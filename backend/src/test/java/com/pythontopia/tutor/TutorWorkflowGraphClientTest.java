@@ -16,6 +16,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
@@ -105,6 +106,57 @@ class TutorWorkflowGraphClientTest {
     assertThat(order).contains("error").doesNotContain("send");
   }
 
+  @Test
+  void downstreamDisconnectAbortsGraphStreamAndMarksRunInterrupted() throws Exception {
+    CompletableFuture<Void> upstreamClosed = new CompletableFuture<>();
+    server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/agents/tutor-workflow/run/stream",
+        exchange -> {
+          exchange.getRequestBody().readAllBytes();
+          exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+          exchange.sendResponseHeaders(200, 0);
+          try (OutputStream output = exchange.getResponseBody()) {
+            output.write("event: trace\ndata: {}\n\n".getBytes(StandardCharsets.UTF_8));
+            output.flush();
+            for (int i = 0; i < 40; i++) {
+              try {
+                Thread.sleep(25);
+                output.write(": ping\n\n".getBytes(StandardCharsets.UTF_8));
+                output.flush();
+              } catch (IOException expectedAfterClientAbort) {
+                upstreamClosed.complete(null);
+                break;
+              } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+              }
+            }
+          } catch (IOException expectedAfterClientAbort) {
+            upstreamClosed.complete(null);
+          }
+        });
+    server.start();
+    AtomicBoolean interrupted = new AtomicBoolean();
+    CompletableFuture<Void> markedInterrupted = new CompletableFuture<>();
+    TutorWorkflowGraphClient client = newClient();
+
+    client.runStream(
+        73L,
+        Map.of("user_id", 73L, "session_id", "wf-shared"),
+        new DisconnectedEmitter(),
+        ignored -> {},
+        ignored -> {},
+        () -> {
+          interrupted.set(true);
+          markedInterrupted.complete(null);
+        });
+
+    markedInterrupted.get(5, TimeUnit.SECONDS);
+    upstreamClosed.get(5, TimeUnit.SECONDS);
+    assertThat(interrupted).isTrue();
+  }
+
   private TutorWorkflowGraphClient newClient() {
     GraphServiceProperties properties =
         new GraphServiceProperties(
@@ -154,6 +206,17 @@ class TutorWorkflowGraphClientTest {
     public void completeWithError(Throwable failure) {
       order.add("error");
       finished.countDown();
+    }
+  }
+
+  private static final class DisconnectedEmitter extends SseEmitter {
+    private DisconnectedEmitter() {
+      super(5_000L);
+    }
+
+    @Override
+    public void send(SseEventBuilder builder) throws IOException {
+      throw new IOException("browser disconnected");
     }
   }
 }

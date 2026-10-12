@@ -27,8 +27,7 @@ import org.springframework.stereotype.Service;
  * 记忆 brief 聚合服务（§3.2 / §4 M backend）：把三路信号合成 {@link MemoryBriefDto}，喂闭环 {@code understand}。
  *
  * <ul>
- *   <li><b>facts</b>：{@link MemoryProviderRouter#recall} 召回（local 复用 memory_embedding / 外部 Mem0·Zep
- *       fail-soft 回退 local），按近→远时序排序。
+ *   <li><b>facts</b>：{@link MemoryProviderRouter#recall} 从本地学习事件与 memory_embedding 召回，按近→远时序排序。
  *   <li><b>weak_kcs</b>：召回中的「受阻」记忆 KC + {@code kc_review_state} 到期/有 lapse 的 KC（近期反复受阻）。
  *   <li><b>style_notes</b>：8 维画像（{@link PassiveProfileService#getDimensions}）的认知风格 / 偏好 / 情绪提示。
  *   <li><b>as_of</b>：生成时刻 ISO-8601（体现「截至此刻」的时序）。
@@ -88,7 +87,7 @@ public class MemoryBriefService {
   /**
    * 为 {@code userId} 合成记忆 brief。{@code query} 可空（空白时召回退化为最近记忆）。
    *
-   * <p>active provider 由 {@code MEMORY_PROVIDER} 决定；外部 provider 故障已在 router 内 fail-soft 回退 local。
+   * <p>学习事件与画像始终留在本地服务，不会因 {@code MEMORY_PROVIDER} 环境变量发送到外部记忆服务。
    */
   public MemoryBriefDto buildBrief(long userId, String query) {
     return buildBrief(userId, safeRecall(userId, query));

@@ -111,6 +111,9 @@ require_fixed "${RELEASE_README}" \
   "发布文档要求外部 Piston 使用 HTTPS" \
   '公网/跨主机 URL 必须用 HTTPS'
 require_fixed "${ENV_EXAMPLE}" \
+  ".env 样板指定 DeepSeek 文本模型" \
+  'PYT_OPENAI_MODEL=deepseek-v4-pro'
+require_fixed "${ENV_EXAMPLE}" \
   ".env 样板指定 DeepSeek 视觉模型" \
   'PYT_OPENAI_MODEL_VISION=deepseek-flash'
 require_fixed "${COMPOSE_FILE}" \

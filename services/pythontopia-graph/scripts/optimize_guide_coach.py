@@ -11,7 +11,7 @@
 
     # DeepSeek/OpenAI 兼容凭证可来自 deploy/.env（PYT_OPENAI_*）或下述 CLI 覆盖
     python3 scripts/optimize_guide_coach.py \
-        --task-model deepseek-chat --reflection-model deepseek-reasoner --auto light
+        --task-model deepseek-v4-pro --reflection-model deepseek-flash --auto light
 
 依赖：``pip install -e '.[optimize]'``（dspy>=3.2,<4）。缺 dspy → 清晰报错并退出码 2。
 """

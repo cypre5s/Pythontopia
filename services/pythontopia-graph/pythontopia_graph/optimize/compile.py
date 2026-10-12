@@ -27,6 +27,7 @@ from typing import Any
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle, RagHit
 from pythontopia_graph.nodes.grounding_critic import grounding_critic
 from pythontopia_graph.nodes.safety_critic import safety_critic
+from pythontopia_graph.llm.provider import DEEPSEEK_CHAT_MODELS
 from pythontopia_graph.optimize.programs import (
     OptimizeDependencyError,
     PROGRAM_NAMES,
@@ -510,6 +511,8 @@ def build_openai_lm(
         valid_deepseek_url = False
     if not valid_deepseek_url:
         raise ValueError("Offline LLM API must use DeepSeek at https://api.deepseek.com")
+    if model not in DEEPSEEK_CHAT_MODELS:
+        raise ValueError(f"Unsupported DeepSeek model: {model}")
     dspy = _require_dspy()
     return dspy.LM(
         f"openai/{model}",

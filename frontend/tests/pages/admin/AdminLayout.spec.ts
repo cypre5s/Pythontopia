@@ -17,7 +17,7 @@ const media = vi.hoisted(() => ({
 }));
 
 vi.mock('vue-router', () => ({
-  RouterLink: { props: ['to'], template: '<a><slot /></a>' },
+  RouterLink: { props: ['to'], template: '<a href="/mock-route"><slot /></a>' },
   RouterView: { template: '<div data-testid="admin-route-view" />' },
   useRoute: () => route.current,
   useRouter: () => router,
@@ -43,21 +43,46 @@ describe('AdminLayout', () => {
     const wrapper = mount(AdminLayout);
     await flushPromises();
 
-    expect(wrapper.findAll('.admin-nav__group')).toHaveLength(2);
+    expect(wrapper.findAll('.admin-nav__group')).toHaveLength(3);
     expect(wrapper.text()).toContain('平台运行');
     expect(wrapper.text()).toContain('内容审核');
     expect(wrapper.text()).toContain('AI 运维概览');
     expect(wrapper.text()).toContain('AI 出题审核');
+    expect(wrapper.text()).toContain('账号管理');
+    expect(wrapper.text()).toContain('用户管理');
     expect(wrapper.find('aside').attributes('aria-hidden')).toBe('true');
 
-    await wrapper.get('.admin-topbar__menu').trigger('click');
-    expect(wrapper.get('.admin-topbar__menu').attributes('aria-expanded')).toBe('true');
+    expect(wrapper.find('.admin-topbar').exists()).toBe(false);
+    await wrapper.get('.admin-shell__navigation-toggle').trigger('click');
+    expect(wrapper.get('.admin-shell__navigation-toggle').attributes('aria-expanded')).toBe('true');
     expect(wrapper.find('aside').attributes('aria-hidden')).toBe('false');
     expect(wrapper.find('.admin-shell__scrim').exists()).toBe(true);
 
     await wrapper.get('.admin-shell__scrim').trigger('click');
-    expect(wrapper.get('.admin-topbar__menu').attributes('aria-expanded')).toBe('false');
+    expect(wrapper.get('.admin-shell__navigation-toggle').attributes('aria-expanded')).toBe('false');
     expect(wrapper.find('.admin-shell__scrim').exists()).toBe(false);
+  });
+
+  it('traps focus in the narrow navigation and closes it with Escape', async () => {
+    const wrapper = mount(AdminLayout, { attachTo: document.body });
+    const toggle = wrapper.get('.admin-shell__navigation-toggle');
+    await toggle.trigger('click');
+    await flushPromises();
+
+    const sidebar = wrapper.get('aside');
+    expect(sidebar.attributes('role')).toBe('dialog');
+    expect(document.activeElement).toBe(sidebar.element.querySelector('a'));
+    const logout = sidebar.element.querySelector('[data-testid="admin-logout"]') as HTMLButtonElement;
+    logout.focus();
+    await sidebar.trigger('keydown', { key: 'Tab' });
+    expect(document.activeElement).toBe(sidebar.element.querySelector('a'));
+    await sidebar.trigger('keydown', { key: 'Tab', shiftKey: true });
+    expect(document.activeElement).toBe(logout);
+    await sidebar.trigger('keydown', { key: 'Escape' });
+
+    expect(toggle.attributes('aria-expanded')).toBe('false');
+    expect(document.activeElement).toBe(toggle.element);
+    wrapper.unmount();
   });
 
   it('logs out and returns to the login page', async () => {

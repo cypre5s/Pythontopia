@@ -38,7 +38,8 @@
 - AI 输出的所有数字、KC code 与课件引用均经过 `GroundingCriticAgent`、`SafetyAgent` 二次校验，
   避免虚构。
 - AI 不直接接入真实学生数据；演示账号统一 `demo-` 前缀，演示后用 `teardown_demo.sh` 清理。
-- 所有真实 LLM provider 凭据（讯飞 Spark）只放在 `.env`（被 `.gitignore` 排除），代码与文档不出现明文。
+- 所有真实 LLM 凭据（DeepSeek）只放在 `.env`（被 `.gitignore` 排除），代码与文档不出现明文；所有生成模型调用限制到 DeepSeek 官方 API。
+- 讯飞图像生成、图片理解、语音识别与语音合成服务固定关闭；配音不启用。
 - AI 不修改 git history / push 远端 / 部署生产，所有动作落在本地仓库与本地 Docker。
 
 ## 5. 与 Alethicode 的关系

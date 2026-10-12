@@ -36,6 +36,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
@@ -101,13 +102,22 @@ class TutorWorkflowServiceTest {
     when(repository.findActive(USER, PROBLEM)).thenReturn(Optional.of(session));
     when(repository.findBySessionKey(USER, session.sessionKey())).thenReturn(Optional.of(session));
     when(repository.findAgentState(session.id())).thenReturn(Optional.empty());
+    when(repository.claimAutoGenRun(anyLong(), any(UUID.class), any()))
+        .thenAnswer(
+            invocation -> {
+              UUID runId = invocation.getArgument(1);
+              String fingerprint = invocation.getArgument(2);
+              return Optional.of(
+                  new TutorWorkflowRepository.AutoGenCheckpoint(
+                      runId, fingerprint, -1, "", "{}", "RUNNING"));
+            });
     when(tutorService.resolveProfileBrief(USER, null)).thenReturn("认知风格: visual");
   }
 
   @SuppressWarnings("unchecked")
   private Map<String, Object> capturedBody() {
     ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-    verify(graphClient).runStream(eq(USER), captor.capture(), any(), any());
+    verify(graphClient).runStream(eq(USER), captor.capture(), any(), any(), any(), any());
     return captor.getValue();
   }
 
@@ -123,11 +133,109 @@ class TutorWorkflowServiceTest {
     assertThat(body.get("restore_chat_history")).isEqualTo(List.of());
     assertThat(body.get("coach_mode")).isEqualTo(true);
     assertThat(body.get("profile_brief")).isEqualTo("认知风格: visual");
+    assertThat(body.get("run_id")).isInstanceOf(String.class);
+    assertThat(body.get("request_fingerprint")).asString().matches("[0-9a-f]{64}");
     @SuppressWarnings("unchecked")
     Map<String, Object> problem = (Map<String, Object>) body.get("problem");
     assertThat(problem.get("problem_id")).isEqualTo(PROBLEM);
     assertThat(problem.get("kc_codes")).isEqualTo(List.of("PY43-KC-016"));
     assertThat(body).doesNotContainKey("diagnosis");
+  }
+
+  @Test
+  void runRestoresNativeAutoGenCheckpointForTheClaimedRun() throws Exception {
+    UUID runId = UUID.randomUUID();
+    String checkpointJson =
+        "{\"stage_index\":2,\"stage_name\":\"generate_card\","
+            + "\"team_state\":{\"agent_states\":[]},\"workflow_state\":\"state\"}";
+    when(repository.claimAutoGenRun(anyLong(), any(UUID.class), any()))
+        .thenAnswer(
+            invocation ->
+                Optional.of(
+                    new TutorWorkflowRepository.AutoGenCheckpoint(
+                        runId,
+                        invocation.getArgument(2),
+                        2,
+                        "generate_card",
+                        checkpointJson,
+                        "RUNNING")));
+
+    service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "READING", Map.of()));
+
+    Map<String, Object> body = capturedBody();
+    assertThat(body.get("run_id")).isEqualTo(runId.toString());
+    assertThat(body.get("request_fingerprint")).asString().matches("[0-9a-f]{64}");
+    assertThat(body.get("restore_autogen_checkpoint"))
+        .isEqualTo(new ObjectMapper().readValue(checkpointJson, Map.class));
+  }
+
+  @Test
+  void runRejectsAnotherActiveRunForTheSameSession() {
+    when(repository.claimAutoGenRun(anyLong(), any(UUID.class), any())).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "READING", Map.of())))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("导学会话正在处理其他请求");
+  }
+
+  @Test
+  void checkpointWriteRequiresOwnerAndActiveRunAndSavesNativeTeamState() throws Exception {
+    UUID runId = UUID.randomUUID();
+    String fingerprint = "c".repeat(64);
+    JsonNode checkpoint =
+        new ObjectMapper()
+            .readTree(
+                "{\"stage_index\":3,\"stage_name\":\"generate_card\","
+                    + "\"team_state\":{\"agent_states\":[]},\"workflow_state\":\"state\"}");
+    when(repository.findAutoGenCheckpoint(session.id(), runId))
+        .thenReturn(
+            Optional.of(
+                new TutorWorkflowRepository.AutoGenCheckpoint(
+                    runId, fingerprint, 2, "fetch_evidence", "{}", "RUNNING")));
+
+    service.persistAutoGenCheckpoint(USER, session.sessionKey(), runId, fingerprint, checkpoint);
+
+    ArgumentCaptor<String> savedJson = ArgumentCaptor.forClass(String.class);
+    verify(repository)
+        .saveAutoGenCheckpoint(
+            eq(session.id()), eq(runId), eq(fingerprint), eq(3), eq("generate_card"), savedJson.capture());
+    assertThat(new ObjectMapper().readTree(savedJson.getValue())).isEqualTo(checkpoint);
+  }
+
+  @Test
+  void checkpointWriteRejectsImagePayloads() throws Exception {
+    UUID runId = UUID.randomUUID();
+    String fingerprint = "d".repeat(64);
+    JsonNode checkpoint =
+        new ObjectMapper()
+            .readTree(
+                "{\"stage_index\":3,\"stage_name\":\"generate_card\","
+                    + "\"team_state\":{\"private_image_data\":\"data:image/png;base64,AAAA\"},"
+                    + "\"workflow_state\":\"state\"}");
+
+    assertThatThrownBy(
+            () ->
+                service.persistAutoGenCheckpoint(
+                    USER, session.sessionKey(), runId, fingerprint, checkpoint))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("恢复点无效");
+  }
+
+  @Test
+  void checkpointWriteCannotCrossTheOwnedSessionBoundary() throws Exception {
+    when(repository.findBySessionKey(8L, session.sessionKey())).thenReturn(Optional.empty());
+    JsonNode checkpoint =
+        new ObjectMapper()
+            .readTree(
+                "{\"stage_index\":0,\"stage_name\":\"validate_transition\","
+                    + "\"team_state\":{},\"workflow_state\":\"state\"}");
+
+    assertThatThrownBy(
+            () ->
+                service.persistAutoGenCheckpoint(
+                    8L, session.sessionKey(), UUID.randomUUID(), "e".repeat(64), checkpoint))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("会话不存在");
   }
 
   @Test
@@ -338,7 +446,7 @@ class TutorWorkflowServiceTest {
               return null;
             })
         .when(graphClient)
-        .runStream(any(), any(), any(), any());
+        .runStream(any(), any(), any(), any(), any(), any());
 
     service.run(
         USER,
@@ -513,7 +621,7 @@ class TutorWorkflowServiceTest {
               return null;
             })
         .when(graphClient)
-        .runStream(any(), any(), any(), any());
+        .runStream(any(), any(), any(), any(), any(), any());
 
     service.run(
         USER, new TutorWorkflowRunRequest(PROBLEM, "CHAT", Map.of("message", "怎么保留小数？")));
@@ -545,7 +653,7 @@ class TutorWorkflowServiceTest {
               return null;
             })
         .when(graphClient)
-        .runStream(any(), any(), any(), any());
+        .runStream(any(), any(), any(), any(), any(), any());
 
     service.run(
         USER, new TutorWorkflowRunRequest(PROBLEM, "CHAT", Map.of("message", "先看哪里？")));
@@ -592,7 +700,7 @@ class TutorWorkflowServiceTest {
               return null;
             })
         .when(graphClient)
-        .runStream(any(), any(), any(), any());
+        .runStream(any(), any(), any(), any(), any(), any());
 
     service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "PLAN_START", Map.of("plan_id", "p1")));
     String result = """
@@ -617,7 +725,7 @@ class TutorWorkflowServiceTest {
               return null;
             })
         .when(graphClient)
-        .runStream(any(), any(), any(), any());
+        .runStream(any(), any(), any(), any(), any(), any());
     org.mockito.Mockito.doThrow(new IllegalStateException("database unavailable"))
         .when(repository)
         .persistRunProjection(eq(session.id()), any(TutorWorkflowRepository.RunProjection.class));

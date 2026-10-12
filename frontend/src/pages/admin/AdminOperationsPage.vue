@@ -22,7 +22,7 @@ function statusLabel(status: RuntimeOperationStatus): string {
 function statusClass(status: RuntimeOperationStatus): string {
   if (status === 'PASS') return 'status-pill--pass';
   if (status === 'WARN') return 'status-pill--warn';
-  return 'status-pill--insufficient';
+  return 'status-pill--insufficient-evidence';
 }
 
 async function loadOperations(): Promise<void> {
@@ -49,9 +49,10 @@ onMounted(() => {
     data-testid="admin-operations"
     :aria-busy="loading"
   >
-    <p class="admin-operations__intro">
-      平台统计来自后端 AI Runtime 快照，按当前服务端返回展示。
-    </p>
+    <header class="admin-page-heading">
+      <h1>AI 运维概览</h1>
+      <p>平台统计来自后端 AI Runtime 快照，按当前服务端返回展示。</p>
+    </header>
 
     <p
       v-if="loading"
@@ -182,7 +183,21 @@ onMounted(() => {
   min-width: 0;
 }
 
-.admin-operations__intro {
+.admin-page-heading h1 {
+  margin: 0;
+  color: var(--admin-text);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.admin-page-heading {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-page-heading p {
   margin: 0;
   color: var(--admin-muted);
   font-size: 13px;
@@ -215,13 +230,13 @@ onMounted(() => {
 
 .admin-button {
   min-height: 36px;
-  padding: 0 13px;
+  padding: 0 18px;
   border: 1px solid #cbd5e1;
-  border-radius: 7px;
+  border-radius: 8px;
   background: #fff;
   color: #334155;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
 }

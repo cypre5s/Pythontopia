@@ -105,6 +105,58 @@ class TutorWorkflowRepositoryIntegrationTest {
   }
 
   @Test
+  void autogenCheckpointClaimResumeAndCompletionAreIdempotent() {
+    UUID firstRunId = UUID.randomUUID();
+    String fingerprint = "a".repeat(64);
+    var claimed =
+        repository.claimAutoGenRun(session.id(), firstRunId, fingerprint).orElseThrow();
+
+    assertThat(claimed.runId()).isEqualTo(firstRunId);
+    assertThat(claimed.stageIndex()).isEqualTo(-1);
+    assertThat(repository.claimAutoGenRun(session.id(), UUID.randomUUID(), fingerprint)).isEmpty();
+
+    repository.saveAutoGenCheckpoint(
+        session.id(),
+        firstRunId,
+        fingerprint,
+        1,
+        "generate_card",
+        "{\"team_state\":{\"agents\":[]},\"workflow_state\":\"state\"}");
+    repository.transitionAutoGenRun(session.id(), firstRunId, "INTERRUPTED");
+
+    var resumed =
+        repository.claimAutoGenRun(session.id(), UUID.randomUUID(), fingerprint).orElseThrow();
+    assertThat(resumed.runId()).isEqualTo(firstRunId);
+    assertThat(resumed.stageIndex()).isEqualTo(1);
+    assertThat(resumed.stageName()).isEqualTo("generate_card");
+    assertThat(resumed.checkpointJson()).contains("team_state");
+
+    repository.persistRunProjection(
+        session.id(), projection(firstRunId, "READING", 1, "READING", null, null));
+    assertThat(repository.findAutoGenCheckpoint(session.id(), firstRunId).orElseThrow().status())
+        .isEqualTo("COMPLETED");
+
+    var nextRun =
+        repository.claimAutoGenRun(session.id(), UUID.randomUUID(), fingerprint).orElseThrow();
+    assertThat(nextRun.runId()).isNotEqualTo(firstRunId);
+  }
+
+  @Test
+  void autogenCheckpointRejectsRegressiveStageUpdates() {
+    UUID runId = UUID.randomUUID();
+    String fingerprint = "b".repeat(64);
+    repository.claimAutoGenRun(session.id(), runId, fingerprint).orElseThrow();
+    repository.saveAutoGenCheckpoint(session.id(), runId, fingerprint, 2, "generate_card", "{}");
+
+    assertThatThrownBy(
+            () ->
+                repository.saveAutoGenCheckpoint(
+                    session.id(), runId, fingerprint, 1, "coach_decide", "{}"))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("stage");
+  }
+
+  @Test
   void failedCardInsertRollsBackRunMarkerProgressStateAndEvent() {
     UUID runId = UUID.randomUUID();
     TutorWorkflowRepository.RunProjection projection =

@@ -18,14 +18,16 @@ import os
 import uuid
 from collections.abc import AsyncIterator
 from typing import Any
+from uuid import UUID
 
 from autogen_core import CancellationToken
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from pydantic import Field
 
 from pythontopia_graph import sse_agui
 from pythontopia_graph.graph import tutor_workflow_session as session_store
+from pythontopia_graph.graph.autogen_tutor_runtime import validate_autogen_tutor_checkpoint_scope
 from pythontopia_graph.graph.tutor_workflow_graph import TutorWorkflowGraph
 from pythontopia_graph.internal_auth import (
     require_internal_user_id,
@@ -41,6 +43,7 @@ from pythontopia_graph.schemas.tutor_workflow import (
     WorkflowRunResult,
 )
 from pythontopia_graph.tutor_workflow_attachments import fetch_tutor_workflow_attachment
+from pythontopia_graph.tutor_workflow_checkpoints import persist_tutor_workflow_checkpoint
 
 router = APIRouter()
 
@@ -52,6 +55,9 @@ class WorkflowRunEnvelope(WorkflowRunRequest):
     restore_seq: int = Field(default=0, ge=0)
     restore_cards: list[dict[str, Any]] = Field(default_factory=list, max_length=12)
     restore_chat_history: list[dict[str, str]] = Field(default_factory=list, max_length=20)
+    run_id: str | None = Field(default=None, min_length=36, max_length=36)
+    request_fingerprint: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    restore_autogen_checkpoint: dict[str, Any] | None = None
 
 def _provider(request: Request) -> LlmProvider:
     provider = getattr(request.app.state, "llm_provider", None)
@@ -101,11 +107,53 @@ async def tutor_workflow_run_stream(
     trusted_user_id: int = Depends(require_internal_user_id),
 ) -> StreamingResponse:
     require_matching_user_id(trusted_user_id, body.user_id)
+    if (body.run_id is None) != (body.request_fingerprint is None):
+        raise HTTPException(status_code=400, detail="Tutor run identity is incomplete")
+    run_id: str | None = None
+    if body.run_id is not None:
+        try:
+            run_id = str(UUID(body.run_id))
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail="Tutor run ID is invalid") from exc
+    elif body.restore_autogen_checkpoint is not None:
+        raise HTTPException(status_code=400, detail="Tutor checkpoint has no run identity")
+
+    request = WorkflowRunRequest.model_validate(
+        body.model_dump(
+            exclude={
+                "restore_phase",
+                "restore_seq",
+                "restore_cards",
+                "restore_chat_history",
+                "run_id",
+                "request_fingerprint",
+                "restore_autogen_checkpoint",
+            }
+        )
+    )
+    if body.restore_autogen_checkpoint is not None:
+        try:
+            validate_autogen_tutor_checkpoint_scope(body.restore_autogen_checkpoint, request)
+        except (TypeError, ValueError) as exc:
+            raise HTTPException(status_code=409, detail="Tutor checkpoint does not match this request") from exc
+    if not await session_store.claim_run(trusted_user_id, body.session_id):
+        raise HTTPException(status_code=409, detail="Tutor session already has an active run")
 
     async def stages() -> AsyncIterator[str]:
         # 节点 trace 经队列真流式推给客户端（卡片生成期间持续可见进度 + 心跳保活）。
         queue: asyncio.Queue[Any] = asyncio.Queue()
         cancellation_token = CancellationToken()
+
+        async def checkpoint_callback(checkpoint: dict[str, Any]) -> None:
+            if run_id is None or body.request_fingerprint is None:
+                raise RuntimeError("Tutor run identity is required to persist AutoGen checkpoints")
+            await persist_tutor_workflow_checkpoint(
+                trusted_user_id,
+                body.session_id,
+                run_id,
+                body.request_fingerprint,
+                checkpoint,
+            )
 
         async def emit(event: str, data: dict[str, Any]) -> None:
             await queue.put(sse_agui.translate(event, data))
@@ -124,16 +172,6 @@ async def tutor_workflow_run_stream(
                     )
                 session = await session_store.get_state(trusted_user_id, body.session_id)
                 graph = TutorWorkflowGraph(provider, evidence_fetcher, emit=emit)
-                request = WorkflowRunRequest.model_validate(
-                    body.model_dump(
-                        exclude={
-                            "restore_phase",
-                            "restore_seq",
-                            "restore_cards",
-                            "restore_chat_history",
-                        }
-                    )
-                )
                 plan = request.episode_plan
                 if plan is not None and (
                     plan.session_id != body.session_id
@@ -167,6 +205,12 @@ async def tutor_workflow_run_stream(
                     },
                     cancellation_token=cancellation_token,
                     private_image_resolver=resolve_private_images,
+                    restore_checkpoint=body.restore_autogen_checkpoint,
+                    on_checkpoint=(
+                        checkpoint_callback
+                        if run_id is not None and body.request_fingerprint is not None
+                        else None
+                    ),
                 )
                 return {"state": dict(state), "session_phase": session.phase}
             finally:
@@ -254,6 +298,7 @@ async def tutor_workflow_run_stream(
                     await task
                 except asyncio.CancelledError:
                     pass
+            await session_store.release_run(trusted_user_id, body.session_id)
 
     return StreamingResponse(
         stages(),

@@ -50,6 +50,7 @@ class UploadServiceTest {
   void setUp() {
     repository = mock(UploadRepository.class);
     service = new UploadService(repository, new UploadTextExtractor());
+    when(repository.canAcceptUpload(anyLong(), anyLong(), anyInt(), anyLong())).thenReturn(true);
     // 仓储 insert 回显入参为持久化行（id/createdAt 由库生成），便于断言返回 DTO 的解析结果。
     when(repository.insert(
             anyLong(), anyString(), anyString(), anyLong(), any(), anyInt(), anyInt(), any(), any()))
@@ -144,6 +145,25 @@ class UploadServiceTest {
         .isInstanceOf(BusinessException.class)
         .extracting(ex -> ((BusinessException) ex).status())
         .isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+  }
+
+  @Test
+  void uploadRejectsWhenPerUserStorageQuotaIsExceeded() {
+    when(repository.canAcceptUpload(USER_ID, 1L, 20, 50L * 1024 * 1024)).thenReturn(false);
+    MockMultipartFile file =
+        new MockMultipartFile("file", "note.txt", "text/plain", "x".getBytes(StandardCharsets.UTF_8));
+
+    assertThatThrownBy(() -> service.upload(USER_ID, file))
+        .isInstanceOf(BusinessException.class)
+        .satisfies(
+            exception -> {
+              BusinessException businessException = (BusinessException) exception;
+              assertThat(businessException.status()).isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+              assertThat(businessException.code()).isEqualTo("UPLOAD_QUOTA_EXCEEDED");
+            });
+
+    verify(repository, never())
+        .insert(anyLong(), anyString(), anyString(), anyLong(), any(), anyInt(), anyInt(), any(), any());
   }
 
   @Test

@@ -49,6 +49,11 @@ export const router = createRouter({
           name: 'admin-problem-reviews',
           component: () => import('@/pages/admin/AdminProblemReviewsPage.vue'),
         },
+        {
+          path: 'users',
+          name: 'admin-users',
+          component: () => import('@/pages/admin/AdminUsersPage.vue'),
+        },
       ],
     },
     {

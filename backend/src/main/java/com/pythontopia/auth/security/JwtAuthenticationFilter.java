@@ -71,6 +71,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     return userRepository
         .findById(principal.userId())
         .filter(UserAccount::isActive)
+        .filter(user -> user.role() == principal.role())
         .filter(user -> user.tokenVersion() == principal.tokenVersion())
         .isPresent();
   }

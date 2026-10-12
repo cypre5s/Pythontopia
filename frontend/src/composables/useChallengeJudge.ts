@@ -15,13 +15,11 @@ import type { BossAttemptResultDto, BossProblemDto } from '@/api/dto/Boss';
 /**
  * 「本次没有真正判定」的后端 feedback 前缀集合。
  *
- * 后端 `BossService.evaluateAttempt` 的三条未判定路径都返回 **200 + passed:false + score:0**
- * （题目缓存过期无持久化 / 缓存缺 testCases / graph 评测服务不可用），且这三条路径**不发**
- * LearningEvent——即后端自己也认为这次不算数。前端若把它们当成真实答错，就会扣体力、清气势、
- * 错题入库，并被当作真实正确率上报补星接口，前后端对「这次算不算」直接分叉。
+ * Older backend versions returned missing problems, empty test cases, or evaluator outages as
+ * **200 + passed:false + score:0**, without emitting a LearningEvent. Current evaluator outages
+ * return 503; keep the legacy hints so a staggered Web/API rollout still cannot penalize students.
  *
- * 注：正解是后端返回显式判别位（如 `judged:false`）或 5xx，而不是让前端嗅探文案；
- * 在 BossService/BossAttemptResultDto 改造前，这里按稳定前缀匹配兜住。
+ * The stable prefixes below only bridge older API responses until all Web instances are updated.
  */
 const JUDGE_UNAVAILABLE_HINTS: readonly string[] = [
   '题目缓存过期且无持久化记录',

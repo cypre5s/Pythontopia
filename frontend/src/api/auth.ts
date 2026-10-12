@@ -19,3 +19,11 @@ export async function refresh(token: string): Promise<LoginResponse> {
   const response = await http.post<LoginResponse>('/api/auth/refresh', { token });
   return response.data;
 }
+
+/** Revoke the user's current server-side session and all older tokens. */
+export async function logout(token: string): Promise<void> {
+  await http.post<void>('/api/auth/logout', null, {
+    headers: { Authorization: `Bearer ${token}` },
+    suppressNetworkToast: true,
+  });
+}

@@ -73,6 +73,7 @@ public class BossService {
   private final BossProblemReviewRepository reviewRepository;
   private final ExpeditionRunService expeditionRunService;
   private final ExpeditionScoreService expeditionScoreService;
+  private final BossAttemptIdempotencyService attemptIdempotencyService;
   private final ApplicationEventPublisher eventPublisher;
   private final ConcurrentMap<ProblemCacheKey, CachedProblem> cache = new ConcurrentHashMap<>();
 
@@ -85,6 +86,7 @@ public class BossService {
       BossProblemReviewRepository reviewRepository,
       ExpeditionRunService expeditionRunService,
       ExpeditionScoreService expeditionScoreService,
+      BossAttemptIdempotencyService attemptIdempotencyService,
       ApplicationEventPublisher eventPublisher) {
     this.graphClient = graphClient;
     this.masteryRepository = masteryRepository;
@@ -94,6 +96,7 @@ public class BossService {
     this.reviewRepository = reviewRepository;
     this.expeditionRunService = expeditionRunService;
     this.expeditionScoreService = expeditionScoreService;
+    this.attemptIdempotencyService = attemptIdempotencyService;
     this.eventPublisher = eventPublisher;
   }
 
@@ -321,6 +324,25 @@ public class BossService {
   }
 
   public BossAttemptResultDto evaluateAttempt(BossAttemptRequest request, Long userId) {
+    BossAttemptIdempotencyService.Claim claim = null;
+    if (userId != null && request.attemptId() != null) {
+      claim = attemptIdempotencyService.claim(userId, request.attemptId(), request);
+      if (claim.replay() != null) {
+        return claim.replay();
+      }
+    }
+    try {
+      return evaluateClaimedAttempt(request, userId, claim);
+    } catch (RuntimeException exception) {
+      if (claim != null) {
+        attemptIdempotencyService.release(userId, request.attemptId(), claim);
+      }
+      throw exception;
+    }
+  }
+
+  private BossAttemptResultDto evaluateClaimedAttempt(
+      BossAttemptRequest request, Long userId, BossAttemptIdempotencyService.Claim claim) {
     Optional<String> expeditionRunId =
         pregenService.findExpeditionRunId(userId, request.problemId());
     if (expeditionRunId.isPresent()
@@ -334,27 +356,37 @@ public class BossService {
       LOG.info(
           "boss attempt problemId={} not in cache nor persisted, returning Pyodide-only fallback",
           request.problemId());
-      return new BossAttemptResultDto(
-          request.problemId(),
-          false,
-          0,
-          3,
-          null,
-          0,
-          "题目缓存过期且无持久化记录；请用前端 Pyodide 校验后再次提交，或重新生成题目。");
+      return completeAttempt(
+          request,
+          userId,
+          claim,
+          new BossAttemptResultDto(
+              request.problemId(),
+              false,
+              0,
+              3,
+              null,
+              0,
+              "题目缓存过期且无持久化记录；请用前端 Pyodide 校验后再次提交，或重新生成题目。"),
+          null);
     }
     requireProblemContext(problem, request.chapter(), request.stage());
     List<BossTestCasePayload> testCases = problem.testCases();
     if (testCases.isEmpty()) {
       LOG.warn("problem {} has empty testCases (graph schema drift?)", request.problemId());
-      return new BossAttemptResultDto(
-          request.problemId(),
-          false,
-          0,
-          problem.totalTestCases(),
-          null,
-          0,
-          "题目缓存数据异常（缺 testCases），请重试生成题目。");
+      return completeAttempt(
+          request,
+          userId,
+          claim,
+          new BossAttemptResultDto(
+              request.problemId(),
+              false,
+              0,
+              problem.totalTestCases(),
+              null,
+              0,
+              "题目缓存数据异常（缺 testCases），请重试生成题目。"),
+          null);
     }
     try {
       BossEvaluateResultDto graphResult =
@@ -374,7 +406,6 @@ public class BossService {
             "EXPEDITION_ATTEMPT_LIMIT_REACHED",
             "本局可计分判题次数已用完");
       }
-      publishPracticeOutcome(userId, problem, graphResult);
       String feedback =
           graphResult.passed()
               ? "通过 ✅ 服务端沙箱已确认。"
@@ -383,29 +414,46 @@ public class BossService {
                   : "未通过 ❌ 部分用例失败，请参考下方 hint。";
       // 闭环关键：服务端沙箱真实判完后（且仅此路径）才发学习事件，与 SubmissionService 同一套事件驱动
       // KC 掌握度（测）+ 8 维画像被动修订。缓存过期 / 缺 testCases / graph 不可用等「未判定」路径不发，
-      // 避免把非判题结果污染进掌握度；同题 HTTP 重放尚无 submission ID 幂等保护。
-      return new BossAttemptResultDto(
-          request.problemId(),
-          graphResult.passed(),
-          graphResult.passedTestCases(),
-          graphResult.totalTestCases(),
-          graphResult.failureFirstHint(),
-          score,
-          feedback);
+      // 避免把非判题结果污染进掌握度；web 重放由 attemptId 结果记录阻止二次发事件。
+      return completeAttempt(
+          request,
+          userId,
+          claim,
+          new BossAttemptResultDto(
+              request.problemId(),
+              graphResult.passed(),
+              graphResult.passedTestCases(),
+              graphResult.totalTestCases(),
+              graphResult.failureFirstHint(),
+              score,
+              feedback),
+          practiceOutcomeEvent(userId, problem, graphResult));
     } catch (RestClientException ex) {
       LOG.warn(
-          "graph evaluate failed ({}): {} — falling back to local Pyodide hint",
+          "graph evaluate failed ({}): {} — returning an unavailable error without a verdict",
           ex.getClass().getSimpleName(),
           ex.getMessage());
-      return new BossAttemptResultDto(
-          request.problemId(),
-          false,
-          0,
-          problem.totalTestCases(),
-          null,
-          0,
-          "graph 评测服务不可用，请用前端 Pyodide 校验后再次提交。");
+      throw new com.pythontopia.common.error.BusinessException(
+          org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+          "BOSS_EVALUATOR_UNAVAILABLE",
+          "正式判题服务暂不可用，请稍后重试。此次提交未计入结果。");
     }
+  }
+
+  private BossAttemptResultDto completeAttempt(
+      BossAttemptRequest request,
+      Long userId,
+      BossAttemptIdempotencyService.Claim claim,
+      BossAttemptResultDto result,
+      LearningEvent event) {
+    if (claim != null) {
+      return attemptIdempotencyService.complete(
+          userId, request.attemptId(), claim, result, event);
+    }
+    if (event != null) {
+      eventPublisher.publishEvent(event);
+    }
+    return result;
   }
 
   private String validateExpeditionRun(Long userId, String runId, int chapter) {
@@ -450,26 +498,23 @@ public class BossService {
    * （各监听器对 null 均安全）；难度按题目 1..5 映射到 mastery 可识别的档位字符串，保留难度加权语义。
    * userId 为空（匿名/未鉴权）或题目缺 kcCode 时安全跳过，绝不抛错影响判题返回。
    */
-  private void publishPracticeOutcome(
+  private LearningEvent practiceOutcomeEvent(
       Long userId, BossInternalProblem problem, BossEvaluateResultDto result) {
     if (userId == null) {
-      return;
+      return null;
     }
     String kcCode = problem.kcCode();
     if (kcCode == null || kcCode.isBlank()) {
       LOG.warn("boss attempt problemId={} has no kcCode; skip LearningEvent", problem.problemId());
-      return;
+      return null;
     }
     String difficulty = difficultyBand(problem.difficulty());
     if (result.passed()) {
-      eventPublisher.publishEvent(
-          new LearningEvent.PracticeSucceeded(userId, kcCode, null, difficulty));
-    } else {
-      String verdict =
-          result.runtimeError() != null && !result.runtimeError().isBlank() ? "RE" : "WA";
-      eventPublisher.publishEvent(
-          new LearningEvent.PracticeFailed(userId, kcCode, null, verdict, difficulty));
+      return new LearningEvent.PracticeSucceeded(userId, kcCode, null, difficulty);
     }
+    String verdict =
+        result.runtimeError() != null && !result.runtimeError().isBlank() ? "RE" : "WA";
+    return new LearningEvent.PracticeFailed(userId, kcCode, null, verdict, difficulty);
   }
 
   /**

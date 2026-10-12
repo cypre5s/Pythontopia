@@ -172,7 +172,14 @@ if [[ "$resolved_jwt_secret" != "$configured_jwt_secret" ]]; then
   c_warn "本地 PYT_JWT_SECRET 缺失、过短或仍为公开占位值；本次启动已生成临时高熵密钥（未写入磁盘）"
 fi
 export PYT_JWT_SECRET="$resolved_jwt_secret"
-export PYT_TEACHER_INVITE_CODE="${PYT_TEACHER_INVITE_CODE:-pytopia-teacher}"
+teacher_invite_code="${PYT_TEACHER_INVITE_CODE:-}"
+case "${teacher_invite_code,,}" in
+  "" | "pytopia-teacher" | *replace-with* | *replace_with* | *change-me* | *changeme* | *placeholder* | *your-invite*)
+    require_cmd openssl
+    export PYT_TEACHER_INVITE_CODE="$(openssl rand -hex 24)"
+    c_warn "本次开发栈已生成临时教师邀请码（未写入磁盘）；如需固定值，请配置 PYT_TEACHER_INVITE_CODE"
+    ;;
+esac
 # 后端默认即 localhost:18091/18092，这里显式声明对齐 dockerized graph/rag
 export PYT_GRAPH_URL="${PYT_GRAPH_URL:-http://127.0.0.1:18091}"
 export PYT_RAG_URL="${PYT_RAG_URL:-http://127.0.0.1:18092}"

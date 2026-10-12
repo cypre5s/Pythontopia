@@ -1,5 +1,22 @@
 # 管理后台最小实现工作日志
 
+## 2026-10-13：补齐用户管理与窄屏键盘操作
+
+- 新增 ADMIN-only `GET /api/admin/users` 分页/搜索与 `PATCH /api/admin/users/{id}` 启用/停用，复用现有 `users.status`、`token_version`，不暴露邮箱或密码字段；停用后旧 JWT 立即失效，并禁止管理员停用自己的当前账号。
+- 新增 `/admin/users` Web 页面并挂入现有分组导航。窄屏抽屉加 Escape 关闭、焦点循环/返回以及主内容 inert；不新增占位菜单或迁移。
+- RED/GREEN：用户页、账号管理导航和抽屉焦点测试先验证缺少实现时失败；后端用户服务授权/过滤/自停用/令牌撤销测试通过，前端用户页/布局/session 定向用例通过。
+- 当前快照验证：全量 Vitest 与生产 build 通过；前端类型检查通过；ESLint 0 errors / 131 warnings（回到既有基线）。没有启动全栈或做浏览器截图。
+
+## 2026-10-13：Alethicode 管理台样式对齐
+
+- 清点 Pythontopia `frontend/src/app/router.ts`：当前管理台只有 ADMIN-only `/admin/operations` 与 `/admin/problem-reviews` 两个页面。Alethicode 最新工作树（HEAD `10a97fe`，管理台最近一次提交 `d96f609` 后仍有多处未提交修改）包含用户、公告、判题服务、题目/导入导出、KC、AI 配置、课程包、使用统计、反馈等管理页面；这些 API/权限/页面在 Pythontopia 未暴露，本次不复制空壳或造数据。
+- 对照 Alethicode `frontend/src/pages/admin/views/Home.vue`、`components/SideMenu.vue`、`components/Panel.vue`、`style.less`、`elementPlusTheme.less`，以及 `views/general/User.vue`、`views/problem/ProblemList.vue` 的最新 dirty diff：沿用其 240px 分组侧栏、面板标题/工具栏、蓝灰表面、36px 控件、44px 表头、52px 行、表格横向滚动和溢出截断方式。
+- Pythontopia 管理台移除桌面重复顶栏；窄屏保留 Alethicode 风格的“管理导航”入口与侧栏抽屉。运维页补明确页标题，审核页维持面板标题；页脚改成 Alethicode 的分隔线与双栏结构。
+- 审核表最小宽度调整为其固定列宽合计（1100px），ID、章节、难度、状态和操作列禁止异常折行，长题面/KC 保持截断并能通过 title 查看全文。
+- 修复运维概览 `INSUFFICIENT_EVIDENCE` 状态使用了不存在的 CSS 类名，状态标签现在应用已有灰色样式。API、DTO、路由守卫、审核权限、分页/筛选/排序和提交逻辑未改。
+- RED/GREEN：先增加布局、页标题、状态标签及表格密度断言，确认缺少移动导航入口/标题和状态类不匹配时失败；实现后管理台 4 个测试文件 / 13 项通过（layout、operations、review lifecycle、样式合同）。
+- 未覆盖 Alethicode 的其他管理页面，因为 Pythontopia 当前没有相应管理路由/API；未做浏览器截图或全栈联测。
+
 ## 2026-10-13：审核确认框键盘与焦点流程
 
 - 审核确认由自绘 `role=dialog` 改为原生 `<dialog>`，焦点受平台模态行为约束；打开时聚焦意见输入框，Escape/取消关闭后回到触发按钮。

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from types import SimpleNamespace
 from typing import Any
 
 import httpx
@@ -72,6 +73,36 @@ def test_project_deepseek_settings_take_precedence_over_generic_aliases(
     assert provider.model == "deepseek-v4-pro"
     assert provider.fast_model == "deepseek-flash"
     assert provider.vision_model == "deepseek-flash"
+
+
+@pytest.mark.parametrize(
+    ("model", "fast_model", "vision_model"),
+    [
+        ("gpt-4o", None, None),
+        ("deepseek-v4-pro", "other-model", None),
+        ("deepseek-v4-pro", None, "deepseek-v4-pro"),
+    ],
+)
+def test_provider_rejects_model_ids_not_supported_by_deepseek(
+    model: str, fast_model: str | None, vision_model: str | None
+) -> None:
+    with pytest.raises(RuntimeError, match="Unsupported DeepSeek model"):
+        OpenAiCompatProvider(
+            base_url="https://api.deepseek.com",
+            api_key="test-key",
+            model=model,
+            fast_model=fast_model,
+            vision_model=vision_model,
+        )
+
+
+def test_provider_from_env_rejects_unrecognized_deepseek_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("OPENAI_MODEL", "gpt-4o")
+
+    with pytest.raises(RuntimeError, match="Unsupported DeepSeek model"):
+        provider_from_env()
 
 
 @pytest.mark.asyncio
@@ -270,13 +301,52 @@ def test_openai_compat_rejects_non_deepseek_base_url() -> None:
 def test_offline_optimizer_rejects_non_deepseek_api(monkeypatch: pytest.MonkeyPatch) -> None:
     from pythontopia_graph.optimize import compile as optimize_compile
 
-    monkeypatch.setattr(optimize_compile, "_require_dspy", lambda: object())
+    monkeypatch.setattr(optimize_compile, "_require_dspy", lambda: SimpleNamespace(LM=lambda *a, **k: None))
     with pytest.raises(ValueError, match="DeepSeek"):
         optimize_compile.build_openai_lm(
             model="test-model",
             base_url="https://other-provider.example/v1",
             api_key="test-key",
         )
+
+
+def test_offline_optimizer_rejects_model_not_supported_by_deepseek(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from pythontopia_graph.optimize import compile as optimize_compile
+
+    monkeypatch.setattr(
+        optimize_compile,
+        "_require_dspy",
+        lambda: SimpleNamespace(LM=lambda *args, **kwargs: None),
+    )
+    with pytest.raises(ValueError, match="Unsupported DeepSeek model"):
+        optimize_compile.build_openai_lm(
+            model="gpt-4o",
+            base_url="https://api.deepseek.com",
+            api_key="test-key",
+        )
+
+
+def test_offline_optimizer_accepts_documented_deepseek_model(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from pythontopia_graph.optimize import compile as optimize_compile
+
+    monkeypatch.setattr(
+        optimize_compile,
+        "_require_dspy",
+        lambda: SimpleNamespace(LM=lambda name, **_kwargs: name),
+    )
+
+    assert (
+        optimize_compile.build_openai_lm(
+            model="deepseek-v4-pro",
+            base_url="https://api.deepseek.com",
+            api_key="test-key",
+        )
+        == "openai/deepseek-v4-pro"
+    )
 
 
 @pytest.mark.asyncio

@@ -4,18 +4,22 @@ import asyncio
 
 import pytest
 from autogen_core import CancellationToken
+from fastapi import HTTPException
 
 from pythontopia_graph.graph import tutor_workflow_session as session_store
 from pythontopia_graph.graph.autogen_tutor_runtime import (
     _PRIVATE_IMAGE_DATA_KEY,
     _encode_state,
+    _decode_state,
     run_autogen_tutor_workflow,
+    validate_autogen_tutor_checkpoint_scope,
 )
 from pythontopia_graph.nodes.evidence_fetcher import RagHit, StaticEvidenceFetcher
 from pythontopia_graph.routes.tutor_workflow import (
     WorkflowRunEnvelope,
     tutor_workflow_run_stream,
 )
+from pythontopia_graph.routes import tutor_workflow as tutor_workflow_route
 from pythontopia_graph.schemas.tutor_workflow import (
     GuideCoachDecision,
     TutorStudentState,
@@ -197,6 +201,63 @@ async def test_autogen_workflow_propagates_request_cancellation() -> None:
 
 
 @pytest.mark.asyncio
+async def test_autogen_stage_checkpoint_restores_native_team_and_resumes_next_stage() -> None:
+    calls: list[str] = []
+    checkpoints: list[dict] = []
+
+    async def first_stage(state):
+        calls.append("first")
+        return {**state, "first_stage_done": True}
+
+    async def second_stage(state):
+        calls.append("second")
+        assert state["first_stage_done"] is True
+        return {**state, "runtime_state": "SUCCEEDED"}
+
+    async def save_checkpoint(checkpoint):
+        checkpoints.append(checkpoint)
+
+    stages = [("first", first_stage), ("second", second_stage)]
+    await run_autogen_tutor_workflow(
+        {"runtime_state": "QUEUED"},
+        stages,
+        on_checkpoint=save_checkpoint,
+    )
+
+    assert calls == ["first", "second"]
+    assert [checkpoint["stage_name"] for checkpoint in checkpoints] == ["first", "second"]
+    assert checkpoints[0]["stage_index"] == 0
+    assert _decode_state(checkpoints[0]["workflow_state"])["first_stage_done"] is True
+    assert checkpoints[0]["team_state"]
+
+    calls.clear()
+    resumed = await run_autogen_tutor_workflow(
+        {"runtime_state": "QUEUED"},
+        stages,
+        restore_checkpoint=checkpoints[0],
+    )
+
+    assert calls == ["second"]
+    assert resumed["runtime_state"] == "SUCCEEDED"
+
+
+def test_autogen_checkpoint_cannot_restore_a_different_request_scope() -> None:
+    original = _request()
+    checkpoint = {
+        "stage_index": 0,
+        "stage_name": "validate_transition",
+        "team_state": {"agent_states": []},
+        "workflow_state": _encode_state({"request": original}),
+    }
+
+    with pytest.raises(ValueError, match="does not belong to this request"):
+        validate_autogen_tutor_checkpoint_scope(
+            checkpoint,
+            original.model_copy(update={"session_id": "other-owner-session"}),
+        )
+
+
+@pytest.mark.asyncio
 async def test_tutor_sse_disconnect_cancels_in_flight_autogen_stage() -> None:
     started = asyncio.Event()
     cancelled = asyncio.Event()
@@ -236,3 +297,134 @@ async def test_tutor_sse_disconnect_cancels_in_flight_autogen_stage() -> None:
     session = await session_store.get_state(7, session_id)
     assert session.seq == 0
     assert session.cards == []
+
+
+@pytest.mark.asyncio
+async def test_same_tutor_session_rejects_a_second_active_run() -> None:
+    started = asyncio.Event()
+    cancelled = asyncio.Event()
+
+    class BlockingProvider:
+        async def chat(self, _messages, **_kwargs):
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+
+        async def chat_stream(self, _messages, **_kwargs):
+            yield ""
+
+    session_id = "autogen-single-active-run"
+    await session_store.reset_session(7, session_id)
+    first = await tutor_workflow_run_stream(
+        WorkflowRunEnvelope(
+            session_id=session_id,
+            user_id=7,
+            event="READING",
+            problem=WorkflowProblemContext(problem_id=12, title="输入输出"),
+        ),
+        provider=BlockingProvider(),  # type: ignore[arg-type]
+        evidence_fetcher=StaticEvidenceFetcher([]),
+        trusted_user_id=7,
+    )
+    iterator = first.body_iterator
+    while not started.is_set():
+        await asyncio.wait_for(iterator.__anext__(), timeout=1)
+
+    with pytest.raises(HTTPException) as duplicate:
+        await tutor_workflow_run_stream(
+            WorkflowRunEnvelope(
+                session_id=session_id,
+                user_id=7,
+                event="READING",
+                problem=WorkflowProblemContext(problem_id=12, title="输入输出"),
+            ),
+            provider=BlockingProvider(),  # type: ignore[arg-type]
+            evidence_fetcher=StaticEvidenceFetcher([]),
+            trusted_user_id=7,
+        )
+    assert duplicate.value.status_code == 409
+
+    await asyncio.wait_for(iterator.aclose(), timeout=1)
+    await asyncio.wait_for(cancelled.wait(), timeout=1)
+
+
+@pytest.mark.asyncio
+async def test_route_persists_each_autogen_stage_checkpoint(monkeypatch) -> None:
+    request = _request()
+    run_id = "2d4c90d4-20f4-4a1b-90ee-e909e5e6d7b5"
+    fingerprint = "a" * 64
+    checkpoint = {
+        "stage_index": 0,
+        "stage_name": "validate_transition",
+        "team_state": {"agent_states": []},
+        "workflow_state": _encode_state({"request": request}),
+    }
+    saved: list[tuple[object, ...]] = []
+
+    class FakeGraph:
+        def __init__(self, _provider, _evidence_fetcher, *, emit) -> None:
+            self.emit = emit
+
+        async def run(self, state, *, on_checkpoint=None, **_kwargs):
+            assert state["request"] == request
+            assert on_checkpoint is not None
+            await on_checkpoint(checkpoint)
+            return {
+                "runtime_state": "SUCCEEDED",
+                "effective_event": "READING",
+                "new_phase": "READING",
+                "card_key": None,
+                "card": None,
+                "available_actions": [],
+            }
+
+    async def persist(*args) -> None:
+        saved.append(args)
+
+    monkeypatch.setattr(tutor_workflow_route, "TutorWorkflowGraph", FakeGraph)
+    monkeypatch.setattr(tutor_workflow_route, "persist_tutor_workflow_checkpoint", persist)
+    await session_store.reset_session(7, request.session_id)
+    response = await tutor_workflow_run_stream(
+        WorkflowRunEnvelope(
+            **request.model_dump(), run_id=run_id, request_fingerprint=fingerprint
+        ),
+        provider=object(),  # type: ignore[arg-type]
+        evidence_fetcher=StaticEvidenceFetcher([]),
+        trusted_user_id=7,
+    )
+
+    events = [event async for event in response.body_iterator]
+    assert any("event: RUN_FINISHED" in event for event in events)
+    assert saved == [(7, request.session_id, run_id, fingerprint, checkpoint)]
+
+
+@pytest.mark.asyncio
+async def test_route_rejects_checkpoint_for_another_problem_before_claiming_session() -> None:
+    original = _request()
+    checkpoint = {
+        "stage_index": 0,
+        "stage_name": "validate_transition",
+        "team_state": {"agent_states": []},
+        "workflow_state": _encode_state({"request": original}),
+    }
+    changed_request = original.model_copy(
+        update={"problem": WorkflowProblemContext(problem_id=13, title="其他题目")}
+    )
+
+    with pytest.raises(HTTPException) as rejected:
+        await tutor_workflow_run_stream(
+            WorkflowRunEnvelope(
+                **changed_request.model_dump(),
+                run_id="2d4c90d4-20f4-4a1b-90ee-e909e5e6d7b5",
+                request_fingerprint="a" * 64,
+                restore_autogen_checkpoint=checkpoint,
+            ),
+            provider=object(),  # type: ignore[arg-type]
+            evidence_fetcher=StaticEvidenceFetcher([]),
+            trusted_user_id=7,
+        )
+
+    assert rejected.value.status_code == 409

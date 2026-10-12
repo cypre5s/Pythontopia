@@ -43,8 +43,25 @@ public class TutorWorkflowGraphClient {
       Map<String, Object> body,
       SseEmitter emitter,
       Consumer<String> onResult) {
+    runStream(userId, body, emitter, onResult, ignored -> {}, () -> {});
+  }
+
+  /** Relays results and records explicit Graph failures or interrupted streams for recovery. */
+  public void runStream(
+      Long userId,
+      Map<String, Object> body,
+      SseEmitter emitter,
+      Consumer<String> onResult,
+      Consumer<String> onError,
+      Runnable onInterrupted) {
     String url = properties.graphUrl() + "/agents/tutor-workflow/run/stream";
     AtomicBoolean projectionFailed = new AtomicBoolean();
+    AtomicBoolean terminalResult = new AtomicBoolean();
+    AtomicBoolean terminalError = new AtomicBoolean();
+    AtomicBoolean downstreamGone = new AtomicBoolean();
+    emitter.onTimeout(() -> downstreamGone.set(true));
+    emitter.onError(ignored -> downstreamGone.set(true));
+    emitter.onCompletion(() -> downstreamGone.set(true));
     sseRelayExecutor.submit(
         () -> {
           try {
@@ -54,6 +71,7 @@ public class TutorWorkflowGraphClient {
                 objectMapper,
                 GraphInternalTokenSupport.tokenOrNull(properties),
                 GraphInternalSubjectSupport.user(userId),
+                downstreamGone::get,
                 (event, data) -> {
                   if (projectionFailed.get()) {
                     return;
@@ -61,26 +79,61 @@ public class TutorWorkflowGraphClient {
                   if ("result".equals(event) || "RUN_FINISHED".equals(event)) {
                     try {
                       onResult.accept(data);
+                      terminalResult.set(true);
                     } catch (RuntimeException e) {
                       projectionFailed.set(true);
+                      terminalError.set(true);
+                      invokeError(onError, "Tutor workflow result projection failed");
                       log.error("Tutor workflow result projection failed", e);
                       emitter.completeWithError(e);
                       return;
                     }
+                  } else if ("error".equals(event) || "RUN_ERROR".equals(event)) {
+                    terminalError.set(true);
+                    invokeError(onError, data);
                   }
                   try {
                     emitter.send(SseEmitter.event().name(event).data(data));
                   } catch (IOException e) {
                     log.debug("Tutor workflow SSE write failed, client likely disconnected", e);
+                    throw new GraphSseConsumer.AbortSseConsumption(e);
                   }
                 });
+            if (!projectionFailed.get() && !terminalResult.get() && !terminalError.get()) {
+              invokeInterrupted(onInterrupted);
+            }
             if (!projectionFailed.get()) {
               emitter.complete();
             }
+          } catch (GraphSseConsumer.AbortSseConsumption e) {
+            if (!terminalResult.get() && !terminalError.get()) {
+              invokeInterrupted(onInterrupted);
+            }
+            log.debug("Tutor workflow graph SSE cancelled after downstream disconnect");
+            emitter.complete();
           } catch (IOException e) {
+            if (!terminalResult.get() && !terminalError.get()) {
+              invokeInterrupted(onInterrupted);
+            }
             log.error("Tutor workflow graph SSE stream failed", e);
             emitter.completeWithError(e);
           }
         });
+  }
+
+  private void invokeError(Consumer<String> callback, String detail) {
+    try {
+      callback.accept(detail);
+    } catch (RuntimeException e) {
+      log.error("Tutor workflow failure checkpoint update failed", e);
+    }
+  }
+
+  private void invokeInterrupted(Runnable callback) {
+    try {
+      callback.run();
+    } catch (RuntimeException e) {
+      log.error("Tutor workflow interruption checkpoint update failed", e);
+    }
   }
 }

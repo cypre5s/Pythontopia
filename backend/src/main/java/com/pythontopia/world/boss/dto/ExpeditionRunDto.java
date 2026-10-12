@@ -34,22 +34,22 @@ import java.util.Map;
  * @param history 答题历史（前端 RogueHistoryEntry[]）
  */
 public record ExpeditionRunDto(
-    @NotBlank @Size(max = 16) String phase,
+    @NotBlank @Pattern(regexp = "idle|map|event|challenge|reward|cleared|over") String phase,
     @Min(1) @Max(7) Integer focusChapter,
-    List<Map<String, Object>> nodes,
-    @Min(0) int layers,
+    @Size(max = 34) List<Map<String, Object>> nodes,
+    @Min(0) @Max(10) int layers,
     @Size(max = 32) String currentNodeId,
-    @Min(0) int hp,
-    @Min(0) int maxHp,
-    @Min(0) int momentum,
-    @Min(0) int bestMomentum,
-    @Min(0) int score,
-    List<String> relics,
+    @Min(0) @Max(6) int hp,
+    @Min(0) @Max(6) int maxHp,
+    @Min(0) @Max(12) int momentum,
+    @Min(0) @Max(12) int bestMomentum,
+    @Min(0) @Max(100_000) int score,
+    @Size(max = 7) List<String> relics,
     boolean isDaily,
-    List<Map<String, Object>> history,
+    @Size(max = 50) List<Map<String, Object>> history,
     @Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
         String runId,
-    @Min(0) int verifiedDepth) {
+    @Min(0) @Max(12) int verifiedDepth) {
 
   /** Compatibility constructor for clients/tests that predate the server-derived depth field. */
   public ExpeditionRunDto(

@@ -1,20 +1,14 @@
 package com.pythontopia.learner.memory.provider;
 
-import java.util.Locale;
-import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * 记忆 provider 选型与外部端点配置，直接绑定 §8.8 约定的 env（{@code MEMORY_PROVIDER} 等），无需改
- * application.yml；本地 / ECS / 容器一致，符合「全部经 env 选型」的可移植性门。
+ * 旧版外部记忆 provider 的配置兼容层。运行时路由固定返回 {@code local}，这些外部 URL/key 不会被调用。
  *
  * <ul>
- *   <li>{@code MEMORY_PROVIDER}：{@code local}（默认，复用既有 memory_embedding）/ {@code mem0} / {@code zep}；
- *       非法值归一为 {@code local}（fail-soft）。
- *   <li>{@code MEM0_BASE_URL} / {@code MEM0_API_KEY}：Mem0 REST 端点与鉴权。
- *   <li>{@code ZEP_BASE_URL} / {@code ZEP_API_KEY}：Zep REST 端点与鉴权。
- *   <li>{@code MEMORY_HTTP_CONNECT_TIMEOUT_MS} / {@code MEMORY_HTTP_READ_TIMEOUT_MS}：外部调用超时（fail-fast）。
+ *   <li>{@code MEMORY_PROVIDER}：兼容旧配置，但本项目固定使用 {@code local}，不向其它记忆服务发送学习数据。
+ *   <li>旧 Mem0/Zep URL、key 和 timeout 字段只为兼容现有配置与适配器测试保留；生产 router 不会选中它们。
  * </ul>
  */
 @Component
@@ -25,8 +19,6 @@ public class MemoryProviderProperties {
 
   public static final String MEM0 = "mem0";
   public static final String ZEP = "zep";
-
-  private static final Set<String> KNOWN = Set.of(LOCAL, MEM0, ZEP);
 
   private final String provider;
   private final String mem0BaseUrl;
@@ -53,13 +45,9 @@ public class MemoryProviderProperties {
     this.readTimeoutMs = readTimeoutMs <= 0 ? 4000 : readTimeoutMs;
   }
 
-  /** 非法 / 空白 provider 归一为 {@code local}（安全默认 + fail-soft）。 */
+  /** 外部记忆服务可能接收学习记录；运行时固定走本地存储。 */
   private static String normalize(String raw) {
-    if (raw == null) {
-      return LOCAL;
-    }
-    String value = raw.trim().toLowerCase(Locale.ROOT);
-    return KNOWN.contains(value) ? value : LOCAL;
+    return LOCAL;
   }
 
   private static String trimTrailingSlash(String url) {

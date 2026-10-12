@@ -102,7 +102,7 @@ public class AuthService {
     }
     UserAccount user =
         userRepository
-            .findByUsername(principal.username())
+            .findById(principal.userId())
             .orElseThrow(
                 () ->
                     new BusinessException(
@@ -113,6 +113,15 @@ public class AuthService {
     }
     requireActive(user);
     return issueFor(user);
+  }
+
+  /** Revokes every existing token for the authenticated user, including the token used here. */
+  public void logout(CurrentUserPrincipal principal) {
+    if (principal == null) {
+      throw new BusinessException(
+          HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "Authentication is required");
+    }
+    userRepository.bumpTokenVersion(principal.userId());
   }
 
   public UserDto toDto(UserAccount user) {

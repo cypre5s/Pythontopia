@@ -18,6 +18,18 @@ from pythontopia_graph.optimize.loader import CompiledPrompt, load_compiled
 from pythontopia_graph.schemas.profile import ProfileDraft
 
 
+DEEPSEEK_CHAT_MODELS = frozenset({"deepseek-flash", "deepseek-v4-pro"})
+DEEPSEEK_VISION_MODELS = frozenset({"deepseek-flash"})
+
+
+def _require_deepseek_model(model: str, *, vision: bool = False) -> str:
+    supported = DEEPSEEK_VISION_MODELS if vision else DEEPSEEK_CHAT_MODELS
+    if model not in supported:
+        purpose = "vision" if vision else "chat"
+        raise RuntimeError(f"Unsupported DeepSeek model for {purpose}: {model}")
+    return model
+
+
 class LlmResponse(BaseModel):
     content_json: dict[str, Any] | None = None
     content_text: str | None = None
@@ -337,10 +349,17 @@ class OpenAiCompatProvider:
         # 经上面非空校验后窄化为 str（mypy 不跨实例属性传递 narrowing，故经局部变量回填）。
         self.base_url: str = base_url
         self.api_key: str = api_key
-        self.model: str = model
+        self.model: str = _require_deepseek_model(model)
         # 快档模型（NPC 寒暄/对话）未配置时回落默认档，行为零回归。
-        self.fast_model: str = fast_model or _openai_fast_model() or self.model
-        self.vision_model = vision_model or _openai_vision_model()
+        self.fast_model: str = _require_deepseek_model(
+            fast_model or _openai_fast_model() or self.model
+        )
+        selected_vision_model = vision_model or _openai_vision_model()
+        self.vision_model = (
+            _require_deepseek_model(selected_vision_model, vision=True)
+            if selected_vision_model
+            else None
+        )
         self.enable_thinking = enable_thinking
 
     def _resolve_model(self, kwargs: dict[str, object]) -> str:

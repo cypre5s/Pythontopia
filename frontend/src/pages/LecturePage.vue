@@ -13,7 +13,11 @@ import {
   type CourseVideoDto,
 } from '@/api/courseVideo';
 import { kcDisplayName } from '@/data/kcNames';
-import { getWorkshopResource, listWorkshopResources } from '@/api/workshop';
+import {
+  consumeWorkshopResource,
+  getWorkshopResource,
+  listWorkshopResources,
+} from '@/api/workshop';
 import { useToastStore } from '@/stores/toast';
 import PptView from '@/components/workshop/PptView.vue';
 import BilibiliVideoCards from '@/components/video/BilibiliVideoCards.vue';
@@ -59,7 +63,7 @@ const biliKeyword = computed<string>(
   () => `${chapterName.value} Python ${kcDisplayName(chapterKcCodes.value[0] ?? '')}`,
 );
 
-// R-15：旧 mainQuest 媒体消费打点已退役。本页只做会话内「已学习」标记（不再写主线进度）。
+// 视频只做会话内播放标记；打开工坊讲义时会另写服务端资源消费证据。
 const mediaConsumed = ref(false);
 
 const chapterDocId = computed<number>(() => 185 + props.chapter);
@@ -128,6 +132,11 @@ async function goPpt(): Promise<void> {
     const match = list.find((r) => r.kcCodes.some((c) => wanted.has(c)));
     if (match) {
       pptResource.value = await getWorkshopResource(match.id);
+      try {
+        await consumeWorkshopResource(match.id);
+      } catch {
+        toast.show('PPT 已打开，但学习记录暂未同步', 'info');
+      }
       showPpt.value = true;
       reportMediaConsumed('ppt');
       return;

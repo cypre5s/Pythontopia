@@ -61,6 +61,10 @@ class AuthServiceSecurityTest {
     return new UserAccount(9L, "stu01", "Stu", "stored-hash", null, role, status, tokenVersion);
   }
 
+  private static UserAccount user(long id, Role role, String status, int tokenVersion) {
+    return new UserAccount(id, "stu01", "Stu", "stored-hash", null, role, status, tokenVersion);
+  }
+
   private static RegisterRequest registerAs(Role role, String inviteCode) {
     return new RegisterRequest("newbie", "P@ssw0rd1", "Newbie", role, null, inviteCode);
   }
@@ -191,7 +195,7 @@ class AuthServiceSecurityTest {
     void missingSubjectIsRejected() {
       when(jwtService.parse("orphan-token"))
           .thenReturn(new CurrentUserPrincipal(9L, "stu01", Role.STUDENT, 0));
-      when(repository.findByUsername("stu01")).thenReturn(Optional.empty());
+      when(repository.findById(9L)).thenReturn(Optional.empty());
 
       assertBusiness(
           catchThrowable(() -> service.refresh("orphan-token")),
@@ -200,11 +204,30 @@ class AuthServiceSecurityTest {
     }
 
     @Test
+    @DisplayName("用户名被删除后重注册也不能用旧账号 token 刷新")
+    void recreatedUsernameCannotRefreshDeletedUsersToken() {
+      when(jwtService.parse("old-account-token"))
+          .thenReturn(new CurrentUserPrincipal(9L, "stu01", Role.STUDENT, 0));
+      when(repository.findById(9L)).thenReturn(Optional.empty());
+      when(repository.findByUsername("stu01"))
+          .thenReturn(Optional.of(user(10L, Role.STUDENT, UserAccount.STATUS_ACTIVE, 0)));
+
+      assertBusiness(
+          catchThrowable(() -> service.refresh("old-account-token")),
+          HttpStatus.UNAUTHORIZED,
+          "REFRESH_TOKEN_INVALID");
+
+      verify(repository).findById(9L);
+      verify(repository, never()).findByUsername("stu01");
+      verify(jwtService, never()).issue(any());
+    }
+
+    @Test
     @DisplayName("会话代次已自增（已吊销）的旧 token 换不到新 token")
     void revokedTokenCannotBeRefreshed() {
       when(jwtService.parse("stale-token"))
           .thenReturn(new CurrentUserPrincipal(9L, "stu01", Role.STUDENT, 0));
-      when(repository.findByUsername("stu01"))
+      when(repository.findById(9L))
           .thenReturn(Optional.of(user(Role.STUDENT, UserAccount.STATUS_ACTIVE, 1)));
 
       assertBusiness(
@@ -220,7 +243,7 @@ class AuthServiceSecurityTest {
     void disabledAccountCannotRefresh() {
       when(jwtService.parse("valid-token"))
           .thenReturn(new CurrentUserPrincipal(9L, "stu01", Role.STUDENT, 0));
-      when(repository.findByUsername("stu01"))
+      when(repository.findById(9L))
           .thenReturn(Optional.of(user(Role.STUDENT, "DISABLED", 0)));
 
       assertBusiness(
@@ -236,7 +259,7 @@ class AuthServiceSecurityTest {
     void activeAccountRefreshesSuccessfully() {
       when(jwtService.parse("valid-token"))
           .thenReturn(new CurrentUserPrincipal(9L, "stu01", Role.STUDENT, 2));
-      when(repository.findByUsername("stu01"))
+      when(repository.findById(9L))
           .thenReturn(Optional.of(user(Role.STUDENT, UserAccount.STATUS_ACTIVE, 2)));
       when(jwtService.issue(new CurrentUserPrincipal(9L, "stu01", Role.STUDENT, 2)))
           .thenReturn(new JwtService.IssuedToken("fresh-token", EXPIRES_AT));
@@ -247,5 +270,13 @@ class AuthServiceSecurityTest {
       assertThat(response.expiresAt()).isEqualTo(EXPIRES_AT);
       assertThat(response.user().username()).isEqualTo("stu01");
     }
+  }
+
+  @Test
+  @DisplayName("服务端登出递增当前账号会话代次以撤销全部旧 token")
+  void logoutRevokesCurrentAccountTokens() {
+    service.logout(new CurrentUserPrincipal(9L, "stu01", Role.STUDENT, 2));
+
+    verify(repository).bumpTokenVersion(9L);
   }
 }

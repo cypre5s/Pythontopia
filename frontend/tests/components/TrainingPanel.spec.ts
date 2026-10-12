@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { mount, flushPromises } from '@vue/test-utils';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { enableAutoUnmount, mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import TrainingPanel from '@/components/training/TrainingPanel.vue';
@@ -50,6 +50,10 @@ import { useToastStore } from '@stores/toast';
 import { loadCodeDraft, saveCodeDraft } from '@/composables/useCodeDraft';
 import { DEFAULT_TRAINING_CODE } from '@stores/learning/trainingSlice';
 import type { SubmissionDto } from '@/api/dto/Submission';
+
+enableAutoUnmount(afterEach);
+
+afterEach(() => vi.useRealTimers());
 
 function mountPanel(options: { stubTutor?: boolean } = {}) {
   const router: Router = createRouter({
@@ -415,6 +419,21 @@ describe('TrainingPanel', () => {
 
     expect(learning.training.code).toBe('print("477 的草稿")');
     wrapper.unmount();
+  });
+
+  it('does not save a draft after the training panel unmounts', async () => {
+    vi.useFakeTimers();
+    const wrapper = mountPanel();
+    const learning = useLearningStore();
+    await learning.loadTrainingProblem(476);
+    await flushPromises();
+    learning.setTrainingCode('print("退出页面后的代码")');
+    await flushPromises();
+
+    wrapper.unmount();
+    await vi.advanceTimersByTimeAsync(500);
+
+    expect(loadCodeDraft(476)).toBeNull();
   });
 
   it('keeps submit disabled while judging even after a local run finishes', async () => {

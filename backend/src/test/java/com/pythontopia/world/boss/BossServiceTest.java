@@ -10,6 +10,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -38,6 +39,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -67,6 +69,7 @@ class BossServiceTest {
   @Mock BossProblemReviewRepository reviewRepository;
   @Mock ExpeditionRunService expeditionRunService;
   @Mock ExpeditionScoreService expeditionScoreService;
+  @Mock BossAttemptIdempotencyService attemptIdempotencyService;
   @Mock ApplicationEventPublisher eventPublisher;
   private BossService service;
 
@@ -82,6 +85,7 @@ class BossServiceTest {
             reviewRepository,
             expeditionRunService,
             expeditionScoreService,
+            attemptIdempotencyService,
             eventPublisher);
     lenient()
         .when(passiveProfileService.getPersonalizationSignals(anyLong()))
@@ -532,6 +536,36 @@ class BossServiceTest {
   }
 
   @Test
+  @DisplayName("同一 attemptId 重放只判题并发布一次学习事件")
+  void replayedAttemptIdDoesNotPublishPracticeOutcomeTwice() {
+    when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problemWithTests(4)));
+    when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
+        .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
+    UUID attemptId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
+    BossAttemptRequest request =
+        new BossAttemptRequest(
+            "p1", 1, 1, "print(5)", 10, attemptId);
+    var claim = new BossAttemptIdempotencyService.Claim(UUID.randomUUID(), null, "a".repeat(64));
+    var replay =
+        new BossAttemptIdempotencyService.Claim(
+            null,
+            new com.pythontopia.world.boss.dto.BossAttemptResultDto(
+                "p1", true, 1, 1, null, 100, "通过 ✅ 服务端沙箱已确认。"),
+            "a".repeat(64));
+    when(attemptIdempotencyService.claim(7L, attemptId, request)).thenReturn(claim, replay);
+    when(attemptIdempotencyService.complete(eq(7L), eq(attemptId), eq(claim), any(), any()))
+        .thenReturn(replay.replay());
+
+    var first = service.evaluateAttempt(request, 7L);
+    var second = service.evaluateAttempt(request, 7L);
+
+    verify(graphClient, times(1)).evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt());
+    verify(attemptIdempotencyService, times(1))
+        .complete(eq(7L), eq(attemptId), eq(claim), any(), any());
+    assertThat(second).isEqualTo(first);
+  }
+
+  @Test
   @DisplayName("不能用可猜测的全局审核题 ID 绕过用户题目签发")
   void approvedAttemptRejectsGlobalReviewBankIdNotIssuedToUser() {
     when(pregenService.findByProblemId(7L, "approved-33-v2"))
@@ -589,13 +623,20 @@ class BossServiceTest {
   }
 
   @Test
-  @DisplayName("graph 评测不可用（无判定）→ 不发任何学习事件")
+  @DisplayName("graph 评测不可用时返回服务错误，不记为答错也不发学习事件")
   void graphUnavailablePublishesNothing() {
     when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problemWithTests(3)));
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenThrow(new RestClientException("graph down"));
 
-    service.evaluateAttempt(new BossAttemptRequest("p1", 1, 1, "print(1)", 10), 7L);
+    assertThatThrownBy(
+            () -> service.evaluateAttempt(new BossAttemptRequest("p1", 1, 1, "print(1)", 10), 7L))
+        .isInstanceOfSatisfying(
+            com.pythontopia.common.error.BusinessException.class,
+            exception -> {
+              assertThat(exception.code()).isEqualTo("BOSS_EVALUATOR_UNAVAILABLE");
+              assertThat(exception.status()).isEqualTo(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE);
+            });
 
     verifyNoInteractions(eventPublisher);
   }

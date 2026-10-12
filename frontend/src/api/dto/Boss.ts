@@ -96,6 +96,8 @@ export interface BossAttemptRequest {
   chapter: number;
   stage: number;
   code: string;
+  /** 重试同一次网络提交时保持不变；后端据此返回原判题结果。 */
+  attemptId?: string;
   /** 玩家做题时长（秒），用于自适应难度。 */
   elapsedSec: number;
   /** 上传画像信号，触发后端 PassiveProfileService 被动更新弱项 KC。 */

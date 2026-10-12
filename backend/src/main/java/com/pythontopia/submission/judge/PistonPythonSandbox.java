@@ -3,6 +3,7 @@ package com.pythontopia.submission.judge;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -28,6 +29,7 @@ public class PistonPythonSandbox implements PythonSandbox {
   private static final long MEMORY_LIMIT_BYTES = 256L * 1024 * 1024;
   private static final int MAX_STDOUT_CHARS = 64 * 1024;
   private static final int MAX_STDERR_CHARS = 16 * 1024;
+  private static final Set<String> PISTON_FAILURE_STATUSES = Set.of("RE", "SG", "TO", "OL", "EL", "XX");
 
   private final RestTemplate restTemplate;
   private final String baseUrl;
@@ -115,13 +117,38 @@ public class PistonPythonSandbox implements PythonSandbox {
     if (run == null || !run.isObject()) {
       return systemError("Sandbox returned an invalid response");
     }
-    String status = text(run, "status");
+    JsonNode statusNode = run.get("status");
+    String status = statusNode == null || statusNode.isNull() ? null : statusNode.asText(null);
+    if ((statusNode != null && !statusNode.isNull() && !statusNode.isTextual())
+        || (status != null && !PISTON_FAILURE_STATUSES.contains(status))) {
+      return systemError("Sandbox returned an invalid execution status");
+    }
+    JsonNode stdoutNode = run.get("stdout");
+    JsonNode stderrNode = run.get("stderr");
+    JsonNode codeNode = run.get("code");
+    JsonNode signalNode = run.get("signal");
+    if (stdoutNode == null
+        || !stdoutNode.isTextual()
+        || stderrNode == null
+        || !stderrNode.isTextual()
+        || (signalNode != null && !signalNode.isNull() && !signalNode.isTextual())
+        || (codeNode == null && status == null)
+        || (codeNode != null && !codeNode.isNull() && !codeNode.isIntegralNumber())) {
+      return systemError("Sandbox returned an invalid execution result");
+    }
     boolean timedOut = "TO".equals(status);
-    int exitCode = run.path("code").canConvertToInt() ? run.path("code").asInt() : -1;
+    int exitCode = codeNode != null && codeNode.canConvertToInt() ? codeNode.asInt() : -1;
+    if ((status != null && !timedOut && exitCode == 0)
+        || (status == null && signalNode != null && !signalNode.isNull() && exitCode == 0)) {
+      exitCode = -1;
+    }
     String stdout = truncate(text(run, "stdout"), MAX_STDOUT_CHARS);
     String stderr = text(run, "stderr");
     if (stderr.isBlank()) {
       stderr = text(run, "message");
+    }
+    if (stderr.isBlank() && status != null) {
+      stderr = "Piston execution status: " + status;
     }
     stderr = truncate(stderr, MAX_STDERR_CHARS);
     String errorKind =

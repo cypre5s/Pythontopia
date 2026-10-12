@@ -598,13 +598,13 @@ onMounted(() => {
   min-height: 36px;
   align-items: center;
   justify-content: center;
-  padding: 0 12px;
+  padding: 0 18px;
   border: 1px solid #cbd5e1;
   border-radius: 8px;
   background: #fff;
   color: #334155;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
@@ -740,7 +740,7 @@ onMounted(() => {
 
 .review-table {
   width: 100%;
-  min-width: 1000px;
+  min-width: 1100px;
   border-collapse: separate;
   border-spacing: 0;
   color: #1e293b;
@@ -765,6 +765,14 @@ onMounted(() => {
   padding: 10px 16px;
   border-bottom: 1px solid rgb(148 163 184 / 14%);
   vertical-align: middle;
+}
+
+.review-table td:nth-child(1),
+.review-table td:nth-child(3),
+.review-table td:nth-child(5),
+.review-table td:nth-child(7),
+.review-table td:nth-child(8) {
+  white-space: nowrap;
 }
 
 .review-table tbody tr:last-child td {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import { useSessionStore } from '@stores/session';
@@ -8,12 +8,10 @@ const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();
 const navigationOpen = ref(false);
-const isNarrow = ref(false);
-let navigationMediaQuery: MediaQueryList | undefined;
-
-const pageTitle = computed(() =>
-  route.name === 'admin-problem-reviews' ? 'AI 出题审核' : 'AI 运维概览',
-);
+const navigationToggle = ref<HTMLButtonElement | null>(null);
+const navigationMenu = ref<HTMLElement | null>(null);
+const navigationMediaQuery = window.matchMedia?.('(max-width: 767px)');
+const isNarrow = ref(navigationMediaQuery?.matches ?? false);
 
 function syncNavigationViewport(event: MediaQueryListEvent): void {
   isNarrow.value = event.matches;
@@ -24,13 +22,38 @@ function closeNavigation(): void {
   navigationOpen.value = false;
 }
 
+function handleNavigationKeydown(event: KeyboardEvent): void {
+  if (!isNarrow.value || !navigationOpen.value) return;
+  if (event.key === 'Escape') {
+    event.preventDefault();
+    closeNavigation();
+    return;
+  }
+  if (event.key !== 'Tab') return;
+  const focusable = Array.from(
+    navigationMenu.value?.querySelectorAll<HTMLElement>('a[href], button:not(:disabled)') ?? [],
+  );
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  if (!first || !last) return;
+  if (
+    event.shiftKey
+    && (document.activeElement === first || !navigationMenu.value?.contains(document.activeElement))
+  ) {
+    event.preventDefault();
+    last.focus();
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault();
+    first.focus();
+  }
+}
+
 function logout(): void {
   session.logout();
   void router.replace({ name: 'login' });
 }
 
 onMounted(() => {
-  navigationMediaQuery = window.matchMedia?.('(max-width: 767px)');
   isNarrow.value = navigationMediaQuery?.matches ?? false;
   navigationMediaQuery?.addEventListener('change', syncNavigationViewport);
 });
@@ -40,6 +63,13 @@ onBeforeUnmount(() => {
 });
 
 watch(() => route.fullPath, closeNavigation);
+watch(navigationOpen, (open) => {
+  if (!isNarrow.value) return;
+  void nextTick(() => {
+    if (open) navigationMenu.value?.querySelector<HTMLElement>('a[href]')?.focus();
+    else navigationToggle.value?.focus();
+  });
+});
 </script>
 
 <template>
@@ -58,10 +88,14 @@ watch(() => route.fullPath, closeNavigation);
 
       <aside
         id="admin-navigation"
+        ref="navigationMenu"
         class="admin-sidebar"
         aria-label="管理员导航"
+        :role="isNarrow && navigationOpen ? 'dialog' : undefined"
+        :aria-modal="isNarrow && navigationOpen ? 'true' : undefined"
         :aria-hidden="isNarrow && !navigationOpen"
         :inert="isNarrow && !navigationOpen"
+        @keydown="handleNavigationKeydown"
       >
         <RouterLink
           class="admin-brand"
@@ -123,6 +157,27 @@ watch(() => route.fullPath, closeNavigation);
               AI 出题审核
             </RouterLink>
           </section>
+
+          <section
+            class="admin-nav__group"
+            aria-labelledby="admin-nav-accounts"
+          >
+            <h2 id="admin-nav-accounts">
+              账号管理
+            </h2>
+            <RouterLink
+              class="admin-nav__link"
+              :to="{ name: 'admin-users' }"
+              exact-active-class="is-active"
+              @click="closeNavigation"
+            >
+              <span
+                class="admin-nav__icon"
+                aria-hidden="true"
+              >03</span>
+              用户管理
+            </RouterLink>
+          </section>
         </nav>
 
         <div class="admin-sidebar__account">
@@ -146,26 +201,23 @@ watch(() => route.fullPath, closeNavigation);
         </div>
       </aside>
 
-      <div class="admin-shell__main">
-        <header class="admin-topbar">
-          <button
-            class="admin-topbar__menu"
-            type="button"
-            aria-controls="admin-navigation"
-            :aria-expanded="navigationOpen"
-            @click="navigationOpen = !navigationOpen"
-          >
-            <span aria-hidden="true">☰</span>
-            <span>导航</span>
-          </button>
-          <div class="admin-topbar__title">
-            <span>管理控制台</span>
-            <h1>{{ pageTitle }}</h1>
-          </div>
-          <span class="admin-topbar__role">管理员</span>
-        </header>
+      <div
+        class="admin-shell__main"
+        :inert="isNarrow && navigationOpen"
+      >
+        <button
+          ref="navigationToggle"
+          class="admin-shell__navigation-toggle"
+          type="button"
+          aria-controls="admin-navigation"
+          :aria-expanded="navigationOpen"
+          @click="navigationOpen = !navigationOpen"
+        >
+          <span aria-hidden="true">☰</span>
+          管理导航
+        </button>
 
-        <div class="admin-shell__content">
+        <main class="admin-shell__content">
           <RouterView v-slot="{ Component }">
             <Transition
               name="admin-page"
@@ -174,11 +226,14 @@ watch(() => route.fullPath, closeNavigation);
               <component :is="Component" />
             </Transition>
           </RouterView>
-        </div>
+        </main>
 
         <footer class="admin-shell__footer">
-          <span>Pythontopia 管理后台</span>
-          <span>课程包 43 · Python语言基础</span>
+          <div class="admin-shell__footer-divider" />
+          <div class="admin-shell__footer-row">
+            <span class="admin-shell__footer-title">Pythontopia 管理台</span>
+            <span class="admin-shell__footer-version">课程包 43 · Python语言基础</span>
+          </div>
         </footer>
       </div>
     </div>
@@ -388,48 +443,15 @@ watch(() => route.fullPath, closeNavigation);
   margin-left: 240px;
 }
 
-.admin-topbar {
-  display: flex;
-  min-height: 76px;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 12px 30px;
-  border-bottom: 1px solid var(--admin-border);
-  background: var(--admin-surface);
-}
-
-.admin-topbar__title > span {
-  color: var(--admin-muted);
-  font-size: 11px;
-  letter-spacing: 0.04em;
-}
-
-.admin-topbar__title h1 {
-  margin: 2px 0 0;
-  color: var(--admin-text);
-  font-size: 18px;
-  font-weight: 700;
-  line-height: 1.35;
-}
-
-.admin-topbar__role {
-  padding: 5px 10px;
-  border: 1px solid #bfdbfe;
-  border-radius: 999px;
-  background: #eff6ff;
-  color: var(--admin-primary-hover);
-  font-size: 11px;
-  font-weight: 700;
-}
-
-.admin-topbar__menu {
+.admin-shell__navigation-toggle {
   display: none;
-  min-height: 40px;
+  min-height: 44px;
   align-items: center;
   gap: 8px;
-  padding: 0 12px;
-  border: 1px solid var(--admin-border);
+  align-self: flex-start;
+  margin: 16px 16px 0;
+  padding: 0 16px;
+  border: 1px solid rgb(148 163 184 / 30%);
   border-radius: 8px;
   background: #fff;
   color: var(--admin-text);
@@ -438,7 +460,7 @@ watch(() => route.fullPath, closeNavigation);
   cursor: pointer;
 }
 
-.admin-topbar__menu:focus-visible,
+.admin-shell__navigation-toggle:focus-visible,
 .admin-nav__link:focus-visible,
 .admin-brand:focus-visible {
   outline: 3px solid #93c5fd;
@@ -450,17 +472,35 @@ watch(() => route.fullPath, closeNavigation);
   max-width: 1440px;
   flex: 1;
   align-self: center;
-  padding: 28px 30px;
+  padding: 24px 28px 28px;
 }
 
 .admin-shell__footer {
+  padding: 0 28px 28px;
+  font-size: 13px;
+}
+
+.admin-shell__footer-divider {
+  height: 1px;
+  margin-bottom: 16px;
+  background: rgb(148 163 184 / 18%);
+}
+
+.admin-shell__footer-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 30px;
-  border-top: 1px solid var(--admin-border);
+}
+
+.admin-shell__footer-title {
+  color: #334155;
+  font-weight: 600;
+}
+
+.admin-shell__footer-version {
   color: var(--admin-muted);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .admin-shell__scrim {
@@ -502,21 +542,8 @@ watch(() => route.fullPath, closeNavigation);
     margin-left: 0;
   }
 
-  .admin-topbar {
-    min-height: 68px;
-    padding: 10px 16px;
-  }
-
-  .admin-topbar__menu {
+  .admin-shell__navigation-toggle {
     display: inline-flex;
-  }
-
-  .admin-topbar__title {
-    margin-right: auto;
-  }
-
-  .admin-topbar__role {
-    display: none;
   }
 
   .admin-shell__content {
@@ -524,8 +551,12 @@ watch(() => route.fullPath, closeNavigation);
   }
 
   .admin-shell__footer {
+    padding: 0 16px 16px;
+  }
+
+  .admin-shell__footer-row {
     flex-wrap: wrap;
-    padding: 14px 16px;
+    gap: 8px;
   }
 }
 
