@@ -23,7 +23,7 @@ export interface TutorAskRequest {
   kcCodes?: string[];
   /** 当前学习上下文（视频标题 / PPT 页 / 题面摘要），透传给导师增强答疑。 */
   context?: string;
-  /** 看图答疑：可选多图 base64（可带 data URL 前缀，最多 3 张）；后端逐张经讯飞图片理解转描述后交 deepseek 作答。 */
+  /** 看图答疑：可选 3 张以内 JPEG/PNG/GIF/WebP base64 图片（可带 data URL 前缀），由 DeepSeek 直接理解并文字作答。 */
   images?: string[];
   /**
    * 即时换讲法：学生本次显式选择的认知风格。携带时后端无视画像置信度门槛，

@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-12 — DeepSeek 导师文字与图片问答
+
+- 导师面板和工坊将图片直接交给 DeepSeek 视觉模型；回答继续使用 TutorAgent 文本流及现有 RAG、grounding、安全审查。
+- 工坊新增 JPEG、PNG、GIF、WebP 图片附件；Graph 校验格式、base64、数量和大小，图片只用于当轮请求，不写入聊天历史。
+- 视觉请求使用独立模型配置，凭证只保存在 Git 忽略的本地 `deploy/.env`；未发送真实 API 请求。
+- Graph 定向回归 24 项通过；前端图片 composer 测试、类型检查和 Java Tutor 转发/SSE 定向测试通过。
+- Maven 全量运行 1124 项、0 assertion failures，但 6 个 Testcontainers 集成测试因 Docker 随机宿主端口冲突启动失败；串行重跑 18 项通过。
+- 详细记录见 `docs/plans/2026-10-12-deepseek-vision-chat-worklog.md`。
+
+
 ## 2026-07-28 — 最终 ECS 双协议发布与 227 项公网验收
 
 - 最终发布包 `pythontopia-web-20260728T093105Z.tar.gz`（723,071,498 bytes，

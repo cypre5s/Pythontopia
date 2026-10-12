@@ -213,8 +213,8 @@ function onImageSelected(event: Event): void {
       toast.show(`最多上传 ${MAX_IMAGES} 张图片`, 'error');
       break;
     }
-    if (!/^image\/(png|jpe?g)$/.test(file.type)) {
-      toast.show('仅支持 PNG / JPG 图片', 'error');
+    if (!/^image\/(png|jpe?g|gif|webp)$/.test(file.type)) {
+      toast.show('仅支持 PNG / JPG / GIF / WebP 图片', 'error');
       continue;
     }
     if (file.size > MAX_IMAGE_BYTES) {
@@ -563,7 +563,7 @@ onMounted(async () => {
         <input
           ref="fileInputRef"
           type="file"
-          accept="image/png,image/jpeg"
+          accept="image/png,image/jpeg,image/gif,image/webp"
           multiple
           hidden
           data-testid="tutor-image-input"

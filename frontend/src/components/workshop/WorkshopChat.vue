@@ -148,6 +148,7 @@ interface AskOptions {
   directive?: string;
   /** 即时换讲法：带 style 字段重问同一问题。 */
   style?: CognitiveStyle;
+  images?: string[];
 }
 
 /** 错误气泡「重试」chip 的参数缓存（重放上次 runAsk / runResource）。 */
@@ -191,6 +192,8 @@ interface ChatMessage {
   kcCodes?: string[];
   /** role==='user'：本轮随发的上传附件（仿 Claude Code），在用户气泡上方渲染。 */
   attachments?: UploadAttachmentRef[];
+  /** role==='user'：本轮已发送给导师的图片数量；图片本身不写入聊天历史。 */
+  imageCount?: number;
   /** kind==='video' / kind==='answer'：B站卡片检索关键词（Python 优先、清洗后）。 */
   videoKeyword?: string;
   /** kind==='browse'：联网查证会话详情（外部内容，非课件）。 */
@@ -821,8 +824,23 @@ watch(tutorSse.tokens, (t) => {
 });
 
 onUnmounted(() => {
+  accountContextActive = false;
+  tutorSse.abort();
+  workshopSse.abort();
+  orchestratorSse.abort();
   if (tokenRafId !== null) cancelAnimationFrame(tokenRafId);
 });
+
+watch(
+  [() => props.ownerId, () => session.user?.id ?? null],
+  ([ownerId, sessionOwnerId]) => {
+    if (ownerId === componentOwnerId && sessionOwnerId === componentOwnerId) return;
+    accountContextActive = false;
+    tutorSse.abort();
+    workshopSse.abort();
+    orchestratorSse.abort();
+  },
+);
 
 watch(workshopSse.tokens, (t) => {
   officeTokenPreview.value = t.slice(0, 200);
@@ -1149,7 +1167,24 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
 
   // 本轮随发的已就绪上传附件（向后兼容：旧调用无此字段时取空数组）。
   const attachments = payload.attachments ?? [];
+  const images = payload.images ?? [];
   rememberUploads(attachments);
+
+  if (
+    images.length > 0 &&
+    (quiz.value ||
+      (payload.forcedIntent &&
+        payload.forcedIntent !== "ASK" &&
+        payload.forcedIntent !== "EXPLAIN_CODE"))
+  ) {
+    pushMessage({
+      id: genId(),
+      role: "assistant",
+      kind: "error",
+      text: "图片输入目前用于导师问答和代码讲解；请退出考核或取消当前工具后重新发送。",
+    });
+    return;
+  }
 
   // 考核模式：普通输入即作答（不再路由，直接评卷下一轮）；/ 强制工具仍可临时打断（逃生门）。
   if (quiz.value && !payload.forcedIntent) {
@@ -1183,6 +1218,7 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
   }
   if (payload.manualKcCodes.length > 0) userMsg.kcCodes = payload.manualKcCodes;
   if (attachments.length > 0) userMsg.attachments = attachments;
+  if (images.length > 0) userMsg.imageCount = images.length;
   pushMessage(userMsg);
   scrollToBottom(true);
 
@@ -1214,6 +1250,7 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
       source: payload.source ?? "composer_text",
     };
     if (payload.forcedIntent) req.requestedIntent = payload.forcedIntent;
+    else if (images.length > 0) req.requestedIntent = "ASK";
     if (routedInteraction) req.interaction = routedInteraction;
     if (
       payload.source === "capability_launcher" &&
@@ -1297,7 +1334,20 @@ async function onSubmit(payload: ComposerSubmitPayload): Promise<void> {
     return;
   }
 
-  const msgId = await dispatchRoutedIntent(intent, ctx);
+  const msgId = images.length > 0
+    ? intent === "ASK" || intent === "EXPLAIN_CODE"
+      ? await dispatchIntent(intent, ctx, images)
+      : null
+    : await dispatchRoutedIntent(intent, ctx);
+  if (images.length > 0 && msgId === null) {
+    pushMessage({
+      id: genId(),
+      role: "assistant",
+      kind: "error",
+      text: "当前请求未进入导师问答，图片没有发送给其他工具。请改用导师问答或代码讲解。",
+    });
+    return;
+  }
   void persistWorkshopHistoryTurn(ctx, msgId);
 
   // 中置信（0.45~0.7）：已正常执行，答后在该 assistant 消息挂纠错 chips。
@@ -1341,9 +1391,10 @@ async function dispatchRoutedIntent(
 async function dispatchIntent(
   intent: IntentKind,
   ctx: DispatchContext,
+  images: string[] = [],
 ): Promise<string | null> {
   if (intent === "ASK") {
-    return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint);
+    return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint, { images });
   }
   if (intent === "ASKME") {
     return startQuiz(ctx);
@@ -1352,6 +1403,7 @@ async function dispatchIntent(
     return runAsk(ctx.text, ctx.kcCodes, ctx.contextHint, {
       intent: "EXPLAIN_CODE",
       directive: EXPLAIN_CODE_DIRECTIVE,
+      images,
     });
   }
   if (intent === "FIX_BUG") {
@@ -1706,6 +1758,7 @@ async function runAsk(
     conversationId: conversationId.value,
   };
   if (opts.style) body.style = opts.style;
+  if (opts.images?.length) body.images = opts.images;
 
   const askLabel = question.trim()
     ? `答疑：${question.trim().slice(0, 30)}`
@@ -2396,6 +2449,16 @@ onMounted(async () => {
               }}</span>
               <span class="user-attach__name">{{ a.filename }}</span>
               <span class="user-attach__meta">{{ a.charCount }} 字</span>
+            </span>
+          </div>
+          <div
+            v-if="m.imageCount"
+            class="user-attachments"
+            data-testid="user-images"
+          >
+            <span class="user-attach">
+              <span class="user-attach__icon" aria-hidden="true">🖼️</span>
+              <span class="user-attach__name">{{ m.imageCount }} 张图片</span>
             </span>
           </div>
           <div class="msg msg--user">

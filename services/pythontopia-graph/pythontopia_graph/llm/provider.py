@@ -55,6 +55,15 @@ def _message_content_to_text(content: object) -> str | None:
     return "".join(parts) if parts else None
 
 
+def _contains_image_input(messages: list[dict[str, Any]]) -> bool:
+    return any(
+        isinstance(part, dict) and part.get("type") in {"image_url", "input_image"}
+        for message in messages
+        if isinstance(message.get("content"), list)
+        for part in message["content"]
+    )
+
+
 def _parse_chat_message(data: dict[str, Any]) -> LlmResponse:
     """把 OpenAI 兼容 chat.completions 响应解析为 LlmResponse（含原生 tool_calls）。
 
@@ -127,12 +136,12 @@ def _drop_non_wire_kwargs(kwargs: dict[str, object]) -> None:
 
 class LlmProvider(Protocol):
     async def chat(
-        self, messages: list[dict[str, str]], *, json_mode: bool = True, **kwargs: object
+        self, messages: list[dict[str, Any]], *, json_mode: bool = True, **kwargs: object
     ) -> LlmResponse:
         raise NotImplementedError
 
     async def chat_stream(
-        self, messages: list[dict[str, str]], **kwargs: object
+        self, messages: list[dict[str, Any]], **kwargs: object
     ) -> AsyncIterator[str]:
         raise NotImplementedError
         yield  # noqa: RET503 – makes this a proper async generator in Protocol
@@ -219,6 +228,14 @@ def _openai_fast_model() -> str | None:
     )
 
 
+def _openai_vision_model() -> str | None:
+    return (
+        os.environ.get("OPENAI_MODEL_VISION")
+        or os.environ.get("LLM_MODEL_VISION")
+        or os.environ.get("PYT_OPENAI_MODEL_VISION")
+    )
+
+
 def _fine_tuned_env() -> tuple[str | None, str | None, str | None]:
     base_url = os.environ.get("PYT_FINE_TUNED_BASE_URL")
     api_key = os.environ.get("PYT_FINE_TUNED_API_KEY")
@@ -243,11 +260,15 @@ class DryRunProvider:
     # 让「有界工具调用循环」在无网络/无密钥时也可被单测覆盖（确定性、可终止）。
     supports_tool_calling = True
 
-    async def chat(self, messages: list[dict[str, str]], **kwargs: object) -> LlmResponse:
+    async def chat(self, messages: list[dict[str, Any]], **kwargs: object) -> LlmResponse:
+        if _contains_image_input(messages):
+            raise RuntimeError("dry-run provider does not support image input")
         tools = kwargs.get("tools")
         if tools:
             return self._dryrun_tool_turn(messages, tools)
-        text = "\n".join(message["content"] for message in messages)
+        text = "\n".join(
+            _message_content_to_text(message.get("content")) or "" for message in messages
+        )
         if "敏感" in text:
             return LlmResponse(content_json={"safety_failed": True, "reason": "PII_OR_SENSITIVE"})
         if "PY43-KC-999" in text or "虚构" in text or "不存在" in text:
@@ -257,8 +278,10 @@ class DryRunProvider:
         return LlmResponse(content_json={"profile_draft": draft.model_dump(mode="json")})
 
     async def chat_stream(
-        self, messages: list[dict[str, str]], **kwargs: object
+        self, messages: list[dict[str, Any]], **kwargs: object
     ) -> AsyncIterator[str]:
+        if _contains_image_input(messages):
+            raise RuntimeError("dry-run provider does not support image input")
         # dry-run 禁止回显 system/证据消息，否则 SYSTEM_PROMPT 会泄露到答疑气泡；仅依据最后一条 user 问题生成占位答复。
         user_turns = [
             str(m.get("content", "")) for m in messages if m.get("role") == "user"
@@ -274,7 +297,7 @@ class DryRunProvider:
             yield answer[i : i + 12]
 
     @staticmethod
-    def _dryrun_tool_turn(messages: list[dict[str, str]], tools: object) -> LlmResponse:
+    def _dryrun_tool_turn(messages: list[dict[str, Any]], tools: object) -> LlmResponse:
         """收到 tool 结果前回一次确定性 tool_call；收到后给最终答复（保证循环可终止）。"""
         last_role = messages[-1].get("role") if messages else None
         if last_role == "tool":
@@ -306,11 +329,11 @@ class OpenAiCompatProvider:
         api_key: str | None = None,
         model: str | None = None,
         fast_model: str | None = None,
+        vision_model: str | None = None,
         enable_thinking: bool | None = None,
     ) -> None:
         if base_url is None or api_key is None or model is None:
             load_pythontopia_env()
-            load_alethicode_env()
             env_base_url, env_api_key, env_model = _openai_compat_env()
             base_url = base_url or env_base_url
             api_key = api_key or env_api_key
@@ -323,18 +346,23 @@ class OpenAiCompatProvider:
         self.model: str = model
         # 快档模型（NPC 寒暄/对话）未配置时回落默认档，行为零回归。
         self.fast_model: str = fast_model or _openai_fast_model() or self.model
+        self.vision_model = vision_model or _openai_vision_model()
         self.enable_thinking = enable_thinking
 
     def _resolve_model(self, kwargs: dict[str, object]) -> str:
-        """按调用方声明的 model_tier 选模型：fast→快档（寒暄/对话），其余→默认档（答疑/工坊）。
+        """按调用方声明的 model_tier 选模型：fast→快档、vision→视觉档，其余→默认档。
 
         从 kwargs 弹出 model_tier，避免它被透传进 OpenAI 兼容请求体。
         """
         tier = kwargs.pop("model_tier", None)
+        if tier == "vision":
+            if not self.vision_model:
+                raise RuntimeError("OpenAI-compatible vision model is not configured")
+            return self.vision_model
         return self.fast_model if tier == "fast" else self.model
 
     async def chat(
-        self, messages: list[dict[str, str]], *, json_mode: bool = True, **kwargs: object
+        self, messages: list[dict[str, Any]], *, json_mode: bool = True, **kwargs: object
     ) -> LlmResponse:
         model = self._resolve_model(kwargs)
         _drop_non_wire_kwargs(kwargs)
@@ -370,7 +398,7 @@ class OpenAiCompatProvider:
         return _parse_chat_message(response.json())
 
     async def chat_stream(
-        self, messages: list[dict[str, str]], **kwargs: object
+        self, messages: list[dict[str, Any]], **kwargs: object
     ) -> AsyncIterator[str]:
         model = self._resolve_model(kwargs)
         _drop_non_wire_kwargs(kwargs)
@@ -420,7 +448,7 @@ class FineTunedFallbackProvider:
         self.guard_metrics = GuardMetrics()
 
     async def chat(
-        self, messages: list[dict[str, str]], *, json_mode: bool = True, **kwargs: object
+        self, messages: list[dict[str, Any]], *, json_mode: bool = True, **kwargs: object
     ) -> LlmResponse:
         guard_context = kwargs.pop("guard_context", None)
         if not self._should_use_adapter(json_mode=json_mode, kwargs=kwargs):
@@ -463,7 +491,7 @@ class FineTunedFallbackProvider:
             return await self.fallback.chat(messages, json_mode=json_mode, **kwargs)
 
     async def chat_stream(
-        self, messages: list[dict[str, str]], **kwargs: object
+        self, messages: list[dict[str, Any]], **kwargs: object
     ) -> AsyncIterator[str]:
         async for chunk in self.fallback.chat_stream(messages, **kwargs):
             yield chunk
@@ -538,14 +566,14 @@ class RoutedFineTunedProvider:
         self.grounding = grounding or default
 
     async def chat(
-        self, messages: list[dict[str, str]], *, json_mode: bool = True, **kwargs: object
+        self, messages: list[dict[str, Any]], *, json_mode: bool = True, **kwargs: object
     ) -> LlmResponse:
         agent = str(kwargs.pop("agent_route", ""))
         provider = self.contract if agent in self.CONTRACT_AGENTS else self.grounding
         return await provider.chat(messages, json_mode=json_mode, **kwargs)
 
     async def chat_stream(
-        self, messages: list[dict[str, str]], **kwargs: object
+        self, messages: list[dict[str, Any]], **kwargs: object
     ) -> AsyncIterator[str]:
         async for chunk in self.default.chat_stream(messages, **kwargs):
             yield chunk
@@ -673,8 +701,10 @@ class SparkProvider:
         return f"spark:{self.model_id}"
 
     async def chat(
-        self, messages: list[dict[str, str]], **kwargs: object
+        self, messages: list[dict[str, Any]], **kwargs: object
     ) -> LlmResponse:
+        if _contains_image_input(messages):
+            raise RuntimeError("Spark provider does not support image input")
         payload: dict[str, object] = {
             "model": self.model_id,
             "messages": messages,
@@ -717,8 +747,10 @@ class SparkProvider:
         return LlmResponse(content_text=content)
 
     async def chat_stream(
-        self, messages: list[dict[str, str]], **kwargs: object
+        self, messages: list[dict[str, Any]], **kwargs: object
     ) -> AsyncIterator[str]:
+        if _contains_image_input(messages):
+            raise RuntimeError("Spark provider does not support image input")
         payload: dict[str, object] = {
             "model": self.model_id,
             "messages": messages,

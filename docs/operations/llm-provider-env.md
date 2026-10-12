@@ -8,7 +8,7 @@ Pythontopia 在 graph / RAG 服务中通过 `LlmProvider` 协议抽象上游模�
 | 取值 | 用途 | 必需 env |
 | ---- | ---- | -------- |
 | `dryrun` | 测试/单元用，所有 chat 走确定式占位 | 无 |
-| `openai_compat` | 开发期 fallback；复用 OpenAI 兼容接口（含 Alethicode `.env` 中的密钥） | `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL`（或对应 `OPENAI_*`） |
+| `openai_compat` | 开发期 fallback；复用 OpenAI 兼容接口（含 Alethicode `.env` 中的密钥） | `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL`（或对应 `OPENAI_*`）；图片问答需 `LLM_MODEL_VISION` |
 | `spark` | 比赛演示主链路（讯飞 Spark OpenAI-兼容接口） | `PYT_SPARK_APP_ID`、`PYT_SPARK_API_KEY`、`PYT_SPARK_API_SECRET`、`PYT_SPARK_MODEL_ID`，可选 `PYT_SPARK_BASE_URL`（默认 `https://spark-api-open.xf-yun.com/v1`） |
 
 ## 切换原则
@@ -40,6 +40,13 @@ export PYT_SPARK_BASE_URL=https://spark-api-open.xf-yun.com/v1
 
 uvicorn pythontopia_graph.main:app --host 0.0.0.0 --port 18091 --workers 1
 ```
+
+## 导师图片问答
+
+- 导师面板与工坊可发送文字及 JPEG、PNG、GIF、WebP 图片；图片由 Graph 校验后以 OpenAI 兼容 `image_url` 内容块直接发送给 DeepSeek，答复保持文本流。
+- DeepSeek 视觉模型配置到 `PYT_OPENAI_MODEL_VISION`（例如 `deepseek-flash`），与 NPC 使用的快档模型分开；未配置时图片请求 fail fast。
+- 每次最多 3 张图片、单张原始文件最大 5 MiB；只接受 base64/Data URL，不接受远程图片 URL。图片只用于本轮，不存入聊天历史。
+- RAG、grounding 和 safety 审查仍按现有导师答疑链路执行。工坊代码/文档附件继续走现有文件上传与文本解析。
 
 ## 安全与合规
 

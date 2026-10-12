@@ -14,8 +14,8 @@ import java.util.List;
  *   <li>{@code question}：必填，≤2000 字。
  *   <li>{@code kcCodes}：关联知识点，转发为 Python graph 的 {@code kc_codes} 做 RAG 过滤检索；可空。
  *   <li>{@code context}：当前学习上下文（视频标题 / PPT 页 / 题面摘要），透传 graph 增强证据检索；可空。
- *   <li>{@code images}：可选截图 / 手写代码图，最多 3 张、单图 ≤8MB 字符（≈ 讯飞 4MB base64）；
- *       非空时后端逐张经讯飞「图片理解」转<b>客观描述</b>并入 {@code context} 再作答，绝不直接解题。
+ *   <li>{@code images}：可选截图 / 手写代码图，最多 3 张、单图 ≤8MB 字符；仅允许 JPEG、PNG、GIF、WebP，
+ *       每张原始图片 ≤5MiB。Graph 校验并规范化 base64 后，由 DeepSeek 视觉模型直接理解并以文字回答。
  *   <li>{@code style}：学生显式选择的认知风格（visual/logical/trial）；非空时<b>无视画像置信度门槛</b>，
  *       由 {@code TutorService} 注入 profile_brief 即时按该风格改写答案，为空则由画像决定。
  *   <li>{@code conversationId}：会话窗口 id——同一聊天窗口（一次打开 / 一次「新对话」）内多次提问共享，

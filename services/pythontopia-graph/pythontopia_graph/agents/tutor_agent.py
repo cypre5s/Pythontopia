@@ -191,10 +191,20 @@ class TutorAgent:
         profile_brief: str,
         conversation_history: list[dict[str, str]],
         evidence_chunks: list[RagHit],
+        images: list[str] | None = None,
     ) -> AsyncIterator[str]:
         messages = self._build_messages(
             question, profile_brief, conversation_history, evidence_chunks,
         )
+        if images:
+            image_parts = [
+                {"type": "image_url", "image_url": {"url": image}}
+                for image in images
+            ]
+            messages[-1]["content"] = [
+                {"type": "text", "text": question},
+                *image_parts,
+            ]
         # 工具增强：仅当「带 ```python 片段 + 在追问错误/输出」时，于受限沙箱实跑一次拿真实输出，
         # 把结果作为 system 提示注入，引导导师据实定位问题；绝不据此直接给出完整答案代码。
         if self.should_verify(question):
@@ -205,7 +215,10 @@ class TutorAgent:
                     {"role": "system", "content": self._build_verification_note(result)},
                 )
         # 流式作答放足 max_tokens，避免长解答被截断变短（chat_stream 本就不强制 JSON）。
-        async for token in self.provider.chat_stream(messages, max_tokens=_ANSWER_MAX_TOKENS):
+        stream_kwargs: dict[str, object] = {"max_tokens": _ANSWER_MAX_TOKENS}
+        if images:
+            stream_kwargs["model_tier"] = "vision"
+        async for token in self.provider.chat_stream(messages, **stream_kwargs):
             yield token
 
     async def ask_quiz_question(
@@ -365,8 +378,8 @@ class TutorAgent:
         profile_brief: str,
         conversation_history: list[dict[str, str]],
         evidence_chunks: list[RagHit],
-    ) -> list[dict[str, str]]:
-        messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    ) -> list[dict[str, Any]]:
+        messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
         if profile_brief:
             messages.append({"role": "system", "content": f"学生画像: {profile_brief}"})
             # 因材施教指令组：按 brief 里实际存在的信号逐条注入 system 消息。
