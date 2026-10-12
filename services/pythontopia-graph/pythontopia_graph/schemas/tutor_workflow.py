@@ -18,6 +18,7 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -221,13 +222,26 @@ class WorkflowRunRequest(BaseModel):
     @model_validator(mode="after")
     def validate_chat_images(self) -> "WorkflowRunRequest":
         images = self.event_data.get("images")
-        if self.event == "CHAT" and images is not None:
+        if images is not None and self.event != "CHAT":
+            raise ValueError("images are only supported for CHAT")
+        if self.event == "CHAT":
+            message = self.event_data.get("message", "")
+            if not isinstance(message, str):
+                raise ValueError("CHAT message must be text")
+            if len(message) > 2000:
+                raise ValueError("CHAT message must be at most 2000 characters")
+            if re.search(r"(?i)data:image/(?:png|jpeg|gif|webp);base64,", message):
+                raise ValueError("CHAT message must not contain image data URI")
+            if images is None:
+                images = []
             if not isinstance(images, list) or not all(isinstance(image, str) for image in images):
                 raise ValueError("event_data.images must be a list of image data")
-            self.event_data = {
-                **self.event_data,
-                "images": normalize_image_data(images),
-            }
+            normalized = normalize_image_data(images)
+            if not message.strip() and normalized:
+                message = "请结合图片帮我分析。"
+            if not message.strip():
+                raise ValueError("CHAT requires a message or image")
+            self.event_data = {**self.event_data, "message": message, "images": normalized}
         return self
 
 

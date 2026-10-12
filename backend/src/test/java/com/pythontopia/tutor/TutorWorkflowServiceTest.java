@@ -25,6 +25,7 @@ import com.pythontopia.submission.service.SubmissionService;
 import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowAgentStateDto;
+import com.pythontopia.tutor.dto.TutorWorkflowCardDto;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -108,6 +109,8 @@ class TutorWorkflowServiceTest {
     assertThat(body.get("session_id")).isEqualTo("wf-7-476-abc");
     assertThat(body.get("event")).isEqualTo("READING");
     assertThat(body.get("restore_phase")).isEqualTo("READING");
+    assertThat(body.get("restore_cards")).isEqualTo(List.of());
+    assertThat(body.get("restore_chat_history")).isEqualTo(List.of());
     assertThat(body.get("coach_mode")).isEqualTo(true);
     assertThat(body.get("profile_brief")).isEqualTo("认知风格: visual");
     @SuppressWarnings("unchecked")
@@ -115,6 +118,107 @@ class TutorWorkflowServiceTest {
     assertThat(problem.get("problem_id")).isEqualTo(PROBLEM);
     assertThat(problem.get("kc_codes")).isEqualTo(List.of("PY43-KC-016"));
     assertThat(body).doesNotContainKey("diagnosis");
+  }
+
+  @Test
+  void runRebuildsAutogenChatContextFromPersistedCards() throws Exception {
+    ObjectMapper mapper = new ObjectMapper();
+    when(repository.findRecentCards(session.id(), 12))
+        .thenReturn(
+            List.of(
+                new TutorWorkflowCardDto(
+                    1,
+                    "CHAT",
+                    "ai_reply",
+                    mapper.readTree(
+                        """
+                        {"card_id":"card-1","user_message":"旧问题","content":"旧回答"}
+                        """),
+                    OffsetDateTime.parse("2026-10-12T12:00:00Z")),
+                new TutorWorkflowCardDto(
+                    2,
+                    "AC_REVIEW",
+                    "post_ac",
+                    mapper.readTree(
+                        """
+                        {"card_id":"card-2","success_summary":"已通过","next_practice_direction":"尝试列表变式"}
+                        """),
+                    OffsetDateTime.parse("2026-10-12T12:01:00Z"))));
+
+    service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "CHAT", Map.of("message", "继续")));
+
+    Map<String, Object> body = capturedBody();
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> cards = (List<Map<String, Object>>) body.get("restore_cards");
+    assertThat(cards)
+        .containsExactly(
+            Map.of("card_id", "card-1", "card_key", "ai_reply", "short_text", "旧回答"),
+            Map.of(
+                "card_id", "card-2",
+                "card_key", "post_ac",
+                "short_text", "已通过",
+                "next_practice_direction", "尝试列表变式"));
+    assertThat(body.get("restore_chat_history"))
+        .isEqualTo(
+            List.of(
+                Map.of("role", "user", "content", "旧问题"),
+                Map.of("role", "assistant", "content", "旧回答")));
+  }
+
+  @Test
+  void chatInputRejectsOversizedTextAndImagesOnOtherEvents() {
+    assertThatThrownBy(
+            () ->
+                service.run(
+                    USER,
+                    new TutorWorkflowRunRequest(
+                        PROBLEM, "CHAT", Map.of("message", "x".repeat(2001)))))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("超过长度限制");
+    assertThatThrownBy(
+            () ->
+                service.run(
+                    USER,
+                    new TutorWorkflowRunRequest(
+                        PROBLEM,
+                        "IDEATING",
+                        Map.of("images", List.of("data:image/png;base64,aGVsbG8=")))))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("仅支持导学对话");
+  }
+
+  @Test
+  void imageOnlyChatGetsTextForPersistenceWithoutSavingImageData() throws Exception {
+    AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              onResult.set(invocation.getArgument(3));
+              return null;
+            })
+        .when(graphClient)
+        .runStream(any(), any(), any(), any());
+
+    service.run(
+        USER,
+        new TutorWorkflowRunRequest(
+            PROBLEM, "CHAT", Map.of("images", List.of("data:image/png;base64,aGVsbG8="))));
+    @SuppressWarnings("unchecked")
+    Map<String, Object> eventData = (Map<String, Object>) capturedBody().get("event_data");
+    assertThat(eventData).containsEntry("message", "请结合图片帮我分析。");
+    assertThat(eventData.get("images")).isEqualTo(List.of("data:image/png;base64,aGVsbG8="));
+
+    onResult
+        .get()
+        .accept(
+            """
+            {"result": {"session_id":"wf-7-476-abc","event":"CHAT","phase":"READING",
+             "card_key":"ai_reply","card":{"card_id":"wf-7-476-abc:x1","content":"看起来是半径输入"},
+             "available_actions":[],"seq":1}}
+            """);
+
+    ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
+    verify(repository).insertCard(eq(11L), eq(1), eq("CHAT"), eq("ai_reply"), payload.capture());
+    assertThat(payload.getValue()).contains("请结合图片帮我分析").doesNotContain("data:image");
   }
 
   @Test

@@ -311,6 +311,19 @@ async def test_restore_phase_replays_java_projection() -> None:
     session_id = "t-wf-restore"
     await session_store.reset_session(1, session_id)
     chat_card = {"content": "复盘后可以试试迁移题。", "referenced_card_ids": []}
+    restore_cards = [
+        {
+            "card_id": "card-old",
+            "card_key": "post_ac",
+            "short_text": "已完成本题复盘",
+            "next_practice_direction": "尝试列表变式",
+        }
+    ]
+    restore_chat_history = [
+        {"role": "user", "content": "旧问题"},
+        {"role": "assistant", "content": "旧回答"},
+    ]
+    provider = JsonStubProvider([chat_card])
     # 进程内无会话 + Java 投影说阶段是 AC_REVIEW → CHAT 应在 AC_REVIEW 上运行。
     response = await tutor_workflow_run_stream(
         WorkflowRunEnvelope(
@@ -321,8 +334,10 @@ async def test_restore_phase_replays_java_projection() -> None:
             event_data={"message": "接下来练什么？"},
             restore_phase="AC_REVIEW",
             restore_seq=3,
+            restore_cards=restore_cards,
+            restore_chat_history=restore_chat_history,
         ),
-        provider=JsonStubProvider([chat_card]),
+        provider=provider,
         evidence_fetcher=StaticEvidenceFetcher([]),
         trusted_user_id=1,
     )
@@ -330,3 +345,8 @@ async def test_restore_phase_replays_java_projection() -> None:
     result = next(payload for event, payload in events if event == "result")
     assert result["phase"] == "AC_REVIEW"
     assert result["seq"] == 4
+    messages = json.dumps(provider.messages, ensure_ascii=False)
+    assert "旧问题" in messages
+    assert "旧回答" in messages
+    assert "[card-old|post_ac]" in messages
+    assert any(action["event"] == "TRANSFER" for action in result["available_actions"])

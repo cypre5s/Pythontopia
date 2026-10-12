@@ -87,11 +87,17 @@ public class BossProblemReviewRepository {
   }
 
   public List<BossProblemReviewRecord> listMatching(
-      BossProblemReviewDecision decision, String query, int limit, long offset) {
+      BossProblemReviewDecision decision,
+      String query,
+      int limit,
+      long offset,
+      BossProblemReviewSortField sortBy,
+      BossProblemReviewSortDirection sortDirection) {
     return jdbcTemplate.query(
         SELECT_REVIEW
             + MATCHING_WHERE
-            + " ORDER BY r.requested_at DESC, r.id DESC LIMIT ? OFFSET ?",
+            + orderBy(sortBy, sortDirection)
+            + " LIMIT ? OFFSET ?",
         this::mapReview,
         PACK_ID,
         decision == null ? null : decision.name(),
@@ -100,6 +106,17 @@ public class BossProblemReviewRepository {
         query,
         limit,
         offset);
+  }
+
+  private static String orderBy(
+      BossProblemReviewSortField sortBy, BossProblemReviewSortDirection sortDirection) {
+    String expression =
+        switch (sortBy) {
+          case REQUESTED_AT -> "r.requested_at";
+          case STATEMENT -> "lower(coalesce(r.payload->>'statement', ''))";
+          case REQUESTER_USERNAME -> "lower(requester.username)";
+        };
+    return " ORDER BY " + expression + " " + sortDirection.name() + ", r.id DESC";
   }
 
   public Optional<BossProblemReviewRecord> findById(long id) {

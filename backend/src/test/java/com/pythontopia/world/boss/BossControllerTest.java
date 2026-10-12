@@ -2,6 +2,7 @@ package com.pythontopia.world.boss;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -88,7 +89,8 @@ class BossControllerTest {
     BossPrefetchStatusDto pending =
         new BossPrefetchStatusDto(17L, "PENDING", 1, null, false, "2026-07-10T00:00:00Z");
     when(service.prefetch(anyInt(), any(), any())).thenReturn(pending);
-    when(service.prefetchStatus(anyInt(), any(), any(), any(), any(), any())).thenReturn(pending);
+    when(service.prefetchStatus(anyInt(), nullable(Integer.class), any(), any(), any(), any(), any(), any()))
+        .thenReturn(pending);
 
     mockMvc
         .perform(

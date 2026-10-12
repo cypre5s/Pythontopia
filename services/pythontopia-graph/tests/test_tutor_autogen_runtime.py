@@ -6,7 +6,10 @@ import pytest
 from autogen_core import CancellationToken
 
 from pythontopia_graph.graph import tutor_workflow_session as session_store
-from pythontopia_graph.graph.autogen_tutor_runtime import run_autogen_tutor_workflow
+from pythontopia_graph.graph.autogen_tutor_runtime import (
+    _encode_state,
+    run_autogen_tutor_workflow,
+)
 from pythontopia_graph.nodes.evidence_fetcher import RagHit, StaticEvidenceFetcher
 from pythontopia_graph.routes.tutor_workflow import (
     WorkflowRunEnvelope,
@@ -88,6 +91,34 @@ async def test_autogen_stages_round_trip_typed_workflow_state() -> None:
     assert isinstance(result["evidence_chunks"][0], RagHit)
     assert isinstance(result["coach_decision"], GuideCoachDecision)
     assert isinstance(result["available_actions"][0], WorkflowAction)
+
+
+@pytest.mark.asyncio
+async def test_chat_images_stay_out_of_autogen_state_messages() -> None:
+    image = "data:image/png;base64,iVBORw0KGgo="
+    request = WorkflowRunRequest(
+        session_id="autogen-image-session",
+        user_id=7,
+        event="CHAT",
+        problem=WorkflowProblemContext(problem_id=12, title="输入输出"),
+        event_data={"message": "请看图", "images": [image]},
+    )
+    encoded = _encode_state({"request": request})
+    assert image not in encoded
+
+    seen_images: list[list[str]] = []
+
+    async def image_stage(state):
+        seen_images.append(state["request"].event_data["images"])
+        return state
+
+    result = await run_autogen_tutor_workflow(
+        {"request": request},
+        [("image_stage", image_stage)],
+    )
+
+    assert seen_images == [[image]]
+    assert image not in result["request"].model_dump_json()
 
 
 @pytest.mark.asyncio

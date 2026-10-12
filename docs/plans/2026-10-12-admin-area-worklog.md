@@ -6,6 +6,8 @@
 - 管理区的蓝灰色、卡片、表格和状态样式均限定在 admin 组件内；没有修改全局游戏颜色 token。
 - AI 运维页读取 `GET /api/ai/runtime/operations` 的 DTO 展示学习者证据覆盖、闭环和治理状态，并提供真实请求的错误重试。
 - 题目审核页使用服务端状态筛选、文本搜索和分页，展示审核 DTO 中的公开题面、样例、申请/审核人和状态；审批调用 `PATCH /api/teacher/problem-reviews/{reviewId}`，提交必填原因及乐观并发 `version`，使用服务端响应更新状态。没有展示隐藏测试或答案，也没有伪造队列数据。
+- 审核队列补充按申请时间、题面或申请人升降序；后端排序列和方向由枚举白名单映射到固定 SQL 表达式，排序变化回到第一页并复用现有失败/重试状态。
+- 排序功能回归：前端 API/页面 10 tests、类型检查与定向 ESLint 通过；后端服务、PostgreSQL 查询和授权集成 11 tests 通过。
 - `BossProblemReviewController` 路由为 `/api/teacher/problem-reviews`，控制器对教师和管理员授权；保留旧 `limit` 列表，新增 `/page` 的 `page/size/decision/q` 查询并限定字段投影；PATCH 接收审核决定 DTO。`AiRuntimeSummaryController` 的 `/api/ai/runtime/operations` 返回 `AiRuntimeOperationsDto`，按角色选择本人或平台统计。
 - 素材引用盘点检查 60 个静态路径，未发现丢失文件；另修正 NPC 索引把矿洞守矿人指向不存在文件名的问题，复用仓库已有 `portrait_miner.png`（上游许可已登记，无新增下载素材）。
 - 后台目前只有运维概览和题目审核两个入口；本次没有添加用户管理页、用户管理 API 或其他占位菜单。

@@ -7,6 +7,7 @@ import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -56,7 +57,13 @@ public class ExpeditionRunService {
     List<ExpeditionRunDto> rows =
         jdbcTemplate.query(
             "SELECT run_id::text AS run_id, phase, focus_chapter, nodes::text AS nodes, layers, current_node_id,"
-                + " hp, max_hp, momentum, best_momentum, score, relics::text AS relics,"
+                + " hp, max_hp, momentum, best_momentum,"
+                + " (SELECT COALESCE(SUM(a.score), 0) FROM expedition_verified_attempt a"
+                + " WHERE a.user_id = expedition_run.user_id AND a.run_id = expedition_run.run_id)"
+                + " AS verified_score,"
+                + " (SELECT COUNT(*) FROM expedition_verified_attempt a"
+                + " WHERE a.user_id = expedition_run.user_id AND a.run_id = expedition_run.run_id"
+                + " AND a.passed) AS verified_depth, relics::text AS relics,"
                 + " is_daily, history::text AS history"
                 + " FROM expedition_run WHERE user_id = ? AND status = 'ACTIVE'",
             (rs, i) ->
@@ -70,11 +77,12 @@ public class ExpeditionRunService {
                     rs.getInt("max_hp"),
                     rs.getInt("momentum"),
                     rs.getInt("best_momentum"),
-                    rs.getInt("score"),
+                    rs.getInt("verified_score"),
                     listOfString(rs.getString("relics")),
                     rs.getBoolean("is_daily"),
                     listOfMap(rs.getString("history")),
-                    rs.getString("run_id")),
+                    rs.getString("run_id"),
+                    rs.getInt("verified_depth")),
             userId);
     return rows.stream().findFirst();
   }
@@ -91,8 +99,13 @@ public class ExpeditionRunService {
         userId.toString());
     List<ExistingRun> existing =
         jdbcTemplate.query(
-            "SELECT run_id::text AS run_id, status FROM expedition_run WHERE user_id = ? FOR UPDATE",
-            (rs, rowNum) -> new ExistingRun(rs.getString("run_id"), rs.getString("status")),
+            "SELECT run_id::text AS run_id, status, focus_chapter FROM expedition_run"
+                + " WHERE user_id = ? FOR UPDATE",
+            (rs, rowNum) ->
+                new ExistingRun(
+                    rs.getString("run_id"),
+                    rs.getString("status"),
+                    (Integer) rs.getObject("focus_chapter")),
             userId);
 
     String requestedRunId = dto.runId() == null ? null : UUID.fromString(dto.runId()).toString();
@@ -107,6 +120,9 @@ public class ExpeditionRunService {
       if ("ACTIVE".equals(current.status())) {
         if (!current.runId().equals(requestedRunId)) {
           throw staleRun();
+        }
+        if (!Objects.equals(current.focusChapter(), dto.focusChapter())) {
+          throw chapterChanged();
         }
         runId = current.runId();
       } else {
@@ -145,14 +161,36 @@ public class ExpeditionRunService {
         serialize(dto.nodes()),
         serialize(dto.relics()),
         serialize(dto.history()));
-    Integer authoritativeScore =
+    VerifiedProgress verifiedProgress =
         jdbcTemplate.queryForObject(
-            "SELECT COALESCE(SUM(score), 0) FROM expedition_verified_attempt"
+            "SELECT COALESCE(SUM(score), 0) AS score,"
+                + " COUNT(*) FILTER (WHERE passed) AS verified_depth FROM expedition_verified_attempt"
                 + " WHERE user_id = ? AND run_id = ?::uuid",
-            Integer.class,
+            (rs, rowNum) -> new VerifiedProgress(rs.getInt("score"), rs.getInt("verified_depth")),
             userId,
             runId);
-    return withRunId(dto, runId, authoritativeScore == null ? 0 : authoritativeScore);
+    return withRunId(dto, runId, verifiedProgress == null ? new VerifiedProgress(0, 0) : verifiedProgress);
+  }
+
+  /** Validate a problem request against the user's active run and its immutable focus chapter. */
+  public void validateProblemRequest(Long userId, String runId, int chapter) {
+    if (runId == null) {
+      return;
+    }
+    List<Integer> focusChapters =
+        jdbcTemplate.query(
+            "SELECT focus_chapter FROM expedition_run WHERE user_id = ? AND run_id = ?::uuid"
+                + " AND status = 'ACTIVE'",
+            (rs, rowNum) -> (Integer) rs.getObject("focus_chapter"),
+            userId,
+            runId);
+    if (userId == null || focusChapters.isEmpty()) {
+      throw staleRun();
+    }
+    Integer focusChapter = focusChapters.getFirst();
+    if (focusChapter == null || focusChapter != chapter) {
+      throw chapterChanged();
+    }
   }
 
   public boolean isActiveRun(Long userId, String runId) {
@@ -167,9 +205,24 @@ public class ExpeditionRunService {
   }
 
   /** 结束 / 弃局：删除当前用户的活跃 run。 */
+  @Transactional
   public void abandon(Long userId) {
     if (userId == null) {
       return;
+    }
+    List<String> runIds =
+        jdbcTemplate.query(
+            "SELECT run_id::text FROM expedition_run WHERE user_id = ? FOR UPDATE",
+            (rs, rowNum) -> rs.getString(1),
+            userId);
+    for (String runId : runIds) {
+      jdbcTemplate.update(
+          "UPDATE pregenerated_problem SET status = 'FAILED', payload = NULL, problem_id = NULL,"
+              + " error_message = '远征已放弃，预加载题目已作废', updated_at = now()"
+              + " WHERE user_id = ? AND expedition_run_id = ?::uuid"
+              + " AND status IN ('PENDING', 'READY')",
+          userId,
+          runId);
     }
     jdbcTemplate.update("DELETE FROM expedition_run WHERE user_id = ?", userId);
   }
@@ -182,11 +235,11 @@ public class ExpeditionRunService {
     }
   }
 
-  private ExpeditionRunDto withRunId(ExpeditionRunDto run, String runId, int score) {
+  private ExpeditionRunDto withRunId(ExpeditionRunDto run, String runId, VerifiedProgress progress) {
     return new ExpeditionRunDto(
         run.phase(), run.focusChapter(), run.nodes(), run.layers(), run.currentNodeId(),
-        run.hp(), run.maxHp(), run.momentum(), run.bestMomentum(), score, run.relics(),
-        run.isDaily(), run.history(), runId);
+        run.hp(), run.maxHp(), run.momentum(), run.bestMomentum(), progress.score(), run.relics(),
+        run.isDaily(), run.history(), runId, progress.depth());
   }
 
   private BusinessException staleRun() {
@@ -194,7 +247,20 @@ public class ExpeditionRunService {
         HttpStatus.CONFLICT, "EXPEDITION_RUN_CHANGED", "远征存档已变化，请刷新后重试");
   }
 
-  record ExistingRun(String runId, String status) {}
+  private BusinessException chapterChanged() {
+    return new BusinessException(
+        HttpStatus.CONFLICT,
+        "EXPEDITION_CHAPTER_CHANGED",
+        "远征章节已绑定，不能在本局中切换章节");
+  }
+
+  record ExistingRun(String runId, String status, Integer focusChapter) {
+    ExistingRun(String runId, String status) {
+      this(runId, status, null);
+    }
+  }
+
+  private record VerifiedProgress(int score, int depth) {}
 
   private List<Map<String, Object>> listOfMap(String json) {
     if (json == null || json.isBlank()) {

@@ -149,7 +149,7 @@ class BossServiceTest {
             true,
             List.of(new BossTestCasePayload("2 3", "5", false)),
             "print(5)");
-    when(pregenService.claimReady(7L, 1, "PY43-KC-001", 2, "debug", null, null))
+    when(pregenService.claimReady(7L, 1, 1, "PY43-KC-001", 2, "debug", null, null))
         .thenReturn(Optional.of(ready));
 
     var dto =
@@ -223,6 +223,9 @@ class BossServiceTest {
     when(graphClient.evaluateAttempt(anyString(), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("ignored", true, 1, 1, null, null, List.of()));
     when(pregenService.findExpeditionRunId(eq(7L), anyString())).thenReturn(Optional.of(runId));
+    when(expeditionScoreService.recordVerifiedAttempt(
+            eq(7L), eq(runId), anyString(), eq(true), eq(100)))
+        .thenReturn(true);
 
     BossProblemRequest request = new BossProblemRequest(1, null, 1, null, null, null, null, runId);
     var problem = service.fetchProblem(1, request, 7L);
@@ -246,6 +249,13 @@ class BossServiceTest {
   @DisplayName("已失效的远征 run 不得发放可计分题目")
   void staleExpeditionRunCannotRequestProblem() {
     String staleRunId = "123e4567-e89b-12d3-a456-426614174001";
+    org.mockito.Mockito.doThrow(
+            new com.pythontopia.common.error.BusinessException(
+                org.springframework.http.HttpStatus.CONFLICT,
+                "EXPEDITION_RUN_CHANGED",
+                "远征存档已变化，请刷新后重试"))
+        .when(expeditionRunService)
+        .validateProblemRequest(7L, staleRunId, 1);
     assertThatThrownBy(
             () ->
                 service.fetchProblem(
@@ -255,6 +265,76 @@ class BossServiceTest {
         .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
         .hasMessageContaining("远征存档");
     verifyNoInteractions(graphClient, pregenService, reviewRepository);
+  }
+
+  @Test
+  @DisplayName("READY 题的服务端章节与阶段不匹配时不能重新标记后发给远征")
+  void readyProblemCannotBeRelabeledToAnotherStage() {
+    when(pregenService.claimReady(7L, 1, 2, "PY43-KC-001", 2, "debug", null, null))
+        .thenReturn(Optional.of(problemWithInput("ready", 1)));
+
+    assertThatThrownBy(
+            () ->
+                service.fetchProblem(
+                    1,
+                    new BossProblemRequest(2, null, 2, "PY43-KC-001", "debug", null, null, null),
+                    7L))
+        .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
+        .hasMessageContaining("阶段");
+    verifyNoInteractions(reviewRepository, graphClient);
+  }
+
+  @Test
+  @DisplayName("提交题目时章节或阶段必须与服务端签发内容一致")
+  void attemptContextMustMatchTheIssuedProblem() {
+    when(pregenService.findByProblemId(7L, "p1"))
+        .thenReturn(Optional.of(problemWithTests(2)));
+
+    assertThatThrownBy(
+            () ->
+                service.evaluateAttempt(
+                    new BossAttemptRequest("p1", 1, 2, "print(5)", 10), 7L))
+        .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
+        .hasMessageContaining("签发");
+    verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
+  }
+
+  @Test
+  @DisplayName("结算后的远征题不得继续调用判题服务")
+  void settledExpeditionProblemCannotBeSubmitted() {
+    String runId = "123e4567-e89b-12d3-a456-426614174000";
+    when(pregenService.findExpeditionRunId(7L, "p1")).thenReturn(Optional.of(runId));
+    when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(false);
+
+    assertThatThrownBy(
+            () ->
+                service.evaluateAttempt(
+                    new BossAttemptRequest("p1", 1, 1, "print(5)", 10), 7L))
+        .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
+        .hasMessageContaining("远征存档");
+    verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
+  }
+
+  @Test
+  @DisplayName("判题账本拒绝活动 run 的超额题目时，不发学习事件，也不误报存档过期")
+  void verifiedAttemptLimitDoesNotPublishLearningEventOrClaimRunExpired() {
+    String runId = "123e4567-e89b-12d3-a456-426614174000";
+    when(pregenService.findExpeditionRunId(7L, "p1")).thenReturn(Optional.of(runId));
+    when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
+    when(pregenService.findByProblemId(7L, "p1"))
+        .thenReturn(Optional.of(problemWithTests(1)));
+    when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
+        .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
+    when(expeditionScoreService.recordVerifiedAttempt(7L, runId, "p1", true, 100))
+        .thenReturn(false);
+
+    assertThatThrownBy(
+            () -> service.evaluateAttempt(
+                new BossAttemptRequest("p1", 1, 1, "print(5)", 10), 7L))
+        .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
+        .hasMessageContaining("判题次数");
+
+    verify(eventPublisher, never()).publishEvent(any());
   }
 
   @Test
@@ -324,7 +404,7 @@ class BossServiceTest {
                 snapshot("PY43-KC-002", "0.15", "0.50")));
     when(graphClient.requestProblem(
             anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
-        .thenReturn(internalProblem());
+        .thenReturn(problemWithStage(4));
 
     // stage=4：旧逻辑会出难度 4；学情驱动应据低掌握出更易的题。
     service.fetchProblem(
@@ -346,7 +426,7 @@ class BossServiceTest {
                 snapshot("PY43-KC-002", "0.92", "0.80")));
     when(graphClient.requestProblem(
             anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
-        .thenReturn(internalProblem());
+        .thenReturn(problemWithStage(2));
 
     service.fetchProblem(
         1, new BossProblemRequest(2, null, null, null, null, null, null, null), 7L);
@@ -361,7 +441,7 @@ class BossServiceTest {
     when(profileService.findProfile(7L)).thenReturn(Optional.of(beginnerProfile()));
     when(graphClient.requestProblem(
             anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
-        .thenReturn(internalProblem());
+        .thenReturn(problemWithStage(4));
 
     service.fetchProblem(
         1, new BossProblemRequest(4, null, 5, null, null, null, null, null), 7L);
@@ -388,12 +468,12 @@ class BossServiceTest {
   void prefetchStatusUsesAuthoritativeDifficultyDimensions() {
     when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of());
     when(profileService.findProfile(7L)).thenReturn(Optional.of(beginnerProfile()));
-    when(pregenService.getPrefetchStatus(7L, 1, "PY43-KC-001", 4, "debug", "1-5"))
+    when(pregenService.getPrefetchStatus(7L, 1, 4, "PY43-KC-001", 4, "debug", "1-5", null))
         .thenReturn(BossPrefetchStatusDto.idle());
 
-    service.prefetchStatus(1, "PY43-KC-001", 5, "debug", "1-5", 7L);
+    service.prefetchStatus(1, 4, "PY43-KC-001", 5, "debug", "1-5", null, 7L);
 
-    verify(pregenService).getPrefetchStatus(7L, 1, "PY43-KC-001", 4, "debug", "1-5");
+    verify(pregenService).getPrefetchStatus(7L, 1, 4, "PY43-KC-001", 4, "debug", "1-5", null);
   }
 
   @Test
@@ -583,8 +663,20 @@ class BossServiceTest {
         List.of(new BossTestCasePayload("2 3", "5", false)), "ref");
   }
 
+  private static BossInternalProblem problemWithStage(int stage) {
+    return new BossInternalProblem(
+        "p1", 1, stage, 1, "PY43-KC-001", "statement", List.of(), "2 3", "5", 1, true, true,
+        List.of(new BossTestCasePayload("2 3", "5", false)), "ref");
+  }
+
   private static BossInternalProblem problemWithInput(String input) {
-    return problemWithInputAndKc(input, "PY43-KC-001");
+    return problemWithInput(input, 1);
+  }
+
+  private static BossInternalProblem problemWithInput(String input, int stage) {
+    return new BossInternalProblem(
+        "same-graph-id", 1, stage, 1, "PY43-KC-001", "statement", List.of(), "", "", 1,
+        true, true, List.of(new BossTestCasePayload(input, "expected", false)), "ref");
   }
 
   private static BossInternalProblem problemWithInputAndKc(String input, String kcCode) {

@@ -153,7 +153,8 @@ public class BossService {
     // preferredKc 优先级高于旧 kcCode（前端 ArenaPage 走 preferredKc）。
     String effectiveKc = request.preferredKc() != null ? request.preferredKc() : request.kcCode();
     String kc = resolveKc(chapter, effectiveKc);
-    String expeditionRunId = validateExpeditionRun(userId, request.expeditionRunId());
+    String expeditionRunId =
+        validateExpeditionRun(userId, request.expeditionRunId(), chapter);
     // 难度优先取前端显式请求；否则据该章 KC 的真实掌握度 + 置信度推断（学情驱动），而非仅按 stage。
     int difficulty =
         computeTargetDifficulty(userId, kc, request.stage(), request.difficulty());
@@ -162,7 +163,7 @@ public class BossService {
     //    这条同时实现「学生中途退出，下次登入复用已生成未做的题」——上次会话预取留下的 READY 行。
     Optional<BossInternalProblem> reused =
         pregenService.claimReady(
-            userId, chapter, kc, difficulty, request.preferredKind(), request.arenaLevel(),
+            userId, chapter, request.stage(), kc, difficulty, request.preferredKind(), request.arenaLevel(),
             expeditionRunId);
     if (reused.isPresent()) {
       BossInternalProblem p = reused.get();
@@ -171,19 +172,8 @@ public class BossService {
       LOG.info("boss reuse pregenerated problemId={} user={} ch={}", p.problemId(), userId, chapter);
       // 展示时套用「本次请求」的 stage + 本次推断难度：预取时的 stage/难度不串到当前上下文
       // （也避免共享端点下复用题把异常 stage 显示给主线 boss）。
-      return new BossProblemDto(
-          p.problemId(),
-          chapter,
-          request.stage(),
-          difficulty,
-          p.kcCode(),
-          p.statement(),
-          p.hints(),
-          p.sampleInput(),
-          p.sampleOutput(),
-          p.totalTestCases(),
-          p.reviewed(),
-          p.aiGenerated());
+      requireProblemContext(p, chapter, request.stage());
+      return p.toPublic();
     }
 
     // 2) 没有该学生的 READY 个性化题时，再查教师已通过的全局题库：按
@@ -194,6 +184,7 @@ public class BossService {
             chapter, request.stage(), kc, request.preferredKind(), difficulty);
     if (approved.isPresent()) {
       BossInternalProblem source = approved.get().problem();
+      requireProblemContext(source, chapter, request.stage());
       BossInternalProblem problem = source.issueAs(ISSUE_ID_PREFIX + UUID.randomUUID(), kc);
       cache.put(new ProblemCacheKey(userId, problem.problemId()), new CachedProblem(problem, Instant.now()));
       pregenService.persistConsumed(
@@ -229,6 +220,7 @@ public class BossService {
               request.preferredKind(),
               authoritativeSignals(userId, request.profileSignals()));
       if (fromGraph != null && fromGraph.problemId() != null) {
+        requireProblemContext(fromGraph, chapter, request.stage());
         BossInternalProblem issued = fromGraph.issueAs(ISSUE_ID_PREFIX + UUID.randomUUID(), kc);
         cache.put(new ProblemCacheKey(userId, issued.problemId()), new CachedProblem(issued, Instant.now()));
         // 现场题也落库 (CONSUMED)，供内存缓存过期 / 进程重启后判题兜底取回 testCases（best-effort）。
@@ -255,12 +247,14 @@ public class BossService {
   public BossPrefetchStatusDto prefetch(int chapter, BossProblemRequest request, Long userId) {
     String effectiveKc = request.preferredKc() != null ? request.preferredKc() : request.kcCode();
     String kc = resolveKc(chapter, effectiveKc);
-    validateExpeditionRun(userId, request.expeditionRunId());
+    String expeditionRunId =
+        validateExpeditionRun(userId, request.expeditionRunId(), chapter);
     int difficulty =
         computeTargetDifficulty(userId, kc, request.stage(), request.difficulty());
     EndlessPregenService.PrefetchStart start =
         pregenService.beginPrefetch(
-            userId, chapter, kc, difficulty, request.preferredKind(), request.arenaLevel());
+            userId, chapter, request.stage(), kc, difficulty, request.preferredKind(),
+            request.arenaLevel(), expeditionRunId);
     if (start.shouldGenerate() && start.status().jobId() != null) {
       try {
         pregenService.generatePrefetch(
@@ -273,6 +267,7 @@ public class BossService {
             request.preferredKc(),
             request.preferredKind(),
             request.arenaLevel(),
+            expeditionRunId,
             authoritativeSignals(userId, request.profileSignals()),
             start.status().attempts());
       } catch (TaskRejectedException rejected) {
@@ -290,17 +285,20 @@ public class BossService {
   /** 查询预加载状态；维度与取题复用完全同构，尤其包含 difficulty。 */
   public BossPrefetchStatusDto prefetchStatus(
       int chapter,
+      Integer stage,
       String preferredKc,
       Integer requestedDifficulty,
       String preferredKind,
       String arenaLevel,
+      String expeditionRunId,
       Long userId) {
     String kc = resolveKc(chapter, preferredKc);
     int progression = requestedDifficulty == null ? 1 : requestedDifficulty;
     int difficulty =
         computeTargetDifficulty(userId, kc, progression, requestedDifficulty);
+    String activeRunId = validateExpeditionRun(userId, expeditionRunId, chapter);
     return pregenService.getPrefetchStatus(
-        userId, chapter, kc, difficulty, preferredKind, arenaLevel);
+        userId, chapter, stage, kc, difficulty, preferredKind, arenaLevel, activeRunId);
   }
 
   /**
@@ -341,6 +339,12 @@ public class BossService {
   }
 
   public BossAttemptResultDto evaluateAttempt(BossAttemptRequest request, Long userId) {
+    Optional<String> expeditionRunId =
+        pregenService.findExpeditionRunId(userId, request.problemId());
+    if (expeditionRunId.isPresent()
+        && !expeditionRunService.isActiveRun(userId, expeditionRunId.get())) {
+      throw expiredExpeditionRun();
+    }
     // 判题取题：先内存缓存（TTL 内有效），过期 / 缺失再回退 pregenerated_problem 凭 problemId 取回，
     // 修复「内存缓存过期 / 进程重启 → 判题失效」。
     BossInternalProblem problem = resolveProblemForEval(request.problemId(), userId);
@@ -357,6 +361,7 @@ public class BossService {
           0,
           "题目缓存过期且无持久化记录；请用前端 Pyodide 校验后再次提交，或重新生成题目。");
     }
+    requireProblemContext(problem, request.chapter(), request.stage());
     List<BossTestCasePayload> testCases = problem.testCases();
     if (testCases.isEmpty()) {
       LOG.warn("problem {} has empty testCases (graph schema drift?)", request.problemId());
@@ -377,7 +382,17 @@ public class BossService {
         throw new RestClientException("graph evaluate returned null body");
       }
       int score = scoreFor(graphResult);
-      recordVerifiedExpeditionAttempt(userId, request.problemId(), graphResult, score);
+      String runId = expeditionRunId.orElse(null);
+      if (!recordVerifiedExpeditionAttempt(userId, runId, request.problemId(), graphResult, score)) {
+        if (!expeditionRunService.isActiveRun(userId, runId)) {
+          throw expiredExpeditionRun();
+        }
+        throw new com.pythontopia.common.error.BusinessException(
+            org.springframework.http.HttpStatus.CONFLICT,
+            "EXPEDITION_ATTEMPT_LIMIT_REACHED",
+            "本局可计分判题次数已用完");
+      }
+      publishPracticeOutcome(userId, problem, graphResult);
       String feedback =
           graphResult.passed()
               ? "通过 ✅ 服务端沙箱已确认。"
@@ -387,7 +402,6 @@ public class BossService {
       // 闭环关键：服务端沙箱真实判完后（且仅此路径）才发学习事件，与 SubmissionService 同一套事件驱动
       // KC 掌握度（测）+ 8 维画像被动修订。缓存过期 / 缺 testCases / graph 不可用等「未判定」路径不发，
       // 避免把非判题结果污染进掌握度。单次 attempt 仅发一次，天然幂等。
-      publishPracticeOutcome(userId, problem, graphResult);
       return new BossAttemptResultDto(
           request.problemId(),
           graphResult.passed(),
@@ -412,34 +426,37 @@ public class BossService {
     }
   }
 
-  private String validateExpeditionRun(Long userId, String runId) {
+  private String validateExpeditionRun(Long userId, String runId, int chapter) {
     if (runId == null) {
       return null;
     }
-    if (userId == null || !expeditionRunService.isActiveRun(userId, runId)) {
-      throw new com.pythontopia.common.error.BusinessException(
-          org.springframework.http.HttpStatus.CONFLICT,
-          "EXPEDITION_RUN_EXPIRED",
-          "远征存档已变化，请刷新后重试");
-    }
+    expeditionRunService.validateProblemRequest(userId, runId, chapter);
     return runId;
   }
 
-  private void recordVerifiedExpeditionAttempt(
-      Long userId, String problemId, BossEvaluateResultDto result, int score) {
-    if (userId == null) {
-      return;
+  private boolean recordVerifiedExpeditionAttempt(
+      Long userId, String runId, String problemId, BossEvaluateResultDto result, int score) {
+    if (userId == null || runId == null) {
+      return true;
     }
-    try {
-      pregenService
-          .findExpeditionRunId(userId, problemId)
-          .ifPresent(
-              runId ->
-                  expeditionScoreService.recordVerifiedAttempt(
-                      userId, runId, problemId, result.passed(), score));
-    } catch (RuntimeException ex) {
-      LOG.warn("verified expedition attempt was not persisted problemId={}: {}", problemId, ex.getMessage());
+    return expeditionScoreService.recordVerifiedAttempt(
+        userId, runId, problemId, result.passed(), score);
+  }
+
+  private void requireProblemContext(BossInternalProblem problem, int chapter, int stage) {
+    if (problem.chapter() != chapter || problem.stage() != stage) {
+      throw new com.pythontopia.common.error.BusinessException(
+          org.springframework.http.HttpStatus.CONFLICT,
+          "BOSS_PROBLEM_CONTEXT_MISMATCH",
+          "题目章节或阶段与签发内容不一致");
     }
+  }
+
+  private com.pythontopia.common.error.BusinessException expiredExpeditionRun() {
+    return new com.pythontopia.common.error.BusinessException(
+        org.springframework.http.HttpStatus.CONFLICT,
+        "EXPEDITION_RUN_EXPIRED",
+        "远征存档已变化，请刷新后重试");
   }
 
   /**

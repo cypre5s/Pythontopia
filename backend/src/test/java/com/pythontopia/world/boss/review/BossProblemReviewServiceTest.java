@@ -50,7 +50,16 @@ class BossProblemReviewServiceTest {
                 student,
                 new BossProblemReviewCreateRequest(1, 1, "PY43-KC-001", 2, "debug")));
     assertForbidden(() -> service.list(student, 100));
-    assertForbidden(() -> service.page(student, 0, 20, null, null));
+    assertForbidden(
+        () ->
+            service.page(
+                student,
+                0,
+                20,
+                null,
+                null,
+                BossProblemReviewSortField.REQUESTED_AT,
+                BossProblemReviewSortDirection.DESC));
     assertForbidden(
         () ->
             service.decide(
@@ -67,18 +76,38 @@ class BossProblemReviewServiceTest {
     BossProblemReviewRecord pending =
         record(41L, problem("source-loop", 2, true, true), BossProblemReviewDecision.PENDING, 1);
     when(repository.countMatching(BossProblemReviewDecision.PENDING, "loop")).thenReturn(1L);
-    when(repository.listMatching(BossProblemReviewDecision.PENDING, "loop", 20, 20))
+    when(repository.listMatching(
+            BossProblemReviewDecision.PENDING,
+            "loop",
+            20,
+            20,
+            BossProblemReviewSortField.STATEMENT,
+            BossProblemReviewSortDirection.ASC))
         .thenReturn(List.of(pending));
 
     BossProblemReviewPageDto result =
-        service.page(admin, 1, 20, BossProblemReviewDecision.PENDING, " loop ");
+        service.page(
+            admin,
+            1,
+            20,
+            BossProblemReviewDecision.PENDING,
+            " loop ",
+            BossProblemReviewSortField.STATEMENT,
+            BossProblemReviewSortDirection.ASC);
 
     assertThat(result.content()).hasSize(1);
     assertThat(result.page()).isEqualTo(1);
     assertThat(result.size()).isEqualTo(20);
     assertThat(result.totalElements()).isEqualTo(1);
     assertThat(result.totalPages()).isEqualTo(1);
-    verify(repository).listMatching(BossProblemReviewDecision.PENDING, "loop", 20, 20);
+    verify(repository)
+        .listMatching(
+            BossProblemReviewDecision.PENDING,
+            "loop",
+            20,
+            20,
+            BossProblemReviewSortField.STATEMENT,
+            BossProblemReviewSortDirection.ASC);
   }
 
   @Test

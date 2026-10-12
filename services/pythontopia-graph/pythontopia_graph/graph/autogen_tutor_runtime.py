@@ -29,9 +29,12 @@ _STATE_MARKER = "__pythontopia_tutor_state_v1__:"
 class TutorWorkflowStageAgent(BaseChatAgent):
     """将一个现有 Tutor handler 包装为固定顺序的 AutoGen Agent。"""
 
-    def __init__(self, name: str, handler: StageHandler[Any]) -> None:
+    def __init__(
+        self, name: str, handler: StageHandler[Any], private_images: list[str] | None = None
+    ) -> None:
         super().__init__(name=name, description=f"Fixed Tutor workflow stage: {name}")
         self._handler = handler
+        self._private_images = private_images
 
     @property
     def produced_message_types(self) -> Sequence[type[BaseChatMessage]]:
@@ -49,6 +52,16 @@ class TutorWorkflowStageAgent(BaseChatAgent):
             raise asyncio.CancelledError
 
         state = _latest_state(messages)
+        request = state.get("request")
+        if self._private_images is not None and isinstance(request, WorkflowRunRequest):
+            state["request"] = request.model_copy(
+                update={
+                    "event_data": {
+                        **request.event_data,
+                        "images": self._private_images,
+                    }
+                }
+            )
         updated_state = await self._handler(state)
         if not isinstance(updated_state, dict):
             raise TypeError("Tutor workflow stage must return a state object")
@@ -82,6 +95,11 @@ async def run_autogen_tutor_workflow(
         TutorWorkflowStageAgent(
             name,
             cast(StageHandler[dict[str, Any]], handler),
+            private_images=(
+                list(state["request"].event_data.get("images", []))
+                if isinstance(state.get("request"), WorkflowRunRequest)
+                else None
+            ),
         )
         for name, handler in stages
     ]
@@ -119,7 +137,8 @@ def _encode_state(state: dict[str, Any]) -> str:
         if value is not None:
             if not isinstance(value, model_type):
                 raise TypeError(f"Tutor workflow state field {key!r} must be {model_type.__name__}")
-            payload[key] = value.model_dump(mode="json")
+            exclude = {"event_data": {"images"}} if key == "request" else None
+            payload[key] = value.model_dump(mode="json", exclude=exclude)
 
     actions = payload.get("available_actions")
     if actions is not None:

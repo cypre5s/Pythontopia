@@ -350,17 +350,22 @@ export async function prefetchBossProblem(
 /** Query the persisted state for exactly the same KC/kind/level/difficulty dimensions. */
 export async function fetchBossPrefetchStatus(
   chapter: number,
-  req: Pick<BossProblemRequest, 'preferredKc' | 'preferredKind' | 'arenaLevel' | 'difficulty'>,
+  req: Pick<
+    BossProblemRequest,
+    'stage' | 'preferredKc' | 'preferredKind' | 'arenaLevel' | 'difficulty' | 'expeditionRunId'
+  >,
 ): Promise<BossPrefetchStatusDto> {
   if (req.difficulty == null) throw new Error('查询预加载状态必须提供 difficulty');
   const response = await http.get<BossPrefetchStatusDto>(
     `/api/world/boss/${chapter}/prefetch`,
     {
       params: {
+        stage: req.stage,
         preferredKc: req.preferredKc,
         preferredKind: req.preferredKind,
         arenaLevel: req.arenaLevel,
         difficulty: req.difficulty,
+        expeditionRunId: req.expeditionRunId,
       },
       suppressNetworkToast: true,
     },

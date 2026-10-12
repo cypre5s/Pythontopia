@@ -85,7 +85,7 @@ class BossProblemReviewAuthorizationIntegrationTest {
             1,
             2,
             "PY43-KC-001",
-            "输入两个整数并输出和",
+            "z title",
             List.of("读取输入"),
             "2 3",
             "5",
@@ -96,16 +96,51 @@ class BossProblemReviewAuthorizationIntegrationTest {
                 new BossTestCasePayload("2 3", "5", true),
                 new BossTestCasePayload("-1 8", "7", false)),
             "a, b = map(int, input().split())\nprint(a + b)");
+    BossInternalProblem alphaProblem = withStatement(problem, "source-auth-alpha", "a title");
+    insertReview(alphaProblem, teacherId);
     Long reviewId =
-        jdbcTemplate.queryForObject(
-            "INSERT INTO boss_problem_review"
-                + " (source_problem_id, chapter, stage, kc_code, kind, difficulty, payload,"
-                + " requester_id)"
-                + " VALUES (?, 1, 1, 'PY43-KC-001', 'debug', 2, ?::jsonb, ?) RETURNING id",
-            Long.class,
-            problem.problemId(),
-            objectMapper.writeValueAsString(problem),
-            teacherId);
+        insertReview(problem, teacherId);
+
+    ResponseEntity<Map> sortedPage =
+        restTemplate.exchange(
+            "/api/teacher/problem-reviews/page?page=0&size=20&sortBy=STATEMENT&sortDirection=ASC",
+            HttpMethod.GET,
+            bearer(adminToken, null),
+            Map.class);
+    assertThat(sortedPage.getStatusCode()).isEqualTo(HttpStatus.OK);
+    List<Map<String, Object>> sortedContent =
+        (List<Map<String, Object>>) sortedPage.getBody().get("content");
+    assertThat(sortedContent)
+        .extracting(row -> ((Map<String, Object>) row.get("problem")).get("statement"))
+        .containsExactly("a title", "z title");
+
+    ResponseEntity<Map> reverseSortedPage =
+        restTemplate.exchange(
+            "/api/teacher/problem-reviews/page?page=0&size=20&sortBy=STATEMENT&sortDirection=DESC",
+            HttpMethod.GET,
+            bearer(adminToken, null),
+            Map.class);
+    List<Map<String, Object>> reverseSortedContent =
+        (List<Map<String, Object>>) reverseSortedPage.getBody().get("content");
+    assertThat(reverseSortedContent)
+        .extracting(row -> ((Map<String, Object>) row.get("problem")).get("statement"))
+        .containsExactly("z title", "a title");
+
+    ResponseEntity<Map> invalidSort =
+        restTemplate.exchange(
+            "/api/teacher/problem-reviews/page?page=0&size=20&sortBy=PAYLOAD&sortDirection=DESC",
+            HttpMethod.GET,
+            bearer(adminToken, null),
+            Map.class);
+    assertThat(invalidSort.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+
+    ResponseEntity<Map> invalidDirection =
+        restTemplate.exchange(
+            "/api/teacher/problem-reviews/page?page=0&size=20&sortBy=STATEMENT&sortDirection=SIDEWAYS",
+            HttpMethod.GET,
+            bearer(adminToken, null),
+            Map.class);
+    assertThat(invalidDirection.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
 
     ResponseEntity<Map> studentList =
         restTemplate.exchange(
@@ -250,5 +285,36 @@ class BossProblemReviewAuthorizationIntegrationTest {
     HttpHeaders headers = new HttpHeaders();
     headers.setBearerAuth(token);
     return new HttpEntity<>(body, headers);
+  }
+
+  private Long insertReview(BossInternalProblem problem, long requesterId) throws Exception {
+    return jdbcTemplate.queryForObject(
+        "INSERT INTO boss_problem_review"
+            + " (source_problem_id, chapter, stage, kc_code, kind, difficulty, payload,"
+            + " requester_id)"
+            + " VALUES (?, 1, 1, 'PY43-KC-001', 'debug', 2, ?::jsonb, ?) RETURNING id",
+        Long.class,
+        problem.problemId(),
+        objectMapper.writeValueAsString(problem),
+        requesterId);
+  }
+
+  private BossInternalProblem withStatement(
+      BossInternalProblem problem, String problemId, String statement) {
+    return new BossInternalProblem(
+        problemId,
+        problem.chapter(),
+        problem.stage(),
+        problem.difficulty(),
+        problem.kcCode(),
+        statement,
+        problem.hints(),
+        problem.sampleInput(),
+        problem.sampleOutput(),
+        problem.totalTestCases(),
+        problem.reviewed(),
+        problem.aiGenerated(),
+        problem.testCases(),
+        problem.referenceSolution());
   }
 }

@@ -45,10 +45,12 @@ router = APIRouter()
 
 
 class WorkflowRunEnvelope(WorkflowRunRequest):
-    """请求信封：在 run 请求上附加 Java 投影回放字段（进程重启后恢复阶段）。"""
+    """请求信封：附加 Java 投影字段，供进程重启后恢复 AutoGen 会话。"""
 
     restore_phase: str | None = Field(default=None)
     restore_seq: int = Field(default=0, ge=0)
+    restore_cards: list[dict[str, Any]] = Field(default_factory=list, max_length=12)
+    restore_chat_history: list[dict[str, str]] = Field(default_factory=list, max_length=20)
 
 
 def _provider(request: Request) -> LlmProvider:
@@ -117,6 +119,8 @@ async def tutor_workflow_run_stream(
                         body.session_id,
                         body.restore_phase,
                         body.restore_seq,
+                        cards=body.restore_cards,
+                        chat_history=body.restore_chat_history,
                     )
                 session = await session_store.get_state(trusted_user_id, body.session_id)
                 graph = TutorWorkflowGraph(provider, evidence_fetcher, emit=emit)

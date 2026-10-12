@@ -251,16 +251,19 @@ describe('boss prefetch status', () => {
     httpMock.get.mockResolvedValueOnce({ data: { ...pending, status: 'READY' } });
     const req = {
       stage: 2, preferredKc: 'PY43-KC-001', preferredKind: 'dual_track', difficulty: 2,
+      expeditionRunId: '123e4567-e89b-12d3-a456-426614174000',
     };
 
     await expect(prefetchBossProblem(1, req)).resolves.toEqual(pending);
     await expect(fetchBossPrefetchStatus(1, req)).resolves.toMatchObject({ status: 'READY' });
     expect(httpMock.get).toHaveBeenCalledWith('/api/world/boss/1/prefetch', {
       params: {
+        stage: 2,
         preferredKc: 'PY43-KC-001',
         preferredKind: 'dual_track',
         arenaLevel: undefined,
         difficulty: 2,
+        expeditionRunId: '123e4567-e89b-12d3-a456-426614174000',
       },
       suppressNetworkToast: true,
     });

@@ -18,10 +18,12 @@ import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
 import java.security.SecureRandom;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -40,6 +42,11 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class TutorWorkflowService {
 
   private static final Logger log = LoggerFactory.getLogger(TutorWorkflowService.class);
+  private static final int MAX_RESTORE_CARDS = 12;
+  private static final int MAX_RESTORE_CHAT_TURNS = 20;
+  private static final int MAX_CHAT_MESSAGE_LENGTH = 2000;
+  private static final Pattern IMAGE_DATA_URI =
+      Pattern.compile("(?i)data:image/(?:png|jpeg|gif|webp);base64,");
 
   /** 唯一课程知识底座 Alethicode packId=43（AGENTS 硬约束）。 */
   private static final long COURSE_PACK_ID = 43L;
@@ -99,6 +106,7 @@ public class TutorWorkflowService {
     body.put("event", request.event());
     body.put("problem", problemContext(problem));
     Map<String, Object> eventData = new HashMap<>(request.eventDataOrEmpty());
+    validateEventData(request.event(), eventData);
     Map<String, Object> diagnosis = resolveDiagnosis(userId, request, eventData);
     if (diagnosis != null) {
       body.put("diagnosis", diagnosis);
@@ -110,6 +118,10 @@ public class TutorWorkflowService {
     // 投影回放：graph 进程内已有会话时忽略；重启后据此恢复阶段（持久化为权威）。
     body.put("restore_phase", session.phase());
     body.put("restore_seq", session.seq());
+    List<TutorWorkflowCardDto> recentCards =
+        repository.findRecentCards(session.id(), MAX_RESTORE_CARDS);
+    body.put("restore_cards", restoreCards(session, recentCards));
+    body.put("restore_chat_history", restoreChatHistory(recentCards));
 
     SseEmitter emitter = new SseEmitter(180_000L);
     graphClient.runStream(
@@ -230,6 +242,120 @@ public class TutorWorkflowService {
     return context;
   }
 
+  private void validateEventData(String event, Map<String, Object> eventData) {
+    Object rawImages = eventData.get("images");
+    if (rawImages != null && !"CHAT".equals(event)) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "TUTOR_IMAGES_UNSUPPORTED", "图片输入仅支持导学对话");
+    }
+    if (!"CHAT".equals(event)) {
+      return;
+    }
+
+    Object rawMessage = eventData.getOrDefault("message", "");
+    if (!(rawMessage instanceof String message)) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "TUTOR_MESSAGE_INVALID", "导学消息必须是文本");
+    }
+    if (message.length() > MAX_CHAT_MESSAGE_LENGTH || IMAGE_DATA_URI.matcher(message).find()) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "TUTOR_MESSAGE_INVALID", "导学消息超过长度限制或包含图片数据");
+    }
+
+    if (rawImages != null) {
+      if (!(rawImages instanceof List<?> images)
+          || images.size() > 3
+          || images.stream()
+              .anyMatch(image -> !(image instanceof String value) || value.length() > 8_000_000)) {
+        throw new BusinessException(
+            HttpStatus.BAD_REQUEST, "TUTOR_IMAGES_INVALID", "图片数量或大小超出限制");
+      }
+      if (message.isBlank() && !images.isEmpty()) {
+        eventData.put("message", "请结合图片帮我分析。");
+      }
+    }
+    if (message.isBlank() && (rawImages == null || ((List<?>) rawImages).isEmpty())) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "TUTOR_MESSAGE_REQUIRED", "请输入问题或上传图片");
+    }
+  }
+
+  private List<Map<String, Object>> restoreCards(
+      TutorWorkflowSessionDto session, List<TutorWorkflowCardDto> cards) {
+    return cards.stream()
+        .map(
+            card -> {
+              JsonNode payload = card.payload();
+              Map<String, Object> restored = new LinkedHashMap<>();
+              restored.put(
+                  "card_id", payload.path("card_id").asText(session.sessionKey() + ":" + card.seq()));
+              restored.put("card_key", card.cardKey());
+              restored.put("short_text", cardShortText(card.cardKey(), payload));
+              String direction = payload.path("next_practice_direction").asText("");
+              if (!direction.isBlank()) {
+                restored.put("next_practice_direction", direction);
+              }
+              return restored;
+            })
+        .toList();
+  }
+
+  private String cardShortText(String cardKey, JsonNode payload) {
+    for (String field :
+        List.of(
+            "problem_restatement",
+            "analysis",
+            "description",
+            "root_cause",
+            "success_summary",
+            "review_content",
+            "summary",
+            "drill_goal",
+            "title",
+            "content")) {
+      String text = payload.path(field).asText("").trim();
+      if (!text.isEmpty()) {
+        return text.substring(0, Math.min(200, text.length()));
+      }
+    }
+    return cardKey;
+  }
+
+  private List<Map<String, String>> restoreChatHistory(List<TutorWorkflowCardDto> cards) {
+    List<Map<String, String>> history = new ArrayList<>();
+    for (TutorWorkflowCardDto card : cards) {
+      if (!"ai_reply".equals(card.cardKey())) {
+        continue;
+      }
+      String userMessage = card.payload().path("user_message").asText("").trim();
+      String answer = card.payload().path("content").asText("").trim();
+      if (userMessage.isEmpty()
+          || answer.isEmpty()
+          || IMAGE_DATA_URI.matcher(userMessage).find()) {
+        continue;
+      }
+      history.add(Map.of("role", "user", "content", limitText(userMessage)));
+      history.add(Map.of("role", "assistant", "content", limitText(answer)));
+    }
+    return history.size() <= MAX_RESTORE_CHAT_TURNS
+        ? history
+        : history.subList(history.size() - MAX_RESTORE_CHAT_TURNS, history.size());
+  }
+
+  private String limitText(String value) {
+    return value.substring(0, Math.min(MAX_CHAT_MESSAGE_LENGTH, value.length()));
+  }
+
+  private String chatMessage(TutorWorkflowRunRequest request) {
+    Map<String, Object> eventData = request.eventDataOrEmpty();
+    Object message = eventData.get("message");
+    if (message instanceof String text && !text.isBlank()) {
+      return text;
+    }
+    Object images = eventData.get("images");
+    return images instanceof List<?> list && !list.isEmpty() ? "请结合图片帮我分析。" : "";
+  }
+
   /**
    * ERROR_FEEDBACK / AC_REVIEW 取判题证据：eventData.submission_id 必填，归属 / 题目 / 判定
    * 一致性校验后投影（AC_REVIEW 必须 AC、ERROR_FEEDBACK 必须非 AC）。其余事件返回 null。
@@ -319,9 +445,8 @@ public class TutorWorkflowService {
     if (card.isObject() && cardKey != null && !cardKey.isBlank()) {
       JsonNode payload = card;
       if ("ai_reply".equals(cardKey)) {
-        Object message = request.eventDataOrEmpty().get("message");
         com.fasterxml.jackson.databind.node.ObjectNode enriched = card.deepCopy();
-        enriched.put("user_message", message == null ? "" : String.valueOf(message));
+        enriched.put("user_message", chatMessage(request));
         payload = enriched;
       }
       repository.insertCard(

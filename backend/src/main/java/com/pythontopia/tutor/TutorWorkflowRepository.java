@@ -162,6 +162,24 @@ public class TutorWorkflowRepository {
         sessionId);
   }
 
+  public List<TutorWorkflowCardDto> findRecentCards(Long sessionId, int limit) {
+    return jdbcTemplate.query(
+        """
+        SELECT seq, event, card_key, payload, created_at
+        FROM (
+          SELECT id, seq, event, card_key, payload, created_at
+          FROM tutor_workflow_card
+          WHERE session_id = ?
+          ORDER BY seq DESC, id DESC
+          LIMIT ?
+        ) recent
+        ORDER BY seq, id
+        """,
+        this::mapCard,
+        sessionId,
+        limit);
+  }
+
   private TutorWorkflowSessionDto mapSession(ResultSet rs, int rowNum) throws SQLException {
     return new TutorWorkflowSessionDto(
         rs.getLong("id"),

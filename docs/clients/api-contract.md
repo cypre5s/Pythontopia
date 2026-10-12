@@ -256,9 +256,12 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 | --- | --- | --- | --- |
 | POST | `/api/world/boss/select-frontier` | Bearer | 服务端以掌握度和 learner profile 选择真实 KC 前沿；失败或空结果返回 `503 EXPEDITION_ADAPTATION_UNAVAILABLE`，客户端不得用本地默认 KC 冒充画像结果 |
 | POST | `/api/world/boss/{chapter}/problem` | Bearer | 按 KC、题型、纵深难度取题；远征客户端只接受 `aiGenerated=true && reviewed=true` |
-| POST | `/api/world/boss/{chapter}/prefetch` | Bearer | 创建/复用同 `chapter + kc + kind + arenaLevel + difficulty` 的预加载任务，返回 `202` + `BossPrefetchStatusDto` |
-| GET | `/api/world/boss/{chapter}/prefetch` | Bearer | 用 `preferredKc`、`preferredKind`、`arenaLevel`、`difficulty` 查询同维度状态 |
+| POST | `/api/world/boss/{chapter}/prefetch` | Bearer | 创建/复用同 `chapter + stage + kc + kind + arenaLevel + difficulty + expeditionRunId` 的预加载任务，返回 `202` + `BossPrefetchStatusDto` |
+| GET | `/api/world/boss/{chapter}/prefetch` | Bearer | 用 `preferredKc`、`preferredKind`、`arenaLevel`、`difficulty` 和可选 `stage`、`expeditionRunId` 查询状态；省略 stage 兼容旧客户端并按其他维度查询 |
 | POST | `/api/world/boss/{chapter}/attempt` | Bearer | 正式提交，判题结果入库；公开样例的本地预览不能代替该接口 |
+| GET | `/api/world/expedition/run` | STUDENT | 取本人活动存档；返回的 `score` 和 `verifiedDepth` 由服务端判题账本计算，空存档返回 `204` |
+| PUT | `/api/world/expedition/run` | STUDENT | 保存本人活动存档；活动 `runId` 和聚焦章节不能被客户端替换，提交的 `score` / `verifiedDepth` 不作为事实来源 |
+| DELETE | `/api/world/expedition/run` | STUDENT | 弃局并结束本人活动存档 |
 
 `BossPrefetchStatusDto = { jobId, status, attempts, errorMessage, retryable, updatedAt }`，其中
 `status ∈ { IDLE, PENDING, READY, FAILED }`。只有审查通过且带隐藏测试的 AI 题可进入 `READY`；

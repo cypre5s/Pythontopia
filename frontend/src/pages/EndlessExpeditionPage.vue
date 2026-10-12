@@ -296,12 +296,12 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
             class="exp-stat"
             data-testid="expedition-score"
           >
-            <span class="exp-stat__label">得分</span>
+            <span class="exp-stat__label">游戏分</span>
             <span class="exp-stat__value">{{ run.score }}</span>
           </span>
           <span class="exp-stat">
-            <span class="exp-stat__label">深度</span>
-            <span class="exp-stat__value">{{ run.depth }}</span>
+            <span class="exp-stat__label">核验分</span>
+            <span class="exp-stat__value">{{ run.verifiedScore }}</span>
           </span>
         </div>
       </header>
@@ -341,7 +341,11 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
         >
           <span class="exp-save-card__eyebrow">已有远征存档</span>
           <strong>{{ run.savedRunSummary.focusChapter ? `第 ${run.savedRunSummary.focusChapter} 章聚焦` : '全局自适应远征' }}</strong>
-          <span>体力 {{ run.savedRunSummary.hp }}/{{ run.savedRunSummary.maxHp }} · 深度 {{ run.savedRunSummary.depth }} · 得分 {{ run.savedRunSummary.score }}</span>
+          <span>体力 {{ run.savedRunSummary.hp }}/{{ run.savedRunSummary.maxHp }} · 已核验通过 {{ run.savedRunSummary.verifiedDepth }} 题 · 核验分 {{ run.savedRunSummary.verifiedScore }}</span>
+          <span
+            v-if="!run.savedRunSummary.serverVerified"
+            class="exp-save-card__hint"
+          >离线存档成绩待服务器核验</span>
           <span v-if="run.savedRunSummary.relicCount > 0">学习增益 {{ run.savedRunSummary.relicCount }} 件</span>
           <PyButton
             variant="primary"
@@ -842,8 +846,9 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
         />
         <h2>{{ run.phase === 'cleared' ? `击穿知识闸 · 战胜 ${bossName}！` : '本局远征结束' }}</h2>
         <ul class="exp-end__stats">
-          <li>深度 {{ run.depth }} 层</li>
-          <li>得分 {{ run.score }}</li>
+          <li>服务端核验通过 {{ run.verifiedDepth }} 题</li>
+          <li>排行榜核验分 {{ run.verifiedScore }}</li>
+          <li>游戏积分 {{ run.score }}</li>
           <li>最高气势 ×{{ run.bestMomentum }}</li>
           <li>答对 {{ run.passedCount }} / {{ run.attempts }}</li>
         </ul>

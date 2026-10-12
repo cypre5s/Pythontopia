@@ -2,6 +2,8 @@ import { http } from "./http";
 import type { BossProblemDto } from "./dto/Boss";
 
 export type BossProblemReviewDecision = "PENDING" | "APPROVED" | "REJECTED";
+export type BossProblemReviewSortBy = "REQUESTED_AT" | "STATEMENT" | "REQUESTER_USERNAME";
+export type BossProblemReviewSortDirection = "ASC" | "DESC";
 
 export interface BossProblemReviewDto {
   id: number;
@@ -45,6 +47,8 @@ export interface BossProblemReviewPageDto {
 export interface BossProblemReviewSearch {
   page: number;
   size: number;
+  sortBy: BossProblemReviewSortBy;
+  sortDirection: BossProblemReviewSortDirection;
   decision?: BossProblemReviewDecision;
   q?: string;
 }
@@ -68,6 +72,8 @@ export async function searchProblemReviews(
   const params = {
     page: search.page,
     size: search.size,
+    sortBy: search.sortBy,
+    sortDirection: search.sortDirection,
     ...(search.decision ? { decision: search.decision } : {}),
     ...(q ? { q } : {}),
   };

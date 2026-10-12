@@ -18,7 +18,7 @@
 
 - 本地 `deploy/.env` 已配置 OpenAI-compatible DeepSeek endpoint，密钥不提交到仓库。图像请求使用 `deepseek-flash`；当前官方模型列表明确其支持视觉，而 `deepseek-v4-pro` 不支持图像。图像请求限制格式、base64、数量和单图大小。
 - Pythontopia 的 Tutor workflow 已真实使用 AutoGen `RoundRobinGroupChat`，以固定的五个阶段执行，保留 Java 端运行投影。它不等价于 Alethicode 当前脏工作树里的 17 类事件 handler、checkpoint 表和内部 API；整体替换会破坏现有 DTO、投影与持久化合同。
-- 普通 Tutor Ask 已有 DeepSeek 视觉输入路径；需要逐条核对用户可见的工坊/工作流聊天是否走这条路径。单独 AutoGen workflow 的输入合同仍没有图片字段。
+- 普通 Tutor Ask 与用户可见的 AutoGen CHAT 均支持 DeepSeek 视觉输入：前端图片经 Java 转发，由 Graph 校验字节、MIME、Base64、数量和大小后交给视觉模型；回复为文本。图片只保存在当轮请求内存中，不落聊天记录或数据库。AutoGen 阶段间 JSON 信封会剔除图片，运行时再将图片注入各阶段 agent 的本地上下文。
 - Alethicode 当前 AutoGen 实现主要是未提交工作树内容。审计只读其源码及 Codex 记录，没有修改或把未提交文件当作稳定接口。
 
 ### 安全与学习数据
@@ -78,7 +78,7 @@ DeepSeek key 只由本机忽略文件提供，compose 示例只含变量名和�
 
 ### Tutor / AutoGen
 
-保留 `TutorWorkflowGraph` 当前五阶段固定 AutoGen 执行以及现有 Java 工作流 API、SSE 事件和投影。对用户可见的工坊问答先接入现有普通 Tutor Ask 图像路径；若工作流聊天组件确实调用 AutoGen workflow，再只扩展该工作流的图片 DTO 和最终模型输入，不把图片字节放进 stage 间的 JSON 状态或 checkpoint。浏览器断开要取消上游模型任务；不能在 Java relay 丢弃客户端写异常后继续消费整条模型流。
+保留 `TutorWorkflowGraph` 当前五阶段固定 AutoGen 执行以及现有 Java 工作流 API、SSE 事件和投影。工作流 CHAT 已接收图片并送至视觉模型；图片不进入 stage 间的 JSON 状态或持久化投影。浏览器断开会取消上游模型任务；不能在 Java relay 丢弃客户端写异常后继续消费整条模型流。
 
 Alethicode 的 checkpoint/event-bus/run API 仅在 Pythontopia 有明确恢复、重放或运维验收需求时才做兼容设计。本轮不增加第二套运行表或新的公开 API。
 

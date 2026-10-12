@@ -53,12 +53,46 @@ async def get_state(user_id: int, session_id: str) -> WorkflowSessionState:
         )
 
 
-async def restore_phase(user_id: int, session_id: str, phase: str, seq: int) -> None:
-    """Java 投影回放（服务重启后首个 run 前调用），不覆盖已存在的会话。"""
+async def restore_phase(
+    user_id: int,
+    session_id: str,
+    phase: str,
+    seq: int,
+    *,
+    cards: list[dict[str, Any]] | None = None,
+    chat_history: list[dict[str, str]] | None = None,
+) -> None:
+    """从 Java 投影恢复 AutoGen 会话上下文，不覆盖进程内已有状态。"""
     async with _LOCK:
         key = _key(user_id, session_id)
         if key not in _STORE:
-            _STORE[key] = WorkflowSessionState(phase=phase, seq=seq)
+            restored_cards = [
+                {
+                    "card_id": str(card.get("card_id", ""))[:120],
+                    "card_key": str(card.get("card_key", ""))[:64],
+                    "short_text": str(card.get("short_text", ""))[:200],
+                    **(
+                        {"next_practice_direction": str(card["next_practice_direction"])[:500]}
+                        if isinstance(card.get("next_practice_direction"), str)
+                        else {}
+                    ),
+                }
+                for card in (cards or [])[-MAX_CARDS:]
+                if isinstance(card, dict)
+            ]
+            restored_history = [
+                {"role": turn["role"], "content": turn["content"][:2000]}
+                for turn in (chat_history or [])[-MAX_CHAT_TURNS:]
+                if isinstance(turn, dict)
+                and turn.get("role") in {"user", "assistant"}
+                and isinstance(turn.get("content"), str)
+            ]
+            _STORE[key] = WorkflowSessionState(
+                phase=phase,
+                seq=seq,
+                cards=restored_cards,
+                chat_history=restored_history,
+            )
 
 
 async def commit_run(

@@ -55,8 +55,10 @@ public class BossProblemReviewController {
       @RequestParam(defaultValue = "0") @Min(0) @Max(100_000) int page,
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
       @RequestParam(required = false) BossProblemReviewDecision decision,
-      @RequestParam(required = false) @Size(max = 100) String q) {
-    return service.page(reviewer, page, size, decision, q);
+      @RequestParam(required = false) @Size(max = 100) String q,
+      @RequestParam(defaultValue = "REQUESTED_AT") BossProblemReviewSortField sortBy,
+      @RequestParam(defaultValue = "DESC") BossProblemReviewSortDirection sortDirection) {
+    return service.page(reviewer, page, size, decision, q, sortBy, sortDirection);
   }
 
   @PatchMapping("/{reviewId}")

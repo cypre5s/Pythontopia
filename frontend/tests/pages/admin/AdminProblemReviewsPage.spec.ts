@@ -78,7 +78,12 @@ describe('AdminProblemReviewsPage', () => {
     const wrapper = mount(AdminProblemReviewsPage);
     await flushPromises();
 
-    expect(api.searchProblemReviews).toHaveBeenCalledWith({ page: 0, size: 20 });
+    expect(api.searchProblemReviews).toHaveBeenCalledWith({
+      page: 0,
+      size: 20,
+      sortBy: "REQUESTED_AT",
+      sortDirection: "DESC",
+    });
     expect(wrapper.findAll('.review-table tbody tr')).toHaveLength(1);
     expect(wrapper.text()).toContain('读入两个整数 a b，输出 a+b。');
     expect(wrapper.text()).toContain('公开输入样例');
@@ -97,6 +102,8 @@ describe('AdminProblemReviewsPage', () => {
     expect(api.searchProblemReviews).toHaveBeenLastCalledWith({
       page: 0,
       size: 20,
+      sortBy: "REQUESTED_AT",
+      sortDirection: "DESC",
       q: "loop",
     });
 
@@ -105,6 +112,8 @@ describe('AdminProblemReviewsPage', () => {
     expect(api.searchProblemReviews).toHaveBeenLastCalledWith({
       page: 0,
       size: 20,
+      sortBy: "REQUESTED_AT",
+      sortDirection: "DESC",
       decision: "PENDING",
       q: "loop",
     });
@@ -115,8 +124,72 @@ describe('AdminProblemReviewsPage', () => {
     expect(api.searchProblemReviews).toHaveBeenLastCalledWith({
       page: 1,
       size: 20,
+      sortBy: "REQUESTED_AT",
+      sortDirection: "DESC",
       decision: "PENDING",
       q: "loop",
+    });
+  });
+
+  it("sorts by a selectable column and direction and resets pagination", async () => {
+    api.searchProblemReviews.mockResolvedValue(page([review()], 45));
+    const wrapper = mount(AdminProblemReviewsPage);
+    await flushPromises();
+
+    expect(api.searchProblemReviews).toHaveBeenLastCalledWith({
+      page: 0,
+      size: 20,
+      sortBy: "REQUESTED_AT",
+      sortDirection: "DESC",
+    });
+
+    await wrapper.get('[data-testid="admin-review-next-page"]').trigger("click");
+    await flushPromises();
+    expect(api.searchProblemReviews).toHaveBeenLastCalledWith({
+      page: 1,
+      size: 20,
+      sortBy: "REQUESTED_AT",
+      sortDirection: "DESC",
+    });
+
+    await wrapper.get('[aria-label="审核队列排序字段"]').setValue("STATEMENT");
+    await flushPromises();
+    expect(api.searchProblemReviews).toHaveBeenLastCalledWith({
+      page: 0,
+      size: 20,
+      sortBy: "STATEMENT",
+      sortDirection: "DESC",
+    });
+
+    await wrapper.get('[aria-label="审核队列排序方向"]').setValue("ASC");
+    await flushPromises();
+    expect(api.searchProblemReviews).toHaveBeenLastCalledWith({
+      page: 0,
+      size: 20,
+      sortBy: "STATEMENT",
+      sortDirection: "ASC",
+    });
+  });
+
+  it("shows a sorting request error and retries with the selected order", async () => {
+    api.searchProblemReviews
+      .mockResolvedValueOnce(page([review()], 45))
+      .mockRejectedValueOnce(new Error("排序请求失败"))
+      .mockResolvedValueOnce(page([review()], 45));
+    const wrapper = mount(AdminProblemReviewsPage);
+    await flushPromises();
+
+    await wrapper.get('[aria-label="审核队列排序字段"]').setValue("REQUESTER_USERNAME");
+    await flushPromises();
+    expect(wrapper.get('[role="alert"]').text()).toContain("排序请求失败");
+
+    await wrapper.get(".review-error .admin-button").trigger("click");
+    await flushPromises();
+    expect(api.searchProblemReviews).toHaveBeenLastCalledWith({
+      page: 0,
+      size: 20,
+      sortBy: "REQUESTER_USERNAME",
+      sortDirection: "DESC",
     });
   });
 
