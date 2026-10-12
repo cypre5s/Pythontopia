@@ -24,11 +24,31 @@ from pythontopia_graph.schemas.tutor_workflow import (
 )
 
 StateT = TypeVar("StateT")
+CallT = TypeVar("CallT")
 StageHandler = Callable[[StateT], Awaitable[StateT]]
 PrivateImageResolver = Callable[[WorkflowRunRequest], Awaitable[list[str]]]
 StageCheckpointCallback = Callable[[dict[str, Any]], Awaitable[None]]
 _PRIVATE_IMAGE_DATA_KEY = "_tutor_stage_private_image_data"
 _STATE_MARKER = "__pythontopia_tutor_state_v1__:"
+
+
+async def run_autogen_tutor_call(
+    stage_name: str, call: Callable[[], Awaitable[CallT]]
+) -> CallT:
+    """Run one existing Tutor operation as a fixed AutoGen stage without serializing its result."""
+    unset = object()
+    result: CallT | object = unset
+
+    async def invoke(state: dict[str, Any]) -> dict[str, Any]:
+        nonlocal result
+        result = await call()
+        return state
+
+    initial_state: dict[str, Any] = {}
+    await run_autogen_tutor_workflow(initial_state, [(stage_name, invoke)])
+    if result is unset:
+        raise RuntimeError(f"Tutor AutoGen stage {stage_name!r} returned no result")
+    return cast(CallT, result)
 
 
 class TutorWorkflowStageAgent(BaseChatAgent):

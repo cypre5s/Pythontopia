@@ -6,6 +6,7 @@ vi.mock('@/api/http', () => ({
 
 import { http } from '@/api/http';
 import {
+  createExpeditionRun,
   deleteExpeditionRun,
   fetchExpeditionRun,
   requestFrontierPicks,
@@ -71,6 +72,20 @@ describe('expedition.ts · frontier selector', () => {
 });
 
 describe('expedition.ts · run persistence API', () => {
+  it('POSTs only run-start intent and receives the server-generated snapshot', async () => {
+    const started = { ...RUN, runId: '123e4567-e89b-12d3-a456-426614174000' };
+    vi.mocked(http.post).mockResolvedValueOnce({ data: started });
+
+    await expect(
+      createExpeditionRun({ focusChapter: 2, isDaily: false }),
+    ).resolves.toEqual(started);
+
+    expect(http.post).toHaveBeenCalledWith('/api/world/expedition/run', {
+      focusChapter: 2,
+      isDaily: false,
+    }, { suppressNetworkToast: true, timeout: 3000 });
+  });
+
   it('GETs the active backend run and maps 204/empty to null', async () => {
     vi.mocked(http.get).mockResolvedValueOnce({ status: 204, data: undefined });
     await expect(fetchExpeditionRun()).resolves.toBeNull();

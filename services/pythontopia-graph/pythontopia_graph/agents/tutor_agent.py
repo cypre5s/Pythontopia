@@ -10,6 +10,7 @@ from pythontopia_graph.agents.orchestrator_agent import (
     REPLY_STYLE_DIRECTIVES,
     select_reply_style,
 )
+from pythontopia_graph.graph.autogen_tutor_runtime import run_autogen_tutor_call
 from pythontopia_graph.llm.provider import LlmProvider
 from pythontopia_graph.nodes.code_runner import CodeRunResult, run_python
 from pythontopia_graph.nodes.evidence_fetcher import RagHit
@@ -162,6 +163,26 @@ class TutorAgent:
         self.provider = provider
 
     async def ask(
+        self,
+        question: str,
+        profile_brief: str,
+        conversation_history: list[dict[str, str]],
+        evidence_chunks: list[RagHit],
+        *,
+        allow_diagram: bool = True,
+    ) -> TutorResponse:
+        return await run_autogen_tutor_call(
+            self.AGENT_NAME,
+            lambda: self._ask_once(
+                question,
+                profile_brief,
+                conversation_history,
+                evidence_chunks,
+                allow_diagram=allow_diagram,
+            ),
+        )
+
+    async def _ask_once(
         self,
         question: str,
         profile_brief: str,

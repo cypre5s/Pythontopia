@@ -1,12 +1,14 @@
 package com.pythontopia.world.boss;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -19,6 +21,10 @@ import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.common.web.CurrentUserArgumentResolver;
 import com.pythontopia.common.web.WebConfig;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
+import com.pythontopia.world.boss.dto.ExpeditionRunStartRequest;
+import com.pythontopia.world.boss.dto.FrontierPickDto;
+import com.pythontopia.world.boss.dto.FrontierSelectRequest;
+import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -45,6 +51,7 @@ class ExpeditionRunControllerTest {
   @Autowired ObjectMapper objectMapper;
 
   @MockBean ExpeditionRunService service;
+  @MockBean BossService bossService;
   @MockBean JwtAuthenticationFilter jwtAuthenticationFilter;
 
   @BeforeEach
@@ -94,6 +101,38 @@ class ExpeditionRunControllerTest {
         .andExpect(jsonPath("$.score").value(32));
 
     verify(service).save(eq(7L), any(ExpeditionRunDto.class));
+  }
+
+  @Test
+  void postStartsRunFromServerSelectedFrontier() throws Exception {
+    ExpeditionRunDto dto = runDto();
+    when(bossService.selectFrontier(eq(7L), any(FrontierSelectRequest.class)))
+        .thenReturn(
+            new FrontierSelectResultDto(List.of(new FrontierPickDto("PY43-KC-008", 2, 3, "weak"))));
+    when(service.start(eq(7L), eq(2), eq(false), anyList())).thenReturn(dto);
+
+    mockMvc
+        .perform(
+            post("/api/world/expedition/run")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(new ExpeditionRunStartRequest(2, false))))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.runId").value(dto.runId()));
+
+    verify(bossService).selectFrontier(eq(7L), any(FrontierSelectRequest.class));
+    verify(service).start(eq(7L), eq(2), eq(false), anyList());
+  }
+
+  @Test
+  void postRejectsInvalidFocusChapterBeforeSelectingFrontier() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/world/expedition/run")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"focusChapter\":8,\"isDaily\":false}"))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(service, bossService);
   }
 
   @Test

@@ -260,7 +260,8 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 | GET | `/api/world/boss/{chapter}/prefetch` | Bearer | 用 `preferredKc`、`preferredKind`、`arenaLevel`、`difficulty` 和可选 `stage`、`expeditionRunId` 查询状态；省略 stage 兼容旧客户端并按其他维度查询 |
 | POST | `/api/world/boss/{chapter}/attempt` | Bearer | 正式提交，判题结果入库；公开样例的本地预览不能代替该接口 |
 | GET | `/api/world/expedition/run` | STUDENT | 取本人活动存档；返回的 `score` 和 `verifiedDepth` 由服务端判题账本计算，空存档返回 `204` |
-| PUT | `/api/world/expedition/run` | STUDENT | 保存本人活动存档；活动 `runId` 和聚焦章节不能被客户端替换，提交的 `score` / `verifiedDepth` 不作为事实来源 |
+| POST | `/api/world/expedition/run` | STUDENT | body `{ focusChapter: 1..7|null, isDaily }`；服务端选择学习前沿、生成地图并初始化 run，返回带服务端 `runId` 的快照 |
+| PUT | `/api/world/expedition/run` | STUDENT | 更新本人活动存档；不能创建新局或改写活动 `runId`、聚焦章节、地图拓扑/题目配置；HP、节点进度、遗物、历史仍是展示快照，`score` / `verifiedDepth` 由服务端判题账本计算 |
 | DELETE | `/api/world/expedition/run` | STUDENT | 弃局并结束本人活动存档 |
 
 `BossPrefetchStatusDto = { jobId, status, attempts, errorMessage, retryable, updatedAt }`，其中

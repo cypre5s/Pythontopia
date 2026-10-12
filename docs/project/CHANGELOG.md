@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-10-13 — 修复后端启动装配并完成 Web 点击联测
+
+- `StaticCodeChecker` 存在公开配置构造器与包级测试构造器；Spring 未能选择注入构造器，导致本地后端启动失败。为唯一注入构造器添加 `@Autowired`，并增加容器装配回归。
+- 验证：回归先按预期复现 `No default constructor found`，修复后 `StaticCodeCheckerTest` 15 项通过；本地后端健康检查返回 200；Web 点击鲁棒性 Playwright 3 项通过（小镇 HUD、主线学习往返、指南桌面/移动目录）。另以拦截 Boss 预取的浏览器冒烟确认远征开局展示服务端签发的 10 层、29 节点地图。
+- 全栈脚本的 Vite 启动因本项目已有 Vite 占用 5173 而退出；复用了该进程完成浏览器联测。没有发起 DeepSeek 请求，也没有测试远征性能。
+
+## 2026-10-13 — 无尽远征开局改由服务端生成
+
+- 新增 `POST /api/world/expedition/run`，后端从权威学习前沿生成并持久化 10 层地图和初始 run；Web store 使用返回快照。`PUT` 仅更新活动 run，不能创建新局或改写已签发地图拓扑/题目配置。
+- 更新客户端 API 契约。当前 Android/Windows 仍走旧 PUT 开局，需要后续接入 POST；旧活动 run 的节点进度、HP、气势、遗物与历史仍是客户端快照，服务端动作状态机尚未完成。
+- 验证：后端 controller/service/map/PostgreSQL 集成定向 25 tests、Web API/store 定向 48 tests、TypeScript typecheck、定向 ESLint、Spotless 8 个 Java 文件与 `git diff --check` 通过；Testcontainers 空库迁移到 V203。全栈与性能未测。
+
+## 2026-10-13 — 远征存档拒绝客户端终态
+
+- `/api/world/expedition/run` 只接受可续局阶段；直接提交 `cleared`、`over` 或 `idle` 会在数据库访问前返回 400，避免把客户端终态伪装成可续局服务端存档。
+- GET 也将已有活动行中的非法/终态 phase 归一为 `map`，避免升级前写入的伪造胜利状态继续展示。
+- 验证：写入与旧行读取回归均先失败后修复；`ExpeditionRunServiceTest` 6 项及 Testcontainers `ExpeditionRunPostgresIntegrationTest` 6 项通过，空库迁移到 V203。远征地图、HP、遗物、路线和节点题目仍未由服务端动作状态机掌管。
+
+## 2026-10-13 — Tutor AutoGen 日志与终态恢复点隐私
+
+- 将 `autogen_core` 与 `autogen_core.events` 固定为 WARNING，避免 AutoGen INFO 日志把含问题、画像、课件证据的团队状态信封写入服务日志。
+- Tutor workflow 成功投影或失败后清空 AutoGen checkpoint 内容；中断状态仍保留恢复所需状态。V203 同步清除历史终态 checkpoint 内容，保留状态列、会话投影与卡片。
+- 验证：Graph Tutor/AutoGen 定向 50 tests 与 Ruff 通过；Tutor workflow PostgreSQL 集成 8 tests 通过，含 V202 既有 COMPLETED/FAILED 敏感 checkpoint 迁移验证；Testcontainers 迁移到 V203；后端变更文件 Spotless 检查通过。没有检查生产日志历史数据或运行全栈。
+
+## 2026-10-13 — 用户管理角色筛选
+
+- 管理员用户列表新增学生、教师、管理员角色筛选；筛选参数贯穿 Web API、ADMIN-only 后端接口与分页 SQL，沿用 `users.role`，无需迁移。
+- 验证：管理员服务与 PostgreSQL repository 集成测试通过；Web 用户管理/API 定向 5 tests、TypeScript typecheck、定向 ESLint 通过。全栈接口联测与远征性能仍待测。
+
+## 2026-10-13 — 普通导师链路接入 AutoGen
+
+- 常用 Tutor SSE 通过固定顺序的 AutoGen stages 运行导师回答、引用审查、防幻觉核查与安全审查；保留 RAG、难题辩论、代码验证、一次修订和原 SSE/result 契约。非流式 `TutorAgent.ask`、考考我出题/评卷和尾部图解/证据注也走固定 AutoGen handler。
+- 图片只通过当前请求的闭包传给 DeepSeek 视觉模型，不进入 AutoGen 状态信封或持久化 checkpoint；SSE 断连会取消正在执行的 AutoGen stage。
+- 验证：Tutor/AutoGen 定向 66 tests 通过；Graph 全量 `1801 passed, 1 skipped`，Ruff 全量通过。没有启动全栈、没有发真实 DeepSeek 请求；远征性能仍待测。
+
 ## 2026-10-13 — Web 交互恢复与判题过载保护
 
 - 访谈发送失败时撤销本地乐观消息、保留输入并显示错误；完成画像失败时停留在访谈页并允许重试。首页班级查询失败显示真实错误和重试入口，不再误显示入班表单；推荐卡改为键盘可操作按钮。

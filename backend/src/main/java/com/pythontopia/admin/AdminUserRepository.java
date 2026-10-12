@@ -14,7 +14,8 @@ public class AdminUserRepository {
   private static final String FILTERS =
       " WHERE (CAST(? AS text) IS NULL OR position(lower(CAST(? AS text)) in"
           + " lower(concat_ws(' ', id::text, username, display_name, role))) > 0)"
-          + " AND (CAST(? AS text) IS NULL OR status = CAST(? AS text))";
+          + " AND (CAST(? AS text) IS NULL OR status = CAST(? AS text))"
+          + " AND (CAST(? AS text) IS NULL OR role = CAST(? AS text))";
 
   private final JdbcTemplate jdbcTemplate;
 
@@ -23,8 +24,9 @@ public class AdminUserRepository {
   }
 
   public AdminUserPageDto page(
-      int page, int size, String query, AdminUserStatus status) {
+      int page, int size, String query, AdminUserStatus status, Role role) {
     String statusValue = status == null ? null : status.name();
+    String roleValue = role == null ? null : role.name();
     Long total =
         jdbcTemplate.queryForObject(
             "SELECT count(*) FROM users" + FILTERS,
@@ -32,7 +34,9 @@ public class AdminUserRepository {
             query,
             query,
             statusValue,
-            statusValue);
+            statusValue,
+            roleValue,
+            roleValue);
     List<AdminUserDto> content =
         jdbcTemplate.query(
             "SELECT id, username, display_name, role, status FROM users"
@@ -43,6 +47,8 @@ public class AdminUserRepository {
             query,
             statusValue,
             statusValue,
+            roleValue,
+            roleValue,
             size,
             (long) page * size);
     long count = total == null ? 0 : total;

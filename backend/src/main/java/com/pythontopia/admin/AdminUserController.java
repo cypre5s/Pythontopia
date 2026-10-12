@@ -1,6 +1,7 @@
 package com.pythontopia.admin;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
+import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.web.CurrentUser;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -35,8 +36,9 @@ public class AdminUserController {
       @RequestParam(defaultValue = "0") @Min(0) @Max(100_000) int page,
       @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,
       @RequestParam(required = false) @Size(max = 100) String q,
-      @RequestParam(required = false) AdminUserStatus status) {
-    return service.page(admin, page, size, q, status);
+      @RequestParam(required = false) AdminUserStatus status,
+      @RequestParam(required = false) Role role) {
+    return service.page(admin, page, size, q, status, role);
   }
 
   @PatchMapping("/{userId}")

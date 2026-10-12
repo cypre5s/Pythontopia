@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
+import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,7 @@ class TutorWorkflowRepositoryIntegrationTest {
 
   private static JdbcTemplate jdbc;
   private static TutorWorkflowRepository repository;
+  private static Long legacyTerminalCheckpointSessionId;
   private Long userId;
   private TutorWorkflowSessionDto session;
 
@@ -45,18 +47,47 @@ class TutorWorkflowRepositoryIntegrationTest {
     dataSource.setUrl(POSTGRES.getJdbcUrl());
     dataSource.setUsername(POSTGRES.getUsername());
     dataSource.setPassword(POSTGRES.getPassword());
+    jdbc = new JdbcTemplate(dataSource);
     Flyway.configure()
         .dataSource(dataSource)
         .locations("classpath:db/migration")
+        .target(MigrationVersion.fromVersion("202"))
         .load()
         .migrate();
-    jdbc = new JdbcTemplate(dataSource);
+    seedLegacyTerminalCheckpoints();
+    Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
 
     var transactionManager = new DataSourceTransactionManager(dataSource);
     var proxyFactory = new ProxyFactory(new TutorWorkflowRepository(jdbc, new ObjectMapper()));
     proxyFactory.addAdvice(
         new TransactionInterceptor(transactionManager, new AnnotationTransactionAttributeSource()));
     repository = (TutorWorkflowRepository) proxyFactory.getProxy();
+  }
+
+  private static void seedLegacyTerminalCheckpoints() {
+    Long legacyUserId =
+        jdbc.queryForObject(
+            "INSERT INTO users (username, display_name, password_hash, role)"
+                + " VALUES ('tutor-checkpoint-migration', 'Migration Test', 'hash', 'STUDENT')"
+                + " RETURNING id",
+            Long.class);
+    legacyTerminalCheckpointSessionId =
+        jdbc.queryForObject(
+            "INSERT INTO tutor_workflow_session (user_id, problem_id, session_key)"
+                + " VALUES (?, 476, 'wf-checkpoint-migration') RETURNING id",
+            Long.class,
+            legacyUserId);
+    jdbc.update(
+        "INSERT INTO tutor_workflow_autogen_checkpoint"
+            + " (session_id, run_id, request_fingerprint, checkpoint, status)"
+            + " VALUES (?, ?::uuid, ?, '{\"student_text\":\"sensitive\"}'::jsonb, 'COMPLETED'),"
+            + " (?, ?::uuid, ?, '{\"student_text\":\"sensitive\"}'::jsonb, 'FAILED')",
+        legacyTerminalCheckpointSessionId,
+        UUID.randomUUID(),
+        "d".repeat(64),
+        legacyTerminalCheckpointSessionId,
+        UUID.randomUUID(),
+        "e".repeat(64));
   }
 
   @BeforeEach
@@ -105,6 +136,24 @@ class TutorWorkflowRepositoryIntegrationTest {
   }
 
   @Test
+  void migrationClearsExistingTerminalCheckpointPayloads() {
+    assertThat(
+            jdbc.queryForList(
+                "SELECT checkpoint::text FROM tutor_workflow_autogen_checkpoint"
+                    + " WHERE session_id = ? ORDER BY status",
+                String.class,
+                legacyTerminalCheckpointSessionId))
+        .containsExactly("{}", "{}");
+    assertThat(
+            jdbc.queryForList(
+                "SELECT status FROM tutor_workflow_autogen_checkpoint"
+                    + " WHERE session_id = ? ORDER BY status",
+                String.class,
+                legacyTerminalCheckpointSessionId))
+        .containsExactly("COMPLETED", "FAILED");
+  }
+
+  @Test
   void autogenCheckpointClaimResumeAndCompletionAreIdempotent() {
     UUID firstRunId = UUID.randomUUID();
     String fingerprint = "a".repeat(64);
@@ -133,8 +182,9 @@ class TutorWorkflowRepositoryIntegrationTest {
 
     repository.persistRunProjection(
         session.id(), projection(firstRunId, "READING", 1, "READING", null, null));
-    assertThat(repository.findAutoGenCheckpoint(session.id(), firstRunId).orElseThrow().status())
-        .isEqualTo("COMPLETED");
+    var completed = repository.findAutoGenCheckpoint(session.id(), firstRunId).orElseThrow();
+    assertThat(completed.status()).isEqualTo("COMPLETED");
+    assertThat(completed.checkpointJson()).isEqualTo("{}");
 
     var nextRun =
         repository.claimAutoGenRun(session.id(), UUID.randomUUID(), fingerprint).orElseThrow();
@@ -154,6 +204,21 @@ class TutorWorkflowRepositoryIntegrationTest {
                     session.id(), runId, fingerprint, 1, "coach_decide", "{}"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("stage");
+  }
+
+  @Test
+  void failedAutoGenRunClearsCheckpointPayload() {
+    UUID runId = UUID.randomUUID();
+    String fingerprint = "c".repeat(64);
+    repository.claimAutoGenRun(session.id(), runId, fingerprint).orElseThrow();
+    repository.saveAutoGenCheckpoint(
+        session.id(), runId, fingerprint, 1, "generate_card", "{\"team_state\":{}}");
+
+    assertThat(repository.transitionAutoGenRun(session.id(), runId, "FAILED")).isTrue();
+
+    var failed = repository.findAutoGenCheckpoint(session.id(), runId).orElseThrow();
+    assertThat(failed.status()).isEqualTo("FAILED");
+    assertThat(failed.checkpointJson()).isEqualTo("{}");
   }
 
   @Test

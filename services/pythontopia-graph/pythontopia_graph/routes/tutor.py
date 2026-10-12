@@ -1,8 +1,7 @@
-"""TutorAgent SSE 流式答疑端点。
+"""AutoGen 驱动的 Tutor SSE 流式答疑端点。
 
-答疑链路：馆员(RAG) → 导师(LLM) → 审查官 → 校对官 → 安全员（资源流水线同款三道审查）。
-开场发 ``plan`` 工位清单 + 各智能体 ``trace`` start/finish，驱动侧栏 marvis「智能体工作室」
-（与资源流同一套 SSE 线协议）。
+固定顺序运行导师作答、引用审查、防幻觉核查和安全审查；RAG、质疑辩论、受限代码校验、
+一次修订与附属图解继续由既有确定式 handler 提供。SSE ``plan``/``trace``/``token`` 合同不变。
 """
 
 from __future__ import annotations
@@ -12,14 +11,20 @@ import os
 import re
 import time
 from collections.abc import AsyncIterator, Callable
+from contextlib import suppress
 from typing import Any, Protocol, TypeVar
 
+from autogen_core import CancellationToken
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 
 from pythontopia_graph import sse_agui
 from pythontopia_graph.agents.tutor_agent import TutorAgent
 from pythontopia_graph.graph.debate_graph import DebateGraph, DebateResult
+from pythontopia_graph.graph.autogen_tutor_runtime import (
+    run_autogen_tutor_call,
+    run_autogen_tutor_workflow,
+)
 from pythontopia_graph.llm.provider import LlmProvider, provider_from_env
 from pythontopia_graph.nodes.evidence_fetcher import (
     EvidenceBundle,
@@ -31,7 +36,13 @@ from pythontopia_graph.nodes.tutor_review import (
     hallucination_review,
     safety_review,
 )
-from pythontopia_graph.schemas.tutor import TutorAskRequest, TutorResponse, TutorVisualAid
+from pythontopia_graph.schemas.tutor import (
+    GroundingResult,
+    SafetyResult,
+    TutorAskRequest,
+    TutorResponse,
+    TutorVisualAid,
+)
 from pythontopia_graph.tools.harness import (
     BudgetGuard,
     ToolObservation,
@@ -391,7 +402,6 @@ async def tutor_ask_stream(
             # ── 导师：流式作答 ──
             agent = TutorAgent(provider)
             history = [{"role": t.role, "content": t.content} for t in body.conversation_history]
-            collected: list[str] = []
 
             # 上下文随题面一并给到 agent，让引导贴合「学生当前在看/在做什么」。
             agent_question = (
@@ -409,117 +419,191 @@ async def tutor_ask_stream(
                 and TutorAgent.should_debate(base_question)
             )
 
-            answer = ""
-            if debate_mode:
-                debate = DebateGraph(provider)
-                debate_result: DebateResult | None = None
-                pending: dict[str, str] | None = None
-                node_started = time.monotonic()
-                debate_started = time.monotonic()
-                # 复合 debate 工位先发 start，子节点 solver/critic/referee 嵌套其中（start+finish 对称·C2）。
-                yield _trace_start("debate")
-                async for kind, payload in debate.run_events(
-                    agent_question,
-                    evidence.chunks,
-                    body.profile_brief,
-                ):
-                    # node_* 载荷为 {node, agent_label}（事件源头自带中文 label·C1）。
-                    if kind == "node_start" and isinstance(payload, dict):
-                        pending = payload
-                        node_started = time.monotonic()
-                        yield _trace_start(
-                            payload["node"],
-                            agent_label=payload.get("agent_label"),
-                        )
-                    elif kind == "node_finish" and isinstance(payload, dict):
-                        pending = None
-                        yield _trace_finish(
-                            payload["node"],
-                            "ok",
-                            int((time.monotonic() - node_started) * 1000),
-                            agent_label=payload.get("agent_label"),
-                        )
-                    elif kind == "result":
-                        debate_result = payload if isinstance(payload, DebateResult) else None
-                # 仅当复核产出非空定稿时采用；否则（含异常/空答）回退普通答疑，绝不让难题崩答疑。
-                if debate_result is not None and debate_result.answer.strip():
-                    answer = debate_result.answer
-                    # 辩论完成后关闭复合 debate 工位（前端可视为"多个 agent 争论"）。
-                    yield _trace_finish(
-                        "debate",
-                        "ok",
-                        int((time.monotonic() - debate_started) * 1000),
-                        note=f"confidence={debate_result.confidence:.2f}",
-                    )
-                    for piece in _stream_pieces(answer):
-                        collected.append(piece)
-                        yield _format_sse("token", {"delta": piece})
-                else:
-                    # 子节点 start 未配对 finish 时补 error finish，再关闭复合 debate 工位（保持对称）。
-                    if pending is not None:
-                        yield _trace_finish(
-                            pending["node"],
-                            "error",
-                            0,
-                            agent_label=pending.get("agent_label"),
-                        )
-                    yield _trace_finish(
-                        "debate",
-                        "error",
-                        int((time.monotonic() - debate_started) * 1000),
-                    )
-                    debate_mode = False
+            # AutoGen 固定阶段接管普通答疑：TutorAgent → 引用审查 → 防幻觉 → 安全审查。
+            # 图片仅由闭包传给视觉模型，不进入 AutoGen 状态信封、检查点或 SSE trace。
+            events: asyncio.Queue[str | None] = asyncio.Queue()
 
-            if not debate_mode:
-                yield _trace_start("TutorAgent")
+            async def emit(event: str) -> None:
+                await events.put(event)
+
+            async def answer_stage(state: dict[str, Any]) -> dict[str, Any]:
+                stage_question = str(state["question"])
+                stage_evidence = state["evidence_chunks"]
+                answer_parts: list[str] = []
+
+                if debate_mode:
+                    debate = DebateGraph(provider)
+                    debate_result: DebateResult | None = None
+                    pending: dict[str, str] | None = None
+                    node_started = time.monotonic()
+                    debate_started = time.monotonic()
+                    await emit(_trace_start("debate"))
+                    async for kind, payload in debate.run_events(
+                        stage_question,
+                        stage_evidence,
+                        body.profile_brief,
+                    ):
+                        if kind == "node_start" and isinstance(payload, dict):
+                            pending = payload
+                            node_started = time.monotonic()
+                            await emit(
+                                _trace_start(
+                                    payload["node"],
+                                    agent_label=payload.get("agent_label"),
+                                )
+                            )
+                        elif kind == "node_finish" and isinstance(payload, dict):
+                            pending = None
+                            await emit(
+                                _trace_finish(
+                                    payload["node"],
+                                    "ok",
+                                    int((time.monotonic() - node_started) * 1000),
+                                    agent_label=payload.get("agent_label"),
+                                )
+                            )
+                        elif kind == "result":
+                            debate_result = payload if isinstance(payload, DebateResult) else None
+
+                    if debate_result is not None and debate_result.answer.strip():
+                        answer = debate_result.answer
+                        await emit(
+                            _trace_finish(
+                                "debate",
+                                "ok",
+                                int((time.monotonic() - debate_started) * 1000),
+                                note=f"confidence={debate_result.confidence:.2f}",
+                            )
+                        )
+                        for piece in _stream_pieces(answer):
+                            answer_parts.append(piece)
+                            await emit(_format_sse("token", {"delta": piece}))
+                        return {**state, "answer": answer}
+
+                    if pending is not None:
+                        await emit(
+                            _trace_finish(
+                                pending["node"],
+                                "error",
+                                0,
+                                agent_label=pending.get("agent_label"),
+                            )
+                        )
+                    await emit(
+                        _trace_finish(
+                            "debate",
+                            "error",
+                            int((time.monotonic() - debate_started) * 1000),
+                        )
+                    )
+
                 tutor_started = time.monotonic()
+                await emit(_trace_start("TutorAgent"))
                 code_started = tutor_started
                 if verify:
-                    yield _trace_start("code_runner")
+                    await emit(_trace_start("code_runner"))
                     code_started = time.monotonic()
                 async for token in agent.ask_stream(
-                    question=agent_question,
+                    question=stage_question,
                     profile_brief=body.profile_brief,
                     conversation_history=history,
-                    evidence_chunks=evidence.chunks,
+                    evidence_chunks=stage_evidence,
                     images=body.images or None,
                 ):
-                    collected.append(token)
-                    yield _format_sse("token", {"delta": token})
-                answer = "".join(collected)
+                    answer_parts.append(token)
+                    await emit(_format_sse("token", {"delta": token}))
+                answer = "".join(answer_parts)
                 if verify:
-                    yield _trace_finish(
-                        "code_runner", "ok", int((time.monotonic() - code_started) * 1000)
+                    await emit(
+                        _trace_finish(
+                            "code_runner", "ok", int((time.monotonic() - code_started) * 1000)
+                        )
                     )
-                yield _trace_finish(
-                    "TutorAgent", "ok", int((time.monotonic() - tutor_started) * 1000)
+                await emit(
+                    _trace_finish(
+                        "TutorAgent", "ok", int((time.monotonic() - tutor_started) * 1000)
+                    )
                 )
+                return {**state, "answer": answer}
 
-            # ── 三道审查：审查官（引用）→ 校对官（防幻觉）→ 安全员（泄答/歧视/PII/危险代码） ──
-            grounding, g_trace = _review_with_trace(
-                "grounding_critic",
-                grounding_review,
-                answer,
-                evidence.chunks,
-            )
-            for chunk in g_trace:
-                yield chunk
-            hallucination, h_trace = _review_with_trace(
-                "hallucination_detector",
-                hallucination_review,
-                answer,
-                evidence.chunks,
-            )
-            for chunk in h_trace:
-                yield chunk
-            safety, s_trace = _review_with_trace(
-                "safety_critic",
-                safety_review,
-                answer,
-                fail_status="fail",
-            )
-            for chunk in s_trace:
-                yield chunk
+            async def grounding_stage(state: dict[str, Any]) -> dict[str, Any]:
+                result, trace = _review_with_trace(
+                    "grounding_critic",
+                    grounding_review,
+                    state["answer"],
+                    state["evidence_chunks"],
+                )
+                for event in trace:
+                    await emit(event)
+                return {**state, "grounding": result.model_dump(mode="json")}
+
+            async def hallucination_stage(state: dict[str, Any]) -> dict[str, Any]:
+                result, trace = _review_with_trace(
+                    "hallucination_detector",
+                    hallucination_review,
+                    state["answer"],
+                    state["evidence_chunks"],
+                )
+                for event in trace:
+                    await emit(event)
+                return {**state, "hallucination": result.model_dump(mode="json")}
+
+            async def safety_stage(state: dict[str, Any]) -> dict[str, Any]:
+                result, trace = _review_with_trace(
+                    "safety_critic",
+                    safety_review,
+                    state["answer"],
+                    fail_status="fail",
+                )
+                for event in trace:
+                    await emit(event)
+                return {**state, "safety": result.model_dump(mode="json")}
+
+            workflow_result: dict[str, Any] | None = None
+            cancellation = CancellationToken()
+
+            async def run_tutor_autogen() -> None:
+                nonlocal workflow_result
+                try:
+                    initial_state: dict[str, Any] = {
+                        "question": agent_question,
+                        "evidence_chunks": evidence.chunks,
+                    }
+                    result_state = await run_autogen_tutor_workflow(
+                        initial_state,
+                        [
+                            ("TutorAgent", answer_stage),
+                            ("grounding_critic", grounding_stage),
+                            ("hallucination_detector", hallucination_stage),
+                            ("safety_critic", safety_stage),
+                        ],
+                        cancellation_token=cancellation,
+                    )
+                    workflow_result = result_state
+                finally:
+                    events.put_nowait(None)
+
+            workflow_task = asyncio.create_task(run_tutor_autogen())
+            try:
+                while True:
+                    event = await events.get()
+                    if event is None:
+                        break
+                    yield event
+                await workflow_task
+            finally:
+                if not workflow_task.done():
+                    cancellation.cancel()
+                    workflow_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await workflow_task
+
+            if workflow_result is None:
+                raise RuntimeError("Tutor AutoGen workflow returned no state")
+            answer = str(workflow_result["answer"])
+            grounding = GroundingResult.model_validate(workflow_result["grounding"])
+            hallucination = GroundingResult.model_validate(workflow_result["hallucination"])
+            safety = SafetyResult.model_validate(workflow_result["safety"])
 
             # ── critique→revise 闭环：grounding/hallucination 未过 → 注入审查意见做一轮有界修订 ──
             # 修订发生在 token 流之后（非流式），前端以 result.answer_md 终值渲染（契约本就支持）。
@@ -608,14 +692,20 @@ async def tutor_ask_stream(
             want_diagram = safety.passed and TutorAgent.wants_diagram(base_question)
 
             async def _make_diagram() -> list[TutorVisualAid]:
-                return await agent.build_diagram(base_question, evidence.chunks)
+                return await run_autogen_tutor_call(
+                    "tutor_diagram",
+                    lambda: agent.build_diagram(base_question, evidence.chunks),
+                )
 
             async def _make_evidence_note() -> str:
-                return await agent.summarize_evidence(
-                    base_question,
-                    context,
-                    body.profile_brief,
-                    evidence.chunks,
+                return await run_autogen_tutor_call(
+                    "tutor_evidence_note",
+                    lambda: agent.summarize_evidence(
+                        base_question,
+                        context,
+                        body.profile_brief,
+                        evidence.chunks,
+                    ),
                 )
 
             async def _skip() -> None:
@@ -807,10 +897,13 @@ async def _quiz_stages(
         q_started = time.monotonic()
         topic = base_question or "、".join(kc_codes) or "Python 基础"
         ask_task = asyncio.ensure_future(
-            agent.ask_quiz_question(
-                topic=topic,
-                profile_brief=body.profile_brief,
-                round_no=round_no,
+            run_autogen_tutor_call(
+                "quiz_question",
+                lambda: agent.ask_quiz_question(
+                    topic=topic,
+                    profile_brief=body.profile_brief,
+                    round_no=round_no,
+                ),
             )
         )
         async for ping in _pings_while(ask_task, heartbeat):
@@ -876,11 +969,14 @@ async def _quiz_stages(
     yield _trace_start("quiz_judge")
     j_started = time.monotonic()
     judge_task = asyncio.ensure_future(
-        agent.judge_quiz(
-            prev_question=prev_question,
-            student_answer=base_question,
-            profile_brief=body.profile_brief,
-            evidence_chunks=evidence.chunks,
+        run_autogen_tutor_call(
+            "quiz_judge",
+            lambda: agent.judge_quiz(
+                prev_question=prev_question,
+                student_answer=base_question,
+                profile_brief=body.profile_brief,
+                evidence_chunks=evidence.chunks,
+            ),
         )
     )
     async for ping in _pings_while(judge_task, heartbeat):

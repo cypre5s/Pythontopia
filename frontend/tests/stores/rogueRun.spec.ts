@@ -11,7 +11,7 @@ const judgeMock = vi.hoisted(() => ({
   clearPrefetch: vi.fn(),
 }));
 const frontierApiMock = vi.hoisted(() => ({
-  requestFrontierPicks: vi.fn(),
+  createExpeditionRun: vi.fn(),
   fetchExpeditionRun: vi.fn(),
   saveExpeditionRun: vi.fn(),
   deleteExpeditionRun: vi.fn(),
@@ -42,7 +42,7 @@ vi.mock('@stores/mainline', () => ({
   useMainlineStore: () => ({ submitEndlessSummary: vi.fn(async () => false) }),
 }));
 vi.mock('@/api/expedition', () => ({
-  requestFrontierPicks: frontierApiMock.requestFrontierPicks,
+  createExpeditionRun: frontierApiMock.createExpeditionRun,
   fetchExpeditionRun: frontierApiMock.fetchExpeditionRun,
   saveExpeditionRun: frontierApiMock.saveExpeditionRun,
   deleteExpeditionRun: frontierApiMock.deleteExpeditionRun,
@@ -51,6 +51,51 @@ vi.mock('@/api/expedition', () => ({
 }));
 
 import { useRogueRunStore } from '@/stores/rogueRun';
+import { generateRogueMap } from '@/data/rogueMap';
+import { computeLayeredDifficulty, NODE_KIND_POOLS } from '@/data/rogueConfig';
+import type { ExpeditionRunSnapshot } from '@/api/expedition';
+
+function serverRun(
+  focusChapter: number | null = null,
+  kcCode = 'PY43-KC-001',
+  difficulty = 2,
+  isDaily = false,
+): ExpeditionRunSnapshot {
+  const map = generateRogueMap({
+    rng: () => 0.4,
+    resolveChallenge: (kind, layer) => {
+      if (kind === 'rest' || kind === 'chest') {
+        return { kcCode: null, challengeKind: null, difficulty: 0 };
+      }
+      const pool = NODE_KIND_POOLS[kind];
+      let resolvedDifficulty = computeLayeredDifficulty(difficulty, layer);
+      if (kind === 'elite') resolvedDifficulty = Math.min(5, resolvedDifficulty + 1);
+      if (kind === 'boss') resolvedDifficulty = Math.min(5, Math.max(3, resolvedDifficulty + 1));
+      return {
+        kcCode,
+        challengeKind: pool[Math.floor(0.4 * pool.length)] ?? 'dual_track',
+        difficulty: resolvedDifficulty,
+      };
+    },
+  });
+  return {
+    runId: EXPEDITION_RUN_ID,
+    phase: 'map',
+    focusChapter,
+    nodes: map.nodes,
+    layers: map.layers,
+    currentNodeId: null,
+    hp: 5,
+    maxHp: 5,
+    momentum: 0,
+    bestMomentum: 0,
+    score: 0,
+    verifiedDepth: 0,
+    relics: [],
+    isDaily,
+    history: [],
+  };
+}
 
 function problem(): BossProblemDto {
   return {
@@ -70,9 +115,10 @@ beforeEach(() => {
   judgeMock.getPrefetchState.mockReset().mockReturnValue({ phase: 'idle', attempts: 0 });
   judgeMock.clearPrefetch.mockReset();
   // 默认使用后端权威画像/掌握度前沿；聚焦章节不足地图节点时循环这一真实排序。
-  frontierApiMock.requestFrontierPicks.mockReset().mockResolvedValue([
-    { kcCode: 'PY43-KC-001', chapter: 1, difficulty: 2, reason: '最近发展区' },
-  ]);
+  frontierApiMock.createExpeditionRun.mockReset().mockImplementation(
+    async ({ focusChapter, isDaily }: { focusChapter: number | null; isDaily: boolean }) =>
+      serverRun(focusChapter, 'PY43-KC-001', 2, isDaily),
+  );
   // 默认没有后端活跃 run；startRun 新开局。
   frontierApiMock.fetchExpeditionRun.mockReset().mockResolvedValue(null);
   frontierApiMock.saveExpeditionRun.mockReset().mockResolvedValue({ runId: EXPEDITION_RUN_ID });
@@ -218,7 +264,7 @@ describe('rogueRun store', () => {
     run.finishRun();
     const restart = run.startRun(null);
     await Promise.resolve();
-    expect(frontierApiMock.requestFrontierPicks).toHaveBeenCalledTimes(1);
+    expect(frontierApiMock.createExpeditionRun).toHaveBeenCalledTimes(1);
     expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(1);
 
     finishSettlement({ entries: [], selfRank: null, selfBest: 0, inClass: false });
@@ -445,7 +491,7 @@ describe('rogueRun store', () => {
     expect(run.attempts).toBe(0);
   });
 
-  it('event 钻研(study) bumps difficulty by 1 and starts a challenge', async () => {
+  it('event 钻研(study) raises one challenge without rewriting the server map', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);
     const node = run.nodes.find((n) => n.layer === 0);
@@ -455,7 +501,8 @@ describe('rogueRun store', () => {
     run.phase = 'event';
     judgeMock.fetchProblem.mockResolvedValue(problem());
     await run.chooseEvent('study');
-    expect(node!.difficulty).toBe(Math.min(5, d0 + 1));
+    expect(node!.difficulty).toBe(d0);
+    expect(run.activeDifficulty).toBe(Math.min(5, d0 + 1));
     expect(run.phase).toBe('challenge');
   });
 
@@ -575,11 +622,6 @@ describe('rogueRun store', () => {
   });
 
   it('raises in-run difficulty on a winning streak (momentum feeds back into the next fight)', async () => {
-    frontierApiMock.requestFrontierPicks.mockResolvedValue(
-      Array.from({ length: 28 }, () => ({
-        kcCode: 'PY43-KC-001', chapter: 1, difficulty: 2, reason: 'test',
-      })),
-    );
     judgeMock.judge.mockResolvedValue({
       problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
     });
@@ -634,12 +676,14 @@ describe('rogueRun store', () => {
     run.continueAfterChallenge();
     expect(run.phase).toBe('over');
     expect(run.dailyAvailable).toBe(false);
+    expect(frontierApiMock.createExpeditionRun).toHaveBeenCalledWith({
+      focusChapter: null,
+      isDaily: true,
+    });
   });
 
-  it('uses backend frontier picks for challenge nodes when the selector returns them', async () => {
-    frontierApiMock.requestFrontierPicks.mockResolvedValueOnce([
-      { kcCode: 'PY43-KC-042', chapter: 5, difficulty: 4, reason: '画像弱项' },
-    ]);
+  it('uses the server-issued map and challenge values when starting a run', async () => {
+    frontierApiMock.createExpeditionRun.mockResolvedValueOnce(serverRun(null, 'PY43-KC-042', 4));
     const run = useRogueRunStore();
     await run.startRun(null);
     // 起点 battle 是第一个挑战节点，应消费后端首个 pick。
@@ -648,8 +692,8 @@ describe('rogueRun store', () => {
     expect(start?.difficulty).toBe(4);
   });
 
-  it('keeps the run idle and reports an error when evidence-backed frontier loading fails', async () => {
-    frontierApiMock.requestFrontierPicks.mockRejectedValueOnce(new Error('network'));
+  it('keeps the run idle and reports an error when server-side run creation fails', async () => {
+    frontierApiMock.createExpeditionRun.mockRejectedValueOnce(new Error('network'));
     const run = useRogueRunStore();
     await run.startRun(null);
     expect(run.phase).toBe('idle');
@@ -689,7 +733,7 @@ describe('rogueRun store', () => {
     const run = useRogueRunStore();
     await run.refreshSavedRun();
 
-    expect(frontierApiMock.requestFrontierPicks).not.toHaveBeenCalled();
+    expect(frontierApiMock.createExpeditionRun).not.toHaveBeenCalled();
     expect(run.phase).toBe('idle');
     expect(run.hasSavedRun).toBe(true);
     expect(run.savedRunSummary?.focusChapter).toBe(3);
@@ -737,7 +781,7 @@ describe('rogueRun store', () => {
     const run = useRogueRunStore();
     await run.refreshSavedRun();
 
-    expect(frontierApiMock.requestFrontierPicks).not.toHaveBeenCalled();
+    expect(frontierApiMock.createExpeditionRun).not.toHaveBeenCalled();
     expect(run.phase).toBe('idle');
     expect(run.hasSavedRun).toBe(true);
     expect(run.savedRunSummary?.focusChapter).toBe(4);
@@ -811,7 +855,10 @@ describe('rogueRun store', () => {
     expect(run.phase).toBe('map');
     expect(run.focusChapter).toBe(1);
     expect(run.nodes[0]?.kcCode).not.toBe('PY43-KC-039');
-    expect(frontierApiMock.requestFrontierPicks).toHaveBeenCalled();
+    expect(frontierApiMock.createExpeditionRun).toHaveBeenCalledWith({
+      focusChapter: 1,
+      isDaily: false,
+    });
   });
 
   it('finishRun settles the run and reports the score to the class leaderboard once', async () => {

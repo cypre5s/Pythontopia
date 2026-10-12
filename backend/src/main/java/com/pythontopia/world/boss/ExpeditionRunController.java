@@ -5,11 +5,15 @@ import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
+import com.pythontopia.world.boss.dto.ExpeditionRunStartRequest;
+import com.pythontopia.world.boss.dto.FrontierSelectRequest;
 import jakarta.validation.Valid;
+import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -21,7 +25,8 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <ul>
  *   <li>{@code GET /api/world/expedition/run}：取当前用户活跃 run（无 → 204）；
- *   <li>{@code PUT /api/world/expedition/run}：保存（upsert）活跃 run；
+ *   <li>{@code POST /api/world/expedition/run}：按服务端学习前沿创建 run 与地图；
+ *   <li>{@code PUT /api/world/expedition/run}：保存活跃 run 快照；
  *   <li>{@code DELETE /api/world/expedition/run}：结束 / 弃局，删除活跃 run。
  * </ul>
  *
@@ -32,9 +37,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ExpeditionRunController {
 
   private final ExpeditionRunService service;
+  private final BossService bossService;
 
-  public ExpeditionRunController(ExpeditionRunService service) {
+  public ExpeditionRunController(ExpeditionRunService service, BossService bossService) {
     this.service = service;
+    this.bossService = bossService;
   }
 
   @GetMapping("/run")
@@ -44,6 +51,20 @@ public class ExpeditionRunController {
         .findActive(user.userId())
         .map(ResponseEntity::ok)
         .orElseGet(() -> ResponseEntity.noContent().build());
+  }
+
+  @PostMapping("/run")
+  @ResponseStatus(HttpStatus.CREATED)
+  public ExpeditionRunDto startRun(
+      @CurrentUser CurrentUserPrincipal user,
+      @Valid @RequestBody ExpeditionRunStartRequest request) {
+    requireStudent(user);
+    var frontier =
+        bossService.selectFrontier(
+            user.userId(),
+            new FrontierSelectRequest(null, List.of(), request.focusChapter(), List.of(), 40));
+    return service.start(
+        user.userId(), request.focusChapter(), request.isDaily(), frontier.picks());
   }
 
   @PutMapping("/run")

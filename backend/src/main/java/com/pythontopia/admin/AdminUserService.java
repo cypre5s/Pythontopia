@@ -18,10 +18,15 @@ public class AdminUserService {
 
   @Transactional(readOnly = true)
   public AdminUserPageDto page(
-      CurrentUserPrincipal admin, int page, int size, String query, AdminUserStatus status) {
+      CurrentUserPrincipal admin,
+      int page,
+      int size,
+      String query,
+      AdminUserStatus status,
+      Role role) {
     requireAdmin(admin);
     String normalizedQuery = query == null || query.isBlank() ? null : query.trim();
-    return repository.page(page, size, normalizedQuery, status);
+    return repository.page(page, size, normalizedQuery, status, role);
   }
 
   @Transactional
