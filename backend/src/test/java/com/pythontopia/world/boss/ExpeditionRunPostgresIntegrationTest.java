@@ -53,6 +53,9 @@ class ExpeditionRunPostgresIntegrationTest {
 
     assertThat(initial.runId()).isNotBlank();
     assertThat(initial.score()).isZero();
+    assertThatThrownBy(() -> runs.validateProblemRequest(userId, initial.runId(), 2))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("章节");
     assertThatThrownBy(() -> runs.save(userId, snapshot(UUID.randomUUID().toString(), 0)))
         .isInstanceOf(BusinessException.class);
     assertThatThrownBy(() -> runs.save(userId, snapshot(initial.runId(), 0, 2)))
@@ -111,6 +114,22 @@ class ExpeditionRunPostgresIntegrationTest {
     ExpeditionRunDto next = runs.save(userId, snapshot(null, 999_999));
     assertThat(next.runId()).isNotEqualTo(initial.runId());
     assertThat(next.score()).isZero();
+  }
+
+  @Test
+  void globalDailyRunCanIssueProblemsFromAnyCourseChapter() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto daily =
+        runs.save(
+            userId,
+            new ExpeditionRunDto(
+                "map", null, List.of(), 10, null, 5, 5, 0, 0, 0, List.of(), true, List.of(), null));
+
+    org.assertj.core.api.Assertions.assertThatNoException()
+        .isThrownBy(() -> runs.validateProblemRequest(userId, daily.runId(), 1));
+    org.assertj.core.api.Assertions.assertThatNoException()
+        .isThrownBy(() -> runs.validateProblemRequest(userId, daily.runId(), 7));
   }
 
   @Test

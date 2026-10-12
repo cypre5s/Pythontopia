@@ -150,7 +150,7 @@ requirementDiagram
   - 4a. graph 评测不可用：返回结构化兜底，提示用前端 Pyodide 校验后再提交，不污染掌握度（未判定不发事件）。
   - 4b. 题目缓存过期且无持久化：返回 Pyodide-only 兜底。
 - **字段列表**：`BossProblemRequest{stage, kcCode, difficulty, preferredKc, preferredKind, profileSignals, arenaLevel}`→`BossProblemDto{problemId, chapter, stage, difficulty, kcCode, statement, hints, sampleInput, sampleOutput, totalTestCases, reviewed, aiGenerated}`；`BossAttemptRequest{problemId, chapter, stage, code, elapsedSec}`→`BossAttemptResultDto{problemId, passed, passedTestCases, totalTestCases, failureFirstHint, score, feedback}`（落表见 §6 表 `boss_attempt`）。
-- **设计规则**：chapter 1..7、stage 1..4 强校验；分数规则全过取 `max(80, 通过率×100)`、未过取 `通过率×60`；仅服务端沙箱真实判完才发学习事件，单次 attempt 幂等。
+- **设计规则**：chapter 1..7、stage 1..4 强校验；分数规则全过取 `max(80, 通过率×100)`、未过取 `通过率×60`；仅服务端沙箱真实判完才发学习事件，但没有稳定 submission ID 幂等保护，HTTP 重放可能重复累计 mastery/Twin 证据。
 - **未解决的问题**：进程内题目缓存随重启失效，靠 `pregenerated_problem` best-effort 回补，跨实例一致性未做。
 - **备注**：无尽远征的 boss 节点复用本用例的出题/评测链，差异在于多阶段与奖励演出。
 

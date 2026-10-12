@@ -8,6 +8,7 @@ import com.pythontopia.common.web.GraphInternalSubjectSupport;
 import com.pythontopia.common.web.GraphInternalTokenSupport;
 import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +44,7 @@ public class TutorWorkflowGraphClient {
       SseEmitter emitter,
       Consumer<String> onResult) {
     String url = properties.graphUrl() + "/agents/tutor-workflow/run/stream";
+    AtomicBoolean projectionFailed = new AtomicBoolean();
     sseRelayExecutor.submit(
         () -> {
           try {
@@ -53,16 +55,28 @@ public class TutorWorkflowGraphClient {
                 GraphInternalTokenSupport.tokenOrNull(properties),
                 GraphInternalSubjectSupport.user(userId),
                 (event, data) -> {
+                  if (projectionFailed.get()) {
+                    return;
+                  }
+                  if ("result".equals(event) || "RUN_FINISHED".equals(event)) {
+                    try {
+                      onResult.accept(data);
+                    } catch (RuntimeException e) {
+                      projectionFailed.set(true);
+                      log.error("Tutor workflow result projection failed", e);
+                      emitter.completeWithError(e);
+                      return;
+                    }
+                  }
                   try {
                     emitter.send(SseEmitter.event().name(event).data(data));
-                    if ("result".equals(event) || "RUN_FINISHED".equals(event)) {
-                      onResult.accept(data);
-                    }
                   } catch (IOException e) {
                     log.debug("Tutor workflow SSE write failed, client likely disconnected", e);
                   }
                 });
-            emitter.complete();
+            if (!projectionFailed.get()) {
+              emitter.complete();
+            }
           } catch (IOException e) {
             log.error("Tutor workflow graph SSE stream failed", e);
             emitter.completeWithError(e);

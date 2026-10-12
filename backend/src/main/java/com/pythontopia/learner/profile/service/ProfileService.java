@@ -37,7 +37,7 @@ public class ProfileService {
   private final GraphServiceProperties graphProperties;
   private final ObjectMapper objectMapper;
   private final SseRelayExecutor sseRelayExecutor;
-  private final InterviewDimensionMirror interviewDimensionMirror;
+  private final ProfileDraftService profileDraftService;
 
   public ProfileService(
       ProfileRepository profileRepository,
@@ -47,7 +47,7 @@ public class ProfileService {
       GraphServiceProperties graphProperties,
       ObjectMapper objectMapper,
       SseRelayExecutor sseRelayExecutor,
-      InterviewDimensionMirror interviewDimensionMirror) {
+      ProfileDraftService profileDraftService) {
     this.profileRepository = profileRepository;
     this.coursePackRepository = coursePackRepository;
     this.resourceRunRecorder = resourceRunRecorder;
@@ -55,7 +55,7 @@ public class ProfileService {
     this.graphProperties = graphProperties;
     this.objectMapper = objectMapper;
     this.sseRelayExecutor = sseRelayExecutor;
-    this.interviewDimensionMirror = interviewDimensionMirror;
+    this.profileDraftService = profileDraftService;
   }
 
   public ProfileInterviewStartResponse openOrResumeInterview(Long userId) {
@@ -104,7 +104,7 @@ public class ProfileService {
     }
     RunStatus status = statusOf(response);
     if (status == RunStatus.SUCCESS && response.profileDraft() != null) {
-      applyDraft(userId, sessionId, response.profileDraft());
+      profileDraftService.applyDraft(userId, sessionId, response.profileDraft());
     } else if (status == RunStatus.FAILED) {
       profileRepository.abortInterview(userId, sessionId);
     }
@@ -179,7 +179,7 @@ public class ProfileService {
       ProfileTurnResponse response = objectMapper.readValue(resultJson, ProfileTurnResponse.class);
       RunStatus status = statusOf(response);
       if (status == RunStatus.SUCCESS && response.profileDraft() != null) {
-        applyDraft(userId, sessionId, response.profileDraft());
+        profileDraftService.applyDraft(userId, sessionId, response.profileDraft());
       } else if (status == RunStatus.FAILED) {
         profileRepository.abortInterview(userId, sessionId);
       }
@@ -196,19 +196,6 @@ public class ProfileService {
     } catch (Exception e) {
       log.warn("Failed to handle profile turn SSE result", e);
     }
-  }
-
-  /**
-   * 落库访谈结果：写旧列 → 镜像进 8 维 dimensions → 记 revision → 关闭访谈。
-   *
-   * <p>镜像这一步不可省：8 维消费方（答疑 / NPC / 工坊 / 记忆简报 / 推荐）只读 dimensions，
-   * 只写旧列等于访谈信号对下游完全不可见。详见 {@link InterviewDimensionMirror}。
-   */
-  public void applyDraft(Long userId, String sessionId, LearnerProfileDto draft) {
-    profileRepository.upsertProfile(userId, draft);
-    interviewDimensionMirror.mirror(userId, draft);
-    profileRepository.addRevision(userId, "INTERVIEW", draft);
-    profileRepository.completeInterview(userId, sessionId);
   }
 
   public void finishInterview(Long userId, String sessionId) {

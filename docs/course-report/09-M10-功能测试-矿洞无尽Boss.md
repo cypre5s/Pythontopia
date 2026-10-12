@@ -4,6 +4,8 @@
 
 本节针对 M10 三条子链做功能（黑盒为主、辅以确定性单测）验证，覆盖 UC-10-01~UC-10-03 与关键非功能项（防幻觉 NFR-AIH、降级不阻塞 NFR-FB）。测试范围：Bug 矿洞失败触发与 L1~L5 分层下探、无尽远征选路推进与跨会话续局、Boss 出题五重审查链质量、查重/敏感词拦截、LLM/graph 不可用时 golden 兜底与 Pyodide 降级。测试环境：后端 `:18080`（Spring Boot + PostgreSQL 16 + Redis 7）、graph `:18091`、前端 dev `http://localhost:5173`（容器态 `http://localhost:8080`）；账号为学生角色（除登录外均需 JWT）。配套自动化：后端 `BossControllerTest`/`BossServiceTest`/`ExpeditionRunControllerTest`/`BugMineProfileAdvisorTest`，graph `tests/agents/boss/`（`test_orchestrator`/`test_self_tester`/`test_plagiarism`/`test_difficulty`/`test_grounding`/`test_struct_validator`/`test_golden_problems`/`test_evaluator`/`test_expedition_selector`/`test_text_evaluator`/`test_boss_route`）与 `tests/test_debug_agent.py`。
 
+> 维护说明：本节“实际结果”是历史演示记录。本轮没有启动 Web 全栈或浏览器 E2E；当前回归证据以本轮明确列出的自动化命令为准。远征路线、HP 和遗物仍来自客户端快照，不能据此声称服务端已验证地图推进。
+
 测试策略上采用「黑盒功能验证为主、确定性单测为辅」的双层组合：对有用户交互的链路（失败入矿、远征推进、Boss 对战）走端到端黑盒，沿真实端点与页面操作复现；对纯算法且不依赖 LLM 的环节（五重审查链、知识前沿选路、golden 兜底、分数与难度计算）则以 graph/后端单测固化确定性结果，保证可重复回归。由于 AI 出题含随机性，质量校验聚焦「可判定的结构性约束」（如 `reviewed=true`、样例数 ≥3、KC 形如 `PY43-KC-NNN`、章节语法不超纲），而非比对具体题面文本，避免把模型波动误判为缺陷。每条用例均给出可操作、可复现的编号步骤流，预期结果对齐真实返回码与 DTO 字段，便于评审按图索骥。
 
 ### 9.4.10.2 测试点流程图（图 T10-1）

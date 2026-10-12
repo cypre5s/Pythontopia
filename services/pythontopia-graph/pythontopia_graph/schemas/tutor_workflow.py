@@ -227,7 +227,7 @@ class TutorEpisodePlanPatch(BaseModel):
 
 
 class ChatEventData(BaseModel):
-    model_config = ConfigDict(extra="allow")
+    model_config = ConfigDict(extra="forbid")
 
     message: str = ""
     attachment_ids: list[str] = Field(default_factory=list, max_length=3)

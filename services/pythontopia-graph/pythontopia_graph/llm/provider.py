@@ -154,19 +154,6 @@ class EnvLoadResult(BaseModel):
     loaded_keys: int
 
 
-def load_alethicode_env(path: str = "/home/cypress/Alethicode/backend/.env") -> EnvLoadResult:
-    env_path = Path(path)
-    if not env_path.exists():
-        return EnvLoadResult(path=str(env_path), exists=False, loaded_keys=0)
-    values = dotenv_values(env_path)
-    loaded = 0
-    for key, value in values.items():
-        if key and value is not None and key not in os.environ:
-            os.environ[key] = value
-            loaded += 1
-    return EnvLoadResult(path=str(env_path), exists=True, loaded_keys=loaded)
-
-
 def _default_deploy_env_path() -> Path:
     # 沿父目录向上查找 deploy/.env（避免写死 parents[n] 在容器内越界 IndexError）；未命中返回占位路径，由 load_pythontopia_env fail-soft。
     here = Path(__file__).resolve()
@@ -195,23 +182,22 @@ def load_pythontopia_env(path: str | None = None) -> EnvLoadResult:
 
 
 def _openai_compat_env() -> tuple[str | None, str | None, str | None]:
-    """解析 OpenAI 兼容（DeepSeek）三件套，兼容三种命名：
-    OPENAI_* / LLM_*（docker-compose 注入）与 PYT_OPENAI_*（deploy/.env 原始名）。
+    """解析 DeepSeek 三件套；项目专用变量优先，通用名仅作 Compose 兼容别名。
     """
     base_url = (
-        os.environ.get("OPENAI_BASE_URL")
+        os.environ.get("PYT_OPENAI_BASE_URL")
+        or os.environ.get("OPENAI_BASE_URL")
         or os.environ.get("LLM_BASE_URL")
-        or os.environ.get("PYT_OPENAI_BASE_URL")
     )
     api_key = (
-        os.environ.get("OPENAI_API_KEY")
+        os.environ.get("PYT_OPENAI_API_KEY")
+        or os.environ.get("OPENAI_API_KEY")
         or os.environ.get("LLM_API_KEY")
-        or os.environ.get("PYT_OPENAI_API_KEY")
     )
     model = (
-        os.environ.get("OPENAI_MODEL")
+        os.environ.get("PYT_OPENAI_MODEL")
+        or os.environ.get("OPENAI_MODEL")
         or os.environ.get("LLM_MODEL")
-        or os.environ.get("PYT_OPENAI_MODEL")
     )
     return base_url, api_key, model
 
@@ -219,21 +205,20 @@ def _openai_compat_env() -> tuple[str | None, str | None, str | None]:
 def _openai_fast_model() -> str | None:
     """快档模型名（NPC 寒暄/对话用，低延迟、少推理 token）。
 
-    兼容三种命名：OPENAI_MODEL_FAST / LLM_MODEL_FAST（docker-compose 注入）与
-    PYT_OPENAI_MODEL_FAST（deploy/.env 原始名）。未配置则返回 None，由调用方回落默认档。
+    项目专用变量优先；未配置则返回 None，由调用方回落默认档。
     """
     return (
-        os.environ.get("OPENAI_MODEL_FAST")
+        os.environ.get("PYT_OPENAI_MODEL_FAST")
+        or os.environ.get("OPENAI_MODEL_FAST")
         or os.environ.get("LLM_MODEL_FAST")
-        or os.environ.get("PYT_OPENAI_MODEL_FAST")
     )
 
 
 def _openai_vision_model() -> str | None:
     return (
-        os.environ.get("OPENAI_MODEL_VISION")
+        os.environ.get("PYT_OPENAI_MODEL_VISION")
+        or os.environ.get("OPENAI_MODEL_VISION")
         or os.environ.get("LLM_MODEL_VISION")
-        or os.environ.get("PYT_OPENAI_MODEL_VISION")
     )
 
 
@@ -671,144 +656,6 @@ class LlmProviderError(RuntimeError):
         self.retryable = retryable
 
 
-class SparkProvider:
-    """讯飞 Spark OpenAI 兼容 Provider（/v1/chat/completions，Bearer api_key:api_secret）；负责 HTTP 调用与限流/欠费翻译。"""
-
-    DEFAULT_BASE_URL = "https://spark-api-open.xf-yun.com/v1"
-    RATE_LIMIT_STATUSES = {429}
-    BILLING_STATUSES = {402, 403}
-    # Spark 工具调用能力未经验证：声明不支持 → 工具调用循环对 Spark 回落意图分类器（安全默认）。
-    supports_tool_calling = False
-
-    def __init__(self) -> None:
-        self.app_id = os.environ.get("PYT_SPARK_APP_ID")
-        self.api_key = os.environ.get("PYT_SPARK_API_KEY")
-        self.api_secret = os.environ.get("PYT_SPARK_API_SECRET")
-        self.base_url = (
-            os.environ.get("PYT_SPARK_BASE_URL") or self.DEFAULT_BASE_URL
-        ).rstrip("/")
-        self.model_id = os.environ.get("PYT_SPARK_MODEL_ID")
-        missing = [
-            name
-            for name, value in (
-                ("PYT_SPARK_APP_ID", self.app_id),
-                ("PYT_SPARK_API_KEY", self.api_key),
-                ("PYT_SPARK_API_SECRET", self.api_secret),
-                ("PYT_SPARK_MODEL_ID", self.model_id),
-            )
-            if value is None or value == ""
-        ]
-        if missing:
-            raise RuntimeError(
-                "Spark provider requires env vars: " + ",".join(missing)
-            )
-        # OpenAI 兼容模式下 token 由 api_key:api_secret 拼接而成
-        self._token = f"{self.api_key}:{self.api_secret}"
-
-    @property
-    def label(self) -> str:
-        return f"spark:{self.model_id}"
-
-    async def chat(
-        self, messages: list[dict[str, Any]], **kwargs: object
-    ) -> LlmResponse:
-        if _contains_image_input(messages):
-            raise RuntimeError("Spark provider does not support image input")
-        payload: dict[str, object] = {
-            "model": self.model_id,
-            "messages": messages,
-        }
-        for forwarded in ("temperature", "top_p", "max_tokens", "response_format"):
-            if forwarded in kwargs:
-                payload[forwarded] = kwargs[forwarded]
-        # 同 OpenAiCompatProvider.chat：长输出任务读超时 90s，连接超时 10s。
-        async with httpx.AsyncClient(timeout=httpx.Timeout(90, connect=10)) as client:
-            response = await client.post(
-                f"{self.base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self._token}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            )
-        if response.status_code in self.RATE_LIMIT_STATUSES:
-            raise LlmProviderError(
-                "Spark rate limited", kind="RATE_LIMITED", retryable=True
-            )
-        if response.status_code in self.BILLING_STATUSES:
-            raise LlmProviderError(
-                "Spark billing rejected", kind="BILLING", retryable=False
-            )
-        if response.status_code >= 500:
-            raise LlmProviderError(
-                f"Spark upstream {response.status_code}",
-                kind="UPSTREAM_ERROR",
-                retryable=True,
-            )
-        response.raise_for_status()
-        data = response.json()
-        try:
-            content = data["choices"][0]["message"]["content"]
-        except (KeyError, IndexError, TypeError) as exc:
-            raise LlmProviderError(
-                f"Spark response malformed: {exc}", kind="MALFORMED", retryable=False
-            ) from exc
-        return LlmResponse(content_text=content)
-
-    async def chat_stream(
-        self, messages: list[dict[str, Any]], **kwargs: object
-    ) -> AsyncIterator[str]:
-        if _contains_image_input(messages):
-            raise RuntimeError("Spark provider does not support image input")
-        payload: dict[str, object] = {
-            "model": self.model_id,
-            "messages": messages,
-            "stream": True,
-        }
-        for forwarded in ("temperature", "top_p", "max_tokens"):
-            if forwarded in kwargs:
-                payload[forwarded] = kwargs[forwarded]
-        async with httpx.AsyncClient(timeout=60) as client:
-            async with client.stream(
-                "POST",
-                f"{self.base_url}/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {self._token}",
-                    "Content-Type": "application/json",
-                },
-                json=payload,
-            ) as response:
-                if response.status_code in self.RATE_LIMIT_STATUSES:
-                    raise LlmProviderError(
-                        "Spark rate limited", kind="RATE_LIMITED", retryable=True
-                    )
-                if response.status_code in self.BILLING_STATUSES:
-                    raise LlmProviderError(
-                        "Spark billing rejected", kind="BILLING", retryable=False
-                    )
-                if response.status_code >= 500:
-                    raise LlmProviderError(
-                        f"Spark upstream {response.status_code}",
-                        kind="UPSTREAM_ERROR",
-                        retryable=True,
-                    )
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if not line.startswith("data: "):
-                        continue
-                    data_str = line[len("data: "):]
-                    if data_str.strip() == "[DONE]":
-                        break
-                    try:
-                        chunk = _json.loads(data_str)
-                        delta = chunk["choices"][0]["delta"]
-                        content = delta.get("content")
-                        if content:
-                            yield content
-                    except (KeyError, IndexError, TypeError, _json.JSONDecodeError):
-                        continue
-
-
 def provider_from_env() -> LlmProvider:
     if _fine_tuned_enabled():
         raise RuntimeError("Fine-tuned LLM providers are disabled; configure DeepSeek")
@@ -872,9 +719,6 @@ def provider_label() -> str:
         if api_key:
             return f"openai_compat:{model or 'unknown'}{fine_tuned_suffix}"
         return f"dryrun{fine_tuned_suffix}"
-    if name == "spark":
-        model = os.environ.get("PYT_SPARK_MODEL_ID") or "unknown"
-        return f"spark:{model}{fine_tuned_suffix}"
     if name in {"openai_compat", "openai-compatible", "openaicompat"}:
         _, _, model = _openai_compat_env()
         fast = _openai_fast_model()

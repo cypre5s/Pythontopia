@@ -308,13 +308,13 @@ REST 端点（路径取自真实 controller；详细字段见 R10 §4.2.4 与 §
 | `/api/world/boss/{chapter}/attempt` | POST | 登录 | 提交评测 |
 | `/api/world/expedition/run` | GET/PUT/DELETE | STUDENT | 远征 run 取/存/弃 |
 
-鉴权与幂等约定：Bug 矿洞与远征 run 端点强制 STUDENT 角色（教师/管理员 403），Boss 出题/评测端点仅需登录；矿洞会话的私有 id（`submissionId`/`sessionId`）不经 URL、由前端 store 承载并经后端归属双键校验。单次 Boss `attempt` 仅在真实判完发一次事件；远征 `PUT /run` 为覆盖式 UPSERT；`prefetch` 返回可查询 job id，重复 PENDING/READY 不重复生成，FAILED 原行增加 attempts 后重试。所有对外 DTO 都不含隐藏用例。
+鉴权与幂等约定：Bug 矿洞与远征 run 端点强制 STUDENT 角色（教师/管理员 403），Boss 出题/评测端点仅需登录；矿洞会话的私有 id（`submissionId`/`sessionId`）不经 URL、由前端 store 承载并经后端归属双键校验。单次 Boss `attempt` 真实判完后发一条事件，但重复 HTTP 提交没有稳定 submission ID，不能视为幂等，可能重复累计 mastery/Twin 证据；远征 `PUT /run` 为客户端快照覆盖式 UPSERT；`prefetch` 返回可查询 job id，重复 PENDING/READY 不重复生成，FAILED 原行增加 attempts 后重试。所有对外 DTO 都不含隐藏用例。
 
 graph 内部端点（`X-Internal-Token` 鉴权）：`POST /agents/boss/problem`、`POST /agents/boss/evaluate`、`POST /agents/boss/select-frontier`、`POST /agents/debug/analyze`。后端经 `BossGraphClient`/`DebugAgentClient` 调用并带 `GraphClientRetryHelper` 重试；任一调用失败都收敛为前述降级路径，绝不把 5xx 透传给玩家。
 
 ### 8.10.6 要素六：关键算法、异常与降级
 
-- **自适应难度**（`BossService.computeTargetDifficulty`）：客户端地图纵深给出 1..5 的递进主轴；服务端综合章节掌握度/置信度与 learner profile 的基础水平、成功率、平均尝试和坚持度形成 readiness，并只在当前纵深上下校准一档；无学情时保持纵深值。
+- **自适应难度**（`BossService.computeTargetDifficulty`）：请求阶段/难度给出递进主轴；服务端综合章节掌握度/置信度与 learner profile 的基础水平、成功率、平均尝试和坚持度形成 readiness，并只在请求难度上下校准一档；无学情时保持请求难度。服务端当前不验证地图层数、节点或 Boss 阶段是否真的走到。
 - **难度校准**（`difficulty_estimator`）：以 `reference_solution` 的 AST 特征（语句长度、行数、深度、循环/分支/函数计数）估算难度，与声明值偏差 ≤1 通过、=2 自动覆盖、>2 reject。
 - **查重与安全**（`plagiarism_checker`）：`SequenceMatcher` 相似度 ≥0.8 视为撞题 reject；命中敏感词 reject。
 - **接地防超纲**（`grounding`）：题面+解答须命中 KC/章节关键词，且 `reference_solution` 的 AST 节点须落在该章语法白名单内（如第 1 章禁循环/分支），超纲 reject。

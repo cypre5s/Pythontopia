@@ -2,17 +2,22 @@ from __future__ import annotations
 
 import pytest
 
+import pythontopia_rag.index.embedder as embedder_module
 from pythontopia_rag.index.embedder import (
+    DEFAULT_DIM,
     FallbackEmbedder,
     HashEmbedder,
-    ZHIPU_DEFAULT_DIM,
     select_embedder,
 )
 
 
+def test_external_zhipu_embedder_is_not_constructible() -> None:
+    assert not hasattr(embedder_module, "ZhipuEmbedder")
+
+
 class _BrokenEmbedder:
     name = "broken-primary"
-    dim = ZHIPU_DEFAULT_DIM
+    dim = DEFAULT_DIM
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         raise RuntimeError("expired api key")
@@ -22,9 +27,9 @@ class _BrokenEmbedder:
 async def test_fallback_embedder_returns_same_dimension_hash_vectors_after_primary_failure() -> None:
     embedder = FallbackEmbedder(
         primary=_BrokenEmbedder(),
-        fallback=HashEmbedder(dim=ZHIPU_DEFAULT_DIM),
-        dim=ZHIPU_DEFAULT_DIM,
-        name="zhipu-embedding-3+hash-fallback",
+        fallback=HashEmbedder(dim=DEFAULT_DIM),
+        dim=DEFAULT_DIM,
+        name="test-primary+hash-fallback",
     )
 
     assert embedder.fallback_reason is None
@@ -32,10 +37,10 @@ async def test_fallback_embedder_returns_same_dimension_hash_vectors_after_prima
 
     vectors = await embedder.embed(["列表推导式", "for 循环"])
 
-    assert embedder.name == "zhipu-embedding-3+hash-fallback"
-    assert embedder.dim == ZHIPU_DEFAULT_DIM
+    assert embedder.name == "test-primary+hash-fallback"
+    assert embedder.dim == DEFAULT_DIM
     assert len(vectors) == 2
-    assert all(len(vector) == ZHIPU_DEFAULT_DIM for vector in vectors)
+    assert all(len(vector) == DEFAULT_DIM for vector in vectors)
     assert "expired api key" in (embedder.fallback_reason or "")
     assert embedder.using_fallback is True
 

@@ -383,7 +383,7 @@ public class BossService {
                   : "未通过 ❌ 部分用例失败，请参考下方 hint。";
       // 闭环关键：服务端沙箱真实判完后（且仅此路径）才发学习事件，与 SubmissionService 同一套事件驱动
       // KC 掌握度（测）+ 8 维画像被动修订。缓存过期 / 缺 testCases / graph 不可用等「未判定」路径不发，
-      // 避免把非判题结果污染进掌握度。单次 attempt 仅发一次，天然幂等。
+      // 避免把非判题结果污染进掌握度；同题 HTTP 重放尚无 submission ID 幂等保护。
       return new BossAttemptResultDto(
           request.problemId(),
           graphResult.passed(),

@@ -62,6 +62,16 @@ describe('AdminProblemReviewsPage', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
+    if (!HTMLDialogElement.prototype.showModal) {
+      Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
+        configurable: true,
+        value(this: HTMLDialogElement) { this.setAttribute('open', ''); },
+      });
+      Object.defineProperty(HTMLDialogElement.prototype, 'close', {
+        configurable: true,
+        value(this: HTMLDialogElement) { this.removeAttribute('open'); },
+      });
+    }
     api.searchProblemReviews.mockResolvedValue(page([review()]));
     api.decideProblemReview.mockImplementation(async (_id: number, request: { decision: string; reason: string }) =>
       review({
@@ -194,7 +204,7 @@ describe('AdminProblemReviewsPage', () => {
   });
 
   it('requires a reason and submits the exact optimistic version before updating the row', async () => {
-    const wrapper = mount(AdminProblemReviewsPage);
+    const wrapper = mount(AdminProblemReviewsPage, { attachTo: document.body });
     await flushPromises();
 
     api.searchProblemReviews.mockResolvedValue(page([review({
@@ -222,6 +232,8 @@ describe('AdminProblemReviewsPage', () => {
     expect(wrapper.text()).toContain('已通过');
     expect(wrapper.text()).toContain('admin-1');
     expect(toast.show).toHaveBeenCalledWith('题目审核已通过。', 'success');
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="admin-problem-reviews"]').element);
+    wrapper.unmount();
   });
 
   it('reports an empty backend queue without inventing a row', async () => {
@@ -231,5 +243,24 @@ describe('AdminProblemReviewsPage', () => {
 
     expect(wrapper.text()).toContain('后端审核队列为空');
     expect(wrapper.findAll('.review-table tbody tr')).toHaveLength(0);
+  });
+
+  it('closes the native confirmation dialog on Escape and restores focus to its opener', async () => {
+    const wrapper = mount(AdminProblemReviewsPage, { attachTo: document.body });
+    await flushPromises();
+    const opener = wrapper.get('.review-decision--approve').element as HTMLButtonElement;
+    const focus = vi.spyOn(opener, 'focus');
+
+    await wrapper.get('.review-decision--approve').trigger('click');
+    await flushPromises();
+    const dialog = wrapper.get('dialog.review-dialog');
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="admin-review-reason"]').element);
+
+    await dialog.trigger('cancel');
+    await flushPromises();
+
+    expect(wrapper.find('dialog.review-dialog').exists()).toBe(false);
+    expect(focus).toHaveBeenCalledOnce();
+    wrapper.unmount();
   });
 });

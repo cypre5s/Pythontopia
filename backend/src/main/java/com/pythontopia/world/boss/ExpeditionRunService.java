@@ -188,7 +188,10 @@ public class ExpeditionRunService {
       throw staleRun();
     }
     Integer focusChapter = focusChapters.getFirst();
-    if (focusChapter == null || focusChapter != chapter) {
+    if (focusChapter == null) {
+      return;
+    }
+    if (focusChapter != chapter) {
       throw chapterChanged();
     }
   }

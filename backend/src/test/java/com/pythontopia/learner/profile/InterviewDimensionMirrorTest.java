@@ -2,6 +2,7 @@ package com.pythontopia.learner.profile;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -23,15 +24,27 @@ import com.pythontopia.learner.profile.dto.LearnerProfileDto;
 import com.pythontopia.learner.profile.dto.LearningGoalDto;
 import com.pythontopia.learner.profile.dto.LearningPreferenceDto;
 import com.pythontopia.learner.profile.dto.PracticeCapabilityDto;
+import com.pythontopia.learner.profile.dto.ProfileTurnResponse;
+import com.pythontopia.learner.profile.dto.ProfileTurnRequest;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
 import com.pythontopia.learner.profile.service.InterviewDimensionMirror;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
+import com.pythontopia.learner.profile.service.ProfileDraftService;
 import com.pythontopia.learner.profile.service.ProfileService;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.http.HttpEntity;
+import org.springframework.transaction.TransactionDefinition;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.client.RestTemplate;
 
 /**
@@ -128,16 +141,8 @@ class InterviewDimensionMirrorTest {
   @Test
   void applyDraftMirrorsDraftIntoDimensions() {
     ProfileRepository repository = mock(ProfileRepository.class);
-    ProfileService service =
-        new ProfileService(
-            repository,
-            mock(CoursePackRepository.class),
-            mock(ResourceRunRecorder.class),
-            mock(RestTemplate.class),
-            new GraphServiceProperties("http://graph", "http://rag", "token"),
-            new ObjectMapper(),
-            mock(SseRelayExecutor.class),
-            mirror);
+    when(repository.completeInterview(7L, "session-1")).thenReturn(true);
+    ProfileDraftService service = new ProfileDraftService(repository, mirror);
 
     service.applyDraft(7L, "session-1", fullDraft());
 
@@ -145,6 +150,77 @@ class InterviewDimensionMirrorTest {
     verify(repository).addRevision(eq(7L), eq("INTERVIEW"), any());
     verify(repository).completeInterview(7L, "session-1");
     assertThat(capturedDeltas()).hasSize(8);
+  }
+
+  @Test
+  void duplicateDraftDoesNotRewriteACompletedInterview() {
+    ProfileRepository repository = mock(ProfileRepository.class);
+    when(repository.completeInterview(7L, "session-1")).thenReturn(false);
+    InterviewDimensionMirror draftMirror = mock(InterviewDimensionMirror.class);
+    ProfileDraftService service = new ProfileDraftService(repository, draftMirror);
+
+    service.applyDraft(7L, "session-1", fullDraft());
+
+    verify(repository).completeInterview(7L, "session-1");
+    verify(repository, never()).upsertProfile(anyLong(), any());
+    verify(repository, never()).addRevision(anyLong(), anyString(), any());
+    verify(draftMirror, never()).mirror(anyLong(), any());
+  }
+
+  @Test
+  void sendTurnClaimsAndWritesDraftInsideATransaction() {
+    ProfileRepository repository = mock(ProfileRepository.class);
+    when(repository.ownsInterview(7L, "session-1")).thenReturn(true);
+    AtomicBoolean claimInsideTransaction = new AtomicBoolean();
+    when(repository.completeInterview(7L, "session-1")).thenAnswer(
+        invocation -> {
+          claimInsideTransaction.set(TransactionSynchronizationManager.isActualTransactionActive());
+          return claimInsideTransaction.get();
+        });
+    CoursePackRepository coursePack = mock(CoursePackRepository.class);
+    when(coursePack.findKcs(43L, null)).thenReturn(List.of());
+    RestTemplate graph = mock(RestTemplate.class);
+    when(graph.postForObject(
+            anyString(), any(HttpEntity.class), eq(ProfileTurnResponse.class)))
+        .thenReturn(new ProfileTurnResponse(null, fullDraft(), true, List.of(), List.of(), null, null));
+    ProfileDraftService draftTarget = new ProfileDraftService(repository, mirror);
+    var proxyFactory = new ProxyFactory(draftTarget);
+    proxyFactory.addAdvice(
+        new TransactionInterceptor(
+            new TestTransactionManager(), new AnnotationTransactionAttributeSource()));
+    ProfileDraftService proxiedDraft = (ProfileDraftService) proxyFactory.getProxy();
+    ProfileService service =
+        new ProfileService(
+            repository,
+            coursePack,
+            mock(ResourceRunRecorder.class),
+            graph,
+            new GraphServiceProperties("http://graph", "http://rag", "token"),
+            new ObjectMapper(),
+            mock(SseRelayExecutor.class),
+            proxiedDraft);
+
+    service.sendTurn(7L, "session-1", new ProfileTurnRequest("我学过 Python", List.of()));
+
+    assertThat(claimInsideTransaction.get()).isTrue();
+    verify(repository).upsertProfile(eq(7L), any());
+  }
+
+  private static final class TestTransactionManager extends AbstractPlatformTransactionManager {
+
+    @Override
+    protected Object doGetTransaction() {
+      return new Object();
+    }
+
+    @Override
+    protected void doBegin(Object transaction, TransactionDefinition definition) {}
+
+    @Override
+    protected void doCommit(DefaultTransactionStatus status) {}
+
+    @Override
+    protected void doRollback(DefaultTransactionStatus status) {}
   }
 
   private Map<String, DimensionDelta> capturedDeltas() {

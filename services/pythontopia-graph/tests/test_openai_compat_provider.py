@@ -26,6 +26,9 @@ def _openai_compat_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("OPENAI_API_KEY", "deepseek-key")
     monkeypatch.setenv("OPENAI_MODEL", "deepseek-v4-pro")
     monkeypatch.setenv("PYT_LLM_PROVIDER", "openai_compat")
+    monkeypatch.setattr(
+        "pythontopia_graph.llm.provider.load_pythontopia_env", lambda *a, **k: None
+    )
     for name in (
         "LLM_BASE_URL",
         "LLM_API_KEY",
@@ -47,6 +50,28 @@ def _openai_compat_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "all_proxy",
     ):
         monkeypatch.delenv(name, raising=False)
+
+
+def test_project_deepseek_settings_take_precedence_over_generic_aliases(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYT_OPENAI_BASE_URL", "https://api.deepseek.com")
+    monkeypatch.setenv("PYT_OPENAI_API_KEY", "project-deepseek-key")
+    monkeypatch.setenv("PYT_OPENAI_MODEL", "deepseek-v4-pro")
+    monkeypatch.setenv("PYT_OPENAI_MODEL_FAST", "deepseek-flash")
+    monkeypatch.setenv("PYT_OPENAI_MODEL_VISION", "deepseek-flash")
+    monkeypatch.setenv("OPENAI_API_KEY", "generic-old-key")
+    monkeypatch.setenv("OPENAI_MODEL", "generic-old-model")
+    monkeypatch.setenv("OPENAI_MODEL_FAST", "generic-old-fast")
+    monkeypatch.setenv("OPENAI_MODEL_VISION", "generic-old-vision")
+
+    provider = OpenAiCompatProvider()
+
+    assert provider.base_url == "https://api.deepseek.com"
+    assert provider.api_key == "project-deepseek-key"
+    assert provider.model == "deepseek-v4-pro"
+    assert provider.fast_model == "deepseek-flash"
+    assert provider.vision_model == "deepseek-flash"
 
 
 @pytest.mark.asyncio
@@ -355,12 +380,9 @@ async def test_fast_tier_falls_back_to_primary_when_fast_model_unset(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     # 未配置快档（OPENAI_MODEL_FAST 缺失）→ fast 档回落默认档，行为零回归。
-    # 隔离 deploy/.env / Alethicode .env 注入，确保"未配置快档"前提在测试中成立。
+    # 隔离 deploy/.env 注入，确保"未配置快档"前提在测试中成立。
     monkeypatch.setattr(
         "pythontopia_graph.llm.provider.load_pythontopia_env", lambda *a, **k: None
-    )
-    monkeypatch.setattr(
-        "pythontopia_graph.llm.provider.load_alethicode_env", lambda *a, **k: None
     )
     bodies = _capture_request_bodies(monkeypatch)
     provider = OpenAiCompatProvider()

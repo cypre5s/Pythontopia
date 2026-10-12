@@ -78,7 +78,7 @@ function medal(rank: number): string {
       v-else-if="entries.length === 0"
       class="lb__empty"
     >
-      <p>本班还没有人完成远征，去抢个首杀吧！</p>
+      <p>本班还没有远征核验成绩。</p>
     </div>
     <ol
       v-else
@@ -99,7 +99,7 @@ function medal(rank: number): string {
             class="lb__me"
           >我</span>
         </span>
-        <span class="lb__depth">深度 {{ e.bestDepth }}</span>
+        <span class="lb__depth">通过题数 {{ e.bestDepth }}</span>
         <span class="lb__score">{{ e.bestScore }}</span>
       </li>
     </ol>

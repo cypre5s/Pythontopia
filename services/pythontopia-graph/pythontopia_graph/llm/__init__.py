@@ -5,8 +5,6 @@ from .provider import (
     LlmProviderError,
     LlmResponse,
     OpenAiCompatProvider,
-    SparkProvider,
-    load_alethicode_env,
     provider_from_env,
     provider_label,
 )
@@ -18,8 +16,6 @@ __all__ = [
     "LlmProviderError",
     "LlmResponse",
     "OpenAiCompatProvider",
-    "SparkProvider",
-    "load_alethicode_env",
     "provider_from_env",
     "provider_label",
 ]
