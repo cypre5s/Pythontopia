@@ -111,6 +111,7 @@ describe('HomePage · 今日推荐卡片', () => {
     apiMocks.listMyClassrooms.mockResolvedValue([]);
     apiMocks.fetchMastery.mockResolvedValue([]);
     apiMocks.getTodayQuests.mockResolvedValue([]);
+    apiMocks.getRecommendations.mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -126,6 +127,8 @@ describe('HomePage · 今日推荐卡片', () => {
 
     const cards = wrapper.findAll('.rec-card');
     expect(cards.length).toBe(2);
+    expect(cards[0]!.element.tagName).toBe('BUTTON');
+    expect(cards[0]!.attributes('type')).toBe('button');
 
     // 第一张卡：标题 + 知识点 + 推荐理由都渲染。
     const first = cards[0]!;
@@ -154,5 +157,35 @@ describe('HomePage · 今日推荐卡片', () => {
 
     const section = wrapper.find('.recommend-section');
     expect(section.text()).toContain('暂无推荐资源');
+  });
+
+  it('班级查询失败时不显示加入表单，并可重试查询', async () => {
+    apiMocks.listMyClassrooms
+      .mockRejectedValueOnce(new Error('班级服务暂时不可用'))
+      .mockResolvedValueOnce([
+        {
+          classroomId: 9,
+          name: 'Python 一班',
+          description: '',
+          teacherId: 42,
+          packId: 43,
+          status: 'ACTIVE',
+          joinCode: 'ABC123',
+        },
+      ]);
+
+    const wrapper = await mountHome();
+
+    expect(wrapper.get('[data-testid="classroom-load-error"]').text()).toContain(
+      '班级服务暂时不可用',
+    );
+    expect(wrapper.find('[data-testid="join-classroom-form"]').exists()).toBe(false);
+
+    await wrapper.get('[data-testid="classroom-retry"]').trigger('click');
+    await flushPromises();
+
+    expect(apiMocks.listMyClassrooms).toHaveBeenCalledTimes(2);
+    expect(wrapper.get('[data-testid="home-classroom"]').text()).toContain('Python 一班');
+    expect(wrapper.find('[data-testid="join-classroom-form"]').exists()).toBe(false);
   });
 });

@@ -2,6 +2,13 @@
 
 日期：2026-10-12 至 2026-10-13
 
+## 2026-10-13 功能优先补充
+
+- 画像访谈发送失败时回滚乐观用户消息并保留输入；完成画像失败时显示错误并保持当前页面。首页班级列表加载失败显示错误和重试，不再误示为尚未入班；学习推荐卡使用原生按钮支持键盘操作。教师重置加入码期间禁用按钮，避免重复生成。画像屋删除 `[占位]` 并说明现有访谈功能。
+- 判题 AST 预检改由共享有界工作池执行；线程池饱和拒绝为 503，避免 `CallerRunsPolicy` 在请求线程运行 Python。`ast_whitelist.py` 缺失时 fail closed，且 readiness 返回未就绪。
+- RED/GREEN 与复验：前端定向 5 files / 19 tests、全量 253 files / 2492 tests、TypeScript typecheck、Vite production build 通过；ESLint 0 errors / 131 warnings。后端 StaticCodeChecker、JudgeWorkerPool、JudgeService、HealthController 定向 30 tests 通过；Graph 全量 1795 passed / 1 skipped，RAG 全量 158 passed / 2 skipped。`git diff --check` 通过。
+- 按“功能优先、性能最后”未启动 Web 全栈、未发 DeepSeek 请求、未启动 Piston、未测无尽远征性能。全量 Maven、真实浏览器/模型联测仍未在本轮执行；Docker Testcontainers 主机端口冲突及真实 Piston 配置仍是后端验证限制。对话中出现过的 API key 应轮换后再用于生产。
+
 ## 2026-10-13 BROWSE DNS 重绑定修复
 
 - Chromium 启动前按白名单主机解析并验证公网地址，使用 `--host-resolver-rules` 固定连接目标；域名规则按长度降序，避免宽域覆盖更具体的域。URL 层原有 scheme、端口、allowlist 和 DNS 公网检查继续保留。

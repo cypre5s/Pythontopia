@@ -33,7 +33,7 @@ onMounted(async () => {
         <div class="profile-npc">
           ProfileAgent
         </div>
-        <p>[占位] 画像屋 NPC 会通过右侧面板访谈生成学生画像。</p>
+        <p>通过右侧访谈建立你的学习画像，完成后查看个性化学习建议。</p>
         <button
           class="weekly-btn"
           @click="showWeekly = !showWeekly"

@@ -9,6 +9,25 @@ import { useWorkshopUiStore } from '@/stores/workshopUi';
 const promptText = '基于本周证据复习 PY43-KC-001';
 
 describe('ProfileRoomPage Learner Twin handoff', () => {
+  it('explains the real profile interview instead of showing placeholder copy', async () => {
+    setActivePinia(createPinia());
+    useLearningStore().profileInterview.sessionId = 'existing-session';
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/profile-room', component: ProfileRoomPage }],
+    });
+    await router.push('/profile-room');
+    const wrapper = mount(ProfileRoomPage, {
+      global: {
+        plugins: [router],
+        stubs: { AppLayout: { template: '<div><slot /></div>' }, ProfileInterviewPanel: true },
+      },
+    });
+
+    expect(wrapper.text()).not.toContain('[占位]');
+    expect(wrapper.text()).toContain('通过右侧访谈建立你的学习画像');
+  });
+
   it('stores a Twin prompt for the workshop and navigates there', async () => {
     setActivePinia(createPinia());
     useLearningStore().profileInterview.sessionId = 'existing-session';

@@ -28,17 +28,28 @@ public class StaticCodeChecker {
   private static final int AST_CHECK_TIMEOUT_SECONDS = 3;
 
   private final String pythonExecutable;
+  private final ClassLoader resourceClassLoader;
+  private volatile PythonSandbox.Readiness readiness =
+      new PythonSandbox.Readiness(false, "AST whitelist self-check has not run");
 
   public StaticCodeChecker(
       @Value("${pythontopia.judge.python:python3}") String pythonExecutable) {
+    this(pythonExecutable, StaticCodeChecker.class.getClassLoader());
+  }
+
+  StaticCodeChecker(String pythonExecutable, ClassLoader resourceClassLoader) {
     this.pythonExecutable = pythonExecutable;
+    this.resourceClassLoader = resourceClassLoader;
     selfCheck();
+  }
+
+  public PythonSandbox.Readiness readiness() {
+    return readiness;
   }
 
   /**
    * 启动自检：用最小合法代码 {@code pass} 跑一次 AST 白名单。若解释器缺标准库（如 {@code ast}）或无法启动，
-   * 记 {@code log.error} 提示运维（演示阻断级，根因：运行镜像曾装 python3-minimal），
-   * 但<strong>绝不</strong> fail-fast 阻断应用启动。
+   * 失败时保持应用可启动以提供健康检查，但将服务标为未就绪；每次实际检查也继续 fail closed。
    */
   private void selfCheck() {
     CheckResult probe;
@@ -46,24 +57,21 @@ public class StaticCodeChecker {
       probe = runAstWhitelist("pass");
     } catch (RuntimeException ex) {
       log.error(
-          "StaticCodeChecker 启动自检异常（已忽略，不阻断启动）：python={} err={}",
+          "StaticCodeChecker startup self-check failed: python={} err={}",
           pythonExecutable,
           ex.getMessage());
+      readiness = new PythonSandbox.Readiness(false, "AST whitelist self-check failed");
       return;
     }
-    if (probe.systemError()) {
+    if (probe.systemError() || !probe.passed()) {
       log.error(
-          "StaticCodeChecker 启动自检失败：python 解释器 '{}' 无法运行 AST 白名单（{}）；"
-              + "运行镜像很可能装了 python3-minimal（缺 ast 等标准库），将导致全部提交被误判。"
-              + "请改装完整 python3。",
+          "StaticCodeChecker startup self-check failed: python={} detail={}",
           pythonExecutable,
           probe.failureReason());
-    } else if (!probe.passed()) {
-      log.warn(
-          "StaticCodeChecker 启动自检：AST 白名单对 `pass` 返回非通过（{}），请核对 ast_whitelist.py。",
-          probe.failureReason());
+      readiness = new PythonSandbox.Readiness(false, "AST whitelist unavailable");
     } else {
       log.info("StaticCodeChecker 启动自检通过：AST 白名单可用（python={}）。", pythonExecutable);
+      readiness = new PythonSandbox.Readiness(true, "AST whitelist available");
     }
   }
 
@@ -146,10 +154,10 @@ public class StaticCodeChecker {
     try {
       scriptFile = Files.createTempFile("pythontopia-ast-", ".py");
       try (InputStream in =
-          getClass().getClassLoader().getResourceAsStream("judge/ast_whitelist.py")) {
+          resourceClassLoader.getResourceAsStream("judge/ast_whitelist.py")) {
         if (in == null) {
-          log.warn("ast_whitelist.py missing from classpath; skipping AST phase");
-          return accepted();
+          log.error("ast_whitelist.py missing from classpath; rejecting code execution");
+          return infraError("SYSTEM_ERROR:ast_whitelist_missing");
         }
         Files.write(scriptFile, in.readAllBytes());
       }

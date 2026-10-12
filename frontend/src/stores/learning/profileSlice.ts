@@ -59,18 +59,23 @@ export function createProfileSlice() {
   }
 
   async function sendTurn(userMessage: string): Promise<void> {
-    if (!profileInterview.value.sessionId) {
-      await openInterview();
-    }
-    const sessionId = profileInterview.value.sessionId;
-    if (!sessionId) {
-      throw new Error('Profile interview session was not opened');
-    }
+    if (profileInterview.value.loading) return;
     profileInterview.value.loading = true;
+    let historyBeforeTurn: ProfileMessageDto[] | null = null;
+    let historyLengthBeforeTurn = 0;
     try {
+      if (!profileInterview.value.sessionId) {
+        await openInterview();
+      }
+      const sessionId = profileInterview.value.sessionId;
+      if (!sessionId) {
+        throw new Error('Profile interview session was not opened');
+      }
       // 先快照本轮之前的多轮历史（用于给 ProfileAgent 多轮记忆），再把当前消息加入本地展示。
-      const priorHistory = [...profileInterview.value.history];
-      profileInterview.value.history.push({ role: 'user', content: userMessage });
+      historyBeforeTurn = profileInterview.value.history;
+      historyLengthBeforeTurn = historyBeforeTurn.length;
+      const priorHistory = [...historyBeforeTurn];
+      historyBeforeTurn.push({ role: 'user', content: userMessage });
       const response = await sendProfileTurn(sessionId, { userMessage, history: priorHistory });
       // 这些字段由外部 graph 填充，缺键时后端回 null；补默认值，避免访谈永远不进入完成态
       // 或把 null 写进 state 让组件 `.length` 崩掉。
@@ -85,6 +90,9 @@ export function createProfileSlice() {
       if (response.profileDraft) {
         profile.value = response.profileDraft;
       }
+    } catch (error) {
+      historyBeforeTurn?.splice(historyLengthBeforeTurn);
+      throw error;
     } finally {
       profileInterview.value.loading = false;
     }

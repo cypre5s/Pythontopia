@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-13 — Web 交互恢复与判题过载保护
+
+- 访谈发送失败时撤销本地乐观消息、保留输入并显示错误；完成画像失败时停留在访谈页并允许重试。首页班级查询失败显示真实错误和重试入口，不再误显示入班表单；推荐卡改为键盘可操作按钮。
+- 教师重置加入码在请求期间禁用，避免重复创建；画像屋移除占位文案并指向现有八维访谈。
+- 判题 AST 预检也纳入有界工作池；工作池满时返回 503，不再由请求线程执行；AST 白名单资源缺失时 fail closed，并使 `/readyz` 不就绪。
+- 验证：前端全量 Vitest 253 files / 2492 tests、TypeScript typecheck、Vite production build 通过；ESLint 0 errors / 131 warnings。后端 `StaticCodeCheckerTest`、`JudgeWorkerPoolTest`、`JudgeServiceTest`、`HealthControllerTest` 共 30 tests 通过；Graph 1795 passed / 1 skipped，RAG 158 passed / 2 skipped。
+- 未启动 Web 全栈、未请求 DeepSeek、未测无尽远征性能；实际 Piston/Isolate 隔离仍需部署环境验证。前端全量测试仍有既有 jsdom 网络/路由告警。
+
 ## 2026-10-13 — BROWSE DNS 重绑定防护
 
 - 联网查证启动 Chromium 前解析白名单主机、校验全部地址为公网地址，并通过 Chromium host resolver rules 固定连接目标；子资源、脚本和非文档请求仍按原策略拦截。

@@ -47,6 +47,15 @@ vi.mock('@/api/teacher', () => ({
 
 let router: Router;
 
+function mountClassroomDetail() {
+  return mount(ClassroomDetail, {
+    global: {
+      plugins: [router],
+      stubs: { AppLayout: { template: '<div><slot /></div>' } },
+    },
+  });
+}
+
 function setupRouter(): Router {
   return createRouter({
     history: createMemoryHistory(),
@@ -119,7 +128,7 @@ describe('ClassroomDetail', () => {
 
   it('renders tabs and switches active panel', async () => {
     await router.push('/teacher/classroom/9');
-    const wrapper = mount(ClassroomDetail, { global: { plugins: [router] } });
+    const wrapper = mountClassroomDetail();
     await flushPromises();
 
     expect(wrapper.text()).toContain('Stage12 Demo');
@@ -133,7 +142,7 @@ describe('ClassroomDetail', () => {
 
   it('regenerates join code via API', async () => {
     await router.push('/teacher/classroom/9');
-    const wrapper = mount(ClassroomDetail, { global: { plugins: [router] } });
+    const wrapper = mountClassroomDetail();
     await flushPromises();
     const button = wrapper.findAll('button').find((b) => b.text() === '重置加入码');
     expect(button).toBeTruthy();
@@ -142,6 +151,32 @@ describe('ClassroomDetail', () => {
     const teacher = useTeacherStore();
     expect(apiMocks.regenerateClassroomJoinCode).toHaveBeenCalledWith(9);
     expect(teacher.current.classroom?.joinCode).toBe('NEW999');
+  });
+
+  it('prevents duplicate join-code regeneration while the request is pending', async () => {
+    let resolveRequest!: (value: { classroomId: number; name: string; joinCode: string }) => void;
+    apiMocks.regenerateClassroomJoinCode.mockReturnValue(
+      new Promise((resolve) => {
+        resolveRequest = resolve;
+      }),
+    );
+
+    await router.push('/teacher/classroom/9');
+    const wrapper = mountClassroomDetail();
+    await flushPromises();
+    const button = wrapper.findAll('button').find((item) => item.text().includes('重置加入码'))!;
+
+    await button.trigger('click');
+    await wrapper.vm.$nextTick();
+    await button.trigger('click');
+
+    expect(button.attributes('disabled')).toBeDefined();
+    expect(button.text()).toContain('重置中…');
+    expect(apiMocks.regenerateClassroomJoinCode).toHaveBeenCalledTimes(1);
+
+    resolveRequest({ classroomId: 9, name: 'Stage12 Demo', joinCode: 'NEW999' });
+    await flushPromises();
+    expect(button.attributes('disabled')).toBeUndefined();
   });
 
   // ── P6.1 一键补救包 ──
@@ -166,7 +201,7 @@ describe('ClassroomDetail', () => {
     });
 
     await router.push('/teacher/classroom/9');
-    const wrapper = mount(ClassroomDetail, { global: { plugins: [router] } });
+    const wrapper = mountClassroomDetail();
     await flushPromises();
 
     const trigger = wrapper.find('[data-testid="remediation-trigger"]');
@@ -204,7 +239,7 @@ describe('ClassroomDetail', () => {
     });
 
     await router.push('/teacher/classroom/9');
-    const wrapper = mount(ClassroomDetail, { global: { plugins: [router] } });
+    const wrapper = mountClassroomDetail();
     await flushPromises();
 
     await wrapper.find('[data-testid="remediation-trigger"]').trigger('click');
@@ -219,7 +254,7 @@ describe('ClassroomDetail', () => {
     apiMocks.triggerRemediation.mockRejectedValue(new Error('班级数据异常'));
 
     await router.push('/teacher/classroom/9');
-    const wrapper = mount(ClassroomDetail, { global: { plugins: [router] } });
+    const wrapper = mountClassroomDetail();
     await flushPromises();
 
     await wrapper.find('[data-testid="remediation-trigger"]').trigger('click');
@@ -240,7 +275,7 @@ describe('ClassroomDetail', () => {
     apiMocks.triggerRemediation.mockReturnValue(pending);
 
     await router.push('/teacher/classroom/9');
-    const wrapper = mount(ClassroomDetail, { global: { plugins: [router] } });
+    const wrapper = mountClassroomDetail();
     await flushPromises();
 
     const trigger = wrapper.find('[data-testid="remediation-trigger"]');
@@ -277,7 +312,7 @@ describe('ClassroomDetail', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await router.push('/teacher/classroom/9');
-    const wrapper = mount(ClassroomDetail, { global: { plugins: [router] } });
+    const wrapper = mountClassroomDetail();
     await flushPromises();
 
     const liveTab = wrapper.find('[data-testid="classroom-live-tab"]');
@@ -303,7 +338,7 @@ describe('ClassroomDetail', () => {
     vi.stubGlobal('fetch', fetchMock);
 
     await router.push('/teacher/classroom/9');
-    const wrapper = mount(ClassroomDetail, { global: { plugins: [router] } });
+    const wrapper = mountClassroomDetail();
     await flushPromises();
 
     const liveTab = wrapper.find('[data-testid="classroom-live-tab"]');

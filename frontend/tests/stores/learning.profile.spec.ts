@@ -1,7 +1,7 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useLearningStore } from '@/stores/learning';
-import { openProfileInterview, sendProfileTurn } from '@/api/learner';
+import { finishProfileInterview, openProfileInterview, sendProfileTurn } from '@/api/learner';
 
 vi.mock('@/api/learner', () => ({
   getLearnerProfile: vi.fn(async () => null),
@@ -43,6 +43,7 @@ describe('learning profile store', () => {
     setActivePinia(createPinia());
     vi.mocked(openProfileInterview).mockClear();
     vi.mocked(sendProfileTurn).mockClear();
+    vi.mocked(finishProfileInterview).mockClear();
   });
 
   it('opens interview session and updates dimensions after a turn', async () => {
@@ -59,5 +60,16 @@ describe('learning profile store', () => {
     );
     expect(store.profileInterview.dimensionsFilled).toHaveLength(8);
     expect(store.profile?.major).toBe('CS');
+  });
+
+  it('removes the optimistic user message when a turn request fails', async () => {
+    const store = useLearningStore();
+    await store.openInterview();
+    vi.mocked(sendProfileTurn).mockRejectedValueOnce(new Error('network unavailable'));
+
+    await expect(store.sendTurn('我的回答')).rejects.toThrow('network unavailable');
+
+    expect(store.profileInterview.history).toEqual([]);
+    expect(store.profileInterview.loading).toBe(false);
   });
 });
