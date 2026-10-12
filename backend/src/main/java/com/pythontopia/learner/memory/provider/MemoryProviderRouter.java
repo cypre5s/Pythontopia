@@ -9,9 +9,7 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
 /**
- * 记忆 provider 路由 + fail-soft 编排：按 {@link MemoryProviderProperties#provider()} 选择 active provider，
- * 外部实现（mem0 / zep）抛 {@link MemoryProviderException} 时 <strong>回退 {@link LocalMemoryProvider}</strong>，
- * 保证 brief / 闭环主链路在外部记忆服务不可用时零影响（§0「外部依赖 fail-soft」）。
+ * 记忆 provider 路由固定使用 {@link LocalMemoryProvider}，不向 Mem0/Zep 等外部服务发送学习记录。
  *
  * <p>{@link #remember} 成功后把外部映射落 {@code agent_memory_ref}（best-effort，DB 故障仅告警不阻断）。
  */

@@ -3,7 +3,9 @@ package com.pythontopia.world.boss;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.nullable;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -18,6 +20,7 @@ import com.pythontopia.world.boss.dto.BossProblemDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest;
 import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -121,16 +124,18 @@ class BossControllerTest {
             "ai-1", true, 3, 3, null, 95, "通过");
     when(service.evaluateAttempt(any(), any())).thenReturn(result);
 
+    UUID attemptId = UUID.randomUUID();
     mockMvc
         .perform(
             post("/api/world/boss/1/attempt")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     objectMapper.writeValueAsString(
-                        new BossAttemptRequest("ai-1", 1, 1, "print(5)", 10))))
+                        new BossAttemptRequest("ai-1", 1, 1, "print(5)", 10, attemptId))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.passed").value(true))
         .andExpect(jsonPath("$.score").value(95));
+    verify(service).evaluateAttempt(argThat(request -> attemptId.equals(request.attemptId())), any());
   }
 
   @Test

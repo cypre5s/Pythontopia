@@ -100,7 +100,7 @@ vi .env
 - `PYT_TEACHER_INVITE_CODE`：教师注册邀请码
 - `PYT_RAG_ADMIN_TOKEN`：RAG 管理接口令牌
 - `PYT_JUDGE_PROVIDER=piston`，并填写 `PYT_PISTON_URL`、`PYT_PISTON_PYTHON_VERSION`、至少 32 字符的 `PYT_PISTON_AUTH_TOKEN`；Piston 必须作为独立隔离服务部署，生产绝不回退 `subprocess`；公网/跨主机 URL 必须用 HTTPS，只有隔离内网允许 HTTP
-- `PYT_LLM_PROVIDER=openai_compat`、`PYT_OPENAI_BASE_URL=https://api.deepseek.com`、`PYT_OPENAI_API_KEY`、`PYT_OPENAI_MODEL` 和 `PYT_OPENAI_MODEL_VISION`：生产只允许 DeepSeek 文本与视觉模型，禁止 dryrun、Spark 和其它兼容端点
+- `PYT_LLM_PROVIDER=openai_compat`、`PYT_OPENAI_BASE_URL=https://api.deepseek.com`、`PYT_OPENAI_API_KEY`：只允许模型 `deepseek-v4-pro`（文本）和 `deepseek-flash`（文本/图片输入）；视觉模型必须为 `deepseek-flash`。生产禁止 dryrun、Spark 和其它兼容端点
 - `PYT_RAG_EMBEDDER=hash`：RAG 使用本地 hash 向量与 BM25，不要求外部 embedding API；语义向量降级时 `/readyz` 标记 `ready_degraded`，仍要求 BM25 课程索引可用
 - 配音、语音识别、语音输入和独立文生图入口关闭；导师图片通过 DeepSeek 视觉模型直接处理
 

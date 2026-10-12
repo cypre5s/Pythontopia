@@ -31,8 +31,6 @@ import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.client.MockRestServiceServer;
-import org.springframework.test.web.client.match.MockRestRequestMatchers;
-import org.springframework.test.web.client.response.MockRestResponseCreators;
 import org.springframework.web.client.RestTemplate;
 
 /**
@@ -163,14 +161,11 @@ class MemoryBriefServiceTest {
             "短步骤+鼓励反馈：先给一个小目标，再用微练习确认。");
   }
 
-  // ── ③ 外部 provider 500 → router fail-soft 回退 local，facts 仍出 ──
+  // ── ③ 即使配置 Mem0，学习数据也只保留在 local ──
   @Test
-  void externalServerErrorFallsBackToLocalFacts() {
+  void configuredMem0CannotReceiveLearningMemory() {
     RestTemplate restTemplate = new RestTemplate();
     MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
-    server
-        .expect(MockRestRequestMatchers.requestTo("http://mem0.test/v1/memories/search/"))
-        .andRespond(MockRestResponseCreators.withServerError());
     when(retrieval.retrieve(eq(USER), isNull(), any(), anyInt()))
         .thenReturn(List.of(item(2L, "practice_failed", "练习失败：PY43-KC-07", "PY43-KC-07", "2026-06-12T00:00:00Z")));
     when(profileService.getDimensions(USER)).thenReturn(List.of());
@@ -183,7 +178,7 @@ class MemoryBriefServiceTest {
 
     assertThat(brief.facts()).containsExactly("练习失败：PY43-KC-07");
     assertThat(brief.weakKcs()).containsExactly("PY43-KC-07");
-    server.verify(Duration.ofSeconds(2));
+    server.verify();
   }
 
   @Test

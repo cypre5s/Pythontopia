@@ -20,6 +20,31 @@ import type {
 import { findBossByChapter } from '@/data/bossCatalog';
 
 const BOSS_PROBLEM_TIMEOUT_MS = 15_000;
+let pendingAttempt: { fingerprint: string; attemptId: string } | null = null;
+
+function newAttemptId(): string {
+  const cryptoApi = globalThis.crypto;
+  if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID();
+  const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = Array.from(bytes, (value) => value.toString(16).padStart(2, '0')).join('');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function attemptIdFor(payload: BossAttemptRequest): string {
+  if (payload.attemptId) return payload.attemptId;
+  const fingerprint = JSON.stringify([
+    payload.problemId,
+    payload.chapter,
+    payload.stage,
+    payload.code,
+    payload.elapsedSec,
+  ]);
+  if (pendingAttempt?.fingerprint === fingerprint) return pendingAttempt.attemptId;
+  pendingAttempt = { fingerprint, attemptId: newAttemptId() };
+  return pendingAttempt.attemptId;
+}
 
 const GOLDEN_TEMPLATES: Record<number, GoldenTemplate[]> = {
   1: [
@@ -307,11 +332,12 @@ function synthesizeBuggyCode(problem: BossProblemDto): string {
 export async function submitBossAttempt(
   payload: BossAttemptRequest,
 ): Promise<BossAttemptResultDto> {
+  const attemptId = attemptIdFor(payload);
   let response: Awaited<ReturnType<typeof http.post<BossAttemptResultDto>>>;
   try {
     response = await http.post<BossAttemptResultDto>(
       `/api/world/boss/${payload.chapter}/attempt`,
-      payload,
+      { ...payload, attemptId },
     );
   } catch (error) {
     if (typeof console !== 'undefined') {
@@ -323,6 +349,7 @@ export async function submitBossAttempt(
   if (!response.data || typeof response.data.problemId !== 'string') {
     throw new Error('判题服务返回了不完整的结果');
   }
+  if (pendingAttempt?.attemptId === attemptId) pendingAttempt = null;
   return response.data;
 }
 

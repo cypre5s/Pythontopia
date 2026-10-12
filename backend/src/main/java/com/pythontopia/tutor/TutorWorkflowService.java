@@ -23,12 +23,15 @@ import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
 import java.security.SecureRandom;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -125,14 +128,12 @@ public class TutorWorkflowService {
   public SseEmitter run(Long userId, TutorWorkflowRunRequest request) {
     PublicProblemDto problem = requireProblem(request.problemId());
     TutorWorkflowSessionDto session = findOrCreate(userId, request.problemId());
-    UUID runId = UUID.randomUUID();
-
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("session_id", session.sessionKey());
     body.put("user_id", userId);
     body.put("event", request.event());
     body.put("problem", problemContext(problem));
-    Map<String, Object> eventData = new HashMap<>(request.eventDataOrEmpty());
+    Map<String, Object> eventData = new LinkedHashMap<>(request.eventDataOrEmpty());
     validateEventData(request.event(), eventData);
     resolveReferences(request.event(), session, eventData);
     Map<String, Object> diagnosis = resolveDiagnosis(userId, request, eventData);
@@ -151,6 +152,35 @@ public class TutorWorkflowService {
     body.put("restore_chat_history", restoreChatHistory(recentCards));
     repository.findAgentState(session.id()).ifPresent(state -> restoreAgentState(body, state));
 
+    String requestFingerprint = requestFingerprint(body);
+    TutorWorkflowRepository.AutoGenCheckpoint run =
+        repository
+            .claimAutoGenRun(session.id(), UUID.randomUUID(), requestFingerprint)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.CONFLICT,
+                        "TUTOR_WORKFLOW_RUN_ACTIVE",
+                        "导学会话正在处理其他请求"));
+    UUID runId = run.runId();
+    body.put("run_id", runId.toString());
+    body.put("request_fingerprint", requestFingerprint);
+    if (run.stageIndex() >= 0) {
+      try {
+        JsonNode checkpoint = objectMapper.readTree(run.checkpointJson());
+        if (checkpoint == null || !checkpoint.isObject()) {
+          throw new IllegalArgumentException("AutoGen checkpoint must be an object");
+        }
+        body.put("restore_autogen_checkpoint", objectMapper.convertValue(checkpoint, Map.class));
+      } catch (Exception e) {
+        repository.transitionAutoGenRun(session.id(), runId, "FAILED");
+        throw new BusinessException(
+            HttpStatus.INTERNAL_SERVER_ERROR,
+            "TUTOR_WORKFLOW_CHECKPOINT_INVALID",
+            "导学恢复点无效");
+      }
+    }
+
     SseEmitter emitter = new SseEmitter(180_000L);
     graphClient.runStream(
         userId,
@@ -162,8 +192,118 @@ public class TutorWorkflowService {
           } catch (Exception e) {
             throw new IllegalStateException("Failed to persist tutor workflow projection", e);
           }
-        });
+        },
+        errorData -> repository.transitionAutoGenRun(session.id(), runId, "FAILED"),
+        () -> repository.transitionAutoGenRun(session.id(), runId, "INTERRUPTED"));
     return emitter;
+  }
+
+  /** Persist one owner-scoped, text-only AutoGen stage checkpoint. */
+  public void persistAutoGenCheckpoint(
+      Long userId, String sessionKey, UUID runId, String requestFingerprint, JsonNode checkpoint) {
+    TutorWorkflowSessionDto session =
+        repository
+            .findBySessionKey(userId, sessionKey)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.NOT_FOUND, "WORKFLOW_SESSION_NOT_FOUND", "导学会话不存在"));
+    if (requestFingerprint == null || !requestFingerprint.matches("[0-9a-f]{64}")) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "TUTOR_WORKFLOW_CHECKPOINT_INVALID", "导学恢复点无效");
+    }
+    if (checkpoint == null || !checkpoint.isObject()) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "TUTOR_WORKFLOW_CHECKPOINT_INVALID", "导学恢复点无效");
+    }
+    JsonNode stageIndexNode = checkpoint.path("stage_index");
+    JsonNode stageNameNode = checkpoint.path("stage_name");
+    JsonNode teamState = checkpoint.path("team_state");
+    JsonNode workflowState = checkpoint.path("workflow_state");
+    List<String> stageNames =
+        List.of("validate_transition", "coach_decide", "fetch_evidence", "generate_card", "decide_actions");
+    if (!stageIndexNode.canConvertToInt()
+        || stageIndexNode.asInt() < 0
+        || stageIndexNode.asInt() >= stageNames.size()
+        || !stageNameNode.isTextual()
+        || !stageNames.get(stageIndexNode.asInt()).equals(stageNameNode.asText())
+        || !teamState.isObject()
+        || !workflowState.isTextual()
+        || workflowState.asText().length() > 1_000_000) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "TUTOR_WORKFLOW_CHECKPOINT_INVALID", "导学恢复点无效");
+    }
+    try {
+      ensureTextOnly(checkpoint);
+      String json = objectMapper.writeValueAsString(checkpoint);
+      if (json.getBytes(StandardCharsets.UTF_8).length > 1_048_576) {
+        throw new IllegalArgumentException("checkpoint exceeds the size limit");
+      }
+      TutorWorkflowRepository.AutoGenCheckpoint current =
+          repository
+              .findAutoGenCheckpoint(session.id(), runId)
+              .orElseThrow(() -> new IllegalArgumentException("checkpoint run not found"));
+      if (!"RUNNING".equals(current.status())
+          || !requestFingerprint.equals(current.requestFingerprint())) {
+        throw new IllegalArgumentException("checkpoint run is no longer active");
+      }
+      repository.saveAutoGenCheckpoint(
+          session.id(),
+          runId,
+          requestFingerprint,
+          stageIndexNode.asInt(),
+          stageNameNode.asText(),
+          json);
+    } catch (BusinessException e) {
+      throw e;
+    } catch (Exception e) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "TUTOR_WORKFLOW_CHECKPOINT_INVALID", "导学恢复点无效");
+    }
+  }
+
+  private String requestFingerprint(Map<String, Object> body) {
+    Map<String, Object> scope = new TreeMap<>();
+    for (String key :
+        List.of(
+            "session_id",
+            "user_id",
+            "event",
+            "problem",
+            "diagnosis",
+            "event_data",
+            "profile_brief",
+            "coach_mode",
+            "student_state",
+            "episode_plan")) {
+      if (body.containsKey(key)) {
+        scope.put(key, canonicalValue(body.get(key)));
+      }
+    }
+    try {
+      byte[] digest = MessageDigest.getInstance("SHA-256").digest(objectMapper.writeValueAsBytes(scope));
+      StringBuilder hex = new StringBuilder(digest.length * 2);
+      for (byte value : digest) {
+        hex.append(String.format(Locale.ROOT, "%02x", value));
+      }
+      return hex.toString();
+    } catch (NoSuchAlgorithmException e) {
+      throw new IllegalStateException("SHA-256 is unavailable", e);
+    } catch (Exception e) {
+      throw new IllegalStateException("Failed to fingerprint tutor workflow request", e);
+    }
+  }
+
+  private Object canonicalValue(Object value) {
+    if (value instanceof Map<?, ?> map) {
+      Map<String, Object> canonical = new TreeMap<>();
+      map.forEach((key, item) -> canonical.put(String.valueOf(key), canonicalValue(item)));
+      return canonical;
+    }
+    if (value instanceof List<?> list) {
+      return list.stream().map(this::canonicalValue).toList();
+    }
+    return value;
   }
 
   public TutorWorkflowAttachmentDto uploadAttachment(

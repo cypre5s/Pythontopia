@@ -282,6 +282,8 @@ class TutorWorkflowGraph:
         *,
         cancellation_token: CancellationToken | None = None,
         private_image_resolver: PrivateImageResolver | None = None,
+        restore_checkpoint: dict[str, Any] | None = None,
+        on_checkpoint: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
     ) -> WorkflowGraphState:
         request = state.get("request")
         if request is not None and "episode_plan" not in state:
@@ -298,6 +300,8 @@ class TutorWorkflowGraph:
             stages,
             cancellation_token=cancellation_token,
             private_image_resolver=private_image_resolver,
+            restore_checkpoint=restore_checkpoint,
+            on_checkpoint=on_checkpoint,
         )
 
     # ── 节点 ──
@@ -551,11 +555,18 @@ class TutorWorkflowGraph:
                 top_k=3,
             )
             chunks = list(bundle.chunks)
-            status = "ok"
-        except Exception:  # noqa: BLE001 - RAG 故障降级为无证据（导学卡仍可产出）
-            chunks = []
-            status = "retry"
-        await self._emit_step_finish("evidence_fetcher", status, started, chunks=len(chunks))
+        except Exception:  # noqa: BLE001 - 课件检索失败时不能生成无证据导学卡
+            await self._emit_step_finish(
+                "evidence_fetcher", "fail", started, chunks=0, note="courseware retrieval failed"
+            )
+            return {
+                **state,
+                "evidence_chunks": [],
+                "runtime_state": "FAILED",
+                "failure_bucket": "TOOL_EXECUTION_FAILED",
+                "last_error": "课件检索服务暂不可用，请稍后重试",
+            }
+        await self._emit_step_finish("evidence_fetcher", "ok", started, chunks=len(chunks))
         return {**state, "evidence_chunks": chunks}
 
     async def _node_generate_card(self, state: WorkflowGraphState) -> WorkflowGraphState:

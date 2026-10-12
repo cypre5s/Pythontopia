@@ -50,7 +50,7 @@ def _fake_piston_endpoint(monkeypatch: pytest.MonkeyPatch) -> None:
             run = {"status": "TO", "code": -1, "stdout": stdout, "stderr": stderr}
         else:
             run = {
-                "status": "AC" if result.returncode == 0 else "RE",
+                "status": None if result.returncode == 0 else "RE",
                 "code": result.returncode,
                 "stdout": result.stdout,
                 "stderr": result.stderr,

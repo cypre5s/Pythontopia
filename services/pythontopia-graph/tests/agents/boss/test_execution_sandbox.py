@@ -24,7 +24,7 @@ def test_piston_request_uses_existing_judge_contract(monkeypatch: pytest.MonkeyP
         captured.update(url=url, payload=json, headers=headers, timeout=timeout)
         return httpx.Response(
             200,
-            json={"run": {"status": "AC", "code": 0, "stdout": "ok\n", "stderr": ""}},
+            json={"run": {"status": None, "code": 0, "stdout": "ok\n", "stderr": ""}},
             request=httpx.Request("POST", url),
         )
 
@@ -42,3 +42,64 @@ def test_piston_request_uses_existing_judge_contract(monkeypatch: pytest.MonkeyP
     assert result.stdout == "ok\n"
     assert result.exit_code == 0
     assert result.runtime_error is None
+
+
+def test_official_piston_success_with_null_status_is_accepted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example")
+    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
+    monkeypatch.setattr(
+        execution_sandbox.httpx,
+        "post",
+        lambda url, **kwargs: httpx.Response(
+            200,
+            json={"run": {"status": None, "code": 0, "stdout": "ok\n", "stderr": ""}},
+            request=httpx.Request("POST", url),
+        ),
+    )
+
+    result = execution_sandbox.run_python("print('ok')", "", timeout_sec=4)
+
+    assert result.runtime_error is None
+    assert result.exit_code == 0
+    assert result.stdout == "ok\n"
+
+
+def test_piston_output_limit_is_a_failed_execution_not_sandbox_outage(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example")
+    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
+    monkeypatch.setattr(
+        execution_sandbox.httpx,
+        "post",
+        lambda url, **kwargs: httpx.Response(
+            200,
+            json={"run": {"status": "OL", "code": 0, "stdout": "", "stderr": ""}},
+            request=httpx.Request("POST", url),
+        ),
+    )
+
+    result = execution_sandbox.run_python("print('x' * 1000000)", "", timeout_sec=4)
+
+    assert result.runtime_error is None
+    assert result.exit_code != 0
+
+
+def test_unknown_piston_status_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example")
+    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
+    monkeypatch.setattr(
+        execution_sandbox.httpx,
+        "post",
+        lambda url, **kwargs: httpx.Response(
+            200,
+            json={"run": {"status": "AC", "code": 0, "stdout": "ok\n", "stderr": ""}},
+            request=httpx.Request("POST", url),
+        ),
+    )
+
+    result = execution_sandbox.run_python("print('ok')", "", timeout_sec=4)
+
+    assert result.runtime_error == "sandbox_unavailable"

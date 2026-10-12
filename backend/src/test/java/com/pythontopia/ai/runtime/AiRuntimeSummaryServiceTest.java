@@ -137,6 +137,16 @@ class AiRuntimeSummaryServiceTest {
         .extracting(AiRuntimeOperationsDto.GovernanceItem::key)
         .contains("resource_review", "world_patch_review", "policy_canary_review");
     assertThat(operations.governance())
+        .filteredOn(item -> "resource_review".equals(item.key()))
+        .first()
+        .extracting(AiRuntimeOperationsDto.GovernanceItem::status)
+        .isEqualTo("WARN");
+    assertThat(operations.governance())
+        .filteredOn(item -> "world_patch_review".equals(item.key()))
+        .first()
+        .extracting(AiRuntimeOperationsDto.GovernanceItem::status)
+        .isEqualTo("WARN");
+    assertThat(operations.governance())
         .filteredOn(item -> "policy_canary_review".equals(item.key()))
         .first()
         .extracting(AiRuntimeOperationsDto.GovernanceItem::reviewRoute)
@@ -194,6 +204,11 @@ class AiRuntimeSummaryServiceTest {
         .isEqualTo("INSUFFICIENT_EVIDENCE");
     assertThat(operations.governance())
         .filteredOn(item -> "resource_review".equals(item.key()))
+        .first()
+        .extracting(AiRuntimeOperationsDto.GovernanceItem::status)
+        .isEqualTo("INSUFFICIENT_EVIDENCE");
+    assertThat(operations.governance())
+        .filteredOn(item -> "world_patch_review".equals(item.key()))
         .first()
         .extracting(AiRuntimeOperationsDto.GovernanceItem::status)
         .isEqualTo("INSUFFICIENT_EVIDENCE");

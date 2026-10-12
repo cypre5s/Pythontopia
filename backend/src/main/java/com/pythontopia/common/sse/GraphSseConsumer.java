@@ -11,6 +11,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.function.BooleanSupplier;
 import java.util.function.BiConsumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,6 +73,22 @@ public final class GraphSseConsumer {
       String internalToken,
       String internalSubject,
       BiConsumer<String, String> onEvent) throws IOException {
+    consume(url, body, mapper, internalToken, internalSubject, () -> false, onEvent);
+  }
+
+  /**
+   * Stateful Graph connection with downstream cancellation polling. Graph Tutor emits comment
+   * heartbeats while a model call is in flight, allowing an abandoned browser stream to close the
+   * upstream request promptly even when no application event is being forwarded.
+   */
+  public static void consume(
+      String url,
+      Object body,
+      ObjectMapper mapper,
+      String internalToken,
+      String internalSubject,
+      BooleanSupplier abortRequested,
+      BiConsumer<String, String> onEvent) throws IOException {
     String json;
     try {
       json = mapper.writeValueAsString(body);
@@ -114,6 +131,9 @@ public final class GraphSseConsumer {
 
       String line;
       while ((line = reader.readLine()) != null) {
+        if (abortRequested.getAsBoolean()) {
+          throw new AbortSseConsumption();
+        }
         if (line.startsWith("event:")) {
           currentEvent = line.substring("event:".length()).trim();
         } else if (line.startsWith("data:")) {
@@ -121,6 +141,8 @@ public final class GraphSseConsumer {
         } else if (line.isEmpty() && dataBuffer.length() > 0) {
           try {
             onEvent.accept(currentEvent, dataBuffer.toString());
+          } catch (AbortSseConsumption e) {
+            throw e;
           } catch (Exception e) {
             log.warn("SSE event handler error for event={}", currentEvent, e);
           }
@@ -131,10 +153,25 @@ public final class GraphSseConsumer {
       if (dataBuffer.length() > 0) {
         try {
           onEvent.accept(currentEvent, dataBuffer.toString());
+        } catch (AbortSseConsumption e) {
+          throw e;
         } catch (Exception e) {
           log.warn("SSE event handler error for trailing event={}", currentEvent, e);
         }
       }
+    }
+  }
+
+  /** Propagates a downstream disconnect so the upstream Graph HTTP body closes immediately. */
+  public static final class AbortSseConsumption extends RuntimeException {
+    private static final long serialVersionUID = 1L;
+
+    public AbortSseConsumption() {
+      super("Downstream SSE client disconnected");
+    }
+
+    public AbortSseConsumption(Throwable cause) {
+      super("Downstream SSE client disconnected", cause);
     }
   }
 }

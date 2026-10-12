@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import sys
+from types import ModuleType
+
 import pytest
 
 import pythontopia_rag.index.embedder as embedder_module
 from pythontopia_rag.index.embedder import (
     DEFAULT_DIM,
+    BgeSmallEmbedder,
     FallbackEmbedder,
     HashEmbedder,
     select_embedder,
@@ -53,3 +57,24 @@ def test_select_embedder_rejects_external_providers(
 
     with pytest.raises(ValueError, match="Only local hash and BGE embedders are supported"):
         select_embedder()
+
+
+def test_bge_weights_are_loaded_from_local_cache_without_network(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: dict[str, object] = {}
+
+    class _SentenceTransformer:
+        def __init__(self, target: str, **kwargs: object) -> None:
+            captured["target"] = target
+            captured.update(kwargs)
+
+    module = ModuleType("sentence_transformers")
+    module.SentenceTransformer = _SentenceTransformer  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "sentence_transformers", module)
+    monkeypatch.setenv("PYT_RAG_BGE_MODEL_DIR", "/models/bge-small-zh-v1.5")
+
+    BgeSmallEmbedder()
+
+    assert captured["target"] == "/models/bge-small-zh-v1.5"
+    assert captured["local_files_only"] is True

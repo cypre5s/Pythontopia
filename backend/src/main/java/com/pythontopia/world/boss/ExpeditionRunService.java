@@ -37,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ExpeditionRunService {
 
   private static final Logger log = LoggerFactory.getLogger(ExpeditionRunService.class);
+  private static final int MAX_SNAPSHOT_BYTES = 64 * 1024;
   private static final TypeReference<List<Map<String, Object>>> LIST_OF_MAP =
       new TypeReference<>() {};
   private static final TypeReference<List<String>> LIST_OF_STRING = new TypeReference<>() {};
@@ -93,6 +94,7 @@ public class ExpeditionRunService {
     if (userId == null) {
       return dto;
     }
+    validateSnapshotSize(dto);
     jdbcTemplate.queryForObject(
         "SELECT pg_advisory_xact_lock(hashtext('pythontopia.expedition.run'), hashtext(?))",
         Object.class,
@@ -235,6 +237,19 @@ public class ExpeditionRunService {
       return objectMapper.writeValueAsString(value == null ? List.of() : value);
     } catch (JsonProcessingException e) {
       throw new IllegalStateException("serialize expedition_run payload failed", e);
+    }
+  }
+
+  private void validateSnapshotSize(ExpeditionRunDto dto) {
+    try {
+      if (objectMapper.writeValueAsBytes(dto).length > MAX_SNAPSHOT_BYTES) {
+        throw new BusinessException(
+            HttpStatus.PAYLOAD_TOO_LARGE,
+            "EXPEDITION_SNAPSHOT_TOO_LARGE",
+            "远征存档快照过大");
+      }
+    } catch (JsonProcessingException e) {
+      throw new IllegalArgumentException("invalid expedition run snapshot", e);
     }
   }
 

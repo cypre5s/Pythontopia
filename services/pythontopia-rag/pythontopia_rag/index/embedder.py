@@ -67,7 +67,7 @@ def _cjk_bigrams(text: str) -> list[str]:
 
 
 class BgeSmallEmbedder:
-    """可选 BGE 中文嵌入，依赖 sentence-transformers；生产环境设 PYT_RAG_EMBEDDER=bge 启用。"""
+    """可选本地 BGE 中文嵌入；只读缓存/本地权重，不从 Hugging Face 下载。"""
 
     name = "bge-small-zh-v1.5"
     dim = 512
@@ -76,7 +76,7 @@ class BgeSmallEmbedder:
         from sentence_transformers import SentenceTransformer  # type: ignore[import-not-found]
 
         target = model_dir or os.environ.get("PYT_RAG_BGE_MODEL_DIR", "BAAI/bge-small-zh-v1.5")
-        self._model = SentenceTransformer(target)
+        self._model = SentenceTransformer(target, local_files_only=True)
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
         return [vector.tolist() for vector in self._model.encode(texts, normalize_embeddings=True)]

@@ -17,7 +17,7 @@ def test_readyz_returns_ok_for_real_provider(monkeypatch) -> None:
     provider = OpenAiCompatProvider(
         base_url="https://api.deepseek.com/v1",
         api_key="test-key",
-        model="test-model",
+        model="deepseek-v4-pro",
     )
     monkeypatch.setattr(app.state, "llm_provider", provider, raising=False)
     client = TestClient(app)
@@ -52,7 +52,7 @@ def test_readyz_rejects_enabled_browse_without_runtime(monkeypatch) -> None:
     provider = OpenAiCompatProvider(
         base_url="https://api.deepseek.com/v1",
         api_key="test-key",
-        model="test-model",
+        model="deepseek-v4-pro",
     )
     monkeypatch.setattr(app.state, "llm_provider", provider, raising=False)
     monkeypatch.setenv("BROWSE_ENABLED", "on")
@@ -71,7 +71,7 @@ def test_readyz_accepts_enabled_browse_with_runtime(monkeypatch) -> None:
     provider = OpenAiCompatProvider(
         base_url="https://api.deepseek.com/v1",
         api_key="test-key",
-        model="test-model",
+        model="deepseek-v4-pro",
     )
     monkeypatch.setattr(app.state, "llm_provider", provider, raising=False)
     monkeypatch.setenv("BROWSE_ENABLED", "on")

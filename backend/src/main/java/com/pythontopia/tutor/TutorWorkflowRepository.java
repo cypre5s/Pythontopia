@@ -39,6 +39,14 @@ public class TutorWorkflowRepository {
       String decisionJson,
       String actionPayloadJson) {}
 
+  public record AutoGenCheckpoint(
+      UUID runId,
+      String requestFingerprint,
+      int stageIndex,
+      String stageName,
+      String checkpointJson,
+      String status) {}
+
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
 
@@ -211,7 +219,136 @@ public class TutorWorkflowRepository {
         actionType,
         actionKey,
         projection.actionPayloadJson());
+    jdbcTemplate.update(
+        "UPDATE tutor_workflow_autogen_checkpoint SET status = 'COMPLETED', updated_at = now()"
+            + " WHERE session_id = ? AND run_id = ? AND status = 'RUNNING'",
+        sessionId,
+        projection.runId());
     return true;
+  }
+
+  /** Claims one active run, or resumes the latest interrupted run for the same request. */
+  @Transactional
+  public Optional<AutoGenCheckpoint> claimAutoGenRun(
+      Long sessionId, UUID proposedRunId, String requestFingerprint) {
+    jdbcTemplate.queryForObject(
+        "SELECT id FROM tutor_workflow_session WHERE id = ? FOR UPDATE", Long.class, sessionId);
+    jdbcTemplate.update(
+        "UPDATE tutor_workflow_autogen_checkpoint SET status = 'INTERRUPTED', updated_at = now()"
+            + " WHERE session_id = ? AND status = 'RUNNING'"
+            + " AND updated_at < now() - INTERVAL '4 minutes'",
+        sessionId);
+    Integer active =
+        jdbcTemplate.queryForObject(
+            "SELECT count(*) FROM tutor_workflow_autogen_checkpoint"
+                + " WHERE session_id = ? AND status = 'RUNNING'",
+            Integer.class,
+            sessionId);
+    if (active != null && active > 0) {
+      return Optional.empty();
+    }
+
+    List<AutoGenCheckpoint> interrupted =
+        jdbcTemplate.query(
+            "SELECT run_id, request_fingerprint, stage_index, stage_name, checkpoint::text, status"
+                + " FROM tutor_workflow_autogen_checkpoint"
+                + " WHERE session_id = ? AND request_fingerprint = ? AND status = 'INTERRUPTED'"
+                + " ORDER BY updated_at DESC, id DESC LIMIT 1 FOR UPDATE",
+            this::mapAutoGenCheckpoint,
+            sessionId,
+            requestFingerprint);
+    if (!interrupted.isEmpty()) {
+      AutoGenCheckpoint previous = interrupted.getFirst();
+      jdbcTemplate.update(
+          "UPDATE tutor_workflow_autogen_checkpoint SET status = 'RUNNING', updated_at = now()"
+              + " WHERE session_id = ? AND run_id = ? AND status = 'INTERRUPTED'",
+          sessionId,
+          previous.runId());
+      return Optional.of(
+          new AutoGenCheckpoint(
+              previous.runId(),
+              previous.requestFingerprint(),
+              previous.stageIndex(),
+              previous.stageName(),
+              previous.checkpointJson(),
+              "RUNNING"));
+    }
+
+    int claimed =
+        jdbcTemplate.update(
+            "INSERT INTO tutor_workflow_autogen_checkpoint"
+                + " (session_id, run_id, request_fingerprint) VALUES (?, ?, ?)"
+                + " ON CONFLICT DO NOTHING",
+            sessionId,
+            proposedRunId,
+            requestFingerprint);
+    if (claimed == 0) {
+      return Optional.empty();
+    }
+    return Optional.of(
+        new AutoGenCheckpoint(proposedRunId, requestFingerprint, -1, "", "{}", "RUNNING"));
+  }
+
+  public void saveAutoGenCheckpoint(
+      Long sessionId,
+      UUID runId,
+      String requestFingerprint,
+      int stageIndex,
+      String stageName,
+      String checkpointJson) {
+    if (stageIndex < 0 || stageName == null || stageName.isBlank()) {
+      throw new IllegalArgumentException("AutoGen checkpoint stage must be valid");
+    }
+    int updated =
+        jdbcTemplate.update(
+            "UPDATE tutor_workflow_autogen_checkpoint"
+                + " SET stage_index = ?, stage_name = ?, checkpoint = ?::jsonb, updated_at = now()"
+                + " WHERE session_id = ? AND run_id = ? AND request_fingerprint = ?"
+                + " AND status = 'RUNNING' AND stage_index <= ?",
+            stageIndex,
+            stageName,
+            checkpointJson,
+            sessionId,
+            runId,
+            requestFingerprint,
+            stageIndex);
+    if (updated != 1) {
+      throw new IllegalStateException("AutoGen checkpoint run or stage is no longer active");
+    }
+  }
+
+  public boolean transitionAutoGenRun(Long sessionId, UUID runId, String status) {
+    if (!List.of("INTERRUPTED", "FAILED").contains(status)) {
+      throw new IllegalArgumentException("Unsupported AutoGen run status");
+    }
+    return jdbcTemplate.update(
+            "UPDATE tutor_workflow_autogen_checkpoint SET status = ?, updated_at = now()"
+                + " WHERE session_id = ? AND run_id = ? AND status = 'RUNNING'",
+            status,
+            sessionId,
+            runId)
+        == 1;
+  }
+
+  public Optional<AutoGenCheckpoint> findAutoGenCheckpoint(Long sessionId, UUID runId) {
+    List<AutoGenCheckpoint> rows =
+        jdbcTemplate.query(
+            "SELECT run_id, request_fingerprint, stage_index, stage_name, checkpoint::text, status"
+                + " FROM tutor_workflow_autogen_checkpoint WHERE session_id = ? AND run_id = ?",
+            this::mapAutoGenCheckpoint,
+            sessionId,
+            runId);
+    return rows.stream().findFirst();
+  }
+
+  private AutoGenCheckpoint mapAutoGenCheckpoint(ResultSet rs, int rowNum) throws SQLException {
+    return new AutoGenCheckpoint(
+        rs.getObject("run_id", UUID.class),
+        rs.getString("request_fingerprint"),
+        rs.getInt("stage_index"),
+        rs.getString("stage_name"),
+        rs.getString("checkpoint"),
+        rs.getString("status"));
   }
 
   /** Atomically stores a submission feedback checkpoint and its event log entry. */

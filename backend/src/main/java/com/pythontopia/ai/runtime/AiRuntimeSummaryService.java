@@ -265,19 +265,21 @@ public class AiRuntimeSummaryService {
         new AiRuntimeOperationsDto.GovernanceItem(
             "resource_review",
             "资源发布审查",
-            metrics.resourceRunCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
-            "查看资源发布、反馈和微测效果",
-            "/workshop",
+            metrics.resourceRunCount() > 0 ? "WARN" : "INSUFFICIENT_EVIDENCE",
             metrics.resourceRunCount() > 0
-                ? List.of("resource_feedback_or_check")
-                : List.of()),
+                ? "检测到资源生成活动，待核验发布审查证据"
+                : "暂无资源生成活动或审查证据",
+            "/workshop",
+            List.of()),
         new AiRuntimeOperationsDto.GovernanceItem(
             "world_patch_review",
             "世界补丁审查",
-            metrics.touchedKcCount() > 0 ? "PASS" : "INSUFFICIENT_EVIDENCE",
-            "检查 town_hub patch 与 rollback",
+            metrics.touchedKcCount() > 0 ? "WARN" : "INSUFFICIENT_EVIDENCE",
+            metrics.touchedKcCount() > 0
+                ? "检测到知识点触达活动，待核验世界补丁与回滚审查"
+                : "暂无世界变更活动或审查证据",
             "/teacher/review",
-            metrics.touchedKcCount() > 0 ? List.of("world-loop-proposal") : List.of()),
+            List.of()),
         new AiRuntimeOperationsDto.GovernanceItem(
             "policy_canary_review",
             "策略灰度审核",

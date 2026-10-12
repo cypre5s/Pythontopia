@@ -97,6 +97,22 @@ class ExpeditionRunControllerTest {
   }
 
   @Test
+  void putRejectsSnapshotOutsideCurrentRunBounds() throws Exception {
+    ExpeditionRunDto dto =
+        new ExpeditionRunDto(
+            "map", 2, List.of(), 11, null, 5, 5, 0, 0, 0, List.of(), false, List.of(), null);
+
+    mockMvc
+        .perform(
+            put("/api/world/expedition/run")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(dto)))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(service);
+  }
+
+  @Test
   void deleteAbandonsActiveRunForCurrentStudent() throws Exception {
     mockMvc.perform(delete("/api/world/expedition/run")).andExpect(status().isNoContent());
     verify(service).abandon(7L);

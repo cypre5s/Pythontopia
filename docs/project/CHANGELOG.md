@@ -1,19 +1,46 @@
 # Changelog
 
+## 2026-10-13 — Web 功能完整性收尾
+
+- 增加真实用户管理 API 与页面：管理员可分页搜索并启用/停用账号；不返回邮箱/密码，停用会增加 `token_version` 撤销旧令牌，不能停用当前账号。
+- 修复认证边界：refresh 按 JWT 用户 ID 定位账号、请求时校验当前数据库角色，并增加服务端 logout 撤销令牌；Workshop 上传总额度/数量受限且并发检查串行化。
+- Tutor RAG 故障时 fail fast，避免无课件证据生成导学卡；运维治理状态要求真实审查证据；远征判题服务不可用返回 503，不再表现为答错。
+- 功能验证：Web 全量 Vitest、类型检查、生产构建通过；ESLint 0 errors / 131 warnings；Graph `1786 passed / 1 skipped`、Ruff 通过；RAG `158 passed / 2 skipped`；AI readiness 契约通过。Maven 全量 `1228` 项、0 断言失败，但 7 项 Testcontainers 环境错误；空库迁移到 V200 成功，重跑时 6 个容器因 Docker 动态 host port 冲突未能启动。
+- 本轮没有新下载素材、没有再次请求 DeepSeek，也没有进行远征性能测量。先前已验证的 2 次 DeepSeek 文/图请求与 3 项 Web Playwright 记录见上节；本轮模型路径没有变化。
+
+## 2026-10-13 — Web 全栈导师文图复验与启动修复
+
+- 修复 `dev.sh` 在教师邀请码缺失或仍为公开占位值时的本地启动失败：启动期间生成临时随机邀请码，不写回配置文件。
+- Web 全栈 Playwright 验证 3 项通过；DeepSeek 导师真实链路完成 2 次请求，分别验证文本输入、合成图片输入与文本回复。
+- Graph 1782 passed / 1 skipped、RAG 158 passed / 2 skipped；前端全量 Vitest、类型检查、生产构建和 AI readiness 契约通过。Maven 全量无断言失败，7 个 Testcontainers 环境错误对应集成类串行重跑通过。
+- 无尽远征性能数据暂不填：本机无 Piston，现有自测只能重试后走 golden fallback，不能代表正常判题；官方本地 Piston 方案需要启动特权容器，本轮未启动。
+- 详细记录见 [DeepSeek 导学安全与数据边界工作日志](../plans/2026-10-12-deepseek-ai-tutor-security-worklog.md)。
+
 ## 2026-10-13 — 写入一致性、DeepSeek 配置与管理交互
 
 - 画像首次写入先并发安全地补建默认行，再执行 JSONB 行锁读改写；访谈草稿事务移至独立服务，避免导师回合内部调用绕过 Spring 事务代理；完成权只领取 OPEN 状态，重复终态不再覆盖画像。
 - 访谈并发启动通过 UPSERT 复用同一 OPEN 会话；V198 将历史重复 OPEN 会话归档为 ABORTED，并建立每用户唯一 OPEN 会话索引。
 - 项目专用 `PYT_OPENAI_*` 配置优先于通用别名；移除可直接请求讯飞 Spark 的 provider，以及测试中读取 Alethicode `.env` 的遗留 helper。
+- Graph 与离线优化入口只接受 DeepSeek 官方当前模型 ID：文本用 `deepseek-v4-pro` 或 `deepseek-flash`，图片输入限 `deepseek-flash`；默认模型配置与部署说明对齐官方文档。
+- `MEMORY_PROVIDER=mem0/zep` 旧配置现在固定归一到本地记忆，学生学习记录不会发往外部记忆服务；讯飞媒体服务即使存在旧凭据也保持禁用，配音不启用。
 - 删除可直接请求智谱的 RAG embedder；运行时只允许本地 hash/BGE，拒绝智谱/讯飞选择值。
+- BGE 模型加载固定 `local_files_only`；若本地没有预置权重则 fail closed，不从 Hugging Face 下载。
 - 审核确认框改用原生 `<dialog>`，支持平台焦点隔离与 Escape 关闭；取消时回焦到触发按钮，提交后焦点落回审核页。
+- 管理台按 Alethicode 最新 Web Admin 样式收敛：桌面移除重复顶栏，窄屏保留导航抽屉入口；运维页补标题，审核表明确列宽/不换行短字段并保留窄屏横向滚动；修正证据不足状态标签类名。
 - AutoGen CHAT 拒绝附件 ID、文本和服务端引用以外的未知字段，避免将图片数据塞入额外字段绕过私有附件传输。
+- Tutor AutoGen 每阶段持久化原生 Team 状态；同一请求的中断恢复复用 run ID 并从下一阶段继续。V199 checkpoint 按用户会话绑定、限制 1 MiB 且拒绝图片数据；Java 检测 SSE 断连后关闭 Graph 请求并取消运行。
+- Tutor AutoGen/服务/SSE/repository 定向检查共 41 项通过；Graph Tutor/coach/AG-UI 相关检查 74 项通过。未做真实 DeepSeek 或全栈浏览器联测；实现来源和 Alethicode 当前 dirty 边界见 Tutor AutoGen 工作日志。
 - Tutor SSE 先落库再发送成功终态；投影写入失败时终止为错误，避免前端已显示成功而跨会话状态未保存。
 - 学生画像自评拒绝任意 metadata 与自由 tag；认知风格只允许画像页已有的 `visual`、`logical`、`trial` 三个选项。
 - 修复全局/每日远征 `focusChapter=null` 时有效章节请求被误拒；聚焦 run 仍锁定原章节。排行榜把 `verifiedDepth` 明确显示为“通过题数”。
 - 首阶段验证：后端画像与 Twin 定向 48 tests 通过，空库迁移至 V198；Graph 全量 1768 passed / 1 skipped，RAG 全量 157 passed / 2 skipped；审核页 7 tests、前端类型检查与定向 ESLint 通过。
 - 当前复验：后端画像/Twin/Tutor/远征/审核定向 14 类 / 124 tests，Graph 1769 passed / 1 skipped，RAG 157 passed / 2 skipped，Web Vitest 251 files / 2461 tests；TypeScript 与生产构建通过。ESLint 0 errors / 131 warnings。
 - 未启动本地全栈、未发真实 DeepSeek 请求或无尽远征性能测试；这些性能指标仍待测。
+- Boss Web 判题新增可选 UUID `attemptId` 与持久化重放结果；相同提交 ID 重放不重新判题或重复发学习事件，同 ID 修改内容冲突。回收租约为 4 分钟，覆盖 Graph HTTP 180 秒读取上限并留恢复余量；旧客户端仍可省略 ID。
+- 远征存档校验 phase/字段集合与单次快照 64 KiB 上限，避免异常客户端快照占用无界存储。
+- Lecture 打开已有 HANDOUT 后调用工坊资源消费 API，记录服务端 `ResourceConsumed` 证据；视频播放仍只做会话内标记。
+- TrainingPanel 卸载时清理未触发的草稿保存计时器，防止离开页面或切换账号后旧代码延迟写入。
+- 全量 Maven、Web Vitest、TypeScript、ESLint、生产构建、Graph/RAG pytest 与生产 AI readiness 的最新复验结果待本轮完成后回填；无尽远征性能指标继续排在功能验证之后。
 
 ## 2026-10-12 — 导学计划恢复与上下文引用
 

@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionStore } from '@/stores/session';
 import { useGuideStore } from '@/stores/guide';
-import { refresh } from '@/api/auth';
+import { logout, refresh } from '@/api/auth';
 
 const workshopHistoryMocks = vi.hoisted(() => ({
   clear: vi.fn(),
@@ -18,6 +18,7 @@ vi.mock('@/api/auth', () => ({
     expiresAt: '2099-01-01T00:00:00Z',
     user: { id: 1, username: 'stu01', displayName: '学生一号', role: 'STUDENT' },
   })),
+  logout: vi.fn(async () => undefined),
   register: vi.fn(async (req: unknown) => ({
     id: 1,
     username: typeof req === 'object' && req !== null && 'username' in req ? String(req.username) : 'stu01',
@@ -32,6 +33,7 @@ vi.mock('@/api/auth', () => ({
 }));
 
 const refreshMock = vi.mocked(refresh);
+const logoutMock = vi.mocked(logout);
 
 async function flushAsync(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -42,6 +44,7 @@ describe('session store', () => {
     setActivePinia(createPinia());
     localStorage.clear();
     refreshMock.mockClear();
+    logoutMock.mockClear();
     workshopHistoryMocks.clear.mockClear();
   });
 
@@ -102,6 +105,17 @@ describe('session store', () => {
     expect(store.user).toBeNull();
     expect(localStorage.getItem('pythontopia.token')).toBeNull();
     expect(localStorage.getItem('pythontopia.user')).toBeNull();
+  });
+
+  it('revokes the current server token when logging out', async () => {
+    const store = useSessionStore();
+    await store.login({ username: 'stu01', password: 'P@ssw0rd1' });
+
+    store.logout();
+    await flushAsync();
+
+    expect(logoutMock).toHaveBeenCalledOnce();
+    expect(logoutMock).toHaveBeenCalledWith('jwt-token');
   });
 
   it('logs out when hydrating an expired token', () => {

@@ -2,6 +2,7 @@
 
 FastAPI 课件 RAG 服务：从 Python 课程包加载页、构建 BM25 与本地 hash 索引，再按课程证据检索。
 部署 Compose 固定使用 `PYT_RAG_EMBEDDER=hash`，不会调用第三方 embedding API。
+可选 BGE 仅从本地目录或已缓存权重加载（`local_files_only=true`）；缺少权重会启动失败，不会访问 Hugging Face 下载。
 
 ```bash
 python -m pip install -e ".[dev]"

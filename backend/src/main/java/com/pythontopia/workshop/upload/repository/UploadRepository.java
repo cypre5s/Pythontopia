@@ -55,6 +55,29 @@ public class UploadRepository {
         error);
   }
 
+  /** Serialize per-user quota checks so parallel uploads cannot exceed the storage limit. */
+  public boolean canAcceptUpload(
+      long userId, long incomingBytes, int maxFiles, long maxTotalBytes) {
+    List<Long> owner =
+        jdbcTemplate.query(
+            "SELECT id FROM users WHERE id = ? FOR UPDATE",
+            (rs, rowNum) -> rs.getLong(1),
+            userId);
+    if (owner.isEmpty()) {
+      return false;
+    }
+    Boolean withinQuota =
+        jdbcTemplate.queryForObject(
+            "SELECT count(*) < ? AND coalesce(sum(byte_size), 0) + ? <= ?"
+                + " FROM workshop_upload WHERE user_id = ?",
+            Boolean.class,
+            maxFiles,
+            incomingBytes,
+            maxTotalBytes,
+            userId);
+    return Boolean.TRUE.equals(withinQuota);
+  }
+
   /** 列表：本人上传按时间倒序，不取 extracted_text（{@code extractedText} 置空串）。 */
   public List<WorkshopUpload> listByUser(long userId) {
     return jdbcTemplate.query(

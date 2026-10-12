@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
@@ -84,6 +85,32 @@ class ExpeditionRunServiceTest {
     ExpeditionRunDto saved = service.save(7L, runWithoutId());
 
     assertThat(saved.runId()).isNotEqualTo(RUN_ID);
+  }
+
+  @Test
+  void oversizedNestedSnapshotIsRejectedBeforeDatabaseAccess() {
+    ExpeditionRunService service = new ExpeditionRunService(jdbcTemplate, new ObjectMapper());
+    ExpeditionRunDto oversized =
+        new ExpeditionRunDto(
+            "map",
+            null,
+            List.of(),
+            10,
+            null,
+            5,
+            5,
+            0,
+            0,
+            0,
+            List.of(),
+            false,
+            List.of(java.util.Map.of("text", "x".repeat(70_000))),
+            null);
+
+    assertThatThrownBy(() -> service.save(7L, oversized))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("快照过大");
+    verifyNoInteractions(jdbcTemplate);
   }
 
   private static ExpeditionRunDto runWithoutId() {

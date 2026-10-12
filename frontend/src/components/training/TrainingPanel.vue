@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
@@ -94,6 +94,7 @@ function cancelPendingDraftSave(): void {
     draftSaveTimer = null;
   }
 }
+onBeforeUnmount(cancelPendingDraftSave);
 watch(
   () => learning.training.code,
   (code) => {

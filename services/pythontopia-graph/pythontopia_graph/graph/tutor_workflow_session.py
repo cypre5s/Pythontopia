@@ -29,6 +29,7 @@ class WorkflowSessionState:
 SessionKey = tuple[int, str]
 
 _STORE: dict[SessionKey, WorkflowSessionState] = {}
+_ACTIVE_RUNS: set[SessionKey] = set()
 _LOCK = asyncio.Lock()
 
 
@@ -142,4 +143,21 @@ async def commit_run(
 
 async def reset_session(user_id: int, session_id: str) -> None:
     async with _LOCK:
-        _STORE.pop(_key(user_id, session_id), None)
+        key = _key(user_id, session_id)
+        _STORE.pop(key, None)
+        _ACTIVE_RUNS.discard(key)
+
+
+async def claim_run(user_id: int, session_id: str) -> bool:
+    """Allow one in-flight AutoGen run per owner/session in this single-worker process."""
+    async with _LOCK:
+        key = _key(user_id, session_id)
+        if key in _ACTIVE_RUNS:
+            return False
+        _ACTIVE_RUNS.add(key)
+        return True
+
+
+async def release_run(user_id: int, session_id: str) -> None:
+    async with _LOCK:
+        _ACTIVE_RUNS.discard(_key(user_id, session_id))

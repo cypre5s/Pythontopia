@@ -35,6 +35,14 @@ const snapshot = {
       reviewRoute: '/admin/problem-reviews',
       evidenceRefs: ['page:1'],
     },
+    {
+      key: 'evidence',
+      label: '证据不足检查',
+      status: 'INSUFFICIENT_EVIDENCE' as const,
+      action: '补充真实证据',
+      reviewRoute: '',
+      evidenceRefs: [],
+    },
   ],
 };
 
@@ -55,6 +63,8 @@ describe('AdminOperationsPage', () => {
     expect(wrapper.text()).toContain('继续检查学习证据');
     expect(wrapper.text()).toContain('复核证据覆盖');
     expect(wrapper.text()).toContain('2 项证据');
+    expect(wrapper.get('h1').text()).toBe('AI 运维概览');
+    expect(wrapper.get('.status-pill--insufficient-evidence').text()).toBe('证据不足');
   });
 
   it('shows a real API error and retries the request', async () => {

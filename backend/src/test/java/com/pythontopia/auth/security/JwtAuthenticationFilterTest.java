@@ -91,6 +91,27 @@ class JwtAuthenticationFilterTest {
   }
 
   @Test
+  @DisplayName("数据库角色已降级时拒绝旧管理员 token")
+  void rejectsTokenAfterDatabaseRoleDowngrade() throws Exception {
+    when(jwtService.parse("old-admin-token"))
+        .thenReturn(new CurrentUserPrincipal(9L, "stu01", Role.ADMIN, 2));
+    when(userRepository.findById(9L))
+        .thenReturn(
+            Optional.of(
+                new UserAccount(
+                    9L,
+                    "stu01",
+                    "Stu",
+                    "hash",
+                    null,
+                    Role.STUDENT,
+                    UserAccount.STATUS_ACTIVE,
+                    2)));
+
+    assertThat(runFilter("old-admin-token")).isNull();
+  }
+
+  @Test
   @DisplayName("用户已被删除：不写入登录态")
   void rejectsMissingUser() throws Exception {
     when(userRepository.findById(9L)).thenReturn(Optional.empty());

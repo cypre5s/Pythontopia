@@ -26,6 +26,7 @@ from pythontopia_graph.schemas.tutor_workflow import (
 StateT = TypeVar("StateT")
 StageHandler = Callable[[StateT], Awaitable[StateT]]
 PrivateImageResolver = Callable[[WorkflowRunRequest], Awaitable[list[str]]]
+StageCheckpointCallback = Callable[[dict[str, Any]], Awaitable[None]]
 _PRIVATE_IMAGE_DATA_KEY = "_tutor_stage_private_image_data"
 _STATE_MARKER = "__pythontopia_tutor_state_v1__:"
 
@@ -97,6 +98,8 @@ async def run_autogen_tutor_workflow(
     *,
     cancellation_token: CancellationToken | None = None,
     private_image_resolver: PrivateImageResolver | None = None,
+    restore_checkpoint: dict[str, Any] | None = None,
+    on_checkpoint: StageCheckpointCallback | None = None,
 ) -> StateT:
     """按声明顺序运行每个 Agent 一轮，并在工作流失败时停止派发。"""
     if not stages:
@@ -120,20 +123,61 @@ async def run_autogen_tutor_workflow(
     )
     cancellation_token = cancellation_token or CancellationToken()
     current_state = cast(dict[str, Any], state)
+    start_index = 0
+    if restore_checkpoint is not None:
+        stage_index = restore_checkpoint.get("stage_index")
+        stage_name = restore_checkpoint.get("stage_name")
+        team_state = restore_checkpoint.get("team_state")
+        workflow_state = restore_checkpoint.get("workflow_state")
+        if (
+            not isinstance(stage_index, int)
+            or isinstance(stage_index, bool)
+            or stage_index < 0
+            or stage_index >= len(stages)
+            or stage_name != names[stage_index]
+            or not isinstance(team_state, dict)
+            or not isinstance(workflow_state, str)
+        ):
+            raise ValueError("AutoGen Tutor checkpoint does not match its workflow stages")
+        current_state = _decode_state(workflow_state)
+        await team.load_state(team_state)
+        start_index = stage_index + 1
 
     try:
-        for _ in stages:
+        for index in range(start_index, len(stages)):
             result = await team.run(
                 task=TextMessage(content=_encode_state(current_state), source="user"),
                 cancellation_token=cancellation_token,
             )
             current_state = _result_state(result.messages)
+            if on_checkpoint is not None:
+                await on_checkpoint(
+                    {
+                        "stage_index": index,
+                        "stage_name": names[index],
+                        "team_state": await team.save_state(),
+                        "workflow_state": _encode_state(current_state),
+                    }
+                )
             if current_state.get("runtime_state") == "FAILED":
                 break
         return cast(StateT, current_state)
     except asyncio.CancelledError:
         cancellation_token.cancel()
         raise
+
+
+def validate_autogen_tutor_checkpoint_scope(
+    checkpoint: dict[str, Any], request: WorkflowRunRequest
+) -> None:
+    """Reject a persisted team state unless it was captured for this exact owner/session request."""
+    workflow_state = checkpoint.get("workflow_state")
+    if not isinstance(workflow_state, str):
+        raise ValueError("AutoGen Tutor checkpoint does not belong to this request")
+    restored_state = _decode_state(workflow_state)
+    restored_request = restored_state.get("request")
+    if not isinstance(restored_request, WorkflowRunRequest) or restored_request != request:
+        raise ValueError("AutoGen Tutor checkpoint does not belong to this request")
 
 
 def _encode_state(state: dict[str, Any]) -> str:

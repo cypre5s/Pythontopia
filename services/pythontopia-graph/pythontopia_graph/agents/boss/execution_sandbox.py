@@ -16,6 +16,7 @@ import httpx
 MEMORY_LIMIT_BYTES = 256 * 1024 * 1024
 MAX_STDOUT_CHARS = 64 * 1024
 MAX_STDERR_CHARS = 16 * 1024
+PISTON_FAILURE_STATUSES = frozenset({"RE", "SG", "TO", "OL", "EL", "XX"})
 
 
 @dataclass(frozen=True)
@@ -73,15 +74,34 @@ def run_python(code: str, stdin: str, timeout_sec: int) -> PythonExecutionResult
         return PythonExecutionResult(runtime_error="sandbox_unavailable")
 
     status = run.get("status")
-    if not isinstance(status, str) or status not in {"AC", "RE", "TO", "XX"}:
+    if status is not None and (
+        not isinstance(status, str) or status not in PISTON_FAILURE_STATUSES
+    ):
         return PythonExecutionResult(runtime_error="sandbox_unavailable")
     if status == "XX":
         return PythonExecutionResult(runtime_error="sandbox_unavailable")
 
+    stdout = run.get("stdout")
+    stderr = run.get("stderr")
     code_value = run.get("code")
+    signal = run.get("signal")
+    message = run.get("message")
+    if (
+        not isinstance(stdout, str)
+        or not isinstance(stderr, str)
+        or (code_value is not None and (not isinstance(code_value, int) or isinstance(code_value, bool)))
+        or (signal is not None and not isinstance(signal, str))
+        or (message is not None and not isinstance(message, str))
+        or (status is None and code_value is None)
+    ):
+        return PythonExecutionResult(runtime_error="sandbox_unavailable")
+
     exit_code = code_value if isinstance(code_value, int) else -1
-    stderr = run.get("stderr") or run.get("message") or ""
-    stdout = run.get("stdout") or ""
+    if status is not None and status != "TO" and exit_code == 0:
+        exit_code = -1
+    if status is None and signal is not None and exit_code == 0:
+        exit_code = -1
+    stderr = stderr or message or (f"Piston execution status: {status}" if status else "")
     return PythonExecutionResult(
         stdout=_bounded_text(stdout, MAX_STDOUT_CHARS),
         stderr=_bounded_text(stderr, MAX_STDERR_CHARS),

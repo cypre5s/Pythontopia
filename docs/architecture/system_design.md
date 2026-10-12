@@ -36,7 +36,7 @@ flowchart LR
   Backend --> Graph
   Backend --> Rag
   Graph --> Rag
-  Graph -.LLM.-> Spark((讯飞 Spark / OpenAI 兼容))
+  Graph -.LLM.-> DeepSeek((DeepSeek API))
   Rag --> Postgres
 ```
 
@@ -188,7 +188,7 @@ learner_evaluation, learner_evaluation_metric
 - 数字与 KC 必须出现在输入 metrics / 课件引用中，否则节点 fail fast。
 - 教师生成资源被禁止；学生角色才能 POST `/api/workshop/resources`。
 - `practice_submission` 与 `judge_result` 真实落库；前端的 Pyodide 预览只是开发体验。
-- 演示主链路要求 `PYT_LLM_PROVIDER=spark`，开发期可 fallback 到 `openai_compat`，CI 用 `dryrun`。
+- 服务端生成模型只允许 `openai_compat` 指向 `https://api.deepseek.com`；模型 ID 限制为 `deepseek-v4-pro` 与 `deepseek-flash`，其中仅 `deepseek-flash` 接受图片输入。讯飞生成、识图、ASR 与 TTS 固定关闭；CI 可使用本地 `dryrun`。
 
 ## 8. 部署
 

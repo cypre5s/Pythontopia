@@ -32,6 +32,9 @@ public class UploadService {
 
   /** 单文件大小上限 5 MB（契约 §3.4）。 */
   static final long MAX_BYTES = 5L * 1024 * 1024;
+  // shortcut: fixed per-user storage limits; move to deployment properties if storage budgets differ.
+  private static final int MAX_FILES_PER_USER = 20;
+  private static final long MAX_TOTAL_BYTES_PER_USER = 50L * 1024 * 1024;
 
   /** filename / error 列宽（V162）：超长截断，避免插入失败。 */
   private static final int MAX_FILENAME_LENGTH = 255;
@@ -93,6 +96,14 @@ public class UploadService {
       lineCount = 0;
       status = UploadStatus.FAILED;
       error = truncate(e.getMessage(), MAX_ERROR_LENGTH);
+    }
+
+    if (!repository.canAcceptUpload(
+        userId, bytes.length, MAX_FILES_PER_USER, MAX_TOTAL_BYTES_PER_USER)) {
+      throw new BusinessException(
+          HttpStatus.PAYLOAD_TOO_LARGE,
+          "UPLOAD_QUOTA_EXCEEDED",
+          "个人上传额度已用完，请删除旧文件后再上传");
     }
 
     WorkshopUpload saved =

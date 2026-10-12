@@ -35,7 +35,7 @@ cd /home/cypress/Pythontopia
 
 ```bash
 cd /home/cypress/Pythontopia/deploy
-cp .env.example .env            # 按需填入 Spark/JWT/Invite/RAG token
+cp .env.example .env            # 按需填入 DeepSeek/JWT/Invite/RAG token
 docker compose up -d --build    # 首次构建约需 5~10 分钟
 ```
 
@@ -342,7 +342,7 @@ docker compose -p deploy -f docker-compose.production.yml up -d
 | frontend 容器反复重启 | 镜像内 nginx 上游写死 `backend:18080`，backend 容器不存在时 DNS 解析失败即退出；先看 backend 健康状态 |
 | 80 被非 nginx 进程占用 | 预检第 6 节会点名进程；处置后重跑 |
 | 公网访问慢 / SSE 断流 | 确认走的是主机 Nginx `/api/`（已禁缓冲、读超时 1h）；若中间另有代理/CDN，需同样禁缓冲 |
-| 文生图 / TTS 一直降级 | `.env` 缺讯飞 `PYT_SPARK_*` 凭据（预检列为建议变量），或 ECS 出网受限；属功能降级，不影响主链路 |
+| 媒体文生图 / TTS 不可用 | 这些讯飞服务已固定关闭，不配置 Spark 凭据；图片输入由 DeepSeek 视觉模型处理，配音不启用 |
 | 磁盘告警 | 容器日志已限 10m×3；大头通常是 releases 旧版本与 backups，按上文清理（至少保留最近 2 个 release） |
 
 ### 生产与开发编排接线差异（速查）

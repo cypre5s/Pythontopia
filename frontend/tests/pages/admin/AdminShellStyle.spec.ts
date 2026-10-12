@@ -10,6 +10,7 @@ function scopedStyles(componentPath: string): string {
 
 const layoutStyles = scopedStyles('../../../src/pages/admin/AdminLayout.vue');
 const panelStyles = scopedStyles('../../../src/pages/admin/AdminPanel.vue');
+const operationsStyles = scopedStyles('../../../src/pages/admin/AdminOperationsPage.vue');
 const reviewStyles = scopedStyles('../../../src/pages/admin/AdminProblemReviewsPage.vue');
 
 describe('admin visual shell contract', () => {
@@ -23,6 +24,8 @@ describe('admin visual shell contract', () => {
     expect(layoutStyles).toMatch(/\.admin-nav__link\.is-active\s*\{[^}]*color:\s*#fff;/);
     expect(layoutStyles).toContain('@media (max-width: 767px)');
     expect(layoutStyles).toContain('.admin-shell--nav-open .admin-sidebar');
+    expect(layoutStyles).toContain('.admin-shell__navigation-toggle');
+    expect(layoutStyles).not.toContain('.admin-topbar');
   });
 
   it('keeps panels and the review table on the shared surface and spacing scale', () => {
@@ -33,6 +36,10 @@ describe('admin visual shell contract', () => {
 
     expect(reviewStyles).toMatch(/\.review-table th\s*\{[^}]*background:\s*var\(--admin-table-header\);/);
     expect(reviewStyles).toMatch(/\.review-table td\s*\{[^}]*padding:\s*10px 16px;/);
+    expect(reviewStyles).toContain('min-width: 1100px;');
+    expect(reviewStyles).toMatch(/\.review-table td:nth-child\(1\),[\s\S]*?white-space:\s*nowrap;/);
     expect(reviewStyles).toContain('background: var(--admin-table-hover);');
+    expect(operationsStyles).toMatch(/\.status-pill--insufficient-evidence\s*\{/);
+    expect(operationsStyles).toMatch(/\.admin-page-heading\s*\{/);
   });
 });

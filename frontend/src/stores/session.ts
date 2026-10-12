@@ -1,5 +1,10 @@
 import { defineStore, getActivePinia } from 'pinia';
-import { login as loginApi, refresh as refreshApi, register as registerApi } from '@api/auth';
+import {
+  login as loginApi,
+  logout as logoutApi,
+  refresh as refreshApi,
+  register as registerApi,
+} from '@api/auth';
 import { setTokenProvider, setUnauthorizedHandler } from '@api/http';
 import { clearWorkshopChatHistoryCache } from '@api/workshopHistory';
 import type { LoginRequest } from '@api/dto/LoginRequest';
@@ -235,6 +240,7 @@ export const useSessionStore = defineStore('session', {
      * 都会跨账号残留，公用机房换账号会直接串档。
      */
     logout(): void {
+      const token = this.token;
       const scope = currentUserScope();
       this.token = null;
       this.user = null;
@@ -246,6 +252,7 @@ export const useSessionStore = defineStore('session', {
       clearWorkshopChatHistoryCache();
       this.accountEpoch += 1;
       resetStoresForAccountSwitch();
+      if (token) void logoutApi(token).catch(() => undefined);
     },
     refreshIfNeeded(): boolean {
       if (!this.expiresAt || Date.parse(this.expiresAt) <= Date.now()) {

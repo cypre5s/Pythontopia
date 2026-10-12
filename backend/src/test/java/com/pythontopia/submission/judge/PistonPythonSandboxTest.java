@@ -134,4 +134,40 @@ class PistonPythonSandboxTest {
         .doesNotThrowAnyException();
     server.verify();
   }
+
+  @Test
+  void unknownPistonStatusFailsClosed() {
+    server
+        .expect(requestTo("https://judge.internal/api/v2/execute"))
+        .andRespond(
+            withSuccess(
+                """
+                {"run":{"stdout":"expected","stderr":"","code":0,"signal":null,"status":"AC","wall_time":1}}
+                """,
+                MediaType.APPLICATION_JSON));
+
+    SandboxRunResult result = sandbox.run("print('expected')", new JudgeTestCase("", "expected", 1000));
+
+    assertThat(result.errorKind()).isEqualTo("SYSTEM_ERROR");
+    assertThat(result.exitCode()).isNotZero();
+    server.verify();
+  }
+
+  @Test
+  void outputLimitStatusCannotBeAcceptedAsSuccessfulExecution() {
+    server
+        .expect(requestTo("https://judge.internal/api/v2/execute"))
+        .andRespond(
+            withSuccess(
+                """
+                {"run":{"stdout":"expected","stderr":"","code":0,"signal":null,"status":"OL","wall_time":1}}
+                """,
+                MediaType.APPLICATION_JSON));
+
+    SandboxRunResult result = sandbox.run("print('expected')", new JudgeTestCase("", "expected", 1000));
+
+    assertThat(result.errorKind()).isNull();
+    assertThat(result.exitCode()).isNotZero();
+    server.verify();
+  }
 }

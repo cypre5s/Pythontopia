@@ -312,4 +312,46 @@ describe('submitBossAttempt', () => {
       }),
     ).rejects.toThrow('graph down');
   });
+
+  it('reuses the same attempt ID after a network failure and rotates it after success', async () => {
+    const payload = {
+      problemId: 'retry-problem',
+      chapter: 2,
+      stage: 1,
+      code: 'print(2)',
+      elapsedSec: 7,
+    };
+    httpMock.post.mockRejectedValueOnce(new Error('network down'));
+    await expect(submitBossAttempt(payload)).rejects.toThrow('network down');
+    const firstAttemptId = httpMock.post.mock.calls.at(-1)?.[1].attemptId;
+
+    httpMock.post.mockResolvedValueOnce({
+      data: {
+        problemId: payload.problemId,
+        passed: false,
+        passedTestCases: 0,
+        totalTestCases: 1,
+        score: 0,
+        feedback: 'WA',
+      },
+    });
+    await submitBossAttempt(payload);
+    const retriedAttemptId = httpMock.post.mock.calls.at(-1)?.[1].attemptId;
+
+    httpMock.post.mockResolvedValueOnce({
+      data: {
+        problemId: payload.problemId,
+        passed: false,
+        passedTestCases: 0,
+        totalTestCases: 1,
+        score: 0,
+        feedback: 'WA',
+      },
+    });
+    await submitBossAttempt(payload);
+    const nextAttemptId = httpMock.post.mock.calls.at(-1)?.[1].attemptId;
+
+    expect(firstAttemptId).toEqual(retriedAttemptId);
+    expect(nextAttemptId).not.toEqual(retriedAttemptId);
+  });
 });

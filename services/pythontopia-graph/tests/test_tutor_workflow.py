@@ -234,6 +234,30 @@ async def test_reading_run_emits_traces_and_card_result() -> None:
 
 
 @pytest.mark.asyncio
+async def test_courseware_retrieval_failure_stops_before_model_generation() -> None:
+    class FailingEvidenceFetcher:
+        async def fetch(self, **_kwargs):
+            raise RuntimeError("rag down")
+
+    session_id = "t-wf-rag-failure"
+    await session_store.reset_session(1, session_id)
+    provider = JsonStubProvider([GUIDE_CARD])
+    response = await tutor_workflow_run_stream(
+        _envelope(session_id, "READING"),
+        provider=provider,
+        evidence_fetcher=FailingEvidenceFetcher(),  # type: ignore[arg-type]
+        trusted_user_id=1,
+    )
+
+    events = await _collect_sse(response)
+    errors = [payload for event, payload in events if event == "error"]
+    assert len(errors) == 1
+    assert errors[0]["code"] == "TOOL_EXECUTION_FAILED"
+    assert not any(event == "result" for event, _ in events)
+    assert provider.calls == 0
+
+
+@pytest.mark.asyncio
 async def test_illegal_transition_fails_fast() -> None:
     session_id = "t-wf-illegal"
     await session_store.reset_session(1, session_id)
