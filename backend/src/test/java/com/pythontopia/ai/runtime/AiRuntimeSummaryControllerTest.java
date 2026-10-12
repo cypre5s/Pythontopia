@@ -61,36 +61,13 @@ class AiRuntimeSummaryControllerTest {
   }
 
   @Test
-  void teacherGetsRuntimeOperationsForGovernance() {
+  void teacherCannotReadPlatformRuntimeOperations() {
     CurrentUserPrincipal teacher = new CurrentUserPrincipal(2L, "teacher", Role.TEACHER);
-    AiRuntimeOperationsDto expected =
-        new AiRuntimeOperationsDto(
-            new AiRuntimeOperationsDto.OperationsSubject("PLATFORM", "全平台学习证据", 18, 12),
-            List.of(
-                new AiRuntimeOperationsDto.LoopOperation(
-                    "RESOURCE",
-                    "资源生成闭环",
-                    "PASS",
-                    "trace-resource",
-                    "evaluate:resource_feedback_or_check",
-                    List.of("resource_feedback_or_check"))),
-            List.of(
-                new AiRuntimeOperationsDto.GovernanceItem(
-                    "policy_canary_review",
-                    "策略灰度审核",
-                    "PASS",
-                    "查看 canary dry-run 与 rollback 状态",
-                    "/teacher/review",
-                    List.of("agentic-m3-system-evolution-v1"))));
-    when(service.operationsForPlatform()).thenReturn(expected);
-
-    AiRuntimeOperationsDto result = controller.operations(teacher);
-
-    assertThat(result).isSameAs(expected);
-    assertThat(result.subject().scope()).isEqualTo("PLATFORM");
-    verify(service).operationsForPlatform();
-    verify(service, never()).summaryForUser(eq(2L));
-    verify(service, never()).operationsForUser(eq(2L));
+    assertThatThrownBy(() -> controller.operations(teacher))
+        .isInstanceOf(BusinessException.class)
+        .extracting(ex -> ((BusinessException) ex).status())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+    verifyNoInteractions(service);
   }
 
   @Test

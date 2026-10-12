@@ -1,24 +1,17 @@
-"""Boss 副本玩家答案评测沙箱。
+"""Boss 副本玩家答案评测。
 
 ``self_tester`` 校验 ``reference_solution`` 自洽；本模块评测玩家提交，返回通过数与首条失败信息。
-复用 forbidden 扫描与 rlimit 沙箱，与出题侧安全模型一致。
+所有 Python 执行都委托给隔离的 Piston 服务，Graph worker 内不执行用户代码。
 """
 
 from __future__ import annotations
 
-import subprocess
-import sys
-import tempfile
 from dataclasses import dataclass, field
-from pathlib import Path
 from typing import Sequence
 
+from .execution_sandbox import run_python
 from .schemas import TestCase
-from .self_tester import (
-    DEFAULT_TIMEOUT_SEC,
-    _maybe_rlimit_preexec,
-    _scan_forbidden_imports,
-)
+from .self_tester import DEFAULT_TIMEOUT_SEC, _scan_forbidden_imports
 
 
 @dataclass
@@ -55,7 +48,6 @@ def evaluate_student_code(
     test_cases: Sequence[TestCase],
     *,
     timeout_sec: int = DEFAULT_TIMEOUT_SEC,
-    python_executable: str | None = None,
 ) -> EvaluationResult:
     """逐条比对玩家 stdout（rstrip）；失败不抛异常，写入 ``EvaluationResult``。"""
 
@@ -78,63 +70,38 @@ def evaluate_student_code(
             failed_indices=list(range(total)),
         )
 
-    interpreter = python_executable or sys.executable
-    preexec = _maybe_rlimit_preexec()
-
     passed_count = 0
     first_failure: CaseResult | None = None
     failed_indices: list[int] = []
 
-    with tempfile.TemporaryDirectory(prefix="pyt-boss-eval-") as tmpdir:
-        script_path = Path(tmpdir) / "submission.py"
-        script_path.write_text(code, encoding="utf-8")
+    for i, tc in enumerate(test_cases):
+        result = run_python(code, tc.input, timeout_sec)
+        if result.runtime_error:
+            return EvaluationResult(
+                passed=False,
+                passed_count=passed_count,
+                total_count=total,
+                runtime_error=result.runtime_error,
+                failed_indices=list(range(i, total)),
+            )
 
-        for i, tc in enumerate(test_cases):
-            timed_out = False
-            actual = ""
-            stderr = ""
-            try:
-                result = subprocess.run(
-                    [interpreter, str(script_path)],
-                    input=tc.input,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout_sec,
-                    env={"PYTHONIOENCODING": "utf-8"},
-                    preexec_fn=preexec,
-                    cwd=tmpdir,
-                )
-                actual = result.stdout.rstrip()
-                stderr = result.stderr[:240]
-                expected = tc.expected_output.rstrip()
-                passed = result.returncode == 0 and actual == expected
-            except subprocess.TimeoutExpired:
-                expected = tc.expected_output.rstrip()
-                stderr = f"timeout >{timeout_sec}s"
-                timed_out = True
-                passed = False
-            except FileNotFoundError as exc:
-                return EvaluationResult(
+        actual = result.stdout.rstrip()
+        stderr = result.stderr[:240]
+        expected = tc.expected_output.rstrip()
+        passed = not result.timed_out and result.exit_code == 0 and actual == expected
+        if passed:
+            passed_count += 1
+        else:
+            failed_indices.append(i)
+            if first_failure is None:
+                first_failure = CaseResult(
+                    index=i,
                     passed=False,
-                    passed_count=passed_count,
-                    total_count=total,
-                    runtime_error=f"interpreter_missing:{exc}",
-                    failed_indices=list(range(i, total)),
+                    actual=actual,
+                    expected=expected,
+                    stderr=(f"timeout >{timeout_sec}s" if result.timed_out else stderr),
+                    timed_out=result.timed_out,
                 )
-
-            if passed:
-                passed_count += 1
-            else:
-                failed_indices.append(i)
-                if first_failure is None:
-                    first_failure = CaseResult(
-                        index=i,
-                        passed=False,
-                        actual=actual,
-                        expected=expected,
-                        stderr=stderr,
-                        timed_out=timed_out,
-                    )
 
     return EvaluationResult(
         passed=passed_count == total,

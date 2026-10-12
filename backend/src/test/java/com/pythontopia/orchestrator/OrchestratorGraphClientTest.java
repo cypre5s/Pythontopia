@@ -52,6 +52,7 @@ class OrchestratorGraphClientTest {
           + "data: {\"reply_md\":\"done\"}\n\n";
 
   private HttpServer server;
+  private final CompletableFuture<String> capturedInternalSubject = new CompletableFuture<>();
 
   @AfterEach
   void tearDown() {
@@ -118,6 +119,7 @@ class OrchestratorGraphClientTest {
         .isEqualTo("/agents/orchestrator/turn/stream");
 
     JsonNode json = new ObjectMapper().readTree(body);
+    assertThat(capturedInternalSubject.get(5, TimeUnit.SECONDS)).isEqualTo("user:7");
     assertThat(json.get("user_id").asLong()).isEqualTo(7L);
     assertThat(json.get("user_message").asText()).isEqualTo("讲一下 for 循环");
     // 空白 sessionId -> 服务端生成 "u{userId}-{timestamp}"
@@ -296,6 +298,8 @@ class OrchestratorGraphClientTest {
         path,
         (HttpExchange exchange) -> {
           capturedPath.complete(exchange.getRequestURI().getPath());
+          capturedInternalSubject.complete(
+              String.valueOf(exchange.getRequestHeaders().getFirst("X-Internal-Subject")));
           String reqBody =
               new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
           capturedBody.complete(reqBody);

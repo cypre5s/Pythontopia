@@ -43,14 +43,18 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
       throws ServletException, IOException {
     String authorization = request.getHeader("Authorization");
     if (authorization != null && authorization.startsWith("Bearer ")) {
-      CurrentUserPrincipal principal = jwtService.parse(authorization.substring(7));
-      if (isSessionAlive(principal)) {
-        UsernamePasswordAuthenticationToken authentication =
-            new UsernamePasswordAuthenticationToken(
-                principal,
-                null,
-                List.of(new SimpleGrantedAuthority("ROLE_" + principal.role().name())));
-        SecurityContextHolder.getContext().setAuthentication(authentication);
+      try {
+        CurrentUserPrincipal principal = jwtService.parse(authorization.substring(7));
+        if (isSessionAlive(principal)) {
+          UsernamePasswordAuthenticationToken authentication =
+              new UsernamePasswordAuthenticationToken(
+                  principal,
+                  null,
+                  List.of(new SimpleGrantedAuthority("ROLE_" + principal.role().name())));
+          SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+      } catch (JwtValidationException exception) {
+        SecurityContextHolder.clearContext();
       }
     }
     filterChain.doFilter(request, response);

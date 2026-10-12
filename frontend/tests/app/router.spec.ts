@@ -89,6 +89,61 @@ describe('/guide 操作指南路由（需登录）', () => {
   });
 });
 
+describe('/admin 管理后台路由与角色边界', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    localStorage.clear();
+  });
+
+  it('registers the operations and problem-review pages under an ADMIN-only shell', () => {
+    const operations = router.resolve('/admin/operations');
+    const reviews = router.resolve('/admin/problem-reviews');
+
+    expect(operations.name).toBe('admin-operations');
+    expect(reviews.name).toBe('admin-problem-reviews');
+    expect(operations.meta.adminOnly).toBe(true);
+    expect(reviews.meta.adminOnly).toBe(true);
+    expect(operations.meta.fullscreen).toBe(true);
+    expect(operations.meta.hideCompanion).toBe(true);
+  });
+
+  it('redirects a signed-in non-admin away from admin pages', async () => {
+    const session = useSessionStore();
+    session.user = {
+      id: 12,
+      username: 'student',
+      displayName: '学生',
+      role: 'STUDENT',
+    };
+    session.token = 'test-token';
+    session.expiresAt = new Date(Date.now() + 3_600_000).toISOString();
+    const toast = useToastStore();
+    const showSpy = vi.spyOn(toast, 'show');
+
+    await router.push('/admin/problem-reviews');
+
+    expect(router.currentRoute.value.path).toBe('/world');
+    expect(showSpy).toHaveBeenCalledWith('需要管理员权限才能打开管理后台。', 'error');
+  });
+
+  it('allows an authenticated ADMIN into the management shell', async () => {
+    const session = useSessionStore();
+    session.user = {
+      id: 1,
+      username: 'admin',
+      displayName: '管理员',
+      role: 'ADMIN',
+    };
+    session.token = 'test-token';
+    session.expiresAt = new Date(Date.now() + 3_600_000).toISOString();
+
+    await router.push('/admin/operations');
+
+    expect(router.currentRoute.value.path).toBe('/admin/operations');
+    expect(router.currentRoute.value.name).toBe('admin-operations');
+  });
+});
+
 describe('分块自愈跳转的站内路径断言（开放重定向防护）', () => {
   it('普通站内路径原样放行', () => {
     expect(toSafeInternalPath('/mainline-map')).toBe('/mainline-map');

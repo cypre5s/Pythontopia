@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+
 import pytest
 from pydantic import ValidationError
 
@@ -67,3 +69,27 @@ def test_workflow_request_and_result_keep_coach_fields_optional() -> None:
     assert request.force_event is None
     assert result.agentic is True
     assert result.coach_decision is None
+
+
+def test_workflow_chat_request_accepts_valid_images() -> None:
+    image = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nimage").decode()
+    request = WorkflowRunRequest(
+        session_id="wf-1",
+        user_id=1,
+        event="CHAT",
+        problem={"problem_id": 42},
+        event_data={"message": "请看图", "images": [image]},
+    )
+
+    assert request.event_data["images"] == [image]
+
+
+def test_workflow_chat_request_rejects_invalid_image_data() -> None:
+    with pytest.raises(ValidationError, match="valid base64"):
+        WorkflowRunRequest(
+            session_id="wf-1",
+            user_id=1,
+            event="CHAT",
+            problem={"problem_id": 42},
+            event_data={"message": "请看图", "images": ["data:image/png;base64,not-base64!"]},
+        )

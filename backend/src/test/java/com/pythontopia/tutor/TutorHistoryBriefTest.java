@@ -7,12 +7,14 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.classroom.dashboard.service.ClassroomDashboardService;
+import com.pythontopia.coursepack.service.CourseVideoTranscriptService;
 import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.tutor.dto.TutorAskRequest;
 import com.pythontopia.tutor.dto.TutorSessionDto;
@@ -28,6 +30,8 @@ class TutorHistoryBriefTest {
   private final TutorGraphClient graphClient = mock(TutorGraphClient.class);
   private final TutorSessionRepository sessionRepository = mock(TutorSessionRepository.class);
   private final MemoryRetrievalService memoryRetrievalService = mock(MemoryRetrievalService.class);
+  private final CourseVideoTranscriptService videoTranscriptService =
+      mock(CourseVideoTranscriptService.class);
   private final TutorService service =
       new TutorService(
           graphClient,
@@ -36,7 +40,8 @@ class TutorHistoryBriefTest {
           mock(com.pythontopia.learner.profile.service.PassiveProfileService.class),
           mock(ApplicationEventPublisher.class),
           mock(ClassroomDashboardService.class),
-          memoryRetrievalService);
+          memoryRetrievalService,
+          videoTranscriptService);
 
   private static TutorSessionDto turn(String question, String answer) {
     return new TutorSessionDto(
@@ -70,16 +75,35 @@ class TutorHistoryBriefTest {
   }
 
   @Test
-  void buildVideoBriefAnchorsTimeWhenVideoPresent() {
-    String brief = TutorService.buildVideoBrief(42L, 125);
-    assertThat(brief).contains("视频上下文");
-    assertThat(brief).contains("#42");
-    assertThat(brief).contains("2:05");
+  void askInjectsRealTranscriptWindowWhenVideoPresent() {
+    CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
+    when(videoTranscriptService.contextFor(42L, 125))
+        .thenReturn("课程视频转写: #42\n[01:40-02:10] 列表索引从零开始");
+
+    service.ask(
+        student,
+        new TutorAskRequest(
+            "这里为什么减一", List.of(), "原始上下文", null, null, null, null, 42L, 125));
+
+    ArgumentCaptor<String> contextCaptor = ArgumentCaptor.forClass(String.class);
+    verify(graphClient)
+        .askStream(
+            eq(7L), any(), anyList(), contextCaptor.capture(), any(), any(), any(), any(), any());
+    assertThat(contextCaptor.getValue())
+        .contains("课程视频转写", "列表索引从零开始", "原始上下文");
+    verify(videoTranscriptService).contextFor(42L, 125);
   }
 
   @Test
-  void buildVideoBriefEmptyWhenNoVideo() {
-    assertThat(TutorService.buildVideoBrief(null, 10)).isEmpty();
+  void askWithoutVideoNeverReadsTranscriptCorpus() {
+    CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
+
+    service.ask(
+        student,
+        new TutorAskRequest(
+            "什么是列表", List.of(), "原始上下文", null, null, null, null, null, null));
+
+    verifyNoInteractions(videoTranscriptService);
   }
 
   @Test

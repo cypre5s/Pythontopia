@@ -158,8 +158,8 @@ function goOpenTest(chapter: number): void {
   void router.push(`/chapter-test/${chapter}`);
 }
 function goOpenEndless(chapter: number): void {
-  // 无尽模式补星：跳已存在的 /endless 并锁定本章范围。
-  void router.push({ path: '/endless', query: { chapter: String(chapter) } });
+  // 补星只依据远征服务端判题记录；独立练习页没有可信的 run 成绩。
+  void router.push({ path: '/expedition', query: { focus: String(chapter) } });
 }
 function goOpenBoss(chapter: number): void {
   // 章末 BOSS：入口只在本章 ≥1★ 时渲染，路由守卫再做一次权威校验。

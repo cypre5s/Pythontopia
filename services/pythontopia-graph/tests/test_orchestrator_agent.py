@@ -132,7 +132,7 @@ async def test_decaying_kcs_prioritised_in_plan_kc_selection() -> None:
 
 @pytest.mark.asyncio
 async def test_ambiguous_goal_returns_clarifying_question() -> None:
-    await reset_session("t-b")
+    await reset_session(1, "t-b")
     understand_payload = {
         "ambiguous": True,
         "clarifying_question": "你想先从哪个主题开始？",
@@ -156,7 +156,7 @@ async def test_ambiguous_goal_returns_clarifying_question() -> None:
 
 @pytest.mark.asyncio
 async def test_recent_failures_insert_debug_replan_step_before_assess() -> None:
-    await reset_session("t-c")
+    await reset_session(1, "t-c")
     graph = OrchestratorGraph(provider=StubProvider([], reply="安排好了"))
     req = request_of("巩固循环", "t-c", recent_failures=["PY43-KC-002"], course_kc_index=["PY43-KC-001", "PY43-KC-002"])
 
@@ -211,7 +211,7 @@ async def test_request_profile_brief_flows_into_tutor_dispatch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """OrchestratorRequest.profile_brief 经 DispatchContext 注入，TutorAgent 编排步真实收到。"""
-    await reset_session("t-pb")
+    await reset_session(1, "t-pb")
 
     from pythontopia_graph.agents.tutor_agent import TutorAgent
     from pythontopia_graph.graph.orchestrator_session import set_plan
@@ -236,6 +236,7 @@ async def test_request_profile_brief_flows_into_tutor_dispatch(
 
     # 预存含 TutorAgent 步的 plan；「太难了」触发 negotiate 就地改写并真调度该步
     await set_plan(
+        1,
         "t-pb",
         [
             PlanStep(
@@ -263,15 +264,15 @@ async def test_request_profile_brief_flows_into_tutor_dispatch(
 
 @pytest.mark.asyncio
 async def test_multi_turn_accumulates_history_in_session_store() -> None:
-    await reset_session("t-e")
+    await reset_session(1, "t-e")
     graph = OrchestratorGraph(provider=StubProvider([], reply="收到"))
 
     await graph.run(request_of("第一句", "t-e", course_kc_index=["PY43-KC-001"]))
-    first = await get_history("t-e")
+    first = await get_history(1, "t-e")
     assert len(first) == 2
 
     await graph.run(request_of("第二句", "t-e", course_kc_index=["PY43-KC-001"]))
-    second = await get_history("t-e")
+    second = await get_history(1, "t-e")
     assert len(second) == 4
     assert second[0].role == "user"
     assert second[0].content == "第一句"
@@ -475,7 +476,7 @@ def test_fallback_clarify_reply_asks_one_question_without_plan_dump() -> None:
 @pytest.mark.asyncio
 async def test_graph_provider_outage_yields_deterministic_structured_reply() -> None:
     """LLM provider 不可用：整轮不崩溃，回复为确定性结构化教学内容并在 trace 标注降级。"""
-    await reset_session("t-outage")
+    await reset_session(1, "t-outage")
     graph = OrchestratorGraph(provider=BoomProvider())
 
     resp = await graph.run(request_of("我想学 for 循环", "t-outage"))
@@ -495,7 +496,7 @@ async def test_graph_provider_outage_yields_deterministic_structured_reply() -> 
 @pytest.mark.asyncio
 async def test_graph_outage_fallback_still_intercepts_full_answer_leak() -> None:
     """降级路径同样要过安全审查：兜底文本带出泄答关键词时必须拦截。"""
-    await reset_session("t-outage-leak")
+    await reset_session(1, "t-outage-leak")
     graph = OrchestratorGraph(provider=BoomProvider())
 
     resp = await graph.run(request_of("请直接给我这道题的完整答案", "t-outage-leak"))
@@ -507,7 +508,7 @@ async def test_graph_outage_fallback_still_intercepts_full_answer_leak() -> None
 @pytest.mark.asyncio
 async def test_streamed_reply_style_active_safety_scan_still_executes() -> None:
     """风格指令生效的正常流式回复，泄答关键词仍被安全审查拦截。"""
-    await reset_session("t-style-safety")
+    await reset_session(1, "t-style-safety")
     provider = CapturingStubProvider([], reply="这是完整答案：print(42)")
     graph = OrchestratorGraph(provider=provider)
 
@@ -528,7 +529,7 @@ async def test_streamed_reply_style_active_safety_scan_still_executes() -> None:
 
 @pytest.mark.asyncio
 async def test_negotiation_mutates_stored_plan_instead_of_rebuilding() -> None:
-    await reset_session("t-f")
+    await reset_session(1, "t-f")
     graph = OrchestratorGraph(provider=StubProvider([], reply="好的"))
 
     first = await graph.run(request_of("系统学 for 循环，准备期末", "t-f"))

@@ -210,9 +210,10 @@ describe('mainline store', () => {
     await store.load();
     expect(mocks.getMainlineOverview).toHaveBeenCalledTimes(1);
 
-    const awarded = await store.submitEndlessSummary({ chapter: 3, correct: 8, total: 10, streak: 8 });
+    const request = { chapter: 3, runId: '123e4567-e89b-12d3-a456-426614174000' };
+    const awarded = await store.submitEndlessSummary(request);
     expect(awarded).toBe(true);
-    expect(mocks.postEndlessSummary).toHaveBeenCalledWith({ chapter: 3, correct: 8, total: 10, streak: 8 });
+    expect(mocks.postEndlessSummary).toHaveBeenCalledWith(request);
     // 发放补星 → reload（再拉一次 overview）。
     expect(mocks.getMainlineOverview).toHaveBeenCalledTimes(2);
   });

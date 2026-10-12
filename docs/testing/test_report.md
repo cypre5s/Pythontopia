@@ -22,7 +22,7 @@
 - 知识田 bootstrap：65 KC × `crop_tile_state`、`MasteryEvaluator` 单写（`Stage05CurriculumBootstrapIntegrationTest`）。
 - 资源工坊：6 类资源、限频、grounding 失败 fail-fast（`Stage07WorkshopAcceptanceIntegrationTest`）。
 - 学习路径 + 公告板：`PathPlannerAgent`、quest 状态机、班级任务（`Stage08PathBoardAcceptanceIntegrationTest`）。
-- 训练场 + 判题：`SubprocessPythonSandbox` × hidden cases、限频 429、双轨执行（`Stage09SubmissionAcceptanceIntegrationTest`）。
+- 训练场 + 判题：Piston adapter / fail-closed、hidden cases、限频 429、双轨执行（`PistonPythonSandboxTest`、`Stage09SubmissionAcceptanceIntegrationTest`）。
 - Bug 矿洞：6 卡片、Layer 1 默认 revealed、重试 AC → `DEBUG_FIX` 事件（`Stage10BugMineAcceptanceIntegrationTest`）。
 - 复盘大厅：6 metric / DRAFT path / accept / keep / 跨用户 404 / 重复 accept 409（`Stage13ReviewHallAcceptanceIntegrationTest`）。
 
@@ -57,7 +57,7 @@
 | `POST /api/auth/login` | < 200ms | BCrypt cost 10 |
 | `POST /api/learner/curriculum/bootstrap` | < 600ms | 65 KC 一次 upsert |
 | `POST /api/workshop/resources` | < 5s | 包含 RAG + Graph，演示前可热身 |
-| `POST /api/submissions` | < 2s | subprocess python sandbox |
+| `POST /api/submissions` | < 2s | 独立 Piston/Isolate 沙箱；本地未配置时 fail closed |
 | `POST /api/learner/evaluations` | < 2s | 6 SQL 聚合 + Graph |
 
 ## 5. 复测命令

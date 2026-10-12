@@ -1,7 +1,8 @@
 // Boss 副本前端 API。
 //
-// 优先调真后端 `/api/world/boss/...`；**只有出题**在后端 404 / 网络失败时降级到本地 golden 题
-// （dev/演示场景，避免阻塞 UI）。**判题不降级**：submitBossAttempt 失败一律抛出，
+// 优先调真后端 `/api/world/boss/...`；出题与判题默认都 fail closed。仅隔离开发测试可由调用方
+// 显式 allowGoldenFallback=true 使用本地 golden 题，生产页面绝不自动把模板冒充真实业务题。
+// **判题不降级**：submitBossAttempt 失败一律抛出，
 // 由调用方按「本次不计分」处理，绝不返回伪造判定。
 //
 // 真后端契约：
@@ -222,8 +223,8 @@ function buildBuggyCode(template: GoldenTemplate): string {
  * 真正基于学生画像偏好出题，不再随机抽 KC。
  *
  * - 优先调真后端 /api/world/boss/{chapter}/problem
- * - 任意 4xx/5xx/网络异常 → 退化到本地 golden 题（不阻塞玩家流程）
- * - golden 兜底支持 preferredKc：若给定 KC 命中，从该 KC 对应的 template 抽题；
+ * - 任意 4xx/5xx/网络异常默认向上抛出，不产生伪题
+ * - 只有隔离开发测试显式 allowGoldenFallback=true 时，才允许按 preferredKc 生成本地模板；
  *   否则按 stage 取默认 template（保留旧行为）。
  */
 export async function requestBossProblem(
@@ -232,7 +233,7 @@ export async function requestBossProblem(
   options: { allowGoldenFallback?: boolean } = {},
 ): Promise<BossProblemDto> {
   const req: BossProblemRequest = typeof arg === 'number' ? { stage: arg } : arg;
-  const allowGoldenFallback = options.allowGoldenFallback ?? true;
+  const allowGoldenFallback = options.allowGoldenFallback === true;
   try {
     const response = await http.post<BossProblemDto>(
       `/api/world/boss/${chapter}/problem`,
@@ -300,8 +301,8 @@ function synthesizeBuggyCode(problem: BossProblemDto): string {
  *
  * **绝不返回伪造结果**：判题不可达时抛出，由调用方决定「本次不计分 / 不入历史 / 可重试」。
  * 早期这里在 catch 里返回 `{passed:false, feedback:'后端未连接 / mock 评测…'}`，
- * 使得网络故障被当成学生真答错——扣体力、清连胜、错题入库，还会被无尽小结当成真实
- * 正确率上报给补星接口。调用方（useEndlessRun / rogueRun）已备好失败分支，这里必须 throw。
+ * 使得网络故障被当成学生真答错——扣体力、清连胜、错题入库，还会污染远征成绩。
+ * 补星由后端按正式判题记录计算。调用方（useEndlessRun / rogueRun）已备好失败分支，这里必须 throw。
  */
 export async function submitBossAttempt(
   payload: BossAttemptRequest,

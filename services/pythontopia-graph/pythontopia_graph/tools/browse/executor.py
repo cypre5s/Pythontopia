@@ -1,29 +1,25 @@
-"""BROWSE 窄工具化 executor（§3.1 / §4 B1）：把 browser-use 封装成**有界、只读、去敏**的查证工具。
+"""有界、只读的 Playwright 联网查证器。
 
-设计要点（红线：非自由 ReAct / 业务 fail-fast / 外部内容标签隔离）：
-- **有界**：步数受 ``BrowseRequest.max_steps`` 上界约束，越界 ``truncated=True`` 提前停。
-- **白名单 fail-fast**：先与安全墙求交集（``allowlist.enforce_allowlist``，防御纵深）；交集为空
-  直接拒绝、engine 永不 open（零请求）；逐步提案的越界 URL 在 **execute 之前**拦截，绝不发请求。
-- **只读动作**：navigate / read / search / stop；无任何写/提交/点击副作用动作进入回路。
-- **去敏**：每步 DOM 摘要过 ``sanitize.sanitize_dom_summary``（脚本/隐藏域/PII 不回传）。
-- **结构化降级**：engine 任意异常被捕获 → 返回**已走步骤 + error**（绝不抛断主链路）。
-- **外部内容标签隔离**：``final_summary`` 冠以 :data:`EXTERNAL_CONTENT_LABEL`，``citations`` 为外部
-  URL，**不进课件证据/引用**（由 S/B2/F 以"外部内容，非课件"通道注入与渲染）。
-- **lazy-import**：browser-use/playwright 仅在默认 engine 的 ``open()`` 内惰性导入；缺包结构化
-  fail-fast（dispatch 回退 ``VIDEO``）。测试经注入 fake engine 零真实联网。
-
-可注入 :class:`BrowseEngine`（propose→执行前白名单校验→execute 的两段式，便于"未发请求"校验）。
+它不是自治浏览 Agent：只读取 goal 中明确给出的 URL；没有 URL 时，只构造 Python 官方站点
+自身的搜索 URL。所有网络请求在 Playwright ``BrowserContext.route`` 层再次经过 scheme、端口、
+allowlist 和 DNS 公网地址校验；脚本、Service Worker、下载和非 document 子资源全部关闭。
 """
 
 from __future__ import annotations
 
+import asyncio
 import contextlib
 import importlib
 import inspect
+import ipaddress
+import os
 import re
-from collections.abc import Mapping
+import socket
+from collections.abc import Awaitable, Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Protocol, cast
+from urllib.parse import quote_plus, urlsplit
 
 from pythontopia_graph.tools.browse.allowlist import enforce_allowlist, is_domain_allowed
 from pythontopia_graph.tools.browse.contract import (
@@ -38,68 +34,94 @@ __all__ = [
     "EXTERNAL_CONTENT_LABEL",
     "BrowseDependencyError",
     "BrowseEngine",
+    "CapturedPage",
     "ProposedStep",
+    "browse_runtime_status",
     "create_default_engine",
     "execute_browse",
+    "validate_network_url",
 ]
 
-# 外部内容标签（红线：浏览/上传外部内容只进带标签 context 通道，绝不冒充课件证据）。
 EXTERNAL_CONTENT_LABEL = "【浏览器读取·外部内容，非课件证据】"
 
-# 只读动作集合（与 contract.BrowseAction 对齐）。
 _KNOWN_ACTIONS: tuple[str, ...] = ("navigate", "read", "search", "stop")
-# 产生外部引用的动作（命中 URL 入 citations）。
 _CITE_ACTIONS: frozenset[str] = frozenset({"navigate", "read", "search"})
-
 _MAX_FINAL_SUMMARY_CHARS = 1200
 _MAX_ERROR_CHARS = 240
+_MAX_TITLE_CHARS = 200
 _WS_RE = re.compile(r"\s+")
+_URL_RE = re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE)
+_TRAILING_URL_PUNCTUATION = ".,;:!?)]}，。；：！？）》」』"
+_METADATA_HOSTS = frozenset(
+    {
+        "metadata.google.internal",
+        "metadata.google.internal.",
+        "instance-data.ec2.internal",
+        "instance-data.ec2.internal.",
+    }
+)
+_MAX_CONCURRENCY = max(1, min(4, int(os.environ.get("BROWSE_MAX_CONCURRENCY", "2"))))
+_BROWSE_GATE = asyncio.Semaphore(_MAX_CONCURRENCY)
+_PLAYWRIGHT_SENTINEL = object()
+
+Resolver = Callable[[str], Sequence[str] | Awaitable[Sequence[str]]]
 
 
 class BrowseDependencyError(RuntimeError):
-    """BROWSE 运行依赖缺失/未接线（browser-use / playwright / LLM）→ 业务 fail-fast。"""
+    """Playwright 或其 Chromium 运行时缺失。"""
 
 
-@dataclass
+@dataclass(frozen=True)
 class ProposedStep:
-    """engine 拟执行的下一步（执行前用于白名单校验；不含已抓取内容）。"""
+    """即将执行的只读步骤；executor 会在 I/O 前再次验证 URL。"""
 
     action: str
     url: str = ""
 
 
+@dataclass(frozen=True)
+class CapturedPage:
+    """Playwright 返回的最小证据单元，不保留原始 DOM、Cookie 或浏览器状态。"""
+
+    url: str
+    title: str
+    snippet: str
+    bytes_read: int
+
+
 class BrowseEngine(Protocol):
-    """浏览器引擎抽象：两段式 propose→execute，便于在 execute 前做白名单 fail-fast。
+    async def open(
+        self,
+        *,
+        goal: str,
+        allowed_domains: list[str],
+        max_steps: int,
+        max_bytes: int = 131_072,
+        timeout_seconds: float = 45.0,
+    ) -> None: ...
 
-    生产实现 :class:`_BrowserUseEngine`（lazy browser-use）；测试注入 fake（零联网）。
-    """
+    async def propose(self) -> ProposedStep | None: ...
 
-    async def open(self, *, goal: str, allowed_domains: list[str], max_steps: int) -> None:
-        """初始化会话（只读、受界、域约束）。失败应抛异常，由 executor 结构化降级。"""
-        ...
+    async def execute(self, step: ProposedStep) -> str | CapturedPage: ...
 
-    async def propose(self) -> ProposedStep | None:
-        """返回下一步提案；``None`` 表示自然结束（无更多步）。"""
-        ...
+    async def close(self) -> None: ...
 
-    async def execute(self, step: ProposedStep) -> str:
-        """执行该（已通过白名单校验的）步，返回原始 DOM/文本摘要（未去敏）。"""
-        ...
 
-    async def close(self) -> None:
-        """释放会话资源（幂等；executor 在 finally 中防御性调用）。"""
-        ...
+class ReadOnlySession(Protocol):
+    async def open(self, *, allowed_domains: list[str], timeout_seconds: float) -> None: ...
+
+    async def read(self, url: str, *, max_bytes: int) -> CapturedPage: ...
+
+    async def close(self) -> None: ...
 
 
 def _coerce_action(action: str) -> BrowseAction:
-    """把 engine 提案动作收敛到合法只读动作（未知动作按 read 处理）。"""
-    if action in _KNOWN_ACTIONS:
-        return cast("BrowseAction", action)
-    return "read"
+    if action not in _KNOWN_ACTIONS:
+        raise ValueError(f"非只读浏览动作已拒绝: {action}")
+    return cast("BrowseAction", action)
 
 
 def _short_error(text: str) -> str:
-    """错误信息去敏 + 折行 + 截断（避免把抓取/异常细节里的敏感内容回带）。"""
     cleaned = _WS_RE.sub(" ", redact_pii(text)).strip()
     if len(cleaned) > _MAX_ERROR_CHARS:
         cleaned = cleaned[: _MAX_ERROR_CHARS - 1].rstrip() + "…"
@@ -112,8 +134,19 @@ def _truncate_summary(text: str, max_chars: int) -> str:
     return text[: max_chars - 1].rstrip() + "…"
 
 
+def _truncate_utf8(text: str, max_bytes: int) -> str:
+    """按 UTF-8 字节安全截断，永不切断多字节字符。"""
+    if max_bytes <= 0:
+        return ""
+    encoded = text.encode("utf-8")
+    if len(encoded) <= max_bytes:
+        return text
+    return encoded[:max_bytes].decode("utf-8", errors="ignore").rstrip()
+
+
 def _compose_final_summary(steps: list[BrowseStep], *, truncated: bool, error: str) -> str:
-    body = " ".join(step.summary for step in steps if step.summary).strip()
+    body = " ".join(step.snippet or step.summary for step in steps if step.snippet or step.summary)
+    body = body.strip()
     notes: list[str] = []
     if truncated:
         notes.append("（已达浏览步数上限，结果可能不完整）")
@@ -123,8 +156,10 @@ def _compose_final_summary(steps: list[BrowseStep], *, truncated: bool, error: s
         if error:
             return f"未能完成联网查证：{error}"
         return f"{EXTERNAL_CONTENT_LABEL}未获取到可引用的外部内容。"
-    body = _truncate_summary(body, _MAX_FINAL_SUMMARY_CHARS)
-    return f"{EXTERNAL_CONTENT_LABEL}{body}{''.join(notes)}"
+    return (
+        f"{EXTERNAL_CONTENT_LABEL}"
+        f"{_truncate_summary(body, _MAX_FINAL_SUMMARY_CHARS)}{''.join(notes)}"
+    )
 
 
 async def execute_browse(
@@ -133,55 +168,94 @@ async def execute_browse(
     engine: BrowseEngine | None = None,
     env: Mapping[str, str] | None = None,
 ) -> BrowseResult:
-    """有界执行一次白名单内浏览查证，永远返回结构化 :class:`BrowseResult`（绝不抛断主链路）。"""
+    """在总超时、并发、步数和文本字节预算内完成一次只读查证。"""
     effective = enforce_allowlist(request.allowed_domains, env)
     if not effective:
-        msg = "无有效白名单域（请求与安全墙无交集），已拒绝发起浏览"
+        message = "无有效白名单域（请求与安全墙无交集），已拒绝发起浏览"
         return BrowseResult(
-            steps=[],
-            final_summary=f"未能完成联网查证：{msg}",
-            citations=[],
-            truncated=False,
-            error=msg,
+            final_summary=f"未能完成联网查证：{message}",
+            error=message,
         )
 
-    eng = engine if engine is not None else create_default_engine(env=env)
+    browse_engine = engine if engine is not None else create_default_engine(env=env)
     steps: list[BrowseStep] = []
     citations: list[str] = []
     truncated = False
     error = ""
+    bytes_used = 0
 
     try:
-        await eng.open(
-            goal=request.goal,
-            allowed_domains=list(effective),
-            max_steps=request.max_steps,
-        )
-        idx = 0
-        proposed = await eng.propose()
-        while proposed is not None and proposed.action != "stop":
-            if idx >= request.max_steps:
-                truncated = True
-                break
-            url = (proposed.url or "").strip()
-            # execute 之前做白名单校验：越界 URL fail-fast，绝不发起请求。
-            if url and not is_domain_allowed(url, effective):
-                error = _short_error(f"越界域被拦截，未发起请求: {url}")
-                break
-            raw = await eng.execute(proposed)
-            action = _coerce_action(proposed.action)
-            steps.append(
-                BrowseStep(index=idx, action=action, url=url, summary=sanitize_dom_summary(raw))
-            )
-            if url and action in _CITE_ACTIONS and url not in citations:
-                citations.append(url)
-            idx += 1
-            proposed = await eng.propose()
-    except Exception as exc:  # noqa: BLE001 - 业务故障也必须结构化降级（返回已走步骤 + error）
+        async with asyncio.timeout(request.timeout_seconds):
+            async with _BROWSE_GATE:
+                await browse_engine.open(
+                    goal=request.goal,
+                    allowed_domains=list(effective),
+                    max_steps=request.max_steps,
+                    max_bytes=request.max_bytes,
+                    timeout_seconds=request.timeout_seconds,
+                )
+                index = 0
+                proposed = await browse_engine.propose()
+                while proposed is not None and proposed.action != "stop":
+                    if index >= request.max_steps:
+                        truncated = True
+                        break
+                    url = (proposed.url or "").strip()
+                    if url and not is_domain_allowed(url, effective):
+                        error = _short_error(f"越界域被拦截，未发起请求: {url}")
+                        break
+
+                    captured = await browse_engine.execute(proposed)
+                    if isinstance(captured, CapturedPage):
+                        title_raw = captured.title
+                        snippet_raw = captured.snippet
+                        source_bytes = max(
+                            captured.bytes_read,
+                            len(title_raw.encode("utf-8")) + len(snippet_raw.encode("utf-8")),
+                        )
+                        final_url = captured.url.strip() or url
+                    else:
+                        title_raw = ""
+                        snippet_raw = captured
+                        source_bytes = len(captured.encode("utf-8"))
+                        final_url = url
+
+                    remaining = max(0, request.max_bytes - bytes_used)
+                    remaining_before_step = remaining
+                    title = sanitize_dom_summary(title_raw, max_chars=_MAX_TITLE_CHARS)
+                    title = _truncate_utf8(title, remaining)
+                    remaining -= len(title.encode("utf-8"))
+                    snippet = sanitize_dom_summary(snippet_raw)
+                    snippet = _truncate_utf8(snippet, remaining)
+                    consumed = len(title.encode("utf-8")) + len(snippet.encode("utf-8"))
+                    bytes_used += consumed
+
+                    action = _coerce_action(proposed.action)
+                    steps.append(
+                        BrowseStep(
+                            index=index,
+                            action=action,
+                            url=final_url,
+                            summary=snippet,
+                            title=title,
+                            snippet=snippet,
+                        )
+                    )
+                    if final_url and action in _CITE_ACTIONS and final_url not in citations:
+                        citations.append(final_url)
+                    index += 1
+
+                    if source_bytes > remaining_before_step or bytes_used >= request.max_bytes:
+                        error = "已达浏览文本字节上限，保留已读取的部分证据"
+                        break
+                    proposed = await browse_engine.propose()
+    except TimeoutError:
+        error = f"浏览超过 {request.timeout_seconds:g} 秒总时限"
+    except Exception as exc:  # noqa: BLE001 - 对上游返回结构化失败和已完成证据
         error = _short_error(f"{type(exc).__name__}: {exc}")
     finally:
         with contextlib.suppress(Exception):
-            await eng.close()
+            await asyncio.wait_for(browse_engine.close(), timeout=3.0)
 
     return BrowseResult(
         steps=steps,
@@ -193,75 +267,293 @@ async def execute_browse(
 
 
 def create_default_engine(*, env: Mapping[str, str] | None = None) -> BrowseEngine:
-    """构造默认（lazy browser-use）engine；不在此触发任何导入/联网。"""
     return _BrowserUseEngine(env=env)
 
 
-# ── 默认 engine：lazy 封装 browser-use（真实联网路径，单测不覆盖）──
-
-
 def _import_or_fail(module_name: str) -> Any:
-    """惰性导入可选浏览依赖；缺失 → 结构化 :class:`BrowseDependencyError`（含"依赖"）。"""
     try:
         return importlib.import_module(module_name)
-    except Exception as exc:  # noqa: BLE001 - ImportError 等一律转结构化业务错误
+    except Exception as exc:  # noqa: BLE001
         raise BrowseDependencyError(
-            f"BROWSE 依赖缺失：未安装 {module_name}（pip install '.[browse]'），"
-            "已 fail-fast；dispatch 将回退 VIDEO"
+            f"BROWSE 依赖缺失：未安装 {module_name}（pip install '.[browse]'）"
         ) from exc
 
 
-class _BrowserUseEngine:
-    """browser-use(Playwright) 适配器：open() 内 lazy-import + 受界域约束运行，replay 为受治理步骤。
+def _extract_urls(goal: str) -> list[str]:
+    urls: list[str] = []
+    for match in _URL_RE.findall(goal):
+        url = match.rstrip(_TRAILING_URL_PUNCTUATION)
+        if url and url not in urls:
+            urls.append(url)
+    return urls
 
-    真实执行需注入 LLM（Phase 2 由编排/后端接线），单测一律走注入 fake engine，零真实联网。
-    """
 
-    def __init__(self, *, env: Mapping[str, str] | None = None) -> None:
-        self._env = env
-        self._steps: list[tuple[str, str, str]] = []  # (action, url, content)
-        self._cursor = 0
-        self._session: Any = None
-
-    async def open(self, *, goal: str, allowed_domains: list[str], max_steps: int) -> None:
-        browser_use = _import_or_fail("browser_use")
-        _import_or_fail("playwright")
-        self._steps = await self._run(
-            browser_use, goal=goal, allowed_domains=allowed_domains, max_steps=max_steps
+def _official_search_url(goal: str, allowed_domains: Iterable[str]) -> str:
+    domains = tuple(allowed_domains)
+    query = quote_plus(goal.strip())
+    if "docs.python.org" in domains:
+        return (
+            f"https://docs.python.org/3/search.html?q={query}"
+            "&check_keywords=yes&area=default"
         )
+    if "pypi.org" in domains:
+        return f"https://pypi.org/search/?q={query}"
+    raise ValueError("查证目标未包含明确 URL，且白名单中没有受支持的官方站内搜索")
 
-    async def propose(self) -> ProposedStep | None:
-        if self._cursor >= len(self._steps):
-            return None
-        action, url, _ = self._steps[self._cursor]
-        return ProposedStep(action=action, url=url)
 
-    async def execute(self, step: ProposedStep) -> str:
-        _, _, content = self._steps[self._cursor]
-        self._cursor += 1
-        return content
+class _BrowserUseEngine:
+    """保留历史类名的 Playwright 适配器；不使用 browser-use，也不运行 ReAct/LLM。"""
 
-    async def close(self) -> None:
-        session = self._session
-        self._session = None
-        if session is None:
-            return
-        closer = getattr(session, "close", None) or getattr(session, "kill", None)
-        if closer is None:
-            return
-        result = closer()
-        if inspect.isawaitable(result):
-            await result
-
-    async def _run(  # pragma: no cover - 真实 browser-use + LLM 联网路径，Phase 2 接线
+    def __init__(
         self,
-        browser_use: Any,
+        *,
+        env: Mapping[str, str] | None = None,
+        session_factory: Callable[[], ReadOnlySession] | None = None,
+    ) -> None:
+        self._env = env
+        self._session_factory = session_factory
+        self._session: ReadOnlySession | None = None
+        self._plans: list[ProposedStep] = []
+        self._cursor = 0
+        self._remaining_bytes = 0
+
+    async def open(
+        self,
         *,
         goal: str,
         allowed_domains: list[str],
         max_steps: int,
-    ) -> list[tuple[str, str, str]]:
-        raise BrowseDependencyError(
-            "BROWSE 真实执行未接线：browser-use Agent 需注入 LLM 与 Playwright 会话"
-            "（Phase 2 由编排/后端注入受界、域约束的 engine）；当前 fail-fast，dispatch 回退 VIDEO"
+        max_bytes: int = 131_072,
+        timeout_seconds: float = 45.0,
+    ) -> None:
+        session = (
+            self._session_factory()
+            if self._session_factory is not None
+            else _PlaywrightReadOnlySession(env=self._env)
         )
+        self._session = session
+        self._remaining_bytes = max_bytes
+        explicit_urls = _extract_urls(goal)
+        if explicit_urls:
+            self._plans = [
+                ProposedStep(action="navigate" if index == 0 else "read", url=url)
+                for index, url in enumerate(explicit_urls[:max_steps])
+            ]
+        else:
+            self._plans = [
+                ProposedStep(action="search", url=_official_search_url(goal, allowed_domains))
+            ]
+        await session.open(
+            allowed_domains=allowed_domains,
+            timeout_seconds=timeout_seconds,
+        )
+
+    async def propose(self) -> ProposedStep | None:
+        if self._cursor >= len(self._plans):
+            return None
+        return self._plans[self._cursor]
+
+    async def execute(self, step: ProposedStep) -> CapturedPage:
+        if self._session is None:
+            raise RuntimeError("Playwright 会话未初始化")
+        if self._remaining_bytes <= 0:
+            raise ValueError("已达浏览文本字节上限")
+        captured = await self._session.read(step.url, max_bytes=self._remaining_bytes)
+        self._remaining_bytes -= min(self._remaining_bytes, captured.bytes_read)
+        self._cursor += 1
+        return captured
+
+    async def close(self) -> None:
+        session = self._session
+        self._session = None
+        if session is not None:
+            await session.close()
+
+
+async def _resolve_public_ips(host: str) -> list[str]:
+    def resolve() -> list[str]:
+        infos = socket.getaddrinfo(host, None, type=socket.SOCK_STREAM)
+        return list(dict.fromkeys(info[4][0] for info in infos))
+
+    return await asyncio.to_thread(resolve)
+
+
+async def validate_network_url(
+    url: str,
+    allowed_domains: Iterable[str],
+    *,
+    resolver: Resolver = _resolve_public_ips,
+) -> None:
+    """阻止 scheme/端口/allowlist/私网 DNS 绕过；每次重定向请求都应调用。"""
+    parsed = urlsplit((url or "").strip())
+    if parsed.scheme.lower() not in {"http", "https"} or not parsed.hostname:
+        raise ValueError("仅允许带主机名的 http/https URL")
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("URL 不允许内嵌凭据")
+    try:
+        port = parsed.port
+    except ValueError as exc:
+        raise ValueError("URL 端口无效") from exc
+    expected_port = 443 if parsed.scheme.lower() == "https" else 80
+    if port is not None and port != expected_port:
+        raise ValueError("仅允许 http/https 标准端口")
+    if not is_domain_allowed(url, allowed_domains):
+        raise ValueError("目标域不在只读浏览白名单")
+
+    host = parsed.hostname.rstrip(".").lower()
+    if host in _METADATA_HOSTS or host == "localhost" or host.endswith(".localhost"):
+        raise ValueError("目标主机不是公网地址")
+    try:
+        addresses: Sequence[str] = [host] if ipaddress.ip_address(host) else []
+    except ValueError:
+        resolved = resolver(host)
+        addresses = await resolved if inspect.isawaitable(resolved) else resolved
+    if not addresses:
+        raise ValueError("目标主机 DNS 无可用地址")
+    try:
+        if any(not ipaddress.ip_address(address).is_global for address in addresses):
+            raise ValueError("目标主机解析到非公网地址")
+    except ValueError as exc:
+        if "非公网" in str(exc):
+            raise
+        raise ValueError("目标主机 DNS 返回了无效地址") from exc
+
+
+class _PlaywrightReadOnlySession:
+    def __init__(self, *, env: Mapping[str, str] | None = None) -> None:
+        self._env = os.environ if env is None else env
+        self._allowed_domains: list[str] = []
+        self._timeout_ms = 45_000
+        self._playwright: Any = None
+        self._browser: Any = None
+        self._context: Any = None
+        self._blocked_reason = ""
+
+    async def open(self, *, allowed_domains: list[str], timeout_seconds: float) -> None:
+        async_api = _import_or_fail("playwright.async_api")
+        self._allowed_domains = list(allowed_domains)
+        self._timeout_ms = int(timeout_seconds * 1000)
+        self._playwright = await async_api.async_playwright().start()
+        executable = self._env.get("BROWSE_CHROMIUM_EXECUTABLE_PATH", "").strip() or None
+        self._browser = await self._playwright.chromium.launch(
+            headless=True,
+            executable_path=executable,
+            args=["--disable-dev-shm-usage"],
+        )
+        self._context = await self._browser.new_context(
+            accept_downloads=False,
+            java_script_enabled=False,
+            service_workers="block",
+            ignore_https_errors=False,
+            viewport={"width": 1024, "height": 768},
+        )
+        self._context.set_default_timeout(self._timeout_ms)
+        self._context.set_default_navigation_timeout(self._timeout_ms)
+        await self._context.route("**/*", self._guard_route)
+
+    async def _guard_route(self, route: Any, request: Any) -> None:
+        if request.method.upper() != "GET" or request.resource_type != "document":
+            await route.abort("blockedbyclient")
+            return
+        try:
+            await validate_network_url(request.url, self._allowed_domains)
+        except ValueError as exc:
+            self._blocked_reason = str(exc)
+            await route.abort("blockedbyclient")
+            return
+        await route.continue_()
+
+    async def read(self, url: str, *, max_bytes: int) -> CapturedPage:
+        if self._context is None:
+            raise RuntimeError("Playwright context 未初始化")
+        await validate_network_url(url, self._allowed_domains)
+        page = await self._context.new_page()
+        self._blocked_reason = ""
+        try:
+            try:
+                response = await page.goto(
+                    url,
+                    wait_until="domcontentloaded",
+                    timeout=self._timeout_ms,
+                )
+            except Exception as exc:
+                if self._blocked_reason:
+                    raise ValueError(f"重定向或请求被安全墙拦截：{self._blocked_reason}") from exc
+                raise
+            if response is None:
+                raise RuntimeError("目标站未返回 document 响应")
+            final_url = page.url
+            await validate_network_url(final_url, self._allowed_domains)
+            if response.status >= 400:
+                raise RuntimeError(f"目标站返回 HTTP {response.status}")
+            content_type = (await response.header_value("content-type") or "").lower()
+            if content_type and not any(
+                token in content_type
+                for token in ("text/html", "application/xhtml+xml", "text/plain")
+            ):
+                raise ValueError(f"目标内容类型不允许：{content_type[:80]}")
+            title = await page.evaluate("() => (document.title || '').slice(0, 200)")
+            body = await page.evaluate(
+                "maxChars => {"
+                " const text = document.body?.innerText || '';"
+                " return {text: text.slice(0, maxChars), truncated: text.length > maxChars};"
+                "}",
+                max_bytes,
+            )
+            text = body.get("text", "") if isinstance(body, dict) else ""
+            truncated = isinstance(body, dict) and bool(body.get("truncated"))
+            body_bytes = max_bytes + 1 if truncated else len(text.encode("utf-8"))
+            return CapturedPage(
+                url=final_url,
+                title=title,
+                snippet=_truncate_utf8(text, max_bytes),
+                bytes_read=body_bytes,
+            )
+        finally:
+            await page.close()
+
+    async def close(self) -> None:
+        if self._context is not None:
+            with contextlib.suppress(Exception):
+                await self._context.close()
+            self._context = None
+        if self._browser is not None:
+            with contextlib.suppress(Exception):
+                await self._browser.close()
+            self._browser = None
+        if self._playwright is not None:
+            with contextlib.suppress(Exception):
+                await self._playwright.stop()
+            self._playwright = None
+
+
+def _playwright_executable_path(module: Any, env: Mapping[str, str]) -> str:
+    configured = env.get("BROWSE_CHROMIUM_EXECUTABLE_PATH", "").strip()
+    if configured:
+        return configured
+    with module.sync_playwright() as playwright:
+        return str(playwright.chromium.executable_path)
+
+
+def browse_runtime_status(
+    *,
+    env: Mapping[str, str] | None = None,
+    playwright_module: Any = _PLAYWRIGHT_SENTINEL,
+) -> tuple[bool, str]:
+    """无联网探测 Playwright 包和配套 Chromium 二进制，用于生产 readyz。"""
+    environ = os.environ if env is None else env
+    if playwright_module is None:
+        return False, "Playwright Python 依赖未安装"
+    module = playwright_module
+    if module is _PLAYWRIGHT_SENTINEL:
+        try:
+            module = importlib.import_module("playwright.sync_api")
+        except Exception:
+            return False, "Playwright Python 依赖未安装"
+    try:
+        executable = Path(_playwright_executable_path(module, environ))
+    except Exception as exc:  # noqa: BLE001
+        return False, f"Playwright Chromium 探测失败：{_short_error(str(exc))}"
+    if not executable.is_file() or not os.access(executable, os.X_OK):
+        return False, f"Playwright Chromium 二进制不存在：{executable}"
+    return True, "ready"

@@ -141,7 +141,7 @@ async def test_dispatch_node_parallel_faster_than_serial() -> None:
 @pytest.mark.asyncio
 async def test_dispatch_trace_start_finish_aligned_by_step_id() -> None:
     """SSE trace 逐 step 上报：每个 dispatch step_id 都有 start 与 finish（顺序可乱、id 对齐）。"""
-    await reset_session("t-par-trace")
+    await reset_session(1, "t-par-trace")
     provider = SleepProvider(0.05)
     graph = OrchestratorGraph(
         provider=provider,
@@ -181,7 +181,7 @@ async def test_single_step_failure_keeps_other_steps_alive(
 ) -> None:
     """单步抛异常：watch 步爆炸 → 该步 ok=False（summary 带 status）+ SSE error；
     learn/practice 正常完成；PathPlanner 诚实 FAILED 不冒充执行错误。"""
-    await reset_session("t-par-fail")
+    await reset_session(1, "t-par-fail")
 
     async def boom_design(self, request, evidence, revision_notes=None):  # type: ignore[no-untyped-def]
         raise RuntimeError("storyboard exploded")

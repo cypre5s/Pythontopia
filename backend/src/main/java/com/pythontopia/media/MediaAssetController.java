@@ -31,8 +31,8 @@ import org.springframework.web.bind.annotation.RestController;
  * 多模态媒资端点：
  *
  * <ul>
- *   <li>{@code POST /api/media/image}（需登录）：按 prompt 生成图片，返回 {@link MediaAssetDto}。
- *       无讯飞 apikey 时返回 {@code degraded=true} 的本地占位资产，不阻塞调用链路。
+ *   <li>{@code POST /api/media/image}（需登录）：按 prompt 生成真实图片，返回 {@link MediaAssetDto}；
+ *       缺少讯飞凭据或上游失败时明确报错，不产生占位资产。
  *   <li>{@code GET /api/media/assets/{id}?k=<sig>}（匿名，供 {@code <img>}/{@code <video>} src）：
  *       按 id 流式分发已生成的媒资字节，支持 HTTP Range。
  * </ul>
@@ -46,7 +46,7 @@ import org.springframework.web.bind.annotation.RestController;
  *   <li>query 参数 {@code k} 是该 id 的合法签名（见 {@link MediaAssetUrls}）——所有 API 下发的
  *       直链都自带该签名；
  *   <li>请求带有效 JWT 且调用者就是资产 owner（原生客户端可直接带 Authorization 头）；
- *   <li>资产无 owner（{@code user_id IS NULL} 的系统级/占位资产）。
+ *   <li>资产无 owner（{@code user_id IS NULL} 的系统级资产）。
  * </ol>
  */
 @Validated
@@ -121,7 +121,7 @@ public class MediaAssetController {
 
   private boolean isAuthorized(MediaAsset asset, String signature) {
     if (asset.userId() == null) {
-      // 无 owner 的系统级/占位资产：任何人可读，不含用户生成内容。
+      // 无 owner 的系统级资产：任何人可读，不含用户生成内容。
       return true;
     }
     if (assetUrls.verify(asset.id(), signature)) {

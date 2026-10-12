@@ -3,8 +3,7 @@ package com.pythontopia.media;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * 讯飞「在线语音合成」(TTS) 接入配置。三项凭据齐备时 {@link #isEnabled()} 为 true；缺失时
- * {@code XfyunTtsService} 抛 {@code TTS_DISABLED}，由调用方决定回退纯文本还是跳过音轨。
+ * 讯飞「在线语音合成」(TTS) 配置。本项目不启用配音，服务始终返回 {@code TTS_DISABLED}。
  */
 @ConfigurationProperties(prefix = "pythontopia.tts")
 public record TtsProperties(
@@ -20,8 +19,6 @@ public record TtsProperties(
   }
 
   public boolean isEnabled() {
-    return appId != null && !appId.isBlank()
-        && apiKey != null && !apiKey.isBlank()
-        && apiSecret != null && !apiSecret.isBlank();
+    return false;
   }
 }

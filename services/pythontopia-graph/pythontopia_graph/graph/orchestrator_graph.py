@@ -28,7 +28,7 @@ trace 节点名：understand, decompose | replan, dispatch.<agent>, reflect, ext
 compose_reply（反思重派的 note 以 ``reflect_retry:learn`` 开头）。
 
 LangGraph v1 checkpointer（R-16 升级，https://docs.langchain.com/oss/python/migrate/langgraph-v1）：
-- ``thread_id = "<session_id>:turn-<轮次>"``——**每轮独立 thread**。理由：``trace`` /
+- ``thread_id = "u<user_id>:<session_id>:turn-<轮次>"``——**用户内每轮独立 thread**。理由：``trace`` /
   ``dispatch_results`` 用 ``operator.add`` reducer，若跨轮共用 thread，次轮 ainvoke 会把上一轮
   快照里的列表继续累加（结果污染、SSE 行为变化）；跨轮记忆本就由 orchestrator_session 权威承担，
   checkpoint 的价值定位为「单轮内逐节点快照」：崩溃点可查、按轮回放排错（time-travel）。
@@ -44,6 +44,7 @@ import logging
 import operator
 import os
 import time
+from collections import Counter
 from collections.abc import Awaitable, Callable
 from typing import Annotated, Any
 
@@ -273,13 +274,17 @@ class OrchestratorGraph:
         return graph.compile()
 
     @staticmethod
-    def turn_thread_id(session_id: str, turn_no: int) -> str:
-        """每轮独立 checkpoint thread（见模块 docstring：防 add reducer 跨轮污染）。"""
-        return f"{session_id}:turn-{turn_no}"
+    def turn_thread_id(user_id: int, session_id: str, turn_no: int) -> str:
+        """用户内每轮独立 checkpoint thread；旧裸 session key 不会被新请求采用。"""
+        return f"u{user_id}:{session_id}:turn-{turn_no}"
 
-    async def get_turn_state(self, session_id: str, turn_no: int) -> dict[str, Any]:
+    async def get_turn_state(
+        self, user_id: int, session_id: str, turn_no: int
+    ) -> dict[str, Any]:
         """按轮读取 checkpoint 快照 values（排错 / time-travel / 测试用；无快照返回空 dict）。"""
-        config = {"configurable": {"thread_id": self.turn_thread_id(session_id, turn_no)}}
+        config = {
+            "configurable": {"thread_id": self.turn_thread_id(user_id, session_id, turn_no)}
+        }
         snapshot = await self._compiled.aget_state(config)
         values = getattr(snapshot, "values", None)
         return dict(values) if values else {}
@@ -288,7 +293,7 @@ class OrchestratorGraph:
         self._emit_cb = emit
 
         # 服务端记忆为权威；客户端 history 仅冷启动回退
-        server_history = await get_history(req.session_id)
+        server_history = await get_history(req.user_id, req.session_id)
         merged_history = server_history if server_history else list(req.history)
         merged_req = req.model_copy(update={"history": merged_history})
 
@@ -324,7 +329,11 @@ class OrchestratorGraph:
         }
         # 轮次 = 服务端已存对话轮数（user+assistant 成对，半开容忍）；thread 按轮独立。
         turn_no = len(server_history) // 2
-        config = {"configurable": {"thread_id": self.turn_thread_id(req.session_id, turn_no)}}
+        config = {
+            "configurable": {
+                "thread_id": self.turn_thread_id(req.user_id, req.session_id, turn_no)
+            }
+        }
         final: dict[str, Any] = await self._compiled.ainvoke(initial, config)
 
         response = self._assemble(allowed_set, final)
@@ -475,7 +484,7 @@ class OrchestratorGraph:
         # continue/negotiate 意图复用 stored plan：这类轮次是在已有学习计划上追问或调整，
         # 不应重新 dispatch 四个子 agent，否则一个“下一步做什么”会再次生成全套资源。
         if state["intent"] in {"continue", "negotiate"}:
-            stored_plan = await get_plan(req.session_id)
+            stored_plan = await get_plan(req.user_id, req.session_id)
             if stored_plan:
                 if state["intent"] == "negotiate":
                     plan = self._negotiate(req.user_message, stored_plan)
@@ -607,11 +616,15 @@ class OrchestratorGraph:
         # 供审计与测试还原「先失败一次、切换候选、再失败一次」的完整恢复过程。
         timeline: list[GraphTraceStep] = []
         attempts_by_id: dict[str, int] = {}
+        dispatches_by_agent: Counter[str] = Counter()
+        dispatches_by_tool: Counter[str] = Counter()
 
         async def _run_step(step: PlanStep, focus_hint_extra: str = "") -> None:
             """单 step 全生命周期：start trace → dispatch → error/finish trace（失败不外抛）。"""
             async with semaphore:
                 attempts_by_id[step.id] = attempts_by_id.get(step.id, 0) + 1
+                dispatches_by_agent[step.agent] += 1
+                dispatches_by_tool[step.tool_name or step.resource_type or step.agent] += 1
                 attempt = attempts_by_id[step.id]
                 step_status[step.id] = "active"
                 await _emit_plan_progress()
@@ -900,6 +913,8 @@ class OrchestratorGraph:
                     if trace.node == "replan" and trace.note.startswith("authorized_same_step")
                 ),
                 latency_ms=int((time.monotonic() - dispatch_started) * 1000),
+                by_agent=dict(dispatches_by_agent),
+                by_tool=dict(dispatches_by_tool),
             )
         return result
 
@@ -1303,6 +1318,7 @@ class OrchestratorGraph:
 
     async def _persist(self, req: OrchestratorRequest, response: OrchestratorResponse) -> None:
         await append_turns(
+            req.user_id,
             req.session_id,
             [
                 OrchestratorTurn(role="user", content=req.user_message),
@@ -1311,9 +1327,9 @@ class OrchestratorGraph:
         )
         # 歧义澄清轮不覆盖已存 plan
         if not response.needs_user_input:
-            await set_plan(req.session_id, response.plan)
+            await set_plan(req.user_id, req.session_id, response.plan)
         if response.profile_updates:
-            await merge_profile_signals(req.session_id, response.profile_updates)
+            await merge_profile_signals(req.user_id, req.session_id, response.profile_updates)
 
     async def _dispatch_step(
         self, step: PlanStep, user_id: int = 1, focus_hint_extra: str = ""

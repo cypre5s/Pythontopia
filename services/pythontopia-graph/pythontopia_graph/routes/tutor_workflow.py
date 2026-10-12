@@ -19,6 +19,7 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Any
 
+from autogen_core import CancellationToken
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import Field
@@ -26,6 +27,10 @@ from pydantic import Field
 from pythontopia_graph import sse_agui
 from pythontopia_graph.graph import tutor_workflow_session as session_store
 from pythontopia_graph.graph.tutor_workflow_graph import TutorWorkflowGraph
+from pythontopia_graph.internal_auth import (
+    require_internal_user_id,
+    require_matching_user_id,
+)
 from pythontopia_graph.llm.provider import LlmProvider, provider_from_env
 from pythontopia_graph.nodes.evidence_fetcher import (
     EvidenceFetcher,
@@ -91,10 +96,14 @@ async def tutor_workflow_run_stream(
     body: WorkflowRunEnvelope,
     provider: LlmProvider = Depends(_provider),
     evidence_fetcher: EvidenceFetcher = Depends(_evidence_fetcher),
+    trusted_user_id: int = Depends(require_internal_user_id),
 ) -> StreamingResponse:
+    require_matching_user_id(trusted_user_id, body.user_id)
+
     async def stages() -> AsyncIterator[str]:
         # 节点 trace 经队列真流式推给客户端（卡片生成期间持续可见进度 + 心跳保活）。
         queue: asyncio.Queue[Any] = asyncio.Queue()
+        cancellation_token = CancellationToken()
 
         async def emit(event: str, data: dict[str, Any]) -> None:
             await queue.put(sse_agui.translate(event, data))
@@ -104,9 +113,12 @@ async def tutor_workflow_run_stream(
                 if body.restore_phase:
                     # Java 投影回放：进程内尚无会话时按持久化快照恢复阶段（已存在则忽略）。
                     await session_store.restore_phase(
-                        body.session_id, body.restore_phase, body.restore_seq
+                        trusted_user_id,
+                        body.session_id,
+                        body.restore_phase,
+                        body.restore_seq,
                     )
-                session = await session_store.get_state(body.session_id)
+                session = await session_store.get_state(trusted_user_id, body.session_id)
                 graph = TutorWorkflowGraph(provider, evidence_fetcher, emit=emit)
                 request = WorkflowRunRequest.model_validate(
                     body.model_dump(exclude={"restore_phase", "restore_seq"})
@@ -118,7 +130,8 @@ async def tutor_workflow_run_stream(
                         "last_cards": session.cards,
                         "chat_history": session.chat_history,
                         "next_practice_direction": _last_direction(session.cards),
-                    }
+                    },
+                    cancellation_token=cancellation_token,
                 )
                 return {"state": dict(state), "session_phase": session.phase}
             finally:
@@ -162,6 +175,7 @@ async def tutor_workflow_run_stream(
                 extra = {"next_practice_direction": card.get("next_practice_direction", "")}
             new_phase = state.get("new_phase") or outcome["session_phase"]
             seq = await session_store.commit_run(
+                trusted_user_id,
                 body.session_id,
                 phase=new_phase,
                 card_key=card_key,
@@ -192,7 +206,12 @@ async def tutor_workflow_run_stream(
             )
         finally:
             if not task.done():
+                cancellation_token.cancel()
                 task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
 
     return StreamingResponse(
         stages(),

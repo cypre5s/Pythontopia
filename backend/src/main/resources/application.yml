@@ -24,12 +24,16 @@ server:
 
 pythontopia:
   judge:
-    # 判题用的 Python 解释器。
+    # 不可信学生代码默认交给独立 Piston/Isolate；未配置服务时判题 fail closed。
+    provider: ${PYT_JUDGE_PROVIDER:piston}
+    # AST 语法检查器使用的 Python 解释器（不运行学生提交）。
     python: ${PYT_JUDGE_PYTHON:python3}
-    # 判题沙箱网络隔离：auto=宿主支持非特权 user namespace 时用 `unshare -r -n` 切断网络（推荐，
-    # 阻断 SSRF 内网 / 窃取云元数据 / 数据外传）；none=关闭。容器内被默认 seccomp 拦截 unshare 时
-    # 自动回退为无隔离子进程并记 WARN（见 SubprocessPythonSandbox）。
-    isolation: ${PYT_JUDGE_ISOLATION:auto}
+    piston:
+      base-url: ${PYT_PISTON_URL:}
+      python-version: ${PYT_PISTON_PYTHON_VERSION:3.11.13}
+      auth-token: ${PYT_PISTON_AUTH_TOKEN:}
+      connect-timeout-ms: ${PYT_PISTON_CONNECT_TIMEOUT_MS:3000}
+      read-timeout-ms: ${PYT_PISTON_READ_TIMEOUT_MS:10000}
   services:
     graphUrl: ${PYT_GRAPH_URL:http://localhost:18091}
     ragUrl: ${PYT_RAG_URL:http://localhost:18092}
@@ -93,7 +97,7 @@ pythontopia:
     dailyLimitPerUser: 100
   image:
     # 讯飞星火文生图：复用与 TTS / Spark LLM 相同的讯飞控制台应用凭据。
-    # 任一缺失则降级为本地占位图（degraded=true），保证无 apikey 时多模态验收链路不被阻塞。
+    # 任一缺失返回 503，上游失败返回 502；不生成或落库占位图片。
     appId: ${PYT_SPARK_APP_ID:}
     apiKey: ${PYT_SPARK_API_KEY:}
     apiSecret: ${PYT_SPARK_API_SECRET:}
@@ -147,3 +151,5 @@ pythontopia:
     videoDir: ${PYT_COURSEPACK_VIDEO_DIR:./data/course-pack-43/videos}
     # 视频清单（入库；空数组表示当前课程无任务点视频）。由 crawl_chaoxing_videos.py 生成/维护。
     videoManifest: ${PYT_COURSEPACK_VIDEO_MANIFEST:./data/course-pack-43/video_manifest.json}
+    # 由 transcribe_videos.py 使用 faster-whisper 从真实 MP4 生成；看课页答疑按播放时刻读取。
+    videoTranscripts: ${PYT_COURSEPACK_VIDEO_TRANSCRIPTS:./data/course-pack-43/video_transcripts.json}

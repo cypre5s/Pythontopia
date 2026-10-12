@@ -34,9 +34,7 @@ import org.springframework.stereotype.Service;
  * 讯飞星火「文生图」服务，把一段文字 prompt 生成知识点图解/插画。鉴权范式复刻
  * {@link XfyunTtsService}（HMAC-SHA256，{@code host date request-line}）。
  *
- * <p><b>降级</b>：未配置 apikey（{@link ImageProperties#isEnabled()}=false）或上游失败时，落到
- * {@link MediaPlaceholderFactory} 生成的本地占位 PNG，并以 {@code degraded=true} 落库，保证无密钥时
- * 多模态链路不被阻塞。配置真实密钥后自动切换为讯飞真实生成（{@code degraded=false}）。
+ * <p>未配置凭据或上游失败时 fail closed，不生成占位图片、不写伪造媒资。
  */
 @Service
 public class XfyunImageService {
@@ -48,7 +46,6 @@ public class XfyunImageService {
 
   private final ImageProperties properties;
   private final ObjectMapper objectMapper;
-  private final MediaPlaceholderFactory placeholderFactory;
   private final MediaAssetStorage storage;
   private final MediaAssetRepository repository;
 
@@ -57,19 +54,17 @@ public class XfyunImageService {
   public XfyunImageService(
       ImageProperties properties,
       ObjectMapper objectMapper,
-      MediaPlaceholderFactory placeholderFactory,
       MediaAssetStorage storage,
       MediaAssetRepository repository) {
     this.properties = properties;
     this.objectMapper = objectMapper;
-    this.placeholderFactory = placeholderFactory;
     this.storage = storage;
     this.repository = repository;
   }
 
   /**
-   * 生成图片并落库为 {@link MediaAsset}。{@code label} 是叠加在占位图上的 ASCII 短标签（如 KC code，
-   * 可空）；{@code kcCodes} 仅用于审计/检索关联。
+   * 生成真实图片并落库为 {@link MediaAsset}。{@code label} 为兼容现有客户端保留；{@code kcCodes}
+   * 用于审计/检索关联。
    */
   public MediaAsset generate(Long userId, String prompt, String label, List<String> kcCodes) {
     if (prompt == null || prompt.isBlank()) {
@@ -79,30 +74,22 @@ public class XfyunImageService {
       checkRateLimit(userId);
     }
 
-    if (properties.isEnabled()) {
-      try {
-        byte[] jpeg = callXfyun(userId, prompt);
-        String file = storage.write("jpg", jpeg);
-        return repository.insert(
-            userId, MediaAssetKind.IMAGE, prompt, file, "image/jpeg", false, "XFYUN", kcCodes, null);
-      } catch (Exception ex) {
-        // 上游失败不阻塞业务：记录后降级到本地占位（与无密钥同路径）。
-        log.warn("Xfyun image generation failed, falling back to placeholder: {}", ex.getMessage());
-      }
+    if (!properties.isEnabled()) {
+      throw new BusinessException(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "IMAGE_PROVIDER_UNAVAILABLE",
+          "图片生成服务尚未配置，请联系管理员");
     }
-
-    byte[] png = placeholderFactory.renderPng(prompt, label);
-    String file = storage.write("png", png);
-    return repository.insert(
-        userId,
-        MediaAssetKind.IMAGE,
-        prompt,
-        file,
-        "image/png",
-        true,
-        "PLACEHOLDER",
-        kcCodes,
-        null);
+    try {
+      byte[] jpeg = callXfyun(userId, prompt);
+      String file = storage.write("jpg", jpeg);
+      return repository.insert(
+          userId, MediaAssetKind.IMAGE, prompt, file, "image/jpeg", false, "XFYUN", kcCodes, null);
+    } catch (Exception ex) {
+      log.warn("Xfyun image generation failed: {}", ex.getMessage());
+      throw new BusinessException(
+          HttpStatus.BAD_GATEWAY, "IMAGE_PROVIDER_FAILED", "图片生成服务暂时不可用，请稍后重试");
+    }
   }
 
   private byte[] callXfyun(Long userId, String prompt) throws Exception {

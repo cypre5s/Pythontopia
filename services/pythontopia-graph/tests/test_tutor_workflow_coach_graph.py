@@ -175,7 +175,7 @@ async def test_coach_decision_controls_generated_card() -> None:
 @pytest.mark.asyncio
 async def test_stream_result_exposes_coach_decision_and_effective_event() -> None:
     session_id = "wf-coach-route"
-    await session_store.reset_session(session_id)
+    await session_store.reset_session(1, session_id)
     response = await tutor_workflow_run_stream(
         WorkflowRunEnvelope(
             session_id=session_id,
@@ -194,6 +194,7 @@ async def test_stream_result_exposes_coach_decision_and_effective_event() -> Non
         ),
         provider=JsonStubProvider([TRACE_CARD]),
         evidence_fetcher=StaticEvidenceFetcher([]),
+        trusted_user_id=1,
     )
 
     events = await _collect_sse(response)

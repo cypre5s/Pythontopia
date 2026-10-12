@@ -1,7 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import TutorVisualAids, { type TutorVisualAid } from '@/components/tutor/TutorVisualAids.vue';
 import { sanitizeSvgMarkup } from '@/utils/sanitizeSvg';
+
+vi.mock('@/api/media', () => ({
+  generateImage: vi.fn(),
+}));
 
 const VALID_SVG =
   '<svg viewBox="0 0 100 60" xmlns="http://www.w3.org/2000/svg">' +
@@ -62,6 +66,16 @@ describe('TutorVisualAids · ascii / svg 图解', () => {
     const wrapper = mount(TutorVisualAids, { props: { aids } });
     await flushPromises();
 
+    expect(wrapper.find('[data-testid="tutor-visual-aids"]').exists()).toBe(false);
+  });
+
+  it('兼容旧 image aid 但不再调用独立文生图接口', async () => {
+    const { generateImage } = await import('@/api/media');
+    const aids: TutorVisualAid[] = [{ kind: 'image', image_prompt: 'draw a list' }];
+    const wrapper = mount(TutorVisualAids, { props: { aids } });
+    await flushPromises();
+
+    expect(generateImage).not.toHaveBeenCalled();
     expect(wrapper.find('[data-testid="tutor-visual-aids"]').exists()).toBe(false);
   });
 });

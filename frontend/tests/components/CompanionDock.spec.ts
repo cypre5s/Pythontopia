@@ -9,11 +9,6 @@ const traces = ref<Array<{ node: string; phase?: 'start' | 'finish'; status: str
 const tokens = ref('');
 const result = ref<unknown>(null);
 const status = ref('idle');
-const voiceSupported = ref(true);
-const voiceListening = ref(false);
-const voiceTranscript = ref('');
-const voiceStartSpy = vi.fn();
-const voiceStopSpy = vi.fn();
 
 vi.mock('@/composables/useSseStream', () => ({
   useSseStream: () => ({
@@ -26,36 +21,6 @@ vi.mock('@/composables/useSseStream', () => ({
     abort: vi.fn(),
     start: startSpy,
   }),
-}));
-
-vi.mock('@/composables/useVoiceInput', () => ({
-  useVoiceInput: () => ({
-    supported: voiceSupported,
-    listening: voiceListening,
-    transcript: voiceTranscript,
-    start: voiceStartSpy,
-    stop: voiceStopSpy,
-    _recognition: null,
-  }),
-}));
-
-const recorderSupported = ref(true);
-const recorderRecording = ref(false);
-const recorderStartSpy = vi.fn(async () => true);
-const recorderStopSpy = vi.fn(async () => new Blob(['a'], { type: 'audio/webm' }));
-
-vi.mock('@/composables/useAudioRecorder', () => ({
-  useAudioRecorder: () => ({
-    supported: recorderSupported,
-    recording: recorderRecording,
-    start: recorderStartSpy,
-    stop: recorderStopSpy,
-  }),
-}));
-
-const transcribeAudioSpy = vi.fn(async () => ({ text: '录音转写的问题', degraded: false }));
-vi.mock('@/api/media', () => ({
-  transcribeAudio: (...args: unknown[]) => transcribeAudioSpy(...args),
 }));
 
 vi.mock('@/api/bugMine', () => ({
@@ -124,16 +89,6 @@ describe('CompanionDock', () => {
     tokens.value = '';
     result.value = null;
     status.value = 'idle';
-    voiceSupported.value = true;
-    voiceListening.value = false;
-    voiceTranscript.value = '';
-    voiceStartSpy.mockClear();
-    voiceStopSpy.mockClear();
-    recorderSupported.value = true;
-    recorderRecording.value = false;
-    recorderStartSpy.mockClear();
-    recorderStopSpy.mockClear();
-    transcribeAudioSpy.mockClear();
     vi.mocked(getBugMineEchoes).mockResolvedValue([]);
     vi.mocked(getInsights).mockResolvedValue([]);
   });
@@ -169,19 +124,13 @@ describe('CompanionDock', () => {
     expect(pushSpy).toHaveBeenCalledWith({ path: '/bug-mine' });
   });
 
-  it('starts voice input and writes transcript into the ask bar', async () => {
+  it('does not expose browser or server speech recognition controls', async () => {
     const wrapper = mountDock();
-    const store = useCompanionStore();
-    store.open = true;
+    useCompanionStore().open = true;
     await flushPromises();
 
-    await wrapper.find('[data-testid="companion-mic"]').trigger('click');
-    expect(voiceStartSpy).toHaveBeenCalledTimes(1);
-
-    voiceTranscript.value = '语音里的问题';
-    await nextTick();
-    expect((wrapper.find('[data-testid="companion-input"]').element as HTMLInputElement).value)
-      .toBe('语音里的问题');
+    expect(wrapper.find('[data-testid="companion-mic"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="companion-record"]').exists()).toBe(false);
   });
 
   it('adds pasted images as thumbnails and sends them with the question', async () => {
@@ -241,34 +190,6 @@ describe('CompanionDock', () => {
     expect(wrapper.find('[data-testid="companion-nudge"]').exists()).toBe(true);
     await wrapper.find('[data-testid="companion-nudge-close"]').trigger('click');
     expect(wrapper.find('[data-testid="companion-nudge"]').exists()).toBe(false);
-  });
-
-  it('falls back to server ASR recording when Web Speech is unsupported', async () => {
-    voiceSupported.value = false;
-    const wrapper = mountDock();
-    const store = useCompanionStore();
-    store.open = true;
-    await flushPromises();
-
-    // Web Speech 不支持：隐藏「说」按钮，露出录音回退「录」按钮。
-    expect(wrapper.find('[data-testid="companion-mic"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="companion-record"]').exists()).toBe(true);
-
-    // 第一次点击：开始录音。
-    await wrapper.find('[data-testid="companion-record"]').trigger('click');
-    expect(recorderStartSpy).toHaveBeenCalledTimes(1);
-
-    // 进入录音态后再次点击：停止 → 转写 → 回填输入框。
-    recorderRecording.value = true;
-    await nextTick();
-    await wrapper.find('[data-testid="companion-record"]').trigger('click');
-    await flushPromises();
-
-    expect(recorderStopSpy).toHaveBeenCalledTimes(1);
-    expect(transcribeAudioSpy).toHaveBeenCalledTimes(1);
-    expect(
-      (wrapper.find('[data-testid="companion-input"]').element as HTMLInputElement).value,
-    ).toBe('录音转写的问题');
   });
 
   it('shows a verified badge when code_runner finishes', async () => {

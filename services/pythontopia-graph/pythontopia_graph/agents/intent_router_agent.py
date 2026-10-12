@@ -558,6 +558,7 @@ class IntentRouterAgent:
     async def route(self, req: IntentRouteRequest) -> IntentRouteResponse:
         """路由主流程：确定性预判 → 受治理 LLM（失败降级关键词路由）→ 校验与 scope 收缩。"""
         route_started = time.monotonic()
+        fallback_used = False
         allowed = {kc.code for kc in req.course_kcs}
 
         data = self._compound_preroute(req)
@@ -580,6 +581,7 @@ class IntentRouterAgent:
                 fallback=_keyword_fallback,
                 breaker_key="provider",
             )
+            fallback_used = observation.fallback_used
             data = (
                 observation.value
                 if observation.ok and isinstance(observation.value, dict)
@@ -597,6 +599,7 @@ class IntentRouterAgent:
         suggested = self._ground(data.get("kc_codes"), allowed)
 
         if intent is None:
+            fallback_used = True
             fallback = self._keyword_payload(req)
             intent = str(fallback["intent"])
             confidence = min(confidence, 0.5)
@@ -686,6 +689,7 @@ class IntentRouterAgent:
         record_route(
             route_decision,
             latency_ms=int((time.monotonic() - route_started) * 1000),
+            fallback_used=fallback_used,
         )
         # 旧字段继续在线，并以统一合同的确定性策略门为准，避免前端和新执行器判断分叉。
         metadata["needs_clarification"] = route_decision.task.needs_clarification

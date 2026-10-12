@@ -105,4 +105,20 @@ class JwtAuthenticationFilterTest {
 
     verifyNoInteractions(userRepository);
   }
+
+  @Test
+  @DisplayName("无效 Bearer：清理登录态并继续到统一认证入口")
+  void rejectsInvalidBearerWithoutEscapingFilter() throws Exception {
+    when(jwtService.parse("bad-token")).thenThrow(new JwtValidationException("Invalid token"));
+    MockHttpServletRequest request = new MockHttpServletRequest();
+    request.addHeader("Authorization", "Bearer bad-token");
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+
+    filter.doFilter(request, response, chain);
+
+    assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    org.mockito.Mockito.verify(chain).doFilter(request, response);
+    verifyNoInteractions(userRepository);
+  }
 }

@@ -1,18 +1,14 @@
 """reference_solution 自洽审查：沙箱内须在超时内通过全部 test_cases。
 
-POSIX 用 ``resource.setrlimit`` 限 CPU/内存；禁网依赖部署层隔离，代码侧扫描 forbidden imports。
-Windows 无 ``resource`` 时仅依赖 subprocess 超时。
+所有代码执行都委托给隔离的 Piston 服务。配置缺失或服务不可用时 fail closed，
+不在 Graph worker 中执行 reference_solution。
 """
 
 from __future__ import annotations
 
-import platform
-import subprocess
-import sys
-import tempfile
-from pathlib import Path
 from typing import Iterable
 
+from .execution_sandbox import run_python
 from .schemas import BossProblem, ReviewIssue, ReviewVerdict
 
 FORBIDDEN_IMPORTS = (
@@ -31,13 +27,10 @@ FORBIDDEN_IMPORTS = (
 )
 
 DEFAULT_TIMEOUT_SEC = 5
-RLIMIT_CPU_SEC = 5
-RLIMIT_AS_BYTES = 256 * 1024 * 1024
 
 
 def self_test_problem(
     problem: BossProblem,
-    python_executable: str | None = None,
     timeout_sec: int = DEFAULT_TIMEOUT_SEC,
 ) -> ReviewVerdict:
     """在沙箱中运行 ``reference_solution`` 并逐条比对 test_cases。"""
@@ -54,73 +47,56 @@ def self_test_problem(
         )
         return ReviewVerdict(review="self_test", passed=False, issues=issues)
 
-    interpreter = python_executable or sys.executable
-    preexec = _maybe_rlimit_preexec()
-
-    with tempfile.TemporaryDirectory(prefix="pyt-boss-") as tmpdir:
-        script_path = Path(tmpdir) / "solution.py"
-        script_path.write_text(problem.reference_solution, encoding="utf-8")
-
-        for i, tc in enumerate(problem.test_cases):
-            try:
-                result = subprocess.run(
-                    [interpreter, str(script_path)],
-                    input=tc.input,
-                    capture_output=True,
-                    text=True,
-                    timeout=timeout_sec,
-                    env={"PYTHONIOENCODING": "utf-8"},
-                    preexec_fn=preexec,
-                    cwd=tmpdir,
+    for i, tc in enumerate(problem.test_cases):
+        result = run_python(problem.reference_solution, tc.input, timeout_sec)
+        if result.runtime_error:
+            issues.append(
+                ReviewIssue(
+                    review="self_test",
+                    severity="error",
+                    code="sandbox_unavailable",
+                    message="isolated Python executor is unavailable",
                 )
-            except subprocess.TimeoutExpired:
-                issues.append(
-                    ReviewIssue(
-                        review="self_test",
-                        severity="error",
-                        code="reference_timeout",
-                        message=f"reference solution timeout on test_case[{i}] (>{timeout_sec}s)",
-                    )
+            )
+            return ReviewVerdict(review="self_test", passed=False, issues=issues)
+        if result.timed_out:
+            issues.append(
+                ReviewIssue(
+                    review="self_test",
+                    severity="error",
+                    code="reference_timeout",
+                    message=f"reference solution timeout on test_case[{i}] (>{timeout_sec}s)",
                 )
-                return ReviewVerdict(review="self_test", passed=False, issues=issues)
-            except FileNotFoundError as exc:
-                issues.append(
-                    ReviewIssue(
-                        review="self_test",
-                        severity="error",
-                        code="interpreter_missing",
-                        message=f"python interpreter not found: {exc}",
-                    )
+            )
+            return ReviewVerdict(review="self_test", passed=False, issues=issues)
+        if result.exit_code != 0:
+            issues.append(
+                ReviewIssue(
+                    review="self_test",
+                    severity="error",
+                    code="reference_nonzero_exit",
+                    message=(
+                        f"test_case[{i}] reference exit={result.exit_code}; "
+                        f"stderr={result.stderr[:240]}"
+                    ),
                 )
-                return ReviewVerdict(review="self_test", passed=False, issues=issues)
-            if result.returncode != 0:
-                issues.append(
-                    ReviewIssue(
-                        review="self_test",
-                        severity="error",
-                        code="reference_nonzero_exit",
-                        message=(
-                            f"test_case[{i}] reference exit={result.returncode}; "
-                            f"stderr={result.stderr[:240]}"
-                        ),
-                    )
+            )
+            return ReviewVerdict(review="self_test", passed=False, issues=issues)
+        actual = result.stdout.strip()
+        expected = tc.expected_output.strip()
+        if actual != expected:
+            issues.append(
+                ReviewIssue(
+                    review="self_test",
+                    severity="error",
+                    code="reference_output_mismatch",
+                    message=(
+                        f"test_case[{i}] input={tc.input!r}: "
+                        f"expected={expected!r}, got={actual!r}"
+                    ),
                 )
-                return ReviewVerdict(review="self_test", passed=False, issues=issues)
-            actual = result.stdout.strip()
-            expected = tc.expected_output.strip()
-            if actual != expected:
-                issues.append(
-                    ReviewIssue(
-                        review="self_test",
-                        severity="error",
-                        code="reference_output_mismatch",
-                        message=(
-                            f"test_case[{i}] input={tc.input!r}: "
-                            f"expected={expected!r}, got={actual!r}"
-                        ),
-                    )
-                )
-                return ReviewVerdict(review="self_test", passed=False, issues=issues)
+            )
+            return ReviewVerdict(review="self_test", passed=False, issues=issues)
 
     return ReviewVerdict(review="self_test", passed=True, issues=issues)
 
@@ -153,28 +129,6 @@ def _matches(name: str) -> bool:
         if name == forbidden or name.startswith(forbidden + "."):
             return True
     return False
-
-
-def _maybe_rlimit_preexec():
-    """POSIX 用 resource 模块限制 CPU / 内存；Windows / 异常时返回 None。"""
-    if platform.system() == "Windows":
-        return None
-    try:
-        import resource  # type: ignore
-    except ImportError:
-        return None
-
-    def _apply() -> None:
-        try:
-            resource.setrlimit(resource.RLIMIT_CPU, (RLIMIT_CPU_SEC, RLIMIT_CPU_SEC))
-        except (ValueError, OSError):
-            pass
-        try:
-            resource.setrlimit(resource.RLIMIT_AS, (RLIMIT_AS_BYTES, RLIMIT_AS_BYTES))
-        except (ValueError, OSError):
-            pass
-
-    return _apply
 
 
 def list_forbidden_imports() -> Iterable[str]:

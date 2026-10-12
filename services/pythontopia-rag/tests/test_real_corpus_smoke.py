@@ -2,7 +2,8 @@
 
 不依赖 Postgres：直接读 data/course-pack-43/json 种子；种子缺失（如服务目录单独构建）时跳过。
 
-烟测按**生产主路**配置跑，不放水：
+烟测按**生产查询参数与检索流程**跑，不放水；向量部分使用离线确定性 Hash，
+它必须显式标记为 degraded，生产 ``/readyz`` 会拒绝该配置：
 - ``min_score`` 用 ``RagQueryRequest`` 的默认值（0.3），不再用 0.0 关掉阈值；
 - 灌入 ``course_kc.page_refs`` 派生的真实 ``kc_codes``，并按 KC 锚定检索（走 KC/前置扩展路）；
 - 断言命中页的 ``page_id`` 落在对应 KC 的 ``page_refs`` 内（引用正确性，而不仅是正文含主题词）；
@@ -108,7 +109,8 @@ async def _build() -> tuple[HashEmbedder, InMemoryVectorStore, Bm25Index, list[I
         source=InMemoryPageSource(pages=pages), embedder=embedder, store=store, bm25=bm25
     )
     assert result.built_chunks >= len(pages)
-    assert result.degraded is False
+    assert result.degraded is True
+    assert result.fallback_reason == "non-semantic hash embedder"
     return embedder, store, bm25, pages
 
 

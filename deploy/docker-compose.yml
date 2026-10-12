@@ -40,33 +40,18 @@ services:
       PYT_DB_URL: jdbc:postgresql://postgres:5432/pythontopia
       PYT_DB_USERNAME: ${PYT_DB_USERNAME:-pytopia}
       PYT_DB_PASSWORD: ${PYT_DB_PASSWORD:-pytopia_dev_password}
-      PYT_JWT_SECRET: ${PYT_JWT_SECRET:-replace-with-32-char-secret-please}
-      PYT_TEACHER_INVITE_CODE: ${PYT_TEACHER_INVITE_CODE:-pytopia-teacher}
+      PYT_JWT_SECRET: ${PYT_JWT_SECRET:?请在 deploy/.env 配置 PYT_JWT_SECRET}
+      PYT_TEACHER_INVITE_CODE: ${PYT_TEACHER_INVITE_CODE:?请在 deploy/.env 配置 PYT_TEACHER_INVITE_CODE}
       PYTHONTOPIA_SERVICES_GRAPHURL: http://pythontopia-graph:18091
       PYTHONTOPIA_SERVICES_RAGURL: http://pythontopia-rag:18092
-      PYTHONTOPIA_SERVICES_RAGADMINTOKEN: ${PYT_RAG_ADMIN_TOKEN:-pytopia-rag-admin}
+      PYTHONTOPIA_SERVICES_RAGADMINTOKEN: ${PYT_RAG_ADMIN_TOKEN:?请在 deploy/.env 配置 PYT_RAG_ADMIN_TOKEN}
       PYT_ROUTE_EXECUTION_SECRET: ${PYT_ROUTE_EXECUTION_SECRET:-}
-      # 多模态：文生图/TTS/看图答疑全部复用同一套讯飞 PYT_SPARK_* 凭据。此前后端容器未注入
-      # 这些变量，导致 ImageProperties/TtsProperties.isEnabled()=false 而恒走本地占位降级；
-      # 在此补齐后配置真实密钥即可切换为讯飞真实生成（缺失仍自动降级，不阻塞链路）。
-      PYT_SPARK_APP_ID: ${PYT_SPARK_APP_ID:-}
-      PYT_SPARK_API_KEY: ${PYT_SPARK_API_KEY:-}
-      PYT_SPARK_API_SECRET: ${PYT_SPARK_API_SECRET:-}
-      PYT_SPARK_IMAGE_URL: ${PYT_SPARK_IMAGE_URL:-https://spark-api.cn-huabei-1.xf-yun.com/v2.1/tti}
-      PYT_SPARK_IMAGE_UNDERSTANDING_URL: ${PYT_SPARK_IMAGE_UNDERSTANDING_URL:-wss://spark-api.cn-huabei-1.xf-yun.com/v2.1/image}
-      PYT_SPARK_IMAGE_UNDERSTANDING_DOMAIN: ${PYT_SPARK_IMAGE_UNDERSTANDING_DOMAIN:-imagev3}
-      PYT_MEDIA_GENERATED_DIR: ${PYT_MEDIA_GENERATED_DIR:-./data/course-pack-43/generated-media}
-      # 讯飞代理（关键踩坑）：部分宿主网络用 fake-ip DNS（如 198.18.x.x），Java HttpClient 默认
-      # 不读 HTTPS_PROXY，会致文生图(TTI)/语音合成(TTS) connect timeout 而恒降级。bridge 网络下
-      # 容器经 host.docker.internal 访问宿主代理（PYT_XFYUN_PROXY_PORT，默认 7892），nonProxyHosts
-      # 排除容器内服务名直连。代理端口留空（设 PYT_XFYUN_PROXY_PORT=""）则退化为 -Dfile.encoding 直连。
+      PYT_JUDGE_PROVIDER: ${PYT_JUDGE_PROVIDER:-piston}
+      PYT_PISTON_URL: ${PYT_PISTON_URL:-}
+      PYT_PISTON_PYTHON_VERSION: ${PYT_PISTON_PYTHON_VERSION:-3.11.13}
+      PYT_PISTON_AUTH_TOKEN: ${PYT_PISTON_AUTH_TOKEN:-}
       JAVA_OPTS: >-
         -XX:MaxRAMPercentage=70 -Dfile.encoding=UTF-8
-        -Dhttps.proxyHost=${PYT_XFYUN_PROXY_HOST:-host.docker.internal}
-        -Dhttps.proxyPort=${PYT_XFYUN_PROXY_PORT:-7892}
-        -Dhttp.proxyHost=${PYT_XFYUN_PROXY_HOST:-host.docker.internal}
-        -Dhttp.proxyPort=${PYT_XFYUN_PROXY_PORT:-7892}
-        -Dhttp.nonProxyHosts=localhost|127.0.0.1|postgres|redis|pythontopia-graph|pythontopia-rag
     volumes:
       # NPC 人格/对话种子（关键踩坑）：NpcPersonaService.seedFromMeta 只按 CWD 找 data/npcs
       # 与 ../data/npcs，而镜像 WORKDIR=/app 且只 COPY 了 jar——不挂这份数据时 npc_persona 表
@@ -94,37 +79,34 @@ services:
     volumes:
       - ../services/pythontopia-graph/pythontopia_graph:/app/pythontopia_graph:ro
     environment:
-      PYT_LLM_PROVIDER: ${PYT_LLM_PROVIDER:-dryrun}
-      PYT_OPENAI_BASE_URL: ${PYT_OPENAI_BASE_URL:-}
+      PYT_LLM_PROVIDER: ${PYT_LLM_PROVIDER:-openai_compat}
+      PYT_OPENAI_BASE_URL: ${PYT_OPENAI_BASE_URL:-https://api.deepseek.com}
       PYT_OPENAI_API_KEY: ${PYT_OPENAI_API_KEY:-}
-      PYT_OPENAI_MODEL: ${PYT_OPENAI_MODEL:-}
+      PYT_OPENAI_MODEL: ${PYT_OPENAI_MODEL:-deepseek-v4-pro}
       # 快档模型（仅 NPC 寒暄/对话 NpcDialogAgent 用 model_tier=fast 选用）；留空回落默认档。
-      PYT_OPENAI_MODEL_FAST: ${PYT_OPENAI_MODEL_FAST:-}
-      PYT_OPENAI_MODEL_VISION: ${PYT_OPENAI_MODEL_VISION:-}
-      # 本地微调 vLLM adapter：仅用于结构化 JSON Agent 调用；不可用时 graph 自动回退原 provider。
-      PYT_FINE_TUNED_LLM_ENABLED: ${PYT_FINE_TUNED_LLM_ENABLED:-false}
-      PYT_FINE_TUNED_BASE_URL: ${PYT_FINE_TUNED_BASE_URL:-http://127.0.0.1:18094/v1}
-      PYT_FINE_TUNED_API_KEY: ${PYT_FINE_TUNED_API_KEY:-local-dev-token}
-      PYT_FINE_TUNED_MODEL: ${PYT_FINE_TUNED_MODEL:-pythontopia-qwen35-e1-lora}
+      PYT_OPENAI_MODEL_FAST: ${PYT_OPENAI_MODEL_FAST:-deepseek-flash}
+      PYT_OPENAI_MODEL_VISION: ${PYT_OPENAI_MODEL_VISION:-deepseek-flash}
       # R-13：OpenAiCompatProvider 读取无前缀的 OPENAI_*/LLM_* env，
       # 这里把带 PYT_ 前缀的容器入口映射成 provider 期望的形态，
-      # 同时保留 Alethicode .env 加载兜底（见 provider.load_alethicode_env）。
-      OPENAI_BASE_URL: ${PYT_OPENAI_BASE_URL:-}
+      OPENAI_BASE_URL: ${PYT_OPENAI_BASE_URL:-https://api.deepseek.com}
       OPENAI_API_KEY: ${PYT_OPENAI_API_KEY:-}
-      OPENAI_MODEL: ${PYT_OPENAI_MODEL:-}
-      OPENAI_MODEL_FAST: ${PYT_OPENAI_MODEL_FAST:-}
-      OPENAI_MODEL_VISION: ${PYT_OPENAI_MODEL_VISION:-}
-      LLM_BASE_URL: ${PYT_OPENAI_BASE_URL:-}
+      OPENAI_MODEL: ${PYT_OPENAI_MODEL:-deepseek-v4-pro}
+      OPENAI_MODEL_FAST: ${PYT_OPENAI_MODEL_FAST:-deepseek-flash}
+      OPENAI_MODEL_VISION: ${PYT_OPENAI_MODEL_VISION:-deepseek-flash}
+      LLM_BASE_URL: ${PYT_OPENAI_BASE_URL:-https://api.deepseek.com}
       LLM_API_KEY: ${PYT_OPENAI_API_KEY:-}
-      LLM_MODEL: ${PYT_OPENAI_MODEL:-}
-      LLM_MODEL_FAST: ${PYT_OPENAI_MODEL_FAST:-}
-      LLM_MODEL_VISION: ${PYT_OPENAI_MODEL_VISION:-}
-      PYT_SPARK_APP_ID: ${PYT_SPARK_APP_ID:-}
-      PYT_SPARK_API_KEY: ${PYT_SPARK_API_KEY:-}
-      PYT_SPARK_API_SECRET: ${PYT_SPARK_API_SECRET:-}
-      PYT_SPARK_MODEL_ID: ${PYT_SPARK_MODEL_ID:-}
+      LLM_MODEL: ${PYT_OPENAI_MODEL:-deepseek-v4-pro}
+      LLM_MODEL_FAST: ${PYT_OPENAI_MODEL_FAST:-deepseek-flash}
+      LLM_MODEL_VISION: ${PYT_OPENAI_MODEL_VISION:-deepseek-flash}
       PYT_RAG_URL: http://127.0.0.1:18092
       PYT_RAG_ADMIN_TOKEN: ${PYT_RAG_ADMIN_TOKEN:-pytopia-rag-admin}
+      PYT_PISTON_URL: ${PYT_PISTON_URL:-}
+      PYT_PISTON_PYTHON_VERSION: ${PYT_PISTON_PYTHON_VERSION:-3.11.13}
+      PYT_PISTON_AUTH_TOKEN: ${PYT_PISTON_AUTH_TOKEN:-}
+      # 与生产同一真实 Playwright 只读执行路径；单并发避免开发机被 Chromium 抢占。
+      BROWSE_ENABLED: "on"
+      BROWSE_MAX_CONCURRENCY: "1"
+      BROWSE_ALLOWED_DOMAINS: ${BROWSE_ALLOWED_DOMAINS:-}
       PYT_BILI_PROXY: ${PYT_BILI_PROXY:-http://127.0.0.1:7892}
       NO_PROXY: localhost,127.0.0.1,pythontopia-rag,postgres,redis
       no_proxy: localhost,127.0.0.1,pythontopia-rag,postgres,redis
@@ -157,12 +139,7 @@ services:
     environment:
       PYT_DB_URL: postgresql://${PYT_DB_USERNAME:-pytopia}:${PYT_DB_PASSWORD:-pytopia_dev_password}@postgres:5432/pythontopia
       PYT_RAG_ADMIN_TOKEN: ${PYT_RAG_ADMIN_TOKEN:-pytopia-rag-admin}
-      PYT_RAG_EMBEDDER: ${PYT_RAG_EMBEDDER:-zhipu}
-      PYT_RAG_EMBEDDING_FALLBACK: ${PYT_RAG_EMBEDDING_FALLBACK:-hash}
-      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY:-}
-      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embedding-3}
-      EMBEDDING_DIM: ${EMBEDDING_DIM:-2048}
+      PYT_RAG_EMBEDDER: hash
     depends_on:
       postgres:
         condition: service_healthy

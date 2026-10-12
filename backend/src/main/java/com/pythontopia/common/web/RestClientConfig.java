@@ -6,6 +6,8 @@ import com.pythontopia.common.config.FeynmanTuteeHttpClientProperties;
 import com.pythontopia.common.config.GraphHttpClientProperties;
 import com.pythontopia.common.config.WorkshopHttpClientProperties;
 import java.time.Duration;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,6 +15,19 @@ import org.springframework.web.client.RestTemplate;
 
 @Configuration
 public class RestClientConfig {
+
+  /** Piston 判题专用客户端；与 Graph/RAG 线程池和超时隔离，远端故障时快速 fail closed。 */
+  @Bean("pistonRestTemplate")
+  @ConditionalOnProperty(name = "pythontopia.judge.provider", havingValue = "piston")
+  RestTemplate pistonRestTemplate(
+      RestTemplateBuilder builder,
+      @Value("${pythontopia.judge.piston.connect-timeout-ms:3000}") int connectTimeoutMs,
+      @Value("${pythontopia.judge.piston.read-timeout-ms:10000}") int readTimeoutMs) {
+    return builder
+        .setConnectTimeout(Duration.ofMillis(connectTimeoutMs))
+        .setReadTimeout(Duration.ofMillis(readTimeoutMs))
+        .build();
+  }
 
   /**
    * graph/rag 阻塞调用共用的 {@link RestTemplate}：配置 connect/read 超时（默认 3s/30s，可经 {@link

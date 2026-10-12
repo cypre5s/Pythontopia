@@ -31,9 +31,13 @@ class JsonStubProvider(LlmProvider):
     def __init__(self, payloads: list[dict]) -> None:
         self._payloads = list(payloads)
         self.calls = 0
+        self.messages: list[dict] = []
+        self.kwargs: dict = {}
 
     async def chat(self, messages, **kwargs):  # type: ignore[override]
         self.calls += 1
+        self.messages = messages
+        self.kwargs = kwargs
         payload = self._payloads.pop(0) if self._payloads else {}
         return LlmResponse(content_text=json.dumps(payload, ensure_ascii=False))
 
@@ -136,6 +140,30 @@ async def test_skeleton_requires_two_todos() -> None:
     assert card["skeleton"].count("TODO") >= 2
 
 
+@pytest.mark.asyncio
+async def test_workflow_chat_sends_image_parts_to_vision_model() -> None:
+    image = "data:image/png;base64,iVBORw0KGgpzbWFsbCBpbWFnZQ=="
+    provider = JsonStubProvider([{"content": "先观察图片中的输入和输出。"}])
+    agent = TutorWorkflowCardAgent(provider)
+
+    card = await agent.chat(
+        PROBLEM,
+        "READING",
+        "请看这张图",
+        [],
+        [],
+        "",
+        images=[image],
+    )
+
+    assert card["content"] == "先观察图片中的输入和输出。"
+    content = provider.messages[-1]["content"]
+    assert content[0]["type"] == "text"
+    assert "学生消息: 请看这张图" in content[0]["text"]
+    assert content[1] == {"type": "image_url", "image_url": {"url": image}}
+    assert provider.kwargs["model_tier"] == "vision"
+
+
 # ── SSE run 端到端 ──
 
 
@@ -179,11 +207,12 @@ def _envelope(session_id: str, event: str, **kwargs) -> WorkflowRunEnvelope:
 @pytest.mark.asyncio
 async def test_reading_run_emits_traces_and_card_result() -> None:
     session_id = "t-wf-reading"
-    await session_store.reset_session(session_id)
+    await session_store.reset_session(1, session_id)
     response = await tutor_workflow_run_stream(
         _envelope(session_id, "READING"),
         provider=JsonStubProvider([GUIDE_CARD]),
         evidence_fetcher=StaticEvidenceFetcher([HIT]),
+        trusted_user_id=1,
     )
     events = await _collect_sse(response)
 
@@ -206,12 +235,13 @@ async def test_reading_run_emits_traces_and_card_result() -> None:
 @pytest.mark.asyncio
 async def test_illegal_transition_fails_fast() -> None:
     session_id = "t-wf-illegal"
-    await session_store.reset_session(session_id)
+    await session_store.reset_session(1, session_id)
     # 新会话默认 READING，直接请求 TRANSFER 属非法迁移。
     response = await tutor_workflow_run_stream(
         _envelope(session_id, "TRANSFER"),
         provider=JsonStubProvider([]),
         evidence_fetcher=StaticEvidenceFetcher([]),
+        trusted_user_id=1,
     )
     events = await _collect_sse(response)
     errors = [payload for event, payload in events if event == "error"]
@@ -223,11 +253,12 @@ async def test_illegal_transition_fails_fast() -> None:
 @pytest.mark.asyncio
 async def test_error_feedback_requires_diagnosis() -> None:
     session_id = "t-wf-diag"
-    await session_store.reset_session(session_id)
+    await session_store.reset_session(1, session_id)
     response = await tutor_workflow_run_stream(
         _envelope(session_id, "ERROR_FEEDBACK"),
         provider=JsonStubProvider([]),
         evidence_fetcher=StaticEvidenceFetcher([]),
+        trusted_user_id=1,
     )
     events = await _collect_sse(response)
     errors = [payload for event, payload in events if event == "error"]
@@ -238,7 +269,7 @@ async def test_error_feedback_requires_diagnosis() -> None:
 @pytest.mark.asyncio
 async def test_phase_progression_and_chat_keeps_phase() -> None:
     session_id = "t-wf-progress"
-    await session_store.reset_session(session_id)
+    await session_store.reset_session(1, session_id)
     ideate_card = {"analysis": "先读入，再计算，最后格式化输出。", "steps": ["读入", "计算", "输出"]}
     chat_card = {"content": "想想输出格式怎么写。", "referenced_card_ids": []}
 
@@ -246,28 +277,39 @@ async def test_phase_progression_and_chat_keeps_phase() -> None:
         _envelope(session_id, "IDEATING", event_data={"thought_text": "先算面积"}),
         provider=JsonStubProvider([ideate_card]),
         evidence_fetcher=StaticEvidenceFetcher([]),
+        trusted_user_id=1,
     )
     events = await _collect_sse(response)
     result = next(payload for event, payload in events if event == "result")
     assert result["phase"] == "IDEATING"
 
     # CHAT 不改变阶段，且能携带会话内已生成的卡片上下文。
+    image = "data:image/png;base64,iVBORw0KGgpzbWFsbCBpbWFnZQ=="
+    chat_provider = JsonStubProvider([chat_card])
     response = await tutor_workflow_run_stream(
-        _envelope(session_id, "CHAT", event_data={"message": "我该怎么保留小数？"}),
-        provider=JsonStubProvider([chat_card]),
+        _envelope(
+            session_id,
+            "CHAT",
+            event_data={"message": "我该怎么保留小数？", "images": [image]},
+        ),
+        provider=chat_provider,
         evidence_fetcher=StaticEvidenceFetcher([]),
+        trusted_user_id=1,
     )
     events = await _collect_sse(response)
     result = next(payload for event, payload in events if event == "result")
     assert result["phase"] == "IDEATING"
     assert result["card_key"] == "ai_reply"
     assert result["seq"] == 2
+    assert chat_provider.kwargs["model_tier"] == "vision"
+    image_part = chat_provider.messages[-1]["content"][-1]
+    assert image_part == {"type": "image_url", "image_url": {"url": image}}
 
 
 @pytest.mark.asyncio
 async def test_restore_phase_replays_java_projection() -> None:
     session_id = "t-wf-restore"
-    await session_store.reset_session(session_id)
+    await session_store.reset_session(1, session_id)
     chat_card = {"content": "复盘后可以试试迁移题。", "referenced_card_ids": []}
     # 进程内无会话 + Java 投影说阶段是 AC_REVIEW → CHAT 应在 AC_REVIEW 上运行。
     response = await tutor_workflow_run_stream(
@@ -282,6 +324,7 @@ async def test_restore_phase_replays_java_projection() -> None:
         ),
         provider=JsonStubProvider([chat_card]),
         evidence_fetcher=StaticEvidenceFetcher([]),
+        trusted_user_id=1,
     )
     events = await _collect_sse(response)
     result = next(payload for event, payload in events if event == "result")

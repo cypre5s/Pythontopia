@@ -9,9 +9,6 @@ import { useRoute, useRouter } from 'vue-router';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import { useCompanionStore } from '@/stores/companion';
 import { useCompanionContext } from '@/composables/useCompanionContext';
-import { useVoiceInput } from '@/composables/useVoiceInput';
-import { useAudioRecorder } from '@/composables/useAudioRecorder';
-import { transcribeAudio } from '@/api/media';
 import { useSessionStore } from '@/stores/session';
 
 const store = useCompanionStore();
@@ -23,14 +20,6 @@ const draft = ref<string>('');
 const pendingImages = ref<string[]>([]);
 // 洞察气泡内「查看证据」展开态；切到另一条洞察时重置。
 const insightEvidenceOpen = ref<boolean>(false);
-const voice = useVoiceInput();
-// Web Speech 不可用时（如 Firefox）回退到「录音 → 服务端讯飞听写」。
-const recorder = useAudioRecorder();
-const asrBusy = ref<boolean>(false);
-const asrHint = ref<string>('');
-const showRecordFallback = computed<boolean>(
-  () => !voice.supported.value && recorder.supported.value,
-);
 const canLoadStudentSignals = computed<boolean>(() => session.role !== 'TEACHER');
 
 const lastEvidencePageId = computed<number | null>(() => {
@@ -51,12 +40,6 @@ const lastAssistantIndex = computed<number>(() => {
   return -1;
 });
 
-watch(voice.transcript, (text) => {
-  if (text) {
-    draft.value = text;
-  }
-});
-
 async function send(): Promise<void> {
   const text = draft.value;
   if (!text.trim() || store.busy) return;
@@ -64,40 +47,6 @@ async function send(): Promise<void> {
   draft.value = '';
   await store.ask(text, ctx.value, images);
   pendingImages.value = [];
-}
-
-function toggleVoice(): void {
-  if (voice.listening.value) {
-    voice.stop();
-    return;
-  }
-  voice.start();
-}
-
-async function toggleRecord(): Promise<void> {
-  if (asrBusy.value) return;
-  if (recorder.recording.value) {
-    asrBusy.value = true;
-    const blob = await recorder.stop();
-    if (blob) {
-      try {
-        const res = await transcribeAudio(blob);
-        if (res.text) {
-          draft.value = res.text;
-          asrHint.value = '';
-        } else {
-          asrHint.value = '语音转写暂不可用，请直接输入';
-        }
-      } catch {
-        asrHint.value = '语音转写失败，请直接输入';
-      }
-    }
-    asrBusy.value = false;
-    return;
-  }
-  asrHint.value = '';
-  const ok = await recorder.start();
-  if (!ok) asrHint.value = '麦克风不可用，请直接输入';
 }
 
 function readImage(file: File): Promise<string | null> {
@@ -371,39 +320,10 @@ onMounted(refreshStudentSignals);
         </button>
       </div>
 
-      <p
-        v-if="asrHint"
-        class="companion__asr-hint"
-        data-testid="companion-asr-hint"
-      >
-        {{ asrHint }}
-      </p>
-
       <form
         class="companion__compose"
         @submit.prevent="send"
       >
-        <button
-          v-if="voice.supported.value"
-          type="button"
-          class="companion__tool"
-          data-testid="companion-mic"
-          :aria-pressed="voice.listening.value"
-          @click="toggleVoice"
-        >
-          {{ voice.listening.value ? '停' : '说' }}
-        </button>
-        <button
-          v-else-if="showRecordFallback"
-          type="button"
-          class="companion__tool"
-          data-testid="companion-record"
-          :aria-pressed="recorder.recording.value"
-          :disabled="asrBusy"
-          @click="toggleRecord"
-        >
-          {{ recorder.recording.value ? '停' : asrBusy ? '…' : '录' }}
-        </button>
         <label class="companion__tool">
           图
           <input
@@ -731,13 +651,6 @@ onMounted(refreshStudentSignals);
   object-fit: cover;
   image-rendering: auto;
   border-radius: calc(var(--pyt-radius-md) - 2px);
-}
-
-.companion__asr-hint {
-  margin: 0;
-  padding: 0 var(--pyt-space-3) var(--pyt-space-1);
-  font-size: var(--pyt-font-size-xs);
-  color: var(--pyt-color-text-hint);
 }
 
 .companion__compose {

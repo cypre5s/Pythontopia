@@ -28,6 +28,10 @@ from pythontopia_graph.graph.hybrid_loop import (
     IntentRouterSelector,
 )
 from pythontopia_graph.graph.orchestrator_graph import OrchestratorGraph
+from pythontopia_graph.internal_auth import (
+    require_internal_user_id,
+    require_matching_user_id,
+)
 from pythontopia_graph.graph.tool_executor import RegistryToolExecutor
 from pythontopia_graph.graph.tool_loop import ToolCallingLoop, ToolLoopStep
 from pythontopia_graph.llm.provider import LlmProvider, provider_from_env
@@ -147,7 +151,9 @@ async def orchestrator_turn(
     valid_kc_codes: set[str] = Depends(_valid_kc_codes),
     memory_brief_provider: MemoryBriefProvider | None = Depends(_memory_brief_provider),
     browse_executor: BrowseExecutor | None = Depends(_browse_executor),
+    trusted_user_id: int = Depends(require_internal_user_id),
 ) -> OrchestratorResponse:
+    require_matching_user_id(trusted_user_id, body.user_id)
     graph = OrchestratorGraph(
         provider=provider,
         evidence_fetcher=evidence_fetcher,
@@ -225,7 +231,9 @@ async def orchestrator_turn_stream(
     valid_kc_codes: set[str] = Depends(_valid_kc_codes),
     memory_brief_provider: MemoryBriefProvider | None = Depends(_memory_brief_provider),
     browse_executor: BrowseExecutor | None = Depends(_browse_executor),
+    trusted_user_id: int = Depends(require_internal_user_id),
 ) -> StreamingResponse:
+    require_matching_user_id(trusted_user_id, body.user_id)
     return StreamingResponse(
         _orchestrator_stream_generator(
             body,
@@ -291,10 +299,12 @@ async def orchestrator_tool_loop(
     provider: LlmProvider = Depends(_provider),
     evidence_fetcher: EvidenceFetcher = Depends(_evidence_fetcher),
     valid_kc_codes: set[str] = Depends(_valid_kc_codes),
+    trusted_user_id: int = Depends(require_internal_user_id),
 ) -> HybridResult:
     """混合工具编排（非流式）；flag off 时 404，绝不影响既有 orchestrator 路径。"""
     if not _tool_loop_enabled():
         raise HTTPException(status_code=404, detail="tool loop disabled (set PYT_TOOL_LOOP=on)")
+    require_matching_user_id(trusted_user_id, body.user_id)
     orchestrator = _build_hybrid(
         provider, evidence_fetcher, _effective_valid_kc_codes(valid_kc_codes, body), body
     )
@@ -366,10 +376,12 @@ async def orchestrator_tool_loop_stream(
     provider: LlmProvider = Depends(_provider),
     evidence_fetcher: EvidenceFetcher = Depends(_evidence_fetcher),
     valid_kc_codes: set[str] = Depends(_valid_kc_codes),
+    trusted_user_id: int = Depends(require_internal_user_id),
 ) -> StreamingResponse:
     """混合工具编排（SSE）：增量 ``loop_step`` 事件 + 终态 ``result``；flag off 时 404。"""
     if not _tool_loop_enabled():
         raise HTTPException(status_code=404, detail="tool loop disabled (set PYT_TOOL_LOOP=on)")
+    require_matching_user_id(trusted_user_id, body.user_id)
     return StreamingResponse(
         _tool_loop_stream_generator(body, provider, evidence_fetcher, valid_kc_codes),
         media_type="text/event-stream",

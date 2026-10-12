@@ -8,6 +8,7 @@
 // 里用 useSseStream 驱动，逐轮把结果写回这里，保证关闭重开仍能看到历史。
 
 import { defineStore } from 'pinia';
+import { userScopedKey } from '@stores/session';
 import type {
   OrchestratorDispatchResult,
   OrchestratorPlanStep,
@@ -65,14 +66,26 @@ function genId(): string {
 function readSessionId(): string {
   if (typeof window === 'undefined') return genId();
   try {
-    const existing = window.localStorage.getItem(SESSION_KEY);
+    const key = userScopedKey(SESSION_KEY);
+    const existing = window.localStorage.getItem(key);
     if (existing) return existing;
     const fresh = genId();
-    window.localStorage.setItem(SESSION_KEY, fresh);
+    window.localStorage.setItem(key, fresh);
     return fresh;
   } catch {
     return genId();
   }
+}
+
+function rotateSessionId(): string {
+  const fresh = genId();
+  if (typeof window === 'undefined') return fresh;
+  try {
+    window.localStorage.setItem(userScopedKey(SESSION_KEY), fresh);
+  } catch {
+    /* localStorage 不可用时仍使用内存会话 id */
+  }
+  return fresh;
 }
 
 export interface GuideStoreState {
@@ -134,6 +147,17 @@ export const useGuideStore = defineStore('guide', {
     },
   },
   actions: {
+    /** 账号切换边界：清空旧线程并在新用户命名空间创建全新会话 id。 */
+    rotateAccountSession(): void {
+      this.open = false;
+      this.sessionId = rotateSessionId();
+      this.messages = [];
+      this.status = 'idle';
+      this.lastError = null;
+      this.recentFailures = [];
+      this.greeted = false;
+      this.lastTurn = null;
+    },
     ensureGreeting(): void {
       if (!this.greeted && this.messages.length === 0) {
         this.messages = [{ ...WELCOME }];

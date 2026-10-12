@@ -116,12 +116,13 @@ public class BossGraphClient {
   /**
    * 调 graph 知识前沿选择器（无尽远征生成地图用）。失败抛 {@link RestClientException}，由调用方决定降级。
    *
-   * <p>mastery 由后端从权威来源读取后传入；profileSignals / recentKcs / focusChapter / exclude 透传。
-   * lastPracticed 为每个 KC 的后端权威最近练习时间（ISO-8601，来自 {@code kc_mastery.last_event_at}），
+   * <p>mastery 与 confidence 由后端从权威来源读取后传入；profileSignals / recentKcs / focusChapter / exclude 透传。
+   * lastPracticed 为每个 KC 的后端权威最近练习时间（ISO-8601，来自正式练习事件），
    * 供 graph 做真·间隔重复（久未练上浮），见 {@code expedition_selector.select_frontier}。
    */
   public FrontierSelectResultDto selectFrontier(
       Map<String, Double> mastery,
+      Map<String, Double> confidence,
       ProfileSignalsPayload profileSignals,
       List<String> recentKcs,
       Integer focusChapter,
@@ -134,7 +135,15 @@ public class BossGraphClient {
     List<Map<String, Object>> masteryList =
         mastery.entrySet().stream()
             .<Map<String, Object>>map(
-                e -> Map.of("kcCode", e.getKey(), "masteryScore", e.getValue()))
+                e -> {
+                  Map<String, Object> entry = new HashMap<>();
+                  entry.put("kcCode", e.getKey());
+                  entry.put("masteryScore", e.getValue());
+                  if (confidence != null && confidence.containsKey(e.getKey())) {
+                    entry.put("confidence", confidence.get(e.getKey()));
+                  }
+                  return entry;
+                })
             .toList();
     Map<String, Object> body = new HashMap<>();
     body.put("mastery", masteryList);

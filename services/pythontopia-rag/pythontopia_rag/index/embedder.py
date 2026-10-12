@@ -30,6 +30,8 @@ class HashEmbedder:
 
     name = "hash-bow-1024"
     dim = DEFAULT_DIM
+    using_fallback = True
+    fallback_reason = "non-semantic hash embedder"
 
     def __init__(self, dim: int = DEFAULT_DIM, name: str | None = None) -> None:
         self.dim = dim
@@ -239,10 +241,13 @@ def select_embedder() -> Embedder:
         return HashEmbedder()
     if kind == "bge":
         return BgeSmallEmbedder()
-    if kind == "iflytek":
-        return IflytekSparkEmbedder()
-    if kind in ("zhipu", "embedding-3", "glm"):
-        return _zhipu_with_hash_fallback()
-    if kind in ("zhipu-strict", "embedding-3-strict"):
-        return ZhipuEmbedder()
+    if kind in {
+        "iflytek",
+        "zhipu",
+        "embedding-3",
+        "glm",
+        "zhipu-strict",
+        "embedding-3-strict",
+    }:
+        raise ValueError("Only local hash and BGE embedders are supported")
     raise ValueError(f"Unknown PYT_RAG_EMBEDDER: {kind}")

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.config.GraphHttpClientProperties;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.sse.SseRelayExecutor;
+import com.pythontopia.common.web.GraphInternalSubjectSupport;
 import com.pythontopia.common.web.GraphInternalTokenSupport;
 import com.pythontopia.intent.dto.IntentRouteRequest;
 import com.pythontopia.orchestrator.dto.OrchestratorTurnMessage;
@@ -181,7 +182,15 @@ public class OrchestratorGraphClient {
       }
     }
     sseRelayExecutor.submit(
-        () -> relay.relay(url, () -> body, internalToken, emitter, onEvent, onFinished));
+        () ->
+            relay.relay(
+                url,
+                () -> body,
+                internalToken,
+                GraphInternalSubjectSupport.user(userId),
+                emitter,
+                onEvent,
+                onFinished));
   }
 
   private Map<String, Object> buildInteraction(

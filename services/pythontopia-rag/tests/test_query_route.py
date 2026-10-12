@@ -11,6 +11,14 @@ from pythontopia_rag.index.store import InMemoryVectorStore
 from pythontopia_rag.main import app
 
 
+class _SemanticEmbedder:
+    name = "semantic-test"
+    dim = 8
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        return [[1.0] + [0.0] * (self.dim - 1) for _ in texts]
+
+
 @pytest.fixture(autouse=True)
 def _reset_state() -> AppState:
     state = AppState(embedder=HashEmbedder(), store=InMemoryVectorStore())
@@ -269,6 +277,7 @@ async def test_index_status_exposes_embedding_degradation() -> None:
 @pytest.mark.asyncio
 async def test_index_status_reports_healthy_embedder_as_not_degraded() -> None:
     state = app.state.rag
+    state.embedder = _SemanticEmbedder()
     await rebuild_index(
         source=_seed_pages(), embedder=state.embedder, store=state.store, bm25=state.bm25
     )

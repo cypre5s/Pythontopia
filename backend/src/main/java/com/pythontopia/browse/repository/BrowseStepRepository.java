@@ -28,7 +28,10 @@ public class BrowseStepRepository {
       return;
     }
     jdbcTemplate.batchUpdate(
-        "INSERT INTO browse_step (run_id, idx, action, url, summary) VALUES (?, ?, ?, ?, ?)",
+        """
+        INSERT INTO browse_step (run_id, idx, action, url, summary, title, snippet)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
         new BatchPreparedStatementSetter() {
           @Override
           public void setValues(PreparedStatement ps, int i) throws SQLException {
@@ -38,6 +41,8 @@ public class BrowseStepRepository {
             ps.setString(3, step.action());
             ps.setString(4, step.url());
             ps.setString(5, step.summary());
+            ps.setString(6, step.title());
+            ps.setString(7, step.snippet());
           }
 
           @Override
@@ -51,7 +56,7 @@ public class BrowseStepRepository {
   public List<BrowseStepEntity> findByRunId(long runId) {
     return jdbcTemplate.query(
         """
-        SELECT id, run_id, idx, action, url, summary
+        SELECT id, run_id, idx, action, url, summary, title, snippet
         FROM browse_step
         WHERE run_id = ?
         ORDER BY idx ASC
@@ -67,6 +72,8 @@ public class BrowseStepRepository {
         rs.getInt("idx"),
         rs.getString("action"),
         rs.getString("url"),
-        rs.getString("summary"));
+        rs.getString("summary"),
+        rs.getString("title"),
+        rs.getString("snippet"));
   }
 }

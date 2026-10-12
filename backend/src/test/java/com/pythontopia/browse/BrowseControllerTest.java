@@ -126,7 +126,14 @@ class BrowseControllerTest {
         new BrowseRunDetailDto(
             42L, "goal", BrowseRunStatus.SUCCESS, "summary", false, null,
             OffsetDateTime.parse("2026-06-17T10:00:00Z"),
-            List.of(new BrowseStepDto(0, "navigate", "https://docs.python.org/3/", "打开")),
+            List.of(
+                new BrowseStepDto(
+                    0,
+                    "navigate",
+                    "https://docs.python.org/3/",
+                    "打开",
+                    "Python documentation",
+                    "Python language reference")),
             List.of(BrowseCitationDto.external("https://docs.python.org/3/")));
     when(service.detail(1L, 42L)).thenReturn(detail);
 
@@ -135,6 +142,8 @@ class BrowseControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.steps.length()").value(1))
         .andExpect(jsonPath("$.steps[0].action").value("navigate"))
+        .andExpect(jsonPath("$.steps[0].title").value("Python documentation"))
+        .andExpect(jsonPath("$.steps[0].snippet").value("Python language reference"))
         .andExpect(jsonPath("$.steps[0].url").value("https://docs.python.org/3/"))
         .andExpect(jsonPath("$.citations.length()").value(1))
         .andExpect(jsonPath("$.citations[0].url").value("https://docs.python.org/3/"))

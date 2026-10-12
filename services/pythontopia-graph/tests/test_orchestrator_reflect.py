@@ -400,7 +400,7 @@ async def test_full_graph_learn_failure_recovers_via_reflect(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """端到端：CODE_LAB learn 步首派失败 → reflect 降级 HANDOUT 重派成功；既有路由不变。"""
-    await reset_session("t-reflect-e2e")
+    await reset_session(7, "t-reflect-e2e")
 
     codelab_calls = {"n": 0}
     handout_calls = {"n": 0, "last_type": ""}
@@ -453,7 +453,7 @@ async def test_full_graph_no_failure_keeps_reflect_noop(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """无 learn 失败：reflect 为 no-op，dispatch_results 不增不减、无 reflect trace。"""
-    await reset_session("t-reflect-noop")
+    await reset_session(7, "t-reflect-noop")
     graph = make_graph()
 
     response = await graph.run(

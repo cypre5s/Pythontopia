@@ -6,6 +6,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.classroom.dashboard.service.ClassroomDashboardService;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.coursepack.service.CourseVideoTranscriptService;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
@@ -35,9 +36,6 @@ public class TutorService {
   private static final int HISTORY_TURN_LIMIT = 6;
   /** 多轮记忆：单轮历史答案在 brief 中的截断长度（控 token）。 */
   private static final int HISTORY_ANSWER_MAX = 240;
-  /** 视频 RAG 时间窗（秒）：真转写检索接入后按 [t-WINDOW, t+WINDOW] 取字幕；当前占位仅锚定时刻。 */
-  private static final int VIDEO_RAG_WINDOW_SEC = 30;
-
   private final TutorGraphClient graphClient;
   private final TutorSessionRepository sessionRepository;
   private final ObjectMapper objectMapper;
@@ -45,6 +43,7 @@ public class TutorService {
   private final ApplicationEventPublisher eventPublisher;
   private final ClassroomDashboardService classroomDashboardService;
   private final MemoryRetrievalService memoryRetrievalService;
+  private final CourseVideoTranscriptService videoTranscriptService;
   /** 进行中的答疑流（userId:conversationId），防同一会话窗口并发重复提问。 */
   private final Set<String> inFlightConversations = ConcurrentHashMap.newKeySet();
 
@@ -55,7 +54,8 @@ public class TutorService {
       PassiveProfileService passiveProfileService,
       ApplicationEventPublisher eventPublisher,
       ClassroomDashboardService classroomDashboardService,
-      MemoryRetrievalService memoryRetrievalService) {
+      MemoryRetrievalService memoryRetrievalService,
+      CourseVideoTranscriptService videoTranscriptService) {
     this.graphClient = graphClient;
     this.sessionRepository = sessionRepository;
     this.objectMapper = objectMapper;
@@ -63,6 +63,7 @@ public class TutorService {
     this.eventPublisher = eventPublisher;
     this.classroomDashboardService = classroomDashboardService;
     this.memoryRetrievalService = memoryRetrievalService;
+    this.videoTranscriptService = videoTranscriptService;
   }
 
   public SseEmitter ask(CurrentUserPrincipal user, TutorAskRequest request) {
@@ -95,9 +96,9 @@ public class TutorService {
     // 多轮记忆：同会话既往问答前置进上下文，让模型在本窗口内有真正的连续记忆
     // （conversationId 本身不下传 graph，仅用其在后端取历史拼进 context）。
     String historyBrief = resolveHistoryBrief(userId, request.conversationId());
-    // 视频 RAG 脚手架：看课页回传 videoId + 播放时刻时，合成「视频上下文」前置进 context
-    // （真字幕转写检索为占位 seam，见 buildVideoBrief）。
-    String videoBrief = buildVideoBrief(request.videoId(), request.videoTimeSec());
+    // 看课页回传 videoId + 播放时刻时，读取由真实 MP4 转写的时间窗字幕；缺失/错版明确失败，
+    // 不再把视频 id 与时间戳拼成一段文字冒充字幕上下文。
+    String videoBrief = resolveVideoBrief(request.videoId(), request.videoTimeSec());
     // 顺序：班级学情（教师）→ 个人近期记忆 → 本会话历史 → 视频上下文 → 原始上下文。
     String effectiveContext =
         mergeContext(
@@ -245,22 +246,12 @@ public class TutorService {
     return text.length() <= max ? text : text.substring(0, max) + "…";
   }
 
-  /**
-   * 视频 RAG 脚手架：由 videoId + 播放时刻合成「视频上下文」brief 注入答疑 context。
-   * <b>占位 seam</b>：真字幕转写检索（按 ±{@link #VIDEO_RAG_WINDOW_SEC}s 窗口取字幕喂 RAG）后续接入，
-   * 当前仅给时间锚点说明，让模型知道学生在看哪段视频。videoId 为空返回空串。
-   */
-  static String buildVideoBrief(Long videoId, Integer videoTimeSec) {
+  /** 视频 id 为空时不读取字幕；非空时由 {@link CourseVideoTranscriptService} 按真实时间窗提供上下文。 */
+  String resolveVideoBrief(Long videoId, Integer videoTimeSec) {
     if (videoId == null) {
       return "";
     }
-    StringBuilder sb = new StringBuilder("视频上下文: 学生正在观看课程视频 #").append(videoId);
-    if (videoTimeSec != null && videoTimeSec >= 0) {
-      sb.append(String.format(" 第 %d:%02d 处（关注前后约 %d 秒讲解）",
-          videoTimeSec / 60, videoTimeSec % 60, VIDEO_RAG_WINDOW_SEC));
-    }
-    sb.append("。视频字幕转写 RAG 待接入，先按时间锚点贴合作答。");
-    return sb.toString();
+    return videoTranscriptService.contextFor(videoId, videoTimeSec);
   }
 
   /**

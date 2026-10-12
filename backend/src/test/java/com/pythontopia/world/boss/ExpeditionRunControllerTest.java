@@ -138,6 +138,7 @@ class ExpeditionRunControllerTest {
         32,
         List.of("calm_mind"),
         false,
-        List.of());
+        List.of(),
+        "123e4567-e89b-12d3-a456-426614174000");
   }
 }

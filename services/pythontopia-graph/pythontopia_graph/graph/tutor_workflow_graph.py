@@ -1,10 +1,11 @@
-"""导学工作流 StateGraph：6 阶段状态机 + 卡片节点编排（移植 Alethicode tutor-graph）。
+"""AutoGen 编排的 6 阶段导学状态机 + 卡片节点（移植 Alethicode tutor-graph）。
 
-控制流（与源版 builder.py 同构，按 SSE 单请求架构裁剪）::
+控制流由固定顺序的 ``RoundRobinGroupChat`` 阶段 Agent 调用现有 handler；每次只运行一轮，
+状态以 JSON 信封跨 AgentChat 往返，并在边界恢复为 Pydantic/RAG 类型。Agent 不调用模型来
+选择节点或工具。失败状态会停止后续阶段派发。::
 
-    START → validate_transition
-              ├─ (非法迁移) → emit_failed → END
-              └─ → fetch_evidence → <事件节点> → validate_card → decide_actions → END
+    validate_transition → coach_decide → fetch_evidence → generate_card → decide_actions
+              └─ (FAILED) → stop
 
 - 阶段迁移规则原样移植（transitions.py），非法迁移 fail fast（TRANSITION_VIOLATION）；
 - 卡片节点产出经 pydantic 强校验（agents/tutor_workflow_cards），违规 SCHEMA_VIOLATION；
@@ -22,7 +23,7 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any, TypedDict
 
-from langgraph.graph import END, START, StateGraph
+from autogen_core import CancellationToken
 
 from pythontopia_graph.agents.guide_coach_agent import CoachContext, GuideCoachAgent
 from pythontopia_graph.agents.guide_guardrail_critic import GuideGuardrailCritic
@@ -30,8 +31,12 @@ from pythontopia_graph.agents.tutor_workflow_cards import (
     CardGenerationError,
     TutorWorkflowCardAgent,
 )
+from pythontopia_graph.graph.autogen_tutor_runtime import (
+    StageHandler,
+    run_autogen_tutor_workflow,
+)
 from pythontopia_graph.llm.provider import LlmProvider
-from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle, EvidenceFetcher
+from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle, EvidenceFetcher, RagHit
 from pythontopia_graph.schemas.tutor_workflow import (
     EVENT_OUTPUT_KEY,
     GuideCoachDecision,
@@ -197,7 +202,7 @@ def _append_guardrail_note(profile_brief: str, reasons: list[str]) -> str:
     return f"{profile_brief}\n{note}".strip()[:1200]
 
 
-# ── LangGraph 状态与图 ──
+# ── Tutor 状态与工作流 ──
 
 
 class WorkflowGraphState(TypedDict, total=False):
@@ -208,7 +213,7 @@ class WorkflowGraphState(TypedDict, total=False):
     chat_history: list[dict[str, str]]
     # AC 复盘给出的下一步方向（TRANSFER 依赖；由会话内最近 post_ac 卡回填）。
     next_practice_direction: str
-    evidence_chunks: list[Any]
+    evidence_chunks: list[RagHit]
     card_key: str | None
     card: dict[str, Any] | None
     effective_event: WorkflowEvent
@@ -235,10 +240,25 @@ class TutorWorkflowGraph:
         self._guardrail = GuideGuardrailCritic()
         self._evidence_fetcher = evidence_fetcher
         self._emit = emit
-        self._compiled = self._build()
 
-    async def run(self, state: WorkflowGraphState) -> WorkflowGraphState:
-        return await self._compiled.ainvoke(state)
+    async def run(
+        self,
+        state: WorkflowGraphState,
+        *,
+        cancellation_token: CancellationToken | None = None,
+    ) -> WorkflowGraphState:
+        stages: list[tuple[str, StageHandler[WorkflowGraphState]]] = [
+            ("validate_transition", self._node_validate_transition),
+            ("coach_decide", self._node_coach_decide),
+            ("fetch_evidence", self._node_fetch_evidence),
+            ("generate_card", self._node_generate_card),
+            ("decide_actions", self._node_decide_actions),
+        ]
+        return await run_autogen_tutor_workflow(
+            state,
+            stages,
+            cancellation_token=cancellation_token,
+        )
 
     # ── 节点 ──
 
@@ -454,6 +474,7 @@ class TutorWorkflowGraph:
                 state.get("last_cards", []),
                 state.get("chat_history", []),
                 brief,
+                images=request.event_data.get("images"),
             )
         raise CardGenerationError("SYSTEM_ERROR", f"unsupported event: {event}")
 
@@ -502,32 +523,6 @@ class TutorWorkflowGraph:
         if decision is not None:
             actions = _rank_actions(actions, decision)
         return {**state, "available_actions": actions}
-
-    # ── 图装配 ──
-
-    def _build(self) -> Any:
-        graph: StateGraph = StateGraph(WorkflowGraphState)
-        graph.add_node("validate_transition", self._node_validate_transition)
-        graph.add_node("coach_decide", self._node_coach_decide)
-        graph.add_node("fetch_evidence", self._node_fetch_evidence)
-        graph.add_node("generate_card", self._node_generate_card)
-        graph.add_node("decide_actions", self._node_decide_actions)
-
-        graph.add_edge(START, "validate_transition")
-        graph.add_conditional_edges(
-            "validate_transition",
-            lambda state: "end" if state.get("runtime_state") == "FAILED" else "coach_decide",
-            {"end": END, "coach_decide": "coach_decide"},
-        )
-        graph.add_edge("coach_decide", "fetch_evidence")
-        graph.add_edge("fetch_evidence", "generate_card")
-        graph.add_conditional_edges(
-            "generate_card",
-            lambda state: "end" if state.get("runtime_state") == "FAILED" else "decide_actions",
-            {"end": END, "decide_actions": "decide_actions"},
-        )
-        graph.add_edge("decide_actions", END)
-        return graph.compile()
 
     # ── SSE 协助 ──
 

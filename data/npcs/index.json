@@ -68,7 +68,7 @@
       "name": "矿洞守矿人",
       "category": "educator_core",
       "spawnMap": null,
-      "portrait": "portrait_mine_keeper.png"
+      "portrait": "portrait_miner.png"
     },
     {
       "key": "student_a",

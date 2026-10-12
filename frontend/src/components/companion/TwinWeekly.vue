@@ -39,6 +39,27 @@ function percent(value: number): string {
   return `${(value * 100).toFixed(0)}%`;
 }
 
+function deltaPercent(value: number): string {
+  const points = (value * 100).toFixed(0);
+  return `${value > 0 ? '+' : ''}${points}%`;
+}
+
+const masterySourceLabels: Record<string, string> = {
+  RESOURCE_READ: '阅读',
+  MICRO_CHECK_PASS: '小测通过',
+  MICRO_CHECK_FAIL: '小测未过',
+  PRACTICE_PASS: '练习通过',
+  PRACTICE_FAIL: '练习未过',
+  DEBUG_FIX: '调试修复',
+  MANUAL_OVERRIDE: '教师调整',
+  DECAY: '时间衰减',
+  BOOTSTRAP: '初始记录',
+};
+
+function evidenceSourceLabel(sources: string[]): string {
+  return sources.map((source) => masterySourceLabels[source] ?? source).join('、');
+}
+
 function promptWeeklyPlan(): void {
   const r = report.value;
   if (!r) return;
@@ -59,10 +80,17 @@ function promptInsight(insight: { text: string; dimensionKey: string }): void {
   );
 }
 
-function promptMastery(delta: { kcCode: string; currentScore: number; confidence: number }): void {
+function promptMastery(delta: {
+  kcCode: string;
+  currentScore: number;
+  confidence: number;
+  weeklyDelta: number;
+  evidenceCount: number;
+  evidenceSources: string[];
+}): void {
   emit(
     'prompt',
-    `针对 ${delta.kcCode}，我当前掌握约 ${percent(delta.currentScore)}、置信 ${percent(delta.confidence)}。请给我一组由浅入深的练习和课件复习建议。`,
+    `针对 ${delta.kcCode}，我当前掌握约 ${percent(delta.currentScore)}，置信度 ${percent(delta.confidence)}，本周变化 ${deltaPercent(delta.weeklyDelta)}；本周有 ${delta.evidenceCount} 条证据（${evidenceSourceLabel(delta.evidenceSources)}）。请给我一组由浅入深的练习和课件复习建议。`,
   );
 }
 </script>
@@ -140,7 +168,7 @@ function promptMastery(delta: { kcCode: string; currentScore: number; confidence
         <span class="tw__ic">↑</span>
         <span class="tw__tx">
           <span class="tw__badge">{{ d.kcCode }}</span>
-          掌握 {{ percent(d.currentScore) }} · 置信 {{ percent(d.confidence) }}
+          掌握 {{ percent(d.currentScore) }} · 置信 {{ percent(d.confidence) }} · 本周 {{ deltaPercent(d.weeklyDelta) }} · {{ d.evidenceCount }} 条证据（{{ evidenceSourceLabel(d.evidenceSources) }}）
         </span>
         <button
           type="button"

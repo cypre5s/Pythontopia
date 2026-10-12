@@ -7,6 +7,7 @@ import copy
 import pytest
 
 from pythontopia_graph.agents.paper_golden import build_golden_paper
+from pythontopia_graph.agents import paper_reviews
 from pythontopia_graph.agents.paper_pipeline import (
     ChapterTestGraph,
     ChapterTestGraphError,
@@ -14,7 +15,6 @@ from pythontopia_graph.agents.paper_pipeline import (
 from pythontopia_graph.agents.paper_reviews import (
     grounding_critic,
     safety_critic,
-    sandbox_self_test,
 )
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.nodes.evidence_fetcher import (
@@ -31,6 +31,8 @@ from pythontopia_graph.schemas.chapter_test import (
     PreferredCodingQuestion,
     QuestionPaper,
 )
+
+pytestmark = pytest.mark.usefixtures("chapter_test_sandbox")
 
 
 class StubProvider(LlmProvider):
@@ -491,7 +493,7 @@ def test_golden_paper_passes_all_reviews() -> None:
         ]
     )
     assert grounding_critic(paper, evidence).passed
-    self_test = sandbox_self_test(paper)
+    self_test = paper_reviews.sandbox_self_test(paper)
     assert self_test.passed and self_test.cases_passed == self_test.cases_total
     assert safety_critic(paper).passed
 

@@ -24,7 +24,7 @@ import org.testcontainers.utility.DockerImageName;
 
 /**
  * 端到端验证多模态媒资 FE↔BE 链路（真实 PG + Spring MVC + Security）：
- * 文生图（无 key 占位降级）→ media_asset 落库 → 匿名按 id 取流 → 8 维画像维度端点。
+ * 文生图无 key 时明确失败且不落伪资产，同时验证 8 维画像维度端点。
  */
 @Testcontainers
 @SpringBootTest(
@@ -61,62 +61,17 @@ class MediaAssetAcceptanceIntegrationTest {
 
   @Test
   @SuppressWarnings("unchecked")
-  void generateImageFallsBackToPlaceholderAndIsServedAnonymously() {
+  void generateImageFailsClosedWithoutProviderAndDoesNotPersistPlaceholder() {
     String token = registerAndLogin("media-stu01");
-    Long userId = userId("media-stu01");
-
     ResponseEntityBody image =
         post(
             "/api/media/image",
             token,
             Map.of("prompt", "for 循环执行流程图解", "label", "PY43-KC-030", "kcCodes", List.of("PY43-KC-030")));
-    assertThat(image.status).isEqualTo(HttpStatus.OK);
-    assertThat(image.body.get("kind")).isEqualTo("IMAGE");
-    // 测试环境无讯飞 key → 走本地占位降级。
-    assertThat(image.body.get("degraded")).isEqualTo(true);
-    assertThat(image.body.get("source")).isEqualTo("PLACEHOLDER");
-    String url = (String) image.body.get("url");
-    assertThat(url).startsWith("/api/media/assets/");
-    Long assetId = ((Number) image.body.get("id")).longValue();
-
-    Integer rows =
-        jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM media_asset WHERE id = ? AND user_id = ? AND kind = 'IMAGE'",
-            Integer.class,
-            assetId,
-            userId);
-    assertThat(rows).isEqualTo(1);
-
-    // 下发的直链自带签名（<img src> 不带 Authorization，只能靠签名授权）。
-    assertThat(url).contains("?k=");
-
-    // 匿名带签名取流：permitAll 放行 + 签名校验通过，返回真实 PNG 字节。
-    ResponseEntity<byte[]> served =
-        restTemplate.exchange(url, HttpMethod.GET, HttpEntity.EMPTY, byte[].class);
-    assertThat(served.getStatusCode()).isEqualTo(HttpStatus.OK);
-    assertThat(served.getBody()).isNotEmpty();
-    assertThat(served.getHeaders().getContentType().toString()).contains("image/png");
-
-    // 反例：去掉签名后按 BIGSERIAL id 枚举一律 404，不能匿名拖走他人生成的媒资。
-    ResponseEntity<byte[]> enumerated =
-        restTemplate.exchange(
-            "/api/media/assets/" + assetId, HttpMethod.GET, HttpEntity.EMPTY, byte[].class);
-    assertThat(enumerated.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-
-    // 反例：签名伪造（挪用相邻 id 的签名）同样 404。
-    ResponseEntity<byte[]> forged =
-        restTemplate.exchange(
-            "/api/media/assets/" + assetId + "?k=deadbeefdeadbeef",
-            HttpMethod.GET,
-            HttpEntity.EMPTY,
-            byte[].class);
-    assertThat(forged.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
-
-    // owner 带 JWT 时无需签名也能取流（原生客户端保留 Authorization 头的场景）。
-    ResponseEntity<byte[]> byOwner =
-        restTemplate.exchange(
-            "/api/media/assets/" + assetId, HttpMethod.GET, bearer(token, null), byte[].class);
-    assertThat(byOwner.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(image.status).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+    assertThat(image.body.get("code")).isEqualTo("IMAGE_PROVIDER_UNAVAILABLE");
+    Integer rows = jdbcTemplate.queryForObject("SELECT COUNT(*) FROM media_asset", Integer.class);
+    assertThat(rows).isZero();
   }
 
   @Test

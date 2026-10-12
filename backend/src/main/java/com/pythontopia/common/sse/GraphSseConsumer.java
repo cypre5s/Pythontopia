@@ -1,6 +1,7 @@
 package com.pythontopia.common.sse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.common.web.GraphInternalSubjectSupport;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -58,6 +59,19 @@ public final class GraphSseConsumer {
       ObjectMapper mapper,
       String internalToken,
       BiConsumer<String, String> onEvent) throws IOException {
+    consume(url, body, mapper, internalToken, null, onEvent);
+  }
+
+  /**
+   * Stateful Graph 连接：服务 token 认证调用方，internalSubject 绑定 Java 已认证用户。
+   */
+  public static void consume(
+      String url,
+      Object body,
+      ObjectMapper mapper,
+      String internalToken,
+      String internalSubject,
+      BiConsumer<String, String> onEvent) throws IOException {
     String json;
     try {
       json = mapper.writeValueAsString(body);
@@ -73,6 +87,9 @@ public final class GraphSseConsumer {
             .timeout(Duration.ofMinutes(3));
     if (internalToken != null && !internalToken.isBlank()) {
       requestBuilder.header("X-Internal-Token", internalToken);
+    }
+    if (internalSubject != null && !internalSubject.isBlank()) {
+      requestBuilder.header(GraphInternalSubjectSupport.HEADER, internalSubject);
     }
     HttpRequest request =
         requestBuilder.POST(HttpRequest.BodyPublishers.ofString(json, StandardCharsets.UTF_8)).build();

@@ -13,6 +13,7 @@ import { computed, ref, type Ref } from 'vue';
 import { prefetchBossProblem, requestBossProblem, submitBossAttempt } from '@/api/boss';
 import { getPyodideRunner } from '@/game/adapters/pyodide';
 import { useProfileSignals, computeAdaptiveDifficulty } from '@/composables/useProfileSignals';
+import { userScopedKey } from '@stores/session';
 import type {
   BossAttemptResultDto,
   BossProblemDto,
@@ -59,8 +60,6 @@ export interface UseEndlessRunReturn {
   bestStreak: Ref<number>;
   totalScore: Ref<number>;
   attempts: Ref<number>;
-  /** 本轮（startRun 起）累计答对题数，供无尽补星小结上报（§7）。 */
-  passedCount: Ref<number>;
   currentDifficulty: Ref<number>;
   history: Ref<EndlessHistoryEntry[]>;
   elapsedSec: Ref<number>;
@@ -79,7 +78,7 @@ const MAX_HISTORY = 50;
 function loadHistory(): EndlessHistoryEntry[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = window.localStorage.getItem(PERSIST_KEY);
+    const raw = window.localStorage.getItem(userScopedKey(PERSIST_KEY));
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
@@ -95,7 +94,10 @@ function loadHistory(): EndlessHistoryEntry[] {
 function saveHistory(history: EndlessHistoryEntry[]): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(PERSIST_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
+    window.localStorage.setItem(
+      userScopedKey(PERSIST_KEY),
+      JSON.stringify(history.slice(0, MAX_HISTORY)),
+    );
   } catch {
     /* 隐私模式禁止写入，忽略 */
   }
@@ -143,7 +145,6 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
   const bestStreak = ref<number>(0);
   const totalScore = ref<number>(0);
   const attempts = ref<number>(0);
-  const passedCount = ref<number>(0);
   const currentDifficulty = ref<number>(2);
   const elapsedSec = ref<number>(0);
   const errorMessage = ref<string>('');
@@ -217,7 +218,6 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
     streak.value = 0;
     totalScore.value = 0;
     attempts.value = 0;
-    passedCount.value = 0;
     currentDifficulty.value = 2;
     await _fetchAndStart();
   }
@@ -278,7 +278,6 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
 
     if (passed) {
       streak.value += 1;
-      passedCount.value += 1;
       if (streak.value > bestStreak.value) bestStreak.value = streak.value;
       phase.value = 'passed';
     } else {
@@ -348,7 +347,6 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
     bestStreak,
     totalScore,
     attempts,
-    passedCount,
     currentDifficulty,
     history,
     elapsedSec,

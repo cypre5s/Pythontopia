@@ -13,7 +13,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 /**
- * 多模态生成产物的本地文件存储。所有生成（真实或占位）的图/音/视频字节都落在
+ * 多模态生成产物的本地文件存储。所有真实生成的图/音/视频字节都落在
  * {@code pythontopia.media.generatedDir}（默认 {@code ./data/course-pack-43/generated-media}，
  * 不入 git，可重生）。读写均带 path-traversal 守卫，对齐 {@code CourseVideoService} 的做法。
  */

@@ -3,6 +3,8 @@ package com.pythontopia.world.boss.dto;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
@@ -17,15 +19,19 @@ import java.util.List;
  * @param preferredKind 关卡题型（fill_blank/debug/multi_round 等），用于 LLM 模板选择
  * @param profileSignals 学生画像信号，{@link ProfileSignalsPayload}
  * @param arenaLevel 闯关塔单关 id（如 "1-3"）：预生成 / 复用题的维度之一（endless / arena 传）
+ * @param expeditionRunId 当前远征 run id；只有服务端当前活跃 run 可关联奖励
  */
 public record BossProblemRequest(
     @Min(1) @Max(4) @JsonProperty("stage") int stage,
-    @JsonProperty("kcCode") String kcCode,
+    @JsonProperty("kcCode") @Size(max = 64) String kcCode,
     @Min(1) @Max(5) @JsonProperty("difficulty") Integer difficulty,
-    @JsonProperty("preferredKc") String preferredKc,
-    @JsonProperty("preferredKind") String preferredKind,
+    @JsonProperty("preferredKc") @Size(max = 64) String preferredKc,
+    @JsonProperty("preferredKind") @Size(max = 32) String preferredKind,
     @JsonProperty("profileSignals") ProfileSignalsPayload profileSignals,
-    @JsonProperty("arenaLevel") String arenaLevel) {
+    @JsonProperty("arenaLevel") @Size(max = 16) String arenaLevel,
+    @JsonProperty("expeditionRunId")
+        @Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+        String expeditionRunId) {
 
   public BossProblemRequest {
     if (kcCode != null && kcCode.isBlank()) {

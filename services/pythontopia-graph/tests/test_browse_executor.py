@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 import pytest
 
@@ -18,9 +19,11 @@ from pythontopia_graph.tools.browse.executor import (
     EXTERNAL_CONTENT_LABEL,
     BrowseDependencyError,
     ProposedStep,
+    _PlaywrightReadOnlySession,
     create_default_engine,
     execute_browse,
 )
+from pythontopia_graph.tools.browse import executor as browse_executor_module
 from pythontopia_graph.tools.browse.sanitize import (
     redact_pii,
     sanitize_dom_summary,
@@ -61,7 +64,15 @@ class FakeBrowseEngine:
     executed_urls: list[str] = field(default_factory=list)
     open_args: dict[str, object] = field(default_factory=dict)
 
-    async def open(self, *, goal: str, allowed_domains: list[str], max_steps: int) -> None:
+    async def open(
+        self,
+        *,
+        goal: str,
+        allowed_domains: list[str],
+        max_steps: int,
+        max_bytes: int = 131_072,
+        timeout_seconds: float = 45.0,
+    ) -> None:
         if self.raise_on_open:
             raise RuntimeError("boom-open")
         self.opened = True
@@ -69,6 +80,8 @@ class FakeBrowseEngine:
             "goal": goal,
             "allowed_domains": allowed_domains,
             "max_steps": max_steps,
+            "max_bytes": max_bytes,
+            "timeout_seconds": timeout_seconds,
         }
 
     async def propose(self) -> ProposedStep | None:
@@ -313,6 +326,47 @@ async def test_engine_open_exception_is_structured_error() -> None:
     assert engine.closed is True
 
 
+async def test_playwright_transfers_only_bounded_body_text(monkeypatch: pytest.MonkeyPatch) -> None:
+    class Response:
+        status = 200
+
+        async def header_value(self, name: str) -> str:
+            return "text/html; charset=utf-8"
+
+    class Page:
+        url = "https://docs.python.org/3/"
+
+        async def goto(self, url: str, **kwargs: object) -> Response:
+            return Response()
+
+        async def evaluate(self, expression: str, argument: object = None) -> object:
+            if "document.title" in expression:
+                return "Python docs"
+            assert argument == 64
+            return {"text": "x" * 64, "truncated": True}
+
+        async def close(self) -> None:
+            pass
+
+    class Context:
+        async def new_page(self) -> Page:
+            return Page()
+
+    async def allow_url(*args: object, **kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(browse_executor_module, "validate_network_url", allow_url)
+    session = _PlaywrightReadOnlySession()
+    session._context = Context()
+    session._allowed_domains = [DOCS]
+
+    result = await session.read("https://docs.python.org/3/", max_bytes=64)
+
+    assert result.title == "Python docs"
+    assert result.snippet == "x" * 64
+    assert result.bytes_read == 65
+
+
 async def test_default_engine_failsfast_when_browseruse_unavailable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -346,7 +400,169 @@ def test_browse_dependency_error_is_runtime_error() -> None:
     assert issubclass(BrowseDependencyError, RuntimeError)
 
 
-# ── ⑥ registry 目录含 BROWSE 且 quiz scope 不暴露 ──
+# ── ⑥ 默认 Playwright engine：真实只读执行（注入 session，零联网）──
+
+
+@dataclass
+class FakeReadOnlySession:
+    pages: dict[str, tuple[str, str]]
+    opened: bool = False
+    closed: bool = False
+    read_urls: list[str] = field(default_factory=list)
+    open_args: dict[str, object] = field(default_factory=dict)
+
+    async def open(self, *, allowed_domains: list[str], timeout_seconds: float) -> None:
+        self.opened = True
+        self.open_args = {
+            "allowed_domains": list(allowed_domains),
+            "timeout_seconds": timeout_seconds,
+        }
+
+    async def read(self, url: str, *, max_bytes: int) -> Any:
+        self.read_urls.append(url)
+        title, snippet = self.pages[url]
+        captured_type = getattr(browse_executor_module, "CapturedPage")
+        return captured_type(
+            url=url,
+            title=title,
+            snippet=snippet,
+            bytes_read=len(snippet.encode("utf-8")),
+        )
+
+    async def close(self) -> None:
+        self.closed = True
+
+
+async def test_default_engine_reads_explicit_url_and_returns_title_snippet() -> None:
+    url = "https://docs.python.org/3/howto/sorting.html"
+    session = FakeReadOnlySession({url: ("Sorting HOW TO", "Sorts are guaranteed stable.")})
+    engine_type = getattr(browse_executor_module, "_BrowserUseEngine")
+    engine = engine_type(env={}, session_factory=lambda: session)
+
+    result = await execute_browse(
+        _req(goal=f"请查证 {url}", max_steps=2, max_bytes=4096, timeout_seconds=5),
+        engine=engine,
+        env={},
+    )
+
+    assert result.error == ""
+    assert session.opened is True
+    assert session.closed is True
+    assert session.read_urls == [url]
+    assert result.steps[0].url == url
+    assert result.steps[0].title == "Sorting HOW TO"
+    assert result.steps[0].snippet == "Sorts are guaranteed stable."
+    # 兼容旧端：summary 继续携带同一份去敏摘要。
+    assert result.steps[0].summary == result.steps[0].snippet
+
+
+async def test_default_engine_builds_bounded_official_search_without_react() -> None:
+    goal = "sorted 稳定性"
+    search_url = (
+        "https://docs.python.org/3/search.html?"
+        "q=sorted+%E7%A8%B3%E5%AE%9A%E6%80%A7&check_keywords=yes&area=default"
+    )
+    session = FakeReadOnlySession({search_url: ("Search", "Search results for sorted 稳定性")})
+    engine_type = getattr(browse_executor_module, "_BrowserUseEngine")
+    engine = engine_type(env={}, session_factory=lambda: session)
+
+    result = await execute_browse(
+        _req(goal=goal, allowed_domains=[DOCS], max_steps=1), engine=engine, env={}
+    )
+
+    assert result.error == ""
+    assert session.read_urls == [search_url]
+    assert len(result.steps) == 1
+    assert result.steps[0].action == "search"
+
+
+async def test_default_engine_enforces_total_byte_budget_and_keeps_partial_evidence() -> None:
+    url = "https://docs.python.org/3/"
+    session = FakeReadOnlySession({url: ("Python", "A" * 128)})
+    engine_type = getattr(browse_executor_module, "_BrowserUseEngine")
+    engine = engine_type(env={}, session_factory=lambda: session)
+
+    result = await execute_browse(
+        _req(goal=url, max_bytes=32, max_steps=1), engine=engine, env={}
+    )
+
+    assert len(result.steps) == 1
+    assert len(result.steps[0].snippet.encode("utf-8")) <= 32
+    assert result.error != ""
+    assert "字节" in result.error
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://127.0.0.1/admin",
+        "http://169.254.169.254/latest/meta-data/",
+        "http://metadata.google.internal/computeMetadata/v1/",
+        "file:///etc/passwd",
+        "https://docs.python.org:8443/",
+    ],
+)
+async def test_network_guard_rejects_internal_metadata_and_nonstandard_ports(url: str) -> None:
+    guard = getattr(browse_executor_module, "validate_network_url")
+    with pytest.raises(ValueError):
+        await guard(url, [DOCS], resolver=lambda _host: ["93.184.216.34"])
+
+
+async def test_network_guard_rejects_allowlisted_hostname_resolving_private_ip() -> None:
+    guard = getattr(browse_executor_module, "validate_network_url")
+    with pytest.raises(ValueError, match="公网"):
+        await guard(
+            "https://docs.python.org/3/",
+            [DOCS],
+            resolver=lambda _host: ["10.0.0.8"],
+        )
+
+
+async def test_network_guard_rejects_credentials_and_mixed_public_private_dns() -> None:
+    guard = getattr(browse_executor_module, "validate_network_url")
+    with pytest.raises(ValueError, match="凭据"):
+        await guard(
+            "https://user:secret@docs.python.org/3/",
+            [DOCS],
+            resolver=lambda _host: ["151.101.0.223"],
+        )
+    with pytest.raises(ValueError, match="公网"):
+        await guard(
+            "https://docs.python.org/3/",
+            [DOCS],
+            resolver=lambda _host: ["151.101.0.223", "192.168.1.9"],
+        )
+
+
+async def test_network_guard_accepts_public_allowlisted_https() -> None:
+    guard = getattr(browse_executor_module, "validate_network_url")
+    await guard(
+        "https://docs.python.org/3/",
+        [DOCS],
+        resolver=lambda _host: ["151.101.0.223"],
+    )
+
+
+def test_runtime_probe_reports_missing_browser_binary(monkeypatch: pytest.MonkeyPatch) -> None:
+    probe = getattr(browse_executor_module, "browse_runtime_status")
+    monkeypatch.setattr(
+        browse_executor_module,
+        "_playwright_executable_path",
+        lambda _module, _env: "/definitely/missing/chromium",
+    )
+    ready, reason = probe(env={}, playwright_module=object())
+    assert ready is False
+    assert "Chromium" in reason
+
+
+def test_runtime_probe_reports_missing_playwright_dependency() -> None:
+    probe = getattr(browse_executor_module, "browse_runtime_status")
+    ready, reason = probe(env={}, playwright_module=None)
+    assert ready is False
+    assert "Playwright" in reason
+
+
+# ── ⑦ registry 目录含 BROWSE 且 quiz scope 不暴露 ──
 
 
 def test_registry_includes_browse_with_full_governance_metadata() -> None:

@@ -20,7 +20,9 @@ export interface MasteryDeltaBrief {
   kcCode: string;
   currentScore: number;
   confidence: number;
-  recentEventReasons: string[];
+  weeklyDelta: number;
+  evidenceCount: number;
+  evidenceSources: string[];
 }
 
 export interface ResourceRunBrief {

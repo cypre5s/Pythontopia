@@ -8,12 +8,15 @@ from __future__ import annotations
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+import pytest
 
 from pythontopia_graph.agents.paper_golden import build_golden_paper
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.nodes.evidence_fetcher import EvidenceFetcher, RagHit, StaticEvidenceFetcher
 from pythontopia_graph.routes.chapter_test import router as chapter_test_router
 from pythontopia_graph.schemas.chapter_test import PaperCounts
+
+pytestmark = pytest.mark.usefixtures("chapter_test_sandbox")
 
 _ROUTE = "/agents/chapter-test/generate"
 _BODY = {"user_id": 1, "chapter": 1, "kc_codes": ["PY43-KC-001", "PY43-KC-002"]}

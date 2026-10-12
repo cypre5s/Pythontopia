@@ -45,8 +45,8 @@ class BrowseGraphClientTest {
                 """
                 {
                   "steps": [
-                    {"index": 0, "action": "navigate", "url": "https://docs.python.org/3/howto/sorting.html", "summary": "打开排序指南"},
-                    {"index": 1, "action": "read", "url": "https://docs.python.org/3/howto/sorting.html", "summary": "sorted 稳定"}
+                    {"index": 0, "action": "navigate", "url": "https://docs.python.org/3/howto/sorting.html", "summary": "打开排序指南", "title": "Sorting HOW TO", "snippet": "打开排序指南"},
+                    {"index": 1, "action": "read", "url": "https://docs.python.org/3/howto/sorting.html", "summary": "sorted 稳定", "title": "Sorting HOW TO", "snippet": "sorts are guaranteed to be stable"}
                   ],
                   "final_summary": "sorted 是稳定排序",
                   "citations": ["https://docs.python.org/3/howto/sorting.html"],
@@ -61,10 +61,37 @@ class BrowseGraphClientTest {
 
     assertThat(result.steps()).hasSize(2);
     assertThat(result.steps().get(0).action()).isEqualTo("navigate");
+    assertThat(result.steps().get(0).title()).isEqualTo("Sorting HOW TO");
+    assertThat(result.steps().get(1).snippet()).isEqualTo("sorts are guaranteed to be stable");
     assertThat(result.finalSummary()).isEqualTo("sorted 是稳定排序");
     assertThat(result.citations()).containsExactly("https://docs.python.org/3/howto/sorting.html");
     assertThat(result.truncated()).isFalse();
     assertThat(result.error()).isEmpty();
+    server.verify(Duration.ofSeconds(2));
+  }
+
+  @Test
+  void browseKeepsBackwardCompatibleSummaryWhenGraphOmitsNewEvidenceFields() {
+    MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+    server
+        .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/browse/run"))
+        .andRespond(
+            MockRestResponseCreators.withSuccess(
+                """
+                {
+                  "steps": [{"index": 0, "action": "read", "url": "https://docs.python.org/3/", "summary": "legacy summary"}],
+                  "final_summary": "legacy summary",
+                  "citations": ["https://docs.python.org/3/"],
+                  "truncated": false,
+                  "error": ""
+                }
+                """,
+                MediaType.APPLICATION_JSON));
+
+    BrowseGraphResult result = client.browse("goal", List.of("docs.python.org"), 1, 1L);
+
+    assertThat(result.steps().get(0).title()).isEmpty();
+    assertThat(result.steps().get(0).snippet()).isEqualTo("legacy summary");
     server.verify(Duration.ofSeconds(2));
   }
 

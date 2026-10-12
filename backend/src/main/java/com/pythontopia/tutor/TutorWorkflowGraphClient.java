@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.sse.GraphSseConsumer;
 import com.pythontopia.common.sse.SseRelayExecutor;
+import com.pythontopia.common.web.GraphInternalSubjectSupport;
 import com.pythontopia.common.web.GraphInternalTokenSupport;
 import java.io.IOException;
 import java.util.Map;
@@ -36,7 +37,11 @@ public class TutorWorkflowGraphClient {
    * 转发一次工作流事件 run：所有 SSE 事件经 {@code emitter} 透传；收到终态 {@code result}
    * （AG-UI RUN_FINISHED 已由 GraphSseConsumer 归一为 result）时回调 {@code onResult} 做投影落库。
    */
-  public void runStream(Map<String, Object> body, SseEmitter emitter, Consumer<String> onResult) {
+  public void runStream(
+      Long userId,
+      Map<String, Object> body,
+      SseEmitter emitter,
+      Consumer<String> onResult) {
     String url = properties.graphUrl() + "/agents/tutor-workflow/run/stream";
     sseRelayExecutor.submit(
         () -> {
@@ -46,6 +51,7 @@ public class TutorWorkflowGraphClient {
                 body,
                 objectMapper,
                 GraphInternalTokenSupport.tokenOrNull(properties),
+                GraphInternalSubjectSupport.user(userId),
                 (event, data) -> {
                   try {
                     emitter.send(SseEmitter.event().name(event).data(data));

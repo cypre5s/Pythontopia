@@ -18,10 +18,24 @@ function makeRun(partial: Partial<BrowseRunDetailDto> = {}): BrowseRunDetailDto 
         action: 'navigate',
         url: 'https://docs.python.org/3/howto/sorting.html',
         summary: '打开官方排序指南',
+        title: 'Sorting HOW TO',
+        snippet: 'Sorts are guaranteed to be stable.',
       },
-      { index: 1, action: 'read', url: '', summary: '读到 sorts are guaranteed to be stable' },
+      {
+        index: 1,
+        action: 'read',
+        url: '',
+        summary: '读到 sorts are guaranteed to be stable',
+        title: '',
+        snippet: '读到 sorts are guaranteed to be stable',
+      },
     ],
-    citations: ['https://docs.python.org/3/howto/sorting.html'],
+    citations: [
+      {
+        url: 'https://docs.python.org/3/howto/sorting.html',
+        label: '外部内容，非课件',
+      },
+    ],
     ...partial,
   };
 }
@@ -44,12 +58,17 @@ describe('BrowseTimeline', () => {
     expect(link?.attributes('href')).toBe('https://docs.python.org/3/howto/sorting.html');
     expect(link?.attributes('target')).toBe('_blank');
     expect(link?.attributes('rel')).toContain('noopener');
-    expect(steps[0]?.text()).toContain('打开官方排序指南');
+    expect(steps[0]?.get('[data-testid="browse-step-title"]').text()).toBe('Sorting HOW TO');
+    expect(steps[0]?.get('[data-testid="browse-step-snippet"]').text()).toContain(
+      'guaranteed to be stable',
+    );
 
     // 第二步 read 且 url 为空 → 无链接，仅摘要。
     expect(steps[1]?.get('[data-testid="browse-step-action"]').text()).toBe('阅读');
     expect(steps[1]?.find('[data-testid="browse-step-url"]').exists()).toBe(false);
-    expect(steps[1]?.text()).toContain('guaranteed to be stable');
+    expect(steps[1]?.get('[data-testid="browse-step-snippet"]').text()).toContain(
+      'guaranteed to be stable',
+    );
   });
 
   it('引用 url 渲染为可点外链，且统一标注「外部内容，非课件」（顶部 banner + 引用分区 + aria）', () => {
@@ -105,8 +124,17 @@ describe('BrowseTimeline', () => {
     const wrapper = mount(BrowseTimeline, {
       props: {
         run: makeRun({
-          steps: [{ index: 0, action: 'navigate', url: 'javascript:alert(1)', summary: '坏链接' }],
-          citations: ['javascript:alert(1)'],
+          steps: [
+            {
+              index: 0,
+              action: 'navigate',
+              url: 'javascript:alert(1)',
+              summary: '坏链接',
+              title: '',
+              snippet: '坏链接',
+            },
+          ],
+          citations: [{ url: 'javascript:alert(1)', label: '外部内容，非课件' }],
         }),
       },
     });
@@ -115,6 +143,26 @@ describe('BrowseTimeline', () => {
     const cite = wrapper.get('[data-testid="browse-citation"]');
     expect(cite.element.tagName).toBe('SPAN');
     expect(cite.attributes('href')).toBeUndefined();
+  });
+
+  it('旧记录缺少 title/snippet 时回退 summary，不出现空白证据', () => {
+    const legacy = makeRun({
+      steps: [
+        {
+          index: 0,
+          action: 'read',
+          url: 'https://docs.python.org/3/',
+          summary: 'legacy summary',
+          title: undefined as unknown as string,
+          snippet: undefined as unknown as string,
+        },
+      ],
+    });
+
+    const wrapper = mount(BrowseTimeline, { props: { run: legacy } });
+
+    expect(wrapper.find('[data-testid="browse-step-title"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="browse-step-snippet"]').text()).toBe('legacy summary');
   });
 
   it('状态徽章可读（文字双通道，不靠颜色）+ role=status', () => {

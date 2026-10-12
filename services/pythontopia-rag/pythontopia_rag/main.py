@@ -4,7 +4,7 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request, status
 from pydantic import BaseModel
 
 from pythontopia_rag.app_state import create_default_state
@@ -98,3 +98,23 @@ app.include_router(embed_router)
 @app.get("/healthz", response_model=HealthResponse)
 def healthz() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+@app.get("/readyz", response_model=HealthResponse)
+async def readyz(request: Request) -> HealthResponse:
+    rag_state = request.app.state.rag
+    index_status = await rag_state.store.status()
+    if index_status.built_chunks <= 0:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RAG index is empty",
+        )
+    live_degraded = bool(getattr(rag_state.embedder, "using_fallback", False))
+    if index_status.degraded or live_degraded:
+        if rag_state.bm25.built_chunks > 0:
+            return HealthResponse(status="ready_degraded")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RAG has no usable retrieval index",
+        )
+    return HealthResponse(status="ready")

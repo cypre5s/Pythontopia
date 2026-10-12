@@ -319,6 +319,7 @@ vi.mock("@/components/workshop/ChatComposer.vue", async () => {
 });
 
 import WorkshopChat from "@/components/workshop/WorkshopChat.vue";
+import { useSessionStore } from "@stores/session";
 import { useWorkshopActivityStore } from "@stores/workshopActivity";
 import type {
   IntentKind,
@@ -465,6 +466,7 @@ function buildRouter(): Router {
 
 function mountChat(): VueWrapper {
   return mount(WorkshopChat, {
+    props: { ownerId: 7 },
     global: {
       plugins: [router],
       stubs: {
@@ -511,6 +513,12 @@ enableAutoUnmount(afterEach);
 describe("WorkshopChat 17 工具分发", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    useSessionStore().user = {
+      id: 7,
+      username: "student-7",
+      displayName: "学生七",
+      role: "STUDENT",
+    };
     router = buildRouter();
     // jsdom 没有 Element.scrollTo，补一个空实现避免 nextTick 回调抛错。
     Object.defineProperty(Element.prototype, "scrollTo", {
@@ -564,6 +572,58 @@ describe("WorkshopChat 17 工具分发", () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it("卸载时中止组件持有的三条 SSE，防止旧账号结果继续回写", () => {
+    const wrapper = mountChat();
+    const tutor = sse(TUTOR_URL);
+    const workshop = sse(WORKSHOP_URL);
+    const orchestrator = sse(ORCH_URL);
+
+    wrapper.unmount();
+
+    expect(tutor.abort).toHaveBeenCalledOnce();
+    expect(workshop.abort).toHaveBeenCalledOnce();
+    expect(orchestrator.abort).toHaveBeenCalledOnce();
+  });
+
+  it("旧账号的异步工具结果在 owner 切换后不发历史 POST 也不 emit", async () => {
+    const wrapper = mountChat();
+    const orchestrator = sse(ORCH_URL);
+    let release: (() => void) | undefined;
+    orchestrator.start.mockImplementation(() => new Promise<void>((resolve) => {
+      release = () => {
+        orchestrator.status.value = "done";
+        orchestrator.result.value = {
+          reply_md: "A 账号的延迟规划",
+          clarifying_question: null,
+          needs_user_input: false,
+          plan: [],
+          dispatch_results: [],
+          profile_updates: [],
+          trace: [],
+          done: true,
+        };
+        resolve();
+      };
+    }));
+    armRoute({ intent: "PLAN" });
+
+    await submit(wrapper, "帮 A 规划学习");
+    expect(orchestrator.start).toHaveBeenCalledOnce();
+
+    useSessionStore().user = {
+      id: 8,
+      username: "student-8",
+      displayName: "学生八",
+      role: "STUDENT",
+    };
+    await wrapper.setProps({ ownerId: 8 });
+    release?.();
+    await flushPromises();
+
+    expect(apiMocks.recordWorkshopChatHistoryTurn).not.toHaveBeenCalled();
+    expect(wrapper.emitted("history-saved")).toBeUndefined();
   });
 
   it("欢迎屏（WelcomePanel）quick 事件直接走 onSubmit → 默认答疑管线", async () => {

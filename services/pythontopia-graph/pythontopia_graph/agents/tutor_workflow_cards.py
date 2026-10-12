@@ -329,6 +329,7 @@ class TutorWorkflowCardAgent:
         last_cards: list[dict[str, Any]],
         chat_history: list[dict[str, str]],
         profile_brief: str,
+        images: list[str] | None = None,
     ) -> dict[str, Any]:
         cards_block = "\n".join(
             f"- [{card.get('card_id', '')}|{card.get('card_key', '')}] {card.get('short_text', '')}"
@@ -340,14 +341,21 @@ class TutorWorkflowCardAgent:
             f"最近导学卡片:\n{cards_block or '(还没有卡片)'}\n"
             f"学生消息: {message}"
         )
-        messages = self._messages(CHAT_PROMPT, user_prompt, profile_brief)
+        messages: list[dict[str, Any]] = self._messages(CHAT_PROMPT, user_prompt, profile_brief)
         # 多轮对话历史插在 system 与本轮 user 之间。
         history = [
             {"role": turn.get("role", "user"), "content": turn.get("content", "")}
             for turn in chat_history[-10:]
         ]
         messages = [messages[0], *history, messages[-1]]
-        card = await self._generate_with_messages("ai_reply", messages)
+        if images:
+            messages[-1]["content"] = [
+                {"type": "text", "text": user_prompt},
+                *({"type": "image_url", "image_url": {"url": image}} for image in images),
+            ]
+        card = await self._generate_with_messages(
+            "ai_reply", messages, model_tier="vision" if images else None
+        )
         return self._validate("ai_reply", card)
 
     async def knowledge_review(
@@ -482,15 +490,16 @@ class TutorWorkflowCardAgent:
     async def _generate_with_messages(
         self,
         card_key: str,
-        messages: list[dict[str, str]],
+        messages: list[dict[str, Any]],
         extra_validate: Any = None,
+        model_tier: str | None = None,
     ) -> dict[str, Any]:
         """LLM 产出 JSON；schema/防泄答违规时带审查意见重试一次，仍违规 fail fast。"""
         last_error = ""
         attempt_messages = list(messages)
         for _ in range(2):
             try:
-                response = await self._chat_json(attempt_messages)
+                response = await self._chat_json(attempt_messages, model_tier=model_tier)
             except Exception as exc:  # noqa: BLE001 - provider 故障归 SYSTEM_ERROR
                 raise CardGenerationError("SYSTEM_ERROR", f"LLM generation failed: {exc}") from exc
             card = _coerce_json(response)
@@ -516,12 +525,20 @@ class TutorWorkflowCardAgent:
             "SCHEMA_VIOLATION", f"Card schema validation failed for '{card_key}': {last_error}"
         )
 
-    async def _chat_json(self, messages: list[dict[str, str]]) -> LlmResponse:
+    async def _chat_json(
+        self, messages: list[dict[str, Any]], *, model_tier: str | None = None
+    ) -> LlmResponse:
+        kwargs: dict[str, Any] = {
+            "response_format": {"type": "json_object"},
+            "temperature": 0.4,
+        }
+        if model_tier:
+            kwargs["model_tier"] = model_tier
         try:
-            return await self.provider.chat(
-                messages, response_format={"type": "json_object"}, temperature=0.4
-            )
+            return await self.provider.chat(messages, **kwargs)
         except TypeError:
+            if model_tier:
+                raise
             return await self.provider.chat(messages)
 
     @staticmethod

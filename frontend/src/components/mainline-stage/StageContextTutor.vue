@@ -27,6 +27,7 @@ interface TutorTurn {
   question: string;
   answer: string;
   grounding: 'PASSED' | 'NO_EVIDENCE' | 'FAILED' | '';
+  images: string[];
 }
 
 const props = withDefaults(
@@ -47,6 +48,12 @@ const props = withDefaults(
 const sse = useSseStream<TutorAskResult>('/api/tutor/ask');
 
 const question = ref('');
+const fileInput = ref<HTMLInputElement | null>(null);
+const attachedImages = ref<string[]>([]);
+const pendingImages = ref<string[]>([]);
+const imageReads = ref(0);
+const MAX_IMAGES = 3;
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const turns = ref<TutorTurn[]>([]);
 /** 流式回答期间显示的提问气泡（完成后并入 turns）。 */
 const pendingQuestion = ref('');
@@ -67,12 +74,51 @@ function scrollToBottom(): void {
   });
 }
 
+function onImagesSelected(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  input.value = '';
+  for (const file of files) {
+    if (attachedImages.value.length + imageReads.value >= MAX_IMAGES) {
+      errorMsg.value = `最多上传 ${MAX_IMAGES} 张图片`;
+      break;
+    }
+    if (!/^image\/(png|jpe?g|gif|webp)$/.test(file.type)) {
+      errorMsg.value = '仅支持 PNG / JPG / GIF / WebP 图片';
+      continue;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      errorMsg.value = '单张图片不能超过 4MB';
+      continue;
+    }
+    imageReads.value += 1;
+    const reader = new FileReader();
+    reader.onload = () => {
+      imageReads.value -= 1;
+      if (typeof reader.result === 'string') attachedImages.value = [...attachedImages.value, reader.result];
+    };
+    reader.onerror = () => {
+      imageReads.value -= 1;
+      errorMsg.value = '图片读取失败';
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function removeImage(index: number): void {
+  attachedImages.value = attachedImages.value.filter((_, i) => i !== index);
+}
+
 async function ask(): Promise<void> {
-  const q = question.value.trim();
-  if (!q || busy.value) return;
+  const typedQuestion = question.value.trim();
+  if ((!typedQuestion && !attachedImages.value.length) || busy.value || imageReads.value) return;
+  const images = [...attachedImages.value];
+  const q = typedQuestion || '请结合图片解释当前学习内容。';
   busy.value = true;
   errorMsg.value = '';
   pendingQuestion.value = q;
+  pendingImages.value = images;
+  attachedImages.value = [];
   question.value = '';
   scrollToBottom();
   let context = '';
@@ -81,7 +127,7 @@ async function ask(): Promise<void> {
   } catch {
     context = '';
   }
-  await sse.start({ question: q, kcCodes: props.kcCodes, context });
+  await sse.start({ question: q, kcCodes: props.kcCodes, context, ...(images.length ? { images } : {}) });
   if (sse.status.value === 'done' && sse.result.value) {
     const r = sse.result.value;
     turns.value = [
@@ -89,6 +135,7 @@ async function ask(): Promise<void> {
       {
         question: q,
         answer: r.answer_md || sse.tokens.value,
+        images,
         grounding: r.based_on_general_knowledge
           ? 'NO_EVIDENCE'
           : r.grounding_result && r.grounding_result.passed === false
@@ -99,9 +146,11 @@ async function ask(): Promise<void> {
   } else {
     errorMsg.value = sse.error.value?.message ?? '助教暂时没答上来，请重试。';
     // 失败把问题放回输入框，方便直接重试。
-    question.value = q;
+    question.value = typedQuestion;
+    attachedImages.value = images;
   }
   pendingQuestion.value = '';
+  pendingImages.value = [];
   busy.value = false;
   scrollToBottom();
 }
@@ -137,7 +186,16 @@ async function ask(): Promise<void> {
         :key="i"
       >
         <div class="sct__msg sct__msg--user">
-          <span class="sct__bubble sct__bubble--user">{{ t.question }}</span>
+          <div class="sct__bubble sct__bubble--user">
+            <span>{{ t.question }}</span>
+            <img
+              v-for="(image, imageIndex) in t.images"
+              :key="imageIndex"
+              class="sct__image-thumb"
+              :src="image"
+              :alt="`提问图片 ${imageIndex + 1}`"
+            >
+          </div>
         </div>
         <div class="sct__msg sct__msg--tutor">
           <div
@@ -156,7 +214,16 @@ async function ask(): Promise<void> {
 
       <template v-if="busy">
         <div class="sct__msg sct__msg--user">
-          <span class="sct__bubble sct__bubble--user">{{ pendingQuestion }}</span>
+          <div class="sct__bubble sct__bubble--user">
+            <span>{{ pendingQuestion }}</span>
+            <img
+              v-for="(image, imageIndex) in pendingImages"
+              :key="imageIndex"
+              class="sct__image-thumb"
+              :src="image"
+              :alt="`提问图片 ${imageIndex + 1}`"
+            >
+          </div>
         </div>
         <div
           class="sct__msg sct__msg--tutor"
@@ -182,6 +249,24 @@ async function ask(): Promise<void> {
       @submit.prevent="ask"
     >
       <input
+        ref="fileInput"
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        multiple
+        hidden
+        data-testid="stage-context-tutor-image-input"
+        @change="onImagesSelected"
+      >
+      <button
+        type="button"
+        class="sct__attach"
+        aria-label="添加图片"
+        :disabled="busy || imageReads > 0 || attachedImages.length >= MAX_IMAGES"
+        @click="fileInput?.click()"
+      >
+        图片
+      </button>
+      <input
         v-model="question"
         class="sct__input"
         type="text"
@@ -191,12 +276,35 @@ async function ask(): Promise<void> {
       <button
         type="submit"
         class="sct__submit"
-        :disabled="busy || !question.trim()"
+        :disabled="busy || imageReads > 0 || (!question.trim() && !attachedImages.length)"
         data-testid="stage-context-tutor-submit"
       >
         {{ busy ? '思考中…' : '发送' }}
       </button>
     </form>
+    <div
+      v-if="attachedImages.length"
+      class="sct__attachments"
+      data-testid="stage-context-tutor-attachments"
+    >
+      <div
+        v-for="(image, index) in attachedImages"
+        :key="index"
+        class="sct__attachment"
+      >
+        <img
+          :src="image"
+          :alt="`待发送图片 ${index + 1}`"
+        >
+        <button
+          type="button"
+          :aria-label="`移除图片 ${index + 1}`"
+          @click="removeImage(index)"
+        >
+          ×
+        </button>
+      </div>
+    </div>
   </section>
 </template>
 
@@ -263,6 +371,43 @@ async function ask(): Promise<void> {
   background: var(--pyt-color-warning-bg);
   border: 1px solid var(--pyt-color-gold);
   color: var(--pyt-color-text-primary);
+}
+.sct__image-thumb {
+  display: block;
+  max-width: 180px;
+  max-height: 120px;
+  margin-top: var(--pyt-space-1);
+  border-radius: var(--pyt-radius-sm);
+}
+.sct__attach {
+  flex: 0 0 auto;
+  padding: var(--pyt-space-1) var(--pyt-space-2);
+  border: 1px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-sm);
+  background: var(--pyt-color-bg-primary);
+  cursor: pointer;
+}
+.sct__attachments {
+  display: flex;
+  gap: var(--pyt-space-1);
+}
+.sct__attachment {
+  position: relative;
+}
+.sct__attachment img {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: var(--pyt-radius-sm);
+}
+.sct__attachment button {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  cursor: pointer;
 }
 .sct__bubble--tutor {
   background: var(--pyt-color-bg-elevated);

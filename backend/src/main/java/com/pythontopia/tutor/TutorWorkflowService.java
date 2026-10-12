@@ -113,6 +113,7 @@ public class TutorWorkflowService {
 
     SseEmitter emitter = new SseEmitter(180_000L);
     graphClient.runStream(
+        userId,
         body,
         emitter,
         resultJson -> {

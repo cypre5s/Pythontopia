@@ -28,7 +28,8 @@ class TwinWeeklyControllerTest {
         "2026-06-09",
         new WeeklyReportDto.MemoryBrief(3, 1, 1, List.of("PY43-KC-001"), List.of("x")),
         List.of(),
-        List.of(new WeeklyReportDto.MasteryDeltaBrief("PY43-KC-001", 0.6, 0.4, List.of())),
+        List.of(new WeeklyReportDto.MasteryDeltaBrief(
+            "PY43-KC-001", 0.6, 0.8, 0.4, 1, List.of("PRACTICE_PASS"))),
         List.of(new WeeklyReportDto.ResourceRunBrief("handout", "讲义", "SUCCESS", 2, "2026-06-08T00:00:00Z")));
   }
 

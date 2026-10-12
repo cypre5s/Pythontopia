@@ -136,7 +136,7 @@ sequenceDiagram
 ```mermaid
 sequenceDiagram
   Browser->>Backend: POST /api/submissions
-  Backend->>Backend: SubprocessPythonSandbox 跑 hidden cases
+  Backend->>Piston: 独立 Isolate 沙箱运行 hidden cases
   Backend-->>Browser: judge_result + verdict
   alt verdict != AC
     Browser->>Backend: POST /api/bug-mine/sessions

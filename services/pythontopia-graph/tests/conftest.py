@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import pytest
+from pythontopia_graph.schemas.chapter_test import QuestionPaper, SelfTestReport
 
 
 @pytest.fixture(autouse=True)
@@ -13,3 +14,27 @@ def _isolate_internal_token_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     monkeypatch.delenv("PYT_RAG_ADMIN_TOKEN", raising=False)
     monkeypatch.setenv("PYT_INTERNAL_AUTH_OPTIONAL", "1")
+
+
+@pytest.fixture
+def chapter_test_sandbox(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stub remote judging in paper graph tests; Piston contract is tested separately."""
+    def self_test(paper: QuestionPaper) -> SelfTestReport:
+        coding = paper.coding_items()
+        case_count = sum(len(item.samples) + len(item.hidden_test_cases) for item in coding)
+        bad_solutions = {"print('wrong')", "print(0)"}
+        passed = all(item.reference_solution not in bad_solutions for item in coding)
+        return SelfTestReport(
+            passed=passed,
+            coding_items=len(coding),
+            cases_total=case_count,
+            cases_passed=case_count if passed else 0,
+            reasons=[] if passed else ["self_test:p1:expected output mismatch"],
+        )
+
+    for target in (
+        "pythontopia_graph.agents.paper_reviews.sandbox_self_test",
+        "pythontopia_graph.agents.paper_designer.sandbox_self_test",
+        "pythontopia_graph.agents.paper_pipeline.sandbox_self_test",
+    ):
+        monkeypatch.setattr(target, self_test)

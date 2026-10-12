@@ -136,13 +136,13 @@ def _capture_request_bodies(
 async def test_chat_uses_fast_model_when_tier_is_fast(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPENAI_MODEL_FAST", "deepseek-v4-flash")
+    monkeypatch.setenv("OPENAI_MODEL_FAST", "deepseek-flash")
     bodies = _capture_request_bodies(monkeypatch)
     provider = OpenAiCompatProvider()
 
     await provider.chat([{"role": "user", "content": "ping"}], model_tier="fast")
 
-    assert bodies[0]["model"] == "deepseek-v4-flash"
+    assert bodies[0]["model"] == "deepseek-flash"
     # model_tier 是路由提示，不得透传进上游请求体。
     assert "model_tier" not in bodies[0]
 
@@ -217,6 +217,27 @@ async def test_chat_stream_fails_fast_when_vision_model_is_unconfigured(
         ]
 
 
+def test_openai_compat_rejects_non_deepseek_base_url() -> None:
+    with pytest.raises(RuntimeError, match="DeepSeek base URL"):
+        OpenAiCompatProvider(
+            base_url="https://llm.example/v1",
+            api_key="test-key",
+            model="test-model",
+        )
+
+
+def test_offline_optimizer_rejects_non_deepseek_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    from pythontopia_graph.optimize import compile as optimize_compile
+
+    monkeypatch.setattr(optimize_compile, "_require_dspy", lambda: object())
+    with pytest.raises(ValueError, match="DeepSeek"):
+        optimize_compile.build_openai_lm(
+            model="test-model",
+            base_url="https://other-provider.example/v1",
+            api_key="test-key",
+        )
+
+
 @pytest.mark.asyncio
 async def test_chat_drops_guard_context_before_serializing_request_body(
     monkeypatch: pytest.MonkeyPatch,
@@ -276,7 +297,7 @@ async def test_chat_stream_drops_guard_context_before_serializing_payload(
 async def test_chat_defaults_to_primary_model_without_tier(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setenv("OPENAI_MODEL_FAST", "deepseek-v4-flash")
+    monkeypatch.setenv("OPENAI_MODEL_FAST", "deepseek-flash")
     bodies = _capture_request_bodies(monkeypatch)
     provider = OpenAiCompatProvider()
 
@@ -353,24 +374,12 @@ async def test_openai_compat_without_proxy_env_does_not_force_local_proxy(
 
 
 @pytest.mark.asyncio
-async def test_provider_from_env_routes_json_calls_to_fine_tuned_adapter(
+def test_provider_from_env_rejects_fine_tuned_provider(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("PYT_FINE_TUNED_LLM_ENABLED", "true")
-    monkeypatch.setenv("PYT_FINE_TUNED_BASE_URL", "http://127.0.0.1:18094/v1")
-    monkeypatch.setenv("PYT_FINE_TUNED_API_KEY", "local-dev-token")
-    monkeypatch.setenv("PYT_FINE_TUNED_MODEL", "pythontopia-qwen35-e1-lora")
-    bodies = _capture_request_bodies(monkeypatch)
-
-    provider = provider_from_env()
-    result = await provider.chat([{"role": "user", "content": "ping"}])
-
-    assert isinstance(provider, FineTunedFallbackProvider)
-    assert result.content_json == {"ok": True}
-    assert bodies[0]["model"] == "pythontopia-qwen35-e1-lora"
-    assert bodies[0]["chat_template_kwargs"] == {"enable_thinking": False}
-    assert bodies[0]["temperature"] == 0.0
-    assert bodies[0]["top_p"] == 1.0
+    with pytest.raises(RuntimeError, match="Fine-tuned LLM providers are disabled"):
+        provider_from_env()
 
 
 @pytest.mark.asyncio

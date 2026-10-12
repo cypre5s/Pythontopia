@@ -47,13 +47,18 @@ class _RoutingMetrics:
         self._routes_error = 0
         self._routes_by_complexity: Counter[str] = Counter()
         self._c3_with_search = 0
+        self._candidates_generated = 0
+        self._candidate_appearances: Counter[str] = Counter()
         self._selected_candidates: Counter[str] = Counter()
+        self._route_fallbacks = 0
         self._route_latencies: deque[int] = deque(maxlen=_LATENCY_WINDOW)
         self._executions_total = 0
         self._executions_by_status: Counter[str] = Counter()
         self._candidate_switches = 0
         self._same_step_retries = 0
         self._agent_dispatches = 0
+        self._dispatches_by_agent: Counter[str] = Counter()
+        self._dispatches_by_tool: Counter[str] = Counter()
         self._blocked_steps = 0
         self._execution_latencies: deque[int] = deque(maxlen=_LATENCY_WINDOW)
 
@@ -61,7 +66,9 @@ class _RoutingMetrics:
         with self._lock:
             self._reset_locked()
 
-    def record_route(self, decision: RouteDecision, *, latency_ms: int) -> None:
+    def record_route(
+        self, decision: RouteDecision, *, latency_ms: int, fallback_used: bool = False
+    ) -> None:
         with self._lock:
             self._routes_total += 1
             self._routes_by_complexity[decision.task.complexity] += 1
@@ -69,7 +76,13 @@ class _RoutingMetrics:
                 self._routes_clarification += 1
             if decision.search is not None:
                 self._c3_with_search += 1
+                self._candidates_generated += len(decision.search.candidates)
+                self._candidate_appearances.update(
+                    candidate.candidate_id for candidate in decision.search.candidates
+                )
                 self._selected_candidates[decision.search.selected_candidate_id] += 1
+            if fallback_used:
+                self._route_fallbacks += 1
             self._route_latencies.append(max(0, int(latency_ms)))
 
     def record_route_error(self, *, latency_ms: int) -> None:
@@ -89,11 +102,15 @@ class _RoutingMetrics:
         candidate_switches: int,
         same_step_retries: int,
         latency_ms: int,
+        by_agent: dict[str, int] | None = None,
+        by_tool: dict[str, int] | None = None,
     ) -> None:
         with self._lock:
             self._executions_total += 1
             self._executions_by_status[status] += 1
             self._agent_dispatches += max(0, dispatched_steps)
+            self._dispatches_by_agent.update(by_agent or {})
+            self._dispatches_by_tool.update(by_tool or {})
             self._blocked_steps += max(0, blocked_steps)
             self._candidate_switches += max(0, candidate_switches)
             self._same_step_retries += max(0, same_step_retries)
@@ -108,13 +125,17 @@ class _RoutingMetrics:
                     "errors": self._routes_error,
                     "byComplexity": dict(self._routes_by_complexity),
                     "c3WithSearch": self._c3_with_search,
+                    "candidatesGenerated": self._candidates_generated,
+                    "candidateAppearances": dict(self._candidate_appearances),
                     "selectedCandidates": dict(self._selected_candidates),
+                    "fallbacks": self._route_fallbacks,
                     "latencyMs": {
                         "p50": _percentile(self._route_latencies, 0.5),
                         "p95": _percentile(self._route_latencies, 0.95),
                     },
                     "clarificationRate": _rate(self._routes_clarification, self._routes_total),
                     "c3Rate": _rate(self._c3_with_search, self._routes_total),
+                    "fallbackRate": _rate(self._route_fallbacks, self._routes_total),
                     "errorRate": _rate(self._routes_error, self._routes_total),
                 },
                 "executions": {
@@ -123,6 +144,8 @@ class _RoutingMetrics:
                     "candidateSwitches": self._candidate_switches,
                     "sameStepRetries": self._same_step_retries,
                     "agentDispatches": self._agent_dispatches,
+                    "byAgent": dict(self._dispatches_by_agent),
+                    "byTool": dict(self._dispatches_by_tool),
                     "blockedSteps": self._blocked_steps,
                     "latencyMs": {
                         "p50": _percentile(self._execution_latencies, 0.5),
@@ -142,8 +165,12 @@ class _RoutingMetrics:
 _METRICS = _RoutingMetrics()
 
 
-def record_route(decision: RouteDecision, *, latency_ms: int) -> None:
-    _METRICS.record_route(decision, latency_ms=latency_ms)
+def record_route(
+    decision: RouteDecision, *, latency_ms: int, fallback_used: bool = False
+) -> None:
+    _METRICS.record_route(
+        decision, latency_ms=latency_ms, fallback_used=fallback_used
+    )
 
 
 def record_route_error(*, latency_ms: int) -> None:
@@ -158,6 +185,8 @@ def record_execution(
     candidate_switches: int,
     same_step_retries: int,
     latency_ms: int,
+    by_agent: dict[str, int] | None = None,
+    by_tool: dict[str, int] | None = None,
 ) -> None:
     _METRICS.record_execution(
         status=status,
@@ -166,6 +195,8 @@ def record_execution(
         candidate_switches=candidate_switches,
         same_step_retries=same_step_retries,
         latency_ms=latency_ms,
+        by_agent=by_agent,
+        by_tool=by_tool,
     )
 
 

@@ -59,3 +59,38 @@ async def test_ask_stream_injects_real_code_output(monkeypatch: pytest.MonkeyPat
     ]
     assert verification_messages
     assert "stdout=6" in verification_messages[0]
+
+
+@pytest.mark.asyncio
+async def test_ask_stream_does_not_claim_code_ran_when_piston_is_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    provider = CapturingProvider()
+    monkeypatch.setattr(
+        tutor_module,
+        "run_python",
+        lambda code, **kwargs: CodeRunResult(
+            stdout="",
+            stderr="隔离沙箱不可用",
+            exit_code=-1,
+            timed_out=False,
+            truncated=False,
+            runtime_error="sandbox_unavailable",
+        ),
+    )
+
+    _ = [
+        token
+        async for token in TutorAgent(provider).ask_stream(
+            question="这段代码为什么报错？\n```python\nprint(1)\n```",
+            profile_brief="",
+            conversation_history=[],
+            evidence_chunks=[],
+        )
+    ]
+
+    verification_messages = [
+        message["content"] for message in provider.messages if "代码运行验证" in message["content"]
+    ]
+    assert verification_messages
+    assert "没有实际执行" in verification_messages[0]

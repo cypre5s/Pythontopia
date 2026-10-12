@@ -120,4 +120,33 @@ describe('TutorPanel · 删助教小队后保留答案 + 证据回链', () => {
     expect(wrapper.findAll('.crew__style-btn')).toHaveLength(0);
     expect(wrapper.find('.tutor-crew').exists()).toBe(false);
   });
+
+  it('允许只发图片并生成默认问题', async () => {
+    vi.stubGlobal('FileReader', class {
+      result: string | null = null;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      readAsDataURL(file: Blob): void {
+        this.result = `data:${file.type};base64,iVBORw0KGgo=`;
+        this.onload?.();
+      }
+    });
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const wrapper = mount(TutorPanel, { global: { plugins: [pinia], stubs } });
+    await flushPromises();
+    const file = new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], 'question.png', { type: 'image/png' });
+    const input = wrapper.get('[data-testid="tutor-image-input"]');
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
+    await input.trigger('change');
+    await flushPromises();
+    await wrapper.get('[data-testid="tutor-submit"]').trigger('click');
+    await flushPromises();
+
+    expect(getStream().start).toHaveBeenCalledWith(expect.objectContaining({
+      question: '请讲解这张图片中的内容。',
+      images: ['data:image/png;base64,iVBORw0KGgo='],
+    }));
+    vi.unstubAllGlobals();
+  });
 });

@@ -4,11 +4,9 @@
  * - mermaid 结构图（用 mermaid 渲染 SVG，失败回退源码）
  * - ascii 字符画（等宽 <pre>，内存布局/索引演示类）
  * - svg 矢量示意（服务端已校验 + 前端 DOMPurify svg profile 双重消毒）
- * - AI 插画（调 /api/media/image 文生图，无 key 占位 degraded）
  * 卡片化展示，配合文字答案构成「文字 + 图解」的多模态答疑。
  */
 import { onMounted, ref, watch } from 'vue';
-import { generateImage } from '@/api/media';
 import { sanitizeSvgMarkup } from '@/utils/sanitizeSvg';
 
 export interface TutorVisualAid {
@@ -24,16 +22,12 @@ export interface TutorVisualAid {
 const props = defineProps<{ aids: TutorVisualAid[] }>();
 
 interface RenderedAid {
-  kind: 'mermaid' | 'image' | 'ascii' | 'svg';
+  kind: 'mermaid' | 'ascii' | 'svg';
   caption: string;
   /** mermaid 渲染产物或已消毒的后端 svg 源码。 */
   svg?: string;
   rawMermaid?: string;
   ascii?: string;
-  imageUrl?: string;
-  degraded?: boolean;
-  loading?: boolean;
-  failed?: boolean;
 }
 
 const rendered = ref<RenderedAid[]>([]);
@@ -46,15 +40,6 @@ async function renderMermaid(text: string, idx: number): Promise<RenderedAid> {
     return { kind: 'mermaid', caption: '', svg };
   } catch {
     return { kind: 'mermaid', caption: '', rawMermaid: text };
-  }
-}
-
-async function renderImage(prompt: string, kcCodes: string[]): Promise<RenderedAid> {
-  try {
-    const asset = await generateImage(prompt, kcCodes[0], kcCodes);
-    return { kind: 'image', caption: '', imageUrl: asset.url, degraded: asset.degraded };
-  } catch {
-    return { kind: 'image', caption: '', failed: true };
   }
 }
 
@@ -75,10 +60,6 @@ async function build(): Promise<void> {
       if (clean.includes('<svg')) {
         out.push({ kind: 'svg', caption: aid.caption ?? '', svg: clean });
       }
-    } else if (aid.kind === 'image' && aid.image_prompt) {
-      const card = await renderImage(aid.image_prompt, aid.kc_codes ?? []);
-      card.caption = aid.caption ?? '';
-      out.push(card);
     }
   }
   rendered.value = out;
@@ -125,24 +106,6 @@ watch(() => props.aids, build);
           data-testid="aid-svg"
           v-html="card.svg"
         />
-        <template v-else-if="card.kind === 'image'">
-          <img
-            v-if="card.imageUrl"
-            :src="card.imageUrl"
-            :alt="card.caption"
-            class="aid-image"
-          >
-          <span
-            v-if="card.degraded"
-            class="aid-badge"
-          >占位</span>
-          <p
-            v-if="card.failed"
-            class="aid-failed"
-          >
-            图解生成失败
-          </p>
-        </template>
         <!-- eslint-enable vue/no-v-html -->
         <figcaption
           v-if="card.caption"
@@ -220,34 +183,6 @@ watch(() => props.aids, build);
   height: auto;
   display: block;
   margin: 0 auto;
-}
-.aid-image {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-  border: 2px solid var(--pyt-color-shadow);
-  border-radius: 4px;
-  image-rendering: pixelated;
-  background: #1a1208;
-}
-.aid-badge {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  font-size: 10px;
-  color: var(--pyt-color-bg-elevated);
-  background: #b39554;
-  border-radius: 999px;
-  padding: 2px 8px;
-  font-family: var(--pyt-font-pixel);
-}
-.aid-failed {
-  margin: 0;
-  font-size: 12px;
-  color: #b3402a;
-  text-align: center;
-  padding: 16px 0;
-  font-family: var(--pyt-font-pixel);
 }
 .aid-caption {
   margin-top: 6px;

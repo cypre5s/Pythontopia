@@ -12,8 +12,7 @@ import org.junit.jupiter.api.Test;
  * 主线打点请求体的边界校验。
  *
  * <ul>
- *   <li>无尽小结：单字段 {@code @Min/@Max} 挡不住 {@code correct > total} 这类跨字段构造
- *       （{@code {"chapter":1,"correct":8,"total":1}} → 正确率 8.0 直接达标白拿 1★）。
+ *   <li>无尽补星只接受章节和 UUID runId，不再接收客户端自报的成绩。
  *   <li>批量页阅读：无条数上限时可把整章 116 个 pageId 一次灌回。
  * </ul>
  */
@@ -22,23 +21,17 @@ class MainlineRequestValidationTest {
   private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
   @Test
-  void endlessSummaryAcceptsPlausibleRound() {
-    assertThat(validator.validate(new EndlessSummaryRequest(1, 8, 10, 5))).isEmpty();
+  void endlessSummaryAcceptsRunId() {
+    assertThat(
+            validator.validate(
+                new EndlessSummaryRequest(1, "123e4567-e89b-12d3-a456-426614174000")))
+        .isEmpty();
   }
 
   @Test
-  void endlessSummaryRejectsCorrectAboveTotal() {
-    assertThat(validator.validate(new EndlessSummaryRequest(1, 8, 1, 0))).isNotEmpty();
-  }
-
-  @Test
-  void endlessSummaryRejectsStreakAboveTotal() {
-    assertThat(validator.validate(new EndlessSummaryRequest(1, 10, 10, 11))).isNotEmpty();
-  }
-
-  @Test
-  void endlessSummaryRejectsAbsurdRoundSize() {
-    assertThat(validator.validate(new EndlessSummaryRequest(1, 100_000, 100_000, 0))).isNotEmpty();
+  void endlessSummaryRejectsMalformedRunId() {
+    assertThat(validator.validate(new EndlessSummaryRequest(1, "client-claimed-score")))
+        .isNotEmpty();
   }
 
   @Test

@@ -16,14 +16,19 @@
 # =============================================================================
 set -uo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PYT_PUBLIC_IP="${PYT_PUBLIC_IP:-47.120.29.62}"
 ENV_FILE="${PYT_ENV_FILE:-/opt/pythontopia/shared/.env}"
 ENV_FILE_FALLBACK="/opt/pythontopia/current/deploy/.env"
 
 # 生产编排必需的变量名。密钥值只做本地强度校验，绝不打印。
-REQUIRED_VARS=(PYT_DB_USERNAME PYT_DB_PASSWORD PYT_JWT_SECRET PYT_TEACHER_INVITE_CODE PYT_RAG_ADMIN_TOKEN PYT_ROUTE_EXECUTION_SECRET)
-# 建议配置的变量名（缺失仅警告：相关功能会降级而不会阻塞主链路）
-RECOMMENDED_VARS=(PYT_LLM_PROVIDER PYT_OPENAI_BASE_URL PYT_OPENAI_API_KEY PYT_OPENAI_MODEL PYT_RAG_EMBEDDER PYT_RAG_EMBEDDING_FALLBACK EMBEDDING_BASE_URL EMBEDDING_MODEL EMBEDDING_DIM PYT_SPARK_APP_ID PYT_SPARK_API_KEY PYT_SPARK_API_SECRET)
+REQUIRED_VARS=(
+  PYT_DB_USERNAME PYT_DB_PASSWORD PYT_JWT_SECRET PYT_TEACHER_INVITE_CODE
+  PYT_RAG_ADMIN_TOKEN PYT_ROUTE_EXECUTION_SECRET
+  PYT_JUDGE_PROVIDER PYT_PISTON_URL PYT_PISTON_PYTHON_VERSION PYT_PISTON_AUTH_TOKEN
+  PYT_LLM_PROVIDER PYT_OPENAI_BASE_URL PYT_OPENAI_API_KEY PYT_OPENAI_MODEL
+  PYT_OPENAI_MODEL_VISION PYT_RAG_EMBEDDER
+)
 
 PASS_COUNT=0
 WARN_COUNT=0
@@ -37,17 +42,137 @@ info() { echo "[信息] $*"; }
 
 section() { echo; echo "===== $* ====="; }
 
+# 只读取指定变量，不执行 .env 内容、不输出变量值；兼容一层单/双引号。
+env_file_value() {
+  local env_file="$1"
+  local var_name="$2"
+  local value
+  value=$(sed -n "s/^[[:space:]]*${var_name}=//p" "${env_file}" 2>/dev/null | tail -n 1)
+  value="${value%$'\r'}"
+  case "${value}" in
+    \"*\") value="${value#\"}"; value="${value%\"}" ;;
+    \'*\') value="${value#\'}"; value="${value%\'}" ;;
+  esac
+  printf '%s' "${value}"
+}
+
+is_public_placeholder() {
+  local value="${1,,}"
+  case "${value}" in
+    ""|*replace-with*|*replace_with*|*change-me*|*changeme*|*placeholder*\
+      |*your-secret*|*your-key*|*your-token*|*example-token*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+require_env_value() {
+  local env_file="$1"
+  local var_name="$2"
+  local value
+  value="$(env_file_value "${env_file}" "${var_name}")"
+  if is_public_placeholder "${value}"; then
+    fail "${var_name} 为空或仍是公开占位值（值不输出）"
+    return 1
+  fi
+  pass "${var_name} 已配置（值不输出）"
+}
+
+is_private_piston_http_url() {
+  local url="$1"
+  local authority host
+  [[ "${url}" == http://* ]] || return 1
+  authority="${url#http://}"
+  authority="${authority%%/*}"
+  if [[ "${authority}" == \[*\]* ]]; then
+    host="${authority%%]*}]"
+  else
+    host="${authority%%:*}"
+  fi
+  case "${host}" in
+    localhost|127.*|10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*\
+      |\[::1\]|piston|piston-*|*.internal|*.local) return 0 ;;
+  esac
+  [[ "${host}" != *.* ]]
+}
+
+validate_production_ai_env() {
+  local env_file="$1"
+  local provider base_url rag_embedder
+  provider="$(env_file_value "${env_file}" PYT_LLM_PROVIDER)"
+  provider="${provider,,}"
+  case "${provider}" in
+    openai_compat|openai-compatible|openaicompat)
+      pass "生产 LLM provider 为 DeepSeek"
+      base_url="$(env_file_value "${env_file}" PYT_OPENAI_BASE_URL)"
+      case "${base_url%/}" in
+        https://api.deepseek.com|https://api.deepseek.com/v1)
+          pass "生产模型端点指向 DeepSeek"
+          ;;
+        *) fail "PYT_OPENAI_BASE_URL 必须指向 https://api.deepseek.com" ;;
+      esac
+      require_env_value "${env_file}" PYT_OPENAI_BASE_URL || true
+      require_env_value "${env_file}" PYT_OPENAI_API_KEY || true
+      require_env_value "${env_file}" PYT_OPENAI_MODEL || true
+      require_env_value "${env_file}" PYT_OPENAI_MODEL_VISION || true
+      ;;
+    ""|dryrun)
+      fail "PYT_LLM_PROVIDER 未配置真实 provider；生产只使用 DeepSeek"
+      ;;
+    *)
+      fail "PYT_LLM_PROVIDER 不受生产门禁支持（只允许 openai_compat）"
+      ;;
+  esac
+
+  rag_embedder="$(env_file_value "${env_file}" PYT_RAG_EMBEDDER)"
+  if [ "${rag_embedder,,}" = "hash" ]; then
+    pass "生产 RAG 使用本地 hash + BM25 检索"
+  else
+    fail "PYT_RAG_EMBEDDER 必须为 hash；不允许调用外部 embedding API"
+  fi
+}
+
+validate_production_judge_env() {
+  local env_file="$1"
+  local provider piston_url
+  provider="$(env_file_value "${env_file}" PYT_JUDGE_PROVIDER)"
+  if [ "${provider,,}" = "piston" ]; then
+    pass "生产判题 provider 为 piston"
+  else
+    fail "PYT_JUDGE_PROVIDER 必须为 piston；生产禁止 subprocess"
+  fi
+  require_env_value "${env_file}" PYT_PISTON_URL || true
+  require_env_value "${env_file}" PYT_PISTON_PYTHON_VERSION || true
+  check_secret_strength PYT_PISTON_AUTH_TOKEN 32 fail "${env_file}"
+
+  piston_url="$(env_file_value "${env_file}" PYT_PISTON_URL)"
+  case "${piston_url}" in
+    https://*) pass "外部 Piston 使用 HTTPS" ;;
+    http://*)
+      if is_private_piston_http_url "${piston_url}"; then
+        warn "Piston 使用隔离内网 HTTP；请确保网络边界不可被公网访问"
+      else
+        fail "外部 Piston 地址必须使用 HTTPS"
+      fi
+      ;;
+    "") ;;
+    *) fail "PYT_PISTON_URL 必须是 http:// 或 https:// URL" ;;
+  esac
+}
+
 # 秘密强度校验：只读取长度与占位特征，任何分支都不打印变量值本身。
-# 用法：check_secret_strength <变量名> <最小长度> <fail|warn>（第三参数决定长度不足时的严重级）
+# 用法：check_secret_strength <变量名> <最小长度> <fail|warn> [env 文件]
 check_secret_strength() {
   local var_name="$1"
   local min_len="$2"
   local short_severity="$3"
-  local value
-  value=$(sed -n "s/^[[:space:]]*${var_name}=//p" "${ENV_FILE}" 2>/dev/null | tail -n 1)
-  case "${value}" in
+  local env_file="${4:-${ENV_FILE}}"
+  local value normalized
+  value="$(env_file_value "${env_file}" "${var_name}")"
+  normalized="${value,,}"
+  case "${normalized}" in
     ""|pytopia-teacher|pytopia-rag-admin|pythontopia-route-secret\
-      |*replace-with*|*replace_with*|*change-me*|*changeme*|*placeholder*|*your-secret*)
+      |*replace-with*|*replace_with*|*change-me*|*changeme*|*placeholder*\
+      |*your-secret*|*your-key*|*your-token*|*example-token*)
       fail "${var_name} 为空或使用公开占位值（必须独立随机生成，且不会在此输出）"
       return
       ;;
@@ -59,6 +184,7 @@ check_secret_strength() {
   else
     fail "${var_name} 长度不足 ${min_len}（值不输出）"
   fi
+  unset normalized value
 }
 
 echo "Pythontopia ECS 部署预检（只读） $(date '+%Y-%m-%d %H:%M:%S')"
@@ -208,24 +334,37 @@ if [ -f "${ENV_FILE}" ]; then
   check_secret_strength PYT_RAG_ADMIN_TOKEN 32 fail
   # 邀请码是人工分发的短串，长度只给建议值；但公开占位值同样一票否决。
   check_secret_strength PYT_TEACHER_INVITE_CODE 16 warn
-
-  MISSING_RECOMMENDED=()
-  for v in "${RECOMMENDED_VARS[@]}"; do
-    if ! printf '%s\n' "${DEFINED_VARS}" | grep -qx "${v}"; then
-      MISSING_RECOMMENDED+=("${v}")
-    fi
-  done
-  if [ "${#MISSING_RECOMMENDED[@]}" -eq 0 ]; then
-    pass "建议变量名齐全"
-  else
-    warn "缺少建议变量名：${MISSING_RECOMMENDED[*]}（LLM/RAG/多模态相关功能将按既定策略降级）"
-  fi
+  validate_production_ai_env "${ENV_FILE}"
+  validate_production_judge_env "${ENV_FILE}"
 else
   fail "未找到远端 .env：${ENV_FILE}（首次迁移请执行 install -D -m 600 <旧.env> /opt/pythontopia/shared/.env）"
 fi
 
 # ---------------------------------------------------------------------------
-section "6. TCP 80 端口占用"
+section "6. 课程运行时数据"
+# ---------------------------------------------------------------------------
+COURSE_DATA_ROOT="${PYT_SHARED_DATA_DIR:-/opt/pythontopia/shared/data}/course-pack-43"
+if [ -f "${ENV_FILE}" ]; then
+  CONFIGURED_SHARED_DATA="$(env_file_value "${ENV_FILE}" PYT_SHARED_DATA_DIR)"
+  if [ -n "${CONFIGURED_SHARED_DATA}" ]; then
+    COURSE_DATA_ROOT="${CONFIGURED_SHARED_DATA}/course-pack-43"
+  fi
+fi
+if ! command -v python3 >/dev/null 2>&1; then
+  fail "缺少 python3，无法校验课件/视频/字幕运行时数据"
+elif [ ! -f "${SCRIPT_DIR}/validate_course_runtime_data.py" ]; then
+  fail "发布包缺少课程数据校验器 validate_course_runtime_data.py"
+else
+  COURSE_DATA_RESULT="$(python3 "${SCRIPT_DIR}/validate_course_runtime_data.py" "${COURSE_DATA_ROOT}" 2>&1)"
+  if [ "$?" -eq 0 ]; then
+    pass "${COURSE_DATA_RESULT}"
+  else
+    fail "${COURSE_DATA_RESULT}"
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+section "7. TCP 80 端口占用"
 # ---------------------------------------------------------------------------
 PORT80_LINES=$(ss -ltnp 2>/dev/null | awk '$4 ~ /(^|:)(\*|0\.0\.0\.0|\[::\]|127\.0\.0\.1):80$/' || true)
 if [ -z "${PORT80_LINES}" ]; then
@@ -241,7 +380,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-section "7. aliyun CLI 与安全组"
+section "8. aliyun CLI 与安全组"
 # ---------------------------------------------------------------------------
 ALIYUN_OK=0
 if command -v aliyun >/dev/null 2>&1; then
@@ -305,7 +444,7 @@ else
 fi
 
 # ---------------------------------------------------------------------------
-section "8. 本地 80 与公网 80 连通性比对"
+section "9. 本地 80 与公网 80 连通性比对"
 # ---------------------------------------------------------------------------
 LOCAL_80_OK=0
 PUBLIC_80_OK=0

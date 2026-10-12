@@ -5,15 +5,24 @@ import { RouterView, useRouter } from 'vue-router';
 import AppToast from '@/components/system/AppToast.vue';
 import DialogTree from '@/components/game/DialogTree.vue';
 import PerfHud from '@/components/hud/PerfHud.vue';
+import { useSessionStore } from '@stores/session';
 import { useToastStore } from '@stores/toast';
 
 const router = useRouter();
+const session = useSessionStore();
 const toast = useToastStore();
 const fatalError = ref<string | null>(null);
 
 // 这些路由自身用 watch/computed 响应式处理 query/param 变化（如 /library?pageId=、/lecture/:chapter），
 // 因此按 route.name 取稳定 :key，避免仅 query/param 变化时整页组件 remount（点讲义/切章的"重载感"根因）。
 const STABLE_NAME_ROUTES = new Set(['world', 'library', 'workshop', 'lecture']);
+
+function accountScopedRouteKey(route: { name?: unknown; fullPath: string }): string {
+  const routeKey = STABLE_NAME_ROUTES.has(route.name as string)
+    ? String(route.name)
+    : route.fullPath;
+  return `${session.user?.id ?? 'anon'}:${session.accountEpoch}:${routeKey}`;
+}
 
 router.onError((err) => {
   const message = err instanceof Error ? err.message : String(err);
@@ -69,7 +78,7 @@ onBeforeUnmount(() => {
           >
             <component
               :is="Component"
-              :key="STABLE_NAME_ROUTES.has(route.name as string) ? String(route.name) : route.fullPath"
+              :key="accountScopedRouteKey(route)"
             />
           </Transition>
         </KeepAlive>

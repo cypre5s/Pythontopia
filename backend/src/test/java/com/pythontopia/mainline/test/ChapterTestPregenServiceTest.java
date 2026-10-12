@@ -2,6 +2,7 @@ package com.pythontopia.mainline.test;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -17,6 +18,7 @@ import com.pythontopia.mainline.test.ChapterProblemBankRepository.PreferredCodin
 import com.pythontopia.mainline.test.ChapterTestGraphClient.GenerateRequest;
 import com.pythontopia.mainline.test.ChapterTestGraphClient.GeneratedPaper;
 import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -27,16 +29,33 @@ class ChapterTestPregenServiceTest {
   private final ChapterTestGraphClient graphClient = mock(ChapterTestGraphClient.class);
   private final ChapterProblemBankRepository problemBank =
       mock(ChapterProblemBankRepository.class);
+  private final ChapterTestPersonalizationService personalization =
+      mock(ChapterTestPersonalizationService.class);
   private final ChapterTestPregenService service =
       new ChapterTestPregenService(
           repository,
           graphClient,
           problemBank,
-          mapper,
+          personalization,
           new MainlineProperties(1, null, null, 0));
+
+  @BeforeEach
+  void defaultPersonalization() {
+    when(personalization.build(anyLong(), any()))
+        .thenReturn(
+            new ChapterTestPersonalizationService.PersonalizationContext(
+                mapper.createObjectNode(), mapper.createObjectNode()));
+  }
 
   @Test
   void quizRequestsTenTenTenThreeAndPassesProblemBank() {
+    ObjectNode profileBrief = mapper.createObjectNode().put("knowledge_level", 2);
+    ObjectNode errorbookBrief = mapper.createObjectNode();
+    errorbookBrief.putArray("frequent_error_kcs").add("PY43-KC-016");
+    when(personalization.build(eq(7L), any()))
+        .thenReturn(
+            new ChapterTestPersonalizationService.PersonalizationContext(
+                profileBrief, errorbookBrief));
     PreferredCodingQuestion bankQuestion =
         new PreferredCodingQuestion(
             476L,
@@ -57,6 +76,8 @@ class ChapterTestPregenServiceTest {
     assertThat(request.getValue().counts())
         .isEqualTo(new GenerateRequest.Counts(10, 10, 10, 3));
     assertThat(request.getValue().preferredCodingQuestions()).containsExactly(bankQuestion);
+    assertThat(request.getValue().profileBrief()).isSameAs(profileBrief);
+    assertThat(request.getValue().errorbookBrief()).isSameAs(errorbookBrief);
     verify(repository).markReady(eq(9L), any(), any(), any());
   }
 

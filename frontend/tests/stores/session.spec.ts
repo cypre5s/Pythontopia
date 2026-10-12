@@ -1,7 +1,16 @@
 import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionStore } from '@/stores/session';
+import { useGuideStore } from '@/stores/guide';
 import { refresh } from '@/api/auth';
+
+const workshopHistoryMocks = vi.hoisted(() => ({
+  clear: vi.fn(),
+}));
+
+vi.mock('@/api/workshopHistory', () => ({
+  clearWorkshopChatHistoryCache: workshopHistoryMocks.clear,
+}));
 
 vi.mock('@/api/auth', () => ({
   login: vi.fn(async () => ({
@@ -33,6 +42,7 @@ describe('session store', () => {
     setActivePinia(createPinia());
     localStorage.clear();
     refreshMock.mockClear();
+    workshopHistoryMocks.clear.mockClear();
   });
 
   it('stores token / expiry / user snapshot after login', async () => {
@@ -48,6 +58,38 @@ describe('session store', () => {
       username: 'stu01',
       role: 'STUDENT',
     });
+  });
+
+  it('登录与登出都清理工坊历史模块缓存并推进账号世代', async () => {
+    const store = useSessionStore();
+    expect(store.accountEpoch).toBe(0);
+
+    await store.login({ username: 'stu01', password: 'P@ssw0rd1' });
+
+    expect(workshopHistoryMocks.clear).toHaveBeenCalledTimes(1);
+    expect(store.accountEpoch).toBe(1);
+
+    store.logout();
+
+    expect(workshopHistoryMocks.clear).toHaveBeenCalledTimes(2);
+    expect(store.accountEpoch).toBe(2);
+  });
+
+  it('登录和登出都会轮换伴学向导会话 id', async () => {
+    const store = useSessionStore();
+    const guide = useGuideStore();
+    const anonymousSessionId = guide.sessionId;
+
+    await store.login({ username: 'stu01', password: 'P@ssw0rd1' });
+    const loggedInSessionId = guide.sessionId;
+
+    expect(loggedInSessionId).not.toBe(anonymousSessionId);
+    expect(localStorage.getItem('pyt_guide_session_v1@u:stu01')).toBe(loggedInSessionId);
+
+    store.logout();
+
+    expect(guide.sessionId).not.toBe(loggedInSessionId);
+    expect(guide.sessionId).not.toBe(anonymousSessionId);
   });
 
   it('clears token / expiry / user on logout', async () => {

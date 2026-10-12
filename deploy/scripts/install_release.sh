@@ -102,16 +102,71 @@ wait_healthy() {
   done
 }
 
+# 只读取指定变量，不执行 .env 内容、不输出变量值；兼容一层单/双引号。
+env_file_value() {
+  local env_file="$1"
+  local var_name="$2"
+  local value
+  value="$(sed -n "s/^[[:space:]]*${var_name}=//p" "${env_file}" 2>/dev/null | tail -n 1)"
+  value="${value%$'\r'}"
+  case "${value}" in
+    \"*\") value="${value#\"}"; value="${value%\"}" ;;
+    \'*\') value="${value#\'}"; value="${value%\'}" ;;
+  esac
+  printf '%s' "${value}"
+}
+
+is_public_placeholder() {
+  local value="${1,,}"
+  case "${value}" in
+    ""|*replace-with*|*replace_with*|*change-me*|*changeme*|*placeholder*\
+      |*your-secret*|*your-key*|*your-token*|*example-token*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+require_env_value() {
+  local env_file="$1"
+  local var_name="$2"
+  local value
+  value="$(env_file_value "${env_file}" "${var_name}")"
+  if is_public_placeholder "${value}"; then
+    echo "[安装失败] ${var_name} 缺失或仍是公开占位值（值不会输出）。" >&2
+    return 1
+  fi
+  echo "    ${var_name} 已配置（值不输出）"
+}
+
+is_private_piston_http_url() {
+  local url="$1"
+  local authority host
+  [[ "${url}" == http://* ]] || return 1
+  authority="${url#http://}"
+  authority="${authority%%/*}"
+  if [[ "${authority}" == \[*\]* ]]; then
+    host="${authority%%]*}]"
+  else
+    host="${authority%%:*}"
+  fi
+  case "${host}" in
+    localhost|127.*|10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*\
+      |\[::1\]|piston|piston-*|*.internal|*.local) return 0 ;;
+  esac
+  [[ "${host}" != *.* ]]
+}
+
 # 从生产 .env 校验秘密存在性、公开占位特征与最小长度；任何分支都不打印值。
 check_env_secret() {
   local var_name="$1"
   local min_len="$2"
-  local value
-  value="$(sed -n "s/^[[:space:]]*${var_name}=//p" "${ENV_FILE}" 2>/dev/null | tail -n 1)"
-  value="${value%$'\r'}"
-  case "${value}" in
+  local env_file="${3:-${ENV_FILE}}"
+  local value normalized
+  value="$(env_file_value "${env_file}" "${var_name}")"
+  normalized="${value,,}"
+  case "${normalized}" in
     ""|pytopia-rag-admin|pythontopia-route-secret\
-      |*replace-with*|*replace_with*|*change-me*|*changeme*|*placeholder*|*your-secret*)
+      |*replace-with*|*replace_with*|*change-me*|*changeme*|*placeholder*\
+      |*your-secret*|*your-key*|*your-token*|*example-token*)
       echo "[安装失败] ${var_name} 缺失或仍是公开占位值；请写入独立随机密钥（值不会输出）。" >&2
       return 1
       ;;
@@ -120,8 +175,75 @@ check_env_secret() {
     echo "[安装失败] ${var_name} 长度不足 ${min_len}；请写入独立高熵密钥（值不会输出）。" >&2
     return 1
   fi
-  unset value
+  unset normalized value
   echo "    ${var_name} 强度校验通过（值不输出）"
+}
+
+validate_production_ai_env() {
+  local env_file="$1"
+  local provider base_url rag_embedder
+  provider="$(env_file_value "${env_file}" PYT_LLM_PROVIDER)"
+  provider="${provider,,}"
+  case "${provider}" in
+    openai_compat|openai-compatible|openaicompat)
+      echo "    生产 LLM provider：DeepSeek"
+      base_url="$(env_file_value "${env_file}" PYT_OPENAI_BASE_URL)"
+      case "${base_url%/}" in
+        https://api.deepseek.com|https://api.deepseek.com/v1) ;;
+        *) echo "[安装失败] PYT_OPENAI_BASE_URL 必须指向 https://api.deepseek.com。" >&2; return 1 ;;
+      esac
+      require_env_value "${env_file}" PYT_OPENAI_BASE_URL || return 1
+      require_env_value "${env_file}" PYT_OPENAI_API_KEY || return 1
+      require_env_value "${env_file}" PYT_OPENAI_MODEL || return 1
+      require_env_value "${env_file}" PYT_OPENAI_MODEL_VISION || return 1
+      ;;
+    ""|dryrun)
+      echo "[安装失败] PYT_LLM_PROVIDER 必须为 openai_compat；生产只使用 DeepSeek。" >&2
+      return 1
+      ;;
+    *)
+      echo "[安装失败] PYT_LLM_PROVIDER 仅允许 openai_compat。" >&2
+      return 1
+      ;;
+  esac
+
+  rag_embedder="$(env_file_value "${env_file}" PYT_RAG_EMBEDDER)"
+  if [ "${rag_embedder,,}" != "hash" ]; then
+    echo "[安装失败] PYT_RAG_EMBEDDER 必须为 hash，禁止外部 embedding API。" >&2
+    return 1
+  fi
+  echo "    RAG 使用本地 hash + BM25 检索"
+}
+
+validate_production_judge_env() {
+  local env_file="$1"
+  local provider piston_url
+  provider="$(env_file_value "${env_file}" PYT_JUDGE_PROVIDER)"
+  if [ "${provider,,}" != "piston" ]; then
+    echo "[安装失败] PYT_JUDGE_PROVIDER 必须为 piston；生产禁止 subprocess。" >&2
+    return 1
+  fi
+  require_env_value "${env_file}" PYT_PISTON_URL || return 1
+  require_env_value "${env_file}" PYT_PISTON_PYTHON_VERSION || return 1
+  check_env_secret PYT_PISTON_AUTH_TOKEN 32 "${env_file}" || return 1
+
+  piston_url="$(env_file_value "${env_file}" PYT_PISTON_URL)"
+  case "${piston_url}" in
+    https://*) ;;
+    http://*)
+      if is_private_piston_http_url "${piston_url}"; then
+        echo "    Piston 使用隔离内网 HTTP；请确保网络边界不可被公网访问"
+      else
+        echo "[安装失败] 外部 Piston 地址必须使用 HTTPS。" >&2
+        return 1
+      fi
+      ;;
+    *)
+      echo "[安装失败] PYT_PISTON_URL 必须是 http:// 或 https:// URL。" >&2
+      return 1
+      ;;
+  esac
+  echo "    Piston 独立判题配置校验通过"
 }
 
 # ---------------------------------------------------------------------------
@@ -170,7 +292,9 @@ chmod 600 "${ENV_FILE}"
 check_env_secret PYT_JWT_SECRET 32
 check_env_secret PYT_RAG_ADMIN_TOKEN 32
 check_env_secret PYT_ROUTE_EXECUTION_SECRET 32
-echo "    秘密文件就绪：${ENV_FILE}（权限 600，内容不读取不打印）"
+validate_production_ai_env "${ENV_FILE}"
+validate_production_judge_env "${ENV_FILE}"
+echo "    秘密文件就绪：${ENV_FILE}（权限 600，仅做门禁校验且不输出值）"
 
 # ---------------------------------------------------------------------------
 step "切换前备份（pg_dump / .env / Nginx / Compose 覆盖文件）"
@@ -235,6 +359,8 @@ fi
 for required in \
   "deploy/${COMPOSE_FILE_NAME}" \
   "${NGINX_SITE_SRC_REL}" \
+  "deploy/course-data/video_transcripts.json" \
+  "deploy/scripts/validate_course_runtime_data.py" \
   "deploy/runtime/sha256sums.txt" \
   "deploy/runtime/images/frontend.tar" \
   "deploy/runtime/images/backend.tar" \
@@ -261,6 +387,27 @@ else
   (cd "${RELEASE_DIR}/deploy/runtime" && sha256sum -c sha256sums.txt 2>&1 | grep -v ': OK$' | head -n 10) >&2 || true
   exit 1
 fi
+
+# ---------------------------------------------------------------------------
+step "校验并安装课程视频字幕"
+# ---------------------------------------------------------------------------
+COURSE_DATA_DIR="${SHARED_DIR}/data/course-pack-43"
+TRANSCRIPT_CANDIDATE="${RELEASE_DIR}/deploy/course-data/video_transcripts.json"
+COURSE_VALIDATOR="${RELEASE_DIR}/deploy/scripts/validate_course_runtime_data.py"
+command -v python3 >/dev/null 2>&1 || {
+  echo "[安装失败] 缺少 python3，无法校验课件/视频/字幕数据。" >&2
+  exit 1
+}
+python3 "${COURSE_VALIDATOR}" "${COURSE_DATA_DIR}" --transcript "${TRANSCRIPT_CANDIDATE}"
+if [ -f "${COURSE_DATA_DIR}/video_transcripts.json" ]; then
+  install -m 600 "${COURSE_DATA_DIR}/video_transcripts.json" \
+    "${BACKUP_DIR}/video_transcripts.json.backup"
+fi
+install -m 644 "${TRANSCRIPT_CANDIDATE}" "${COURSE_DATA_DIR}/video_transcripts.json.next"
+mv -f "${COURSE_DATA_DIR}/video_transcripts.json.next" \
+  "${COURSE_DATA_DIR}/video_transcripts.json"
+python3 "${COURSE_VALIDATOR}" "${COURSE_DATA_DIR}"
+echo "    7 份 PDF、视频清单/文件与逐视频字幕来源校验通过"
 
 # ---------------------------------------------------------------------------
 step "docker load 导入四个冻结镜像"

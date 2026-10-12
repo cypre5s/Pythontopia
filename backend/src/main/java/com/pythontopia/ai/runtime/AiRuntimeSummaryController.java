@@ -40,8 +40,8 @@ public class AiRuntimeSummaryController {
   }
 
   private void requireRuntimeViewer(CurrentUserPrincipal user) {
-    if (user.role() != Role.STUDENT && user.role() != Role.TEACHER && user.role() != Role.ADMIN) {
-      throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "无权查看 AI Runtime 运维状态");
+    if (user.role() != Role.STUDENT && user.role() != Role.ADMIN) {
+      throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "仅学生或管理员可查看 AI Runtime 状态");
     }
   }
 }

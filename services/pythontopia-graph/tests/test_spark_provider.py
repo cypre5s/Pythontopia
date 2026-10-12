@@ -110,10 +110,9 @@ async def test_spark_provider_handles_malformed_response(monkeypatch: pytest.Mon
     assert exc_info.value.kind == "MALFORMED"
 
 
-def test_provider_from_env_selects_spark() -> None:
-    provider = provider_from_env()
-    assert isinstance(provider, SparkProvider)
-    assert provider.label.startswith("spark:")
+def test_provider_from_env_rejects_spark() -> None:
+    with pytest.raises(RuntimeError, match="Spark LLM is disabled"):
+        provider_from_env()
 
 
 def test_provider_label_reports_model() -> None:

@@ -35,7 +35,7 @@ public record TutorAskRequest(
     @Pattern(regexp = "visual|logical|trial") String style,
     @Size(max = 64) String conversationId,
     @Positive Long classroomId,
-    // 看课页视频 RAG 脚手架：学生提问时回传当前视频 id + 播放时刻（秒）。后端据此合成「视频上下文」
-    // 锚定讲解片段（真字幕转写检索为占位 seam，后续按 ±窗口检索接入）；其余页不传则行为不变。
+    // 看课页学生提问时回传当前视频 id + 播放时刻（秒）；后端读取真实 MP4 的机器转写时间窗，
+    // 与课件 RAG 证据一同交给导师。字幕缺失或错版时明确报错，不伪造视频上下文。
     @Positive Long videoId,
     @PositiveOrZero Integer videoTimeSec) {}

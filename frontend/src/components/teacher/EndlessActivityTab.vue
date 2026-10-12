@@ -154,7 +154,7 @@ watch(() => props.classroomId, load);
         class="empty"
         data-testid="endless-empty"
       >
-        近 7 日暂无无尽补星活动。学生在无尽模式「本章范围」单轮答对 ≥ 8 题且正确率 ≥ 80% 即可补星。
+        近 7 日暂无无尽补星活动。学生在章节聚焦远征中，本章正式判题答对 ≥ 8 题且正确率 ≥ 80% 可申请补星。
       </p>
     </template>
   </section>

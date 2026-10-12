@@ -37,6 +37,9 @@ ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 ALLOWLIST="$ROOT/deploy/release/archive-allowlist.txt"
 RELEASE_README="$ROOT/deploy/release/README.md"
 VERIFIER="$SCRIPT_DIR/verify_release_archive.sh"
+COURSE_VALIDATOR="$SCRIPT_DIR/validate_course_runtime_data.py"
+COURSE_DATA_ROOT="$ROOT/data/course-pack-43"
+VIDEO_TRANSCRIPTS="$COURSE_DATA_ROOT/video_transcripts.json"
 
 # 冻结契约：短名 → 构建上下文（镜像名 = pythontopia/<短名>:release，
 # 导出文件 = deploy/runtime/images/<短名>.tar）
@@ -57,9 +60,13 @@ command -v docker >/dev/null 2>&1 || die "未安装 docker，无法构建镜像"
 docker info >/dev/null 2>&1 || die "docker daemon 不可用，请先启动 Docker"
 command -v rsync >/dev/null 2>&1 || die "未安装 rsync（用于暂存源码树），请先 apt install rsync"
 command -v sha256sum >/dev/null 2>&1 || die "缺少 sha256sum"
+command -v python3 >/dev/null 2>&1 || die "缺少 python3（用于验证课件/视频/字幕运行时数据）"
 [[ -f "$ALLOWLIST" ]] || die "内容契约文件缺失：$ALLOWLIST"
 [[ -f "$RELEASE_README" ]] || die "发布包根 README 源文件缺失：$RELEASE_README"
 [[ -f "$VERIFIER" ]] || die "校验脚本缺失：$VERIFIER"
+[[ -f "$COURSE_VALIDATOR" ]] || die "课程数据校验器缺失：$COURSE_VALIDATOR"
+python3 "$COURSE_VALIDATOR" "$COURSE_DATA_ROOT" \
+  || die "课程运行时数据不完整或字幕与源视频不匹配，禁止构建发布包"
 for spec in "${IMAGE_SPECS[@]}"; do
   ctx="${spec#*|}"
   [[ -f "$ctx/Dockerfile" ]] || die "Dockerfile 缺失：$ctx/Dockerfile"
@@ -190,6 +197,11 @@ if [[ -d "$ROOT/data/npcs" ]]; then
 else
   die "NPC 人格种子缺失：$ROOT/data/npcs（后端 NPC 寒暄会全部降级为通用人设）"
 fi
+
+# 字幕文本体积小且与本次 Web 代码契约强绑定，随发布包交付；PDF/MP4 仍留在共享数据目录。
+mkdir -p "$STAGE/deploy/course-data"
+install -m 644 "$VIDEO_TRANSCRIPTS" "$STAGE/deploy/course-data/video_transcripts.json"
+echo "==> 暂存课程视频字幕：data/course-pack-43/video_transcripts.json -> deploy/course-data/"
 
 echo "==> [3/7] docker save 导出镜像到 deploy/runtime/images/"
 IMAGES_DIR="$STAGE/deploy/runtime/images"

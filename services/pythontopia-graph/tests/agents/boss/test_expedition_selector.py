@@ -34,8 +34,7 @@ def test_recent_kc_pushed_down() -> None:
 
 def test_persisted_last_practiced_prioritizes_stale_mastered_kc() -> None:
     others = [
-        c for c in kc_codes_for_chapter(1)
-        if c not in {"PY43-KC-001", "PY43-KC-002"}
+        c for c in kc_codes_for_chapter(1) if c not in {"PY43-KC-001", "PY43-KC-002"}
     ]
     picks = select_frontier(
         mastery={"PY43-KC-001": 0.9, "PY43-KC-002": 0.9},
@@ -59,6 +58,18 @@ def test_difficulty_scales_with_mastery() -> None:
     assert low[0].difficulty < high[0].difficulty
 
 
+def test_low_confidence_mastery_gets_a_small_exploration_boost() -> None:
+    picks = select_frontier(
+        mastery={"PY43-KC-001": 0.6, "PY43-KC-002": 0.6},
+        confidence={"PY43-KC-001": 0.2, "PY43-KC-002": 0.9},
+        focus_chapter=1,
+        exclude=[c for c in kc_codes_for_chapter(1) if c not in {"PY43-KC-001", "PY43-KC-002"}],
+        count=2,
+    )
+    assert [pick.kc_code for pick in picks] == ["PY43-KC-001", "PY43-KC-002"]
+    assert "证据待确认" in picks[0].reason
+
+
 def test_exclude_respected_and_count() -> None:
     picks = select_frontier(mastery={}, focus_chapter=1, exclude=["PY43-KC-001"], count=3)
     codes = [p.kc_code for p in picks]
@@ -71,7 +82,7 @@ def test_select_frontier_route_smoke() -> None:
     resp = client.post(
         "/agents/boss/select-frontier",
         json={
-            "mastery": [{"kcCode": "PY43-KC-001", "masteryScore": 0.5}],
+            "mastery": [{"kcCode": "PY43-KC-001", "masteryScore": 0.5, "confidence": 0.3}],
             "profileSignals": {"weakKcCodes": ["PY43-KC-005"]},
             "recentKcs": ["PY43-KC-001"],
             "lastPracticed": {"PY43-KC-002": "2026-04-01T00:00:00Z"},

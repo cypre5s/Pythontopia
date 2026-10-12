@@ -96,7 +96,7 @@ class TutorWorkflowServiceTest {
   @SuppressWarnings("unchecked")
   private Map<String, Object> capturedBody() {
     ArgumentCaptor<Map<String, Object>> captor = ArgumentCaptor.forClass(Map.class);
-    verify(graphClient).runStream(captor.capture(), any(), any());
+    verify(graphClient).runStream(eq(USER), captor.capture(), any(), any());
     return captor.getValue();
   }
 
@@ -213,11 +213,11 @@ class TutorWorkflowServiceTest {
     AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
     org.mockito.Mockito.doAnswer(
             invocation -> {
-              onResult.set(invocation.getArgument(2));
+              onResult.set(invocation.getArgument(3));
               return null;
             })
         .when(graphClient)
-        .runStream(any(), any(), any());
+        .runStream(any(), any(), any(), any());
 
     service.run(
         USER, new TutorWorkflowRunRequest(PROBLEM, "CHAT", Map.of("message", "怎么保留小数？")));
@@ -243,11 +243,11 @@ class TutorWorkflowServiceTest {
     AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
     org.mockito.Mockito.doAnswer(
             invocation -> {
-              onResult.set(invocation.getArgument(2));
+              onResult.set(invocation.getArgument(3));
               return null;
             })
         .when(graphClient)
-        .runStream(any(), any(), any());
+        .runStream(any(), any(), any(), any());
 
     service.run(
         USER, new TutorWorkflowRunRequest(PROBLEM, "CHAT", Map.of("message", "先看哪里？")));

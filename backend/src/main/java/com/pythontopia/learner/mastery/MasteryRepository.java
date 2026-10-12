@@ -7,6 +7,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.ArrayList;
+import java.util.stream.Collectors;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -109,6 +111,60 @@ public class MasteryRepository {
         userId,
         kcCode,
         limit);
+  }
+
+  public Map<String, OffsetDateTime> findLastPracticedAtByUser(Long userId) {
+    return jdbcTemplate.query(
+            "SELECT kc_code, MAX(created_at) AS last_practiced_at FROM kc_mastery_event"
+                + " WHERE user_id = ? AND source IN ('PRACTICE_PASS', 'PRACTICE_FAIL', 'DEBUG_FIX')"
+                + " GROUP BY kc_code",
+            (rs, rowNum) ->
+                Map.entry(
+                    rs.getString("kc_code"),
+                    offset(rs, "last_practiced_at")),
+            userId)
+        .stream()
+        .filter(entry -> entry.getValue() != null)
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+  }
+
+  public List<WeeklyEvidence> findWeeklyEvidence(Long userId, OffsetDateTime since) {
+    return jdbcTemplate.query(
+        "SELECT kc_code, SUM(delta) AS weekly_delta, COUNT(*) AS evidence_count,"
+            + " ARRAY_AGG(DISTINCT source ORDER BY source) AS evidence_sources"
+            + " FROM kc_mastery_event WHERE user_id = ? AND created_at >= ?"
+            + " GROUP BY kc_code ORDER BY kc_code",
+        (rs, rowNum) ->
+            new WeeklyEvidence(
+                rs.getString("kc_code"),
+                rs.getBigDecimal("weekly_delta"),
+                rs.getInt("evidence_count"),
+                readStringArray(rs.getArray("evidence_sources"))),
+        userId,
+        since);
+  }
+
+  private static List<String> readStringArray(java.sql.Array array) {
+    List<String> values = new ArrayList<>();
+    if (array == null) return values;
+    try {
+      Object raw = array.getArray();
+      if (raw instanceof Object[] items) {
+        for (Object item : items) {
+          if (item instanceof String value) values.add(value);
+        }
+      }
+    } catch (SQLException ignored) {
+      return List.of();
+    }
+    return List.copyOf(values);
+  }
+
+  public record WeeklyEvidence(
+      String kcCode, BigDecimal weeklyDelta, int evidenceCount, List<String> evidenceSources) {
+    public WeeklyEvidence {
+      evidenceSources = evidenceSources == null ? List.of() : List.copyOf(evidenceSources);
+    }
   }
 
   private MasterySnapshot mapSnapshot(ResultSet rs, int rowNum) throws SQLException {

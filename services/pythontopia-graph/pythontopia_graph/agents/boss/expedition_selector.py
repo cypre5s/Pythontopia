@@ -48,6 +48,7 @@ def _difficulty_for(mastery: float, success_rate: float | None) -> int:
 def _priority(
     kc: str,
     mastery: dict[str, float],
+    confidence: dict[str, float],
     weak: set[str],
     recent_rank: int | None,
     last_practiced: dict[str, str],
@@ -66,6 +67,11 @@ def _priority(
         score += 20
         reasons.append("尚未掌握")
     score += (1 - m) * 10
+    certainty = confidence.get(kc)
+    if certainty is not None:
+        score += (1 - certainty) * 8
+        if certainty < 0.6:
+            reasons.append("证据待确认")
     if recent_rank is None:
         spacing_score, spacing_reason = _spacing_priority(kc, last_practiced, now)
         score += spacing_score
@@ -111,6 +117,7 @@ def _spacing_priority(
 def select_frontier(
     *,
     mastery: dict[str, float] | None = None,
+    confidence: dict[str, float] | None = None,
     profile_signals: dict | None = None,
     recent_kcs: list[str] | None = None,
     last_practiced: dict[str, str] | None = None,
@@ -122,6 +129,7 @@ def select_frontier(
     """返回按优先级排序的前沿 KC（最多 ``count`` 个）。"""
 
     mastery = mastery or {}
+    confidence = confidence or {}
     signals = profile_signals or {}
     weak = set(signals.get("weakKcCodes") or signals.get("weak_kc_codes") or [])
     success_rate = signals.get("successRate", signals.get("success_rate"))
@@ -138,7 +146,18 @@ def select_frontier(
 
     scored = sorted(
         (
-            (*_priority(kc, mastery, weak, recent_rank.get(kc), practiced, clock), kc)
+            (
+                *_priority(
+                    kc,
+                    mastery,
+                    confidence,
+                    weak,
+                    recent_rank.get(kc),
+                    practiced,
+                    clock,
+                ),
+                kc,
+            )
             for kc in pool
         ),
         key=lambda t: t[0],

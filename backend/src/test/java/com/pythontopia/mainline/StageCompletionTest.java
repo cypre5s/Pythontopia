@@ -29,10 +29,10 @@ class StageCompletionTest {
   }
 
   @Test
-  void emptyCoursewareMakesPagesTriviallyComplete() {
-    // 占位期：courseware_page_ids 空 + required_pages=0 ⇒「学」默认过线。
+  void emptyCoursewareFailsClosed() {
+    // 课程包页未能加载时不能把「学」自动判为完成，否则课程数据故障会静默放行主线。
     MainlineStage s = stage(240, 0, 2, List.of());
-    assertThat(StageCompletion.pagesComplete(s, progress(0, List.of(), List.of()))).isTrue();
+    assertThat(StageCompletion.pagesComplete(s, progress(0, List.of(), List.of()))).isFalse();
   }
 
   @Test
@@ -61,19 +61,19 @@ class StageCompletionTest {
 
   @Test
   void allThreePiecesRequiredForCompletion() {
-    MainlineStage s = stage(240, 0, 2, List.of());
-    assertThat(StageCompletion.allComplete(s, progress(240, List.of(), List.of(1L, 2L)))).isTrue();
+    MainlineStage s = stage(240, 0, 2, List.of(100L));
+    assertThat(StageCompletion.allComplete(s, progress(240, List.of(100L), List.of(1L, 2L)))).isTrue();
     // 视频差一点 → 未完成。
-    assertThat(StageCompletion.allComplete(s, progress(239, List.of(), List.of(1L, 2L)))).isFalse();
+    assertThat(StageCompletion.allComplete(s, progress(239, List.of(100L), List.of(1L, 2L)))).isFalse();
     // 例题不足 → 未完成。
-    assertThat(StageCompletion.allComplete(s, progress(240, List.of(), List.of(1L)))).isFalse();
+    assertThat(StageCompletion.allComplete(s, progress(240, List.of(100L), List.of(1L)))).isFalse();
   }
 
   @Test
   void questionsDimensionGatesCompletionInOverload() {
     // 看/学/练-OJ 三项齐全。
-    MainlineStage s = stage(240, 0, 2, List.of());
-    MainlineStageProgress p = progress(240, List.of(), List.of(1L, 2L));
+    MainlineStage s = stage(240, 0, 2, List.of(100L));
+    MainlineStageProgress p = progress(240, List.of(100L), List.of(1L, 2L));
     // 客观题未全对 → 未完成；全对 → 完成。
     assertThat(StageCompletion.allComplete(s, p, false)).isFalse();
     assertThat(StageCompletion.allComplete(s, p, true)).isTrue();

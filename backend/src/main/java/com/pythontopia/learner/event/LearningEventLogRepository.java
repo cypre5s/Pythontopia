@@ -44,6 +44,25 @@ public class LearningEventLogRepository {
     return id == null ? 0L : id;
   }
 
+  public AuthoritativeEventCounts summarizeAuthoritativeSince(Long userId, Instant since) {
+    return jdbc.queryForObject(
+        "SELECT COUNT(*) AS total_events,"
+            + " COUNT(*) FILTER (WHERE event_type = 'practice_failed') AS failed_practices,"
+            + " COUNT(*) FILTER (WHERE event_type = 'practice_succeeded') AS succeeded_practices"
+            + " FROM learning_event_log WHERE user_id = ? AND created_at >= ?"
+            + " AND source IN ('backend', 'graph')",
+        (rs, rowNum) ->
+            new AuthoritativeEventCounts(
+                rs.getInt("total_events"),
+                rs.getInt("failed_practices"),
+                rs.getInt("succeeded_practices")),
+        userId,
+        Timestamp.from(since));
+  }
+
+  public record AuthoritativeEventCounts(
+      int totalEvents, int failedPractices, int succeededPractices) {}
+
   public List<Map<String, Object>> findByUser(Long userId, int limit) {
     return jdbc.queryForList(
         "SELECT id, event_type, payload::text, source, created_at FROM learning_event_log WHERE user_id = ? ORDER BY created_at DESC LIMIT ?",

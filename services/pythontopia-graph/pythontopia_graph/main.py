@@ -1,13 +1,15 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request, status
 from pydantic import BaseModel
 
 from pythontopia_graph.agents.curriculum_mapper_agent import CurriculumMapperAgent
 from pythontopia_graph.agents.profile_agent import ProfileAgent
 from pythontopia_graph.llm.provider import (
+    DryRunProvider,
     load_pythontopia_env,
     provider_from_env,
     provider_label,
@@ -38,6 +40,8 @@ from pythontopia_graph.schemas.curriculum import MapperInput, MapperOutput
 from pythontopia_graph.internal_auth import InternalTokenMiddleware
 from pythontopia_graph.observability import init_tracing
 from pythontopia_graph.schemas.profile import ProfileAgentInput, ProfileAgentOutput
+from pythontopia_graph.tools.browse.contract import BrowseRequest, BrowseResult
+from pythontopia_graph.tools.browse.executor import browse_runtime_status, execute_browse
 
 
 class HealthResponse(BaseModel):
@@ -50,6 +54,7 @@ class HealthResponse(BaseModel):
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 LOG = logging.getLogger(__name__)
+_TRUTHY = frozenset({"1", "true", "yes", "on"})
 
 
 @asynccontextmanager
@@ -96,6 +101,35 @@ app.include_router(system_evolution_runtime_router)
 @app.get("/healthz", response_model=HealthResponse)
 def healthz() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+@app.get("/readyz", response_model=HealthResponse)
+def readyz(request: Request) -> HealthResponse:
+    provider = getattr(request.app.state, "llm_provider", None)
+    if provider is None or isinstance(provider, DryRunProvider):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="real LLM provider is not ready",
+        )
+    if os.environ.get("BROWSE_ENABLED", "").strip().lower() in _TRUTHY:
+        browse_ready, reason = browse_runtime_status()
+        if not browse_ready:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=reason,
+            )
+    return HealthResponse(status="ready")
+
+
+@app.post("/agents/browse/run", response_model=BrowseResult)
+async def browse_run(request: BrowseRequest) -> BrowseResult:
+    """内部调用的有界只读查证端点；未显式启用时 fail closed。"""
+    if os.environ.get("BROWSE_ENABLED", "").strip().lower() not in _TRUTHY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="BROWSE 未启用",
+        )
+    return await execute_browse(request)
 
 
 @app.post("/agents/profile/turn", response_model=ProfileAgentOutput)

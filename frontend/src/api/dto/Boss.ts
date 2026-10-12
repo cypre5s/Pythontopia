@@ -75,6 +75,8 @@ export interface BossProblemRequest {
   /** 期望难度 1..5：用于「预取按当前难度」；普通出题留空由后端按学情推断。 */
   difficulty?: number;
   profileSignals?: ProfileSignalsDto;
+  /** 当前学生的活跃远征 run；由后端校验并绑定判题奖励。 */
+  expeditionRunId?: string;
 }
 
 export type BossPrefetchStatus = 'IDLE' | 'PENDING' | 'READY' | 'FAILED';

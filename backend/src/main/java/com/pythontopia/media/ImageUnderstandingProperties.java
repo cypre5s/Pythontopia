@@ -6,8 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 讯飞星火「图片理解」(看图答疑) 接入配置。复用与 TTS / TTI / Spark LLM 相同的讯飞控制台应用凭据
  * （{@code PYT_SPARK_APP_ID} / {@code PYT_SPARK_API_KEY} / {@code PYT_SPARK_API_SECRET}）。
  *
- * <p>任一凭据缺失时 {@link #isEnabled()}=false：{@code XfyunImageUnderstandingService} 直接返回 null，
- * 导师答疑回退为纯文本而不阻塞链路；配置真实密钥后自动启用看图答疑。
+ * <p>看图答疑由 Graph 的 DeepSeek 视觉模型处理，不启用讯飞图片理解。
  */
 @ConfigurationProperties(prefix = "pythontopia.image-understanding")
 public record ImageUnderstandingProperties(
@@ -40,8 +39,6 @@ public record ImageUnderstandingProperties(
   }
 
   public boolean isEnabled() {
-    return appId != null && !appId.isBlank()
-        && apiKey != null && !apiKey.isBlank()
-        && apiSecret != null && !apiSecret.isBlank();
+    return false;
   }
 }

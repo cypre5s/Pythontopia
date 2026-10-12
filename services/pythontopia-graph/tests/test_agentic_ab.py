@@ -2,8 +2,6 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from pythontopia_graph.eval.agentic_ab import (
     AgenticAbCase,
     AgenticAbGates,

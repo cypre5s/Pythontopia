@@ -1,9 +1,9 @@
 package com.pythontopia.stage09;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
 import com.pythontopia.PythontopiaApplication;
 import com.pythontopia.learner.event.LearningEventLogRepository;
+import com.pythontopia.submission.judge.StubPythonSandboxConfiguration;
 import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -12,6 +12,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
@@ -27,6 +28,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 @Testcontainers
+@Import(StubPythonSandboxConfiguration.class)
 @SpringBootTest(
     classes = PythontopiaApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -53,13 +55,15 @@ class Stage09SubmissionAcceptanceIntegrationTest {
     registry.add("pythontopia.security.teacherInviteCode", () -> "test-teacher-code");
     registry.add("pythontopia.services.graphUrl", () -> "http://graph.test");
     registry.add("pythontopia.judge.python", () -> "python3");
+    registry.add("pythontopia.judge.provider", () -> "piston");
+    registry.add("pythontopia.judge.piston.base-url", () -> "http://piston.test");
+    registry.add("pythontopia.judge.piston.python-version", () -> "3.11.13");
   }
 
   @Autowired TestRestTemplate restTemplate;
   @Autowired JdbcTemplate jdbcTemplate;
   @Autowired LearningEventLogRepository eventRepository;
   @Autowired PracticeSubmissionRepository submissionRepository;
-
   @Test
   void publicProblemEndpointHidesSensitiveFields() {
     String token = registerAndLogin("submit-stu01");

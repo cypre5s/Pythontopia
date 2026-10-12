@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import subprocess
+
+import httpx
 import pytest
 
+from pythontopia_graph.agents.boss import execution_sandbox
 from pythontopia_graph.agents.boss.evaluator import (
     build_failure_hint,
     evaluate_student_code,
@@ -80,6 +84,43 @@ def test_empty_test_cases_returns_runtime_error() -> None:
     assert not result.passed
     assert result.total_count == 0
     assert result.runtime_error == "no_test_cases"
+
+
+def test_missing_isolated_executor_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("PYT_PISTON_URL", raising=False)
+    monkeypatch.delenv("PYT_PISTON_PYTHON_VERSION", raising=False)
+
+    def forbidden_local_execution(*args: object, **kwargs: object) -> None:
+        pytest.fail("student code must never run in the Graph process")
+
+    monkeypatch.setattr(subprocess, "run", forbidden_local_execution)
+
+    result = evaluate_student_code("print('must not execute')", [_tc("", "")])
+
+    assert not result.passed
+    assert result.runtime_error == "sandbox_unavailable"
+    assert result.failed_indices == [0]
+
+
+def test_unavailable_piston_fails_closed_without_local_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYT_PISTON_URL", "http://piston.test")
+    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
+
+    def unreachable(*args: object, **kwargs: object) -> None:
+        raise httpx.ConnectError("test endpoint unavailable")
+
+    def forbidden_local_execution(*args: object, **kwargs: object) -> None:
+        pytest.fail("Piston errors must not fall back to Graph worker execution")
+
+    monkeypatch.setattr(execution_sandbox.httpx, "post", unreachable)
+    monkeypatch.setattr(subprocess, "run", forbidden_local_execution)
+
+    result = evaluate_student_code("print('must not execute')", [_tc("", "")])
+
+    assert not result.passed
+    assert result.runtime_error == "sandbox_unavailable"
 
 
 def test_build_failure_hint_uses_runtime_error_first() -> None:
