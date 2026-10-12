@@ -62,3 +62,14 @@
 - 验证：Graph selector pytest 8 passed，Ruff 检查通过；Java 远征 run/score、Boss、Twin 与 Runtime 10 个测试类合计 55 passed；`ExpeditionRunPostgresIntegrationTest` 将空库迁移到 V194 并验证换 ID 拒绝、客户端分数忽略、结算和新局 ID；前端远征 store 36 tests、TwinWeekly 5 tests、Vue 类型检查通过；浏览器文本预算测试包含在 browse executor 35 项回归中。
 - 仍待验证：真实 Web 全栈 / 浏览器联测、DeepSeek 真实请求、远征性能指标和生产 Piston。节点拓扑、HP、遗物与路径状态仍来自客户端快照，当前不用于排行榜成绩/通关发奖；服务端尚未建地图动作状态机。浏览器底层 DOM 内存也未实测。
 - 性能闸门检查：本地服务当前未运行，`deploy/.env` 未设置 `PYT_PISTON_URL`。Graph 题目自测在沙箱缺失时 fail closed，单个问题最多重试 6 次再回退 golden；此状态下不发起付费压测，避免把预算花在已知降级路径。补测前需要本地可用的 Piston/Isolate 和已轮换的 DeepSeek 凭证。
+
+## Web 导学恢复、远征绑定与审核列表（2026-10-12）
+
+- Graph 重启后从 Java 投影恢复最近的 Tutor 卡片、聊天历史和下一步方向；输入端限制消息长度、图片事件范围和数量。AutoGen 阶段信封不序列化图片字节，图片仅在本次运行内存中回注各阶段。
+- 无尽远征预生成身份增加 `stage` 与 `runId`：唯一任务冲突通过 `ON CONFLICT DO NOTHING` 处理，避免捕获唯一键异常后 PostgreSQL 事务进入 aborted 状态；READY 结果需匹配请求章节/阶段，更新同时绑定用户、阶段、run 和重试次数。
+- 正式判题核对已签发题目的章节/阶段，拒绝已经结算的远征；判题 ledger 写入成功后才发布 LearningEvent，额度用尽与 run 过期返回不同错误。V195 为旧预生成行回填阶段并新增 run/阶段索引。
+- 预生成按用户加事务 advisory lock 后检查在途配额，避免并发请求绕过上限；远征结算或放弃时关闭关联的待处理/就绪任务并释放配额。
+- Web 取题状态请求新增可选 stage/run ID 参数；stage 可省略以兼容旧客户端。远征存档响应返回账本派生的 `score` / `verifiedDepth`，Web 将核验统计与局内体验分分开展示，离线存档不会标成核验成绩。
+- 管理题目审核列表增加按申请时间、题面、申请人升降序；后端排序字段/方向使用固定白名单，排序变化回第一页。
+- 已执行定向验证：前端 5 个文件、68 tests 通过；`npm run typecheck` 通过，定向 ESLint 0 errors。Graph 导学 24 tests 与 Ruff 通过。后端变更相关定向 Maven 累计 74 tests 通过（包括阶段/run 绑定、结算/放弃清理预生成任务及配额锁的 PostgreSQL 集成复验），空库 Flyway 迁移到 V195 成功。
+- 不启动本地全栈、不发真实 DeepSeek 请求或性能压测；远征 P50/P95、缓存命中率、重复率、恢复率与完成率留待后续实测。地图节点、HP、遗物仍是客户端存档状态，未用于服务端排行榜分数或判题深度。

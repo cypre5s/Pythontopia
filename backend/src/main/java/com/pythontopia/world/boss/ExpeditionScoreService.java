@@ -84,14 +84,21 @@ public class ExpeditionScoreService {
             + " WHERE user_id = ? AND run_id = ?::uuid AND status = 'ACTIVE'",
         userId,
         runId);
+    jdbcTemplate.update(
+        "UPDATE pregenerated_problem SET status = 'FAILED', payload = NULL, problem_id = NULL,"
+            + " error_message = '远征已结算，预加载题目已作废', updated_at = now()"
+            + " WHERE user_id = ? AND expedition_run_id = ?::uuid"
+            + " AND status IN ('PENDING', 'READY')",
+        userId,
+        runId);
   }
 
   /** 只记录实际判题结果；同一题可从失败更新为通过，但不能重复累计。 */
   @Transactional
-  public void recordVerifiedAttempt(
+  public boolean recordVerifiedAttempt(
       Long userId, String runId, String problemId, boolean passed, int score) {
     if (userId == null || runId == null || problemId == null) {
-      return;
+      return false;
     }
     UUID runUuid = UUID.fromString(runId);
     // Locking the run row serializes budget checks for parallel submissions in this run.
@@ -103,9 +110,9 @@ public class ExpeditionScoreService {
             userId,
             runUuid)
         .isEmpty()) {
-      return;
+      return false;
     }
-    jdbcTemplate.update(
+    return jdbcTemplate.update(
         "INSERT INTO expedition_verified_attempt (user_id, run_id, problem_id, passed, score)"
             + " SELECT ?, ?::uuid, ?, ?, ?"
             + " WHERE EXISTS (SELECT 1 FROM expedition_run WHERE user_id = ?"
@@ -131,7 +138,7 @@ public class ExpeditionScoreService {
         runUuid,
         userId,
         runUuid,
-        problemId);
+        problemId) > 0;
   }
 
   /** 判定一个活动远征 run 在指定章节的真实答题汇总。 */

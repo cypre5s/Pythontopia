@@ -87,8 +87,9 @@ export interface RogueRunSaveSummary {
   focusChapter: number | null;
   hp: number;
   maxHp: number;
-  score: number;
-  depth: number;
+  verifiedScore: number;
+  verifiedDepth: number;
+  serverVerified: boolean;
   relicCount: number;
   isDaily: boolean;
   lastPlayedAt: string | null;
@@ -192,9 +193,12 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   const bestMomentum = ref(0);
   const runId = ref<string | null>(null);
   const score = ref(0);
+  const verifiedScore = ref(0);
+  const verifiedDepth = ref(0);
   const relics = ref<string[]>([]);
   const history = ref<RogueHistoryEntry[]>([]);
   const savedRun = ref<PersistShape | null>(loadPersisted());
+  const savedRunVerified = ref(false);
 
   const hasRelic = (id: string): boolean => relics.value.includes(id);
 
@@ -237,7 +241,6 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   });
   const passedCount = computed(() => history.value.filter((h) => h.passed).length);
   const attempts = computed(() => history.value.length);
-  const depth = computed(() => nodes.value.filter((n) => n.state === 'cleared' && n.challengeKind).length);
   const nodeById = (id: string): RogueNode | undefined => nodes.value.find((n) => n.id === id);
   const hasSavedRun = computed(() => isUsableSavedRun(savedRun.value));
   const savedRunSummary = computed<RogueRunSaveSummary | null>(() => {
@@ -247,8 +250,9 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       focusChapter: snap.focusChapter ?? null,
       hp: snap.hp,
       maxHp: snap.maxHp ?? EXPEDITION_MAX_HP,
-      score: snap.score ?? 0,
-      depth: snap.nodes.filter((n) => n.state === 'cleared' && n.challengeKind).length,
+      verifiedScore: savedRunVerified.value ? snap.score : 0,
+      verifiedDepth: savedRunVerified.value ? snap.verifiedDepth ?? 0 : 0,
+      serverVerified: savedRunVerified.value,
       relicCount: Array.isArray(snap.relics) ? snap.relics.length : 0,
       isDaily: snap.isDaily ?? false,
       lastPlayedAt: snap.history[0]?.at ?? null,
@@ -298,12 +302,21 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     }
     if (isResumablePhase(phase.value)) {
       savedRun.value = snap;
+      savedRunVerified.value = false;
       try {
         const saved = await saveExpeditionRun(snap);
         if (saved?.runId) {
           runId.value = saved.runId;
-          const updated = snapshot();
+          const updated = {
+            ...snapshot(),
+            score: typeof saved.score === 'number' ? saved.score : score.value,
+            verifiedDepth: typeof saved.verifiedDepth === 'number' ? saved.verifiedDepth : 0,
+          };
+          if (typeof saved.score === 'number') verifiedScore.value = saved.score;
+          if (typeof saved.verifiedDepth === 'number') verifiedDepth.value = saved.verifiedDepth;
           savedRun.value = updated;
+          savedRunVerified.value =
+            typeof saved.score === 'number' && typeof saved.verifiedDepth === 'number';
           if (typeof window !== 'undefined') {
             try {
               window.localStorage.setItem(userScopedKey(PERSIST_KEY), JSON.stringify(updated));
@@ -326,7 +339,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   }
 
   /** 把一份快照灌入 store（中途答题/事件刷新 → 退回地图）；供 hydrate / 续局复用。 */
-  function applySnapshot(p: PersistShape): void {
+  function applySnapshot(p: PersistShape, serverVerified: boolean): void {
     phase.value = isResumablePhase(p.phase) && p.phase !== 'map' ? 'map' : p.phase;
     runId.value = p.runId ?? null;
     focusChapter.value = p.focusChapter ?? null;
@@ -339,6 +352,8 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     momentum.value = p.momentum ?? 0;
     bestMomentum.value = p.bestMomentum ?? 0;
     score.value = p.score ?? 0;
+    verifiedScore.value = serverVerified ? p.score : 0;
+    verifiedDepth.value = serverVerified ? p.verifiedDepth ?? 0 : 0;
     relics.value = Array.isArray(p.relics) ? p.relics : [];
     isDaily.value = p.isDaily ?? false;
     history.value = Array.isArray(p.history) ? p.history : [];
@@ -348,31 +363,39 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     clearActive();
   }
 
-  async function loadSavedSnapshot(): Promise<PersistShape | null> {
+  async function loadSavedSnapshot(): Promise<{ snapshot: PersistShape | null; serverVerified: boolean }> {
     try {
       const snap = await fetchExpeditionRun();
-      return snap ?? loadPersisted();
+      if (snap) return { snapshot: snap, serverVerified: true };
     } catch {
-      return loadPersisted();
+      // Continue with the local map snapshot, but never treat its score/depth as verified.
     }
+    return { snapshot: loadPersisted(), serverVerified: false };
   }
 
   /** 只刷新“可继续的存档预览”，不直接灌入 run，让玩家自己选择是否继续。 */
   async function refreshSavedRun(): Promise<boolean> {
-    const snap = await loadSavedSnapshot();
+    const loaded = await loadSavedSnapshot();
+    const snap = loaded.snapshot;
     savedRun.value = isUsableSavedRun(snap) ? snap : null;
+    savedRunVerified.value = !!savedRun.value && loaded.serverVerified;
     return hasSavedRun.value;
   }
 
   /** 玩家点“继续上次远征”后才恢复存档。 */
   async function resumeSavedRun(): Promise<boolean> {
-    const snap = isUsableSavedRun(savedRun.value) ? savedRun.value : await loadSavedSnapshot();
+    const loaded = isUsableSavedRun(savedRun.value)
+      ? { snapshot: savedRun.value, serverVerified: savedRunVerified.value }
+      : await loadSavedSnapshot();
+    const snap = loaded.snapshot;
     if (!isUsableSavedRun(snap)) {
       savedRun.value = null;
+      savedRunVerified.value = false;
       return false;
     }
     savedRun.value = snap;
-    applySnapshot(snap); // applySnapshot 已把可续 phase 归一到 'map'
+    savedRunVerified.value = loaded.serverVerified;
+    applySnapshot(snap, loaded.serverVerified); // applySnapshot 已把可续 phase 归一到 'map'
     await persist();
     return true;
   }
@@ -493,6 +516,9 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       momentum.value = 0;
       bestMomentum.value = 0;
       score.value = 0;
+      verifiedScore.value = 0;
+      verifiedDepth.value = 0;
+      savedRunVerified.value = false;
       relics.value = [];
       history.value = [];
       bossPhase.value = 1;
@@ -917,6 +943,8 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     momentum,
     bestMomentum,
     score,
+    verifiedScore,
+    verifiedDepth,
     relics,
     isDaily,
     dailyAvailable,
@@ -939,7 +967,6 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     nodesByLayer,
     passedCount,
     attempts,
-    depth,
     startRun,
     startDailyRun,
     refreshSavedRun,

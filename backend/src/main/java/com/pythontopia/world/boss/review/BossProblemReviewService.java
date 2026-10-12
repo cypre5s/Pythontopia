@@ -61,12 +61,17 @@ public class BossProblemReviewService {
       int page,
       int size,
       BossProblemReviewDecision decision,
-      String query) {
+      String query,
+      BossProblemReviewSortField sortBy,
+      BossProblemReviewSortDirection sortDirection) {
     requireReviewer(reviewer);
     String normalizedQuery = query == null || query.isBlank() ? null : query.trim();
     long total = repository.countMatching(decision, normalizedQuery);
     List<BossProblemReviewDto> content =
-        repository.listMatching(decision, normalizedQuery, size, (long) page * size).stream()
+        repository
+            .listMatching(
+                decision, normalizedQuery, size, (long) page * size, sortBy, sortDirection)
+            .stream()
             .map(BossProblemReviewService::toDto)
             .toList();
     int totalPages = total == 0 ? 0 : (int) ((total + size - 1) / size);

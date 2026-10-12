@@ -73,13 +73,22 @@ describe("problemReview API", () => {
       searchProblemReviews({
         page: 1,
         size: 20,
+        sortBy: "REQUESTED_AT",
+        sortDirection: "DESC",
         decision: "PENDING",
         q: " loop ",
       }),
     ).resolves.toEqual(page);
 
     expect(http.get).toHaveBeenCalledWith("/api/teacher/problem-reviews/page", {
-      params: { page: 1, size: 20, decision: "PENDING", q: "loop" },
+      params: {
+        page: 1,
+        size: 20,
+        sortBy: "REQUESTED_AT",
+        sortDirection: "DESC",
+        decision: "PENDING",
+        q: "loop",
+      },
     });
   });
 

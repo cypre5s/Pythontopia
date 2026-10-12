@@ -14,6 +14,7 @@ import java.util.Map;
  *
  * <p>除服务端签发的 runId 和从判题记录计算的 score 外，其余过程字段仍由客户端提供，只用于续局展示/玩法；
  * 不得用于正式成绩、学习奖励或已通关认定。
+ * verifiedDepth 同样只由服务端判题账本派生；请求中的值会被忽略。
  *
  * <p>nodes / history 用 {@code List<Map<String,Object>>} 透传前端 RogueNode[] / RogueHistoryEntry[]，
  * 后端不解释其内部结构（避免节点 schema 漂移时频繁改后端 DTO），仅整体存取于 {@code expedition_run}。
@@ -47,7 +48,29 @@ public record ExpeditionRunDto(
     boolean isDaily,
     List<Map<String, Object>> history,
     @Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-        String runId) {
+        String runId,
+    @Min(0) int verifiedDepth) {
+
+  /** Compatibility constructor for clients/tests that predate the server-derived depth field. */
+  public ExpeditionRunDto(
+      String phase,
+      Integer focusChapter,
+      List<Map<String, Object>> nodes,
+      int layers,
+      String currentNodeId,
+      int hp,
+      int maxHp,
+      int momentum,
+      int bestMomentum,
+      int score,
+      List<String> relics,
+      boolean isDaily,
+      List<Map<String, Object>> history,
+      String runId) {
+    this(
+        phase, focusChapter, nodes, layers, currentNodeId, hp, maxHp, momentum, bestMomentum,
+        score, relics, isDaily, history, runId, 0);
+  }
 
   public ExpeditionRunDto {
     nodes = nodes == null ? List.of() : List.copyOf(nodes);

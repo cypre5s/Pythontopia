@@ -672,12 +672,37 @@ describe('rogueRun store', () => {
     expect(run.phase).toBe('idle');
     expect(run.hasSavedRun).toBe(true);
     expect(run.savedRunSummary?.focusChapter).toBe(4);
+    expect(run.savedRunSummary?.serverVerified).toBe(false);
+    expect(run.savedRunSummary?.verifiedScore).toBe(0);
+    expect(run.savedRunSummary?.verifiedDepth).toBe(0);
 
     await run.resumeSavedRun();
 
     expect(run.focusChapter).toBe(4);
     expect(run.nodes[0]?.kcCode).toBe('PY43-KC-031');
     expect(run.score).toBe(42);
+    expect(run.verifiedScore).toBe(0);
+    expect(run.verifiedDepth).toBe(0);
+  });
+
+  it('shows score and passed depth only from the server ledger', async () => {
+    frontierApiMock.saveExpeditionRun
+      .mockResolvedValueOnce({ runId: EXPEDITION_RUN_ID, score: 0, verifiedDepth: 0 })
+      .mockResolvedValueOnce({ runId: EXPEDITION_RUN_ID, score: 95, verifiedDepth: 1 });
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    run.score = 999_999;
+    run.saveCheckpoint();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(run.score).toBe(999_999); // local experience score remains separate
+    expect(run.verifiedScore).toBe(95);
+    expect(run.verifiedDepth).toBe(1);
+    expect(run.savedRunSummary).toMatchObject({
+      verifiedScore: 95,
+      verifiedDepth: 1,
+      serverVerified: true,
+    });
   });
 
   it('starts a fresh run instead of silently auto-resuming a saved run', async () => {

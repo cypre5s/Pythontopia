@@ -107,7 +107,13 @@ class BossProblemReviewRepositoryPostgresTest {
         approved.id(), 1, BossProblemReviewDecision.APPROVED, deciderId, "已审核");
 
     List<BossProblemReviewRecord> firstPage =
-        repository.listMatching(BossProblemReviewDecision.PENDING, "search-loop", 1, 0);
+        repository.listMatching(
+            BossProblemReviewDecision.PENDING,
+            "search-loop",
+            1,
+            0,
+            BossProblemReviewSortField.REQUESTED_AT,
+            BossProblemReviewSortDirection.DESC);
 
     assertThat(firstPage).hasSize(1);
     assertThat(repository.countMatching(BossProblemReviewDecision.PENDING, "search-loop"))

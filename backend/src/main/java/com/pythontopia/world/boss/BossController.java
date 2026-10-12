@@ -71,14 +71,23 @@ public class BossController {
   @GetMapping("/{chapter}/prefetch")
   public BossPrefetchStatusDto prefetchStatus(
       @PathVariable @Min(1) @Max(7) int chapter,
+      @RequestParam(required = false) @Min(1) @Max(4) Integer stage,
       @RequestParam(required = false) String preferredKc,
       @RequestParam @Min(1) @Max(5) Integer difficulty,
       @RequestParam(required = false) String preferredKind,
       @RequestParam(required = false) String arenaLevel,
+      @RequestParam(required = false) String expeditionRunId,
       @CurrentUser CurrentUserPrincipal user) {
     Long userId = user == null ? null : user.userId();
     return service.prefetchStatus(
-        chapter, preferredKc, difficulty, preferredKind, arenaLevel, userId);
+        chapter,
+        stage,
+        preferredKc,
+        difficulty,
+        preferredKind,
+        arenaLevel,
+        expeditionRunId,
+        userId);
   }
 
   /**

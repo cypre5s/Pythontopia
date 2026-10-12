@@ -76,7 +76,10 @@ export interface ExpeditionRunSnapshot {
   maxHp: number;
   momentum: number;
   bestMomentum: number;
+  /** Server response value from verified judged attempts; ignored when sent on save requests. */
   score: number;
+  /** Server-derived count of passed judged attempts; absent from local-only saves. */
+  verifiedDepth?: number;
   relics: string[];
   isDaily: boolean;
   history: RogueHistoryEntry[];

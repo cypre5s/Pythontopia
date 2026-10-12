@@ -6,6 +6,8 @@ import {
   searchProblemReviews,
   type BossProblemReviewDecision,
   type BossProblemReviewDto,
+  type BossProblemReviewSortBy,
+  type BossProblemReviewSortDirection,
 } from '@/api/problemReview';
 import AdminPanel from './AdminPanel.vue';
 
@@ -18,6 +20,8 @@ const loading = ref(false);
 const error = ref<string | null>(null);
 const selectedId = ref<number | null>(null);
 const filter = ref<DecisionFilter>('ALL');
+const sortBy = ref<BossProblemReviewSortBy>('REQUESTED_AT');
+const sortDirection = ref<BossProblemReviewSortDirection>('DESC');
 const searchInput = ref('');
 const searchTerm = ref('');
 const page = ref(0);
@@ -70,6 +74,8 @@ async function loadQueue(): Promise<void> {
     const readPage = () => searchProblemReviews({
       page: page.value,
       size: PAGE_SIZE,
+      sortBy: sortBy.value,
+      sortDirection: sortDirection.value,
       ...(filter.value === 'ALL' ? {} : { decision: filter.value }),
       ...(searchTerm.value ? { q: searchTerm.value } : {}),
     });
@@ -181,6 +187,31 @@ onMounted(() => {
             <option value="PENDING">待审核</option>
             <option value="APPROVED">已通过</option>
             <option value="REJECTED">已驳回</option>
+          </select>
+        </label>
+        <label class="review-filter">
+          <span>排序字段</span>
+          <select
+            v-model="sortBy"
+            aria-label="审核队列排序字段"
+            :disabled="loading"
+            @change="applyQueueFilters"
+          >
+            <option value="REQUESTED_AT">申请时间</option>
+            <option value="STATEMENT">题面</option>
+            <option value="REQUESTER_USERNAME">申请人</option>
+          </select>
+        </label>
+        <label class="review-filter">
+          <span>顺序</span>
+          <select
+            v-model="sortDirection"
+            aria-label="审核队列排序方向"
+            :disabled="loading"
+            @change="applyQueueFilters"
+          >
+            <option value="DESC">降序</option>
+            <option value="ASC">升序</option>
           </select>
         </label>
         <button

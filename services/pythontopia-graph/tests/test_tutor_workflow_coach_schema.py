@@ -93,3 +93,34 @@ def test_workflow_chat_request_rejects_invalid_image_data() -> None:
             problem={"problem_id": 42},
             event_data={"message": "请看图", "images": ["data:image/png;base64,not-base64!"]},
         )
+
+
+def test_workflow_chat_rejects_embedded_image_data_and_oversized_messages() -> None:
+    with pytest.raises(ValidationError, match="image data URI"):
+        WorkflowRunRequest(
+            session_id="wf-1",
+            user_id=1,
+            event="CHAT",
+            problem={"problem_id": 42},
+            event_data={"message": "看图 data:image/png;base64,aGVsbG8="},
+        )
+    with pytest.raises(ValidationError, match="message must be at most"):
+        WorkflowRunRequest(
+            session_id="wf-1",
+            user_id=1,
+            event="CHAT",
+            problem={"problem_id": 42},
+            event_data={"message": "x" * 2001},
+        )
+
+
+def test_workflow_rejects_images_outside_chat_event() -> None:
+    image = "data:image/png;base64,aGVsbG8="
+    with pytest.raises(ValidationError, match="images are only supported for CHAT"):
+        WorkflowRunRequest(
+            session_id="wf-1",
+            user_id=1,
+            event="IDEATING",
+            problem={"problem_id": 42},
+            event_data={"images": [image]},
+        )
