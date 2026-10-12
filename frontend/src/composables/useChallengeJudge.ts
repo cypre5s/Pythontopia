@@ -43,6 +43,7 @@ export interface ChallengeProblemArgs {
   kind: string | null;
   difficulty: number;
   expeditionRunId?: string | null;
+  expeditionNodeId?: string | null;
 }
 
 export type ChallengePreloadPhase = 'idle' | 'pending' | 'ready' | 'failed';
@@ -79,7 +80,7 @@ export function useChallengeJudge(): UseChallengeJudgeReturn {
   // 客户端只缓存「状态」，题目本体与 hidden tests 始终留在后端 pregenerated_problem。
   const preloadStates = ref<Record<string, ChallengePreloadState>>({});
   function keyOf(args: ChallengeProblemArgs): string {
-    return `${args.kc}|${args.kind ?? ''}|${args.difficulty}`;
+    return `${args.kc}|${args.kind ?? ''}|${args.difficulty}|${args.expeditionNodeId ?? ''}`;
   }
 
   function requestPayload(args: ChallengeProblemArgs) {
@@ -89,6 +90,7 @@ export function useChallengeJudge(): UseChallengeJudgeReturn {
       ...(args.kind ? { preferredKind: args.kind } : {}),
       difficulty: args.difficulty,
       ...(args.expeditionRunId ? { expeditionRunId: args.expeditionRunId } : {}),
+      ...(args.expeditionNodeId ? { expeditionNodeId: args.expeditionNodeId } : {}),
       ...(hasAnySignal.value ? { profileSignals: signals.value } : {}),
     };
   }

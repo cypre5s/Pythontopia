@@ -137,7 +137,8 @@ class BossControllerTest {
     BossPrefetchStatusDto pending =
         new BossPrefetchStatusDto(17L, "PENDING", 1, null, false, "2026-07-10T00:00:00Z");
     when(service.prefetch(anyInt(), any(), any())).thenReturn(pending);
-    when(service.prefetchStatus(anyInt(), nullable(Integer.class), any(), any(), any(), any(), any(), any()))
+    when(service.prefetchStatus(
+            anyInt(), nullable(Integer.class), any(), any(), any(), any(), any(), any(), any()))
         .thenReturn(pending);
 
     mockMvc

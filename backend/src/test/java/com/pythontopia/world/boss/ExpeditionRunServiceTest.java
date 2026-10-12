@@ -68,16 +68,19 @@ class ExpeditionRunServiceTest {
   void activeRunCanOnlyBeUpdatedByItsServerIssuedId() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), eq(7L)))
         .thenReturn(List.of(new ExpeditionRunService.ExistingRun(RUN_ID, "ACTIVE")));
-    when(jdbcTemplate.update(contains("INSERT INTO expedition_run"), any(Object[].class)))
-        .thenReturn(1);
+    ExpeditionRunDto canonical = runWithId(RUN_ID);
+    when(jdbcTemplate.query(
+            contains("FROM expedition_run WHERE user_id = ? AND status = 'ACTIVE'"),
+            any(RowMapper.class),
+            eq(7L)))
+        .thenReturn(List.of(canonical));
     ExpeditionRunService service = new ExpeditionRunService(jdbcTemplate, new ObjectMapper());
 
     ExpeditionRunDto saved = service.save(7L, runWithId(RUN_ID));
 
     assertThat(saved.runId()).isEqualTo(RUN_ID);
-    ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
-    verify(jdbcTemplate).update(sql.capture(), any(Object[].class));
-    assertThat(sql.getValue()).contains("expedition_verified_attempt");
+    verify(jdbcTemplate, org.mockito.Mockito.never())
+        .update(contains("INSERT INTO expedition_run"), any(Object[].class));
   }
 
   @Test
@@ -141,7 +144,7 @@ class ExpeditionRunServiceTest {
   }
 
   @Test
-  void activeSnapshotCanUpdateProgressWithoutChangingItsMap() {
+  void snapshotPutReturnsCanonicalStateWithoutMutatingGameplayProgress() {
     Map<String, Object> canonicalNode =
         Map.of(
             "id", "L0-0",
@@ -160,8 +163,15 @@ class ExpeditionRunServiceTest {
             List.of(
                 new ExpeditionRunService.ExistingRun(
                     RUN_ID, "ACTIVE", 1, List.of(canonicalNode), 10, false)));
-    when(jdbcTemplate.update(contains("INSERT INTO expedition_run"), any(Object[].class)))
-        .thenReturn(1);
+    ExpeditionRunDto canonical =
+        new ExpeditionRunDto(
+            "map", 1, List.of(canonicalNode), 10, null, 5, 5, 0, 0, 7, List.of(), false,
+            List.of(), RUN_ID);
+    when(jdbcTemplate.query(
+            contains("FROM expedition_run WHERE user_id = ? AND status = 'ACTIVE'"),
+            any(RowMapper.class),
+            eq(7L)))
+        .thenReturn(List.of(canonical));
     ExpeditionRunService service = new ExpeditionRunService(jdbcTemplate, new ObjectMapper());
     ExpeditionRunDto update =
         new ExpeditionRunDto(
@@ -183,8 +193,12 @@ class ExpeditionRunServiceTest {
     ExpeditionRunDto saved = service.save(7L, update);
 
     assertThat(saved.runId()).isEqualTo(RUN_ID);
-    assertThat(saved.hp()).isEqualTo(4);
-    assertThat(saved.nodes().getFirst().get("state")).isEqualTo("cleared");
+    assertThat(saved.hp()).isEqualTo(5);
+    assertThat(saved.score()).isEqualTo(7);
+    assertThat(saved.currentNodeId()).isNull();
+    assertThat(saved.nodes().getFirst().get("state")).isEqualTo("available");
+    verify(jdbcTemplate, org.mockito.Mockito.never())
+        .update(contains("INSERT INTO expedition_run"), any(Object[].class));
   }
 
   @Test

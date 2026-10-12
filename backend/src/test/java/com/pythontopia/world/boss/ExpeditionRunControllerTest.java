@@ -21,6 +21,7 @@ import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.common.web.CurrentUserArgumentResolver;
 import com.pythontopia.common.web.WebConfig;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
+import com.pythontopia.world.boss.dto.ExpeditionRunActionRequest;
 import com.pythontopia.world.boss.dto.ExpeditionRunStartRequest;
 import com.pythontopia.world.boss.dto.FrontierPickDto;
 import com.pythontopia.world.boss.dto.FrontierSelectRequest;
@@ -104,6 +105,37 @@ class ExpeditionRunControllerTest {
   }
 
   @Test
+  void postRunActionReturnsTheCanonicalRun() throws Exception {
+    ExpeditionRunDto dto = runDto();
+    when(service.performAction(eq(7L), any(ExpeditionRunActionRequest.class))).thenReturn(dto);
+
+    mockMvc
+        .perform(
+            post("/api/world/expedition/run/actions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"runId\":\"" + dto.runId() + "\",\"nodeId\":\"L0-0\","
+                        + "\"action\":\"ENTER_NODE\"}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.runId").value(dto.runId()))
+        .andExpect(jsonPath("$.phase").value("map"));
+
+    verify(service).performAction(eq(7L), any(ExpeditionRunActionRequest.class));
+  }
+
+  @Test
+  void postRunActionRejectsUnknownActionEnum() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/world/expedition/run/actions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"runId\":\"123e4567-e89b-12d3-a456-426614174000\",\"action\":\"HACK\"}"))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(service);
+  }
+
+  @Test
   void postStartsRunFromServerSelectedFrontier() throws Exception {
     ExpeditionRunDto dto = runDto();
     when(bossService.selectFrontier(eq(7L), any(FrontierSelectRequest.class)))
@@ -166,6 +198,14 @@ class ExpeditionRunControllerTest {
                 teacher, null, List.of(new SimpleGrantedAuthority("ROLE_TEACHER"))));
 
     mockMvc.perform(get("/api/world/expedition/run")).andExpect(status().isForbidden());
+    mockMvc
+        .perform(
+            post("/api/world/expedition/run/actions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"runId\":\"123e4567-e89b-12d3-a456-426614174000\","
+                        + "\"action\":\"FINISH\"}"))
+        .andExpect(status().isForbidden());
     verifyNoInteractions(service);
   }
 

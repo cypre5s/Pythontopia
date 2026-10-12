@@ -128,15 +128,20 @@ interface NodePos {
 }
 
 const bridge = {
-  /** 像素节点选择：仅 available 节点可进入，回流到 onNodeClick（与 DOM 地图同一动作）。 */
+  /** 像素节点选择：available 节点及地图恢复时的当前节点可进入。 */
   selectNode(id: string): void {
     const node = currentMap?.nodes.find((n) => n.id === id);
-    if (!node || node.state !== 'available') {
+    if (!node || !isSelectableNode(node)) {
       return;
     }
     onNodeClick?.(id);
   },
 };
+
+function isSelectableNode(node: RogueNode): boolean {
+  return node.state === 'available'
+    || (runView.phase === 'map' && node.id === runView.currentNodeId && node.state === 'current');
+}
 
 /** 对外控制接口：像素节点点击回流桥。 */
 export function getExpeditionBridge(): typeof bridge {
@@ -361,8 +366,8 @@ function drawRoom(ctx: ExpeditionSceneContext, pos: NodePos, roomW: number, room
     .setColor(textAlpha >= 1 ? '#1a1326' : '#cfc6e6')
     .setAlpha(textAlpha);
 
-  // available 节点可点击：像素点击回流到 run.enterNode（与 DOM 地图同一动作）。
-  if (node.state === 'available') {
+  // 可进入节点点击后回流到 run.enterNode（与 DOM 地图同一动作）。
+  if (isSelectableNode(node)) {
     label.setInteractive({ useHandCursor: true }).on('pointerdown', () => bridge.selectNode(node.id));
   }
 

@@ -378,7 +378,7 @@ export async function fetchBossPrefetchStatus(
   chapter: number,
   req: Pick<
     BossProblemRequest,
-    'stage' | 'preferredKc' | 'preferredKind' | 'arenaLevel' | 'difficulty' | 'expeditionRunId'
+    'stage' | 'preferredKc' | 'preferredKind' | 'arenaLevel' | 'difficulty' | 'expeditionRunId' | 'expeditionNodeId'
   >,
 ): Promise<BossPrefetchStatusDto> {
   if (req.difficulty == null) throw new Error('查询预加载状态必须提供 difficulty');
@@ -392,6 +392,7 @@ export async function fetchBossPrefetchStatus(
         arenaLevel: req.arenaLevel,
         difficulty: req.difficulty,
         expeditionRunId: req.expeditionRunId,
+        expeditionNodeId: req.expeditionNodeId,
       },
       suppressNetworkToast: true,
     },

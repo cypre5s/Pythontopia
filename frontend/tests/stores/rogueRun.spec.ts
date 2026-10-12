@@ -12,6 +12,7 @@ const judgeMock = vi.hoisted(() => ({
 }));
 const frontierApiMock = vi.hoisted(() => ({
   createExpeditionRun: vi.fn(),
+  performExpeditionAction: vi.fn(),
   fetchExpeditionRun: vi.fn(),
   saveExpeditionRun: vi.fn(),
   deleteExpeditionRun: vi.fn(),
@@ -43,6 +44,7 @@ vi.mock('@stores/mainline', () => ({
 }));
 vi.mock('@/api/expedition', () => ({
   createExpeditionRun: frontierApiMock.createExpeditionRun,
+  performExpeditionAction: frontierApiMock.performExpeditionAction,
   fetchExpeditionRun: frontierApiMock.fetchExpeditionRun,
   saveExpeditionRun: frontierApiMock.saveExpeditionRun,
   deleteExpeditionRun: frontierApiMock.deleteExpeditionRun,
@@ -53,7 +55,23 @@ vi.mock('@/api/expedition', () => ({
 import { useRogueRunStore } from '@/stores/rogueRun';
 import { generateRogueMap } from '@/data/rogueMap';
 import { computeLayeredDifficulty, NODE_KIND_POOLS } from '@/data/rogueConfig';
-import type { ExpeditionRunSnapshot } from '@/api/expedition';
+import type { ExpeditionRunAction, ExpeditionRunSnapshot } from '@/api/expedition';
+
+let mockServerRun: ExpeditionRunSnapshot | null = null;
+
+function copyRun(run: ExpeditionRunSnapshot): ExpeditionRunSnapshot {
+  return {
+    ...run,
+    nodes: run.nodes.map((node) => ({ ...node, next: [...node.next] })),
+    relics: [...run.relics],
+    history: run.history.map((entry) => ({ ...entry })),
+  };
+}
+
+function setServerNode(id: string, update: (node: ExpeditionRunSnapshot['nodes'][number]) => void): void {
+  const node = mockServerRun?.nodes.find((item) => item.id === id);
+  if (node) update(node);
+}
 
 function serverRun(
   focusChapter: number | null = null,
@@ -108,6 +126,7 @@ function problem(): BossProblemDto {
 beforeEach(() => {
   setActivePinia(createPinia());
   localStorage.clear();
+  mockServerRun = null;
   judgeMock.fetchProblem.mockReset().mockResolvedValue(problem());
   judgeMock.judge.mockReset();
   judgeMock.prefetchProblem.mockReset().mockResolvedValue({ phase: 'pending', attempts: 1 });
@@ -116,8 +135,68 @@ beforeEach(() => {
   judgeMock.clearPrefetch.mockReset();
   // 默认使用后端权威画像/掌握度前沿；聚焦章节不足地图节点时循环这一真实排序。
   frontierApiMock.createExpeditionRun.mockReset().mockImplementation(
-    async ({ focusChapter, isDaily }: { focusChapter: number | null; isDaily: boolean }) =>
-      serverRun(focusChapter, 'PY43-KC-001', 2, isDaily),
+    async ({ focusChapter, isDaily }: { focusChapter: number | null; isDaily: boolean }) => {
+      mockServerRun = serverRun(focusChapter, 'PY43-KC-001', 2, isDaily);
+      return copyRun(mockServerRun);
+    },
+  );
+  frontierApiMock.performExpeditionAction.mockReset().mockImplementation(
+    async (command: ExpeditionRunAction) => {
+      const snapshot = copyRun(mockServerRun ?? serverRun());
+      const nodeId = 'nodeId' in command ? command.nodeId : null;
+      const node = nodeId ? snapshot.nodes.find((item) => item.id === nodeId) : null;
+      if (command.action === 'ENTER_NODE' && node) {
+        snapshot.currentNodeId = node.id;
+        if (node.kind === 'rest' || node.kind === 'chest') node.state = 'cleared';
+        snapshot.phase = node.kind === 'event' ? 'event'
+          : node.kind === 'chest' ? 'reward'
+            : node.kind === 'rest' ? 'map' : 'challenge';
+        if (node.kind === 'rest') snapshot.hp = Math.min(snapshot.maxHp, snapshot.hp + 1);
+      } else if (command.action === 'EVENT_REVIEW' && node) {
+        snapshot.phase = 'map';
+        node.state = 'cleared';
+        snapshot.hp = Math.min(snapshot.maxHp, snapshot.hp + 1);
+      } else if ((command.action === 'EVENT_STUDY' || command.action === 'EVENT_STEADY') && node) {
+        snapshot.phase = 'challenge';
+      } else if (command.action === 'CLAIM_RELIC' && node) {
+        snapshot.phase = 'map';
+        node.state = 'cleared';
+        if (!snapshot.relics.includes(command.relicId)) snapshot.relics.push(command.relicId);
+      } else if (command.action === 'SETTLE_CHALLENGE' && node) {
+        const latest = judgeMock.judge.mock.results.at(-1)?.value;
+        const judged = await Promise.resolve(latest as ReturnType<typeof judgeMock.judge> | undefined);
+        const passed = judged?.passed === true;
+        const at = new Date().toISOString();
+        snapshot.history.unshift({
+          nodeId: node.id, kcCode: node.kcCode, kind: node.kind, passed,
+          score: passed ? judged.score : 0, at,
+        });
+        if (passed) {
+          snapshot.score += judged.score;
+          snapshot.verifiedDepth = (snapshot.verifiedDepth ?? 0) + 1;
+          snapshot.momentum += 1;
+          if (node.kind === 'boss' && (node.bossPhase ?? 1) < 3) {
+            node.bossPhase = (node.bossPhase ?? 1) + 1;
+            snapshot.phase = 'challenge';
+          } else {
+            node.state = 'cleared';
+            snapshot.phase = node.kind === 'boss' ? 'cleared' : node.kind === 'elite' ? 'reward' : 'map';
+            for (const nextId of node.next) {
+              const next = snapshot.nodes.find((item) => item.id === nextId);
+              if (next?.state === 'locked') next.state = 'available';
+            }
+          }
+        } else {
+          snapshot.hp = Math.max(0, snapshot.hp - 2);
+          snapshot.momentum = 0;
+          snapshot.phase = snapshot.hp === 0 ? 'over' : 'challenge';
+        }
+      } else if (command.action === 'FINISH') {
+        snapshot.phase = 'over';
+      }
+      mockServerRun = copyRun(snapshot);
+      return copyRun(snapshot);
+    },
   );
   // 默认没有后端活跃 run；startRun 新开局。
   frontierApiMock.fetchExpeditionRun.mockReset().mockResolvedValue(null);
@@ -199,13 +278,8 @@ describe('rogueRun store', () => {
     );
   });
 
-  it('persists the new run id before warming its first battle', async () => {
+  it('uses the server run id and node binding when warming its first battle', async () => {
     const run = useRogueRunStore();
-    frontierApiMock.saveExpeditionRun.mockImplementationOnce(async () => {
-      expect(judgeMock.prefetchProblem).not.toHaveBeenCalled();
-      return { runId: EXPEDITION_RUN_ID };
-    });
-
     await run.startRun(null);
 
     const start = run.nodes.find((n) => n.layer === 0);
@@ -214,6 +288,7 @@ describe('rogueRun store', () => {
         kc: start?.kcCode,
         kind: start?.challengeKind,
         expeditionRunId: EXPEDITION_RUN_ID,
+        expeditionNodeId: start?.id,
       }),
     );
   });
@@ -225,12 +300,111 @@ describe('rogueRun store', () => {
     await run.enterNode(start!.id);
 
     expect(judgeMock.fetchProblem).toHaveBeenCalledWith(
-      expect.objectContaining({ kc: start?.kcCode, expeditionRunId: EXPEDITION_RUN_ID }),
+      expect.objectContaining({
+        kc: start?.kcCode,
+        expeditionRunId: EXPEDITION_RUN_ID,
+        expeditionNodeId: start?.id,
+      }),
     );
 
     run.finishRun();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledWith({ runId: EXPEDITION_RUN_ID });
+  });
+
+  it('enters a node through the server action and applies its canonical snapshot', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const start = run.nodes.find((node) => node.layer === 0)!;
+    const canonical = serverRun();
+    canonical.phase = 'challenge';
+    canonical.currentNodeId = start.id;
+    frontierApiMock.performExpeditionAction.mockResolvedValueOnce(canonical);
+
+    await run.enterNode(start.id);
+
+    expect(frontierApiMock.performExpeditionAction).toHaveBeenCalledWith({
+      runId: EXPEDITION_RUN_ID,
+      action: 'ENTER_NODE',
+      nodeId: start.id,
+    });
+    expect(run.phase).toBe('challenge');
+    expect(run.currentNodeId).toBe(start.id);
+    expect(run.nodes.find((node) => node.id === start.id)?.state).toBe('available');
+  });
+
+  it('settles a judged challenge from the server ledger and only then returns to the map', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const start = run.nodes.find((node) => node.layer === 0)!;
+    await run.enterNode(start.id);
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
+    });
+    const canonical = serverRun();
+    canonical.phase = 'map';
+    canonical.currentNodeId = start.id;
+    canonical.score = 80;
+    canonical.verifiedDepth = 1;
+    canonical.history = [{ nodeId: start.id, kcCode: start.kcCode, kind: start.kind, passed: true, score: 80, at: new Date().toISOString() }];
+    canonical.nodes = canonical.nodes.map((node) =>
+      node.id === start.id ? { ...node, state: 'cleared' } : node,
+    );
+    frontierApiMock.performExpeditionAction.mockResolvedValueOnce(canonical);
+
+    await run.submitChallenge();
+
+    expect(frontierApiMock.performExpeditionAction).toHaveBeenLastCalledWith({
+      runId: EXPEDITION_RUN_ID,
+      action: 'SETTLE_CHALLENGE',
+      nodeId: start.id,
+      problemId: 'p1',
+    });
+    expect(run.phase).toBe('challenge');
+    expect(run.challengeResult?.passed).toBe(true);
+    expect(run.score).toBe(start.difficulty * 10);
+    expect(run.verifiedScore).toBe(80);
+    expect(run.nodes.find((node) => node.id === start.id)?.state).toBe('cleared');
+
+    await run.continueAfterChallenge();
+    expect(run.phase).toBe('map');
+  });
+
+  it('retries settlement for the same judged problem without requesting or charging for a new one', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const start = run.nodes.find((node) => node.layer === 0)!;
+    await run.enterNode(start.id);
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
+    });
+    const canonical = serverRun();
+    canonical.phase = 'map';
+    canonical.currentNodeId = start.id;
+    canonical.score = 80;
+    canonical.verifiedDepth = 1;
+    canonical.nodes = canonical.nodes.map((node) =>
+      node.id === start.id ? { ...node, state: 'cleared' } : node,
+    );
+    frontierApiMock.performExpeditionAction
+      .mockRejectedValueOnce(new Error('temporary settlement failure'))
+      .mockResolvedValueOnce(canonical);
+
+    await run.submitChallenge();
+
+    expect(run.settlementPending).toBe(true);
+    expect(run.challengeResult?.problemId).toBe('p1');
+    await run.submitChallenge();
+    await run.continueAfterChallenge();
+
+    expect(run.settlementPending).toBe(false);
+    expect(run.phase).toBe('map');
+    expect(judgeMock.judge).toHaveBeenCalledTimes(1);
+    expect(judgeMock.fetchProblem).toHaveBeenCalledTimes(1);
+    expect(frontierApiMock.performExpeditionAction.mock.calls.slice(-2).map(([action]) => action)).toEqual([
+      expect.objectContaining({ action: 'SETTLE_CHALLENGE', problemId: 'p1' }),
+      expect.objectContaining({ action: 'SETTLE_CHALLENGE', problemId: 'p1' }),
+    ]);
   });
 
   it('does not accept client score fields in the leaderboard settlement payload', async () => {
@@ -246,9 +420,6 @@ describe('rogueRun store', () => {
 
   it('settles a finished run before creating the next server-owned run', async () => {
     const nextRunId = '223e4567-e89b-12d3-a456-426614174000';
-    frontierApiMock.saveExpeditionRun
-      .mockResolvedValueOnce({ runId: EXPEDITION_RUN_ID })
-      .mockResolvedValueOnce({ runId: nextRunId });
     let finishSettlement!: (value: {
       entries: never[];
       selfRank: null;
@@ -260,18 +431,20 @@ describe('rogueRun store', () => {
     );
     const run = useRogueRunStore();
     await run.startRun(null);
+    frontierApiMock.createExpeditionRun.mockResolvedValueOnce({ ...serverRun(), runId: nextRunId });
 
     run.finishRun();
     const restart = run.startRun(null);
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(frontierApiMock.createExpeditionRun).toHaveBeenCalledTimes(1);
-    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(1);
+    expect(frontierApiMock.performExpeditionAction).toHaveBeenCalledWith({
+      runId: EXPEDITION_RUN_ID, action: 'FINISH',
+    });
 
     finishSettlement({ entries: [], selfRank: null, selfBest: 0, inClass: false });
     await restart;
 
     expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledTimes(1);
-    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(2);
     expect(Object.values(localStorage).join('')).toContain(nextRunId);
   });
 
@@ -288,6 +461,8 @@ describe('rogueRun store', () => {
     expect(run.activeProblem?.problemId).toBe('p1');
     await run.submitChallenge();
     expect(run.score).toBeGreaterThan(0);
+    expect(run.score).toBe(start!.difficulty * 10);
+    expect(run.verifiedScore).toBe(80);
     expect(run.momentum).toBe(1);
     expect(run.nodes.find((n) => n.id === start!.id)?.state).toBe('cleared');
     run.continueAfterChallenge();
@@ -296,6 +471,25 @@ describe('rogueRun store', () => {
       (id) => run.nodes.find((n) => n.id === id)?.state === 'available',
     );
     expect(unlocked).toBe(true);
+  });
+
+  it('applies relic score bonuses to game points, while verified points remain ledger-backed', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    run.relics = ['combo_scholar', 'quick_thinker'];
+    if (mockServerRun) mockServerRun.relics = [...run.relics];
+    const start = run.nodes.find((n) => n.layer === 0)!;
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
+    });
+
+    await run.enterNode(start.id);
+    for (let second = 0; second < 30; second += 1) run.tickSecond();
+    const expected = Math.round(run.activeDifficulty * 10 * 1.2 * 1.5);
+    await run.submitChallenge();
+
+    expect(run.score).toBe(expected);
+    expect(run.verifiedScore).toBe(80);
   });
 
   it('failing a battle costs HP gently (resilience 0.5 → -2) and resets momentum', async () => {
@@ -346,7 +540,7 @@ describe('rogueRun store', () => {
     expect(run.activeCode).toContain('total = item');
   });
 
-  it('persists challenge entry before waiting for a generated problem', async () => {
+  it('records node entry with the server before requesting its challenge', async () => {
     let resolveProblem: ((value: BossProblemDto) => void) | undefined;
     judgeMock.fetchProblem.mockReturnValueOnce(new Promise((resolve) => {
       resolveProblem = resolve;
@@ -354,22 +548,21 @@ describe('rogueRun store', () => {
 
     const run = useRogueRunStore();
     await run.startRun(null);
-    frontierApiMock.saveExpeditionRun.mockClear();
+    frontierApiMock.performExpeditionAction.mockClear();
     const start = run.nodes.find((n) => n.layer === 0);
 
     const entering = run.enterNode(start!.id);
-    await Promise.resolve();
-    await Promise.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 0));
 
     const persisted = JSON.parse(localStorage.getItem('pyt_rogue_run_v1@u:anon') ?? '{}');
     expect(persisted.phase).toBe('challenge');
     expect(persisted.currentNodeId).toBe(start!.id);
-    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledWith(
-      expect.objectContaining({
-        phase: 'challenge',
-        currentNodeId: start!.id,
-      }),
-    );
+    expect(frontierApiMock.performExpeditionAction).toHaveBeenCalledWith(expect.objectContaining({
+      runId: EXPEDITION_RUN_ID,
+      action: 'ENTER_NODE',
+      nodeId: start!.id,
+    }));
+    expect(judgeMock.fetchProblem).toHaveBeenCalledWith(expect.objectContaining({ expeditionNodeId: start!.id }));
 
     resolveProblem?.(problem());
     await entering;
@@ -396,136 +589,119 @@ describe('rogueRun store', () => {
     expect(run.loading).toBe(false);
   });
 
-  it('serializes snapshot writes and sends the latest snapshot with the server run id', async () => {
-    let resolveInitialSave: ((value: { runId: string }) => void) | undefined;
-    frontierApiMock.saveExpeditionRun
-      .mockImplementationOnce(() => new Promise((resolve) => {
-        resolveInitialSave = resolve;
-      }))
-      .mockResolvedValueOnce({ runId: EXPEDITION_RUN_ID, score: 0, verifiedDepth: 0 });
+  it('keeps client-edited score out of local recovery snapshots marked server verified', async () => {
     const run = useRogueRunStore();
-    const starting = run.startRun(null);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(1);
+    await run.startRun(null);
     run.hp = 3;
+    run.score = 999_999;
     run.saveCheckpoint();
-    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(1);
-
-    resolveInitialSave?.({ runId: EXPEDITION_RUN_ID });
-    await starting;
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(2);
-    expect(frontierApiMock.saveExpeditionRun).toHaveBeenLastCalledWith(
-      expect.objectContaining({ hp: 3, runId: EXPEDITION_RUN_ID }),
-    );
+    const preview = JSON.parse(localStorage.getItem('pyt_rogue_run_v1@u:anon') ?? '{}');
+    expect(preview).toMatchObject({ hp: 3, score: 0, verifiedDepth: 0 });
+    expect(frontierApiMock.saveExpeditionRun).not.toHaveBeenCalled();
   });
 
-  it('waits for an in-flight save before deleting the run on abort', async () => {
-    let resolveSave: ((value: { runId: string }) => void) | undefined;
-    frontierApiMock.saveExpeditionRun.mockImplementationOnce(() => new Promise((resolve) => {
-      resolveSave = resolve;
+  it('waits for an in-flight server action before deleting the run on abort', async () => {
+    let resolveAction: ((value: ExpeditionRunSnapshot) => void) | undefined;
+    frontierApiMock.performExpeditionAction.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveAction = resolve;
     }));
     const run = useRogueRunStore();
-    const starting = run.startRun(null);
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await run.startRun(null);
+    const start = run.nodes.find((node) => node.layer === 0)!;
+    const entering = run.enterNode(start.id);
+    await Promise.resolve();
     const aborting = run.abort();
 
     expect(frontierApiMock.deleteExpeditionRun).not.toHaveBeenCalled();
-    resolveSave?.({ runId: EXPEDITION_RUN_ID });
-    await Promise.all([starting, aborting]);
+    resolveAction?.(serverRun());
+    await Promise.all([entering, aborting]);
 
     expect(frontierApiMock.deleteExpeditionRun).toHaveBeenCalledTimes(1);
   });
 
-  it('relic 沉静心法(calm_mind) softens damage from -2 to -1', async () => {
-    const run = useRogueRunStore();
-    await run.startRun(null);
-    run.relics.push('calm_mind');
-    const start = run.nodes.find((n) => n.layer === 0);
-    const hp0 = run.hp;
-    judgeMock.judge.mockResolvedValue({
-      problemId: 'p1', passed: false, passedTestCases: 0, totalTestCases: 1, score: 0, feedback: 'wa',
-    });
-    await run.enterNode(start!.id);
-    await run.submitChallenge();
-    expect(run.hp).toBe(hp0 - 1);
-  });
-
-  it('relic 连题学者(combo_scholar) boosts first-clear score over the no-relic baseline', async () => {
-    judgeMock.judge.mockResolvedValue({
-      problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
-    });
-    const baseRun = useRogueRunStore();
-    await baseRun.startRun(null);
-    const baseStart = baseRun.nodes.find((n) => n.layer === 0);
-    await baseRun.enterNode(baseStart!.id);
-    await baseRun.submitChallenge();
-    const baseScore = baseRun.score;
-
-    setActivePinia(createPinia());
-    const relicRun = useRogueRunStore();
-    await relicRun.startRun(null);
-    relicRun.relics.push('combo_scholar');
-    const relicStart = relicRun.nodes.find((n) => n.layer === 0);
-    await relicRun.enterNode(relicStart!.id);
-    await relicRun.submitChallenge();
-    expect(relicRun.score).toBeGreaterThan(baseScore);
-  });
-
-  it('event 复盘(review) heals + scores + clears node, returns to map without judging', async () => {
+  it('sends event review to the server and applies its canonical snapshot', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);
     const node = run.nodes.find((n) => n.layer === 0);
-    node!.kcCode = 'PY43-KC-001';
+    node!.kind = 'event';
+    setServerNode(node!.id, (serverNode) => { serverNode.kind = 'event'; });
     run.hp = 3;
-    const score0 = run.score;
-    run.activeNode = node!;
-    run.phase = 'event';
+    if (mockServerRun) mockServerRun.hp = 3;
+    await run.enterNode(node!.id);
     await run.chooseEvent('review');
+
+    expect(frontierApiMock.performExpeditionAction).toHaveBeenLastCalledWith({
+      runId: EXPEDITION_RUN_ID, action: 'EVENT_REVIEW', nodeId: node!.id,
+    });
     expect(run.phase).toBe('map');
     expect(run.hp).toBe(4);
-    expect(run.score).toBeGreaterThan(score0);
     expect(run.nodes.find((n) => n.id === node!.id)?.state).toBe('cleared');
     expect(run.attempts).toBe(0);
+    expect(run.score).toBe(node!.difficulty * 5);
+    expect(run.verifiedScore).toBe(0);
   });
 
-  it('event 钻研(study) raises one challenge without rewriting the server map', async () => {
+  it('sends event study to the server and uses its challenge snapshot', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);
     const node = run.nodes.find((n) => n.layer === 0);
-    node!.kcCode = 'PY43-KC-001';
+    node!.kind = 'event';
+    setServerNode(node!.id, (serverNode) => { serverNode.kind = 'event'; });
     const d0 = node!.difficulty;
-    run.activeNode = node!;
-    run.phase = 'event';
     judgeMock.fetchProblem.mockResolvedValue(problem());
+    await run.enterNode(node!.id);
     await run.chooseEvent('study');
+
+    expect(frontierApiMock.performExpeditionAction).toHaveBeenLastCalledWith({
+      runId: EXPEDITION_RUN_ID, action: 'EVENT_STUDY', nodeId: node!.id,
+    });
     expect(node!.difficulty).toBe(d0);
     expect(run.activeDifficulty).toBe(Math.min(5, d0 + 1));
     expect(run.phase).toBe('challenge');
   });
 
-  it('rest node heals and clears in-place without fetching a problem', async () => {
+  it('applies the event study score multiplier only to the local game score', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const node = run.nodes.find((n) => n.layer === 0)!;
+    node.kind = 'event';
+    setServerNode(node.id, (serverNode) => { serverNode.kind = 'event'; });
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
+    });
+
+    await run.enterNode(node.id);
+    await run.chooseEvent('study');
+    const expected = Math.round(run.activeDifficulty * 10 * 1.5);
+    await run.submitChallenge();
+
+    expect(run.score).toBe(expected);
+    expect(run.verifiedScore).toBe(80);
+  });
+
+  it('uses the server response for rest nodes without requesting a problem', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);
     const node = run.nodes.find((n) => n.layer === 0);
     node!.kind = 'rest';
+    setServerNode(node!.id, (serverNode) => { serverNode.kind = 'rest'; });
     run.hp = 2;
+    if (mockServerRun) mockServerRun.hp = 2;
 
     await run.enterNode(node!.id);
 
     expect(judgeMock.fetchProblem).not.toHaveBeenCalled();
     expect(run.phase).toBe('map');
-    expect(run.hp).toBeGreaterThan(2);
+    expect(run.hp).toBe(3);
     expect(run.nodes.find((n) => n.id === node!.id)?.state).toBe('cleared');
   });
 
-  it('chest node opens a three-choice reward; claiming returns to map with the relic', async () => {
+  it('claims a chest relic through the server and applies its canonical snapshot', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);
     const node = run.nodes.find((n) => n.layer === 0);
     node!.kind = 'chest';
+    setServerNode(node!.id, (serverNode) => { serverNode.kind = 'chest'; });
 
     await run.enterNode(node!.id);
 
@@ -534,67 +710,13 @@ describe('rogueRun store', () => {
     expect(run.rewardChoices.length).toBeGreaterThan(0);
     expect(run.rewardChoices.length).toBeLessThanOrEqual(3);
     expect(run.relics).toHaveLength(0); // not granted until chosen
-    expect(run.nodes.find((n) => n.id === node!.id)?.state).toBe('cleared');
-
     const picked = run.rewardChoices[0]!;
-    run.chooseReward(picked);
+    await run.chooseReward(picked);
+    expect(frontierApiMock.performExpeditionAction).toHaveBeenLastCalledWith({
+      runId: EXPEDITION_RUN_ID, action: 'CLAIM_RELIC', nodeId: node!.id, relicId: picked,
+    });
     expect(run.phase).toBe('map');
     expect(run.relics).toEqual([picked]);
-  });
-
-  it('relic 急救包(first_aid) shields the first mistake, then later mistakes cost HP', async () => {
-    const run = useRogueRunStore();
-    await run.startRun(null);
-    run.relics.push('first_aid');
-    const start = run.nodes.find((n) => n.layer === 0);
-    const hp0 = run.hp;
-    judgeMock.judge.mockResolvedValue({
-      problemId: 'p1', passed: false, passedTestCases: 0, totalTestCases: 1, score: 0, feedback: 'wa',
-    });
-    await run.enterNode(start!.id);
-    await run.submitChallenge();
-    expect(run.hp).toBe(hp0); // first failure shielded
-
-    await run.retryChallenge();
-    await run.submitChallenge();
-    expect(run.hp).toBe(hp0 - 2); // second failure costs HP normally
-  });
-
-  it('relic 急智(quick_thinker) boosts score when solved quickly', async () => {
-    judgeMock.judge.mockResolvedValue({
-      problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
-    });
-    const baseRun = useRogueRunStore();
-    await baseRun.startRun(null);
-    const baseStart = baseRun.nodes.find((n) => n.layer === 0);
-    await baseRun.enterNode(baseStart!.id);
-    await baseRun.submitChallenge();
-    const baseScore = baseRun.score;
-
-    setActivePinia(createPinia());
-    const fastRun = useRogueRunStore();
-    await fastRun.startRun(null);
-    fastRun.relics.push('quick_thinker');
-    const fastStart = fastRun.nodes.find((n) => n.layer === 0);
-    await fastRun.enterNode(fastStart!.id);
-    await fastRun.submitChallenge();
-    expect(fastRun.score).toBeGreaterThan(baseScore);
-  });
-
-  it('clearing a node at the half-way layer heals 1 HP (milestone)', async () => {
-    const run = useRogueRunStore();
-    await run.startRun(null);
-    const halfway = Math.floor((run.layers - 1) / 2);
-    const node = run.nodes.find((n) => n.layer === halfway);
-    expect(node).toBeDefined();
-    node!.kind = 'chest';
-    node!.state = 'available';
-    run.hp = run.maxHp - 2;
-
-    await run.enterNode(node!.id);
-
-    // chest 不直接回血，唯一来源是半程里程碑 +1。
-    expect(run.hp).toBe(run.maxHp - 1);
   });
 
   it('rejects a structurally corrupt saved run instead of resuming into a crash', async () => {
@@ -629,6 +751,7 @@ describe('rogueRun store', () => {
     await run.startRun(null);
     // 直接把气势拉到 3，进入任一可战节点应出更高难度题。
     run.momentum = 3;
+    if (mockServerRun) mockServerRun.momentum = 3;
     const start = run.nodes.find((n) => n.layer === 0);
     await run.enterNode(start!.id);
     // base 2 + 气势(>=3) +1 = 3。
@@ -644,23 +767,26 @@ describe('rogueRun store', () => {
     const node = run.nodes.find((n) => n.layer === 0);
     node!.kind = 'boss';
     node!.kcCode = 'PY43-KC-001';
-    node!.challengeKind = 'multi_round';
-    run.activeNode = node!;
-    run.activeProblem = problem();
-    run.phase = 'challenge';
-    run.bossPhase = 1;
+    setServerNode(node!.id, (serverNode) => {
+      serverNode.kind = 'boss';
+      serverNode.kcCode = 'PY43-KC-001';
+      serverNode.bossPhase = 1;
+    });
     judgeMock.fetchProblem.mockResolvedValue(problem());
     judgeMock.judge.mockResolvedValue({
       problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
     });
+    await run.enterNode(node!.id);
     await run.submitChallenge();
     expect(run.bossPhase).toBe(2);
-    expect(run.nodes.find((n) => n.id === node!.id)?.state).not.toBe('cleared');
+    expect(run.nodes.find((n) => n.id === node!.id)?.state).toBe('available');
+    await run.continueAfterChallenge();
     await run.submitChallenge();
     expect(run.bossPhase).toBe(3);
+    await run.continueAfterChallenge();
     await run.submitChallenge();
     expect(run.nodes.find((n) => n.id === node!.id)?.state).toBe('cleared');
-    run.continueAfterChallenge();
+    await run.continueAfterChallenge();
     expect(run.phase).toBe('cleared');
   });
 
@@ -670,10 +796,7 @@ describe('rogueRun store', () => {
     await run.startDailyRun();
     expect(run.isDaily).toBe(true);
     expect(run.phase).toBe('map');
-    run.hp = 0;
-    run.activeNode = run.nodes.find((n) => n.layer === 0) ?? null;
-    run.phase = 'challenge';
-    run.continueAfterChallenge();
+    await run.finishRun();
     expect(run.phase).toBe('over');
     expect(run.dailyAvailable).toBe(false);
     expect(frontierApiMock.createExpeditionRun).toHaveBeenCalledWith({
@@ -748,7 +871,7 @@ describe('rogueRun store', () => {
     expect(run.relics).toEqual(['calm_mind']);
   });
 
-  it('falls back to localStorage when loading a selectable save and backend is unreachable', async () => {
+  it('keeps a local-only snapshot previewable but refuses to resume without server state', async () => {
     frontierApiMock.fetchExpeditionRun.mockRejectedValueOnce(new Error('offline'));
     localStorage.setItem('pyt_rogue_run_v1@u:anon', JSON.stringify({
       phase: 'map',
@@ -791,32 +914,92 @@ describe('rogueRun store', () => {
 
     await run.resumeSavedRun();
 
-    expect(run.focusChapter).toBe(4);
-    expect(run.nodes[0]?.kcCode).toBe('PY43-KC-031');
-    expect(run.score).toBe(42);
+    expect(run.focusChapter).toBeNull();
+    expect(run.nodes).toHaveLength(0);
+    expect(run.score).toBe(0);
     expect(run.verifiedScore).toBe(0);
     expect(run.verifiedDepth).toBe(0);
     expect(frontierApiMock.saveExpeditionRun).not.toHaveBeenCalled();
   });
 
   it('shows score and passed depth only from the server ledger', async () => {
-    frontierApiMock.saveExpeditionRun
-      .mockResolvedValueOnce({ runId: EXPEDITION_RUN_ID, score: 0, verifiedDepth: 0 })
-      .mockResolvedValueOnce({ runId: EXPEDITION_RUN_ID, score: 95, verifiedDepth: 1 });
+    const verified = serverRun();
+    verified.score = 95;
+    verified.verifiedDepth = 1;
+    frontierApiMock.fetchExpeditionRun.mockResolvedValueOnce(verified);
     const run = useRogueRunStore();
-    await run.startRun(null);
-    run.score = 999_999;
-    run.saveCheckpoint();
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await run.refreshSavedRun();
 
-    expect(run.score).toBe(999_999); // local experience score remains separate
-    expect(run.verifiedScore).toBe(95);
-    expect(run.verifiedDepth).toBe(1);
     expect(run.savedRunSummary).toMatchObject({
       verifiedScore: 95,
       verifiedDepth: 1,
       serverVerified: true,
     });
+    expect(await run.resumeSavedRun()).toBe(true);
+    expect(run.verifiedScore).toBe(95);
+    expect(run.verifiedDepth).toBe(1);
+    run.score = 999_999;
+    run.saveCheckpoint();
+    expect(run.savedRunSummary?.verifiedScore).toBe(95);
+  });
+
+  it('can re-enter the interrupted current challenge after resuming to the map', async () => {
+    const interrupted = serverRun();
+    const node = interrupted.nodes.find((item) => item.layer === 0)!;
+    interrupted.phase = 'challenge';
+    interrupted.currentNodeId = node.id;
+    node.state = 'current';
+    mockServerRun = copyRun(interrupted);
+    frontierApiMock.fetchExpeditionRun.mockResolvedValueOnce(copyRun(interrupted));
+    const run = useRogueRunStore();
+
+    await run.refreshSavedRun();
+    expect(await run.resumeSavedRun()).toBe(true);
+    await run.enterNode(node.id);
+
+    expect(run.phase).toBe('challenge');
+    expect(judgeMock.fetchProblem).toHaveBeenCalledWith(expect.objectContaining({
+      expeditionRunId: EXPEDITION_RUN_ID,
+      expeditionNodeId: node.id,
+    }));
+  });
+
+  it('restores reward choices when resuming a run at the reward phase', async () => {
+    const interrupted = serverRun();
+    const node = interrupted.nodes.find((item) => item.layer === 0)!;
+    node.kind = 'chest';
+    node.state = 'current';
+    interrupted.currentNodeId = node.id;
+    interrupted.phase = 'reward';
+    mockServerRun = copyRun(interrupted);
+    frontierApiMock.fetchExpeditionRun.mockResolvedValueOnce(copyRun(interrupted));
+    const run = useRogueRunStore();
+
+    await run.refreshSavedRun();
+
+    expect(await run.resumeSavedRun()).toBe(true);
+    expect(run.phase).toBe('reward');
+    expect(run.rewardChoices.length).toBeGreaterThan(0);
+  });
+
+  it('can re-open the interrupted event after resuming to the map', async () => {
+    const interrupted = serverRun();
+    const node = interrupted.nodes.find((item) => item.layer === 0)!;
+    node.kind = 'event';
+    node.state = 'current';
+    interrupted.currentNodeId = node.id;
+    interrupted.phase = 'event';
+    mockServerRun = copyRun(interrupted);
+    frontierApiMock.fetchExpeditionRun.mockResolvedValueOnce(copyRun(interrupted));
+    const run = useRogueRunStore();
+
+    await run.refreshSavedRun();
+    expect(await run.resumeSavedRun()).toBe(true);
+    await run.enterNode(node.id);
+
+    expect(run.phase).toBe('event');
+    expect(run.activeNode?.id).toBe(node.id);
+    expect(run.activeEventText).not.toBe('');
   });
 
   it('starts a fresh run instead of silently auto-resuming a saved run', async () => {
@@ -899,12 +1082,14 @@ describe('rogueRun store', () => {
 
     run.finishRun();
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(1);
+    expect(frontierApiMock.performExpeditionAction).toHaveBeenCalledWith({
+      runId: EXPEDITION_RUN_ID, action: 'FINISH',
+    });
 
     await run.startRun(null);
 
     expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledTimes(2);
-    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(2);
+    expect(frontierApiMock.createExpeditionRun).toHaveBeenCalledTimes(2);
   });
 
   it('loadLeaderboard populates the class leaderboard state (best-effort)', async () => {
@@ -947,16 +1132,25 @@ describe('rogueRun store', () => {
     expect(run.loading).toBe(false);
   });
 
-  it('does not double-report when a run settles via HP loss then finishRun', async () => {
+  it('does not double-report after a failed challenge ends the server run', async () => {
+    frontierApiMock.submitExpeditionScore.mockResolvedValue({
+      entries: [], selfRank: null, selfBest: 0, inClass: false,
+    });
     const run = useRogueRunStore();
     await run.startRun(null);
+    const start = run.nodes.find((node) => node.layer === 0)!;
     run.hp = 0;
-    run.activeNode = run.nodes.find((n) => n.layer === 0) ?? null;
-    run.phase = 'challenge';
-    run.continueAfterChallenge(); // hp 0 → 结算并上报一次
+    if (mockServerRun) mockServerRun.hp = 0;
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: false, passedTestCases: 0, totalTestCases: 1, score: 0, feedback: 'wa',
+    });
+    await run.enterNode(start.id);
+    await run.submitChallenge();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await run.continueAfterChallenge();
     expect(run.phase).toBe('over');
     expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledTimes(1);
-    run.finishRun(); // 已 over，提前返回，不重复上报
+    await run.finishRun();
     expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledTimes(1);
   });
 });

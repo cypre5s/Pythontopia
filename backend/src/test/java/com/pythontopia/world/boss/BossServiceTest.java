@@ -269,12 +269,16 @@ class BossServiceTest {
         .thenReturn(problemWithInput("server-owned"));
     when(graphClient.evaluateAttempt(anyString(), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("ignored", true, 1, 1, null, null, List.of()));
-    when(pregenService.findExpeditionRunId(eq(7L), anyString())).thenReturn(Optional.of(runId));
+    BossInternalProblem issuedProblem =
+        problemWithInput("server-owned").issueAs("issue-id", "PY43-KC-001");
+    when(pregenService.findExpeditionBinding(eq(7L), anyString()))
+        .thenReturn(Optional.of(binding(runId, "L0-0", 1, 1, issuedProblem)));
     when(expeditionScoreService.recordVerifiedAttempt(
             eq(7L), eq(runId), anyString(), anyString(), eq(true), eq(100)))
         .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
 
-    BossProblemRequest request = new BossProblemRequest(1, null, 1, null, null, null, null, runId);
+    BossProblemRequest request =
+        new BossProblemRequest(1, null, 1, null, null, null, null, runId, "L0-0");
     var problem = service.fetchProblem(1, request, 7L);
     service.evaluateAttempt(new BossAttemptRequest(problem.problemId(), 1, 1, "print(1)", 1), 7L);
     BossInternalProblem internalProblem =
@@ -289,7 +293,8 @@ class BossServiceTest {
             org.mockito.ArgumentMatchers.isNull(),
             eq(1),
             org.mockito.ArgumentMatchers.argThat(p -> p.problemId().equals(problem.problemId())),
-            eq(runId));
+            eq(runId),
+            eq("L0-0"));
     verify(expeditionScoreService)
         .recordVerifiedAttempt(
             7L,
@@ -310,12 +315,13 @@ class BossServiceTest {
                 "EXPEDITION_RUN_CHANGED",
                 "远征存档已变化，请刷新后重试"))
         .when(expeditionRunService)
-        .validateProblemRequest(7L, staleRunId, 1);
+        .validateProblemRequest(7L, staleRunId, "L0-0", 1, false, "PY43-KC-001");
     assertThatThrownBy(
             () ->
                 service.fetchProblem(
                     1,
-                    new BossProblemRequest(1, null, 1, null, null, null, null, staleRunId),
+                    new BossProblemRequest(
+                        1, null, 1, null, null, null, null, staleRunId, "L0-0"),
                     7L))
         .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
         .hasMessageContaining("远征存档");
@@ -358,7 +364,11 @@ class BossServiceTest {
   @DisplayName("结算后的远征题不得继续调用判题服务")
   void settledExpeditionProblemCannotBeSubmitted() {
     String runId = "123e4567-e89b-12d3-a456-426614174000";
-    when(pregenService.findExpeditionRunId(7L, "p1")).thenReturn(Optional.of(runId));
+    when(pregenService.findExpeditionBinding(7L, "p1"))
+        .thenReturn(
+            Optional.of(
+                new EndlessPregenService.ExpeditionProblemBinding(
+                    runId, "L0-0", 1, 1, "PY43-KC-001", "a".repeat(64))));
     when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(false);
 
     assertThatThrownBy(
@@ -374,7 +384,16 @@ class BossServiceTest {
   @DisplayName("判题账本拒绝活动 run 的超额题目时，不发学习事件，也不误报存档过期")
   void verifiedAttemptLimitDoesNotPublishLearningEventOrClaimRunExpired() {
     String runId = "123e4567-e89b-12d3-a456-426614174000";
-    when(pregenService.findExpeditionRunId(7L, "p1")).thenReturn(Optional.of(runId));
+    when(pregenService.findExpeditionBinding(7L, "p1"))
+        .thenReturn(
+            Optional.of(
+                new EndlessPregenService.ExpeditionProblemBinding(
+                    runId,
+                    "L0-0",
+                    1,
+                    1,
+                    "PY43-KC-001",
+                    BossService.questionFingerprint(problemWithTests(1)))));
     when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
     when(pregenService.findByProblemId(7L, "p1"))
         .thenReturn(Optional.of(problemWithTests(1)));
@@ -397,7 +416,16 @@ class BossServiceTest {
   @DisplayName("远征题只记录首次失败和首次通过的学情，已通过后重判仍返回结果但不重复发事件")
   void expeditionProblemPublishesOnlyFirstFailureAndFirstPass() {
     String runId = "123e4567-e89b-12d3-a456-426614174000";
-    when(pregenService.findExpeditionRunId(7L, "p1")).thenReturn(Optional.of(runId));
+    when(pregenService.findExpeditionBinding(7L, "p1"))
+        .thenReturn(
+            Optional.of(
+                new EndlessPregenService.ExpeditionProblemBinding(
+                    runId,
+                    "L0-0",
+                    1,
+                    1,
+                    "PY43-KC-001",
+                    BossService.questionFingerprint(problemWithTests(3)))));
     when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
     when(pregenService.findByProblemId(7L, "p1"))
         .thenReturn(Optional.of(problemWithTests(3)));
@@ -919,6 +947,17 @@ class BossServiceTest {
     return new BossInternalProblem(
         "p1", 1, 1, difficulty, "PY43-KC-001", "statement", List.of(), "2 3", "5", 1, true, true,
         List.of(new BossTestCasePayload("2 3", "5", false)), "ref");
+  }
+
+  private static EndlessPregenService.ExpeditionProblemBinding binding(
+      String runId, String nodeId, int chapter, int stage, BossInternalProblem problem) {
+    return new EndlessPregenService.ExpeditionProblemBinding(
+        runId,
+        nodeId,
+        chapter,
+        stage,
+        problem.kcCode(),
+        BossService.questionFingerprint(problem));
   }
 
   private static BossInternalProblem problemWithStage(int stage) {

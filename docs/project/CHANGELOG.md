@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-13 — 远征动作由服务端结算并修复 Web 续局
+
+- 新增 `/api/world/expedition/run/actions`，服务端校验节点可达性、事件、遗物、挑战结算与结束动作。远征 Boss 题目按 run 和地图节点绑定；HP、气势、节点状态、遗物和历史从正式判题记录/服务端状态推进，兼容 `PUT` 仅校验快照并返回 canonical state。
+- Web 续局可从中断挑战/事件回到当前节点，也可恢复待领奖阶段；结算失败可对同一正式判题重试。修复旧 `current` 节点恢复、集齐遗物后精英通关卡在领奖、韧性扣血反转及 `second_wind` 遗物遗漏；局内体验分与排行榜核验分继续分开计算。
+- V204 新增远征题目节点绑定与结算表；无法安全关联节点的旧 PENDING/READY 预生成题作废并重新生成。迁移保留旧活动局，但旧版 PUT 可写的节点、HP、遗物和历史来源无法追溯；Android/Windows 尚未改接新 Web 合约。
+- 验证：Maven 定向 6 类 / 85 tests 通过，Testcontainers 空库迁移到 V204；Web 全量 Vitest 254 files / 2500 tests、TypeScript typecheck、生产构建、改动文件 ESLint 通过。全仓 `mvn spotless:check` 因其他 Java 文件的格式违规失败，本次新增/修改远征 Java 文件未列为违规。
+- 暂留玩法边界：Boss 新阶段若再次生成同一题目指纹会被 run 级幂等结算拦住；服务端每日一次限制及排行榜 daily 标记尚未实现。局内游戏分只保存在 Web 本地会话，不影响 verified leaderboard。按用户优先级，本轮未启动 Web 全栈、DeepSeek 请求、Piston 或远征性能测试。
+
 ## 2026-10-13 — 修复后端启动装配并完成 Web 点击联测
 
 - `StaticCodeChecker` 存在公开配置构造器与包级测试构造器；Spring 未能选择注入构造器，导致本地后端启动失败。为唯一注入构造器添加 `@Autowired`，并增加容器装配回归。

@@ -9,22 +9,21 @@ import { computed, ref, watch } from 'vue';
 import { defineStore } from 'pinia';
 import {
   EXPEDITION_MAX_HP,
-  REST_HEAL,
   computeRunDifficulty,
 } from '@/data/rogueConfig';
 import { ROGUE_RELICS, relicById } from '@/data/rogueRelics';
 import { pickEventScenario, type RogueEventChoice } from '@/data/rogueEvents';
 import { kcDisplayName } from '@/data/kcNames';
 import { useChallengeJudge, isJudgeUnavailable } from '@/composables/useChallengeJudge';
-import { useProfileSignals } from '@/composables/useProfileSignals';
 import {
   createExpeditionRun,
   deleteExpeditionRun,
   fetchExpeditionLeaderboard,
   fetchExpeditionRun,
-  saveExpeditionRun,
+  performExpeditionAction,
   submitExpeditionScore,
   type ExpeditionLeaderboard,
+  type ExpeditionRunAction,
   type ExpeditionRunSnapshot,
 } from '@/api/expedition';
 import { useMainlineStore } from '@stores/mainline';
@@ -39,6 +38,10 @@ import type {
   RogueNodeState,
   RogueRunPhase,
 } from '@/types/rogue';
+
+type ExpeditionRunActionInput = ExpeditionRunAction extends infer Action
+  ? Action extends ExpeditionRunAction ? Omit<Action, 'runId'> : never
+  : never;
 
 const PERSIST_KEY = 'pyt_rogue_run_v1';
 const DAILY_KEY = 'pyt_rogue_daily_v1';
@@ -82,7 +85,7 @@ export interface RogueRunSaveSummary {
   lastPlayedAt: string | null;
 }
 
-/** 续局允许的 phase（中途答题/事件/领增益统一回退到地图，避免存档因瞬时态被判废）。 */
+/** 续局允许从地图、挑战、事件或领奖阶段恢复。 */
 function isResumablePhase(p: RogueRunPhase): boolean {
   return p === 'map' || p === 'challenge' || p === 'event' || p === 'reward';
 }
@@ -137,6 +140,10 @@ function isValidRogueNode(value: unknown): value is RogueNode {
     && Array.isArray(n.next) && n.next.every((x) => typeof x === 'string')
     && (n.kcCode === null || typeof n.kcCode === 'string')
     && (n.challengeKind === null || typeof n.challengeKind === 'string')
+    && (n.bossPhase === undefined || (
+      n.kind === 'boss' && Number.isInteger(n.bossPhase)
+      && (n.bossPhase as number) >= 1 && (n.bossPhase as number) <= BOSS_PHASES
+    ))
   );
 }
 
@@ -165,7 +172,6 @@ function loadPersisted(): PersistShape | null {
 
 export const useRogueRunStore = defineStore('rogueRun', () => {
   const challenge = useChallengeJudge();
-  const { signals } = useProfileSignals();
   const mainline = useMainlineStore();
   const toast = useToastStore();
 
@@ -179,6 +185,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   const momentum = ref(0);
   const bestMomentum = ref(0);
   const runId = ref<string | null>(null);
+  // Session-only game points; verifiedScore is the ledger-backed class score.
   const score = ref(0);
   const verifiedScore = ref(0);
   const verifiedDepth = ref(0);
@@ -188,19 +195,21 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   const savedRunVerified = ref(false);
   let serverPersistenceEnabled = true;
   let challengeGeneration = 0;
-  let persistenceGeneration = 0;
-  let snapshotVersion = 0;
-  let persistQueue: Promise<void> = Promise.resolve();
-
-  const hasRelic = (id: string): boolean => relics.value.includes(id);
+  let actionQueue: Promise<void> = Promise.resolve();
+  const scoredProblemIds = new Set<string>();
+  const pendingGameScore = new Map<string, number>();
+  const rewardBonusNodeIds = new Set<string>();
 
   // 当前进入的节点 + 题目（不持久化：刷新中途答题安全退回地图）。
   const activeNode = ref<RogueNode | null>(null);
   const activeProblem = ref<BossProblemDto | null>(null);
+  const activeBossPhase = ref(1);
   // 本次挑战实际难度（= 基准 node.difficulty 经局内气势/连败自适应后的值；驱动出题与计分）。
   const activeDifficulty = ref(0);
   const activeCode = ref('');
   const challengeResult = ref<BossAttemptResultDto | null>(null);
+  const settlementPending = ref(false);
+  const nextPhase = ref<RogueRunPhase | null>(null);
   const loading = ref(false);
   const starting = ref(false);
   const elapsedSec = ref(0);
@@ -234,6 +243,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   const passedCount = computed(() => history.value.filter((h) => h.passed).length);
   const attempts = computed(() => history.value.length);
   const nodeById = (id: string): RogueNode | undefined => nodes.value.find((n) => n.id === id);
+  const hasRelic = (id: string): boolean => relics.value.includes(id);
   const hasSavedRun = computed(() => isUsableSavedRun(savedRun.value));
   const savedRunSummary = computed<RogueRunSaveSummary | null>(() => {
     const snap = savedRun.value;
@@ -278,15 +288,13 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     };
   }
 
-  /**
-   * 持久化 run 进度：后端权威（saveExpeditionRun）+ localStorage 兜底。
-   * 后端失败/不可达只吞掉（best-effort，绝不阻塞玩家）；本地写入隐私模式禁写也忽略。
-   * idle（弃局/未开局）不镜像后端——交由 abort() 显式 DELETE 清活跃 run。
-   */
-  async function persist(): Promise<void> {
+  /** Server actions persist canonical state; localStorage is only a recovery preview. */
+  function persist(): void {
     const snap = snapshot();
-    const version = ++snapshotVersion;
-    const generation = persistenceGeneration;
+    if (serverPersistenceEnabled) {
+      snap.score = verifiedScore.value;
+      snap.verifiedDepth = verifiedDepth.value;
+    }
     if (typeof window !== 'undefined') {
       try {
         window.localStorage.setItem(userScopedKey(PERSIST_KEY), JSON.stringify(snap));
@@ -296,55 +304,25 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     }
     if (isResumablePhase(phase.value)) {
       savedRun.value = snap;
-      savedRunVerified.value = false;
+      savedRunVerified.value = serverPersistenceEnabled;
     }
-    if (!isResumablePhase(phase.value) || !serverPersistenceEnabled) return;
-    persistQueue = persistQueue.then(async () => {
-      if (
-        generation !== persistenceGeneration
-        || !serverPersistenceEnabled
-        || !isResumablePhase(phase.value)
-      ) return;
-      try {
-        const saved = await saveExpeditionRun({ ...snap, runId: runId.value ?? snap.runId });
-        if (!saved?.runId || generation !== persistenceGeneration) return;
-        runId.value = saved.runId;
-        if (typeof saved.score === 'number') verifiedScore.value = saved.score;
-        if (typeof saved.verifiedDepth === 'number') verifiedDepth.value = saved.verifiedDepth;
-        if (version !== snapshotVersion) return;
-        const updated = {
-          ...snap,
-          runId: saved.runId,
-          score: typeof saved.score === 'number' ? saved.score : score.value,
-          verifiedDepth: typeof saved.verifiedDepth === 'number' ? saved.verifiedDepth : 0,
-        };
-        savedRun.value = updated;
-        savedRunVerified.value =
-          typeof saved.score === 'number' && typeof saved.verifiedDepth === 'number';
-        if (typeof window !== 'undefined') {
-          try {
-            window.localStorage.setItem(userScopedKey(PERSIST_KEY), JSON.stringify(updated));
-          } catch {
-            /* 隐私模式禁写，忽略 */
-          }
-        }
-      } catch {
-        /* 后端不可达：本地已兜底，忽略 */
-      }
-    });
-    await persistQueue;
   }
 
-  /** 用户显式保存当前进度：用于“保存并返回小镇”。 */
+  /** 用户显式保存本地恢复预览；服务端进度已由每个动作即时持久化。 */
   function saveCheckpoint(): void {
     if (phase.value === 'idle') return;
     persist();
     toast.show('远征已存档，下次可从存档继续', 'success');
   }
 
-  /** 把一份快照灌入 store（中途答题/事件刷新 → 退回地图）；供 hydrate / 续局复用。 */
-  function applySnapshot(p: PersistShape, serverVerified: boolean): void {
-    phase.value = isResumablePhase(p.phase) && p.phase !== 'map' ? 'map' : p.phase;
+  /** 把一份快照灌入 store；中断的挑战和事件回到地图，领奖保留原阶段。 */
+  function applySnapshot(
+    p: PersistShape,
+    serverVerified: boolean,
+    resume = false,
+    clearTransient = true,
+  ): void {
+    phase.value = resume && p.phase !== 'reward' ? 'map' : p.phase;
     runId.value = p.runId ?? null;
     focusChapter.value = p.focusChapter ?? null;
     // 老存档可能含已弃用的不可判题型，续局前就地迁移到可真判题型，避免恢复即卡死。
@@ -361,10 +339,9 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     relics.value = Array.isArray(p.relics) ? p.relics : [];
     isDaily.value = p.isDaily ?? false;
     history.value = Array.isArray(p.history) ? p.history : [];
-    // 续局统一回退到地图：BOSS 多阶段不跨会话恢复（重进 BOSS 由 enterNode 重置为第 1 阶段），
-    // 这里显式归零避免上一局的 bossPhase 残留被渲染。
-    bossPhase.value = 1;
-    clearActive();
+    const currentBoss = p.nodes.find((node) => node.id === p.currentNodeId && node.kind === 'boss');
+    bossPhase.value = currentBoss?.bossPhase ?? 1;
+    if (clearTransient) clearActive();
   }
 
   async function loadSavedSnapshot(): Promise<{ snapshot: PersistShape | null; serverVerified: boolean }> {
@@ -388,8 +365,6 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
 
   /** 玩家点“继续上次远征”后才恢复存档。 */
   async function resumeSavedRun(): Promise<boolean> {
-    persistenceGeneration += 1;
-    await persistQueue;
     const loaded = isUsableSavedRun(savedRun.value)
       ? { snapshot: savedRun.value, serverVerified: savedRunVerified.value }
       : await loadSavedSnapshot();
@@ -399,24 +374,70 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       savedRunVerified.value = false;
       return false;
     }
+    if (!loaded.serverVerified) {
+      errorMessage.value = '本地存档仅用于预览；请连接服务端后继续远征';
+      toast.show(errorMessage.value, 'error');
+      return false;
+    }
     savedRun.value = snap;
     savedRunVerified.value = loaded.serverVerified;
     serverPersistenceEnabled = loaded.serverVerified;
-    applySnapshot(snap, loaded.serverVerified); // applySnapshot 已把可续 phase 归一到 'map'
-    await persist();
+    applySnapshot(snap, loaded.serverVerified, true);
+    if (phase.value === 'reward') openReward();
+    persist();
     return true;
   }
 
-  /** 把一件学习增益落到 run 上（仅厚实笔记有即时数值效果，其余在计分/扣血/回血时按需读取）。 */
-  function applyRelic(id: string): void {
-    if (relics.value.includes(id)) return;
-    relics.value = [...relics.value, id];
-    if (id === 'sturdy_notes') {
-      maxHp.value += 1;
-      hp.value += 1;
+  async function performAction(
+    action: ExpeditionRunActionInput,
+    preserveChallenge = false,
+  ): Promise<ExpeditionRunSnapshot | null> {
+    if (!serverPersistenceEnabled || !runId.value) {
+      errorMessage.value = '远征服务端状态不可用，请重新连接后继续';
+      return null;
     }
-    const relic = relicById(id);
-    if (relic) toast.show(`获得学习增益：${relic.icon} ${relic.name}`, 'success');
+    const currentRunId = runId.value;
+    let result: ExpeditionRunSnapshot | null = null;
+    const task = actionQueue.then(async () => {
+      if (currentRunId !== runId.value) return;
+      try {
+        const canonical = await performExpeditionAction({ ...action, runId: currentRunId } as ExpeditionRunAction);
+        if (currentRunId !== runId.value) return;
+        const gameScore = score.value;
+        const challengeView = preserveChallenge
+          ? {
+              nodeId: activeNode.value?.id,
+              problem: activeProblem.value,
+              difficulty: activeDifficulty.value,
+              code: activeCode.value,
+              result: challengeResult.value,
+              elapsed: elapsedSec.value,
+            }
+          : null;
+        applySnapshot(canonical, true, false, !preserveChallenge);
+        score.value = gameScore;
+        if (challengeView) {
+          phase.value = 'challenge';
+          activeNode.value = challengeView.nodeId ? nodeById(challengeView.nodeId) ?? null : null;
+          activeProblem.value = challengeView.problem;
+          activeDifficulty.value = challengeView.difficulty;
+          activeCode.value = challengeView.code;
+          challengeResult.value = challengeView.result;
+          elapsedSec.value = challengeView.elapsed;
+          nextPhase.value = canonical.phase;
+        }
+        savedRun.value = canonical;
+        savedRunVerified.value = true;
+        persist();
+        result = canonical;
+      } catch (error) {
+        errorMessage.value = error instanceof Error ? error.message : '远征操作失败，请重试';
+        toast.show(errorMessage.value, 'error');
+      }
+    });
+    actionQueue = task.then(() => undefined, () => undefined);
+    await task;
+    return result;
   }
 
   /**
@@ -427,25 +448,28 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     const owned = new Set(relics.value);
     const pool = ROGUE_RELICS.filter((r) => !owned.has(r.id)).map((r) => r.id);
     if (pool.length === 0) {
-      score.value += 30;
-      toast.show('已集齐全部学习增益 · 折算 +30 分', 'info');
       rewardChoices.value = [];
-      phase.value = 'map';
-      persist();
+      const nodeId = currentNodeId.value;
+      if (nodeId && !rewardBonusNodeIds.has(nodeId)) {
+        rewardBonusNodeIds.add(nodeId);
+        score.value += 30;
+        toast.show('已集齐全部学习增益 · 折算 +30 分', 'info');
+      }
       return;
     }
     rewardChoices.value = sampleN(pool, 3);
-    phase.value = 'reward';
-    persist();
   }
 
   /** 三选一领取：选中的增益生效并回到地图（未选中的弃掉）。 */
-  function chooseReward(id: string): void {
-    if (phase.value !== 'reward') return;
-    if (rewardChoices.value.includes(id)) applyRelic(id);
-    rewardChoices.value = [];
-    phase.value = 'map';
-    persist();
+  async function chooseReward(id: string): Promise<void> {
+    if (phase.value !== 'reward' || !rewardChoices.value.includes(id) || !currentNodeId.value) return;
+    const canonical = await performAction({
+      action: 'CLAIM_RELIC', nodeId: currentNodeId.value, relicId: id,
+    });
+    if (canonical) {
+      rewardChoices.value = [];
+      if (relics.value.includes(id)) toast.show(`获得学习增益：${relicById(id)?.icon ?? ''} ${relicById(id)?.name ?? id}`, 'success');
+    }
   }
 
   async function startRun(
@@ -453,14 +477,13 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     daily = false,
   ): Promise<void> {
     if (starting.value) return;
-    persistenceGeneration += 1;
     challengeGeneration += 1;
     loading.value = false;
     starting.value = true;
     errorMessage.value = '';
     focusChapter.value = focus;
     try {
-      await persistQueue;
+      await actionQueue;
       if (phase.value === 'over' || phase.value === 'cleared') {
         if (!(await reportScore())) {
           errorMessage.value = '本局成绩暂未结算，请重试后再开新局';
@@ -485,7 +508,10 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       score.value = started.score;
       verifiedScore.value = started.score;
       verifiedDepth.value = started.verifiedDepth ?? 0;
-      savedRunVerified.value = false;
+      scoredProblemIds.clear();
+      pendingGameScore.clear();
+      rewardBonusNodeIds.clear();
+      savedRunVerified.value = true;
       relics.value = started.relics;
       history.value = started.history;
       bossPhase.value = 1;
@@ -496,7 +522,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       clearActive();
       serverPersistenceEnabled = true;
       phase.value = 'map';
-      await persist();
+      persist();
       prefetchAvailable();
     } catch (error) {
       errorMessage.value = error instanceof Error ? error.message : '画像学习前沿加载失败';
@@ -523,49 +549,26 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     activeDifficulty.value = 0;
     activeCode.value = '';
     challengeResult.value = null;
+    settlementPending.value = false;
+    nextPhase.value = null;
     elapsedSec.value = 0;
     errorMessage.value = '';
     activeEventText.value = '';
     eventScoreMult.value = 1;
     rewardChoices.value = [];
+    pendingGameScore.clear();
     loading.value = false;
-  }
-
-  /** 标记节点通关：解锁出边、同层其它可选节点置为绕过（不可回头）、过半程小回血。 */
-  function markCleared(node: RogueNode): void {
-    node.state = 'cleared';
-    for (const sib of nodes.value) {
-      if (sib.layer === node.layer && sib.id !== node.id && sib.state === 'available') {
-        sib.state = 'bypassed';
-      }
-    }
-    for (const id of node.next) {
-      const target = nodeById(id);
-      if (target && target.state === 'locked') target.state = 'available';
-    }
-    maybeMilestone(node);
-  }
-
-  /** 首次到达「半程层」时小回 1 点体力（每层至多通关 1 个节点 → 天然只触发一次；续局不重复）。 */
-  function maybeMilestone(node: RogueNode): void {
-    const halfway = Math.floor((layers.value - 1) / 2);
-    if (halfway <= 0 || node.layer !== halfway) return;
-    const otherCleared = nodes.value.some(
-      (n) => n.layer === halfway && n.id !== node.id && n.state === 'cleared',
-    );
-    if (otherCleared) return;
-    if (hp.value < maxHp.value) {
-      hp.value = Math.min(maxHp.value, hp.value + 1);
-      toast.show('已过半程 · 恢复 1 点体力', 'success');
-    }
   }
 
   /** 拉取并进入某节点的判题（战斗/精英/抓bug/boss，以及事件选择后的挑战）。 */
   async function beginChallenge(node: RogueNode, difficultyBonus = 0): Promise<void> {
     const requestGeneration = ++challengeGeneration;
     activeNode.value = node;
+    activeBossPhase.value = node.kind === 'boss' ? bossPhase.value : 1;
     activeCode.value = '';
     challengeResult.value = null;
+    settlementPending.value = false;
+    nextPhase.value = null;
     errorMessage.value = '';
     elapsedSec.value = 0;
     phase.value = 'challenge';
@@ -583,6 +586,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
         kind: node.challengeKind,
         difficulty: activeDifficulty.value,
         expeditionRunId: runId.value,
+        expeditionNodeId: node.id,
       });
       if (requestGeneration !== challengeGeneration) return;
       activeProblem.value = problem;
@@ -613,6 +617,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
         kind: node.challengeKind,
         difficulty,
         expeditionRunId: runId.value,
+        expeditionNodeId: node.id,
       });
     }
   }
@@ -625,50 +630,46 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   async function enterNode(id: string): Promise<void> {
     if (phase.value !== 'map') return;
     const node = nodeById(id);
-    if (!node || node.state !== 'available') return;
-    currentNodeId.value = id;
+    const isCurrentNode = node?.state === 'current' && currentNodeId.value === id;
+    if (!node || (node.state !== 'available' && !isCurrentNode)) return;
+    const previousHp = hp.value;
+    const canonical = await performAction({ action: 'ENTER_NODE', nodeId: id });
+    const entered = nodeById(id);
+    if (!canonical || phase.value !== canonical.phase || !entered || currentNodeId.value !== id) return;
 
     // 非战斗节点（营地 / 宝箱）即时结算，不出题。
-    if (node.kind === 'rest') {
-      const heal = REST_HEAL + (hasRelic('focus_lens') ? 1 : 0);
-      hp.value = Math.min(maxHp.value, hp.value + heal);
-      markCleared(node);
-      toast.show(`营地休整：恢复 ${heal} 点体力`, 'success');
-      persist();
+    if (entered.kind === 'rest') {
+      if (canonical.hp > previousHp) toast.show(`营地休整：恢复 ${canonical.hp - previousHp} 点体力`, 'success');
       return;
     }
-    if (node.kind === 'chest') {
-      markCleared(node);
+    if (entered.kind === 'chest') {
       openReward();
       return;
     }
 
     // 概念事件：先选应对（钻研/稳练/复盘），再决定是否开打。
-    if (node.kind === 'event') {
-      activeNode.value = node;
+    if (entered.kind === 'event') {
+      activeNode.value = entered;
       eventScoreMult.value = 1;
-      activeEventText.value = pickEventScenario(kcDisplayName(node.kcCode ?? ''));
-      phase.value = 'event';
-      persist();
+      activeEventText.value = pickEventScenario(kcDisplayName(entered.kcCode ?? ''));
       return;
     }
 
     // 战斗 / 精英 / 抓 bug / boss：直接出题（boss 多阶段从第 1 阶段起）。
-    if (node.kind === 'boss') bossPhase.value = 1;
-    await beginChallenge(node);
+    await beginChallenge(entered);
   }
 
   /** 事件节点三选一：钻研(难度+1，得分×1.5) / 稳练(常规) / 复盘(不战，回血+小分直接过)。 */
   async function chooseEvent(choice: RogueEventChoice): Promise<void> {
     const node = activeNode.value;
     if (!node || phase.value !== 'event') return;
+    const action = choice === 'review'
+      ? 'EVENT_REVIEW'
+      : choice === 'study' ? 'EVENT_STUDY' : 'EVENT_STEADY';
+    const canonical = await performAction({ action, nodeId: node.id });
+    if (!canonical || phase.value !== canonical.phase || currentNodeId.value !== node.id) return;
     if (choice === 'review') {
-      const heal = 1 + (hasRelic('focus_lens') ? 1 : 0);
-      hp.value = Math.min(maxHp.value, hp.value + heal);
       score.value += node.difficulty * 5;
-      markCleared(node);
-      clearActive();
-      phase.value = 'map';
       persist();
       return;
     }
@@ -677,25 +678,34 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     } else {
       eventScoreMult.value = 1;
     }
-    await beginChallenge(node, choice === 'study' ? 1 : 0);
+    const current = nodeById(node.id);
+    if (current) await beginChallenge(current, choice === 'study' ? 1 : 0);
   }
 
   function scoreFor(node: RogueNode): number {
-    // 计分以「本次实际难度」为底（连胜抬难度后通关给更高回报）；未进战斗时回退基准难度。
     const effective = activeDifficulty.value > 0 ? activeDifficulty.value : node.difficulty;
     const base = effective * 10;
     const momentumBonus = Math.round(base * momentum.value * 0.1);
     const kindMult = node.kind === 'elite' || node.kind === 'boss' ? 1.5 : 1;
     const relicMult = hasRelic('combo_scholar') ? 1.2 : 1;
-    // 「急智」：30 秒内通关额外 +50% 得分（奖励快速作答，不影响判题真源）。
     const speedMult = hasRelic('quick_thinker') && elapsedSec.value <= 30 ? 1.5 : 1;
     return Math.round((base + momentumBonus) * kindMult * relicMult * speedMult * eventScoreMult.value);
+  }
+
+  function applySettledGameScore(problemId: string): void {
+    const points = pendingGameScore.get(problemId) ?? 0;
+    if (points > 0 && !scoredProblemIds.has(problemId)) {
+      score.value += points;
+      scoredProblemIds.add(problemId);
+    }
+    pendingGameScore.delete(problemId);
+    persist();
   }
 
   async function submitChallenge(): Promise<void> {
     const node = activeNode.value;
     const problem = activeProblem.value;
-    if (!node || !problem || loading.value) return;
+    if (!node || !problem || loading.value || settlementPending.value) return;
     const requestGeneration = challengeGeneration;
     loading.value = true;
     errorMessage.value = '';
@@ -707,44 +717,26 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
         return;
       }
       challengeResult.value = result;
-      history.value = [
-        { nodeId: node.id, kcCode: node.kcCode, kind: node.kind, passed: result.passed, score: result.passed ? scoreFor(node) : 0, at: new Date().toISOString() },
-        ...history.value,
-      ].slice(0, 50);
-
-      if (result.passed) {
-        score.value += scoreFor(node);
-        momentum.value += 1;
-        if (momentum.value > bestMomentum.value) bestMomentum.value = momentum.value;
-        // BOSS 多阶段：未到最后一阶段则进入下一阶段、不结算，连续作战。
-        if (node.kind === 'boss' && bossPhase.value < bossPhasesTotal.value) {
-          bossPhase.value += 1;
-          toast.show(`BOSS 阶段 ${bossPhase.value - 1}/${bossPhasesTotal.value} 通过，继续！`, 'success');
-          void maybeReportStar();
-          persist();
-          await beginChallenge(node);
-          return;
-        }
-        markCleared(node);
-        // 精英通关的学习增益走「三选一」（continueAfterChallenge 里玩家看完判题结果再选）。
-      } else {
-        const resilience = signals.value.resilience ?? 0.5;
-        // 温和：低韧性扣得更少，避免逼脆弱的学生；「沉静心法」再 -1（至少扣 1）。
-        let loss = resilience < 0.4 ? 1 : 2;
-        if (hasRelic('calm_mind')) loss = Math.max(1, loss - 1);
-        // 「急救包」：本局首次答错不扣血。用 history 里此前的失败数判定（已含本次失败条目 → 排除自身），
-        // 从持久化历史派生 → 续局也不会被重置而重复触发。
-        const priorMistakes = history.value.slice(1).filter((h) => !h.passed).length;
-        if (hasRelic('first_aid') && priorMistakes === 0) {
-          loss = 0;
-          toast.show('急救包：本局首次失误免于扣体力', 'info');
-        }
-        hp.value = Math.max(0, hp.value - loss);
-        // 「复盘回气」：气势减半而非清零。
-        momentum.value = hasRelic('second_wind') ? Math.floor(momentum.value / 2) : 0;
+      pendingGameScore.set(problem.problemId, result.passed ? scoreFor(node) : 0);
+      settlementPending.value = true;
+      const canonical = await performAction({
+        action: 'SETTLE_CHALLENGE', nodeId: node.id, problemId: problem.problemId,
+      }, true);
+      if (!canonical) {
+        settlementPending.value = true;
+        return;
       }
+      settlementPending.value = false;
+      applySettledGameScore(problem.problemId);
       void maybeReportStar();
-      persist();
+      if (canonical.phase === 'over' || canonical.phase === 'cleared') {
+        if (isDaily.value) {
+          const date = todayStr();
+          dailyDoneDate.value = date;
+          saveDailyDate(date);
+        }
+        void reportScore();
+      }
     } catch (error) {
       if (requestGeneration === challengeGeneration) {
         errorMessage.value = error instanceof Error ? error.message : '判题失败，请重试';
@@ -755,22 +747,36 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   }
 
   /** 战斗结算后：返回地图；若刚通关 boss → 胜利；HP 归零 → 结束。 */
-  function continueAfterChallenge(): void {
+  async function continueAfterChallenge(): Promise<void> {
     const node = activeNode.value;
+    const result = challengeResult.value;
+    if (!node || !result) return;
+    if (settlementPending.value && activeProblem.value) {
+      if (loading.value) return;
+      loading.value = true;
+      const canonical = await performAction({
+        action: 'SETTLE_CHALLENGE', nodeId: node.id, problemId: activeProblem.value.problemId,
+      }, true);
+      loading.value = false;
+      if (!canonical) return;
+      settlementPending.value = false;
+      applySettledGameScore(activeProblem.value.problemId);
+    }
+    const destination = nextPhase.value;
     const wasBoss = node?.kind === 'boss';
     const wasElite = node?.kind === 'elite';
-    const passed = challengeResult.value?.passed ?? false;
-    clearActive();
-    if (hp.value <= 0) {
-      phase.value = 'over';
-    } else if (wasBoss && passed) {
-      phase.value = 'cleared';
-    } else if (wasElite && passed) {
-      // 精英通关 → 三选一领增益（openReward 内部置 phase='reward' 并 persist；集齐则回地图）。
-      openReward();
-    } else {
-      phase.value = 'map';
+    const passed = result.passed;
+    if (!destination) return;
+    if (wasBoss && passed && destination === 'challenge') {
+      toast.show(`BOSS 阶段 ${activeBossPhase.value}/${bossPhasesTotal.value} 通过，继续！`, 'success');
+      const current = nodeById(node.id);
+      if (current) await beginChallenge(current);
+      return;
     }
+    clearActive();
+    phase.value = wasElite && passed && destination === 'reward' ? 'reward' : destination;
+    if (phase.value === 'reward') openReward();
+    else if (wasElite && passed && destination === 'map') openReward();
     // 本局收尾：上报班级排行榜成绩（每局一次）；每日挑战记「今日已挑战」（无论胜负）。
     if (phase.value === 'over' || phase.value === 'cleared') {
       if (isDaily.value) {
@@ -787,18 +793,17 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
    * 主动结束本局：直接进结算页（掌握度/判题结果已实时入库，永不回滚）。
    * 区别于 abort（弃局清后端活跃 run + 本地缓存、回到起始页）。每日挑战照常算「今日已挑战」。
    */
-  function finishRun(): void {
+  async function finishRun(): Promise<void> {
     if (phase.value === 'idle' || phase.value === 'over' || phase.value === 'cleared') return;
-    clearActive();
-    phase.value = 'over';
+    const canonical = await performAction({ action: 'FINISH' });
+    if (!canonical) return;
     if (isDaily.value) {
       const d = todayStr();
       dailyDoneDate.value = d;
       saveDailyDate(d);
     }
     // 主动结束也算一局有效成绩：上报班级排行榜（reportScore 内部 scoreReported 防重复）。
-    void reportScore();
-    persist();
+    await reportScore();
   }
 
   /** 战斗失败后重试同一节点（重新出一道同 KC/题型/难度的题，事件加成保留）。 */
@@ -806,7 +811,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     const node = activeNode.value;
     // 与 submitChallenge 同款并发守卫：重复点击「再试一次」会重复触发 LLM 出题（计费）
     // 且后到的 beginChallenge 会覆盖 activeProblem / activeCode。
-    if (!node || loading.value) return;
+    if (!node || loading.value || settlementPending.value) return;
     const difficulty = activeDifficulty.value > 0 ? activeDifficulty.value : node.difficulty;
     // 预取先于 beginChallenge，其间 loading 必须已置位，否则守卫留有空窗（双击仍会出两题）。
     loading.value = true;
@@ -817,6 +822,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
           kind: node.challengeKind,
           difficulty,
           expeditionRunId: runId.value,
+          expeditionNodeId: node.id,
         });
       }
     } catch {
@@ -837,12 +843,12 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       kind: node.challengeKind,
       difficulty,
       expeditionRunId: runId.value,
+      expeditionNodeId: node.id,
     });
   }
 
   /** 弃局：回到起始页 + 清后端活跃 run 与本地缓存（避免下次 startRun 续到废局）。 */
   async function abort(): Promise<void> {
-    persistenceGeneration += 1;
     phase.value = 'idle';
     clearActive();
     if (typeof window !== 'undefined') {
@@ -854,7 +860,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     }
     savedRun.value = null;
     runId.value = null;
-    await persistQueue;
+    await actionQueue;
     await deleteExpeditionRun().catch(() => {
       /* 后端不可达：本地已清，忽略 */
     });
@@ -936,12 +942,14 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     dailyAvailable,
     bossPhase,
     bossPhasesTotal,
+    activeBossPhase,
     history,
     activeNode,
     activeProblem,
     activeDifficulty,
     activeCode,
     challengeResult,
+    settlementPending,
     loading,
     starting,
     elapsedSec,

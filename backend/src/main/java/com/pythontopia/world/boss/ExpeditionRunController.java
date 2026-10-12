@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.world.boss.dto.ExpeditionRunActionRequest;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import com.pythontopia.world.boss.dto.ExpeditionRunStartRequest;
 import com.pythontopia.world.boss.dto.FrontierSelectRequest;
@@ -72,6 +73,14 @@ public class ExpeditionRunController {
       @CurrentUser CurrentUserPrincipal user, @Valid @RequestBody ExpeditionRunDto run) {
     requireStudent(user);
     return service.save(user.userId(), run);
+  }
+
+  @PostMapping("/run/actions")
+  public ExpeditionRunDto performRunAction(
+      @CurrentUser CurrentUserPrincipal user,
+      @Valid @RequestBody ExpeditionRunActionRequest request) {
+    requireStudent(user);
+    return service.performAction(user.userId(), request);
   }
 
   @DeleteMapping("/run")

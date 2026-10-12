@@ -198,6 +198,27 @@ describe('ExpeditionScene · bridge', () => {
 
     expect(onNodeClick).not.toHaveBeenCalled();
   });
+
+  it('routes the current node from the map so an interrupted run can be resumed', () => {
+    const onNodeClick = vi.fn();
+    const currentNodeId = 'L1-0';
+    loadExpedition(
+      {
+        ...MAP,
+        nodes: MAP.nodes.map((node) => node.id === currentNodeId ? { ...node, state: 'current' } : node),
+      },
+      { currentNodeId, phase: 'map' },
+      { onNodeClick },
+    );
+    const ctx = makeCtx();
+    ExpeditionScene.create.call(ctx);
+
+    getExpeditionBridge().selectNode(currentNodeId);
+
+    expect(onNodeClick).toHaveBeenCalledWith(currentNodeId);
+    const labelIndex = ctx._spies.text.mock.calls.findIndex(([, , label]) => label === '❓ 概念考点');
+    expect(ctx._spies.text.mock.results[labelIndex]?.value.setInteractive).toHaveBeenCalled();
+  });
 });
 
 describe('ExpeditionScene · singleton mounting', () => {

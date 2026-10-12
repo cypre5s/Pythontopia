@@ -16,6 +16,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.http.HttpStatus;
+import org.springframework.beans.factory.annotation.Autowired;
 import com.pythontopia.common.error.BusinessException;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,12 +46,24 @@ public class EndlessPregenService {
   private final BossGraphClient graphClient;
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
+  private final ExpeditionRunService expeditionRunService;
 
+  @Autowired
   public EndlessPregenService(
-      BossGraphClient graphClient, JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+      BossGraphClient graphClient,
+      JdbcTemplate jdbcTemplate,
+      ObjectMapper objectMapper,
+      ExpeditionRunService expeditionRunService) {
     this.graphClient = graphClient;
     this.jdbcTemplate = jdbcTemplate;
     this.objectMapper = objectMapper;
+    this.expeditionRunService = expeditionRunService;
+  }
+
+  /** Unit-test compatibility constructor for non-expedition prefetch flows. */
+  EndlessPregenService(
+      BossGraphClient graphClient, JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
+    this(graphClient, jdbcTemplate, objectMapper, null);
   }
 
   /** 同步创建或复用一个可追踪预加载任务；FAILED 任务在相同维度再次调用时进入下一次尝试。 */
@@ -64,6 +77,30 @@ public class EndlessPregenService {
       String kind,
       String arenaLevel,
       String expeditionRunId) {
+    return beginPrefetch(
+        userId,
+        chapter,
+        stage,
+        kcCode,
+        difficulty,
+        kind,
+        arenaLevel,
+        expeditionRunId,
+        null);
+  }
+
+  /** Create a preload row bound to the validated reachable node. */
+  @Transactional
+  public PrefetchStart beginPrefetch(
+      Long userId,
+      int chapter,
+      int stage,
+      String kcCode,
+      Integer difficulty,
+      String kind,
+      String arenaLevel,
+      String expeditionRunId,
+      String expeditionNodeId) {
     if (userId == null) {
       return new PrefetchStart(
           new BossPrefetchStatusDto(
@@ -73,10 +110,11 @@ public class EndlessPregenService {
     validateStage(stage);
     lockUserPrefetchQuota(userId);
     lockActiveRun(userId, expeditionRunId);
+    validateExpeditionNode(userId, expeditionRunId, expeditionNodeId, chapter, kcCode, true);
     recoverStalePending(userId);
     Optional<BossPrefetchStatusDto> active =
         findLatestStatus(userId, chapter, stage, kcCode, difficulty, kind, arenaLevel,
-            expeditionRunId, true);
+            expeditionRunId, expeditionNodeId, true);
     if (active.isPresent()) {
       return new PrefetchStart(active.get(), false);
     }
@@ -96,17 +134,19 @@ public class EndlessPregenService {
 
     Optional<BossPrefetchStatusDto> failed =
         findLatestStatus(userId, chapter, stage, kcCode, difficulty, kind, arenaLevel,
-            expeditionRunId, false);
+            expeditionRunId, expeditionNodeId, false);
     if (failed.isPresent() && "FAILED".equals(failed.get().status())) {
       int updated =
           jdbcTemplate.update(
               "UPDATE pregenerated_problem"
                   + " SET status = 'PENDING', stage = ?, expedition_run_id = ?::uuid,"
+                  + " expedition_node_id = ?,"
                   + " payload = NULL, problem_id = NULL,"
                   + " error_message = NULL, attempt_count = attempt_count + 1, updated_at = now()"
                   + " WHERE id = ? AND status = 'FAILED'",
               stage,
               expeditionRunId,
+              expeditionNodeId,
               failed.get().jobId());
       if (updated == 1) {
         BossPrefetchStatusDto retried =
@@ -120,8 +160,8 @@ public class EndlessPregenService {
         jdbcTemplate.query(
             "INSERT INTO pregenerated_problem"
                 + " (user_id, chapter, stage, kc_code, kind, arena_level, difficulty, payload,"
-                + " status, attempt_count, expedition_run_id, updated_at)"
-                + " VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'PENDING', 1, ?::uuid, now())"
+                + " status, attempt_count, expedition_run_id, expedition_node_id, updated_at)"
+                + " VALUES (?, ?, ?, ?, ?, ?, ?, NULL, 'PENDING', 1, ?::uuid, ?, now())"
                 + " ON CONFLICT DO NOTHING RETURNING id",
             (rs, rowNum) -> rs.getLong("id"),
             userId,
@@ -131,7 +171,8 @@ public class EndlessPregenService {
             kind,
             arenaLevel,
             difficulty,
-            expeditionRunId);
+            expeditionRunId,
+            expeditionNodeId);
     if (!insertedIds.isEmpty()) {
       BossPrefetchStatusDto created =
           statusById(insertedIds.getFirst())
@@ -142,7 +183,7 @@ public class EndlessPregenService {
     // PostgreSQL's transaction usable so this lookup remains valid inside @Transactional.
     BossPrefetchStatusDto activeAfterRace =
         findLatestStatus(userId, chapter, stage, kcCode, difficulty, kind, arenaLevel,
-                expeditionRunId, true)
+                expeditionRunId, expeditionNodeId, true)
             .orElseThrow(() -> new IllegalStateException("conflicting preload disappeared"));
     return new PrefetchStart(activeAfterRace, false);
   }
@@ -164,6 +205,35 @@ public class EndlessPregenService {
   }
 
   /** 后台执行一个已经落为 PENDING 的任务；只有通过审查的 AI 题才可以进入 READY。 */
+  public void generatePrefetch(
+      long jobId,
+      Long userId,
+      int chapter,
+      int stage,
+      String kcCode,
+      Integer difficulty,
+      String preferredKc,
+      String kind,
+      String arenaLevel,
+      String expeditionRunId,
+      ProfileSignalsPayload signals,
+      int generationAttempt) {
+    generatePrefetch(
+        jobId,
+        userId,
+        chapter,
+        stage,
+        kcCode,
+        difficulty,
+        preferredKc,
+        kind,
+        arenaLevel,
+        expeditionRunId,
+        null,
+        signals,
+        generationAttempt);
+  }
+
   @Async("bossPrefetchExecutor")
   public void generatePrefetch(
       long jobId,
@@ -176,6 +246,7 @@ public class EndlessPregenService {
       String kind,
       String arenaLevel,
       String expeditionRunId,
+      String expeditionNodeId,
       ProfileSignalsPayload signals,
       int generationAttempt) {
     try {
@@ -195,17 +266,21 @@ public class EndlessPregenService {
           jdbcTemplate.update(
               "UPDATE pregenerated_problem"
                   + " SET payload = ?::jsonb, problem_id = ?, status = 'READY',"
+                  + " question_fingerprint = ?,"
                   + " error_message = NULL, updated_at = now()"
                   + " WHERE id = ? AND user_id = ? AND chapter = ? AND stage = ?"
                   + " AND expedition_run_id IS NOT DISTINCT FROM ?::uuid"
+                  + " AND expedition_node_id IS NOT DISTINCT FROM ?"
                   + " AND status = 'PENDING' AND attempt_count = ?",
               serialize(problem),
               problem.problemId(),
+              BossService.questionFingerprint(problem),
               jobId,
               userId,
               chapter,
               stage,
               expeditionRunId,
+              expeditionNodeId,
               generationAttempt);
       if (updated != 1) {
         log.warn("prefetch job {} was no longer PENDING when generation completed", jobId);
@@ -249,14 +324,38 @@ public class EndlessPregenService {
       String kind,
       String arenaLevel,
       String expeditionRunId) {
+    return getPrefetchStatus(
+        userId,
+        chapter,
+        stage,
+        kcCode,
+        difficulty,
+        kind,
+        arenaLevel,
+        expeditionRunId,
+        null);
+  }
+
+  /** Query one exact node-bound preload status. */
+  public BossPrefetchStatusDto getPrefetchStatus(
+      Long userId,
+      int chapter,
+      Integer stage,
+      String kcCode,
+      Integer difficulty,
+      String kind,
+      String arenaLevel,
+      String expeditionRunId,
+      String expeditionNodeId) {
     if (userId == null) {
       return BossPrefetchStatusDto.idle();
     }
     if (stage != null) {
       validateStage(stage);
     }
+    validateExpeditionNode(userId, expeditionRunId, expeditionNodeId, chapter, kcCode, true);
     return findLatestStatus(userId, chapter, stage, kcCode, difficulty, kind, arenaLevel,
-            expeditionRunId, false)
+            expeditionRunId, expeditionNodeId, false)
         .orElseGet(BossPrefetchStatusDto::idle);
   }
 
@@ -274,12 +373,37 @@ public class EndlessPregenService {
       String kind,
       String arenaLevel,
       String expeditionRunId) {
+    return claimReady(
+        userId,
+        chapter,
+        stage,
+        kcCode,
+        difficulty,
+        kind,
+        arenaLevel,
+        expeditionRunId,
+        null);
+  }
+
+  /** Claim a READY problem only when it was prepared for this reachable/current map node. */
+  @Transactional
+  public Optional<BossInternalProblem> claimReady(
+      Long userId,
+      int chapter,
+      int stage,
+      String kcCode,
+      Integer difficulty,
+      String kind,
+      String arenaLevel,
+      String expeditionRunId,
+      String expeditionNodeId) {
     if (userId == null) {
       return Optional.empty();
     }
     validateStage(stage);
     try {
       lockActiveRun(userId, expeditionRunId);
+      validateExpeditionNode(userId, expeditionRunId, expeditionNodeId, chapter, kcCode, false);
       List<Map<String, Object>> rows =
           jdbcTemplate.queryForList(
               "SELECT id, payload::text AS payload FROM pregenerated_problem"
@@ -289,9 +413,18 @@ public class EndlessPregenService {
                   + " AND arena_level IS NOT DISTINCT FROM ?"
                   + " AND difficulty IS NOT DISTINCT FROM ?"
                   + " AND expedition_run_id IS NOT DISTINCT FROM ?::uuid"
+                  + " AND expedition_node_id IS NOT DISTINCT FROM ?"
                   + " AND status = 'READY'"
                   + " ORDER BY created_at DESC, id DESC LIMIT 1",
-              userId, chapter, stage, kcCode, kind, arenaLevel, difficulty, expeditionRunId);
+              userId,
+              chapter,
+              stage,
+              kcCode,
+              kind,
+              arenaLevel,
+              difficulty,
+              expeditionRunId,
+              expeditionNodeId);
       if (rows.isEmpty()) {
         return Optional.empty();
       }
@@ -306,10 +439,19 @@ public class EndlessPregenService {
       int updated =
           jdbcTemplate.update(
               "UPDATE pregenerated_problem SET status = 'CONSUMED', consumed_at = now()"
-                  + ", problem_id = ?, payload = ?::jsonb, expedition_run_id = ?::uuid"
+                  + ", problem_id = ?, payload = ?::jsonb, expedition_run_id = ?::uuid,"
+                  + " expedition_node_id = ?, question_fingerprint = ?"
                   + " WHERE id = ? AND status = 'READY'"
-                  + " AND expedition_run_id IS NOT DISTINCT FROM ?::uuid",
-              issued.problemId(), serialize(issued), expeditionRunId, id, expeditionRunId);
+                  + " AND expedition_run_id IS NOT DISTINCT FROM ?::uuid"
+                  + " AND expedition_node_id IS NOT DISTINCT FROM ?",
+              issued.problemId(),
+              serialize(issued),
+              expeditionRunId,
+              expeditionNodeId,
+              BossService.questionFingerprint(issued),
+              id,
+              expeditionRunId,
+              expeditionNodeId);
       if (updated != 1) {
         return Optional.empty();
       }
@@ -334,6 +476,30 @@ public class EndlessPregenService {
       Integer difficulty,
       BossInternalProblem problem,
       String expeditionRunId) {
+    persistConsumed(
+        userId,
+        chapter,
+        kcCode,
+        kind,
+        arenaLevel,
+        difficulty,
+        problem,
+        expeditionRunId,
+        null);
+  }
+
+  /** Persist a displayed question with its authoritative expedition node binding. */
+  @Transactional
+  public void persistConsumed(
+      Long userId,
+      int chapter,
+      String kcCode,
+      String kind,
+      String arenaLevel,
+      Integer difficulty,
+      BossInternalProblem problem,
+      String expeditionRunId,
+      String expeditionNodeId) {
     if (userId == null || problem == null || problem.problemId() == null) {
       return;
     }
@@ -343,15 +509,16 @@ public class EndlessPregenService {
     }
     if (expeditionRunId != null) {
       lockActiveRun(userId, expeditionRunId);
+      validateExpeditionNode(userId, expeditionRunId, expeditionNodeId, chapter, kcCode, false);
       insert(
           userId, chapter, problem.stage(), kcCode, kind, arenaLevel, difficulty, problem,
-          "CONSUMED", expeditionRunId);
+          "CONSUMED", expeditionRunId, expeditionNodeId);
       return;
     }
     try {
       insert(
           userId, chapter, problem.stage(), kcCode, kind, arenaLevel, difficulty, problem,
-          "CONSUMED", null);
+          "CONSUMED", null, null);
     } catch (BusinessException exception) {
       throw exception;
     } catch (RuntimeException ex) {
@@ -404,6 +571,28 @@ public class EndlessPregenService {
         .findFirst();
   }
 
+  public Optional<ExpeditionProblemBinding> findExpeditionBinding(Long userId, String problemId) {
+    if (userId == null || problemId == null) return Optional.empty();
+    return jdbcTemplate
+        .query(
+            "SELECT expedition_run_id::text AS run_id, expedition_node_id, chapter, stage, kc_code,"
+                + " question_fingerprint FROM pregenerated_problem"
+                + " WHERE user_id = ? AND problem_id = ? AND status = 'CONSUMED'"
+                + " AND expedition_run_id IS NOT NULL ORDER BY created_at DESC, id DESC LIMIT 1",
+            (rs, rowNum) ->
+                new ExpeditionProblemBinding(
+                    rs.getString("run_id"),
+                    rs.getString("expedition_node_id"),
+                    rs.getInt("chapter"),
+                    rs.getInt("stage"),
+                    rs.getString("kc_code"),
+                    rs.getString("question_fingerprint")),
+            userId,
+            problemId)
+        .stream()
+        .findFirst();
+  }
+
   private void insert(
       Long userId,
       int chapter,
@@ -414,13 +603,14 @@ public class EndlessPregenService {
       Integer difficulty,
       BossInternalProblem problem,
       String status,
-      String expeditionRunId) {
+      String expeditionRunId,
+      String expeditionNodeId) {
     jdbcTemplate.update(
         "INSERT INTO pregenerated_problem"
             + " (user_id, chapter, stage, kc_code, kind, arena_level, difficulty, problem_id, payload,"
-            + " status, consumed_at, expedition_run_id)"
+            + " status, consumed_at, expedition_run_id, expedition_node_id, question_fingerprint)"
             + " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?,"
-            + " CASE WHEN ? = 'CONSUMED' THEN now() ELSE NULL END, ?::uuid)",
+            + " CASE WHEN ? = 'CONSUMED' THEN now() ELSE NULL END, ?::uuid, ?, ?)",
         userId,
         chapter,
         stage,
@@ -432,7 +622,9 @@ public class EndlessPregenService {
         serialize(problem),
         status,
         status,
-        expeditionRunId);
+        expeditionRunId,
+        expeditionNodeId,
+        BossService.questionFingerprint(problem));
   }
 
   private String serialize(BossInternalProblem problem) {
@@ -464,6 +656,7 @@ public class EndlessPregenService {
       String kind,
       String arenaLevel,
       String expeditionRunId,
+      String expeditionNodeId,
       boolean activeOnly) {
     String statuses = activeOnly ? "('PENDING', 'READY')" : "('PENDING', 'READY', 'FAILED')";
     return jdbcTemplate
@@ -476,6 +669,7 @@ public class EndlessPregenService {
                 + " AND arena_level IS NOT DISTINCT FROM ?"
                 + " AND difficulty IS NOT DISTINCT FROM ?"
                 + " AND expedition_run_id IS NOT DISTINCT FROM ?::uuid"
+                + " AND expedition_node_id IS NOT DISTINCT FROM ?"
                 + " AND status IN " + statuses
                 + " ORDER BY updated_at DESC, id DESC LIMIT 1",
             (rs, rowNum) -> mapStatus(rs),
@@ -487,7 +681,8 @@ public class EndlessPregenService {
             kind,
             arenaLevel,
             difficulty,
-            expeditionRunId)
+            expeditionRunId,
+            expeditionNodeId)
         .stream()
         .findFirst();
   }
@@ -510,6 +705,29 @@ public class EndlessPregenService {
           "EXPEDITION_RUN_EXPIRED",
           "远征存档已变化，请刷新后重试");
     }
+  }
+
+  private void validateExpeditionNode(
+      Long userId,
+      String runId,
+      String nodeId,
+      int chapter,
+      String kcCode,
+      boolean allowPrefetch) {
+    if (runId == null) {
+      if (nodeId != null) {
+        throw new BusinessException(
+            HttpStatus.CONFLICT,
+            "EXPEDITION_PROBLEM_BINDING_MISMATCH",
+            "题目节点绑定需要有效的远征 run");
+      }
+      return;
+    }
+    if (expeditionRunService == null) {
+      throw new IllegalStateException("ExpeditionRunService is required for run-bound problems");
+    }
+    expeditionRunService.validateProblemRequest(
+        userId, runId, nodeId, chapter, allowPrefetch, kcCode);
   }
 
   private void lockUserPrefetchQuota(Long userId) {
@@ -563,4 +781,12 @@ public class EndlessPregenService {
 
   /** Internal scheduling result: the public status plus whether this call owns async generation. */
   public record PrefetchStart(BossPrefetchStatusDto status, boolean shouldGenerate) {}
+
+  public record ExpeditionProblemBinding(
+      String runId,
+      String nodeId,
+      int chapter,
+      int stage,
+      String kcCode,
+      String questionFingerprint) {}
 }

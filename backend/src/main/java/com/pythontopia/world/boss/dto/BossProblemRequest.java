@@ -23,6 +23,7 @@ import java.util.List;
  * @param profileSignals 学生画像信号，{@link ProfileSignalsPayload}
  * @param arenaLevel 闯关塔单关 id（如 "1-3"）：预生成 / 复用题的维度之一（endless / arena 传）
  * @param expeditionRunId 当前远征 run id；只有服务端当前活跃 run 可关联奖励
+ * @param expeditionNodeId 当前题目绑定的远征节点
  */
 public record BossProblemRequest(
     @Min(1) @Max(4) @JsonProperty("stage") int stage,
@@ -36,7 +37,22 @@ public record BossProblemRequest(
     @JsonProperty("arenaLevel") @Size(max = 16) String arenaLevel,
     @JsonProperty("expeditionRunId")
         @Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
-        String expeditionRunId) {
+        String expeditionRunId,
+    @JsonProperty("expeditionNodeId") @Pattern(regexp = "^[A-Za-z0-9_-]{1,32}$")
+        String expeditionNodeId) {
+
+  public BossProblemRequest(
+      int stage,
+      String kcCode,
+      Integer difficulty,
+      String preferredKc,
+      String preferredKind,
+      ProfileSignalsPayload profileSignals,
+      String arenaLevel,
+      String expeditionRunId) {
+    this(stage, kcCode, difficulty, preferredKc, preferredKind, profileSignals, arenaLevel,
+        expeditionRunId, null);
+  }
 
   public BossProblemRequest {
     if (kcCode != null && kcCode.isBlank()) {

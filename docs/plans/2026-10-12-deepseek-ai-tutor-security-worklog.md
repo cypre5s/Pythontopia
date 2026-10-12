@@ -2,6 +2,14 @@
 
 日期：2026-10-12 至 2026-10-13
 
+## 2026-10-13 远征服务端动作状态与 Web 续局
+
+- Web 的节点进入、事件选择、遗物领奖、正式判题结算与主动结束均改走有类型的服务端 action；旧 `PUT` 只校验快照并返回 canonical state。Boss 题目与 run/node 绑定，结算只采用本人已签发题目和正式判题账本，不接受客户端分数、HP、路线或通关字段。
+- 续局恢复挑战/事件时回到地图并允许重进服务端当前节点；领奖阶段保留并重建选项；结算请求失败时可用同一题重试。修复旧 `current` 节点无法继续、满遗物精英奖励阶段卡住、韧性扣血方向反转，以及 `second_wind` 未生效。
+- V204 新增题目节点绑定和结算记录。迁移只废弃不能安全绑定节点的旧远征 PENDING/READY 题；保留活动局以避免破坏性重置，但旧 PUT 写入的节点状态、HP、气势、遗物和历史无法追溯可信。Android/Windows 未改接 Web 新开局/action 契约。
+- 验证：后端定向 `mvn -Dtest=ExpeditionRunServiceTest,ExpeditionRunControllerTest,ExpeditionRunPostgresIntegrationTest,EndlessPregenServiceTest,BossServiceTest,BossControllerTest test`，85 tests 通过，Testcontainers 空库迁移至 V204；Web 全量 254 files / 2500 tests、`npm run typecheck`、`npm run build`、改动文件 ESLint 通过。全仓 `mvn spotless:check` 被其他 Java 文件的格式违规阻断，本次远征 Java 文件未列在违规清单中。
+- 尚未完成：Boss 新阶段重复生成相同题目指纹会被 run 级防重放挡住；服务端 daily 一日一次与排行榜 daily 标记尚未接回。局内游戏积分加成仅在 Web 本地会话显示，不进入正式判题 ledger 或排行榜。按“功能优先、性能最后”未启动全栈、未发 DeepSeek 请求、未运行 Piston 或远征性能测试。
+
 ## 2026-10-13 远征服务端开局与 Web 接线
 
 - Web 新局改走 `POST /api/world/expedition/run`：后端读取权威学习前沿、生成兼容现有 Roguelike schema 的 10 层可达地图并初始化 HP/气势/遗物/历史；前端 store 只接收服务端快照。`PUT` 不能再创建新 run 或改写已签发地图拓扑/题目配置，活动 run id 和章节绑定校验保留。

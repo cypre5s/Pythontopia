@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -161,7 +162,8 @@ public class BossService {
     String effectiveKc = request.preferredKc() != null ? request.preferredKc() : request.kcCode();
     String kc = resolveKc(chapter, effectiveKc);
     String expeditionRunId =
-        validateExpeditionRun(userId, request.expeditionRunId(), chapter);
+        validateExpeditionRun(
+            userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, false, kc);
     // 难度优先取前端显式请求；否则据该章 KC 的真实掌握度 + 置信度推断（学情驱动），而非仅按 stage。
     int difficulty =
         computeTargetDifficulty(userId, kc, request.stage(), request.difficulty());
@@ -169,9 +171,26 @@ public class BossService {
     // 1) 复用「已预生成未做」(READY) 的同维度题：命中即原子标 CONSUMED，省去现场等 LLM。
     //    这条同时实现「学生中途退出，下次登入复用已生成未做的题」——上次会话预取留下的 READY 行。
     Optional<BossInternalProblem> reused =
-        pregenService.claimReady(
-            userId, chapter, request.stage(), kc, difficulty, request.preferredKind(), request.arenaLevel(),
-            expeditionRunId);
+        expeditionRunId == null
+            ? pregenService.claimReady(
+                userId,
+                chapter,
+                request.stage(),
+                kc,
+                difficulty,
+                request.preferredKind(),
+                request.arenaLevel(),
+                null)
+            : pregenService.claimReady(
+                userId,
+                chapter,
+                request.stage(),
+                kc,
+                difficulty,
+                request.preferredKind(),
+                request.arenaLevel(),
+                expeditionRunId,
+                request.expeditionNodeId());
     if (reused.isPresent()) {
       BossInternalProblem p = reused.get();
       cache.put(new ProblemCacheKey(userId, p.problemId()), new CachedProblem(p, Instant.now()));
@@ -194,15 +213,8 @@ public class BossService {
       requireProblemContext(source, chapter, request.stage());
       BossInternalProblem problem = source.issueAs(ISSUE_ID_PREFIX + UUID.randomUUID(), kc);
       cache.put(new ProblemCacheKey(userId, problem.problemId()), new CachedProblem(problem, Instant.now()));
-      pregenService.persistConsumed(
-          userId,
-          chapter,
-          kc,
-          request.preferredKind(),
-          request.arenaLevel(),
-          difficulty,
-          problem,
-          expeditionRunId);
+      persistConsumed(
+          userId, chapter, kc, request, difficulty, problem, expeditionRunId);
       evictExpired();
       LOG.info(
           "boss selected approved review={} version={} problemId={} user={} ch={}",
@@ -215,15 +227,26 @@ public class BossService {
     }
 
     BossPrefetchStatusDto prefetchStatus =
-        pregenService.getPrefetchStatus(
-            userId,
-            chapter,
-            request.stage(),
-            kc,
-            difficulty,
-            request.preferredKind(),
-            request.arenaLevel(),
-            expeditionRunId);
+        expeditionRunId == null
+            ? pregenService.getPrefetchStatus(
+                userId,
+                chapter,
+                request.stage(),
+                kc,
+                difficulty,
+                request.preferredKind(),
+                request.arenaLevel(),
+                null)
+            : pregenService.getPrefetchStatus(
+                userId,
+                chapter,
+                request.stage(),
+                kc,
+                difficulty,
+                request.preferredKind(),
+                request.arenaLevel(),
+                expeditionRunId,
+                request.expeditionNodeId());
     if (prefetchStatus != null && "PENDING".equals(prefetchStatus.status())) {
       throw new com.pythontopia.common.error.BusinessException(
           org.springframework.http.HttpStatus.CONFLICT,
@@ -264,9 +287,7 @@ public class BossService {
     BossInternalProblem issued = fromGraph.issueAs(ISSUE_ID_PREFIX + UUID.randomUUID(), kc);
     cache.put(new ProblemCacheKey(userId, issued.problemId()), new CachedProblem(issued, Instant.now()));
     // 现场题也落库 (CONSUMED)，供内存缓存过期 / 进程重启后判题兜底取回 testCases（best-effort）。
-    pregenService.persistConsumed(
-        userId, chapter, kc, request.preferredKind(), request.arenaLevel(), difficulty,
-        issued, expeditionRunId);
+    persistConsumed(userId, chapter, kc, request, difficulty, issued, expeditionRunId);
     evictExpired();
     return issued.toPublic();
   }
@@ -280,28 +301,63 @@ public class BossService {
     String effectiveKc = request.preferredKc() != null ? request.preferredKc() : request.kcCode();
     String kc = resolveKc(chapter, effectiveKc);
     String expeditionRunId =
-        validateExpeditionRun(userId, request.expeditionRunId(), chapter);
+        validateExpeditionRun(
+            userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, true, kc);
     int difficulty =
         computeTargetDifficulty(userId, kc, request.stage(), request.difficulty());
     EndlessPregenService.PrefetchStart start =
-        pregenService.beginPrefetch(
-            userId, chapter, request.stage(), kc, difficulty, request.preferredKind(),
-            request.arenaLevel(), expeditionRunId);
+        expeditionRunId == null
+            ? pregenService.beginPrefetch(
+                userId,
+                chapter,
+                request.stage(),
+                kc,
+                difficulty,
+                request.preferredKind(),
+                request.arenaLevel(),
+                null)
+            : pregenService.beginPrefetch(
+                userId,
+                chapter,
+                request.stage(),
+                kc,
+                difficulty,
+                request.preferredKind(),
+                request.arenaLevel(),
+                expeditionRunId,
+                request.expeditionNodeId());
     if (start.shouldGenerate() && start.status().jobId() != null) {
       try {
-        pregenService.generatePrefetch(
-            start.status().jobId(),
-            userId,
-            chapter,
-            request.stage(),
-            kc,
-            difficulty,
-            request.preferredKc(),
-            request.preferredKind(),
-            request.arenaLevel(),
-            expeditionRunId,
-            authoritativeSignals(userId, request.profileSignals()),
-            start.status().attempts());
+        if (expeditionRunId == null) {
+          pregenService.generatePrefetch(
+              start.status().jobId(),
+              userId,
+              chapter,
+              request.stage(),
+              kc,
+              difficulty,
+              request.preferredKc(),
+              request.preferredKind(),
+              request.arenaLevel(),
+              null,
+              authoritativeSignals(userId, request.profileSignals()),
+              start.status().attempts());
+        } else {
+          pregenService.generatePrefetch(
+              start.status().jobId(),
+              userId,
+              chapter,
+              request.stage(),
+              kc,
+              difficulty,
+              request.preferredKc(),
+              request.preferredKind(),
+              request.arenaLevel(),
+              expeditionRunId,
+              request.expeditionNodeId(),
+              authoritativeSignals(userId, request.profileSignals()),
+              start.status().attempts());
+        }
       } catch (TaskRejectedException rejected) {
         pregenService.failPrefetch(
             start.status().jobId(), start.status().attempts(), "预加载队列已满，请稍后重试");
@@ -324,13 +380,47 @@ public class BossService {
       String arenaLevel,
       String expeditionRunId,
       Long userId) {
+    return prefetchStatus(
+        chapter,
+        stage,
+        preferredKc,
+        requestedDifficulty,
+        preferredKind,
+        arenaLevel,
+        expeditionRunId,
+        null,
+        userId);
+  }
+
+  public BossPrefetchStatusDto prefetchStatus(
+      int chapter,
+      Integer stage,
+      String preferredKc,
+      Integer requestedDifficulty,
+      String preferredKind,
+      String arenaLevel,
+      String expeditionRunId,
+      String expeditionNodeId,
+      Long userId) {
     String kc = resolveKc(chapter, preferredKc);
     int progression = requestedDifficulty == null ? 1 : requestedDifficulty;
     int difficulty =
         computeTargetDifficulty(userId, kc, progression, requestedDifficulty);
-    String activeRunId = validateExpeditionRun(userId, expeditionRunId, chapter);
-    return pregenService.getPrefetchStatus(
-        userId, chapter, stage, kc, difficulty, preferredKind, arenaLevel, activeRunId);
+    String activeRunId =
+        validateExpeditionRun(userId, expeditionRunId, expeditionNodeId, chapter, true, kc);
+    return activeRunId == null
+        ? pregenService.getPrefetchStatus(
+            userId, chapter, stage, kc, difficulty, preferredKind, arenaLevel, null)
+        : pregenService.getPrefetchStatus(
+            userId,
+            chapter,
+            stage,
+            kc,
+            difficulty,
+            preferredKind,
+            arenaLevel,
+            activeRunId,
+            expeditionNodeId);
   }
 
   /**
@@ -358,6 +448,38 @@ public class BossService {
         profile.sessionMinutesPerDay());
   }
 
+  private void persistConsumed(
+      Long userId,
+      int chapter,
+      String kcCode,
+      BossProblemRequest request,
+      int difficulty,
+      BossInternalProblem problem,
+      String expeditionRunId) {
+    if (expeditionRunId == null) {
+      pregenService.persistConsumed(
+          userId,
+          chapter,
+          kcCode,
+          request.preferredKind(),
+          request.arenaLevel(),
+          difficulty,
+          problem,
+          null);
+    } else {
+      pregenService.persistConsumed(
+          userId,
+          chapter,
+          kcCode,
+          request.preferredKind(),
+          request.arenaLevel(),
+          difficulty,
+          problem,
+          expeditionRunId,
+          request.expeditionNodeId());
+    }
+  }
+
   public BossAttemptResultDto evaluateAttempt(BossAttemptRequest request, Long userId) {
     BossAttemptIdempotencyService.Claim claim = null;
     if (userId != null && request.attemptId() != null) {
@@ -378,11 +500,24 @@ public class BossService {
 
   private BossAttemptResultDto evaluateClaimedAttempt(
       BossAttemptRequest request, Long userId, BossAttemptIdempotencyService.Claim claim) {
-    Optional<String> expeditionRunId =
-        pregenService.findExpeditionRunId(userId, request.problemId());
-    if (expeditionRunId.isPresent()
-        && !expeditionRunService.isActiveRun(userId, expeditionRunId.get())) {
-      throw expiredExpeditionRun();
+    Optional<EndlessPregenService.ExpeditionProblemBinding> expeditionBinding =
+        pregenService.findExpeditionBinding(userId, request.problemId());
+    if (expeditionBinding.isPresent()) {
+      EndlessPregenService.ExpeditionProblemBinding binding = expeditionBinding.get();
+      if (binding.nodeId() == null
+          || binding.questionFingerprint() == null
+          || binding.chapter() != request.chapter()
+          || binding.stage() != request.stage()) {
+        throw problemBindingMismatch();
+      }
+      if (!expeditionRunService.isActiveRun(userId, binding.runId())) {
+        throw expiredExpeditionRun();
+      }
+      expeditionRunService.validateProblemRequest(
+          userId, binding.runId(), binding.nodeId(), binding.chapter(), false, binding.kcCode());
+    } else if (pregenService.findExpeditionRunId(userId, request.problemId()).isPresent()) {
+      // Old rows may have a run id but cannot safely identify which map node issued the question.
+      throw problemBindingMismatch();
     }
     // 判题取题：先内存缓存（TTL 内有效），过期 / 缺失再回退 pregenerated_problem 凭 problemId 取回，
     // 修复「内存缓存过期 / 进程重启 → 判题失效」。
@@ -406,6 +541,11 @@ public class BossService {
           null);
     }
     requireProblemContext(problem, request.chapter(), request.stage());
+    if (expeditionBinding.isPresent()
+        && !Objects.equals(
+            expeditionBinding.get().questionFingerprint(), questionFingerprint(problem))) {
+      throw problemBindingMismatch();
+    }
     List<BossTestCasePayload> testCases = problem.testCases();
     if (testCases.isEmpty()) {
       LOG.warn("problem {} has empty testCases (graph schema drift?)", request.problemId());
@@ -431,7 +571,7 @@ public class BossService {
         throw new RestClientException("graph evaluate returned null body");
       }
       int score = scoreFor(graphResult);
-      String runId = expeditionRunId.orElse(null);
+      String runId = expeditionBinding.map(EndlessPregenService.ExpeditionProblemBinding::runId).orElse(null);
       ExpeditionScoreService.VerifiedAttemptResult attemptResult =
           recordVerifiedExpeditionAttempt(userId, runId, problem, graphResult, score);
       if (!attemptResult.accepted()) {
@@ -493,12 +633,27 @@ public class BossService {
     return result;
   }
 
-  private String validateExpeditionRun(Long userId, String runId, int chapter) {
+  private String validateExpeditionRun(
+      Long userId,
+      String runId,
+      String nodeId,
+      int chapter,
+      boolean allowPrefetch,
+      String kcCode) {
     if (runId == null) {
+      if (nodeId != null) throw problemBindingMismatch();
       return null;
     }
-    expeditionRunService.validateProblemRequest(userId, runId, chapter);
+    expeditionRunService.validateProblemRequest(
+        userId, runId, nodeId, chapter, allowPrefetch, kcCode);
     return runId;
+  }
+
+  private com.pythontopia.common.error.BusinessException problemBindingMismatch() {
+    return new com.pythontopia.common.error.BusinessException(
+        org.springframework.http.HttpStatus.CONFLICT,
+        "EXPEDITION_PROBLEM_BINDING_MISMATCH",
+        "题目与当前远征节点绑定不匹配，无法判题或结算");
   }
 
   private ExpeditionScoreService.VerifiedAttemptResult recordVerifiedExpeditionAttempt(

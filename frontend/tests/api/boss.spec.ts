@@ -266,6 +266,7 @@ describe('boss prefetch status', () => {
     const req = {
       stage: 2, preferredKc: 'PY43-KC-001', preferredKind: 'dual_track', difficulty: 2,
       expeditionRunId: '123e4567-e89b-12d3-a456-426614174000',
+      expeditionNodeId: 'L0-0',
     };
 
     await expect(prefetchBossProblem(1, req)).resolves.toEqual(pending);
@@ -278,6 +279,7 @@ describe('boss prefetch status', () => {
         arenaLevel: undefined,
         difficulty: 2,
         expeditionRunId: '123e4567-e89b-12d3-a456-426614174000',
+        expeditionNodeId: 'L0-0',
       },
       suppressNetworkToast: true,
     });

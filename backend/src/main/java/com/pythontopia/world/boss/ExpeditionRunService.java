@@ -4,9 +4,16 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.world.boss.dto.ExpeditionRunAction;
+import com.pythontopia.world.boss.dto.ExpeditionRunActionRequest;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import com.pythontopia.world.boss.dto.FrontierPickDto;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.time.LocalDate;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
@@ -29,13 +36,12 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <ul>
  *   <li>{@link #findActive}：GET 活跃 run（无则 empty → controller 返 204）；
- *   <li>{@link #save}：PUT upsert 活跃 run（结构化标量列 + nodes/relics/history JSONB）；
+ *   <li>{@link #save}：PUT 校验地图并返回服务端活动 run；
  *   <li>{@link #abandon}：DELETE 结束 / 弃局。
  * </ul>
  *
- * <p>地图拓扑与题目配置在开局后不可由快照改写；节点进度、HP、遗物和历史仍由客户端提供，不能用于正式奖励或排行榜。 shortcut: per-action state is
- * client-authored; move it to a server action ledger before granting rewards or trusting
- * completion. 掌握度 / 判题结果由 learner_mastery 等权威表负责，成绩由 expedition_verified_attempt 汇总。
+ * <p>地图拓扑与题目配置在开局后不可由快照改写；PUT 只校验地图并返回服务端状态。节点、体力和遗物由动作端点更新。
+ * 掌握度 / 判题结果由 learner_mastery 等权威表负责，成绩由 expedition_verified_attempt 汇总。
  */
 @Service
 public class ExpeditionRunService {
@@ -46,8 +52,23 @@ public class ExpeditionRunService {
       Set.of("map", "event", "challenge", "reward");
   private static final Set<String> NODE_STATES =
       Set.of("locked", "available", "current", "cleared", "bypassed");
+  private static final Set<String> CHALLENGE_NODE_KINDS =
+      Set.of("battle", "bug", "elite", "boss");
+  private static final Set<String> RELIC_IDS =
+      Set.of(
+          "sturdy_notes",
+          "calm_mind",
+          "combo_scholar",
+          "second_wind",
+          "focus_lens",
+          "quick_thinker",
+          "first_aid");
   private static final Set<String> IMMUTABLE_NODE_FIELDS =
       Set.of("id", "layer", "col", "kind", "kcCode", "challengeKind", "difficulty", "next");
+  private static final Set<String> ALLOWED_NODE_FIELDS =
+      Set.of(
+          "id", "layer", "col", "kind", "kcCode", "challengeKind", "difficulty", "next",
+          "state", "bossPhase");
   private static final TypeReference<List<Map<String, Object>>> LIST_OF_MAP =
       new TypeReference<>() {};
   private static final TypeReference<List<String>> LIST_OF_STRING = new TypeReference<>() {};
@@ -68,7 +89,7 @@ public class ExpeditionRunService {
     List<ExpeditionRunDto> rows =
         jdbcTemplate.query(
             "SELECT run_id::text AS run_id,"
-                + " CASE WHEN phase IN ('event', 'challenge', 'reward') THEN phase ELSE 'map' END AS phase,"
+                + " CASE WHEN phase IN ('event', 'challenge', 'reward', 'over') THEN phase ELSE 'map' END AS phase,"
                 + " focus_chapter, nodes::text AS nodes, layers, current_node_id,"
                 + " hp, max_hp, momentum, best_momentum,"
                 + " (SELECT COALESCE(SUM(a.score), 0) FROM expedition_verified_attempt a"
@@ -100,10 +121,56 @@ public class ExpeditionRunService {
     return rows.stream().findFirst();
   }
 
-  /** 保存当前 run；身份、章节和开局地图不可改写，快照中的分数不作为事实来源。 */
+  /** 校验兼容快照的身份和地图，然后返回服务端状态；请求中的游戏进度不会写入数据库。 */
   @Transactional
   public ExpeditionRunDto save(Long userId, ExpeditionRunDto dto) {
-    return persistSnapshot(userId, dto, false);
+    if (userId == null) {
+      return dto;
+    }
+    validateSnapshotSize(dto);
+    validatePersistablePhase(dto.phase());
+    jdbcTemplate.queryForObject(
+        "SELECT pg_advisory_xact_lock(hashtext('pythontopia.expedition.run'), hashtext(?))",
+        Object.class,
+        userId.toString());
+    List<ExistingRun> existing = lockRunRow(userId);
+    if (existing.isEmpty()) {
+      if (dto.runId() == null) throw startRequired();
+      throw staleRun();
+    }
+    ExistingRun current = existing.getFirst();
+    if (!"ACTIVE".equals(current.status())) {
+      if (dto.runId() == null) throw startRequired();
+      throw staleRun();
+    }
+    if (!current.runId().equals(normalizeRunId(dto.runId()))) {
+      throw staleRun();
+    }
+    if (!Objects.equals(current.focusChapter(), dto.focusChapter())) {
+      throw chapterChanged();
+    }
+    validateMapSnapshot(current, dto);
+    return findActive(userId).orElseThrow(this::staleRun);
+  }
+
+  /** Apply one typed gameplay command while holding the user's active run row lock. */
+  @Transactional
+  public ExpeditionRunDto performAction(Long userId, ExpeditionRunActionRequest request) {
+    if (userId == null || request == null || request.action() == null) {
+      throw invalidAction("远征操作参数无效");
+    }
+    if (request.action() != ExpeditionRunAction.SETTLE_CHALLENGE && request.problemId() != null) {
+      throw invalidAction("该远征操作不能携带题目 id");
+    }
+    ExpeditionRunDto run = lockActiveSnapshot(userId, request.runId());
+    return switch (request.action()) {
+      case ENTER_NODE -> enterNode(userId, run, request);
+      case EVENT_REVIEW -> reviewEvent(userId, run, request);
+      case EVENT_STUDY, EVENT_STEADY -> chooseEventChallenge(userId, run, request);
+      case CLAIM_RELIC -> claimRelic(userId, run, request);
+      case SETTLE_CHALLENGE -> settleChallenge(userId, run, request);
+      case FINISH -> finishRun(userId, run, request);
+    };
   }
 
   /** Start a run with a server-generated map and reset all client-supplied gameplay state. */
@@ -228,6 +295,526 @@ public class ExpeditionRunService {
         dto, runId, verifiedProgress == null ? new VerifiedProgress(0, 0) : verifiedProgress);
   }
 
+  private List<ExistingRun> lockRunRow(Long userId) {
+    return jdbcTemplate.query(
+        "SELECT run_id::text AS run_id, status, focus_chapter, nodes::text AS nodes, layers, is_daily"
+            + " FROM expedition_run WHERE user_id = ? FOR UPDATE",
+        (rs, rowNum) ->
+            new ExistingRun(
+                rs.getString("run_id"),
+                rs.getString("status"),
+                (Integer) rs.getObject("focus_chapter"),
+                listOfMap(rs.getString("nodes")),
+                rs.getInt("layers"),
+                rs.getBoolean("is_daily")),
+        userId);
+  }
+
+  private ExpeditionRunDto lockActiveSnapshot(Long userId, String requestedRunId) {
+    String normalizedRunId = normalizeRunId(requestedRunId);
+    List<ExistingRun> rows = lockRunRow(userId);
+    if (rows.isEmpty()) throw staleRun();
+    ExistingRun current = rows.getFirst();
+    if (!"ACTIVE".equals(current.status()) || !current.runId().equals(normalizedRunId)) {
+      throw staleRun();
+    }
+    ExpeditionRunDto run = findActive(userId).orElseThrow(this::staleRun);
+    validateMapSnapshot(current, run);
+    validateRelics(run.relics());
+    return run;
+  }
+
+  private ExpeditionRunDto enterNode(
+      Long userId, ExpeditionRunDto run, ExpeditionRunActionRequest request) {
+    requireNoRelic(request);
+    Map<String, Object> node = findNode(run, request.nodeId());
+    if (("challenge".equals(run.phase()) || "event".equals(run.phase()))
+        && request.nodeId().equals(run.currentNodeId())
+        && ("available".equals(node.get("state")) || "current".equals(node.get("state")))
+        && ("event".equals(node.get("kind"))
+            || CHALLENGE_NODE_KINDS.contains(stringValue(node.get("kind"))))) {
+      // Resume path: the Web client may normalize transient phases to its map view. Re-entering
+      // only the server's current node returns its canonical challenge/event state unchanged.
+      return run;
+    }
+    requirePhase(run, "map");
+    requireReachable(run, node);
+    String kind = stringValue(node.get("kind"));
+    List<Map<String, Object>> nodes = copyNodes(run.nodes());
+    String currentNodeId = request.nodeId();
+    Map<String, Object> changedNode = findNode(nodes, currentNodeId);
+    String phase;
+    int hp = run.hp();
+    int maxHp = run.maxHp();
+    if ("rest".equals(kind)) {
+      hp = heal(hp, maxHp, 1 + (run.relics().contains("focus_lens") ? 1 : 0));
+      hp = clearNode(nodes, currentNodeId, run.layers(), hp, maxHp);
+      phase = "map";
+    } else if ("chest".equals(kind)) {
+      hp = clearNode(nodes, currentNodeId, run.layers(), hp, maxHp);
+      phase = run.relics().size() >= RELIC_IDS.size() ? "map" : "reward";
+    } else if ("event".equals(kind)) {
+      phase = "event";
+    } else if (CHALLENGE_NODE_KINDS.contains(kind)) {
+      if ("boss".equals(kind)) changedNode.put("bossPhase", 1);
+      phase = "challenge";
+    } else {
+      throw invalidAction("该节点类型不可进入");
+    }
+    return persistActionState(userId, run, phase, currentNodeId, hp, maxHp, nodes, run.relics());
+  }
+
+  private ExpeditionRunDto reviewEvent(
+      Long userId, ExpeditionRunDto run, ExpeditionRunActionRequest request) {
+    requireEventNode(run, request);
+    List<Map<String, Object>> nodes = copyNodes(run.nodes());
+    int hp = heal(run.hp(), run.maxHp(), 1 + (run.relics().contains("focus_lens") ? 1 : 0));
+    hp = clearNode(nodes, run.currentNodeId(), run.layers(), hp, run.maxHp());
+    return persistActionState(
+        userId, run, "map", run.currentNodeId(), hp, run.maxHp(), nodes, run.relics());
+  }
+
+  private ExpeditionRunDto chooseEventChallenge(
+      Long userId, ExpeditionRunDto run, ExpeditionRunActionRequest request) {
+    requireEventNode(run, request);
+    return persistActionState(
+        userId,
+        run,
+        "challenge",
+        run.currentNodeId(),
+        run.hp(),
+        run.maxHp(),
+        copyNodes(run.nodes()),
+        run.relics());
+  }
+
+  private ExpeditionRunDto claimRelic(
+      Long userId, ExpeditionRunDto run, ExpeditionRunActionRequest request) {
+    requirePhase(run, "reward");
+    Map<String, Object> rewardNode = findNode(run, request.nodeId());
+    if (!request.nodeId().equals(run.currentNodeId())
+        || !"cleared".equals(rewardNode.get("state"))
+        || !("chest".equals(rewardNode.get("kind")) || "elite".equals(rewardNode.get("kind")))
+        || request.relicId() == null
+        || !RELIC_IDS.contains(request.relicId())
+        || run.relics().contains(request.relicId())) {
+      throw invalidAction("奖励节点或遗物选择无效");
+    }
+    if (run.relics().size() >= RELIC_IDS.size()) {
+      throw invalidAction("遗物数量已达上限");
+    }
+    List<String> relics = new ArrayList<>(run.relics());
+    relics.add(request.relicId());
+    int maxHp = run.maxHp();
+    int hp = run.hp();
+    if ("sturdy_notes".equals(request.relicId())) {
+      maxHp = Math.min(6, maxHp + 1);
+      hp = Math.min(maxHp, hp + 1);
+    }
+    return persistActionState(
+        userId,
+        run,
+        "map",
+        run.currentNodeId(),
+        hp,
+        maxHp,
+        copyNodes(run.nodes()),
+        relics);
+  }
+
+  private ExpeditionRunDto finishRun(
+      Long userId, ExpeditionRunDto run, ExpeditionRunActionRequest request) {
+    if (request.nodeId() != null
+        || request.relicId() != null
+        || request.problemId() != null
+        || "over".equals(run.phase())) {
+      throw invalidAction("当前状态不能结束远征");
+    }
+    return persistActionState(
+        userId,
+        run,
+        "over",
+        run.currentNodeId(),
+        run.hp(),
+        run.maxHp(),
+        copyNodes(run.nodes()),
+        run.relics());
+  }
+
+  private ExpeditionRunDto settleChallenge(
+      Long userId, ExpeditionRunDto run, ExpeditionRunActionRequest request) {
+    if (request.relicId() != null || request.nodeId() == null || request.problemId() == null) {
+      throw invalidAction("判题结算参数无效");
+    }
+    Map<String, Object> node = findNode(run, request.nodeId());
+    ChallengeEvidence evidence = findChallengeEvidence(userId, run, request, node);
+    Optional<ChallengeSettlement> prior =
+        findSettlement(userId, run.runId(), evidence.questionFingerprint());
+    if (prior.isPresent()) {
+      ChallengeSettlement settlement = prior.get();
+      if (!settlement.nodeId().equals(request.nodeId())) {
+        throw problemBindingMismatch();
+      }
+      if (settlement.passed() || !evidence.passed()) {
+        return findActive(userId).orElseThrow(this::staleRun);
+      }
+      // A failed verdict can later be upgraded to a pass for the same fingerprint. Keep the
+      // original HP result, while allowing that verified pass to clear the current node.
+      if (!"challenge".equals(run.phase()) || !request.nodeId().equals(run.currentNodeId())) {
+        throw problemBindingMismatch();
+      }
+      return applyChallengeOutcome(userId, run, node, request.problemId(), evidence, false, true);
+    }
+    if (!"challenge".equals(run.phase()) || !request.nodeId().equals(run.currentNodeId())) {
+      throw problemBindingMismatch();
+    }
+    if (!CHALLENGE_NODE_KINDS.contains(stringValue(node.get("kind")))
+        && !"event".equals(node.get("kind"))) {
+      throw problemBindingMismatch();
+    }
+    return applyChallengeOutcome(userId, run, node, request.problemId(), evidence, true, false);
+  }
+
+  private ExpeditionRunDto applyChallengeOutcome(
+      Long userId,
+      ExpeditionRunDto run,
+      Map<String, Object> currentNode,
+      String problemId,
+      ChallengeEvidence evidence,
+      boolean createSettlement,
+      boolean upgradeFailure) {
+    List<Map<String, Object>> nodes = copyNodes(run.nodes());
+    Map<String, Object> node = findNode(nodes, run.currentNodeId());
+    List<Map<String, Object>> history = copyNodes(run.history());
+    int hp = run.hp();
+    int momentum;
+    int bestMomentum = run.bestMomentum();
+    String phase;
+    boolean firstAidUsed = false;
+    int settledScore = evidence.passed() ? evidence.score() : 0;
+
+    if (evidence.passed()) {
+      momentum = Math.min(12, run.momentum() + 1);
+      bestMomentum = Math.max(bestMomentum, momentum);
+      if ("boss".equals(node.get("kind"))) {
+        int bossPhase = node.get("bossPhase") == null ? 1 : integerValue(node.get("bossPhase"));
+        if (bossPhase < 1 || bossPhase > 3) throw mapChanged();
+        if (bossPhase < 3) {
+          node.put("bossPhase", bossPhase + 1);
+          phase = "challenge";
+        } else {
+          hp = clearNode(nodes, run.currentNodeId(), run.layers(), hp, run.maxHp());
+          phase = "over";
+        }
+      } else {
+        hp = clearNode(nodes, run.currentNodeId(), run.layers(), hp, run.maxHp());
+        phase =
+            "elite".equals(node.get("kind")) && run.relics().size() < RELIC_IDS.size()
+                ? "reward"
+                : "map";
+      }
+    } else {
+      momentum = run.relics().contains("second_wind") ? Math.floorDiv(run.momentum(), 2) : 0;
+      firstAidUsed = run.relics().contains("first_aid") && !hasUsedFirstAid(userId, run.runId());
+      int damage = challengeDamage(userId);
+      if (run.relics().contains("calm_mind")) damage = Math.max(1, damage - 1);
+      if (firstAidUsed) damage = 0;
+      hp = Math.max(0, hp - damage);
+      phase = hp == 0 ? "over" : "challenge";
+    }
+
+    Map<String, Object> historyItem = new LinkedHashMap<>();
+    historyItem.put("nodeId", run.currentNodeId());
+    historyItem.put("kcCode", node.get("kcCode"));
+    historyItem.put("kind", node.get("kind"));
+    historyItem.put("problemId", problemId);
+    historyItem.put("passed", evidence.passed());
+    historyItem.put("score", settledScore);
+    historyItem.put("firstAidUsed", firstAidUsed);
+    historyItem.put("at", OffsetDateTime.now().toString());
+    history.addFirst(historyItem);
+
+    if (createSettlement) {
+      jdbcTemplate.update(
+          "INSERT INTO expedition_challenge_settlement"
+              + " (user_id, run_id, question_fingerprint, problem_id, node_id, passed, score, first_aid_used)"
+              + " VALUES (?, ?::uuid, ?, ?, ?, ?, ?, ?)",
+          userId,
+          run.runId(),
+          evidence.questionFingerprint(),
+          problemId,
+          run.currentNodeId(),
+          evidence.passed(),
+          settledScore,
+          firstAidUsed);
+    } else if (upgradeFailure) {
+      jdbcTemplate.update(
+          "UPDATE expedition_challenge_settlement SET passed = TRUE, score = ?, problem_id = ?"
+              + " WHERE user_id = ? AND run_id = ?::uuid AND question_fingerprint = ? AND passed = FALSE",
+          settledScore,
+          problemId,
+          userId,
+          run.runId(),
+          evidence.questionFingerprint());
+    }
+
+    int updated =
+        jdbcTemplate.update(
+            "UPDATE expedition_run SET phase = ?, hp = ?, momentum = ?, best_momentum = ?,"
+                + " nodes = ?::jsonb, history = ?::jsonb, updated_at = now()"
+                + " WHERE user_id = ? AND run_id = ?::uuid AND status = 'ACTIVE'",
+            phase,
+            hp,
+            momentum,
+            bestMomentum,
+            serialize(nodes),
+            serialize(history),
+            userId,
+            run.runId());
+    if (updated != 1) throw staleRun();
+    return findActive(userId).orElseThrow(this::staleRun);
+  }
+
+  private ChallengeEvidence findChallengeEvidence(
+      Long userId,
+      ExpeditionRunDto run,
+      ExpeditionRunActionRequest request,
+      Map<String, Object> node) {
+    List<ChallengeEvidence> rows =
+        jdbcTemplate.query(
+            "SELECT p.expedition_node_id, p.kc_code, p.chapter, p.question_fingerprint,"
+                + " a.passed, a.score FROM pregenerated_problem p"
+                + " JOIN expedition_verified_attempt a ON a.user_id = p.user_id"
+                + " AND a.run_id = p.expedition_run_id"
+                + " AND (a.problem_id = p.problem_id OR"
+                + " (p.question_fingerprint IS NOT NULL AND a.question_fingerprint = p.question_fingerprint))"
+                + " WHERE p.user_id = ? AND p.expedition_run_id = ?::uuid"
+                + " AND p.expedition_node_id = ? AND p.problem_id = ? AND p.status = 'CONSUMED'"
+                + " ORDER BY a.passed DESC, a.score DESC LIMIT 1",
+            (rs, rowNum) ->
+                new ChallengeEvidence(
+                    rs.getString("expedition_node_id"),
+                    rs.getString("kc_code"),
+                    rs.getInt("chapter"),
+                    rs.getString("question_fingerprint"),
+                    rs.getBoolean("passed"),
+                    rs.getInt("score")),
+            userId,
+            run.runId(),
+            request.nodeId(),
+            request.problemId());
+    if (rows.isEmpty()) throw problemBindingMismatch();
+    ChallengeEvidence evidence = rows.getFirst();
+    if (!request.nodeId().equals(evidence.nodeId())
+        || !Objects.equals(node.get("kcCode"), evidence.kcCode())
+        || evidence.questionFingerprint() == null
+        || (run.focusChapter() != null && evidence.chapter() != run.focusChapter())) {
+      throw problemBindingMismatch();
+    }
+    return evidence;
+  }
+
+  private Optional<ChallengeSettlement> findSettlement(
+      Long userId, String runId, String questionFingerprint) {
+    return jdbcTemplate
+        .query(
+            "SELECT node_id, passed FROM expedition_challenge_settlement"
+                + " WHERE user_id = ? AND run_id = ?::uuid AND question_fingerprint = ?",
+            (rs, rowNum) -> new ChallengeSettlement(rs.getString("node_id"), rs.getBoolean("passed")),
+            userId,
+            runId,
+            questionFingerprint)
+        .stream()
+        .findFirst();
+  }
+
+  private boolean hasUsedFirstAid(Long userId, String runId) {
+    return Boolean.TRUE.equals(
+        jdbcTemplate.queryForObject(
+            "SELECT EXISTS(SELECT 1 FROM expedition_challenge_settlement"
+                + " WHERE user_id = ? AND run_id = ?::uuid AND first_aid_used)",
+            Boolean.class,
+            userId,
+            runId));
+  }
+
+  private int challengeDamage(Long userId) {
+    List<Double> resilience =
+        jdbcTemplate.query(
+            "SELECT CASE WHEN dimensions #>> '{emotion_persistence,resilience}' ~ '^[0-9]+([.][0-9]+)?$'"
+                + " THEN (dimensions #>> '{emotion_persistence,resilience}')::double precision END"
+                + " FROM learner_profile WHERE user_id = ?",
+            (rs, rowNum) -> {
+              double value = rs.getDouble(1);
+              return rs.wasNull() ? null : value;
+            },
+            userId);
+    return resilience.stream().filter(Objects::nonNull).findFirst().orElse(0.5) < 0.4 ? 1 : 2;
+  }
+
+  private BusinessException problemBindingMismatch() {
+    return new BusinessException(
+        HttpStatus.CONFLICT,
+        "EXPEDITION_PROBLEM_BINDING_MISMATCH",
+        "题目与当前远征节点绑定不匹配，无法结算");
+  }
+
+  private ExpeditionRunDto persistActionState(
+      Long userId,
+      ExpeditionRunDto run,
+      String phase,
+      String currentNodeId,
+      int hp,
+      int maxHp,
+      List<Map<String, Object>> nodes,
+      List<String> relics) {
+    int updated =
+        jdbcTemplate.update(
+            "UPDATE expedition_run SET phase = ?, current_node_id = ?, hp = ?, max_hp = ?,"
+                + " nodes = ?::jsonb, relics = ?::jsonb, updated_at = now()"
+                + " WHERE user_id = ? AND run_id = ?::uuid AND status = 'ACTIVE'",
+            phase,
+            currentNodeId,
+            hp,
+            maxHp,
+            serialize(nodes),
+            serialize(relics),
+            userId,
+            run.runId());
+    if (updated != 1) throw staleRun();
+    return findActive(userId).orElseThrow(this::staleRun);
+  }
+
+  private void requireReachable(ExpeditionRunDto run, Map<String, Object> node) {
+    if (!"map".equals(run.phase()) || !"available".equals(node.get("state"))) {
+      throw invalidAction("该节点当前不可达");
+    }
+    if (run.currentNodeId() == null) {
+      if (integerValue(node.get("layer")) != 0) throw invalidAction("该节点当前不可达");
+      return;
+    }
+    Map<String, Object> current = findNode(run, run.currentNodeId());
+    Object next = current.get("next");
+    if (!"cleared".equals(current.get("state"))
+        || !(next instanceof List<?> reachable)
+        || !reachable.contains(node.get("id"))) {
+      throw invalidAction("该节点当前不可达");
+    }
+  }
+
+  private void requireEventNode(ExpeditionRunDto run, ExpeditionRunActionRequest request) {
+    requirePhase(run, "event");
+    if (request.relicId() != null
+        || request.nodeId() == null
+        || !request.nodeId().equals(run.currentNodeId())) {
+      throw invalidAction("事件节点与当前远征阶段不匹配");
+    }
+    Map<String, Object> node = findNode(run, run.currentNodeId());
+    if (!"event".equals(node.get("kind"))) throw invalidAction("当前节点不是事件节点");
+  }
+
+  private void requirePhase(ExpeditionRunDto run, String phase) {
+    if (!phase.equals(run.phase())) throw invalidAction("当前远征阶段不支持该操作");
+  }
+
+  private void requireNoRelic(ExpeditionRunActionRequest request) {
+    if (request.relicId() != null) throw invalidAction("该操作不能携带遗物 id");
+  }
+
+  private Map<String, Object> findNode(ExpeditionRunDto run, String nodeId) {
+    if (nodeId == null) throw invalidAction("节点 id 必填");
+    Map<String, Object> found = null;
+    for (Map<String, Object> node : run.nodes()) {
+      if (nodeId.equals(node.get("id"))) {
+        if (found != null) throw mapChanged();
+        found = node;
+      }
+    }
+    if (found == null) throw invalidAction("节点不属于当前地图");
+    return found;
+  }
+
+  private int clearNode(
+      List<Map<String, Object>> nodes, String nodeId, int layers, int hp, int maxHp) {
+    Map<String, Object> node = findNode(nodes, nodeId);
+    int layer = integerValue(node.get("layer"));
+    node.put("state", "cleared");
+    for (Map<String, Object> sibling : nodes) {
+      if (integerValue(sibling.get("layer")) == layer
+          && !nodeId.equals(sibling.get("id"))
+          && "available".equals(sibling.get("state"))) {
+        sibling.put("state", "bypassed");
+      }
+    }
+    Object next = node.get("next");
+    if (!(next instanceof List<?> nextIds)) throw mapChanged();
+    for (Object nextId : nextIds) {
+      if (!(nextId instanceof String targetId)) throw mapChanged();
+      Map<String, Object> target = findNode(nodes, targetId);
+      if ("locked".equals(target.get("state"))) target.put("state", "available");
+    }
+    int halfway = Math.floorDiv(layers - 1, 2);
+    boolean firstClearedOnHalfway =
+        layer == halfway
+            && nodes.stream()
+                .noneMatch(
+                    candidate ->
+                        integerValue(candidate.get("layer")) == halfway
+                            && !nodeId.equals(candidate.get("id"))
+                            && "cleared".equals(candidate.get("state")));
+    return firstClearedOnHalfway && hp < maxHp ? Math.min(maxHp, hp + 1) : hp;
+  }
+
+  private Map<String, Object> findNode(List<Map<String, Object>> nodes, String nodeId) {
+    Map<String, Object> found = null;
+    for (Map<String, Object> node : nodes) {
+      if (nodeId.equals(node.get("id"))) {
+        if (found != null) throw mapChanged();
+        found = node;
+      }
+    }
+    if (found == null) throw mapChanged();
+    return found;
+  }
+
+  private List<Map<String, Object>> copyNodes(List<Map<String, Object>> nodes) {
+    List<Map<String, Object>> copy = new ArrayList<>(nodes.size());
+    for (Map<String, Object> node : nodes) copy.add(new LinkedHashMap<>(node));
+    return copy;
+  }
+
+  private int heal(int hp, int maxHp, int amount) {
+    return Math.min(maxHp, hp + amount);
+  }
+
+  private int integerValue(Object value) {
+    if (value instanceof Number number) return number.intValue();
+    throw mapChanged();
+  }
+
+  private String stringValue(Object value) {
+    if (value instanceof String string) return string;
+    throw mapChanged();
+  }
+
+  private void validateRelics(List<String> relics) {
+    Set<String> unique = new HashSet<>();
+    if (relics.size() > RELIC_IDS.size()) throw invalidAction("远征遗物状态无效");
+    for (String relicId : relics) {
+      if (relicId == null || !RELIC_IDS.contains(relicId) || !unique.add(relicId)) {
+        throw invalidAction("远征遗物状态无效");
+      }
+    }
+  }
+
+  private String normalizeRunId(String runId) {
+    try {
+      return UUID.fromString(runId).toString();
+    } catch (RuntimeException exception) {
+      throw invalidAction("远征 runId 无效");
+    }
+  }
+
   /** Validate a problem request against the user's active run and its immutable focus chapter. */
   public void validateProblemRequest(Long userId, String runId, int chapter) {
     if (runId == null) {
@@ -250,6 +837,65 @@ public class ExpeditionRunService {
     if (focusChapter != chapter) {
       throw chapterChanged();
     }
+  }
+
+  /** Validate an expedition problem against its server-owned node and current map phase. */
+  public void validateProblemRequest(
+      Long userId,
+      String runId,
+      String nodeId,
+      int chapter,
+      boolean allowPrefetch,
+      String kcCode) {
+    if (runId == null) {
+      if (nodeId != null) throw problemBindingMismatch();
+      return;
+    }
+    if (userId == null || nodeId == null) throw problemBindingMismatch();
+    List<ProblemRunState> rows =
+        jdbcTemplate.query(
+            "SELECT phase, focus_chapter, nodes::text AS nodes, layers, current_node_id"
+                + " FROM expedition_run WHERE user_id = ? AND run_id = ?::uuid AND status = 'ACTIVE'",
+            (rs, rowNum) ->
+                new ProblemRunState(
+                    rs.getString("phase"),
+                    (Integer) rs.getObject("focus_chapter"),
+                    listOfMap(rs.getString("nodes")),
+                    rs.getInt("layers"),
+                    rs.getString("current_node_id")),
+            userId,
+            runId);
+    if (rows.isEmpty()) throw staleRun();
+    ProblemRunState state = rows.getFirst();
+    if (state.focusChapter() != null && state.focusChapter() != chapter) throw chapterChanged();
+    Map<String, Object> node = findNode(state.nodes(), nodeId);
+    if (!Objects.equals(node.get("kcCode"), kcCode)) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT,
+          "EXPEDITION_PROBLEM_NODE_MISMATCH",
+          "题目知识点与绑定的远征节点不一致");
+    }
+    if ("map".equals(state.phase()) && allowPrefetch) {
+      if (!"available".equals(node.get("state"))) throw problemBindingMismatch();
+      if (state.currentNodeId() == null) {
+        if (integerValue(node.get("layer")) != 0) throw problemBindingMismatch();
+        return;
+      }
+      Map<String, Object> current = findNode(state.nodes(), state.currentNodeId());
+      Object next = current.get("next");
+      if (!"cleared".equals(current.get("state"))
+          || !(next instanceof List<?> reachable)
+          || !reachable.contains(nodeId)) {
+        throw problemBindingMismatch();
+      }
+      return;
+    }
+    if ("challenge".equals(state.phase())
+        && nodeId.equals(state.currentNodeId())
+        && ("available".equals(node.get("state")) || "current".equals(node.get("state")))) {
+      return;
+    }
+    throw problemBindingMismatch();
   }
 
   public boolean isActiveRun(Long userId, String runId) {
@@ -317,12 +963,18 @@ public class ExpeditionRunService {
         || current.nodes().size() != requested.nodes().size()) {
       throw mapChanged();
     }
-    Map<String, Map<String, Object>> requestedById = new java.util.HashMap<>();
+    Map<String, Map<String, Object>> requestedById = new HashMap<>();
     for (Map<String, Object> node : requested.nodes()) {
       Object id = node.get("id");
       if (!(id instanceof String nodeId)
           || !(node.get("state") instanceof String state)
           || !NODE_STATES.contains(state)
+          || !ALLOWED_NODE_FIELDS.containsAll(node.keySet())
+          || (node.containsKey("bossPhase")
+              && (!(node.get("bossPhase") instanceof Number bossPhase)
+                  || bossPhase.intValue() < 1
+                  || bossPhase.intValue() > 3
+                  || !"boss".equals(node.get("kind"))))
           || requestedById.put(nodeId, node) != null) {
         throw mapChanged();
       }
@@ -336,7 +988,6 @@ public class ExpeditionRunService {
       Map<String, Object> requestedNode =
           id instanceof String nodeId ? requestedById.get(nodeId) : null;
       if (requestedNode == null
-          || !existingNode.keySet().equals(requestedNode.keySet())
           || IMMUTABLE_NODE_FIELDS.stream()
               .anyMatch(
                   field -> !Objects.equals(existingNode.get(field), requestedNode.get(field)))) {
@@ -384,6 +1035,10 @@ public class ExpeditionRunService {
         HttpStatus.CONFLICT, "EXPEDITION_CHAPTER_CHANGED", "远征章节已绑定，不能在本局中切换章节");
   }
 
+  private BusinessException invalidAction(String message) {
+    return new BusinessException(HttpStatus.CONFLICT, "EXPEDITION_ACTION_INVALID", message);
+  }
+
   record ExistingRun(
       String runId,
       String status,
@@ -401,6 +1056,23 @@ public class ExpeditionRunService {
   }
 
   private record VerifiedProgress(int score, int depth) {}
+
+  private record ChallengeEvidence(
+      String nodeId,
+      String kcCode,
+      int chapter,
+      String questionFingerprint,
+      boolean passed,
+      int score) {}
+
+  private record ChallengeSettlement(String nodeId, boolean passed) {}
+
+  private record ProblemRunState(
+      String phase,
+      Integer focusChapter,
+      List<Map<String, Object>> nodes,
+      int layers,
+      String currentNodeId) {}
 
   private List<Map<String, Object>> listOfMap(String json) {
     if (json == null || json.isBlank()) {

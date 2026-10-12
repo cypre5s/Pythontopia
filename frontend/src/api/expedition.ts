@@ -2,8 +2,8 @@
 //
 // - select-frontier：调后端 POST /api/world/boss/select-frontier（后端读权威掌握度、服务端画像 +
 //   graph 排序 + 间隔重复）。
-// - expedition/run：POST 开局时由服务端选择前沿并生成地图；GET/PUT/DELETE 负责存档和弃局。
-//   所有请求 suppressNetworkToast + 短超时，失败由调用方回退 localStorage，绝不阻塞。
+// - expedition/run：POST 开局由服务端生成地图；POST /actions 写入服务端权威进度。
+//   GET/DELETE 读取或弃局；PUT 仅保留旧客户端的快照校验兼容。
 
 import { http } from './http';
 import type { ProfileSignalsDto } from '@/api/dto/Boss';
@@ -33,6 +33,13 @@ export interface ExpeditionRunStartInput {
   focusChapter: number | null;
   isDaily: boolean;
 }
+
+export type ExpeditionRunAction =
+  | { runId: string; action: 'ENTER_NODE'; nodeId: string }
+  | { runId: string; action: 'EVENT_REVIEW' | 'EVENT_STUDY' | 'EVENT_STEADY'; nodeId: string }
+  | { runId: string; action: 'CLAIM_RELIC'; nodeId: string; relicId: string }
+  | { runId: string; action: 'SETTLE_CHALLENGE'; nodeId: string; problemId: string }
+  | { runId: string; action: 'FINISH' };
 
 /** 取一批知识前沿候选；空结果/坏结构与网络错误一样显式失败。 */
 export async function requestFrontierPicks(input: FrontierSelectInput): Promise<FrontierPick[]> {
@@ -100,6 +107,17 @@ export async function createExpeditionRun(
   return res.data;
 }
 
+/** Applies one typed gameplay command; the returned snapshot is server-authoritative. */
+export async function performExpeditionAction(
+  action: ExpeditionRunAction,
+): Promise<ExpeditionRunSnapshot> {
+  const res = await http.post<ExpeditionRunSnapshot>(`${RUN_PATH}/actions`, action, {
+    suppressNetworkToast: true,
+    timeout: 3000,
+  });
+  return res.data;
+}
+
 /** 取当前用户的活跃 run；无活跃 run（204/空）返回 null。失败抛错（调用方回退本地）。 */
 export async function fetchExpeditionRun(): Promise<ExpeditionRunSnapshot | null> {
   const res = await http.get<ExpeditionRunSnapshot>(RUN_PATH, {
@@ -112,7 +130,7 @@ export async function fetchExpeditionRun(): Promise<ExpeditionRunSnapshot | null
   return res.data;
 }
 
-/** 保存（upsert）当前用户的活跃 run。失败抛错（调用方 best-effort 吞掉，本地仍有兜底）。 */
+/** 校验旧客户端快照并返回服务端进度；此兼容接口不会写入游戏进度。 */
 export async function saveExpeditionRun(
   run: ExpeditionRunSnapshot,
 ): Promise<ExpeditionRunSnapshot | undefined> {
