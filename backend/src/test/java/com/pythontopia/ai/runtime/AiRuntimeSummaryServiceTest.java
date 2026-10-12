@@ -132,7 +132,7 @@ class AiRuntimeSummaryServiceTest {
         .filteredOn(operation -> "RESOURCE".equals(operation.loopType()))
         .first()
         .extracting(AiRuntimeOperationsDto.LoopOperation::status)
-        .isEqualTo("PASS");
+        .isEqualTo("WARN");
     assertThat(operations.governance())
         .extracting(AiRuntimeOperationsDto.GovernanceItem::key)
         .contains("resource_review", "world_patch_review", "policy_canary_review");
@@ -232,7 +232,7 @@ class AiRuntimeSummaryServiceTest {
   }
 
   @Test
-  void platformAggregateCountsDriveLoopStatusesWithoutLearnerIdentifiers() {
+  void platformActivityIsNotReportedAsACompletedLoopWithoutReviewEvidence() {
     when(platformSnapshotRepository.snapshot())
         .thenReturn(new AiRuntimePlatformSnapshotRepository.PlatformSnapshot(12, 5, 2, 4, 3));
 
@@ -248,7 +248,7 @@ class AiRuntimeSummaryServiceTest {
         .filteredOn(operation -> "LEARNER".equals(operation.loopType()))
         .first()
         .extracting(AiRuntimeOperationsDto.LoopOperation::status)
-        .isEqualTo("PASS");
+        .isEqualTo("WARN");
     assertThat(operations.loops())
         .filteredOn(operation -> "DEBUG".equals(operation.loopType()))
         .first()
@@ -258,11 +258,11 @@ class AiRuntimeSummaryServiceTest {
         .filteredOn(operation -> "RESOURCE".equals(operation.loopType()))
         .first()
         .extracting(AiRuntimeOperationsDto.LoopOperation::status)
-        .isEqualTo("PASS");
+        .isEqualTo("WARN");
     assertThat(operations.loops())
         .filteredOn(operation -> "WORLD".equals(operation.loopType()))
         .first()
         .extracting(AiRuntimeOperationsDto.LoopOperation::status)
-        .isEqualTo("PASS");
+        .isEqualTo("WARN");
   }
 }

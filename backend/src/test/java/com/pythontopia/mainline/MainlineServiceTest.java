@@ -18,6 +18,7 @@ import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.coursepack.dto.CourseVideoDto;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.coursepack.service.CourseVideoService;
+import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.mainline.domain.ChapterStar;
 import com.pythontopia.mainline.domain.MainlineStage;
 import com.pythontopia.mainline.domain.MainlineStageProgress;
@@ -39,6 +40,8 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.Test;
 
 /** MainlineService：overview 单次聚合（avoid N+1）+ 打点幂等/限频/校验/完成触发重算。 */
@@ -61,6 +64,7 @@ class MainlineServiceTest {
   private final MainlineOjCatalogRepository ojCatalogRepository =
       mock(MainlineOjCatalogRepository.class);
   private final MainlinePracticePort practicePort = mock(MainlinePracticePort.class);
+  private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
   private final MainlineProperties properties =
       new MainlineProperties(null, null, null, null); // 默认：deltaMax=120, writesPerMin=2
 
@@ -69,14 +73,14 @@ class MainlineServiceTest {
       new MainlineService(
           stageRepo, progressRepo, starRepo, testRepo, starService, properties, throttle,
           submissionRepo, mapper, courseVideoService, coursePackRepository, ojCatalogRepository,
-          Optional.empty());
+          Optional.empty(), eventPublisher);
 
   // 题库 bean 就位（Optional.of）→ 过线计入「客观题是否全对」。
   private final MainlineService serviceWithPractice =
       new MainlineService(
           stageRepo, progressRepo, starRepo, testRepo, starService, properties, throttle,
           submissionRepo, mapper, courseVideoService, coursePackRepository, ojCatalogRepository,
-          Optional.of(practicePort));
+          Optional.of(practicePort), eventPublisher);
 
   private MainlineStage stage(long id, int chapter) {
     return new MainlineStage(
@@ -102,6 +106,11 @@ class MainlineServiceTest {
     return new MainlineStageProgress(
         stageId, USER, stageId, videoSec, List.of(), examples, List.of(), completedAt,
         OffsetDateTime.now());
+  }
+
+  private MainlineStageProgress progressWithPages(long stageId, List<Long> pages) {
+    return new MainlineStageProgress(
+        stageId, USER, stageId, 0, pages, List.of(), List.of(), null, OffsetDateTime.now());
   }
 
   @Test
@@ -174,6 +183,44 @@ class MainlineServiceTest {
     assertThat(dto.completed()).isFalse();
     verify(progressRepo).addVideoSeconds(USER, 10L, 120);
     verify(starService, never()).recalc(anyLong(), anyInt(), any());
+  }
+
+  @Test
+  void videoConsumptionEmitsOnceOnlyAfterTheRequiredWatchTime() {
+    when(stageRepo.findById(10L)).thenReturn(Optional.of(stage(10, 1)));
+    when(courseVideoService.listVideos(1))
+        .thenReturn(List.of(new CourseVideoDto(100L, 1, "v1", 1000, List.of(), true)));
+    when(throttle.tryAcquire(USER, 10L)).thenReturn(true);
+    when(progressRepo.addVideoSeconds(USER, 10L, 120))
+        .thenReturn(progress(10, 800, List.of(), null));
+    when(progressRepo.claimVideoConsumed(USER, 10L)).thenReturn(true, false);
+
+    service.reportVideoProgress(USER, 10L, 120);
+    service.reportVideoProgress(USER, 10L, 120);
+
+    ArgumentCaptor<LearningEvent.MediaConsumed> event =
+        ArgumentCaptor.forClass(LearningEvent.MediaConsumed.class);
+    verify(eventPublisher).publishEvent(event.capture());
+    assertThat(event.getValue().mediaType()).isEqualTo("video");
+    assertThat(event.getValue().chapter()).isEqualTo(1);
+    assertThat(event.getValue().kcCodes()).containsExactly("PY43-KC-001");
+  }
+
+  @Test
+  void coursewareConsumptionUsesCompletedServerPageProgress() {
+    when(stageRepo.findById(10L)).thenReturn(Optional.of(stage(10, 1)));
+    when(coursePackRepository.findPageIdsByDocument(186L)).thenReturn(List.of(5001L, 5002L));
+    when(progressRepo.addPagesRead(USER, 10L, List.of(5001L, 5002L)))
+        .thenReturn(progressWithPages(10L, List.of(5001L, 5002L)));
+    when(progressRepo.claimCoursewareConsumed(USER, 10L)).thenReturn(true);
+
+    service.reportPagesRead(USER, 10L, List.of(5001L, 5002L));
+
+    ArgumentCaptor<LearningEvent.MediaConsumed> event =
+        ArgumentCaptor.forClass(LearningEvent.MediaConsumed.class);
+    verify(eventPublisher).publishEvent(event.capture());
+    assertThat(event.getValue().mediaType()).isEqualTo("courseware");
+    assertThat(event.getValue().kcCodes()).containsExactly("PY43-KC-001");
   }
 
   @Test
@@ -349,6 +396,7 @@ class MainlineServiceTest {
             10L, USER, 10L, 0, List.of(5001L, 5002L, 5003L), List.of(1L, 2L), List.of(), null,
             OffsetDateTime.now());
     when(progressRepo.addPagesRead(USER, 10L, List.of(5001L, 5002L, 5003L))).thenReturn(full);
+    when(progressRepo.claimCoursewareConsumed(USER, 10L)).thenReturn(true);
     when(progressRepo.markCompleted(USER, 10L)).thenReturn(true);
 
     StageProgressDto dto = service.reportPagesRead(USER, 10L, List.of(5001L, 5002L, 5003L));

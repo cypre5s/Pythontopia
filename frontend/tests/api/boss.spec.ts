@@ -185,7 +185,21 @@ describe('requestBossProblem', () => {
     });
     await expect(
       requestBossProblem(1, { stage: 2 }, { allowGoldenFallback: false }),
-    ).rejects.toThrow('未通过 AI 审查');
+    ).rejects.toThrow('未通过审核');
+  });
+
+  it('accepts a reviewed backend golden problem without claiming it was AI-generated', async () => {
+    httpMock.post.mockResolvedValueOnce({
+      data: {
+        problemId: 'golden-c1-s2', chapter: 1, stage: 2, difficulty: 2,
+        kcCode: 'PY43-KC-001', statement: '审查通过的课程题', hints: [], sampleInput: '',
+        sampleOutput: '', totalTestCases: 3, reviewed: true, aiGenerated: false,
+      },
+    });
+
+    await expect(
+      requestBossProblem(1, { stage: 2 }, { allowGoldenFallback: false }),
+    ).resolves.toMatchObject({ problemId: 'golden-c1-s2', reviewed: true, aiGenerated: false });
   });
 
   it('falls back when backend returns malformed body (no problemId)', async () => {

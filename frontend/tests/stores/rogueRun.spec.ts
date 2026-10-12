@@ -203,7 +203,12 @@ describe('rogueRun store', () => {
     frontierApiMock.saveExpeditionRun
       .mockResolvedValueOnce({ runId: EXPEDITION_RUN_ID })
       .mockResolvedValueOnce({ runId: nextRunId });
-    let finishSettlement!: (value: null) => void;
+    let finishSettlement!: (value: {
+      entries: never[];
+      selfRank: null;
+      selfBest: number;
+      inClass: boolean;
+    }) => void;
     frontierApiMock.submitExpeditionScore.mockImplementationOnce(
       () => new Promise((resolve) => { finishSettlement = resolve; }),
     );
@@ -216,7 +221,7 @@ describe('rogueRun store', () => {
     expect(frontierApiMock.requestFrontierPicks).toHaveBeenCalledTimes(1);
     expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(1);
 
-    finishSettlement(null);
+    finishSettlement({ entries: [], selfRank: null, selfBest: 0, inClass: false });
     await restart;
 
     expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledTimes(1);
@@ -322,6 +327,70 @@ describe('rogueRun store', () => {
 
     resolveProblem?.(problem());
     await entering;
+  });
+
+  it('ignores a late problem response after the run is aborted and a new run starts', async () => {
+    let resolveProblem: ((value: BossProblemDto) => void) | undefined;
+    judgeMock.fetchProblem.mockReturnValueOnce(new Promise((resolve) => {
+      resolveProblem = resolve;
+    }));
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const start = run.nodes.find((node) => node.layer === 0);
+    const entering = run.enterNode(start!.id);
+
+    await run.abort();
+    await run.startRun(null);
+    resolveProblem?.(problem());
+    await entering;
+
+    expect(run.phase).toBe('map');
+    expect(run.activeProblem).toBeNull();
+    expect(run.activeCode).toBe('');
+    expect(run.loading).toBe(false);
+  });
+
+  it('serializes snapshot writes and sends the latest snapshot with the server run id', async () => {
+    let resolveInitialSave: ((value: { runId: string }) => void) | undefined;
+    frontierApiMock.saveExpeditionRun
+      .mockImplementationOnce(() => new Promise((resolve) => {
+        resolveInitialSave = resolve;
+      }))
+      .mockResolvedValueOnce({ runId: EXPEDITION_RUN_ID, score: 0, verifiedDepth: 0 });
+    const run = useRogueRunStore();
+    const starting = run.startRun(null);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(1);
+    run.hp = 3;
+    run.saveCheckpoint();
+    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(1);
+
+    resolveInitialSave?.({ runId: EXPEDITION_RUN_ID });
+    await starting;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(2);
+    expect(frontierApiMock.saveExpeditionRun).toHaveBeenLastCalledWith(
+      expect.objectContaining({ hp: 3, runId: EXPEDITION_RUN_ID }),
+    );
+  });
+
+  it('waits for an in-flight save before deleting the run on abort', async () => {
+    let resolveSave: ((value: { runId: string }) => void) | undefined;
+    frontierApiMock.saveExpeditionRun.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveSave = resolve;
+    }));
+    const run = useRogueRunStore();
+    const starting = run.startRun(null);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const aborting = run.abort();
+
+    expect(frontierApiMock.deleteExpeditionRun).not.toHaveBeenCalled();
+    resolveSave?.({ runId: EXPEDITION_RUN_ID });
+    await Promise.all([starting, aborting]);
+
+    expect(frontierApiMock.deleteExpeditionRun).toHaveBeenCalledTimes(1);
   });
 
   it('relic 沉静心法(calm_mind) softens damage from -2 to -1', async () => {
@@ -683,6 +752,7 @@ describe('rogueRun store', () => {
     expect(run.score).toBe(42);
     expect(run.verifiedScore).toBe(0);
     expect(run.verifiedDepth).toBe(0);
+    expect(frontierApiMock.saveExpeditionRun).not.toHaveBeenCalled();
   });
 
   it('shows score and passed depth only from the server ledger', async () => {
@@ -770,6 +840,24 @@ describe('rogueRun store', () => {
     // 已结算后再点「结束本局」不重复上报。
     run.finishRun();
     expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not open a new run when settlement returns null and retries on the next start', async () => {
+    const board = { entries: [], selfRank: null, selfBest: 0, inClass: false };
+    frontierApiMock.submitExpeditionScore
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(board);
+    const run = useRogueRunStore();
+    await run.startRun(null);
+
+    run.finishRun();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(1);
+
+    await run.startRun(null);
+
+    expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledTimes(2);
+    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(2);
   });
 
   it('loadLeaderboard populates the class leaderboard state (best-effort)', async () => {

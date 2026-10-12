@@ -240,11 +240,10 @@ class MasteryEntryPayload(BaseModel):
 
 
 class FrontierSelectRequest(BaseModel):
-    """无尽远征「下一题选择器」请求：掌握度 + 画像 + 近期 KC → 前沿候选。"""
+    """无尽远征「下一题选择器」请求：掌握度 + 画像 + 正式练习时间 → 前沿候选。"""
 
     mastery: list[MasteryEntryPayload] = Field(default_factory=list)
     profileSignals: ProfileSignalsPayload | None = None
-    recentKcs: list[str] = Field(default_factory=list, description="近期练过的 KC（最近在前）")
     lastPracticed: dict[str, str] = Field(
         default_factory=dict,
         description="每个 KC 的后端权威最近练习时间（ISO-8601），用于间隔重复",
@@ -278,7 +277,6 @@ def select_frontier_endpoint(body: FrontierSelectRequest) -> FrontierSelectRespo
         mastery=mastery,
         confidence=confidence,
         profile_signals=signals,
-        recent_kcs=body.recentKcs,
         last_practiced=body.lastPracticed,
         focus_chapter=body.focusChapter,
         exclude=body.exclude,

@@ -168,6 +168,48 @@ class BossServiceTest {
   }
 
   @Test
+  @DisplayName("同维度预加载仍在生成时不启动第二次同步出题")
+  void pendingPrefetchPreventsDuplicateOnDemandGeneration() {
+    when(pregenService.getPrefetchStatus(7L, 1, 2, "PY43-KC-001", 2, "debug", null, null))
+        .thenReturn(new BossPrefetchStatusDto(7L, "PENDING", 1, null, false, null));
+
+    assertThatThrownBy(
+            () ->
+                service.fetchProblem(
+                    1,
+                    new BossProblemRequest(2, null, 2, "PY43-KC-001", "debug", null, null, null),
+                    7L))
+        .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
+        .hasMessageContaining("仍在生成");
+
+    verify(graphClient, never())
+        .requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("Graph 出题服务不可用时返回服务错误，不发放通用占位题")
+  void graphProblemUnavailableDoesNotIssueGenericGoldenProblem() {
+    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenThrow(new RestClientException("graph down"));
+
+    assertThatThrownBy(
+            () ->
+                service.fetchProblem(
+                    1,
+                    new BossProblemRequest(2, null, 2, "PY43-KC-001", "debug", null, null, null),
+                    7L))
+        .isInstanceOfSatisfying(
+            com.pythontopia.common.error.BusinessException.class,
+            exception -> {
+              assertThat(exception.code()).isEqualTo("BOSS_PROBLEM_GENERATION_UNAVAILABLE");
+              assertThat(exception.status())
+                  .isEqualTo(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE);
+            });
+
+    verify(pregenService, never()).persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any());
+  }
+
+  @Test
   @DisplayName("同一图生成 ID 不会跨用户或同用户复用隐藏测试")
   void generatedProblemsReceiveUniqueUserScopedIds() {
     when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
@@ -360,14 +402,14 @@ class BossServiceTest {
                     lastPracticed.plusDays(10),
                     lastPracticed.plusDays(10))));
     when(graphClient.selectFrontier(
-            any(), any(), any(), any(), any(), any(), anyInt(), any()))
+            any(), any(), any(), any(), any(), anyInt(), any()))
         .thenReturn(
             new FrontierSelectResultDto(
                 List.of(new FrontierPickDto("PY43-KC-001", 1, 4, "最近发展区"))));
 
     service.selectFrontier(
         7L,
-        new FrontierSelectRequest(null, List.of(), 1, List.of(), 4));
+        new FrontierSelectRequest(null, List.of("PY43-KC-001"), 1, List.of(), 4));
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
@@ -377,7 +419,6 @@ class BossServiceTest {
         .selectFrontier(
             any(),
             confidenceCaptor.capture(),
-            any(),
             any(),
             any(),
             any(),

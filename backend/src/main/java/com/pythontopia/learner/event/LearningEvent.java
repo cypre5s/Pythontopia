@@ -72,8 +72,8 @@ public sealed interface LearningEvent
   record DebugResolved(Long userId, String kcCode, Long problemId) implements LearningEvent {}
 
   /**
-   * 学生消费了多模态学习内容（章节讲解视频 / AI 动画 / 知识点图解）。{@code mediaType} 形如
-   * {@code video} / {@code storyboard} / {@code illustration}；用于把多模态消费回流到画像
+   * 学生消费了学习内容（章节视频 / 课件 / AI 动画 / 知识点图解）。{@code mediaType} 形如
+   * {@code video} / {@code courseware} / {@code storyboard} / {@code illustration}；用于把消费回流到画像
    * {@code learning_preference} 维度（媒介偏好），驱动后续个性化推送。
    */
   record MediaConsumed(

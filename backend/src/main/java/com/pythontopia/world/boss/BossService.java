@@ -27,7 +27,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -48,7 +47,7 @@ import org.springframework.web.client.RestClientException;
  *
  * <ul>
  *   <li>把 chapter + stage 翻译成默认 KC 范围（与前端 {@code MAIN_QUEST_BOSSES} 表一致）；
- *   <li>调 {@link BossGraphClient} 拉 AI 出题，失败时退化到 golden 兜底题；
+ *   <li>调 {@link BossGraphClient} 拉经过审查的题目；上游不可用时返回可重试服务错误；
  *   <li>用进程内 cache 持有完整 {@link BossInternalProblem}（含 hidden testCases），
  *       {@link #evaluateAttempt} 时取出转发给 graph evaluate；
  *   <li>graph 评测失败时返回结构化兜底，提示前端用 Pyodide 校验。
@@ -101,7 +100,7 @@ public class BossService {
   }
 
   /**
-   * 无尽远征知识前沿选择（下沉自前端）：从权威掌握度 + 画像 + 近期 KC，调 graph 选择器返回候选。
+   * 无尽远征知识前沿选择（下沉自前端）：使用权威掌握度、画像与正式练习时间调 graph 选择器。
    *
    * <p>graph 不可达或返回空结果时显式 503；禁止用前端默认 KC 冒充画像自适应结果。
    */
@@ -134,7 +133,6 @@ public class BossService {
               mastery,
               confidence,
               authoritativeSignals(userId, request.profileSignals()),
-              request.recentKcs(),
               request.focusChapter(),
               request.exclude(),
               request.count(),
@@ -210,9 +208,27 @@ public class BossService {
       return problem.toPublic();
     }
 
-    // 3) 个性化预生成与 approved bank 均未命中 → 现场走 graph 出题（失败回退 golden）。
+    BossPrefetchStatusDto prefetchStatus =
+        pregenService.getPrefetchStatus(
+            userId,
+            chapter,
+            request.stage(),
+            kc,
+            difficulty,
+            request.preferredKind(),
+            request.arenaLevel(),
+            expeditionRunId);
+    if (prefetchStatus != null && "PENDING".equals(prefetchStatus.status())) {
+      throw new com.pythontopia.common.error.BusinessException(
+          org.springframework.http.HttpStatus.CONFLICT,
+          "BOSS_PREFETCH_PENDING",
+          "题目仍在生成，请稍后重试");
+    }
+
+    // 3) 个性化预生成与 approved bank 均未命中 → 现场走 graph 出题。
+    BossInternalProblem fromGraph;
     try {
-      BossInternalProblem fromGraph =
+      fromGraph =
           graphClient.requestProblem(
               userId,
               chapter,
@@ -222,24 +238,31 @@ public class BossService {
               request.preferredKc(),
               request.preferredKind(),
               authoritativeSignals(userId, request.profileSignals()));
-      if (fromGraph != null && fromGraph.problemId() != null) {
-        requireProblemContext(fromGraph, chapter, request.stage());
-        BossInternalProblem issued = fromGraph.issueAs(ISSUE_ID_PREFIX + UUID.randomUUID(), kc);
-        cache.put(new ProblemCacheKey(userId, issued.problemId()), new CachedProblem(issued, Instant.now()));
-        // 现场题也落库 (CONSUMED)，供内存缓存过期 / 进程重启后判题兜底取回 testCases（best-effort）。
-        pregenService.persistConsumed(
-            userId, chapter, kc, request.preferredKind(), request.arenaLevel(), difficulty,
-            issued, expeditionRunId);
-        evictExpired();
-        return issued.toPublic();
-      }
     } catch (RestClientException ex) {
       LOG.warn(
-          "graph boss problem failed, fallback to golden ({}): {}",
+          "graph boss problem unavailable ({}): {}",
           ex.getClass().getSimpleName(),
           ex.getMessage());
+      throw new com.pythontopia.common.error.BusinessException(
+          org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+          "BOSS_PROBLEM_GENERATION_UNAVAILABLE",
+          "题目生成服务暂不可用，请稍后重试");
     }
-    return buildGoldenProblem(chapter, request.stage(), kc, difficulty);
+    if (fromGraph == null || fromGraph.problemId() == null) {
+      throw new com.pythontopia.common.error.BusinessException(
+          org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+          "BOSS_PROBLEM_GENERATION_UNAVAILABLE",
+          "题目生成服务暂不可用，请稍后重试");
+    }
+    requireProblemContext(fromGraph, chapter, request.stage());
+    BossInternalProblem issued = fromGraph.issueAs(ISSUE_ID_PREFIX + UUID.randomUUID(), kc);
+    cache.put(new ProblemCacheKey(userId, issued.problemId()), new CachedProblem(issued, Instant.now()));
+    // 现场题也落库 (CONSUMED)，供内存缓存过期 / 进程重启后判题兜底取回 testCases（best-effort）。
+    pregenService.persistConsumed(
+        userId, chapter, kc, request.preferredKind(), request.arenaLevel(), difficulty,
+        issued, expeditionRunId);
+    evictExpired();
+    return issued.toPublic();
   }
 
   /**
@@ -715,25 +738,6 @@ public class BossService {
       return normalized;
     }
     return ChapterCatalog.kcCodes(safeChapter).get(0);
-  }
-
-  BossProblemDto buildGoldenProblem(int chapter, int stage, String kcCode, int difficulty) {
-    String title = String.format(Locale.ROOT, "第 %d 章 Stage %d · Golden", chapter, stage);
-    String statement =
-        "Graph 服务未连接，使用 golden 兜底题。\n\n请实现：读入两个整数 a b，输出 a+b。";
-    return new BossProblemDto(
-        String.format(Locale.ROOT, "golden-c%d-s%d", chapter, stage),
-        chapter,
-        stage,
-        Math.min(5, Math.max(1, difficulty)),
-        kcCode,
-        title + "\n\n" + statement,
-        List.of("用 input().split() 拿到两段字符串", "map(int, ...) 转 int"),
-        "2 3",
-        "5",
-        3,
-        false,
-        false);
   }
 
   /** 分数：通过时取 max(80, 通过率*100)；未通过时取 通过率*60。 */

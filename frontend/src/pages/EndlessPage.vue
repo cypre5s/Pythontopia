@@ -140,11 +140,7 @@ const lastScore = computed<number>(() => run.history.value[0]?.score ?? 0);
 
 // 提交期出错（判题服务不可用）时，若题目仍在则允许「重试提交」，否则「重新开始」。
 async function onRetry(): Promise<void> {
-  if (run.problem.value) {
-    await onSubmit();
-  } else {
-    await onStartRun();
-  }
+  await run.retry();
 }
 
 // 对标做题页（/training?problemId=476）的 OJ 排布：
@@ -290,7 +286,7 @@ async function copySample(text: string): Promise<void> {
           test-id="endless-retry"
           @click="onRetry"
         >
-          {{ run.problem.value ? '重试提交' : '重新开始' }}
+          {{ run.retryAction.value === 'submit' ? '重试提交' : run.retryAction.value === 'next' ? '重试取题' : '重新开始' }}
         </PyButton>
       </div>
 

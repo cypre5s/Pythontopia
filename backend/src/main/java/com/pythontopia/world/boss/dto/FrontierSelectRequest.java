@@ -9,11 +9,10 @@ import java.util.List;
 /**
  * 无尽远征「知识前沿选择器」请求 body。
  *
- * <p>掌握度由后端从 {@code MasteryRepository} 权威读取，不从前端传（防刷 / 单一事实源）；
- * 前端只传画像信号、近期 KC（间隔重复）、聚焦章节、排除集与候选数量。
+ * <p>掌握度、画像与练习时间由后端权威读取；近期 KC 字段保留给旧客户端兼容但不参与排序。
  *
  * @param profileSignals 学生画像信号（弱项 / 成功率 / 韧性等）
- * @param recentKcs 近期练过的 KC（最近在前），用于间隔重复
+ * @param recentKcs 旧客户端字段，服务端忽略并使用正式练习事件时间
  * @param focusChapter 聚焦章节 1..7（null=全局自适应）
  * @param exclude 排除的 KC（本局已用，避免重复）
  * @param count 需要的候选数量 1..40

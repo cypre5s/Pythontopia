@@ -64,10 +64,12 @@ export interface UseEndlessRunReturn {
   history: Ref<EndlessHistoryEntry[]>;
   elapsedSec: Ref<number>;
   errorMessage: Ref<string>;
+  retryAction: Ref<'start' | 'next' | 'submit' | null>;
   failureRate: Ref<number>;
   startRun: () => Promise<void>;
   submit: () => Promise<void>;
   nextProblem: () => Promise<void>;
+  retry: () => Promise<void>;
   abort: () => void;
   tickSecond: () => void;
 }
@@ -148,6 +150,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
   const currentDifficulty = ref<number>(2);
   const elapsedSec = ref<number>(0);
   const errorMessage = ref<string>('');
+  const retryAction = ref<'start' | 'next' | 'submit' | null>('start');
   const history = ref<EndlessHistoryEntry[]>(loadHistory());
   const profileSignals = useProfileSignals();
 
@@ -162,6 +165,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
 
   async function _fetchAndStart(): Promise<void> {
     phase.value = 'loading';
+    problem.value = null;
     lastResult.value = null;
     code.value = '';
     elapsedSec.value = 0;
@@ -201,6 +205,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
       problem.value = fetched;
       currentDifficulty.value = clampDifficulty(fetched.difficulty);
       phase.value = 'playing';
+      retryAction.value = null;
       // 进入答题即后台预生成「下一题」（不 await）：玩家做题时后端把下一题落 READY，
       // nextProblem 时后端 claimReady 近乎瞬时返回；失败由调用方保留正常现场出题路径。
       void prefetchNext().catch((error) => {
@@ -215,6 +220,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
   }
 
   async function startRun(): Promise<void> {
+    retryAction.value = 'start';
     streak.value = 0;
     totalScore.value = 0;
     attempts.value = 0;
@@ -259,9 +265,11 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
       errorMessage.value =
         `判题服务暂不可用，本次不计分，请稍后重试。（${error instanceof Error ? error.message : String(error)}）`;
       lastResult.value = null;
+      retryAction.value = 'submit';
       phase.value = 'error';
       return;
     }
+    retryAction.value = null;
     const passed = backendResult.passed;
     const finalResult: BossAttemptResultDto = {
       ...backendResult,
@@ -324,12 +332,24 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
   async function nextProblem(): Promise<void> {
     // 「就绪预取」存于后端 pregenerated_problem (READY)：_fetchAndStart → 后端 fetchProblem 优先
     // claimReady，命中即瞬时返回（省去等 LLM），未命中自然回退现场出题。无需前端缓存题目本体。
+    retryAction.value = 'next';
     await _fetchAndStart();
+  }
+
+  async function retry(): Promise<void> {
+    if (retryAction.value === 'submit') {
+      await submit();
+    } else if (retryAction.value === 'next') {
+      await _fetchAndStart();
+    } else {
+      await startRun();
+    }
   }
 
   function abort(): void {
     phase.value = 'idle';
     problem.value = null;
+    retryAction.value = null;
   }
 
   function tickSecond(): void {
@@ -351,10 +371,12 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
     history,
     elapsedSec,
     errorMessage,
+    retryAction,
     failureRate,
     startRun,
     submit,
     nextProblem,
+    retry,
     abort,
     tickSecond,
   };

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.error.ResourceNotFoundException;
+import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.coursepack.service.CourseVideoService;
 import com.pythontopia.mainline.domain.ChapterStar;
@@ -37,6 +38,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 主线域核心服务：关卡地图总览 + stage 三件套打点（R-14 看/学/练标准聚合）。
@@ -90,6 +93,7 @@ public class MainlineService implements MainlineStageCompletionPort {
   private final CoursePackRepository coursePackRepository;
   private final MainlineOjCatalogRepository ojCatalogRepository;
   private final Optional<MainlinePracticePort> practicePort;
+  private final ApplicationEventPublisher eventPublisher;
 
   public MainlineService(
       MainlineStageRepository stageRepository,
@@ -104,7 +108,8 @@ public class MainlineService implements MainlineStageCompletionPort {
       CourseVideoService courseVideoService,
       CoursePackRepository coursePackRepository,
       MainlineOjCatalogRepository ojCatalogRepository,
-      Optional<MainlinePracticePort> practicePort) {
+      Optional<MainlinePracticePort> practicePort,
+      ApplicationEventPublisher eventPublisher) {
     this.stageRepository = stageRepository;
     this.progressRepository = progressRepository;
     this.starRepository = starRepository;
@@ -118,6 +123,7 @@ public class MainlineService implements MainlineStageCompletionPort {
     this.coursePackRepository = coursePackRepository;
     this.ojCatalogRepository = ojCatalogRepository;
     this.practicePort = practicePort;
+    this.eventPublisher = eventPublisher;
   }
 
   // --- 总览 -----------------------------------------------------------------
@@ -249,6 +255,7 @@ public class MainlineService implements MainlineStageCompletionPort {
   // --- 三件套打点 -----------------------------------------------------------
 
   /** 视频时长上报：钳制单次上限 + 每分钟限频；超频 no-op（幂等软节流），不报错。 */
+  @Transactional
   public StageProgressDto reportVideoProgress(long userId, long stageId, int deltaSec) {
     MainlineStage raw = requireStage(stageId);
     requireChapterUnlocked(userId, raw.chapter());
@@ -258,10 +265,17 @@ public class MainlineService implements MainlineStageCompletionPort {
       return progressDto(userId, stage, progressRepository.find(userId, stageId).orElse(null), false);
     }
     MainlineStageProgress progress = progressRepository.addVideoSeconds(userId, stageId, clamped);
+    if (stage.requiredVideoSec() > 0
+        && StageCompletion.videoComplete(stage, progress)
+        && progressRepository.claimVideoConsumed(userId, stageId)) {
+      eventPublisher.publishEvent(
+          new LearningEvent.MediaConsumed(userId, "video", stage.chapter(), stage.kcCodes()));
+    }
     return progressDto(userId, stage, progress, true);
   }
 
   /** 课件页阅读打点（单页，并集去重，幂等）。不属于本小节课件切片的 pageId 直接丢弃（no-op）。 */
+  @Transactional
   public StageProgressDto reportPageRead(long userId, long stageId, long pageId) {
     MainlineStage raw = requireStage(stageId);
     requireChapterUnlocked(userId, raw.chapter());
@@ -271,6 +285,7 @@ public class MainlineService implements MainlineStageCompletionPort {
       return progressDto(userId, stage, progressRepository.find(userId, stageId).orElse(null), false);
     }
     MainlineStageProgress progress = progressRepository.addPageRead(userId, stageId, pageId);
+    publishCoursewareConsumedIfComplete(userId, stage, progress);
     return progressDto(userId, stage, progress, true);
   }
 
@@ -278,6 +293,7 @@ public class MainlineService implements MainlineStageCompletionPort {
    * 课件页阅读批量打点（并集去重，幂等）。<b>白名单过滤</b>：只接受本小节课件切片内的 pageId，
    * 其余静默丢弃——否则把 stageDetail 回传的整章页 id 原样 POST 回来即可 0 秒过「学」。
    */
+  @Transactional
   public StageProgressDto reportPagesRead(long userId, long stageId, List<Long> pageIds) {
     MainlineStage raw = requireStage(stageId);
     requireChapterUnlocked(userId, raw.chapter());
@@ -287,7 +303,18 @@ public class MainlineService implements MainlineStageCompletionPort {
       return progressDto(userId, stage, progressRepository.find(userId, stageId).orElse(null), false);
     }
     MainlineStageProgress progress = progressRepository.addPagesRead(userId, stageId, accepted);
+    publishCoursewareConsumedIfComplete(userId, stage, progress);
     return progressDto(userId, stage, progress, true);
+  }
+
+  private void publishCoursewareConsumedIfComplete(
+      long userId, MainlineStage stage, MainlineStageProgress progress) {
+    if (!stage.coursewarePageIds().isEmpty()
+        && StageCompletion.pagesComplete(stage, progress)
+        && progressRepository.claimCoursewareConsumed(userId, stage.id())) {
+      eventPublisher.publishEvent(
+          new LearningEvent.MediaConsumed(userId, "courseware", stage.chapter(), stage.kcCodes()));
+    }
   }
 
   /**

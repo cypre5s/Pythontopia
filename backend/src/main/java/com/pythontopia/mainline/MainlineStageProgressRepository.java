@@ -70,6 +70,26 @@ public class MainlineStageProgressRepository {
     return find(userId, stageId).orElseThrow();
   }
 
+  /** Atomically claim the single learning event for completed video progress. */
+  public boolean claimVideoConsumed(long userId, long stageId) {
+    return jdbcTemplate.update(
+            "UPDATE mainline_stage_progress SET video_consumed_at = now()"
+                + " WHERE user_id = ? AND stage_id = ? AND video_consumed_at IS NULL",
+            userId,
+            stageId)
+        > 0;
+  }
+
+  /** Atomically claim the single learning event for completed courseware progress. */
+  public boolean claimCoursewareConsumed(long userId, long stageId) {
+    return jdbcTemplate.update(
+            "UPDATE mainline_stage_progress SET courseware_consumed_at = now()"
+                + " WHERE user_id = ? AND stage_id = ? AND courseware_consumed_at IS NULL",
+            userId,
+            stageId)
+        > 0;
+  }
+
   /** 课件页阅读打点：并集去重（幂等）。 */
   public MainlineStageProgress addPageRead(long userId, long stageId, long pageId) {
     jdbcTemplate.update(

@@ -26,10 +26,16 @@ def test_focus_chapter_restricts_pool() -> None:
     assert all(p.chapter == 2 for p in picks)
 
 
-def test_recent_kc_pushed_down() -> None:
-    picks = select_frontier(mastery={}, recent_kcs=["PY43-KC-001"], focus_chapter=1, count=7)
+def test_persisted_recent_practice_pushed_down() -> None:
+    picks = select_frontier(
+        mastery={},
+        last_practiced={"PY43-KC-001": "2026-06-18T00:00:00Z"},
+        now=datetime(2026, 6, 19, tzinfo=timezone.utc),
+        focus_chapter=1,
+        count=7,
+    )
     order = [p.kc_code for p in picks]
-    assert order[-1] == "PY43-KC-001"  # 刚练过 → 强力压制到末位
+    assert order[-1] == "PY43-KC-001"  # 正式练习时间显示刚练过 → 压制到末位
 
 
 def test_persisted_last_practiced_prioritizes_stale_mastered_kc() -> None:
@@ -84,7 +90,7 @@ def test_select_frontier_route_smoke() -> None:
         json={
             "mastery": [{"kcCode": "PY43-KC-001", "masteryScore": 0.5, "confidence": 0.3}],
             "profileSignals": {"weakKcCodes": ["PY43-KC-005"]},
-            "recentKcs": ["PY43-KC-001"],
+            "recentKcs": ["PY43-KC-001"],  # 旧客户端信号不应覆盖服务端练习证据
             "lastPracticed": {"PY43-KC-002": "2026-04-01T00:00:00Z"},
             "focusChapter": 1,
             "count": 3,
@@ -97,3 +103,12 @@ def test_select_frontier_route_smoke() -> None:
     for pick in body["picks"]:
         assert pick["chapter"] == 1
         assert 1 <= pick["difficulty"] <= 5
+
+
+def test_route_ignores_legacy_client_recent_kcs() -> None:
+    response = TestClient(app).post(
+        "/agents/boss/select-frontier",
+        json={"recentKcs": ["PY43-KC-001"], "focusChapter": 1, "count": 2},
+    )
+    assert response.status_code == 200
+    assert response.json()["picks"][0]["kcCode"] == "PY43-KC-001"

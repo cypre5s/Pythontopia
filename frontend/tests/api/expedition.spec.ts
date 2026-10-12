@@ -55,11 +55,11 @@ describe('expedition.ts · frontier selector', () => {
       },
     });
 
-    await requestFrontierPicks({ focusChapter: 1, recentKcs: ['PY43-KC-001'], count: 4 });
+    await requestFrontierPicks({ focusChapter: 1, count: 4 });
 
     expect(http.post).toHaveBeenCalledWith(
       '/api/world/boss/select-frontier',
-      { recentKcs: ['PY43-KC-001'], exclude: [], count: 4, focusChapter: 1 },
+      { exclude: [], count: 4, focusChapter: 1 },
       { suppressNetworkToast: true, timeout: 3000 },
     );
   });
