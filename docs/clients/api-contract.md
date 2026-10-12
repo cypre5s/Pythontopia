@@ -255,18 +255,20 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 | 方法 | 路径 | 鉴权 | 说明 |
 | --- | --- | --- | --- |
 | POST | `/api/world/boss/select-frontier` | Bearer | 服务端以掌握度和 learner profile 选择真实 KC 前沿；失败或空结果返回 `503 EXPEDITION_ADAPTATION_UNAVAILABLE`，客户端不得用本地默认 KC 冒充画像结果 |
-| POST | `/api/world/boss/{chapter}/problem` | Bearer | 按 KC、题型、纵深难度取题；远征客户端只接受 `aiGenerated=true && reviewed=true` |
-| POST | `/api/world/boss/{chapter}/prefetch` | Bearer | 创建/复用同 `chapter + stage + kc + kind + arenaLevel + difficulty + expeditionRunId` 的预加载任务，返回 `202` + `BossPrefetchStatusDto` |
-| GET | `/api/world/boss/{chapter}/prefetch` | Bearer | 用 `preferredKc`、`preferredKind`、`arenaLevel`、`difficulty` 和可选 `stage`、`expeditionRunId` 查询状态；省略 stage 兼容旧客户端并按其他维度查询 |
+| POST | `/api/world/boss/{chapter}/problem` | Bearer | 按 KC、题型、纵深难度取题；远征必须同时传服务端签发的 `expeditionRunId` 与 `expeditionNodeId`，题目只绑定当前 run 中可挑战的节点；远征客户端只接受 `aiGenerated=true && reviewed=true` |
+| POST | `/api/world/boss/{chapter}/prefetch` | Bearer | 创建/复用同 `chapter + stage + kc + kind + arenaLevel + difficulty + expeditionRunId + expeditionNodeId` 的预加载任务，返回 `202` + `BossPrefetchStatusDto` |
+| GET | `/api/world/boss/{chapter}/prefetch` | Bearer | 用 `preferredKc`、`preferredKind`、`arenaLevel`、`difficulty` 和可选 `stage`、`expeditionRunId`、`expeditionNodeId` 查询状态；省略 stage 兼容旧客户端并按其他维度查询 |
 | POST | `/api/world/boss/{chapter}/attempt` | Bearer | 正式提交，判题结果入库；公开样例的本地预览不能代替该接口 |
 | GET | `/api/world/expedition/run` | STUDENT | 取本人活动存档；返回的 `score` 和 `verifiedDepth` 由服务端判题账本计算，空存档返回 `204` |
 | POST | `/api/world/expedition/run` | STUDENT | body `{ focusChapter: 1..7|null, isDaily }`；服务端选择学习前沿、生成地图并初始化 run，返回带服务端 `runId` 的快照 |
-| PUT | `/api/world/expedition/run` | STUDENT | 更新本人活动存档；不能创建新局或改写活动 `runId`、聚焦章节、地图拓扑/题目配置；HP、节点进度、遗物、历史仍是展示快照，`score` / `verifiedDepth` 由服务端判题账本计算 |
+| PUT | `/api/world/expedition/run` | STUDENT | 兼容旧客户端的校验入口；只校验活动 `runId`、章节和地图拓扑并返回服务端快照，不写入客户端提交的 phase、HP、节点状态、气势、遗物或历史，也不能创建新局 |
+| POST | `/api/world/expedition/run/actions` | STUDENT | 执行单个服务端校验的远征动作并返回 canonical 快照。`action` 为 `ENTER_NODE`、`EVENT_REVIEW`、`EVENT_STUDY`、`EVENT_STEADY`、`CLAIM_RELIC`、`SETTLE_CHALLENGE`、`FINISH`；按动作传 `nodeId`、`relicId` 或 `problemId`。结算会核对该 run、题目、节点绑定及本人正式判题账本；客户端不提交 HP、分数或通关结果 |
 | DELETE | `/api/world/expedition/run` | STUDENT | 弃局并结束本人活动存档 |
 
 `BossPrefetchStatusDto = { jobId, status, attempts, errorMessage, retryable, updatedAt }`，其中
 `status ∈ { IDLE, PENDING, READY, FAILED }`。只有审查通过且带隐藏测试的 AI 题可进入 `READY`；
 `FAILED` 以相同维度再次 `POST` 会增加 attempts 并重试。题目正文与隐藏测试从不进入预加载状态响应。
+远征题目预生成记录按 `runId + nodeId` 绑定；远征 SETTLE 只接受同一绑定下已入库的正式判题结果。同一题的结算请求可安全重试，重复题不会跨节点结算。
 
 > **星级（`chapter_star` 权威，0–3★）**：1★ = 章末测试最高分 ≥ 60；2★ = 1★ 且本章全部 stage 三件套（看+学+练）过线；
 > 3★ = 2★ 且（本章 KC 平均掌握度 ≥ 0.80 且测试最高分 ≥ 85）。补星每章每途径至多 +1、封顶 3★、幂等、只升不降。

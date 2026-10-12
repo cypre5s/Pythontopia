@@ -12,8 +12,8 @@ import java.util.Map;
  * 无尽远征一局 run 的可持久化快照 DTO（前后端同构；前端 stores/rogueRun PersistShape + api/expedition.ts
  * ExpeditionRunSnapshot 的对端）。
  *
- * <p>服务端签发的 runId、章节绑定和地图拓扑/题目配置不可由快照改写。节点进度、HP、遗物和历史仍由客户端提供， 只用于续局展示/玩法；不得用于正式成绩、学习奖励或已通关认定。
- * verifiedDepth 同样只由服务端判题账本派生；请求中的值会被忽略。
+ * <p>服务端签发的 runId、章节绑定和地图拓扑/题目配置不可由快照改写。PUT 请求只用于兼容性校验，服务端不从快照写入节点进度、HP、遗物或历史。
+ * verifiedDepth 与 score 只由服务端判题账本派生；请求中的值不会被用于正式成绩、学习奖励或已通关认定。
  *
  * <p>nodes 用 {@code List<Map<String,Object>>} 透传前端 RogueNode[]，后端比对其固定拓扑与题目字段；history 整体存取，
  * 不用于成绩、奖励或通关事实来源。

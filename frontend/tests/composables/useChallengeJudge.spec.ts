@@ -101,15 +101,16 @@ describe('useChallengeJudge preload state', () => {
     expect(apiMock.requestBossProblem).not.toHaveBeenCalled();
   });
 
-  it('forwards the active expedition run id to the server-issued problem', async () => {
+  it('forwards the active expedition run and node ids to the server-issued problem', async () => {
     const judge = useChallengeJudge();
     const expeditionRunId = '123e4567-e89b-12d3-a456-426614174000';
+    const expeditionNodeId = 'L0-0';
 
-    await judge.fetchProblem({ ...ARGS, expeditionRunId });
+    await judge.fetchProblem({ ...ARGS, expeditionRunId, expeditionNodeId });
 
     expect(apiMock.requestBossProblem).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ preferredKc: ARGS.kc, expeditionRunId }),
+      expect.objectContaining({ preferredKc: ARGS.kc, expeditionRunId, expeditionNodeId }),
       { allowGoldenFallback: false },
     );
   });

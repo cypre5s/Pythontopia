@@ -105,7 +105,7 @@ function onSubmit(): void {
 const showMapModal = ref(false);
 function onFinishRun(): void {
   showMapModal.value = false;
-  run.finishRun();
+  void run.finishRun();
 }
 
 const bossChapter = computed<number>(() => {
@@ -224,7 +224,8 @@ function nodeTooltip(node: RogueNode): string {
   if (node.difficulty > 0) parts.push(`难度 ${node.difficulty}/5`);
   if (node.kind === 'rest') parts.push('恢复体力');
   if (node.kind === 'chest') parts.push('三选一学习增益');
-  if (node.state === 'cleared') parts.push('已通关');
+  if (run.phase === 'map' && node.id === run.currentNodeId && node.state === 'current') parts.push('当前节点，点击继续');
+  else if (node.state === 'cleared') parts.push('已通关');
   else if (node.state === 'available') parts.push('可前往');
   else if (node.state === 'bypassed') parts.push('已绕过');
   else if (node.state === 'locked') parts.push('未解锁');
@@ -247,10 +248,12 @@ const kcSummary = computed<{ kcCode: string; passed: number; total: number }[]>(
 });
 
 function nodeClass(node: RogueNode): Record<string, boolean> {
+  const resumableCurrent = run.phase === 'map' && node.id === run.currentNodeId && node.state === 'current';
   return {
     'exp-node': true,
     [`exp-node--${node.kind}`]: true,
     'is-available': node.state === 'available',
+    'is-current': resumableCurrent,
     'is-cleared': node.state === 'cleared',
     'is-locked': node.state === 'locked',
     'is-bypassed': node.state === 'bypassed',
@@ -546,7 +549,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
                 :ref="(el) => setNodeEl(node.id, el)"
                 type="button"
                 :class="nodeClass(node)"
-                :disabled="node.state !== 'available'"
+                :disabled="node.state !== 'available' && !(run.phase === 'map' && node.id === run.currentNodeId && node.state === 'current')"
                 :title="nodeTooltip(node)"
                 :data-testid="`expedition-node-${node.id}`"
                 @click="onEnter(node)"
@@ -709,7 +712,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
             <span
               v-if="run.activeNode?.kind === 'boss'"
               class="exp-chip exp-chip--boss"
-            >阶段 {{ run.bossPhase }} / {{ run.bossPhasesTotal }}</span>
+            >阶段 {{ run.activeBossPhase }} / {{ run.bossPhasesTotal }}</span>
           </template>
           <template #actions>
             <p
@@ -729,7 +732,16 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
             </PyButton>
             <template v-else>
               <PyButton
-                v-if="run.challengeResult.passed"
+                v-if="run.settlementPending"
+                variant="primary"
+                test-id="expedition-settlement-retry"
+                :disabled="run.loading"
+                @click="run.continueAfterChallenge()"
+              >
+                {{ run.loading ? '结算中…' : '重试结算' }}
+              </PyButton>
+              <PyButton
+                v-else-if="run.challengeResult.passed"
                 variant="primary"
                 test-id="expedition-continue"
                 @click="run.continueAfterChallenge()"
@@ -1357,11 +1369,13 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
   font-family: inherit;
   transition: transform 0.1s, box-shadow 0.1s;
 }
-.exp-node.is-available {
+.exp-node.is-available,
+.exp-node.is-current {
   border-color: var(--pyt-color-warning);
   box-shadow: 2px 2px 0 var(--pyt-color-warning);
 }
-.exp-node.is-available:hover {
+.exp-node.is-available:hover,
+.exp-node.is-current:hover {
   transform: translateY(-2px);
 }
 .exp-node.is-cleared {

@@ -8,6 +8,7 @@ import { http } from '@/api/http';
 import {
   createExpeditionRun,
   deleteExpeditionRun,
+  performExpeditionAction,
   fetchExpeditionRun,
   requestFrontierPicks,
   saveExpeditionRun,
@@ -121,5 +122,26 @@ describe('expedition.ts · run persistence API', () => {
       suppressNetworkToast: true,
       timeout: 3000,
     });
+  });
+
+  it('sends a typed node action and returns the backend canonical snapshot', async () => {
+    const canonical = { ...RUN, currentNodeId: 'L0-0', phase: 'challenge' as const };
+    vi.mocked(http.post).mockResolvedValueOnce({ data: canonical });
+
+    await expect(performExpeditionAction({
+      runId: '123e4567-e89b-12d3-a456-426614174000',
+      action: 'ENTER_NODE',
+      nodeId: 'L0-0',
+    })).resolves.toEqual(canonical);
+
+    expect(http.post).toHaveBeenCalledWith(
+      '/api/world/expedition/run/actions',
+      {
+        runId: '123e4567-e89b-12d3-a456-426614174000',
+        action: 'ENTER_NODE',
+        nodeId: 'L0-0',
+      },
+      { suppressNetworkToast: true, timeout: 3000 },
+    );
   });
 });

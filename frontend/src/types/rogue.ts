@@ -34,6 +34,8 @@ export interface RogueNode {
   /** 出边：可前往的下一层节点 id 列表。 */
   next: string[];
   state: RogueNodeState;
+  /** 服务端维护的多阶段 BOSS 进度。 */
+  bossPhase?: number;
 }
 
 export interface RogueMap {

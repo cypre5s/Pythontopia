@@ -80,6 +80,8 @@ public class BossController {
           String preferredKind,
       @RequestParam(required = false) String arenaLevel,
       @RequestParam(required = false) String expeditionRunId,
+      @RequestParam(required = false) @Pattern(regexp = "^[A-Za-z0-9_-]{1,32}$")
+          String expeditionNodeId,
       @CurrentUser CurrentUserPrincipal user) {
     Long userId = user == null ? null : user.userId();
     return service.prefetchStatus(
@@ -90,6 +92,7 @@ public class BossController {
         preferredKind,
         arenaLevel,
         expeditionRunId,
+        expeditionNodeId,
         userId);
   }
 

@@ -40,8 +40,8 @@ class EndlessPregenServiceTest {
             eq("PY43-KC-001"), eq("dual_track"), eq(null)))
         .thenReturn(reviewedProblem());
     when(jdbcTemplate.update(
-            contains("status = 'READY'"), anyString(), eq("ai-1"), eq(19L), eq(7L), eq(1),
-            eq(2), isNull(), eq(1)))
+            contains("status = 'READY'"), anyString(), eq("ai-1"), anyString(), eq(19L), eq(7L),
+            eq(1), eq(2), isNull(), isNull(), eq(1)))
         .thenReturn(1);
 
     service.generatePrefetch(
@@ -49,8 +49,8 @@ class EndlessPregenServiceTest {
 
     verify(jdbcTemplate)
         .update(
-            contains("status = 'READY'"), anyString(), eq("ai-1"), eq(19L), eq(7L), eq(1),
-            eq(2), isNull(), eq(1));
+            contains("status = 'READY'"), anyString(), eq("ai-1"), anyString(), eq(19L), eq(7L),
+            eq(1), eq(2), isNull(), isNull(), eq(1));
   }
 
   @Test
@@ -93,8 +93,8 @@ class EndlessPregenServiceTest {
     when(jdbcTemplate.queryForList(anyString(), any(Object[].class)))
         .thenReturn(List.of(Map.of("id", 19L, "payload", payload)));
     when(jdbcTemplate.update(
-            contains("status = 'CONSUMED'"), anyString(), anyString(), org.mockito.ArgumentMatchers.isNull(),
-            org.mockito.ArgumentMatchers.eq(19L), org.mockito.ArgumentMatchers.isNull()))
+            contains("status = 'CONSUMED'"), anyString(), anyString(), isNull(), isNull(), anyString(),
+            org.mockito.ArgumentMatchers.eq(19L), org.mockito.ArgumentMatchers.isNull(), isNull()))
         .thenReturn(1);
 
     var claimed = service.claimReady(7L, 1, 2, "PY43-KC-001", 2, "dual_track", null, null);
@@ -107,9 +107,12 @@ class EndlessPregenServiceTest {
             contains("status = 'CONSUMED'"),
             org.mockito.ArgumentMatchers.eq(claimed.orElseThrow().problemId()),
             savedPayload.capture(),
-            org.mockito.ArgumentMatchers.isNull(),
+            isNull(),
+            isNull(),
+            anyString(),
             org.mockito.ArgumentMatchers.eq(19L),
-            org.mockito.ArgumentMatchers.isNull());
+            isNull(),
+            isNull());
     assertThat(new ObjectMapper().readTree(savedPayload.getValue()).path("problemId").asText())
         .isEqualTo(claimed.orElseThrow().problemId());
   }
@@ -138,8 +141,8 @@ class EndlessPregenServiceTest {
             eq("PY43-KC-001"), eq("dual_track"), eq(null)))
         .thenReturn(reviewedProblem());
     when(jdbcTemplate.update(
-            contains("status = 'READY'"), anyString(), eq("ai-1"), eq(19L), eq(7L), eq(1),
-            eq(2), isNull(), eq(1)))
+            contains("status = 'READY'"), anyString(), eq("ai-1"), anyString(), eq(19L), eq(7L),
+            eq(1), eq(2), isNull(), isNull(), eq(1)))
         .thenReturn(0);
 
     service.generatePrefetch(
@@ -147,8 +150,8 @@ class EndlessPregenServiceTest {
 
     verify(jdbcTemplate)
         .update(
-            contains("attempt_count = ?"), anyString(), eq("ai-1"), eq(19L), eq(7L), eq(1),
-            eq(2), isNull(), eq(1));
+            contains("attempt_count = ?"), anyString(), eq("ai-1"), anyString(), eq(19L), eq(7L),
+            eq(1), eq(2), isNull(), isNull(), eq(1));
   }
 
   @Test
@@ -169,8 +172,8 @@ class EndlessPregenServiceTest {
             eq(31L), eq(1));
     verify(jdbcTemplate, org.mockito.Mockito.never())
         .update(
-            contains("status = 'READY'"), anyString(), anyString(), eq(31L), eq(7L),
-            eq(1), eq(2), isNull(), eq(1));
+            contains("status = 'READY'"), anyString(), anyString(), anyString(), eq(31L), eq(7L),
+            eq(1), eq(2), isNull(), isNull(), eq(1));
   }
 
   private BossInternalProblem reviewedProblem() {

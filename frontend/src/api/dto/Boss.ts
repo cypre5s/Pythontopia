@@ -86,6 +86,8 @@ export interface BossProblemRequest {
   profileSignals?: ProfileSignalsDto;
   /** 当前学生的活跃远征 run；由后端校验并绑定判题奖励。 */
   expeditionRunId?: string;
+  /** 将远征题目绑定到服务端签发地图中的一个具体节点。 */
+  expeditionNodeId?: string;
 }
 
 export type BossPrefetchStatus = 'IDLE' | 'PENDING' | 'READY' | 'FAILED';
