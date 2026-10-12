@@ -6,10 +6,12 @@ import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
+import com.pythontopia.tutor.dto.TutorWorkflowAttachmentDto;
 import jakarta.validation.Valid;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.web.multipart.MultipartFile;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -57,6 +59,17 @@ public class TutorWorkflowController {
       @Valid @RequestBody TutorWorkflowFeedbackRequest request) {
     requireStudent(user);
     service.recordFeedback(user.userId(), sessionKey, request);
+  }
+
+  @PostMapping(
+      value = "/sessions/{sessionKey}/attachments",
+      consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+  public TutorWorkflowAttachmentDto uploadAttachment(
+      @CurrentUser CurrentUserPrincipal user,
+      @PathVariable String sessionKey,
+      @RequestParam("file") MultipartFile file) {
+    requireStudent(user);
+    return service.uploadAttachment(user.userId(), sessionKey, file);
   }
 
   private void requireStudent(CurrentUserPrincipal user) {

@@ -3,7 +3,11 @@ package com.pythontopia.tutor;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.coursepack.domain.CoursePage;
+import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.submission.dto.PublicProblemDto;
 import com.pythontopia.submission.dto.SubmissionDetailDto;
@@ -14,6 +18,7 @@ import com.pythontopia.submission.repository.PublicProblemRepository;
 import com.pythontopia.submission.service.SubmissionService;
 import com.pythontopia.tutor.dto.TutorWorkflowCardDto;
 import com.pythontopia.tutor.dto.TutorWorkflowAgentStateDto;
+import com.pythontopia.tutor.dto.TutorWorkflowAttachmentDto;
 import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
@@ -22,7 +27,10 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.UUID;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,6 +55,8 @@ public class TutorWorkflowService {
   private static final int MAX_CHAT_MESSAGE_LENGTH = 2000;
   private static final Pattern IMAGE_DATA_URI =
       Pattern.compile("(?i)data:image/(?:png|jpeg|gif|webp);base64,");
+  private static final Pattern EXPLICIT_REFERENCE =
+      Pattern.compile("@card:([A-Za-z0-9:_-]+)|@courseware:([0-9]+)");
 
   /** 唯一课程知识底座 Alethicode packId=43（AGENTS 硬约束）。 */
   private static final long COURSE_PACK_ID = 43L;
@@ -57,25 +67,31 @@ public class TutorWorkflowService {
   private static final SecureRandom RANDOM = new SecureRandom();
 
   private final TutorWorkflowRepository repository;
+  private final TutorWorkflowAttachmentService attachmentService;
   private final TutorWorkflowGraphClient graphClient;
   private final TutorService tutorService;
   private final PublicProblemRepository problemRepository;
+  private final CoursePackRepository coursePackRepository;
   private final SubmissionService submissionService;
   private final ApplicationEventPublisher eventPublisher;
   private final ObjectMapper objectMapper;
 
   public TutorWorkflowService(
       TutorWorkflowRepository repository,
+      TutorWorkflowAttachmentService attachmentService,
       TutorWorkflowGraphClient graphClient,
       TutorService tutorService,
       PublicProblemRepository problemRepository,
+      CoursePackRepository coursePackRepository,
       SubmissionService submissionService,
       ApplicationEventPublisher eventPublisher,
       ObjectMapper objectMapper) {
     this.repository = repository;
+    this.attachmentService = attachmentService;
     this.graphClient = graphClient;
     this.tutorService = tutorService;
     this.problemRepository = problemRepository;
+    this.coursePackRepository = coursePackRepository;
     this.submissionService = submissionService;
     this.eventPublisher = eventPublisher;
     this.objectMapper = objectMapper;
@@ -92,6 +108,16 @@ public class TutorWorkflowService {
     snapshot.put("phase", session.phase());
     snapshot.put("seq", session.seq());
     snapshot.put("cards", cards);
+    repository
+        .findAgentState(session.id())
+        .map(this::readStoredState)
+        .map(state -> state.path("episode_plan"))
+        .filter(JsonNode::isObject)
+        .ifPresent(
+            plan ->
+                snapshot.put(
+                    "episodePlan",
+                    objectMapper.convertValue(plan, new TypeReference<Map<String, Object>>() {})));
     return snapshot;
   }
 
@@ -99,6 +125,7 @@ public class TutorWorkflowService {
   public SseEmitter run(Long userId, TutorWorkflowRunRequest request) {
     PublicProblemDto problem = requireProblem(request.problemId());
     TutorWorkflowSessionDto session = findOrCreate(userId, request.problemId());
+    UUID runId = UUID.randomUUID();
 
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("session_id", session.sessionKey());
@@ -107,6 +134,7 @@ public class TutorWorkflowService {
     body.put("problem", problemContext(problem));
     Map<String, Object> eventData = new HashMap<>(request.eventDataOrEmpty());
     validateEventData(request.event(), eventData);
+    resolveReferences(request.event(), session, eventData);
     Map<String, Object> diagnosis = resolveDiagnosis(userId, request, eventData);
     if (diagnosis != null) {
       body.put("diagnosis", diagnosis);
@@ -114,7 +142,6 @@ public class TutorWorkflowService {
     body.put("event_data", eventData);
     body.put("profile_brief", tutorService.resolveProfileBrief(userId, null));
     body.put("coach_mode", true);
-    repository.findAgentState(session.id()).ifPresent(state -> restoreAgentState(body, state));
     // 投影回放：graph 进程内已有会话时忽略；重启后据此恢复阶段（持久化为权威）。
     body.put("restore_phase", session.phase());
     body.put("restore_seq", session.seq());
@@ -122,6 +149,7 @@ public class TutorWorkflowService {
         repository.findRecentCards(session.id(), MAX_RESTORE_CARDS);
     body.put("restore_cards", restoreCards(session, recentCards));
     body.put("restore_chat_history", restoreChatHistory(recentCards));
+    repository.findAgentState(session.id()).ifPresent(state -> restoreAgentState(body, state));
 
     SseEmitter emitter = new SseEmitter(180_000L);
     graphClient.runStream(
@@ -130,12 +158,17 @@ public class TutorWorkflowService {
         emitter,
         resultJson -> {
           try {
-            persistProjection(session, request, resultJson);
+            persistProjection(session, request, runId, resultJson);
           } catch (Exception e) {
             log.warn("Failed to persist tutor workflow projection", e);
           }
         });
     return emitter;
+  }
+
+  public TutorWorkflowAttachmentDto uploadAttachment(
+      Long userId, String sessionKey, org.springframework.web.multipart.MultipartFile file) {
+    return attachmentService.upload(userId, sessionKey, file);
   }
 
   /** 记录学生对导学动作/卡片的显式反馈；失败不应由前端阻塞导学主链路。 */
@@ -248,6 +281,15 @@ public class TutorWorkflowService {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST, "TUTOR_IMAGES_UNSUPPORTED", "图片输入仅支持导学对话");
     }
+    if (rawImages != null) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "TUTOR_IMAGES_UNSUPPORTED", "图片必须先上传为会话私有附件");
+    }
+    Object rawAttachmentIds = eventData.get("attachment_ids");
+    if (rawAttachmentIds != null && !"CHAT".equals(event)) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "TUTOR_IMAGES_UNSUPPORTED", "图片输入仅支持导学对话");
+    }
     if (!"CHAT".equals(event)) {
       return;
     }
@@ -262,22 +304,120 @@ public class TutorWorkflowService {
           HttpStatus.BAD_REQUEST, "TUTOR_MESSAGE_INVALID", "导学消息超过长度限制或包含图片数据");
     }
 
-    if (rawImages != null) {
-      if (!(rawImages instanceof List<?> images)
-          || images.size() > 3
-          || images.stream()
-              .anyMatch(image -> !(image instanceof String value) || value.length() > 8_000_000)) {
+    List<?> attachmentIds = List.of();
+    if (rawAttachmentIds != null) {
+      if (!(rawAttachmentIds instanceof List<?> ids)) {
         throw new BusinessException(
-            HttpStatus.BAD_REQUEST, "TUTOR_IMAGES_INVALID", "图片数量或大小超出限制");
+            HttpStatus.BAD_REQUEST, "TUTOR_IMAGES_INVALID", "图片附件数量无效");
       }
-      if (message.isBlank() && !images.isEmpty()) {
+      if (ids.size() > 3 || ids.stream().anyMatch(id -> !(id instanceof String))) {
+        throw new BusinessException(
+            HttpStatus.BAD_REQUEST, "TUTOR_IMAGES_INVALID", "图片附件数量无效");
+      }
+      for (Object attachmentId : ids) {
+        try {
+          UUID.fromString((String) attachmentId);
+        } catch (IllegalArgumentException e) {
+          throw new BusinessException(
+              HttpStatus.BAD_REQUEST, "TUTOR_IMAGES_INVALID", "图片附件引用无效");
+        }
+      }
+      attachmentIds = ids;
+      if (message.isBlank() && !ids.isEmpty()) {
         eventData.put("message", "请结合图片帮我分析。");
       }
     }
-    if (message.isBlank() && (rawImages == null || ((List<?>) rawImages).isEmpty())) {
+    if (message.isBlank() && attachmentIds.isEmpty()) {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST, "TUTOR_MESSAGE_REQUIRED", "请输入问题或上传图片");
     }
+  }
+
+  private void resolveReferences(
+      String event, TutorWorkflowSessionDto session, Map<String, Object> eventData) {
+    eventData.remove("references");
+    if (!"CHAT".equals(event) && !"AGENT_FEEDBACK".equals(event)) {
+      return;
+    }
+
+    Object rawMessage = eventData.get("message");
+    String message = rawMessage instanceof String text ? text : "";
+    Matcher matcher = EXPLICIT_REFERENCE.matcher(message);
+    List<String> tokens = new ArrayList<>();
+    while (matcher.find()) {
+      String token =
+          matcher.group(1) == null
+              ? "courseware:" + matcher.group(2)
+              : "card:" + matcher.group(1);
+      if (!tokens.contains(token)) {
+        tokens.add(token);
+      }
+      if (tokens.size() > 5) {
+        throw new BusinessException(
+            HttpStatus.BAD_REQUEST, "TUTOR_REFERENCES_INVALID", "最多引用 5 条内容");
+      }
+    }
+
+    List<Map<String, Object>> references = new ArrayList<>();
+    List<TutorWorkflowCardDto> cards = null;
+    for (String token : tokens) {
+      if (token.startsWith("card:")) {
+        if (cards == null) {
+          cards = repository.findCards(session.id());
+        }
+        String cardId = token.substring("card:".length());
+        TutorWorkflowCardDto card =
+            cards.stream()
+                .filter(candidate -> matchesCardId(session, candidate, cardId))
+                .findFirst()
+                .orElseThrow(this::referenceNotFound);
+        JsonNode payload = card.payload();
+        references.add(
+            Map.of(
+                "kind", "card",
+                "card_id", cardId,
+                "card_key", card.cardKey(),
+                "snippet", cardShortText(card.cardKey(), payload)));
+      } else {
+        long pageId;
+        try {
+          pageId = Long.parseLong(token.substring("courseware:".length()));
+        } catch (NumberFormatException e) {
+          throw referenceNotFound();
+        }
+        CoursePage page =
+            coursePackRepository
+                .findPageById(pageId)
+                .filter(candidate -> Long.valueOf(COURSE_PACK_ID).equals(candidate.packId()))
+                .orElseThrow(this::referenceNotFound);
+        String snippet =
+            page.excerpt() == null || page.excerpt().isBlank()
+                ? nullSafe(page.contentMarkdown()).trim()
+                : page.excerpt().trim();
+        Map<String, Object> reference = new LinkedHashMap<>();
+        reference.put("kind", "courseware");
+        reference.put("page_id", page.id());
+        reference.put("page_no", page.pageNo());
+        reference.put("chapter_id", page.chapterId());
+        reference.put("title", nullSafe(page.title()));
+        reference.put("snippet", snippet.substring(0, Math.min(2000, snippet.length())));
+        references.add(reference);
+      }
+    }
+    eventData.put("references", references);
+  }
+
+  private boolean matchesCardId(
+      TutorWorkflowSessionDto session, TutorWorkflowCardDto card, String requestedId) {
+    String storedId = card.payload().path("card_id").asText("");
+    return requestedId.equals(storedId)
+        || requestedId.equals(session.sessionKey() + ":" + card.seq())
+        || requestedId.equals("seq-" + card.seq());
+  }
+
+  private BusinessException referenceNotFound() {
+    return new BusinessException(
+        HttpStatus.BAD_REQUEST, "TUTOR_REFERENCE_NOT_FOUND", "引用内容不可用");
   }
 
   private List<Map<String, Object>> restoreCards(
@@ -352,8 +492,8 @@ public class TutorWorkflowService {
     if (message instanceof String text && !text.isBlank()) {
       return text;
     }
-    Object images = eventData.get("images");
-    return images instanceof List<?> list && !list.isEmpty() ? "请结合图片帮我分析。" : "";
+    Object attachments = eventData.get("attachment_ids");
+    return attachments instanceof List<?> list && !list.isEmpty() ? "请结合图片帮我分析。" : "";
   }
 
   /**
@@ -427,9 +567,12 @@ public class TutorWorkflowService {
     }
   }
 
-  /** result 投影落库：更新会话 phase/seq + 插入卡片（含 ai_reply 的 user_message 回放）。 */
+  /** result 投影落库：同一 run_id 下 progress/state/card/event 原子提交。 */
   private void persistProjection(
-      TutorWorkflowSessionDto session, TutorWorkflowRunRequest request, String resultJson)
+      TutorWorkflowSessionDto session,
+      TutorWorkflowRunRequest request,
+      UUID runId,
+      String resultJson)
       throws Exception {
     JsonNode root = objectMapper.readTree(resultJson);
     // AG-UI RUN_FINISHED 形状是 {"result": {...}}；历史名 result 是裸体。两种都接。
@@ -437,61 +580,203 @@ public class TutorWorkflowService {
     String phase = result.path("phase").asText(session.phase());
     int seq = result.path("seq").asInt(session.seq());
     String event = result.path("event").asText(request.event());
-    repository.updateProgress(session.id(), phase, seq);
-    persistAgentProjection(session.id(), seq, event, result);
+
+    TutorWorkflowAgentStateDto previousState =
+        repository
+            .findAgentState(session.id())
+            .orElse(new TutorWorkflowAgentStateDto(session.id(), "{}", "{}"));
+    String checkpointJson = checkpointJson(result, previousState);
+    JsonNode coachDecision = result.path("coach_decision");
+    String decisionJson =
+        coachDecision.isObject()
+            ? objectMapper.writeValueAsString(coachDecision)
+            : safeJson(previousState.decisionJson(), "{}");
 
     JsonNode card = result.path("card");
     String cardKey = result.path("card_key").asText(null);
+    String cardPayloadJson = null;
     if (card.isObject() && cardKey != null && !cardKey.isBlank()) {
       JsonNode payload = card;
       if ("ai_reply".equals(cardKey)) {
-        com.fasterxml.jackson.databind.node.ObjectNode enriched = card.deepCopy();
+        ObjectNode enriched = card.deepCopy();
         enriched.put("user_message", chatMessage(request));
         payload = enriched;
       }
-      repository.insertCard(
-          session.id(), seq, event, cardKey, objectMapper.writeValueAsString(payload));
-      insertActionEvent(session.id(), seq, event, cardKey, result);
+      ensureTextOnly(payload);
+      cardPayloadJson = objectMapper.writeValueAsString(payload);
     }
+    String actionPayloadJson =
+        actionPayloadJson(runId, event, cardKey, result);
+    repository.persistRunProjection(
+        session.id(),
+        new TutorWorkflowRepository.RunProjection(
+            runId,
+            phase,
+            seq,
+            event,
+            checkpointJson,
+            decisionJson,
+            cardPayloadJson == null ? null : cardKey,
+            cardPayloadJson,
+            actionPayloadJson));
   }
 
   private void restoreAgentState(
       Map<String, Object> body, TutorWorkflowAgentStateDto agentState) {
     try {
-      Map<String, Object> state =
-          objectMapper.readValue(
-              agentState.stateJson(), new TypeReference<Map<String, Object>>() {});
-      if (!state.isEmpty()) {
-        body.put("student_state", state);
+      JsonNode stored = objectMapper.readTree(agentState.stateJson());
+      if (stored == null || !stored.isObject()) {
+        return;
+      }
+      boolean wrapped =
+          stored.has("student_state") || stored.has("episode_plan") || stored.has("chat_history");
+      JsonNode studentState = wrapped ? stored.path("student_state") : stored;
+      if (studentState.isObject() && !studentState.isEmpty()) {
+        body.put(
+            "student_state",
+            objectMapper.convertValue(studentState, new TypeReference<Map<String, Object>>() {}));
+      }
+      JsonNode episodePlan = stored.path("episode_plan");
+      if (wrapped && episodePlan.isObject()) {
+        body.put(
+            "episode_plan",
+            objectMapper.convertValue(episodePlan, new TypeReference<Map<String, Object>>() {}));
+      }
+      JsonNode chatHistory = stored.path("chat_history");
+      if (wrapped && chatHistory.isArray()) {
+        body.put("restore_chat_history", safeChatHistory(chatHistory));
       }
     } catch (Exception e) {
       log.warn("Failed to restore tutor workflow agent state", e);
     }
   }
 
-  private void persistAgentProjection(Long sessionId, int seq, String event, JsonNode result)
+  private String checkpointJson(JsonNode result, TutorWorkflowAgentStateDto previous)
       throws Exception {
+    JsonNode previousState = readStoredState(previous);
+    boolean wrapped =
+        previousState.has("student_state")
+            || previousState.has("episode_plan")
+            || previousState.has("chat_history");
     JsonNode studentState = result.path("student_state");
-    JsonNode coachDecision = result.path("coach_decision");
-    if (studentState.isObject() || coachDecision.isObject()) {
-      repository.upsertAgentState(
-          sessionId,
-          studentState.isObject() ? objectMapper.writeValueAsString(studentState) : "{}",
-          coachDecision.isObject() ? objectMapper.writeValueAsString(coachDecision) : "{}");
+    JsonNode episodePlan = result.path("episode_plan");
+    JsonNode resumeChatHistory = result.path("resume_chat_history");
+    ObjectNode checkpoint = objectMapper.createObjectNode();
+    JsonNode previousStudentState = wrapped ? previousState.path("student_state") : previousState;
+    checkpoint.set(
+        "student_state",
+        studentState.isObject() ? studentState : objectOrEmpty(previousStudentState));
+    JsonNode previousPlan = previousState.path("episode_plan");
+    JsonNode savedPlan = episodePlan.isObject() ? episodePlan : previousPlan;
+    if (savedPlan.isObject()) {
+      checkpoint.set("episode_plan", savedPlan);
+    }
+    JsonNode historySource =
+        resumeChatHistory.isArray() ? resumeChatHistory : previousState.path("chat_history");
+    checkpoint.set("chat_history", objectMapper.valueToTree(safeChatHistory(historySource)));
+    ensureTextOnly(checkpoint);
+    return objectMapper.writeValueAsString(checkpoint);
+  }
+
+  private JsonNode readStoredState(TutorWorkflowAgentStateDto agentState) {
+    return readStoredState(agentState.stateJson());
+  }
+
+  private JsonNode readStoredState(String stateJson) {
+    try {
+      JsonNode state = objectMapper.readTree(stateJson);
+      return state != null && state.isObject() ? state : objectMapper.createObjectNode();
+    } catch (Exception e) {
+      log.warn("Failed to read tutor workflow checkpoint", e);
+      return objectMapper.createObjectNode();
     }
   }
 
-  private void insertActionEvent(
-      Long sessionId, int seq, String event, String cardKey, JsonNode result) throws Exception {
-    Map<String, Object> payload = new LinkedHashMap<>();
+  private JsonNode objectOrEmpty(JsonNode value) {
+    return value != null && value.isObject() ? value : objectMapper.createObjectNode();
+  }
+
+  private List<Map<String, String>> safeChatHistory(JsonNode history) {
+    if (history == null || !history.isArray()) {
+      return List.of();
+    }
+    List<Map<String, String>> safe = new ArrayList<>();
+    for (JsonNode turn : history) {
+      if (!turn.isObject()) {
+        continue;
+      }
+      String role = turn.path("role").asText("");
+      String content = turn.path("content").asText("");
+      if (!("user".equals(role) || "assistant".equals(role))
+          || content.isBlank()
+          || IMAGE_DATA_URI.matcher(content).find()) {
+        continue;
+      }
+      safe.add(Map.of("role", role, "content", limitText(content)));
+    }
+    return safe.size() <= MAX_RESTORE_CHAT_TURNS
+        ? safe
+        : safe.subList(safe.size() - MAX_RESTORE_CHAT_TURNS, safe.size());
+  }
+
+  private void ensureTextOnly(JsonNode node) {
+    if (node.isTextual()) {
+      if (IMAGE_DATA_URI.matcher(node.asText()).find()) {
+        throw new IllegalArgumentException("Tutor checkpoint cannot persist image data");
+      }
+      return;
+    }
+    if (node.isObject()) {
+      node.fields()
+          .forEachRemaining(
+              field -> {
+                String key = field.getKey().toLowerCase(Locale.ROOT);
+                if (key.contains("image") || key.contains("base64") || key.contains("bytes")) {
+                  throw new IllegalArgumentException("Tutor checkpoint cannot persist image data");
+                }
+                ensureTextOnly(field.getValue());
+              });
+      return;
+    }
+    if (node.isArray()) {
+      node.forEach(this::ensureTextOnly);
+    }
+  }
+
+  private String actionPayloadJson(UUID runId, String event, String cardKey, JsonNode result)
+      throws Exception {
+    ObjectNode payload = objectMapper.createObjectNode();
+    payload.put("run_id", runId.toString());
     payload.put("event", event);
-    payload.put("card_key", cardKey);
+    if (cardKey != null && !cardKey.isBlank()) {
+      payload.put("card_key", cardKey);
+    }
     JsonNode coachDecision = result.path("coach_decision");
     if (coachDecision.isObject()) {
-      payload.put("coach_decision", coachDecision);
+      payload.set("coach_decision", coachDecision);
     }
-    repository.insertActionEvent(
-        sessionId, seq, "CARD_GENERATED", cardKey, objectMapper.writeValueAsString(payload));
+    JsonNode episodePlan = result.path("episode_plan");
+    if (episodePlan.isObject()) {
+      payload.set("episode_plan", episodePlan);
+    }
+    JsonNode episodePatch = result.path("episode_patch");
+    if (episodePatch.isObject()) {
+      payload.set("episode_patch", episodePatch);
+    }
+    ensureTextOnly(payload);
+    return objectMapper.writeValueAsString(payload);
+  }
+
+  private String safeJson(String value, String fallback) {
+    if (value == null || value.isBlank()) {
+      return fallback;
+    }
+    try {
+      JsonNode parsed = objectMapper.readTree(value);
+      return parsed != null && parsed.isObject() ? objectMapper.writeValueAsString(parsed) : fallback;
+    } catch (Exception e) {
+      return fallback;
+    }
   }
 
   private static String nullSafe(String value) {

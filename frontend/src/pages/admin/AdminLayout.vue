@@ -187,13 +187,19 @@ watch(() => route.fullPath, closeNavigation);
 
 <style scoped>
 .admin-shell {
-  --admin-bg: #f5f7fb;
+  --admin-bg: linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
   --admin-surface: #fff;
   --admin-border: #e2e8f0;
-  --admin-text: #172033;
+  --admin-text: #0f172a;
   --admin-muted: #64748b;
   --admin-primary: #2563eb;
-  --admin-primary-soft: #eff6ff;
+  --admin-primary-hover: #1d4ed8;
+  --admin-primary-soft: rgb(37 99 235 / 8%);
+  --admin-panel-muted: #f6f9fc;
+  --admin-table-header: #eef4fb;
+  --admin-table-hover: #f8fbff;
+  --admin-panel-radius: 16px;
+  --admin-panel-shadow: 0 6px 18px rgb(15 23 42 / 8%);
   position: relative;
   display: flex;
   min-height: 100vh;
@@ -212,7 +218,9 @@ watch(() => route.fullPath, closeNavigation);
   width: 240px;
   flex-direction: column;
   border-right: 1px solid var(--admin-border);
-  background: var(--admin-surface);
+  background: rgb(255 255 255 / 92%);
+  backdrop-filter: blur(18px);
+  box-shadow: 10px 0 30px rgb(15 23 42 / 4%);
   transition: transform 180ms ease;
 }
 
@@ -223,6 +231,7 @@ watch(() => route.fullPath, closeNavigation);
   gap: 12px;
   padding: 16px 22px;
   border-bottom: 1px solid var(--admin-border);
+  background: rgb(255 255 255 / 60%);
   color: inherit;
   text-decoration: none;
 }
@@ -261,8 +270,8 @@ watch(() => route.fullPath, closeNavigation);
 
 .admin-nav {
   display: grid;
-  gap: 26px;
-  padding: 24px 14px;
+  gap: 22px;
+  padding: 16px 12px;
 }
 
 .admin-nav__group h2 {
@@ -275,22 +284,33 @@ watch(() => route.fullPath, closeNavigation);
 
 .admin-nav__link {
   display: flex;
-  min-height: 42px;
+  min-height: 46px;
   align-items: center;
   gap: 11px;
-  padding: 0 10px;
-  border-radius: 8px;
+  padding: 0 16px;
+  border-radius: 12px;
   color: #475569;
   font-size: 13px;
   font-weight: 600;
   text-decoration: none;
-  transition: background 140ms ease, color 140ms ease;
+  transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;
 }
 
-.admin-nav__link:hover,
-.admin-nav__link.is-active {
+.admin-nav__link:hover:not(.is-active) {
   background: var(--admin-primary-soft);
-  color: var(--admin-primary);
+  color: var(--admin-primary-hover);
+}
+
+.admin-nav__link.is-active {
+  background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+  color: #fff;
+  box-shadow: 0 12px 24px rgb(37 99 235 / 22%);
+}
+
+.admin-nav__link.is-active .admin-nav__icon {
+  border-color: rgb(255 255 255 / 36%);
+  background: rgb(255 255 255 / 14%);
+  color: #fff;
 }
 
 .admin-nav__icon {
@@ -355,7 +375,7 @@ watch(() => route.fullPath, closeNavigation);
 .admin-sidebar__logout:hover {
   border-color: #bfdbfe;
   background: var(--admin-primary-soft);
-  color: var(--admin-primary);
+  color: var(--admin-primary-hover);
 }
 
 .admin-shell__main {
@@ -398,7 +418,7 @@ watch(() => route.fullPath, closeNavigation);
   border: 1px solid #bfdbfe;
   border-radius: 999px;
   background: #eff6ff;
-  color: #1d4ed8;
+  color: var(--admin-primary-hover);
   font-size: 11px;
   font-weight: 700;
 }

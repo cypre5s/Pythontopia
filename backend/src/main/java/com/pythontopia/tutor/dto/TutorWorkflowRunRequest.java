@@ -8,11 +8,8 @@ import java.util.Map;
 /**
  * 导学工作流事件请求（前端 → Java）。
  *
- * <p>主线事件 ∈ READING / IDEATING / SKELETON / CODING / ERROR_FEEDBACK / AC_REVIEW / TRANSFER /
- * CHAT；辅助事件（不推进阶段）∈ KNOWLEDGE_REVIEW / EXECUTION_TRACE / VISUALIZE / PARSONS（白名单
- * 正则校验，阶段合法性由 graph 状态机权威判定）。eventData 按事件携带：IDEATING.thought_text、
- * CHAT.message、ERROR_FEEDBACK/AC_REVIEW.submission_id、EXECUTION_TRACE/VISUALIZE.code、
- * VISUALIZE.intent、PARSONS.sub_skill。
+ * <p>阶段卡片与辅助事件由 graph 状态机校验；Tutor 事件也包含计划推荐/开始/响应/控制，以及聊天
+ * 反馈与上下文压缩。事件数据由 graph 的逐事件 schema 再校验。
  */
 public record TutorWorkflowRunRequest(
     @NotNull Long problemId,
@@ -20,7 +17,8 @@ public record TutorWorkflowRunRequest(
         @Pattern(
             regexp =
                 "READING|IDEATING|SKELETON|CODING|ERROR_FEEDBACK|AC_REVIEW|TRANSFER|CHAT"
-                    + "|KNOWLEDGE_REVIEW|EXECUTION_TRACE|VISUALIZE|PARSONS",
+                    + "|KNOWLEDGE_REVIEW|EXECUTION_TRACE|VISUALIZE|PARSONS|AGENT_FEEDBACK"
+                    + "|COMPACT|PLAN_RECOMMEND|PLAN_START|PLAN_RESPONSE|PLAN_STEERING",
             message = "未知的工作流事件")
         String event,
     Map<String, Object> eventData) {

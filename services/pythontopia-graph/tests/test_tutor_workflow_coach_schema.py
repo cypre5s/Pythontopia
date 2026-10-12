@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import base64
-
 import pytest
 from pydantic import ValidationError
 
@@ -71,21 +69,21 @@ def test_workflow_request_and_result_keep_coach_fields_optional() -> None:
     assert result.coach_decision is None
 
 
-def test_workflow_chat_request_accepts_valid_images() -> None:
-    image = "data:image/png;base64," + base64.b64encode(b"\x89PNG\r\n\x1a\nimage").decode()
+def test_workflow_chat_request_accepts_private_attachment_ids() -> None:
+    attachment_id = "d0162eb8-8c60-4d85-a3da-3aa3f11460ba"
     request = WorkflowRunRequest(
         session_id="wf-1",
         user_id=1,
         event="CHAT",
         problem={"problem_id": 42},
-        event_data={"message": "请看图", "images": [image]},
+        event_data={"message": "请看图", "attachment_ids": [attachment_id]},
     )
 
-    assert request.event_data["images"] == [image]
+    assert request.event_data["attachment_ids"] == [attachment_id]
 
 
-def test_workflow_chat_request_rejects_invalid_image_data() -> None:
-    with pytest.raises(ValidationError, match="valid base64"):
+def test_workflow_chat_request_rejects_inline_image_bytes() -> None:
+    with pytest.raises(ValidationError, match="private attachment transport"):
         WorkflowRunRequest(
             session_id="wf-1",
             user_id=1,
@@ -115,12 +113,12 @@ def test_workflow_chat_rejects_embedded_image_data_and_oversized_messages() -> N
 
 
 def test_workflow_rejects_images_outside_chat_event() -> None:
-    image = "data:image/png;base64,aGVsbG8="
-    with pytest.raises(ValidationError, match="images are only supported for CHAT"):
+    attachment_id = "d0162eb8-8c60-4d85-a3da-3aa3f11460ba"
+    with pytest.raises(ValidationError, match="attachment_ids are only supported for CHAT"):
         WorkflowRunRequest(
             session_id="wf-1",
             user_id=1,
             event="IDEATING",
             problem={"problem_id": 42},
-            event_data={"images": [image]},
+            event_data={"attachment_ids": [attachment_id]},
         )

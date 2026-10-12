@@ -5,11 +5,9 @@ import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
 import jakarta.validation.Valid;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -19,17 +17,13 @@ import org.springframework.web.bind.annotation.*;
 @Validated
 public class LearningEventController {
 
-  private static final String MEDIA_CONSUMED = "media_consumed";
   private static final Set<String> CLIENT_EVENT_TYPES =
-      Set.of(MEDIA_CONSUMED, "quiz_finished", "answer_feedback");
+      Set.of("quiz_finished", "answer_feedback");
 
   private final LearningEventLogRepository repository;
-  private final ApplicationEventPublisher eventPublisher;
 
-  public LearningEventController(
-      LearningEventLogRepository repository, ApplicationEventPublisher eventPublisher) {
+  public LearningEventController(LearningEventLogRepository repository) {
     this.repository = repository;
-    this.eventPublisher = eventPublisher;
   }
 
   @PostMapping
@@ -45,7 +39,6 @@ public class LearningEventController {
         dto.payload() != null ? dto.payload() : Map.of(),
         "frontend",
         EventImportance.of(dto.eventType()));
-    maybePublishDomainEvent(user.userId(), dto);
   }
 
   @PostMapping("/batch")
@@ -65,7 +58,6 @@ public class LearningEventController {
           dto.payload() != null ? dto.payload() : Map.of(),
           "frontend",
           EventImportance.of(dto.eventType()));
-      maybePublishDomainEvent(user.userId(), dto);
     }
   }
 
@@ -76,36 +68,6 @@ public class LearningEventController {
           "INVALID_LEARNING_EVENT",
           "不允许客户端上报该事件");
     }
-  }
-
-  /**
-   * 把前端上报的「多模态消费」事件提升为进程内 {@link LearningEvent.MediaConsumed} 领域事件，
-   * 供 {@code PassiveProfileRevisionListener} 回流到画像 {@code learning_preference} 维度。
-   * 其余 eventType 仅审计落库（领域事件由对应后端服务在真实业务点发布）。
-   */
-  private void maybePublishDomainEvent(Long userId, LearningEventLogDto dto) {
-    if (!MEDIA_CONSUMED.equals(dto.eventType())) {
-      return;
-    }
-    Map<String, Object> payload = dto.payload() != null ? dto.payload() : Map.of();
-    Object mediaTypeRaw = payload.get("mediaType");
-    String mediaType = mediaTypeRaw == null ? "video" : String.valueOf(mediaTypeRaw);
-    Integer chapter = null;
-    Object chapterRaw = payload.get("chapter");
-    if (chapterRaw instanceof Number number) {
-      chapter = number.intValue();
-    }
-    List<String> kcCodes = new ArrayList<>();
-    Object kcRaw = payload.get("kcCodes");
-    if (kcRaw instanceof List<?> list) {
-      for (Object item : list) {
-        if (item != null) {
-          kcCodes.add(String.valueOf(item));
-        }
-      }
-    }
-    eventPublisher.publishEvent(
-        new LearningEvent.MediaConsumed(userId, mediaType, chapter, kcCodes));
   }
 
   @GetMapping

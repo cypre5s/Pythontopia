@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.learner.profile.dto.DimensionDelta;
 import com.pythontopia.learner.profile.dto.DimensionUpdateResult;
+import com.pythontopia.learner.profile.dto.LearnerProfileSignals;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
 import java.time.Instant;
 import java.util.LinkedHashMap;
@@ -280,6 +281,116 @@ public class PassiveProfileService {
               tags));
     }
     return out;
+  }
+
+  /**
+   * 读取可用于个性化的显式画像 metadata；低于 profile brief 同一置信门槛的维度不提供信号。
+   *
+   * <p>数值只按 metadata 原值和合法范围投影，不从 score 推导。访谈字段是自评快照；正式练习
+   * 的实时适应仍应使用 mastery 与服务端练习历史。
+   */
+  @Transactional(readOnly = true)
+  public LearnerProfileSignals getPersonalizationSignals(Long userId) {
+    JsonNode dimensions = profileRepository.findDimensions(userId).orElse(null);
+    if (dimensions == null || !dimensions.isObject()) {
+      return LearnerProfileSignals.empty();
+    }
+
+    JsonNode errors = confidentDimension(dimensions, "error_pattern");
+    JsonNode knowledge = confidentDimension(dimensions, "knowledge_base");
+    JsonNode practice = confidentDimension(dimensions, "practical_ability");
+    JsonNode preference = confidentDimension(dimensions, "learning_preference");
+    JsonNode emotion = confidentDimension(dimensions, "emotion_persistence");
+
+    List<String> mediaPriority = stringArray(preference, "media_priority", 4);
+    if (preference != null) {
+      for (String tag : stringArray(preference, "tags", 4)) {
+        if (mediaPriority.size() >= 4) {
+          break;
+        }
+        if (!mediaPriority.contains(tag)) {
+          mediaPriority.add(tag);
+        }
+      }
+    }
+
+    return new LearnerProfileSignals(
+        kcCodeArray(errors, "frequent_kc_codes", 6),
+        boundedInteger(knowledge, "python_self_rated_level", 0, 5),
+        boundedNumber(practice, "success_rate", 0.0, 1.0),
+        mediaPriority,
+        boundedNumber(emotion, "resilience", 0.0, 1.0),
+        boundedNumber(practice, "avg_attempts_per_problem", 0.0, 20.0));
+  }
+
+  private static JsonNode confidentDimension(JsonNode dimensions, String key) {
+    JsonNode dimension = dimensions.get(key);
+    if (dimension == null || !dimension.isObject()) {
+      return null;
+    }
+    int evidenceCount = clampEvidence(dimension.path("evidence_count").asInt(0));
+    double confidence = clamp01(evidenceCount / (double) EVIDENCE_SATURATION);
+    return confidence >= BRIEF_CONFIDENCE_FLOOR ? dimension : null;
+  }
+
+  private static List<String> stringArray(JsonNode dimension, String key, int limit) {
+    JsonNode values = dimension == null ? null : dimension.get(key);
+    if (values == null || !values.isArray()) {
+      return new java.util.ArrayList<>();
+    }
+    List<String> result = new java.util.ArrayList<>();
+    for (JsonNode value : values) {
+      if (!value.isTextual()) {
+        continue;
+      }
+      String clean = value.asText().trim();
+      if (!clean.isEmpty() && !result.contains(clean)) {
+        result.add(clean);
+        if (result.size() >= limit) {
+          break;
+        }
+      }
+    }
+    return result;
+  }
+
+  private static List<String> kcCodeArray(JsonNode dimension, String key, int limit) {
+    JsonNode values = dimension == null ? null : dimension.get(key);
+    if (values == null || !values.isArray()) {
+      return List.of();
+    }
+    List<String> codes = new java.util.ArrayList<>();
+    for (JsonNode value : values) {
+      if (!value.isTextual()) {
+        continue;
+      }
+      String code = value.asText().trim();
+      if (code.matches("PY43-KC-\\d{3}") && !codes.contains(code)) {
+        codes.add(code);
+        if (codes.size() >= limit) {
+          break;
+        }
+      }
+    }
+    return codes;
+  }
+
+  private static Integer boundedInteger(JsonNode dimension, String key, int min, int max) {
+    JsonNode value = dimension == null ? null : dimension.get(key);
+    if (value == null || !value.isIntegralNumber()) {
+      return null;
+    }
+    int number = value.asInt();
+    return number >= min && number <= max ? number : null;
+  }
+
+  private static Double boundedNumber(JsonNode dimension, String key, double min, double max) {
+    JsonNode value = dimension == null ? null : dimension.get(key);
+    if (value == null || !value.isNumber()) {
+      return null;
+    }
+    double number = value.asDouble();
+    return Double.isFinite(number) && number >= min && number <= max ? number : null;
   }
 
   /** profile_brief 注入的常规维度置信度门槛（信号不足不贴标签，防幻觉）。 */

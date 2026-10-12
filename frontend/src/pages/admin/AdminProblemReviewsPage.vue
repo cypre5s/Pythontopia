@@ -573,7 +573,7 @@ onMounted(() => {
 <style scoped>
 .admin-reviews {
   display: grid;
-  gap: 18px;
+  gap: 20px;
   min-width: 0;
 }
 
@@ -586,7 +586,7 @@ onMounted(() => {
   justify-content: center;
   padding: 0 12px;
   border: 1px solid #cbd5e1;
-  border-radius: 7px;
+  border-radius: 8px;
   background: #fff;
   color: #334155;
   font: inherit;
@@ -599,7 +599,7 @@ onMounted(() => {
 .admin-button:hover:not(:disabled),
 .review-open:hover {
   border-color: #93c5fd;
-  color: #1d4ed8;
+  color: var(--admin-primary-hover);
 }
 
 .admin-button:disabled,
@@ -611,7 +611,7 @@ onMounted(() => {
 .review-filter {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 8px;
   color: var(--admin-muted);
   font-size: 12px;
 }
@@ -620,7 +620,7 @@ onMounted(() => {
   min-height: 36px;
   padding: 0 28px 0 10px;
   border: 1px solid #cbd5e1;
-  border-radius: 7px;
+  border-radius: 8px;
   background: #fff;
   color: var(--admin-text);
   font: inherit;
@@ -645,7 +645,7 @@ onMounted(() => {
   min-height: 36px;
   padding: 0 10px;
   border: 1px solid #cbd5e1;
-  border-radius: 7px;
+  border-radius: 8px;
   color: var(--admin-text);
   font: inherit;
 }
@@ -671,8 +671,8 @@ onMounted(() => {
 .review-counts span {
   padding: 6px 10px;
   border: 1px solid #e2e8f0;
-  border-radius: 7px;
-  background: #f8fafc;
+  border-radius: 8px;
+  background: var(--admin-panel-muted);
   color: #64748b;
   font-size: 11px;
 }
@@ -720,7 +720,7 @@ onMounted(() => {
   max-width: 100%;
   overflow-x: auto;
   border: 1px solid var(--admin-border);
-  border-radius: 8px;
+  border-radius: 12px;
   outline-color: #93c5fd;
 }
 
@@ -729,17 +729,17 @@ onMounted(() => {
   min-width: 1000px;
   border-collapse: separate;
   border-spacing: 0;
-  color: #334155;
+  color: #1e293b;
   font-size: 12px;
   table-layout: fixed;
 }
 
 .review-table th {
   height: 44px;
-  padding: 0 12px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--admin-border);
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--admin-table-header);
+  color: var(--admin-text);
   font-size: 11px;
   font-weight: 700;
   text-align: left;
@@ -748,8 +748,8 @@ onMounted(() => {
 
 .review-table td {
   height: 52px;
-  padding: 8px 12px;
-  border-bottom: 1px solid #edf1f6;
+  padding: 10px 16px;
+  border-bottom: 1px solid rgb(148 163 184 / 14%);
   vertical-align: middle;
 }
 
@@ -759,7 +759,7 @@ onMounted(() => {
 
 .review-table tbody tr:hover,
 .review-table tbody tr.is-selected {
-  background: #f8fbff;
+  background: var(--admin-table-hover);
 }
 
 .review-table__id { width: 72px; }
@@ -798,7 +798,7 @@ onMounted(() => {
   padding: 0;
   border: 0;
   background: transparent;
-  color: #2563eb;
+  color: var(--admin-primary);
   font: inherit;
   font-weight: 700;
   cursor: pointer;

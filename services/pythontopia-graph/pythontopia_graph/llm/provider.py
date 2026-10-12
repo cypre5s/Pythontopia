@@ -291,8 +291,7 @@ class DryRunProvider:
         answer = (
             "基于通识知识（本地 dry-run，未接入真实大模型）：\n\n"
             f"已收到你的问题：「{question}」。\n\n"
-            "当前为离线占位答复。将 PYT_LLM_PROVIDER 切到 openai_compat 或 spark "
-            "并配置密钥后即可获得真实课件答疑。"
+            "当前为离线占位答复。配置 DeepSeek 密钥后即可获得真实课件答疑。"
         )
         for i in range(0, len(answer), 12):
             yield answer[i : i + 12]

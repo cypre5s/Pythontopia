@@ -7,11 +7,15 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.coursepack.domain.CoursePage;
+import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.submission.dto.JudgeResultDto;
 import com.pythontopia.submission.dto.PublicProblemDto;
@@ -22,6 +26,7 @@ import com.pythontopia.submission.dto.SubmissionStatus;
 import com.pythontopia.submission.dto.Verdict;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import com.pythontopia.submission.service.SubmissionService;
+import com.pythontopia.tutor.TutorWorkflowAttachmentService;
 import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowAgentStateDto;
@@ -51,18 +56,23 @@ import org.mockito.ArgumentCaptor;
 class TutorWorkflowServiceTest {
 
   private final TutorWorkflowRepository repository = mock(TutorWorkflowRepository.class);
+  private final TutorWorkflowAttachmentService attachmentService =
+      mock(TutorWorkflowAttachmentService.class);
   private final TutorWorkflowGraphClient graphClient = mock(TutorWorkflowGraphClient.class);
   private final TutorService tutorService = mock(TutorService.class);
   private final PublicProblemRepository problemRepository = mock(PublicProblemRepository.class);
+  private final CoursePackRepository coursePackRepository = mock(CoursePackRepository.class);
   private final SubmissionService submissionService = mock(SubmissionService.class);
   private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
 
   private final TutorWorkflowService service =
       new TutorWorkflowService(
           repository,
+          attachmentService,
           graphClient,
           tutorService,
           problemRepository,
+          coursePackRepository,
           submissionService,
           eventPublisher,
           new ObjectMapper());
@@ -118,6 +128,121 @@ class TutorWorkflowServiceTest {
     assertThat(problem.get("problem_id")).isEqualTo(PROBLEM);
     assertThat(problem.get("kc_codes")).isEqualTo(List.of("PY43-KC-016"));
     assertThat(body).doesNotContainKey("diagnosis");
+  }
+
+  @Test
+  void chatReferencesAreResolvedFromTheOwnedSessionCards() throws Exception {
+    String cardId = "wf-7-476-abc:x1";
+    when(repository.findCards(session.id()))
+        .thenReturn(
+            List.of(
+                new TutorWorkflowCardDto(
+                    1,
+                    "CHAT",
+                    "ai_reply",
+                    new ObjectMapper().readTree(
+                        """
+                        {"card_id":"wf-7-476-abc:x1","content":"先检查半径输入是否正确。"}
+                        """),
+                    OffsetDateTime.parse("2026-10-12T12:00:00Z"))));
+
+    service.run(
+        USER,
+        new TutorWorkflowRunRequest(
+            PROBLEM,
+            "CHAT",
+            Map.of(
+                "message", "@card:" + cardId + " 请继续解释",
+                "references", List.of(Map.of("kind", "card", "snippet", "伪造内容")))));
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> eventData = (Map<String, Object>) capturedBody().get("event_data");
+    assertThat(eventData.get("references"))
+        .isEqualTo(
+            List.of(
+                Map.of(
+                    "kind", "card",
+                    "card_id", cardId,
+                    "card_key", "ai_reply",
+                    "snippet", "先检查半径输入是否正确。")));
+  }
+
+  @Test
+  void chatRejectsReferencesOutsideTheOwnedSession() {
+    assertThatThrownBy(
+            () ->
+                service.run(
+                    USER,
+                    new TutorWorkflowRunRequest(
+                        PROBLEM, "CHAT", Map.of("message", "@card:wf-7-476-other:x1"))))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("引用内容不可用");
+  }
+
+  @Test
+  void chatReferencesOnlyPagesFromTheCoursePack() {
+    when(coursePackRepository.findPageById(88L))
+        .thenReturn(
+            Optional.of(
+                new CoursePage(
+                    88L, 43L, 12L, 4L, 17, "for 循环", "课件完整内容", "课件摘录")));
+
+    service.run(
+        USER,
+        new TutorWorkflowRunRequest(
+            PROBLEM, "CHAT", Map.of("message", "@courseware:88 请结合这页说明")));
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> eventData = (Map<String, Object>) capturedBody().get("event_data");
+    assertThat(eventData.get("references"))
+        .isEqualTo(
+            List.of(
+                Map.of(
+                    "kind", "courseware",
+                    "page_id", 88L,
+                    "page_no", 17,
+                    "chapter_id", 4L,
+                    "title", "for 循环",
+                    "snippet", "课件摘录")));
+  }
+
+  @Test
+  void chatRejectsCoursewareOutsideTheCoursePack() {
+    when(coursePackRepository.findPageById(88L))
+        .thenReturn(
+            Optional.of(
+                new CoursePage(
+                    88L, 99L, 12L, 4L, 17, "他人课件", "不应暴露", "不应暴露")));
+
+    assertThatThrownBy(
+            () ->
+                service.run(
+                    USER,
+                    new TutorWorkflowRunRequest(
+                        PROBLEM, "CHAT", Map.of("message", "@courseware:88"))))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("引用内容不可用");
+  }
+
+  @Test
+  void activeSessionReturnsPersistedEpisodePlan() throws Exception {
+    when(repository.findAgentState(session.id()))
+        .thenReturn(
+            Optional.of(
+                new TutorWorkflowAgentStateDto(
+                    session.id(),
+                    """
+                    {"student_state":{"hint_level":1},
+                     "episode_plan":{"plan_id":"plan-1","revision":3,"status":"ACTIVE"},
+                     "chat_history":[]}
+                    """,
+                    "{}")));
+
+    Map<String, Object> snapshot = service.activeSession(USER, PROBLEM);
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> episodePlan = (Map<String, Object>) snapshot.get("episodePlan");
+    assertThat(episodePlan).containsEntry("plan_id", "plan-1").containsEntry("revision", 3);
   }
 
   @Test
@@ -188,7 +313,24 @@ class TutorWorkflowServiceTest {
   }
 
   @Test
+  void runRejectsInlineImageBytesBeforeTheyEnterTheGraphEvent() {
+    assertThatThrownBy(
+            () ->
+                service.run(
+                    USER,
+                    new TutorWorkflowRunRequest(
+                        PROBLEM,
+                        "CHAT",
+                        Map.of(
+                            "message", "请看图",
+                            "images", List.of("data:image/png;base64,aGVsbG8=")))))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("私有附件");
+  }
+
+  @Test
   void imageOnlyChatGetsTextForPersistenceWithoutSavingImageData() throws Exception {
+    String attachmentId = "5db6f261-913a-4c12-b1c8-f40303dbf8a9";
     AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
     org.mockito.Mockito.doAnswer(
             invocation -> {
@@ -201,11 +343,14 @@ class TutorWorkflowServiceTest {
     service.run(
         USER,
         new TutorWorkflowRunRequest(
-            PROBLEM, "CHAT", Map.of("images", List.of("data:image/png;base64,aGVsbG8="))));
+            PROBLEM, "CHAT", Map.of("attachment_ids", List.of(attachmentId))));
     @SuppressWarnings("unchecked")
     Map<String, Object> eventData = (Map<String, Object>) capturedBody().get("event_data");
     assertThat(eventData).containsEntry("message", "请结合图片帮我分析。");
-    assertThat(eventData.get("images")).isEqualTo(List.of("data:image/png;base64,aGVsbG8="));
+    assertThat(eventData)
+        .containsEntry("attachment_ids", List.of(attachmentId))
+        .doesNotContainKey("images");
+    assertThat(capturedBody()).doesNotContainKey("private_images");
 
     onResult
         .get()
@@ -216,9 +361,10 @@ class TutorWorkflowServiceTest {
              "available_actions":[],"seq":1}}
             """);
 
-    ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
-    verify(repository).insertCard(eq(11L), eq(1), eq("CHAT"), eq("ai_reply"), payload.capture());
-    assertThat(payload.getValue()).contains("请结合图片帮我分析").doesNotContain("data:image");
+    TutorWorkflowRepository.RunProjection projection = capturedProjection();
+    assertThat(projection.cardPayloadJson())
+        .contains("请结合图片帮我分析")
+        .doesNotContain("data:image");
   }
 
   @Test
@@ -241,6 +387,52 @@ class TutorWorkflowServiceTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> state = (Map<String, Object>) capturedBody().get("student_state");
     assertThat(state).containsEntry("hint_level", 2).containsEntry("latest_verdict", "WA");
+  }
+
+  @Test
+  void runRestoresWrappedCheckpointPlanAndChatHistory() {
+    when(repository.findAgentState(session.id()))
+        .thenReturn(
+            Optional.of(
+                new TutorWorkflowAgentStateDto(
+                    session.id(),
+                    """
+                    {
+                      "student_state":{"session_id":"wf-7-476-abc","user_id":7,"problem_id":476,
+                        "phase":"CODING","hint_level":2},
+                      "episode_plan":{
+                        "plan_id":"plan-1","session_id":"wf-7-476-abc","problem_id":476,
+                        "user_id":7,"objective":"完成圆面积程序","trigger_event":"ERROR_FEEDBACK",
+                        "revision":2,"current_step_id":"step-2","status":"ACTIVE",
+                        "steps":[
+                          {"step_id":"step-1","event":"EXECUTION_TRACE","title":"观察变量",
+                           "status":"DONE"},
+                          {"step_id":"step-2","event":"SKELETON","title":"整理计算步骤",
+                           "status":"ACTIVE"}
+                        ]
+                      },
+                      "chat_history":[
+                        {"role":"user","content":"旧问题"},
+                        {"role":"assistant","content":"旧回答"}
+                      ]
+                    }
+                    """,
+                    "{}")));
+
+    service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "CHAT", Map.of("message", "继续")));
+
+    Map<String, Object> body = capturedBody();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> state = (Map<String, Object>) body.get("student_state");
+    assertThat(state).containsEntry("hint_level", 2);
+    @SuppressWarnings("unchecked")
+    Map<String, Object> plan = (Map<String, Object>) body.get("episode_plan");
+    assertThat(plan).containsEntry("plan_id", "plan-1").containsEntry("revision", 2);
+    assertThat(body.get("restore_chat_history"))
+        .isEqualTo(
+            List.of(
+                Map.of("role", "user", "content", "旧问题"),
+                Map.of("role", "assistant", "content", "旧回答")));
   }
 
   @Test
@@ -336,14 +528,16 @@ class TutorWorkflowServiceTest {
              "available_actions": [], "seq": 3}}
             """);
 
-    verify(repository).updateProgress(11L, "READING", 3);
-    ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
-    verify(repository).insertCard(eq(11L), eq(3), eq("CHAT"), eq("ai_reply"), payload.capture());
-    assertThat(payload.getValue()).contains("user_message").contains("怎么保留小数？");
+    TutorWorkflowRepository.RunProjection projection = capturedProjection();
+    assertThat(projection.phase()).isEqualTo("READING");
+    assertThat(projection.seq()).isEqualTo(3);
+    assertThat(projection.cardPayloadJson())
+        .contains("user_message")
+        .contains("怎么保留小数？");
   }
 
   @Test
-  void persistProjectionStoresCoachStateDecisionAndActionEvent() throws Exception {
+  void persistProjectionStoresWrappedStatePlanAndChatHistory() throws Exception {
     AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
     org.mockito.Mockito.doAnswer(
             invocation -> {
@@ -364,19 +558,61 @@ class TutorWorkflowServiceTest {
              "card_key": "execution_trace", "card": {"card_id": "wf-7-476-abc:x2", "summary": "看变量"},
              "student_state": {"session_id": "wf-7-476-abc", "user_id": 7, "problem_id": 476,
                "phase": "READING", "hint_level": 1, "next_best_action": "EXECUTION_TRACE"},
+             "episode_plan": {"plan_id":"plan-1","session_id":"wf-7-476-abc","problem_id":476,
+               "user_id":7,"objective":"完成圆面积程序","trigger_event":"ERROR_FEEDBACK",
+               "revision":2,"current_step_id":"step-2","status":"ACTIVE",
+               "steps":[{"step_id":"step-1","event":"EXECUTION_TRACE","title":"观察变量","status":"DONE"},
+                 {"step_id":"step-2","event":"SKELETON","title":"整理计算步骤","status":"ACTIVE"}]},
+             "resume_chat_history": [{"role":"user","content":"旧问题"},
+               {"role":"assistant","content":"旧回答"}],
+             "private_images": ["data:image/png;base64,SECRET_IMAGE_BYTES"],
              "coach_decision": {"next_event": "EXECUTION_TRACE", "tool_name": "execution_trace",
                "hint_level": 1, "action_goal": "看清实际行为", "stop_condition": "说出偏差",
                "confidence": 0.82, "reason_summary": "WA 早期先看执行轨迹"},
              "available_actions": [], "seq": 4}}
             """);
 
-    ArgumentCaptor<String> stateJson = ArgumentCaptor.forClass(String.class);
-    ArgumentCaptor<String> decisionJson = ArgumentCaptor.forClass(String.class);
-    verify(repository).upsertAgentState(eq(11L), stateJson.capture(), decisionJson.capture());
-    assertThat(stateJson.getValue()).contains("\"hint_level\":1");
-    assertThat(decisionJson.getValue()).contains("\"next_event\":\"EXECUTION_TRACE\"");
-    verify(repository)
-        .insertActionEvent(eq(11L), eq(4), eq("CARD_GENERATED"), eq("execution_trace"), any());
+    TutorWorkflowRepository.RunProjection projection = capturedProjection();
+    JsonNode savedState = new ObjectMapper().readTree(projection.stateJson());
+    assertThat(savedState.path("student_state").path("hint_level").asInt()).isEqualTo(1);
+    assertThat(savedState.path("episode_plan").path("plan_id").asText()).isEqualTo("plan-1");
+    assertThat(savedState.path("chat_history")).hasSize(2);
+    assertThat(projection.stateJson())
+        .doesNotContain("private_images", "data:image", "SECRET_IMAGE_BYTES");
+    assertThat(projection.decisionJson()).contains("\"next_event\":\"EXECUTION_TRACE\"");
+    assertThat(projection.actionPayloadJson()).contains("\"plan_id\":\"plan-1\"");
+  }
+
+  @Test
+  void duplicateTerminalCallbacksShareOneRunId() {
+    AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              onResult.set(invocation.getArgument(3));
+              return null;
+            })
+        .when(graphClient)
+        .runStream(any(), any(), any(), any());
+
+    service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "PLAN_START", Map.of("plan_id", "p1")));
+    String result = """
+        {"result":{"event":"PLAN_START","phase":"READING","seq":2}}
+        """;
+    onResult.get().accept(result);
+    onResult.get().accept(result);
+
+    ArgumentCaptor<TutorWorkflowRepository.RunProjection> projection =
+        ArgumentCaptor.forClass(TutorWorkflowRepository.RunProjection.class);
+    verify(repository, times(2)).persistRunProjection(eq(session.id()), projection.capture());
+    assertThat(projection.getAllValues().get(0).runId())
+        .isEqualTo(projection.getAllValues().get(1).runId());
+  }
+
+  private TutorWorkflowRepository.RunProjection capturedProjection() {
+    ArgumentCaptor<TutorWorkflowRepository.RunProjection> projection =
+        ArgumentCaptor.forClass(TutorWorkflowRepository.RunProjection.class);
+    verify(repository).persistRunProjection(eq(session.id()), projection.capture());
+    return projection.getValue();
   }
 
   @Test

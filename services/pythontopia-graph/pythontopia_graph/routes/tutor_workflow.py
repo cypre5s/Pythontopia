@@ -40,6 +40,7 @@ from pythontopia_graph.schemas.tutor_workflow import (
     WorkflowRunRequest,
     WorkflowRunResult,
 )
+from pythontopia_graph.tutor_workflow_attachments import fetch_tutor_workflow_attachment
 
 router = APIRouter()
 
@@ -51,7 +52,6 @@ class WorkflowRunEnvelope(WorkflowRunRequest):
     restore_seq: int = Field(default=0, ge=0)
     restore_cards: list[dict[str, Any]] = Field(default_factory=list, max_length=12)
     restore_chat_history: list[dict[str, str]] = Field(default_factory=list, max_length=20)
-
 
 def _provider(request: Request) -> LlmProvider:
     provider = getattr(request.app.state, "llm_provider", None)
@@ -125,8 +125,38 @@ async def tutor_workflow_run_stream(
                 session = await session_store.get_state(trusted_user_id, body.session_id)
                 graph = TutorWorkflowGraph(provider, evidence_fetcher, emit=emit)
                 request = WorkflowRunRequest.model_validate(
-                    body.model_dump(exclude={"restore_phase", "restore_seq"})
+                    body.model_dump(
+                        exclude={
+                            "restore_phase",
+                            "restore_seq",
+                            "restore_cards",
+                            "restore_chat_history",
+                        }
+                    )
                 )
+                plan = request.episode_plan
+                if plan is not None and (
+                    plan.session_id != body.session_id
+                    or plan.user_id != trusted_user_id
+                    or plan.problem_id != body.problem.problem_id
+                ):
+                    raise ValueError("episode plan does not belong to this user, session, and problem")
+
+                async def resolve_private_images(
+                    attachment_request: WorkflowRunRequest,
+                ) -> list[str]:
+                    attachment_ids = attachment_request.event_data.get("attachment_ids", [])
+                    if not isinstance(attachment_ids, list) or len(attachment_ids) > 3:
+                        raise ValueError("Tutor attachment references are invalid")
+                    return [
+                        await fetch_tutor_workflow_attachment(
+                            trusted_user_id,
+                            body.session_id,
+                            attachment_id,
+                        )
+                        for attachment_id in attachment_ids
+                    ]
+
                 state = await graph.run(
                     {
                         "request": request,
@@ -136,6 +166,7 @@ async def tutor_workflow_run_stream(
                         "next_practice_direction": _last_direction(session.cards),
                     },
                     cancellation_token=cancellation_token,
+                    private_image_resolver=resolve_private_images,
                 )
                 return {"state": dict(state), "session_phase": session.phase}
             finally:
@@ -169,7 +200,7 @@ async def tutor_workflow_run_stream(
             card = state.get("card")
             card_id = f"{body.session_id}:{uuid.uuid4().hex[:8]}" if card_key else None
             chat_turns: list[dict[str, str]] | None = None
-            if card_key == "ai_reply" and isinstance(card, dict):
+            if card_key == "ai_reply" and isinstance(card, dict) and body.event != "COMPACT":
                 chat_turns = [
                     {"role": "user", "content": str(body.event_data.get("message", ""))},
                     {"role": "assistant", "content": str(card.get("content", ""))},
@@ -187,7 +218,11 @@ async def tutor_workflow_run_stream(
                 short_text=_card_short_text(card_key, card) if card_key and card else "",
                 extra=extra,
                 chat_turns=chat_turns,
+                replace_chat_history=(
+                    state.get("resume_chat_history") if body.event == "COMPACT" else None
+                ),
             )
+            committed_session = await session_store.get_state(trusted_user_id, body.session_id)
             if isinstance(card, dict) and card_id is not None:
                 card = {**card, "card_id": card_id}
 
@@ -201,6 +236,9 @@ async def tutor_workflow_run_stream(
                 coach_decision=state.get("coach_decision"),
                 student_state=state.get("student_state"),
                 agentic=body.coach_mode,
+                episode_plan=state.get("episode_plan"),
+                episode_patch=state.get("episode_patch"),
+                resume_chat_history=committed_session.chat_history,
                 seq=seq,
             )
             yield sse_agui.translate("result", result.model_dump(mode="json"))

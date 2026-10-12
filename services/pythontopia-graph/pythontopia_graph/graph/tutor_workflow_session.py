@@ -105,6 +105,7 @@ async def commit_run(
     short_text: str,
     extra: dict[str, Any] | None = None,
     chat_turns: list[dict[str, str]] | None = None,
+    replace_chat_history: list[dict[str, str]] | None = None,
 ) -> int:
     """run 成功后提交阶段与时间线；返回该卡片的会话内 seq（无卡片返回当前 seq）。
 
@@ -129,6 +130,13 @@ async def commit_run(
             )
             if len(state.chat_history) > MAX_CHAT_TURNS:
                 del state.chat_history[: len(state.chat_history) - MAX_CHAT_TURNS]
+        if replace_chat_history is not None:
+            state.chat_history = [
+                {"role": turn["role"], "content": turn["content"][:2000]}
+                for turn in replace_chat_history[-MAX_CHAT_TURNS:]
+                if turn.get("role") in {"user", "assistant"}
+                and isinstance(turn.get("content"), str)
+            ]
         return state.seq
 
 

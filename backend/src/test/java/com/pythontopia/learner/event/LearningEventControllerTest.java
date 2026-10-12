@@ -12,17 +12,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.context.ApplicationEventPublisher;
 
 @ExtendWith(MockitoExtension.class)
 class LearningEventControllerTest {
 
   @Mock LearningEventLogRepository repository;
-  @Mock ApplicationEventPublisher eventPublisher;
 
   @Test
   void clientCannotForgeFormalPracticeOutcome() {
-    LearningEventController controller = new LearningEventController(repository, eventPublisher);
+    LearningEventController controller = new LearningEventController(repository);
     CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
 
     assertThatThrownBy(
@@ -32,12 +30,29 @@ class LearningEventControllerTest {
         .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
         .hasMessageContaining("不允许客户端上报该事件");
 
-    verifyNoInteractions(repository, eventPublisher);
+    verifyNoInteractions(repository);
+  }
+
+  @Test
+  void clientCannotForgeMediaConsumptionEvidence() {
+    LearningEventController controller = new LearningEventController(repository);
+    CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
+
+    assertThatThrownBy(
+            () -> controller.logEvent(
+                student,
+                new LearningEventLogDto(
+                    "media_consumed",
+                    Map.of("mediaType", "video", "chapter", 43, "kcCodes", List.of("PY43-KC-001")))))
+        .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
+        .hasMessageContaining("不允许客户端上报该事件");
+
+    verifyNoInteractions(repository);
   }
 
   @Test
   void invalidBatchIsRejectedBeforeAnyEventIsWritten() {
-    LearningEventController controller = new LearningEventController(repository, eventPublisher);
+    LearningEventController controller = new LearningEventController(repository);
     CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
     List<LearningEventLogDto> batch = List.of(
         new LearningEventLogDto("answer_feedback", Map.of("useful", true)),
@@ -46,6 +61,6 @@ class LearningEventControllerTest {
     assertThatThrownBy(() -> controller.logBatch(student, batch))
         .isInstanceOf(com.pythontopia.common.error.BusinessException.class);
 
-    verifyNoInteractions(repository, eventPublisher);
+    verifyNoInteractions(repository);
   }
 }

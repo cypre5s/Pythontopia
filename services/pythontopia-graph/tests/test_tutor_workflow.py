@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 import pytest
+import pythontopia_graph.routes.tutor_workflow as tutor_workflow_route
 
 from pythontopia_graph.agents.tutor_workflow_cards import (
     CardGenerationError,
@@ -267,7 +268,7 @@ async def test_error_feedback_requires_diagnosis() -> None:
 
 
 @pytest.mark.asyncio
-async def test_phase_progression_and_chat_keeps_phase() -> None:
+async def test_phase_progression_and_chat_keeps_phase(monkeypatch) -> None:
     session_id = "t-wf-progress"
     await session_store.reset_session(1, session_id)
     ideate_card = {"analysis": "先读入，再计算，最后格式化输出。", "steps": ["读入", "计算", "输出"]}
@@ -285,23 +286,35 @@ async def test_phase_progression_and_chat_keeps_phase() -> None:
 
     # CHAT 不改变阶段，且能携带会话内已生成的卡片上下文。
     image = "data:image/png;base64,iVBORw0KGgpzbWFsbCBpbWFnZQ=="
+    fetched: list[tuple[int, str, str]] = []
+
+    async def fetch_attachment(user_id, requested_session, attachment_id):
+        fetched.append((user_id, requested_session, attachment_id))
+        return image
+
+    monkeypatch.setattr(tutor_workflow_route, "fetch_tutor_workflow_attachment", fetch_attachment)
     chat_provider = JsonStubProvider([chat_card])
     response = await tutor_workflow_run_stream(
         _envelope(
             session_id,
             "CHAT",
-            event_data={"message": "我该怎么保留小数？", "images": [image]},
+            event_data={
+                "message": "我该怎么保留小数？",
+                "attachment_ids": ["5db6f261-913a-4c12-b1c8-f40303dbf8a9"],
+            },
         ),
         provider=chat_provider,
         evidence_fetcher=StaticEvidenceFetcher([]),
         trusted_user_id=1,
     )
     events = await _collect_sse(response)
+    assert image not in json.dumps([payload for _, payload in events], ensure_ascii=False)
     result = next(payload for event, payload in events if event == "result")
     assert result["phase"] == "IDEATING"
     assert result["card_key"] == "ai_reply"
     assert result["seq"] == 2
     assert chat_provider.kwargs["model_tier"] == "vision"
+    assert fetched == [(1, session_id, "5db6f261-913a-4c12-b1c8-f40303dbf8a9")]
     image_part = chat_provider.messages[-1]["content"][-1]
     assert image_part == {"type": "image_url", "image_url": {"url": image}}
 
@@ -350,3 +363,52 @@ async def test_restore_phase_replays_java_projection() -> None:
     assert "旧回答" in messages
     assert "[card-old|post_ac]" in messages
     assert any(action["event"] == "TRANSFER" for action in result["available_actions"])
+
+
+@pytest.mark.asyncio
+async def test_chat_uses_server_resolved_card_and_courseware_references() -> None:
+    provider = JsonStubProvider([
+        {
+            "content": "卡片中的循环边界与课件页讲解可以一起对照。",
+            "referenced_card_ids": ["wf-test:card-1", "invented-card"],
+        }
+    ])
+    agent = TutorWorkflowCardAgent(provider)
+
+    card = await agent.chat(
+        PROBLEM,
+        "READING",
+        "@card:wf-test:card-1 @courseware:10757 请结合这两处说明。",
+        [],
+        [],
+        "",
+        references=[
+            {
+                "kind": "card",
+                "card_id": "wf-test:card-1",
+                "card_key": "execution_trace",
+                "snippet": "循环变量从 0 变化到 4。",
+            },
+            {
+                "kind": "courseware",
+                "page_id": 10757,
+                "page_no": 12,
+                "chapter_id": 3,
+                "title": "for 循环",
+                "snippet": "for 循环会依次处理可迭代对象中的元素。",
+            },
+        ],
+    )
+
+    prompt = provider.messages[-1]["content"]
+    assert "循环变量从 0 变化到 4。" in prompt
+    assert "第 12 页" in prompt
+    assert card["referenced_card_ids"] == ["wf-test:card-1"]
+    assert card["courseware_refs"] == [
+        {
+            "page_no": 12,
+            "page_id": 10757,
+            "chapter_id": 3,
+            "snippet": "for 循环会依次处理可迭代对象中的元素。",
+        }
+    ]

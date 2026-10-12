@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-12 — 导学计划恢复与上下文引用
+
+- Tutor 工作流增加计划推荐、开始、响应、暂停/恢复、跳过、接管和重定向事件；计划控制携带 revision，拒绝过期状态操作，并在刷新或 Graph 重启后恢复计划与纯文本对话历史。
+- 支持 `@card:<id>` 和 `@courseware:<pageId>` 显式引用；Java 从当前会话卡片和 pack 43 课件重新解析，丢弃客户端伪造的引用数据。
+- Graph 终态投影增加 run 唯一标记，进度、checkpoint、卡片与 action event 在单事务内写入；正式提交反馈更新 tutor state，并按匹配的 ACTIVE 学习步骤推进计划。
+- Web 管理台对齐现有 admin shell 的侧栏、窄屏导航、面板与审核列表样式，仍只使用当前真实 API。
+- 清除研究 runner 中的硬编码 DeepSeek 凭证，统一改为读取 `PYT_OPENAI_API_KEY`；本地配置仍只保存在被忽略的 `deploy/.env`。
+- 验证：后端定向 103 tests（9 类）通过并将空库迁移到 V197；Graph 58 tests 与 Ruff 通过；Web 38 tests、TypeScript typecheck、ESLint 通过（0 errors / 41 warnings），`git diff --check` 通过。
+- 未运行全栈浏览器联测、真实 DeepSeek 请求或无尽远征性能测试；本地 compose 未运行且 `PYT_PISTON_URL` 未配置，无法测真实判题链路。提交事件当前没有稳定 submission ID，完全相同事件的重放仍可能重复计数。
+
 ## 2026-10-12 — Web 导学恢复、远征阶段绑定与核验展示
 
 - Java 投影恢复 Graph 重启后的 Tutor 卡片、聊天历史与下一步方向；输入校验限制消息长度、图片数量和事件范围。AutoGen 阶段 JSON 信封不含图像字节，图片仅在当轮内存上下文传递。

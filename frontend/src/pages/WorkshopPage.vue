@@ -103,6 +103,12 @@ function onSelectConversation(turns: WorkshopChatHistoryTurnDto[]): void {
   chatRef.value?.loadConversation(turns);
 }
 
+function consumePendingPrompt(): void {
+  if (!chatRef.value) return;
+  const prompt = workshopUi.takePendingPrompt();
+  if (prompt !== null) chatRef.value.prefillDraft(prompt);
+}
+
 // R-14 域1④：书房当前打开的资源 id 由 store 持有，不再进 URL（避免暴露可枚举 id）。
 const selectedId = computed<number | null>(() => workshopUi.openResourceId);
 
@@ -128,6 +134,7 @@ onMounted(async () => {
   // 故 onMounted 与 onActivated 都 add 不会重复绑定；失活/卸载时 remove。
   window.addEventListener('keydown', onKeydown);
   pageActive.value = true;
+  consumePendingPrompt();
   if (learning.field.masterySnapshot.length === 0) {
     await learning.loadField();
   }
@@ -140,6 +147,7 @@ onMounted(async () => {
 onActivated(() => {
   window.addEventListener('keydown', onKeydown);
   pageActive.value = true;
+  consumePendingPrompt();
 });
 
 // KeepAlive 失活（离开工坊但不销毁）：撤掉键盘监听、停渲染 body 上的书房弹窗，

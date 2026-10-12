@@ -16,6 +16,8 @@ from autogen_core import CancellationToken
 from pythontopia_graph.nodes.evidence_fetcher import RagHit
 from pythontopia_graph.schemas.tutor_workflow import (
     GuideCoachDecision,
+    TutorEpisodePlan,
+    TutorEpisodePlanPatch,
     TutorStudentState,
     WorkflowAction,
     WorkflowRunRequest,
@@ -23,6 +25,8 @@ from pythontopia_graph.schemas.tutor_workflow import (
 
 StateT = TypeVar("StateT")
 StageHandler = Callable[[StateT], Awaitable[StateT]]
+PrivateImageResolver = Callable[[WorkflowRunRequest], Awaitable[list[str]]]
+_PRIVATE_IMAGE_DATA_KEY = "_tutor_stage_private_image_data"
 _STATE_MARKER = "__pythontopia_tutor_state_v1__:"
 
 
@@ -30,11 +34,14 @@ class TutorWorkflowStageAgent(BaseChatAgent):
     """将一个现有 Tutor handler 包装为固定顺序的 AutoGen Agent。"""
 
     def __init__(
-        self, name: str, handler: StageHandler[Any], private_images: list[str] | None = None
+        self,
+        name: str,
+        handler: StageHandler[Any],
+        private_image_resolver: PrivateImageResolver | None = None,
     ) -> None:
         super().__init__(name=name, description=f"Fixed Tutor workflow stage: {name}")
         self._handler = handler
-        self._private_images = private_images
+        self._private_image_resolver = private_image_resolver
 
     @property
     def produced_message_types(self) -> Sequence[type[BaseChatMessage]]:
@@ -53,15 +60,21 @@ class TutorWorkflowStageAgent(BaseChatAgent):
 
         state = _latest_state(messages)
         request = state.get("request")
-        if self._private_images is not None and isinstance(request, WorkflowRunRequest):
-            state["request"] = request.model_copy(
-                update={
-                    "event_data": {
-                        **request.event_data,
-                        "images": self._private_images,
-                    }
-                }
-            )
+        if (
+            self._private_image_resolver is not None
+            and isinstance(request, WorkflowRunRequest)
+            and self.name == "generate_card"
+            and request.event == "CHAT"
+            and request.event_data.get("attachment_ids")
+        ):
+            state[_PRIVATE_IMAGE_DATA_KEY] = await self._private_image_resolver(request)
+        elif (
+            isinstance(request, WorkflowRunRequest)
+            and self.name == "generate_card"
+            and request.event == "CHAT"
+            and request.event_data.get("attachment_ids")
+        ):
+            raise RuntimeError("Tutor attachment resolver is not configured")
         updated_state = await self._handler(state)
         if not isinstance(updated_state, dict):
             raise TypeError("Tutor workflow stage must return a state object")
@@ -83,6 +96,7 @@ async def run_autogen_tutor_workflow(
     stages: Sequence[tuple[str, StageHandler[StateT]]],
     *,
     cancellation_token: CancellationToken | None = None,
+    private_image_resolver: PrivateImageResolver | None = None,
 ) -> StateT:
     """按声明顺序运行每个 Agent 一轮，并在工作流失败时停止派发。"""
     if not stages:
@@ -95,11 +109,7 @@ async def run_autogen_tutor_workflow(
         TutorWorkflowStageAgent(
             name,
             cast(StageHandler[dict[str, Any]], handler),
-            private_images=(
-                list(state["request"].event_data.get("images", []))
-                if isinstance(state.get("request"), WorkflowRunRequest)
-                else None
-            ),
+            private_image_resolver=private_image_resolver if name == "generate_card" else None,
         )
         for name, handler in stages
     ]
@@ -128,10 +138,13 @@ async def run_autogen_tutor_workflow(
 
 def _encode_state(state: dict[str, Any]) -> str:
     payload = dict(state)
+    payload.pop(_PRIVATE_IMAGE_DATA_KEY, None)
     for key, model_type in (
         ("request", WorkflowRunRequest),
         ("coach_decision", GuideCoachDecision),
         ("student_state", TutorStudentState),
+        ("episode_plan", TutorEpisodePlan),
+        ("episode_patch", TutorEpisodePlanPatch),
     ):
         value = payload.get(key)
         if value is not None:
@@ -176,6 +189,8 @@ def _decode_state(content: str) -> dict[str, Any]:
         ("request", WorkflowRunRequest),
         ("coach_decision", GuideCoachDecision),
         ("student_state", TutorStudentState),
+        ("episode_plan", TutorEpisodePlan),
+        ("episode_patch", TutorEpisodePlanPatch),
     ):
         if state.get(key) is not None:
             state[key] = model_type.model_validate(state[key])

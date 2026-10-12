@@ -10,6 +10,7 @@ import httpx
 import pytest
 
 from pythontopia_graph.llm.provider import (
+    DryRunProvider,
     FineTunedFallbackProvider,
     LlmResponse,
     RoutedFineTunedProvider,
@@ -46,6 +47,21 @@ def _openai_compat_env(monkeypatch: pytest.MonkeyPatch) -> None:
         "all_proxy",
     ):
         monkeypatch.delenv(name, raising=False)
+
+
+@pytest.mark.asyncio
+async def test_dryrun_setup_message_only_points_to_deepseek() -> None:
+    response = "".join(
+        [
+            chunk
+            async for chunk in DryRunProvider().chat_stream(
+                [{"role": "user", "content": "你好"}]
+            )
+        ]
+    )
+
+    assert "DeepSeek" in response
+    assert "spark" not in response.casefold()
 
 
 def _capture_async_client_kwargs(

@@ -8,6 +8,24 @@
 
 import { http } from './http';
 
+export interface TutorWorkflowImageAttachmentDto {
+  attachmentId: string;
+}
+
+/** 把图片上传到指定导学会话的私有短期附件区；工作流事件只携带返回的 ID。 */
+export async function uploadTutorWorkflowImage(
+  sessionKey: string,
+  file: File,
+): Promise<TutorWorkflowImageAttachmentDto> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  const response = await http.post<TutorWorkflowImageAttachmentDto>(
+    `/api/tutor/workflow/sessions/${encodeURIComponent(sessionKey)}/attachments`,
+    form,
+  );
+  return response.data;
+}
+
 export type WorkflowPhase =
   | 'READING'
   | 'IDEATING'
@@ -29,7 +47,13 @@ export type WorkflowEvent =
   | 'KNOWLEDGE_REVIEW'
   | 'EXECUTION_TRACE'
   | 'VISUALIZE'
-  | 'PARSONS';
+  | 'PARSONS'
+  | 'AGENT_FEEDBACK'
+  | 'COMPACT'
+  | 'PLAN_RECOMMEND'
+  | 'PLAN_START'
+  | 'PLAN_RESPONSE'
+  | 'PLAN_STEERING';
 
 export type WorkflowCardKey =
   | 'problem_guide'
@@ -131,6 +155,7 @@ export interface AiReplyCardDto {
   card_id?: string;
   content: string;
   referenced_card_ids: string[];
+  courseware_refs?: CoursewareRefDto[];
   /** Java 投影附带：本轮学生消息（时间线恢复用户气泡用）。 */
   user_message?: string;
 }
@@ -234,6 +259,49 @@ export interface WorkflowActionDto {
   reason?: string;
 }
 
+export type TutorEpisodePlanStatus = 'RECOMMENDED' | 'ACTIVE' | 'PAUSED' | 'COMPLETED' | 'SURRENDERED';
+
+export interface TutorEpisodeStepDto {
+  step_id: string;
+  event: WorkflowEvent;
+  tool_name: string;
+  title: string;
+  goal: string;
+  student_visible_reason: string;
+  stop_condition: string;
+  status: 'PENDING' | 'ACTIVE' | 'DONE' | 'SKIPPED' | 'REVISED';
+  depends_on: string[];
+  expected_evidence: string;
+}
+
+export interface TutorEpisodePlanDto {
+  plan_id: string;
+  session_id: string;
+  problem_id: number;
+  user_id: number;
+  objective: string;
+  trigger_event: WorkflowEvent;
+  trigger_verdict: string;
+  revision: number;
+  current_step_id: string;
+  steps: TutorEpisodeStepDto[];
+  status: TutorEpisodePlanStatus;
+  stop_policy: 'WAIT_FOR_CLICK' | 'WAIT_FOR_SUBMISSION' | 'DONE';
+  revision_reason: string;
+  created_by: 'coach' | 'fallback';
+  evidence_summary: string;
+}
+
+export interface TutorEpisodePlanPatchDto {
+  plan_id: string;
+  revision: number;
+  current_step_id?: string | null;
+  revised_step_ids: string[];
+  revision_reason: string;
+  stop_policy?: 'WAIT_FOR_CLICK' | 'WAIT_FOR_SUBMISSION' | 'DONE' | null;
+  status?: TutorEpisodePlanStatus | null;
+}
+
 /** SSE RUN_FINISHED.result 形状（graph WorkflowRunResult）。 */
 export interface WorkflowRunResultDto {
   session_id: string;
@@ -242,6 +310,9 @@ export interface WorkflowRunResultDto {
   card_key: WorkflowCardKey | null;
   card: (WorkflowCardPayload & { card_id?: string }) | null;
   available_actions: WorkflowActionDto[];
+  episode_plan?: TutorEpisodePlanDto | null;
+  episode_patch?: TutorEpisodePlanPatchDto | null;
+  resume_chat_history?: Array<{ role: 'user' | 'assistant'; content: string }>;
   seq: number;
 }
 
@@ -259,6 +330,7 @@ export interface WorkflowSessionSnapshotDto {
   phase: WorkflowPhase;
   seq: number;
   cards: WorkflowTimelineCardDto[];
+  episodePlan?: TutorEpisodePlanDto | null;
 }
 
 export type WorkflowFeedbackEventType =

@@ -11,13 +11,33 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 /** 导学工作流投影（tutor_workflow_session / tutor_workflow_card）数据访问。 */
 @Repository
 public class TutorWorkflowRepository {
+
+  public record RunProjection(
+      UUID runId,
+      String phase,
+      int seq,
+      String event,
+      String stateJson,
+      String decisionJson,
+      String cardKey,
+      String cardPayloadJson,
+      String actionPayloadJson) {}
+
+  public record SubmissionFeedbackProjection(
+      int seq,
+      String verdict,
+      String stateJson,
+      String decisionJson,
+      String actionPayloadJson) {}
 
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
@@ -148,6 +168,63 @@ public class TutorWorkflowRepository {
         eventType,
         actionKey,
         payloadJson);
+  }
+
+  /**
+   * Atomically projects one completed Graph run. The unique marker prevents duplicate terminal SSE
+   * callbacks from replaying any of the projection writes.
+   */
+  @Transactional
+  public boolean persistRunProjection(Long sessionId, RunProjection projection) {
+    int claimed =
+        jdbcTemplate.update(
+            """
+            INSERT INTO tutor_workflow_run_projection (session_id, run_id, seq, event)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT (session_id, run_id) DO NOTHING
+            """,
+            sessionId,
+            projection.runId(),
+            projection.seq(),
+            projection.event());
+    if (claimed == 0) {
+      return false;
+    }
+
+    updateProgress(sessionId, projection.phase(), projection.seq());
+    upsertAgentState(
+        sessionId, projection.stateJson(), projection.decisionJson());
+    if (projection.cardKey() != null && projection.cardPayloadJson() != null) {
+      insertCard(
+          sessionId,
+          projection.seq(),
+          projection.event(),
+          projection.cardKey(),
+          projection.cardPayloadJson());
+    }
+    String actionKey =
+        projection.cardKey() == null ? projection.event() : projection.cardKey();
+    String actionType = projection.cardKey() == null ? "WORKFLOW_RESULT" : "CARD_GENERATED";
+    insertActionEvent(
+        sessionId,
+        projection.seq(),
+        actionType,
+        actionKey,
+        projection.actionPayloadJson());
+    return true;
+  }
+
+  /** Atomically stores a submission feedback checkpoint and its event log entry. */
+  @Transactional
+  public void persistSubmissionFeedback(
+      Long sessionId, SubmissionFeedbackProjection projection) {
+    upsertAgentState(sessionId, projection.stateJson(), projection.decisionJson());
+    insertActionEvent(
+        sessionId,
+        projection.seq(),
+        "SUBMISSION_OBSERVED",
+        projection.verdict(),
+        projection.actionPayloadJson());
   }
 
   public List<TutorWorkflowCardDto> findCards(Long sessionId) {

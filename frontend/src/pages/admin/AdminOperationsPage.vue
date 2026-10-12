@@ -178,7 +178,7 @@ onMounted(() => {
 <style scoped>
 .admin-operations {
   display: grid;
-  gap: 18px;
+  gap: 20px;
   min-width: 0;
 }
 
@@ -228,7 +228,7 @@ onMounted(() => {
 
 .admin-button:hover:not(:disabled) {
   border-color: #93c5fd;
-  color: #1d4ed8;
+  color: var(--admin-primary-hover);
 }
 
 .admin-button:disabled {
@@ -247,10 +247,11 @@ onMounted(() => {
   min-height: 116px;
   align-content: center;
   gap: 5px;
-  padding: 18px 20px;
+  padding: 20px 22px;
   border: 1px solid var(--admin-border);
-  border-radius: 12px;
+  border-radius: var(--admin-panel-radius);
   background: var(--admin-surface);
+  box-shadow: var(--admin-panel-shadow);
 }
 
 .admin-stat-card span,
