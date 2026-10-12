@@ -44,6 +44,7 @@ export interface ChallengeProblemArgs {
   kc: string;
   kind: string | null;
   difficulty: number;
+  expeditionRunId?: string | null;
 }
 
 export type ChallengePreloadPhase = 'idle' | 'pending' | 'ready' | 'failed';
@@ -89,6 +90,7 @@ export function useChallengeJudge(): UseChallengeJudgeReturn {
       preferredKc: args.kc,
       ...(args.kind ? { preferredKind: args.kind } : {}),
       difficulty: args.difficulty,
+      ...(args.expeditionRunId ? { expeditionRunId: args.expeditionRunId } : {}),
       ...(hasAnySignal.value ? { profileSignals: signals.value } : {}),
     };
   }

@@ -69,8 +69,20 @@ class BrowseRunServiceTest {
   private BrowseGraphResult successResult() {
     return new BrowseGraphResult(
         List.of(
-            new BrowseGraphStep(0, "navigate", "https://docs.python.org/3/howto/sorting.html", "打开排序指南"),
-            new BrowseGraphStep(1, "read", "https://docs.python.org/3/howto/sorting.html", "确认 sorted 稳定")),
+            new BrowseGraphStep(
+                0,
+                "navigate",
+                "https://docs.python.org/3/howto/sorting.html",
+                "打开排序指南",
+                "Sorting HOW TO",
+                "打开排序指南"),
+            new BrowseGraphStep(
+                1,
+                "read",
+                "https://docs.python.org/3/howto/sorting.html",
+                "确认 sorted 稳定",
+                "Sorting HOW TO",
+                "sorts are guaranteed to be stable")),
         "sorted 是稳定排序",
         List.of("https://docs.python.org/3/howto/sorting.html"),
         false,
@@ -98,6 +110,8 @@ class BrowseRunServiceTest {
     assertThat(persisted).hasSize(2);
     assertThat(persisted.get(0).runId()).isEqualTo(42L);
     assertThat(persisted.get(0).action()).isEqualTo("navigate");
+    assertThat(persisted.get(0).title()).isEqualTo("Sorting HOW TO");
+    assertThat(persisted.get(1).snippet()).isEqualTo("sorts are guaranteed to be stable");
     assertThat(persisted.get(1).action()).isEqualTo("read");
   }
 
@@ -146,7 +160,7 @@ class BrowseRunServiceTest {
   void createMarksTruncatedRun() {
     BrowseGraphResult truncated =
         new BrowseGraphResult(
-            List.of(new BrowseGraphStep(0, "navigate", "https://pypi.org/", "首页")),
+            List.of(new BrowseGraphStep(0, "navigate", "https://pypi.org/", "首页", "PyPI", "首页")),
             "未完成", List.of("https://pypi.org/"), true, "");
     when(graphClient.browse(any(), any(), anyInt(), anyLong())).thenReturn(truncated);
     when(runRepository.insert(anyLong(), any(), any(), any(), eq(true), isNull()))
@@ -163,7 +177,9 @@ class BrowseRunServiceTest {
   void createPersistsFailedRunWithPartialStepsOnGraphFailFast() {
     BrowseGraphResult failFast =
         new BrowseGraphResult(
-            List.of(new BrowseGraphStep(0, "navigate", "https://docs.python.org/3/", "打开")),
+            List.of(
+                new BrowseGraphStep(
+                    0, "navigate", "https://docs.python.org/3/", "打开", "Python docs", "打开")),
             "", List.of(), false, "目标站点超时");
     when(graphClient.browse(any(), any(), anyInt(), anyLong())).thenReturn(failFast);
     when(runRepository.insert(anyLong(), any(), any(), any(), anyBoolean(), any()))
@@ -198,7 +214,9 @@ class BrowseRunServiceTest {
   void createRejectsIllegalGraphActionAsBadGateway() {
     BrowseGraphResult illegal =
         new BrowseGraphResult(
-            List.of(new BrowseGraphStep(0, "click", "https://docs.python.org/3/", "点了一下")),
+            List.of(
+                new BrowseGraphStep(
+                    0, "click", "https://docs.python.org/3/", "点了一下", "", "点了一下")),
             "x", List.of(), false, "");
     when(graphClient.browse(any(), any(), anyInt(), anyLong())).thenReturn(illegal);
 
@@ -233,16 +251,28 @@ class BrowseRunServiceTest {
     when(stepRepository.findByRunId(42L))
         .thenReturn(
             List.of(
-                new BrowseStepEntity(1L, 42L, 0, "navigate", "https://docs.python.org/3/a", "a"),
-                new BrowseStepEntity(2L, 42L, 1, "read", "https://docs.python.org/3/a", "再读 a"),
-                new BrowseStepEntity(3L, 42L, 2, "search", "", "站内搜索"),
-                new BrowseStepEntity(4L, 42L, 3, "read", "https://peps.python.org/pep-0008/", "PEP8")));
+                new BrowseStepEntity(
+                    1L, 42L, 0, "navigate", "https://docs.python.org/3/a", "a", "A", "a"),
+                new BrowseStepEntity(
+                    2L, 42L, 1, "read", "https://docs.python.org/3/a", "再读 a", "A", "再读 a"),
+                new BrowseStepEntity(3L, 42L, 2, "search", "", "站内搜索", "搜索", "站内搜索"),
+                new BrowseStepEntity(
+                    4L,
+                    42L,
+                    3,
+                    "read",
+                    "https://peps.python.org/pep-0008/",
+                    "PEP8",
+                    "PEP 8",
+                    "PEP8")));
 
     BrowseRunDetailDto detail = service.detail(1L, 42L);
 
     assertThat(detail.id()).isEqualTo(42L);
     assertThat(detail.steps()).hasSize(4);
     assertThat(detail.steps().get(0).index()).isEqualTo(0);
+    assertThat(detail.steps().get(0).title()).isEqualTo("A");
+    assertThat(detail.steps().get(1).snippet()).isEqualTo("再读 a");
     // 去重（两次同 url 只一条）+ 跳过空 url（search 步）+ 保序。
     assertThat(detail.citations()).hasSize(2);
     assertThat(detail.citations()).extracting(BrowseCitationDto::url)

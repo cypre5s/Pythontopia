@@ -45,9 +45,11 @@ class ScriptedProvider(LlmProvider):
         yield "按计划学起来。"
 
 
-def request_of(session_id: str, message: str = "帮我规划 for 循环") -> OrchestratorRequest:
+def request_of(
+    session_id: str, message: str = "帮我规划 for 循环", *, user_id: int = 1
+) -> OrchestratorRequest:
     return OrchestratorRequest(
-        user_id=1,
+        user_id=user_id,
         session_id=session_id,
         user_message=message,
         history=[],
@@ -59,8 +61,10 @@ def request_of(session_id: str, message: str = "帮我规划 for 循环") -> Orc
 async def _clean_sessions() -> AsyncIterator[None]:
     yield
     # orchestrator_session 是模块级存储，逐用例清理防串台。
-    await orchestrator_session.reset_session("ckpt-s1")
-    await orchestrator_session.reset_session("ckpt-s2")
+    await orchestrator_session.reset_session(1, "ckpt-s1")
+    await orchestrator_session.reset_session(1, "ckpt-s2")
+    await orchestrator_session.reset_session(101, "ckpt-shared")
+    await orchestrator_session.reset_session(202, "ckpt-shared")
 
 
 @pytest.mark.asyncio
@@ -70,7 +74,7 @@ async def test_turn_snapshot_captures_full_run_context() -> None:
 
     await graph.run(request_of("ckpt-s1"))
 
-    snapshot = await graph.get_turn_state("ckpt-s1", 0)
+    snapshot = await graph.get_turn_state(1, "ckpt-s1", 0)
     assert snapshot, "首轮（turn-0）应有 checkpoint 快照"
     assert snapshot.get("goal") == "学习 for 循环"
     assert "plan" in snapshot and isinstance(snapshot["plan"], list)
@@ -84,11 +88,11 @@ async def test_turns_use_isolated_threads_no_reducer_pollution() -> None:
     graph = OrchestratorGraph(provider=ScriptedProvider())
 
     await graph.run(request_of("ckpt-s1", "帮我规划 for 循环"))
-    first = await graph.get_turn_state("ckpt-s1", 0)
+    first = await graph.get_turn_state(1, "ckpt-s1", 0)
 
     # 第一轮 persist 后 server_history 含 user+assistant 两条 → 第二轮 turn_no=1。
     await graph.run(request_of("ckpt-s1", "再细化一下练习安排"))
-    second = await graph.get_turn_state("ckpt-s1", 1)
+    second = await graph.get_turn_state(1, "ckpt-s1", 1)
 
     assert second, "第二轮（turn-1）应有独立快照"
     assert len(first["trace"]) == len(second["trace"]), (
@@ -105,8 +109,20 @@ async def test_sessions_are_isolated() -> None:
 
     await graph.run(request_of("ckpt-s1"))
 
-    other = await graph.get_turn_state("ckpt-s2", 0)
+    other = await graph.get_turn_state(1, "ckpt-s2", 0)
     assert other == {}, "未运行过的 session 不应有快照"
+
+
+@pytest.mark.asyncio
+async def test_same_session_checkpoint_is_isolated_between_users() -> None:
+    graph = OrchestratorGraph(provider=ScriptedProvider())
+
+    await graph.run(request_of("ckpt-shared", user_id=101))
+
+    owner = await graph.get_turn_state(101, "ckpt-shared", 0)
+    other = await graph.get_turn_state(202, "ckpt-shared", 0)
+    assert owner
+    assert other == {}
 
 
 @pytest.mark.asyncio

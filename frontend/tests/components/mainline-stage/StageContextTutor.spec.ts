@@ -48,7 +48,10 @@ describe('StageContextTutor（锚定上下文的百晓助教问答）', () => {
     tokensRef.value = '';
     errorRef.value = null;
   });
-  afterEach(() => vi.clearAllMocks());
+  afterEach(() => {
+    vi.clearAllMocks();
+    vi.unstubAllGlobals();
+  });
 
   it('提交问答：调 contextProvider 取当前上下文，并随 question/kcCodes 传给 SSE', async () => {
     statusRef.value = 'done';
@@ -67,6 +70,35 @@ describe('StageContextTutor（锚定上下文的百晓助教问答）', () => {
       context: '【第 3 页课件】for 循环讲解…',
     });
     expect(wrapper.find('[data-testid="stage-context-tutor-answer"]').text()).toContain('for 循环用于遍历序列');
+  });
+
+  it('把图片附件随锚定问答提交', async () => {
+    vi.stubGlobal('FileReader', class {
+      result: string | null = null;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      readAsDataURL(file: Blob): void {
+        this.result = `data:${file.type};base64,iVBORw0KGgo=`;
+        this.onload?.();
+      }
+    });
+    statusRef.value = 'done';
+    resultRef.value = { answer_md: '图中展示了循环。', grounding_result: { passed: true, reasons: [] } };
+    const wrapper = mountTutor(vi.fn().mockResolvedValue('ctx'));
+    const file = new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], 'page.png', { type: 'image/png' });
+    const input = wrapper.get('[data-testid="stage-context-tutor-image-input"]');
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
+    await input.trigger('change');
+    await flushPromises();
+    expect(wrapper.find('[data-testid="stage-context-tutor-attachments"]').exists()).toBe(true);
+    await wrapper.find('[data-testid="stage-context-tutor-input"]').setValue('请解释图中代码');
+    await wrapper.find('form').trigger('submit');
+    await flushPromises();
+
+    expect(startSpy).toHaveBeenCalledWith(expect.objectContaining({
+      question: '请解释图中代码',
+      images: [expect.stringMatching(/^data:image\/png;base64,/)],
+    }));
   });
 
   it('空问题不提交', async () => {

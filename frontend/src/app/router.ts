@@ -6,6 +6,12 @@ import { useDialogStore } from '@stores/dialog';
 import { useMainlineStore } from '@stores/mainline';
 import { isExamActive, isExamBlockedPath } from '@/components/chaptertest';
 
+declare module 'vue-router' {
+  interface RouteMeta {
+    adminOnly?: boolean;
+  }
+}
+
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -26,6 +32,24 @@ export const router = createRouter({
       name: 'register',
       component: () => import('@/pages/RegisterPage.vue'),
       meta: { guestOnly: true },
+    },
+    {
+      path: '/admin',
+      component: () => import('@/pages/admin/AdminLayout.vue'),
+      meta: { requiresAuth: true, adminOnly: true, fullscreen: true, hideCompanion: true },
+      children: [
+        { path: '', redirect: { name: 'admin-operations' } },
+        {
+          path: 'operations',
+          name: 'admin-operations',
+          component: () => import('@/pages/admin/AdminOperationsPage.vue'),
+        },
+        {
+          path: 'problem-reviews',
+          name: 'admin-problem-reviews',
+          component: () => import('@/pages/admin/AdminProblemReviewsPage.vue'),
+        },
+      ],
     },
     {
       path: '/world',
@@ -174,9 +198,7 @@ export const router = createRouter({
       component: () => import('@/pages/teacher/ClassroomDetail.vue'),
       meta: { requiresAuth: true },
     },
-    // AI 出题教师审核兜底页。
-    // 教师拉一题 → 看 5 重审查结论 → 通过 / 驳回；驳回原因写 LearningEvent。
-    // Web 演示用 localStorage 兜底。
+    // AI 出题教师审核页：队列、决定与审计信息均由后端持久化，路由与 API 双重鉴权。
     {
       path: '/teacher/review',
       name: 'teacher-review',
@@ -309,6 +331,10 @@ router.beforeEach((to: RouteLocationNormalized) => {
       hadSession ? 'error' : 'info',
     );
     return { name: 'login', query: { redirect: to.fullPath } };
+  }
+  if (to.meta.adminOnly && session.role !== 'ADMIN') {
+    toast.show('需要管理员权限才能打开管理后台。', 'error');
+    return { name: 'world', replace: true };
   }
   if (to.meta.guestOnly && session.isAuthenticated) {
     return { name: 'world' };

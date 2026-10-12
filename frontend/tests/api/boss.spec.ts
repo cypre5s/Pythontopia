@@ -151,9 +151,14 @@ describe('requestBossProblem', () => {
     expect(problem.buggyCode).toBeUndefined();
   });
 
-  it('falls back to local golden problem on 4xx error', async () => {
+  it('fails closed by default when the backend cannot generate a problem', async () => {
     httpMock.post.mockRejectedValueOnce(new Error('404 not found'));
-    const problem = await requestBossProblem(1, 1);
+    await expect(requestBossProblem(1, 1)).rejects.toThrow('404 not found');
+  });
+
+  it('allows an explicitly requested local golden problem for isolated development', async () => {
+    httpMock.post.mockRejectedValueOnce(new Error('404 not found'));
+    const problem = await requestBossProblem(1, 1, { allowGoldenFallback: true });
     expect(problem.problemId).toContain('golden-c1-s1');
     expect(problem.aiGenerated).toBe(false);
     expect(problem.totalTestCases).toBeGreaterThan(0);
@@ -185,14 +190,14 @@ describe('requestBossProblem', () => {
 
   it('falls back when backend returns malformed body (no problemId)', async () => {
     httpMock.post.mockResolvedValueOnce({ data: { foo: 'bar' } });
-    const problem = await requestBossProblem(2, 1);
+    const problem = await requestBossProblem(2, 1, { allowGoldenFallback: true });
     expect(problem.problemId).toContain('golden-c2');
     expect(problem.aiGenerated).toBe(false);
   });
 
   it('chapter without templates returns generic golden fallback', async () => {
     httpMock.post.mockRejectedValueOnce(new Error('network'));
-    const problem = await requestBossProblem(7, 2);
+    const problem = await requestBossProblem(7, 2, { allowGoldenFallback: true });
     expect(problem.chapter).toBe(7);
     expect(problem.stage).toBe(2);
     expect(problem.kcCode).toMatch(/^PY43-KC-\d{3}$/);
@@ -201,11 +206,15 @@ describe('requestBossProblem', () => {
   it('debug golden fallback includes buggy starter code separate from the prompt', async () => {
     httpMock.post.mockRejectedValueOnce(new Error('network'));
 
-    const problem = await requestBossProblem(1, {
-      stage: 2,
-      preferredKind: 'debug',
-      preferredKc: 'PY43-KC-002',
-    });
+    const problem = await requestBossProblem(
+      1,
+      {
+        stage: 2,
+        preferredKind: 'debug',
+        preferredKc: 'PY43-KC-002',
+      },
+      { allowGoldenFallback: true },
+    );
 
     expect(problem.statement).toContain('修复');
     expect(problem.buggyCode).toContain('print');
@@ -216,11 +225,15 @@ describe('requestBossProblem', () => {
   it('bug mine golden fallback includes code that can be edited in-place', async () => {
     httpMock.post.mockRejectedValueOnce(new Error('network'));
 
-    const problem = await requestBossProblem(1, {
-      stage: 2,
-      preferredKind: 'bug_mine',
-      preferredKc: 'PY43-KC-001',
-    });
+    const problem = await requestBossProblem(
+      1,
+      {
+        stage: 2,
+        preferredKind: 'bug_mine',
+        preferredKc: 'PY43-KC-001',
+      },
+      { allowGoldenFallback: true },
+    );
 
     expect(problem.statement).toContain('30 秒');
     expect(problem.buggyCode).toContain('input');

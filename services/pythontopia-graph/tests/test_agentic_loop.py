@@ -566,7 +566,7 @@ def test_build_loop_plan_bounded_and_mapped() -> None:
 @pytest.mark.asyncio
 async def test_orchestrator_normal_single_round_closed_loop() -> None:
     """① 正常单轮闭环：critic 通过 → 保留 compose 回复 + 审计记录 grounding/safety pass。"""
-    await reset_session("t-normal")
+    await reset_session(7, "t-normal")
     graph = make_graph()
     resp = await graph.run(request_of(session_id="t-normal"))
     assert resp.reply_md == "规划完成。"  # 未被降级覆盖
@@ -584,7 +584,7 @@ async def test_orchestrator_normal_single_round_closed_loop() -> None:
 @pytest.mark.asyncio
 async def test_orchestrator_injects_memory_brief_before_understand() -> None:
     """⑤ memory_brief 注入：折叠进 profile_brief（理解/调度可见）+ 入轮快照。"""
-    await reset_session("t-mem")
+    await reset_session(7, "t-mem")
     brief = MemoryBrief(
         facts=["上次卡在缩进"], weak_kcs=["PY43-KC-003"], style_notes=["偏好可视化"], as_of="2026-06-17T10:00:00Z"
     )
@@ -594,14 +594,14 @@ async def test_orchestrator_injects_memory_brief_before_understand() -> None:
     assert "上次卡在缩进" in graph._dispatcher._ctx.profile_brief
     assert "原始画像" in graph._dispatcher._ctx.profile_brief
     # memory_brief 入轮 checkpoint 快照（可审计）
-    snapshot = await graph.get_turn_state("t-mem", 0)
+    snapshot = await graph.get_turn_state(7, "t-mem", 0)
     assert snapshot.get("memory_brief", {}).get("facts") == ["上次卡在缩进"]
 
 
 @pytest.mark.asyncio
 async def test_orchestrator_default_no_provider_backward_compatible() -> None:
     """⑤ 缺省（无 provider）→ 空 brief，profile_brief 不被污染，行为不变。"""
-    await reset_session("t-nobrief")
+    await reset_session(7, "t-nobrief")
     graph = make_graph()  # 默认 NullMemoryBriefProvider
     await graph.run(request_of(session_id="t-nobrief", profile_brief="仅原始"))
     assert graph._dispatcher._ctx.profile_brief == "仅原始"
@@ -610,7 +610,7 @@ async def test_orchestrator_default_no_provider_backward_compatible() -> None:
 @pytest.mark.asyncio
 async def test_orchestrator_critic_reject_does_not_compose_unauthorized() -> None:
     """⑦ critic 拒绝（安全泄答）→ 不 surface 越权内容，给诚实降级；safety_result 如实 False。"""
-    await reset_session("t-reject")
+    await reset_session(7, "t-reject")
     graph = make_graph(provider=StubProvider(reply="这是完整答案：print(42)"))
     resp = await graph.run(request_of(session_id="t-reject"))
     assert resp.safety_result.passed is False
@@ -623,7 +623,7 @@ async def test_orchestrator_critic_reject_does_not_compose_unauthorized() -> Non
 @pytest.mark.asyncio
 async def test_orchestrator_replan_recorded_in_audit() -> None:
     """② 触发有界 replan：审计 replan_count≥1，tool_trail 含 DebugAgent。"""
-    await reset_session("t-replan")
+    await reset_session(7, "t-replan")
     graph = make_graph()
     resp = await graph.run(
         request_of(
@@ -643,7 +643,7 @@ async def test_orchestrator_replan_recorded_in_audit() -> None:
 @pytest.mark.asyncio
 async def test_orchestrator_loop_record_sink_wired() -> None:
     """Phase 2 接线点：注入 sink 回调即可拿到结构化审计记录（落库由 S2 负责）。"""
-    await reset_session("t-sink")
+    await reset_session(7, "t-sink")
     received: list[AgenticLoopRunRecord] = []
 
     async def sink(record: AgenticLoopRunRecord) -> None:
@@ -658,7 +658,7 @@ async def test_orchestrator_loop_record_sink_wired() -> None:
 @pytest.mark.asyncio
 async def test_orchestrator_loop_record_sink_failsoft() -> None:
     """sink 抛错 → fail-soft，不拖垮主链路（仍正常返回响应）。"""
-    await reset_session("t-sink-boom")
+    await reset_session(7, "t-sink-boom")
 
     async def boom_sink(record: AgenticLoopRunRecord) -> None:
         raise RuntimeError("db down")
@@ -671,7 +671,7 @@ async def test_orchestrator_loop_record_sink_failsoft() -> None:
 @pytest.mark.asyncio
 async def test_orchestrator_browse_step_dispatched_default_scope() -> None:
     """BROWSE 可派发（default scope）：经闭环路由到 mock executor，外部引用标注非课件。"""
-    await reset_session("t-browse-ok")
+    await reset_session(7, "t-browse-ok")
     executor = FakeBrowseExecutor()
     graph = make_graph(
         browse_executor=executor,
@@ -697,7 +697,7 @@ async def test_orchestrator_browse_step_dispatched_default_scope() -> None:
 @pytest.mark.asyncio
 async def test_orchestrator_browse_step_blocked_quiz_scope() -> None:
     """④ quiz scope：BROWSE 步不可派发，回退 VIDEO，executor 绝不被调用。"""
-    await reset_session("t-browse-quiz")
+    await reset_session(7, "t-browse-quiz")
     executor = FakeBrowseExecutor()
     graph = make_graph(
         browse_executor=executor,

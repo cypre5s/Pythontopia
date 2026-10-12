@@ -35,12 +35,18 @@ const DEST_ROOT = path.join(FRONTEND_ROOT, 'public', 'pyodide');
 // 启动 Pyodide 核心运行时所需的最小文件集（不含 numpy/pandas 等按需 wheel）。
 const RUNTIME_FILES = [
   'pyodide.js',
-  'pyodide.asm.js',
+  'pyodide.js.map',
+  'pyodide.mjs',
+  'pyodide.mjs.map',
+  'pyodide.asm.mjs',
   'pyodide.asm.wasm',
   'python_stdlib.zip',
   'pyodide-lock.json',
   'package.json',
 ];
+
+// 314.x 改用 ES module glue；清理 0.25.x 遗留文件，避免发布包多带无用的旧 ABI。
+const OBSOLETE_RUNTIME_FILES = ['pyodide.asm.js'];
 
 const quiet = process.argv.includes('--quiet');
 const force = process.argv.includes('--force');
@@ -67,6 +73,9 @@ async function main() {
   }
 
   await fs.mkdir(DEST_ROOT, { recursive: true });
+  for (const name of OBSOLETE_RUNTIME_FILES) {
+    await fs.rm(path.join(DEST_ROOT, name), { force: true });
+  }
   let copied = 0;
   let skipped = 0;
   for (const name of RUNTIME_FILES) {

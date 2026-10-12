@@ -19,9 +19,9 @@ class XfyunIatServiceTest {
   }
 
   @Test
-  void propertiesDefaultsAndEnabledFlag() {
+  void legacyCredentialsDoNotEnableSpeechRecognition() {
     AsrProperties p = new AsrProperties("app", "key", "secret", null, 0);
-    assertThat(p.isEnabled()).isTrue();
+    assertThat(p.isEnabled()).isFalse();
     assertThat(p.baseUrl()).contains("iat-api.xfyun.cn");
     assertThat(p.dailyLimitPerUser()).isEqualTo(100);
 

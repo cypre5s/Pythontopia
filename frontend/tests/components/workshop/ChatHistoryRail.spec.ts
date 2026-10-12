@@ -53,7 +53,7 @@ describe('ChatHistoryRail · 历史列表缓存', () => {
       } as never);
 
     const first = mount(ChatHistoryRail, {
-      props: { embeddedOpen: true },
+      props: { ownerId: 7, embeddedOpen: true },
     });
     await flushPromises();
     expect(first.text()).toContain('什么是 if 语句');
@@ -61,7 +61,7 @@ describe('ChatHistoryRail · 历史列表缓存', () => {
     first.unmount();
 
     const second = mount(ChatHistoryRail, {
-      props: { embeddedOpen: true },
+      props: { ownerId: 7, embeddedOpen: true },
     });
     await flushPromises();
     expect(second.text()).toContain('什么是 if 语句');
@@ -70,6 +70,39 @@ describe('ChatHistoryRail · 历史列表缓存', () => {
     await second.get('[data-testid="workshop-history-refresh"]').trigger('click');
     await flushPromises();
     expect(second.text()).toContain('什么是 while 语句');
+    expect(vi.mocked(http.get)).toHaveBeenCalledTimes(2);
+  });
+
+  it('切换 owner 立即清空旧列表，且旧请求晚到不得覆盖新账号', async () => {
+    let resolveOwnerA: ((value: { data: WorkshopChatHistoryTurnDto[] }) => void) | undefined;
+    const ownerBTurn: WorkshopChatHistoryTurnDto = {
+      ...baseTurn,
+      id: 'b-1',
+      conversationId: 'conv-b',
+      userText: 'B 账号的唯一问题',
+    };
+    vi.mocked(http.get)
+      .mockReturnValueOnce(new Promise((resolve) => {
+        resolveOwnerA = resolve;
+      }))
+      .mockResolvedValueOnce({ data: [ownerBTurn] } as never);
+
+    const wrapper = mount(ChatHistoryRail, {
+      props: { ownerId: 101, embeddedOpen: true },
+    });
+    await Promise.resolve();
+
+    await wrapper.setProps({ ownerId: 202 });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('B 账号的唯一问题');
+    expect(wrapper.text()).not.toContain('什么是 if 语句');
+
+    resolveOwnerA?.({ data: [baseTurn] });
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('B 账号的唯一问题');
+    expect(wrapper.text()).not.toContain('什么是 if 语句');
     expect(vi.mocked(http.get)).toHaveBeenCalledTimes(2);
   });
 });

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.PythontopiaApplication;
+import com.pythontopia.submission.judge.StubPythonSandboxConfiguration;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
@@ -32,6 +34,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 @Testcontainers
+@Import(StubPythonSandboxConfiguration.class)
 @SpringBootTest(
     classes = PythontopiaApplication.class,
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
@@ -58,6 +61,9 @@ class Stage10BugMineAcceptanceIntegrationTest {
     registry.add("pythontopia.security.teacherInviteCode", () -> "test-teacher-code");
     registry.add("pythontopia.services.graphUrl", () -> "http://graph.test");
     registry.add("pythontopia.judge.python", () -> "python3");
+    registry.add("pythontopia.judge.provider", () -> "piston");
+    registry.add("pythontopia.judge.piston.base-url", () -> "http://piston.test");
+    registry.add("pythontopia.judge.piston.python-version", () -> "3.11.13");
     registry.add("pythontopia.bugMine.maxRetriesPerSession", () -> "2");
   }
 

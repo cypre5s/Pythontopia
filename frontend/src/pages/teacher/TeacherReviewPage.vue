@@ -1,30 +1,18 @@
 <script setup lang="ts">
-/**
- * 教师审核 AI 出题页（路由 /teacher/review，需 TEACHER / ADMIN 角色）。
- * 按需触发 graph 出题，审核决定（approve / reject）持久化到 localStorage；
- * 驳回会写 LearningEvent('AI_PROBLEM_REJECTED')。
- * 注意：视图层不做硬鉴权，依赖路由 meta + JWT 角色。
- */
-import { computed, onMounted, ref } from 'vue';
-import { useRouter } from 'vue-router';
-import AppLayout from '@/app/AppLayout.vue';
-import RuntimeOperationsPanel from '@/components/workshop/RuntimeOperationsPanel.vue';
-import { useSessionStore } from '@stores/session';
-import { useToastStore } from '@stores/toast';
-import { requestBossProblem } from '@/api/boss';
-import type { BossProblemDto } from '@/api/dto/Boss';
-
-const PERSIST_KEY = 'pyt_teacher_review_decisions_v1';
-
-type Decision = 'pending' | 'approved' | 'rejected';
-
-interface ReviewEntry {
-  problem: BossProblemDto;
-  decision: Decision;
-  reason?: string;
-  decidedAt?: string;
-  fetchedAt: string;
-}
+/** 教师审核 AI 出题页。完整题与审核决定均以后端 pack-43 review bank 为唯一权威。 */
+import { computed, onMounted, ref } from "vue";
+import { useRouter } from "vue-router";
+import AppLayout from "@/app/AppLayout.vue";
+import RuntimeOperationsPanel from "@/components/workshop/RuntimeOperationsPanel.vue";
+import { useSessionStore } from "@stores/session";
+import { useToastStore } from "@stores/toast";
+import {
+  createProblemReview,
+  decideProblemReview,
+  listProblemReviews,
+  type BossProblemReviewDecision,
+  type BossProblemReviewDto,
+} from "@/api/problemReview";
 
 const session = useSessionStore();
 const toast = useToastStore();
@@ -32,132 +20,134 @@ const router = useRouter();
 
 const chapter = ref<number>(1);
 const stage = ref<number>(1);
+const kcCode = ref<string>("");
+const kind = ref<string>("");
 const loading = ref<boolean>(false);
-const entries = ref<ReviewEntry[]>([]);
-const rejectReason = ref<string>('');
-const selectedIdx = ref<number | null>(null);
+const loadingQueue = ref<boolean>(false);
+const deciding = ref<boolean>(false);
+const entries = ref<BossProblemReviewDto[]>([]);
+const decisionReason = ref<string>("");
+const selectedId = ref<number | null>(null);
 
 const isTeacherOrAdmin = computed<boolean>(() => {
   const role = session.role;
-  return role === 'TEACHER' || role === 'ADMIN';
+  return role === "TEACHER" || role === "ADMIN";
 });
 
 const counts = computed(() => ({
   total: entries.value.length,
-  approved: entries.value.filter((e) => e.decision === 'approved').length,
-  rejected: entries.value.filter((e) => e.decision === 'rejected').length,
-  pending: entries.value.filter((e) => e.decision === 'pending').length,
+  approved: entries.value.filter((entry) => entry.decision === "APPROVED")
+    .length,
+  rejected: entries.value.filter((entry) => entry.decision === "REJECTED")
+    .length,
+  pending: entries.value.filter((entry) => entry.decision === "PENDING").length,
 }));
 
-function loadPersisted(): void {
-  if (typeof window === 'undefined') return;
+async function loadQueue(): Promise<void> {
+  if (!isTeacherOrAdmin.value || loadingQueue.value) return;
+  loadingQueue.value = true;
   try {
-    const raw = window.localStorage.getItem(PERSIST_KEY);
-    if (!raw) return;
-    const parsed = JSON.parse(raw);
-    if (Array.isArray(parsed)) {
-      entries.value = parsed.filter((e) => e && typeof e === 'object' && 'problem' in e);
+    entries.value = await listProblemReviews(100);
+    if (selectedId.value === null && entries.value.length > 0) {
+      selectedId.value = entries.value[0]?.id ?? null;
     }
-  } catch {
-    // 忽略损坏的存储数据
-  }
-}
-
-function persist(): void {
-  if (typeof window === 'undefined') return;
-  try {
-    window.localStorage.setItem(PERSIST_KEY, JSON.stringify(entries.value));
-  } catch {
-    // 隐私模式等不可写
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    toast.show(`审核队列加载失败：${message}`, "error");
+  } finally {
+    loadingQueue.value = false;
   }
 }
 
 async function fetchProblem(): Promise<void> {
-  if (loading.value) return;
+  if (loading.value || !isTeacherOrAdmin.value) return;
   loading.value = true;
   try {
-    const problem = await requestBossProblem(chapter.value, stage.value);
+    const requestedKc = kcCode.value.trim();
+    const requestedKind = kind.value.trim();
+    const candidate = await createProblemReview({
+      chapter: chapter.value,
+      stage: stage.value,
+      ...(requestedKc ? { kcCode: requestedKc } : {}),
+      ...(requestedKind ? { kind: requestedKind } : {}),
+    });
     entries.value = [
-      {
-        problem,
-        decision: 'pending',
-        fetchedAt: new Date().toISOString(),
-      },
-      ...entries.value,
+      candidate,
+      ...entries.value.filter((entry) => entry.id !== candidate.id),
     ];
-    persist();
-    selectedIdx.value = 0;
-    toast.show(
-      problem.aiGenerated ? 'AI 出题成功，请审核' : '回落 golden 题（graph 未连通）',
-      'info',
-    );
+    selectedId.value = candidate.id;
+    toast.show("AI 题已进入后端审核队列", "info");
   } catch (error) {
-    const msg = error instanceof Error ? error.message : String(error);
-    toast.show(`拉题失败：${msg}`, 'error');
+    const message = error instanceof Error ? error.message : String(error);
+    toast.show(`拉题失败：${message}`, "error");
   } finally {
     loading.value = false;
   }
 }
 
-function setDecision(idx: number, decision: Decision, reason?: string): void {
-  const entry = entries.value[idx];
-  if (!entry) return;
-  entry.decision = decision;
-  if (reason !== undefined) {
-    entry.reason = reason;
+async function decideCurrent(
+  decision: Exclude<BossProblemReviewDecision, "PENDING">,
+): Promise<void> {
+  const entry = currentEntry.value;
+  const reason = decisionReason.value.trim();
+  if (!entry || entry.decision !== "PENDING" || deciding.value) return;
+  if (!reason) {
+    toast.show("请填写审核意见", "error");
+    return;
   }
-  entry.decidedAt = new Date().toISOString();
-  persist();
-  toast.show(
-    `${entry.problem.problemId} → ${decision}${reason ? `（${reason}）` : ''}`,
-    decision === 'approved' ? 'success' : 'error',
-  );
+  deciding.value = true;
+  try {
+    const updated = await decideProblemReview(entry.id, {
+      decision,
+      reason,
+      version: entry.version,
+    });
+    entries.value = entries.value.map((item) =>
+      item.id === updated.id ? updated : item,
+    );
+    decisionReason.value = "";
+    toast.show(
+      decision === "APPROVED"
+        ? "题目已发布到全局 approved bank"
+        : "题目已驳回并保留审计记录",
+      decision === "APPROVED" ? "success" : "error",
+    );
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    toast.show(`审核失败：${message}`, "error");
+    await loadQueue();
+  } finally {
+    deciding.value = false;
+  }
 }
 
 function approveCurrent(): void {
-  if (selectedIdx.value !== null) setDecision(selectedIdx.value, 'approved');
+  void decideCurrent("APPROVED");
 }
 
 function rejectCurrent(): void {
-  if (selectedIdx.value === null) return;
-  const reason = rejectReason.value.trim() || '未提供原因';
-  const entry = entries.value[selectedIdx.value];
-  setDecision(selectedIdx.value, 'rejected', reason);
-  rejectReason.value = '';
-  if (entry) {
-    void import('@/api/learningEvent').then((mod) => {
-      mod.postLearningEvent({
-        eventType: 'AI_PROBLEM_REJECTED',
-        payload: {
-          problemId: entry.problem.problemId,
-          chapter: entry.problem.chapter,
-          stage: entry.problem.stage,
-          kcCode: entry.problem.kcCode,
-          reason,
-        },
-      }).catch(() => {});
-    });
-  }
-}
-
-function clearAll(): void {
-  entries.value = [];
-  persist();
-  toast.show('已清空审核队列', 'info');
+  void decideCurrent("REJECTED");
 }
 
 function exitToHome(): void {
-  void router.push({ name: 'teacher' });
+  void router.push({ name: "teacher" });
 }
 
 onMounted(() => {
-  loadPersisted();
+  void loadQueue();
 });
 
-const currentEntry = computed<ReviewEntry | null>(() => {
-  if (selectedIdx.value === null) return null;
-  return entries.value[selectedIdx.value] ?? null;
-});
+const currentEntry = computed<BossProblemReviewDto | null>(
+  () => entries.value.find((entry) => entry.id === selectedId.value) ?? null,
+);
+
+const canDecide = computed<boolean>(
+  () =>
+    isTeacherOrAdmin.value &&
+    currentEntry.value?.decision === "PENDING" &&
+    decisionReason.value.trim().length > 0 &&
+    !deciding.value,
+);
 </script>
 
 <template>
@@ -172,8 +162,9 @@ const currentEntry = computed<ReviewEntry | null>(() => {
             教师审核 · AI 出题兜底
           </h1>
           <p class="subtitle">
-            R-13 §2.3-6：5 重审查链通过后的题目仍由教师手动「上线」或「驳回」；
-            驳回会写 <code>LearningEvent('AI_PROBLEM_REJECTED')</code>（R-14 后端落库）。
+            AI
+            题经自动审查后进入后端持久化队列；教师决定、审核意见与版本均保留审计记录。
+            只有通过的题目会进入学生 Boss 题库，隐藏用例始终只保存在后端。
           </p>
         </div>
         <button
@@ -191,8 +182,9 @@ const currentEntry = computed<ReviewEntry | null>(() => {
         class="role-warning"
         data-testid="teacher-review-role-warning"
       >
-        当前账号角色 <strong>{{ session.role ?? '未登录' }}</strong> 没有审核权限；
-        请用 TEACHER 或 ADMIN 账号登录后访问。R-14 后端将硬鉴权该路由。
+        当前账号角色
+        <strong>{{ session.role ?? "未登录" }}</strong> 没有审核权限； 请用
+        TEACHER 或 ADMIN 账号登录后访问。
       </div>
 
       <RuntimeOperationsPanel class="review-runtime" />
@@ -208,9 +200,7 @@ const currentEntry = computed<ReviewEntry | null>(() => {
               v-for="c in 7"
               :key="c"
               :value="c"
-            >
-              第 {{ c }} 章
-            </option>
+            >第 {{ c }} 章</option>
           </select>
         </label>
         <label class="toolbar-field">
@@ -223,19 +213,35 @@ const currentEntry = computed<ReviewEntry | null>(() => {
               v-for="s in 4"
               :key="s"
               :value="s"
-            >
-              Stage {{ s }}
-            </option>
+            >Stage {{ s }}</option>
           </select>
+        </label>
+        <label class="toolbar-field">
+          <span>KC（可选）</span>
+          <input
+            v-model="kcCode"
+            data-testid="teacher-review-kc"
+            maxlength="64"
+            placeholder="留空则取本章首个 KC"
+          >
+        </label>
+        <label class="toolbar-field">
+          <span>题型（可选）</span>
+          <input
+            v-model="kind"
+            data-testid="teacher-review-kind"
+            maxlength="32"
+            placeholder="如 debug"
+          >
         </label>
         <button
           type="button"
           class="btn btn-primary"
           data-testid="teacher-review-fetch"
-          :disabled="loading"
+          :disabled="loading || !isTeacherOrAdmin"
           @click="fetchProblem"
         >
-          {{ loading ? '拉题中…' : '调 graph 出 1 道题' }}
+          {{ loading ? "拉题中…" : "调 graph 出 1 道题" }}
         </button>
         <span
           class="counts"
@@ -245,15 +251,10 @@ const currentEntry = computed<ReviewEntry | null>(() => {
           <span class="ok">通过 {{ counts.approved }}</span> ·
           <span class="bad">驳回 {{ counts.rejected }}</span>
         </span>
-        <button
-          v-if="entries.length > 0"
-          type="button"
-          class="btn btn-ghost"
-          data-testid="teacher-review-clear"
-          @click="clearAll"
-        >
-          清空队列
-        </button>
+        <span
+          v-if="loadingQueue"
+          class="muted"
+        >正在同步后端队列…</span>
       </div>
 
       <div class="review-body">
@@ -270,18 +271,20 @@ const currentEntry = computed<ReviewEntry | null>(() => {
           </p>
           <ul v-else>
             <li
-              v-for="(entry, idx) in entries"
-              :key="`${entry.problem.problemId}-${entry.fetchedAt}`"
+              v-for="entry in entries"
+              :key="entry.id"
               :class="{
                 'list-item': true,
-                'list-item--current': idx === selectedIdx,
-                'list-item--approved': entry.decision === 'approved',
-                'list-item--rejected': entry.decision === 'rejected',
+                'list-item--current': entry.id === selectedId,
+                'list-item--approved': entry.decision === 'APPROVED',
+                'list-item--rejected': entry.decision === 'REJECTED',
               }"
-              @click="selectedIdx = idx"
+              @click="selectedId = entry.id"
             >
               <header>
-                <strong>第 {{ entry.problem.chapter }} 章 S{{ entry.problem.stage }}</strong>
+                <strong>第 {{ entry.problem.chapter }} 章 S{{
+                  entry.problem.stage
+                }}</strong>
                 <span class="badge">{{ entry.problem.kcCode }}</span>
                 <span
                   class="badge"
@@ -290,7 +293,7 @@ const currentEntry = computed<ReviewEntry | null>(() => {
                     'badge--golden': !entry.problem.aiGenerated,
                   }"
                 >
-                  {{ entry.problem.aiGenerated ? 'AI' : 'Golden' }}
+                  {{ entry.problem.aiGenerated ? "AI" : "Golden" }}
                 </span>
               </header>
               <p class="list-statement">
@@ -299,11 +302,17 @@ const currentEntry = computed<ReviewEntry | null>(() => {
               <small class="list-meta">
                 <span
                   class="decision-dot"
-                  :class="`decision-dot--${entry.decision}`"
+                  :class="`decision-dot--${entry.decision.toLowerCase()}`"
                   aria-hidden="true"
                 />
-                {{ entry.decision === 'pending' ? '待审' : entry.decision === 'approved' ? '已通过' : '已驳回' }}
-                · {{ new Date(entry.fetchedAt).toLocaleString() }}
+                {{
+                  entry.decision === "PENDING"
+                    ? "待审"
+                    : entry.decision === "APPROVED"
+                      ? "已通过"
+                      : "已驳回"
+                }}
+                · {{ new Date(entry.requestedAt).toLocaleString() }}
               </small>
             </li>
           </ul>
@@ -327,7 +336,11 @@ const currentEntry = computed<ReviewEntry | null>(() => {
                     'badge--reviewed': currentEntry.problem.reviewed,
                   }"
                 >
-                  {{ currentEntry.problem.reviewed ? '5 重审查通过' : '未通过审查' }}
+                  {{
+                    currentEntry.problem.reviewed
+                      ? "5 重审查通过"
+                      : "未通过审查"
+                  }}
                 </span>
               </h2>
               <p>
@@ -343,7 +356,7 @@ const currentEntry = computed<ReviewEntry | null>(() => {
             <section>
               <h3>样例</h3>
               <div class="sample-pair">
-                <pre>{{ currentEntry.problem.sampleInput || '(无输入)' }}</pre>
+                <pre>{{ currentEntry.problem.sampleInput || "(无输入)" }}</pre>
                 <pre>{{ currentEntry.problem.sampleOutput }}</pre>
               </div>
             </section>
@@ -359,41 +372,54 @@ const currentEntry = computed<ReviewEntry | null>(() => {
               </ul>
             </section>
             <section
-              v-if="currentEntry.decision !== 'pending'"
+              v-if="currentEntry.decision !== 'PENDING'"
               class="decision-recap"
               :class="{
-                'decision-recap--approved': currentEntry.decision === 'approved',
-                'decision-recap--rejected': currentEntry.decision === 'rejected',
+                'decision-recap--approved':
+                  currentEntry.decision === 'APPROVED',
+                'decision-recap--rejected':
+                  currentEntry.decision === 'REJECTED',
               }"
             >
-              <strong>{{ currentEntry.decision === 'approved' ? '已通过' : '已驳回' }}</strong>
-              <span v-if="currentEntry.reason">
-                · 原因：{{ currentEntry.reason }}
+              <strong>{{
+                currentEntry.decision === "APPROVED" ? "已通过" : "已驳回"
+              }}</strong>
+              <span v-if="currentEntry.decisionReason">
+                · 审核意见：{{ currentEntry.decisionReason }}
               </span>
-              <small>{{ currentEntry.decidedAt ? new Date(currentEntry.decidedAt).toLocaleString() : '' }}</small>
+              <span v-if="currentEntry.deciderUsername">
+                · 审核人：{{ currentEntry.deciderUsername }}
+              </span>
+              <small>{{
+                currentEntry.decidedAt
+                  ? new Date(currentEntry.decidedAt).toLocaleString()
+                  : ""
+              }}</small>
             </section>
             <footer class="actions">
               <button
                 type="button"
                 class="btn btn-ok"
                 data-testid="teacher-review-approve"
-                :disabled="!isTeacherOrAdmin"
+                :disabled="!canDecide"
                 @click="approveCurrent"
               >
                 通过 · 上线该题
               </button>
               <textarea
-                v-model="rejectReason"
+                v-model="decisionReason"
                 class="reject-input"
                 rows="2"
-                placeholder="驳回原因（必填，将记入 LearningEvent）"
-                data-testid="teacher-review-reject-reason"
+                maxlength="1000"
+                :disabled="currentEntry.decision !== 'PENDING' || deciding"
+                placeholder="审核意见（通过或驳回均必填，写入后端审计记录）"
+                data-testid="teacher-review-decision-reason"
               />
               <button
                 type="button"
                 class="btn btn-bad"
                 data-testid="teacher-review-reject"
-                :disabled="!isTeacherOrAdmin"
+                :disabled="!canDecide"
                 @click="rejectCurrent"
               >
                 驳回该题
@@ -419,8 +445,12 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   gap: 12px;
   padding: 16px;
   min-height: calc(100dvh - 56px);
-  background: linear-gradient(180deg, var(--pyt-color-bg-elevated) 0%, #f1d896 100%);
-  font-family: var(--pyt-font-pixel), 'PingFang SC', monospace;
+  background: linear-gradient(
+    180deg,
+    var(--pyt-color-bg-elevated) 0%,
+    #f1d896 100%
+  );
+  font-family: var(--pyt-font-pixel), "PingFang SC", monospace;
   color: #3a2a14;
 }
 .review-header {
@@ -636,7 +666,8 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   padding: 10px;
   background: var(--pyt-color-bg-soft);
   border: 2px solid var(--pyt-color-border);
-  font-family: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace;
+  font-family: "Consolas", "JetBrains Mono", "Cascadia Code", Menlo,
+    "Courier New", monospace;
   font-size: 13px;
   line-height: 1.7;
   white-space: pre-wrap;
@@ -651,7 +682,8 @@ const currentEntry = computed<ReviewEntry | null>(() => {
   padding: 8px;
   background: #1a0e04;
   color: #f6f1e6;
-  font-family: 'Consolas', 'JetBrains Mono', 'Cascadia Code', Menlo, 'Courier New', monospace;
+  font-family: "Consolas", "JetBrains Mono", "Cascadia Code", Menlo,
+    "Courier New", monospace;
   font-size: 12px;
   border: 2px solid var(--pyt-color-text-primary);
 }

@@ -85,7 +85,10 @@ vi.mock('@/components/workshop/ChatComposer.vue', async () => {
   return {
     default: defineComponent({
       name: 'ChatComposer',
-      props: ['mentionItems', 'busy'],
+      props: {
+        mentionItems: { type: Array, default: () => [] },
+        busy: { type: Boolean, default: false },
+      },
       emits: ['submit'],
       template: '<div data-testid="stub-composer" />',
     }),

@@ -33,7 +33,7 @@ class StubProvider(LlmProvider):
 
 def test_orchestrator_turn_returns_200_and_response_shape() -> None:
     app.state.llm_provider = StubProvider([], reply="我们先看再学。")
-    client = TestClient(app)
+    client = TestClient(app, headers={"X-Internal-Subject": "user:1"})
     body = {
         "user_id": 1,
         "session_id": "route-turn",
@@ -64,7 +64,7 @@ def test_orchestrator_turn_returns_200_and_response_shape() -> None:
 
 def test_orchestrator_stream_emits_canonical_agui_events() -> None:
     app.state.llm_provider = StubProvider([], reply="本轮安排已就绪。")
-    client = TestClient(app)
+    client = TestClient(app, headers={"X-Internal-Subject": "user:1"})
     body = {
         "user_id": 1,
         "session_id": "route-stream",
@@ -93,7 +93,7 @@ def test_orchestrator_stream_emits_canonical_agui_events() -> None:
 def test_orchestrator_stream_emits_state_delta_plan_progress() -> None:
     """dispatch 经 AG-UI STATE_DELTA 实时推送 plan 步骤进度（真实产出，不造假）。"""
     app.state.llm_provider = StubProvider([], reply="进度同步演示。")
-    client = TestClient(app)
+    client = TestClient(app, headers={"X-Internal-Subject": "user:1"})
     body = {
         "user_id": 1,
         "session_id": "route-state-delta",
@@ -119,7 +119,7 @@ def test_orchestrator_followup_reuses_stored_plan_without_dispatch() -> None:
     """已有计划后的“第一步/下一步”追问应快速复用 plan，不再重跑子 agent。"""
     session_id = "route-followup-fast"
     app.state.llm_provider = StubProvider([], reply="先完成第一步的视频预习。")
-    client = TestClient(app)
+    client = TestClient(app, headers={"X-Internal-Subject": "user:1"})
     first = {
         "user_id": 1,
         "session_id": session_id,
@@ -172,7 +172,7 @@ def test_compound_orchestrator_stream_emits_task_plan_and_incremental_results() 
     )
     # 生产进程未预加载 KC 集合时，请求内的课程索引仍是本轮证据接地的权威边界。
     app.state.valid_kc_codes = set()
-    client = TestClient(app)
+    client = TestClient(app, headers={"X-Internal-Subject": "user:1"})
     route = compile_route_decision(
         IntentRouteRequest(
             message="总结循环课件，然后根据总结出三道练习",

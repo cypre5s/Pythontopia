@@ -35,7 +35,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  *       终态广播 {@code result}/{@code error}。
  * </ul>
  *
- * <p>红线：合成失败/讯飞缺失沿用 {@link StoryboardCompositionService} 的 degraded 占位语义，不伪造成片。
+ * <p>红线：合成失败必须进入 FAILED 并广播结构化错误；不生成占位图片或伪造成片。
  */
 @Service
 public class MediaJobService {

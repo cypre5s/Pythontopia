@@ -31,12 +31,14 @@ public record WeeklyReportDto(
       List<String> tags,
       String createdAt) {}
 
-  /** 掌握度变化：单 KC 的 delta 与最近事件。 */
+  /** 本周掌握度变化与服务端留存的证据覆盖。 */
   public record MasteryDeltaBrief(
       String kcCode,
       double currentScore,
       double confidence,
-      List<String> recentEventReasons) {}
+      double weeklyDelta,
+      int evidenceCount,
+      List<String> evidenceSources) {}
 
   /** AI 团队为你做了什么（资源运行摘要）。 */
   public record ResourceRunBrief(

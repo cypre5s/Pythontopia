@@ -15,7 +15,11 @@ import {
 import { playUiClick } from '@/composables/useStardewFx';
 
 const props = withDefaults(
-  defineProps<{ embeddedOpen?: boolean; pendingTurn?: WorkshopChatHistoryTurnDto | null }>(),
+  defineProps<{
+    ownerId: number | null;
+    embeddedOpen?: boolean;
+    pendingTurn?: WorkshopChatHistoryTurnDto | null;
+  }>(),
   {
     embeddedOpen: false,
     pendingTurn: null,
@@ -30,28 +34,38 @@ const loaded = ref(false);
 const failed = ref(false);
 const turns = ref<WorkshopChatHistoryTurnDto[]>([]);
 const effectiveOpen = computed<boolean>(() => props.embeddedOpen || open.value);
+let loadGeneration = 0;
 
 async function load(force = false): Promise<void> {
+  const ownerId = props.ownerId;
+  if (ownerId === null) return;
+  const generation = ++loadGeneration;
   loading.value = true;
   failed.value = false;
   try {
-    turns.value = await listWorkshopChatHistoryTurns(50, { force });
+    const result = await listWorkshopChatHistoryTurns(ownerId, 50, { force });
+    if (generation !== loadGeneration || props.ownerId !== ownerId) return;
+    turns.value = result;
     loaded.value = true;
   } catch {
+    if (generation !== loadGeneration || props.ownerId !== ownerId) return;
     failed.value = true;
   } finally {
-    loading.value = false;
+    if (generation === loadGeneration && props.ownerId === ownerId) {
+      loading.value = false;
+    }
   }
 }
 
 function mergeTurn(turn: WorkshopChatHistoryTurnDto): void {
+  if (props.ownerId === null) return;
   const existingIndex = turns.value.findIndex((item) => item.id === turn.id);
   if (existingIndex >= 0) {
     turns.value = turns.value.map((item, index) => (index === existingIndex ? turn : item));
   } else {
     turns.value = [turn, ...turns.value];
   }
-  rememberWorkshopChatHistoryTurn(turn);
+  rememberWorkshopChatHistoryTurn(props.ownerId, turn);
   failed.value = false;
 }
 
@@ -113,6 +127,21 @@ watch(
   () => props.embeddedOpen,
   (value) => {
     if (value && !loaded.value && !loading.value) void load();
+  },
+);
+
+watch(
+  () => props.ownerId,
+  (ownerId, previousOwnerId) => {
+    if (ownerId === previousOwnerId) return;
+    // 先作废旧请求并同步清屏；transport 即使不响应 abort，晚到结果也过不了 generation+owner 双闸。
+    loadGeneration += 1;
+    turns.value = [];
+    query.value = '';
+    loaded.value = false;
+    loading.value = false;
+    failed.value = false;
+    if (ownerId !== null && effectiveOpen.value) void load();
   },
   { immediate: true },
 );

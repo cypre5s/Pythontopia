@@ -18,7 +18,7 @@ import org.springframework.stereotype.Service;
  * 把一份故事板分镜（图序列 + 每镜 TTS 旁白）经 ffmpeg 程序化合成为真实 mp4 短视频讲解。
  *
  * <p>讯飞未提供公开「文生视频」接口，故采用「文生图 + TTS 配音 → ffmpeg 拼接」路线。每个分镜：
- * {@link XfyunImageService} 生成插画（无 key 占位）+ {@link XfyunTtsService} 合成旁白（无 key 跳过音轨），
+ * {@link XfyunImageService} 生成真实插画（无凭据时 fail closed）+ {@link XfyunTtsService} 合成旁白，
  * 再用 ffmpeg 把图按旁白时长定格成片段并 concat 为整片。
  *
  * <p><b>降级</b>：未安装 ffmpeg 时 {@link #isAvailable()} 为 false，{@link #compose} 抛

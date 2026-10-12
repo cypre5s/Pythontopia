@@ -35,9 +35,9 @@ export interface TutorAskRequest {
    * 用于「聊天记录」按会话分组而非每问一条。前端生成、后端落库，不下传 graph。
    */
   conversationId?: string;
-  /** 看课页视频 RAG 脚手架：当前视频 id，后端据此合成「视频上下文」（字幕转写检索为占位）。 */
+  /** 看课页当前视频 id；后端据此读取真实 MP4 的机器转写时间窗。 */
   videoId?: number;
-  /** 看课页视频 RAG 脚手架：当前播放时刻（秒），后端按时间锚点贴合作答。 */
+  /** 当前播放时刻（秒）；后端读取前后时间窗字幕并继续以课件 RAG 证据约束回答。 */
   videoTimeSec?: number;
 }
 

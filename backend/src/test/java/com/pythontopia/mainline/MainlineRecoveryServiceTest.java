@@ -18,6 +18,7 @@ import com.pythontopia.mainline.domain.ChapterStar;
 import com.pythontopia.mainline.star.ChapterStarRepository;
 import com.pythontopia.mainline.star.ChapterStarService;
 import com.pythontopia.mainline.star.StarSource;
+import com.pythontopia.world.boss.ExpeditionScoreService;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,18 +32,22 @@ class MainlineRecoveryServiceTest {
 
   private static final long USER = 1L;
   private static final int CH = 1;
+  private static final String RUN_ID = "123e4567-e89b-12d3-a456-426614174000";
 
   private final ObjectMapper mapper = new ObjectMapper();
 
   @Mock private BugMineRepository bugMineRepository;
   @Mock private ChapterStarService starService;
   @Mock private ChapterStarRepository starRepository;
+  @Mock private ExpeditionScoreService expeditionScoreService;
 
   private MainlineRecoveryService service;
 
   @BeforeEach
   void setUp() {
-    service = new MainlineRecoveryService(bugMineRepository, starService, starRepository);
+    service =
+        new MainlineRecoveryService(
+            bugMineRepository, starService, starRepository, expeditionScoreService);
   }
 
   private ChapterStar star(int stars) {
@@ -76,38 +81,37 @@ class MainlineRecoveryServiceTest {
 
   @Test
   void endlessNotQualifyingAwardsNothing() {
-    assertThat(service.recordEndlessSummary(USER, CH, 7, 10, 3)).isFalse(); // 答对 < 8
-    assertThat(service.recordEndlessSummary(USER, CH, 8, 11, 3)).isFalse(); // 8/11 ≈ 0.73 < 0.8
-    assertThat(service.recordEndlessSummary(USER, CH, 10, 0, 0)).isFalse(); // total 非法
+    when(expeditionScoreService.summarizeVerifiedAttempts(USER, RUN_ID, CH))
+        .thenReturn(new ExpeditionScoreService.VerifiedAttemptSummary(10, 7));
+    assertThat(service.recordEndlessSummary(USER, CH, RUN_ID)).isFalse();
     verify(starService, never()).applyRecoveryStar(anyLong(), anyInt(), any());
   }
 
   @Test
   void endlessQualifyingAwardsStar() {
+    when(expeditionScoreService.summarizeVerifiedAttempts(USER, RUN_ID, CH))
+        .thenReturn(new ExpeditionScoreService.VerifiedAttemptSummary(10, 8));
     when(starRepository.countEventsToday(USER, CH, StarSource.ENDLESS_RECOVERY.name())).thenReturn(0);
     when(starRepository.find(USER, CH)).thenReturn(Optional.of(star(1)));
     when(starService.applyRecoveryStar(USER, CH, StarSource.ENDLESS_RECOVERY)).thenReturn(star(2));
-    assertThat(service.recordEndlessSummary(USER, CH, 8, 10, 5)).isTrue(); // 正确率 0.8 边界达标
+    assertThat(service.recordEndlessSummary(USER, CH, RUN_ID)).isTrue(); // 正确率 0.8 边界达标
   }
 
-  /**
-   * correct/total 全由客户端自证：{@code 8/1 = 8.0 ≥ 0.8} 这类构造过去能白拿 1★（并顺带解锁下一章）。
-   * 服务端必须先做可信性兜底：答对数 &gt; 总题数 / 超单轮题量上限 / 连对数 &gt; 总题数一律不发星。
-   */
   @Test
-  void endlessImplausibleSelfReportAwardsNothing() {
-    assertThat(service.recordEndlessSummary(USER, CH, 8, 1, 0)).isFalse(); // correct > total
-    assertThat(service.recordEndlessSummary(USER, CH, 10, 10, 11)).isFalse(); // streak > total
-    assertThat(service.recordEndlessSummary(USER, CH, 500, 500, 0)).isFalse(); // 超单轮题量上限
+  void clientClaimedResultsCannotAwardAnEndlessStarWithoutVerifiedAttempts() {
+    when(expeditionScoreService.summarizeVerifiedAttempts(USER, RUN_ID, CH))
+        .thenReturn(new ExpeditionScoreService.VerifiedAttemptSummary(0, 0));
+    assertThat(service.recordEndlessSummary(USER, CH, RUN_ID)).isFalse();
 
     verify(starService, never()).applyRecoveryStar(anyLong(), anyInt(), any());
-    verify(starRepository, never()).countEventsToday(anyLong(), anyInt(), any());
   }
 
   @Test
   void endlessDailyCapBlocksSecondAward() {
+    when(expeditionScoreService.summarizeVerifiedAttempts(USER, RUN_ID, CH))
+        .thenReturn(new ExpeditionScoreService.VerifiedAttemptSummary(10, 9));
     when(starRepository.countEventsToday(USER, CH, StarSource.ENDLESS_RECOVERY.name())).thenReturn(1);
-    assertThat(service.recordEndlessSummary(USER, CH, 10, 10, 9)).isFalse();
+    assertThat(service.recordEndlessSummary(USER, CH, RUN_ID)).isFalse();
     verify(starService, never()).applyRecoveryStar(anyLong(), anyInt(), any());
   }
 
@@ -116,7 +120,7 @@ class MainlineRecoveryServiceTest {
   void recoveryRejectedForLockedChapter() {
     when(starRepository.find(USER, 4)).thenReturn(Optional.empty()); // 第 4 章 0★ → 第 5 章未解锁
 
-    assertThatThrownBy(() -> service.recordEndlessSummary(USER, 5, 10, 10, 10))
+    assertThatThrownBy(() -> service.recordEndlessSummary(USER, 5, RUN_ID))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("尚未解锁");
     assertThatThrownBy(() -> service.claimErrorbookRecovery(USER, 5))

@@ -3,6 +3,7 @@ ARG HTTP_PROXY
 ARG HTTPS_PROXY
 ARG NO_PROXY
 ENV HTTP_PROXY=${HTTP_PROXY} HTTPS_PROXY=${HTTPS_PROXY} NO_PROXY=${NO_PROXY}
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 WORKDIR /app
 
 # apt 换阿里源：deb.debian.org 在国内网络拉索引极慢（ECS 直连也一样）。
@@ -16,11 +17,17 @@ COPY pythontopia_graph ./pythontopia_graph
 RUN pip install --no-cache-dir \
     --index-url https://mirrors.aliyun.com/pypi/simple/ \
     --trusted-host mirrors.aliyun.com \
-    .
+    ".[browse]" \
+    && python -m playwright install --with-deps chromium \
+    && useradd --create-home --uid 10001 pythontopia \
+    && chown -R pythontopia:pythontopia /app /ms-playwright
 
 # 构建代理仅供上面 apt/pip 拉取使用；务必清空运行时代理，否则部署到 ECS 后 httpx 会去
 # 连不存在的 7892 代理 → LLM/外部调用 ConnectError（AI 功能全线失效）。
 ENV HTTP_PROXY="" HTTPS_PROXY="" NO_PROXY="" http_proxy="" https_proxy=""
+
+# 官方建议抓取不可信网页时不要以 root 运行浏览器；allowlist/SSRF 守卫之外再保留 OS 隔离层。
+USER pythontopia
 
 EXPOSE 18091
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=15s \

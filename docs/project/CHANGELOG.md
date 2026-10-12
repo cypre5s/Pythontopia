@@ -1,14 +1,52 @@
 # Changelog
 
+## 2026-10-12 — DeepSeek 安全边界与针对性回归
+
+- 远征记分只接受服务端判题结果并绑定活动 run；题目发放使用唯一实例 ID，分数榜按一个活动班级与单局成绩汇总。补星 API 只接收章节和 run ID，服务端按本人活动 run 的发题记录汇总正式判题；每局最多 12 个判题名额，并锁定 run 行串行检查额度。预生成加入并发、排队、单用户配额和过期任务回收。
+- Graph 导师代码验证不再以 Graph worker 身份执行学生代码，改为复用 Piston/Isolate；隔离服务不可用时 fail closed，Tutor 明确报告未执行。Java 旧 subprocess provider 也永久拒绝运行提交。
+- Boss 判题不再按可预测的 `approved-{id}-v{version}` 全局审核库 ID 恢复题目；只有当前用户实际签发并持久化的题目才能判定，防止猜 ID 绕过用户题目归属并回写学情。
+- Learner Twin 周报限制在近 7 天权威事件，拒绝客户端伪造正式练习结果；掌握度变化展示事件数与来源。管理台继续只展示有真实 API 支撑的功能。
+- AI runtime 平台聚合改为 ADMIN-only，学生仍仅读本人运行证据；后台补上退出到登录页的操作。
+- 开发与生产判题默认使用 Piston，未配置时 fail closed；认证过滤与生产 DeepSeek 配置门禁补上回归。开发 Compose 移除遗留微调模型变量。
+- DeepSeek 图像请求限 3 张、每张 5 MiB，检查媒体字节和 Base64；快档/视觉档改用官方当前模型名 `deepseek-flash`。key 只存在于被忽略的本地 `deploy/.env`。
+- 补齐做题页 AutoGen CHAT 与主线锚定导师的图片输入；普通导师支持图片单发，Graph 校验并将工作流图片路由到 DeepSeek vision tier，仍返回文本且不保存图片。
+- 验证：前端全量 248 files / 2444 tests、类型检查与生产构建通过；ESLint 0 errors / 114 warnings。Graph 1735 passed/1 skipped，RAG 156 passed/2 skipped；后端远征补星、成绩、角色访问等定向测试通过并将空库迁移至 V193。AI readiness 与 Compose 配置门禁通过。
+- Maven 全量 1139 项仍未全绿：5 个旧测试夹具问题已修正且相关测试定向通过；6 个 Testcontainers 集成类因 Docker 主机端口冲突不能启动。未做真实 DeepSeek API、全栈浏览器或生产 Piston 测试；无尽远征真实出题 P50/P95、缓存命中率、重复率、恢复率和完成率均未测，不填推测值。
+- 实施记录：`docs/plans/2026-10-12-deepseek-vision-chat-worklog.md`、`docs/plans/2026-10-12-deepseek-ai-tutor-security-worklog.md`。
+
+### 同日后续修复
+
+- 远征 run ID 改为服务端签发，成绩只按服务端正式判题汇总，结算后禁止复用；V194 允许并约束 `ACTIVE/SETTLED` 状态。存档里的节点、HP、遗物等仍是客户端快照，不作为排行榜或学习进度依据。
+- Graph 页面读取在浏览器端先截断，再将文本交给 Python，避免把无界 `body.inner_text()` 副本传入服务进程。
+- Twin 周报显示 KC 置信度；远征知识选择器使用服务端掌握度和置信度，低证据点获有限且可解释的探索加权。设计现状、研究来源与未完成边界见 `docs/plans/2026-10-12-expedition-twin-research-design.md`。
+- 本轮 targeted verification：Graph selector 8 tests 与 Ruff 通过；Java 远征 run/score、Boss、Twin 与 Runtime 10 个测试类合计 55 passed；前端远征 store/TwinWeekly 41 tests 与 Vue 类型检查通过。以上为模块检查，不代表真实 Web 全栈验收或性能测量。
+
+## 2026-10-12 — 管理后台最小可用区
+
+- 新增 ADMIN-only `/admin` 壳层，含分组侧栏、窄屏抽屉和局部蓝灰配色；不改游戏全局色板。
+- 题目审核队列新增真实状态筛选、文本搜索与服务端分页，保留旧列表接口；后端 PostgreSQL 测试验证筛选、搜索和分页。
+- 仅接入已存在的 AI 运维概览与题目审核队列两个入口，展示后端真实数据并通过审核 API 持久化决定；没有用户管理入口或伪造数据。
+- 修复矿洞守矿人 NPC 索引指向不存在头像的问题，复用已审计的矿工头像素材，没有新增第三方素材；Web 静态资源检查未发现缺文件。
+- 管理页定向测试、前端严格类型检查、后端审核服务与 PostgreSQL 定向测试通过；真实浏览器全栈联测未执行。
+- 实施记录见 `docs/plans/2026-10-12-admin-area-worklog.md`。
+
+## 2026-10-12 — 导学工作流切换到 AutoGen AgentChat
+
+- Java `/api/tutor/workflow` 背后的 Graph runtime 改用 AutoGen `RoundRobinGroupChat` 固定顺序执行现有五个 handler；每轮只调度一个阶段，失败后停止后续派发，不开放模型自主选工具。
+- 阶段间用 JSON 状态信封传递，并恢复 `WorkflowRunRequest`、画像/教练 DTO、动作和 `RagHit` 类型；SSE trace/result/error 与 Java 投影合同保持原格式。
+- SSE 断开会取消共享 `CancellationToken` 并清理 graph task；没有引入 Alethicode 数据库或 API。
+- AutoGen AgentChat/Core 固定为 0.7.5。Graph 定向工作流与 SSE 回归：39 项通过；定向 Mypy 仍报 6 个既有类型错误，Java/真实模型联测未执行。
+- 实施记录见 `docs/plans/2026-10-12-tutor-autogen-worklog.md`。
+
 ## 2026-10-12 — DeepSeek 导师文字与图片问答
 
-- 导师面板和工坊将图片直接交给 DeepSeek 视觉模型；回答继续使用 TutorAgent 文本流及现有 RAG、grounding、安全审查。
-- 工坊新增 JPEG、PNG、GIF、WebP 图片附件；Graph 校验格式、base64、数量和大小，图片只用于当轮请求，不写入聊天历史。
-- 视觉请求使用独立模型配置，凭证只保存在 Git 忽略的本地 `deploy/.env`；未发送真实 API 请求。
-- Graph 定向回归 24 项通过；前端图片 composer 测试、类型检查和 Java Tutor 转发/SSE 定向测试通过。
-- Maven 全量运行 1124 项、0 assertion failures，但 6 个 Testcontainers 集成测试因 Docker 随机宿主端口冲突启动失败；串行重跑 18 项通过。
-- 详细记录见 `docs/plans/2026-10-12-deepseek-vision-chat-worklog.md`。
-
+- Graph 生成模型入口强制使用 DeepSeek；导师面板和工坊把图片直接交给 DeepSeek 视觉模型，回答仍走 TutorAgent 文本流及现有 RAG、grounding、安全审查。
+- 工坊附件入口新增 JPEG、PNG、GIF、WebP 图片，图片只在本轮请求中传递，不进入文档附件解析或历史存储。
+- Graph 校验图片格式、base64、数量和大小；图片输入使用 `deepseek-flash`，文字仍使用现有文本/快档配置。密钥只放在 Git 忽略的本地 `deploy/.env`。
+- 关闭 Spark、讯飞语音/图片接口、浏览器语音输入和 B 站 AI 总结调用；视频概述继续由 DeepSeek 生成，时间点仅使用真实分 P 元数据。
+- RAG 切换为本地 hash 与 BM25，不调用外部 embedding API；hash 向量不写入学习记忆语义向量表，BM25 可用时 readiness 显示 `ready_degraded`。
+- 定向回归见 `docs/plans/2026-10-12-deepseek-vision-chat-worklog.md`；Maven 全量 1124 项中有 6 项因 Docker 随机端口冲突未能启动，串行重跑 18 项通过；真实 DeepSeek API 联测未执行。
+- 详细实施记录见 `docs/plans/2026-10-12-deepseek-vision-chat-worklog.md`。
 
 ## 2026-07-28 — 最终 ECS 双协议发布与 227 项公网验收
 

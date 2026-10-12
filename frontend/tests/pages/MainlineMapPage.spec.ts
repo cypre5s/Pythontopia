@@ -76,6 +76,7 @@ function setupRouter(): Router {
       { path: '/mainline-map', component: MainlineMapPage },
       { path: '/world', component: { template: '<div data-testid="world-stub" />' } },
       { path: '/endless', component: { template: '<div data-testid="endless-stub" />' } },
+      { path: '/expedition', component: { template: '<div data-testid="expedition-stub" />' } },
       { path: '/bug-mine', component: { template: '<div data-testid="bugmine-stub" />' } },
       { path: '/mainline/stage/:stageId', component: { template: '<div data-testid="stage-stub" />' } },
       { path: '/chapter-test/:chapter', component: { template: '<div data-testid="test-stub" />' } },
@@ -213,6 +214,16 @@ describe('MainlineMapPage', () => {
     await w.get('[data-testid="mainline-open-boss"]').trigger('click');
     await flushPromises();
     expect(router.currentRoute.value.path).toBe('/boss/2');
+  });
+
+  it('opens the verified expedition with the selected chapter for recovery stars', async () => {
+    const { wrapper: w, router } = await mountPage();
+
+    await w.get('[data-testid="mainline-open-endless"]').trigger('click');
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe('/expedition');
+    expect(router.currentRoute.value.query.focus).toBe('2');
   });
 
   it('未毕业时不渲染毕业典礼入口；七章全部 ≥1★ 时给出显式入口', async () => {

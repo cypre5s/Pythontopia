@@ -38,6 +38,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 class AuthServiceSecurityTest {
 
   private static final String DUMMY_HASH = "dummy-password-hash";
+  private static final String VALID_TEACHER_INVITE = "7ec856ee4f514a66ad5bf1f4f7a9c193";
   private static final Instant EXPIRES_AT = Instant.parse("2026-05-21T08:00:00Z");
 
   private UserRepository repository;
@@ -51,7 +52,9 @@ class AuthServiceSecurityTest {
     encoder = mock(PasswordEncoder.class);
     jwtService = mock(JwtService.class);
     when(encoder.encode("pythontopia-login-timing-dummy")).thenReturn(DUMMY_HASH);
-    service = new AuthService(repository, encoder, jwtService, new TeacherInviteProperties("invite"));
+    service =
+        new AuthService(
+            repository, encoder, jwtService, new TeacherInviteProperties(VALID_TEACHER_INVITE));
   }
 
   private static UserAccount user(Role role, String status, int tokenVersion) {

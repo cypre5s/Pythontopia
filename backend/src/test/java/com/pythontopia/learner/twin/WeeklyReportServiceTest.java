@@ -1,6 +1,7 @@
 package com.pythontopia.learner.twin;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -10,6 +11,9 @@ import static org.mockito.Mockito.when;
 
 import com.pythontopia.learner.mastery.MasteryRepository;
 import com.pythontopia.learner.mastery.MasterySnapshot;
+import com.pythontopia.learner.mastery.MasteryRepository.WeeklyEvidence;
+import com.pythontopia.learner.event.LearningEventLogRepository;
+import com.pythontopia.learner.event.LearningEventLogRepository.AuthoritativeEventCounts;
 import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.reflection.LearnerInsightRepository;
@@ -24,6 +28,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.jdbc.BadSqlGrammarException;
 
 @ExtendWith(MockitoExtension.class)
 class WeeklyReportServiceTest {
@@ -35,19 +40,27 @@ class WeeklyReportServiceTest {
   @Mock
   private MasteryRepository masteryRepository;
   @Mock
+  private LearningEventLogRepository eventRepository;
+  @Mock
   private JdbcTemplate jdbc;
 
   private WeeklyReportService service;
 
   @BeforeEach
   void setUp() {
-    service = new WeeklyReportService(memoryService, insightRepository, masteryRepository, jdbc);
+    service = new WeeklyReportService(
+        memoryService, insightRepository, masteryRepository, eventRepository, jdbc);
+    when(memoryService.retrieveAuthoritative(anyLong(), isNull(), isNull(), anyInt()))
+        .thenReturn(List.of());
+    when(eventRepository.summarizeAuthoritativeSince(anyLong(), any()))
+        .thenReturn(new AuthoritativeEventCounts(0, 0, 0));
+    when(masteryRepository.findWeeklyEvidence(anyLong(), any()))
+        .thenReturn(List.of());
   }
 
   @Test
   @DisplayName("空记忆返回空摘要且不崩溃")
   void emptyMemoryReturnsEmptyReport() {
-    when(memoryService.retrieve(anyLong(), isNull(), anyInt())).thenReturn(List.of());
     when(insightRepository.findByUser(anyLong(), anyInt())).thenReturn(List.of());
     when(masteryRepository.findAll(anyLong())).thenReturn(List.of());
     when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any()))
@@ -63,14 +76,16 @@ class WeeklyReportServiceTest {
   @Test
   @DisplayName("有记忆事件时统计正确的通过/失败数")
   void countsMemoryEvents() {
-    when(memoryService.retrieve(anyLong(), isNull(), anyInt()))
+    when(memoryService.retrieveAuthoritative(anyLong(), isNull(), isNull(), anyInt()))
         .thenReturn(List.of(
             new MemoryItemDto(1L, "practice_failed", "练习失败：KC01（WA）",
-                List.of("KC01"), "2026-06-08T10:00:00Z", 3, 0.8, 0.6, 0.0, 0.5),
+                List.of("KC01"), java.time.Instant.now().minusSeconds(86400).toString(), 3, 0.8, 0.6, 0.0, 0.5),
             new MemoryItemDto(2L, "practice_succeeded", "练习通过：KC02",
-                List.of("KC02"), "2026-06-09T10:00:00Z", 2, 0.9, 0.4, 0.0, 0.52)));
-    when(insightRepository.findByUser(anyLong(), anyInt())).thenReturn(List.of());
-    when(masteryRepository.findAll(anyLong())).thenReturn(List.of());
+                List.of("KC02"), java.time.Instant.now().minusSeconds(3600).toString(), 2, 0.9, 0.4, 0.0, 0.52),
+            new MemoryItemDto(3L, "practice_succeeded", "旧的练习通过：KC03",
+                List.of("KC03"), java.time.Instant.now().minusSeconds(8 * 86400L).toString(), 2, 0.9, 0.4, 0.0, 0.52)));
+    when(eventRepository.summarizeAuthoritativeSince(anyLong(), any()))
+        .thenReturn(new AuthoritativeEventCounts(2, 1, 1));
     when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any()))
         .thenReturn(List.of());
 
@@ -79,21 +94,21 @@ class WeeklyReportServiceTest {
     assertThat(report.memoryBrief().totalEvents()).isEqualTo(2);
     assertThat(report.memoryBrief().failedPractices()).isEqualTo(1);
     assertThat(report.memoryBrief().succeededPractices()).isEqualTo(1);
+    assertThat(report.memoryBrief().topKcCodes()).doesNotContain("KC03");
   }
 
   @Test
   @DisplayName("有掌握度时返回 delta 摘要")
   void includesMasteryDeltas() {
-    when(memoryService.retrieve(anyLong(), isNull(), anyInt())).thenReturn(List.of());
-    when(insightRepository.findByUser(anyLong(), anyInt())).thenReturn(List.of());
     when(masteryRepository.findAll(anyLong()))
         .thenReturn(List.of(
             new MasterySnapshot(1L, 1L, "KC01",
                 java.math.BigDecimal.valueOf(0.75),
                 java.math.BigDecimal.valueOf(0.8),
                 null, null)));
-    when(masteryRepository.recentEvents(anyLong(), eq("KC01"), anyInt()))
-        .thenReturn(List.of());
+    when(masteryRepository.findWeeklyEvidence(anyLong(), any()))
+        .thenReturn(List.of(new WeeklyEvidence("KC01", java.math.BigDecimal.valueOf(0.12), 2,
+            List.of("PRACTICE_PASS", "DECAY"))));
     when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any()))
         .thenReturn(List.of());
 
@@ -102,16 +117,21 @@ class WeeklyReportServiceTest {
     assertThat(report.masteryDeltas()).hasSize(1);
     assertThat(report.masteryDeltas().get(0).kcCode()).isEqualTo("KC01");
     assertThat(report.masteryDeltas().get(0).currentScore()).isEqualTo(0.75);
+    assertThat(report.masteryDeltas().get(0).confidence()).isEqualTo(0.8);
+    assertThat(report.masteryDeltas().get(0).weeklyDelta()).isEqualTo(0.12);
+    assertThat(report.masteryDeltas().get(0).evidenceCount()).isEqualTo(2);
+    assertThat(report.masteryDeltas().get(0).evidenceSources())
+        .containsExactly("PRACTICE_PASS", "DECAY");
   }
 
   @Test
   @DisplayName("有洞察时返回洞察列表")
   void includesRecentInsights() {
-    when(memoryService.retrieve(anyLong(), isNull(), anyInt())).thenReturn(List.of());
     when(insightRepository.findByUser(anyLong(), anyInt()))
         .thenReturn(List.of(
             new LearnerInsightDto(1L, "需要加强错误处理", "error_pattern",
-                List.of("KC01"), List.of(1L, 2L), 0.8, "GRAPH", "2026-06-09T00:00:00Z")));
+                List.of("KC01"), List.of(1L, 2L), 0.8, "GRAPH",
+                java.time.Instant.now().minusSeconds(3600).toString())));
     when(masteryRepository.findAll(anyLong())).thenReturn(List.of());
     when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any()))
         .thenReturn(List.of());
@@ -120,5 +140,16 @@ class WeeklyReportServiceTest {
 
     assertThat(report.insights()).hasSize(1);
     assertThat(report.insights().get(0).text()).contains("错误处理");
+  }
+
+  @Test
+  @DisplayName("resource_run 查询失败时向上传播数据库异常")
+  void propagatesResourceRunQueryFailure() {
+    BadSqlGrammarException failure =
+        new BadSqlGrammarException("weekly report", "SELECT", new java.sql.SQLException("boom"));
+    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any()))
+        .thenThrow(failure);
+
+    assertThatThrownBy(() -> service.build(1L)).isSameAs(failure);
   }
 }

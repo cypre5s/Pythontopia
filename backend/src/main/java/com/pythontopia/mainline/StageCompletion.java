@@ -6,7 +6,8 @@ import java.util.HashSet;
 
 /**
  * stage 三件套过线判定（纯函数，便于单测）：看=video_watched_sec≥required；
- * 学=required_pages>0 按去重页数，否则需读全 courseware_page_ids（空集占位视为已读）；练=去重例题数≥required。
+ * 学=required_pages>0 按去重页数，否则需读全 courseware_page_ids；课程页为空时 fail closed，避免课程数据故障静默放行；
+ * 练=去重例题数≥required。
  */
 public final class StageCompletion {
 
@@ -25,7 +26,7 @@ public final class StageCompletion {
       return distinctPages(progress) >= stage.requiredPages();
     }
     if (stage.coursewarePageIds().isEmpty()) {
-      return true; // 占位期：courseware_page_ids 未回填 ⇒ 「学」环节默认过线（见 V156 TODO）。
+      return false;
     }
     return progress != null
         && new HashSet<>(progress.pagesRead()).containsAll(stage.coursewarePageIds());

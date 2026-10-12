@@ -89,4 +89,17 @@ describe('useChallengeJudge preload state', () => {
       { allowGoldenFallback: false },
     );
   });
+
+  it('forwards the active expedition run id to the server-issued problem', async () => {
+    const judge = useChallengeJudge();
+    const expeditionRunId = '123e4567-e89b-12d3-a456-426614174000';
+
+    await judge.fetchProblem({ ...ARGS, expeditionRunId });
+
+    expect(apiMock.requestBossProblem).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ preferredKc: ARGS.kc, expeditionRunId }),
+      { allowGoldenFallback: false },
+    );
+  });
 });

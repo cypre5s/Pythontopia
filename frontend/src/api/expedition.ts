@@ -65,6 +65,8 @@ export async function requestFrontierPicks(input: FrontierSelectInput): Promise<
 
 /** 一局远征 run 的可持久化快照（与 stores/rogueRun PersistShape 同构，后端 expedition_run 表存它）。 */
 export interface ExpeditionRunSnapshot {
+  /** 后端为当前玩家存档签发的 run 标识。 */
+  runId?: string | null;
   phase: RogueRunPhase;
   focusChapter: number | null;
   nodes: RogueNode[];
@@ -133,11 +135,7 @@ export interface ExpeditionLeaderboard {
 }
 
 export interface ExpeditionScorePayload {
-  score: number;
-  depth: number;
-  bestMomentum: number;
-  cleared: boolean;
-  daily: boolean;
+  runId: string;
 }
 
 const SCORE_PATH = '/api/world/expedition/score';

@@ -247,7 +247,7 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 | POST | `/api/mainline/chapters/{chapter}/test/start` | STUDENT | 开考：下发**去答案**题面 + 截止时间（同章未提交只允许一份）→ `ChapterTestPaperDto` |
 | POST | `/api/mainline/chapters/{chapter}/test/{testId}/submit` | STUDENT | 交卷判分（选/判/填服务端比对，编程走判题沙箱跑隐藏用例），body `{ answers, integrity }` → `ChapterTestResultDto` |
 | GET | `/api/mainline/chapters/{chapter}/test/latest` | STUDENT | 本章最近一次测试结果（解析仅提交后返回）→ `ChapterTestResultDto?` |
-| POST | `/api/mainline/endless/summary` | STUDENT | 无尽一轮小结 → `ENDLESS_RECOVERY` 补星判定（防刷：每日每章至多记 1 次），body `{ chapter, correct, total, streak }` → `{ starAwarded }` |
+| POST | `/api/mainline/endless/summary` | STUDENT | 远征补星申请，body `{ chapter, runId }` → `{ starAwarded }`；后端只统计本人活动 run 中已发放且属于该章题目的正式判题记录，答对 ≥8 且正确率 ≥80% 才达标，每日每章至多发放 1 次 |
 | POST | `/api/mainline/chapters/{chapter}/recovery/errorbook` | STUDENT | 申领错题复盘补星（校验本章 bug-mine RESOLVED ≥ 3，幂等）→ `{ starAwarded }` |
 
 #### 无尽远征 / Boss（学生玩法）
@@ -281,6 +281,17 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 | GET | `/api/teacher/classrooms/{classroomId}/dashboard/chapter-tests` | 每章参试数 / 通过率 / 分数分布 |
 | GET | `/api/teacher/classrooms/{classroomId}/dashboard/endless-activity` | 近 7 日无尽轮次 / 正确率 / 补星数 |
 | GET | `/api/teacher/classrooms/{classroomId}/dashboard/mainline-progress` | 成员 × 章节 stage 完成度矩阵 |
+
+#### 管理题目审核（TEACHER/ADMIN）
+
+| 方法 | 路径 | 说明 |
+| --- | --- | --- |
+| GET | `/api/teacher/problem-reviews?limit=100` | 兼容列表，`limit` 1–200，返回公开题面与审核状态 |
+| GET | `/api/teacher/problem-reviews/page?page=0&size=20&decision=PENDING&q=` | 搜索和分页；`page` 从 0 开始，`size` 1–100，`decision` 可选为 `PENDING` / `APPROVED` / `REJECTED`，`q` 最长 100 字，匹配编号、KC、章节、申请人和题面；返回 `{ content, page, size, totalElements, totalPages }` |
+| POST | `/api/teacher/problem-reviews` | 提交候选题进入审核，返回公开审核 DTO |
+| PATCH | `/api/teacher/problem-reviews/{reviewId}` | 保存审核决定、必填理由及乐观并发 `version` |
+
+审核 DTO 不包含隐藏测试、参考答案或内部生成提示词。
 
 ---
 

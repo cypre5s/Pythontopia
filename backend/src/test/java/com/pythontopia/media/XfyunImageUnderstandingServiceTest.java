@@ -22,10 +22,10 @@ class XfyunImageUnderstandingServiceTest {
   }
 
   @Test
-  void propertiesDefaultsAndEnabledFlag() {
+  void legacyCredentialsDoNotEnableXfyunImageUnderstanding() {
     ImageUnderstandingProperties p =
         new ImageUnderstandingProperties("app", "key", "secret", null, null, 0, 0, 0);
-    assertThat(p.isEnabled()).isTrue();
+    assertThat(p.isEnabled()).isFalse();
     assertThat(p.baseUrl()).contains("v2.1/image");
     assertThat(p.domain()).isEqualTo("imagev3");
     assertThat(p.maxTokens()).isEqualTo(1024);

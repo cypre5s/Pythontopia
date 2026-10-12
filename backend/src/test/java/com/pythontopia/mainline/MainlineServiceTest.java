@@ -132,7 +132,7 @@ class MainlineServiceTest {
     assertThat(ch1.testStatus()).isEqualTo("SUBMITTED");
     assertThat(ch1.recovery().errorbookDone()).isTrue();
     assertThat(ch1.stages()).hasSize(1);
-    assertThat(ch1.stages().get(0).completed()).isTrue();
+    assertThat(ch1.stages().get(0).completed()).isFalse(); // mock 中没有课程页数据时 fail closed
 
     var ch2 = overview.chapters().get(1);
     assertThat(ch2.unlocked()).isTrue(); // 前章 2★ ≥1 → 解锁
@@ -237,9 +237,13 @@ class MainlineServiceTest {
   @Test
   void stageCompletionTriggersRecalcOnceIdempotently() {
     when(stageRepo.findById(10L)).thenReturn(Optional.of(stage(10, 1)));
+    when(coursePackRepository.findPageIdsByDocument(186L)).thenReturn(List.of(8001L));
     stubPassedSubmission(2L);
     when(progressRepo.addExampleDone(USER, 10L, 2L))
-        .thenReturn(progress(10, 240, List.of(1L, 2L), null)); // 三件套齐全
+        .thenReturn(
+            new MainlineStageProgress(
+                10L, USER, 10L, 240, List.of(8001L), List.of(1L, 2L), List.of(), null,
+                OffsetDateTime.now())); // 三件套齐全且确实读过课程页
     when(progressRepo.markCompleted(USER, 10L)).thenReturn(true);
 
     service.reportExampleDone(USER, 10L, 2L, null);

@@ -22,6 +22,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator, model_validator
 
+from pythontopia_graph.schemas.tutor import normalize_image_data
+
 Phase = Literal[
     "READING",
     "IDEATING",
@@ -215,6 +217,18 @@ class WorkflowRunRequest(BaseModel):
     # Java 投影还原的既有 episode 计划（首次触发为 None，由 graph 新建）。
     episode_plan: TutorEpisodePlan | None = None
     episode_patch: TutorEpisodePlanPatch | None = None
+
+    @model_validator(mode="after")
+    def validate_chat_images(self) -> "WorkflowRunRequest":
+        images = self.event_data.get("images")
+        if self.event == "CHAT" and images is not None:
+            if not isinstance(images, list) or not all(isinstance(image, str) for image in images):
+                raise ValueError("event_data.images must be a list of image data")
+            self.event_data = {
+                **self.event_data,
+                "images": normalize_image_data(images),
+            }
+        return self
 
 
 class WorkflowAction(BaseModel):

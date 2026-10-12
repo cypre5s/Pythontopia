@@ -54,6 +54,43 @@ describe('useEndlessRun', () => {
     pyodideMock.run.mockReset().mockResolvedValue({ stdout: '5\n', stderr: '' });
   });
 
+  it('忽略旧的无 owner 无尽历史键', () => {
+    window.localStorage.setItem(
+      'pyt_endless_history_v1',
+      JSON.stringify([{ problemId: 'legacy-problem' }]),
+    );
+    window.localStorage.setItem(
+      'pythontopia.user',
+      JSON.stringify({ id: 11, username: 'alice', displayName: 'A', role: 'STUDENT' }),
+    );
+    setActivePinia(createPinia());
+
+    expect(useEndlessRun().history.value).toEqual([]);
+  });
+
+  it('无尽历史只写当前用户，B 账号不得读到 A 的答题记录', async () => {
+    window.localStorage.setItem(
+      'pythontopia.user',
+      JSON.stringify({ id: 11, username: 'alice', displayName: 'A', role: 'STUDENT' }),
+    );
+    setActivePinia(createPinia());
+    const alice = useEndlessRun();
+    await alice.startRun();
+    await alice.submit();
+
+    expect(JSON.parse(
+      window.localStorage.getItem('pyt_endless_history_v1@u:alice') ?? '[]',
+    )).toHaveLength(1);
+
+    window.localStorage.setItem(
+      'pythontopia.user',
+      JSON.stringify({ id: 22, username: 'bob', displayName: 'B', role: 'STUDENT' }),
+    );
+    setActivePinia(createPinia());
+
+    expect(useEndlessRun().history.value).toEqual([]);
+  });
+
   it('后端判定失败时，即使本地样例通过也保持 failed', async () => {
     const run = useEndlessRun();
     await run.startRun();

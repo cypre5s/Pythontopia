@@ -1,6 +1,7 @@
 import { defineStore, getActivePinia } from 'pinia';
 import { login as loginApi, refresh as refreshApi, register as registerApi } from '@api/auth';
 import { setTokenProvider, setUnauthorizedHandler } from '@api/http';
+import { clearWorkshopChatHistoryCache } from '@api/workshopHistory';
 import type { LoginRequest } from '@api/dto/LoginRequest';
 import type { LoginResponse } from '@api/dto/LoginResponse';
 import type { RegisterRequest } from '@api/dto/RegisterRequest';
@@ -28,6 +29,7 @@ interface ResettableStore {
   $reset?: () => void;
   $dispose?: () => void;
   reset?: () => void;
+  rotateAccountSession?: () => void;
 }
 
 interface PiniaRegistry {
@@ -120,7 +122,9 @@ export function resetStoresForAccountSwitch(): void {
   for (const [id, store] of Array.from(registry.entries())) {
     if (RESET_EXCLUDED_STORE_IDS.includes(id)) continue;
     try {
-      if (SETUP_STORE_IDS.includes(id)) {
+      if (id === 'guide' && store.rotateAccountSession) {
+        store.rotateAccountSession();
+      } else if (SETUP_STORE_IDS.includes(id)) {
         disposeStore(pinia, id, store);
       } else {
         store.$reset?.();
@@ -149,6 +153,8 @@ export const useSessionStore = defineStore('session', {
     token: null as string | null,
     user: null as UserDto | null,
     expiresAt: null as string | null,
+    /** 每次成功登录/登出递增，用于强制销毁账号绑定的 KeepAlive 实例。 */
+    accountEpoch: 0,
   }),
   getters: {
     isAuthenticated: (state): boolean => {
@@ -187,6 +193,8 @@ export const useSessionStore = defineStore('session', {
     async login(req: LoginRequest): Promise<void> {
       this.applySession(await loginApi(req));
       this.configureHttp();
+      clearWorkshopChatHistoryCache();
+      this.accountEpoch += 1;
       resetStoresForAccountSwitch();
     },
     async register(req: RegisterRequest): Promise<UserDto> {
@@ -208,7 +216,14 @@ export const useSessionStore = defineStore('session', {
     async refreshSession(): Promise<void> {
       if (!this.token) return;
       try {
-        this.applySession(await refreshApi(this.token));
+        const previousUserId = this.user?.id ?? null;
+        const response = await refreshApi(this.token);
+        this.applySession(response);
+        if (previousUserId !== response.user.id) {
+          clearWorkshopChatHistoryCache();
+          this.accountEpoch += 1;
+          resetStoresForAccountSwitch();
+        }
       } catch {
         // 失效场景已由 unauthorized handler 处理；离线场景静默保留本地态
       }
@@ -228,6 +243,8 @@ export const useSessionStore = defineStore('session', {
       localStorage.removeItem(EXPIRES_KEY);
       localStorage.removeItem(USER_KEY);
       clearUserScopedStorage(scope);
+      clearWorkshopChatHistoryCache();
+      this.accountEpoch += 1;
       resetStoresForAccountSwitch();
     },
     refreshIfNeeded(): boolean {

@@ -46,6 +46,9 @@ public class BrowseRunService {
   /** {@code browse_step.url} 列宽（V170）。 */
   private static final int MAX_URL_LENGTH = 1024;
 
+  /** {@code browse_step.title} 列宽（V192）。 */
+  private static final int MAX_TITLE_LENGTH = 512;
+
   /** 合法只读动作（对齐 V170 CHECK 与 contract Literal）。 */
   private static final Set<String> ALLOWED_ACTIONS = Set.of("navigate", "read", "search", "stop");
 
@@ -138,14 +141,28 @@ public class BrowseRunService {
               step.index(),
               action,
               truncate(step.url() == null ? "" : step.url(), MAX_URL_LENGTH),
-              step.summary() == null ? "" : step.summary()));
+              step.summary() == null ? "" : step.summary(),
+              truncate(step.title() == null ? "" : step.title(), MAX_TITLE_LENGTH),
+              step.snippet() == null || step.snippet().isBlank()
+                  ? (step.summary() == null ? "" : step.summary())
+                  : step.snippet()));
     }
     return entities;
   }
 
   private static List<BrowseStepEntity> withRunId(long runId, List<BrowseStepEntity> steps) {
     return steps.stream()
-        .map(s -> new BrowseStepEntity(null, runId, s.idx(), s.action(), s.url(), s.summary()))
+        .map(
+            s ->
+                new BrowseStepEntity(
+                    null,
+                    runId,
+                    s.idx(),
+                    s.action(),
+                    s.url(),
+                    s.summary(),
+                    s.title(),
+                    s.snippet()))
         .toList();
   }
 

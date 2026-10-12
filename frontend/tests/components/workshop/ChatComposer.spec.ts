@@ -32,4 +32,25 @@ describe('ChatComposer image attachments', () => {
     expect(payload.attachments).toEqual([]);
     expect(uploadFile).not.toHaveBeenCalled();
   });
+
+  it('allows an image-only question and adds a clear tutoring prompt', async () => {
+    const wrapper = mount(ChatComposer, { props: { mentionItems: [] } });
+    const fileInput = wrapper.get<HTMLInputElement>('[data-testid="composer-file-input"]');
+    const file = new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], 'code.png', {
+      type: 'image/png',
+    });
+    Object.defineProperty(fileInput.element, 'files', { configurable: true, value: [file] });
+
+    await fileInput.trigger('change');
+    await vi.waitFor(() => {
+      expect(wrapper.get('[data-testid="attachment-pill"]').attributes('data-status')).toBe('ready');
+    });
+
+    expect(wrapper.get('[data-testid="composer-submit"]').attributes('disabled')).toBeUndefined();
+    await wrapper.get('[data-testid="composer-submit"]').trigger('click');
+
+    const payload = wrapper.emitted('submit')?.[0]?.[0] as ComposerSubmitPayload;
+    expect(payload.text).toBe('请讲解这张图片中的内容。');
+    expect(payload.images).toEqual(['data:image/png;base64,iVBORw0KGgo=']);
+  });
 });

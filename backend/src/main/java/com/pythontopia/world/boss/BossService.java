@@ -19,6 +19,8 @@ import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
 import com.pythontopia.world.boss.dto.FrontierSelectRequest;
 import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
+import com.pythontopia.world.boss.review.ApprovedBossProblem;
+import com.pythontopia.world.boss.review.BossProblemReviewRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.format.DateTimeFormatter;
@@ -29,10 +31,12 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
@@ -59,14 +63,18 @@ public class BossService {
   private static final Duration CACHE_TTL = Duration.ofMinutes(30);
   private static final int EVAL_TIMEOUT_SEC = 5;
   private static final long DEFAULT_PACK_ID = 43L;
+  private static final String ISSUE_ID_PREFIX = "issue-";
 
   private final BossGraphClient graphClient;
   private final MasteryRepository masteryRepository;
   private final CoursePackRepository coursePackRepository;
   private final ProfileService profileService;
   private final EndlessPregenService pregenService;
+  private final BossProblemReviewRepository reviewRepository;
+  private final ExpeditionRunService expeditionRunService;
+  private final ExpeditionScoreService expeditionScoreService;
   private final ApplicationEventPublisher eventPublisher;
-  private final ConcurrentMap<String, CachedProblem> cache = new ConcurrentHashMap<>();
+  private final ConcurrentMap<ProblemCacheKey, CachedProblem> cache = new ConcurrentHashMap<>();
 
   public BossService(
       BossGraphClient graphClient,
@@ -74,12 +82,18 @@ public class BossService {
       CoursePackRepository coursePackRepository,
       ProfileService profileService,
       EndlessPregenService pregenService,
+      BossProblemReviewRepository reviewRepository,
+      ExpeditionRunService expeditionRunService,
+      ExpeditionScoreService expeditionScoreService,
       ApplicationEventPublisher eventPublisher) {
     this.graphClient = graphClient;
     this.masteryRepository = masteryRepository;
     this.coursePackRepository = coursePackRepository;
     this.profileService = profileService;
     this.pregenService = pregenService;
+    this.reviewRepository = reviewRepository;
+    this.expeditionRunService = expeditionRunService;
+    this.expeditionScoreService = expeditionScoreService;
     this.eventPublisher = eventPublisher;
   }
 
@@ -90,10 +104,15 @@ public class BossService {
    */
   public FrontierSelectResultDto selectFrontier(Long userId, FrontierSelectRequest request) {
     Map<String, Double> mastery = new HashMap<>();
-    // 间隔重复持久化：复用 kc_mastery.last_event_at 作为「每 KC 最近练习时间」，传给 graph 做真·间隔
-    // 重复（久未练上浮），而非仅靠前端 recentKcs。ISO_OFFSET_DATE_TIME 保证 "...:00Z" 完整秒位。
+    Map<String, Double> confidence = new HashMap<>();
+    // 间隔重复只看正式练习/调试证据；last_event_at 也会被 DECAY 更新，不能充当最近练习时间。
     Map<String, String> lastPracticed = new HashMap<>();
     if (userId != null) {
+      masteryRepository
+          .findLastPracticedAtByUser(userId)
+          .forEach(
+              (kcCode, practicedAt) ->
+                  lastPracticed.put(kcCode, practicedAt.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)));
       for (MasterySnapshot snapshot : masteryRepository.findAll(userId)) {
         if (snapshot.kcCode() == null) {
           continue;
@@ -101,10 +120,8 @@ public class BossService {
         if (snapshot.masteryScore() != null) {
           mastery.put(snapshot.kcCode(), snapshot.masteryScore().doubleValue());
         }
-        if (snapshot.lastEventAt() != null) {
-          lastPracticed.put(
-              snapshot.kcCode(),
-              snapshot.lastEventAt().format(DateTimeFormatter.ISO_OFFSET_DATE_TIME));
+        if (snapshot.confidence() != null) {
+          confidence.put(snapshot.kcCode(), snapshot.confidence().doubleValue());
         }
       }
     }
@@ -112,6 +129,7 @@ public class BossService {
       FrontierSelectResultDto result =
           graphClient.selectFrontier(
               mastery,
+              confidence,
               authoritativeSignals(userId, request.profileSignals()),
               request.recentKcs(),
               request.focusChapter(),
@@ -135,19 +153,20 @@ public class BossService {
     // preferredKc 优先级高于旧 kcCode（前端 ArenaPage 走 preferredKc）。
     String effectiveKc = request.preferredKc() != null ? request.preferredKc() : request.kcCode();
     String kc = resolveKc(chapter, effectiveKc);
+    String expeditionRunId = validateExpeditionRun(userId, request.expeditionRunId());
     // 难度优先取前端显式请求；否则据该章 KC 的真实掌握度 + 置信度推断（学情驱动），而非仅按 stage。
     int difficulty =
         computeTargetDifficulty(userId, kc, request.stage(), request.difficulty());
 
-    // 1) 优先复用「已预生成未做」(READY) 的同维度题：命中即原子标 CONSUMED，省去现场等 LLM。
+    // 1) 复用「已预生成未做」(READY) 的同维度题：命中即原子标 CONSUMED，省去现场等 LLM。
     //    这条同时实现「学生中途退出，下次登入复用已生成未做的题」——上次会话预取留下的 READY 行。
     Optional<BossInternalProblem> reused =
         pregenService.claimReady(
-            userId, chapter, kc, difficulty, request.preferredKind(), request.arenaLevel());
+            userId, chapter, kc, difficulty, request.preferredKind(), request.arenaLevel(),
+            expeditionRunId);
     if (reused.isPresent()) {
       BossInternalProblem p = reused.get();
-      // 回灌内存缓存（用题目原 problemId 作键），供随后的 evaluateAttempt 直接取 hidden testCases。
-      cache.put(p.problemId(), new CachedProblem(p, Instant.now()));
+      cache.put(new ProblemCacheKey(userId, p.problemId()), new CachedProblem(p, Instant.now()));
       evictExpired();
       LOG.info("boss reuse pregenerated problemId={} user={} ch={}", p.problemId(), userId, chapter);
       // 展示时套用「本次请求」的 stage + 本次推断难度：预取时的 stage/难度不串到当前上下文
@@ -167,7 +186,37 @@ public class BossService {
           p.aiGenerated());
     }
 
-    // 2) 未命中 → 现场走 graph 出题（失败回退 golden）。
+    // 2) 没有该学生的 READY 个性化题时，再查教师已通过的全局题库：按
+    //    chapter/stage/KC/kind 只读选择最接近目标难度的版本。题库 payload 含 hidden tests，
+    //    只在后端回灌缓存并为当前学生落判题兜底，前端仅拿公开投影。
+    Optional<ApprovedBossProblem> approved =
+        reviewRepository.findApproved(
+            chapter, request.stage(), kc, request.preferredKind(), difficulty);
+    if (approved.isPresent()) {
+      BossInternalProblem source = approved.get().problem();
+      BossInternalProblem problem = source.issueAs(ISSUE_ID_PREFIX + UUID.randomUUID(), kc);
+      cache.put(new ProblemCacheKey(userId, problem.problemId()), new CachedProblem(problem, Instant.now()));
+      pregenService.persistConsumed(
+          userId,
+          chapter,
+          kc,
+          request.preferredKind(),
+          request.arenaLevel(),
+          difficulty,
+          problem,
+          expeditionRunId);
+      evictExpired();
+      LOG.info(
+          "boss selected approved review={} version={} problemId={} user={} ch={}",
+          approved.get().reviewId(),
+          approved.get().version(),
+          problem.problemId(),
+          userId,
+          chapter);
+      return problem.toPublic();
+    }
+
+    // 3) 个性化预生成与 approved bank 均未命中 → 现场走 graph 出题（失败回退 golden）。
     try {
       BossInternalProblem fromGraph =
           graphClient.requestProblem(
@@ -180,13 +229,14 @@ public class BossService {
               request.preferredKind(),
               authoritativeSignals(userId, request.profileSignals()));
       if (fromGraph != null && fromGraph.problemId() != null) {
-        cache.put(fromGraph.problemId(), new CachedProblem(fromGraph, Instant.now()));
+        BossInternalProblem issued = fromGraph.issueAs(ISSUE_ID_PREFIX + UUID.randomUUID(), kc);
+        cache.put(new ProblemCacheKey(userId, issued.problemId()), new CachedProblem(issued, Instant.now()));
         // 现场题也落库 (CONSUMED)，供内存缓存过期 / 进程重启后判题兜底取回 testCases（best-effort）。
         pregenService.persistConsumed(
             userId, chapter, kc, request.preferredKind(), request.arenaLevel(), difficulty,
-            fromGraph);
+            issued, expeditionRunId);
         evictExpired();
-        return fromGraph.toPublic();
+        return issued.toPublic();
       }
     } catch (RestClientException ex) {
       LOG.warn(
@@ -205,23 +255,34 @@ public class BossService {
   public BossPrefetchStatusDto prefetch(int chapter, BossProblemRequest request, Long userId) {
     String effectiveKc = request.preferredKc() != null ? request.preferredKc() : request.kcCode();
     String kc = resolveKc(chapter, effectiveKc);
+    validateExpeditionRun(userId, request.expeditionRunId());
     int difficulty =
         computeTargetDifficulty(userId, kc, request.stage(), request.difficulty());
     EndlessPregenService.PrefetchStart start =
         pregenService.beginPrefetch(
             userId, chapter, kc, difficulty, request.preferredKind(), request.arenaLevel());
     if (start.shouldGenerate() && start.status().jobId() != null) {
-      pregenService.generatePrefetch(
-          start.status().jobId(),
-          userId,
-          chapter,
-          request.stage(),
-          kc,
-          difficulty,
-          request.preferredKc(),
-          request.preferredKind(),
-          request.arenaLevel(),
-          authoritativeSignals(userId, request.profileSignals()));
+      try {
+        pregenService.generatePrefetch(
+            start.status().jobId(),
+            userId,
+            chapter,
+            request.stage(),
+            kc,
+            difficulty,
+            request.preferredKc(),
+            request.preferredKind(),
+            request.arenaLevel(),
+            authoritativeSignals(userId, request.profileSignals()),
+            start.status().attempts());
+      } catch (TaskRejectedException rejected) {
+        pregenService.failPrefetch(
+            start.status().jobId(), start.status().attempts(), "预加载队列已满，请稍后重试");
+        throw new com.pythontopia.common.error.BusinessException(
+            org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+            "BOSS_PREFETCH_QUEUE_FULL",
+            "题目预加载队列已满，请稍后重试");
+      }
     }
     return start.status();
   }
@@ -316,6 +377,7 @@ public class BossService {
         throw new RestClientException("graph evaluate returned null body");
       }
       int score = scoreFor(graphResult);
+      recordVerifiedExpeditionAttempt(userId, request.problemId(), graphResult, score);
       String feedback =
           graphResult.passed()
               ? "通过 ✅ 服务端沙箱已确认。"
@@ -347,6 +409,36 @@ public class BossService {
           null,
           0,
           "graph 评测服务不可用，请用前端 Pyodide 校验后再次提交。");
+    }
+  }
+
+  private String validateExpeditionRun(Long userId, String runId) {
+    if (runId == null) {
+      return null;
+    }
+    if (userId == null || !expeditionRunService.isActiveRun(userId, runId)) {
+      throw new com.pythontopia.common.error.BusinessException(
+          org.springframework.http.HttpStatus.CONFLICT,
+          "EXPEDITION_RUN_EXPIRED",
+          "远征存档已变化，请刷新后重试");
+    }
+    return runId;
+  }
+
+  private void recordVerifiedExpeditionAttempt(
+      Long userId, String problemId, BossEvaluateResultDto result, int score) {
+    if (userId == null) {
+      return;
+    }
+    try {
+      pregenService
+          .findExpeditionRunId(userId, problemId)
+          .ifPresent(
+              runId ->
+                  expeditionScoreService.recordVerifiedAttempt(
+                      userId, runId, problemId, result.passed(), score));
+    } catch (RuntimeException ex) {
+      LOG.warn("verified expedition attempt was not persisted problemId={}: {}", problemId, ex.getMessage());
     }
   }
 
@@ -396,21 +488,22 @@ public class BossService {
   }
 
   /**
-   * 取判题所需完整题（含 hidden testCases）：先查进程内缓存（TTL 内有效）；过期 / 未命中再回退
-   * {@code pregenerated_problem} 凭 user + problemId 取最新一条 payload，命中后回灌缓存。
-   * 二者皆空返回 {@code null}（题目已无法判，调用方给 Pyodide 兜底提示）。
+   * 取判题所需完整题（含 hidden testCases）：先查进程内缓存（TTL 内有效）；过期 / 未命中只从
+   * {@code pregenerated_problem} 按 user + issued problemId 取回。审核题在发放前会先签发用户专属 ID
+   * 并写入该表；全局审核库 ID 不可直接用于判题。未找到用户记录即返回 {@code null}。
    */
   private BossInternalProblem resolveProblemForEval(String problemId, Long userId) {
-    CachedProblem cached = cache.get(problemId);
+    ProblemCacheKey key = new ProblemCacheKey(userId, problemId);
+    CachedProblem cached = cache.get(key);
     if (cached != null) {
       if (Duration.between(cached.cachedAt(), Instant.now()).compareTo(CACHE_TTL) <= 0) {
         return cached.problem();
       }
-      cache.remove(problemId); // 过期，落 DB 再取
+      cache.remove(key); // 过期，落 DB 再取
     }
     BossInternalProblem fromDb = pregenService.findByProblemId(userId, problemId).orElse(null);
     if (fromDb != null) {
-      cache.put(problemId, new CachedProblem(fromDb, Instant.now())); // 回灌缓存避免重复查库
+      cache.put(key, new CachedProblem(fromDb, Instant.now())); // 回灌缓存避免重复查库
     }
     return fromDb;
   }
@@ -566,10 +659,17 @@ public class BossService {
    * 第 1、2 章），该错位会让 boss 出题与学情聚合锚到错误章节的 KC。不再臆造 KC，全部源自课程包。
    */
   String resolveKc(int chapter, String override) {
-    if (override != null && !override.isBlank()) {
-      return override;
-    }
     int safeChapter = ChapterCatalog.isValidChapter(chapter) ? chapter : 1;
+    if (override != null && !override.isBlank()) {
+      String normalized = override.trim();
+      if (ChapterCatalog.chapterOfKc(normalized).filter(kcChapter -> kcChapter == safeChapter).isEmpty()) {
+        throw new com.pythontopia.common.error.BusinessException(
+            org.springframework.http.HttpStatus.BAD_REQUEST,
+            "INVALID_BOSS_KC",
+            "KC 必须属于指定章节的 Python 语言基础课程内容");
+      }
+      return normalized;
+    }
     return ChapterCatalog.kcCodes(safeChapter).get(0);
   }
 
@@ -608,5 +708,7 @@ public class BossService {
    * 缓存条目：完整 {@link BossInternalProblem} + 入库时间，用于 TTL 计算。
    * 暴露包私有供测试 assert。
    */
+  record ProblemCacheKey(Long userId, String problemId) {}
+
   record CachedProblem(BossInternalProblem problem, Instant cachedAt) {}
 }

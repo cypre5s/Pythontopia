@@ -190,7 +190,7 @@ export const useMainlineStore = defineStore('mainline', {
       return progress;
     },
 
-    /** 无尽轮次小结 → 补星判定；发放补星则 reload 取权威星级。返回是否补星。 */
+    /** 远征 run 补星申请；发放补星则 reload 取权威星级。返回是否补星。 */
     async submitEndlessSummary(input: EndlessSummaryInput): Promise<boolean> {
       const result = await postEndlessSummary(input);
       if (result.starAwarded) {

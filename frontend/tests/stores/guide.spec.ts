@@ -46,6 +46,30 @@ describe('useGuideStore（伴学向导多轮线程）', () => {
     }
   });
 
+  it('会话 id 按用户命名空间隔离，且忽略旧的无 owner 键', () => {
+    window.localStorage.setItem('pyt_guide_session_v1', 'legacy-global-session');
+    window.localStorage.setItem(
+      'pythontopia.user',
+      JSON.stringify({ id: 1, username: 'alice', displayName: 'A', role: 'STUDENT' }),
+    );
+    setActivePinia(createPinia());
+    const alice = useGuideStore();
+
+    expect(alice.sessionId).not.toBe('legacy-global-session');
+    expect(window.localStorage.getItem('pyt_guide_session_v1@u:alice')).toBe(alice.sessionId);
+
+    window.localStorage.setItem(
+      'pythontopia.user',
+      JSON.stringify({ id: 2, username: 'bob', displayName: 'B', role: 'STUDENT' }),
+    );
+    setActivePinia(createPinia());
+    const bob = useGuideStore();
+
+    expect(bob.sessionId).not.toBe(alice.sessionId);
+    expect(window.localStorage.getItem('pyt_guide_session_v1@u:bob')).toBe(bob.sessionId);
+    expect(window.localStorage.getItem('pyt_guide_session_v1')).toBe('legacy-global-session');
+  });
+
   it('openPanel 首次进入 seed 欢迎语，且不污染发往后端的历史', () => {
     const g = useGuideStore();
     expect(g.messages).toHaveLength(0);

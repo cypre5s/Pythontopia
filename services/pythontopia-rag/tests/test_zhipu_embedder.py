@@ -40,15 +40,11 @@ async def test_fallback_embedder_returns_same_dimension_hash_vectors_after_prima
     assert embedder.using_fallback is True
 
 
-@pytest.mark.asyncio
-async def test_select_zhipu_without_key_still_uses_2048_dim_hash_fallback(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("PYT_RAG_EMBEDDER", "zhipu")
-    monkeypatch.delenv("PYT_RAG_EMBEDDING_API_KEY", raising=False)
-    monkeypatch.delenv("EMBEDDING_API_KEY", raising=False)
+@pytest.mark.parametrize("provider", ["zhipu", "zhipu-strict", "iflytek"])
+def test_select_embedder_rejects_external_providers(
+    monkeypatch: pytest.MonkeyPatch, provider: str
+) -> None:
+    monkeypatch.setenv("PYT_RAG_EMBEDDER", provider)
 
-    embedder = select_embedder()
-    vectors = await embedder.embed(["input 函数"])
-
-    assert embedder.dim == ZHIPU_DEFAULT_DIM
-    assert "hash-fallback" in embedder.name
-    assert len(vectors[0]) == ZHIPU_DEFAULT_DIM
+    with pytest.raises(ValueError, match="Only local hash and BGE embedders are supported"):
+        select_embedder()

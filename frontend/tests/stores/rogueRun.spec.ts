@@ -18,6 +18,7 @@ const frontierApiMock = vi.hoisted(() => ({
   submitExpeditionScore: vi.fn(),
   fetchExpeditionLeaderboard: vi.fn(),
 }));
+const EXPEDITION_RUN_ID = '123e4567-e89b-12d3-a456-426614174000';
 
 vi.mock('@/composables/useChallengeJudge', () => ({
   isJudgeUnavailable: () => false,
@@ -74,7 +75,7 @@ beforeEach(() => {
   ]);
   // 默认没有后端活跃 run；startRun 新开局。
   frontierApiMock.fetchExpeditionRun.mockReset().mockResolvedValue(null);
-  frontierApiMock.saveExpeditionRun.mockReset().mockResolvedValue(undefined);
+  frontierApiMock.saveExpeditionRun.mockReset().mockResolvedValue({ runId: EXPEDITION_RUN_ID });
   frontierApiMock.deleteExpeditionRun.mockReset().mockResolvedValue(undefined);
   // 排行榜：默认不上报/拉到空（best-effort）。具体用例自行覆盖返回值。
   frontierApiMock.submitExpeditionScore.mockReset().mockResolvedValue(null);
@@ -82,6 +83,55 @@ beforeEach(() => {
 });
 
 describe('rogueRun store', () => {
+  it('只把本地远征存档写入当前用户命名空间', async () => {
+    localStorage.setItem(
+      'pythontopia.user',
+      JSON.stringify({ id: 11, username: 'alice', displayName: 'A', role: 'STUDENT' }),
+    );
+    localStorage.setItem('pyt_rogue_run_v1', 'legacy-must-not-be-touched');
+    setActivePinia(createPinia());
+
+    const run = useRogueRunStore();
+    await run.startRun(null);
+
+    expect(JSON.parse(localStorage.getItem('pyt_rogue_run_v1@u:alice') ?? '{}')).toMatchObject({
+      phase: 'map',
+    });
+    expect(localStorage.getItem('pyt_rogue_run_v1')).toBe('legacy-must-not-be-touched');
+  });
+
+  it('同一浏览器的 B 账号不会从本地兜底读到 A 的远征存档', async () => {
+    localStorage.setItem(
+      'pythontopia.user',
+      JSON.stringify({ id: 11, username: 'alice', displayName: 'A', role: 'STUDENT' }),
+    );
+    setActivePinia(createPinia());
+    const alice = useRogueRunStore();
+    await alice.startRun(null);
+
+    localStorage.setItem(
+      'pythontopia.user',
+      JSON.stringify({ id: 22, username: 'bob', displayName: 'B', role: 'STUDENT' }),
+    );
+    setActivePinia(createPinia());
+    frontierApiMock.fetchExpeditionRun.mockRejectedValueOnce(new Error('offline'));
+    const bob = useRogueRunStore();
+
+    expect(await bob.refreshSavedRun()).toBe(false);
+    expect(bob.hasSavedRun).toBe(false);
+  });
+
+  it('每日挑战完成日期也按用户隔离，不读旧的无 owner 键', () => {
+    localStorage.setItem('pyt_rogue_daily_v1', new Date().toISOString().slice(0, 10));
+    localStorage.setItem(
+      'pythontopia.user',
+      JSON.stringify({ id: 11, username: 'alice', displayName: 'A', role: 'STUDENT' }),
+    );
+    setActivePinia(createPinia());
+
+    expect(useRogueRunStore().dailyAvailable).toBe(true);
+  });
+
   it('startRun builds a map with an available start node', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);
@@ -103,19 +153,75 @@ describe('rogueRun store', () => {
     );
   });
 
-  it('starts warming the first battle before persisting a new map', async () => {
+  it('persists the new run id before warming its first battle', async () => {
     const run = useRogueRunStore();
     frontierApiMock.saveExpeditionRun.mockImplementationOnce(async () => {
-      const start = run.nodes.find((n) => n.layer === 0);
-      expect(judgeMock.prefetchProblem).toHaveBeenCalledWith(
-        expect.objectContaining({ kc: start?.kcCode, kind: start?.challengeKind }),
-      );
-      return undefined;
+      expect(judgeMock.prefetchProblem).not.toHaveBeenCalled();
+      return { runId: EXPEDITION_RUN_ID };
     });
 
     await run.startRun(null);
 
-    expect(run.phase).toBe('map');
+    const start = run.nodes.find((n) => n.layer === 0);
+    expect(judgeMock.prefetchProblem).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kc: start?.kcCode,
+        kind: start?.challengeKind,
+        expeditionRunId: EXPEDITION_RUN_ID,
+      }),
+    );
+  });
+
+  it('sends the current run id when fetching and settling a challenge', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const start = run.nodes.find((n) => n.layer === 0);
+    await run.enterNode(start!.id);
+
+    expect(judgeMock.fetchProblem).toHaveBeenCalledWith(
+      expect.objectContaining({ kc: start?.kcCode, expeditionRunId: EXPEDITION_RUN_ID }),
+    );
+
+    run.finishRun();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledWith({ runId: EXPEDITION_RUN_ID });
+  });
+
+  it('does not accept client score fields in the leaderboard settlement payload', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    run.score = 999_999;
+    run.finishRun();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledWith({ runId: EXPEDITION_RUN_ID });
+    expect(frontierApiMock.submitExpeditionScore.mock.calls[0]?.[0]).not.toHaveProperty('score');
+  });
+
+  it('settles a finished run before creating the next server-owned run', async () => {
+    const nextRunId = '223e4567-e89b-12d3-a456-426614174000';
+    frontierApiMock.saveExpeditionRun
+      .mockResolvedValueOnce({ runId: EXPEDITION_RUN_ID })
+      .mockResolvedValueOnce({ runId: nextRunId });
+    let finishSettlement!: (value: null) => void;
+    frontierApiMock.submitExpeditionScore.mockImplementationOnce(
+      () => new Promise((resolve) => { finishSettlement = resolve; }),
+    );
+    const run = useRogueRunStore();
+    await run.startRun(null);
+
+    run.finishRun();
+    const restart = run.startRun(null);
+    await Promise.resolve();
+    expect(frontierApiMock.requestFrontierPicks).toHaveBeenCalledTimes(1);
+    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(1);
+
+    finishSettlement(null);
+    await restart;
+
+    expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledTimes(1);
+    expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledTimes(2);
+    expect(Object.values(localStorage).join('')).toContain(nextRunId);
   });
 
   it('passing a battle awards score + momentum and clears the node, unlocking next', async () => {
@@ -204,7 +310,7 @@ describe('rogueRun store', () => {
     await Promise.resolve();
     await Promise.resolve();
 
-    const persisted = JSON.parse(localStorage.getItem('pyt_rogue_run_v1') ?? '{}');
+    const persisted = JSON.parse(localStorage.getItem('pyt_rogue_run_v1@u:anon') ?? '{}');
     expect(persisted.phase).toBe('challenge');
     expect(persisted.currentNodeId).toBe(start!.id);
     expect(frontierApiMock.saveExpeditionRun).toHaveBeenCalledWith(
@@ -377,7 +483,7 @@ describe('rogueRun store', () => {
 
   it('rejects a structurally corrupt saved run instead of resuming into a crash', async () => {
     frontierApiMock.fetchExpeditionRun.mockResolvedValueOnce(null);
-    localStorage.setItem('pyt_rogue_run_v1', JSON.stringify({
+    localStorage.setItem('pyt_rogue_run_v1@u:anon', JSON.stringify({
       phase: 'map',
       focusChapter: 1,
       nodes: [{ id: 'L0-0', layer: 0 }], // missing col/kind/state/next → invalid
@@ -531,7 +637,7 @@ describe('rogueRun store', () => {
 
   it('falls back to localStorage when loading a selectable save and backend is unreachable', async () => {
     frontierApiMock.fetchExpeditionRun.mockRejectedValueOnce(new Error('offline'));
-    localStorage.setItem('pyt_rogue_run_v1', JSON.stringify({
+    localStorage.setItem('pyt_rogue_run_v1@u:anon', JSON.stringify({
       phase: 'map',
       focusChapter: 4,
       nodes: [
@@ -632,7 +738,7 @@ describe('rogueRun store', () => {
     expect(run.phase).toBe('over');
     expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledTimes(1);
     expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledWith(
-      expect.objectContaining({ score: 120, bestMomentum: 2, cleared: false }),
+      { runId: EXPEDITION_RUN_ID },
     );
     expect(run.leaderboard).toEqual(board);
 

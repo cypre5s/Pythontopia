@@ -32,6 +32,7 @@ import {
   type FrontierPick,
 } from '@/api/expedition';
 import { useMainlineStore } from '@stores/mainline';
+import { userScopedKey } from '@stores/session';
 import { useToastStore } from '@stores/toast';
 import type { BossAttemptResultDto, BossProblemDto } from '@/api/dto/Boss';
 import type { ArenaLevelKind } from '@/types/arena';
@@ -45,7 +46,7 @@ import type {
 
 const PERSIST_KEY = 'pyt_rogue_run_v1';
 const DAILY_KEY = 'pyt_rogue_daily_v1';
-// 无尽补星门槛（与 EndlessPage / 后端 MainlineRecoveryService 一致）。
+// 本地补星提示门槛；服务端仍按活动 run 的正式判题记录独立复核。
 const STAR_MIN_CORRECT = 8;
 const STAR_MIN_ACCURACY = 0.8;
 // BOSS 多阶段：连过 N 道才算击穿知识闸（过关高潮）。
@@ -57,7 +58,7 @@ function todayStr(): string {
 function loadDailyDate(): string | null {
   if (typeof window === 'undefined') return null;
   try {
-    return window.localStorage.getItem(DAILY_KEY);
+    return window.localStorage.getItem(userScopedKey(DAILY_KEY));
   } catch {
     return null;
   }
@@ -65,7 +66,7 @@ function loadDailyDate(): string | null {
 function saveDailyDate(date: string): void {
   if (typeof window === 'undefined') return;
   try {
-    window.localStorage.setItem(DAILY_KEY, date);
+    window.localStorage.setItem(userScopedKey(DAILY_KEY), date);
   } catch {
     /* 隐私模式禁写，忽略 */
   }
@@ -165,7 +166,7 @@ function isValidSnapshot(value: unknown): value is PersistShape {
 function loadPersisted(): PersistShape | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = window.localStorage.getItem(PERSIST_KEY);
+    const raw = window.localStorage.getItem(userScopedKey(PERSIST_KEY));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as unknown;
     return isValidSnapshot(parsed) ? parsed : null;
@@ -189,6 +190,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   const maxHp = ref(EXPEDITION_MAX_HP);
   const momentum = ref(0);
   const bestMomentum = ref(0);
+  const runId = ref<string | null>(null);
   const score = ref(0);
   const relics = ref<string[]>([]);
   const history = ref<RogueHistoryEntry[]>([]);
@@ -223,6 +225,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   // 班级排行榜（最高单局得分）：结算上报 + 起始页拉取；本局成绩只上报一次。
   const leaderboard = ref<ExpeditionLeaderboard | null>(null);
   const scoreReported = ref(false);
+  let scoreReportTask: Promise<boolean> | null = null;
 
   // ── 派生 ──
   const nodesByLayer = computed<RogueNode[][]>(() => {
@@ -275,6 +278,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       relics: relics.value,
       isDaily: isDaily.value,
       history: history.value,
+      runId: runId.value,
     };
   }
 
@@ -283,20 +287,34 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
    * 后端失败/不可达只吞掉（best-effort，绝不阻塞玩家）；本地写入隐私模式禁写也忽略。
    * idle（弃局/未开局）不镜像后端——交由 abort() 显式 DELETE 清活跃 run。
    */
-  function persist(): void {
+  async function persist(): Promise<void> {
     const snap = snapshot();
     if (typeof window !== 'undefined') {
       try {
-        window.localStorage.setItem(PERSIST_KEY, JSON.stringify(snap));
+        window.localStorage.setItem(userScopedKey(PERSIST_KEY), JSON.stringify(snap));
       } catch {
         /* 隐私模式禁写，忽略 */
       }
     }
-    if (phase.value !== 'idle') {
+    if (isResumablePhase(phase.value)) {
       savedRun.value = snap;
-      void saveExpeditionRun(snap).catch(() => {
+      try {
+        const saved = await saveExpeditionRun(snap);
+        if (saved?.runId) {
+          runId.value = saved.runId;
+          const updated = snapshot();
+          savedRun.value = updated;
+          if (typeof window !== 'undefined') {
+            try {
+              window.localStorage.setItem(userScopedKey(PERSIST_KEY), JSON.stringify(updated));
+            } catch {
+              /* 隐私模式禁写，忽略 */
+            }
+          }
+        }
+      } catch {
         /* 后端不可达：本地已兜底，忽略 */
-      });
+      }
     }
   }
 
@@ -310,6 +328,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   /** 把一份快照灌入 store（中途答题/事件刷新 → 退回地图）；供 hydrate / 续局复用。 */
   function applySnapshot(p: PersistShape): void {
     phase.value = isResumablePhase(p.phase) && p.phase !== 'map' ? 'map' : p.phase;
+    runId.value = p.runId ?? null;
     focusChapter.value = p.focusChapter ?? null;
     // 老存档可能含已弃用的不可判题型，续局前就地迁移到可真判题型，避免恢复即卡死。
     nodes.value = sanitizeRunNodes(p.nodes);
@@ -354,7 +373,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     }
     savedRun.value = snap;
     applySnapshot(snap); // applySnapshot 已把可续 phase 归一到 'map'
-    persist();
+    await persist();
     return true;
   }
 
@@ -438,6 +457,16 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     errorMessage.value = '';
     focusChapter.value = focus;
     try {
+      if (phase.value === 'over' || phase.value === 'cleared') {
+        if (!(await reportScore())) {
+          errorMessage.value = '本局成绩暂未结算，请重试后再开新局';
+          toast.show(errorMessage.value, 'error');
+          return;
+        }
+      } else if (phase.value === 'idle') {
+        const existing = await fetchExpeditionRun();
+        if (existing?.runId) await deleteExpeditionRun();
+      }
       // 后端同时读取 kc_mastery + learner_profile；失败时保持 idle 并明确提示，不用前端假数据造图。
       const recent = history.value
         .map((h) => h.kcCode)
@@ -455,6 +484,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
         rng: opts.rng,
         resolveChallenge: (kind, layer) => resolveChallenge(kind, layer, picks, cursor),
       });
+      runId.value = null;
       nodes.value = map.nodes;
       layers.value = map.layers;
       currentNodeId.value = null;
@@ -472,8 +502,8 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       challenge.clearPrefetch();
       clearActive();
       phase.value = 'map';
+      await persist();
       prefetchAvailable();
-      persist();
     } catch (error) {
       errorMessage.value = error instanceof Error ? error.message : '画像学习前沿加载失败';
       phase.value = 'idle';
@@ -553,6 +583,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
         kc: node.kcCode ?? '',
         kind: node.challengeKind,
         difficulty: activeDifficulty.value,
+        expeditionRunId: runId.value,
       });
       activeCode.value = initialCodeFor(activeProblem.value);
     } catch (error) {
@@ -574,13 +605,18 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       if (node.state !== 'available') continue;
       if (!node.kcCode || !node.challengeKind || node.kind === 'event') continue;
       const difficulty = computeRunDifficulty(node.difficulty, momentum.value, recentFailures);
-      void challenge.prefetchProblem({ kc: node.kcCode, kind: node.challengeKind, difficulty });
+      void challenge.prefetchProblem({
+        kc: node.kcCode,
+        kind: node.challengeKind,
+        difficulty,
+        expeditionRunId: runId.value,
+      });
     }
   }
 
   // 落到地图（开局 / 通关返回 / 营地 / 宝箱 / 事件复盘后）→ 预取可达节点题目，减少「正在出题…」等待。
   watch(phase, (p) => {
-    if (p === 'map') prefetchAvailable();
+    if (p === 'map' && !starting.value) prefetchAvailable();
   });
 
   async function enterNode(id: string): Promise<void> {
@@ -774,6 +810,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
           kc: node.kcCode,
           kind: node.challengeKind,
           difficulty,
+          expeditionRunId: runId.value,
         });
       }
     } catch {
@@ -789,7 +826,12 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     if (!node?.kcCode || !node.challengeKind) return null;
     const recentFailures = history.value.slice(0, 2).filter((h) => !h.passed).length;
     const difficulty = computeRunDifficulty(node.difficulty, momentum.value, recentFailures);
-    return challenge.getPrefetchState({ kc: node.kcCode, kind: node.challengeKind, difficulty });
+    return challenge.getPrefetchState({
+      kc: node.kcCode,
+      kind: node.challengeKind,
+      difficulty,
+      expeditionRunId: runId.value,
+    });
   }
 
   /** 弃局：回到起始页 + 清后端活跃 run 与本地缓存（避免下次 startRun 续到废局）。 */
@@ -798,12 +840,13 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     clearActive();
     if (typeof window !== 'undefined') {
       try {
-        window.localStorage.removeItem(PERSIST_KEY);
+        window.localStorage.removeItem(userScopedKey(PERSIST_KEY));
       } catch {
         /* 隐私模式禁写，忽略 */
       }
     }
     savedRun.value = null;
+    runId.value = null;
     await deleteExpeditionRun().catch(() => {
       /* 后端不可达：本地已清，忽略 */
     });
@@ -820,22 +863,34 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   }
 
   /** 本局结束上报成绩（每局至多一次）；返回的最新榜直接刷新本地缓存。best-effort。 */
-  async function reportScore(): Promise<void> {
-    if (scoreReported.value) return;
+  async function reportScore(): Promise<boolean> {
+    if (scoreReportTask) return scoreReportTask;
+    if (scoreReported.value) return true;
+    const currentRunId = runId.value;
+    if (!currentRunId) {
+      scoreReported.value = true;
+      return true;
+    }
     scoreReported.value = true;
-    const board = await submitExpeditionScore({
-      score: score.value,
-      depth: depth.value,
-      bestMomentum: bestMomentum.value,
-      cleared: phase.value === 'cleared',
-      daily: isDaily.value,
-    });
-    if (board) leaderboard.value = board;
+    scoreReportTask = submitExpeditionScore({ runId: currentRunId })
+      .then((board) => {
+        if (board) leaderboard.value = board;
+        return true;
+      })
+      .catch(() => {
+        scoreReported.value = false;
+        return false;
+      })
+      .finally(() => {
+        scoreReportTask = null;
+      });
+    return scoreReportTask;
   }
 
   async function maybeReportStar(): Promise<void> {
     const chapter = focusChapter.value;
-    if (summaryReported.value || chapter === null) return;
+    const currentRunId = runId.value;
+    if (summaryReported.value || chapter === null || currentRunId === null) return;
     const correct = passedCount.value;
     const total = attempts.value;
     if (total <= 0 || correct < STAR_MIN_CORRECT || correct / total < STAR_MIN_ACCURACY) return;
@@ -843,9 +898,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     try {
       const awarded = await mainline.submitEndlessSummary({
         chapter,
-        correct,
-        total,
-        streak: bestMomentum.value,
+        runId: currentRunId,
       });
       if (awarded) toast.show(`第 ${chapter} 章远征补星 +1 ★`, 'success');
     } catch {

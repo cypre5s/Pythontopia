@@ -60,31 +60,42 @@ class TutorAskRequest(BaseModel):
     @field_validator("images")
     @classmethod
     def normalize_images(cls, images: list[str]) -> list[str]:
-        normalized: list[str] = []
-        for image in images:
-            encoded = image
-            declared_mime: str | None = None
-            if image.startswith("data:"):
-                header, separator, encoded = image.partition(",")
-                match = re.fullmatch(
-                    r"data:(image/(?:png|jpeg|gif|webp));base64", header
-                )
-                if not separator or match is None:
-                    raise ValueError("images must be supported base64 image data")
-                declared_mime = match.group(1)
-            try:
-                data = base64.b64decode(encoded, validate=True)
-            except (binascii.Error, ValueError) as exc:
-                raise ValueError("images must contain valid base64 data") from exc
-            if len(data) > 5 * 1024 * 1024:
-                raise ValueError("each image must be at most 5 MiB")
-            detected_mime = _image_mime_type(data)
-            if detected_mime is None or (
-                declared_mime and declared_mime != detected_mime
-            ):
-                raise ValueError("images must be JPEG, PNG, GIF, or WebP")
-            normalized.append(f"data:{detected_mime};base64,{encoded}")
-        return normalized
+        return normalize_image_data(images)
+
+
+def normalize_image_data(images: list[str]) -> list[str]:
+    """Validate and normalize inline JPEG, PNG, GIF, or WebP images."""
+    if len(images) > 3:
+        raise ValueError("at most three images are supported")
+    normalized: list[str] = []
+    for image in images:
+        if not isinstance(image, str):
+            raise ValueError("images must be strings")
+        if len(image) > 8_000_000:
+            raise ValueError("image data is too large")
+        encoded = image
+        declared_mime: str | None = None
+        if image.startswith("data:"):
+            header, separator, encoded = image.partition(",")
+            match = re.fullmatch(
+                r"data:(image/(?:png|jpeg|gif|webp));base64", header
+            )
+            if not separator or match is None:
+                raise ValueError("images must be supported base64 image data")
+            declared_mime = match.group(1)
+        try:
+            data = base64.b64decode(encoded, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("images must contain valid base64 data") from exc
+        if len(data) > 5 * 1024 * 1024:
+            raise ValueError("each image must be at most 5 MiB")
+        detected_mime = _image_mime_type(data)
+        if detected_mime is None or (
+            declared_mime and declared_mime != detected_mime
+        ):
+            raise ValueError("images must be JPEG, PNG, GIF, or WebP")
+        normalized.append(f"data:{detected_mime};base64,{encoded}")
+    return normalized
 
 
 class EvidenceCitation(BaseModel):

@@ -1,83 +1,32 @@
-# LLM Provider Environment Policy
+# DeepSeek 模型配置
 
-Pythontopia 在 graph / RAG 服务中通过 `LlmProvider` 协议抽象上游模型，主链路 LLM Provider 由
-环境变量 `PYT_LLM_PROVIDER` 决定。
+项目的生成式 AI 请求统一走 Graph 的 DeepSeek OpenAI 兼容 provider。provider 会校验
+HTTPS 和 `api.deepseek.com` 主机；Spark、微调模型和其它兼容地址不会被选用。Graph 只读取
+Pythontopia 自己的 `deploy/.env` 与容器环境，不再回退 Alethicode 的 `.env`。
 
-## 支持的 Provider
-
-| 取值 | 用途 | 必需 env |
-| ---- | ---- | -------- |
-| `dryrun` | 测试/单元用，所有 chat 走确定式占位 | 无 |
-| `openai_compat` | 开发期 fallback；复用 OpenAI 兼容接口（含 Alethicode `.env` 中的密钥） | `LLM_BASE_URL`/`LLM_API_KEY`/`LLM_MODEL`（或对应 `OPENAI_*`）；图片问答需 `LLM_MODEL_VISION` |
-| `spark` | 比赛演示主链路（讯飞 Spark OpenAI-兼容接口） | `PYT_SPARK_APP_ID`、`PYT_SPARK_API_KEY`、`PYT_SPARK_API_SECRET`、`PYT_SPARK_MODEL_ID`，可选 `PYT_SPARK_BASE_URL`（默认 `https://spark-api-open.xf-yun.com/v1`） |
-
-## 切换原则
-
-- 阶段 04 ~ 阶段 10 主链路 LLM Provider 暂时复用 `/home/cypress/Alethicode/backend/.env`（取值 `openai_compat`）。
-- 阶段 11 起，主演示链路必须切到 `spark`：
-  - `PYT_LLM_PROVIDER=spark` 缺任意必需变量直接 fail fast，不允许默认值降级。
-  - 启动日志显示 `provider_label`（如 `spark:spark-pro`）。
-  - 任何 4xx/5xx 翻译成 `LlmProviderError`，节点层 fail fast，前端透出"模型限流/欠费"。
-- `dryrun` 仅供 Pytest 和本地无密钥环境使用，业务节点禁止默认走 `dryrun`。
-
-## 本地运行示例
-
-```bash
-# 开发期 fallback
-export PYT_LLM_PROVIDER=openai_compat
-set -a
-. /home/cypress/Alethicode/backend/.env
-set +a
-
-# 演示主链路（讯飞）
-export PYT_LLM_PROVIDER=spark
-export PYT_SPARK_APP_ID=...
-export PYT_SPARK_API_KEY=...
-export PYT_SPARK_API_SECRET=...
-export PYT_SPARK_MODEL_ID=spark-pro
-# 可选
-export PYT_SPARK_BASE_URL=https://spark-api-open.xf-yun.com/v1
-
-uvicorn pythontopia_graph.main:app --host 0.0.0.0 --port 18091 --workers 1
+```dotenv
+PYT_LLM_PROVIDER=openai_compat
+PYT_OPENAI_BASE_URL=https://api.deepseek.com
+PYT_OPENAI_API_KEY=<DeepSeek API key>
+PYT_OPENAI_MODEL=deepseek-v4-pro
+PYT_OPENAI_MODEL_FAST=deepseek-flash
+PYT_OPENAI_MODEL_VISION=deepseek-flash
 ```
 
-## 导师图片问答
+文本消息由默认模型处理；含图消息使用视觉模型。导师和工坊支持 JPEG、PNG、GIF、WebP，
+每轮最多 3 张、单张不超过 5 MiB。图片以 base64 `image_url` 内容块直接发给 DeepSeek，
+返回仍是文本流；图片不会存入聊天历史。Graph 对图片格式、base64、数量和大小做校验，
+视觉模型缺失时拒绝图片请求，不回退到其它图像服务。
 
-- 导师面板与工坊可发送文字及 JPEG、PNG、GIF、WebP 图片；图片由 Graph 校验后以 OpenAI 兼容 `image_url` 内容块直接发送给 DeepSeek，答复保持文本流。
-- DeepSeek 视觉模型配置到 `PYT_OPENAI_MODEL_VISION`（例如 `deepseek-flash`），与 NPC 使用的快档模型分开；未配置时图片请求 fail fast。
-- 每次最多 3 张图片、单张原始文件最大 5 MiB；只接受 base64/Data URL，不接受远程图片 URL。图片只用于本轮，不存入聊天历史。
-- RAG、grounding 和 safety 审查仍按现有导师答疑链路执行。工坊代码/文档附件继续走现有文件上传与文本解析。
+RAG 使用本地 hash 向量和 BM25，不调用第三方 embedding API。hash 不写入学习记忆的语义向量表；
+当没有语义 embedding 时，记忆检索退回现有 KC/时间/重要度排序。RAG `readyz` 在 BM25
+索引可用但语义向量降级时返回 `ready_degraded`，索引状态仍显式标记 degraded。
 
-## 安全与合规
+配音、语音识别、浏览器语音输入和独立文生图/图片理解入口关闭。导师图片理解由 DeepSeek
+直接完成；视频讲解的文字摘要也使用同一 DeepSeek provider，视频时间点只取真实分 P 元数据，
+不请求第三方 AI 总结。
 
-- 严禁把 `.env` / `.env.demo` 或任何形态的 `api_secret` 提交到仓库。
-- 日志中 Provider 密钥必须脱敏，仅打印 `provider_label`。
-- 演示账号建议使用一次性 token，演示完毕立即吊销。
-- `SparkProvider` 不持久化任何用户提交内容到上游模型供应商之外，所有 grounding / safety
-  审查仍在本服务进行。
+密钥只放在被 Git 忽略的 `deploy/.env`，不可提交、打印到日志或写入文档。生产配置门禁要求
+DeepSeek API key、文本模型和视觉模型，并拒绝非 DeepSeek 地址及外部 embedding provider。
 
-## 多模态生成接入（文生图 / 配音 / 合成短视频）
-
-多模态能力统一接入**科大讯飞**，并复用与 Spark LLM 相同的讯飞控制台应用凭据
-（`PYT_SPARK_APP_ID` / `PYT_SPARK_API_KEY` / `PYT_SPARK_API_SECRET`），无需额外申请独立 key。
-
-| 能力 | 服务 | 必需 env | 缺失时降级 |
-| ---- | ---- | -------- | -------- |
-| 配音 TTS | `XfyunTtsService`（`tts-api.xfyun.cn/v2/tts`） | `PYT_SPARK_APP_ID/API_KEY/API_SECRET` | 前端 `speechSynthesis` 浏览器语音 |
-| 文生图 | `XfyunImageService`（讯飞星火 TTI，`PYT_SPARK_IMAGE_URL` 可覆盖） | 同上 | 本地占位 PNG（`degraded=true`，`MediaPlaceholderFactory` 内存生成） |
-| 短视频合成 | `StoryboardCompositionService`（图序列 + TTS 经 ffmpeg） | 同上 + 容器内 `ffmpeg` | 前端「图 + TTS + 动效」实时剧场（不落地 mp4） |
-
-降级原则：**任一凭据缺失或上游失败都不阻塞业务**，落到本地占位产物并打 `degraded=true` 标记落库
-（`media_asset` 表），保证无 apikey 时多模态验收链路仍可完整跑通；配置真实密钥后自动切回真实生成。
-多模态产物落盘在 `PYT_MEDIA_GENERATED_DIR`（默认 `./data/course-pack-43/generated-media`，不入 git、可重生）。
-
-> 注：讯飞未提供公开「文生视频」接口，故短视频走「文生图序列 + TTS 配音 → ffmpeg 程序化合成」路线，
-> 而非端到端文生视频模型（如 SeeDance）。
-
-## RAG 嵌入接入
-
-- 当前 `pythontopia-rag` 默认使用 384 维 `HashEmbedder`；生产可切到 384 维 `BgeSmallEmbedder`。
-- 讯飞嵌入接口（`IflytekSparkEmbedder`）作为阶段 11 占位，引入时需要：
-  - 重新计算 `rag_chunk` 向量列维度（通常 1024）。
-  - 同步重建索引（`POST /rag/index/rebuild`）。
-- 维度切换必须在新的 Flyway 迁移中处理，避免在生产数据库上手工 DDL。
+官方图片输入格式与模型说明：[DeepSeek Vision 文档](https://api-docs.deepseek.com/guides/vision/)。

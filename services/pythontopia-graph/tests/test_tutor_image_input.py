@@ -34,6 +34,25 @@ def test_tutor_request_rejects_mime_that_does_not_match_image_bytes() -> None:
         )
 
 
+def test_tutor_request_rejects_invalid_base64() -> None:
+    with pytest.raises(ValidationError, match="valid base64"):
+        TutorAskRequest(
+            user_id=1,
+            question="请解释图片",
+            images=["data:image/png;base64,not-base64!"],
+        )
+
+
+def test_tutor_request_rejects_image_over_five_mib() -> None:
+    oversized_png = b"\x89PNG\r\n\x1a\n" + b"x" * (5 * 1024 * 1024)
+    with pytest.raises(ValidationError, match="at most 5 MiB"):
+        TutorAskRequest(
+            user_id=1,
+            question="请解释图片",
+            images=[_data_url(data=oversized_png)],
+        )
+
+
 def test_tutor_request_rejects_more_than_three_images() -> None:
     with pytest.raises(ValidationError):
         TutorAskRequest(

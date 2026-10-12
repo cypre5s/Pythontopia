@@ -1,6 +1,7 @@
 package com.pythontopia.tutor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.common.web.GraphInternalSubjectSupport;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -89,10 +90,24 @@ public final class GraphStreamRelay {
       SseEmitter emitter,
       BiConsumer<String, String> onEvent,
       Runnable onFinished) {
+    relay(url, bodySupplier, internalToken, null, emitter, onEvent, onFinished);
+  }
+
+  /**
+   * Stateful Graph 中继：除服务 token 外携带由 Java JWT 身份派生的可信主体。
+   */
+  public void relay(
+      String url,
+      Supplier<?> bodySupplier,
+      String internalToken,
+      String internalSubject,
+      SseEmitter emitter,
+      BiConsumer<String, String> onEvent,
+      Runnable onFinished) {
     HttpURLConnection connection = null;
     try {
       byte[] payload = objectMapper.writeValueAsBytes(bodySupplier.get());
-      connection = open(url, internalToken, payload);
+      connection = open(url, internalToken, internalSubject, payload);
       int status = connection.getResponseCode();
       if (status >= 400) {
         log.error("Graph SSE endpoint {} returned HTTP {}", url, status);
@@ -162,7 +177,8 @@ public final class GraphStreamRelay {
     }
   }
 
-  private HttpURLConnection open(String url, String internalToken, byte[] payload)
+  private HttpURLConnection open(
+      String url, String internalToken, String internalSubject, byte[] payload)
       throws IOException {
     HttpURLConnection connection = (HttpURLConnection) URI.create(url).toURL().openConnection();
     connection.setConnectTimeout(connectTimeoutMs);
@@ -174,6 +190,9 @@ public final class GraphStreamRelay {
     connection.setRequestProperty("Accept", "text/event-stream");
     if (internalToken != null && !internalToken.isBlank()) {
       connection.setRequestProperty("X-Internal-Token", internalToken);
+    }
+    if (internalSubject != null && !internalSubject.isBlank()) {
+      connection.setRequestProperty(GraphInternalSubjectSupport.HEADER, internalSubject);
     }
     connection.setFixedLengthStreamingMode(payload.length);
     try (OutputStream out = connection.getOutputStream()) {

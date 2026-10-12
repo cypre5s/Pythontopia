@@ -13,12 +13,43 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from types import SimpleNamespace
 
 import pythontopia_graph.routes.video_insight as video_insight_route
 from pythontopia_graph.llm.provider import LlmResponse
 from pythontopia_graph.main import app
 from pythontopia_graph.nodes.timeline_grounding import TimelineSegment
 from pythontopia_graph.routes.video_insight import VideoMeta
+
+
+@pytest.mark.asyncio
+async def test_metadata_fetch_does_not_call_external_ai_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeVideo:
+        ai_summary_called = False
+
+        async def get_info(self) -> dict[str, str]:
+            return {"title": "Python 入门", "desc": "基础语法"}
+
+        async def get_pages(self) -> list[dict[str, object]]:
+            return [{"part": "第一章", "duration": 60}, {"part": "第二章", "duration": 45}]
+
+        async def get_ai_conclusion(self, **_kwargs: object) -> None:
+            self.ai_summary_called = True
+
+    fake_video = FakeVideo()
+    fake_module = SimpleNamespace(video=SimpleNamespace(Video=lambda **_kwargs: fake_video))
+    monkeypatch.setitem(__import__("sys").modules, "bilibili_api", fake_module)
+    monkeypatch.setattr(
+        "pythontopia_graph.routes.video._configure_bilibili_proxy", lambda: None
+    )
+
+    meta = await video_insight_route._fetch_bilibili_metadata("BV1test00000")
+
+    assert fake_video.ai_summary_called is False
+    assert meta.outline_segments == []
+    assert [segment.t_sec for segment in meta.page_segments] == [0, 60]
 
 
 def _patch_fetch(monkeypatch: pytest.MonkeyPatch, meta: VideoMeta) -> None:

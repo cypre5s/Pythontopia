@@ -19,6 +19,7 @@ import { computed, nextTick, onMounted, onUnmounted, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useLearningStore } from "@stores/learning";
 import { useMainlineStore } from "@stores/mainline";
+import { useSessionStore } from "@stores/session";
 import { useToastStore } from "@stores/toast";
 import { useWorkshopActivityStore } from "@stores/workshopActivity";
 import { playSfx } from "@/composables/useAudio";
@@ -274,6 +275,10 @@ interface ChatMessage {
   retry?: RetryInfo;
 }
 
+const props = withDefaults(defineProps<{ ownerId?: number | null }>(), {
+  ownerId: null,
+});
+
 const emit = defineEmits<{
   (event: "open-resource", resourceId: number): void;
   (event: "history-saved", turn: WorkshopChatHistoryTurnDto): void;
@@ -283,8 +288,21 @@ const router = useRouter();
 const route = useRoute();
 const learning = useLearningStore();
 const mainline = useMainlineStore();
+const session = useSessionStore();
 const toast = useToastStore();
 const activity = useWorkshopActivityStore();
+
+// 组件创建时锁定真实 owner。App 会以 owner+epoch 重建 KeepAlive；这道本地闸
+// 额外兜住测试替身、传输层不响应 abort，以及账号切换与卸载之间的竞态。
+const componentOwnerId = props.ownerId ?? session.user?.id ?? null;
+let accountContextActive = true;
+
+function isComponentOwnerActive(): boolean {
+  return accountContextActive
+    && componentOwnerId !== null
+    && props.ownerId === componentOwnerId
+    && session.user?.id === componentOwnerId;
+}
 
 const messages = ref<ChatMessage[]>([]);
 const mentionItems = ref<MentionItem[]>([]);
@@ -610,6 +628,7 @@ function emitSavedWorkshopTurn(
   recordId: number,
   m: ChatMessage,
 ): void {
+  if (!isComponentOwnerActive()) return;
   emit("history-saved", {
     id: `workshop-${recordId}`,
     conversationId: request.conversationId,
@@ -636,6 +655,7 @@ function emitProvisionalAnswerTurn(
   intent: IntentKind,
   kcCodes: string[],
 ): void {
+  if (!isComponentOwnerActive()) return;
   const meta = commandOf(intent);
   emit("history-saved", {
     id: `local-${messageId}`,
@@ -660,6 +680,7 @@ function emitSavedAnswerTurn(
   text: string,
   kcCodes: string[],
 ): void {
+  if (!isComponentOwnerActive()) return;
   const meta = commandOf(intent);
   emit("history-saved", {
     id: `local-${messageId}`,
@@ -685,6 +706,7 @@ async function persistWorkshopHistoryTurn(
   ctx: DispatchContext,
   messageId: string | null,
 ): Promise<void> {
+  if (!isComponentOwnerActive()) return;
   const m = assistantMessageById(messageId);
   if (!m || m.kind === "answer" || m.kind === "text") return;
   const request: WorkshopChatHistoryRecordRequest = {
@@ -699,6 +721,7 @@ async function persistWorkshopHistoryTurn(
   pendingHistorySaves.value += 1;
   try {
     const response = await recordWorkshopChatHistoryTurn(request);
+    if (!isComponentOwnerActive()) return;
     emitSavedWorkshopTurn(request, response.id, m);
   } catch {
     /* 历史保存失败不打断当前工具结果。 */

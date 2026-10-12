@@ -29,7 +29,7 @@ class EmbeddingClientTest {
         .expect(MockRestRequestMatchers.requestTo("http://rag.test/embed"))
         .andRespond(
             MockRestResponseCreators.withSuccess(
-                "{\"model\":\"hash-bow-1024\",\"dim\":3,"
+                "{\"model\":\"semantic-test\",\"dim\":3,"
                     + "\"vectors\":[[1.0,0.0,0.0],[0.0,1.0,0.0]]}",
                 MediaType.APPLICATION_JSON));
 
@@ -44,7 +44,7 @@ class EmbeddingClientTest {
 
   @Test
   void embedSingleReturnsVectorWithExpectedDimension() {
-    // 2048 维（对齐智谱 embedding-3）：客户端原样解析维度，不截断。
+    // 语义向量按接口返回维度解析，不截断。
     StringBuilder vector = new StringBuilder("0.0");
     for (int i = 1; i < 2048; i++) {
       vector.append(",0.0");
@@ -61,6 +61,20 @@ class EmbeddingClientTest {
 
     assertThat(result).isPresent();
     assertThat(result.orElseThrow()).hasSize(2048);
+  }
+
+  @Test
+  void hashVectorsAreNotStoredAsSemanticMemoryEmbeddings() {
+    MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+    server
+        .expect(MockRestRequestMatchers.requestTo("http://rag.test/embed"))
+        .andRespond(
+            MockRestResponseCreators.withSuccess(
+                "{\"model\":\"hash-bow-2048\",\"dim\":2048,\"vectors\":[[1.0]]}",
+                MediaType.APPLICATION_JSON));
+
+    assertThat(client.embed("列表是可变对象")).isEmpty();
+    server.verify(Duration.ofSeconds(2));
   }
 
   @Test

@@ -76,6 +76,9 @@ public class RagEmbeddingClient implements EmbeddingClient {
     if (body == null || body.vectors() == null) {
       return emptyVectors(expected);
     }
+    if (body.model() != null && body.model().startsWith("hash-")) {
+      return emptyVectors(expected);
+    }
     List<Optional<float[]>> result = new ArrayList<>(expected);
     for (List<Double> vector : body.vectors()) {
       if (vector == null || vector.isEmpty()) {

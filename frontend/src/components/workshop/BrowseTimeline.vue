@@ -34,7 +34,11 @@ const statusTone = computed<string>(() => browseRunStatusTone(props.run?.status 
 /** 命中来源 → 外部引用 chips（复用冻结类型 LoopCitation；kind 恒为 external）。 */
 const citations = computed<LoopCitation[]>(() =>
   (props.run?.citations ?? []).map(
-    (url): LoopCitation => ({ kind: 'external', ref: url, label: browseUrlLabel(url) }),
+    (citation): LoopCitation => ({
+      kind: 'external',
+      ref: citation.url,
+      label: browseUrlLabel(citation.url),
+    }),
   ),
 );
 
@@ -96,7 +100,19 @@ function externalAria(url: string): string {
             :aria-label="externalAria(s.url)"
             data-testid="browse-step-url"
           >{{ browseUrlLabel(s.url) }} <span aria-hidden="true">↗</span></a>
-          <p class="browse__summary">{{ s.summary }}</p>
+          <p
+            v-if="s.title"
+            class="browse__step-title"
+            data-testid="browse-step-title"
+          >
+            {{ s.title }}
+          </p>
+          <p
+            class="browse__summary"
+            data-testid="browse-step-snippet"
+          >
+            {{ s.snippet || s.summary }}
+          </p>
         </div>
       </li>
     </ol>
@@ -170,7 +186,9 @@ function externalAria(url: string): string {
         aria-hidden="true"
       >✗</span>
       <div class="browse__error-body">
-        <p class="browse__error-msg">联网查证失败：{{ run.error }}</p>
+        <p class="browse__error-msg">
+          联网查证失败：{{ run.error }}
+        </p>
         <p
           class="browse__fallback"
           data-testid="browse-fallback"
@@ -313,6 +331,13 @@ function externalAria(url: string): string {
   line-height: 1.45;
   color: #33423a;
   word-break: break-word;
+}
+
+.browse__step-title {
+  margin: 3px 0 1px;
+  color: #203a2d;
+  font-size: 0.84rem;
+  font-weight: 700;
 }
 .browse__empty {
   margin: 0;

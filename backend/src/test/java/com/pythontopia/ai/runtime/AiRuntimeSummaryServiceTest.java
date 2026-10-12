@@ -86,7 +86,8 @@ class AiRuntimeSummaryServiceTest {
                         1L, "更适合先例子后抽象", "cognitive_style", List.of("visual"), "2026-06-25")),
                 List.of(
                     new WeeklyReportDto.MasteryDeltaBrief(
-                        "PY43-KC-001", 0.62, 0.4, List.of("resource_check:21;resource:5"))),
+                        "PY43-KC-001", 0.62, 0.7, 0.4, 1,
+                        List.of("resource_check:21;resource:5"))),
                 List.of(
                     new WeeklyReportDto.ResourceRunBrief(
                         "ResourceDesignerAgent", "讲义", "SUCCESS", 3, "2026-06-25T10:00:00Z"))));

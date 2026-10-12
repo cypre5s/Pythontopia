@@ -1,7 +1,7 @@
 // 多模态媒资前端访问层。
 //
 // 后端端点（MediaAssetController / MediaAsrController）：
-//   POST /api/media/image            → MediaAssetDto（按 prompt 文生图；无 apikey 返回占位 degraded=true）
+//   POST /api/media/image            → MediaAssetDto（真实文生图；缺 Provider/上游失败明确报错）
 //   POST /api/media/storyboard/video → MediaAssetDto（图序列+TTS 经 ffmpeg 合成 mp4；无 ffmpeg 抛降级错误）
 //   POST /api/media/asr              → AsrResponse（multipart 上传录音 → 讯飞语音听写转文本；不可用返回 degraded=true）
 //   GET  /api/media/assets/{id}      → 媒资字节流（匿名，支持 Range，供 <img>/<video> src 直连）
@@ -18,7 +18,7 @@ export interface MediaAssetDto {
   /** 可直接用于 <img>/<video> src 的相对地址（/api/media/assets/{id}）。 */
   url: string;
   mimeType: string;
-  /** true 表示本地占位/降级产物（未接入真实讯飞生成），前端可显示角标。 */
+  /** true 表示历史或非图像链路的降级产物；新图像生成会在 Provider 不可用时直接报错。 */
   degraded: boolean;
   source: string;
   prompt: string | null;

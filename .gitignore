@@ -52,6 +52,7 @@ qa-screens/
 secrets/
 # 超星爬取的任务点视频（仅本地缓存供演示，manifest 入库、视频不入库）
 data/course-pack-43/videos/
+data/course-pack-43/.transcript-work/
 # 多模态生成产物（文生图/合成短视频，含占位降级产物，本地落盘可重生，不入库）
 data/course-pack-43/generated-media/
 

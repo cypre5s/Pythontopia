@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
@@ -19,6 +20,8 @@ import org.springframework.web.bind.annotation.*;
 public class LearningEventController {
 
   private static final String MEDIA_CONSUMED = "media_consumed";
+  private static final Set<String> CLIENT_EVENT_TYPES =
+      Set.of(MEDIA_CONSUMED, "quiz_finished", "answer_feedback");
 
   private final LearningEventLogRepository repository;
   private final ApplicationEventPublisher eventPublisher;
@@ -35,6 +38,7 @@ public class LearningEventController {
       @CurrentUser CurrentUserPrincipal user,
       @Valid @RequestBody LearningEventLogDto dto) {
     requireStudent(user);
+    validateClientEvent(dto);
     repository.insert(
         user.userId(),
         dto.eventType(),
@@ -53,6 +57,7 @@ public class LearningEventController {
     if (events.size() > 100) {
       throw new BusinessException(HttpStatus.BAD_REQUEST, "BATCH_TOO_LARGE", "Max 100 events per batch");
     }
+    events.forEach(this::validateClientEvent);
     for (LearningEventLogDto dto : events) {
       repository.insert(
           user.userId(),
@@ -61,6 +66,15 @@ public class LearningEventController {
           "frontend",
           EventImportance.of(dto.eventType()));
       maybePublishDomainEvent(user.userId(), dto);
+    }
+  }
+
+  private void validateClientEvent(LearningEventLogDto dto) {
+    if (dto == null || !CLIENT_EVENT_TYPES.contains(dto.eventType())) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST,
+          "INVALID_LEARNING_EVENT",
+          "不允许客户端上报该事件");
     }
   }
 

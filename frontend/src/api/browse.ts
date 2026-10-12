@@ -39,6 +39,16 @@ export interface BrowseStepDto {
   url: string;
   /** 该步可读摘要（已去敏，外部内容）。 */
   summary: string;
+  /** 页面标题（已去敏；旧记录可能为空）。 */
+  title: string;
+  /** 独立正文摘录（已去敏、受字节预算约束）。 */
+  snippet: string;
+}
+
+/** 后端 BrowseCitationDto；对象形态保留外部内容标签，不能降成裸 URL 字符串。 */
+export interface BrowseCitationDto {
+  url: string;
+  label: string;
 }
 
 /** 浏览会话概要（POST 创建 / 列表返回；镜像 browse_run 去 user_id）。 */
@@ -59,7 +69,7 @@ export interface BrowseRunDto {
 export interface BrowseRunDetailDto extends BrowseRunDto {
   steps: BrowseStepDto[];
   /** 命中 url（全部为外部链接，统一标注「外部内容，非课件」）。 */
-  citations: string[];
+  citations: BrowseCitationDto[];
 }
 
 // ============ REST 端点 ============

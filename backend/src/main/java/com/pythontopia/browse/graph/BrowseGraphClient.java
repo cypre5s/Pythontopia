@@ -108,11 +108,23 @@ public class BrowseGraphClient {
       @JsonProperty("index") int index,
       @JsonProperty("action") String action,
       @JsonProperty("url") String url,
-      @JsonProperty("summary") String summary) {
+      @JsonProperty("summary") String summary,
+      @JsonProperty("title") String title,
+      @JsonProperty("snippet") String snippet) {
 
     BrowseGraphStep toStep() {
+      String normalizedSummary = summary == null ? "" : summary;
+      String normalizedSnippet = snippet == null || snippet.isBlank() ? normalizedSummary : snippet;
+      if (normalizedSummary.isBlank()) {
+        normalizedSummary = normalizedSnippet;
+      }
       return new BrowseGraphStep(
-          index, action == null ? "" : action, url == null ? "" : url, summary == null ? "" : summary);
+          index,
+          action == null ? "" : action,
+          url == null ? "" : url,
+          normalizedSummary,
+          title == null ? "" : title,
+          normalizedSnippet);
     }
   }
 }

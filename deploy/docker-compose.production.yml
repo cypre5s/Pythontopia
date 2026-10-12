@@ -84,7 +84,7 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    # 秘密（JWT/数据库/讯飞/OpenAI 兼容凭据等）全部由远端 .env 注入。
+    # 秘密（JWT/数据库/DeepSeek 凭据等）全部由远端 .env 注入。
     env_file:
       - .env
     environment:
@@ -98,15 +98,26 @@ services:
       PYTHONTOPIA_SERVICES_RAGURL: http://pythontopia-rag:18092
       PYT_GRAPH_URL: http://pythontopia-graph:18091
       PYT_RAG_URL: http://pythontopia-rag:18092
+      # 联网查证生产必须使用镜像内的 Playwright Chromium；readyz 会在依赖/二进制缺失时 503。
+      # 2C4G 单机仅允许一个并发浏览会话，且 executor 仍有总超时、字节和 allowlist 硬上限。
+      BROWSE_ENABLED: "on"
+      BROWSE_MAX_CONCURRENCY: "1"
+      BROWSE_ALLOWED_DOMAINS: ${BROWSE_ALLOWED_DOMAINS:-}
       # 签名 RouteDecision/TaskPlan 的独立 HMAC 密钥；缺失时必须阻止生产启动，
       # 否则普通答疑仍可用但多 Agent 编排只能返回空执行令牌。
       PYT_ROUTE_EXECUTION_SECRET: ${PYT_ROUTE_EXECUTION_SECRET:?缺少 PYT_ROUTE_EXECUTION_SECRET}
+      # 正式判题必须交给独立隔离的 Piston；生产不允许回落到 backend 容器内 subprocess。
+      PYT_JUDGE_PROVIDER: piston
+      PYT_PISTON_URL: ${PYT_PISTON_URL:?缺少 PYT_PISTON_URL}
+      PYT_PISTON_PYTHON_VERSION: ${PYT_PISTON_PYTHON_VERSION:?缺少 PYT_PISTON_PYTHON_VERSION}
+      PYT_PISTON_AUTH_TOKEN: ${PYT_PISTON_AUTH_TOKEN:?缺少 PYT_PISTON_AUTH_TOKEN}
       # 生产环境不公开 Swagger/OpenAPI，避免匿名枚举完整接口与 DTO。
       PYT_EXPOSE_API_DOCS: "false"
       # ---- 数据目录接线：远端 .env 中的宿主相对路径在容器内无意义，统一覆盖 ----
       PYT_COURSEPACK_PDF_DIR: /data/course-pack-43/pdfs
       PYT_COURSEPACK_VIDEO_DIR: /data/course-pack-43/videos
       PYT_COURSEPACK_VIDEO_MANIFEST: /data/course-pack-43/video_manifest.json
+      PYT_COURSEPACK_VIDEO_TRANSCRIPTS: /data/course-pack-43/video_transcripts.json
       PYT_MEDIA_GENERATED_DIR: /data/generated-media
       # 课件页 PNG 渲染缓存目录：必须落到可写挂载卷（generated-media，rw），否则容器内非 root
       # 用户写默认 ./data(=/app/data) 触发 AccessDenied，课件证据图全部裂图。relaxed-binding 覆盖
@@ -115,7 +126,7 @@ services:
       # ---- JVM：默认直连（ECS 无本地代理）；如需代理用 PYT_BACKEND_JAVA_OPTS 覆盖 ----
       JAVA_OPTS: ${PYT_BACKEND_JAVA_OPTS:--XX:MaxRAMPercentage=70 -Dfile.encoding=UTF-8}
     volumes:
-      # 课件 PDF / 超星视频：只读；目录不存在或为空时相关端点自动降级，不阻塞主链路。
+      # 课件 PDF / 超星视频 / 字幕：只读；install/preflight 已做逐文件与来源哈希强校验。
       - ${PYT_SHARED_DATA_DIR:-/opt/pythontopia/shared/data}/course-pack-43:/data/course-pack-43:ro
       # 多模态生成产物（文生图/TTS/合成视频）：读写；内容可重生成。
       - ${PYT_SHARED_DATA_DIR:-/opt/pythontopia/shared/data}/generated-media:/data/generated-media
@@ -126,11 +137,11 @@ services:
       - ${PYT_SHARED_DATA_DIR:-/opt/pythontopia/shared/data}/npcs:/app/data/npcs:ro
     extra_hosts:
       - "host.docker.internal:host-gateway"
-    # 仅绑定回环：供主机诊断（curl 127.0.0.1:18080/healthz），不对公网暴露。
+    # 仅绑定回环：供主机诊断（curl 127.0.0.1:18080/readyz），不对公网暴露。
     ports:
       - "127.0.0.1:18080:18080"
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18080/healthz || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18080/readyz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10
@@ -151,6 +162,8 @@ services:
     env_file:
       - .env
     environment:
+      # 生产只使用 DeepSeek；preflight/install 校验 endpoint、key、文本及视觉模型。
+      PYT_LLM_PROVIDER: ${PYT_LLM_PROVIDER:?缺少 PYT_LLM_PROVIDER}
       # OpenAiCompatProvider 读取无前缀 OPENAI_*/LLM_* 变量，
       # 这里把 .env 中带 PYT_ 前缀的值映射成 provider 期望的形态（与开发编排一致）。
       OPENAI_BASE_URL: ${PYT_OPENAI_BASE_URL:-}
@@ -186,7 +199,7 @@ services:
       LANGFUSE_PUBLIC_KEY: ${LANGFUSE_PUBLIC_KEY:-}
       LANGFUSE_SECRET_KEY: ${LANGFUSE_SECRET_KEY:-}
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18091/healthz || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18091/readyz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 5
@@ -207,8 +220,10 @@ services:
       # 用 .env 凭据拼数据库连接串；密码含 @ : / 等 URL 保留字符时会解析失败，
       # 见 README「常见故障」。
       PYT_DB_URL: postgresql://${PYT_DB_USERNAME:?缺少 PYT_DB_USERNAME，请检查远端 .env}:${PYT_DB_PASSWORD:?缺少 PYT_DB_PASSWORD，请检查远端 .env}@postgres:5432/pythontopia
+      # 课程检索使用本地哈希向量与 BM25，不向第三方 embedding 服务发送数据。
+      PYT_RAG_EMBEDDER: hash
     healthcheck:
-      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18092/healthz || exit 1"]
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18092/readyz || exit 1"]
       interval: 15s
       timeout: 5s
       retries: 10

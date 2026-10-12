@@ -91,9 +91,7 @@ public class MainlineController {
         recoveryService.recordEndlessSummary(
             requireUserId(user),
             request.chapter(),
-            request.correct(),
-            request.total(),
-            request.streak());
+            request.runId());
     return new StarAwardResultDto(awarded);
   }
 

@@ -43,7 +43,7 @@ export interface StarBreakdownDto {
 export interface RecoveryStatusDto {
   /** 错题复盘补星是否已发放（本章 bug-mine RESOLVED ≥ 3）。 */
   errorbookDone: boolean;
-  /** 无尽挑战补星是否已发放（本章范围单轮答对 ≥ 8 且正确率 ≥ 80%）。 */
+  /** 远征补星是否已发放（服务端按本人的活动 run 判题记录计算）。 */
   endlessDone: boolean;
 }
 
@@ -196,12 +196,10 @@ export interface StageProgressDto {
   completed: boolean;
 }
 
-/** 无尽模式轮次小结上报体（§7 / §9）。 */
+/** 无尽远征补星申请；判题汇总由后端按 runId 计算。 */
 export interface EndlessSummaryInput {
   chapter: number;
-  correct: number;
-  total: number;
-  streak: number;
+  runId: string;
 }
 
 /** 补星类端点返回（无尽小结 / 错题复盘）：是否本次发放了一颗补星（幂等，后端权威）。 */
@@ -297,8 +295,8 @@ export async function answerPracticeQuestion(
 }
 
 /**
- * 上报无尽模式一轮小结 → 触发 `ENDLESS_RECOVERY` 补星判定（后端校验 + 防刷：
- * 每日每章至多记 1 次有效补星）。返回是否发放补星。
+ * 申请远征补星；后端按本人活动 run 中本章已发题目的正式判题记录计算门槛，
+ * 每日每章至多发放一次。返回是否发放补星。
  */
 export async function postEndlessSummary(
   input: EndlessSummaryInput,

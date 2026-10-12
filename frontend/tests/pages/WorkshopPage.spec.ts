@@ -106,6 +106,8 @@ vi.mock('@/composables/useAudio', async () => {
 
 import WorkshopPage from '@/pages/WorkshopPage.vue';
 import WorkshopChat from '@/components/workshop/WorkshopChat.vue';
+import ChatHistoryRail from '@/components/workshop/ChatHistoryRail.vue';
+import { useSessionStore } from '@stores/session';
 import { useWorldStore } from '@stores/world';
 
 const APP_LAYOUT_STUB = { template: '<div data-testid="layout-stub"><slot /></div>' };
@@ -129,6 +131,12 @@ describe('WorkshopPage R-13 改造', () => {
     // 否则前一用例开过的抽屉会被后一用例的全新挂载 hydrate，污染默认布局断言。
     localStorage.clear();
     setActivePinia(createPinia());
+    useSessionStore().user = {
+      id: 7,
+      username: 'student-7',
+      displayName: '学生七',
+      role: 'STUDENT',
+    };
     router = setupRouter();
     Object.values(apiMocks).forEach((fn) => fn.mockReset?.());
     apiMocks.listChapters.mockResolvedValue([
@@ -394,6 +402,15 @@ describe('WorkshopPage R-13 改造', () => {
     expect(wrapper.vm.$options.name).toBe('WorkshopPage');
   });
 
+  it('把真实登录用户 id 同时传给历史栏与工坊对话', async () => {
+    await router.push('/workshop');
+    const wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.findComponent(ChatHistoryRail).props('ownerId')).toBe(7);
+    expect(wrapper.findComponent(WorkshopChat).props('ownerId')).toBe(7);
+  });
+
   it('defaults to a ChatGPT-like workbench with the history rail visible', async () => {
     await router.push('/workshop');
     const wrapper = mountPage();
@@ -533,6 +550,6 @@ describe('WorkshopPage R-13 改造', () => {
     expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(false);
     wrapper.findComponent(WorkshopChat).vm.$emit('history-saved', savedTurn);
 
-    expect(apiMocks.rememberWorkshopChatHistoryTurn).toHaveBeenCalledWith(savedTurn);
+    expect(apiMocks.rememberWorkshopChatHistoryTurn).toHaveBeenCalledWith(7, savedTurn);
   });
 });

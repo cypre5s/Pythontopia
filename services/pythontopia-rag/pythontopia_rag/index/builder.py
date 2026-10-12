@@ -122,7 +122,7 @@ async def rebuild_index(
 
 
 def _embedder_degradation(embedder: Embedder) -> tuple[bool, str | None]:
-    """读取兜底 embedder 的降级身份；非兜底实现（Hash/Zhipu strict 等）恒为未降级。"""
+    """读取 embedder 的降级身份；Hash 会自报非语义降级，Zhipu strict 不带该标志。"""
     using_fallback = getattr(embedder, "using_fallback", None)
     if using_fallback is None:
         return False, None

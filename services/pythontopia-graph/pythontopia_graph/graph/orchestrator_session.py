@@ -1,6 +1,6 @@
 """OrchestratorAgent 进程内单 worker 会话记忆。
 
-单 worker 下模块级 dict + asyncio.Lock；按 session_id 存多轮对话、plan、画像信号。
+单 worker 下模块级 dict + asyncio.Lock；按 (user_id, session_id) 存多轮对话、plan、画像信号。
 服务端为权威，客户端 history 仅冷启动回退。访问器返回深拷贝，写路径经锁保护。
 """
 
@@ -25,25 +25,35 @@ class SessionState:
     profile_signals: list[ProfileSignal] = field(default_factory=list)
 
 
-_STORE: dict[str, SessionState] = {}
+SessionKey = tuple[int, str]
+
+_STORE: dict[SessionKey, SessionState] = {}
 _LOCK = asyncio.Lock()
 
 
-async def get_history(session_id: str) -> list[OrchestratorTurn]:
+def _key(user_id: int, session_id: str) -> SessionKey:
+    if user_id < 1:
+        raise ValueError("user_id must be positive")
+    if not session_id:
+        raise ValueError("session_id must not be empty")
+    return user_id, session_id
+
+
+async def get_history(user_id: int, session_id: str) -> list[OrchestratorTurn]:
     async with _LOCK:
-        state = _STORE.get(session_id)
+        state = _STORE.get(_key(user_id, session_id))
         return [turn.model_copy(deep=True) for turn in state.turns] if state else []
 
 
-async def get_plan(session_id: str) -> list[PlanStep]:
+async def get_plan(user_id: int, session_id: str) -> list[PlanStep]:
     async with _LOCK:
-        state = _STORE.get(session_id)
+        state = _STORE.get(_key(user_id, session_id))
         return [step.model_copy(deep=True) for step in state.plan] if state else []
 
 
-async def get_profile_signals(session_id: str) -> list[ProfileSignal]:
+async def get_profile_signals(user_id: int, session_id: str) -> list[ProfileSignal]:
     async with _LOCK:
-        state = _STORE.get(session_id)
+        state = _STORE.get(_key(user_id, session_id))
         return (
             [signal.model_copy(deep=True) for signal in state.profile_signals]
             if state
@@ -51,33 +61,37 @@ async def get_profile_signals(session_id: str) -> list[ProfileSignal]:
         )
 
 
-async def append_turns(session_id: str, new_turns: list[OrchestratorTurn]) -> None:
+async def append_turns(
+    user_id: int, session_id: str, new_turns: list[OrchestratorTurn]
+) -> None:
     if not new_turns:
         return
     async with _LOCK:
-        state = _STORE.setdefault(session_id, SessionState())
+        state = _STORE.setdefault(_key(user_id, session_id), SessionState())
         state.turns.extend(turn.model_copy(deep=True) for turn in new_turns)
         if len(state.turns) > MAX_TURNS:
             del state.turns[: len(state.turns) - MAX_TURNS]
 
 
-async def set_plan(session_id: str, plan: list[PlanStep]) -> None:
+async def set_plan(user_id: int, session_id: str, plan: list[PlanStep]) -> None:
     async with _LOCK:
-        state = _STORE.setdefault(session_id, SessionState())
+        state = _STORE.setdefault(_key(user_id, session_id), SessionState())
         state.plan = [step.model_copy(deep=True) for step in plan]
 
 
-async def merge_profile_signals(session_id: str, signals: list[ProfileSignal]) -> None:
+async def merge_profile_signals(
+    user_id: int, session_id: str, signals: list[ProfileSignal]
+) -> None:
     if not signals:
         return
     async with _LOCK:
-        state = _STORE.setdefault(session_id, SessionState())
+        state = _STORE.setdefault(_key(user_id, session_id), SessionState())
         by_dimension = {signal.dimension: signal for signal in state.profile_signals}
         for signal in signals:
             by_dimension[signal.dimension] = signal.model_copy(deep=True)
         state.profile_signals = list(by_dimension.values())
 
 
-async def reset_session(session_id: str) -> None:
+async def reset_session(user_id: int, session_id: str) -> None:
     async with _LOCK:
-        _STORE.pop(session_id, None)
+        _STORE.pop(_key(user_id, session_id), None)

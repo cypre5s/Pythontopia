@@ -37,10 +37,24 @@ const DETAIL: BrowseRunDetailDto = {
       action: 'navigate',
       url: 'https://docs.python.org/3/howto/sorting.html',
       summary: '打开官方排序指南',
+      title: 'Sorting HOW TO',
+      snippet: 'Sorts are guaranteed to be stable.',
     },
-    { index: 1, action: 'read', url: '', summary: '读到 sorts are guaranteed to be stable' },
+    {
+      index: 1,
+      action: 'read',
+      url: '',
+      summary: '读到 sorts are guaranteed to be stable',
+      title: '',
+      snippet: '读到 sorts are guaranteed to be stable',
+    },
   ],
-  citations: ['https://docs.python.org/3/howto/sorting.html'],
+  citations: [
+    {
+      url: 'https://docs.python.org/3/howto/sorting.html',
+      label: '外部内容，非课件',
+    },
+  ],
 };
 
 beforeEach(() => {
@@ -78,8 +92,15 @@ describe('browse.ts · REST 访问层（DTO 类型与序列化）', () => {
     expect(dto.steps).toHaveLength(2);
     expect(dto.steps[0]?.action).toBe('navigate');
     expect(dto.steps[0]?.url).toBe('https://docs.python.org/3/howto/sorting.html');
+    expect(dto.steps[0]?.title).toBe('Sorting HOW TO');
+    expect(dto.steps[0]?.snippet).toBe('Sorts are guaranteed to be stable.');
     expect(dto.steps[1]?.url).toBe('');
-    expect(dto.citations).toEqual(['https://docs.python.org/3/howto/sorting.html']);
+    expect(dto.citations).toEqual([
+      {
+        url: 'https://docs.python.org/3/howto/sorting.html',
+        label: '外部内容，非课件',
+      },
+    ]);
     expect(dto.truncated).toBe(false);
   });
 });

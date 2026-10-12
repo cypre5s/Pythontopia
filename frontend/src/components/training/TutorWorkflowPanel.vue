@@ -63,6 +63,13 @@ const availableActions = ref<WorkflowActionDto[]>([]);
 const phase = ref<string>('READING');
 const sessionKey = ref('');
 const chatInput = ref('');
+const chatFileInput = ref<HTMLInputElement | null>(null);
+const chatImages = ref<string[]>([]);
+const chatImageReads = ref(0);
+const canSendChat = computed(() => !running.value && !chatImageReads.value
+  && (chatInput.value.trim().length > 0 || chatImages.value.length > 0));
+const MAX_CHAT_IMAGES = 3;
+const MAX_CHAT_IMAGE_BYTES = 4 * 1024 * 1024;
 const bodyRef = ref<HTMLElement | null>(null);
 const loaded = ref(false);
 const lastInitialNonce = ref(0);
@@ -277,11 +284,49 @@ async function markCardFeedback(entry: CardEntry, value: 'helpful' | 'not_helpfu
   cardFeedback.value = { ...cardFeedback.value, [id]: value };
 }
 
+function onChatImagesSelected(event: Event): void {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files ?? []);
+  input.value = '';
+  for (const file of files) {
+    if (chatImages.value.length + chatImageReads.value >= MAX_CHAT_IMAGES) {
+      toast.show(`最多上传 ${MAX_CHAT_IMAGES} 张图片`, 'error');
+      break;
+    }
+    if (!/^image\/(png|jpe?g|gif|webp)$/.test(file.type)) {
+      toast.show('仅支持 PNG / JPG / GIF / WebP 图片', 'error');
+      continue;
+    }
+    if (file.size > MAX_CHAT_IMAGE_BYTES) {
+      toast.show('单张图片不能超过 4MB', 'error');
+      continue;
+    }
+    chatImageReads.value += 1;
+    const reader = new FileReader();
+    reader.onload = () => {
+      chatImageReads.value -= 1;
+      if (typeof reader.result === 'string') chatImages.value = [...chatImages.value, reader.result];
+    };
+    reader.onerror = () => {
+      chatImageReads.value -= 1;
+      toast.show('图片读取失败', 'error');
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
+function removeChatImage(index: number): void {
+  chatImages.value = chatImages.value.filter((_, i) => i !== index);
+}
+
 function sendChat(): void {
   const text = chatInput.value.trim();
-  if (!text || running.value) return;
+  if ((!text && !chatImages.value.length) || running.value || chatImageReads.value) return;
+  const message = text || '请结合这张图片帮我分析。';
+  const images = [...chatImages.value];
   chatInput.value = '';
-  void runEvent('CHAT', { message: text });
+  chatImages.value = [];
+  void runEvent('CHAT', { message, ...(images.length ? { images } : {}) });
 }
 
 function insertSkeleton(code: string): void {
@@ -760,10 +805,51 @@ function cardId(entry: CardEntry): string {
     </div>
 
     <!-- 自由提问（CHAT） -->
+    <div
+      v-if="chatImages.length"
+      class="tw-chat__images"
+      data-testid="tw-chat-images"
+    >
+      <div
+        v-for="(image, index) in chatImages"
+        :key="index"
+        class="tw-chat__image"
+      >
+        <img
+          :src="image"
+          :alt="`待发送图片 ${index + 1}`"
+        >
+        <button
+          type="button"
+          :aria-label="`移除图片 ${index + 1}`"
+          @click="removeChatImage(index)"
+        >
+          ×
+        </button>
+      </div>
+    </div>
     <form
       class="tw-chat"
       @submit.prevent="sendChat"
     >
+      <input
+        ref="chatFileInput"
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        multiple
+        hidden
+        data-testid="tw-chat-image-input"
+        @change="onChatImagesSelected"
+      >
+      <button
+        type="button"
+        class="tw-chat__attach"
+        aria-label="添加图片"
+        :disabled="running || chatImages.length + chatImageReads >= MAX_CHAT_IMAGES"
+        @click="chatFileInput?.click()"
+      >
+        图片
+      </button>
       <input
         v-model="chatInput"
         class="tw-chat__input"
@@ -774,7 +860,7 @@ function cardId(entry: CardEntry): string {
       <button
         type="submit"
         class="tw-chat__send"
-        :disabled="running || !chatInput.trim()"
+        :disabled="!canSendChat"
       >
         问
       </button>
@@ -1196,6 +1282,39 @@ function cardId(entry: CardEntry): string {
   display: flex;
   gap: 6px;
   padding: 8px 12px 10px;
+}
+.tw-chat__attach {
+  flex: 0 0 auto;
+  padding: 6px 8px;
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid var(--pyt-color-border);
+  border-radius: 4px;
+  background: var(--pyt-color-bg-soft);
+}
+.tw-chat__images {
+  display: flex;
+  gap: 6px;
+  padding: 0 12px 8px;
+}
+.tw-chat__image {
+  position: relative;
+}
+.tw-chat__image img {
+  width: 52px;
+  height: 52px;
+  object-fit: cover;
+  border-radius: 4px;
+}
+.tw-chat__image button {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--pyt-color-border);
+  border-radius: 50%;
+  cursor: pointer;
 }
 .tw-chat__input {
   flex: 1 1 auto;

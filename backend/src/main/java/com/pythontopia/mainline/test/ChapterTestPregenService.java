@@ -1,7 +1,6 @@
 package com.pythontopia.mainline.test;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.mainline.ChapterCatalog;
 import com.pythontopia.mainline.MainlineProperties;
 import com.pythontopia.mainline.domain.ChapterAssessmentKind;
@@ -43,7 +42,7 @@ public class ChapterTestPregenService {
   private final ChapterTestRepository repository;
   private final ChapterTestGraphClient graphClient;
   private final ChapterProblemBankRepository problemBankRepository;
-  private final ObjectMapper objectMapper;
+  private final ChapterTestPersonalizationService personalizationService;
   private final MainlineProperties properties;
   private final Semaphore pregenSemaphore;
 
@@ -51,12 +50,12 @@ public class ChapterTestPregenService {
       ChapterTestRepository repository,
       ChapterTestGraphClient graphClient,
       ChapterProblemBankRepository problemBankRepository,
-      ObjectMapper objectMapper,
+      ChapterTestPersonalizationService personalizationService,
       MainlineProperties properties) {
     this.repository = repository;
     this.graphClient = graphClient;
     this.problemBankRepository = problemBankRepository;
-    this.objectMapper = objectMapper;
+    this.personalizationService = personalizationService;
     this.properties = properties;
     this.pregenSemaphore = new Semaphore(properties.pregenConcurrency());
   }
@@ -102,17 +101,18 @@ public class ChapterTestPregenService {
     int maxAttempts = 1 + properties.testGenerateMaxRetries();
     GenerateRequest.Counts counts =
         assessmentKind == ChapterAssessmentKind.QUIZ ? QUIZ_COUNTS : FINAL_COUNTS;
+    List<String> chapterKcCodes = ChapterCatalog.kcCodes(chapter);
     List<PreferredCodingQuestion> preferredCodingQuestions =
-        problemBankRepository.findByKcCodes(ChapterCatalog.kcCodes(chapter));
+        problemBankRepository.findByKcCodes(chapterKcCodes);
+    ChapterTestPersonalizationService.PersonalizationContext personalization =
+        personalizationService.build(userId, chapterKcCodes);
     GenerateRequest request =
         new GenerateRequest(
             userId,
             chapter,
-            ChapterCatalog.kcCodes(chapter),
-            // TODO(integration/B1)：接入真实 8 维画像摘要 + errorbook 高频错因 brief（§10 个性化）。
-            //   A1 暂传空 brief（不伪造画像内容）；graph 端需对空 brief 兜底出题。
-            objectMapper.createObjectNode(),
-            objectMapper.createObjectNode(),
+            chapterKcCodes,
+            personalization.profileBrief(),
+            personalization.errorbookBrief(),
             counts,
             excludedQuestions == null ? List.of() : List.copyOf(excludedQuestions),
             preferredCodingQuestions);

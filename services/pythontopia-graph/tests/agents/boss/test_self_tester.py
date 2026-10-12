@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import sys
+import subprocess
 
 import pytest
 
@@ -36,7 +36,7 @@ def test_reference_passes_all_cases() -> None:
             TestCase("100 -50", "50"),
         ],
     )
-    verdict = self_test_problem(problem, python_executable=sys.executable)
+    verdict = self_test_problem(problem)
     assert verdict.passed, verdict.issues
 
 
@@ -49,7 +49,7 @@ def test_reference_wrong_output_fails() -> None:
             TestCase("0 0", "0"),
         ],
     )
-    verdict = self_test_problem(problem, python_executable=sys.executable)
+    verdict = self_test_problem(problem)
     assert not verdict.passed
     assert any(i.code == "reference_output_mismatch" for i in verdict.issues)
 
@@ -59,7 +59,7 @@ def test_reference_nonzero_exit_fails() -> None:
         "raise SystemExit(1)",
         [TestCase("", "", is_sample=True), TestCase("", ""), TestCase("", "")],
     )
-    verdict = self_test_problem(problem, python_executable=sys.executable)
+    verdict = self_test_problem(problem)
     assert not verdict.passed
     assert any(i.code == "reference_nonzero_exit" for i in verdict.issues)
 
@@ -70,7 +70,7 @@ def test_reference_syntax_error_caught_by_forbidden_scan() -> None:
         "def broken(",
         [TestCase("", "", is_sample=True), TestCase("", ""), TestCase("", "")],
     )
-    verdict = self_test_problem(problem, python_executable=sys.executable)
+    verdict = self_test_problem(problem)
     assert not verdict.passed
     assert any(i.code == "forbidden_imports" for i in verdict.issues)
 
@@ -80,7 +80,7 @@ def test_reference_timeout() -> None:
         "while True:\n    pass",
         [TestCase("", "", is_sample=True), TestCase("", ""), TestCase("", "")],
     )
-    verdict = self_test_problem(problem, python_executable=sys.executable, timeout_sec=2)
+    verdict = self_test_problem(problem, timeout_sec=2)
     assert not verdict.passed
     assert any(i.code == "reference_timeout" for i in verdict.issues)
 
@@ -101,7 +101,7 @@ def test_forbidden_imports_rejected(code: str) -> None:
         code,
         [TestCase("", "x", is_sample=True), TestCase("", "x"), TestCase("", "x")],
     )
-    verdict = self_test_problem(problem, python_executable=sys.executable)
+    verdict = self_test_problem(problem)
     assert not verdict.passed
     assert any(i.code == "forbidden_imports" for i in verdict.issues)
 
@@ -112,7 +112,7 @@ def test_dangerous_os_system_through_subprocess_is_rejected() -> None:
         "import os; os.system('echo HACK')\nprint('x')",
         [TestCase("", "x", is_sample=True), TestCase("", "x"), TestCase("", "x")],
     )
-    verdict = self_test_problem(problem, python_executable=sys.executable)
+    verdict = self_test_problem(problem)
     assert isinstance(verdict.passed, bool)
 
 
@@ -121,6 +121,24 @@ def test_list_forbidden_imports_returns_known_set() -> None:
     assert "socket" in items
     assert "subprocess" in items
     assert "requests" in items
+
+
+def test_missing_isolated_executor_rejects_reference_without_local_execution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PYT_PISTON_URL", raising=False)
+    monkeypatch.delenv("PYT_PISTON_PYTHON_VERSION", raising=False)
+
+    def forbidden_local_execution(*args: object, **kwargs: object) -> None:
+        pytest.fail("reference code must never run in the Graph process")
+
+    monkeypatch.setattr(subprocess, "run", forbidden_local_execution)
+    problem = _make("print('must not execute')", [TestCase("", "")])
+
+    verdict = self_test_problem(problem)
+
+    assert not verdict.passed
+    assert any(issue.code == "sandbox_unavailable" for issue in verdict.issues)
 
 
 def test_multiline_solution_with_input_loop_passes() -> None:
@@ -132,5 +150,5 @@ def test_multiline_solution_with_input_loop_passes() -> None:
             TestCase("1\n42", "42"),
         ],
     )
-    verdict = self_test_problem(problem, python_executable=sys.executable)
+    verdict = self_test_problem(problem)
     assert verdict.passed

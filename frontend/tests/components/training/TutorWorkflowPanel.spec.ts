@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
@@ -128,6 +128,8 @@ describe('TutorWorkflowPanel', () => {
     vi.mocked(recordTutorWorkflowFeedback).mockClear();
   });
 
+  afterEach(() => vi.unstubAllGlobals());
+
   it('aborts the in-flight stream on unmount and stays silent afterwards', async () => {
     const stream = getStream();
     let releaseRun: (() => void) | null = null;
@@ -208,6 +210,38 @@ describe('TutorWorkflowPanel', () => {
       payload: { cardId: 'card-reading-1', seq: 1 },
     });
     expect(wrapper.get('[data-testid="card-feedback-state"]').text()).toContain('已记录');
+  });
+
+  it('sends an attached image with the CHAT event', async () => {
+    vi.stubGlobal('FileReader', class {
+      result: string | null = null;
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      readAsDataURL(file: Blob): void {
+        this.result = `data:${file.type};base64,iVBORw0KGgo=`;
+        this.onload?.();
+      }
+    });
+    const wrapper = mountPanel();
+    await flushPromises();
+    const file = new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], 'question.png', { type: 'image/png' });
+    const input = wrapper.get('[data-testid="tw-chat-image-input"]');
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
+    await input.trigger('change');
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tw-chat-images"]').exists()).toBe(true);
+    await wrapper.get('.tw-chat__input').setValue('请看这张图');
+    expect(wrapper.get('.tw-chat__send').attributes('disabled')).toBeUndefined();
+    await wrapper.get('.tw-chat').trigger('submit');
+    await flushPromises();
+
+    expect(getStream().start).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'CHAT',
+      eventData: expect.objectContaining({
+        message: '请看这张图',
+        images: [expect.stringMatching(/^data:image\/png;base64,/)],
+      }),
+    }));
   });
 
   it('renders bounded coach progress from trace nodes without exposing raw internals', async () => {

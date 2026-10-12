@@ -40,6 +40,24 @@ public record BossInternalProblem(
     }
   }
 
+  public BossInternalProblem issueAs(String issuedProblemId, String authoritativeKcCode) {
+    return new BossInternalProblem(
+        issuedProblemId,
+        chapter,
+        stage,
+        difficulty,
+        authoritativeKcCode,
+        statement,
+        hints,
+        sampleInput,
+        sampleOutput,
+        totalTestCases,
+        reviewed,
+        aiGenerated,
+        testCases,
+        referenceSolution);
+  }
+
   /** 剥掉 hidden 字段，转成可返给前端的 {@link BossProblemDto}。 */
   public BossProblemDto toPublic() {
     return new BossProblemDto(

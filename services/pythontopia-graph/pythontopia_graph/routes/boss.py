@@ -236,6 +236,7 @@ def evaluate_attempt(body: BossEvaluateRequest) -> BossEvaluateResponse:
 class MasteryEntryPayload(BaseModel):
     kcCode: str
     masteryScore: float = Field(ge=0, le=1)
+    confidence: float | None = Field(default=None, ge=0, le=1)
 
 
 class FrontierSelectRequest(BaseModel):
@@ -269,11 +270,13 @@ def select_frontier_endpoint(body: FrontierSelectRequest) -> FrontierSelectRespo
     """知识前沿选择器（下沉自前端 useKcFrontier）：权威排序 + 间隔重复，供无尽远征生成地图。"""
 
     mastery = {e.kcCode: e.masteryScore for e in body.mastery}
+    confidence = {e.kcCode: e.confidence for e in body.mastery if e.confidence is not None}
     signals = (
         body.profileSignals.model_dump(exclude_none=True) if body.profileSignals else None
     )
     picks = select_frontier(
         mastery=mastery,
+        confidence=confidence,
         profile_signals=signals,
         recent_kcs=body.recentKcs,
         last_practiced=body.lastPracticed,

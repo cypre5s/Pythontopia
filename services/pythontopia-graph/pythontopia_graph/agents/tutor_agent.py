@@ -359,6 +359,11 @@ class TutorAgent:
     @staticmethod
     def _build_verification_note(result: CodeRunResult) -> str:
         """把沙箱真实运行结果包装成 system 提示，供导师据实定位（非正式判题、严禁给完整答案）。"""
+        if result.runtime_error:
+            return (
+                "代码运行验证未执行：隔离沙箱不可用，代码没有实际执行。"
+                "不要声称已经运行或根据虚构输出诊断；请引导学生稍后重试正式判题。"
+            )
         notes = [
             "代码运行验证（在受限沙箱实跑学生片段，仅供你定位问题，非正式判题）：",
             f"stdout={result.stdout.strip()}",

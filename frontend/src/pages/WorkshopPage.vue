@@ -19,6 +19,7 @@ import {
 } from '@/api/workshopHistory';
 import { FAST_TRAVEL_ENABLED, FAST_TRAVEL_ROUTES, type FastTravelRoute } from '@/data/fastTravel';
 import { useLearningStore } from '@stores/learning';
+import { useSessionStore } from '@stores/session';
 import { useWorldStore } from '@stores/world';
 import { useToastStore } from '@stores/toast';
 import { useWorkshopUiStore } from '@stores/workshopUi';
@@ -29,10 +30,12 @@ import { playUiClick, playChime } from '@/composables/useStardewFx';
 defineOptions({ name: 'WorkshopPage' });
 
 const learning = useLearningStore();
+const session = useSessionStore();
 const world = useWorldStore();
 const toast = useToastStore();
 const workshopUi = useWorkshopUiStore();
 const router = useRouter();
+const ownerId = computed<number | null>(() => session.user?.id ?? null);
 
 // 被 KeepAlive 缓存时是否处于「激活」（当前可见）状态。
 // 仅用于守卫 Teleport 到 body 的书房弹窗：失活（切到别的页）时不渲染，回来再渲染，
@@ -214,7 +217,8 @@ function closeHistoryDrawer(): void {
 }
 
 function appendHistoryTurn(turn: WorkshopChatHistoryTurnDto): void {
-  rememberWorkshopChatHistoryTurn(turn);
+  if (ownerId.value === null) return;
+  rememberWorkshopChatHistoryTurn(ownerId.value, turn);
   historyPendingTurn.value = turn;
 }
 
@@ -367,6 +371,7 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
           <div class="workshop-drawer__body">
             <ChatHistoryRail
               embedded-open
+              :owner-id="ownerId"
               :pending-turn="historyPendingTurn"
               @select="onSelectConversation"
             />
@@ -379,6 +384,7 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
         >
           <WorkshopChat
             ref="chatRef"
+            :owner-id="ownerId"
             @open-resource="onOpenResource"
             @history-saved="appendHistoryTurn"
           />

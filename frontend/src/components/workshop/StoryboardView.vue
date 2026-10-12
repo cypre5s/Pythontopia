@@ -1,247 +1,41 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import gsap from 'gsap';
-import { useSessionStore } from '@/stores/session';
-import { useToastStore } from '@/stores/toast';
-import { ApiClientError } from '@/api/http';
-import {
-  createStoryboardVideoJob,
-  generateImage,
-  getMediaJob,
-  type MediaJobResult,
-  type StoryboardSceneSpec,
-} from '@/api/media';
-import {
-  useSseStream,
-  type SsePlan,
-  type SseStreamState,
-  type SseTraceEvent,
-} from '@/composables/useSseStream';
-import AgentStudioStream from '@/components/workshop/AgentStudioStream.vue';
 import { kcDisplayName } from '@/data/kcNames';
 import BilibiliVideoCards from '@/components/video/BilibiliVideoCards.vue';
 import type { StoryboardContent, StoryboardScene } from '@/api/dto/Workshop';
 
-const props = defineProps<{
-  content: StoryboardContent;
-}>();
-
-const toast = useToastStore();
-
+const props = defineProps<{ content: StoryboardContent }>();
 const currentScene = ref(0);
 const isPlaying = ref(false);
 const showSubtitle = ref(true);
 const playbackSpeed = ref(1);
-const currentAudio = ref<HTMLAudioElement | null>(null);
 const sceneImageUrl = ref('');
 const sceneImageError = ref(false);
 const stageRef = ref<HTMLElement | null>(null);
 const sceneRefs = ref<HTMLLIElement[]>([]);
-
-// 多模态：AI 文生图插画（默认开启）。每个分镜按 image_prompt 生成一次并缓存（index → {url,degraded}）。
-const useAiIllustration = ref(true);
-const imageGenerating = ref(false);
-const imageDegraded = ref(false);
-const sceneImageCache = new Map<number, { url: string; degraded: boolean }>();
-
-// 多模态：异步合成短视频（图序列 + TTS → ffmpeg mp4）。走 media job：创建作业 → 订阅 SSE 进度
-// （插画师/配音师/剪辑师）→ result 拿到成片 assetId 内联播放。无 ffmpeg 时降级，保留实时剧场。
-const composedVideoUrl = ref('');
-const composing = ref(false);
-const composeError = ref<string | null>(null);
-type JobStream = SseStreamState<MediaJobResult> & {
-  start: (body: unknown) => Promise<void>;
-};
-const jobStream = shallowRef<JobStream | null>(null);
-const studioTraces = computed<SseTraceEvent[]>(() => jobStream.value?.traces.value ?? []);
-const studioPlan = computed<SsePlan | null>(() => jobStream.value?.plan.value ?? null);
-const studioStatus = computed<'idle' | 'streaming' | 'done' | 'error'>(() => {
-  const s = jobStream.value?.status.value;
-  if (s === 'connecting' || s === 'streaming') return 'streaming';
-  if (s === 'done') return 'done';
-  if (s === 'error') return 'error';
-  return 'idle';
-});
-let imageRequestToken = 0;
-
 const scenes = computed(() => props.content.scenes);
-// 「B站精选讲解」关键词：Python + 故事板涉及的前两个 KC 中文名（去重）。
 const biliKeyword = computed<string>(() => {
-  const codes = Array.from(new Set(scenes.value.flatMap((s) => s.kc_codes)));
-  const names = codes.slice(0, 2).map(kcDisplayName);
-  return `Python ${names.join(' ')}`.trim();
+  const codes = Array.from(new Set(scenes.value.flatMap((scene) => scene.kc_codes)));
+  return `Python ${codes.slice(0, 2).map(kcDisplayName).join(' ')}`.trim();
 });
 const activeScene = computed<StoryboardScene | undefined>(
   () => scenes.value[currentScene.value],
 );
 const progressPercent = computed(() =>
-  scenes.value.length > 0
-    ? ((currentScene.value + 1) / scenes.value.length) * 100
-    : 0,
+  scenes.value.length > 0 ? ((currentScene.value + 1) / scenes.value.length) * 100 : 0,
 );
 const speedOptions: readonly number[] = [0.5, 1, 1.5, 2];
 
-let currentBlobUrl: string | null = null;
-
-function setSceneRef(el: unknown, i: number): void {
-  if (el instanceof HTMLElement) sceneRefs.value[i] = el as HTMLLIElement;
+function setSceneRef(element: unknown, index: number): void {
+  if (element instanceof HTMLElement) sceneRefs.value[index] = element as HTMLLIElement;
 }
 
-function coursePageFallback(scene: StoryboardScene): void {
+function loadSceneImage(scene: StoryboardScene): void {
   sceneImageError.value = false;
-  imageDegraded.value = false;
-  if (scene.evidence_page_id) {
-    // 后端契约是 /api/course/pages/{pageId}/image（CoursePageImageController，匿名放行）。
-    // 这里曾误写成 /api/coursepack/...，导致文生图不可用（未配讯飞密钥时是常态）走到本兜底
-    // 分支时连课件原页都 404，整条降级链断掉。
-    sceneImageUrl.value = `/api/course/pages/${scene.evidence_page_id}/image`;
-  } else {
-    sceneImageUrl.value = '';
-    sceneImageError.value = true;
-  }
-}
-
-/**
- * 舞台图加载：开启 AI 插画时优先按 image_prompt 文生图（生成一次后缓存），失败回退课件页图，
- * 再回退占位 SVG。关闭 AI 插画时直接走课件页图。
- */
-async function loadSceneImage(scene: StoryboardScene, index: number): Promise<void> {
-  if (!useAiIllustration.value) {
-    coursePageFallback(scene);
-    return;
-  }
-  const cached = sceneImageCache.get(index);
-  if (cached) {
-    sceneImageUrl.value = cached.url;
-    sceneImageError.value = false;
-    imageDegraded.value = cached.degraded;
-    return;
-  }
-  const prompt = (scene.image_prompt ?? scene.visual_hint ?? '').trim();
-  if (!prompt) {
-    coursePageFallback(scene);
-    return;
-  }
-  const token = ++imageRequestToken;
-  imageGenerating.value = true;
-  try {
-    const asset = await generateImage(prompt, scene.kc_codes[0], scene.kc_codes);
-    if (token !== imageRequestToken) return; // 已切到别的分镜，丢弃过期结果
-    sceneImageCache.set(index, { url: asset.url, degraded: asset.degraded });
-    sceneImageUrl.value = asset.url;
-    sceneImageError.value = false;
-    imageDegraded.value = asset.degraded;
-  } catch {
-    if (token !== imageRequestToken) return;
-    coursePageFallback(scene);
-  } finally {
-    if (token === imageRequestToken) imageGenerating.value = false;
-  }
-}
-
-// 失败码 → 学生可读提示（降级保留实时剧场）。
-const COMPOSE_ERROR_ZH: Record<string, string> = {
-  VIDEO_COMPOSE_UNAVAILABLE: '服务端未装 ffmpeg，暂时无法合成视频（已保留实时剧场播放）',
-  VIDEO_COMPOSE_FAILED: '视频合成失败，请稍后重试（已保留实时剧场播放）',
-};
-
-function friendlyComposeError(code: string | undefined, fallback: string): string {
-  const mapped = code === undefined ? undefined : COMPOSE_ERROR_ZH[code];
-  return mapped ?? fallback;
-}
-
-/**
- * 成片直链只能用后端下发的 url：{@code /api/media/assets/{id}} 带签名参数（见后端 MediaAssetUrls），
- * 前端按 assetId 自行拼接的裸直链会被服务端 404。
- */
-function enterPlayback(url: string): void {
-  composedVideoUrl.value = url;
-  composeError.value = null;
-}
-
-function toSceneSpec(s: StoryboardScene): StoryboardSceneSpec {
-  return {
-    imagePrompt: (s.image_prompt ?? s.visual_hint ?? '').trim(),
-    narration: s.narration,
-    voice: s.narration_tts_voice ?? 'x4_yezi',
-    durationSeconds: s.duration_seconds,
-    kcCodes: s.kc_codes,
-  };
-}
-
-/** 一键合成：创建合成作业；命中缓存直接播放，否则订阅 SSE 进度。 */
-async function composeVideo(): Promise<void> {
-  if (composing.value || scenes.value.length === 0) return;
-  pause();
-  composing.value = true;
-  composeError.value = null;
-  composedVideoUrl.value = '';
-  jobStream.value?.abort();
-  jobStream.value = null;
-  try {
-    const job = await createStoryboardVideoJob(scenes.value.map(toSceneSpec));
-    if (job.cached && job.assetId !== undefined) {
-      // 创建响应只给 assetId；成片直链带签名，必须读作业详情拿后端下发的 url，不能自行拼接。
-      await recoverViaPoll(job.jobId);
-      composing.value = false;
-      if (composeError.value === null) {
-        toast.show('已命中合成缓存，直接播放', 'success');
-      }
-      return;
-    }
-    await subscribeJob(job.jobId);
-  } catch (error) {
-    const code = error instanceof ApiClientError ? error.code : undefined;
-    const fallback = error instanceof Error ? error.message : '短视频合成失败';
-    composeError.value = friendlyComposeError(code, fallback);
-    composing.value = false;
-  }
-}
-
-/** 订阅合成作业 SSE 进度；流终止后据 result/error 决定播放或报错（必要时轮询兜底）。 */
-async function subscribeJob(jobId: number): Promise<void> {
-  const stream = useSseStream<MediaJobResult>(`/api/media/jobs/${jobId}/stream`);
-  jobStream.value = stream;
-  await stream.start({});
-  composing.value = false;
-  const failure = stream.error.value;
-  if (failure) {
-    composeError.value = friendlyComposeError(failure.code, failure.message || '视频合成失败');
-    return;
-  }
-  const ready = stream.result.value;
-  if (ready && ready.url) {
-    enterPlayback(ready.url);
-    return;
-  }
-  // SSE 正常结束却未拿到成片：轮询一次真实作业状态兜底（不伪造结果）。
-  await recoverViaPoll(jobId);
-}
-
-async function recoverViaPoll(jobId: number): Promise<void> {
-  try {
-    const job = await getMediaJob(jobId);
-    if (job.status === 'SUCCESS' && job.url) {
-      enterPlayback(job.url);
-    } else if (job.status === 'FAILED') {
-      composeError.value = friendlyComposeError(job.errorCode, '视频合成失败，请稍后重试');
-    } else {
-      composeError.value = '合成尚未完成，请稍后重试';
-    }
-  } catch (error) {
-    composeError.value = error instanceof Error ? error.message : '无法获取合成结果';
-  }
-}
-
-function closeComposedVideo(): void {
-  composedVideoUrl.value = '';
-  composeError.value = null;
-}
-
-function toggleAiIllustration(): void {
-  useAiIllustration.value = !useAiIllustration.value;
-  const scene = scenes.value[currentScene.value];
-  if (scene) void loadSceneImage(scene, currentScene.value);
+  sceneImageUrl.value = scene.evidence_page_id
+    ? `/api/course/pages/${scene.evidence_page_id}/image`
+    : '';
 }
 
 function onImageError(): void {
@@ -249,137 +43,82 @@ function onImageError(): void {
 }
 
 function animateScene(index: number): void {
-  const el = sceneRefs.value[index];
-  if (!el) return;
+  const element = sceneRefs.value[index];
+  if (!element) return;
   gsap.fromTo(
-    el,
+    element,
     { opacity: 0, y: 30, scale: 0.95 },
     { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'power2.out' },
   );
-  const badge = el.querySelector('.badge');
-  if (badge) {
-    gsap.fromTo(badge, { scale: 0 }, { scale: 1, duration: 0.3, delay: 0.2, ease: 'back.out(2)' });
-  }
-  const narration = el.querySelector('.narration');
-  if (narration) {
-    gsap.fromTo(narration, { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.4, delay: 0.25 });
-  }
-  const visual = el.querySelector('.visual');
-  if (visual) {
-    gsap.fromTo(visual, { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.4, delay: 0.35 });
-  }
+  const badge = element.querySelector('.badge');
+  if (badge) gsap.fromTo(badge, { scale: 0 }, { scale: 1, duration: 0.3, delay: 0.2 });
+  const narration = element.querySelector('.narration');
+  if (narration) gsap.fromTo(narration, { opacity: 0, x: -20 }, { opacity: 1, x: 0, duration: 0.4 });
+  const visual = element.querySelector('.visual');
+  if (visual) gsap.fromTo(visual, { opacity: 0, x: 20 }, { opacity: 1, x: 0, duration: 0.4 });
 }
 
 function animateStage(): void {
-  if (!stageRef.value) return;
-  const content = stageRef.value.querySelector('.stage-content');
-  if (content) {
-    gsap.fromTo(content, { opacity: 0 }, { opacity: 1, duration: 0.4, ease: 'power2.out' });
-  }
+  const content = stageRef.value?.querySelector('.stage-content');
+  if (content) gsap.fromTo(content, { opacity: 0 }, { opacity: 1, duration: 0.4, ease: 'power2.out' });
 }
 
-function stopCurrentAudio(): void {
-  if (currentAudio.value) {
-    currentAudio.value.pause();
-    currentAudio.value = null;
-  }
-  if (currentBlobUrl) {
-    URL.revokeObjectURL(currentBlobUrl);
-    currentBlobUrl = null;
-  }
-  if ('speechSynthesis' in window) {
-    speechSynthesis.cancel();
-  }
-}
+let playbackTimer: number | null = null;
+let resolvePlaybackWait: (() => void) | null = null;
 
-async function fetchTts(text: string, voice: string): Promise<Blob> {
-  const session = useSessionStore();
-  const response = await fetch('/api/media/tts', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${session.token}`,
-    },
-    body: JSON.stringify({ text: text.slice(0, 200), voice }),
+function waitForScene(durationSeconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    resolvePlaybackWait = resolve;
+    playbackTimer = window.setTimeout(() => {
+      playbackTimer = null;
+      resolvePlaybackWait = null;
+      resolve();
+    }, (durationSeconds * 1000) / playbackSpeed.value);
   });
-  if (!response.ok) throw new Error('TTS failed');
-  return response.blob();
 }
 
 async function playScene(index: number): Promise<void> {
   currentScene.value = index;
   const scene = scenes.value[index];
   if (!scene) return;
-
-  void loadSceneImage(scene, index);
+  loadSceneImage(scene);
   animateScene(index);
   animateStage();
-
-  try {
-    const voice = scene.narration_tts_voice ?? 'x4_yezi';
-    const audioBlob = await fetchTts(scene.narration, voice);
-    if (!isPlaying.value) return;
-
-    stopCurrentAudio();
-    currentBlobUrl = URL.createObjectURL(audioBlob);
-    const audio = new Audio(currentBlobUrl);
-    audio.playbackRate = playbackSpeed.value;
-    currentAudio.value = audio;
-
-    await new Promise<void>((resolve) => {
-      audio.onended = () => resolve();
-      audio.onerror = () => resolve();
-      audio.onpause = () => resolve();
-      audio.play().catch(() => resolve());
-    });
-  } catch {
-    if (!isPlaying.value) return;
-
-    if ('speechSynthesis' in window) {
-      const utterance = new SpeechSynthesisUtterance(scene.narration);
-      utterance.lang = 'zh-CN';
-      utterance.rate = playbackSpeed.value;
-      speechSynthesis.speak(utterance);
-      await new Promise<void>((resolve) => {
-        utterance.onend = () => resolve();
-        utterance.onerror = () => resolve();
-        setTimeout(resolve, (scene.duration_seconds * 1000) / playbackSpeed.value);
-      });
-    } else {
-      await new Promise<void>((r) =>
-        setTimeout(r, (scene.duration_seconds * 1000) / playbackSpeed.value),
-      );
-    }
-  }
+  if (isPlaying.value) await waitForScene(scene.duration_seconds);
 }
 
 async function playAll(): Promise<void> {
   if (isPlaying.value) return;
   isPlaying.value = true;
-  for (let i = currentScene.value; i < scenes.value.length; i++) {
+  for (let index = currentScene.value; index < scenes.value.length; index += 1) {
     if (!isPlaying.value) break;
-    await playScene(i);
+    await playScene(index);
   }
   isPlaying.value = false;
 }
 
 function pause(): void {
   isPlaying.value = false;
-  stopCurrentAudio();
+  if (playbackTimer !== null) {
+    window.clearTimeout(playbackTimer);
+    playbackTimer = null;
+    resolvePlaybackWait?.();
+    resolvePlaybackWait = null;
+  }
 }
 
 function togglePlay(): void {
   if (isPlaying.value) pause();
-  else playAll();
+  else void playAll();
 }
 
-function goToScene(i: number): void {
+function goToScene(index: number): void {
   pause();
-  currentScene.value = i;
-  const scene = scenes.value[i];
+  currentScene.value = index;
+  const scene = scenes.value[index];
   if (scene) {
-    void loadSceneImage(scene, i);
-    animateScene(i);
+    loadSceneImage(scene);
+    animateScene(index);
     animateStage();
   }
 }
@@ -392,39 +131,25 @@ function nextScene(): void {
   if (currentScene.value < scenes.value.length - 1) goToScene(currentScene.value + 1);
 }
 
-watch(playbackSpeed, (speed) => {
-  if (currentAudio.value) currentAudio.value.playbackRate = speed;
-});
-
 onMounted(async () => {
   await nextTick();
   const first = scenes.value[0];
   if (first) {
-    void loadSceneImage(first, 0);
+    loadSceneImage(first);
     animateScene(0);
   }
 });
 
-onBeforeUnmount(() => {
-  stopCurrentAudio();
-  jobStream.value?.abort();
-});
-
+onBeforeUnmount(pause);
 watch(
   () => props.content.scenes,
   async () => {
     pause();
     currentScene.value = 0;
-    sceneImageCache.clear();
-    composedVideoUrl.value = '';
-    composeError.value = null;
-    composing.value = false;
-    jobStream.value?.abort();
-    jobStream.value = null;
     await nextTick();
     const first = scenes.value[0];
     if (first) {
-      void loadSceneImage(first, 0);
+      loadSceneImage(first);
       animateScene(0);
     }
   },
@@ -452,16 +177,8 @@ watch(
         class="theater-stage"
       >
         <div class="stage-content">
-          <video
-            v-if="composedVideoUrl"
-            :src="composedVideoUrl"
-            class="stage-video"
-            controls
-            autoplay
-            data-testid="storyboard-video"
-          />
           <img
-            v-else-if="sceneImageUrl && !sceneImageError"
+            v-if="sceneImageUrl && !sceneImageError"
             :src="sceneImageUrl"
             :alt="activeScene?.visual_hint ?? ''"
             class="stage-image"
@@ -501,21 +218,9 @@ watch(
             </p>
           </div>
         </div>
-        <div
-          v-if="imageGenerating && !composedVideoUrl"
-          class="stage-loading"
-          data-testid="storyboard-image-loading"
-        >
-          AI 插画生成中…
-        </div>
-        <span
-          v-if="imageDegraded && !composedVideoUrl"
-          class="degraded-badge"
-          title="未配置讯飞文生图 apikey，当前为本地占位插画"
-        >占位插画</span>
         <Transition name="subtitle-fade">
           <div
-            v-if="showSubtitle && activeScene && !composedVideoUrl"
+            v-if="showSubtitle && activeScene"
             :key="currentScene"
             class="subtitle-overlay"
           >
@@ -523,58 +228,6 @@ watch(
           </div>
         </Transition>
       </div>
-
-      <div class="multimodal-bar">
-        <button
-          type="button"
-          :class="['mm-btn', { active: useAiIllustration }]"
-          :title="useAiIllustration ? '已开启 AI 文生图插画' : '使用课件页图'"
-          data-testid="storyboard-ai-toggle"
-          @click="toggleAiIllustration"
-        >
-          {{ useAiIllustration ? '✨ AI 插画 开' : 'AI 插画 关' }}
-        </button>
-        <button
-          v-if="!composedVideoUrl"
-          type="button"
-          class="mm-btn compose-btn"
-          :disabled="composing"
-          data-testid="storyboard-compose"
-          @click="composeVideo"
-        >
-          {{ composing ? '合成中…' : '🎬 一键合成短视频' }}
-        </button>
-        <button
-          v-else
-          type="button"
-          class="mm-btn"
-          data-testid="storyboard-back-theater"
-          @click="closeComposedVideo"
-        >
-          ← 返回实时剧场
-        </button>
-      </div>
-
-      <div
-        v-if="composing && jobStream"
-        class="compose-studio"
-        data-testid="storyboard-studio"
-      >
-        <AgentStudioStream
-          :traces="studioTraces"
-          :status="studioStatus"
-          :plan="studioPlan"
-          :error-message="composeError"
-          label="合成讲解短视频"
-        />
-      </div>
-      <p
-        v-if="composeError && !composedVideoUrl"
-        class="compose-error"
-        data-testid="storyboard-compose-error"
-      >
-        ⚠ {{ composeError }}
-      </p>
 
       <div class="control-bar">
         <div class="playback-controls">
@@ -590,7 +243,7 @@ watch(
           <button
             type="button"
             class="ctrl-btn play-btn"
-            :title="isPlaying ? '暂停' : '播放'"
+            :title="isPlaying ? '暂停静音播放' : '静音播放场景'"
             @click="togglePlay"
           >
             {{ isPlaying ? '\u23F8' : '\u25B6' }}

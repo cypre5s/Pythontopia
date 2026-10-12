@@ -1,6 +1,7 @@
 package com.pythontopia.world.boss;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -8,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -31,6 +33,8 @@ import com.pythontopia.world.boss.dto.BossTestCasePayload;
 import com.pythontopia.world.boss.dto.FrontierPickDto;
 import com.pythontopia.world.boss.dto.FrontierSelectRequest;
 import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
+import com.pythontopia.world.boss.review.ApprovedBossProblem;
+import com.pythontopia.world.boss.review.BossProblemReviewRepository;
 import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -62,6 +66,9 @@ class BossServiceTest {
   @Mock CoursePackRepository coursePackRepository;
   @Mock ProfileService profileService;
   @Mock EndlessPregenService pregenService;
+  @Mock BossProblemReviewRepository reviewRepository;
+  @Mock ExpeditionRunService expeditionRunService;
+  @Mock ExpeditionScoreService expeditionScoreService;
   @Mock ApplicationEventPublisher eventPublisher;
   private BossService service;
 
@@ -74,13 +81,188 @@ class BossServiceTest {
             coursePackRepository,
             profileService,
             pregenService,
+            reviewRepository,
+            expeditionRunService,
+            expeditionScoreService,
             eventPublisher);
   }
 
   @Test
-  @DisplayName("selectFrontier 把 kc_mastery.last_event_at 作为 lastPracticed 传给 graph")
+  @DisplayName("学生取题命中全局 approved bank 时不调用 Graph，并为该学生保存判题 payload")
+  void approvedBankIsPreferredBeforeOnDemandGraphGeneration() {
+    BossInternalProblem approved =
+        new BossInternalProblem(
+            "approved-33-v2",
+            1,
+            1,
+            2,
+            "PY43-KC-001",
+            "approved statement",
+            List.of("hint"),
+            "2 3",
+            "5",
+            1,
+            true,
+            true,
+            List.of(new BossTestCasePayload("2 3", "5", false)),
+            "print(5)");
+    when(reviewRepository.findApproved(1, 1, "PY43-KC-001", "debug", 2))
+        .thenReturn(Optional.of(new ApprovedBossProblem(33L, 2, approved)));
+
+    var dto =
+        service.fetchProblem(
+            1,
+            new BossProblemRequest(1, null, 2, "PY43-KC-001", "debug", null, null, null),
+            7L);
+
+    assertThat(dto.problemId()).startsWith("issue-").isNotEqualTo("approved-33-v2");
+    assertThat(dto.statement()).isEqualTo("approved statement");
+    verify(pregenService)
+        .persistConsumed(
+            eq(7L),
+            eq(1),
+            eq("PY43-KC-001"),
+            eq("debug"),
+            org.mockito.ArgumentMatchers.isNull(),
+            eq(2),
+            org.mockito.ArgumentMatchers.argThat(p -> p.problemId().equals(dto.problemId())),
+            org.mockito.ArgumentMatchers.isNull());
+    verifyNoInteractions(graphClient);
+  }
+
+  @Test
+  @DisplayName("学生已有 READY 个性化预取题时先消费该题，再查询全局 approved bank")
+  void readyPersonalizedProblemTakesPriorityOverApprovedBank() {
+    BossInternalProblem ready =
+        new BossInternalProblem(
+            "ready-for-user-7",
+            1,
+            1,
+            2,
+            "PY43-KC-001",
+            "personalized ready statement",
+            List.of(),
+            "2 3",
+            "5",
+            1,
+            true,
+            true,
+            List.of(new BossTestCasePayload("2 3", "5", false)),
+            "print(5)");
+    when(pregenService.claimReady(7L, 1, "PY43-KC-001", 2, "debug", null, null))
+        .thenReturn(Optional.of(ready));
+
+    var dto =
+        service.fetchProblem(
+            1,
+            new BossProblemRequest(1, null, 2, "PY43-KC-001", "debug", null, null, null),
+            7L);
+
+    assertThat(dto.problemId()).isEqualTo("ready-for-user-7");
+    verifyNoInteractions(reviewRepository, graphClient);
+  }
+
+  @Test
+  @DisplayName("同一图生成 ID 不会跨用户或同用户复用隐藏测试")
+  void generatedProblemsReceiveUniqueUserScopedIds() {
+    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenReturn(
+            problemWithInputAndKc("private-user-7", "FAKE-KC"),
+            problemWithInput("private-user-8"),
+            problemWithInput("private-user-8"));
+    when(graphClient.evaluateAttempt(anyString(), anyString(), anyList(), anyInt()))
+        .thenReturn(new BossEvaluateResultDto("ignored", true, 1, 1, null, null, List.of()));
+    BossProblemRequest request = new BossProblemRequest(1, null, 1, null, null, null, null, null);
+
+    var user7First = service.fetchProblem(1, request, 7L);
+    var user7Second = service.fetchProblem(1, request, 7L);
+    var user8 = service.fetchProblem(1, request, 8L);
+
+    assertThat(user7First.problemId()).isNotEqualTo(user7Second.problemId());
+    assertThat(user7First.problemId()).isNotEqualTo(user8.problemId());
+    assertThat(user7First.kcCode()).isEqualTo("PY43-KC-001");
+
+    service.evaluateAttempt(
+        new BossAttemptRequest(user7First.problemId(), 1, 1, "print(1)", 1), 7L);
+    service.evaluateAttempt(
+        new BossAttemptRequest(user7Second.problemId(), 1, 1, "print(1)", 1), 7L);
+    service.evaluateAttempt(new BossAttemptRequest(user8.problemId(), 1, 1, "print(1)", 1), 8L);
+
+    ArgumentCaptor<List<BossTestCasePayload>> cases = ArgumentCaptor.forClass(List.class);
+    verify(graphClient, org.mockito.Mockito.times(3))
+        .evaluateAttempt(anyString(), anyString(), cases.capture(), anyInt());
+    assertThat(cases.getAllValues())
+        .extracting(testCases -> testCases.get(0).input())
+        .containsExactly("private-user-7", "private-user-8", "private-user-8");
+  }
+
+  @Test
+  @DisplayName("其他用户不能用猜到的题目 ID 读取已发放题目的隐藏测试")
+  void generatedProblemCannotBeEvaluatedByAnotherUser() {
+    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenReturn(problemWithInput("private-user-7"));
+    var problem =
+        service.fetchProblem(
+            1, new BossProblemRequest(1, null, 1, null, null, null, null, null), 7L);
+
+    service.evaluateAttempt(
+        new BossAttemptRequest(problem.problemId(), 1, 1, "print(1)", 1), 8L);
+
+    verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
+    verify(pregenService).findByProblemId(8L, problem.problemId());
+    verifyNoInteractions(eventPublisher);
+  }
+
+  @Test
+  @DisplayName("远征题绑定活跃 run，奖励由服务端判题结果记录")
+  void verifiedAttemptIsBoundToActiveRun() {
+    String runId = "123e4567-e89b-12d3-a456-426614174000";
+    when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
+    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenReturn(problemWithInput("server-owned"));
+    when(graphClient.evaluateAttempt(anyString(), anyString(), anyList(), anyInt()))
+        .thenReturn(new BossEvaluateResultDto("ignored", true, 1, 1, null, null, List.of()));
+    when(pregenService.findExpeditionRunId(eq(7L), anyString())).thenReturn(Optional.of(runId));
+
+    BossProblemRequest request = new BossProblemRequest(1, null, 1, null, null, null, null, runId);
+    var problem = service.fetchProblem(1, request, 7L);
+    service.evaluateAttempt(new BossAttemptRequest(problem.problemId(), 1, 1, "print(1)", 1), 7L);
+
+    verify(pregenService)
+        .persistConsumed(
+            eq(7L),
+            eq(1),
+            eq("PY43-KC-001"),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.isNull(),
+            eq(1),
+            org.mockito.ArgumentMatchers.argThat(p -> p.problemId().equals(problem.problemId())),
+            eq(runId));
+    verify(expeditionScoreService)
+        .recordVerifiedAttempt(7L, runId, problem.problemId(), true, 100);
+  }
+
+  @Test
+  @DisplayName("已失效的远征 run 不得发放可计分题目")
+  void staleExpeditionRunCannotRequestProblem() {
+    String staleRunId = "123e4567-e89b-12d3-a456-426614174001";
+    assertThatThrownBy(
+            () ->
+                service.fetchProblem(
+                    1,
+                    new BossProblemRequest(1, null, 1, null, null, null, null, staleRunId),
+                    7L))
+        .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
+        .hasMessageContaining("远征存档");
+    verifyNoInteractions(graphClient, pregenService, reviewRepository);
+  }
+
+  @Test
+  @DisplayName("selectFrontier 使用真实练习事件时间，忽略 DECAY 推进的 last_event_at")
   void selectFrontierPassesPersistedLastPracticedToGraph() {
     OffsetDateTime lastPracticed = OffsetDateTime.parse("2026-05-01T08:30:00Z");
+    when(masteryRepository.findLastPracticedAtByUser(7L))
+        .thenReturn(Map.of("PY43-KC-001", lastPracticed));
     when(masteryRepository.findAll(7L))
         .thenReturn(
             List.of(
@@ -90,9 +272,10 @@ class BossServiceTest {
                     "PY43-KC-001",
                     new BigDecimal("0.82"),
                     new BigDecimal("0.80"),
-                    lastPracticed,
-                    lastPracticed)));
-    when(graphClient.selectFrontier(any(), any(), any(), any(), any(), anyInt(), any()))
+                    lastPracticed.plusDays(10),
+                    lastPracticed.plusDays(10))));
+    when(graphClient.selectFrontier(
+            any(), any(), any(), any(), any(), any(), anyInt(), any()))
         .thenReturn(
             new FrontierSelectResultDto(
                 List.of(new FrontierPickDto("PY43-KC-001", 1, 4, "最近发展区"))));
@@ -103,8 +286,20 @@ class BossServiceTest {
 
     @SuppressWarnings("unchecked")
     ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
-    verify(graphClient).selectFrontier(any(), any(), any(), any(), any(), anyInt(), captor.capture());
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<Map<String, Double>> confidenceCaptor = ArgumentCaptor.forClass(Map.class);
+    verify(graphClient)
+        .selectFrontier(
+            any(),
+            confidenceCaptor.capture(),
+            any(),
+            any(),
+            any(),
+            any(),
+            anyInt(),
+            captor.capture());
     assertThat(captor.getValue()).containsEntry("PY43-KC-001", "2026-05-01T08:30:00Z");
+    assertThat(confidenceCaptor.getValue()).containsEntry("PY43-KC-001", 0.8);
   }
 
   @Test
@@ -133,7 +328,7 @@ class BossServiceTest {
 
     // stage=4：旧逻辑会出难度 4；学情驱动应据低掌握出更易的题。
     service.fetchProblem(
-        1, new BossProblemRequest(4, null, null, null, null, null, null), 7L);
+        1, new BossProblemRequest(4, null, null, null, null, null, null, null), 7L);
 
     int difficulty = capturedDifficulty();
     assertThat(difficulty).isEqualTo(3);
@@ -154,7 +349,7 @@ class BossServiceTest {
         .thenReturn(internalProblem());
 
     service.fetchProblem(
-        1, new BossProblemRequest(2, null, null, null, null, null, null), 7L);
+        1, new BossProblemRequest(2, null, null, null, null, null, null, null), 7L);
 
     assertThat(capturedDifficulty()).isEqualTo(3);
   }
@@ -169,7 +364,7 @@ class BossServiceTest {
         .thenReturn(internalProblem());
 
     service.fetchProblem(
-        1, new BossProblemRequest(4, null, 5, null, null, null, null), 7L);
+        1, new BossProblemRequest(4, null, 5, null, null, null, null, null), 7L);
 
     assertThat(capturedDifficulty()).isEqualTo(4);
   }
@@ -218,6 +413,20 @@ class BossServiceTest {
     assertThat(event.kcCode()).isEqualTo("PY43-KC-001");
     assertThat(event.problemId()).isNull(); // boss 题无 course_problem 数字主键
     assertThat(event.difficulty()).isEqualTo("hard"); // difficulty 4 → hard
+  }
+
+  @Test
+  @DisplayName("不能用可猜测的全局审核题 ID 绕过用户题目签发")
+  void approvedAttemptRejectsGlobalReviewBankIdNotIssuedToUser() {
+    when(pregenService.findByProblemId(7L, "approved-33-v2"))
+        .thenReturn(Optional.empty());
+    var result =
+        service.evaluateAttempt(
+            new BossAttemptRequest("approved-33-v2", 1, 1, "print(5)", 10), 7L);
+
+    assertThat(result.passed()).isFalse();
+    verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
+    verify(eventPublisher, never()).publishEvent(any());
   }
 
   @Test
@@ -298,8 +507,12 @@ class BossServiceTest {
     assertThat(service.resolveKc(5, null)).isEqualTo("PY43-KC-039");
     assertThat(service.resolveKc(6, null)).isEqualTo("PY43-KC-048");
     assertThat(service.resolveKc(7, null)).isEqualTo("PY43-KC-054");
-    // 显式 override 优先于默认锚定。
-    assertThat(service.resolveKc(3, "PY43-KC-099")).isEqualTo("PY43-KC-099");
+    assertThat(service.resolveKc(3, "PY43-KC-017")).isEqualTo("PY43-KC-017");
+    assertThatThrownBy(() -> service.resolveKc(3, "PY43-KC-099"))
+        .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
+        .hasMessageContaining("KC");
+    assertThatThrownBy(() -> service.resolveKc(3, "NOT-A-COURSE-KC"))
+        .isInstanceOf(com.pythontopia.common.error.BusinessException.class);
   }
 
   @Test
@@ -368,5 +581,15 @@ class BossServiceTest {
     return new BossInternalProblem(
         "p1", 1, 1, difficulty, "PY43-KC-001", "statement", List.of(), "2 3", "5", 1, true, true,
         List.of(new BossTestCasePayload("2 3", "5", false)), "ref");
+  }
+
+  private static BossInternalProblem problemWithInput(String input) {
+    return problemWithInputAndKc(input, "PY43-KC-001");
+  }
+
+  private static BossInternalProblem problemWithInputAndKc(String input, String kcCode) {
+    return new BossInternalProblem(
+        "same-graph-id", 1, 1, 1, kcCode, "statement", List.of(), "", "", 1,
+        true, true, List.of(new BossTestCasePayload(input, "expected", false)), "ref");
   }
 }

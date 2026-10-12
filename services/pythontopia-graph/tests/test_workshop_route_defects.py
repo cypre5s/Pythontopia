@@ -461,7 +461,9 @@ def test_tool_loop_grounds_on_request_catalogue_when_app_state_is_empty(
     monkeypatch.setattr(app.state, "llm_provider", _RouteStub(), raising=False)
     monkeypatch.setattr(app.state, "evidence_fetcher", StaticEvidenceFetcher([]), raising=False)
 
-    response = TestClient(app).post(path, json=_TOOL_LOOP_BODY)
+    response = TestClient(
+        app, headers={"X-Internal-Subject": "user:1"}
+    ).post(path, json=_TOOL_LOOP_BODY)
 
     assert response.status_code == 200
     assert seen == [set(_TOOL_LOOP_BODY["course_kc_index"])]

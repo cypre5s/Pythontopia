@@ -90,6 +90,9 @@ def test_snapshot_starts_at_zero_and_reset_clears_recorded_state() -> None:
     assert snapshot["routes"]["total"] == 0
     assert snapshot["routes"]["clarifications"] == 0
     assert snapshot["routes"]["c3WithSearch"] == 0
+    assert snapshot["routes"]["candidatesGenerated"] == 0
+    assert snapshot["routes"]["candidateAppearances"] == {}
+    assert snapshot["routes"]["fallbacks"] == 0
     assert snapshot["routes"]["byComplexity"] == {}
     assert snapshot["routes"]["selectedCandidates"] == {}
     assert snapshot["routes"]["latencyMs"] == {"p50": 0, "p95": 0}
@@ -124,7 +127,7 @@ def test_record_route_counts_complexity_clarification_c3_and_selection() -> None
     assert clarification.task.needs_clarification is True
 
     record_route(c2, latency_ms=10)
-    record_route(c3, latency_ms=30)
+    record_route(c3, latency_ms=30, fallback_used=True)
     record_route(clarification, latency_ms=20)
 
     snapshot = routing_metrics_snapshot()
@@ -134,7 +137,13 @@ def test_record_route_counts_complexity_clarification_c3_and_selection() -> None
     assert routes["byComplexity"]["C2"] == 1
     assert routes["byComplexity"]["C3"] == 1
     assert routes["c3WithSearch"] == 1
+    assert routes["candidatesGenerated"] == 3
+    assert routes["candidateAppearances"] == {
+        candidate.candidate_id: 1 for candidate in c3.search.candidates
+    }
     assert routes["selectedCandidates"] == {c3.search.selected_candidate_id: 1}
+    assert routes["fallbacks"] == 1
+    assert routes["fallbackRate"] == pytest.approx(1 / 3, abs=1e-4)
     assert routes["clarificationRate"] == pytest.approx(1 / 3, abs=1e-4)
     assert routes["c3Rate"] == pytest.approx(1 / 3, abs=1e-4)
     assert routes["latencyMs"]["p50"] == 20
@@ -210,6 +219,9 @@ async def test_c3_dispatch_with_candidate_switch_records_execution_metrics() -> 
     assert snapshot["sameStepRetries"] == 0
     # PRACTICE 成功 + 失败工具两次真实尝试 = 3 次派发；PLAN 被依赖阻断不计入派发。
     assert snapshot["agentDispatches"] == 3
+    assert sum(snapshot["byAgent"].values()) == 3
+    assert sum(snapshot["byTool"].values()) == 3
+    assert snapshot["byTool"][failed_tool] == 2
     assert snapshot["blockedSteps"] == 1
     assert snapshot["partialRate"] == pytest.approx(1.0)
     assert snapshot["switchRate"] == pytest.approx(1.0)
@@ -243,6 +255,22 @@ def test_intent_route_http_records_metrics_and_harness_stats_exposes_routing() -
         assert routing["routes"]["total"] == 1
         assert routing["routes"]["byComplexity"]
         assert routing["executions"]["total"] == 0
+    finally:
+        del app.state.llm_provider
+
+
+def test_intent_route_keyword_fallback_is_counted_from_real_router_observation() -> None:
+    app.state.llm_provider = StubProvider(None)
+    try:
+        response = TestClient(app).post(
+            "/agents/intent/route",
+            json={"message": "解释闭包", "course_kcs": []},
+        )
+        assert response.status_code == 200
+        routes = routing_metrics_snapshot()["routes"]
+        assert routes["total"] == 1
+        assert routes["fallbacks"] == 1
+        assert routes["fallbackRate"] == 1.0
     finally:
         del app.state.llm_provider
 

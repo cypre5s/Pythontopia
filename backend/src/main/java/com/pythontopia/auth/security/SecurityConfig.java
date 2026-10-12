@@ -51,7 +51,8 @@ public class SecurityConfig {
                       "/api/media/assets/**",
                       "/api/internal/**",
                       "/api/downloads/**",
-                      "/healthz")
+                      "/healthz",
+                      "/readyz")
                   .permitAll();
               // OpenAPI/Swagger 默认开放（dev 联调方便）；生产设 PYT_EXPOSE_API_DOCS=false 后
               // 落到 anyRequest().authenticated()，需有效 JWT 才能访问，避免公开泄露完整 API 面。

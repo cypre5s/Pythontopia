@@ -26,13 +26,23 @@ class WorkflowSessionState:
     chat_history: list[dict[str, str]] = field(default_factory=list)
 
 
-_STORE: dict[str, WorkflowSessionState] = {}
+SessionKey = tuple[int, str]
+
+_STORE: dict[SessionKey, WorkflowSessionState] = {}
 _LOCK = asyncio.Lock()
 
 
-async def get_state(session_id: str) -> WorkflowSessionState:
+def _key(user_id: int, session_id: str) -> SessionKey:
+    if user_id < 1:
+        raise ValueError("user_id must be positive")
+    if not session_id:
+        raise ValueError("session_id must not be empty")
+    return user_id, session_id
+
+
+async def get_state(user_id: int, session_id: str) -> WorkflowSessionState:
     async with _LOCK:
-        state = _STORE.get(session_id)
+        state = _STORE.get(_key(user_id, session_id))
         if state is None:
             return WorkflowSessionState()
         return WorkflowSessionState(
@@ -43,14 +53,16 @@ async def get_state(session_id: str) -> WorkflowSessionState:
         )
 
 
-async def restore_phase(session_id: str, phase: str, seq: int) -> None:
+async def restore_phase(user_id: int, session_id: str, phase: str, seq: int) -> None:
     """Java 投影回放（服务重启后首个 run 前调用），不覆盖已存在的会话。"""
     async with _LOCK:
-        if session_id not in _STORE:
-            _STORE[session_id] = WorkflowSessionState(phase=phase, seq=seq)
+        key = _key(user_id, session_id)
+        if key not in _STORE:
+            _STORE[key] = WorkflowSessionState(phase=phase, seq=seq)
 
 
 async def commit_run(
+    user_id: int,
     session_id: str,
     *,
     phase: str,
@@ -66,7 +78,7 @@ async def commit_run(
     供 TRANSFER 事件回查），不存整卡（整卡持久化归 Java 投影）。
     """
     async with _LOCK:
-        state = _STORE.setdefault(session_id, WorkflowSessionState())
+        state = _STORE.setdefault(_key(user_id, session_id), WorkflowSessionState())
         state.phase = phase
         if card_key is not None and card_id is not None:
             state.seq += 1
@@ -86,6 +98,6 @@ async def commit_run(
         return state.seq
 
 
-async def reset_session(session_id: str) -> None:
+async def reset_session(user_id: int, session_id: str) -> None:
     async with _LOCK:
-        _STORE.pop(session_id, None)
+        _STORE.pop(_key(user_id, session_id), None)

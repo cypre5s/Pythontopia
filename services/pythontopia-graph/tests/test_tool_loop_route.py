@@ -49,7 +49,7 @@ class _RouteStub:
 @pytest.fixture
 def _client() -> Iterator[TestClient]:
     app.state.evidence_fetcher = StaticEvidenceFetcher([])
-    yield TestClient(app)
+    yield TestClient(app, headers={"X-Internal-Subject": "user:1"})
     for attr in ("llm_provider", "evidence_fetcher"):
         if hasattr(app.state, attr):
             delattr(app.state, attr)

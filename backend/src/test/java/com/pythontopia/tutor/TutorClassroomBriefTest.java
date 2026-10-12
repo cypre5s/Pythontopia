@@ -36,7 +36,8 @@ class TutorClassroomBriefTest {
           mock(PassiveProfileService.class),
           mock(ApplicationEventPublisher.class),
           dashboard,
-          mock(com.pythontopia.learner.memory.MemoryRetrievalService.class));
+          mock(com.pythontopia.learner.memory.MemoryRetrievalService.class),
+          mock(com.pythontopia.coursepack.service.CourseVideoTranscriptService.class));
 
   private static CurrentUserPrincipal student() {
     return new CurrentUserPrincipal(7L, "stu01", Role.STUDENT);

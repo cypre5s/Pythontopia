@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+from urllib.parse import urlsplit
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -490,13 +491,26 @@ def build_openai_lm(
     **extra: Any,
 ) -> Any:
     """构造 OpenAI 兼容 ``dspy.LM``（需 dspy；离线 scripts 用）。"""
-    dspy = _require_dspy()
     model, base_url, api_key = _resolve_openai_env(model, base_url, api_key)
     if not (model and base_url and api_key):
         raise ValueError(
             "缺少 OpenAI 兼容 LLM 配置：需 base_url/api_key/model"
             "（CLI --base-url/--api-key/--task-model 或 deploy/.env 的 PYT_OPENAI_*）。"
         )
+    endpoint = urlsplit(base_url)
+    try:
+        valid_deepseek_url = (
+            endpoint.scheme == "https"
+            and endpoint.hostname == "api.deepseek.com"
+            and endpoint.port in (None, 443)
+            and endpoint.username is None
+            and endpoint.password is None
+        )
+    except ValueError:
+        valid_deepseek_url = False
+    if not valid_deepseek_url:
+        raise ValueError("Offline LLM API must use DeepSeek at https://api.deepseek.com")
+    dspy = _require_dspy()
     return dspy.LM(
         f"openai/{model}",
         api_base=base_url,

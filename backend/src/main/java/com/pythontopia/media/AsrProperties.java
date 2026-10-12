@@ -6,8 +6,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * 讯飞「语音听写」(IAT / ASR) 接入配置——随身助教语音输入在浏览器 Web Speech API 不可用时的服务端回退。
  * 复用与 TTS / 图片理解相同的讯飞控制台应用凭据（{@code appId}/{@code apiKey}/{@code apiSecret}）。
  *
- * <p>任一凭据缺失时 {@link #isEnabled()}=false：{@code XfyunIatService} 直接返回 {@code degraded=true}
- * 的空转写，由前端提示「语音转写暂不可用，请直接输入」，绝不阻塞答疑链路；配置真实密钥后自动启用。
+ * <p>本项目只启用文字与图片输入，语音识别始终关闭；服务返回空转写，前端使用键盘输入。
  */
 @ConfigurationProperties(prefix = "pythontopia.asr")
 public record AsrProperties(
@@ -27,11 +26,6 @@ public record AsrProperties(
   }
 
   public boolean isEnabled() {
-    return appId != null
-        && !appId.isBlank()
-        && apiKey != null
-        && !apiKey.isBlank()
-        && apiSecret != null
-        && !apiSecret.isBlank();
+    return false;
   }
 }

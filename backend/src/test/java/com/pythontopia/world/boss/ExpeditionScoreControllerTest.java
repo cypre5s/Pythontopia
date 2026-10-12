@@ -73,7 +73,7 @@ class ExpeditionScoreControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     objectMapper.writeValueAsString(
-                        new ExpeditionScoreSubmitDto(320, 6, 4, true, false))))
+                        new ExpeditionScoreSubmitDto("123e4567-e89b-12d3-a456-426614174000"))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.entries[0].displayName").value("小明"))
         .andExpect(jsonPath("$.entries[0].self").value(true))

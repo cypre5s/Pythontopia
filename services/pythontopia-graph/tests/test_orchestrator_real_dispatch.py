@@ -486,7 +486,7 @@ async def test_dispatcher_resource_graph_failure_is_structured_failure() -> None
 @pytest.mark.asyncio
 async def test_orchestrator_real_dispatch_produces_artifacts() -> None:
     """一次 orchestrator turn 服务端真产出讲义+题（dispatch_results 含真 artifact 摘要）。"""
-    await reset_session("t-real")
+    await reset_session(1, "t-real")
 
     # understand → decompose 走确定性规则（无 LLM payload 也用规则兜底）
     provider = StubProvider(
@@ -584,7 +584,7 @@ async def test_orchestrator_real_dispatch_produces_artifacts() -> None:
 @pytest.mark.asyncio
 async def test_orchestrator_stream_emits_start_finish_per_dispatch() -> None:
     """SSE 序列含每个子 agent 的真 start/finish trace（断言 node 名与 elapsed_ms 存在）。"""
-    await reset_session("t-stream-dispatch")
+    await reset_session(1, "t-stream-dispatch")
 
     provider = StubProvider(
         payloads=[None, None, None, None, None],
@@ -631,7 +631,7 @@ async def test_orchestrator_stream_emits_start_finish_per_dispatch() -> None:
 @pytest.mark.asyncio
 async def test_dryrun_provider_does_not_crash_dispatch() -> None:
     """DryRun provider 下全链不报错（兜底草稿）。"""
-    await reset_session("t-dryrun")
+    await reset_session(1, "t-dryrun")
 
     from pythontopia_graph.llm.provider import DryRunProvider
 
@@ -746,7 +746,7 @@ async def test_practice_focus_hint_carries_learn_artifact(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """工件链协作：learn 讲义产物（title/summary）注入 practice 步的 focus_hint。"""
-    await reset_session("t-chain")
+    await reset_session(1, "t-chain")
 
     from pythontopia_graph.agents.handout_agent import HandoutAgent
     from pythontopia_graph.agents.practice_agent import PracticeAgent
@@ -822,7 +822,7 @@ async def test_orchestrator_node_dispatch_catches_per_step_and_emits_error() -> 
     单步失败必须用 step_error 而非 error：下游 SSE 中继与前端把 error 视为整轮
     终止事件，若发 error 会截断后续 STATE_DELTA / result，导致整个学习计划丢失。
     """
-    await reset_session("t-failfast")
+    await reset_session(1, "t-failfast")
 
     # understand + decompose 先用 None（规则兜底），dispatch 阶段第一个 agent 爆炸
     call_seq = [0]

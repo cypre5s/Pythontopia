@@ -65,7 +65,7 @@ const scrollRef = ref<HTMLElement | null>(null);
 const inputRef = ref<HTMLTextAreaElement | null>(null);
 
 // 看图答疑：最多 3 张截图 / 手写代码图，
-// 后端逐张经讯飞「图片理解」转描述后交 deepseek 作答。
+// 图片以 Data URL 发送给 DeepSeek 视觉模型；仅当前一轮保留在客户端内存。
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 const MAX_IMAGES = 3;
 const fileInputRef = ref<HTMLInputElement | null>(null);
@@ -84,7 +84,9 @@ const selectedRefs = composer.selected;
 const sse = useSseStream<TutorStreamResult>('/api/tutor/ask');
 
 const isStreaming = computed(() => sse.status.value === 'streaming' || sse.status.value === 'connecting');
-const canSubmit = computed(() => inputText.value.trim().length > 0 && !isStreaming.value);
+const canSubmit = computed(() => (inputText.value.trim().length > 0 || attachedImages.value.length > 0)
+  && !isStreaming.value);
+const IMAGE_ONLY_PROMPT = '请讲解这张图片中的内容。';
 
 const displayedAnswer = computed(() => {
   if (isStreaming.value || sse.status.value === 'done') {
@@ -279,7 +281,8 @@ async function runAsk(ask: AskParams): Promise<void> {
 }
 
 async function submit(): Promise<void> {
-  const q = inputText.value.trim();
+  const images = attachedImages.value.length > 0 ? [...attachedImages.value] : undefined;
+  const q = inputText.value.trim() || (images ? IMAGE_ONLY_PROMPT : '');
   if (!q) return;
 
   playSfx('sfx_click');
@@ -295,7 +298,6 @@ async function submit(): Promise<void> {
 
   composer.reset();
 
-  const images = attachedImages.value.length > 0 ? [...attachedImages.value] : undefined;
   const ask: AskParams = {
     question: q,
     kcCodes: mergedKcCodes,

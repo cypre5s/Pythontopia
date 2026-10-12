@@ -5,6 +5,7 @@ import com.pythontopia.mainline.domain.ChapterStar;
 import com.pythontopia.mainline.star.ChapterStarRepository;
 import com.pythontopia.mainline.star.ChapterStarService;
 import com.pythontopia.mainline.star.StarSource;
+import com.pythontopia.world.boss.ExpeditionScoreService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -12,7 +13,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 补星条件校验（§5/§7）：错题复盘（本章 RESOLVED≥3 → ERRORBOOK_RECOVERY）、
- * 无尽（单轮答对≥8 且正确率≥80%，每日每章 1 次 → ENDLESS_RECOVERY）。
+ * 远征（本章正式判题答对≥8 且正确率≥80%，每日每章 1 次 → ENDLESS_RECOVERY）。
  * 加星/幂等/封顶由 ChapterStarService.applyRecoveryStar 收口。
  *
  * <p>两条补星途径都会真实加星（进而解锁下一章），因此同样受章解锁 gate 约束
@@ -25,22 +26,22 @@ public class MainlineRecoveryService {
   static final int ENDLESS_MIN_CORRECT = 8;
   static final double ENDLESS_MIN_ACCURACY = 0.80;
 
-  /** 单轮无尽题量上限（与 {@code EndlessSummaryRequest} 同口径，服务端兜底不依赖 Bean Validation）。 */
-  static final int ENDLESS_MAX_ROUND_QUESTIONS = 200;
-
   private static final Logger log = LoggerFactory.getLogger(MainlineRecoveryService.class);
 
   private final BugMineRepository bugMineRepository;
   private final ChapterStarService starService;
   private final ChapterStarRepository starRepository;
+  private final ExpeditionScoreService expeditionScoreService;
 
   public MainlineRecoveryService(
       BugMineRepository bugMineRepository,
       ChapterStarService starService,
-      ChapterStarRepository starRepository) {
+      ChapterStarRepository starRepository,
+      ExpeditionScoreService expeditionScoreService) {
     this.bugMineRepository = bugMineRepository;
     this.starService = starService;
     this.starRepository = starRepository;
+    this.expeditionScoreService = expeditionScoreService;
   }
 
   /** 错题复盘补星：本章 RESOLVED ≥ 3 则发放（幂等）。返回本次是否真正发放了补星。 */
@@ -59,21 +60,20 @@ public class MainlineRecoveryService {
   }
 
   /**
-   * 无尽小结 → {@code ENDLESS_RECOVERY} 补星判定（达标 + 每日每章 1 次有效）。返回本次是否发放了补星。
+   * 无尽远征 run → {@code ENDLESS_RECOVERY} 补星判定（真实判题达标 + 每日每章 1 次）。
    *
-   * <p>correct/total/streak 均为客户端自证（服务端无无尽轮次落库可交叉核对），因此这里先做可信性兜底：
-   * 非法区间（{@code total<=0}、{@code correct>total}、超单轮题量上限）一律不发星，不进入判定。
+   * <p>客户端只提交 runId；用户归属、活动状态、章节和判题结果均由服务端记录确认。
    */
   @Transactional
-  public boolean recordEndlessSummary(
-      long userId, int chapter, int correct, int total, int streak) {
+  public boolean recordEndlessSummary(long userId, int chapter, String runId) {
     requireChapter(chapter);
     ChapterUnlockGuard.requireUnlocked(starRepository, userId, chapter);
-    if (!isPlausibleRound(correct, total, streak)) {
-      return false;
-    }
+    ExpeditionScoreService.VerifiedAttemptSummary attempts =
+        expeditionScoreService.summarizeVerifiedAttempts(userId, runId, chapter);
     boolean qualifies =
-        correct >= ENDLESS_MIN_CORRECT && (double) correct / total >= ENDLESS_MIN_ACCURACY;
+        attempts.total() > 0
+            && attempts.correct() >= ENDLESS_MIN_CORRECT
+            && (double) attempts.correct() / attempts.total() >= ENDLESS_MIN_ACCURACY;
     if (!qualifies) {
       return false;
     }
@@ -86,20 +86,10 @@ public class MainlineRecoveryService {
     boolean awarded = after.stars() > before;
     if (awarded) {
       log.info(
-          "endless recovery star user={} ch={} correct={}/{} streak={}",
-          userId, chapter, correct, total, streak);
+          "endless recovery star user={} ch={} correct={}/{} run={}",
+          userId, chapter, attempts.correct(), attempts.total(), runId);
     }
     return awarded;
-  }
-
-  /** 一轮无尽小结的自证数据是否可信：0 &lt; total ≤ 上限，且 correct / streak 都不超过 total。 */
-  private static boolean isPlausibleRound(int correct, int total, int streak) {
-    return total > 0
-        && total <= ENDLESS_MAX_ROUND_QUESTIONS
-        && correct >= 0
-        && correct <= total
-        && streak >= 0
-        && streak <= total;
   }
 
   private int currentStars(long userId, int chapter) {

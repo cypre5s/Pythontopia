@@ -9,6 +9,14 @@ from pythontopia_rag.index.embedder import FallbackEmbedder, HashEmbedder
 from pythontopia_rag.index.store import InMemoryVectorStore
 
 
+class _SemanticEmbedder:
+    name = "semantic-test"
+    dim = 8
+
+    async def embed(self, texts: list[str]) -> list[list[float]]:
+        return [[1.0] + [0.0] * (self.dim - 1) for _ in texts]
+
+
 def _sample_pages() -> list[IndexablePage]:
     return [
         IndexablePage(
@@ -175,7 +183,7 @@ async def test_healthy_embedder_reports_not_degraded() -> None:
     store = InMemoryVectorStore()
     result = await rebuild_index(
         source=InMemoryPageSource(pages=_sample_pages()),
-        embedder=HashEmbedder(),
+        embedder=_SemanticEmbedder(),
         store=store,
     )
     assert result.degraded is False
