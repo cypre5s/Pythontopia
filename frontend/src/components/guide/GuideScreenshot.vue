@@ -60,7 +60,9 @@ function closeZoom(): void {
         :aria-label="alt"
       >
         <span class="guide-screenshot__badge pyt-pixel-text">截图准备中</span>
-        <p class="guide-screenshot__fallback-text">{{ alt }}</p>
+        <p class="guide-screenshot__fallback-text">
+          {{ alt }}
+        </p>
         <p class="guide-screenshot__fallback-hint">
           截图将在集成阶段统一生成；当前以文字说明代替，不影响阅读。
         </p>
@@ -88,7 +90,9 @@ function closeZoom(): void {
           :alt="alt"
           class="guide-screenshot__lightbox-img"
         >
-        <p class="guide-screenshot__lightbox-caption">{{ caption }}（ESC 或点击任意处关闭）</p>
+        <p class="guide-screenshot__lightbox-caption">
+          {{ caption }}（ESC 或点击任意处关闭）
+        </p>
         <button
           type="button"
           class="guide-screenshot__lightbox-close"

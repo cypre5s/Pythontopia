@@ -56,6 +56,13 @@ withDefaults(defineProps<{
   white-space: nowrap;
 }
 
+.admin-table-scroll > table th.admin-table__sticky {
+  position: sticky;
+  right: 0;
+  z-index: 2;
+  background: var(--admin-table-header, #eef4fb);
+}
+
 .admin-table-scroll > table td {
   height: 52px;
   padding: 10px 16px;
@@ -64,11 +71,24 @@ withDefaults(defineProps<{
   vertical-align: middle;
 }
 
+.admin-table-scroll > table td.admin-table__sticky {
+  position: sticky;
+  right: 0;
+  z-index: 1;
+  background: var(--admin-surface, #fff);
+  box-shadow: -8px 0 8px rgb(15 23 42 / 5%);
+}
+
 .admin-table-scroll > table tbody tr:last-child td {
   border-bottom: 0;
 }
 
 .admin-table-scroll > table tbody tr:hover {
+  background: var(--admin-table-hover, #f8fbff);
+}
+
+.admin-table-scroll > table tbody tr:hover td.admin-table__sticky,
+.admin-table-scroll > table tbody tr.is-selected td.admin-table__sticky {
   background: var(--admin-table-hover, #f8fbff);
 }
 </style>

@@ -12,6 +12,26 @@ const props = defineProps<{
   disabled?: boolean;
 }>();
 
+const pageItems = computed<Array<number | 'ellipsis'>>(() => {
+  if (props.totalPages <= 7) {
+    return Array.from({ length: props.totalPages }, (_, index) => index);
+  }
+
+  const start = Math.max(0, Math.min(props.page - 2, props.totalPages - 5));
+  const end = Math.min(props.totalPages - 1, start + 4);
+  const items: Array<number | 'ellipsis'> = [];
+  if (start > 0) {
+    items.push(0);
+    if (start > 1) items.push('ellipsis');
+  }
+  for (let page = start; page <= end; page += 1) items.push(page);
+  if (end < props.totalPages - 1) {
+    if (end < props.totalPages - 2) items.push('ellipsis');
+    items.push(props.totalPages - 1);
+  }
+  return items;
+});
+
 const emit = defineEmits<{
   (event: 'page-change', page: number): void;
   (event: 'page-size-change', pageSize: number): void;
@@ -107,40 +127,45 @@ function jump(): void {
         <button
           class="admin-button"
           type="button"
-          data-testid="admin-pagination-first-page"
-          :disabled="disabled || page <= 0"
-          aria-label="第一页"
-          @click="emit('page-change', 0)"
-        >
-          «
-        </button>
-        <button
-          class="admin-button"
-          type="button"
           data-testid="admin-pagination-previous-page"
+          aria-label="上一页"
           :disabled="disabled || page <= 0"
           @click="emit('page-change', page - 1)"
         >
-          上一页
+          ‹
         </button>
+        <template
+          v-for="(pageItem, index) in pageItems"
+          :key="`${pageItem}-${index}`"
+        >
+          <span
+            v-if="pageItem === 'ellipsis'"
+            class="admin-pagination__ellipsis"
+            aria-hidden="true"
+          >…</span>
+          <button
+            v-else
+            class="admin-button admin-pagination__page"
+            :class="{ 'admin-button--primary': pageItem === page }"
+            type="button"
+            :data-testid="`admin-pagination-page-${pageItem + 1}`"
+            :aria-label="`第 ${pageItem + 1} 页`"
+            :aria-current="pageItem === page ? 'page' : undefined"
+            :disabled="disabled || pageItem === page"
+            @click="emit('page-change', pageItem)"
+          >
+            {{ pageItem + 1 }}
+          </button>
+        </template>
         <button
           class="admin-button"
           type="button"
           data-testid="admin-pagination-next-page"
+          aria-label="下一页"
           :disabled="disabled || page + 1 >= totalPages"
           @click="emit('page-change', page + 1)"
         >
-          下一页
-        </button>
-        <button
-          class="admin-button"
-          type="button"
-          data-testid="admin-pagination-last-page"
-          :disabled="disabled || totalPages === 0 || page + 1 >= totalPages"
-          aria-label="最后一页"
-          @click="emit('page-change', totalPages - 1)"
-        >
-          »
+          ›
         </button>
       </div>
     </div>
@@ -188,6 +213,16 @@ function jump(): void {
 
 .admin-pagination input {
   width: 68px;
+}
+
+.admin-pagination__page {
+  min-width: 36px;
+  padding: 0 10px;
+}
+
+.admin-pagination__ellipsis {
+  min-width: 16px;
+  text-align: center;
 }
 
 @media (max-width: 640px) {

@@ -2395,7 +2395,10 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="chat" data-testid="workshop-chat">
+  <div
+    class="chat"
+    data-testid="workshop-chat"
+  >
     <div class="chat__topbar">
       <span class="chat__topbar-title">✦ AI 答疑</span>
       <button
@@ -2425,17 +2428,22 @@ onMounted(async () => {
       @exit="exitQuiz"
     />
 
-    <div ref="scrollRef" class="chat__scroll" @scroll.passive="onScroll">
+    <div
+      ref="scrollRef"
+      class="chat__scroll"
+      @scroll.passive="onScroll"
+    >
       <!-- 续聊提示：回看历史会话后，明确告诉学生「接着问会并入这段会话」。 -->
       <div
         v-if="continuing && messages.length > 0"
         class="chat__continue"
         data-testid="workshop-continue-hint"
       >
-        <span class="chat__continue-icon" aria-hidden="true">↩</span>
-        <span class="chat__continue-text"
-          >正在继续这段会话，新的提问会并入同一条「聊天记录」</span
-        >
+        <span
+          class="chat__continue-icon"
+          aria-hidden="true"
+        >↩</span>
+        <span class="chat__continue-text">正在继续这段会话，新的提问会并入同一条「聊天记录」</span>
         <button
           type="button"
           class="chat__continue-new"
@@ -2453,7 +2461,10 @@ onMounted(async () => {
         @quick="onWelcomeQuick"
       />
 
-      <template v-for="m in messages" :key="m.id">
+      <template
+        v-for="m in messages"
+        :key="m.id"
+      >
         <!-- 用户气泡（附件 pill 渲染在气泡上方） -->
         <template v-if="m.role === 'user'">
           <div
@@ -2467,7 +2478,10 @@ onMounted(async () => {
               class="user-attach"
               :title="a.filename"
             >
-              <span class="user-attach__icon" aria-hidden="true">{{
+              <span
+                class="user-attach__icon"
+                aria-hidden="true"
+              >{{
                 attachmentIcon(a.ext)
               }}</span>
               <span class="user-attach__name">{{ a.filename }}</span>
@@ -2480,7 +2494,10 @@ onMounted(async () => {
             data-testid="user-images"
           >
             <span class="user-attach">
-              <span class="user-attach__icon" aria-hidden="true">🖼️</span>
+              <span
+                class="user-attach__icon"
+                aria-hidden="true"
+              >🖼️</span>
               <span class="user-attach__name">{{ m.imageCount }} 张图片</span>
             </span>
           </div>
@@ -2489,12 +2506,14 @@ onMounted(async () => {
               v-if="m.toolLabel || (m.kcCodes && m.kcCodes.length)"
               class="msg__tags"
             >
-              <span v-if="m.toolLabel" class="msg__tool"
-                >{{ m.toolIcon }} {{ m.toolLabel }}</span
-              >
-              <span v-if="m.kcCodes && m.kcCodes.length" class="msg__kc"
-                >@{{ m.kcCodes.length }} 知识点</span
-              >
+              <span
+                v-if="m.toolLabel"
+                class="msg__tool"
+              >{{ m.toolIcon }} {{ m.toolLabel }}</span>
+              <span
+                v-if="m.kcCodes && m.kcCodes.length"
+                class="msg__kc"
+              >@{{ m.kcCodes.length }} 知识点</span>
             </div>
             <p class="msg__text">
               {{ m.text }}
@@ -2503,13 +2522,20 @@ onMounted(async () => {
         </template>
 
         <!-- 助手消息行：左侧百晓像素头像 + 右侧气泡 -->
-        <div v-else class="msg-row" :data-kind="m.kind">
+        <div
+          v-else
+          class="msg-row"
+          :data-kind="m.kind"
+        >
           <div class="msg-row__avatar">
             <WorkshopAvatar :streaming="m.streaming === true" />
           </div>
           <div class="msg-row__body">
             <!-- 助手：答疑（ASK / ASKME / EXPLAIN_CODE / FIX_BUG 共用） -->
-            <div v-if="m.kind === 'answer'" class="msg msg--assistant">
+            <div
+              v-if="m.kind === 'answer'"
+              class="msg msg--assistant"
+            >
               <div
                 v-if="m.personalizationNote"
                 class="msg__pnote"
@@ -2517,10 +2543,11 @@ onMounted(async () => {
               >
                 ✨ 为你定制
               </div>
-              <div v-if="m.toolLabel" class="msg__tags">
-                <span class="msg__tool"
-                  >{{ m.toolIcon }} {{ m.toolLabel }}</span
-                >
+              <div
+                v-if="m.toolLabel"
+                class="msg__tags"
+              >
+                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
               </div>
               <div
                 v-if="m.groundingStatus || (m.review && !m.streaming)"
@@ -2530,8 +2557,7 @@ onMounted(async () => {
                   v-if="m.groundingStatus"
                   class="g-chip"
                   :class="groundingInfo(m.groundingStatus).cls"
-                  >{{ groundingInfo(m.groundingStatus).text }}</span
-                >
+                >{{ groundingInfo(m.groundingStatus).text }}</span>
                 <!-- 三审徽章：仅 live 答疑（带 review）显示；历史回放无 review → 不显示。 -->
                 <template v-if="m.review && !m.streaming">
                   <span
@@ -2540,8 +2566,7 @@ onMounted(async () => {
                     class="r-badge"
                     :class="b.passed ? 'r-badge--ok' : 'r-badge--no'"
                     :title="b.title"
-                    >{{ b.passed ? "✓" : "✗" }} {{ b.label }}</span
-                  >
+                  >{{ b.passed ? "✓" : "✗" }} {{ b.label }}</span>
                 </template>
                 <!-- 折叠「⚙ 工具调用」轨迹（渐进披露），挂在三审徽章行尾部。 -->
                 <ToolTraceLine
@@ -2580,7 +2605,7 @@ onMounted(async () => {
                       )
                     "
                     @keydown.enter.prevent="submitQuizFill(m)"
-                  />
+                  >
                 </div>
                 <button
                   type="button"
@@ -2591,14 +2616,20 @@ onMounted(async () => {
                   提交作答
                 </button>
               </div>
-              <span v-if="m.streaming" class="cursor">▌</span>
+              <span
+                v-if="m.streaming"
+                class="cursor"
+              >▌</span>
               <!-- 流式期间：工具调用生命周期实时时间轴（证据检索 → 作答 → 三审）。 -->
               <ToolCallTimeline
                 v-if="m.streaming"
                 :traces="liveAskTraces"
                 live
               />
-              <div v-if="m.streaming" class="msg__stoprow">
+              <div
+                v-if="m.streaming"
+                class="msg__stoprow"
+              >
                 <button
                   type="button"
                   class="stop-chip"
@@ -2621,7 +2652,10 @@ onMounted(async () => {
                 :aids="m.visualAids"
               />
               <!-- 工具产出按需触发：动作按钮常驻（手动入口）；B站讲解仅在视频意图下自动内嵌。 -->
-              <div v-if="!m.streaming && m.suggestTopic" class="msg__tools">
+              <div
+                v-if="!m.streaming && m.suggestTopic"
+                class="msg__tools"
+              >
                 <div class="msg__tool-actions">
                   <span class="msg__tool-hint">接下来</span>
                   <button
@@ -2728,10 +2762,16 @@ onMounted(async () => {
                 class="resource-body"
                 data-testid="resource-inline"
               >
-                <p v-if="m.resourceSummary" class="resource-body__summary">
+                <p
+                  v-if="m.resourceSummary"
+                  class="resource-body__summary"
+                >
                   {{ m.resourceSummary }}
                 </p>
-                <p v-if="m.resourceLoading" class="resource-body__loading">
+                <p
+                  v-if="m.resourceLoading"
+                  class="resource-body__loading"
+                >
                   正在载入资源全文…
                 </p>
                 <template v-else-if="m.resourceContent && m.resourceType">
@@ -2760,7 +2800,10 @@ onMounted(async () => {
                     :content="m.resourceContent as StoryboardContent"
                   />
                 </template>
-                <p v-else class="resource-body__empty">
+                <p
+                  v-else
+                  class="resource-body__empty"
+                >
                   暂无法在此内联展示，请点「书房 →」查看。
                 </p>
               </div>
@@ -2771,10 +2814,11 @@ onMounted(async () => {
               v-else-if="m.kind === 'video'"
               class="msg msg--assistant msg--video"
             >
-              <div v-if="m.toolLabel" class="msg__tags">
-                <span class="msg__tool"
-                  >{{ m.toolIcon }} {{ m.toolLabel }}</span
-                >
+              <div
+                v-if="m.toolLabel"
+                class="msg__tags"
+              >
+                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
               </div>
               <BilibiliVideoCards
                 :keyword="m.videoKeyword ?? ''"
@@ -2788,17 +2832,21 @@ onMounted(async () => {
               class="msg msg--assistant msg--browse"
               data-testid="browse-msg"
             >
-              <div v-if="m.toolLabel" class="msg__tags">
-                <span class="msg__tool"
-                  >{{ m.toolIcon }} {{ m.toolLabel }}</span
-                >
+              <div
+                v-if="m.toolLabel"
+                class="msg__tags"
+              >
+                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
               </div>
               <p
                 v-if="m.text && (m.streaming || !m.browseRun)"
                 class="msg__text"
               >
                 {{ m.text }}
-                <span v-if="m.streaming" class="cursor">▌</span>
+                <span
+                  v-if="m.streaming"
+                  class="cursor"
+                >▌</span>
               </p>
               <BrowseTimeline :run="m.browseRun ?? null" />
             </div>
@@ -2811,10 +2859,11 @@ onMounted(async () => {
               :data-loop-run-id="m.loopRunId ?? undefined"
               :data-streaming="String(Boolean(m.streaming))"
             >
-              <div v-if="m.toolLabel" class="msg__tags">
-                <span class="msg__tool"
-                  >{{ m.toolIcon }} {{ m.toolLabel }}</span
-                >
+              <div
+                v-if="m.toolLabel"
+                class="msg__tags"
+              >
+                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
               </div>
               <p
                 v-if="m.personalizationSummary"
@@ -2830,8 +2879,14 @@ onMounted(async () => {
               >
                 🔀 {{ m.searchSummary }}
               </p>
-              <MarkdownView v-if="m.text" :source="m.text" />
-              <PlanCard :steps="m.planSteps ?? []" @open-step="onPlanOpen" />
+              <MarkdownView
+                v-if="m.text"
+                :source="m.text"
+              />
+              <PlanCard
+                :steps="m.planSteps ?? []"
+                @open-step="onPlanOpen"
+              />
             </div>
 
             <!-- 助手：学情卡（PROGRESS，纯前端读 masterySnapshot） -->
@@ -2840,10 +2895,11 @@ onMounted(async () => {
               class="msg msg--assistant msg--progress"
               data-testid="progress-card-msg"
             >
-              <div v-if="m.toolLabel" class="msg__tags">
-                <span class="msg__tool"
-                  >{{ m.toolIcon }} {{ m.toolLabel }}</span
-                >
+              <div
+                v-if="m.toolLabel"
+                class="msg__tags"
+              >
+                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
               </div>
               <ProgressCard
                 :snapshot="learning.field.masterySnapshot"
@@ -2857,12 +2913,16 @@ onMounted(async () => {
               class="msg msg--assistant msg--mystudy"
               data-testid="mystudy-msg"
             >
-              <div v-if="m.toolLabel" class="msg__tags">
-                <span class="msg__tool"
-                  >{{ m.toolIcon }} {{ m.toolLabel }}</span
-                >
+              <div
+                v-if="m.toolLabel"
+                class="msg__tags"
+              >
+                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
               </div>
-              <p v-if="m.text" class="msg__text">
+              <p
+                v-if="m.text"
+                class="msg__text"
+              >
                 {{ m.text }}
               </p>
               <div
@@ -2904,10 +2964,11 @@ onMounted(async () => {
               class="msg msg--assistant msg--navigate"
               data-testid="navigate-msg"
             >
-              <div v-if="m.toolLabel" class="msg__tags">
-                <span class="msg__tool"
-                  >{{ m.toolIcon }} {{ m.toolLabel }}</span
-                >
+              <div
+                v-if="m.toolLabel"
+                class="msg__tags"
+              >
+                <span class="msg__tool">{{ m.toolIcon }} {{ m.toolLabel }}</span>
               </div>
               <p class="msg__text">
                 {{ m.text }}
@@ -2951,7 +3012,10 @@ onMounted(async () => {
               >
                 接着：{{ commandOf(m.secondaryIntent ?? "ASK").label }} →
               </button>
-              <p v-else class="msg__text msg__text--dim">
+              <p
+                v-else
+                class="msg__text msg__text--dim"
+              >
                 已接着执行：{{ commandOf(m.secondaryIntent ?? "ASK").label }}
               </p>
             </div>
@@ -2980,8 +3044,8 @@ onMounted(async () => {
             <div
               v-if="
                 !m.streaming &&
-                m.correctionOptions &&
-                m.correctionOptions.length
+                  m.correctionOptions &&
+                  m.correctionOptions.length
               "
               class="msg-followup"
               data-testid="correction-chips"
@@ -3002,7 +3066,11 @@ onMounted(async () => {
         </div>
       </template>
 
-      <div v-if="routing" class="routing" data-testid="routing-indicator">
+      <div
+        v-if="routing"
+        class="routing"
+        data-testid="routing-indicator"
+      >
         正在判断该用哪个工具…
       </div>
 

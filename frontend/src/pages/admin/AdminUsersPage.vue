@@ -255,7 +255,10 @@ onMounted(() => {
               <th scope="col">
                 状态
               </th>
-              <th scope="col">
+              <th
+                scope="col"
+                class="admin-table__sticky"
+              >
                 操作
               </th>
             </tr>
@@ -282,7 +285,7 @@ onMounted(() => {
                   ]"
                 >{{ statusLabel(user.status) }}</span>
               </td>
-              <td>
+              <td class="admin-table__sticky">
                 <button
                   class="admin-button"
                   type="button"

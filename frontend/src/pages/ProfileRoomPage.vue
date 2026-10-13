@@ -98,7 +98,10 @@ function lastPractice(value: string | null): string {
 
 <template>
   <AppLayout>
-    <main class="twin-page" data-testid="learner-twin-page">
+    <main
+      class="twin-page"
+      data-testid="learner-twin-page"
+    >
       <header class="twin-hero">
         <img
           class="twin-hero__portrait"
@@ -106,7 +109,9 @@ function lastPractice(value: string | null): string {
           alt="学习分身像素头像"
         >
         <div class="twin-hero__copy">
-          <p class="twin-eyebrow">PYTHONTOPIA · LEARNER TWIN</p>
+          <p class="twin-eyebrow">
+            PYTHONTOPIA · LEARNER TWIN
+          </p>
           <h1>我的学习分身</h1>
           <p class="twin-hero__summary">
             {{ session.displayName }} · {{ state?.growthStage ?? '正在读取学习状态' }}
@@ -115,21 +120,42 @@ function lastPractice(value: string | null): string {
             分身依据服务端判题与复习记录成长；访谈偏好只用于推荐，不会代替能力测评。
           </p>
         </div>
-        <button class="twin-link" type="button" @click="router.push('/profile')">
+        <button
+          class="twin-link"
+          type="button"
+          @click="router.push('/profile')"
+        >
           详细画像 ↗
         </button>
       </header>
 
-      <div v-if="busy" class="twin-message" role="status">
+      <div
+        v-if="busy"
+        class="twin-message"
+        role="status"
+      >
         正在整理你的学习记录…
       </div>
-      <div v-else-if="error" class="twin-message twin-message--error" role="alert">
+      <div
+        v-else-if="error"
+        class="twin-message twin-message--error"
+        role="alert"
+      >
         {{ error }}
-        <button type="button" class="twin-button twin-button--small" @click="loadState">重试</button>
+        <button
+          type="button"
+          class="twin-button twin-button--small"
+          @click="loadState"
+        >
+          重试
+        </button>
       </div>
 
       <template v-else-if="state">
-        <section class="twin-overview" aria-label="学习进展">
+        <section
+          class="twin-overview"
+          aria-label="学习进展"
+        >
           <div class="twin-stat">
             <strong>{{ state.assessedKcCount }} / {{ state.totalKcCount }}</strong>
             <span>已有练习证据</span>
@@ -148,43 +174,76 @@ function lastPractice(value: string | null): string {
           <article class="twin-card twin-card--knowledge">
             <div class="twin-card__heading">
               <div>
-                <p class="twin-eyebrow">KNOWLEDGE MAP</p>
+                <p class="twin-eyebrow">
+                  KNOWLEDGE MAP
+                </p>
                 <h2>知识星图</h2>
               </div>
               <span class="twin-count">已评估 {{ state.assessedKcCount }}/{{ state.totalKcCount }}</span>
             </div>
-            <KnowledgeConstellation :mastery="masteryMap" :assessed="assessedKcs" />
+            <KnowledgeConstellation
+              :mastery="masteryMap"
+              :assessed="assessedKcs"
+            />
             <p class="twin-note">
               只有经过练习判题的知识点才显示掌握度。灰色星点表示尚未评估。
             </p>
-            <div v-if="focusKcs.length" class="twin-kc-list" data-testid="twin-evidence-list">
-              <div v-for="kc in focusKcs" :key="kc.kcCode" class="twin-kc-row">
+            <div
+              v-if="focusKcs.length"
+              class="twin-kc-list"
+              data-testid="twin-evidence-list"
+            >
+              <div
+                v-for="kc in focusKcs"
+                :key="kc.kcCode"
+                class="twin-kc-row"
+              >
                 <div>
                   <strong>{{ kc.kcName }}</strong>
                   <span>{{ kc.chapterName }} · {{ lastPractice(kc.lastPracticedAt) }}</span>
                 </div>
                 <div class="twin-kc-row__status">
                   <strong>{{ percent(kc.masteryScore) }}</strong>
-                  <span v-if="kc.reviewDue" class="twin-due">复习已到期</span>
-                  <span v-else-if="kc.consecutiveFailures >= 2" class="twin-due">连续练习未通过</span>
+                  <span
+                    v-if="kc.reviewDue"
+                    class="twin-due"
+                  >复习已到期</span>
+                  <span
+                    v-else-if="kc.consecutiveFailures >= 2"
+                    class="twin-due"
+                  >连续练习未通过</span>
                 </div>
               </div>
             </div>
-            <p v-else class="twin-note" data-testid="twin-unassessed-hint">
+            <p
+              v-else
+              class="twin-note"
+              data-testid="twin-unassessed-hint"
+            >
               还没有经判题确认的学习证据。先完成一道基础练习，分身就会开始记录你的进步。
             </p>
           </article>
 
           <article class="twin-card twin-card--next">
-            <p class="twin-eyebrow">YOUR NEXT STEP</p>
+            <p class="twin-eyebrow">
+              YOUR NEXT STEP
+            </p>
             <h2>建议的下一步</h2>
             <template v-if="nextStep">
-              <div class="twin-recommendation" data-testid="twin-recommendation">
+              <div
+                class="twin-recommendation"
+                data-testid="twin-recommendation"
+              >
                 <span class="twin-recommendation__chapter">{{ nextStep.chapterName }} · 难度 {{ nextStep.difficulty }}/5</span>
                 <h3>{{ nextStep.kcName }}</h3>
                 <p>{{ nextStep.reason }}</p>
                 <small v-if="nextStep.remediationRequired">近期连续未通过，先巩固再升级。</small>
-                <button class="twin-button" type="button" data-testid="twin-next-primary" @click="goToNextStep">
+                <button
+                  class="twin-button"
+                  type="button"
+                  data-testid="twin-next-primary"
+                  @click="goToNextStep"
+                >
                   {{ actionLabel(nextStep) }}
                 </button>
                 <button
@@ -198,22 +257,39 @@ function lastPractice(value: string | null): string {
                 </button>
               </div>
             </template>
-            <p v-else class="twin-empty" data-testid="twin-no-recommendation">
+            <p
+              v-else
+              class="twin-empty"
+              data-testid="twin-no-recommendation"
+            >
               当前没有满足先修条件的推荐知识点。完成基础练习后再来查看下一步。
             </p>
           </article>
         </section>
 
-        <section class="twin-details" aria-label="学习分身详情">
+        <section
+          class="twin-details"
+          aria-label="学习分身详情"
+        >
           <details data-testid="twin-weekly-details">
-            <summary data-testid="twin-weekly-summary">近期变化 · 本周学习记录</summary>
-            <TwinWeekly class="twin-details__panel" @prompt="onTwinPrompt" />
+            <summary data-testid="twin-weekly-summary">
+              近期变化 · 本周学习记录
+            </summary>
+            <TwinWeekly
+              class="twin-details__panel"
+              @prompt="onTwinPrompt"
+            />
           </details>
           <details>
             <summary>学习目标与偏好 · 画像访谈</summary>
             <div class="twin-details__panel">
               <p>访谈回答用于设定目标和偏好，不作为实际能力的测评证据。</p>
-              <button class="twin-button twin-button--small" type="button" data-testid="twin-interview-toggle" @click="toggleInterview">
+              <button
+                class="twin-button twin-button--small"
+                type="button"
+                data-testid="twin-interview-toggle"
+                @click="toggleInterview"
+              >
                 {{ showInterview ? '收起画像访谈' : '编辑学习目标与偏好' }}
               </button>
               <ProfileInterviewPanel v-if="showInterview" />

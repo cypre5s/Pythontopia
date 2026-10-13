@@ -284,7 +284,6 @@ function shortTime(iso: string): string {
           </button>
         </li>
       </ul>
-
     </div>
   </aside>
 </template>

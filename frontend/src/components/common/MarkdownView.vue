@@ -65,14 +65,14 @@ const rendered = computed(() => {
   <div
     v-if="!inline"
     class="md-view"
-    v-html="rendered"
     @click="onRootClick"
+    v-html="rendered"
   />
   <span
     v-else
     class="md-view md-view--inline"
-    v-html="rendered"
     @click="onRootClick"
+    v-html="rendered"
   />
   <!-- eslint-enable vue/no-v-html -->
 </template>

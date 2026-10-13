@@ -1,9 +1,9 @@
-# Pythontopia 安全源代码复核
+# Pythontopia 安全与本地运行复核
 
-- 日期：2026-10-13（Asia/Shanghai）
-- 范围：当前工作树的 Web/后端/部署源配置、凭据存放元数据、相关自动化回归
-- 不包含：ECS 登录、公网主动扫描、真实密码爆破、Piston 实际执行、真实 DeepSeek 调用
-- 结论类型：代码与本地契约复核；不代表生产环境已经部署或运行时通过
+- 初审日期：2026-10-13（Asia/Shanghai）；增量复核至 2026-10-14。
+- 范围：Web/后端/部署源配置、凭据存放元数据、自动化回归及本地 Piston/DeepSeek 调用证据。
+- 不包含：ECS 登录、公网主动测试、生产 Piston 内核/逃逸验证、密钥轮换后的计费调用。
+- 结论类型：本地代码与运行记录；不代表生产环境已经部署或运行态通过。
 
 ## 已核对的防线
 
@@ -11,9 +11,9 @@
 - `backend/.../AgentStrategyController.java` 与 Tutor 内部附件端点：要求配置并匹配 `X-Internal-Token`，使用常数时间字节比较；附件读取还要求格式正确的 `X-Internal-Subject` 并按所有者读取。
 - `SecurityConfig`：API 默认要求 JWT；生产发布契约关闭 OpenAPI/Swagger 匿名访问。JWT 当前由前端保存在 `localStorage`。
 - Tutor 文本及工作流共用每账号、上海时区每日 30 次请求配额，conversationId 不会重置该额度。它限制请求数，不限制 token 数或实际费用；一次工作流请求仍可能触发多个模型调用。
-- 判题代码采用独立 Piston 适配器；远程错误 fail closed，不回退应用进程内执行。此次仅跑了 Piston 适配器回归，没有对实际 Piston 服务执行学生代码。
-- ASR、TTS、讯飞文生图和讯飞图片理解在属性类中固定关闭；Tutor 图片输入由 DeepSeek 视觉路径处理。该结论来自源代码和测试，未发起上游请求。
-- `deploy/.env` 被 Git 忽略，当前权限为 `0600`。本复核没有读取或输出其中内容。提供给助手的 API key 已出现在对话中，真实模型调用前应在服务商控制台轮换。
+- 判题代码采用独立 Piston 适配器；远程错误 fail closed，不回退应用进程内执行。此前已在本地 Piston/Isolate 执行 Python、文件/网络边界和超时探针；生产内核、逃逸与部署策略仍未验证。
+- ASR、TTS、讯飞文生图和讯飞图片理解在属性类中固定关闭；Tutor 图片输入走 DeepSeek 视觉路径。此前已完成真实 Tutor 文本与合成图片输入请求，本次增量复核没有发起上游请求。
+- `deploy/.env` 被 Git 忽略，文件权限为 `0600`；本复核只检查存在状态，没有读取或输出值。对话中出现过的 API key 尚未确认已轮换，后续真实请求前应在服务商控制台轮换。
 - `npm audit --registry=https://registry.npmjs.org --audit-level=high` 返回 0 vulnerabilities。Python 服务生产依赖审计与临时镜像构建结果见下方 2026-10-14 部分；未运行 OS 层镜像扫描，也没有部署镜像。
 - NPC dialog/greeting 路由现限制 key 长度为 1–40，并只接受小写字母、数字、`_`、`-`；超长 key 回归确认在到达服务层前返回 404。
 
@@ -22,9 +22,9 @@
 - CSP 已覆盖 SPA 文档，并把 `unsafe-eval` 限定在 Pyodide worker；本地 Chromium 已验证 Pyodide 与 PDF.js。仍需在生产入口和更多浏览器复核；`style-src 'unsafe-inline'` 是 Vue 动态样式与像素字体注入所需的兼容例外。
 - JWT 保存在 `localStorage`；若应用出现 XSS，令牌可被同源脚本读取。
 - 每日 30 次请求上限不是成本上限，不能据此推断 DeepSeek 费用有硬上限。
-- 聊天中出现过的 API key 尚未轮换；当前没有使用它发起真实请求。
+- 聊天中出现过的 API key 尚未确认轮换；此风险仍在，当前增量没有使用密钥发起新请求。
 - 本轮没有连接 ECS 或进行公网主动测试，因此 TLS、Nginx 限流、生产 Swagger 关闭和当前部署版本仍需从真实运行环境复核。
-- Piston 只验证了适配器错误处理和 fail-closed 行为；实际隔离、网络阻断、超时和资源限制没有在本轮重测。
+- 本地 Piston 探针不等同于生产容器内核/网络隔离验证；实际生产威胁模型仍需部署环境复核。
 
 ## 本地验证证据
 
@@ -67,3 +67,10 @@
 - 新增 `deploy/scripts/test_dev_compose_security_contract.sh` 断言 SPA 文档、Pyodide worker 和边缘响应的 CSP 规则。脚本通过；临时 Nginx 容器对 `/`、`/admin/users`、`/index.html` 实测 HTTP 200 且带策略，worker 响应另带隔离策略。
 - Chromium 在该 Nginx 配置下加载登录页、运行 Pyodide `print(2+3)` 得到 `5`，加载 PDF.js 并解析一页 PDF；浏览器 CSP violation 为 0。未做 ECS、公网或其他浏览器验证。
 - 参考：[W3C CSP Level 3](https://www.w3.org/TR/CSP3/)、[NGINX add_header 继承规则](https://nginx.org/en/docs/http/ngx_http_headers_module.html)、[Chrome WASM CSP 指引](https://developer.chrome.com/docs/iwa/developer-policy)。
+
+## 2026-10-14 最新增量
+
+- 已有本地运行记录包含 DeepSeek 真实文本和合成 PNG 图片输入调用；两类调用都返回非空文本，视觉答复识别合成图中的黄色背景与蓝色图形。本次没有发起新的 DeepSeek 请求。密钥只核对过本地非空状态，未读取值；尚未确认其已轮换。
+- 本地 Piston/Isolate 曾以 uid 1001 实际运行学生样例；读取 `/etc/shadow` 与创建 socket 被拒绝，短时限程序由 SIGKILL 中止。Java 适配器已兼容该 signal-only 返回；该结果不是生产内核逃逸测试。
+- AutoGen Tutor CHAT 增加完整 Python 函数、stdin/stdout 脚本及主入口代码的本地 AST 清理；Graph 全量回归 `1822 passed, 1 skipped`。这是结构启发式，不保证拦截所有等价答案表述；未调用模型进行红队复测。
+- 每账号每日 30 次、全站每日 300 次限制的是 AI 入口操作，不是模型请求、token 或金额硬上限。安全范围内没有访问 ECS/公网，也没有生产 Piston 威胁验证。

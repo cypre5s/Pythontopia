@@ -44,11 +44,15 @@ describe('admin visual shell contract', () => {
   it('keeps panels and the review table on the shared surface and spacing scale', () => {
     expect(panelStyles).toMatch(/border-radius:\s*var\(--admin-panel-radius\);/);
     expect(panelStyles).toMatch(/box-shadow:\s*var\(--admin-panel-shadow\);/);
-    expect(panelStyles).toMatch(/padding:\s*15px 18px 12px;/);
-    expect(panelStyles).toMatch(/padding:\s*15px 18px 18px;/);
+    expect(panelStyles).toMatch(/padding:\s*20px 22px 16px;/);
+    expect(panelStyles).toMatch(/padding:\s*18px 22px 22px;/);
 
     expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*background:\s*var\(--admin-table-header, #eef4fb\);/);
+    expect(tableStyles).toMatch(/\.admin-table-scroll > table th\.admin-table__sticky\s*\{[^}]*position:\s*sticky;[^}]*right:\s*0;/);
     expect(tableStyles).toMatch(/\.admin-table-scroll > table td\s*\{[^}]*padding:\s*10px 16px;/);
+    expect(tableStyles).toContain('position: sticky;');
+    expect(reviewSource).toContain('class="review-table__action admin-table__sticky"');
+    expect(usersSource).toContain('class="admin-table__sticky"');
     expect(reviewSource).toContain(':min-width="1100"');
     expect(reviewStyles).toMatch(/\.review-table td:nth-child\(1\),[\s\S]*?white-space:\s*nowrap;/);
     expect(reviewStyles).toContain('background: var(--admin-table-hover);');
@@ -66,7 +70,7 @@ describe('admin visual shell contract', () => {
 
   it('provides a shared compact toolbar and consistent admin controls', () => {
     expect(panelStyles).toContain('.admin-panel__toolbar');
-    expect(panelStyles).toMatch(/\.admin-panel__header h2\s*\{[^}]*font-size:\s*18px;/);
+    expect(panelStyles).toMatch(/\.admin-panel__header h2\s*\{[^}]*font-size:\s*20px;/);
     expect(layoutStyles).toContain(':deep(.admin-control)');
     expect(layoutStyles).toContain(':deep(.admin-button)');
     expect(layoutStyles).toContain(':deep(.admin-status)');
