@@ -1,5 +1,6 @@
 package com.pythontopia.video;
 
+import com.pythontopia.common.web.AiBudgeted;
 import java.util.List;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -26,6 +27,7 @@ public class BilibiliVideoController {
   }
 
   @GetMapping
+  @AiBudgeted
   public List<BilibiliVideoDto> search(
       @RequestParam String keyword,
       @RequestParam(required = false, defaultValue = "8") int limit) {

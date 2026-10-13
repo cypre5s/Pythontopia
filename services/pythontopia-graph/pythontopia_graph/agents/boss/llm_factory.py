@@ -284,6 +284,7 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
                 messages,
                 temperature=temperature,
                 max_tokens=1500,
+                reasoning_effort="none",
                 response_format={"type": "json_object"},
             )
         except TypeError:

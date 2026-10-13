@@ -39,3 +39,12 @@
 - 工作坊上传先检查个人存储额度，再解析文件；生产 Compose 固定关闭 Graph 可选内部鉴权，ECS 预检和发布安装拒绝公开开发数据库密码。
 - 验证：本轮后端相关单元及 PostgreSQL/Testcontainers 集成 192 项通过；Web 全量 260 文件 / 2506 项与 TypeScript typecheck 通过；Graph 全量 1816 passed / 1 skipped；生产 AI/readiness 与安装密钥契约脚本通过。
 - 本次仍未连接 ECS、公网测试或启动 Piston 实际执行；对话中暴露过的 DeepSeek key 未用于请求，轮换前不进行计费性能采样。每日请求配额不是 token 或费用上限；JWT localStorage、CSP 来源限制及 Graph 依赖锁/漏洞扫描仍需后续处理。
+
+## 2026-10-14 复核后修复
+
+- Boss 判题要求 `attemptId`；题目需先确认属于当前用户，再建立幂等 claim，因此随机无效题目 ID 不再永久增长幂等表。重复 Boss 学习事件使用 `boss-attempt:<UUID>` 同时保护掌握度和画像投影。
+- Graph 的 `sandbox_unavailable` 明确作为基础设施错误处理：调用现有 Java/Piston 兜底；若本地沙箱也不可用，返回 503，不扣远征判题额度、不更新学习画像。
+- V212 新增全站每日 300 次 AI 入口请求上限，与每账号每日 30 次共同在一个事务中原子预留，覆盖匿名批量注册对单账号额度的绕过。该表以数据库唯一日行跨实例串行化；达到全站上限后当日停止所有标注端点。
+- 账号与全站额度预留共用一次读取的上海日期，避免恰逢午夜时被分别计入相邻两天；模拟跨午夜用例已复现并回归通过。
+- 验证：Boss Controller/Service、额度与画像监听器共 71 项单测通过；PostgreSQL/Testcontainers 3 项通过，包含 40 个账号并发提交 400 次时仅放行 300 次，以及幂等事件回放只更新一次画像/掌握度；Flyway 空库迁移至 V212 成功。
+- 剩余风险：全站限制计数的是标注入口操作，不是 DeepSeek provider 外发次数/token/金额；单次操作可在 Graph 内重试或多轮生成。Android/Windows Boss 调用尚未携带必填 `attemptId`，此次遵照 Web 优先范围未改客户端。未访问 ECS/公网，也未用真实 Piston 故障注入验证运行态行为。对话中暴露的 DeepSeek key 仍应轮换。

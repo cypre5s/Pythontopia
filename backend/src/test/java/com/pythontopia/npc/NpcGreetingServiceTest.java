@@ -1,6 +1,7 @@
 package com.pythontopia.npc;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -17,9 +18,12 @@ import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.profile.dto.ProfileDimensionDto;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
+import com.pythontopia.common.error.BusinessException;
+import org.springframework.http.HttpStatus;
 import com.pythontopia.npc.dto.NpcDialogResponse;
 import com.pythontopia.npc.dto.NpcGreetingResponse;
 import com.pythontopia.npc.graph.NpcDialogGraphClient;
+import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -35,6 +39,7 @@ class NpcGreetingServiceTest {
   private final PassiveProfileService passiveProfileService = mock(PassiveProfileService.class);
   private final NpcPersonaService personaService = mock(NpcPersonaService.class);
   private final NpcDialogGraphClient graphClient = mock(NpcDialogGraphClient.class);
+  private final TutorDailyRequestLimitService requestLimit = mock(TutorDailyRequestLimitService.class);
 
   // 可推进的测试时钟：用于验证 30 分钟缓存命中与过期重算。
   private final Instant[] nowHolder = {Instant.parse("2026-06-10T08:00:00Z")};
@@ -58,7 +63,7 @@ class NpcGreetingServiceTest {
 
   private final NpcGreetingService service =
       new NpcGreetingService(
-          memoryRetrievalService, passiveProfileService, personaService, graphClient, clock);
+          memoryRetrievalService, passiveProfileService, personaService, graphClient, clock, requestLimit);
 
   private static MemoryItemDto memory(long eventId, String summary, String kc) {
     return new MemoryItemDto(
@@ -95,6 +100,7 @@ class NpcGreetingServiceTest {
     assertThat(second.cached()).isTrue();
     assertThat(second.greeting()).isEqualTo(first.greeting());
     verify(graphClient, times(1)).talk(eq("foreman_bug"), anyString(), any(), anyString());
+    verify(requestLimit).reserve(7L);
   }
 
   @Test
@@ -133,6 +139,35 @@ class NpcGreetingServiceTest {
     assertThat(hit.cached()).isTrue();
     assertThat(hit.greeting()).isEqualTo(warmed.greeting());
     verify(graphClient, times(1)).talk(anyString(), anyString(), any(), anyString());
+    verify(requestLimit).reserve(7L);
+  }
+
+  @Test
+  void exhaustedDailyBudgetPreventsPrewarmModelCall() {
+    when(memoryRetrievalService.retrieve(eq(7L), isNull(), anyInt()))
+        .thenReturn(List.of(memory(9L, "练习失败：PY43-KC-016", "PY43-KC-016")));
+    org.mockito.Mockito.doThrow(
+            new BusinessException(HttpStatus.TOO_MANY_REQUESTS, "TUTOR_DAILY_LIMIT_REACHED", "daily limit"))
+        .when(requestLimit)
+        .reserve(7L);
+
+    assertThatThrownBy(() -> service.prewarm(7L, "foreman_bug"))
+        .isInstanceOf(BusinessException.class);
+    verify(graphClient, never()).talk(anyString(), anyString(), any(), anyString());
+  }
+
+  @Test
+  void exhaustedDailyBudgetPreventsGreetingModelCall() {
+    when(memoryRetrievalService.retrieve(eq(7L), isNull(), anyInt()))
+        .thenReturn(List.of(memory(9L, "练习失败：PY43-KC-016", "PY43-KC-016")));
+    org.mockito.Mockito.doThrow(
+            new BusinessException(HttpStatus.TOO_MANY_REQUESTS, "TUTOR_DAILY_LIMIT_REACHED", "daily limit"))
+        .when(requestLimit)
+        .reserve(7L);
+
+    assertThatThrownBy(() -> service.greeting(7L, "foreman_bug"))
+        .isInstanceOf(BusinessException.class);
+    verify(graphClient, never()).talk(anyString(), anyString(), any(), anyString());
   }
 
   @Test
@@ -181,6 +216,17 @@ class NpcGreetingServiceTest {
     NpcGreetingResponse second = service.greeting(7L, "foreman_bug");
     assertThat(second.cached()).isTrue();
     verify(memoryRetrievalService, times(1)).retrieve(eq(7L), isNull(), anyInt());
+    verify(graphClient, never()).talk(anyString(), anyString(), any(), anyString());
+    verify(requestLimit, never()).reserve(7L);
+  }
+
+  @Test
+  void prewarmWithoutMemoriesDoesNotReserveBudget() {
+    when(memoryRetrievalService.retrieve(eq(7L), isNull(), anyInt())).thenReturn(List.of());
+
+    service.prewarm(7L, "foreman_bug");
+
+    verify(requestLimit, never()).reserve(7L);
     verify(graphClient, never()).talk(anyString(), anyString(), any(), anyString());
   }
 

@@ -25,7 +25,8 @@ public sealed interface LearningEvent
 
   Long userId();
 
-  record ProfileBootstrapped(Long userId, java.util.List<String> unlockedKcs) implements LearningEvent {}
+  record ProfileBootstrapped(Long userId, java.util.List<String> unlockedKcs)
+      implements LearningEvent {}
 
   record ResourceConsumed(
       Long userId, Long resourceId, String kcCode, String resourceKind, java.math.BigDecimal delta)
@@ -76,10 +77,20 @@ public sealed interface LearningEvent
   }
 
   record PracticeSucceeded(
-      Long userId, String kcCode, Long problemId, String difficulty, Long submissionId)
+      Long userId,
+      String kcCode,
+      Long problemId,
+      String difficulty,
+      Long submissionId,
+      String idempotencyKey)
       implements LearningEvent {
     public PracticeSucceeded(Long userId, String kcCode, Long problemId, String difficulty) {
-      this(userId, kcCode, problemId, difficulty, null);
+      this(userId, kcCode, problemId, difficulty, null, null);
+    }
+
+    public PracticeSucceeded(
+        Long userId, String kcCode, Long problemId, String difficulty, Long submissionId) {
+      this(userId, kcCode, problemId, difficulty, submissionId, null);
     }
   }
 
@@ -89,20 +100,31 @@ public sealed interface LearningEvent
       Long problemId,
       String failureKind,
       String difficulty,
-      Long submissionId)
+      Long submissionId,
+      String idempotencyKey)
       implements LearningEvent {
     public PracticeFailed(
         Long userId, String kcCode, Long problemId, String failureKind, String difficulty) {
-      this(userId, kcCode, problemId, failureKind, difficulty, null);
+      this(userId, kcCode, problemId, failureKind, difficulty, null, null);
+    }
+
+    public PracticeFailed(
+        Long userId,
+        String kcCode,
+        Long problemId,
+        String failureKind,
+        String difficulty,
+        Long submissionId) {
+      this(userId, kcCode, problemId, failureKind, difficulty, submissionId, null);
     }
   }
 
   record DebugResolved(Long userId, String kcCode, Long problemId) implements LearningEvent {}
 
   /**
-   * 学生消费了学习内容（章节视频 / 课件 / AI 动画 / 知识点图解）。{@code mediaType} 形如
-   * {@code video} / {@code courseware} / {@code storyboard} / {@code illustration}；用于把消费回流到画像
-   * {@code learning_preference} 维度（媒介偏好），驱动后续个性化推送。
+   * 学生消费了学习内容（章节视频 / 课件 / AI 动画 / 知识点图解）。{@code mediaType} 形如 {@code video} / {@code courseware} /
+   * {@code storyboard} / {@code illustration}；用于把消费回流到画像 {@code learning_preference}
+   * 维度（媒介偏好），驱动后续个性化推送。
    */
   record MediaConsumed(
       Long userId, String mediaType, Integer chapter, java.util.List<String> kcCodes)

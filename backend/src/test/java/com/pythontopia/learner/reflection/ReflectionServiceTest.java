@@ -17,6 +17,7 @@ import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.reflection.graph.InsightPayload;
 import com.pythontopia.learner.reflection.graph.ReflectionGraphClient;
 import com.pythontopia.learner.reflection.graph.ReflectionGraphResponse;
+import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -27,9 +28,10 @@ class ReflectionServiceTest {
       mock(MemoryRetrievalService.class);
   private final ReflectionGraphClient graphClient = mock(ReflectionGraphClient.class);
   private final LearnerInsightRepository insightRepository = mock(LearnerInsightRepository.class);
+  private final TutorDailyRequestLimitService requestLimit = mock(TutorDailyRequestLimitService.class);
 
   private final ReflectionService service =
-      new ReflectionService(memoryRetrievalService, graphClient, insightRepository);
+      new ReflectionService(memoryRetrievalService, graphClient, insightRepository, requestLimit);
 
   private static MemoryItemDto memory(long id, String type, String kc) {
     return new MemoryItemDto(
@@ -62,6 +64,7 @@ class ReflectionServiceTest {
             eq(List.of(10L)),
             eq(0.8),
             eq("GRAPH"));
+    verify(requestLimit).reserve(7L);
   }
 
   @Test
@@ -110,8 +113,26 @@ class ReflectionServiceTest {
     service.reflect(7L);
 
     verifyNoInteractions(graphClient);
+    verify(requestLimit, never()).reserve(7L);
     verify(insightRepository, never())
         .insert(eq(7L), any(), any(), anyList(), anyList(), anyDoubleArg(), any());
+  }
+
+  @Test
+  void dailyLimitPreventsBackgroundGraphCallAndUsesRuleFallback() {
+    when(memoryRetrievalService.retrieve(eq(7L), isNull(), anyInt()))
+        .thenReturn(List.of(memory(10, "practice_failed", "PY43-KC-016")));
+    org.mockito.Mockito.doThrow(new RuntimeException("daily limit"))
+        .when(requestLimit)
+        .reserve(7L);
+
+    service.reflect(7L);
+
+    verify(graphClient, never()).reflect(eq(7L), anyList());
+    verify(insightRepository)
+        .insert(
+            eq(7L), any(), eq("error_pattern"), eq(List.of("PY43-KC-016")), eq(List.of(10L)),
+            anyDoubleArg(), eq("RULE"));
   }
 
   @Test

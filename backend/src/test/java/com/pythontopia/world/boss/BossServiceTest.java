@@ -23,10 +23,10 @@ import com.pythontopia.learner.twin.LearnerTwinService;
 import com.pythontopia.mainline.test.ChapterProblemBankRepository;
 import com.pythontopia.mainline.test.ChapterProblemBankRepository.CodingCase;
 import com.pythontopia.mainline.test.ChapterProblemBankRepository.PreferredCodingQuestion;
+import com.pythontopia.submission.dto.Verdict;
 import com.pythontopia.submission.judge.JudgeCaseEvaluator;
 import com.pythontopia.submission.judge.JudgeWorkerPool;
 import com.pythontopia.submission.judge.StaticCodeChecker;
-import com.pythontopia.submission.dto.Verdict;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
@@ -39,7 +39,6 @@ import com.pythontopia.world.boss.dto.FrontierSelectRequest;
 import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
 import com.pythontopia.world.boss.review.ApprovedBossProblem;
 import com.pythontopia.world.boss.review.BossProblemReviewRepository;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -62,7 +61,10 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClientException;
 
-/** Boss shares the Twin's deterministic practice policy; verified expedition results feed back into learning. */
+/**
+ * Boss shares the Twin's deterministic practice policy; verified expedition results feed back into
+ * learning.
+ */
 @ExtendWith(MockitoExtension.class)
 class BossServiceTest {
 
@@ -109,6 +111,19 @@ class BossServiceTest {
             expeditionRunService.validateProblemRequest(
                 anyLong(), anyString(), anyString(), anyInt(), anyBoolean(), anyString()))
         .thenReturn(null);
+    lenient()
+        .when(attemptIdempotencyService.claim(anyLong(), any(), any()))
+        .thenAnswer(
+            invocation ->
+                new BossAttemptIdempotencyService.Claim(UUID.randomUUID(), null, "a".repeat(64)));
+    lenient()
+        .when(attemptIdempotencyService.complete(anyLong(), any(), any(), any(), any()))
+        .thenAnswer(
+            invocation -> {
+              LearningEvent event = invocation.getArgument(4);
+              if (event != null) eventPublisher.publishEvent(event);
+              return invocation.getArgument(3);
+            });
   }
 
   @Test
@@ -152,9 +167,7 @@ class BossServiceTest {
 
     var dto =
         service.fetchProblem(
-            1,
-            new BossProblemRequest(1, null, 2, "PY43-KC-001", "debug", null, null, null),
-            7L);
+            1, new BossProblemRequest(1, null, 2, "PY43-KC-001", "debug", null, null, null), 7L);
 
     assertThat(dto.problemId()).startsWith("issue-").isNotEqualTo("approved-33-v2");
     assertThat(dto.statement()).isEqualTo("approved statement");
@@ -196,9 +209,7 @@ class BossServiceTest {
 
     var dto =
         service.fetchProblem(
-            1,
-            new BossProblemRequest(1, null, 2, "PY43-KC-001", "debug", null, null, null),
-            7L);
+            1, new BossProblemRequest(1, null, 2, "PY43-KC-001", "debug", null, null, null), 7L);
 
     assertThat(dto.problemId()).isEqualTo("ready-for-user-7");
     verifyNoInteractions(reviewRepository, graphClient);
@@ -226,7 +237,8 @@ class BossServiceTest {
   @Test
   @DisplayName("Graph 出题服务不可用时返回服务错误，不发放通用占位题")
   void graphProblemUnavailableDoesNotIssueGenericGoldenProblem() {
-    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenThrow(new RestClientException("graph down"));
 
     assertThatThrownBy(
@@ -243,7 +255,8 @@ class BossServiceTest {
                   .isEqualTo(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE);
             });
 
-    verify(pregenService, never()).persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any());
+    verify(pregenService, never())
+        .persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any());
   }
 
   @Test
@@ -252,12 +265,15 @@ class BossServiceTest {
     CountDownLatch graphStarted = new CountDownLatch(1);
     CountDownLatch releaseGraph = new CountDownLatch(1);
     when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
-    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
-        .thenAnswer(invocation -> {
-          graphStarted.countDown();
-          if (!releaseGraph.await(3, TimeUnit.SECONDS)) throw new IllegalStateException("test timed out");
-          return problemWithStage(2);
-        });
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenAnswer(
+            invocation -> {
+              graphStarted.countDown();
+              if (!releaseGraph.await(3, TimeUnit.SECONDS))
+                throw new IllegalStateException("test timed out");
+              return problemWithStage(2);
+            });
     BossProblemRequest request =
         new BossProblemRequest(2, null, 2, "PY43-KC-001", "debug", null, null, null);
     ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -268,12 +284,14 @@ class BossServiceTest {
       assertThatThrownBy(() -> service.fetchProblem(1, request, 7L))
           .isInstanceOfSatisfying(
               com.pythontopia.common.error.BusinessException.class,
-              exception -> assertThat(exception.code()).isEqualTo("BOSS_PROBLEM_GENERATION_PENDING"));
+              exception ->
+                  assertThat(exception.code()).isEqualTo("BOSS_PROBLEM_GENERATION_PENDING"));
 
       releaseGraph.countDown();
       assertThat(first.get(3, TimeUnit.SECONDS)).isNotNull();
       verify(graphClient, times(1))
-          .requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any());
+          .requestProblem(
+              anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any());
     } finally {
       releaseGraph.countDown();
       executor.shutdownNow();
@@ -284,11 +302,13 @@ class BossServiceTest {
   @DisplayName("完成后再次使用同一请求 ID 会复用原题而不是重新出题")
   void completedRequestIdReturnsTheSameProblem() {
     when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
-    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenReturn(problemWithInput("generated-once"));
     String requestId = UUID.randomUUID().toString();
     BossProblemRequest request =
-        new BossProblemRequest(1, null, 2, "PY43-KC-001", "debug", null, null, null, null, requestId);
+        new BossProblemRequest(
+            1, null, 2, "PY43-KC-001", "debug", null, null, null, null, requestId);
 
     var first = service.fetchProblem(1, request, 7L);
     var retry = service.fetchProblem(1, request, 7L);
@@ -304,9 +324,20 @@ class BossServiceTest {
     when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
     BossInternalProblem approved =
         new BossInternalProblem(
-            "approved-33-v2", 1, 1, 2, "PY43-KC-001", "approved statement", List.of(),
-            "2 3", "5", 1, true, true,
-            List.of(new BossTestCasePayload("2 3", "5", false)), "print(5)");
+            "approved-33-v2",
+            1,
+            1,
+            2,
+            "PY43-KC-001",
+            "approved statement",
+            List.of(),
+            "2 3",
+            "5",
+            1,
+            true,
+            true,
+            List.of(new BossTestCasePayload("2 3", "5", false)),
+            "print(5)");
     when(reviewRepository.findApproved(1, 1, "PY43-KC-001", "debug", 2))
         .thenReturn(Optional.of(new ApprovedBossProblem(33L, 2, approved)));
     BossProblemRequest request =
@@ -320,20 +351,24 @@ class BossServiceTest {
   @Test
   @DisplayName("Graph 出题不可用时复用同 KC 的课程题库内容与隐藏用例")
   void graphProblemUnavailableFallsBackToTrustedCourseQuestion() {
-    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenThrow(new RestClientException("graph down"));
     when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
-        .thenReturn(List.of(new PreferredCodingQuestion(
-            120L,
-            "打印和",
-            "读入两个整数并输出它们的和。",
-            List.of(new CodingCase("2 3", "5")),
-            List.of(new CodingCase("2 3", "5"), new CodingCase("10 -4", "6")),
-            "a, b = map(int, input().split())\\nprint(a + b)",
-            "PY43-KC-001")));
+        .thenReturn(
+            List.of(
+                new PreferredCodingQuestion(
+                    120L,
+                    "打印和",
+                    "读入两个整数并输出它们的和。",
+                    List.of(new CodingCase("2 3", "5")),
+                    List.of(new CodingCase("2 3", "5"), new CodingCase("10 -4", "6")),
+                    "a, b = map(int, input().split())\\nprint(a + b)",
+                    "PY43-KC-001")));
 
-    var problem = service.fetchProblem(
-        1, new BossProblemRequest(1, null, 3, "PY43-KC-001", null, null, null, null), 7L);
+    var problem =
+        service.fetchProblem(
+            1, new BossProblemRequest(1, null, 3, "PY43-KC-001", null, null, null, null), 7L);
 
     assertThat(problem.statement()).contains("课程题库 · 打印和");
     assertThat(problem.kcCode()).isEqualTo("PY43-KC-001");
@@ -348,29 +383,55 @@ class BossServiceTest {
   void expeditionSkipsRepeatedGraphQuestionAndUsesUnusedGoldenQuestion() {
     String runId = "123e4567-e89b-12d3-a456-426614174000";
     String nodeId = "L0-0";
-    var usedGolden = new BossInternalProblem(
-        "course-problem-120", 1, 1, 1, "PY43-KC-001", "课程题库 · 已用\n\nstatement",
-        List.of(), "2 3", "5", 1, true, false,
-        List.of(new BossTestCasePayload("2 3", "5", false)), "ref");
+    var usedGolden =
+        new BossInternalProblem(
+            "course-problem-120",
+            1,
+            1,
+            1,
+            "PY43-KC-001",
+            "课程题库 · 已用\n\nstatement",
+            List.of(),
+            "2 3",
+            "5",
+            1,
+            true,
+            false,
+            List.of(new BossTestCasePayload("2 3", "5", false)),
+            "ref");
     when(expeditionRunService.findIssuedQuestionFingerprints(7L, runId))
-        .thenReturn(Set.of(
-            BossService.questionFingerprint(problemWithStage(1)),
-            BossService.questionFingerprint(usedGolden)));
+        .thenReturn(
+            Set.of(
+                BossService.questionFingerprint(problemWithStage(1)),
+                BossService.questionFingerprint(usedGolden)));
     when(graphClient.requestProblem(
             anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenReturn(problemWithStage(1));
     when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
-        .thenReturn(List.of(
-            new PreferredCodingQuestion(
-                120L, "已用", "statement", List.of(new CodingCase("2 3", "5")),
-                List.of(new CodingCase("2 3", "5")), "ref", "PY43-KC-001"),
-            new PreferredCodingQuestion(
-                121L, "新题", "different statement", List.of(new CodingCase("4 5", "9")),
-                List.of(new CodingCase("4 5", "9")), "ref", "PY43-KC-001")));
+        .thenReturn(
+            List.of(
+                new PreferredCodingQuestion(
+                    120L,
+                    "已用",
+                    "statement",
+                    List.of(new CodingCase("2 3", "5")),
+                    List.of(new CodingCase("2 3", "5")),
+                    "ref",
+                    "PY43-KC-001"),
+                new PreferredCodingQuestion(
+                    121L,
+                    "新题",
+                    "different statement",
+                    List.of(new CodingCase("4 5", "9")),
+                    List.of(new CodingCase("4 5", "9")),
+                    "ref",
+                    "PY43-KC-001")));
 
-    var problem = service.fetchProblem(
-        1, new BossProblemRequest(
-            1, "PY43-KC-001", 1, null, null, null, null, runId, nodeId), 7L);
+    var problem =
+        service.fetchProblem(
+            1,
+            new BossProblemRequest(1, "PY43-KC-001", 1, null, null, null, null, runId, nodeId),
+            7L);
 
     assertThat(problem.statement()).contains("课程题库 · 新题");
   }
@@ -384,12 +445,15 @@ class BossServiceTest {
     when(graphClient.requestProblem(
             anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenReturn(problemWithStage(1));
-    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
-        .thenReturn(List.of());
+    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001"))).thenReturn(List.of());
 
-    assertThatThrownBy(() -> service.fetchProblem(
-            1, new BossProblemRequest(
-                1, "PY43-KC-001", 1, null, null, null, null, runId, "L0-0"), 7L))
+    assertThatThrownBy(
+            () ->
+                service.fetchProblem(
+                    1,
+                    new BossProblemRequest(
+                        1, "PY43-KC-001", 1, null, null, null, null, runId, "L0-0"),
+                    7L))
         .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
         .hasMessageContaining("没有新的可用题目");
   }
@@ -397,20 +461,24 @@ class BossServiceTest {
   @Test
   @DisplayName("Graph 返回空题目时也使用同 KC 课程题库兜底")
   void emptyGraphProblemFallsBackToTrustedCourseQuestion() {
-    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenReturn(null);
     when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
-        .thenReturn(List.of(new PreferredCodingQuestion(
-            121L,
-            "列表求和",
-            "输出列表元素之和。",
-            List.of(new CodingCase("2 3", "5")),
-            List.of(new CodingCase("2 3", "5")),
-            "a, b = map(int, input().split())\\nprint(a + b)",
-            "PY43-KC-001")));
+        .thenReturn(
+            List.of(
+                new PreferredCodingQuestion(
+                    121L,
+                    "列表求和",
+                    "输出列表元素之和。",
+                    List.of(new CodingCase("2 3", "5")),
+                    List.of(new CodingCase("2 3", "5")),
+                    "a, b = map(int, input().split())\\nprint(a + b)",
+                    "PY43-KC-001")));
 
-    var problem = service.fetchProblem(
-        1, new BossProblemRequest(1, null, 3, "PY43-KC-001", null, null, null, null), 7L);
+    var problem =
+        service.fetchProblem(
+            1, new BossProblemRequest(1, null, 3, "PY43-KC-001", null, null, null, null), 7L);
 
     assertThat(problem.statement()).contains("课程题库 · 列表求和");
     assertThat(problem.kcCode()).isEqualTo("PY43-KC-001");
@@ -420,7 +488,8 @@ class BossServiceTest {
   @Test
   @DisplayName("同一图生成 ID 不会跨用户或同用户复用隐藏测试")
   void generatedProblemsReceiveUniqueUserScopedIds() {
-    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenReturn(
             problemWithInputAndKc("private-user-7", "PY43-KC-001"),
             problemWithInput("private-user-8"),
@@ -437,11 +506,9 @@ class BossServiceTest {
     assertThat(user7First.problemId()).isNotEqualTo(user8.problemId());
     assertThat(user7First.kcCode()).isEqualTo("PY43-KC-001");
 
-    service.evaluateAttempt(
-        new BossAttemptRequest(user7First.problemId(), 1, 1, "print(1)", 1), 7L);
-    service.evaluateAttempt(
-        new BossAttemptRequest(user7Second.problemId(), 1, 1, "print(1)", 1), 7L);
-    service.evaluateAttempt(new BossAttemptRequest(user8.problemId(), 1, 1, "print(1)", 1), 8L);
+    service.evaluateAttempt(attemptRequest(user7First.problemId(), 1, 1, "print(1)", 1), 7L);
+    service.evaluateAttempt(attemptRequest(user7Second.problemId(), 1, 1, "print(1)", 1), 7L);
+    service.evaluateAttempt(attemptRequest(user8.problemId(), 1, 1, "print(1)", 1), 8L);
 
     ArgumentCaptor<List<BossTestCasePayload>> cases = ArgumentCaptor.forClass(List.class);
     verify(graphClient, org.mockito.Mockito.times(3))
@@ -454,7 +521,8 @@ class BossServiceTest {
   @Test
   @DisplayName("Graph 返回不同知识点的题目时不把它签发为当前 KC")
   void graphProblemWithMismatchedKcIsRejectedBeforePersistence() {
-    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenReturn(problemWithInputAndKc("private-mismatch", "PY43-KC-002"));
 
     assertThatThrownBy(
@@ -467,7 +535,8 @@ class BossServiceTest {
             com.pythontopia.common.error.BusinessException.class,
             exception -> {
               assertThat(exception.code()).isEqualTo("BOSS_PROBLEM_CONTEXT_MISMATCH");
-              assertThat(exception.status()).isEqualTo(org.springframework.http.HttpStatus.CONFLICT);
+              assertThat(exception.status())
+                  .isEqualTo(org.springframework.http.HttpStatus.CONFLICT);
             });
 
     verify(pregenService, never())
@@ -477,14 +546,14 @@ class BossServiceTest {
   @Test
   @DisplayName("其他用户不能用猜到的题目 ID 读取已发放题目的隐藏测试")
   void generatedProblemCannotBeEvaluatedByAnotherUser() {
-    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenReturn(problemWithInput("private-user-7"));
     var problem =
         service.fetchProblem(
             1, new BossProblemRequest(1, null, 1, null, null, null, null, null), 7L);
 
-    service.evaluateAttempt(
-        new BossAttemptRequest(problem.problemId(), 1, 1, "print(1)", 1), 8L);
+    service.evaluateAttempt(attemptRequest(problem.problemId(), 1, 1, "print(1)", 1), 8L);
 
     verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
     verify(pregenService).findByProblemId(8L, problem.problemId());
@@ -496,7 +565,8 @@ class BossServiceTest {
   void verifiedAttemptIsBoundToActiveRun() {
     String runId = "123e4567-e89b-12d3-a456-426614174000";
     when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
-    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenReturn(problemWithInput("server-owned"));
     when(graphClient.evaluateAttempt(anyString(), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("ignored", true, 1, 1, null, null, List.of()));
@@ -511,7 +581,7 @@ class BossServiceTest {
     BossProblemRequest request =
         new BossProblemRequest(1, null, 1, null, null, null, null, runId, "L0-0");
     var problem = service.fetchProblem(1, request, 7L);
-    service.evaluateAttempt(new BossAttemptRequest(problem.problemId(), 1, 1, "print(1)", 1), 7L);
+    service.evaluateAttempt(attemptRequest(problem.problemId(), 1, 1, "print(1)", 1), 7L);
     BossInternalProblem internalProblem =
         problemWithInput("server-owned").issueAs(problem.problemId(), "PY43-KC-001");
 
@@ -551,8 +621,7 @@ class BossServiceTest {
             () ->
                 service.fetchProblem(
                     1,
-                    new BossProblemRequest(
-                        1, null, 1, null, null, null, null, staleRunId, "L0-0"),
+                    new BossProblemRequest(1, null, 1, null, null, null, null, staleRunId, "L0-0"),
                     7L))
         .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
         .hasMessageContaining("远征存档");
@@ -579,13 +648,10 @@ class BossServiceTest {
   @Test
   @DisplayName("提交题目时章节或阶段必须与服务端签发内容一致")
   void attemptContextMustMatchTheIssuedProblem() {
-    when(pregenService.findByProblemId(7L, "p1"))
-        .thenReturn(Optional.of(problemWithTests(2)));
+    when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problemWithTests(2)));
 
     assertThatThrownBy(
-            () ->
-                service.evaluateAttempt(
-                    new BossAttemptRequest("p1", 1, 2, "print(5)", 10), 7L))
+            () -> service.evaluateAttempt(attemptRequest("p1", 1, 2, "print(5)", 10), 7L))
         .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
         .hasMessageContaining("签发");
     verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
@@ -603,9 +669,7 @@ class BossServiceTest {
     when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(false);
 
     assertThatThrownBy(
-            () ->
-                service.evaluateAttempt(
-                    new BossAttemptRequest("p1", 1, 1, "print(5)", 10), 7L))
+            () -> service.evaluateAttempt(attemptRequest("p1", 1, 1, "print(5)", 10), 7L))
         .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
         .hasMessageContaining("远征存档");
     verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
@@ -616,17 +680,15 @@ class BossServiceTest {
   void bossProblemFromPreviousPhaseCannotBeEvaluatedAgain() {
     String runId = "123e4567-e89b-12d3-a456-426614174000";
     String problemId = BossService.issueProblemId(1);
-    BossInternalProblem problem =
-        problemWithTests(1).issueAs(problemId, "PY43-KC-001");
+    BossInternalProblem problem = problemWithTests(1).issueAs(problemId, "PY43-KC-001");
     when(pregenService.findExpeditionBinding(7L, problemId))
         .thenReturn(Optional.of(binding(runId, "L9-0", 1, 1, problem)));
     when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
-    when(expeditionRunService.validateProblemRequest(
-            7L, runId, "L9-0", 1, false, "PY43-KC-001"))
+    when(expeditionRunService.validateProblemRequest(7L, runId, "L9-0", 1, false, "PY43-KC-001"))
         .thenReturn(2);
 
     assertThatThrownBy(
-            () -> service.evaluateAttempt(new BossAttemptRequest(problemId, 1, 1, "print(5)", 1), 7L))
+            () -> service.evaluateAttempt(attemptRequest(problemId, 1, 1, "print(5)", 1), 7L))
         .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
         .hasMessageContaining("绑定");
     verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
@@ -648,8 +710,7 @@ class BossServiceTest {
                     BossService.questionFingerprint(problemWithTests(1)),
                     null)));
     when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
-    when(pregenService.findByProblemId(7L, "p1"))
-        .thenReturn(Optional.of(problemWithTests(1)));
+    when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problemWithTests(1)));
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
     when(expeditionScoreService.recordVerifiedAttempt(
@@ -657,8 +718,7 @@ class BossServiceTest {
         .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(false, false));
 
     assertThatThrownBy(
-            () -> service.evaluateAttempt(
-                new BossAttemptRequest("p1", 1, 1, "print(5)", 10), 7L))
+            () -> service.evaluateAttempt(attemptRequest("p1", 1, 1, "print(5)", 10), 7L))
         .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
         .hasMessageContaining("判题次数");
 
@@ -681,8 +741,7 @@ class BossServiceTest {
                     BossService.questionFingerprint(problemWithTests(3)),
                     null)));
     when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
-    when(pregenService.findByProblemId(7L, "p1"))
-        .thenReturn(Optional.of(problemWithTests(3)));
+    when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problemWithTests(3)));
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenReturn(
             new BossEvaluateResultDto("p1", false, 0, 1, "hint", null, List.of(0)),
@@ -703,20 +762,29 @@ class BossServiceTest {
     BossAttemptRequest first = new BossAttemptRequest("p1", 1, 1, "print(0)", 1, firstId);
     BossAttemptRequest second = new BossAttemptRequest("p1", 1, 1, "print(5)", 1, secondId);
     BossAttemptRequest third = new BossAttemptRequest("p1", 1, 1, "print(5)", 1, thirdId);
-    var firstClaim = new BossAttemptIdempotencyService.Claim(UUID.randomUUID(), null, "a".repeat(64));
-    var secondClaim = new BossAttemptIdempotencyService.Claim(UUID.randomUUID(), null, "b".repeat(64));
-    var thirdClaim = new BossAttemptIdempotencyService.Claim(UUID.randomUUID(), null, "c".repeat(64));
+    var firstClaim =
+        new BossAttemptIdempotencyService.Claim(UUID.randomUUID(), null, "a".repeat(64));
+    var secondClaim =
+        new BossAttemptIdempotencyService.Claim(UUID.randomUUID(), null, "b".repeat(64));
+    var thirdClaim =
+        new BossAttemptIdempotencyService.Claim(UUID.randomUUID(), null, "c".repeat(64));
     when(attemptIdempotencyService.claim(7L, firstId, first)).thenReturn(firstClaim);
     when(attemptIdempotencyService.claim(7L, secondId, second)).thenReturn(secondClaim);
     when(attemptIdempotencyService.claim(7L, thirdId, third)).thenReturn(thirdClaim);
     when(attemptIdempotencyService.complete(eq(7L), eq(firstId), eq(firstClaim), any(), any()))
         .thenAnswer(call -> call.getArgument(3));
     when(attemptIdempotencyService.complete(
-            eq(7L), eq(secondId), eq(secondClaim), any(),
+            eq(7L),
+            eq(secondId),
+            eq(secondClaim),
+            any(),
             org.mockito.ArgumentMatchers.nullable(LearningEvent.class)))
         .thenAnswer(call -> call.getArgument(3));
     when(attemptIdempotencyService.complete(
-            eq(7L), eq(thirdId), eq(thirdClaim), any(),
+            eq(7L),
+            eq(thirdId),
+            eq(thirdClaim),
+            any(),
             org.mockito.ArgumentMatchers.nullable(LearningEvent.class)))
         .thenAnswer(call -> call.getArgument(3));
 
@@ -729,14 +797,23 @@ class BossServiceTest {
     assertThat(thirdResult.passed()).isTrue();
     assertThat(thirdResult.score()).isEqualTo(100);
     verify(attemptIdempotencyService)
-        .complete(eq(7L), eq(firstId), eq(firstClaim), any(),
+        .complete(
+            eq(7L),
+            eq(firstId),
+            eq(firstClaim),
+            any(),
             org.mockito.ArgumentMatchers.argThat(LearningEvent.PracticeFailed.class::isInstance));
     verify(attemptIdempotencyService)
-        .complete(eq(7L), eq(secondId), eq(secondClaim), any(),
-            org.mockito.ArgumentMatchers.argThat(LearningEvent.PracticeSucceeded.class::isInstance));
+        .complete(
+            eq(7L),
+            eq(secondId),
+            eq(secondClaim),
+            any(),
+            org.mockito.ArgumentMatchers.argThat(
+                LearningEvent.PracticeSucceeded.class::isInstance));
     verify(attemptIdempotencyService)
-        .complete(eq(7L), eq(thirdId), eq(thirdClaim), any(),
-            org.mockito.ArgumentMatchers.isNull());
+        .complete(
+            eq(7L), eq(thirdId), eq(thirdClaim), any(), org.mockito.ArgumentMatchers.isNull());
     verifyNoInteractions(eventPublisher);
   }
 
@@ -786,13 +863,13 @@ class BossServiceTest {
   @Test
   @DisplayName("远征选题复用数字孪生规则，不调用 Graph 选择器或客户端画像")
   void selectFrontierUsesSharedDeterministicPolicy() {
-    var expected = new FrontierSelectResultDto(
-        List.of(new FrontierPickDto("PY43-KC-001", 1, 4, "FSRS-lite 复习已到期")));
+    var expected =
+        new FrontierSelectResultDto(
+            List.of(new FrontierPickDto("PY43-KC-001", 1, 4, "FSRS-lite 复习已到期")));
     when(learnerTwinService.frontier(7L, 1, List.of(), 4)).thenReturn(expected);
 
-    var result = service.selectFrontier(
-        7L,
-        new FrontierSelectRequest(null, List.of(), 1, List.of(), 4));
+    var result =
+        service.selectFrontier(7L, new FrontierSelectRequest(null, List.of(), 1, List.of(), 4));
 
     assertThat(result).isSameAs(expected);
     verify(learnerTwinService).frontier(7L, 1, List.of(), 4);
@@ -856,7 +933,8 @@ class BossServiceTest {
                 0.7,
                 -0.5,
                 30));
-    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenReturn(problemWithStage(1));
     ProfileSignalsPayload clientSignals =
         new ProfileSignalsPayload(
@@ -874,9 +952,7 @@ class BossServiceTest {
             60);
 
     service.fetchProblem(
-        1,
-        new BossProblemRequest(1, null, null, null, "review", clientSignals, null, null),
-        7L);
+        1, new BossProblemRequest(1, null, null, null, "review", clientSignals, null, null), 7L);
 
     ArgumentCaptor<ProfileSignalsPayload> captured =
         ArgumentCaptor.forClass(ProfileSignalsPayload.class);
@@ -913,8 +989,9 @@ class BossServiceTest {
     when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problemWithTests(4)));
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
+    UUID attemptId = UUID.randomUUID();
 
-    service.evaluateAttempt(new BossAttemptRequest("p1", 1, 1, "print(5)", 10), 7L);
+    service.evaluateAttempt(new BossAttemptRequest("p1", 1, 1, "print(5)", 10, attemptId), 7L);
 
     ArgumentCaptor<LearningEvent.PracticeSucceeded> captor =
         ArgumentCaptor.forClass(LearningEvent.PracticeSucceeded.class);
@@ -924,6 +1001,7 @@ class BossServiceTest {
     assertThat(event.kcCode()).isEqualTo("PY43-KC-001");
     assertThat(event.problemId()).isNull(); // boss 题无 course_problem 数字主键
     assertThat(event.difficulty()).isEqualTo("hard"); // difficulty 4 → hard
+    assertThat(event.idempotencyKey()).isEqualTo("boss-attempt:" + attemptId);
   }
 
   @Test
@@ -933,9 +1011,7 @@ class BossServiceTest {
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
     UUID attemptId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
-    BossAttemptRequest request =
-        new BossAttemptRequest(
-            "p1", 1, 1, "print(5)", 10, attemptId);
+    BossAttemptRequest request = new BossAttemptRequest("p1", 1, 1, "print(5)", 10, attemptId);
     var claim = new BossAttemptIdempotencyService.Claim(UUID.randomUUID(), null, "a".repeat(64));
     var replay =
         new BossAttemptIdempotencyService.Claim(
@@ -957,13 +1033,23 @@ class BossServiceTest {
   }
 
   @Test
+  @DisplayName("认证用户的判题必须携带 attemptId")
+  void authenticatedAttemptRequiresIdempotencyKey() {
+    BossAttemptRequest request = new BossAttemptRequest("p1", 1, 1, "print(5)", 10, null);
+
+    assertThatThrownBy(() -> service.evaluateAttempt(request, 7L))
+        .isInstanceOfSatisfying(
+            com.pythontopia.common.error.BusinessException.class,
+            exception -> assertThat(exception.code()).isEqualTo("BOSS_ATTEMPT_ID_REQUIRED"));
+    verifyNoInteractions(pregenService, attemptIdempotencyService, graphClient, eventPublisher);
+  }
+
+  @Test
   @DisplayName("不能用可猜测的全局审核题 ID 绕过用户题目签发")
   void approvedAttemptRejectsGlobalReviewBankIdNotIssuedToUser() {
-    when(pregenService.findByProblemId(7L, "approved-33-v2"))
-        .thenReturn(Optional.empty());
+    when(pregenService.findByProblemId(7L, "approved-33-v2")).thenReturn(Optional.empty());
     var result =
-        service.evaluateAttempt(
-            new BossAttemptRequest("approved-33-v2", 1, 1, "print(5)", 10), 7L);
+        service.evaluateAttempt(attemptRequest("approved-33-v2", 1, 1, "print(5)", 10), 7L);
 
     assertThat(result.passed()).isFalse();
     verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
@@ -977,7 +1063,7 @@ class BossServiceTest {
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("p1", false, 0, 1, "hint", null, List.of(0)));
 
-    service.evaluateAttempt(new BossAttemptRequest("p1", 1, 1, "print(0)", 10), 7L);
+    service.evaluateAttempt(attemptRequest("p1", 1, 1, "print(0)", 10), 7L);
 
     ArgumentCaptor<LearningEvent.PracticeFailed> captor =
         ArgumentCaptor.forClass(LearningEvent.PracticeFailed.class);
@@ -995,7 +1081,7 @@ class BossServiceTest {
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("p1", false, 0, 1, null, "NameError: x", List.of()));
 
-    service.evaluateAttempt(new BossAttemptRequest("p1", 1, 1, "print(x)", 10), 7L);
+    service.evaluateAttempt(attemptRequest("p1", 1, 1, "print(x)", 10), 7L);
 
     ArgumentCaptor<LearningEvent.PracticeFailed> captor =
         ArgumentCaptor.forClass(LearningEvent.PracticeFailed.class);
@@ -1008,9 +1094,31 @@ class BossServiceTest {
   void missingProblemPublishesNothing() {
     when(pregenService.findByProblemId(7L, "missing")).thenReturn(Optional.empty());
 
-    service.evaluateAttempt(new BossAttemptRequest("missing", 1, 1, "print(1)", 10), 7L);
+    service.evaluateAttempt(attemptRequest("missing", 1, 1, "print(1)", 10), 7L);
 
+    verify(attemptIdempotencyService, never()).claim(eq(7L), any(), any());
     verifyNoInteractions(eventPublisher);
+  }
+
+  @Test
+  @DisplayName("Graph 报告沙箱不可用时使用本地沙箱；本地也不可用则不记分")
+  void graphSandboxUnavailableDoesNotCountAsStudentFailure() {
+    when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problemWithTests(3)));
+    when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
+        .thenReturn(
+            new BossEvaluateResultDto("p1", false, 0, 1, null, "sandbox_unavailable", List.of(0)));
+    when(judgeWorkerPool.submitAndWait(any()))
+        .thenAnswer(invocation -> ((Callable<?>) invocation.getArgument(0)).call());
+    when(staticCodeChecker.check("print(1)"))
+        .thenReturn(new StaticCodeChecker.CheckResult(false, "SYSTEM_ERROR", true));
+
+    assertThatThrownBy(
+            () -> service.evaluateAttempt(attemptRequest("p1", 1, 1, "print(1)", 10), 7L))
+        .isInstanceOfSatisfying(
+            com.pythontopia.common.error.BusinessException.class,
+            exception -> assertThat(exception.code()).isEqualTo("BOSS_EVALUATOR_UNAVAILABLE"));
+
+    verifyNoInteractions(expeditionScoreService, eventPublisher);
   }
 
   @Test
@@ -1025,12 +1133,13 @@ class BossServiceTest {
         .thenReturn(new StaticCodeChecker.CheckResult(false, "SYSTEM_ERROR", true));
 
     assertThatThrownBy(
-            () -> service.evaluateAttempt(new BossAttemptRequest("p1", 1, 1, "print(1)", 10), 7L))
+            () -> service.evaluateAttempt(attemptRequest("p1", 1, 1, "print(1)", 10), 7L))
         .isInstanceOfSatisfying(
             com.pythontopia.common.error.BusinessException.class,
             exception -> {
               assertThat(exception.code()).isEqualTo("BOSS_EVALUATOR_UNAVAILABLE");
-              assertThat(exception.status()).isEqualTo(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE);
+              assertThat(exception.status())
+                  .isEqualTo(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE);
             });
 
     verifyNoInteractions(eventPublisher);
@@ -1049,7 +1158,7 @@ class BossServiceTest {
     when(judgeCaseEvaluator.evaluate(eq("print(5)"), anyList()))
         .thenReturn(new JudgeCaseEvaluator.CaseEvaluation(Verdict.AC, 1, 2, null, null));
 
-    var result = service.evaluateAttempt(new BossAttemptRequest("p1", 1, 1, "print(5)", 10), 7L);
+    var result = service.evaluateAttempt(attemptRequest("p1", 1, 1, "print(5)", 10), 7L);
 
     assertThat(result.passed()).isTrue();
     assertThat(result.passedTestCases()).isEqualTo(1);
@@ -1064,7 +1173,7 @@ class BossServiceTest {
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
 
-    service.evaluateAttempt(new BossAttemptRequest("p1", 1, 1, "print(5)", 10), null);
+    service.evaluateAttempt(attemptRequest("p1", 1, 1, "print(5)", 10), null);
 
     verifyNoInteractions(eventPublisher);
   }
@@ -1097,6 +1206,11 @@ class BossServiceTest {
     assertThat(BossService.difficultyBand(5)).isEqualTo("hard");
   }
 
+  private static BossAttemptRequest attemptRequest(
+      String problemId, int chapter, int stage, String code, int elapsedSec) {
+    return new BossAttemptRequest(problemId, chapter, stage, code, elapsedSec, UUID.randomUUID());
+  }
+
   private int capturedDifficulty() {
     ArgumentCaptor<Integer> difficultyCaptor = ArgumentCaptor.forClass(Integer.class);
     verify(graphClient)
@@ -1114,15 +1228,39 @@ class BossServiceTest {
 
   private static BossInternalProblem internalProblem() {
     return new BossInternalProblem(
-        "p1", 1, 1, 1, "PY43-KC-001", "statement", List.of(), "in", "out", 1, true, true,
-        List.of(), "");
+        "p1",
+        1,
+        1,
+        1,
+        "PY43-KC-001",
+        "statement",
+        List.of(),
+        "in",
+        "out",
+        1,
+        true,
+        true,
+        List.of(),
+        "");
   }
 
   /** 带 hidden testCases 的内部题：evaluateAttempt 才能越过「空 testCases」兜底进入真实判题路径。 */
   private static BossInternalProblem problemWithTests(int difficulty) {
     return new BossInternalProblem(
-        "p1", 1, 1, difficulty, "PY43-KC-001", "statement", List.of(), "2 3", "5", 1, true, true,
-        List.of(new BossTestCasePayload("2 3", "5", false)), "ref");
+        "p1",
+        1,
+        1,
+        difficulty,
+        "PY43-KC-001",
+        "statement",
+        List.of(),
+        "2 3",
+        "5",
+        1,
+        true,
+        true,
+        List.of(new BossTestCasePayload("2 3", "5", false)),
+        "ref");
   }
 
   private static EndlessPregenService.ExpeditionProblemBinding binding(
@@ -1139,8 +1277,20 @@ class BossServiceTest {
 
   private static BossInternalProblem problemWithStage(int stage) {
     return new BossInternalProblem(
-        "p1", 1, stage, 1, "PY43-KC-001", "statement", List.of(), "2 3", "5", 1, true, true,
-        List.of(new BossTestCasePayload("2 3", "5", false)), "ref");
+        "p1",
+        1,
+        stage,
+        1,
+        "PY43-KC-001",
+        "statement",
+        List.of(),
+        "2 3",
+        "5",
+        1,
+        true,
+        true,
+        List.of(new BossTestCasePayload("2 3", "5", false)),
+        "ref");
   }
 
   private static BossInternalProblem problemWithInput(String input) {
@@ -1149,13 +1299,37 @@ class BossServiceTest {
 
   private static BossInternalProblem problemWithInput(String input, int stage) {
     return new BossInternalProblem(
-        "same-graph-id", 1, stage, 1, "PY43-KC-001", "statement", List.of(), "", "", 1,
-        true, true, List.of(new BossTestCasePayload(input, "expected", false)), "ref");
+        "same-graph-id",
+        1,
+        stage,
+        1,
+        "PY43-KC-001",
+        "statement",
+        List.of(),
+        "",
+        "",
+        1,
+        true,
+        true,
+        List.of(new BossTestCasePayload(input, "expected", false)),
+        "ref");
   }
 
   private static BossInternalProblem problemWithInputAndKc(String input, String kcCode) {
     return new BossInternalProblem(
-        "same-graph-id", 1, 1, 1, kcCode, "statement", List.of(), "", "", 1,
-        true, true, List.of(new BossTestCasePayload(input, "expected", false)), "ref");
+        "same-graph-id",
+        1,
+        1,
+        1,
+        kcCode,
+        "statement",
+        List.of(),
+        "",
+        "",
+        1,
+        true,
+        true,
+        List.of(new BossTestCasePayload(input, "expected", false)),
+        "ref");
   }
 }

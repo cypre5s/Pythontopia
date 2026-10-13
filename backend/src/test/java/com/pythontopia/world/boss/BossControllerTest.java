@@ -2,11 +2,11 @@ package com.pythontopia.world.boss;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.ArgumentMatchers.argThat;
-import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.nullable;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -17,10 +17,10 @@ import com.pythontopia.auth.security.JwtAuthenticationFilter;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossAttemptResultDto;
+import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import com.pythontopia.world.boss.dto.BossProblemDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest;
 import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
-import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -56,7 +56,9 @@ class BossControllerTest {
         .perform(
             post("/api/world/boss/1/problem")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new BossProblemRequest(1, null, 2, null, null, null, null, null))))
+                .content(
+                    objectMapper.writeValueAsString(
+                        new BossProblemRequest(1, null, 2, null, null, null, null, null))))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.problemId").value("ai-1"))
         .andExpect(jsonPath("$.aiGenerated").value(true))
@@ -69,7 +71,9 @@ class BossControllerTest {
         .perform(
             post("/api/world/boss/1/problem")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new BossProblemRequest(99, null, 2, null, null, null, null, null))))
+                .content(
+                    objectMapper.writeValueAsString(
+                        new BossProblemRequest(99, null, 2, null, null, null, null, null))))
         .andExpect(status().isBadRequest());
   }
 
@@ -79,13 +83,17 @@ class BossControllerTest {
         .perform(
             post("/api/world/boss/0/problem")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new BossProblemRequest(1, null, 1, null, null, null, null, null))))
+                .content(
+                    objectMapper.writeValueAsString(
+                        new BossProblemRequest(1, null, 1, null, null, null, null, null))))
         .andExpect(status().isBadRequest());
     mockMvc
         .perform(
             post("/api/world/boss/8/problem")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new BossProblemRequest(1, null, 1, null, null, null, null, null))))
+                .content(
+                    objectMapper.writeValueAsString(
+                        new BossProblemRequest(1, null, 1, null, null, null, null, null))))
         .andExpect(status().isBadRequest());
   }
 
@@ -165,9 +173,7 @@ class BossControllerTest {
 
   @Test
   void evaluateAttemptReturns200WithDto() throws Exception {
-    BossAttemptResultDto result =
-        new BossAttemptResultDto(
-            "ai-1", true, 3, 3, null, 95, "通过");
+    BossAttemptResultDto result = new BossAttemptResultDto("ai-1", true, 3, 3, null, 95, "通过");
     when(service.evaluateAttempt(any(), any())).thenReturn(result);
 
     UUID attemptId = UUID.randomUUID();
@@ -181,7 +187,22 @@ class BossControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.passed").value(true))
         .andExpect(jsonPath("$.score").value(95));
-    verify(service).evaluateAttempt(argThat(request -> attemptId.equals(request.attemptId())), any());
+    verify(service)
+        .evaluateAttempt(argThat(request -> attemptId.equals(request.attemptId())), any());
+  }
+
+  @Test
+  void rejectsAttemptWithoutIdBeforeCallingService() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/world/boss/1/attempt")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"problemId\":\"ai-1\",\"chapter\":1,\"stage\":1,"
+                        + "\"code\":\"print(5)\",\"elapsedSec\":10}"))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(service);
   }
 
   @Test
@@ -192,7 +213,7 @@ class BossControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     objectMapper.writeValueAsString(
-                        new BossAttemptRequest("ai-1", 1, 1, "", 10))))
+                        new BossAttemptRequest("ai-1", 1, 1, "", 10, UUID.randomUUID()))))
         .andExpect(status().isBadRequest());
   }
 
@@ -205,7 +226,7 @@ class BossControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
                     objectMapper.writeValueAsString(
-                        new BossAttemptRequest("ai-1", 1, 1, "print(1)", 5))))
+                        new BossAttemptRequest("ai-1", 1, 1, "print(1)", 5, UUID.randomUUID()))))
         .andExpect(status().is5xxServerError());
   }
 }

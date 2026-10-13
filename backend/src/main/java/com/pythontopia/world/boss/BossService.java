@@ -602,25 +602,17 @@ public class BossService {
   }
 
   public BossAttemptResultDto evaluateAttempt(BossAttemptRequest request, Long userId) {
-    BossAttemptIdempotencyService.Claim claim = null;
-    if (userId != null && request.attemptId() != null) {
-      claim = attemptIdempotencyService.claim(userId, request.attemptId(), request);
-      if (claim.replay() != null) {
-        return claim.replay();
-      }
+    if (userId != null && request.attemptId() == null) {
+      throw new com.pythontopia.common.error.BusinessException(
+          org.springframework.http.HttpStatus.BAD_REQUEST,
+          "BOSS_ATTEMPT_ID_REQUIRED",
+          "判题请求必须包含 attemptId");
     }
-    try {
-      return evaluateClaimedAttempt(request, userId, claim);
-    } catch (RuntimeException exception) {
-      if (claim != null) {
-        attemptIdempotencyService.release(userId, request.attemptId(), claim);
-      }
-      throw exception;
-    }
+    return evaluateAttemptInternal(request, userId);
   }
 
-  private BossAttemptResultDto evaluateClaimedAttempt(
-      BossAttemptRequest request, Long userId, BossAttemptIdempotencyService.Claim claim) {
+  private BossAttemptResultDto evaluateAttemptInternal(BossAttemptRequest request, Long userId) {
+    BossAttemptIdempotencyService.Claim claim = null;
     Optional<EndlessPregenService.ExpeditionProblemBinding> expeditionBinding =
         pregenService.findExpeditionBinding(userId, request.problemId());
     Integer bossPhaseForAttempt = null;
@@ -660,102 +652,106 @@ public class BossService {
     // 修复「内存缓存过期 / 进程重启 → 判题失效」。
     BossInternalProblem problem = resolveProblemForEval(request.problemId(), userId);
     if (problem == null) {
-      LOG.info(
-          "boss attempt problemId={} not in cache nor persisted, returning Pyodide-only fallback",
-          request.problemId());
-      return completeAttempt(
-          request,
-          userId,
-          claim,
-          new BossAttemptResultDto(
-              request.problemId(),
-              false,
-              0,
-              3,
-              null,
-              0,
-              "题目缓存过期且无持久化记录；请用前端 Pyodide 校验后再次提交，或重新生成题目。"),
-          null);
+      LOG.info("boss attempt problemId={} not issued to user={}", request.problemId(), userId);
+      return new BossAttemptResultDto(
+          request.problemId(), false, 0, 3, null, 0, "题目缓存过期且无持久化记录；请重新生成题目后再提交。");
     }
-    requireProblemContext(problem, request.chapter(), request.stage());
-    if (expeditionBinding.isPresent()
-        && !Objects.equals(
-            expeditionBinding.get().questionFingerprint(), questionFingerprint(problem))) {
-      throw problemBindingMismatch();
+    if (userId != null) {
+      claim = attemptIdempotencyService.claim(userId, request.attemptId(), request);
+      if (claim.replay() != null) return claim.replay();
     }
-    List<BossTestCasePayload> testCases = problem.testCases();
-    if (testCases.isEmpty()) {
-      LOG.warn("problem {} has empty testCases (graph schema drift?)", request.problemId());
-      return completeAttempt(
-          request,
-          userId,
-          claim,
-          new BossAttemptResultDto(
-              request.problemId(),
-              false,
-              0,
-              problem.totalTestCases(),
-              null,
-              0,
-              "题目缓存数据异常（缺 testCases），请重试生成题目。"),
-          null);
-    }
-    BossEvaluateResultDto graphResult;
     try {
-      graphResult =
-          graphClient.evaluateAttempt(
-              request.problemId(), request.code(), testCases, EVAL_TIMEOUT_SEC);
-      if (graphResult == null) throw new RestClientException("graph evaluate returned null body");
-    } catch (RestClientException ex) {
-      LOG.warn(
-          "graph evaluate failed ({}): {}; using the existing local Python judge",
-          ex.getClass().getSimpleName(),
-          ex.getMessage());
-      graphResult = evaluateLocally(request, testCases);
-    }
-    int score = scoreFor(graphResult);
-    String runId = expeditionBinding.isPresent() ? expeditionBinding.get().runId() : null;
-    String attemptFingerprint =
-        expeditionBinding.isPresent()
-            ? expeditionAttemptFingerprint(
-                questionFingerprint(problem), expeditionBinding.get().nodeId(), bossPhaseForAttempt)
-            : questionFingerprint(problem);
-    ExpeditionScoreService.VerifiedAttemptResult attemptResult =
-        recordVerifiedExpeditionAttempt(
-            userId, runId, problem, attemptFingerprint, graphResult, score);
-    if (!attemptResult.accepted()) {
-      if (!expeditionRunService.isActiveRun(userId, runId)) {
-        throw expiredExpeditionRun();
+      requireProblemContext(problem, request.chapter(), request.stage());
+      if (expeditionBinding.isPresent()
+          && !Objects.equals(
+              expeditionBinding.get().questionFingerprint(), questionFingerprint(problem))) {
+        throw problemBindingMismatch();
       }
-      throw new com.pythontopia.common.error.BusinessException(
-          org.springframework.http.HttpStatus.CONFLICT,
-          "EXPEDITION_ATTEMPT_LIMIT_REACHED",
-          "本局可计分判题次数已用完");
+      List<BossTestCasePayload> testCases = problem.testCases();
+      if (testCases.isEmpty()) {
+        LOG.warn("problem {} has empty testCases (graph schema drift?)", request.problemId());
+        return completeAttempt(
+            request,
+            userId,
+            claim,
+            new BossAttemptResultDto(
+                request.problemId(),
+                false,
+                0,
+                problem.totalTestCases(),
+                null,
+                0,
+                "题目缓存数据异常（缺 testCases），请重试生成题目。"),
+            null);
+      }
+      BossEvaluateResultDto graphResult;
+      try {
+        graphResult =
+            graphClient.evaluateAttempt(
+                request.problemId(), request.code(), testCases, EVAL_TIMEOUT_SEC);
+        if (graphResult == null) throw new RestClientException("graph evaluate returned null body");
+        if ("sandbox_unavailable".equals(graphResult.runtimeError())) {
+          LOG.warn("graph sandbox unavailable; using the existing local Python judge");
+          graphResult = evaluateLocally(request, testCases);
+        }
+      } catch (RestClientException ex) {
+        LOG.warn(
+            "graph evaluate failed ({}): {}; using the existing local Python judge",
+            ex.getClass().getSimpleName(),
+            ex.getMessage());
+        graphResult = evaluateLocally(request, testCases);
+      }
+      int score = scoreFor(graphResult);
+      String runId = expeditionBinding.isPresent() ? expeditionBinding.get().runId() : null;
+      String attemptFingerprint =
+          expeditionBinding.isPresent()
+              ? expeditionAttemptFingerprint(
+                  questionFingerprint(problem),
+                  expeditionBinding.get().nodeId(),
+                  bossPhaseForAttempt)
+              : questionFingerprint(problem);
+      ExpeditionScoreService.VerifiedAttemptResult attemptResult =
+          recordVerifiedExpeditionAttempt(
+              userId, runId, problem, attemptFingerprint, graphResult, score);
+      if (!attemptResult.accepted()) {
+        if (!expeditionRunService.isActiveRun(userId, runId)) {
+          throw expiredExpeditionRun();
+        }
+        throw new com.pythontopia.common.error.BusinessException(
+            org.springframework.http.HttpStatus.CONFLICT,
+            "EXPEDITION_ATTEMPT_LIMIT_REACHED",
+            "本局可计分判题次数已用完");
+      }
+      String feedback =
+          graphResult.passed()
+              ? "通过 ✅ 服务端沙箱已确认。"
+              : graphResult.runtimeError() != null
+                  ? "代码运行错误：" + graphResult.runtimeError()
+                  : "未通过 ❌ 部分用例失败，请参考下方 hint。";
+      // 闭环关键：服务端沙箱真实判完后（且仅此路径）才发学习事件，与 SubmissionService 同一套事件驱动
+      // KC 掌握度（测）+ 8 维画像被动修订。缓存过期 / 缺 testCases / graph 不可用等「未判定」路径不发，
+      // 避免把非判题结果污染进掌握度；web 重放由 attemptId 结果记录阻止二次发事件。
+      return completeAttempt(
+          request,
+          userId,
+          claim,
+          new BossAttemptResultDto(
+              request.problemId(),
+              graphResult.passed(),
+              graphResult.passedTestCases(),
+              graphResult.totalTestCases(),
+              graphResult.failureFirstHint(),
+              score,
+              feedback),
+          attemptResult.publishLearningEvent()
+              ? practiceOutcomeEvent(userId, problem, graphResult, request.attemptId())
+              : null);
+    } catch (RuntimeException exception) {
+      if (claim != null) {
+        attemptIdempotencyService.release(userId, request.attemptId(), claim);
+      }
+      throw exception;
     }
-    String feedback =
-        graphResult.passed()
-            ? "通过 ✅ 服务端沙箱已确认。"
-            : graphResult.runtimeError() != null
-                ? "代码运行错误：" + graphResult.runtimeError()
-                : "未通过 ❌ 部分用例失败，请参考下方 hint。";
-    // 闭环关键：服务端沙箱真实判完后（且仅此路径）才发学习事件，与 SubmissionService 同一套事件驱动
-    // KC 掌握度（测）+ 8 维画像被动修订。缓存过期 / 缺 testCases / graph 不可用等「未判定」路径不发，
-    // 避免把非判题结果污染进掌握度；web 重放由 attemptId 结果记录阻止二次发事件。
-    return completeAttempt(
-        request,
-        userId,
-        claim,
-        new BossAttemptResultDto(
-            request.problemId(),
-            graphResult.passed(),
-            graphResult.passedTestCases(),
-            graphResult.totalTestCases(),
-            graphResult.failureFirstHint(),
-            score,
-            feedback),
-        attemptResult.publishLearningEvent()
-            ? practiceOutcomeEvent(userId, problem, graphResult)
-            : null);
   }
 
   private BossEvaluateResultDto evaluateLocally(
@@ -963,7 +959,7 @@ public class BossService {
    * 时安全跳过，绝不抛错影响判题返回。
    */
   private LearningEvent practiceOutcomeEvent(
-      Long userId, BossInternalProblem problem, BossEvaluateResultDto result) {
+      Long userId, BossInternalProblem problem, BossEvaluateResultDto result, UUID attemptId) {
     if (userId == null) {
       return null;
     }
@@ -973,12 +969,15 @@ public class BossService {
       return null;
     }
     String difficulty = difficultyBand(problem.difficulty());
+    String idempotencyKey = "boss-attempt:" + attemptId;
     if (result.passed()) {
-      return new LearningEvent.PracticeSucceeded(userId, kcCode, null, difficulty);
+      return new LearningEvent.PracticeSucceeded(
+          userId, kcCode, null, difficulty, null, idempotencyKey);
     }
     String verdict =
         result.runtimeError() != null && !result.runtimeError().isBlank() ? "RE" : "WA";
-    return new LearningEvent.PracticeFailed(userId, kcCode, null, verdict, difficulty);
+    return new LearningEvent.PracticeFailed(
+        userId, kcCode, null, verdict, difficulty, null, idempotencyKey);
   }
 
   /**

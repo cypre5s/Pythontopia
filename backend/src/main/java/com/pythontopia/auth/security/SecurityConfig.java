@@ -94,6 +94,10 @@ public class SecurityConfig {
                   + "http://localhost:5173,http://localhost:5174,"
                   + "http://127.0.0.1:5173,http://127.0.0.1:5174}")
           List<String> allowedOriginPatterns) {
+    if (allowedOriginPatterns.stream().anyMatch(pattern -> "*".equals(pattern.trim()))) {
+      throw new IllegalArgumentException(
+          "CORS wildcard origin patterns cannot be used with credentials");
+    }
     CorsConfiguration cfg = new CorsConfiguration();
     // 允许来源外置：默认本地 dev 入口；生产用 PYT_CORS_ALLOWED_ORIGINS 覆盖为真实域名，无需改代码。
     cfg.setAllowedOriginPatterns(allowedOriginPatterns);

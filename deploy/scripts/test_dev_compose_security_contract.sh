@@ -4,6 +4,17 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 TEST_TOKEN="$(printf 'a%.0s' {1..64})"
 
+python3 -c '
+from pathlib import Path
+import sys
+script = (Path(sys.argv[1]) / "dev.sh").read_text()
+guard = script.index("if [[ \"$START_DEPS\" == \"0\" && \"$resolved_internal_token\" != \"$configured_internal_token\" ]]")
+export = script.index("export PYT_RAG_ADMIN_TOKEN=")
+compose = script.index("compose up -d \"${DEP_SERVICES[@]}\"")
+assert guard < export < compose
+print("dev startup token order: PASS")
+' "$ROOT_DIR"
+
 PYT_JWT_SECRET="test-jwt-secret-for-compose-config-validation-123456" \
 PYT_TEACHER_INVITE_CODE="test-teacher-invite-code" \
 PYT_RAG_ADMIN_TOKEN="$TEST_TOKEN" \

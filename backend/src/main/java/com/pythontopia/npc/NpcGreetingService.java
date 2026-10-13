@@ -7,6 +7,7 @@ import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.npc.dto.NpcDialogResponse;
 import com.pythontopia.npc.dto.NpcGreetingResponse;
 import com.pythontopia.npc.graph.NpcDialogGraphClient;
+import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -49,6 +50,7 @@ public class NpcGreetingService {
   private final NpcPersonaService personaService;
   private final NpcDialogGraphClient graphClient;
   private final Clock clock;
+  private final TutorDailyRequestLimitService requestLimit;
 
   /** npc×学生 → 缓存条目；仅缓存成功寒暄与「无记忆」确定态，不缓存下游故障（保证可恢复）。 */
   private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
@@ -58,8 +60,15 @@ public class NpcGreetingService {
       MemoryRetrievalService memoryRetrievalService,
       PassiveProfileService passiveProfileService,
       NpcPersonaService personaService,
-      NpcDialogGraphClient graphClient) {
-    this(memoryRetrievalService, passiveProfileService, personaService, graphClient, Clock.systemUTC());
+      NpcDialogGraphClient graphClient,
+      TutorDailyRequestLimitService requestLimit) {
+    this(
+        memoryRetrievalService,
+        passiveProfileService,
+        personaService,
+        graphClient,
+        Clock.systemUTC(),
+        requestLimit);
   }
 
   NpcGreetingService(
@@ -67,12 +76,14 @@ public class NpcGreetingService {
       PassiveProfileService passiveProfileService,
       NpcPersonaService personaService,
       NpcDialogGraphClient graphClient,
-      Clock clock) {
+      Clock clock,
+      TutorDailyRequestLimitService requestLimit) {
     this.memoryRetrievalService = memoryRetrievalService;
     this.passiveProfileService = passiveProfileService;
     this.personaService = personaService;
     this.graphClient = graphClient;
     this.clock = clock;
+    this.requestLimit = requestLimit;
   }
 
   /** 取（或复用缓存）该生在某 NPC 处的首句个性化寒暄。 */
@@ -120,6 +131,7 @@ public class NpcGreetingService {
     String profileBrief = resolveProfileBrief(userId);
     String prompt = buildGreetingPrompt(profileBrief);
 
+    requestLimit.reserve(userId);
     Optional<NpcDialogResponse> graphReply = graphClient.talk(npcKey, personaCore, memories, prompt);
     if (graphReply.isEmpty()) {
       // graph NpcDialogAgent 不可达/超时/缺 token → 结构化降级（fail-fast，不静默降级成普通寒暄）。

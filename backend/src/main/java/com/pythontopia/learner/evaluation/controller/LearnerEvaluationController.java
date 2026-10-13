@@ -4,7 +4,6 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
-import com.pythontopia.common.web.AiBudgeted;
 import com.pythontopia.learner.evaluation.dto.EvaluationDto;
 import com.pythontopia.learner.evaluation.dto.EvaluationRequest;
 import com.pythontopia.learner.evaluation.service.LearnerEvaluationService;
@@ -30,7 +29,6 @@ public class LearnerEvaluationController {
   }
 
   @PostMapping
-  @AiBudgeted
   public EvaluationDto compute(
       @CurrentUser CurrentUserPrincipal user,
       @RequestBody(required = false) @Valid EvaluationRequest request) {

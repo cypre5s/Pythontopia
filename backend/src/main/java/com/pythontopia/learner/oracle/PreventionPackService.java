@@ -6,6 +6,7 @@ import com.pythontopia.workshop.dto.ResourceCreateRequest;
 import com.pythontopia.workshop.dto.ResourceCreateResponse;
 import com.pythontopia.workshop.dto.ResourceType;
 import com.pythontopia.workshop.service.ResourceWorkshopService;
+import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -31,14 +32,17 @@ public class PreventionPackService {
   private final ResourceWorkshopService resourceWorkshopService;
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
+  private final TutorDailyRequestLimitService requestLimit;
 
   public PreventionPackService(
       ResourceWorkshopService resourceWorkshopService,
       JdbcTemplate jdbcTemplate,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      TutorDailyRequestLimitService requestLimit) {
     this.resourceWorkshopService = resourceWorkshopService;
     this.jdbcTemplate = jdbcTemplate;
     this.objectMapper = objectMapper;
+    this.requestLimit = requestLimit;
   }
 
   /**
@@ -56,6 +60,7 @@ public class PreventionPackService {
             "prevention pack skipped (recent exists) user={} kc={}", userId, prediction.kcCode());
         return;
       }
+      requestLimit.reserve(userId);
       ResourceCreateResponse response =
           resourceWorkshopService.create(
               userId,

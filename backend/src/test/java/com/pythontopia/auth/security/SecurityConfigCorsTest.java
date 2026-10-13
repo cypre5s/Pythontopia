@@ -1,6 +1,7 @@
 package com.pythontopia.auth.security;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.web.cors.CorsConfiguration;
@@ -21,5 +22,13 @@ class SecurityConfigCorsTest {
     assertThat(config).isNotNull();
     assertThat(config.getAllowedOriginPatterns())
         .contains("http://127.0.0.1:8080", "http://localhost:8080");
+  }
+
+  @Test
+  void corsShouldRejectWildcardOriginWhenCredentialsAreEnabled() {
+    assertThatThrownBy(
+            () -> new SecurityConfig().corsConfigurationSource(java.util.List.of("*")))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("wildcard");
   }
 }

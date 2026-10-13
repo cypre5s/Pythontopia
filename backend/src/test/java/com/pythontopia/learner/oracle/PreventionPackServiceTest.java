@@ -16,6 +16,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.workshop.dto.ResourceCreateRequest;
 import com.pythontopia.workshop.dto.ResourceCreateResponse;
 import com.pythontopia.workshop.service.ResourceWorkshopService;
+import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -34,11 +35,14 @@ class PreventionPackServiceTest {
 
   @Mock ResourceWorkshopService resourceWorkshopService;
   @Mock JdbcTemplate jdbcTemplate;
+  @Mock TutorDailyRequestLimitService requestLimit;
   private PreventionPackService service;
 
   @BeforeEach
   void setUp() {
-    service = new PreventionPackService(resourceWorkshopService, jdbcTemplate, new ObjectMapper());
+    service =
+        new PreventionPackService(
+            resourceWorkshopService, jdbcTemplate, new ObjectMapper(), requestLimit);
   }
 
   private OracleService.RiskPrediction prediction() {
@@ -67,6 +71,7 @@ class PreventionPackServiceTest {
             evidenceCaptor.capture());
     String evidence = evidenceCaptor.getValue();
     assertThat(evidence).contains("201").contains("202").contains("PY43-KC-015");
+    verify(requestLimit).reserve(USER);
   }
 
   @Test
@@ -76,6 +81,22 @@ class PreventionPackServiceTest {
         .thenReturn(1);
 
     service.pregenerate(USER, prediction());
+
+    verify(resourceWorkshopService, never()).create(anyLong(), any());
+    verify(jdbcTemplate, never()).update(anyString(), any(), any(), any(), any());
+    verify(requestLimit, never()).reserve(USER);
+  }
+
+  @Test
+  @DisplayName("账号额度耗尽 → 不调用资源生成链")
+  void dailyLimitSkipsGeneration() {
+    when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(USER), anyString(), anyInt()))
+        .thenReturn(0);
+    org.mockito.Mockito.doThrow(new RuntimeException("daily limit"))
+        .when(requestLimit)
+        .reserve(USER);
+
+    assertThatCode(() -> service.pregenerate(USER, prediction())).doesNotThrowAnyException();
 
     verify(resourceWorkshopService, never()).create(anyLong(), any());
     verify(jdbcTemplate, never()).update(anyString(), any(), any(), any(), any());

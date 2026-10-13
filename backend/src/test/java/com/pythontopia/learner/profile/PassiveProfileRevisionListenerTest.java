@@ -40,6 +40,15 @@ class PassiveProfileRevisionListenerTest {
   }
 
   @Test
+  void verifiedBossAttemptUsesItsStableIdempotencyKeyForProfileEvidence() {
+    listener.onPracticeSucceeded(
+        new LearningEvent.PracticeSucceeded(
+            7L, "PY43-KC-001", null, "hard", null, "boss-attempt:attempt-123"));
+
+    assertThat(singleProjection().idempotencyKey()).isEqualTo("boss-attempt:attempt-123");
+  }
+
+  @Test
   void practiceFailedUpdatesErrorPatternWithTag() {
     listener.onPracticeFailed(
         new LearningEvent.PracticeFailed(7L, "PY43-KC-002", 102L, "WA", "medium"));
@@ -66,8 +75,7 @@ class PassiveProfileRevisionListenerTest {
 
   @Test
   void resourceConsumedDoesNotUpdateDimensions() {
-    listener.onResourceConsumed(
-        new LearningEvent.ResourceConsumed(7L, "PY43-KC-004", "VIDEO"));
+    listener.onResourceConsumed(new LearningEvent.ResourceConsumed(7L, "PY43-KC-004", "VIDEO"));
 
     verifyNoInteractions(outboxService);
   }
@@ -86,7 +94,8 @@ class PassiveProfileRevisionListenerTest {
 
   @Test
   void coursewareConsumptionMapsToSupportedTextPreference() {
-    listener.onMediaConsumed(new LearningEvent.MediaConsumed(7L, "courseware", 2, java.util.List.of()));
+    listener.onMediaConsumed(
+        new LearningEvent.MediaConsumed(7L, "courseware", 2, java.util.List.of()));
 
     ProfileDimensionProjection projection = singleProjection();
     assertThat(projection.dimensionKey()).isEqualTo("learning_preference");
@@ -196,14 +205,7 @@ class PassiveProfileRevisionListenerTest {
     listener.onDebugResolved(new LearningEvent.DebugResolved(7L, "K3", 3L));
     listener.onResourceCheckCompleted(
         new LearningEvent.ResourceCheckCompleted(
-            7L,
-            34L,
-            99L,
-            "K4",
-            "MICRO_QUIZ",
-            true,
-            new java.math.BigDecimal("0.05"),
-            null));
+            7L, 34L, 99L, "K4", "MICRO_QUIZ", true, new java.math.BigDecimal("0.05"), null));
 
     verify(outboxService, times(4)).enqueue(any(ProfileDimensionProjection.class));
   }
@@ -215,8 +217,9 @@ class PassiveProfileRevisionListenerTest {
         .enqueue(any(ProfileDimensionProjection.class));
 
     assertThatThrownBy(
-            () -> listener.onPracticeSucceeded(
-                new LearningEvent.PracticeSucceeded(7L, "K1", 1L, "medium")))
+            () ->
+                listener.onPracticeSucceeded(
+                    new LearningEvent.PracticeSucceeded(7L, "K1", 1L, "medium")))
         .isInstanceOf(DataAccessResourceFailureException.class);
   }
 

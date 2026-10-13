@@ -6,6 +6,7 @@ import com.pythontopia.learner.reflection.graph.InsightPayload;
 import com.pythontopia.learner.reflection.graph.MemoryItemPayload;
 import com.pythontopia.learner.reflection.graph.ReflectionGraphClient;
 import com.pythontopia.learner.reflection.graph.ReflectionGraphResponse;
+import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -42,14 +43,17 @@ public class ReflectionService {
   private final MemoryRetrievalService memoryRetrievalService;
   private final ReflectionGraphClient graphClient;
   private final LearnerInsightRepository insightRepository;
+  private final TutorDailyRequestLimitService requestLimit;
 
   public ReflectionService(
       MemoryRetrievalService memoryRetrievalService,
       ReflectionGraphClient graphClient,
-      LearnerInsightRepository insightRepository) {
+      LearnerInsightRepository insightRepository,
+      TutorDailyRequestLimitService requestLimit) {
     this.memoryRetrievalService = memoryRetrievalService;
     this.graphClient = graphClient;
     this.insightRepository = insightRepository;
+    this.requestLimit = requestLimit;
   }
 
   /** 为该用户做一次反思。best-effort：任何异常都被吞掉（记忆/反思失败不得影响主链路）。 */
@@ -59,10 +63,10 @@ public class ReflectionService {
       if (memories.isEmpty()) {
         return;
       }
-
       List<InsightPayload> insights;
       String sourceTag;
       try {
+        requestLimit.reserve(userId);
         ReflectionGraphResponse response = graphClient.reflect(userId, toPayloads(memories));
         insights = response.safeInsights();
         sourceTag = "GRAPH";
@@ -71,7 +75,7 @@ public class ReflectionService {
           return;
         }
       } catch (RuntimeException ex) {
-        log.warn("reflection graph unavailable, falling back to rule for user {}: {}", userId, ex.getMessage());
+        log.warn("reflection model call unavailable, falling back to rule for user {}: {}", userId, ex.getMessage());
         insights = ruleFallback(memories);
         sourceTag = "RULE";
       }

@@ -1,12 +1,35 @@
 # Changelog
 
+## 2026-10-14 — 远征真实生成性能复测与结构化输出修复
+
+- 首次真实 Boss 生成在 6 次 DeepSeek 请求后因空结构化内容回退 Golden。根据 DeepSeek thinking/JSON 文档，为 Boss JSON 请求显式设 `reasoning_effort="none"`；其余输出预算与校验保持不变。原因判断是默认推理占用输出预算，属于与成功复测一致的推断，并非可见的模型内部计量。
+- TDD 新增 provider 参数断言：旧代码先失败，修复后 Boss 工厂目录 217 项通过。随后通过本机后端完整调用一次：HTTP 200、DeepSeek 1 次请求、`aiGenerated=true`、`reviewed=true`，端到端耗时 2937.10 ms，无 Golden 回退。
+- 远征建档经本地 Spring API 顺序采样 10 次：P50 16.18 ms、P95 22.75 ms、27 个节点；Piston Python 3.12 执行 `print(2 + 3)` 返回 `5`，耗时 20.27 ms。性能阶段总计 7 次 DeepSeek 外发请求（首次 6 次失败生成 + 修复后 1 次成功），低于最多 30 次的约定；样本量不支持稳定的线上性能结论。
+- 同轮额度跨日回归与 AI 路由标记覆盖 7 项通过，相关 Java 文件 Spotless 检查通过；临时性能账号已删除。停止开发栈后重跑全量 Maven：1353 tests、0 assertion failures、7 errors，未达到 `BUILD SUCCESS`；6 个 pgvector Testcontainers 因 Docker 随机端口 `address already in use` 启动失败，另 1 个 JDBC 集成测试连接失败。生产环境、真实正式提交判题延迟与真实硬件仍未验证。
+- 触及文件按在线规范整理：Google Java Style Guide、Vue props 命名指引、typescript-eslint 命名规则；只处理改动范围，未全仓格式化。Boss JSON 参数依据 [DeepSeek thinking mode](https://api-docs.deepseek.com/guides/thinking_mode/) 与 [JSON mode](https://api-docs.deepseek.com/guides/json_mode/) 文档。
+
+## 2026-10-14 — 判题幂等与 AI 请求闸门
+
+- Boss API 要求提交 UUID `attemptId`，服务层也拒绝认证请求缺少该键；未由当前用户签发的题目不会写入永久幂等表。
+- Graph 返回 `sandbox_unavailable` 时改走现有 Java/Piston 判题；本地沙箱也不可用则返回服务错误，不扣远征判题额度、不发失败学习事件。
+- Boss 学习事件携带稳定 attempt key；掌握度与画像投影共用该键去重，重复事件不会重复改变 KC 或画像。
+- 保留每账号上海时区每日 30 次上限，新增跨账号每日 300 次入口请求上限（V212）。计数覆盖带 `@AiBudgeted` 的用户操作；仍不等于 DeepSeek 实际调用次数、token 或金额硬上限。
+- 同一次额度预留只读取一次上海日期，避免跨午夜时账号额度与全站额度落入不同日期；新增模拟跨午夜回归。
+- 验证：Boss Controller/Service、额度服务与画像监听器共 71 项单测通过；PostgreSQL/Testcontainers 定向 3 项通过，空库迁移至 V212；额度跨账号 400 并发实测只放行 300 次。完整 Maven 全套未重跑。
+- 未改 Android/Windows 调用方；它们在使用 Boss 判题接口前需要提交 `attemptId`。Tutor 全链路文图实测、全 Web 回归和远征无模型性能采样的结果见本日后续记录；公网/ECS 未验证。
+- 补充验证：额度跨午夜一致性及 AI 路由标记覆盖共 7 项通过；回归先复现账号记入 2026-10-14、全站记入 2026-10-15，再验证修复。
+
 ## 2026-10-14 — Boss 战场、真实 DeepSeek 调用与收尾
 
 - 无尽远征 Boss 节点切换到独立 Phaser 场景，沿用现有单 Game/canvas，复用已审计 Boss 立绘；真实判题结算成功后才播受击动画与音效，失败显示服务端结算体力。Kenney CC0 命中音效已登记进双份素材清单与同步脚本。
 - DeepSeek Tutor 真实文本与合成图片输入各完成一次调用，均返回非空文本；全栈浏览器检查远征地图与 Boss 场景，画布只有一个、音效和立绘均 HTTP 200、无页面异常。另完成一次本地 Piston 正式判题 E2E。
+- 追加用本地凭证直连 DeepSeek 兼容接口验证文本与图片：2 次请求均 HTTP 200；文本答复匹配测试问题，视觉答复识别黄色背景和蓝色中心图形。后端补齐 B 站摘要、教师补救及反思/NPC 预热/预防包后台生成的每日账号额度预留，并移除确定性或禁用端点的误扣标记；相关定向回归 30 项通过。
+- Tutor 应用层全栈文图联测：经本地 Web/Vite 与 Spring Boot 认证后分别发起文字和合成 PNG 请求，各返回 HTTP 200、`RUN_FINISHED` 与文本答案；图片答复识别黄色背景和蓝色中央图形，浏览器异常为 0，临时账号已删除。测试发现 `dev.sh` 在 Compose 启动 Graph 后才生成临时内部令牌，导致 Graph 401；现改为先生成并同时传给 Compose 与后端。`--no-deps` 在缺少固定共享令牌时也会 fail fast，启动契约回归通过。此前遗留后端进程造成的令牌不匹配通过干净停止重启后排除。
 - 无模型调用的本地性能采样：经 Vite 代理连续 12 次创建远征，P50 23.32 ms、P95 27.37 ms；1440×900、DPR 1 的 headless Chromium 中地图就绪 1.89 s。Boss 场景帧间隔 P50/P95 为 16.7/16.8 ms；地图为 16.7/33.4 ms。Boss 画面采样使用合成的已结算状态，未测模型出题或真实提交时延。
 - 工程整理按官方 Vue、typescript-eslint 与 Google Java Style 指引限定在触及文件：拆解 Boss 状态文案嵌套三元表达式，修复页面 ESLint 提示，并对 4 个相关 Java 类使用项目现有 Spotless/Google Java Format。前端定向 ESLint 无告警，所选 Java 文件 Spotless 检查通过。
 - 验证：Web 全量 263 个测试文件 / 2516 项通过；本轮最终 Boss 回归 4 个文件 / 17 项、typecheck、生产构建、素材同步检查通过。后端定向 46 项通过。全量后端 1337 项有 0 断言失败、7 个 Testcontainers/JDBC 环境错误；7 个受影响类逐个串行重跑通过。
+- 最后重跑全量后端：1345 tests、0 assertion failures、7 errors，Maven `BUILD FAILURE`。6 个 pgvector Testcontainers 类在 Docker 动态映射宿主端口时复现 `address already in use`；另 1 个 JDBC 故障对应的模拟测试单独复跑通过。7 个受影响类的合并定向复跑仍有 6 个相同端口错误。
+- 管理台审核队列刷新期间禁用通过/驳回按钮，并在打开确认框时校验加载状态，避免旧列表响应覆盖已提交的决定。测试先复现了缺少禁用状态，修复后审核页 9 项测试、相关 ESLint 和前端 typecheck 通过。
 - 尚未测真实硬件/移动端、Boss 真实提交后的端到端性能、ECS/公网与真实视觉回答质量。项目全量 lint 仍有 177 条历史 warning，Spotless 全仓检查还报告另外 622 个格式不合规文件；本轮没有全仓自动格式化。对话中出现过的 DeepSeek key 应立即轮换。
 
 ## 2026-10-14 — Twin 选题共用与远征重试收口
