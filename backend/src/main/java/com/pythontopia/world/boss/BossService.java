@@ -200,7 +200,7 @@ public class BossService {
       LOG.info("boss reuse pregenerated problemId={} user={} ch={}", p.problemId(), userId, chapter);
       // 展示时套用「本次请求」的 stage + 本次推断难度：预取时的 stage/难度不串到当前上下文
       // （也避免共享端点下复用题把异常 stage 显示给主线 boss）。
-      requireProblemContext(p, chapter, request.stage());
+      requireProblemContext(p, chapter, request.stage(), kc);
       return p.toPublic();
     }
 
@@ -212,7 +212,7 @@ public class BossService {
             chapter, request.stage(), kc, request.preferredKind(), difficulty);
     if (approved.isPresent()) {
       BossInternalProblem source = approved.get().problem();
-      requireProblemContext(source, chapter, request.stage());
+      requireProblemContext(source, chapter, request.stage(), kc);
       BossInternalProblem problem = source.issueAs(issueProblemId(expeditionBinding.bossPhase()), kc);
       cache.put(new ProblemCacheKey(userId, problem.problemId()), new CachedProblem(problem, Instant.now()));
       persistConsumed(
@@ -285,7 +285,7 @@ public class BossService {
           "BOSS_PROBLEM_GENERATION_UNAVAILABLE",
           "题目生成服务暂不可用，请稍后重试");
     }
-    requireProblemContext(fromGraph, chapter, request.stage());
+    requireProblemContext(fromGraph, chapter, request.stage(), kc);
     BossInternalProblem issued = fromGraph.issueAs(issueProblemId(expeditionBinding.bossPhase()), kc);
     cache.put(new ProblemCacheKey(userId, issued.problemId()), new CachedProblem(issued, Instant.now()));
     // 现场题也落库 (CONSUMED)，供内存缓存过期 / 进程重启后判题兜底取回 testCases（best-effort）。
@@ -784,11 +784,18 @@ public class BossService {
   }
 
   private void requireProblemContext(BossInternalProblem problem, int chapter, int stage) {
-    if (problem.chapter() != chapter || problem.stage() != stage) {
+    requireProblemContext(problem, chapter, stage, null);
+  }
+
+  private void requireProblemContext(
+      BossInternalProblem problem, int chapter, int stage, String expectedKcCode) {
+    if (problem.chapter() != chapter
+        || problem.stage() != stage
+        || (expectedKcCode != null && !Objects.equals(problem.kcCode(), expectedKcCode))) {
       throw new com.pythontopia.common.error.BusinessException(
           org.springframework.http.HttpStatus.CONFLICT,
           "BOSS_PROBLEM_CONTEXT_MISMATCH",
-          "题目章节或阶段与签发内容不一致");
+          "题目章节、阶段或知识点与签发内容不一致");
     }
   }
 

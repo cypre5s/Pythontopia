@@ -128,3 +128,11 @@ V204 不会把既有活动局的可变字段重置为新开局。迁移前的地
 
 - 本次继续完成 Web Tutor 断线重试幂等与管理列表分页；没有改动远征状态机，也没有添加性能推测值。
 - 依照用户要求，先完成 Web 功能实现和复核，再安排本地全栈及可用 Piston 下的性能测量。远征 P50/P95、缓存命中率、重复率、失败恢复率和通关率仍待测。
+
+### 2026-10-13 远征题目 KC 与奖励候选服务端校验
+
+- Graph 请求的生成题或 golden 兜底题必须匹配请求 KC；Java 持久化/复用边界再次核对 KC，错配在写入前失败，避免把题目记到错误知识点。
+- 遗物候选现在随胸箱/精英节点由服务端签发并保存在现有节点 JSONB；`CLAIM_RELIC` 只接受已签发候选，成功后移除候选。旧 reward 存档没有候选时按 run/node/已持有遗物稳定派生，刷新前后选择一致，不需要迁移。
+- RED/GREEN：PostgreSQL 回归先因缺少服务端候选失败；补齐候选签发和核验后，`BossServiceTest` 35、`ExpeditionRunServiceTest` 9、`ExpeditionRunPostgresIntegrationTest` 23 共 67 项通过，空库迁移到 V208。前端远征 store 49 项与全量 Web 256 文件 / 2517 项通过，typecheck、定向 ESLint、build、Java 定向 Spotless 通过。
+- 后续仍需处理/验证：在线生成在客户端超时后的跨请求幂等恢复；Pregen 只能逻辑取消已进入的阻塞 Graph 调用，底层请求不主动终止；Twin LearningEvent 镜像数据库失败的重放保护仍弱于画像 outbox。远征选择器是规则启发式，不是已校准预测模型。
+- 本轮没有请求 DeepSeek/Piston、启动全栈或执行性能测试。无尽远征 P50/P95、缓存命中率、重复率、失败恢复率与通关率继续待测。

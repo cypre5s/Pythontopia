@@ -248,7 +248,7 @@ onMounted(() => {
 }
 
 .admin-button:hover:not(:disabled) {
-  border-color: #93c5fd;
+  border-color: var(--admin-focus);
   color: var(--admin-primary-hover);
 }
 

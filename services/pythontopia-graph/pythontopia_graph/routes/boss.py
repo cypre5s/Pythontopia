@@ -28,7 +28,6 @@ from pythontopia_graph.llm.provider import (
     DryRunProvider,
     LlmProvider,
     LlmProviderError,
-    OpenAiCompatProvider,
     provider_from_env,
 )
 
@@ -135,25 +134,28 @@ def _resolve_kc(chapter: int, override: str) -> str:
 
 
 def _safe_provider() -> LlmProvider:
-    """provider 不可用时回落 DryRun，保证 problem 路由可用。
-
-    优先级：PYT_LLM_PROVIDER 显式指定 → provider_from_env；有 OPENAI_API_KEY 时尝试 OpenAiCompat；否则 DryRun。
-    """
-
-    import os
-
+    """缺少 DeepSeek 配置时 fail fast；上游请求失败走明确的 golden 兜底策略。"""
     try:
-        return provider_from_env()
+        provider = provider_from_env()
     except RuntimeError as exc:
-        # PYT_LLM_PROVIDER 未设置时尝试自动检测 Alethicode 的 OPENAI/LLM env
-        has_key = bool(os.environ.get("OPENAI_API_KEY") or os.environ.get("LLM_API_KEY"))
-        if has_key:
-            try:
-                return OpenAiCompatProvider()
-            except RuntimeError as inner:
-                LOG.warning("OpenAi-compat auto-detect failed: %s", inner)
-        LOG.warning("LLM provider unavailable, fall back to DryRun: %s", exc)
-        return DryRunProvider()
+        LOG.error("DeepSeek provider configuration failed: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "LLM_PROVIDER_UNAVAILABLE",
+                "message": "DeepSeek 尚未配置，题目生成暂不可用",
+            },
+        ) from exc
+    if isinstance(provider, DryRunProvider):
+        LOG.error("DeepSeek provider configuration resolved to DryRunProvider")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "LLM_PROVIDER_UNAVAILABLE",
+                "message": "DeepSeek 尚未配置，题目生成暂不可用",
+            },
+        )
+    return provider
 
 
 @router.post("/agents/boss/problem")
@@ -162,21 +164,24 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
 
     chapter = body.chapter
     stage = body.stage
+    golden = get_golden_problem(chapter, stage)
     effective_kc_input = body.preferredKc if body.preferredKc else body.kcCode
-    kc_code = _resolve_kc(chapter, effective_kc_input)
+    kc_code = (
+        _resolve_kc(chapter, effective_kc_input)
+        if effective_kc_input.strip()
+        else golden.kc_code
+    )
     difficulty = body.difficulty if body.difficulty is not None else min(5, stage)
     if body.profileSignals or body.preferredKind:
         LOG.info(
-            "boss.problem profile-aware request: chapter=%d kc=%s kind=%s signals=%s",
+            "boss.problem profile-aware request: chapter=%d kc=%s kind=%s profile_signals_present=%s",
             chapter,
             kc_code,
             body.preferredKind,
-            body.profileSignals.model_dump(exclude_none=True) if body.profileSignals else None,
+            body.profileSignals is not None,
         )
 
     provider = _safe_provider()
-    golden = get_golden_problem(chapter, stage)
-
     factory = build_llm_problem_factory(provider)
     # preferredKind + profileSignals 透传 orchestrator，供 PracticeAgent 按画像出题。
     profile_signals_dict = (
@@ -209,6 +214,14 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
         )
 
     problem = review.problem if review.passed else golden
+    if problem.kc_code != kc_code:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "BOSS_PROBLEM_KC_MISMATCH",
+                "message": "当前没有与目标知识点匹配的已审题目，请稍后重试",
+            },
+        )
     payload = problem.to_payload()
     payload["reviewed"] = review.passed
     payload["aiGenerated"] = problem.metadata.get("source") == "llm"

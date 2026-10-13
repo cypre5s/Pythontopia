@@ -201,7 +201,7 @@ function jump(): void {
 }
 
 .admin-pagination button:hover:not(:disabled) {
-  border-color: #93c5fd;
+  border-color: var(--admin-focus, #3b82f6);
   color: var(--admin-primary-hover);
 }
 
@@ -213,7 +213,7 @@ function jump(): void {
 }
 
 .admin-pagination :focus-visible {
-  outline: 2px solid #93c5fd;
+  outline: 2px solid var(--admin-focus, #3b82f6);
   outline-offset: 2px;
 }
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-13 — DeepSeek/Tutor 安全、后台表格和远征奖励校验
+
+- Graph Piston 请求关闭环境代理继承；Tutor/Boss 日志仅记录画像信号是否存在，视频代理日志不再含代理地址。Boss 未配置 DeepSeek 或解析为 DryRun 时明确返回不可用；生成/兜底题的 KC 与请求目标不符时拒绝下发。
+- Tutor 图片追问回归断言每轮保留题面、输入输出样例和当前阶段上下文。现有忽略文件 `deploy/.env` 检测到 DeepSeek 配置，本轮没有读取或回显凭证。
+- 管理用户页与审核页共用有可访问名称和键盘滚动的 `AdminTable`，统一表头/行距；颜色对齐 Alethicode 蓝灰主题，保留各自最小表宽。
+- 远征遗物候选由服务端写入节点 JSON 快照并校验领取；旧奖励存档缺候选时稳定派生，未增加迁移。Graph 与 Java 两层拒绝跨 KC 题目。
+- ASR 关闭时控制器立即返回降级结果，不再读取上传音频；启用时在复制字节前拒绝超过 8MiB 的文件。
+- 验证：Graph 全量 `1812 passed, 1 skipped`；Web 全量 256 个测试文件 / 2517 项、typecheck、定向 ESLint 和生产构建通过；后端 BossService、ExpeditionRunService 与 PostgreSQL 远征集成共 67 项通过，空库迁移到 V208；定向 Spotless/Ruff、`git diff --check` 通过。
+- ASR 补充验证：控制器与服务 6 项定向测试通过；全仓 Spotless 仍被 607 个其他 Java 文件的格式问题阻断，ASR 控制器和测试不在违规清单中；本轮改动未触发外部 ASR 或 DeepSeek 请求。
+- 本轮没有调用 DeepSeek，也没有跑无尽远征性能测试。Tutor 账号费用额度仍等待用户选择；已在对话出现过的密钥应轮换后再用于生产。
+
 ## 2026-10-13 — Tutor 断线重试幂等与后台分页
 
 - Tutor Web 为每次新动作生成稳定 `requestId`，重试复用原 ID。后端 V208 保存大小受限的文本终态结果；同 ID 同请求回放已完成 SSE 结果，同 ID 不同内容返回冲突，FAILED 请求可以沿用 ID 重试。回放不存储图片字节。

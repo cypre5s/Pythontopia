@@ -10,6 +10,7 @@ import {
   type BossProblemReviewSortDirection,
 } from '@/api/problemReview';
 import AdminPanel from './AdminPanel.vue';
+import AdminTable from './AdminTable.vue';
 import AdminPagination from './AdminPagination.vue';
 
 type DecisionFilter = 'ALL' | BossProblemReviewDecision;
@@ -316,11 +317,10 @@ onMounted(() => {
       >
         当前页没有记录。
       </p>
-      <div
+      <AdminTable
         v-else
-        class="review-table-scroll"
-        tabindex="0"
-        aria-label="审核队列，可横向滚动"
+        label="审核队列，可横向滚动"
+        :min-width="1100"
       >
         <table class="review-table">
           <thead>
@@ -430,7 +430,7 @@ onMounted(() => {
             </tr>
           </tbody>
         </table>
-      </div>
+      </AdminTable>
       <AdminPagination
         :page="page"
         :total-pages="totalPages"
@@ -603,7 +603,7 @@ onMounted(() => {
 
 .admin-button:hover:not(:disabled),
 .review-open:hover {
-  border-color: #93c5fd;
+  border-color: var(--admin-focus);
   color: var(--admin-primary-hover);
 }
 
@@ -656,7 +656,7 @@ onMounted(() => {
 
 .review-search input:focus-visible,
 .review-filter select:focus-visible {
-  outline: 2px solid #93c5fd;
+  outline: 2px solid var(--admin-focus);
   outline-offset: 2px;
 }
 
@@ -704,53 +704,12 @@ onMounted(() => {
   font-size: 12px;
 }
 
-.review-table-scroll {
-  max-width: 100%;
-  overflow-x: auto;
-  border: 1px solid var(--admin-border);
-  border-radius: 12px;
-  outline-color: #93c5fd;
-}
-
-.review-table {
-  width: 100%;
-  min-width: 1100px;
-  border-collapse: separate;
-  border-spacing: 0;
-  color: #1e293b;
-  font-size: 12px;
-  table-layout: fixed;
-}
-
-.review-table th {
-  height: 44px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--admin-border);
-  background: var(--admin-table-header);
-  color: var(--admin-text);
-  font-size: 11px;
-  font-weight: 700;
-  text-align: left;
-  white-space: nowrap;
-}
-
-.review-table td {
-  height: 52px;
-  padding: 10px 16px;
-  border-bottom: 1px solid rgb(148 163 184 / 14%);
-  vertical-align: middle;
-}
-
 .review-table td:nth-child(1),
 .review-table td:nth-child(3),
 .review-table td:nth-child(5),
 .review-table td:nth-child(7),
 .review-table td:nth-child(8) {
   white-space: nowrap;
-}
-
-.review-table tbody tr:last-child td {
-  border-bottom: 0;
 }
 
 .review-table tbody tr:hover,
@@ -806,7 +765,7 @@ onMounted(() => {
 .admin-button:focus-visible,
 .review-filter select:focus-visible,
 .review-dialog textarea:focus-visible {
-  outline: 3px solid #93c5fd;
+  outline: 3px solid var(--admin-focus);
   outline-offset: 2px;
 }
 

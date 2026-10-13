@@ -70,7 +70,7 @@ def _configure_bilibili_proxy() -> None:
             from bilibili_api import request_settings  # noqa: PLC0415
 
             request_settings.set_proxy(proxy)
-            _LOG.info("bilibili 代理已配置: %s", proxy)
+            _LOG.info("bilibili 代理已配置")
         except Exception as exc:  # noqa: BLE001 - 老版本无该 API：已回退 HTTPS_PROXY env 兜底
             _LOG.warning(
                 "bilibili request_settings.set_proxy 不可用(%s)，回退 HTTPS_PROXY env 兜底",

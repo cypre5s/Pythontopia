@@ -63,6 +63,7 @@ def run_python(code: str, stdin: str, timeout_sec: int) -> PythonExecutionResult
             json=payload,
             headers=headers,
             timeout=max(3.0, timeout_sec + 3.0),
+            trust_env=False,
         )
         response.raise_for_status()
         body = response.json()

@@ -147,6 +147,12 @@ function isValidRogueNode(value: unknown): value is RogueNode {
       n.kind === 'boss' && Number.isInteger(n.bossPhase)
       && (n.bossPhase as number) >= 1 && (n.bossPhase as number) <= BOSS_PHASES
     ))
+    && (n.rewardChoices === undefined || (
+      Array.isArray(n.rewardChoices)
+      && n.rewardChoices.length <= 3
+      && n.rewardChoices.every((id) => typeof id === 'string' && relicById(id) !== undefined)
+      && new Set(n.rewardChoices).size === n.rewardChoices.length
+    ))
   );
 }
 
@@ -221,7 +227,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   // 概念事件：进入 event 节点先选应对；study 选项把本题得分 ×eventScoreMult。
   const activeEventText = ref('');
   const eventScoreMult = ref(1);
-  // 宝箱 / 精英通关的「三选一」学习增益候选（reward 阶段，瞬时态不入快照）。
+  // 宝箱 / 精英通关的「三选一」学习增益候选由服务端签发并随 run 快照恢复。
   const rewardChoices = ref<string[]>([]);
   // BOSS 多阶段进度（连过 bossPhasesTotal 道才通关）。
   const bossPhase = ref(1);
@@ -474,6 +480,17 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
         score.value += 30;
         toast.show('已集齐全部学习增益 · 折算 +30 分', 'info');
       }
+      return;
+    }
+    if (serverPersistenceEnabled) {
+      const issuedChoices = nodeById(currentNodeId.value ?? '')?.rewardChoices;
+      if (Array.isArray(issuedChoices)) {
+        rewardChoices.value = [...issuedChoices];
+        return;
+      }
+      rewardChoices.value = [];
+      errorMessage.value = '服务端未返回奖励候选，请刷新远征后重试';
+      toast.show(errorMessage.value, 'error');
       return;
     }
     rewardChoices.value = sampleN(pool, 3);

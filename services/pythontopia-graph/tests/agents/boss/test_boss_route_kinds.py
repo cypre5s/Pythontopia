@@ -114,13 +114,13 @@ def test_problem_payload_includes_kind_from_preferred_kind(
     class _StubProvider:
         async def chat(self, messages, **kwargs):  # type: ignore[no-untyped-def]
             return LlmResponse(content_json={
-                "title": "简答：解释变量",
-                "statement": "用 30-100 字解释什么是变量。",
+                "title": "简答：解释 list",
+                "statement": "用 30-100 字说明 list 列表如何按下标访问元素。",
                 "reference_solution": "x = 1\nprint(x)",
                 "test_cases": [
                     {"input": "1", "expected_output": "1", "is_sample": True},
-                    {"input": "2", "expected_output": "2"},
-                    {"input": "3", "expected_output": "3"},
+                    {"input": "2", "expected_output": "1"},
+                    {"input": "3", "expected_output": "1"},
                 ],
                 "hints": ["变量是命名的存储"],
             })

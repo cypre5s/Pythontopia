@@ -36,6 +36,8 @@ export interface RogueNode {
   state: RogueNodeState;
   /** 服务端维护的多阶段 BOSS 进度。 */
   bossPhase?: number;
+  /** 服务端签发的宝箱 / 精英遗物候选。 */
+  rewardChoices?: string[];
 }
 
 export interface RogueMap {

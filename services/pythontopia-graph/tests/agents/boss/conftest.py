@@ -64,8 +64,10 @@ def fake_piston_endpoint(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str
         json: dict[str, Any],
         headers: dict[str, str],
         timeout: float,
+        trust_env: bool,
     ) -> httpx.Response:
         del headers, timeout
+        assert trust_env is False
         source = json["files"][0]["content"]
         stdin = json["stdin"]
         submissions.append((source, stdin))

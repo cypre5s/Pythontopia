@@ -22,6 +22,9 @@
 # =============================================================================
 set -Eeuo pipefail
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/deepseek_model_contract.sh"
+
 # ---------------------------------------------------------------------------
 # 常量与全局状态
 # ---------------------------------------------------------------------------
@@ -183,7 +186,7 @@ check_env_secret() {
 
 validate_production_ai_env() {
   local env_file="$1"
-  local provider base_url rag_embedder
+  local provider base_url rag_embedder model fast_model
   provider="$(env_file_value "${env_file}" PYT_LLM_PROVIDER)"
   provider="${provider,,}"
   case "${provider}" in
@@ -197,7 +200,22 @@ validate_production_ai_env() {
       require_env_value "${env_file}" PYT_OPENAI_BASE_URL || return 1
       require_env_value "${env_file}" PYT_OPENAI_API_KEY || return 1
       require_env_value "${env_file}" PYT_OPENAI_MODEL || return 1
+      model="$(env_file_value "${env_file}" PYT_OPENAI_MODEL)"
+      if ! deepseek_model_is_supported chat "${model}"; then
+        echo "[安装失败] PYT_OPENAI_MODEL 不是受支持的 DeepSeek 文本模型。" >&2
+        return 1
+      fi
+      fast_model="$(env_file_value "${env_file}" PYT_OPENAI_MODEL_FAST)"
+      if [ -n "${fast_model}" ] && ! deepseek_model_is_supported fast "${fast_model}"; then
+        echo "[安装失败] PYT_OPENAI_MODEL_FAST 不是受支持的 DeepSeek 文本模型。" >&2
+        return 1
+      fi
       require_env_value "${env_file}" PYT_OPENAI_MODEL_VISION || return 1
+      model="$(env_file_value "${env_file}" PYT_OPENAI_MODEL_VISION)"
+      if ! deepseek_model_is_supported vision "${model}"; then
+        echo "[安装失败] PYT_OPENAI_MODEL_VISION 不是受支持的 DeepSeek 视觉模型。" >&2
+        return 1
+      fi
       ;;
     ""|dryrun)
       echo "[安装失败] PYT_LLM_PROVIDER 必须为 openai_compat；生产只使用 DeepSeek。" >&2
