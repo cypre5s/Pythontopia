@@ -234,3 +234,14 @@
 - 修复后后端 `/healthz` 返回 200；Vite 5173 已有本项目进程运行，因此 `./dev.sh` 的前端启动阶段提示端口占用并退出，随后复用已运行的 Web 进程完成浏览器测试。
 - `StaticCodeCheckerTest` 15 tests passed；`deliveryClickRobustness.spec.ts` 的小镇 HUD、主线地图/学习往返、指南桌面/移动目录 3 项 Playwright passed。另以浏览器登录临时学生并从页面真实开局，确认服务端返回并渲染 10 层 / 29 节点地图；浏览器拦截 1 次 Boss 预取，未请求出题服务。
 - 本轮没有 DeepSeek 请求或远征性能测量。服务端远征节点动作、题目与可达节点绑定、权威 HP/奖励仍未完成；本地自动注册的临时 E2E 学生账号留在开发数据库中。
+
+## 2026-10-13 功能复核：每日远征与判题策略
+
+- V205 新增按 `user_id + Asia/Shanghai challenge_date` 唯一的每日远征领取表；服务端创建日挑战前检查并写入领取，弃局不会释放当日名额。迁移回填当天已有的 daily run。榜单结算现在从锁定的服务端 run 读取 `is_daily`，不再固定写 `FALSE`。
+- Web 本地日期按上海日界线显示；后端拒绝跨设备重复领取时，同步本地日期状态并显示明确提示。本地标记仅影响显示，不能绕过服务端限制。
+- 修复随机地图没有精英节点的分布缺口：若 9 个常规层抽样未包含精英，则在 Boss 前最后一层替换一个节点为精英。新增 256 个固定 seed 的性质回归。
+- Graph 的 AST 策略检查补上直接 `__import__` 与 `importlib`；这只是纵深策略检查，Piston/Isolate 仍是唯一执行安全边界，缺配置依旧 fail closed。
+- 修复相同题面导致 Boss 后续阶段卡住：服务端签发 ID 编入 Boss 阶段，verified attempt 与结算指纹按题面、节点、阶段派生；同阶段重试继续合并，旧阶段题无法在新阶段判题。V205 现有指纹列足够，无需加迁移；旧未标记 ID 仅兼容第一阶段。
+- 本机忽略文件 `deploy/.env` 中过短的教师邀请码已随机重置到满足启动校验的长度；未打印或提交其值。DeepSeek 请求未运行。
+- RED/GREEN：Boss 阶段回归先失败于 phase 2 仍停留 phase 2，修复后后端五类测试 79 passed，Testcontainers 空库迁移到 V205；Web store 45 passed、typecheck 与定向 ESLint 通过；Graph 策略/导师文图链路 102 passed、Ruff 通过；9 个 Java 文件定向 Spotless 通过。全仓 Spotless 仍有其他文件的既有格式问题。
+- 尚未验证：本轮没有启动 Web 全栈、没有发 DeepSeek 请求或执行 Piston，也未测无尽远征性能。Boss 重复题阶段推进已由数据库集成回归覆盖；对话中曾展示的 DeepSeek key 应轮换后再用于生产。

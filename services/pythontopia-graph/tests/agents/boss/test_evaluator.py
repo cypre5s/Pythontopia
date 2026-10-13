@@ -59,6 +59,18 @@ def test_forbidden_import_returns_runtime_error() -> None:
     assert "socket" in result.runtime_error
 
 
+def test_dynamic_import_returns_runtime_error_before_sandbox(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PYT_PISTON_URL", raising=False)
+    result = evaluate_student_code("__import__('os').system('true')", [_tc("", "")])
+
+    assert not result.passed
+    assert result.runtime_error is not None
+    assert "forbidden_imports" in result.runtime_error
+    assert "__import__" in result.runtime_error
+
+
 def test_syntax_error_is_reported_as_first_failure() -> None:
     code = "this is not python"
     cases = [_tc("", "ignored", sample=True), _tc("", "x"), _tc("", "y")]

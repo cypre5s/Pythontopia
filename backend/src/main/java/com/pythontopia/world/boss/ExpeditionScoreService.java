@@ -35,16 +35,15 @@ public class ExpeditionScoreService {
       return;
     }
     UUID runId = UUID.fromString(dto.runId());
-    if (jdbcTemplate
-        .query(
-            "SELECT 1 FROM expedition_run WHERE user_id = ? AND run_id = ?::uuid"
+    List<Boolean> dailyRuns =
+        jdbcTemplate.query(
+            "SELECT is_daily FROM expedition_run WHERE user_id = ? AND run_id = ?::uuid"
                 + " AND status = 'ACTIVE' FOR UPDATE",
-            (rs, rowNum) -> rs.getInt(1),
+            (rs, rowNum) -> rs.getBoolean("is_daily"),
             userId,
-            runId)
-        .isEmpty()) {
-      return;
-    }
+            runId);
+    if (dailyRuns.isEmpty()) return;
+    boolean isDaily = dailyRuns.getFirst();
     List<VerifiedAttempt> attempts =
         jdbcTemplate.query(
             "SELECT passed, score FROM expedition_verified_attempt"
@@ -71,13 +70,14 @@ public class ExpeditionScoreService {
       jdbcTemplate.update(
           "INSERT INTO expedition_score"
               + " (user_id, run_id, score, depth, best_momentum, cleared, is_daily, verified)"
-              + " VALUES (?, ?::uuid, ?, ?, ?, FALSE, FALSE, TRUE)"
+              + " VALUES (?, ?::uuid, ?, ?, ?, FALSE, ?, TRUE)"
               + " ON CONFLICT (user_id, run_id) WHERE run_id IS NOT NULL DO NOTHING",
           userId,
           runId,
           score,
           depth,
-          bestMomentum);
+          bestMomentum,
+          isDaily);
     }
     jdbcTemplate.update(
         "UPDATE expedition_run SET status = 'SETTLED', phase = 'over', updated_at = now()"

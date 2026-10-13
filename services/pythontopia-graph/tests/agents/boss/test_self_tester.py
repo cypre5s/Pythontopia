@@ -106,6 +106,24 @@ def test_forbidden_imports_rejected(code: str) -> None:
     assert any(i.code == "forbidden_imports" for i in verdict.issues)
 
 
+@pytest.mark.parametrize(
+    "code",
+    [
+        "__import__('os').system('true')",
+        "import importlib\nimportlib.import_module('os')",
+    ],
+)
+def test_dynamic_imports_are_rejected_before_execution(
+    code: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PYT_PISTON_URL", raising=False)
+    verdict = self_test_problem(_make(code, [TestCase("", "")]))
+
+    assert not verdict.passed
+    assert any(i.code == "forbidden_imports" for i in verdict.issues)
+
+
 def test_fake_piston_never_executes_submitted_source(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path,

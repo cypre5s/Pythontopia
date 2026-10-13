@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import type { BossProblemDto } from '@/api/dto/Boss';
+import { ApiClientError } from '@/api/http';
 
 const judgeMock = vi.hoisted(() => ({
   fetchProblem: vi.fn(),
@@ -247,7 +248,10 @@ describe('rogueRun store', () => {
   });
 
   it('每日挑战完成日期也按用户隔离，不读旧的无 owner 键', () => {
-    localStorage.setItem('pyt_rogue_daily_v1', new Date().toISOString().slice(0, 10));
+    localStorage.setItem(
+      'pyt_rogue_daily_v1',
+      new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10),
+    );
     localStorage.setItem(
       'pythontopia.user',
       JSON.stringify({ id: 11, username: 'alice', displayName: 'A', role: 'STUDENT' }),
@@ -803,6 +807,27 @@ describe('rogueRun store', () => {
       focusChapter: null,
       isDaily: true,
     });
+  });
+
+  it('marks a daily challenge unavailable when the server says this account already claimed it', async () => {
+    frontierApiMock.createExpeditionRun.mockRejectedValueOnce(
+      new ApiClientError(
+        {
+          code: 'EXPEDITION_DAILY_ALREADY_CLAIMED',
+          message: '今日挑战已完成，请明天再来',
+          details: [],
+          traceId: '',
+          timestamp: new Date().toISOString(),
+        },
+        409,
+      ),
+    );
+    const run = useRogueRunStore();
+
+    await run.startDailyRun();
+
+    expect(run.dailyAvailable).toBe(false);
+    expect(run.errorMessage).toContain('今日挑战已完成');
   });
 
   it('uses the server-issued map and challenge values when starting a run', async () => {

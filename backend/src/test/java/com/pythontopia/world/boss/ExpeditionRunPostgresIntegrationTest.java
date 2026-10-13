@@ -527,14 +527,24 @@ class ExpeditionRunPostgresIntegrationTest {
 
     ExpeditionRunDto state = entered;
     for (int phase = 1; phase <= 3; phase++) {
-      String problemId = "boss-phase-" + phase + "-" + UUID.randomUUID();
+      assertThat(
+              runs.validateProblemRequest(
+                  userId,
+                  active.runId(),
+                  bossNodeId,
+                  1,
+                  false,
+                  (String) boss.get("kcCode")))
+          .isEqualTo(phase);
+      String problemId = "issue-boss-phase-" + phase + "-" + UUID.randomUUID();
       insertIssuedProblem(
           userId,
           active.runId(),
           bossNodeId,
           problemId,
           (String) boss.get("kcCode"),
-          String.valueOf(phase).repeat(64),
+          "f".repeat(64),
+          BossService.expeditionAttemptFingerprint("f".repeat(64), bossNodeId, phase),
           true,
           80);
       state =
@@ -549,6 +559,15 @@ class ExpeditionRunPostgresIntegrationTest {
       if (phase < 3) {
         assertThat(state.phase()).isEqualTo("challenge");
         assertThat(nodeById(state, bossNodeId).get("bossPhase")).isEqualTo(phase + 1);
+        assertThat(
+                runs.validateProblemRequest(
+                    userId,
+                    active.runId(),
+                    bossNodeId,
+                    1,
+                    false,
+                    (String) boss.get("kcCode")))
+            .isEqualTo(phase + 1);
       }
     }
     assertThat(state.phase()).isEqualTo("over");
@@ -819,6 +838,43 @@ class ExpeditionRunPostgresIntegrationTest {
   }
 
   @Test
+  void dailyChallengeIsLimitedByTheServerAfterAbandonment() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    startRun(runs, userId, null, true);
+
+    runs.abandon(userId);
+
+    assertThatThrownBy(() -> startRun(runs, userId, null, true))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("今日挑战已完成");
+  }
+
+  @Test
+  void dailyRunIsMarkedInItsVerifiedLeaderboardEntry() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto daily = startRun(runs, userId, null, true);
+    jdbc.update(
+        "INSERT INTO expedition_verified_attempt"
+            + " (user_id, run_id, problem_id, question_fingerprint, passed, score)"
+            + " VALUES (?, ?::uuid, 'daily-problem', ?, TRUE, 80)",
+        userId,
+        daily.runId(),
+        "d".repeat(64));
+
+    new ExpeditionScoreService(jdbc).record(userId, new ExpeditionScoreSubmitDto(daily.runId()));
+
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT is_daily FROM expedition_score WHERE user_id = ? AND run_id = ?::uuid",
+                Boolean.class,
+                userId,
+                daily.runId()))
+        .isTrue();
+  }
+
+  @Test
   void abandoningRunReleasesItsOutstandingPrefetchJobs() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
@@ -870,6 +926,20 @@ class ExpeditionRunPostgresIntegrationTest {
       String fingerprint,
       boolean passed,
       int score) {
+    insertIssuedProblem(
+        userId, runId, nodeId, problemId, kcCode, fingerprint, fingerprint, passed, score);
+  }
+
+  private void insertIssuedProblem(
+      long userId,
+      String runId,
+      String nodeId,
+      String problemId,
+      String kcCode,
+      String questionFingerprint,
+      String attemptFingerprint,
+      boolean passed,
+      int score) {
     jdbc.update(
         "INSERT INTO pregenerated_problem"
             + " (user_id, chapter, stage, kc_code, problem_id, payload, status, consumed_at,"
@@ -880,7 +950,7 @@ class ExpeditionRunPostgresIntegrationTest {
         problemId,
         runId,
         nodeId,
-        fingerprint);
+        questionFingerprint);
     jdbc.update(
         "INSERT INTO expedition_verified_attempt"
             + " (user_id, run_id, problem_id, question_fingerprint, passed, score)"
@@ -888,7 +958,7 @@ class ExpeditionRunPostgresIntegrationTest {
         userId,
         runId,
         problemId,
-        fingerprint,
+        attemptFingerprint,
         passed,
         score);
   }

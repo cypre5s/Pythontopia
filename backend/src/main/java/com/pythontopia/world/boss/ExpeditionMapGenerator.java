@@ -88,6 +88,10 @@ final class ExpeditionMapGenerator {
         rows.add(row);
       }
     }
+    if (rows.stream().flatMap(List::stream).noneMatch("elite"::equals)) {
+      List<String> finalMiddleLayer = rows.get(MIDDLE_LAYERS - 1);
+      finalMiddleLayer.set(random.nextInt(finalMiddleLayer.size()), "elite");
+    }
     return rows;
   }
 

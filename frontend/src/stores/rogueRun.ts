@@ -14,6 +14,7 @@ import {
 import { ROGUE_RELICS, relicById } from '@/data/rogueRelics';
 import { pickEventScenario, type RogueEventChoice } from '@/data/rogueEvents';
 import { kcDisplayName } from '@/data/kcNames';
+import { ApiClientError } from '@/api/http';
 import { useChallengeJudge, isJudgeUnavailable } from '@/composables/useChallengeJudge';
 import {
   createExpeditionRun,
@@ -52,7 +53,8 @@ const STAR_MIN_ACCURACY = 0.8;
 const BOSS_PHASES = 3;
 
 function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
+  // Keep the daily boundary aligned with the backend's Asia/Shanghai date.
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 function loadDailyDate(): string | null {
   if (typeof window === 'undefined') return null;
@@ -525,7 +527,14 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       persist();
       prefetchAvailable();
     } catch (error) {
-      errorMessage.value = error instanceof Error ? error.message : '画像学习前沿加载失败';
+      if (daily && error instanceof ApiClientError && error.code === 'EXPEDITION_DAILY_ALREADY_CLAIMED') {
+        const date = todayStr();
+        dailyDoneDate.value = date;
+        saveDailyDate(date);
+        errorMessage.value = '今日挑战已完成，请明天再来';
+      } else {
+        errorMessage.value = error instanceof Error ? error.message : '画像学习前沿加载失败';
+      }
       phase.value = 'idle';
       toast.show(`远征暂未开始：${errorMessage.value}`, 'error');
     } finally {
