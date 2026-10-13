@@ -15,14 +15,10 @@ vi.mock('@/api/learner', () => ({
     nextQuestion: null,
     done: true,
     dimensionsFilled: [
-      'major',
-      'base_level',
+      'professional_background',
+      'knowledge_base',
       'learning_goal',
-      'cognitive_style',
       'learning_preference',
-      'error_patterns',
-      'practice_capability',
-      'emotion_persistence',
     ],
     profileDraft: {
       profileId: null,
@@ -58,7 +54,7 @@ describe('learning profile store', () => {
       '00000000-0000-0000-0000-000000000001',
       { userMessage: '我是计算机大一，目标是期末考试。', history: [] },
     );
-    expect(store.profileInterview.dimensionsFilled).toHaveLength(8);
+    expect(store.profileInterview.dimensionsFilled).toHaveLength(4);
     expect(store.profile?.major).toBe('CS');
   });
 

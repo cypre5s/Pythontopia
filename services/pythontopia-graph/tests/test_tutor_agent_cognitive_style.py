@@ -71,18 +71,13 @@ def test_style_directive_rotates_between_adjacent_turns() -> None:
     assert d0 != d1 and d1 != d2
 
 
-def test_style_rotation_respects_emotion_profile() -> None:
-    """情绪需鼓励的画像：轮换候选必须包含鼓励复盘式风格。"""
+def test_style_candidates_do_not_infer_emotion_from_profile_text() -> None:
+    """答题之外的画像文字不应推断情绪并改变讲解风格。"""
     from pythontopia_graph.agents.orchestrator_agent import (
-        REPLY_STYLE_DIRECTIVES,
         style_candidates,
     )
 
-    brief = "情绪: 需鼓励"
-    seen = {_style_directive(brief, turn) for turn in range(3)}
-    expected = {REPLY_STYLE_DIRECTIVES[key] for key in style_candidates(brief)}
-    assert seen == expected
-    assert REPLY_STYLE_DIRECTIVES["encouraging_recap"] in seen
+    assert style_candidates("情绪: 需鼓励") == style_candidates(None)
 
 
 def test_style_directive_hides_internal_identifiers() -> None:

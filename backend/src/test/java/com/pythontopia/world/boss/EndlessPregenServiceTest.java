@@ -178,10 +178,25 @@ class EndlessPregenServiceTest {
 
   @Test
   void startupFailsPendingRowsLeftByPreviousProcess() {
+    when(jdbcTemplate.queryForObject(
+            eq("SELECT to_regclass('public.pregenerated_problem') IS NOT NULL"), eq(Boolean.class)))
+        .thenReturn(true);
+
     service.recoverAbandonedPendingAtStartup();
 
     verify(jdbcTemplate)
         .update(contains("status = 'FAILED'"));
+  }
+
+  @Test
+  void startupRecoverySkipsWhenThePrefetchTableHasNotBeenMigratedYet() {
+    when(jdbcTemplate.queryForObject(
+            eq("SELECT to_regclass('public.pregenerated_problem') IS NOT NULL"), eq(Boolean.class)))
+        .thenReturn(false);
+
+    service.recoverAbandonedPendingAtStartup();
+
+    verify(jdbcTemplate, never()).update(anyString());
   }
 
   @Test

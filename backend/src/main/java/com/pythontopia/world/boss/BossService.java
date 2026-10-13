@@ -137,6 +137,18 @@ public class BossService {
         validateExpeditionRun(
             userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, false, kc);
     String expeditionRunId = expeditionBinding.runId();
+    if (expeditionRunId != null) {
+      Optional<BossInternalProblem> open =
+          pregenService.findOpenExpeditionProblem(
+              userId, expeditionRunId, request.expeditionNodeId(), expeditionBinding.bossPhase());
+      if (open != null && open.isPresent()) {
+        BossInternalProblem problem = open.orElseThrow();
+        requireProblemContext(problem, chapter, request.stage(), kc);
+        cache.put(new ProblemCacheKey(userId, problem.problemId()), new CachedProblem(problem, Instant.now()));
+        evictExpired();
+        return problem.toPublic();
+      }
+    }
     int difficulty = computeTargetDifficulty(userId, kc, request.stage());
     Set<String> issuedFingerprints =
         expeditionRunId == null
@@ -171,6 +183,13 @@ public class BossService {
       // 展示时套用「本次请求」的 stage + 本次推断难度：预取时的 stage/难度不串到当前上下文
       // （也避免共享端点下复用题把异常 stage 显示给主线 boss）。
       requireProblemContext(p, chapter, request.stage(), kc);
+      if (expeditionRunId != null
+          && pregenService.isOpenExpeditionProblem(
+              userId, expeditionRunId, request.expeditionNodeId(), p.problemId(), expeditionBinding.bossPhase())) {
+        cache.put(new ProblemCacheKey(userId, p.problemId()), new CachedProblem(p, Instant.now()));
+        evictExpired();
+        return p.toPublic();
+      }
       if (!issuedFingerprints.contains(questionFingerprint(p))) {
         cache.put(new ProblemCacheKey(userId, p.problemId()), new CachedProblem(p, Instant.now()));
         evictExpired();
@@ -191,9 +210,10 @@ public class BossService {
       requireProblemContext(source, chapter, request.stage(), kc);
       if (!issuedFingerprints.contains(questionFingerprint(source))) {
         BossInternalProblem problem = source.issueAs(issueProblemId(expeditionBinding.bossPhase()), kc);
-        cache.put(new ProblemCacheKey(userId, problem.problemId()), new CachedProblem(problem, Instant.now()));
-        persistConsumed(
+        BossInternalProblem persisted = persistConsumed(
             userId, chapter, kc, request, difficulty, problem, expeditionRunId);
+        if (persisted != null) problem = persisted;
+        cache.put(new ProblemCacheKey(userId, problem.problemId()), new CachedProblem(problem, Instant.now()));
         evictExpired();
         LOG.info(
             "boss selected approved review={} version={} problemId={} user={} ch={}",
@@ -278,9 +298,10 @@ public class BossService {
               () -> repeatedProblemUnavailable());
     }
     BossInternalProblem issued = fromGraph.issueAs(issueProblemId(expeditionBinding.bossPhase()), kc);
-    cache.put(new ProblemCacheKey(userId, issued.problemId()), new CachedProblem(issued, Instant.now()));
     // 现场题也落库 (CONSUMED)，供内存缓存过期 / 进程重启后判题兜底取回 testCases（best-effort）。
-    persistConsumed(userId, chapter, kc, request, difficulty, issued, expeditionRunId);
+    BossInternalProblem persisted = persistConsumed(userId, chapter, kc, request, difficulty, issued, expeditionRunId);
+    if (persisted != null) issued = persisted;
+    cache.put(new ProblemCacheKey(userId, issued.problemId()), new CachedProblem(issued, Instant.now()));
     evictExpired();
     return issued.toPublic();
   }
@@ -483,7 +504,7 @@ public class BossService {
         profile.sessionMinutesPerDay());
   }
 
-  private void persistConsumed(
+  private BossInternalProblem persistConsumed(
       Long userId,
       int chapter,
       String kcCode,
@@ -492,7 +513,7 @@ public class BossService {
       BossInternalProblem problem,
       String expeditionRunId) {
     if (expeditionRunId == null) {
-      pregenService.persistConsumed(
+      return pregenService.persistConsumed(
           userId,
           chapter,
           kcCode,
@@ -502,7 +523,7 @@ public class BossService {
           problem,
           null);
     } else {
-      pregenService.persistConsumed(
+      return pregenService.persistConsumed(
           userId,
           chapter,
           kcCode,

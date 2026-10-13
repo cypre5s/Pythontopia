@@ -124,6 +124,29 @@ public class ExpeditionScoreService {
         .isEmpty()) {
       return new VerifiedAttemptResult(false, false);
     }
+    if (!Boolean.TRUE.equals(
+        jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM pregenerated_problem p"
+                + " JOIN expedition_run r ON r.user_id = p.user_id AND r.run_id = p.expedition_run_id"
+                + " WHERE p.user_id = ? AND p.expedition_run_id = ?::uuid AND p.problem_id = ?"
+                + " AND p.status = 'CONSUMED' AND p.expedition_node_id IS NOT NULL"
+                + " AND r.status = 'ACTIVE' AND r.phase = 'challenge'"
+                + " AND r.current_node_id = p.expedition_node_id"
+                + " AND NOT EXISTS (SELECT 1 FROM expedition_challenge_settlement s"
+                + " WHERE s.user_id = p.user_id AND s.run_id = p.expedition_run_id"
+                + " AND s.node_id = p.expedition_node_id AND s.problem_id = p.problem_id)"
+                + " AND p.id = (SELECT MAX(open.id) FROM pregenerated_problem open"
+                + " WHERE open.user_id = p.user_id AND open.expedition_run_id = p.expedition_run_id"
+                + " AND open.expedition_node_id = p.expedition_node_id AND open.status = 'CONSUMED'"
+                + " AND NOT EXISTS (SELECT 1 FROM expedition_challenge_settlement settled"
+                + " WHERE settled.user_id = open.user_id AND settled.run_id = open.expedition_run_id"
+                + " AND settled.node_id = open.expedition_node_id AND settled.problem_id = open.problem_id)))",
+            Boolean.class,
+            userId,
+            runUuid,
+            problemId))) {
+      return new VerifiedAttemptResult(false, false);
+    }
     List<ExistingAttempt> existing =
         jdbcTemplate.query(
             "SELECT id, passed FROM expedition_verified_attempt"

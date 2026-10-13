@@ -60,5 +60,5 @@ public class TeacherClassroomController {
   }
 
   public record UpdateClassroomRequest(
-      @NotBlank @Size(max = 128) String name, @Size(max = 1024) String description) {}
+      @NotBlank @Size(max = 128) String name, @Size(max = 1000) String description) {}
 }

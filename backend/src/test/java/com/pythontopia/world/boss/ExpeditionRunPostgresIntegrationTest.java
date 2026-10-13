@@ -6,6 +6,7 @@ import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.world.boss.dto.BossInternalProblem;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import com.pythontopia.world.boss.dto.ExpeditionRunAction;
 import com.pythontopia.world.boss.dto.ExpeditionRunActionRequest;
@@ -871,7 +872,7 @@ class ExpeditionRunPostgresIntegrationTest {
   }
 
   @Test
-  void failedChallengeUsesResilienceAndSecondWindFromServerState() {
+  void failedChallengeDamageDoesNotDependOnEmotionProfile() {
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
 
     long lowResilienceUserId = createStudent();
@@ -907,7 +908,7 @@ class ExpeditionRunPostgresIntegrationTest {
                 null,
                 lowProblemId));
 
-    assertThat(lowFailure.hp()).isEqualTo(4);
+    assertThat(lowFailure.hp()).isEqualTo(3);
     assertThat(lowFailure.momentum()).isEqualTo(2);
 
     long highResilienceUserId = createStudent();
@@ -985,24 +986,37 @@ class ExpeditionRunPostgresIntegrationTest {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
     ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    String nodeId = (String) active.nodes().getFirst().get("id");
+    ExpeditionRunDto challenge =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
+    insertConsumedProblem(
+        userId,
+        challenge.runId(),
+        nodeId,
+        "issued-problem",
+        (String) nodeById(challenge, nodeId).get("kcCode"),
+        "c".repeat(64));
     ExpeditionScoreService scores = new ExpeditionScoreService(jdbc);
     String fingerprint = "b".repeat(64);
 
     var firstFailure =
         scores.recordVerifiedAttempt(
-            userId, active.runId(), "issued-problem", fingerprint, false, 0);
+            userId, challenge.runId(), "issued-problem", fingerprint, false, 0);
     var repeatedFailure =
         scores.recordVerifiedAttempt(
-            userId, active.runId(), "issued-problem", fingerprint, false, 0);
+            userId, challenge.runId(), "issued-problem", fingerprint, false, 0);
     var firstPass =
         scores.recordVerifiedAttempt(
-            userId, active.runId(), "issued-problem", fingerprint, true, 100);
+            userId, challenge.runId(), "issued-problem", fingerprint, true, 100);
     var repeatedPass =
         scores.recordVerifiedAttempt(
-            userId, active.runId(), "issued-problem", fingerprint, true, 100);
+            userId, challenge.runId(), "issued-problem", fingerprint, true, 100);
     var failureAfterPass =
         scores.recordVerifiedAttempt(
-            userId, active.runId(), "issued-problem", fingerprint, false, 0);
+            userId, challenge.runId(), "issued-problem", fingerprint, false, 0);
 
     assertThat(firstFailure)
         .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
@@ -1019,7 +1033,7 @@ class ExpeditionRunPostgresIntegrationTest {
                     + " AND problem_id = 'issued-problem'",
                 Boolean.class,
                 userId,
-                active.runId()))
+                challenge.runId()))
         .isTrue();
     assertThat(
             jdbc.queryForObject(
@@ -1027,8 +1041,137 @@ class ExpeditionRunPostgresIntegrationTest {
                     + " AND problem_id = 'issued-problem'",
                 Integer.class,
                 userId,
-                active.runId()))
+                challenge.runId()))
         .isEqualTo(100);
+  }
+
+  @Test
+  void onlyOneUnsettledProblemCanBeVerifiedPerCurrentNode() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    String nodeId = (String) active.nodes().getFirst().get("id");
+    ExpeditionRunDto challenge =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
+    String kcCode = (String) nodeById(challenge, nodeId).get("kcCode");
+    insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-first", kcCode, "1".repeat(64));
+    insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-second", kcCode, "2".repeat(64));
+    ExpeditionScoreService scores = new ExpeditionScoreService(jdbc);
+
+    var olderIssue = scores.recordVerifiedAttempt(
+        userId, challenge.runId(), "issue-first", "a".repeat(64), true, 80);
+    var currentIssue = scores.recordVerifiedAttempt(
+        userId, challenge.runId(), "issue-second", "b".repeat(64), true, 90);
+
+    assertThat(olderIssue).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(false, false));
+    assertThat(currentIssue).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
+                Integer.class,
+                userId,
+                challenge.runId()))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void persistedOpenProblemIsReusedAfterReloadInsteadOfIssuingAnother() throws Exception {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    String nodeId = (String) active.nodes().getFirst().get("id");
+    ExpeditionRunDto challenge =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
+    String kcCode = (String) nodeById(challenge, nodeId).get("kcCode");
+    BossInternalProblem issued =
+        new BossInternalProblem(
+            BossService.issueProblemId(null),
+            1,
+            1,
+            1,
+            kcCode,
+            "Persisted challenge",
+            List.of(),
+            "",
+            "",
+            1,
+            true,
+            false,
+            List.of(new com.pythontopia.world.boss.dto.BossTestCasePayload("", "", false)),
+            "");
+    EndlessPregenService pregen =
+        new EndlessPregenService(null, jdbc, new ObjectMapper(), runs);
+
+    BossInternalProblem first =
+        pregen.persistConsumed(userId, 1, kcCode, null, null, 1, issued, challenge.runId(), nodeId);
+    BossInternalProblem duplicate =
+        pregen.persistConsumed(
+            userId,
+            1,
+            kcCode,
+            null,
+            null,
+            1,
+            issued.issueAs(BossService.issueProblemId(null), kcCode),
+            challenge.runId(),
+            nodeId);
+    var resumed = pregen.claimReady(userId, 1, 1, kcCode, 1, null, null, challenge.runId(), nodeId);
+
+    assertThat(duplicate.problemId()).isEqualTo(first.problemId());
+    assertThat(resumed).isPresent();
+    assertThat(resumed.orElseThrow().problemId()).isEqualTo(first.problemId());
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM pregenerated_problem WHERE user_id = ? AND expedition_run_id = ?::uuid"
+                    + " AND expedition_node_id = ? AND status = 'CONSUMED'",
+                Integer.class,
+                userId,
+                challenge.runId(),
+                nodeId))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void settlementRejectsAnOlderUnsettledIssueWhenANewerIssueExists() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    String nodeId = (String) active.nodes().getFirst().get("id");
+    ExpeditionRunDto challenge =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
+    String kcCode = (String) nodeById(challenge, nodeId).get("kcCode");
+    String olderFingerprint = "1".repeat(64);
+    insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-older", kcCode, olderFingerprint);
+    insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-newer", kcCode, "2".repeat(64));
+    jdbc.update(
+        "INSERT INTO expedition_verified_attempt"
+            + " (user_id, run_id, problem_id, question_fingerprint, passed, score)"
+            + " VALUES (?, ?::uuid, 'issue-older', ?, TRUE, 80)",
+        userId,
+        challenge.runId(),
+        olderFingerprint);
+
+    assertThatThrownBy(
+            () ->
+                runs.performAction(
+                    userId,
+                    new ExpeditionRunActionRequest(
+                        challenge.runId(),
+                        nodeId,
+                        ExpeditionRunAction.SETTLE_CHALLENGE,
+                        null,
+                        "issue-older")))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("绑定");
   }
 
   @Test
@@ -1036,29 +1179,38 @@ class ExpeditionRunPostgresIntegrationTest {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
     ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    String nodeId = (String) active.nodes().getFirst().get("id");
+    ExpeditionRunDto challenge =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
+    String kcCode = (String) nodeById(challenge, nodeId).get("kcCode");
+    insertConsumedProblem(userId, challenge.runId(), nodeId, "issued-problem-1", kcCode, "d".repeat(64));
+    insertConsumedProblem(userId, challenge.runId(), nodeId, "issued-problem-2", kcCode, "d".repeat(64));
     ExpeditionScoreService scores = new ExpeditionScoreService(jdbc);
     String fingerprint = "a".repeat(64);
 
     var firstFailure =
         scores.recordVerifiedAttempt(
-            userId, active.runId(), "issued-problem-1", fingerprint, false, 0);
+            userId, challenge.runId(), "issued-problem-2", fingerprint, false, 0);
     var duplicateFailure =
         scores.recordVerifiedAttempt(
-            userId, active.runId(), "issued-problem-2", fingerprint, false, 0);
+            userId, challenge.runId(), "issued-problem-1", fingerprint, false, 0);
     var firstPass =
         scores.recordVerifiedAttempt(
-            userId, active.runId(), "issued-problem-2", fingerprint, true, 100);
+            userId, challenge.runId(), "issued-problem-2", fingerprint, true, 100);
     var duplicatePass =
         scores.recordVerifiedAttempt(
-            userId, active.runId(), "issued-problem-3", fingerprint, true, 100);
+            userId, challenge.runId(), "issued-problem-1", fingerprint, true, 100);
 
     assertThat(firstFailure)
         .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
     assertThat(duplicateFailure)
-        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(false, false));
     assertThat(firstPass).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
     assertThat(duplicatePass)
-        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(false, false));
     assertThat(
             jdbc.queryForObject(
                 "SELECT COUNT(*) FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
@@ -1189,6 +1341,21 @@ class ExpeditionRunPostgresIntegrationTest {
       int score) {
     insertIssuedProblem(
         userId, runId, nodeId, problemId, kcCode, fingerprint, fingerprint, passed, score);
+  }
+
+  private void insertConsumedProblem(
+      long userId, String runId, String nodeId, String problemId, String kcCode, String fingerprint) {
+    jdbc.update(
+        "INSERT INTO pregenerated_problem"
+            + " (user_id, chapter, stage, kc_code, problem_id, payload, status, consumed_at,"
+            + " expedition_run_id, expedition_node_id, question_fingerprint)"
+            + " VALUES (?, 1, 1, ?, ?, '{}'::jsonb, 'CONSUMED', now(), ?::uuid, ?, ?)",
+        userId,
+        kcCode,
+        problemId,
+        runId,
+        nodeId,
+        fingerprint);
   }
 
   private void insertIssuedProblem(

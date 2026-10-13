@@ -4,12 +4,14 @@ from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 
 from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from pythontopia_graph.agents.curriculum_mapper_agent import CurriculumMapperAgent
 from pythontopia_graph.agents.profile_agent import ProfileAgent
 from pythontopia_graph.llm.provider import (
     DryRunProvider,
+    LlmProviderNotConfigured,
     load_pythontopia_env,
     provider_from_env,
     provider_label,
@@ -76,6 +78,18 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Pythontopia Graph", version="0.1.0", lifespan=lifespan)
 app.add_middleware(InternalTokenMiddleware)
+
+
+@app.exception_handler(LlmProviderNotConfigured)
+async def llm_provider_not_configured(
+    _request: Request, _exception: LlmProviderNotConfigured
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={"detail": "DeepSeek provider is not configured"},
+    )
+
+
 app.include_router(resource_router)
 app.include_router(path_router)
 app.include_router(debug_router)

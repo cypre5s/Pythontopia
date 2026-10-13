@@ -70,6 +70,12 @@ public class EndlessPregenService {
   // shortcut: recovery assumes one worker, add ownership leases before enabling multiple replicas.
   @PostConstruct
   public void recoverAbandonedPendingAtStartup() {
+    Boolean tableReady =
+        jdbcTemplate.queryForObject(
+            "SELECT to_regclass('public.pregenerated_problem') IS NOT NULL", Boolean.class);
+    if (!Boolean.TRUE.equals(tableReady)) {
+      return;
+    }
     int recovered =
         jdbcTemplate.update(
             "UPDATE pregenerated_problem"
@@ -436,18 +442,24 @@ public class EndlessPregenService {
       lockActiveRun(userId, expeditionRunId);
       Integer bossPhase =
           validateExpeditionNode(userId, expeditionRunId, expeditionNodeId, chapter, kcCode, false);
+      Optional<BossInternalProblem> open =
+          findOpenExpeditionProblem(userId, expeditionRunId, expeditionNodeId, bossPhase);
+      if (open.isPresent()) return open;
       List<Map<String, Object>> rows =
           jdbcTemplate.queryForList(
-              "SELECT id, payload::text AS payload FROM pregenerated_problem"
-                  + " WHERE user_id = ? AND chapter = ? AND stage = ?"
-                  + " AND kc_code IS NOT DISTINCT FROM ?"
-                  + " AND kind IS NOT DISTINCT FROM ?"
-                  + " AND arena_level IS NOT DISTINCT FROM ?"
-                  + " AND difficulty IS NOT DISTINCT FROM ?"
-                  + " AND expedition_run_id IS NOT DISTINCT FROM ?::uuid"
-                  + " AND expedition_node_id IS NOT DISTINCT FROM ?"
-                  + " AND status = 'READY'"
-                  + " ORDER BY created_at DESC, id DESC LIMIT 1",
+              "SELECT p.id, p.payload::text AS payload FROM pregenerated_problem p"
+                  + " WHERE p.user_id = ? AND p.chapter = ? AND p.stage = ?"
+                  + " AND p.kc_code IS NOT DISTINCT FROM ?"
+                  + " AND p.kind IS NOT DISTINCT FROM ?"
+                  + " AND p.arena_level IS NOT DISTINCT FROM ?"
+                  + " AND p.difficulty IS NOT DISTINCT FROM ?"
+                  + " AND p.expedition_run_id IS NOT DISTINCT FROM ?::uuid"
+                  + " AND p.expedition_node_id IS NOT DISTINCT FROM ?"
+                  + " AND p.status = 'READY'"
+                  + " AND (?::uuid IS NULL OR NOT EXISTS (SELECT 1 FROM pregenerated_problem prior"
+                  + " WHERE prior.user_id = p.user_id AND prior.expedition_run_id = p.expedition_run_id"
+                  + " AND prior.status = 'CONSUMED' AND prior.question_fingerprint = p.question_fingerprint))"
+                  + " ORDER BY p.created_at DESC, p.id DESC LIMIT 1",
               userId,
               chapter,
               stage,
@@ -456,7 +468,8 @@ public class EndlessPregenService {
               arenaLevel,
               difficulty,
               expeditionRunId,
-              expeditionNodeId);
+              expeditionNodeId,
+              expeditionRunId);
       if (rows.isEmpty()) {
         return Optional.empty();
       }
@@ -499,7 +512,7 @@ public class EndlessPregenService {
 
   /** 把「现场出题并已展示给学生」的题落库 (CONSUMED)，供判题兜底取回。 */
   @Transactional
-  public void persistConsumed(
+  public BossInternalProblem persistConsumed(
       Long userId,
       int chapter,
       String kcCode,
@@ -508,7 +521,7 @@ public class EndlessPregenService {
       Integer difficulty,
       BossInternalProblem problem,
       String expeditionRunId) {
-    persistConsumed(
+    return persistConsumed(
         userId,
         chapter,
         kcCode,
@@ -522,7 +535,7 @@ public class EndlessPregenService {
 
   /** Persist a displayed question with its authoritative expedition node binding. */
   @Transactional
-  public void persistConsumed(
+  public BossInternalProblem persistConsumed(
       Long userId,
       int chapter,
       String kcCode,
@@ -533,7 +546,7 @@ public class EndlessPregenService {
       String expeditionRunId,
       String expeditionNodeId) {
     if (userId == null || problem == null || problem.problemId() == null) {
-      return;
+      return problem;
     }
     validateStage(problem.stage());
     if (problem.chapter() != chapter) {
@@ -544,22 +557,73 @@ public class EndlessPregenService {
       Integer bossPhase =
           validateExpeditionNode(userId, expeditionRunId, expeditionNodeId, chapter, kcCode, false);
       requireIssuedBossPhase(problem.problemId(), bossPhase);
+      Optional<BossInternalProblem> open =
+          findOpenExpeditionProblem(userId, expeditionRunId, expeditionNodeId, bossPhase);
+      if (open.isPresent()) return open.orElseThrow();
       insert(
           userId, chapter, problem.stage(), kcCode, kind, arenaLevel, difficulty, problem,
           "CONSUMED", expeditionRunId, expeditionNodeId);
-      return;
+      return problem;
     }
     try {
       insert(
           userId, chapter, problem.stage(), kcCode, kind, arenaLevel, difficulty, problem,
           "CONSUMED", null, null);
+      return problem;
     } catch (BusinessException exception) {
       throw exception;
     } catch (RuntimeException ex) {
       log.warn(
           "persistConsumed failed user={} problemId={}: {}",
           userId, problem.problemId(), ex.getMessage());
+      return problem;
     }
+  }
+
+  /** Return the newest un-settled question already bound to the active challenge node. */
+  public Optional<BossInternalProblem> findOpenExpeditionProblem(
+      Long userId, String expeditionRunId, String expeditionNodeId, Integer bossPhase) {
+    if (userId == null || expeditionRunId == null || expeditionNodeId == null) {
+      return Optional.empty();
+    }
+    List<String> payloads =
+        jdbcTemplate.query(
+            "SELECT p.payload::text FROM pregenerated_problem p"
+                + " JOIN expedition_run r ON r.user_id = p.user_id AND r.run_id = p.expedition_run_id"
+                + " WHERE p.user_id = ? AND p.expedition_run_id = ?::uuid"
+                + " AND p.expedition_node_id = ? AND p.status = 'CONSUMED'"
+                + " AND r.status = 'ACTIVE' AND r.phase = 'challenge' AND r.current_node_id = p.expedition_node_id"
+                + " AND ((?::int IS NULL AND p.problem_id NOT LIKE 'issue-boss-phase-%')"
+                + " OR p.problem_id LIKE ('issue-boss-phase-' || ? || '-%'))"
+                + " AND NOT EXISTS (SELECT 1 FROM expedition_challenge_settlement s"
+                + " WHERE s.user_id = p.user_id AND s.run_id = p.expedition_run_id"
+                + " AND s.node_id = p.expedition_node_id AND s.problem_id = p.problem_id)"
+                + " AND p.id = (SELECT MAX(candidate.id) FROM pregenerated_problem candidate"
+                + " WHERE candidate.user_id = p.user_id AND candidate.expedition_run_id = p.expedition_run_id"
+                + " AND candidate.expedition_node_id = p.expedition_node_id AND candidate.status = 'CONSUMED'"
+                + " AND ((?::int IS NULL AND candidate.problem_id NOT LIKE 'issue-boss-phase-%')"
+                + " OR candidate.problem_id LIKE ('issue-boss-phase-' || ? || '-%'))"
+                + " AND NOT EXISTS (SELECT 1 FROM expedition_challenge_settlement settled"
+                + " WHERE settled.user_id = candidate.user_id AND settled.run_id = candidate.expedition_run_id"
+                + " AND settled.node_id = candidate.expedition_node_id AND settled.problem_id = candidate.problem_id))"
+                + " LIMIT 1",
+            (rs, rowNum) -> rs.getString(1),
+            userId,
+            expeditionRunId,
+            expeditionNodeId,
+            bossPhase,
+            bossPhase,
+            bossPhase,
+            bossPhase);
+    return payloads.stream().findFirst().map(this::deserialize);
+  }
+
+  /** The exact issued problem must still be the active node's single open question. */
+  public boolean isOpenExpeditionProblem(
+      Long userId, String expeditionRunId, String expeditionNodeId, String problemId, Integer bossPhase) {
+    return findOpenExpeditionProblem(userId, expeditionRunId, expeditionNodeId, bossPhase)
+        .map(problem -> problemId.equals(problem.problemId()))
+        .orElse(false);
   }
 
   /** 判题兜底：内存缓存 miss 时凭 user + problemId 取回最新一条 payload 的完整题（含 testCases）。 */

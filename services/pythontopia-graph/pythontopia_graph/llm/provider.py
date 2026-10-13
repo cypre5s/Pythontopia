@@ -677,16 +677,21 @@ class LlmProviderError(RuntimeError):
         self.retryable = retryable
 
 
+class LlmProviderNotConfigured(RuntimeError):
+    """No real provider is configured; API routes must not return demo answers."""
+
+
 def provider_from_env() -> LlmProvider:
     if _fine_tuned_enabled():
         raise RuntimeError("Fine-tuned LLM providers are disabled; configure DeepSeek")
+    load_pythontopia_env()
     provider_name = (os.environ.get("PYT_LLM_PROVIDER") or "").strip().lower()
     if not provider_name:
-        # 未指定 PYT_LLM_PROVIDER 时：有 OpenAI 兼容凭证默认 openai_compat，否则 dryrun。
+        # 未指定 provider 时仅在真实 DeepSeek 凭证存在时启动在线 provider。
         _, api_key, _ = _openai_compat_env()
-        provider_name = "openai_compat" if api_key else "dryrun"
-    if provider_name == "dryrun":
-        return DryRunProvider()
+        provider_name = "openai_compat" if api_key else ""
+    if not provider_name or provider_name == "dryrun":
+        raise LlmProviderNotConfigured("DeepSeek provider is not configured")
     if provider_name in {"openai_compat", "openai-compatible", "openaicompat"}:
         return OpenAiCompatProvider()
     if provider_name == "spark":

@@ -42,7 +42,7 @@ class WorkshopLearningContextServiceTest {
   @Test
   void buildsAuthoritativeContextFromExistingProfileMasterySubmissionAndResourceFacts() {
     when(profileService.profileBrief(7L))
-        .thenReturn("认知风格: visual; 偏好: 图解; 情绪: 需鼓励");
+        .thenReturn("自述偏好: mindmap");
     when(profileService.getDimensions(7L))
         .thenReturn(
             List.of(
@@ -88,13 +88,13 @@ class WorkshopLearningContextServiceTest {
     var context = service.build(7L, "帮我复习循环");
 
     verify(memoryBriefService).buildAuthoritativeBrief(7L, "帮我复习循环");
-    assertThat(context.profileBrief()).contains("visual");
+    assertThat(context.profileBrief()).contains("自述偏好");
     assertThat(context.kcMastery()).containsEntry("PY43-KC-031", 0.28);
     assertThat(context.kcConfidence()).containsEntry("PY43-KC-031", 0.8);
     assertThat(context.recentErrorKcs()).containsExactly("PY43-KC-031");
     assertThat(context.cognitiveLoad()).isEqualTo("HIGH");
-    assertThat(context.frustrationLevel()).isEqualTo("HIGH");
-    assertThat(context.cognitiveStyle()).isEqualTo("visual");
+    assertThat(context.frustrationLevel()).isEqualTo("LOW");
+    assertThat(context.cognitiveStyle()).isEmpty();
     assertThat(context.learningPreferences()).contains("图解", "偏好图解");
     assertThat(context.profileMajor()).isEqualTo("CS");
     assertThat(context.pythonLevel()).isEqualTo(2);
