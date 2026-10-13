@@ -91,6 +91,16 @@ public class LearnerTwinService {
     return new FrontierSelectResultDto(picks);
   }
 
+  @Transactional(readOnly = true)
+  public Integer recommendedDifficulty(Long userId, String kcCode) {
+    if (userId == null || kcCode == null) return null;
+    return load(userId).candidates().stream()
+        .filter(candidate -> kcCode.equals(candidate.kcCode()))
+        .findFirst()
+        .map(AdaptivePracticePolicy::difficulty)
+        .orElse(null);
+  }
+
   private LearnerSnapshot load(Long userId) {
     List<CourseKc> kcs = coursePackRepository.findKcs(COURSE_PACK_ID, null);
     List<CourseChapter> chapters = coursePackRepository.findChapters(COURSE_PACK_ID);

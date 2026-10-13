@@ -24,7 +24,7 @@ public class NpcDialogController {
     this.dialogService = dialogService;
   }
 
-  @PostMapping("/{npcKey}/dialog")
+  @PostMapping("/{npcKey:[a-z0-9_-]{1,40}}/dialog")
   public NpcDialogResponse talk(
       @CurrentUser CurrentUserPrincipal user,
       @PathVariable String npcKey,

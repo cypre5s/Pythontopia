@@ -1,10 +1,6 @@
 package com.pythontopia.world.boss;
 
-import com.pythontopia.coursepack.domain.CourseKc;
-import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.event.LearningEvent;
-import com.pythontopia.learner.mastery.MasteryRepository;
-import com.pythontopia.learner.mastery.MasterySnapshot;
 import com.pythontopia.learner.profile.dto.LearnerProfileSignals;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.twin.LearnerTwinService;
@@ -38,7 +34,6 @@ import java.time.format.DateTimeFormatter;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -75,13 +70,10 @@ public class BossService {
   private static final Logger LOG = LoggerFactory.getLogger(BossService.class);
   private static final Duration CACHE_TTL = Duration.ofMinutes(30);
   private static final int EVAL_TIMEOUT_SEC = 5;
-  private static final long DEFAULT_PACK_ID = 43L;
   private static final String ISSUE_ID_PREFIX = "issue-";
   private static final String BOSS_ISSUE_ID_PREFIX = "issue-boss-phase-";
 
   private final BossGraphClient graphClient;
-  private final MasteryRepository masteryRepository;
-  private final CoursePackRepository coursePackRepository;
   private final PassiveProfileService passiveProfileService;
   private final LearnerTwinService learnerTwinService;
   private final ChapterProblemBankRepository chapterProblemBankRepository;
@@ -98,8 +90,6 @@ public class BossService {
 
   public BossService(
       BossGraphClient graphClient,
-      MasteryRepository masteryRepository,
-      CoursePackRepository coursePackRepository,
       PassiveProfileService passiveProfileService,
       LearnerTwinService learnerTwinService,
       ChapterProblemBankRepository chapterProblemBankRepository,
@@ -113,8 +103,6 @@ public class BossService {
       BossAttemptIdempotencyService attemptIdempotencyService,
       ApplicationEventPublisher eventPublisher) {
     this.graphClient = graphClient;
-    this.masteryRepository = masteryRepository;
-    this.coursePackRepository = coursePackRepository;
     this.passiveProfileService = passiveProfileService;
     this.learnerTwinService = learnerTwinService;
     this.chapterProblemBankRepository = chapterProblemBankRepository;
@@ -149,9 +137,11 @@ public class BossService {
         validateExpeditionRun(
             userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, false, kc);
     String expeditionRunId = expeditionBinding.runId();
-    // 难度优先取前端显式请求；否则据该章 KC 的真实掌握度 + 置信度推断（学情驱动），而非仅按 stage。
-    int difficulty =
-        computeTargetDifficulty(userId, kc, request.stage(), request.difficulty());
+    int difficulty = computeTargetDifficulty(userId, kc, request.stage());
+    Set<String> issuedFingerprints =
+        expeditionRunId == null
+            ? Set.of()
+            : expeditionRunService.findIssuedQuestionFingerprints(userId, expeditionRunId);
 
     // 1) 复用「已预生成未做」(READY) 的同维度题：命中即原子标 CONSUMED，省去现场等 LLM。
     //    这条同时实现「学生中途退出，下次登入复用已生成未做的题」——上次会话预取留下的 READY 行。
@@ -178,13 +168,16 @@ public class BossService {
                 request.expeditionNodeId());
     if (reused.isPresent()) {
       BossInternalProblem p = reused.get();
-      cache.put(new ProblemCacheKey(userId, p.problemId()), new CachedProblem(p, Instant.now()));
-      evictExpired();
-      LOG.info("boss reuse pregenerated problemId={} user={} ch={}", p.problemId(), userId, chapter);
       // 展示时套用「本次请求」的 stage + 本次推断难度：预取时的 stage/难度不串到当前上下文
       // （也避免共享端点下复用题把异常 stage 显示给主线 boss）。
       requireProblemContext(p, chapter, request.stage(), kc);
-      return p.toPublic();
+      if (!issuedFingerprints.contains(questionFingerprint(p))) {
+        cache.put(new ProblemCacheKey(userId, p.problemId()), new CachedProblem(p, Instant.now()));
+        evictExpired();
+        LOG.info("boss reuse pregenerated problemId={} user={} ch={}", p.problemId(), userId, chapter);
+        return p.toPublic();
+      }
+      LOG.info("boss skipped repeated pregenerated question user={} run={} ch={}", userId, expeditionRunId, chapter);
     }
 
     // 2) 没有该学生的 READY 个性化题时，再查教师已通过的全局题库：按
@@ -196,19 +189,21 @@ public class BossService {
     if (approved.isPresent()) {
       BossInternalProblem source = approved.get().problem();
       requireProblemContext(source, chapter, request.stage(), kc);
-      BossInternalProblem problem = source.issueAs(issueProblemId(expeditionBinding.bossPhase()), kc);
-      cache.put(new ProblemCacheKey(userId, problem.problemId()), new CachedProblem(problem, Instant.now()));
-      persistConsumed(
-          userId, chapter, kc, request, difficulty, problem, expeditionRunId);
-      evictExpired();
-      LOG.info(
-          "boss selected approved review={} version={} problemId={} user={} ch={}",
-          approved.get().reviewId(),
-          approved.get().version(),
-          problem.problemId(),
-          userId,
-          chapter);
-      return problem.toPublic();
+      if (!issuedFingerprints.contains(questionFingerprint(source))) {
+        BossInternalProblem problem = source.issueAs(issueProblemId(expeditionBinding.bossPhase()), kc);
+        cache.put(new ProblemCacheKey(userId, problem.problemId()), new CachedProblem(problem, Instant.now()));
+        persistConsumed(
+            userId, chapter, kc, request, difficulty, problem, expeditionRunId);
+        evictExpired();
+        LOG.info(
+            "boss selected approved review={} version={} problemId={} user={} ch={}",
+            approved.get().reviewId(),
+            approved.get().version(),
+            problem.problemId(),
+            userId,
+            chapter);
+        return problem.toPublic();
+      }
     }
 
     BossPrefetchStatusDto prefetchStatus =
@@ -257,7 +252,8 @@ public class BossService {
           "graph boss problem unavailable ({}): {}",
           ex.getClass().getSimpleName(),
           ex.getMessage());
-      Optional<BossInternalProblem> golden = findGoldenProblem(kc, chapter, request.stage(), difficulty);
+      Optional<BossInternalProblem> golden =
+          findGoldenProblem(kc, chapter, request.stage(), difficulty, issuedFingerprints);
       if (golden.isEmpty()) {
         throw new com.pythontopia.common.error.BusinessException(
             org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
@@ -267,7 +263,7 @@ public class BossService {
       fromGraph = golden.get();
     }
     if (fromGraph == null || fromGraph.problemId() == null) {
-      fromGraph = findGoldenProblem(kc, chapter, request.stage(), difficulty).orElse(null);
+      fromGraph = findGoldenProblem(kc, chapter, request.stage(), difficulty, issuedFingerprints).orElse(null);
       if (fromGraph == null) {
         throw new com.pythontopia.common.error.BusinessException(
             org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
@@ -276,6 +272,11 @@ public class BossService {
       }
     }
     requireProblemContext(fromGraph, chapter, request.stage(), kc);
+    if (issuedFingerprints.contains(questionFingerprint(fromGraph))) {
+      fromGraph =
+          findGoldenProblem(kc, chapter, request.stage(), difficulty, issuedFingerprints).orElseThrow(
+              () -> repeatedProblemUnavailable());
+    }
     BossInternalProblem issued = fromGraph.issueAs(issueProblemId(expeditionBinding.bossPhase()), kc);
     cache.put(new ProblemCacheKey(userId, issued.problemId()), new CachedProblem(issued, Instant.now()));
     // 现场题也落库 (CONSUMED)，供内存缓存过期 / 进程重启后判题兜底取回 testCases（best-effort）。
@@ -285,11 +286,23 @@ public class BossService {
   }
 
   private Optional<BossInternalProblem> findGoldenProblem(
-      String kcCode, int chapter, int stage, int difficulty) {
+      String kcCode,
+      int chapter,
+      int stage,
+      int difficulty,
+      Set<String> excludedFingerprints) {
     return chapterProblemBankRepository.findByKcCodes(List.of(kcCode)).stream()
         .filter(question -> kcCode.equals(question.kcCode()))
-        .findFirst()
-        .map(question -> toGoldenProblem(question, chapter, stage, difficulty));
+        .map(question -> toGoldenProblem(question, chapter, stage, difficulty))
+        .filter(problem -> !excludedFingerprints.contains(questionFingerprint(problem)))
+        .findFirst();
+  }
+
+  private com.pythontopia.common.error.BusinessException repeatedProblemUnavailable() {
+    return new com.pythontopia.common.error.BusinessException(
+        org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+        "BOSS_REPEAT_PROBLEM_UNAVAILABLE",
+        "当前知识点暂时没有新的可用题目，请稍后重试");
   }
 
   private static BossInternalProblem toGoldenProblem(
@@ -327,8 +340,7 @@ public class BossService {
         validateExpeditionRun(
             userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, true, kc)
             .runId();
-    int difficulty =
-        computeTargetDifficulty(userId, kc, request.stage(), request.difficulty());
+    int difficulty = computeTargetDifficulty(userId, kc, request.stage());
     EndlessPregenService.PrefetchStart start =
         expeditionRunId == null
             ? pregenService.beginPrefetch(
@@ -427,9 +439,7 @@ public class BossService {
       String expeditionNodeId,
       Long userId) {
     String kc = resolveKc(chapter, preferredKc);
-    int progression = requestedDifficulty == null ? 1 : requestedDifficulty;
-    int difficulty =
-        computeTargetDifficulty(userId, kc, progression, requestedDifficulty);
+    int difficulty = computeTargetDifficulty(userId, kc, stage == null ? 1 : stage);
     String activeRunId =
         validateExpeditionRun(userId, expeditionRunId, expeditionNodeId, chapter, true, kc)
             .runId();
@@ -937,137 +947,21 @@ public class BossService {
     cache.entrySet().removeIf(e -> Duration.between(e.getValue().cachedAt(), now).compareTo(CACHE_TTL) > 0);
   }
 
-  /** Boss 目标难度 1..5；无显式纵深时以 stage 作为递进主轴。 */
+  /** Boss 目标难度复用 Twin 的 KC 规则；数据缺失或聚合故障时回到 stage 难度。 */
   int computeTargetDifficulty(Long userId, String anchorKc, int stage) {
-    return computeTargetDifficulty(userId, anchorKc, stage, null);
-  }
-
-  /**
-   * 难度由两部分合成：地图纵深/关卡请求给出递进主轴，服务端掌握度与画像给出 readiness。
-   * readiness 只允许在当前层上下调整一档，既避免客户端把任意难度当权威，也保证同一学生随
-   * 纵深单调递进，不会因为画像较弱而在深层突然掉回新手题。
-   */
-  int computeTargetDifficulty(
-      Long userId, String anchorKc, int stage, Integer requestedProgression) {
-    int progression = clampDifficulty(requestedProgression == null ? stage : requestedProgression);
-    if (userId == null || anchorKc == null) {
-      return progression;
-    }
+    int fallback = clampDifficulty(stage);
+    if (userId == null || anchorKc == null) return fallback;
     try {
-      Integer masteryDifficulty = masteryDifficulty(userId, anchorKc);
-      Integer profileDifficulty =
-          profileDifficulty(passiveProfileService.getPersonalizationSignals(userId));
-      Integer readiness = averageDifficulty(masteryDifficulty, profileDifficulty);
-      if (readiness == null) {
-        return progression;
-      }
-      return clampDifficulty(progression + Integer.compare(readiness, progression));
+      Integer recommended = learnerTwinService.recommendedDifficulty(userId, anchorKc);
+      return recommended == null ? fallback : clampDifficulty(recommended);
     } catch (RuntimeException ex) {
       LOG.debug("boss target difficulty degraded for user {}: {}", userId, ex.getMessage());
-      return progression;
+      return fallback;
     }
-  }
-
-  private Integer masteryDifficulty(Long userId, String anchorKc) {
-    List<CourseKc> kcs = coursePackRepository.findKcs(DEFAULT_PACK_ID, null);
-    Long chapterId = null;
-    for (CourseKc kc : kcs) {
-      if (anchorKc.equals(kc.kcCode())) {
-        chapterId = kc.chapterId();
-        break;
-      }
-    }
-    if (chapterId == null) {
-      return null;
-    }
-    Set<String> chapterKcCodes = new HashSet<>();
-    for (CourseKc kc : kcs) {
-      if (chapterId.equals(kc.chapterId()) && kc.kcCode() != null) {
-        chapterKcCodes.add(kc.kcCode());
-      }
-    }
-    double scoreSum = 0.0;
-    double confSum = 0.0;
-    int n = 0;
-    for (MasterySnapshot s : masteryRepository.findAll(userId)) {
-      if (s.masteryScore() == null || !chapterKcCodes.contains(s.kcCode())) {
-        continue;
-      }
-      scoreSum += s.masteryScore().doubleValue();
-      confSum += s.confidence() == null ? 0.5 : s.confidence().doubleValue();
-      n++;
-    }
-    if (n == 0) {
-      return null;
-    }
-    return bossDifficulty(scoreSum / n, confSum / n);
-  }
-
-  static Integer profileDifficulty(LearnerProfileSignals profile) {
-    if (profile == null) {
-      return null;
-    }
-    List<Integer> signals = new java.util.ArrayList<>();
-    if (profile.pythonSelfRatedLevel() != null) {
-      int level = profile.pythonSelfRatedLevel();
-      signals.add(clampDifficulty(level == 0 ? 1 : level));
-    }
-    if (profile.successRate() != null) {
-      double rate = Math.max(0.0, Math.min(1.0, profile.successRate()));
-      signals.add(clampDifficulty(1 + (int) Math.floor(rate * 5.0)));
-    }
-    if (profile.avgAttemptsPerProblem() != null) {
-      double attempts = profile.avgAttemptsPerProblem();
-      signals.add(attempts <= 1.2 ? 5 : attempts <= 2.0 ? 4 : attempts <= 3.0 ? 3 : 2);
-    }
-    if (signals.isEmpty()) {
-      return null;
-    }
-    int readiness = (int) Math.round(signals.stream().mapToInt(Integer::intValue).average().orElse(3));
-    if (profile.resilience() != null) {
-      double resilience = profile.resilience();
-      if (resilience < 0.35) {
-        readiness--;
-      } else if (resilience > 0.8) {
-        readiness++;
-      }
-    }
-    return clampDifficulty(readiness);
-  }
-
-  private static Integer averageDifficulty(Integer mastery, Integer profile) {
-    if (mastery == null) {
-      return profile;
-    }
-    if (profile == null) {
-      return mastery;
-    }
-    return clampDifficulty((int) Math.round(mastery * 0.7 + profile * 0.3));
   }
 
   private static int clampDifficulty(int difficulty) {
     return Math.min(5, Math.max(1, difficulty));
-  }
-
-  /**
-   * 掌握度 + 置信度 → 难度 1..5 的纯函数（便于直接单测）：低掌握→易（建立信心），
-   * 高掌握 + 高置信且逼近本档上沿→难（促成长）；低置信度降一档。
-   */
-  static int bossDifficulty(double score, double confidence) {
-    int base = score < 0.2 ? 1 : score < 0.4 ? 2 : score < 0.6 ? 3 : score < 0.8 ? 4 : 5;
-    if (confidence < 0.4) {
-      return Math.max(1, base - 1);
-    }
-    if (confidence >= 0.7 && nearBandTop(score)) {
-      return Math.min(5, base + 1);
-    }
-    return base;
-  }
-
-  /** 逼近本 0.2 宽难度档上沿（本档后 1/4 区间）。 */
-  private static boolean nearBandTop(double score) {
-    double fraction = score * 5.0 - Math.floor(score * 5.0);
-    return fraction >= 0.75;
   }
 
   /**

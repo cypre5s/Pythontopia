@@ -16,11 +16,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-import com.pythontopia.coursepack.domain.CourseKc;
-import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.event.LearningEvent;
-import com.pythontopia.learner.mastery.MasteryRepository;
-import com.pythontopia.learner.mastery.MasterySnapshot;
 import com.pythontopia.learner.profile.dto.LearnerProfileSignals;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.twin.LearnerTwinService;
@@ -43,11 +39,11 @@ import com.pythontopia.world.boss.dto.FrontierSelectRequest;
 import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
 import com.pythontopia.world.boss.review.ApprovedBossProblem;
 import com.pythontopia.world.boss.review.BossProblemReviewRepository;
-import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,20 +56,11 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.client.RestClientException;
 
-/**
- * P3.2：Boss 出题难度据该章 KC 真实掌握度 + 置信度推断（学情驱动），而非仅按 stage。
- *
- * <p>闭环回流：boss/endless 服务端判题后须发布与 {@code SubmissionService} 同一套 {@link LearningEvent}，
- * 驱动 KC 掌握度（测）+ 8 维画像被动修订；并校验 resolveKc 章→KC 默认锚定与课程包对齐。
- */
+/** Boss shares the Twin's deterministic practice policy; verified expedition results feed back into learning. */
 @ExtendWith(MockitoExtension.class)
 class BossServiceTest {
 
-  private static final Long CHAPTER_ID = 11L;
-
   @Mock BossGraphClient graphClient;
-  @Mock MasteryRepository masteryRepository;
-  @Mock CoursePackRepository coursePackRepository;
   @Mock PassiveProfileService passiveProfileService;
   @Mock LearnerTwinService learnerTwinService;
   @Mock ChapterProblemBankRepository chapterProblemBankRepository;
@@ -93,8 +80,6 @@ class BossServiceTest {
     service =
         new BossService(
             graphClient,
-            masteryRepository,
-            coursePackRepository,
             passiveProfileService,
             learnerTwinService,
             chapterProblemBankRepository,
@@ -110,6 +95,9 @@ class BossServiceTest {
     lenient()
         .when(passiveProfileService.getPersonalizationSignals(anyLong()))
         .thenReturn(LearnerProfileSignals.empty());
+    lenient()
+        .when(learnerTwinService.recommendedDifficulty(anyLong(), anyString()))
+        .thenReturn(null);
     lenient()
         .when(
             expeditionRunService.validateProblemRequest(
@@ -136,6 +124,7 @@ class BossServiceTest {
   @Test
   @DisplayName("学生取题命中全局 approved bank 时不调用 Graph，并为该学生保存判题 payload")
   void approvedBankIsPreferredBeforeOnDemandGraphGeneration() {
+    when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
     BossInternalProblem approved =
         new BossInternalProblem(
             "approved-33-v2",
@@ -197,6 +186,7 @@ class BossServiceTest {
             "print(5)");
     when(pregenService.claimReady(7L, 1, 1, "PY43-KC-001", 2, "debug", null, null))
         .thenReturn(Optional.of(ready));
+    when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
 
     var dto =
         service.fetchProblem(
@@ -274,6 +264,57 @@ class BossServiceTest {
     assertThat(problem.reviewed()).isTrue();
     assertThat(problem.totalTestCases()).isEqualTo(2);
     verifyNoInteractions(judgeCaseEvaluator);
+  }
+
+  @Test
+  @DisplayName("远征跳过本局已发题目并选择未重复课程题")
+  void expeditionSkipsRepeatedGraphQuestionAndUsesUnusedGoldenQuestion() {
+    String runId = "123e4567-e89b-12d3-a456-426614174000";
+    String nodeId = "L0-0";
+    var usedGolden = new BossInternalProblem(
+        "course-problem-120", 1, 1, 1, "PY43-KC-001", "课程题库 · 已用\n\nstatement",
+        List.of(), "2 3", "5", 1, true, false,
+        List.of(new BossTestCasePayload("2 3", "5", false)), "ref");
+    when(expeditionRunService.findIssuedQuestionFingerprints(7L, runId))
+        .thenReturn(Set.of(
+            BossService.questionFingerprint(problemWithStage(1)),
+            BossService.questionFingerprint(usedGolden)));
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenReturn(problemWithStage(1));
+    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
+        .thenReturn(List.of(
+            new PreferredCodingQuestion(
+                120L, "已用", "statement", List.of(new CodingCase("2 3", "5")),
+                List.of(new CodingCase("2 3", "5")), "ref", "PY43-KC-001"),
+            new PreferredCodingQuestion(
+                121L, "新题", "different statement", List.of(new CodingCase("4 5", "9")),
+                List.of(new CodingCase("4 5", "9")), "ref", "PY43-KC-001")));
+
+    var problem = service.fetchProblem(
+        1, new BossProblemRequest(
+            1, "PY43-KC-001", 1, null, null, null, null, runId, nodeId), 7L);
+
+    assertThat(problem.statement()).contains("课程题库 · 新题");
+  }
+
+  @Test
+  @DisplayName("Graph 重复且课程题库无新题时返回可重试错误")
+  void expeditionDoesNotReissueRepeatedQuestionWhenNoGoldenFallbackExists() {
+    String runId = "123e4567-e89b-12d3-a456-426614174000";
+    when(expeditionRunService.findIssuedQuestionFingerprints(7L, runId))
+        .thenReturn(Set.of(BossService.questionFingerprint(problemWithStage(1))));
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenReturn(problemWithStage(1));
+    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
+        .thenReturn(List.of());
+
+    assertThatThrownBy(() -> service.fetchProblem(
+            1, new BossProblemRequest(
+                1, "PY43-KC-001", 1, null, null, null, null, runId, "L0-0"), 7L))
+        .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
+        .hasMessageContaining("没有新的可用题目");
   }
 
   @Test
@@ -682,97 +723,42 @@ class BossServiceTest {
   }
 
   @Test
-  @DisplayName("纯函数：低掌握→易，高掌握+高置信→难，低置信降档")
-  void bossDifficultyPureFunction() {
-    assertThat(BossService.bossDifficulty(0.10, 0.5)).isEqualTo(1);
-    assertThat(BossService.bossDifficulty(0.90, 0.85)).isEqualTo(5);
-    // 临界 0.5（base 3）低置信 → 降一档 2。
-    assertThat(BossService.bossDifficulty(0.50, 0.20)).isEqualTo(2);
-    // 0.78（base 4，逼近上沿）高置信 → 升一档 5。
-    assertThat(BossService.bossDifficulty(0.78, 0.80)).isEqualTo(5);
-  }
-
-  @Test
-  @DisplayName("低掌握章节 → 在纵深主轴上温和降一档")
-  void lowMasteryYieldsEasierBossDifficulty() {
-    stubChapterKcs();
-    when(masteryRepository.findAll(7L))
-        .thenReturn(
-            List.of(
-                snapshot("PY43-KC-001", "0.10", "0.50"),
-                snapshot("PY43-KC-002", "0.15", "0.50")));
+  @DisplayName("Boss 取题使用数字孪生针对当前 KC 的规则难度")
+  void fetchProblemUsesSharedLearnerDifficultyInsteadOfClientDifficulty() {
+    when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
     when(graphClient.requestProblem(
-            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
-        .thenReturn(problemWithStage(4));
-
-    // stage=4：旧逻辑会出难度 4；学情驱动应据低掌握出更易的题。
-    service.fetchProblem(
-        1, new BossProblemRequest(4, null, null, null, null, null, null, null), 7L);
-
-    int difficulty = capturedDifficulty();
-    assertThat(difficulty).isEqualTo(3);
-    assertThat(difficulty).isLessThan(4);
-  }
-
-  @Test
-  @DisplayName("高掌握+高置信章节 → 在纵深主轴上升一档")
-  void highMasteryHighConfidenceYieldsHarderBossDifficulty() {
-    stubChapterKcs();
-    when(masteryRepository.findAll(7L))
-        .thenReturn(
-            List.of(
-                snapshot("PY43-KC-001", "0.90", "0.85"),
-                snapshot("PY43-KC-002", "0.92", "0.80")));
-    when(graphClient.requestProblem(
-            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
-        .thenReturn(problemWithStage(2));
-
-    service.fetchProblem(
-        1, new BossProblemRequest(2, null, null, null, null, null, null, null), 7L);
-
-    assertThat(capturedDifficulty()).isEqualTo(3);
-  }
-
-  @Test
-  @DisplayName("前端 difficulty 仅表达纵深，不能绕过服务端画像")
-  void explicitDifficultyIsAdaptedByServerProfile() {
-    when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of());
-    when(passiveProfileService.getPersonalizationSignals(7L)).thenReturn(beginnerSignals());
-    when(graphClient.requestProblem(
-            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+            anyLong(), anyInt(), anyInt(), anyString(), eq(2), any(), any(), any()))
         .thenReturn(problemWithStage(4));
 
     service.fetchProblem(
-        1, new BossProblemRequest(4, null, 5, null, null, null, null, null), 7L);
+        1, new BossProblemRequest(4, null, 5, "PY43-KC-001", null, null, null, null), 7L);
 
-    assertThat(capturedDifficulty()).isEqualTo(4);
+    verify(learnerTwinService).recommendedDifficulty(7L, "PY43-KC-001");
+    verify(graphClient)
+        .requestProblem(anyLong(), anyInt(), anyInt(), anyString(), eq(2), any(), any(), any());
   }
 
   @Test
-  @DisplayName("画像自适应仍保持纵深难度单调递进")
-  void profileAdaptiveDifficultyRemainsMonotonicByDepth() {
-    when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of());
-    when(passiveProfileService.getPersonalizationSignals(7L)).thenReturn(beginnerSignals());
-
+  @DisplayName("Twin 无可用学情时按 stage 使用有界难度兜底")
+  void missingTwinAssessmentFallsBackToStageDifficulty() {
     assertThat(
             java.util.stream.IntStream.rangeClosed(1, 5)
-                .map(depth -> service.computeTargetDifficulty(7L, "PY43-KC-001", 1, depth))
+                .map(stage -> service.computeTargetDifficulty(7L, "PY43-KC-001", stage))
                 .boxed()
                 .toList())
-        .containsExactly(1, 1, 2, 3, 4);
+        .containsExactly(1, 2, 3, 4, 5);
   }
 
   @Test
-  @DisplayName("预加载轮询使用与 POST 相同的服务端画像合成难度")
-  void prefetchStatusUsesAuthoritativeDifficultyDimensions() {
-    when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of());
-    when(passiveProfileService.getPersonalizationSignals(7L)).thenReturn(beginnerSignals());
-    when(pregenService.getPrefetchStatus(7L, 1, 4, "PY43-KC-001", 4, "debug", "1-5", null))
+  @DisplayName("预加载轮询与取题使用相同 Twin 难度")
+  void prefetchStatusUsesSharedLearnerDifficulty() {
+    when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
+    when(pregenService.getPrefetchStatus(7L, 1, 4, "PY43-KC-001", 2, "debug", "1-5", null))
         .thenReturn(BossPrefetchStatusDto.idle());
 
     service.prefetchStatus(1, 4, "PY43-KC-001", 5, "debug", "1-5", null, 7L);
 
-    verify(pregenService).getPrefetchStatus(7L, 1, 4, "PY43-KC-001", 4, "debug", "1-5", null);
+    verify(pregenService).getPrefetchStatus(7L, 1, 4, "PY43-KC-001", 2, "debug", "1-5", null);
   }
 
   @Test
@@ -1034,15 +1020,6 @@ class BossServiceTest {
     assertThat(BossService.difficultyBand(5)).isEqualTo("hard");
   }
 
-  private void stubChapterKcs() {
-    lenient()
-        .when(coursePackRepository.findKcs(eq(43L), eq(null)))
-        .thenReturn(
-            List.of(
-                new CourseKc(1L, 43L, "PY43-KC-001", "输入输出", CHAPTER_ID, 1, "basic", "s"),
-                new CourseKc(2L, 43L, "PY43-KC-002", "变量", CHAPTER_ID, 1, "basic", "s")));
-  }
-
   private int capturedDifficulty() {
     ArgumentCaptor<Integer> difficultyCaptor = ArgumentCaptor.forClass(Integer.class);
     verify(graphClient)
@@ -1058,20 +1035,10 @@ class BossServiceTest {
     return difficultyCaptor.getValue();
   }
 
-  private static MasterySnapshot snapshot(String kc, String score, String confidence) {
-    return new MasterySnapshot(
-        1L, 7L, kc, new BigDecimal(score), new BigDecimal(confidence), null, null);
-  }
-
   private static BossInternalProblem internalProblem() {
     return new BossInternalProblem(
         "p1", 1, 1, 1, "PY43-KC-001", "statement", List.of(), "in", "out", 1, true, true,
         List.of(), "");
-  }
-
-  private static LearnerProfileSignals beginnerSignals() {
-    return new LearnerProfileSignals(
-        List.of(), 0, 0.1, List.of(), 0.2, 4.0, null, null, List.of(), null, null, null);
   }
 
   /** 带 hidden testCases 的内部题：evaluateAttempt 才能越过「空 testCases」兜底进入真实判题路径。 */

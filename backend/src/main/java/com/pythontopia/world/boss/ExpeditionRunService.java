@@ -126,6 +126,24 @@ public class ExpeditionRunService {
     return rows.stream().findFirst().map(this::withRewardChoices);
   }
 
+  /** Questions already issued in this run, used to avoid repeating them at another node. */
+  public Set<String> findIssuedQuestionFingerprints(Long userId, String runId) {
+    if (userId == null || runId == null) return Set.of();
+    try {
+      UUID.fromString(runId);
+    } catch (IllegalArgumentException exception) {
+      return Set.of();
+    }
+    return Set.copyOf(
+        jdbcTemplate.query(
+            "SELECT DISTINCT question_fingerprint FROM pregenerated_problem"
+                + " WHERE user_id = ? AND expedition_run_id = ?::uuid"
+                + " AND status = 'CONSUMED' AND question_fingerprint IS NOT NULL",
+            (rs, rowNum) -> rs.getString(1),
+            userId,
+            runId));
+  }
+
   /** 校验兼容快照的身份和地图，然后返回服务端状态；请求中的游戏进度不会写入数据库。 */
   @Transactional
   public ExpeditionRunDto save(Long userId, ExpeditionRunDto dto) {
