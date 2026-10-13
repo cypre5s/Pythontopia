@@ -28,7 +28,7 @@ class ExpeditionScoreServiceTest {
   @Test
   void settlesOnlyScoresDerivedFromServerJudgedAttempts() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
-        .thenReturn(List.of(false));
+        .thenReturn(List.of(new ExpeditionScoreService.LockedRun(false, false)));
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(
@@ -48,6 +48,7 @@ class ExpeditionScoreServiceTest {
             eq(170),
             eq(2),
             eq(1),
+            eq(false),
             eq(false));
     verify(jdbcTemplate)
         .update(contains("SET status = 'SETTLED'"), eq(7L), eq(RUN_ID));
@@ -56,7 +57,7 @@ class ExpeditionScoreServiceTest {
   @Test
   void preservesTheDailyFlagFromTheLockedServerRun() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
-        .thenReturn(List.of(true));
+        .thenReturn(List.of(new ExpeditionScoreService.LockedRun(true, false)));
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttempt(true, 80)));
@@ -72,13 +73,37 @@ class ExpeditionScoreServiceTest {
             eq(80),
             eq(1),
             eq(1),
+            eq(false),
             eq(true));
+  }
+
+  @Test
+  void recordsBossClearFromTheLockedServerRun() {
+    when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
+        .thenReturn(List.of(new ExpeditionScoreService.LockedRun(false, true)));
+    when(jdbcTemplate.query(
+            contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
+        .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttempt(true, 80)));
+    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
+
+    service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
+
+    verify(jdbcTemplate)
+        .update(
+            contains("INSERT INTO expedition_score"),
+            eq(7L),
+            eq(RUN_ID),
+            eq(80),
+            eq(1),
+            eq(1),
+            eq(true),
+            eq(false));
   }
 
   @Test
   void doesNotCreateScoreFromClientPayloadWhenNoServerAttemptExists() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
-        .thenReturn(List.of(false));
+        .thenReturn(List.of(new ExpeditionScoreService.LockedRun(false, false)));
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
@@ -107,13 +132,13 @@ class ExpeditionScoreServiceTest {
   }
 
   @Test
-  void limitsVerifiedAttemptsToTheMaximumQuestionsInOneExpeditionMap() {
+  void includesBoundedRetriesWhenSettlingVerifiedAttempts() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
-        .thenReturn(List.of(false));
+        .thenReturn(List.of(new ExpeditionScoreService.LockedRun(false, false)));
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(
-            java.util.stream.IntStream.range(0, 12)
+            java.util.stream.IntStream.range(0, 36)
                 .mapToObj(index -> new ExpeditionScoreService.VerifiedAttempt(true, 80))
                 .toList());
     ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
@@ -121,15 +146,16 @@ class ExpeditionScoreServiceTest {
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
 
     verify(jdbcTemplate)
-        .query(contains("LIMIT 12"), any(RowMapper.class), any(Object[].class));
+        .query(contains("LIMIT 36"), any(RowMapper.class), any(Object[].class));
     verify(jdbcTemplate)
         .update(
             contains("INSERT INTO expedition_score"),
             eq(7L),
             eq(RUN_ID),
-            eq(960),
-            eq(12),
-            eq(12),
+            eq(2880),
+            eq(36),
+            eq(36),
+            eq(false),
             eq(false));
   }
 
@@ -152,7 +178,7 @@ class ExpeditionScoreServiceTest {
 
     org.mockito.ArgumentCaptor<String> sql = org.mockito.ArgumentCaptor.forClass(String.class);
     verify(jdbcTemplate).update(sql.capture(), any(Object[].class));
-    org.assertj.core.api.Assertions.assertThat(sql.getValue()).contains("< 12");
+    org.assertj.core.api.Assertions.assertThat(sql.getValue()).contains("< 36");
   }
 
   @Test

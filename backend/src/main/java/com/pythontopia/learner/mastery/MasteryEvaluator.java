@@ -45,6 +45,7 @@ public class MasteryEvaluator {
     if (difficulty != null && !difficulty.isBlank()) {
       effectiveDelta = MasteryProperties.difficultyWeightedDelta(effectiveDelta, difficulty);
     }
+    repository.lockSnapshot(userId, kcCode);
     Optional<MasterySnapshot> existing = repository.findSnapshot(userId, kcCode);
     BigDecimal previousScore =
         existing.map(MasterySnapshot::masteryScore).orElse(BigDecimal.ZERO);

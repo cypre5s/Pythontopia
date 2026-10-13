@@ -54,6 +54,38 @@ describe('AdminUsersPage', () => {
     expect(searchAdminUsers).toHaveBeenCalledTimes(2);
   });
 
+  it('prevents a status change while a list refresh is in flight', async () => {
+    vi.mocked(setAdminUserStatus).mockClear();
+    const wrapper = mount(AdminUsersPage);
+    await flushPromises();
+
+    let resolveRefresh!: (value: {
+      content: typeof activeUser[];
+      page: number;
+      size: number;
+      totalElements: number;
+      totalPages: number;
+    }) => void;
+    vi.mocked(searchAdminUsers).mockImplementationOnce(
+      () => new Promise((resolve) => { resolveRefresh = resolve; }),
+    );
+
+    const refresh = wrapper.get('button').trigger('click');
+    await flushPromises();
+    expect(wrapper.get('[data-testid="admin-user-status-7"]').attributes('disabled')).toBeDefined();
+
+    resolveRefresh({
+      content: [activeUser],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    });
+    await refresh;
+    await flushPromises();
+    expect(setAdminUserStatus).not.toHaveBeenCalled();
+  });
+
   it('filters the real user list by role', async () => {
     const wrapper = mount(AdminUsersPage);
     await flushPromises();

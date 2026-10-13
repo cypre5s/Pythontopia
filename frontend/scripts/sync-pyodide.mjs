@@ -2,7 +2,7 @@
 /**
  * sync-pyodide.mjs — 把 Pyodide 运行时自托管到前端 public/ 下。
  *
- * @file 从 `node_modules/pyodide` 复制启动 Pyodide 所需的最小运行时文件到
+ * @file 从 `node_modules/pyodide` 复制运行时数据文件到
  *        `frontend/public/pyodide/`，让前端以同源路径 `/pyodide/` 加载，
  *        避免第三方 CDN（jsdelivr）被浏览器「跟踪保护 / Tracking Prevention」
  *        拦截 storage，从而导致 Pyodide 加载告警 / 失败。
@@ -10,9 +10,9 @@
  * @summary
  *   - 源：`<frontend>/node_modules/pyodide`
  *   - 目标：`<frontend>/public/pyodide`
- *   - 只复制启动核心（不含按需下载的科学计算 wheel），约 13MB
+ *   - 只复制 WASM、标准库和锁文件（不含按需下载的科学计算 wheel），约 12MB
  *   - 幂等：目标已是最新（大小一致）则跳过；--force 强制覆盖
- *   - 缺源（未 npm i pyodide）时不报错退出（保留 CDN 回退），仅告警
+ *   - Pyodide JS 模块由前端 Worker bundle 提供；这里只发布运行所需的数据文件
  *
  * @example
  *   node scripts/sync-pyodide.mjs            # 同步
@@ -32,21 +32,23 @@ const FRONTEND_ROOT = path.resolve(__dirname, '..');
 const SRC_ROOT = path.join(FRONTEND_ROOT, 'node_modules', 'pyodide');
 const DEST_ROOT = path.join(FRONTEND_ROOT, 'public', 'pyodide');
 
-// 启动 Pyodide 核心运行时所需的最小文件集（不含 numpy/pandas 等按需 wheel）。
+// Worker 将 Pyodide JS 模块打包；运行时只需从同源目录读取这些数据文件。
 const RUNTIME_FILES = [
+  'pyodide.asm.wasm',
+  'python_stdlib.zip',
+  'pyodide-lock.json',
+];
+
+// 清掉上一套运行时按 URL 加载的 JS 文件，避免保留重复 bundle。
+const OBSOLETE_RUNTIME_FILES = [
+  'pyodide.asm.js',
+  'pyodide.asm.mjs',
   'pyodide.js',
   'pyodide.js.map',
   'pyodide.mjs',
   'pyodide.mjs.map',
-  'pyodide.asm.mjs',
-  'pyodide.asm.wasm',
-  'python_stdlib.zip',
-  'pyodide-lock.json',
   'package.json',
 ];
-
-// 314.x 改用 ES module glue；清理 0.25.x 遗留文件，避免发布包多带无用的旧 ABI。
-const OBSOLETE_RUNTIME_FILES = ['pyodide.asm.js'];
 
 const quiet = process.argv.includes('--quiet');
 const force = process.argv.includes('--force');
@@ -67,8 +69,8 @@ async function statSafe(p) {
 async function main() {
   const srcStat = await statSafe(SRC_ROOT);
   if (!srcStat) {
-    // 没装 pyodide：不阻断构建，运行时自动回退 CDN。
-    log('未找到 node_modules/pyodide，跳过（运行时回退 CDN）。先 `npm i` 可启用自托管。');
+    // Pyodide 是前端依赖；未安装依赖的场景不阻断同步脚本。
+    log('未找到 node_modules/pyodide，跳过。先 `npm install` 安装前端依赖。');
     return;
   }
 
@@ -98,6 +100,6 @@ async function main() {
 }
 
 main().catch((err) => {
-  // 同步失败不阻断 dev/build（运行时回退 CDN），仅告警。
-  console.warn('[sync-pyodide] 同步失败（运行时将回退 CDN）：', err?.message ?? err);
+  // 同步失败不阻断 dev/build，仅告警。
+  console.warn('[sync-pyodide] 同步失败：', err?.message ?? err);
 });

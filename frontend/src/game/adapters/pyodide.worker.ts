@@ -1,20 +1,11 @@
 /// <reference lib="webworker" />
 
 import type { PyodideWorkerRequest, PyodideWorkerResponse } from './pyodideProtocol';
-
-interface WorkerPyodide {
-  runPython(code: string): unknown;
-  setStdin(handler: { stdin: () => string | null }): void;
-  setStdout(handler: { batched: (output: string) => void }): void;
-  setStderr(handler: { batched: (output: string) => void }): void;
-}
-
-interface PyodideModule {
-  loadPyodide(options: { indexURL: string }): Promise<WorkerPyodide>;
-}
+import { loadPyodide, type PyodideInterface } from 'pyodide';
+import createPyodideModule from 'pyodide/pyodide.asm.mjs';
 
 const workerScope = self as DedicatedWorkerGlobalScope;
-let pyodidePromise: Promise<WorkerPyodide> | null = null;
+let pyodidePromise: Promise<PyodideInterface> | null = null;
 
 workerScope.addEventListener('message', (event: MessageEvent<PyodideWorkerRequest>) => {
   void handleMessage(event.data);
@@ -63,13 +54,9 @@ async function handleMessage(message: PyodideWorkerRequest): Promise<void> {
   }
 }
 
-function ensurePyodide(indexUrl: string): Promise<WorkerPyodide> {
+function ensurePyodide(indexUrl: string): Promise<PyodideInterface> {
   if (!pyodidePromise) {
-    pyodidePromise = (async () => {
-      const moduleUrl = `${indexUrl.replace(/\/?$/, '/') }pyodide.mjs`;
-      const pyodideModule = (await import(/* @vite-ignore */ moduleUrl)) as PyodideModule;
-      return pyodideModule.loadPyodide({ indexURL: indexUrl });
-    })();
+    pyodidePromise = loadPyodide({ indexURL: indexUrl, createPyodideModule });
   }
   return pyodidePromise;
 }

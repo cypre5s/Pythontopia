@@ -367,6 +367,8 @@ class OpenAiCompatProvider:
 
         从 kwargs 弹出 model_tier，避免它被透传进 OpenAI 兼容请求体。
         """
+        if "model" in kwargs:
+            raise RuntimeError("DeepSeek request model override is disabled; use model_tier")
         tier = kwargs.pop("model_tier", None)
         if tier == "vision":
             if not self.vision_model:

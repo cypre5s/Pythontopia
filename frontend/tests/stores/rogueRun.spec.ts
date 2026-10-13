@@ -181,7 +181,7 @@ beforeEach(() => {
             snapshot.phase = 'challenge';
           } else {
             node.state = 'cleared';
-            snapshot.phase = node.kind === 'boss' ? 'cleared' : node.kind === 'elite' ? 'reward' : 'map';
+            snapshot.phase = node.kind === 'boss' ? 'over' : node.kind === 'elite' ? 'reward' : 'map';
             for (const nextId of node.next) {
               const next = snapshot.nodes.find((item) => item.id === nextId);
               if (next?.state === 'locked') next.state = 'available';
@@ -664,6 +664,31 @@ describe('rogueRun store', () => {
     expect(run.phase).toBe('challenge');
   });
 
+  it('keeps the study event difficulty when retrying a failed challenge', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const node = run.nodes.find((n) => n.layer === 0)!;
+    node.kind = 'event';
+    setServerNode(node.id, (serverNode) => { serverNode.kind = 'event'; });
+    await run.enterNode(node.id);
+    await run.chooseEvent('study');
+    const studyDifficulty = run.activeDifficulty;
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: false, passedTestCases: 0, totalTestCases: 1, score: 0, feedback: 'retry',
+    });
+
+    await run.submitChallenge();
+    await run.retryChallenge();
+
+    expect(judgeMock.retryPrefetch).toHaveBeenCalledWith(expect.objectContaining({
+      difficulty: studyDifficulty,
+    }));
+    expect(judgeMock.fetchProblem).toHaveBeenLastCalledWith(expect.objectContaining({
+      difficulty: studyDifficulty,
+    }));
+    expect(run.activeDifficulty).toBe(studyDifficulty);
+  });
+
   it('applies the event study score multiplier only to the local game score', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);
@@ -791,7 +816,63 @@ describe('rogueRun store', () => {
     await run.submitChallenge();
     expect(run.nodes.find((n) => n.id === node!.id)?.state).toBe('cleared');
     await run.continueAfterChallenge();
-    expect(run.phase).toBe('cleared');
+    expect(run.phase).toBe('over');
+    expect(run.isVictory).toBe(true);
+  });
+
+  it('resumes an already claimed daily run instead of deleting it and claiming again', async () => {
+    const dailyRun = serverRun(null, 'PY43-KC-001', 2, true);
+    frontierApiMock.fetchExpeditionRun.mockResolvedValueOnce(dailyRun);
+    const run = useRogueRunStore();
+
+    await run.startDailyRun();
+
+    expect(run.phase).toBe('map');
+    expect(run.isDaily).toBe(true);
+    expect(frontierApiMock.deleteExpeditionRun).not.toHaveBeenCalled();
+    expect(frontierApiMock.createExpeditionRun).not.toHaveBeenCalled();
+  });
+
+  it('does not replace an active regular run when the daily challenge is selected', async () => {
+    frontierApiMock.fetchExpeditionRun.mockResolvedValueOnce(serverRun());
+    const run = useRogueRunStore();
+
+    await run.startDailyRun();
+
+    expect(run.phase).toBe('idle');
+    expect(run.errorMessage).toContain('先继续或弃掉当前远征');
+    expect(frontierApiMock.deleteExpeditionRun).not.toHaveBeenCalled();
+    expect(frontierApiMock.createExpeditionRun).not.toHaveBeenCalled();
+  });
+
+  it('recovers score settlement for a terminal run after a page reload', async () => {
+    const terminal = serverRun();
+    terminal.phase = 'over';
+    terminal.currentNodeId = terminal.nodes.find((node) => node.kind === 'boss')?.id ?? null;
+    const finalBoss = terminal.nodes.find((node) => node.id === terminal.currentNodeId);
+    if (finalBoss) finalBoss.state = 'cleared';
+    terminal.score = 120;
+    const board = { entries: [], selfRank: null, selfBest: 120, inClass: false };
+    frontierApiMock.fetchExpeditionRun.mockResolvedValue(terminal);
+    frontierApiMock.submitExpeditionScore
+      .mockRejectedValueOnce(new Error('temporary network failure'))
+      .mockResolvedValueOnce(board);
+
+    const firstPage = useRogueRunStore();
+    await firstPage.refreshSavedRun();
+    expect(firstPage.hasSavedRun).toBe(true);
+    expect(firstPage.savedRunSummary?.settlementPending).toBe(true);
+    await firstPage.resumeSavedRun();
+    expect(firstPage.phase).toBe('over');
+    expect(firstPage.isVictory).toBe(true);
+
+    setActivePinia(createPinia());
+    const reloadedPage = useRogueRunStore();
+    await reloadedPage.refreshSavedRun();
+    expect(await reloadedPage.resumeSavedRun()).toBe(true);
+    expect(reloadedPage.phase).toBe('over');
+    expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledTimes(2);
+    expect(frontierApiMock.deleteExpeditionRun).not.toHaveBeenCalled();
   });
 
   it('daily run marks today done after the run ends and blocks a second daily', async () => {

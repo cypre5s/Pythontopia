@@ -58,6 +58,8 @@ export interface ChallengePreloadState {
 const IDLE_PRELOAD: ChallengePreloadState = {
   phase: 'idle', attempts: 0, errorMessage: null, updatedAt: null,
 };
+const PREFETCH_POLL_INTERVAL_MS = 500;
+const PREFETCH_MAX_POLLS = 10;
 
 export interface UseChallengeJudgeReturn {
   fetchProblem: (args: ChallengeProblemArgs) => Promise<BossProblemDto>;
@@ -102,9 +104,13 @@ export function useChallengeJudge(): UseChallengeJudgeReturn {
 
   async function fetchProblem(args: ChallengeProblemArgs): Promise<BossProblemDto> {
     let preload = getPrefetchState(args);
-    if (getPrefetchState(args).phase !== 'idle') {
+    if (preload.phase !== 'idle') {
       // 点击节点时最后确认一次；PENDING/FAILED 不会被客户端乐观改成 READY。
       preload = await refreshPrefetch(args).catch(() => getPrefetchState(args));
+    }
+    for (let attempt = 0; preload.phase === 'pending' && attempt < PREFETCH_MAX_POLLS; attempt += 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, PREFETCH_POLL_INTERVAL_MS));
+      preload = await refreshPrefetch(args);
     }
     if (preload.phase === 'pending') throw new Error('题目仍在生成，请稍后重试');
     return request(args);

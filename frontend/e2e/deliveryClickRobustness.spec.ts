@@ -375,6 +375,51 @@ test.describe('上线交付深链点击鲁棒性 @delivery-clicks', () => {
     assertNoFatal(report, '核心深链刷新点击链');
   });
 
+  test('训练场可以在本地 Pyodide Worker 执行代码并显示输出', async ({
+    page,
+    context,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    await prepareStudent(context, request);
+
+    await page.goto(`/training?problemId=${TRAINING_PROBLEM_ID}`, { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('training-panel')).toBeVisible({ timeout: 60_000 });
+
+    await page.getByTestId('code-editor').locator('.cm-content').fill('print("pyodide-e2e-ok")');
+    await page.getByTestId('preview-button').click();
+    await expect(page.getByTestId('preview-output')).toContainText('pyodide-e2e-ok', {
+      timeout: 30_000,
+    });
+  });
+
+  test('正式判题会将 Python 代码交给本地 Piston 沙箱执行', async ({ context, request }) => {
+    test.skip(process.env.PYT_E2E_PISTON !== '1', '本地 Piston 沙箱验收需显式启用');
+    const session = await prepareStudent(context, request);
+    const response = await request.post(`${BASE_URL}/api/submissions`, {
+      headers: authHeaders(session),
+      data: {
+        problemId: TRAINING_PROBLEM_ID,
+        code: 'print("server-piston-e2e")',
+        source: 'TRAINING',
+      },
+      timeout: 30_000,
+    });
+    expect(response.ok(), `正式提交失败：HTTP ${response.status()} ${await response.text()}`).toBe(true);
+
+    const submission = (await response.json()) as { id: number };
+    const detailResponse = await request.get(`${BASE_URL}/api/submissions/${submission.id}`, {
+      headers: authHeaders(session),
+    });
+    expect(detailResponse.ok(), `提交详情失败：HTTP ${detailResponse.status()}`).toBe(true);
+    const detail = (await detailResponse.json()) as {
+      judgeResult: { verdict: string; totalCases: number } | null;
+    };
+    expect(detail.judgeResult).not.toBeNull();
+    expect(['AC', 'WA']).toContain(detail.judgeResult?.verdict);
+    expect(detail.judgeResult?.totalCases).toBeGreaterThan(0);
+  });
+
   test('教师首页和班级看板多标签点击稳定', async ({ page, context, request }) => {
     test.skip(!TEACHER_SESSION_AVAILABLE, '未提供教师账号或教师邀请码，跳过教师点击鲁棒性验收');
     test.setTimeout(180_000);

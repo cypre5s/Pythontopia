@@ -2,9 +2,11 @@ package com.pythontopia.world.boss;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
 import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
+import jakarta.annotation.PostConstruct;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -12,12 +14,11 @@ import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.http.HttpStatus;
-import org.springframework.beans.factory.annotation.Autowired;
-import com.pythontopia.common.error.BusinessException;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -64,6 +65,20 @@ public class EndlessPregenService {
   EndlessPregenService(
       BossGraphClient graphClient, JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
     this(graphClient, jdbcTemplate, objectMapper, null);
+  }
+
+  // shortcut: recovery assumes one worker, add ownership leases before enabling multiple replicas.
+  @PostConstruct
+  public void recoverAbandonedPendingAtStartup() {
+    int recovered =
+        jdbcTemplate.update(
+            "UPDATE pregenerated_problem"
+                + " SET status = 'FAILED', payload = NULL, problem_id = NULL,"
+                + " error_message = '服务重启后预加载中断，可重试', updated_at = now()"
+                + " WHERE status = 'PENDING'");
+    if (recovered > 0) {
+      log.warn("recovered {} abandoned prefetch jobs after startup", recovered);
+    }
   }
 
   /** 同步创建或复用一个可追踪预加载任务；FAILED 任务在相同维度再次调用时进入下一次尝试。 */
@@ -250,6 +265,10 @@ public class EndlessPregenService {
       ProfileSignalsPayload signals,
       int generationAttempt) {
     try {
+      if (!isCurrentPendingAttempt(jobId, userId, generationAttempt)) {
+        log.info("skip cancelled prefetch job={} attempt={}", jobId, generationAttempt);
+        return;
+      }
       BossInternalProblem problem =
           graphClient.requestProblem(
               userId, chapter, stage, kcCode, difficulty, preferredKc, kind, signals);
@@ -312,6 +331,18 @@ public class EndlessPregenService {
         boundedError(message),
         jobId,
         generationAttempt);
+  }
+
+  private boolean isCurrentPendingAttempt(long jobId, Long userId, int generationAttempt) {
+    Boolean pending =
+        jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM pregenerated_problem"
+                + " WHERE id = ? AND user_id = ? AND status = 'PENDING' AND attempt_count = ?)",
+            Boolean.class,
+            jobId,
+            userId,
+            generationAttempt);
+    return Boolean.TRUE.equals(pending);
   }
 
   /** 查询同一完整维度的最新可观察状态；没有任务时返回 IDLE。 */

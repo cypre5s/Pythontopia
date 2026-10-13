@@ -90,6 +90,7 @@ def test_reference_timeout() -> None:
     [
         "import socket\nprint('x')",
         "import subprocess\nprint('x')",
+        "import os\nos.system('true')",
         "from urllib.request import urlopen\nprint('x')",
         "import ctypes\nprint('x')",
         "import multiprocessing\nprint('x')",
@@ -148,6 +149,7 @@ def test_list_forbidden_imports_returns_known_set() -> None:
     items = set(list_forbidden_imports())
     assert "socket" in items
     assert "subprocess" in items
+    assert "os" in items
     assert "requests" in items
 
 

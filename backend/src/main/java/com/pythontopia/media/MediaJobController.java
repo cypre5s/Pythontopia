@@ -73,7 +73,7 @@ public class MediaJobController {
   }
 
   private boolean ownedBy(MediaJob job, CurrentUserPrincipal user) {
-    return job.userId() == null || job.userId().equals(user.userId());
+    return job.userId() != null && job.userId().equals(user.userId());
   }
 
   private BusinessException notFound() {

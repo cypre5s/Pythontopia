@@ -4,6 +4,10 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
   plugins: [vue()],
+  worker: {
+    // Pyodide's module worker imports ESM chunks; the default IIFE format cannot split them.
+    format: 'es',
+  },
   server: {
     // R-12 遗留：vite 默认 port 被占用时回退 5174，但后端 CORS allowlist 只有 5173 →
     // 预检 OPTIONS /api/auth/login 直接 403，玩家以为登录炸了。strictPort=true 让

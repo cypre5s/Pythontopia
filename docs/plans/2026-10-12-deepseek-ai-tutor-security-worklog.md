@@ -245,3 +245,56 @@
 - 本机忽略文件 `deploy/.env` 中过短的教师邀请码已随机重置到满足启动校验的长度；未打印或提交其值。DeepSeek 请求未运行。
 - RED/GREEN：Boss 阶段回归先失败于 phase 2 仍停留 phase 2，修复后后端五类测试 79 passed，Testcontainers 空库迁移到 V205；Web store 45 passed、typecheck 与定向 ESLint 通过；Graph 策略/导师文图链路 102 passed、Ruff 通过；9 个 Java 文件定向 Spotless 通过。全仓 Spotless 仍有其他文件的既有格式问题。
 - 尚未验证：本轮没有启动 Web 全栈、没有发 DeepSeek 请求或执行 Piston，也未测无尽远征性能。Boss 重复题阶段推进已由数据库集成回归覆盖；对话中曾展示的 DeepSeek key 应轮换后再用于生产。
+
+## 2026-10-13 补充：拦截远征生成代码的 os 模块
+
+- Graph Boss 自测/评估共用 AST 扫描器新增 `os` 禁止项，`import os; os.system(...)` 会在交给 Piston 前被拒绝。扫描器不替代 Piston/Isolate 的实际隔离边界。
+- RED/GREEN：新增恶意调用回归先失败后通过；Boss 自测、评估及路由 43 tests 通过，Ruff 通过。
+- 未启动全栈、未调用 DeepSeek 或 Piston；无尽远征性能仍待功能复核完成后测试。
+
+## 2026-10-13 补充：远征恢复与 Web 学习状态可靠性
+
+- Web 远征：`over` 终局进入可恢复保存，并保留待结算状态；刷新后重试同一局排行榜结算。日挑战续局先恢复已有 run，普通远征不能被日挑战开局覆盖。Boss 已清除节点决定胜利展示；挑战重试保留首次难度。
+- Web 画像与教学：Twin 周报和八维画像加载失败展示可重试错误态；教师快速切换班级后，前一班级迟到的响应不再覆盖当前成员、任务或看板数据。
+- 后端安全与数据一致性：媒体读取、流式输出拒绝空用户或非所有者；掌握度事件按用户/KC 获取 PostgreSQL 事务级锁后再读写快照，避免并发增量互相覆盖。远征正式判题账本上限调整为 36，匹配当前最多 12 个挑战阶段、每阶段可换题重试的有界容量。
+- Graph Boss 自测扫描拒绝 `os` 导入，阻断参考解调用 `os.system`；Piston/Isolate 仍是代码执行的安全边界。
+- 当前复验：Web 定向 Vitest 5 文件 / 86 tests、`npm run typecheck`、定向 ESLint 通过；后端计分/媒体/掌握度/Twin 定向 Maven 测试退出码为 0，Testcontainers 空库迁移到 V205；Graph `test_self_tester.py` 18 tests 与定向 Ruff 通过。
+- 本轮没有启动全栈、发起 DeepSeek 请求、调用 Piston 或测性能。此前对话中暴露的 DeepSeek 凭证应轮换后再用于真实请求。
+- 预生成 pending 已有最多 10 次、每 500ms 的前端轮询；尚未覆盖后台任务主动取消与前台生成超时后的重复请求保护。Twin 仍是可解释的 7 日只读摘要而非预测模型；画像被动事件持久化的失败补偿/重放尚无 outbox。这些缺口需要单独设计与验收。
+
+## 2026-10-13 补充：DeepSeek 模型锁定与部署门禁
+
+- OpenAI 兼容 provider 拒绝调用方通过 `model=` 覆盖运行配置；只允许通过 `model_tier` 选择受限的 chat/fast/vision 模型，避免请求绕过 DeepSeek 模型 allowlist。流式和非流式均有回归覆盖。
+- 新增共享部署模型契约；ECS preflight 和 release installer 会拒绝不支持的文本/fast/视觉模型名，且留空 fast 档继续使用默认回落。allowlist 与 Graph provider 一致：文本/fast 为 `deepseek-v4-pro` 或 `deepseek-flash`，vision 仅 `deepseek-flash`。
+- 官方文档确认 `deepseek-v4-pro` 为文本输入/输出，`deepseek-flash` 支持图像输入并输出文本；[模型列表](https://api-docs.deepseek.com/api/list-models/) 和 [Vision 指南](https://api-docs.deepseek.com/guides/vision/) 是本次核对依据。
+- 本地忽略文件 `deploy/.env` 已配置 `openai_compat`、DeepSeek endpoint 及文本/fast/vision 模型字段；仅检查是否存在密钥，不读取其值。本轮没有启动服务或调用 API；对话中暴露过的密钥应轮换后再发起真实请求。
+- RED/GREEN 后验证：provider、策略与导师文图输入 57 tests 通过（含 1 项既有 pytest asyncio 标记警告）；AutoGen Tutor runtime/workflow、附件、图像和流式响应 73 tests 通过；Web 工坊/伴学图像提交 4 个测试文件 / 64 tests 通过；部署模型契约、生产 AI readiness 契约、部署脚本 `bash -n` 通过。没有运行全栈联测或无尽远征性能测量。
+
+## 2026-10-13 补充：HTTP 入口、注册隐私与预生成恢复
+
+- Nginx 80 端口现在只响应 ACME challenge，其余请求固定 308 到可信 IP 的 HTTPS；避免把密码、JWT 或业务请求经明文转发，也不使用客户端提供的 Host 构造跳转目标。发布、回滚与公网验收脚本同步校验新入口。
+- 公网 `/api/classrooms/join` 限制为每来源 IP 5 次/分钟并返回 429；生产流量必须经过主机 Nginx。认证、停用账号和 JWT 代次已有的门禁保持原样。
+- 邮箱目前是可选且未验证的资料字段，不被登录、恢复或查询使用。V206 删除 `users_email_key`，保留 `username` 唯一约束，避免通过注册响应枚举已登记邮箱；没有修改已有邮箱值。
+- 预生成服务单实例启动时将遗留 PENDING 行改为 FAILED，用户可重试；异步任务出队后先检查 PENDING 状态和 attempt，已取消/被替代任务不会再调用 Graph。已经进入阻塞 HTTP 调用的任务不能主动取消，但数据库条件更新仍阻止其覆盖新状态。
+- TDD：邮箱重复插入的 Testcontainers 回归在 V206 前因 `users_email_key` 失败，迁移后通过；空库迁移到 V206，邮箱可复用而用户名仍唯一。预生成回归覆盖启动清理、排队任务取消和旧 attempt 晚到，`EndlessPregenServiceTest` 9 passed，`ExpeditionRunPostgresIntegrationTest` 22 passed。Nginx 入口契约、回滚选择和 HTTPS 转发契约脚本通过；临时 Nginx 1.27 容器验证 Host 不可控、ACME HTTP-01 可用且加入码接口连续请求触发 429。
+- 未执行全栈浏览器、真实 DeepSeek/Piston 请求或性能测试。Piston 远程服务的低权身份、网络/文件隔离尚无实际运行时证据；继续以 fail closed 为当前安全行为。
+
+## 2026-10-13 补充：远征成绩终局与通关状态
+
+- 复核 Web 远征服务端动作链后发现两个真实缺口：排行榜固定把 `cleared` 写成 `FALSE`；成绩接口即使 run 仍在 `map/challenge` 阶段也能直接结算。
+- 成绩结算查询现在锁定且只接受 `phase='over'` 的服务端活动 run；`cleared` 由服务端 JSONB 地图的 Boss 节点状态计算，客户端快照不能改变这两个事实。
+- TDD：三阶段 Boss 集成回归先暴露排行榜 `cleared=false`；提前结算回归先暴露活动 run 被置为 `SETTLED`。修复后 `ExpeditionScoreServiceTest` 10 tests 与 `ExpeditionRunPostgresIntegrationTest` 22 tests 通过；Testcontainers 空库迁移到 V206。普通主动结束记录 `cleared=false`，三阶段 Boss 通过记录 `cleared=true`。
+- 仍未验证生产 Piston/Isolate 的实际隔离属性；未发新 DeepSeek 请求，也未测远征性能。此前对话中出现的 API 凭证应先轮换。
+
+## 2026-10-13 补充：训练场 Pyodide Worker 打包与运行回归
+
+- 训练场开发态发现未知动态导入 `/pyodide/pyodide.mjs` 被 Vite 改写为 `?import`，命中 public 文件后返回 500。Worker 改为从 npm 包静态导入 Pyodide ESM 与 asm 模块，显式传入 `createPyodideModule`；Vite Worker 输出切到 ESM 以支持依赖分块。同步脚本仅复制本地 WASM、Python 标准库和锁文件，并清除旧 JS 运行时文件。
+- RED/GREEN：浏览器回归在旧实现下因 Vite 错误遮罩无法运行；重启 Vite 后用 `print("pyodide-e2e-ok")` 实际执行并显示结果。生产构建后的 Worker 也在 Chromium 中加载 `/pyodide/` 数据并输出 `pyodide-prod-ok`。
+- `npm run build`（含 vue-tsc）通过。Pyodide 上游 ESM 引入的 Node builtin externalization 和 `eval` 警告仍会在构建时出现；生产 Worker 实测正常。本轮没有请求 DeepSeek/Piston，也未测无尽远征性能。
+
+## 2026-10-13 补充：Web 依赖审计与全量构建
+
+- `npm audit` 首次发现 7 项生产依赖高危公告；更新 Vue、Axios 和受影响依赖，并升级 Vite/Vitest、ESLint Vue 插件、jsdom 与 TypeScript ESLint。Mermaid 子依赖 KaTeX 固定至 `0.18.2`，npm 官方 registry 的完整审计结果为 0 vulnerabilities。
+- Vitest 4 全量运行复现 ClassroomDetail 用例间调用次数串扰；该组件已经有请求中互斥保护，问题来自 hoisted mock 未清空。测试 `beforeEach` 增加 `vi.clearAllMocks()` 后，单文件 9 tests 及全量 255 文件 / 2512 tests 通过；全量学习 store 单测 4 tests 独立通过，teardown 报错未复现。
+- `npm run build`（含 vue-tsc 与 Vite production build）通过；全量 ESLint 0 errors、131 warnings。锁文件只恢复版本和 integrity 均未变化包的原 registry URL，保留实际依赖版本变更。
+- 没有启动全栈、发起 DeepSeek/Piston 请求或测无尽远征性能。前端测试环境使用 jsdom 29，Node 20 需为 20.19+；Piston/Isolate 的操作系统隔离仍没有本机运行证据。

@@ -97,6 +97,12 @@ function resetAllMocks(): void {
   }
 }
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((done) => { resolve = done; });
+  return { promise, resolve };
+}
+
 describe('teacher store - 初始状态 / getters', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -288,6 +294,137 @@ describe('teacher store - openClassroom / refreshDetail', () => {
     await store.refreshDetail();
     expect(teacherMocks.listClassroomMembersByStatus).not.toHaveBeenCalled();
     expect(teacherMocks.listClassroomQuestsForTeacher).not.toHaveBeenCalled();
+  });
+
+  it('快速切换班级时忽略较慢的旧成员和任务响应', async () => {
+    const firstMembers = deferred<ReturnType<typeof makeMember>[]>();
+    const firstQuests = deferred<ReturnType<typeof makeQuest>[]>();
+    const secondMembers = deferred<ReturnType<typeof makeMember>[]>();
+    const secondQuests = deferred<ReturnType<typeof makeQuest>[]>();
+    teacherMocks.listClassroomMembersByStatus.mockImplementation((id: number) =>
+      id === 1 ? firstMembers.promise : secondMembers.promise,
+    );
+    teacherMocks.listClassroomQuestsForTeacher.mockImplementation((id: number) =>
+      id === 1 ? firstQuests.promise : secondQuests.promise,
+    );
+    const store = useTeacherStore();
+    store.classrooms = [makeClassroom({ classroomId: 1 }), makeClassroom({ classroomId: 2 })];
+
+    const first = store.openClassroom(1);
+    const second = store.openClassroom(2);
+    secondMembers.resolve([makeMember({ displayName: '新班学生' })]);
+    secondQuests.resolve([makeQuest({ classroomId: 2, title: '新班任务' })]);
+    await second;
+    firstMembers.resolve([makeMember({ displayName: '旧班学生' })]);
+    firstQuests.resolve([makeQuest({ classroomId: 1, title: '旧班任务' })]);
+    await first;
+
+    expect(store.currentId).toBe(2);
+    expect(store.current.members[0]?.displayName).toBe('新班学生');
+    expect(store.current.quests[0]?.title).toBe('新班任务');
+  });
+
+  it('班级切换时忽略较慢的旧看板响应', async () => {
+    const firstHeatmap = deferred<unknown>();
+    const secondHeatmap = deferred<unknown>();
+    teacherMocks.fetchKcHeatmap.mockImplementation((id: number) =>
+      id === 1 ? firstHeatmap.promise : secondHeatmap.promise,
+    );
+    teacherMocks.fetchQuestSummary.mockResolvedValue([]);
+    teacherMocks.fetchErrorHotspots.mockResolvedValue([]);
+    teacherMocks.fetchResourceUsage.mockResolvedValue(null);
+    teacherMocks.fetchRecentActivity.mockResolvedValue([]);
+    const store = useTeacherStore();
+    store.currentId = 1;
+
+    const first = store.loadDashboard(1);
+    store.currentId = 2;
+    const second = store.loadDashboard(2);
+    secondHeatmap.resolve([{ kcCode: 'NEW' }]);
+    await second;
+    firstHeatmap.resolve([{ kcCode: 'OLD' }]);
+    await first;
+
+    expect(store.current.dashboard.kcHeatmap).toEqual([{ kcCode: 'NEW' }]);
+  });
+
+  it('切换班级后看板请求失败也不保留上一班级的数据', async () => {
+    const store = useTeacherStore();
+    store.classrooms = [makeClassroom({ classroomId: 1 }), makeClassroom({ classroomId: 2 })];
+    store.currentId = 1;
+    store.current.classroom = makeClassroom({ classroomId: 1 });
+    store.current.members = [makeMember({ displayName: '旧班学生' })];
+    store.current.quests = [makeQuest({ classroomId: 1, title: '旧班任务' })];
+    store.current.dashboard.kcHeatmap = [
+      {
+        kcCode: 'OLD-KC',
+        kcName: '旧班知识点',
+        chapterId: 1,
+        chapterOrder: 1,
+        avgMastery: 0.8,
+        studentCount: 1,
+        masteredCount: 1,
+        learningCount: 0,
+        strugglingCount: 0,
+      },
+    ];
+    store.current.dashboard.questSummary = [
+      {
+        classroomQuestId: 1,
+        title: '旧班任务',
+        dueDate: '2026-10-13',
+        status: 'ACTIVE',
+        totalStudents: 1,
+        completedCount: 1,
+        inProgressCount: 0,
+        skippedCount: 0,
+        completionRate: 1,
+      },
+    ];
+    store.current.dashboard.errorHotspots = [
+      { kcCode: 'OLD-KC', kcName: '旧班知识点', failedSubmissionCount: 1, affectedStudentCount: 1, categories: [] },
+    ];
+    store.current.dashboard.resourceUsage = {
+      periodStart: '2026-10-06',
+      periodEnd: '2026-10-13',
+      totals: [{ resourceType: 'VIDEO', count: 1 }],
+      daily: [],
+    };
+    store.current.dashboard.recentActivity = [
+      {
+        studentId: 7,
+        displayName: '旧班学生',
+        eventKind: 'SUBMISSION',
+        kcCode: 'OLD-KC',
+        detail: null,
+        occurredAt: '2026-10-13T08:00:00Z',
+      },
+    ];
+
+    teacherMocks.listClassroomMembersByStatus.mockResolvedValue([]);
+    teacherMocks.listClassroomQuestsForTeacher.mockResolvedValue([]);
+    teacherMocks.fetchKcHeatmap.mockRejectedValue(new Error('看板暂不可用'));
+    teacherMocks.fetchQuestSummary.mockResolvedValue([]);
+    teacherMocks.fetchErrorHotspots.mockResolvedValue([]);
+    teacherMocks.fetchResourceUsage.mockResolvedValue(null);
+    teacherMocks.fetchRecentActivity.mockResolvedValue([]);
+
+    const switching = store.reloadCurrent(2);
+
+    expect(store.current.members).toEqual([]);
+    expect(store.current.quests).toEqual([]);
+    expect(store.current.dashboard.kcHeatmap).toEqual([]);
+    expect(store.current.dashboard.questSummary).toEqual([]);
+    expect(store.current.dashboard.errorHotspots).toEqual([]);
+    expect(store.current.dashboard.resourceUsage).toBeNull();
+    expect(store.current.dashboard.recentActivity).toEqual([]);
+
+    await switching;
+
+    expect(store.currentId).toBe(2);
+    expect(store.current.dashboard.lastError).toBe('看板暂不可用');
+    expect(store.current.dashboard.kcHeatmap).toEqual([]);
+    expect(store.current.members).toEqual([]);
   });
 });
 

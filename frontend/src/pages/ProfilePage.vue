@@ -24,6 +24,7 @@ const toast = useToastStore();
 const router = useRouter();
 
 const dimensions = ref<ProfileDimensionDto[]>([]);
+const dimensionsError = ref('');
 const savingKey = ref<string | null>(null);
 
 const COGNITIVE_STYLE_KEY = 'cognitive_style';
@@ -41,10 +42,12 @@ function goBack(): void {
 }
 
 async function loadDimensions(): Promise<void> {
+  dimensionsError.value = '';
   try {
     dimensions.value = await getProfileDimensions();
   } catch {
     dimensions.value = [];
+    dimensionsError.value = '画像维度暂时无法加载，请重试。';
   }
 }
 
@@ -242,6 +245,23 @@ const dimensionCards = computed(() => {
         <span class="nav-breadcrumb">我的画像</span>
       </header>
 
+      <div
+        v-if="dimensionsError"
+        class="profile-load-error"
+        role="alert"
+        data-testid="profile-dimensions-error"
+      >
+        <span>{{ dimensionsError }}</span>
+        <PyButton
+          variant="secondary"
+          size="sm"
+          test-id="profile-dimensions-retry"
+          @click="loadDimensions"
+        >
+          重试
+        </PyButton>
+      </div>
+
       <div class="profile-body">
         <aside
           v-if="dimensions.length > 0"
@@ -407,6 +427,16 @@ const dimensionCards = computed(() => {
   min-height: 0;
   display: flex;
   gap: 16px;
+}
+
+.profile-load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  color: var(--pyt-color-danger, #9b2d20);
+  border: 1px solid var(--pyt-color-danger, #9b2d20);
 }
 
 .profile-col {

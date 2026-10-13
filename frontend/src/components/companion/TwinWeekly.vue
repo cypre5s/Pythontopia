@@ -10,7 +10,9 @@ const report = ref<WeeklyReport | null>(null);
 const busy = ref(true);
 const error = ref('');
 
-onMounted(async () => {
+async function loadReport(): Promise<void> {
+  busy.value = true;
+  error.value = '';
   try {
     report.value = await fetchWeeklyReport();
   } catch {
@@ -18,7 +20,9 @@ onMounted(async () => {
   } finally {
     busy.value = false;
   }
-});
+}
+
+onMounted(() => void loadReport());
 
 const dimLabel: Record<string, string> = {
   error_pattern: '易错', cognitive_style: '风格',
@@ -111,6 +115,14 @@ function promptMastery(delta: {
       class="tw__err"
     >
       {{ error }}
+      <button
+        type="button"
+        class="tw__action"
+        data-testid="twin-weekly-retry"
+        @click="loadReport"
+      >
+        重试
+      </button>
     </div>
     <div
       v-else-if="!report"

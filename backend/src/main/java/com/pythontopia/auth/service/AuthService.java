@@ -67,7 +67,7 @@ public class AuthService {
               request.role());
       return toDto(user);
     } catch (DuplicateKeyException exception) {
-      throw new BusinessException(HttpStatus.CONFLICT, "USERNAME_CONFLICT", "Username or email exists");
+      throw new BusinessException(HttpStatus.CONFLICT, "USERNAME_CONFLICT", "Username exists");
     }
   }
 

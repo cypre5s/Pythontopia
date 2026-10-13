@@ -1,13 +1,17 @@
 package com.pythontopia.world.boss;
 
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
@@ -32,6 +36,10 @@ class EndlessPregenServiceTest {
   @BeforeEach
   void setUp() {
     service = new EndlessPregenService(graphClient, jdbcTemplate, new ObjectMapper());
+    lenient()
+        .when(jdbcTemplate.queryForObject(
+            contains("SELECT EXISTS"), eq(Boolean.class), anyLong(), anyLong(), anyInt()))
+        .thenReturn(true);
   }
 
   @Test
@@ -152,6 +160,28 @@ class EndlessPregenServiceTest {
         .update(
             contains("attempt_count = ?"), anyString(), eq("ai-1"), anyString(), eq(19L), eq(7L),
             eq(1), eq(2), isNull(), isNull(), eq(1));
+  }
+
+  @Test
+  void cancelledQueuedAttemptDoesNotCallGraphWhenDequeued() {
+    when(jdbcTemplate.queryForObject(
+            contains("SELECT EXISTS"), eq(Boolean.class), eq(19L), eq(7L), eq(1)))
+        .thenReturn(false);
+
+    service.generatePrefetch(
+        19L, 7L, 1, 2, "PY43-KC-001", 2, "PY43-KC-001", "dual_track", null, null, null, 1);
+
+    verify(graphClient, never())
+        .requestProblem(eq(7L), eq(1), eq(2), eq("PY43-KC-001"), eq(2),
+            eq("PY43-KC-001"), eq("dual_track"), eq(null));
+  }
+
+  @Test
+  void startupFailsPendingRowsLeftByPreviousProcess() {
+    service.recoverAbandonedPendingAtStartup();
+
+    verify(jdbcTemplate)
+        .update(contains("status = 'FAILED'"));
   }
 
   @Test

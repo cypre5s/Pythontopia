@@ -3,36 +3,27 @@ package com.pythontopia.learner.profile;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.probe.ProbeCatalog;
 import com.pythontopia.learner.profile.dto.DimensionDelta;
-import com.pythontopia.learner.profile.service.PassiveProfileService;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.UUID;
 import org.springframework.context.event.EventListener;
-import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Component;
 
 /**
  * 监听 {@link LearningEvent}，把每类学习事件映射为一个画像维度的被动增量更新。
  *
- * <p>每个事件转成一次 {@link PassiveProfileService#applyDimensionUpdate} 调用，由 service 统一写
- * {@code learner_profile.dimensions} 并追加 {@code profile_revision} 审计；透传的 source 必须落在
- * profile_revision 允许的枚举内（PRACTICE_PASS / PRACTICE_FAIL / DEBUG_FIX / RESOURCE_FEEDBACK 等）。
- *
- * <p>降级：捕获 {@link DataAccessException}（如 {@code dimensions} 列尚未创建）时仅记录 warn 日志，
- * 不影响 mastery 评估等下游链路。
+ * <p>这里仅把可验证学习事件转换为持久化投影任务。数据库更新由 outbox worker 在提交后完成，失败任务会
+ * 留在表中重试，避免进程内事件监听失败后静默丢失画像变化。
  */
 @Component
 public class PassiveProfileRevisionListener {
 
-  private static final Logger log = LoggerFactory.getLogger(PassiveProfileRevisionListener.class);
+  private final ProfileDimensionProjectionOutboxService outboxService;
 
-  private final PassiveProfileService passiveProfileService;
-
-  public PassiveProfileRevisionListener(PassiveProfileService passiveProfileService) {
-    this.passiveProfileService = passiveProfileService;
+  public PassiveProfileRevisionListener(ProfileDimensionProjectionOutboxService outboxService) {
+    this.outboxService = outboxService;
   }
 
   @EventListener
@@ -40,7 +31,8 @@ public class PassiveProfileRevisionListener {
     DimensionDelta delta =
         new DimensionDelta(
             0.02, 1, null, contextOf(event.kcCode(), event.problemId(), null), "PRACTICE_PASS");
-    safeApply(event.userId(), "practical_ability", delta);
+    enqueue(event.userId(), "practical_ability", delta,
+        stableKey("practice_succeeded", event.userId(), event.problemId()));
   }
 
   @EventListener
@@ -52,7 +44,12 @@ public class PassiveProfileRevisionListener {
             event.failureKind() == null ? null : List.of(event.failureKind()),
             contextOf(event.kcCode(), event.problemId(), event.failureKind()),
             "PRACTICE_FAIL");
-    safeApply(event.userId(), "error_pattern", delta);
+    enqueue(event.userId(), "error_pattern", delta,
+        stableKey(
+            "practice_failed",
+            event.userId(),
+            event.problemId(),
+            event.failureKind() == null ? "unspecified" : event.failureKind()));
   }
 
   @EventListener
@@ -60,7 +57,8 @@ public class PassiveProfileRevisionListener {
     Map<String, Object> meta = contextOf(event.kcCode(), null, null);
     meta.put("sessionId", event.sessionId());
     DimensionDelta delta = new DimensionDelta(0.03, 1, null, meta, "PRACTICE_PASS");
-    safeApply(event.userId(), "practical_ability", delta);
+    enqueue(event.userId(), "practical_ability", delta,
+        stableKey("taught_ai_succeeded", event.userId(), event.sessionId()));
   }
 
   @EventListener
@@ -69,7 +67,8 @@ public class PassiveProfileRevisionListener {
     meta.put("sessionId", event.sessionId());
     DimensionDelta delta =
         new DimensionDelta(0.015, 1, List.of("teach_back_failed"), meta, "PRACTICE_FAIL");
-    safeApply(event.userId(), "error_pattern", delta);
+    enqueue(event.userId(), "error_pattern", delta,
+        stableKey("taught_ai_failed", event.userId(), event.sessionId()));
   }
 
   @EventListener
@@ -77,7 +76,8 @@ public class PassiveProfileRevisionListener {
     DimensionDelta delta =
         new DimensionDelta(
             -0.02, null, null, contextOf(event.kcCode(), event.problemId(), null), "DEBUG_FIX");
-    safeApply(event.userId(), "error_pattern", delta);
+    enqueue(event.userId(), "error_pattern", delta,
+        stableKey("debug_resolved", event.userId(), event.problemId()));
   }
 
   @EventListener
@@ -105,7 +105,8 @@ public class PassiveProfileRevisionListener {
               ? "practical_ability"
               : "knowledge_base";
       DimensionDelta delta = new DimensionDelta(0.015, 1, null, meta, "RESOURCE_FEEDBACK");
-      safeApply(event.userId(), dimension, delta);
+      enqueue(event.userId(), dimension, delta,
+          stableKey("resource_check", event.userId(), event.checkId()));
       return;
     }
     List<String> tags =
@@ -115,7 +116,8 @@ public class PassiveProfileRevisionListener {
                 "resource_check_failed",
                 "remediation_" + event.remediationType().toLowerCase(Locale.ROOT));
     DimensionDelta delta = new DimensionDelta(0.015, 1, tags, meta, "PRACTICE_FAIL");
-    safeApply(event.userId(), "error_pattern", delta);
+    enqueue(event.userId(), "error_pattern", delta,
+        stableKey("resource_check", event.userId(), event.checkId()));
   }
 
   /**
@@ -131,7 +133,7 @@ public class PassiveProfileRevisionListener {
     }
     String tag = event.mediaType() == null || event.mediaType().isBlank() ? "video" : event.mediaType();
     DimensionDelta delta = new DimensionDelta(0.01, 1, List.of(tag), meta, "RESOURCE_FEEDBACK");
-    safeApply(event.userId(), "learning_preference", delta);
+    enqueue(event.userId(), "learning_preference", delta, transientKey("media_consumed", event.userId()));
   }
 
   /**
@@ -149,7 +151,7 @@ public class PassiveProfileRevisionListener {
     }
     DimensionDelta delta =
         new DimensionDelta(0.01, 1, List.of(event.style()), meta, "RESOURCE_FEEDBACK");
-    safeApply(event.userId(), "cognitive_style", delta);
+    enqueue(event.userId(), "cognitive_style", delta, transientKey("tutor_style_engaged", event.userId()));
   }
 
   /**
@@ -167,7 +169,8 @@ public class PassiveProfileRevisionListener {
               DimensionDelta delta =
                   new DimensionDelta(
                       signal.scoreDelta(), 1, List.of(signal.tag()), meta, signal.source());
-              safeApply(event.userId(), signal.dimensionKey(), delta);
+              enqueue(event.userId(), signal.dimensionKey(), delta,
+                  transientKey("probe_choice", event.userId()));
             });
   }
 
@@ -177,7 +180,8 @@ public class PassiveProfileRevisionListener {
     DimensionDelta delta =
         new DimensionDelta(
             0.02, 1, List.of("retry"), contextOf(event.kcCode(), event.problemId(), null), "PRACTICE_FAIL");
-    safeApply(event.userId(), "emotion_persistence", delta);
+    enqueue(event.userId(), "emotion_persistence", delta,
+        transientKey("practice_retried", event.userId()));
   }
 
   /** 失败后放弃 → emotion_persistence 负向（tag=abandon，evidence+1）。 */
@@ -190,7 +194,8 @@ public class PassiveProfileRevisionListener {
             List.of("abandon"),
             contextOf(event.kcCode(), event.problemId(), null),
             "PRACTICE_FAIL");
-    safeApply(event.userId(), "emotion_persistence", delta);
+    enqueue(event.userId(), "emotion_persistence", delta,
+        transientKey("practice_abandoned", event.userId()));
   }
 
   /** 逆袭（≥2 次失败后通过）→ emotion_persistence 较强正向（tag=comeback，evidence+1）。 */
@@ -199,27 +204,32 @@ public class PassiveProfileRevisionListener {
     Map<String, Object> meta = contextOf(event.kcCode(), event.problemId(), null);
     meta.put("priorFails", event.priorFails());
     DimensionDelta delta = new DimensionDelta(0.04, 1, List.of("comeback"), meta, "PRACTICE_PASS");
-    safeApply(event.userId(), "emotion_persistence", delta);
+    enqueue(event.userId(), "emotion_persistence", delta,
+        stableKey("comeback_solved", event.userId(), event.problemId()));
   }
 
-  private void safeApply(Long userId, String dimensionKey, DimensionDelta delta) {
-    try {
-      passiveProfileService.applyDimensionUpdate(userId, dimensionKey, delta);
-    } catch (DataAccessException dae) {
-      log.warn(
-          "PassiveProfileRevisionListener degrade due to DataAccessException userId={} dim={} source={} cause={}",
-          userId,
-          dimensionKey,
-          delta.source(),
-          dae.getMostSpecificCause() == null ? dae.getMessage() : dae.getMostSpecificCause().getMessage());
-    } catch (RuntimeException ex) {
-      log.warn(
-          "PassiveProfileRevisionListener skip dimension update userId={} dim={} source={}: {}",
-          userId,
-          dimensionKey,
-          delta.source(),
-          ex.getMessage());
+  private void enqueue(Long userId, String dimensionKey, DimensionDelta delta, String idempotencyKey) {
+    if (userId == null) {
+      return;
     }
+    outboxService.enqueue(new ProfileDimensionProjection(userId, dimensionKey, delta, idempotencyKey));
+  }
+
+  private static String stableKey(String type, Long userId, Object... identifiers) {
+    if (userId == null || identifiers.length == 0) {
+      return transientKey(type, userId);
+    }
+    for (Object identifier : identifiers) {
+      if (identifier == null) {
+        return transientKey(type, userId);
+      }
+    }
+    return type + ":" + userId + ":" + String.join(":", java.util.Arrays.stream(identifiers)
+        .map(String::valueOf).toList());
+  }
+
+  private static String transientKey(String type, Long userId) {
+    return type + ":" + userId + ":" + UUID.randomUUID();
   }
 
   private static Map<String, Object> contextOf(String kcCode, Long problemId, String failureKind) {

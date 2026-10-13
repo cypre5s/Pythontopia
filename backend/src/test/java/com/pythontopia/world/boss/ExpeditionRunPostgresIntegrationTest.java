@@ -2,6 +2,7 @@ package com.pythontopia.world.boss;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
@@ -87,7 +88,25 @@ class ExpeditionRunPostgresIntegrationTest {
     ExpeditionRunDto updated = runs.save(userId, withScore(initial, 999_999));
     assertThat(updated.score()).isEqualTo(80);
 
-    new ExpeditionScoreService(jdbc).record(userId, new ExpeditionScoreSubmitDto(initial.runId()));
+    ExpeditionScoreService scores = new ExpeditionScoreService(jdbc);
+    scores.record(userId, new ExpeditionScoreSubmitDto(initial.runId()));
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT status FROM expedition_run WHERE user_id = ?", String.class, userId))
+        .isEqualTo("ACTIVE");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM expedition_score WHERE user_id = ? AND run_id = ?::uuid",
+                Integer.class,
+                userId,
+                initial.runId()))
+        .isZero();
+
+    runs.performAction(
+        userId,
+        new ExpeditionRunActionRequest(
+            initial.runId(), null, ExpeditionRunAction.FINISH, null));
+    scores.record(userId, new ExpeditionScoreSubmitDto(initial.runId()));
     assertThat(
             jdbc.queryForObject(
                 "SELECT status FROM expedition_run WHERE user_id = ?", String.class, userId))
@@ -99,6 +118,13 @@ class ExpeditionRunPostgresIntegrationTest {
                 userId,
                 initial.runId()))
         .isEqualTo(80);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT cleared FROM expedition_score WHERE user_id = ? AND run_id = ?::uuid",
+                Boolean.class,
+                userId,
+                initial.runId()))
+        .isFalse();
     assertThat(
             jdbc.queryForObject(
                 "SELECT COUNT(*) FROM pregenerated_problem WHERE user_id = ?"
@@ -122,6 +148,41 @@ class ExpeditionRunPostgresIntegrationTest {
     ExpeditionRunDto next = startRun(runs, userId, 1, false);
     assertThat(next.runId()).isNotEqualTo(initial.runId());
     assertThat(next.score()).isZero();
+  }
+
+  @Test
+  void startupRecoveryFailsOnlyPendingPrefetchRows() {
+    long userId = createStudent();
+    jdbc.update(
+        "INSERT INTO pregenerated_problem"
+            + " (user_id, chapter, stage, kc_code, difficulty, problem_id, payload, status, attempt_count)"
+            + " VALUES (?, 1, 1, 'PY43-KC-001', 1, NULL, NULL, 'PENDING', 1),"
+            + " (?, 1, 1, 'PY43-KC-002', 1, 'ready', '{}'::jsonb, 'READY', 1)",
+        userId,
+        userId);
+    EndlessPregenService pregen =
+        new EndlessPregenService(mock(BossGraphClient.class), jdbc, new ObjectMapper());
+
+    pregen.recoverAbandonedPendingAtStartup();
+
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT status FROM pregenerated_problem WHERE user_id = ? AND kc_code = 'PY43-KC-001'",
+                String.class,
+                userId))
+        .isEqualTo("FAILED");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT status FROM pregenerated_problem WHERE user_id = ? AND kc_code = 'PY43-KC-002'",
+                String.class,
+                userId))
+        .isEqualTo("READY");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT error_message FROM pregenerated_problem WHERE user_id = ? AND kc_code = 'PY43-KC-001'",
+                String.class,
+                userId))
+        .contains("重启");
   }
 
   @Test
@@ -257,6 +318,131 @@ class ExpeditionRunPostgresIntegrationTest {
       assertThat(challenged.phase()).isEqualTo("challenge");
       assertThat(challenged.currentNodeId()).isEqualTo(node.get("id"));
     }
+  }
+
+  @Test
+  void clearingOneBranchFailsPendingAndReadyPrefetchesForBypassedSiblings() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    Map<String, Object> chosen =
+        active.nodes().stream()
+            .filter(node -> ((Number) node.get("layer")).intValue() == 1)
+            .findFirst()
+            .orElseThrow();
+    seedReachableNode(userId, active, chosen, "challenge", 5, 5, List.of());
+    List<Map<String, Object>> nodes =
+        active.nodes().stream().<Map<String, Object>>map(HashMap::new).toList();
+    nodes.stream()
+        .filter(node -> ((Number) node.get("layer")).intValue() == 1)
+        .forEach(node -> node.put("state", "available"));
+    try {
+      jdbc.update(
+          "UPDATE expedition_run SET nodes = ?::jsonb WHERE user_id = ?",
+          new ObjectMapper().writeValueAsString(nodes),
+          userId);
+    } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+      throw new AssertionError(e);
+    }
+    ExpeditionRunDto beforeSettlement = runs.findActive(userId).orElseThrow();
+    List<Map<String, Object>> branches =
+        beforeSettlement.nodes().stream()
+            .filter(node -> "available".equals(node.get("state")))
+            .filter(node -> ((Number) node.get("layer")).intValue() == 1)
+            .toList();
+    assertThat(branches).hasSizeGreaterThan(1);
+    for (int index = 0; index < branches.size(); index++) {
+      Map<String, Object> branch = branches.get(index);
+      String nodeId = (String) branch.get("id");
+      String status = index == 0 ? "PENDING" : "READY";
+      jdbc.update(
+          "INSERT INTO pregenerated_problem"
+              + " (user_id, chapter, stage, kc_code, kind, difficulty, problem_id, payload,"
+              + " status, attempt_count, expedition_run_id, expedition_node_id)"
+              + " VALUES (?, 1, 1, ?, ?, 1, ?, '{}'::jsonb, ?, 1, ?::uuid, ?)",
+          userId,
+          branch.get("kcCode"),
+          branch.get("challengeKind"),
+          status.equals("READY") ? "ready-" + nodeId : null,
+          status,
+          active.runId(),
+          nodeId);
+    }
+    for (int index = branches.size(); index < 4; index++) {
+      jdbc.update(
+          "INSERT INTO pregenerated_problem"
+              + " (user_id, chapter, stage, kc_code, kind, difficulty, status, attempt_count)"
+              + " VALUES (?, 1, 1, ?, 'dual_track', 1, 'PENDING', 1)",
+          userId,
+          "PY43-KC-0" + (20 + index));
+    }
+
+    String chosenId = (String) chosen.get("id");
+    String chosenProblemId = "branch-chosen-" + UUID.randomUUID();
+    insertIssuedProblem(
+        userId,
+        active.runId(),
+        chosenId,
+        chosenProblemId,
+        (String) chosen.get("kcCode"),
+        "d".repeat(64),
+        true,
+        80);
+
+    ExpeditionRunDto afterChosen =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                beforeSettlement.runId(), chosenId, ExpeditionRunAction.SETTLE_CHALLENGE, null,
+                chosenProblemId));
+
+    List<String> bypassedIds =
+        afterChosen.nodes().stream()
+            .filter(node -> "bypassed".equals(node.get("state")))
+            .map(node -> (String) node.get("id"))
+            .toList();
+    assertThat(bypassedIds).isNotEmpty();
+    for (String bypassedId : bypassedIds) {
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT status FROM pregenerated_problem"
+                      + " WHERE user_id = ? AND expedition_run_id = ?::uuid"
+                      + " AND expedition_node_id = ?",
+                  String.class,
+                  userId,
+                  active.runId(),
+                  bypassedId))
+          .isEqualTo("FAILED");
+    }
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM pregenerated_problem"
+                    + " WHERE user_id = ? AND status IN ('PENDING', 'READY')",
+                Integer.class,
+                userId))
+        .isLessThan(4);
+
+    Map<String, Object> nextChallenge =
+        afterChosen.nodes().stream()
+            .filter(node -> ((Number) node.get("layer")).intValue() == 2)
+            .filter(node -> "available".equals(node.get("state")))
+            .filter(node -> node.get("kcCode") != null && node.get("challengeKind") != null)
+            .findFirst()
+            .orElseThrow();
+    var nextPrefetch =
+        new EndlessPregenService(null, jdbc, new ObjectMapper(), runs)
+            .beginPrefetch(
+                userId,
+                1,
+                1,
+                (String) nextChallenge.get("kcCode"),
+                ((Number) nextChallenge.get("difficulty")).intValue(),
+                (String) nextChallenge.get("challengeKind"),
+                null,
+                active.runId(),
+                (String) nextChallenge.get("id"));
+    assertThat(nextPrefetch.shouldGenerate()).isTrue();
+    assertThat(nextPrefetch.status().status()).isEqualTo("PENDING");
   }
 
   @Test
@@ -572,6 +758,16 @@ class ExpeditionRunPostgresIntegrationTest {
     }
     assertThat(state.phase()).isEqualTo("over");
     assertThat(nodeById(state, bossNodeId).get("state")).isEqualTo("cleared");
+
+    new ExpeditionScoreService(jdbc)
+        .record(userId, new ExpeditionScoreSubmitDto(active.runId()));
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT cleared FROM expedition_score WHERE user_id = ? AND run_id = ?::uuid",
+                Boolean.class,
+                userId,
+                active.runId()))
+        .isTrue();
   }
 
   @Test
@@ -863,6 +1059,10 @@ class ExpeditionRunPostgresIntegrationTest {
         daily.runId(),
         "d".repeat(64));
 
+    runs.performAction(
+        userId,
+        new ExpeditionRunActionRequest(
+            daily.runId(), null, ExpeditionRunAction.FINISH, null));
     new ExpeditionScoreService(jdbc).record(userId, new ExpeditionScoreSubmitDto(daily.runId()));
 
     assertThat(
