@@ -104,7 +104,7 @@ class TutorWorkflowRepositoryIntegrationTest {
   }
 
   @Test
-  void runProjectionCommitsOnceForRunId() {
+  void runProjectionCommitsOnceForRunId() throws Exception {
     UUID runId = UUID.randomUUID();
     TutorWorkflowRepository.RunProjection projection =
         projection(runId, "CODING", 2, "PLAN_START", "plan_card", "{\"content\":\"started\"}");
@@ -133,6 +133,16 @@ class TutorWorkflowRepositoryIntegrationTest {
             Integer.class,
             session.id()))
         .isEqualTo(1);
+    assertThat(
+            new ObjectMapper()
+                .readTree(repository.findAutoGenRunResult(session.id(), runId).orElseThrow()))
+        .isEqualTo(
+            new ObjectMapper()
+                .readTree(
+                    "{\"session_id\":\"wf-test\",\"event\":\"PLAN_START\","
+                        + "\"phase\":\"CODING\",\"card_key\":\"plan_card\","
+                        + "\"card\":{\"content\":\"started\"},"
+                        + "\"available_actions\":[],\"seq\":2}"));
   }
 
   @Test
@@ -219,6 +229,21 @@ class TutorWorkflowRepositoryIntegrationTest {
     var failed = repository.findAutoGenCheckpoint(session.id(), runId).orElseThrow();
     assertThat(failed.status()).isEqualTo("FAILED");
     assertThat(failed.checkpointJson()).isEqualTo("{}");
+  }
+
+  @Test
+  void failedAutoGenRunCanBeClaimedAgainWithItsStableRequestId() {
+    UUID requestId = UUID.randomUUID();
+    String fingerprint = "9".repeat(64);
+    repository.claimAutoGenRun(session.id(), requestId, fingerprint).orElseThrow();
+    assertThat(repository.transitionAutoGenRun(session.id(), requestId, "FAILED")).isTrue();
+
+    assertThat(repository.retryFailedAutoGenRun(session.id(), requestId, fingerprint)).isTrue();
+    var retry = repository.claimAutoGenRun(session.id(), requestId, fingerprint).orElseThrow();
+
+    assertThat(retry.runId()).isEqualTo(requestId);
+    assertThat(retry.status()).isEqualTo("RUNNING");
+    assertThat(retry.stageIndex()).isEqualTo(-1);
   }
 
   @Test
@@ -315,6 +340,11 @@ class TutorWorkflowRepositoryIntegrationTest {
         "{}",
         cardKey,
         cardPayload,
-        "{\"event\":\"" + event + "\",\"run_id\":\"" + runId + "\"}");
+        "{\"event\":\"" + event + "\",\"run_id\":\"" + runId + "\"}",
+        "{\"session_id\":\"wf-test\",\"event\":\"" + event + "\","
+            + "\"phase\":\"" + phase + "\",\"card_key\":"
+            + (cardKey == null ? "null" : "\"" + cardKey + "\"")
+            + ",\"card\":" + (cardPayload == null ? "null" : cardPayload)
+            + ",\"available_actions\":[],\"seq\":" + seq + "}");
   }
 }

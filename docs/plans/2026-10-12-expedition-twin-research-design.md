@@ -123,3 +123,8 @@ V204 不会把既有活动局的可变字段重置为新开局。迁移前的地
 - 本地 Piston 正式判题 Playwright E2E 通过，提交产生的 Twin 画像 outbox 行在 PostgreSQL 中达到 `APPLIED`；Piston 与正式全栈已关闭。
 - `EndlessPregenServiceTest` 9、`ExpeditionScoreServiceTest` 10、`ExpeditionRunPostgresIntegrationTest` 22，共 41 项通过；profile outbox 的 Spring 应用上下文测试通过，相关 Java 定向 Spotless 与 `git diff --check` 通过。
 - 本轮没有调用 DeepSeek，也没有执行远征性能测试。P50/P95、缓存命中率、重复率、失败恢复率与通关率仍待测；`/readyz` 仍因视频转录服务不可用整体返回 503。
+
+### 2026-10-13 功能优先续项
+
+- 本次继续完成 Web Tutor 断线重试幂等与管理列表分页；没有改动远征状态机，也没有添加性能推测值。
+- 依照用户要求，先完成 Web 功能实现和复核，再安排本地全栈及可用 Piston 下的性能测量。远征 P50/P95、缓存命中率、重复率、失败恢复率和通关率仍待测。

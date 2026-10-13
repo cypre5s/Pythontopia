@@ -11,6 +11,7 @@ import {
   type AdminUserStatusFilter,
 } from '@/api/adminUsers';
 import AdminPanel from './AdminPanel.vue';
+import AdminPagination from './AdminPagination.vue';
 
 const session = useSessionStore();
 const toast = useToastStore();
@@ -26,7 +27,7 @@ const totalPages = ref(0);
 const totalElements = ref(0);
 const updatingUserId = ref<number | null>(null);
 const listBusy = computed(() => loading.value || updatingUserId.value !== null);
-const PAGE_SIZE = 20;
+const pageSize = ref(20);
 
 function roleLabel(role: AdminUserDto['role']): string {
   if (role === 'ADMIN') return '管理员';
@@ -45,7 +46,7 @@ async function loadUsers(): Promise<void> {
   try {
     const readPage = () => searchAdminUsers({
       page: page.value,
-      size: PAGE_SIZE,
+      size: pageSize.value,
       ...(searchTerm.value ? { q: searchTerm.value } : {}),
       ...(statusFilter.value === 'ALL' ? {} : { status: statusFilter.value }),
       ...(roleFilter.value === 'ALL' ? {} : { role: roleFilter.value }),
@@ -76,10 +77,16 @@ function searchUsers(): void {
   applyFilters();
 }
 
-function movePage(delta: number): void {
-  const next = page.value + delta;
-  if (listBusy.value || next < 0 || next >= totalPages.value) return;
-  page.value = next;
+function goToPage(nextPage: number): void {
+  if (listBusy.value || nextPage < 0 || nextPage >= totalPages.value) return;
+  page.value = nextPage;
+  void loadUsers();
+}
+
+function changePageSize(nextSize: number): void {
+  if (listBusy.value || nextSize === pageSize.value) return;
+  pageSize.value = nextSize;
+  page.value = 0;
   void loadUsers();
 }
 
@@ -183,7 +190,6 @@ onMounted(() => {
         >
           搜索
         </button>
-        <span class="admin-users__total">共 {{ totalElements }} 个账号</span>
       </form>
 
       <p
@@ -286,27 +292,16 @@ onMounted(() => {
       </div>
 
       <template #footer>
-        <div class="admin-users__pagination">
-          <span>第 {{ totalPages === 0 ? 0 : page + 1 }} / {{ totalPages }} 页</span>
-          <div>
-            <button
-              class="admin-users__button"
-              type="button"
-              :disabled="listBusy || page === 0"
-              @click="movePage(-1)"
-            >
-              上一页
-            </button>
-            <button
-              class="admin-users__button"
-              type="button"
-              :disabled="listBusy || page + 1 >= totalPages"
-              @click="movePage(1)"
-            >
-              下一页
-            </button>
-          </div>
-        </div>
+        <AdminPagination
+          :page="page"
+          :total-pages="totalPages"
+          :page-size="pageSize"
+          :total-elements="totalElements"
+          item-label="个账号"
+          :disabled="listBusy"
+          @page-change="goToPage"
+          @page-size-change="changePageSize"
+        />
       </template>
     </AdminPanel>
   </section>
@@ -407,7 +402,6 @@ onMounted(() => {
   outline-offset: 2px;
 }
 
-.admin-users__total,
 .admin-users__state {
   align-self: center;
   color: var(--admin-muted);
@@ -509,22 +503,7 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-.admin-users__pagination {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  color: var(--admin-muted);
-  font-size: 12px;
-}
-
-.admin-users__pagination > div {
-  display: flex;
-  gap: 8px;
-}
-
 @media (max-width: 640px) {
   .admin-page-heading h1 { font-size: 22px; }
-  .admin-users__pagination { align-items: flex-start; flex-direction: column; }
 }
 </style>

@@ -2,6 +2,14 @@
 
 日期：2026-10-12 至 2026-10-13
 
+## 2026-10-13 Tutor 断线重试幂等与多图部分失败恢复
+
+- 每个新的 Tutor Web 动作生成 `requestId`，同一次失败重试复用该 ID。后端把已完成的精简文本结果随 V208 投影保存；重放返回原终态 SSE，不再次调用 Graph/DeepSeek。相同 ID 携带不同内容时返回 409；FAILED run 清除 checkpoint 后可按原 ID 重试。受限结果不包含上传图片字节。
+- 多图中有上传成功项、失败项时缓存成功项的 attachment ID；重新提交只上传失败项，且上传过程中禁止删除待处理图片，避免附件额度重复消耗。
+- RED/GREEN 与复验：`TutorWorkflowServiceTest` 30 项、Testcontainers `TutorWorkflowRepositoryIntegrationTest` 9 项、`TutorWorkflowControllerTest` 2 项通过，空库迁移至 V208；Web 全量 255 个测试文件 / 2516 项通过，`npm run typecheck` 与 `npm run build` 通过。`./dev.sh` 启动成功；Playwright 确认根页 HTTP 200、未登录后台正确转登录页、无浏览器异常。登录页 8 秒未到 `networkidle`，当时仍有 `/healthz` 和字体请求；DOM 已渲染且没有失败请求。本轮没有真实模型请求。
+- ESLint 改动文件检查 0 errors，Tutor 面板仍有 51 项 Vue 格式 warnings。全仓 Maven Spotless 受 606+ 个其他文件的既有格式违规阻断，当前 Tutor Java 文件不在报告清单中。
+- 本轮未启动全栈或发起 DeepSeek 请求；无尽远征性能仍待功能复核结束后测试。此前在对话中出现的 DeepSeek 凭证应轮换后再用于真实请求。
+
 ## 2026-10-13 远征服务端动作状态与 Web 续局
 
 - Web 的节点进入、事件选择、遗物领奖、正式判题结算与主动结束均改走有类型的服务端 action；旧 `PUT` 只校验快照并返回 canonical state。Boss 题目与 run/node 绑定，结算只采用本人已签发题目和正式判题账本，不接受客户端分数、HP、路线或通关字段。

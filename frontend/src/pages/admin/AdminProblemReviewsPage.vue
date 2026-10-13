@@ -10,6 +10,7 @@ import {
   type BossProblemReviewSortDirection,
 } from '@/api/problemReview';
 import AdminPanel from './AdminPanel.vue';
+import AdminPagination from './AdminPagination.vue';
 
 type DecisionFilter = 'ALL' | BossProblemReviewDecision;
 type FinalDecision = Exclude<BossProblemReviewDecision, 'PENDING'>;
@@ -27,7 +28,7 @@ const searchTerm = ref('');
 const page = ref(0);
 const totalPages = ref(0);
 const totalElements = ref(0);
-const PAGE_SIZE = 20;
+const pageSize = ref(20);
 const pendingDecision = ref<FinalDecision | null>(null);
 const decisionReason = ref('');
 const decisionError = ref<string | null>(null);
@@ -76,7 +77,7 @@ async function loadQueue(): Promise<void> {
   try {
     const readPage = () => searchProblemReviews({
       page: page.value,
-      size: PAGE_SIZE,
+      size: pageSize.value,
       sortBy: sortBy.value,
       sortDirection: sortDirection.value,
       ...(filter.value === 'ALL' ? {} : { decision: filter.value }),
@@ -111,10 +112,16 @@ function searchQueue(): void {
   applyQueueFilters();
 }
 
-function movePage(delta: number): void {
-  const next = page.value + delta;
-  if (next < 0 || next >= totalPages.value || loading.value) return;
-  page.value = next;
+function goToPage(nextPage: number): void {
+  if (nextPage < 0 || nextPage >= totalPages.value || loading.value) return;
+  page.value = nextPage;
+  void loadQueue();
+}
+
+function changePageSize(nextSize: number): void {
+  if (loading.value || nextSize === pageSize.value) return;
+  pageSize.value = nextSize;
+  page.value = 0;
   void loadQueue();
 }
 
@@ -263,7 +270,6 @@ onMounted(() => {
         >
           搜索
         </button>
-        <span class="review-search__total">共 {{ totalElements }} 条</span>
       </form>
 
       <div
@@ -425,31 +431,16 @@ onMounted(() => {
           </tbody>
         </table>
       </div>
-      <nav
-        v-if="totalPages > 1"
-        class="review-pagination"
-        aria-label="审核队列分页"
-      >
-        <button
-          class="admin-button"
-          type="button"
-          :disabled="loading || page === 0"
-          data-testid="admin-review-previous-page"
-          @click="movePage(-1)"
-        >
-          上一页
-        </button>
-        <span>第 {{ page + 1 }} / {{ totalPages }} 页</span>
-        <button
-          class="admin-button"
-          type="button"
-          :disabled="loading || page + 1 >= totalPages"
-          data-testid="admin-review-next-page"
-          @click="movePage(1)"
-        >
-          下一页
-        </button>
-      </nav>
+      <AdminPagination
+        :page="page"
+        :total-pages="totalPages"
+        :page-size="pageSize"
+        :total-elements="totalElements"
+        item-label="条审核记录"
+        :disabled="loading"
+        @page-change="goToPage"
+        @page-size-change="changePageSize"
+      />
     </AdminPanel>
 
     <AdminPanel
@@ -648,8 +639,7 @@ onMounted(() => {
   margin-bottom: 14px;
 }
 
-.review-search label,
-.review-search__total {
+.review-search label {
   color: var(--admin-muted);
   font-size: 12px;
 }
@@ -668,11 +658,6 @@ onMounted(() => {
 .review-filter select:focus-visible {
   outline: 2px solid #93c5fd;
   outline-offset: 2px;
-}
-
-.review-search__total {
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
 }
 
 .review-counts {
@@ -703,17 +688,6 @@ onMounted(() => {
   color: var(--admin-muted);
   font-size: 13px;
   text-align: center;
-}
-
-.review-pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 14px;
-  color: var(--admin-muted);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
 }
 
 .review-error {
@@ -1055,10 +1029,6 @@ onMounted(() => {
 
   .review-search input {
     flex: 1 1 100%;
-  }
-
-  .review-search__total {
-    margin-left: 0;
   }
 
   .review-counts {

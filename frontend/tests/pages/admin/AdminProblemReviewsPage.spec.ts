@@ -129,7 +129,7 @@ describe('AdminProblemReviewsPage', () => {
     });
 
     api.searchProblemReviews.mockResolvedValue(page([review({ id: 42 })], 25, 1));
-    await wrapper.get('[data-testid="admin-review-next-page"]').trigger("click");
+    await wrapper.get('[data-testid="admin-pagination-next-page"]').trigger("click");
     await flushPromises();
     expect(api.searchProblemReviews).toHaveBeenLastCalledWith({
       page: 1,
@@ -153,7 +153,7 @@ describe('AdminProblemReviewsPage', () => {
       sortDirection: "DESC",
     });
 
-    await wrapper.get('[data-testid="admin-review-next-page"]').trigger("click");
+    await wrapper.get('[data-testid="admin-pagination-next-page"]').trigger("click");
     await flushPromises();
     expect(api.searchProblemReviews).toHaveBeenLastCalledWith({
       page: 1,
@@ -178,6 +178,25 @@ describe('AdminProblemReviewsPage', () => {
       size: 20,
       sortBy: "STATEMENT",
       sortDirection: "ASC",
+    });
+  });
+
+  it('supports direct page jumps and selectable page sizes', async () => {
+    api.searchProblemReviews.mockResolvedValue(page([review()], 45));
+    const wrapper = mount(AdminProblemReviewsPage);
+    await flushPromises();
+
+    await wrapper.get('[data-testid="admin-pagination-page-input"]').setValue('3');
+    await wrapper.get('[data-testid="admin-pagination-jump-form"]').trigger('submit');
+    await flushPromises();
+    expect(api.searchProblemReviews).toHaveBeenLastCalledWith({
+      page: 2, size: 20, sortBy: 'REQUESTED_AT', sortDirection: 'DESC',
+    });
+
+    await wrapper.get('[data-testid="admin-pagination-size"]').setValue('50');
+    await flushPromises();
+    expect(api.searchProblemReviews).toHaveBeenLastCalledWith({
+      page: 0, size: 50, sortBy: 'REQUESTED_AT', sortDirection: 'DESC',
     });
   });
 

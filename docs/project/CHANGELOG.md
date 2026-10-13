@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-13 — Tutor 断线重试幂等与后台分页
+
+- Tutor Web 为每次新动作生成稳定 `requestId`，重试复用原 ID。后端 V208 保存大小受限的文本终态结果；同 ID 同请求回放已完成 SSE 结果，同 ID 不同内容返回冲突，FAILED 请求可以沿用 ID 重试。回放不存储图片字节。
+- 多图上传部分失败时保留已成功附件 ID，重试只补传失败项，避免重复占用附件配额；上传期间禁用移除图片。
+- 用户管理与题目审核页共用分页控件，新增每页 10/20/50/100 条、首页/末页和页码跳转。
+- 验证：后端 Tutor workflow service 30、PostgreSQL 集成 9、controller 2 项通过，Testcontainers 空库迁移至 V208；Web 全量 255 个测试文件 / 2516 项通过，`npm run typecheck`、`npm run build` 通过。`./dev.sh` 本地启动成功；Playwright 确认根页面 200、未登录访问 `/admin/users` 会转到登录页且无浏览器异常。登录页未在 8 秒内达到 `networkidle`，当时有 `/healthz` 与字体请求未完成；页面已渲染，未见失败请求。全仓 Spotless 被 606+ 个其他文件的格式问题阻断，本轮 Tutor Java 文件未出现在违例列表。改动文件 ESLint 0 errors，Tutor 面板保留 51 项 Vue 格式 warnings；没有发起 DeepSeek 请求或性能测试。
+
 ## 2026-10-13 — Twin 被动画像更新增加持久重放
 
 - 学习事件产生的八维画像增量现在先写入 V207 outbox，再于事务提交后应用；重复事件按业务键幂等，单学生按 outbox 顺序处理。数据库异常会保留待处理行并按 10 秒间隔重试。

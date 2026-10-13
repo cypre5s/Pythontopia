@@ -22,6 +22,7 @@ import com.pythontopia.tutor.dto.TutorWorkflowAttachmentDto;
 import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
+import java.io.IOException;
 import java.security.SecureRandom;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -31,6 +32,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -56,6 +58,7 @@ public class TutorWorkflowService {
   private static final int MAX_RESTORE_CARDS = 12;
   private static final int MAX_RESTORE_CHAT_TURNS = 20;
   private static final int MAX_CHAT_MESSAGE_LENGTH = 2000;
+  private static final int MAX_REPLAY_RESULT_BYTES = 1_048_576;
   private static final Pattern IMAGE_DATA_URI =
       Pattern.compile("(?i)data:image/(?:png|jpeg|gif|webp);base64,");
   private static final Pattern EXPLICIT_REFERENCE =
@@ -152,16 +155,31 @@ public class TutorWorkflowService {
     body.put("restore_chat_history", restoreChatHistory(recentCards));
     repository.findAgentState(session.id()).ifPresent(state -> restoreAgentState(body, state));
 
-    String requestFingerprint = requestFingerprint(body);
+    boolean idempotentRequest = request.requestId() != null;
+    String requestFingerprint = requestFingerprint(body, idempotentRequest);
+    UUID proposedRunId = idempotentRequest ? request.requestId() : UUID.randomUUID();
+    if (idempotentRequest) {
+      SseEmitter replay = replayCompletedRun(session, proposedRunId, requestFingerprint);
+      if (replay != null) {
+        return replay;
+      }
+    }
+    Optional<TutorWorkflowRepository.AutoGenCheckpoint> claimed =
+        repository.claimAutoGenRun(session.id(), proposedRunId, requestFingerprint);
+    if (claimed.isEmpty() && idempotentRequest) {
+      SseEmitter replay = replayCompletedRun(session, proposedRunId, requestFingerprint);
+      if (replay != null) {
+        return replay;
+      }
+      assertRequestIdMatches(session, proposedRunId, requestFingerprint);
+    }
     TutorWorkflowRepository.AutoGenCheckpoint run =
-        repository
-            .claimAutoGenRun(session.id(), UUID.randomUUID(), requestFingerprint)
-            .orElseThrow(
-                () ->
-                    new BusinessException(
-                        HttpStatus.CONFLICT,
-                        "TUTOR_WORKFLOW_RUN_ACTIVE",
-                        "导学会话正在处理其他请求"));
+        claimed.orElseThrow(
+            () ->
+                new BusinessException(
+                    HttpStatus.CONFLICT,
+                    "TUTOR_WORKFLOW_RUN_ACTIVE",
+                    "导学会话正在处理其他请求"));
     UUID runId = run.runId();
     body.put("run_id", runId.toString());
     body.put("request_fingerprint", requestFingerprint);
@@ -262,20 +280,23 @@ public class TutorWorkflowService {
     }
   }
 
-  private String requestFingerprint(Map<String, Object> body) {
+  private String requestFingerprint(Map<String, Object> body, boolean stableClientIntent) {
     Map<String, Object> scope = new TreeMap<>();
-    for (String key :
-        List.of(
-            "session_id",
-            "user_id",
-            "event",
-            "problem",
-            "diagnosis",
-            "event_data",
-            "profile_brief",
-            "coach_mode",
-            "student_state",
-            "episode_plan")) {
+    List<String> keys =
+        stableClientIntent
+            ? List.of("session_id", "user_id", "event", "problem", "diagnosis", "event_data")
+            : List.of(
+                "session_id",
+                "user_id",
+                "event",
+                "problem",
+                "diagnosis",
+                "event_data",
+                "profile_brief",
+                "coach_mode",
+                "student_state",
+                "episode_plan");
+    for (String key : keys) {
       if (body.containsKey(key)) {
         scope.put(key, canonicalValue(body.get(key)));
       }
@@ -291,6 +312,54 @@ public class TutorWorkflowService {
       throw new IllegalStateException("SHA-256 is unavailable", e);
     } catch (Exception e) {
       throw new IllegalStateException("Failed to fingerprint tutor workflow request", e);
+    }
+  }
+
+  private SseEmitter replayCompletedRun(
+      TutorWorkflowSessionDto session, UUID requestId, String requestFingerprint) {
+    Optional<TutorWorkflowRepository.AutoGenCheckpoint> existing =
+        repository.findAutoGenCheckpoint(session.id(), requestId);
+    if (existing.isEmpty()) {
+      return null;
+    }
+    assertRequestIdMatches(session, requestId, requestFingerprint);
+    TutorWorkflowRepository.AutoGenCheckpoint checkpoint = existing.orElseThrow();
+    if ("FAILED".equals(checkpoint.status())) {
+      repository.retryFailedAutoGenRun(session.id(), requestId, requestFingerprint);
+      return null;
+    }
+    if (!"COMPLETED".equals(checkpoint.status())) {
+      return null;
+    }
+    String resultJson =
+        repository
+            .findAutoGenRunResult(session.id(), requestId)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.CONFLICT,
+                        "TUTOR_WORKFLOW_RESULT_UNAVAILABLE",
+                        "导学请求已完成，但结果暂不可恢复，请刷新会话"));
+    SseEmitter emitter = new SseEmitter(180_000L);
+    try {
+      emitter.send(SseEmitter.event().name("result").data(resultJson));
+      emitter.complete();
+    } catch (IOException e) {
+      emitter.completeWithError(e);
+    }
+    return emitter;
+  }
+
+  private void assertRequestIdMatches(
+      TutorWorkflowSessionDto session, UUID requestId, String requestFingerprint) {
+    Optional<TutorWorkflowRepository.AutoGenCheckpoint> existing =
+        repository.findAutoGenCheckpoint(session.id(), requestId);
+    if (existing.isPresent()
+        && !requestFingerprint.equals(existing.orElseThrow().requestFingerprint())) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT,
+          "TUTOR_WORKFLOW_REQUEST_ID_REUSED",
+          "请求标识已用于不同的导学请求");
     }
   }
 
@@ -758,7 +827,48 @@ public class TutorWorkflowService {
             decisionJson,
             cardPayloadJson == null ? null : cardKey,
             cardPayloadJson,
-            actionPayloadJson));
+            actionPayloadJson,
+            replayResultJson(session, event, phase, seq, result)));
+  }
+
+  private String replayResultJson(
+      TutorWorkflowSessionDto session,
+      String event,
+      String phase,
+      int seq,
+      JsonNode result)
+      throws Exception {
+    ObjectNode replay = objectMapper.createObjectNode();
+    replay.put("session_id", session.sessionKey());
+    replay.put("event", event);
+    replay.put("phase", phase);
+    replay.put("seq", seq);
+    if (result.hasNonNull("card_key")) {
+      replay.set("card_key", result.path("card_key"));
+    } else {
+      replay.putNull("card_key");
+    }
+    if (result.hasNonNull("card")) {
+      replay.set("card", result.path("card"));
+    } else {
+      replay.putNull("card");
+    }
+    replay.set(
+        "available_actions",
+        result.path("available_actions").isArray()
+            ? result.path("available_actions")
+            : objectMapper.createArrayNode());
+    for (String field : List.of("episode_plan", "episode_patch", "resume_chat_history")) {
+      if (result.has(field)) {
+        replay.set(field, result.path(field));
+      }
+    }
+    ensureTextOnly(replay);
+    String json = objectMapper.writeValueAsString(replay);
+    if (json.getBytes(StandardCharsets.UTF_8).length > MAX_REPLAY_RESULT_BYTES) {
+      throw new IllegalArgumentException("Tutor workflow replay result exceeds the size limit");
+    }
+    return json;
   }
 
   private void restoreAgentState(

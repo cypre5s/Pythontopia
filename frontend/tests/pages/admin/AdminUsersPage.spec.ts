@@ -100,6 +100,23 @@ describe('AdminUsersPage', () => {
     });
   });
 
+  it('supports page-size changes and direct page jumps through the API', async () => {
+    vi.mocked(searchAdminUsers).mockResolvedValue({
+      content: [activeUser], page: 0, size: 20, totalElements: 45, totalPages: 3,
+    });
+    const wrapper = mount(AdminUsersPage);
+    await flushPromises();
+
+    await wrapper.get('[data-testid="admin-pagination-size"]').setValue('50');
+    await flushPromises();
+    expect(searchAdminUsers).toHaveBeenLastCalledWith({ page: 0, size: 50 });
+
+    await wrapper.get('[data-testid="admin-pagination-page-input"]').setValue('3');
+    await wrapper.get('[data-testid="admin-pagination-jump-form"]').trigger('submit');
+    await flushPromises();
+    expect(searchAdminUsers).toHaveBeenLastCalledWith({ page: 2, size: 50 });
+  });
+
   it('does not offer the current administrator a self-disable action', async () => {
     vi.mocked(searchAdminUsers).mockResolvedValueOnce({
       content: [{

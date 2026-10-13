@@ -4,6 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * 导学工作流事件请求（前端 → Java）。
@@ -12,6 +13,7 @@ import java.util.Map;
  * 反馈与上下文压缩。事件数据由 graph 的逐事件 schema 再校验。
  */
 public record TutorWorkflowRunRequest(
+    UUID requestId,
     @NotNull Long problemId,
     @NotBlank
         @Pattern(
@@ -22,6 +24,11 @@ public record TutorWorkflowRunRequest(
             message = "未知的工作流事件")
         String event,
     Map<String, Object> eventData) {
+
+  /** Compatibility constructor for older clients; new Web clients send a stable request ID. */
+  public TutorWorkflowRunRequest(Long problemId, String event, Map<String, Object> eventData) {
+    this(null, problemId, event, eventData);
+  }
 
   public Map<String, Object> eventDataOrEmpty() {
     return eventData == null ? Map.of() : eventData;
