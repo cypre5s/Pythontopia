@@ -1,5 +1,6 @@
 package com.pythontopia.world.boss;
 
+import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.profile.dto.LearnerProfileSignals;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
@@ -20,6 +21,7 @@ import com.pythontopia.world.boss.dto.BossProblemDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest;
 import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
+import com.pythontopia.world.boss.dto.FrontierPickDto;
 import com.pythontopia.world.boss.dto.FrontierSelectRequest;
 import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
 import com.pythontopia.world.boss.review.ApprovedBossProblem;
@@ -40,6 +42,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
@@ -136,7 +139,23 @@ public class BossService {
    */
   public FrontierSelectResultDto selectFrontier(
       Long userId, Integer focusChapter, String preferredKcCode) {
-    return learnerTwinService.frontier(userId, focusChapter, List.of(), 40, preferredKcCode);
+    FrontierSelectResultDto frontier =
+        learnerTwinService.frontier(userId, focusChapter, List.of(), 40, preferredKcCode);
+    List<String> candidateKcs =
+        frontier.picks().stream().map(FrontierPickDto::kcCode).distinct().toList();
+    Set<String> practiceKcs =
+        chapterProblemBankRepository.findByKcCodes(candidateKcs).stream()
+            .map(PreferredCodingQuestion::kcCode)
+            .collect(Collectors.toSet());
+    List<FrontierPickDto> playablePicks =
+        frontier.picks().stream().filter(pick -> practiceKcs.contains(pick.kcCode())).toList();
+    if (playablePicks.isEmpty()) {
+      throw new BusinessException(
+          org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
+          "EXPEDITION_NO_PRACTICE_PROBLEMS",
+          "当前学习范围没有可用于远征的课程编程题，请选择包含编程练习的章节");
+    }
+    return new FrontierSelectResultDto(playablePicks);
   }
 
   public BossProblemDto fetchProblem(int chapter, BossProblemRequest request, Long userId) {

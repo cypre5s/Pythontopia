@@ -62,8 +62,8 @@
 | 23 | `23-clients.webp` | `/guide?topic=clients` | 学生会话；滚动到「多端下载」主题的下载卡片区 | `guide-content` 含「多端下载」→ `guide-downloads` 可见并含 Android / Windows 下载卡 | 无 |
 | 24 | `24-code-theater-stage.webp` | `/code-theater` | 学生会话；点「运行」后代码傀儡执行到循环中段（脚本梯发光行、变量牌翻新、循环跑道计数） | `code-theater-page` 与 `ct-quest` 可见 → 点 `ct-run` → `ct-stage` 与 `ct-steps` 可见，傀儡停在 `ct-world` 内某一执行行 | 无 |
 | 25 | `25-endless-result.webp` | `/endless` | 学生会话；点 `endless-start` 连答数题后命中一次判题结算 | `endless-page` → `endless-start` → `endless-body` → 至少一次 `endless-submit` → `endless-result` 可见，且 `endless-streak` / `endless-total-score` 有值 | 无 |
-| 26 | `26-arena-tower.webp` | `/arena/1` | 学生会话；展示第 1 章闯关塔 10 关阶梯（9 小关 + 第 10 关 BOSS），部分已通关点亮 | `arena-page` → `arena-steps` 可见 → 10 个 `arena-step-1-1`…`arena-step-1-10` 渲染（末关为 boss） | 无 |
-| 27 | `27-loop-mastery.webp` | `/arena/1` | 学生会话；点开某一关详情，展示该关 KC、弱项推荐徽标与画像接入提示（练→测→掌握→画像回流的落点） | `arena-page` → 点某个 `arena-step-1-*` → `arena-detail` 可见 → `arena-reco-badge` 与 `arena-profile-hint` 可见 | 无 |
+| 26 | `26-arena-tower.webp` | `/expedition` | 学生会话；开始一局全局自适应远征，展示 10 层分支地图与顶层 Boss 节点 | `expedition-page` → 点 `expedition-begin` → `expedition-map` 与 Phaser `expedition-canvas` 可见 | 新手以难度 1 诊断尚未评估知识点；课程题库无可玩题时提示先修学习路径 |
+| 27 | `27-loop-mastery.webp` | `/expedition` | 学生会话；开始远征并进入可达挑战节点，展示服务端课程题、KC 与统一编辑器 | `expedition-page` → 点 `expedition-begin` → 地图列表中进入可达节点 → `expedition-challenge` 与 `challenge-workspace` 可见 | 远征题优先复用预生成题，Graph 不可用时使用同 KC 课程题库兜底 |
 | 28 | `28-code-theater-debug.webp` | `/code-theater` | 学生会话；模拟「从失败练习跳入」（载入一段未通过代码）运行后，世界目标未全部达成（如第 4 盏灯仍黑） | `code-theater-page` 与 `ct-quest` 可见 → 点 `ct-run` → `ct-world` 显示部分目标未点亮（未达成态） | 无 |
 | 29 | `29-endless-weak-kc.webp` | `/endless` | 学生会话；锁定 `endless-focus-chapter` 后连答，展示按画像弱项出题 + 历史记录 | `endless-page` → 选择 `endless-focus-chapter` → `endless-start` → `endless-history` 可见且含知识点 / 难度记录 | 无 |
 

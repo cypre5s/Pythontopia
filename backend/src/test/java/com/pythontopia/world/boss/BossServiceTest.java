@@ -877,6 +877,51 @@ class BossServiceTest {
   }
 
   @Test
+  @DisplayName("远征开局过滤没有课程编程题的 KC，避免新手落在不可玩的首节点")
+  void expeditionFrontierOnlyIncludesKnowledgePointsWithCourseProblems() {
+    var candidates = new FrontierSelectResultDto(
+        List.of(
+            new FrontierPickDto("PY43-KC-001", 1, 1, "尚未评估"),
+            new FrontierPickDto("PY43-KC-016", 2, 1, "尚未评估")));
+    when(learnerTwinService.frontier(7L, null, List.of(), 40, "PY43-KC-001"))
+        .thenReturn(candidates);
+    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001", "PY43-KC-016")))
+        .thenReturn(List.of(courseProblem("PY43-KC-016")));
+
+    var result = service.selectFrontier(7L, null, "PY43-KC-001");
+
+    assertThat(result.picks()).extracting(FrontierPickDto::kcCode)
+        .containsExactly("PY43-KC-016");
+    verifyNoInteractions(graphClient);
+  }
+
+  @Test
+  @DisplayName("聚焦章节没有课程编程题时以明确业务错误拒绝开局")
+  void expeditionFrontierRejectsChapterWithoutCourseProblems() {
+    when(learnerTwinService.frontier(7L, 1, List.of(), 40, null))
+        .thenReturn(new FrontierSelectResultDto(
+            List.of(new FrontierPickDto("PY43-KC-001", 1, 1, "尚未评估"))));
+    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
+        .thenReturn(List.of());
+
+    assertThatThrownBy(() -> service.selectFrontier(7L, 1, null))
+        .isInstanceOfSatisfying(
+            com.pythontopia.common.error.BusinessException.class,
+            exception -> {
+              assertThat(exception.code()).isEqualTo("EXPEDITION_NO_PRACTICE_PROBLEMS");
+              assertThat(exception.status())
+                  .isEqualTo(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY);
+            });
+    verifyNoInteractions(graphClient);
+  }
+
+  private static PreferredCodingQuestion courseProblem(String kcCode) {
+    var sample = new CodingCase("", "0");
+    return new PreferredCodingQuestion(
+        1L, "course question", "statement", List.of(sample), List.of(sample), "print(0)", kcCode);
+  }
+
+  @Test
   @DisplayName("Boss 取题使用数字孪生针对当前 KC 的规则难度")
   void fetchProblemUsesSharedLearnerDifficultyInsteadOfClientDifficulty() {
     when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
