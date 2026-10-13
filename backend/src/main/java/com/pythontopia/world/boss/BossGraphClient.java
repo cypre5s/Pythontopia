@@ -1,6 +1,7 @@
 package com.pythontopia.world.boss;
 
 import com.pythontopia.common.config.GraphServiceProperties;
+import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.GraphClientRetryHelper;
 import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
@@ -112,16 +113,20 @@ public class BossGraphClient {
       }
     }
     setInternalToken(headers);
-    return GraphClientRetryHelper.withRetry(
-        "boss-problem",
-        () ->
-            bossProblemRestTemplate
-                .exchange(
-                    properties.graphUrl() + "/agents/boss/problem",
-                    HttpMethod.POST,
-                    new HttpEntity<>(body, headers),
-                    BossInternalProblem.class)
-                .getBody());
+    try {
+      return GraphClientRetryHelper.withRetry(
+          "boss-problem",
+          () ->
+              bossProblemRestTemplate
+                  .exchange(
+                      properties.graphUrl() + "/agents/boss/problem",
+                      HttpMethod.POST,
+                      new HttpEntity<>(body, headers),
+                      BossInternalProblem.class)
+                  .getBody());
+    } catch (BusinessException ex) {
+      throw new RestClientException("boss-problem Graph service is unavailable", ex);
+    }
   }
 
   /**

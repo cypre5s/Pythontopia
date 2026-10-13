@@ -182,8 +182,7 @@ async function submitJudge(): Promise<void> {
         class="feynman-panel__concept-badge"
         data-testid="feynman-concept-badge"
         title="课件外概念 · 通识知识：以代码找茬为准，不计入掌握度"
-        >通识 · 非课件</span
-      >
+      >通识 · 非课件</span>
       <p
         v-if="currentSession && misconceptionSummary"
         class="feynman-panel__misc"

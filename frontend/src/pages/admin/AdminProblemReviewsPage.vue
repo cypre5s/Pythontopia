@@ -383,7 +383,7 @@ onMounted(() => {
               </th>
               <th
                 scope="col"
-                class="review-table__action"
+                class="review-table__action admin-table__sticky"
               >
                 操作
               </th>
@@ -432,7 +432,7 @@ onMounted(() => {
                   :class="[decisionClass(entry.decision), decisionTone(entry.decision)]"
                 >{{ decisionLabel(entry.decision) }}</span>
               </td>
-              <td>
+              <td class="admin-table__sticky">
                 <button
                   class="admin-button review-open"
                   type="button"

@@ -65,7 +65,9 @@ async function finish(): Promise<void> {
     <div class="profile-question">
       {{ learning.profileInterview.currentQuestion }}
     </div>
-    <p class="profile-note">访谈只记录你的目标、已有经验和偏好，不会据此评估能力或情绪。</p>
+    <p class="profile-note">
+      访谈只记录你的目标、已有经验和偏好，不会据此评估能力或情绪。
+    </p>
 
     <div class="status-row">
       <span>Grounding: {{ learning.profileInterview.grounding?.passed === false ? '需补充' : '通过' }}</span>

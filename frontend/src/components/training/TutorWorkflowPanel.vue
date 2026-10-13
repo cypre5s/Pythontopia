@@ -630,8 +630,12 @@ function cardId(entry: CardEntry): string {
           <p class="tw-card__lead">
             {{ asGuide(entry.payload).problem_restatement }}
           </p>
-          <p class="tw-kv"><b>输入/输出关注：</b>{{ asGuide(entry.payload).input_output_focus }}</p>
-          <p class="tw-kv"><b>关键观察：</b>{{ asGuide(entry.payload).key_observation }}</p>
+          <p class="tw-kv">
+            <b>输入/输出关注：</b>{{ asGuide(entry.payload).input_output_focus }}
+          </p>
+          <p class="tw-kv">
+            <b>关键观察：</b>{{ asGuide(entry.payload).key_observation }}
+          </p>
           <ul class="tw-list">
             <li
               v-for="(q, i) in asGuide(entry.payload).starter_questions"
@@ -680,10 +684,18 @@ function cardId(entry: CardEntry): string {
 
         <!-- 错因诊断 -->
         <template v-else-if="entry.key === 'error_diagnosis'">
-          <p class="tw-kv"><b>根因：</b>{{ asError(entry.payload).root_cause }}</p>
-          <p class="tw-kv"><b>程序现在在做：</b>{{ asError(entry.payload).what_program_is_doing }}</p>
-          <p class="tw-kv"><b>应有行为：</b>{{ asError(entry.payload).expected_behavior }}</p>
-          <p class="tw-kv"><b>修复方向：</b>{{ asError(entry.payload).fix_direction }}</p>
+          <p class="tw-kv">
+            <b>根因：</b>{{ asError(entry.payload).root_cause }}
+          </p>
+          <p class="tw-kv">
+            <b>程序现在在做：</b>{{ asError(entry.payload).what_program_is_doing }}
+          </p>
+          <p class="tw-kv">
+            <b>应有行为：</b>{{ asError(entry.payload).expected_behavior }}
+          </p>
+          <p class="tw-kv">
+            <b>修复方向：</b>{{ asError(entry.payload).fix_direction }}
+          </p>
           <p
             v-if="asError(entry.payload).encouragement"
             class="tw-encourage"
@@ -697,7 +709,9 @@ function cardId(entry: CardEntry): string {
           <p class="tw-card__lead">
             {{ asPostAc(entry.payload).success_summary }}
           </p>
-          <p class="tw-kv"><b>关键一步：</b>{{ asPostAc(entry.payload).key_action }}</p>
+          <p class="tw-kv">
+            <b>关键一步：</b>{{ asPostAc(entry.payload).key_action }}
+          </p>
           <ul class="tw-list">
             <li
               v-for="(n, i) in asPostAc(entry.payload).code_quality_notes"
@@ -706,7 +720,9 @@ function cardId(entry: CardEntry): string {
               {{ n }}
             </li>
           </ul>
-          <p class="tw-kv"><b>下一步练习：</b>{{ asPostAc(entry.payload).next_practice_direction }}</p>
+          <p class="tw-kv">
+            <b>下一步练习：</b>{{ asPostAc(entry.payload).next_practice_direction }}
+          </p>
         </template>
 
         <!-- 迁移练习 -->
@@ -715,8 +731,12 @@ function cardId(entry: CardEntry): string {
             <b>{{ asTransfer(entry.payload).title }}</b>
           </p>
           <p>{{ asTransfer(entry.payload).description }}</p>
-          <p class="tw-kv"><b>输入：</b>{{ asTransfer(entry.payload).input_description }}</p>
-          <p class="tw-kv"><b>输出：</b>{{ asTransfer(entry.payload).output_description }}</p>
+          <p class="tw-kv">
+            <b>输入：</b>{{ asTransfer(entry.payload).input_description }}
+          </p>
+          <p class="tw-kv">
+            <b>输出：</b>{{ asTransfer(entry.payload).output_description }}
+          </p>
           <div
             v-for="(s, i) in asTransfer(entry.payload).samples"
             :key="i"
@@ -790,7 +810,9 @@ function cardId(entry: CardEntry): string {
           <p class="tw-card__lead">
             {{ asTrace(entry.payload).summary }}
           </p>
-          <p class="tw-kv"><b>追踪输入：</b>{{ asTrace(entry.payload).input_used }}</p>
+          <p class="tw-kv">
+            <b>追踪输入：</b>{{ asTrace(entry.payload).input_used }}
+          </p>
           <ol class="tw-list tw-list--ol">
             <li
               v-for="(st, i) in asTrace(entry.payload).steps"
@@ -826,7 +848,9 @@ function cardId(entry: CardEntry): string {
           <p class="tw-card__lead">
             {{ asParsons(entry.payload).prompt }}
           </p>
-          <p class="tw-kv"><b>本练目标：</b>{{ asParsons(entry.payload).drill_goal }}</p>
+          <p class="tw-kv">
+            <b>本练目标：</b>{{ asParsons(entry.payload).drill_goal }}
+          </p>
           <div class="tw-parsons">
             <button
               v-for="b in [...asParsons(entry.payload).blocks, ...asParsons(entry.payload).distractors]"
@@ -898,7 +922,9 @@ function cardId(entry: CardEntry): string {
           <strong>学习计划</strong>
           <span>{{ episodePlan.status === 'RECOMMENDED' ? '待开始' : episodePlan.status === 'ACTIVE' ? '进行中' : episodePlan.status === 'PAUSED' ? '已暂停' : episodePlan.status === 'COMPLETED' ? '已完成' : '已接管' }}</span>
         </header>
-        <p class="tw-plan__objective">{{ episodePlan.objective }}</p>
+        <p class="tw-plan__objective">
+          {{ episodePlan.objective }}
+        </p>
         <ol class="tw-plan__steps">
           <li
             v-for="step in episodePlan.steps"
@@ -914,7 +940,9 @@ function cardId(entry: CardEntry): string {
           class="tw-plan__stop"
         >
           当前目标：{{ activePlanStep.stop_condition }}
-          <template v-if="planNeedsSubmission"> 正式提交后自动推进。</template>
+          <template v-if="planNeedsSubmission">
+            正式提交后自动推进。
+          </template>
         </p>
         <button
           v-if="episodePlan.status === 'RECOMMENDED'"
@@ -927,7 +955,10 @@ function cardId(entry: CardEntry): string {
           开始计划
         </button>
         <template v-else-if="episodePlan.status === 'ACTIVE' && !planNeedsSubmission">
-          <label class="tw-plan__response-label" for="tw-plan-response">完成这一步后，用自己的话说说你理解了什么</label>
+          <label
+            class="tw-plan__response-label"
+            for="tw-plan-response"
+          >完成这一步后，用自己的话说说你理解了什么</label>
           <textarea
             id="tw-plan-response"
             v-model="planResponse"
@@ -955,21 +986,27 @@ function cardId(entry: CardEntry): string {
             class="tw-chip"
             :disabled="running"
             @click="steerEpisodePlan('pause')"
-          >暂停</button>
+          >
+            暂停
+          </button>
           <button
             v-else
             type="button"
             class="tw-chip"
             :disabled="running"
             @click="steerEpisodePlan('resume')"
-          >继续计划</button>
+          >
+            继续计划
+          </button>
           <button
             v-if="episodePlan.status === 'ACTIVE'"
             type="button"
             class="tw-chip"
             :disabled="running"
             @click="steerEpisodePlan('skip')"
-          >跳过当前步</button>
+          >
+            跳过当前步
+          </button>
           <input
             v-model="planRedirect"
             class="tw-plan__redirect"
@@ -982,13 +1019,17 @@ function cardId(entry: CardEntry): string {
             class="tw-chip"
             :disabled="running || !planRedirect.trim()"
             @click="steerEpisodePlan('redirect')"
-          >调整计划</button>
+          >
+            调整计划
+          </button>
           <button
             type="button"
             class="tw-chip"
             :disabled="running"
             @click="steerEpisodePlan('take_over')"
-          >自行安排</button>
+          >
+            自行安排
+          </button>
         </div>
       </section>
 
@@ -1050,7 +1091,9 @@ function cardId(entry: CardEntry): string {
         data-testid="compact-chat"
         :disabled="running"
         @click="runEvent('COMPACT')"
-      >整理对话上下文</button>
+      >
+        整理对话上下文
+      </button>
       <button
         v-if="primaryAction"
         type="button"

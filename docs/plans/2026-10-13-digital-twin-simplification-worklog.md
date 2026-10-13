@@ -1,5 +1,12 @@
 # Pythontopia 数字孪生精简优化工作日志
 
+## 2026-10-14：研究与治理原则复核
+
+- 在线复核 Jisc 的学习分析实践规范（2026-09-09 更新）与 UNESCO 教育/研究生成式 AI 指南（2026-01-16 更新）：画像用途应以学生受益为中心，说明指标和数据用途、验证数据质量、限制数据访问并最少化采集；学生应能查看/纠正相关信息，AI 分析需保留人类监督与质疑路径。[Jisc](https://www.jisc.ac.uk/guides/code-of-practice-for-learning-analytics)、[UNESCO](https://www.unesco.org/en/articles/guidance-generative-ai-education-and-research)。
+- 人本学习分析系统综述也指出学生能动性、隐私、安全、可靠性与信任仍是需要验证的设计要点；该文是研究综述，不构成当前产品已经有效的实证。[Alfredo et al., 2024](https://doi.org/10.1016/j.caeai.2024.100215)。
+- 与本项目实现对应：正式判题是 KC 能力证据；自评与偏好保持主观来源；AI 洞察只解释或建议；证据不足显示未评估；当前实现没有推断心理状态。下一步推荐附依据并可由学生选择，学习成效对照实验尚未完成。
+- 这些来源支持透明、最少化与可质疑原则，不证明当前选题策略的因果效果；BKT、未来路线概率和学习效果 A/B 仍按原方案暂缓。
+
 日期：2026-10-13
 范围：Web、共享后端与现有 Graph Tutor；未新增 Twin 状态表、Agent 或模型，仅为账号限额加日计数表，并为学习事件增加幂等键和实际增量字段。
 
@@ -146,6 +153,13 @@
 - Boss 事件幂等键补入 `userId`。回归测试让两个用户复用同一个 attempt UUID，分别得到独立画像投影键；复核 PassiveProfileRevisionListener 后确认其稳定事件键均已包含用户 ID。
 - AI 媒体路由复核确认讯飞图片生成、图片理解、TTS 和 ASR 均由 `isEnabled() == false` 硬关闭，相关服务不会发起外部调用。保留 DeepSeek 文本/视觉输入与 TTS 关闭策略；路由覆盖测试锁定禁用状态，避免未来启用 provider 后仍被误分类为无额度成本。
 - 验证：`BossServiceTest` 与 `AiBudgetRouteCoverageTest` 共 45 项单测通过，`ProfileDimensionProjectionOutboxPostgresTest` 2 项 PostgreSQL 集成通过。此次没有真实 provider 请求；媒体 provider 的关闭契约由代码与单元测试验证。
+
+## 2026-10-14 Boss Golden 兜底全栈复核
+
+- 本地全栈实测发现 Graph 重试助手的 `BusinessException` 包装破坏了 `BossGraphClient` 声明的 `RestClientException` 契约，令服务端没有进入同 KC Golden 题回退。客户端现保留原异常为 cause 并恢复契约；回归测试先失败于实际异常类型，再通过。
+- 独立全栈库空库迁移至 V212。浏览器真实登录并创建远征地图；服务端 Boss API 对 `PY43-KC-041` 返回课程 Golden 题，正式 Piston 判题验证错误答案、正确答案和相同 attemptId 回放。`BossGraphClientTest`、`BossServiceTest`、`BossProblemReviewServiceTest`、`EndlessPregenServiceTest` 共 61 tests 通过。
+- 本地正式判题顺序 10 次：P50 77.32 ms，最近秩 P95 81.95 ms；测量路径是 Graph 沙箱不可用后的 Java/Piston 兜底，不是 AI 出题或线上性能。Graph provider 被限制到本机拒绝端口，本轮 DeepSeek 请求为 0。
+- 边界：若目标 KC 没有匹配的现有课程编程题（例如 `PY43-KC-001`），服务端继续 fail closed 返回 503；不跨 KC 伪造题目关联。完整 Boss UI 通过判题后的命中演出，本次未从浏览器实际走到远征最终 Boss 节点；已有 Phaser 场景状态回归与先前合成状态浏览器检查仍是该分支的证据。
 
 ## 2026-10-14 无尽远征实测与 Boss JSON 出题修复
 

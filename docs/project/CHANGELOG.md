@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-10-14 — 全量后端复验与 Testcontainers 端口冲突定位
+
+- 当前工作树全量 `mvn test`：1356 tests、0 failures、7 errors，未达到 `BUILD SUCCESS`。6 个 pgvector Testcontainers 在 Docker 发布随机宿主端口时因 `address already in use` 失败；另 `LongTermClassroomEffectSimulationTest` 曾遇 JDBC connection reset。
+- 将 7 个错误类单独重跑后，长期仿真测试通过，6 个 Testcontainers 用例仍因同一端口绑定错误失败。诊断时发现本机 `net.ipv4.ip_local_port_range=44620 48715`，Postgres 集成请求留下的 TIME-WAIT 源端口与 Docker 随机映射端口重叠；失败端口依次出现 45921、45932 及后续相邻端口。这是本机容器网络/端口范围问题，不是断言失败。本轮没有改系统级网络设置。
+- 受影响测试的失败汇总记录于 `backend/target/surefire-reports/`；Boss 变更本身的 61 项定向 Maven 回归独立通过。临时 Pythontopia Compose 项目已清理，既有 `deploy_pytopia_pg` 数据卷保留。
+
+## 2026-10-14 — Tutor 完整答案防护与管理端交互收口
+
+- 对照 Alethicode 当前 Tutor AutoGen 工作树与近期实现日志，确认 Pythontopia 已复用 AutoGen 分阶段工作流、会话检查点、DeepSeek provider 和结构化卡片；差距集中在 CHAT 回复缺少写入历史/投影前的完整代码清理。
+- `TutorWorkflowCardAgent.chat` 现在对回复中的 Python 代码做本地 AST 判定，完整函数、含输入输出的完整脚本和 `__main__` 程序入口会替换为引导语，局部代码片段保留。新增测试先复现函数及顶层脚本均未拦截，再验证两种拦截与局部片段通过；没有发起模型请求。
+- Admin 用户与审核表格的操作列现在在水平滚动时固定于右侧；页码控件补上数字页码和省略号，面板、控件间距及尺寸继续向 Alethicode 对齐。`th` 固定定位缺失由样式合同测试先复现，再修复。
+- Web 工程清理沿用 Vue / TypeScript 官方风格指引与仓库现有命名约定，自动整理模板属性、缩进和多行内容。全量 ESLint warning 从 177 降到 7、error 为 0；未批量改动跨语言 DTO 名称。只读试运行发现的命名例外主要是测试 hook 与外部构造器名，因此没有启用会产生误报的一刀切命名规则。
+- 学习画像研究复核采用学生受益、数据最少化、指标透明且可验证、学生可访问/纠正、人类监督等原则；相关实现继续使用真实判题证据、明确测评依据，不将 AI 洞察或自评当作能力事实。[Jisc 学习分析实践规范](https://www.jisc.ac.uk/guides/code-of-practice-for-learning-analytics)、[UNESCO 教育与研究生成式 AI 指南](https://www.unesco.org/en/articles/guidance-generative-ai-education-and-research)。
+- 验证：Graph 全量 `1822 passed, 1 skipped`、全仓 Ruff 通过；Web 全量 265 个测试文件 / 2523 项、TypeScript typecheck 和生产构建通过。管理端 5 个定向测试文件 / 24 项通过，改动页面 ESLint 无告警。全量 lint 余下 7 条为可选 prop 默认值提示和账号隔离测试里的多组件 mock。
+- 未验证：Tutor 清理规则不是语义级防泄答证明，未做模型红队调用；登录后的全 Web 页面/角色矩阵、生产 Piston 内核边界、ECS/公网及有效果对照的 Twin 学习评估仍未完成。每日请求数限制不等于模型 token/金额硬上限。
+
 ## 2026-10-14 — Piston 响应兼容与全层复验
 
 - 本地 Piston/Isolate 样例实际运行在 uid 1001；读取 `/etc/shadow` 与创建 socket 均被拒绝。设置短运行时限后，当前固定版本仅返回 `signal=SIGKILL`，不带 `status` 或 `code`；这使 Java 适配器此前把已杀停的学生进程误判为判题系统异常。
@@ -68,6 +84,15 @@
 - 今日学习推荐改为沿用 Learner Twin 的确定性 KC 顺序；洞察与记忆只补充解释，不再覆盖服务端排序。画像自评、周报证据、未评估 KC 和分身页面联动经复核，周报回归覆盖“记忆列表条数不等于本周事件总数”。
 - 远征题目请求保留稳定 requestId，超时后先核对服务端结果再继续；同题并发生成互斥，旧 READY 预生成题回收，问题缓存封顶 256 条。用户触发的图片/分镜生成也纳入已有账号上海时区每日 30 次额度。
 - 验证：后端 24 个相关测试类 / 217 项通过（含 PostgreSQL/Testcontainers 集成）；Web 全量 260 个测试文件 / 2509 项、typecheck、改动文件 ESLint 与 `git diff --check` 通过。
+
+## 2026-10-14 — Boss Graph 故障兜底与正式判题复验
+
+- 全栈联测发现 `GraphClientRetryHelper` 会把底层 `RestClientException` 包成 `BusinessException`，导致 `BossService` 的 Golden 题兜底收不到 Graph 故障。`BossGraphClient.requestProblem` 现按既有客户端契约转换回 `RestClientException`；新增测试先复现异常类型不匹配，再验证保留重试并将错误交给调用方兜底。
+- 在独立 Compose 项目和全新数据库卷中启动 Web/API、Graph、RAG、PostgreSQL、Redis 与本地 Piston；空库迁移到 V212。Graph 的 provider 基址固定指向 `127.0.0.1:9`，本次没有访问 DeepSeek。
+- 浏览器真实注册、登录、`/expedition?focus=1` 建图均通过；地图 Phaser canvas 正常，pageerror 与 HTTP 错误均为 0。登录页 `/healthz` 健康探针响应 200，但浏览器 `networkidle` 未收敛，因此按 DOMContentLoaded、表单和页面内容就绪继续操作。
+- 真实 Boss API 在课程题库存在匹配编程题的 `PY43-KC-041` 上返回 Golden 题；错误代码经正式判题返回 0/1、0 分，正确代码经本地 Piston 返回 1/1、100 分；重复 `attemptId` 回放了相同结果。对该正式判题路径顺序采样 10 次，P50 77.32 ms、P95 81.95 ms、最大 81.95 ms。
+- 性能值仅代表本机、匹配课程 Golden 题、Graph 沙箱不可用后走 Java/Piston 兜底的 HTTP 判题链路；不代表 DeepSeek 出题、线上环境或移动设备性能。若当前 KC 没有匹配课程编程题（如 `PY43-KC-001`），Graph 不可用时仍会明确返回 503，不会用错 KC 的题目冒充兜底。
+- 后端 BossGraphClient、BossService、预生成与审核服务定向回归共 61 项通过；隔离 Compose 项目、容器与临时账号/数据卷已清理。完整 Maven 的 7 个 Docker/JDBC 环境错误、ECS/公网及有效果对照的学习评估仍未关闭。
 - 未做真实 DeepSeek/无尽远征性能采样、Piston 容器冒烟或 ECS/公网联测；对话中暴露的 API key 应轮换后再进行有费用的测量。账号每日请求数不限制单次工作流内部 token 或模型调用数。
 
 ## 2026-10-14 — 导学编辑器上下文与账号额度收口

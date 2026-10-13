@@ -269,14 +269,14 @@ watch(navigationOpen, (open) => {
 }
 
 .admin-shell :deep(.admin-control) {
-  min-height: 34px;
+  min-height: 36px;
   border: 1px solid var(--admin-border);
-  border-radius: 7px;
+  border-radius: 8px;
   padding: 0 10px;
   background: #fff;
   color: var(--admin-text);
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .admin-shell :deep(textarea.admin-control) {
@@ -299,17 +299,17 @@ watch(navigationOpen, (open) => {
 
 .admin-shell :deep(.admin-button) {
   display: inline-flex;
-  min-height: 34px;
+  min-height: 36px;
   align-items: center;
   justify-content: center;
   gap: 6px;
   border: 1px solid #cbd5e1;
-  border-radius: 7px;
-  padding: 0 12px;
+  border-radius: 8px;
+  padding: 0 18px;
   background: #fff;
   color: #334155;
   font: inherit;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   line-height: 1.2;
   white-space: nowrap;

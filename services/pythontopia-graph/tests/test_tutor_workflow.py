@@ -186,6 +186,35 @@ async def test_workflow_chat_includes_editor_code_as_untrusted_context() -> None
     assert "不可信数据" in prompt
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "answer",
+    [
+        "```python\ndef solve(radius):\n    area = 3.14159 * radius ** 2\n    return area\n```",
+        "```python\nradius = float(input())\narea = 3.14159 * radius ** 2\nprint(f'{area:.4f}')\n```",
+        "def solve(radius):\n    area = 3.14159 * radius ** 2\n    return area",
+    ],
+    ids=["complete-function", "complete-stdin-script", "unfenced-function"],
+)
+async def test_workflow_chat_redacts_complete_python_answers(answer: str) -> None:
+    agent = TutorWorkflowCardAgent(JsonStubProvider([{"content": answer}]))
+
+    card = await agent.chat(PROBLEM, "CODING", "解释一下", [], [], "")
+
+    assert "```python" not in card["content"]
+    assert "完整可提交代码" in card["content"]
+
+
+@pytest.mark.asyncio
+async def test_workflow_chat_keeps_a_local_code_fragment() -> None:
+    fragment = "```python\narea = radius ** 2\n```"
+    agent = TutorWorkflowCardAgent(JsonStubProvider([{"content": fragment}]))
+
+    card = await agent.chat(PROBLEM, "CODING", "解释这行", [], [], "")
+
+    assert card["content"] == fragment
+
+
 # ── SSE run 端到端 ──
 
 

@@ -190,7 +190,9 @@ const dimensionCards = computed(() => {
               详细画像雷达
             </h2>
             <ProfileRadar :dimensions="dimensions" />
-            <p class="profile-note">证据不足的维度不绘制分值；情绪和固定学习风格不作推断，知识掌握以正式练习记录为准。</p>
+            <p class="profile-note">
+              证据不足的维度不绘制分值；情绪和固定学习风格不作推断，知识掌握以正式练习记录为准。
+            </p>
             <div
               v-if="selfEditable.length > 0"
               class="self-rate"

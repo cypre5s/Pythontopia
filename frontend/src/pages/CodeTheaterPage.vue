@@ -175,7 +175,9 @@ onMounted(() => {
     data-testid="code-theater-page"
   >
     <header class="ct-head">
-      <h1 class="ct-head__title">🎭 代码剧场 · 机关广场</h1>
+      <h1 class="ct-head__title">
+        🎭 代码剧场 · 机关广场
+      </h1>
       <p class="ct-head__sub">
         写真实 Python，看傀儡把「执行过程」一步步走给你看——循环、变量、分支不再是看不见的黑箱。
       </p>

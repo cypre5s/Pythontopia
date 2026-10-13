@@ -103,7 +103,10 @@ function axisLine(a: Axis): { x2: number; y2: number } {
         :points="polygonPoints"
         class="radar__area"
       />
-      <template v-for="(a, i) in axes" :key="`pt-${i}`">
+      <template
+        v-for="(a, i) in axes"
+        :key="`pt-${i}`"
+      >
         <circle
           v-if="a.score !== null"
           :cx="a.x"

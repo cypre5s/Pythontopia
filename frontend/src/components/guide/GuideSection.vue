@@ -148,8 +148,12 @@ function pad(value: number): string {
         >
           <thead>
             <tr>
-              <th scope="col">按键</th>
-              <th scope="col">作用</th>
+              <th scope="col">
+                按键
+              </th>
+              <th scope="col">
+                作用
+              </th>
             </tr>
           </thead>
           <tbody>

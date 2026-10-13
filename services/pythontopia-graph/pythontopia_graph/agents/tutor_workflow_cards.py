@@ -12,8 +12,10 @@ ac_review/chat），保留全部防泄答硬约束；按 Pythontopia 适配：
 
 from __future__ import annotations
 
+import ast
 import json
 import re
+import textwrap
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
@@ -29,6 +31,11 @@ from pythontopia_graph.schemas.tutor_workflow import (
 AGENT_NAME = "TutorWorkflowAgent"
 
 _JSON_FENCE = re.compile(r"^\s*```(?:json)?\s*(.+?)\s*```\s*$", re.DOTALL)
+_PYTHON_FENCE = re.compile(r"```(?:python3?|py)?[ \t]*\r?\n(.*?)```", re.IGNORECASE | re.DOTALL)
+_SAFE_CODE_BOUNDARY = (
+    "我不能直接提供完整可提交代码。请先告诉我输入处理或关键变量准备怎么写，"
+    "我会按步骤给你提示。"
+)
 
 
 class CardGenerationError(RuntimeError):
@@ -406,7 +413,9 @@ class TutorWorkflowCardAgent:
             }
             for ref in courseware_references
         ]
-        return self._validate("ai_reply", card)
+        validated = self._validate("ai_reply", card)
+        validated["content"] = _sanitize_complete_python_answers(validated["content"])
+        return validated
 
     async def knowledge_review(
         self,
@@ -631,6 +640,75 @@ def _coerce_json(response: LlmResponse) -> dict[str, Any]:
         if isinstance(parsed, dict):
             return parsed
     return {}
+
+
+def _sanitize_complete_python_answers(content: str) -> str:
+    """Remove complete-looking Python solutions while keeping local code hints."""
+    if "```" not in content:
+        return _SAFE_CODE_BOUNDARY if _is_complete_python_program(content) else content
+    return _PYTHON_FENCE.sub(
+        lambda match: _SAFE_CODE_BOUNDARY
+        if _is_complete_python_program(match.group(1))
+        else match.group(0),
+        content,
+    )
+
+
+def _is_complete_python_program(source: str) -> bool:
+    # shortcut: this catches common copyable solutions; upgrade if offline red-team finds misses.
+    try:
+        tree = ast.parse(textwrap.dedent(source))
+    except SyntaxError:
+        return False
+    if not tree.body:
+        return False
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.If) and _is_main_guard(node.test):
+            return True
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and any(
+            isinstance(child, ast.Return) and child.value is not None
+            for child in ast.walk(node)
+        ):
+            return True
+        if isinstance(node, ast.ClassDef) and any(
+            isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and any(
+                isinstance(descendant, ast.Return) and descendant.value is not None
+                for descendant in ast.walk(child)
+            )
+            for child in node.body
+        ):
+            return True
+
+    top_level_nodes = [node for node in tree.body if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
+    calls = [child for node in top_level_nodes for child in ast.walk(node) if isinstance(child, ast.Call)]
+    reads_input = any(
+        isinstance(call.func, ast.Name) and call.func.id == "input"
+        or isinstance(call.func, ast.Attribute) and call.func.attr == "readline"
+        for call in calls
+    )
+    writes_output = any(
+        isinstance(call.func, ast.Name) and call.func.id == "print"
+        or isinstance(call.func, ast.Attribute) and call.func.attr == "write"
+        for call in calls
+    )
+    return reads_input and writes_output
+
+
+def _is_main_guard(test: ast.expr) -> bool:
+    return (
+        isinstance(test, ast.Compare)
+        and isinstance(test.left, ast.Name)
+        and test.left.id == "__name__"
+        and len(test.ops) == 1
+        and isinstance(test.ops[0], (ast.Eq, ast.Is))
+        and len(test.comparators) == 1
+        and any(
+            isinstance(comparator, ast.Constant) and comparator.value == "__main__"
+            for comparator in test.comparators
+        )
+    )
 
 
 def _strip_nulls(value: Any) -> Any:
