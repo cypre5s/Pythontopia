@@ -403,7 +403,8 @@ public class EndlessPregenService {
     validateStage(stage);
     try {
       lockActiveRun(userId, expeditionRunId);
-      validateExpeditionNode(userId, expeditionRunId, expeditionNodeId, chapter, kcCode, false);
+      Integer bossPhase =
+          validateExpeditionNode(userId, expeditionRunId, expeditionNodeId, chapter, kcCode, false);
       List<Map<String, Object>> rows =
           jdbcTemplate.queryForList(
               "SELECT id, payload::text AS payload FROM pregenerated_problem"
@@ -434,7 +435,7 @@ public class EndlessPregenService {
       if (problem == null || problem.chapter() != chapter || problem.stage() != stage) {
         return Optional.empty();
       }
-      BossInternalProblem issued = problem.issueAs("issue-" + UUID.randomUUID(), kcCode);
+      BossInternalProblem issued = problem.issueAs(BossService.issueProblemId(bossPhase), kcCode);
       // 原子认领：仅当仍为 READY 才置 CONSUMED，并发下只有一个请求拿到这一行。
       int updated =
           jdbcTemplate.update(
@@ -509,7 +510,9 @@ public class EndlessPregenService {
     }
     if (expeditionRunId != null) {
       lockActiveRun(userId, expeditionRunId);
-      validateExpeditionNode(userId, expeditionRunId, expeditionNodeId, chapter, kcCode, false);
+      Integer bossPhase =
+          validateExpeditionNode(userId, expeditionRunId, expeditionNodeId, chapter, kcCode, false);
+      requireIssuedBossPhase(problem.problemId(), bossPhase);
       insert(
           userId, chapter, problem.stage(), kcCode, kind, arenaLevel, difficulty, problem,
           "CONSUMED", expeditionRunId, expeditionNodeId);
@@ -586,7 +589,8 @@ public class EndlessPregenService {
                     rs.getInt("chapter"),
                     rs.getInt("stage"),
                     rs.getString("kc_code"),
-                    rs.getString("question_fingerprint")),
+                    rs.getString("question_fingerprint"),
+                    BossService.bossPhaseFromProblemId(problemId)),
             userId,
             problemId)
         .stream()
@@ -707,7 +711,7 @@ public class EndlessPregenService {
     }
   }
 
-  private void validateExpeditionNode(
+  private Integer validateExpeditionNode(
       Long userId,
       String runId,
       String nodeId,
@@ -721,13 +725,22 @@ public class EndlessPregenService {
             "EXPEDITION_PROBLEM_BINDING_MISMATCH",
             "题目节点绑定需要有效的远征 run");
       }
-      return;
+      return null;
     }
     if (expeditionRunService == null) {
       throw new IllegalStateException("ExpeditionRunService is required for run-bound problems");
     }
-    expeditionRunService.validateProblemRequest(
+    return expeditionRunService.validateProblemRequest(
         userId, runId, nodeId, chapter, allowPrefetch, kcCode);
+  }
+
+  private void requireIssuedBossPhase(String problemId, Integer expectedPhase) {
+    if (!java.util.Objects.equals(BossService.bossPhaseFromProblemId(problemId), expectedPhase)) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT,
+          "EXPEDITION_PROBLEM_BINDING_MISMATCH",
+          "题目签发阶段与当前远征 Boss 阶段不一致");
+    }
   }
 
   private void lockUserPrefetchQuota(Long userId) {
@@ -788,5 +801,6 @@ public class EndlessPregenService {
       int chapter,
       int stage,
       String kcCode,
-      String questionFingerprint) {}
+      String questionFingerprint,
+      Integer bossPhase) {}
 }

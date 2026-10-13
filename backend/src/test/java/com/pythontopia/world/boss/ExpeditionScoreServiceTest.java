@@ -28,7 +28,7 @@ class ExpeditionScoreServiceTest {
   @Test
   void settlesOnlyScoresDerivedFromServerJudgedAttempts() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
-        .thenReturn(List.of(1));
+        .thenReturn(List.of(false));
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(
@@ -47,15 +47,38 @@ class ExpeditionScoreServiceTest {
             eq(RUN_ID),
             eq(170),
             eq(2),
-            eq(1));
+            eq(1),
+            eq(false));
     verify(jdbcTemplate)
         .update(contains("SET status = 'SETTLED'"), eq(7L), eq(RUN_ID));
   }
 
   @Test
+  void preservesTheDailyFlagFromTheLockedServerRun() {
+    when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
+        .thenReturn(List.of(true));
+    when(jdbcTemplate.query(
+            contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
+        .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttempt(true, 80)));
+    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
+
+    service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
+
+    verify(jdbcTemplate)
+        .update(
+            contains("INSERT INTO expedition_score"),
+            eq(7L),
+            eq(RUN_ID),
+            eq(80),
+            eq(1),
+            eq(1),
+            eq(true));
+  }
+
+  @Test
   void doesNotCreateScoreFromClientPayloadWhenNoServerAttemptExists() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
-        .thenReturn(List.of(1));
+        .thenReturn(List.of(false));
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
@@ -86,7 +109,7 @@ class ExpeditionScoreServiceTest {
   @Test
   void limitsVerifiedAttemptsToTheMaximumQuestionsInOneExpeditionMap() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
-        .thenReturn(List.of(1));
+        .thenReturn(List.of(false));
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(
@@ -106,13 +129,14 @@ class ExpeditionScoreServiceTest {
             eq(RUN_ID),
             eq(960),
             eq(12),
-            eq(12));
+            eq(12),
+            eq(false));
   }
 
   @Test
   void refusesToAddANewVerifiedAttemptAfterOneRunBudgetIsUsed() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
-        .thenReturn(List.of(1));
+        .thenReturn(List.of(false));
     when(jdbcTemplate.query(contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
     when(jdbcTemplate.query(contains("problem_id = ?"), any(RowMapper.class), any(Object[].class)))
@@ -134,7 +158,7 @@ class ExpeditionScoreServiceTest {
   @Test
   void locksTheActiveRunBeforeCheckingItsAttemptBudget() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
-        .thenReturn(List.of(1));
+        .thenReturn(List.of(false));
     when(jdbcTemplate.query(contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
     when(jdbcTemplate.query(contains("problem_id = ?"), any(RowMapper.class), any(Object[].class)))
@@ -155,7 +179,7 @@ class ExpeditionScoreServiceTest {
   @Test
   void publishesLearningEvidenceOnlyForFirstFailureAndFirstPass() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
-        .thenReturn(List.of(1));
+        .thenReturn(List.of(false));
     when(jdbcTemplate.query(contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(
             List.of(),

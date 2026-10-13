@@ -3,6 +3,7 @@ package com.pythontopia.world.boss;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -90,6 +91,27 @@ class BossServiceTest {
     lenient()
         .when(passiveProfileService.getPersonalizationSignals(anyLong()))
         .thenReturn(LearnerProfileSignals.empty());
+    lenient()
+        .when(
+            expeditionRunService.validateProblemRequest(
+                anyLong(), anyString(), anyString(), anyInt(), anyBoolean(), anyString()))
+        .thenReturn(null);
+  }
+
+  @Test
+  @DisplayName("远征 Boss 题目身份区分阶段但同阶段同题仍复用指纹")
+  void bossQuestionFingerprintIsScopedToItsServerIssuedPhase() {
+    String questionFingerprint = "a".repeat(64);
+    String phaseOneId = BossService.issueProblemId(1);
+    String phaseTwoId = BossService.issueProblemId(2);
+
+    assertThat(BossService.bossPhaseFromProblemId(phaseOneId)).isEqualTo(1);
+    assertThat(BossService.bossPhaseFromProblemId(phaseTwoId)).isEqualTo(2);
+    assertThat(BossService.bossPhaseFromProblemId("issue-" + UUID.randomUUID())).isNull();
+    assertThat(BossService.expeditionAttemptFingerprint(questionFingerprint, "L9-0", 1))
+        .isEqualTo(BossService.expeditionAttemptFingerprint(questionFingerprint, "L9-0", 1));
+    assertThat(BossService.expeditionAttemptFingerprint(questionFingerprint, "L9-0", 1))
+        .isNotEqualTo(BossService.expeditionAttemptFingerprint(questionFingerprint, "L9-0", 2));
   }
 
   @Test
@@ -368,7 +390,7 @@ class BossServiceTest {
         .thenReturn(
             Optional.of(
                 new EndlessPregenService.ExpeditionProblemBinding(
-                    runId, "L0-0", 1, 1, "PY43-KC-001", "a".repeat(64))));
+                    runId, "L0-0", 1, 1, "PY43-KC-001", "a".repeat(64), null)));
     when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(false);
 
     assertThatThrownBy(
@@ -377,6 +399,27 @@ class BossServiceTest {
                     new BossAttemptRequest("p1", 1, 1, "print(5)", 10), 7L))
         .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
         .hasMessageContaining("远征存档");
+    verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
+  }
+
+  @Test
+  @DisplayName("Boss 题签发后阶段已推进时不能再次判题")
+  void bossProblemFromPreviousPhaseCannotBeEvaluatedAgain() {
+    String runId = "123e4567-e89b-12d3-a456-426614174000";
+    String problemId = BossService.issueProblemId(1);
+    BossInternalProblem problem =
+        problemWithTests(1).issueAs(problemId, "PY43-KC-001");
+    when(pregenService.findExpeditionBinding(7L, problemId))
+        .thenReturn(Optional.of(binding(runId, "L9-0", 1, 1, problem)));
+    when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
+    when(expeditionRunService.validateProblemRequest(
+            7L, runId, "L9-0", 1, false, "PY43-KC-001"))
+        .thenReturn(2);
+
+    assertThatThrownBy(
+            () -> service.evaluateAttempt(new BossAttemptRequest(problemId, 1, 1, "print(5)", 1), 7L))
+        .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
+        .hasMessageContaining("绑定");
     verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
   }
 
@@ -393,7 +436,8 @@ class BossServiceTest {
                     1,
                     1,
                     "PY43-KC-001",
-                    BossService.questionFingerprint(problemWithTests(1)))));
+                    BossService.questionFingerprint(problemWithTests(1)),
+                    null)));
     when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
     when(pregenService.findByProblemId(7L, "p1"))
         .thenReturn(Optional.of(problemWithTests(1)));
@@ -425,7 +469,8 @@ class BossServiceTest {
                     1,
                     1,
                     "PY43-KC-001",
-                    BossService.questionFingerprint(problemWithTests(3)))));
+                    BossService.questionFingerprint(problemWithTests(3)),
+                    null)));
     when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
     when(pregenService.findByProblemId(7L, "p1"))
         .thenReturn(Optional.of(problemWithTests(3)));
@@ -957,7 +1002,8 @@ class BossServiceTest {
         chapter,
         stage,
         problem.kcCode(),
-        BossService.questionFingerprint(problem));
+        BossService.questionFingerprint(problem),
+        BossService.bossPhaseFromProblemId(problem.problemId()));
   }
 
   private static BossInternalProblem problemWithStage(int stage) {

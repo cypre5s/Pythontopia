@@ -13,6 +13,18 @@ import org.junit.jupiter.api.Test;
 class ExpeditionMapGeneratorTest {
 
   @Test
+  void everyMapHasAnEliteChallengeBeforeTheBoss() {
+    List<FrontierPickDto> picks =
+        List.of(new FrontierPickDto("PY43-KC-001", 1, 2, "weak"));
+
+    for (long seed = 0; seed < 256; seed++) {
+      ExpeditionMapGenerator.MapData map = ExpeditionMapGenerator.generate(picks, seed);
+
+      assertThat(map.nodes()).anyMatch(node -> "elite".equals(node.get("kind")));
+    }
+  }
+
+  @Test
   void serverMapIsAReachableTenLayerDagBuiltFromFrontierPicks() {
     List<FrontierPickDto> picks =
         List.of(

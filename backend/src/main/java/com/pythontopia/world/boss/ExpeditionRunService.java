@@ -8,13 +8,13 @@ import com.pythontopia.world.boss.dto.ExpeditionRunAction;
 import com.pythontopia.world.boss.dto.ExpeditionRunActionRequest;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import com.pythontopia.world.boss.dto.FrontierPickDto;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
-import java.time.LocalDate;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -48,6 +48,7 @@ public class ExpeditionRunService {
 
   private static final Logger log = LoggerFactory.getLogger(ExpeditionRunService.class);
   private static final int MAX_SNAPSHOT_BYTES = 64 * 1024;
+  private static final ZoneId DAILY_CHALLENGE_ZONE = ZoneId.of("Asia/Shanghai");
   private static final Set<String> PERSISTABLE_PHASES =
       Set.of("map", "event", "challenge", "reward");
   private static final Set<String> NODE_STATES =
@@ -129,10 +130,7 @@ public class ExpeditionRunService {
     }
     validateSnapshotSize(dto);
     validatePersistablePhase(dto.phase());
-    jdbcTemplate.queryForObject(
-        "SELECT pg_advisory_xact_lock(hashtext('pythontopia.expedition.run'), hashtext(?))",
-        Object.class,
-        userId.toString());
+    lockUserRun(userId);
     List<ExistingRun> existing = lockRunRow(userId);
     if (existing.isEmpty()) {
       if (dto.runId() == null) throw startRequired();
@@ -177,9 +175,22 @@ public class ExpeditionRunService {
   @Transactional
   public ExpeditionRunDto start(
       Long userId, Integer focusChapter, boolean isDaily, List<FrontierPickDto> picks) {
+    LocalDate challengeDate = LocalDate.now(DAILY_CHALLENGE_ZONE);
+    if (isDaily && userId != null) {
+      lockUserRun(userId);
+      boolean claimed =
+          Boolean.TRUE.equals(
+              jdbcTemplate.queryForObject(
+                  "SELECT EXISTS(SELECT 1 FROM expedition_daily_claim"
+                      + " WHERE user_id = ? AND challenge_date = ?)",
+                  Boolean.class,
+                  userId,
+                  challengeDate));
+      if (claimed) throw dailyChallengeAlreadyClaimed();
+    }
     long seed =
         isDaily
-            ? LocalDate.now(ZoneOffset.UTC).toEpochDay()
+            ? challengeDate.toEpochDay()
             : ThreadLocalRandom.current().nextLong();
     ExpeditionMapGenerator.MapData map = ExpeditionMapGenerator.generate(picks, seed);
     ExpeditionRunDto initial =
@@ -199,7 +210,17 @@ public class ExpeditionRunService {
             List.of(),
             null,
             0);
-    return persistSnapshot(userId, initial, true);
+    ExpeditionRunDto started = persistSnapshot(userId, initial, true);
+    if (isDaily && userId != null) {
+      int claimed =
+          jdbcTemplate.update(
+              "INSERT INTO expedition_daily_claim (user_id, challenge_date) VALUES (?, ?)"
+                  + " ON CONFLICT (user_id, challenge_date) DO NOTHING",
+              userId,
+              challengeDate);
+      if (claimed != 1) throw dailyChallengeAlreadyClaimed();
+    }
+    return started;
   }
 
   private ExpeditionRunDto persistSnapshot(Long userId, ExpeditionRunDto dto, boolean allowNewRun) {
@@ -208,10 +229,7 @@ public class ExpeditionRunService {
     }
     validateSnapshotSize(dto);
     validatePersistablePhase(dto.phase());
-    jdbcTemplate.queryForObject(
-        "SELECT pg_advisory_xact_lock(hashtext('pythontopia.expedition.run'), hashtext(?))",
-        Object.class,
-        userId.toString());
+    lockUserRun(userId);
     List<ExistingRun> existing =
         jdbcTemplate.query(
             "SELECT run_id::text AS run_id, status, focus_chapter, nodes::text AS nodes, layers, is_daily"
@@ -465,6 +483,7 @@ public class ExpeditionRunService {
       }
       return applyChallengeOutcome(userId, run, node, request.problemId(), evidence, false, true);
     }
+    validateIssuedBossPhase(node, evidence, request.problemId());
     if (!"challenge".equals(run.phase()) || !request.nodeId().equals(run.currentNodeId())) {
       throw problemBindingMismatch();
     }
@@ -580,38 +599,74 @@ public class ExpeditionRunService {
       ExpeditionRunDto run,
       ExpeditionRunActionRequest request,
       Map<String, Object> node) {
-    List<ChallengeEvidence> rows =
+    List<IssuedProblem> issuedProblems =
         jdbcTemplate.query(
-            "SELECT p.expedition_node_id, p.kc_code, p.chapter, p.question_fingerprint,"
-                + " a.passed, a.score FROM pregenerated_problem p"
-                + " JOIN expedition_verified_attempt a ON a.user_id = p.user_id"
-                + " AND a.run_id = p.expedition_run_id"
-                + " AND (a.problem_id = p.problem_id OR"
-                + " (p.question_fingerprint IS NOT NULL AND a.question_fingerprint = p.question_fingerprint))"
+            "SELECT p.expedition_node_id, p.kc_code, p.chapter, p.problem_id, p.question_fingerprint"
+                + " FROM pregenerated_problem p"
                 + " WHERE p.user_id = ? AND p.expedition_run_id = ?::uuid"
                 + " AND p.expedition_node_id = ? AND p.problem_id = ? AND p.status = 'CONSUMED'"
-                + " ORDER BY a.passed DESC, a.score DESC LIMIT 1",
+                + " LIMIT 1",
             (rs, rowNum) ->
-                new ChallengeEvidence(
+                new IssuedProblem(
                     rs.getString("expedition_node_id"),
                     rs.getString("kc_code"),
                     rs.getInt("chapter"),
-                    rs.getString("question_fingerprint"),
-                    rs.getBoolean("passed"),
-                    rs.getInt("score")),
+                    rs.getString("problem_id"),
+                    rs.getString("question_fingerprint")),
             userId,
             run.runId(),
             request.nodeId(),
             request.problemId());
-    if (rows.isEmpty()) throw problemBindingMismatch();
-    ChallengeEvidence evidence = rows.getFirst();
-    if (!request.nodeId().equals(evidence.nodeId())
-        || !Objects.equals(node.get("kcCode"), evidence.kcCode())
-        || evidence.questionFingerprint() == null
-        || (run.focusChapter() != null && evidence.chapter() != run.focusChapter())) {
+    if (issuedProblems.isEmpty()) throw problemBindingMismatch();
+    IssuedProblem issued = issuedProblems.getFirst();
+    Integer bossPhase = BossService.bossPhaseFromProblemId(issued.problemId());
+    if (!request.nodeId().equals(issued.nodeId())
+        || !Objects.equals(node.get("kcCode"), issued.kcCode())
+        || issued.questionFingerprint() == null
+        || (run.focusChapter() != null && issued.chapter() != run.focusChapter())) {
       throw problemBindingMismatch();
     }
-    return evidence;
+    String attemptFingerprint =
+        BossService.expeditionAttemptFingerprint(
+            issued.questionFingerprint(), issued.nodeId(), bossPhase);
+    List<ChallengeEvidence> attempts =
+        jdbcTemplate.query(
+            "SELECT question_fingerprint, passed, score FROM expedition_verified_attempt"
+                + " WHERE user_id = ? AND run_id = ?::uuid"
+                + " AND (problem_id = ? OR question_fingerprint = ?)"
+                + " ORDER BY passed DESC, score DESC LIMIT 1",
+            (rs, rowNum) ->
+                new ChallengeEvidence(
+                    issued.nodeId(),
+                    issued.kcCode(),
+                    issued.chapter(),
+                    rs.getString("question_fingerprint"),
+                    bossPhase,
+                    rs.getBoolean("passed"),
+                    rs.getInt("score")),
+            userId,
+            run.runId(),
+            request.problemId(),
+            attemptFingerprint);
+    if (attempts.isEmpty()) throw problemBindingMismatch();
+    return attempts.getFirst();
+  }
+
+  private void validateIssuedBossPhase(
+      Map<String, Object> node, ChallengeEvidence evidence, String problemId) {
+    Integer currentPhase = null;
+    if ("boss".equals(node.get("kind"))) {
+      currentPhase = node.get("bossPhase") == null ? 1 : integerValue(node.get("bossPhase"));
+      if (currentPhase < 1 || currentPhase > 3) throw mapChanged();
+    }
+    Integer issuedPhase = evidence.bossPhase();
+    if (currentPhase != null
+        && currentPhase == 1
+        && issuedPhase == null
+        && BossService.isLegacyIssueProblemId(problemId)) {
+      issuedPhase = 1;
+    }
+    if (!Objects.equals(currentPhase, issuedPhase)) throw problemBindingMismatch();
   }
 
   private Optional<ChallengeSettlement> findSettlement(
@@ -840,7 +895,7 @@ public class ExpeditionRunService {
   }
 
   /** Validate an expedition problem against its server-owned node and current map phase. */
-  public void validateProblemRequest(
+  public Integer validateProblemRequest(
       Long userId,
       String runId,
       String nodeId,
@@ -849,7 +904,7 @@ public class ExpeditionRunService {
       String kcCode) {
     if (runId == null) {
       if (nodeId != null) throw problemBindingMismatch();
-      return;
+      return null;
     }
     if (userId == null || nodeId == null) throw problemBindingMismatch();
     List<ProblemRunState> rows =
@@ -875,11 +930,16 @@ public class ExpeditionRunService {
           "EXPEDITION_PROBLEM_NODE_MISMATCH",
           "题目知识点与绑定的远征节点不一致");
     }
+    Integer bossPhase = null;
+    if ("boss".equals(node.get("kind"))) {
+      bossPhase = node.get("bossPhase") == null ? 1 : integerValue(node.get("bossPhase"));
+      if (bossPhase < 1 || bossPhase > 3) throw mapChanged();
+    }
     if ("map".equals(state.phase()) && allowPrefetch) {
       if (!"available".equals(node.get("state"))) throw problemBindingMismatch();
       if (state.currentNodeId() == null) {
         if (integerValue(node.get("layer")) != 0) throw problemBindingMismatch();
-        return;
+        return bossPhase;
       }
       Map<String, Object> current = findNode(state.nodes(), state.currentNodeId());
       Object next = current.get("next");
@@ -888,12 +948,12 @@ public class ExpeditionRunService {
           || !reachable.contains(nodeId)) {
         throw problemBindingMismatch();
       }
-      return;
+      return bossPhase;
     }
     if ("challenge".equals(state.phase())
         && nodeId.equals(state.currentNodeId())
         && ("available".equals(node.get("state")) || "current".equals(node.get("state")))) {
-      return;
+      return bossPhase;
     }
     throw problemBindingMismatch();
   }
@@ -1020,6 +1080,18 @@ public class ExpeditionRunService {
     return new BusinessException(HttpStatus.CONFLICT, "EXPEDITION_RUN_CHANGED", "远征存档已变化，请刷新后重试");
   }
 
+  private void lockUserRun(Long userId) {
+    jdbcTemplate.queryForObject(
+        "SELECT pg_advisory_xact_lock(hashtext('pythontopia.expedition.run'), hashtext(?))",
+        Object.class,
+        userId.toString());
+  }
+
+  private BusinessException dailyChallengeAlreadyClaimed() {
+    return new BusinessException(
+        HttpStatus.CONFLICT, "EXPEDITION_DAILY_ALREADY_CLAIMED", "今日挑战已完成，请明天再来");
+  }
+
   private BusinessException startRequired() {
     return new BusinessException(
         HttpStatus.BAD_REQUEST, "EXPEDITION_RUN_START_REQUIRED", "新局只能通过服务端开局");
@@ -1062,8 +1134,12 @@ public class ExpeditionRunService {
       String kcCode,
       int chapter,
       String questionFingerprint,
+      Integer bossPhase,
       boolean passed,
       int score) {}
+
+  private record IssuedProblem(
+      String nodeId, String kcCode, int chapter, String problemId, String questionFingerprint) {}
 
   private record ChallengeSettlement(String nodeId, boolean passed) {}
 

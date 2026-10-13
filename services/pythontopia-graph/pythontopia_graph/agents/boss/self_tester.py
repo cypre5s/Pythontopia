@@ -24,6 +24,7 @@ FORBIDDEN_IMPORTS = (
     "smtplib",
     "ftplib",
     "ssl",
+    "importlib",
 )
 
 DEFAULT_TIMEOUT_SEC = 5
@@ -118,6 +119,10 @@ def _scan_forbidden_imports(source: str) -> list[str]:
             mod = node.module or ""
             if _matches(mod):
                 forbidden.append(mod)
+        elif isinstance(node, ast.Name) and node.id == "__import__":
+            forbidden.append(node.id)
+        elif isinstance(node, ast.Attribute) and node.attr == "__import__":
+            forbidden.append(node.attr)
     return forbidden
 
 

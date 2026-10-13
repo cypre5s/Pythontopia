@@ -70,6 +70,7 @@ public class BossService {
   private static final int EVAL_TIMEOUT_SEC = 5;
   private static final long DEFAULT_PACK_ID = 43L;
   private static final String ISSUE_ID_PREFIX = "issue-";
+  private static final String BOSS_ISSUE_ID_PREFIX = "issue-boss-phase-";
 
   private final BossGraphClient graphClient;
   private final MasteryRepository masteryRepository;
@@ -161,9 +162,10 @@ public class BossService {
     // preferredKc 优先级高于旧 kcCode（前端 ArenaPage 走 preferredKc）。
     String effectiveKc = request.preferredKc() != null ? request.preferredKc() : request.kcCode();
     String kc = resolveKc(chapter, effectiveKc);
-    String expeditionRunId =
+    ExpeditionRequestBinding expeditionBinding =
         validateExpeditionRun(
             userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, false, kc);
+    String expeditionRunId = expeditionBinding.runId();
     // 难度优先取前端显式请求；否则据该章 KC 的真实掌握度 + 置信度推断（学情驱动），而非仅按 stage。
     int difficulty =
         computeTargetDifficulty(userId, kc, request.stage(), request.difficulty());
@@ -211,7 +213,7 @@ public class BossService {
     if (approved.isPresent()) {
       BossInternalProblem source = approved.get().problem();
       requireProblemContext(source, chapter, request.stage());
-      BossInternalProblem problem = source.issueAs(ISSUE_ID_PREFIX + UUID.randomUUID(), kc);
+      BossInternalProblem problem = source.issueAs(issueProblemId(expeditionBinding.bossPhase()), kc);
       cache.put(new ProblemCacheKey(userId, problem.problemId()), new CachedProblem(problem, Instant.now()));
       persistConsumed(
           userId, chapter, kc, request, difficulty, problem, expeditionRunId);
@@ -284,7 +286,7 @@ public class BossService {
           "题目生成服务暂不可用，请稍后重试");
     }
     requireProblemContext(fromGraph, chapter, request.stage());
-    BossInternalProblem issued = fromGraph.issueAs(ISSUE_ID_PREFIX + UUID.randomUUID(), kc);
+    BossInternalProblem issued = fromGraph.issueAs(issueProblemId(expeditionBinding.bossPhase()), kc);
     cache.put(new ProblemCacheKey(userId, issued.problemId()), new CachedProblem(issued, Instant.now()));
     // 现场题也落库 (CONSUMED)，供内存缓存过期 / 进程重启后判题兜底取回 testCases（best-effort）。
     persistConsumed(userId, chapter, kc, request, difficulty, issued, expeditionRunId);
@@ -302,7 +304,8 @@ public class BossService {
     String kc = resolveKc(chapter, effectiveKc);
     String expeditionRunId =
         validateExpeditionRun(
-            userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, true, kc);
+            userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, true, kc)
+            .runId();
     int difficulty =
         computeTargetDifficulty(userId, kc, request.stage(), request.difficulty());
     EndlessPregenService.PrefetchStart start =
@@ -407,7 +410,8 @@ public class BossService {
     int difficulty =
         computeTargetDifficulty(userId, kc, progression, requestedDifficulty);
     String activeRunId =
-        validateExpeditionRun(userId, expeditionRunId, expeditionNodeId, chapter, true, kc);
+        validateExpeditionRun(userId, expeditionRunId, expeditionNodeId, chapter, true, kc)
+            .runId();
     return activeRunId == null
         ? pregenService.getPrefetchStatus(
             userId, chapter, stage, kc, difficulty, preferredKind, arenaLevel, null)
@@ -502,6 +506,7 @@ public class BossService {
       BossAttemptRequest request, Long userId, BossAttemptIdempotencyService.Claim claim) {
     Optional<EndlessPregenService.ExpeditionProblemBinding> expeditionBinding =
         pregenService.findExpeditionBinding(userId, request.problemId());
+    Integer bossPhaseForAttempt = null;
     if (expeditionBinding.isPresent()) {
       EndlessPregenService.ExpeditionProblemBinding binding = expeditionBinding.get();
       if (binding.nodeId() == null
@@ -513,8 +518,18 @@ public class BossService {
       if (!expeditionRunService.isActiveRun(userId, binding.runId())) {
         throw expiredExpeditionRun();
       }
-      expeditionRunService.validateProblemRequest(
-          userId, binding.runId(), binding.nodeId(), binding.chapter(), false, binding.kcCode());
+      Integer currentBossPhase =
+          expeditionRunService.validateProblemRequest(
+              userId, binding.runId(), binding.nodeId(), binding.chapter(), false, binding.kcCode());
+      boolean legacyPhaseOne =
+          currentBossPhase != null
+              && currentBossPhase == 1
+              && binding.bossPhase() == null
+              && isLegacyIssueProblemId(request.problemId());
+      if (!Objects.equals(currentBossPhase, binding.bossPhase()) && !legacyPhaseOne) {
+        throw problemBindingMismatch();
+      }
+      bossPhaseForAttempt = binding.bossPhase() == null ? currentBossPhase : binding.bossPhase();
     } else if (pregenService.findExpeditionRunId(userId, request.problemId()).isPresent()) {
       // Old rows may have a run id but cannot safely identify which map node issued the question.
       throw problemBindingMismatch();
@@ -571,9 +586,17 @@ public class BossService {
         throw new RestClientException("graph evaluate returned null body");
       }
       int score = scoreFor(graphResult);
-      String runId = expeditionBinding.map(EndlessPregenService.ExpeditionProblemBinding::runId).orElse(null);
+      String runId = expeditionBinding.isPresent() ? expeditionBinding.get().runId() : null;
+      String attemptFingerprint =
+          expeditionBinding.isPresent()
+              ? expeditionAttemptFingerprint(
+                  questionFingerprint(problem),
+                  expeditionBinding.get().nodeId(),
+                  bossPhaseForAttempt)
+              : questionFingerprint(problem);
       ExpeditionScoreService.VerifiedAttemptResult attemptResult =
-          recordVerifiedExpeditionAttempt(userId, runId, problem, graphResult, score);
+          recordVerifiedExpeditionAttempt(
+              userId, runId, problem, attemptFingerprint, graphResult, score);
       if (!attemptResult.accepted()) {
         if (!expeditionRunService.isActiveRun(userId, runId)) {
           throw expiredExpeditionRun();
@@ -633,7 +656,7 @@ public class BossService {
     return result;
   }
 
-  private String validateExpeditionRun(
+  private ExpeditionRequestBinding validateExpeditionRun(
       Long userId,
       String runId,
       String nodeId,
@@ -642,11 +665,64 @@ public class BossService {
       String kcCode) {
     if (runId == null) {
       if (nodeId != null) throw problemBindingMismatch();
+      return new ExpeditionRequestBinding(null, null);
+    }
+    Integer bossPhase =
+        expeditionRunService.validateProblemRequest(
+            userId, runId, nodeId, chapter, allowPrefetch, kcCode);
+    return new ExpeditionRequestBinding(runId, bossPhase);
+  }
+
+  static String issueProblemId(Integer bossPhase) {
+    if (bossPhase == null) return ISSUE_ID_PREFIX + UUID.randomUUID();
+    if (bossPhase < 1 || bossPhase > 3) {
+      throw new IllegalArgumentException("boss phase must be in 1..3");
+    }
+    return BOSS_ISSUE_ID_PREFIX + bossPhase + "-" + UUID.randomUUID();
+  }
+
+  static Integer bossPhaseFromProblemId(String problemId) {
+    if (problemId == null || !problemId.startsWith(BOSS_ISSUE_ID_PREFIX)) return null;
+    int separator = problemId.indexOf('-', BOSS_ISSUE_ID_PREFIX.length());
+    if (separator < 0) return null;
+    try {
+      int phase = Integer.parseInt(problemId.substring(BOSS_ISSUE_ID_PREFIX.length(), separator));
+      UUID.fromString(problemId.substring(separator + 1));
+      return phase >= 1 && phase <= 3 ? phase : null;
+    } catch (IllegalArgumentException exception) {
       return null;
     }
-    expeditionRunService.validateProblemRequest(
-        userId, runId, nodeId, chapter, allowPrefetch, kcCode);
-    return runId;
+  }
+
+  static boolean isLegacyIssueProblemId(String problemId) {
+    if (problemId == null
+        || !problemId.startsWith(ISSUE_ID_PREFIX)
+        || problemId.startsWith(BOSS_ISSUE_ID_PREFIX)) {
+      return false;
+    }
+    try {
+      UUID.fromString(problemId.substring(ISSUE_ID_PREFIX.length()));
+      return true;
+    } catch (IllegalArgumentException exception) {
+      return false;
+    }
+  }
+
+  static String expeditionAttemptFingerprint(
+      String questionFingerprint, String nodeId, Integer bossPhase) {
+    if (bossPhase == null) return questionFingerprint;
+    if (nodeId == null || bossPhase < 1 || bossPhase > 3) {
+      throw new IllegalArgumentException("boss attempt binding is invalid");
+    }
+    try {
+      MessageDigest digest = MessageDigest.getInstance("SHA-256");
+      updateFingerprint(digest, questionFingerprint);
+      updateFingerprint(digest, nodeId);
+      updateFingerprint(digest, Integer.toString(bossPhase));
+      return HexFormat.of().formatHex(digest.digest());
+    } catch (NoSuchAlgorithmException exception) {
+      throw new IllegalStateException("SHA-256 is unavailable", exception);
+    }
   }
 
   private com.pythontopia.common.error.BusinessException problemBindingMismatch() {
@@ -660,6 +736,7 @@ public class BossService {
       Long userId,
       String runId,
       BossInternalProblem problem,
+      String attemptFingerprint,
       BossEvaluateResultDto result,
       int score) {
     if (userId == null || runId == null) {
@@ -669,10 +746,12 @@ public class BossService {
         userId,
         runId,
         problem.problemId(),
-        questionFingerprint(problem),
+        attemptFingerprint,
         result.passed(),
         score);
   }
+
+  private record ExpeditionRequestBinding(String runId, Integer bossPhase) {}
 
   static String questionFingerprint(BossInternalProblem problem) {
     try {
