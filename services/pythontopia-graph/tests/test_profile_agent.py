@@ -33,7 +33,7 @@ def profile_input(message: str) -> ProfileAgentInput:
 
 
 @pytest.mark.asyncio
-async def test_profile_agent_completes_all_dimensions() -> None:
+async def test_profile_agent_completes_after_self_report_fields_are_collected() -> None:
     draft = ProfileDraft.example_complete(target_kc_codes=["PY43-KC-001", "PY43-KC-003"])
     agent = ProfileAgent(FakeLlmProvider({"profile_draft": draft.model_dump()}))
 
@@ -41,9 +41,26 @@ async def test_profile_agent_completes_all_dimensions() -> None:
 
     assert output.done is True
     assert output.profile_draft is not None
-    assert len(output.dimensions_filled) == 8
+    assert output.dimensions_filled == ["major", "base_level", "learning_goal", "learning_preference"]
     assert output.grounding_result.passed is True
     assert output.safety_result.passed is True
+
+
+@pytest.mark.asyncio
+async def test_profile_agent_ignores_unrequested_ability_and_emotion_fields() -> None:
+    draft = ProfileDraft.example_complete(target_kc_codes=["PY43-KC-001"]).model_dump()
+    draft.update({"emotion_persistence": {"resilience": 0.1, "recent_mood": "negative"},
+                  "practice_capability": {"success_rate": 0.1, "avg_attempts_per_problem": 8},
+                  "error_patterns": {"frequent_kc_codes": ["PY43-KC-001"]}})
+    agent = ProfileAgent(FakeLlmProvider({"profile_draft": draft}))
+
+    output = await agent.run(profile_input("我学过 Python，准备期末复习，喜欢代码练习。"))
+
+    assert output.done is True
+    assert output.profile_draft is not None
+    assert not hasattr(output.profile_draft, "emotion_persistence")
+    assert not hasattr(output.profile_draft, "practice_capability")
+    assert not hasattr(output.profile_draft, "error_patterns")
 
 
 @pytest.mark.asyncio

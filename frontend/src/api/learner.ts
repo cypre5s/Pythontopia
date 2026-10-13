@@ -140,19 +140,18 @@ export async function submitProbe(probeKey: string, choiceId: string): Promise<v
   await http.post('/api/learner/probe', { probeKey, choiceId });
 }
 
-/** 情绪化小镇：由 emotion_persistence 派生的世界情绪状态。 */
+/** 兼容世界氛围接口；服务端不再根据学习行为推断情绪。 */
 export interface WorldStateDto {
-  /** 直接驱动小镇氛围叠加层（背景级）。 */
+  /** 兼容旧客户端的固定中性氛围值。 */
   mood: 'sunny' | 'cloudy' | 'rainy';
   /** 带符号的近期提交连击：正=连续 AC、负=连续失败。 */
   streak: number;
-  /** [0,1] 的有效情绪坚持度得分（已做读时 decay）。 */
+  /** 固定 0.5 的兼容字段，不代表学生情绪或坚持度。 */
   emotionScore: number;
 }
 
 /**
- * 情绪化小镇：拉取学习者当前世界情绪状态。需 STUDENT 鉴权（共享 axios 自动注入 token）。
- * 后端可恒返回 200——无情绪信号/冷启动时降级为 sunny，前端据此渲染氛围，绝不阻塞玩家。
+ * 拉取客观学习连击及兼容氛围字段。需 STUDENT 鉴权（共享 axios 自动注入 token）。
  */
 export async function fetchWorldState(): Promise<WorldStateDto> {
   const response = await http.get<WorldStateDto>('/api/learner/world-state');

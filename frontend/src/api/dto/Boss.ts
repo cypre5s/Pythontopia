@@ -5,31 +5,27 @@
  * 偏好出题而非随机抽 KC + 随机难度；后端未接画像（golden fallback）时这些字段被忽略。
  *
  * 各字段对齐 `LearnerProfileDto` 的抽取来源：
- *   - weakKcCodes ← errorPatterns.frequentKcCodes：弱项 KC，PracticeAgent 优先出；
- *   - pythonSelfRatedLevel ← baseLevel.pythonSelfRatedLevel：自评水平 0..5；
- *   - successRate ← practiceCapability.successRate：近况通过率，影响起始难度；
- *   - mediaPriority ← learningPreference.mediaPriority：影响题面格式（代码块 / 流程图 / 例子）；
- *   - sessionMinutesPerDay ← learningPreference.sessionMinutesPerDay：控制题目长度；
- *   - resilience ← emotionPersistence.resilience：影响失败时是否降难度；
- *   - major / learningGoalKind / targetKcCodes / cognitiveStyle ← 专业、目标和认知偏好；
- *   - questPreferredKind ← ArenaPage 关卡类型：选择对应出题模板。
+ *   Authenticated requests are rehydrated from server-side profile and mastery data.
+ *   The fields remain for wire compatibility; user-declared values are preferences, not ability evidence.
  */
 export interface ProfileSignalsDto {
-  /** 弱项 KC 编码，最多 6 个。 */
+  /** @deprecated authenticated KC selection comes from server-side mastery and review state. */
   weakKcCodes?: string[];
   /** 学生自评 Python 水平 0..5。 */
   pythonSelfRatedLevel?: number;
-  /** 近况通过率 0..1。 */
+  /** @deprecated practice outcomes are calculated server-side. */
   successRate?: number;
   /** 偏好媒介：CODE / DIAGRAM / VIDEO / TEXT 等。 */
   mediaPriority?: string[];
-  /** 抗挫折度 0..1。 */
+  /** @deprecated emotional state is not inferred from practice. */
   resilience?: number;
   major?: string;
   learningGoalKind?: string;
   /** pack 43 中最多 6 个目标知识点。 */
   targetKcCodes?: string[];
+  /** @deprecated fixed learning-style scores are not used for recommendations. */
   fieldDependent?: number;
+  /** @deprecated fixed learning-style scores are not used for recommendations. */
   sequentialVsHolistic?: number;
   sessionMinutesPerDay?: number;
   /** Arena 关卡题型（若来自 ArenaPage） */

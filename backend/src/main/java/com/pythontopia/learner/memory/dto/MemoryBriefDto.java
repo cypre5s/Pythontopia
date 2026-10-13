@@ -11,7 +11,7 @@ import java.util.List;
  *
  * @param facts 时序压缩后的稳定事实（外部召回 / 本地记忆，按近→远排序）
  * @param weakKcs 近期反复受阻 / 到期需复习的 KC code
- * @param styleNotes 认知风格 / 偏好 / 情绪提示（来自 8 维画像）
+ * @param styleNotes 学生明确选择的学习媒介偏好
  * @param asOf 生成时间 ISO-8601（体现「截至此刻」的时序语义）
  * @param stablePreferences 类 ChatGPT memory 的稳定偏好摘要
  * @param strugglePatterns 近期反复卡住的模式

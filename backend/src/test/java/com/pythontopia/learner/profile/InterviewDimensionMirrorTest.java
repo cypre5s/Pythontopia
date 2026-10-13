@@ -48,8 +48,7 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import org.springframework.web.client.RestTemplate;
 
 /**
- * 访谈结果必须镜像进 8 维 {@code dimensions}：8 维消费方（答疑 / NPC / 工坊 / 记忆简报 / 推荐）只读
- * dimensions，只写 learner_profile 旧列等于访谈信号对下游完全不可见。
+ * 访谈只把自述目标、经验和偏好镜像到 dimensions；不能为能力画像增加证据或镜像 AI 洞察。
  */
 class InterviewDimensionMirrorTest {
 
@@ -58,7 +57,7 @@ class InterviewDimensionMirrorTest {
       new InterviewDimensionMirror(passiveProfileService);
 
   @Test
-  void mirrorsAllEightDimensionsWithInterviewSource() {
+  void mirrorsOnlySelfReportedDimensionsWithInterviewSource() {
     mirror.mirror(7L, fullDraft());
 
     Map<String, DimensionDelta> byKey = capturedDeltas();
@@ -67,25 +66,17 @@ class InterviewDimensionMirrorTest {
             "professional_background",
             "knowledge_base",
             "learning_goal",
-            "cognitive_style",
-            "learning_preference",
-            "error_pattern",
-            "practical_ability",
-            "emotion_persistence");
+            "learning_preference");
     assertThat(byKey.values()).allMatch(delta -> "INTERVIEW".equals(delta.source()));
   }
 
   @Test
-  void grantsEnoughEvidenceToClearTheProfileBriefConfidenceFloor() {
+  void interviewDoesNotCreateAbilityEvidenceOrScores() {
     mirror.mirror(7L, fullDraft());
 
-    // profile_brief 的门槛是 confidence >= 0.3，confidence = evidence_count / 8。
-    // 证据数不够时学生做完 8 维访谈，brief 仍整体返回空串，答疑毫无个性化。
     for (DimensionDelta delta : capturedDeltas().values()) {
-      assertThat(delta.evidenceIncrement()).isNotNull();
-      assertThat(delta.evidenceIncrement() / 8.0).isGreaterThanOrEqualTo(0.3);
-      // 同时不得压过长期被动累积（饱和值 8）。
-      assertThat(delta.evidenceIncrement()).isLessThan(8);
+      assertThat(delta.evidenceIncrement()).isNull();
+      assertThat(delta.scoreDelta()).isNull();
     }
   }
 
@@ -96,25 +87,17 @@ class InterviewDimensionMirrorTest {
 
     assertThat(byKey.get("professional_background").tagsAdd()).containsExactly("统计学");
     assertThat(byKey.get("learning_goal").tagsAdd()).containsExactly("exam");
-    assertThat(byKey.get("error_pattern").tagsAdd()).containsExactly("off_by_one", "indent");
     // mediaPriority 首位=最偏好，而全仓消费方取末尾 tag 为主导 → 倒序追加。
     assertThat(byKey.get("learning_preference").tagsAdd()).containsExactly("text", "video");
   }
 
   @Test
-  void keepsFreeformNumericSignalsOutOfTags() {
+  void omitsCognitiveAndEmotionInterpretationsFromInterviewProjection() {
     mirror.mirror(7L, fullDraft());
     Map<String, DimensionDelta> byKey = capturedDeltas();
 
-    // cognitive_style 的 tag 词表是 visual/logical/trial：塞进连续量会被 DialogContextService
-    // 归一成 unknown，反而盖掉此前有效的推断（消费方只看末尾 tag）。
-    assertThat(byKey.get("cognitive_style").tagsAdd()).isEmpty();
-    assertThat(byKey.get("cognitive_style").metadata())
-        .containsEntry("field_dependent", 0.3333333333333333)
-        .containsEntry("sequential_vs_holistic", 0.25);
-    // 自述心情是自由文本，同样只进 metadata。
-    assertThat(byKey.get("emotion_persistence").tagsAdd()).isEmpty();
-    assertThat(byKey.get("emotion_persistence").metadata()).containsEntry("recent_mood", "焦虑");
+    assertThat(byKey).doesNotContainKeys("cognitive_style", "error_pattern", "practical_ability", "emotion_persistence");
+    assertThat(byKey.get("learning_preference").tagsAdd()).containsExactly("text", "video");
   }
 
   @Test
@@ -135,7 +118,7 @@ class InterviewDimensionMirrorTest {
 
     mirror.mirror(7L, fullDraft());
 
-    assertThat(capturedDeltas()).hasSize(8);
+    assertThat(capturedDeltas()).hasSize(4);
   }
 
   @Test
@@ -149,7 +132,7 @@ class InterviewDimensionMirrorTest {
     verify(repository).upsertProfile(eq(7L), any());
     verify(repository).addRevision(eq(7L), eq("INTERVIEW"), any());
     verify(repository).completeInterview(7L, "session-1");
-    assertThat(capturedDeltas()).hasSize(8);
+    assertThat(capturedDeltas()).hasSize(4);
   }
 
   @Test

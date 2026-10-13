@@ -8,7 +8,7 @@
  * notifyMainQuestMastery 系列已整体移除。
  */
 
-// 一次服务端判题（无论 AC/WA）后刷新世界情绪氛围——连挫触发细雨+助教台阶、逆袭回暖到晴。
+// 正式判题后刷新世界状态里的客观连击；氛围字段仅为固定中性兼容值。
 export function notifyMoodRefresh(): void {
   if (typeof window === 'undefined') return;
   void import('@stores/mood').then((mod) => {
@@ -16,20 +16,6 @@ export function notifyMoodRefresh(): void {
       void mod.useMoodStore().refresh();
     } catch {
       /* mood store 不可用时静默 */
-    }
-  });
-}
-
-// 练习失败后请求 fail_react 探针（emotion_persistence 行为信号）。
-// probe store 仅置 requested 标记，由世界内 ProbeCard 监听弹出
-// （失败发生在训练页、探针卡在世界页，借 store 跨页传信号）。
-export function notifyProbeRequest(probeKey: string): void {
-  if (typeof window === 'undefined') return;
-  void import('@stores/probe').then((mod) => {
-    try {
-      mod.useProbeStore().request(probeKey);
-    } catch {
-      /* probe store 不可用时静默 */
     }
   });
 }

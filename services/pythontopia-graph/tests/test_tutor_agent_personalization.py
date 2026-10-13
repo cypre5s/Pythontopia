@@ -36,21 +36,20 @@ def test_knowledge_levels_map_to_difficulty_directives() -> None:
     assert any("循序渐进" in d for d in _directives("知识基础: 进阶(0.6)"))
 
 
-def test_goal_preference_mistakes_emotion_signals() -> None:
+def test_goal_preference_and_verified_mistake_signals() -> None:
     assert any("期末备考" in d for d in _directives("目标: 期末备考"))
     assert any("视频,实例" in d for d in _directives("偏好: 视频,实例"))
     mistakes = _directives("易错: off-by-one,缩进")
     assert any("off-by-one" in d and "预警" in d for d in mistakes)
-    emotion = _directives("情绪: 需鼓励")
-    assert any("先肯定" in d for d in emotion)
+    assert not any("情绪" in d for d in _directives("情绪: 需鼓励"))
 
 
 def test_full_brief_produces_one_directive_per_signal() -> None:
     directives = _directives(FULL_BRIEF)
-    # 风格/基础/目标/偏好/易错/情绪 共 6 条；实践与专业不产指令。
-    assert len(directives) == 6
+    # 显式讲解方式/基础/目标/偏好/易错共 5 条；情绪字段被忽略。
+    assert len(directives) == 5
     joined = " ".join(directives)
-    for token in ("图解", "打比方", "期末备考", "视频,实例", "off-by-one", "先肯定"):
+    for token in ("图解", "打比方", "期末备考", "视频,实例", "off-by-one"):
         assert token in joined
 
 
@@ -104,7 +103,7 @@ def test_personalization_note_full_brief() -> None:
     note = TutorAgent.personalization_note(FULL_BRIEF)
     assert note.startswith("本回答按你的【")
     assert note.endswith("】定制")
-    for token in ("视觉型偏好", "入门基础", "期末备考目标", "易错点预警", "鼓励式讲解"):
+    for token in ("视觉型偏好", "入门基础", "期末备考目标", "易错点预警"):
         assert token in note
 
 

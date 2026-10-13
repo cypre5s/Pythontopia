@@ -194,12 +194,12 @@ async def test_extract_profile_returns_signal_with_allowed_dimension() -> None:
 
 
 @pytest.mark.asyncio
-async def test_extract_profile_heuristic_fallback_on_empty_llm() -> None:
+async def test_extract_profile_heuristic_does_not_infer_emotion_from_difficulty_feedback() -> None:
     agent = OrchestratorAgent(StubProvider([]))
 
     signals = await agent.extract_profile(request_of("这题太难了，我有点想放弃", "t-d2"))
 
-    assert any(signal.dimension == "emotion_persistence" for signal in signals)
+    assert all(signal.dimension != "emotion_persistence" for signal in signals)
     assert all(signal.dimension in PROFILE_DIMENSION_KEYS for signal in signals)
 
 
@@ -332,13 +332,14 @@ def test_prompt_builders_carry_pack43_beginner_context() -> None:
 
 
 def test_style_candidates_respect_profile_signals() -> None:
-    """风格候选排序尊重画像：情绪要鼓励 / 认知风格 / 学习偏好各维度信号。"""
+    """只按学生明确的媒介偏好排序，不按认知类型或情绪推断排序。"""
     from pythontopia_graph.agents.orchestrator_agent import style_candidates
 
-    assert style_candidates("情绪: 需鼓励，最近受挫")[0] == "encouraging_recap"
-    assert style_candidates("认知风格: visual")[0] == "analogy_first"
-    assert style_candidates("认知风格: logical")[0] == "step_by_step"
-    assert style_candidates("认知风格: trial")[0] == "example_first"
+    assert style_candidates("情绪: 需鼓励，最近受挫") == style_candidates(None)
+    assert style_candidates("认知风格: visual") == style_candidates(None)
+    assert style_candidates("认知风格: logical") == style_candidates(None)
+    assert style_candidates("认知风格: trial") == style_candidates(None)
+    assert style_candidates("偏好: 视频")[0] == "analogy_first"
     assert style_candidates("偏好: 提问,互动")[0] == "question_first"
 
 

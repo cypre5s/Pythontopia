@@ -18,7 +18,7 @@ public class WorldAdvanceController {
   }
 
   /**
-   * 推进世界一个游戏内日：day_index +1，轮转 weekday/season/weather，衰减掌握度，提升 emotion_persistence，
+   * 推进世界一个游戏内日：day_index +1，轮转 weekday/season/weather，应用掌握度遗忘曲线，
    * 并为新一天排入日历事件。
    */
   @PostMapping("/sleep")

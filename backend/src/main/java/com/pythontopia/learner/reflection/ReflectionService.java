@@ -2,8 +2,6 @@ package com.pythontopia.learner.reflection;
 
 import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
-import com.pythontopia.learner.profile.dto.DimensionDelta;
-import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.reflection.graph.InsightPayload;
 import com.pythontopia.learner.reflection.graph.MemoryItemPayload;
 import com.pythontopia.learner.reflection.graph.ReflectionGraphClient;
@@ -17,13 +15,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
- * 反思编排：取 topK 记忆 → 交 graph ReflectionAgent 综合洞察 → 回写画像（source=REFLECTION）+ 落库
- * {@code learner_insight}。借鉴 Stanford Generative Agents 的「反思」，但剥离幻觉：
+ * 反思编排：取 topK 记忆 → 交 graph ReflectionAgent 生成建议 → 落库 {@code learner_insight}。
+ * 建议不会写回可信画像维度：
  *
  * <ul>
  *   <li>每条洞察必须引用 event id（graph 端强校验，规则兜底也只引用真实失败事件 id）。
- *   <li>仅回写 5 个白名单维度。
- *   <li>graph 不可用 → 规则兜底（最高频失败 KC → error_pattern），{@code source=RULE}，全程不抛、不阻塞事件主链路。
+ *   <li>仅允许基于真实失败事件生成 error_pattern 建议，不修改可信画像。
+ *   <li>graph 不可用 → 规则兜底（最高频失败 KC），{@code source=RULE}，全程不抛、不阻塞事件主链路。
  * </ul>
  *
  * <p>本方法预期在独立线程执行（由 {@link ReflectionTrigger} 提交线程池），不直接挂事件发布线程。
@@ -31,14 +29,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class ReflectionService {
 
-  /** 反思可回写的维度白名单（防越权写非学情维度）。 */
-  static final Set<String> REFLECTION_DIMENSIONS =
-      Set.of(
-          "error_pattern",
-          "cognitive_style",
-          "emotion_persistence",
-          "practical_ability",
-          "knowledge_base");
+  /** 反思只允许写入基于失败事件的建议；所有事实画像由确定性学习事件更新。 */
+  static final Set<String> REFLECTION_DIMENSIONS = Set.of("error_pattern");
 
   private static final int MEMORY_LIMIT = 12;
   private static final String FAILURE_EVENT_TYPE = "practice_failed";
@@ -49,17 +41,14 @@ public class ReflectionService {
 
   private final MemoryRetrievalService memoryRetrievalService;
   private final ReflectionGraphClient graphClient;
-  private final PassiveProfileService passiveProfileService;
   private final LearnerInsightRepository insightRepository;
 
   public ReflectionService(
       MemoryRetrievalService memoryRetrievalService,
       ReflectionGraphClient graphClient,
-      PassiveProfileService passiveProfileService,
       LearnerInsightRepository insightRepository) {
     this.memoryRetrievalService = memoryRetrievalService;
     this.graphClient = graphClient;
-    this.passiveProfileService = passiveProfileService;
     this.insightRepository = insightRepository;
   }
 
@@ -119,7 +108,7 @@ public class ReflectionService {
   }
 
   /**
-   * 回写画像 + 落库一条洞察。
+   * 落库一条有真实事件依据的学习建议；不更新掌握度或画像证据。
    *
    * @return 是否成功写入（维度非白名单则跳过）。
    */
@@ -128,13 +117,14 @@ public class ReflectionService {
     if (dimensionKey == null || !REFLECTION_DIMENSIONS.contains(dimensionKey)) {
       return false;
     }
-    List<String> tags = insight.safeTags();
-    List<Long> evidence = insight.safeEvidence();
-    // scoreDelta=0：反思不擅自移动雷达分（练习事件已驱动分数），只贡献 tags + evidence_count + 审计来源 REFLECTION。
-    passiveProfileService.applyDimensionUpdate(
-        userId, dimensionKey, new DimensionDelta(0.0, 1, tags, null, "REFLECTION"));
     insightRepository.insert(
-        userId, insight.text(), dimensionKey, tags, evidence, insight.confidence(), sourceTag);
+        userId,
+        insight.text(),
+        dimensionKey,
+        insight.safeTags(),
+        insight.safeEvidence(),
+        insight.confidence(),
+        sourceTag);
     return true;
   }
 

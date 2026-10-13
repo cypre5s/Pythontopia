@@ -766,7 +766,7 @@ public class TutorWorkflowService {
     return diagnosis;
   }
 
-  /** 最近提交里该题的连续失败次数（从最新往回数到首个非失败为止），驱动挫败度分级。 */
+  /** 最近提交里该题的连续失败次数（客观事实，仅供选择分步补救内容）。 */
   int countConsecutiveErrors(Long userId, Long problemId) {
     try {
       List<SubmissionDto> recent =

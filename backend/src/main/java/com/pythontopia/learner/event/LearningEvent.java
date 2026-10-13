@@ -108,34 +108,19 @@ public sealed interface LearningEvent
       Long userId, String mediaType, Integer chapter, java.util.List<String> kcCodes)
       implements LearningEvent {}
 
-  /**
-   * 学生在答疑/讲解中采纳某讲法（{@code visual}/{@code logical}/{@code trial}）。回流到画像
-   * {@code cognitive_style} 维度，让「认知风格」随学动态更新（闭环），而非仅访谈设一次。
-   */
+  /** 学生在答疑/讲解中显式选择某种媒介；该选择只更新学习偏好，不代表固定类型或能力。 */
   record TutorStyleEngaged(Long userId, String style, String kcCode) implements LearningEvent {}
 
-  /**
-   * 学生在世界内「探针」中做出中性选择。{@code probeKey}/{@code choiceId} 由服务端
-   * {@code ProbeCatalog} 权威解析为维度/score 增量/tag（前端不可篡改信号）；用于把「随玩随选」回流到画像
-   * {@code cognitive_style} / {@code emotion_persistence} / {@code learning_preference} 等维度。
-   */
+  /** 学生在世界内做出中性选择；服务端目录只将明确选择回流为自述学习媒介偏好。 */
   record ProbeChoiceMade(Long userId, String probeKey, String choiceId) implements LearningEvent {}
 
-  /**
-   * 学生在同一题失败后再次提交（坚持度行为信号）。回流到画像
-   * {@code emotion_persistence}（轻微正向：愿意重试 = 韧性）。
-   */
+  /** 学生在同一题失败后再次提交；仅保留为学习过程事件，不推断情绪或人格。 */
   record PracticeRetried(Long userId, Long problemId, String kcCode) implements LearningEvent {}
 
-  /**
-   * 学生在失败后放弃（如 Bug 矿洞会话 ABANDONED）。回流到 {@code emotion_persistence}（负向）。
-   */
+  /** 学生在失败后放弃；仅保留为学习过程事件，不推断情绪或人格。 */
   record PracticeAbandoned(Long userId, Long problemId, String kcCode) implements LearningEvent {}
 
-  /**
-   * 逆袭：同一题在累计 {@code priorFails}≥2 次失败后最终通过。回流到 {@code emotion_persistence}
-   * （较强正向：从挫败中坚持并成功）。
-   */
+  /** 同一题多次失败后最终通过；仅保留可核对的练习过程。 */
   record ComebackSolved(Long userId, Long problemId, String kcCode, int priorFails)
       implements LearningEvent {}
 

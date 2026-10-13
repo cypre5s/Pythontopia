@@ -550,7 +550,7 @@ export const WorldScene = {
 
     // 在 weather/time 之后叠加「氛围层」（背景级、不抢 tint）。初始从 mood store
     // 读当前 mood；之后 mood store refresh / 开关变更派发的 window CustomEvent 实时重应用
-    // （先销毁旧句柄再重建），实现「画像 emotion_persistence 改了世界」的可见联动。
+    // （先销毁旧句柄再重建）；当前服务端仅返回中性氛围兼容值。
     const applyMoodKind = (kind: MoodKind): void => {
       if (state.mood) {
         state.mood.destroy();

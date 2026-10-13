@@ -36,25 +36,18 @@ COURSE_PACK_CONTEXT = (
 # 对最终回复做泄答关键词扫描（与 TutorAgent 同词表）。
 SAFETY_KEYWORDS = ("answer_key", "hidden_test", "完整答案", "直接给我代码")
 
-# 后端 learner_profile.dimensions 的 8 个 JSONB 维度 key。
+# 对话中仅提取学生明确自述的背景、经验、目标和媒介偏好。
 PROFILE_DIMENSION_KEYS = (
     "professional_background",
     "knowledge_base",
     "learning_goal",
-    "cognitive_style",
     "learning_preference",
-    "error_pattern",
-    "practical_ability",
-    "emotion_persistence",
 )
 
 # 容忍 LLM 返回的 ProfileDraft 风格维度别名。
 _DIMENSION_ALIASES = {
     "major": "professional_background",
     "base_level": "knowledge_base",
-    "error_patterns": "error_pattern",
-    "practice_capability": "practical_ability",
-    "emotion": "emotion_persistence",
     "preference": "learning_preference",
     "goal": "learning_goal",
 }
@@ -182,21 +175,11 @@ REPLY_STYLE_DIRECTIVES: dict[str, str] = {
 
 
 def _style_affinity(profile_brief: str | None) -> dict[str, int]:
-    """画像信号 → 各风格亲和度打分（认知风格 / 学习偏好 / 情绪与坚持度）。"""
+    """Explicit media preferences may shape presentation; no learner-type or mood inference."""
     scores = dict.fromkeys(REPLY_STYLE_KEYS, 0)
     text = (profile_brief or "").lower()
     if not text:
         return scores
-    # cognitive_style：视觉型偏类比/例子，逻辑型偏步骤，试错型偏先上手。
-    if "visual" in text or "视觉" in text:
-        scores["analogy_first"] += 2
-        scores["example_first"] += 1
-    if "logical" in text or "逻辑" in text:
-        scores["step_by_step"] += 2
-        scores["question_first"] += 1
-    if "trial" in text or "试错" in text:
-        scores["example_first"] += 2
-        scores["question_first"] += 1
     # learning_preference：媒介与互动倾向。
     if any(token in text for token in ("视频", "动画", "导图", "图示")):
         scores["analogy_first"] += 1
@@ -204,9 +187,6 @@ def _style_affinity(profile_brief: str | None) -> dict[str, int]:
         scores["question_first"] += 2
     if any(token in text for token in ("实例", "案例", "代码", "实操", "动手")):
         scores["example_first"] += 1
-    # emotion_persistence：受挫/需鼓励信号权重最高，优先安抚。
-    if any(token in text for token in ("鼓励", "挫", "放弃", "焦虑", "沮丧", "信心")):
-        scores["encouraging_recap"] += 3
     return scores
 
 
@@ -535,7 +515,8 @@ class OrchestratorAgent:
                     f"维度 key 只能用：{keys}。schema:"
                     '{"profile_signals":[{"dimension":"…","value":"中文短语",'
                     '"confidence":0~1}]}。'
-                    "只抽取消息中可观测的信号，无法抽取就返回空数组，禁止编造。"
+                    "只抽取学生明确自述的背景、已有经验、目标和学习媒介偏好。"
+                    "不得从答题结果推断能力、情绪、人格或固定学习风格；无法抽取就返回空数组。"
                     f"{COURSE_PACK_CONTEXT}"
                 ),
             }
@@ -721,14 +702,6 @@ class OrchestratorAgent:
     def _heuristic_profile(req: OrchestratorRequest) -> list[ProfileSignal]:
         message = req.user_message
         signals: list[ProfileSignal] = []
-        if any(token in message for token in ("太难", "听不懂", "不会", "挫败", "放弃")):
-            signals.append(
-                ProfileSignal(
-                    dimension="emotion_persistence",
-                    value="近期遇到挫折，需要鼓励与降低难度",
-                    confidence=0.4,
-                )
-            )
         if any(token in message for token in ("期末", "考试", "考研", "项目", "工作", "兴趣")):
             signals.append(
                 ProfileSignal(

@@ -2,10 +2,7 @@ import { ref } from 'vue';
 import { getPublicProblem } from '@/api/problems';
 import { createSubmission, getSubmission } from '@/api/submissions';
 import { getPyodideRunner, type PyodideRunResult } from '@/game/adapters/pyodide';
-import {
-  notifyMoodRefresh,
-  notifyProbeRequest,
-} from './notify';
+import { notifyMoodRefresh } from './notify';
 import type {
   PublicProblemDto,
   SubmissionCreateRequest,
@@ -140,14 +137,6 @@ export function createTrainingSlice(deps: TrainingSliceDeps) {
         } catch {
           /* 掌握度刷新失败不阻断提交结果展示 */
         }
-      } else if (
-        // 服务端判题为「失败」（FAILED/ERROR 或有非 AC 判定）→ 请求 fail_react
-        // 探针。仅置标记、不阻塞；排除 PENDING/RUNNING（尚未判定）误触。
-        detail.submission.status === 'FAILED' ||
-        detail.submission.status === 'ERROR' ||
-        (detail.judgeResult !== null && detail.judgeResult.verdict !== 'AC')
-      ) {
-        notifyProbeRequest('fail_react');
       }
       return detail;
     } catch (error) {

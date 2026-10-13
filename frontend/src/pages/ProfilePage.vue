@@ -16,7 +16,6 @@ import {
   selfUpdateDimension,
   type ProfileDimensionDto,
 } from '@/api/learner';
-import { kcDisplayName } from '@/data/kcNames';
 
 const learning = useLearningStore();
 const session = useSessionStore();
@@ -26,15 +25,6 @@ const router = useRouter();
 const dimensions = ref<ProfileDimensionDto[]>([]);
 const dimensionsError = ref('');
 const savingKey = ref<string | null>(null);
-
-const COGNITIVE_STYLE_KEY = 'cognitive_style';
-// 学生纠偏：认知风格 3 选 1，取值与探针 / 后端 tag 对齐（visual / logical / trial）。
-const cognitiveStyleChoices = [
-  { id: 'visual', label: '先看图解' },
-  { id: 'logical', label: '先读推理' },
-  { id: 'trial', label: '先跑例子' },
-] as const;
-const savingCognitiveStyle = ref(false);
 
 function goBack(): void {
   playUiClick();
@@ -51,9 +41,8 @@ async function loadDimensions(): Promise<void> {
   }
 }
 
-// 认知风格走专门的 3 选 1 纠偏（categorical），不混入 0..100 滑块自评。
 const selfEditable = computed(() =>
-  dimensions.value.filter((d) => d.selfEditable && d.key !== COGNITIVE_STYLE_KEY),
+  dimensions.value.filter((d) => d.selfEditable),
 );
 
 // 自评滑块的「本地草稿值」(0..100)：拖动即时跟手、提交后保留学生选定位置，
@@ -77,14 +66,6 @@ function onDraftInput(dim: ProfileDimensionDto, event: Event): void {
   draftScores.value[dim.key] = Number((event.target as HTMLInputElement).value);
 }
 
-// 当前主导认知风格 = cognitive_style 维度末尾 tag（与后端消费口径一致），用于高亮已选项。
-const currentCognitiveStyle = computed<string | null>(() => {
-  const dim = dimensions.value.find((d) => d.key === COGNITIVE_STYLE_KEY);
-  const tags = dim?.tags ?? [];
-  const last = tags.length > 0 ? tags[tags.length - 1] : undefined;
-  return last ?? null;
-});
-
 /** 学生自评：松手时把草稿目标分（0..100）换算成相对当前分的增量提交，并保留所选位置。 */
 async function onSelfRate(dim: ProfileDimensionDto): Promise<void> {
   const targetPct = draftValue(dim);
@@ -103,25 +84,6 @@ async function onSelfRate(dim: ProfileDimensionDto): Promise<void> {
     toast.show(message, 'error');
   } finally {
     savingKey.value = null;
-  }
-}
-
-/** 纠偏：把所选风格作为主导 tag 提交；自评不增加可信证据。 */
-async function onPickCognitiveStyle(choice: string): Promise<void> {
-  if (savingCognitiveStyle.value) return;
-  savingCognitiveStyle.value = true;
-  try {
-    await selfUpdateDimension(COGNITIVE_STYLE_KEY, {
-      scoreDelta: 0.05,
-      tagsAdd: [choice],
-    });
-    await loadDimensions();
-    toast.show('已更新学习风格', 'success');
-  } catch (error) {
-    const message = error instanceof Error ? error.message : '更新失败';
-    toast.show(message, 'error');
-  } finally {
-    savingCognitiveStyle.value = false;
   }
 }
 
@@ -159,18 +121,6 @@ const dimensionCards = computed(() => {
         : null,
     },
     {
-      key: 'cognitiveStyle',
-      title: '认知风格',
-      value: p.value.cognitiveStyle
-        ? p.value.cognitiveStyle.sequentialVsHolistic > 0
-          ? '喜欢先看全局'
-          : '喜欢一步步来'
-        : '待评估',
-      detail: p.value.cognitiveStyle
-        ? `学术：${p.value.cognitiveStyle.sequentialVsHolistic > 0 ? '整体型' : '序列型'} · 场依存 ${Math.round(p.value.cognitiveStyle.fieldDependent * 10)}/10`
-        : null,
-    },
-    {
       key: 'learningPreference',
       title: '学习偏好',
       value: p.value.learningPreference
@@ -179,37 +129,6 @@ const dimensionCards = computed(() => {
       detail: p.value.learningPreference?.mediaPriority.length
         ? `偏好: ${p.value.learningPreference.mediaPriority.join(' > ')}`
         : null,
-    },
-    {
-      key: 'errorPatterns',
-      title: '易错模式',
-      value: p.value.errorPatterns?.commonCategories.length
-        ? p.value.errorPatterns.commonCategories.slice(0, 3).join(', ')
-        : '暂无数据',
-      detail: p.value.errorPatterns?.frequentKcCodes.length
-        ? `高频知识点: ${p.value.errorPatterns.frequentKcCodes
-            .slice(0, 3)
-            .map(kcDisplayName)
-            .join(', ')}`
-        : null,
-    },
-    {
-      key: 'practiceCapability',
-      title: '实践能力',
-      value: p.value.practiceCapability
-        ? `成功率 ${Math.round(p.value.practiceCapability.successRate * 100)}%`
-        : '暂无数据',
-      detail: p.value.practiceCapability
-        ? `平均尝试 ${p.value.practiceCapability.avgAttemptsPerProblem.toFixed(1)} 次/题`
-        : null,
-    },
-    {
-      key: 'emotionPersistence',
-      title: '情绪与坚持',
-      value: p.value.emotionPersistence
-        ? `韧性 ${p.value.emotionPersistence.resilience}/10 | ${p.value.emotionPersistence.recentMood}`
-        : '待评估',
-      detail: null,
     },
   ];
 });
@@ -268,9 +187,10 @@ const dimensionCards = computed(() => {
         >
           <PyPanel class="radar-section">
             <h2 class="summary-title">
-              8 维画像雷达
+              详细画像雷达
             </h2>
             <ProfileRadar :dimensions="dimensions" />
+            <p class="profile-note">证据不足的维度不绘制分值；情绪和固定学习风格不作推断，知识掌握以正式练习记录为准。</p>
             <div
               v-if="selfEditable.length > 0"
               class="self-rate"
@@ -327,26 +247,6 @@ const dimensionCards = computed(() => {
               >
                 {{ dim.detail }}
               </p>
-              <div
-                v-if="dim.key === 'cognitiveStyle'"
-                class="cog-correct"
-                data-testid="cognitive-style-correct"
-              >
-                <span class="cog-correct__hint">选最顺手的，随时可改</span>
-                <div class="cog-correct__options">
-                  <PyButton
-                    v-for="opt in cognitiveStyleChoices"
-                    :key="opt.id"
-                    :variant="currentCognitiveStyle === opt.id ? 'primary' : 'secondary'"
-                    size="sm"
-                    :disabled="savingCognitiveStyle"
-                    :test-id="`cog-style-${opt.id}`"
-                    @click="onPickCognitiveStyle(opt.id)"
-                  >
-                    {{ opt.label }}
-                  </PyButton>
-                </div>
-              </div>
             </article>
           </div>
 

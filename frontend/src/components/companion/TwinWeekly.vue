@@ -25,8 +25,7 @@ async function loadReport(): Promise<void> {
 onMounted(() => void loadReport());
 
 const dimLabel: Record<string, string> = {
-  error_pattern: '易错', cognitive_style: '风格',
-  emotion_persistence: '坚持', practical_ability: '实践', knowledge_base: '基础',
+  error_pattern: '错题复盘建议',
 };
 const agentIcons: Record<string, string> = {
   handout: '\u{1F4D6}', practice: '\u{270F}\u{FE0F}', reading: '\u{1F4D5}',
@@ -81,7 +80,7 @@ function promptInsight(insight: { text: string; dimensionKey: string }): void {
   const label = dimLabel[insight.dimensionKey] ?? insight.dimensionKey;
   emit(
     'prompt',
-    `结合我的 Learner Twin 画像洞察「${insight.text}」（${label}），请在课件证据范围内设计一个针对性学习任务，并说明如何验证效果。`,
+    `结合 Learner Twin 的学习建议「${insight.text}」（${label}），请在课件证据范围内设计一个针对性学习任务，并说明如何验证效果。`,
   );
 }
 
@@ -161,7 +160,7 @@ function promptMastery(delta: {
       >
         <span class="tw__ic">!</span>
         <span class="tw__tx">
-          <span class="tw__badge">{{ dimLabel[i.dimensionKey] ?? i.dimensionKey }}</span>
+          <span class="tw__badge">建议 · {{ dimLabel[i.dimensionKey] ?? i.dimensionKey }}</span>
           {{ i.text }}
         </span>
         <button

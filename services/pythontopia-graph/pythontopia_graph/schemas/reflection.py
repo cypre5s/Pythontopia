@@ -1,8 +1,8 @@
 """ReflectionAgent（学情反思器）的结构化输出 schema。
 
-记忆条目来自后端记忆流（learning_event_log）；ReflectionAgent 据此综合学情洞察，
-每条洞察强制引用输入里出现过的 event_id（防幻觉），dimension_key 仅限 8 维画像
-白名单的可被动回写子集。Insight 的字段约束本身即第一道过滤闸（空证据/非法维度
+记忆条目来自后端记忆流（learning_event_log）；ReflectionAgent 据此综合学习建议，
+每条建议强制引用输入里出现过的 event_id（防幻觉），dimension_key 仅限 error_pattern。
+Insight 的字段约束本身即第一道过滤闸（空证据/非法维度
 直接触发 ValidationError 而被丢弃）。
 """
 
@@ -12,14 +12,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-# 反思可回写的画像维度白名单（8 维中可由记忆被动综合的子集）。
-InsightDimensionKey = Literal[
-    "error_pattern",
-    "cognitive_style",
-    "emotion_persistence",
-    "practical_ability",
-    "knowledge_base",
-]
+# Reflection outputs are recommendations only and may describe observed error patterns.
+InsightDimensionKey = Literal["error_pattern"]
 
 
 class MemoryItem(BaseModel):

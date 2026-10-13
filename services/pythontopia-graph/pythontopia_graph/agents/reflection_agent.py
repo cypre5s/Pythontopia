@@ -27,10 +27,6 @@ AGENT_NAME = "ReflectionAgent"
 # dimension_key 白名单（与 Insight schema 同源；显式列出供 system prompt 约束）。
 ALLOWED_DIMENSIONS: tuple[str, ...] = (
     "error_pattern",
-    "cognitive_style",
-    "emotion_persistence",
-    "practical_ability",
-    "knowledge_base",
 )
 
 MAX_INSIGHTS = 3

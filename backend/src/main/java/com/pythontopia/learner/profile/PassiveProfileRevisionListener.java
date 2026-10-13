@@ -138,32 +138,42 @@ public class PassiveProfileRevisionListener {
    */
   @EventListener
   public void onMediaConsumed(LearningEvent.MediaConsumed event) {
+    String tag = switch (event.mediaType() == null ? "" : event.mediaType().trim().toLowerCase(Locale.ROOT)) {
+      case "video" -> "video";
+      case "courseware" -> "text";
+      case "storyboard", "illustration" -> "mindmap";
+      default -> null;
+    };
+    if (tag == null) return;
     Map<String, Object> meta = new LinkedHashMap<>();
     meta.put("mediaType", event.mediaType());
     if (event.chapter() != null) {
       meta.put("chapter", event.chapter());
     }
-    String tag = event.mediaType() == null || event.mediaType().isBlank() ? "video" : event.mediaType();
     DimensionDelta delta = new DimensionDelta(0.01, 1, List.of(tag), meta, "RESOURCE_FEEDBACK");
     enqueue(event.userId(), "learning_preference", delta, transientKey("media_consumed", event.userId()));
   }
 
-  /**
-   * 学生采纳某讲法（视觉/逻辑/试错）→ cognitive_style：style 作为 tag 累积、evidence+1、score 微增，
-   * 多次累积才稳定；source 复用 RESOURCE_FEEDBACK 枚举。
-   */
+  /** 学生明确选择讲解方式 → 记为媒介偏好，不作为认知能力证据。 */
   @EventListener
   public void onTutorStyleEngaged(LearningEvent.TutorStyleEngaged event) {
     if (event.style() == null || event.style().isBlank()) {
       return;
     }
+    String mediaType = switch (event.style().trim().toLowerCase(Locale.ROOT)) {
+      case "visual" -> "video";
+      case "logical" -> "text";
+      case "trial" -> "code";
+      default -> null;
+    };
+    if (mediaType == null) return;
     Map<String, Object> meta = new LinkedHashMap<>();
     if (event.kcCode() != null) {
       meta.put("kcCode", event.kcCode());
     }
-    DimensionDelta delta =
-        new DimensionDelta(0.01, 1, List.of(event.style()), meta, "RESOURCE_FEEDBACK");
-    enqueue(event.userId(), "cognitive_style", delta, transientKey("tutor_style_engaged", event.userId()));
+    meta.put("mediaType", mediaType);
+    DimensionDelta delta = new DimensionDelta(null, null, List.of(mediaType), meta, "INTERVIEW");
+    enqueue(event.userId(), "learning_preference", delta, transientKey("tutor_style_engaged", event.userId()));
   }
 
   /**
@@ -178,46 +188,17 @@ public class PassiveProfileRevisionListener {
               Map<String, Object> meta = new LinkedHashMap<>();
               meta.put("probeKey", event.probeKey());
               meta.put("choiceId", event.choiceId());
+              boolean selfReported = "INTERVIEW".equals(signal.source());
               DimensionDelta delta =
                   new DimensionDelta(
-                      signal.scoreDelta(), 1, List.of(signal.tag()), meta, signal.source());
+                      selfReported ? null : signal.scoreDelta(),
+                      selfReported ? null : 1,
+                      List.of(signal.tag()),
+                      meta,
+                      signal.source());
               enqueue(event.userId(), signal.dimensionKey(), delta,
                   transientKey("probe_choice", event.userId()));
             });
-  }
-
-  /** 失败后重试 → emotion_persistence 轻微正向（愿意重试=韧性）；tag=retry，evidence+1。 */
-  @EventListener
-  public void onPracticeRetried(LearningEvent.PracticeRetried event) {
-    DimensionDelta delta =
-        new DimensionDelta(
-            0.02, 1, List.of("retry"), contextOf(event.kcCode(), event.problemId(), null), "PRACTICE_FAIL");
-    enqueue(event.userId(), "emotion_persistence", delta,
-        transientKey("practice_retried", event.userId()));
-  }
-
-  /** 失败后放弃 → emotion_persistence 负向（tag=abandon，evidence+1）。 */
-  @EventListener
-  public void onPracticeAbandoned(LearningEvent.PracticeAbandoned event) {
-    DimensionDelta delta =
-        new DimensionDelta(
-            -0.03,
-            1,
-            List.of("abandon"),
-            contextOf(event.kcCode(), event.problemId(), null),
-            "PRACTICE_FAIL");
-    enqueue(event.userId(), "emotion_persistence", delta,
-        transientKey("practice_abandoned", event.userId()));
-  }
-
-  /** 逆袭（≥2 次失败后通过）→ emotion_persistence 较强正向（tag=comeback，evidence+1）。 */
-  @EventListener
-  public void onComebackSolved(LearningEvent.ComebackSolved event) {
-    Map<String, Object> meta = contextOf(event.kcCode(), event.problemId(), null);
-    meta.put("priorFails", event.priorFails());
-    DimensionDelta delta = new DimensionDelta(0.04, 1, List.of("comeback"), meta, "PRACTICE_PASS");
-    enqueue(event.userId(), "emotion_persistence", delta,
-        stableKey("comeback_solved", event.userId(), event.problemId()));
   }
 
   private void enqueue(Long userId, String dimensionKey, DimensionDelta delta, String idempotencyKey) {

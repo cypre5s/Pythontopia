@@ -8,8 +8,6 @@ import com.pythontopia.dialog.DialogContextRepository.KcFailureRow;
 import com.pythontopia.dialog.DialogContextRepository.KcMasteryRow;
 import com.pythontopia.dialog.DialogContextRepository.LastFailureRow;
 import com.pythontopia.dialog.DialogContextRepository.VerdictCountRow;
-import com.pythontopia.learner.profile.dto.CognitiveStyleDto;
-import com.pythontopia.learner.profile.dto.LearnerProfileDto;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -213,10 +211,9 @@ public class DialogContextService {
 
     String displayName = resolveDisplayName(userId, username);
 
-    // 画像状态：驱动 profileAdaptive / styleAdaptive 分支
-    LearnerProfileDto profile = profileRepository.findProfile(userId).orElse(null);
-    String profileType = inferProfileType(profile);
-    String cognitiveStyle = inferCognitiveStyle(userId);
+    // The legacy template slot now follows an explicit media preference, never a learner-type inference.
+    String profileType = DialogContextDto.PROFILE_CAUTIOUS;
+    String cognitiveStyle = inferPresentationPreference(userId);
 
     // profileType / cognitiveStyle 同步暴露到 stats：少数对话直接引用 stats.* 字面量
     stats.put("profileType", profileType);
@@ -237,64 +234,35 @@ public class DialogContextService {
     return user.username() == null ? "学习者" : user.username();
   }
 
-  /**
-   * 按 learner_profile.cognitive_style 判定画像类型：{@code sequentialVsHolistic ≥ 0.55} 归实践型，
-   * 其余（含 balanced 与缺失 profile）归谨慎型（保守走 B 分支，通常是更稳的入门建议）。
-   */
-  private String inferProfileType(LearnerProfileDto profile) {
-    if (profile == null) {
-      return DialogContextDto.PROFILE_CAUTIOUS;
-    }
-    CognitiveStyleDto style = profile.cognitiveStyle();
-    if (style == null || style.sequentialVsHolistic() == null) {
-      return DialogContextDto.PROFILE_CAUTIOUS;
-    }
-    double value = style.sequentialVsHolistic();
-    if (value >= 0.55) {
-      return DialogContextDto.PROFILE_PRACTICAL;
-    }
-    return DialogContextDto.PROFILE_CAUTIOUS;
-  }
-
-  /**
-   * 三态认知风格推断：读 {@code learner_profile.dimensions} 的 {@code cognitive_style.tags}，取最新/主导
-   * 标签（数组末元素，与 TutorCrew 取风格口径一致）归一化为 {@code visual/logical/trial}；无 profile、
-   * 无 tags、标签不可识别、或 dimensions 列未迁移（DataAccessException）均回退 {@code unknown}。
-   * 整段防御性吞运行时异常，保证 {@code /api/dialog/context} 不因画像缺失而 500。
-   */
-  private String inferCognitiveStyle(Long userId) {
+  /** Read an explicit media preference for legacy dialog templates; never read stored cognitive-style labels. */
+  private String inferPresentationPreference(Long userId) {
     try {
       JsonNode dims = profileRepository.findDimensions(userId).orElse(null);
       if (dims == null) {
         return DialogContextDto.STYLE_UNKNOWN;
       }
-      JsonNode tags = dims.path("cognitive_style").path("tags");
+      JsonNode tags = dims.path("learning_preference").path("tags");
       if (!tags.isArray() || tags.isEmpty()) {
         return DialogContextDto.STYLE_UNKNOWN;
       }
       // 最新/主导 = 最后追加的 tag（PassiveProfileService 按时间顺序 append）。
       String latest = tags.get(tags.size() - 1).asText(null);
-      return normalizeCognitiveStyle(latest);
+      return normalizePresentationPreference(latest);
     } catch (RuntimeException ex) {
-      log.debug("cognitive_style dimensions unavailable for user {}: {}", userId, ex.getMessage());
+      log.debug("learning preference unavailable for user {}: {}", userId, ex.getMessage());
       return DialogContextDto.STYLE_UNKNOWN;
     }
   }
 
-  /**
-   * 把 cognitive_style 标签归一化到三态：主用 ProbeCatalog / TutorCrew 写入的 {@code visual/logical/trial}，
-   * 并容忍别名（verbal-logical、trial-and-error 等）；不可识别一律 {@code unknown}，避免脏标签泄露成对话分支。
-   */
-  private static String normalizeCognitiveStyle(String tag) {
+  private static String normalizePresentationPreference(String tag) {
     if (tag == null || tag.isBlank()) {
       return DialogContextDto.STYLE_UNKNOWN;
     }
     String t = tag.trim().toLowerCase(Locale.ROOT);
     return switch (t) {
-      case "visual" -> DialogContextDto.STYLE_VISUAL;
-      case "logical", "verbal", "verbal-logical", "verbal_logical" -> DialogContextDto.STYLE_LOGICAL;
-      case "trial", "trial-and-error", "trial_and_error", "trialanderror" ->
-          DialogContextDto.STYLE_TRIAL;
+      case "video", "mindmap" -> DialogContextDto.STYLE_VISUAL;
+      case "text" -> DialogContextDto.STYLE_LOGICAL;
+      case "code" -> DialogContextDto.STYLE_TRIAL;
       default -> DialogContextDto.STYLE_UNKNOWN;
     };
   }

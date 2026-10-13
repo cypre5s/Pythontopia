@@ -1,4 +1,4 @@
-// 把 LearnerProfileDto 8 维度抽取成出题用的 ProfileSignalsDto。
+// 只抽取自述目标与学习偏好；能力信号由服务端依据已验证的学习记录计算。
 //
 // 设计目标：不让 boss/endless/arena 出题代码反复 import LearnerProfileDto 全字段，
 // 而是收敛到这一个 composable，只把出题真正需要的信号传给后端，
@@ -38,27 +38,9 @@ function deriveSignals(profile: LearnerProfileDto | null): ProfileSignalsDto {
     out.targetKcCodes = [...new Set(targetKcs)].slice(0, MAX_WEAK_KCS);
   }
 
-  const fieldDependent = profile.cognitiveStyle?.fieldDependent;
-  if (typeof fieldDependent === 'number' && fieldDependent >= 0 && fieldDependent <= 1) {
-    out.fieldDependent = fieldDependent;
-  }
-  const sequentialVsHolistic = profile.cognitiveStyle?.sequentialVsHolistic;
-  if (
-    typeof sequentialVsHolistic === 'number' &&
-    sequentialVsHolistic >= -1 &&
-    sequentialVsHolistic <= 1
-  ) {
-    out.sequentialVsHolistic = sequentialVsHolistic;
-  }
-
   const level = profile.baseLevel?.pythonSelfRatedLevel;
   if (typeof level === 'number' && level >= 0 && level <= 5) {
     out.pythonSelfRatedLevel = level;
-  }
-
-  const rate = profile.practiceCapability?.successRate;
-  if (typeof rate === 'number' && rate >= 0 && rate <= 1) {
-    out.successRate = rate;
   }
 
   const media = profile.learningPreference?.mediaPriority;
@@ -73,11 +55,6 @@ function deriveSignals(profile: LearnerProfileDto | null): ProfileSignalsDto {
     sessionMinutes <= 240
   ) {
     out.sessionMinutesPerDay = sessionMinutes;
-  }
-
-  const resilience = profile.emotionPersistence?.resilience;
-  if (typeof resilience === 'number' && resilience >= 0 && resilience <= 1) {
-    out.resilience = resilience;
   }
 
   return out;
@@ -100,32 +77,18 @@ export function useProfileSignals(): UseProfileSignalsReturn {
 }
 
 /**
- * 根据画像信号 + 当前难度 + 连胜/失败次数计算下一题难度（1..5）。
- * 比 useEndlessRun 内置的 "+0.5 / -1" 更细：高 successRate 拉高，
- * 低 resilience 时连失 2 次直接 -2，避免逼玩家。
+ * 本地展示用难度提示只响应连续练习结果；正式难度由服务端学情策略决定。
  */
 export function computeAdaptiveDifficulty(args: {
-  signals: ProfileSignalsDto;
   baseDifficulty: number;
   recentFailures: number;
   recentStreak: number;
 }): number {
   let d = args.baseDifficulty;
-  const successRate = args.signals.successRate ?? 0.5;
-  const resilience = args.signals.resilience ?? 0.5;
 
   if (args.recentStreak >= 2) d += 1;
-  else if (args.recentStreak >= 1) d += 0.5;
 
-  if (args.recentFailures >= 2) {
-    d -= resilience < 0.4 ? 2 : 1;
-  } else if (args.recentFailures >= 1) {
-    d -= 1;
-  }
-
-  // 学生本就高水平 → 起始难度高 +1
-  if (successRate >= 0.75) d += 1;
-  else if (successRate <= 0.3) d -= 1;
+  if (args.recentFailures >= 2) d -= 1;
 
   return Math.max(1, Math.min(5, Math.round(d)));
 }

@@ -19,14 +19,13 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * 把后端已有的 8 维画像与 Bug 矿洞错题本投影为 Graph 章测契约。
  *
- * <p>只发送带证据的画像维度（常规 confidence ≥ 0.3，情绪 ≥ 0.25）和当前章节仍打开的真实错题记录；无信号时发送空对象，
+ * <p>只发送带证据的学习维度和当前章节仍打开的真实错题记录；无信号时发送空对象，
  * 不用演示标签或静态样例补齐。
  */
 @Service
 public class ChapterTestPersonalizationService {
 
   private static final double PROFILE_CONFIDENCE_FLOOR = 0.30;
-  private static final double EMOTION_CONFIDENCE_FLOOR = 0.25;
   private static final int PROFILE_TAG_LIMIT = 3;
   private static final int ERROR_KC_LIMIT = 8;
   private static final int ERROR_TAG_LIMIT = 8;
@@ -68,7 +67,6 @@ public class ChapterTestPersonalizationService {
     }
     putTags(node, "major", eligible(byKey.get("professional_background"), PROFILE_CONFIDENCE_FLOOR));
     putTags(node, "learning_goal", eligible(byKey.get("learning_goal"), PROFILE_CONFIDENCE_FLOOR));
-    putTags(node, "cognitive_style", eligible(byKey.get("cognitive_style"), PROFILE_CONFIDENCE_FLOOR));
     putTags(
         node,
         "learning_preference",
@@ -84,11 +82,6 @@ public class ChapterTestPersonalizationService {
     ProfileDimensionDto practice = eligible(byKey.get("practical_ability"), PROFILE_CONFIDENCE_FLOOR);
     if (practice != null) {
       node.put("practice_ability", band(practice.score(), "偏弱", "一般", "较强"));
-    }
-    ProfileDimensionDto emotion =
-        eligible(byKey.get("emotion_persistence"), EMOTION_CONFIDENCE_FLOOR);
-    if (emotion != null) {
-      node.put("persistence", emotion.score() < 0.5 ? "需鼓励" : "稳定");
     }
     return node;
   }

@@ -1,7 +1,6 @@
 <script setup lang="ts">
 /**
- * 8 维学习画像雷达图（纯 SVG，无第三方图表库）。把 learner_profile.dimensions 的 8 个 0..1 得分
- * 画成像素风八边形雷达，配合 ProfilePage 的卡片把「8 维动态画像」可视化。
+ * 8 维学习画像辅助图（纯 SVG）。只绘制达到证据门槛的维度，避免把默认中性值当成测评结果。
  */
 import { computed } from 'vue';
 import type { ProfileDimensionDto } from '@/api/learner';
@@ -10,7 +9,8 @@ const props = defineProps<{ dimensions: ProfileDimensionDto[] }>();
 
 // 学生侧友好别名：把偏学术的维度名换成口语短label（仅显示，data key 不变）；未列出的用后端 label。
 const FRIENDLY_LABELS: Readonly<Record<string, string>> = {
-  cognitive_style: '学习风格',
+  cognitive_style: '风格（不评估）',
+  emotion_persistence: '情绪（不推断）',
   error_pattern: '易错点',
 };
 function displayLabel(dim: ProfileDimensionDto): string {
@@ -24,7 +24,7 @@ const RINGS = [0.25, 0.5, 0.75, 1];
 
 interface Axis {
   label: string;
-  score: number;
+  score: number | null;
   x: number;
   y: number;
   lx: number;
@@ -43,16 +43,16 @@ const axes = computed<Axis[]>(() => {
   return props.dimensions.map((dim, i) => {
     // 从正上方开始顺时针均分。
     const angle = -Math.PI / 2 + (i * 2 * Math.PI) / n;
-    const score = Math.max(0, Math.min(1, dim.score));
-    const tip = pointAt(angle, RADIUS * score);
+    const score = dim.confidence >= 0.3 ? Math.max(0, Math.min(1, dim.score)) : null;
+    const tip = pointAt(angle, RADIUS * (score ?? 0));
     const label = pointAt(angle, RADIUS + 22);
     return { label: displayLabel(dim), score, x: tip.x, y: tip.y, lx: label.x, ly: label.y };
   });
 });
 
-const polygonPoints = computed(() =>
-  axes.value.map((a) => `${a.x.toFixed(1)},${a.y.toFixed(1)}`).join(' '),
-);
+const polygonPoints = computed(() => axes.value.every((axis) => axis.score !== null)
+  ? axes.value.map((axis) => `${axis.x.toFixed(1)},${axis.y.toFixed(1)}`).join(' ')
+  : '');
 
 function ringPoints(scale: number): string {
   const n = props.dimensions.length || 1;
@@ -81,7 +81,7 @@ function axisLine(a: Axis): { x2: number; y2: number } {
       :viewBox="`0 0 ${SIZE} ${SIZE}`"
       class="radar__svg"
       role="img"
-      aria-label="8 维学习画像雷达图"
+      aria-label="学习画像辅助图；证据不足的维度不显示分值"
     >
       <polygon
         v-for="(scale, i) in RINGS"
@@ -99,17 +99,19 @@ function axisLine(a: Axis): { x2: number; y2: number } {
         class="radar__axis"
       />
       <polygon
+        v-if="polygonPoints"
         :points="polygonPoints"
         class="radar__area"
       />
-      <circle
-        v-for="(a, i) in axes"
-        :key="`pt-${i}`"
-        :cx="a.x"
-        :cy="a.y"
-        r="3.5"
-        class="radar__dot"
-      />
+      <template v-for="(a, i) in axes" :key="`pt-${i}`">
+        <circle
+          v-if="a.score !== null"
+          :cx="a.x"
+          :cy="a.y"
+          r="3.5"
+          class="radar__dot"
+        />
+      </template>
       <text
         v-for="(a, i) in axes"
         :key="`lbl-${i}`"
@@ -118,7 +120,7 @@ function axisLine(a: Axis): { x2: number; y2: number } {
         class="radar__label"
         text-anchor="middle"
         dominant-baseline="middle"
-      >{{ a.label }}</text>
+      >{{ a.label }}<title>{{ a.score === null ? `${a.label}：尚未评估` : `${a.label}：${Math.round(a.score * 100)}%` }}</title></text>
     </svg>
   </div>
 </template>

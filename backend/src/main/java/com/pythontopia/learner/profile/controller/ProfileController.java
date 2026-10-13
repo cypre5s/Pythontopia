@@ -13,6 +13,7 @@ import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.profile.service.ProfileService;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,8 +29,11 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/learner/profile")
 public class ProfileController {
 
-  private static final Set<String> STUDENT_COGNITIVE_STYLE_TAGS =
-      Set.of("visual", "logical", "trial");
+  private static final Map<String, Set<String>> SELF_REPORT_TAGS =
+      Map.of(
+          "professional_background", Set.of("CS", "NON_CS_STEM", "NON_CS_HUMANITIES", "OTHER"),
+          "learning_goal", Set.of("EXAM", "PROJECT", "INTEREST", "JOB"),
+          "learning_preference", Set.of("video", "text", "mindmap", "code"));
 
   private final ProfileService profileService;
   private final PassiveProfileService passiveProfileService;
@@ -63,7 +67,7 @@ public class ProfileController {
   /**
    * 学生 / 教师对单个维度的直写（自评）接口，只作用于调用者本人的画像。
    *
-   * <p>学生（STUDENT）只能直写 {@link PassiveProfileService#SELF_EDITABLE_DIMENSIONS} 内的主观维度； 教师（TEACHER）/
+   * <p>学生（STUDENT）只能直写 {@link PassiveProfileService#SELF_EDITABLE_DIMENSIONS} 内的目标与偏好；教师（TEACHER）/
    * 管理员（ADMIN）可直写自身画像的全部 8 维。
    */
   @PutMapping("/dimensions/{dimensionKey}")
@@ -88,14 +92,11 @@ public class ProfileController {
     List<String> tags = request.tagsAdd();
     if (!privileged
         && tags != null
-        && !tags.isEmpty()
-        && (!dimensionKey.equals("cognitive_style")
-            || tags.stream()
-                .anyMatch(tag -> tag == null || !STUDENT_COGNITIVE_STYLE_TAGS.contains(tag)))) {
+        && tags.stream().anyMatch(tag -> !SELF_REPORT_TAGS.get(dimensionKey).contains(tag))) {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST,
           "PROFILE_SELF_UPDATE_TAG_NOT_ALLOWED",
-          "Students can only choose a supported cognitive style tag");
+          "自述标签必须是支持的目标或偏好选项");
     }
     return passiveProfileService.applyDimensionUpdate(
         user.userId(), dimensionKey, request.toDelta("INTERVIEW"));

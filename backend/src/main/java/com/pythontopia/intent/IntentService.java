@@ -17,9 +17,8 @@ import org.springframework.stereotype.Service;
  * 意图路由服务层，镜像 {@code OrchestratorService}：薄薄一层，委托 {@link IntentGraphClient}
  * 调 Python graph。无 Repository——不落库。
  *
- * <p>R-16：路由前注入学生 8 维画像摘要 {@code profile_brief}（{@link
- * PassiveProfileService#profileBrief(Long)}），让 IntentRouterAgent 按情绪/基础倾斜 REVIEW vs ASK
- * 等判定。仅 STUDENT 角色注入；任何取数异常降级空串，不破坏路由。
+ * <p>路由前注入学生的显式目标、偏好与已验证易错点（{@link
+ * PassiveProfileService#profileBrief(Long)}）。仅 STUDENT 角色注入；任何取数异常降级空串，不破坏路由。
  */
 @Service
 public class IntentService {

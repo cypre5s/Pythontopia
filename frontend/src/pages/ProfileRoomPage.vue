@@ -19,8 +19,6 @@ const state = ref<LearnerTwinState | null>(null);
 const busy = ref(true);
 const error = ref('');
 const showInterview = ref(false);
-const showWeekly = ref(false);
-const showNotebook = ref(false);
 
 const assessedKcs = computed(() => state.value?.kcs.filter((kc) => kc.assessed).map((kc) => kc.kcCode) ?? []);
 const masteryMap = computed<Record<string, number>>(() => {

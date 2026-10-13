@@ -11,17 +11,16 @@ import java.util.Optional;
  * 使画像信号不可被客户端篡改（信号必须服务端可信）。
  *
  * <p>不可变静态数据：{@code ProbeController}（入参校验）与 {@code PassiveProfileRevisionListener}
- * （事件 → 维度映射）共用同一 {@link #lookup}，避免重复与漂移。{@code source} 复用已有枚举值
- * {@code RESOURCE_FEEDBACK}。
+ * （事件 → 维度映射）共用同一 {@link #lookup}，避免重复与漂移。探针只保存明确的学习媒介偏好，不计入能力证据。
  */
 public final class ProbeCatalog {
 
   private ProbeCatalog() {}
 
   /** 单个探针选项解析出的画像信号。 */
-  public record ProbeSignal(String dimensionKey, double scoreDelta, String tag, String source) {}
+  public record ProbeSignal(String dimensionKey, Double scoreDelta, String tag, String source) {}
 
-  private static final String SOURCE = "RESOURCE_FEEDBACK";
+  private static final String SOURCE = "INTERVIEW";
 
   /** probeKey -> (choiceId -> 信号)。LinkedHashMap 保留声明顺序，便于阅读。 */
   private static final Map<String, Map<String, ProbeSignal>> CATALOG = buildCatalog();
@@ -29,25 +28,18 @@ public final class ProbeCatalog {
   private static Map<String, Map<String, ProbeSignal>> buildCatalog() {
     Map<String, Map<String, ProbeSignal>> catalog = new LinkedHashMap<>();
 
-    // cog_intro：认知风格（入门偏好）
+    // 入门选择只是学生当前偏好的媒介，不代表固定认知类型。
     Map<String, ProbeSignal> cogIntro = new LinkedHashMap<>();
-    cogIntro.put("visual", new ProbeSignal("cognitive_style", 0.03, "visual", SOURCE));
-    cogIntro.put("logical", new ProbeSignal("cognitive_style", 0.03, "logical", SOURCE));
-    cogIntro.put("trial", new ProbeSignal("cognitive_style", 0.03, "trial", SOURCE));
+    cogIntro.put("visual", new ProbeSignal("learning_preference", null, "video", SOURCE));
+    cogIntro.put("logical", new ProbeSignal("learning_preference", null, "text", SOURCE));
+    cogIntro.put("trial", new ProbeSignal("learning_preference", null, "code", SOURCE));
     catalog.put("cog_intro", Map.copyOf(cogIntro));
-
-    // fail_react：失败后反应（坚持度行为信号）
-    Map<String, ProbeSignal> failReact = new LinkedHashMap<>();
-    failReact.put("retry", new ProbeSignal("emotion_persistence", 0.02, "retry", SOURCE));
-    failReact.put("hint", new ProbeSignal("emotion_persistence", 0.0, "hint", SOURCE));
-    failReact.put("skip", new ProbeSignal("emotion_persistence", -0.02, "skip", SOURCE));
-    catalog.put("fail_react", Map.copyOf(failReact));
 
     // media_pref：媒介偏好
     Map<String, ProbeSignal> mediaPref = new LinkedHashMap<>();
-    mediaPref.put("video", new ProbeSignal("learning_preference", 0.01, "video", SOURCE));
-    mediaPref.put("reading", new ProbeSignal("learning_preference", 0.01, "text", SOURCE));
-    mediaPref.put("interactive", new ProbeSignal("learning_preference", 0.01, "interactive", SOURCE));
+    mediaPref.put("video", new ProbeSignal("learning_preference", null, "video", SOURCE));
+    mediaPref.put("reading", new ProbeSignal("learning_preference", null, "text", SOURCE));
+    mediaPref.put("interactive", new ProbeSignal("learning_preference", null, "code", SOURCE));
     catalog.put("media_pref", Map.copyOf(mediaPref));
 
     return Map.copyOf(catalog);

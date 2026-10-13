@@ -88,7 +88,7 @@ ERROR_DIAGNOSIS_PROMPT = """你是面向非计算机专业 Python 初学者的 A
 - 不允许只给泛化模板句（例如「检查循环边界」），必须结合本题的具体输入输出展开；
 - 若判题未返回失败样例详情，必须在 root_cause 或 what_program_is_doing 中显式写出「判题未返回失败样例详情」，不要凭空捏造样例；
 - related_kcs 必须从【候选知识点】中选择最贴合的 1~3 个，禁止编造课程外知识点；
-- encouragement 按提供的挫败度提示措辞；
+- encouragement 用中性、可执行的下一步提示，不推断学生的情绪状态；
 - 输出 JSON 对象，字段：root_cause, what_program_is_doing, expected_behavior, fix_direction,
   related_kcs(数组), error_pattern, is_recurring(布尔), encouragement,
   teaching_goal, checkpoint_prompt, reflection_prompt"""
@@ -266,19 +266,18 @@ class TutorWorkflowCardAgent:
         diagnosis: WorkflowDiagnosisContext,
         profile_brief: str,
     ) -> dict[str, Any]:
-        frustration, frustration_hint = _frustration(diagnosis.consecutive_errors)
         user_prompt = (
             f"{_format_problem(problem)}\n"
             f"判题结果: verdict={diagnosis.verdict or '未知'}, "
             f"通过 {diagnosis.passed_cases}/{diagnosis.total_cases}\n"
+            f"连续未通过提交次数: {diagnosis.consecutive_errors}（只代表作答记录，不据此推断情绪；"
+            "可用于提供更细的技术排查步骤）\n"
             f"代码:\n{diagnosis.code or '(无)'}\n"
             f"错误信息: {diagnosis.failure_reason or '判题未返回失败样例详情'}\n"
-            f"候选知识点: {problem.kc_codes or '(题目未挂 KC)'}\n"
-            f"挫败度提示: {frustration_hint}"
+            f"候选知识点: {problem.kc_codes or '(题目未挂 KC)'}"
         )
         card = await self._generate("error_diagnosis", ERROR_DIAGNOSIS_PROMPT, user_prompt, profile_brief)
-        # 挫败度由服务端行为指标推导注入，不交给 LLM 自评（与源版 ac_review 同策略）。
-        card["frustration_level"] = frustration
+        card["frustration_level"] = "low"
         card.setdefault("teaching_goal", "先弄清程序实际行为与期望行为的差距，再动手改。")
         card.setdefault("checkpoint_prompt", "用最小输入手动走一遍你的代码，说出第一处偏差。")
         card.setdefault("reflection_prompt", "下次提交前，你会先自查哪一类边界？")
@@ -291,12 +290,9 @@ class TutorWorkflowCardAgent:
         evidence: list[RagHit],
         profile_brief: str,
     ) -> dict[str, Any]:
-        frustration, frustration_hint = _frustration(diagnosis.consecutive_errors)
         user_prompt = (
             f"{_format_problem(problem)}\n"
             f"AC 代码:\n{diagnosis.code or '(无)'}\n"
-            f"挫败度 frustration_level: {frustration}\n"
-            f"挫败度提示: {frustration_hint}\n"
             f"课件参考: {_format_evidence(evidence)}"
         )
         card = await self._generate("post_ac", POST_AC_PROMPT, user_prompt, profile_brief)
@@ -660,15 +656,6 @@ def _format_evidence(chunks: list[RagHit]) -> str:
             text = text[:300] + "…"
         lines.append(f"- [页 {chunk.page_no}] {text}")
     return "\n".join(lines)
-
-
-def _frustration(consecutive_errors: int) -> tuple[str, str]:
-    """连错次数 → 挫败度分级（与源版 ac_review 阈值对齐）。"""
-    if consecutive_errors >= 5:
-        return "severe", "学生连续多次失败，语气要先肯定坚持，再点出关键转折。"
-    if consecutive_errors >= 3:
-        return "moderate", "学生几次失败，要明确指出这次的关键扭转点。"
-    return "low", "学生状态正常，可以直接进入正题。"
 
 
 def _validate_skeleton(card: dict[str, Any], problem: WorkflowProblemContext) -> str:

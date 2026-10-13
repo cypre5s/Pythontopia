@@ -219,7 +219,7 @@ async def test_debug_prompt_preserves_stdout_judge_contract() -> None:
 
 
 @pytest.mark.asyncio
-async def test_profile_prompt_uses_background_goal_cognitive_style_and_session_budget() -> None:
+async def test_profile_prompt_uses_preferences_but_ignores_inferred_ability_and_emotion() -> None:
     provider = _StubProvider(LlmResponse(content_json=_good_payload()))
     factory = build_llm_problem_factory(provider)
 
@@ -234,6 +234,8 @@ async def test_profile_prompt_uses_background_goal_cognitive_style_and_session_b
             "targetKcCodes": ["PY43-KC-031"],
             "fieldDependent": 0.7,
             "sequentialVsHolistic": -0.5,
+            "successRate": 0.2,
+            "resilience": 0.1,
             "sessionMinutesPerDay": 20,
         },
     )
@@ -241,8 +243,10 @@ async def test_profile_prompt_uses_background_goal_cognitive_style_and_session_b
     user_prompt = provider.last_messages[-1]["content"]
     assert "人文背景" in user_prompt
     assert "求职实践" in user_prompt
-    assert "按步骤" in user_prompt
     assert "20 分钟" in user_prompt
+    assert "按步骤" not in user_prompt
+    assert "通过率" not in user_prompt
+    assert "抗挫" not in user_prompt
 
 
 @pytest.mark.asyncio

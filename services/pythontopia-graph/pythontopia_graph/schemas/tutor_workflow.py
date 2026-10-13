@@ -94,7 +94,7 @@ class WorkflowDiagnosisContext(BaseModel):
     failure_reason: str = ""
     passed_cases: int = 0
     total_cases: int = 0
-    # 学生近期连错次数（Java 统计），驱动挫败度分级。
+    # Java-verified consecutive failed submissions; use only as an objective remediation signal.
     consecutive_errors: int = 0
 
 
@@ -112,6 +112,7 @@ class TutorStudentState(BaseModel):
     latest_verdict: str = ""
     consecutive_errors: int = Field(default=0, ge=0)
     hint_level: int = Field(default=0, ge=0, le=3)
+    # Legacy wire field kept neutral; failed submissions do not determine emotion.
     frustration_level: Literal["low", "moderate", "severe"] = "low"
     misconception_hypothesis: str = ""
     last_action: str = ""
