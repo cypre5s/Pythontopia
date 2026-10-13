@@ -75,10 +75,6 @@ class EvidenceBinder:
 
 ReflectionDimensionIntent = Literal[
     "ERROR_PATTERN",
-    "COGNITIVE_STYLE",
-    "EMOTION_PERSISTENCE",
-    "PRACTICAL_ABILITY",
-    "KNOWLEDGE_BASE",
 ]
 
 
@@ -296,10 +292,6 @@ class ContractCompiler:
         event_by_ref = {f"event-{event_id}": event_id for event_id in allowed_event_ids}
         dimension_keys = {
             "ERROR_PATTERN": "error_pattern",
-            "COGNITIVE_STYLE": "cognitive_style",
-            "EMOTION_PERSISTENCE": "emotion_persistence",
-            "PRACTICAL_ABILITY": "practical_ability",
-            "KNOWLEDGE_BASE": "knowledge_base",
         }
         insights: list[Insight] = []
         for observation in ir.observations:

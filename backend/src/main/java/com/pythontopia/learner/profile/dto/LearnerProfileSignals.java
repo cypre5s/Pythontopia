@@ -3,11 +3,10 @@ package com.pythontopia.learner.profile.dto;
 import java.util.List;
 
 /**
- * Low-risk personalization inputs projected from the unified learner dimensions.
+ * Self-reported goals/preferences and event-backed error hints projected from learner dimensions.
  *
- * <p>Values such as success rate, resilience, and self-rated level are snapshots from interview
- * metadata, not live outcome statistics. Adaptive decisions must continue to use formal mastery and
- * practice history as their behavioral evidence.
+ * <p>Legacy success-rate, resilience and cognitive-style slots remain null for wire compatibility;
+ * adaptive decisions use formal mastery and server-side practice history.
  */
 public record LearnerProfileSignals(
     List<String> frequentKcCodes,

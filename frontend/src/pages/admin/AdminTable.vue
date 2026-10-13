@@ -38,7 +38,7 @@ withDefaults(defineProps<{
   border-collapse: separate;
   border-spacing: 0;
   color: var(--admin-text, #0f172a);
-  font-size: 12px;
+  font-size: 13px;
   table-layout: fixed;
   text-align: left;
 }
@@ -49,7 +49,7 @@ withDefaults(defineProps<{
   border-bottom: 1px solid var(--admin-border, #e2e8f0);
   background: var(--admin-table-header, #eef4fb);
   color: var(--admin-text, #0f172a);
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
 }

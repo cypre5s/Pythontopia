@@ -14,13 +14,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 /**
- * 看阶段 NPC 对话 3-way 个性化：{@link DialogContextService} 把 {@code
- * learner_profile.dimensions} 的 {@code cognitive_style.tags} 最新/主导标签推断为三态 {@code
- * cognitiveStyle} ∈ {visual, logical, trial, unknown}。
+ * Dialog templates may use explicit media preferences for presentation; legacy cognitive-style labels are ignored.
  *
  * <p>所有依赖以 Mockito mock 注入；{@code DialogContextRepository} 各聚合查询用默认空值兜底，
  * 仅 {@link ProfileRepository#findDimensions} 按用例桩定 tags，借公开的 {@link
- * DialogContextService#buildContext} 端到端断言推断结果（兼顾 stats 镜像字段）。
+ * DialogContextService#buildContext} 端到端断言结果（兼顾 stats 镜像字段）。
  */
 class DialogContextServiceTest {
 
@@ -38,10 +36,10 @@ class DialogContextServiceTest {
     return service.buildContext(USER_ID, "tester");
   }
 
-  /** 桩定 cognitive_style.tags（按声明顺序 append，末元素=最新/主导）。 */
-  private void stubTags(String... tags) {
+  /** 桩定 preference tags（按声明顺序 append，末元素=最新）。 */
+  private void stubPreferenceTags(String... tags) {
     ObjectNode dims = MAPPER.createObjectNode();
-    ArrayNode arr = dims.putObject("cognitive_style").putArray("tags");
+    ArrayNode arr = dims.putObject("learning_preference").putArray("tags");
     for (String tag : tags) {
       arr.add(tag);
     }
@@ -49,40 +47,42 @@ class DialogContextServiceTest {
   }
 
   @Test
-  void visualTag_mapsToVisual() {
-    stubTags("visual");
+  void videoPreference_mapsToVisualPresentation() {
+    stubPreferenceTags("video");
     DialogContextDto dto = build();
     assertThat(dto.cognitiveStyle()).isEqualTo(DialogContextDto.STYLE_VISUAL);
     assertThat(dto.stats()).containsEntry("cognitiveStyle", "visual");
   }
 
   @Test
-  void logicalTag_mapsToLogical() {
-    stubTags("logical");
+  void textPreference_mapsToLogicalPresentation() {
+    stubPreferenceTags("text");
     assertThat(build().cognitiveStyle()).isEqualTo(DialogContextDto.STYLE_LOGICAL);
   }
 
   @Test
-  void trialTag_mapsToTrial() {
-    stubTags("trial");
+  void codePreference_mapsToTrialPresentation() {
+    stubPreferenceTags("code");
     assertThat(build().cognitiveStyle()).isEqualTo(DialogContextDto.STYLE_TRIAL);
   }
 
   @Test
-  void picksLatestDominantTag() {
-    stubTags("visual", "trial", "logical");
+  void picksLatestPreference() {
+    stubPreferenceTags("video", "code", "text");
     assertThat(build().cognitiveStyle()).isEqualTo(DialogContextDto.STYLE_LOGICAL);
   }
 
   @Test
-  void aliasTagNormalizesToTrial() {
-    stubTags("trial-and-error");
-    assertThat(build().cognitiveStyle()).isEqualTo(DialogContextDto.STYLE_TRIAL);
+  void oldCognitiveStyleLabelsAreIgnored() {
+    ObjectNode dims = MAPPER.createObjectNode();
+    dims.putObject("cognitive_style").putArray("tags").add("trial");
+    when(profileRepository.findDimensions(USER_ID)).thenReturn(Optional.of(dims));
+    assertThat(build().cognitiveStyle()).isEqualTo(DialogContextDto.STYLE_UNKNOWN);
   }
 
   @Test
   void unrecognizedTagIsUnknown() {
-    stubTags("kinesthetic");
+    stubPreferenceTags("kinesthetic");
     assertThat(build().cognitiveStyle()).isEqualTo(DialogContextDto.STYLE_UNKNOWN);
   }
 
@@ -94,7 +94,7 @@ class DialogContextServiceTest {
 
   @Test
   void emptyTagsIsUnknown() {
-    stubTags();
+    stubPreferenceTags();
     assertThat(build().cognitiveStyle()).isEqualTo(DialogContextDto.STYLE_UNKNOWN);
   }
 

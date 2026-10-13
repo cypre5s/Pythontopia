@@ -1,9 +1,8 @@
-// 世界情绪氛围的前端 store（拉取 + 派发 + 可关闭开关）。
+// 小镇氛围兼容 store（拉取 + 派发 + 可关闭开关）；后端不推断学生情绪。
 //
 // 职责：
-//   - refresh()：拉 GET /api/learner/world-state，写入 mood/streak/emotionScore；
-//     成功且未关闭氛围时，向 window 派发 'pythontopia:mood-changed' 事件，由 WorldScene
-//     的 mood adapter 实时重应用氛围叠加层（画像→世界的可见联动）。
+//   - refresh()：拉 GET /api/learner/world-state，写入中性 mood 及客观 streak；
+//     成功且未关闭氛围时，向 window 派发事件，由 WorldScene 重应用兼容氛围层。
 //   - 失败一律降级到 'sunny'，绝不阻塞玩家或翻车（沿用 world store 的容错风格）。
 //   - 玩家可通过「关闭情绪氛围」开关（localStorage 'pyt_mood_disabled'）关停氛围；
 //     关闭后 refresh 不再派发，并立即派发一次 'sunny' 让 WorldScene 清场。

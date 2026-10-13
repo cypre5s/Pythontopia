@@ -82,11 +82,7 @@ const profileDimensions = computed(() => {
     major: p.major ?? '—',
     baseLevel: p.baseLevel?.pythonSelfRatedLevel ?? '—',
     goal: p.learningGoal?.kind ?? '—',
-    sequential: p.cognitiveStyle?.sequentialVsHolistic ?? '—',
     media: (p.learningPreference?.mediaPriority ?? []).join(' · ') || '—',
-    weakKcs: p.errorPatterns?.frequentKcCodes?.length ?? 0,
-    success: p.practiceCapability?.successRate ?? '—',
-    mood: p.emotionPersistence?.recentMood ?? '—',
   };
 });
 </script>
@@ -187,7 +183,7 @@ const profileDimensions = computed(() => {
         data-testid="qslot-skill"
       >
         <header class="qslot-head">
-          <h2>技能 · 学生画像（8 维度）</h2>
+          <h2>学习偏好 · 学习者画像</h2>
           <button
             type="button"
             class="qslot-close"
@@ -200,7 +196,7 @@ const profileDimensions = computed(() => {
           v-if="!profileDimensions"
           class="qslot-empty"
         >
-          画像尚未生成。前往「画像屋」与镜长 Py 做一次访谈即可解锁 8 维度数据。
+          暂无可展示的自述信息。前往「画像屋」与镜长 Py 完成简短访谈。
         </div>
         <ul
           v-else
@@ -209,14 +205,10 @@ const profileDimensions = computed(() => {
           <li><b>专业背景</b><span>{{ profileDimensions.major }}</span></li>
           <li><b>Python 自评</b><span>{{ profileDimensions.baseLevel }} / 5</span></li>
           <li><b>学习目标</b><span>{{ profileDimensions.goal }}</span></li>
-          <li><b>认知风格 (序列/整体)</b><span>{{ profileDimensions.sequential }}</span></li>
           <li><b>学习偏好</b><span>{{ profileDimensions.media }}</span></li>
-          <li><b>弱项 KC 数</b><span>{{ profileDimensions.weakKcs }}</span></li>
-          <li><b>近况通过率</b><span>{{ profileDimensions.success }}</span></li>
-          <li><b>最近情绪</b><span>{{ profileDimensions.mood }}</span></li>
         </ul>
         <p class="qslot-hint">
-          这些维度会驱动无尽远征 / boss 副本的出题偏好（弱项 KC 优先 + 难度自适应）。
+          这些自述信息用于调整学习资源；知识掌握和题目难度以服务端验证的练习记录为准。
         </p>
       </section>
     </div>

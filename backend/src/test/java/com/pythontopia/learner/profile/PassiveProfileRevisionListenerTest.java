@@ -73,6 +73,27 @@ class PassiveProfileRevisionListenerTest {
   }
 
   @Test
+  void tutorStyleChoiceBecomesMediaPreferenceWithoutEvidenceOrScore() {
+    listener.onTutorStyleEngaged(new LearningEvent.TutorStyleEngaged(7L, "visual", "PY43-KC-001"));
+
+    ProfileDimensionProjection projection = singleProjection();
+    assertThat(projection.dimensionKey()).isEqualTo("learning_preference");
+    assertThat(projection.delta().tagsAdd()).containsExactly("video");
+    assertThat(projection.delta().scoreDelta()).isNull();
+    assertThat(projection.delta().evidenceIncrement()).isNull();
+    assertThat(projection.delta().source()).isEqualTo("INTERVIEW");
+  }
+
+  @Test
+  void coursewareConsumptionMapsToSupportedTextPreference() {
+    listener.onMediaConsumed(new LearningEvent.MediaConsumed(7L, "courseware", 2, java.util.List.of()));
+
+    ProfileDimensionProjection projection = singleProjection();
+    assertThat(projection.dimensionKey()).isEqualTo("learning_preference");
+    assertThat(projection.delta().tagsAdd()).containsExactly("text");
+  }
+
+  @Test
   void microQuizResourceCheckPassedUpdatesKnowledgeBaseWithCheckMetadata() {
     listener.onResourceCheckCompleted(
         new LearningEvent.ResourceCheckCompleted(

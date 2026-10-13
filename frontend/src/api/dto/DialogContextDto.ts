@@ -1,9 +1,8 @@
 /**
  * 对话模板的数据上下文，与后端 `com.pythontopia.dialog.DialogContextDto` 一一对应。
  *   - playerName：玩家显示名（后端取 users.display_name / username）；
- *   - profileType：基于 learner_profile.cognitive_style 推断；
- *   - cognitiveStyle：基于 dimensions.cognitive_style.tags 主导标签推断，驱动
- *     {{styleAdaptive:..|..|..}} 三分支因材施教；
+ *   - profileType：legacy template slot fixed to a conservative fallback;
+ *   - cognitiveStyle：legacy template slot mapped from explicit media preference, never inferred as learner ability;
  *   - stats：所有 {{stats.xxx}} 占位符来源，统一为 string。
  *
  * 枚举字段额外允许 string，是为了后端新增取值时不触发前端 typecheck 失败（渲染器拿不到 key

@@ -5,7 +5,9 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.learner.profile.dto.*;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -89,9 +91,7 @@ public class ProfileRepository {
     return jdbcTemplate
         .query(
             """
-            SELECT id, user_id, pack_id, major, base_level, learning_goal, cognitive_style,
-                   learning_preference, error_patterns, practice_capability,
-                   emotion_persistence, narrative_summary
+            SELECT id, user_id, pack_id, major, base_level, learning_goal, learning_preference
             FROM learner_profile
             WHERE user_id = ?
             """,
@@ -209,6 +209,28 @@ public class ProfileRepository {
     return readDimensions("SELECT dimensions FROM learner_profile WHERE user_id = ?", userId);
   }
 
+  /** Returns the confidence increments historically written by profile interviews. */
+  public Map<String, Integer> findInterviewEvidenceByDimension(Long userId) {
+    Map<String, Integer> evidence = new LinkedHashMap<>();
+    jdbcTemplate.query(
+        """
+        SELECT diff->>'dimensionKey' AS dimension_key,
+               SUM(CASE WHEN jsonb_typeof(diff->'evidenceIncrement') = 'number'
+                        THEN (diff->>'evidenceIncrement')::integer ELSE 0 END) AS evidence_count
+        FROM profile_revision
+        WHERE user_id = ? AND source = 'INTERVIEW'
+          AND jsonb_typeof(diff->'dimensionKey') = 'string'
+        GROUP BY diff->>'dimensionKey'
+        """,
+        rs -> {
+          while (rs.next()) {
+            evidence.put(rs.getString("dimension_key"), rs.getInt("evidence_count"));
+          }
+        },
+        userId);
+    return evidence;
+  }
+
   /**
    * 与 {@link #findDimensions} 相同，但对 learner_profile 行加行级写锁（{@code FOR UPDATE}）。
    *
@@ -293,12 +315,12 @@ public class ProfileRepository {
         rs.getString("major"),
         read(rs.getString("base_level"), BaseLevelDto.class),
         read(rs.getString("learning_goal"), LearningGoalDto.class),
-        read(rs.getString("cognitive_style"), CognitiveStyleDto.class),
+        null,
         read(rs.getString("learning_preference"), LearningPreferenceDto.class),
-        read(rs.getString("error_patterns"), ErrorPatternsDto.class),
-        read(rs.getString("practice_capability"), PracticeCapabilityDto.class),
-        read(rs.getString("emotion_persistence"), EmotionPersistenceDto.class),
-        rs.getString("narrative_summary"));
+        null,
+        null,
+        null,
+        null);
   }
 
   private <T> T read(String json, Class<T> type) {

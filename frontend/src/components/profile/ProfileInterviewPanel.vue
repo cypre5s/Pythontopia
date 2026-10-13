@@ -13,11 +13,7 @@ const dimensionLabels: Record<string, string> = {
   major: '专业背景',
   base_level: '知识基础',
   learning_goal: '学习目标',
-  cognitive_style: '认知风格',
   learning_preference: '学习偏好',
-  error_patterns: '易错模式',
-  practice_capability: '实践能力',
-  emotion_persistence: '情绪与坚持度',
 };
 
 async function send(): Promise<void> {
@@ -53,7 +49,7 @@ async function finish(): Promise<void> {
   <aside class="profile-panel">
     <header>
       <h2>画像屋访谈</h2>
-      <span>{{ learning.profileInterview.dimensionsFilled.length }} / 8</span>
+      <span>{{ learning.profileInterview.dimensionsFilled.length }} / 4</span>
     </header>
 
     <div class="dimension-grid">
@@ -69,6 +65,7 @@ async function finish(): Promise<void> {
     <div class="profile-question">
       {{ learning.profileInterview.currentQuestion }}
     </div>
+    <p class="profile-note">访谈只记录你的目标、已有经验和偏好，不会据此评估能力或情绪。</p>
 
     <div class="status-row">
       <span>Grounding: {{ learning.profileInterview.grounding?.passed === false ? '需补充' : '通过' }}</span>
@@ -91,7 +88,7 @@ async function finish(): Promise<void> {
       <textarea
         v-model="answer"
         :disabled="learning.profileInterview.loading || finishing"
-        placeholder="写下你的学习背景、目标或偏好"
+        placeholder="写下你的编程经验、学习目标或偏好媒介"
       />
       <button
         :disabled="learning.profileInterview.loading || finishing"

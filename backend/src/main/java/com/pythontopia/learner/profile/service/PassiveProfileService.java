@@ -66,15 +66,13 @@ public class PassiveProfileService {
   /**
    * 学生 PUT 自评接口允许直写的主观维度；其余维度只读，仅由本服务被动更新。
    *
-   * <p>纳入 {@code cognitive_style} 是为了让学生在画像屋纠正被推断的认知风格（防幻觉、不贴死标签）。
+   * <p>这些字段只表示学生自述，不作为能力证据。
    */
   public static final Set<String> SELF_EDITABLE_DIMENSIONS =
       Set.of(
           "professional_background",
           "learning_goal",
-          "cognitive_style",
-          "learning_preference",
-          "emotion_persistence");
+          "learning_preference");
 
   /** profile_revision_source_check 约束允许的 source 枚举（须与 V136 迁移保持一致）。 */
   private static final Set<String> ALLOWED_REVISION_SOURCES =
@@ -95,6 +93,7 @@ public class PassiveProfileService {
   private static final Set<String> PROFILE_MAJORS =
       Set.of("CS", "NON_CS_STEM", "NON_CS_HUMANITIES", "OTHER");
   private static final Set<String> LEARNING_GOAL_KINDS = Set.of("EXAM", "PROJECT", "INTEREST", "JOB");
+  private static final Set<String> MEDIA_TYPES = Set.of("video", "text", "mindmap", "code");
 
   /** confidence 饱和证据数：evidence_count 达到该值时置信度=1（读时派生，不入库）。 */
   private static final int EVIDENCE_SATURATION = 8;
@@ -252,6 +251,7 @@ public class PassiveProfileService {
   @Transactional(readOnly = true)
   public List<com.pythontopia.learner.profile.dto.ProfileDimensionDto> getDimensions(Long userId) {
     JsonNode dims = profileRepository.findDimensions(userId).orElse(null);
+    Map<String, Integer> interviewEvidence = profileRepository.findInterviewEvidenceByDimension(userId);
     List<com.pythontopia.learner.profile.dto.ProfileDimensionDto> out = new java.util.ArrayList<>();
     for (String key : DIMENSION_KEYS) {
       JsonNode dim = dims == null ? null : dims.get(key);
@@ -259,10 +259,12 @@ public class PassiveProfileService {
       int evidenceCount = 0;
       String lastUpdated = null;
       List<String> tags = new java.util.ArrayList<>();
-      if (dim instanceof ObjectNode obj) {
+      boolean selfReportOnly = key.equals("cognitive_style") || key.equals("emotion_persistence");
+      if (!selfReportOnly && dim instanceof ObjectNode obj) {
         rawScore = obj.path("score").asDouble(DEFAULT_SCORE);
         // 历史脏数据（负 / 超大 evidence_count）在读时也钳制，避免 confidence 越界。
-        evidenceCount = clampEvidence(obj.path("evidence_count").asInt(0));
+        evidenceCount = clampEvidence(
+            obj.path("evidence_count").asInt(0) - interviewEvidence.getOrDefault(key, 0));
         JsonNode lu = obj.get("last_updated");
         lastUpdated = lu != null && lu.isTextual() ? lu.asText() : null;
         JsonNode tagsNode = obj.get("tags");
@@ -288,10 +290,9 @@ public class PassiveProfileService {
   }
 
   /**
-   * 读取可用于个性化的显式画像 metadata；低于 profile brief 同一置信门槛的维度不提供信号。
+   * 读取可用于个性化的显式自述偏好，以及由学习事件确认的易错知识点。
    *
-   * <p>数值只按 metadata 原值和合法范围投影，不从 score 推导。访谈字段是自评快照；正式练习
-   * 的实时适应仍应使用 mastery 与服务端练习历史。
+   * <p>不从失败行为推断韧性或能力；正式练习的实时适应使用 mastery 与服务端练习历史。
    */
   @Transactional(readOnly = true)
   public LearnerProfileSignals getPersonalizationSignals(Long userId) {
@@ -300,22 +301,23 @@ public class PassiveProfileService {
       return LearnerProfileSignals.empty();
     }
 
-    JsonNode errors = confidentDimension(dimensions, "error_pattern");
-    JsonNode knowledge = confidentDimension(dimensions, "knowledge_base");
-    JsonNode practice = confidentDimension(dimensions, "practical_ability");
-    JsonNode preference = confidentDimension(dimensions, "learning_preference");
-    JsonNode emotion = confidentDimension(dimensions, "emotion_persistence");
-    JsonNode background = confidentDimension(dimensions, "professional_background");
-    JsonNode goal = confidentDimension(dimensions, "learning_goal");
-    JsonNode cognition = confidentDimension(dimensions, "cognitive_style");
+    Map<String, Integer> interviewEvidence = profileRepository.findInterviewEvidenceByDimension(userId);
+    JsonNode errors = confidentDimension(dimensions, "error_pattern", interviewEvidence);
+    JsonNode knowledge = objectDimension(dimensions, "knowledge_base");
+    JsonNode preference = objectDimension(dimensions, "learning_preference");
+    JsonNode background = objectDimension(dimensions, "professional_background");
+    JsonNode goal = objectDimension(dimensions, "learning_goal");
 
-    List<String> mediaPriority = stringArray(preference, "media_priority", 4);
+    List<String> mediaPriority = new java.util.ArrayList<>();
+    for (String mediaType : stringArray(preference, "media_priority", 8)) {
+      if (MEDIA_TYPES.contains(mediaType) && mediaPriority.size() < 4) mediaPriority.add(mediaType);
+    }
     if (preference != null) {
-      for (String tag : stringArray(preference, "tags", 4)) {
+      for (String tag : stringArray(preference, "tags", 8)) {
         if (mediaPriority.size() >= 4) {
           break;
         }
-        if (!mediaPriority.contains(tag)) {
+        if (MEDIA_TYPES.contains(tag) && !mediaPriority.contains(tag)) {
           mediaPriority.add(tag);
         }
       }
@@ -324,24 +326,29 @@ public class PassiveProfileService {
     return new LearnerProfileSignals(
         kcCodeArray(errors, "frequent_kc_codes", 6),
         boundedInteger(knowledge, "python_self_rated_level", 0, 5),
-        boundedNumber(practice, "success_rate", 0.0, 1.0),
+        null,
         mediaPriority,
-        boundedNumber(emotion, "resilience", 0.0, 1.0),
-        boundedNumber(practice, "avg_attempts_per_problem", 0.0, 20.0),
+        null,
+        null,
         allowlistedString(background, "major", PROFILE_MAJORS),
         allowlistedString(goal, "kind", LEARNING_GOAL_KINDS),
         kcCodeArray(goal, "target_kc_codes", 6),
-        boundedNumber(cognition, "field_dependent", 0.0, 1.0),
-        boundedNumber(cognition, "sequential_vs_holistic", -1.0, 1.0),
+        null,
+        null,
         boundedInteger(preference, "session_minutes_per_day", 5, 240));
   }
 
-  private static JsonNode confidentDimension(JsonNode dimensions, String key) {
+  private static JsonNode objectDimension(JsonNode dimensions, String key) {
     JsonNode dimension = dimensions.get(key);
-    if (dimension == null || !dimension.isObject()) {
-      return null;
-    }
-    int evidenceCount = clampEvidence(dimension.path("evidence_count").asInt(0));
+    return dimension != null && dimension.isObject() ? dimension : null;
+  }
+
+  private static JsonNode confidentDimension(
+      JsonNode dimensions, String key, Map<String, Integer> interviewEvidence) {
+    JsonNode dimension = objectDimension(dimensions, key);
+    if (dimension == null) return null;
+    int evidenceCount = clampEvidence(
+        dimension.path("evidence_count").asInt(0) - interviewEvidence.getOrDefault(key, 0));
     double confidence = clamp01(evidenceCount / (double) EVIDENCE_SATURATION);
     return confidence >= BRIEF_CONFIDENCE_FLOOR ? dimension : null;
   }
@@ -415,25 +422,18 @@ public class PassiveProfileService {
     return Double.isFinite(number) && number >= min && number <= max ? number : null;
   }
 
-  /** profile_brief 注入的常规维度置信度门槛（信号不足不贴标签，防幻觉）。 */
+  /** profile_brief 注入的客观维度置信度门槛（信号不足不贴标签，防幻觉）。 */
   private static final double BRIEF_CONFIDENCE_FLOOR = 0.3;
-
-  /** 情绪维门槛更低（宁可敏感）：低落信号尽早进入 brief，让下游及时调成鼓励语气。 */
-  private static final double BRIEF_EMOTION_CONFIDENCE_FLOOR = 0.25;
 
   /** 每个维度注入 brief 的 tag 上限（取最近 N 个）。 */
   private static final int BRIEF_TAG_LIMIT = 3;
 
   /**
-   * 8 维全量组装紧凑中文画像摘要（profile_brief），供答疑 / 意图路由等下游 prompt 注入。
-   *
-   * <p>规则：常规维度置信度 ≥{@value #BRIEF_CONFIDENCE_FLOOR} 才注入；{@code emotion_persistence}
-   * ≥{@value #BRIEF_EMOTION_CONFIDENCE_FLOOR} 即注入。score 分档：&lt;0.45 →「入门/偏弱」、0.45~0.7 →
-   * 「进阶/一般」、&gt;0.7 →「扎实/较强」。tag 维度取最近 ≤{@value #BRIEF_TAG_LIMIT} 个逗号拼接。
+   * 组装紧凑画像摘要（profile_brief），供答疑 / 意图路由等下游 prompt 注入。
+   * 自述目标和偏好明确标成自述；事实性易错信息必须有学习事件证据。
    *
    * <p>输出（分号+空格分隔，只含有信号的维度，全空返回 ""）形如：
-   * {@code 认知风格: visual; 知识基础: 入门(0.4); 目标: 期末备考; 偏好: 视频,实例; 易错: off-by-one,缩进;
-   * 情绪: 需鼓励; 实践: 偏弱(0.4); 专业: 文科}
+   * {@code 自述目标: 期末备考; 自述偏好: 视频,实例; 易错: off-by-one,缩进}
    *
    * <p>任何取数异常降级返回 ""（不破坏调用方）。
    */
@@ -447,7 +447,7 @@ public class PassiveProfileService {
     }
   }
 
-  /** 按固定顺序（认知风格→知识基础→目标→偏好→易错→情绪→实践→专业）拼装有信号的维度段。 */
+  /** 按固定顺序拼装有信号的偏好和经过学习事件验证的易错信息。 */
   private static String assembleBrief(
       List<com.pythontopia.learner.profile.dto.ProfileDimensionDto> dims) {
     Map<String, com.pythontopia.learner.profile.dto.ProfileDimensionDto> byKey =
@@ -459,40 +459,9 @@ public class PassiveProfileService {
     }
     List<String> parts = new java.util.ArrayList<>();
 
-    // 认知风格：取最后一个 tag（最近主导信号）。
-    var cognitive = byKey.get("cognitive_style");
-    if (passesFloor(cognitive, BRIEF_CONFIDENCE_FLOOR)) {
-      List<String> tags = recentTags(cognitive);
-      if (!tags.isEmpty()) {
-        parts.add("认知风格: " + tags.get(tags.size() - 1));
-      }
-    }
-
-    // 知识基础：分档词 + 保留一位小数的 score。
-    var knowledge = byKey.get("knowledge_base");
-    if (passesFloor(knowledge, BRIEF_CONFIDENCE_FLOOR)) {
-      parts.add("知识基础: " + bandWord(knowledge.score(), "入门", "进阶", "扎实")
-          + "(" + formatScore(knowledge.score()) + ")");
-    }
-
-    appendTagPart(parts, "目标", byKey.get("learning_goal"));
-    appendTagPart(parts, "偏好", byKey.get("learning_preference"));
-    appendTagPart(parts, "易错", byKey.get("error_pattern"));
-
-    // 情绪：低于 0.5 视为需鼓励（门槛更低，宁可敏感）。
-    var emotion = byKey.get("emotion_persistence");
-    if (passesFloor(emotion, BRIEF_EMOTION_CONFIDENCE_FLOOR)) {
-      parts.add("情绪: " + (emotion.score() < 0.5 ? "需鼓励" : "稳定"));
-    }
-
-    // 实践：分档词 + 保留一位小数的 score。
-    var practical = byKey.get("practical_ability");
-    if (passesFloor(practical, BRIEF_CONFIDENCE_FLOOR)) {
-      parts.add("实践: " + bandWord(practical.score(), "偏弱", "一般", "较强")
-          + "(" + formatScore(practical.score()) + ")");
-    }
-
-    appendTagPart(parts, "专业", byKey.get("professional_background"));
+    appendAllowedTagPart(parts, "自述目标", byKey.get("learning_goal"), LEARNING_GOAL_KINDS);
+    appendAllowedTagPart(parts, "自述偏好", byKey.get("learning_preference"), MEDIA_TYPES);
+    appendTagPart(parts, "近期易错", byKey.get("error_pattern"));
 
     return String.join("; ", parts);
   }
@@ -514,6 +483,18 @@ public class PassiveProfileService {
     }
   }
 
+  private static void appendAllowedTagPart(
+      List<String> parts,
+      String label,
+      com.pythontopia.learner.profile.dto.ProfileDimensionDto dim,
+      Set<String> allowed) {
+    List<String> tags = recentTags(dim).stream()
+        .filter(tag -> allowed.contains(tag)
+            || allowed.contains(tag.toUpperCase(java.util.Locale.ROOT)))
+        .toList();
+    if (!tags.isEmpty()) parts.add(label + ": " + String.join(",", tags));
+  }
+
   /** 取该维最近 ≤{@value #BRIEF_TAG_LIMIT} 个非空 tag（保持时间正序）。 */
   private static List<String> recentTags(
       com.pythontopia.learner.profile.dto.ProfileDimensionDto dim) {
@@ -529,18 +510,6 @@ public class PassiveProfileService {
     return clean.size() > BRIEF_TAG_LIMIT
         ? List.copyOf(clean.subList(clean.size() - BRIEF_TAG_LIMIT, clean.size()))
         : clean;
-  }
-
-  /** score 分档：&lt;0.45 → low、0.45~0.7 → mid、&gt;0.7 → high。 */
-  private static String bandWord(double score, String low, String mid, String high) {
-    if (score < 0.45) {
-      return low;
-    }
-    return score <= 0.7 ? mid : high;
-  }
-
-  private static String formatScore(double score) {
-    return String.format(java.util.Locale.ROOT, "%.1f", score);
   }
 
   /**

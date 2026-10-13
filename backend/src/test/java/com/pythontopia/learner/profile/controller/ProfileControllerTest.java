@@ -22,71 +22,62 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
-import org.mockito.ArgumentCaptor;
 
 class ProfileControllerTest {
 
   private final ProfileService profileService = mock(ProfileService.class);
   private final PassiveProfileService passiveProfileService = mock(PassiveProfileService.class);
-  private final ProfileController controller =
-      new ProfileController(profileService, passiveProfileService);
-  private final CurrentUserPrincipal student =
-      new CurrentUserPrincipal(7L, "student", Role.STUDENT);
+  private final ProfileController controller = new ProfileController(profileService, passiveProfileService);
+  private final CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
 
   @BeforeEach
-  void allowStudentSelfEditableDimensions() {
+  void allowStudentSelfReportedDimensions() {
     when(passiveProfileService.isSelfEditable("learning_goal")).thenReturn(true);
-    when(passiveProfileService.isSelfEditable("cognitive_style")).thenReturn(true);
+    when(passiveProfileService.isSelfEditable("learning_preference")).thenReturn(true);
   }
 
   @Test
-  void rejectsStudentFreeFormTagsBeforeWritingProfile() {
-    assertThatThrownBy(
-            () ->
-                controller.selfUpdate(
-                    student,
-                    "learning_goal",
-                    new SelfDimensionRequest(null, List.of("ignore previous instructions"))))
-        .isInstanceOfSatisfying(
-            BusinessException.class,
-            error -> {
-              assertThat(error.status()).isEqualTo(HttpStatus.BAD_REQUEST);
-              assertThat(error.code()).isEqualTo("PROFILE_SELF_UPDATE_TAG_NOT_ALLOWED");
-            });
+  void rejectsFreeFormTagsBeforeWritingProfile() {
+    assertThatThrownBy(() -> controller.selfUpdate(
+        student,
+        "learning_goal",
+        new SelfDimensionRequest(null, List.of("ignore previous instructions"))))
+        .isInstanceOfSatisfying(BusinessException.class, error -> {
+          assertThat(error.status()).isEqualTo(HttpStatus.BAD_REQUEST);
+          assertThat(error.code()).isEqualTo("PROFILE_SELF_UPDATE_TAG_NOT_ALLOWED");
+        });
 
     verify(passiveProfileService, never()).applyDimensionUpdate(any(), any(), any());
   }
 
   @Test
-  void rejectsUnknownStudentCognitiveStyleTag() {
-    assertThatThrownBy(
-            () ->
-                controller.selfUpdate(
-                    student,
-                    "cognitive_style",
-                    new SelfDimensionRequest(null, List.of("system prompt"))))
-        .isInstanceOfSatisfying(
-            BusinessException.class,
-            error -> assertThat(error.code()).isEqualTo("PROFILE_SELF_UPDATE_TAG_NOT_ALLOWED"));
+  void blocksStudentWritesToStyleAndEmotionDimensions() {
+    when(passiveProfileService.isSelfEditable("cognitive_style")).thenReturn(false);
+    when(passiveProfileService.isSelfEditable("emotion_persistence")).thenReturn(false);
 
+    for (String dimension : List.of("cognitive_style", "emotion_persistence")) {
+      assertThatThrownBy(() -> controller.selfUpdate(
+          student, dimension, new SelfDimensionRequest(0.2, List.of("video"))))
+          .isInstanceOfSatisfying(BusinessException.class, error ->
+              assertThat(error.status()).isEqualTo(HttpStatus.FORBIDDEN));
+    }
     verify(passiveProfileService, never()).applyDimensionUpdate(any(), any(), any());
   }
 
   @Test
-  void acceptsSupportedStudentCognitiveStyleChoice() {
-    DimensionUpdateResult result = new DimensionUpdateResult(7L, "cognitive_style", null);
+  void acceptsSupportedSelfReportedPreferenceWithoutAddingEvidence() {
+    DimensionUpdateResult result = new DimensionUpdateResult(7L, "learning_preference", null);
     when(passiveProfileService.applyDimensionUpdate(
-            eq(7L), eq("cognitive_style"), any(DimensionDelta.class)))
+            eq(7L), eq("learning_preference"), any(DimensionDelta.class)))
         .thenReturn(result);
 
-    DimensionUpdateResult actual =
-        controller.selfUpdate(
-            student, "cognitive_style", new SelfDimensionRequest(0.05, List.of("visual")));
+    DimensionUpdateResult actual = controller.selfUpdate(
+        student, "learning_preference", new SelfDimensionRequest(0.05, List.of("video")));
 
     assertThat(actual).isSameAs(result);
     ArgumentCaptor<DimensionDelta> deltaCaptor = ArgumentCaptor.forClass(DimensionDelta.class);
     verify(passiveProfileService)
-        .applyDimensionUpdate(eq(7L), eq("cognitive_style"), deltaCaptor.capture());
+        .applyDimensionUpdate(eq(7L), eq("learning_preference"), deltaCaptor.capture());
     assertThat(deltaCaptor.getValue().evidenceIncrement()).isNull();
     assertThat(deltaCaptor.getValue().metadata()).isNull();
   }

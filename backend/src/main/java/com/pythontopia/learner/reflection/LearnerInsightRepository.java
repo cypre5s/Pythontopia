@@ -49,7 +49,8 @@ public class LearnerInsightRepository {
     return jdbc.query(
         "SELECT id, text, dimension_key, tags::text AS tags_text, evidence_event_ids, "
             + "confidence, source, created_at::text AS created_at "
-            + "FROM learner_insight WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT ?",
+            + "FROM learner_insight WHERE user_id = ? AND dimension_key = 'error_pattern' "
+            + "ORDER BY created_at DESC, id DESC LIMIT ?",
         (rs, rowNum) ->
             new LearnerInsightDto(
                 rs.getLong("id"),
@@ -69,7 +70,8 @@ public class LearnerInsightRepository {
     return jdbc.query(
         "SELECT id, text, dimension_key, tags::text AS tags_text, evidence_event_ids, "
             + "confidence, source, created_at::text AS created_at "
-            + "FROM learner_insight WHERE user_id = ? AND created_at >= ? AND created_at < ? "
+            + "FROM learner_insight WHERE user_id = ? AND dimension_key = 'error_pattern' "
+            + "AND created_at >= ? AND created_at < ? "
             + "ORDER BY created_at DESC, id DESC LIMIT ?",
         (rs, rowNum) ->
             new LearnerInsightDto(
@@ -91,7 +93,8 @@ public class LearnerInsightRepository {
   public Optional<String> findLatestText(Long userId) {
     return jdbc
         .query(
-            "SELECT text FROM learner_insight WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 1",
+            "SELECT text FROM learner_insight WHERE user_id = ? AND dimension_key = 'error_pattern' "
+                + "ORDER BY created_at DESC, id DESC LIMIT 1",
             (rs, rowNum) -> rs.getString("text"),
             userId)
         .stream()

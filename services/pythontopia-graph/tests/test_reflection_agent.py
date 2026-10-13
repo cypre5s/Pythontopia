@@ -1,6 +1,6 @@
 """ReflectionAgent（学情反思器）单元测试。
 
-覆盖契约 C：①空记忆→空洞察且 0 次 LLM 调用 ②解析+过滤（合法/空证据/非法维度/
+覆盖契约 C：①空记忆→空洞察且 0 次 LLM 调用 ②解析+过滤（合法/空证据/心理或非法维度/
 引用输入外 id）③provider 抛异常向上传播（fail-fast）④DryRun 路由返回空 insights 不报错。
 """
 
@@ -99,6 +99,12 @@ async def test_parses_and_filters_insights() -> None:
                     "dimension_intent": "FOO",
                     "evidence_refs": ["event-10"],
                     "confidence": 0.5,
+                },
+                {
+                    "claim": "答错说明沮丧",
+                    "dimension_intent": "EMOTION_PERSISTENCE",
+                    "evidence_refs": ["event-10"],
+                    "confidence": 0.9,
                 },
                 {
                     "claim": "引用了不存在的事件",

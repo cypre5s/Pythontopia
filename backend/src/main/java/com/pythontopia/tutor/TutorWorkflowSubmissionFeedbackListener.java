@@ -92,7 +92,7 @@ public class TutorWorkflowSubmissionFeedbackListener {
     state.put("attempt_count", previousAttempts + 1);
     state.put("latest_verdict", verdict);
     state.put("consecutive_errors", consecutiveErrors);
-    state.put("frustration_level", frustrationLevel(consecutiveErrors));
+    state.put("frustration_level", "low");
     if (state.hasNonNull("last_action") && !state.path("last_action").asText().isBlank()) {
       state.put("last_action_effective", accepted);
     }
@@ -253,13 +253,4 @@ public class TutorWorkflowSubmissionFeedbackListener {
     return payload;
   }
 
-  private String frustrationLevel(int consecutiveErrors) {
-    if (consecutiveErrors >= 5) {
-      return "severe";
-    }
-    if (consecutiveErrors >= 3) {
-      return "moderate";
-    }
-    return "low";
-  }
 }

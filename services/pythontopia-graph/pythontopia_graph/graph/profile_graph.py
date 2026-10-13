@@ -52,9 +52,12 @@ async def run_profile_graph(provider: LlmProvider, input_data: ProfileAgentInput
             safety_result=safety,
             grounding_result=grounding,
         )
-    done = len(draft.filled_dimensions) == 8
+    done = all(
+        getattr(draft, dimension) is not None
+        for dimension in ("base_level", "learning_goal", "learning_preference")
+    )
     dynamic_q = _dynamic_next_question(response.content_json)
-    fallback_q = "还差一些信息：你更偏好视频、文字、思维导图还是代码练习？"
+    fallback_q = "还差一些信息：你目前的编程经验、学习目标和偏好媒介分别是什么？"
     return ProfileAgentOutput(
         next_question=None if done else (dynamic_q or fallback_q),
         profile_draft=draft if done else None,
@@ -73,9 +76,12 @@ def node_question_planner(input_data: ProfileAgentInput) -> list[dict[str, str]]
             "role": "system",
             "content": (
                 "你是 Pythontopia ProfileAgent。只输出 JSON。"
-                "必须覆盖 8 维画像，KC code 只能来自给定列表。"
+                "只收集专业背景（可选）、已有编程经验、学习目标、学习媒介偏好。"
+                "不得根据答题成败推断能力、错误模式、认知类型、情绪、人格或坚持度；这些不是访谈字段。"
+                "只输出 ProfileDraft schema 中的字段，不得补写其他字段。"
+                "已有经验、学习目标、学习媒介偏好齐全即可完成，专业背景可选。"
                 "结合多轮对话历史，避免重复已问过的问题；"
-                "可在 JSON 中附带 next_question 字段：针对【尚未补全的维度】提出的、不重复的下一个追问。"
+                "可在 JSON 中附带 next_question 字段：只追问尚未补全的允许字段。"
             ),
         },
         {"role": "system", "content": f"课程 KC 列表: {kc_summary}"},
@@ -119,8 +125,6 @@ def node_grounding_critic(draft: ProfileDraft, input_data: ProfileAgentInput) ->
     referenced: list[str] = []
     if draft.learning_goal is not None:
         referenced.extend(draft.learning_goal.target_kc_codes)
-    if draft.error_patterns is not None:
-        referenced.extend(draft.error_patterns.frequent_kc_codes)
     invalid = [code for code in referenced if code not in valid_codes]
     if invalid:
         return GroundingResult(

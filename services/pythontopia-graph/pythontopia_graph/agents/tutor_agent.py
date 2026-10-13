@@ -798,8 +798,7 @@ class TutorAgent:
     def _personalization_directives(cls, profile_brief: str | None) -> list[str]:
         """按 brief 里实际存在的信号产出多条因材施教指令（每条独立注入 system 消息）。
 
-        覆盖信号：认知风格（沿用三型映射）/ 知识基础（难度调节）/ 目标（举例贴场景）/
-        偏好（媒介倾向）/ 易错（主动预警）/ 情绪（先肯定再纠错）；brief 为空返回 []。
+        覆盖信号：本次显式讲解方式 / 自述经验 / 目标 / 媒介偏好 / 已验证易错；不读取情绪判断。
         """
         if not profile_brief:
             return []
@@ -822,8 +821,6 @@ class TutorAgent:
         mistakes = signals.get("易错") or signals.get("易错模式")
         if mistakes:
             directives.append(f"该生易错点：{mistakes}。讲解涉及相关内容时请主动预警这些坑。")
-        if "鼓励" in signals.get("情绪", ""):
-            directives.append("该生情绪上需要鼓励：先肯定其思路里正确的部分，再温和指出问题，语气友善。")
         return directives
 
     @classmethod
@@ -851,8 +848,6 @@ class TutorAgent:
             parts.append(f"{preference.replace(',', '、').replace('，', '、')}偏好")
         if signals.get("易错") or signals.get("易错模式"):
             parts.append("易错点预警")
-        if "鼓励" in signals.get("情绪", ""):
-            parts.append("鼓励式讲解")
         if not parts:
             return ""
         return f"本回答按你的【{'、'.join(parts)}】定制"

@@ -2,8 +2,6 @@ package com.pythontopia.world;
 
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.learner.mastery.MasteryEvaluator;
-import com.pythontopia.learner.profile.dto.DimensionDelta;
-import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.world.calendar.CalendarMath;
 import com.pythontopia.world.calendar.WorldEvent;
 import com.pythontopia.world.calendar.WorldEventRepository;
@@ -31,7 +29,6 @@ import org.springframework.transaction.annotation.Transactional;
  *   <li>{@code day_index} +1，轮转 {@code weekday}；当 28 天的季度翻页时推进 {@code season/month_index}；
  *   <li>随机选择新天气（测试中按种子可复现）；
  *   <li>调用 {@link MasteryEvaluator#decayAll} 对每个 KC 掌握度应用遗忘曲线；
- *   <li>调用 {@link PassiveProfileService} 将 {@code emotion_persistence.score} +0.01 以奖励每日游玩；
  *   <li>为新一天写入可选的 {@link WorldEvent}（天气变化、课堂提示）供 UI 日历展示。
  * </ol>
  */
@@ -41,13 +38,11 @@ public class WorldAdvanceService {
   private static final Logger log = LoggerFactory.getLogger(WorldAdvanceService.class);
 
   private static final List<String> WEATHERS = List.of("SUNNY", "CLOUDY", "RAIN", "WIND");
-  private static final double DAILY_PERSISTENCE_DELTA = 0.01;
 
   private final WorldRepository worldRepository;
   private final GameBootstrapRepository bootstrapRepository;
   private final WorldEventRepository eventRepository;
   private final MasteryEvaluator masteryEvaluator;
-  private final PassiveProfileService passiveProfileService;
   private final Random random;
 
   @Autowired
@@ -55,14 +50,12 @@ public class WorldAdvanceService {
       WorldRepository worldRepository,
       GameBootstrapRepository bootstrapRepository,
       WorldEventRepository eventRepository,
-      MasteryEvaluator masteryEvaluator,
-      PassiveProfileService passiveProfileService) {
+      MasteryEvaluator masteryEvaluator) {
     this(
         worldRepository,
         bootstrapRepository,
         eventRepository,
         masteryEvaluator,
-        passiveProfileService,
         new Random());
   }
 
@@ -71,13 +64,11 @@ public class WorldAdvanceService {
       GameBootstrapRepository bootstrapRepository,
       WorldEventRepository eventRepository,
       MasteryEvaluator masteryEvaluator,
-      PassiveProfileService passiveProfileService,
       Random random) {
     this.worldRepository = worldRepository;
     this.bootstrapRepository = bootstrapRepository;
     this.eventRepository = eventRepository;
     this.masteryEvaluator = masteryEvaluator;
-    this.passiveProfileService = passiveProfileService;
     this.random = random;
   }
 
@@ -106,16 +97,6 @@ public class WorldAdvanceService {
       masteryEvaluator.decayAll(userId);
     } catch (Exception exception) {
       log.warn("WorldAdvanceService.decayAll failed for user {}: {}", userId, exception.getMessage());
-    }
-
-    try {
-      passiveProfileService.applyDimensionUpdate(
-          userId,
-          "emotion_persistence",
-          new DimensionDelta(
-              DAILY_PERSISTENCE_DELTA, 1, null, Map.of("source_kind", "DAILY_SLEEP"), "QUEST"));
-    } catch (Exception exception) {
-      log.warn("WorldAdvanceService persistence bump failed for user {}: {}", userId, exception.getMessage());
     }
 
     List<WorldEventDto> newEvents = new ArrayList<>();

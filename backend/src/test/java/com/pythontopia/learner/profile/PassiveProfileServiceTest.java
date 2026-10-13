@@ -243,34 +243,31 @@ class PassiveProfileServiceTest {
   }
 
   @Test
-  void testIsSelfEditable_subjectiveDimensionsIncludeCognitiveStyle() {
+  void testIsSelfEditableAllowsOnlySelfReportedGoalAndPreferenceDimensions() {
     assertThat(service.isSelfEditable("professional_background")).isTrue();
     assertThat(service.isSelfEditable("learning_goal")).isTrue();
     assertThat(service.isSelfEditable("learning_preference")).isTrue();
-    assertThat(service.isSelfEditable("emotion_persistence")).isTrue();
-    // #1 学生纠偏阀：cognitive_style 现可被学生自评纠正。
-    assertThat(service.isSelfEditable("cognitive_style")).isTrue();
+    assertThat(service.isSelfEditable("emotion_persistence")).isFalse();
+    assertThat(service.isSelfEditable("cognitive_style")).isFalse();
     assertThat(service.isSelfEditable("knowledge_base")).isFalse();
     assertThat(service.isSelfEditable("error_pattern")).isFalse();
     assertThat(service.isSelfEditable("practical_ability")).isFalse();
   }
 
   @Test
-  void testApplyDimensionUpdate_selfReportPromotesChosenTagToDominant() {
-    // 既有 cognitive_style tags=[visual, logical]，末尾 logical=旧主导。
+  void testApplyDimensionUpdate_selfReportPromotesChosenPreferenceToDominant() {
+    // 既有 preference tags=[video, text]，末尾 text=旧主导。
     ObjectNode existing = objectMapper.createObjectNode();
-    existing.putObject("cognitive_style").putArray("tags").add("visual").add("logical");
+    existing.putObject("learning_preference").putArray("tags").add("video").add("text");
     when(profileRepository.findDimensionsForUpdate(7L)).thenReturn(Optional.of(existing));
 
-    // 学生纠偏选 visual（自评路径 source=INTERVIEW，tagsAdd=[visual] + 小增量）。
-    DimensionDelta delta = new DimensionDelta(0.05, 1, List.of("visual"), null, "INTERVIEW");
-    DimensionUpdateResult result = service.applyDimensionUpdate(7L, "cognitive_style", delta);
+    DimensionDelta delta = new DimensionDelta(null, null, List.of("video"), null, "INTERVIEW");
+    DimensionUpdateResult result = service.applyDimensionUpdate(7L, "learning_preference", delta);
 
     java.util.List<String> tags = new java.util.ArrayList<>();
     result.finalDimension().path("tags").forEach(n -> tags.add(n.asText()));
-    // visual 去重后被移到末尾 → 成为 dominant（消费方取末尾 tag），纠偏 decisively 生效。
-    assertThat(tags).containsExactly("logical", "visual");
-    assertThat(result.finalDimension().path("evidence_count").asInt()).isEqualTo(1);
+    assertThat(tags).containsExactly("text", "video");
+    assertThat(result.finalDimension().path("evidence_count").asInt()).isZero();
   }
 
   @Test
@@ -301,13 +298,33 @@ class PassiveProfileServiceTest {
     var cog = list.stream().filter(d -> d.key().equals("cognitive_style")).findFirst().orElseThrow();
     var prac = list.stream().filter(d -> d.key().equals("practical_ability")).findFirst().orElseThrow();
     var missing = list.stream().filter(d -> d.key().equals("learning_goal")).findFirst().orElseThrow();
-    assertThat(cog.confidence()).isEqualTo(0.5, org.assertj.core.data.Offset.offset(1e-9));
+    assertThat(cog.confidence()).isZero();
+    assertThat(cog.score()).isEqualTo(0.5);
+    assertThat(cog.tags()).isEmpty();
     assertThat(prac.confidence()).isEqualTo(1.0, org.assertj.core.data.Offset.offset(1e-9));
     assertThat(missing.confidence()).isEqualTo(0.0);
   }
 
   @Test
-  void personalizationSignalsReadExistingMetadataOnlyWhenDimensionEvidenceIsConfident() {
+  void interviewEvidenceIsRemovedFromHistoricalConfidence() {
+    ObjectNode dims = objectMapper.createObjectNode();
+    dims.putObject("learning_goal").put("evidence_count", 3).put("score", 0.5);
+    dims.putObject("practical_ability").put("evidence_count", 5).put("score", 0.6);
+    when(profileRepository.findDimensions(7L)).thenReturn(Optional.of(dims));
+    when(profileRepository.findInterviewEvidenceByDimension(7L))
+        .thenReturn(Map.of("learning_goal", 3, "practical_ability", 3));
+
+    var list = service.getDimensions(7L);
+
+    assertThat(list.stream().filter(d -> d.key().equals("learning_goal")).findFirst().orElseThrow().confidence())
+        .isZero();
+    var practical = list.stream().filter(d -> d.key().equals("practical_ability")).findFirst().orElseThrow();
+    assertThat(practical.evidenceCount()).isEqualTo(2);
+    assertThat(practical.confidence()).isEqualTo(0.25);
+  }
+
+  @Test
+  void personalizationSignalsSeparateSelfReportedPreferencesFromAbilityEvidence() {
     ObjectNode dims = objectMapper.createObjectNode();
     dims.putObject("error_pattern")
         .put("evidence_count", 3)
@@ -344,20 +361,20 @@ class PassiveProfileServiceTest {
 
     assertThat(signals.frequentKcCodes()).containsExactly("PY43-KC-001", "PY43-KC-002");
     assertThat(signals.pythonSelfRatedLevel()).isEqualTo(2);
-    assertThat(signals.successRate()).isEqualTo(0.6);
-    assertThat(signals.avgAttemptsPerProblem()).isEqualTo(2.5);
-    assertThat(signals.mediaPriority()).containsExactly("video", "text", "diagram");
-    assertThat(signals.resilience()).isEqualTo(0.4);
+    assertThat(signals.successRate()).isNull();
+    assertThat(signals.avgAttemptsPerProblem()).isNull();
+    assertThat(signals.mediaPriority()).containsExactly("video", "text");
+    assertThat(signals.resilience()).isNull();
     assertThat(signals.major()).isEqualTo("NON_CS_HUMANITIES");
     assertThat(signals.learningGoalKind()).isEqualTo("JOB");
     assertThat(signals.targetKcCodes()).containsExactly("PY43-KC-001", "PY43-KC-065");
-    assertThat(signals.fieldDependent()).isEqualTo(0.7);
-    assertThat(signals.sequentialVsHolistic()).isEqualTo(-0.5);
+    assertThat(signals.fieldDependent()).isNull();
+    assertThat(signals.sequentialVsHolistic()).isNull();
     assertThat(signals.sessionMinutesPerDay()).isEqualTo(30);
   }
 
   @Test
-  void personalizationSignalsDoNotInferNumericValuesFromDimensionScoresOrLowEvidenceMetadata() {
+  void personalizationSignalsKeepExplicitSelfReportSeparateFromAbilityMetrics() {
     ObjectNode dims = objectMapper.createObjectNode();
     dims.putObject("knowledge_base")
         .put("evidence_count", 2)
@@ -387,18 +404,18 @@ class PassiveProfileServiceTest {
 
     var signals = service.getPersonalizationSignals(7L);
 
-    assertThat(signals.pythonSelfRatedLevel()).isNull();
+    assertThat(signals.pythonSelfRatedLevel()).isEqualTo(4);
     assertThat(signals.successRate()).isNull();
     assertThat(signals.avgAttemptsPerProblem()).isNull();
     assertThat(signals.resilience()).isNull();
     assertThat(signals.frequentKcCodes()).isEmpty();
     assertThat(signals.mediaPriority()).isEmpty();
-    assertThat(signals.major()).isNull();
-    assertThat(signals.learningGoalKind()).isNull();
-    assertThat(signals.targetKcCodes()).isEmpty();
+    assertThat(signals.major()).isEqualTo("CS");
+    assertThat(signals.learningGoalKind()).isEqualTo("EXAM");
+    assertThat(signals.targetKcCodes()).containsExactly("PY43-KC-001");
     assertThat(signals.fieldDependent()).isNull();
     assertThat(signals.sequentialVsHolistic()).isNull();
-    assertThat(signals.sessionMinutesPerDay()).isNull();
+    assertThat(signals.sessionMinutesPerDay()).isEqualTo(60);
   }
 
   @Test
@@ -446,6 +463,23 @@ class PassiveProfileServiceTest {
     assertThat(signals.fieldDependent()).isNull();
     assertThat(signals.sequentialVsHolistic()).isNull();
     assertThat(signals.sessionMinutesPerDay()).isNull();
+  }
+
+  @Test
+  void profileBriefKeepsSelfReportedPreferencesAndOmitsPsychologicalOrAbilityLabels() {
+    ObjectNode dims = objectMapper.createObjectNode();
+    dims.putObject("learning_goal").put("evidence_count", 8).putArray("tags").add("exam");
+    dims.putObject("learning_preference").put("evidence_count", 8).putArray("tags").add("video");
+    dims.putObject("cognitive_style").put("evidence_count", 8).put("score", 0.1).putArray("tags").add("visual");
+    dims.putObject("knowledge_base").put("evidence_count", 8).put("score", 0.1);
+    dims.putObject("emotion_persistence").put("evidence_count", 8).put("score", 0.1);
+    dims.putObject("practical_ability").put("evidence_count", 8).put("score", 0.1);
+    when(profileRepository.findDimensions(7L)).thenReturn(Optional.of(dims));
+
+    String brief = service.profileBrief(7L);
+
+    assertThat(brief).contains("自述目标: exam", "自述偏好: video");
+    assertThat(brief).doesNotContain("认知风格", "知识基础", "情绪", "实践");
   }
 
   @Test

@@ -8,9 +8,8 @@
  * 2. `{{stats.xxx}}` —— DialogContext.stats[xxx]，未提供时回退到 '—'，
  *    保证 UI 不会出现 `{{stats.xxx}}` 字面量泄露。
  * 3. `{{profileAdaptive:A | B}}` —— profileType === 'practical' 走 A，否则走 B。
- * 4. `{{styleAdaptive:视觉文案|逻辑文案|试错文案}}` —— 按 cognitiveStyle 三分支选择
- *    （'visual' 走第 1 段、'logical' 走第 2 段、'trial' 走第 3 段，'unknown'/其它兜底首段视觉文案），
- *    用于「看阶段」按认知风格因材施教。
+ * 4. `{{styleAdaptive:视觉文案|逻辑文案|试错文案}}` —— 按显式媒介偏好选择文案
+ *    （visual/logical/trial 是旧模板分支名，unknown 回退首段）。
  *
  * 支持任意层级嵌套，例如：
  *   `{{profileAdaptive:走吧 | 你还在第 {{stats.currentChapterOrder}} 章}}`
@@ -25,7 +24,7 @@ export interface DialogTemplateContext {
   /** 'practical' 走 profileAdaptive 的 A 分支；'cautious' 或其他走 B 分支。 */
   profileType: string;
   /**
-   * 认知风格三态：'visual' | 'logical' | 'trial' | 'unknown'，驱动 styleAdaptive 三分支。
+   * Legacy presentation slot: 'visual' | 'logical' | 'trial' | 'unknown'.
    * 缺省 'unknown' 时按视觉型首分支兜底。
    */
   cognitiveStyle: string;

@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,7 +30,7 @@ import org.springframework.stereotype.Service;
  * <ul>
  *   <li><b>facts</b>：{@link MemoryProviderRouter#recall} 从本地学习事件与 memory_embedding 召回，按近→远时序排序。
  *   <li><b>weak_kcs</b>：召回中的「受阻」记忆 KC + {@code kc_review_state} 到期/有 lapse 的 KC（近期反复受阻）。
- *   <li><b>style_notes</b>：8 维画像（{@link PassiveProfileService#getDimensions}）的认知风格 / 偏好 / 情绪提示。
+ *   <li><b>style_notes</b>：8 维画像（{@link PassiveProfileService#getDimensions}）中的显式媒介偏好。
  *   <li><b>as_of</b>：生成时刻 ISO-8601（体现「截至此刻」的时序）。
  * </ul>
  *
@@ -45,10 +46,6 @@ public class MemoryBriefService {
   private static final int MAX_WEAK_KCS = 6;
   private static final int MAX_STYLE_NOTES = 4;
 
-  /** 与 {@link PassiveProfileService} 对齐：信号不足不贴标签（防幻觉）。 */
-  private static final double CONFIDENCE_FLOOR = 0.3;
-
-  private static final double EMOTION_CONFIDENCE_FLOOR = 0.25;
   private static final int STYLE_TAG_LIMIT = 3;
 
   private final MemoryProviderRouter providerRouter;
@@ -260,13 +257,13 @@ public class MemoryBriefService {
     LinkedHashSet<String> hints = new LinkedHashSet<>();
     String preferenceText = String.join(" ", stablePreferences).toLowerCase();
     String styleText = String.join(" ", styleNotes).toLowerCase();
-    if (preferenceText.contains("图") || styleText.contains("visual")) {
+    if (preferenceText.contains("图") || preferenceText.contains("mindmap") || styleText.contains("mindmap")) {
       hints.add("优先图解/结构化示例。");
     }
     if (!weakKcs.isEmpty()) {
       hints.add("围绕 " + weakKcs.get(0) + " 做一次短补救，再换题验证。");
     }
-    if (styleNotes.stream().anyMatch(note -> note.contains("需鼓励")) || !strugglePatterns.isEmpty()) {
+    if (!strugglePatterns.isEmpty()) {
       hints.add("短步骤+鼓励反馈：先给一个小目标，再用微练习确认。");
     }
     if (!strugglePatterns.isEmpty()) {
@@ -334,25 +331,12 @@ public class MemoryBriefService {
     }
     List<String> notes = new ArrayList<>();
 
-    ProfileDimensionDto cognitive = byKey.get("cognitive_style");
-    if (passesFloor(cognitive, CONFIDENCE_FLOOR)) {
-      List<String> tags = recentTags(cognitive);
-      if (!tags.isEmpty()) {
-        notes.add("认知风格: " + tags.get(tags.size() - 1));
-      }
-    }
-
     ProfileDimensionDto preference = byKey.get("learning_preference");
-    if (passesFloor(preference, CONFIDENCE_FLOOR)) {
-      List<String> tags = recentTags(preference);
-      if (!tags.isEmpty()) {
-        notes.add("偏好: " + String.join(",", tags));
-      }
-    }
-
-    ProfileDimensionDto emotion = byKey.get("emotion_persistence");
-    if (passesFloor(emotion, EMOTION_CONFIDENCE_FLOOR) && emotion.score() < 0.5) {
-      notes.add("情绪: 需鼓励");
+    List<String> tags = recentTags(preference).stream()
+        .filter(tag -> Set.of("video", "text", "mindmap", "code").contains(tag))
+        .toList();
+    if (!tags.isEmpty()) {
+      notes.add("自述媒介偏好: " + String.join(",", tags));
     }
 
     return notes.size() > MAX_STYLE_NOTES ? List.copyOf(notes.subList(0, MAX_STYLE_NOTES)) : notes;
@@ -374,10 +358,6 @@ public class MemoryBriefService {
       byKey.put(dim.key(), dim);
     }
     return byKey;
-  }
-
-  private static boolean passesFloor(ProfileDimensionDto dim, double floor) {
-    return dim != null && dim.confidence() >= floor;
   }
 
   private static List<String> recentTags(ProfileDimensionDto dim) {

@@ -569,7 +569,7 @@ public class ExpeditionRunService {
     } else {
       momentum = run.relics().contains("second_wind") ? Math.floorDiv(run.momentum(), 2) : 0;
       firstAidUsed = run.relics().contains("first_aid") && !hasUsedFirstAid(userId, run.runId());
-      int damage = challengeDamage(userId);
+      int damage = challengeDamage();
       if (run.relics().contains("calm_mind")) damage = Math.max(1, damage - 1);
       if (firstAidUsed) damage = 0;
       hp = Math.max(0, hp - damage);
@@ -727,18 +727,8 @@ public class ExpeditionRunService {
             runId));
   }
 
-  private int challengeDamage(Long userId) {
-    List<Double> resilience =
-        jdbcTemplate.query(
-            "SELECT CASE WHEN dimensions #>> '{emotion_persistence,resilience}' ~ '^[0-9]+([.][0-9]+)?$'"
-                + " THEN (dimensions #>> '{emotion_persistence,resilience}')::double precision END"
-                + " FROM learner_profile WHERE user_id = ?",
-            (rs, rowNum) -> {
-              double value = rs.getDouble(1);
-              return rs.wasNull() ? null : value;
-            },
-            userId);
-    return resilience.stream().filter(Objects::nonNull).findFirst().orElse(0.5) < 0.4 ? 1 : 2;
+  private static int challengeDamage() {
+    return 2;
   }
 
   private BusinessException problemBindingMismatch() {

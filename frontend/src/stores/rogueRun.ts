@@ -1,7 +1,7 @@
 // 无尽远征（Roguelike）run 状态机（Pinia）。
 //
 // 一局 run：知识前沿生成分支地图 → 玩家沿出边选节点 → 战斗节点出题真判题 →
-// 对得分/攒气势、错按韧性温和扣血（掌握度收益持久保留）→ HP 归零结束、打通 boss 胜利。
+// 对得分/攒气势、错按固定规则扣血（掌握度收益持久保留）→ HP 归零结束、打通 boss 胜利。
 // 掌握度 / 达标后端权威（submitBossAttempt 入库）；本 store 只持久化 run 进度（localStorage）。
 // 详见 docs/plans/2026-06-19-endless-roguelike-rebuild.md。
 

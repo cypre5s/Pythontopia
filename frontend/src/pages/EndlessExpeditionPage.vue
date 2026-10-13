@@ -3,7 +3,7 @@
  * /expedition 无尽远征（Roguelike）。
  *
  * 取代「7 章 × 10 关」死网格：知识前沿（掌握度 + 画像）生成分支地图，玩家选路闯关，
- * 战斗节点真判题；对得分攒气势、错按韧性温和扣血，HP 归零结束，打通 boss 胜利。
+ * 战斗节点真判题；对得分攒气势、错按固定规则扣血，HP 归零结束，打通 boss 胜利。
  * 章节为可选「聚焦」过滤器，默认全局自适应。详见 docs/plans/2026-06-19-endless-roguelike-rebuild.md。
  */
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';

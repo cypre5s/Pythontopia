@@ -10,22 +10,24 @@ import org.junit.jupiter.api.Test;
 class ProbeCatalogTest {
 
   @Test
-  void cogIntro_resolvesCognitiveStyleSignal() {
+  void cogIntro_resolvesExplicitMediaPreferenceWithoutAbilityEvidence() {
     Optional<ProbeSignal> signal = ProbeCatalog.lookup("cog_intro", "visual");
     assertThat(signal).isPresent();
-    assertThat(signal.get().dimensionKey()).isEqualTo("cognitive_style");
-    assertThat(signal.get().scoreDelta()).isEqualTo(0.03);
-    assertThat(signal.get().tag()).isEqualTo("visual");
-    assertThat(signal.get().source()).isEqualTo("RESOURCE_FEEDBACK");
+    assertThat(signal.get().dimensionKey()).isEqualTo("learning_preference");
+    assertThat(signal.get().scoreDelta()).isNull();
+    assertThat(signal.get().tag()).isEqualTo("video");
+    assertThat(signal.get().source()).isEqualTo("INTERVIEW");
   }
 
   @Test
-  void failReact_skip_resolvesNegativeEmotionSignal() {
-    Optional<ProbeSignal> signal = ProbeCatalog.lookup("fail_react", "skip");
-    assertThat(signal).isPresent();
-    assertThat(signal.get().dimensionKey()).isEqualTo("emotion_persistence");
-    assertThat(signal.get().scoreDelta()).isEqualTo(-0.02);
-    assertThat(signal.get().tag()).isEqualTo("skip");
+  void trialPreferenceMapsToSupportedCodeMedia() {
+    assertThat(ProbeCatalog.lookup("cog_intro", "trial").orElseThrow().tag()).isEqualTo("code");
+  }
+
+  @Test
+  void failureReactionNoLongerMapsToEmotion() {
+    assertThat(ProbeCatalog.lookup("fail_react", "skip")).isEmpty();
+    assertThat(ProbeCatalog.isValid("fail_react", "skip")).isFalse();
   }
 
   @Test

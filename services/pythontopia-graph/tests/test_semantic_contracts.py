@@ -73,7 +73,7 @@ def test_reflection_compiler_rejects_unbound_event_evidence() -> None:
             "observations": [
                 {
                     "claim": "声称存在未提供的事件。",
-                    "dimension_intent": "KNOWLEDGE_BASE",
+                    "dimension_intent": "ERROR_PATTERN",
                     "evidence_refs": ["event-999"],
                     "confidence": 0.5,
                 }

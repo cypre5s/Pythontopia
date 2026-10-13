@@ -1,16 +1,22 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { useRouter } from 'vue-router';
 import PyButton from '@/components/ui/PyButton.vue';
 import MetricCard from './MetricCard.vue';
 import KcGrowthList from './KcGrowthList.vue';
 import PathDiffView from './PathDiffView.vue';
+import { fetchLearnerTwinState, type LearnerTwinNextStep, type LearnerTwinState } from '@/api/twin';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import type { EvaluationActedStatus, EvaluationDto } from '@/api/dto/Evaluation';
 
 const learning = useLearningStore();
 const toast = useToastStore();
+const router = useRouter();
 const runPhase = ref(false);
+const twinState = ref<LearnerTwinState | null>(null);
+const twinLoading = ref(true);
+const twinError = ref(false);
 // 详情弹窗的开合与「当前评估」解耦：列表点击/立即评估完成才打开，页面加载不自动弹。
 const detailOpen = ref(false);
 
@@ -19,6 +25,32 @@ const current = computed<EvaluationDto | null>(() => learning.evaluation.current
 const loading = computed(() => learning.evaluation.loading);
 const lastError = computed(() => learning.evaluation.lastError);
 const isPending = computed(() => current.value?.actedStatus === 'PENDING');
+const nextStep = computed(() => twinState.value?.nextSteps[0] ?? null);
+
+async function loadTwinState(): Promise<void> {
+  twinLoading.value = true;
+  twinError.value = false;
+  try {
+    twinState.value = await fetchLearnerTwinState();
+  } catch {
+    twinState.value = null;
+    twinError.value = true;
+  } finally {
+    twinLoading.value = false;
+  }
+}
+
+function openNextStep(step: LearnerTwinNextStep): void {
+  const progress = twinState.value?.kcs.find((kc) => kc.kcCode === step.kcCode);
+  if (progress?.reviewDue) {
+    void router.push({ path: '/bug-mine', query: { review: step.kcCode } });
+    return;
+  }
+  void router.push({
+    path: '/expedition',
+    query: { focus: String(step.chapter), kcCode: step.kcCode },
+  });
+}
 
 // ── 周分组 ────────────────────────────────────────────────
 interface WeekGroup {
@@ -149,6 +181,7 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 onMounted(() => window.addEventListener('keydown', onKeydown));
+onMounted(() => void loadTwinState());
 onUnmounted(() => window.removeEventListener('keydown', onKeydown));
 </script>
 
@@ -180,6 +213,58 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
     >
       {{ lastError }}
     </p>
+
+    <section
+      class="review__next"
+      aria-label="学习状态推荐的下一步"
+    >
+      <h3 class="review__next-title">
+        下一步学习建议
+      </h3>
+      <p
+        v-if="twinLoading"
+        class="review__next-note"
+        role="status"
+      >
+        正在读取复习与练习状态…
+      </p>
+      <div
+        v-else-if="nextStep"
+        data-testid="review-twin-recommendation"
+      >
+        <strong>{{ nextStep.kcName }} · 难度 {{ nextStep.difficulty }}/5</strong>
+        <p class="review__next-note">
+          {{ nextStep.reason }}
+        </p>
+        <PyButton
+          variant="primary"
+          test-id="review-twin-next"
+          @click="openNextStep(nextStep)"
+        >
+          按系统建议开始
+        </PyButton>
+      </div>
+      <div
+        v-else-if="twinError"
+        class="review__next-note"
+        role="alert"
+      >
+        学习建议暂时无法读取。
+        <PyButton
+          variant="secondary"
+          test-id="review-twin-retry"
+          @click="loadTwinState"
+        >
+          重试
+        </PyButton>
+      </div>
+      <p
+        v-else
+        class="review__next-note"
+      >
+        当前没有满足先修条件的推荐知识点。
+      </p>
+    </section>
 
     <section class="history">
       <h3 class="history__title">
@@ -361,6 +446,21 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown));
   margin: 0;
   font-size: 20px;
   color: var(--pyt-color-text-primary);
+}
+.review__next {
+  padding: 14px 16px;
+  border: 1px solid var(--pyt-color-border);
+  border-radius: var(--pyt-radius-md);
+  background: var(--pyt-color-bg-soft);
+}
+.review__next-title {
+  margin: 0 0 8px;
+  color: var(--pyt-color-text-primary);
+}
+.review__next-note {
+  margin: 6px 0 0;
+  color: var(--pyt-color-text-muted);
+  font-size: 13px;
 }
 .review__error {
   background: var(--pyt-color-danger-bg);

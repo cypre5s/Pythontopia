@@ -177,10 +177,11 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
       // - focusKc（来自 ArenaPage 关卡）优先级最高；
       // - 否则按画像 weakKcs 命中本章 KC，让玩家"刷弱项"；
       // - profileSignals 一并传给后端 PracticeAgent 偏好出题；
-      // - difficulty 用 computeAdaptiveDifficulty 计算（考虑 successRate / resilience）。
-      const recentFailures = history.value.slice(0, 3).filter((h) => !h.passed).length;
+      // - 难度只根据本局连续练习结果作本地提示，正式难度由服务端学情策略重算。
+      const recent = history.value.slice(0, 3);
+      const firstPass = recent.findIndex((entry) => entry.passed);
+      const recentFailures = firstPass < 0 ? recent.length : firstPass;
       const adaptiveDiff = computeAdaptiveDifficulty({
-        signals: profileSignals.signals.value,
         baseDifficulty: currentDifficulty.value,
         recentFailures,
         recentStreak: streak.value,
@@ -292,7 +293,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
       streak.value = 0;
       phase.value = 'failed';
     }
-    // 难度自适应统一由 computeAdaptiveDifficulty 在下一次取题时按更新后的 streak / 近期失败 / successRate
+    // 难度自适应统一由 computeAdaptiveDifficulty 在下一次取题时按更新后的 streak / 近期连续失败
     // 计算（单一真源，NFR-MNT）；此处不再叠加 "+0.5 / -1"，避免双重难度系统互相打架。
 
     const entry: EndlessHistoryEntry = {

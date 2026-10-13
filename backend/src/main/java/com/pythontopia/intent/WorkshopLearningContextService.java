@@ -107,13 +107,12 @@ public class WorkshopLearningContextService {
     }
 
     Map<String, ProfileDimensionDto> dimensionIndex = indexDimensions(dimensions);
-    String cognitiveStyle = lastTag(dimensionIndex.get("cognitive_style"));
+    String cognitiveStyle = "";
     LinkedHashSet<String> preferences = new LinkedHashSet<>();
     preferences.addAll(tags(dimensionIndex.get("learning_preference")));
     preferences.addAll(brief.stablePreferences());
-    boolean needsEncouragement = needsEncouragement(dimensionIndex, brief);
     String cognitiveLoad = cognitiveLoad(recentFailureCount, brief);
-    String frustrationLevel = frustrationLevel(recentFailureCount, needsEncouragement, brief);
+    String frustrationLevel = "LOW";
 
     return new LearnerRoutingContext(
         profileBrief,
@@ -241,25 +240,6 @@ public class WorkshopLearningContextService {
     return failures > 0 || !brief.weakKcs().isEmpty() ? "MEDIUM" : "LOW";
   }
 
-  private static String frustrationLevel(
-      int failures, boolean needsEncouragement, MemoryBriefDto brief) {
-    if ((needsEncouragement && failures >= 2) || failures >= 3) {
-      return "HIGH";
-    }
-    return needsEncouragement || failures > 0 || !brief.strugglePatterns().isEmpty()
-        ? "MEDIUM"
-        : "LOW";
-  }
-
-  private static boolean needsEncouragement(
-      Map<String, ProfileDimensionDto> dimensions, MemoryBriefDto brief) {
-    ProfileDimensionDto emotion = dimensions.get("emotion_persistence");
-    if (emotion != null && emotion.confidence() >= 0.25 && emotion.score() < 0.5) {
-      return true;
-    }
-    return brief.styleNotes().stream().anyMatch(note -> note != null && note.contains("需鼓励"));
-  }
-
   private static int pythonLevel(ProfileDimensionDto knowledge) {
     if (knowledge == null || knowledge.confidence() < 0.3) {
       return 2;
@@ -279,11 +259,6 @@ public class WorkshopLearningContextService {
       return "NON_CS_HUMANITIES";
     }
     return "OTHER";
-  }
-
-  private static String lastTag(ProfileDimensionDto dimension) {
-    List<String> values = tags(dimension);
-    return values.isEmpty() ? "" : values.get(values.size() - 1);
   }
 
   private static List<String> tags(ProfileDimensionDto dimension) {

@@ -11,8 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 读接口：返回当前学生的小镇心情天气（由 emotion_persistence + 最近练习势头派生）。
- * 前端 {@code useMoodStore} 据此渲染 MoodOverlay；冷启动/无数据降级为晴天。
+ * Compatibility read interface: returns neutral town ambience and the objective recent practice streak.
  */
 @RestController
 @RequestMapping("/api/learner/world-state")
