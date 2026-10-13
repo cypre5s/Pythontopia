@@ -27,7 +27,7 @@ public class NpcGreetingController {
     this.greetingService = greetingService;
   }
 
-  @GetMapping("/{npcKey}/greeting")
+  @GetMapping("/{npcKey:[a-z0-9_-]{1,40}}/greeting")
   public NpcGreetingResponse greeting(
       @CurrentUser CurrentUserPrincipal user, @PathVariable String npcKey) {
     requireStudent(user);

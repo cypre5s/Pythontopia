@@ -17,7 +17,7 @@ import java.util.List;
  *
  * @param stage 当前阶段 1..4
  * @param kcCode 锚定 KC（兼容旧字段，等价于 preferredKc 的旧名）
- * @param difficulty 期望难度 1..5（null 由后端按 stage 推断）
+ * @param difficulty 兼容旧客户端的提示字段；题目难度由服务端 Twin 规则决定，证据不足时回退到 stage
  * @param preferredKc 偏好锚定 KC（覆盖 kcCode；前端 ArenaPage 关卡传）
  * @param preferredKind 关卡题型（fill_blank/debug/multi_round 等），用于 LLM 模板选择
  * @param profileSignals 学生画像信号，{@link ProfileSignalsPayload}

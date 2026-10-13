@@ -189,7 +189,7 @@ public class AdaptivePracticePolicy {
         difficulty(candidate), action, reason, remediation);
   }
 
-  private static int difficulty(Candidate candidate) {
+  public static int difficulty(Candidate candidate) {
     if (!candidate.assessed() || candidate.masteryScore() == null) return 1;
     int base = clamp((int) Math.round(1.0 + candidate.masteryScore() * 4.0), 1, 5);
     List<Boolean> outcomes = candidate.recentOutcomes();

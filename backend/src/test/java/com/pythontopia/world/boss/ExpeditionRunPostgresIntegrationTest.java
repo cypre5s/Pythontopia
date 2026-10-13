@@ -742,6 +742,21 @@ class ExpeditionRunPostgresIntegrationTest {
   }
 
   @Test
+  void issuedQuestionFingerprintsAreScopedToTheAuthenticatedRun() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    String fingerprint = "a".repeat(64);
+    insertIssuedProblem(
+        userId, active.runId(), "L0-0", "issued-question", "PY43-KC-001", fingerprint, true, 80);
+
+    assertThat(runs.findIssuedQuestionFingerprints(userId, active.runId()))
+        .containsExactly(fingerprint);
+    assertThat(runs.findIssuedQuestionFingerprints(userId + 1, active.runId())).isEmpty();
+    assertThat(runs.findIssuedQuestionFingerprints(userId, "not-a-uuid")).isEmpty();
+  }
+
+  @Test
   void bossNodeAdvancesOnlyThroughThreeVerifiedServerPhases() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());

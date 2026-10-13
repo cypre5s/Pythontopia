@@ -59,6 +59,24 @@ class LearnerTwinServiceTest {
     assertThat(state.nextSteps().getFirst().kcCode()).isEqualTo("PY43-KC-001");
   }
 
+  @Test
+  void difficultyForTopicUsesItsVerifiedRecentPracticeOutcomes() {
+    String kcCode = "PY43-KC-001";
+    when(coursePack.findKcs(43L, null)).thenReturn(List.of(kc(1L, kcCode, "变量", 1L)));
+    when(coursePack.findChapters(43L)).thenReturn(List.of(new CourseChapter(1L, 43L, 1, "第一章", "")));
+    when(coursePack.findKcPrerequisites(43L)).thenReturn(Map.of());
+    when(mastery.findAll(7L)).thenReturn(List.of(snapshot(kcCode, "0.500", "0.700")));
+    when(mastery.findAssessedKcCodes(7L)).thenReturn(Set.of(kcCode));
+    when(mastery.findRecentPracticeOutcomesByUser(7L)).thenReturn(List.of(
+        new MasteryRepository.PracticeOutcome(kcCode, true, null),
+        new MasteryRepository.PracticeOutcome(kcCode, true, null)));
+    when(mastery.findLastPracticedAtByUser(7L)).thenReturn(Map.of());
+    when(reviewRepository.findAll(7L)).thenReturn(List.of());
+    when(profiles.getPersonalizationSignals(7L)).thenReturn(LearnerProfileSignals.empty());
+
+    assertThat(service.recommendedDifficulty(7L, kcCode)).isEqualTo(4);
+  }
+
   private static CourseKc kc(Long id, String code, String name, Long chapterId) {
     return new CourseKc(id, 43L, code, name, chapterId, 1, "Easy", "");
   }
