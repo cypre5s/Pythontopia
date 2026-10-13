@@ -260,7 +260,7 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 | POST | `/api/world/boss/{chapter}/problem` | Bearer | 按 KC、题型、纵深难度取题；远征必须同时传服务端签发的 `expeditionRunId` 与 `expeditionNodeId`，题目只绑定当前 run 中可挑战的节点；远征客户端只接受 `aiGenerated=true && reviewed=true` |
 | POST | `/api/world/boss/{chapter}/prefetch` | Bearer | 创建/复用同 `chapter + stage + kc + kind + arenaLevel + difficulty + expeditionRunId + expeditionNodeId` 的预加载任务，返回 `202` + `BossPrefetchStatusDto` |
 | GET | `/api/world/boss/{chapter}/prefetch` | Bearer | 用 `preferredKc`、`preferredKind`、`arenaLevel`、`difficulty` 和可选 `stage`、`expeditionRunId`、`expeditionNodeId` 查询状态；省略 stage 兼容旧客户端并按其他维度查询 |
-| POST | `/api/world/boss/{chapter}/attempt` | Bearer | 正式提交，判题结果入库；公开样例的本地预览不能代替该接口 |
+| POST | `/api/world/boss/{chapter}/attempt` | Bearer | body 必须包含 UUID `attemptId`；服务端按用户/ID/请求体幂等保存判题结果，同 ID 改内容返回 `409`。题目必须由服务端签发；公开样例的本地预览不能代替该接口 |
 | GET | `/api/world/expedition/run` | STUDENT | 取本人活动存档；返回的 `score` 和 `verifiedDepth` 由服务端判题账本计算，空存档返回 `204` |
 | POST | `/api/world/expedition/run` | STUDENT | body `{ focusChapter: 1..7|null, isDaily, preferredKcCode? }`；可选 `preferredKcCode` 只表达导航偏好，服务端先校验课程 KC 与先修条件，再将合格 KC 排在远征第一题；服务端生成地图并返回带 `runId` 的快照 |
 | PUT | `/api/world/expedition/run` | STUDENT | 兼容旧客户端的校验入口；只校验活动 `runId`、章节和地图拓扑并返回服务端快照，不写入客户端提交的 phase、HP、节点状态、气势、遗物或历史，也不能创建新局 |
@@ -271,6 +271,8 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 `status ∈ { IDLE, PENDING, READY, FAILED }`。只有审查通过且带隐藏测试的 AI 题可进入 `READY`；
 `FAILED` 以相同维度再次 `POST` 会增加 attempts 并重试。题目正文与隐藏测试从不进入预加载状态响应。
 远征题目预生成记录按 `runId + nodeId` 绑定；远征 SETTLE 只接受同一绑定下已入库的正式判题结果。同一题的结算请求可安全重试，重复题不会跨节点结算。
+
+`attemptId` 是远征与 Boss 判题的必填字段。Web 会在同一次提交的重试期间复用 UUID；未更新请求 DTO 的 Android/Windows 客户端在调用该接口前需要补充此字段。
 
 > **星级（`chapter_star` 权威，0–3★）**：1★ = 章末测试最高分 ≥ 60；2★ = 1★ 且本章全部 stage 三件套（看+学+练）过线；
 > 3★ = 2★ 且（本章 KC 平均掌握度 ≥ 0.80 且测试最高分 ≥ 85）。补星每章每途径至多 +1、封顶 3★、幂等、只升不降。

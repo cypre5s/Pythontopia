@@ -14,8 +14,7 @@ import org.springframework.stereotype.Component;
 /**
  * 监听 {@link LearningEvent}，把每类学习事件映射为一个画像维度的被动增量更新。
  *
- * <p>这里仅把可验证学习事件转换为持久化投影任务。数据库更新由 outbox worker 在提交后完成，失败任务会
- * 留在表中重试，避免进程内事件监听失败后静默丢失画像变化。
+ * <p>这里仅把可验证学习事件转换为持久化投影任务。数据库更新由 outbox worker 在提交后完成，失败任务会 留在表中重试，避免进程内事件监听失败后静默丢失画像变化。
  */
 @Component
 public class PassiveProfileRevisionListener {
@@ -31,10 +30,15 @@ public class PassiveProfileRevisionListener {
     DimensionDelta delta =
         new DimensionDelta(
             0.02, 1, null, contextOf(event.kcCode(), event.problemId(), null), "PRACTICE_PASS");
-    enqueue(event.userId(), "practical_ability", delta,
-        event.submissionId() == null
-            ? stableKey("practice_succeeded", event.userId(), event.problemId())
-            : submissionKey(event.userId(), event.submissionId()));
+    enqueue(
+        event.userId(),
+        "practical_ability",
+        delta,
+        event.idempotencyKey() != null
+            ? event.idempotencyKey()
+            : event.submissionId() == null
+                ? stableKey("practice_succeeded", event.userId(), event.problemId())
+                : submissionKey(event.userId(), event.submissionId()));
   }
 
   @EventListener
@@ -46,14 +50,19 @@ public class PassiveProfileRevisionListener {
             event.failureKind() == null ? null : List.of(event.failureKind()),
             contextOf(event.kcCode(), event.problemId(), event.failureKind()),
             "PRACTICE_FAIL");
-    enqueue(event.userId(), "error_pattern", delta,
-        event.submissionId() == null
-            ? stableKey(
-                "practice_failed",
-                event.userId(),
-                event.problemId(),
-                event.failureKind() == null ? "unspecified" : event.failureKind())
-            : submissionKey(event.userId(), event.submissionId()));
+    enqueue(
+        event.userId(),
+        "error_pattern",
+        delta,
+        event.idempotencyKey() != null
+            ? event.idempotencyKey()
+            : event.submissionId() == null
+                ? stableKey(
+                    "practice_failed",
+                    event.userId(),
+                    event.problemId(),
+                    event.failureKind() == null ? "unspecified" : event.failureKind())
+                : submissionKey(event.userId(), event.submissionId()));
   }
 
   @EventListener
@@ -61,7 +70,10 @@ public class PassiveProfileRevisionListener {
     Map<String, Object> meta = contextOf(event.kcCode(), null, null);
     meta.put("sessionId", event.sessionId());
     DimensionDelta delta = new DimensionDelta(0.03, 1, null, meta, "PRACTICE_PASS");
-    enqueue(event.userId(), "practical_ability", delta,
+    enqueue(
+        event.userId(),
+        "practical_ability",
+        delta,
         stableKey("taught_ai_succeeded", event.userId(), event.sessionId()));
   }
 
@@ -71,7 +83,10 @@ public class PassiveProfileRevisionListener {
     meta.put("sessionId", event.sessionId());
     DimensionDelta delta =
         new DimensionDelta(0.015, 1, List.of("teach_back_failed"), meta, "PRACTICE_FAIL");
-    enqueue(event.userId(), "error_pattern", delta,
+    enqueue(
+        event.userId(),
+        "error_pattern",
+        delta,
         stableKey("taught_ai_failed", event.userId(), event.sessionId()));
   }
 
@@ -80,7 +95,10 @@ public class PassiveProfileRevisionListener {
     DimensionDelta delta =
         new DimensionDelta(
             -0.02, null, null, contextOf(event.kcCode(), event.problemId(), null), "DEBUG_FIX");
-    enqueue(event.userId(), "error_pattern", delta,
+    enqueue(
+        event.userId(),
+        "error_pattern",
+        delta,
         stableKey("debug_resolved", event.userId(), event.problemId()));
   }
 
@@ -133,17 +151,19 @@ public class PassiveProfileRevisionListener {
   }
 
   /**
-   * 多模态消费（视频 / 动画 / 图解）→ learning_preference：mediaType 作为 tag 累积、score 微增，
-   * 使推荐服务的媒介优先级能反映学生实际偏好的媒介。
+   * 多模态消费（视频 / 动画 / 图解）→ learning_preference：mediaType 作为 tag 累积、score 微增， 使推荐服务的媒介优先级能反映学生实际偏好的媒介。
    */
   @EventListener
   public void onMediaConsumed(LearningEvent.MediaConsumed event) {
-    String tag = switch (event.mediaType() == null ? "" : event.mediaType().trim().toLowerCase(Locale.ROOT)) {
-      case "video" -> "video";
-      case "courseware" -> "text";
-      case "storyboard", "illustration" -> "mindmap";
-      default -> null;
-    };
+    String tag =
+        switch (event.mediaType() == null
+            ? ""
+            : event.mediaType().trim().toLowerCase(Locale.ROOT)) {
+          case "video" -> "video";
+          case "courseware" -> "text";
+          case "storyboard", "illustration" -> "mindmap";
+          default -> null;
+        };
     if (tag == null) return;
     Map<String, Object> meta = new LinkedHashMap<>();
     meta.put("mediaType", event.mediaType());
@@ -151,7 +171,11 @@ public class PassiveProfileRevisionListener {
       meta.put("chapter", event.chapter());
     }
     DimensionDelta delta = new DimensionDelta(0.01, 1, List.of(tag), meta, "RESOURCE_FEEDBACK");
-    enqueue(event.userId(), "learning_preference", delta, transientKey("media_consumed", event.userId()));
+    enqueue(
+        event.userId(),
+        "learning_preference",
+        delta,
+        transientKey("media_consumed", event.userId()));
   }
 
   /** 学生明确选择讲解方式 → 记为媒介偏好，不作为认知能力证据。 */
@@ -160,12 +184,13 @@ public class PassiveProfileRevisionListener {
     if (event.style() == null || event.style().isBlank()) {
       return;
     }
-    String mediaType = switch (event.style().trim().toLowerCase(Locale.ROOT)) {
-      case "visual" -> "video";
-      case "logical" -> "text";
-      case "trial" -> "code";
-      default -> null;
-    };
+    String mediaType =
+        switch (event.style().trim().toLowerCase(Locale.ROOT)) {
+          case "visual" -> "video";
+          case "logical" -> "text";
+          case "trial" -> "code";
+          default -> null;
+        };
     if (mediaType == null) return;
     Map<String, Object> meta = new LinkedHashMap<>();
     if (event.kcCode() != null) {
@@ -173,12 +198,16 @@ public class PassiveProfileRevisionListener {
     }
     meta.put("mediaType", mediaType);
     DimensionDelta delta = new DimensionDelta(null, null, List.of(mediaType), meta, "INTERVIEW");
-    enqueue(event.userId(), "learning_preference", delta, transientKey("tutor_style_engaged", event.userId()));
+    enqueue(
+        event.userId(),
+        "learning_preference",
+        delta,
+        transientKey("tutor_style_engaged", event.userId()));
   }
 
   /**
-   * 世界内探针选择 → 由服务端权威 {@link ProbeCatalog} 解析出维度/score/tag 后回写；
-   * choiceId 不在目录内时跳过（防伪造信号）；source 复用 RESOURCE_FEEDBACK 枚举。
+   * 世界内探针选择 → 由服务端权威 {@link ProbeCatalog} 解析出维度/score/tag 后回写； choiceId 不在目录内时跳过（防伪造信号）；source 复用
+   * RESOURCE_FEEDBACK 枚举。
    */
   @EventListener
   public void onProbeChoiceMade(LearningEvent.ProbeChoiceMade event) {
@@ -196,16 +225,21 @@ public class PassiveProfileRevisionListener {
                       List.of(signal.tag()),
                       meta,
                       signal.source());
-              enqueue(event.userId(), signal.dimensionKey(), delta,
+              enqueue(
+                  event.userId(),
+                  signal.dimensionKey(),
+                  delta,
                   transientKey("probe_choice", event.userId()));
             });
   }
 
-  private void enqueue(Long userId, String dimensionKey, DimensionDelta delta, String idempotencyKey) {
+  private void enqueue(
+      Long userId, String dimensionKey, DimensionDelta delta, String idempotencyKey) {
     if (userId == null) {
       return;
     }
-    outboxService.enqueue(new ProfileDimensionProjection(userId, dimensionKey, delta, idempotencyKey));
+    outboxService.enqueue(
+        new ProfileDimensionProjection(userId, dimensionKey, delta, idempotencyKey));
   }
 
   private static String stableKey(String type, Long userId, Object... identifiers) {
@@ -217,8 +251,11 @@ public class PassiveProfileRevisionListener {
         return transientKey(type, userId);
       }
     }
-    return type + ":" + userId + ":" + String.join(":", java.util.Arrays.stream(identifiers)
-        .map(String::valueOf).toList());
+    return type
+        + ":"
+        + userId
+        + ":"
+        + String.join(":", java.util.Arrays.stream(identifiers).map(String::valueOf).toList());
   }
 
   private static String transientKey(String type, Long userId) {

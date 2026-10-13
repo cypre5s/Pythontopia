@@ -47,32 +47,48 @@ public class LearningEventListener {
 
   @EventListener
   public void onPracticePass(LearningEvent.PracticeSucceeded event) {
-    masteryEvaluator.applyEventWithDifficulty(event.userId(), event.kcCode(),
-        MasterySource.PRACTICE_PASS, null, "problem:" + event.problemId(),
+    masteryEvaluator.applyEventWithDifficulty(
+        event.userId(),
+        event.kcCode(),
+        MasterySource.PRACTICE_PASS,
+        null,
+        "problem:" + event.problemId(),
         event.difficulty() == null ? loadDifficulty(event.problemId()) : event.difficulty(),
-        event.submissionId() == null ? null : "submission:" + event.submissionId());
+        practiceIdempotencyKey(event.idempotencyKey(), event.submissionId()));
   }
 
   @EventListener
   public void onPracticeFail(LearningEvent.PracticeFailed event) {
-    masteryEvaluator.applyEventWithDifficulty(event.userId(), event.kcCode(),
-        MasterySource.PRACTICE_FAIL, null,
+    masteryEvaluator.applyEventWithDifficulty(
+        event.userId(),
+        event.kcCode(),
+        MasterySource.PRACTICE_FAIL,
+        null,
         "problem:" + event.problemId() + ":" + event.failureKind(),
         event.difficulty() == null ? loadDifficulty(event.problemId()) : event.difficulty(),
-        event.submissionId() == null ? null : "submission:" + event.submissionId());
+        practiceIdempotencyKey(event.idempotencyKey(), event.submissionId()));
   }
 
   @EventListener
   public void onDebugResolved(LearningEvent.DebugResolved event) {
-    masteryEvaluator.applyEventWithDifficulty(event.userId(), event.kcCode(),
-        MasterySource.DEBUG_FIX, null, "debug:" + event.problemId(), null);
+    masteryEvaluator.applyEventWithDifficulty(
+        event.userId(),
+        event.kcCode(),
+        MasterySource.DEBUG_FIX,
+        null,
+        "debug:" + event.problemId(),
+        null);
   }
 
   @EventListener
   public void onProfileBootstrapped(LearningEvent.ProfileBootstrapped event) {
     for (String kc : event.unlockedKcs()) {
-      masteryEvaluator.applyEvent(event.userId(), kc,
-          MasterySource.BOOTSTRAP, java.math.BigDecimal.ZERO, "profile bootstrap");
+      masteryEvaluator.applyEvent(
+          event.userId(),
+          kc,
+          MasterySource.BOOTSTRAP,
+          java.math.BigDecimal.ZERO,
+          "profile bootstrap");
     }
   }
 
@@ -87,9 +103,17 @@ public class LearningEventListener {
     }
   }
 
+  private static String practiceIdempotencyKey(String idempotencyKey, Long submissionId) {
+    return idempotencyKey != null
+        ? idempotencyKey
+        : submissionId == null ? null : "submission:" + submissionId;
+  }
+
   private static String resourceCheckReason(LearningEvent.ResourceCheckCompleted event) {
     String primary =
-        event.checkId() == null ? "resource:" + event.resourceId() : "resource_check:" + event.checkId();
+        event.checkId() == null
+            ? "resource:" + event.resourceId()
+            : "resource_check:" + event.checkId();
     return event.resourceId() == null ? primary : primary + ";resource:" + event.resourceId();
   }
 }

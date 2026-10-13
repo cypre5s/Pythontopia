@@ -127,7 +127,7 @@ function changePageSize(nextSize: number): void {
 }
 
 function openDecision(decision: FinalDecision, event: MouseEvent): void {
-  if (!selectedEntry.value || selectedEntry.value.decision !== 'PENDING' || deciding.value) return;
+  if (!selectedEntry.value || selectedEntry.value.decision !== 'PENDING' || loading.value || deciding.value) return;
   decisionTrigger.value = event.currentTarget as HTMLButtonElement;
   pendingDecision.value = decision;
   decisionReason.value = '';
@@ -507,6 +507,7 @@ onMounted(() => {
             <button
               class="review-decision review-decision--approve"
               type="button"
+              :disabled="loading"
               @click="openDecision('APPROVED', $event)"
             >
               通过并发布
@@ -514,6 +515,7 @@ onMounted(() => {
             <button
               class="review-decision review-decision--reject"
               type="button"
+              :disabled="loading"
               @click="openDecision('REJECTED', $event)"
             >
               驳回并留档

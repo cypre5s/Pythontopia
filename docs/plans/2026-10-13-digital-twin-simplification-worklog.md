@@ -108,3 +108,44 @@
 - 工程清理参考官方 Vue 风格指南、typescript-eslint 命名约定说明及 Google Java Style；改为可读的 Boss 状态分支/状态播报，修复改动页面 ESLint warning，并用 Spotless 只格式化 AI 额度拦截器、配置、BossService 与推荐服务。定向前端 ESLint 无告警；定向 Spotless 检查通过；完整 Web 263 文件 / 2516 tests、typecheck、build 与资产同步检查通过。最终 Boss 用例 4 文件 / 17 tests 通过；后端额度拦截、Boss 与推荐服务本轮 46 tests 通过。
 - 后端全量 `mvn test` 1337 项、0 assertion failures、7 errors：6 个 pgvector Testcontainers 动态宿主端口绑定冲突，1 个关联 JDBC 连接被拒；受影响 7 个类逐类串行重跑全部通过。不是全量 Maven BUILD SUCCESS。全仓 `npm run lint` 为 0 errors / 177 warnings；全仓 `spotless:check` 报另外 622 个格式不合规文件。仅整理改动范围，未对整个仓库做大规模 reformat。
 - 这轮测试临时注册的 9 个本地账号已删除，开发容器已停止。未来路线对比、BKT、学习成效对照实验与 ECS/公网验证仍暂缓；用户在对话中粘贴过的 DeepSeek key 应轮换后再使用。
+
+## 2026-10-14 DeepSeek 实网文图验证与额度覆盖补充
+
+- 本地 `deploy/.env` 凭证直连 DeepSeek OpenAI 兼容接口，分别发送文本与合成 PNG 图片，共 2 次请求：均 HTTP 200 且以文本回复；文本请求使用 13 tokens，图片请求使用 210 tokens。视觉回答识别出黄色背景与蓝色中心图形。请求没有经过本地应用认证/路由，因此只证明 DeepSeek 文图 API 与当前模型配置可用，不替代 Tutor Web 全链路联测。
+- 预算审计补齐两个先前漏标的用户入口：有结果时会调用摘要模型的 B 站视频搜索，以及触发多个资源生成的教师补救。Reflection、NPC 每日预热、Oracle 预防包在后台外发前共用同账号上海时区每日 30 次额度；达到额度后阻止模型请求，Reflection 保留确定性规则兜底。移除纯确定性浏览/学习路径/评估与禁用媒体端点上的额度标记。
+- 回归：新增额度路由覆盖测试，并验证后台额度耗尽时不会调用 Graph；四个相关测试类与路由测试共 30 项通过，改动 Java 文件 Spotless 检查通过。
+- 额度语义仍是每个用户操作/后台生成任务预留一次，不是 DeepSeek 外发 HTTP 调用、token 或金额硬上限；一项工作流仍可能发出多次模型调用或重试。需要硬支出上限时，应将计量放到 Graph Provider 外发边界并传递可信账户身份。
+
+## 2026-10-14 管理台审核队列竞态修复
+
+- 审核列表刷新期间禁用通过/驳回操作，并在弹窗入口再次检查 loading 状态，避免正在返回的旧队列覆盖刚提交的审核结果。
+- 回归用例先在旧实现上失败（刷新期间按钮没有禁用），修复后 `AdminProblemReviewsPage.spec.ts` 9 项通过；相关 Vue ESLint 与 `npm run typecheck` 通过。
+
+## 2026-10-14 Tutor 全栈文图调用与启动鉴权修复
+
+- 用 Playwright 经本地 Web/Vite 与 Spring Boot 后端认证后，分别向现有 `/api/tutor/ask` 发送文字和合成 PNG 图片，各完成一次真实 DeepSeek Tutor 调用；两次 HTTP 200、收到 `RUN_FINISHED`，文字答复 `5`，图片答复识别黄色背景和蓝色中央图形并以文本返回。浏览器 `pageerror` 为 0，测试临时账号与其 Tutor 会话已清理。
+- 首轮冒烟定位到全栈启动契约问题：`dev.sh` 先启动 Graph 容器、后生成仅本次有效的 `PYT_RAG_ADMIN_TOKEN`，于是后端与 Graph 的内部令牌不同，Graph 以 401 拒绝请求。将令牌解析移至 Compose 启动之前，并在现有 Compose 安全契约中增加顺序断言；`--no-deps` 若无法复用有效固定令牌则提前报错，避免与已运行 Graph 产生静默鉴权失败。干净停止本地后端/依赖后重启，全栈应用调用通过。
+- 回归：额度路由覆盖、Reflection、PreventionPack、NPC 预热/问候与 CORS 五个测试类共 30 tests 通过；`bash -n dev.sh deploy/scripts/test_dev_compose_security_contract.sh`、`test_dev_compose_security_contract.sh`、`test_resolve_dev_internal_token.sh` 均通过。最后重跑完整 `mvn test` 为 1345 tests、0 assertion failures、7 errors，未达到 `BUILD SUCCESS`：6 个 pgvector Testcontainers 类在绑定 Docker 随机宿主端口时遇 `address already in use`，另 1 个 JDBC 连接错误。随后定向复跑 7 个受影响类，6 个端口错误复现，`LongTermClassroomEffectSimulationTest` 单独通过。
+- 未验证生产 CORS 配置、公网/ECS、真实硬件或线上性能；Tutor Markdown 仍允许外部图片 URL，访问者 IP/请求会暴露给图片主机，需后续隐私收紧。账号每日 30 次是操作额度，不是模型调用、token 或费用硬上限。对话中粘贴的 DeepSeek 密钥应轮换。
+
+## 2026-10-14 判题与配额安全增量
+
+- Boss 判题请求在 DTO 与服务层都要求 UUID `attemptId`。服务先核验当前用户签发的题目，再 claim 幂等记录；无效 ID 保持兼容提示但不写永久记录。Boss 成功/失败事件携带 `boss-attempt:<UUID>`，掌握度与画像投影均按此键去重。
+- Graph 评测若返回 `runtimeError=sandbox_unavailable`，复用已有 Java/Piston 本地判题；本地环境也不可用就返回 `BOSS_EVALUATOR_UNAVAILABLE`，不占用远征得分次数、不发布练习失败事件。
+- V212 增加跨账号每日 300 次 AI 入口请求闸门，并保留每账号每日 30 次限制。两项额度同一事务预留，上海时区日界线一致，保留 90 天计数。
+- 验证：Boss Controller/Service、额度服务、画像事件监听器共 71 单测通过；Testcontainers 3 项通过，其中 400 个跨账号并发请求仅接受 300 个，并验证 Boss 学习事件回放不会重复更新；空库 Flyway 到 V212 通过。
+- 额度仍按被标注的入口操作计数，不能换算为 DeepSeek 外发次数、token 或费用；单个操作可能触发 Graph 重试和多轮生成。Android/Windows 客户端未改，Boss API 使用前需补传 `attemptId`。本轮没有重跑完整 Maven、Web 全量、ECS/公网、真实 Piston 故障注入，也没有做远征实时生成/判题性能采样。
+
+## 2026-10-14 补充：额度跨日一致性
+
+- 账号与全站额度预留共用同一次上海日期读取，避免跨午夜请求分别计入相邻两天。
+- TDD 回归先稳定复现账号日期 `2026-10-14`、全站日期 `2026-10-15` 不一致；修复后额度服务与路由标记覆盖共 7 项通过。定向 Spotless 检查通过。
+
+## 2026-10-14 无尽远征实测与 Boss JSON 出题修复
+
+- 本地真实 Boss 出题首次 6 次 DeepSeek 调用均未得到可审核题目，端点回退 Golden。查阅 DeepSeek thinking/JSON 文档后，发现结构化生成仍使用默认 thinking；在 Boss 的 JSON 调用关闭 reasoning。推断默认 reasoning 消耗有限输出预算可能导致空 content；API 没有暴露可验证的内部 token 分配，本结论仅由失败模式和后续单次成功复测支持。
+- 回归测试先在缺少 `reasoning_effort` 参数时失败，再验证参数值为 `none`；Boss 生成工厂目录 217 tests 通过。修改后的本地真实调用只发 1 次 DeepSeek 请求，HTTP 200、`aiGenerated=true`、`reviewed=true`，端到端 2937.10 ms，成功生成并通过自动审查。本次远征性能采样共 7 次外发模型请求，未超过 30 次上限。
+- 本地 Spring 远征 run 创建顺序采样 10 次，P50/P95 16.18/22.75 ms，返回 27 个节点。Piston Python 3.12 直接执行样本耗时 20.27 ms，退出码 0、stdout 为 `5`。这不是正式 Boss 答题提交延迟，也不是线上或真实硬件基准。
+- 远征地图/Phaser 帧率沿用同日此前 Chromium 样本（地图就绪 1.89 s、Boss 帧间隔 P50/P95 16.7/16.8 ms；合成结算状态），本次未重复浏览器地图采样。ECS/公网、真实用户视觉质量与完整 Maven 成功仍未验证。
+- 工程命名/格式检查以 [Google Java Style Guide](https://google.github.io/styleguide/javaguide.html)、[Vue props guide](https://vuejs.org/guide/components/props)、[typescript-eslint naming-convention](https://typescript-eslint.io/rules/naming-convention/) 为参考，限于本轮触及文件，不触发全仓重排。已删除临时性能账号并停止本地开发容器；数据卷保留。
+- 停止开发栈后重跑完整后端 `mvn test`：1353 tests、0 failures、7 errors，`BUILD FAILURE`。Surefire 确认 6 个 pgvector Testcontainers 因 Docker 动态宿主端口 `address already in use` 无法启动，另 `LongTermClassroomEffectSimulationTest` 遇 JDBC 连接拒绝；单线程重跑没有消除该环境问题。

@@ -4,7 +4,6 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
-import com.pythontopia.common.web.AiBudgeted;
 import com.pythontopia.learner.path.dto.LearningPathDto;
 import com.pythontopia.learner.path.dto.PlanPathResponse;
 import com.pythontopia.learner.path.service.LearningPathService;
@@ -27,7 +26,6 @@ public class LearningPathController {
   }
 
   @PostMapping("/plan")
-  @AiBudgeted
   public PlanPathResponse plan(@CurrentUser CurrentUserPrincipal user) {
     requireStudent(user);
     return service.plan(user.userId());

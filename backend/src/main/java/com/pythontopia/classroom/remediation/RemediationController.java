@@ -1,6 +1,7 @@
 package com.pythontopia.classroom.remediation;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
+import com.pythontopia.common.web.AiBudgeted;
 import com.pythontopia.common.web.CurrentUser;
 import jakarta.validation.constraints.Positive;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -27,6 +28,7 @@ public class RemediationController {
   }
 
   @PostMapping
+  @AiBudgeted
   public RemediationResultDto trigger(
       @CurrentUser CurrentUserPrincipal user, @PathVariable @Positive Long classroomId) {
     return service.trigger(user, classroomId);

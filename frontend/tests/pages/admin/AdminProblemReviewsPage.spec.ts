@@ -255,6 +255,34 @@ describe('AdminProblemReviewsPage', () => {
     wrapper.unmount();
   });
 
+  it('prevents review decisions while a queue refresh is in flight', async () => {
+    const wrapper = mount(AdminProblemReviewsPage, { attachTo: document.body });
+    await flushPromises();
+
+    let resolveRefresh!: (result: ReturnType<typeof page>) => void;
+    const pendingRefresh = new Promise<ReturnType<typeof page>>((resolve) => {
+      resolveRefresh = resolve;
+    });
+    api.searchProblemReviews.mockReturnValueOnce(pendingRefresh);
+
+    await wrapper.get('[aria-label="审核队列排序字段"]').setValue('STATEMENT');
+    const approveButton = wrapper.get('.review-decision--approve');
+    expect(approveButton.attributes('disabled')).toBeDefined();
+
+    await approveButton.trigger('click');
+    await flushPromises();
+    expect(wrapper.find('dialog.review-dialog').exists()).toBe(false);
+    expect(api.decideProblemReview).not.toHaveBeenCalled();
+
+    resolveRefresh(page([review()]));
+    await flushPromises();
+    await wrapper.get('.review-decision--approve').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('dialog.review-dialog').exists()).toBe(true);
+
+    wrapper.unmount();
+  });
+
   it('reports an empty backend queue without inventing a row', async () => {
     api.searchProblemReviews.mockResolvedValue(page([]));
     const wrapper = mount(AdminProblemReviewsPage);

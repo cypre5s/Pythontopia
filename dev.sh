@@ -136,16 +136,22 @@ set -a
 source "$DEPLOY_DIR/.env"
 set +a
 
+# Compose and the local backend must receive the same per-run service token.
+configured_internal_token="${PYT_RAG_ADMIN_TOKEN:-}"
+resolved_internal_token="$("$DEPLOY_DIR/scripts/resolve_dev_internal_token.sh" "$configured_internal_token")"
+if [[ "$START_DEPS" == "0" && "$resolved_internal_token" != "$configured_internal_token" ]]; then
+  c_err "--no-deps 需要 deploy/.env 配置与现有 Graph 共用的有效 PYT_RAG_ADMIN_TOKEN"
+  exit 1
+fi
+export PYT_RAG_ADMIN_TOKEN="$resolved_internal_token"
+if [[ "$PYT_RAG_ADMIN_TOKEN" != "$configured_internal_token" ]]; then
+  c_warn "本次开发栈已生成临时服务间鉴权令牌（未写入磁盘）"
+fi
+
 if [[ "$START_SANDBOX" == "1" ]]; then
   DEP_SERVICES+=(piston)
   export PYT_PISTON_URL="http://127.0.0.1:2000"
   export PYT_PISTON_PYTHON_VERSION="${PYT_DEV_PISTON_PYTHON_VERSION:-3.12.0}"
-fi
-
-configured_internal_token="${PYT_RAG_ADMIN_TOKEN:-}"
-export PYT_RAG_ADMIN_TOKEN="$("$DEPLOY_DIR/scripts/resolve_dev_internal_token.sh" "$configured_internal_token")"
-if [[ "$PYT_RAG_ADMIN_TOKEN" != "$configured_internal_token" ]]; then
-  c_warn "本次开发栈已生成临时服务间鉴权令牌（未写入磁盘）"
 fi
 
 # ---- 1. 依赖（docker） ----

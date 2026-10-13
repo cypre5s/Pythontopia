@@ -58,6 +58,17 @@ async def test_factory_builds_boss_problem_from_content_json() -> None:
 
 
 @pytest.mark.asyncio
+async def test_factory_disables_reasoning_for_structured_problem_generation() -> None:
+    provider = _StubProvider(LlmResponse(content_json=_good_payload()))
+
+    await build_llm_problem_factory(provider)(
+        chapter=1, stage=1, kc_code="PY43-KC-001", difficulty=2
+    )
+
+    assert provider.last_kwargs["reasoning_effort"] == "none"
+
+
+@pytest.mark.asyncio
 async def test_factory_parses_content_text_json() -> None:
     payload = _good_payload()
     provider = _StubProvider(LlmResponse(content_text=json.dumps(payload)))
