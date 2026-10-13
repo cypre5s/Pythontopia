@@ -1,5 +1,22 @@
 # Changelog
 
+## 2026-10-14 — 状态文档与模型出口纠偏
+
+- 将比赛符合度、执行日志和 Beta 回归报告中的旧 Spark/TTS 配置标为历史状态，补上当前 DeepSeek 文图输入契约与 TTS/ASR 等媒体出口关闭说明，避免旧截图或结果被误用作当前验收结论。
+
+## 2026-10-14 — Web 教师与课件异步状态修复
+
+- 教师切换班级时重订阅新的直播流并清空旧班级事件；审核队列加载期间禁用生成，迟到的旧队列响应不会覆盖刚生成或更新的审核题。
+- 视频清单 API 不再把 HTTP/网络错误伪装为空列表。看课页与图书馆在请求失败时展示可重试错误，章节/翻页的旧响应无法覆盖当前页面；图书馆索引失败也给出错误和重试入口。
+- TDD 先复现各类失败；当前完整 Web Vitest 为 266 files / 2533 tests，通过；TypeScript typecheck、生产 build、改动文件 ESLint、`git diff --check` 通过。全量 ESLint 为 0 errors / 7 warnings（未改文件中的 2 条可选 prop 提示和账号隔离测试中的 5 条多组件提示）。生产构建保留已有 Pyodide Node 内置模块 externalize 提示。
+- 本轮未改后端/Graph，也未发起 DeepSeek 请求。Twin 学习效果对照、完整 Boss 最终节点真实提交浏览器演出、生产 Piston 与 ECS/公网验证仍未完成；最新全量 Maven 1358 tests、0 assertion failures、6 errors（5 个 Testcontainers 宿主端口绑定冲突、1 个长期仿真 PostgreSQL TLS 建连 reset）。长期仿真单类重跑 1 项通过，先前端口冲突类隔离重跑 19 项通过；全量仍未通过。
+
+## 2026-10-14 — 后端全量重跑与远征 Golden 边界复核
+
+- 开发栈关闭后再跑全量 Maven：1358 tests、0 assertion failures、6 errors，未达到 `BUILD SUCCESS`。`DecisionTraceControllerTest`、`EvidenceMemoryServiceTest`、`LearningEvidenceGraphServiceTest`、`MemoryRetrievalSemanticIntegrationTest`、`RecommendationServiceTest` 的 pgvector Testcontainers 仍因随机宿主端口 `address already in use` 启动失败；另 1 个长期仿真测试出现 PostgreSQL TLS 建连 reset。该模拟测试隔离重跑 1 项通过；先前 6 个端口冲突类隔离重跑共 19 项通过。端口冲突仍可在本机全量运行时复现，未修改系统网络设置，也不能将全量失败当作已修复。
+- 本地完整 Web/Piston 栈健康，Flyway 到 V212。尝试走离线 Graph Golden 路径时，新学生选中的 `PY43-KC-001` 没有匹配的课程编程题，服务端按契约返回 503，未拿其他 KC 题目错记掌握度。Graph 已恢复；最终 Boss 真实判题浏览器演出仍未验证。既有 `PY43-KC-041` 匹配题库的 Golden 正式判题证据见下方 Boss 复验记录。
+- 本轮没有新增 DeepSeek 请求，也没有做性能测试；Twin 的长期学习效果对照、生产 Piston 隔离和 ECS/公网仍未验证。
+
 ## 2026-10-14 — 全量后端复验与 Testcontainers 端口冲突定位
 
 - 当前工作树全量 `mvn test`：1356 tests、0 failures、7 errors，未达到 `BUILD SUCCESS`。6 个 pgvector Testcontainers 在 Docker 发布随机宿主端口时因 `address already in use` 失败；另 `LongTermClassroomEffectSimulationTest` 曾遇 JDBC connection reset。

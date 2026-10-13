@@ -25,17 +25,13 @@ export interface CourseVideoDto {
   available: boolean;
 }
 
-/** 拉某章视频清单；任何失败（404/网络/后端未起）都降级成空数组，调用方据此回退。 */
+/** 拉某章视频清单；成功但返回非数组时视为空清单，请求失败由调用方展示并重试。 */
 export async function listChapterVideos(chapter: number): Promise<CourseVideoDto[]> {
-  try {
-    const res = await http.get<CourseVideoDto[]>('/api/course/videos', {
-      params: { chapterId: chapter },
-      suppressNetworkToast: true,
-    });
-    return Array.isArray(res.data) ? res.data : [];
-  } catch {
-    return [];
-  }
+  const res = await http.get<CourseVideoDto[]>('/api/course/videos', {
+    params: { chapterId: chapter },
+    suppressNetworkToast: true,
+  });
+  return Array.isArray(res.data) ? res.data : [];
 }
 
 /** <video> 可直连的流式播放 URL（dev 由 Vite 代理 /api，prod 同源）。 */

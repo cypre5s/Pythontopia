@@ -33,6 +33,7 @@ export function useClassroomLive(): UseClassroomLiveReturn {
 
   let controller: AbortController | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  let activeClassroomId: number | null = null;
   // 代数计数器：disconnect/重新 connect 后递增，让旧的读取循环与重连定时器失效。
   let generation = 0;
 
@@ -137,6 +138,10 @@ export function useClassroomLive(): UseClassroomLiveReturn {
   }
 
   function connect(classroomId: number): void {
+    if (activeClassroomId !== classroomId) {
+      events.value = [];
+      activeClassroomId = classroomId;
+    }
     disconnect();
     error.value = null;
     const gen = ++generation;

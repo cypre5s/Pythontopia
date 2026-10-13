@@ -178,6 +178,98 @@ describe("TeacherReviewPage", () => {
     ).toContain("待审 1");
   });
 
+  it("disables generation while the review queue is loading", async () => {
+    let resolveQueue!: (entries: BossProblemReviewDto[]) => void;
+    reviewMocks.listProblemReviews.mockReturnValue(
+      new Promise((resolve) => {
+        resolveQueue = resolve;
+      }),
+    );
+    useSessionStore().user = {
+      id: 2,
+      username: "teach",
+      displayName: "老师",
+      role: "TEACHER",
+    };
+
+    const wrapper = mount(TeacherReviewPage);
+    await flushPromises();
+    const fetchButton = wrapper.find(
+      '[data-testid="teacher-review-fetch"]',
+    );
+
+    expect((fetchButton.element as HTMLButtonElement).disabled).toBe(true);
+    await fetchButton.trigger("click");
+    await flushPromises();
+    expect(reviewMocks.createProblemReview).not.toHaveBeenCalled();
+
+    resolveQueue([]);
+    await flushPromises();
+  });
+
+  it("keeps a newly generated candidate when an older queue response finishes later", async () => {
+    let rejectDecision!: (reason: Error) => void;
+    let resolveReload!: (entries: BossProblemReviewDto[]) => void;
+    let resolveGenerated!: (entry: BossProblemReviewDto) => void;
+    const generated = review({
+      id: 42,
+      sourceProblemId: "source-2",
+      problem: {
+        ...review().problem,
+        problemId: "fresh-question",
+        statement: "freshly generated question",
+      },
+    });
+    reviewMocks.listProblemReviews
+      .mockResolvedValueOnce([review()])
+      .mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveReload = resolve;
+        }),
+      );
+    reviewMocks.decideProblemReview.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        rejectDecision = reject;
+      }),
+    );
+    reviewMocks.createProblemReview.mockReturnValue(
+      new Promise((resolve) => {
+        resolveGenerated = resolve;
+      }),
+    );
+    useSessionStore().user = {
+      id: 2,
+      username: "teach",
+      displayName: "老师",
+      role: "TEACHER",
+    };
+
+    const wrapper = mount(TeacherReviewPage);
+    await flushPromises();
+    await wrapper
+      .find('[data-testid="teacher-review-decision-reason"]')
+      .setValue("题面已复核");
+    await wrapper
+      .find('[data-testid="teacher-review-approve"]')
+      .trigger("click");
+    await wrapper.find('[data-testid="teacher-review-fetch"]').trigger("click");
+    await flushPromises();
+    expect(reviewMocks.createProblemReview).toHaveBeenCalledTimes(1);
+
+    rejectDecision(new Error("decision conflict"));
+    await flushPromises();
+    expect(reviewMocks.listProblemReviews).toHaveBeenCalledTimes(2);
+
+    resolveGenerated(generated);
+    await flushPromises();
+    expect(wrapper.text()).toContain("freshly generated question");
+
+    resolveReload([review()]);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("freshly generated question");
+  });
+
   it("approves through the API with a reason and optimistic version", async () => {
     reviewMocks.listProblemReviews.mockResolvedValue([review()]);
     reviewMocks.decideProblemReview.mockResolvedValue(

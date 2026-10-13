@@ -24,6 +24,7 @@ const router = useRouter();
 const teacher = useTeacherStore();
 const toast = useToastStore();
 const live = useClassroomLive();
+const liveSubscribed = ref(false);
 
 const tabs = [
   { id: 'overview', label: '概览' },
@@ -43,6 +44,16 @@ type TabId = (typeof tabs)[number]['id'];
 const activeTab = ref<TabId>('overview');
 
 const classroomId = computed<number>(() => Number(route.params.id));
+
+function connectLive(): void {
+  liveSubscribed.value = true;
+  live.connect(classroomId.value);
+}
+
+function disconnectLive(): void {
+  liveSubscribed.value = false;
+  live.disconnect();
+}
 
 const classroom = computed(() => teacher.current.classroom);
 const dashboard = computed(() => teacher.current.dashboard);
@@ -94,6 +105,7 @@ watch(
   () => Number(route.params.id),
   async (newId, oldId) => {
     if (newId === oldId) return;
+    if (liveSubscribed.value) live.connect(newId);
     await teacher.reloadCurrent(newId);
   },
 );
@@ -338,7 +350,7 @@ function back() {
                 v-if="!live.connected.value"
                 variant="secondary"
                 size="sm"
-                @click="live.connect(classroomId)"
+                @click="connectLive"
               >
                 开始直播
               </PyButton>
@@ -346,7 +358,7 @@ function back() {
                 v-else
                 variant="secondary"
                 size="sm"
-                @click="live.disconnect()"
+                @click="disconnectLive"
               >
                 断开
               </PyButton>

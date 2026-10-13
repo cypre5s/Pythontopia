@@ -24,6 +24,12 @@ vi.mock('@/api/course', () => ({
   getProblem: vi.fn(),
 }));
 
+const videoMocks = vi.hoisted(() => ({ listChapterVideos: vi.fn() }));
+vi.mock('@/api/courseVideo', () => ({
+  listChapterVideos: videoMocks.listChapterVideos,
+  videoStreamUrl: (id: number) => `/api/course/videos/${id}`,
+}));
+
 import LibraryPage from '@/pages/LibraryPage.vue';
 import {
   getDocumentPage,
@@ -161,6 +167,14 @@ const FLOW_COVER_PAGE: CoursePageDetail = {
   excerpt: '计算思维与人工智能',
 };
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 function buildKcs(): CourseKcSummary[] {
   return KCS.map((kc) => ({
     kcId: kc.kcId,
@@ -190,6 +204,7 @@ function createTestRouter(): Router {
 describe('LibraryPage', () => {
   beforeEach(async () => {
     setActivePinia(createPinia());
+    localStorage.removeItem('pyt_library_view_mode');
     vi.mocked(listCourseDocuments).mockResolvedValue(DOCUMENTS);
     vi.mocked(listAllProblems).mockResolvedValue(PROBLEMS);
     vi.mocked(listAllExamples).mockResolvedValue(EXAMPLES);
@@ -220,6 +235,7 @@ describe('LibraryPage', () => {
       },
     ]);
     vi.mocked(answerCourseware).mockRejectedValue(new Error('courseware answer unavailable'));
+    videoMocks.listChapterVideos.mockReset().mockResolvedValue([]);
   });
 
   afterEach(() => {
@@ -248,6 +264,71 @@ describe('LibraryPage', () => {
     const chapterHeads = wrapper.findAll('.chapter-head');
     expect(chapterHeads.length).toBe(7);
     expect(wrapper.find('[data-testid="chapter-doc-1"]').text()).toContain('3 页');
+  });
+
+  it('初始索引加载失败时显示可重试错误，重试成功后恢复目录', async () => {
+    vi.mocked(listAllProblems)
+      .mockRejectedValueOnce(new Error('index offline'))
+      .mockResolvedValueOnce(PROBLEMS);
+    const router = createTestRouter();
+    await router.push('/library');
+    await router.isReady();
+    const wrapper = mount(LibraryPage, {
+      global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
+    });
+    await flushPromises();
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('index offline');
+    await wrapper.get('[data-testid="library-index-retry"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain('计算工具与计算思维');
+  });
+
+  it('翻页时较旧的页面响应不能覆盖当前页内容', async () => {
+    const router = createTestRouter();
+    await router.push('/library');
+    await router.isReady();
+    const wrapper = mount(LibraryPage, {
+      global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
+    });
+    await flushPromises();
+
+    const pageTwo = deferred<CoursePageDetail>();
+    const pageThree = deferred<CoursePageDetail>();
+    vi.mocked(getDocumentPage).mockImplementation((_docId, pageNo) => {
+      if (pageNo === 2) return pageTwo.promise;
+      if (pageNo === 3) return pageThree.promise;
+      return Promise.resolve(PAGE_DETAIL);
+    });
+
+    await wrapper.get('[data-testid="library-next-page"]').trigger('click');
+    await wrapper.get('[data-testid="library-next-page"]').trigger('click');
+    pageThree.resolve({ ...PAGE_DETAIL, pageNo: 3, title: '第三页标题' });
+    await flushPromises();
+    pageTwo.resolve({ ...PAGE_DETAIL, pageNo: 2, title: '第二页标题' });
+    await flushPromises();
+
+    expect(wrapper.get('.page-title').text()).toContain('第三页标题');
+    expect(wrapper.get('nav[aria-label="阅读路径"]').text()).toContain('第 3 / 3 页');
+  });
+
+  it('视频清单请求失败时显示错误状态，不伪装成没有视频', async () => {
+    videoMocks.listChapterVideos.mockRejectedValueOnce(new Error('video service offline'));
+    const router = createTestRouter();
+    await router.push('/library');
+    await router.isReady();
+    const wrapper = mount(LibraryPage, {
+      global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
+    });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="library-view-mode-video"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="library-video-error"]').text()).toContain('video service offline');
+    expect(wrapper.text()).not.toContain('本章暂无课件视频');
   });
 
   it('点击章节目录切换 docId，触发新的 getDocumentPage 调用但不触发路由导航', async () => {

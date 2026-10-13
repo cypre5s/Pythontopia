@@ -35,8 +35,10 @@ const tutor = useTutorStore();
 const asideMode = ref<AsideMode>('guide');
 
 const loading = ref(true);
+const videoLoadError = ref(false);
 const videos = ref<CourseVideoDto[]>([]);
 const activeId = ref<number | null>(null);
+let videoRequestId = 0;
 // 看课页视频 RAG：跟踪当前播放时刻（秒），提问时随 videoId 回传后端合成「视频上下文」。
 const videoTimeSec = ref(0);
 
@@ -108,14 +110,22 @@ function onVideoProgress(e: Event): void {
 }
 
 async function load(): Promise<void> {
+  const requestId = ++videoRequestId;
   loading.value = true;
+  videoLoadError.value = false;
+  videos.value = [];
+  activeId.value = null;
   mediaReported = false;
   mediaConsumed.value = false;
   try {
-    videos.value = await listChapterVideos(props.chapter);
+    const chapterVideos = await listChapterVideos(props.chapter);
+    if (requestId !== videoRequestId) return;
+    videos.value = chapterVideos;
     activeId.value = playable.value[0]?.id ?? null;
+  } catch {
+    if (requestId === videoRequestId) videoLoadError.value = true;
   } finally {
-    loading.value = false;
+    if (requestId === videoRequestId) loading.value = false;
   }
 }
 
@@ -235,6 +245,28 @@ watch(() => props.chapter, () => {
               {{ activeVideo.title }}
             </p>
           </template>
+
+          <div
+            v-else-if="videoLoadError"
+            class="lecture-empty"
+            role="alert"
+            data-testid="lecture-video-error"
+          >
+            <p class="lecture-empty-title">
+              本章在线视频加载失败
+            </p>
+            <p class="lecture-empty-sub">
+              请检查网络后重试。
+            </p>
+            <PyButton
+              test-id="lecture-video-retry"
+              variant="secondary"
+              size="sm"
+              @click="load"
+            >
+              重试
+            </PyButton>
+          </div>
 
           <div
             v-else
