@@ -14,12 +14,12 @@
 - 判题代码采用独立 Piston 适配器；远程错误 fail closed，不回退应用进程内执行。此次仅跑了 Piston 适配器回归，没有对实际 Piston 服务执行学生代码。
 - ASR、TTS、讯飞文生图和讯飞图片理解在属性类中固定关闭；Tutor 图片输入由 DeepSeek 视觉路径处理。该结论来自源代码和测试，未发起上游请求。
 - `deploy/.env` 被 Git 忽略，当前权限为 `0600`。本复核没有读取或输出其中内容。提供给助手的 API key 已出现在对话中，真实模型调用前应在服务商控制台轮换。
-- `npm audit --registry=https://registry.npmjs.org --audit-level=high` 返回 0 vulnerabilities；生产依赖审计亦为 0 vulnerabilities。
+- `npm audit --registry=https://registry.npmjs.org --audit-level=high` 返回 0 vulnerabilities。Python 服务生产依赖审计与临时镜像构建结果见下方 2026-10-14 部分；未运行 OS 层镜像扫描，也没有部署镜像。
 - NPC dialog/greeting 路由现限制 key 长度为 1–40，并只接受小写字母、数字、`_`、`-`；超长 key 回归确认在到达服务层前返回 404。
 
 ## 未关闭的风险
 
-- CSP 仍只有 `frame-ancestors 'self'`，没有限制脚本、样式或连接来源；需结合 Phaser、Pyodide、Bilibili 和 SSE 做浏览器回归后再收紧。
+- CSP 已覆盖 SPA 文档，并把 `unsafe-eval` 限定在 Pyodide worker；本地 Chromium 已验证 Pyodide 与 PDF.js。仍需在生产入口和更多浏览器复核；`style-src 'unsafe-inline'` 是 Vue 动态样式与像素字体注入所需的兼容例外。
 - JWT 保存在 `localStorage`；若应用出现 XSS，令牌可被同源脚本读取。
 - 每日 30 次请求上限不是成本上限，不能据此推断 DeepSeek 费用有硬上限。
 - 聊天中出现过的 API key 尚未轮换；当前没有使用它发起真实请求。
@@ -42,9 +42,28 @@
 
 ## 2026-10-14 复核后修复
 
-- Boss 判题要求 `attemptId`；题目需先确认属于当前用户，再建立幂等 claim，因此随机无效题目 ID 不再永久增长幂等表。重复 Boss 学习事件使用 `boss-attempt:<UUID>` 同时保护掌握度和画像投影。
+- Boss 判题要求 `attemptId`；题目需先确认属于当前用户，再建立幂等 claim，因此随机无效题目 ID 不再永久增长幂等表。重复 Boss 学习事件使用 `boss-attempt:<userId>:<UUID>` 同时保护掌握度和画像投影；画像 outbox 的幂等键是全局唯一，同一 UUID 被不同用户提交时仍各自产生投影事件。
 - Graph 的 `sandbox_unavailable` 明确作为基础设施错误处理：调用现有 Java/Piston 兜底；若本地沙箱也不可用，返回 503，不扣远征判题额度、不更新学习画像。
 - V212 新增全站每日 300 次 AI 入口请求上限，与每账号每日 30 次共同在一个事务中原子预留，覆盖匿名批量注册对单账号额度的绕过。该表以数据库唯一日行跨实例串行化；达到全站上限后当日停止所有标注端点。
 - 账号与全站额度预留共用一次读取的上海日期，避免恰逢午夜时被分别计入相邻两天；模拟跨午夜用例已复现并回归通过。
 - 验证：Boss Controller/Service、额度与画像监听器共 71 项单测通过；PostgreSQL/Testcontainers 3 项通过，包含 40 个账号并发提交 400 次时仅放行 300 次，以及幂等事件回放只更新一次画像/掌握度；Flyway 空库迁移至 V212 成功。
+- 后续定向回归：BossService 与 AI 额度路由覆盖 45 项单测、画像 outbox PostgreSQL 集成 2 项通过；包含跨用户共享 attempt UUID 和图片生成/图片理解/TTS/ASR 保持关闭的断言。
 - 剩余风险：全站限制计数的是标注入口操作，不是 DeepSeek provider 外发次数/token/金额；单次操作可在 Graph 内重试或多轮生成。Android/Windows Boss 调用尚未携带必填 `attemptId`，此次遵照 Web 优先范围未改客户端。未访问 ECS/公网，也未用真实 Piston 故障注入验证运行态行为。对话中暴露的 DeepSeek key 仍应轮换。
+
+## 2026-10-14 Python 生产依赖与内部鉴权复核
+
+- 生产依赖范围按 `services/pythontopia-graph/Dockerfile` 的 `.[browse]` 与 `services/pythontopia-rag/Dockerfile` 的 `.` 重建；不包含 Graph 的 memory/eval/optimize/observability extra，也不包含 RAG 的 dev/graph extra。修复前 pip-audit 报 Graph 15 条、RAG 31 条记录，分别涉及 2 和 6 个包；按包与公告 ID 去重后为 8 和 18 对。
+- FastAPI 约束调整至 `>=0.143,<0.144`，隔离解析结果为 FastAPI 0.143.0 / Starlette 1.8.0；Graph `json-repair` 调整至 `>=0.60.1,<0.61`（[GHSA-xf7x-x43h-rpqh](https://github.com/advisories/GHSA-xf7x-x43h-rpqh)）；RAG 移除了全服务没有导入的 LangGraph，并将 `pyarrow` 调整至 `>=23.0.1,<24`（[PYSEC-2026-113](https://osv.dev/vulnerability/PYSEC-2026-113)）。修复后对两个干净 Python 3.11 生产依赖目录重新运行 `pip-audit`，均为 `No known vulnerabilities found`。
+- Graph 内部鉴权曾用 `request.url.path` 判断公开白名单；恶意请求 `POST /agents/curriculum/map` 加 `Host: example.com/healthz?bypass=` 在受影响 Starlette 上曾返回 200，详见 [Starlette GHSA-86qp-5c8j-p5mr](https://github.com/Kludex/starlette/security/advisories/GHSA-86qp-5c8j-p5mr)。现在白名单和鉴权日志均使用 ASGI 原始 `scope["path"]`；回归在旧依赖及 FastAPI 0.143.0 / Starlette 1.8.0 下均返回 401。
+- 验证命令：`uv pip install --python <fresh-python-3.11-env> 'services/pythontopia-graph[browse]'`、`uv pip install --python <fresh-python-3.11-env> services/pythontopia-rag`，移除本地项目元包后对对应 `site-packages` 执行 `uv tool run --from pip-audit pip-audit --strict --progress-spinner off --desc off --aliases off --path <site-packages> --format json`；两次均退出码 0。Graph 全量 pytest 为 1816 passed / 3 skipped，RAG 为 158 passed / 2 skipped；两侧 `ruff check .` 通过。
+- 严格 Mypy 当前未通过：Graph 报 66 个类型错误、涉及 30 个文件；RAG 在 `routes/query.py` 报 2 个缺少返回类型标注。此次没有为依赖审计扩展到无关类型修复。
+- 原始镜像路径的 `docker build` 在 apt 阶段受容器代理和 Aliyun 下载速度影响未完成。之后以仅存在于 `/tmp` 的 Dockerfile 变体重建：Python 索引改用官方 PyPI，apt 保留官方 Debian 源并通过 7892 代理；项目 Dockerfile 未改。Graph（`.[browse]`）与 RAG（`.`）镜像都构建成功，启动后 `/healthz` 均为 HTTP 200；Graph 的 Chromium 无头启动通过。容器内 FastAPI 0.143.0 / Starlette 1.8.0、Graph json-repair 0.60.1、RAG PyArrow 23.0.1 与隔离依赖审计一致；镜像配置中的大小写代理变量均为空。RAG 未连接数据库，按设计以空索引启动；Graph 未注入 DeepSeek 密钥，仅验证 healthz，未验证 readyz 或模型调用。
+- 容器构建和启动不等于原始阿里云索引配置的构建，也不是 OS 层镜像漏洞扫描、生产发布或 ECS 核验；两套 Python 包依赖的 pip-audit 均无已知漏洞。
+
+## 2026-10-14 Web CSP 收紧与浏览器复核
+
+- `frontend/nginx.conf` 为 `/index.html` 实际文档响应设置 CSP：同源脚本与连接、禁止 object 与 iframe、限制表单/基础 URL/资源类型；图片仅允许同源、`data:`、`blob:` 和 B 站封面域。Vue 动态样式继续使用 `unsafe-inline`。
+- Pyodide Emscripten worker 确实依赖 `eval()`，因此只有哈希 worker 脚本响应单独允许 `unsafe-eval` 与 WASM eval；主文档 CSP 没有通用 `unsafe-eval`。生产边缘 Nginx 移除重复的宽松 CSP，保留 `X-Frame-Options` 供非 SPA 响应使用。
+- 新增 `deploy/scripts/test_dev_compose_security_contract.sh` 断言 SPA 文档、Pyodide worker 和边缘响应的 CSP 规则。脚本通过；临时 Nginx 容器对 `/`、`/admin/users`、`/index.html` 实测 HTTP 200 且带策略，worker 响应另带隔离策略。
+- Chromium 在该 Nginx 配置下加载登录页、运行 Pyodide `print(2+3)` 得到 `5`，加载 PDF.js 并解析一页 PDF；浏览器 CSP violation 为 0。未做 ECS、公网或其他浏览器验证。
+- 参考：[W3C CSP Level 3](https://www.w3.org/TR/CSP3/)、[NGINX add_header 继承规则](https://nginx.org/en/docs/http/ngx_http_headers_module.html)、[Chrome WASM CSP 指引](https://developer.chrome.com/docs/iwa/developer-policy)。

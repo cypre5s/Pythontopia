@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Pythontopia multi-agent graph service"
 requires-python = ">=3.11,<3.13"
 dependencies = [
-  "fastapi>=0.115,<0.116",
+  "fastapi>=0.143,<0.144",
   "uvicorn[standard]>=0.34,<0.35",
   "pydantic>=2,<3",
   # LangGraph v1：核心图 API 与 0.2 兼容（官方迁移指南确认 graph primitives 不变），
@@ -16,7 +16,7 @@ dependencies = [
   # https://docs.langchain.com/oss/python/migrate/langgraph-v1
   "langgraph>=1,<2",
   "httpx>=0.28,<0.29",
-  "json-repair>=0.59,<0.60",
+  "json-repair>=0.60.1,<0.61",
   "structlog>=24.4,<25",
   "tenacity>=9,<10",
   "python-dotenv>=1,<2",

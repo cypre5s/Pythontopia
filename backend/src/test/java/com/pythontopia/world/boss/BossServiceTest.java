@@ -1001,7 +1001,29 @@ class BossServiceTest {
     assertThat(event.kcCode()).isEqualTo("PY43-KC-001");
     assertThat(event.problemId()).isNull(); // boss 题无 course_problem 数字主键
     assertThat(event.difficulty()).isEqualTo("hard"); // difficulty 4 → hard
-    assertThat(event.idempotencyKey()).isEqualTo("boss-attempt:" + attemptId);
+    assertThat(event.idempotencyKey()).isEqualTo("boss-attempt:7:" + attemptId);
+  }
+
+  @Test
+  @DisplayName("不同用户复用同一 attemptId 时画像事件幂等键仍各自独立")
+  void sameAttemptIdAcrossUsersProducesDistinctProfileIdempotencyKeys() {
+    when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problemWithTests(4)));
+    when(pregenService.findByProblemId(8L, "p1")).thenReturn(Optional.of(problemWithTests(4)));
+    when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
+        .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
+    UUID sharedAttemptId = UUID.fromString("123e4567-e89b-12d3-a456-426614174000");
+    BossAttemptRequest request =
+        new BossAttemptRequest("p1", 1, 1, "print(5)", 10, sharedAttemptId);
+
+    service.evaluateAttempt(request, 7L);
+    service.evaluateAttempt(request, 8L);
+
+    ArgumentCaptor<LearningEvent> events = ArgumentCaptor.forClass(LearningEvent.class);
+    verify(eventPublisher, times(2)).publishEvent(events.capture());
+    assertThat(events.getAllValues())
+        .extracting(event -> ((LearningEvent.PracticeSucceeded) event).idempotencyKey())
+        .containsExactly(
+            "boss-attempt:7:" + sharedAttemptId, "boss-attempt:8:" + sharedAttemptId);
   }
 
   @Test

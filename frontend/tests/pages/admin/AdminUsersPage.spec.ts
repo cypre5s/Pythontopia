@@ -45,6 +45,11 @@ describe('AdminUsersPage', () => {
     expect(searchAdminUsers).toHaveBeenCalledWith({ page: 0, size: 20 });
     expect(wrapper.text()).toContain('学生七号');
     expect(wrapper.text()).toContain('student7');
+    expect(wrapper.get('.admin-panel__toolbar [data-testid="admin-users-search-form"]').exists()).toBe(true);
+    expect(wrapper.get('.admin-panel__toolbar').findAll('.admin-control')).toHaveLength(3);
+    expect(wrapper.get('.admin-panel__footer .admin-pagination').exists()).toBe(true);
+    expect(wrapper.get('.admin-users__status').classes()).toContain('admin-status--positive');
+    expect(wrapper.get('.admin-table-scroll').attributes('role')).toBe('region');
 
     await wrapper.get('[data-testid="admin-user-status-7"]').trigger('click');
     await flushPromises();

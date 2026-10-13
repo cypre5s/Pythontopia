@@ -8,13 +8,12 @@ version = "0.1.0"
 description = "Pythontopia courseware RAG service"
 requires-python = ">=3.11,<3.13"
 dependencies = [
-  "fastapi>=0.115,<0.116",
+  "fastapi>=0.143,<0.144",
   "uvicorn[standard]>=0.34,<0.35",
   "pydantic>=2,<3",
-  "langgraph>=0.2,<0.3",
   "httpx>=0.28,<0.29",
   "psycopg[binary]>=3.2,<4",
-  "pyarrow>=18,<19",
+  "pyarrow>=23.0.1,<24",
   "structlog>=24.4,<25",
   "tenacity>=9,<10",
   "python-dotenv>=1,<2",

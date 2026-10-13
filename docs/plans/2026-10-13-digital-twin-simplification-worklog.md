@@ -130,7 +130,7 @@
 
 ## 2026-10-14 判题与配额安全增量
 
-- Boss 判题请求在 DTO 与服务层都要求 UUID `attemptId`。服务先核验当前用户签发的题目，再 claim 幂等记录；无效 ID 保持兼容提示但不写永久记录。Boss 成功/失败事件携带 `boss-attempt:<UUID>`，掌握度与画像投影均按此键去重。
+- Boss 判题请求在 DTO 与服务层都要求 UUID `attemptId`。服务先核验当前用户签发的题目，再 claim 幂等记录；无效 ID 保持兼容提示但不写永久记录。Boss 成功/失败事件携带 `boss-attempt:<userId>:<UUID>`，掌握度与画像投影均按此键去重；新增同 UUID 跨用户测试，防止全局唯一 outbox 键吞掉第二位用户的事件。
 - Graph 评测若返回 `runtimeError=sandbox_unavailable`，复用已有 Java/Piston 本地判题；本地环境也不可用就返回 `BOSS_EVALUATOR_UNAVAILABLE`，不占用远征得分次数、不发布练习失败事件。
 - V212 增加跨账号每日 300 次 AI 入口请求闸门，并保留每账号每日 30 次限制。两项额度同一事务预留，上海时区日界线一致，保留 90 天计数。
 - 验证：Boss Controller/Service、额度服务、画像事件监听器共 71 单测通过；Testcontainers 3 项通过，其中 400 个跨账号并发请求仅接受 300 个，并验证 Boss 学习事件回放不会重复更新；空库 Flyway 到 V212 通过。
@@ -140,6 +140,12 @@
 
 - 账号与全站额度预留共用同一次上海日期读取，避免跨午夜请求分别计入相邻两天。
 - TDD 回归先稳定复现账号日期 `2026-10-14`、全站日期 `2026-10-15` 不一致；修复后额度服务与路由标记覆盖共 7 项通过。定向 Spotless 检查通过。
+
+## 2026-10-14 Boss 投影与媒体 provider 复核
+
+- Boss 事件幂等键补入 `userId`。回归测试让两个用户复用同一个 attempt UUID，分别得到独立画像投影键；复核 PassiveProfileRevisionListener 后确认其稳定事件键均已包含用户 ID。
+- AI 媒体路由复核确认讯飞图片生成、图片理解、TTS 和 ASR 均由 `isEnabled() == false` 硬关闭，相关服务不会发起外部调用。保留 DeepSeek 文本/视觉输入与 TTS 关闭策略；路由覆盖测试锁定禁用状态，避免未来启用 provider 后仍被误分类为无额度成本。
+- 验证：`BossServiceTest` 与 `AiBudgetRouteCoverageTest` 共 45 项单测通过，`ProfileDimensionProjectionOutboxPostgresTest` 2 项 PostgreSQL 集成通过。此次没有真实 provider 请求；媒体 provider 的关闭契约由代码与单元测试验证。
 
 ## 2026-10-14 无尽远征实测与 Boss JSON 出题修复
 

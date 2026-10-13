@@ -18,8 +18,8 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 /**
- * Piston 远程判题适配器。Piston/Isolate 负责 namespace、chroot、cgroup、无网络和逐提交低权用户隔离；
- * 本类只转换 Pythontopia 判题契约，任何远程异常均 fail closed，绝不回退到应用容器内执行。
+ * Piston 远程判题适配器。Piston/Isolate 负责 namespace、chroot、cgroup、无网络和逐提交低权用户隔离； 本类只转换 Pythontopia
+ * 判题契约，任何远程异常均 fail closed，绝不回退到应用容器内执行。
  */
 @Component
 @ConditionalOnProperty(name = "pythontopia.judge.provider", havingValue = "piston")
@@ -29,7 +29,8 @@ public class PistonPythonSandbox implements PythonSandbox {
   private static final long MEMORY_LIMIT_BYTES = 256L * 1024 * 1024;
   private static final int MAX_STDOUT_CHARS = 64 * 1024;
   private static final int MAX_STDERR_CHARS = 16 * 1024;
-  private static final Set<String> PISTON_FAILURE_STATUSES = Set.of("RE", "SG", "TO", "OL", "EL", "XX");
+  private static final Set<String> PISTON_FAILURE_STATUSES =
+      Set.of("RE", "SG", "TO", "OL", "EL", "XX");
 
   private final RestTemplate restTemplate;
   private final String baseUrl;
@@ -74,10 +75,7 @@ public class PistonPythonSandbox implements PythonSandbox {
       JsonNode body =
           restTemplate
               .exchange(
-                  baseUrl + "/api/v2/execute",
-                  HttpMethod.POST,
-                  entity(request),
-                  JsonNode.class)
+                  baseUrl + "/api/v2/execute", HttpMethod.POST, entity(request), JsonNode.class)
               .getBody();
       return mapResponse(body);
     } catch (RestClientException ex) {
@@ -94,8 +92,7 @@ public class PistonPythonSandbox implements PythonSandbox {
     try {
       JsonNode runtimes =
           restTemplate
-              .exchange(
-                  baseUrl + "/api/v2/runtimes", HttpMethod.GET, entity(null), JsonNode.class)
+              .exchange(baseUrl + "/api/v2/runtimes", HttpMethod.GET, entity(null), JsonNode.class)
               .getBody();
       if (runtimes != null && runtimes.isArray()) {
         for (JsonNode runtime : runtimes) {
@@ -132,12 +129,21 @@ public class PistonPythonSandbox implements PythonSandbox {
         || stderrNode == null
         || !stderrNode.isTextual()
         || (signalNode != null && !signalNode.isNull() && !signalNode.isTextual())
-        || (codeNode == null && status == null)
+        || (codeNode == null && status == null && (signalNode == null || signalNode.isNull()))
         || (codeNode != null && !codeNode.isNull() && !codeNode.isIntegralNumber())) {
       return systemError("Sandbox returned an invalid execution result");
     }
     boolean timedOut = "TO".equals(status);
-    int exitCode = codeNode != null && codeNode.canConvertToInt() ? codeNode.asInt() : -1;
+    // Legacy Piston omits status and exit code on SIGKILL; preserve JudgeCaseEvaluator's signal
+    // handling.
+    int exitCode =
+        codeNode != null && codeNode.canConvertToInt()
+            ? codeNode.asInt()
+            : switch (text(run, "signal")) {
+              case "SIGKILL" -> 137;
+              case "SIGXCPU" -> 152;
+              default -> -1;
+            };
     if ((status != null && !timedOut && exitCode == 0)
         || (status == null && signalNode != null && !signalNode.isNull() && exitCode == 0)) {
       exitCode = -1;
@@ -151,8 +157,7 @@ public class PistonPythonSandbox implements PythonSandbox {
       stderr = "Piston execution status: " + status;
     }
     stderr = truncate(stderr, MAX_STDERR_CHARS);
-    String errorKind =
-        timedOut ? "TLE" : ("XX".equals(status) ? "SYSTEM_ERROR" : null);
+    String errorKind = timedOut ? "TLE" : ("XX".equals(status) ? "SYSTEM_ERROR" : null);
     return new SandboxRunResult(
         timedOut, exitCode, stdout, stderr, run.path("wall_time").asLong(0L), errorKind);
   }

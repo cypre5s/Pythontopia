@@ -25,6 +25,12 @@ function statusClass(status: RuntimeOperationStatus): string {
   return 'status-pill--insufficient-evidence';
 }
 
+function statusTone(status: RuntimeOperationStatus): string {
+  if (status === 'PASS') return 'admin-status--positive';
+  if (status === 'WARN') return 'admin-status--warning';
+  return 'admin-status--muted';
+}
+
 async function loadOperations(): Promise<void> {
   if (loading.value) return;
   loading.value = true;
@@ -114,8 +120,8 @@ onMounted(() => {
               class="operation-row"
             >
               <span
-                class="status-pill"
-                :class="statusClass(loop.status)"
+                class="admin-status status-pill"
+                :class="[statusClass(loop.status), statusTone(loop.status)]"
               >{{ statusLabel(loop.status) }}</span>
               <div class="operation-row__body">
                 <strong>{{ loop.label }}</strong>
@@ -156,8 +162,8 @@ onMounted(() => {
               class="operation-row"
             >
               <span
-                class="status-pill"
-                :class="statusClass(item.status)"
+                class="admin-status status-pill"
+                :class="[statusClass(item.status), statusTone(item.status)]"
               >{{ statusLabel(item.status) }}</span>
               <div class="operation-row__body">
                 <strong>{{ item.label }}</strong>
@@ -192,7 +198,7 @@ onMounted(() => {
 .admin-page-heading h1 {
   margin: 0;
   color: var(--admin-text);
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -232,29 +238,6 @@ onMounted(() => {
 .admin-operations__error p {
   margin: 0;
   overflow-wrap: anywhere;
-}
-
-.admin-button {
-  min-height: 36px;
-  padding: 0 18px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #fff;
-  color: #334155;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.admin-button:hover:not(:disabled) {
-  border-color: var(--admin-focus);
-  color: var(--admin-primary-hover);
-}
-
-.admin-button:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
 }
 
 .admin-operations__stats {
@@ -336,32 +319,6 @@ onMounted(() => {
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.status-pill {
-  display: inline-flex;
-  min-height: 23px;
-  align-items: center;
-  padding: 0 8px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.status-pill--pass {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.status-pill--warn {
-  background: #fef3c7;
-  color: #92400e;
-}
-
-.status-pill--insufficient-evidence {
-  background: #e2e8f0;
-  color: #475569;
 }
 
 @media (max-width: 900px) {

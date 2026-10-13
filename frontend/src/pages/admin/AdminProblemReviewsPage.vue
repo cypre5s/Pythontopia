@@ -58,6 +58,12 @@ function decisionClass(decision: BossProblemReviewDecision): string {
   return `review-status--${decision.toLowerCase()}`;
 }
 
+function decisionTone(decision: BossProblemReviewDecision): string {
+  if (decision === 'APPROVED') return 'admin-status--positive';
+  if (decision === 'REJECTED') return 'admin-status--danger';
+  return 'admin-status--warning';
+}
+
 function shortStatement(statement: string): string {
   const singleLine = statement.replace(/\s+/g, ' ').trim();
   return singleLine.length > 110 ? `${singleLine.slice(0, 110)}…` : singleLine;
@@ -201,45 +207,6 @@ onMounted(() => {
       description="从后端审核队列搜索、筛选和分页；决定与审核意见会持久化。"
     >
       <template #actions>
-        <label class="review-filter">
-          <span>状态</span>
-          <select
-            v-model="filter"
-            aria-label="按审核状态筛选"
-            :disabled="loading"
-            @change="applyQueueFilters"
-          >
-            <option value="ALL">全部状态</option>
-            <option value="PENDING">待审核</option>
-            <option value="APPROVED">已通过</option>
-            <option value="REJECTED">已驳回</option>
-          </select>
-        </label>
-        <label class="review-filter">
-          <span>排序字段</span>
-          <select
-            v-model="sortBy"
-            aria-label="审核队列排序字段"
-            :disabled="loading"
-            @change="applyQueueFilters"
-          >
-            <option value="REQUESTED_AT">申请时间</option>
-            <option value="STATEMENT">题面</option>
-            <option value="REQUESTER_USERNAME">申请人</option>
-          </select>
-        </label>
-        <label class="review-filter">
-          <span>顺序</span>
-          <select
-            v-model="sortDirection"
-            aria-label="审核队列排序方向"
-            :disabled="loading"
-            @change="applyQueueFilters"
-          >
-            <option value="DESC">降序</option>
-            <option value="ASC">升序</option>
-          </select>
-        </label>
         <button
           class="admin-button"
           type="button"
@@ -250,28 +217,75 @@ onMounted(() => {
         </button>
       </template>
 
-      <form
-        class="review-search"
-        data-testid="admin-review-search-form"
-        @submit.prevent="searchQueue"
-      >
-        <label for="admin-review-search">搜索题目、KC、申请人或编号</label>
-        <input
-          id="admin-review-search"
-          v-model="searchInput"
-          type="search"
-          maxlength="100"
-          :disabled="loading"
-          data-testid="admin-review-search"
-        >
-        <button
-          class="admin-button"
-          type="submit"
-          :disabled="loading"
-        >
-          搜索
-        </button>
-      </form>
+      <template #toolbar>
+        <div class="review-toolbar">
+          <form
+            class="review-search"
+            data-testid="admin-review-search-form"
+            @submit.prevent="searchQueue"
+          >
+            <label for="admin-review-search">搜索题目、KC、申请人或编号</label>
+            <input
+              id="admin-review-search"
+              v-model="searchInput"
+              class="admin-control"
+              type="search"
+              maxlength="100"
+              :disabled="loading"
+              data-testid="admin-review-search"
+            >
+            <button
+              class="admin-button admin-button--primary"
+              type="submit"
+              :disabled="loading"
+            >
+              搜索
+            </button>
+          </form>
+          <label class="review-filter">
+            <span>状态</span>
+            <select
+              v-model="filter"
+              class="admin-control"
+              aria-label="按审核状态筛选"
+              :disabled="loading"
+              @change="applyQueueFilters"
+            >
+              <option value="ALL">全部状态</option>
+              <option value="PENDING">待审核</option>
+              <option value="APPROVED">已通过</option>
+              <option value="REJECTED">已驳回</option>
+            </select>
+          </label>
+          <label class="review-filter">
+            <span>排序字段</span>
+            <select
+              v-model="sortBy"
+              class="admin-control"
+              aria-label="审核队列排序字段"
+              :disabled="loading"
+              @change="applyQueueFilters"
+            >
+              <option value="REQUESTED_AT">申请时间</option>
+              <option value="STATEMENT">题面</option>
+              <option value="REQUESTER_USERNAME">申请人</option>
+            </select>
+          </label>
+          <label class="review-filter">
+            <span>顺序</span>
+            <select
+              v-model="sortDirection"
+              class="admin-control"
+              aria-label="审核队列排序方向"
+              :disabled="loading"
+              @change="applyQueueFilters"
+            >
+              <option value="DESC">降序</option>
+              <option value="ASC">升序</option>
+            </select>
+          </label>
+        </div>
+      </template>
 
       <div
         class="review-counts"
@@ -414,13 +428,13 @@ onMounted(() => {
               </td>
               <td>
                 <span
-                  class="review-status"
-                  :class="decisionClass(entry.decision)"
+                  class="admin-status review-status"
+                  :class="[decisionClass(entry.decision), decisionTone(entry.decision)]"
                 >{{ decisionLabel(entry.decision) }}</span>
               </td>
               <td>
                 <button
-                  class="review-open"
+                  class="admin-button review-open"
                   type="button"
                   @click="selectedId = entry.id"
                 >
@@ -431,16 +445,18 @@ onMounted(() => {
           </tbody>
         </table>
       </AdminTable>
-      <AdminPagination
-        :page="page"
-        :total-pages="totalPages"
-        :page-size="pageSize"
-        :total-elements="totalElements"
-        item-label="条审核记录"
-        :disabled="loading"
-        @page-change="goToPage"
-        @page-size-change="changePageSize"
-      />
+      <template #footer>
+        <AdminPagination
+          :page="page"
+          :total-pages="totalPages"
+          :page-size="pageSize"
+          :total-elements="totalElements"
+          item-label="条审核记录"
+          :disabled="loading"
+          @page-change="goToPage"
+          @page-size-change="changePageSize"
+        />
+      </template>
     </AdminPanel>
 
     <AdminPanel
@@ -505,7 +521,7 @@ onMounted(() => {
             class="review-detail__actions"
           >
             <button
-              class="review-decision review-decision--approve"
+              class="admin-button admin-button--positive review-decision review-decision--approve"
               type="button"
               :disabled="loading"
               @click="openDecision('APPROVED', $event)"
@@ -513,7 +529,7 @@ onMounted(() => {
               通过并发布
             </button>
             <button
-              class="review-decision review-decision--reject"
+              class="admin-button admin-button--danger review-decision review-decision--reject"
               type="button"
               :disabled="loading"
               @click="openDecision('REJECTED', $event)"
@@ -528,7 +544,7 @@ onMounted(() => {
     <dialog
       v-if="pendingDecision"
       ref="decisionDialog"
-      class="review-dialog"
+      class="admin-dialog review-dialog"
       aria-labelledby="review-dialog-title"
       @cancel.prevent="closeDecision"
       @click.self="closeDecision"
@@ -541,6 +557,7 @@ onMounted(() => {
       <textarea
         id="review-decision-reason"
         v-model="decisionReason"
+        class="admin-control"
         rows="4"
         maxlength="1000"
         :disabled="deciding"
@@ -563,8 +580,10 @@ onMounted(() => {
           取消
         </button>
         <button
-          class="review-decision"
-          :class="pendingDecision === 'APPROVED' ? 'review-decision--approve' : 'review-decision--reject'"
+          class="admin-button review-decision"
+          :class="pendingDecision === 'APPROVED'
+            ? ['review-decision--approve', 'admin-button--positive']
+            : ['review-decision--reject', 'admin-button--danger']"
           type="button"
           :disabled="deciding"
           data-testid="admin-review-confirm"
@@ -584,89 +603,54 @@ onMounted(() => {
   min-width: 0;
 }
 
-.admin-button,
-.review-open,
-.review-decision {
-  display: inline-flex;
-  min-height: 36px;
-  align-items: center;
-  justify-content: center;
-  padding: 0 18px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #fff;
-  color: #334155;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.admin-button:hover:not(:disabled),
-.review-open:hover {
-  border-color: var(--admin-focus);
-  color: var(--admin-primary-hover);
-}
-
-.admin-button:disabled,
-.review-decision:disabled {
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
 .review-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
+  display: grid;
+  min-width: 112px;
+  gap: 4px;
   color: var(--admin-muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .review-filter select {
-  min-height: 36px;
-  padding: 0 28px 0 10px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  background: #fff;
-  color: var(--admin-text);
-  font: inherit;
+  min-width: 112px;
+}
+
+.review-toolbar {
+  display: flex;
+  width: 100%;
+  align-items: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .review-search {
   display: flex;
-  flex-wrap: wrap;
-  align-items: center;
+  min-width: min(360px, 100%);
+  align-items: flex-end;
   gap: 8px;
-  margin-bottom: 14px;
+  flex: 1 1 360px;
+  flex-wrap: wrap;
+  margin: 0;
 }
 
 .review-search label {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
   color: var(--admin-muted);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .review-search input {
   width: min(320px, 100%);
-  min-height: 36px;
-  padding: 0 10px;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  color: var(--admin-text);
-  font: inherit;
-}
-
-.review-search input:focus-visible,
-.review-filter select:focus-visible {
-  outline: 2px solid var(--admin-focus);
-  outline-offset: 2px;
+  flex: 1 1 180px;
 }
 
 .review-counts {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 
 .review-counts span {
@@ -761,30 +745,10 @@ onMounted(() => {
   cursor: pointer;
 }
 
-.review-id:focus-visible,
-.review-open:focus-visible,
-.review-decision:focus-visible,
-.admin-button:focus-visible,
-.review-filter select:focus-visible,
-.review-dialog textarea:focus-visible {
+.review-id:focus-visible {
   outline: 3px solid var(--admin-focus);
   outline-offset: 2px;
 }
-
-.review-status {
-  display: inline-flex;
-  min-height: 23px;
-  align-items: center;
-  padding: 0 8px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.review-status--pending { background: #fef3c7; color: #92400e; }
-.review-status--approved { background: #dcfce7; color: #166534; }
-.review-status--rejected { background: #fee2e2; color: #991b1b; }
 
 .review-detail {
   display: grid;
@@ -895,40 +859,10 @@ onMounted(() => {
   margin-top: 18px;
 }
 
-.review-decision--approve {
-  border-color: #bbf7d0;
-  background: #f0fdf4;
-  color: #166534;
-}
-
-.review-decision--reject {
-  border-color: #fecaca;
-  background: #fff7f7;
-  color: #991b1b;
-}
-
-.review-dialog::backdrop {
-  background: rgb(15 23 42 / 42%);
-}
-
 .review-dialog {
   position: fixed;
   z-index: 1000;
-  width: min(480px, 100%);
-  max-height: calc(100dvh - 36px);
   margin: auto;
-  overflow: auto;
-  padding: 22px;
-  border: 1px solid #dbe3ef;
-  border-radius: 12px;
-  background: #fff;
-  box-shadow: 0 20px 60px rgb(15 23 42 / 20%);
-}
-
-.review-dialog h2 {
-  margin: 0;
-  color: #172033;
-  font-size: 17px;
 }
 
 .review-dialog > p {
@@ -949,14 +883,6 @@ onMounted(() => {
 .review-dialog textarea {
   display: block;
   width: 100%;
-  min-height: 96px;
-  resize: vertical;
-  padding: 10px;
-  border: 1px solid #cbd5e1;
-  border-radius: 7px;
-  color: #172033;
-  font: inherit;
-  font-size: 13px;
 }
 
 .review-dialog__error {

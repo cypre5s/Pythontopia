@@ -6,7 +6,10 @@ import com.pythontopia.browse.controller.BrowseController;
 import com.pythontopia.classroom.remediation.RemediationController;
 import com.pythontopia.learner.evaluation.controller.LearnerEvaluationController;
 import com.pythontopia.learner.path.controller.LearningPathController;
+import com.pythontopia.media.MediaAsrController;
 import com.pythontopia.media.MediaAssetController;
+import com.pythontopia.media.MediaJobController;
+import com.pythontopia.media.MediaTtsController;
 import com.pythontopia.npc.NpcGreetingController;
 import com.pythontopia.video.BilibiliVideoController;
 import java.lang.reflect.Method;
@@ -24,6 +27,17 @@ class AiBudgetRouteCoverageTest {
 
   @Test
   void deterministicOrDisabledRoutesDoNotConsumeAiBudget() throws NoSuchMethodException {
+    assertThat(new com.pythontopia.media.ImageProperties(null, null, null, null, 50).isEnabled())
+        .isFalse();
+    assertThat(new com.pythontopia.media.TtsProperties(null, null, null, 100).isEnabled())
+        .isFalse();
+    assertThat(new com.pythontopia.media.AsrProperties(null, null, null, null, 100).isEnabled())
+        .isFalse();
+    assertThat(
+            new com.pythontopia.media.ImageUnderstandingProperties(
+                    null, null, null, null, null, 100, 50, 1024)
+                .isEnabled())
+        .isFalse();
     assertNotBudgeted(
         BrowseController.class.getMethod(
             "create",
@@ -47,6 +61,21 @@ class AiBudgetRouteCoverageTest {
             "composeStoryboardVideo",
             com.pythontopia.auth.security.CurrentUserPrincipal.class,
             com.pythontopia.media.dto.StoryboardVideoRequest.class));
+    assertNotBudgeted(
+        MediaJobController.class.getMethod(
+            "submitJob",
+            com.pythontopia.auth.security.CurrentUserPrincipal.class,
+            com.pythontopia.media.dto.StoryboardVideoRequest.class));
+    assertNotBudgeted(
+        MediaTtsController.class.getMethod(
+            "synthesize",
+            com.pythontopia.auth.security.CurrentUserPrincipal.class,
+            com.pythontopia.media.dto.TtsRequest.class));
+    assertNotBudgeted(
+        MediaAsrController.class.getMethod(
+            "transcribe",
+            com.pythontopia.auth.security.CurrentUserPrincipal.class,
+            org.springframework.web.multipart.MultipartFile.class));
     assertNotBudgeted(
         NpcGreetingController.class.getMethod(
             "greeting", com.pythontopia.auth.security.CurrentUserPrincipal.class, String.class));

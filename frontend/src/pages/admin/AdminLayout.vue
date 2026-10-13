@@ -268,6 +268,138 @@ watch(navigationOpen, (open) => {
   line-height: 1.5;
 }
 
+.admin-shell :deep(.admin-control) {
+  min-height: 34px;
+  border: 1px solid var(--admin-border);
+  border-radius: 7px;
+  padding: 0 10px;
+  background: #fff;
+  color: var(--admin-text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.admin-shell :deep(textarea.admin-control) {
+  min-height: 96px;
+  padding: 9px 10px;
+  resize: vertical;
+}
+
+.admin-shell :deep(.admin-control:focus-visible),
+.admin-shell :deep(.admin-button:focus-visible) {
+  outline: 2px solid var(--admin-focus);
+  outline-offset: 2px;
+}
+
+.admin-shell :deep(.admin-control:disabled),
+.admin-shell :deep(.admin-button:disabled) {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.admin-shell :deep(.admin-button) {
+  display: inline-flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  padding: 0 12px;
+  background: #fff;
+  color: #334155;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+}
+
+.admin-shell :deep(.admin-button:hover:not(:disabled)) {
+  border-color: var(--admin-focus);
+  color: var(--admin-primary-hover);
+}
+
+.admin-shell :deep(.admin-button--primary) {
+  border-color: var(--admin-primary);
+  background: var(--admin-primary);
+  color: #fff;
+}
+
+.admin-shell :deep(.admin-button--primary:hover:not(:disabled)) {
+  border-color: var(--admin-primary-hover);
+  background: var(--admin-primary-hover);
+  color: #fff;
+}
+
+.admin-shell :deep(.admin-button--positive) {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.admin-shell :deep(.admin-button--danger) {
+  border-color: #fecaca;
+  background: #fff7f7;
+  color: #991b1b;
+}
+
+.admin-shell :deep(.admin-status) {
+  display: inline-flex;
+  min-height: 22px;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.admin-shell :deep(.admin-status--positive) {
+  background: #dcfce7;
+  color: #166534;
+}
+
+.admin-shell :deep(.admin-status--warning) {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.admin-shell :deep(.admin-status--muted) {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.admin-shell :deep(.admin-status--danger) {
+  background: #fee2e2;
+  color: #991b1b;
+}
+
+.admin-shell :deep(.admin-dialog) {
+  width: min(480px, calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  overflow: auto;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  padding: 20px;
+  background: var(--admin-surface);
+  color: var(--admin-text);
+  box-shadow: 0 20px 60px rgb(15 23 42 / 20%);
+}
+
+.admin-shell :deep(.admin-dialog::backdrop) {
+  background: rgb(15 23 42 / 42%);
+}
+
+.admin-shell :deep(.admin-dialog h2) {
+  margin: 0;
+  color: var(--admin-text);
+  font-size: 17px;
+}
+
 .admin-sidebar {
   position: fixed;
   z-index: 30;
@@ -275,6 +407,8 @@ watch(navigationOpen, (open) => {
   display: flex;
   width: 240px;
   flex-direction: column;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   border-right: 1px solid var(--admin-border);
   background: rgb(255 255 255 / 92%);
   backdrop-filter: blur(18px);

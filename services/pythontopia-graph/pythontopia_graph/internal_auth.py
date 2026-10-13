@@ -40,7 +40,11 @@ class InternalTokenMiddleware(BaseHTTPMiddleware):
     async def dispatch(
         self, request: Request, call_next: RequestResponseEndpoint
     ) -> Response:
-        if request.url.path in PUBLIC_PATHS:
+        # Routing and the public-path exception must use the same ASGI path. Starlette versions
+        # affected by GHSA-86qp-5c8j-p5mr can reconstruct request.url.path from an untrusted Host
+        # header, which could otherwise make a protected route look public here.
+        request_path = request.scope["path"]
+        if request_path in PUBLIC_PATHS:
             return await call_next(request)
         expected = expected_internal_token()
         if not expected:
@@ -55,7 +59,7 @@ class InternalTokenMiddleware(BaseHTTPMiddleware):
             logger.error(
                 "拒绝 %s：PYT_RAG_ADMIN_TOKEN 未配置。生产必须配置内部令牌；"
                 "本地开发如需放行请设 PYT_INTERNAL_AUTH_OPTIONAL=1。",
-                request.url.path,
+                request_path,
             )
             return JSONResponse(
                 status_code=503,

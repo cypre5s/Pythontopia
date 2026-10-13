@@ -65,6 +65,8 @@ describe('AdminOperationsPage', () => {
     expect(wrapper.text()).toContain('2 项证据');
     expect(wrapper.get('h1').text()).toBe('AI 运维概览');
     expect(wrapper.get('.status-pill--insufficient-evidence').text()).toBe('证据不足');
+    expect(wrapper.get('.status-pill--insufficient-evidence').classes()).toContain('admin-status--muted');
+    expect(wrapper.get('.status-pill--pass').classes()).toContain('admin-status--positive');
   });
 
   it('shows a real API error and retries the request', async () => {
