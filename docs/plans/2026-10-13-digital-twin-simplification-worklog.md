@@ -176,3 +176,13 @@
 - 本轮后端相关测试隔离复跑：`AdaptivePracticePolicyTest` 6 项、`BossServiceTest` 45 项、`ExpeditionRunPostgresIntegrationTest` 27 项通过；Testcontainers 空库迁移到 V212。全量 Web 266 个文件 / 2533 项 Vitest 通过，typecheck 通过；全量 Maven 1359 项中 0 assertion failures、7 个环境级 errors（6 个 pgvector 容器启动失败、1 个长期仿真数据库连接拒绝）。
 - 功能复验结束后，经本地 Vite 代理连续启动远征 14 次（2 次预热，12 个计时样本）：P50 20.14 ms、P95 24.75 ms，地图 29 个节点；未发起 DeepSeek 请求，临时账号与存档已删除。此处只测建局接口，不代表 Graph 出题、正式判题或线上延迟。
 - Twin 的学习成效 A/B、BKT/未来路线概率、ECS/公网和真实用户长期效果仍属计划暂缓或未验证项；不得以本次功能回归代替成效评估。
+
+## 2026-10-14 续接收尾复验
+
+- 修复通用 `/api/world/boss/select-frontier` 的选题边界：先取最多 40 个有序 Twin 候选，再筛选 pack 43 中具有同 KC 课程编程题的知识点，最后按请求数量截取。新手首候选 KC001 无题时不会再泄漏为可玩候选；聚焦第一章仍明确返回 422 `EXPEDITION_NO_PRACTICE_PROBLEMS`。不创建跨 KC 代题或伪造题源。
+- Graph 离线 `answer_relevancy` scorer 不再让 DeepEval 自动选择默认 provider。未显式注入评测模型时返回 skipped；在线 DeepSeek provider 未改变。
+- 本地 DeepSeek 凭据安全复核只输出配置字段：API key 存在、地址为 `https://api.deepseek.com`、文本模型 `deepseek-v4-pro`、视觉模型 `deepseek-flash`；`deploy/.env` 被忽略且未跟踪。实际直连模型 2 次文本、1 次合成 PNG 图片请求均 HTTP 200。第一次文本未匹配逐字断言，第二次正确解释 `input()`；图片识别黄色背景与蓝色图形。本轮没有打印凭据。
+- 验证：前端 266 files / 2533 tests、typecheck、build 通过；全量 ESLint 0 errors / 7 warnings。Graph 全量 1823 passed / 1 skipped、Ruff 全量通过；DeepEval scorer 定向 21 passed / 1 skipped。BossService 定向 46 项通过。资产同步检查通过。
+- 后端全量 `mvn test`：1360 tests、0 failures、7 errors。6 个 pgvector Testcontainers 错误在 Surefire XML 中证实为 Docker 动态端口绑定 `address already in use`；`LongTermClassroomEffectSimulationTest` 则是容器连接拒绝。定向 BossService 组独立 `BUILD SUCCESS`。这些环境错误仍未解决。
+- 按“功能最后、性能收尾”的顺序，本地 Vite → Spring 远征建局采样 2 次预热、12 次计时：P50 21.01 ms、最近秩 P95 22.63 ms、25 个地图节点；未调用 DeepSeek。该样本只覆盖建局 API，不代表题目生成、判题、线上负载或其他硬件性能。
+- 仍未完成：完整 10 层 Boss 多阶段真实判题浏览器旅程；pack 43 第一章 KC001–KC007 没有编程题，不能通过错配素材完成。Twin 学习效果对照、BKT/未来路线概率以及生产 Piston/ECS/公网验证继续暂缓，性能采样不覆盖它们。

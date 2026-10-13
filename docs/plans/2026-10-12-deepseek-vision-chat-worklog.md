@@ -29,3 +29,9 @@
 - Maven 全量曾运行 1139 项，5 failures、7 errors。判题测试的本地执行器与审核 ID 夹具已修正，受影响定向组 91 项通过；另外 6 个 Testcontainers 集成类重跑仍因 Docker 主机端口 `address already in use` 未能启动，故全量 Maven 未通过。
 - 生产 AI/readiness 契约脚本、Compose 静态配置检查、Ruff、`git diff --check` 均通过。
 - 未进行真实 DeepSeek 请求、浏览器全栈流程或生产 Piston 执行；对话中曾展示的 key 应轮换后再用于生产。
+
+## 2026-10-14 当前快照实网补测
+
+- 本地忽略的 `deploy/.env` 配置再次确认：DeepSeek endpoint 与文本/视觉模型匹配，凭据未跟踪、未输出。
+- 直连当前 DeepSeek provider 实际发出 3 次请求：2 次文本和 1 次合成 PNG 图片；三次均返回 HTTP 200。第一次文本返回非空内容但没有逐字重复测试标记，第二次正确回答 Python 内置输入函数是 `input()`；图片回答识别到黄色背景和蓝色图形。它验证了基础文本/图片输入与文本输出，不是图像质量基准。
+- 此前 Tutor Web 全栈登录流程也分别完成一次真实文本与图片问答（HTTP 200、SSE `RUN_FINISHED`）；本轮没有重复增加全栈模型调用。离线 DeepEval 没有显式评测模型时改为 skipped，避免触发默认 provider；完整评测结果见本轮数字孪生工作日志。

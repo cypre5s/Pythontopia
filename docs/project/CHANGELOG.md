@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-14 — 当前工作树收尾验证与前沿候选修复
+
+- 通用 Boss 前沿入口与远征开局一致：先加载有序 Twin 候选，再按 pack 43 的同 KC 课程编程题过滤，最后截取请求数量。第一章没有可匹配的课程编程题时仍返回 `EXPEDITION_NO_PRACTICE_PROBLEMS`，不跨 KC 借题。
+- DeepEval `answer_relevancy` 未显式注入评测模型时现在返回 skipped，避免它自动采用默认 provider；依据 [DeepEval FAQ](https://deepeval.com/docs/faq)，该指标未提供模型时会使用默认 OpenAI 模型。明确注入的离线评测模型和在线 DeepSeek 路径不变。
+- 真实 DeepSeek provider 本轮直连 3 次（2 次文本、1 次合成 PNG 图片），均收到 HTTP 200；一次文本回答非空但未满足逐字标记断言，另一次正确回答 `input()`，图片正确识别黄色背景与蓝色图形。此前经 Tutor Web 全栈的文本与图片问答也分别完成过一次真实请求。密钥只存在于被 Git 忽略的 `deploy/.env`，未输出或跟踪。
+- 当前验证：Graph 全量 `1823 passed, 1 skipped`，Ruff 全量通过，打分器 21 passed / 1 skipped；Web 全量 266 files / 2533 tests、TypeScript typecheck、生产 build 通过；ESLint 0 errors / 7 warnings；`BossServiceTest` 46 项通过，资产同步与 `git diff --check` 通过。
+- 全量后端 `mvn test` 为 1360 tests、0 assertion failures、7 errors，未达 `BUILD SUCCESS`：6 个 pgvector Testcontainers 因 Docker 随机宿主端口 `address already in use` 启动失败，另 `LongTermClassroomEffectSimulationTest` 数据库连接被拒。远征服务的定向 BossServiceTest 单独通过。
+- 功能检查结束后本地 Vite → Spring 远征建局采样 14 次（2 次预热、12 个计时样本）：P50 21.01 ms、最近秩 P95 22.63 ms、地图 25 节点，未调用 DeepSeek。完整 Boss 多阶段真实判题浏览器旅程、线上性能、Piston 生产隔离和 ECS/公网仍未验证。
+
 ## 2026-10-14 — 远征与 Web 收尾复验
 
 - 首次进入全局远征时，未评估 KC 且其先修同样未评估的节点可作为难度 1 诊断练习；正式选题仍只保留课程编程题库确有题目的 KC，无匹配题时返回明确错误，不借用其他知识点题目。
