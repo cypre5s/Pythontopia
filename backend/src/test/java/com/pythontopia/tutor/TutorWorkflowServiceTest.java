@@ -470,6 +470,45 @@ class TutorWorkflowServiceTest {
   }
 
   @Test
+  void chatForwardsCurrentEditorCodeToGraph() {
+    service.run(
+        USER,
+        new TutorWorkflowRunRequest(
+            PROBLEM,
+            "CHAT",
+            Map.of("message", "解释当前代码", "code", "print(radius * radius)")));
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> eventData = (Map<String, Object>) capturedBody().get("event_data");
+    assertThat(eventData)
+        .containsEntry("message", "解释当前代码")
+        .containsEntry("code", "print(radius * radius)");
+  }
+
+  @Test
+  void chatRejectsInvalidOrOversizedEditorCode() {
+    assertThatThrownBy(
+            () ->
+                service.run(
+                    USER,
+                    new TutorWorkflowRunRequest(
+                        PROBLEM,
+                        "CHAT",
+                        Map.of("message", "解释当前代码", "code", "x".repeat(20_001)))))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("代码");
+
+    assertThatThrownBy(
+            () ->
+                service.run(
+                    USER,
+                    new TutorWorkflowRunRequest(
+                        PROBLEM, "CHAT", Map.of("message", "解释当前代码", "code", 42))))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("代码");
+  }
+
+  @Test
   void runRejectsInlineImageBytesBeforeTheyEnterTheGraphEvent() {
     assertThatThrownBy(
             () ->

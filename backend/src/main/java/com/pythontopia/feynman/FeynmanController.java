@@ -10,6 +10,7 @@ import com.pythontopia.feynman.dto.FeynmanDtos.StartRequest;
 import com.pythontopia.feynman.dto.FeynmanDtos.TeachRequest;
 import com.pythontopia.feynman.dto.FeynmanDtos.TurnResponse;
 import com.pythontopia.feynman.dto.FeynmanDtos.Verdict;
+import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,11 +25,15 @@ public class FeynmanController {
 
   private final FeynmanSessionService sessionService;
   private final FeynmanJudgeService judgeService;
+  private final TutorDailyRequestLimitService requestLimitService;
 
   public FeynmanController(
-      FeynmanSessionService sessionService, FeynmanJudgeService judgeService) {
+      FeynmanSessionService sessionService,
+      FeynmanJudgeService judgeService,
+      TutorDailyRequestLimitService requestLimitService) {
     this.sessionService = sessionService;
     this.judgeService = judgeService;
+    this.requestLimitService = requestLimitService;
   }
 
   @PostMapping("/sessions")
@@ -44,6 +49,7 @@ public class FeynmanController {
       @PathVariable long id,
       @Valid @RequestBody TeachRequest request) {
     requireStudent(user);
+    requestLimitService.reserve(user.userId());
     return sessionService.teach(user.userId(), id, request.explanation());
   }
 
@@ -56,6 +62,7 @@ public class FeynmanController {
   @PostMapping("/sessions/{id}/bug-hunt")
   public BugHuntResponse bugHunt(@CurrentUser CurrentUserPrincipal user, @PathVariable long id) {
     requireStudent(user);
+    requestLimitService.reserve(user.userId());
     return sessionService.bugHunt(user.userId(), id);
   }
 

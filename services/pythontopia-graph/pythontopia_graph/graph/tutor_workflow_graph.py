@@ -698,6 +698,7 @@ class TutorWorkflowGraph:
                 brief,
                 images=images,
                 references=request.event_data.get("references", []),
+                code=request.event_data.get("code") if event == "CHAT" else None,
             )
         raise CardGenerationError("SYSTEM_ERROR", f"unsupported event: {event}")
 

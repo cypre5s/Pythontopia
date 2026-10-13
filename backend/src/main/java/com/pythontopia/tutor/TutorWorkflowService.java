@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 import java.util.regex.Matcher;
@@ -58,6 +59,7 @@ public class TutorWorkflowService {
   private static final int MAX_RESTORE_CARDS = 12;
   private static final int MAX_RESTORE_CHAT_TURNS = 20;
   private static final int MAX_CHAT_MESSAGE_LENGTH = 2000;
+  private static final int MAX_TUTOR_CODE_LENGTH = 20_000;
   private static final int MAX_REPLAY_RESULT_BYTES = 1_048_576;
   private static final Pattern IMAGE_DATA_URI =
       Pattern.compile("(?i)data:image/(?:png|jpeg|gif|webp);base64,");
@@ -508,6 +510,15 @@ public class TutorWorkflowService {
     if (rawAttachmentIds != null && !"CHAT".equals(event)) {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST, "TUTOR_IMAGES_UNSUPPORTED", "图片输入仅支持导学对话");
+    }
+    Object rawCode = eventData.get("code");
+    if (rawCode != null) {
+      if (!(rawCode instanceof String code)
+          || code.length() > MAX_TUTOR_CODE_LENGTH
+          || !Set.of("CHAT", "EXECUTION_TRACE", "VISUALIZE").contains(event)) {
+        throw new BusinessException(
+            HttpStatus.BAD_REQUEST, "TUTOR_CODE_INVALID", "编辑器代码格式无效或超过 20000 字符");
+      }
     }
     if (!"CHAT".equals(event)) {
       return;

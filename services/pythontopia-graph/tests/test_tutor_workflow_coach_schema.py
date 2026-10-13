@@ -82,6 +82,28 @@ def test_workflow_chat_request_accepts_private_attachment_ids() -> None:
     assert request.event_data["attachment_ids"] == [attachment_id]
 
 
+def test_workflow_chat_request_accepts_bounded_editor_code() -> None:
+    request = WorkflowRunRequest(
+        session_id="wf-1",
+        user_id=1,
+        event="CHAT",
+        problem={"problem_id": 42},
+        event_data={"message": "解释这段代码", "code": "print(42)"},
+    )
+
+    assert request.typed_event_data is not None
+    assert request.typed_event_data.code == "print(42)"
+
+    with pytest.raises(ValidationError, match="at most 20000 characters"):
+        WorkflowRunRequest(
+            session_id="wf-1",
+            user_id=1,
+            event="CHAT",
+            problem={"problem_id": 42},
+            event_data={"message": "解释代码", "code": "x" * 20_001},
+        )
+
+
 def test_workflow_chat_request_rejects_inline_image_bytes() -> None:
     with pytest.raises(ValidationError, match="private attachment transport"):
         WorkflowRunRequest(

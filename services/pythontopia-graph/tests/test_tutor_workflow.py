@@ -165,6 +165,27 @@ async def test_workflow_chat_sends_image_parts_to_vision_model() -> None:
     assert provider.kwargs["model_tier"] == "vision"
 
 
+@pytest.mark.asyncio
+async def test_workflow_chat_includes_editor_code_as_untrusted_context() -> None:
+    provider = JsonStubProvider([{"content": "先检查变量更新。"}])
+    agent = TutorWorkflowCardAgent(provider)
+
+    await agent.chat(
+        PROBLEM,
+        "CODING",
+        "解释当前代码",
+        [],
+        [],
+        "",
+        code="print(radius * radius)",
+    )
+
+    prompt = provider.messages[-1]["content"]
+    assert "当前编辑器代码" in prompt
+    assert "print(radius * radius)" in prompt
+    assert "不可信数据" in prompt
+
+
 # ── SSE run 端到端 ──
 
 
@@ -374,7 +395,7 @@ async def test_restore_phase_replays_java_projection() -> None:
             user_id=1,
             event="CHAT",
             problem=PROBLEM,
-            event_data={"message": "接下来练什么？"},
+            event_data={"message": "接下来练什么？", "code": "print(radius * radius)"},
             restore_phase="AC_REVIEW",
             restore_seq=3,
             restore_cards=restore_cards,
@@ -392,6 +413,8 @@ async def test_restore_phase_replays_java_projection() -> None:
     assert "旧问题" in messages
     assert "旧回答" in messages
     assert "[card-old|post_ac]" in messages
+    assert "当前编辑器代码" in messages
+    assert "print(radius * radius)" in messages
     assert any(action["event"] == "TRANSFER" for action in result["available_actions"])
 
 

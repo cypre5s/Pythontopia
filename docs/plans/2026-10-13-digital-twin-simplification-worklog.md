@@ -80,3 +80,11 @@
 - 验证：远征后端 `ExpeditionRunPostgresIntegrationTest`、`ExpeditionScoreServiceTest`、`BossServiceTest`、`EndlessPregenServiceTest`、`ExpeditionRunControllerTest` 共 95 项通过；最终情绪边界 Testcontainers 用例也单独复跑通过。前端全量 260 files / 2504 tests、typecheck、build 通过；lint 0 errors、178 warnings。Graph 全量 1814 passed / 1 skipped，RAG 158 passed / 2 skipped；六项部署契约脚本通过。
 - 后端全量 `mvn -q test` 运行 1327 项：0 assertion failures、7 errors。6 项 pgvector Testcontainers 无法绑定动态宿主端口（Docker `address already in use`），另 1 项连接对应容器失败；隔离重跑相关类共 8 项，仍有 5 项同类容器错误、0 assertion failures。需在 Docker 端口稳定的环境补齐全量证据。
 - 本轮未产生新的 DeepSeek 请求，也未做远征性能测量；Twin 聚合接口旧的 30 次本地采样不能替代远征 P50/P95。跨 run 重复题抑制、未来路线对比、BKT、效果对照实验仍暂缓。公开过的 API key 应轮换。
+
+## 2026-10-14 Tutor 与生产安全补充
+
+- 训练场工作流 `CHAT` 现在携带当前编辑器代码；前端、Java 与 Graph 均拒绝超过 20,000 字符的代码，Tutor prompt 将代码按不可信学生内容处理，不作为指令或课程证据。
+- 费曼学伴的教学与找茬入口复用 Tutor 账号/上海时区每日 30 次计数；额度耗尽时不调用 Graph。工作坊上传超出个人存储额度时在解析文件前返回错误。
+- 生产 Graph 显式关闭可选内部鉴权；ECS 预检和安装脚本拒绝公开开发数据库密码。未连接 ECS，也未执行部署。
+- 验证：后端 14 个相关单测类与 2 个 PostgreSQL/Testcontainers 集成类共 192 项通过；Web 260 个测试文件 / 2506 项与 typecheck 通过；Graph 全量 1816 passed / 1 skipped；生产 AI/readiness 与安装密钥契约脚本通过。
+- 无尽远征性能采样、Piston 容器隔离冒烟、全栈浏览器联测仍未完成；本轮未发起 DeepSeek 请求。对话中暴露过的 API key 应轮换后再执行有费用的远征性能测量。
