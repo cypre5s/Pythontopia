@@ -1,6 +1,6 @@
-# Pythontopia Beta v1 全量回归报告
+# Pythontopia Beta v1 全量回归报告（历史快照）
 
-> 演示前最后一次回归记录。每次发布前重跑并刷新本文件。
+> 以下结果是 2026-05-21 的历史基线，已被后续实现和验证取代，不能作为当前发布结论。当前快照请先看 [2026-10-14 CHANGELOG](../project/CHANGELOG.md) 和对应计划工作日志；发布前需重新运行本报告列出的全套命令并更新结果。
 
 ## 1. 单元 / 集成测试
 
@@ -40,6 +40,6 @@
 
 ## 5. 复盘备注
 
-- 演示主链路依赖讯飞 Spark；如演示日 API 不可用，按 `docs/presentations/demo_script.md` 备用计划切换 `openai_compat`。
+- 本报告写成时演示主链路依赖讯飞 Spark；该配置已废弃。当前 Graph 只接受 DeepSeek provider，详见 `docs/operations/llm-provider-env.md`。
 - Pyodide 首加载约 6~8s，建议演示前在演示机预跑一次 `/training` 热身。
 - 后端单 worker 启动；若评审机器 CPU < 4 核，建议提前 5 分钟把 backend / graph / rag 预热。

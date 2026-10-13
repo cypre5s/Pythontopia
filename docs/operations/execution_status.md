@@ -2,6 +2,7 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
+> **当前快照（2026-10-14）**：本轮工作聚焦 Web。Tutor 已使用 DeepSeek 固定阶段 AutoGen；Twin 状态聚合/确定性推荐、Boss Phaser 场景、教师与管理 Web 交互已实现并有定向验证。本轮又修复教师切班直播订阅、审核队列并发、课件视频失败状态与请求竞态、图书馆索引错误状态。当前完整 Web Vitest 为 266 files / 2533 tests，typecheck 与 production build 通过。关闭开发栈后再次全量跑 Maven：1358 tests、0 assertion failures、6 errors（5 个 Testcontainers 随机宿主端口绑定冲突、1 个长期仿真测试连接 reset）；长期仿真单类隔离重跑 1 项通过，先前端口冲突类隔离重跑 19 项通过，但全量仍未通过。剩余项包括 Twin 学习效果对照、完整 Boss 最终节点真实判题浏览器演出、题库缺少当前 KC 时的 Graph 故障兜底、生产 Piston/ECS/公网验证；本轮不追加性能测量，历史本机样本见 CHANGELOG。下方阶段表与进度时间线保留早期历史，不代表当前工作焦点。
 
 ## 全局阶段进度
 

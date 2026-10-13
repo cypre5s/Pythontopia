@@ -89,7 +89,9 @@ const currentKcCode = ref<string | null>(
 const pageDetail = ref<CoursePageDetail | null>(null);
 const pageLoading = ref<boolean>(false);
 const indexLoading = ref<boolean>(true);
+const indexError = ref<string | null>(null);
 const documentPageList = ref<CoursePageDetail[]>([]);
+let pageLoadRequestId = 0;
 
 const ragQuery = ref<string>('');
 const ragRunning = ref<boolean>(false);
@@ -128,20 +130,29 @@ function setViewMode(mode: PageViewMode): void {
 // 课件视频：按当前章号拉 video_manifest，优先选第一个已就绪(available)的视频；整章无视频时回退文字摘录。
 const chapterVideos = ref<CourseVideoDto[]>([]);
 const videosLoading = ref<boolean>(false);
+const videosError = ref<string | null>(null);
 const selectedVideoId = ref<number | null>(null);
 const videoChapterLoaded = ref<number | null>(null);
+let videoRequestId = 0;
 
 async function loadChapterVideos(chapterNo: number): Promise<void> {
   if (videoChapterLoaded.value === chapterNo) return;
+  const requestId = ++videoRequestId;
   videosLoading.value = true;
+  videosError.value = null;
   try {
     const list = await listChapterVideos(chapterNo);
+    if (requestId !== videoRequestId) return;
     chapterVideos.value = list;
     videoChapterLoaded.value = chapterNo;
     const firstReady = list.find((v) => v.available) ?? list[0] ?? null;
     selectedVideoId.value = firstReady?.id ?? null;
+  } catch (error) {
+    if (requestId !== videoRequestId) return;
+    const message = error instanceof Error ? error.message : String(error);
+    videosError.value = `课件视频加载失败：${message}`;
   } finally {
-    videosLoading.value = false;
+    if (requestId === videoRequestId) videosLoading.value = false;
   }
 }
 
@@ -274,6 +285,10 @@ async function loadIndex(): Promise<void> {
     kcs.value = mergeKcFromBackend(kcDtos, kcFallback);
     problemsList.value = problems;
     examplesList.value = examples;
+    indexError.value = null;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    indexError.value = `课件索引加载失败：${message}`;
   } finally {
     indexLoading.value = false;
   }
@@ -301,12 +316,14 @@ function mergeKcFromBackend(backend: KcDto[], fallback: CourseKcSummary[]): Cour
 }
 
 async function loadPage(docId: number, pageNo: number): Promise<void> {
+  const requestId = ++pageLoadRequestId;
   pageLoading.value = true;
   try {
     const [detail, pages] = await Promise.all([
       getDocumentPage(docId, pageNo),
       listDocumentPages(docId),
     ]);
+    if (requestId !== pageLoadRequestId) return;
     documentPageList.value = pages;
     pageDetail.value = detail;
     if (!detail) {
@@ -314,11 +331,12 @@ async function loadPage(docId: number, pageNo: number): Promise<void> {
     }
     syncQuery();
   } catch (error) {
+    if (requestId !== pageLoadRequestId) return;
     pageDetail.value = null;
     const message = error instanceof Error ? error.message : String(error);
     toast.push({ kind: 'error', text: `课件加载失败：${message}` });
   } finally {
-    pageLoading.value = false;
+    if (requestId === pageLoadRequestId) pageLoading.value = false;
   }
 }
 
@@ -577,6 +595,23 @@ watch(chapterNoForVideo, (next) => {
         </nav>
       </header>
 
+      <section
+        v-if="indexError"
+        class="library-index-error"
+        role="alert"
+      >
+        <span>{{ indexError }}</span>
+        <PyButton
+          test-id="library-index-retry"
+          variant="secondary"
+          size="sm"
+          :disabled="indexLoading"
+          @click="loadIndex"
+        >
+          {{ indexLoading ? '正在重试…' : '重试' }}
+        </PyButton>
+      </section>
+
       <div
         ref="bodyRef"
         class="library-body"
@@ -792,6 +827,22 @@ watch(chapterNoForVideo, (next) => {
               >
                 加载课件视频清单…
               </p>
+              <div
+                v-else-if="videosError"
+                class="video-error"
+                role="alert"
+                data-testid="library-video-error"
+              >
+                <span>{{ videosError }}</span>
+                <PyButton
+                  variant="secondary"
+                  size="sm"
+                  :disabled="videosLoading"
+                  @click="loadChapterVideos(chapterNoForVideo)"
+                >
+                  重试
+                </PyButton>
+              </div>
               <template v-else-if="chapterVideos.length > 0">
                 <div class="video-stage">
                   <video
@@ -1068,6 +1119,16 @@ watch(chapterNoForVideo, (next) => {
   background: var(--pyt-color-bg-elevated, var(--pyt-color-bg-elevated));
   box-shadow: 4px 4px 0 var(--pyt-color-border-strong, var(--pyt-color-text-primary));
 }
+.library-index-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  background: var(--pyt-color-danger-bg, #fff0e8);
+  color: var(--pyt-color-text-primary, #352b25);
+}
 .back-button {
   font-family: var(--pyt-font-pixel), monospace;
   min-height: 36px;
@@ -1257,6 +1318,16 @@ watch(chapterNoForVideo, (next) => {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+.video-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 2px solid var(--pyt-color-border-strong, var(--pyt-color-text-primary));
+  background: var(--pyt-color-danger-bg, #fff0e8);
+  color: var(--pyt-color-text-primary, #352b25);
 }
 .video-stage {
   width: 100%;

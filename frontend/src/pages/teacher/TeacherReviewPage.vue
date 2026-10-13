@@ -28,6 +28,7 @@ const deciding = ref<boolean>(false);
 const entries = ref<BossProblemReviewDto[]>([]);
 const decisionReason = ref<string>("");
 const selectedId = ref<number | null>(null);
+let queueRevision = 0;
 
 const isTeacherOrAdmin = computed<boolean>(() => {
   const role = session.role;
@@ -46,8 +47,18 @@ const counts = computed(() => ({
 async function loadQueue(): Promise<void> {
   if (!isTeacherOrAdmin.value || loadingQueue.value) return;
   loadingQueue.value = true;
+  const revisionAtRequest = queueRevision;
   try {
-    entries.value = await listProblemReviews(100);
+    const loadedEntries = await listProblemReviews(100);
+    entries.value =
+      revisionAtRequest === queueRevision
+        ? loadedEntries
+        : [
+            ...entries.value,
+            ...loadedEntries.filter(
+              (loaded) => !entries.value.some((current) => current.id === loaded.id),
+            ),
+          ];
     if (selectedId.value === null && entries.value.length > 0) {
       selectedId.value = entries.value[0]?.id ?? null;
     }
@@ -60,7 +71,7 @@ async function loadQueue(): Promise<void> {
 }
 
 async function fetchProblem(): Promise<void> {
-  if (loading.value || !isTeacherOrAdmin.value) return;
+  if (loading.value || loadingQueue.value || !isTeacherOrAdmin.value) return;
   loading.value = true;
   try {
     const requestedKc = kcCode.value.trim();
@@ -71,6 +82,7 @@ async function fetchProblem(): Promise<void> {
       ...(requestedKc ? { kcCode: requestedKc } : {}),
       ...(requestedKind ? { kind: requestedKind } : {}),
     });
+    queueRevision += 1;
     entries.value = [
       candidate,
       ...entries.value.filter((entry) => entry.id !== candidate.id),
@@ -102,6 +114,7 @@ async function decideCurrent(
       reason,
       version: entry.version,
     });
+    queueRevision += 1;
     entries.value = entries.value.map((item) =>
       item.id === updated.id ? updated : item,
     );
@@ -238,7 +251,7 @@ const canDecide = computed<boolean>(
           type="button"
           class="btn btn-primary"
           data-testid="teacher-review-fetch"
-          :disabled="loading || !isTeacherOrAdmin"
+          :disabled="loading || loadingQueue || !isTeacherOrAdmin"
           @click="fetchProblem"
         >
           {{ loading ? "拉题中…" : "调 graph 出 1 道题" }}

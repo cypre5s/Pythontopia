@@ -353,4 +353,42 @@ describe('ClassroomDetail', () => {
     expect(fetchMock).toHaveBeenCalledOnce();
     wrapper.unmount();
   });
+
+  it('切换班级时将直播订阅切换到新班级并清除旧班级事件', async () => {
+    const encoder = new TextEncoder();
+    const fetchMock = vi.fn(async (url: string) => {
+      const classroomId = url.includes('/10/live') ? 10 : 9;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(encoder.encode('event: connected\ndata: {}\n\n'));
+          controller.enqueue(
+            encoder.encode(`event: submission\ndata: {"classroomId":${classroomId}}\n\n`),
+          );
+        },
+      });
+      return new Response(body, { status: 200 });
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await router.push('/teacher/classroom/9');
+    const wrapper = mountClassroomDetail();
+    await flushPromises();
+    const liveTab = wrapper.find('[data-testid="classroom-live-tab"]');
+    await liveTab.findAll('button').find((button) => button.text().includes('开始直播'))!.trigger('click');
+    await vi.waitFor(() => expect(liveTab.text()).toContain('classroomId'));
+
+    await router.push('/teacher/classroom/10');
+    await flushPromises();
+    await vi.waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(liveTab.text()).toContain('"classroomId": 10');
+    });
+
+    expect(liveTab.text()).not.toContain('"classroomId": 9');
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/classroom/9/live',
+      '/api/classroom/10/live',
+    ]);
+    wrapper.unmount();
+  });
 });
