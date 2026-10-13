@@ -84,12 +84,13 @@ export interface RogueRunSaveSummary {
   serverVerified: boolean;
   relicCount: number;
   isDaily: boolean;
+  settlementPending: boolean;
   lastPlayedAt: string | null;
 }
 
 /** 续局允许从地图、挑战、事件或领奖阶段恢复。 */
 function isResumablePhase(p: RogueRunPhase): boolean {
-  return p === 'map' || p === 'challenge' || p === 'event' || p === 'reward';
+  return p === 'map' || p === 'challenge' || p === 'event' || p === 'reward' || p === 'over';
 }
 
 /** 从数组里无放回随机取最多 n 个（Fisher–Yates 部分洗牌）。 */
@@ -247,6 +248,12 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   const nodeById = (id: string): RogueNode | undefined => nodes.value.find((n) => n.id === id);
   const hasRelic = (id: string): boolean => relics.value.includes(id);
   const hasSavedRun = computed(() => isUsableSavedRun(savedRun.value));
+  const isVictory = computed(() => phase.value === 'cleared' || (
+    phase.value === 'over'
+    && nodes.value.some((node) =>
+      node.id === currentNodeId.value && node.kind === 'boss' && node.state === 'cleared',
+    )
+  ));
   const savedRunSummary = computed<RogueRunSaveSummary | null>(() => {
     const snap = savedRun.value;
     if (!isUsableSavedRun(snap)) return null;
@@ -259,6 +266,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       serverVerified: savedRunVerified.value,
       relicCount: Array.isArray(snap.relics) ? snap.relics.length : 0,
       isDaily: snap.isDaily ?? false,
+      settlementPending: snap.phase === 'over',
       lastPlayedAt: snap.history[0]?.at ?? null,
     };
   });
@@ -324,7 +332,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     resume = false,
     clearTransient = true,
   ): void {
-    phase.value = resume && p.phase !== 'reward' ? 'map' : p.phase;
+    phase.value = resume && (p.phase === 'challenge' || p.phase === 'event') ? 'map' : p.phase;
     runId.value = p.runId ?? null;
     focusChapter.value = p.focusChapter ?? null;
     // 老存档可能含已弃用的不可判题型，续局前就地迁移到可真判题型，避免恢复即卡死。
@@ -384,9 +392,18 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     savedRun.value = snap;
     savedRunVerified.value = loaded.serverVerified;
     serverPersistenceEnabled = loaded.serverVerified;
+    scoreReported.value = false;
+    summaryReported.value = false;
     applySnapshot(snap, loaded.serverVerified, true);
     if (phase.value === 'reward') openReward();
     persist();
+    if (phase.value === 'over') {
+      if (isDaily.value) {
+        dailyDoneDate.value = todayStr();
+        saveDailyDate(dailyDoneDate.value);
+      }
+      await reportScore();
+    }
     return true;
   }
 
@@ -494,7 +511,37 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
         }
       } else if (phase.value === 'idle') {
         const existing = await fetchExpeditionRun();
-        if (existing?.runId) await deleteExpeditionRun();
+        if (existing?.runId && existing.phase === 'over') {
+          serverPersistenceEnabled = true;
+          scoreReported.value = false;
+          summaryReported.value = false;
+          applySnapshot(existing, true);
+          if (existing.isDaily) {
+            dailyDoneDate.value = todayStr();
+            saveDailyDate(dailyDoneDate.value);
+          }
+          if (!(await reportScore())) {
+            errorMessage.value = '本局成绩暂未结算，请重试后再开新局';
+            toast.show(errorMessage.value, 'error');
+            return;
+          }
+          if (daily && existing.isDaily) return;
+        } else if (existing?.runId && daily) {
+          if (!existing.isDaily) {
+            throw new Error('已有普通远征，请先继续或弃掉当前远征，再开始每日挑战');
+          }
+          scoreReported.value = false;
+          summaryReported.value = false;
+          serverPersistenceEnabled = true;
+          savedRun.value = existing;
+          savedRunVerified.value = true;
+          applySnapshot(existing, true, true);
+          if (existing.phase === 'reward') openReward();
+          persist();
+          return;
+        } else if (existing?.runId) {
+          await deleteExpeditionRun();
+        }
       }
       // 前沿和地图由服务端一次性签发，客户端不再决定本局的节点拓扑与挑战配置。
       const started = await createExpeditionRun({ focusChapter: focus, isDaily: daily });
@@ -570,7 +617,11 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   }
 
   /** 拉取并进入某节点的判题（战斗/精英/抓bug/boss，以及事件选择后的挑战）。 */
-  async function beginChallenge(node: RogueNode, difficultyBonus = 0): Promise<void> {
+  async function beginChallenge(
+    node: RogueNode,
+    difficultyBonus = 0,
+    difficultyOverride?: number,
+  ): Promise<void> {
     const requestGeneration = ++challengeGeneration;
     activeNode.value = node;
     activeBossPhase.value = node.kind === 'boss' ? bossPhase.value : 1;
@@ -584,10 +635,9 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     loading.value = true;
     // 局内自适应和事件加成只影响当前题，不改服务端签发的地图配置。
     const recentFailures = history.value.slice(0, 2).filter((h) => !h.passed).length;
-    activeDifficulty.value = Math.min(
-      5,
-      computeRunDifficulty(node.difficulty, momentum.value, recentFailures) + difficultyBonus,
-    );
+    activeDifficulty.value = Math.min(5, difficultyOverride ?? (
+      computeRunDifficulty(node.difficulty, momentum.value, recentFailures) + difficultyBonus
+    ));
     persist();
     try {
       const problem = await challenge.fetchProblem({
@@ -838,7 +888,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       // 预取失败不阻断重试：beginChallenge 会走现场出题路径。
     }
     // beginChallenge 内部 finally 会把 loading 归位。
-    await beginChallenge(node);
+    await beginChallenge(node, 0, difficulty);
   }
 
   /** UI/诊断按 node 查询预加载状态；ready 只来自后端 READY。 */
@@ -967,6 +1017,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     rewardChoices,
     hasSavedRun,
     savedRunSummary,
+    isVictory,
     nodesByLayer,
     passedCount,
     attempts,

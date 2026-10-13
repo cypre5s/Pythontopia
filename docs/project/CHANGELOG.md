@@ -1,5 +1,70 @@
 # Changelog
 
+## 2026-10-13 — Twin 被动画像更新增加持久重放
+
+- 学习事件产生的八维画像增量现在先写入 V207 outbox，再于事务提交后应用；重复事件按业务键幂等，单学生按 outbox 顺序处理。数据库异常会保留待处理行并按 10 秒间隔重试。
+- 验证：画像事件单测 19 项、PostgreSQL 故障恢复/顺序/幂等集成测试 1 项、Spring 应用上下文测试 1 项通过；本次 Java 文件 Spotless 定向检查通过。全仓 Spotless 仍被其他既有格式差异阻断。
+
+## 2026-10-13 — 本地 Piston 沙箱与正式判题联测
+
+- `./dev.sh --sandbox` 新增 opt-in 本地 Isolate/Piston 判题环境。固定上游镜像依赖并补齐 CommonJS 兼容，Python runtime 由脚本安装；沙箱 API 只映射到宿主机 loopback。Piston 最大运行时限设为 10 秒，覆盖当前题目默认的 5 秒限时。
+- 验证：Piston 隔离冒烟确认 Python 执行、宿主文件和 loopback 不可访问、超时会终止；Playwright 正式提交 E2E 通过。`/readyz` 中 judge 与 AST 检查器就绪，但整体仍因视频转录服务不可用返回 503。无 DeepSeek 请求，无尽远征性能指标待测。
+
+## 2026-10-13 — 无尽远征功能回归（性能后置）
+
+- 正式判题联测提交已触发 Twin 画像 outbox 投影，并在 PostgreSQL 中以 `APPLIED` 状态完成；本地 Vite、后端及 Docker 开发依赖已关闭。
+- 验证：`EndlessPregenServiceTest` 9、`ExpeditionScoreServiceTest` 10、`ExpeditionRunPostgresIntegrationTest` 22，共 41 tests 全部通过；定向 Java Spotless 与 `git diff --check` 通过。
+- 按用户优先级，本轮没有运行远征性能基准或发起 DeepSeek 请求；P50/P95、缓存命中率、重复率、失败恢复率与通关率继续待测。
+
+## 2026-10-13 — 修复训练场 Pyodide Worker 本地与生产加载
+
+- Vite 会给未知动态导入的公共文件追加 `?import`，使 `/pyodide/pyodide.mjs` 返回 500。训练 Worker 改为从 npm 包导入 Pyodide ESM 与 asm 模块，并提供 Vite 所需的 ESM worker 输出格式；同步脚本只发布 WASM、标准库和锁文件。
+- 验证：浏览器回归实际运行 Python 并显示输出；构建后的 Worker 在生产预览中独立输出 `pyodide-prod-ok`；`npm run build` 通过。构建会显示 Pyodide 上游 ESM 的 Node builtin externalization 与 `eval` 提示。
+
+## 2026-10-13 — Web 依赖安全更新与全量回归
+
+- 更新 Vue、Axios、Vite、Vitest、ESLint Vue 插件及相关开发工具，修复生产依赖审计发现的高危公告；Mermaid 的 KaTeX 固定到已修复的 `0.18.2`。
+- Vitest 4 暴露 ClassroomDetail 测试跨用例共享 mock 调用记录，`beforeEach` 现在清空调用历史；实际页面已有重复点击保护，无需改业务代码。
+- 验证：`npm audit` 0 vulnerabilities；全量 Vitest 255 文件 / 2512 tests 通过；lint 0 errors（131 warnings）；生产构建成功。未启动全栈、未请求 DeepSeek、未测远征性能。
+
+## 2026-10-13 — 远征终局校验与真实通关记录
+
+- 成绩接口仅接受服务端已进入 `over` 的活动 run；客户端不能跳过游戏动作直接提前结算。
+- 排行榜 `cleared` 从服务端地图中的 Boss 清除状态派生；主动结束/失败局记未通关，三阶段 Boss 判题通过后记通关。
+- TDD：提前结算和 Boss 通关回归先复现失败，修复后 `ExpeditionScoreServiceTest` 与 `ExpeditionRunPostgresIntegrationTest` 共 32 tests 通过；Testcontainers 空库迁移到 V206。无性能测量。
+
+## 2026-10-13 — Web 安全与远征恢复复核
+
+- 生产 HTTP 入口仅保留 ACME challenge，其余请求固定 308 到受信任的 HTTPS IP；发布终验、公网验收和回滚契约同步更新，验收脚本先验证重定向再使用 HTTPS。
+- Nginx 对 `/api/classrooms/join` 按来源 IP 限速，超限返回 429，降低加入码枚举速率。
+- V206 移除未验证可选邮箱的唯一约束，保留用户名唯一；邮箱重复不再通过注册 409 暴露账号是否存在。
+- 远征服务启动时把上次进程遗留的 PENDING 预生成任务置为 FAILED；排队任务开始前复核状态与 attempt，已取消任务不会再调用 Graph。
+- 验证：Nginx 入口契约、HTTPS 转发与回滚选择脚本通过；临时 Nginx 1.27 容器确认 Host 固定跳转、ACME 路径可用、加入接口第 7 次请求起返回 429；Web 10 个 Vitest 文件 / 165 tests、typecheck 与改动文件 ESLint 通过；`EndlessPregenServiceTest` 9 tests、远征 Testcontainers 22 tests 和 V206 邮箱/用户名唯一性集成回归通过。全栈、DeepSeek/Piston 请求与远征性能未运行。
+
+## 2026-10-13 — 功能优先复核
+
+- DeepSeek provider 阻断请求级 `model=` 覆盖；preflight 和 release installer 会拒绝不支持的文本、fast、vision 模型名。导师图片继续由 DeepSeek Flash 直接处理并返回文本；本地忽略的 `deploy/.env` 已有 DeepSeek 配置。
+- 无尽远征清除节点时取消被绕过分支的 pending/ready 题目预取并释放配额，避免异步晚到结果复活已跳过节点。
+- 教师切换班级时清空旧班级快照；管理员用户列表读写期间锁住其他列表操作，避免状态更新后未刷新。
+- 验证：Web 状态/管理回归 117 tests、图像提交路径 4 个文件 / 64 tests、管理台及 router 35 tests、typecheck、定向 ESLint；后端定向 57 tests（含 PostgreSQL Testcontainers 空库迁移到 V205）；Graph provider 57 tests、AutoGen Tutor 73 tests；DeepSeek 模型与生产 readiness 脚本通过。Graph 有 1 项既有 pytest 标记警告；全仓 Spotless 仍有 604 个既有格式违规，本次修改 Java 文件均未落入违规列表。
+- 待测：按用户要求未启动全栈、未调用 DeepSeek/Piston，也未进行无尽远征性能测试；性能数据保留待测。对话中暴露过的 API 密钥应轮换后再进行真实请求。
+
+## 2026-10-13 — 远征恢复、Twin 重试与数据并发保护
+
+- Web 远征恢复保留 `over` 终态并可重试同一局结算；Boss 节点已清除时正确显示胜利，日挑战续局不会被重新开局流程删除。挑战重试保留原难度，最多 36 个经核验题目覆盖当前 12 个挑战阶段的有界重试空间。
+- 进入挑战时若题目预生成仍为 PENDING，Web 每 500ms 查询一次、最多等 5 秒；仍在生成时明确提示稍后重试，并停止发起本次出题请求。
+- 教师切换班级时忽略旧请求回包；画像维度与 Twin 周报加载失败提供错误态和重试入口。
+- 媒体读取与流式访问要求非空且匹配的所有者；同一用户/KC 的并发掌握度事件使用 PostgreSQL 事务级 advisory lock 串行读取与更新，避免丢失增量。
+- Graph Boss 自测/评估扫描器拒绝 `os` 导入，防止生成代码以 `os.system` 调用系统命令。
+- 验证：Web 定向 Vitest 5 个文件 / 86 tests、`npm run typecheck`、改动文件 ESLint 通过；后端计分/媒体/掌握度/Twin 定向 Maven 测试通过，Testcontainers 空库迁移到 V205；Graph Boss 自测 18 tests 与 Ruff 通过。
+- 未启动全栈、未请求 DeepSeek 或 Piston、未测远征性能；P50/P95 等指标按用户顺序留待功能复核之后。
+
+## 2026-10-13 — 远征命题扫描拦截 os 模块
+
+- Graph Boss 自测/评估共享 AST 扫描器现拒绝 `os` 导入，避免生成参考解通过 `os.system` 调用系统命令；真实执行仍只委托配置好的 Piston/Isolate。
+- RED/GREEN：新增 `import os; os.system(...)` 回归先失败后通过；Boss 自测、评估与路由 43 tests 通过，Ruff 通过。
+- 未启动全栈、未调用 DeepSeek 或 Piston；远征性能测试仍留待功能复核完成后。
+
 ## 2026-10-13 — 每日挑战服务端限额与地图节点保障
 
 - V205 新增按用户与上海自然日唯一的远征每日领取记录；启动日挑战后即占用当天名额，弃局也不释放。远征结算时从服务端 run 写入排行榜 `is_daily`，Web 收到跨设备冲突会同步本地显示。

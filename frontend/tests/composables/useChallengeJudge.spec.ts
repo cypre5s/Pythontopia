@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
 import type { BossPrefetchStatusDto, BossProblemDto } from '@/api/dto/Boss';
 
@@ -50,6 +50,8 @@ beforeEach(() => {
   apiMock.requestBossProblem.mockResolvedValue(PROBLEM);
 });
 
+afterEach(() => vi.useRealTimers());
+
 describe('useChallengeJudge preload state', () => {
   it('keeps accepted PENDING distinct from READY until the server confirms readiness', async () => {
     apiMock.prefetchBossProblem.mockResolvedValueOnce(status('PENDING'));
@@ -90,13 +92,30 @@ describe('useChallengeJudge preload state', () => {
     );
   });
 
-  it('does not request another problem while the prefetch job is still pending', async () => {
+  it('waits for a pending prefetch to become ready before requesting the challenge', async () => {
     apiMock.prefetchBossProblem.mockResolvedValueOnce(status('PENDING'));
-    apiMock.fetchBossPrefetchStatus.mockResolvedValueOnce(status('PENDING'));
+    apiMock.fetchBossPrefetchStatus
+      .mockResolvedValueOnce(status('PENDING'))
+      .mockResolvedValueOnce(status('READY'));
     const judge = useChallengeJudge();
     await judge.prefetchProblem(ARGS);
 
-    await expect(judge.fetchProblem(ARGS)).rejects.toThrow('仍在生成');
+    await expect(judge.fetchProblem(ARGS)).resolves.toEqual(PROBLEM);
+
+    expect(apiMock.fetchBossPrefetchStatus).toHaveBeenCalledTimes(2);
+    expect(apiMock.requestBossProblem).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops polling a prefetch after the bounded wait expires', async () => {
+    vi.useFakeTimers();
+    apiMock.prefetchBossProblem.mockResolvedValueOnce(status('PENDING'));
+    apiMock.fetchBossPrefetchStatus.mockResolvedValue(status('PENDING'));
+    const judge = useChallengeJudge();
+    await judge.prefetchProblem(ARGS);
+
+    const pendingProblem = expect(judge.fetchProblem(ARGS)).rejects.toThrow('仍在生成');
+    await vi.runAllTimersAsync();
+    await pendingProblem;
 
     expect(apiMock.requestBossProblem).not.toHaveBeenCalled();
   });

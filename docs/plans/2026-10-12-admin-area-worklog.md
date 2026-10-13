@@ -61,3 +61,10 @@
 - TDD：新增管理壳样式契约测试，修改前 2 项失败于旧主题/面板值；对齐样式后管理壳、运维页、审核页及样式测试共 12 项通过：`npm run test -- tests/pages/admin/AdminShellStyle.spec.ts tests/pages/admin/AdminLayout.spec.ts tests/pages/admin/AdminOperationsPage.spec.ts tests/pages/admin/AdminProblemReviewsPage.spec.ts --coverage.enabled=false`。
 - 验证：`npm run typecheck` 通过；对四个 admin Vue 文件和新增测试运行定向 ESLint 通过；`git diff --check` 通过。
 - 未运行浏览器/全栈联测、后端和 Graph 测试；本切片只修改管理台样式/前端回归测试。CHANGELOG 由整合者统一更新。
+
+## 2026-10-13 补充：用户列表操作互斥与班级切换隔离
+
+- 管理用户列表统一在刷新/更新状态期间禁用筛选、分页、刷新和行操作，避免并行读写触发 `loadUsers` loading 守卫后丢失更新后的列表刷新。
+- 教师切换班级时立即清除旧班成员、任务、热力图、任务汇总、误区、资源使用和近期活动；旧班的迟到响应不会覆盖当前班级。新班看板加载失败时保留错误提示，不显示旧班快照。
+- RED/GREEN 后验证：AdminUsersPage、teacher store、Twin/Profile、管理台页面及 ClassroomDetail/router 共 10 个 Web 测试文件 / 81 项通过；另管理台 shell、运维、审核与 router 5 个文件 / 35 项通过。`npm run typecheck` 与定向 ESLint 通过。router 用例有既有 jsdom `window.scrollTo` 警告及尝试 localhost 的连接拒绝日志，但测试退出码为 0。
+- 本轮没有全栈浏览器联测；当前管理台仍只覆盖 Pythontopia 已有的真实 API 页面，不复制 Alethicode 尚无 API/权限契约的管理功能。

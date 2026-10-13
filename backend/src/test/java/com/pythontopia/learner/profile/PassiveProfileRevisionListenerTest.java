@@ -1,10 +1,8 @@
 package com.pythontopia.learner.profile;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -13,26 +11,27 @@ import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.profile.dto.DimensionDelta;
-import com.pythontopia.learner.profile.service.PassiveProfileService;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 class PassiveProfileRevisionListenerTest {
 
-  private final PassiveProfileService passiveProfileService = mock(PassiveProfileService.class);
+  private final ProfileDimensionProjectionOutboxService outboxService =
+      mock(ProfileDimensionProjectionOutboxService.class);
   private final PassiveProfileRevisionListener listener =
-      new PassiveProfileRevisionListener(passiveProfileService);
+      new PassiveProfileRevisionListener(outboxService);
 
   @Test
   void practiceSucceededUpdatesPracticalAbility() {
     listener.onPracticeSucceeded(
         new LearningEvent.PracticeSucceeded(7L, "PY43-KC-001", 101L, "hard"));
 
-    ArgumentCaptor<DimensionDelta> captor = ArgumentCaptor.forClass(DimensionDelta.class);
-    verify(passiveProfileService)
-        .applyDimensionUpdate(eq(7L), eq("practical_ability"), captor.capture());
-    DimensionDelta delta = captor.getValue();
+    ProfileDimensionProjection projection = singleProjection();
+    DimensionDelta delta = projection.delta();
+    assertThat(projection.userId()).isEqualTo(7L);
+    assertThat(projection.dimensionKey()).isEqualTo("practical_ability");
+    assertThat(projection.idempotencyKey()).isEqualTo("practice_succeeded:7:101");
     assertThat(delta.scoreDelta()).isEqualTo(0.02);
     assertThat(delta.evidenceIncrement()).isEqualTo(1);
     assertThat(delta.source()).isEqualTo("PRACTICE_PASS");
@@ -45,10 +44,10 @@ class PassiveProfileRevisionListenerTest {
     listener.onPracticeFailed(
         new LearningEvent.PracticeFailed(7L, "PY43-KC-002", 102L, "WA", "medium"));
 
-    ArgumentCaptor<DimensionDelta> captor = ArgumentCaptor.forClass(DimensionDelta.class);
-    verify(passiveProfileService)
-        .applyDimensionUpdate(eq(7L), eq("error_pattern"), captor.capture());
-    DimensionDelta delta = captor.getValue();
+    ProfileDimensionProjection projection = singleProjection();
+    DimensionDelta delta = projection.delta();
+    assertThat(projection.dimensionKey()).isEqualTo("error_pattern");
+    assertThat(projection.idempotencyKey()).isEqualTo("practice_failed:7:102:WA");
     assertThat(delta.scoreDelta()).isEqualTo(0.02);
     assertThat(delta.tagsAdd()).containsExactly("WA");
     assertThat(delta.source()).isEqualTo("PRACTICE_FAIL");
@@ -58,10 +57,9 @@ class PassiveProfileRevisionListenerTest {
   void debugResolvedReducesErrorPatternScore() {
     listener.onDebugResolved(new LearningEvent.DebugResolved(7L, "PY43-KC-003", 103L));
 
-    ArgumentCaptor<DimensionDelta> captor = ArgumentCaptor.forClass(DimensionDelta.class);
-    verify(passiveProfileService)
-        .applyDimensionUpdate(eq(7L), eq("error_pattern"), captor.capture());
-    DimensionDelta delta = captor.getValue();
+    ProfileDimensionProjection projection = singleProjection();
+    DimensionDelta delta = projection.delta();
+    assertThat(projection.dimensionKey()).isEqualTo("error_pattern");
     assertThat(delta.scoreDelta()).isEqualTo(-0.02);
     assertThat(delta.source()).isEqualTo("DEBUG_FIX");
   }
@@ -71,7 +69,7 @@ class PassiveProfileRevisionListenerTest {
     listener.onResourceConsumed(
         new LearningEvent.ResourceConsumed(7L, "PY43-KC-004", "VIDEO"));
 
-    verifyNoInteractions(passiveProfileService);
+    verifyNoInteractions(outboxService);
   }
 
   @Test
@@ -87,10 +85,9 @@ class PassiveProfileRevisionListenerTest {
             new java.math.BigDecimal("0.05"),
             null));
 
-    ArgumentCaptor<DimensionDelta> captor = ArgumentCaptor.forClass(DimensionDelta.class);
-    verify(passiveProfileService)
-        .applyDimensionUpdate(eq(7L), eq("knowledge_base"), captor.capture());
-    DimensionDelta delta = captor.getValue();
+    ProfileDimensionProjection projection = singleProjection();
+    DimensionDelta delta = projection.delta();
+    assertThat(projection.dimensionKey()).isEqualTo("knowledge_base");
     assertThat(delta.scoreDelta()).isEqualTo(0.015);
     assertThat(delta.evidenceIncrement()).isEqualTo(1);
     assertThat(delta.metadata()).containsEntry("kcCode", "PY43-KC-004");
@@ -113,10 +110,9 @@ class PassiveProfileRevisionListenerTest {
             new java.math.BigDecimal("0.05"),
             null));
 
-    ArgumentCaptor<DimensionDelta> captor = ArgumentCaptor.forClass(DimensionDelta.class);
-    verify(passiveProfileService)
-        .applyDimensionUpdate(eq(7L), eq("practical_ability"), captor.capture());
-    DimensionDelta delta = captor.getValue();
+    ProfileDimensionProjection projection = singleProjection();
+    DimensionDelta delta = projection.delta();
+    assertThat(projection.dimensionKey()).isEqualTo("practical_ability");
     assertThat(delta.scoreDelta()).isEqualTo(0.015);
     assertThat(delta.evidenceIncrement()).isEqualTo(1);
     assertThat(delta.source()).isEqualTo("RESOURCE_FEEDBACK");
@@ -137,10 +133,9 @@ class PassiveProfileRevisionListenerTest {
             new java.math.BigDecimal("-0.02"),
             "PRACTICE"));
 
-    ArgumentCaptor<DimensionDelta> captor = ArgumentCaptor.forClass(DimensionDelta.class);
-    verify(passiveProfileService)
-        .applyDimensionUpdate(eq(7L), eq("error_pattern"), captor.capture());
-    DimensionDelta delta = captor.getValue();
+    ProfileDimensionProjection projection = singleProjection();
+    DimensionDelta delta = projection.delta();
+    assertThat(projection.dimensionKey()).isEqualTo("error_pattern");
     assertThat(delta.scoreDelta()).isEqualTo(0.015);
     assertThat(delta.evidenceIncrement()).isEqualTo(1);
     assertThat(delta.tagsAdd()).containsExactly("resource_check_failed", "remediation_practice");
@@ -165,40 +160,28 @@ class PassiveProfileRevisionListenerTest {
             new java.math.BigDecimal("0.05"),
             null));
 
-    verify(passiveProfileService, times(4))
-        .applyDimensionUpdate(eq(7L), anyString(), any(DimensionDelta.class));
+    verify(outboxService, times(4)).enqueue(any(ProfileDimensionProjection.class));
   }
 
   @Test
-  void dataAccessExceptionIsSwallowedToAvoidBreakingEventChain() {
-    doThrow(new DataAccessResourceFailureException("column dimensions does not exist"))
-        .when(passiveProfileService)
-        .applyDimensionUpdate(anyLong(), anyString(), any(DimensionDelta.class));
+  void dataAccessExceptionIsNotSilentlyDropped() {
+    doThrow(new DataAccessResourceFailureException("outbox unavailable"))
+        .when(outboxService)
+        .enqueue(any(ProfileDimensionProjection.class));
 
-    listener.onPracticeSucceeded(new LearningEvent.PracticeSucceeded(7L, "K1", 1L, "medium"));
-    listener.onResourceCheckCompleted(
-        new LearningEvent.ResourceCheckCompleted(
-            7L,
-            35L,
-            99L,
-            "K2",
-            "MICRO_QUIZ",
-            false,
-            new java.math.BigDecimal("-0.02"),
-            "PRACTICE"));
-
-    verify(passiveProfileService, times(2))
-        .applyDimensionUpdate(anyLong(), anyString(), any(DimensionDelta.class));
+    assertThatThrownBy(
+            () -> listener.onPracticeSucceeded(
+                new LearningEvent.PracticeSucceeded(7L, "K1", 1L, "medium")))
+        .isInstanceOf(DataAccessResourceFailureException.class);
   }
 
   @Test
   void taughtAiSucceededUpdatesPracticalAbility() {
     listener.onTaughtAiSucceeded(new LearningEvent.TaughtAiSucceeded(7L, "PY43-KC-010", 33L));
 
-    ArgumentCaptor<DimensionDelta> captor = ArgumentCaptor.forClass(DimensionDelta.class);
-    verify(passiveProfileService)
-        .applyDimensionUpdate(eq(7L), eq("practical_ability"), captor.capture());
-    DimensionDelta delta = captor.getValue();
+    ProfileDimensionProjection projection = singleProjection();
+    DimensionDelta delta = projection.delta();
+    assertThat(projection.dimensionKey()).isEqualTo("practical_ability");
     assertThat(delta.scoreDelta()).isEqualTo(0.03);
     assertThat(delta.evidenceIncrement()).isEqualTo(1);
     assertThat(delta.source()).isEqualTo("PRACTICE_PASS");
@@ -210,13 +193,19 @@ class PassiveProfileRevisionListenerTest {
   void taughtAiFailedUpdatesErrorPattern() {
     listener.onTaughtAiFailed(new LearningEvent.TaughtAiFailed(7L, "PY43-KC-011", 34L));
 
-    ArgumentCaptor<DimensionDelta> captor = ArgumentCaptor.forClass(DimensionDelta.class);
-    verify(passiveProfileService)
-        .applyDimensionUpdate(eq(7L), eq("error_pattern"), captor.capture());
-    DimensionDelta delta = captor.getValue();
+    ProfileDimensionProjection projection = singleProjection();
+    DimensionDelta delta = projection.delta();
+    assertThat(projection.dimensionKey()).isEqualTo("error_pattern");
     assertThat(delta.scoreDelta()).isEqualTo(0.015);
     assertThat(delta.tagsAdd()).containsExactly("teach_back_failed");
     assertThat(delta.source()).isEqualTo("PRACTICE_FAIL");
     assertThat(delta.metadata()).containsEntry("sessionId", 34L);
+  }
+
+  private ProfileDimensionProjection singleProjection() {
+    ArgumentCaptor<ProfileDimensionProjection> captor =
+        ArgumentCaptor.forClass(ProfileDimensionProjection.class);
+    verify(outboxService).enqueue(captor.capture());
+    return captor.getValue();
   }
 }

@@ -112,7 +112,7 @@ public class MediaJobService {
             .findById(jobId)
             .orElseThrow(
                 () -> new BusinessException(HttpStatus.NOT_FOUND, "MEDIA_JOB_NOT_FOUND", "合成作业不存在"));
-    if (job.userId() != null && !job.userId().equals(userId)) {
+    if (job.userId() == null || !job.userId().equals(userId)) {
       throw new BusinessException(HttpStatus.NOT_FOUND, "MEDIA_JOB_NOT_FOUND", "合成作业不存在");
     }
 

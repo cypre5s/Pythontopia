@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.test.context.ActiveProfiles;
 
 /**
@@ -32,6 +33,11 @@ class PythontopiaApplicationTests {
     @Bean
     JdbcClient jdbcClient() {
       return org.mockito.Mockito.mock(JdbcClient.class);
+    }
+
+    @Bean
+    PlatformTransactionManager transactionManager() {
+      return org.mockito.Mockito.mock(PlatformTransactionManager.class);
     }
   }
 }

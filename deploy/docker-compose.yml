@@ -26,6 +26,26 @@ services:
       timeout: 5s
       retries: 5
 
+  piston:
+    # Optional local judge only. Piston uses Isolate/cgroups and requires a privileged
+    # container; the API is reachable only on host loopback. Production uses external Piston.
+    image: pythontopia-piston-dev:local
+    build:
+      context: ./piston-local
+      dockerfile: Dockerfile
+      network: host
+    profiles: ["sandbox"]
+    privileged: true
+    environment:
+      # Match the backend's 5s default per test while keeping a bounded local ceiling.
+      PISTON_RUN_TIMEOUT: "10000"
+    ports:
+      - "127.0.0.1:2000:2000"
+    volumes:
+      - piston_packages:/piston/packages
+    tmpfs:
+      - /tmp:exec
+
   backend:
     image: pythontopia-backend:dev
     build:
@@ -312,6 +332,7 @@ services:
 
 volumes:
   pytopia_pg:
+  piston_packages:
   # Langfuse 自托管数据卷（仅 observability profile 使用）。
   langfuse_pg:
   langfuse_clickhouse_data:

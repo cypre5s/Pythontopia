@@ -116,6 +116,20 @@ describe('ProfilePage cognitive_style 纠偏', () => {
     );
   });
 
+  it('shows a retry action when loading profile dimensions fails', async () => {
+    getProfileDimensionsMock
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce(dims(['logical']));
+    const wrapper = await mountPage();
+
+    expect(wrapper.find('[data-testid="profile-dimensions-error"]').exists()).toBe(true);
+    await wrapper.find('[data-testid="profile-dimensions-retry"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="profile-dimensions-error"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="cognitive-style-correct"]').exists()).toBe(true);
+  });
+
   it('renders cognitive style using the profile schema scales', async () => {
     const wrapper = await mountPage();
     const card = wrapper.find('[data-testid="dim-cognitiveStyle"]');

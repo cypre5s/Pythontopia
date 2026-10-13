@@ -350,13 +350,17 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
             class="exp-save-card__hint"
           >离线存档成绩待服务器核验</span>
           <span v-if="run.savedRunSummary.relicCount > 0">学习增益 {{ run.savedRunSummary.relicCount }} 件</span>
+          <span
+            v-if="run.savedRunSummary.settlementPending"
+            class="exp-save-card__hint"
+          >本局成绩待结算</span>
           <PyButton
             variant="primary"
             size="sm"
             test-id="expedition-resume"
             @click="onResume"
           >
-            继续上次远征
+            {{ run.savedRunSummary.settlementPending ? '继续结算本局' : '继续上次远征' }}
           </PyButton>
         </div>
         <label class="exp-focus">
@@ -848,15 +852,15 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
       <div
         v-else
         class="exp-end"
-        :class="run.phase === 'cleared' ? 'exp-end--win' : 'exp-end--over'"
+        :class="run.isVictory ? 'exp-end--win' : 'exp-end--over'"
         data-testid="expedition-end"
       >
         <BossSprite
           :chapter="bossChapter"
-          :phase="run.phase === 'cleared' ? 'hurt' : 'idle'"
+          :phase="run.isVictory ? 'hurt' : 'idle'"
           :size="150"
         />
-        <h2>{{ run.phase === 'cleared' ? `击穿知识闸 · 战胜 ${bossName}！` : '本局远征结束' }}</h2>
+        <h2>{{ run.isVictory ? `击穿知识闸 · 战胜 ${bossName}！` : '本局远征结束' }}</h2>
         <ul class="exp-end__stats">
           <li>服务端核验通过 {{ run.verifiedDepth }} 题</li>
           <li>排行榜核验分 {{ run.verifiedScore }}</li>

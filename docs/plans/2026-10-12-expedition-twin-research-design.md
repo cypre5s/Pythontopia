@@ -62,6 +62,8 @@ V204 不会把既有活动局的可变字段重置为新开局。迁移前的地
 
 ## 尚未解决
 
+> 截至 2026-10-13 的代码复核：早期记录中“Web 地图进度仍由客户端快照驱动”的问题已由服务端 `run/actions` 状态机解决。Web 的节点进入、可达性、HP、遗物、Boss 阶段与题目结算现在以服务端 run/判题账本为准；排行榜只结算服务端 `over` run，并从 Boss 节点状态派生 `cleared`。Testcontainers 回归覆盖普通结束与 Boss 通关。生产 Piston/Isolate 隔离仍未运行验证。
+
 ### 2026-10-13 Web 功能复验与性能闸门
 
 - Web 全栈主线导航与指南交互 3 项 Playwright 通过；DeepSeek 导师文本和图片输入、文本输出真实链路 2 次请求通过。
@@ -87,3 +89,37 @@ V204 不会把既有活动局的可变字段重置为新开局。迁移前的地
 - 回归：Testcontainers 远征与计分 29 项、地图生成 2 项、远征服务单测 9 项通过；空库迁移到 V205。BossService 增加同题跨阶段与旧阶段题拒绝回归，相关后端五类测试合计 79 项通过。Web 远征 store 45 项、typecheck 与定向 ESLint 通过；Graph 评测/自测 31 项和 Ruff 通过。精英节点性质测试覆盖 256 个地图种子。
 - Web 远征开局、节点动作、事件、遗物奖励、主动结束、题目节点绑定和判题结算已迁至服务端；`PUT` 退为只校验并返回 canonical snapshot。迁移前活动局的可变状态不做破坏性重置，可信度未知；Android/Windows 未改。
 - 用户要求先完成功能、最后再测性能；本轮未启动 Web 全栈、未发 DeepSeek 请求。无尽远征 P50/P95、缓存命中、重复率、失败恢复率和通关率仍待本地全栈及可用 Piston 实际测量。
+
+### 2026-10-13 后续功能复验
+
+- 远征 `over` 终局现可从 Web 保存恢复并重试结算；Boss 已清除节点仍显示胜利，每日挑战恢复活动局，事件挑战重试保留难度。正式判题账本上限为 36，适配当前最多 12 个挑战阶段的有界题目重试。
+- 同一用户/KC 并发写掌握度由数据库事务级锁串行化；Twin 仍是基于权威事件的 7 日只读摘要，当前不能解释为预测正确率或未来行为的数字孪生。
+- Web 画像与 Twin 周报失败可重试，教师切换班级后忽略迟到回包；媒体读取要求精确的非空用户所有权。
+- 本次复验：Web 定向测试 86 项、类型检查、定向 ESLint 通过；后端计分/媒体/掌握度/Twin 定向测试及空库 V205 迁移通过；Graph Boss 自测 18 项与定向 Ruff 通过。
+- 远征 pending 已补最多 10 次、每 500ms 的前端轮询；未补后台任务主动取消与前台生成超时后的重复请求保护、画像被动事件写入的补偿重放。本轮未启动全栈、未发 DeepSeek/Piston 请求，也未测 P50/P95 等性能指标；待功能缺口收敛并获得可用 Piston/Isolate 环境后再测。
+
+### 2026-10-13 功能优先复验（性能后置）
+
+- 清除一个远征分支时，同事务把已绕过兄弟节点的 `PENDING`/`READY` 预生成行改为 `FAILED` 并清理题目载荷，释放用户预取配额；异步生成晚到时因状态不再是 `PENDING` 而不能复活旧行。
+- Teacher 切换班级时清空上一班成员、任务和看板快照；旧请求响应继续由班级 ID 守卫丢弃。Admin 用户列表在刷新或变更状态期间禁用其他读写操作，避免 `loading` 守卫吞掉更新后的重载。
+- 验证：远征 Testcontainers 集成 21 项通过；Web 定向 10 个测试文件 / 117 项、类型检查和定向 ESLint 通过；Graph provider/策略/导师图片和 Boss 自测 57 项通过；部署模型契约和生产 readiness 脚本通过。
+- 按用户要求，本轮不启动全栈、不发 DeepSeek/Piston 请求，也不执行无尽远征性能测试。性能基准仍待后续功能联测阶段。
+
+### 2026-10-13 本地 Piston 沙箱与正式判题联测
+
+- 增加 `./dev.sh --sandbox` 本地可选 Piston/Isolate；本地 Docker 镜像固定到上游 digest，并修正镜像内 API 对 CommonJS `node-fetch` 的依赖兼容。Python 3.12.0 runtime 安装后可直接用于开发环境；生产运行时配置不变。
+- 正式判题首次返回 `SYSTEM_ERROR`，日志确认题目 5000ms 上限超过 Piston 默认 3000ms。将可选开发沙箱的 `PISTON_RUN_TIMEOUT` 设为 10000ms 后，正式提交 Playwright E2E 通过；直接隔离检查验证 Python 输出、宿主文件不可见、宿主 loopback 不可访问和无限循环被超时杀死。
+- 本地 `/readyz` 显示 `judge=piston python 3.12.0`、AST 检查器可用；整体仍为 503，原因是 `VIDEO_TRANSCRIPT_UNAVAILABLE`。本轮没有调用 DeepSeek，也没有测无尽远征 P50/P95、缓存命中率、重复率、失败恢复率或通关率；性能测试继续后置。
+
+### 2026-10-13 Twin 画像投影失败恢复
+
+- PassiveProfileRevisionListener 不再直接吞掉 JSONB 更新错误；先持久化八维增量到 V207 `learner_profile_projection_outbox`，提交后立即处理，进程重启后由定时任务扫描重试。
+- 同一提交、判题、微测或 Taught AI session 使用稳定幂等键；无稳定业务 ID 的交互保留独立事件。PostgreSQL 事务 advisory lock 串行同一学生的入队，worker 阻止较新增量越过较早的 pending 行。画像更新与 APPLIED 状态在同一事务提交，失败不会重复累加。
+- RED/GREEN：原监听器会吞掉画像写入异常的回归先失败；修复后被动画像单测 19 项通过。Testcontainers 验证数据库失败后任务仍为 PENDING、较新任务等待、重放后两条各只应用一次，并迁移空库到 V207。定向 Spotless 检查通过。
+- Twin 周报仍是依据已落库学习事件的 7 日只读摘要；本次强化八维画像投影可靠性，没有增加预测或概率声明。无尽远征性能继续待测。
+
+### 2026-10-13 远征功能回归与正式判题联测
+
+- 本地 Piston 正式判题 Playwright E2E 通过，提交产生的 Twin 画像 outbox 行在 PostgreSQL 中达到 `APPLIED`；Piston 与正式全栈已关闭。
+- `EndlessPregenServiceTest` 9、`ExpeditionScoreServiceTest` 10、`ExpeditionRunPostgresIntegrationTest` 22，共 41 项通过；profile outbox 的 Spring 应用上下文测试通过，相关 Java 定向 Spotless 与 `git diff --check` 通过。
+- 本轮没有调用 DeepSeek，也没有执行远征性能测试。P50/P95、缓存命中率、重复率、失败恢复率与通关率仍待测；`/readyz` 仍因视频转录服务不可用整体返回 503。

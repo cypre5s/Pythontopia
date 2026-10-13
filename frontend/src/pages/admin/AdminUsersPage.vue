@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { useSessionStore } from '@stores/session';
 import { useToastStore } from '@stores/toast';
 import {
@@ -25,6 +25,7 @@ const page = ref(0);
 const totalPages = ref(0);
 const totalElements = ref(0);
 const updatingUserId = ref<number | null>(null);
+const listBusy = computed(() => loading.value || updatingUserId.value !== null);
 const PAGE_SIZE = 20;
 
 function roleLabel(role: AdminUserDto['role']): string {
@@ -77,7 +78,7 @@ function searchUsers(): void {
 
 function movePage(delta: number): void {
   const next = page.value + delta;
-  if (loading.value || next < 0 || next >= totalPages.value) return;
+  if (listBusy.value || next < 0 || next >= totalPages.value) return;
   page.value = next;
   void loadUsers();
 }
@@ -124,7 +125,7 @@ onMounted(() => {
         <button
           class="admin-users__button"
           type="button"
-          :disabled="loading"
+          :disabled="listBusy"
           @click="loadUsers"
         >
           {{ loading ? '正在刷新…' : '刷新列表' }}
@@ -142,7 +143,7 @@ onMounted(() => {
             v-model="searchInput"
             type="search"
             maxlength="100"
-            :disabled="loading"
+            :disabled="listBusy"
             aria-label="搜索账号或显示名"
             data-testid="admin-users-search"
           >
@@ -152,7 +153,7 @@ onMounted(() => {
           <select
             v-model="statusFilter"
             aria-label="按账号状态筛选"
-            :disabled="loading"
+            :disabled="listBusy"
             @change="applyFilters"
           >
             <option value="ALL">全部状态</option>
@@ -166,7 +167,7 @@ onMounted(() => {
             v-model="roleFilter"
             aria-label="按用户角色筛选"
             data-testid="admin-users-role-filter"
-            :disabled="loading"
+            :disabled="listBusy"
             @change="applyFilters"
           >
             <option value="ALL">全部角色</option>
@@ -178,7 +179,7 @@ onMounted(() => {
         <button
           class="admin-users__button admin-users__button--primary"
           type="submit"
-          :disabled="loading"
+          :disabled="listBusy"
         >
           搜索
         </button>
@@ -202,7 +203,7 @@ onMounted(() => {
         <button
           class="admin-users__button"
           type="button"
-          :disabled="loading"
+          :disabled="listBusy"
           @click="loadUsers"
         >
           重试
@@ -268,7 +269,7 @@ onMounted(() => {
                 <button
                   class="admin-users__button"
                   type="button"
-                  :disabled="user.id === session.user?.id || updatingUserId !== null"
+                  :disabled="user.id === session.user?.id || listBusy"
                   :data-testid="`admin-user-status-${user.id}`"
                   @click="toggleStatus(user)"
                 >
@@ -291,7 +292,7 @@ onMounted(() => {
             <button
               class="admin-users__button"
               type="button"
-              :disabled="loading || page === 0"
+              :disabled="listBusy || page === 0"
               @click="movePage(-1)"
             >
               上一页
@@ -299,7 +300,7 @@ onMounted(() => {
             <button
               class="admin-users__button"
               type="button"
-              :disabled="loading || page + 1 >= totalPages"
+              :disabled="listBusy || page + 1 >= totalPages"
               @click="movePage(1)"
             >
               下一页

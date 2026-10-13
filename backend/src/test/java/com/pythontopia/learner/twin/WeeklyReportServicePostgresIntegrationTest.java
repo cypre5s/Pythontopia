@@ -6,15 +6,23 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.learner.event.LearningEventLogRepository;
+import com.pythontopia.learner.mastery.MasteryEvaluator;
+import com.pythontopia.learner.mastery.MasteryProperties;
 import com.pythontopia.learner.mastery.MasteryRepository;
+import com.pythontopia.learner.mastery.MasterySource;
+import com.pythontopia.learner.mastery.review.ReviewScheduler;
+import com.pythontopia.learner.mastery.review.ReviewStateRepository;
+import com.pythontopia.learner.mastery.review.ReviewStateService;
 import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
 import com.pythontopia.learner.reflection.LearnerInsightRepository;
 import com.pythontopia.learner.twin.dto.WeeklyReportDto;
+import java.math.BigDecimal;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.UUID;
+import java.util.Map;
 import javax.sql.DataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
@@ -22,7 +30,9 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -151,6 +161,60 @@ class WeeklyReportServicePostgresIntegrationTest {
               assertThat(delta.evidenceSources()).containsExactly("PRACTICE_PASS");
               assertThat(delta.currentScore()).isEqualTo(0.700);
             });
+  }
+
+  @Test
+  void concurrentMasteryEventsForSameKcKeepSnapshotAndLedgerInSync() throws Exception {
+    long userId = insertUser("concurrent-mastery-owner");
+    int eventCount = 24;
+    MasteryEvaluator evaluator = new MasteryEvaluator(
+        new MasteryRepository(jdbc),
+        new MasteryProperties(
+            14,
+            new BigDecimal("0.05"),
+            new BigDecimal("0.02"),
+            Map.of("PRACTICE_PASS", new BigDecimal("0.010"))),
+        new ReviewStateService(new ReviewStateRepository(jdbc), new ReviewScheduler()));
+    TransactionTemplate transaction =
+        new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource()));
+    CountDownLatch ready = new CountDownLatch(eventCount);
+    CountDownLatch start = new CountDownLatch(1);
+
+    try (var executor = Executors.newFixedThreadPool(eventCount)) {
+      var futures = java.util.stream.IntStream.range(0, eventCount)
+          .mapToObj(index -> executor.submit(() -> {
+            ready.countDown();
+            if (!start.await(10, TimeUnit.SECONDS)) {
+              throw new IllegalStateException("mastery concurrency test did not start");
+            }
+            return transaction.execute(status -> evaluator.applyEvent(
+                userId,
+                "PY43-KC-001",
+                MasterySource.PRACTICE_PASS,
+                new BigDecimal("0.010"),
+                "concurrent:" + index));
+          }))
+          .toList();
+      assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+      start.countDown();
+      for (var future : futures) {
+        future.get(20, TimeUnit.SECONDS);
+      }
+    }
+
+    BigDecimal score = jdbc.queryForObject(
+        "SELECT mastery_score FROM kc_mastery WHERE user_id = ? AND kc_code = ?",
+        BigDecimal.class,
+        userId,
+        "PY43-KC-001");
+    Integer persistedEvents = jdbc.queryForObject(
+        "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ? AND kc_code = ?",
+        Integer.class,
+        userId,
+        "PY43-KC-001");
+
+    assertThat(persistedEvents).isEqualTo(eventCount);
+    assertThat(score).isEqualByComparingTo(new BigDecimal("0.240"));
   }
 
   @Test

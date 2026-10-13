@@ -19,8 +19,8 @@ import org.springframework.transaction.annotation.Transactional;
 public class ExpeditionScoreService {
 
   private static final int DEFAULT_LIMIT = 20;
-  // shortcut: current map has 9 challenge levels and 3 boss phases; revise with map topology changes.
-  private static final int MAX_VERIFIED_ATTEMPTS_PER_RUN = 12;
+  // shortcut: 3 unique questions per each of the 12 challenge stages; revise if topology or retry policy changes.
+  private static final int MAX_VERIFIED_ATTEMPTS_PER_RUN = 36;
 
   private final JdbcTemplate jdbcTemplate;
 
@@ -35,15 +35,17 @@ public class ExpeditionScoreService {
       return;
     }
     UUID runId = UUID.fromString(dto.runId());
-    List<Boolean> dailyRuns =
+    List<LockedRun> runs =
         jdbcTemplate.query(
-            "SELECT is_daily FROM expedition_run WHERE user_id = ? AND run_id = ?::uuid"
-                + " AND status = 'ACTIVE' FOR UPDATE",
-            (rs, rowNum) -> rs.getBoolean("is_daily"),
+            "SELECT r.is_daily, EXISTS (SELECT 1 FROM jsonb_array_elements(r.nodes) AS node(value)"
+                + " WHERE node.value ->> 'kind' = 'boss' AND node.value ->> 'state' = 'cleared')"
+                + " AS cleared FROM expedition_run r WHERE r.user_id = ? AND r.run_id = ?::uuid"
+                + " AND r.status = 'ACTIVE' AND r.phase = 'over' FOR UPDATE",
+            (rs, rowNum) -> new LockedRun(rs.getBoolean("is_daily"), rs.getBoolean("cleared")),
             userId,
             runId);
-    if (dailyRuns.isEmpty()) return;
-    boolean isDaily = dailyRuns.getFirst();
+    if (runs.isEmpty()) return;
+    LockedRun lockedRun = runs.getFirst();
     List<VerifiedAttempt> attempts =
         jdbcTemplate.query(
             "SELECT passed, score FROM expedition_verified_attempt"
@@ -70,14 +72,15 @@ public class ExpeditionScoreService {
       jdbcTemplate.update(
           "INSERT INTO expedition_score"
               + " (user_id, run_id, score, depth, best_momentum, cleared, is_daily, verified)"
-              + " VALUES (?, ?::uuid, ?, ?, ?, FALSE, ?, TRUE)"
+              + " VALUES (?, ?::uuid, ?, ?, ?, ?, ?, TRUE)"
               + " ON CONFLICT (user_id, run_id) WHERE run_id IS NOT NULL DO NOTHING",
           userId,
           runId,
           score,
           depth,
           bestMomentum,
-          isDaily);
+          lockedRun.cleared(),
+          lockedRun.isDaily());
     }
     jdbcTemplate.update(
         "UPDATE expedition_run SET status = 'SETTLED', phase = 'over', updated_at = now()"
@@ -286,6 +289,8 @@ public class ExpeditionScoreService {
   record ExistingAttempt(long id, boolean passed) {}
 
   public record VerifiedAttemptResult(boolean accepted, boolean publishLearningEvent) {}
+
+  record LockedRun(boolean isDaily, boolean cleared) {}
 
   public record VerifiedAttemptSummary(int total, int correct) {}
 }

@@ -1,6 +1,7 @@
 package com.pythontopia.media;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
@@ -10,7 +11,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.JwtProperties;
+import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.media.domain.MediaAsset;
 import com.pythontopia.media.domain.MediaJob;
@@ -185,5 +188,69 @@ class MediaJobServiceTest {
     service.submit(USER_ID, sampleRequest());
 
     verify(jobRepository).updateStatus(44L, MediaJobStatus.FAILED, null, "VIDEO_COMPOSE_FAILED");
+  }
+
+  @Test
+  void getJobHidesOwnerlessAndForeignJobs() {
+    Instant now = Instant.now();
+    MediaJob ownerless =
+        new MediaJob(45L, null, "STORYBOARD_VIDEO", MediaJobStatus.PENDING, "fp", "{}", "{}", null, null, now, now);
+    MediaJob foreign =
+        new MediaJob(46L, USER_ID + 1, "STORYBOARD_VIDEO", MediaJobStatus.PENDING, "fp", "{}", "{}", null, null, now, now);
+    MediaJob owned =
+        new MediaJob(48L, USER_ID, "STORYBOARD_VIDEO", MediaJobStatus.PENDING, "fp", "{}", "{}", null, null, now, now);
+    MediaJobService controllerService = mock(MediaJobService.class);
+    when(controllerService.getJob(45L)).thenReturn(Optional.of(ownerless));
+    when(controllerService.getJob(46L)).thenReturn(Optional.of(foreign));
+    when(controllerService.getJob(48L)).thenReturn(Optional.of(owned));
+    MediaJobController controller =
+        new MediaJobController(
+            controllerService,
+            objectMapper,
+            new MediaAssetUrls(new JwtProperties("media-job-test-secret-at-least-32-chars", 60)));
+    CurrentUserPrincipal caller = new CurrentUserPrincipal(USER_ID, "student", Role.STUDENT);
+
+    assertThatThrownBy(() -> controller.getJob(caller, 45L))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> {
+              assertThat(error.status()).isEqualTo(HttpStatus.NOT_FOUND);
+              assertThat(error.code()).isEqualTo("MEDIA_JOB_NOT_FOUND");
+            });
+    assertThatThrownBy(() -> controller.getJob(caller, 46L))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> {
+              assertThat(error.status()).isEqualTo(HttpStatus.NOT_FOUND);
+              assertThat(error.code()).isEqualTo("MEDIA_JOB_NOT_FOUND");
+            });
+    assertThat(controller.getJob(caller, 48L)).isNotNull();
+  }
+
+  @Test
+  void streamHidesOwnerlessJob() {
+    Instant now = Instant.now();
+    MediaJob ownerless =
+        new MediaJob(47L, null, "STORYBOARD_VIDEO", MediaJobStatus.PENDING, "fp", "{}", "{}", null, null, now, now);
+    when(jobRepository.findById(47L)).thenReturn(Optional.of(ownerless));
+
+    assertThatThrownBy(() -> service.stream(47L, USER_ID))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> {
+              assertThat(error.status()).isEqualTo(HttpStatus.NOT_FOUND);
+              assertThat(error.code()).isEqualTo("MEDIA_JOB_NOT_FOUND");
+            });
+
+    MediaJob foreign =
+        new MediaJob(49L, USER_ID + 1, "STORYBOARD_VIDEO", MediaJobStatus.PENDING, "fp", "{}", "{}", null, null, now, now);
+    when(jobRepository.findById(49L)).thenReturn(Optional.of(foreign));
+    assertThatThrownBy(() -> service.stream(49L, USER_ID))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> {
+              assertThat(error.status()).isEqualTo(HttpStatus.NOT_FOUND);
+              assertThat(error.code()).isEqualTo("MEDIA_JOB_NOT_FOUND");
+            });
   }
 }

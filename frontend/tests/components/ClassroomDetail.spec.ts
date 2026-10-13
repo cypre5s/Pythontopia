@@ -72,6 +72,7 @@ function setupRouter(): Router {
 
 describe('ClassroomDetail', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     setActivePinia(createPinia());
     router = setupRouter();
     apiMocks.listMyClassrooms.mockResolvedValue([

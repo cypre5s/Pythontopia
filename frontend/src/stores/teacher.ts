@@ -121,14 +121,32 @@ export const useTeacherStore = defineStore('teacher', {
       return updated;
     },
     async openClassroom(classroomId: number): Promise<void> {
+      if (this.currentId !== classroomId) {
+        // 清除旧班级快照，避免切换期间或新班看板失败后把旧数据显示在新班下。
+        this.current.members = [];
+        this.current.quests = [];
+        this.current.lastError = null;
+        this.current.loading = false;
+        this.current.dashboard = {
+          kcHeatmap: [],
+          questSummary: [],
+          errorHotspots: [],
+          resourceUsage: null,
+          recentActivity: [],
+          loading: false,
+          lastError: null,
+        };
+      }
       this.currentId = classroomId;
       this.current.classroom =
         this.classrooms.find((c) => c.classroomId === classroomId) ?? null;
       if (!this.current.classroom) {
         await this.loadClassrooms();
+        if (this.currentId !== classroomId) return;
         this.current.classroom =
           this.classrooms.find((c) => c.classroomId === classroomId) ?? null;
       }
+      if (this.currentId !== classroomId) return;
       await this.refreshDetail();
     },
     /**
@@ -149,14 +167,16 @@ export const useTeacherStore = defineStore('teacher', {
           listClassroomMembersByStatus(id),
           listClassroomQuestsForTeacher(id),
         ]);
+        if (this.currentId !== id) return;
         this.current.members = members;
         this.current.quests = quests;
       } catch (error) {
+        if (this.currentId !== id) return;
         this.current.lastError = errorMessage(error);
         this.current.members = [];
         this.current.quests = [];
       } finally {
-        this.current.loading = false;
+        if (this.currentId === id) this.current.loading = false;
       }
     },
     /** 班级详情页的统一重试入口：班级级 + 看板并列重跑，互不阻塞。 */
@@ -191,6 +211,9 @@ export const useTeacherStore = defineStore('teacher', {
       }
     },
     async loadDashboard(classroomId: number): Promise<void> {
+      const selectedId = this.currentId;
+      const stillSelected = () =>
+        this.currentId === selectedId && (selectedId === null || selectedId === classroomId);
       this.current.dashboard.loading = true;
       this.current.dashboard.lastError = null;
       try {
@@ -201,15 +224,17 @@ export const useTeacherStore = defineStore('teacher', {
           fetchResourceUsage(classroomId),
           fetchRecentActivity(classroomId, 20),
         ]);
+        if (!stillSelected()) return;
         this.current.dashboard.kcHeatmap = heatmap;
         this.current.dashboard.questSummary = summary;
         this.current.dashboard.errorHotspots = hotspots;
         this.current.dashboard.resourceUsage = usage;
         this.current.dashboard.recentActivity = activity;
       } catch (error) {
+        if (!stillSelected()) return;
         this.current.dashboard.lastError = errorMessage(error);
       } finally {
-        this.current.dashboard.loading = false;
+        if (stillSelected()) this.current.dashboard.loading = false;
       }
     },
     replaceClassroom(updated: ClassroomDto): void {

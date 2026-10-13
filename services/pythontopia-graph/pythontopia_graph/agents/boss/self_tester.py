@@ -12,6 +12,7 @@ from .execution_sandbox import run_python
 from .schemas import BossProblem, ReviewIssue, ReviewVerdict
 
 FORBIDDEN_IMPORTS = (
+    "os",
     "socket",
     "subprocess",
     "shutil",

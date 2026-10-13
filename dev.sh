@@ -8,6 +8,7 @@
 #
 # 用法：
 #   ./dev.sh            启动开发栈（前端在前台，Ctrl+C 退出并清理后端）
+#   ./dev.sh --sandbox  额外启动本机 Piston/Isolate 并安装 Python runtime
 #   ./dev.sh --down     停止本脚本拉起的一切（后端 + 前端 + docker 依赖）
 #   ./dev.sh --no-deps  跳过 docker 依赖（依赖已在别处运行时）
 #
@@ -23,6 +24,7 @@ BACKEND_LOG="$WORK_DIR/dev-backend.log"
 BACKEND_PID_FILE="$WORK_DIR/dev-backend.pid"
 
 DEP_SERVICES=(postgres redis pythontopia-graph pythontopia-rag)
+STOP_SERVICES=(postgres redis pythontopia-graph pythontopia-rag piston)
 
 c_info() { printf '\033[36m[INFO]\033[0m %s\n' "$*"; }
 c_ok()   { printf '\033[32m[OK]\033[0m %s\n' "$*"; }
@@ -87,7 +89,7 @@ stop_all() {
   fi
   # 兜底：按端口清理可能残留的后端
   pkill -f 'spring-boot:run' 2>/dev/null || true
-  compose stop "${DEP_SERVICES[@]}" 2>/dev/null || true
+  compose stop "${STOP_SERVICES[@]}" 2>/dev/null || true
   c_ok "已停止后端 + docker 依赖（数据卷保留）。前端 Vite 若在前台已随 Ctrl+C 退出。"
 }
 
@@ -106,11 +108,13 @@ cleanup_on_exit() {
 
 # ---- 参数 ----
 START_DEPS=1
+START_SANDBOX=0
 case "${1:-}" in
   --down) require_cmd docker; stop_all; exit 0 ;;
   --no-deps) START_DEPS=0 ;;
+  --sandbox) START_SANDBOX=1 ;;
   "" ) ;;
-  * ) c_err "未知参数: $1（支持: --down / --no-deps）"; exit 1 ;;
+  * ) c_err "未知参数: $1（支持: --down / --no-deps / --sandbox）"; exit 1 ;;
 esac
 
 require_cmd docker
@@ -132,6 +136,12 @@ set -a
 source "$DEPLOY_DIR/.env"
 set +a
 
+if [[ "$START_SANDBOX" == "1" ]]; then
+  DEP_SERVICES+=(piston)
+  export PYT_PISTON_URL="http://127.0.0.1:2000"
+  export PYT_PISTON_PYTHON_VERSION="${PYT_DEV_PISTON_PYTHON_VERSION:-3.12.0}"
+fi
+
 configured_internal_token="${PYT_RAG_ADMIN_TOKEN:-}"
 export PYT_RAG_ADMIN_TOKEN="$("$DEPLOY_DIR/scripts/resolve_dev_internal_token.sh" "$configured_internal_token")"
 if [[ "$PYT_RAG_ADMIN_TOKEN" != "$configured_internal_token" ]]; then
@@ -141,7 +151,13 @@ fi
 # ---- 1. 依赖（docker） ----
 if [[ "$START_DEPS" == "1" ]]; then
   c_info "拉起依赖容器: ${DEP_SERVICES[*]} …"
-  compose up -d "${DEP_SERVICES[@]}"
+  if [[ "$START_SANDBOX" == "1" ]]; then
+    compose --profile sandbox up -d "${DEP_SERVICES[@]}"
+    c_info "确保本地 Piston 已安装 Python ${PYT_PISTON_PYTHON_VERSION} …"
+    node "$DEPLOY_DIR/scripts/ensure_dev_piston_runtime.mjs"
+  else
+    compose up -d "${DEP_SERVICES[@]}"
+  fi
 
   c_info "等待 Postgres 就绪…"
   for _ in $(seq 1 60); do

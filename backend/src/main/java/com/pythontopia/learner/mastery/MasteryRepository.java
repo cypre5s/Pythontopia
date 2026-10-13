@@ -3,6 +3,7 @@ package com.pythontopia.learner.mastery;
 import java.math.BigDecimal;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.PreparedStatement;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -10,6 +11,7 @@ import java.util.Optional;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.stereotype.Repository;
 
 @Repository
@@ -19,6 +21,18 @@ public class MasteryRepository {
 
   public MasteryRepository(JdbcTemplate jdbcTemplate) {
     this.jdbcTemplate = jdbcTemplate;
+  }
+
+  void lockSnapshot(Long userId, String kcCode) {
+    jdbcTemplate.execute((ConnectionCallback<Void>) connection -> {
+      try (PreparedStatement statement = connection.prepareStatement(
+          "SELECT pg_advisory_xact_lock(hashtextextended(CAST(? AS TEXT) || ':' || ?, 0))")) {
+        statement.setLong(1, userId);
+        statement.setString(2, kcCode);
+        statement.execute();
+      }
+      return null;
+    });
   }
 
   Optional<MasterySnapshot> findSnapshot(Long userId, String kcCode) {

@@ -366,10 +366,10 @@ public class ExpeditionRunService {
     int maxHp = run.maxHp();
     if ("rest".equals(kind)) {
       hp = heal(hp, maxHp, 1 + (run.relics().contains("focus_lens") ? 1 : 0));
-      hp = clearNode(nodes, currentNodeId, run.layers(), hp, maxHp);
+      hp = clearNode(userId, run.runId(), nodes, currentNodeId, run.layers(), hp, maxHp);
       phase = "map";
     } else if ("chest".equals(kind)) {
-      hp = clearNode(nodes, currentNodeId, run.layers(), hp, maxHp);
+      hp = clearNode(userId, run.runId(), nodes, currentNodeId, run.layers(), hp, maxHp);
       phase = run.relics().size() >= RELIC_IDS.size() ? "map" : "reward";
     } else if ("event".equals(kind)) {
       phase = "event";
@@ -387,7 +387,7 @@ public class ExpeditionRunService {
     requireEventNode(run, request);
     List<Map<String, Object>> nodes = copyNodes(run.nodes());
     int hp = heal(run.hp(), run.maxHp(), 1 + (run.relics().contains("focus_lens") ? 1 : 0));
-    hp = clearNode(nodes, run.currentNodeId(), run.layers(), hp, run.maxHp());
+    hp = clearNode(userId, run.runId(), nodes, run.currentNodeId(), run.layers(), hp, run.maxHp());
     return persistActionState(
         userId, run, "map", run.currentNodeId(), hp, run.maxHp(), nodes, run.relics());
   }
@@ -522,11 +522,13 @@ public class ExpeditionRunService {
           node.put("bossPhase", bossPhase + 1);
           phase = "challenge";
         } else {
-          hp = clearNode(nodes, run.currentNodeId(), run.layers(), hp, run.maxHp());
+          hp = clearNode(
+              userId, run.runId(), nodes, run.currentNodeId(), run.layers(), hp, run.maxHp());
           phase = "over";
         }
       } else {
-        hp = clearNode(nodes, run.currentNodeId(), run.layers(), hp, run.maxHp());
+        hp = clearNode(
+            userId, run.runId(), nodes, run.currentNodeId(), run.layers(), hp, run.maxHp());
         phase =
             "elite".equals(node.get("kind")) && run.relics().size() < RELIC_IDS.size()
                 ? "reward"
@@ -790,7 +792,13 @@ public class ExpeditionRunService {
   }
 
   private int clearNode(
-      List<Map<String, Object>> nodes, String nodeId, int layers, int hp, int maxHp) {
+      Long userId,
+      String runId,
+      List<Map<String, Object>> nodes,
+      String nodeId,
+      int layers,
+      int hp,
+      int maxHp) {
     Map<String, Object> node = findNode(nodes, nodeId);
     int layer = integerValue(node.get("layer"));
     node.put("state", "cleared");
@@ -799,6 +807,7 @@ public class ExpeditionRunService {
           && !nodeId.equals(sibling.get("id"))
           && "available".equals(sibling.get("state"))) {
         sibling.put("state", "bypassed");
+        cancelBypassedPrefetch(userId, runId, stringValue(sibling.get("id")));
       }
     }
     Object next = node.get("next");
@@ -818,6 +827,19 @@ public class ExpeditionRunService {
                             && !nodeId.equals(candidate.get("id"))
                             && "cleared".equals(candidate.get("state")));
     return firstClearedOnHalfway && hp < maxHp ? Math.min(maxHp, hp + 1) : hp;
+  }
+
+  private void cancelBypassedPrefetch(Long userId, String runId, String nodeId) {
+    if (userId == null || runId == null) return;
+    jdbcTemplate.update(
+        "UPDATE pregenerated_problem"
+            + " SET status = 'FAILED', payload = NULL, problem_id = NULL,"
+            + " error_message = '远征分支节点已跳过', updated_at = now()"
+            + " WHERE user_id = ? AND expedition_run_id = ?::uuid AND expedition_node_id = ?"
+            + " AND status IN ('PENDING', 'READY')",
+        userId,
+        runId,
+        nodeId);
   }
 
   private Map<String, Object> findNode(List<Map<String, Object>> nodes, String nodeId) {

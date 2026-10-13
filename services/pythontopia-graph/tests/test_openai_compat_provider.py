@@ -220,6 +220,26 @@ async def test_chat_uses_fast_model_when_tier_is_fast(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("stream", [False, True])
+async def test_request_model_override_is_rejected(
+    monkeypatch: pytest.MonkeyPatch, stream: bool
+) -> None:
+    bodies = _capture_request_bodies(monkeypatch)
+    provider = OpenAiCompatProvider()
+    messages = [{"role": "user", "content": "ping"}]
+
+    with pytest.raises(RuntimeError, match="model override is disabled"):
+        if stream:
+            _ = [
+                chunk async for chunk in provider.chat_stream(messages, model="gpt-4o")
+            ]
+        else:
+            await provider.chat(messages, model="gpt-4o")
+
+    assert bodies == []
+
+
+@pytest.mark.asyncio
 async def test_chat_stream_uses_vision_model_and_forwards_image_blocks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
