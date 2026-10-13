@@ -388,6 +388,12 @@ data: <json>
 - `REVIEW` → **记忆矿脉回声复习**：引导去 Bug 矿洞按 FSRS 到期 KC 复盘（非生成，不调工坊生成管线）。
 - 其余 6 个 = 资源类型 → 工坊生成（`POST /api/workshop/resources/stream` SSE）。
 
+### 5.2 训练场导学工作流
+
+`POST /api/tutor/workflow/runs` 以 SSE 推进训练场导学事件；`GET /api/tutor/workflow/sessions/active?problemId=...` 恢复当前题目的会话。仅学生可用。
+
+对 `CHAT`、`EXECUTION_TRACE` 和 `VISUALIZE` 事件，`eventData.code` 可选，最多 20,000 个字符。`CHAT` 会将当前编辑器代码作为学生提供的上下文交给导师；代码中的注释和字符串均按不可信内容处理，不作为系统指令或课程证据。图片必须先上传到会话私有附件端点，再通过 `eventData.attachment_ids` 引用，图片字节不得放入事件 JSON。
+
 ---
 
 ## 6. CORS 与跨端注意事项

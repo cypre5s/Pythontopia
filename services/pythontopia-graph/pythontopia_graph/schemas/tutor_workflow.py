@@ -231,6 +231,7 @@ class ChatEventData(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     message: str = ""
+    code: str | None = Field(default=None, max_length=20_000)
     attachment_ids: list[str] = Field(default_factory=list, max_length=3)
     # Populated only by the Java owner/session resolver, never copied from user input.
     references: list[dict[str, Any]] = Field(default_factory=list, max_length=5)
@@ -352,6 +353,14 @@ class WorkflowRunRequest(BaseModel):
     def validate_chat_attachments(self) -> "WorkflowRunRequest":
         if "images" in self.event_data:
             raise ValueError("workflow image bytes must use private attachment transport")
+        code = self.event_data.get("code")
+        if code is not None:
+            if self.event not in {"CHAT", "EXECUTION_TRACE", "VISUALIZE"}:
+                raise ValueError("event_data.code is only supported for code-aware events")
+            if not isinstance(code, str):
+                raise ValueError("event_data.code must be text")
+            if len(code) > 20_000:
+                raise ValueError("event_data.code must be at most 20000 characters")
         attachment_ids = self.event_data.get("attachment_ids")
         if attachment_ids is not None and self.event != "CHAT":
             raise ValueError("attachment_ids are only supported for CHAT")

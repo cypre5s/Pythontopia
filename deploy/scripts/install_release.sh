@@ -125,7 +125,7 @@ env_file_value() {
 is_public_placeholder() {
   local value="${1,,}"
   case "${value}" in
-    ""|*replace-with*|*replace_with*|*change-me*|*changeme*|*placeholder*\
+    ""|pytopia_dev_password|*replace-with*|*replace_with*|*change-me*|*changeme*|*placeholder*\
       |*your-secret*|*your-key*|*your-token*|*example-token*) return 0 ;;
     *) return 1 ;;
   esac
@@ -152,7 +152,7 @@ check_env_secret() {
   value="$(env_file_value "${env_file}" "${var_name}")"
   normalized="${value,,}"
   case "${normalized}" in
-    ""|pytopia-rag-admin|pythontopia-route-secret\
+    ""|pytopia-rag-admin|pythontopia-route-secret|pytopia_dev_password\
       |*replace-with*|*replace_with*|*change-me*|*changeme*|*placeholder*\
       |*your-secret*|*your-key*|*your-token*|*example-token*)
       echo "[安装失败] ${var_name} 缺失或仍是公开占位值；请写入独立随机密钥（值不会输出）。" >&2
@@ -292,6 +292,7 @@ if [ ! -f "${ENV_FILE}" ]; then
   exit 1
 fi
 chmod 600 "${ENV_FILE}"
+require_env_value "${ENV_FILE}" PYT_DB_PASSWORD
 check_env_secret PYT_JWT_SECRET 32
 check_env_secret PYT_RAG_ADMIN_TOKEN 32
 check_env_secret PYT_ROUTE_EXECUTION_SECRET 32

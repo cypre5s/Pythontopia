@@ -86,6 +86,7 @@ const chatImages = ref<ChatImageDraft[]>([]);
 const chatImageReads = ref(0);
 const canSendChat = computed(() => !running.value && !chatImageReads.value
   && (chatInput.value.trim().length > 0 || chatImages.value.length > 0));
+const MAX_TUTOR_CODE_LENGTH = 20_000;
 const MAX_CHAT_IMAGES = 3;
 const MAX_CHAT_IMAGE_BYTES = 5 * 1024 * 1024;
 const bodyRef = ref<HTMLElement | null>(null);
@@ -301,6 +302,11 @@ async function runEvent(
   requestId = createWorkflowRequestId(),
 ): Promise<void> {
   if (running.value) return;
+  const code = eventData?.code;
+  if (typeof code === 'string' && code.length > MAX_TUTOR_CODE_LENGTH) {
+    toast.show('当前代码超过导学长度限制，请先精简代码', 'error');
+    return;
+  }
   const body: TutorWorkflowRunRequestDto = {
     problemId: props.problemId,
     event,
@@ -445,6 +451,11 @@ async function sendChat(): Promise<void> {
   const draft = chatInput.value;
   const text = draft.trim();
   if ((!text && !chatImages.value.length) || running.value || chatImageReads.value) return;
+  const currentCode = learning.training.code ?? '';
+  if (currentCode.length > MAX_TUTOR_CODE_LENGTH) {
+    toast.show('当前代码超过导学长度限制，请先精简代码', 'error');
+    return;
+  }
   const message = text || '请结合这张图片帮我分析。';
   const images = [...chatImages.value];
   chatImageReads.value += 1;
@@ -475,6 +486,7 @@ async function sendChat(): Promise<void> {
     images.forEach((image) => revokeImagePreview(image.previewUrl));
     await runEvent('CHAT', {
       message,
+      ...(currentCode.trim() ? { code: currentCode.trim() } : {}),
       ...(attachmentIds.length
         ? { attachment_ids: attachmentIds }
         : {}),

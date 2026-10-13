@@ -76,6 +76,14 @@ public class UploadService {
           HttpStatus.PAYLOAD_TOO_LARGE, "UPLOAD_TOO_LARGE", "文件超过 5MB 上限");
     }
 
+    if (!repository.canAcceptUpload(
+        userId, bytes.length, MAX_FILES_PER_USER, MAX_TOTAL_BYTES_PER_USER)) {
+      throw new BusinessException(
+          HttpStatus.PAYLOAD_TOO_LARGE,
+          "UPLOAD_QUOTA_EXCEEDED",
+          "个人上传额度已用完，请删除旧文件后再上传");
+    }
+
     UploadStatus status;
     String error;
     String text;
@@ -96,14 +104,6 @@ public class UploadService {
       lineCount = 0;
       status = UploadStatus.FAILED;
       error = truncate(e.getMessage(), MAX_ERROR_LENGTH);
-    }
-
-    if (!repository.canAcceptUpload(
-        userId, bytes.length, MAX_FILES_PER_USER, MAX_TOTAL_BYTES_PER_USER)) {
-      throw new BusinessException(
-          HttpStatus.PAYLOAD_TOO_LARGE,
-          "UPLOAD_QUOTA_EXCEEDED",
-          "个人上传额度已用完，请删除旧文件后再上传");
     }
 
     WorkshopUpload saved =

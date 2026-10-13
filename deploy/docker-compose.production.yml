@@ -162,6 +162,8 @@ services:
     env_file:
       - .env
     environment:
+      # .env 的开发态可选鉴权开关不能覆盖生产安全边界。
+      PYT_INTERNAL_AUTH_OPTIONAL: "0"
       # 生产只使用 DeepSeek；preflight/install 校验 endpoint、key、文本及视觉模型。
       PYT_LLM_PROVIDER: ${PYT_LLM_PROVIDER:?缺少 PYT_LLM_PROVIDER}
       # OpenAiCompatProvider 读取无前缀 OPENAI_*/LLM_* 变量，

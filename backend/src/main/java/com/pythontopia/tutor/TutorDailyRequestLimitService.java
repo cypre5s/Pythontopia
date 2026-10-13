@@ -9,7 +9,7 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-/** Atomic per-account daily cap shared by Tutor chat and workflow requests. */
+/** Atomic per-account daily cap shared by Tutor, workflow, and Feynman model requests. */
 @Service
 public class TutorDailyRequestLimitService {
 
@@ -44,7 +44,7 @@ public class TutorDailyRequestLimitService {
       throw new BusinessException(
           HttpStatus.TOO_MANY_REQUESTS,
           "TUTOR_DAILY_LIMIT_REACHED",
-          "今日导师使用次数已达 30 次，请明天再试");
+          "今日 AI 学习助手使用次数已达 30 次，请明天再试");
     }
   }
 

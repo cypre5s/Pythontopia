@@ -54,6 +54,9 @@ require_fixed "${COMPOSE_FILE}" \
   "Graph 生产健康检查使用 readiness" \
   'curl -fsS http://127.0.0.1:18091/readyz'
 require_fixed "${COMPOSE_FILE}" \
+  "生产 Graph 强制关闭可选内部鉴权" \
+  'PYT_INTERNAL_AUTH_OPTIONAL: "0"'
+require_fixed "${COMPOSE_FILE}" \
   "RAG 生产健康检查使用 readiness" \
   'curl -fsS http://127.0.0.1:18092/readyz'
 require_fixed "${COMPOSE_FILE}" \
@@ -86,6 +89,18 @@ require_fixed "${INSTALLER}" \
 require_fixed "${INSTALLER}" \
   "安装前执行生产判题配置门禁" \
   'validate_production_judge_env "${ENV_FILE}"'
+require_fixed "${PREFLIGHT}" \
+  "ECS 预检拒绝公开开发数据库密码" \
+  'pytopia_dev_password'
+require_fixed "${INSTALLER}" \
+  "安装拒绝公开开发数据库密码" \
+  'pytopia_dev_password'
+require_fixed "${PREFLIGHT}" \
+  "ECS 预检对数据库密码执行值校验" \
+  'require_env_value "${ENV_FILE}" PYT_DB_PASSWORD'
+require_fixed "${INSTALLER}" \
+  "安装前对数据库密码执行值校验" \
+  'require_env_value "${ENV_FILE}" PYT_DB_PASSWORD'
 require_fixed "${PREFLIGHT}" \
   "ECS 预检强制 Piston token 至少 32 字符" \
   'check_secret_strength PYT_PISTON_AUTH_TOKEN 32 fail "${env_file}"'

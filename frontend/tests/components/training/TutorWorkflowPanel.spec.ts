@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
+import { useLearningStore } from '@stores/learning';
 import TutorWorkflowPanel from '@/components/training/TutorWorkflowPanel.vue';
 
 vi.mock('vue-router', () => ({
@@ -338,6 +339,36 @@ describe('TutorWorkflowPanel', () => {
     expect(getStream().start).toHaveBeenCalledWith(expect.objectContaining({
       eventData: expect.not.objectContaining({ images: expect.anything() }),
     }));
+  });
+
+  it('sends the current editor code with the CHAT event', async () => {
+    const wrapper = mountPanel();
+    useLearningStore().setTrainingCode('print("hello")');
+    await flushPromises();
+
+    await wrapper.get('.tw-chat__input').setValue('请解释当前代码');
+    await wrapper.get('.tw-chat').trigger('submit');
+    await flushPromises();
+
+    expect(getStream().start).toHaveBeenCalledWith(expect.objectContaining({
+      event: 'CHAT',
+      eventData: expect.objectContaining({
+        message: '请解释当前代码',
+        code: 'print("hello")',
+      }),
+    }));
+  });
+
+  it('keeps oversized editor code out of tutor requests', async () => {
+    const wrapper = mountPanel();
+    useLearningStore().setTrainingCode('x'.repeat(20_001));
+    await flushPromises();
+
+    await wrapper.get('.tw-chat__input').setValue('解释当前代码');
+    await wrapper.get('.tw-chat').trigger('submit');
+    await flushPromises();
+
+    expect(getStream().start).not.toHaveBeenCalled();
   });
 
   it('keeps the text and image draft when attachment upload fails', async () => {

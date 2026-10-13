@@ -61,7 +61,7 @@ env_file_value() {
 is_public_placeholder() {
   local value="${1,,}"
   case "${value}" in
-    ""|*replace-with*|*replace_with*|*change-me*|*changeme*|*placeholder*\
+    ""|pytopia_dev_password|*replace-with*|*replace_with*|*change-me*|*changeme*|*placeholder*\
       |*your-secret*|*your-key*|*your-token*|*example-token*) return 0 ;;
     *) return 1 ;;
   esac
@@ -333,6 +333,7 @@ if [ -f "${ENV_FILE}" ]; then
 
   # 秘密类变量逐个做「占位值 + 长度」校验。只查变量名是否存在是不够的：.env.example 里的
   # 占位值是公开的，原样进生产等于把 JWT 签名密钥 / 教师邀请码 / 内部令牌直接公开。
+  require_env_value "${ENV_FILE}" PYT_DB_PASSWORD || true
   check_secret_strength PYT_JWT_SECRET 32 fail
   check_secret_strength PYT_ROUTE_EXECUTION_SECRET 32 fail
   check_secret_strength PYT_RAG_ADMIN_TOKEN 32 fail

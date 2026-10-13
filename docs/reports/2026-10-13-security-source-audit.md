@@ -32,3 +32,10 @@
 - `deploy/scripts/test_deepseek_model_contract.sh`、`test_production_ai_readiness_contract.sh`、`test_piston_http_host_contract.sh`、`test_public_demo_account_contract.sh`、`test_https_forwarded_proto_contract.sh`、`test_dev_compose_security_contract.sh`、`test_install_release_secret_contract.sh` 均通过。
 - Web 全量 Vitest：256 files / 2522 tests 通过；TypeScript typecheck 通过。
 - 这些结果验证源代码与本地环境，不构成公网或生产运行态的安全证明。
+
+## 2026-10-14 增量复核
+
+- 费曼学伴的教学与找茬入口已纳入相同账号每日 30 次计数；额度检查在调用学习服务前执行。Tutor workflow 的编辑器代码由前端、Java 和 Graph 限制为最多 20,000 字符，并在 Tutor 提示中标为不可信学生输入。
+- 工作坊上传先检查个人存储额度，再解析文件；生产 Compose 固定关闭 Graph 可选内部鉴权，ECS 预检和发布安装拒绝公开开发数据库密码。
+- 验证：本轮后端相关单元及 PostgreSQL/Testcontainers 集成 192 项通过；Web 全量 260 文件 / 2506 项与 TypeScript typecheck 通过；Graph 全量 1816 passed / 1 skipped；生产 AI/readiness 与安装密钥契约脚本通过。
+- 本次仍未连接 ECS、公网测试或启动 Piston 实际执行；对话中暴露过的 DeepSeek key 未用于请求，轮换前不进行计费性能采样。每日请求配额不是 token 或费用上限；JWT localStorage、CSP 来源限制及 Graph 依赖锁/漏洞扫描仍需后续处理。
