@@ -68,6 +68,13 @@ export type WorkflowCardKey =
   | 'visualize'
   | 'parsons';
 
+export interface TutorWorkflowRunRequestDto {
+  requestId: string;
+  problemId: number;
+  event: WorkflowEvent;
+  eventData?: Record<string, unknown>;
+}
+
 export interface ProblemGuideCardDto {
   card_id?: string;
   problem_restatement: string;

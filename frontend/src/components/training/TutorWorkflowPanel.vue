@@ -30,6 +30,7 @@ import {
   type TransferProblemCardDto,
   type TutorEpisodePlanDto,
   type TutorEpisodeStepDto,
+  type TutorWorkflowRunRequestDto,
   type VisualizeCardDto,
   type WorkflowActionDto,
   type WorkflowCardKey,
@@ -61,6 +62,12 @@ interface CardEntry {
   userMessage?: string;
 }
 
+interface RetryableWorkflowRequest {
+  event: WorkflowEvent;
+  eventData?: Record<string, unknown>;
+  requestId: string;
+}
+
 const cards = ref<CardEntry[]>([]);
 const availableActions = ref<WorkflowActionDto[]>([]);
 const phase = ref<string>('READING');
@@ -73,6 +80,7 @@ const chatFileInput = ref<HTMLInputElement | null>(null);
 interface ChatImageDraft {
   file: File;
   previewUrl: string;
+  attachmentId?: string;
 }
 const chatImages = ref<ChatImageDraft[]>([]);
 const chatImageReads = ref(0);
@@ -84,6 +92,7 @@ const bodyRef = ref<HTMLElement | null>(null);
 const loaded = ref(false);
 const lastInitialNonce = ref(0);
 const cardFeedback = ref<Record<string, 'helpful' | 'not_helpful'>>({});
+const retryableRequest = ref<RetryableWorkflowRequest | null>(null);
 
 const sse = useSseStream<WorkflowRunResultDto>('/api/tutor/workflow/runs');
 const running = computed(
@@ -277,15 +286,34 @@ function steerEpisodePlan(signal: 'pause' | 'resume' | 'skip' | 'take_over' | 'r
   if (signal === 'redirect') planRedirect.value = '';
 }
 
-async function runEvent(event: WorkflowEvent, eventData?: Record<string, unknown>): Promise<void> {
+function createWorkflowRequestId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = ((bytes[6] ?? 0) & 0x0f) | 0x40;
+  bytes[8] = ((bytes[8] ?? 0) & 0x3f) | 0x80;
+  const hex = [...bytes].map((value) => value.toString(16).padStart(2, '0'));
+  return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10).join('')}`;
+}
+
+async function runEvent(
+  event: WorkflowEvent,
+  eventData?: Record<string, unknown>,
+  requestId = createWorkflowRequestId(),
+): Promise<void> {
   if (running.value) return;
-  const body: Record<string, unknown> = { problemId: props.problemId, event };
-  if (eventData) body.eventData = eventData;
+  const body: TutorWorkflowRunRequestDto = {
+    problemId: props.problemId,
+    event,
+    requestId,
+    ...(eventData ? { eventData } : {}),
+  };
+  retryableRequest.value = { event, ...(eventData ? { eventData } : {}), requestId };
   await sse.start(body);
   // 组件已销毁（含 onBeforeUnmount 的 abort：abort 会把 status 置成 done 但 result 为空）→
   // 不再落卡片、更不弹「导学助手暂时没响应」到别的页面。
   if (!alive) return;
   if (sse.status.value === 'done' && sse.result.value) {
+    retryableRequest.value = null;
     const r = sse.result.value;
     sessionKey.value = r.session_id || sessionKey.value;
     phase.value = r.phase;
@@ -304,6 +332,12 @@ async function runEvent(event: WorkflowEvent, eventData?: Record<string, unknown
   } else {
     toast.show(sse.error.value?.message ?? '导学助手暂时没响应，再试一次', 'error');
   }
+}
+
+function retryLastWorkflowRequest(): void {
+  const request = retryableRequest.value;
+  if (!request || running.value) return;
+  void runEvent(request.event, request.eventData, request.requestId);
 }
 
 async function consumeInitialRequest(): Promise<void> {
@@ -395,6 +429,7 @@ function onChatImagesSelected(event: Event): void {
 }
 
 function removeChatImage(index: number): void {
+  if (chatImageReads.value > 0) return;
   const removed = chatImages.value[index];
   if (removed) revokeImagePreview(removed.previewUrl);
   chatImages.value = chatImages.value.filter((_, i) => i !== index);
@@ -414,24 +449,34 @@ async function sendChat(): Promise<void> {
   const images = [...chatImages.value];
   chatImageReads.value += 1;
   try {
-    // shortcut: if one of several uploads fails, successful siblings remain quota-bound until the 30-minute TTL cleanup.
     const uploadResults = await Promise.allSettled(
-      images.map((image) => uploadTutorWorkflowImage(sessionKey.value, image.file)),
+      images.map((image) => image.attachmentId
+        ? Promise.resolve({ attachmentId: image.attachmentId })
+        : uploadTutorWorkflowImage(sessionKey.value, image.file)),
     );
-    const failedUpload = uploadResults.find((result) => result.status === 'rejected');
-    if (failedUpload?.status === 'rejected') throw failedUpload.reason;
     if (!alive) return;
-    const attachments = uploadResults.map((result) => {
-      if (result.status !== 'fulfilled') throw new Error('Image upload did not complete');
-      return result.value;
+    let failedUpload = false;
+    const attachmentIds: string[] = [];
+    uploadResults.forEach((result, index) => {
+      const image = images[index];
+      if (result.status === 'fulfilled' && image) {
+        image.attachmentId = result.value.attachmentId;
+        attachmentIds.push(result.value.attachmentId);
+      } else {
+        failedUpload = true;
+      }
     });
+    if (failedUpload) {
+      toast.show('图片上传失败，请重试；已上传的图片会保留', 'error');
+      return;
+    }
     if (chatInput.value === draft) chatInput.value = '';
     chatImages.value = chatImages.value.filter((image) => !images.includes(image));
     images.forEach((image) => revokeImagePreview(image.previewUrl));
     await runEvent('CHAT', {
       message,
-      ...(attachments.length
-        ? { attachment_ids: attachments.map((attachment) => attachment.attachmentId) }
+      ...(attachmentIds.length
+        ? { attachment_ids: attachmentIds }
         : {}),
     });
   } catch {
@@ -1055,6 +1100,21 @@ function cardId(entry: CardEntry): string {
       </div>
     </div>
 
+    <div
+      v-if="retryableRequest && !running"
+      class="tw-retry"
+      role="status"
+    >
+      <span>{{ sse.error.value?.message ?? '上次导学请求未完成，可以安全重试。' }}</span>
+      <button
+        type="button"
+        data-testid="tutor-workflow-retry"
+        @click="retryLastWorkflowRequest"
+      >
+        重试上次请求
+      </button>
+    </div>
+
     <!-- 自由提问（CHAT） -->
     <div
       v-if="chatImages.length"
@@ -1073,6 +1133,7 @@ function cardId(entry: CardEntry): string {
         <button
           type="button"
           :aria-label="`移除图片 ${index + 1}`"
+          :disabled="chatImageReads > 0"
           @click="removeChatImage(index)"
         >
           ×
@@ -1663,5 +1724,41 @@ function cardId(entry: CardEntry): string {
 .tw-chat__send:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.tw-retry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 6px 10px;
+  padding: 8px 10px;
+  border: 1px solid rgba(180, 83, 9, 0.25);
+  border-radius: 8px;
+  background: rgba(255, 247, 237, 0.9);
+  color: #9a3412;
+  font: 12px/1.45 var(--pyt-font-ui, sans-serif);
+}
+
+.tw-retry button {
+  flex: 0 0 auto;
+  min-height: 32px;
+  border: 1px solid rgba(180, 83, 9, 0.4);
+  border-radius: 6px;
+  padding: 0 10px;
+  background: #fff;
+  color: #9a3412;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.tw-retry button:focus-visible {
+  outline: 2px solid #c2410c;
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .tw-retry { align-items: flex-start; flex-direction: column; }
 }
 </style>

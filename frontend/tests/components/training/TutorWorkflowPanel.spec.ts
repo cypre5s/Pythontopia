@@ -200,6 +200,30 @@ describe('TutorWorkflowPanel', () => {
     expect(getStream().start).toHaveBeenCalledTimes(1);
   });
 
+  it('retries an interrupted workflow with the same idempotency key and payload', async () => {
+    vi.stubGlobal('crypto', { randomUUID: () => 'request-1' });
+    const stream = getStream();
+    stream.start.mockImplementationOnce(async () => {
+      stream.status.value = 'error';
+      stream.error.value = { message: '连接中断' };
+    });
+
+    const wrapper = mountPanel();
+    await flushPromises();
+    await wrapper.get('[data-testid="coach-recommended-action"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="tutor-workflow-retry"]').text()).toContain('重试');
+    await wrapper.get('[data-testid="tutor-workflow-retry"]').trigger('click');
+    await flushPromises();
+
+    const firstRequest = stream.start.mock.calls[0]?.[0] as Record<string, unknown>;
+    const retryRequest = stream.start.mock.calls[1]?.[0] as Record<string, unknown>;
+    expect(firstRequest).toMatchObject({ requestId: 'request-1', problemId: 476, event: 'READING' });
+    expect(retryRequest).toEqual(firstRequest);
+    expect(wrapper.find('[data-testid="tutor-workflow-retry"]').exists()).toBe(false);
+  });
+
   it('records helpful card feedback without blocking the workflow UI', async () => {
     const wrapper = mountPanel();
     await flushPromises();
@@ -278,14 +302,15 @@ describe('TutorWorkflowPanel', () => {
     await wrapper.get('[data-testid="plan-start"]').trigger('click');
     await flushPromises();
 
-    expect(stream.start).toHaveBeenCalledWith({
+    expect(stream.start).toHaveBeenCalledWith(expect.objectContaining({
       problemId: 476,
       event: 'PLAN_START',
+      requestId: expect.any(String),
       eventData: {
         plan_id: 'ep-wf-test', revision: 0, reason: '学生开始已推荐的学习计划',
         trigger_source: 'student', current_phase: 'READING',
       },
-    });
+    }));
   });
 
   it('sends an attached image with the CHAT event', async () => {
@@ -331,6 +356,37 @@ describe('TutorWorkflowPanel', () => {
     expect((wrapper.get('.tw-chat__input').element as HTMLTextAreaElement).value).toBe('请看这张图');
     expect(wrapper.find('[data-testid="tw-chat-images"]').exists()).toBe(true);
     expect(getStream().start).not.toHaveBeenCalled();
+  });
+
+  it('reuses successful image uploads when a sibling attachment needs retry', async () => {
+    vi.mocked(uploadTutorWorkflowImage)
+      .mockResolvedValueOnce({ attachmentId: 'attachment-1' })
+      .mockRejectedValueOnce(new Error('temporary upload failure'))
+      .mockResolvedValueOnce({ attachmentId: 'attachment-2' });
+    const wrapper = mountPanel();
+    await flushPromises();
+    const first = new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], 'one.png', { type: 'image/png' });
+    const second = new File([new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10])], 'two.png', { type: 'image/png' });
+    const input = wrapper.get('[data-testid="tw-chat-image-input"]');
+    Object.defineProperty(input.element, 'files', { value: [first, second], configurable: true });
+    await input.trigger('change');
+    await flushPromises();
+    await wrapper.get('.tw-chat__input').setValue('请对照两张图');
+
+    await wrapper.get('.tw-chat').trigger('submit');
+    await flushPromises();
+    expect(getStream().start).not.toHaveBeenCalled();
+
+    await wrapper.get('.tw-chat').trigger('submit');
+    await flushPromises();
+
+    expect(uploadTutorWorkflowImage).toHaveBeenCalledTimes(3);
+    expect(uploadTutorWorkflowImage).toHaveBeenNthCalledWith(1, 'wf-test', first);
+    expect(uploadTutorWorkflowImage).toHaveBeenNthCalledWith(2, 'wf-test', second);
+    expect(uploadTutorWorkflowImage).toHaveBeenNthCalledWith(3, 'wf-test', second);
+    expect(getStream().start).toHaveBeenCalledWith(expect.objectContaining({
+      eventData: expect.objectContaining({ attachment_ids: ['attachment-1', 'attachment-2'] }),
+    }));
   });
 
   it('renders bounded coach progress from trace nodes without exposing raw internals', async () => {

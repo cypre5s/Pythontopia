@@ -30,7 +30,8 @@ public class TutorWorkflowRepository {
       String decisionJson,
       String cardKey,
       String cardPayloadJson,
-      String actionPayloadJson) {}
+      String actionPayloadJson,
+      String resultJson) {}
 
   public record SubmissionFeedbackProjection(
       int seq,
@@ -187,14 +188,15 @@ public class TutorWorkflowRepository {
     int claimed =
         jdbcTemplate.update(
             """
-            INSERT INTO tutor_workflow_run_projection (session_id, run_id, seq, event)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO tutor_workflow_run_projection (session_id, run_id, seq, event, result_json)
+            VALUES (?, ?, ?, ?, ?::jsonb)
             ON CONFLICT (session_id, run_id) DO NOTHING
             """,
             sessionId,
             projection.runId(),
             projection.seq(),
-            projection.event());
+            projection.event(),
+            projection.resultJson() == null ? "{}" : projection.resultJson());
     if (claimed == 0) {
       return false;
     }
@@ -343,6 +345,30 @@ public class TutorWorkflowRepository {
             sessionId,
             runId);
     return rows.stream().findFirst();
+  }
+
+  public Optional<String> findAutoGenRunResult(Long sessionId, UUID runId) {
+    List<String> rows =
+        jdbcTemplate.query(
+            "SELECT result_json::text FROM tutor_workflow_run_projection"
+                + " WHERE session_id = ? AND run_id = ? AND result_json IS NOT NULL",
+            (rs, rowNum) -> rs.getString(1),
+            sessionId,
+            runId);
+    return rows.stream().findFirst();
+  }
+
+  /** Makes a failed request-key run claimable again after an explicit Web retry. */
+  public boolean retryFailedAutoGenRun(Long sessionId, UUID runId, String requestFingerprint) {
+    return jdbcTemplate.update(
+            "UPDATE tutor_workflow_autogen_checkpoint SET status = 'INTERRUPTED',"
+                + " stage_index = -1, stage_name = '', checkpoint = '{}'::jsonb, updated_at = now()"
+                + " WHERE session_id = ? AND run_id = ? AND request_fingerprint = ?"
+                + " AND status = 'FAILED'",
+            sessionId,
+            runId,
+            requestFingerprint)
+        == 1;
   }
 
   private AutoGenCheckpoint mapAutoGenCheckpoint(ResultSet rs, int rowNum) throws SQLException {

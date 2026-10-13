@@ -179,6 +179,54 @@ class TutorWorkflowServiceTest {
   }
 
   @Test
+  void completedIdempotentRunReplaysStoredResultWithoutCallingGraphAgain() {
+    UUID requestId = UUID.randomUUID();
+    TutorWorkflowRunRequest request =
+        new TutorWorkflowRunRequest(requestId, PROBLEM, "READING", Map.of());
+    service.run(USER, request);
+
+    ArgumentCaptor<String> fingerprint = ArgumentCaptor.forClass(String.class);
+    verify(repository).claimAutoGenRun(eq(session.id()), eq(requestId), fingerprint.capture());
+    when(repository.findAutoGenCheckpoint(session.id(), requestId))
+        .thenReturn(
+            Optional.of(
+                new TutorWorkflowRepository.AutoGenCheckpoint(
+                    requestId, fingerprint.getValue(), -1, "", "{}", "COMPLETED")));
+    when(repository.findAutoGenRunResult(session.id(), requestId))
+        .thenReturn(
+            Optional.of(
+                "{\"session_id\":\"wf-7-476-abc\",\"event\":\"READING\","
+                    + "\"phase\":\"READING\",\"card_key\":null,\"card\":null,"
+                    + "\"available_actions\":[],\"seq\":1}"));
+    when(tutorService.resolveProfileBrief(USER, null)).thenReturn("changed profile");
+
+    assertThat(service.run(USER, request)).isNotNull();
+
+    verify(graphClient, times(1)).runStream(eq(USER), any(), any(), any(), any(), any());
+    verify(repository).findAutoGenRunResult(session.id(), requestId);
+  }
+
+  @Test
+  void idempotencyKeyCannotBeReusedForDifferentRequest() {
+    UUID requestId = UUID.randomUUID();
+    when(repository.findAutoGenCheckpoint(session.id(), requestId))
+        .thenReturn(
+            Optional.of(
+                new TutorWorkflowRepository.AutoGenCheckpoint(
+                    requestId, "f".repeat(64), -1, "", "{}", "COMPLETED")));
+
+    assertThatThrownBy(
+            () ->
+                service.run(
+                    USER,
+                    new TutorWorkflowRunRequest(requestId, PROBLEM, "READING", Map.of())))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("请求标识");
+
+    verify(graphClient, times(0)).runStream(eq(USER), any(), any(), any(), any(), any());
+  }
+
+  @Test
   void checkpointWriteRequiresOwnerAndActiveRunAndSavesNativeTeamState() throws Exception {
     UUID runId = UUID.randomUUID();
     String fingerprint = "c".repeat(64);
