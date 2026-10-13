@@ -1,13 +1,5 @@
-/**
- * ProfilePage 认知风格纠偏（#1 学生纠偏阀）单测。
- *
- * 覆盖：
- *   1. 认知风格卡内渲染 3 选 1 纠偏（先看图解=visual / 先读推理=logical / 先跑例子=trial），
- *      初始按末尾 tag 高亮当前主导风格；
- *   2. 选某风格 → 更新主观自评标签，不增加可信证据，保存回读后高亮反映所选风格。
- */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { mount, flushPromises } from '@vue/test-utils';
+import { flushPromises, mount } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import { createRouter, createMemoryHistory, type Router } from 'vue-router';
 import ProfilePage from '@/pages/ProfilePage.vue';
@@ -34,35 +26,35 @@ vi.mock('@/composables/useStardewFx', () => ({ playUiClick: vi.fn() }));
 
 const APP_LAYOUT_STUB = { template: '<div data-testid="layout-stub"><slot /></div>' };
 const BLANK_STUB = { template: '<div />' };
-
 const PROFILE = {
   profileId: 1,
   userId: 1,
   packId: 43,
   major: 'CS',
+  baseLevel: { programmingYears: 1, languagesKnown: [], pythonSelfRatedLevel: 3 },
+  learningGoal: { kind: 'EXAM', deadlineIso: null, targetKcCodes: [] },
+  learningPreference: { mediaPriority: ['CODE'], sessionMinutesPerDay: 30 },
   cognitiveStyle: { fieldDependent: 0.6, sequentialVsHolistic: 0.25 },
   narrativeSummary: null,
 };
 
-function dims(cognitiveTags: string[]): ProfileDimensionDto[] {
+function dims(): ProfileDimensionDto[] {
   return [
     {
-      key: 'cognitive_style',
-      label: '认知风格',
-      score: 0.5,
-      confidence: 0.5,
-      evidenceCount: 4,
-      selfEditable: true,
-      tags: cognitiveTags,
+      key: 'professional_background', label: '专业背景', score: 0.5, confidence: 0.5,
+      evidenceCount: 4, selfEditable: true, tags: [],
     },
     {
-      key: 'learning_goal',
-      label: '学习目标',
-      score: 0.5,
-      confidence: 0.3,
-      evidenceCount: 2,
-      selfEditable: true,
-      tags: [],
+      key: 'learning_goal', label: '学习目标', score: 0.5, confidence: 0.3,
+      evidenceCount: 2, selfEditable: true, tags: [],
+    },
+    {
+      key: 'learning_preference', label: '学习偏好', score: 0.5, confidence: 0.3,
+      evidenceCount: 2, selfEditable: true, tags: [],
+    },
+    {
+      key: 'cognitive_style', label: '认知风格', score: 0.5, confidence: 0.5,
+      evidenceCount: 4, selfEditable: false, tags: [],
     },
   ];
 }
@@ -91,34 +83,33 @@ async function mountPage() {
   return wrapper;
 }
 
-describe('ProfilePage cognitive_style 纠偏', () => {
+describe('ProfilePage', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     getLearnerProfileMock.mockReset().mockResolvedValue({ ...PROFILE });
-    getProfileDimensionsMock.mockReset().mockResolvedValue(dims(['logical']));
+    getProfileDimensionsMock.mockReset().mockResolvedValue(dims());
     selfUpdateDimensionMock
       .mockReset()
-      .mockResolvedValue({ userId: 1, dimensionKey: 'cognitive_style', finalDimension: {} });
+      .mockResolvedValue({ userId: 1, dimensionKey: 'professional_background', finalDimension: {} });
   });
 
-  it('renders the 3-choice corrector and highlights the current dominant style', async () => {
+  it('shows profile context and only exposes dimensions marked self-editable by the server', async () => {
     const wrapper = await mountPage();
 
-    expect(wrapper.find('[data-testid="cognitive-style-correct"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="cog-style-visual"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="cog-style-logical"]').exists()).toBe(true);
-    expect(wrapper.find('[data-testid="cog-style-trial"]').exists()).toBe(true);
-    // 当前主导 = 末尾 tag 'logical' → 高亮（primary）；其余非高亮。
-    expect(wrapper.find('[data-testid="cog-style-logical"]').classes()).toContain('py-btn--primary');
-    expect(wrapper.find('[data-testid="cog-style-visual"]').classes()).not.toContain(
-      'py-btn--primary',
-    );
+    expect(wrapper.find('[data-testid="dim-major"]').text()).toContain('CS');
+    expect(wrapper.find('[data-testid="dim-baseLevel"]').text()).toContain('Python Lv.3');
+    expect(wrapper.find('[data-testid="dim-learningGoal"]').text()).toContain('EXAM');
+    expect(wrapper.find('[data-testid="self-rate-professional_background"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="self-rate-learning_goal"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="self-rate-learning_preference"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="self-rate-cognitive_style"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="cognitive-style-correct"]').exists()).toBe(false);
   });
 
   it('shows a retry action when loading profile dimensions fails', async () => {
     getProfileDimensionsMock
       .mockRejectedValueOnce(new Error('network'))
-      .mockResolvedValueOnce(dims(['logical']));
+      .mockResolvedValueOnce(dims());
     const wrapper = await mountPage();
 
     expect(wrapper.find('[data-testid="profile-dimensions-error"]').exists()).toBe(true);
@@ -126,42 +117,16 @@ describe('ProfilePage cognitive_style 纠偏', () => {
     await flushPromises();
 
     expect(wrapper.find('[data-testid="profile-dimensions-error"]').exists()).toBe(false);
-    expect(wrapper.find('[data-testid="cognitive-style-correct"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="self-rate-professional_background"]').exists()).toBe(true);
   });
 
-  it('renders cognitive style using the profile schema scales', async () => {
+  it('submits a self-rating as a score delta without adding evidence fields', async () => {
     const wrapper = await mountPage();
-    const card = wrapper.find('[data-testid="dim-cognitiveStyle"]');
-
-    expect(card.find('.dim-card__value').text()).toBe('喜欢先看全局');
-    expect(card.find('.dim-card__detail').text()).toContain('整体型 · 场依存 6/10');
-  });
-
-  it('renders negative sequential-versus-holistic values as step-by-step preference', async () => {
-    getLearnerProfileMock.mockResolvedValueOnce({
-      ...PROFILE,
-      cognitiveStyle: { fieldDependent: 0.4, sequentialVsHolistic: -0.25 },
-    });
-    const wrapper = await mountPage();
-    const card = wrapper.find('[data-testid="dim-cognitiveStyle"]');
-
-    expect(card.find('.dim-card__value').text()).toBe('喜欢一步步来');
-    expect(card.find('.dim-card__detail').text()).toContain('序列型 · 场依存 4/10');
-  });
-
-  it('picking a style cannot increase trusted evidence', async () => {
-    const wrapper = await mountPage();
-    // 保存后回读：下一次拉取返回 visual 落在末尾（主导）。
-    getProfileDimensionsMock.mockResolvedValueOnce(dims(['logical', 'visual']));
-
-    await wrapper.find('[data-testid="cog-style-visual"]').trigger('click');
+    const slider = wrapper.get('[data-testid="self-rate-professional_background"] input');
+    await slider.setValue('65');
+    await slider.trigger('change');
     await flushPromises();
 
-    expect(selfUpdateDimension).toHaveBeenCalledWith('cognitive_style', {
-      scoreDelta: 0.05,
-      tagsAdd: ['visual'],
-    });
-    // 反映已选：visual 成为主导高亮。
-    expect(wrapper.find('[data-testid="cog-style-visual"]').classes()).toContain('py-btn--primary');
+    expect(selfUpdateDimension).toHaveBeenCalledWith('professional_background', 0.15);
   });
 });

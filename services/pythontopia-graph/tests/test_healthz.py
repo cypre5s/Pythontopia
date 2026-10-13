@@ -48,6 +48,32 @@ def test_readyz_rejects_provider_initialization_failure(monkeypatch) -> None:
     assert response.json() == {"detail": "real LLM provider is not ready"}
 
 
+def test_profile_route_fails_closed_when_deepseek_is_unavailable(monkeypatch) -> None:
+    monkeypatch.setenv("PYT_LLM_PROVIDER", "dryrun")
+    for name in (
+        "PYT_OPENAI_API_KEY",
+        "OPENAI_API_KEY",
+        "LLM_API_KEY",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(
+        "pythontopia_graph.llm.provider.load_pythontopia_env", lambda *args, **kwargs: None
+    )
+
+    response = TestClient(app).post(
+        "/agents/profile/turn",
+        json={
+            "user_id": 1,
+            "interview_session_id": "session-1",
+            "last_user_message": "我想学习 Python",
+            "course_kc_index": [],
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json() == {"detail": "DeepSeek provider is not configured"}
+
+
 def test_readyz_rejects_enabled_browse_without_runtime(monkeypatch) -> None:
     provider = OpenAiCompatProvider(
         base_url="https://api.deepseek.com/v1",

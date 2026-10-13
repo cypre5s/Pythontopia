@@ -512,6 +512,9 @@ public class ExpeditionRunService {
       }
       return applyChallengeOutcome(userId, run, node, request.problemId(), evidence, false, true);
     }
+    if (!isCurrentOpenProblem(userId, run.runId(), request.nodeId(), request.problemId())) {
+      throw problemBindingMismatch();
+    }
     validateIssuedBossPhase(node, evidence, request.problemId());
     if (!"challenge".equals(run.phase()) || !request.nodeId().equals(run.currentNodeId())) {
       throw problemBindingMismatch();
@@ -715,6 +718,31 @@ public class ExpeditionRunService {
             questionFingerprint)
         .stream()
         .findFirst();
+  }
+
+  private boolean isCurrentOpenProblem(
+      Long userId, String runId, String nodeId, String problemId) {
+    return Boolean.TRUE.equals(
+        jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM pregenerated_problem p"
+                + " JOIN expedition_run r ON r.user_id = p.user_id AND r.run_id = p.expedition_run_id"
+                + " WHERE p.user_id = ? AND p.expedition_run_id = ?::uuid"
+                + " AND p.expedition_node_id = ? AND p.problem_id = ? AND p.status = 'CONSUMED'"
+                + " AND r.status = 'ACTIVE' AND r.phase = 'challenge' AND r.current_node_id = p.expedition_node_id"
+                + " AND NOT EXISTS (SELECT 1 FROM expedition_challenge_settlement s"
+                + " WHERE s.user_id = p.user_id AND s.run_id = p.expedition_run_id"
+                + " AND s.node_id = p.expedition_node_id AND s.problem_id = p.problem_id)"
+                + " AND p.id = (SELECT MAX(open.id) FROM pregenerated_problem open"
+                + " WHERE open.user_id = p.user_id AND open.expedition_run_id = p.expedition_run_id"
+                + " AND open.expedition_node_id = p.expedition_node_id AND open.status = 'CONSUMED'"
+                + " AND NOT EXISTS (SELECT 1 FROM expedition_challenge_settlement settled"
+                + " WHERE settled.user_id = open.user_id AND settled.run_id = open.expedition_run_id"
+                + " AND settled.node_id = open.expedition_node_id AND settled.problem_id = open.problem_id)))",
+            Boolean.class,
+            userId,
+            runId,
+            nodeId,
+            problemId));
   }
 
   private boolean hasUsedFirstAid(Long userId, String runId) {

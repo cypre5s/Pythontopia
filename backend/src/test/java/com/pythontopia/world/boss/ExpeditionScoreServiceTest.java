@@ -161,6 +161,7 @@ class ExpeditionScoreServiceTest {
 
   @Test
   void refusesToAddANewVerifiedAttemptAfterOneRunBudgetIsUsed() {
+    stubCurrentOpenIssue();
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(false));
     when(jdbcTemplate.query(contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
@@ -183,6 +184,7 @@ class ExpeditionScoreServiceTest {
 
   @Test
   void locksTheActiveRunBeforeCheckingItsAttemptBudget() {
+    stubCurrentOpenIssue();
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(false));
     when(jdbcTemplate.query(contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
@@ -204,6 +206,7 @@ class ExpeditionScoreServiceTest {
 
   @Test
   void publishesLearningEvidenceOnlyForFirstFailureAndFirstPass() {
+    stubCurrentOpenIssue();
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(false));
     when(jdbcTemplate.query(contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
@@ -265,5 +268,15 @@ class ExpeditionScoreServiceTest {
     org.assertj.core.api.Assertions.assertThat(sql.getValue())
         .contains("r.status = 'ACTIVE'")
         .contains("p.expedition_run_id = a.run_id AND p.chapter = ?");
+  }
+
+  private void stubCurrentOpenIssue() {
+    when(jdbcTemplate.queryForObject(
+            contains("FROM pregenerated_problem p"),
+            eq(Boolean.class),
+            eq(7L),
+            eq(RUN_ID),
+            eq("issue-one")))
+        .thenReturn(true);
   }
 }

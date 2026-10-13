@@ -92,7 +92,7 @@ class MemoryBriefServiceTest {
     assertThat(brief.asOf()).isEqualTo("2026-06-17T05:52:00Z");
   }
 
-  // ── ④ brief 聚合：facts 近→远时序 + weak_kcs + style_notes + as_of ──
+  // ── ④ brief 聚合：事实、显式媒介偏好、弱项与时间 ──
   @Test
   void aggregatesFactsWeakKcsStyleNotesWithTemporalOrder() {
     when(retrieval.retrieve(eq(USER), isNull(), any(), anyInt()))
@@ -109,7 +109,7 @@ class MemoryBriefServiceTest {
         .thenReturn(
             List.of(
                 dim("cognitive_style", 0.6, 0.5, List.of("logic", "visual")),
-                dim("learning_preference", 0.5, 0.4, List.of("video", "example")),
+                dim("learning_preference", 0.5, 0.4, List.of("video", "mindmap")),
                 dim("emotion_persistence", 0.4, 0.3, List.of())));
 
     MemoryBriefDto brief = service(localProps(), new RestTemplate()).buildBrief(USER, "列表");
@@ -120,10 +120,11 @@ class MemoryBriefServiceTest {
     // weak_kcs：召回中受阻 KC（KC-07）在前，到期/有 lapse 的复习 KC（KC-99）补后；未到期且无 lapse 的 KC-03 不计。
     assertThat(brief.weakKcs()).containsExactly("PY43-KC-07", "PY43-KC-99");
     assertThat(brief.weakKcs()).doesNotContain("PY43-KC-03");
-    // style_notes 来自 8 维画像。
+    // 仅将明确选择的媒介偏好传入建议；不推断认知风格或情绪。
     assertThat(brief.styleNotes())
-        .containsExactly("认知风格: visual", "偏好: video,example", "情绪: 需鼓励");
-    assertThat(brief.stablePreferences()).contains("偏好: video,example");
+        .containsExactly("自述媒介偏好: video,mindmap");
+    assertThat(brief.styleNotes()).doesNotContain("认知风格: visual", "情绪: 需鼓励");
+    assertThat(brief.stablePreferences()).contains("自述媒介偏好: video,mindmap");
     assertThat(brief.strugglePatterns()).contains("练习失败：PY43-KC-07");
     assertThat(brief.recentWins()).contains("练习通过：PY43-KC-03");
     assertThat(brief.interventionHints())
@@ -146,12 +147,14 @@ class MemoryBriefServiceTest {
         .thenReturn(
             List.of(
                 dim("cognitive_style", 0.6, 0.6, List.of("visual")),
-                dim("learning_preference", 0.7, 0.7, List.of("diagram")),
+                dim("learning_preference", 0.7, 0.7, List.of("mindmap")),
                 dim("emotion_persistence", 0.35, 0.4, List.of())));
 
     MemoryBriefDto brief = service(localProps(), new RestTemplate()).buildBrief(USER, "列表 append");
 
-    assertThat(brief.stablePreferences()).contains("偏好图解讲解", "认知风格: visual", "偏好: diagram");
+    assertThat(brief.stablePreferences())
+        .contains("偏好图解讲解", "自述媒介偏好: mindmap")
+        .doesNotContain("认知风格: visual", "情绪: 需鼓励");
     assertThat(brief.strugglePatterns()).contains("微测未过：PY43-KC-016");
     assertThat(brief.recentWins()).contains("逆袭通过：PY43-KC-016", "练习通过：PY43-KC-001");
     assertThat(brief.interventionHints())

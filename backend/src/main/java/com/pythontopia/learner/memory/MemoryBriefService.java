@@ -30,7 +30,7 @@ import org.springframework.stereotype.Service;
  * <ul>
  *   <li><b>facts</b>：{@link MemoryProviderRouter#recall} 从本地学习事件与 memory_embedding 召回，按近→远时序排序。
  *   <li><b>weak_kcs</b>：召回中的「受阻」记忆 KC + {@code kc_review_state} 到期/有 lapse 的 KC（近期反复受阻）。
- *   <li><b>style_notes</b>：8 维画像（{@link PassiveProfileService#getDimensions}）中的显式媒介偏好。
+ *   <li><b>style_notes</b>：画像中的明确自述媒介偏好，不推断能力、学习风格或情绪。
  *   <li><b>as_of</b>：生成时刻 ISO-8601（体现「截至此刻」的时序）。
  * </ul>
  *
@@ -202,7 +202,7 @@ public class MemoryBriefService {
     }
     for (String note : styleNotes) {
       String clean = safeTrim(note);
-      if (clean.startsWith("认知风格:") || clean.startsWith("偏好:")) {
+      if (clean.startsWith("自述媒介偏好:")) {
         preferences.add(clean);
       }
     }
@@ -323,7 +323,7 @@ public class MemoryBriefService {
     return due != null && !due.isAfter(now);
   }
 
-  /** style_notes：认知风格（最近主导标签）+ 学习偏好（最近标签）+ 情绪（低落则需鼓励）。 */
+  /** style_notes 只包含经过 allowlist 过滤的学生自述媒介偏好。 */
   private List<String> toStyleNotes(long userId) {
     Map<String, ProfileDimensionDto> byKey = dimensionsByKey(userId);
     if (byKey.isEmpty()) {

@@ -6,21 +6,17 @@ import ProfileInterviewPanel from '@/components/profile/ProfileInterviewPanel.vu
 import { useLearningStore } from '@/stores/learning';
 
 describe('ProfileInterviewPanel', () => {
-  it('shows completion action when all eight dimensions are filled', async () => {
+  it('shows completion action when the four interview dimensions are filled', async () => {
     const pinia = createPinia();
     setActivePinia(pinia);
     const store = useLearningStore();
     store.profileInterview.sessionId = 'session-1';
     store.profileInterview.done = true;
     store.profileInterview.dimensionsFilled = [
-      'major',
-      'base_level',
+      'professional_background',
+      'knowledge_base',
       'learning_goal',
-      'cognitive_style',
       'learning_preference',
-      'error_patterns',
-      'practice_capability',
-      'emotion_persistence',
     ];
     store.finishInterview = vi.fn(async () => undefined);
     const router = createRouter({
@@ -33,7 +29,7 @@ describe('ProfileInterviewPanel', () => {
       global: { plugins: [pinia, router] },
     });
 
-    expect(wrapper.text()).toContain('8 / 8');
+    expect(wrapper.text()).toContain('4 / 4');
     expect(wrapper.get('button.finish').text()).toContain('完成访谈');
   });
 

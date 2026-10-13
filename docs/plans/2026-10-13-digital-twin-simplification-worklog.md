@@ -71,3 +71,12 @@
 - 真实 API 冒烟共发起 5 次请求（远低于 30 次上限）：两次按 80 token 的短试探没有可见终答，一次 SSE 诊断确认短 token 被推理内容耗尽；再按 Tutor 实际 2048 token 上限各发一次文本与合成图片请求，均返回非空中文文本。文本答复为 `Python 中 2 加 3 等于 5。`；视觉请求识别了合成蓝紫色方块并返回颜色文本。此项只验证通路，不代表视觉问答质量评估。
 - 新鲜验证：`npm run typecheck` 通过；相关 Vitest 4 文件 / 7 tests 通过；后端 21 类 / 214 tests，0 failures、0 errors、0 skipped；Graph 定向回归 146 passed、1 条既有 `asyncio` 标记警告；复盘推荐组件 ESLint 无警告，画像分身定向 ESLint 无错误；`git diff --check` 通过。变更工作树扫描未发现 API key 格式的字符串。
 - 本轮没有重启全栈浏览器，也未重测性能；此前状态聚合接口的 30 次本地采样不代表无尽远征性能。无尽远征跨 run/时间窗重复题抑制、未来路线对比、BKT 仍暂缓。对话中粘贴的密钥已暴露，应立即轮换；后续请求应改用轮换后的凭证。
+
+## 2026-10-13 最终边界与回归补测
+
+- Tutor 记忆只转发 `自述媒介偏好`；失败答题不再推断挫败/韧性，画像中的情绪或固定学习风格字段不参与 Tutor 个性化事实、能力评估或远征伤害。自评回归确认请求不能写入系统证据。
+- 收敛远征同一节点的未结算题目：刷新复用已签发问题，并发 Graph 结果只落一份；更旧的问题在新题签发后无法入 verified attempt，也无法结算。失败伤害固定为 2，再应用现有遗物效果；低/高韧性自评产生相同结果。
+- Graph 未配置真实 provider 时拒绝 DryRun 并对功能请求返回 503。Piston HTTP allowlist 移除云元数据与 IPv6 link-local 网段；教师班级说明限制对齐到 1000 字。`EndlessPregenService` 在旧迁移版本启动时先检查预生成表是否存在，避免测试/分阶段迁移数据库启动失败。
+- 验证：远征后端 `ExpeditionRunPostgresIntegrationTest`、`ExpeditionScoreServiceTest`、`BossServiceTest`、`EndlessPregenServiceTest`、`ExpeditionRunControllerTest` 共 95 项通过；最终情绪边界 Testcontainers 用例也单独复跑通过。前端全量 260 files / 2504 tests、typecheck、build 通过；lint 0 errors、178 warnings。Graph 全量 1814 passed / 1 skipped，RAG 158 passed / 2 skipped；六项部署契约脚本通过。
+- 后端全量 `mvn -q test` 运行 1327 项：0 assertion failures、7 errors。6 项 pgvector Testcontainers 无法绑定动态宿主端口（Docker `address already in use`），另 1 项连接对应容器失败；隔离重跑相关类共 8 项，仍有 5 项同类容器错误、0 assertion failures。需在 Docker 端口稳定的环境补齐全量证据。
+- 本轮未产生新的 DeepSeek 请求，也未做远征性能测量；Twin 聚合接口旧的 30 次本地采样不能替代远征 P50/P95。跨 run 重复题抑制、未来路线对比、BKT、效果对照实验仍暂缓。公开过的 API key 应轮换。

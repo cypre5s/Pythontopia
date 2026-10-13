@@ -112,7 +112,7 @@ async function createClassroom() {
             班级名称
             <input
               v-model="newName"
-              maxlength="64"
+              maxlength="128"
               placeholder="例如 2026 春 Python 一班"
               required
             >
@@ -121,7 +121,7 @@ async function createClassroom() {
             班级说明
             <textarea
               v-model="newDescription"
-              maxlength="256"
+              maxlength="1000"
               placeholder="简要说明用途、面向学员、上课频率"
             />
           </label>

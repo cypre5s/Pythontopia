@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-13 — 数字孪生边界与远征恢复补测
+
+- Tutor 记忆只传递学生明确自述的媒介偏好；答题失败和情绪画像不再作为学习能力或远征伤害依据。无 DeepSeek provider 时 Graph 返回 503，不生成 DryRun 演示答案。
+- 远征当前节点只保留一个未结算题目；刷新或并发生成复用已持久化题目，旧题不能在新题签发后记分或结算。启动恢复兼容课程测试停在旧 Flyway 版本的数据库。
+- Piston HTTP 地址契约拒绝云元数据与 IPv6 link-local 地址；教师班级说明前端上限和后端校验统一为 1000 字。
+- 验证：Web 260 个测试文件 / 2504 项、类型检查、构建通过，ESLint 0 errors / 178 warnings；Graph 1814 passed / 1 skipped；RAG 158 passed / 2 skipped；远征相关后端 95 项通过。后端全量 1327 项为 0 assertion failures，但 7 项 Testcontainers/JDBC error；Docker 报随机宿主端口 `address already in use`，隔离重跑仍复现容器端口错误。
+- 本轮未调用 DeepSeek，也未测无尽远征性能；对话中粘贴过的 API key 应先轮换。
+
 ## 2026-10-13 — 画像可信度与复盘推荐收口
 
 - 画像访谈/自评只保存专业背景、已有经验、目标与媒介偏好；不再把失败次数解释为情绪、韧性或认知风格。反思 Agent 只保留有证据的易错建议，旧的推断型洞察不再作为事实展示。

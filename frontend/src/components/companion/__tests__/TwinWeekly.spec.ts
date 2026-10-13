@@ -37,7 +37,7 @@ describe('TwinWeekly', () => {
     const t = w.text();
     expect(t).toContain('Learner Twin');
     expect(t).toContain('12'); expect(t).toContain('5'); expect(t).toContain('3');
-    expect(t).toContain('易错'); expect(t).toContain('加强错误处理');
+    expect(t).toContain('错题复盘建议'); expect(t).toContain('加强错误处理');
     // 掌握度变化必须渲染（修复前 masteryDeltas 在 UI 缺席）。
     expect(t).toContain('KC01'); expect(t).toContain('掌握'); expect(t).toContain('证据');
     expect(t).toContain('证据充分度 80%');

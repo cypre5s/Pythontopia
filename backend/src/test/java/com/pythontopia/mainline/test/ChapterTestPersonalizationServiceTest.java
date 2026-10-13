@@ -42,13 +42,13 @@ class ChapterTestPersonalizationServiceTest {
     assertThat(context.profileBrief().path("knowledge_level").asInt()).isEqualTo(4);
     assertThat(context.profileBrief().path("major").asText()).isEqualTo("CS");
     assertThat(context.profileBrief().path("learning_goal").asText()).isEmpty();
-    assertThat(context.profileBrief().path("cognitive_style").asText()).isEqualTo("visual");
     assertThat(context.profileBrief().path("learning_preference").asText())
         .isEqualTo("示例,视频");
     assertThat(textValues(context.profileBrief().path("error_patterns")))
         .containsExactly("off-by-one", "缩进");
     assertThat(context.profileBrief().path("practice_ability").asText()).isEqualTo("偏弱");
-    assertThat(context.profileBrief().path("persistence").asText()).isEqualTo("需鼓励");
+    assertThat(context.profileBrief().path("cognitive_style").asText()).isEmpty();
+    assertThat(context.profileBrief().path("persistence").asText()).isEmpty();
   }
 
   @Test
