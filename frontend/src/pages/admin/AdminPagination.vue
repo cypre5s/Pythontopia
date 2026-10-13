@@ -60,6 +60,7 @@ function jump(): void {
       <label>
         <span>每页</span>
         <select
+          class="admin-control"
           :value="pageSize"
           aria-label="每页显示条数"
           data-testid="admin-pagination-size"
@@ -82,6 +83,7 @@ function jump(): void {
         <label>
           <span>跳转到第</span>
           <input
+            class="admin-control"
             :value="jumpTarget || ''"
             type="number"
             min="1"
@@ -94,6 +96,7 @@ function jump(): void {
           <span>页</span>
         </label>
         <button
+          class="admin-button"
           type="submit"
           :disabled="!canJump"
         >
@@ -102,6 +105,7 @@ function jump(): void {
       </form>
       <div class="admin-pagination__buttons">
         <button
+          class="admin-button"
           type="button"
           data-testid="admin-pagination-first-page"
           :disabled="disabled || page <= 0"
@@ -111,6 +115,7 @@ function jump(): void {
           «
         </button>
         <button
+          class="admin-button"
           type="button"
           data-testid="admin-pagination-previous-page"
           :disabled="disabled || page <= 0"
@@ -119,6 +124,7 @@ function jump(): void {
           上一页
         </button>
         <button
+          class="admin-button"
           type="button"
           data-testid="admin-pagination-next-page"
           :disabled="disabled || page + 1 >= totalPages"
@@ -127,6 +133,7 @@ function jump(): void {
           下一页
         </button>
         <button
+          class="admin-button"
           type="button"
           data-testid="admin-pagination-last-page"
           :disabled="disabled || totalPages === 0 || page + 1 >= totalPages"
@@ -171,17 +178,6 @@ function jump(): void {
 }
 
 .admin-pagination select,
-.admin-pagination input,
-.admin-pagination button {
-  min-height: 34px;
-  border: 1px solid var(--admin-border);
-  border-radius: 8px;
-  background: #fff;
-  color: var(--admin-text);
-  font: inherit;
-}
-
-.admin-pagination select,
 .admin-pagination input {
   padding: 0 8px;
 }
@@ -192,29 +188,6 @@ function jump(): void {
 
 .admin-pagination input {
   width: 68px;
-}
-
-.admin-pagination button {
-  padding: 0 10px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.admin-pagination button:hover:not(:disabled) {
-  border-color: var(--admin-focus, #3b82f6);
-  color: var(--admin-primary-hover);
-}
-
-.admin-pagination button:disabled,
-.admin-pagination select:disabled,
-.admin-pagination input:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.admin-pagination :focus-visible {
-  outline: 2px solid var(--admin-focus, #3b82f6);
-  outline-offset: 2px;
 }
 
 @media (max-width: 640px) {

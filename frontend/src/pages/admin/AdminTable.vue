@@ -23,6 +23,8 @@ withDefaults(defineProps<{
 .admin-table-scroll {
   max-width: 100%;
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
   border: 1px solid var(--admin-border, #e2e8f0);
   border-radius: 10px;
 }

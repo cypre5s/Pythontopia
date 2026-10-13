@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-10-14 — Piston 响应兼容与全层复验
+
+- 本地 Piston/Isolate 样例实际运行在 uid 1001；读取 `/etc/shadow` 与创建 socket 均被拒绝。设置短运行时限后，当前固定版本仅返回 `signal=SIGKILL`，不带 `status` 或 `code`；这使 Java 适配器此前把已杀停的学生进程误判为判题系统异常。
+- Java 适配器现在接受 Piston 的 signal-only 响应，并将 `SIGKILL` / `SIGXCPU` 映射到已有判题器识别的退出码 137 / 152。新增回归先以 `-1` 复现，再验证通过；Piston adapter 与判题器定向 15 tests 通过。
+- 当前工作树复验：Web 264 个测试文件 / 2521 项通过，TypeScript typecheck、生产构建及改动管理端 ESLint 通过；Graph 1818 passed / 1 skipped，RAG 158 passed / 2 skipped。
+- 全量 Maven 最新运行 1354 tests、0 assertion failures、7 errors，仍未达到 `BUILD SUCCESS`：6 个 Testcontainers 类因 Docker 不能绑定随机宿主端口（`address already in use`），另 `LongTermClassroomEffectSimulationTest` 数据库连接被拒绝。运行失败的类为 `CoursePackServiceIntegrationTest`、`DecisionTraceControllerTest`、`EvidenceMemoryServiceTest`、`LearningEvidenceGraphServiceTest`、`MemoryRetrievalSemanticIntegrationTest`、`RecommendationServiceTest` 与 `LongTermClassroomEffectSimulationTest`。
+- 未完成认证后的学生/教师全页面 Playwright 矩阵、生产 Piston/内核逃逸验证、公网验证和全仓格式修复；这些结果不由单元测试或本地隔离探针代替。
+
+## 2026-10-14 — Web 角色联测与开发栈退出清理
+
+- `./dev.sh` Ctrl+C 曾只结束 PID 文件里的包装 shell，脱离进程组的 Maven/Spring Boot 仍在 :18080 运行，下一次启动会误复用旧环境。将后台命令改为 `exec setsid` 后，实测 PID 与进程组一致；再次 Ctrl+C 后进程组、:18080 和 PID 文件均已清理。
+- 真实浏览器回归通过：账号切换隔离 1/1；教师创建班级、发布任务、学生加入、正式 Piston 判题、提交证据及教师看板同步 1/1；管理端运营、题目审核、用户三页均以 ADMIN 会话渲染，用户筛选/审核搜索完成；学习分身显示新用户“尚无判题证据”，周报折叠与详细画像导航可用。
+- 当前复验：前端全量 Vitest 退出码 0，typecheck、生产 build、改动管理页 ESLint 通过；Graph `1818 passed, 1 skipped`、RAG `158 passed, 2 skipped`、两侧 Ruff 通过；判题/Boss/额度 Maven 定向 60 tests 通过，Piston 两个 Java 文件 Spotless check 通过。
+- 本地浏览器联测没有调用 DeepSeek。测试数据库保留本轮创建的本地测试账号、课堂和任务记录；临时 ADMIN 已恢复为 STUDENT。没有执行审核发布或用户停用写操作。
+- 全量 Maven 仍有 7 个 Docker/JDBC 环境错误；认证后的所有学生/教师页面矩阵、生产 Piston 内核逃逸、公网/ECS 和全仓静态类型/格式债务仍未验证。
+
+## 2026-10-14 — Python 生产依赖安全复核
+
+- Graph 内部鉴权白名单改用 ASGI `scope["path"]`，拒绝受恶意 `Host: example.com/healthz?bypass=` 影响；该请求修复前实测可绕过鉴权并返回 200，修复后返回 401。回归先保留 RED，再验证旧 Starlette 与 FastAPI 0.143.0 / Starlette 1.8.0 组合均拒绝该请求。
+- Graph 与 RAG 的 FastAPI 下限更新至 0.143，干净依赖解析得到 FastAPI 0.143.0 / Starlette 1.8.0；Graph `json-repair` 更新至 0.60.1；RAG 删除未被代码引用的 LangGraph 依赖，并将 `pyarrow` 更新至 23.0.1。
+- 按 Dockerfile 生产范围在 Python 3.11 隔离环境重建依赖集合（Graph `.[browse]`、RAG `.`）：修复前 pip-audit 报 Graph 15 条、RAG 31 条记录（分别涉及 2 和 6 个包；按包与公告去重为 8 和 18 对）；修复后两组均为 0 known vulnerabilities。该扫描是按 Docker 声明重建的依赖集，不是已构建镜像扫描。
+- 验证：Graph 全量 1816 passed / 3 skipped，RAG 全量 158 passed / 2 skipped；两服务 Ruff 均通过。严格 Mypy 尚未通过：Graph 66 个错误 / 30 个文件，RAG 2 个缺少返回类型错误。原始阿里云镜像路径构建受容器代理影响；后以临时 Dockerfile 只替换 Python 索引和 Debian 访问路径后，Graph/RAG 生产依赖镜像均构建、启动成功，健康端点均为 HTTP 200，Graph Chromium 启动通过。此构建没有改仓库 Dockerfile，也不等同于原始镜像路径或 ECS 发布验证。
+
+## 2026-10-14 — Web CSP 本地浏览器复核
+
+- SPA 文档现限制脚本、连接和资源来源；Pyodide `unsafe-eval` 权限只放在 worker 响应，主页面不放行通用 `unsafe-eval`。保留 Vue 所需的内联样式与 B 站封面图片源；边缘 Nginx 不再与 SPA 重复发送 CSP。
+- CSP 部署契约、临时 Nginx 响应、Chromium 登录页、Pyodide 执行和 PDF.js 解析均验证通过；浏览器无 CSP violation。仅本地单浏览器验证，ECS/公网未测。
+- 规则依据 [W3C CSP Level 3](https://www.w3.org/TR/CSP3/)、[NGINX add_header](https://nginx.org/en/docs/http/ngx_http_headers_module.html) 与 [Chrome WASM CSP 指引](https://developer.chrome.com/docs/iwa/developer-policy)。
+
 ## 2026-10-14 — 远征真实生成性能复测与结构化输出修复
 
 - 首次真实 Boss 生成在 6 次 DeepSeek 请求后因空结构化内容回退 Golden。根据 DeepSeek thinking/JSON 文档，为 Boss JSON 请求显式设 `reasoning_effort="none"`；其余输出预算与校验保持不变。原因判断是默认推理占用输出预算，属于与成功复测一致的推断，并非可见的模型内部计量。
@@ -18,6 +47,8 @@
 - 验证：Boss Controller/Service、额度服务与画像监听器共 71 项单测通过；PostgreSQL/Testcontainers 定向 3 项通过，空库迁移至 V212；额度跨账号 400 并发实测只放行 300 次。完整 Maven 全套未重跑。
 - 未改 Android/Windows 调用方；它们在使用 Boss 判题接口前需要提交 `attemptId`。Tutor 全链路文图实测、全 Web 回归和远征无模型性能采样的结果见本日后续记录；公网/ECS 未验证。
 - 补充验证：额度跨午夜一致性及 AI 路由标记覆盖共 7 项通过；回归先复现账号记入 2026-10-14、全站记入 2026-10-15，再验证修复。
+- 复核修复：Boss 画像投影幂等键包含 `userId`，同一 UUID 被不同账号提交时不会因 outbox 全局唯一键冲突而吞掉第二个账号的事件；新增跨用户共享 attempt UUID 回归。Boss/路由定向单测 45 项、画像 outbox PostgreSQL 集成 2 项通过。
+- 媒体 provider 契约回归确认讯飞图片生成、图片理解、TTS 与 ASR 仍硬关闭；这些路由因此不作为可计费 AI 操作标注。未来启用 provider 时，额度覆盖测试会要求同步调整。
 
 ## 2026-10-14 — Boss 战场、真实 DeepSeek 调用与收尾
 

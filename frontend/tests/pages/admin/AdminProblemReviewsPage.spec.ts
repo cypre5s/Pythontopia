@@ -99,6 +99,11 @@ describe('AdminProblemReviewsPage', () => {
     expect(wrapper.text()).toContain('公开输入样例');
     expect(wrapper.text()).toContain('公开输出样例');
     expect(wrapper.text()).toContain('teacher-1');
+    expect(wrapper.get('.admin-panel__toolbar [data-testid="admin-review-search-form"]').exists()).toBe(true);
+    expect(wrapper.get('.admin-panel__toolbar').findAll('.admin-control')).toHaveLength(4);
+    expect(wrapper.get('.admin-panel__footer .admin-pagination').exists()).toBe(true);
+    expect(wrapper.get('.review-status').classes()).toContain('admin-status--warning');
+    expect(wrapper.get('.admin-table-scroll').attributes('tabindex')).toBe('0');
   });
 
   it("searches and filters through the backend page endpoint", async () => {
@@ -237,6 +242,8 @@ describe('AdminProblemReviewsPage', () => {
     await wrapper.get('.review-decision--approve').trigger('click');
     await wrapper.get('[data-testid="admin-review-confirm"]').trigger('click');
     expect(wrapper.get('[role="alert"]').text()).toContain('请填写审核意见');
+    expect(wrapper.get('dialog.review-dialog').classes()).toContain('admin-dialog');
+    expect(wrapper.get('[data-testid="admin-review-reason"]').classes()).toContain('admin-control');
     expect(api.decideProblemReview).not.toHaveBeenCalled();
 
     await wrapper.get('[data-testid="admin-review-reason"]').setValue('题面与公开样例已复核');

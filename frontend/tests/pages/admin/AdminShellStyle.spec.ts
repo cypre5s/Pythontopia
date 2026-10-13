@@ -16,6 +16,7 @@ const layoutStyles = scopedStyles('../../../src/pages/admin/AdminLayout.vue');
 const panelStyles = scopedStyles('../../../src/pages/admin/AdminPanel.vue');
 const operationsStyles = scopedStyles('../../../src/pages/admin/AdminOperationsPage.vue');
 const reviewStyles = scopedStyles('../../../src/pages/admin/AdminProblemReviewsPage.vue');
+const userStyles = scopedStyles('../../../src/pages/admin/AdminUsersPage.vue');
 const tableStyles = componentSource('../../../src/pages/admin/AdminTable.vue');
 const reviewSource = componentSource('../../../src/pages/admin/AdminProblemReviewsPage.vue');
 const usersSource = componentSource('../../../src/pages/admin/AdminUsersPage.vue');
@@ -43,21 +44,46 @@ describe('admin visual shell contract', () => {
   it('keeps panels and the review table on the shared surface and spacing scale', () => {
     expect(panelStyles).toMatch(/border-radius:\s*var\(--admin-panel-radius\);/);
     expect(panelStyles).toMatch(/box-shadow:\s*var\(--admin-panel-shadow\);/);
-    expect(panelStyles).toMatch(/padding:\s*20px 22px 16px;/);
-    expect(panelStyles).toMatch(/padding:\s*18px 22px 22px;/);
+    expect(panelStyles).toMatch(/padding:\s*15px 18px 12px;/);
+    expect(panelStyles).toMatch(/padding:\s*15px 18px 18px;/);
 
     expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*background:\s*var\(--admin-table-header, #eef4fb\);/);
     expect(tableStyles).toMatch(/\.admin-table-scroll > table td\s*\{[^}]*padding:\s*10px 16px;/);
     expect(reviewSource).toContain(':min-width="1100"');
     expect(reviewStyles).toMatch(/\.review-table td:nth-child\(1\),[\s\S]*?white-space:\s*nowrap;/);
     expect(reviewStyles).toContain('background: var(--admin-table-hover);');
-    expect(operationsStyles).toMatch(/\.status-pill--insufficient-evidence\s*\{/);
+    expect(layoutStyles).toContain('.admin-status--muted');
     expect(operationsStyles).toMatch(/\.admin-page-heading\s*\{/);
   });
 
   it('keeps the user table on the same row and cell spacing as the review table', () => {
     expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*height:\s*44px;[^}]*padding:\s*0 16px;/);
     expect(tableStyles).toMatch(/\.admin-table-scroll > table td\s*\{[^}]*height:\s*52px;[^}]*padding:\s*10px 16px;/);
+    expect(tableStyles).toContain('-webkit-overflow-scrolling: touch;');
+    expect(tableStyles).toContain('overscroll-behavior-x: contain;');
     expect(usersSource).toContain(':min-width="820"');
+  });
+
+  it('provides a shared compact toolbar and consistent admin controls', () => {
+    expect(panelStyles).toContain('.admin-panel__toolbar');
+    expect(panelStyles).toMatch(/\.admin-panel__header h2\s*\{[^}]*font-size:\s*18px;/);
+    expect(layoutStyles).toContain(':deep(.admin-control)');
+    expect(layoutStyles).toContain(':deep(.admin-button)');
+    expect(layoutStyles).toContain(':deep(.admin-status)');
+    expect(layoutStyles).toContain(':deep(.admin-dialog)');
+    expect(userStyles).toContain('.admin-users__filters');
+    expect(reviewStyles).toContain('.review-toolbar');
+    expect(usersSource).toContain('admin-control');
+    expect(reviewSource).toContain('admin-control');
+    expect(usersSource).toContain('admin-status');
+    expect(reviewSource).toContain('admin-status');
+  });
+
+  it('keeps filters and pagination in their shared panel regions', () => {
+    expect(usersSource).toContain('<template #toolbar>');
+    expect(usersSource).toMatch(/<template #footer>[\s\S]*?AdminPagination/);
+    expect(reviewSource).toContain('<template #toolbar>');
+    expect(reviewSource).toMatch(/<template #footer>[\s\S]*?AdminPagination/);
+    expect(reviewSource).toContain('class="admin-dialog review-dialog"');
   });
 });

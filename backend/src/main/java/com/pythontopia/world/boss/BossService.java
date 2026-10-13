@@ -969,7 +969,7 @@ public class BossService {
       return null;
     }
     String difficulty = difficultyBand(problem.difficulty());
-    String idempotencyKey = "boss-attempt:" + attemptId;
+    String idempotencyKey = "boss-attempt:" + userId + ":" + attemptId;
     if (result.passed()) {
       return new LearningEvent.PracticeSucceeded(
           userId, kcCode, null, difficulty, null, idempotencyKey);

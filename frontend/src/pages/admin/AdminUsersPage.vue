@@ -40,6 +40,10 @@ function statusLabel(status: AdminUserStatus): string {
   return status === 'ACTIVE' ? '正常' : '已停用';
 }
 
+function statusTone(status: AdminUserStatus): string {
+  return status === 'ACTIVE' ? 'admin-status--positive' : 'admin-status--danger';
+}
+
 async function loadUsers(): Promise<void> {
   if (loading.value) return;
   loading.value = true;
@@ -131,7 +135,7 @@ onMounted(() => {
     >
       <template #actions>
         <button
-          class="admin-users__button"
+          class="admin-button"
           type="button"
           :disabled="listBusy"
           @click="loadUsers"
@@ -140,58 +144,63 @@ onMounted(() => {
         </button>
       </template>
 
-      <form
-        class="admin-users__filters"
-        data-testid="admin-users-search-form"
-        @submit.prevent="searchUsers"
-      >
-        <label class="admin-users__search">
-          <span>搜索账号或显示名</span>
-          <input
-            v-model="searchInput"
-            type="search"
-            maxlength="100"
-            :disabled="listBusy"
-            aria-label="搜索账号或显示名"
-            data-testid="admin-users-search"
-          >
-        </label>
-        <label class="admin-users__status-filter">
-          <span>账号状态</span>
-          <select
-            v-model="statusFilter"
-            aria-label="按账号状态筛选"
-            :disabled="listBusy"
-            @change="applyFilters"
-          >
-            <option value="ALL">全部状态</option>
-            <option value="ACTIVE">正常</option>
-            <option value="DISABLED">已停用</option>
-          </select>
-        </label>
-        <label class="admin-users__role-filter">
-          <span>用户角色</span>
-          <select
-            v-model="roleFilter"
-            aria-label="按用户角色筛选"
-            data-testid="admin-users-role-filter"
-            :disabled="listBusy"
-            @change="applyFilters"
-          >
-            <option value="ALL">全部角色</option>
-            <option value="STUDENT">学生</option>
-            <option value="TEACHER">教师</option>
-            <option value="ADMIN">管理员</option>
-          </select>
-        </label>
-        <button
-          class="admin-users__button admin-users__button--primary"
-          type="submit"
-          :disabled="listBusy"
+      <template #toolbar>
+        <form
+          class="admin-users__filters"
+          data-testid="admin-users-search-form"
+          @submit.prevent="searchUsers"
         >
-          搜索
-        </button>
-      </form>
+          <label class="admin-users__search">
+            <span>搜索账号或显示名</span>
+            <input
+              v-model="searchInput"
+              class="admin-control"
+              type="search"
+              maxlength="100"
+              :disabled="listBusy"
+              aria-label="搜索账号或显示名"
+              data-testid="admin-users-search"
+            >
+          </label>
+          <label class="admin-users__status-filter">
+            <span>账号状态</span>
+            <select
+              v-model="statusFilter"
+              class="admin-control"
+              aria-label="按账号状态筛选"
+              :disabled="listBusy"
+              @change="applyFilters"
+            >
+              <option value="ALL">全部状态</option>
+              <option value="ACTIVE">正常</option>
+              <option value="DISABLED">已停用</option>
+            </select>
+          </label>
+          <label class="admin-users__role-filter">
+            <span>用户角色</span>
+            <select
+              v-model="roleFilter"
+              class="admin-control"
+              aria-label="按用户角色筛选"
+              data-testid="admin-users-role-filter"
+              :disabled="listBusy"
+              @change="applyFilters"
+            >
+              <option value="ALL">全部角色</option>
+              <option value="STUDENT">学生</option>
+              <option value="TEACHER">教师</option>
+              <option value="ADMIN">管理员</option>
+            </select>
+          </label>
+          <button
+            class="admin-button admin-button--primary"
+            type="submit"
+            :disabled="listBusy"
+          >
+            搜索
+          </button>
+        </form>
+      </template>
 
       <p
         v-if="loading && entries.length === 0"
@@ -266,13 +275,16 @@ onMounted(() => {
               <td>{{ roleLabel(user.role) }}</td>
               <td>
                 <span
-                  class="admin-users__status"
-                  :class="`admin-users__status--${user.status.toLowerCase()}`"
+                  class="admin-status admin-users__status"
+                  :class="[
+                    `admin-users__status--${user.status.toLowerCase()}`,
+                    statusTone(user.status),
+                  ]"
                 >{{ statusLabel(user.status) }}</span>
               </td>
               <td>
                 <button
-                  class="admin-users__button"
+                  class="admin-button"
                   type="button"
                   :disabled="user.id === session.user?.id || listBusy"
                   :data-testid="`admin-user-status-${user.id}`"
@@ -313,91 +325,48 @@ onMounted(() => {
   min-width: 0;
 }
 
+.admin-page-heading {
+  display: grid;
+  gap: 5px;
+}
+
 .admin-page-heading h1 {
   margin: 0;
   color: var(--admin-text);
-  font-size: 26px;
-  line-height: 1.3;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.25;
 }
 
 .admin-page-heading p {
-  margin: 7px 0 0;
+  margin: 0;
   color: var(--admin-muted);
-  font-size: 14px;
+  font-size: 13px;
 }
 
 .admin-users__filters {
   display: flex;
   align-items: flex-end;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
-  margin-bottom: 18px;
+  width: 100%;
 }
 
 .admin-users__search,
 .admin-users__status-filter,
 .admin-users__role-filter {
   display: grid;
-  gap: 5px;
+  gap: 4px;
   color: var(--admin-muted);
-  font-size: 12px;
-}
-
-.admin-users__search input,
-.admin-users__status-filter select,
-.admin-users__role-filter select {
-  min-height: 36px;
-  border: 1px solid var(--admin-border);
-  border-radius: 8px;
-  padding: 0 10px;
-  background: #fff;
-  color: var(--admin-text);
-  font: inherit;
-  font-size: 13px;
+  font-size: 11px;
 }
 
 .admin-users__search input {
   width: min(320px, 72vw);
 }
 
-.admin-users__button {
-  display: inline-flex;
-  min-height: 36px;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid #cbd5e1;
-  border-radius: 8px;
-  padding: 0 14px;
-  background: #fff;
-  color: #334155;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.admin-users__button:hover:not(:disabled) {
-  border-color: var(--admin-focus);
-  color: var(--admin-primary-hover);
-}
-
-.admin-users__button:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
-}
-
-.admin-users__button--primary {
-  border-color: var(--admin-primary);
-  background: var(--admin-primary);
-  color: #fff;
-}
-
-.admin-users__button:focus-visible,
-.admin-users__search input:focus-visible,
-.admin-users__status-filter select:focus-visible,
-.admin-users__role-filter select:focus-visible {
-  outline: 3px solid var(--admin-focus);
-  outline-offset: 2px;
+.admin-users__filters > button {
+  align-self: end;
 }
 
 .admin-users__state {
@@ -440,25 +409,6 @@ onMounted(() => {
 .admin-users__table td:nth-child(6) {
   overflow: visible;
   text-overflow: clip;
-}
-
-.admin-users__status {
-  display: inline-flex;
-  border-radius: 999px;
-  padding: 4px 9px;
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.admin-users__status--active {
-  background: #dcfce7;
-  color: #166534;
-}
-
-.admin-users__status--disabled {
-  background: #fee2e2;
-  color: #991b1b;
 }
 
 .admin-users__self-note {

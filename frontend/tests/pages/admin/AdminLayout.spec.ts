@@ -29,6 +29,7 @@ vi.mock('@/app/AppLayout.vue', () => ({
 describe('AdminLayout', () => {
   beforeEach(() => {
     setActivePinia(createPinia());
+    media.query.matches = true;
     Object.defineProperty(window, 'matchMedia', {
       configurable: true,
       value: vi.fn(() => media.query),
@@ -82,6 +83,20 @@ describe('AdminLayout', () => {
 
     expect(toggle.attributes('aria-expanded')).toBe('false');
     expect(document.activeElement).toBe(toggle.element);
+    wrapper.unmount();
+  });
+
+  it('keeps grouped navigation persistent on desktop without drawer semantics', async () => {
+    media.query.matches = false;
+    const wrapper = mount(AdminLayout);
+    await flushPromises();
+
+    const sidebar = wrapper.get('aside');
+    expect(wrapper.findAll('.admin-nav__group')).toHaveLength(3);
+    expect(sidebar.attributes('role')).toBeUndefined();
+    expect(sidebar.attributes('aria-hidden')).toBe('false');
+    expect(wrapper.find('.admin-shell__scrim').exists()).toBe(false);
+
     wrapper.unmount();
   });
 

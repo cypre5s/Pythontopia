@@ -1,6 +1,23 @@
 # DeepSeek 导学安全与数据边界工作日志
 
-日期：2026-10-12 至 2026-10-13
+日期：2026-10-12 至 2026-10-14
+
+## 2026-10-14 Piston signal-only 响应与当前全层复验
+
+- 在本地受限 Piston 中运行 `uid/euid`、读取 `/etc/shadow`、创建 socket 和短超时样例：程序 uid/euid 为 1001，敏感路径与 socket 均返回 `PermissionError`。超时样例实际只返回 `signal=SIGKILL`，没有 `status` 或 `code`。
+- Java `PistonPythonSandbox` 原先因缺少 status/code 把该结果判为 SYSTEM_ERROR；先新增 RED 回归（期望退出码 137，原实现返回 -1），再增加 signal 到 Linux 退出码的适配。`PistonPythonSandboxTest` 与 `JudgeCaseEvaluatorTest` 共 15 项通过，SIGKILL 继续由既有 evaluator 判为 TLE。
+- 当前全量：Graph `1818 passed, 1 skipped, 13 warnings`；RAG `158 passed, 2 skipped`；Web `264 files, 2521 tests passed`，typecheck/build/管理端改动文件 ESLint 通过。
+- 全量 Maven `1354 tests, 0 failures, 7 errors`。6 个 Testcontainers 测试容器因 Docker 随机宿主端口绑定冲突启动失败；另 `LongTermClassroomEffectSimulationTest` JDBC 被拒绝。Piston 定向 15 项已通过，未将全套 Maven 失败描述为代码通过。
+- 尚未验证生产 Piston 内核隔离或逃逸、认证后学生/教师逐页 Playwright、ECS/公网、真实硬件及全仓静态类型/格式债务；本地探针只验证所列边界。
+
+## 2026-10-14 开发栈退出与 Web 角色浏览器联测
+
+- 先在实际 `./dev.sh --sandbox` 启停中复现退出缺陷：PID 文件记录 874886，Maven/Spring Boot 运行于进程组 874888；Ctrl+C 后 :18080 仍健康。最小修复是后台 shell `exec setsid mvn`，不再让 PID 文件指向额外包装 shell。
+- RED 断言确认文件 PID 与实际进程组不一致；GREEN 实测 PID/PGID 均为 888297，Ctrl+C 后进程组消失、健康端口关闭且 PID 文件删除。第二次修复后在普通开发栈重复启动/退出，PID/PGID 为 890991，退出清理再次通过。
+- 真实 Chromium：`accountIsolation.spec.ts` 1/1；`teacherStudentFullFlow.spec.ts` 1/1（创建班级、发布班级任务、学生加入、Piston Python 3.12 正式判题、提交完成证据、教师进度同步）；管理端 3 个路由以真实 ADMIN 登录渲染，用户筛选和审核队列搜索可操作。冒烟仅读审核队列，没有发布或停用用户。
+- 学习分身实页对新用户显示“还没有经判题确认的学习证据”，打开周报折叠并导航至详细画像均成功，无 pageerror。此浏览器轮未发 DeepSeek 请求。
+- 本轮复验：前端 Vitest 全量退出码 0，`typecheck`、build、改动管理页 ESLint 通过；Graph pytest 1818 passed/1 skipped、RAG pytest 158 passed/2 skipped、两侧 Ruff 通过；判题/Boss/AI 额度 Maven 定向 60 tests 与两个 Piston Java 文件 Spotless check 通过。完整 Maven 历史运行仍为 7 个 Docker/JDBC 环境错误，未描述为全套通过。
+- 本地数据库留下本次创建的测试账号与教师闭环课堂/任务记录；临时 ADMIN 已降回 STUDENT。尚未完成所有学生/教师页面矩阵、生产 Piston 内核逃逸、ECS/公网和全仓类型/格式债务验证。
 
 ## 2026-10-13 Tutor 断线重试幂等与多图部分失败恢复
 

@@ -6,6 +6,63 @@ TEST_TOKEN="$(printf 'a%.0s' {1..64})"
 
 python3 -c '
 from pathlib import Path
+import re, sys
+
+root = Path(sys.argv[1])
+frontend = (root / "frontend/nginx.conf").read_text()
+edge = (root / "deploy/nginx/pythontopia.conf").read_text()
+index_location = re.search(r"location = /index\.html \{(?P<body>.*?)\n    \}", frontend, re.S)
+assert index_location, "missing exact index.html response block"
+worker_location = re.search(
+    re.escape("location ~* ^/assets/pyodide\\.worker-[^/]+\\.js$ {")
+    + r"(?P<body>.*?)\n    \}",
+    frontend,
+    re.S,
+)
+assert worker_location, "Pyodide eval must be isolated to its worker response"
+policy = re.search(
+    r"add_header Content-Security-Policy \"(?P<policy>[^\"]+)\" always;",
+    index_location.group("body"),
+)
+assert policy, "the actual SPA document response must carry an enforced CSP"
+directives = dict(
+    item.strip().split(None, 1) if " " in item.strip() else (item.strip(), "")
+    for item in policy.group("policy").split(";") if item.strip()
+)
+assert set(directives) == {
+    "default-src", "base-uri", "object-src", "form-action", "frame-ancestors",
+    "script-src", "style-src", "img-src", "font-src", "connect-src", "worker-src",
+    "frame-src", "media-src", "manifest-src",
+}
+assert directives.get("default-src") == "\u0027self\u0027"
+assert directives.get("script-src") == "\u0027self\u0027 \u0027wasm-unsafe-eval\u0027"
+assert directives.get("style-src") == "\u0027self\u0027 \u0027unsafe-inline\u0027"
+assert directives.get("object-src") == "\u0027none\u0027"
+assert directives.get("base-uri") == "\u0027self\u0027"
+assert directives.get("form-action") == "\u0027self\u0027"
+assert directives.get("frame-ancestors") == "\u0027self\u0027"
+assert directives.get("img-src") == "\u0027self\u0027 data: blob: https://*.hdslb.com"
+assert directives.get("font-src") == "\u0027self\u0027"
+assert directives.get("connect-src") == "\u0027self\u0027"
+assert directives.get("worker-src") == "\u0027self\u0027"
+assert directives.get("frame-src") == "\u0027none\u0027"
+assert directives.get("media-src") == "\u0027self\u0027"
+assert directives.get("manifest-src") == "\u0027self\u0027"
+assert "\u0027unsafe-eval\u0027" not in policy.group("policy")
+worker_policy = re.search(
+    r"add_header Content-Security-Policy \"(?P<policy>[^\"]+)\" always;",
+    worker_location.group("body"),
+)
+assert worker_policy, "the Pyodide worker must carry its own CSP"
+assert "script-src \u0027self\u0027 \u0027unsafe-eval\u0027 \u0027wasm-unsafe-eval\u0027" in worker_policy.group("policy")
+assert "connect-src \u0027self\u0027" in worker_policy.group("policy")
+assert "add_header X-Frame-Options \"SAMEORIGIN\" always;" in edge
+assert "add_header Content-Security-Policy" not in edge
+print("CSP document-response contract: PASS")
+' "$ROOT_DIR"
+
+python3 -c '
+from pathlib import Path
 import sys
 script = (Path(sys.argv[1]) / "dev.sh").read_text()
 guard = script.index("if [[ \"$START_DEPS\" == \"0\" && \"$resolved_internal_token\" != \"$configured_internal_token\" ]]")

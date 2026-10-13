@@ -28,8 +28,7 @@ class PistonPythonSandboxTest {
     restTemplate = new RestTemplate();
     server = MockRestServiceServer.bindTo(restTemplate).build();
     sandbox =
-        new PistonPythonSandbox(
-            restTemplate, "https://judge.internal", "3.11.9", "release-token");
+        new PistonPythonSandbox(restTemplate, "https://judge.internal", "3.11.9", "release-token");
   }
 
   @Test
@@ -76,12 +75,30 @@ class PistonPythonSandboxTest {
                 """,
                 MediaType.APPLICATION_JSON));
 
-    SandboxRunResult result =
-        sandbox.run("while True: pass", new JudgeTestCase("", "", 1000));
+    SandboxRunResult result = sandbox.run("while True: pass", new JudgeTestCase("", "", 1000));
 
     assertThat(result.timedOut()).isTrue();
     assertThat(result.errorKind()).isEqualTo("TLE");
     assertThat(result.stderr()).isEqualTo("Time limit exceeded");
+    server.verify();
+  }
+
+  @Test
+  void mapsLegacyPistonSigkillWithoutStatusToSignalExitCode() {
+    server
+        .expect(requestTo("https://judge.internal/api/v2/execute"))
+        .andRespond(
+            withSuccess(
+                """
+                {"run":{"stdout":"","stderr":"","code":null,"signal":"SIGKILL","output":""}}
+                """,
+                MediaType.APPLICATION_JSON));
+
+    SandboxRunResult result = sandbox.run("while True: pass", new JudgeTestCase("", "", 1000));
+
+    assertThat(result.timedOut()).isFalse();
+    assertThat(result.exitCode()).isEqualTo(137);
+    assertThat(result.errorKind()).isNull();
     server.verify();
   }
 
@@ -146,7 +163,8 @@ class PistonPythonSandboxTest {
                 """,
                 MediaType.APPLICATION_JSON));
 
-    SandboxRunResult result = sandbox.run("print('expected')", new JudgeTestCase("", "expected", 1000));
+    SandboxRunResult result =
+        sandbox.run("print('expected')", new JudgeTestCase("", "expected", 1000));
 
     assertThat(result.errorKind()).isEqualTo("SYSTEM_ERROR");
     assertThat(result.exitCode()).isNotZero();
@@ -164,7 +182,8 @@ class PistonPythonSandboxTest {
                 """,
                 MediaType.APPLICATION_JSON));
 
-    SandboxRunResult result = sandbox.run("print('expected')", new JudgeTestCase("", "expected", 1000));
+    SandboxRunResult result =
+        sandbox.run("print('expected')", new JudgeTestCase("", "expected", 1000));
 
     assertThat(result.errorKind()).isNull();
     assertThat(result.exitCode()).isNotZero();

@@ -65,6 +65,23 @@ def test_protected_route_requires_token(monkeypatch) -> None:
     assert response.status_code == 401
 
 
+def test_malformed_host_cannot_bypass_internal_auth(monkeypatch) -> None:
+    monkeypatch.setenv("PYT_RAG_ADMIN_TOKEN", "secret")
+    client = TestClient(app)
+    response = client.post(
+        "/agents/curriculum/map",
+        json={
+            "user_id": 1,
+            "profile_summary": {"major": "OTHER", "python_self_rated_level": 2},
+            "chapters": [],
+            "kcs": [],
+        },
+        headers={"Host": "example.com/healthz?bypass="},
+    )
+
+    assert response.status_code == 401
+
+
 def test_protected_route_accepts_valid_token(monkeypatch) -> None:
     monkeypatch.setenv("PYT_RAG_ADMIN_TOKEN", "secret")
     client = TestClient(app)
