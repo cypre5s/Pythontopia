@@ -3,11 +3,13 @@ import { setActivePinia, createPinia } from 'pinia';
 import { useEndlessRun } from '@/composables/useEndlessRun';
 
 const apiMocks = vi.hoisted(() => ({
+  newBossProblemRequestId: vi.fn(() => '00000000-0000-4000-8000-000000000001'),
   requestBossProblem: vi.fn(),
   submitBossAttempt: vi.fn(),
   prefetchBossProblem: vi.fn(),
 }));
 vi.mock('@/api/boss', () => ({
+  newBossProblemRequestId: apiMocks.newBossProblemRequestId,
   requestBossProblem: apiMocks.requestBossProblem,
   submitBossAttempt: apiMocks.submitBossAttempt,
   prefetchBossProblem: apiMocks.prefetchBossProblem,
@@ -39,6 +41,7 @@ const PROBLEM = {
 
 describe('useEndlessRun', () => {
   beforeEach(() => {
+    vi.restoreAllMocks();
     setActivePinia(createPinia());
     window.localStorage.clear();
     apiMocks.requestBossProblem.mockReset().mockResolvedValue(PROBLEM);
@@ -89,6 +92,35 @@ describe('useEndlessRun', () => {
     setActivePinia(createPinia());
 
     expect(useEndlessRun().history.value).toEqual([]);
+  });
+
+  it('reuses the exact prefetched request after timeout and retry', async () => {
+    const random = vi.spyOn(Math, 'random')
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0)
+      .mockReturnValueOnce(0.5)
+      .mockReturnValueOnce(0.99)
+      .mockReturnValueOnce(0.99);
+    const run = useEndlessRun();
+    await run.startRun();
+    await run.submit();
+    const [prefetchedChapter, prefetchedRequest] = apiMocks.prefetchBossProblem.mock.calls[0] as [
+      number,
+      Record<string, unknown>,
+    ];
+    apiMocks.requestBossProblem.mockRejectedValueOnce(new Error('timeout'));
+
+    await run.nextProblem();
+    apiMocks.requestBossProblem.mockResolvedValueOnce({ ...PROBLEM, problemId: 'p-endless-next' });
+    await run.retry();
+
+    expect(apiMocks.requestBossProblem.mock.calls[1]).toEqual([
+      prefetchedChapter,
+      prefetchedRequest,
+      { allowGoldenFallback: false },
+    ]);
+    expect(apiMocks.requestBossProblem.mock.calls[2]).toEqual(apiMocks.requestBossProblem.mock.calls[1]);
+    random.mockRestore();
   });
 
   it('后端判定失败时，即使本地样例通过也保持 failed', async () => {

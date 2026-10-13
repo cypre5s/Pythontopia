@@ -987,7 +987,7 @@ describe('rogueRun store', () => {
     expect(run.relics).toEqual(['calm_mind']);
   });
 
-  it('keeps a local-only snapshot previewable but refuses to resume without server state', async () => {
+  it('retries server lookup before resuming a local-only snapshot preview', async () => {
     frontierApiMock.fetchExpeditionRun.mockRejectedValueOnce(new Error('offline'));
     localStorage.setItem('pyt_rogue_run_v1@u:anon', JSON.stringify({
       phase: 'map',
@@ -1019,6 +1019,7 @@ describe('rogueRun store', () => {
 
     const run = useRogueRunStore();
     await run.refreshSavedRun();
+    frontierApiMock.fetchExpeditionRun.mockResolvedValueOnce(serverRun(4, 'PY43-KC-031'));
 
     expect(frontierApiMock.createExpeditionRun).not.toHaveBeenCalled();
     expect(run.phase).toBe('idle');
@@ -1028,14 +1029,12 @@ describe('rogueRun store', () => {
     expect(run.savedRunSummary?.verifiedScore).toBe(0);
     expect(run.savedRunSummary?.verifiedDepth).toBe(0);
 
-    await run.resumeSavedRun();
+    expect(await run.resumeSavedRun()).toBe(true);
 
-    expect(run.focusChapter).toBeNull();
-    expect(run.nodes).toHaveLength(0);
-    expect(run.score).toBe(0);
-    expect(run.verifiedScore).toBe(0);
-    expect(run.verifiedDepth).toBe(0);
-    expect(frontierApiMock.saveExpeditionRun).not.toHaveBeenCalled();
+    expect(run.focusChapter).toBe(4);
+    expect(run.nodes).not.toHaveLength(0);
+    expect(frontierApiMock.fetchExpeditionRun).toHaveBeenCalledTimes(2);
+    expect(run.savedRunSummary?.serverVerified).toBe(true);
   });
 
   it('shows score and passed depth only from the server ledger', async () => {
@@ -1071,6 +1070,10 @@ describe('rogueRun store', () => {
 
     await run.refreshSavedRun();
     expect(await run.resumeSavedRun()).toBe(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(judgeMock.prefetchProblem).not.toHaveBeenCalledWith(expect.objectContaining({
+      expeditionNodeId: node.id,
+    }));
     await run.enterNode(node.id);
 
     expect(run.phase).toBe('challenge');
@@ -1078,6 +1081,22 @@ describe('rogueRun store', () => {
       expeditionRunId: EXPEDITION_RUN_ID,
       expeditionNodeId: node.id,
     }));
+  });
+
+  it('reconciles a committed action after its response is lost without replaying it', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const committed = serverRun();
+    committed.phase = 'over';
+    mockServerRun = copyRun(committed);
+    frontierApiMock.performExpeditionAction.mockRejectedValueOnce(new Error('response lost'));
+    frontierApiMock.fetchExpeditionRun.mockResolvedValueOnce(copyRun(committed));
+
+    await run.finishRun();
+
+    expect(run.phase).toBe('over');
+    expect(frontierApiMock.performExpeditionAction).toHaveBeenCalledTimes(1);
+    expect(frontierApiMock.fetchExpeditionRun).toHaveBeenCalled();
   });
 
   it('restores reward choices when resuming a run at the reward phase', async () => {

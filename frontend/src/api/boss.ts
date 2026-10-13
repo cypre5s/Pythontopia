@@ -22,7 +22,7 @@ import { findBossByChapter } from '@/data/bossCatalog';
 const BOSS_PROBLEM_TIMEOUT_MS = 15_000;
 let pendingAttempt: { fingerprint: string; attemptId: string } | null = null;
 
-function newAttemptId(): string {
+export function newBossProblemRequestId(): string {
   const cryptoApi = globalThis.crypto;
   if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID();
   const bytes = cryptoApi.getRandomValues(new Uint8Array(16));
@@ -42,7 +42,7 @@ function attemptIdFor(payload: BossAttemptRequest): string {
     payload.elapsedSec,
   ]);
   if (pendingAttempt?.fingerprint === fingerprint) return pendingAttempt.attemptId;
-  pendingAttempt = { fingerprint, attemptId: newAttemptId() };
+  pendingAttempt = { fingerprint, attemptId: newBossProblemRequestId() };
   return pendingAttempt.attemptId;
 }
 

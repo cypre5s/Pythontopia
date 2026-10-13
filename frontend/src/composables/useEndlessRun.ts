@@ -10,7 +10,12 @@
 //   * 失败结束当前局，玩家可继续无尽，但 streak 清零。
 
 import { computed, ref, type Ref } from 'vue';
-import { prefetchBossProblem, requestBossProblem, submitBossAttempt } from '@/api/boss';
+import {
+  newBossProblemRequestId,
+  prefetchBossProblem,
+  requestBossProblem,
+  submitBossAttempt,
+} from '@/api/boss';
 import { getPyodideRunner } from '@/game/adapters/pyodide';
 import { useProfileSignals, computeAdaptiveDifficulty } from '@/composables/useProfileSignals';
 import { userScopedKey } from '@stores/session';
@@ -72,6 +77,11 @@ export interface UseEndlessRunReturn {
   retry: () => Promise<void>;
   abort: () => void;
   tickSecond: () => void;
+}
+
+interface PendingProblemRequest {
+  chapter: number;
+  request: BossProblemRequest;
 }
 
 const PERSIST_KEY = 'pyt_endless_history_v1';
@@ -153,6 +163,8 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
   const retryAction = ref<'start' | 'next' | 'submit' | null>('start');
   const history = ref<EndlessHistoryEntry[]>(loadHistory());
   const profileSignals = useProfileSignals();
+  let pendingNext: PendingProblemRequest | null = null;
+  let pendingCurrent: PendingProblemRequest | null = null;
 
   const failureRate = computed<number>(() => {
     if (attempts.value === 0) return 0;
@@ -163,57 +175,53 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
     return failedCount / recent.length;
   });
 
-  async function _fetchAndStart(): Promise<void> {
+  function buildProblemRequest(chapter: number): BossProblemRequest {
+    const recent = history.value.slice(0, 3);
+    const firstPass = recent.findIndex((entry) => entry.passed);
+    const recentFailures = firstPass < 0 ? recent.length : firstPass;
+    const adaptiveDiff = computeAdaptiveDifficulty({
+      baseDifficulty: currentDifficulty.value,
+      recentFailures,
+      recentStreak: streak.value,
+    });
+    const preferredKc =
+      opts.focusKc?.value
+      ?? pickWeakKcForChapter(profileSignals.weakKcs.value, chapter);
+    return {
+      requestId: newBossProblemRequestId(),
+      stage: 1 + Math.floor(Math.random() * 4),
+      difficulty: clampDifficulty(adaptiveDiff),
+      ...(preferredKc ? { preferredKc } : {}),
+      ...(opts.preferredKind?.value ? { preferredKind: opts.preferredKind.value } : {}),
+      ...(opts.arenaLevel?.value ? { arenaLevel: opts.arenaLevel.value } : {}),
+      ...(profileSignals.hasAnySignal.value ? { profileSignals: profileSignals.signals.value } : {}),
+    };
+  }
+
+  async function _fetchAndStart(pending?: PendingProblemRequest): Promise<void> {
     phase.value = 'loading';
     problem.value = null;
     lastResult.value = null;
     code.value = '';
     elapsedSec.value = 0;
     try {
-      const chapter = pickChapter(opts.focusChapter?.value ?? null);
-      const stage = 1 + Math.floor(Math.random() * 4);
-
-      // 构造 BossProblemRequest，接入学生画像：
-      // - focusKc（来自 ArenaPage 关卡）优先级最高；
-      // - 否则按画像 weakKcs 命中本章 KC，让玩家"刷弱项"；
-      // - profileSignals 一并传给后端 PracticeAgent 偏好出题；
-      // - 难度只根据本局连续练习结果作本地提示，正式难度由服务端学情策略重算。
-      const recent = history.value.slice(0, 3);
-      const firstPass = recent.findIndex((entry) => entry.passed);
-      const recentFailures = firstPass < 0 ? recent.length : firstPass;
-      const adaptiveDiff = computeAdaptiveDifficulty({
-        baseDifficulty: currentDifficulty.value,
-        recentFailures,
-        recentStreak: streak.value,
-      });
-      currentDifficulty.value = adaptiveDiff;
-
-      const preferredKc =
-        opts.focusKc?.value
-        ?? pickWeakKcForChapter(profileSignals.weakKcs.value, chapter);
-
-      const req: BossProblemRequest = {
-        stage,
-        // 客户端只表达本局纵深；后端会与服务端 learner_profile + mastery 合成最终难度。
-        difficulty: clampDifficulty(adaptiveDiff),
-        ...(preferredKc ? { preferredKc } : {}),
-        ...(opts.preferredKind?.value ? { preferredKind: opts.preferredKind.value } : {}),
-        ...(opts.arenaLevel?.value ? { arenaLevel: opts.arenaLevel.value } : {}),
-        ...(profileSignals.hasAnySignal.value ? { profileSignals: profileSignals.signals.value } : {}),
-      };
+      let target = pending ?? pendingCurrent;
+      if (!target) {
+        const chapter = pickChapter(opts.focusChapter?.value ?? null);
+        target = { chapter, request: buildProblemRequest(chapter) };
+      }
+      const chapter = target.chapter;
+      const request = target.request;
+      pendingCurrent = { chapter, request };
+      currentDifficulty.value = clampDifficulty(request.difficulty ?? currentDifficulty.value);
       // 远征只接受服务端审查通过的 AI 题；golden / 本地模板不能冒充画像自适应关卡。
-      const fetched = await requestBossProblem(chapter, req, { allowGoldenFallback: false });
+      const fetched = await requestBossProblem(chapter, request, { allowGoldenFallback: false });
       problem.value = fetched;
       currentDifficulty.value = clampDifficulty(fetched.difficulty);
+      pendingCurrent = null;
+      if (pendingNext === target) pendingNext = null;
       phase.value = 'playing';
       retryAction.value = null;
-      // 进入答题即后台预生成「下一题」（不 await）：玩家做题时后端把下一题落 READY，
-      // nextProblem 时后端 claimReady 近乎瞬时返回；失败由调用方保留正常现场出题路径。
-      void prefetchNext().catch((error) => {
-        if (typeof console !== 'undefined') {
-          console.warn('[endless] prefetch failed:', error instanceof Error ? error.message : String(error));
-        }
-      });
     } catch (error) {
       phase.value = 'error';
       errorMessage.value = error instanceof Error ? error.message : String(error);
@@ -222,6 +230,8 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
 
   async function startRun(): Promise<void> {
     retryAction.value = 'start';
+    pendingNext = null;
+    pendingCurrent = null;
     streak.value = 0;
     totalScore.value = 0;
     attempts.value = 0;
@@ -308,40 +318,43 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
     };
     history.value = [entry, ...history.value].slice(0, MAX_HISTORY);
     saveHistory(history.value);
+    void prefetchNext().catch((error) => {
+      if (typeof console !== 'undefined') {
+        console.warn('[endless] prefetch failed:', error instanceof Error ? error.message : String(error));
+      }
+    });
   }
 
-  /**
-   * 预取「下一题」（不 await）。维度用「当前题」的 chapter + kc + kind + arenaLevel：锁定章节 /
-   * arena 单关 / 聚焦弱项时与下一次取题维度一致 → 后端 claimReady 命中复用；随机 7 章模式下章节会变
-   * 可能 miss → nextProblem 回退现场出题（best-effort，可接受）。
-   */
+  /** 结果已知后冻结完整下一题请求，确保预取维度和超时重试完全一致。 */
   async function prefetchNext(): Promise<void> {
-    const p = problem.value;
-    if (!p) return;
-    const req: BossProblemRequest = {
-      stage: 1 + Math.floor(Math.random() * 4),
-      preferredKc: p.kcCode,
-      ...(opts.preferredKind?.value ? { preferredKind: opts.preferredKind.value } : {}),
-      ...(opts.arenaLevel?.value ? { arenaLevel: opts.arenaLevel.value } : {}),
-      // 预取按「当前难度」生成；后端复用严格匹配 difficulty，禁止易题冒充难题。
-      difficulty: clampDifficulty(currentDifficulty.value),
-      ...(profileSignals.hasAnySignal.value ? { profileSignals: profileSignals.signals.value } : {}),
-    };
-    await prefetchBossProblem(p.chapter, req);
+    if (!problem.value || pendingNext) return;
+    const chapter = pickChapter(opts.focusChapter?.value ?? null);
+    pendingNext = { chapter, request: buildProblemRequest(chapter) };
+    await prefetchBossProblem(pendingNext.chapter, pendingNext.request);
   }
 
   async function nextProblem(): Promise<void> {
     // 「就绪预取」存于后端 pregenerated_problem (READY)：_fetchAndStart → 后端 fetchProblem 优先
     // claimReady，命中即瞬时返回（省去等 LLM），未命中自然回退现场出题。无需前端缓存题目本体。
     retryAction.value = 'next';
-    await _fetchAndStart();
+    if (!pendingNext) {
+      const chapter = pickChapter(opts.focusChapter?.value ?? null);
+      pendingNext = { chapter, request: buildProblemRequest(chapter) };
+    }
+    await _fetchAndStart(pendingNext);
   }
 
   async function retry(): Promise<void> {
     if (retryAction.value === 'submit') {
       await submit();
     } else if (retryAction.value === 'next') {
-      await _fetchAndStart();
+      if (!pendingNext) {
+        const chapter = pickChapter(opts.focusChapter?.value ?? null);
+        pendingNext = { chapter, request: buildProblemRequest(chapter) };
+      }
+      await _fetchAndStart(pendingNext);
+    } else if (retryAction.value === 'start' && pendingCurrent) {
+      await _fetchAndStart(pendingCurrent);
     } else {
       await startRun();
     }
@@ -351,6 +364,8 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
     phase.value = 'idle';
     problem.value = null;
     retryAction.value = null;
+    pendingNext = null;
+    pendingCurrent = null;
   }
 
   function tickSecond(): void {

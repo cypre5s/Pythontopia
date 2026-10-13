@@ -56,6 +56,20 @@ export type RogueRunPhase =
   | 'cleared'     // 打通 boss，本局胜利
   | 'over';       // HP 归零，本局结束
 
+export type ExpeditionBossStatus = 'ready' | 'judging' | 'settling' | 'passed' | 'failed';
+
+/** Boss 战场只读投影，阶段/体力来自远征 store，判题结果必须已结算。 */
+export interface ExpeditionBossView {
+  chapter: number;
+  name: string;
+  phase: number;
+  phasesTotal: number;
+  hp: number;
+  maxHp: number;
+  status: ExpeditionBossStatus;
+  attemptId: string | null;
+}
+
 export interface RogueHistoryEntry {
   nodeId: string;
   kcCode: string | null;

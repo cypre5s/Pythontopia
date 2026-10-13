@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.pythontopia.PythontopiaApplication;
 import com.pythontopia.learner.reflection.LearnerInsightRepository;
+import com.pythontopia.learner.twin.LearnerTwinService;
+import java.math.BigDecimal;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -17,12 +19,9 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /**
- * P3.3：动态推送（孪生驱动）。验收（蓝图 AC 303 行）：改变洞察 → 推送结果改变（可断言），
- * 且推荐理由可溯源（绑定洞察 evidence event id）。
+ * P3.3：动态推送与 Twin/Expedition 共用同一 KC 选择顺序，洞察只补充可溯源理由。
  *
- * <p>基线只有掌握度信号时按掌握度升序推送（最弱 KC 在前）；插入 error_pattern 洞察（命中掌握度排第三的
- * KC）后，该 KC 跃居首位且理由含「反复出错」、evidenceEventIds 指向真实 learning_event_log.id —— 证明
- * 输出随孪生洞察改变且可溯源（非假绿）。
+ * <p>掌握度、到期复习、先修条件与近期结果只由共享规则决定；AI 洞察和证据图可以解释推荐，但不能另行重排 KC。
  */
 @Testcontainers
 @SpringBootTest(
@@ -53,11 +52,40 @@ class RecommendationServiceTest {
   }
 
   @Autowired LearnerRecommendationService service;
+  @Autowired LearnerTwinService twinService;
   @Autowired LearnerInsightRepository insightRepository;
   @Autowired JdbcTemplate jdbcTemplate;
 
   @Test
-  void insightChangesRankingAndReasonCarriesTraceability() {
+  void bootstrapOnlyMasteryIsNotRecommendedAsAProvenWeakness() {
+    Long userId =
+        jdbcTemplate.queryForObject(
+            "INSERT INTO users (username, display_name, password_hash, role)"
+                + " VALUES ('rec-bootstrap-stu', 'rec bootstrap', 'x', 'STUDENT') RETURNING id",
+            Long.class);
+    String kcCode =
+        jdbcTemplate.queryForObject(
+            "SELECT kc_code FROM course_kc WHERE pack_id = 43 ORDER BY kc_code LIMIT 1",
+            String.class);
+    jdbcTemplate.update(
+        "INSERT INTO kc_mastery (user_id, kc_code, mastery_score, confidence) VALUES (?, ?, 0, 0)",
+        userId,
+        kcCode);
+    jdbcTemplate.update(
+        "INSERT INTO kc_mastery_event (user_id, kc_code, source, delta, reason)"
+            + " VALUES (?, ?, 'BOOTSTRAP', 0, 'profile bootstrap')",
+        userId,
+        kcCode);
+
+    List<RecommendationDto> recommendations = service.recommend(userId);
+
+    assertThat(recommendations).isNotEmpty();
+    assertThat(recommendations.get(0).reason()).contains("尚未评估");
+    assertThat(recommendations.get(0).reason()).doesNotContain("掌握度较低");
+  }
+
+  @Test
+  void insightAddsTraceabilityWithoutChangingSharedSelectionOrder() {
     Long userId =
         jdbcTemplate.queryForObject(
             "INSERT INTO users (username, display_name, password_hash, role)"
@@ -69,52 +97,45 @@ class RecommendationServiceTest {
             "SELECT kc_code FROM course_kc WHERE pack_id = 43 ORDER BY kc_code LIMIT 3",
             String.class);
     assertThat(kcCodes).hasSize(3);
-    String weakest = kcCodes.get(0);
-    String strongerWeak = kcCodes.get(2);
-
     // 掌握度升序：weakest(0.10) < mid(0.20) < strongerWeak(0.30)。
-    jdbcTemplate.update(seedMasterySql(), userId, kcCodes.get(0));
-    jdbcTemplate.update(
-        "INSERT INTO kc_mastery (user_id, kc_code, mastery_score, confidence, last_event_at)"
-            + " VALUES (?, ?, 0.200, 0.500, now())",
-        userId, kcCodes.get(1));
-    jdbcTemplate.update(
-        "INSERT INTO kc_mastery (user_id, kc_code, mastery_score, confidence, last_event_at)"
-            + " VALUES (?, ?, 0.300, 0.500, now())",
-        userId, kcCodes.get(2));
+    seedMastery(userId, kcCodes.get(0), new BigDecimal("0.100"));
+    seedMastery(userId, kcCodes.get(1), new BigDecimal("0.200"));
+    seedMastery(userId, kcCodes.get(2), new BigDecimal("0.300"));
 
     // 基线：无洞察/记忆 → 按掌握度升序，最弱 KC 在前，理由不含「反复出错」。
     List<RecommendationDto> baseline = service.recommend(userId);
     assertThat(baseline).isNotEmpty();
-    assertThat(baseline.get(0).kcCode()).isEqualTo(weakest);
+    List<String> expectedOrder = twinService.frontier(userId, null, List.of(), 3).picks().stream()
+        .map(pick -> pick.kcCode()).toList();
+    assertThat(baseline).extracting(RecommendationDto::kcCode).containsExactlyElementsOf(expectedOrder);
     assertThat(baseline.get(0).reason()).doesNotContain("反复出错");
     assertThat(baseline.get(0).evidenceEventIds()).isEmpty();
     assertThat(baseline.get(0).checkIds()).isEmpty();
     assertThat(baseline.get(0).pageIds()).isEmpty();
 
-    // 插入指向掌握度第三的 KC 的真实失败事件 + error_pattern 洞察（evidence 锚定该 event id）。
+    String insightKc = baseline.get(0).kcCode();
+    // 插入指向共享策略首选 KC 的真实失败事件 + error_pattern 洞察。
     Long eventId =
         jdbcTemplate.queryForObject(
             "INSERT INTO learning_event_log (user_id, event_type, payload, source, importance)"
                 + " VALUES (?, 'practice_failed', ?::jsonb, 'backend', 4) RETURNING id",
             Long.class,
             userId,
-            "{\"kcCode\":\"" + strongerWeak + "\"}");
+            "{\"kcCode\":\"" + insightKc + "\"}");
     insightRepository.insert(
         userId,
         "在该知识点上反复出错",
         "error_pattern",
-        List.of(strongerWeak),
+        List.of(insightKc),
         List.of(eventId),
         0.8,
         "TEST");
 
-    // 改变洞察后：被洞察命中的 KC 跃居首位（即便其掌握度更高），理由含「反复出错」且 evidence 可溯源。
+    // 洞察提供理由和证据，但不改变 Twin/Expedition 的 KC 优先级。
     List<RecommendationDto> afterInsight = service.recommend(userId);
     assertThat(afterInsight).isNotEmpty();
+    assertThat(afterInsight).extracting(RecommendationDto::kcCode).containsExactlyElementsOf(expectedOrder);
     RecommendationDto top = afterInsight.get(0);
-    assertThat(top.kcCode()).isEqualTo(strongerWeak);
-    assertThat(top.kcCode()).isNotEqualTo(weakest); // 排序确实因洞察改变
     assertThat(top.reason()).contains("反复出错");
     assertThat(top.evidenceEventIds()).contains(eventId);
     assertThat(top.checkIds()).isEmpty();
@@ -133,26 +154,14 @@ class RecommendationServiceTest {
         jdbcTemplate.queryForList(
             "SELECT kc_code FROM course_kc WHERE pack_id = 43 ORDER BY kc_code LIMIT 3",
             String.class);
-    String masteryWeakest = kcCodes.get(0);
-    String evidenceWeak = kcCodes.get(2);
-
-    jdbcTemplate.update(seedMasterySql(), userId, masteryWeakest);
-    jdbcTemplate.update(
-        "INSERT INTO kc_mastery (user_id, kc_code, mastery_score, confidence, last_event_at)"
-            + " VALUES (?, ?, 0.200, 0.500, now())",
-        userId,
-        kcCodes.get(1));
-    jdbcTemplate.update(
-        "INSERT INTO kc_mastery (user_id, kc_code, mastery_score, confidence, last_event_at)"
-            + " VALUES (?, ?, 0.300, 0.500, now())",
-        userId,
-        evidenceWeak);
+    seedMastery(userId, kcCodes.get(0), new BigDecimal("0.100"));
+    seedMastery(userId, kcCodes.get(1), new BigDecimal("0.200"));
+    seedMastery(userId, kcCodes.get(2), new BigDecimal("0.300"));
 
     List<RecommendationDto> baseline = service.recommend(userId);
     assertThat(baseline).isNotEmpty();
-    assertThat(baseline.get(0).kcCode()).isEqualTo(masteryWeakest);
-    int baselineRank = rankOf(baseline, evidenceWeak);
-    assertThat(baselineRank).isEqualTo(2);
+    String evidenceWeak = baseline.getLast().kcCode();
+    List<String> baselineOrder = baseline.stream().map(RecommendationDto::kcCode).toList();
 
     Long resourceId =
         jdbcTemplate.queryForObject(
@@ -190,27 +199,27 @@ class RecommendationServiceTest {
     List<RecommendationDto> recommendations = service.recommend(userId);
 
     assertThat(recommendations).isNotEmpty();
-    RecommendationDto top = recommendations.get(0);
-    assertThat(top.kcCode()).isEqualTo(evidenceWeak);
-    assertThat(top.kcCode()).isNotEqualTo(masteryWeakest);
-    assertThat(top.reason()).contains("学习证据图", "微测失败");
-    assertThat(top.evidenceEventIds()).contains(eventId);
-    assertThat(top.checkIds()).contains(checkId);
-    assertThat(top.pageIds()).contains(10707L);
-    assertThat(baselineRank - rankOf(recommendations, evidenceWeak)).isGreaterThanOrEqualTo(2);
+    assertThat(recommendations).extracting(RecommendationDto::kcCode).containsExactlyElementsOf(baselineOrder);
+    RecommendationDto evidenceRecommendation = recommendations.stream()
+        .filter(item -> item.kcCode().equals(evidenceWeak)).findFirst().orElseThrow();
+    assertThat(evidenceRecommendation.reason()).contains("学习证据图", "微测失败");
+    assertThat(evidenceRecommendation.evidenceEventIds()).contains(eventId);
+    assertThat(evidenceRecommendation.checkIds()).contains(checkId);
+    assertThat(evidenceRecommendation.pageIds()).contains(10707L);
   }
 
-  private static String seedMasterySql() {
-    return "INSERT INTO kc_mastery (user_id, kc_code, mastery_score, confidence, last_event_at)"
-        + " VALUES (?, ?, 0.100, 0.500, now())";
+  private void seedMastery(Long userId, String kcCode, BigDecimal masteryScore) {
+    jdbcTemplate.update(
+        "INSERT INTO kc_mastery (user_id, kc_code, mastery_score, confidence, last_event_at)"
+            + " VALUES (?, ?, ?, 0.500, now())",
+        userId,
+        kcCode,
+        masteryScore);
+    jdbcTemplate.update(
+        "INSERT INTO kc_mastery_event (user_id, kc_code, source, delta, applied_delta, reason)"
+            + " VALUES (?, ?, 'PRACTICE_PASS', 0, 0, 'verified recommendation fixture')",
+        userId,
+        kcCode);
   }
 
-  private static int rankOf(List<RecommendationDto> recommendations, String kcCode) {
-    for (int index = 0; index < recommendations.size(); index++) {
-      if (recommendations.get(index).kcCode().equals(kcCode)) {
-        return index;
-      }
-    }
-    return Integer.MAX_VALUE;
-  }
 }

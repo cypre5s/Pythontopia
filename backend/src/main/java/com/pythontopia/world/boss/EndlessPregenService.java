@@ -211,6 +211,11 @@ public class EndlessPregenService {
 
   private void recoverStalePending(Long userId) {
     jdbcTemplate.update(
+        "DELETE FROM pregenerated_problem"
+            + " WHERE user_id = ? AND status = 'READY'"
+            + " AND updated_at < now() - INTERVAL '1 day'",
+        userId);
+    jdbcTemplate.update(
         "UPDATE pregenerated_problem"
             + " SET status = 'FAILED', payload = NULL, problem_id = NULL,"
             + " error_message = '预加载超时，可重试', updated_at = now()"

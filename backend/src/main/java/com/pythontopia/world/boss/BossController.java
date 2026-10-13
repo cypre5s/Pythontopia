@@ -2,6 +2,7 @@ package com.pythontopia.world.boss;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.AiBudgeted;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossAttemptResultDto;
 import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
@@ -46,6 +47,7 @@ public class BossController {
   }
 
   @PostMapping("/{chapter}/problem")
+  @AiBudgeted
   public BossProblemDto requestProblem(
       @PathVariable @Min(1) @Max(7) int chapter,
       @Valid @RequestBody BossProblemRequest request,
@@ -59,6 +61,7 @@ public class BossController {
    * 前端在进入答题后 fire-and-forget 调用，玩家做题时后台备好下一题落 READY。
    */
   @PostMapping("/{chapter}/prefetch")
+  @AiBudgeted
   @ResponseStatus(HttpStatus.ACCEPTED)
   public BossPrefetchStatusDto prefetchProblem(
       @PathVariable @Min(1) @Max(7) int chapter,

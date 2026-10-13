@@ -23,7 +23,7 @@ import { relicById } from '@/data/rogueRelics';
 import { ROGUE_EVENT_CHOICES } from '@/data/rogueEvents';
 import { MAIN_QUEST_BOSSES } from '@/data/bossCatalog';
 import type { ChallengeResult } from '@/api/dto/CodeChallenge';
-import type { RogueNode, RogueNodeKind } from '@/types/rogue';
+import type { ExpeditionBossView, RogueNode, RogueNodeKind } from '@/types/rogue';
 
 // 地图图例固定顺序（与节点类型一一对应，供玩家快速看懂各房间含义）。
 const LEGEND_KINDS: readonly RogueNodeKind[] = [
@@ -125,6 +125,46 @@ const bossChapter = computed<number>(() => {
 const bossName = computed<string>(
   () => MAIN_QUEST_BOSSES.find((b) => b.chapter === bossChapter.value)?.name ?? '知识守关者',
 );
+const isBossChallenge = computed<boolean>(
+  () => run.phase === 'challenge' && run.activeNode?.kind === 'boss',
+);
+const showExpeditionStage = computed<boolean>(() =>
+  isBossChallenge.value || (run.phase === 'map' && mapView.value === 'pixel'),
+);
+const bossBattleView = computed<ExpeditionBossView | null>(() => {
+  if (!isBossChallenge.value) return null;
+  const result = run.challengeResult;
+  let status: ExpeditionBossView['status'] = 'ready';
+  if (run.settlementPending || (result !== null && run.loading)) {
+    status = 'settling';
+  } else if (run.loading) {
+    status = 'judging';
+  } else if (result) {
+    status = result.passed ? 'passed' : 'failed';
+  }
+  return {
+    chapter: bossChapter.value,
+    name: bossName.value,
+    phase: run.activeBossPhase,
+    phasesTotal: run.bossPhasesTotal,
+    hp: run.hp,
+    maxHp: run.maxHp,
+    status,
+    attemptId: result && !run.loading && !run.settlementPending
+      ? `${result.problemId}:${run.activeBossPhase}`
+      : null,
+  };
+});
+const bossStatusAnnouncement = computed<string>(() => {
+  switch (bossBattleView.value?.status) {
+    case 'judging': return '判题中。';
+    case 'settling': return '正在确认本次结算。';
+    case 'passed': return '判题通过，Boss 受到命中。';
+    case 'failed': return '判题未通过，当前体力以本局真实结算显示。';
+    case 'ready': return '等待提交答案。';
+    default: return '';
+  }
+});
 
 // 局内自适应难度展示：实际出题难度 + 相对基准的「↑气势 / ↓回稳」标签。
 const shownDifficulty = computed<number>(() =>
@@ -437,87 +477,152 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
 
       <!-- 地图：选节点 -->
       <div
-        v-else-if="run.phase === 'map'"
-        class="exp-map"
-        data-testid="expedition-map"
+        v-else-if="run.phase === 'map' || run.phase === 'challenge'"
+        class="exp-active-run"
+        data-testid="expedition-active-run"
       >
-        <div class="exp-map__bar">
-          <p class="exp-map__hint">
-            点亮的房间可前往，选了同层就不回头——一路打到顶层 BOSS。
-          </p>
-          <div class="exp-map__tools">
-            <div
-              class="exp-view-toggle"
-              role="group"
-              aria-label="地图视图切换"
-            >
+        <div
+          v-if="run.phase === 'map'"
+          class="exp-map"
+          data-testid="expedition-map"
+        >
+          <div class="exp-map__bar">
+            <p class="exp-map__hint">
+              点亮的房间可前往，选了同层就不回头——一路打到顶层 BOSS。
+            </p>
+            <div class="exp-map__tools">
+              <div
+                class="exp-view-toggle"
+                role="group"
+                aria-label="地图视图切换"
+              >
+                <button
+                  type="button"
+                  class="exp-view-btn"
+                  :class="{ 'is-active': mapView === 'pixel' }"
+                  :aria-pressed="mapView === 'pixel'"
+                  data-testid="expedition-view-pixel"
+                  @click="mapView = 'pixel'"
+                >
+                  🗼 像素塔
+                </button>
+                <button
+                  type="button"
+                  class="exp-view-btn"
+                  :class="{ 'is-active': mapView === 'list' }"
+                  :aria-pressed="mapView === 'list'"
+                  data-testid="expedition-view-list"
+                  @click="mapView = 'list'"
+                >
+                  ☰ 列表
+                </button>
+              </div>
               <button
                 type="button"
-                class="exp-view-btn"
-                :class="{ 'is-active': mapView === 'pixel' }"
-                :aria-pressed="mapView === 'pixel'"
-                data-testid="expedition-view-pixel"
-                @click="mapView = 'pixel'"
+                class="exp-abandon"
+                data-testid="expedition-save-exit"
+                @click="onExit"
               >
-                🗼 像素塔
+                保存退出
               </button>
               <button
                 type="button"
-                class="exp-view-btn"
-                :class="{ 'is-active': mapView === 'list' }"
-                :aria-pressed="mapView === 'list'"
-                data-testid="expedition-view-list"
-                @click="mapView = 'list'"
+                class="exp-abandon exp-abandon--finish"
+                data-testid="expedition-finish-map"
+                @click="onFinishRun"
               >
-                ☰ 列表
+                🏁 结束本局
+              </button>
+              <button
+                type="button"
+                class="exp-abandon"
+                data-testid="expedition-abandon"
+                @click="onAbandon"
+              >
+                🏳 弃局
               </button>
             </div>
-            <button
-              type="button"
-              class="exp-abandon"
-              data-testid="expedition-save-exit"
-              @click="onExit"
+          </div>
+
+          <!-- 图例：让玩家快速看懂各房间含义 -->
+          <div
+            class="exp-legend"
+            data-testid="expedition-legend"
+          >
+            <span
+              v-for="k in LEGEND_KINDS"
+              :key="k"
+              class="exp-legend__item"
             >
-              保存退出
-            </button>
-            <button
-              type="button"
-              class="exp-abandon exp-abandon--finish"
-              data-testid="expedition-finish-map"
-              @click="onFinishRun"
+              <span class="exp-legend__icon">{{ NODE_KIND_ICON[k] }}</span>{{ NODE_KIND_LABEL[k] }}
+            </span>
+          </div>
+
+          <!-- 列表视图（移动端 / 降级交互真源） -->
+          <div
+            v-if="mapView === 'list'"
+            ref="mapInner"
+            class="exp-map__inner"
+          >
+            <svg
+              class="exp-edges"
+              aria-hidden="true"
             >
-              🏁 结束本局
-            </button>
-            <button
-              type="button"
-              class="exp-abandon"
-              data-testid="expedition-abandon"
-              @click="onAbandon"
+              <line
+                v-for="e in edges"
+                :key="e.id"
+                :x1="e.x1"
+                :y1="e.y1"
+                :x2="e.x2"
+                :y2="e.y2"
+                :class="['exp-edge', e.cls]"
+              />
+            </svg>
+            <div
+              v-for="(layer, li) in run.nodesByLayer"
+              :key="li"
+              class="exp-layer"
             >
-              🏳 弃局
-            </button>
+              <span class="exp-layer__tag">{{ li === run.layers - 1 ? '顶层' : `第 ${li + 1} 层` }}</span>
+              <div class="exp-layer__nodes">
+                <button
+                  v-for="node in layer"
+                  :key="node.id"
+                  :ref="(el) => setNodeEl(node.id, el)"
+                  type="button"
+                  :class="nodeClass(node)"
+                  :disabled="node.state !== 'available' && !(run.phase === 'map' && node.id === run.currentNodeId && node.state === 'current')"
+                  :title="nodeTooltip(node)"
+                  :data-testid="`expedition-node-${node.id}`"
+                  @click="onEnter(node)"
+                >
+                  <span class="exp-node__icon">{{ NODE_KIND_ICON[node.kind] }}</span>
+                  <span class="exp-node__kind">{{ NODE_KIND_LABEL[node.kind] }}</span>
+                  <span
+                    v-if="node.kcCode"
+                    class="exp-node__kc"
+                  >{{ kcDisplayName(node.kcCode) }}</span>
+                  <span
+                    v-if="node.difficulty > 0"
+                    class="exp-node__diff"
+                  >{{ star(node.difficulty) }}</span>
+                  <span
+                    v-if="node.state === 'cleared'"
+                    class="exp-node__done"
+                  >✓</span>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
-        <!-- 图例：让玩家快速看懂各房间含义 -->
+        <!-- 像素远征塔 / Boss 战场共用稳定挂载点，避免地图转入 Boss 时重建 Phaser Game。 -->
         <div
-          class="exp-legend"
-          data-testid="expedition-legend"
-        >
-          <span
-            v-for="k in LEGEND_KINDS"
-            :key="k"
-            class="exp-legend__item"
-          >
-            <span class="exp-legend__icon">{{ NODE_KIND_ICON[k] }}</span>{{ NODE_KIND_LABEL[k] }}
-          </span>
-        </div>
-
-        <!-- 像素远征塔（Phaser 单例渐进增强）：点像素节点 = 同 DOM 的 run.enterNode -->
-        <div
-          v-if="mapView === 'pixel'"
+          v-if="showExpeditionStage"
           class="exp-tower"
+          :class="{ 'exp-tower--boss': isBossChallenge }"
           data-testid="expedition-tower"
+          aria-hidden="true"
         >
           <ExpeditionCanvas
             :nodes="run.nodes"
@@ -527,63 +632,224 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
             :hp="run.hp"
             :max-hp="run.maxHp"
             :score="run.score"
+            :mode="isBossChallenge ? 'boss' : 'tower'"
+            :boss="bossBattleView"
             @select="onEnterId"
           />
         </div>
-
-        <!-- 列表视图（移动端 / 降级交互真源） -->
-        <div
-          v-else
-          ref="mapInner"
-          class="exp-map__inner"
+        <p
+          v-if="isBossChallenge && bossBattleView"
+          class="exp-boss-live"
+          role="status"
+          aria-live="polite"
         >
-          <svg
-            class="exp-edges"
-            aria-hidden="true"
-          >
-            <line
-              v-for="e in edges"
-              :key="e.id"
-              :x1="e.x1"
-              :y1="e.y1"
-              :x2="e.x2"
-              :y2="e.y2"
-              :class="['exp-edge', e.cls]"
-            />
-          </svg>
-          <div
-            v-for="(layer, li) in run.nodesByLayer"
-            :key="li"
-            class="exp-layer"
-          >
-            <span class="exp-layer__tag">{{ li === run.layers - 1 ? '顶层' : `第 ${li + 1} 层` }}</span>
-            <div class="exp-layer__nodes">
+          {{ bossName }}，阶段 {{ bossBattleView.phase }} / {{ bossBattleView.phasesTotal }}，体力 {{ bossBattleView.hp }} / {{ bossBattleView.maxHp }}。{{ bossStatusAnnouncement }}
+        </p>
+
+        <!-- 战斗：出题 + 判题 -->
+        <div
+          v-if="run.phase === 'challenge'"
+          class="exp-challenge"
+          data-testid="expedition-challenge"
+        >
+          <header class="exp-challenge__head">
+            <span class="exp-chip">{{ NODE_KIND_ICON[run.activeNode?.kind ?? 'battle'] }} {{ NODE_KIND_LABEL[run.activeNode?.kind ?? 'battle'] }}</span>
+            <span class="exp-chip exp-chip--timer">⏱ {{ run.elapsedSec }}s</span>
+            <div class="exp-challenge__tools">
               <button
-                v-for="node in layer"
-                :key="node.id"
-                :ref="(el) => setNodeEl(node.id, el)"
                 type="button"
-                :class="nodeClass(node)"
-                :disabled="node.state !== 'available' && !(run.phase === 'map' && node.id === run.currentNodeId && node.state === 'current')"
-                :title="nodeTooltip(node)"
-                :data-testid="`expedition-node-${node.id}`"
-                @click="onEnter(node)"
+                class="exp-mini-btn"
+                data-testid="expedition-view-map"
+                @click="showMapModal = true"
               >
-                <span class="exp-node__icon">{{ NODE_KIND_ICON[node.kind] }}</span>
-                <span class="exp-node__kind">{{ NODE_KIND_LABEL[node.kind] }}</span>
-                <span
-                  v-if="node.kcCode"
-                  class="exp-node__kc"
-                >{{ kcDisplayName(node.kcCode) }}</span>
-                <span
-                  v-if="node.difficulty > 0"
-                  class="exp-node__diff"
-                >{{ star(node.difficulty) }}</span>
-                <span
-                  v-if="node.state === 'cleared'"
-                  class="exp-node__done"
-                >✓</span>
+                🗺 查看地图
               </button>
+              <button
+                type="button"
+                class="exp-mini-btn exp-mini-btn--danger"
+                data-testid="expedition-finish"
+                @click="onFinishRun"
+              >
+                🏁 结束本局
+              </button>
+            </div>
+          </header>
+
+          <div
+            v-if="run.loading && !run.activeProblem"
+            class="exp-loading"
+            role="status"
+          >
+            正在出题…
+          </div>
+
+          <div
+            v-else-if="run.errorMessage && !run.activeProblem"
+            class="exp-error"
+            role="alert"
+          >
+            <p>{{ run.errorMessage }}</p>
+            <PyButton
+              variant="primary"
+              size="sm"
+              test-id="expedition-error-retry"
+              :disabled="run.loading"
+              @click="run.retryChallenge()"
+            >
+              {{ run.loading ? '出题中…' : '重试' }}
+            </PyButton>
+          </div>
+
+          <ChallengeWorkspace
+            v-else-if="run.activeProblem"
+            v-model:code="run.activeCode"
+            :kind="run.activeNode?.challengeKind ?? null"
+            :problem="run.activeProblem"
+            :title="NODE_KIND_LABEL[run.activeNode?.kind ?? 'battle']"
+            :kc-code="run.activeNode?.kcCode ?? null"
+            :difficulty="shownDifficulty"
+            :elapsed-sec="run.elapsedSec"
+            :ai-generated="run.activeProblem.aiGenerated"
+            :bug-mine-time-limit-seconds="EXPEDITION_BUG_MINE_SECONDS"
+            :result="challengeResult"
+            @timeout="onSubmit"
+          >
+            <template #chips>
+              <span
+                v-if="difficultyTag"
+                class="exp-chip"
+              >{{ difficultyTag }}</span>
+              <span
+                v-if="run.activeNode?.kind === 'boss'"
+                class="exp-chip exp-chip--boss"
+              >阶段 {{ run.activeBossPhase }} / {{ run.bossPhasesTotal }}</span>
+            </template>
+            <template #actions>
+              <p
+                v-if="run.errorMessage"
+                class="exp-inline-error"
+              >
+                {{ run.errorMessage }}
+              </p>
+              <PyButton
+                v-if="!run.challengeResult"
+                variant="primary"
+                test-id="expedition-submit"
+                :disabled="run.loading"
+                @click="onSubmit"
+              >
+                {{ run.loading ? '评测中…' : '提交答案' }}
+              </PyButton>
+              <template v-else>
+                <PyButton
+                  v-if="run.settlementPending"
+                  variant="primary"
+                  test-id="expedition-settlement-retry"
+                  :disabled="run.loading"
+                  @click="run.continueAfterChallenge()"
+                >
+                  {{ run.loading ? '结算中…' : '重试结算' }}
+                </PyButton>
+                <PyButton
+                  v-else-if="run.challengeResult.passed"
+                  variant="primary"
+                  test-id="expedition-continue"
+                  @click="run.continueAfterChallenge()"
+                >
+                  {{ run.activeNode?.kind === 'boss' ? '通关！' : '继续闯关' }}
+                </PyButton>
+                <template v-else>
+                  <PyButton
+                    v-if="run.hp > 0"
+                    variant="primary"
+                    test-id="expedition-retry"
+                    :disabled="run.loading"
+                    @click="run.retryChallenge()"
+                  >
+                    {{ run.loading ? '出题中…' : '再试一次（换一题）' }}
+                  </PyButton>
+                  <PyButton
+                    v-else
+                    variant="secondary"
+                    test-id="expedition-over"
+                    @click="run.continueAfterChallenge()"
+                  >
+                    体力耗尽 · 查看结算
+                  </PyButton>
+                </template>
+              </template>
+            </template>
+            <template #result-extra>
+              <p
+                v-if="!run.challengeResult?.passed"
+                class="exp-result__hp"
+              >
+                答错 · 体力 {{ run.hp }}/{{ run.maxHp }}
+              </p>
+            </template>
+          </ChallengeWorkspace>
+
+          <!-- 只读地图弹窗：答题中查看进度，不可换节点 -->
+          <div
+            v-if="showMapModal"
+            class="exp-modal"
+            data-testid="expedition-map-modal"
+            @click.self="showMapModal = false"
+          >
+            <div
+              class="exp-modal__panel"
+              role="dialog"
+              aria-label="远征地图"
+            >
+              <header class="exp-modal__head">
+                <h3>远征地图 · 只读</h3>
+                <button
+                  type="button"
+                  class="exp-modal__close"
+                  aria-label="关闭地图"
+                  data-testid="expedition-map-modal-close"
+                  @click="showMapModal = false"
+                >
+                  ×
+                </button>
+              </header>
+              <p class="exp-modal__legend">
+                <span
+                  v-for="k in LEGEND_KINDS"
+                  :key="k"
+                  class="exp-legend__item"
+                ><span class="exp-legend__icon">{{ NODE_KIND_ICON[k] }}</span>{{ NODE_KIND_LABEL[k] }}</span>
+              </p>
+              <div class="exp-modal__body">
+                <div
+                  v-for="(layer, li) in run.nodesByLayer"
+                  :key="li"
+                  class="exp-mini-layer"
+                >
+                  <span class="exp-mini-layer__tag">{{ li === run.layers - 1 ? '顶层' : `第 ${li + 1} 层` }}</span>
+                  <div class="exp-mini-layer__nodes">
+                    <span
+                      v-for="node in layer"
+                      :key="node.id"
+                      class="exp-mini-node"
+                      :class="{
+                        'is-cleared': node.state === 'cleared',
+                        'is-available': node.state === 'available',
+                        'is-locked': node.state === 'locked',
+                        'is-bypassed': node.state === 'bypassed',
+                        'is-current': node.id === run.currentNodeId,
+                      }"
+                      :title="nodeTooltip(node)"
+                    >
+                      {{ NODE_KIND_ICON[node.kind] }}
+                      <span
+                        v-if="node.id === run.currentNodeId"
+                        class="exp-mini-node__here"
+                      >●</span>
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -651,214 +917,6 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
         </div>
       </div>
 
-      <!-- 战斗：出题 + 判题 -->
-      <div
-        v-else-if="run.phase === 'challenge'"
-        class="exp-challenge"
-        data-testid="expedition-challenge"
-      >
-        <header class="exp-challenge__head">
-          <span class="exp-chip">{{ NODE_KIND_ICON[run.activeNode?.kind ?? 'battle'] }} {{ NODE_KIND_LABEL[run.activeNode?.kind ?? 'battle'] }}</span>
-          <span class="exp-chip exp-chip--timer">⏱ {{ run.elapsedSec }}s</span>
-          <div class="exp-challenge__tools">
-            <button
-              type="button"
-              class="exp-mini-btn"
-              data-testid="expedition-view-map"
-              @click="showMapModal = true"
-            >
-              🗺 查看地图
-            </button>
-            <button
-              type="button"
-              class="exp-mini-btn exp-mini-btn--danger"
-              data-testid="expedition-finish"
-              @click="onFinishRun"
-            >
-              🏁 结束本局
-            </button>
-          </div>
-        </header>
-
-        <div
-          v-if="run.loading && !run.activeProblem"
-          class="exp-loading"
-          role="status"
-        >
-          正在出题…
-        </div>
-
-        <div
-          v-else-if="run.errorMessage && !run.activeProblem"
-          class="exp-error"
-          role="alert"
-        >
-          <p>{{ run.errorMessage }}</p>
-          <PyButton
-            variant="primary"
-            size="sm"
-            test-id="expedition-error-retry"
-            :disabled="run.loading"
-            @click="run.retryChallenge()"
-          >
-            {{ run.loading ? '出题中…' : '重试' }}
-          </PyButton>
-        </div>
-
-        <ChallengeWorkspace
-          v-else-if="run.activeProblem"
-          v-model:code="run.activeCode"
-          :kind="run.activeNode?.challengeKind ?? null"
-          :problem="run.activeProblem"
-          :title="NODE_KIND_LABEL[run.activeNode?.kind ?? 'battle']"
-          :kc-code="run.activeNode?.kcCode ?? null"
-          :difficulty="shownDifficulty"
-          :elapsed-sec="run.elapsedSec"
-          :ai-generated="run.activeProblem.aiGenerated"
-          :bug-mine-time-limit-seconds="EXPEDITION_BUG_MINE_SECONDS"
-          :result="challengeResult"
-          @timeout="onSubmit"
-        >
-          <template #chips>
-            <span
-              v-if="difficultyTag"
-              class="exp-chip"
-            >{{ difficultyTag }}</span>
-            <span
-              v-if="run.activeNode?.kind === 'boss'"
-              class="exp-chip exp-chip--boss"
-            >阶段 {{ run.activeBossPhase }} / {{ run.bossPhasesTotal }}</span>
-          </template>
-          <template #actions>
-            <p
-              v-if="run.errorMessage"
-              class="exp-inline-error"
-            >
-              {{ run.errorMessage }}
-            </p>
-            <PyButton
-              v-if="!run.challengeResult"
-              variant="primary"
-              test-id="expedition-submit"
-              :disabled="run.loading"
-              @click="onSubmit"
-            >
-              {{ run.loading ? '评测中…' : '提交答案' }}
-            </PyButton>
-            <template v-else>
-              <PyButton
-                v-if="run.settlementPending"
-                variant="primary"
-                test-id="expedition-settlement-retry"
-                :disabled="run.loading"
-                @click="run.continueAfterChallenge()"
-              >
-                {{ run.loading ? '结算中…' : '重试结算' }}
-              </PyButton>
-              <PyButton
-                v-else-if="run.challengeResult.passed"
-                variant="primary"
-                test-id="expedition-continue"
-                @click="run.continueAfterChallenge()"
-              >
-                {{ run.activeNode?.kind === 'boss' ? '通关！' : '继续闯关' }}
-              </PyButton>
-              <template v-else>
-                <PyButton
-                  v-if="run.hp > 0"
-                  variant="primary"
-                  test-id="expedition-retry"
-                  :disabled="run.loading"
-                  @click="run.retryChallenge()"
-                >
-                  {{ run.loading ? '出题中…' : '再试一次（换一题）' }}
-                </PyButton>
-                <PyButton
-                  v-else
-                  variant="secondary"
-                  test-id="expedition-over"
-                  @click="run.continueAfterChallenge()"
-                >
-                  体力耗尽 · 查看结算
-                </PyButton>
-              </template>
-            </template>
-          </template>
-          <template #result-extra>
-            <p
-              v-if="!run.challengeResult?.passed"
-              class="exp-result__hp"
-            >
-              答错 · 体力 {{ run.hp }}/{{ run.maxHp }}
-            </p>
-          </template>
-        </ChallengeWorkspace>
-
-        <!-- 只读地图弹窗：答题中查看进度，不可换节点 -->
-        <div
-          v-if="showMapModal"
-          class="exp-modal"
-          data-testid="expedition-map-modal"
-          @click.self="showMapModal = false"
-        >
-          <div
-            class="exp-modal__panel"
-            role="dialog"
-            aria-label="远征地图"
-          >
-            <header class="exp-modal__head">
-              <h3>远征地图 · 只读</h3>
-              <button
-                type="button"
-                class="exp-modal__close"
-                aria-label="关闭地图"
-                data-testid="expedition-map-modal-close"
-                @click="showMapModal = false"
-              >
-                ×
-              </button>
-            </header>
-            <p class="exp-modal__legend">
-              <span
-                v-for="k in LEGEND_KINDS"
-                :key="k"
-                class="exp-legend__item"
-              ><span class="exp-legend__icon">{{ NODE_KIND_ICON[k] }}</span>{{ NODE_KIND_LABEL[k] }}</span>
-            </p>
-            <div class="exp-modal__body">
-              <div
-                v-for="(layer, li) in run.nodesByLayer"
-                :key="li"
-                class="exp-mini-layer"
-              >
-                <span class="exp-mini-layer__tag">{{ li === run.layers - 1 ? '顶层' : `第 ${li + 1} 层` }}</span>
-                <div class="exp-mini-layer__nodes">
-                  <span
-                    v-for="node in layer"
-                    :key="node.id"
-                    class="exp-mini-node"
-                    :class="{
-                      'is-cleared': node.state === 'cleared',
-                      'is-available': node.state === 'available',
-                      'is-locked': node.state === 'locked',
-                      'is-bypassed': node.state === 'bypassed',
-                      'is-current': node.id === run.currentNodeId,
-                    }"
-                    :title="nodeTooltip(node)"
-                  >
-                    {{ NODE_KIND_ICON[node.kind] }}
-                    <span
-                      v-if="node.id === run.currentNodeId"
-                      class="exp-mini-node__here"
-                    >●</span>
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
       <!-- 结算：胜利 / 失败 -->
       <div
         v-else
@@ -902,7 +960,10 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
             </li>
           </ul>
         </div>
-        <KnowledgeConstellation :mastery="masteryMap" :assessed="assessedKcs" />
+        <KnowledgeConstellation
+          :mastery="masteryMap"
+          :assessed="assessedKcs"
+        />
         <ExpeditionLeaderboard
           :board="run.leaderboard"
           data-testid="expedition-end-leaderboard"
@@ -939,6 +1000,12 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
     var(--pyt-color-bg-primary);
   color: var(--pyt-color-text-primary);
   font-family: var(--pyt-font-pixel);
+}
+.exp-active-run {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
 }
 .exp-head {
   display: grid;
@@ -1295,6 +1362,21 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
   background:
     linear-gradient(180deg, rgba(232, 247, 255, 0.96), rgba(248, 244, 225, 0.98));
   box-shadow: 3px 3px 0 rgba(129, 112, 75, 0.18), 0 10px 30px rgba(70, 92, 72, 0.12);
+}
+.exp-tower--boss {
+  flex: 0 0 auto;
+  height: clamp(240px, 34vh, 340px);
+  min-height: 240px;
+}
+.exp-boss-live {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
 }
 @media (max-width: 900px) {
   .exp-tower {

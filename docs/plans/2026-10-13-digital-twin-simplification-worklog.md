@@ -88,3 +88,23 @@
 - 生产 Graph 显式关闭可选内部鉴权；ECS 预检和安装脚本拒绝公开开发数据库密码。未连接 ECS，也未执行部署。
 - 验证：后端 14 个相关单测类与 2 个 PostgreSQL/Testcontainers 集成类共 192 项通过；Web 260 个测试文件 / 2506 项与 typecheck 通过；Graph 全量 1816 passed / 1 skipped；生产 AI/readiness 与安装密钥契约脚本通过。
 - 无尽远征性能采样、Piston 容器隔离冒烟、全栈浏览器联测仍未完成；本轮未发起 DeepSeek 请求。对话中暴露过的 API key 应轮换后再执行有费用的远征性能测量。
+
+## 2026-10-14 Twin 与远征闭环补充
+
+- 今日学习推荐直接复用 `LearnerTwinService` 的确定性 KC 顺序；反思洞察、失败记忆和证据图仅用于说明依据，避免与 Twin/远征产生第二套排序。`SelfDimensionRequest` 仅接受主观分数增量与标签；当前能力证据仍来自已验证判题事件。
+- 周报用权威事件聚合计算本周总量，最多 30 条相关记忆只用于 KC 与摘要；当前掌握度和有完整 `applied_delta` 的周变化分开展示，不可重建的历史差值为空。周报时间边界统一为上海时区的 `[start, end)`，掌握度事件按 KC 批量读取。
+- 分身页面已有真实星图、证据来源、尚未评估提示、服务端主/备推荐和近期变化折叠区；主/备动作分别路由到复习或指定 KC 的无尽远征，周报提示落入既有工坊。页面集成测试验证了这些导航。
+- 远征保留稳定请求 ID，超时后读取 canonical run 确认已提交动作，确认前不重复提交；精确维度的并发生成互斥，缓存上限 256，恢复时清理超过一天的 READY 预生成题。今日推荐、Twin 与 Boss 选题共用策略。
+- 复用现有账号每日 30 次计数，覆盖用户触发的模型端点，包括图片和分镜生成；没有新增 Agent、模型、微服务或数据库迁移。日额度限制的是 HTTP 操作次数，不能限制单次工作流内部的模型调用、token 或金额。
+- 验证：后端 24 个定向单测/集成测试类共 217 项通过，含周报与画像投影 Testcontainers 回归；Web 260 个测试文件 / 2509 项通过，`npm run typecheck`、改动文件 ESLint、`git diff --check` 通过。本轮没有 DeepSeek 请求。
+- 未完成：无尽远征真实生成与正式判题的 P50/P95、缓存命中、失败恢复和重复率测量；未来路线对比、BKT 与对照实验仍暂缓。未重启本地全栈浏览器、未运行 Piston 容器冒烟或 ECS/公网验证。DeepSeek key 已在对话中暴露，轮换后再做有费用的真实性能采样。
+
+## 2026-10-14 最终复验与工程整理
+
+- 无尽远征 Boss 节点已集成 Phaser Boss 场景；地图与 Boss 共用一个挂载 canvas / Phaser.Game，复用项目立绘。仅收到已完成的服务端判题结算后才演出命中；失败读取实际远征 HP。命中音效来自 Kenney Impact Sounds 的 CC0 `impactSoft_medium_000.ogg`，已经加入 `LICENSE-ART.md`、运行时素材 license 和资产同步 manifest。
+- 真正 DeepSeek Tutor 调用：文本问题与合成图片问题各一次，均返回非空文本答案。图片属于输入通路冒烟，不能代表图片理解质量评测。性能采样阶段没有模型请求。
+- 本地全栈浏览器实测：`/expedition?focus=1` 建图与一张 Phaser canvas 正常；Boss 切场景后 canvas 元素不变，章节立绘与 CC0 音效文件 HTTP 200，浏览器 pageerror / requestfailed 均为 0。Pass 与 fail 演出检查通过，其中浏览器 Boss 状态由测试脚本注入，不是实际 Boss 判题提交；正式判题路径由后端与页面回归测试覆盖。另有本地 Piston 正式 Python 判题 Playwright E2E 1 项通过。
+- 无 DeepSeek 的本地性能采样条件：Chromium headless，WebGL，1440×900 CSS px，DPR 1，Vite + Spring 全栈。远征 run POST 通过 Vite 代理实测 12 次，P50 23.32 ms、P95 27.37 ms；UI 从点击开局到地图与 canvas 可见约 1886.9 ms。地图 requestAnimationFrame 间隔 P50/P95 16.7/33.4 ms；Boss 为 16.7/16.8 ms。采样局含 23 节点。run API 不涉及出题 Graph 调用；页面性能脚本拦截题目预生成，避免触发模型。它只代表本地开发机 headless 采样，不是线上或移动设备目标值。
+- 工程清理参考官方 Vue 风格指南、typescript-eslint 命名约定说明及 Google Java Style；改为可读的 Boss 状态分支/状态播报，修复改动页面 ESLint warning，并用 Spotless 只格式化 AI 额度拦截器、配置、BossService 与推荐服务。定向前端 ESLint 无告警；定向 Spotless 检查通过；完整 Web 263 文件 / 2516 tests、typecheck、build 与资产同步检查通过。最终 Boss 用例 4 文件 / 17 tests 通过；后端额度拦截、Boss 与推荐服务本轮 46 tests 通过。
+- 后端全量 `mvn test` 1337 项、0 assertion failures、7 errors：6 个 pgvector Testcontainers 动态宿主端口绑定冲突，1 个关联 JDBC 连接被拒；受影响 7 个类逐类串行重跑全部通过。不是全量 Maven BUILD SUCCESS。全仓 `npm run lint` 为 0 errors / 177 warnings；全仓 `spotless:check` 报另外 622 个格式不合规文件。仅整理改动范围，未对整个仓库做大规模 reformat。
+- 这轮测试临时注册的 9 个本地账号已删除，开发容器已停止。未来路线对比、BKT、学习成效对照实验与 ECS/公网验证仍暂缓；用户在对话中粘贴过的 DeepSeek key 应轮换后再使用。

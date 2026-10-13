@@ -12,6 +12,7 @@ export type SfxKey =
   | 'sfx_error'
   | 'sfx_jump'
   | 'sfx_land'
+  | 'sfx_boss_impact'
   | 'sfx_jingle_complete'
   | 'sfx_jingle_levelup';
 

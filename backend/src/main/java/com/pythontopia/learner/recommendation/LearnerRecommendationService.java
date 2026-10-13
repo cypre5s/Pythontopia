@@ -12,7 +12,8 @@ import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.profile.service.ProfileService;
 import com.pythontopia.learner.reflection.LearnerInsightRepository;
 import com.pythontopia.learner.reflection.dto.LearnerInsightDto;
-import java.math.BigDecimal;
+import com.pythontopia.learner.twin.LearnerTwinService;
+import com.pythontopia.world.boss.dto.FrontierPickDto;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -24,23 +25,22 @@ import java.util.stream.Collectors;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
-/**
- * 「今日推送」推荐：以数字孪生为驱动——薄弱 KC（掌握度）× 最新 error_pattern 洞察 × 近期失败记忆 topK，
- * Evidence Memory 2.0 证据图信号，共同决定推什么、排序与「为什么推」（绑定 evidence event id，满足可溯源红线，P3.3）。
- */
+/** 「今日推送」复用 Twin 的确定性 KC 顺序；学习洞察与证据图只补充可溯源推荐理由。 */
 @Service
 public class LearnerRecommendationService {
 
   private static final Long DEFAULT_PACK_ID = 43L;
-  private static final int WEAKEST_KC_COUNT = 3;
   private static final int MAX_RECOMMENDATIONS = 3;
+
   /** 失败记忆扫描条数（topK），用于把「近期反复受挫的 KC」纳入推送排序。 */
   private static final int MEMORY_SCAN_LIMIT = 8;
+
   /** 洞察文本注入推荐理由的最大摘要长度，避免理由过长。 */
   private static final int INSIGHT_BRIEF_MAX = 40;
 
   private final JdbcTemplate jdbcTemplate;
   private final CoursePackRepository coursePackRepository;
+  private final LearnerTwinService learnerTwinService;
   private final ProfileService profileService;
   private final PassiveProfileService passiveProfileService;
   private final LearnerInsightRepository insightRepository;
@@ -50,6 +50,7 @@ public class LearnerRecommendationService {
   public LearnerRecommendationService(
       JdbcTemplate jdbcTemplate,
       CoursePackRepository coursePackRepository,
+      LearnerTwinService learnerTwinService,
       ProfileService profileService,
       PassiveProfileService passiveProfileService,
       LearnerInsightRepository insightRepository,
@@ -57,6 +58,7 @@ public class LearnerRecommendationService {
       MemoryRetrievalService memoryRetrievalService) {
     this.jdbcTemplate = jdbcTemplate;
     this.coursePackRepository = coursePackRepository;
+    this.learnerTwinService = learnerTwinService;
     this.profileService = profileService;
     this.passiveProfileService = passiveProfileService;
     this.insightRepository = insightRepository;
@@ -66,9 +68,10 @@ public class LearnerRecommendationService {
 
   public List<RecommendationDto> recommend(Long userId) {
     List<String> mediaPriority = resolveMediaPriority(userId);
-    List<WeakKc> weakKcs = findWeakestKcs(userId);
+    List<FrontierPickDto> picks =
+        learnerTwinService.frontier(userId, null, List.of(), MAX_RECOMMENDATIONS).picks();
 
-    if (weakKcs.isEmpty()) {
+    if (picks.isEmpty()) {
       return buildColdStartRecommendations();
     }
 
@@ -81,18 +84,16 @@ public class LearnerRecommendationService {
     Map<String, EvidenceMemorySignalDto> evidenceMemorySignals = evidenceMemorySignals(userId);
     Set<String> memoryWeakKcs = memoryWeakKcCodes(userId);
 
-    List<WeakKc> ranked = rerankByTwinSignals(weakKcs, insight, evidenceMemorySignals, memoryWeakKcs);
-
     List<RecommendationDto> results = new ArrayList<>();
-    for (WeakKc wk : ranked) {
-      CourseKc kc = kcIndex.get(wk.kcCode());
-      String kcName = kc != null ? kc.kcName() : wk.kcCode();
-      boolean insightGrounded = insight != null && insight.kcTags().contains(wk.kcCode());
-      EvidenceMemorySignalDto evidenceSignal = evidenceMemorySignals.get(wk.kcCode());
+    for (FrontierPickDto pick : picks) {
+      CourseKc kc = kcIndex.get(pick.kcCode());
+      String kcName = kc != null ? kc.kcName() : pick.kcCode();
+      boolean insightGrounded = insight != null && insight.kcTags().contains(pick.kcCode());
+      EvidenceMemorySignalDto evidenceSignal = evidenceMemorySignals.get(pick.kcCode());
       boolean evidenceMemoryGrounded = evidenceSignal != null;
-      boolean memoryGrounded = memoryWeakKcs.contains(wk.kcCode());
+      boolean memoryGrounded = memoryWeakKcs.contains(pick.kcCode());
 
-      List<ResourceCandidate> candidates = findResourcesForKc(userId, wk.kcCode(), mediaPriority);
+      List<ResourceCandidate> candidates = findResourcesForKc(userId, pick.kcCode(), mediaPriority);
       Long resourceId;
       String title;
       String type;
@@ -123,54 +124,21 @@ public class LearnerRecommendationService {
         reason = "近期在「" + kcName + "」的练习记忆中多次受挫，建议优先巩固";
         evidence = List.of();
       } else if (resourceId != null) {
-        reason = "针对薄弱知识点「" + kcName + "」的已有学习资源";
+        reason = pick.reason() + "；已有学习资源可供巩固";
         evidence = List.of();
       } else {
-        reason = "当前掌握度较低，建议从「" + kcName + "」的基础内容开始";
+        reason = pick.reason();
         evidence = List.of();
       }
 
       results.add(
           new RecommendationDto(
-              resourceId, title, type, wk.kcCode(), kcName, reason, evidence, checkIds, pageIds));
+              resourceId, title, type, pick.kcCode(), kcName, reason, evidence, checkIds, pageIds));
       if (results.size() >= MAX_RECOMMENDATIONS) {
         break;
       }
     }
     return results;
-  }
-
-  /**
-   * 据孪生信号重排薄弱 KC：洞察命中（最强信号，evidence 可溯源）优先，其次近期失败记忆命中，
-   * 同优先级内保持原「掌握度升序」。{@code stream().sorted} 是稳定排序，故原顺序得以保留。
-   */
-  private List<WeakKc> rerankByTwinSignals(
-      List<WeakKc> weakKcs,
-      ErrorInsight insight,
-      Map<String, EvidenceMemorySignalDto> evidenceMemorySignals,
-      Set<String> memoryWeakKcs) {
-    return weakKcs.stream()
-        .sorted(
-            Comparator.comparingInt(
-                wk -> twinPriority(wk.kcCode(), insight, evidenceMemorySignals, memoryWeakKcs)))
-        .toList();
-  }
-
-  private int twinPriority(
-      String kcCode,
-      ErrorInsight insight,
-      Map<String, EvidenceMemorySignalDto> evidenceMemorySignals,
-      Set<String> memoryWeakKcs) {
-    if (insight != null && insight.kcTags().contains(kcCode)) {
-      return 0;
-    }
-    if (evidenceMemorySignals.containsKey(kcCode)) {
-      return 1;
-    }
-    if (memoryWeakKcs.contains(kcCode)) {
-      return 2;
-    }
-    return 3;
   }
 
   /** 取最新一条 error_pattern 洞察（含 tags 与 evidence event id），无则 null；读失败降级 null。 */
@@ -255,8 +223,8 @@ public class LearnerRecommendationService {
   /**
    * 从 learning_preference 维度累积的 tags 推导媒介类别顺序（多模态消费/评估回流信号）。
    *
-   * <p><b>倒序遍历</b>：全仓约定 tags 数组「末尾 = 最近/主导信号」（PassiveProfileService 按时间追加，
-   * INTERVIEW 自评还会把所选 tag 移到末尾；DialogContextService / NpcGreetingService / MemoryBriefService
+   * <p><b>倒序遍历</b>：全仓约定 tags 数组「末尾 = 最近/主导信号」（PassiveProfileService 按时间追加， INTERVIEW 自评还会把所选 tag
+   * 移到末尾；DialogContextService / NpcGreetingService / MemoryBriefService
    * 均取末尾）。按正序遍历会把学生最新、最明确表达的偏好排到推荐优先级的最后一位。
    */
   private List<String> mediaPriorityFromConsumption(Long userId) {
@@ -301,20 +269,6 @@ public class LearnerRecommendationService {
     };
   }
 
-  private List<WeakKc> findWeakestKcs(Long userId) {
-    return jdbcTemplate.query(
-        """
-        SELECT kc_code, mastery_score
-        FROM kc_mastery
-        WHERE user_id = ?
-        ORDER BY mastery_score ASC, updated_at ASC
-        LIMIT ?
-        """,
-        (rs, rowNum) -> new WeakKc(rs.getString("kc_code"), rs.getBigDecimal("mastery_score")),
-        userId,
-        WEAKEST_KC_COUNT);
-  }
-
   private List<ResourceCandidate> findResourcesForKc(
       Long userId, String kcCode, List<String> mediaPriority) {
     List<ResourceCandidate> candidates =
@@ -330,7 +284,8 @@ public class LearnerRecommendationService {
             LIMIT 10
             """,
             (rs, rowNum) ->
-                new ResourceCandidate(rs.getLong("id"), rs.getString("title"), rs.getString("type")),
+                new ResourceCandidate(
+                    rs.getLong("id"), rs.getString("title"), rs.getString("type")),
             userId,
             kcCode);
 
@@ -383,8 +338,6 @@ public class LearnerRecommendationService {
                     List.of()))
         .toList();
   }
-
-  private record WeakKc(String kcCode, BigDecimal masteryScore) {}
 
   private record ResourceCandidate(Long id, String title, String type) {}
 

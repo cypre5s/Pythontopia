@@ -84,6 +84,8 @@ export interface BossProblemRequest {
   expeditionRunId?: string;
   /** 将远征题目绑定到服务端签发地图中的一个具体节点。 */
   expeditionNodeId?: string;
+  /** 超时重试保持同一 ID，避免重复签发或重复生成。 */
+  requestId?: string;
 }
 
 export type BossPrefetchStatus = 'IDLE' | 'PENDING' | 'READY' | 'FAILED';

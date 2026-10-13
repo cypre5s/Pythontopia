@@ -167,6 +167,31 @@ function isValidSnapshot(value: unknown): value is PersistShape {
   return s.nodes.every(isValidRogueNode);
 }
 
+function actionWasCommitted(
+  action: ExpeditionRunActionInput,
+  snapshot: ExpeditionRunSnapshot,
+  previousHistoryLength: number,
+): boolean {
+  const nodeId = 'nodeId' in action ? action.nodeId : null;
+  const node = nodeId ? snapshot.nodes.find((item) => item.id === nodeId) : null;
+  switch (action.action) {
+    case 'ENTER_NODE':
+      return snapshot.currentNodeId === action.nodeId && (node?.state === 'current' || node?.state === 'cleared');
+    case 'EVENT_REVIEW':
+      return snapshot.currentNodeId === action.nodeId && snapshot.phase === 'map' && node?.state === 'cleared';
+    case 'EVENT_STUDY':
+    case 'EVENT_STEADY':
+      return snapshot.currentNodeId === action.nodeId && snapshot.phase === 'challenge';
+    case 'CLAIM_RELIC':
+      return snapshot.phase === 'map' && snapshot.relics.includes(action.relicId);
+    case 'SETTLE_CHALLENGE':
+      return snapshot.history.length > previousHistoryLength
+        && snapshot.history[0]?.nodeId === action.nodeId;
+    case 'FINISH':
+      return snapshot.phase === 'over' || snapshot.phase === 'cleared';
+  }
+}
+
 function loadPersisted(): PersistShape | null {
   if (typeof window === 'undefined') return null;
   try {
@@ -381,7 +406,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
 
   /** 玩家点“继续上次远征”后才恢复存档。 */
   async function resumeSavedRun(): Promise<boolean> {
-    const loaded = isUsableSavedRun(savedRun.value)
+    const loaded = savedRunVerified.value && isUsableSavedRun(savedRun.value)
       ? { snapshot: savedRun.value, serverVerified: savedRunVerified.value }
       : await loadSavedSnapshot();
     const snap = loaded.snapshot;
@@ -425,20 +450,18 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     let result: ExpeditionRunSnapshot | null = null;
     const task = actionQueue.then(async () => {
       if (currentRunId !== runId.value) return;
-      try {
-        const canonical = await performExpeditionAction({ ...action, runId: currentRunId } as ExpeditionRunAction);
-        if (currentRunId !== runId.value) return;
+      const challengeView = preserveChallenge
+        ? {
+            nodeId: activeNode.value?.id,
+            problem: activeProblem.value,
+            difficulty: activeDifficulty.value,
+            code: activeCode.value,
+            result: challengeResult.value,
+            elapsed: elapsedSec.value,
+          }
+        : null;
+      const applyCanonical = (canonical: ExpeditionRunSnapshot) => {
         const gameScore = score.value;
-        const challengeView = preserveChallenge
-          ? {
-              nodeId: activeNode.value?.id,
-              problem: activeProblem.value,
-              difficulty: activeDifficulty.value,
-              code: activeCode.value,
-              result: challengeResult.value,
-              elapsed: elapsedSec.value,
-            }
-          : null;
         applySnapshot(canonical, true, false, !preserveChallenge);
         score.value = gameScore;
         if (challengeView) {
@@ -455,9 +478,21 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
         savedRunVerified.value = true;
         persist();
         result = canonical;
+      };
+      try {
+        const canonical = await performExpeditionAction({ ...action, runId: currentRunId } as ExpeditionRunAction);
+        if (currentRunId !== runId.value) return;
+        applyCanonical(canonical);
       } catch (error) {
-        errorMessage.value = error instanceof Error ? error.message : '远征操作失败，请重试';
-        toast.show(errorMessage.value, 'error');
+        const canonical = await fetchExpeditionRun().catch(() => null);
+        if (currentRunId === runId.value && canonical?.runId === currentRunId
+          && actionWasCommitted(action, canonical, history.value.length)) {
+          errorMessage.value = '';
+          applyCanonical(canonical);
+        } else {
+          errorMessage.value = error instanceof Error ? error.message : '远征操作失败，请重试';
+          toast.show(errorMessage.value, 'error');
+        }
       }
     });
     actionQueue = task.then(() => undefined, () => undefined);
@@ -691,6 +726,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     const recentFailures = history.value.slice(0, 2).filter((h) => !h.passed).length;
     for (const node of nodes.value) {
       if (node.state !== 'available') continue;
+      if (node.id === currentNodeId.value) continue;
       if (!node.kcCode || !node.challengeKind || node.kind === 'event') continue;
       const difficulty = computeRunDifficulty(node.difficulty, momentum.value, recentFailures);
       void challenge.prefetchProblem({

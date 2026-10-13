@@ -1,5 +1,6 @@
 package com.pythontopia.video;
 
+import com.pythontopia.common.web.AiBudgeted;
 import jakarta.validation.Valid;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -27,6 +28,7 @@ public class BilibiliInsightController {
   }
 
   @PostMapping
+  @AiBudgeted
   public BilibiliInsightResponse insight(@Valid @RequestBody BilibiliInsightRequest request) {
     return service.insight(request);
   }

@@ -9,8 +9,7 @@
  * 交互真源仍是 store：像素节点点击经 ExpeditionScene 桥回流 emit('select', id) → run.enterNode
  * （与 DOM 地图同一动作）。本组件只负责把 run 状态喂给场景并把点击抛回父级。
  */
-import { onBeforeUnmount, onMounted, watch } from 'vue';
-import { ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import {
   createPhaserGame,
   destroyPhaserGame,
@@ -22,7 +21,16 @@ import {
   loadExpedition,
   stopExpeditionScene,
 } from '@game/scenes/ExpeditionScene';
-import type { RogueNode, RogueRunPhase } from '@/types/rogue';
+import {
+  BOSS_IMPACT_SOUND_KEY,
+  ensureExpeditionBossSceneStarted,
+  loadExpeditionBoss,
+  stopExpeditionBossScene,
+} from '@game/scenes/ExpeditionBossScene';
+import { playSfx } from '@/composables/useAudio';
+import type { ExpeditionBossView, RogueNode, RogueRunPhase } from '@/types/rogue';
+
+type ExpeditionCanvasMode = 'tower' | 'boss';
 
 const props = defineProps<{
   nodes: RogueNode[];
@@ -32,6 +40,8 @@ const props = defineProps<{
   hp: number;
   maxHp: number;
   score: number;
+  mode?: ExpeditionCanvasMode;
+  boss?: ExpeditionBossView | null;
 }>();
 
 const emit = defineEmits<{ (e: 'select', id: string): void }>();
@@ -41,9 +51,11 @@ let handle: PhaserGameHandle | null = null;
 let resizeObserver: ResizeObserver | null = null;
 let resizeRaf: number | null = null;
 let mounted = false;
+let activeScene: ExpeditionCanvasMode | null = null;
 
 function syncScene(): void {
   if (!mounted) return;
+  const game = getPhaserGame() as unknown as Parameters<typeof ensureExpeditionSceneStarted>[0];
   loadExpedition(
     { nodes: props.nodes, layers: props.layers },
     {
@@ -55,6 +67,20 @@ function syncScene(): void {
     },
     { onNodeClick: (id) => emit('select', id) },
   );
+  const bossView = props.boss;
+  const mode = props.mode === 'boss' && bossView ? 'boss' : 'tower';
+  if (mode === 'boss' && bossView) {
+    loadExpeditionBoss(bossView, { onBossHit: () => playSfx(BOSS_IMPACT_SOUND_KEY) });
+  }
+  if (activeScene === mode) return;
+  if (mode === 'boss') {
+    stopExpeditionScene(game);
+    ensureExpeditionBossSceneStarted(game);
+  } else {
+    stopExpeditionBossScene(game);
+    ensureExpeditionSceneStarted(game);
+  }
+  activeScene = mode;
 }
 
 function applyCanvasSize(): void {
@@ -81,10 +107,8 @@ onMounted(() => {
   // 画布父节点必须是本页容器：复用残留单例会把画布渲染到别处，故先销毁再重建本页专属实例。
   if (getPhaserGame()) destroyPhaserGame(true);
   handle = createPhaserGame(root.value, []);
-  ensureExpeditionSceneStarted(
-    getPhaserGame() as unknown as Parameters<typeof ensureExpeditionSceneStarted>[0],
-  );
   mounted = true;
+  // Feed the initial state before scene start so Boss preload sees the selected portrait.
   syncScene();
   if (typeof ResizeObserver === 'function') {
     resizeObserver = new ResizeObserver(() => scheduleResize());
@@ -103,6 +127,13 @@ watch(
     props.hp,
     props.maxHp,
     props.score,
+    props.mode,
+    props.boss?.chapter,
+    props.boss?.name,
+    props.boss?.phase,
+    props.boss?.phasesTotal,
+    props.boss?.status,
+    props.boss?.attemptId,
   ],
   () => syncScene(),
 );
@@ -117,8 +148,10 @@ onBeforeUnmount(() => {
   resizeObserver?.disconnect();
   resizeObserver = null;
   stopExpeditionScene(getPhaserGame() as unknown as Parameters<typeof stopExpeditionScene>[0]);
+  stopExpeditionBossScene(getPhaserGame() as unknown as Parameters<typeof stopExpeditionBossScene>[0]);
   handle?.destroy(true);
   handle = null;
+  activeScene = null;
 });
 </script>
 

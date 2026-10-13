@@ -87,15 +87,15 @@ class WeeklyReportServiceTest {
             new MemoryItemDto(2L, "practice_succeeded", "练习通过：KC02",
                 List.of("KC02"), java.time.Instant.now().minusSeconds(3600).toString(), 2, 0.9, 0.4, 0.0, 0.52)));
     when(eventRepository.summarizeAuthoritativeBetween(anyLong(), any(), any()))
-        .thenReturn(new AuthoritativeEventCounts(2, 1, 1));
+        .thenReturn(new AuthoritativeEventCounts(12, 4, 3));
     when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any(), any()))
         .thenReturn(List.of());
 
     WeeklyReportDto report = service.build(1L);
 
-    assertThat(report.memoryBrief().totalEvents()).isEqualTo(2);
-    assertThat(report.memoryBrief().failedPractices()).isEqualTo(1);
-    assertThat(report.memoryBrief().succeededPractices()).isEqualTo(1);
+    assertThat(report.memoryBrief().totalEvents()).isEqualTo(12);
+    assertThat(report.memoryBrief().failedPractices()).isEqualTo(4);
+    assertThat(report.memoryBrief().succeededPractices()).isEqualTo(3);
     assertThat(report.memoryBrief().topKcCodes()).containsExactly("KC01", "KC02");
   }
 

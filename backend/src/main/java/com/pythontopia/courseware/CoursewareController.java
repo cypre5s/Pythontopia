@@ -1,5 +1,6 @@
 package com.pythontopia.courseware;
 
+import com.pythontopia.common.web.AiBudgeted;
 import com.pythontopia.courseware.dto.CoursewareAnswerRequestDto;
 import com.pythontopia.courseware.dto.CoursewareAnswerResponseDto;
 import jakarta.validation.Valid;
@@ -25,6 +26,7 @@ public class CoursewareController {
   }
 
   @PostMapping("/answer")
+  @AiBudgeted
   public CoursewareAnswerResponseDto answer(@Valid @RequestBody CoursewareAnswerRequestDto request) {
     return client.answer(request);
   }

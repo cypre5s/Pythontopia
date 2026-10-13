@@ -8,6 +8,7 @@ import com.pythontopia.browse.dto.BrowseRunDto;
 import com.pythontopia.browse.service.BrowseRunService;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.AiBudgeted;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,6 +33,7 @@ public class BrowseController {
   }
 
   @PostMapping
+  @AiBudgeted
   public BrowseRunDto create(
       @CurrentUser CurrentUserPrincipal user, @Valid @RequestBody BrowseRunCreateRequest request) {
     requireStudent(user);

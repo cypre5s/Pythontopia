@@ -19,6 +19,7 @@ import com.pythontopia.auth.security.JwtAuthenticationFilter;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.common.web.CurrentUserArgumentResolver;
+import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import com.pythontopia.common.web.WebConfig;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import com.pythontopia.world.boss.dto.ExpeditionRunActionRequest;
@@ -52,6 +53,7 @@ class ExpeditionRunControllerTest {
   @MockBean ExpeditionRunService service;
   @MockBean BossService bossService;
   @MockBean JwtAuthenticationFilter jwtAuthenticationFilter;
+  @MockBean TutorDailyRequestLimitService requestLimitService;
 
   @BeforeEach
   void authenticateAsStudent() {

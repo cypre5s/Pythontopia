@@ -85,6 +85,7 @@
 | `sfx/plant` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/impact-sounds) | 种植/放置 4 个音效 |
 | `sfx/water` | CC0-1.0 | rubberduck | [link](https://opengameart.org/content/40-cc0-water-splash-slime-sfx) | 浇水 7 个音效（inbox 用 water_can，dest 用 water 与 BootScene 命名一致） |
 | `sfx/footstep` | CC0-1.0 | Kenney Vleugels / rubberduck | [link](https://kenney.nl/assets/impact-sounds) | 脚步声 10 个音效 |
+| `sfx/boss/impactSoft_medium_000.ogg` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/impact-sounds) | 无尽远征 Boss 命中反馈音效 |
 | `sfx/harvest` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/interface-sounds) | 收获/掉落 5 个音效（重命名 harvest_pickup → harvest） |
 | `sfx/bell` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/impact-sounds) | 收获完成铃声 6 个音效（重命名 bell_chime → bell） |
 | `sfx/jingle-complete.ogg` | CC0-1.0 | Kenney Vleugels | [link](https://kenney.nl/assets/music-jingles) | 任务完成 jingle（NES 风），BootScene sfx_jingle_complete |

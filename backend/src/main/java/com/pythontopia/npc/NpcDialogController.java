@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.AiBudgeted;
 import com.pythontopia.npc.dto.NpcDialogRequest;
 import com.pythontopia.npc.dto.NpcDialogResponse;
 import jakarta.validation.Valid;
@@ -25,6 +26,7 @@ public class NpcDialogController {
   }
 
   @PostMapping("/{npcKey:[a-z0-9_-]{1,40}}/dialog")
+  @AiBudgeted
   public NpcDialogResponse talk(
       @CurrentUser CurrentUserPrincipal user,
       @PathVariable String npcKey,
