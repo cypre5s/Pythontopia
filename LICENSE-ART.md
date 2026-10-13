@@ -175,6 +175,7 @@ Rive `.riv` 二进制动画属**素材层**，必须同步登记本文件与
 | `fonts/ark-pixel-12px-{mono,prop}-*.woff2`, `fonts/OFL.txt` | TakWolf Ark Pixel Font (`assets/inbox/github_extra/ark_pixel_font/`) | OFL-1.1 | 运行时短文件名，与 OFL 原文一并分发 |
 | `sfx/success.ogg`, `sfx/error.ogg` | Kenney Digital Audio (`assets/inbox/sfx_extra/digital-audio/`) | CC0-1.0 | 正误反馈提示音 |
 | `sfx/jump/kenney_jump_soft_000.ogg`, `sfx/jump/kenney_land_wood_000.ogg` | Kenney "Impact Sounds" (https://kenney.nl/assets/impact-sounds)，通过本机代理 7892 下载；源文件与协议保留在 `assets/inbox/sfx_jump/kenney_impact-sounds/` | CC0-1.0 | 低障碍跳跃起跳/落地反馈音效 |
+| `sfx/boss/impactSoft_medium_000.ogg` | Kenney "Impact Sounds" (https://kenney.nl/assets/impact-sounds)，源文件与协议保留在 `assets/inbox/sfx_jump/kenney_impact-sounds/` | CC0-1.0 | 无尽远征 Boss 判题通过后的命中反馈音效 |
 | `props/fantastic-fence/fence_00.png` | InThePixel "fantastic fence 16x16" (https://opengameart.org/content/fantastic-fence-16x16)，通过本机代理 7892 下载；源文件保留在 `assets/inbox/fantastic-fence-16x16/` | CC0-1.0 | 低障碍小路矮栅栏 / 木桩 spritesheet（16×16，含单木桩、横栏、竖栏） |
 | `props/fantastic-fence/stump_agnaldo.png` | Agnaldo "Tree(Arvore) & stump" (https://opengameart.org/content/treearvore-stump)，通过本机代理 7892 下载；源文件保留在 `assets/inbox/tree-stump/` | CC0-1.0 | 备用树桩 sprite，当前未接入 BootScene |
 | `effects/weather/` | Weather FX 审计池 (`assets/inbox/weather_fx/LICENSE.md`) + Pythontopia 粒子占位 | CC0-1.0 / Pythontopia-Proprietary | 云、雨滴、雪花来自已审计 CC0；项目运行时占位部分见根 `LICENSE` |

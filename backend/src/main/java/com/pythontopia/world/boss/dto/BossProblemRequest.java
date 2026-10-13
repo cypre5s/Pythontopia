@@ -24,6 +24,7 @@ import java.util.List;
  * @param arenaLevel 闯关塔单关 id（如 "1-3"）：预生成 / 复用题的维度之一（endless / arena 传）
  * @param expeditionRunId 当前远征 run id；只有服务端当前活跃 run 可关联奖励
  * @param expeditionNodeId 当前题目绑定的远征节点
+ * @param requestId 客户端超时重试时保持不变的请求幂等键
  */
 public record BossProblemRequest(
     @Min(1) @Max(4) @JsonProperty("stage") int stage,
@@ -39,7 +40,24 @@ public record BossProblemRequest(
         @Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
         String expeditionRunId,
     @JsonProperty("expeditionNodeId") @Pattern(regexp = "^[A-Za-z0-9_-]{1,32}$")
-        String expeditionNodeId) {
+        String expeditionNodeId,
+    @JsonProperty("requestId")
+        @Pattern(regexp = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
+        String requestId) {
+
+  public BossProblemRequest(
+      int stage,
+      String kcCode,
+      Integer difficulty,
+      String preferredKc,
+      String preferredKind,
+      ProfileSignalsPayload profileSignals,
+      String arenaLevel,
+      String expeditionRunId,
+      String expeditionNodeId) {
+    this(stage, kcCode, difficulty, preferredKc, preferredKind, profileSignals, arenaLevel,
+        expeditionRunId, expeditionNodeId, null);
+  }
 
   public BossProblemRequest(
       int stage,
@@ -51,7 +69,7 @@ public record BossProblemRequest(
       String arenaLevel,
       String expeditionRunId) {
     this(stage, kcCode, difficulty, preferredKc, preferredKind, profileSignals, arenaLevel,
-        expeditionRunId, null);
+        expeditionRunId, null, null);
   }
 
   public BossProblemRequest {

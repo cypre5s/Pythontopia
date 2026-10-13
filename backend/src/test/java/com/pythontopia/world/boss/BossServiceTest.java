@@ -46,6 +46,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Callable;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -54,6 +59,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClientException;
 
 /** Boss shares the Twin's deterministic practice policy; verified expedition results feed back into learning. */
@@ -238,6 +244,77 @@ class BossServiceTest {
             });
 
     verify(pregenService, never()).persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any());
+  }
+
+  @Test
+  @DisplayName("同一题请求仍在 Graph 生成时，重试不会再发起一次生成")
+  void concurrentRetryForSameProblemDoesNotStartAnotherGraphCall() throws Exception {
+    CountDownLatch graphStarted = new CountDownLatch(1);
+    CountDownLatch releaseGraph = new CountDownLatch(1);
+    when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
+    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenAnswer(invocation -> {
+          graphStarted.countDown();
+          if (!releaseGraph.await(3, TimeUnit.SECONDS)) throw new IllegalStateException("test timed out");
+          return problemWithStage(2);
+        });
+    BossProblemRequest request =
+        new BossProblemRequest(2, null, 2, "PY43-KC-001", "debug", null, null, null);
+    ExecutorService executor = Executors.newSingleThreadExecutor();
+    try {
+      Future<?> first = executor.submit(() -> service.fetchProblem(1, request, 7L));
+      assertThat(graphStarted.await(2, TimeUnit.SECONDS)).isTrue();
+
+      assertThatThrownBy(() -> service.fetchProblem(1, request, 7L))
+          .isInstanceOfSatisfying(
+              com.pythontopia.common.error.BusinessException.class,
+              exception -> assertThat(exception.code()).isEqualTo("BOSS_PROBLEM_GENERATION_PENDING"));
+
+      releaseGraph.countDown();
+      assertThat(first.get(3, TimeUnit.SECONDS)).isNotNull();
+      verify(graphClient, times(1))
+          .requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any());
+    } finally {
+      releaseGraph.countDown();
+      executor.shutdownNow();
+    }
+  }
+
+  @Test
+  @DisplayName("完成后再次使用同一请求 ID 会复用原题而不是重新出题")
+  void completedRequestIdReturnsTheSameProblem() {
+    when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
+    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenReturn(problemWithInput("generated-once"));
+    String requestId = UUID.randomUUID().toString();
+    BossProblemRequest request =
+        new BossProblemRequest(1, null, 2, "PY43-KC-001", "debug", null, null, null, null, requestId);
+
+    var first = service.fetchProblem(1, request, 7L);
+    var retry = service.fetchProblem(1, request, 7L);
+
+    assertThat(retry.problemId()).isEqualTo(first.problemId());
+    verify(graphClient, times(1))
+        .requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("含隐藏测试的进程缓存严格限制在 256 题")
+  void problemCacheRemainsBounded() {
+    when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
+    BossInternalProblem approved =
+        new BossInternalProblem(
+            "approved-33-v2", 1, 1, 2, "PY43-KC-001", "approved statement", List.of(),
+            "2 3", "5", 1, true, true,
+            List.of(new BossTestCasePayload("2 3", "5", false)), "print(5)");
+    when(reviewRepository.findApproved(1, 1, "PY43-KC-001", "debug", 2))
+        .thenReturn(Optional.of(new ApprovedBossProblem(33L, 2, approved)));
+    BossProblemRequest request =
+        new BossProblemRequest(1, null, 2, "PY43-KC-001", "debug", null, null, null);
+
+    for (int i = 0; i < 300; i++) service.fetchProblem(1, request, 7L);
+
+    assertThat((Map<?, ?>) ReflectionTestUtils.getField(service, "cache")).hasSize(256);
   }
 
   @Test

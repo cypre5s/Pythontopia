@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.AiBudgeted;
 import com.pythontopia.learner.profile.dto.ProfileInterviewStartResponse;
 import com.pythontopia.learner.profile.dto.ProfileTurnRequest;
 import com.pythontopia.learner.profile.dto.ProfileTurnResponse;
@@ -35,6 +36,7 @@ public class ProfileInterviewController {
   }
 
   @PostMapping("/{sessionId}/turn")
+  @AiBudgeted
   ProfileTurnResponse turn(
       @CurrentUser CurrentUserPrincipal user,
       @PathVariable String sessionId,
@@ -46,6 +48,7 @@ public class ProfileInterviewController {
   @PostMapping(
       value = "/{sessionId}/turn/stream",
       produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  @AiBudgeted
   SseEmitter turnStream(
       @CurrentUser CurrentUserPrincipal user,
       @PathVariable String sessionId,

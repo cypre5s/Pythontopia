@@ -106,6 +106,17 @@ function makeText(): TextSpy {
 }
 
 describe('BootScene asset manifest', () => {
+  it('registers the CC0 impact sound used by the expedition boss scene', () => {
+    const loader = makeLoaderSpy();
+
+    BootScene.preload.call({ load: loader });
+
+    expect(loader.audio).toHaveBeenCalledWith(
+      'sfx_boss_impact',
+      '/assets/pixel/sfx/boss/impactSoft_medium_000.ogg',
+    );
+  });
+
   it('loads only existing public audio assets', () => {
     const loader = makeLoaderSpy();
 

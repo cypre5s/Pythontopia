@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.AiBudgeted;
 import com.pythontopia.workshop.dto.LearningResourceDto;
 import com.pythontopia.workshop.dto.ResourceCheckResponse;
 import com.pythontopia.workshop.dto.ResourceCheckSubmitRequest;
@@ -39,6 +40,7 @@ public class ResourceWorkshopController {
   }
 
   @PostMapping
+  @AiBudgeted
   public ResourceCreateResponse create(
       @CurrentUser CurrentUserPrincipal user,
       @Valid @RequestBody ResourceCreateRequest request) {
@@ -47,6 +49,7 @@ public class ResourceWorkshopController {
   }
 
   @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+  @AiBudgeted
   public SseEmitter createStream(
       @CurrentUser CurrentUserPrincipal user,
       @Valid @RequestBody ResourceCreateRequest request) {

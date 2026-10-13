@@ -16,7 +16,7 @@ const session = useSessionStore();
 const learning = useLearningStore();
 const workshopUi = useWorkshopUiStore();
 
-const classroom = ref<ClassroomDto | null>(null);
+const classrooms = ref<ClassroomDto[]>([]);
 const classroomLoading = ref(true);
 const classroomLoadError = ref<string | null>(null);
 const recommendations = ref<RecommendationDto[]>([]);
@@ -41,9 +41,9 @@ async function loadClassroom(): Promise<void> {
   classroomLoadError.value = null;
   try {
     const list = await listMyClassrooms();
-    classroom.value = list.find((c) => c.status === 'ACTIVE') ?? null;
+    classrooms.value = list.filter((c) => c.status === 'ACTIVE');
   } catch (error) {
-    classroom.value = null;
+    classrooms.value = [];
     classroomLoadError.value =
       error instanceof Error ? error.message : '班级信息加载失败，请稍后重试。';
   } finally {
@@ -185,13 +185,19 @@ onMounted(async () => {
             <h1 class="welcome-title">
               欢迎回来，{{ session.displayName }}
             </h1>
-            <p
-              v-if="classroom"
-              class="welcome-class"
-              data-testid="home-classroom"
+            <ul
+              v-if="classrooms.length > 0"
+              class="welcome-classes"
+              data-testid="home-classrooms"
+              aria-label="已加入的班级"
             >
-              班级：{{ classroom.name }}
-            </p>
+              <li
+                v-for="classroom in classrooms"
+                :key="classroom.classroomId"
+              >
+                班级：{{ classroom.name }}
+              </li>
+            </ul>
             <div
               v-else-if="classroomLoadError"
               class="classroom-load-error"
@@ -218,9 +224,9 @@ onMounted(async () => {
             <p class="welcome-hint">
               开始今天的学习吧
             </p>
-            <!-- 还没入班的学生：加入码入口。老师建班后把 6 位码发给学生，输入即入班。 -->
+            <!-- 学生可加入多个班级；老师建班后把 6 位码发给学生，输入即入班。 -->
             <form
-              v-if="!classroom && !classroomLoading && !classroomLoadError"
+              v-if="!classroomLoading && !classroomLoadError"
               class="join-form"
               data-testid="join-classroom-form"
               @submit.prevent="submitJoin"
@@ -511,10 +517,15 @@ onMounted(async () => {
   color: var(--pyt-color-text-primary);
   line-height: 1.3;
 }
-.welcome-class {
+.welcome-classes {
   margin: 4px 0 0;
+  padding: 0;
   font-size: 13px;
   color: var(--pyt-color-text-hint);
+  list-style: none;
+}
+.welcome-classes li + li {
+  margin-top: 2px;
 }
 .welcome-hint {
   margin: 6px 0 0;

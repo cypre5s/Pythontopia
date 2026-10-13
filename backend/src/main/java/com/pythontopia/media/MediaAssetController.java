@@ -1,6 +1,7 @@
 package com.pythontopia.media;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
+import com.pythontopia.common.web.AiBudgeted;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.media.domain.MediaAsset;
 import com.pythontopia.media.dto.ImageGenerationRequest;
@@ -74,6 +75,7 @@ public class MediaAssetController {
   }
 
   @PostMapping("/image")
+  @AiBudgeted
   public MediaAssetDto generateImage(
       @CurrentUser CurrentUserPrincipal user, @Valid @RequestBody ImageGenerationRequest request) {
     MediaAsset asset =
@@ -83,6 +85,7 @@ public class MediaAssetController {
   }
 
   @PostMapping("/storyboard/video")
+  @AiBudgeted
   public MediaAssetDto composeStoryboardVideo(
       @CurrentUser CurrentUserPrincipal user, @Valid @RequestBody StoryboardVideoRequest request) {
     List<StoryboardCompositionService.SceneSpec> specs =

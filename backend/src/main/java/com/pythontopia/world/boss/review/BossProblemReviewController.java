@@ -2,6 +2,7 @@ package com.pythontopia.world.boss.review;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.AiBudgeted;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -35,6 +36,7 @@ public class BossProblemReviewController {
   }
 
   @PostMapping
+  @AiBudgeted
   @ResponseStatus(HttpStatus.CREATED)
   public BossProblemReviewDto create(
       @CurrentUser CurrentUserPrincipal reviewer,

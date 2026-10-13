@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.AiBudgeted;
 import com.pythontopia.intent.dto.IntentRouteRequest;
 import com.pythontopia.intent.dto.IntentRouteResponse;
 import jakarta.validation.Valid;
@@ -29,6 +30,7 @@ public class IntentController {
   }
 
   @PostMapping("/route")
+  @AiBudgeted
   public IntentRouteResponse route(
       @CurrentUser CurrentUserPrincipal user, @Valid @RequestBody IntentRouteRequest request) {
     requireStudent(user);

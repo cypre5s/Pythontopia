@@ -141,6 +141,7 @@ class EndlessPregenServiceTest {
     verify(jdbcTemplate)
         .queryForObject(contains("pg_advisory_xact_lock"), eq(Object.class), eq("7"));
     verify(jdbcTemplate).update(contains("status = 'FAILED'"), eq(7L), eq(10));
+    verify(jdbcTemplate).update(contains("status = 'READY'"), eq(7L));
   }
 
   @Test

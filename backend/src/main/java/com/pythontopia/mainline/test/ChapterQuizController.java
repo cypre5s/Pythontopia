@@ -3,6 +3,7 @@ package com.pythontopia.mainline.test;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.AiBudgeted;
 import com.pythontopia.mainline.dto.ChapterTestPaperDto;
 import com.pythontopia.mainline.dto.ChapterTestResultDto;
 import com.pythontopia.mainline.dto.ChapterTestSubmitRequest;
@@ -32,6 +33,7 @@ public class ChapterQuizController {
   }
 
   @PostMapping("/prepare")
+  @AiBudgeted
   public TestPrepareResponse prepare(
       @PathVariable @Min(1) @Max(7) int chapter, @CurrentUser CurrentUserPrincipal user) {
     return service.prepareQuiz(requireUserId(user), chapter);

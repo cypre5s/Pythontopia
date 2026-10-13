@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.AiBudgeted;
 import com.pythontopia.npc.dto.NpcGreetingResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -28,6 +29,7 @@ public class NpcGreetingController {
   }
 
   @GetMapping("/{npcKey:[a-z0-9_-]{1,40}}/greeting")
+  @AiBudgeted
   public NpcGreetingResponse greeting(
       @CurrentUser CurrentUserPrincipal user, @PathVariable String npcKey) {
     requireStudent(user);

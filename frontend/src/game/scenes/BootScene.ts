@@ -76,6 +76,7 @@ const SFX_LIST: ReadonlyArray<[string, string]> = [
   ['sfx_error', '/assets/pixel/sfx/error.ogg'],
   ['sfx_jump', '/assets/pixel/sfx/jump/kenney_jump_soft_000.ogg'],
   ['sfx_land', '/assets/pixel/sfx/jump/kenney_land_wood_000.ogg'],
+  ['sfx_boss_impact', '/assets/pixel/sfx/boss/impactSoft_medium_000.ogg'],
   ['sfx_jingle_complete', '/assets/pixel/sfx/jingle-complete.ogg'],
   ['sfx_jingle_levelup', '/assets/pixel/sfx/jingle-level-up.ogg'],
 ];

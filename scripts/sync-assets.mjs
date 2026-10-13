@@ -518,6 +518,15 @@ const MANIFEST = [
     notes: '脚步声 10 个音效',
   },
   {
+    src: 'sfx_jump/kenney_impact-sounds/impactSoft_medium_000.ogg',
+    dest: 'sfx/boss/impactSoft_medium_000.ogg',
+    kind: 'file',
+    license: 'CC0-1.0',
+    author: 'Kenney Vleugels',
+    source: 'https://kenney.nl/assets/impact-sounds',
+    notes: '无尽远征 Boss 命中反馈音效',
+  },
+  {
     src: 'sfx/harvest_pickup',
     dest: 'sfx/harvest',
     kind: 'dir',

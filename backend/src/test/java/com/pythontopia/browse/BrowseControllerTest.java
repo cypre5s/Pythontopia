@@ -25,6 +25,7 @@ import com.pythontopia.browse.service.BrowseRunService;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.common.web.CurrentUserArgumentResolver;
+import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import com.pythontopia.common.web.WebConfig;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -63,6 +64,7 @@ class BrowseControllerTest {
   @MockBean BrowseRunService service;
 
   @MockBean JwtAuthenticationFilter jwtAuthenticationFilter;
+  @MockBean TutorDailyRequestLimitService requestLimitService;
 
   @BeforeEach
   void authenticateAsStudent() {

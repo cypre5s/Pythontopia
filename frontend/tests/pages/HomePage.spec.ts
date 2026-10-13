@@ -15,6 +15,7 @@ import type { RecommendationDto } from '@/api/recommendations';
 const apiMocks = vi.hoisted(() => ({
   getRecommendations: vi.fn(),
   listMyClassrooms: vi.fn(),
+  joinClassroom: vi.fn(),
   fetchMastery: vi.fn(),
   getTodayQuests: vi.fn(),
 }));
@@ -26,7 +27,7 @@ vi.mock('@/api/recommendations', () => ({
 vi.mock('@/api/classroom', () => ({
   listMyClassrooms: apiMocks.listMyClassrooms,
   createClassroom: vi.fn(),
-  joinClassroom: vi.fn(),
+  joinClassroom: apiMocks.joinClassroom,
   listClassroomMembers: vi.fn(),
   removeClassroomMember: vi.fn(),
 }));
@@ -109,6 +110,7 @@ describe('HomePage · 今日推荐卡片', () => {
 
     Object.values(apiMocks).forEach((fn) => fn.mockReset());
     apiMocks.listMyClassrooms.mockResolvedValue([]);
+    apiMocks.joinClassroom.mockResolvedValue(undefined);
     apiMocks.fetchMastery.mockResolvedValue([]);
     apiMocks.getTodayQuests.mockResolvedValue([]);
     apiMocks.getRecommendations.mockResolvedValue([]);
@@ -185,7 +187,84 @@ describe('HomePage · 今日推荐卡片', () => {
     await flushPromises();
 
     expect(apiMocks.listMyClassrooms).toHaveBeenCalledTimes(2);
-    expect(wrapper.get('[data-testid="home-classroom"]').text()).toContain('Python 一班');
-    expect(wrapper.find('[data-testid="join-classroom-form"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="home-classrooms"]').text()).toContain('Python 一班');
+    expect(wrapper.find('[data-testid="join-classroom-form"]').exists()).toBe(true);
+  });
+
+  it('显示所有已加入班级，并允许继续加入另一个班级', async () => {
+    apiMocks.listMyClassrooms
+      .mockResolvedValueOnce([
+        {
+          classroomId: 9,
+          name: 'Python 一班',
+          description: '',
+          teacherId: 42,
+          packId: 43,
+          status: 'ACTIVE',
+          joinCode: null,
+        },
+        {
+          classroomId: 10,
+          name: 'Python 二班',
+          description: '',
+          teacherId: 43,
+          packId: 43,
+          status: 'ACTIVE',
+          joinCode: null,
+        },
+        {
+          classroomId: 11,
+          name: '已归档班级',
+          description: '',
+          teacherId: 44,
+          packId: 43,
+          status: 'ARCHIVED',
+          joinCode: null,
+        },
+      ])
+      .mockResolvedValueOnce([
+        {
+          classroomId: 9,
+          name: 'Python 一班',
+          description: '',
+          teacherId: 42,
+          packId: 43,
+          status: 'ACTIVE',
+          joinCode: null,
+        },
+        {
+          classroomId: 10,
+          name: 'Python 二班',
+          description: '',
+          teacherId: 43,
+          packId: 43,
+          status: 'ACTIVE',
+          joinCode: null,
+        },
+        {
+          classroomId: 12,
+          name: 'Python 三班',
+          description: '',
+          teacherId: 45,
+          packId: 43,
+          status: 'ACTIVE',
+          joinCode: null,
+        },
+      ]);
+
+    const wrapper = await mountHome();
+
+    const classrooms = wrapper.find('[data-testid="home-classrooms"]');
+    expect(classrooms.text()).toContain('Python 一班');
+    expect(classrooms.text()).toContain('Python 二班');
+    expect(classrooms.text()).not.toContain('已归档班级');
+    expect(wrapper.find('[data-testid="join-classroom-form"]').exists()).toBe(true);
+
+    await wrapper.get('[data-testid="join-code-input"]').setValue('abc123');
+    await wrapper.get('[data-testid="join-classroom-form"]').trigger('submit');
+    await flushPromises();
+
+    expect(apiMocks.joinClassroom).toHaveBeenCalledWith({ joinCode: 'ABC123' });
+    expect(wrapper.get('[data-testid="home-classrooms"]').text()).toContain('Python 三班');
   });
 });

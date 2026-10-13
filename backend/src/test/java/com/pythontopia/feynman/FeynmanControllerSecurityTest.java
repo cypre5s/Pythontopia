@@ -50,7 +50,7 @@ class FeynmanControllerSecurityTest {
     doThrow(new BusinessException(
             HttpStatus.TOO_MANY_REQUESTS,
             "TUTOR_DAILY_LIMIT_REACHED",
-            "今日 AI 学习助手使用次数已达 30 次，请明天再试"))
+            "今日 AI 请求额度已达 30 次，请明天再试"))
         .when(requestLimitService)
         .reserve(7L);
 
