@@ -255,14 +255,22 @@ def _score_with_deepeval(sample: EvalSample, *, model: Any | None) -> ScoreResul
             detail=f"deepeval unavailable: {exc!r}",
         )
 
+    if model is None:
+        return ScoreResult(
+            metric=metric,
+            value=None,
+            backend="unavailable",
+            status="skipped",
+            detail="explicit evaluator model required; skipped to prevent the default provider",
+        )
+
     try:
         kwargs: dict[str, Any] = {
             "threshold": 0.5,
             "async_mode": False,  # 评测 harness 同步跑，避免事件循环重入
             "include_reason": False,
         }
-        if model is not None:
-            kwargs["model"] = model
+        kwargs["model"] = model
         metric_impl = AnswerRelevancyMetric(**kwargs)
         test_case = LLMTestCase(
             input=sample.question,

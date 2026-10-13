@@ -861,18 +861,57 @@ class BossServiceTest {
   }
 
   @Test
-  @DisplayName("远征选题复用数字孪生规则，不调用 Graph 选择器或客户端画像")
-  void selectFrontierUsesSharedDeterministicPolicy() {
-    var expected =
+  @DisplayName("通用远征前沿只返回有同 KC 课程编程题的候选")
+  void selectFrontierFiltersKnowledgePointsWithoutCourseProblems() {
+    var frontier =
         new FrontierSelectResultDto(
-            List.of(new FrontierPickDto("PY43-KC-001", 1, 4, "FSRS-lite 复习已到期")));
-    when(learnerTwinService.frontier(7L, 1, List.of(), 4)).thenReturn(expected);
+            List.of(
+                new FrontierPickDto("PY43-KC-001", 1, 1, "尚未评估"),
+                new FrontierPickDto("PY43-KC-016", 2, 1, "尚未评估"),
+                new FrontierPickDto("PY43-KC-034", 4, 2, "近期练习薄弱")));
+    lenient()
+        .when(learnerTwinService.frontier(7L, null, List.of(), 1))
+        .thenReturn(new FrontierSelectResultDto(List.of(frontier.picks().getFirst())));
+    lenient().when(learnerTwinService.frontier(7L, null, List.of(), 40)).thenReturn(frontier);
+    when(chapterProblemBankRepository.findByKcCodes(
+            List.of("PY43-KC-001", "PY43-KC-016", "PY43-KC-034")))
+        .thenReturn(List.of(courseProblem("PY43-KC-016"), courseProblem("PY43-KC-034")));
 
     var result =
-        service.selectFrontier(7L, new FrontierSelectRequest(null, List.of(), 1, List.of(), 4));
+        service.selectFrontier(7L, new FrontierSelectRequest(null, List.of(), null, List.of(), 1));
 
-    assertThat(result).isSameAs(expected);
-    verify(learnerTwinService).frontier(7L, 1, List.of(), 4);
+    assertThat(result.picks()).containsExactly(frontier.picks().get(1));
+    verify(learnerTwinService).frontier(7L, null, List.of(), 40);
+    verifyNoInteractions(graphClient);
+  }
+
+  @Test
+  @DisplayName("通用远征前沿聚焦无课程题章节时明确拒绝，不借用其他 KC")
+  void selectFrontierRejectsFocusedChapterWithoutCourseProblems() {
+    lenient()
+        .when(learnerTwinService.frontier(7L, 1, List.of(), 4))
+        .thenReturn(
+            new FrontierSelectResultDto(
+                List.of(new FrontierPickDto("PY43-KC-001", 1, 1, "尚未评估"))));
+    lenient()
+        .when(learnerTwinService.frontier(7L, 1, List.of(), 40))
+        .thenReturn(
+            new FrontierSelectResultDto(
+                List.of(new FrontierPickDto("PY43-KC-001", 1, 1, "尚未评估"))));
+    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
+        .thenReturn(List.of());
+
+    assertThatThrownBy(
+            () ->
+                service.selectFrontier(
+                    7L, new FrontierSelectRequest(null, List.of(), 1, List.of(), 4)))
+        .isInstanceOfSatisfying(
+            com.pythontopia.common.error.BusinessException.class,
+            exception -> {
+              assertThat(exception.code()).isEqualTo("EXPEDITION_NO_PRACTICE_PROBLEMS");
+              assertThat(exception.status())
+                  .isEqualTo(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY);
+            });
     verifyNoInteractions(graphClient);
   }
 

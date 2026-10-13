@@ -161,6 +161,29 @@ def test_answer_relevancy_skips_when_deepeval_missing(no_deepeval: None) -> None
     assert "deepeval" in result.detail.lower()
 
 
+def test_answer_relevancy_without_explicit_model_does_not_use_deepeval_default(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class UnexpectedDefaultMetric:
+        def __init__(self, **_kwargs: object) -> None:
+            raise AssertionError("DeepEval default provider must not be selected")
+
+    import types
+
+    metrics = types.ModuleType("deepeval.metrics")
+    metrics.AnswerRelevancyMetric = UnexpectedDefaultMetric  # type: ignore[attr-defined]
+    test_case = types.ModuleType("deepeval.test_case")
+    test_case.LLMTestCase = object  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "deepeval.metrics", metrics)
+    monkeypatch.setitem(sys.modules, "deepeval.test_case", test_case)
+
+    result = scorers.score_answer_relevancy(_sample())
+
+    assert result.status == "skipped"
+    assert result.backend == "unavailable"
+    assert "explicit" in result.detail.lower()
+
+
 def test_missing_package_never_raises_on_import(no_ragas: None, no_deepeval: None) -> None:
     # 三个 scorer 在缺包时都返回结果对象、绝不抛。
     for fn in (scorers.score_faithfulness, scorers.score_context_recall):

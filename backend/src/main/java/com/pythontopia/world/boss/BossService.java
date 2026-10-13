@@ -127,11 +127,12 @@ public class BossService {
 
   /**
    * Deterministic KC selection shared with the learner Twin; Graph remains responsible for
-   * questions.
+   * questions. Only KCs with a same-KC course programming question can become expedition nodes.
    */
   public FrontierSelectResultDto selectFrontier(Long userId, FrontierSelectRequest request) {
-    return learnerTwinService.frontier(
-        userId, request.focusChapter(), request.exclude(), request.count());
+    FrontierSelectResultDto frontier =
+        learnerTwinService.frontier(userId, request.focusChapter(), request.exclude(), 40);
+    return requirePlayablePicks(frontier.picks(), request.count());
   }
 
   /**
@@ -141,14 +142,17 @@ public class BossService {
       Long userId, Integer focusChapter, String preferredKcCode) {
     FrontierSelectResultDto frontier =
         learnerTwinService.frontier(userId, focusChapter, List.of(), 40, preferredKcCode);
-    List<String> candidateKcs =
-        frontier.picks().stream().map(FrontierPickDto::kcCode).distinct().toList();
+    return requirePlayablePicks(frontier.picks(), 40);
+  }
+
+  private FrontierSelectResultDto requirePlayablePicks(List<FrontierPickDto> picks, int count) {
+    List<String> candidateKcs = picks.stream().map(FrontierPickDto::kcCode).distinct().toList();
     Set<String> practiceKcs =
         chapterProblemBankRepository.findByKcCodes(candidateKcs).stream()
             .map(PreferredCodingQuestion::kcCode)
             .collect(Collectors.toSet());
     List<FrontierPickDto> playablePicks =
-        frontier.picks().stream().filter(pick -> practiceKcs.contains(pick.kcCode())).toList();
+        picks.stream().filter(pick -> practiceKcs.contains(pick.kcCode())).limit(count).toList();
     if (playablePicks.isEmpty()) {
       throw new BusinessException(
           org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
