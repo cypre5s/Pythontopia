@@ -54,7 +54,7 @@ describe('AdminUsersPage', () => {
     expect(searchAdminUsers).toHaveBeenCalledTimes(2);
   });
 
-  it('prevents a status change while a list refresh is in flight', async () => {
+  it('removes old status actions while a list refresh is in flight', async () => {
     vi.mocked(setAdminUserStatus).mockClear();
     const wrapper = mount(AdminUsersPage);
     await flushPromises();
@@ -72,7 +72,7 @@ describe('AdminUsersPage', () => {
 
     const refresh = wrapper.get('button').trigger('click');
     await flushPromises();
-    expect(wrapper.get('[data-testid="admin-user-status-7"]').attributes('disabled')).toBeDefined();
+    expect(wrapper.find('[data-testid="admin-user-status-7"]').exists()).toBe(false);
 
     resolveRefresh({
       content: [activeUser],
@@ -98,6 +98,25 @@ describe('AdminUsersPage', () => {
       size: 20,
       role: 'TEACHER',
     });
+  });
+
+  it('removes old status actions when a filtered list request fails', async () => {
+    vi.mocked(searchAdminUsers)
+      .mockResolvedValueOnce({
+        content: [activeUser], page: 0, size: 20, totalElements: 1, totalPages: 1,
+      })
+      .mockRejectedValueOnce(new Error('筛选失败'));
+    const wrapper = mount(AdminUsersPage);
+    await flushPromises();
+    expect(wrapper.get('[data-testid="admin-user-status-7"]').exists()).toBe(true);
+
+    await wrapper.get('[data-testid="admin-users-role-filter"]').setValue('TEACHER');
+    await flushPromises();
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('筛选失败');
+    expect(wrapper.find('[data-testid="admin-user-status-7"]').exists()).toBe(false);
+    expect(wrapper.find('tbody tr').exists()).toBe(false);
+    expect(setAdminUserStatus).not.toHaveBeenCalled();
   });
 
   it('supports page-size changes and direct page jumps through the API', async () => {

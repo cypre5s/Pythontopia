@@ -2,6 +2,16 @@
 
 日期：2026-10-12 至 2026-10-13
 
+## 2026-10-13 Web 安全与功能复核续记
+
+- 修复 Bilibili 代理配置写入进程级 `HTTP_PROXY` / `HTTPS_PROXY` 的串扰：`PYT_BILI_PROXY` 现在只交给 Bilibili 请求设置，Graph 回归确认不会改动共享 HTTP 环境。
+- 远征选题策略现在来自服务端节点快照与保存的运行证据，不再信任请求中的阶段、题型、难度或客户端气势；V209 绑定已判题记录到节点/首领阶段，同一节点/阶段的唯一判题上限为 3，计分/深度每槽仅加一次。
+- V210 为每局题目生成增加 36 次上限，并保留每节点/首领阶段 3 次上限；V211 将普通答疑和导学卡片合并为账号共享的每日 30 次顶层 Tutor 请求预算，按上海自然日重置。已完成幂等回放不重复计数；开始派发后的失败请求仍占用一次额度。这个额度不是 token 或金额上限。
+- 本轮新鲜回归：Web 4 个定向 Vitest 文件 / 76 项、类型检查、改动文件 ESLint 与生产构建通过；Graph Tutor/provider/vision/attachment/workflow/video 定向 117 项通过（有 1 条既有 asyncio 标记 warning），改动代理路由 Ruff 通过；Tutor、远征、Workshop 上传和迁移相关后端共 168 项通过，其中 PostgreSQL 验证 60 个并发 Tutor 请求恰好 30 个成功，V209→V211 升级与 V210 历史回填通过。Vite-only Playwright smoke 确认未登录访问 `/admin/users` 重定向到 `/login`，没有页面异常；未验证登录态 API 操作。
+- 只检查本地忽略配置的布尔状态：主 checkout `deploy/.env` 存在 DeepSeek endpoint、非空 API key、普通与 vision model 配置；没有回显凭证。当前隔离 worktree 没有自己的 `.env`，因此本轮不启动后端、不连接模型。因 key 已粘贴到对话，在线调用前仍应轮换。
+- 状态：本次审查范围内没有确认 P0；已确认的跨会话 Tutor 预算缺口通过 V211 限制了顶层请求数。全 Web API 尚未完成全面对抗审计。精确 token/USD 计量、其他 AI 路径的统一费用硬上限仍未实现。P2 判题账本与学习事件投影的一致性未作故障注入验证。
+- 未在本轮重跑登录后的管理页浏览器流程或部署级 Piston/Isolate；没有发现需要新增下载的 Web 素材。无尽远征性能维持最后阶段；本轮真实 DeepSeek 请求数为 0。对话中已展示的密钥应先轮换再用于真实调用。
+
 ## 2026-10-13 Tutor 断线重试幂等与多图部分失败恢复
 
 - 每个新的 Tutor Web 动作生成 `requestId`，同一次失败重试复用该 ID。后端把已完成的精简文本结果随 V208 投影保存；重放返回原终态 SSE，不再次调用 Graph/DeepSeek。相同 ID 携带不同内容时返回 409；FAILED run 清除 checkpoint 后可按原 ID 重试。受限结果不包含上传图片字节。

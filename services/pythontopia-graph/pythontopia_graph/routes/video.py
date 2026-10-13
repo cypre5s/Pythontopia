@@ -43,39 +43,31 @@ router = APIRouter()
 
 _LOG = logging.getLogger(__name__)
 
-# 代理只配一次（幂等）。B站在部分网络环境需经代理；优先 PYT_BILI_PROXY，回退 HTTPS_PROXY。
+# 代理只配一次（幂等）；B 站专用代理不写入进程级 HTTP(S)_PROXY。
 _proxy_configured = False
 
 
 def _configure_bilibili_proxy() -> None:
-    """若配置了代理则设给 bilibili-api（其 httpx 客户端走该代理）。
+    """仅通过 bilibili-api 自身配置 B 站代理，不修改进程级 HTTP(S)_PROXY。
 
-    优先 ``PYT_BILI_PROXY``，回退标准 ``HTTPS_PROXY`` / ``https_proxy``。未配置则直连；
-    老版本 bilibili-api 无 ``request_settings`` 时静默跳过（靠 httpx ``trust_env`` 兜底）。
+    ``PYT_BILI_PROXY`` 用于给 B 站单独指定代理；若当前 bilibili-api 版本不支持
+    ``request_settings.set_proxy``，显式 B 站代理配置必须失败，不能污染其他 HTTP 客户端。
+    标准 ``HTTP_PROXY`` / ``HTTPS_PROXY`` 由各 HTTP 客户端自己的 ``trust_env`` 策略处理。
     """
     global _proxy_configured
     if _proxy_configured:
         return
-    proxy = (
-        os.environ.get("PYT_BILI_PROXY")
-        or os.environ.get("HTTPS_PROXY")
-        or os.environ.get("https_proxy")
-        or ""
-    ).strip()
+    proxy = os.environ.get("PYT_BILI_PROXY", "").strip()
     if proxy:
-        # 兜底：即便 set_proxy 不可用，也让 bilibili-api 的 httpx(trust_env=True) 经代理出网。
-        os.environ.setdefault("HTTPS_PROXY", proxy)
-        os.environ.setdefault("HTTP_PROXY", proxy)
         try:
             from bilibili_api import request_settings  # noqa: PLC0415
 
             request_settings.set_proxy(proxy)
             _LOG.info("bilibili 代理已配置")
-        except Exception as exc:  # noqa: BLE001 - 老版本无该 API：已回退 HTTPS_PROXY env 兜底
-            _LOG.warning(
-                "bilibili request_settings.set_proxy 不可用(%s)，回退 HTTPS_PROXY env 兜底",
-                type(exc).__name__,
-            )
+        except Exception as exc:  # noqa: BLE001 - explicit Bilibili proxy must not fall back globally
+            raise RuntimeError(
+                "PYT_BILI_PROXY requires bilibili_api.request_settings.set_proxy"
+            ) from exc
     # 放宽请求超时（老版本无此 API 则忽略）：弱网/过代理时默认超时偏短易失败。
     try:
         from bilibili_api import request_settings  # noqa: PLC0415

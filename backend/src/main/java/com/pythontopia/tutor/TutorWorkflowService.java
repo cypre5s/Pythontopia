@@ -80,6 +80,7 @@ public class TutorWorkflowService {
   private final CoursePackRepository coursePackRepository;
   private final SubmissionService submissionService;
   private final ApplicationEventPublisher eventPublisher;
+  private final TutorRequestBudgetService requestBudgetService;
   private final ObjectMapper objectMapper;
 
   public TutorWorkflowService(
@@ -91,6 +92,7 @@ public class TutorWorkflowService {
       CoursePackRepository coursePackRepository,
       SubmissionService submissionService,
       ApplicationEventPublisher eventPublisher,
+      TutorRequestBudgetService requestBudgetService,
       ObjectMapper objectMapper) {
     this.repository = repository;
     this.attachmentService = attachmentService;
@@ -100,6 +102,7 @@ public class TutorWorkflowService {
     this.coursePackRepository = coursePackRepository;
     this.submissionService = submissionService;
     this.eventPublisher = eventPublisher;
+    this.requestBudgetService = requestBudgetService;
     this.objectMapper = objectMapper;
   }
 
@@ -197,6 +200,13 @@ public class TutorWorkflowService {
             "TUTOR_WORKFLOW_CHECKPOINT_INVALID",
             "导学恢复点无效");
       }
+    }
+
+    try {
+      requestBudgetService.reserve(userId);
+    } catch (RuntimeException e) {
+      repository.transitionAutoGenRun(session.id(), runId, "FAILED");
+      throw e;
     }
 
     SseEmitter emitter = new SseEmitter(180_000L);

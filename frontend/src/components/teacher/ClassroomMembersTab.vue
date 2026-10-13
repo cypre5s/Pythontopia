@@ -40,36 +40,54 @@ function handleRemove(studentId: number) {
     >
       暂无成员，分享加入码邀请学生。
     </p>
-    <PyTable
+    <div
       v-else
-      :columns="columns"
-      :rows="rows"
-      row-key="studentId"
+      class="members-table-scroll"
+      role="region"
+      aria-label="班级成员列表，可横向滚动"
+      tabindex="0"
     >
-      <template #status="{ value }">
-        <span
-          class="member-status"
-          :class="value === 'ACTIVE' ? 'member-status--active' : 'member-status--removed'"
-        >
-          {{ value === 'ACTIVE' ? '在班' : '已移除' }}
-        </span>
-      </template>
-      <template #action="{ row }">
-        <PyButton
-          variant="ghost"
-          size="sm"
-          :disabled="row.status !== 'ACTIVE'"
-          @click="handleRemove(row.studentId as number)"
-        >
-          移除
-        </PyButton>
-      </template>
-    </PyTable>
+      <PyTable
+        :columns="columns"
+        :rows="rows"
+        row-key="studentId"
+      >
+        <template #status="{ value }">
+          <span
+            class="member-status"
+            :class="value === 'ACTIVE' ? 'member-status--active' : 'member-status--removed'"
+          >
+            {{ value === 'ACTIVE' ? '在班' : '已移除' }}
+          </span>
+        </template>
+        <template #action="{ row }">
+          <PyButton
+            variant="ghost"
+            size="sm"
+            :disabled="row.status !== 'ACTIVE'"
+            @click="handleRemove(row.studentId as number)"
+          >
+            移除
+          </PyButton>
+        </template>
+      </PyTable>
+    </div>
   </section>
 </template>
 
 <style scoped>
 .members-tab { display: grid; gap: 12px; }
+.members-table-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: var(--pyt-radius-md);
+}
+.members-table-scroll:focus-visible {
+  outline: 2px solid var(--pyt-color-gold);
+  outline-offset: 2px;
+}
+.members-table-scroll :deep(.py-table) { min-width: 720px; }
 .empty {
   padding: 16px;
   background: var(--pyt-color-bg-soft);

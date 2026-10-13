@@ -51,6 +51,8 @@ public class ExpeditionRunService {
 
   private static final Logger log = LoggerFactory.getLogger(ExpeditionRunService.class);
   private static final int MAX_SNAPSHOT_BYTES = 64 * 1024;
+  private static final int MAX_PROBLEM_GENERATIONS_PER_NODE_PHASE = 3;
+  private static final int MAX_PROBLEM_GENERATIONS_PER_RUN = 36;
   private static final ZoneId DAILY_CHALLENGE_ZONE = ZoneId.of("Asia/Shanghai");
   private static final Set<String> PERSISTABLE_PHASES =
       Set.of("map", "event", "challenge", "reward");
@@ -69,11 +71,13 @@ public class ExpeditionRunService {
           "first_aid");
   private static final Set<String> RELIC_IDS = Set.copyOf(RELIC_ORDER);
   private static final Set<String> IMMUTABLE_NODE_FIELDS =
-      Set.of("id", "layer", "col", "kind", "kcCode", "challengeKind", "difficulty", "next");
+      Set.of(
+          "id", "layer", "col", "kind", "kcCode", "challengeKind", "difficulty", "next",
+          "eventDifficultyBonus");
   private static final Set<String> ALLOWED_NODE_FIELDS =
       Set.of(
           "id", "layer", "col", "kind", "kcCode", "challengeKind", "difficulty", "next",
-          "state", "bossPhase", "rewardChoices");
+          "state", "bossPhase", "rewardChoices", "eventDifficultyBonus");
   private static final TypeReference<List<Map<String, Object>>> LIST_OF_MAP =
       new TypeReference<>() {};
   private static final TypeReference<List<String>> LIST_OF_STRING = new TypeReference<>() {};
@@ -402,6 +406,9 @@ public class ExpeditionRunService {
   private ExpeditionRunDto chooseEventChallenge(
       Long userId, ExpeditionRunDto run, ExpeditionRunActionRequest request) {
     requireEventNode(run, request);
+    List<Map<String, Object>> nodes = copyNodes(run.nodes());
+    Map<String, Object> node = findNode(nodes, run.currentNodeId());
+    node.put("eventDifficultyBonus", request.action() == ExpeditionRunAction.EVENT_STUDY ? 1 : 0);
     return persistActionState(
         userId,
         run,
@@ -409,7 +416,7 @@ public class ExpeditionRunService {
         run.currentNodeId(),
         run.hp(),
         run.maxHp(),
-        copyNodes(run.nodes()),
+        nodes,
         run.relics());
   }
 
@@ -1010,6 +1017,19 @@ public class ExpeditionRunService {
       int chapter,
       boolean allowPrefetch,
       String kcCode) {
+    ExpeditionProblemPolicy policy =
+        resolveProblemRequest(userId, runId, nodeId, chapter, allowPrefetch, kcCode);
+    return policy == null ? null : policy.bossPhase();
+  }
+
+  /** Resolve immutable problem settings from an authorized server-owned expedition node. */
+  public ExpeditionProblemPolicy resolveProblemRequest(
+      Long userId,
+      String runId,
+      String nodeId,
+      int chapter,
+      boolean allowPrefetch,
+      String kcCode) {
     if (runId == null) {
       if (nodeId != null) throw problemBindingMismatch();
       return null;
@@ -1017,7 +1037,8 @@ public class ExpeditionRunService {
     if (userId == null || nodeId == null) throw problemBindingMismatch();
     List<ProblemRunState> rows =
         jdbcTemplate.query(
-            "SELECT phase, focus_chapter, nodes::text AS nodes, layers, current_node_id"
+            "SELECT phase, focus_chapter, nodes::text AS nodes, layers, current_node_id, momentum,"
+                + " history::text AS history"
                 + " FROM expedition_run WHERE user_id = ? AND run_id = ?::uuid AND status = 'ACTIVE'",
             (rs, rowNum) ->
                 new ProblemRunState(
@@ -1025,7 +1046,9 @@ public class ExpeditionRunService {
                     (Integer) rs.getObject("focus_chapter"),
                     listOfMap(rs.getString("nodes")),
                     rs.getInt("layers"),
-                    rs.getString("current_node_id")),
+                    rs.getString("current_node_id"),
+                    rs.getInt("momentum"),
+                    listOfMap(rs.getString("history"))),
             userId,
             runId);
     if (rows.isEmpty()) throw staleRun();
@@ -1047,7 +1070,7 @@ public class ExpeditionRunService {
       if (!"available".equals(node.get("state"))) throw problemBindingMismatch();
       if (state.currentNodeId() == null) {
         if (integerValue(node.get("layer")) != 0) throw problemBindingMismatch();
-        return bossPhase;
+        return problemPolicy(node, bossPhase, state);
       }
       Map<String, Object> current = findNode(state.nodes(), state.currentNodeId());
       Object next = current.get("next");
@@ -1056,14 +1079,123 @@ public class ExpeditionRunService {
           || !reachable.contains(nodeId)) {
         throw problemBindingMismatch();
       }
-      return bossPhase;
+      return problemPolicy(node, bossPhase, state);
     }
     if ("challenge".equals(state.phase())
         && nodeId.equals(state.currentNodeId())
         && ("available".equals(node.get("state")) || "current".equals(node.get("state")))) {
-      return bossPhase;
+      return problemPolicy(node, bossPhase, state);
     }
     throw problemBindingMismatch();
+  }
+
+  /** Reserve one bounded Graph problem-generation slot for an authorized node/phase. */
+  @Transactional
+  public long reserveProblemGeneration(
+      Long userId,
+      String runId,
+      String nodeId,
+      int chapter,
+      boolean allowPrefetch,
+      String kcCode) {
+    if (userId == null || runId == null || nodeId == null) throw problemBindingMismatch();
+    String normalizedRunId = normalizeRunId(runId);
+    lockActiveSnapshot(userId, normalizedRunId);
+    ExpeditionProblemPolicy policy =
+        resolveProblemRequest(userId, normalizedRunId, nodeId, chapter, allowPrefetch, kcCode);
+    Integer runReservations =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM expedition_problem_generation_attempt"
+                + " WHERE user_id = ? AND run_id = ?::uuid",
+            Integer.class,
+            userId,
+            normalizedRunId);
+    if (runReservations != null && runReservations >= MAX_PROBLEM_GENERATIONS_PER_RUN) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "EXPEDITION_PROBLEM_GENERATION_RUN_LIMIT_REACHED",
+          "本局题目生成次数已达上限，请使用已生成题目或结束本局");
+    }
+    Integer reserved =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM expedition_problem_generation_attempt"
+                + " WHERE user_id = ? AND run_id = ?::uuid AND node_id = ?"
+                + " AND boss_phase IS NOT DISTINCT FROM ?",
+            Integer.class,
+            userId,
+            normalizedRunId,
+            policy.nodeId(),
+            policy.bossPhase());
+    if (reserved != null && reserved >= MAX_PROBLEM_GENERATIONS_PER_NODE_PHASE) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "EXPEDITION_PROBLEM_GENERATION_LIMIT_REACHED",
+          "当前节点的题目生成次数已达上限，请使用已生成题目或审核题库题目");
+    }
+    Long reservationId =
+        jdbcTemplate.queryForObject(
+            "INSERT INTO expedition_problem_generation_attempt"
+                + " (user_id, run_id, node_id, boss_phase) VALUES (?, ?::uuid, ?, ?) RETURNING id",
+            Long.class,
+            userId,
+            normalizedRunId,
+            policy.nodeId(),
+            policy.bossPhase());
+    if (reservationId == null) {
+      throw new IllegalStateException("problem generation reservation was not persisted");
+    }
+    return reservationId;
+  }
+
+  /** Release a reservation only when the async executor rejected work before it started. */
+  @Transactional
+  public void releaseProblemGeneration(Long userId, Long reservationId) {
+    if (userId == null || reservationId == null) return;
+    jdbcTemplate.update(
+        "DELETE FROM expedition_problem_generation_attempt WHERE user_id = ? AND id = ?",
+        userId,
+        reservationId);
+  }
+
+  private ExpeditionProblemPolicy problemPolicy(
+      Map<String, Object> node, Integer bossPhase, ProblemRunState state) {
+    int mapDifficulty = integerValue(node.get("difficulty"));
+    Object rawChallengeKind = node.get("challengeKind");
+    if (mapDifficulty < 1
+        || mapDifficulty > 5
+        || !(rawChallengeKind instanceof String challengeKind)) {
+      throw mapChanged();
+    }
+    long recentFailures =
+        state.history().stream()
+            .limit(2)
+            .filter(entry -> Boolean.FALSE.equals(entry.get("passed")))
+            .count();
+    int difficulty = mapDifficulty;
+    if (state.momentum() >= 6) {
+      difficulty += 2;
+    } else if (state.momentum() >= 3) {
+      difficulty++;
+    }
+    if (recentFailures >= 2) difficulty--;
+    Object rawEventBonus = node.get("eventDifficultyBonus");
+    if (rawEventBonus != null) {
+      if (!(rawEventBonus instanceof Number eventBonus)
+          || eventBonus.intValue() < 0
+          || eventBonus.intValue() > 1
+          || !"event".equals(node.get("kind"))) {
+        throw mapChanged();
+      }
+      difficulty += eventBonus.intValue();
+    }
+    difficulty = Math.min(5, Math.max(1, difficulty));
+    return new ExpeditionProblemPolicy(
+        stringValue(node.get("id")),
+        stringValue(node.get("kcCode")),
+        Math.min(4, difficulty),
+        difficulty,
+        challengeKind,
+        bossPhase);
   }
 
   public boolean isActiveRun(Long userId, String runId) {
@@ -1145,6 +1277,11 @@ public class ExpeditionRunService {
                   || !"boss".equals(node.get("kind"))))
           || (node.containsKey("rewardChoices")
               && !isValidRewardChoicePayload(node.get("rewardChoices")))
+          || (node.containsKey("eventDifficultyBonus")
+              && (!(node.get("eventDifficultyBonus") instanceof Number eventBonus)
+                  || eventBonus.intValue() < 0
+                  || eventBonus.intValue() > 1
+                  || !"event".equals(node.get("kind"))))
           || requestedById.put(nodeId, node) != null) {
         throw mapChanged();
       }
@@ -1258,7 +1395,17 @@ public class ExpeditionRunService {
       Integer focusChapter,
       List<Map<String, Object>> nodes,
       int layers,
-      String currentNodeId) {}
+      String currentNodeId,
+      int momentum,
+      List<Map<String, Object>> history) {}
+
+  public record ExpeditionProblemPolicy(
+      String nodeId,
+      String kcCode,
+      int stage,
+      int difficulty,
+      String challengeKind,
+      Integer bossPhase) {}
 
   private List<Map<String, Object>> listOfMap(String json) {
     if (json == null || json.isBlank()) {

@@ -33,9 +33,9 @@ class ExpeditionScoreServiceTest {
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(
             List.of(
-                new ExpeditionScoreService.VerifiedAttempt(true, 90),
-                new ExpeditionScoreService.VerifiedAttempt(false, 0),
-                new ExpeditionScoreService.VerifiedAttempt(true, 80)));
+                new ExpeditionScoreService.VerifiedAttempt(true, 90, true),
+                new ExpeditionScoreService.VerifiedAttempt(false, 0, false),
+                new ExpeditionScoreService.VerifiedAttempt(true, 80, true)));
     ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
@@ -60,7 +60,7 @@ class ExpeditionScoreServiceTest {
         .thenReturn(List.of(new ExpeditionScoreService.LockedRun(true, false)));
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
-        .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttempt(true, 80)));
+        .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttempt(true, 80, true)));
     ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
@@ -83,7 +83,7 @@ class ExpeditionScoreServiceTest {
         .thenReturn(List.of(new ExpeditionScoreService.LockedRun(false, true)));
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
-        .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttempt(true, 80)));
+        .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttempt(true, 80, true)));
     ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
@@ -132,14 +132,16 @@ class ExpeditionScoreServiceTest {
   }
 
   @Test
-  void includesBoundedRetriesWhenSettlingVerifiedAttempts() {
+  void scoresOnlyClaimedNodeSlotsWithinTheRunAttemptLimit() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(new ExpeditionScoreService.LockedRun(false, false)));
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(
             java.util.stream.IntStream.range(0, 36)
-                .mapToObj(index -> new ExpeditionScoreService.VerifiedAttempt(true, 80))
+                .mapToObj(
+                    index ->
+                        new ExpeditionScoreService.VerifiedAttempt(true, 80, index < 12))
                 .toList());
     ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
 
@@ -152,9 +154,36 @@ class ExpeditionScoreServiceTest {
             contains("INSERT INTO expedition_score"),
             eq(7L),
             eq(RUN_ID),
-            eq(2880),
-            eq(36),
-            eq(36),
+                eq(960),
+                eq(12),
+                eq(12),
+            eq(false),
+            eq(false));
+  }
+
+  @Test
+  void passingQuestionWithoutNodeScoreSlotDoesNotIncreaseDepthOrMomentum() {
+    when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
+        .thenReturn(List.of(new ExpeditionScoreService.LockedRun(false, false)));
+    when(jdbcTemplate.query(
+            contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
+        .thenReturn(
+            List.of(
+                new ExpeditionScoreService.VerifiedAttempt(true, 100, true),
+                new ExpeditionScoreService.VerifiedAttempt(true, 100, false),
+                new ExpeditionScoreService.VerifiedAttempt(true, 80, true)));
+    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
+
+    service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
+
+    verify(jdbcTemplate)
+        .update(
+            contains("INSERT INTO expedition_score"),
+            eq(7L),
+            eq(RUN_ID),
+            eq(180),
+            eq(2),
+            eq(2),
             eq(false),
             eq(false));
   }
@@ -171,7 +200,7 @@ class ExpeditionScoreServiceTest {
 
     var result =
         service.recordVerifiedAttempt(
-            7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, true, 80);
+            7L, RUN_ID.toString(), "L0-0", null, "issue-one", QUESTION_FINGERPRINT, true, 80);
 
     assertThat(result.accepted()).isFalse();
     assertThat(result.publishLearningEvent()).isFalse();
@@ -192,7 +221,7 @@ class ExpeditionScoreServiceTest {
     ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
 
     service.recordVerifiedAttempt(
-        7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, true, 80);
+        7L, RUN_ID.toString(), "L0-0", null, "issue-one", QUESTION_FINGERPRINT, true, 80);
 
     verify(jdbcTemplate)
         .query(
@@ -209,10 +238,10 @@ class ExpeditionScoreServiceTest {
     when(jdbcTemplate.query(contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(
             List.of(),
-            List.of(new ExpeditionScoreService.ExistingAttempt(1, false)),
-            List.of(new ExpeditionScoreService.ExistingAttempt(1, false)),
-            List.of(new ExpeditionScoreService.ExistingAttempt(1, true)),
-            List.of(new ExpeditionScoreService.ExistingAttempt(1, true)));
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, false, "L0-0", null)),
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, false, "L0-0", null)),
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, true, "L0-0", null)),
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, true, "L0-0", null)));
     when(jdbcTemplate.query(contains("problem_id = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
     when(jdbcTemplate.update(contains("INSERT INTO expedition_verified_attempt"), any(Object[].class)))
@@ -223,19 +252,19 @@ class ExpeditionScoreServiceTest {
 
     var firstFailure =
         service.recordVerifiedAttempt(
-            7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, false, 0);
+            7L, RUN_ID.toString(), "L0-0", null, "issue-one", QUESTION_FINGERPRINT, false, 0);
     var repeatedFailure =
         service.recordVerifiedAttempt(
-            7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, false, 0);
+            7L, RUN_ID.toString(), "L0-0", null, "issue-one", QUESTION_FINGERPRINT, false, 0);
     var firstPass =
         service.recordVerifiedAttempt(
-            7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, true, 100);
+            7L, RUN_ID.toString(), "L0-0", null, "issue-one", QUESTION_FINGERPRINT, true, 100);
     var repeatedPass =
         service.recordVerifiedAttempt(
-            7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, true, 100);
+            7L, RUN_ID.toString(), "L0-0", null, "issue-one", QUESTION_FINGERPRINT, true, 100);
     var failureAfterPass =
         service.recordVerifiedAttempt(
-            7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, false, 0);
+            7L, RUN_ID.toString(), "L0-0", null, "issue-one", QUESTION_FINGERPRINT, false, 0);
 
     assertThat(firstFailure.accepted()).isTrue();
     assertThat(firstFailure.publishLearningEvent()).isTrue();

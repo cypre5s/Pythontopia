@@ -65,6 +65,10 @@ public class UploadService {
       throw new BusinessException(
           HttpStatus.PAYLOAD_TOO_LARGE, "UPLOAD_TOO_LARGE", "文件超过 5MB 上限");
     }
+    if (!repository.hasUploadCapacity(
+        userId, file.getSize(), MAX_FILES_PER_USER, MAX_TOTAL_BYTES_PER_USER)) {
+      throw quotaExceeded();
+    }
     byte[] bytes;
     try {
       bytes = file.getBytes();
@@ -100,10 +104,7 @@ public class UploadService {
 
     if (!repository.canAcceptUpload(
         userId, bytes.length, MAX_FILES_PER_USER, MAX_TOTAL_BYTES_PER_USER)) {
-      throw new BusinessException(
-          HttpStatus.PAYLOAD_TOO_LARGE,
-          "UPLOAD_QUOTA_EXCEEDED",
-          "个人上传额度已用完，请删除旧文件后再上传");
+      throw quotaExceeded();
     }
 
     WorkshopUpload saved =
@@ -176,5 +177,12 @@ public class UploadService {
       return null;
     }
     return value.length() <= max ? value : value.substring(0, max);
+  }
+
+  private static BusinessException quotaExceeded() {
+    return new BusinessException(
+        HttpStatus.PAYLOAD_TOO_LARGE,
+        "UPLOAD_QUOTA_EXCEEDED",
+        "个人上传额度已用完，请删除旧文件后再上传");
   }
 }

@@ -75,6 +75,10 @@ async function loadQueue(): Promise<void> {
   if (loading.value) return;
   loading.value = true;
   error.value = null;
+  entries.value = [];
+  selectedId.value = null;
+  totalElements.value = 0;
+  totalPages.value = 0;
   try {
     const readPage = () => searchProblemReviews({
       page: page.value,
@@ -98,6 +102,10 @@ async function loadQueue(): Promise<void> {
     }
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : '审核队列暂不可用';
+    entries.value = [];
+    selectedId.value = null;
+    totalElements.value = 0;
+    totalPages.value = 0;
   } finally {
     loading.value = false;
   }

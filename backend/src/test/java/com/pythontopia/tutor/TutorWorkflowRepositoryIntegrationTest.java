@@ -4,8 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.UUID;
+import java.util.concurrent.Callable;
+import java.util.concurrent.Executors;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
 import org.junit.jupiter.api.BeforeAll;
@@ -161,6 +167,89 @@ class TutorWorkflowRepositoryIntegrationTest {
                 String.class,
                 legacyTerminalCheckpointSessionId))
         .containsExactly("COMPLETED", "FAILED");
+  }
+
+  @Test
+  void tutorDailyBudgetIsAccountScopedAndStopsAtThirtyRequests() {
+    TutorRequestBudgetService budgetService = new TutorRequestBudgetService(jdbc);
+    Long otherUserId =
+        jdbc.queryForObject(
+            "INSERT INTO users (username, display_name, password_hash, role)"
+                + " VALUES (?, 'Other Tutor Test', 'hash', 'STUDENT') RETURNING id",
+            Long.class,
+            "tutor-budget-other-" + System.nanoTime());
+
+    for (int request = 0; request < 30; request++) {
+      budgetService.reserve(userId);
+    }
+
+    assertThatThrownBy(() -> budgetService.reserve(userId))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            exception -> {
+              assertThat(exception.status())
+                  .isEqualTo(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS);
+              assertThat(exception.code()).isEqualTo("TUTOR_DAILY_REQUEST_LIMIT_REACHED");
+            });
+
+    budgetService.reserve(otherUserId);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT request_count FROM tutor_model_daily_usage"
+                    + " WHERE user_id = ? AND usage_date = ?",
+                Integer.class,
+                userId,
+                LocalDate.now(ZoneId.of("Asia/Shanghai"))))
+        .isEqualTo(30);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT request_count FROM tutor_model_daily_usage"
+                    + " WHERE user_id = ? AND usage_date = ?",
+                Integer.class,
+                otherUserId,
+                LocalDate.now(ZoneId.of("Asia/Shanghai"))))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void concurrentTutorRequestsCannotExceedTheAccountDailyBudget() throws Exception {
+    TutorRequestBudgetService budgetService = new TutorRequestBudgetService(jdbc);
+    var executor = Executors.newFixedThreadPool(12);
+    try {
+      var requests = new ArrayList<Callable<Boolean>>();
+      for (int request = 0; request < 60; request++) {
+        requests.add(
+            () -> {
+              try {
+                budgetService.reserve(userId);
+                return true;
+              } catch (BusinessException limitReached) {
+                return false;
+              }
+            });
+      }
+
+      long accepted =
+          executor.invokeAll(requests).stream().filter(future -> get(future)).count();
+
+      assertThat(accepted).isEqualTo(30);
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT request_count FROM tutor_model_daily_usage WHERE user_id = ?",
+                  Integer.class,
+                  userId))
+          .isEqualTo(30);
+    } finally {
+      executor.shutdownNow();
+    }
+  }
+
+  private static boolean get(java.util.concurrent.Future<Boolean> future) {
+    try {
+      return future.get();
+    } catch (Exception e) {
+      throw new AssertionError("Unexpected tutor budget reservation failure", e);
+    }
   }
 
   @Test

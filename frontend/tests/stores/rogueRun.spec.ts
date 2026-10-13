@@ -656,14 +656,14 @@ describe('rogueRun store', () => {
     expect(run.verifiedScore).toBe(0);
   });
 
-  it('sends event study to the server and uses its challenge snapshot', async () => {
+  it('sends event study to the server and trusts the issued problem difficulty', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);
     const node = run.nodes.find((n) => n.layer === 0);
     node!.kind = 'event';
     setServerNode(node!.id, (serverNode) => { serverNode.kind = 'event'; });
     const d0 = node!.difficulty;
-    judgeMock.fetchProblem.mockResolvedValue(problem());
+    judgeMock.fetchProblem.mockResolvedValue({ ...problem(), difficulty: 3 });
     await run.enterNode(node!.id);
     await run.chooseEvent('study');
 
@@ -671,7 +671,10 @@ describe('rogueRun store', () => {
       runId: EXPEDITION_RUN_ID, action: 'EVENT_STUDY', nodeId: node!.id,
     });
     expect(node!.difficulty).toBe(d0);
-    expect(run.activeDifficulty).toBe(Math.min(5, d0 + 1));
+    expect(run.activeDifficulty).toBe(3);
+    expect(judgeMock.fetchProblem).toHaveBeenLastCalledWith(
+      expect.objectContaining({ difficulty: d0 }),
+    );
     expect(run.phase).toBe('challenge');
   });
 
@@ -782,19 +785,19 @@ describe('rogueRun store', () => {
     expect(run.hasSavedRun).toBe(false);
   });
 
-  it('raises in-run difficulty on a winning streak (momentum feeds back into the next fight)', async () => {
+  it('uses the issued problem difficulty even when the local momentum hint differs', async () => {
+    judgeMock.fetchProblem.mockResolvedValue({ ...problem(), difficulty: 4 });
     judgeMock.judge.mockResolvedValue({
       problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
     });
     const run = useRogueRunStore();
     await run.startRun(null);
-    // 直接把气势拉到 3，进入任一可战节点应出更高难度题。
+    // 模拟本地存档中的气势提示；服务端返回的签发难度仍是最终值。
     run.momentum = 3;
     if (mockServerRun) mockServerRun.momentum = 3;
     const start = run.nodes.find((n) => n.layer === 0);
     await run.enterNode(start!.id);
-    // base 2 + 气势(>=3) +1 = 3。
-    expect(run.activeDifficulty).toBe(3);
+    expect(run.activeDifficulty).toBe(4);
     expect(judgeMock.fetchProblem).toHaveBeenLastCalledWith(
       expect.objectContaining({ difficulty: 3 }),
     );

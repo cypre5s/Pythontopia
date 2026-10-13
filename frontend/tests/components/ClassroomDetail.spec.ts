@@ -141,6 +141,63 @@ describe('ClassroomDetail', () => {
     expect(wrapper.find('[data-testid="quest-tab"]').isVisible()).toBe(true);
   });
 
+  it('keeps member and quest tables keyboard-scrollable on narrow screens', async () => {
+    apiMocks.listClassroomQuestsForTeacher.mockResolvedValueOnce([
+      {
+        id: 101,
+        classroomId: 9,
+        title: '循环练习',
+        description: null,
+        kcCodes: ['PY43-KC-001'],
+        nodeType: 'SOLVE_PROBLEM',
+        payload: {},
+        dueDate: '2026-10-20',
+        createdBy: 42,
+        createdAt: '2026-10-13T00:00:00Z',
+        status: 'ACTIVE',
+        targetProblemId: null,
+        targetResourceType: null,
+        studentQuestId: null,
+        studentQuestStatus: null,
+        requiredEvidenceType: null,
+        targetProblemIds: [],
+        deepLinkRoute: null,
+        deepLinkParams: {},
+      },
+    ]);
+    await router.push('/teacher/classroom/9');
+    const wrapper = mountClassroomDetail();
+    await flushPromises();
+
+    const tabs = wrapper.findAll('.cd-nav__item');
+    await tabs.find((tab) => tab.text().includes('成员'))!.trigger('click');
+    const membersRegion = wrapper.get('.members-table-scroll');
+    expect(membersRegion.attributes('role')).toBe('region');
+    expect(membersRegion.attributes('tabindex')).toBe('0');
+
+    await tabs.find((tab) => tab.text().includes('任务'))!.trigger('click');
+    const questsRegion = wrapper.get('.quest-table-scroll');
+    expect(questsRegion.attributes('role')).toBe('region');
+    expect(questsRegion.attributes('tabindex')).toBe('0');
+    wrapper.unmount();
+  });
+
+  it('hides class data and write actions when classroom access is forbidden', async () => {
+    apiMocks.listMyClassrooms.mockResolvedValueOnce([]);
+    apiMocks.listClassroomMembersByStatus.mockRejectedValueOnce(new Error('403 FORBIDDEN'));
+    await router.push('/teacher/classroom/9');
+    const wrapper = mountClassroomDetail();
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="classroom-error"]').text()).toContain('没有查看这个班级的权限');
+    expect(wrapper.find('.cd-nav__list').exists()).toBe(false);
+    expect(wrapper.find('.cd-nav__foot').exists()).toBe(false);
+    expect(wrapper.find('.cd-content').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="regenerate-join-code"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="remediation-trigger"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
   it('regenerates join code via API', async () => {
     await router.push('/teacher/classroom/9');
     const wrapper = mountClassroomDetail();
@@ -350,6 +407,26 @@ describe('ClassroomDetail', () => {
       expect(wrapper.find('[data-testid="live-error"]').exists()).toBe(true);
     });
     expect(wrapper.find('[data-testid="live-error"]').text()).toContain('无权订阅课堂直播');
+    expect(fetchMock).toHaveBeenCalledOnce();
+    wrapper.unmount();
+  });
+
+  it('直播 Tab：服务返回 503 时显示错误原因和自动重试状态', async () => {
+    const fetchMock = vi.fn(async () => new Response(null, { status: 503 }));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await router.push('/teacher/classroom/9');
+    const wrapper = mountClassroomDetail();
+    await flushPromises();
+
+    const liveTab = wrapper.find('[data-testid="classroom-live-tab"]');
+    await liveTab.findAll('button').find((button) => button.text().includes('开始直播'))!.trigger('click');
+
+    await vi.waitFor(() => {
+      expect(wrapper.get('[data-testid="live-error"]').text()).toContain('HTTP 503');
+    });
+    expect(wrapper.get('[data-testid="live-connection-status"]').text()).toContain('5 秒后自动重试');
+    expect(liveTab.find('button').attributes('disabled')).toBeDefined();
     expect(fetchMock).toHaveBeenCalledOnce();
     wrapper.unmount();
   });

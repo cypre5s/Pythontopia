@@ -19,6 +19,7 @@ import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
 import com.pythontopia.world.boss.dto.FrontierSelectRequest;
 import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
+import com.pythontopia.world.boss.ExpeditionRunService.ExpeditionProblemPolicy;
 import com.pythontopia.world.boss.review.ApprovedBossProblem;
 import com.pythontopia.world.boss.review.BossProblemReviewRepository;
 import java.nio.ByteBuffer;
@@ -165,10 +166,13 @@ public class BossService {
     ExpeditionRequestBinding expeditionBinding =
         validateExpeditionRun(
             userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, false, kc);
+    ExpeditionProblemPolicy policy = expeditionBinding.policy();
+    int progression = policy == null ? request.stage() : policy.stage();
+    Integer requestedDifficulty = request.difficulty();
+    if (policy != null) requestedDifficulty = policy.difficulty();
+    int difficulty = computeTargetDifficulty(userId, kc, progression, requestedDifficulty);
+    request = applyExpeditionPolicy(request, policy, difficulty);
     String expeditionRunId = expeditionBinding.runId();
-    // 难度优先取前端显式请求；否则据该章 KC 的真实掌握度 + 置信度推断（学情驱动），而非仅按 stage。
-    int difficulty =
-        computeTargetDifficulty(userId, kc, request.stage(), request.difficulty());
 
     // 1) 复用「已预生成未做」(READY) 的同维度题：命中即原子标 CONSUMED，省去现场等 LLM。
     //    这条同时实现「学生中途退出，下次登入复用已生成未做的题」——上次会话预取留下的 READY 行。
@@ -257,6 +261,15 @@ public class BossService {
     }
 
     // 3) 个性化预生成与 approved bank 均未命中 → 现场走 graph 出题。
+    if (expeditionRunId != null) {
+      expeditionRunService.reserveProblemGeneration(
+          userId,
+          expeditionRunId,
+          request.expeditionNodeId(),
+          chapter,
+          false,
+          kc);
+    }
     BossInternalProblem fromGraph;
     try {
       fromGraph =
@@ -302,12 +315,16 @@ public class BossService {
   public BossPrefetchStatusDto prefetch(int chapter, BossProblemRequest request, Long userId) {
     String effectiveKc = request.preferredKc() != null ? request.preferredKc() : request.kcCode();
     String kc = resolveKc(chapter, effectiveKc);
-    String expeditionRunId =
+    ExpeditionRequestBinding expeditionBinding =
         validateExpeditionRun(
-            userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, true, kc)
-            .runId();
-    int difficulty =
-        computeTargetDifficulty(userId, kc, request.stage(), request.difficulty());
+            userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, true, kc);
+    ExpeditionProblemPolicy policy = expeditionBinding.policy();
+    int progression = policy == null ? request.stage() : policy.stage();
+    Integer requestedDifficulty = request.difficulty();
+    if (policy != null) requestedDifficulty = policy.difficulty();
+    int difficulty = computeTargetDifficulty(userId, kc, progression, requestedDifficulty);
+    request = applyExpeditionPolicy(request, policy, difficulty);
+    String expeditionRunId = expeditionBinding.runId();
     EndlessPregenService.PrefetchStart start =
         expeditionRunId == null
             ? pregenService.beginPrefetch(
@@ -330,6 +347,23 @@ public class BossService {
                 expeditionRunId,
                 request.expeditionNodeId());
     if (start.shouldGenerate() && start.status().jobId() != null) {
+      Long generationReservation = null;
+      if (expeditionRunId != null) {
+        try {
+          generationReservation =
+              expeditionRunService.reserveProblemGeneration(
+                  userId,
+                  expeditionRunId,
+                  request.expeditionNodeId(),
+                  chapter,
+                  true,
+                  kc);
+        } catch (com.pythontopia.common.error.BusinessException exception) {
+          pregenService.failPrefetch(
+              start.status().jobId(), start.status().attempts(), exception.getMessage());
+          throw exception;
+        }
+      }
       try {
         if (expeditionRunId == null) {
           pregenService.generatePrefetch(
@@ -362,6 +396,9 @@ public class BossService {
               start.status().attempts());
         }
       } catch (TaskRejectedException rejected) {
+        if (generationReservation != null) {
+          expeditionRunService.releaseProblemGeneration(userId, generationReservation);
+        }
         pregenService.failPrefetch(
             start.status().jobId(), start.status().attempts(), "预加载队列已满，请稍后重试");
         throw new com.pythontopia.common.error.BusinessException(
@@ -406,23 +443,31 @@ public class BossService {
       String expeditionNodeId,
       Long userId) {
     String kc = resolveKc(chapter, preferredKc);
-    int progression = requestedDifficulty == null ? 1 : requestedDifficulty;
+    ExpeditionRequestBinding expeditionBinding =
+        validateExpeditionRun(userId, expeditionRunId, expeditionNodeId, chapter, true, kc);
+    ExpeditionProblemPolicy policy = expeditionBinding.policy();
+    Integer effectiveStage = policy == null ? stage : policy.stage();
+    Integer effectiveRequestedDifficulty =
+        policy == null ? requestedDifficulty : policy.difficulty();
+    String effectiveKind = policy == null ? preferredKind : policy.challengeKind();
+    String effectiveArenaLevel = policy == null ? arenaLevel : null;
+    int progression =
+        effectiveRequestedDifficulty == null ? 1 : effectiveRequestedDifficulty;
     int difficulty =
-        computeTargetDifficulty(userId, kc, progression, requestedDifficulty);
-    String activeRunId =
-        validateExpeditionRun(userId, expeditionRunId, expeditionNodeId, chapter, true, kc)
-            .runId();
+        computeTargetDifficulty(userId, kc, progression, effectiveRequestedDifficulty);
+    if (policy != null) effectiveStage = Math.min(4, difficulty);
+    String activeRunId = expeditionBinding.runId();
     return activeRunId == null
         ? pregenService.getPrefetchStatus(
-            userId, chapter, stage, kc, difficulty, preferredKind, arenaLevel, null)
+            userId, chapter, effectiveStage, kc, difficulty, effectiveKind, effectiveArenaLevel, null)
         : pregenService.getPrefetchStatus(
             userId,
             chapter,
-            stage,
+            effectiveStage,
             kc,
             difficulty,
-            preferredKind,
-            arenaLevel,
+            effectiveKind,
+            effectiveArenaLevel,
             activeRunId,
             expeditionNodeId);
   }
@@ -596,7 +641,14 @@ public class BossService {
               : questionFingerprint(problem);
       ExpeditionScoreService.VerifiedAttemptResult attemptResult =
           recordVerifiedExpeditionAttempt(
-              userId, runId, problem, attemptFingerprint, graphResult, score);
+              userId,
+              runId,
+              expeditionBinding.map(EndlessPregenService.ExpeditionProblemBinding::nodeId).orElse(null),
+              bossPhaseForAttempt,
+              problem,
+              attemptFingerprint,
+              graphResult,
+              score);
       if (!attemptResult.accepted()) {
         if (!expeditionRunService.isActiveRun(userId, runId)) {
           throw expiredExpeditionRun();
@@ -665,12 +717,32 @@ public class BossService {
       String kcCode) {
     if (runId == null) {
       if (nodeId != null) throw problemBindingMismatch();
-      return new ExpeditionRequestBinding(null, null);
+      return new ExpeditionRequestBinding(null, null, null);
     }
-    Integer bossPhase =
-        expeditionRunService.validateProblemRequest(
+    ExpeditionProblemPolicy policy =
+        expeditionRunService.resolveProblemRequest(
             userId, runId, nodeId, chapter, allowPrefetch, kcCode);
-    return new ExpeditionRequestBinding(runId, bossPhase);
+    if (policy == null
+        || !Objects.equals(policy.nodeId(), nodeId)
+        || !Objects.equals(policy.kcCode(), kcCode)) {
+      throw problemBindingMismatch();
+    }
+    return new ExpeditionRequestBinding(runId, policy.bossPhase(), policy);
+  }
+
+  private BossProblemRequest applyExpeditionPolicy(
+      BossProblemRequest request, ExpeditionProblemPolicy policy, int targetDifficulty) {
+    if (policy == null) return request;
+    return new BossProblemRequest(
+        Math.min(4, targetDifficulty),
+        request.kcCode(),
+        targetDifficulty,
+        request.preferredKc(),
+        policy.challengeKind(),
+        request.profileSignals(),
+        null,
+        request.expeditionRunId(),
+        policy.nodeId());
   }
 
   static String issueProblemId(Integer bossPhase) {
@@ -710,15 +782,14 @@ public class BossService {
 
   static String expeditionAttemptFingerprint(
       String questionFingerprint, String nodeId, Integer bossPhase) {
-    if (bossPhase == null) return questionFingerprint;
-    if (nodeId == null || bossPhase < 1 || bossPhase > 3) {
+    if (nodeId == null || nodeId.isBlank() || (bossPhase != null && (bossPhase < 1 || bossPhase > 3))) {
       throw new IllegalArgumentException("boss attempt binding is invalid");
     }
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       updateFingerprint(digest, questionFingerprint);
       updateFingerprint(digest, nodeId);
-      updateFingerprint(digest, Integer.toString(bossPhase));
+      updateFingerprint(digest, bossPhase == null ? "" : Integer.toString(bossPhase));
       return HexFormat.of().formatHex(digest.digest());
     } catch (NoSuchAlgorithmException exception) {
       throw new IllegalStateException("SHA-256 is unavailable", exception);
@@ -735,6 +806,8 @@ public class BossService {
   private ExpeditionScoreService.VerifiedAttemptResult recordVerifiedExpeditionAttempt(
       Long userId,
       String runId,
+      String nodeId,
+      Integer bossPhase,
       BossInternalProblem problem,
       String attemptFingerprint,
       BossEvaluateResultDto result,
@@ -745,13 +818,16 @@ public class BossService {
     return expeditionScoreService.recordVerifiedAttempt(
         userId,
         runId,
+        nodeId,
+        bossPhase,
         problem.problemId(),
         attemptFingerprint,
         result.passed(),
         score);
   }
 
-  private record ExpeditionRequestBinding(String runId, Integer bossPhase) {}
+  private record ExpeditionRequestBinding(
+      String runId, Integer bossPhase, ExpeditionProblemPolicy policy) {}
 
   static String questionFingerprint(BossInternalProblem problem) {
     try {

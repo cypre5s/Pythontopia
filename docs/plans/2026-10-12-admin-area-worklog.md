@@ -1,5 +1,12 @@
 # 管理后台最小实现工作日志
 
+## 2026-10-13：本轮 Web 功能核对
+
+- 当前管理区有 AI 运维、题目审核、用户管理三项真实 API 页面；排序、搜索、分页、启停和 ADMIN 路由守卫由现有前后端测试覆盖。早期样式对齐记录中的“两页”描述对应用户管理页加入前的快照，不代表当前页面数量。
+- 数字孪生周报读取当前用户的学习事件、掌握度、记忆与资源证据；Web 已把启发式数值标为“证据充分度”，没有将其描述为正确率预测。
+- 本轮 Web 全量 Vitest 256 个文件 / 2517 项通过，TypeScript 类型检查和生产构建通过；管理页登录后浏览器交互未在本轮重跑。
+- Tutor 继续使用固定 AutoGen 审查链；文图路径由 Graph 定向测试验证。本轮没有向 DeepSeek 发起在线请求。
+
 ## 2026-10-13：统一用户与审核列表分页
 
 - 用户管理和题目审核列表复用 `AdminPagination`：可选每页 10/20/50/100 条、首页/末页、前后页及直接跳转；更改每页数量时回到第一页，加载期间禁用分页操作。
@@ -25,7 +32,7 @@
 
 ## 2026-10-13：Alethicode 管理台样式对齐
 
-- 清点 Pythontopia `frontend/src/app/router.ts`：当前管理台只有 ADMIN-only `/admin/operations` 与 `/admin/problem-reviews` 两个页面。Alethicode 最新工作树（HEAD `10a97fe`，管理台最近一次提交 `d96f609` 后仍有多处未提交修改）包含用户、公告、判题服务、题目/导入导出、KC、AI 配置、课程包、使用统计、反馈等管理页面；这些 API/权限/页面在 Pythontopia 未暴露，本次不复制空壳或造数据。
+- 清点 Pythontopia `frontend/src/app/router.ts`：在本次样式对齐切片开始时，管理台只有 ADMIN-only `/admin/operations` 与 `/admin/problem-reviews` 两个页面；后续同日新增了真实的 `/admin/users` 页面与 API。Alethicode 最新工作树（HEAD `10a97fe`，管理台最近一次提交 `d96f609` 后仍有多处未提交修改）包含公告、判题服务、题目/导入导出、KC、AI 配置、课程包、使用统计、反馈等页面；这些 API/权限/页面在 Pythontopia 未暴露，本次不复制空壳或造数据。
 - 对照 Alethicode `frontend/src/pages/admin/views/Home.vue`、`components/SideMenu.vue`、`components/Panel.vue`、`style.less`、`elementPlusTheme.less`，以及 `views/general/User.vue`、`views/problem/ProblemList.vue` 的最新 dirty diff：沿用其 240px 分组侧栏、面板标题/工具栏、蓝灰表面、36px 控件、44px 表头、52px 行、表格横向滚动和溢出截断方式。
 - Pythontopia 管理台移除桌面重复顶栏；窄屏保留 Alethicode 风格的“管理导航”入口与侧栏抽屉。运维页补明确页标题，审核页维持面板标题；页脚改成 Alethicode 的分隔线与双栏结构。
 - 审核表最小宽度调整为其固定列宽合计（1100px），ID、章节、难度、状态和操作列禁止异常折行，长题面/KC 保持截断并能通过 title 查看全文。

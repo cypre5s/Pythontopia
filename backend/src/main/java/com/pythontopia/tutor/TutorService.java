@@ -44,6 +44,7 @@ public class TutorService {
   private final ClassroomDashboardService classroomDashboardService;
   private final MemoryRetrievalService memoryRetrievalService;
   private final CourseVideoTranscriptService videoTranscriptService;
+  private final TutorRequestBudgetService requestBudgetService;
   /** 进行中的答疑流（userId:conversationId），防同一会话窗口并发重复提问。 */
   private final Set<String> inFlightConversations = ConcurrentHashMap.newKeySet();
 
@@ -55,7 +56,8 @@ public class TutorService {
       ApplicationEventPublisher eventPublisher,
       ClassroomDashboardService classroomDashboardService,
       MemoryRetrievalService memoryRetrievalService,
-      CourseVideoTranscriptService videoTranscriptService) {
+      CourseVideoTranscriptService videoTranscriptService,
+      TutorRequestBudgetService requestBudgetService) {
     this.graphClient = graphClient;
     this.sessionRepository = sessionRepository;
     this.objectMapper = objectMapper;
@@ -64,6 +66,7 @@ public class TutorService {
     this.classroomDashboardService = classroomDashboardService;
     this.memoryRetrievalService = memoryRetrievalService;
     this.videoTranscriptService = videoTranscriptService;
+    this.requestBudgetService = requestBudgetService;
   }
 
   public SseEmitter ask(CurrentUserPrincipal user, TutorAskRequest request) {
@@ -107,6 +110,7 @@ public class TutorService {
                 memoryBrief,
                 mergeContext(historyBrief, mergeContext(videoBrief, request.context()))));
 
+    requestBudgetService.reserve(userId);
     graphClient.askStream(
         userId,
         request.question(),

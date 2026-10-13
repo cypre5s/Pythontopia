@@ -36,7 +36,8 @@ class TutorMemoryBriefTest {
           mock(ApplicationEventPublisher.class),
           mock(ClassroomDashboardService.class),
           memoryRetrievalService,
-          mock(com.pythontopia.coursepack.service.CourseVideoTranscriptService.class));
+          mock(com.pythontopia.coursepack.service.CourseVideoTranscriptService.class),
+          mock(TutorRequestBudgetService.class));
 
   private static MemoryItemDto memory(String summary) {
     return new MemoryItemDto(

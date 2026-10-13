@@ -44,6 +44,9 @@ async function loadUsers(): Promise<void> {
   if (loading.value) return;
   loading.value = true;
   error.value = null;
+  entries.value = [];
+  totalElements.value = 0;
+  totalPages.value = 0;
   try {
     const readPage = () => searchAdminUsers({
       page: page.value,
@@ -63,6 +66,9 @@ async function loadUsers(): Promise<void> {
     totalPages.value = result.totalPages;
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : '用户列表暂不可用';
+    entries.value = [];
+    totalElements.value = 0;
+    totalPages.value = 0;
   } finally {
     loading.value = false;
   }

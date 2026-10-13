@@ -1,5 +1,31 @@
 # Changelog
 
+## 2026-10-13 — Tutor 账号日预算与迁移回归补齐
+
+- 新增 V211 `tutor_model_daily_usage`，以 PostgreSQL 原子 upsert 对每账号的普通 Tutor 答疑与导学卡片请求共享上海自然日 30 次上限；成功完成的幂等回放不重复计数，请求抵达 Graph 前被拒绝的操作不计数，已预留后发生的调用失败仍占额度。
+- 超限返回 429 `TUTOR_DAILY_REQUEST_LIMIT_REACHED`；导学请求先占用 run 后检查预算，超限时将该 run 标记为 FAILED，并且不启动 Graph。
+- 该上限是顶层 Tutor 请求数，不是 token、模型内部多智能体调用数或金额上限。精确费用控制和其他 AI 路径的统一配额仍未实现。
+- V210 旧远征回填 CTE 补全用于排序的历史列；为每局增加 36 次总生成上限，并保留每节点/首领阶段 3 次限制。迁移保守回填可追溯的旧行。
+- 验证：Tutor、远征、上传和迁移相关 Maven 定向用例共 168 项通过；Tutor PostgreSQL 集成覆盖 60 个并发额度预留，恰好 30 次成功；V209→V211 升级、V210 旧数据回填通过。Web 76 项定向 Vitest、类型检查、定向 ESLint、生产构建通过；Graph Tutor/provider/vision/attachment/workflow/video 定向 117 项通过，改动代理路由 Ruff 通过。Vite-only Playwright smoke 验证未登录访问 `/admin/users` 返回 200 并重定向到 `/login`，无页面异常。
+- 仍未验证：登录态管理端读写浏览器联测、完整安全对抗审查、部署 CORS/Piston 隔离、异常日志敏感信息、真实 DeepSeek 文图请求和无尽远征性能。无实际 DeepSeek/Piston 请求或性能数据；开始真实调用前应轮换对话中已暴露的密钥。
+
+## 2026-10-13 — 远征生成预算与 Web 安全交互补齐
+
+- V210 为远征节点/首领阶段建立服务端题目生成预留记录；现场出题与预生成在调用 Graph 前占用额度，每节点/阶段最多 3 次新生成，异步队列未接收任务时释放预留。迁移按旧节点绑定题目行保守回填，来源未知的已审核题也计入；旧版本中未落库的失败调用无法追溯，且此额度不等于 Tutor 全局费用上限。
+- 管理用户筛选失败时移除旧操作行，审核队列失败时清空旧详情和审核动作；无权班级页隐藏 tabs/写操作，教师成员和任务表可用键盘横向滚动，直播页展示连接失败原因和重试状态。
+- Workshop 上传额度在解析前预检，解析和读取后仍在写入前持用户行锁重查，减少已满配额文件触发 PDF/DOCX 解析的工作量并保留并发额度保护。
+- 验证：Web 定向 4 个测试文件 / 76 tests、typecheck、改动文件 ESLint 和 production build 通过；后端远征 3 类 / 76 tests、上传服务 17 tests、V210 旧数据升级迁移测试 1 项通过；Graph 视频代理路由 6 tests 通过。Testcontainers 空库到 V210；V209 数据升级至 V210 的回填检查通过。
+- 仍未验证：Tutor 跨会话/账号级调用或 token 预算尚无产品策略；全量安全审计、登录后的管理员浏览器流程、部署 CORS/Piston 隔离、异常日志敏感信息回归、真实 DeepSeek 文图请求和无尽远征性能仍待处理。对话中贴出的 DeepSeek key 应轮换后再用于真实请求；本轮没有真实模型/Piston 请求或性能数据。
+
+## 2026-10-13 — Tutor 文图、远征可信策略与安全复核续办
+
+- Bilibili 专用代理只写入 `bilibili_api` 的请求配置，不再改进程级 `HTTP_PROXY` / `HTTPS_PROXY`，避免串到 DeepSeek HTTP 客户端。
+- 远征出题现在以服务端地图节点决定 KC、题型、难度和阶段；自适应只读服务端保存的连胜、近期真实判题和事件奖励。V209 将已判题账本绑定节点/首领阶段，每节点（或首领阶段）最多 3 道唯一判题，结算只采纳首次通过的计分槽；Web 展示服务端返回难度。
+- 当前 Tutor 文本、图片输入与文本回复路径继续经既有 DeepSeek provider 和固定 AutoGen 审查链；图片载荷不进入 trace 或 checkpoint。数字孪生继续展示本人真实学习证据，启发式“证据充分度”不声称是正确率概率；管理区核对为运维、审核、用户三项真实 API 页面。
+- 验证：全量 Web Vitest 256 文件 / 2517 项、`npm run typecheck`、生产 build、改动文件 ESLint 通过；Tutor/视觉/provider/视频代理 Graph 定向 79 项、Ruff 通过；11 个后端测试类共 112 项通过（含 Boss、远征 PostgreSQL、Twin、管理员用户、Tutor 并发、Browse 与 Piston fail-closed），空库迁移到 V209。
+- 本轮未启动 Web 全栈、未发起 DeepSeek 请求，未测无尽远征性能。安全审查没有确认 P0；全应用端点的完整对抗审查尚未完成。全局 AI 使用额度策略仍未设定，远征唯一题限制目前约束已判题账本，不能据此声称 DeepSeek 总费用有账号级硬上限。Piston 部署级隔离仍需在目标环境验证。
+- `mvn spotless:check` 仍因全仓 607 个 Java 文件存在格式差异而失败；未对全仓批量格式化。性能和在线模型请求留到功能核对完成后最后处理。
+
 ## 2026-10-13 — DeepSeek/Tutor 安全、后台表格和远征奖励校验
 
 - Graph Piston 请求关闭环境代理继承；Tutor/Boss 日志仅记录画像信号是否存在，视频代理日志不再含代理地址。Boss 未配置 DeepSeek 或解析为 DryRun 时明确返回不可用；生成/兜底题的 KC 与请求目标不符时拒绝下发。

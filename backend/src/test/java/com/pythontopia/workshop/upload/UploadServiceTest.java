@@ -9,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -50,6 +51,7 @@ class UploadServiceTest {
   void setUp() {
     repository = mock(UploadRepository.class);
     service = new UploadService(repository, new UploadTextExtractor());
+    when(repository.hasUploadCapacity(anyLong(), anyLong(), anyInt(), anyLong())).thenReturn(true);
     when(repository.canAcceptUpload(anyLong(), anyLong(), anyInt(), anyLong())).thenReturn(true);
     // 仓储 insert 回显入参为持久化行（id/createdAt 由库生成），便于断言返回 DTO 的解析结果。
     when(repository.insert(
@@ -164,6 +166,22 @@ class UploadServiceTest {
 
     verify(repository, never())
         .insert(anyLong(), anyString(), anyString(), anyLong(), any(), anyInt(), anyInt(), any(), any());
+  }
+
+  @Test
+  void checksStorageQuotaBeforeParsingTheFile() {
+    when(repository.hasUploadCapacity(USER_ID, 1L, 20, 50L * 1024 * 1024)).thenReturn(false);
+    UploadTextExtractor extractor = spy(new UploadTextExtractor());
+    UploadService quotaService = new UploadService(repository, extractor);
+    MockMultipartFile file =
+        new MockMultipartFile("file", "note.txt", "text/plain", "x".getBytes(StandardCharsets.UTF_8));
+
+    assertThatThrownBy(() -> quotaService.upload(USER_ID, file))
+        .isInstanceOf(BusinessException.class)
+        .extracting(ex -> ((BusinessException) ex).code())
+        .isEqualTo("UPLOAD_QUOTA_EXCEEDED");
+
+    verify(extractor, never()).extract(eq(".txt"), any(byte[].class));
   }
 
   @Test
