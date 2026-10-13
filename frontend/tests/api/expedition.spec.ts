@@ -87,6 +87,22 @@ describe('expedition.ts · run persistence API', () => {
     }, { suppressNetworkToast: true, timeout: 3000 });
   });
 
+  it('sends the explicitly selected KC as a server-side expedition priority', async () => {
+    vi.mocked(http.post).mockResolvedValueOnce({ data: RUN });
+
+    await createExpeditionRun({
+      focusChapter: 2,
+      isDaily: false,
+      preferredKcCode: 'PY43-KC-008',
+    });
+
+    expect(http.post).toHaveBeenCalledWith('/api/world/expedition/run', {
+      focusChapter: 2,
+      isDaily: false,
+      preferredKcCode: 'PY43-KC-008',
+    }, { suppressNetworkToast: true, timeout: 3000 });
+  });
+
   it('GETs the active backend run and maps 204/empty to null', async () => {
     vi.mocked(http.get).mockResolvedValueOnce({ status: 204, data: undefined });
     await expect(fetchExpeditionRun()).resolves.toBeNull();

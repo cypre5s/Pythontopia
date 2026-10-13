@@ -32,6 +32,9 @@ require_pattern "${BACKEND_CONFIG}" \
 require_pattern "${INSTALLER}" \
   "发布终验覆盖 HTTPS 公网入口" \
   'curl.*--resolve[[:space:]]+47\.120\.29\.62:443:127\.0\.0\.1.*https://47\.120\.29\.62/healthz'
+require_pattern "${INSTALLER}" \
+  "发布终验要求 HTTP 入口固定跳转 HTTPS" \
+  'HTTP_REDIRECT=.*%\{http_code\}.*%\{redirect_url\}.*http://127\.0\.0\.1/healthz'
 
 if [ "${FAILURES}" -ne 0 ]; then
   echo "[RESULT] ${FAILURES} 项 HTTPS 转发链路契约未满足" >&2

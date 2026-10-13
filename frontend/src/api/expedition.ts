@@ -32,6 +32,7 @@ export interface FrontierSelectInput {
 export interface ExpeditionRunStartInput {
   focusChapter: number | null;
   isDaily: boolean;
+  preferredKcCode?: string | null;
 }
 
 export type ExpeditionRunAction =

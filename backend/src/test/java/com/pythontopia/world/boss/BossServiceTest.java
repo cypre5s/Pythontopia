@@ -23,6 +23,14 @@ import com.pythontopia.learner.mastery.MasteryRepository;
 import com.pythontopia.learner.mastery.MasterySnapshot;
 import com.pythontopia.learner.profile.dto.LearnerProfileSignals;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
+import com.pythontopia.learner.twin.LearnerTwinService;
+import com.pythontopia.mainline.test.ChapterProblemBankRepository;
+import com.pythontopia.mainline.test.ChapterProblemBankRepository.CodingCase;
+import com.pythontopia.mainline.test.ChapterProblemBankRepository.PreferredCodingQuestion;
+import com.pythontopia.submission.judge.JudgeCaseEvaluator;
+import com.pythontopia.submission.judge.JudgeWorkerPool;
+import com.pythontopia.submission.judge.StaticCodeChecker;
+import com.pythontopia.submission.dto.Verdict;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
@@ -41,6 +49,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.Callable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -66,6 +75,11 @@ class BossServiceTest {
   @Mock MasteryRepository masteryRepository;
   @Mock CoursePackRepository coursePackRepository;
   @Mock PassiveProfileService passiveProfileService;
+  @Mock LearnerTwinService learnerTwinService;
+  @Mock ChapterProblemBankRepository chapterProblemBankRepository;
+  @Mock JudgeWorkerPool judgeWorkerPool;
+  @Mock StaticCodeChecker staticCodeChecker;
+  @Mock JudgeCaseEvaluator judgeCaseEvaluator;
   @Mock EndlessPregenService pregenService;
   @Mock BossProblemReviewRepository reviewRepository;
   @Mock ExpeditionRunService expeditionRunService;
@@ -82,6 +96,11 @@ class BossServiceTest {
             masteryRepository,
             coursePackRepository,
             passiveProfileService,
+            learnerTwinService,
+            chapterProblemBankRepository,
+            judgeWorkerPool,
+            staticCodeChecker,
+            judgeCaseEvaluator,
             pregenService,
             reviewRepository,
             expeditionRunService,
@@ -229,6 +248,55 @@ class BossServiceTest {
             });
 
     verify(pregenService, never()).persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any());
+  }
+
+  @Test
+  @DisplayName("Graph 出题不可用时复用同 KC 的课程题库内容与隐藏用例")
+  void graphProblemUnavailableFallsBackToTrustedCourseQuestion() {
+    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenThrow(new RestClientException("graph down"));
+    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
+        .thenReturn(List.of(new PreferredCodingQuestion(
+            120L,
+            "打印和",
+            "读入两个整数并输出它们的和。",
+            List.of(new CodingCase("2 3", "5")),
+            List.of(new CodingCase("2 3", "5"), new CodingCase("10 -4", "6")),
+            "a, b = map(int, input().split())\\nprint(a + b)",
+            "PY43-KC-001")));
+
+    var problem = service.fetchProblem(
+        1, new BossProblemRequest(1, null, 3, "PY43-KC-001", null, null, null, null), 7L);
+
+    assertThat(problem.statement()).contains("课程题库 · 打印和");
+    assertThat(problem.kcCode()).isEqualTo("PY43-KC-001");
+    assertThat(problem.aiGenerated()).isFalse();
+    assertThat(problem.reviewed()).isTrue();
+    assertThat(problem.totalTestCases()).isEqualTo(2);
+    verifyNoInteractions(judgeCaseEvaluator);
+  }
+
+  @Test
+  @DisplayName("Graph 返回空题目时也使用同 KC 课程题库兜底")
+  void emptyGraphProblemFallsBackToTrustedCourseQuestion() {
+    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenReturn(null);
+    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
+        .thenReturn(List.of(new PreferredCodingQuestion(
+            121L,
+            "列表求和",
+            "输出列表元素之和。",
+            List.of(new CodingCase("2 3", "5")),
+            List.of(new CodingCase("2 3", "5")),
+            "a, b = map(int, input().split())\\nprint(a + b)",
+            "PY43-KC-001")));
+
+    var problem = service.fetchProblem(
+        1, new BossProblemRequest(1, null, 3, "PY43-KC-001", null, null, null, null), 7L);
+
+    assertThat(problem.statement()).contains("课程题库 · 列表求和");
+    assertThat(problem.kcCode()).isEqualTo("PY43-KC-001");
+    assertThat(problem.aiGenerated()).isFalse();
   }
 
   @Test
@@ -598,47 +666,19 @@ class BossServiceTest {
   }
 
   @Test
-  @DisplayName("selectFrontier 使用真实练习事件时间，忽略 DECAY 推进的 last_event_at")
-  void selectFrontierPassesPersistedLastPracticedToGraph() {
-    OffsetDateTime lastPracticed = OffsetDateTime.parse("2026-05-01T08:30:00Z");
-    when(masteryRepository.findLastPracticedAtByUser(7L))
-        .thenReturn(Map.of("PY43-KC-001", lastPracticed));
-    when(masteryRepository.findAll(7L))
-        .thenReturn(
-            List.of(
-                new MasterySnapshot(
-                    1L,
-                    7L,
-                    "PY43-KC-001",
-                    new BigDecimal("0.82"),
-                    new BigDecimal("0.80"),
-                    lastPracticed.plusDays(10),
-                    lastPracticed.plusDays(10))));
-    when(graphClient.selectFrontier(
-            any(), any(), any(), any(), any(), anyInt(), any()))
-        .thenReturn(
-            new FrontierSelectResultDto(
-                List.of(new FrontierPickDto("PY43-KC-001", 1, 4, "最近发展区"))));
+  @DisplayName("远征选题复用数字孪生规则，不调用 Graph 选择器或客户端画像")
+  void selectFrontierUsesSharedDeterministicPolicy() {
+    var expected = new FrontierSelectResultDto(
+        List.of(new FrontierPickDto("PY43-KC-001", 1, 4, "FSRS-lite 复习已到期")));
+    when(learnerTwinService.frontier(7L, 1, List.of(), 4)).thenReturn(expected);
 
-    service.selectFrontier(
+    var result = service.selectFrontier(
         7L,
-        new FrontierSelectRequest(null, List.of("PY43-KC-001"), 1, List.of(), 4));
+        new FrontierSelectRequest(null, List.of(), 1, List.of(), 4));
 
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<Map<String, String>> captor = ArgumentCaptor.forClass(Map.class);
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<Map<String, Double>> confidenceCaptor = ArgumentCaptor.forClass(Map.class);
-    verify(graphClient)
-        .selectFrontier(
-            any(),
-            confidenceCaptor.capture(),
-            any(),
-            any(),
-            any(),
-            anyInt(),
-            captor.capture());
-    assertThat(captor.getValue()).containsEntry("PY43-KC-001", "2026-05-01T08:30:00Z");
-    assertThat(confidenceCaptor.getValue()).containsEntry("PY43-KC-001", 0.8);
+    assertThat(result).isSameAs(expected);
+    verify(learnerTwinService).frontier(7L, 1, List.of(), 4);
+    verifyNoInteractions(graphClient);
   }
 
   @Test
@@ -911,11 +951,15 @@ class BossServiceTest {
   }
 
   @Test
-  @DisplayName("graph 评测不可用时返回服务错误，不记为答错也不发学习事件")
+  @DisplayName("Graph 与本地判题环境都不可用时返回服务错误，不记为答错")
   void graphUnavailablePublishesNothing() {
     when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problemWithTests(3)));
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenThrow(new RestClientException("graph down"));
+    when(judgeWorkerPool.submitAndWait(any()))
+        .thenAnswer(invocation -> ((Callable<?>) invocation.getArgument(0)).call());
+    when(staticCodeChecker.check("print(1)"))
+        .thenReturn(new StaticCodeChecker.CheckResult(false, "SYSTEM_ERROR", true));
 
     assertThatThrownBy(
             () -> service.evaluateAttempt(new BossAttemptRequest("p1", 1, 1, "print(1)", 10), 7L))
@@ -927,6 +971,26 @@ class BossServiceTest {
             });
 
     verifyNoInteractions(eventPublisher);
+  }
+
+  @Test
+  @DisplayName("Graph 评测不可用时由同一 Python 沙箱本地判题并回流真实结果")
+  void graphUnavailableFallsBackToLocalJudge() {
+    when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problemWithTests(3)));
+    when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
+        .thenThrow(new RestClientException("graph down"));
+    when(judgeWorkerPool.submitAndWait(any()))
+        .thenAnswer(invocation -> ((Callable<?>) invocation.getArgument(0)).call());
+    when(staticCodeChecker.check("print(5)"))
+        .thenReturn(new StaticCodeChecker.CheckResult(true, null, false));
+    when(judgeCaseEvaluator.evaluate(eq("print(5)"), anyList()))
+        .thenReturn(new JudgeCaseEvaluator.CaseEvaluation(Verdict.AC, 1, 2, null, null));
+
+    var result = service.evaluateAttempt(new BossAttemptRequest("p1", 1, 1, "print(5)", 10), 7L);
+
+    assertThat(result.passed()).isTrue();
+    assertThat(result.passedTestCases()).isEqualTo(1);
+    verify(eventPublisher).publishEvent(any(LearningEvent.PracticeSucceeded.class));
   }
 
   @Test

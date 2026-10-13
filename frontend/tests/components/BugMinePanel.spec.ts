@@ -174,15 +174,18 @@ function buildEchoCandidate(
   };
 }
 
-function mountPanel() {
+function mountPanel(props: { reviewKc?: string | null } = {}) {
   const router: Router = createRouter({
     history: createMemoryHistory(),
     routes: [
+      { path: '/', component: { template: '<div />' } },
       { path: '/bug-mine', name: 'bug-mine', component: { template: '<div />' } },
+      { path: '/expedition', name: 'expedition', component: { template: '<div />' } },
       { path: '/training', name: 'training', component: { template: '<div />' } },
     ],
   });
   return mount(BugMinePanel, {
+    props,
     global: { plugins: [createPinia(), router] },
   });
 }
@@ -258,6 +261,18 @@ describe('BugMinePanel', () => {
     expect(openBugMineEcho).toHaveBeenCalledWith({ kcCode: 'PY43-KC-016' });
     expect(wrapper.text()).toContain('会话 #100');
     expect(wrapper.text()).toContain('久未复习');
+  });
+
+  it('starts a KC expedition when an overdue review has no error-book or echo candidate', async () => {
+    const wrapper = mountPanel({ reviewKc: 'PY43-KC-016' });
+    const router = wrapper.vm.$router;
+    const pushSpy = vi.spyOn(router, 'push');
+    await flushPromises();
+
+    expect(pushSpy).toHaveBeenCalledWith({
+      path: '/expedition',
+      query: { kcCode: 'PY43-KC-016' },
+    });
   });
 
   it('omits locked layers from the diagnostic dropdown (depth gating)', async () => {

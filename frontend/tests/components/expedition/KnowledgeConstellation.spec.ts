@@ -18,4 +18,13 @@ describe('KnowledgeConstellation', () => {
     const wrapper = mount(KnowledgeConstellation);
     expect(wrapper.get('.kc-constellation__cap strong').text()).toBe('0');
   });
+
+  it('shows unassessed knowledge neutrally instead of as a measured zero', () => {
+    const wrapper = mount(KnowledgeConstellation, {
+      props: { mastery: { 'PY43-KC-001': 0 }, assessed: [] },
+    });
+
+    expect(wrapper.get('[data-testid="kc-star-PY43-KC-001"] title').text()).toContain('尚未评估');
+    expect(wrapper.text()).toContain('已评估 0 / 65');
+  });
 });

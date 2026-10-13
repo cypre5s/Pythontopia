@@ -67,6 +67,7 @@ public class MemoryStreamMirror {
     put(payload, "resourceId", event.resourceId());
     put(payload, "kcCode", event.kcCode());
     put(payload, "evidenceType", event.evidenceType());
+    put(payload, "submissionId", event.submissionId());
     put(payload, "delta", event.delta());
     put(payload, "remediationType", event.remediationType());
     mirror(

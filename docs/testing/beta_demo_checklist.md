@@ -14,8 +14,8 @@
 - [ ] 后端启动：`cd backend && mvn -s .mvn/settings.xml spring-boot:run`，等待 stdout `Started PythontopiaApplication`，端口按本地配置可访问。
 - [ ] 前端启动：`cd frontend && npm run dev`，等待 `VITE ready at http://localhost:5173`（`predev` 钩子会同步 NPC 与 course43 数据，请确认无 sync 报错）。
 - [ ] 测试账号已就绪：
-  - 学生：`student@demo / P@ssw0rd1`（首次需 `/register` 创建，或运行 `bash deploy/scripts/seed_demo_classroom.sh`）。
-  - 教师：`teacher@demo / P@ssw0rd1`（同上）。
+  - 学生：通过 `/register` 创建，或使用 `bash deploy/scripts/seed_demo_classroom.sh` 本次运行打印的一次性凭据。
+  - 教师：使用 seed 脚本本次打印的一次性凭据（邀请码从本地 `.env` 读取）。
 - [ ] 浏览器：Chrome / Edge 最新版；DevTools Network / Console 全开；建议宽度 ≥1366。
 - [ ] 资产同步：`frontend/public/data/npcs/` 与 `data/npcs/` 一致；R-14 主线 NPC 均能在 `town_hub` 内触达。
 
@@ -27,7 +27,7 @@
 
 - [ ] 访问 `http://localhost:5173/` → 自动 redirect 到 `/login`（未登录时由 `router.beforeEach` 强制跳转）。
 - [ ] 表单显示 `用户名` 与 `密码` 标签，按钮文字 `进入小镇`。
-- [ ] 输入 `student@demo / P@ssw0rd1` → 点击 `进入小镇`。
+- [ ] 输入本次注册或 seed 脚本生成的学生凭据 → 点击 `进入小镇`。
 - [ ] 登录成功后跳转链路：`/login → /town`（兼容旧路由）→ `router.ts` 重定向 `/world`。
 - [ ] Vue 路由稳定在 `/world`；地址栏 URL 不再变动。
 - [ ] DevTools Network 看到关键请求：
@@ -126,7 +126,7 @@
 
 ### B1. 教师登录与 dashboard
 
-- [ ] 登录 `teacher@demo` → 跳转 `/teacher`，看到「我的班级」列表 + 「新建班级」按钮。
+- [ ] 登录 seed 脚本本次打印的一次性教师账号 → 跳转 `/teacher`，看到「我的班级」列表 + 「新建班级」按钮。
 
 ### B2. 创建班级与拉学生
 

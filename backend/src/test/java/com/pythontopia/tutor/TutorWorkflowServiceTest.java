@@ -76,7 +76,8 @@ class TutorWorkflowServiceTest {
           coursePackRepository,
           submissionService,
           eventPublisher,
-          new ObjectMapper());
+          new ObjectMapper(),
+          mock(TutorDailyRequestLimitService.class));
 
   private static final long USER = 7L;
   private static final long PROBLEM = 476L;

@@ -87,6 +87,16 @@ public class MemoryRetrievalService {
     return retrieve(userId, focusKc, queryText, limit, true);
   }
 
+  @Transactional(readOnly = true)
+  public List<MemoryItemDto> retrieveAuthoritativeBetween(
+      Long userId, Instant since, Instant until, int limit) {
+    int safeLimit = clampLimit(limit);
+    List<MemoryRow> rows =
+        eventRepository.findRecentAuthoritativeForMemoryBetween(
+            userId, SCAN_WINDOW, since, until);
+    return scoreRows(userId, rows, null, null, safeLimit);
+  }
+
   private List<MemoryItemDto> retrieve(
       Long userId, String focusKc, String queryText, int limit, boolean authoritative) {
     int safeLimit = clampLimit(limit);
@@ -94,6 +104,11 @@ public class MemoryRetrievalService {
         authoritative
             ? eventRepository.findRecentAuthoritativeForMemory(userId, SCAN_WINDOW)
             : eventRepository.findRecentForMemory(userId, SCAN_WINDOW);
+    return scoreRows(userId, rows, focusKc, queryText, safeLimit);
+  }
+
+  private List<MemoryItemDto> scoreRows(
+      Long userId, List<MemoryRow> rows, String focusKc, String queryText, int safeLimit) {
     if (rows.isEmpty()) {
       return List.of();
     }

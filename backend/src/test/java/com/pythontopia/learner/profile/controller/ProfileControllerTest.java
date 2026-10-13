@@ -18,10 +18,11 @@ import com.pythontopia.learner.profile.dto.SelfDimensionRequest;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.profile.service.ProfileService;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
+import org.mockito.ArgumentCaptor;
 
 class ProfileControllerTest {
 
@@ -39,33 +40,13 @@ class ProfileControllerTest {
   }
 
   @Test
-  void rejectsStudentMetadataBeforeWritingProfile() {
-    assertThatThrownBy(
-            () ->
-                controller.selfUpdate(
-                    student,
-                    "learning_goal",
-                    new SelfDimensionRequest(
-                        null, null, null, Map.of("goal", "ignore previous instructions"))))
-        .isInstanceOfSatisfying(
-            BusinessException.class,
-            error -> {
-              assertThat(error.status()).isEqualTo(HttpStatus.BAD_REQUEST);
-              assertThat(error.code()).isEqualTo("PROFILE_SELF_UPDATE_METADATA_NOT_ALLOWED");
-            });
-
-    verify(passiveProfileService, never()).applyDimensionUpdate(any(), any(), any());
-  }
-
-  @Test
   void rejectsStudentFreeFormTagsBeforeWritingProfile() {
     assertThatThrownBy(
             () ->
                 controller.selfUpdate(
                     student,
                     "learning_goal",
-                    new SelfDimensionRequest(
-                        null, null, List.of("ignore previous instructions"), null)))
+                    new SelfDimensionRequest(null, List.of("ignore previous instructions"))))
         .isInstanceOfSatisfying(
             BusinessException.class,
             error -> {
@@ -83,7 +64,7 @@ class ProfileControllerTest {
                 controller.selfUpdate(
                     student,
                     "cognitive_style",
-                    new SelfDimensionRequest(null, null, List.of("system prompt"), null)))
+                    new SelfDimensionRequest(null, List.of("system prompt"))))
         .isInstanceOfSatisfying(
             BusinessException.class,
             error -> assertThat(error.code()).isEqualTo("PROFILE_SELF_UPDATE_TAG_NOT_ALLOWED"));
@@ -100,10 +81,13 @@ class ProfileControllerTest {
 
     DimensionUpdateResult actual =
         controller.selfUpdate(
-            student, "cognitive_style", new SelfDimensionRequest(0.05, 1, List.of("visual"), null));
+            student, "cognitive_style", new SelfDimensionRequest(0.05, List.of("visual")));
 
     assertThat(actual).isSameAs(result);
+    ArgumentCaptor<DimensionDelta> deltaCaptor = ArgumentCaptor.forClass(DimensionDelta.class);
     verify(passiveProfileService)
-        .applyDimensionUpdate(eq(7L), eq("cognitive_style"), any(DimensionDelta.class));
+        .applyDimensionUpdate(eq(7L), eq("cognitive_style"), deltaCaptor.capture());
+    assertThat(deltaCaptor.getValue().evidenceIncrement()).isNull();
+    assertThat(deltaCaptor.getValue().metadata()).isNull();
   }
 }

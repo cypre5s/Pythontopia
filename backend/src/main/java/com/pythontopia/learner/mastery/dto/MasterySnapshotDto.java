@@ -7,4 +7,15 @@ public record MasterySnapshotDto(
     BigDecimal masteryScore,
     BigDecimal confidence,
     String lastEventAt,
-    String latestSource) {}
+    String latestSource,
+    boolean assessed) {
+
+  public MasterySnapshotDto(
+      String kcCode,
+      BigDecimal masteryScore,
+      BigDecimal confidence,
+      String lastEventAt,
+      String latestSource) {
+    this(kcCode, masteryScore, confidence, lastEventAt, latestSource, false);
+  }
+}

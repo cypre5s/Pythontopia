@@ -7,9 +7,7 @@ import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.world.boss.dto.ExpeditionRunActionRequest;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import com.pythontopia.world.boss.dto.ExpeditionRunStartRequest;
-import com.pythontopia.world.boss.dto.FrontierSelectRequest;
 import jakarta.validation.Valid;
-import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -61,9 +59,7 @@ public class ExpeditionRunController {
       @Valid @RequestBody ExpeditionRunStartRequest request) {
     requireStudent(user);
     var frontier =
-        bossService.selectFrontier(
-            user.userId(),
-            new FrontierSelectRequest(null, List.of(), request.focusChapter(), List.of(), 40));
+        bossService.selectFrontier(user.userId(), request.focusChapter(), request.preferredKcCode());
     return service.start(
         user.userId(), request.focusChapter(), request.isDaily(), frontier.picks());
   }

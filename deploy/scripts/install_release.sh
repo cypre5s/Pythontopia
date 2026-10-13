@@ -24,6 +24,7 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/deepseek_model_contract.sh"
+source "${SCRIPT_DIR}/piston_url_contract.sh"
 
 # ---------------------------------------------------------------------------
 # 常量与全局状态
@@ -140,24 +141,6 @@ require_env_value() {
     return 1
   fi
   echo "    ${var_name} 已配置（值不输出）"
-}
-
-is_private_piston_http_url() {
-  local url="$1"
-  local authority host
-  [[ "${url}" == http://* ]] || return 1
-  authority="${url#http://}"
-  authority="${authority%%/*}"
-  if [[ "${authority}" == \[*\]* ]]; then
-    host="${authority%%]*}]"
-  else
-    host="${authority%%:*}"
-  fi
-  case "${host}" in
-    localhost|127.*|10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*\
-      |\[::1\]|piston|piston-*|*.internal|*.local) return 0 ;;
-  esac
-  [[ "${host}" != *.* ]]
 }
 
 # 从生产 .env 校验秘密存在性、公开占位特征与最小长度；任何分支都不打印值。
@@ -492,13 +475,6 @@ step "启动应用服务（rag → graph → backend → frontend）并等待健
 wait_healthy 480 pythontopia-rag pythontopia-graph backend frontend
 
 # ---------------------------------------------------------------------------
-step "校准公共快速体验账号"
-# ---------------------------------------------------------------------------
-PYT_COMPOSE_PROJECT="${COMPOSE_PROJECT}" \
-PYT_COMPOSE_FILE="${COMPOSE_FILE}" \
-  bash "${RELEASE_DIR}/deploy/scripts/ensure_public_demo_account.sh"
-
-# ---------------------------------------------------------------------------
 step "安装主机 Nginx 配置并 nginx -t"
 # ---------------------------------------------------------------------------
 if ! command -v nginx >/dev/null 2>&1; then
@@ -564,11 +540,12 @@ step "终验：HTTP/HTTPS 全链路与容器直连健康检查"
 sleep 2
 curl -fsS -m 5 -o /dev/null http://127.0.0.1:8080/healthz \
   || { echo "[安装失败] 容器直连 127.0.0.1:8080/healthz 不可达。" >&2; exit 1; }
-curl -fsS -m 5 -o /dev/null http://127.0.0.1/healthz \
-  || { echo "[安装失败] 主机 Nginx 80 端口 /healthz 不可达（容器层正常，问题在主机 Nginx）。" >&2; exit 1; }
+HTTP_REDIRECT="$(curl -sS -m 5 -o /dev/null -w '%{http_code} %{redirect_url}' http://127.0.0.1/healthz 2>/dev/null || true)"
+[ "${HTTP_REDIRECT}" = "308 https://47.120.29.62/healthz" ] \
+  || { echo "[安装失败] 主机 Nginx 80 端口未将 /healthz 安全跳转到 HTTPS。" >&2; exit 1; }
 curl -fsS --connect-timeout 5 --max-time 10 --resolve 47.120.29.62:443:127.0.0.1 -o /dev/null https://47.120.29.62/healthz \
   || { echo "[安装失败] 主机 Nginx 443 端口 HTTPS /healthz 不可达或证书校验失败。" >&2; exit 1; }
-echo "    本机 HTTP + HTTPS 全链路健康"
+echo "    HTTP 安全跳转与 HTTPS 全链路健康"
 
 # ---------------------------------------------------------------------------
 # 收尾报告
@@ -579,7 +556,7 @@ echo "安装完成。"
 echo "  生效版本：${RELEASE_DIR}"
 [ -n "${PREV_RELEASE:-}" ] && echo "  上一版本：${PREV_RELEASE}（保留，可回滚）"
 echo "  本次备份：${BACKUP_DIR}"
-echo "  HTTP 入口：http://47.120.29.62/"
+echo "  HTTP 入口：http://47.120.29.62/（308 跳转到 HTTPS）"
 echo "  HTTPS 入口：https://47.120.29.62/"
 echo "  回滚命令：bash ${CURRENT_LINK}/deploy/scripts/rollback_release.sh"
 RELEASE_COUNT="$(find "${RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d | wc -l)"

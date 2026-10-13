@@ -18,6 +18,7 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/deepseek_model_contract.sh"
+source "${SCRIPT_DIR}/piston_url_contract.sh"
 PYT_PUBLIC_IP="${PYT_PUBLIC_IP:-47.120.29.62}"
 ENV_FILE="${PYT_ENV_FILE:-/opt/pythontopia/shared/.env}"
 ENV_FILE_FALLBACK="/opt/pythontopia/current/deploy/.env"
@@ -76,24 +77,6 @@ require_env_value() {
     return 1
   fi
   pass "${var_name} 已配置（值不输出）"
-}
-
-is_private_piston_http_url() {
-  local url="$1"
-  local authority host
-  [[ "${url}" == http://* ]] || return 1
-  authority="${url#http://}"
-  authority="${authority%%/*}"
-  if [[ "${authority}" == \[*\]* ]]; then
-    host="${authority%%]*}]"
-  else
-    host="${authority%%:*}"
-  fi
-  case "${host}" in
-    localhost|127.*|10.*|192.168.*|172.1[6-9].*|172.2[0-9].*|172.3[01].*\
-      |\[::1\]|piston|piston-*|*.internal|*.local) return 0 ;;
-  esac
-  [[ "${host}" != *.* ]]
 }
 
 validate_production_ai_env() {
@@ -471,7 +454,7 @@ LOCAL_80_OK=0
 PUBLIC_80_OK=0
 if curl -fsS -m 5 -o /dev/null http://127.0.0.1/healthz 2>/dev/null; then
   LOCAL_80_OK=1
-  pass "本机 http://127.0.0.1/healthz 可达"
+  pass "本机 HTTP 入口可达（健康响应或 HTTPS 跳转）"
 else
   info "本机 80 上的 /healthz 不可达（尚未部署主机 Nginx 时属预期，跳过公网阻断判定）"
 fi
@@ -479,7 +462,7 @@ fi
 if [ "${LOCAL_80_OK}" = "1" ]; then
   if curl -fsS -m 8 -o /dev/null "http://${PYT_PUBLIC_IP}/healthz" 2>/dev/null; then
     PUBLIC_80_OK=1
-    pass "公网 http://${PYT_PUBLIC_IP}/healthz 可达"
+    pass "公网 HTTP 入口可达（生产将跳转到 HTTPS）"
   else
     SG_BLOCKED=1
     echo "SECURITY_GROUP_PORT_80_BLOCKED"

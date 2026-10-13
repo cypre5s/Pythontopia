@@ -36,11 +36,35 @@ public class MasteryEvaluator {
     return applyEventWithDifficulty(userId, kcCode, source, delta, reason, null);
   }
 
+  @Transactional
+  public MasterySnapshot applyEvent(
+      Long userId,
+      String kcCode,
+      MasterySource source,
+      BigDecimal delta,
+      String reason,
+      String idempotencyKey) {
+    return applyEventWithDifficulty(userId, kcCode, source, delta, reason, null, idempotencyKey);
+  }
+
   /** 难度加权：难题通过增益大（×1.5），易题失败惩罚重（÷0.7）。difficulty 为空时退化为普通模式。 */
   @Transactional
   public MasterySnapshot applyEventWithDifficulty(
       Long userId, String kcCode, MasterySource source,
       BigDecimal delta, String reason, String difficulty) {
+    return applyEventWithDifficulty(userId, kcCode, source, delta, reason, difficulty, null);
+  }
+
+  /** Duplicate server-verified submissions do not change mastery or review state a second time. */
+  @Transactional
+  public MasterySnapshot applyEventWithDifficulty(
+      Long userId,
+      String kcCode,
+      MasterySource source,
+      BigDecimal delta,
+      String reason,
+      String difficulty,
+      String idempotencyKey) {
     BigDecimal effectiveDelta = delta != null ? delta : properties.defaultDelta(source);
     if (difficulty != null && !difficulty.isBlank()) {
       effectiveDelta = MasteryProperties.difficultyWeightedDelta(effectiveDelta, difficulty);
@@ -53,6 +77,15 @@ public class MasteryEvaluator {
         existing.map(MasterySnapshot::confidence).orElse(BigDecimal.ZERO);
 
     BigDecimal newScore = clamp(previousScore.add(effectiveDelta));
+    BigDecimal appliedDelta = scale(newScore.subtract(previousScore));
+    if (idempotencyKey != null) {
+      if (!repository.insertEventIfNew(
+          userId, kcCode, source, scale(effectiveDelta), appliedDelta, reason, idempotencyKey)) {
+        return existing.orElse(null);
+      }
+    } else {
+      repository.insertEvent(userId, kcCode, source, scale(effectiveDelta), appliedDelta, reason);
+    }
     BigDecimal newConfidence;
     if (source == MasterySource.DECAY) {
       newConfidence = clamp(previousConfidence.subtract(properties.confidenceLossPerDecay()));
@@ -68,7 +101,6 @@ public class MasteryEvaluator {
 
     OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
     repository.upsertSnapshot(userId, kcCode, scale(newScore), scale(newConfidence), now);
-    repository.insertEvent(userId, kcCode, source, scale(effectiveDelta), reason);
     // 同事务演化 FSRS-lite 复习状态（成功/失败/重学）；DECAY/BOOTSTRAP/MANUAL 在 service 内被忽略。
     reviewStateService.onMasteryEvent(userId, kcCode, source, now);
     return new MasterySnapshot(
@@ -125,6 +157,10 @@ public class MasteryEvaluator {
 
   public List<MasterySnapshot> snapshots(Long userId) {
     return repository.findAll(userId);
+  }
+
+  public java.util.Set<String> assessedKcCodes(Long userId) {
+    return repository.findAssessedKcCodes(userId);
   }
 
   public List<MasteryEventRecord> recentEvents(Long userId, String kcCode, int limit) {

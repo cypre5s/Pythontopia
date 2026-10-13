@@ -1,5 +1,7 @@
 # ECS HTTP + HTTPS 双协议入口设计
 
+> 状态：此设计的“HTTP 与 HTTPS 长期同时提供应用”决策已于 2026-10-13 被安全修复取代。当前仅 HTTPS 代理应用，HTTP 只保留 ACME 并将其他路径 308 重定向；权威配置见 `deploy/nginx/pythontopia.conf` 和 `deploy/README.md`。
+
 ## 背景
 
 Pythontopia 公网入口当前为 `47.120.29.62`。主机 Nginx 仅监听

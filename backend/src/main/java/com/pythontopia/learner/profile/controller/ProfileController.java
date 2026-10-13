@@ -75,7 +75,7 @@ public class ProfileController {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST,
           "PROFILE_DELTA_EMPTY",
-          "Delta must contain at least one of scoreDelta / evidenceIncrement / tagsAdd / metadata");
+          "Delta must contain scoreDelta or tagsAdd");
     }
     boolean privileged = user.role() == Role.TEACHER || user.role() == Role.ADMIN;
     if (!privileged && !passiveProfileService.isSelfEditable(dimensionKey)) {
@@ -84,12 +84,6 @@ public class ProfileController {
           "PROFILE_DIMENSION_NOT_SELF_EDITABLE",
           "Students can only self-update dimensions: "
               + PassiveProfileService.SELF_EDITABLE_DIMENSIONS);
-    }
-    if (!privileged && request.metadata() != null && !request.metadata().isEmpty()) {
-      throw new BusinessException(
-          HttpStatus.BAD_REQUEST,
-          "PROFILE_SELF_UPDATE_METADATA_NOT_ALLOWED",
-          "Students cannot set profile metadata");
     }
     List<String> tags = request.tagsAdd();
     if (!privileged

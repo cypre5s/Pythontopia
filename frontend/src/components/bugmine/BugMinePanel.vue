@@ -21,6 +21,8 @@ import {
 const learning = useLearningStore();
 const toast = useToastStore();
 const router = useRouter();
+const props = defineProps<{ reviewKc?: string | null }>();
+const initialDataLoaded = ref(false);
 
 const session = computed(() => learning.bugMine.session);
 // 题干优先用后端随会话下发的 session.problem（零额外请求）；缺失时回退到单题接口结果。
@@ -156,9 +158,28 @@ const activeErrorItem = computed<BugMineErrorBookItemDto | null>(() => {
 });
 const mistakePatterns = computed<string[]>(() => activeErrorItem.value?.mistakePatterns ?? []);
 
-onMounted(() => {
-  void learning.loadBugMineErrorBook();
-  void learning.loadBugMineEchoes();
+async function openRequestedReview(kcCode: string): Promise<void> {
+  const hasOpenSession = errorBook.value.some(
+    (item) => item.kcCode === kcCode && item.status === 'OPEN',
+  );
+  const isDue = echoes.value.some((candidate) => candidate.kcCode === kcCode);
+  if (!hasOpenSession && !isDue) {
+    toast.show('没有可用的历史错题，已改为该知识点的远征练习。', 'info');
+    await router.push({ path: '/expedition', query: { kcCode } });
+    return;
+  }
+  await learning.openBugMineEchoByKc(kcCode);
+  if (learning.bugMine.lastError) toast.show(learning.bugMine.lastError, 'error');
+}
+
+onMounted(async () => {
+  await Promise.all([learning.loadBugMineErrorBook(), learning.loadBugMineEchoes()]);
+  initialDataLoaded.value = true;
+  if (props.reviewKc) await openRequestedReview(props.reviewKc);
+});
+
+watch(() => props.reviewKc, (kcCode) => {
+  if (initialDataLoaded.value && kcCode) void openRequestedReview(kcCode);
 });
 
 // 后端已随会话下发题干则零额外请求；仅当 session.problem 缺失时回退到单题接口拉取。

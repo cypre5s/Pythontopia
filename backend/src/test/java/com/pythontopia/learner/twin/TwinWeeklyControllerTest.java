@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.learner.twin.dto.LearnerTwinStateDto;
 import com.pythontopia.learner.twin.dto.WeeklyReportDto;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -20,7 +21,8 @@ import org.springframework.http.HttpStatus;
 class TwinWeeklyControllerTest {
 
   private final WeeklyReportService service = mock(WeeklyReportService.class);
-  private final TwinWeeklyController controller = new TwinWeeklyController(service);
+  private final LearnerTwinService learnerTwinService = mock(LearnerTwinService.class);
+  private final TwinWeeklyController controller = new TwinWeeklyController(service, learnerTwinService);
 
   private static WeeklyReportDto sample() {
     return new WeeklyReportDto(
@@ -56,5 +58,27 @@ class TwinWeeklyControllerTest {
     assertThat(result.resourceRuns().get(0).status()).isEqualTo("SUCCESS");
     // 必须用当前登录者 userId 聚合，杜绝越权读他人周报。
     verify(service).build(eq(7L));
+  }
+
+  @Test
+  void studentGetsOnlyTheirTwinState() {
+    CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
+    LearnerTwinStateDto expected = new LearnerTwinStateDto(1, 65, 0, "启程练习", List.of(), List.of());
+    when(learnerTwinService.state(7L)).thenReturn(expected);
+
+    assertThat(controller.state(student)).isSameAs(expected);
+    verify(learnerTwinService).state(7L);
+  }
+
+  @Test
+  void rejectsTeacherFromTwinState() {
+    CurrentUserPrincipal teacher = new CurrentUserPrincipal(2L, "teacher", Role.TEACHER);
+
+    assertThatThrownBy(() -> controller.state(teacher))
+        .isInstanceOf(BusinessException.class)
+        .extracting(ex -> ((BusinessException) ex).status())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+
+    verifyNoInteractions(learnerTwinService);
   }
 }

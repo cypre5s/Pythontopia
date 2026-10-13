@@ -139,7 +139,7 @@ docker compose -p deploy -f docker-compose.production.yml ps   # 六个服务应
 # 宿主回环口（生产编排只暴露这两个）
 curl -sf http://127.0.0.1:8080/healthz   && echo " frontend ok"
 curl -sf http://127.0.0.1:18080/readyz  && echo " backend ready"
-curl -sf http://127.0.0.1/healthz         && echo " nginx http ok"
+curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' http://127.0.0.1/healthz  # 预期 308 到 HTTPS
 curl -sf --resolve 47.120.29.62:443:127.0.0.1 \
   https://47.120.29.62/healthz            && echo " nginx https ok"
 

@@ -41,7 +41,8 @@ fi
 BASE_URL="${BASE_URL%/}"
 
 # 从 base_url 提取主机名（去协议、去端口、去路径）
-HOST="$(printf '%s' "${BASE_URL}" | sed -E 's#^[a-zA-Z]+://##; s#/.*$##; s#:.*$##')"
+AUTHORITY="$(printf '%s' "${BASE_URL}" | sed -E 's#^[a-zA-Z]+://##; s#/.*$##')"
+HOST="${AUTHORITY%%:*}"
 
 PASS_COUNT=0
 FAIL_COUNT=0
@@ -78,19 +79,40 @@ http_code() {
   printf '%s' "${code:-000}"
 }
 
+# Never send QA credentials to a remote HTTP endpoint. Probe only a harmless GET,
+# then use the HTTPS destination for every acceptance request.
+if [ "${HOST}" != "localhost" ] && [[ ! "${HOST}" =~ ^127\. ]]; then
+  HTTP_PROBE="$(curl -sS -o /dev/null -w '%{http_code}\n%{redirect_url}' --max-time 20 \
+    "http://${AUTHORITY}/healthz" 2>/dev/null || true)"
+  HTTP_CODE="${HTTP_PROBE%%$'\n'*}"
+  HTTP_LOCATION="${HTTP_PROBE#*$'\n'}"
+  if [ "${HTTP_CODE}" != "308" ] || [[ "${HTTP_LOCATION}" != https://* ]]; then
+    fail "HTTP 入口未安全返回 308 HTTPS 跳转；停止验收以避免明文发送账号凭据"
+    log "结果：通过 ${PASS_COUNT} 项 / 失败 ${FAIL_COUNT} 项 / 跳过 ${SKIP_COUNT} 项"
+    exit 1
+  fi
+  pass "公网 HTTP 入口返回 308 HTTPS 跳转"
+  if [[ "${BASE_URL}" == http://* ]]; then
+    BASE_URL="${HTTP_LOCATION%/healthz}"
+    log "后续验收使用 HTTPS：${BASE_URL}"
+  fi
+else
+  skip "本机开发地址不要求公网 HTTP→HTTPS 入口"
+fi
+
 log "==============================================================="
 log " Pythontopia 公网验收：${BASE_URL}（主机 ${HOST}）"
 log " 时间：$(date '+%F %T')  证据日志：${LOG_FILE}"
 log "==============================================================="
 
 # ----------------------------------------------------------------------------
-# 1. 首页 HTTP 200（不跟随重定向，直接命中即视为正常）
+# 1. 首页最终返回 200；公网 HTTP 入口已先单独验证 308 到 HTTPS
 # ----------------------------------------------------------------------------
 ROOT_CODE="$(http_code "${BASE_URL}/")"
 if [ "${ROOT_CODE}" = "200" ]; then
   pass "01 首页 GET / 返回 200"
 else
-  fail "01 首页 GET / 返回 ${ROOT_CODE}（期望 200，未跟随重定向）"
+  fail "01 首页 GET / 返回 ${ROOT_CODE}（期望 200）"
 fi
 
 # ----------------------------------------------------------------------------

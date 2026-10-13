@@ -106,14 +106,13 @@ async function onSelfRate(dim: ProfileDimensionDto): Promise<void> {
   }
 }
 
-/** 纠偏：把所选风格作为主导 tag 提交（tagsAdd + 小 evidence/score），保存后回读反映选择。 */
+/** 纠偏：把所选风格作为主导 tag 提交；自评不增加可信证据。 */
 async function onPickCognitiveStyle(choice: string): Promise<void> {
   if (savingCognitiveStyle.value) return;
   savingCognitiveStyle.value = true;
   try {
     await selfUpdateDimension(COGNITIVE_STYLE_KEY, {
       scoreDelta: 0.05,
-      evidenceIncrement: 1,
       tagsAdd: [choice],
     });
     await loadDimensions();

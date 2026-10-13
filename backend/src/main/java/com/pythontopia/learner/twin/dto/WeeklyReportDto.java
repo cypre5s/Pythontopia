@@ -34,9 +34,9 @@ public record WeeklyReportDto(
   /** 本周掌握度变化与服务端留存的证据覆盖。 */
   public record MasteryDeltaBrief(
       String kcCode,
-      double currentScore,
-      double confidence,
-      double weeklyDelta,
+      Double currentScore,
+      Double confidence,
+      Double weeklyDelta,
       int evidenceCount,
       List<String> evidenceSources) {}
 

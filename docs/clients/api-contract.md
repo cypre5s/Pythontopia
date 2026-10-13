@@ -55,7 +55,7 @@ Authorization: Bearer <token>
 {
   "token": "<jwt>",
   "expiresAt": "2026-06-06T09:39:00Z",
-  "user": { "id": 1, "username": "demo-stu-01", "displayName": "演示学生", "role": "STUDENT" }
+  "user": { "id": 1, "username": "student1", "displayName": "学生", "role": "STUDENT" }
 }
 ```
 
@@ -122,6 +122,8 @@ Authorization: Bearer <token>
 | GET | `/api/learner/profile/dimensions` | Bearer | 8 维画像快照（雷达图 + 自评 UI 用） |
 | PUT | `/api/learner/profile/dimensions/{dimensionKey}` | Bearer | 自评直写单维；学生仅可改 4 个主观维度，越权改客观维度 → `403` |
 | GET | `/api/learner/mastery` | Bearer | KC 掌握度快照列表 |
+
+`/api/learner/mastery` 的快照包含 `assessed`：只有正式练习、微测或调试证据存在时为 `true`；`confidence` 不是评估状态标志。
 
 ### 4.3 任务（公告板，仅学生）
 
@@ -260,7 +262,7 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 | GET | `/api/world/boss/{chapter}/prefetch` | Bearer | 用 `preferredKc`、`preferredKind`、`arenaLevel`、`difficulty` 和可选 `stage`、`expeditionRunId`、`expeditionNodeId` 查询状态；省略 stage 兼容旧客户端并按其他维度查询 |
 | POST | `/api/world/boss/{chapter}/attempt` | Bearer | 正式提交，判题结果入库；公开样例的本地预览不能代替该接口 |
 | GET | `/api/world/expedition/run` | STUDENT | 取本人活动存档；返回的 `score` 和 `verifiedDepth` 由服务端判题账本计算，空存档返回 `204` |
-| POST | `/api/world/expedition/run` | STUDENT | body `{ focusChapter: 1..7|null, isDaily }`；服务端选择学习前沿、生成地图并初始化 run，返回带服务端 `runId` 的快照 |
+| POST | `/api/world/expedition/run` | STUDENT | body `{ focusChapter: 1..7|null, isDaily, preferredKcCode? }`；可选 `preferredKcCode` 只表达导航偏好，服务端先校验课程 KC 与先修条件，再将合格 KC 排在远征第一题；服务端生成地图并返回带 `runId` 的快照 |
 | PUT | `/api/world/expedition/run` | STUDENT | 兼容旧客户端的校验入口；只校验活动 `runId`、章节和地图拓扑并返回服务端快照，不写入客户端提交的 phase、HP、节点状态、气势、遗物或历史，也不能创建新局 |
 | POST | `/api/world/expedition/run/actions` | STUDENT | 执行单个服务端校验的远征动作并返回 canonical 快照。`action` 为 `ENTER_NODE`、`EVENT_REVIEW`、`EVENT_STUDY`、`EVENT_STEADY`、`CLAIM_RELIC`、`SETTLE_CHALLENGE`、`FINISH`；按动作传 `nodeId`、`relicId` 或 `problemId`。结算会核对该 run、题目、节点绑定及本人正式判题账本；客户端不提交 HP、分数或通关结果 |
 | DELETE | `/api/world/expedition/run` | STUDENT | 弃局并结束本人活动存档 |

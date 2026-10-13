@@ -61,11 +61,9 @@ bash scripts/seed_demo_classroom.sh # 注册 1 教师 + 3 学生 + 1 班级 + 1 
 bash scripts/demo_smoke.sh          # 4 健康检查 + course pack 43 可读冒烟
 ```
 
-登录页「快速体验」使用固定公共账号 `demo-stu-01 / P@ssw0rd1`。生产安装脚本会调用
-`ensure_public_demo_account.sh` 幂等校准该账号口令，并保留已有学习进度。
-
-`seed_demo_classroom.sh` 为教师联动演示生成其余一次性密码并打印到终端，**不会写入 .env、不会落盘**。
-演示后可用 `bash scripts/teardown_demo.sh` 清理 `demo-*` 账号；再次发布会自动恢复公共快速体验账号。
+公网不创建共享演示账号；学生通过登录页注册，避免访客共用学习记录。
+本地联动演示可运行 `bash scripts/seed_demo_classroom.sh`，脚本会把一次性密码打印到终端，**不会写入 .env、不会落盘**。
+演示后可用 `bash scripts/teardown_demo.sh` 清理 `demo-*` 账号。
 
 ## 健康检查
 
@@ -167,7 +165,7 @@ Docker Compose 同样保留官方镜像名，镜像加速交给本机 Docker dae
 ## 生产部署（阿里云 ECS · HTTP + HTTPS）
 
 生产环境为阿里云 ECS（Ubuntu 22.04，2C4G，公网 `47.120.29.62`），
-**80（HTTP）与 443（HTTPS）同时对外**。
+**80（HTTP）仅供 ACME 验证并将其他请求永久跳转到 443（HTTPS）**。
 与开发编排（`docker-compose.yml`）不同，生产用 `docker-compose.production.yml` +
 主机 Nginx（`nginx/pythontopia.conf`）+ 三个运维脚本（`scripts/preflight_ecs.sh`、
 `scripts/install_release.sh`、`scripts/rollback_release.sh`）。
@@ -194,8 +192,8 @@ flowchart LR
 
 - 对外只有主机 Nginx 的 80/443；`frontend` 绑 `127.0.0.1:8080`、`backend` 绑 `127.0.0.1:18080`
   （仅主机诊断），graph / rag / postgres / redis **不绑任何宿主端口**。
-- HTTP 与 HTTPS 共用同一个 Nginx `server` 和全部代理规则；不做 80→443 强制跳转，
-  也不启用 HSTS，两个入口长期并存。
+- HTTP 入口不代理应用/API：除 ACME HTTP-01 challenge 外，所有路径固定 308 跳转到
+  `https://47.120.29.62`，避免密码、JWT 和业务数据经明文链路传输。
 - HTTPS 使用 Let’s Encrypt 为 `47.120.29.62` 签发的可信 IP 短期证书。证书位于
   `/etc/letsencrypt/live/47.120.29.62/`，由
   `pythontopia-certbot-renew.timer` 每日检查两次，续期成功后自动 reload Nginx。
@@ -259,12 +257,12 @@ sudo bash <发布包内>/deploy/scripts/install_release.sh /path/to/pythontopia-
 ### 健康检查
 
 ```bash
-curl -s http://127.0.0.1/healthz          # 主机 Nginx → frontend 容器（全链路）
+curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' http://127.0.0.1/healthz  # 预期 308 到 HTTPS
 curl --resolve 47.120.29.62:443:127.0.0.1 -s https://47.120.29.62/healthz
 curl -s http://127.0.0.1:8080/healthz     # frontend 容器直连
 curl -s http://127.0.0.1:18080/healthz    # backend 容器直连（主机诊断口）
 docker compose -p deploy ps               # 六个服务应全部 healthy
-curl -s http://47.120.29.62/healthz       # 公网全链路（任意机器）
+curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' http://47.120.29.62/healthz  # 预期 308
 curl -s https://47.120.29.62/healthz      # 公网 HTTPS + 可信 IP 证书
 ```
 

@@ -39,11 +39,12 @@ function agentIcon(n: string): string {
   return '\u{1F916}';
 }
 
-function percent(value: number): string {
-  return `${(value * 100).toFixed(0)}%`;
+function percent(value: number | null): string {
+  return value == null ? '暂无可比数据' : `${(value * 100).toFixed(0)}%`;
 }
 
-function deltaPercent(value: number): string {
+function deltaPercent(value: number | null): string {
+  if (value == null) return '暂无可比数据';
   const points = (value * 100).toFixed(0);
   return `${value > 0 ? '+' : ''}${points}%`;
 }
@@ -86,9 +87,9 @@ function promptInsight(insight: { text: string; dimensionKey: string }): void {
 
 function promptMastery(delta: {
   kcCode: string;
-  currentScore: number;
-  confidence: number;
-  weeklyDelta: number;
+  currentScore: number | null;
+  confidence: number | null;
+  weeklyDelta: number | null;
   evidenceCount: number;
   evidenceSources: string[];
 }): void {
