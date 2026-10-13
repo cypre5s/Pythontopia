@@ -511,6 +511,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   async function startRun(
     focus: number | null,
     daily = false,
+    preferredKcCode: string | null = null,
   ): Promise<void> {
     if (starting.value) return;
     challengeGeneration += 1;
@@ -561,7 +562,11 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
         }
       }
       // 前沿和地图由服务端一次性签发，客户端不再决定本局的节点拓扑与挑战配置。
-      const started = await createExpeditionRun({ focusChapter: focus, isDaily: daily });
+      const started = await createExpeditionRun({
+        focusChapter: focus,
+        isDaily: daily,
+        ...(!daily && preferredKcCode ? { preferredKcCode } : {}),
+      });
       if (!started.runId) throw new Error('服务端未签发远征 run');
       runId.value = started.runId;
       nodes.value = started.nodes;

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-13 — 数字孪生可信闭环与远征共享选题
+
+- 新增只读 `GET /api/learner/twin/state`：从课程包 43、已验证 KC 证据、正式练习时间、FSRS-lite 复习状态与学习目标聚合统一状态；无证据的 KC 返回未评估，不把默认分数当能力事实。`/api/learner/mastery` 明确返回 `assessed`，远征星图使用相同判定。
+- `AdaptivePracticePolicy` 为学习分身、复习与无尽远征共用确定性 KC/难度选择；远征不再依赖客户端画像信号或等待 Graph 选择前沿。Graph 出题异常或返回空题时按同 KC 查现有课程题库，Graph 判题故障时尝试现有本地判题器。
+- 掌握度事件关联服务端 submission ID 并按用户幂等；V210 防止正式提交与同提交微测跨模块重复计分，V211 保存封顶后的实际掌握度变化，旧事件无法重建时周报显示“暂无可比数据”。自评请求不能提交 evidence 增量或任意 metadata。V209 为 Tutor 文本/工作流设每账号上海时区每日最多 30 次请求，conversationId 无法绕过额度，并清理超过 90 天的计数记录。
+- 画像投影也按服务端 submission ID 幂等，正式练习与同一提交的资源操作检查不会重复提高实践能力。分身推荐把选中的 KC 传给远征，服务端仅优先已通过先修校验的候选；到期推荐没有可用错题/遗忘回声时，自动转到同 KC 远征练习。
+- 周报统一周区间、时区和批量读取，分开展示事件总数、最多 30 条记忆、当前掌握度与可核对的周变化。学习分身页整合真实 KC 状态、成长证据、可执行的主/备推荐与近期变化；第二条推荐独立取自服务端结果。
+- 验证：后端 12 类 / 138 tests，0 failures、0 errors，Testcontainers 空库迁移到 V211；Web 画像页、矿洞、远征 API/store 与星图 5 个文件 / 77 tests、TypeScript typecheck 通过；Tutor 文图/流式/工作流/provider 61 tests 通过；生产 AI readiness、Piston 主机与共享演示账号契约通过；`git diff --check` 通过。
+- 未完成：策略排除本局已用 KC，尚未按近期题目指纹排除重复题；Tutor 限制是请求次数而非模型 token 或金额支出上限。未来路线对比与 BKT 按计划暂缓。未运行全栈浏览器联测、未发起新的 DeepSeek 请求、未测远征性能。对话中暴露过的 DeepSeek 密钥应先轮换。
+- 详细记录见 [数字孪生精简优化工作日志](../plans/2026-10-13-digital-twin-simplification-worklog.md)。
+
 ## 2026-10-13 — DeepSeek/Tutor 安全、后台表格和远征奖励校验
 
 - Graph Piston 请求关闭环境代理继承；Tutor/Boss 日志仅记录画像信号是否存在，视频代理日志不再含代理地址。Boss 未配置 DeepSeek 或解析为 DryRun 时明确返回不可用；生成/兜底题的 KC 与请求目标不符时拒绝下发。
@@ -9,7 +20,7 @@
 - ASR 关闭时控制器立即返回降级结果，不再读取上传音频；启用时在复制字节前拒绝超过 8MiB 的文件。
 - 验证：Graph 全量 `1812 passed, 1 skipped`；Web 全量 256 个测试文件 / 2517 项、typecheck、定向 ESLint 和生产构建通过；后端 BossService、ExpeditionRunService 与 PostgreSQL 远征集成共 67 项通过，空库迁移到 V208；定向 Spotless/Ruff、`git diff --check` 通过。
 - ASR 补充验证：控制器与服务 6 项定向测试通过；全仓 Spotless 仍被 607 个其他 Java 文件的格式问题阻断，ASR 控制器和测试不在违规清单中；本轮改动未触发外部 ASR 或 DeepSeek 请求。
-- 本轮没有调用 DeepSeek，也没有跑无尽远征性能测试。Tutor 账号费用额度仍等待用户选择；已在对话出现过的密钥应轮换后再用于生产。
+- 本轮没有调用 DeepSeek，也没有跑无尽远征性能测试。Tutor 账号级限额后来落实为上海时区每日 30 次请求（不是 token/金额支出上限）；已在对话出现过的密钥应轮换后再用于生产。
 
 ## 2026-10-13 — Tutor 断线重试幂等与后台分页
 

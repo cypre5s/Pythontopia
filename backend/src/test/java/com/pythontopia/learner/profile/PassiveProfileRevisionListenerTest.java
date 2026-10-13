@@ -121,6 +121,30 @@ class PassiveProfileRevisionListenerTest {
   }
 
   @Test
+  void operationCheckAndPracticePassForTheSameSubmissionShareOneIdempotencyKey() {
+    listener.onPracticeSucceeded(
+        new LearningEvent.PracticeSucceeded(7L, "PY43-KC-004", 104L, "medium", 501L));
+    listener.onResourceCheckCompleted(
+        new LearningEvent.ResourceCheckCompleted(
+            7L,
+            35L,
+            99L,
+            "PY43-KC-004",
+            "OPERATION",
+            true,
+            new java.math.BigDecimal("0.05"),
+            null,
+            501L));
+
+    ArgumentCaptor<ProfileDimensionProjection> captor =
+        ArgumentCaptor.forClass(ProfileDimensionProjection.class);
+    verify(outboxService, times(2)).enqueue(captor.capture());
+    assertThat(captor.getAllValues())
+        .extracting(ProfileDimensionProjection::idempotencyKey)
+        .containsExactly("submission:7:501", "submission:7:501");
+  }
+
+  @Test
   void resourceCheckFailedUpdatesErrorPatternWithRemediationTag() {
     listener.onResourceCheckCompleted(
         new LearningEvent.ResourceCheckCompleted(

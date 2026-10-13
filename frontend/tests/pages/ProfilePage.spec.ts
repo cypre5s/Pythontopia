@@ -4,8 +4,7 @@
  * 覆盖：
  *   1. 认知风格卡内渲染 3 选 1 纠偏（先看图解=visual / 先读推理=logical / 先跑例子=trial），
  *      初始按末尾 tag 高亮当前主导风格；
- *   2. 选某风格 → 调用 selfUpdateDimension('cognitive_style', tagsAdd:[choice] + 小 evidence/score)，
- *      保存回读后高亮反映所选风格。
+ *   2. 选某风格 → 更新主观自评标签，不增加可信证据，保存回读后高亮反映所选风格。
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mount, flushPromises } from '@vue/test-utils';
@@ -150,7 +149,7 @@ describe('ProfilePage cognitive_style 纠偏', () => {
     expect(card.find('.dim-card__detail').text()).toContain('序列型 · 场依存 4/10');
   });
 
-  it('picking a style calls selfUpdateDimension with tagsAdd + small evidence/score', async () => {
+  it('picking a style cannot increase trusted evidence', async () => {
     const wrapper = await mountPage();
     // 保存后回读：下一次拉取返回 visual 落在末尾（主导）。
     getProfileDimensionsMock.mockResolvedValueOnce(dims(['logical', 'visual']));
@@ -160,7 +159,6 @@ describe('ProfilePage cognitive_style 纠偏', () => {
 
     expect(selfUpdateDimension).toHaveBeenCalledWith('cognitive_style', {
       scoreDelta: 0.05,
-      evidenceIncrement: 1,
       tagsAdd: ['visual'],
     });
     // 反映已选：visual 成为主导高亮。

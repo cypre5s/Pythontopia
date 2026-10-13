@@ -7,7 +7,14 @@ import com.pythontopia.learner.mastery.MasteryRepository;
 import com.pythontopia.learner.mastery.MasterySnapshot;
 import com.pythontopia.learner.profile.dto.LearnerProfileSignals;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
+import com.pythontopia.learner.twin.LearnerTwinService;
 import com.pythontopia.mainline.ChapterCatalog;
+import com.pythontopia.mainline.test.ChapterProblemBankRepository;
+import com.pythontopia.mainline.test.ChapterProblemBankRepository.PreferredCodingQuestion;
+import com.pythontopia.submission.judge.JudgeCaseEvaluator;
+import com.pythontopia.submission.judge.JudgeTestCase;
+import com.pythontopia.submission.judge.JudgeWorkerPool;
+import com.pythontopia.submission.judge.StaticCodeChecker;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossAttemptResultDto;
 import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
@@ -76,6 +83,11 @@ public class BossService {
   private final MasteryRepository masteryRepository;
   private final CoursePackRepository coursePackRepository;
   private final PassiveProfileService passiveProfileService;
+  private final LearnerTwinService learnerTwinService;
+  private final ChapterProblemBankRepository chapterProblemBankRepository;
+  private final JudgeWorkerPool judgeWorkerPool;
+  private final StaticCodeChecker staticCodeChecker;
+  private final JudgeCaseEvaluator judgeCaseEvaluator;
   private final EndlessPregenService pregenService;
   private final BossProblemReviewRepository reviewRepository;
   private final ExpeditionRunService expeditionRunService;
@@ -89,6 +101,11 @@ public class BossService {
       MasteryRepository masteryRepository,
       CoursePackRepository coursePackRepository,
       PassiveProfileService passiveProfileService,
+      LearnerTwinService learnerTwinService,
+      ChapterProblemBankRepository chapterProblemBankRepository,
+      JudgeWorkerPool judgeWorkerPool,
+      StaticCodeChecker staticCodeChecker,
+      JudgeCaseEvaluator judgeCaseEvaluator,
       EndlessPregenService pregenService,
       BossProblemReviewRepository reviewRepository,
       ExpeditionRunService expeditionRunService,
@@ -99,6 +116,11 @@ public class BossService {
     this.masteryRepository = masteryRepository;
     this.coursePackRepository = coursePackRepository;
     this.passiveProfileService = passiveProfileService;
+    this.learnerTwinService = learnerTwinService;
+    this.chapterProblemBankRepository = chapterProblemBankRepository;
+    this.judgeWorkerPool = judgeWorkerPool;
+    this.staticCodeChecker = staticCodeChecker;
+    this.judgeCaseEvaluator = judgeCaseEvaluator;
     this.pregenService = pregenService;
     this.reviewRepository = reviewRepository;
     this.expeditionRunService = expeditionRunService;
@@ -107,55 +129,16 @@ public class BossService {
     this.eventPublisher = eventPublisher;
   }
 
-  /**
-   * 无尽远征知识前沿选择（下沉自前端）：使用权威掌握度、画像与正式练习时间调 graph 选择器。
-   *
-   * <p>graph 不可达或返回空结果时显式 503；禁止用前端默认 KC 冒充画像自适应结果。
-   */
+  /** Deterministic KC selection shared with the learner Twin; Graph remains responsible for questions. */
   public FrontierSelectResultDto selectFrontier(Long userId, FrontierSelectRequest request) {
-    Map<String, Double> mastery = new HashMap<>();
-    Map<String, Double> confidence = new HashMap<>();
-    // 间隔重复只看正式练习/调试证据；last_event_at 也会被 DECAY 更新，不能充当最近练习时间。
-    Map<String, String> lastPracticed = new HashMap<>();
-    if (userId != null) {
-      masteryRepository
-          .findLastPracticedAtByUser(userId)
-          .forEach(
-              (kcCode, practicedAt) ->
-                  lastPracticed.put(kcCode, practicedAt.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME)));
-      for (MasterySnapshot snapshot : masteryRepository.findAll(userId)) {
-        if (snapshot.kcCode() == null) {
-          continue;
-        }
-        if (snapshot.masteryScore() != null) {
-          mastery.put(snapshot.kcCode(), snapshot.masteryScore().doubleValue());
-        }
-        if (snapshot.confidence() != null) {
-          confidence.put(snapshot.kcCode(), snapshot.confidence().doubleValue());
-        }
-      }
-    }
-    try {
-      FrontierSelectResultDto result =
-          graphClient.selectFrontier(
-              mastery,
-              confidence,
-              authoritativeSignals(userId, request.profileSignals()),
-              request.focusChapter(),
-              request.exclude(),
-              request.count(),
-              lastPracticed);
-      if (result == null || result.picks().isEmpty()) {
-        throw new RestClientException("frontier selector returned no evidence-backed picks");
-      }
-      return result;
-    } catch (RestClientException ex) {
-      LOG.warn("select-frontier graph unavailable: {}", ex.getMessage());
-      throw new com.pythontopia.common.error.BusinessException(
-          org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
-          "EXPEDITION_ADAPTATION_UNAVAILABLE",
-          "学习证据暂时不可用，请稍后重试远征");
-    }
+    return learnerTwinService.frontier(
+        userId, request.focusChapter(), request.exclude(), request.count());
+  }
+
+  /** Re-rank only an eligible server-loaded KC to honor an explicit expedition navigation choice. */
+  public FrontierSelectResultDto selectFrontier(
+      Long userId, Integer focusChapter, String preferredKcCode) {
+    return learnerTwinService.frontier(userId, focusChapter, List.of(), 40, preferredKcCode);
   }
 
   public BossProblemDto fetchProblem(int chapter, BossProblemRequest request, Long userId) {
@@ -274,16 +257,23 @@ public class BossService {
           "graph boss problem unavailable ({}): {}",
           ex.getClass().getSimpleName(),
           ex.getMessage());
-      throw new com.pythontopia.common.error.BusinessException(
-          org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
-          "BOSS_PROBLEM_GENERATION_UNAVAILABLE",
-          "题目生成服务暂不可用，请稍后重试");
+      Optional<BossInternalProblem> golden = findGoldenProblem(kc, chapter, request.stage(), difficulty);
+      if (golden.isEmpty()) {
+        throw new com.pythontopia.common.error.BusinessException(
+            org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+            "BOSS_PROBLEM_GENERATION_UNAVAILABLE",
+            "题目生成服务暂不可用，当前知识点也没有可用的课程题库题目，请稍后重试");
+      }
+      fromGraph = golden.get();
     }
     if (fromGraph == null || fromGraph.problemId() == null) {
-      throw new com.pythontopia.common.error.BusinessException(
-          org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
-          "BOSS_PROBLEM_GENERATION_UNAVAILABLE",
-          "题目生成服务暂不可用，请稍后重试");
+      fromGraph = findGoldenProblem(kc, chapter, request.stage(), difficulty).orElse(null);
+      if (fromGraph == null) {
+        throw new com.pythontopia.common.error.BusinessException(
+            org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+            "BOSS_PROBLEM_GENERATION_UNAVAILABLE",
+            "题目生成服务暂不可用，当前知识点也没有可用的课程题库题目，请稍后重试");
+      }
     }
     requireProblemContext(fromGraph, chapter, request.stage(), kc);
     BossInternalProblem issued = fromGraph.issueAs(issueProblemId(expeditionBinding.bossPhase()), kc);
@@ -292,6 +282,37 @@ public class BossService {
     persistConsumed(userId, chapter, kc, request, difficulty, issued, expeditionRunId);
     evictExpired();
     return issued.toPublic();
+  }
+
+  private Optional<BossInternalProblem> findGoldenProblem(
+      String kcCode, int chapter, int stage, int difficulty) {
+    return chapterProblemBankRepository.findByKcCodes(List.of(kcCode)).stream()
+        .filter(question -> kcCode.equals(question.kcCode()))
+        .findFirst()
+        .map(question -> toGoldenProblem(question, chapter, stage, difficulty));
+  }
+
+  private static BossInternalProblem toGoldenProblem(
+      PreferredCodingQuestion question, int chapter, int stage, int difficulty) {
+    List<BossTestCasePayload> cases = question.hiddenTestCases().stream()
+        .map(testCase -> new BossTestCasePayload(testCase.input(), testCase.output(), false))
+        .toList();
+    var sample = question.samples().getFirst();
+    return new BossInternalProblem(
+        "course-problem-" + question.sourceProblemId(),
+        chapter,
+        stage,
+        difficulty,
+        question.kcCode(),
+        "课程题库 · " + question.title() + "\n\n" + question.statementMarkdown(),
+        List.of("先读清输入与输出格式，再用样例检查程序。"),
+        sample.input(),
+        sample.output(),
+        cases.size(),
+        true,
+        false,
+        cases,
+        question.referenceSolution());
   }
 
   /**
@@ -578,66 +599,104 @@ public class BossService {
               "题目缓存数据异常（缺 testCases），请重试生成题目。"),
           null);
     }
+    BossEvaluateResultDto graphResult;
     try {
-      BossEvaluateResultDto graphResult =
+      graphResult =
           graphClient.evaluateAttempt(
               request.problemId(), request.code(), testCases, EVAL_TIMEOUT_SEC);
-      if (graphResult == null) {
-        throw new RestClientException("graph evaluate returned null body");
-      }
-      int score = scoreFor(graphResult);
-      String runId = expeditionBinding.isPresent() ? expeditionBinding.get().runId() : null;
-      String attemptFingerprint =
-          expeditionBinding.isPresent()
-              ? expeditionAttemptFingerprint(
-                  questionFingerprint(problem),
-                  expeditionBinding.get().nodeId(),
-                  bossPhaseForAttempt)
-              : questionFingerprint(problem);
-      ExpeditionScoreService.VerifiedAttemptResult attemptResult =
-          recordVerifiedExpeditionAttempt(
-              userId, runId, problem, attemptFingerprint, graphResult, score);
-      if (!attemptResult.accepted()) {
-        if (!expeditionRunService.isActiveRun(userId, runId)) {
-          throw expiredExpeditionRun();
-        }
-        throw new com.pythontopia.common.error.BusinessException(
-            org.springframework.http.HttpStatus.CONFLICT,
-            "EXPEDITION_ATTEMPT_LIMIT_REACHED",
-            "本局可计分判题次数已用完");
-      }
-      String feedback =
-          graphResult.passed()
-              ? "通过 ✅ 服务端沙箱已确认。"
-              : graphResult.runtimeError() != null
-                  ? "代码运行错误：" + graphResult.runtimeError()
-                  : "未通过 ❌ 部分用例失败，请参考下方 hint。";
-      // 闭环关键：服务端沙箱真实判完后（且仅此路径）才发学习事件，与 SubmissionService 同一套事件驱动
-      // KC 掌握度（测）+ 8 维画像被动修订。缓存过期 / 缺 testCases / graph 不可用等「未判定」路径不发，
-      // 避免把非判题结果污染进掌握度；web 重放由 attemptId 结果记录阻止二次发事件。
-      return completeAttempt(
-          request,
-          userId,
-          claim,
-          new BossAttemptResultDto(
-              request.problemId(),
-              graphResult.passed(),
-              graphResult.passedTestCases(),
-              graphResult.totalTestCases(),
-              graphResult.failureFirstHint(),
-              score,
-              feedback),
-          attemptResult.publishLearningEvent() ? practiceOutcomeEvent(userId, problem, graphResult) : null);
+      if (graphResult == null) throw new RestClientException("graph evaluate returned null body");
     } catch (RestClientException ex) {
       LOG.warn(
-          "graph evaluate failed ({}): {} — returning an unavailable error without a verdict",
+          "graph evaluate failed ({}): {}; using the existing local Python judge",
           ex.getClass().getSimpleName(),
           ex.getMessage());
-      throw new com.pythontopia.common.error.BusinessException(
-          org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
-          "BOSS_EVALUATOR_UNAVAILABLE",
-          "正式判题服务暂不可用，请稍后重试。此次提交未计入结果。");
+      graphResult = evaluateLocally(request, testCases);
     }
+    int score = scoreFor(graphResult);
+    String runId = expeditionBinding.isPresent() ? expeditionBinding.get().runId() : null;
+    String attemptFingerprint =
+        expeditionBinding.isPresent()
+            ? expeditionAttemptFingerprint(
+                questionFingerprint(problem),
+                expeditionBinding.get().nodeId(),
+                bossPhaseForAttempt)
+            : questionFingerprint(problem);
+    ExpeditionScoreService.VerifiedAttemptResult attemptResult =
+        recordVerifiedExpeditionAttempt(
+            userId, runId, problem, attemptFingerprint, graphResult, score);
+    if (!attemptResult.accepted()) {
+      if (!expeditionRunService.isActiveRun(userId, runId)) {
+        throw expiredExpeditionRun();
+      }
+      throw new com.pythontopia.common.error.BusinessException(
+          org.springframework.http.HttpStatus.CONFLICT,
+          "EXPEDITION_ATTEMPT_LIMIT_REACHED",
+          "本局可计分判题次数已用完");
+    }
+    String feedback =
+        graphResult.passed()
+            ? "通过 ✅ 服务端沙箱已确认。"
+            : graphResult.runtimeError() != null
+                ? "代码运行错误：" + graphResult.runtimeError()
+                : "未通过 ❌ 部分用例失败，请参考下方 hint。";
+    // 闭环关键：服务端沙箱真实判完后（且仅此路径）才发学习事件，与 SubmissionService 同一套事件驱动
+    // KC 掌握度（测）+ 8 维画像被动修订。缓存过期 / 缺 testCases / graph 不可用等「未判定」路径不发，
+    // 避免把非判题结果污染进掌握度；web 重放由 attemptId 结果记录阻止二次发事件。
+    return completeAttempt(
+        request,
+        userId,
+        claim,
+        new BossAttemptResultDto(
+            request.problemId(),
+            graphResult.passed(),
+            graphResult.passedTestCases(),
+            graphResult.totalTestCases(),
+            graphResult.failureFirstHint(),
+            score,
+            feedback),
+        attemptResult.publishLearningEvent() ? practiceOutcomeEvent(userId, problem, graphResult) : null);
+  }
+
+  private BossEvaluateResultDto evaluateLocally(
+      BossAttemptRequest request, List<BossTestCasePayload> testCases) {
+    var check = judgeWorkerPool.submitAndWait(() -> staticCodeChecker.check(request.code()));
+    if (check.systemError()) throw evaluatorUnavailable();
+    if (!check.passed()) {
+      return new BossEvaluateResultDto(
+          request.problemId(), false, 0, testCases.size(), check.failureReason(), null, List.of(0));
+    }
+    List<JudgeTestCase> cases =
+        testCases.stream()
+            .map(
+                testCase ->
+                    new JudgeTestCase(
+                        testCase.input(), testCase.expectedOutput(), 5000, !testCase.isSample()))
+            .toList();
+    var result =
+        judgeWorkerPool.submitAndWait(() -> judgeCaseEvaluator.evaluate(request.code(), cases));
+    if (result.finalVerdict() == com.pythontopia.submission.dto.Verdict.SYSTEM_ERROR) {
+      throw evaluatorUnavailable();
+    }
+    boolean passed = result.finalVerdict() == com.pythontopia.submission.dto.Verdict.AC;
+    String runtimeError =
+        result.finalVerdict() == com.pythontopia.submission.dto.Verdict.RE
+            ? result.failureReason()
+            : null;
+    return new BossEvaluateResultDto(
+        request.problemId(),
+        passed,
+        result.passedCases(),
+        cases.size(),
+        result.failureReason(),
+        runtimeError,
+        passed ? List.of() : List.of(result.passedCases()));
+  }
+
+  private static com.pythontopia.common.error.BusinessException evaluatorUnavailable() {
+    return new com.pythontopia.common.error.BusinessException(
+        org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+        "BOSS_EVALUATOR_UNAVAILABLE",
+        "本地判题环境暂不可用，此次提交未计入结果。");
   }
 
   private BossAttemptResultDto completeAttempt(

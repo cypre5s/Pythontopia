@@ -37,13 +37,6 @@ function submit(): void {
   emit('submit', { username: form.username.trim(), password: form.password });
 }
 
-defineExpose({
-  fill(username: string, password: string): void {
-    form.username = username;
-    form.password = password;
-  },
-  submit,
-});
 </script>
 
 <template>
@@ -59,7 +52,7 @@ defineExpose({
         :class="{ 'has-error': errorField === 'username' }"
         name="username"
         autocomplete="username"
-        placeholder="请输入用户名，例如 demo"
+        placeholder="请输入用户名"
         :disabled="props.loading"
         :aria-invalid="errorField === 'username'"
         :aria-describedby="errorField === 'username' ? 'login-error' : undefined"

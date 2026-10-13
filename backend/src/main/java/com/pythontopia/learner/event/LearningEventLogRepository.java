@@ -60,6 +60,24 @@ public class LearningEventLogRepository {
         Timestamp.from(since));
   }
 
+  public AuthoritativeEventCounts summarizeAuthoritativeBetween(
+      Long userId, Instant since, Instant until) {
+    return jdbc.queryForObject(
+        "SELECT COUNT(*) AS total_events,"
+            + " COUNT(*) FILTER (WHERE event_type = 'practice_failed') AS failed_practices,"
+            + " COUNT(*) FILTER (WHERE event_type = 'practice_succeeded') AS succeeded_practices"
+            + " FROM learning_event_log WHERE user_id = ? AND created_at >= ? AND created_at < ?"
+            + " AND source IN ('backend', 'graph')",
+        (rs, rowNum) ->
+            new AuthoritativeEventCounts(
+                rs.getInt("total_events"),
+                rs.getInt("failed_practices"),
+                rs.getInt("succeeded_practices")),
+        userId,
+        Timestamp.from(since),
+        Timestamp.from(until));
+  }
+
   public record AuthoritativeEventCounts(
       int totalEvents, int failedPractices, int succeededPractices) {}
 
@@ -130,6 +148,27 @@ public class LearningEventLogRepository {
    */
   public List<MemoryRow> findRecentAuthoritativeForMemory(Long userId, int windowSize) {
     return findRecentForMemory(userId, windowSize, "AND source IN ('backend', 'graph')");
+  }
+
+  public List<MemoryRow> findRecentAuthoritativeForMemoryBetween(
+      Long userId, int windowSize, Instant since, Instant until) {
+    return jdbc.query(
+        "SELECT id, event_type, payload::text AS payload_text, importance, created_at "
+            + "FROM learning_event_log WHERE user_id = ? AND source IN ('backend', 'graph') "
+            + "AND created_at >= ? AND created_at < ? ORDER BY created_at DESC LIMIT ?",
+        (rs, rowNum) -> {
+          long id = rs.getLong("id");
+          String eventType = rs.getString("event_type");
+          int importance = rs.getInt("importance");
+          Timestamp ts = rs.getTimestamp("created_at");
+          Instant createdAt = ts == null ? null : ts.toInstant();
+          JsonNode payload = parsePayload(rs.getString("payload_text"));
+          return new MemoryRow(id, eventType, extractKcCodes(payload), importance, createdAt, payload);
+        },
+        userId,
+        Timestamp.from(since),
+        Timestamp.from(until),
+        windowSize);
   }
 
   private List<MemoryRow> findRecentForMemory(

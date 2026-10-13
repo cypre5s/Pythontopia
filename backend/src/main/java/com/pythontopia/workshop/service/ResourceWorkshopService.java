@@ -401,7 +401,8 @@ public class ResourceWorkshopService {
             request.evidenceType().name(),
             evaluation.passed(),
             delta,
-            remediationType == null ? null : remediationType.name()));
+            remediationType == null ? null : remediationType.name(),
+            submission == null ? null : submission.id()));
     return new ResourceCheckResponse(
         checkId,
         resource.id(),

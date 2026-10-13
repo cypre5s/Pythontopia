@@ -21,11 +21,8 @@ npm run dev
 
 ## 2. 演示账号
 
-| 用户名 | 密码 | 角色 |
-| --- | --- | --- |
-| `demo` | `P@ssw0rd1` | STUDENT |
-
-登录页右下方有"快速体验：演示账号 demo / P@ssw0rd1"按钮，一键填入并提交。点击按钮的副作用：解锁 Audio Context，让 `/world` 的 BGM 不被浏览器 autoplay 策略静音。
+公网环境请通过登录页的注册入口创建自己的学生账号，不要使用共享账号。
+本地需要教师与学生联动数据时，运行 `bash deploy/scripts/seed_demo_classroom.sh`；脚本会打印本次生成的一次性密码，复制后用于登录。
 
 ## 3. 预期首屏与可见组件
 
@@ -59,7 +56,7 @@ curl -s http://localhost:18080/healthz
 
 curl -s -X POST http://localhost:18080/api/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"username":"demo","password":"P@ssw0rd1"}'
+  -d '{"username":"<本次注册或 seed 输出的用户名>","password":"<对应密码>"}'
 # 期望：返回 token + user 信息，HTTP 200
 
 # 通过前端代理也再验一次
@@ -77,7 +74,7 @@ curl -s -H "Authorization: Bearer $TOKEN" http://localhost:18080/api/world/boots
 | 症状 | 第一手排查 |
 | --- | --- |
 | 登录页一直显示"服务器还没就绪" | 看后端日志，是否 Flyway 还在跑 V100-V113 |
-| 登录返回 401 / "用户名或密码错误" | 确认 `demo` 用户是否已注册：`docker compose exec postgres psql -U pythontopia -c "select username,role from users where username='demo';"` |
+| 登录返回 401 / "用户名或密码错误" | 确认本次注册或 seed 生成的用户是否存在：`docker compose exec postgres psql -U pythontopia -c "select username,role from users order by id desc limit 10;"` |
 | 登录后 `/world` 黑屏不动 | 看浏览器 DevTools Network：bootstrap 是否 200；Console 是否有 Phaser load failed |
 | BGM 没声音 | 必须从登录按钮进入，跳过登录直接打 `/world` 的 URL 时 audio 未解锁 |
 | 公告板 Tab 打不开 | 确认 backend `/api/quests` 是否 200，jwt 未过期 |

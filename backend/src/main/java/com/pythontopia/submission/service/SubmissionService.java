@@ -143,7 +143,8 @@ public class SubmissionService {
     int priorFails = submissionRepository.countPriorFailures(userId, request.problemId(), submissionId);
     if (outcome.verdict() == Verdict.AC) {
       eventPublisher.publishEvent(
-          new LearningEvent.PracticeSucceeded(userId, kcCode, request.problemId(), difficulty));
+          new LearningEvent.PracticeSucceeded(
+              userId, kcCode, request.problemId(), difficulty, submissionId));
       if (priorFails >= 2) {
         eventPublisher.publishEvent(
             new LearningEvent.ComebackSolved(userId, request.problemId(), kcCode, priorFails));
@@ -166,7 +167,7 @@ public class SubmissionService {
     } else {
       eventPublisher.publishEvent(
           new LearningEvent.PracticeFailed(
-              userId, kcCode, request.problemId(), outcome.verdict().name(), difficulty));
+              userId, kcCode, request.problemId(), outcome.verdict().name(), difficulty, submissionId));
       if (priorFails >= 1) {
         eventPublisher.publishEvent(
             new LearningEvent.PracticeRetried(userId, request.problemId(), kcCode));

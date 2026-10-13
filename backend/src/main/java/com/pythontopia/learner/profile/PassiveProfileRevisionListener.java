@@ -32,7 +32,9 @@ public class PassiveProfileRevisionListener {
         new DimensionDelta(
             0.02, 1, null, contextOf(event.kcCode(), event.problemId(), null), "PRACTICE_PASS");
     enqueue(event.userId(), "practical_ability", delta,
-        stableKey("practice_succeeded", event.userId(), event.problemId()));
+        event.submissionId() == null
+            ? stableKey("practice_succeeded", event.userId(), event.problemId())
+            : submissionKey(event.userId(), event.submissionId()));
   }
 
   @EventListener
@@ -45,11 +47,13 @@ public class PassiveProfileRevisionListener {
             contextOf(event.kcCode(), event.problemId(), event.failureKind()),
             "PRACTICE_FAIL");
     enqueue(event.userId(), "error_pattern", delta,
-        stableKey(
-            "practice_failed",
-            event.userId(),
-            event.problemId(),
-            event.failureKind() == null ? "unspecified" : event.failureKind()));
+        event.submissionId() == null
+            ? stableKey(
+                "practice_failed",
+                event.userId(),
+                event.problemId(),
+                event.failureKind() == null ? "unspecified" : event.failureKind())
+            : submissionKey(event.userId(), event.submissionId()));
   }
 
   @EventListener
@@ -105,8 +109,7 @@ public class PassiveProfileRevisionListener {
               ? "practical_ability"
               : "knowledge_base";
       DimensionDelta delta = new DimensionDelta(0.015, 1, null, meta, "RESOURCE_FEEDBACK");
-      enqueue(event.userId(), dimension, delta,
-          stableKey("resource_check", event.userId(), event.checkId()));
+      enqueue(event.userId(), dimension, delta, resourceCheckKey(event));
       return;
     }
     List<String> tags =
@@ -116,8 +119,17 @@ public class PassiveProfileRevisionListener {
                 "resource_check_failed",
                 "remediation_" + event.remediationType().toLowerCase(Locale.ROOT));
     DimensionDelta delta = new DimensionDelta(0.015, 1, tags, meta, "PRACTICE_FAIL");
-    enqueue(event.userId(), "error_pattern", delta,
-        stableKey("resource_check", event.userId(), event.checkId()));
+    enqueue(event.userId(), "error_pattern", delta, resourceCheckKey(event));
+  }
+
+  private static String resourceCheckKey(LearningEvent.ResourceCheckCompleted event) {
+    return event.submissionId() != null && "OPERATION".equalsIgnoreCase(event.evidenceType())
+        ? submissionKey(event.userId(), event.submissionId())
+        : stableKey("resource_check", event.userId(), event.checkId());
+  }
+
+  private static String submissionKey(Long userId, Long submissionId) {
+    return stableKey("submission", userId, submissionId);
   }
 
   /**

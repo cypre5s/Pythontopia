@@ -48,8 +48,21 @@ public sealed interface LearningEvent
       String evidenceType,
       boolean passed,
       java.math.BigDecimal delta,
-      String remediationType)
+      String remediationType,
+      Long submissionId)
       implements LearningEvent {
+    public ResourceCheckCompleted(
+        Long userId,
+        Long checkId,
+        Long resourceId,
+        String kcCode,
+        String evidenceType,
+        boolean passed,
+        java.math.BigDecimal delta,
+        String remediationType) {
+      this(userId, checkId, resourceId, kcCode, evidenceType, passed, delta, remediationType, null);
+    }
+
     public ResourceCheckCompleted(
         Long userId,
         Long resourceId,
@@ -58,16 +71,31 @@ public sealed interface LearningEvent
         boolean passed,
         java.math.BigDecimal delta,
         String remediationType) {
-      this(userId, null, resourceId, kcCode, evidenceType, passed, delta, remediationType);
+      this(userId, null, resourceId, kcCode, evidenceType, passed, delta, remediationType, null);
     }
   }
 
-  record PracticeSucceeded(Long userId, String kcCode, Long problemId, String difficulty)
-      implements LearningEvent {}
+  record PracticeSucceeded(
+      Long userId, String kcCode, Long problemId, String difficulty, Long submissionId)
+      implements LearningEvent {
+    public PracticeSucceeded(Long userId, String kcCode, Long problemId, String difficulty) {
+      this(userId, kcCode, problemId, difficulty, null);
+    }
+  }
 
   record PracticeFailed(
-      Long userId, String kcCode, Long problemId, String failureKind, String difficulty)
-      implements LearningEvent {}
+      Long userId,
+      String kcCode,
+      Long problemId,
+      String failureKind,
+      String difficulty,
+      Long submissionId)
+      implements LearningEvent {
+    public PracticeFailed(
+        Long userId, String kcCode, Long problemId, String failureKind, String difficulty) {
+      this(userId, kcCode, problemId, failureKind, difficulty, null);
+    }
+  }
 
   record DebugResolved(Long userId, String kcCode, Long problemId) implements LearningEvent {}
 

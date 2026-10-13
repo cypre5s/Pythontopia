@@ -32,19 +32,25 @@ public class LearningEventListener {
     if (delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
       return;
     }
+    String idempotencyKey =
+        event.submissionId() != null
+            ? "submission:" + event.submissionId()
+            : event.checkId() == null ? null : "resource-check:" + event.checkId();
     masteryEvaluator.applyEvent(
         event.userId(),
         event.kcCode(),
         event.passed() ? MasterySource.MICRO_CHECK_PASS : MasterySource.MICRO_CHECK_FAIL,
         delta,
-        resourceCheckReason(event));
+        resourceCheckReason(event),
+        idempotencyKey);
   }
 
   @EventListener
   public void onPracticePass(LearningEvent.PracticeSucceeded event) {
     masteryEvaluator.applyEventWithDifficulty(event.userId(), event.kcCode(),
         MasterySource.PRACTICE_PASS, null, "problem:" + event.problemId(),
-        event.difficulty() == null ? loadDifficulty(event.problemId()) : event.difficulty());
+        event.difficulty() == null ? loadDifficulty(event.problemId()) : event.difficulty(),
+        event.submissionId() == null ? null : "submission:" + event.submissionId());
   }
 
   @EventListener
@@ -52,7 +58,8 @@ public class LearningEventListener {
     masteryEvaluator.applyEventWithDifficulty(event.userId(), event.kcCode(),
         MasterySource.PRACTICE_FAIL, null,
         "problem:" + event.problemId() + ":" + event.failureKind(),
-        event.difficulty() == null ? loadDifficulty(event.problemId()) : event.difficulty());
+        event.difficulty() == null ? loadDifficulty(event.problemId()) : event.difficulty(),
+        event.submissionId() == null ? null : "submission:" + event.submissionId());
   }
 
   @EventListener

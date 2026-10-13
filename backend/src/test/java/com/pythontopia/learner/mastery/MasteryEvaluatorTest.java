@@ -60,7 +60,7 @@ class MasteryEvaluatorTest {
         .upsertSnapshot(eq(1L), eq("PY43-KC-001"), any(), any(), any(OffsetDateTime.class));
     verify(repository)
         .insertEvent(
-            eq(1L), eq("PY43-KC-001"), eq(MasterySource.RESOURCE_READ), any(), eq("test"));
+            eq(1L), eq("PY43-KC-001"), eq(MasterySource.RESOURCE_READ), any(), any(), eq("test"));
   }
 
   @Test
@@ -122,7 +122,7 @@ class MasteryEvaluatorTest {
 
     assertThat(snapshot.masteryScore()).isEqualByComparingTo("0.400");
     verify(repository)
-        .insertEvent(eq(1L), eq("PY43-KC-001"), eq(MasterySource.DECAY), any(), anyString());
+        .insertEvent(eq(1L), eq("PY43-KC-001"), eq(MasterySource.DECAY), any(), any(), anyString());
   }
 
   @Test
@@ -153,7 +153,7 @@ class MasteryEvaluatorTest {
     evaluator.decayAll(1L);
 
     verify(repository, times(2))
-        .insertEvent(anyLong(), anyString(), eq(MasterySource.DECAY), any(), anyString());
+        .insertEvent(anyLong(), anyString(), eq(MasterySource.DECAY), any(), any(), anyString());
   }
 
   private MasterySnapshot snapshotFor(String kcCode) {

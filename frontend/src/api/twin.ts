@@ -18,9 +18,9 @@ export interface InsightBrief {
 
 export interface MasteryDeltaBrief {
   kcCode: string;
-  currentScore: number;
-  confidence: number;
-  weeklyDelta: number;
+  currentScore: number | null;
+  confidence: number | null;
+  weeklyDelta: number | null;
   evidenceCount: number;
   evidenceSources: string[];
 }
@@ -40,6 +40,46 @@ export interface WeeklyReport {
   insights: InsightBrief[];
   masteryDeltas: MasteryDeltaBrief[];
   resourceRuns: ResourceRunBrief[];
+}
+
+export interface LearnerTwinKcProgress {
+  kcCode: string;
+  kcName: string;
+  chapter: number;
+  chapterName: string;
+  assessed: boolean;
+  masteryScore: number | null;
+  confidence: number | null;
+  reviewDue: boolean;
+  dueAt: string | null;
+  lastPracticedAt: string | null;
+  consecutiveFailures: number;
+}
+
+export interface LearnerTwinNextStep {
+  kcCode: string;
+  kcName: string;
+  chapter: number;
+  chapterName: string;
+  difficulty: number;
+  action: 'REVIEW' | 'REMEDIATION' | 'PRACTICE';
+  reason: string;
+  remediationRequired: boolean;
+}
+
+export interface LearnerTwinState {
+  assessedKcCount: number;
+  totalKcCount: number;
+  masteredKcCount: number;
+  growthStage: string;
+  kcs: LearnerTwinKcProgress[];
+  nextSteps: LearnerTwinNextStep[];
+}
+
+/** GET /api/learner/twin/state */
+export async function fetchLearnerTwinState(): Promise<LearnerTwinState> {
+  const response = await http.get<LearnerTwinState>('/api/learner/twin/state');
+  return response.data;
 }
 
 /** GET /api/learner/twin/weekly */

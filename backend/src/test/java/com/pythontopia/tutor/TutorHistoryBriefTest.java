@@ -41,7 +41,8 @@ class TutorHistoryBriefTest {
           mock(ApplicationEventPublisher.class),
           mock(ClassroomDashboardService.class),
           memoryRetrievalService,
-          videoTranscriptService);
+          videoTranscriptService,
+          mock(TutorDailyRequestLimitService.class));
 
   private static TutorSessionDto turn(String question, String answer) {
     return new TutorSessionDto(

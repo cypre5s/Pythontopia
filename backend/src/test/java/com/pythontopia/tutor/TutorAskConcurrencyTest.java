@@ -38,7 +38,8 @@ class TutorAskConcurrencyTest {
           mock(ApplicationEventPublisher.class),
           mock(ClassroomDashboardService.class),
           mock(MemoryRetrievalService.class),
-          mock(com.pythontopia.coursepack.service.CourseVideoTranscriptService.class));
+          mock(com.pythontopia.coursepack.service.CourseVideoTranscriptService.class),
+          mock(TutorDailyRequestLimitService.class));
 
   private static final CurrentUserPrincipal STUDENT =
       new CurrentUserPrincipal(7L, "stu", Role.STUDENT);

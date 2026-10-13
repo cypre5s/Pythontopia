@@ -3,6 +3,7 @@ package com.pythontopia.learner.profile;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.profile.dto.DimensionDelta;
 import com.pythontopia.learner.profile.dto.DimensionUpdateResult;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
@@ -20,6 +21,7 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
+import org.springframework.context.ApplicationEventPublisher;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -147,6 +149,52 @@ class ProfileDimensionProjectionOutboxPostgresTest {
             String.class,
             userId))
         .isEqualTo("2");
+  }
+
+  @Test
+  void practiceAndOperationCheckForOneSubmissionApplyOnePracticalProjection() {
+    ProfileDimensionProjectionOutboxRepository outboxRepository =
+        new ProfileDimensionProjectionOutboxRepository(jdbc, objectMapper);
+    ApplicationEventPublisher eventPublisher = ignored -> {};
+    PassiveProfileRevisionListener listener =
+        new PassiveProfileRevisionListener(
+            new ProfileDimensionProjectionOutboxService(outboxRepository, eventPublisher));
+    listener.onPracticeSucceeded(
+        new LearningEvent.PracticeSucceeded(userId, "PY43-KC-001", 101L, "medium", 501L));
+    listener.onResourceCheckCompleted(
+        new LearningEvent.ResourceCheckCompleted(
+            userId,
+            31L,
+            99L,
+            "PY43-KC-001",
+            "OPERATION",
+            true,
+            new java.math.BigDecimal("0.05"),
+            null,
+            501L));
+
+    assertThat(jdbc.queryForObject(
+            "SELECT COUNT(*) FROM learner_profile_projection_outbox"
+                + " WHERE idempotency_key = ? AND dimension_key = 'practical_ability'",
+            Integer.class,
+            "submission:" + userId + ":501"))
+        .isEqualTo(1);
+
+    PassiveProfileService profileService =
+        new PassiveProfileService(new ProfileRepository(jdbc, objectMapper), objectMapper);
+    ProfileDimensionProjectionProcessor processor =
+        new ProfileDimensionProjectionProcessor(
+            outboxRepository, profileService, transactionManager);
+    ProfileDimensionProjectionDispatcher dispatcher =
+        new ProfileDimensionProjectionDispatcher(outboxRepository, processor);
+    dispatcher.dispatchOne(outboxRepository.findDuePendingIds(10).getFirst());
+
+    assertThat(jdbc.queryForObject(
+            "SELECT dimensions #>> '{practical_ability,evidence_count}'"
+                + " FROM learner_profile WHERE user_id = ?",
+            String.class,
+            userId))
+        .isEqualTo("1");
   }
 
   private String outboxStatus(long id) {

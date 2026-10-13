@@ -1,6 +1,6 @@
 # 公网 Web 验收手册（public-web-acceptance）
 
-> 适用范围：Pythontopia 网页端公网部署验收（部署目标 `http://47.120.29.62`，仅 80 端口对外）
+> 适用范围：Pythontopia 网页端公网部署验收（部署目标 `https://47.120.29.62`；80 端口仅保留 ACME 并重定向到 HTTPS）
 > 与本地集成预演（`http://127.0.0.1:5173`）。
 >
 > 配套产物：
@@ -14,7 +14,7 @@
 
 | 层 | 工具 | 覆盖内容 |
 |----|------|----------|
-| 部署/网络层 | `public_acceptance.sh` | 80 端口可达、`/healthz`、静态资源缓存与类型头、内部端口公网封闭（8080/18080/18091/18092/15432/16379）、重定向不指回 `:8080`、SSE 连续请求无 502/504、本地包 sha256 与部署端校验和比对 |
+| 部署/网络层 | `public_acceptance.sh` | HTTP 入口返回 308 HTTPS 且不向明文地址发送凭据、`/healthz`、静态资源缓存与类型头、内部端口公网封闭（8080/18080/18091/18092/15432/16379）、重定向不指回 `:8080`、SSE 连续请求无 502/504、本地包 sha256 与部署端校验和比对 |
 | 浏览器/业务层 | `publicAcceptance.spec.ts` | 注册登录与认证跳转、town_hub 主城加载与 console 错误、`/guide` 导航/锚点/图片放大/双端布局、AI 向导多轮 SSE/澄清/计划/失败重试、向导→工坊深链与 KC 上下文、工坊真实响应、图书馆 RAG 三查询证据页码、训练场判题三态（AC/WA/RE）、复盘大厅与个人画像、深链直接刷新、错误渲染面不泄密 |
 
 两层互补：**先跑 shell 脚本确认部署面健康，再跑 Playwright 验证业务闭环**。
@@ -23,7 +23,7 @@
 
 | 变量 | 必填 | 含义 | 示例 |
 |------|------|------|------|
-| `BASE_URL` | 是（spec） | 目标地址；本地集成 `http://127.0.0.1:5173`，公网验收 `http://47.120.29.62` | `BASE_URL=http://47.120.29.62` |
+| `BASE_URL` | 是（spec） | 目标地址；本地集成 `http://127.0.0.1:5173`，公网验收 `https://47.120.29.62` | `BASE_URL=https://47.120.29.62` |
 | `PYT_E2E_USERNAME` | 二选一 | 演示账号用户名（凭证绝不写进仓库与脚本） | 由演示助教单独下发 |
 | `PYT_E2E_PASSWORD` | 二选一 | 演示账号密码 | 同上 |
 | `PYT_E2E_REGISTER` | 二选一 | `=1` 时通过 API 注册临时 QA 账号；与上面两项同给则注册指定用户名（已存在冲突自动容忍） | `PYT_E2E_REGISTER=1` |
@@ -45,14 +45,14 @@
 bash -n deploy/scripts/public_acceptance.sh
 
 # 公网验收（基础）
-bash deploy/scripts/public_acceptance.sh http://47.120.29.62
+bash deploy/scripts/public_acceptance.sh https://47.120.29.62
 
 # 公网验收（带演示账号，SSE 走认证链路；凭证从环境注入，不落盘）
 PYT_E2E_USERNAME='<下发用户名>' PYT_E2E_PASSWORD='<下发密码>' \
-  bash deploy/scripts/public_acceptance.sh http://47.120.29.62
+  bash deploy/scripts/public_acceptance.sh https://47.120.29.62
 
 # 部署一致性核对：第 2 个参数传本地构建包 sha256
-bash deploy/scripts/public_acceptance.sh http://47.120.29.62 \
+bash deploy/scripts/public_acceptance.sh https://47.120.29.62 \
   "$(sha256sum dist.tar.gz | awk '{print $1}')"
 ```
 
@@ -74,12 +74,12 @@ BASE_URL=http://127.0.0.1:5173 PYT_E2E_REGISTER=1 \
   npx playwright test e2e/publicAcceptance.spec.ts
 
 # 公网验收（演示账号）
-BASE_URL=http://47.120.29.62 \
+BASE_URL=https://47.120.29.62 \
 PYT_E2E_USERNAME='<下发用户名>' PYT_E2E_PASSWORD='<下发密码>' \
   npx playwright test e2e/publicAcceptance.spec.ts
 
 # 公网验收（临时 QA 账号：API 注册，跑完按 §5 清理）
-BASE_URL=http://47.120.29.62 PYT_E2E_REGISTER=1 \
+BASE_URL=https://47.120.29.62 PYT_E2E_REGISTER=1 \
   npx playwright test e2e/publicAcceptance.spec.ts
 ```
 
@@ -134,8 +134,8 @@ npx playwright test e2e/publicAcceptance.spec.ts -g "错误信息不泄密"
 ## 5. 部署后验收执行顺序（建议）
 
 1. `bash -n deploy/scripts/public_acceptance.sh`（语法自检，秒级）；
-2. `bash deploy/scripts/public_acceptance.sh http://47.120.29.62 <本地包sha256>` —— 全 PASS 再进下一步；
-3. `BASE_URL=http://47.120.29.62 PYT_E2E_REGISTER=1 npx playwright test e2e/publicAcceptance.spec.ts -g "认证与会话"` 先验账号链路；
+2. `bash deploy/scripts/public_acceptance.sh https://47.120.29.62 <本地包sha256>` —— 全 PASS 再进下一步；
+3. `BASE_URL=https://47.120.29.62 PYT_E2E_REGISTER=1 npx playwright test e2e/publicAcceptance.spec.ts -g "认证与会话"` 先验账号链路；
 4. 跑全量 spec；AI 相关子集（向导/工坊）耗时最长，必要时单独跑并放宽 `--timeout`；
 5. 汇总 `qa-screens/` 证据 + Playwright 报告，按 §4 写验收结论。
 

@@ -17,7 +17,8 @@ import java.sql.Types;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,6 +37,7 @@ public class WeeklyReportService {
   private static final int MEMORY_LIMIT = 30;
   private static final int INSIGHT_LIMIT = 5;
   private static final int RUN_LIMIT = 10;
+  private static final ZoneId REPORT_ZONE = ZoneId.of("Asia/Shanghai");
 
   private final MemoryRetrievalService memoryService;
   private final LearnerInsightRepository insightRepository;
@@ -58,32 +60,30 @@ public class WeeklyReportService {
 
   @Transactional(readOnly = true)
   public WeeklyReportDto build(Long userId) {
-    Instant weekStart = LocalDate.now(ZoneOffset.UTC)
-        .minusDays(7)
-        .atStartOfDay(ZoneOffset.UTC)
-        .toInstant();
+    Instant now = Instant.now();
+    LocalDate today = now.atZone(REPORT_ZONE).toLocalDate();
+    Instant weekStart = today.minusDays(7).atStartOfDay(REPORT_ZONE).toInstant();
 
-    MemoryBrief memoryBrief = buildMemoryBrief(userId, weekStart);
-    List<InsightBrief> insights = buildInsightBriefs(userId, weekStart);
-    List<MasteryDeltaBrief> masteryDeltas = buildMasteryDeltas(userId, weekStart);
-    List<ResourceRunBrief> resourceRuns = buildResourceRunBriefs(userId, weekStart);
+    MemoryBrief memoryBrief = buildMemoryBrief(userId, weekStart, now);
+    List<InsightBrief> insights = buildInsightBriefs(userId, weekStart, now);
+    List<MasteryDeltaBrief> masteryDeltas = buildMasteryDeltas(userId, weekStart, now);
+    List<ResourceRunBrief> resourceRuns = buildResourceRunBriefs(userId, weekStart, now);
 
     DateTimeFormatter fmt = DateTimeFormatter.ISO_LOCAL_DATE;
     return new WeeklyReportDto(
-        fmt.format(LocalDate.now(ZoneOffset.UTC).minusDays(7)),
-        fmt.format(LocalDate.now(ZoneOffset.UTC)),
+        fmt.format(today.minusDays(7)),
+        fmt.format(today),
         memoryBrief,
         insights,
         masteryDeltas,
         resourceRuns);
   }
 
-  private MemoryBrief buildMemoryBrief(Long userId, Instant weekStart) {
-    AuthoritativeEventCounts counts = eventRepository.summarizeAuthoritativeSince(userId, weekStart);
+  private MemoryBrief buildMemoryBrief(Long userId, Instant weekStart, Instant now) {
+    AuthoritativeEventCounts counts =
+        eventRepository.summarizeAuthoritativeBetween(userId, weekStart, now);
     List<MemoryItemDto> memories =
-        memoryService.retrieveAuthoritative(userId, null, null, MEMORY_LIMIT).stream()
-            .filter(memory -> isInWindow(memory.createdAt(), weekStart))
-            .toList();
+        memoryService.retrieveAuthoritativeBetween(userId, weekStart, now, MEMORY_LIMIT);
     List<String> kcCodes = new ArrayList<>();
     List<String> highlights = new ArrayList<>();
     for (MemoryItemDto m : memories) {
@@ -105,53 +105,44 @@ public class WeeklyReportService {
         counts.totalEvents(), counts.failedPractices(), counts.succeededPractices(), kcCodes, highlights);
   }
 
-  private List<InsightBrief> buildInsightBriefs(Long userId, Instant weekStart) {
-    List<LearnerInsightDto> raw = insightRepository.findByUser(userId, INSIGHT_LIMIT);
-    return raw.stream()
-        .filter(i -> isInWindow(i.createdAt(), weekStart))
+  private List<InsightBrief> buildInsightBriefs(Long userId, Instant weekStart, Instant now) {
+    return insightRepository.findByUserBetween(userId, weekStart, now, INSIGHT_LIMIT).stream()
         .map(i -> new InsightBrief(
             i.id(), i.text(), i.dimensionKey(), i.tags(), i.createdAt()))
         .toList();
   }
 
-  private List<MasteryDeltaBrief> buildMasteryDeltas(Long userId, Instant weekStart) {
+  private List<MasteryDeltaBrief> buildMasteryDeltas(
+      Long userId, Instant weekStart, Instant now) {
     List<MasterySnapshot> snapshots = masteryRepository.findAll(userId);
-    var currentScores = snapshots.stream()
-        .filter(snapshot -> snapshot.masteryScore() != null)
-        .collect(java.util.stream.Collectors.toMap(
-            MasterySnapshot::kcCode, snapshot -> snapshot.masteryScore().doubleValue()));
-    var confidenceScores = snapshots.stream()
-        .filter(snapshot -> snapshot.confidence() != null)
-        .collect(java.util.stream.Collectors.toMap(
-            MasterySnapshot::kcCode, snapshot -> snapshot.confidence().doubleValue()));
-    OffsetDateTime since = weekStart.atOffset(ZoneOffset.UTC);
-    return masteryRepository.findWeeklyEvidence(userId, since).stream()
-        .map(evidence -> new MasteryDeltaBrief(
-            evidence.kcCode(),
-            currentScores.getOrDefault(evidence.kcCode(), 0.0),
-            confidenceScores.getOrDefault(evidence.kcCode(), 0.0),
-            evidence.weeklyDelta() == null ? 0.0 : evidence.weeklyDelta().doubleValue(),
-            evidence.evidenceCount(),
-            evidence.evidenceSources()))
+    var snapshotByKc = snapshots.stream()
+        .collect(java.util.stream.Collectors.toMap(MasterySnapshot::kcCode, snapshot -> snapshot));
+    ZonedDateTime start = weekStart.atZone(REPORT_ZONE);
+    ZonedDateTime end = now.atZone(REPORT_ZONE);
+    return masteryRepository.findWeeklyEvidence(
+            userId, start.toOffsetDateTime(), end.toOffsetDateTime()).stream()
+        .map(evidence -> {
+          MasterySnapshot snapshot = snapshotByKc.get(evidence.kcCode());
+          return new MasteryDeltaBrief(
+              evidence.kcCode(),
+              snapshot == null || snapshot.masteryScore() == null
+                  ? null : snapshot.masteryScore().doubleValue(),
+              snapshot == null || snapshot.confidence() == null
+                  ? null : snapshot.confidence().doubleValue(),
+              evidence.weeklyDelta() == null ? null : evidence.weeklyDelta().doubleValue(),
+              evidence.evidenceCount(),
+              evidence.evidenceSources());
+        })
         .toList();
   }
 
-  private static boolean isInWindow(String value, Instant weekStart) {
-    if (value == null || value.isBlank()) return false;
-    try {
-      Instant createdAt = OffsetDateTime.parse(value).toInstant();
-      return !createdAt.isBefore(weekStart) && !createdAt.isAfter(Instant.now());
-    } catch (java.time.format.DateTimeParseException ignored) {
-      return false;
-    }
-  }
-
-  private List<ResourceRunBrief> buildResourceRunBriefs(Long userId, Instant weekStart) {
+  private List<ResourceRunBrief> buildResourceRunBriefs(
+      Long userId, Instant weekStart, Instant now) {
     return jdbc.query(
         """
         SELECT agent_name, scenario, status, evidence_page_ids, created_at::text AS created_at
         FROM resource_run
-        WHERE user_id = ? AND created_at >= ?
+        WHERE user_id = ? AND created_at >= ? AND created_at < ?
         ORDER BY created_at DESC
         LIMIT ?
         """,
@@ -163,7 +154,9 @@ public class WeeklyReportService {
             rs.getString("created_at")),
         userId,
         new SqlParameterValue(
-            Types.TIMESTAMP_WITH_TIMEZONE, weekStart.atOffset(ZoneOffset.UTC)),
+            Types.TIMESTAMP_WITH_TIMEZONE, weekStart.atZone(REPORT_ZONE).toOffsetDateTime()),
+        new SqlParameterValue(
+            Types.TIMESTAMP_WITH_TIMEZONE, now.atZone(REPORT_ZONE).toOffsetDateTime()),
         RUN_LIMIT);
   }
 

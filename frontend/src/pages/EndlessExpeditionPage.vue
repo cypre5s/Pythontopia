@@ -42,6 +42,9 @@ const masteryMap = computed<Record<string, number>>(() => {
   for (const s of learning.field.masterySnapshot) m[s.kcCode] = s.masteryScore;
   return m;
 });
+const assessedKcs = computed(() => learning.field.masterySnapshot
+  .filter((snapshot) => snapshot.assessed === true)
+  .map((snapshot) => snapshot.kcCode));
 const showConstellation = ref(false);
 const showLeaderboard = ref(false);
 
@@ -50,7 +53,14 @@ const focusFromQuery = computed<number | null>(() => {
   const raw = Number(route.query.focus);
   return Number.isInteger(raw) && raw >= 1 && raw <= 7 ? raw : null;
 });
-const focusChoice = ref<number | null>(run.focusChapter ?? focusFromQuery.value);
+const preferredKcFromQuery = computed<string | null>(() => {
+  const raw = route.query.kcCode;
+  const value = Array.isArray(raw) ? raw[0] : raw;
+  return typeof value === 'string' && /^PY43-KC-\d{3}$/.test(value) ? value : null;
+});
+const focusChoice = ref<number | null>(
+  focusFromQuery.value ?? (preferredKcFromQuery.value ? null : run.focusChapter ?? null),
+);
 
 // 地图视图：像素远征塔（Phaser 渐进增强）/ 列表（移动端 + 降级真源）。窄屏默认列表。
 const mapView = ref<'pixel' | 'list'>(
@@ -72,11 +82,11 @@ onBeforeUnmount(() => {
 });
 
 function onStart(): void {
-  void run.startRun(focusChoice.value);
+  void run.startRun(focusChoice.value, false, preferredKcFromQuery.value);
 }
 /** 再来一局 / 弃局重开：显式新开，不续旧局（startRun 总是全量重建地图）。 */
 function onRestart(): void {
-  void run.startRun(focusChoice.value);
+  void run.startRun(focusChoice.value, false, preferredKcFromQuery.value);
 }
 function onResume(): void {
   void run.resumeSavedRun();
@@ -409,6 +419,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
         <KnowledgeConstellation
           v-if="showConstellation"
           :mastery="masteryMap"
+          :assessed="assessedKcs"
         />
         <button
           type="button"
@@ -891,7 +902,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
             </li>
           </ul>
         </div>
-        <KnowledgeConstellation :mastery="masteryMap" />
+        <KnowledgeConstellation :mastery="masteryMap" :assessed="assessedKcs" />
         <ExpeditionLeaderboard
           :board="run.leaderboard"
           data-testid="expedition-end-leaderboard"

@@ -456,22 +456,11 @@ test.describe('公网验收 · 认证与会话 @auth', () => {
     });
   });
 
-  test('公网快速体验账号可直接进入小镇', async ({ page }) => {
+  test('公网登录页不暴露共享账号并提供注册入口', async ({ page }) => {
     await page.goto(u('/login'), { waitUntil: 'domcontentloaded' });
-    const loginResponse = page.waitForResponse(
-      (response) =>
-        response.url().includes('/api/auth/login') && response.request().method() === 'POST',
-      { timeout: 30_000 },
-    );
-    await page.getByRole('button', { name: /快速体验：演示学生/ }).click();
-
-    const response = await loginResponse;
-    expect(response.status(), '快速体验账号登录接口应返回 200').toBe(200);
-    await expect(page, '快速体验登录后应进入 /world').toHaveURL(/\/world/, {
-      timeout: 30_000,
-    });
-    await expect(page.getByText(/密码错误|用户名或密码错误/)).toHaveCount(0);
-    await evidence(page, 'auth-快速体验进入小镇');
+    await expect(page.getByRole('button', { name: /快速体验/ })).toHaveCount(0);
+    await expect(page.locator('body')).not.toContainText(/demo-stu-01|P@ssw0rd1/);
+    await expect(page.getByRole('link', { name: '还没有账号？创建新账号' })).toBeVisible();
   });
 });
 

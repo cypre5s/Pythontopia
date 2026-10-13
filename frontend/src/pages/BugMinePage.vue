@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, watch } from 'vue';
+import { computed, onMounted, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import BugMinePanel from '@/components/bugmine/BugMinePanel.vue';
 import { useLearningStore } from '@stores/learning';
@@ -7,6 +8,11 @@ import { useToastStore } from '@stores/toast';
 
 const learning = useLearningStore();
 const toast = useToastStore();
+const route = useRoute();
+const reviewKc = computed(() => {
+  const value = route.query.review;
+  return typeof value === 'string' && /^PY43-KC-\d{3}$/.test(value) ? value : null;
+});
 
 // S1：错题矿洞「入口」私有 id（submissionId / sessionId）不经 URL，改由 store 承载。
 // 上游（训练场判题失败「进入 Bug 矿洞」/ L5 变式通过）在导航前 setPendingBugMineEntry，
@@ -53,7 +59,7 @@ watch(
 <template>
   <AppLayout>
     <section class="bug-mine-page">
-      <BugMinePanel />
+      <BugMinePanel :review-kc="reviewKc" />
     </section>
   </AppLayout>
 </template>

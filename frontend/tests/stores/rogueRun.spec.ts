@@ -1150,7 +1150,7 @@ describe('rogueRun store', () => {
     const run = useRogueRunStore();
     await run.refreshSavedRun();
 
-    await run.startRun(1);
+    await run.startRun(1, false, 'PY43-KC-042');
 
     expect(run.phase).toBe('map');
     expect(run.focusChapter).toBe(1);
@@ -1158,6 +1158,7 @@ describe('rogueRun store', () => {
     expect(frontierApiMock.createExpeditionRun).toHaveBeenCalledWith({
       focusChapter: 1,
       isDaily: false,
+      preferredKcCode: 'PY43-KC-042',
     });
   });
 

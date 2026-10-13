@@ -35,7 +35,8 @@ class TutorProfileBriefTest {
           mock(ApplicationEventPublisher.class),
           mock(ClassroomDashboardService.class),
           mock(MemoryRetrievalService.class),
-          mock(com.pythontopia.coursepack.service.CourseVideoTranscriptService.class));
+          mock(com.pythontopia.coursepack.service.CourseVideoTranscriptService.class),
+          mock(TutorDailyRequestLimitService.class));
 
   private ProfileDimensionDto dim(String key, double confidence, List<String> tags) {
     return new ProfileDimensionDto(key, key, 0.5, confidence, 0, false, tags);

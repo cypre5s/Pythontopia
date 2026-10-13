@@ -22,9 +22,7 @@ import com.pythontopia.common.web.CurrentUserArgumentResolver;
 import com.pythontopia.common.web.WebConfig;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import com.pythontopia.world.boss.dto.ExpeditionRunActionRequest;
-import com.pythontopia.world.boss.dto.ExpeditionRunStartRequest;
 import com.pythontopia.world.boss.dto.FrontierPickDto;
-import com.pythontopia.world.boss.dto.FrontierSelectRequest;
 import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
 import java.util.List;
 import java.util.Map;
@@ -138,7 +136,7 @@ class ExpeditionRunControllerTest {
   @Test
   void postStartsRunFromServerSelectedFrontier() throws Exception {
     ExpeditionRunDto dto = runDto();
-    when(bossService.selectFrontier(eq(7L), any(FrontierSelectRequest.class)))
+    when(bossService.selectFrontier(7L, 2, "PY43-KC-008"))
         .thenReturn(
             new FrontierSelectResultDto(List.of(new FrontierPickDto("PY43-KC-008", 2, 3, "weak"))));
     when(service.start(eq(7L), eq(2), eq(false), anyList())).thenReturn(dto);
@@ -147,11 +145,11 @@ class ExpeditionRunControllerTest {
         .perform(
             post("/api/world/expedition/run")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new ExpeditionRunStartRequest(2, false))))
+                .content("{\"focusChapter\":2,\"isDaily\":false,\"preferredKcCode\":\"PY43-KC-008\"}"))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.runId").value(dto.runId()));
 
-    verify(bossService).selectFrontier(eq(7L), any(FrontierSelectRequest.class));
+    verify(bossService).selectFrontier(7L, 2, "PY43-KC-008");
     verify(service).start(eq(7L), eq(2), eq(false), anyList());
   }
 
@@ -162,6 +160,18 @@ class ExpeditionRunControllerTest {
             post("/api/world/expedition/run")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{\"focusChapter\":8,\"isDaily\":false}"))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(service, bossService);
+  }
+
+  @Test
+  void postRejectsInvalidPreferredKcBeforeSelectingFrontier() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/world/expedition/run")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"focusChapter\":2,\"isDaily\":false,\"preferredKcCode\":\"other-course-kc\"}"))
         .andExpect(status().isBadRequest());
 
     verifyNoInteractions(service, bossService);

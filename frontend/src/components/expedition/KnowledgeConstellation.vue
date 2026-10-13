@@ -15,6 +15,8 @@ const props = withDefaults(
   defineProps<{
     /** KC 编码 → 掌握度 0..1。 */
     mastery?: Record<string, number>;
+    /** 已有服务端评估证据的 KC；省略时兼容旧调用方按 mastery keys 判断。 */
+    assessed?: string[];
   }>(),
   { mastery: () => ({}) },
 );
@@ -29,19 +31,26 @@ const nodeById = computed<Record<string, ConstellationNode>>(() => {
 function scoreOf(code: string): number {
   return props.mastery[code] ?? 0;
 }
+const assessedCodes = computed(() => new Set(props.assessed ?? Object.keys(props.mastery)));
+function isAssessed(code: string): boolean {
+  return assessedCodes.value.has(code);
+}
 function radiusOf(code: string): number {
-  return 4 + scoreOf(code) * 4;
+  return isAssessed(code) ? 4 + scoreOf(code) * 4 : 3.5;
 }
 function fillOf(code: string): string {
+  if (!isAssessed(code)) return 'rgba(177, 183, 196, 0.38)';
   const s = scoreOf(code);
   if (s >= CONSTELLATION_LIT_THRESHOLD) return '#43a45b'; // 已掌握：点亮绿
   if (s >= 0.2) return '#d99f3a'; // 学习中：金
-  return 'rgba(74, 54, 29, 0.28)'; // 未触及：暗
+  return 'rgba(74, 54, 29, 0.45)'; // 有评估证据但当前掌握度偏低
 }
 
 const litCount = computed(
-  () => constellation.nodes.filter((n) => scoreOf(n.code) >= CONSTELLATION_LIT_THRESHOLD).length,
+  () => constellation.nodes.filter((n) => isAssessed(n.code)
+    && scoreOf(n.code) >= CONSTELLATION_LIT_THRESHOLD).length,
 );
+const assessedCount = computed(() => constellation.nodes.filter((node) => isAssessed(node.code)).length);
 const total = computed(() => constellation.nodes.length);
 </script>
 
@@ -51,7 +60,7 @@ const total = computed(() => constellation.nodes.length);
     data-testid="kc-constellation"
   >
     <figcaption class="kc-constellation__cap">
-      知识星座 · 已点亮 <strong>{{ litCount }}</strong> / {{ total }} 个知识点
+      知识星座 · 已点亮 <strong>{{ litCount }}</strong> · 已评估 {{ assessedCount }} / {{ total }} 个知识点
     </figcaption>
     <svg
       class="kc-constellation__svg"
@@ -80,14 +89,14 @@ const total = computed(() => constellation.nodes.length);
           :fill="fillOf(n.code)"
           :data-testid="`kc-star-${n.code}`"
         >
-          <title>{{ kcDisplayName(n.code) }} · 掌握 {{ Math.round(scoreOf(n.code) * 100) }}%</title>
+          <title>{{ kcDisplayName(n.code) }} · {{ isAssessed(n.code) ? `掌握 ${Math.round(scoreOf(n.code) * 100)}%` : '尚未评估' }}</title>
         </circle>
       </g>
     </svg>
     <div class="kc-constellation__legend">
       <span><i class="dot dot--lit" /> 已掌握</span>
       <span><i class="dot dot--learning" /> 学习中</span>
-      <span><i class="dot dot--dim" /> 未触及</span>
+      <span><i class="dot dot--dim" /> 尚未评估</span>
     </div>
   </figure>
 </template>

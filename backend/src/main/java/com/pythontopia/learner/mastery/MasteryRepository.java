@@ -9,6 +9,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.ArrayList;
+import java.util.Set;
 import java.util.stream.Collectors;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.ConnectionCallback;
@@ -62,6 +63,35 @@ public class MasteryRepository {
         userId);
   }
 
+  /** KC codes backed by verified practice evidence; bootstrap/default snapshots do not count. */
+  public Set<String> findAssessedKcCodes(Long userId) {
+    return Set.copyOf(jdbcTemplate.queryForList(
+        "SELECT DISTINCT kc_code FROM kc_mastery_event WHERE user_id = ?"
+            + " AND source IN ('PRACTICE_PASS', 'PRACTICE_FAIL', 'MICRO_CHECK_PASS',"
+            + " 'MICRO_CHECK_FAIL', 'DEBUG_FIX')",
+        String.class,
+        userId));
+  }
+
+  /** Latest three server-recorded practice outcomes per KC, newest first. */
+  public List<PracticeOutcome> findRecentPracticeOutcomesByUser(Long userId) {
+    return jdbcTemplate.query(
+        "SELECT kc_code, source, created_at FROM ("
+            + " SELECT kc_code, source, created_at, ROW_NUMBER() OVER (PARTITION BY kc_code"
+            + " ORDER BY created_at DESC, id DESC) AS row_number"
+            + " FROM kc_mastery_event WHERE user_id = ? AND source IN"
+            + " ('PRACTICE_PASS', 'PRACTICE_FAIL')"
+            + ") recent WHERE row_number <= 3 ORDER BY kc_code, row_number",
+        (rs, rowNum) ->
+            new PracticeOutcome(
+                rs.getString("kc_code"),
+                rs.getString("source").endsWith("PASS") || "DEBUG_FIX".equals(rs.getString("source")),
+                offset(rs, "created_at")),
+        userId);
+  }
+
+  public record PracticeOutcome(String kcCode, boolean passed, OffsetDateTime createdAt) {}
+
   Map<String, MasterySnapshot> findAllAsMap(Long userId) {
     return findAll(userId).stream()
         .collect(java.util.stream.Collectors.toMap(MasterySnapshot::kcCode, s -> s));
@@ -91,17 +121,46 @@ public class MasteryRepository {
   }
 
   void insertEvent(
-      Long userId, String kcCode, MasterySource source, BigDecimal delta, String reason) {
+      Long userId,
+      String kcCode,
+      MasterySource source,
+      BigDecimal delta,
+      BigDecimal appliedDelta,
+      String reason) {
     jdbcTemplate.update(
         """
-        INSERT INTO kc_mastery_event (user_id, kc_code, source, delta, reason)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO kc_mastery_event (user_id, kc_code, source, delta, applied_delta, reason)
+        VALUES (?, ?, ?, ?, ?, ?)
         """,
         userId,
         kcCode,
         source.name(),
         delta,
+        appliedDelta,
         reason);
+  }
+
+  boolean insertEventIfNew(
+      Long userId,
+      String kcCode,
+      MasterySource source,
+      BigDecimal delta,
+      BigDecimal appliedDelta,
+      String reason,
+      String idempotencyKey) {
+    return !jdbcTemplate.query(
+            "INSERT INTO kc_mastery_event (user_id, kc_code, source, delta, applied_delta, reason, idempotency_key)"
+                + " VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT (user_id, idempotency_key)"
+                + " WHERE idempotency_key IS NOT NULL DO NOTHING RETURNING id",
+            (rs, rowNum) -> rs.getLong("id"),
+            userId,
+            kcCode,
+            source.name(),
+            delta,
+            appliedDelta,
+            reason,
+            idempotencyKey)
+        .isEmpty();
   }
 
   public List<MasteryEventRecord> recentEvents(Long userId, String kcCode, int limit) {
@@ -142,11 +201,15 @@ public class MasteryRepository {
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }
 
-  public List<WeeklyEvidence> findWeeklyEvidence(Long userId, OffsetDateTime since) {
+  public List<WeeklyEvidence> findWeeklyEvidence(
+      Long userId, OffsetDateTime since, OffsetDateTime until) {
     return jdbcTemplate.query(
-        "SELECT kc_code, SUM(delta) AS weekly_delta, COUNT(*) AS evidence_count,"
+        "SELECT kc_code, CASE WHEN COUNT(*) FILTER (WHERE applied_delta IS NULL) = 0"
+            + " THEN SUM(applied_delta) END AS weekly_delta, COUNT(*) AS evidence_count,"
             + " ARRAY_AGG(DISTINCT source ORDER BY source) AS evidence_sources"
-            + " FROM kc_mastery_event WHERE user_id = ? AND created_at >= ?"
+            + " FROM kc_mastery_event WHERE user_id = ? AND created_at >= ? AND created_at < ?"
+            + " AND source IN ('PRACTICE_PASS', 'PRACTICE_FAIL', 'DEBUG_FIX',"
+            + " 'MICRO_CHECK_PASS', 'MICRO_CHECK_FAIL')"
             + " GROUP BY kc_code ORDER BY kc_code",
         (rs, rowNum) ->
             new WeeklyEvidence(
@@ -155,7 +218,8 @@ public class MasteryRepository {
                 rs.getInt("evidence_count"),
                 readStringArray(rs.getArray("evidence_sources"))),
         userId,
-        since);
+        since,
+        until);
   }
 
   private static List<String> readStringArray(java.sql.Array array) {

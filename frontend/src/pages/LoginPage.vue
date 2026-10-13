@@ -18,10 +18,6 @@ const route = useRoute();
 
 const loading = ref(false);
 const backendReady = ref<boolean | null>(null);
-const loginFormRef = ref<InstanceType<typeof LoginForm> | null>(null);
-
-const DEMO_USERNAME = 'demo-stu-01';
-const DEMO_PASSWORD = 'P@ssw0rd1';
 
 async function checkBackendHealth(): Promise<void> {
   try {
@@ -58,14 +54,6 @@ async function submit(req: LoginRequest): Promise<void> {
   }
 }
 
-function fillAndSubmitDemo(): void {
-  if (loading.value || !loginFormRef.value) {
-    return;
-  }
-  unlockAudio();
-  loginFormRef.value.fill(DEMO_USERNAME, DEMO_PASSWORD);
-  loginFormRef.value.submit();
-}
 </script>
 
 <template>
@@ -703,18 +691,9 @@ function fillAndSubmitDemo(): void {
         如长时间无响应，请联系演示助教。
       </div>
       <LoginForm
-        ref="loginFormRef"
         :loading="loading"
         @submit="submit"
       />
-      <button
-        type="button"
-        class="auth-demo-btn"
-        :disabled="loading"
-        @click="fillAndSubmitDemo"
-      >
-        快速体验：演示学生 demo-stu-01 / P@ssw0rd1
-      </button>
       <RouterLink
         to="/register"
         class="auth-link"
@@ -850,34 +829,6 @@ function fillAndSubmitDemo(): void {
   font-size: 13px;
   line-height: 1.5;
   box-shadow: 2px 2px 0 var(--pyt-color-danger);
-}
-
-.auth-demo-btn {
-  margin-top: 16px;
-  width: 100%;
-  min-height: 44px;
-  border: 2px dashed var(--pyt-color-text-hint);
-  background: var(--pyt-color-bg-soft);
-  color: var(--pyt-color-text-primary);
-  cursor: pointer;
-  font-weight: 700;
-  border-radius: var(--pyt-radius-lg);
-  box-shadow: 2px 2px 0 var(--pyt-color-text-hint);
-  transition: transform 80ms ease;
-}
-
-.auth-demo-btn:hover:not(:disabled) {
-  background: var(--pyt-color-warning-bg);
-}
-
-.auth-demo-btn:active:not(:disabled) {
-  transform: translate(2px, 2px);
-  box-shadow: 0 0 0 var(--pyt-color-text-hint);
-}
-
-.auth-demo-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 .auth-link {

@@ -4,6 +4,8 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.learner.reflection.dto.LearnerInsightDto;
 import java.sql.Array;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -59,6 +61,29 @@ public class LearnerInsightRepository {
                 rs.getString("source"),
                 rs.getString("created_at")),
         userId,
+        limit);
+  }
+
+  public List<LearnerInsightDto> findByUserBetween(
+      Long userId, Instant since, Instant until, int limit) {
+    return jdbc.query(
+        "SELECT id, text, dimension_key, tags::text AS tags_text, evidence_event_ids, "
+            + "confidence, source, created_at::text AS created_at "
+            + "FROM learner_insight WHERE user_id = ? AND created_at >= ? AND created_at < ? "
+            + "ORDER BY created_at DESC, id DESC LIMIT ?",
+        (rs, rowNum) ->
+            new LearnerInsightDto(
+                rs.getLong("id"),
+                rs.getString("text"),
+                rs.getString("dimension_key"),
+                parseTags(rs.getString("tags_text")),
+                readLongArray(rs.getArray("evidence_event_ids")),
+                rs.getDouble("confidence"),
+                rs.getString("source"),
+                rs.getString("created_at")),
+        userId,
+        Timestamp.from(since),
+        Timestamp.from(until),
         limit);
   }
 

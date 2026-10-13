@@ -14,4 +14,6 @@ export interface MasterySnapshotDto {
   confidence: number;
   lastEventAt: string | null;
   latestSource: string | null;
+  /** True only when a verified practice/check/debug event supports this KC score. */
+  assessed?: boolean;
 }

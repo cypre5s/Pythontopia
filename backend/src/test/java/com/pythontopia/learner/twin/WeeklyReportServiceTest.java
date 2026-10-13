@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 import com.pythontopia.learner.mastery.MasteryRepository;
 import com.pythontopia.learner.mastery.MasterySnapshot;
@@ -50,20 +51,23 @@ class WeeklyReportServiceTest {
   void setUp() {
     service = new WeeklyReportService(
         memoryService, insightRepository, masteryRepository, eventRepository, jdbc);
-    when(memoryService.retrieveAuthoritative(anyLong(), isNull(), isNull(), anyInt()))
+    when(memoryService.retrieveAuthoritativeBetween(anyLong(), any(), any(), anyInt()))
         .thenReturn(List.of());
-    when(eventRepository.summarizeAuthoritativeSince(anyLong(), any()))
+    when(eventRepository.summarizeAuthoritativeBetween(anyLong(), any(), any()))
         .thenReturn(new AuthoritativeEventCounts(0, 0, 0));
-    when(masteryRepository.findWeeklyEvidence(anyLong(), any()))
+    when(masteryRepository.findWeeklyEvidence(anyLong(), any(), any()))
+        .thenReturn(List.of());
+    when(insightRepository.findByUserBetween(anyLong(), any(), any(), anyInt()))
         .thenReturn(List.of());
   }
 
   @Test
   @DisplayName("空记忆返回空摘要且不崩溃")
   void emptyMemoryReturnsEmptyReport() {
-    when(insightRepository.findByUser(anyLong(), anyInt())).thenReturn(List.of());
+    when(insightRepository.findByUserBetween(anyLong(), any(), any(), anyInt()))
+        .thenReturn(List.of());
     when(masteryRepository.findAll(anyLong())).thenReturn(List.of());
-    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any()))
+    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any(), any()))
         .thenReturn(List.of());
 
     WeeklyReportDto report = service.build(1L);
@@ -76,17 +80,15 @@ class WeeklyReportServiceTest {
   @Test
   @DisplayName("有记忆事件时统计正确的通过/失败数")
   void countsMemoryEvents() {
-    when(memoryService.retrieveAuthoritative(anyLong(), isNull(), isNull(), anyInt()))
+    when(memoryService.retrieveAuthoritativeBetween(anyLong(), any(), any(), anyInt()))
         .thenReturn(List.of(
             new MemoryItemDto(1L, "practice_failed", "练习失败：KC01（WA）",
                 List.of("KC01"), java.time.Instant.now().minusSeconds(86400).toString(), 3, 0.8, 0.6, 0.0, 0.5),
             new MemoryItemDto(2L, "practice_succeeded", "练习通过：KC02",
-                List.of("KC02"), java.time.Instant.now().minusSeconds(3600).toString(), 2, 0.9, 0.4, 0.0, 0.52),
-            new MemoryItemDto(3L, "practice_succeeded", "旧的练习通过：KC03",
-                List.of("KC03"), java.time.Instant.now().minusSeconds(8 * 86400L).toString(), 2, 0.9, 0.4, 0.0, 0.52)));
-    when(eventRepository.summarizeAuthoritativeSince(anyLong(), any()))
+                List.of("KC02"), java.time.Instant.now().minusSeconds(3600).toString(), 2, 0.9, 0.4, 0.0, 0.52)));
+    when(eventRepository.summarizeAuthoritativeBetween(anyLong(), any(), any()))
         .thenReturn(new AuthoritativeEventCounts(2, 1, 1));
-    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any()))
+    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any(), any()))
         .thenReturn(List.of());
 
     WeeklyReportDto report = service.build(1L);
@@ -94,7 +96,7 @@ class WeeklyReportServiceTest {
     assertThat(report.memoryBrief().totalEvents()).isEqualTo(2);
     assertThat(report.memoryBrief().failedPractices()).isEqualTo(1);
     assertThat(report.memoryBrief().succeededPractices()).isEqualTo(1);
-    assertThat(report.memoryBrief().topKcCodes()).doesNotContain("KC03");
+    assertThat(report.memoryBrief().topKcCodes()).containsExactly("KC01", "KC02");
   }
 
   @Test
@@ -106,10 +108,10 @@ class WeeklyReportServiceTest {
                 java.math.BigDecimal.valueOf(0.75),
                 java.math.BigDecimal.valueOf(0.8),
                 null, null)));
-    when(masteryRepository.findWeeklyEvidence(anyLong(), any()))
+    when(masteryRepository.findWeeklyEvidence(anyLong(), any(), any()))
         .thenReturn(List.of(new WeeklyEvidence("KC01", java.math.BigDecimal.valueOf(0.12), 2,
-            List.of("PRACTICE_PASS", "DECAY"))));
-    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any()))
+            List.of("PRACTICE_PASS", "MICRO_CHECK_PASS"))));
+    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any(), any()))
         .thenReturn(List.of());
 
     WeeklyReportDto report = service.build(1L);
@@ -121,19 +123,63 @@ class WeeklyReportServiceTest {
     assertThat(report.masteryDeltas().get(0).weeklyDelta()).isEqualTo(0.12);
     assertThat(report.masteryDeltas().get(0).evidenceCount()).isEqualTo(2);
     assertThat(report.masteryDeltas().get(0).evidenceSources())
-        .containsExactly("PRACTICE_PASS", "DECAY");
+        .containsExactly("PRACTICE_PASS", "MICRO_CHECK_PASS");
+  }
+
+  @Test
+  @DisplayName("周报所有统计共享上海时区的起止窗口")
+  void usesOneBoundedWindowForWeeklySources() {
+    when(masteryRepository.findAll(anyLong())).thenReturn(List.of());
+    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any(), any()))
+        .thenReturn(List.of());
+
+    service.build(1L);
+
+    verify(memoryService).retrieveAuthoritativeBetween(eq(1L), any(), any(), eq(30));
+    verify(insightRepository).findByUserBetween(eq(1L), any(), any(), eq(5));
+    verify(eventRepository).summarizeAuthoritativeBetween(eq(1L), any(), any());
+    verify(masteryRepository).findWeeklyEvidence(eq(1L), any(), any());
+  }
+
+  @Test
+  @DisplayName("无法读取当前掌握度快照时不伪造为 0")
+  void doesNotDefaultMissingMasterySnapshotToZero() {
+    when(masteryRepository.findAll(anyLong())).thenReturn(List.of());
+    when(masteryRepository.findWeeklyEvidence(anyLong(), any(), any()))
+        .thenReturn(List.of(new WeeklyEvidence("KC01", java.math.BigDecimal.valueOf(0.1), 1,
+            List.of("PRACTICE_PASS"))));
+    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any(), any()))
+        .thenReturn(List.of());
+
+    WeeklyReportDto report = service.build(1L);
+
+    assertThat(report.masteryDeltas().getFirst().currentScore()).isNull();
+  }
+
+  @Test
+  @DisplayName("缺少可重建的变化值时明确返回空值")
+  void preservesUnknownWeeklyDelta() {
+    when(masteryRepository.findAll(anyLong())).thenReturn(List.of());
+    when(masteryRepository.findWeeklyEvidence(anyLong(), any(), any()))
+        .thenReturn(List.of(new WeeklyEvidence("KC01", null, 1, List.of("PRACTICE_PASS"))));
+    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any(), any()))
+        .thenReturn(List.of());
+
+    WeeklyReportDto report = service.build(1L);
+
+    assertThat(report.masteryDeltas().getFirst().weeklyDelta()).isNull();
   }
 
   @Test
   @DisplayName("有洞察时返回洞察列表")
   void includesRecentInsights() {
-    when(insightRepository.findByUser(anyLong(), anyInt()))
+    when(insightRepository.findByUserBetween(anyLong(), any(), any(), anyInt()))
         .thenReturn(List.of(
             new LearnerInsightDto(1L, "需要加强错误处理", "error_pattern",
                 List.of("KC01"), List.of(1L, 2L), 0.8, "GRAPH",
                 java.time.Instant.now().minusSeconds(3600).toString())));
     when(masteryRepository.findAll(anyLong())).thenReturn(List.of());
-    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any()))
+    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any(), any()))
         .thenReturn(List.of());
 
     WeeklyReportDto report = service.build(1L);
@@ -147,7 +193,7 @@ class WeeklyReportServiceTest {
   void propagatesResourceRunQueryFailure() {
     BadSqlGrammarException failure =
         new BadSqlGrammarException("weekly report", "SELECT", new java.sql.SQLException("boom"));
-    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any()))
+    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any(), any()))
         .thenThrow(failure);
 
     assertThatThrownBy(() -> service.build(1L)).isSameAs(failure);
