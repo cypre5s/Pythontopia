@@ -80,8 +80,8 @@ public class BossService {
   private final EndlessPregenService pregenService;
   private final BossProblemReviewRepository reviewRepository;
   private final ExpeditionRunService expeditionRunService;
-  private final ExpeditionScoreService expeditionScoreService;
   private final BossAttemptIdempotencyService attemptIdempotencyService;
+  private final ExpeditionAttemptCompletionService expeditionAttemptCompletionService;
   private final ApplicationEventPublisher eventPublisher;
   private final ConcurrentMap<ProblemCacheKey, CachedProblem> cache = new ConcurrentHashMap<>();
 
@@ -93,8 +93,8 @@ public class BossService {
       EndlessPregenService pregenService,
       BossProblemReviewRepository reviewRepository,
       ExpeditionRunService expeditionRunService,
-      ExpeditionScoreService expeditionScoreService,
       BossAttemptIdempotencyService attemptIdempotencyService,
+      ExpeditionAttemptCompletionService expeditionAttemptCompletionService,
       ApplicationEventPublisher eventPublisher) {
     this.graphClient = graphClient;
     this.masteryRepository = masteryRepository;
@@ -103,8 +103,8 @@ public class BossService {
     this.pregenService = pregenService;
     this.reviewRepository = reviewRepository;
     this.expeditionRunService = expeditionRunService;
-    this.expeditionScoreService = expeditionScoreService;
     this.attemptIdempotencyService = attemptIdempotencyService;
+    this.expeditionAttemptCompletionService = expeditionAttemptCompletionService;
     this.eventPublisher = eventPublisher;
   }
 
@@ -639,25 +639,6 @@ public class BossService {
                   expeditionBinding.get().nodeId(),
                   bossPhaseForAttempt)
               : questionFingerprint(problem);
-      ExpeditionScoreService.VerifiedAttemptResult attemptResult =
-          recordVerifiedExpeditionAttempt(
-              userId,
-              runId,
-              expeditionBinding.map(EndlessPregenService.ExpeditionProblemBinding::nodeId).orElse(null),
-              bossPhaseForAttempt,
-              problem,
-              attemptFingerprint,
-              graphResult,
-              score);
-      if (!attemptResult.accepted()) {
-        if (!expeditionRunService.isActiveRun(userId, runId)) {
-          throw expiredExpeditionRun();
-        }
-        throw new com.pythontopia.common.error.BusinessException(
-            org.springframework.http.HttpStatus.CONFLICT,
-            "EXPEDITION_ATTEMPT_LIMIT_REACHED",
-            "本局可计分判题次数已用完");
-      }
       String feedback =
           graphResult.passed()
               ? "通过 ✅ 服务端沙箱已确认。"
@@ -667,10 +648,7 @@ public class BossService {
       // 闭环关键：服务端沙箱真实判完后（且仅此路径）才发学习事件，与 SubmissionService 同一套事件驱动
       // KC 掌握度（测）+ 8 维画像被动修订。缓存过期 / 缺 testCases / graph 不可用等「未判定」路径不发，
       // 避免把非判题结果污染进掌握度；web 重放由 attemptId 结果记录阻止二次发事件。
-      return completeAttempt(
-          request,
-          userId,
-          claim,
+      BossAttemptResultDto response =
           new BossAttemptResultDto(
               request.problemId(),
               graphResult.passed(),
@@ -678,8 +656,35 @@ public class BossService {
               graphResult.totalTestCases(),
               graphResult.failureFirstHint(),
               score,
-              feedback),
-          attemptResult.publishLearningEvent() ? practiceOutcomeEvent(userId, problem, graphResult) : null);
+              feedback);
+      LearningEvent learningEvent = practiceOutcomeEvent(userId, problem, graphResult);
+      if (expeditionBinding.isPresent()) {
+        ExpeditionAttemptCompletionService.Completion completion =
+            expeditionAttemptCompletionService.complete(
+                userId,
+                runId,
+                expeditionBinding.get().nodeId(),
+                bossPhaseForAttempt,
+                problem.problemId(),
+                attemptFingerprint,
+                graphResult.passed(),
+                score,
+                request.attemptId(),
+                claim,
+                response,
+                learningEvent);
+        if (!completion.accepted()) {
+          if (!expeditionRunService.isActiveRun(userId, runId)) {
+            throw expiredExpeditionRun();
+          }
+          throw new com.pythontopia.common.error.BusinessException(
+              org.springframework.http.HttpStatus.CONFLICT,
+              "EXPEDITION_ATTEMPT_LIMIT_REACHED",
+              "本局可计分判题次数已用完");
+        }
+        return completion.response();
+      }
+      return completeAttempt(request, userId, claim, response, learningEvent);
     } catch (RestClientException ex) {
       LOG.warn(
           "graph evaluate failed ({}): {} — returning an unavailable error without a verdict",
@@ -801,29 +806,6 @@ public class BossService {
         org.springframework.http.HttpStatus.CONFLICT,
         "EXPEDITION_PROBLEM_BINDING_MISMATCH",
         "题目与当前远征节点绑定不匹配，无法判题或结算");
-  }
-
-  private ExpeditionScoreService.VerifiedAttemptResult recordVerifiedExpeditionAttempt(
-      Long userId,
-      String runId,
-      String nodeId,
-      Integer bossPhase,
-      BossInternalProblem problem,
-      String attemptFingerprint,
-      BossEvaluateResultDto result,
-      int score) {
-    if (userId == null || runId == null) {
-      return new ExpeditionScoreService.VerifiedAttemptResult(true, true);
-    }
-    return expeditionScoreService.recordVerifiedAttempt(
-        userId,
-        runId,
-        nodeId,
-        bossPhase,
-        problem.problemId(),
-        attemptFingerprint,
-        result.passed(),
-        score);
   }
 
   private record ExpeditionRequestBinding(

@@ -103,14 +103,15 @@
 - Additional Web fixes: failed admin filters clear stale user/review actions; classroom 403 hides protected navigation and write actions; teacher member/quest tables have keyboard-accessible horizontal scrolling; live classroom streaming shows HTTP/network errors and retry state.
 - Upload quota preflight now rejects exhausted accounts before parser work, then repeats the quota check under the user-row lock before insert to retain concurrent-upload safety.
 - Tutor daily request ceiling: V211 plus an atomic PostgreSQL upsert shares a 30 top-level model-request budget per user per Asia/Shanghai calendar day across normal Q&A and workflow cards. Completed idempotent replay is free; rejected requests that never reach Graph are not charged. A started dispatch reserves a slot even if it then fails.
+- Expedition judgment completion: a PostgreSQL fault-injection regression reproduced a stranded verified-attempt row when learning-event publication failed after score persistence. `ExpeditionAttemptCompletionService` now wraps the verified-attempt ledger, idempotent response, and synchronous learning-event listeners in one transaction; the ledger and response roll back together on failure.
+- Admin presentation: user/review toolbars and confirmation dialogs now share the existing Alethicode-aligned panel and dialog styling; account status confirmation has Escape/focus recovery and retry coverage. No unsupported admin routes or fabricated records were added.
 - Functional verification: full Vitest, TypeScript, production build, changed-file ESLint, 79 focused Tutor/provider/video pytest cases, Ruff, and 112 selected backend JUnit/PostgreSQL cases passed; the empty database migration reached V209.
 
 ### Still open
 
 - The per-node/per-phase cap covers new server-run-bound Graph generation requests, not total model spend: ordinary Tutor, Workshop, non-expedition generation, or internal model subcalls are outside it. Historical failed direct-generation calls that never persisted a row are not recoverable from legacy data.
 - The 30/day ceiling limits top-level Tutor turns, not tokens, internal multi-agent subcalls, or billed currency. It reduces conversation-ID rotation bypass, but does not guarantee an exact monetary cap.
-- P2 atomicity between expedition verified-attempt persistence and downstream learning-event projection was not changed or fault-injection tested. Review the outbox boundary before claiming it is closed.
-- Admin logged-in browser interactions and deployment-level Piston isolation were not re-run. The current evidence is automated tests and static configuration review.
+- Admin logged-in browser interactions were verified in an isolated full stack: user status disable/enable, dialog Escape/focus restoration, and review queue loading all passed with no browser exceptions or API 5xx. Deployment-level Piston isolation remains unverified.
 - The security review did not cover every Web endpoint adversarially; no P0 was confirmed within the reviewed surfaces.
 - Account-level Tutor request limiting is now implemented; exact token/USD billing caps and broader limits for Workshop or other AI routes remain outside this change.
 - CORS deployment values, production Piston isolation, and exception-stack redaction against sensitive upstream sentinels were not runtime-verified. Upload owner scoping and bounded parser limits were reviewed; account quota is now preflighted and atomically rechecked before persistence.
@@ -128,3 +129,15 @@
 - Combined selected backend regression passed 168 tests across Tutor, expedition, upload, migration, and PostgreSQL integration classes. Frontend focused Vitest (76), typecheck, changed-file ESLint, and production build remain green from the earlier current worktree run. A Vite-only Playwright smoke verified `/admin/users` redirects to `/login` with no browser page errors; it did not exercise authenticated API interactions.
 - Fresh Graph Tutor/provider/vision/attachment/workflow/video regression passed 117 tests (one existing pytest asyncio-mark warning); Ruff passed for the changed proxy route. No live model or Piston request was made.
 - Still not run: all Web/Graph/RAG/Maven suites as one current snapshot, authenticated admin/browser walkthrough, deployment CORS/Piston checks, real DeepSeek text/image calls, and expedition performance. The 30/day limit is not a token or monetary cap. Performance remains last; rotate the key shared in chat before any live model call.
+
+## Follow-up verification — Admin and expedition attempt atomicity — 2026-10-13
+
+- Admin users/reviews now share the panel header toolbar; account status uses a themed native dialog with cancel, Escape and focus restoration, and preserves retry on failure. Admin-focused 25 Vitest tests passed; the full frontend Vitest command exited 0, along with typecheck, targeted ESLint and production build.
+- Added `ExpeditionAttemptCompletionService` so a judged expedition attempt, its idempotent response, and synchronous learning event handling share a transaction. Before the change, a PostgreSQL fault-injection test failed as expected: event publication raised an exception while one verified attempt remained. After the change, `BossServiceTest`, completion-service tests and `ExpeditionRunPostgresIntegrationTest` passed 70 cases, including rollback of both rows; the empty Testcontainers database migrated through V211.
+- `git diff --check` passed. No live DeepSeek/Piston call, deployment CORS/Piston check or expedition performance run occurred.
+
+## Follow-up verification — Full-stack admin browser and backend reruns — 2026-10-13
+
+- Isolated Compose full stack: Graph and RAG health checks returned `ok`; the backend reported `not_ready` because Piston was not configured. Authenticated Playwright checks passed for `/admin/users` (status update and keyboard/focus behavior) and `/admin/problem-reviews` (real empty queue), with zero browser exceptions and API 5xx. The temporary account, database volume, generated local `.env`, and services were removed.
+- The first full Maven run reported 1 randomized expedition chest fixture failure and 9 test errors. After making the chest fixture deterministic, `ExpeditionRunPostgresIntegrationTest` passed all 28 tests. `PyodideSchemaTest` had pinned Flyway at V116 while booting application services that require later tables; the test now migrates the current schema and passes 2 tests. The remaining 7 initially errored classes passed individually (19 tests total).
+- A single full Maven run has not passed on the corrected snapshot; the per-class reruns do not replace a green full-suite run. No DeepSeek or Piston requests were made. Performance stays pending until a real Piston judge and a rotated API key are available.

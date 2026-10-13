@@ -20,6 +20,7 @@ const activeUser = {
 
 describe('AdminUsersPage', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     setActivePinia(createPinia());
     useSessionStore().user = {
       id: 1,
@@ -35,7 +36,16 @@ describe('AdminUsersPage', () => {
       totalPages: 1,
     });
     vi.mocked(setAdminUserStatus).mockResolvedValue({ ...activeUser, status: 'DISABLED' });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    if (!HTMLDialogElement.prototype.showModal) {
+      Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
+        configurable: true,
+        value(this: HTMLDialogElement) { this.setAttribute('open', ''); },
+      });
+      Object.defineProperty(HTMLDialogElement.prototype, 'close', {
+        configurable: true,
+        value(this: HTMLDialogElement) { this.removeAttribute('open'); },
+      });
+    }
   });
 
   it('loads real paged users and lets an administrator disable an account', async () => {
@@ -45,13 +55,53 @@ describe('AdminUsersPage', () => {
     expect(searchAdminUsers).toHaveBeenCalledWith({ page: 0, size: 20 });
     expect(wrapper.text()).toContain('学生七号');
     expect(wrapper.text()).toContain('student7');
+    expect(wrapper.get('.admin-panel__header').find('[data-testid="admin-users-search-form"]').exists()).toBe(true);
+
+    await wrapper.get('[data-testid="admin-user-status-7"]').trigger('click');
+    expect(wrapper.get('[data-testid="admin-user-status-confirm"]').exists()).toBe(true);
+    expect(setAdminUserStatus).not.toHaveBeenCalled();
+    await wrapper.get('[data-testid="admin-user-status-confirm"]').trigger('click');
+    await flushPromises();
+
+    expect(setAdminUserStatus).toHaveBeenCalledWith(7, 'DISABLED');
+    expect(searchAdminUsers).toHaveBeenCalledTimes(2);
+  });
+
+  it('closes the themed account status dialog on Escape and restores focus', async () => {
+    const wrapper = mount(AdminUsersPage, { attachTo: document.body });
+    await flushPromises();
+    const opener = wrapper.get('[data-testid="admin-user-status-7"]').element as HTMLButtonElement;
+    const focus = vi.spyOn(opener, 'focus');
 
     await wrapper.get('[data-testid="admin-user-status-7"]').trigger('click');
     await flushPromises();
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="admin-user-status-cancel"]').element);
+    await wrapper.get('dialog.admin-dialog').trigger('cancel');
+    await flushPromises();
 
-    expect(window.confirm).toHaveBeenCalled();
-    expect(setAdminUserStatus).toHaveBeenCalledWith(7, 'DISABLED');
-    expect(searchAdminUsers).toHaveBeenCalledTimes(2);
+    expect(wrapper.find('dialog.admin-dialog').exists()).toBe(false);
+    expect(focus).toHaveBeenCalledOnce();
+    wrapper.unmount();
+  });
+
+  it('keeps the status dialog open after a failed update and allows retry', async () => {
+    vi.mocked(setAdminUserStatus)
+      .mockRejectedValueOnce(new Error('状态更新失败'))
+      .mockResolvedValueOnce({ ...activeUser, status: 'DISABLED' });
+    const wrapper = mount(AdminUsersPage);
+    await flushPromises();
+
+    await wrapper.get('[data-testid="admin-user-status-7"]').trigger('click');
+    await wrapper.get('[data-testid="admin-user-status-confirm"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('状态更新失败');
+    expect(wrapper.find('dialog.admin-dialog').exists()).toBe(true);
+    await wrapper.get('[data-testid="admin-user-status-confirm"]').trigger('click');
+    await flushPromises();
+
+    expect(setAdminUserStatus).toHaveBeenCalledTimes(2);
+    expect(wrapper.find('dialog.admin-dialog').exists()).toBe(false);
   });
 
   it('removes old status actions while a list refresh is in flight', async () => {
@@ -70,7 +120,7 @@ describe('AdminUsersPage', () => {
       () => new Promise((resolve) => { resolveRefresh = resolve; }),
     );
 
-    const refresh = wrapper.get('button').trigger('click');
+    const refresh = wrapper.get('[data-testid="admin-users-refresh"]').trigger('click');
     await flushPromises();
     expect(wrapper.find('[data-testid="admin-user-status-7"]').exists()).toBe(false);
 

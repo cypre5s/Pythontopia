@@ -129,10 +129,14 @@ watch(navigationOpen, (open) => {
               exact-active-class="is-active"
               @click="closeNavigation"
             >
-              <span
+              <svg
                 class="admin-nav__icon"
+                viewBox="0 0 24 24"
+                fill="none"
                 aria-hidden="true"
-              >01</span>
+              >
+                <path d="M4 19V5m0 14h17M8 15v-4m5 4V7m5 8V9" />
+              </svg>
               AI 运维概览
             </RouterLink>
           </section>
@@ -150,10 +154,14 @@ watch(navigationOpen, (open) => {
               exact-active-class="is-active"
               @click="closeNavigation"
             >
-              <span
+              <svg
                 class="admin-nav__icon"
+                viewBox="0 0 24 24"
+                fill="none"
                 aria-hidden="true"
-              >02</span>
+              >
+                <path d="M8 4h8l3 3v13H5V4h3Zm0 0v4h8V4m-7 8 2 2 4-4" />
+              </svg>
               AI 出题审核
             </RouterLink>
           </section>
@@ -171,10 +179,14 @@ watch(navigationOpen, (open) => {
               exact-active-class="is-active"
               @click="closeNavigation"
             >
-              <span
+              <svg
                 class="admin-nav__icon"
+                viewBox="0 0 24 24"
+                fill="none"
                 aria-hidden="true"
-              >03</span>
+              >
+                <path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20m4-9a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm14 9v-1.5a4 4 0 0 0-3-3.87M16 3.2a4 4 0 0 1 0 7.6" />
+              </svg>
               用户管理
             </RouterLink>
           </section>
@@ -258,6 +270,13 @@ watch(navigationOpen, (open) => {
   --admin-table-hover: #f8fbff;
   --admin-panel-radius: 16px;
   --admin-panel-shadow: 0 6px 18px rgb(15 23 42 / 8%);
+  --admin-control-height: 36px;
+  --admin-control-radius: 8px;
+  --admin-table-header-height: 44px;
+  --admin-table-row-height: 52px;
+  --admin-dialog-width: 520px;
+  --admin-dialog-radius: 16px;
+  --admin-dialog-shadow: 0 20px 60px rgb(15 23 42 / 20%);
   position: relative;
   display: flex;
   min-height: 100vh;
@@ -365,22 +384,19 @@ watch(navigationOpen, (open) => {
   box-shadow: 0 12px 24px rgb(37 99 235 / 22%);
 }
 
-.admin-nav__link.is-active .admin-nav__icon {
-  border-color: rgb(255 255 255 / 36%);
-  background: rgb(255 255 255 / 14%);
-  color: #fff;
+.admin-nav__icon {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  color: var(--admin-primary);
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
 }
 
-.admin-nav__icon {
-  display: grid;
-  width: 27px;
-  height: 27px;
-  place-items: center;
-  border: 1px solid #dbe6f7;
-  border-radius: 7px;
-  color: var(--admin-primary);
-  font-size: 9px;
-  font-variant-numeric: tabular-nums;
+.admin-nav__link.is-active .admin-nav__icon {
+  color: #fff;
 }
 
 .admin-sidebar__account {
@@ -520,6 +536,71 @@ watch(navigationOpen, (open) => {
   display: none;
 }
 
+.admin-shell :deep(.admin-page-heading) {
+  display: grid;
+  gap: 6px;
+}
+
+.admin-shell :deep(.admin-page-heading h1) {
+  margin: 0;
+  color: var(--admin-text);
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.admin-shell :deep(.admin-page-heading p) {
+  margin: 0;
+  color: var(--admin-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.admin-shell :deep(.admin-dialog) {
+  position: fixed;
+  z-index: 1000;
+  width: min(var(--admin-dialog-width), calc(100vw - 32px));
+  max-height: calc(100dvh - 32px);
+  margin: auto;
+  overflow: auto;
+  padding: 24px;
+  border: 1px solid var(--admin-border);
+  border-radius: var(--admin-dialog-radius);
+  background: var(--admin-surface);
+  box-shadow: var(--admin-dialog-shadow);
+  color: var(--admin-text);
+}
+
+.admin-shell :deep(.admin-dialog::backdrop) {
+  background: rgb(15 23 42 / 42%);
+}
+
+.admin-shell :deep(.admin-dialog h2) {
+  margin: 0;
+  color: var(--admin-text);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.admin-shell :deep(.admin-dialog > p) {
+  margin: 8px 0 16px;
+  color: var(--admin-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.admin-shell :deep(.admin-dialog__actions) {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.admin-shell :deep(.admin-dialog__error) {
+  color: #b91c1c;
+}
+
 .admin-page-enter-active,
 .admin-page-leave-active {
   transition: opacity 120ms ease, transform 120ms ease;
@@ -570,6 +651,19 @@ watch(navigationOpen, (open) => {
   .admin-shell__footer-row {
     flex-wrap: wrap;
     gap: 8px;
+  }
+
+  .admin-shell :deep(.admin-panel__header) {
+    align-items: stretch;
+  }
+
+  .admin-shell :deep(.admin-panel__actions) {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .admin-shell :deep(.admin-page-heading h1) {
+    font-size: 22px;
   }
 }
 

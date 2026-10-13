@@ -69,8 +69,8 @@ class BossServiceTest {
   @Mock EndlessPregenService pregenService;
   @Mock BossProblemReviewRepository reviewRepository;
   @Mock ExpeditionRunService expeditionRunService;
-  @Mock ExpeditionScoreService expeditionScoreService;
   @Mock BossAttemptIdempotencyService attemptIdempotencyService;
+  @Mock ExpeditionAttemptCompletionService expeditionAttemptCompletionService;
   @Mock ApplicationEventPublisher eventPublisher;
   private BossService service;
 
@@ -85,9 +85,28 @@ class BossServiceTest {
             pregenService,
             reviewRepository,
             expeditionRunService,
-            expeditionScoreService,
             attemptIdempotencyService,
+            expeditionAttemptCompletionService,
             eventPublisher);
+    lenient()
+        .when(
+            expeditionAttemptCompletionService.complete(
+                anyLong(),
+                anyString(),
+                anyString(),
+                org.mockito.ArgumentMatchers.nullable(Integer.class),
+                anyString(),
+                anyString(),
+                anyBoolean(),
+                anyInt(),
+                org.mockito.ArgumentMatchers.nullable(UUID.class),
+                org.mockito.ArgumentMatchers.nullable(BossAttemptIdempotencyService.Claim.class),
+                any(com.pythontopia.world.boss.dto.BossAttemptResultDto.class),
+                org.mockito.ArgumentMatchers.nullable(LearningEvent.class)))
+        .thenAnswer(
+            call ->
+                new ExpeditionAttemptCompletionService.Completion(
+                    true, call.getArgument(10)));
     lenient()
         .when(passiveProfileService.getPersonalizationSignals(anyLong()))
         .thenReturn(LearnerProfileSignals.empty());
@@ -411,10 +430,6 @@ class BossServiceTest {
         problemWithInput("server-owned").issueAs("issue-id", "PY43-KC-001");
     when(pregenService.findExpeditionBinding(eq(7L), anyString()))
         .thenReturn(Optional.of(binding(runId, "L0-0", 1, 1, issuedProblem)));
-    when(expeditionScoreService.recordVerifiedAttempt(
-            eq(7L), eq(runId), eq("L0-0"), org.mockito.ArgumentMatchers.isNull(), anyString(),
-            anyString(), eq(true), eq(100)))
-        .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
     when(expeditionRunService.resolveProblemRequest(
             7L, runId, "L0-0", 1, false, "PY43-KC-001"))
         .thenReturn(
@@ -439,17 +454,21 @@ class BossServiceTest {
             org.mockito.ArgumentMatchers.argThat(p -> p.problemId().equals(problem.problemId())),
             eq(runId),
             eq("L0-0"));
-    verify(expeditionScoreService)
-        .recordVerifiedAttempt(
-            7L,
-            runId,
-            "L0-0",
-            null,
-            problem.problemId(),
-            BossService.expeditionAttemptFingerprint(
-                BossService.questionFingerprint(internalProblem), "L0-0", null),
-            true,
-            100);
+    verify(expeditionAttemptCompletionService)
+        .complete(
+            eq(7L),
+            eq(runId),
+            eq("L0-0"),
+            org.mockito.ArgumentMatchers.isNull(),
+            eq(problem.problemId()),
+            eq(BossService.expeditionAttemptFingerprint(
+                BossService.questionFingerprint(internalProblem), "L0-0", null)),
+            eq(true),
+            eq(100),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.isNull(),
+            any(com.pythontopia.world.boss.dto.BossAttemptResultDto.class),
+            org.mockito.ArgumentMatchers.argThat(LearningEvent.PracticeSucceeded.class::isInstance));
   }
 
   @Test
@@ -568,10 +587,20 @@ class BossServiceTest {
         .thenReturn(Optional.of(problemWithTests(1)));
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
-    when(expeditionScoreService.recordVerifiedAttempt(
-            eq(7L), eq(runId), eq("L0-0"), org.mockito.ArgumentMatchers.isNull(), eq("p1"),
-            anyString(), eq(true), eq(100)))
-        .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(false, false));
+    when(expeditionAttemptCompletionService.complete(
+            eq(7L),
+            eq(runId),
+            eq("L0-0"),
+            org.mockito.ArgumentMatchers.isNull(),
+            eq("p1"),
+            anyString(),
+            eq(true),
+            eq(100),
+            org.mockito.ArgumentMatchers.isNull(),
+            org.mockito.ArgumentMatchers.isNull(),
+            any(com.pythontopia.world.boss.dto.BossAttemptResultDto.class),
+            org.mockito.ArgumentMatchers.any()))
+        .thenReturn(new ExpeditionAttemptCompletionService.Completion(false, null));
 
     assertThatThrownBy(
             () -> service.evaluateAttempt(
@@ -605,16 +634,6 @@ class BossServiceTest {
             new BossEvaluateResultDto("p1", false, 0, 1, "hint", null, List.of(0)),
             new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()),
             new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
-    when(expeditionScoreService.recordVerifiedAttempt(
-            eq(7L), eq(runId), eq("L0-0"), org.mockito.ArgumentMatchers.isNull(), eq("p1"),
-            anyString(), eq(false), eq(0)))
-        .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
-    when(expeditionScoreService.recordVerifiedAttempt(
-            eq(7L), eq(runId), eq("L0-0"), org.mockito.ArgumentMatchers.isNull(), eq("p1"),
-            anyString(), eq(true), eq(100)))
-        .thenReturn(
-            new ExpeditionScoreService.VerifiedAttemptResult(true, true),
-            new ExpeditionScoreService.VerifiedAttemptResult(true, false));
 
     UUID firstId = UUID.fromString("123e4567-e89b-12d3-a456-426614174001");
     UUID secondId = UUID.fromString("123e4567-e89b-12d3-a456-426614174002");
@@ -628,17 +647,6 @@ class BossServiceTest {
     when(attemptIdempotencyService.claim(7L, firstId, first)).thenReturn(firstClaim);
     when(attemptIdempotencyService.claim(7L, secondId, second)).thenReturn(secondClaim);
     when(attemptIdempotencyService.claim(7L, thirdId, third)).thenReturn(thirdClaim);
-    when(attemptIdempotencyService.complete(eq(7L), eq(firstId), eq(firstClaim), any(), any()))
-        .thenAnswer(call -> call.getArgument(3));
-    when(attemptIdempotencyService.complete(
-            eq(7L), eq(secondId), eq(secondClaim), any(),
-            org.mockito.ArgumentMatchers.nullable(LearningEvent.class)))
-        .thenAnswer(call -> call.getArgument(3));
-    when(attemptIdempotencyService.complete(
-            eq(7L), eq(thirdId), eq(thirdClaim), any(),
-            org.mockito.ArgumentMatchers.nullable(LearningEvent.class)))
-        .thenAnswer(call -> call.getArgument(3));
-
     var firstResult = service.evaluateAttempt(first, 7L);
     var secondResult = service.evaluateAttempt(second, 7L);
     var thirdResult = service.evaluateAttempt(third, 7L);
@@ -647,15 +655,48 @@ class BossServiceTest {
     assertThat(secondResult.passed()).isTrue();
     assertThat(thirdResult.passed()).isTrue();
     assertThat(thirdResult.score()).isEqualTo(100);
-    verify(attemptIdempotencyService)
-        .complete(eq(7L), eq(firstId), eq(firstClaim), any(),
+    verify(expeditionAttemptCompletionService)
+        .complete(
+            eq(7L),
+            eq(runId),
+            eq("L0-0"),
+            org.mockito.ArgumentMatchers.isNull(),
+            eq("p1"),
+            anyString(),
+            eq(false),
+            eq(0),
+            eq(firstId),
+            eq(firstClaim),
+            any(com.pythontopia.world.boss.dto.BossAttemptResultDto.class),
             org.mockito.ArgumentMatchers.argThat(LearningEvent.PracticeFailed.class::isInstance));
-    verify(attemptIdempotencyService)
-        .complete(eq(7L), eq(secondId), eq(secondClaim), any(),
+    verify(expeditionAttemptCompletionService)
+        .complete(
+            eq(7L),
+            eq(runId),
+            eq("L0-0"),
+            org.mockito.ArgumentMatchers.isNull(),
+            eq("p1"),
+            anyString(),
+            eq(true),
+            eq(100),
+            eq(secondId),
+            eq(secondClaim),
+            any(com.pythontopia.world.boss.dto.BossAttemptResultDto.class),
             org.mockito.ArgumentMatchers.argThat(LearningEvent.PracticeSucceeded.class::isInstance));
-    verify(attemptIdempotencyService)
-        .complete(eq(7L), eq(thirdId), eq(thirdClaim), any(),
-            org.mockito.ArgumentMatchers.isNull());
+    verify(expeditionAttemptCompletionService)
+        .complete(
+            eq(7L),
+            eq(runId),
+            eq("L0-0"),
+            org.mockito.ArgumentMatchers.isNull(),
+            eq("p1"),
+            anyString(),
+            eq(true),
+            eq(100),
+            eq(thirdId),
+            eq(thirdClaim),
+            any(com.pythontopia.world.boss.dto.BossAttemptResultDto.class),
+            org.mockito.ArgumentMatchers.argThat(LearningEvent.PracticeSucceeded.class::isInstance));
     verifyNoInteractions(eventPublisher);
   }
 

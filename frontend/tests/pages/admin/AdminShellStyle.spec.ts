@@ -25,6 +25,12 @@ describe('admin visual shell contract', () => {
     expect(layoutStyles).toMatch(/--admin-bg:\s*linear-gradient\(180deg, #f8fbff 0%, #f3f7fc 100%\);/);
     expect(layoutStyles).toContain('--admin-panel-radius: 16px;');
     expect(layoutStyles).toContain('--admin-panel-shadow: 0 6px 18px rgb(15 23 42 / 8%);');
+    expect(layoutStyles).toContain('--admin-control-height: 36px;');
+    expect(layoutStyles).toContain('--admin-control-radius: 8px;');
+    expect(layoutStyles).toContain('--admin-table-header-height: 44px;');
+    expect(layoutStyles).toContain('--admin-table-row-height: 52px;');
+    expect(layoutStyles).toContain('--admin-dialog-radius: 16px;');
+    expect(layoutStyles).toContain('.admin-shell :deep(.admin-page-heading h1)');
     expect(layoutStyles).toContain('--admin-table-header: #eef4fb;');
     expect(layoutStyles).toContain('--admin-table-hover: #f8fbff;');
     expect(layoutStyles).toMatch(/\.admin-nav__link\.is-active\s*\{[^}]*background:\s*linear-gradient\(90deg, #2563eb 0%, #3b82f6 100%\);/);
@@ -33,6 +39,9 @@ describe('admin visual shell contract', () => {
     expect(layoutStyles).toContain('.admin-shell--nav-open .admin-sidebar');
     expect(layoutStyles).toContain('.admin-shell__navigation-toggle');
     expect(layoutStyles).not.toContain('.admin-topbar');
+    expect(layoutStyles).toContain('.admin-shell :deep(.admin-dialog)');
+    expect(componentSource('../../../src/pages/admin/AdminLayout.vue')).toContain('<svg');
+    expect(componentSource('../../../src/pages/admin/AdminLayout.vue')).not.toContain('>01</span>');
   });
 
   it('matches Alethicode account and narrow navigation sizing', () => {
@@ -52,12 +61,12 @@ describe('admin visual shell contract', () => {
     expect(reviewStyles).toMatch(/\.review-table td:nth-child\(1\),[\s\S]*?white-space:\s*nowrap;/);
     expect(reviewStyles).toContain('background: var(--admin-table-hover);');
     expect(operationsStyles).toMatch(/\.status-pill--insufficient-evidence\s*\{/);
-    expect(operationsStyles).toMatch(/\.admin-page-heading\s*\{/);
+    expect(operationsStyles).not.toContain('.admin-page-heading h1');
   });
 
   it('keeps the user table on the same row and cell spacing as the review table', () => {
-    expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*height:\s*44px;[^}]*padding:\s*0 16px;/);
-    expect(tableStyles).toMatch(/\.admin-table-scroll > table td\s*\{[^}]*height:\s*52px;[^}]*padding:\s*10px 16px;/);
+    expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*height:\s*var\(--admin-table-header-height, 44px\);[^}]*padding:\s*0 16px;/);
+    expect(tableStyles).toMatch(/\.admin-table-scroll > table td\s*\{[^}]*height:\s*var\(--admin-table-row-height, 52px\);[^}]*padding:\s*10px 16px;/);
     expect(usersSource).toContain(':min-width="820"');
   });
 });

@@ -189,26 +189,6 @@ onMounted(() => {
   min-width: 0;
 }
 
-.admin-page-heading h1 {
-  margin: 0;
-  color: var(--admin-text);
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-
-.admin-page-heading {
-  display: grid;
-  gap: 6px;
-}
-
-.admin-page-heading p {
-  margin: 0;
-  color: var(--admin-muted);
-  font-size: 13px;
-}
-
 .admin-operations__state,
 .admin-operations__empty {
   margin: 0;

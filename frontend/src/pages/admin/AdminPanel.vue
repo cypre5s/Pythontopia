@@ -70,6 +70,8 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
 
 .admin-panel__actions {
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;

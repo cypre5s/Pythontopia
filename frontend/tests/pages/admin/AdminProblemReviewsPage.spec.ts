@@ -258,6 +258,15 @@ describe('AdminProblemReviewsPage', () => {
     wrapper.unmount();
   });
 
+  it('keeps the review search and filters in the shared panel toolbar', async () => {
+    const wrapper = mount(AdminProblemReviewsPage);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('AI 出题审核');
+    expect(wrapper.get('.admin-panel__header').find('[data-testid="admin-review-search-form"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it('reports an empty backend queue without inventing a row', async () => {
     api.searchProblemReviews.mockResolvedValue(page([]));
     const wrapper = mount(AdminProblemReviewsPage);

@@ -6,6 +6,9 @@ import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.learner.event.LearningEvent;
+import com.pythontopia.world.boss.dto.BossAttemptRequest;
+import com.pythontopia.world.boss.dto.BossAttemptResultDto;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import com.pythontopia.world.boss.dto.ExpeditionRunAction;
 import com.pythontopia.world.boss.dto.ExpeditionRunActionRequest;
@@ -15,11 +18,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -38,6 +44,8 @@ class ExpeditionRunPostgresIntegrationTest {
           .withPassword("pytopia");
 
   private static JdbcTemplate jdbc;
+  private static TransactionTemplate transactions;
+  private static ObjectMapper objectMapper;
 
   @BeforeAll
   static void migrate() {
@@ -48,6 +56,64 @@ class ExpeditionRunPostgresIntegrationTest {
     source.setPassword(POSTGRES.getPassword());
     Flyway.configure().dataSource(source).locations("classpath:db/migration").load().migrate();
     jdbc = new JdbcTemplate(source);
+    transactions = new TransactionTemplate(new DataSourceTransactionManager(source));
+    objectMapper = new ObjectMapper();
+  }
+
+  @Test
+  void learningEventFailureRollsBackTheVerifiedAttemptAndIdempotentResponseTogether() {
+    long userId = createStudent();
+    ExpeditionRunDto run = startRun(new ExpeditionRunService(jdbc, objectMapper), userId, 1, false);
+    String nodeId = (String) run.nodes().getFirst().get("id");
+    UUID attemptId = UUID.randomUUID();
+    BossAttemptRequest request = new BossAttemptRequest("atomic-problem", 1, 1, "print(1)", 1, attemptId);
+    BossAttemptResultDto result =
+        new BossAttemptResultDto("atomic-problem", true, 1, 1, null, 100, "PASS");
+    LearningEvent event = new LearningEvent.PracticeSucceeded(userId, "PY43-KC-001", null, "easy");
+    ApplicationEventPublisher failingEvents =
+        published -> { throw new IllegalStateException("learning event storage unavailable"); };
+    BossAttemptIdempotencyService idempotency =
+        new BossAttemptIdempotencyService(jdbc, objectMapper, failingEvents);
+    var claim = idempotency.claim(userId, attemptId, request);
+    ExpeditionScoreService scores = new ExpeditionScoreService(jdbc);
+    ExpeditionAttemptCompletionService completion =
+        new ExpeditionAttemptCompletionService(scores, idempotency, failingEvents);
+
+    assertThatThrownBy(
+            () ->
+                transactions.execute(
+                    status ->
+                        completion.complete(
+                            userId,
+                            run.runId(),
+                            nodeId,
+                            null,
+                            request.problemId(),
+                            "a".repeat(64),
+                            true,
+                            100,
+                            attemptId,
+                            claim,
+                            result,
+                            event)))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("learning event storage unavailable");
+
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
+                Integer.class,
+                userId,
+                run.runId()))
+        .isZero();
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT response_payload IS NULL FROM boss_attempt_idempotency"
+                    + " WHERE user_id = ? AND attempt_id = ?",
+                Boolean.class,
+                userId,
+                attemptId))
+        .isTrue();
   }
 
   @Test
@@ -192,7 +258,7 @@ class ExpeditionRunPostgresIntegrationTest {
   void activeSnapshotCannotReturnAStoredClientTerminalPhase() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
-    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    ExpeditionRunDto active = seedChestNode(userId, startRun(runs, userId, 1, false), runs);
     jdbc.update(
         "UPDATE expedition_run SET phase = 'cleared' WHERE user_id = ? AND run_id = ?::uuid",
         userId,
@@ -547,7 +613,7 @@ class ExpeditionRunPostgresIntegrationTest {
   void rewardCandidatesAreServerIssuedAndUnofferedRelicsCannotBeClaimed() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
-    ExpeditionRunDto started = startRun(runs, userId, 1, false);
+    ExpeditionRunDto started = seedChestNode(userId, startRun(runs, userId, 1, false), runs);
     Map<String, Object> chestNode = findNode(started, "chest");
     String nodeId = (String) chestNode.get("id");
     seedReachableNode(userId, started, chestNode, "reward", 2, 5, List.of());
@@ -1477,6 +1543,30 @@ class ExpeditionRunPostgresIntegrationTest {
         .filter(node -> kind.equals(node.get("kind")))
         .findFirst()
         .orElseThrow(() -> new AssertionError("Generated map has no " + kind + " node"));
+  }
+
+  private ExpeditionRunDto seedChestNode(
+      long userId, ExpeditionRunDto run, ExpeditionRunService runs) {
+    List<Map<String, Object>> nodes = run.nodes().stream().<Map<String, Object>>map(HashMap::new).toList();
+    Map<String, Object> chest =
+        nodes.stream()
+            .filter(node -> node.get("layer") instanceof Number layer && layer.intValue() == 1)
+            .findFirst()
+            .orElseThrow(() -> new AssertionError("Generated map has no first-layer node"));
+    chest.put("kind", "chest");
+    chest.put("kcCode", null);
+    chest.put("challengeKind", null);
+    chest.put("difficulty", 0);
+    try {
+      jdbc.update(
+          "UPDATE expedition_run SET nodes = ?::jsonb WHERE user_id = ? AND run_id = ?::uuid",
+          objectMapper.writeValueAsString(nodes),
+          userId,
+          run.runId());
+    } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+      throw new AssertionError(e);
+    }
+    return runs.findActive(userId).orElseThrow();
   }
 
   private static Map<String, Object> nodeById(ExpeditionRunDto run, String nodeId) {
