@@ -97,15 +97,26 @@ describe('ExpeditionBossScene', () => {
       expect.any(Number), expect.any(Number), '体力 3 / 5', expect.any(Object),
     );
 
-    const settledPass: ExpeditionBossView = {
+    const pendingAttempt: ExpeditionBossView = {
       ...READY_BOSS,
-      status: 'passed',
+      status: 'judging',
       attemptId: 'problem-42',
+    };
+    loadExpeditionBoss(pendingAttempt, { onBossHit });
+
+    expect(scene.cameraShake).not.toHaveBeenCalled();
+    expect(scene.cameraFlash).not.toHaveBeenCalled();
+    expect(onBossHit).not.toHaveBeenCalled();
+
+    const settledPass: ExpeditionBossView = {
+      ...pendingAttempt,
+      status: 'passed',
     };
     loadExpeditionBoss(settledPass, { onBossHit });
     loadExpeditionBoss(settledPass, { onBossHit });
 
     expect(scene.cameraShake).toHaveBeenCalledTimes(1);
+    expect(scene.cameraFlash).toHaveBeenCalledTimes(1);
     expect(onBossHit).toHaveBeenCalledTimes(1);
   });
 
@@ -127,6 +138,7 @@ describe('ExpeditionBossScene', () => {
       expect.any(Number), expect.any(Number), '体力 2 / 5', expect.any(Object),
     );
     expect(scene.cameraShake).not.toHaveBeenCalled();
+    expect(scene.cameraFlash).not.toHaveBeenCalled();
     expect(onBossHit).not.toHaveBeenCalled();
   });
 });

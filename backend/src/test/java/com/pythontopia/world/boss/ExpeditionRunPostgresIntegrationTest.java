@@ -514,7 +514,7 @@ class ExpeditionRunPostgresIntegrationTest {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
     ExpeditionRunDto active = startRun(runs, userId, 1, false);
-    Map<String, Object> chestNode = findNode(active, "chest");
+    Map<String, Object> chestNode = findRewardNode(active);
     List<String> sixRelics =
         List.of("calm_mind", "combo_scholar", "second_wind", "focus_lens", "quick_thinker", "first_aid");
     seedReachableNode(userId, active, chestNode, "reward", 2, 5, sixRelics);
@@ -546,7 +546,7 @@ class ExpeditionRunPostgresIntegrationTest {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
     ExpeditionRunDto started = startRun(runs, userId, 1, false);
-    Map<String, Object> chestNode = findNode(started, "chest");
+    Map<String, Object> chestNode = findRewardNode(started);
     String nodeId = (String) chestNode.get("id");
     seedReachableNode(userId, started, chestNode, "reward", 2, 5, List.of());
 
@@ -1434,6 +1434,13 @@ class ExpeditionRunPostgresIntegrationTest {
         .filter(node -> kind.equals(node.get("kind")))
         .findFirst()
         .orElseThrow(() -> new AssertionError("Generated map has no " + kind + " node"));
+  }
+
+  private static Map<String, Object> findRewardNode(ExpeditionRunDto run) {
+    return run.nodes().stream()
+        .filter(node -> "chest".equals(node.get("kind")) || "elite".equals(node.get("kind")))
+        .findFirst()
+        .orElseThrow(() -> new AssertionError("Generated map has no reward node"));
   }
 
   private static Map<String, Object> nodeById(ExpeditionRunDto run, String nodeId) {

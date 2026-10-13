@@ -169,3 +169,10 @@
 - 远征地图/Phaser 帧率沿用同日此前 Chromium 样本（地图就绪 1.89 s、Boss 帧间隔 P50/P95 16.7/16.8 ms；合成结算状态），本次未重复浏览器地图采样。ECS/公网、真实用户视觉质量与完整 Maven 成功仍未验证。
 - 工程命名/格式检查以 [Google Java Style Guide](https://google.github.io/styleguide/javaguide.html)、[Vue props guide](https://vuejs.org/guide/components/props)、[typescript-eslint naming-convention](https://typescript-eslint.io/rules/naming-convention/) 为参考，限于本轮触及文件，不触发全仓重排。已删除临时性能账号并停止本地开发容器；数据卷保留。
 - 停止开发栈后重跑完整后端 `mvn test`：1353 tests、0 failures、7 errors，`BUILD FAILURE`。Surefire 确认 6 个 pgvector Testcontainers 因 Docker 动态宿主端口 `address already in use` 无法启动，另 `LongTermClassroomEffectSimulationTest` 遇 JDBC 连接拒绝；单线程重跑没有消除该环境问题。
+
+## 2026-10-14 收尾复验：未评估 KC 诊断入口
+
+- 真实新手画像的 frontier 仅包含首个未评估 KC；若其先修也未评估，策略允许该 KC 以难度 1 进入诊断练习。Boss 题目入口同时过滤无课程编程题的 KC；显式聚焦无题 KC 时返回 `EXPEDITION_NO_PRACTICE_PROBLEMS`，不伪造题目或能力证据。
+- 本轮后端相关测试隔离复跑：`AdaptivePracticePolicyTest` 6 项、`BossServiceTest` 45 项、`ExpeditionRunPostgresIntegrationTest` 27 项通过；Testcontainers 空库迁移到 V212。全量 Web 266 个文件 / 2533 项 Vitest 通过，typecheck 通过；全量 Maven 1359 项中 0 assertion failures、7 个环境级 errors（6 个 pgvector 容器启动失败、1 个长期仿真数据库连接拒绝）。
+- 功能复验结束后，经本地 Vite 代理连续启动远征 14 次（2 次预热，12 个计时样本）：P50 20.14 ms、P95 24.75 ms，地图 29 个节点；未发起 DeepSeek 请求，临时账号与存档已删除。此处只测建局接口，不代表 Graph 出题、正式判题或线上延迟。
+- Twin 的学习成效 A/B、BKT/未来路线概率、ECS/公网和真实用户长期效果仍属计划暂缓或未验证项；不得以本次功能回归代替成效评估。

@@ -547,8 +547,8 @@ test.describe('引导手册 23 张截图（输出 frontend/public/guide/screensh
 
   test('26-expedition-tower 无尽远征浅色分支地图', async ({ page, context, request }, testInfo) => {
     await prepareStudentContext(context, request);
-    await page.goto('/arena/1', { waitUntil: 'domcontentloaded' });
-    await expect(page).toHaveURL(/\/expedition\?focus=1/);
+    await page.goto('/expedition', { waitUntil: 'domcontentloaded' });
+    await expect(page).toHaveURL(/\/expedition$/);
     await expect(page.locator('[data-testid="expedition-page"]')).toBeVisible();
     await page.locator('[data-testid="expedition-begin"]').click();
     await expect(page.locator('[data-testid="expedition-map"]')).toBeVisible({ timeout: 60_000 });
@@ -560,7 +560,7 @@ test.describe('引导手册 23 张截图（输出 frontend/public/guide/screensh
 
   test('27-expedition-node 无尽远征节点挑战详情', async ({ page, context, request }, testInfo) => {
     await prepareStudentContext(context, request);
-    await page.goto('/arena/1', { waitUntil: 'domcontentloaded' });
+    await page.goto('/expedition', { waitUntil: 'domcontentloaded' });
     await expect(page.locator('[data-testid="expedition-page"]')).toBeVisible();
     await page.locator('[data-testid="expedition-begin"]').click();
     await expect(page.locator('[data-testid="expedition-map"]')).toBeVisible({ timeout: 60_000 });
