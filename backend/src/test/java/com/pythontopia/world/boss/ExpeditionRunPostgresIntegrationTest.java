@@ -541,6 +541,52 @@ class ExpeditionRunPostgresIntegrationTest {
   }
 
   @Test
+  void rewardCandidatesAreServerIssuedAndUnofferedRelicsCannotBeClaimed() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto started = startRun(runs, userId, 1, false);
+    Map<String, Object> chestNode = findNode(started, "chest");
+    String nodeId = (String) chestNode.get("id");
+    seedReachableNode(userId, started, chestNode, "reward", 2, 5, List.of());
+
+    ExpeditionRunDto reward = runs.findActive(userId).orElseThrow();
+    Object rawChoices = nodeById(reward, nodeId).get("rewardChoices");
+    assertThat(rawChoices).isInstanceOf(List.class);
+    List<?> offeredChoices = (List<?>) rawChoices;
+    assertThat(offeredChoices).hasSize(3);
+    assertThat(offeredChoices).allMatch(String.class::isInstance);
+    List<String> choices = offeredChoices.stream().map(String.class::cast).toList();
+    assertThat(nodeById(runs.findActive(userId).orElseThrow(), nodeId).get("rewardChoices"))
+        .isEqualTo(choices);
+    String offered = choices.getFirst();
+    String unoffered =
+        List.of(
+                "sturdy_notes", "calm_mind", "combo_scholar", "second_wind", "focus_lens",
+                "quick_thinker", "first_aid")
+            .stream()
+            .filter(id -> !choices.contains(id))
+            .findFirst()
+            .orElseThrow();
+
+    assertThatThrownBy(
+            () ->
+                runs.performAction(
+                    userId,
+                    new ExpeditionRunActionRequest(
+                        reward.runId(), nodeId, ExpeditionRunAction.CLAIM_RELIC, unoffered)))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("遗物");
+
+    ExpeditionRunDto claimed =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                reward.runId(), nodeId, ExpeditionRunAction.CLAIM_RELIC, offered));
+    assertThat(claimed.phase()).isEqualTo("map");
+    assertThat(claimed.relics()).containsExactly(offered);
+  }
+
+  @Test
   void snapshotPutReturnsTheCanonicalStateInsteadOfReplayingClientProgress() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());

@@ -236,7 +236,7 @@ class BossServiceTest {
   void generatedProblemsReceiveUniqueUserScopedIds() {
     when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenReturn(
-            problemWithInputAndKc("private-user-7", "FAKE-KC"),
+            problemWithInputAndKc("private-user-7", "PY43-KC-001"),
             problemWithInput("private-user-8"),
             problemWithInput("private-user-8"));
     when(graphClient.evaluateAttempt(anyString(), anyString(), anyList(), anyInt()))
@@ -263,6 +263,29 @@ class BossServiceTest {
     assertThat(cases.getAllValues())
         .extracting(testCases -> testCases.get(0).input())
         .containsExactly("private-user-7", "private-user-8", "private-user-8");
+  }
+
+  @Test
+  @DisplayName("Graph 返回不同知识点的题目时不把它签发为当前 KC")
+  void graphProblemWithMismatchedKcIsRejectedBeforePersistence() {
+    when(graphClient.requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenReturn(problemWithInputAndKc("private-mismatch", "PY43-KC-002"));
+
+    assertThatThrownBy(
+            () ->
+                service.fetchProblem(
+                    1,
+                    new BossProblemRequest(1, null, 1, "PY43-KC-001", "debug", null, null, null),
+                    7L))
+        .isInstanceOfSatisfying(
+            com.pythontopia.common.error.BusinessException.class,
+            exception -> {
+              assertThat(exception.code()).isEqualTo("BOSS_PROBLEM_CONTEXT_MISMATCH");
+              assertThat(exception.status()).isEqualTo(org.springframework.http.HttpStatus.CONFLICT);
+            });
+
+    verify(pregenService, never())
+        .persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any());
   }
 
   @Test

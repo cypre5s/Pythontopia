@@ -17,6 +17,7 @@
 set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/deepseek_model_contract.sh"
 PYT_PUBLIC_IP="${PYT_PUBLIC_IP:-47.120.29.62}"
 ENV_FILE="${PYT_ENV_FILE:-/opt/pythontopia/shared/.env}"
 ENV_FILE_FALLBACK="/opt/pythontopia/current/deploy/.env"
@@ -97,7 +98,7 @@ is_private_piston_http_url() {
 
 validate_production_ai_env() {
   local env_file="$1"
-  local provider base_url rag_embedder
+  local provider base_url rag_embedder model fast_model
   provider="$(env_file_value "${env_file}" PYT_LLM_PROVIDER)"
   provider="${provider,,}"
   case "${provider}" in
@@ -113,7 +114,27 @@ validate_production_ai_env() {
       require_env_value "${env_file}" PYT_OPENAI_BASE_URL || true
       require_env_value "${env_file}" PYT_OPENAI_API_KEY || true
       require_env_value "${env_file}" PYT_OPENAI_MODEL || true
+      model="$(env_file_value "${env_file}" PYT_OPENAI_MODEL)"
+      if deepseek_model_is_supported chat "${model}"; then
+        pass "PYT_OPENAI_MODEL 是受支持的 DeepSeek 文本模型"
+      else
+        fail "PYT_OPENAI_MODEL 不是受支持的 DeepSeek 文本模型"
+      fi
+      fast_model="$(env_file_value "${env_file}" PYT_OPENAI_MODEL_FAST)"
+      if [ -n "${fast_model}" ]; then
+        if deepseek_model_is_supported fast "${fast_model}"; then
+          pass "PYT_OPENAI_MODEL_FAST 是受支持的 DeepSeek 文本模型"
+        else
+          fail "PYT_OPENAI_MODEL_FAST 不是受支持的 DeepSeek 文本模型"
+        fi
+      fi
       require_env_value "${env_file}" PYT_OPENAI_MODEL_VISION || true
+      model="$(env_file_value "${env_file}" PYT_OPENAI_MODEL_VISION)"
+      if deepseek_model_is_supported vision "${model}"; then
+        pass "PYT_OPENAI_MODEL_VISION 是受支持的 DeepSeek 视觉模型"
+      else
+        fail "PYT_OPENAI_MODEL_VISION 不是受支持的 DeepSeek 视觉模型"
+      fi
       ;;
     ""|dryrun)
       fail "PYT_LLM_PROVIDER 未配置真实 provider；生产只使用 DeepSeek"

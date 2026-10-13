@@ -74,3 +74,10 @@
 - 教师切换班级时立即清除旧班成员、任务、热力图、任务汇总、误区、资源使用和近期活动；旧班的迟到响应不会覆盖当前班级。新班看板加载失败时保留错误提示，不显示旧班快照。
 - RED/GREEN 后验证：AdminUsersPage、teacher store、Twin/Profile、管理台页面及 ClassroomDetail/router 共 10 个 Web 测试文件 / 81 项通过；另管理台 shell、运维、审核与 router 5 个文件 / 35 项通过。`npm run typecheck` 与定向 ESLint 通过。router 用例有既有 jsdom `window.scrollTo` 警告及尝试 localhost 的连接拒绝日志，但测试退出码为 0。
 - 本轮没有全栈浏览器联测；当前管理台仍只覆盖 Pythontopia 已有的真实 API 页面，不复制 Alethicode 尚无 API/权限契约的管理功能。
+
+## 2026-10-13 补充：用户与审核表格共享布局
+
+- 新增 `AdminTable.vue` 管理表格容器，统一横向滚动、可聚焦 region、表头/行高/间距和 hover 色。用户管理页最小宽 820px，题目审核页 1100px；页面保留各自列定义与筛选/操作。
+- 后台恢复并锁定 Alethicode 蓝灰 token，Tab 焦点色统一从 shell token 读取。样式契约改为检查共享组件，避免分别复制同一组表格样式。
+- 验证：管理样式和 AdminTable 定向 5 项通过；Web 全量 256 文件 / 2517 tests、typecheck、改动文件 ESLint 与 production build 通过。
+- 本次没有添加管理 API、菜单或假数据；未进行浏览器全栈联测。

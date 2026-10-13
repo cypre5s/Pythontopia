@@ -20,8 +20,9 @@ def test_piston_request_uses_existing_judge_contract(monkeypatch: pytest.MonkeyP
         json: dict[str, Any],
         headers: dict[str, str],
         timeout: float,
+        trust_env: bool,
     ) -> httpx.Response:
-        captured.update(url=url, payload=json, headers=headers, timeout=timeout)
+        captured.update(url=url, payload=json, headers=headers, timeout=timeout, trust_env=trust_env)
         return httpx.Response(
             200,
             json={"run": {"status": None, "code": 0, "stdout": "ok\n", "stderr": ""}},
@@ -39,6 +40,7 @@ def test_piston_request_uses_existing_judge_contract(monkeypatch: pytest.MonkeyP
     assert captured["payload"]["version"] == "3.11.13"
     assert captured["payload"]["run_timeout"] == 4000
     assert captured["payload"]["run_memory_limit"] == execution_sandbox.MEMORY_LIMIT_BYTES
+    assert captured["trust_env"] is False
     assert result.stdout == "ok\n"
     assert result.exit_code == 0
     assert result.runtime_error is None

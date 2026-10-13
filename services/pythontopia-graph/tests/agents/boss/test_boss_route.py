@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
+from types import SimpleNamespace
+
 import pytest
 from fastapi.testclient import TestClient
 
-from pythontopia_graph.llm.provider import LlmResponse
+from pythontopia_graph.llm.provider import LlmProviderError, LlmResponse
 from pythontopia_graph.main import app
 
 
@@ -14,20 +17,20 @@ def client() -> TestClient:
     return TestClient(app)
 
 
+class _UnavailableProvider:
+    async def chat(self, _messages, **_kwargs):
+        raise LlmProviderError("DeepSeek temporarily unavailable", kind="UPSTREAM_UNAVAILABLE")
+
+
 # /agents/boss/problem
 
 
 def test_problem_endpoint_returns_golden_when_llm_unavailable(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.delenv("PYT_LLM_PROVIDER", raising=False)
-    # 清除 LLM 凭证，强制 provider_from_env() 回落 dryrun
-    for key in [
-        "OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENAI_MODEL",
-        "LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL",
-        "PYT_OPENAI_BASE_URL", "PYT_OPENAI_API_KEY", "PYT_OPENAI_MODEL",
-    ]:
-        monkeypatch.delenv(key, raising=False)
+    from pythontopia_graph.routes import boss as boss_route
+
+    monkeypatch.setattr(boss_route, "provider_from_env", lambda: _UnavailableProvider())
     response = client.post(
         "/agents/boss/problem",
         json={"chapter": 1, "stage": 1, "kcCode": "PY43-KC-001", "difficulty": 1},
@@ -39,17 +42,78 @@ def test_problem_endpoint_returns_golden_when_llm_unavailable(
     assert body["stage"] == 1
     assert body["totalTestCases"] >= 3
     assert "problemId" in body
+    assert body["reviewed"] is False
+    assert body["aiGenerated"] is False
+
+
+def test_problem_endpoint_rejects_golden_for_a_different_requested_kc(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pythontopia_graph.routes import boss as boss_route
+
+    monkeypatch.setattr(boss_route, "provider_from_env", lambda: _UnavailableProvider())
+
+    response = client.post(
+        "/agents/boss/problem",
+        json={"chapter": 1, "stage": 2, "kcCode": "PY43-KC-001", "difficulty": 2},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "BOSS_PROBLEM_KC_MISMATCH"
+
+
+def test_problem_logs_profile_signal_presence_without_signal_values(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from pythontopia_graph.routes import boss as boss_route
+    from pythontopia_graph.agents.boss.golden_problems import get_golden_problem
+
+    async def accepted_problem(*_args, **_kwargs):
+        return SimpleNamespace(problem=get_golden_problem(1, 1), passed=True)
+
+    monkeypatch.setattr(boss_route, "provider_from_env", lambda: object())
+    monkeypatch.setattr(boss_route, "build_llm_problem_factory", lambda _provider: object())
+    monkeypatch.setattr(boss_route, "generate_boss_problem", accepted_problem)
+    caplog.set_level(logging.INFO, logger="pythontopia_graph.routes.boss")
+
+    response = client.post(
+        "/agents/boss/problem",
+        json={
+            "chapter": 1,
+            "stage": 1,
+            "kcCode": "PY43-KC-001",
+            "profileSignals": {"weakKcCodes": ["PRIVATE_SIGNAL_SENTINEL"]},
+        },
+    )
+
+    assert response.status_code == 200
+    assert "profile-aware request" in caplog.text
+    assert "PRIVATE_SIGNAL_SENTINEL" not in caplog.text
+
+
+def test_problem_endpoint_rejects_unconfigured_dry_run_provider(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pythontopia_graph.llm.provider import DryRunProvider
+    from pythontopia_graph.routes import boss as boss_route
+
+    monkeypatch.setattr(boss_route, "provider_from_env", lambda: DryRunProvider())
+
+    response = client.post(
+        "/agents/boss/problem",
+        json={"chapter": 1, "stage": 1, "kcCode": "PY43-KC-001"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "LLM_PROVIDER_UNAVAILABLE"
 
 
 def test_problem_endpoint_default_kc_when_blank(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    for key in [
-        "PYT_LLM_PROVIDER", "OPENAI_BASE_URL", "OPENAI_API_KEY", "OPENAI_MODEL",
-        "LLM_BASE_URL", "LLM_API_KEY", "LLM_MODEL",
-        "PYT_OPENAI_BASE_URL", "PYT_OPENAI_API_KEY", "PYT_OPENAI_MODEL",
-    ]:
-        monkeypatch.delenv(key, raising=False)
+    from pythontopia_graph.routes import boss as boss_route
+
+    monkeypatch.setattr(boss_route, "provider_from_env", lambda: _UnavailableProvider())
     response = client.post(
         "/agents/boss/problem",
         json={"chapter": 3, "stage": 2, "kcCode": "", "difficulty": 2},

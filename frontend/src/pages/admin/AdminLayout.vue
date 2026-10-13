@@ -252,6 +252,7 @@ watch(navigationOpen, (open) => {
   --admin-primary: #2563eb;
   --admin-primary-hover: #1d4ed8;
   --admin-primary-soft: rgb(37 99 235 / 8%);
+  --admin-focus: #3b82f6;
   --admin-panel-muted: #f6f9fc;
   --admin-table-header: #eef4fb;
   --admin-table-hover: #f8fbff;
@@ -475,7 +476,7 @@ watch(navigationOpen, (open) => {
 .admin-shell__navigation-toggle:focus-visible,
 .admin-nav__link:focus-visible,
 .admin-brand:focus-visible {
-  outline: 3px solid #93c5fd;
+  outline: 3px solid var(--admin-focus);
   outline-offset: 2px;
 }
 

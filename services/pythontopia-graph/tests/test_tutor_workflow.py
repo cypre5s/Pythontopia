@@ -339,6 +339,12 @@ async def test_phase_progression_and_chat_keeps_phase(monkeypatch) -> None:
     assert result["seq"] == 2
     assert chat_provider.kwargs["model_tier"] == "vision"
     assert fetched == [(1, session_id, "5db6f261-913a-4c12-b1c8-f40303dbf8a9")]
+    prompt_text = chat_provider.messages[-1]["content"][0]["text"]
+    assert "题目标题: 圆面积计算" in prompt_text
+    assert "读取半径 radius，输出圆面积，保留 4 位小数。" in prompt_text
+    assert "输出说明: 面积，保留 4 位小数" in prompt_text
+    assert '"input": "25"' in prompt_text
+    assert "当前学习阶段: IDEATING" in prompt_text
     image_part = chat_provider.messages[-1]["content"][-1]
     assert image_part == {"type": "image_url", "image_url": {"url": image}}
 

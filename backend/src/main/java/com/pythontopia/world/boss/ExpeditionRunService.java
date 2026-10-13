@@ -8,10 +8,12 @@ import com.pythontopia.world.boss.dto.ExpeditionRunAction;
 import com.pythontopia.world.boss.dto.ExpeditionRunActionRequest;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import com.pythontopia.world.boss.dto.FrontierPickDto;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -19,6 +21,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
@@ -55,8 +58,8 @@ public class ExpeditionRunService {
       Set.of("locked", "available", "current", "cleared", "bypassed");
   private static final Set<String> CHALLENGE_NODE_KINDS =
       Set.of("battle", "bug", "elite", "boss");
-  private static final Set<String> RELIC_IDS =
-      Set.of(
+  private static final List<String> RELIC_ORDER =
+      List.of(
           "sturdy_notes",
           "calm_mind",
           "combo_scholar",
@@ -64,12 +67,13 @@ public class ExpeditionRunService {
           "focus_lens",
           "quick_thinker",
           "first_aid");
+  private static final Set<String> RELIC_IDS = Set.copyOf(RELIC_ORDER);
   private static final Set<String> IMMUTABLE_NODE_FIELDS =
       Set.of("id", "layer", "col", "kind", "kcCode", "challengeKind", "difficulty", "next");
   private static final Set<String> ALLOWED_NODE_FIELDS =
       Set.of(
           "id", "layer", "col", "kind", "kcCode", "challengeKind", "difficulty", "next",
-          "state", "bossPhase");
+          "state", "bossPhase", "rewardChoices");
   private static final TypeReference<List<Map<String, Object>>> LIST_OF_MAP =
       new TypeReference<>() {};
   private static final TypeReference<List<String>> LIST_OF_STRING = new TypeReference<>() {};
@@ -119,7 +123,7 @@ public class ExpeditionRunService {
                     rs.getString("run_id"),
                     rs.getInt("verified_depth")),
             userId);
-    return rows.stream().findFirst();
+    return rows.stream().findFirst().map(this::withRewardChoices);
   }
 
   /** 校验兼容快照的身份和地图，然后返回服务端状态；请求中的游戏进度不会写入数据库。 */
@@ -379,6 +383,9 @@ public class ExpeditionRunService {
     } else {
       throw invalidAction("该节点类型不可进入");
     }
+    if ("reward".equals(phase)) {
+      changedNode.put("rewardChoices", drawRewardChoices(run.relics()));
+    }
     return persistActionState(userId, run, phase, currentNodeId, hp, maxHp, nodes, run.relics());
   }
 
@@ -415,6 +422,8 @@ public class ExpeditionRunService {
         || !("chest".equals(rewardNode.get("kind")) || "elite".equals(rewardNode.get("kind")))
         || request.relicId() == null
         || !RELIC_IDS.contains(request.relicId())
+        || !readRewardChoices(rewardNode.get("rewardChoices"), run.relics())
+            .contains(request.relicId())
         || run.relics().contains(request.relicId())) {
       throw invalidAction("奖励节点或遗物选择无效");
     }
@@ -423,6 +432,8 @@ public class ExpeditionRunService {
     }
     List<String> relics = new ArrayList<>(run.relics());
     relics.add(request.relicId());
+    List<Map<String, Object>> nodes = copyNodes(run.nodes());
+    findNode(nodes, request.nodeId()).remove("rewardChoices");
     int maxHp = run.maxHp();
     int hp = run.hp();
     if ("sturdy_notes".equals(request.relicId())) {
@@ -436,7 +447,7 @@ public class ExpeditionRunService {
         run.currentNodeId(),
         hp,
         maxHp,
-        copyNodes(run.nodes()),
+        nodes,
         relics);
   }
 
@@ -533,6 +544,9 @@ public class ExpeditionRunService {
             "elite".equals(node.get("kind")) && run.relics().size() < RELIC_IDS.size()
                 ? "reward"
                 : "map";
+        if ("reward".equals(phase)) {
+          node.put("rewardChoices", drawRewardChoices(run.relics()));
+        }
       }
     } else {
       momentum = run.relics().contains("second_wind") ? Math.floorDiv(run.momentum(), 2) : 0;
@@ -860,6 +874,78 @@ public class ExpeditionRunService {
     return copy;
   }
 
+  private ExpeditionRunDto withRewardChoices(ExpeditionRunDto run) {
+    if (!"reward".equals(run.phase()) || run.currentNodeId() == null) return run;
+    List<Map<String, Object>> nodes = copyNodes(run.nodes());
+    Map<String, Object> node = findNode(nodes, run.currentNodeId());
+    if (!"cleared".equals(node.get("state"))
+        || !("chest".equals(node.get("kind")) || "elite".equals(node.get("kind")))) {
+      throw mapChanged();
+    }
+    if (readRewardChoices(node.get("rewardChoices"), run.relics()).isEmpty()) {
+      node.put(
+          "rewardChoices",
+          deterministicRewardChoices(run.runId(), run.currentNodeId(), run.relics()));
+      return withNodes(run, nodes);
+    }
+    return run;
+  }
+
+  private List<String> drawRewardChoices(List<String> ownedRelics) {
+    List<String> available = availableRelics(ownedRelics);
+    Collections.shuffle(available, ThreadLocalRandom.current());
+    return List.copyOf(available.subList(0, Math.min(3, available.size())));
+  }
+
+  private List<String> deterministicRewardChoices(
+      String runId, String nodeId, List<String> ownedRelics) {
+    List<String> available = availableRelics(ownedRelics);
+    String seedInput =
+        runId + ":" + nodeId + ":" + String.join(",", ownedRelics.stream().sorted().toList());
+    long seed =
+        UUID.nameUUIDFromBytes(seedInput.getBytes(StandardCharsets.UTF_8)).getMostSignificantBits();
+    Collections.shuffle(available, new Random(seed));
+    return List.copyOf(available.subList(0, Math.min(3, available.size())));
+  }
+
+  private List<String> availableRelics(List<String> ownedRelics) {
+    return new ArrayList<>(RELIC_ORDER.stream().filter(id -> !ownedRelics.contains(id)).toList());
+  }
+
+  private List<String> readRewardChoices(Object raw, List<String> ownedRelics) {
+    if (!isValidRewardChoicePayload(raw)) return List.of();
+    List<String> choices = ((List<?>) raw).stream().map(String.class::cast).toList();
+    return choices.stream().anyMatch(ownedRelics::contains) ? List.of() : choices;
+  }
+
+  private boolean isValidRewardChoicePayload(Object raw) {
+    if (!(raw instanceof List<?> choices) || choices.size() > 3) return false;
+    Set<String> unique = new HashSet<>();
+    for (Object choice : choices) {
+      if (!(choice instanceof String id) || !RELIC_IDS.contains(id) || !unique.add(id)) return false;
+    }
+    return true;
+  }
+
+  private ExpeditionRunDto withNodes(ExpeditionRunDto run, List<Map<String, Object>> nodes) {
+    return new ExpeditionRunDto(
+        run.phase(),
+        run.focusChapter(),
+        nodes,
+        run.layers(),
+        run.currentNodeId(),
+        run.hp(),
+        run.maxHp(),
+        run.momentum(),
+        run.bestMomentum(),
+        run.score(),
+        run.relics(),
+        run.isDaily(),
+        run.history(),
+        run.runId(),
+        run.verifiedDepth());
+  }
+
   private int heal(int hp, int maxHp, int amount) {
     return Math.min(maxHp, hp + amount);
   }
@@ -1057,6 +1143,8 @@ public class ExpeditionRunService {
                   || bossPhase.intValue() < 1
                   || bossPhase.intValue() > 3
                   || !"boss".equals(node.get("kind"))))
+          || (node.containsKey("rewardChoices")
+              && !isValidRewardChoicePayload(node.get("rewardChoices")))
           || requestedById.put(nodeId, node) != null) {
         throw mapChanged();
       }

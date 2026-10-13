@@ -1,8 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
+function componentSource(componentPath: string): string {
+  return readFileSync(new URL(componentPath, import.meta.url), 'utf8');
+}
+
 function scopedStyles(componentPath: string): string {
-  const source = readFileSync(new URL(componentPath, import.meta.url), 'utf8');
+  const source = componentSource(componentPath);
   return [...source.matchAll(/<style scoped[^>]*>([\s\S]*?)<\/style>/g)]
     .map((match) => match[1])
     .join('\n');
@@ -12,7 +16,9 @@ const layoutStyles = scopedStyles('../../../src/pages/admin/AdminLayout.vue');
 const panelStyles = scopedStyles('../../../src/pages/admin/AdminPanel.vue');
 const operationsStyles = scopedStyles('../../../src/pages/admin/AdminOperationsPage.vue');
 const reviewStyles = scopedStyles('../../../src/pages/admin/AdminProblemReviewsPage.vue');
-const usersStyles = scopedStyles('../../../src/pages/admin/AdminUsersPage.vue');
+const tableStyles = componentSource('../../../src/pages/admin/AdminTable.vue');
+const reviewSource = componentSource('../../../src/pages/admin/AdminProblemReviewsPage.vue');
+const usersSource = componentSource('../../../src/pages/admin/AdminUsersPage.vue');
 
 describe('admin visual shell contract', () => {
   it('uses the scoped blue-gray shell and Alethicode active navigation treatment', () => {
@@ -40,9 +46,9 @@ describe('admin visual shell contract', () => {
     expect(panelStyles).toMatch(/padding:\s*20px 22px 16px;/);
     expect(panelStyles).toMatch(/padding:\s*18px 22px 22px;/);
 
-    expect(reviewStyles).toMatch(/\.review-table th\s*\{[^}]*background:\s*var\(--admin-table-header\);/);
-    expect(reviewStyles).toMatch(/\.review-table td\s*\{[^}]*padding:\s*10px 16px;/);
-    expect(reviewStyles).toContain('min-width: 1100px;');
+    expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*background:\s*var\(--admin-table-header, #eef4fb\);/);
+    expect(tableStyles).toMatch(/\.admin-table-scroll > table td\s*\{[^}]*padding:\s*10px 16px;/);
+    expect(reviewSource).toContain(':min-width="1100"');
     expect(reviewStyles).toMatch(/\.review-table td:nth-child\(1\),[\s\S]*?white-space:\s*nowrap;/);
     expect(reviewStyles).toContain('background: var(--admin-table-hover);');
     expect(operationsStyles).toMatch(/\.status-pill--insufficient-evidence\s*\{/);
@@ -50,9 +56,8 @@ describe('admin visual shell contract', () => {
   });
 
   it('keeps the user table on the same row and cell spacing as the review table', () => {
-    expect(usersStyles).toMatch(/\.admin-users__table th\s*\{[^}]*height:\s*44px;/);
-    expect(usersStyles).toMatch(/\.admin-users__table td\s*\{[^}]*height:\s*52px;/);
-    expect(usersStyles).toMatch(/\.admin-users__table th\s*\{[^}]*padding:\s*0 16px;/);
-    expect(usersStyles).toMatch(/\.admin-users__table td\s*\{[^}]*padding:\s*10px 16px;/);
+    expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*height:\s*44px;[^}]*padding:\s*0 16px;/);
+    expect(tableStyles).toMatch(/\.admin-table-scroll > table td\s*\{[^}]*height:\s*52px;[^}]*padding:\s*10px 16px;/);
+    expect(usersSource).toContain(':min-width="820"');
   });
 });

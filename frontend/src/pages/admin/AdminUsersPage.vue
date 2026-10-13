@@ -11,6 +11,7 @@ import {
   type AdminUserStatusFilter,
 } from '@/api/adminUsers';
 import AdminPanel from './AdminPanel.vue';
+import AdminTable from './AdminTable.vue';
 import AdminPagination from './AdminPagination.vue';
 
 const session = useSessionStore();
@@ -222,12 +223,10 @@ onMounted(() => {
         没有匹配的账号。
       </p>
 
-      <div
+      <AdminTable
         v-if="entries.length > 0"
-        class="admin-users__table-scroll"
-        role="region"
-        aria-label="用户列表"
-        tabindex="0"
+        label="用户列表"
+        :min-width="820"
       >
         <table class="admin-users__table">
           <thead>
@@ -289,7 +288,7 @@ onMounted(() => {
             </tr>
           </tbody>
         </table>
-      </div>
+      </AdminTable>
 
       <template #footer>
         <AdminPagination
@@ -378,7 +377,7 @@ onMounted(() => {
 }
 
 .admin-users__button:hover:not(:disabled) {
-  border-color: #93c5fd;
+  border-color: var(--admin-focus);
   color: var(--admin-primary-hover);
 }
 
@@ -396,9 +395,8 @@ onMounted(() => {
 .admin-users__button:focus-visible,
 .admin-users__search input:focus-visible,
 .admin-users__status-filter select:focus-visible,
-.admin-users__role-filter select:focus-visible,
-.admin-users__table-scroll:focus-visible {
-  outline: 3px solid #93c5fd;
+.admin-users__role-filter select:focus-visible {
+  outline: 3px solid var(--admin-focus);
   outline-offset: 2px;
 }
 
@@ -417,36 +415,7 @@ onMounted(() => {
   font-size: 13px;
 }
 
-.admin-users__table-scroll {
-  overflow-x: auto;
-  border: 1px solid var(--admin-border);
-  border-radius: 10px;
-}
-
-.admin-users__table {
-  width: 100%;
-  min-width: 820px;
-  border-collapse: collapse;
-  table-layout: fixed;
-  text-align: left;
-  font-size: 12px;
-}
-
-.admin-users__table th {
-  height: 44px;
-  padding: 0 16px;
-  background: var(--admin-table-header);
-  color: var(--admin-text);
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
 .admin-users__table td {
-  height: 52px;
-  padding: 10px 16px;
-  border-top: 1px solid var(--admin-border);
-  color: #334155;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -471,10 +440,6 @@ onMounted(() => {
 .admin-users__table td:nth-child(6) {
   overflow: visible;
   text-overflow: clip;
-}
-
-.admin-users__table tbody tr:hover {
-  background: var(--admin-table-hover);
 }
 
 .admin-users__status {

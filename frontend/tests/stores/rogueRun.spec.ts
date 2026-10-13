@@ -63,7 +63,11 @@ let mockServerRun: ExpeditionRunSnapshot | null = null;
 function copyRun(run: ExpeditionRunSnapshot): ExpeditionRunSnapshot {
   return {
     ...run,
-    nodes: run.nodes.map((node) => ({ ...node, next: [...node.next] })),
+    nodes: run.nodes.map((node) => ({
+      ...node,
+      next: [...node.next],
+      rewardChoices: node.rewardChoices ? [...node.rewardChoices] : undefined,
+    })),
     relics: [...run.relics],
     history: run.history.map((entry) => ({ ...entry })),
   };
@@ -149,6 +153,9 @@ beforeEach(() => {
       if (command.action === 'ENTER_NODE' && node) {
         snapshot.currentNodeId = node.id;
         if (node.kind === 'rest' || node.kind === 'chest') node.state = 'cleared';
+        if (node.kind === 'chest') {
+          node.rewardChoices = ['sturdy_notes', 'calm_mind', 'combo_scholar'];
+        }
         snapshot.phase = node.kind === 'event' ? 'event'
           : node.kind === 'chest' ? 'reward'
             : node.kind === 'rest' ? 'map' : 'challenge';
@@ -162,6 +169,7 @@ beforeEach(() => {
       } else if (command.action === 'CLAIM_RELIC' && node) {
         snapshot.phase = 'map';
         node.state = 'cleared';
+        delete node.rewardChoices;
         if (!snapshot.relics.includes(command.relicId)) snapshot.relics.push(command.relicId);
       } else if (command.action === 'SETTLE_CHALLENGE' && node) {
         const latest = judgeMock.judge.mock.results.at(-1)?.value;
@@ -182,6 +190,9 @@ beforeEach(() => {
           } else {
             node.state = 'cleared';
             snapshot.phase = node.kind === 'boss' ? 'over' : node.kind === 'elite' ? 'reward' : 'map';
+            if (node.kind === 'elite' && snapshot.phase === 'reward') {
+              node.rewardChoices = ['sturdy_notes', 'calm_mind', 'combo_scholar'];
+            }
             for (const nextId of node.next) {
               const next = snapshot.nodes.find((item) => item.id === nextId);
               if (next?.state === 'locked') next.state = 'available';
@@ -736,8 +747,7 @@ describe('rogueRun store', () => {
 
     expect(judgeMock.fetchProblem).not.toHaveBeenCalled();
     expect(run.phase).toBe('reward');
-    expect(run.rewardChoices.length).toBeGreaterThan(0);
-    expect(run.rewardChoices.length).toBeLessThanOrEqual(3);
+    expect(run.rewardChoices).toEqual(['sturdy_notes', 'calm_mind', 'combo_scholar']);
     expect(run.relics).toHaveLength(0); // not granted until chosen
     const picked = run.rewardChoices[0]!;
     await run.chooseReward(picked);
@@ -1074,7 +1084,8 @@ describe('rogueRun store', () => {
     const interrupted = serverRun();
     const node = interrupted.nodes.find((item) => item.layer === 0)!;
     node.kind = 'chest';
-    node.state = 'current';
+    node.state = 'cleared';
+    node.rewardChoices = ['sturdy_notes', 'calm_mind', 'combo_scholar'];
     interrupted.currentNodeId = node.id;
     interrupted.phase = 'reward';
     mockServerRun = copyRun(interrupted);

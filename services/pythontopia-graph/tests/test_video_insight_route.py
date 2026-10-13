@@ -12,14 +12,45 @@ based_on=metadata_only ③LLM 不可用→degraded ④LLM 编造的非法 t_sec 
 from __future__ import annotations
 
 import pytest
+import logging
 from fastapi.testclient import TestClient
 from types import SimpleNamespace
 
 import pythontopia_graph.routes.video_insight as video_insight_route
+import pythontopia_graph.routes.video as video_route
 from pythontopia_graph.llm.provider import LlmResponse
 from pythontopia_graph.main import app
 from pythontopia_graph.nodes.timeline_grounding import TimelineSegment
 from pythontopia_graph.routes.video_insight import VideoMeta
+
+
+def test_bilibili_proxy_configuration_does_not_log_proxy_credentials(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from types import ModuleType
+
+    proxy = "http://proxy-user:proxy-secret@proxy.example:8080/?token=hidden"
+    calls: list[str] = []
+    request_settings = SimpleNamespace(
+        set_proxy=lambda value: calls.append(value),
+        set_timeout=lambda _value: None,
+    )
+    fake_bilibili = ModuleType("bilibili_api")
+    fake_bilibili.request_settings = request_settings  # type: ignore[attr-defined]
+    monkeypatch.setitem(__import__("sys").modules, "bilibili_api", fake_bilibili)
+    monkeypatch.setattr(video_route, "_proxy_configured", False)
+    monkeypatch.setenv("PYT_BILI_PROXY", proxy)
+    monkeypatch.delenv("HTTP_PROXY", raising=False)
+    monkeypatch.delenv("HTTPS_PROXY", raising=False)
+    monkeypatch.delenv("https_proxy", raising=False)
+    caplog.set_level(logging.INFO, logger="pythontopia_graph.routes.video")
+
+    video_route._configure_bilibili_proxy()
+
+    assert calls == [proxy]
+    assert proxy not in caplog.text
+    assert "proxy-secret" not in caplog.text
+    assert "token=hidden" not in caplog.text
 
 
 @pytest.mark.asyncio

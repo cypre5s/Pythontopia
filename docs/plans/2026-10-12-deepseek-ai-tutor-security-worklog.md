@@ -306,3 +306,12 @@
 - Vitest 4 全量运行复现 ClassroomDetail 用例间调用次数串扰；该组件已经有请求中互斥保护，问题来自 hoisted mock 未清空。测试 `beforeEach` 增加 `vi.clearAllMocks()` 后，单文件 9 tests 及全量 255 文件 / 2512 tests 通过；全量学习 store 单测 4 tests 独立通过，teardown 报错未复现。
 - `npm run build`（含 vue-tsc 与 Vite production build）通过；全量 ESLint 0 errors、131 warnings。锁文件只恢复版本和 integrity 均未变化包的原 registry URL，保留实际依赖版本变更。
 - 没有启动全栈、发起 DeepSeek/Piston 请求或测无尽远征性能。前端测试环境使用 jsdom 29，Node 20 需为 20.19+；Piston/Isolate 的操作系统隔离仍没有本机运行证据。
+
+## 2026-10-13 补充：Tutor 安全边界复核
+
+- Piston 请求设置 `trust_env=False`，避免学生代码、标准输入和服务间令牌受进程代理变量影响而发往代理。Tutor 不再输出完整学习画像；视频代理日志不再包含可能带凭证的 URL。
+- Boss 路由对缺失 DeepSeek 配置 / DryRun fail fast；显式上游故障仍按已记录的 reviewed=false golden 策略返回。题目自检/审查失败后若 golden KC 与请求 KC 不同，Graph 返回 `BOSS_PROBLEM_KC_MISMATCH`；Java 入库边界也拒绝错 KC。
+- Tutor CHAT 回归现在确认当前问题标题、题面、样例输入输出、输出说明、阶段和图片持续进入当轮提示。`deploy/.env` 存在被 Git 忽略的 DeepSeek 配置；本轮没有读取凭证或发起模型请求。
+- 验证：Graph 全量 `1812 passed, 1 skipped, 13 warnings`；Boss 定向路由/沙箱回归及 Ruff 通过；后端 `BossServiceTest` 35 项通过，前端全量 256 文件 / 2517 tests、typecheck、定向 ESLint、build 通过。
+- ASR 控制器现在先检查服务开关；关闭时不访问上传内容。启用时，超过 8MiB 的音频在 `getBytes()` 前返回 `ASR_AUDIO_TOO_LARGE` / 413。回归用例先在旧实现下失败，修复后控制器与服务 6 项定向测试通过；全仓 Spotless 仍被 607 个其他 Java 文件的格式问题阻断，ASR 控制器和测试不在违规清单中。
+- 未关闭：Tutor 账号级费用/请求额度策略仍等用户选择；生产 Piston/出口网络隔离仍未实测。对话中出现过的密钥需轮换后再用于生产。无尽远征性能照用户要求留到最后；本轮没有真实 DeepSeek 请求。
