@@ -1,5 +1,10 @@
 # Web 工程可读性与规范清理工作日志
 
+## 2026-10-14 后端全量复验
+
+- 最新 `mvn -o test`：1392 tests、0 assertion failures、7 errors。6 个 Testcontainers PostgreSQL 容器在 Docker 宿主端口映射时报告 `address already in use`，长期仿真类在全量运行中连接被拒。
+- 将 7 个失败类隔离复跑：长期仿真、DecisionTrace、CoursePack、EvidenceMemory、LearningEvidenceGraph、MemoryRetrievalSemantic、Recommendation 合计 20/20 tests 通过。全量套件仍不稳定，未标记通过；未修改系统端口范围或 Docker 配置。
+
 ## 2026-10-14 管理后台主题隔离
 
 - Playwright 复核发现全局像素按钮阴影覆盖到管理端；在管理 layout 作用域取消 `button` 阴影与按压位移，恢复 Alethicode 管理控件外观。

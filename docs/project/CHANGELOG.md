@@ -19,6 +19,11 @@
 - Maven 全量为 1393 tests、0 failures、6 errors。5 个 Testcontainers 错误类隔离复跑 16/16、长期仿真类隔离复跑 1/1 均通过；全量串跑仍出现 5 个动态宿主端口绑定冲突和 1 个仿真连接拒绝，不能记为全绿。
 - DeepSeek 只接收图片并返回文本；真实文字与合成 PNG 输入请求均返回文本，provider 同步/流式解析会丢弃图片输出块。
 
+## 2026-10-14 — Maven 全量容器错误隔离复验
+
+- 最新 `mvn -o test` 为 1392 tests、0 assertion failures、7 errors。Surefire 记录 6 个 PostgreSQL Testcontainers 容器因 Docker 宿主动态端口绑定 `address already in use` 未启动，长期仿真测试随后遇 PostgreSQL 连接拒绝。
+- 7 个受影响类在隔离复跑中共 20/20 tests 通过（包括长期仿真）；全量 Maven 仍因 Docker 端口分配不稳定而未能整体通过。未更改 Docker 或系统网络设置。
+
 ## 2026-10-14 — 管理台样式隔离与浏览器复核
 
 - 修复全局像素风按钮的阴影和按压位移泄漏到管理后台；管理端控件恢复 Alethicode 的扁平蓝灰样式。

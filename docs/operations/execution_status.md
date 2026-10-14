@@ -2,7 +2,7 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-14）**：本轮聚焦 Web。Tutor 使用 DeepSeek 固定阶段 AutoGen；图片仅作为输入，provider 同步及流式接口只提取文本。前端 Vitest 最新为 270 files / 2568 tests；typecheck、build 通过；ESLint 0 errors / 7 warnings。Graph 全量为 1842 passed / 1 skipped，RAG 为 158 passed / 2 skipped。Maven 全量最新为 1393 tests、0 failures、6 errors：5 个 Testcontainers 测试类出现宿主动态端口 `address already in use`，长期仿真类在全量串跑中连接被拒；5 个容器类隔离 16/16、长期仿真隔离 1/1、远征集成隔离 28/28 通过。全量 Maven 仍未稳定全绿。剩余项包括 Twin A/B 与 7 日复测、DeepSeek 供应商 token/账单核对、稳定全量 Maven 复验、生产 Piston 验证；ECS/GitHub 与非 Web 客户端不在本轮范围。性能按用户要求后置。下方阶段表与时间线保留早期历史，不代表当前焦点。
+> **当前快照（2026-10-14）**：本轮聚焦 Web。Tutor 使用 DeepSeek 固定阶段 AutoGen；图片仅作为输入，provider 同步及流式接口只提取文本。前端 Vitest 最新为 270 files / 2568 tests；typecheck、build 通过；ESLint 0 errors / 7 warnings。Graph 全量为 1842 passed / 1 skipped，RAG 为 158 passed / 2 skipped。Maven 全量最新为 1392 tests、0 assertion failures、7 errors：6 个 Testcontainers 测试类出现 Docker 宿主动态端口 `address already in use`，长期仿真类在全量串跑中连接被拒；7 个受影响类后续隔离复跑共 20/20 通过。全量 Maven 仍未稳定全绿。剩余项包括 Twin A/B 与 7 日复测、DeepSeek 供应商 token/账单核对、稳定全量 Maven 复验、生产 Piston 验证；ECS/GitHub 与非 Web 客户端不在本轮范围。性能按用户要求后置。下方阶段表与时间线保留早期历史，不代表当前焦点。
 
 ## 2026-10-14 当前续接
 
@@ -20,7 +20,8 @@
 - 复查先前记录的 Tutor Markdown 外链图片隐私风险：共享 `MarkdownView` 已在写入 DOM 前移除跨域图片并显示 alt 文本，保留同源图片；现有 `MarkdownView.spec.ts` 隔离复跑 6/6 通过，无需重复新增防护代码。
 - 管理台 5 个 Vitest 文件 / 31 项、typecheck、定向 ESLint 通过；Playwright 模拟 API 检查 3 页的 1440px 与 320px 布局、窄屏抽屉和用户状态对话框，页面溢出 0、JS 错误 0。期间排除了全局像素按钮阴影对管理端的污染。
 - 前端全量 Vitest 270 files / 2568 tests、typecheck、build 通过；ESLint 0 errors / 7 warnings。Graph 最新全量 1842 passed / 1 skipped；RAG 158 passed / 2 skipped。
-- 远征随机节点集成夹具已修复，`ExpeditionRunPostgresIntegrationTest` 隔离 28/28 通过；本次 Maven 全量 1393 tests、0 failures、6 errors；5 个 Testcontainers 类隔离 16/16、长期仿真类隔离 1/1 通过。失败均为全量串跑时的 Docker 动态端口绑定冲突或测试库连接拒绝。
+- 远征随机节点集成夹具已修复，`ExpeditionRunPostgresIntegrationTest` 隔离 28/28 通过；此前一次 Maven 全量为 1393 tests、0 failures、6 errors。最新一次完整运行与隔离复验见下条。
+- 本次重跑完整后端套件：1392 tests、0 assertion failures、7 errors。Surefire 报告显示 6 个 PostgreSQL Testcontainers 类遇 Docker 宿主临时端口 `address already in use`，长期仿真类在全量串跑中连接被拒；7 个受影响类逐类/小组隔离复跑共 20/20 通过。说明代码用例可单独通过，但全量 Docker 端口分配仍不稳定，不能标记 Maven 全量通过。
 - 本地 320 CSS px 教师班级列表 Playwright 检查通过（模拟 API）；管理员活动会话、生产 Piston/ECS、Twin A/B 与 7 日延迟效果仍未验证。性能最后处理。
 
 ### 已完成
