@@ -31,7 +31,7 @@ KC_CONTEXT = {
 # /agents/boss/problem
 
 
-def test_problem_endpoint_rejects_unreviewed_golden_when_llm_unavailable(
+def test_problem_endpoint_uses_grounded_golden_when_llm_unavailable(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from pythontopia_graph.routes import boss as boss_route
@@ -41,8 +41,11 @@ def test_problem_endpoint_rejects_unreviewed_golden_when_llm_unavailable(
         "/agents/boss/problem",
         json={**KC_CONTEXT, "chapter": 1, "stage": 1, "kcCode": "PY43-KC-001", "difficulty": 1},
     )
-    assert response.status_code == 503
-    assert response.json()["detail"]["code"] == "BOSS_PROBLEM_GENERATION_UNAVAILABLE"
+    assert response.status_code == 200
+    assert response.json()["kcCode"] == "PY43-KC-001"
+    assert response.json()["reviewed"] is True
+    assert response.json()["aiGenerated"] is False
+    assert "神威·太湖之光" in response.json()["statement"]
 
 
 def test_problem_endpoint_rejects_golden_for_a_different_requested_kc(

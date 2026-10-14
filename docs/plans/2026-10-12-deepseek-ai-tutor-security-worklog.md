@@ -411,3 +411,11 @@
 - 浏览器真实访问 Twin 状态与周报接口均为 HTTP 200；未评估 KC 不显示虚构掌握度，主推荐按钮导航到 `/expedition?focus=1&kcCode=PY43-KC-001`。页面和 API 测试账号已删除。
 - Web 工程复核参考 [Vue 官方风格指南](https://vuejs.org/style-guide/) 与 [WCAG 2.2 Focus Visible](https://www.w3.org/WAI/WCAG22/Understanding/focus-visible.html)。课件阅读器可选 `kcCodes` 明确默认为 `[]`（新增测试先失败后通过）；星图 `assessed` 的 `undefined` 仍保留其旧兼容语义。Boss/远征 61、Twin 18、阅读器/星图 13 项测试通过；typecheck、build 通过，ESLint 0 errors / 5 个测试桩告警。
 - `npm run build` 产生的课程 manifest 时间戳只由构建脚本刷新，已恢复，不作为产品改动。未重复运行全量 Maven；新空画像 Boss 路径仍受 KC-001 内容覆盖限制，性能阶段未启动。
+
+## 2026-10-14 DeepSeek 图片输出边界与 KC-001 真实生成复验
+
+- DeepSeek 的图片能力用于视觉输入；项目 provider 同步和 SSE 仅提取文本块，混合响应中的图片块不会到达 Web。刚重跑 `test_openai_compat_provider.py` 与 `test_tutor_image_input.py`：42 passed，1 条既有 pytest asyncio 标记警告。
+- 真实 DeepSeek 对 KC-001 的候选仍因 `trivial_echo_solution` / `kc_solution_miss` 未通过质量审核；最多 6 次候选均未形成合格 AI 题，本次没有 AI 题进入题库。未绕过审题门槛。
+- 根因是原有 KC-001 Golden 回退题只输出 Hello 文本，无法命中权威 KC。改成以 `print()` 输出课程资料中的“神威·太湖之光”；真实 provider 请求失败后，审核回退在正确配置的本地 Piston 上通过。临时调用只读课程种子数据，未创建测试账号或写题库。
+- RED/GREEN 端点回归、Boss Graph 套件 235 passed；改动文件 Ruff、`git diff --check` 通过。
+- 仍未验证新 KC-001 AI 候选可稳定通过并写入共享题库；空画像玩家可以由审核通过的 Golden 题继续。性能阶段仍未启动，供应商 Token/账单未核对。

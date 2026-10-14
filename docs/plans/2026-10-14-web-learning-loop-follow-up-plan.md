@@ -47,6 +47,6 @@
 
 ## 2026-10-14 当前检查点
 
-- Phase 1–4 已交付。Phase 5 的 Tutor 文图输入、Twin 页面联动、Boss 场景与三阶段实战在此前真实浏览器记录中已通过；本次重新验证了相关 Boss/Twin/UI 单测、Web typecheck/build 和 DeepSeek KC 审核拒绝路径。
-- 本次空画像用户的初始节点被权威推荐为 `PY43-KC-001`，DeepSeek 没有生成合格编程题，因此这条新账户路径不能开始挑战。KC-012 由于 KC-010 先修缺少真实评估也不能强行选用。该内容覆盖缺口保留为功能未完成风险，不通过伪造画像或低质题绕过。
+- Phase 1–4 已交付。Phase 5 的 Tutor 文图输入、Twin 页面联动、Boss 场景与三阶段实战在此前真实浏览器记录中已通过；本次重跑 DeepSeek/provider 测试与 Graph Boss 全套，并验证 KC-001 审核回退。
+- 空画像用户的初始节点由权威策略推荐 `PY43-KC-001`。本次 DeepSeek 最多 6 次候选仍因输入回显或 KC 未进入参考程序而未通过审查；原 Golden 回退也因没有课程 KC 事实被拒。现已将 KC-001 入门 Golden 改为输出课程资料中经核对的“神威·太湖之光”，并由真实本地 Piston 和 Graph 回归验证通过，避免新用户卡住。失败 AI 候选不会写入题库。KC-001 AI 题稳定通过并自动入库尚未验证；KC-012 缺少 KC-010 的真实先修评估时仍须由服务端排除。
 - 已完成本轮触点级工程检查；全量 ESLint 0 errors、5 个测试桩 warning，Vite build 有 Pyodide externalized/chunk 提示。性能阶段尚未开始，仍按用户要求放在功能完成之后。

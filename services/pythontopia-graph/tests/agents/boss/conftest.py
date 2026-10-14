@@ -20,6 +20,7 @@ _MULTILINE_SUM = (
 _COUNT_TO_THREE = "for i in range(3):\n    print(i)"
 _PRINT_ALWAYS_ZERO = "print('always 0')"
 _PRINT_ONE = "x = 1\nprint(x)"
+_PRINT_KC001_FACT = 'print("神威·太湖之光")'
 _KC001_FACT_PLUS_ONE = "n = int(input())\nprint('神威·太湖之光', n + 1)"
 _KC010_LABEL_PLUS_ONE = "x = int(input())\nprint('变量与运算符', x + 1)"
 
@@ -50,6 +51,7 @@ _FIXED_STDOUT: dict[tuple[str, str], str] = {
     (_PRINT_ALWAYS_ZERO, "0 0"): "always 0\n",
     (_PRINT_ALWAYS_ZERO, ""): "always 0\n",
     **{(_PRINT_ONE, value): "1\n" for value in ("1", "2", "3")},
+    **{(_PRINT_KC001_FACT, value): "神威·太湖之光\n" for value in ("", "ignored", "\n\n")},
     (_KC001_FACT_PLUS_ONE, "1"): "神威·太湖之光 2\n",
     (_KC001_FACT_PLUS_ONE, "5"): "神威·太湖之光 6\n",
     (_KC001_FACT_PLUS_ONE, "9"): "神威·太湖之光 10\n",

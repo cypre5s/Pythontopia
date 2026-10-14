@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-14 — DeepSeek 图片输出边界与 KC-001 审核兜底
+
+- DeepSeek 图像能力是图片输入/视觉理解；本项目 provider 的同步与 SSE 响应都只提取文本块，混合响应中的图片块被丢弃。重跑 provider 与 Tutor 图片输入测试：42 passed，保留 1 条既有 pytest asyncio 标记警告。
+- 查明 KC-001 的 Golden 回退题只输出 Hello 文本，与权威课程 KC 不匹配；改为用 `print()` 输出课程资料中的“神威·太湖之光”。DeepSeek 候选仍因回显和 `kc_solution_miss` 未通过审查；新回退题通过审查和本地 Piston 自测，可为该 KC 提供可玩的入门题，不把失败的 AI 候选写入题库。
+- 回归先红后绿；Graph Boss 测试 235 passed，Ruff 与 `git diff --check` 通过。性能阶段仍待功能闭环后进行。
+
 ## 2026-10-14 — KC 固定输出误接地拦截与 Web 工程复核
 
 - Graph 的固定输出放行依据收窄为题面明确教授 `print`/输出语句，避免已知 KC 的宽泛摘要里顺带出现 `print()` 就把固定字符串误当成符合该 KC 的编程题。补充 KC-001 形状回归；Boss Graph 测试 235 项通过，Ruff 通过。

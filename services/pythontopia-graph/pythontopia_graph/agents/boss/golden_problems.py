@@ -45,16 +45,17 @@ def _chapter1(stage: int) -> BossProblem:
             stage=1,
             kc_code="PY43-KC-001",
             difficulty=1,
-            title="第一行 print",
+            title="输出中国计算机发展成就",
             statement=(
-                "请用 print 函数把 `Hello, Pythontopia!` 原样输出到屏幕。\n\n"
-                "样例输入：（无）\n样例输出：Hello, Pythontopia!"
+                "请用 print() 函数输出“神威·太湖之光”，它是中国计算机发展成就之一。"
+                "字符串内容应与样例一致，不需要读取输入。\n\n"
+                "样例输入：（无）\n样例输出：神威·太湖之光"
             ),
-            reference_solution='print("Hello, Pythontopia!")',
+            reference_solution='print("神威·太湖之光")',
             test_cases=[
-                TestCase("", "Hello, Pythontopia!", is_sample=True),
-                TestCase("ignored", "Hello, Pythontopia!"),
-                TestCase("\n\n", "Hello, Pythontopia!"),
+                TestCase("", "神威·太湖之光", is_sample=True),
+                TestCase("ignored", "神威·太湖之光"),
+                TestCase("\n\n", "神威·太湖之光"),
             ],
             hints=["print 函数会在末尾自动换行", "字符串两边要带引号"],
         )
