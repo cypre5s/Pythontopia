@@ -1,5 +1,10 @@
 # Web 工程可读性与规范清理工作日志
 
+## 2026-10-14 管理后台主题隔离
+
+- Playwright 复核发现全局像素按钮阴影覆盖到管理端；在管理 layout 作用域取消 `button` 阴影与按压位移，恢复 Alethicode 管理控件外观。
+- 红绿验证：管理样式回归先失败，再通过；管理台 5 个测试文件 / 31 项、typecheck、定向 ESLint 通过。三个页面桌面 1440px/窄屏 320px 无页面溢出，移动抽屉和状态对话框交互通过。
+
 ## 2026-10-14 DeepSeek 与 KC 出题真调用续验
 
 - `./dev.sh` 的运行中 Spring 环境确认应用级 AI 次数限制关闭；部署配置仍保留账号/全站每日限制。模型供应商余额和自身限流不受此开关控制。
@@ -99,6 +104,13 @@
 - 安全复核未确认 P0 或本地可复现的代码级 P1。定向 Maven 140 项、Graph 判题 37 项、Compose 沙箱安全契约通过。生产 Piston endpoint 的私网 ACL/代理 token 校验仍需部署证据；本地 Compose Piston 仅监听 localhost 且阻断外联。媒体生成禁用状态下，队列拒绝可遗留 PENDING 属于 P2。
 - Alethicode 比对确认 Pythontopia 已具备固定阶段 AutoGen Tutor，应该保留 Pythontopia 的 API/SSE、V199 会话级检查点和附件/事件契约。管理台布局遵循相同视觉约定，但只保留本项目有真实 API 的运维、用户与题目审核页。
 - 未发 DeepSeek 请求。此前本地日志仍显示约 28 条远征预生成请求，加上 8 次 Tutor/provider 尝试可能达到 36；账单与 token 总量未核。Graph 保持停止；完整 Boss 多阶段实战和 Twin A/B/延迟效果仍未验证。
+
+## 2026-10-14 AI 配额预留时序修复
+
+- `AiBudgeted` 原 MVC 拦截器在 Spring MVC 解析/校验参数和控制器角色检查之前预留额度，导致格式错误或越权请求也消耗配额。改为方法拦截器，在请求参数验证后检查认证用户及端点允许角色，再预留额度；未新增表或迁移。
+- 去掉使用此配额标记且依赖 `@Validated` AOP 参数校验的控制器类注解，改由 Spring MVC 原生方法校验在方法拦截器之前执行；新增 `HandlerMethodValidationException` 到统一 400 错误响应的映射。
+- TDD 回归在修复前确认有效、无效和教师越权请求都会预留；修复后后端定向 35/35 通过，范围内 Spotless 与 `git diff --check` 通过。
+- Maven 全量 1393 tests、0 failures、6 环境错误；5 个 Testcontainers 失败类隔离 16/16、长期仿真类隔离 1/1 通过。剩余环境问题仅在全量串跑时触发，尚未取得稳定全量全绿结果。
 # 2026-10-14 — 本地模型额度与 KC 出题闭环续接
 
 - 最新用户指示覆盖此前“达到 30 次就停止”的本地开发约束：`./dev.sh` 明确将 `PYT_AI_REQUEST_LIMITS_ENABLED` 默认设为 `false`；部署默认值仍为 `true`。已从运行中的 Spring 进程环境读取到 `false`。

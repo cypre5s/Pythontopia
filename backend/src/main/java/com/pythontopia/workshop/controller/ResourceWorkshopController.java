@@ -40,7 +40,7 @@ public class ResourceWorkshopController {
   }
 
   @PostMapping
-  @AiBudgeted
+  @AiBudgeted(roles = Role.STUDENT)
   public ResourceCreateResponse create(
       @CurrentUser CurrentUserPrincipal user,
       @Valid @RequestBody ResourceCreateRequest request) {
@@ -49,7 +49,7 @@ public class ResourceWorkshopController {
   }
 
   @PostMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  @AiBudgeted
+  @AiBudgeted(roles = Role.STUDENT)
   public SseEmitter createStream(
       @CurrentUser CurrentUserPrincipal user,
       @Valid @RequestBody ResourceCreateRequest request) {

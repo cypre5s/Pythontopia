@@ -4,6 +4,7 @@ import com.pythontopia.coursepack.service.CoursePackNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -12,6 +13,7 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -45,6 +47,25 @@ public class GlobalExceptionHandler {
     List<String> details =
         exception.getConstraintViolations().stream()
             .map(violation -> violation.getPropertyPath() + ": " + violation.getMessage())
+            .toList();
+    return error(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Request validation failed", details, request);
+  }
+
+  @ExceptionHandler(HandlerMethodValidationException.class)
+  ResponseEntity<ApiError> handleMethodValidation(
+      HandlerMethodValidationException exception, HttpServletRequest request) {
+    if (exception.isForReturnValue()) {
+      return error(
+          HttpStatus.INTERNAL_SERVER_ERROR,
+          "INTERNAL_ERROR",
+          "Response validation failed",
+          List.of(),
+          request);
+    }
+    List<String> details =
+        exception.getAllErrors().stream()
+            .map(error -> error.getDefaultMessage())
+            .filter(Objects::nonNull)
             .toList();
     return error(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Request validation failed", details, request);
   }

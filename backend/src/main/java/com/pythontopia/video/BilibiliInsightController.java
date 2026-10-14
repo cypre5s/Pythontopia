@@ -2,7 +2,6 @@ package com.pythontopia.video;
 
 import com.pythontopia.common.web.AiBudgeted;
 import jakarta.validation.Valid;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -16,7 +15,6 @@ import org.springframework.web.bind.annotation.RestController;
  * Python 微服务，本控制器仅经 {@link BilibiliInsightService} 代理；snake→camel 字段映射由
  * {@link BilibiliInsightResponse} 完成。
  */
-@Validated
 @RestController
 @RequestMapping("/api/videos/bilibili/insight")
 public class BilibiliInsightController {

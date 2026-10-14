@@ -2,7 +2,7 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-14）**：本轮聚焦 Web。Tutor 使用 DeepSeek 固定阶段 AutoGen；图片仅作为输入，provider 同步及流式接口只提取文本。前端 Vitest 最新为 270 files / 2568 tests；typecheck、build 通过；ESLint 0 errors / 7 warnings。Graph 全量为 1842 passed / 1 skipped，RAG 为 158 passed / 2 skipped。修复随机远征 fixture 后的最新 Maven 全量为 1389 tests、0 failures、7 errors：6 个 Testcontainers 因宿主端口 `address already in use` 启动失败，长期仿真测试的测试库连接在全量运行中 reset；对应长期仿真类隔离 1/1、远征集成类隔离 28/28 通过。全量 Maven 尚未稳定通过。剩余项包括 Twin A/B 与 7 日复测、DeepSeek 供应商 token/账单核对、稳定全量 Maven 复验、生产 Piston 验证；ECS/GitHub 与非 Web 客户端不在本轮范围。性能按用户要求后置。下方阶段表与时间线保留早期历史，不代表当前焦点。
+> **当前快照（2026-10-14）**：本轮聚焦 Web。Tutor 使用 DeepSeek 固定阶段 AutoGen；图片仅作为输入，provider 同步及流式接口只提取文本。前端 Vitest 最新为 270 files / 2568 tests；typecheck、build 通过；ESLint 0 errors / 7 warnings。Graph 全量为 1842 passed / 1 skipped，RAG 为 158 passed / 2 skipped。Maven 全量最新为 1393 tests、0 failures、6 errors：5 个 Testcontainers 测试类出现宿主动态端口 `address already in use`，长期仿真类在全量串跑中连接被拒；5 个容器类隔离 16/16、长期仿真隔离 1/1、远征集成隔离 28/28 通过。全量 Maven 仍未稳定全绿。剩余项包括 Twin A/B 与 7 日复测、DeepSeek 供应商 token/账单核对、稳定全量 Maven 复验、生产 Piston 验证；ECS/GitHub 与非 Web 客户端不在本轮范围。性能按用户要求后置。下方阶段表与时间线保留早期历史，不代表当前焦点。
 
 ## 2026-10-14 当前续接
 
@@ -10,8 +10,12 @@
 
 - DeepSeek provider 的同步与 SSE 响应都只提取文本块；流式回归覆盖了上游混合文本/图片块，客户端只收到文本。项目不调用图片生成接口。
 - 真实 provider smoke：2 次 DeepSeek 请求成功，分别验证纯文本答复和合成 PNG 识别；响应均为文本。此次没有改动请求模型或提示词，因此未额外发送模型请求。
+- 本次更正续验：再发 2 次真实请求（文本精确回显、红蓝 PNG 识别），两次都只返回 `content_text`；同步混合输出块回归现已明确包含图片块。DeepSeek 负责看图并文字回答，不承担图片生成。
+- 修复额度预留早于校验/授权的问题：改为 Spring 方法拦截器，在 MVC 入参校验后再检查会话与允许角色并预留；移除相关控制器的 AOP `@Validated`，使用 Spring MVC 原生方法校验；补齐统一 400 响应。定向 Maven 35/35 通过。
+- 续验 `tests/test_provider_tool_calling.py tests/test_openai_compat_provider.py`：46 passed，1 条既有 pytest 标记警告。
+- 管理台 5 个 Vitest 文件 / 31 项、typecheck、定向 ESLint 通过；Playwright 模拟 API 检查 3 页的 1440px 与 320px 布局、窄屏抽屉和用户状态对话框，页面溢出 0、JS 错误 0。期间排除了全局像素按钮阴影对管理端的污染。
 - 前端全量 Vitest 270 files / 2568 tests、typecheck、build 通过；ESLint 0 errors / 7 warnings。Graph 最新全量 1842 passed / 1 skipped；RAG 158 passed / 2 skipped。
-- 远征随机节点集成夹具已修复，`ExpeditionRunPostgresIntegrationTest` 隔离 28/28 通过；长期仿真类隔离 1/1 通过。修复后 Maven 全量 1389 tests、0 failures、7 errors：6 个 Testcontainers 宿主端口绑定错误和 1 个长期仿真测试库连接 reset。
+- 远征随机节点集成夹具已修复，`ExpeditionRunPostgresIntegrationTest` 隔离 28/28 通过；本次 Maven 全量 1393 tests、0 failures、6 errors；5 个 Testcontainers 类隔离 16/16、长期仿真类隔离 1/1 通过。失败均为全量串跑时的 Docker 动态端口绑定冲突或测试库连接拒绝。
 - 本地 320 CSS px 教师班级列表 Playwright 检查通过（模拟 API）；管理员活动会话、生产 Piston/ECS、Twin A/B 与 7 日延迟效果仍未验证。性能最后处理。
 
 ### 已完成
@@ -23,9 +27,10 @@
 ### 当前验证
 
 - Graph Tutor/provider/图片/AutoGen 定向回归：102 passed、1 条既有 pytest 标记警告。
+- DeepSeek 文本/视觉 provider 回归：46 passed；真实文字请求及红蓝 PNG 图片输入各 1 次，返回内容均为文本。AI 配额授权/校验顺序的后端定向测试 35/35；五个全量失败容器类隔离 16/16，长期仿真隔离 1/1。
 - 后端 `ClassroomServiceTest`、`ClassroomRepositoryTest`、`TutorDailyRequestLimitServiceTest` 通过；`git diff --check` 通过。
 - 4 个本轮触及的 Java 文件通过定向 Spotless；全仓 Spotless 仍报告 614 个其他历史文件格式差异，未批量格式化。
-- 最新全量 Maven：1389 tests、0 failures、7 errors，原因是 6 个 Testcontainers 动态宿主端口冲突和长期仿真类全量运行时数据库连接失败；后者隔离复跑通过。
+- 最新全量 Maven：1393 tests、0 failures、6 errors；5 个 Testcontainers 测试类在全量串跑中遇到宿主动态端口绑定冲突，长期仿真类连接失败；相关测试类隔离复跑通过。
 - 本地开发 Spring 保持 `PYT_AI_REQUEST_LIMITS_ENABLED=false`；此开关仅关闭应用级每日计数，不覆盖 DeepSeek 自身余额/限流。
 - 生产 AI/readiness 与 Piston URL 合同脚本通过。ECS 运行时只读检查因本机直连路由需要 sudo 密码而未执行。
 

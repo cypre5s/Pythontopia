@@ -46,6 +46,11 @@ describe('admin visual shell contract', () => {
     expect(layoutStyles).not.toContain('.admin-topbar');
   });
 
+  it('keeps the global pixel button effect out of the admin interface', () => {
+    expect(layoutStyles).toMatch(/\.admin-shell :deep\(button\)\s*\{[^}]*box-shadow:\s*none;/);
+    expect(layoutStyles).toMatch(/\.admin-shell :deep\(button:active\)\s*\{[^}]*transform:\s*none;[^}]*box-shadow:\s*none;/);
+  });
+
   it('matches Alethicode account and narrow navigation sizing', () => {
     expect(layoutStyles).toMatch(/\.admin-sidebar__logout\s*\{[^}]*width:\s*100%;[^}]*height:\s*42px;[^}]*background:\s*rgba\(239,\s*68,\s*68,\s*0\.1\);[^}]*color:\s*#dc2626;/);
     expect(layoutStyles).toContain('width: min(320px, 90vw);');

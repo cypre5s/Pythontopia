@@ -17,7 +17,6 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Pattern;
 import org.springframework.http.HttpStatus;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -37,7 +36,6 @@ import org.springframework.web.bind.annotation.RestController;
  *
  * <p>鉴权：JwtAuthenticationFilter 强制登录；{@link CurrentUserPrincipal} 用于上报 graph 做自适应难度。
  */
-@Validated
 @RestController
 @RequestMapping("/api/world/boss")
 public class BossController {
@@ -49,7 +47,7 @@ public class BossController {
   }
 
   @PostMapping("/{chapter}/problem")
-  @AiBudgeted
+  @AiBudgeted(roles = Role.STUDENT)
   public BossProblemDto requestProblem(
       @PathVariable @Min(1) @Max(7) int chapter,
       @Valid @RequestBody BossProblemRequest request,
@@ -62,7 +60,7 @@ public class BossController {
    * 前端在进入答题后 fire-and-forget 调用，玩家做题时后台备好下一题落 READY。
    */
   @PostMapping("/{chapter}/prefetch")
-  @AiBudgeted
+  @AiBudgeted(roles = Role.STUDENT)
   @ResponseStatus(HttpStatus.ACCEPTED)
   public BossPrefetchStatusDto prefetchProblem(
       @PathVariable @Min(1) @Max(7) int chapter,

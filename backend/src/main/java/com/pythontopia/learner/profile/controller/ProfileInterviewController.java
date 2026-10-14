@@ -36,7 +36,7 @@ public class ProfileInterviewController {
   }
 
   @PostMapping("/{sessionId}/turn")
-  @AiBudgeted
+  @AiBudgeted(roles = Role.STUDENT)
   ProfileTurnResponse turn(
       @CurrentUser CurrentUserPrincipal user,
       @PathVariable String sessionId,
@@ -48,7 +48,7 @@ public class ProfileInterviewController {
   @PostMapping(
       value = "/{sessionId}/turn/stream",
       produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  @AiBudgeted
+  @AiBudgeted(roles = Role.STUDENT)
   SseEmitter turnStream(
       @CurrentUser CurrentUserPrincipal user,
       @PathVariable String sessionId,

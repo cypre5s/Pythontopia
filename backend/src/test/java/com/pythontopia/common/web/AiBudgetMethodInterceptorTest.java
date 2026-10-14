@@ -9,7 +9,6 @@ import static org.mockito.Mockito.verify;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.tutor.TutorDailyRequestLimitService;
-import java.lang.reflect.Method;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -17,21 +16,22 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.aop.support.DefaultPointcutAdvisor;
+import org.springframework.aop.support.annotation.AnnotationMatchingPointcut;
+import org.springframework.core.Ordered;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.mock.web.MockHttpServletRequest;
-import org.springframework.mock.web.MockHttpServletResponse;
-import org.springframework.web.method.HandlerMethod;
 
 @ExtendWith(MockitoExtension.class)
-class AiBudgetInterceptorTest {
+class AiBudgetMethodInterceptorTest {
 
   @Mock TutorDailyRequestLimitService requestLimitService;
-  private AiBudgetInterceptor interceptor;
+  private AiBudgetMethodInterceptor interceptor;
 
   @BeforeEach
   void setUp() {
-    interceptor = new AiBudgetInterceptor(requestLimitService);
+    interceptor = new AiBudgetMethodInterceptor(requestLimitService);
   }
 
   @AfterEach
@@ -44,37 +44,55 @@ class AiBudgetInterceptorTest {
     SecurityContextHolder.getContext().setAuthentication(
         new UsernamePasswordAuthenticationToken(
             new CurrentUserPrincipal(17L, "student", Role.STUDENT), null, List.of()));
-    GeneratedEndpoints controller = new GeneratedEndpoints();
+    GeneratedEndpoints controller = proxiedEndpoints();
 
-    assertThat(intercept(controller, "tutor")).isTrue();
-    assertThat(intercept(controller, "expedition")).isTrue();
+    assertThat(controller.tutor()).isEqualTo("ok");
+    assertThat(controller.expedition()).isEqualTo("ok");
 
     verify(requestLimitService, times(2)).reserve(17L);
   }
 
   @Test
   void unmarkedEndpointsDoNotSpendAiBudget() throws Exception {
-    assertThat(intercept(new GeneratedEndpoints(), "status")).isTrue();
+    assertThat(proxiedEndpoints().status()).isEqualTo("ok");
     verifyNoInteractions(requestLimitService);
   }
 
   @Test
   void markedEndpointRequiresAnAuthenticatedAccount() {
-    assertThatThrownBy(() -> intercept(new GeneratedEndpoints(), "tutor"))
+    assertThatThrownBy(() -> proxiedEndpoints().tutor())
         .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
         .hasMessageContaining("需要登录");
     verifyNoInteractions(requestLimitService);
   }
 
-  private boolean intercept(Object controller, String methodName) throws Exception {
-    Method method = controller.getClass().getMethod(methodName);
-    return interceptor.preHandle(
-        new MockHttpServletRequest(), new MockHttpServletResponse(), new HandlerMethod(controller, method));
+  @Test
+  void wrongRoleDoesNotSpendAiBudget() {
+    SecurityContextHolder.getContext().setAuthentication(
+        new UsernamePasswordAuthenticationToken(
+            new CurrentUserPrincipal(17L, "teacher", Role.TEACHER), null, List.of()));
+
+    assertThatThrownBy(() -> proxiedEndpoints().studentOnly())
+        .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
+        .hasMessageContaining("无权");
+    verifyNoInteractions(requestLimitService);
+  }
+
+  private GeneratedEndpoints proxiedEndpoints() {
+    DefaultPointcutAdvisor advisor =
+        new DefaultPointcutAdvisor(
+            AnnotationMatchingPointcut.forMethodAnnotation(AiBudgeted.class), interceptor);
+    advisor.setOrder(Ordered.LOWEST_PRECEDENCE);
+    ProxyFactory factory = new ProxyFactory(new GeneratedEndpoints());
+    factory.setProxyTargetClass(true);
+    factory.addAdvisor(advisor);
+    return (GeneratedEndpoints) factory.getProxy();
   }
 
   static class GeneratedEndpoints {
-    @AiBudgeted public void tutor() {}
-    @AiBudgeted public void expedition() {}
-    public void status() {}
+    @AiBudgeted public String tutor() { return "ok"; }
+    @AiBudgeted public String expedition() { return "ok"; }
+    @AiBudgeted(roles = Role.STUDENT) public String studentOnly() { return "ok"; }
+    public String status() { return "ok"; }
   }
 }

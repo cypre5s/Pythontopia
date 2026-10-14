@@ -26,7 +26,7 @@ public class NpcDialogController {
   }
 
   @PostMapping("/{npcKey:[a-z0-9_-]{1,40}}/dialog")
-  @AiBudgeted
+  @AiBudgeted(roles = Role.STUDENT)
   public NpcDialogResponse talk(
       @CurrentUser CurrentUserPrincipal user,
       @PathVariable String npcKey,
