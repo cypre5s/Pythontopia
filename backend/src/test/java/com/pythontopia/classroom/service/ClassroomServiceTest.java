@@ -2,6 +2,8 @@ package com.pythontopia.classroom.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -12,10 +14,12 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.classroom.domain.Classroom;
 import com.pythontopia.classroom.dto.ClassroomDto;
+import com.pythontopia.classroom.dto.CreateClassroomRequest;
 import com.pythontopia.classroom.quest.service.ClassroomQuestService;
 import com.pythontopia.classroom.repository.ClassroomRepository;
 import com.pythontopia.classroom.security.ClassroomGuard;
 import com.pythontopia.common.error.BusinessException;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -39,6 +43,7 @@ class ClassroomServiceTest {
       new ClassroomService(repository, classroomGuard, questService);
 
   private final CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "stu01", Role.STUDENT);
+  private final CurrentUserPrincipal admin = new CurrentUserPrincipal(1L, "root", Role.ADMIN);
 
   private static Classroom classroom(String status) {
     return new Classroom(9L, "演示班", "desc", 42L, 43L, "ABC123", status);
@@ -60,11 +65,36 @@ class ClassroomServiceTest {
     verify(questService).backfillForStudent(9L, 7L);
   }
 
+  @Test
+  @DisplayName("管理员进入教师屋可创建班级")
+  void adminCanCreateClassroom() {
+    when(repository.create(eq("管理班"), eq("演示"), eq(admin.userId()), anyString()))
+        .thenReturn(new Classroom(99L, "管理班", "演示", admin.userId(), 43L, "ZXCVBN", "ACTIVE"));
+
+    ClassroomDto dto = service.create(admin, new CreateClassroomRequest("管理班", "演示"));
+
+    assertThat(dto.classroomId()).isEqualTo(99L);
+    assertThat(dto.joinCode()).isEqualTo("ZXCVBN");
+  }
+
+  @Test
+  @DisplayName("管理员班级总览包含可管理班级的加入码")
+  void adminClassroomListIncludesManageableClassrooms() {
+    when(repository.findAll()).thenReturn(List.of(classroom("ACTIVE")));
+
+    List<ClassroomDto> rows = service.mine(admin);
+
+    assertThat(rows).hasSize(1);
+    assertThat(rows.getFirst().classroomId()).isEqualTo(9L);
+    assertThat(rows.getFirst().joinCode()).isEqualTo("ABC123");
+    verify(repository).findAll();
+    verify(repository, never()).findByStudent(admin.userId());
+  }
+
   /**
-   * 回归（缺陷 2）：{@code removeMember} 是软删（status='REMOVED'），而
-   * {@code classroom_members} 上有 UNIQUE(classroom_id, student_id)。旧实现裸 INSERT，
-   * 被移出的学生二次加入必撞唯一键 → 409「已加入该班级」，但 /api/classrooms/mine 又看不到
-   * （只查 ACTIVE），学生和教师都没有自助恢复手段。
+   * 回归（缺陷 2）：{@code removeMember} 是软删（status='REMOVED'），而 {@code classroom_members} 上有
+   * UNIQUE(classroom_id, student_id)。旧实现裸 INSERT， 被移出的学生二次加入必撞唯一键 → 409「已加入该班级」，但
+   * /api/classrooms/mine 又看不到 （只查 ACTIVE），学生和教师都没有自助恢复手段。
    */
   @Test
   @DisplayName("被移出的学生可以重新加入：不报 409，走 upsert 复活成员行")
@@ -104,8 +134,7 @@ class ClassroomServiceTest {
 
     assertThatThrownBy(() -> service.join(student, "ABC123"))
         .isInstanceOfSatisfying(
-            BusinessException.class,
-            ex -> assertThat(ex.status()).isEqualTo(HttpStatus.FORBIDDEN));
+            BusinessException.class, ex -> assertThat(ex.status()).isEqualTo(HttpStatus.FORBIDDEN));
     verifyNoInteractions(questService);
   }
 
@@ -116,15 +145,13 @@ class ClassroomServiceTest {
 
     assertThatThrownBy(() -> service.join(teacher, "ABC123"))
         .isInstanceOfSatisfying(
-            BusinessException.class,
-            ex -> assertThat(ex.status()).isEqualTo(HttpStatus.FORBIDDEN));
+            BusinessException.class, ex -> assertThat(ex.status()).isEqualTo(HttpStatus.FORBIDDEN));
     verifyNoInteractions(repository);
   }
 
   /**
-   * 回归（缺陷 8）：教师端写操作原本自己做 {@code requireRole(user, TEACHER)}，与类级注解 /
-   * ClassroomGuard 放行 ADMIN 的口径相反——同一个 ADMIN 能读看板、能发任务，却在改名 /
-   * 重置加入码 / 成员管理上被 403。现在统一走 guard。
+   * 回归（缺陷 8）：教师端写操作原本自己做 {@code requireRole(user, TEACHER)}，与类级注解 / ClassroomGuard 放行 ADMIN
+   * 的口径相反——同一个 ADMIN 能读看板、能发任务，却在改名 / 重置加入码 / 成员管理上被 403。现在统一走 guard。
    */
   @Test
   @DisplayName("ADMIN 走同一道 guard：改名 / 重置加入码 / 成员列表不再自相矛盾地 403")
@@ -151,8 +178,7 @@ class ClassroomServiceTest {
 
     assertThatThrownBy(() -> service.update(other, 9L, "改名", ""))
         .isInstanceOfSatisfying(
-            BusinessException.class,
-            ex -> assertThat(ex.status()).isEqualTo(HttpStatus.FORBIDDEN));
+            BusinessException.class, ex -> assertThat(ex.status()).isEqualTo(HttpStatus.FORBIDDEN));
     assertThatThrownBy(() -> service.removeMember(other, 9L, 7L))
         .isInstanceOf(BusinessException.class);
     assertThatThrownBy(() -> service.regenerateJoinCode(other, 9L))

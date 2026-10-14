@@ -38,28 +38,36 @@ public class ClassroomService {
   }
 
   public ClassroomDto create(CurrentUserPrincipal user, CreateClassroomRequest request) {
-    requireRole(user, Role.TEACHER);
+    if (!canManageClassrooms(user)) {
+      throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Role is not allowed");
+    }
     for (int i = 0; i < 10; i++) {
       try {
-        return toDto(repository.create(request.name(), request.description(), user.userId(), joinCode()), true);
+        return toDto(
+            repository.create(request.name(), request.description(), user.userId(), joinCode()),
+            true);
       } catch (DuplicateKeyException ignored) {
         // join_code 唯一冲突，重试生成新码
       }
     }
-    throw new BusinessException(HttpStatus.CONFLICT, "JOIN_CODE_CONFLICT", "Could not allocate join code");
+    throw new BusinessException(
+        HttpStatus.CONFLICT, "JOIN_CODE_CONFLICT", "Could not allocate join code");
   }
 
   public List<ClassroomDto> mine(CurrentUserPrincipal user) {
-    boolean teacher = user.role() == Role.TEACHER;
+    boolean manager = canManageClassrooms(user);
     List<Classroom> rows =
-        teacher ? repository.findByTeacher(user.userId()) : repository.findByStudent(user.userId());
-    return rows.stream().map(row -> toDto(row, teacher)).toList();
+        switch (user.role()) {
+          case ADMIN -> repository.findAll();
+          case TEACHER -> repository.findByTeacher(user.userId());
+          case STUDENT -> repository.findByStudent(user.userId());
+        };
+    return rows.stream().map(row -> toDto(row, manager)).toList();
   }
 
   /**
-   * 学生凭加入码入班。<b>可重入</b>：只有当成员行已是 {@code ACTIVE} 时才回 409；被教师移出
-   * （{@code REMOVED}）的学生可以再次加入（{@link ClassroomRepository#addMember} 是 upsert）。
-   * 入班成功后立刻补发该班「进行中」的班级任务副本，避免发布后才入班的学生看得到任务卡却点不动。
+   * 学生凭加入码入班。<b>可重入</b>：只有当成员行已是 {@code ACTIVE} 时才回 409；被教师移出 （{@code REMOVED}）的学生可以再次加入（{@link
+   * ClassroomRepository#addMember} 是 upsert）。 入班成功后立刻补发该班「进行中」的班级任务副本，避免发布后才入班的学生看得到任务卡却点不动。
    */
   public ClassroomDto join(CurrentUserPrincipal user, String joinCode) {
     requireRole(user, Role.STUDENT);
@@ -70,8 +78,7 @@ public class ClassroomService {
     if (!"ACTIVE".equals(classroom.status())) {
       throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Classroom is archived");
     }
-    Optional<String> existingStatus =
-        repository.findMemberStatus(classroom.id(), user.userId());
+    Optional<String> existingStatus = repository.findMemberStatus(classroom.id(), user.userId());
     if (existingStatus.filter("ACTIVE"::equals).isPresent()) {
       throw new BusinessException(
           HttpStatus.CONFLICT, "CLASSROOM_ALREADY_JOINED", "Student already joined");
@@ -132,9 +139,8 @@ public class ClassroomService {
   }
 
   /**
-   * 教师端班级归属校验：统一复用 {@link ClassroomGuard#requireOwner}，与 dashboard / quest /
-   * remediation / live 四条教师入口口径一致（ADMIN 同样放行，不再出现「同一个 ADMIN 能读看板
-   * 却在改名 / 重置加入码 / 成员管理上被 403」的自相矛盾）。
+   * 教师端班级归属校验：统一复用 {@link ClassroomGuard#requireOwner}，与 dashboard / quest / remediation / live
+   * 四条教师入口口径一致（ADMIN 同样放行，不再出现「同一个 ADMIN 能读看板 却在改名 / 重置加入码 / 成员管理上被 403」的自相矛盾）。
    */
   private Classroom ownedClassroom(CurrentUserPrincipal user, Long classroomId) {
     return classroomGuard.requireOwner(user, classroomId);
@@ -144,6 +150,10 @@ public class ClassroomService {
     if (user.role() != role) {
       throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Role is not allowed");
     }
+  }
+
+  private boolean canManageClassrooms(CurrentUserPrincipal user) {
+    return user.role() == Role.TEACHER || user.role() == Role.ADMIN;
   }
 
   private String joinCode() {
