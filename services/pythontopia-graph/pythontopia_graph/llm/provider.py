@@ -394,8 +394,9 @@ class OpenAiCompatProvider:
         has_tools = bool(kwargs.get("tools"))
         if json_mode and not has_tools and "response_format" not in kwargs:
             body["response_format"] = {"type": "json_object"}
-        if self.enable_thinking is not None and "chat_template_kwargs" not in kwargs:
-            body["chat_template_kwargs"] = {"enable_thinking": self.enable_thinking}
+        kwargs.setdefault(
+            "thinking", {"type": "enabled" if self.enable_thinking else "disabled"}
+        )
         body.update(kwargs)
         # trust_env=True：有 HTTP(S)_PROXY 则走代理，否则直连；NO_PROXY 保护 localhost/RAG。
         # 读超时 90s：讲义/练习生成属长输出任务，30s 会让 ResourceDesigner 等 agent 高频
@@ -424,6 +425,9 @@ class OpenAiCompatProvider:
             "stream": True,
             **kwargs,
         }
+        payload.setdefault(
+            "thinking", {"type": "enabled" if self.enable_thinking else "disabled"}
+        )
         # 同 chat()：trust_env 代理策略。
         async with httpx.AsyncClient(timeout=60, trust_env=True) as client:
             async with client.stream(
