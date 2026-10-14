@@ -2,10 +2,13 @@ package com.pythontopia.common.web;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.pythontopia.auth.security.Role;
 import com.pythontopia.browse.controller.BrowseController;
 import com.pythontopia.classroom.remediation.RemediationController;
 import com.pythontopia.learner.evaluation.controller.LearnerEvaluationController;
 import com.pythontopia.learner.path.controller.LearningPathController;
+import com.pythontopia.mainline.test.ChapterQuizController;
+import com.pythontopia.mainline.test.ChapterTestController;
 import com.pythontopia.media.MediaAsrController;
 import com.pythontopia.media.MediaAssetController;
 import com.pythontopia.media.MediaJobController;
@@ -23,6 +26,14 @@ class AiBudgetRouteCoverageTest {
     assertBudgeted(
         RemediationController.class.getMethod(
             "trigger", com.pythontopia.auth.security.CurrentUserPrincipal.class, Long.class));
+  }
+
+  @Test
+  void chapterTestGenerationIsStudentOnly() throws NoSuchMethodException {
+    assertStudentBudgeted(ChapterTestController.class.getMethod(
+        "prepare", int.class, com.pythontopia.auth.security.CurrentUserPrincipal.class));
+    assertStudentBudgeted(ChapterQuizController.class.getMethod(
+        "prepare", int.class, com.pythontopia.auth.security.CurrentUserPrincipal.class));
   }
 
   @Test
@@ -87,5 +98,9 @@ class AiBudgetRouteCoverageTest {
 
   private static void assertNotBudgeted(Method method) {
     assertThat(method.isAnnotationPresent(AiBudgeted.class)).isFalse();
+  }
+
+  private static void assertStudentBudgeted(Method method) {
+    assertThat(method.getAnnotation(AiBudgeted.class).roles()).containsExactly(Role.STUDENT);
   }
 }

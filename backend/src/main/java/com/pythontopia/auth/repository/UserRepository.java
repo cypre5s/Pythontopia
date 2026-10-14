@@ -64,6 +64,7 @@ public class UserRepository {
             SELECT id, username, display_name, password_hash, email, role, status, token_version
             FROM users
             WHERE username = ?
+            FOR UPDATE
             """,
             this::map,
             username)

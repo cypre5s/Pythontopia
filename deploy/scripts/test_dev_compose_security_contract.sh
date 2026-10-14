@@ -68,7 +68,9 @@ script = (Path(sys.argv[1]) / "dev.sh").read_text()
 guard = script.index("if [[ \"$START_DEPS\" == \"0\" && \"$resolved_internal_token\" != \"$configured_internal_token\" ]]")
 export = script.index("export PYT_RAG_ADMIN_TOKEN=")
 compose = script.index("compose up -d \"${DEP_SERVICES[@]}\"")
-assert guard < export < compose
+reuse = script.index("backend_preexisting=0")
+assert reuse < guard < export < compose
+assert "resolve_dev_internal_token.sh\" \"$configured_internal_token\" \"$existing_backend_pid\"" in script
 print("dev startup token order: PASS")
 ' "$ROOT_DIR"
 

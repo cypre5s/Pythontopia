@@ -17,6 +17,7 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
@@ -72,6 +73,7 @@ public class AuthService {
     }
   }
 
+  @Transactional(noRollbackFor = BusinessException.class)
   public LoginResponse login(LoginRequest request) {
     UserAccount user = userRepository.findByUsername(request.username()).orElse(null);
     if (user == null) {

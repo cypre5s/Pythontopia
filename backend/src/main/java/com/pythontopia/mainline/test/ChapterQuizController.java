@@ -1,6 +1,7 @@
 package com.pythontopia.mainline.test;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
+import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.common.web.AiBudgeted;
@@ -31,7 +32,7 @@ public class ChapterQuizController {
   }
 
   @PostMapping("/prepare")
-  @AiBudgeted
+  @AiBudgeted(roles = Role.STUDENT)
   public TestPrepareResponse prepare(
       @PathVariable @Min(1) @Max(7) int chapter, @CurrentUser CurrentUserPrincipal user) {
     return service.prepareQuiz(requireUserId(user), chapter);

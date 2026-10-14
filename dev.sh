@@ -145,13 +145,29 @@ export PYT_AI_REQUEST_LIMITS_ENABLED=false
 
 # Compose and the local backend must receive the same per-run service token.
 configured_internal_token="${PYT_RAG_ADMIN_TOKEN:-}"
-resolved_internal_token="$("$DEPLOY_DIR/scripts/resolve_dev_internal_token.sh" "$configured_internal_token")"
+backend_preexisting=0
+existing_backend_pid=""
+if wait_http_ok "http://127.0.0.1:18080/healthz" 1 1; then
+  backend_preexisting=1
+  if ! command -v ss >/dev/null 2>&1; then
+    c_err "后端已在运行，但缺少 ss，无法安全复用它的服务令牌；请先停止后端后重试"
+    exit 1
+  fi
+  existing_backend_pid="$(ss -ltnp 'sport = :18080' 2>/dev/null | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | head -n 1)"
+  if [[ -z "$existing_backend_pid" ]]; then
+    c_err "后端已在运行，但无法读取监听进程；请先停止后端后重试"
+    exit 1
+  fi
+fi
+resolved_internal_token="$("$DEPLOY_DIR/scripts/resolve_dev_internal_token.sh" "$configured_internal_token" "$existing_backend_pid")"
 if [[ "$START_DEPS" == "0" && "$resolved_internal_token" != "$configured_internal_token" ]]; then
   c_err "--no-deps 需要 deploy/.env 配置与现有 Graph 共用的有效 PYT_RAG_ADMIN_TOKEN"
   exit 1
 fi
 export PYT_RAG_ADMIN_TOKEN="$resolved_internal_token"
-if [[ "$PYT_RAG_ADMIN_TOKEN" != "$configured_internal_token" ]]; then
+if [[ "$backend_preexisting" == "1" ]]; then
+  c_info "复用已运行后端的内部服务令牌，保持 Graph/RAG 鉴权一致"
+elif [[ "$PYT_RAG_ADMIN_TOKEN" != "$configured_internal_token" ]]; then
   c_warn "本次开发栈已生成临时服务间鉴权令牌（未写入磁盘）"
 fi
 
@@ -201,26 +217,28 @@ mkdir -p "$ROOT_DIR/data/course-pack-43/generated-media"
 export PYT_DB_URL="jdbc:postgresql://127.0.0.1:15432/pythontopia"
 export PYT_DB_USERNAME="${PYT_DB_USERNAME:-pytopia}"
 export PYT_DB_PASSWORD="${PYT_DB_PASSWORD:-pytopia_dev_password}"
-configured_jwt_secret="${PYT_JWT_SECRET:-}"
-resolved_jwt_secret="$("$DEPLOY_DIR/scripts/resolve_dev_jwt_secret.sh" "$configured_jwt_secret")"
-if [[ "$resolved_jwt_secret" != "$configured_jwt_secret" ]]; then
-  c_warn "本地 PYT_JWT_SECRET 缺失、过短或仍为公开占位值；本次启动已生成临时高熵密钥（未写入磁盘）"
+if [[ "$backend_preexisting" != "1" ]]; then
+  configured_jwt_secret="${PYT_JWT_SECRET:-}"
+  resolved_jwt_secret="$("$DEPLOY_DIR/scripts/resolve_dev_jwt_secret.sh" "$configured_jwt_secret")"
+  if [[ "$resolved_jwt_secret" != "$configured_jwt_secret" ]]; then
+    c_warn "本地 PYT_JWT_SECRET 缺失、过短或仍为公开占位值；本次启动已生成临时高熵密钥（未写入磁盘）"
+  fi
+  export PYT_JWT_SECRET="$resolved_jwt_secret"
+  teacher_invite_code="${PYT_TEACHER_INVITE_CODE:-}"
+  case "${teacher_invite_code,,}" in
+    "" | "pytopia-teacher" | *replace-with* | *replace_with* | *change-me* | *changeme* | *placeholder* | *your-invite*)
+      require_cmd openssl
+      export PYT_TEACHER_INVITE_CODE="$(openssl rand -hex 24)"
+      c_warn "本次开发栈已生成临时教师邀请码（未写入磁盘）；如需固定值，请配置 PYT_TEACHER_INVITE_CODE"
+      ;;
+  esac
 fi
-export PYT_JWT_SECRET="$resolved_jwt_secret"
-teacher_invite_code="${PYT_TEACHER_INVITE_CODE:-}"
-case "${teacher_invite_code,,}" in
-  "" | "pytopia-teacher" | *replace-with* | *replace_with* | *change-me* | *changeme* | *placeholder* | *your-invite*)
-    require_cmd openssl
-    export PYT_TEACHER_INVITE_CODE="$(openssl rand -hex 24)"
-    c_warn "本次开发栈已生成临时教师邀请码（未写入磁盘）；如需固定值，请配置 PYT_TEACHER_INVITE_CODE"
-    ;;
-esac
 # 后端默认即 localhost:18091/18092，这里显式声明对齐 dockerized graph/rag
 export PYT_GRAPH_URL="${PYT_GRAPH_URL:-http://127.0.0.1:18091}"
 export PYT_RAG_URL="${PYT_RAG_URL:-http://127.0.0.1:18092}"
 # 多 Agent RouteDecision 执行签名使用独立、每次开发栈启动随机的高熵密钥；不复用公开的
 # graph/rag internal token。外部显式配置时保持原值，便于多后端实例共享验证。
-if [[ -z "${PYT_ROUTE_EXECUTION_SECRET:-}" ]]; then
+if [[ "$backend_preexisting" != "1" && -z "${PYT_ROUTE_EXECUTION_SECRET:-}" ]]; then
   require_cmd openssl
   export PYT_ROUTE_EXECUTION_SECRET="$(openssl rand -hex 32)"
 fi
@@ -235,7 +253,7 @@ verify_postgres_password_from_host || exit 1
 
 trap cleanup_on_exit INT TERM EXIT
 
-if wait_http_ok "http://127.0.0.1:18080/healthz" 1 1; then
+if [[ "$backend_preexisting" == "1" ]]; then
   c_warn "后端 :18080 已在运行，复用之（跳过启动）"
 else
   c_info "启动后端 (mvn spring-boot:run)，日志: $BACKEND_LOG"

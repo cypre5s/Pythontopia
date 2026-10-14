@@ -64,6 +64,27 @@ describe('AdminLayout', () => {
     expect(wrapper.find('.admin-shell__scrim').exists()).toBe(false);
   });
 
+  it('uses collapsible navigation groups with leading icons and keeps the active group open', async () => {
+    const wrapper = mount(AdminLayout);
+    await flushPromises();
+
+    const operationsToggle = wrapper.get('[data-testid="admin-nav-toggle-platform"]');
+    expect(wrapper.findAll('.admin-nav__group-toggle')).toHaveLength(3);
+    expect(wrapper.findAll('.admin-nav__group-toggle .admin-nav__icon')).toHaveLength(3);
+    expect(operationsToggle.attributes('aria-expanded')).toBe('true');
+    const operationsItems = wrapper.get('[data-testid="admin-nav-items-platform"]');
+    expect(operationsItems.attributes('aria-hidden')).toBe('false');
+
+    await operationsToggle.trigger('click');
+    expect(operationsToggle.attributes('aria-expanded')).toBe('false');
+    expect(operationsItems.attributes('aria-hidden')).toBe('true');
+    expect(operationsItems.attributes('style')).toContain('display: none');
+
+    await operationsToggle.trigger('click');
+    expect(operationsToggle.attributes('aria-expanded')).toBe('true');
+    expect(operationsItems.attributes('aria-hidden')).toBe('false');
+  });
+
   it('traps focus in the narrow navigation and closes it with Escape', async () => {
     const wrapper = mount(AdminLayout, { attachTo: document.body });
     const toggle = wrapper.get('.admin-shell__navigation-toggle');

@@ -354,12 +354,8 @@ class OpenAiCompatProvider:
         self.fast_model: str = _require_deepseek_model(
             fast_model or _openai_fast_model() or self.model
         )
-        selected_vision_model = vision_model or _openai_vision_model()
-        self.vision_model = (
-            _require_deepseek_model(selected_vision_model, vision=True)
-            if selected_vision_model
-            else None
-        )
+        selected_vision_model = vision_model or _openai_vision_model() or "deepseek-flash"
+        self.vision_model = _require_deepseek_model(selected_vision_model, vision=True)
         self.enable_thinking = enable_thinking
 
     def _resolve_model(self, kwargs: dict[str, object]) -> str:

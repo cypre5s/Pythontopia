@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * AuthService 的安全契约回归：自助注册角色白名单、停用账号不得登录 / 续期、会话代次（吊销）
@@ -127,6 +128,16 @@ class AuthServiceSecurityTest {
   @Nested
   @DisplayName("login：口令、账号状态与会话代次")
   class Login {
+
+    @Test
+    @DisplayName("账号锁覆盖完整登录校验，错误口令事务仍提交退避状态")
+    void loginSerializesAccountAttemptsAndCommitsFailedAttempt() throws NoSuchMethodException {
+      Transactional transactional =
+          AuthService.class.getMethod("login", LoginRequest.class).getAnnotation(Transactional.class);
+
+      assertThat(transactional).isNotNull();
+      assertThat(transactional.noRollbackFor()).contains(BusinessException.class);
+    }
 
     @Test
     @DisplayName("用户名不存在时仍执行一次哈希比对（消除时序侧信道）")

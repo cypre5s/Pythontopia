@@ -20,4 +20,12 @@ strong_token="local-only-strong-internal-token-0123456789"
 resolved="$("$RESOLVER" "$strong_token")"
 [[ "$resolved" == "$strong_token" ]]
 
+backend_token="$(printf 'b%.0s' {1..64})"
+PYT_RAG_ADMIN_TOKEN="$backend_token" sleep 5 &
+backend_pid=$!
+resolved="$("$RESOLVER" "" "$backend_pid")"
+kill "$backend_pid" 2>/dev/null || true
+wait "$backend_pid" 2>/dev/null || true
+[[ "$resolved" == "$backend_token" ]]
+
 printf 'resolve_dev_internal_token: PASS\n'

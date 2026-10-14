@@ -378,7 +378,7 @@ async def test_chat_stream_emits_only_text_from_multimodal_response_blocks(
 
 
 @pytest.mark.asyncio
-async def test_chat_stream_fails_fast_when_vision_model_is_unconfigured(
+async def test_chat_stream_defaults_to_deepseek_flash_when_vision_model_is_unconfigured(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     for name in (
@@ -387,8 +387,19 @@ async def test_chat_stream_fails_fast_when_vision_model_is_unconfigured(
         "PYT_OPENAI_MODEL_VISION",
     ):
         monkeypatch.setenv(name, "")
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            text='data: {"choices":[{"delta":{"content":"已识别"}}]}\n\n'
+            "data: [DONE]\n\n",
+        )
+
+    _capture_async_client_kwargs(monkeypatch, handler)
     provider = OpenAiCompatProvider()
-    assert not provider.vision_model
+    assert provider.vision_model == "deepseek-flash"
     messages = [
         {
             "role": "user",
@@ -399,11 +410,13 @@ async def test_chat_stream_fails_fast_when_vision_model_is_unconfigured(
         }
     ]
 
-    with pytest.raises(RuntimeError, match="vision model is not configured"):
-        _ = [
-            chunk
-            async for chunk in provider.chat_stream(messages, model_tier="vision")
-        ]
+    chunks = [
+        chunk
+        async for chunk in provider.chat_stream(messages, model_tier="vision")
+    ]
+
+    assert chunks == ["已识别"]
+    assert bodies[0]["model"] == "deepseek-flash"
 
 
 def test_openai_compat_rejects_non_deepseek_base_url() -> None:

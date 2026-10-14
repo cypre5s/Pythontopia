@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-15 — Web Tutor、管理台与登录并发续验
+
+- 在 `/profile-room` 的随身助教中通过真实 Web → Spring → Graph → DeepSeek 路径完成两次请求：`range(3)` 文字问答返回正确序列；单张合成 PNG 输入返回“蓝色正方形、黄色圆形”的文本说明。两条 SSE 均收到 `RUN_FINISHED`，图片请求边界记录为 1 张，回答只显示文本。临时学生与 Tutor 记录已清除。
+- 管理台使用临时本地管理员做只读浏览器检查：运维页和用户页 API 均为 HTTP 200，活动导航分组展开，320 px 下 document/body 宽度均为 320，浏览器 JS 错误为 0。临时管理员账号已删除。
+- 登录用户名查询加 PostgreSQL 行锁，并将错误登录事务设为提交 `BusinessException` 更新，确保并发错误尝试仍受现有账号退避限制；20 个并发错误登录仅有 5 次已存口令校验。章节测验和小测的 AI 配额只允许学生角色；`dev.sh` 复用已运行后端的内部令牌，避免重用旧 Spring 进程时 Graph/RAG 鉴权令牌失配。
+- 验证：Maven 定向 30 项通过，8 个改动 Java 文件 Spotless 通过；Graph provider/Tutor 51 passed、1 条既有 pytest marker warning；全量 Web Vitest 274 文件 / 2592 项通过，production build、typecheck 与触及文件 ESLint 通过；构建仍报告已有 Pyodide externalize/eval 和大 chunk 警告；Ruff、启动脚本语法、令牌解析和 Compose 安全契约通过。全量 Maven 为 1417 项、0 断言失败、7 个环境错误：6 个 Testcontainers 宿主端口冲突、长期仿真数据库连接 reset。`git diff --check` 通过。
+- 仍未完成：完整 Maven 当前快照全绿、生产 Piston 隔离、DeepSeek 供应商用量/账单、Twin A/B 与延迟学习效果，以及最终 Boss 多阶段真实浏览器旅程。性能按计划后置。
+
 ## 2026-10-15 — 账号级登录退避与 DeepSeek 全栈复验
 
 - 新增 V215，为账号累计错误登录并使用 15 分钟窗口和 1/2/4/8 秒封顶退避；冷却中仍返回通用凭据错误，成功登录清零。匿名账号枚举仍执行 dummy hash 比对。

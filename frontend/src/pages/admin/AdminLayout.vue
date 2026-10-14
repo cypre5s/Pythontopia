@@ -7,6 +7,19 @@ import { useSessionStore } from '@stores/session';
 const route = useRoute();
 const router = useRouter();
 const session = useSessionStore();
+type AdminNavigationGroupKey = 'platform' | 'review' | 'accounts';
+
+function navigationGroupForRoute(routeName: unknown): AdminNavigationGroupKey | null {
+  if (routeName === 'admin-operations') return 'platform';
+  if (routeName === 'admin-problem-reviews') return 'review';
+  if (routeName === 'admin-users') return 'accounts';
+  return null;
+}
+
+const initialNavigationGroup = navigationGroupForRoute(route.name);
+const expandedNavigationGroups = ref<Set<AdminNavigationGroupKey>>(
+  new Set(initialNavigationGroup ? [initialNavigationGroup] : []),
+);
 const navigationOpen = ref(false);
 const navigationToggle = ref<HTMLButtonElement | null>(null);
 const navigationMenu = ref<HTMLElement | null>(null);
@@ -22,6 +35,17 @@ function closeNavigation(): void {
   navigationOpen.value = false;
 }
 
+function isNavigationGroupOpen(group: AdminNavigationGroupKey): boolean {
+  return expandedNavigationGroups.value.has(group);
+}
+
+function toggleNavigationGroup(group: AdminNavigationGroupKey): void {
+  const next = new Set(expandedNavigationGroups.value);
+  if (next.has(group)) next.delete(group);
+  else next.add(group);
+  expandedNavigationGroups.value = next;
+}
+
 function handleNavigationKeydown(event: KeyboardEvent): void {
   if (!isNarrow.value || !navigationOpen.value) return;
   if (event.key === 'Escape') {
@@ -32,7 +56,7 @@ function handleNavigationKeydown(event: KeyboardEvent): void {
   if (event.key !== 'Tab') return;
   const focusable = Array.from(
     navigationMenu.value?.querySelectorAll<HTMLElement>('a[href], button:not(:disabled)') ?? [],
-  );
+  ).filter((element) => !element.closest('[aria-hidden="true"]'));
   const first = focusable[0];
   const last = focusable[focusable.length - 1];
   if (!first || !last) return;
@@ -63,6 +87,14 @@ onBeforeUnmount(() => {
 });
 
 watch(() => route.fullPath, closeNavigation);
+watch(() => route.name, (name) => {
+  const activeGroup = navigationGroupForRoute(name);
+  if (activeGroup) {
+    const next = new Set(expandedNavigationGroups.value);
+    next.add(activeGroup);
+    expandedNavigationGroups.value = next;
+  }
+});
 watch(navigationOpen, (open) => {
   if (!isNarrow.value) return;
   void nextTick(() => {
@@ -120,133 +152,211 @@ watch(navigationOpen, (open) => {
             class="admin-nav__group"
             aria-labelledby="admin-nav-platform"
           >
-            <h2 id="admin-nav-platform">
-              平台运行
-            </h2>
-            <RouterLink
-              class="admin-nav__link"
-              :to="{ name: 'admin-operations' }"
-              exact-active-class="is-active"
-              @click="closeNavigation"
+            <h2
+              id="admin-nav-platform"
+              class="admin-nav__heading"
             >
-              <span
-                class="admin-nav__icon"
-                aria-hidden="true"
+              <button
+                class="admin-nav__group-toggle"
+                type="button"
+                data-testid="admin-nav-toggle-platform"
+                aria-controls="admin-nav-items-platform"
+                :aria-expanded="isNavigationGroupOpen('platform')"
+                @click="toggleNavigationGroup('platform')"
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+                <span
+                  class="admin-nav__icon"
                   aria-hidden="true"
                 >
-                  <rect
-                    x="3"
-                    y="3"
-                    width="8"
-                    height="8"
-                    rx="1.5"
-                  />
-                  <rect
-                    x="13"
-                    y="3"
-                    width="8"
-                    height="5"
-                    rx="1.5"
-                  />
-                  <rect
-                    x="13"
-                    y="10"
-                    width="8"
-                    height="11"
-                    rx="1.5"
-                  />
-                  <rect
-                    x="3"
-                    y="13"
-                    width="8"
-                    height="8"
-                    rx="1.5"
-                  />
-                </svg>
-              </span>
-              AI 运维概览
-            </RouterLink>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <rect
+                      x="3"
+                      y="3"
+                      width="8"
+                      height="8"
+                      rx="1.5"
+                    />
+                    <rect
+                      x="13"
+                      y="3"
+                      width="8"
+                      height="5"
+                      rx="1.5"
+                    />
+                    <rect
+                      x="13"
+                      y="10"
+                      width="8"
+                      height="11"
+                      rx="1.5"
+                    />
+                    <rect
+                      x="3"
+                      y="13"
+                      width="8"
+                      height="8"
+                      rx="1.5"
+                    />
+                  </svg>
+                </span>
+                <span class="admin-nav__group-label">平台运行</span>
+                <span
+                  class="admin-nav__chevron"
+                  aria-hidden="true"
+                >⌄</span>
+              </button>
+            </h2>
+            <div
+              v-show="isNavigationGroupOpen('platform')"
+              id="admin-nav-items-platform"
+              class="admin-nav__items"
+              data-testid="admin-nav-items-platform"
+              :aria-hidden="!isNavigationGroupOpen('platform')"
+              :inert="!isNavigationGroupOpen('platform')"
+            >
+              <RouterLink
+                class="admin-nav__link"
+                :to="{ name: 'admin-operations' }"
+                exact-active-class="is-active"
+                data-testid="admin-nav-item-operations"
+                @click="closeNavigation"
+              >
+                AI 运维概览
+              </RouterLink>
+            </div>
           </section>
 
           <section
             class="admin-nav__group"
             aria-labelledby="admin-nav-review"
           >
-            <h2 id="admin-nav-review">
-              内容审核
-            </h2>
-            <RouterLink
-              class="admin-nav__link"
-              :to="{ name: 'admin-problem-reviews' }"
-              exact-active-class="is-active"
-              @click="closeNavigation"
+            <h2
+              id="admin-nav-review"
+              class="admin-nav__heading"
             >
-              <span
-                class="admin-nav__icon"
-                aria-hidden="true"
+              <button
+                class="admin-nav__group-toggle"
+                type="button"
+                data-testid="admin-nav-toggle-review"
+                aria-controls="admin-nav-items-review"
+                :aria-expanded="isNavigationGroupOpen('review')"
+                @click="toggleNavigationGroup('review')"
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+                <span
+                  class="admin-nav__icon"
                   aria-hidden="true"
                 >
-                  <path d="M12 3 20 6v5c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6l8-3Z" />
-                  <path d="m8.5 12 2.2 2.2 4.8-5" />
-                </svg>
-              </span>
-              AI 出题审核
-            </RouterLink>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M12 3 20 6v5c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6l8-3Z" />
+                    <path d="m8.5 12 2.2 2.2 4.8-5" />
+                  </svg>
+                </span>
+                <span class="admin-nav__group-label">内容审核</span>
+                <span
+                  class="admin-nav__chevron"
+                  aria-hidden="true"
+                >⌄</span>
+              </button>
+            </h2>
+            <div
+              v-show="isNavigationGroupOpen('review')"
+              id="admin-nav-items-review"
+              class="admin-nav__items"
+              data-testid="admin-nav-items-review"
+              :aria-hidden="!isNavigationGroupOpen('review')"
+              :inert="!isNavigationGroupOpen('review')"
+            >
+              <RouterLink
+                class="admin-nav__link"
+                :to="{ name: 'admin-problem-reviews' }"
+                exact-active-class="is-active"
+                data-testid="admin-nav-item-problem-reviews"
+                @click="closeNavigation"
+              >
+                AI 出题审核
+              </RouterLink>
+            </div>
           </section>
 
           <section
             class="admin-nav__group"
             aria-labelledby="admin-nav-accounts"
           >
-            <h2 id="admin-nav-accounts">
-              账号管理
-            </h2>
-            <RouterLink
-              class="admin-nav__link"
-              :to="{ name: 'admin-users' }"
-              exact-active-class="is-active"
-              @click="closeNavigation"
+            <h2
+              id="admin-nav-accounts"
+              class="admin-nav__heading"
             >
-              <span
-                class="admin-nav__icon"
-                aria-hidden="true"
+              <button
+                class="admin-nav__group-toggle"
+                type="button"
+                data-testid="admin-nav-toggle-accounts"
+                aria-controls="admin-nav-items-accounts"
+                :aria-expanded="isNavigationGroupOpen('accounts')"
+                @click="toggleNavigationGroup('accounts')"
               >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.8"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
+                <span
+                  class="admin-nav__icon"
                   aria-hidden="true"
                 >
-                  <path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20" />
-                  <circle
-                    cx="9.5"
-                    cy="7"
-                    r="4"
-                  />
-                  <path d="M17 11a4 4 0 0 0 0-8M21 20v-1.5a4 4 0 0 0-3-3.87" />
-                </svg>
-              </span>
-              用户管理
-            </RouterLink>
+                  <svg
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20" />
+                    <circle
+                      cx="9.5"
+                      cy="7"
+                      r="4"
+                    />
+                    <path d="M17 11a4 4 0 0 0 0-8M21 20v-1.5a4 4 0 0 0-3-3.87" />
+                  </svg>
+                </span>
+                <span class="admin-nav__group-label">账号管理</span>
+                <span
+                  class="admin-nav__chevron"
+                  aria-hidden="true"
+                >⌄</span>
+              </button>
+            </h2>
+            <div
+              v-show="isNavigationGroupOpen('accounts')"
+              id="admin-nav-items-accounts"
+              class="admin-nav__items"
+              data-testid="admin-nav-items-accounts"
+              :aria-hidden="!isNavigationGroupOpen('accounts')"
+              :inert="!isNavigationGroupOpen('accounts')"
+            >
+              <RouterLink
+                class="admin-nav__link"
+                :to="{ name: 'admin-users' }"
+                exact-active-class="is-active"
+                data-testid="admin-nav-item-users"
+                @click="closeNavigation"
+              >
+                用户管理
+              </RouterLink>
+            </div>
           </section>
         </nav>
 
@@ -551,23 +661,73 @@ watch(navigationOpen, (open) => {
 
 .admin-nav {
   display: grid;
-  gap: 22px;
+  gap: 4px;
   padding: 16px 12px;
 }
 
 .admin-nav__group h2 {
-  margin: 0 10px 9px;
-  color: #8792a5;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  margin: 0;
+}
+
+.admin-nav__group-toggle {
+  display: flex;
+  width: 100%;
+  min-height: 46px;
+  align-items: center;
+  gap: 10px;
+  margin: 4px 0;
+  padding: 0 16px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #475569;
+  font: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+
+.admin-nav__group-toggle:hover {
+  background: var(--admin-primary-soft);
+  color: var(--primary-color);
+}
+
+.admin-nav__group-toggle:focus-visible {
+  outline: 3px solid var(--admin-focus);
+  outline-offset: 2px;
+}
+
+.admin-nav__group-label {
+  flex: 1;
+  line-height: 1;
+}
+
+.admin-nav__chevron {
+  color: #94a3b8;
+  font-size: 19px;
+  line-height: 1;
+  transition: transform 140ms ease, color 140ms ease;
+}
+
+.admin-nav__group-toggle:hover .admin-nav__chevron {
+  color: var(--primary-color);
+}
+
+.admin-nav__group-toggle[aria-expanded="true"] .admin-nav__chevron {
+  transform: rotate(180deg);
+}
+
+.admin-nav__items {
+  display: grid;
 }
 
 .admin-nav__link {
   display: flex;
   min-height: 46px;
   align-items: center;
-  gap: 11px;
+  margin: 4px 0;
   padding: 0 16px;
   border-radius: 12px;
   color: #475569;
@@ -588,26 +748,23 @@ watch(navigationOpen, (open) => {
   box-shadow: 0 12px 24px rgb(37 99 235 / 22%);
 }
 
-.admin-nav__link.is-active .admin-nav__icon {
-  border-color: rgb(255 255 255 / 36%);
-  background: rgb(255 255 255 / 14%);
-  color: #fff;
-}
-
 .admin-nav__icon {
-  display: grid;
-  width: 27px;
-  height: 27px;
-  place-items: center;
-  border: 1px solid #dbe6f7;
-  border-radius: 7px;
-  color: var(--primary-color);
+  display: inline-flex;
+  width: 18px;
+  flex: 0 0 18px;
+  align-items: center;
+  color: #94a3b8;
+  transition: color 140ms ease;
 }
 
 .admin-nav__icon svg {
   display: block;
-  width: 16px;
-  height: 16px;
+  width: 17px;
+  height: 17px;
+}
+
+.admin-nav__group-toggle:hover .admin-nav__icon {
+  color: var(--primary-color);
 }
 
 .admin-sidebar__account {
@@ -803,7 +960,8 @@ watch(navigationOpen, (open) => {
 @media (prefers-reduced-motion: reduce) {
   .admin-sidebar,
   .admin-page-enter-active,
-  .admin-page-leave-active {
+  .admin-page-leave-active,
+  .admin-nav__chevron {
     transition: none;
   }
 }

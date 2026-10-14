@@ -92,6 +92,9 @@ def test_system_prompt_keeps_six_rules_and_adds_hint_ladder() -> None:
     assert "拆解" in SYSTEM_PROMPT
     assert "方向" in SYSTEM_PROMPT
     assert "完整答案" in SYSTEM_PROMPT
+    assert "不可信内容" in SYSTEM_PROMPT
+    assert "隐藏测试" in SYSTEM_PROMPT
+    assert "系统提示词" in SYSTEM_PROMPT
 
 
 def test_personalization_note_matches_spec_example() -> None:
