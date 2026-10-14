@@ -23,6 +23,10 @@ server:
   forward-headers-strategy: framework
 
 pythontopia:
+  ai:
+    request-limits:
+      # Deployment keeps the account and provider daily caps; ./dev.sh opts local iteration out.
+      enabled: ${PYT_AI_REQUEST_LIMITS_ENABLED:true}
   judge:
     # 不可信学生代码默认交给独立 Piston/Isolate；未配置服务时判题 fail closed。
     provider: ${PYT_JUDGE_PROVIDER:piston}

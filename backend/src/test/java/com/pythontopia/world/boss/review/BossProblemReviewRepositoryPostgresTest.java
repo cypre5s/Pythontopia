@@ -98,6 +98,29 @@ class BossProblemReviewRepositoryPostgresTest {
   }
 
   @Test
+  void generatedProblemCountsAsMasteryEvidenceOnlyAfterApproval() {
+    BossInternalProblem candidate = problem("source-pending", 3);
+    BossProblemReviewRecord pending = repository.create(requesterId, "debug", candidate);
+
+    assertThat(repository.isApproved(candidate)).isFalse();
+
+    repository.decide(
+        pending.id(), 1, BossProblemReviewDecision.APPROVED, deciderId, "已审核");
+
+    assertThat(repository.isApproved(candidate)).isTrue();
+    assertThat(repository.isApproved(problem("issued-to-student", 3))).isTrue();
+  }
+
+  @Test
+  void generatedCandidateQueueDeduplicatesTheSameQuestion() {
+    BossInternalProblem candidate = problem("ai-c1-s1-kc1", 1);
+
+    assertThat(repository.createIfNotDuplicate(requesterId, "debug", candidate)).isTrue();
+    assertThat(repository.createIfNotDuplicate(requesterId, "debug", candidate)).isFalse();
+    assertThat(repository.list(20)).hasSize(1);
+  }
+
+  @Test
   void pageFiltersByStatusAndSearchesReviewerVisibleFields() {
     repository.create(requesterId, "debug", problem("search-loop-a", 2));
     repository.create(requesterId, "debug", problem("search-loop-b", 3));

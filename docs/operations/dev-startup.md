@@ -18,6 +18,8 @@ cd /home/cypress/Pythontopia
 | Postgres | 127.0.0.1:15432 | Docker 数据卷 `pytopia_pg` |
 | Redis | 127.0.0.1:16379 | Docker |
 
+`./dev.sh` 默认关闭 Tutor/AI 入口的账号级与全站每日请求计数，便于本地连续调试模型；部署配置默认保留每账号 30 次、全站 300 次/日。开发栈无限请求仍受 DeepSeek 账号额度和供应商限流约束。
+
 停止：`Ctrl+C`（关前端 + 本机后端）；彻底停依赖：`./dev.sh --down`。
 
 ## 与「全 Docker」的区别

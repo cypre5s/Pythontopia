@@ -6,6 +6,7 @@ import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
 import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
+import com.pythontopia.world.boss.review.BossProblemReviewRepository;
 import jakarta.annotation.PostConstruct;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -15,6 +16,7 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.dao.DataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Async;
@@ -48,23 +50,34 @@ public class EndlessPregenService {
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
   private final ExpeditionRunService expeditionRunService;
+  private final BossProblemReviewRepository reviewRepository;
 
   @Autowired
   public EndlessPregenService(
       BossGraphClient graphClient,
       JdbcTemplate jdbcTemplate,
       ObjectMapper objectMapper,
-      ExpeditionRunService expeditionRunService) {
+      ExpeditionRunService expeditionRunService,
+      BossProblemReviewRepository reviewRepository) {
     this.graphClient = graphClient;
     this.jdbcTemplate = jdbcTemplate;
     this.objectMapper = objectMapper;
     this.expeditionRunService = expeditionRunService;
+    this.reviewRepository = reviewRepository;
+  }
+
+  EndlessPregenService(
+      BossGraphClient graphClient,
+      JdbcTemplate jdbcTemplate,
+      ObjectMapper objectMapper,
+      ExpeditionRunService expeditionRunService) {
+    this(graphClient, jdbcTemplate, objectMapper, expeditionRunService, null);
   }
 
   /** Unit-test compatibility constructor for non-expedition prefetch flows. */
   EndlessPregenService(
       BossGraphClient graphClient, JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
-    this(graphClient, jdbcTemplate, objectMapper, null);
+    this(graphClient, jdbcTemplate, objectMapper, null, null);
   }
 
   // shortcut: recovery assumes one worker, add ownership leases before enabling multiple replicas.
@@ -291,6 +304,15 @@ public class EndlessPregenService {
       }
       if (!problem.reviewed() || !problem.aiGenerated() || problem.testCases().isEmpty()) {
         throw new IllegalStateException("generated problem did not pass the reviewed AI contract");
+      }
+      if (reviewRepository != null) {
+        try {
+          reviewRepository.createIfNotDuplicate(userId, kind, problem);
+        } catch (DataAccessException ex) {
+          log.warn(
+              "could not queue pre-generated Boss problem for teacher review: {}",
+              ex.getClass().getSimpleName());
+        }
       }
       int updated =
           jdbcTemplate.update(

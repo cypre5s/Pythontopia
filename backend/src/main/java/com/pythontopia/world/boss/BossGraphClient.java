@@ -3,6 +3,9 @@ package com.pythontopia.world.boss;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.GraphClientRetryHelper;
+import com.pythontopia.coursepack.domain.CourseKc;
+import com.pythontopia.coursepack.repository.CoursePackRepository;
+import com.pythontopia.coursepack.service.CoursePackService;
 import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
 import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
@@ -43,14 +46,17 @@ public class BossGraphClient {
   private final RestTemplate restTemplate;
   private final RestTemplate bossProblemRestTemplate;
   private final GraphServiceProperties properties;
+  private final CoursePackRepository coursePackRepository;
 
   public BossGraphClient(
       @Qualifier("graphRestTemplate") RestTemplate graphRestTemplate,
       @Qualifier("bossProblemRestTemplate") RestTemplate bossProblemRestTemplate,
-      GraphServiceProperties properties) {
+      GraphServiceProperties properties,
+      CoursePackRepository coursePackRepository) {
     this.restTemplate = graphRestTemplate;
     this.bossProblemRestTemplate = bossProblemRestTemplate;
     this.properties = properties;
+    this.coursePackRepository = coursePackRepository;
   }
 
   /**
@@ -73,6 +79,12 @@ public class BossGraphClient {
       String preferredKc,
       String preferredKind,
       ProfileSignalsPayload profileSignals) {
+    String effectiveKc = preferredKc != null && !preferredKc.isBlank() ? preferredKc : kcCode;
+    CourseKc kc =
+        coursePackRepository
+            .findKcByCode(CoursePackService.ACTIVE_PACK_ID, effectiveKc)
+            .orElseThrow(
+                () -> new RestClientException("boss-problem KC is missing from the active course pack"));
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     Map<String, Object> body = new HashMap<>();
@@ -80,6 +92,8 @@ public class BossGraphClient {
     body.put("chapter", chapter);
     body.put("stage", stage);
     body.put("kcCode", kcCode == null ? "" : kcCode);
+    body.put("kcName", kc.kcName());
+    body.put("kcSummary", kc.summaryMarkdown() == null ? "" : kc.summaryMarkdown());
     body.put("difficulty", difficulty == null ? Math.min(5, Math.max(1, stage)) : difficulty);
     if (preferredKc != null) {
       body.put("preferredKc", preferredKc);

@@ -3,9 +3,9 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter } from 'vue-router';
 import ProfileRoomPage from '@/pages/ProfileRoomPage.vue';
-import { fetchLearnerTwinState } from '@/api/twin';
+import { fetchLearnerTwinState, fetchWeeklyReport } from '@/api/twin';
 import { useWorkshopUiStore } from '@/stores/workshopUi';
-import type { LearnerTwinState } from '@/api/twin';
+import type { LearnerTwinState, WeeklyReport } from '@/api/twin';
 
 vi.mock('@/api/twin', () => ({
   fetchLearnerTwinState: vi.fn(),
@@ -40,6 +40,28 @@ const unassessedState: LearnerTwinState = {
     reason: '尚未评估，先从基础题建立证据',
     remediationRequired: false,
   }],
+};
+
+const weeklyReport: WeeklyReport = {
+  periodStart: '2026-10-07',
+  periodEnd: '2026-10-14',
+  memoryBrief: {
+    totalEvents: 2,
+    failedPractices: 1,
+    succeededPractices: 1,
+    topKcCodes: ['PY43-KC-001'],
+    highlights: [],
+  },
+  insights: [],
+  masteryDeltas: [{
+    kcCode: 'PY43-KC-001',
+    currentScore: 0.4,
+    confidence: 0.6,
+    weeklyDelta: 0.1,
+    evidenceCount: 2,
+    evidenceSources: ['PRACTICE_PASS'],
+  }],
+  resourceRuns: [],
 };
 
 function makeRouter() {
@@ -131,7 +153,7 @@ describe('ProfileRoomPage Learner Twin', () => {
   it('stores a weekly Twin prompt for the workshop and navigates there', async () => {
     setActivePinia(createPinia());
     vi.mocked(fetchLearnerTwinState).mockResolvedValue(unassessedState);
-    const promptText = '基于本周证据复习 PY43-KC-001';
+    vi.mocked(fetchWeeklyReport).mockResolvedValue(weeklyReport);
     const ui = useWorkshopUiStore();
     const router = makeRouter();
     await router.push('/profile-room');
@@ -142,21 +164,28 @@ describe('ProfileRoomPage Learner Twin', () => {
           AppLayout: { template: '<div><slot /></div>' },
           ProfileInterviewPanel: true,
           AgentNotebook: true,
-          TwinWeekly: {
-            emits: ['prompt'],
-            template: '<button data-testid="emit-prompt" @click="$emit(\'prompt\', promptText)">prompt</button>',
-            setup() { return { promptText }; },
-          },
         },
       },
     });
     await flushPromises();
 
     await wrapper.get('[data-testid="twin-weekly-summary"]').trigger('click');
-    await wrapper.get('[data-testid="emit-prompt"]').trigger('click');
+    await flushPromises();
+    await wrapper.get('[data-testid="twin-weekly-plan"]').trigger('click');
     await flushPromises();
 
-    expect(ui.pendingPrompt).toBe(promptText);
+    expect(fetchWeeklyReport).toHaveBeenCalled();
+    expect(ui.pendingPrompt).toContain('PY43-KC-001');
+    expect(router.currentRoute.value.path).toBe('/workshop');
+
+    await router.push('/profile-room');
+    await flushPromises();
+    await wrapper.get('[data-testid="twin-weekly-summary"]').trigger('click');
+    await flushPromises();
+    await wrapper.get('[data-testid="twin-mastery-prompt-PY43-KC-001"]').trigger('click');
+    await flushPromises();
+
+    expect(ui.pendingPrompt).toContain('当前掌握约 40%');
     expect(router.currentRoute.value.path).toBe('/workshop');
   });
 });

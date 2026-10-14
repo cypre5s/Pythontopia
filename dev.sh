@@ -135,6 +135,8 @@ set -a
 # shellcheck disable=SC1090
 source "$DEPLOY_DIR/.env"
 set +a
+# Local development has no application-level model request cap; deployment keeps the daily caps.
+export PYT_AI_REQUEST_LIMITS_ENABLED=false
 
 # Compose and the local backend must receive the same per-run service token.
 configured_internal_token="${PYT_RAG_ADMIN_TOKEN:-}"

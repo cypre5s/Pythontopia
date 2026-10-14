@@ -224,9 +224,34 @@ async def test_debug_prompt_preserves_stdout_judge_contract() -> None:
 
     user_prompt = provider.last_messages[-1]["content"]
     assert "改错题仍然是可执行 Python 判题题" in user_prompt
+    assert "错误代码：" in user_prompt
+    assert "至少在一条 test_cases 上退出失败或输出错误" in user_prompt
     assert "stdin 输入" in user_prompt
     assert "stdout 输出" in user_prompt
     assert "至少 3 条 test_cases" in user_prompt
+
+
+@pytest.mark.asyncio
+async def test_factory_uses_authoritative_kc_context_in_prompt() -> None:
+    provider = _StubProvider(LlmResponse(content_json=_good_payload()))
+
+    await build_llm_problem_factory(provider)(
+        chapter=1,
+        stage=1,
+        kc_code="PY43-KC-001",
+        difficulty=1,
+        kc_name="中国计算机发展成就",
+        kc_summary="了解银河一号、龙芯 CPU、神威·太湖之光等发展成果。",
+    )
+
+    user_prompt = provider.last_messages[-1]["content"]
+    assert "中国计算机发展成就" in user_prompt
+    assert "神威·太湖之光" in user_prompt
+    assert "不能只把知识点名称贴在无关题面上" in user_prompt
+    assert "不得只把课程事实当作背景或样例文字" in user_prompt
+    assert "不能让学生输入一个数值后原样回显来凑 KC" in user_prompt
+    assert "摘要里的具体术语作为字符串常量实际输出" in user_prompt
+    assert "不能仅设计把输入原样回显的题目" in user_prompt
 
 
 @pytest.mark.asyncio

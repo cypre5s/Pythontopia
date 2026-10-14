@@ -58,8 +58,8 @@ export interface ChallengePreloadState {
 const IDLE_PRELOAD: ChallengePreloadState = {
   phase: 'idle', attempts: 0, errorMessage: null, updatedAt: null,
 };
-const PREFETCH_POLL_INTERVAL_MS = 500;
-const PREFETCH_MAX_POLLS = 10;
+const PREFETCH_POLL_INTERVAL_MS = 5_000;
+const PREFETCH_MAX_POLLS = 36; // Boss Graph generation can take up to 180 seconds.
 
 export interface UseChallengeJudgeReturn {
   fetchProblem: (args: ChallengeProblemArgs) => Promise<BossProblemDto>;

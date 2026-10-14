@@ -171,8 +171,25 @@ function back() {
 
 <template>
   <AppLayout>
+    <section
+      v-if="isForbidden"
+      class="cd-banner cd-banner--error cd-banner--action cd-forbidden"
+      role="alert"
+      data-testid="teacher-forbidden"
+    >
+      <span>你没有查看这个班级的权限（仅班级归属教师可进入）。</span>
+      <PyButton
+        variant="secondary"
+        size="sm"
+        test-id="teacher-detail-back"
+        @click="back"
+      >
+        返回班级列表
+      </PyButton>
+    </section>
     <!-- dashboard-01 pattern: sidebar + inset -->
     <div
+      v-else
       class="cd-shell"
       data-testid="teacher-detail"
     >
@@ -572,6 +589,9 @@ function back() {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+}
+.cd-forbidden {
+  margin: 16px;
 }
 .cd-content {
   flex: 1 1 auto;

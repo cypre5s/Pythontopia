@@ -9,6 +9,7 @@ import { isExamActive, isExamBlockedPath } from '@/components/chaptertest';
 declare module 'vue-router' {
   interface RouteMeta {
     adminOnly?: boolean;
+    teacherOnly?: boolean;
   }
 }
 
@@ -195,20 +196,20 @@ export const router = createRouter({
       path: '/teacher',
       name: 'teacher',
       component: () => import('@/pages/TeacherPage.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, teacherOnly: true },
     },
     {
       path: '/teacher/classroom/:id',
       name: 'teacher-classroom',
       component: () => import('@/pages/teacher/ClassroomDetail.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, teacherOnly: true },
     },
     // AI 出题教师审核页：队列、决定与审计信息均由后端持久化，路由与 API 双重鉴权。
     {
       path: '/teacher/review',
       name: 'teacher-review',
       component: () => import('@/pages/teacher/TeacherReviewPage.vue'),
-      meta: { requiresAuth: true },
+      meta: { requiresAuth: true, teacherOnly: true },
     },
     // 章末 BOSS 副本（4 阶段 AI 出题）：本章通过章末大测试（≥1★）后开放的可选挑战。
     // 入口在冒险地图的章节抽屉（ChapterStagePanel「挑战第 N 章 BOSS」），
@@ -339,6 +340,10 @@ router.beforeEach((to: RouteLocationNormalized) => {
   }
   if (to.meta.adminOnly && session.role !== 'ADMIN') {
     toast.show('需要管理员权限才能打开管理后台。', 'error');
+    return { name: 'world', replace: true };
+  }
+  if (to.meta.teacherOnly && session.role !== 'TEACHER' && session.role !== 'ADMIN') {
+    toast.show('需要教师或管理员权限才能打开教师页面。', 'error');
     return { name: 'world', replace: true };
   }
   if (to.meta.guestOnly && session.isAuthenticated) {

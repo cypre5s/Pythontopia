@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -22,7 +23,7 @@ import org.springframework.jdbc.core.RowMapper;
 class TutorDailyRequestLimitServiceTest {
 
   private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
-  private final TutorDailyRequestLimitService service = new TutorDailyRequestLimitService(jdbc);
+  private final TutorDailyRequestLimitService service = new TutorDailyRequestLimitService(jdbc, true);
 
   @Test
   void reservesOneOfThirtyRequestsAtomicallyForTheAccountAndShanghaiDate() {
@@ -54,6 +55,16 @@ class TutorDailyRequestLimitServiceTest {
             any(LocalDate.class),
             org.mockito.ArgumentMatchers.eq(300));
     assertThat(providerSql.getValue()).contains("ai_provider_daily_request_usage", "ON CONFLICT");
+  }
+
+  @Test
+  void localUnlimitedModeDoesNotReserveAccountOrProviderUsage() {
+    TutorDailyRequestLimitService unlimitedService =
+        new TutorDailyRequestLimitService(jdbc, false);
+
+    unlimitedService.reserve(42L);
+
+    verifyNoInteractions(jdbc);
   }
 
   @Test

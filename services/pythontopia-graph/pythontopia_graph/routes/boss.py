@@ -20,6 +20,7 @@ from pythontopia_graph.schemas.profile import GoalKind, Major
 from pythontopia_graph.agents.boss.evaluator import build_failure_hint, evaluate_boss_attempt
 from pythontopia_graph.agents.boss.expedition_selector import select_frontier
 from pythontopia_graph.agents.boss.golden_problems import get_golden_problem
+from pythontopia_graph.agents.boss.grounding import extract_kc_grounding_keywords
 from pythontopia_graph.agents.boss.kc_map import chapter_default_kc
 from pythontopia_graph.agents.boss.llm_factory import build_llm_problem_factory
 from pythontopia_graph.agents.boss.orchestrator import generate_boss_problem
@@ -74,6 +75,8 @@ class BossProblemRequest(BaseModel):
     chapter: int = Field(ge=1, le=7)
     stage: int = Field(ge=1, le=4)
     kcCode: str = Field(default="", description="目标 KC 代码；空则用 chapter 默认 KC")
+    kcName: str = Field(min_length=1, max_length=128, description="课程包中的权威 KC 名称")
+    kcSummary: str = Field(default="", max_length=4000, description="课程包中的权威 KC 内容摘要")
     difficulty: int | None = Field(default=None, ge=1, le=5)
     preferredKc: str | None = Field(default=None)
     preferredKind: BossProblemKind | None = Field(default=None)
@@ -183,6 +186,7 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
 
     provider = _safe_provider()
     factory = build_llm_problem_factory(provider)
+    kc_keywords = {kc_code: extract_kc_grounding_keywords(body.kcName, body.kcSummary)}
     # preferredKind + profileSignals 透传 orchestrator，供 PracticeAgent 按画像出题。
     profile_signals_dict = (
         body.profileSignals.model_dump(exclude_none=True) if body.profileSignals else None
@@ -192,9 +196,12 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
             chapter,
             stage,
             kc_code=kc_code,
+            kc_name=body.kcName,
+            kc_summary=body.kcSummary,
             difficulty=difficulty,
             problem_factory=factory,
             golden_fallback=golden,
+            kc_keywords=kc_keywords,
             max_retries=BOSS_PROBLEM_MAX_RETRIES,
             preferred_kind=body.preferredKind,
             profile_signals=profile_signals_dict,
@@ -205,9 +212,12 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
             chapter,
             stage,
             kc_code=kc_code,
+            kc_name=body.kcName,
+            kc_summary=body.kcSummary,
             difficulty=difficulty,
             problem_factory=_async_raise_factory,
             golden_fallback=golden,
+            kc_keywords=kc_keywords,
             max_retries=0,
             preferred_kind=body.preferredKind,
             profile_signals=profile_signals_dict,

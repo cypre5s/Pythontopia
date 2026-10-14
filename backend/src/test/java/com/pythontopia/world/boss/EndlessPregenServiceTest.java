@@ -31,11 +31,12 @@ class EndlessPregenServiceTest {
 
   @Mock BossGraphClient graphClient;
   @Mock JdbcTemplate jdbcTemplate;
+  @Mock com.pythontopia.world.boss.review.BossProblemReviewRepository reviewRepository;
   private EndlessPregenService service;
 
   @BeforeEach
   void setUp() {
-    service = new EndlessPregenService(graphClient, jdbcTemplate, new ObjectMapper());
+    service = new EndlessPregenService(graphClient, jdbcTemplate, new ObjectMapper(), null, reviewRepository);
     lenient()
         .when(jdbcTemplate.queryForObject(
             contains("SELECT EXISTS"), eq(Boolean.class), anyLong(), anyLong(), anyInt()))
@@ -55,6 +56,7 @@ class EndlessPregenServiceTest {
     service.generatePrefetch(
         19L, 7L, 1, 2, "PY43-KC-001", 2, "PY43-KC-001", "dual_track", null, null, null, 1);
 
+    verify(reviewRepository).createIfNotDuplicate(7L, "dual_track", reviewedProblem());
     verify(jdbcTemplate)
         .update(
             contains("status = 'READY'"), anyString(), eq("ai-1"), anyString(), eq(19L), eq(7L),

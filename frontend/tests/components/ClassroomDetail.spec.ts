@@ -268,6 +268,20 @@ describe('ClassroomDetail', () => {
     expect(wrapper.find('[data-testid="remediation-packs"]').exists()).toBe(false);
   });
 
+  it('班级接口返回 403 时只显示无权限说明，不展示教师操作或旧班级数据', async () => {
+    apiMocks.listClassroomMembersByStatus.mockRejectedValue(new Error('403 FORBIDDEN'));
+
+    await router.push('/teacher/classroom/9');
+    const wrapper = mountClassroomDetail();
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="teacher-forbidden"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="regenerate-join-code"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="remediation-trigger"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="quest-tab"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="teacher-detail-back"]').exists()).toBe(true);
+  });
+
   it('请求进行中 → 按钮禁用并显示「生成中…」，完成后恢复', async () => {
     let resolveFn: (value: RemediationResultDto) => void = () => {};
     const pending = new Promise<RemediationResultDto>((resolve) => {

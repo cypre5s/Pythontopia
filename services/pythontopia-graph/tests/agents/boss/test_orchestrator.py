@@ -38,6 +38,60 @@ def test_run_all_reviews_happy_path() -> None:
     assert review.passed, review.issues
 
 
+def test_debug_problem_rejects_a_correct_snippet(fake_piston_endpoint) -> None:
+    problem = _good_problem()
+    problem.kind = "debug"
+    problem.statement = (
+        "修复下面的代码。错误代码：\n"
+        "a, b = map(int, input().split())\nprint(a + b)\n\n"
+        "输入格式：一行两个整数。"
+    )
+
+    review = run_all_reviews(problem)
+
+    assert not review.passed
+    assert any(issue.code == "debug_snippet_not_buggy" for issue in review.issues)
+
+
+def test_debug_problem_accepts_a_snippet_that_fails_a_case(fake_piston_endpoint) -> None:
+    problem = _good_problem()
+    problem.kind = "debug"
+    problem.statement = (
+        "修复下面的代码。错误代码：\n"
+        "print('always 0')\n\n"
+        "输入格式：一行两个整数。"
+    )
+
+    review = run_all_reviews(problem)
+
+    assert review.passed, review.issues
+
+
+def test_grounding_rejects_a_question_without_the_authoritative_kc_name() -> None:
+    review = run_all_reviews(
+        _good_problem(),
+        kc_keywords={"PY43-KC-001": ["中国计算机发展成就"]},
+        skip_self_test=True,
+    )
+
+    assert not review.passed
+    assert any(issue.code == "kc_keyword_miss" for issue in review.issues)
+
+
+def test_grounding_accepts_a_concrete_term_from_kc_summary() -> None:
+    problem = _good_problem()
+    problem.statement += " 本题展示神威·太湖之光的名称。"
+    problem.reference_solution = "print('神威·太湖之光')"
+
+    review = run_all_reviews(
+        problem,
+        kc_keywords={"PY43-KC-001": ["中国计算机发展成就", "神威·太湖之光"]},
+        skip_self_test=True,
+    )
+
+    assert review.passed, review.issues
+
+
 def test_run_all_reviews_fails_struct_early() -> None:
     p = _good_problem()
     p.title = ""
@@ -177,6 +231,33 @@ def test_generate_boss_problem_passes_temperature_bump_to_factory() -> None:
     assert len(seen_temperatures) == 3
     assert seen_temperatures[1] > seen_temperatures[0]
     assert seen_temperatures[2] > seen_temperatures[1]
+
+
+def test_generate_boss_problem_passes_authoritative_kc_context_to_factory() -> None:
+    seen_context: dict[str, str | None] = {}
+
+    async def recording_factory(**kwargs) -> BossProblem:
+        seen_context["kc_name"] = kwargs.get("kc_name")
+        seen_context["kc_summary"] = kwargs.get("kc_summary")
+        return _good_problem()
+
+    asyncio.run(
+        generate_boss_problem(
+            chapter=1,
+            stage=1,
+            kc_code="PY43-KC-001",
+            difficulty=1,
+            problem_factory=recording_factory,
+            kc_name="中国计算机发展成就",
+            kc_summary="了解龙芯 CPU 等发展成果。",
+            max_retries=1,
+        )
+    )
+
+    assert seen_context == {
+        "kc_name": "中国计算机发展成就",
+        "kc_summary": "了解龙芯 CPU 等发展成果。",
+    }
 
 
 def test_run_all_reviews_fixed_self_test_response_succeeds() -> None:

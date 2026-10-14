@@ -93,6 +93,7 @@ describe('useChallengeJudge preload state', () => {
   });
 
   it('waits for a pending prefetch to become ready before requesting the challenge', async () => {
+    vi.useFakeTimers();
     apiMock.prefetchBossProblem.mockResolvedValueOnce(status('PENDING'));
     apiMock.fetchBossPrefetchStatus
       .mockResolvedValueOnce(status('PENDING'))
@@ -100,9 +101,33 @@ describe('useChallengeJudge preload state', () => {
     const judge = useChallengeJudge();
     await judge.prefetchProblem(ARGS);
 
-    await expect(judge.fetchProblem(ARGS)).resolves.toEqual(PROBLEM);
+    const challenge = expect(judge.fetchProblem(ARGS)).resolves.toEqual(PROBLEM);
+    await vi.runAllTimersAsync();
+    await challenge;
 
     expect(apiMock.fetchBossPrefetchStatus).toHaveBeenCalledTimes(2);
+    expect(apiMock.requestBossProblem).toHaveBeenCalledTimes(1);
+  });
+
+  it('continues waiting beyond five seconds while the server is still generating', async () => {
+    vi.useFakeTimers();
+    apiMock.prefetchBossProblem.mockResolvedValueOnce(status('PENDING'));
+    let polls = 0;
+    apiMock.fetchBossPrefetchStatus.mockImplementation(async () => {
+      polls += 1;
+      return status(polls <= 11 ? 'PENDING' : 'READY');
+    });
+    const judge = useChallengeJudge();
+    await judge.prefetchProblem(ARGS);
+
+    const challenge = judge.fetchProblem(ARGS).then(
+      (problem) => ({ problem }),
+      (error: unknown) => ({ error }),
+    );
+    await vi.runAllTimersAsync();
+
+    await expect(challenge).resolves.toEqual({ problem: PROBLEM });
+    expect(apiMock.fetchBossPrefetchStatus).toHaveBeenCalledTimes(12);
     expect(apiMock.requestBossProblem).toHaveBeenCalledTimes(1);
   });
 

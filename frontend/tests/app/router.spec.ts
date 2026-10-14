@@ -147,6 +147,54 @@ describe('/admin 管理后台路由与角色边界', () => {
   });
 });
 
+describe('/teacher 教师路由与角色边界', () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    localStorage.clear();
+  });
+
+  it('registers teacher-only routes for the teacher workspace and its protected pages', () => {
+    for (const path of ['/teacher', '/teacher/classroom/9', '/teacher/review']) {
+      expect(router.resolve(path).meta.teacherOnly).toBe(true);
+    }
+  });
+
+  it('redirects a signed-in student away from a teacher classroom URL', async () => {
+    const session = useSessionStore();
+    session.user = {
+      id: 12,
+      username: 'student',
+      displayName: '学生',
+      role: 'STUDENT',
+    };
+    session.token = 'test-token';
+    session.expiresAt = new Date(Date.now() + 3_600_000).toISOString();
+    const toast = useToastStore();
+    const showSpy = vi.spyOn(toast, 'show');
+
+    await router.push('/teacher/classroom/9');
+
+    expect(router.currentRoute.value.path).toBe('/world');
+    expect(showSpy).toHaveBeenCalledWith('需要教师或管理员权限才能打开教师页面。', 'error');
+  });
+
+  it('allows a teacher into the teacher workspace', async () => {
+    const session = useSessionStore();
+    session.user = {
+      id: 21,
+      username: 'teacher',
+      displayName: '教师',
+      role: 'TEACHER',
+    };
+    session.token = 'test-token';
+    session.expiresAt = new Date(Date.now() + 3_600_000).toISOString();
+
+    await router.push('/teacher/review');
+
+    expect(router.currentRoute.value.path).toBe('/teacher/review');
+  });
+});
+
 describe('分块自愈跳转的站内路径断言（开放重定向防护）', () => {
   it('普通站内路径原样放行', () => {
     expect(toSafeInternalPath('/mainline-map')).toBe('/mainline-map');

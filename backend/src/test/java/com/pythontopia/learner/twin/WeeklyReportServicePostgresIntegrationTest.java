@@ -360,7 +360,7 @@ class WeeklyReportServicePostgresIntegrationTest {
   @Test
   void concurrentTutorRequestsCannotExceedTheDailyAccountCap() throws Exception {
     long userId = insertUser("tutor-daily-limit-owner");
-    TutorDailyRequestLimitService limitService = new TutorDailyRequestLimitService(jdbc);
+    TutorDailyRequestLimitService limitService = new TutorDailyRequestLimitService(jdbc, true);
     TransactionTemplate transaction =
         new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource()));
     int attempts = 36;
@@ -407,7 +407,7 @@ class WeeklyReportServicePostgresIntegrationTest {
   void concurrentRequestsAcrossAccountsCannotExceedTheSharedProviderCap() throws Exception {
     var userIds = new ArrayList<Long>();
     for (int i = 0; i < 40; i++) userIds.add(insertUser("ai-provider-limit-owner-" + i));
-    TutorDailyRequestLimitService limitService = new TutorDailyRequestLimitService(jdbc);
+    TutorDailyRequestLimitService limitService = new TutorDailyRequestLimitService(jdbc, true);
     TransactionTemplate transaction =
         new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource()));
     int attempts = 400;
