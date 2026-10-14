@@ -2,6 +2,14 @@
 
 日期：2026-10-12 至 2026-10-14
 
+## 2026-10-14 增量：在线模型出口与语音禁用复核
+
+- 运行态 Graph provider 摘要为 `OpenAiCompatProvider`、HTTPS `api.deepseek.com`；Spark key 缺失，fine-tuned provider 关闭。provider 工厂对非 DeepSeek 地址/模型 fail-fast；研究实验室在线 client 有同样的 DeepSeek host/model allowlist，RAG 仅使用本地 hash 或本地 BGE embedding。
+- TTS、ASR、讯飞文生图和讯飞图片理解的 properties 均固定 `isEnabled() == false`；17 个 Java 回归覆盖凭据非空仍不可用、媒体路由与预算分类。Web Speech/录音 composable 当前没有业务调用方。
+- 经项目 provider 发起两次真实请求：文本精确回显和合成 PNG 颜色识别都成功并返回文本；`LlmResponse` 只含文本/JSON/tool-call 字段，没有图片字段。provider、研究实验室、RAG 相关定向测试共 91 项通过，另有 Graph 既有 pytest 标记警告。
+- 复查 Tutor Markdown 外链图片风险：共享 `MarkdownView` 已删除跨域 `<img>` 并显示 alt 文本；现有页面回归隔离复跑 6 项通过。
+- 未检查供应商 token 和账单；真实请求仅证明当前调用路径，不用于推算费用。
+
 ## 2026-10-14 补充：主线补星并发检查
 
 - 检查 `MainlineRecoveryService`、`ChapterStarService` 的全部调用方后，确认用户/章节的每日远征补星检查与星级写入之间存在 TOCTOU 竞态：同一日两个并发请求都可能通过检查并写入重复审计事件。错题补星与核心星级重算也会争用同一份 JSON breakdown。

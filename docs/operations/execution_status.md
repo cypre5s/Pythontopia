@@ -14,7 +14,10 @@
 - 修复额度预留早于校验/授权的问题：改为 Spring 方法拦截器，在 MVC 入参校验后再检查会话与允许角色并预留；移除相关控制器的 AOP `@Validated`，使用 Spring MVC 原生方法校验；补齐统一 400 响应。定向 Maven 35/35 通过。
 - 新增章节级事务 advisory lock，串行化无尽远征/错题补星的限额检查与写入，并防止核心星级重算覆盖并发补星。PostgreSQL 回归先失败（两个请求都发放），修复后并发集成 + 补星/星级单元测试共 14/14 通过。
 - 续验 `tests/test_provider_tool_calling.py tests/test_openai_compat_provider.py`：46 passed，1 条既有 pytest 标记警告。
-- DeepSeek 本项目只使用图片输入 + 文本输出；未接入图像生成接口。此次确认未改动 DeepSeek 请求与解析代码，未产生新模型请求。
+- DeepSeek 本项目只使用图片输入 + 文本输出；未接入图像生成接口。前次 provider 回归复核未改动请求/解析代码；本次 provider 审计另发了两次真实验证请求，见下条。
+- 对实际运行的 Graph 容器只打印脱敏 provider 摘要：`OpenAiCompatProvider`、`api.deepseek.com`、Spark key 缺失、fine-tuned 关闭。经项目 provider 新发 2 次真实 DeepSeek 请求，纯文本校验词和合成 PNG 颜色识别都返回文本；没有调用语音/图像生成服务。
+- provider 审计回归：Graph 53、研究实验室 provider 32、RAG 本地 embedder 6、后端媒体禁用与路由 17 项通过；DeepSeek 生产 readiness/model contract 脚本通过。
+- 复查先前记录的 Tutor Markdown 外链图片隐私风险：共享 `MarkdownView` 已在写入 DOM 前移除跨域图片并显示 alt 文本，保留同源图片；现有 `MarkdownView.spec.ts` 隔离复跑 6/6 通过，无需重复新增防护代码。
 - 管理台 5 个 Vitest 文件 / 31 项、typecheck、定向 ESLint 通过；Playwright 模拟 API 检查 3 页的 1440px 与 320px 布局、窄屏抽屉和用户状态对话框，页面溢出 0、JS 错误 0。期间排除了全局像素按钮阴影对管理端的污染。
 - 前端全量 Vitest 270 files / 2568 tests、typecheck、build 通过；ESLint 0 errors / 7 warnings。Graph 最新全量 1842 passed / 1 skipped；RAG 158 passed / 2 skipped。
 - 远征随机节点集成夹具已修复，`ExpeditionRunPostgresIntegrationTest` 隔离 28/28 通过；本次 Maven 全量 1393 tests、0 failures、6 errors；5 个 Testcontainers 类隔离 16/16、长期仿真类隔离 1/1 通过。失败均为全量串跑时的 Docker 动态端口绑定冲突或测试库连接拒绝。
