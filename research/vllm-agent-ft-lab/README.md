@@ -2,6 +2,10 @@
 
 This is an isolated research lab for local Qwen3.5/vLLM baseline evaluation and later LoRA fine-tuning. It intentionally does not modify Pythontopia web frontend or backend code.
 
+> **Current provider policy:** outbound model API requests from this lab are restricted to `https://api.deepseek.com` and the `deepseek-flash` / `deepseek-v4-pro` models. Credentials come from `PYT_OPENAI_API_KEY` or `OPENAI_API_KEY`; live CLI tools no longer accept API keys as command-line arguments. The local Qwen serving and evaluation commands below are historical research records and fail closed if they try to use Qwen as an API provider. Offline Qwen training and evaluation remain separate from model API calls.
+
+The command examples below record earlier Qwen experiments. Their live Qwen endpoint commands are no longer runnable under the current provider policy; use the offline training/evaluation tools for those artifacts and the `run_baseline.py` DeepSeek defaults for live API evaluation.
+
 ## Current Status
 
 - GPU: NVIDIA GeForce RTX 5060 Laptop GPU, 8 GB VRAM.

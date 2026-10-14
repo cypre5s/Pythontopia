@@ -110,6 +110,7 @@ class MediaJobServiceTest {
   @Test
   void idempotentHitReturnsCachedWithoutComposing() {
     MediaJob cached = job(10L, MediaJobStatus.SUCCESS, 777L, null);
+    when(compositionService.isImageGenerationEnabled()).thenReturn(true);
     when(jobRepository.findCachedSuccess(eq(USER_ID), Mockito.anyString()))
         .thenReturn(Optional.of(cached));
     when(assetRepository.findById(777L)).thenReturn(Optional.of(videoAsset(777L)));
@@ -133,11 +134,51 @@ class MediaJobServiceTest {
   }
 
   @Test
+  void mediaJobPlanDoesNotAdvertiseDisabledVoiceSynthesis() {
+    assertThat(streamRegistry.planNodes())
+        .extracting(node -> node.get("role_key"))
+        .doesNotContain("narrator");
+  }
+
+  @Test
+  void disabledImageProviderRejectsBeforePersistingOrQueueing() {
+    when(jobRepository.findCachedSuccess(eq(USER_ID), Mockito.anyString()))
+        .thenReturn(Optional.empty());
+    when(compositionService.isImageGenerationEnabled()).thenReturn(false);
+
+    assertThatThrownBy(() -> service.submit(USER_ID, sampleRequest()))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> {
+              assertThat(error.status()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+              assertThat(error.code()).isEqualTo("VIDEO_COMPOSE_UNAVAILABLE");
+            });
+
+    verify(jobRepository, never()).insert(any(), any(), any(), any());
+    verify(compositionService, never())
+        .compose(any(), anyList(), any(StoryboardCompositionService.ProgressSink.class));
+  }
+
+  @Test
+  void disabledImageProviderRejectsCachedVideoInsteadOfReturningIt() {
+    when(compositionService.isImageGenerationEnabled()).thenReturn(false);
+
+    assertThatThrownBy(() -> service.submit(USER_ID, sampleRequest()))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> assertThat(error.code()).isEqualTo("VIDEO_COMPOSE_UNAVAILABLE"));
+
+    verify(jobRepository, never()).findCachedSuccess(eq(USER_ID), Mockito.anyString());
+    verify(assetRepository, never()).findById(Mockito.anyLong());
+  }
+
+  @Test
   void statusFlowsPendingThenRunningThenSuccess() {
     when(jobRepository.findCachedSuccess(eq(USER_ID), Mockito.anyString()))
         .thenReturn(Optional.empty());
     when(jobRepository.insert(eq(USER_ID), eq("STORYBOARD_VIDEO"), Mockito.anyString(), Mockito.anyString()))
         .thenReturn(job(42L, MediaJobStatus.PENDING, null, null));
+    when(compositionService.isImageGenerationEnabled()).thenReturn(true);
     when(compositionService.isAvailable()).thenReturn(true);
     when(compositionService.compose(
             eq(USER_ID), anyList(), any(StoryboardCompositionService.ProgressSink.class)))
@@ -161,6 +202,7 @@ class MediaJobServiceTest {
         .thenReturn(Optional.empty());
     when(jobRepository.insert(eq(USER_ID), eq("STORYBOARD_VIDEO"), Mockito.anyString(), Mockito.anyString()))
         .thenReturn(job(43L, MediaJobStatus.PENDING, null, null));
+    when(compositionService.isImageGenerationEnabled()).thenReturn(true);
     when(compositionService.isAvailable()).thenReturn(false);
 
     MediaJobService.SubmitResult result = service.submit(USER_ID, sampleRequest());
@@ -180,6 +222,7 @@ class MediaJobServiceTest {
         .thenReturn(Optional.empty());
     when(jobRepository.insert(eq(USER_ID), eq("STORYBOARD_VIDEO"), Mockito.anyString(), Mockito.anyString()))
         .thenReturn(job(44L, MediaJobStatus.PENDING, null, null));
+    when(compositionService.isImageGenerationEnabled()).thenReturn(true);
     when(compositionService.isAvailable()).thenReturn(true);
     when(compositionService.compose(
             eq(USER_ID), anyList(), any(StoryboardCompositionService.ProgressSink.class)))

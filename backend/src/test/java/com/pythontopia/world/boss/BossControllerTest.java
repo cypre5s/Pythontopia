@@ -13,7 +13,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.JwtAuthenticationFilter;
+import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossAttemptResultDto;
@@ -23,6 +25,8 @@ import com.pythontopia.world.boss.dto.BossProblemRequest;
 import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
 import java.util.List;
 import java.util.UUID;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -31,6 +35,8 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 
 @WebMvcTest(BossController.class)
 @AutoConfigureMockMvc(addFilters = false)
@@ -44,6 +50,16 @@ class BossControllerTest {
   @MockBean BossService service;
 
   @MockBean JwtAuthenticationFilter jwtAuthenticationFilter;
+
+  @BeforeEach
+  void authenticateAsStudent() {
+    authenticate(new CurrentUserPrincipal(7L, "student", Role.STUDENT));
+  }
+
+  @AfterEach
+  void clearAuthentication() {
+    SecurityContextHolder.clearContext();
+  }
 
   @Test
   void returns200WithBossProblem() throws Exception {
@@ -206,6 +222,22 @@ class BossControllerTest {
   }
 
   @Test
+  void teacherCannotSubmitBossAttempt() throws Exception {
+    authenticate(new CurrentUserPrincipal(2L, "teacher", Role.TEACHER));
+
+    mockMvc
+        .perform(
+            post("/api/world/boss/1/attempt")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new BossAttemptRequest("ai-1", 1, 1, "print(5)", 10, UUID.randomUUID()))))
+        .andExpect(status().isForbidden());
+
+    verifyNoInteractions(service);
+  }
+
+  @Test
   void rejects400WhenAttemptHasEmptyCode() throws Exception {
     mockMvc
         .perform(
@@ -228,5 +260,10 @@ class BossControllerTest {
                     objectMapper.writeValueAsString(
                         new BossAttemptRequest("ai-1", 1, 1, "print(1)", 5, UUID.randomUUID()))))
         .andExpect(status().is5xxServerError());
+  }
+
+  private void authenticate(CurrentUserPrincipal principal) {
+    SecurityContextHolder.getContext()
+        .setAuthentication(new UsernamePasswordAuthenticationToken(principal, null, List.of()));
   }
 }

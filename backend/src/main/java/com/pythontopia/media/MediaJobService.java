@@ -82,6 +82,13 @@ public class MediaJobService {
   public SubmitResult submit(Long userId, StoryboardVideoRequest request) {
     String fingerprint = fingerprint(request);
 
+    if (!compositionService.isImageGenerationEnabled()) {
+      throw new BusinessException(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "VIDEO_COMPOSE_UNAVAILABLE",
+          "故事板图片生成服务未启用，无法提交视频合成任务");
+    }
+
     Optional<MediaJob> cached = jobRepository.findCachedSuccess(userId, fingerprint);
     if (cached.isPresent()) {
       MediaJob hit = cached.get();

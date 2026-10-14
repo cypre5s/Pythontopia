@@ -31,7 +31,6 @@ def main() -> None:
     parser.add_argument("--backend", choices=("fixture", "live"), default="live")
     parser.add_argument("--env-file", default="deploy/.env")
     parser.add_argument("--base-url")
-    parser.add_argument("--api-key")
     parser.add_argument("--model")
     parser.add_argument(
         "--proxy-url",
@@ -77,7 +76,6 @@ def main() -> None:
         settings = resolve_teacher_settings(
             args.env_file,
             base_url=args.base_url,
-            api_key=args.api_key,
             model=args.model,
         )
         secrets = (settings["api_key"],)

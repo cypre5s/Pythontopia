@@ -1,5 +1,59 @@
 # Changelog
 
+## 2026-10-14 — 章测并发、Boss 入口保护与故障兜底复验
+
+- 章测提交现在锁定学生自己的测试记录直到本地判题结束，并限制请求最多 100 道、答案键 128 字符、答案值 8192 字符，防止同卷并发重复判题及超大输入。
+- Boss 判题按账号对不同 attempt ID 做 10 秒节流，重放相同 attempt ID 仍保持幂等；Boss 控制器统一限制学生角色。Graph 的重试熔断错误现在会映射为已有的 `RestClientException` 故障路径，使 Graph 不可用时能正确进入本地 Piston 判题兜底。
+- 浏览器实际远征旅程通过普通节点正确答案、一次错误扣除服务端体力、换题重试通过，并完成复盘和休息节点；普通题的本地 Piston 判题返回通过。最终 Boss 场景的真实提交/击中动画仍未通过浏览器完整验证。
+- 验证：后端 8 个定向测试类 / 104 项通过（含 PostgreSQL/Testcontainers 并发与去重集成）；Phaser Boss 场景和单画布切换 2 个测试文件 / 5 项通过；前端 typecheck、`git diff --check` 通过。用于浏览器的两个本地合成账号已删除。
+- 本轮未发起 DeepSeek 请求。历史模型请求计数与供应商账单仍待核对；Graph 保持停止。
+
+## 2026-10-14 — Bug Mine FIX_BUG 重复掌握度事件
+
+- 同一 Bug Mine 通过提交会先自动完成 FIX_BUG 任务，随后关闭会话；此前两处都发出 `DebugResolved`，同一次答案会写入两条 `DEBUG_FIX` 掌握度事件。`QuestService` 现在让有已验证 submission 证据的 FIX_BUG 完成由 Bug Mine 会话发布唯一调试事件，保留无提交证据的既有任务事件行为。
+- TDD：Testcontainers 端到端回归先复现 `DEBUG_FIX=2`，修复后通过并断言为 1；`QuestServiceTest` 8 项和 `Stage10BugMineAcceptanceIntegrationTest#retrySubmitResolvedSessionAndIncrementsMastery` 通过。未调用 DeepSeek。
+
+## 2026-10-14 — Tutor 账号额度绕过复核
+
+- 确认 Tutor 普通问答与 AutoGen 工作流都在调用 Graph 前，以 `userId` 预占上海时区每日额度；`conversationId` 不参与计数。现有限额为每账号 30 次、全站 300 次/日，PostgreSQL 原子 upsert 并同事务提交，旧计数保留 90 天。
+- 当前快照复验 `TutorDailyRequestLimitServiceTest` 通过；额度耗尽时为 HTTP 429，且不会进入 Graph 请求。额度按入口请求计数，一次工作流可能包含多次模型调用，不能视作 token 或金额硬上限。
+
+## 2026-10-14 — 研究模型请求收口到 DeepSeek
+
+- 研究共用 `OpenAICompatClient` 只接受 HTTPS `api.deepseek.com`、默认/443 端口及 Graph 已有的 `deepseek-flash` / `deepseek-v4-pro` 白名单；不跟随 HTTP 重定向，防止授权头随目标跳转。
+- baseline / A-B-C / 教师投票及 Graph 路由诊断 CLI 移除 API/internal token 参数，密钥只从进程环境或教师工具既有 `.env` 读取；baseline 和 A/B 默认模型切到 DeepSeek。旧 Qwen 在线评测命令在共享客户端处 fail closed，离线训练不受影响。
+- 验证：研究测试在缺少 `torch` 的环境中排除两个训练模块后 `321 passed`；DeepSeek host/model、重定向及 5 个 CLI 参数回归均包含在内。全套研究测试收集被两个 `torch` 导入错误阻断；未发起模型/API 请求。
+
+## 2026-10-14 — Tutor 本地执行轨迹与管理台链接收尾
+
+- Tutor 的 `EXECUTION_TRACE` 复用现有 Pyodide 浏览器轨迹服务，执行当前编辑器代码与首个样例输入；输入保留原始空格和换行。卡片标记为本地预览，不用于判题或掌握度，也不写工作流反馈；无代码或执行失败时提示用户，不回退到 Graph。
+- 运维审核链接只对 `/workshop`、`/teacher/review`、`/admin/problem-reviews` 白名单路径启用；未知路径保持文本。管理侧栏数字徽标改为内联语义 SVG。
+- 当前 Web 验证：Vitest 269 files / 2546 tests、typecheck、production build 通过；ESLint 0 errors / 7 warnings（两条未改组件 prop 默认值、五条账号隔离测试多组件提示）。
+- Tutor 的 `runTrace` 在组件测试中使用 mock，未做浏览器真实 Pyodide 冒烟。没有新增 DeepSeek 请求；累计模型请求日志仍可能为 36，超出 30 次上限的风险和供应商账单/token 用量尚未核实，Graph 保持停止。
+
+## 2026-10-14 — DeepSeek、媒体与远征浏览器复核
+
+- 图片 provider 关闭时先执行禁用策略检查，再查媒体缓存；旧缓存视频不再绕过当前禁用设置。回归测试覆盖缓存命中拒绝。
+- 工作室停用的配音节点不再显示为“配音师”，统一作为普通工作节点呈现；管理台运维与题目审核列表刷新失败时清除过期快照，避免用户对旧数据继续操作。
+- 浏览器真实注册并进入远征，成功创建 25 节点地图；Graph 服务不可用时题目获取退回课程 Golden 题库并渲染，无浏览器运行时错误。多阶段 Boss 最终真实判题旅程仍未完成。
+- 验证：Web Vitest 269 files / 2542 tests、typecheck、生产 build 通过；ESLint 0 errors / 7 existing warnings；媒体服务定向 Maven 测试通过。全量 Maven 仍有 7 个环境错误（Testcontainers 随机端口冲突和长时模拟 PostgreSQL 连接 reset），0 个断言失败。本轮发现本地 Graph 实际在 `18091` 运行，远征预生成触发了 28 条成功的 `POST /chat/completions` 日志；与此前记录的 8 次 provider 尝试合计可能为 36，可能超过用户设定的 30 次上限。已停止 Graph 容器，不再发起模型调用。日志不能代替供应商账单/token 用量核对。
+- 最终在停止 Graph 后完成一轮本地 Vite → Spring 建局性能采样：2 次预热 + 12 个计时样本，P50 37.80 ms、最近秩 P95 65.70 ms，地图 22–29 节点；14 个 run 均 DELETE 204，最终活跃 run 检查也为 204。此前两轮在 Graph 运行期间测得 P95 558.20 / 2132.90 ms，可能受并发预生成影响；建局接口本身为确定性路径，不调用 Graph。样本只代表本机建局，不覆盖出题、判题或生产负载。
+- 本次浏览器测试使用的临时 `bosscheck.*` 与 `perfcheck.*` 账号留在本地开发数据库；未触碰 ECS/GitHub。由于本轮 Graph 实际已运行，28 条成功模型请求日志已记录并停止 Graph；此前 8 次 Tutor provider 尝试累计后可能超过 30 次限制，供应商实际用量待核对。
+
+## 2026-10-14 — 凭据与媒体边界收尾
+
+- RAG 索引初始化移除公开默认 token，要求有效配置并在缺失时 fail closed；不再把 `.env` 全量 export，也不把管理 token 放入 curl 命令行。Graph 优化脚本拒绝 `--api-key`，密钥继续从环境配置读取；补充了 argv/标准输入边界回归测试。
+- 媒体任务在图片 provider 关闭时于入队前明确失败，避免生成永远无法完成的任务；关闭 TTS 时允许无旁白产物且不误报降级，启用 TTS 后的合成错误会使任务失败。
+- 修复管理台运维页窄屏标题工具栏造成的大块空白，320/390 CSS px 单列、桌面双列且无页面横向溢出；新增服务端刷新请求和布局回归覆盖。行为命名保持项目现有约定，未批量重命名或格式化无关文件。
+- 验证：RAG 脚本 credential test、Graph 优化脚本 credential tests 及 Graph 全量 `1826 passed / 1 skipped`；媒体 Maven 定向测试 `16/16`；Web Vitest `269 files / 2541 tests`、typecheck、build 通过，ESLint `0 errors / 7 existing warnings`。账号隔离和教师/学生 Playwright 流程通过；全量 Maven 为 `1369 tests / 0 assertion failures / 7 environment errors`（6 个 Testcontainers 端口绑定错误、1 个长期模拟 PostgreSQL 连接 reset）。
+- 性能最后复核：Vite 代理到 Spring 远征建局 2 次预热 + 12 个样本，P50 20.81 ms、最近秩 P95 22.02 ms；本轮地图为 22–32 节点，未调用模型；14 个临时 run 删除均返回 204。此采样不代表 Boss 出题/判题或生产负载。
+
+## 2026-10-14 — 管理台运维页布局对齐
+
+- AI 运维概览改用共享 `AdminPanel` 标题、描述与操作区，与用户和题目审核页统一；桌面双列详情在窄屏改为单列，数据仍读取现有 `/api/ai/runtime/operations`。
+- 管理侧栏和其余列表页已采用 Alethicode 的 240px 侧栏、面板标题工具栏和表格交互结构；本轮未增加无后端支撑的菜单、CRUD 或字段。
+- 验证：管理员相关 Vitest 9 files / 33 tests 通过；TypeScript typecheck 与改动文件 ESLint 通过。
+
 ## 2026-10-14 — Tutor 图片隐私与本轮功能收尾验证
 
 - Tutor Markdown 清洗后移除非本站图片 URL，保留同源图片与图片替代文本；回归测试覆盖外站移除和同源保留。

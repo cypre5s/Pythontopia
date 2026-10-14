@@ -54,6 +54,10 @@ public class XfyunTtsService {
     this.objectMapper = objectMapper;
   }
 
+  public boolean isEnabled() {
+    return properties.isEnabled();
+  }
+
   /**
    * 合成语音并返回 mp3 字节。
    *
@@ -63,7 +67,7 @@ public class XfyunTtsService {
    *     上游失败 {@code TTS_FAILED}(502)
    */
   public byte[] synthesize(Long userId, String text, String voice) {
-    if (!properties.isEnabled()) {
+    if (!isEnabled()) {
       throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "TTS_DISABLED", "TTS 服务未配置");
     }
 

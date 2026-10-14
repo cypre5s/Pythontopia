@@ -260,7 +260,7 @@ def test_runner_can_vote_three_reviewer_roles_concurrently(tmp_path: Path) -> No
 
 def test_live_backend_uses_configured_output_budget_and_disables_thinking() -> None:
     backend = OpenAICompatibleTeacherBackend(
-        base_url="https://example.test/v1",
+        base_url="https://api.deepseek.com/v1",
         api_key="secret",
         model="deepseek-v4-pro",
         max_tokens=2400,

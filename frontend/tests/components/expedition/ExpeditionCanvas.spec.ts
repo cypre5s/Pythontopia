@@ -77,6 +77,11 @@ describe('ExpeditionCanvas scene switching', () => {
       BOSS_VIEW,
       expect.objectContaining({ onBossHit: expect.any(Function) }),
     );
+    const bossOptions = phaserMocks.loadExpeditionBoss.mock.calls[0]?.[1] as {
+      onBossHit?: () => void;
+    } | undefined;
+    bossOptions?.onBossHit?.();
+    expect(phaserMocks.playSfx).toHaveBeenCalledWith('sfx_boss_impact');
     expect(phaserMocks.stopExpeditionScene).toHaveBeenCalledWith(game);
     expect(phaserMocks.ensureExpeditionBossSceneStarted).toHaveBeenCalledWith(game);
     expect(phaserMocks.ensureExpeditionSceneStarted).toHaveBeenCalledTimes(1);

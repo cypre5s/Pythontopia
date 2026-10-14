@@ -13,6 +13,7 @@ function scopedStyles(componentPath: string): string {
 }
 
 const layoutStyles = scopedStyles('../../../src/pages/admin/AdminLayout.vue');
+const layoutSource = componentSource('../../../src/pages/admin/AdminLayout.vue');
 const panelStyles = scopedStyles('../../../src/pages/admin/AdminPanel.vue');
 const operationsStyles = scopedStyles('../../../src/pages/admin/AdminOperationsPage.vue');
 const reviewStyles = scopedStyles('../../../src/pages/admin/AdminProblemReviewsPage.vue');
@@ -22,6 +23,14 @@ const reviewSource = componentSource('../../../src/pages/admin/AdminProblemRevie
 const usersSource = componentSource('../../../src/pages/admin/AdminUsersPage.vue');
 
 describe('admin visual shell contract', () => {
+  it('uses semantic inline icons instead of numbered navigation badges', () => {
+    expect(layoutSource.match(/class="admin-nav__icon"/g)).toHaveLength(3);
+    expect(layoutSource.match(/<svg[\s\S]*?aria-hidden="true"/g)).toHaveLength(3);
+    expect(layoutSource).not.toContain('>01</span>');
+    expect(layoutSource).not.toContain('>02</span>');
+    expect(layoutSource).not.toContain('>03</span>');
+  });
+
   it('uses the scoped blue-gray shell and Alethicode active navigation treatment', () => {
     expect(layoutStyles).toMatch(/--admin-bg:\s*linear-gradient\(180deg, #f8fbff 0%, #f3f7fc 100%\);/);
     expect(layoutStyles).toContain('--admin-panel-radius: 16px;');
@@ -47,6 +56,7 @@ describe('admin visual shell contract', () => {
     expect(panelStyles).toMatch(/box-shadow:\s*var\(--admin-panel-shadow\);/);
     expect(panelStyles).toMatch(/padding:\s*20px 22px 16px;/);
     expect(panelStyles).toMatch(/padding:\s*18px 22px 22px;/);
+    expect(panelStyles).toMatch(/@media \(max-width: 640px\) \{[\s\S]*?\.admin-panel__tools\s*\{[^}]*flex:\s*0 1 auto;/);
 
     expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*background:\s*var\(--admin-table-header, #eef4fb\);/);
     expect(tableStyles).toMatch(/\.admin-table-scroll > table th\.admin-table__sticky\s*\{[^}]*position:\s*sticky;[^}]*right:\s*0;/);
@@ -58,7 +68,10 @@ describe('admin visual shell contract', () => {
     expect(reviewStyles).toMatch(/\.review-table td:nth-child\(1\),[\s\S]*?white-space:\s*nowrap;/);
     expect(reviewStyles).toContain('background: var(--admin-table-hover);');
     expect(layoutStyles).toContain('.admin-status--muted');
-    expect(operationsStyles).toMatch(/\.admin-page-heading\s*\{/);
+    expect(operationsStyles).toMatch(/\.admin-operations__panels\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/);
+    expect(operationsStyles).not.toContain('.admin-page-heading');
+    expect(operationsStyles).toContain('@media (max-width: 900px)');
+    expect(operationsStyles).toContain('grid-template-columns: 1fr;');
   });
 
   it('keeps the user table on the same row and cell spacing as the review table', () => {

@@ -1,6 +1,8 @@
 package com.pythontopia.mainline.dto;
 
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.util.Map;
 
 /**
@@ -12,7 +14,9 @@ import java.util.Map;
  * 服务端拒收超时提交时仍会强制覆盖为 true。
  */
 public record ChapterTestSubmitRequest(
-    @NotNull Map<String, String> answers, IntegrityReport integrity) {
+    @NotNull @Size(max = 100)
+        Map<@NotBlank @Size(max = 128) String, @NotNull @Size(max = 8192) String> answers,
+    IntegrityReport integrity) {
 
   public record IntegrityReport(Integer pasteBlocked, Integer blurEvents, Boolean overtime) {}
 }

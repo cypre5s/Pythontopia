@@ -9,7 +9,7 @@
 
 用法::
 
-    # DeepSeek/OpenAI 兼容凭证可来自 deploy/.env（PYT_OPENAI_*）或下述 CLI 覆盖
+    # DeepSeek credentials are read from environment variables, never command-line arguments.
     python3 scripts/optimize_guide_coach.py \
         --task-model deepseek-v4-pro --reflection-model deepseek-flash --auto light
 
@@ -33,7 +33,6 @@ def _parse_args(argv: list[str] | None) -> argparse.Namespace:
     parser.add_argument("--task-model", default=None, help="主任务模型名（默认读 env PYT_OPENAI_MODEL 等）")
     parser.add_argument("--reflection-model", default=None, help="GEPA 反思模型名（默认同 task-model）")
     parser.add_argument("--base-url", default=None, help="OpenAI 兼容 base_url（默认读 env）")
-    parser.add_argument("--api-key", default=None, help="OpenAI 兼容 api_key（默认读 env）")
     parser.add_argument(
         "--auto", default="light", choices=["light", "medium", "heavy"], help="GEPA 预算档"
     )
@@ -51,12 +50,12 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         task_lm = compile_mod.build_openai_lm(
-            args.task_model, base_url=args.base_url, api_key=args.api_key,
+            args.task_model, base_url=args.base_url,
             temperature=0.0, max_tokens=4000,
         )
         reflection_lm = compile_mod.build_openai_lm(
             args.reflection_model or args.task_model, base_url=args.base_url,
-            api_key=args.api_key, temperature=1.0, max_tokens=8000,
+            temperature=1.0, max_tokens=8000,
         )
         path = compile_mod.run_offline_compile(
             PROGRAM_NAME,

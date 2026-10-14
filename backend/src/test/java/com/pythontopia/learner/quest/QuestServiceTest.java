@@ -89,6 +89,21 @@ class QuestServiceTest {
   }
 
   @Test
+  void completeFixBugWithVerifiedSubmissionLeavesDebugResolvedToBugMine() {
+    ObjectNode payload = mapper.createObjectNode();
+    payload.put("suggestedProblemId", 42L);
+    QuestDto quest = sampleQuest(QuestStatus.IN_PROGRESS, QuestNodeType.FIX_BUG, 17L, payload);
+    when(repository.findById(eq(7L), eq(17L))).thenReturn(Optional.of(quest));
+    when(repository.updateStatus(7L, 17L, QuestStatus.COMPLETED)).thenReturn(1);
+    when(repository.findOwned(eq(7L), eq(17L)))
+        .thenReturn(Optional.of(sampleQuest(QuestStatus.COMPLETED, QuestNodeType.FIX_BUG, 17L, payload)));
+
+    service.complete(7L, 17L, new QuestCompleteRequest("fixed", 99L, null, null, null));
+
+    verify(publisher, never()).publishEvent(any(LearningEvent.DebugResolved.class));
+  }
+
+  @Test
   void completeLosingTheConcurrentRaceConflictsInsteadOfDoubleRecording() {
     QuestDto quest = sampleQuest(QuestStatus.IN_PROGRESS, QuestNodeType.FIX_BUG, 16L);
     when(repository.findById(eq(7L), eq(16L))).thenReturn(Optional.of(quest));

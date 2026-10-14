@@ -36,10 +36,8 @@ def parse_args() -> argparse.Namespace:
         description="Run a live Graph route A/B through /agents/resource/produce."
     )
     parser.add_argument("--base-url", default="http://127.0.0.1:18094/v1")
-    parser.add_argument("--api-key", default="local-dev-token")
     parser.add_argument("--baseline-model", default="pythontopia-qwen35-awq-base")
     parser.add_argument("--candidate-model", default="pythontopia-qwen35-e1-lora")
-    parser.add_argument("--internal-token", default="local-dev-token")
     parser.add_argument(
         "--output-dir",
         default="research/vllm-agent-ft-lab/outputs/web-ab/graph-route-live-v1",
@@ -69,23 +67,29 @@ def patched_env(values: dict[str, str]):
 
 async def main() -> int:
     args = parse_args()
+    api_key = os.environ.get("PYT_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    internal_token = os.environ.get("PYT_RAG_ADMIN_TOKEN")
+    if not api_key:
+        raise SystemExit("Set PYT_OPENAI_API_KEY or OPENAI_API_KEY in the process environment.")
+    if not internal_token:
+        raise SystemExit("Set PYT_RAG_ADMIN_TOKEN in the process environment.")
     baseline_results = await _run_variant(
         variant="baseline_base_model",
         base_url=args.base_url,
-        api_key=args.api_key,
+        api_key=api_key,
         baseline_model=args.baseline_model,
         candidate_model=args.candidate_model,
-        internal_token=args.internal_token,
+        internal_token=internal_token,
         fine_tuned_enabled=False,
         timeout_seconds=args.timeout_seconds,
     )
     candidate_results = await _run_variant(
         variant="candidate_fine_tuned_provider",
         base_url=args.base_url,
-        api_key=args.api_key,
+        api_key=api_key,
         baseline_model=args.baseline_model,
         candidate_model=args.candidate_model,
-        internal_token=args.internal_token,
+        internal_token=internal_token,
         fine_tuned_enabled=True,
         timeout_seconds=args.timeout_seconds,
     )

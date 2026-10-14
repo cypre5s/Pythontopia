@@ -1,5 +1,10 @@
 from pathlib import Path
+import subprocess
+import sys
 import urllib.error
+import urllib.request
+
+import pytest
 
 from pyt_agent_lab.baseline import (
     OpenAICompatClient,
@@ -46,6 +51,70 @@ def test_extract_message_text_falls_back_to_reasoning() -> None:
     assert extract_message_text({"content": "Final", "reasoning": "Thinking"}) == "Final"
 
 
+@pytest.mark.parametrize(
+    "base_url",
+    [
+        "http://api.deepseek.com/v1",
+        "https://example.test/v1",
+        "https://api.deepseek.com:8443/v1",
+        "https://user:password@api.deepseek.com/v1",
+    ],
+)
+def test_openai_compat_client_rejects_non_deepseek_endpoints(base_url: str) -> None:
+    with pytest.raises(RuntimeError, match="DeepSeek base URL"):
+        OpenAICompatClient(base_url, "token", "deepseek-flash")
+
+
+def test_openai_compat_client_rejects_non_allowlisted_models() -> None:
+    with pytest.raises(RuntimeError, match="Unsupported DeepSeek model"):
+        OpenAICompatClient("https://api.deepseek.com/v1", "token", "qwen3")
+
+
+def test_openai_compat_client_does_not_follow_redirects() -> None:
+    client = OpenAICompatClient("https://api.deepseek.com/v1", "token", "deepseek-flash")
+    redirect_handler = next(
+        handler
+        for handler in client._opener.handlers
+        if isinstance(handler, urllib.request.HTTPRedirectHandler)
+    )
+
+    redirected_request = redirect_handler.redirect_request(
+        urllib.request.Request("https://api.deepseek.com/v1/chat/completions"),
+        None,
+        307,
+        "Temporary Redirect",
+        {"Location": "https://unexpected.example"},
+        "https://unexpected.example",
+    )
+
+    assert redirected_request is None
+
+
+@pytest.mark.parametrize(
+    ("script", "secret_flags"),
+    [
+        ("run_baseline.py", ("--api-key",)),
+        ("run_abc_eval.py", ("--a-api-key", "--b-api-key")),
+        ("label_rsage_teacher_votes.py", ("--api-key",)),
+        ("run_graph_route_ab.py", ("--api-key", "--internal-token")),
+        ("diagnose_graph_agent_prompts.py", ("--api-key",)),
+    ],
+)
+def test_live_research_clis_do_not_accept_api_keys_in_argv(
+    script: str, secret_flags: tuple[str, ...]
+) -> None:
+    script_path = Path(__file__).parents[1] / "scripts" / script
+    result = subprocess.run(
+        [sys.executable, str(script_path), "--help"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    for secret_flag in secret_flags:
+        assert secret_flag not in result.stdout
+
+
 def test_openai_compat_client_retries_transient_url_errors(monkeypatch) -> None:
     calls = 0
 
@@ -71,7 +140,9 @@ def test_openai_compat_client_retries_transient_url_errors(monkeypatch) -> None:
         return _Opener()
 
     monkeypatch.setattr("urllib.request.build_opener", fake_build_opener)
-    client = OpenAICompatClient("http://local/v1", "token", "model", retries=2, retry_sleep_seconds=0)
+    client = OpenAICompatClient(
+        "https://api.deepseek.com/v1", "token", "deepseek-flash", retries=2, retry_sleep_seconds=0
+    )
 
     assert client.chat([{"role": "user", "content": "hi"}]) == '{"ok": true}'
     assert calls == 2
@@ -100,7 +171,7 @@ def test_openai_compat_client_uses_proxy_free_opener(monkeypatch) -> None:
 
     monkeypatch.setattr("urllib.request.build_opener", fake_build_opener)
 
-    client = OpenAICompatClient("http://10.255.255.254:18096/v1", "token", "model")
+    client = OpenAICompatClient("https://api.deepseek.com/v1", "token", "deepseek-flash")
 
     assert client.chat([{"role": "user", "content": "hi"}]) == '{"ok": true}'
     assert any(getattr(handler, "proxies", None) == {} for handler in handlers)
@@ -130,9 +201,9 @@ def test_openai_compat_client_can_use_explicit_https_proxy(monkeypatch) -> None:
     monkeypatch.setattr("urllib.request.build_opener", fake_build_opener)
 
     client = OpenAICompatClient(
-        "https://example.test/v1",
+        "https://api.deepseek.com/v1",
         "token",
-        "model",
+        "deepseek-v4-pro",
         proxy_url="http://127.0.0.1:7892",
     )
 

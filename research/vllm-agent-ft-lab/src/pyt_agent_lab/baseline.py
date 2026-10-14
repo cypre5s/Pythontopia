@@ -9,6 +9,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
+from urllib.parse import urlsplit
 
 from .experiment_logging import ExperimentLogger
 from .prompt_variants import apply_prompt_variant
@@ -17,6 +18,20 @@ from .serving import build_agent_structured_json_extra_body
 
 
 DECODING_MODES = ("unconstrained", "json_schema", "json_schema_bound")
+DEEPSEEK_MODELS = frozenset({"deepseek-flash", "deepseek-v4-pro"})
+
+
+class _RejectRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(
+        self,
+        req: urllib.request.Request,
+        fp: Any,
+        code: int,
+        msg: str,
+        headers: Any,
+        newurl: str,
+    ) -> None:
+        return None
 
 
 @dataclass(frozen=True)
@@ -38,6 +53,21 @@ class OpenAICompatClient:
         retry_sleep_seconds: float = 1.0,
         proxy_url: str | None = None,
     ) -> None:
+        try:
+            endpoint = urlsplit(base_url)
+            port = endpoint.port
+        except ValueError as exc:
+            raise RuntimeError("DeepSeek base URL must use https://api.deepseek.com") from exc
+        if (
+            endpoint.scheme != "https"
+            or endpoint.hostname != "api.deepseek.com"
+            or port not in (None, 443)
+            or endpoint.username is not None
+            or endpoint.password is not None
+        ):
+            raise RuntimeError("DeepSeek base URL must use https://api.deepseek.com")
+        if model not in DEEPSEEK_MODELS:
+            raise RuntimeError(f"Unsupported DeepSeek model: {model}")
         self.base_url = base_url.rstrip("/")
         self.api_key = api_key
         self.model = model
@@ -45,7 +75,9 @@ class OpenAICompatClient:
         self.retries = retries
         self.retry_sleep_seconds = retry_sleep_seconds
         proxies = {"http": proxy_url, "https": proxy_url} if proxy_url else {}
-        self._opener = urllib.request.build_opener(urllib.request.ProxyHandler(proxies))
+        self._opener = urllib.request.build_opener(
+            urllib.request.ProxyHandler(proxies), _RejectRedirects()
+        )
 
     def chat(
         self,

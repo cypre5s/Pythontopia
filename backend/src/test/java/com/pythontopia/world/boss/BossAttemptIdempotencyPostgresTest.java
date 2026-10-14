@@ -134,6 +134,32 @@ class BossAttemptIdempotencyPostgresTest {
         .hasMessageContaining("处理中");
   }
 
+  @Test
+  void differentAttemptIdsAreThrottledPerUserBeforeAnotherJudgeCanRun() {
+    long userId = createStudent();
+    BossAttemptIdempotencyService service =
+        new BossAttemptIdempotencyService(
+            jdbc, new ObjectMapper(), mock(ApplicationEventPublisher.class));
+    BossAttemptRequest first =
+        new BossAttemptRequest("p1", 1, 1, "print(1)", 3, UUID.randomUUID());
+    BossAttemptRequest second =
+        new BossAttemptRequest("p1", 1, 1, "print(2)", 3, UUID.randomUUID());
+    transactions.execute(status -> service.claim(userId, first.attemptId(), first));
+
+    assertThatThrownBy(
+            () ->
+                transactions.execute(status -> service.claim(userId, second.attemptId(), second)))
+        .isInstanceOf(BusinessException.class)
+        .extracting(exception -> ((BusinessException) exception).code())
+        .isEqualTo("BOSS_ATTEMPT_RATE_LIMITED");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM boss_attempt_idempotency WHERE user_id = ?",
+                Integer.class,
+                userId))
+        .isEqualTo(1);
+  }
+
   private long createStudent() {
     return jdbc.queryForObject(
         "INSERT INTO users (username, display_name, password_hash, role)"

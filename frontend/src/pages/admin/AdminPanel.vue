@@ -128,6 +128,7 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
 
   .admin-panel__tools {
     width: 100%;
+    flex: 0 1 auto;
     align-items: stretch;
     justify-content: flex-start;
   }

@@ -78,6 +78,17 @@ public class ChapterTestRepository {
         .findFirst();
   }
 
+  public Optional<ChapterTestRecord> findOwnedForUpdate(long userId, long testId) {
+    return jdbcTemplate
+        .query(
+            "SELECT " + SELECT_COLUMNS + " FROM chapter_test WHERE id = ? AND user_id = ? FOR UPDATE",
+            this::map,
+            testId,
+            userId)
+        .stream()
+        .findFirst();
+  }
+
   /** 该学生该章最近一条章测（任意状态）。 */
   public Optional<ChapterTestRecord> findLatest(long userId, int chapter) {
     return findLatest(userId, chapter, ChapterAssessmentKind.FINAL);

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
+import { RouterLink } from 'vue-router';
 import { fetchAiRuntimeOperations, type AiRuntimeOperations, type RuntimeOperationStatus } from '@/api/aiRuntime';
 import AdminPanel from './AdminPanel.vue';
 
+const REVIEW_ROUTE_PATHS = new Set(['/workshop', '/teacher/review', '/admin/problem-reviews']);
 const operations = ref<AiRuntimeOperations | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
@@ -38,6 +40,7 @@ async function loadOperations(): Promise<void> {
   try {
     operations.value = await fetchAiRuntimeOperations();
   } catch (cause) {
+    operations.value = null;
     error.value = cause instanceof Error ? cause.message : '运维数据暂不可用';
   } finally {
     loading.value = false;
@@ -55,192 +58,278 @@ onMounted(() => {
     data-testid="admin-operations"
     :aria-busy="loading"
   >
-    <header class="admin-page-heading">
-      <h1>AI 运维概览</h1>
-      <p>平台统计来自后端 AI Runtime 快照，按当前服务端返回展示。</p>
-      <button
-        class="admin-button"
-        type="button"
-        data-testid="admin-operations-refresh"
-        :disabled="loading"
-        @click="loadOperations"
-      >
-        {{ loading ? '正在刷新…' : '刷新数据' }}
-      </button>
-    </header>
-
-    <p
-      v-if="loading"
-      class="admin-operations__state"
-      role="status"
-      aria-live="polite"
+    <AdminPanel
+      title="AI 运维概览"
+      description="平台统计来自后端 AI Runtime 快照，按当前服务端返回展示。"
     >
-      正在读取平台运维数据…
-    </p>
+      <template #actions>
+        <button
+          class="admin-button"
+          type="button"
+          data-testid="admin-operations-refresh"
+          :disabled="loading"
+          @click="loadOperations"
+        >
+          {{ loading ? '正在刷新…' : '刷新数据' }}
+        </button>
+      </template>
 
-    <div
-      v-if="error"
-      class="admin-operations__error"
-      role="alert"
-    >
-      <p>读取失败：{{ error }}</p>
-      <button
-        type="button"
-        class="admin-button"
-        :disabled="loading"
-        @click="loadOperations"
+      <p
+        v-if="loading"
+        class="admin-operations__state"
+        role="status"
+        aria-live="polite"
       >
-        {{ loading ? '正在重试…' : '重试' }}
-      </button>
-    </div>
+        正在读取平台运维数据…
+      </p>
 
-    <template v-if="operations">
-      <div class="admin-operations__stats">
-        <article class="admin-stat-card">
-          <span>活跃学习者</span>
-          <strong>{{ operations.subject.learnerCount }}</strong>
-          <small>{{ operations.subject.label }}</small>
-        </article>
-        <article class="admin-stat-card">
-          <span>已有学习证据</span>
-          <strong>{{ operations.subject.evidenceLearnerCount }}</strong>
-          <small>{{ evidenceCoverage }}</small>
-        </article>
+      <div
+        v-if="error"
+        class="admin-operations__error"
+        role="alert"
+      >
+        <p>读取失败：{{ error }}</p>
+        <button
+          type="button"
+          class="admin-button"
+          :disabled="loading"
+          @click="loadOperations"
+        >
+          {{ loading ? '正在重试…' : '重试' }}
+        </button>
       </div>
 
-      <div class="admin-operations__panels">
-        <AdminPanel
-          title="学习闭环"
-          description="当前平台学习流程的运行状态与下一步动作"
-        >
-          <p
-            v-if="operations.loops.length === 0"
-            class="admin-operations__empty"
-          >
-            后端当前没有返回学习闭环记录。
-          </p>
-          <ul
-            v-else
-            class="operation-list"
-          >
-            <li
-              v-for="loop in operations.loops"
-              :key="loop.loopType"
-              class="operation-row"
-            >
-              <span
-                class="admin-status status-pill"
-                :class="[statusClass(loop.status), statusTone(loop.status)]"
-              >{{ statusLabel(loop.status) }}</span>
-              <div class="operation-row__body">
-                <strong>{{ loop.label }}</strong>
-                <span :title="loop.nextAction">{{ loop.nextAction }}</span>
-                <small
-                  v-if="loop.latestTraceId"
-                  :title="`Trace ${loop.latestTraceId}`"
-                >Trace {{ loop.latestTraceId }}</small>
-              </div>
-              <span
-                v-if="loop.evidenceRefs.length"
-                class="operation-row__evidence"
-                :title="loop.evidenceRefs.join(' · ')"
-              >
-                {{ loop.evidenceRefs.length }} 项证据
-              </span>
-            </li>
-          </ul>
-        </AdminPanel>
+      <template v-if="operations">
+        <div class="admin-operations__content">
+          <div class="admin-operations__stats">
+            <article class="admin-stat-card">
+              <span>活跃学习者</span>
+              <strong>{{ operations.subject.learnerCount }}</strong>
+              <small>{{ operations.subject.label }}</small>
+            </article>
+            <article class="admin-stat-card">
+              <span>已有学习证据</span>
+              <strong>{{ operations.subject.evidenceLearnerCount }}</strong>
+              <small>{{ evidenceCoverage }}</small>
+            </article>
+          </div>
 
-        <AdminPanel
-          title="治理检查"
-          description="后端返回的治理状态和建议动作"
-        >
-          <p
-            v-if="operations.governance.length === 0"
-            class="admin-operations__empty"
-          >
-            后端当前没有返回治理检查项。
-          </p>
-          <ul
-            v-else
-            class="operation-list"
-          >
-            <li
-              v-for="item in operations.governance"
-              :key="item.key"
-              class="operation-row"
+          <div class="admin-operations__panels">
+            <AdminPanel
+              title="学习闭环"
+              description="当前平台学习流程的运行状态与下一步动作"
             >
-              <span
-                class="admin-status status-pill"
-                :class="[statusClass(item.status), statusTone(item.status)]"
-              >{{ statusLabel(item.status) }}</span>
-              <div class="operation-row__body">
-                <strong>{{ item.label }}</strong>
-                <span :title="item.action">{{ item.action }}</span>
-                <small
-                  v-if="item.reviewRoute"
-                  :title="`关联页面：${item.reviewRoute}`"
-                >关联页面：{{ item.reviewRoute }}</small>
-              </div>
-              <span
-                v-if="item.evidenceRefs.length"
-                class="operation-row__evidence"
-                :title="item.evidenceRefs.join(' · ')"
+              <p
+                v-if="operations.loops.length === 0"
+                class="admin-operations__empty"
               >
-                {{ item.evidenceRefs.length }} 项证据
-              </span>
-            </li>
-          </ul>
-        </AdminPanel>
-      </div>
-    </template>
+                后端当前没有返回学习闭环记录。
+              </p>
+              <ul
+                v-else
+                class="operation-list"
+              >
+                <li
+                  v-for="loop in operations.loops"
+                  :key="loop.loopType"
+                  class="operation-row"
+                >
+                  <span
+                    class="admin-status status-pill"
+                    :class="[statusClass(loop.status), statusTone(loop.status)]"
+                  >{{ statusLabel(loop.status) }}</span>
+                  <div class="operation-row__body">
+                    <strong>{{ loop.label }}</strong>
+                    <span :title="loop.nextAction">{{ loop.nextAction }}</span>
+                    <small
+                      v-if="loop.latestTraceId"
+                      :title="`Trace ${loop.latestTraceId}`"
+                    >Trace {{ loop.latestTraceId }}</small>
+                  </div>
+                  <span
+                    v-if="loop.evidenceRefs.length"
+                    class="operation-row__evidence"
+                    :title="loop.evidenceRefs.join(' · ')"
+                  >
+                    {{ loop.evidenceRefs.length }} 项证据
+                  </span>
+                </li>
+              </ul>
+            </AdminPanel>
+
+            <AdminPanel
+              title="治理检查"
+              description="后端返回的治理状态和建议动作"
+            >
+              <p
+                v-if="operations.governance.length === 0"
+                class="admin-operations__empty"
+              >
+                后端当前没有返回治理检查项。
+              </p>
+              <ul
+                v-else
+                class="operation-list"
+              >
+                <li
+                  v-for="item in operations.governance"
+                  :key="item.key"
+                  class="operation-row"
+                >
+                  <span
+                    class="admin-status status-pill"
+                    :class="[statusClass(item.status), statusTone(item.status)]"
+                  >{{ statusLabel(item.status) }}</span>
+                  <div class="operation-row__body">
+                    <strong>{{ item.label }}</strong>
+                    <span :title="item.action">{{ item.action }}</span>
+                    <small
+                      v-if="item.reviewRoute"
+                      :title="`关联页面：${item.reviewRoute}`"
+                    >关联页面：<RouterLink
+                      v-if="REVIEW_ROUTE_PATHS.has(item.reviewRoute)"
+                      :to="item.reviewRoute"
+                    >{{ item.reviewRoute }}</RouterLink><span v-else>{{ item.reviewRoute }}</span></small>
+                  </div>
+                  <span
+                    v-if="item.evidenceRefs.length"
+                    class="operation-row__evidence"
+                    :title="item.evidenceRefs.join(' · ')"
+                  >
+                    {{ item.evidenceRefs.length }} 项证据
+                  </span>
+                </li>
+              </ul>
+            </AdminPanel>
+          </div>
+        </div>
+      </template>
+    </AdminPanel>
   </section>
 </template>
 
 <style scoped>
 .admin-operations {
-  display: grid;
-  gap: 20px;
   min-width: 0;
 }
 
-.admin-page-heading h1 {
-  margin: 0;
-  color: var(--admin-text);
-  font-size: 22px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
-}
-
-.admin-page-heading {
+.admin-operations__content,
+.admin-operations__panels {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 6px 16px;
+  gap: 20px;
 }
 
-.admin-page-heading button {
-  grid-column: 2;
-  grid-row: 1 / span 2;
+.admin-operations__panels {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
 }
 
-@media (max-width: 640px) {
-  .admin-page-heading {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .admin-page-heading button {
-    grid-column: 1;
-    grid-row: auto;
-    justify-self: start;
-  }
+.admin-operations__stats {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
 }
 
-.admin-page-heading p {
-  margin: 0;
+.admin-stat-card {
+  display: grid;
+  min-height: 112px;
+  align-content: center;
+  gap: 6px;
+  border: 1px solid var(--admin-border);
+  border-radius: 12px;
+  padding: 16px 18px;
+  background: var(--admin-panel-muted);
+}
+
+.admin-stat-card span {
   color: var(--admin-muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.admin-stat-card strong {
+  color: var(--admin-text);
+  font-size: 28px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.admin-stat-card small {
+  color: var(--admin-muted);
+  font-size: 11px;
+}
+
+.operation-list {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.operation-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--admin-border);
+}
+
+.operation-row:first-child {
+  padding-top: 0;
+}
+
+.operation-row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.operation-row__body {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+}
+
+.operation-row__body strong,
+.operation-row__body span,
+.operation-row__body small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.operation-row__body strong {
+  color: var(--admin-text);
   font-size: 13px;
+}
+
+.operation-row__body span {
+  color: #334155;
+  font-size: 12px;
+}
+
+.operation-row__body small {
+  color: var(--admin-muted);
+  font-size: 10px;
+}
+
+.operation-row__body a {
+  color: var(--admin-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.operation-row__body a:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--admin-primary);
+  outline-offset: 2px;
+}
+
+.operation-row__evidence {
+  color: var(--admin-muted);
+  font-size: 11px;
+  white-space: nowrap;
 }
 
 .admin-operations__state,
@@ -260,93 +349,17 @@ onMounted(() => {
   border-radius: 10px;
   background: #fff7f7;
   color: #991b1b;
-  font-size: 13px;
 }
 
 .admin-operations__error p {
   margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.admin-operations__stats {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 14px;
-}
-
-.admin-stat-card {
-  display: grid;
-  min-height: 116px;
-  align-content: center;
-  gap: 5px;
-  padding: 20px 22px;
-  border: 1px solid var(--admin-border);
-  border-radius: var(--admin-panel-radius);
-  background: var(--admin-surface);
-  box-shadow: var(--admin-panel-shadow);
-}
-
-.admin-stat-card span,
-.admin-stat-card small {
-  color: var(--admin-muted);
-  font-size: 12px;
-}
-
-.admin-stat-card strong {
-  color: var(--admin-text);
-  font-size: 27px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.15;
-}
-
-.admin-operations__panels {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  align-items: start;
-  gap: 16px;
-}
-
-.operation-list {
-  display: grid;
-  gap: 12px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.operation-row {
-  display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 12px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid #edf1f6;
-}
-
-.operation-row:last-child {
-  padding-bottom: 0;
-  border-bottom: 0;
-}
-
-.operation-row__body {
-  display: grid;
-  min-width: 0;
-  gap: 3px;
-}
-
-.operation-row__body strong {
-  color: var(--admin-text);
   font-size: 13px;
 }
 
-.operation-row__body span,
-.operation-row__body small,
-.operation-row__evidence {
-  overflow: hidden;
-  color: var(--admin-muted);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+@media (max-width: 720px) {
+  .admin-operations__stats {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 900px) {
@@ -355,17 +368,10 @@ onMounted(() => {
   }
 }
 
-@media (max-width: 540px) {
-  .admin-operations__stats {
-    grid-template-columns: 1fr;
-  }
-
+@media (max-width: 520px) {
   .operation-row {
-    grid-template-columns: auto minmax(0, 1fr);
-  }
-
-  .operation-row__evidence {
-    grid-column: 2;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 7px;
   }
 }
 </style>

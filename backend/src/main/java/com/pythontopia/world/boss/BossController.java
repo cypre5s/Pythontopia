@@ -1,6 +1,8 @@
 package com.pythontopia.world.boss;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
+import com.pythontopia.auth.security.Role;
+import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.common.web.AiBudgeted;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
@@ -52,8 +54,7 @@ public class BossController {
       @PathVariable @Min(1) @Max(7) int chapter,
       @Valid @RequestBody BossProblemRequest request,
       @CurrentUser CurrentUserPrincipal user) {
-    Long userId = user == null ? null : user.userId();
-    return service.fetchProblem(chapter, request, userId);
+    return service.fetchProblem(chapter, request, requireStudent(user));
   }
 
   /**
@@ -67,8 +68,7 @@ public class BossController {
       @PathVariable @Min(1) @Max(7) int chapter,
       @Valid @RequestBody BossProblemRequest request,
       @CurrentUser CurrentUserPrincipal user) {
-    Long userId = user == null ? null : user.userId();
-    return service.prefetch(chapter, request, userId);
+    return service.prefetch(chapter, request, requireStudent(user));
   }
 
   /** 查询同一完整维度的预加载状态；PENDING 绝不冒充 READY，FAILED 可再次 POST 重试。 */
@@ -86,7 +86,6 @@ public class BossController {
       @RequestParam(required = false) @Pattern(regexp = "^[A-Za-z0-9_-]{1,32}$")
           String expeditionNodeId,
       @CurrentUser CurrentUserPrincipal user) {
-    Long userId = user == null ? null : user.userId();
     return service.prefetchStatus(
         chapter,
         stage,
@@ -96,7 +95,7 @@ public class BossController {
         arenaLevel,
         expeditionRunId,
         expeditionNodeId,
-        userId);
+        requireStudent(user));
   }
 
   /**
@@ -106,8 +105,7 @@ public class BossController {
   @PostMapping("/select-frontier")
   public FrontierSelectResultDto selectFrontier(
       @Valid @RequestBody FrontierSelectRequest request, @CurrentUser CurrentUserPrincipal user) {
-    Long userId = user == null ? null : user.userId();
-    return service.selectFrontier(userId, request);
+    return service.selectFrontier(requireStudent(user), request);
   }
 
   @PostMapping("/{chapter}/attempt")
@@ -118,7 +116,13 @@ public class BossController {
     if (request.chapter() != chapter) {
       throw new IllegalArgumentException("chapter param mismatch with body");
     }
-    Long userId = user == null ? null : user.userId();
-    return service.evaluateAttempt(request, userId);
+    return service.evaluateAttempt(request, requireStudent(user));
+  }
+
+  private Long requireStudent(CurrentUserPrincipal user) {
+    if (user == null || user.role() != Role.STUDENT) {
+      throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "仅学生可使用 Boss 练习");
+    }
+    return user.userId();
   }
 }

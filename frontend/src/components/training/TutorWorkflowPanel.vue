@@ -14,6 +14,8 @@ import MarkdownView from '@/components/common/MarkdownView.vue';
 import { useSseStream, type SseTraceEvent } from '@/composables/useSseStream';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
+import { runTrace } from '@/services/codeTheater/trace';
+import type { Trace, TraceEvent } from '@/services/codeTheater/types';
 import {
   getActiveWorkflowSession,
   recordTutorWorkflowFeedback,
@@ -60,6 +62,7 @@ interface CardEntry {
   payload: WorkflowCardPayload;
   seq: number;
   userMessage?: string;
+  localOnly?: boolean;
 }
 
 interface RetryableWorkflowRequest {
@@ -94,10 +97,12 @@ const loaded = ref(false);
 const lastInitialNonce = ref(0);
 const cardFeedback = ref<Record<string, 'helpful' | 'not_helpful'>>({});
 const retryableRequest = ref<RetryableWorkflowRequest | null>(null);
+const localTraceRunning = ref(false);
+let localTraceSeq = 0;
 
 const sse = useSseStream<WorkflowRunResultDto>('/api/tutor/workflow/runs');
 const running = computed(
-  () => sse.status.value === 'streaming' || sse.status.value === 'connecting',
+  () => localTraceRunning.value || sse.status.value === 'streaming' || sse.status.value === 'connecting',
 );
 interface CoachProgressItem {
   key: string;
@@ -230,7 +235,7 @@ async function load(): Promise<void> {
 
 /** 关键节点感知环境：按事件携带 submission_id / 当前编辑器代码 / intent 等。 */
 function eventDataFor(event: WorkflowEvent): Record<string, unknown> | undefined {
-  if (event === 'EXECUTION_TRACE' || event === 'VISUALIZE') {
+  if (event === 'VISUALIZE') {
     const code = (learning.training.code ?? '').trim();
     return code ? { code } : undefined;
   }
@@ -296,12 +301,108 @@ function createWorkflowRequestId(): string {
   return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10).join('')}`;
 }
 
+function executionTraceStep(event: TraceEvent): ExecutionTraceCardDto['steps'][number] {
+  const common = { step: event.step + 1, line_ref: `第 ${event.line} 行` };
+  switch (event.kind) {
+    case 'line':
+      return { ...common, action: '执行到这一行' };
+    case 'assign':
+      return {
+        ...common,
+        action: `变量 ${event.varName} = ${event.value}`,
+        variables: { [event.varName]: event.value },
+      };
+    case 'loop_iter':
+      return {
+        ...common,
+        action: `${event.loopType === 'for' ? 'for' : 'while'} 循环第 ${event.iter + 1} 轮${event.varName ? `，${event.varName} = ${event.value ?? ''}` : ''}`,
+      };
+    case 'branch':
+      return { ...common, action: `条件“${event.cond}”结果为${event.result ? '真' : '假'}` };
+    case 'call':
+      return { ...common, action: `调用函数 ${event.funcName}(${event.args.join(', ')})` };
+    case 'return':
+      return { ...common, action: `函数 ${event.funcName} 返回 ${event.value}` };
+    case 'list_op':
+      return { ...common, action: `列表 ${event.target} 执行 ${event.op}${event.value ? `：${event.value}` : ''}` };
+    case 'dict_op':
+      return { ...common, action: `字典 ${event.target} 执行 ${event.op}，键为 ${event.key}${event.value ? `，值为 ${event.value}` : ''}` };
+    case 'output':
+      return { ...common, action: `输出：${event.text}` };
+    case 'input':
+      return { ...common, action: `读取输入${event.prompt ? `（${event.prompt}）` : ''}：${event.value}` };
+    case 'exception':
+      return { ...common, action: `发生 ${event.excType}：${event.message}` };
+  }
+}
+
+function executionTraceCard(trace: Trace, stdin: string): ExecutionTraceCardDto {
+  const output = trace.stdout.trim();
+  const shownOutput = output.length > 300 ? `${output.slice(0, 300)}…` : output;
+  const outputSummary = trace.stdout.length > 0
+    ? `实际输出${trace.stdout.length > 300 ? '（节选）' : ''}：${shownOutput || '（仅空白字符）'}`
+    : '本次运行没有标准输出。';
+  return {
+    card_id: `local-execution-trace-${++localTraceSeq}`,
+    summary: '这是当前代码在浏览器中的本地执行轨迹。',
+    trace_target: '当前编辑器代码',
+    input_used: stdin.length === 0 ? '（无输入）' : stdin,
+    steps: trace.events.map(executionTraceStep),
+    key_insight: trace.truncated
+      ? `已达到本地追踪步数上限，后续轨迹已省略。${trace.stdout.length > 0 ? outputSummary : ''}`
+      : outputSummary,
+    teaching_goal: '观察程序实际运行时的变量、分支与输出变化。',
+    checkpoint_prompt: '你能指出变量发生变化的那一步吗？',
+    reflection_prompt: '实际输出是否符合你的预期？',
+  };
+}
+
+async function runLocalExecutionTrace(): Promise<void> {
+  const code = (learning.training.code ?? '').trim();
+  if (!code) {
+    toast.show('当前没有可追踪的代码，请先在编辑器中编写 Python 代码。', 'error');
+    return;
+  }
+  if (code.length > MAX_TUTOR_CODE_LENGTH) {
+    toast.show('当前代码超过导学长度限制，请先精简代码', 'error');
+    return;
+  }
+
+  const stdin = learning.training.problem?.samples[0]?.input ?? '';
+  localTraceRunning.value = true;
+  retryableRequest.value = null;
+  try {
+    const trace = await runTrace(code, { stdin });
+    if (!alive) return;
+    cards.value = [
+      ...cards.value,
+      {
+        key: 'execution_trace',
+        payload: executionTraceCard(trace, stdin),
+        seq: -localTraceSeq,
+        localOnly: true,
+      },
+    ];
+    scrollBottom();
+  } catch (error) {
+    if (!alive) return;
+    const detail = error instanceof Error ? error.message : String(error);
+    toast.show(`本地执行轨迹生成失败：${detail}`, 'error');
+  } finally {
+    localTraceRunning.value = false;
+  }
+}
+
 async function runEvent(
   event: WorkflowEvent,
   eventData?: Record<string, unknown>,
   requestId = createWorkflowRequestId(),
 ): Promise<void> {
   if (running.value) return;
+  if (event === 'EXECUTION_TRACE') {
+    await runLocalExecutionTrace();
+    return;
+  }
   const code = eventData?.code;
   if (typeof code === 'string' && code.length > MAX_TUTOR_CODE_LENGTH) {
     toast.show('当前代码超过导学长度限制，请先精简代码', 'error');
@@ -373,11 +474,13 @@ watch(() => props.submissionId, async () => {
 });
 
 function onAction(action: WorkflowActionDto): void {
-  void recordFeedback({
-    eventType: 'ACTION_CLICKED',
-    actionKey: action.key,
-    payload: { event: action.event },
-  });
+  if (action.event !== 'EXECUTION_TRACE') {
+    void recordFeedback({
+      eventType: 'ACTION_CLICKED',
+      actionKey: action.key,
+      payload: { event: action.event },
+    });
+  }
   void runEvent(action.event, eventDataFor(action.event));
 }
 
@@ -396,6 +499,7 @@ async function recordFeedback(request: {
 }
 
 async function markCardFeedback(entry: CardEntry, value: 'helpful' | 'not_helpful'): Promise<void> {
+  if (entry.localOnly) return;
   const id = cardId(entry);
   const eventType = value === 'helpful' ? 'CARD_HELPFUL' : 'CARD_NOT_HELPFUL';
   await recordFeedback({
@@ -807,6 +911,13 @@ function cardId(entry: CardEntry): string {
 
         <!-- 执行轨迹 -->
         <template v-else-if="entry.key === 'execution_trace'">
+          <p
+            v-if="entry.localOnly"
+            class="tw-kv"
+            data-testid="execution-trace-local"
+          >
+            浏览器本地预览，不用于判题或掌握度。
+          </p>
           <p class="tw-card__lead">
             {{ asTrace(entry.payload).summary }}
           </p>
@@ -883,7 +994,10 @@ function cardId(entry: CardEntry): string {
             >✗ 再调整一下</span>
           </div>
         </template>
-        <footer class="tw-card-feedback">
+        <footer
+          v-if="!entry.localOnly"
+          class="tw-card-feedback"
+        >
           <button
             type="button"
             class="tw-card-feedback__btn"

@@ -34,6 +34,8 @@ import com.pythontopia.mainline.star.StarSource;
 import com.pythontopia.mainline.test.ChapterTestJudge.JudgeReport;
 import com.pythontopia.mainline.test.ChapterTestJudge.QuestionJudgement;
 import com.pythontopia.mainline.test.question.QuestionType;
+import jakarta.validation.Validation;
+import jakarta.validation.Validator;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +45,8 @@ import org.junit.jupiter.api.Test;
 
 /** ChapterTestService：小测/大测 prepare / start / submit / latest 编排。 */
 class ChapterTestServiceTest {
+
+  private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
   private static final long USER = 7L;
   private static final int CH = 2;
@@ -351,7 +355,7 @@ class ChapterTestServiceTest {
 
   @Test
   void submitRejectsOvertimeAndRecordsIntegrity() {
-    when(repo.findOwned(USER, TEST_ID))
+    when(repo.findOwnedForUpdate(USER, TEST_ID))
         .thenReturn(
             Optional.of(
                 record(
@@ -375,7 +379,7 @@ class ChapterTestServiceTest {
 
   @Test
   void submitJudgesPersistsAndRecalculatesStars() {
-    when(repo.findOwned(USER, TEST_ID))
+    when(repo.findOwnedForUpdate(USER, TEST_ID))
         .thenReturn(
             Optional.of(
                 record(
@@ -419,7 +423,7 @@ class ChapterTestServiceTest {
             "{\"score\":80,\"maxScore\":100,\"items\":[{\"qid\":\"c1\",\"type\":\"CHOICE\","
                 + "\"correct\":true,\"awardedScore\":8,\"maxScore\":8,\"yourAnswer\":\"A\","
                 + "\"correctAnswer\":\"A\",\"explain\":\"e\"}]}");
-    when(repo.findOwned(USER, TEST_ID))
+    when(repo.findOwnedForUpdate(USER, TEST_ID))
         .thenReturn(
             Optional.of(record(ChapterTestStatus.SUBMITTED, OffsetDateTime.now(), questions(), detail)));
     when(starRepo.find(USER, CH))
@@ -438,7 +442,7 @@ class ChapterTestServiceTest {
 
   @Test
   void submitRejectsWhenNotStarted() {
-    when(repo.findOwned(USER, TEST_ID))
+    when(repo.findOwnedForUpdate(USER, TEST_ID))
         .thenReturn(Optional.of(record(ChapterTestStatus.READY, null, questions(), null)));
 
     assertThatThrownBy(
@@ -447,6 +451,14 @@ class ChapterTestServiceTest {
                     USER, CH, TEST_ID, new ChapterTestSubmitRequest(Map.of(), null)))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("先开考");
+  }
+
+  @Test
+  void submitRejectsOversizedAnswerValuesAtTheRequestBoundary() {
+    ChapterTestSubmitRequest request =
+        new ChapterTestSubmitRequest(Map.of("coding", "x".repeat(8193)), null);
+
+    assertThat(validator.validate(request)).isNotEmpty();
   }
 
   // --- latest ----------------------------------------------------------------

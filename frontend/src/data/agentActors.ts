@@ -21,13 +21,12 @@ export interface AgentActor {
   doing: string;
 }
 
-/** role_key → 工作室人物。新增视频领航员 / 时间轴核验官 / 插画师 / 配音师 / 剪辑师等。 */
+/** role_key → 工作室人物。 */
 export const AGENT_ACTORS: Record<string, AgentActor> = {
   video_navigator: { roleKey: 'video_navigator', label: '视频领航员', npcKey: 'professor', emoji: '🧭', doing: '正在读视频概览定位看点' },
   timeline_checker: { roleKey: 'timeline_checker', label: '时间轴核验官', npcKey: 'sage_review', emoji: '⏱', doing: '正在核对时间点真实性' },
   director: { roleKey: 'director', label: '故事板导演', npcKey: 'workshop_master', emoji: '🎬', doing: '正在编写分镜脚本' },
   illustrator: { roleKey: 'illustrator', label: '插画师', npcKey: 'gardener', emoji: '🎨', doing: '正在绘制分镜插画' },
-  narrator: { roleKey: 'narrator', label: '配音师', npcKey: 'merchant', emoji: '🎙', doing: '正在合成旁白配音' },
   editor: { roleKey: 'editor', label: '剪辑师', npcKey: 'workshop_master', emoji: '✂', doing: '正在拼接合成短视频' },
   librarian: { roleKey: 'librarian', label: '证据馆员', npcKey: 'librarian_doc', emoji: '📚', doing: '正在检索课件证据' },
   critic: { roleKey: 'critic', label: '审查校对官', npcKey: 'professor', emoji: '🔍', doing: '正在核对引用与防幻觉' },
@@ -60,7 +59,6 @@ export function nodeToRoleKey(node: string): string {
   if (n.includes('videoinsight') || n.includes('video_insight') || n.includes('navigator')) return 'video_navigator';
   if (n.includes('storyboard') || n.includes('director')) return 'director';
   if (n.includes('illustrat') || n.includes('image')) return 'illustrator';
-  if (n.includes('narrat') || n.includes('tts') || n.includes('voice')) return 'narrator';
   if (n.includes('editor') || n.includes('compose') || n.includes('ffmpeg') || n.includes('concat')) return 'editor';
   if (n.includes('orchestrat') || n.includes('replan') || n.includes('understand') || n.includes('decompose') || n.includes('dispatch')) return 'orchestrator';
   if (n.includes('tutor') || n.includes('image_understanding')) return 'tutor';
