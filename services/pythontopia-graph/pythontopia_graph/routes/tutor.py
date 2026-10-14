@@ -35,7 +35,9 @@ from pythontopia_graph.nodes.tutor_review import (
     grounding_review,
     hallucination_review,
     safety_review,
+    semantic_review,
 )
+from pythontopia_graph.nodes.semantic_grounding_verifier import STRONG_ASSERTION_RE
 from pythontopia_graph.schemas.tutor import (
     GroundingResult,
     SafetyResult,
@@ -527,12 +529,47 @@ async def tutor_ask_stream(
                 return {**state, "answer": answer}
 
             async def grounding_stage(state: dict[str, Any]) -> dict[str, Any]:
-                result, trace = _review_with_trace(
-                    "grounding_critic",
-                    grounding_review,
-                    state["answer"],
-                    state["evidence_chunks"],
+                started = time.monotonic()
+                answer = state["answer"]
+                chunks = state["evidence_chunks"]
+                semantic_observation: ToolObservation | None = None
+                if chunks and STRONG_ASSERTION_RE.search(answer):
+                    semantic_observation = await run_with_governance(
+                        "tutor_semantic_grounding",
+                        lambda: semantic_review(answer, chunks, provider),
+                        breaker_key="provider",
+                        budget=guard,
+                    )
+                if (
+                    semantic_observation is not None
+                    and semantic_observation.ok
+                    and isinstance(semantic_observation.value, GroundingResult)
+                ):
+                    result = semantic_observation.value
+                else:
+                    result = await semantic_review(answer, chunks)
+                reasons = list(result.reasons)
+                if semantic_observation is not None and not semantic_observation.ok:
+                    reasons.append(
+                        f"SEMANTIC_REVIEW_{semantic_observation.status.upper()}"
+                    )
+                status = (
+                    "skipped"
+                    if semantic_observation is not None
+                    and semantic_observation.status == "budget_skipped"
+                    else "ok"
+                    if result.passed
+                    else "retry"
                 )
+                trace = [
+                    _trace_start("grounding_critic"),
+                    _trace_finish(
+                        "grounding_critic",
+                        status,
+                        int((time.monotonic() - started) * 1000),
+                        **_note_kwargs(reasons),
+                    ),
+                ]
                 for event in trace:
                     await emit(event)
                 return {**state, "grounding": result.model_dump(mode="json")}

@@ -2,7 +2,29 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-14）**：本轮工作聚焦 Web。Tutor 已使用 DeepSeek 固定阶段 AutoGen；Twin 状态聚合/确定性推荐、Boss Phaser 场景、教师与管理 Web 交互已实现并有定向验证。本轮又修复教师切班直播订阅、审核队列并发、课件视频失败状态与请求竞态、图书馆索引错误状态。当前完整 Web Vitest 为 266 files / 2533 tests，typecheck 与 production build 通过。全量 Maven 最近一次为 1363 tests、1 failure、10 errors：9 个 Testcontainers 容器启动失败、1 个长期仿真数据库连接失败；唯一断言失败是已修正的随机地图 HP 预期，`ExpeditionRunPostgresIntegrationTest` 隔离复跑 28/28 通过，10 个全量错误类隔离复跑均退出 0。全量 Maven 仍未重新验证为全绿。剩余项包括 Twin 学习效果对照、完整 Boss 最终节点真实判题浏览器演出、同 KC 题库覆盖（无匹配题时已验证 fail closed 为 503，不跨 KC 借题）、生产 Piston/ECS/公网验证；本轮不追加性能测量，历史本机样本见 CHANGELOG。下方阶段表与进度时间线保留早期历史，不代表当前工作焦点。
+> **当前快照（2026-10-14）**：本轮工作聚焦 Web。Tutor 使用 DeepSeek 固定阶段 AutoGen；Twin 状态/确定性推荐和 Phaser Boss 多阶段浏览器旅程已实现。前端全量 Vitest 最新记录为 270 files / 2561 tests。全量 Maven 本轮最新为 1389 tests、0 failures、7 errors：6 个 Testcontainers PostgreSQL 动态宿主端口绑定冲突，长期仿真类的数据库连接在全量运行中失败、隔离复跑通过；因此 Maven 全量未通过。剩余项是 Twin 学习效果 A/B 与 7 日复测、供应商 token/账单核对、稳定全量 Maven、生产 Piston/ECS 验证；性能按用户要求最后处理。下方阶段表与时间线保留早期历史，不代表当前焦点。
+
+## 2026-10-14 当前续接
+
+### 已完成
+
+- 明确 DeepSeek 数据方向：视觉模型接收图片，返回文本；按需 Mermaid/SVG 是模型给出的文本源码，由 Web 本地渲染，不代表模型返回图片。
+- Tutor 对带课件证据的强事实声明调用现有语义核验器，并沿用请求预算/熔断；修复 ADMIN 在教师屋班级总览与创建班级的权限闭环。
+- 本轮通过实际 DeepSeek 请求验证文字、合成 PNG 识别、Tutor 文本答复与语义反例核验；宿主机直连图片请求 TLS 超时后，通过 Graph 容器代理链路成功复验。
+
+### 当前验证
+
+- Graph Tutor/provider/图片/AutoGen 定向回归：102 passed、1 条既有 pytest 标记警告。
+- 后端 `ClassroomServiceTest`、`ClassroomRepositoryTest`、`TutorDailyRequestLimitServiceTest` 通过；`git diff --check` 通过。
+- 4 个本轮触及的 Java 文件通过定向 Spotless；全仓 Spotless 仍报告 614 个其他历史文件格式差异，未批量格式化。
+- 最新全量 Maven：1389 tests、0 failures、7 errors，原因是 6 个 Testcontainers 动态宿主端口冲突和长期仿真类全量运行时数据库连接失败；后者隔离复跑通过。
+- 本地开发 Spring 保持 `PYT_AI_REQUEST_LIMITS_ENABLED=false`；此开关仅关闭应用级每日计数，不覆盖 DeepSeek 自身余额/限流。
+- 生产 AI/readiness 与 Piston URL 合同脚本通过。ECS 运行时只读检查因本机直连路由需要 sudo 密码而未执行。
+
+### 未完成或未验证
+
+- Twin 学习效果 A/B 与 7 日延迟复测、DeepSeek 供应商 token/账单对账、稳定全量 Maven 复验、生产 Piston/ECS 实例验证。
+- 本轮未做性能测试；按用户顺序在功能和工程任务完成后再处理。
 
 ## 2026-10-14 本轮增量（08:46 CST）
 

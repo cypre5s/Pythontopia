@@ -126,6 +126,36 @@ async def test_ask_stream_runs_all_review_agents() -> None:
 
 
 @pytest.mark.asyncio
+async def test_ask_stream_semantically_checks_strong_course_claims() -> None:
+    answer = "根据教材第 12 页 [页 12]，for 循环只能遍历列表。"
+
+    class DistortionProvider(StreamStubProvider):
+        def __init__(self) -> None:
+            super().__init__(answer)
+            self.semantic_calls = 0
+
+        async def chat(self, messages, **kwargs):  # type: ignore[override]
+            prompt = str(messages[-1].get("content", ""))
+            if "判断论述是否被证据支持" in prompt:
+                self.semantic_calls += 1
+                return LlmResponse(content_json={"supported": False, "reason": "证据没有排除字符串"})
+            return LlmResponse(content_text="")
+
+    provider = DistortionProvider()
+    response = await tutor_ask_stream(
+        TutorAskRequest(user_id=1, question="for 循环能遍历哪些对象？"),
+        provider=provider,
+        evidence_fetcher=StaticEvidenceFetcher([HIT]),
+    )
+    events = await _collect_sse(response)
+    result = events[-1][1]
+
+    assert provider.semantic_calls == 1
+    assert result["grounding_result"]["passed"] is False
+    assert result["grounding_status"] == "FAILED"
+
+
+@pytest.mark.asyncio
 async def test_ask_stream_runs_answer_and_reviews_through_fixed_autogen_stages(monkeypatch) -> None:
     seen: list[str] = []
     original = tutor_route.run_autogen_tutor_workflow

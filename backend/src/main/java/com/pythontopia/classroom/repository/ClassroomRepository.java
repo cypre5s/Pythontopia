@@ -81,6 +81,16 @@ public class ClassroomRepository {
         teacherId);
   }
 
+  public List<Classroom> findAll() {
+    return jdbcTemplate.query(
+        """
+        SELECT id, name, description, teacher_id, pack_id, join_code, status
+        FROM classrooms
+        ORDER BY id
+        """,
+        this::map);
+  }
+
   public List<Classroom> findByStudent(Long studentId) {
     return jdbcTemplate.query(
         """
@@ -95,9 +105,9 @@ public class ClassroomRepository {
   }
 
   /**
-   * 加入班级（幂等）：{@code classroom_members} 上有 {@code UNIQUE (classroom_id, student_id)}，
-   * 而 {@link #removeMember} 是软删（{@code status='REMOVED'}）。裸 INSERT 会让「被移出的学生」
-   * 永远撞唯一键、再也回不来，因此这里改为 upsert 复活成员行。
+   * 加入班级（幂等）：{@code classroom_members} 上有 {@code UNIQUE (classroom_id, student_id)}， 而 {@link
+   * #removeMember} 是软删（{@code status='REMOVED'}）。裸 INSERT 会让「被移出的学生」 永远撞唯一键、再也回不来，因此这里改为 upsert
+   * 复活成员行。
    */
   public void addMember(Long classroomId, Long studentId) {
     jdbcTemplate.update(

@@ -13,7 +13,12 @@
 - 本地 `./dev.sh` 默认关闭应用级 AI 每日次数限制，当前后端进程环境已实测为 `PYT_AI_REQUEST_LIMITS_ENABLED=false`；部署配置仍保留上限。Boss 判题 10 秒提交保护是独立的防重复机制。
 - KC 编程题生成链路已补齐课程库上下文：后端权威查找 KC 名称/摘要，Graph 用它构造提示并按摘要术语校验；真实 DeepSeek 生成题通过 Graph/Piston 自测与服务端正式判题后，进入教师 `PENDING` 队列。未自动批准。
 - 已实际调用 Tutor 文本和图片流，数据库会话答案非空且图片识别正确；验证完成后删除了本轮 4 个合成学生账号、关联 Tutor 会话/审核记录及用户数据。
-- 当前续验：前端全量 Vitest 270 files / 2561 tests 通过。最新后端 `mvn test` 为 1386 项、0 断言失败、7 个错误；6 个错误是 Testcontainers PostgreSQL 动态端口绑定到 TCP TIME-WAIT 端口，另 1 个长期仿真类串行复跑通过。7 类串行复跑中长期仿真 1/1 通过，其余 6 类仍因相同端口占用失败。`TutorDailyRequestLimitServiceTest` 6/6 通过；本轮模型文本/图片真调用结果记录于下方“本地请求限额与模型真调用续验”。
+- 当前续验：前端全量 Vitest 270 files / 2561 tests 通过。最新后端全量 `mvn test` 为 1389 项、0 assertion failures、7 errors：6 个 Testcontainers PostgreSQL 动态端口绑定失败（Docker 报 `address already in use`），长期仿真类在全量运行中数据库连接失败；该仿真类本轮隔离复跑通过。`TutorDailyRequestLimitServiceTest` 定向复验通过；模型真调用结果见下方“本地请求限额与模型真调用续验”。
+- 本轮补强 Tutor：带证据的强事实声明经现有语义核验器，受调用预算/熔断治理；常规回答仍走规则审查。真实 DeepSeek 文本、合成 PNG 识图、Tutor 文本响应与语义反例核验均成功；图片作为输入，模型响应为文本。宿主机直连图片遇 TLS 超时，Graph 容器代理链路复验成功。Mermaid/SVG 图解是文本源码，由 Web 本地渲染，并非模型返回图片。
+- 修复教师屋管理员班级查询/创建权限；管理员查看所有班级并取得管理用加入码，教师/学生查询范围不变。验证：Graph Tutor/provider/图片/AutoGen 定向 102 passed（1 条既有 pytest 标记警告）；后端 `ClassroomServiceTest`、`ClassroomRepositoryTest`、`TutorDailyRequestLimitServiceTest` 通过；`git diff --check` 通过。
+- 按 Google Java Format 整理本轮 4 个 Java 文件，定向 `spotless:check` 通过。全仓 Spotless 检查仍报告 614 个其他历史文件格式不一致，本轮未对其做批量重写。
+- 再跑全量 Maven：1389 tests / 0 failures / 7 errors；6 个容器在 Docker 绑定随机宿主机端口时报告端口占用，长期仿真类数据库连接失败但隔离复跑通过。因此后端全量结果仍未通过。
+- `deploy/scripts/test_production_ai_readiness_contract.sh` 与 `test_piston_http_host_contract.sh` 通过。尝试生产 ECS 只读验证时发现当前 TUN 路由需改走 eth2；本机 `sudo -n` 要求密码，未能加临时路由，因此没有声称检查过生产实例。
 - 学情可信度补强：教师批准前的 AI 题可练习但不发 KC 掌握事件；仅与已批准题完整 payload 一致的题能入学情，查询失败时继续返回判题并跳过事件，反馈会说明暂不计入画像。新测试先复现旧行为；最新 Boss/Tutor/Twin/审核关键回归 86 项通过。
 - Phaser Boss 多阶段真实浏览器旅程现已完成：三阶段 AI 题绑定、正式判题、服务端受击结算、胜利页与 Phaser 单实例连续性均通过；命中音效 HTTP 200，0 个浏览器 JS 错误。阶段间通过既有预生成/轮询取题，进入加载时清空上一阶段题目。
 - 最新 Playwright Tutor 真调用识别了文本校验词及合成图片的蓝色方形/黄色背景，2 条会话可回读；临时测试用户、关联记录和图片均清理。本地 Spring 进程仍为 `PYT_AI_REQUEST_LIMITS_ENABLED=false`，供应商本身费用和速率限制不受影响。

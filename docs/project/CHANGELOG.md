@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-14 — Tutor 强断言语义核验与管理员班级权限
+
+- Tutor 仅对带课件证据的强事实声明调用现有语义核验器，并受现有请求预算与熔断治理；普通回答继续走规则审查。DeepSeek 不返回图片：图片只作为视觉输入，回答是文本；按需 Mermaid/SVG 是文本源码，由 Web 本地渲染。
+- 修复教师屋对 ADMIN 的班级闭环：管理员班级总览读取全量班级并返回管理所需加入码，管理员可以创建班级；教师和学生仍查询各自范围。
+- 真实 DeepSeek 调用复验：文本、合成 PNG 视觉输入、Tutor 文本回答和课件语义核验成功；宿主机直连图片请求遇 TLS 超时，通过项目 Graph 容器的代理链路重试成功。没有获取供应商 token/账单数据。
+- 按项目 Google Java Format 整理本轮 4 个 Java 文件，定向 Spotless 检查通过；全仓检查报告另有 614 个历史文件格式差异，本轮没有批量格式化。
+- 验证：Graph Tutor/provider/图片/AutoGen 定向回归 102 项通过（1 条既有 pytest 标记警告）；后端班级服务/仓储和本地 AI 限额测试通过；`git diff --check`、生产 AI/readiness 与 Piston URL 合同脚本通过。全量 Maven 1389 项为 0 failures / 7 errors：6 个 Testcontainers 动态端口冲突、长期仿真类全量运行连接失败（隔离复跑通过），故不记为全绿。ECS 实例检查因本机直连路由需要 sudo 密码未执行。
+
 ## 2026-10-14 — AI 编程题自动入库与真实复用验证
 
 - 新增 V213 `review_source` 审计来源；仅 Graph 五重审查通过、章节/阶段/KC/难度匹配、含参考解及至少 3 条样例/隐藏用例的 AI 编程题会自动进入现有 approved bank。复用 PostgreSQL advisory lock 防并发重复，未新建题库表。
