@@ -160,7 +160,8 @@ class Stage10BugMineAcceptanceIntegrationTest {
     MockRestServiceServer graphServer = MockRestServiceServer.bindTo(graphRestTemplate).build();
     String token = registerAndLogin("mine-stu02");
     Long userId = userId("mine-stu02");
-    Long submissionId = seedFailedSubmission(userId, 476L);
+    Long questId = seedFixBugQuest(userId, 476L);
+    Long submissionId = seedFailedSubmission(userId, 476L, questId);
 
     graphServer
         .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/debug/analyze"))
@@ -202,7 +203,7 @@ class Stage10BugMineAcceptanceIntegrationTest {
             "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ? AND source = 'DEBUG_FIX'",
             Integer.class,
             userId);
-    assertThat(debugFix).isGreaterThanOrEqualTo(1);
+    assertThat(debugFix).isEqualTo(1);
     graphServer.verify(Duration.ofSeconds(2));
   }
 
@@ -737,16 +738,21 @@ class Stage10BugMineAcceptanceIntegrationTest {
   }
 
   private Long seedFailedSubmission(Long userId, Long problemId) {
+    return seedFailedSubmission(userId, problemId, null);
+  }
+
+  private Long seedFailedSubmission(Long userId, Long problemId, Long questId) {
     Long submissionId =
         jdbcTemplate.queryForObject(
             """
-            INSERT INTO practice_submission (user_id, problem_id, source, language, code, status, submitted_at)
-            VALUES (?, ?, 'TRAINING', 'PYTHON_3_11', ?, 'FAILED', now() - interval '2 minutes')
+            INSERT INTO practice_submission (user_id, problem_id, quest_id, source, language, code, status, submitted_at)
+            VALUES (?, ?, ?, 'TRAINING', 'PYTHON_3_11', ?, 'FAILED', now() - interval '2 minutes')
             RETURNING id
             """,
             Long.class,
             userId,
             problemId,
+            questId,
             "print(\"42\")");
     jdbcTemplate.update(
         """
@@ -755,6 +761,25 @@ class Stage10BugMineAcceptanceIntegrationTest {
         """,
         submissionId);
     return submissionId;
+  }
+
+  private Long seedFixBugQuest(Long userId, Long problemId) {
+    String kcCode =
+        jdbcTemplate.queryForObject(
+            "SELECT kc_code FROM course_problem WHERE id = ?", String.class, problemId);
+    return jdbcTemplate.queryForObject(
+        """
+        INSERT INTO quest (
+          user_id, source, title, kc_code, node_type, payload, due_date, status,
+          required_evidence_type, target_problem_ids
+        ) VALUES (?, 'SYSTEM_DEFAULT', '修复练习', ?, 'FIX_BUG', '{}'::jsonb,
+                  CURRENT_DATE + 1, 'IN_PROGRESS', 'submission', ARRAY[?]::BIGINT[])
+        RETURNING id
+        """,
+        Long.class,
+        userId,
+        kcCode,
+        problemId);
   }
 
   private Long seedOpenBugMineSession(

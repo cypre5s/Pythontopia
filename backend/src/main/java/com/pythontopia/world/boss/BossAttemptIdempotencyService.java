@@ -22,6 +22,8 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class BossAttemptIdempotencyService {
 
+  private static final int RATE_LIMIT_SECONDS = 10;
+
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
   private final ApplicationEventPublisher eventPublisher;
@@ -39,6 +41,7 @@ public class BossAttemptIdempotencyService {
   public Claim claim(Long userId, UUID attemptId, BossAttemptRequest request) {
     String requestHash = requestHash(request);
     UUID token = UUID.randomUUID();
+    jdbcTemplate.queryForObject("SELECT id FROM users WHERE id = ? FOR UPDATE", Long.class, userId);
     int inserted =
         jdbcTemplate.update(
             "INSERT INTO boss_attempt_idempotency (user_id, attempt_id, request_hash, claim_token)"
@@ -48,6 +51,18 @@ public class BossAttemptIdempotencyService {
             requestHash,
             token);
     if (inserted == 1) {
+      Integer recentAttempts =
+          jdbcTemplate.queryForObject(
+              "SELECT count(*) FROM boss_attempt_idempotency WHERE user_id = ?"
+                  + " AND created_at > now() - interval '10 seconds'",
+              Integer.class,
+              userId);
+      if (recentAttempts != null && recentAttempts > 1) {
+        throw new BusinessException(
+            HttpStatus.TOO_MANY_REQUESTS,
+            "BOSS_ATTEMPT_RATE_LIMITED",
+            "请稍候，10 秒内只能提交一次 Boss 答案");
+      }
       return new Claim(token, null, requestHash);
     }
 

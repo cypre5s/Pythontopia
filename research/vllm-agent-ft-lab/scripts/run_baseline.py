@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import csv
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -18,11 +19,10 @@ from pyt_agent_lab.training_quality import (
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run Pythontopia agent baseline through an OpenAI-compatible vLLM endpoint.")
+    parser = argparse.ArgumentParser(description="Run a Pythontopia agent baseline through DeepSeek.")
     parser.add_argument("--cases", default="research/vllm-agent-ft-lab/cases/baseline_cases.jsonl")
-    parser.add_argument("--base-url", required=True)
-    parser.add_argument("--api-key", default="local-dev-token")
-    parser.add_argument("--model", default="pythontopia-qwen35-baseline")
+    parser.add_argument("--base-url", default="https://api.deepseek.com")
+    parser.add_argument("--model", default="deepseek-flash")
     parser.add_argument(
         "--adapter-path",
         default=None,
@@ -42,9 +42,12 @@ def main() -> None:
         help="Keep unconstrained raw as the model-regression sentinel; json_schema is a separately reported inference ablation.",
     )
     args = parser.parse_args()
+    api_key = os.environ.get("PYT_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        parser.error("Set PYT_OPENAI_API_KEY or OPENAI_API_KEY in the process environment.")
 
     run_dir = Path(args.run_dir or f"research/vllm-agent-ft-lab/runs/baseline-{_stamp()}")
-    client = OpenAICompatClient(args.base_url, args.api_key, args.model)
+    client = OpenAICompatClient(args.base_url, api_key, args.model)
     cases = load_cases(args.cases)
     initialize_evaluation_manifest(
         run_dir=run_dir,

@@ -232,16 +232,20 @@ public class BossGraphClient {
     body.put("code", code);
     body.put("testCases", cases);
     body.put("timeoutSec", timeoutSec);
-    return GraphClientRetryHelper.withRetry(
-        "boss-evaluate",
-        () ->
-            restTemplate
-                .exchange(
-                    properties.graphUrl() + "/agents/boss/evaluate",
-                    HttpMethod.POST,
-                    new HttpEntity<>(body, headers),
-                    BossEvaluateResultDto.class)
-                .getBody());
+    try {
+      return GraphClientRetryHelper.withRetry(
+          "boss-evaluate",
+          () ->
+              restTemplate
+                  .exchange(
+                      properties.graphUrl() + "/agents/boss/evaluate",
+                      HttpMethod.POST,
+                      new HttpEntity<>(body, headers),
+                      BossEvaluateResultDto.class)
+                  .getBody());
+    } catch (BusinessException ex) {
+      throw new RestClientException("boss-evaluate Graph service is unavailable", ex);
+    }
   }
 
   /** 用于运维探活。失败返回 false，永不抛。 */

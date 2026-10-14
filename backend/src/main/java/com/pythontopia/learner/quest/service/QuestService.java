@@ -85,7 +85,7 @@ public class QuestService {
           HttpStatus.CONFLICT, "QUEST_ALREADY_FINALIZED", "任务已被其他请求完成，请刷新后查看");
     }
     repository.recordProgress(questId, "COMPLETED", request == null ? null : request.note());
-    publishCompletionEvent(quest);
+    publishCompletionEvent(quest, request);
     return refresh(userId, questId);
   }
 
@@ -135,7 +135,7 @@ public class QuestService {
                     HttpStatus.NOT_FOUND, "QUEST_NOT_FOUND", "任务不存在"));
   }
 
-  private void publishCompletionEvent(QuestDto quest) {
+  private void publishCompletionEvent(QuestDto quest, QuestCompleteRequest request) {
     if (quest.kcCode() == null || quest.kcCode().isBlank()) {
       return;
     }
@@ -148,9 +148,15 @@ public class QuestService {
         // 随后才回调本方法完成任务。这里再发一次会让 MasteryEvaluator 对同一次 AC 记两遍掌握度
         // （它不按 problemId 去重），也会把 practical_ability 维度的证据数灌成双倍。
       }
-      case FIX_BUG -> eventPublisher.publishEvent(
-          new LearningEvent.DebugResolved(
-              quest.userId(), quest.kcCode(), extractProblemId(quest)));
+      case FIX_BUG -> {
+        // A verified submission publishes its own practice event; BugMine publishes the single
+        // DebugResolved event when its session transitions to RESOLVED.
+        if (request == null || request.submissionId() == null) {
+          eventPublisher.publishEvent(
+              new LearningEvent.DebugResolved(
+                  quest.userId(), quest.kcCode(), extractProblemId(quest)));
+        }
+      }
       case PLANT_KC, PROFILE_UPDATE -> {
         // PLANT_KC 与 PROFILE_UPDATE 不直接驱动 mastery 加分，留待复盘大厅处理。
       }

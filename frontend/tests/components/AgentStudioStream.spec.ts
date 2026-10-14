@@ -65,13 +65,13 @@ describe('AgentStudioStream · 双层思考链', () => {
     expect(img.attributes('alt')).toBe('插画师');
   });
 
-  it('后端未发 role_key 时按 node 名回退推断（narrator）', () => {
+  it('已禁用的 TTS 节点不显示为配音师', () => {
     const wrapper = mount(AgentStudioStream, {
       props: { traces: [trace({ node: 'tts_synthesize' })], status: 'streaming' },
     });
 
-    expect(wrapper.find('[data-testid="agent-studio-brief"]').text()).toContain('配音师');
-    expect(wrapper.find('.studio__face-img').attributes('src')).toBe(`${HEAD}/portrait_merchant_head.png`);
+    expect(wrapper.find('[data-testid="agent-studio-brief"]').text()).toContain('工作室成员');
+    expect(wrapper.find('.studio__face-img').attributes('src')).toBe(`${HEAD}/portrait_workshop_master_head.png`);
   });
 
   it('未知 node 且无 role_key → 回退「工作室成员」兜底人物', () => {
@@ -157,16 +157,16 @@ describe('AgentStudioStream · 双层思考链', () => {
   it('error 态：红框 + 错误行展示 errorMessage，展开后末步标失败 ✗', async () => {
     const wrapper = mount(AgentStudioStream, {
       props: {
-        traces: [trace({ role_key: 'narrator' })],
+        traces: [trace({ role_key: 'worker' })],
         status: 'error',
-        errorMessage: '配音合成失败',
+        errorMessage: '媒体合成失败',
       },
     });
 
     expect(wrapper.find('[data-testid="agent-studio-stream"]').classes()).toContain('studio--error');
     const errLine = wrapper.find('[data-testid="agent-studio-error"]');
     expect(errLine.exists()).toBe(true);
-    expect(errLine.text()).toContain('配音合成失败');
+    expect(errLine.text()).toContain('媒体合成失败');
 
     await wrapper.find('[data-testid="agent-studio-toggle"]').trigger('click');
     expect(wrapper.find('.studio__line--failed').exists()).toBe(true);
@@ -185,7 +185,7 @@ describe('AgentStudioStream · 双层思考链', () => {
     const traces: SseTraceEvent[] = [
       trace({ role_key: 'illustrator', phase: 'start', message: '绘制分镜' }),
       trace({ role_key: 'illustrator', phase: 'finish', status: 'finish', elapsed_ms: 1200, note: '产出 3 张图' }),
-      trace({ role_key: 'narrator', message: '合成旁白', elapsed_ms: 800 }),
+      trace({ role_key: 'worker', message: '合成视频', elapsed_ms: 800 }),
     ];
     const wrapper = mount(AgentStudioStream, {
       props: { traces, status: 'streaming', defaultExpanded: true },
@@ -197,7 +197,7 @@ describe('AgentStudioStream · 双层思考链', () => {
     expect(lines[0]?.text()).toContain('绘制分镜');
     expect(lines[0]?.text()).toContain('1200ms');
     expect(lines[0]?.text()).toContain('产出 3 张图');
-    expect(lines[1]?.text()).toContain('配音师');
+    expect(lines[1]?.text()).toContain('工作室成员');
     expect(lines[1]?.text()).toContain('800ms');
   });
 

@@ -31,6 +31,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 章末大测试编排（r15 计划 §4 / §9）：prepare（触发异步预生成）/ start（去答案发卷 + 限时）/
@@ -191,12 +192,14 @@ public class ChapterTestService {
    * 提交判分（服务端权威）。超时按 deadline 拒收并记 integrity.overtime；正常则判分入库 + 触发星级重算。
    * 幂等：对已 SUBMITTED 的同一 test 重复提交返回既有结果。
    */
+  @Transactional
   public ChapterTestResultDto submit(
       long userId, int chapter, long testId, ChapterTestSubmitRequest request) {
     return submit(
         userId, chapter, testId, request, ChapterAssessmentKind.FINAL);
   }
 
+  @Transactional
   public ChapterTestResultDto submitQuiz(
       long userId, int chapter, long testId, ChapterTestSubmitRequest request) {
     return submit(
@@ -212,7 +215,7 @@ public class ChapterTestService {
     requireChapter(chapter);
     ChapterTestRecord record =
         repository
-            .findOwned(userId, testId)
+            .findOwnedForUpdate(userId, testId)
             .filter(r -> r.chapter() == chapter && r.assessmentKind() == assessmentKind)
             .orElseThrow(
                 () ->

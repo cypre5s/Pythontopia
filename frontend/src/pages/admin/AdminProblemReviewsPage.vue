@@ -103,6 +103,10 @@ async function loadQueue(): Promise<void> {
       selectedId.value = result.content[0]?.id ?? null;
     }
   } catch (cause) {
+    entries.value = [];
+    selectedId.value = null;
+    totalElements.value = 0;
+    totalPages.value = 0;
     error.value = cause instanceof Error ? cause.message : '审核队列暂不可用';
   } finally {
     loading.value = false;

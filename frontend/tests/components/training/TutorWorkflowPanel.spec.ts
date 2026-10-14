@@ -3,11 +3,15 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { nextTick } from 'vue';
 import { createPinia, setActivePinia } from 'pinia';
 import { useLearningStore } from '@stores/learning';
+import { runTrace } from '@/services/codeTheater/trace';
+import type { Trace } from '@/services/codeTheater/types';
 import TutorWorkflowPanel from '@/components/training/TutorWorkflowPanel.vue';
 
 vi.mock('vue-router', () => ({
   useRouter: () => ({ push: vi.fn() }),
 }));
+
+vi.mock('@/services/codeTheater/trace', () => ({ runTrace: vi.fn() }));
 
 vi.mock('@/api/tutorWorkflow', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/api/tutorWorkflow')>();
@@ -100,11 +104,11 @@ function getStream(): MockStream {
   return useSseStream('/api/tutor/workflow/runs') as unknown as MockStream;
 }
 
-function mountPanel() {
+function mountPanel(props: { initialEventRequest?: { event: 'EXECUTION_TRACE'; nonce: number } } = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
   return mount(TutorWorkflowPanel, {
-    props: { problemId: 476, kcCodes: ['PY43-KC-016'], submissionId: 21 },
+    props: { problemId: 476, kcCodes: ['PY43-KC-016'], submissionId: 21, ...props },
     global: {
       plugins: [pinia],
       stubs: {
@@ -129,9 +133,81 @@ describe('TutorWorkflowPanel', () => {
     stream.state.value = {};
     stream.start.mockClear();
     stream.abort.mockClear();
+    vi.mocked(runTrace).mockReset();
     vi.mocked(recordTutorWorkflowFeedback).mockClear();
     vi.mocked(uploadTutorWorkflowImage).mockClear();
     vi.mocked(getActiveWorkflowSession).mockClear();
+  });
+
+  it('uses the browser trace for EXECUTION_TRACE and keeps it out of workflow feedback', async () => {
+    const code = 'radius = int(input())\nprint(radius)';
+    const trace: Trace = {
+      version: 1,
+      source: code,
+      events: [
+        { step: 0, line: 1, kind: 'assign', varName: 'radius', value: '3', scope: 'global' },
+        { step: 1, line: 2, kind: 'output', text: '3' },
+      ],
+      stdout: '3\n',
+      truncated: false,
+      stepCount: 2,
+    };
+    vi.mocked(runTrace).mockResolvedValue(trace);
+    const wrapper = mountPanel();
+    const learning = useLearningStore();
+    learning.setTrainingCode(code);
+    learning.training.problem = {
+      id: 476,
+      packId: 43,
+      kcCode: 'PY43-KC-016',
+      title: '读取并输出数字',
+      statementMarkdown: '',
+      inputDescription: '',
+      outputDescription: '',
+      difficulty: 'easy',
+      samples: [{ input: '  3 \n4\n', output: '3' }],
+    };
+    await flushPromises();
+    await wrapper.get('.tw-tools__toggle').trigger('click');
+    const traceAction = wrapper.get('.tw-tools__menu').findAll('button')
+      .find((button) => button.text().includes('执行轨迹讲解'));
+    expect(traceAction).toBeDefined();
+    await traceAction!.trigger('click');
+    await flushPromises();
+
+    expect(runTrace).toHaveBeenCalledWith(code, { stdin: '  3 \n4\n' });
+    expect(getStream().start).not.toHaveBeenCalled();
+    expect(recordTutorWorkflowFeedback).not.toHaveBeenCalled();
+    expect(wrapper.get('[data-testid="execution-trace-local"]').text())
+      .toContain('浏览器本地预览');
+    expect(wrapper.get('[data-testid="execution-trace-local"]').text())
+      .toContain('不用于判题或掌握度');
+    expect(wrapper.get('[data-card="execution_trace"]').text()).toContain('变量 radius = 3');
+    expect(wrapper.get('[data-card="execution_trace"]').text()).toContain('实际输出：3');
+    expect(wrapper.get('[data-card="execution_trace"]').element.textContent).toContain('  3 \n4\n');
+    expect(wrapper.find('[data-testid="card-helpful"]').exists()).toBe(false);
+    expect(recordTutorWorkflowFeedback).not.toHaveBeenCalled();
+  });
+
+  it('shows a clear message and skips server fallback when there is no code', async () => {
+    mountPanel({ initialEventRequest: { event: 'EXECUTION_TRACE', nonce: 1 } });
+    await flushPromises();
+
+    expect(runTrace).not.toHaveBeenCalled();
+    expect(getStream().start).not.toHaveBeenCalled();
+    expect(useToastStore().message).toContain('请先在编辑器中编写 Python 代码');
+  });
+
+  it('shows a local execution error without falling back to the workflow server', async () => {
+    vi.mocked(runTrace).mockRejectedValue(new Error('Pyodide unavailable'));
+    mountPanel({ initialEventRequest: { event: 'EXECUTION_TRACE', nonce: 1 } });
+    useLearningStore().setTrainingCode('print(1)');
+    await flushPromises();
+
+    expect(runTrace).toHaveBeenCalledWith('print(1)', { stdin: '' });
+    expect(getStream().start).not.toHaveBeenCalled();
+    expect(useToastStore().message).toContain('本地执行轨迹生成失败');
+    expect(useToastStore().message).toContain('Pyodide unavailable');
   });
 
   afterEach(() => vi.unstubAllGlobals());

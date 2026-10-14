@@ -496,7 +496,7 @@ def build_openai_lm(
     if not (model and base_url and api_key):
         raise ValueError(
             "缺少 OpenAI 兼容 LLM 配置：需 base_url/api_key/model"
-            "（CLI --base-url/--api-key/--task-model 或 deploy/.env 的 PYT_OPENAI_*）。"
+            "（CLI --base-url/--task-model 或环境变量 PYT_OPENAI_*）。"
         )
     endpoint = urlsplit(base_url)
     try:

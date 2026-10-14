@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """Run the same workshop task cases through three pipelines:
 
-  Group A — External LLM
-  Group B — Qwen LoRA (local vLLM)
-  Group C — Qwen LoRA + Guard + Fallback
+  Group A — DeepSeek Flash
+  Group B — DeepSeek V4 Pro
+  Group C — DeepSeek V4 Pro + Guard + Fallback
 
 Produces three standard run directories plus a 3-way comparison report.
 """
 from __future__ import annotations
 
 import argparse
+import os
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -24,9 +25,7 @@ from pyt_agent_lab.baseline import load_cases
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="A/B/C workshop task evaluation: External LLM vs Qwen LoRA vs Qwen LoRA + Guard"
-    )
+    parser = argparse.ArgumentParser(description="A/B/C workshop task evaluation using DeepSeek.")
     # ---- Cases -----------------------------------------------------------
     parser.add_argument(
         "--cases",
@@ -34,38 +33,28 @@ def main() -> None:
         help="JSONL case file to evaluate across all three groups.",
     )
 
-    # ---- Group A (External LLM) ------------------------------------------
+    # ---- Group A (DeepSeek Flash) ----------------------------------------
     parser.add_argument(
         "--a-base-url",
-        required=True,
-        help="OpenAI-compatible base URL for external LLM (Group A).",
-    )
-    parser.add_argument(
-        "--a-api-key",
-        default="local-dev-token",
-        help="API key for external LLM endpoint.",
+        default="https://api.deepseek.com",
+        help="DeepSeek base URL for Group A.",
     )
     parser.add_argument(
         "--a-model",
-        default="deepseek-chat",
-        help="Model name for external LLM.",
+        default="deepseek-flash",
+        help="Allowlisted DeepSeek model for Group A.",
     )
 
-    # ---- Group B (Qwen LoRA) ---------------------------------------------
+    # ---- Group B (DeepSeek V4 Pro) ---------------------------------------
     parser.add_argument(
         "--b-base-url",
-        required=True,
-        help="OpenAI-compatible base URL for Qwen LoRA vLLM (Group B).",
-    )
-    parser.add_argument(
-        "--b-api-key",
-        default="local-dev-token",
-        help="API key for Qwen LoRA endpoint.",
+        default="https://api.deepseek.com",
+        help="DeepSeek base URL for Group B.",
     )
     parser.add_argument(
         "--b-model",
-        default="pythontopia-qwen35-e1-lora",
-        help="Model name for Qwen LoRA.",
+        default="deepseek-v4-pro",
+        help="Allowlisted DeepSeek model for Group B.",
     )
 
     # ---- Execution -------------------------------------------------------
@@ -82,6 +71,9 @@ def main() -> None:
     )
 
     args = parser.parse_args()
+    api_key = os.environ.get("PYT_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        parser.error("Set PYT_OPENAI_API_KEY or OPENAI_API_KEY in the process environment.")
 
     output_dir = Path(
         args.output_dir
@@ -94,15 +86,15 @@ def main() -> None:
         output_dir=output_dir,
         cases=cases,
         group_a=GroupEndpoint(
-            label="External LLM",
+            label=args.a_model,
             base_url=args.a_base_url,
-            api_key=args.a_api_key,
+            api_key=api_key,
             model=args.a_model,
         ),
         group_b=GroupEndpoint(
-            label="Qwen LoRA",
+            label=args.b_model,
             base_url=args.b_base_url,
-            api_key=args.b_api_key,
+            api_key=api_key,
             model=args.b_model,
         ),
         seed=args.seed,

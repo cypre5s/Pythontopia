@@ -29,7 +29,6 @@ def parse_args() -> argparse.Namespace:
         description="Inspect raw fine-tuned responses for real graph Agent prompts."
     )
     parser.add_argument("--base-url", default="http://127.0.0.1:18094/v1")
-    parser.add_argument("--api-key", default="local-dev-token")
     parser.add_argument("--baseline-model", default="pythontopia-qwen35-awq-base")
     parser.add_argument("--candidate-model", default="pythontopia-qwen35-e1-lora")
     parser.add_argument(
@@ -41,16 +40,19 @@ def parse_args() -> argparse.Namespace:
 
 async def main() -> int:
     args = parse_args()
+    api_key = os.environ.get("PYT_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        raise SystemExit("Set PYT_OPENAI_API_KEY or OPENAI_API_KEY in the process environment.")
     os.environ.update(
         {
             "PYT_LLM_PROVIDER": "openai_compat",
             "OPENAI_BASE_URL": args.base_url,
-            "OPENAI_API_KEY": args.api_key,
+            "OPENAI_API_KEY": api_key,
             "OPENAI_MODEL": args.baseline_model,
             "OPENAI_MODEL_FAST": args.baseline_model,
             "PYT_FINE_TUNED_LLM_ENABLED": "true",
             "PYT_FINE_TUNED_BASE_URL": args.base_url,
-            "PYT_FINE_TUNED_API_KEY": args.api_key,
+            "PYT_FINE_TUNED_API_KEY": api_key,
             "PYT_FINE_TUNED_MODEL": args.candidate_model,
             "NO_PROXY": "*",
             "no_proxy": "*",

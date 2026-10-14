@@ -132,7 +132,46 @@ watch(navigationOpen, (open) => {
               <span
                 class="admin-nav__icon"
                 aria-hidden="true"
-              >01</span>
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect
+                    x="3"
+                    y="3"
+                    width="8"
+                    height="8"
+                    rx="1.5"
+                  />
+                  <rect
+                    x="13"
+                    y="3"
+                    width="8"
+                    height="5"
+                    rx="1.5"
+                  />
+                  <rect
+                    x="13"
+                    y="10"
+                    width="8"
+                    height="11"
+                    rx="1.5"
+                  />
+                  <rect
+                    x="3"
+                    y="13"
+                    width="8"
+                    height="8"
+                    rx="1.5"
+                  />
+                </svg>
+              </span>
               AI 运维概览
             </RouterLink>
           </section>
@@ -153,7 +192,20 @@ watch(navigationOpen, (open) => {
               <span
                 class="admin-nav__icon"
                 aria-hidden="true"
-              >02</span>
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M12 3 20 6v5c0 5-3.4 8.4-8 10-4.6-1.6-8-5-8-10V6l8-3Z" />
+                  <path d="m8.5 12 2.2 2.2 4.8-5" />
+                </svg>
+              </span>
               AI 出题审核
             </RouterLink>
           </section>
@@ -174,7 +226,25 @@ watch(navigationOpen, (open) => {
               <span
                 class="admin-nav__icon"
                 aria-hidden="true"
-              >03</span>
+              >
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.8"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M16 20v-1.5a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4V20" />
+                  <circle
+                    cx="9.5"
+                    cy="7"
+                    r="4"
+                  />
+                  <path d="M17 11a4 4 0 0 0 0-8M21 20v-1.5a4 4 0 0 0-3-3.87" />
+                </svg>
+              </span>
               用户管理
             </RouterLink>
           </section>
@@ -523,8 +593,12 @@ watch(navigationOpen, (open) => {
   border: 1px solid #dbe6f7;
   border-radius: 7px;
   color: var(--admin-primary);
-  font-size: 9px;
-  font-variant-numeric: tabular-nums;
+}
+
+.admin-nav__icon svg {
+  display: block;
+  width: 16px;
+  height: 16px;
 }
 
 .admin-sidebar__account {

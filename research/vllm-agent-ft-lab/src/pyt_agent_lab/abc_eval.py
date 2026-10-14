@@ -5,9 +5,8 @@ import sys
 import threading
 import time
 from dataclasses import dataclass
-from datetime import datetime, timezone
 from pathlib import Path
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from .baseline import (
@@ -15,7 +14,6 @@ from .baseline import (
     OpenAICompatClient,
     ResponseJsonlWriter,
     build_case_messages,
-    load_cases,
 )
 from .experiment_logging import ExperimentLogger
 from .fallback import build_fallback_response
@@ -62,8 +60,8 @@ def run_abc_groups(config: AbcEvalConfig) -> dict[str, Path]:
     config.output_dir.mkdir(parents=True, exist_ok=True)
 
     # ---- Groups A & B run in parallel ------------------------------------
-    a_dir = config.output_dir / "group_a_external"
-    b_dir = config.output_dir / "group_b_lora"
+    a_dir = config.output_dir / "group_a"
+    b_dir = config.output_dir / "group_b"
 
     a_client = OpenAICompatClient(
         base_url=config.group_a.base_url,
@@ -105,7 +103,7 @@ def run_abc_groups(config: AbcEvalConfig) -> dict[str, Path]:
     _finalise_run(a_dir, a_logger, a_results)
     _finalise_run(b_dir, b_logger, b_results)
 
-    # ---- Group C: LoRA + Guard + Fallback  -------------------------------
+    # ---- Group C: Group B + Guard + Fallback  ----------------------------
     c_dir = config.output_dir / "group_c_guarded"
     _run_group_c(config, b_results, c_dir, progress)
 
@@ -206,7 +204,7 @@ def _run_parallel(
 
 
 # ---------------------------------------------------------------------------
-# Group C: LoRA + Guard + Fallback
+# Group C: Group B + Guard + Fallback
 # ---------------------------------------------------------------------------
 
 

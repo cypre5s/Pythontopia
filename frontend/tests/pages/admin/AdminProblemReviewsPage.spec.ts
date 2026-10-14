@@ -216,6 +216,8 @@ describe('AdminProblemReviewsPage', () => {
     await wrapper.get('[aria-label="审核队列排序字段"]').setValue("REQUESTER_USERNAME");
     await flushPromises();
     expect(wrapper.get('[role="alert"]').text()).toContain("排序请求失败");
+    expect(wrapper.findAll('.review-table tbody tr')).toHaveLength(0);
+    expect(wrapper.find('.review-detail__actions').exists()).toBe(false);
 
     await wrapper.get(".review-error .admin-button").trigger("click");
     await flushPromises();

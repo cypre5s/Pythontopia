@@ -62,6 +62,10 @@ public class XfyunImageService {
     this.repository = repository;
   }
 
+  public boolean isEnabled() {
+    return properties.isEnabled();
+  }
+
   /**
    * 生成真实图片并落库为 {@link MediaAsset}。{@code label} 为兼容现有客户端保留；{@code kcCodes}
    * 用于审计/检索关联。
@@ -74,7 +78,7 @@ public class XfyunImageService {
       checkRateLimit(userId);
     }
 
-    if (!properties.isEnabled()) {
+    if (!isEnabled()) {
       throw new BusinessException(
           HttpStatus.SERVICE_UNAVAILABLE,
           "IMAGE_PROVIDER_UNAVAILABLE",

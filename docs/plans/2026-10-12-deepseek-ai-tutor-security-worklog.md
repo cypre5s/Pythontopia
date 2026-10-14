@@ -355,3 +355,31 @@
 - 验证：Graph 全量 `1812 passed, 1 skipped, 13 warnings`；Boss 定向路由/沙箱回归及 Ruff 通过；后端 `BossServiceTest` 35 项通过，前端全量 256 文件 / 2517 tests、typecheck、定向 ESLint、build 通过。
 - ASR 控制器现在先检查服务开关；关闭时不访问上传内容。启用时，超过 8MiB 的音频在 `getBytes()` 前返回 `ASR_AUDIO_TOO_LARGE` / 413。回归用例先在旧实现下失败，修复后控制器与服务 6 项定向测试通过；全仓 Spotless 仍被 607 个其他 Java 文件的格式问题阻断，ASR 控制器和测试不在违规清单中。
 - 未关闭：Tutor 账号级费用/请求额度策略仍等用户选择；生产 Piston/出口网络隔离仍未实测。对话中出现过的密钥需轮换后再用于生产。无尽远征性能照用户要求留到最后；本轮没有真实 DeepSeek 请求。
+
+## 2026-10-14 额度策略落实与当前快照复核
+
+- 用户将 Tutor 账号级额度周期与上限交由项目决定。复核当前实现：V209 按账号/上海自然日计数，Tutor 普通问答和工作流在 Graph 前预占，每账号每日 30 次；V212 同事务增加全站每日 300 次入口上限；计数保留 90 天。改变 conversationId 不改变账号计数。
+- `mvn -q -Dtest=TutorDailyRequestLimitServiceTest test` 当前快照退出码 0。额度耗尽响应 HTTP 429，业务路径在 Graph 客户端调用前结束。
+- 这限制的是入口请求次数，不是工作流内部模型调用次数、token 或金额。供应商账单/Token 用量仍需核实；本轮没有调用 DeepSeek。
+
+## 2026-10-14 研究和调试 CLI 外发边界
+
+- 研究共享 HTTP 客户端及 Graph provider 路由均限制 DeepSeek HTTPS 主机与 allowlist 模型；研究客户端不跟随 HTTP 重定向。baseline、A/B、教师投票、Graph 路由和诊断 CLI 移除 key/internal token 的 argv 参数，改为环境配置；旧 Qwen 在线端点因共享客户端检查而在发送前失败。
+- RED/GREEN 回归覆盖非 DeepSeek 地址、端口、userinfo、模型、重定向和五个 CLI 帮助输出中的 secret 参数。研究全量非训练套件 `321 passed`、Ruff 与 `git diff --check` 通过；两个需要 `torch` 的训练模块因当前测试环境未安装 `torch` 而未收集成功。
+- 本轮未发起模型或网络 API 请求；已确认的外部请求数与供应商实际账单仍未核对。
+
+## 2026-10-14 Bug Mine 事件去重
+
+- Bug Mine retry 通过时，`SubmissionService` 自动完成关联 FIX_BUG 任务与 `BugMineService` 关闭会话会各发一个 `DebugResolved`。改为有已验证 submission 证据的任务完成不再重复发事件，让 RESOLVED 会话作为该调试事件的唯一来源；无 submission 的旧任务完成行为保留。
+- TDD：新增真实 Testcontainers 调用链回归，旧代码写入 2 条 `DEBUG_FIX` 后失败，修复后精确断言 1 条通过。`QuestServiceTest` 8 项及该 Bug Mine 集成用例通过。
+- 未触发模型调用。章测并发判题、Boss 唯一 attemptId 请求限流、Boss 控制器角色边界、Boss 完整浏览器判题旅程及外部额度核对仍待处理。
+
+## 2026-10-14 续：章测并发、Boss 入口与 Graph 故障兜底
+
+- 章测提交在服务端锁定对应学生的测试记录直到本地判题与写入结束；请求最多 100 道，答案 key 最多 128 字符、value 最多 8192 字符。数据库并发回归证明同一测试不能并行重复判题。
+- Boss 判题以 user 行锁串行化新 attempt ID 的账号请求，并施加 10 秒窗口限流；同一 attempt ID 的重放仍走幂等结果。Boss 出题、预生成、状态与判题入口统一拒绝非学生身份。
+- Graph 熔断重试最终抛出的 `BusinessException` 原先绕开了 Boss 的 `RestClientException` 本地执行兜底。现在在 Graph client 边界映射成已有传输异常；RED/GREEN 回归覆盖 Graph 连续返回 503 后的异常类型。当前代码下，正式 Boss 判题 API 使用本地 Piston 成功通过 1/1 样例。
+- 浏览器从真实登录开始检查远征：普通题通过，另一次错误只按服务端结果扣 2 点体力，再用新题通过；继续体验了复盘与休息节点，期间没有浏览器异常。已通过的 Phaser 单测确认 Boss scene 会复用唯一 Game/canvas、成功结算才触发命中回调，失败状态不伪造 Boss 受伤。
+- 定向验证：`QuestServiceTest` 8、`Stage10BugMineAcceptanceIntegrationTest` 12、`ChapterTestServiceTest` 19、`ChapterTestSubmitConcurrencyIntegrationTest` 1、Boss 幂等 PostgreSQL 5、`BossControllerTest` 11、`BossGraphClientTest` 2、`BossServiceTest` 46，共 104 项通过；前端 Boss 场景和画布切换 5 项、typecheck、`git diff --check` 通过。
+- 尝试用第二个合成账号直开第 5 章远征时，服务端按真实先修画像返回 `EXPEDITION_NO_PRACTICE_PROBLEMS`：仅有一个真实通过记录且掌握度不足以满足先修条件，回退候选也没有课程编程题。没有伪造掌握度；两个临时测试账号及其级联学习数据已从本地数据库删除。
+- 未完成项：最终 Boss 节点的浏览器真实判题与命中动画旅程没有跑完；用户尚未完成先修评估的账号可能无法从高章直接开始远征。该限制需要有真实教学流程的产品决策，不用假数据掩盖。未发起新的 DeepSeek 请求；历史约 36 条应用日志与供应商用量仍未核对，因此继续保持 Graph 停止。

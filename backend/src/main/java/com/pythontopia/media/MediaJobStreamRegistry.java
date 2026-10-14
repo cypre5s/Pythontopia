@@ -18,7 +18,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  * <p>事件协议（契约 4.2/4.3）：
  *
  * <ul>
- *   <li>{@code plan}：{@code {nodes:[{node,agent_label,kind,role_key}]}}，role_key=插画师/配音师/剪辑师。
+ *   <li>{@code plan}：{@code {nodes:[{node,agent_label,kind,role_key}]}}，role_key=插画师/剪辑师。
  *   <li>{@code trace}：{@code {node,phase,status,elapsed_ms,role_key,message,percent}}。
  *   <li>{@code result}：{@code {jobId,assetId,url}}。
  *   <li>{@code error}：{@code {code,message}}。
@@ -32,11 +32,10 @@ public class MediaJobStreamRegistry {
 
   private static final Logger log = LoggerFactory.getLogger(MediaJobStreamRegistry.class);
 
-  /** 合成流水线静态节点（插画师→配音师→剪辑师），订阅即下发，供前端搭骨架。 */
+  /** 合成流水线静态节点（插画师→剪辑师）；配音关闭时不向客户端展示虚假阶段。 */
   private static final List<Map<String, Object>> PLAN_NODES =
       List.of(
           planNode("illustrator", "插画师"),
-          planNode("narrator", "配音师"),
           planNode("editor", "剪辑师"));
 
   private final ObjectMapper objectMapper;

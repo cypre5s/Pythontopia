@@ -15,14 +15,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 /**
- * 把一份故事板分镜（图序列 + 每镜 TTS 旁白）经 ffmpeg 程序化合成为真实 mp4 短视频讲解。
+ * 把一份故事板分镜经 ffmpeg 程序化合成为真实 mp4 短视频讲解。
  *
- * <p>讯飞未提供公开「文生视频」接口，故采用「文生图 + TTS 配音 → ffmpeg 拼接」路线。每个分镜：
- * {@link XfyunImageService} 生成真实插画（无凭据时 fail closed）+ {@link XfyunTtsService} 合成旁白，
- * 再用 ffmpeg 把图按旁白时长定格成片段并 concat 为整片。
+ * <p>讯飞未提供公开「文生视频」接口，故采用「文生图 +（启用时）TTS 配音 → ffmpeg 拼接」路线。
+ * TTS 关闭时生成静音片段，不伪报配音阶段。
  *
  * <p><b>降级</b>：未安装 ffmpeg 时 {@link #isAvailable()} 为 false，{@link #compose} 抛
- * {@code VIDEO_COMPOSE_UNAVAILABLE}，前端据此回退到「实时剧场」（图 + TTS + 动效）播放，不阻塞主流程。
+ * {@code VIDEO_COMPOSE_UNAVAILABLE}，前端据此回退到「实时剧场」（分镜图 + 字幕/动效，启用 TTS 时附音轨）播放，
+ * 不阻塞主流程。
  */
 @Service
 public class StoryboardCompositionService {
@@ -59,7 +59,7 @@ public class StoryboardCompositionService {
   /**
    * 合成进度回调 + 讯飞路数闸门。同步端点（{@code /api/media/storyboard/video}）用 {@link #NOOP}，
    * 行为与重构前完全一致；异步 job worker 注入实现：{@link #onProgress} 回写 {@code progress_json}
-   * 并向 SSE 订阅者推 trace（{@code roleKey}=illustrator/narrator/editor），
+   * 并向 SSE 订阅者推 trace（{@code roleKey}=illustrator/editor，启用 TTS 时也包含 narrator），
    * {@code acquire*Slot}/{@code release*Slot} 接到全局 Semaphore 限讯飞并发（acquire 在 TTS/TTI 调用前）。
    */
   public interface ProgressSink {
@@ -107,6 +107,10 @@ public class StoryboardCompositionService {
     return ok;
   }
 
+  public boolean isImageGenerationEnabled() {
+    return imageService.isEnabled();
+  }
+
   /** 同步合成（{@code /api/media/storyboard/video}）：无进度上报、无并发闸门，行为与重构前一致。 */
   public MediaAsset compose(Long userId, List<SceneSpec> scenes) {
     return compose(userId, scenes, ProgressSink.NOOP);
@@ -114,7 +118,7 @@ public class StoryboardCompositionService {
 
   /**
    * 带进度回调 + 讯飞路数闸门的合成（异步 job worker 用）。逐镜：插画师出图（{@code acquireImageSlot}）
-   * → 配音师配音（{@code acquireTtsSlot}）→ 定格片段 → 剪辑师 concat 成片，每阶段经 {@code sink} 上报。
+   * →（配音启用时）配音 → 定格片段 → 剪辑师 concat 成片，每阶段经 {@code sink} 上报。
    */
   public MediaAsset compose(Long userId, List<SceneSpec> scenes, ProgressSink sink) {
     if (scenes == null || scenes.isEmpty()) {
@@ -131,7 +135,8 @@ public class StoryboardCompositionService {
     }
 
     int total = scenes.size();
-    long units = 2L * total + 1; // 每镜 2 步（图/音）+ 1 步成片，用于进度百分比。
+    boolean narrationEnabled = ttsService.isEnabled();
+    long units = (narrationEnabled ? 2L : 1L) * total + 1;
     Path work = null;
     boolean degraded = false;
     List<String> kcAll = new ArrayList<>();
@@ -144,7 +149,7 @@ public class StoryboardCompositionService {
 
         sink.onProgress(
             "illustrate", i, total, "illustrator", "插画师绘制第 " + (i + 1) + " 镜",
-            percentOf(2L * i, units));
+            percentOf((narrationEnabled ? 2L : 1L) * i, units));
         MediaAsset image;
         sink.acquireImageSlot();
         try {
@@ -163,17 +168,17 @@ public class StoryboardCompositionService {
                             "IMAGE_MISSING",
                             "分镜插画落盘失败"));
 
-        sink.onProgress(
-            "narrate", i, total, "narrator", "配音师朗读第 " + (i + 1) + " 镜",
-            percentOf(2L * i + 1, units));
-        Path audioPath = synthAudio(userId, scene, work, i, sink);
-        if (audioPath == null) {
-          degraded = true; // 没有真实 TTS 音轨即视为降级（静默片段）。
+        Path audioPath = null;
+        if (narrationEnabled && scene.narration() != null && !scene.narration().isBlank()) {
+          sink.onProgress(
+              "narrate", i, total, "narrator", "配音师朗读第 " + (i + 1) + " 镜",
+              percentOf(2L * i + 1, units));
+          audioPath = synthAudio(userId, scene, work, i, sink);
         }
         clips.add(buildClip(work, i, imagePath, audioPath, scene.durationSeconds()));
       }
 
-      sink.onProgress("edit", total, total, "editor", "剪辑师拼接成片", percentOf(2L * total, units));
+      sink.onProgress("edit", total, total, "editor", "剪辑师拼接成片", percentOf(units - 1, units));
       Path finalMp4 = concat(work, clips);
       byte[] bytes = Files.readAllBytes(finalMp4);
       String file = storage.write("mp4", bytes);
@@ -202,7 +207,7 @@ public class StoryboardCompositionService {
   }
 
   private Path synthAudio(Long userId, SceneSpec scene, Path work, int index, ProgressSink sink)
-      throws InterruptedException {
+      throws IOException, InterruptedException {
     String narration = scene.narration() == null ? "" : scene.narration().trim();
     if (narration.isEmpty()) {
       return null;
@@ -215,10 +220,6 @@ public class StoryboardCompositionService {
       Path audioPath = work.resolve("scene_" + index + ".mp3");
       Files.write(audioPath, audio);
       return audioPath;
-    } catch (Exception ex) {
-      // TTS 未配置/失败 → 该片段无音轨，按时长定格（不阻塞合成）。
-      log.debug("scene {} tts unavailable, silent clip: {}", index, ex.getMessage());
-      return null;
     } finally {
       sink.releaseTtsSlot();
     }
