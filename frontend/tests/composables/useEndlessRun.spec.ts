@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { ref } from 'vue';
 import { setActivePinia, createPinia } from 'pinia';
 import { useEndlessRun } from '@/composables/useEndlessRun';
+import { useLearningStore } from '@stores/learning';
 
 const apiMocks = vi.hoisted(() => ({
   newBossProblemRequestId: vi.fn(() => '00000000-0000-4000-8000-000000000001'),
@@ -245,5 +247,34 @@ describe('useEndlessRun', () => {
     );
     expect(run.problem.value?.difficulty).toBe(4);
     expect(run.currentDifficulty.value).toBe(4);
+  });
+
+  it('不把本地画像易错 KC 自动提升为 preferredKc', async () => {
+    useLearningStore().profile = {
+      profileId: null,
+      userId: 11,
+      packId: 43,
+      major: null,
+      errorPatterns: { frequentKcCodes: ['PY43-KC-003'], commonCategories: [] },
+      narrativeSummary: null,
+    };
+    const run = useEndlessRun({ focusChapter: ref(1) });
+
+    await run.startRun();
+
+    const request = apiMocks.requestBossProblem.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(request).not.toHaveProperty('preferredKc');
+    expect(request).toHaveProperty('profileSignals.weakKcCodes', ['PY43-KC-003']);
+  });
+
+  it('保留用户明确指定的 focusKc', async () => {
+    const run = useEndlessRun({ focusKc: ref('PY43-KC-005') });
+
+    await run.startRun();
+
+    expect(apiMocks.requestBossProblem.mock.calls[0]?.[1]).toHaveProperty(
+      'preferredKc',
+      'PY43-KC-005',
+    );
   });
 });

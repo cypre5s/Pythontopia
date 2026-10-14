@@ -213,7 +213,53 @@ class BossServiceTest {
             1, new BossProblemRequest(1, null, 2, "PY43-KC-001", "debug", null, null, null), 7L);
 
     assertThat(dto.problemId()).isEqualTo("ready-for-user-7");
-    verifyNoInteractions(reviewRepository, graphClient);
+    verify(reviewRepository).isApproved(ready);
+    verifyNoInteractions(graphClient);
+  }
+
+  @Test
+  @DisplayName("复用的预加载 AI 题已撤销审核时改用课程题库题")
+  void revokedReadyProblemFallsBackToTrustedCourseQuestion() {
+    BossInternalProblem revoked =
+        new BossInternalProblem(
+            "ready-revoked",
+            1,
+            1,
+            2,
+            "PY43-KC-001",
+            "AI generated statement",
+            List.of(),
+            "2 3",
+            "5",
+            1,
+            true,
+            true,
+            List.of(new BossTestCasePayload("2 3", "5", false)),
+            "print(5)");
+    when(pregenService.claimReady(7L, 1, 1, "PY43-KC-001", 2, "debug", null, null))
+        .thenReturn(Optional.of(revoked));
+    when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
+    when(reviewRepository.isApproved(revoked)).thenReturn(false);
+    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
+        .thenReturn(
+            List.of(
+                new PreferredCodingQuestion(
+                    120L,
+                    "审核题",
+                    "课程题库中的已审核题目",
+                    List.of(new CodingCase("2 3", "5")),
+                    List.of(new CodingCase("2 3", "5")),
+                    "a, b = map(int, input().split())\\nprint(a + b)",
+                    "PY43-KC-001")));
+
+    var dto =
+        service.fetchProblem(
+            1, new BossProblemRequest(1, null, 2, "PY43-KC-001", "debug", null, null, null), 7L);
+
+    assertThat(dto.statement()).contains("课程题库 · 审核题");
+    assertThat(dto.aiGenerated()).isFalse();
+    verify(graphClient)
+        .requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any());
   }
 
   @Test
@@ -559,6 +605,28 @@ class BossServiceTest {
     verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
     verify(pregenService).findByProblemId(8L, problem.problemId());
     verifyNoInteractions(eventPublisher);
+  }
+
+  @Test
+  @DisplayName("AI 题未获自动审核通过时不签发，且没有课程题库兜底时返回不可用")
+  void unapprovedGeneratedProblemIsNotIssued() {
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenReturn(problemWithTests(3));
+    when(reviewRepository.approveAutomaticallyIfNotDuplicate(
+            anyLong(), any(), anyInt(), anyInt(), anyString(), anyInt(), any()))
+        .thenReturn(false);
+    when(reviewRepository.isApproved(any())).thenReturn(false);
+
+    assertThatThrownBy(
+            () ->
+                service.fetchProblem(
+                    1, new BossProblemRequest(1, null, 1, null, null, null, null, null), 7L))
+        .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
+        .hasMessageContaining("尚未通过审核");
+
+    verify(pregenService, never())
+        .persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any());
   }
 
   @Test
@@ -1181,8 +1249,28 @@ class BossServiceTest {
     var result = service.evaluateAttempt(attemptRequest("p1", 1, 1, "print(5)", 10), 7L);
 
     assertThat(result.passed()).isTrue();
-    assertThat(result.feedback()).contains("暂不计入知识画像");
+    assertThat(result.feedback()).contains("不计入本局进度、排行榜与知识画像");
     verifyNoInteractions(eventPublisher);
+  }
+
+  @Test
+  @DisplayName("教师撤销审核后的远征 AI 题仍可练习，但不推进本局或排行榜")
+  void revokedAiProblemCanBePracticedWithoutExpeditionCredit() {
+    String runId = "123e4567-e89b-12d3-a456-426614174000";
+    BossInternalProblem problem = problemWithTests(1);
+    when(pregenService.findExpeditionBinding(eq(7L), eq("p1")))
+        .thenReturn(Optional.of(binding(runId, "L0-0", 1, 1, problem)));
+    when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
+    when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problem));
+    when(reviewRepository.isApproved(problem)).thenReturn(false);
+    when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
+        .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
+
+    var result = service.evaluateAttempt(attemptRequest("p1", 1, 1, "print(5)", 10), 7L);
+
+    assertThat(result.passed()).isTrue();
+    assertThat(result.feedback()).contains("不计入本局进度、排行榜与知识画像");
+    verifyNoInteractions(expeditionScoreService, eventPublisher);
   }
 
   @Test

@@ -2,7 +2,7 @@
 
 设计依据：[Web 学习闭环后续改造设计](2026-10-14-web-learning-loop-follow-up-design.md)。依照用户“功能优先、性能最后”要求分阶段交付；每阶段记录变更、定向测试和运行日志，再进入下一阶段。
 
-## Phase 1 — 远征题目审核与计分一致性
+## Phase 1 — 远征题目审核与计分一致性（已完成）
 
 1. 为 `EndlessPregenServiceTest` 增加审核 false、审核抛出数据访问异常用例；先确认当前测试能暴露 READY 缺口。
 2. 修正 `EndlessPregenService`：只有审核成功或已批准的精确重复项才进入 READY；失败进入现有 FAILED 状态。
@@ -10,14 +10,14 @@
 4. 修正签发与 verified-attempt 入口，让远征评分和 Boss 阶段推进都受当前审核资格约束。
 5. 运行远征单元测试与相关 Postgres 集成测试；更新 changelog/worklog 后提交本阶段。
 
-## Phase 2 — 统一 Twin 与远征的 KC 推荐
+## Phase 2 — 统一 Twin 与远征的 KC 推荐（已完成）
 
 1. 为 `useNextSteps.spec.ts` 增加 assessed/unassessed 对照用例，确保默认值不构成薄弱证据。
 2. 将 `useNextSteps.ts` 的 KC 选择改为消费现有 Twin 推荐；保留主线任务进度计算。
 3. 为 `useEndlessRun` 加自动开局与显式 KC 选择回归；自动策略交给服务端，学生明确选择时保留 preferredKc。
 4. 运行 Twin/Home/ReviewHall/Boss 相关前后端回归，更新日志并提交。
 
-## Phase 3 — AutoGen Tutor 生命周期核对与补齐
+## Phase 3 — AutoGen Tutor 生命周期核对与补齐（核对中）
 
 1. 按事件类型比对 Alethicode AutoGen 阶段与 Pythontopia `tutor_workflow_graph.py`、Java projection；保留现有 API/DTO/V199。
 2. 增加长请求、SSE 超时/断流、取消后同幂等键重试、重复请求与 checkpoint CAS 回归。

@@ -187,8 +187,15 @@ public class BossService {
       if (open != null && open.isPresent()) {
         BossInternalProblem problem = open.orElseThrow();
         requireProblemContext(problem, chapter, request.stage(), kc);
-        cacheProblem(userId, problem);
-        return problem.toPublic();
+        if (isMasteryEligible(problem)) {
+          cacheProblem(userId, problem);
+          return problem.toPublic();
+        }
+        LOG.warn(
+            "boss skipped revoked AI problemId={} user={} run={}",
+            problem.problemId(),
+            userId,
+            expeditionRunId);
       }
     }
     int difficulty = computeTargetDifficulty(userId, kc, request.stage());
@@ -255,26 +262,34 @@ public class BossService {
       // 展示时套用「本次请求」的 stage + 本次推断难度：预取时的 stage/难度不串到当前上下文
       // （也避免共享端点下复用题把异常 stage 显示给主线 boss）。
       requireProblemContext(p, chapter, request.stage(), kc);
-      if (expeditionRunId != null
-          && pregenService.isOpenExpeditionProblem(
-              userId,
-              expeditionRunId,
-              request.expeditionNodeId(),
-              p.problemId(),
-              expeditionBinding.bossPhase())) {
-        return cacheAndRemember(userId, request, generationKey, p);
-      }
-      if (!issuedFingerprints.contains(questionFingerprint(p))) {
-        cacheProblem(userId, p);
+      if (!isMasteryEligible(p)) {
+        LOG.warn(
+            "boss skipped revoked AI problemId={} user={} run={}",
+            p.problemId(),
+            userId,
+            expeditionRunId);
+      } else {
+        if (expeditionRunId != null
+            && pregenService.isOpenExpeditionProblem(
+                userId,
+                expeditionRunId,
+                request.expeditionNodeId(),
+                p.problemId(),
+                expeditionBinding.bossPhase())) {
+          return cacheAndRemember(userId, request, generationKey, p);
+        }
+        if (!issuedFingerprints.contains(questionFingerprint(p))) {
+          cacheProblem(userId, p);
+          LOG.info(
+              "boss reuse pregenerated problemId={} user={} ch={}", p.problemId(), userId, chapter);
+          return rememberRequest(userId, request, generationKey, p);
+        }
         LOG.info(
-            "boss reuse pregenerated problemId={} user={} ch={}", p.problemId(), userId, chapter);
-        return rememberRequest(userId, request, generationKey, p);
+            "boss skipped repeated pregenerated question user={} run={} ch={}",
+            userId,
+            expeditionRunId,
+            chapter);
       }
-      LOG.info(
-          "boss skipped repeated pregenerated question user={} run={} ch={}",
-          userId,
-          expeditionRunId,
-          chapter);
     }
 
     // 2) 没有该学生的 READY 个性化题时，再查教师已通过的全局题库：按
@@ -379,20 +394,35 @@ public class BossService {
             findGoldenProblem(kc, chapter, request.stage(), difficulty, issuedFingerprints)
                 .orElseThrow(() -> repeatedProblemUnavailable());
       }
-      if (fromGraph.aiGenerated() && fromGraph.reviewed()) {
-        try {
-          reviewRepository.approveAutomaticallyIfNotDuplicate(
-              userId,
-              request.preferredKind(),
-              chapter,
-              request.stage(),
-              kc,
-              difficulty,
-              fromGraph);
-        } catch (DataAccessException ex) {
-          LOG.warn(
-              "could not add reviewed Boss problem to the shared bank: {}",
-              ex.getClass().getSimpleName());
+      if (fromGraph.aiGenerated()) {
+        boolean autoApproved = false;
+        if (fromGraph.reviewed()) {
+          try {
+            autoApproved =
+                reviewRepository.approveAutomaticallyIfNotDuplicate(
+                        userId,
+                        request.preferredKind(),
+                        chapter,
+                        request.stage(),
+                        kc,
+                        difficulty,
+                        fromGraph)
+                    || reviewRepository.isApproved(fromGraph);
+          } catch (DataAccessException ex) {
+            LOG.warn(
+                "could not verify generated Boss problem approval: {}",
+                ex.getClass().getSimpleName());
+          }
+        }
+        if (!autoApproved) {
+          fromGraph =
+              findGoldenProblem(kc, chapter, request.stage(), difficulty, issuedFingerprints)
+                  .orElseThrow(
+                      () ->
+                          new com.pythontopia.common.error.BusinessException(
+                              org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+                              "BOSS_PROBLEM_GENERATION_UNAVAILABLE",
+                              "AI 题目尚未通过审核，当前知识点没有可用的课程题库题目，请稍后重试"));
         }
       }
       BossInternalProblem issued =
@@ -734,6 +764,7 @@ public class BossService {
         graphResult = evaluateLocally(request, testCases);
       }
       int score = scoreFor(graphResult);
+      boolean masteryEligible = isMasteryEligible(problem);
       String runId = expeditionBinding.isPresent() ? expeditionBinding.get().runId() : null;
       String attemptFingerprint =
           expeditionBinding.isPresent()
@@ -744,7 +775,7 @@ public class BossService {
               : questionFingerprint(problem);
       ExpeditionScoreService.VerifiedAttemptResult attemptResult =
           recordVerifiedExpeditionAttempt(
-              userId, runId, problem, attemptFingerprint, graphResult, score);
+              userId, runId, problem, attemptFingerprint, graphResult, score, masteryEligible);
       if (!attemptResult.accepted()) {
         if (!expeditionRunService.isActiveRun(userId, runId)) {
           throw expiredExpeditionRun();
@@ -761,9 +792,9 @@ public class BossService {
                   ? "代码运行错误：" + graphResult.runtimeError()
                   : "未通过 ❌ 部分用例失败，请参考下方 hint。";
       boolean publishLearningEvent =
-          attemptResult.publishLearningEvent() && isMasteryEligible(problem);
-      if (attemptResult.publishLearningEvent() && problem.aiGenerated() && !publishLearningEvent) {
-        feedback += " 本题尚未确认经教师审核通过，暂不计入知识画像。";
+          attemptResult.publishLearningEvent() && masteryEligible;
+      if (problem.aiGenerated() && !masteryEligible) {
+        feedback += " 本题尚未确认经教师审核通过，不计入本局进度、排行榜与知识画像。";
       }
       // 闭环关键：服务端判定成功且题目已获准用于画像时才发学习事件；待教师审核的 AI 题只练习、不计掌握度。
       // 事件与 SubmissionService 共用并驱动 KC 掌握度（测）+ 8 维画像被动修订；缓存过期 / 缺 testCases / graph 不可用等「未判定」路径不发，
@@ -796,7 +827,7 @@ public class BossService {
       return true;
     }
     try {
-      return reviewRepository.isApproved(problem);
+      return problem.reviewed() && reviewRepository.isApproved(problem);
     } catch (DataAccessException exception) {
       LOG.warn(
           "could not verify generated Boss problem approval; skip mastery evidence: {}",
@@ -939,9 +970,13 @@ public class BossService {
       BossInternalProblem problem,
       String attemptFingerprint,
       BossEvaluateResultDto result,
-      int score) {
+      int score,
+      boolean masteryEligible) {
     if (userId == null || runId == null) {
       return new ExpeditionScoreService.VerifiedAttemptResult(true, true);
+    }
+    if (!masteryEligible) {
+      return new ExpeditionScoreService.VerifiedAttemptResult(true, false);
     }
     return expeditionScoreService.recordVerifiedAttempt(
         userId, runId, problem.problemId(), attemptFingerprint, result.passed(), score);

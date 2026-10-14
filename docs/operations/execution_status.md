@@ -6,6 +6,13 @@
 
 ## 2026-10-14 当前续接
 
+### 本轮阶段记录
+
+- Phase 1 完成：Boss 预加载和同步签发共用审核门槛；撤销批准的 AI 题不记远征分、排行榜或掌握度。定向 `BossServiceTest` + `EndlessPregenServiceTest`：64/64 通过。
+- Phase 2 完成：`useNextSteps` 消费服务端 Twin 推荐；无评估状态不再由前端推断弱项；远征自动开局不发送画像 weak KC，显式 `focusKc` 仍有效。定向 Vitest 20/20，`npm run typecheck` 通过。
+- Phase 3 核对中：Java SSE 与 Graph 单次请求上限为 180 秒，provider HTTP timeout 为 90 秒；Graph 断流会取消活动任务，同 session 仅允许一个活动 run。现有测试已覆盖活动锁、检查点恢复、阶段 CAS、断流取消和重复投影。当前未发现需要增加 `updated_at` 续租的证据；仍需重跑完整 Tutor 回归并做真实本地文本/图片输入验证。
+- Phase 4 管理台真实 API/同视口对照、Phase 5 Boss Phaser 多阶段浏览器闭环和 Web 最终回归尚未完成；性能测试仍后置。
+
 ### 本次补充
 
 - Boss 题目重试会把上一轮审查错误传给下一次生成。非输出类 KC 的常量输出和“KC 术语只在故事题面、不进入参考程序”现被阻断；摘要中的 Python API 词也用于识别代码类 KC。

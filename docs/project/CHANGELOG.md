@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-14 — 远征 AI 题审核计分与 Twin 推荐统一
+
+- AI 远征题只有审核写入成功或确认已有批准记录后才进入预加载 READY；已撤销批准的题不再签发。审核失败时仅使用同 KC 的可信课程题兜底，否则明确返回不可用。
+- 被撤销批准的旧 AI 题仍可用于练习，但不增加本局分数、排行榜或掌握度证据；通过题目仍沿用现有服务端判题与评分账本。
+- 学习分身的 KC 行动改读现有服务端 Twin 推荐与原因；远征自动开局不再把前端画像弱项提升为权威 KC 偏好，显式用户选择仍保留。
+- 验证：Boss/预加载 Maven 定向 64 tests 通过；Twin/远征 Vitest 20 tests 与 TypeScript typecheck 通过；`git diff --check` 通过。
+
 ## 2026-10-14 — DeepSeek 编程题审查与 KC 兜底收紧
 
 - Boss 重试会把有限长度的上一轮审查诊断传给下一次 DeepSeek 出题；摘要中的 Python API 词（如 `format`、`split`、`input`）也参与代码接地。

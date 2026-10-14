@@ -48,6 +48,9 @@ class EndlessPregenServiceTest {
     when(graphClient.requestProblem(eq(7L), eq(1), eq(2), eq("PY43-KC-001"), eq(2),
             eq("PY43-KC-001"), eq("dual_track"), eq(null)))
         .thenReturn(reviewedProblem());
+    when(reviewRepository.approveAutomaticallyIfNotDuplicate(
+            7L, "dual_track", 1, 2, "PY43-KC-001", 2, reviewedProblem()))
+        .thenReturn(true);
     when(jdbcTemplate.update(
             contains("status = 'READY'"), anyString(), eq("ai-1"), anyString(), eq(19L), eq(7L),
             eq(1), eq(2), isNull(), isNull(), eq(1)))
@@ -63,6 +66,46 @@ class EndlessPregenServiceTest {
         .update(
             contains("status = 'READY'"), anyString(), eq("ai-1"), anyString(), eq(19L), eq(7L),
             eq(1), eq(2), isNull(), isNull(), eq(1));
+  }
+
+  @Test
+  void rejectedAutomaticApprovalFailsPrefetchInsteadOfMarkingItReady() {
+    when(graphClient.requestProblem(eq(7L), eq(1), eq(2), eq("PY43-KC-001"), eq(2),
+            eq("PY43-KC-001"), eq("dual_track"), eq(null)))
+        .thenReturn(reviewedProblem());
+    when(reviewRepository.approveAutomaticallyIfNotDuplicate(
+            7L, "dual_track", 1, 2, "PY43-KC-001", 2, reviewedProblem()))
+        .thenReturn(false);
+
+    service.generatePrefetch(
+        19L, 7L, 1, 2, "PY43-KC-001", 2, "PY43-KC-001", "dual_track", null, null, null, 1);
+
+    verify(jdbcTemplate)
+        .update(contains("status = 'FAILED'"), contains("approval"), eq(19L), eq(1));
+    verify(jdbcTemplate, never())
+        .update(
+            contains("status = 'READY'"), anyString(), eq("ai-1"), anyString(), eq(19L),
+            eq(7L), eq(1), eq(2), isNull(), isNull(), eq(1));
+  }
+
+  @Test
+  void approvalPersistenceFailureFailsPrefetchInsteadOfMarkingItReady() {
+    when(graphClient.requestProblem(eq(7L), eq(1), eq(2), eq("PY43-KC-001"), eq(2),
+            eq("PY43-KC-001"), eq("dual_track"), eq(null)))
+        .thenReturn(reviewedProblem());
+    when(reviewRepository.approveAutomaticallyIfNotDuplicate(
+            7L, "dual_track", 1, 2, "PY43-KC-001", 2, reviewedProblem()))
+        .thenThrow(new org.springframework.dao.DataAccessResourceFailureException("review store down"));
+
+    service.generatePrefetch(
+        19L, 7L, 1, 2, "PY43-KC-001", 2, "PY43-KC-001", "dual_track", null, null, null, 1);
+
+    verify(jdbcTemplate)
+        .update(contains("status = 'FAILED'"), contains("approval"), eq(19L), eq(1));
+    verify(jdbcTemplate, never())
+        .update(
+            contains("status = 'READY'"), anyString(), eq("ai-1"), anyString(), eq(19L),
+            eq(7L), eq(1), eq(2), isNull(), isNull(), eq(1));
   }
 
   @Test
@@ -153,6 +196,9 @@ class EndlessPregenServiceTest {
     when(graphClient.requestProblem(eq(7L), eq(1), eq(2), eq("PY43-KC-001"), eq(2),
             eq("PY43-KC-001"), eq("dual_track"), eq(null)))
         .thenReturn(reviewedProblem());
+    when(reviewRepository.approveAutomaticallyIfNotDuplicate(
+            7L, "dual_track", 1, 2, "PY43-KC-001", 2, reviewedProblem()))
+        .thenReturn(true);
     when(jdbcTemplate.update(
             contains("status = 'READY'"), anyString(), eq("ai-1"), anyString(), eq(19L), eq(7L),
             eq(1), eq(2), isNull(), isNull(), eq(1)))

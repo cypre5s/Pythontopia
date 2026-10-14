@@ -310,15 +310,21 @@ public class EndlessPregenService {
       if (!problem.reviewed() || !problem.aiGenerated() || problem.testCases().isEmpty()) {
         throw new IllegalStateException("generated problem did not pass the reviewed AI contract");
       }
-      if (reviewRepository != null) {
-        try {
-          reviewRepository.approveAutomaticallyIfNotDuplicate(
-              userId, kind, chapter, stage, kcCode, difficulty, problem);
-        } catch (DataAccessException ex) {
-          log.warn(
-              "could not add reviewed pre-generated Boss problem to the shared bank: {}",
-              ex.getClass().getSimpleName());
+      if (reviewRepository == null) {
+        throw new IllegalStateException("Boss problem approval is unavailable");
+      }
+      try {
+        boolean approved =
+            reviewRepository.approveAutomaticallyIfNotDuplicate(
+                userId, kind, chapter, stage, kcCode, difficulty, problem);
+        if (!approved && !reviewRepository.isApproved(problem)) {
+          throw new IllegalStateException("Boss problem failed automatic approval");
         }
+      } catch (DataAccessException ex) {
+        log.warn(
+            "could not approve pre-generated Boss problem: {}",
+            ex.getClass().getSimpleName());
+        throw new IllegalStateException("Boss problem approval failed", ex);
       }
       int updated =
           jdbcTemplate.update(

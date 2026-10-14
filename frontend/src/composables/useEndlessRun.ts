@@ -49,7 +49,7 @@ export type EndlessPhase =
 export interface UseEndlessRunOptions {
   /** 锁定章节 1..7；空 = 随机抽章 */
   focusChapter?: Ref<number | null>;
-  /** 锁定 KC（来自 ArenaPage 关卡）；空 = 按 chapter 随机 / 画像 weakKcs 优先 */
+  /** 用户明确选择的 KC；未指定时由服务端自适应策略选择 */
   focusKc?: Ref<string | null>;
   /** 偏好题型（来自 ArenaPage 关卡 kind） */
   preferredKind?: Ref<string | null>;
@@ -128,30 +128,6 @@ function clampDifficulty(d: number): number {
   return Math.max(1, Math.min(5, Math.round(d)));
 }
 
-/**
- * 从画像 weakKcs 中按 chapter 过滤出命中本章的 KC（PY43-KC-XXX）。
- * 章 1 = KC-001..007，章 2 = KC-008..016，…，章 7 = KC-054..065，与 mainQuests boss kcRange 一致。
- */
-function pickWeakKcForChapter(
-  weakKcs: readonly string[] | undefined,
-  chapter: number,
-): string | undefined {
-  if (!weakKcs || weakKcs.length === 0) return undefined;
-  // 按章节编号区间匹配本章 KC
-  const ranges: readonly [number, number, number][] = [
-    [1, 1, 7], [2, 8, 16], [3, 17, 30], [4, 31, 38], [5, 39, 47], [6, 48, 53], [7, 54, 65],
-  ];
-  const range = ranges.find(([c]) => c === chapter);
-  if (!range) return undefined;
-  const [, lo, hi] = range;
-  return weakKcs.find((code) => {
-    const m = /PY43-KC-(\d+)/.exec(code);
-    if (!m) return false;
-    const num = Number(m[1]);
-    return num >= lo && num <= hi;
-  });
-}
-
 export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunReturn {
   const phase = ref<EndlessPhase>('idle');
   const problem = ref<BossProblemDto | null>(null);
@@ -179,7 +155,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
     return failedCount / recent.length;
   });
 
-  function buildProblemRequest(chapter: number): BossProblemRequest {
+  function buildProblemRequest(): BossProblemRequest {
     const recent = history.value.slice(0, 3);
     const firstPass = recent.findIndex((entry) => entry.passed);
     const recentFailures = firstPass < 0 ? recent.length : firstPass;
@@ -188,9 +164,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
       recentFailures,
       recentStreak: streak.value,
     });
-    const preferredKc =
-      opts.focusKc?.value
-      ?? pickWeakKcForChapter(profileSignals.weakKcs.value, chapter);
+    const preferredKc = opts.focusKc?.value;
     return {
       requestId: newBossProblemRequestId(),
       stage: 1 + Math.floor(Math.random() * 4),
@@ -212,7 +186,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
       let target = pending ?? pendingCurrent;
       if (!target) {
         const chapter = pickChapter(opts.focusChapter?.value ?? null);
-        target = { chapter, request: buildProblemRequest(chapter) };
+        target = { chapter, request: buildProblemRequest() };
       }
       const chapter = target.chapter;
       const request = target.request;
@@ -334,7 +308,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
   async function prefetchNext(): Promise<void> {
     if (!problem.value || pendingNext) return;
     const chapter = pickChapter(opts.focusChapter?.value ?? null);
-    const target: PendingProblemRequest = { chapter, request: buildProblemRequest(chapter) };
+    const target: PendingProblemRequest = { chapter, request: buildProblemRequest() };
     target.prefetchPromise = prefetchBossProblem(target.chapter, target.request);
     pendingNext = target;
     await target.prefetchPromise;
@@ -362,7 +336,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
     retryAction.value = 'next';
     if (!pendingNext) {
       const chapter = pickChapter(opts.focusChapter?.value ?? null);
-      pendingNext = { chapter, request: buildProblemRequest(chapter) };
+      pendingNext = { chapter, request: buildProblemRequest() };
     }
     await _fetchAndStart(pendingNext);
   }
@@ -373,7 +347,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
     } else if (retryAction.value === 'next') {
       if (!pendingNext) {
         const chapter = pickChapter(opts.focusChapter?.value ?? null);
-        pendingNext = { chapter, request: buildProblemRequest(chapter) };
+        pendingNext = { chapter, request: buildProblemRequest() };
       }
       await _fetchAndStart(pendingNext);
     } else if (retryAction.value === 'start' && pendingCurrent) {
