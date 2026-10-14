@@ -52,7 +52,10 @@ const weeklyReport: WeeklyReport = {
   periodEnd: '2026-10-13',
   memoryBrief: { totalEvents: 2, failedPractices: 1, succeededPractices: 1, topKcCodes: ['PY43-KC-002'], highlights: [] },
   insights: [{ id: 1, text: '巩固表达式', dimensionKey: 'error_pattern', tags: [], createdAt: '2026-10-12T00:00:00Z' }],
-  masteryDeltas: [],
+  masteryDeltas: [{
+    kcCode: 'PY43-KC-002', currentScore: 0.5, confidence: 0.6, weeklyDelta: null,
+    evidenceCount: 2, evidenceSources: ['PRACTICE_FAIL'],
+  }],
   resourceRuns: [],
 };
 
@@ -94,6 +97,17 @@ describe('ProfileRoomPage', () => {
     await wrapper.get('[data-testid="twin-insight-prompt-1"]').trigger('click');
 
     expect(setPendingPrompt).toHaveBeenCalledWith(expect.stringContaining('巩固表达式'));
+    expect(routerPush).toHaveBeenCalledWith('/workshop');
+  });
+
+  it('routes the weekly mastery reinforce action to the workshop with its KC context', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+
+    await wrapper.get('[data-testid="twin-mastery-prompt-PY43-KC-002"]').trigger('click');
+
+    expect(setPendingPrompt).toHaveBeenCalledWith(expect.stringContaining('PY43-KC-002'));
+    expect(setPendingPrompt).toHaveBeenCalledWith(expect.stringContaining('2 条证据'));
     expect(routerPush).toHaveBeenCalledWith('/workshop');
   });
 });

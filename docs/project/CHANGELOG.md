@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-14 — 远征 Boss、Twin 与管理台收尾修正
+
+- Boss 结算成功时增加玩家短冲刺和像素命中爆点；仍只在服务端确认通过后播放，失败只呈现真实远征体力。复用现有 Phaser 单例与素材。
+- 自适应选题现在要求候选知识点的所有先修项已有足够证据；未知先修项不会再放行进阶诊断题。远征已消耗题目指纹按用户跨 run 保留 7 天，到期后可重新使用。
+- 为 Twin 周报“补强”按钮补页面级导航断言；管理台侧栏字号对齐 Alethicode 当前值（15px）。
+- 验证：前端 4 个相关文件 / 14 tests 通过，typecheck、production build、改动文件 ESLint 通过；后端 AdaptivePracticePolicy、LearnerTwinService、BossService 与 PostgreSQL ExpeditionRun 集成共 82 tests 通过。
+- 本轮没有发 DeepSeek 请求或运行性能测试。完整 Boss 最终节点真实提交浏览器旅程、Twin 学习效果对照和生产 Piston/ECS 仍待验证；全量 Maven 当前记录仍有 7 个环境级错误。7 天去重窗口可能暂时耗尽小题库中的可用题目。
+
 ## 2026-10-14 — 当前工作树收尾验证与前沿候选修复
 
 - 通用 Boss 前沿入口与远征开局一致：先加载有序 Twin 候选，再按 pack 43 的同 KC 课程编程题过滤，最后截取请求数量。第一章没有可匹配的课程编程题时仍返回 `EXPEDITION_NO_PRACTICE_PROBLEMS`，不跨 KC 借题。

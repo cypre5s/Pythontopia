@@ -17,6 +17,8 @@ const BOSS_IMPACT_SOUND_URL = '/assets/pixel/sfx/boss/impactSoft_medium_000.ogg'
 const PIXEL_FONT = '"Zpix", "Ark Pixel 12", monospace';
 
 interface GraphicsLike {
+  x?: number;
+  y?: number;
   fillStyle(color: number, alpha?: number): GraphicsLike;
   fillRect(x: number, y: number, width: number, height: number): GraphicsLike;
   fillRoundedRect(x: number, y: number, width: number, height: number, radius?: number): GraphicsLike;
@@ -25,6 +27,8 @@ interface GraphicsLike {
   strokeRoundedRect(x: number, y: number, width: number, height: number, radius?: number): GraphicsLike;
   setDepth(depth: number): GraphicsLike;
   setAlpha(alpha: number): GraphicsLike;
+  setPosition(x: number, y?: number): GraphicsLike;
+  setScale(scale: number): GraphicsLike;
   destroy(): void;
 }
 
@@ -89,6 +93,7 @@ export interface ExpeditionBossSceneOptions {
 let currentView: ExpeditionBossView | null = null;
 let liveScene: ExpeditionBossSceneContext | null = null;
 let bossPortrait: DisplayObjectLike | null = null;
+let playerAvatar: GraphicsLike | null = null;
 let lastHitAttemptId: string | null = null;
 let onBossHit: (() => void) | null = null;
 
@@ -140,6 +145,7 @@ function drawBossArena(scene: ExpeditionBossSceneContext): void {
   scene.tweens?.killAll?.();
   scene.children?.removeAll(true);
   bossPortrait = null;
+  playerAvatar = null;
 
   const view = currentView;
   const { width, height } = size(scene);
@@ -204,11 +210,12 @@ function drawPlayer(scene: ExpeditionBossSceneContext, width: number, height: nu
   const x = width * 0.17;
   const y = height * 0.66;
   const avatar = scene.add.graphics();
-  avatar.fillStyle(0xffd9a5, 1).fillRect(x - 7, y - 27, 14, 13);
-  avatar.fillStyle(0x2caa89, 1).fillRoundedRect(x - 11, y - 13, 22, 24, 3);
-  avatar.fillStyle(0x193f43, 1).fillRect(x - 10, y + 11, 8, 11).fillRect(x + 2, y + 11, 8, 11);
-  avatar.fillStyle(0xe8c36f, 1).fillRect(x + 10, y - 5, 15, 4);
-  avatar.setDepth(3);
+  avatar.fillStyle(0xffd9a5, 1).fillRect(-7, -27, 14, 13);
+  avatar.fillStyle(0x2caa89, 1).fillRoundedRect(-11, -13, 22, 24, 3);
+  avatar.fillStyle(0x193f43, 1).fillRect(-10, 11, 8, 11).fillRect(2, 11, 8, 11);
+  avatar.fillStyle(0xe8c36f, 1).fillRect(10, -5, 15, 4);
+  avatar.setPosition(x, y).setDepth(3);
+  playerAvatar = avatar;
   addText(scene, x, y + 34, '你 · 学习者', '11px', '#e2f1dc');
 }
 
@@ -254,14 +261,32 @@ function playBossHit(scene: ExpeditionBossSceneContext): void {
       duration: 36,
       ease: 'Sine.easeInOut',
     });
-    const strike = scene.add.graphics();
-    strike.fillStyle(0xffe58f, 0.9).fillRoundedRect(width * 0.28, height * 0.48, width * 0.25, 6, 3);
-    strike.setDepth(4).setAlpha(0.9);
+    if (playerAvatar) {
+      scene.tweens?.add({
+        targets: playerAvatar,
+        x: width * 0.44,
+        yoyo: true,
+        duration: 110,
+        ease: 'Quad.easeOut',
+      });
+    }
+    const impact = scene.add.graphics();
+    impact.fillStyle(0xfff0a6, 1)
+      .fillRect(-2, -17, 4, 34)
+      .fillRect(-17, -2, 34, 4)
+      .fillRect(-12, -12, 7, 7)
+      .fillRect(5, -10, 7, 7)
+      .fillRect(-10, 5, 7, 7)
+      .setPosition(width * 0.47, height * 0.55)
+      .setScale(0.45)
+      .setDepth(4)
+      .setAlpha(1);
     scene.tweens?.add({
-      targets: strike,
+      targets: impact,
+      scale: 1.4,
       alpha: 0,
-      duration: 220,
-      onComplete: () => strike.destroy(),
+      duration: 180,
+      onComplete: () => impact.destroy(),
     });
   }
 }
@@ -296,6 +321,7 @@ export function __resetExpeditionBossForTests(): void {
   currentView = null;
   liveScene = null;
   bossPortrait = null;
+  playerAvatar = null;
   lastHitAttemptId = null;
   onBossHit = null;
 }

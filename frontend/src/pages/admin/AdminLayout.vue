@@ -482,7 +482,7 @@ watch(navigationOpen, (open) => {
   padding: 0 16px;
   border-radius: 12px;
   color: #475569;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
   text-decoration: none;
   transition: background 140ms ease, color 140ms ease, box-shadow 140ms ease;

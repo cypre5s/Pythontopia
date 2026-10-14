@@ -186,3 +186,10 @@
 - 后端全量 `mvn test`：1360 tests、0 failures、7 errors。6 个 pgvector Testcontainers 错误在 Surefire XML 中证实为 Docker 动态端口绑定 `address already in use`；`LongTermClassroomEffectSimulationTest` 则是容器连接拒绝。定向 BossService 组独立 `BUILD SUCCESS`。这些环境错误仍未解决。
 - 按“功能最后、性能收尾”的顺序，本地 Vite → Spring 远征建局采样 2 次预热、12 次计时：P50 21.01 ms、最近秩 P95 22.63 ms、25 个地图节点；未调用 DeepSeek。该样本只覆盖建局 API，不代表题目生成、判题、线上负载或其他硬件性能。
 - 仍未完成：完整 10 层 Boss 多阶段真实判题浏览器旅程；pack 43 第一章 KC001–KC007 没有编程题，不能通过错配素材完成。Twin 学习效果对照、BKT/未来路线概率以及生产 Piston/ECS/公网验证继续暂缓，性能采样不覆盖它们。
+
+## 2026-10-14 Twin 先修与跨局重复题修正
+
+- 自适应策略改为阻止任何先修尚未评估/未达标的候选，避免把未知状态当作掌握；学生会先看到可评估的基础 KC。
+- 已消耗题目指纹在当前远征和此前 7 天的远征之间共同排重，7 天前的题目重新可用。窗口有意保持固定；小题库可能短期无可用题，后续应依据真实复用数据再调整。
+- `AdaptivePracticePolicyTest` 6 项、`LearnerTwinServiceTest` 2 项、`BossServiceTest` 46 项及 `ExpeditionRunPostgresIntegrationTest` 28 项通过，共 82 项。集成测试覆盖跨 run 排除及旧指纹过期。
+- 完整 Maven 仍未通过：此前全量运行记录为 7 个环境级错误，定向回归不能替代全量构建；Twin 学习效果 A/B、BKT 和未来路径概率未做。

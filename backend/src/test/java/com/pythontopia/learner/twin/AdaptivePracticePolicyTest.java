@@ -78,19 +78,16 @@ class AdaptivePracticePolicyTest {
   }
 
   @Test
-  void allowsAnUnassessedTopicAsALevelOneDiagnosticWhenItsPrerequisitesAreAlsoUnassessed() {
+  void keepsAnUnassessedAdvancedTopicBehindItsUnassessedPrerequisite() {
     var picks = policy.select(
         List.of(
             kc("KC-FOUNDATION", 1, false, null, false, List.of(), List.of()),
             kc("KC-DIAGNOSTIC", 2, false, null, false, List.of(), List.of("KC-FOUNDATION"))),
         Set.of(), null, List.of(), 40);
 
-    var diagnostic = picks.stream()
-        .filter(pick -> "KC-DIAGNOSTIC".equals(pick.kcCode()))
-        .findFirst()
-        .orElseThrow();
-    assertThat(diagnostic.difficulty()).isEqualTo(1);
-    assertThat(diagnostic.reason()).contains("尚未评估");
+    assertThat(picks).extracting(AdaptivePracticePolicy.Pick::kcCode)
+        .containsExactly("KC-FOUNDATION")
+        .doesNotContain("KC-DIAGNOSTIC");
   }
 
   @Test
