@@ -11,6 +11,7 @@
 
 import { computed, ref, type Ref } from 'vue';
 import {
+  fetchBossPrefetchStatus,
   newBossProblemRequestId,
   prefetchBossProblem,
   requestBossProblem,
@@ -82,10 +83,13 @@ export interface UseEndlessRunReturn {
 interface PendingProblemRequest {
   chapter: number;
   request: BossProblemRequest;
+  prefetchPromise?: ReturnType<typeof prefetchBossProblem>;
 }
 
 const PERSIST_KEY = 'pyt_endless_history_v1';
 const MAX_HISTORY = 50;
+const PREFETCH_POLL_INTERVAL_MS = 5_000;
+const PREFETCH_MAX_POLLS = 36;
 
 function loadHistory(): EndlessHistoryEntry[] {
   if (typeof window === 'undefined') return [];
@@ -214,6 +218,7 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
       const request = target.request;
       pendingCurrent = { chapter, request };
       currentDifficulty.value = clampDifficulty(request.difficulty ?? currentDifficulty.value);
+      if (target.prefetchPromise) await waitForPrefetch(target);
       // 远征只接受服务端审查通过的 AI 题；golden / 本地模板不能冒充画像自适应关卡。
       const fetched = await requestBossProblem(chapter, request, { allowGoldenFallback: false });
       problem.value = fetched;
@@ -329,8 +334,26 @@ export function useEndlessRun(opts: UseEndlessRunOptions = {}): UseEndlessRunRet
   async function prefetchNext(): Promise<void> {
     if (!problem.value || pendingNext) return;
     const chapter = pickChapter(opts.focusChapter?.value ?? null);
-    pendingNext = { chapter, request: buildProblemRequest(chapter) };
-    await prefetchBossProblem(pendingNext.chapter, pendingNext.request);
+    const target: PendingProblemRequest = { chapter, request: buildProblemRequest(chapter) };
+    target.prefetchPromise = prefetchBossProblem(target.chapter, target.request);
+    pendingNext = target;
+    await target.prefetchPromise;
+  }
+
+  async function waitForPrefetch(target: PendingProblemRequest): Promise<void> {
+    if (!target.prefetchPromise) return;
+    let status: Awaited<ReturnType<typeof prefetchBossProblem>>;
+    try {
+      status = await target.prefetchPromise;
+    } catch {
+      // A lost POST response may still have created a server job; inspect it before starting a duplicate.
+      status = await fetchBossPrefetchStatus(target.chapter, target.request);
+    }
+    for (let attempt = 0; status.status === 'PENDING' && attempt < PREFETCH_MAX_POLLS; attempt += 1) {
+      await new Promise<void>((resolve) => setTimeout(resolve, PREFETCH_POLL_INTERVAL_MS));
+      status = await fetchBossPrefetchStatus(target.chapter, target.request);
+    }
+    if (status.status === 'PENDING') throw new Error('题目仍在生成，请稍后重试');
   }
 
   async function nextProblem(): Promise<void> {

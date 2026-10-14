@@ -17,6 +17,8 @@ PYT_OPENAI_MODEL_VISION=deepseek-flash
 每轮最多 3 张、单张不超过 5 MiB。图片以 base64 `image_url` 内容块直接发给 DeepSeek，
 返回仍是文本流；图片不会存入聊天历史。Graph 对图片格式、base64、数量和大小做校验，
 视觉模型缺失时拒绝图片请求，不回退到其它图像服务。
+同步响应和 SSE 流都只提取文本块；即使上游响应意外包含图片块，也不会转发给客户端。
+项目不调用图片生成接口。
 
 RAG 使用本地 hash 向量和 BM25，不调用第三方 embedding API。hash 不写入学习记忆的语义向量表；
 当没有语义 embedding 时，记忆检索退回现有 KC/时间/重要度排序。RAG `readyz` 在 BM25

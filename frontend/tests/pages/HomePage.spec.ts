@@ -161,7 +161,7 @@ describe('HomePage · 今日推荐卡片', () => {
     expect(section.text()).toContain('暂无推荐资源');
   });
 
-  it('班级查询失败时不显示加入表单，并可重试查询', async () => {
+  it('班级查询失败时仍显示加入表单，并可重试查询', async () => {
     apiMocks.listMyClassrooms
       .mockRejectedValueOnce(new Error('班级服务暂时不可用'))
       .mockResolvedValueOnce([
@@ -181,7 +181,7 @@ describe('HomePage · 今日推荐卡片', () => {
     expect(wrapper.get('[data-testid="classroom-load-error"]').text()).toContain(
       '班级服务暂时不可用',
     );
-    expect(wrapper.find('[data-testid="join-classroom-form"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="join-classroom-form"]').exists()).toBe(true);
 
     await wrapper.get('[data-testid="classroom-retry"]').trigger('click');
     await flushPromises();
@@ -189,6 +189,20 @@ describe('HomePage · 今日推荐卡片', () => {
     expect(apiMocks.listMyClassrooms).toHaveBeenCalledTimes(2);
     expect(wrapper.get('[data-testid="home-classrooms"]').text()).toContain('Python 一班');
     expect(wrapper.find('[data-testid="join-classroom-form"]').exists()).toBe(true);
+  });
+
+  it('班级查询失败时仍可通过独立加入接口入班', async () => {
+    apiMocks.listMyClassrooms.mockRejectedValue(new Error('列表暂不可用'));
+
+    const wrapper = await mountHome();
+
+    await wrapper.get('[data-testid="join-code-input"]').setValue('ABC123');
+    await wrapper.get('[data-testid="join-classroom-form"]').trigger('submit');
+    await flushPromises();
+
+    expect(apiMocks.joinClassroom).toHaveBeenCalledWith({ joinCode: 'ABC123' });
+    expect(wrapper.find('[data-testid="join-classroom-error"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="classroom-load-error"]').exists()).toBe(true);
   });
 
   it('显示所有已加入班级，并允许继续加入另一个班级', async () => {

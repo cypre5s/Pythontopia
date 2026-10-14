@@ -226,7 +226,7 @@ onMounted(async () => {
             </p>
             <!-- 学生可加入多个班级；老师建班后把 6 位码发给学生，输入即入班。 -->
             <form
-              v-if="!classroomLoading && !classroomLoadError"
+              v-if="!classroomLoading"
               class="join-form"
               data-testid="join-classroom-form"
               @submit.prevent="submitJoin"

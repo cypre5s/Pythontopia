@@ -128,7 +128,7 @@ async def test_failed_grounding_triggers_one_revise_and_rereviews() -> None:
     assert provider.revise_call_count() == 1
     revise_prompt = next(text for text in provider.chat_calls if "审查意见" in text)
     assert BAD_ANSWER in revise_prompt
-    assert "CITED_PAGE_NOT_IN_EVIDENCE:99" in revise_prompt
+    assert "答案引用第99页不在证据中" in revise_prompt
 
     # result：修订稿替换答案，重跑三审后以新结果组装。
     result = events[-1][1]
@@ -172,7 +172,7 @@ async def test_revise_still_failing_keeps_original_answer_and_reviews() -> None:
     assert result["answer_md"] == BAD_ANSWER
     assert result["grounding_status"] == "FAILED"
     # 原审查结果（页 99 的意见）原样返回，而非修订稿的页 98。
-    assert result["review"]["grounding"]["reasons"] == ["CITED_PAGE_NOT_IN_EVIDENCE:99"]
+    assert result["review"]["grounding"]["reasons"] == ["答案引用第99页不在证据中"]
 
 
 async def test_revise_failure_keeps_original_answer(monkeypatch: pytest.MonkeyPatch) -> None:

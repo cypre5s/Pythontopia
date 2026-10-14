@@ -274,9 +274,10 @@ class ExpeditionRunPostgresIntegrationTest {
     assertThat(rested.hp()).isEqualTo(4);
     assertThat(nodeById(rested, (String) restNode.get("id")).get("state")).isEqualTo("cleared");
 
-    long reviewUserId = createStudent();
-    ExpeditionRunDto reviewRun = startRun(runs, reviewUserId, 1, false);
-    Map<String, Object> eventNode = findNode(reviewRun, "event");
+    RunWithNode review = startRunWithNode(runs, "event");
+    long reviewUserId = review.userId();
+    ExpeditionRunDto reviewRun = review.run();
+    Map<String, Object> eventNode = review.node();
     seedReachableNode(reviewUserId, reviewRun, eventNode, "map", 2, 5, List.of("focus_lens"));
     ExpeditionRunDto event =
         runs.performAction(
@@ -306,9 +307,10 @@ class ExpeditionRunPostgresIntegrationTest {
 
     for (ExpeditionRunAction choice :
         List.of(ExpeditionRunAction.EVENT_STUDY, ExpeditionRunAction.EVENT_STEADY)) {
-      long userId = createStudent();
-      ExpeditionRunDto run = startRun(runs, userId, 1, false);
-      Map<String, Object> node = findNode(run, "event");
+      RunWithNode runWithEvent = startRunWithNode(runs, "event");
+      long userId = runWithEvent.userId();
+      ExpeditionRunDto run = runWithEvent.run();
+      Map<String, Object> node = runWithEvent.node();
       seedReachableNode(userId, run, node, "map", 3, 5, List.of());
       ExpeditionRunDto entered =
           runs.performAction(
@@ -1467,6 +1469,22 @@ class ExpeditionRunPostgresIntegrationTest {
         .findFirst()
         .orElseThrow(() -> new AssertionError("Generated map has no " + kind + " node"));
   }
+
+  private RunWithNode startRunWithNode(ExpeditionRunService runs, String kind) {
+    for (int attempt = 0; attempt < 32; attempt++) {
+      long userId = createStudent();
+      ExpeditionRunDto run = startRun(runs, userId, 1, false);
+      Map<String, Object> node =
+          run.nodes().stream()
+              .filter(candidate -> kind.equals(candidate.get("kind")))
+              .findFirst()
+              .orElse(null);
+      if (node != null) return new RunWithNode(userId, run, node);
+    }
+    throw new AssertionError("Could not generate an expedition map with a " + kind + " node");
+  }
+
+  private record RunWithNode(long userId, ExpeditionRunDto run, Map<String, Object> node) {}
 
   private static Map<String, Object> findRewardNode(ExpeditionRunDto run) {
     return run.nodes().stream()

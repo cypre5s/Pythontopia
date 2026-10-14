@@ -672,6 +672,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
                 type="button"
                 class="exp-mini-btn exp-mini-btn--danger"
                 data-testid="expedition-finish"
+                :disabled="run.loading || run.settlementPending"
                 @click="onFinishRun"
               >
                 🏁 结束本局

@@ -2,9 +2,17 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-14）**：本轮工作聚焦 Web。Tutor 使用 DeepSeek 固定阶段 AutoGen；Twin 状态/确定性推荐和 Phaser Boss 多阶段浏览器旅程已实现。前端全量 Vitest 最新记录为 270 files / 2561 tests。全量 Maven 本轮最新为 1389 tests、0 failures、7 errors：6 个 Testcontainers PostgreSQL 动态宿主端口绑定冲突，长期仿真类的数据库连接在全量运行中失败、隔离复跑通过；因此 Maven 全量未通过。剩余项是 Twin 学习效果 A/B 与 7 日复测、供应商 token/账单核对、稳定全量 Maven、生产 Piston/ECS 验证；性能按用户要求最后处理。下方阶段表与时间线保留早期历史，不代表当前焦点。
+> **当前快照（2026-10-14）**：本轮聚焦 Web。Tutor 使用 DeepSeek 固定阶段 AutoGen；图片仅作为输入，provider 同步及流式接口只提取文本。前端 Vitest 最新为 270 files / 2568 tests；typecheck、build 通过；ESLint 0 errors / 7 warnings。Graph 全量为 1842 passed / 1 skipped，RAG 为 158 passed / 2 skipped。修复随机远征 fixture 后的最新 Maven 全量为 1389 tests、0 failures、7 errors：6 个 Testcontainers 因宿主端口 `address already in use` 启动失败，长期仿真测试的测试库连接在全量运行中 reset；对应长期仿真类隔离 1/1、远征集成类隔离 28/28 通过。全量 Maven 尚未稳定通过。剩余项包括 Twin A/B 与 7 日复测、DeepSeek 供应商 token/账单核对、稳定全量 Maven 复验、生产 Piston 验证；ECS/GitHub 与非 Web 客户端不在本轮范围。性能按用户要求后置。下方阶段表与时间线保留早期历史，不代表当前焦点。
 
 ## 2026-10-14 当前续接
+
+### 本次补充
+
+- DeepSeek provider 的同步与 SSE 响应都只提取文本块；流式回归覆盖了上游混合文本/图片块，客户端只收到文本。项目不调用图片生成接口。
+- 真实 provider smoke：2 次 DeepSeek 请求成功，分别验证纯文本答复和合成 PNG 识别；响应均为文本。此次没有改动请求模型或提示词，因此未额外发送模型请求。
+- 前端全量 Vitest 270 files / 2568 tests、typecheck、build 通过；ESLint 0 errors / 7 warnings。Graph 最新全量 1842 passed / 1 skipped；RAG 158 passed / 2 skipped。
+- 远征随机节点集成夹具已修复，`ExpeditionRunPostgresIntegrationTest` 隔离 28/28 通过；长期仿真类隔离 1/1 通过。修复后 Maven 全量 1389 tests、0 failures、7 errors：6 个 Testcontainers 宿主端口绑定错误和 1 个长期仿真测试库连接 reset。
+- 本地 320 CSS px 教师班级列表 Playwright 检查通过（模拟 API）；管理员活动会话、生产 Piston/ECS、Twin A/B 与 7 日延迟效果仍未验证。性能最后处理。
 
 ### 已完成
 

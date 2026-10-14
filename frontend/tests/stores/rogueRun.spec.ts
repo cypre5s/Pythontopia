@@ -327,6 +327,25 @@ describe('rogueRun store', () => {
     expect(frontierApiMock.submitExpeditionScore).toHaveBeenCalledWith({ runId: EXPEDITION_RUN_ID });
   });
 
+  it('uses the difficulty returned with the issued question for display and score', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const start = run.nodes.find((node) => node.layer === 0)!;
+    run.momentum = 3;
+    if (mockServerRun) mockServerRun.momentum = 3;
+    await run.enterNode(start.id);
+
+    expect(judgeMock.fetchProblem).toHaveBeenCalledWith(expect.objectContaining({ difficulty: 3 }));
+    expect(run.activeDifficulty).toBe(problem().difficulty);
+
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
+    });
+    await run.submitChallenge();
+
+    expect(run.score).toBe(26);
+  });
+
   it('enters a node through the server action and applies its canonical snapshot', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);
@@ -385,6 +404,39 @@ describe('rogueRun store', () => {
     expect(run.phase).toBe('map');
   });
 
+  it('does not finish a run while its challenge is still being judged', async () => {
+    let resolveJudge!: (value: {
+      problemId: string;
+      passed: boolean;
+      passedTestCases: number;
+      totalTestCases: number;
+      score: number;
+      feedback: string;
+    }) => void;
+    judgeMock.judge.mockReturnValue(new Promise((resolve) => { resolveJudge = resolve; }));
+
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const start = run.nodes.find((node) => node.layer === 0)!;
+    await run.enterNode(start.id);
+
+    const submission = run.submitChallenge();
+    await run.finishRun();
+
+    expect(frontierApiMock.performExpeditionAction).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'FINISH' }),
+    );
+
+    resolveJudge({
+      problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
+    });
+    await submission;
+
+    expect(frontierApiMock.performExpeditionAction).toHaveBeenLastCalledWith({
+      runId: EXPEDITION_RUN_ID, action: 'SETTLE_CHALLENGE', nodeId: start.id, problemId: 'p1',
+    });
+  });
+
   it('retries settlement for the same judged problem without requesting or charging for a new one', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);
@@ -409,6 +461,10 @@ describe('rogueRun store', () => {
 
     expect(run.settlementPending).toBe(true);
     expect(run.challengeResult?.problemId).toBe('p1');
+    await run.finishRun();
+    expect(frontierApiMock.performExpeditionAction).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'FINISH' }),
+    );
     await run.submitChallenge();
     await run.continueAfterChallenge();
 
@@ -671,7 +727,10 @@ describe('rogueRun store', () => {
       runId: EXPEDITION_RUN_ID, action: 'EVENT_STUDY', nodeId: node!.id,
     });
     expect(node!.difficulty).toBe(d0);
-    expect(run.activeDifficulty).toBe(Math.min(5, d0 + 1));
+    expect(judgeMock.fetchProblem).toHaveBeenLastCalledWith(
+      expect.objectContaining({ difficulty: Math.min(5, d0 + 1) }),
+    );
+    expect(run.activeDifficulty).toBe(problem().difficulty);
     expect(run.phase).toBe('challenge');
   });
 
@@ -782,7 +841,7 @@ describe('rogueRun store', () => {
     expect(run.hasSavedRun).toBe(false);
   });
 
-  it('raises in-run difficulty on a winning streak (momentum feeds back into the next fight)', async () => {
+  it('requests momentum difficulty but displays the issued question difficulty', async () => {
     judgeMock.judge.mockResolvedValue({
       problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
     });
@@ -793,8 +852,8 @@ describe('rogueRun store', () => {
     if (mockServerRun) mockServerRun.momentum = 3;
     const start = run.nodes.find((n) => n.layer === 0);
     await run.enterNode(start!.id);
-    // base 2 + 气势(>=3) +1 = 3。
-    expect(run.activeDifficulty).toBe(3);
+    // base 2 + 气势(>=3) +1 is requested; server-issued difficulty remains authoritative.
+    expect(run.activeDifficulty).toBe(problem().difficulty);
     expect(judgeMock.fetchProblem).toHaveBeenLastCalledWith(
       expect.objectContaining({ difficulty: 3 }),
     );
