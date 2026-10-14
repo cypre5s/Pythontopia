@@ -150,15 +150,25 @@ def test_build_failure_hint_uses_runtime_error_first() -> None:
     assert "forbidden_imports" in hint
 
 
-def test_build_failure_hint_for_value_mismatch() -> None:
+def test_build_failure_hint_hides_hidden_case_values() -> None:
     code = "print(int(input()) * 2)"
     cases = [_tc("2", "4", sample=True), _tc("3", "7"), _tc("4", "8")]
     result = evaluate_student_code(code, cases)
     hint = build_failure_hint(result)
     assert hint is not None
-    assert "用例 2" in hint
-    assert "'7'" in hint
-    assert "'6'" in hint
+    assert "隐藏测试" in hint
+    assert "'7'" not in hint
+    assert "'6'" not in hint
+
+
+def test_build_failure_hint_shows_public_sample_mismatch() -> None:
+    result = evaluate_student_code(
+        "print(int(input()) * 2)", [_tc("2", "0", sample=True), _tc("3", "4")]
+    )
+
+    hint = build_failure_hint(result)
+
+    assert hint == "用例 1 期望 '0' 实际 '4'"
 
 
 def test_build_failure_hint_for_timeout() -> None:

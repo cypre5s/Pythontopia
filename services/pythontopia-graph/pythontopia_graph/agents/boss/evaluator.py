@@ -24,6 +24,7 @@ class CaseResult:
     expected: str
     stderr: str = ""
     timed_out: bool = False
+    is_sample: bool = False
 
     __test__ = False
 
@@ -101,6 +102,7 @@ def evaluate_student_code(
                     expected=expected,
                     stderr=(f"timeout >{timeout_sec}s" if result.timed_out else stderr),
                     timed_out=result.timed_out,
+                    is_sample=tc.is_sample,
                 )
 
     return EvaluationResult(
@@ -123,6 +125,8 @@ def build_failure_hint(result: EvaluationResult) -> str | None:
     f = result.first_failure
     if f is None:
         return None
+    if not f.is_sample:
+        return "隐藏测试未通过，请检查边界条件。"
     if f.timed_out:
         return f"用例 {f.index + 1} 超时（>5s）"
     return f"用例 {f.index + 1} 期望 {f.expected!r} 实际 {f.actual!r}"

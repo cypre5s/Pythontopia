@@ -45,7 +45,7 @@ function percent(value: number | null): string {
 function deltaPercent(value: number | null): string {
   if (value == null) return '暂无可比数据';
   const points = (value * 100).toFixed(0);
-  return `${value > 0 ? '+' : ''}${points}%`;
+  return `${value > 0 ? '+' : ''}${points} 个百分点`;
 }
 
 const masterySourceLabels: Record<string, string> = {
@@ -153,6 +153,19 @@ function promptMastery(delta: {
           <span class="ng">{{ report.memoryBrief.failedPractices }}</span> 未过
         </span>
       </div>
+      <ul
+        v-if="report.memoryBrief.highlights.length > 0"
+        class="tw__highlights"
+        data-testid="twin-weekly-highlights"
+        aria-label="近期未通过练习摘要"
+      >
+        <li
+          v-for="(highlight, index) in report.memoryBrief.highlights"
+          :key="`${index}-${highlight}`"
+        >
+          {{ highlight }}
+        </li>
+      </ul>
       <div
         v-for="i in report.insights"
         :key="i.id"
@@ -249,6 +262,12 @@ function promptMastery(delta: {
   margin-bottom: 10px;
   padding-bottom: 8px;
   border-bottom: 1px solid #e4e9e3;
+}
+.tw__highlights {
+  margin: -4px 0 8px 22px;
+  padding-left: 16px;
+  color: #7a3f35;
+  line-height: 1.5;
 }
 .tw__ttl {
   display: block;

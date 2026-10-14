@@ -161,6 +161,41 @@ async def test_openai_compat_chat_trusts_proxy_environment(
 
 
 @pytest.mark.asyncio
+async def test_chat_returns_only_text_from_multimodal_response_blocks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "choices": [
+                    {
+                        "message": {
+                            "content": [
+                                {"type": "text", "text": "只返回文字"},
+                                {
+                                    "type": "image",
+                                    "image_url": "data:image/png;base64,c2VjcmV0",
+                                },
+                            ]
+                        }
+                    }
+                ]
+            },
+        )
+
+    _capture_async_client_kwargs(monkeypatch, handler)
+    provider = OpenAiCompatProvider()
+
+    response = await provider.chat(
+        [{"role": "user", "content": "ping"}], json_mode=False
+    )
+
+    assert response.content_text == "只返回文字"
+    assert "image" not in response.model_dump_json()
+
+
+@pytest.mark.asyncio
 async def test_openai_compat_stream_trusts_proxy_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -318,6 +353,28 @@ async def test_chat_stream_uses_vision_model_and_forwards_image_blocks(
     assert bodies[0]["model"] == "deepseek-flash"
     assert bodies[0]["messages"] == messages
     assert "model_tier" not in bodies[0]
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_emits_only_text_from_multimodal_response_blocks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            text='data: {"choices":[{"delta":{"content":[{"type":"text","text":"只返回文字"},{"type":"image","image_url":"data:image/png;base64,c2VjcmV0"}]}}]}\n\n'
+            "data: [DONE]\n\n",
+        )
+
+    _capture_async_client_kwargs(monkeypatch, handler)
+    provider = OpenAiCompatProvider()
+
+    chunks = [
+        chunk
+        async for chunk in provider.chat_stream([{"role": "user", "content": "ping"}])
+    ]
+
+    assert chunks == ["只返回文字"]
 
 
 @pytest.mark.asyncio

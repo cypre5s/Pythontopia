@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-14 — 文字输出边界与 Web 续验
+
+- DeepSeek provider 的 Chat 与 SSE 统一只提取文本块，不把上游图片块转发给客户端；项目不调用图片生成接口。补充同步和混合内容流式回归测试。
+- 修复 Graph 隐藏判题用例信息泄露；补齐 Twin 周报失败摘要/百分点标注、首页班级加入故障兜底、教师班级页签键盘操作，以及远征预生成等待竞态和结算重复提交保护。
+- 验证：前端 270 files / 2568 tests、typecheck、build 通过；Graph 1842 passed / 1 skipped；RAG 158 passed / 2 skipped；provider 定向 36 passed；远征 PostgreSQL 集成类隔离 28/28 通过。全量 ESLint 0 errors / 7 warnings。
+- 未完成：Maven 修复后全量复验仍有 7 errors（1389 tests、0 failures）：6 个 Testcontainers 宿主端口绑定 `address already in use`，长期仿真测试库连接在全量运行中 reset；远征类隔离 28/28、长期仿真类隔离 1/1 通过。Twin A/B 与 7 日复测、供应商账单/token 对账、生产 Piston 验证未完成；性能后置。
+
 ## 2026-10-14 — Tutor 强断言语义核验与管理员班级权限
 
 - Tutor 仅对带课件证据的强事实声明调用现有语义核验器，并受现有请求预算与熔断治理；普通回答继续走规则审查。DeepSeek 不返回图片：图片只作为视觉输入，回答是文本；按需 Mermaid/SVG 是文本源码，由 Web 本地渲染。

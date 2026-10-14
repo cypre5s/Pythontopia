@@ -204,6 +204,7 @@ async function createClassroom() {
   gap: 18px;
   color: var(--pyt-color-text-primary);
   max-width: 1100px;
+  min-width: 0;
 }
 header h1 {
   margin: 0 0 4px;
@@ -299,7 +300,7 @@ header p {
   margin: 0;
   display: grid;
   gap: 14px;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(280px, 100%), 1fr));
 }
 .classroom-card {
   background: var(--pyt-color-bg-elevated);

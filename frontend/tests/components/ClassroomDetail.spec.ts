@@ -47,12 +47,13 @@ vi.mock('@/api/teacher', () => ({
 
 let router: Router;
 
-function mountClassroomDetail() {
+function mountClassroomDetail(attachTo?: Element) {
   return mount(ClassroomDetail, {
     global: {
       plugins: [router],
       stubs: { AppLayout: { template: '<div><slot /></div>' } },
     },
+    ...(attachTo ? { attachTo } : {}),
   });
 }
 
@@ -139,6 +140,26 @@ describe('ClassroomDetail', () => {
     // index 2 = 任务 tab（overview/live/quests/...）。
     await tabButtons[2]!.trigger('click');
     expect(wrapper.find('[data-testid="quest-tab"]').isVisible()).toBe(true);
+  });
+
+  it('exposes the classroom navigation as keyboard-operable tabs', async () => {
+    await router.push('/teacher/classroom/9');
+    const wrapper = mountClassroomDetail(document.body);
+    await flushPromises();
+
+    const tablist = wrapper.get('[role="tablist"]');
+    const tabs = wrapper.findAll('[role="tab"]');
+    const panel = wrapper.get('[role="tabpanel"]');
+
+    expect(tablist.attributes('aria-label')).toBe('班级数据面板');
+    expect(tabs[0]?.attributes('aria-selected')).toBe('true');
+    expect(panel.attributes('aria-labelledby')).toBe(tabs[0]?.attributes('id'));
+
+    await tabs[0]!.trigger('keydown', { key: 'ArrowDown' });
+
+    expect(tabs[1]?.attributes('aria-selected')).toBe('true');
+    expect(document.activeElement).toBe(tabs[1]?.element);
+    wrapper.unmount();
   });
 
   it('regenerates join code via API', async () => {

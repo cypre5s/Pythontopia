@@ -42,6 +42,22 @@ const tabs = [
 
 type TabId = (typeof tabs)[number]['id'];
 const activeTab = ref<TabId>('overview');
+const tablistRef = ref<HTMLElement | null>(null);
+
+function onTabKeydown(event: KeyboardEvent, index: number): void {
+  let next = index;
+  if (event.key === 'ArrowDown' || event.key === 'ArrowRight') next = (index + 1) % tabs.length;
+  else if (event.key === 'ArrowUp' || event.key === 'ArrowLeft') next = (index - 1 + tabs.length) % tabs.length;
+  else if (event.key === 'Home') next = 0;
+  else if (event.key === 'End') next = tabs.length - 1;
+  else return;
+
+  event.preventDefault();
+  const tab = tabs[next];
+  if (!tab) return;
+  activeTab.value = tab.id;
+  tablistRef.value?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next]?.focus();
+}
 
 const classroomId = computed<number>(() => Number(route.params.id));
 
@@ -211,13 +227,26 @@ function back() {
           </div>
         </div>
 
-        <nav class="cd-nav__list">
+        <nav
+          ref="tablistRef"
+          class="cd-nav__list"
+          role="tablist"
+          aria-label="班级数据面板"
+          aria-orientation="vertical"
+        >
           <button
-            v-for="tab in tabs"
+            v-for="(tab, index) in tabs"
+            :id="`classroom-tab-${tab.id}`"
             :key="tab.id"
+            type="button"
+            role="tab"
+            :aria-selected="tab.id === activeTab"
+            aria-controls="classroom-panel"
+            :tabindex="tab.id === activeTab ? 0 : -1"
             class="cd-nav__item"
             :class="{ 'cd-nav__item--active': tab.id === activeTab }"
             @click="activeTab = tab.id"
+            @keydown="onTabKeydown($event, index)"
           >
             {{ tab.label }}
           </button>
@@ -345,7 +374,13 @@ function back() {
           </template>
         </section>
 
-        <div class="cd-content">
+        <div
+          id="classroom-panel"
+          class="cd-content"
+          role="tabpanel"
+          tabindex="0"
+          :aria-labelledby="`classroom-tab-${activeTab}`"
+        >
           <ClassroomOverviewTab
             v-show="activeTab === 'overview'"
             :classroom="classroom"

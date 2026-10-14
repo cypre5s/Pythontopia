@@ -227,7 +227,9 @@ def test_evaluate_endpoint_partial_pass_reports_first_failure(client: TestClient
     assert body["totalTestCases"] == 3
     assert body["failedIndices"] == [1]
     assert body["failureFirstHint"] is not None
-    assert "用例 2" in body["failureFirstHint"]
+    assert "隐藏测试" in body["failureFirstHint"]
+    assert "7" not in body["failureFirstHint"]
+    assert "6" not in body["failureFirstHint"]
 
 
 def test_evaluate_endpoint_forbidden_import_returns_runtime_error(client: TestClient) -> None:

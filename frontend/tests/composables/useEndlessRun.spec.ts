@@ -7,12 +7,14 @@ const apiMocks = vi.hoisted(() => ({
   requestBossProblem: vi.fn(),
   submitBossAttempt: vi.fn(),
   prefetchBossProblem: vi.fn(),
+  fetchBossPrefetchStatus: vi.fn(),
 }));
 vi.mock('@/api/boss', () => ({
   newBossProblemRequestId: apiMocks.newBossProblemRequestId,
   requestBossProblem: apiMocks.requestBossProblem,
   submitBossAttempt: apiMocks.submitBossAttempt,
   prefetchBossProblem: apiMocks.prefetchBossProblem,
+  fetchBossPrefetchStatus: apiMocks.fetchBossPrefetchStatus,
 }));
 
 const pyodideMock = vi.hoisted(() => ({ run: vi.fn() }));
@@ -45,7 +47,8 @@ describe('useEndlessRun', () => {
     setActivePinia(createPinia());
     window.localStorage.clear();
     apiMocks.requestBossProblem.mockReset().mockResolvedValue(PROBLEM);
-    apiMocks.prefetchBossProblem.mockReset().mockResolvedValue(undefined);
+    apiMocks.prefetchBossProblem.mockReset().mockResolvedValue({ status: 'READY' });
+    apiMocks.fetchBossPrefetchStatus.mockReset().mockResolvedValue({ status: 'READY' });
     apiMocks.submitBossAttempt.mockReset().mockResolvedValue({
       problemId: 'p-endless-1',
       passed: false,
@@ -121,6 +124,31 @@ describe('useEndlessRun', () => {
     ]);
     expect(apiMocks.requestBossProblem.mock.calls[2]).toEqual(apiMocks.requestBossProblem.mock.calls[1]);
     random.mockRestore();
+  });
+
+  it('waits for an in-flight prefetch before requesting the next problem', async () => {
+    vi.useFakeTimers();
+    let resolvePrefetch!: (value: { status: string }) => void;
+    apiMocks.prefetchBossProblem.mockReturnValueOnce(new Promise((resolve) => {
+      resolvePrefetch = resolve;
+    }));
+    apiMocks.fetchBossPrefetchStatus
+      .mockResolvedValueOnce({ status: 'PENDING' })
+      .mockResolvedValueOnce({ status: 'READY' });
+    const run = useEndlessRun();
+    await run.startRun();
+    await run.submit();
+
+    const nextProblem = run.nextProblem();
+    await Promise.resolve();
+    expect(apiMocks.requestBossProblem).toHaveBeenCalledTimes(1);
+
+    resolvePrefetch({ status: 'PENDING' });
+    await vi.runAllTimersAsync();
+    await nextProblem;
+
+    expect(apiMocks.fetchBossPrefetchStatus).toHaveBeenCalledTimes(2);
+    expect(apiMocks.requestBossProblem).toHaveBeenCalledTimes(2);
   });
 
   it('后端判定失败时，即使本地样例通过也保持 failed', async () => {

@@ -707,6 +707,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       });
       if (requestGeneration !== challengeGeneration) return;
       activeProblem.value = problem;
+      activeDifficulty.value = problem.difficulty;
       activeCode.value = initialCodeFor(activeProblem.value);
     } catch (error) {
       if (requestGeneration === challengeGeneration) {
@@ -927,7 +928,8 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
    * 区别于 abort（弃局清后端活跃 run + 本地缓存、回到起始页）。每日挑战照常算「今日已挑战」。
    */
   async function finishRun(): Promise<void> {
-    if (phase.value === 'idle' || phase.value === 'over' || phase.value === 'cleared') return;
+    if (phase.value === 'idle' || phase.value === 'over' || phase.value === 'cleared'
+      || loading.value || settlementPending.value) return;
     const canonical = await performAction({ action: 'FINISH' });
     if (!canonical) return;
     if (isDaily.value) {

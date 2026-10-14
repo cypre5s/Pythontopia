@@ -445,7 +445,7 @@ class OpenAiCompatProvider:
                         break
                     chunk = _json.loads(data_str)
                     delta = chunk.get("choices", [{}])[0].get("delta", {})
-                    content = delta.get("content")
+                    content = _message_content_to_text(delta.get("content"))
                     if content:
                         yield content
 
