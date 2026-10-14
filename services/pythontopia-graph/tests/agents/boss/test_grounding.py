@@ -6,6 +6,7 @@ import pytest
 
 from pythontopia_graph.agents.boss.grounding import (
     CHAPTER_SYNTAX_WHITELIST,
+    extract_kc_grounding_keywords,
     verify_kc_grounding,
 )
 from pythontopia_graph.agents.boss.schemas import BossProblem, TestCase
@@ -63,6 +64,23 @@ def test_input_echo_with_appended_constant_label_is_still_rejected() -> None:
 
     assert not verdict.passed
     assert any(issue.code == "trivial_echo_solution" for issue in verdict.issues)
+
+
+def test_constant_output_does_not_auto_ground_non_programming_kc() -> None:
+    p = _problem(
+        1,
+        "PY43-KC-001",
+        "输出神威·太湖之光这一中国计算机发展成就。",
+        "print('神威·太湖之光')",
+    )
+
+    verdict = verify_kc_grounding(
+        p,
+        kc_keywords={"PY43-KC-001": ["中国计算机发展成就", "神威·太湖之光"]},
+    )
+
+    assert not verdict.passed
+    assert any(issue.code == "trivial_constant_output" for issue in verdict.issues)
 
 
 def test_chapter_1_no_keyword_fails() -> None:
@@ -143,9 +161,20 @@ def test_unknown_kc_code_falls_back_to_chapter_keywords() -> None:
 
 
 def test_custom_kc_keywords_override_defaults() -> None:
-    p = _problem(2, "PY43-KC-008", "演示某种特殊场景", "print('特殊场景')")
+    p = _problem(
+        2,
+        "PY43-KC-008",
+        "读入一个数字，计算增加 1 后的特殊场景编号。",
+        "value = int(input()) + 1\nprint('特殊场景', value)",
+    )
     v = verify_kc_grounding(p, kc_keywords={"PY43-KC-008": ["特殊场景"]})
     assert v.passed
+
+
+def test_constant_output_is_allowed_for_print_kc() -> None:
+    p = _problem(1, "PY43-KC-001", "用 print() 输出 hello world", "print('hello world')")
+    verdict = verify_kc_grounding(p, kc_keywords={"PY43-KC-001": ["print()"]})
+    assert verdict.passed
 
 
 def test_custom_kc_keywords_miss_fails() -> None:
@@ -155,7 +184,7 @@ def test_custom_kc_keywords_miss_fails() -> None:
     assert any(i.code == "kc_keyword_miss" for i in v.issues)
 
 
-def test_authoritative_kc_term_only_in_story_warns_for_manual_review() -> None:
+def test_authoritative_kc_term_only_in_story_blocks_bank_approval() -> None:
     p = _problem(
         1,
         "PY43-KC-001",
@@ -168,9 +197,29 @@ def test_authoritative_kc_term_only_in_story_warns_for_manual_review() -> None:
         kc_keywords={"PY43-KC-001": ["中国计算机发展成就", "神威·太湖之光"]},
     )
 
-    assert verdict.passed
+    assert not verdict.passed
     issue = next(issue for issue in verdict.issues if issue.code == "kc_solution_miss")
-    assert issue.severity == "warning"
+    assert issue.severity == "error"
+
+
+def test_python_api_from_kc_summary_can_ground_reference_solution() -> None:
+    kc_name = "format()方法的格式控制"
+    kc_summary = "掌握 Python 中 format() 方法的填充字符、对齐方式与宽度设置。"
+    problem = _problem(
+        3,
+        "PY43-KC-018",
+        "使用 format() 方法控制数字格式。",
+        "value = '{:>5}'.format(input())\nprint(value)",
+    )
+
+    keywords = extract_kc_grounding_keywords(kc_name, kc_summary)
+    verdict = verify_kc_grounding(
+        problem,
+        kc_keywords={"PY43-KC-018": keywords},
+    )
+
+    assert "format" in keywords
+    assert verdict.passed, verdict.issues
 
 
 def test_no_keywords_provided_emits_warning_only() -> None:
