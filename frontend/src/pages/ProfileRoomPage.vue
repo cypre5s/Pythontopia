@@ -90,6 +90,10 @@ function percent(value: number | null): string {
   return value == null ? '掌握度暂无可比数据' : `掌握 ${Math.round(value * 100)}%`;
 }
 
+function evidenceSufficiency(value: number | null): string {
+  return value == null ? '证据充分度暂无数据' : `证据充分度 ${Math.round(value * 100)}%`;
+}
+
 function lastPractice(value: string | null): string {
   if (!value) return '暂无正式练习记录';
   return `最近练习 ${new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(new Date(value))}`;
@@ -204,6 +208,9 @@ function lastPractice(value: string | null): string {
                 </div>
                 <div class="twin-kc-row__status">
                   <strong>{{ percent(kc.masteryScore) }}</strong>
+                  <span title="服务端依据学习事件维护的证据指标，不代表答题正确概率。">
+                    {{ evidenceSufficiency(kc.confidence) }}
+                  </span>
                   <span
                     v-if="kc.reviewDue"
                     class="twin-due"

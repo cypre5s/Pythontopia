@@ -110,3 +110,11 @@
 - 已重启 Compose Graph 服务，经其本地 HTTP Tutor AutoGen/SSE 路由真实验证文本与图片。之后 Playwright 真实登录 Web 工坊发送文本与 PNG 图片，确认两个答复、图片请求载荷与两条持久化会话；清理临时学生账号。测试脚本前两轮等待条件不正确，第三轮通过。
 - 管理后台 Vitest 9 项、前端 typecheck、Graph 定向 pytest 62 项、Ruff 和本地不限额 Maven 单测通过。静态核对未发现管理台 DTO/API/数据库字段错位；布局色彩尺寸与 Alethicode 的 Admin tokens 对齐。
 - 仍未完成：学习 Twin P0–P3 计划、KC 个性化覆盖与 A/B 效果对照、Boss 最终 Phaser 浏览器旅程、全量 Maven 稳定复跑、Web 全量回归、全仓工程整理及素材授权/登记复核。账单/token 用量未核对。
+
+## 2026-10-14 — Learner Twin P0 复核与 UI 补齐
+
+- 核对 `SelfDimensionRequest`、`ProfileController`、`PassiveProfileService`：客户端不能提交 evidenceIncrement 或任意 metadata，学生直写仅限主观目标/偏好；当前事件计分仍由服务端 `LearningEvent` 路径处理。
+- 核对 WeeklyReportService/Repository：所有来源使用统一 Asia/Shanghai 七日区间；全量事件数与最多 30 条相关记忆分离；当前分数和本周 `applied_delta` 分开；未能重建的周增量返回 null；通过两次批量查询读取所有 KC 快照与事件，不逐 KC 打库。
+- Twin 主页面已将 confidence 显示为独立的“证据充分度”，并说明非正确概率；未评估 KC 继续显示无测评值。补充页面级回归，先 RED 后 GREEN。
+- 验证：画像/Twin Java 定向 57 tests 通过（含 Testcontainers PostgreSQL 周报集成）；ProfileRoom/TwinWeekly 9 tests、前端 typecheck 通过。
+- 本阶段静态与测试检查确认推荐和周报操作已导航至真实复习/远征/工坊。学习效果 A/B、7 日延迟复测及足够样本的校准仍待做。
