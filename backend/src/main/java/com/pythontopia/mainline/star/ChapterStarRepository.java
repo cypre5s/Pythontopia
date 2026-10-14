@@ -44,6 +44,16 @@ public class ChapterStarRepository {
         .findFirst();
   }
 
+  /** Serialize chapter-star reads followed by writes for one learner and chapter. */
+  public void lockForUserChapter(long userId, int chapter) {
+    jdbcTemplate.queryForObject(
+        "SELECT pg_advisory_xact_lock(hashtextextended('pythontopia.mainline.chapter-star:'"
+            + " || CAST(? AS TEXT) || ':' || CAST(? AS TEXT), 0))",
+        Object.class,
+        userId,
+        chapter);
+  }
+
   /**
    * 幂等只升写入：stars 取 {@code GREATEST(existing, new)}（只升不降，§5），best_test_score 同理（null-safe），
    * breakdown 直接覆盖为最新构成（调用方已合并 recovered）。

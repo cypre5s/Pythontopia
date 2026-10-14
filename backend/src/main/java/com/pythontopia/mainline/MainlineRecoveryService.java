@@ -48,6 +48,7 @@ public class MainlineRecoveryService {
   @Transactional
   public boolean claimErrorbookRecovery(long userId, int chapter) {
     requireChapter(chapter);
+    starRepository.lockForUserChapter(userId, chapter);
     ChapterUnlockGuard.requireUnlocked(starRepository, userId, chapter);
     int resolved = bugMineRepository.countResolvedByKcCodes(userId, ChapterCatalog.kcCodes(chapter));
     if (resolved < ERRORBOOK_RESOLVED_THRESHOLD) {
@@ -67,6 +68,7 @@ public class MainlineRecoveryService {
   @Transactional
   public boolean recordEndlessSummary(long userId, int chapter, String runId) {
     requireChapter(chapter);
+    starRepository.lockForUserChapter(userId, chapter);
     ChapterUnlockGuard.requireUnlocked(starRepository, userId, chapter);
     ExpeditionScoreService.VerifiedAttemptSummary attempts =
         expeditionScoreService.summarizeVerifiedAttempts(userId, runId, chapter);

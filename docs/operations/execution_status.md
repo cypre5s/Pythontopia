@@ -12,7 +12,9 @@
 - 真实 provider smoke：2 次 DeepSeek 请求成功，分别验证纯文本答复和合成 PNG 识别；响应均为文本。此次没有改动请求模型或提示词，因此未额外发送模型请求。
 - 本次更正续验：再发 2 次真实请求（文本精确回显、红蓝 PNG 识别），两次都只返回 `content_text`；同步混合输出块回归现已明确包含图片块。DeepSeek 负责看图并文字回答，不承担图片生成。
 - 修复额度预留早于校验/授权的问题：改为 Spring 方法拦截器，在 MVC 入参校验后再检查会话与允许角色并预留；移除相关控制器的 AOP `@Validated`，使用 Spring MVC 原生方法校验；补齐统一 400 响应。定向 Maven 35/35 通过。
+- 新增章节级事务 advisory lock，串行化无尽远征/错题补星的限额检查与写入，并防止核心星级重算覆盖并发补星。PostgreSQL 回归先失败（两个请求都发放），修复后并发集成 + 补星/星级单元测试共 14/14 通过。
 - 续验 `tests/test_provider_tool_calling.py tests/test_openai_compat_provider.py`：46 passed，1 条既有 pytest 标记警告。
+- DeepSeek 本项目只使用图片输入 + 文本输出；未接入图像生成接口。此次确认未改动 DeepSeek 请求与解析代码，未产生新模型请求。
 - 管理台 5 个 Vitest 文件 / 31 项、typecheck、定向 ESLint 通过；Playwright 模拟 API 检查 3 页的 1440px 与 320px 布局、窄屏抽屉和用户状态对话框，页面溢出 0、JS 错误 0。期间排除了全局像素按钮阴影对管理端的污染。
 - 前端全量 Vitest 270 files / 2568 tests、typecheck、build 通过；ESLint 0 errors / 7 warnings。Graph 最新全量 1842 passed / 1 skipped；RAG 158 passed / 2 skipped。
 - 远征随机节点集成夹具已修复，`ExpeditionRunPostgresIntegrationTest` 隔离 28/28 通过；本次 Maven 全量 1393 tests、0 failures、6 errors；5 个 Testcontainers 类隔离 16/16、长期仿真类隔离 1/1 通过。失败均为全量串跑时的 Docker 动态端口绑定冲突或测试库连接拒绝。
