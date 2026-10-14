@@ -27,9 +27,15 @@
 
 ## Execution phases
 
+## Current execution status (2026-10-14)
+
+- **Completed:** Phase 0 baseline and local commit `9c595f3d`; Phase 2 provider/Tutor source audit plus real DeepSeek requests through Tutor text/image streams and the workflow structured-image path; Phase 5 admin interaction repairs, responsive browser checks, and a remote Markdown image privacy fix. Fresh Web verification: Vitest 269 files / 2541 tests, typecheck, production build, and `git diff --check` passed; ESLint has 0 errors and 7 existing warnings. Functional checks are followed by local run-creation sampling: 2 warmups + 12 samples, P50 24.26 ms / P95 31.65 ms, 25 nodes, 0 model calls; the temporary run was deleted and GET returned 204.
+- **Partially complete:** Phase 1 focused trust-boundary and sandbox checks passed; fresh full Maven ran 1382 tests with 0 assertion failures but 6 environment errors (5 pgvector Testcontainers host-port bind conflicts and 1 PostgreSQL connection reset). Graph's guarded public-document browser request remains blocked because allowed domains resolve to non-public IPs in this environment; the guard failed closed. Phase 3 focused selection, Boss, recovery, Phaser, and browser-settled-state checks exist, but the full real judged final Boss journey remains unverified. Phase 4 trusted Twin changes and focused tests are complete; calibrated learning-outcome comparison remains unverified.
+- **Pending:** Full real student/teacher journeys beyond the changed-page browser checks; a complete real final Boss solve journey; Twin A/B and delayed-outcome measurement; production Piston, ECS/public validation; and resolving the local Docker/Testcontainers port collision. No Android, Windows, WeChat, ECS, or GitHub work is in scope.
+
 ### Phase 0 — Establish the current baseline
 
-- Keep a local commit before further implementation; current anchor: `a82fa3bf`.
+- Keep a local commit before further implementation; current anchor: `9c595f3d` (2026-10-14 security and sandbox fixes).
 - Inventory current security contracts, model-provider allowlists, Tutor routes, expedition state machine, Twin APIs, and every Web admin page before editing.
 - Save audit findings and evidence in the project changelog/worklogs; treat Alethicode's current dirty worktree as comparison input, not as a source to modify.
 
@@ -44,7 +50,7 @@
 
 - Trace every runtime AI call, background job, and evaluation script. Ensure model inference uses the DeepSeek provider, image-capable routes use the configured vision model, no request accepts an untrusted model override, and TTS/ASR are unreachable.
 - Compare Pythontopia's AutoGen Tutor implementation and persisted event lifecycle with Alethicode's latest implementation and relevant Codex logs. Merge only the missing required lifecycle behavior while keeping Pythontopia's current API/SSE/image privacy contract.
-- Verify with provider routing tests and prior real text/image evidence. A real API request is reserved for an identified gap and must remain within the request ceiling.
+- Verify with provider routing tests and real text/image requests. This continuation used 8 provider attempts total, including exploratory low-token probes and one connection timeout; Tutor text/image streaming and the workflow-shaped structured image request returned nonempty, expected results. All prompts used synthetic content, and the total remained below the 30-request ceiling.
 
 ### Phase 3 — Expedition continuity and adaptive practice
 

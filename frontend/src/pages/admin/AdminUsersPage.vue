@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref } from 'vue';
 import { useSessionStore } from '@stores/session';
 import { useToastStore } from '@stores/toast';
 import {
@@ -29,6 +29,14 @@ const totalElements = ref(0);
 const updatingUserId = ref<number | null>(null);
 const listBusy = computed(() => loading.value || updatingUserId.value !== null);
 const pageSize = ref(20);
+const pendingStatusChange = ref<{
+  user: AdminUserDto;
+  status: AdminUserStatus;
+  action: string;
+} | null>(null);
+const usersPage = ref<HTMLElement | null>(null);
+const statusDialog = ref<HTMLDialogElement | null>(null);
+const statusTrigger = ref<HTMLButtonElement | null>(null);
 
 function roleLabel(role: AdminUserDto['role']): string {
   if (role === 'ADMIN') return '管理员';
@@ -67,6 +75,10 @@ async function loadUsers(): Promise<void> {
     totalPages.value = result.totalPages;
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : '用户列表暂不可用';
+    entries.value = [];
+    page.value = 0;
+    totalPages.value = 0;
+    totalElements.value = 0;
   } finally {
     loading.value = false;
   }
@@ -95,19 +107,38 @@ function changePageSize(nextSize: number): void {
   void loadUsers();
 }
 
-async function toggleStatus(user: AdminUserDto): Promise<void> {
+function openStatusConfirmation(user: AdminUserDto, event: MouseEvent): void {
   if (user.id === session.user?.id || updatingUserId.value !== null) return;
   const status: AdminUserStatus = user.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
   const action = status === 'DISABLED' ? '停用' : '启用';
-  if (!window.confirm(`确认${action}账号“${user.displayName}（${user.username}）”？`)) return;
+  statusTrigger.value = event.currentTarget as HTMLButtonElement;
+  pendingStatusChange.value = { user, status, action };
+  void nextTick(() => statusDialog.value?.showModal());
+}
 
-  updatingUserId.value = user.id;
+function closeStatusConfirmation(restoreTrigger = true): void {
+  if (updatingUserId.value !== null) return;
+  statusDialog.value?.close();
+  pendingStatusChange.value = null;
+  void nextTick(() => {
+    if (restoreTrigger && statusTrigger.value?.isConnected) statusTrigger.value.focus();
+    else usersPage.value?.focus();
+  });
+}
+
+async function confirmStatusChange(): Promise<void> {
+  const pending = pendingStatusChange.value;
+  if (!pending || updatingUserId.value !== null) return;
+
+  updatingUserId.value = pending.user.id;
   try {
-    await setAdminUserStatus(user.id, status);
-    toast.show(`账号已${action}`, 'success');
+    await setAdminUserStatus(pending.user.id, pending.status);
+    toast.show(`账号已${pending.action}`, 'success');
+    updatingUserId.value = null;
+    closeStatusConfirmation(false);
     await loadUsers();
   } catch (cause) {
-    toast.show(cause instanceof Error ? cause.message : `账号${action}失败`, 'error');
+    toast.show(cause instanceof Error ? cause.message : `账号${pending.action}失败`, 'error');
   } finally {
     updatingUserId.value = null;
   }
@@ -120,23 +151,21 @@ onMounted(() => {
 
 <template>
   <section
+    ref="usersPage"
     class="admin-users"
     data-testid="admin-users"
-    :aria-busy="loading"
+    tabindex="-1"
+    :aria-busy="listBusy"
   >
-    <header class="admin-page-heading">
-      <h1>用户管理</h1>
-      <p>查看账号角色与状态；停用或启用账号会撤销该账号的现有登录令牌。</p>
-    </header>
-
     <AdminPanel
-      title="平台账号"
-      description="仅提供账号状态管理，密码与凭据不会出现在列表中。"
+      title="用户管理"
+      description="查看账号角色与状态并管理登录资格；列表不包含密码与凭据。"
     >
       <template #actions>
         <button
           class="admin-button"
           type="button"
+          data-testid="admin-users-refresh"
           :disabled="listBusy"
           @click="loadUsers"
         >
@@ -291,7 +320,7 @@ onMounted(() => {
                   type="button"
                   :disabled="user.id === session.user?.id || listBusy"
                   :data-testid="`admin-user-status-${user.id}`"
-                  @click="toggleStatus(user)"
+                  @click="openStatusConfirmation(user, $event)"
                 >
                   {{ updatingUserId === user.id ? '正在保存…' : user.status === 'ACTIVE' ? '停用' : '启用' }}
                 </button>
@@ -318,6 +347,47 @@ onMounted(() => {
         />
       </template>
     </AdminPanel>
+
+    <dialog
+      v-if="pendingStatusChange"
+      ref="statusDialog"
+      class="admin-dialog admin-users__dialog"
+      role="alertdialog"
+      aria-modal="true"
+      aria-labelledby="admin-user-status-title"
+      aria-describedby="admin-user-status-description"
+      @cancel.prevent="closeStatusConfirmation()"
+      @click.self="closeStatusConfirmation()"
+    >
+      <h2 id="admin-user-status-title">
+        确认{{ pendingStatusChange.action }}账号
+      </h2>
+      <p id="admin-user-status-description">
+        {{ pendingStatusChange.user.displayName }}（{{ pendingStatusChange.user.username }}）
+        {{ pendingStatusChange.status === 'DISABLED' ? '将无法继续使用当前登录令牌。' : '将恢复登录权限。' }}
+      </p>
+      <div class="admin-users__dialog-actions">
+        <button
+          class="admin-button"
+          type="button"
+          data-testid="admin-user-status-cancel"
+          :disabled="updatingUserId !== null"
+          @click="closeStatusConfirmation()"
+        >
+          取消
+        </button>
+        <button
+          class="admin-button"
+          :class="pendingStatusChange.status === 'DISABLED' ? 'admin-button--danger' : 'admin-button--primary'"
+          type="button"
+          data-testid="admin-user-status-confirm"
+          :disabled="updatingUserId !== null"
+          @click="confirmStatusChange"
+        >
+          {{ updatingUserId === null ? `确认${pendingStatusChange.action}` : '正在保存…' }}
+        </button>
+      </div>
+    </dialog>
   </section>
 </template>
 
@@ -326,25 +396,6 @@ onMounted(() => {
   display: grid;
   gap: 20px;
   min-width: 0;
-}
-
-.admin-page-heading {
-  display: grid;
-  gap: 5px;
-}
-
-.admin-page-heading h1 {
-  margin: 0;
-  color: var(--admin-text);
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.25;
-}
-
-.admin-page-heading p {
-  margin: 0;
-  color: var(--admin-muted);
-  font-size: 13px;
 }
 
 .admin-users__filters {
@@ -421,7 +472,17 @@ onMounted(() => {
   white-space: nowrap;
 }
 
-@media (max-width: 640px) {
-  .admin-page-heading h1 { font-size: 22px; }
+.admin-users__dialog > p {
+  margin: 12px 0 20px;
+  color: var(--admin-muted);
+  font-size: 14px;
+  line-height: 1.6;
 }
+
+.admin-users__dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 </style>
