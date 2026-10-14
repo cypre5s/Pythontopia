@@ -157,6 +157,54 @@ class TutorWorkflowGraphClientTest {
     assertThat(interrupted).isTrue();
   }
 
+  @Test
+  void emitterTimeoutAbortsGraphStreamAndMarksRunInterrupted() throws Exception {
+    CompletableFuture<Void> streamOpened = new CompletableFuture<>();
+    CompletableFuture<Void> upstreamClosed = new CompletableFuture<>();
+    server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    server.createContext(
+        "/agents/tutor-workflow/run/stream",
+        exchange -> {
+          exchange.getRequestBody().readAllBytes();
+          exchange.getResponseHeaders().add("Content-Type", "text/event-stream");
+          exchange.sendResponseHeaders(200, 0);
+          streamOpened.complete(null);
+          try (OutputStream output = exchange.getResponseBody()) {
+            for (int i = 0; i < 40; i++) {
+              try {
+                Thread.sleep(25);
+                output.write(": ping\n\n".getBytes(StandardCharsets.UTF_8));
+                output.flush();
+              } catch (IOException expectedAfterTimeout) {
+                upstreamClosed.complete(null);
+                break;
+              } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                break;
+              }
+            }
+          } catch (IOException expectedAfterTimeout) {
+            upstreamClosed.complete(null);
+          }
+        });
+    server.start();
+    CompletableFuture<Void> markedInterrupted = new CompletableFuture<>();
+    TimeoutEmitter emitter = new TimeoutEmitter();
+
+    newClient().runStream(
+        73L,
+        Map.of("user_id", 73L, "session_id", "wf-shared"),
+        emitter,
+        ignored -> {},
+        ignored -> {},
+        () -> markedInterrupted.complete(null));
+
+    streamOpened.get(5, TimeUnit.SECONDS);
+    emitter.triggerTimeout();
+    markedInterrupted.get(5, TimeUnit.SECONDS);
+    upstreamClosed.get(5, TimeUnit.SECONDS);
+  }
+
   private TutorWorkflowGraphClient newClient() {
     GraphServiceProperties properties =
         new GraphServiceProperties(
@@ -217,6 +265,23 @@ class TutorWorkflowGraphClientTest {
     @Override
     public void send(SseEventBuilder builder) throws IOException {
       throw new IOException("browser disconnected");
+    }
+  }
+
+  private static final class TimeoutEmitter extends SseEmitter {
+    private Runnable timeoutCallback;
+
+    private TimeoutEmitter() {
+      super(5_000L);
+    }
+
+    @Override
+    public void onTimeout(Runnable callback) {
+      timeoutCallback = callback;
+    }
+
+    private void triggerTimeout() {
+      timeoutCallback.run();
     }
   }
 }

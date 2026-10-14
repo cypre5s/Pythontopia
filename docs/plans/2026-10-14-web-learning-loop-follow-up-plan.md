@@ -17,7 +17,7 @@
 3. 为 `useEndlessRun` 加自动开局与显式 KC 选择回归；自动策略交给服务端，学生明确选择时保留 preferredKc。
 4. 运行 Twin/Home/ReviewHall/Boss 相关前后端回归，更新日志并提交。
 
-## Phase 3 — AutoGen Tutor 生命周期核对与补齐（核对中）
+## Phase 3 — AutoGen Tutor 生命周期核对与补齐（已完成）
 
 1. 按事件类型比对 Alethicode AutoGen 阶段与 Pythontopia `tutor_workflow_graph.py`、Java projection；保留现有 API/DTO/V199。
 2. 增加长请求、SSE 超时/断流、取消后同幂等键重试、重复请求与 checkpoint CAS 回归。

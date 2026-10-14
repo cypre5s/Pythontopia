@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
+import java.time.Instant;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
@@ -36,6 +37,7 @@ class TutorWorkflowRepositoryIntegrationTest {
 
   private static JdbcTemplate jdbc;
   private static TutorWorkflowRepository repository;
+  private static TutorWorkflowAttachmentRepository attachmentRepository;
   private static Long legacyTerminalCheckpointSessionId;
   private Long userId;
   private TutorWorkflowSessionDto session;
@@ -58,6 +60,7 @@ class TutorWorkflowRepositoryIntegrationTest {
     Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
 
     var transactionManager = new DataSourceTransactionManager(dataSource);
+    attachmentRepository = new TutorWorkflowAttachmentRepository(jdbc);
     var proxyFactory = new ProxyFactory(new TutorWorkflowRepository(jdbc, new ObjectMapper()));
     proxyFactory.addAdvice(
         new TransactionInterceptor(transactionManager, new AnnotationTransactionAttributeSource()));
@@ -161,6 +164,21 @@ class TutorWorkflowRepositoryIntegrationTest {
                 String.class,
                 legacyTerminalCheckpointSessionId))
         .containsExactly("COMPLETED", "FAILED");
+  }
+
+  @Test
+  void attachmentRepositoryPersistsExpiryForPostgres() {
+    UUID attachmentId = UUID.randomUUID();
+    Instant expiresAt = Instant.now().plusSeconds(60);
+
+    attachmentRepository.insert(session.id(), attachmentId, "image/png", new byte[] {1}, expiresAt);
+
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT expires_at > now() FROM tutor_workflow_attachment WHERE id = ?",
+                Boolean.class,
+                attachmentId))
+        .isTrue();
   }
 
   @Test

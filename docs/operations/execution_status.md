@@ -10,7 +10,7 @@
 
 - Phase 1 完成：Boss 预加载和同步签发共用审核门槛；撤销批准的 AI 题不记远征分、排行榜或掌握度。定向 `BossServiceTest` + `EndlessPregenServiceTest`：64/64 通过。
 - Phase 2 完成：`useNextSteps` 消费服务端 Twin 推荐；无评估状态不再由前端推断弱项；远征自动开局不发送画像 weak KC，显式 `focusKc` 仍有效。定向 Vitest 20/20，`npm run typecheck` 通过。
-- Phase 3 核对中：Java SSE 与 Graph 单次请求上限为 180 秒，provider HTTP timeout 为 90 秒；Graph 断流会取消活动任务，同 session 仅允许一个活动 run。现有测试已覆盖活动锁、检查点恢复、阶段 CAS、断流取消和重复投影。当前未发现需要增加 `updated_at` 续租的证据；仍需重跑完整 Tutor 回归并做真实本地文本/图片输入验证。
+- Phase 3 完成：SSE/Graph 请求时限、断流取消、同会话活动锁和检查点恢复已核对，无需新增租约字段。修复 Tutor 图片附件 `Instant` PostgreSQL 参数绑定，并补充 emitter 超时会中止 Graph 流的回归测试。Tutor Maven 120/120、Graph Tutor/provider/附件 88 项通过；本地 DeepSeek 文本与相关蓝圆 PNG 输入各完成真实调用，响应为文本字符串，Tutor 持久化卡片与 checkpoint 未发现图像 payload。初始无关图片按课程相关性规则被拒答，改用圆面积相关图片后识别成功。
 - Phase 4 管理台真实 API/同视口对照、Phase 5 Boss Phaser 多阶段浏览器闭环和 Web 最终回归尚未完成；性能测试仍后置。
 
 ### 本次补充
@@ -23,6 +23,9 @@
 - Graph Boss 回归 234/234 通过，改动 Python 文件 Ruff 通过；本地 Spring 进程的 AI 每日限制仍为 `false`。
 
 - DeepSeek provider 的同步与 SSE 响应都只提取文本块；流式回归覆盖了上游混合文本/图片块，客户端只收到文本。项目不调用图片生成接口。
+- Tutor 图片附件写入 PostgreSQL 时，`JdbcTemplate` 不支持直接绑定 `Instant`；现改为 `Timestamp.from(expiresAt)`，并有 Testcontainers 回归覆盖。新增 SSE emitter 超时测试，确认超时后会取消 Graph 上游并标记运行中断。
+- 最新 Tutor 验证：后端 `Tutor*Test` 120/120 通过；Graph Tutor/provider/附件 88 passed、1 条既有 pytest 标记警告。真实本地 DeepSeek 文本回显与圆面积相关的蓝圆 PNG 识别均成功，响应 card content 类型为字符串；卡片/checkpoint 图像 payload 数为 0，测试用户清理成功。无关红底蓝方块曾被正确拒绝，本次改用相关圆图后才计为视觉验证通过。
+- `git diff --check` 通过。全仓 Spotless 仍因 616 个其他文件格式差异失败；本阶段修改的三个 Java 文件均未列入格式违规。
 - 真实 provider smoke：2 次 DeepSeek 请求成功，分别验证纯文本答复和合成 PNG 识别；响应均为文本。此次没有改动请求模型或提示词，因此未额外发送模型请求。
 - 本次更正续验：再发 2 次真实请求（文本精确回显、红蓝 PNG 识别），两次都只返回 `content_text`；同步混合输出块回归现已明确包含图片块。DeepSeek 负责看图并文字回答，不承担图片生成。
 - 修复额度预留早于校验/授权的问题：改为 Spring 方法拦截器，在 MVC 入参校验后再检查会话与允许角色并预留；移除相关控制器的 AOP `@Validated`，使用 Spring MVC 原生方法校验；补齐统一 400 响应。定向 Maven 35/35 通过。

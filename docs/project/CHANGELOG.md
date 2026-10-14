@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-14 — Tutor 图片输入持久化与 SSE 超时收尾
+
+- 修复 Tutor 私有图片附件到期时间写入 PostgreSQL 的类型错误：将 `Instant` 显式转成 JDBC `Timestamp`；增加 Testcontainers 回归。增加 SSE emitter 超时回归，确认超时会取消 Graph 上游并中断活动运行。
+- DeepSeek provider 同步与流式解析只提取文本响应块。真实本地 Tutor 调用验证纯文本回显，以及与当前圆面积题相关的蓝圆 PNG 识别；Web 返回文字字符串，没有模型图片输出。无关图片被课程相关性规则拒绝后，改用相关图复验成功。
+- 验证：后端 `Tutor*Test` 120/120、Graph Tutor/provider/附件 88 passed（1 条既有 pytest 标记警告）；真实 Tutor 图像输入后卡片与 checkpoint 均未持久化图像 payload，临时用户清理成功。`git diff --check` 通过；全仓 Spotless 有 616 个其他历史文件格式差异，本阶段三个 Java 文件均未出现在违规列表。
+
 ## 2026-10-14 — 远征 AI 题审核计分与 Twin 推荐统一
 
 - AI 远征题只有审核写入成功或确认已有批准记录后才进入预加载 READY；已撤销批准的题不再签发。审核失败时仅使用同 KC 的可信课程题兜底，否则明确返回不可用。
