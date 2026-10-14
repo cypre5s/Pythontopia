@@ -4,6 +4,7 @@
 import { ref, type Ref } from 'vue';
 import {
   fetchBossPrefetchStatus,
+  newBossProblemRequestId,
   prefetchBossProblem,
   requestBossProblem,
   submitBossAttempt,
@@ -81,12 +82,24 @@ export function useChallengeJudge(): UseChallengeJudgeReturn {
 
   // 客户端只缓存「状态」，题目本体与 hidden tests 始终留在后端 pregenerated_problem。
   const preloadStates = ref<Record<string, ChallengePreloadState>>({});
+  const problemRequestIds = new Map<string, string>();
+  // 浏览器超时无法判断服务端是否完成生成，重试时必须保留原请求 ID。
+  const uncertainProblemRequests = new Set<string>();
   function keyOf(args: ChallengeProblemArgs): string {
     return `${args.kc}|${args.kind ?? ''}|${args.difficulty}|${args.expeditionNodeId ?? ''}`;
   }
 
+  function problemRequestKey(args: ChallengeProblemArgs): string {
+    return JSON.stringify([
+      args.expeditionRunId ?? null,
+      args.expeditionNodeId ?? null,
+      args.kc,
+      args.kind,
+    ]);
+  }
+
   function requestPayload(args: ChallengeProblemArgs) {
-    return {
+    const payload = {
       stage: Math.max(1, Math.min(4, Math.round(args.difficulty))),
       preferredKc: args.kc,
       ...(args.kind ? { preferredKind: args.kind } : {}),
@@ -95,11 +108,31 @@ export function useChallengeJudge(): UseChallengeJudgeReturn {
       ...(args.expeditionNodeId ? { expeditionNodeId: args.expeditionNodeId } : {}),
       ...(hasAnySignal.value ? { profileSignals: signals.value } : {}),
     };
+    const key = problemRequestKey(args);
+    let requestId = problemRequestIds.get(key);
+    if (!requestId) {
+      requestId = newBossProblemRequestId();
+      problemRequestIds.set(key, requestId);
+    }
+    return { ...payload, requestId };
   }
 
-  function request(args: ChallengeProblemArgs): Promise<BossProblemDto> {
+  async function request(args: ChallengeProblemArgs): Promise<BossProblemDto> {
     const chapter = kcChapter(args.kc);
-    return requestBossProblem(chapter, requestPayload(args), { allowGoldenFallback: false });
+    const key = problemRequestKey(args);
+    try {
+      const problem = await requestBossProblem(
+        chapter,
+        requestPayload(args),
+        { allowGoldenFallback: false },
+      );
+      problemRequestIds.delete(key);
+      uncertainProblemRequests.delete(key);
+      return problem;
+    } catch (error) {
+      uncertainProblemRequests.add(key);
+      throw error;
+    }
   }
 
   async function fetchProblem(args: ChallengeProblemArgs): Promise<BossProblemDto> {
@@ -169,6 +202,10 @@ export function useChallengeJudge(): UseChallengeJudgeReturn {
   }
 
   async function retryPrefetch(args: ChallengeProblemArgs): Promise<ChallengePreloadState> {
+    // 现场请求结果不确定时，不能另起后台生成，后续现场请求会沿用原 ID。
+    if (uncertainProblemRequests.has(problemRequestKey(args))) {
+      return getPrefetchState(args);
+    }
     preloadStates.value = { ...preloadStates.value, [keyOf(args)]: IDLE_PRELOAD };
     return prefetchProblem(args);
   }
@@ -188,6 +225,8 @@ export function useChallengeJudge(): UseChallengeJudgeReturn {
 
   function clearPrefetch(): void {
     preloadStates.value = {};
+    problemRequestIds.clear();
+    uncertainProblemRequests.clear();
   }
 
   async function judge(

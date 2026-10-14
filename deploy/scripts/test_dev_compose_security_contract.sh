@@ -99,7 +99,7 @@ assert "no-new-privileges:true" in piston["security_opt"]
 assert piston["mem_limit"] == piston["memswap_limit"] == "805306368"
 assert piston["cpus"] == 1 and piston["pids_limit"] == 128
 assert "/piston/jobs:exec,size=256m" in piston["tmpfs"]
-assert "/tmp:exec,size=256m" in piston["tmpfs"]
+assert "/tmp:exec,size=256m,mode=700" in piston["tmpfs"]
 assert piston["environment"]["PISTON_RUN_TIMEOUT"] == "10000"
 assert piston["environment"]["PISTON_RUN_MEMORY_LIMIT"] == "268435456"
 assert piston["environment"]["PISTON_MAX_CONCURRENT_JOBS"] == "2"

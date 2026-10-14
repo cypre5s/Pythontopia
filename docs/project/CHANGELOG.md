@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-10-15 — 会话期限、判题隔离与 Tutor 续跑复验
+
+- JWT 刷新保留原始登录时间，增加 30 天绝对期限，避免 access token 无限滑动续期；旧 token 的首次刷新按原签发周期推导边界。
+- 本地 Piston 将 Python 临时目录指向每个任务自己的工作目录，并将共享 `/tmp` 权限收紧为 `0700`；沙箱回归覆盖临时文件、共享目录写入、loopback、x86_64 compat socketcall 与超时。
+- 验证：认证与远征相关 Maven 定向测试 90 项通过；前端类型检查、挑战 composable 2 项、远征 store 53 项通过；本地 Piston 隔离脚本和 Compose 安全契约通过。Tutor 真实浏览器断连续跑复用原 requestId，数据库只产生 1 条 run 投影与 1 张卡片，页面错误 0；临时账号和关联数据已清理。
+- 全量 Maven 已重跑：1408 项、0 断言失败、7 个错误；6 个 Testcontainers PostgreSQL 失败于 Docker 绑定已占用 host port，长仿真测试另有 PostgreSQL 连接 reset。7 个受影响类随后隔离重跑共 21 项全部通过，表明失败受全量运行时 Docker 端口/容器稳定性影响。生产 Piston ACL/ECS、DeepSeek 供应商费用/总 token 与 Twin A/B 效果仍未验证。
+
+## 2026-10-15 — 远征预生成恢复与现场请求幂等
+
+- 状态查询会用单条条件 `UPDATE` 将超过租约的 `PENDING` 预生成任务转成可重试 `FAILED`；后台 worker 开始生成时刷新租约起点，租约从 Boss Graph 实际读取超时配置计算并增加 60 秒恢复余量（默认 240 秒）。
+- `useChallengeJudge` 为同一远征节点的现场出题保留稳定 `requestId`；请求结果不确定时，重试沿用该 ID，并跳过会造成重复生成的预加载重试。题目成功取得后，下次新题生成使用新 ID。
+- 回归先 RED 后 GREEN：`EndlessPregenServiceTest` 14 项、`BossServiceTest` 53 项、`useChallengeJudge.spec.ts` 2 项和 `rogueRun.spec.ts` 53 项通过；前端 typecheck、定向 ESLint、Java Spotless 和 `git diff --check` 通过。未调用 DeepSeek，未启动全栈或验证真实 Graph 超时恢复。
+
 ## 2026-10-15 — DeepSeek 文本输出与 AI 预算入口复核
 
 - 再次确认 DeepSeek 图像只用于输入：同步和 SSE 响应解析仅保留文本；混合响应内的图片块被丢弃；Tutor、工坊等 AI 输出视图禁用 Markdown 图片。经项目 provider 新发起两次真实调用：纯文本请求返回非空文字，合成四色 PNG 输入返回颜色描述文字；返回 DTO 只有文本/JSON/工具调用字段。provider + Tutor 图片输入测试 43 passed（含同步和 SSE 混合图片块回归），Ruff 通过。

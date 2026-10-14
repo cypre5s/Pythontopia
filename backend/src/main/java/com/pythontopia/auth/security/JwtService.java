@@ -20,6 +20,7 @@ public class JwtService {
   private static final Base64.Encoder URL_ENCODER = Base64.getUrlEncoder().withoutPadding();
   private static final Base64.Decoder URL_DECODER = Base64.getUrlDecoder();
   private static final TypeReference<Map<String, Object>> MAP_TYPE = new TypeReference<>() {};
+  private static final long MAX_SESSION_DAYS = 30;
 
   private final JwtProperties properties;
   private final ObjectMapper objectMapper;
@@ -37,7 +38,25 @@ public class JwtService {
   }
 
   public IssuedToken issue(CurrentUserPrincipal principal) {
-    Instant expiresAt = Instant.now(clock).plus(properties.ttlMinutes(), ChronoUnit.MINUTES);
+    return issue(principal, Instant.now(clock));
+  }
+
+  public IssuedToken issueForRefresh(CurrentUserPrincipal principal, String sourceToken) {
+    Map<String, Object> payload = verifiedPayload(sourceToken);
+    validateTimeClaims(payload);
+    return issue(principal, sessionStartedAt(payload));
+  }
+
+  private IssuedToken issue(CurrentUserPrincipal principal, Instant sessionStartedAt) {
+    Instant now = Instant.now(clock);
+    Instant sessionExpiresAt = sessionStartedAt.plus(MAX_SESSION_DAYS, ChronoUnit.DAYS);
+    if (sessionExpiresAt.isBefore(now)) {
+      throw new JwtValidationException("Session expired");
+    }
+    Instant expiresAt = now.plus(properties.ttlMinutes(), ChronoUnit.MINUTES);
+    if (sessionExpiresAt.isBefore(expiresAt)) {
+      expiresAt = sessionExpiresAt;
+    }
     Map<String, Object> header = new LinkedHashMap<>();
     header.put("alg", "HS256");
     header.put("typ", "JWT");
@@ -47,6 +66,7 @@ public class JwtService {
     payload.put("role", principal.role().name());
     // tv = 会话代次，见 users.token_version（V188）；鉴权时与库中当前值比对以支持吊销。
     payload.put("tv", principal.tokenVersion());
+    payload.put("auth_at", sessionStartedAt.getEpochSecond());
     payload.put("exp", expiresAt.getEpochSecond());
     String headerPart = encodeJson(header);
     String payloadPart = encodeJson(payload);
@@ -56,20 +76,8 @@ public class JwtService {
 
   public CurrentUserPrincipal parse(String token) {
     try {
-      String[] parts = token.split("\\.");
-      if (parts.length != 3) {
-        throw new JwtValidationException("Malformed token");
-      }
-      String signingInput = parts[0] + "." + parts[1];
-      if (!constantTimeEquals(sign(signingInput), parts[2])) {
-        throw new JwtValidationException("Invalid token signature");
-      }
-      Map<String, Object> payload =
-          objectMapper.readValue(URL_DECODER.decode(parts[1]), MAP_TYPE);
-      long exp = ((Number) payload.get("exp")).longValue();
-      if (Instant.ofEpochSecond(exp).isBefore(Instant.now(clock))) {
-        throw new JwtValidationException("Token expired");
-      }
+      Map<String, Object> payload = verifiedPayload(token);
+      validateTimeClaims(payload);
       return new CurrentUserPrincipal(
           Long.valueOf((String) payload.get("sub")),
           (String) payload.get("username"),
@@ -80,6 +88,43 @@ public class JwtService {
     } catch (Exception exception) {
       throw new JwtValidationException("Invalid token", exception);
     }
+  }
+
+  private Map<String, Object> verifiedPayload(String token) {
+    try {
+      String[] parts = token.split("\\.");
+      if (parts.length != 3) {
+        throw new JwtValidationException("Malformed token");
+      }
+      String signingInput = parts[0] + "." + parts[1];
+      if (!constantTimeEquals(sign(signingInput), parts[2])) {
+        throw new JwtValidationException("Invalid token signature");
+      }
+      return objectMapper.readValue(URL_DECODER.decode(parts[1]), MAP_TYPE);
+    } catch (JwtValidationException exception) {
+      throw exception;
+    } catch (Exception exception) {
+      throw new JwtValidationException("Invalid token", exception);
+    }
+  }
+
+  private void validateTimeClaims(Map<String, Object> payload) {
+    long exp = ((Number) payload.get("exp")).longValue();
+    if (Instant.ofEpochSecond(exp).isBefore(Instant.now(clock))) {
+      throw new JwtValidationException("Token expired");
+    }
+    if (sessionStartedAt(payload).plus(MAX_SESSION_DAYS, ChronoUnit.DAYS)
+        .isBefore(Instant.now(clock))) {
+      throw new JwtValidationException("Session expired");
+    }
+  }
+
+  private Instant sessionStartedAt(Map<String, Object> payload) {
+    if (payload.get("auth_at") instanceof Number authAt) {
+      return Instant.ofEpochSecond(authAt.longValue());
+    }
+    long exp = ((Number) payload.get("exp")).longValue();
+    return Instant.ofEpochSecond(exp).minus(properties.ttlMinutes(), ChronoUnit.MINUTES);
   }
 
   /**

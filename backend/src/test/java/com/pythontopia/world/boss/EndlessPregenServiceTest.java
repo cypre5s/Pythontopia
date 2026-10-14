@@ -8,21 +8,27 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.common.config.BossProblemHttpClientProperties;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
+import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
 import java.util.List;
 import java.util.Map;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.web.client.RestClientException;
 
@@ -38,9 +44,66 @@ class EndlessPregenServiceTest {
   void setUp() {
     service = new EndlessPregenService(graphClient, jdbcTemplate, new ObjectMapper(), null, reviewRepository);
     lenient()
-        .when(jdbcTemplate.queryForObject(
-            contains("SELECT EXISTS"), eq(Boolean.class), anyLong(), anyLong(), anyInt()))
+        .when(jdbcTemplate.update(
+            contains("WHERE id = ? AND user_id = ? AND status = 'PENDING' AND attempt_count = ?"),
+            anyLong(), anyLong(), anyInt()))
+        .thenReturn(1);
+  }
+
+  @Test
+  void statusQueryExpiresPendingRowsAfterGraphTimeoutPlusRecoveryMargin() {
+    service =
+        new EndlessPregenService(
+            graphClient,
+            jdbcTemplate,
+            new ObjectMapper(),
+            null,
+            reviewRepository,
+            new BossProblemHttpClientProperties(90_000));
+    BossPrefetchStatusDto failed =
+        new BossPrefetchStatusDto(19L, "FAILED", 1, "预加载超时，可重试", true, null);
+    org.mockito.Mockito.doReturn(List.of(failed))
+        .when(jdbcTemplate)
+        .query(contains("SELECT id, status"), any(RowMapper.class), any(Object[].class));
+
+    BossPrefetchStatusDto status =
+        service.getPrefetchStatus(7L, 1, 2, "PY43-KC-001", 2, "dual_track", null, null);
+
+    assertThat(status.status()).isEqualTo("FAILED");
+    assertThat(status.retryable()).isTrue();
+    ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+    verify(jdbcTemplate).update(sql.capture(), eq(7L), eq(150_000L));
+    assertThat(sql.getValue())
+        .contains("SET status = 'FAILED'", "status = 'PENDING'", "updated_at < now()");
+  }
+
+  @Test
+  void generationRenewsPendingLeaseBeforeCallingGraph() {
+    when(jdbcTemplate.update(
+            contains("WHERE id = ? AND user_id = ? AND status = 'PENDING' AND attempt_count = ?"),
+            eq(19L), eq(7L), eq(1)))
+        .thenReturn(1);
+    when(graphClient.requestProblem(eq(7L), eq(1), eq(2), eq("PY43-KC-001"), eq(2),
+            eq("PY43-KC-001"), eq("dual_track"), eq(null)))
+        .thenReturn(reviewedProblem());
+    when(reviewRepository.approveAutomaticallyIfNotDuplicate(
+            7L, "dual_track", 1, 2, "PY43-KC-001", 2, reviewedProblem()))
         .thenReturn(true);
+    when(jdbcTemplate.update(
+            contains("status = 'READY'"), anyString(), eq("ai-1"), anyString(), eq(19L), eq(7L),
+            eq(1), eq(2), isNull(), isNull(), eq(1)))
+        .thenReturn(1);
+
+    service.generatePrefetch(
+        19L, 7L, 1, 2, "PY43-KC-001", 2, "PY43-KC-001", "dual_track", null, null, null, 1);
+
+    InOrder order = inOrder(jdbcTemplate, graphClient);
+    order.verify(jdbcTemplate)
+        .update(
+            contains("WHERE id = ? AND user_id = ? AND status = 'PENDING' AND attempt_count = ?"),
+            eq(19L), eq(7L), eq(1));
+    order.verify(graphClient)
+        .requestProblem(7L, 1, 2, "PY43-KC-001", 2, "PY43-KC-001", "dual_track", null);
   }
 
   @Test
@@ -187,7 +250,7 @@ class EndlessPregenServiceTest {
 
     verify(jdbcTemplate)
         .queryForObject(contains("pg_advisory_xact_lock"), eq(Object.class), eq("7"));
-    verify(jdbcTemplate).update(contains("status = 'FAILED'"), eq(7L), eq(10));
+    verify(jdbcTemplate).update(contains("status = 'FAILED'"), eq(7L), eq(240_000L));
     verify(jdbcTemplate).update(contains("status = 'READY'"), eq(7L));
   }
 
@@ -215,9 +278,10 @@ class EndlessPregenServiceTest {
 
   @Test
   void cancelledQueuedAttemptDoesNotCallGraphWhenDequeued() {
-    when(jdbcTemplate.queryForObject(
-            contains("SELECT EXISTS"), eq(Boolean.class), eq(19L), eq(7L), eq(1)))
-        .thenReturn(false);
+    when(jdbcTemplate.update(
+            contains("WHERE id = ? AND user_id = ? AND status = 'PENDING' AND attempt_count = ?"),
+            eq(19L), eq(7L), eq(1)))
+        .thenReturn(0);
 
     service.generatePrefetch(
         19L, 7L, 1, 2, "PY43-KC-001", 2, "PY43-KC-001", "dual_track", null, null, null, 1);

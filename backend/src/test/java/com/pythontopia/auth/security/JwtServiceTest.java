@@ -8,7 +8,9 @@ import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.Base64;
+import java.util.Map;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
@@ -38,6 +40,51 @@ class JwtServiceTest {
     assertThatThrownBy(() -> parser.parse(token))
         .isInstanceOf(JwtValidationException.class)
         .hasMessage("Token expired");
+  }
+
+  @Test
+  void rejectsTokenPastAbsoluteSessionLifetimeEvenWhenAccessExpiryIsFuture() {
+    JwtService service = serviceAt(NOW, 60);
+    String token = signedToken(
+        "{\"sub\":\"42\",\"username\":\"stu01\",\"role\":\"STUDENT\",\"tv\":0,\"exp\":"
+            + NOW.plusSeconds(3600).getEpochSecond()
+            + ",\"auth_at\":" + NOW.minus(31, ChronoUnit.DAYS).getEpochSecond() + "}");
+
+    assertThatThrownBy(() -> service.parse(token))
+        .isInstanceOf(JwtValidationException.class)
+        .hasMessage("Session expired");
+  }
+
+  @Test
+  void refreshPreservesSessionStartAndCapsExpiryAtAbsoluteDeadline() throws Exception {
+    Instant sessionStartedAt = NOW.minus(29, ChronoUnit.DAYS);
+    String token = signedToken(
+        "{\"sub\":\"42\",\"username\":\"stu01\",\"role\":\"STUDENT\",\"tv\":0,\"exp\":"
+            + NOW.plusSeconds(3600).getEpochSecond()
+            + ",\"auth_at\":" + sessionStartedAt.getEpochSecond() + "}");
+    JwtService service = serviceAt(NOW, 60 * 24 * 30);
+
+    JwtService.IssuedToken refreshed =
+        service.issueForRefresh(new CurrentUserPrincipal(42L, "stu01", Role.STUDENT), token);
+    Map<String, Object> payload = payloadOf(refreshed.token());
+
+    assertThat(((Number) payload.get("auth_at")).longValue())
+        .isEqualTo(sessionStartedAt.getEpochSecond());
+    assertThat(refreshed.expiresAt()).isEqualTo(sessionStartedAt.plus(30, ChronoUnit.DAYS));
+  }
+
+  @Test
+  void legacyTokenGetsBoundedSessionStartWhenRefreshed() throws Exception {
+    String token = signedToken(
+        "{\"sub\":\"42\",\"username\":\"stu01\",\"role\":\"STUDENT\",\"tv\":0,\"exp\":"
+            + NOW.plusSeconds(3600).getEpochSecond() + "}");
+    JwtService service = serviceAt(NOW, 60);
+
+    JwtService.IssuedToken refreshed =
+        service.issueForRefresh(new CurrentUserPrincipal(42L, "stu01", Role.STUDENT), token);
+    Map<String, Object> payload = payloadOf(refreshed.token());
+
+    assertThat(((Number) payload.get("auth_at")).longValue()).isEqualTo(NOW.getEpochSecond());
   }
 
   @Test
@@ -96,6 +143,22 @@ class JwtServiceTest {
     } catch (Exception exception) {
       throw new IllegalStateException(exception);
     }
+  }
+
+  private String signedToken(String payloadJson) {
+    String header = Base64.getUrlEncoder().withoutPadding()
+        .encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
+    String payload = Base64.getUrlEncoder().withoutPadding()
+        .encodeToString(payloadJson.getBytes(StandardCharsets.UTF_8));
+    String signingInput = header + "." + payload;
+    return signingInput + "." + hmac(signingInput);
+  }
+
+  private Map<String, Object> payloadOf(String token) throws Exception {
+    return new ObjectMapper()
+        .readValue(
+            Base64.getUrlDecoder().decode(token.split("\\.")[1]),
+            new com.fasterxml.jackson.core.type.TypeReference<>() {});
   }
 
   private JwtService serviceAt(Instant instant, long ttlMinutes) {

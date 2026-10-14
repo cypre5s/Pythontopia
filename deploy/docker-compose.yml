@@ -55,7 +55,7 @@ services:
     volumes:
       - piston_packages:/piston/packages
     tmpfs:
-      - /tmp:exec,size=256m
+      - /tmp:exec,size=256m,mode=700
       - /piston/jobs:exec,size=256m
 
   backend:

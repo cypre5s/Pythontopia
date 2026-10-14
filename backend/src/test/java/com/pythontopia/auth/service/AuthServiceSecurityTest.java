@@ -277,7 +277,8 @@ class AuthServiceSecurityTest {
           .thenReturn(new CurrentUserPrincipal(9L, "stu01", Role.STUDENT, 2));
       when(repository.findById(9L))
           .thenReturn(Optional.of(user(Role.STUDENT, UserAccount.STATUS_ACTIVE, 2)));
-      when(jwtService.issue(new CurrentUserPrincipal(9L, "stu01", Role.STUDENT, 2)))
+      when(jwtService.issueForRefresh(
+              new CurrentUserPrincipal(9L, "stu01", Role.STUDENT, 2), "valid-token"))
           .thenReturn(new JwtService.IssuedToken("fresh-token", EXPIRES_AT));
 
       LoginResponse response = service.refresh("valid-token");
@@ -285,6 +286,8 @@ class AuthServiceSecurityTest {
       assertThat(response.token()).isEqualTo("fresh-token");
       assertThat(response.expiresAt()).isEqualTo(EXPIRES_AT);
       assertThat(response.user().username()).isEqualTo("stu01");
+      verify(jwtService)
+          .issueForRefresh(new CurrentUserPrincipal(9L, "stu01", Role.STUDENT, 2), "valid-token");
     }
   }
 

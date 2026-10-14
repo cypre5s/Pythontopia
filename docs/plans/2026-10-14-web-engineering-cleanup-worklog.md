@@ -1,5 +1,19 @@
 # Web 工程可读性与规范清理工作日志
 
+## 2026-10-15 会话期限、判题隔离与 Tutor 浏览器续跑
+
+- JWT 使用 `auth_at` 保存会话起点；刷新时保持该值，访问与刷新都受 30 天绝对期限约束。兼容旧 token 时用 `exp - ttl` 推算起点，避免升级时无条件重开期限。
+- 本地 Piston 启动执行器前将 `TMPDIR`、`TMP`、`TEMP` 设为当前 job 工作目录；Compose 的共享 `/tmp` 改为 `0700`。真实沙箱测试确认 Python 临时文件留在 job 目录、跨任务共享 `/tmp` 写入受阻、loopback 与 compat socketcall 受阻、超时进程被杀。
+- 真实 Tutor 浏览器联测：开始导学请求后刷新页面，恢复提示出现；点击续跑沿用原 requestId。Graph 完成后数据库只有 1 条 run projection 和 1 张卡片，浏览器 pageerror 为 0；临时学生账号及其关联数据已清理。
+- 验证：`JwtServiceTest`、`AuthServiceSecurityTest`、`EndlessPregenServiceTest`、`BossServiceTest` 共 90 项通过；前端 typecheck、`useChallengeJudge.spec.ts` 2 项、`rogueRun.spec.ts` 53 项通过；Piston 运行时隔离脚本、Compose 安全契约、`git diff --check` 通过。全量 Maven 重跑 1408 项、0 断言失败、7 个环境错误；6 个端口冲突类与长仿真类隔离复跑共 21 项全部通过。生产 Piston/ECS、供应商费用与 Twin A/B 未验证。
+
+## 2026-10-15 远征题目生成恢复补齐
+
+- 先加回归并确认 RED：状态查询没有将过租约 `PENDING` 任务转为 `FAILED`；现场出题未携带请求幂等 ID，超时后会使用新请求，且手动重试会先启动另一个预生成任务。
+- 后端状态查询通过单条条件 `UPDATE` 原子过期任务；worker 启动 Graph 前刷新租约起点。租约读取 `BossProblemHttpClientProperties.readTimeoutMs` 并加 60 秒余量，当前默认 Graph 读超时 180 秒、恢复租约 240 秒。
+- 前端按 run、node、KC、题型保留现场请求 ID；超时/不确定失败后重试复用该 ID，并绕过会另起任务的预加载重试；取得题目后清除 ID，使之后的新题使用新 ID。
+- 验证：`EndlessPregenServiceTest` 14 项、`BossServiceTest` 53 项、`useChallengeJudge.spec.ts` 2 项和 `rogueRun.spec.ts` 53 项通过；前端 typecheck、改动文件 ESLint、Java 定向 Spotless 和 `git diff --check` 通过。未调用 DeepSeek、未启动全栈，真实 Graph 超时和数据库并发恢复未做运行态验证。
+
 ## 2026-10-14 后端全量复验
 
 - 最新 `mvn -o test`：1392 tests、0 assertion failures、7 errors。6 个 Testcontainers PostgreSQL 容器在 Docker 宿主端口映射时报告 `address already in use`，长期仿真类在全量运行中连接被拒。

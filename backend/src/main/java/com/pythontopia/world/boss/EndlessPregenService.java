@@ -2,12 +2,14 @@ package com.pythontopia.world.boss;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.common.config.BossProblemHttpClientProperties;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
 import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
 import com.pythontopia.world.boss.review.BossProblemReviewRepository;
 import jakarta.annotation.PostConstruct;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -45,13 +47,14 @@ public class EndlessPregenService {
 
   private static final Logger log = LoggerFactory.getLogger(EndlessPregenService.class);
   private static final int MAX_OUTSTANDING_PER_USER = 4;
-  private static final int PREFETCH_LEASE_MINUTES = 10;
+  private static final long PREFETCH_RECOVERY_MARGIN_MS = Duration.ofMinutes(1).toMillis();
 
   private final BossGraphClient graphClient;
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
   private final ExpeditionRunService expeditionRunService;
   private final BossProblemReviewRepository reviewRepository;
+  private final long prefetchLeaseMs;
 
   @Autowired
   public EndlessPregenService(
@@ -59,12 +62,30 @@ public class EndlessPregenService {
       JdbcTemplate jdbcTemplate,
       ObjectMapper objectMapper,
       ExpeditionRunService expeditionRunService,
-      BossProblemReviewRepository reviewRepository) {
+      BossProblemReviewRepository reviewRepository,
+      BossProblemHttpClientProperties bossProblemHttpClientProperties) {
     this.graphClient = graphClient;
     this.jdbcTemplate = jdbcTemplate;
     this.objectMapper = objectMapper;
     this.expeditionRunService = expeditionRunService;
     this.reviewRepository = reviewRepository;
+    this.prefetchLeaseMs =
+        bossProblemHttpClientProperties.readTimeoutMs() + PREFETCH_RECOVERY_MARGIN_MS;
+  }
+
+  EndlessPregenService(
+      BossGraphClient graphClient,
+      JdbcTemplate jdbcTemplate,
+      ObjectMapper objectMapper,
+      ExpeditionRunService expeditionRunService,
+      BossProblemReviewRepository reviewRepository) {
+    this(
+        graphClient,
+        jdbcTemplate,
+        objectMapper,
+        expeditionRunService,
+        reviewRepository,
+        new BossProblemHttpClientProperties(null));
   }
 
   EndlessPregenService(
@@ -224,24 +245,28 @@ public class EndlessPregenService {
   }
 
   private void recoverStalePending(Long userId) {
+    failExpiredPending(userId);
     jdbcTemplate.update(
         "DELETE FROM pregenerated_problem"
             + " WHERE user_id = ? AND status = 'READY'"
             + " AND updated_at < now() - INTERVAL '1 day'",
         userId);
     jdbcTemplate.update(
-        "UPDATE pregenerated_problem"
-            + " SET status = 'FAILED', payload = NULL, problem_id = NULL,"
-            + " error_message = '预加载超时，可重试', updated_at = now()"
-            + " WHERE user_id = ? AND status = 'PENDING'"
-            + " AND updated_at < now() - (? * INTERVAL '1 minute')",
-        userId,
-        PREFETCH_LEASE_MINUTES);
-    jdbcTemplate.update(
         "DELETE FROM pregenerated_problem"
             + " WHERE user_id = ? AND status IN ('FAILED', 'CONSUMED')"
             + " AND updated_at < now() - INTERVAL '30 days'",
         userId);
+  }
+
+  private void failExpiredPending(Long userId) {
+    jdbcTemplate.update(
+        "UPDATE pregenerated_problem"
+            + " SET status = 'FAILED', payload = NULL, problem_id = NULL,"
+            + " error_message = '预加载超时，可重试', updated_at = now()"
+            + " WHERE user_id = ? AND status = 'PENDING'"
+            + " AND updated_at < now() - (? * INTERVAL '1 millisecond')",
+        userId,
+        prefetchLeaseMs);
   }
 
   /** 后台执行一个已经落为 PENDING 的任务；只有通过审查的 AI 题才可以进入 READY。 */
@@ -290,7 +315,7 @@ public class EndlessPregenService {
       ProfileSignalsPayload signals,
       int generationAttempt) {
     try {
-      if (!isCurrentPendingAttempt(jobId, userId, generationAttempt)) {
+      if (!markPendingAttemptStarted(jobId, userId, generationAttempt)) {
         log.info("skip cancelled prefetch job={} attempt={}", jobId, generationAttempt);
         return;
       }
@@ -378,16 +403,14 @@ public class EndlessPregenService {
         generationAttempt);
   }
 
-  private boolean isCurrentPendingAttempt(long jobId, Long userId, int generationAttempt) {
-    Boolean pending =
-        jdbcTemplate.queryForObject(
-            "SELECT EXISTS (SELECT 1 FROM pregenerated_problem"
-                + " WHERE id = ? AND user_id = ? AND status = 'PENDING' AND attempt_count = ?)",
-            Boolean.class,
+  private boolean markPendingAttemptStarted(long jobId, Long userId, int generationAttempt) {
+    return jdbcTemplate.update(
+            "UPDATE pregenerated_problem SET updated_at = now()"
+                + " WHERE id = ? AND user_id = ? AND status = 'PENDING' AND attempt_count = ?",
             jobId,
             userId,
-            generationAttempt);
-    return Boolean.TRUE.equals(pending);
+            generationAttempt)
+        == 1;
   }
 
   /** 查询同一完整维度的最新可观察状态；没有任务时返回 IDLE。 */
@@ -430,6 +453,7 @@ public class EndlessPregenService {
       validateStage(stage);
     }
     validateExpeditionNode(userId, expeditionRunId, expeditionNodeId, chapter, kcCode, true);
+    failExpiredPending(userId);
     return findLatestStatus(userId, chapter, stage, kcCode, difficulty, kind, arenaLevel,
             expeditionRunId, expeditionNodeId, false)
         .orElseGet(BossPrefetchStatusDto::idle);

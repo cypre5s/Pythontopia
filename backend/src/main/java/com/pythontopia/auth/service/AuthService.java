@@ -8,6 +8,7 @@ import com.pythontopia.auth.dto.UserDto;
 import com.pythontopia.auth.repository.UserRepository;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.JwtService;
+import com.pythontopia.auth.security.JwtValidationException;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.auth.security.TeacherInviteProperties;
 import com.pythontopia.common.error.BusinessException;
@@ -89,8 +90,8 @@ public class AuthService {
    * 用现有有效 token 重新签发 access token。当前契约有意把 access token 兼作 refresh 源，
    * 故调用方须回传未过期的 access token；非法或过期 token 抛 {@code 401 UNAUTHORIZED}。
    *
-   * <p>续期不是无条件的：已停用账号、以及会话代次已被自增（吊销）的 token 都会在这里被拒，
-   * 否则一枚旧 token 可以把自己「洗」成携带新代次的新 token，绕过吊销。
+   * <p>续期会保留原始登录时间，并在 30 天后失效；已停用账号和会话代次已被自增（吊销）的
+   * token 也会在这里被拒。
    */
   public LoginResponse refresh(String token) {
     CurrentUserPrincipal principal;
@@ -112,7 +113,12 @@ public class AuthService {
           HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_INVALID", "Refresh token has been revoked");
     }
     requireActive(user);
-    return issueFor(user);
+    try {
+      return issueFor(user, token);
+    } catch (JwtValidationException exception) {
+      throw new BusinessException(
+          HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_INVALID", "Refresh token is invalid or expired");
+    }
   }
 
   /** Revokes every existing token for the authenticated user, including the token used here. */
@@ -140,6 +146,15 @@ public class AuthService {
         jwtService.issue(
             new CurrentUserPrincipal(
                 user.id(), user.username(), user.role(), user.tokenVersion()));
+    return new LoginResponse(issued.token(), issued.expiresAt(), toDto(user));
+  }
+
+  private LoginResponse issueFor(UserAccount user, String sourceToken) {
+    JwtService.IssuedToken issued =
+        jwtService.issueForRefresh(
+            new CurrentUserPrincipal(
+                user.id(), user.username(), user.role(), user.tokenVersion()),
+            sourceToken);
     return new LoginResponse(issued.token(), issued.expiresAt(), toDto(user));
   }
 }

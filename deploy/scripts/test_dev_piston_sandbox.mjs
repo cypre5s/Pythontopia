@@ -42,6 +42,19 @@ async function main() {
     );
     assert.equal(fileProbe.stdout.trim(), 'False', 'sandbox must not see a host-only file');
 
+    const tempProbe = await execute(
+      'import os, tempfile\n'
+        + 'with tempfile.NamedTemporaryFile() as f:\n'
+        + ' print(os.path.realpath(os.path.dirname(f.name)) == os.path.realpath(os.getcwd()))',
+    );
+    assert.equal(tempProbe.stdout.trim(), 'True', 'Python temporary files must stay inside this job directory');
+
+    const sharedTempPath = `/tmp/pythontopia-piston-${process.pid}-${Date.now()}`;
+    const sharedTempProbe = await execute(
+      `import os\ntry:\n open(${JSON.stringify(sharedTempPath)}, "w").close()\n os.remove(${JSON.stringify(sharedTempPath)})\n print("writable")\nexcept PermissionError:\n print("blocked")`,
+    );
+    assert.equal(sharedTempProbe.stdout.trim(), 'blocked', 'sandbox jobs must not access shared /tmp');
+
     const networkProbe = await execute(
       'import socket\nsock = socket.socket()\nsock.settimeout(1)\nprint(sock.connect_ex(("127.0.0.1", 2000)))',
     );
@@ -49,6 +62,30 @@ async function main() {
       networkProbe.stdout.trim(),
       '0',
       'sandbox must not reach the host Piston API through loopback',
+    );
+
+    const compatSocketProbe = await execute(
+      'import ctypes, mmap, os, platform, struct\n'
+        + 'if platform.machine() != "x86_64":\n print("unsupported-architecture")\n'
+        + 'else:\n'
+        + ' libc = ctypes.CDLL(None, use_errno=True)\n'
+        + ' libc.mmap.argtypes = [ctypes.c_void_p, ctypes.c_size_t, ctypes.c_int, ctypes.c_int, ctypes.c_int, ctypes.c_long]\n'
+        + ' libc.mmap.restype = ctypes.c_void_p\n'
+        + ' flags = 0x02 | 0x20 | 0x40\n'
+        + ' args = libc.mmap(None, 4096, 3, flags, -1, 0)\n'
+        + ' code = libc.mmap(None, 4096, 7, flags, -1, 0)\n'
+        + ' if args in (None, ctypes.c_void_p(-1).value) or code in (None, ctypes.c_void_p(-1).value): raise OSError(ctypes.get_errno(), "mmap")\n'
+        + ' ctypes.memmove(args, struct.pack("<III", 2, 1, 0), 12)\n'
+        + ' payload = b"\\xb8\\x66\\x00\\x00\\x00\\xbb\\x01\\x00\\x00\\x00\\xb9" + struct.pack("<I", args) + b"\\xcd\\x80\\xc3"\n'
+        + ' ctypes.memmove(code, payload, len(payload))\n'
+        + ' create_socket = ctypes.CFUNCTYPE(ctypes.c_int)(code)\n'
+        + ' descriptor = create_socket()\n'
+        + ' print("blocked" if descriptor < 0 else "allowed")\n'
+        + ' if descriptor >= 0: os.close(descriptor)',
+    );
+    assert.ok(
+      ['blocked', 'unsupported-architecture'].includes(compatSocketProbe.stdout.trim()),
+      'compat socketcall must be blocked on x86_64 (or explicitly skipped elsewhere)',
     );
 
     const timeout = await execute('while True:\n    pass', 1_000);
