@@ -35,7 +35,14 @@ describe('AdminUsersPage', () => {
       totalPages: 1,
     });
     vi.mocked(setAdminUserStatus).mockResolvedValue({ ...activeUser, status: 'DISABLED' });
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+    Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
+      configurable: true,
+      value(this: HTMLDialogElement) { this.setAttribute('open', ''); },
+    });
+    Object.defineProperty(HTMLDialogElement.prototype, 'close', {
+      configurable: true,
+      value(this: HTMLDialogElement) { this.removeAttribute('open'); },
+    });
   });
 
   it('loads real paged users and lets an administrator disable an account', async () => {
@@ -52,9 +59,11 @@ describe('AdminUsersPage', () => {
     expect(wrapper.get('.admin-table-scroll').attributes('role')).toBe('region');
 
     await wrapper.get('[data-testid="admin-user-status-7"]').trigger('click');
+    expect(setAdminUserStatus).not.toHaveBeenCalled();
+    expect(wrapper.get('dialog.admin-dialog').attributes('open')).toBeDefined();
+    await wrapper.get('[data-testid="admin-user-status-confirm"]').trigger('click');
     await flushPromises();
 
-    expect(window.confirm).toHaveBeenCalled();
     expect(setAdminUserStatus).toHaveBeenCalledWith(7, 'DISABLED');
     expect(searchAdminUsers).toHaveBeenCalledTimes(2);
   });
@@ -75,7 +84,7 @@ describe('AdminUsersPage', () => {
       () => new Promise((resolve) => { resolveRefresh = resolve; }),
     );
 
-    const refresh = wrapper.get('button').trigger('click');
+    const refresh = wrapper.get('[data-testid="admin-users-refresh"]').trigger('click');
     await flushPromises();
     expect(wrapper.get('[data-testid="admin-user-status-7"]').attributes('disabled')).toBeDefined();
 

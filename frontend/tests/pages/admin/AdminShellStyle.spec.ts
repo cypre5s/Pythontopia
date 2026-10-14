@@ -62,8 +62,8 @@ describe('admin visual shell contract', () => {
   });
 
   it('keeps the user table on the same row and cell spacing as the review table', () => {
-    expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*height:\s*44px;[^}]*padding:\s*0 16px;/);
-    expect(tableStyles).toMatch(/\.admin-table-scroll > table td\s*\{[^}]*height:\s*52px;[^}]*padding:\s*10px 16px;/);
+    expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*height:\s*var\(--admin-table-header-height, 44px\);[^}]*padding:\s*0 16px;/);
+    expect(tableStyles).toMatch(/\.admin-table-scroll > table td\s*\{[^}]*height:\s*var\(--admin-table-row-height, 52px\);[^}]*padding:\s*10px 16px;/);
     expect(tableStyles).toContain('-webkit-overflow-scrolling: touch;');
     expect(tableStyles).toContain('overscroll-behavior-x: contain;');
     expect(usersSource).toContain(':min-width="820"');

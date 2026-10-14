@@ -14,18 +14,23 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
         </p>
       </div>
       <div
-        v-if="$slots.actions"
-        class="admin-panel__actions"
+        v-if="$slots.toolbar || $slots.actions"
+        class="admin-panel__tools"
       >
-        <slot name="actions" />
+        <div
+          v-if="$slots.toolbar"
+          class="admin-panel__toolbar"
+        >
+          <slot name="toolbar" />
+        </div>
+        <div
+          v-if="$slots.actions"
+          class="admin-panel__actions"
+        >
+          <slot name="actions" />
+        </div>
       </div>
     </header>
-    <div
-      v-if="$slots.toolbar"
-      class="admin-panel__toolbar"
-    >
-      <slot name="toolbar" />
-    </div>
     <div class="admin-panel__body">
       <slot />
     </div>
@@ -78,7 +83,17 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 8px;
+  gap: var(--admin-toolbar-gap, 10px);
+  flex-wrap: wrap;
+}
+
+.admin-panel__tools {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 480px;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--admin-toolbar-gap, 10px);
   flex-wrap: wrap;
 }
 
@@ -86,11 +101,8 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
   display: flex;
   min-width: 0;
   align-items: center;
-  gap: 10px;
+  gap: var(--admin-toolbar-gap, 10px);
   flex-wrap: wrap;
-  padding: 12px 22px;
-  border-bottom: 1px solid var(--admin-border);
-  background: var(--admin-panel-muted);
 }
 
 .admin-panel__body {
@@ -112,7 +124,16 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
 
   .admin-panel__toolbar {
     align-items: stretch;
-    padding: 12px 16px;
+  }
+
+  .admin-panel__tools {
+    width: 100%;
+    align-items: stretch;
+    justify-content: flex-start;
+  }
+
+  .admin-panel__actions {
+    justify-content: flex-start;
   }
 
   .admin-panel__footer {

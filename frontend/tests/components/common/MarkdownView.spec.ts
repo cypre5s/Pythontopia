@@ -39,4 +39,16 @@ describe('MarkdownView', () => {
     expect(wrapper.find('strong').exists()).toBe(true);
     expect(wrapper.find('p').exists()).toBe(false);
   });
+
+  it('不请求外站 Markdown 图片，并保留替代文本和同源图片', () => {
+    const wrapper = mount(MarkdownView, {
+      props: {
+        source: '![外站图](https://tracker.example/pixel.png)\n\n![本地图](/assets/course.png)',
+      },
+    });
+
+    expect(wrapper.find('img[src="https://tracker.example/pixel.png"]').exists()).toBe(false);
+    expect(wrapper.text()).toContain('外站图');
+    expect(wrapper.find('img[src="/assets/course.png"]').exists()).toBe(true);
+  });
 });

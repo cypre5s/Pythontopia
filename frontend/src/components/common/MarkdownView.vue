@@ -49,6 +49,22 @@ function closeOpenFence(src: string): string {
   return src;
 }
 
+function removeExternalImages(markup: string): string {
+  const document = new DOMParser().parseFromString(markup, 'text/html');
+  document.querySelectorAll<HTMLImageElement>('img[src]').forEach((image) => {
+    const source = image.getAttribute('src') ?? '';
+    if (source.startsWith('data:image/')) return;
+    try {
+      const url = new URL(source, window.location.href);
+      if (url.origin === window.location.origin) return;
+    } catch {
+      // Invalid and non-local image URLs are replaced by their text alternative.
+    }
+    image.replaceWith(document.createTextNode(image.alt));
+  });
+  return document.body.innerHTML;
+}
+
 const rendered = computed(() => {
   if (!props.source) return '';
   // inline 模式无代码块，不做围栏补全。
@@ -56,7 +72,7 @@ const rendered = computed(() => {
   const raw = props.inline
     ? marked.parseInline(src) as string
     : marked.parse(src) as string;
-  return DOMPurify.sanitize(raw, PURIFY_CONFIG);
+  return removeExternalImages(DOMPurify.sanitize(raw, PURIFY_CONFIG));
 });
 </script>
 

@@ -46,7 +46,7 @@ withDefaults(defineProps<{
 }
 
 .admin-table-scroll > table th {
-  height: 44px;
+  height: var(--admin-table-header-height, 44px);
   padding: 0 16px;
   border-bottom: 1px solid var(--admin-border, #e2e8f0);
   background: var(--admin-table-header, #eef4fb);
@@ -64,7 +64,7 @@ withDefaults(defineProps<{
 }
 
 .admin-table-scroll > table td {
-  height: 52px;
+  height: var(--admin-table-row-height, 52px);
   padding: 10px 16px;
   border-bottom: 1px solid var(--admin-border, #e2e8f0);
   color: #334155;

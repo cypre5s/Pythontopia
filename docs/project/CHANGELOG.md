@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-10-14 — Tutor 图片隐私与本轮功能收尾验证
+
+- Tutor Markdown 清洗后移除非本站图片 URL，保留同源图片与图片替代文本；回归测试覆盖外站移除和同源保留。
+- 管理台用户状态确认改为可键盘取消的原生对话框；修正标题、错误状态旧数据和工具栏布局，运维概览增加手动刷新。
+- 使用本地 DeepSeek 配置完成真实 Tutor 文本流、Tutor 图片流及 workflow 结构化图片请求；回答内容符合合成输入，所有提示均无真实个人信息。8 次 provider 请求尝试（含探索性低 token 请求和一次连接超时），总量未超过 30；密钥没有写入版本控制或测试输出。
+- 验证：Web 269 files / 2541 tests、TypeScript typecheck、生产 build 通过；ESLint 0 errors / 7 existing warnings；Chromium 桌面和窄屏管理台检查通过。全量 Maven 1382 tests、0 assertion failures、6 environment errors（5 个 Testcontainers 随机端口绑定失败、1 个长时模拟 PostgreSQL reset），不标记全量通过。
+- Tutor Markdown 远程图隐私修复完成后，最后测本地 Vite → Spring 远征建局：2 次预热 + 12 次计时，P50 24.26 ms、P95 31.65 ms、25 nodes；没有模型或判题调用，临时 run 已删除且查询为 204。此数据不覆盖 Boss 出题/判题或线上负载。
+
+## 2026-10-14 — 管理台页面交互复验
+
+- 管理台搜索筛选并入面板标题区；用户页去掉重复标题，停用账号改用可键盘取消并恢复焦点的确认对话框；用户列表加载失败时清除过期行，避免误操作旧数据；运维概览增加手动刷新。
+- Web 真实浏览器（网络 API 拦截）验证用户列表、对话框 Escape 取消与确认停用、刷新、运维数据刷新；桌面与 390px 视口无横向溢出，页面无运行时错误，未触发未模拟 API。
+- 验证：Vitest 269 files / 2540 tests、TypeScript typecheck、生产 build 通过；全量 ESLint 0 errors / 7 warnings（既有）。浏览器验证只覆盖当前更改的用户页和运维页，API 返回由 Playwright 拦截模拟。
+
 ## 2026-10-14 — 本地 Piston 最小权限与资源封顶
 
 - 本地可选 Piston sandbox 移除 `privileged`；改为只读根文件系统、`no-new-privileges`、最小 capability 白名单、容器内存/CPU/PID 限制、有限任务 tmpfs，并封顶每进程内存、运行时长和并发数。修正文档中把固定 Piston API 描述成自带 Isolate/cgroups 的说法。

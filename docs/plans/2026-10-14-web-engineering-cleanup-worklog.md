@@ -21,3 +21,14 @@
 - 对齐管理台侧栏导航字号至 Alethicode 当前的 15px，并用样式契约测试固定这一差异。
 - Phaser Boss 场景的成功反馈测试扩展为玩家冲刺与像素命中爆点；复用现有素材与单 Phaser 实例。
 - 当前相关 Web 回归 4 files / 14 tests、typecheck、production build 与改动文件 ESLint 通过。未做管理台全栈截图，也未完成最终 Boss 多阶段真实判题浏览器旅程。
+
+## 2026-10-14 收尾复验
+
+- 修复 Tutor Markdown 外站图片隐私：DOMPurify 清洗后只保留 data:image 与同源图片，外站图片替换为 alt 文本；新增回归测试。
+- 管理台用户停用确认可用 Escape 取消、确认后刷新列表并恢复焦点；列表请求失败会清空旧数据；运维页支持手动刷新。Playwright 对用户页和运维页完成桌面与窄屏检查。
+- 依据官方 [Vue Style Guide](https://vuejs.org/style-guide/)、[Google TypeScript Style Guide](https://google.github.io/styleguide/tsguide.html) 和 [Google Java Style Guide](https://google.github.io/styleguide/javaguide.html) 核查新增/触及代码；保留项目 PascalCase、camelCase 与 strict TypeScript 约定，不对全仓强推 Google 专属规则或批量重排 Java。
+- 最新 Web 验证：269 files / 2541 tests、typecheck、production build 通过；ESLint 0 errors / 7 warnings（2 条未改组件可选 prop 提示、5 条账号隔离测试多组件提示）；`git diff --check` 通过。生产构建仍报告既有 Pyodide Node 内置模块 externalize、`eval` 与大 chunk 提示。
+- 全量 Maven 最新结果：1382 tests、0 assertion failures、6 errors；5 个 Testcontainers 在 Docker 分配随机宿主端口时报 `address already in use`，长时课堂模拟测试 PostgreSQL 连接 reset。当前没有断言失败，但全量 Maven 不是通过状态；受影响容器类与长时测试此前的隔离重跑记录为通过。
+- DeepSeek 真调用：文本流、图片流及 workflow 结构化图片路径成功，使用合成问题/合成 PNG；本次总计 8 次 provider 尝试（包括失败的连接与低 token 探索），少于用户设定的 30 次上限，未输出或提交密钥。
+- 最后完成无模型本地性能采样：Vite 代理到 Spring 的远征建局 2 次预热 + 12 个计时样本，P50 24.26 ms、P95 31.65 ms、25 节点；无 DeepSeek、Graph 出题或正式判题调用。演示账号此前没有活动局；采样后删除全部临时 run，GET 再查为 204。
+- 尚未完成：完整最终 Boss 多阶段真实判题浏览器旅程、Twin A/B 与延迟复测成效、生产 Piston/ECS/公网；SSRF 允许域的真实公网页面因本地 DNS 将域名解析为非公网 IP 而未启动，防护按预期 fail closed。

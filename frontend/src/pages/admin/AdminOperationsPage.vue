@@ -58,6 +58,15 @@ onMounted(() => {
     <header class="admin-page-heading">
       <h1>AI 运维概览</h1>
       <p>平台统计来自后端 AI Runtime 快照，按当前服务端返回展示。</p>
+      <button
+        class="admin-button"
+        type="button"
+        data-testid="admin-operations-refresh"
+        :disabled="loading"
+        @click="loadOperations"
+      >
+        {{ loading ? '正在刷新…' : '刷新数据' }}
+      </button>
     </header>
 
     <p
@@ -206,7 +215,26 @@ onMounted(() => {
 
 .admin-page-heading {
   display: grid;
-  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px 16px;
+}
+
+.admin-page-heading button {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+
+@media (max-width: 640px) {
+  .admin-page-heading {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-page-heading button {
+    grid-column: 1;
+    grid-row: auto;
+    justify-self: start;
+  }
 }
 
 .admin-page-heading p {

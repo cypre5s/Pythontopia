@@ -253,6 +253,10 @@ watch(navigationOpen, (open) => {
   --admin-primary-hover: #1d4ed8;
   --admin-primary-soft: rgb(37 99 235 / 8%);
   --admin-focus: #3b82f6;
+  --admin-control-height: 36px;
+  --admin-toolbar-gap: 10px;
+  --admin-table-header-height: 44px;
+  --admin-table-row-height: 52px;
   --admin-panel-muted: #f6f9fc;
   --admin-table-header: #eef4fb;
   --admin-table-hover: #f8fbff;
@@ -269,7 +273,7 @@ watch(navigationOpen, (open) => {
 }
 
 .admin-shell :deep(.admin-control) {
-  min-height: 36px;
+  min-height: var(--admin-control-height);
   border: 1px solid var(--admin-border);
   border-radius: 8px;
   padding: 0 10px;
@@ -299,7 +303,7 @@ watch(navigationOpen, (open) => {
 
 .admin-shell :deep(.admin-button) {
   display: inline-flex;
-  min-height: 36px;
+  min-height: var(--admin-control-height);
   align-items: center;
   justify-content: center;
   gap: 6px;
@@ -383,11 +387,17 @@ watch(navigationOpen, (open) => {
   max-height: calc(100dvh - 32px);
   overflow: auto;
   border: 1px solid #dbe3ef;
-  border-radius: 12px;
-  padding: 20px;
+  border-radius: var(--admin-panel-radius);
+  padding: 22px 24px;
   background: var(--admin-surface);
   color: var(--admin-text);
   box-shadow: 0 20px 60px rgb(15 23 42 / 20%);
+}
+
+@media (max-width: 720px) {
+  .admin-shell :deep(.admin-dialog) {
+    padding: 16px;
+  }
 }
 
 .admin-shell :deep(.admin-dialog::backdrop) {

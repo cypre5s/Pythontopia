@@ -18,12 +18,11 @@ describe('AdminPanel', () => {
       .map((element) => (element as HTMLElement).className);
     expect(childClasses).toEqual([
       'admin-panel__header',
-      'admin-panel__toolbar',
       'admin-panel__body',
       'admin-panel__footer',
     ]);
     expect(wrapper.get('.admin-panel__header h2').text()).toBe('用户管理');
-    expect(wrapper.get('.admin-panel__toolbar [data-testid="filters"]').exists()).toBe(true);
+    expect(wrapper.get('.admin-panel__header .admin-panel__toolbar [data-testid="filters"]').exists()).toBe(true);
     expect(wrapper.get('.admin-panel__body table').attributes('aria-label')).toBe('用户列表');
     expect(wrapper.get('.admin-panel__footer nav').attributes('aria-label')).toBe('列表分页');
   });
