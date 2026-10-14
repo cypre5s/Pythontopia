@@ -25,7 +25,7 @@ import org.springframework.web.client.RestTemplate;
 class BossGraphClientTest {
 
   @Test
-  void exposesGraphProblemFailuresAsRestClientExceptionsForFallbackConsumers() {
+  void doesNotRetryGraphProblemHttpRejections() {
     RestTemplate graphRestTemplate = new RestTemplate();
     RestTemplate bossProblemRestTemplate = new RestTemplate();
     CoursePackRepository coursePackRepository = mock(CoursePackRepository.class);
@@ -33,7 +33,7 @@ class BossGraphClientTest {
         .thenReturn(Optional.of(kc("PY43-KC-001")));
     MockRestServiceServer server = MockRestServiceServer.bindTo(bossProblemRestTemplate).build();
     server
-        .expect(ExpectedCount.times(2), requestTo("http://graph/agents/boss/problem"))
+        .expect(requestTo("http://graph/agents/boss/problem"))
         .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE));
     BossGraphClient client =
         new BossGraphClient(

@@ -20,8 +20,10 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -130,14 +132,23 @@ public class BossGraphClient {
     try {
       return GraphClientRetryHelper.withRetry(
           "boss-problem",
-          () ->
-              bossProblemRestTemplate
+          () -> {
+            try {
+              return bossProblemRestTemplate
                   .exchange(
                       properties.graphUrl() + "/agents/boss/problem",
                       HttpMethod.POST,
                       new HttpEntity<>(body, headers),
                       BossInternalProblem.class)
-                  .getBody());
+                  .getBody();
+            } catch (HttpStatusCodeException ignored) {
+              // A Graph response already ran this generation request; retry only transport failures.
+              throw new BusinessException(
+                  HttpStatus.BAD_GATEWAY,
+                  "BOSS_PROBLEM_GRAPH_RESPONSE",
+                  "boss-problem Graph service returned an error response");
+            }
+          });
     } catch (BusinessException ex) {
       throw new RestClientException("boss-problem Graph service is unavailable", ex);
     }

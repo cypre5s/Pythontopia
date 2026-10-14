@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 from fastapi.testclient import TestClient
 
+from pythontopia_graph.agents.boss.schemas import BossProblem, TestCase
 from pythontopia_graph.llm.provider import LlmProviderError, LlmResponse
 from pythontopia_graph.main import app
 
@@ -28,6 +29,24 @@ KC_CONTEXT = {
 }
 
 
+def _echo_candidate() -> BossProblem:
+    return BossProblem(
+        problem_id="ai-echo",
+        chapter=1,
+        stage=1,
+        kc_code="PY43-KC-001",
+        title="原样输出",
+        statement="读入一行并原样输出。",
+        reference_solution="print(input())",
+        test_cases=[
+            TestCase("a", "a", is_sample=True),
+            TestCase("b", "b"),
+            TestCase("c", "c"),
+        ],
+        difficulty=1,
+    )
+
+
 # /agents/boss/problem
 
 
@@ -46,6 +65,61 @@ def test_problem_endpoint_uses_grounded_golden_when_llm_unavailable(
     assert response.json()["reviewed"] is True
     assert response.json()["aiGenerated"] is False
     assert "神威·太湖之光" in response.json()["statement"]
+
+
+def test_problem_endpoint_uses_golden_after_candidates_fail_review(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pythontopia_graph.routes import boss as boss_route
+
+    candidate = _echo_candidate()
+
+    async def rejected_factory(**_kwargs: object) -> BossProblem:
+        return candidate
+
+    monkeypatch.setattr(boss_route, "provider_from_env", lambda: object())
+    monkeypatch.setattr(
+        boss_route, "build_llm_problem_factory", lambda _provider: rejected_factory
+    )
+    response = client.post(
+        "/agents/boss/problem",
+        json={**KC_CONTEXT, "chapter": 1, "stage": 1, "kcCode": "PY43-KC-001", "difficulty": 1},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["problemId"] == "golden-c1-s1"
+    assert response.json()["reviewed"] is True
+    assert response.json()["aiGenerated"] is False
+
+
+def test_problem_endpoint_logs_final_fallback_review_codes(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from pythontopia_graph.routes import boss as boss_route
+    from pythontopia_graph.agents.boss.golden_problems import get_golden_problem
+
+    candidate = _echo_candidate()
+    invalid_golden = get_golden_problem(1, 1)
+    invalid_golden.title = ""
+
+    async def rejected_factory(**_kwargs: object) -> BossProblem:
+        return candidate
+
+    monkeypatch.setattr(boss_route, "provider_from_env", lambda: object())
+    monkeypatch.setattr(
+        boss_route, "build_llm_problem_factory", lambda _provider: rejected_factory
+    )
+    monkeypatch.setattr(boss_route, "get_golden_problem", lambda _chapter, _stage: invalid_golden)
+    caplog.set_level(logging.WARNING, logger="pythontopia_graph.routes.boss")
+
+    response = client.post(
+        "/agents/boss/problem",
+        json={**KC_CONTEXT, "chapter": 1, "stage": 1, "kcCode": "PY43-KC-001", "difficulty": 1},
+    )
+
+    assert response.status_code == 503
+    assert "boss problem final review failed" in caplog.text
+    assert "missing_title" in caplog.text
 
 
 def test_problem_endpoint_rejects_golden_for_a_different_requested_kc(

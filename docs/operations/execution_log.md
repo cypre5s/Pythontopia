@@ -7,6 +7,8 @@
 ## 2026-10-14 当前续接
 
 - 最新补充：DeepSeek 同步与 SSE provider 都只传文本块；混合文本/图片响应的回归确认图片块不会到达客户端，不调用图片生成接口。真实 provider smoke 两次成功（文本 + 合成 PNG 识别），响应均为文本；此次 provider 的请求体和模型未变，因此未再发送模型请求。
+- Boss 重复请求修复已通过真实 Web API 复验：同类 KC-001 请求不再重放 Graph 的 HTTP 生成响应。首轮六次候选均被拒并返回 503（修复前同类请求曾产生 12 次模型 HTTP 200）；加上只记录审查错误码的诊断后，第二轮五次模型 HTTP 200，返回 `reviewed=true`、`aiGenerated=false` 的同 KC Golden 题。两轮临时学生均已删除。首轮为何未通过回退、第二轮能通过仍待复现。
+- 对应 Java `BossGraphClientTest`、`BossServiceTest`、`EndlessPregenServiceTest` 共 67 项通过；Graph Boss 全套 237 项、Ruff、修改 Java 文件 Spotless 检查均通过。全量 Maven 尚未稳定通过，见下方已记录的容器端口冲突与长期仿真连接错误。
 - 最新验证：前端 270 files / 2568 tests、typecheck 与 build 通过；ESLint 0 errors / 7 warnings。Graph 全量 1842 passed / 1 skipped；RAG 全量 158 passed / 2 skipped。教师班级列表 320px Chromium 布局测试通过，使用模拟 API。
 - 安全与交互：Graph 隐藏测试失败现在只返回通用提示，不泄露隐藏 expected/actual；Twin 周报呈现最近失败与百分点单位；首页班级加入表单在班级列表 API 失败时仍可用；教师班级页签支持 ARIA tabs 键盘操作。
 - 远征：旧 `/endless` 预生成等待已有请求并轮询 READY，防止生成竞态；结算期间阻止重复提交；显示服务端题目难度。随机事件节点集成测试 fixture 已修，`ExpeditionRunPostgresIntegrationTest` 隔离 28/28 通过。修复后 Maven 全量 1389 tests / 0 failures / 7 errors：6 个 Testcontainers 宿主端口绑定 `address already in use`，长期仿真测试在全量运行中遇测试库连接 reset；该仿真类隔离 1/1 通过。

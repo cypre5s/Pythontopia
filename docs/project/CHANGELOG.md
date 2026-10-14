@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-14 — 远征生成 HTTP 错误不再重复触发模型调用
+
+- Boss Graph 出题收到 HTTP 错误时停止重放已执行过的生成 POST；传输层失败仍沿用现有重试。回归先红后绿，Boss Graph client、Boss service、远征预生成共 67 项定向测试通过。
+- 真实本地 Web API 复验中，首轮 KC-001 题请求因六个候选均被拒而返回 503，Graph 记录 6 次 DeepSeek HTTP 200；修复前同类请求曾触发两轮、共 12 次。增加最终回退审查错误码日志后，第二轮同 KC 请求记录 5 次 DeepSeek HTTP 200，返回经审查 Golden 题（`reviewed=true`、`aiGenerated=false`）。两轮临时学生账号及关联数据均已清理。
+- 增加“质量审查全部拒绝时回退同 KC Golden”路由回归，以及只记录审查错误码的失败诊断；Graph Boss 全套 237 passed，Ruff 通过。首轮在线失败与第二轮成功的具体运行差异尚未定位，完整 Phaser 多阶段胜利旅程仍未在本轮验证。
+
 ## 2026-10-14 — DeepSeek 图片输出边界与 KC-001 审核兜底
 
 - DeepSeek 图像能力是图片输入/视觉理解；本项目 provider 的同步与 SSE 响应都只提取文本块，混合响应中的图片块被丢弃。重跑 provider 与 Tutor 图片输入测试：42 passed，保留 1 条既有 pytest asyncio 标记警告。

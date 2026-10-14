@@ -224,6 +224,14 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
         )
 
     if not review.passed:
+        issue_codes = [issue.code for issue in review.issues if issue.severity == "error"]
+        LOG.warning(
+            "boss problem final review failed chapter=%s stage=%s kc=%s issues=%s",
+            chapter,
+            stage,
+            kc_code,
+            issue_codes,
+        )
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
