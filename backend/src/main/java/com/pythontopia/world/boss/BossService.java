@@ -157,7 +157,7 @@ public class BossService {
       throw new BusinessException(
           org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
           "EXPEDITION_NO_PRACTICE_PROBLEMS",
-          "当前学习范围没有可用于远征的课程编程题，请选择包含编程练习的章节");
+          "当前范围没有可立即游玩的远征题。请先完成对应前置知识的小测或练习；若该章节尚无课程编程题，请切换到包含编程练习的章节。");
     }
     return new FrontierSelectResultDto(playablePicks);
   }

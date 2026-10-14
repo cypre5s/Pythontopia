@@ -1,5 +1,13 @@
 # Web 工程可读性与规范清理工作日志
 
+## 2026-10-14 远征新手开局复核
+
+- 复核真实新手路径：后端权威策略在先修证据不足时退回最早前置 KC；该 KC 没有课程编程题，远征会拒绝开局。通过真实本地 Piston 提交，临时学生账号的 KC016 题 476 判题通过，但第 5 章远征仍返回 422，因为 KC001–015 还没有已验证掌握证据。课程页阅读不会生成客观掌握度；已有工坊资源小测会发布可追溯的掌握事件，但新建资源依赖 Graph。本地 Graph 停止且 DeepSeek 请求账务未核，本轮不调用模型，不伪造掌握度，也不绕过先修条件。
+- 只修正 `EXPEDITION_NO_PRACTICE_PROBLEMS` 的说明，使其引导学生先完成前置知识小测/练习，或切换到包含课程题的章节；补充回归后，先观察到旧提示导致测试失败，再运行 `mvn -o -Dtest=BossServiceTest,AdaptivePracticePolicyTest,LearnerTwinServiceTest test`：55 项通过。改动的两个 Java 文件通过定向 `spotless:check`。
+- 通过只输出聚合计数的容器日志筛选，确认 Graph 有 32 次 DeepSeek completion HTTP 200（4 次 Tutor/workflow、28 次远征预生成）；另外此前有 4 次失败尝试未获得 HTTP 响应，约 36 次尝试，超过 30 次限制。供应商 token/费用明细无法从本地日志推断；Graph 保持停止，没有新增请求。
+- 清理本探测创建的三个确切 `codexboss` 测试用户（其中一个仅有一条通过判题的测试提交）；删除前确认其受限外键表没有引用。
+- 尚未完成最终 Boss 多阶段真实浏览器判题演出、工坊前置小测的 live Graph 路径、DeepSeek 供应商用量核对、生产 Piston 网络隔离、稳定的全量 Maven 复跑和 Twin A/B/延迟效果验证。
+
 ## 2026-10-14
 
 - 参考 [Vue Style Guide](https://vuejs.org/style-guide/)、[typescript-eslint 命名规则说明](https://typescript-eslint.io/rules/naming-convention/) 与 [Google Java Style Guide](https://google.github.io/styleguide/javaguide.html)，沿用仓库现有约定：Vue 多属性元素分行，TypeScript/Java 使用项目既定标识符命名，Python 继续使用 snake_case。
