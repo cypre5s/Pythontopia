@@ -126,6 +126,41 @@ describe("TeacherReviewPage", () => {
     expect(wrapper.text()).toContain("题面与隐藏用例均已复核");
   });
 
+  it("exposes queue selection as keyboard-operable buttons", async () => {
+    reviewMocks.listProblemReviews.mockResolvedValue([
+      review(),
+      review({
+        id: 42,
+        sourceProblemId: "source-2",
+        problem: { ...review().problem, problemId: "source-2" },
+      }),
+    ]);
+    useSessionStore().user = {
+      id: 2,
+      username: "teach",
+      displayName: "老师",
+      role: "TEACHER",
+    };
+
+    const wrapper = mount(TeacherReviewPage);
+    await flushPromises();
+    const first = wrapper.get('[data-testid="teacher-review-select-41"]');
+    const second = wrapper.get('[data-testid="teacher-review-select-42"]');
+
+    expect(first.element.tagName).toBe("BUTTON");
+    expect((first.element as HTMLButtonElement).tabIndex).toBe(0);
+    expect(first.attributes("aria-pressed")).toBe("true");
+    expect(second.attributes("aria-pressed")).toBe("false");
+
+    await second.trigger("click");
+
+    expect(first.attributes("aria-pressed")).toBe("false");
+    expect(second.attributes("aria-pressed")).toBe("true");
+    expect(wrapper.get('[data-testid="teacher-review-detail"]').text()).toContain(
+      "source-2",
+    );
+  });
+
   it("never requests the reviewer queue for a student and disables generation", async () => {
     useSessionStore().user = {
       id: 1,

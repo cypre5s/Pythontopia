@@ -1,5 +1,22 @@
 # Web 工程可读性与规范清理工作日志
 
+## 2026-10-14 DeepSeek 与 KC 出题真调用续验
+
+- `./dev.sh` 的运行中 Spring 环境确认应用级 AI 次数限制关闭；部署配置仍保留账号/全站每日限制。模型供应商余额和自身限流不受此开关控制。
+- 经正式 Tutor SSE 路径完成新文本与 PNG 图片 DeepSeek 调用：文本回显“青竹 83”，图片识别为黄色背景、蓝色正方形；答案均通过 Tutor 会话接口确认已持久化。Graph 最近观察窗口共 13 条 provider completion HTTP 200 日志、无 provider error；该数量不是供应商账单或 token 用量。
+- 正式 Boss 学生接口生成了 `PY43-KC-001` Stage 2/3 候选；Graph 自检通过意味着结构、grounding、相似度检查及 Piston 参考程序用例通过，但不代表题目适合据此更新历史 KC 掌握度。候选多为回显或拼接固定标签，审核 API 已将 QA 的 5–9 号记录拒绝，未进入 approved bank。
+- Grounding 新增对纯 input/print 回显的 AST 拒绝（含额外固定标签），先看到新增测试失败，再通过修复；Boss Graph 228 tests、Ruff 全量通过。临时 run 已清除；QA 账号和拒绝审计记录保留在本地数据库。
+- `useChallengeJudge` 轮询从 5 秒延长到与 Boss Graph 对齐的最多 180 秒（5 秒间隔、36 次）；新测试在 PENDING 超过 5 秒后变 READY，验证不会重复请求 challenge。远征相关 3 个 Vitest 文件 / 9 tests、typecheck 和改动文件 ESLint 通过。
+- 未测 DeepSeek 实际账单/token、未发布上述题目、未完成全量 Maven 与最终 Phaser 多阶段真实浏览器验收。一次进程环境检查的工具输出可能包含运行时凭据，建议轮换可能出现在输出中的凭据。
+
+## 2026-10-14 全量验证续跑
+
+- 前端全量 Vitest 270 files / 2555 tests 通过；全量 ESLint 0 errors / 7 warnings；`npm run build` 成功。构建仍有 Pyodide Node 内置模块 externalize、`eval` 与 chunk size 警告，性能工作按要求后置。
+- Graph 全量 1836 passed / 1 skipped，Ruff 全量通过。后端最新全量 `mvn test` 报告 1383 tests、0 assertion failures、7 errors：6 个 Testcontainers Postgres 类因 Docker 宿主机端口已占用未能启动，长期仿真随之 JDBC 连接失败。
+- 6 个冲突类串行复跑 19 tests 全通过，长期仿真单独复跑 1 test 通过；本轮相关后端回归测试最新 86 项通过。故本轮改动的目标用例有通过证据，但全量 Maven 仍因 Docker 端口冲突失败。
+- 修正 AI 题的画像可信度：待教师审核的题可以作为练习，但不会发布 KC 掌握事件；审核状态不可读取或题目内容未精确匹配已批准版本时 fail closed，判题结果仍返回并提示未计入画像。TDD RED 先复现旧行为，当前 BossService + 审核仓储、Tutor 限额、预生成、Graph client 和周报关键回归共 86 tests 通过。
+- 仍未完成：Phaser Boss 最终多阶段真实浏览器判题旅程；Twin A/B 与 7 日延迟复测；DeepSeek 供应商账单/token 核对；生产 Piston 网络隔离与 ECS 公网验证。一次早期进程环境输出可能含运行时凭据，建议轮换可能出现于该输出的凭据。
+
 ## 2026-10-14 远征新手开局复核
 
 - 复核真实新手路径：后端权威策略在先修证据不足时退回最早前置 KC；该 KC 没有课程编程题，远征会拒绝开局。通过真实本地 Piston 提交，临时学生账号的 KC016 题 476 判题通过，但第 5 章远征仍返回 422，因为 KC001–015 还没有已验证掌握证据。课程页阅读不会生成客观掌握度；已有工坊资源小测会发布可追溯的掌握事件，但新建资源依赖 Graph。本地 Graph 停止且 DeepSeek 请求账务未核，本轮不调用模型，不伪造掌握度，也不绕过先修条件。
@@ -74,3 +91,12 @@
 - 安全复核未确认 P0 或本地可复现的代码级 P1。定向 Maven 140 项、Graph 判题 37 项、Compose 沙箱安全契约通过。生产 Piston endpoint 的私网 ACL/代理 token 校验仍需部署证据；本地 Compose Piston 仅监听 localhost 且阻断外联。媒体生成禁用状态下，队列拒绝可遗留 PENDING 属于 P2。
 - Alethicode 比对确认 Pythontopia 已具备固定阶段 AutoGen Tutor，应该保留 Pythontopia 的 API/SSE、V199 会话级检查点和附件/事件契约。管理台布局遵循相同视觉约定，但只保留本项目有真实 API 的运维、用户与题目审核页。
 - 未发 DeepSeek 请求。此前本地日志仍显示约 28 条远征预生成请求，加上 8 次 Tutor/provider 尝试可能达到 36；账单与 token 总量未核。Graph 保持停止；完整 Boss 多阶段实战和 Twin A/B/延迟效果仍未验证。
+# 2026-10-14 — 本地模型额度与 KC 出题闭环续接
+
+- 最新用户指示覆盖此前“达到 30 次就停止”的本地开发约束：`./dev.sh` 明确将 `PYT_AI_REQUEST_LIMITS_ENABLED` 默认设为 `false`；部署默认值仍为 `true`。已从运行中的 Spring 进程环境读取到 `false`。
+- 原因复盘：Graph 之前只收到 KC code，缺失真实课程上下文，导致章节关键词放行无关题。新增 pack 43 单 KC 查询，BossGraphClient 传递名称/摘要；Graph 将其注入 prompt，并从摘要拆出具体术语做接地。已有未知 KC 查询会 fail closed，BossService 保留 Golden/课程题回退。
+- 真实模型结果：首次全栈出题有 5 个 DeepSeek HTTP 200 候选因旧的“必须逐字出现 KC 标题”检查或章节语法限制被拒，最终回落 Golden。一次直接 DeepSeek 检查发现模型产物确实用了 KC 摘要中的“神威·太湖之光”，而标题没有逐字复述 KC 名称；因此接地改为标题或摘要术语匹配，并把“至少使用摘要具体术语”写入 prompt。
+- 修改后真实 `POST /api/world/boss/1/problem` 成功返回 AI 编程题，`reviewed=true`、`aiGenerated=true`，题面提及中国超级计算机及“神威·太湖之光”；Graph/Piston 自测通过，临时审核记录为 `PENDING`。真实错误提交为 0/3，参考实现为 3/3、分数 100。十秒内连交曾被既有 `BOSS_ATTEMPT_RATE_LIMITED` 拒绝，等待限流窗后正确提交通过；未改动这一防滥用策略。
+- Tutor 全栈真实文本与合成 PNG 图片各完成一次 DeepSeek 调用，回复成功持久化；图片答复识别黄色背景和蓝色方形。验证后删除本轮 4 个合成学生账号、3 条候选及相关 Tutor/判题记录。
+- 验证结果：Graph Boss 225 passed；Ruff 全量通过；Maven `BossGraphClientTest`、`BossServiceTest`、`EndlessPregenServiceTest`、`BossProblemReviewRepositoryPostgresTest` 共 65 passed；`TutorDailyRequestLimitServiceTest` 通过；`git diff --check` 通过。当前工作树仍有此前任务的其他未提交修改，未作清理或重置。
+- 尚未完成：学习 Twin P0–P3 计划、KC 全面个性化覆盖和 A/B 效果对照、Boss 最终 Phaser 浏览器旅程、全量 Maven 稳定复跑、Web 全量回归、全仓工程整理及素材授权/登记复核。队列候选仍须教师批准才能加入全局题库。

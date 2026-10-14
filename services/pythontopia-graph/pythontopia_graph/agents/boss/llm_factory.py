@@ -196,6 +196,8 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
         chapter: int,
         stage: int,
         kc_code: str,
+        kc_name: str | None = None,
+        kc_summary: str | None = None,
         difficulty: int,
         temperature: float = 0.2,
         preferred_kind: str | None = None,
@@ -264,13 +266,33 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
                 "第 1 章只能使用 print / input / 变量赋值 / int / float / str / 简单四则运算；"
                 "禁止 if、for、while、list、dict、def、class、import。"
             )
+        if preferred_kind == "debug":
+            contract_lines.append(
+                "statement 必须包含独立一行‘错误代码：’，其后给出可执行 Python 代码，下一节用‘输入格式：’开始；"
+                "这段错误代码至少在一条 test_cases 上退出失败或输出错误，而 reference_solution 必须全部通过。"
+            )
         contract_block = "\n\n【本题硬约束】\n" + "\n".join(
             f"- {line}" for line in contract_lines
         )
 
+        kc_context = ""
+        if kc_name:
+            kc_context = (
+                f"\n权威 KC 名称：{kc_name}\n"
+                f"权威 KC 内容摘要：{kc_summary or '无额外摘要'}\n"
+                "题目必须实际考查该知识点，不能只把知识点名称贴在无关题面上；"
+                "题面至少出现一个摘要里的具体术语，不得编造摘要没有提供的课程事实；"
+                "参考程序必须把摘要里的具体术语作为字符串常量实际输出，且至少一条正确输出必须包含该术语；"
+                "不得只把课程事实当作背景或样例文字；至少一条测试用例的正确输出和参考程序都要实际用到该事实。"
+                "具体事实必须作为代码实际使用的数据，并出现在至少一个正确输出中；"
+                "不能让学生输入一个数值后原样回显来凑 KC，也不能假设摘要未给出的事实数值。"
+                "除 KC 核心就是标准输入输出外，不能仅设计把输入原样回显的题目。\n"
+            )
+
         user_prompt = (
             f"请为第 {chapter} 章 Stage {stage} 出一道难度 {difficulty}/5 的 Python 题。\n"
             f"目标 KC: {kc_code}\n"
+            f"{kc_context}"
             f"难度参考：1=只需 1 行 print；3=两步运算；5=综合 3+ 步逻辑。"
             f"{extras_block}"
             f"{contract_block}"

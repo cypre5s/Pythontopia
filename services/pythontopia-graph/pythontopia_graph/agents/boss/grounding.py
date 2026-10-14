@@ -1,11 +1,12 @@
-"""KC 接地审查：关键词命中与超纲语法拒绝（纯静态，防幻觉与超纲出题）。
+"""KC 接地审查：题面与参考程序关键词命中、超纲语法拒绝（纯静态）。
 
-校验题面与 ``reference_solution`` 是否含 KC 关键词，并用 ``ast.walk`` 对照章节语法白名单。
+校验权威 KC 术语不能只出现在题面里，并用 ``ast.walk`` 对照章节语法白名单。
 """
 
 from __future__ import annotations
 
 import ast
+import re
 from typing import Iterable, Mapping
 
 from .kc_map import is_known_kc
@@ -92,6 +93,69 @@ CHAPTER_SYNTAX_WHITELIST: Mapping[int, frozenset[str]] = {
     }),
 }
 
+_KC_KEYWORD_SPLIT = re.compile(
+    r"[，。；：、（）()\n\r]+|包括|从|到|以及|等|的|和|与|及|在|领域|事业|"
+    r"认识|了解|发展历程|自主研发历程|前沿成就|创新贡献|超级计算机|计算机|原型机"
+)
+_KC_KEYWORD_NOISE = frozenset(
+    {"中国", "发展", "历程", "成就", "成果", "前沿", "创新", "贡献", "领域", "事业"}
+)
+
+
+def extract_kc_grounding_keywords(kc_name: str, kc_summary: str) -> list[str]:
+    """Use the authoritative KC title and distinctive summary terms for grounding."""
+    keywords = [kc_name.strip()] if kc_name.strip() else []
+    for part in _KC_KEYWORD_SPLIT.split(kc_summary):
+        keyword = re.sub(r"\s+", "", part).strip(" .,:;!?\"'`")
+        if len(keyword) >= 2 and keyword not in _KC_KEYWORD_NOISE and keyword not in keywords:
+            keywords.append(keyword)
+    return keywords
+
+
+def _is_trivial_input_echo(code: str) -> bool:
+    try:
+        body = ast.parse(code).body
+    except (SyntaxError, TypeError):
+        return False
+
+    input_names: set[str] = set()
+    echoes_input = False
+    for statement in body:
+        if isinstance(statement, ast.Assign):
+            if (
+                len(statement.targets) != 1
+                or not isinstance(statement.targets[0], ast.Name)
+                or not isinstance(statement.value, ast.Call)
+                or not isinstance(statement.value.func, ast.Name)
+                or statement.value.func.id != "input"
+                or statement.value.keywords
+            ):
+                return False
+            input_names.add(statement.targets[0].id)
+            continue
+
+        if not isinstance(statement, ast.Expr) or not isinstance(statement.value, ast.Call):
+            return False
+        output = statement.value
+        if not isinstance(output.func, ast.Name) or output.func.id != "print" or output.keywords:
+            return False
+        for argument in output.args:
+            if isinstance(argument, ast.Name) and argument.id in input_names:
+                echoes_input = True
+            elif isinstance(argument, ast.Constant):
+                continue
+            elif (
+                isinstance(argument, ast.Call)
+                and isinstance(argument.func, ast.Name)
+                and argument.func.id == "input"
+                and not argument.keywords
+            ):
+                echoes_input = True
+            else:
+                return False
+
+    return echoes_input
+
 
 def verify_kc_grounding(
     problem: BossProblem,
@@ -99,7 +163,7 @@ def verify_kc_grounding(
     kc_keywords: Mapping[str, Iterable[str]] | None = None,
     min_keyword_hits: int = 1,
 ) -> ReviewVerdict:
-    """校验 KC 关键词接地与章节语法白名单，未命中或超纲则 reject。
+    """拒绝纯输入回显，并校验 KC 关键词接地与章节语法白名单。
 
     关键词来源优先级：
     1. 外部 ``kc_keywords[kc_code]`` 显式词表；
@@ -110,6 +174,16 @@ def verify_kc_grounding(
     另外用 ``kc_map.is_known_kc`` 做防幻觉提示：KC 不在课程包内仅 warning，不阻断。
     """
     issues: list[ReviewIssue] = []
+
+    if _is_trivial_input_echo(problem.reference_solution):
+        issues.append(
+            ReviewIssue(
+                review="grounding",
+                severity="error",
+                code="trivial_echo_solution",
+                message="input-to-output echo does not assess a programming skill or the target KC",
+            )
+        )
 
     override = bool(kc_keywords and problem.kc_code in kc_keywords)
     if override:
@@ -129,8 +203,12 @@ def verify_kc_grounding(
                 )
             )
 
-    haystack = f"{problem.statement}\n{problem.reference_solution}".lower()
-    hits = sum(1 for kw in keywords if kw.lower() in haystack)
+    def normalize(text: str) -> str:
+        return re.sub(r"\s+", "", text).lower()
+
+    haystack = normalize(f"{problem.statement}\n{problem.reference_solution}")
+    solution = normalize(problem.reference_solution)
+    hits = sum(1 for kw in keywords if normalize(kw) in haystack)
     if keywords and hits < min_keyword_hits:
         issues.append(
             ReviewIssue(
@@ -140,6 +218,19 @@ def verify_kc_grounding(
                 message=(
                     f"statement+solution hits {hits}/{len(keywords)} keywords for {problem.kc_code}; "
                     f"need >= {min_keyword_hits}"
+                ),
+            )
+        )
+
+    if override and keywords and not any(normalize(keyword) in solution for keyword in keywords):
+        issues.append(
+            ReviewIssue(
+                review="grounding",
+                severity="warning",
+                code="kc_solution_miss",
+                message=(
+                    f"reference_solution uses none of the authoritative KC terms for {problem.kc_code}; "
+                    "a teacher should confirm that the subject is more than story context before bank approval"
                 ),
             )
         )

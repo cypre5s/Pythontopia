@@ -42,11 +42,11 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.task.TaskRejectedException;
+import org.springframework.dao.DataAccessException;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClientException;
 
@@ -127,12 +127,12 @@ public class BossService {
 
   /**
    * Deterministic KC selection shared with the learner Twin; Graph remains responsible for
-   * questions. Only KCs with a same-KC course programming question can become expedition nodes.
+   * questions. A qualified KC without a course problem may still be used for same-KC AI generation.
    */
   public FrontierSelectResultDto selectFrontier(Long userId, FrontierSelectRequest request) {
     FrontierSelectResultDto frontier =
         learnerTwinService.frontier(userId, request.focusChapter(), request.exclude(), 40);
-    return requirePlayablePicks(frontier.picks(), request.count());
+    return limitFrontierPicks(frontier.picks(), request.count());
   }
 
   /**
@@ -142,24 +142,17 @@ public class BossService {
       Long userId, Integer focusChapter, String preferredKcCode) {
     FrontierSelectResultDto frontier =
         learnerTwinService.frontier(userId, focusChapter, List.of(), 40, preferredKcCode);
-    return requirePlayablePicks(frontier.picks(), 40);
+    return limitFrontierPicks(frontier.picks(), 40);
   }
 
-  private FrontierSelectResultDto requirePlayablePicks(List<FrontierPickDto> picks, int count) {
-    List<String> candidateKcs = picks.stream().map(FrontierPickDto::kcCode).distinct().toList();
-    Set<String> practiceKcs =
-        chapterProblemBankRepository.findByKcCodes(candidateKcs).stream()
-            .map(PreferredCodingQuestion::kcCode)
-            .collect(Collectors.toSet());
-    List<FrontierPickDto> playablePicks =
-        picks.stream().filter(pick -> practiceKcs.contains(pick.kcCode())).limit(count).toList();
-    if (playablePicks.isEmpty()) {
+  private FrontierSelectResultDto limitFrontierPicks(List<FrontierPickDto> picks, int count) {
+    if (picks.isEmpty()) {
       throw new BusinessException(
           org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
           "EXPEDITION_NO_PRACTICE_PROBLEMS",
-          "当前范围没有可立即游玩的远征题。请先完成对应前置知识的小测或练习；若该章节尚无课程编程题，请切换到包含编程练习的章节。");
+          "当前范围没有满足先修条件的可练习知识点。请完成前置知识的小测或练习，或切换到其他章节后重试。");
     }
-    return new FrontierSelectResultDto(playablePicks);
+    return new FrontierSelectResultDto(picks.stream().limit(count).toList());
   }
 
   public BossProblemDto fetchProblem(int chapter, BossProblemRequest request, Long userId) {
@@ -385,6 +378,15 @@ public class BossService {
         fromGraph =
             findGoldenProblem(kc, chapter, request.stage(), difficulty, issuedFingerprints)
                 .orElseThrow(() -> repeatedProblemUnavailable());
+      }
+      if (fromGraph.aiGenerated() && fromGraph.reviewed()) {
+        try {
+          reviewRepository.createIfNotDuplicate(userId, request.preferredKind(), fromGraph);
+        } catch (DataAccessException ex) {
+          LOG.warn(
+              "could not queue generated Boss problem for teacher review: {}",
+              ex.getClass().getSimpleName());
+        }
       }
       BossInternalProblem issued =
           fromGraph.issueAs(issueProblemId(expeditionBinding.bossPhase()), kc);
@@ -751,8 +753,13 @@ public class BossService {
               : graphResult.runtimeError() != null
                   ? "代码运行错误：" + graphResult.runtimeError()
                   : "未通过 ❌ 部分用例失败，请参考下方 hint。";
-      // 闭环关键：服务端沙箱真实判完后（且仅此路径）才发学习事件，与 SubmissionService 同一套事件驱动
-      // KC 掌握度（测）+ 8 维画像被动修订。缓存过期 / 缺 testCases / graph 不可用等「未判定」路径不发，
+      boolean publishLearningEvent =
+          attemptResult.publishLearningEvent() && isMasteryEligible(problem);
+      if (attemptResult.publishLearningEvent() && problem.aiGenerated() && !publishLearningEvent) {
+        feedback += " 本题尚未确认经教师审核通过，暂不计入知识画像。";
+      }
+      // 闭环关键：服务端判定成功且题目已获准用于画像时才发学习事件；待教师审核的 AI 题只练习、不计掌握度。
+      // 事件与 SubmissionService 共用并驱动 KC 掌握度（测）+ 8 维画像被动修订；缓存过期 / 缺 testCases / graph 不可用等「未判定」路径不发，
       // 避免把非判题结果污染进掌握度；web 重放由 attemptId 结果记录阻止二次发事件。
       return completeAttempt(
           request,
@@ -766,7 +773,7 @@ public class BossService {
               graphResult.failureFirstHint(),
               score,
               feedback),
-          attemptResult.publishLearningEvent()
+          publishLearningEvent
               ? practiceOutcomeEvent(userId, problem, graphResult, request.attemptId())
               : null);
     } catch (RuntimeException exception) {
@@ -774,6 +781,20 @@ public class BossService {
         attemptIdempotencyService.release(userId, request.attemptId(), claim);
       }
       throw exception;
+    }
+  }
+
+  private boolean isMasteryEligible(BossInternalProblem problem) {
+    if (!problem.aiGenerated()) {
+      return true;
+    }
+    try {
+      return reviewRepository.isApproved(problem);
+    } catch (DataAccessException exception) {
+      LOG.warn(
+          "could not verify generated Boss problem approval; skip mastery evidence: {}",
+          exception.getClass().getSimpleName());
+      return false;
     }
   }
 
@@ -973,9 +994,9 @@ public class BossService {
   }
 
   /**
-   * 把一次 boss / endless 的服务端判题结果发布为 {@link LearningEvent}：通过 → {@code PracticeSucceeded}， 未通过 →
+   * 把可用于画像的 boss / endless 判题结果发布为 {@link LearningEvent}：通过 → {@code PracticeSucceeded}， 未通过 →
    * {@code PracticeFailed}（verdict 取 RE/WA），与 {@code SubmissionService} 同一套事件， 统一驱动 KC 掌握度与 8
-   * 维画像被动修订（修复 /endless、/arena 练习此前不回流学情的断环）。
+   * 维画像被动修订。课程题和教师已批准的 AI 题可计入；待审核 AI 题可练习但不更新能力画像。
    *
    * <p>boss 题为 AI 现场生成、无 {@code course_problem} 数字主键，故事件 {@code problemId} 传 {@code null} （各监听器对
    * null 均安全）；难度按题目 1..5 映射到 mastery 可识别的档位字符串，保留难度加权语义。 userId 为空（匿名/未鉴权）或题目缺 kcCode

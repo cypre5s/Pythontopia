@@ -286,47 +286,53 @@ const canDecide = computed<boolean>(
             <li
               v-for="entry in entries"
               :key="entry.id"
-              :class="{
-                'list-item': true,
-                'list-item--current': entry.id === selectedId,
-                'list-item--approved': entry.decision === 'APPROVED',
-                'list-item--rejected': entry.decision === 'REJECTED',
-              }"
-              @click="selectedId = entry.id"
             >
-              <header>
-                <strong>第 {{ entry.problem.chapter }} 章 S{{
-                  entry.problem.stage
-                }}</strong>
-                <span class="badge">{{ entry.problem.kcCode }}</span>
-                <span
-                  class="badge"
-                  :class="{
-                    'badge--ai': entry.problem.aiGenerated,
-                    'badge--golden': !entry.problem.aiGenerated,
-                  }"
-                >
-                  {{ entry.problem.aiGenerated ? "AI" : "Golden" }}
-                </span>
-              </header>
-              <p class="list-statement">
-                {{ entry.problem.statement.slice(0, 60) }}…
-              </p>
-              <small class="list-meta">
-                <span
-                  class="decision-dot"
-                  :class="`decision-dot--${entry.decision.toLowerCase()}`"
-                  aria-hidden="true"
-                />
-                {{
-                  entry.decision === "PENDING"
-                    ? "待审"
-                    : entry.decision === "APPROVED"
-                      ? "已通过"
-                      : "已驳回"
-                }}
-                · {{ new Date(entry.requestedAt).toLocaleString() }}
-              </small>
+              <button
+                type="button"
+                :data-testid="`teacher-review-select-${entry.id}`"
+                :class="{
+                  'list-item': true,
+                  'list-item--current': entry.id === selectedId,
+                  'list-item--approved': entry.decision === 'APPROVED',
+                  'list-item--rejected': entry.decision === 'REJECTED',
+                }"
+                :aria-pressed="entry.id === selectedId"
+                @click="selectedId = entry.id"
+              >
+                <header>
+                  <strong>第 {{ entry.problem.chapter }} 章 S{{
+                    entry.problem.stage
+                  }}</strong>
+                  <span class="badge">{{ entry.problem.kcCode }}</span>
+                  <span
+                    class="badge"
+                    :class="{
+                      'badge--ai': entry.problem.aiGenerated,
+                      'badge--golden': !entry.problem.aiGenerated,
+                    }"
+                  >
+                    {{ entry.problem.aiGenerated ? "AI" : "Golden" }}
+                  </span>
+                </header>
+                <p class="list-statement">
+                  {{ entry.problem.statement.slice(0, 60) }}…
+                </p>
+                <small class="list-meta">
+                  <span
+                    class="decision-dot"
+                    :class="`decision-dot--${entry.decision.toLowerCase()}`"
+                    aria-hidden="true"
+                  />
+                  {{
+                    entry.decision === "PENDING"
+                      ? "待审"
+                      : entry.decision === "APPROVED"
+                        ? "已通过"
+                        : "已驳回"
+                  }}
+                  · {{ new Date(entry.requestedAt).toLocaleString() }}
+                </small>
+              </button>
             </li>
           </ul>
         </aside>
@@ -594,14 +600,22 @@ const canDecide = computed<boolean>(
 .list-item {
   display: grid;
   gap: 3px;
+  width: 100%;
   padding: 8px;
   border: 2px solid var(--pyt-color-border);
   background: var(--pyt-color-bg-soft);
   cursor: pointer;
   border-radius: 3px;
+  color: inherit;
+  font: inherit;
+  text-align: left;
 }
 .list-item:hover {
   background: var(--pyt-color-warning-bg);
+}
+.list-item:focus-visible {
+  outline: 3px solid var(--pyt-color-text-hint);
+  outline-offset: 2px;
 }
 .list-item--current {
   outline: 3px solid var(--pyt-color-text-hint);

@@ -31,6 +31,40 @@ def test_chapter_1_with_print_keyword_passes() -> None:
     assert v.passed
 
 
+def test_trivial_input_echo_is_rejected_even_when_kc_term_is_in_statement() -> None:
+    p = _problem(
+        1,
+        "PY43-KC-001",
+        "读入一个成就名称并原样输出，例如银河一号。",
+        "name = input()\nprint(name)",
+    )
+
+    verdict = verify_kc_grounding(
+        p,
+        kc_keywords={"PY43-KC-001": ["银河一号"]},
+    )
+
+    assert not verdict.passed
+    assert any(issue.code == "trivial_echo_solution" for issue in verdict.issues)
+
+
+def test_input_echo_with_appended_constant_label_is_still_rejected() -> None:
+    p = _problem(
+        1,
+        "PY43-KC-001",
+        "读入一个成就名称并展示中国计算机发展成就。",
+        "name = input()\nprint(name)\nprint('中国计算机发展成就')",
+    )
+
+    verdict = verify_kc_grounding(
+        p,
+        kc_keywords={"PY43-KC-001": ["中国计算机发展成就"]},
+    )
+
+    assert not verdict.passed
+    assert any(issue.code == "trivial_echo_solution" for issue in verdict.issues)
+
+
 def test_chapter_1_no_keyword_fails() -> None:
     p = _problem(
         1,
@@ -109,7 +143,7 @@ def test_unknown_kc_code_falls_back_to_chapter_keywords() -> None:
 
 
 def test_custom_kc_keywords_override_defaults() -> None:
-    p = _problem(2, "PY43-KC-008", "演示某种特殊场景", "print('ok')")
+    p = _problem(2, "PY43-KC-008", "演示某种特殊场景", "print('特殊场景')")
     v = verify_kc_grounding(p, kc_keywords={"PY43-KC-008": ["特殊场景"]})
     assert v.passed
 
@@ -119,6 +153,24 @@ def test_custom_kc_keywords_miss_fails() -> None:
     v = verify_kc_grounding(p, kc_keywords={"PY43-KC-008": ["不存在的词"]})
     assert not v.passed
     assert any(i.code == "kc_keyword_miss" for i in v.issues)
+
+
+def test_authoritative_kc_term_only_in_story_warns_for_manual_review() -> None:
+    p = _problem(
+        1,
+        "PY43-KC-001",
+        "输出神威·太湖之光的相关说明",
+        "value = int(input())\nprint(value + 1)",
+    )
+
+    verdict = verify_kc_grounding(
+        p,
+        kc_keywords={"PY43-KC-001": ["中国计算机发展成就", "神威·太湖之光"]},
+    )
+
+    assert verdict.passed
+    issue = next(issue for issue in verdict.issues if issue.code == "kc_solution_miss")
+    assert issue.severity == "warning"
 
 
 def test_no_keywords_provided_emits_warning_only() -> None:

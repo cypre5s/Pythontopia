@@ -114,13 +114,13 @@ def test_problem_payload_includes_kind_from_preferred_kind(
     class _StubProvider:
         async def chat(self, messages, **kwargs):  # type: ignore[no-untyped-def]
             return LlmResponse(content_json={
-                "title": "简答：解释 list",
-                "statement": "用 30-100 字说明 list 列表如何按下标访问元素。",
-                "reference_solution": "x = 1\nprint(x)",
+                "title": "简答：解释变量与运算符",
+                "statement": "用 30-100 字说明变量与运算符如何配合完成数值计算。",
+                "reference_solution": "x = int(input())\nprint('变量与运算符', x + 1)",
                 "test_cases": [
-                    {"input": "1", "expected_output": "1", "is_sample": True},
-                    {"input": "2", "expected_output": "1"},
-                    {"input": "3", "expected_output": "1"},
+                    {"input": "1", "expected_output": "变量与运算符 2", "is_sample": True},
+                    {"input": "2", "expected_output": "变量与运算符 3"},
+                    {"input": "3", "expected_output": "变量与运算符 4"},
                 ],
                 "hints": ["变量是命名的存储"],
             })
@@ -131,6 +131,8 @@ def test_problem_payload_includes_kind_from_preferred_kind(
     response = client.post(
         "/agents/boss/problem",
         json={
+            "kcName": "变量与运算符",
+            "kcSummary": "变量用于存储数据，运算符用于执行数值运算。",
             "chapter": 2,
             "stage": 1,
             "kcCode": "PY43-KC-010",

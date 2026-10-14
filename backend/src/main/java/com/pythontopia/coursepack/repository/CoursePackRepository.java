@@ -76,6 +76,22 @@ public class CoursePackRepository {
     return spec.query(CourseKc.class).list();
   }
 
+  public Optional<CourseKc> findKcByCode(Long packId, String kcCode) {
+    return jdbcClient
+        .sql(
+            """
+            SELECT id, pack_id AS packId, kc_code AS kcCode, kc_name AS kcName,
+                   chapter_id AS chapterId, chapter_order AS chapterOrder, difficulty,
+                   summary_markdown AS summaryMarkdown
+            FROM course_kc
+            WHERE pack_id = :packId AND kc_code = :kcCode
+            """)
+        .param("packId", packId)
+        .param("kcCode", kcCode)
+        .query(CourseKc.class)
+        .optional();
+  }
+
   /**
    * 读取每个 KC 的先修 KC code 列表（{@code course_kc.prerequisite_codes}）。
    * 供 PathPlanner 做 DAG 拓扑排序。

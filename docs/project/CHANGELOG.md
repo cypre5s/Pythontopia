@@ -1,5 +1,25 @@
 # Changelog
 
+## 2026-10-14 — 本地 DeepSeek 复验与 KC 编程题接地
+
+- 本地 `./dev.sh` 启动时 `PYT_AI_REQUEST_LIMITS_ENABLED=false`，运行进程已核实为 `false`；部署默认日限额保持开启。Boss 判题的 10 秒防重复提交限制仍保留，它不限制 DeepSeek 请求数。
+- Boss Graph client 从 pack 43 课程库按 KC code 读取权威名称和摘要并传给 Graph。出题 prompt 使用该内容；接地审查校验 KC 标题或摘要中的具体术语，避免只按整章宽泛关键词接受无关题目。未知 KC 不进入 AI 生成上下文。
+- 真实全栈出题：DeepSeek 为 `PY43-KC-001` 生成“展示中国超级计算机名称”的 Python 输入输出题，Graph/Piston 自测通过，响应为 `aiGenerated=true`、`reviewed=true`；错误提交为 0/3，参考实现为 3/3。题目进入教师审核队列 `PENDING`，没有自动发布到全局题库；验证账号及临时审核题已清理。
+- 本轮又完成真实 Tutor 文本与合成 PNG 图片全栈调用；会话答案分别确认文本请求已收到，以及识别出黄色背景、蓝色方形。Graph 服务日志有 8 次 DeepSeek completion HTTP 200，另有 1 次直接模型出题成功；这是请求数，不代表供应商 token/费用账单。
+- 后续真调用复验：新 Tutor 文本流回显校验词“青竹 83”，图片流识别黄色背景与蓝色正方形，两个会话均成功持久化。最近 Graph 日志窗口有 13 条 DeepSeek completion HTTP 200、0 条 provider error；含质量重试，不能据此推算供应商 token 或费用。
+- KC 出题质量复核：真实学生接口为 `PY43-KC-001` 生成了输入回显及字符串拼接候选；模型自检与 Piston 执行自测通过，但它们没有可靠测量 KC 掌握度，且个别候选含课件摘要未给出的表述。教师审核 API 已将本地 QA 候选 5–9 全部标为 `REJECTED`，未加入 approved bank。Graph grounding 新增纯输入回显拒绝规则，包含追加常量标签的回显也会被拦截。
+- 验证：Graph Boss 套件 228 项通过、Ruff 全量通过；Tutor Daily 限额在运行中的后端仍为关闭状态，开发者本人次数表未因本轮请求新增记录。部署限额保持开启；provider 自身额度/限流仍适用。临时远征 run 已清理，QA 账号及拒绝记录留在本地库供审计。
+- 修复远征预生成等待：前端从 5 秒改为最多等待 180 秒、每 5 秒查询一次，覆盖 Boss Graph 的当前最长请求窗口，避免仍在生成时让学生反复重试并制造重复生成请求。TDD 回归模拟 PENDING 超过 5 秒后转 READY；远征相关 3 个文件 / 9 tests、typecheck 与改动文件 ESLint 通过。
+- Twin 画像/周报与统一选题策略已有实现并通过定向回归；Web 工程可读性整理已完成本轮范围。仍待 Phaser Boss 最终多阶段浏览器实战、Twin A/B/7 日延迟验证及生产环境核验。
+
+### 2026-10-14 全量验证续跑
+
+- 前端全量 Vitest 为 270 个文件 / 2555 项通过；本轮全量 ESLint 0 errors / 7 warnings，生产 `npm run build` 成功。构建仍打印 Pyodide Node 内置模块 externalize、`eval` 与大 chunk 警告；未做性能改造。
+- Graph 全量为 1836 passed / 1 skipped，Ruff 全量通过。后端最新全量 `mvn test` 报告 1383 项、0 assertion failures、7 errors；6 个 Testcontainers PostgreSQL 用例在 Docker 绑定宿主机端口时遇 `address already in use`，长期仿真随之拿不到 JDBC 连接。
+- 将 6 个冲突集成类合并串行重跑后 19 项全通过；长期仿真独立重跑 1 项通过。与本轮后端改动直接相关的 Boss、Tutor、周报与审核仓储测试最新 86 项均通过。结论：定向代码验证通过，但全量 Maven 因本地 Docker 端口冲突仍未整体通过。
+- 修正 AI 练习题对能力画像的影响：题目可以在教师审核前供学生练习，但提交结果只在课程题或完全匹配的 AI 审核题已获教师批准后写入 KC 掌握度；审核状态不可读时仍返回判题结果并跳过学情事件。学生反馈会说明结果暂不计入画像。TDD RED 已复现旧行为；本轮 Boss/Tutor/Twin/审核关键 Maven 回归现为 86 项通过。
+- 尚未核对 DeepSeek 供应商账单/token，未完成最终 Phaser Boss 多阶段浏览器实战、Twin 学习效果 A/B 与 7 日延迟复测、生产 Piston 网络隔离及 ECS 公网验证；性能测试按用户要求后置。
+
 ## 2026-10-14 — 远征新手开局提示与复验
 
 - 新用户没有掌握证据时，规则会优先返回未评估的最早前置 KC；若它没有同 KC 课程编程题，开局会被拒绝。修正错误提示，明确建议先做对应前置知识小测/练习，或切换到含编程题的章节；不绕过先修与服务端证据规则。

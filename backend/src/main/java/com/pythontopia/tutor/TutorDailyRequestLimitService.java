@@ -4,6 +4,7 @@ import com.pythontopia.common.error.BusinessException;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -39,14 +40,21 @@ public class TutorDailyRequestLimitService {
       """;
 
   private final JdbcTemplate jdbc;
+  private final boolean limitsEnabled;
 
-  public TutorDailyRequestLimitService(JdbcTemplate jdbc) {
+  public TutorDailyRequestLimitService(
+      JdbcTemplate jdbc,
+      @Value("${pythontopia.ai.request-limits.enabled:true}") boolean limitsEnabled) {
     this.jdbc = jdbc;
+    this.limitsEnabled = limitsEnabled;
   }
 
   /** Reserves one request before contacting the model; conversation IDs do not affect the cap. */
   @Transactional
   public void reserve(Long userId) {
+    if (!limitsEnabled) {
+      return;
+    }
     LocalDate usageDate = LocalDate.now(RESET_ZONE);
     List<Integer> counts =
         jdbc.query(

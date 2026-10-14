@@ -106,6 +106,7 @@ class BossServiceTest {
     lenient()
         .when(learnerTwinService.recommendedDifficulty(anyLong(), anyString()))
         .thenReturn(null);
+    lenient().when(reviewRepository.isApproved(any())).thenReturn(true);
     lenient()
         .when(
             expeditionRunService.validateProblemRequest(
@@ -861,68 +862,42 @@ class BossServiceTest {
   }
 
   @Test
-  @DisplayName("通用远征前沿只返回有同 KC 课程编程题的候选")
-  void selectFrontierFiltersKnowledgePointsWithoutCourseProblems() {
+  @DisplayName("无课程编程题的合格 KC 仍可开局并由 AI 按同一 KC 出题")
+  void selectFrontierAllowsKcWithoutCourseProblemForAiGeneration() {
+    var pick = new FrontierPickDto("PY43-KC-001", 1, 1, "尚未评估，先从基础题建立证据");
+    when(learnerTwinService.frontier(7L, 1, List.of(), 40))
+        .thenReturn(new FrontierSelectResultDto(List.of(pick)));
+
+    var result = service.selectFrontier(7L, new FrontierSelectRequest(null, List.of(), 1, List.of(), 1));
+
+    assertThat(result.picks()).containsExactly(pick);
+    verifyNoInteractions(chapterProblemBankRepository, graphClient);
+  }
+
+  @Test
+  @DisplayName("通用远征前沿保留数字孪生排序，由 AI 为缺题 KC 出题")
+  void selectFrontierPreservesTwinPriorityForAiGeneratedQuestions() {
     var frontier =
         new FrontierSelectResultDto(
             List.of(
                 new FrontierPickDto("PY43-KC-001", 1, 1, "尚未评估"),
                 new FrontierPickDto("PY43-KC-016", 2, 1, "尚未评估"),
                 new FrontierPickDto("PY43-KC-034", 4, 2, "近期练习薄弱")));
-    lenient()
-        .when(learnerTwinService.frontier(7L, null, List.of(), 1))
-        .thenReturn(new FrontierSelectResultDto(List.of(frontier.picks().getFirst())));
     lenient().when(learnerTwinService.frontier(7L, null, List.of(), 40)).thenReturn(frontier);
-    when(chapterProblemBankRepository.findByKcCodes(
-            List.of("PY43-KC-001", "PY43-KC-016", "PY43-KC-034")))
-        .thenReturn(List.of(courseProblem("PY43-KC-016"), courseProblem("PY43-KC-034")));
 
     var result =
         service.selectFrontier(7L, new FrontierSelectRequest(null, List.of(), null, List.of(), 1));
 
-    assertThat(result.picks()).containsExactly(frontier.picks().get(1));
+    assertThat(result.picks()).containsExactly(frontier.picks().getFirst());
     verify(learnerTwinService).frontier(7L, null, List.of(), 40);
-    verifyNoInteractions(graphClient);
+    verifyNoInteractions(chapterProblemBankRepository, graphClient);
   }
 
   @Test
-  @DisplayName("通用远征前沿聚焦无课程题章节时明确拒绝，不借用其他 KC")
-  void selectFrontierRejectsFocusedChapterWithoutCourseProblems() {
-    lenient()
-        .when(learnerTwinService.frontier(7L, 1, List.of(), 4))
-        .thenReturn(
-            new FrontierSelectResultDto(
-                List.of(new FrontierPickDto("PY43-KC-001", 1, 1, "尚未评估"))));
-    lenient()
-        .when(learnerTwinService.frontier(7L, 1, List.of(), 40))
-        .thenReturn(
-            new FrontierSelectResultDto(
-                List.of(new FrontierPickDto("PY43-KC-001", 1, 1, "尚未评估"))));
-    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
-        .thenReturn(List.of());
-
-    assertThatThrownBy(
-            () ->
-                service.selectFrontier(
-                    7L, new FrontierSelectRequest(null, List.of(), 1, List.of(), 4)))
-        .isInstanceOfSatisfying(
-            com.pythontopia.common.error.BusinessException.class,
-            exception -> {
-              assertThat(exception.code()).isEqualTo("EXPEDITION_NO_PRACTICE_PROBLEMS");
-              assertThat(exception.status())
-                  .isEqualTo(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY);
-            });
-    verifyNoInteractions(graphClient);
-  }
-
-  @Test
-  @DisplayName("远征前沿无可玩候选时说明先修与课程题条件")
-  void selectFrontierExplainsWhyNoCandidateIsPlayable() {
+  @DisplayName("前沿没有满足先修条件的知识点时返回明确说明")
+  void selectFrontierExplainsWhenNoKnowledgePointMeetsPrerequisites() {
     when(learnerTwinService.frontier(7L, 5, List.of(), 40))
-        .thenReturn(new FrontierSelectResultDto(
-            List.of(new FrontierPickDto("PY43-KC-001", 1, 1, "建议先复习前置知识"))));
-    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
-        .thenReturn(List.of());
+        .thenReturn(new FrontierSelectResultDto(List.of()));
 
     assertThatThrownBy(
             () ->
@@ -931,37 +906,32 @@ class BossServiceTest {
         .isInstanceOfSatisfying(
             com.pythontopia.common.error.BusinessException.class,
             exception -> assertThat(exception.getMessage())
-                .contains("前置知识", "课程编程题"));
-    verifyNoInteractions(graphClient);
+                .contains("先修条件"));
+    verifyNoInteractions(chapterProblemBankRepository, graphClient);
   }
 
   @Test
-  @DisplayName("远征开局过滤没有课程编程题的 KC，避免新手落在不可玩的首节点")
-  void expeditionFrontierOnlyIncludesKnowledgePointsWithCourseProblems() {
+  @DisplayName("远征开局保留无静态编程题的优先 KC 并允许按同 KC AI 出题")
+  void expeditionFrontierKeepsPreferredUnassessedKcForAiQuestion() {
     var candidates = new FrontierSelectResultDto(
         List.of(
             new FrontierPickDto("PY43-KC-001", 1, 1, "尚未评估"),
             new FrontierPickDto("PY43-KC-016", 2, 1, "尚未评估")));
     when(learnerTwinService.frontier(7L, null, List.of(), 40, "PY43-KC-001"))
         .thenReturn(candidates);
-    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001", "PY43-KC-016")))
-        .thenReturn(List.of(courseProblem("PY43-KC-016")));
 
     var result = service.selectFrontier(7L, null, "PY43-KC-001");
 
     assertThat(result.picks()).extracting(FrontierPickDto::kcCode)
-        .containsExactly("PY43-KC-016");
-    verifyNoInteractions(graphClient);
+        .containsExactly("PY43-KC-001", "PY43-KC-016");
+    verifyNoInteractions(chapterProblemBankRepository, graphClient);
   }
 
   @Test
-  @DisplayName("聚焦章节没有课程编程题时以明确业务错误拒绝开局")
-  void expeditionFrontierRejectsChapterWithoutCourseProblems() {
+  @DisplayName("聚焦章节没有满足先修条件的 KC 时以明确业务错误拒绝开局")
+  void expeditionFrontierRejectsChapterWithoutEligibleKnowledgePoints() {
     when(learnerTwinService.frontier(7L, 1, List.of(), 40, null))
-        .thenReturn(new FrontierSelectResultDto(
-            List.of(new FrontierPickDto("PY43-KC-001", 1, 1, "尚未评估"))));
-    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
-        .thenReturn(List.of());
+        .thenReturn(new FrontierSelectResultDto(List.of()));
 
     assertThatThrownBy(() -> service.selectFrontier(7L, 1, null))
         .isInstanceOfSatisfying(
@@ -970,14 +940,9 @@ class BossServiceTest {
               assertThat(exception.code()).isEqualTo("EXPEDITION_NO_PRACTICE_PROBLEMS");
               assertThat(exception.status())
                   .isEqualTo(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY);
+              assertThat(exception.getMessage()).contains("先修条件");
             });
-    verifyNoInteractions(graphClient);
-  }
-
-  private static PreferredCodingQuestion courseProblem(String kcCode) {
-    var sample = new CodingCase("", "0");
-    return new PreferredCodingQuestion(
-        1L, "course question", "statement", List.of(sample), List.of(sample), "print(0)", kcCode);
+    verifyNoInteractions(chapterProblemBankRepository, graphClient);
   }
 
   @Test
@@ -994,6 +959,24 @@ class BossServiceTest {
     verify(learnerTwinService).recommendedDifficulty(7L, "PY43-KC-001");
     verify(graphClient)
         .requestProblem(anyLong(), anyInt(), anyInt(), anyString(), eq(2), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("通过 AI 审查的现场题进入教师审核队列")
+  void generatedProblemIsQueuedForTeacherReview() {
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenReturn(problemWithStage(1));
+
+    service.fetchProblem(
+        1, new BossProblemRequest(1, null, 1, "PY43-KC-001", "debug", null, null, null), 7L);
+
+    verify(reviewRepository)
+        .createIfNotDuplicate(
+            eq(7L),
+            eq("debug"),
+            org.mockito.ArgumentMatchers.argThat(
+                (BossInternalProblem problem) -> problem.aiGenerated() && problem.reviewed()));
   }
 
   @Test
@@ -1180,6 +1163,22 @@ class BossServiceTest {
     assertThat(result.passed()).isFalse();
     verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
     verify(eventPublisher, never()).publishEvent(any());
+  }
+
+  @Test
+  @DisplayName("教师审核前的 AI 题可练习，但不计入 KC 掌握证据")
+  void unapprovedAiProblemDoesNotPublishMasteryEvidence() {
+    when(pregenService.findByProblemId(7L, "p1"))
+        .thenReturn(Optional.of(problemWithTests(3)));
+    when(reviewRepository.isApproved(any())).thenReturn(false);
+    when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
+        .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
+
+    var result = service.evaluateAttempt(attemptRequest("p1", 1, 1, "print(5)", 10), 7L);
+
+    assertThat(result.passed()).isTrue();
+    assertThat(result.feedback()).contains("暂不计入知识画像");
+    verifyNoInteractions(eventPublisher);
   }
 
   @Test

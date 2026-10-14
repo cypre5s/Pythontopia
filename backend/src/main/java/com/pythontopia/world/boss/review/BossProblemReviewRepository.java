@@ -65,6 +65,27 @@ public class BossProblemReviewRepository {
     return findById(id).orElseThrow(() -> new IllegalStateException("created review disappeared"));
   }
 
+  public boolean createIfNotDuplicate(
+      long requesterId, String kind, BossInternalProblem problem) {
+    Boolean exists =
+        jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM boss_problem_review"
+                + " WHERE pack_id = ? AND chapter = ? AND stage = ? AND kc_code = ?"
+                + " AND kind IS NOT DISTINCT FROM ? AND payload->>'statement' = ?)",
+            Boolean.class,
+            PACK_ID,
+            problem.chapter(),
+            problem.stage(),
+            problem.kcCode(),
+            normalizeKind(kind),
+            problem.statement());
+    if (Boolean.TRUE.equals(exists)) {
+      return false;
+    }
+    create(requesterId, kind, problem);
+    return true;
+  }
+
   public List<BossProblemReviewRecord> list(int limit) {
     return jdbcTemplate.query(
         SELECT_REVIEW + " WHERE r.pack_id = ? ORDER BY r.requested_at DESC, r.id DESC LIMIT ?",
@@ -188,6 +209,23 @@ public class BossProblemReviewRepository {
             targetDifficulty)
         .stream()
         .findFirst();
+  }
+
+  public boolean isApproved(BossInternalProblem problem) {
+    Boolean approved =
+        jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM boss_problem_review"
+                + " WHERE pack_id = ? AND decision = 'APPROVED' AND chapter = ? AND stage = ?"
+                + " AND kc_code = ? AND difficulty = ?"
+                + " AND (payload - 'problemId') = (CAST(? AS jsonb) - 'problemId'))",
+            Boolean.class,
+            PACK_ID,
+            problem.chapter(),
+            problem.stage(),
+            problem.kcCode(),
+            problem.difficulty(),
+            serialize(problem));
+    return Boolean.TRUE.equals(approved);
   }
 
   private BossProblemReviewRecord mapReview(ResultSet rs, int rowNum) throws SQLException {
