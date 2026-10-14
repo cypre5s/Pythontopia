@@ -287,6 +287,7 @@ async function copySample(text: string): Promise<void> {
                 class="statement-markdown"
                 data-testid="problem-statement"
                 :source="problem.statementMarkdown"
+                :allow-images="false"
               />
             </section>
 
@@ -300,6 +301,7 @@ async function copySample(text: string): Promise<void> {
               <MarkdownView
                 class="statement-markdown"
                 :source="problem.inputDescription"
+                :allow-images="false"
               />
             </section>
 
@@ -313,6 +315,7 @@ async function copySample(text: string): Promise<void> {
               <MarkdownView
                 class="statement-markdown"
                 :source="problem.outputDescription"
+                :allow-images="false"
               />
             </section>
 

@@ -44,9 +44,6 @@ import ToolCallTimeline from "@/components/workshop/ToolCallTimeline.vue";
 import AnswerFeedback from "@/components/workshop/AnswerFeedback.vue";
 import MarkdownView from "@/components/common/MarkdownView.vue";
 import { annotateCitations } from "@/utils/citations";
-import TutorVisualAids, {
-  type TutorVisualAid,
-} from "@/components/tutor/TutorVisualAids.vue";
 import CoursewareEvidence from "@/components/tutor/CoursewareEvidence.vue";
 import BilibiliVideoCards from "@/components/video/BilibiliVideoCards.vue";
 import BrowseTimeline from "@/components/workshop/BrowseTimeline.vue";
@@ -212,7 +209,6 @@ interface ChatMessage {
    * 历史回放不带（loadConversation 不设此字段）→ 旧会话不显示徽章，仅 live 显示。
    */
   review?: TutorReview;
-  visualAids?: TutorVisualAid[];
   /** kind==='answer' 且 live：本次答疑 trace 快照，渲染为折叠「⚙ 工具调用」行。 */
   traces?: SseTraceEvent[];
   /** kind==='answer' 且 live：画像个性化说明 → 气泡顶「✨ 为你定制」小标签的 title。 */
@@ -694,7 +690,6 @@ function emitSavedAnswerTurn(
       kcCodes,
       evidenceNote: result.evidence_note ?? "",
       personalizationNote: result.personalization_note ?? "",
-      visualAids: result.visual_aids ?? [],
     },
     evidencePageIds: result.evidence_page_ids ?? [],
     groundingStatus: deriveGroundingStatus(result),
@@ -1834,13 +1829,12 @@ async function runAsk(
             },
           }
         : {}),
-      visualAids: r.visual_aids ?? [],
       // 工具调用轨迹快照 → 折叠「⚙ 工具调用」行（ToolTraceLine）。
       traces: [...tutorSse.traces.value],
       streaming: false,
       // 工具产出按需触发：「看相关视频/生成讲义」按钮常驻为手动入口；
       // 「相关 B站讲解」仅当学生语句表达视频意图（wantsVideo）时才自动内嵌。
-      // 图解由后端按「要图」意图返回（visual_aids 为空则不显示），无需前端再判。
+      // Tutor 答复只显示文本，不把模型文字转成本地渲染图。
       suggestTopic: question.trim(),
       kcCodes,
       showVideo: wantsVideo(question),
@@ -2577,6 +2571,7 @@ onMounted(async () => {
               </div>
               <MarkdownView
                 :source="annotateCitations(m.text, m.evidence ?? [])"
+                :allow-images="false"
                 @cite-click="(p) => goToPage(p.pageId)"
               />
               <!-- 考考我·填空作答（多轮）：题干见上方，每个空一个输入框，提交即评卷并出下一轮。 -->
@@ -2646,10 +2641,6 @@ onMounted(async () => {
                 :grounding-status="m.groundingStatus ?? ''"
                 :evidence-note="m.evidenceNote ?? ''"
                 @open-page="goToPage"
-              />
-              <TutorVisualAids
-                v-if="!m.streaming && m.visualAids && m.visualAids.length"
-                :aids="m.visualAids"
               />
               <!-- 工具产出按需触发：动作按钮常驻（手动入口）；B站讲解仅在视频意图下自动内嵌。 -->
               <div
@@ -2882,6 +2873,7 @@ onMounted(async () => {
               <MarkdownView
                 v-if="m.text"
                 :source="m.text"
+                :allow-images="false"
               />
               <PlanCard
                 :steps="m.planSteps ?? []"

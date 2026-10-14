@@ -622,6 +622,7 @@ async function retry(): Promise<void> {
               <MarkdownView
                 v-if="problem?.statementMarkdown"
                 :source="problem.statementMarkdown"
+                :allow-images="false"
               />
               <p
                 v-else
@@ -636,7 +637,10 @@ async function retry(): Promise<void> {
                 <h4 class="problem__io-title">
                   输入
                 </h4>
-                <MarkdownView :source="problem.inputDescription" />
+                <MarkdownView
+                  :source="problem.inputDescription"
+                  :allow-images="false"
+                />
               </div>
               <div
                 v-if="problem?.outputDescription"
@@ -645,7 +649,10 @@ async function retry(): Promise<void> {
                 <h4 class="problem__io-title">
                   输出
                 </h4>
-                <MarkdownView :source="problem.outputDescription" />
+                <MarkdownView
+                  :source="problem.outputDescription"
+                  :allow-images="false"
+                />
               </div>
             </template>
 

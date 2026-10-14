@@ -76,7 +76,7 @@ async function mountPage() {
   const wrapper = mount(ProfilePage, {
     global: {
       plugins: [router],
-      stubs: { AppLayout: APP_LAYOUT_STUB, ProfileRadar: BLANK_STUB, MarkdownView: BLANK_STUB },
+      stubs: { AppLayout: APP_LAYOUT_STUB, ProfileRadar: BLANK_STUB },
     },
   });
   await flushPromises();
@@ -118,6 +118,18 @@ describe('ProfilePage', () => {
 
     expect(wrapper.find('[data-testid="profile-dimensions-error"]').exists()).toBe(false);
     expect(wrapper.find('[data-testid="self-rate-professional_background"]').exists()).toBe(true);
+  });
+
+  it('renders model image syntax in the narrative summary as text', async () => {
+    getLearnerProfileMock.mockResolvedValue({
+      ...PROFILE,
+      narrativeSummary: '![模型生成图片](data:image/png;base64,YQ==)',
+    });
+
+    const wrapper = await mountPage();
+
+    expect(wrapper.find('img').exists()).toBe(false);
+    expect(wrapper.text()).toContain('模型生成图片');
   });
 
   it('submits a self-rating as a score delta without adding evidence fields', async () => {

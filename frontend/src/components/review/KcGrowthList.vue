@@ -20,7 +20,10 @@ defineProps<{ evaluation: EvaluationDto }>();
       v-if="evaluation.narrativeSummary"
       class="narrative"
     >
-      <MarkdownView :source="evaluation.narrativeSummary" />
+      <MarkdownView
+        :source="evaluation.narrativeSummary"
+        :allow-images="false"
+      />
     </div>
     <p
       v-else

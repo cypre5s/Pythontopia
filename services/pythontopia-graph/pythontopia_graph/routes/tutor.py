@@ -1,7 +1,7 @@
 """AutoGen 驱动的 Tutor SSE 流式答疑端点。
 
 固定顺序运行导师作答、引用审查、防幻觉核查和安全审查；RAG、质疑辩论、受限代码校验、
-一次修订与附属图解继续由既有确定式 handler 提供。SSE ``plan``/``trace``/``token`` 合同不变。
+一次修订与证据摘要继续由既有确定式 handler 提供。SSE ``plan``/``trace``/``token`` 合同不变。
 """
 
 from __future__ import annotations
@@ -43,7 +43,6 @@ from pythontopia_graph.schemas.tutor import (
     SafetyResult,
     TutorAskRequest,
     TutorResponse,
-    TutorVisualAid,
 )
 from pythontopia_graph.tools.harness import (
     BudgetGuard,
@@ -659,7 +658,6 @@ async def tutor_ask_stream(
                         profile_brief=body.profile_brief,
                         conversation_history=history,
                         evidence_chunks=evidence.chunks,
-                        allow_diagram=False,
                     )
 
                 revise_task = asyncio.ensure_future(
@@ -708,7 +706,7 @@ async def tutor_ask_stream(
                         note="revised" if revised else "kept_original",
                     )
 
-            # ── 汇总结果（答案优先：审查只标注、不丢弃答案；安全失败时不再附图解） ──
+            # ── 汇总结果（答案优先：审查只标注、不丢弃答案） ──
             based_on_general = not evidence.chunks
             # 命中证据按 page_id 去重投影成可展示引用卡（页码 + 原文片段），page_ids 同源同序，
             # 供前端「课件证据」面板（CoursewareEvidence）渲染——复用 TutorAgent 同一套截断逻辑。
@@ -723,17 +721,7 @@ async def tutor_ask_stream(
             else:
                 grounding_status = "FAILED"
 
-            # ── 尾部并行：图解 ∥ 证据注（asyncio.gather；各自经 provider 熔断 + 预算治理） ──
-            # 图解按需触发：仅当学生语句明确「要图/流程/结构」且安全通过时生成；
-            # 证据注仅在有证据时生成。两者优先级最低，预算不足先被砍（trace 标 budget_skipped）。
-            want_diagram = safety.passed and TutorAgent.wants_diagram(base_question)
-
-            async def _make_diagram() -> list[TutorVisualAid]:
-                return await run_autogen_tutor_call(
-                    "tutor_diagram",
-                    lambda: agent.build_diagram(base_question, evidence.chunks),
-                )
-
+            # 只输出文字答复；保留空 visual_aids 字段以兼容旧客户端。
             async def _make_evidence_note() -> str:
                 return await run_autogen_tutor_call(
                     "tutor_evidence_note",
@@ -748,16 +736,6 @@ async def tutor_ask_stream(
             async def _skip() -> None:
                 return None
 
-            diagram_coro = (
-                run_with_governance(
-                    "tutor_diagram",
-                    _make_diagram,
-                    breaker_key="provider",
-                    budget=guard,
-                )
-                if want_diagram
-                else _skip()
-            )
             note_coro = (
                 run_with_governance(
                     "tutor_evidence_note",
@@ -770,32 +748,15 @@ async def tutor_ask_stream(
             )
             if heartbeat.due():
                 yield _PING
-            # 尾部工位 start（仅对实际会运行的节点发，与 finish 对称·C2）：未触发图解/无证据则不发。
+            # 无课件证据时跳过说明摘要工位。
             tail_started = time.monotonic()
-            if want_diagram:
-                yield _trace_start("tutor_diagram")
             if evidence.chunks:
                 yield _trace_start("tutor_evidence_note")
-            tail_task = asyncio.ensure_future(asyncio.gather(diagram_coro, note_coro))
+            tail_task = asyncio.ensure_future(note_coro)
             async for ping in _pings_while(tail_task, heartbeat):
                 yield ping
-            diagram_obs, note_obs = await tail_task
+            note_obs = await tail_task
             tail_elapsed = int((time.monotonic() - tail_started) * 1000)
-
-            visual_aids: list[dict[str, Any]] = []
-            if isinstance(diagram_obs, ToolObservation):
-                if diagram_obs.status == "budget_skipped":
-                    yield _trace_finish(
-                        "tutor_diagram",
-                        "skipped",
-                        tail_elapsed,
-                        note="budget_skipped",
-                    )
-                elif diagram_obs.ok and isinstance(diagram_obs.value, list):
-                    visual_aids = [aid.model_dump(mode="json") for aid in diagram_obs.value]
-                    yield _trace_finish("tutor_diagram", "ok", tail_elapsed)
-                else:
-                    yield _trace_finish("tutor_diagram", "retry", tail_elapsed)
 
             # 「课件证据」整组一句话总览说明（结合提问/上下文/画像）；best-effort，失败回空串。
             evidence_note = ""
@@ -825,7 +786,7 @@ async def tutor_ask_stream(
                     hallucination=hallucination,
                     safety=safety,
                     based_on_general=based_on_general,
-                    visual_aids=visual_aids,
+                    visual_aids=[],
                     evidence_note=evidence_note,
                     revised=revised,
                     personalization_note=TutorAgent.personalization_note(body.profile_brief),

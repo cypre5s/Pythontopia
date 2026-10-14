@@ -3,10 +3,13 @@ import { computed } from 'vue';
 import { marked } from 'marked';
 import DOMPurify from 'dompurify';
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   source: string;
   inline?: boolean;
-}>();
+  allowImages?: boolean;
+}>(), {
+  allowImages: true,
+});
 
 const emit = defineEmits<{
   (e: 'cite-click', payload: { pageId: number; pageNo: number }): void;
@@ -49,16 +52,18 @@ function closeOpenFence(src: string): string {
   return src;
 }
 
-function removeExternalImages(markup: string): string {
+function sanitizeImages(markup: string, allowImages: boolean): string {
   const document = new DOMParser().parseFromString(markup, 'text/html');
   document.querySelectorAll<HTMLImageElement>('img[src]').forEach((image) => {
     const source = image.getAttribute('src') ?? '';
-    if (source.startsWith('data:image/')) return;
-    try {
-      const url = new URL(source, window.location.href);
-      if (url.origin === window.location.origin) return;
-    } catch {
-      // Invalid and non-local image URLs are replaced by their text alternative.
+    if (allowImages) {
+      if (source.startsWith('data:image/')) return;
+      try {
+        const url = new URL(source, window.location.href);
+        if (url.origin === window.location.origin) return;
+      } catch {
+        // Invalid and non-local image URLs are replaced by their text alternative.
+      }
     }
     image.replaceWith(document.createTextNode(image.alt));
   });
@@ -72,7 +77,7 @@ const rendered = computed(() => {
   const raw = props.inline
     ? marked.parseInline(src) as string
     : marked.parse(src) as string;
-  return removeExternalImages(DOMPurify.sanitize(raw, PURIFY_CONFIG));
+  return sanitizeImages(DOMPurify.sanitize(raw, PURIFY_CONFIG), props.allowImages);
 });
 </script>
 

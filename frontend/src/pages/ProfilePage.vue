@@ -256,7 +256,10 @@ const dimensionCards = computed(() => {
             <h2 class="summary-title">
               综合总结
             </h2>
-            <MarkdownView :source="p.narrativeSummary" />
+            <MarkdownView
+              :source="p.narrativeSummary"
+              :allow-images="false"
+            />
           </PyPanel>
         </div>
 

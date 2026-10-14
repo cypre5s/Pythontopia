@@ -62,6 +62,7 @@ async def test_autogen_single_call_preserves_nonserializable_result() -> None:
 async def test_nonstream_tutor_ask_uses_fixed_autogen_stage(monkeypatch) -> None:
     stages: list[str] = []
     original = tutor_agent_module.run_autogen_tutor_call
+    chat_calls = 0
 
     async def observe(stage_name, call):
         stages.append(stage_name)
@@ -69,13 +70,17 @@ async def test_nonstream_tutor_ask_uses_fixed_autogen_stage(monkeypatch) -> None
 
     class Provider:
         async def chat(self, _messages, **_kwargs):
+            nonlocal chat_calls
+            chat_calls += 1
             return LlmResponse(content_text="基于通识知识，这里是解释。")
 
     monkeypatch.setattr(tutor_agent_module, "run_autogen_tutor_call", observe)
-    response = await TutorAgent(Provider()).ask("什么是变量？", "", [], [])  # type: ignore[arg-type]
+    response = await TutorAgent(Provider()).ask("画个变量示意图", "", [], [])  # type: ignore[arg-type]
 
     assert stages == ["TutorAgent"]
+    assert chat_calls == 1
     assert response.answer_md == "基于通识知识，这里是解释。"
+    assert response.visual_aids == []
 
 
 @pytest.mark.asyncio

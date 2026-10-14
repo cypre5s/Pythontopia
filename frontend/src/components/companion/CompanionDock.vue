@@ -251,6 +251,7 @@ onMounted(refreshStudentSignals);
           <MarkdownView
             v-if="message.role === 'assistant' && message.content"
             :source="message.content"
+            :allow-images="false"
           />
           <span v-else>{{ message.content }}</span>
           <div

@@ -859,7 +859,10 @@ function cardId(entry: CardEntry): string {
 
         <!-- 百晓回复（CHAT） -->
         <template v-else-if="entry.key === 'ai_reply'">
-          <MarkdownView :source="asReply(entry.payload).content" />
+          <MarkdownView
+            :source="asReply(entry.payload).content"
+            :allow-images="false"
+          />
           <ul
             v-if="asReply(entry.payload).courseware_refs?.length"
             class="tw-refs"
@@ -881,7 +884,10 @@ function cardId(entry: CardEntry): string {
 
         <!-- 知识点复盘 -->
         <template v-else-if="entry.key === 'knowledge_review'">
-          <MarkdownView :source="asReview(entry.payload).review_content" />
+          <MarkdownView
+            :source="asReview(entry.payload).review_content"
+            :allow-images="false"
+          />
           <ul
             v-if="asReview(entry.payload).courseware_refs.length"
             class="tw-refs"

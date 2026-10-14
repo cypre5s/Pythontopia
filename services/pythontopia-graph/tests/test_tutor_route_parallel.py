@@ -1,13 +1,9 @@
-"""答疑路由的并发与稳定性：尾部 gather 并行、RAG 降级空证据、SSE 心跳 ping。
-
-fake provider 各 LLM 子调用 sleep 0.2s，用总耗时断言真并行；全程离线。
-"""
+"""答疑路由的文本输出、RAG 降级与 SSE 心跳回归；全程离线。"""
 
 from __future__ import annotations
 
 import asyncio
 import json
-import time
 from collections.abc import AsyncIterator, Iterator
 
 import pytest
@@ -75,24 +71,14 @@ def _parse_events(chunks: list[str]) -> list[tuple[str, dict]]:
     return events
 
 
-class SleepyTailProvider(LlmProvider):
-    """chat 每次 sleep 0.2s 后按 prompt 分派（图解 JSON / 证据注 JSON）；chat_stream 即刻吐答案。"""
+class CountingTailProvider(LlmProvider):
+    """记录非流式附属调用数；chat_stream 即刻吐答案。"""
 
-    def __init__(self, sleep_s: float = 0.2) -> None:
-        self.sleep_s = sleep_s
+    def __init__(self) -> None:
         self.chat_calls = 0
 
     async def chat(self, messages, **kwargs):  # type: ignore[override]
         self.chat_calls += 1
-        await asyncio.sleep(self.sleep_s)
-        text = "\n".join(m["content"] for m in messages)
-        if "图解生成器" in text:
-            return LlmResponse(
-                content_json={
-                    "kind": "mermaid",
-                    "source": 'flowchart TD\n  A["for 循环"] --> B["循环体"]',
-                }
-            )
         return LlmResponse(content_json={"note": "这些课件页讲 for 循环的用法。"})
 
     async def chat_stream(self, messages, **kwargs) -> AsyncIterator[str]:  # type: ignore[override]
@@ -100,24 +86,20 @@ class SleepyTailProvider(LlmProvider):
         yield "for 循环可遍历列表。"
 
 
-async def test_diagram_and_evidence_note_run_in_parallel() -> None:
-    provider = SleepyTailProvider(sleep_s=0.2)
+async def test_text_only_tutor_skips_diagram_but_keeps_evidence_note() -> None:
+    provider = CountingTailProvider()
     body = TutorAskRequest(
         user_id=1, question="画个 for 循环的流程图", kc_codes=["PY43-KC-001"],
     )
-    started = time.monotonic()
     response = await tutor_routes.tutor_ask_stream(
         body, provider=provider, evidence_fetcher=StaticEvidenceFetcher([HIT]),
     )
     chunks = await _collect_raw(response)
-    elapsed = time.monotonic() - started
 
-    # 两个 0.2s 的子调用串行需 ≥0.4s；并行后整条流 <0.35s。
-    assert provider.chat_calls == 2
-    assert elapsed < 0.35, f"尾部未并行：耗时 {elapsed:.3f}s"
+    assert provider.chat_calls == 1
 
     result = _parse_events(chunks)[-1][1]
-    assert result["visual_aids"] and result["visual_aids"][0]["kind"] == "mermaid"
+    assert result["visual_aids"] == []
     assert result["evidence_note"] == "这些课件页讲 for 循环的用法。"
 
 

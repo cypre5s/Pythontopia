@@ -27,7 +27,10 @@ function sectionToMarkdown(section: HandoutSection): string {
       class="section"
     >
       <h3>{{ section.heading }}</h3>
-      <MarkdownView :source="sectionToMarkdown(section)" />
+      <MarkdownView
+        :source="sectionToMarkdown(section)"
+        :allow-images="false"
+      />
       <EvidenceTag :refs="section.page_refs" />
     </section>
   </article>

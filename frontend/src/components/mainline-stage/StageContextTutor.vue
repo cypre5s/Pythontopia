@@ -207,7 +207,10 @@ async function ask(): Promise<void> {
               class="sct__g"
               :class="GROUNDING_LABEL[t.grounding]?.cls"
             >{{ GROUNDING_LABEL[t.grounding]?.text }}</span>
-            <MarkdownView :source="t.answer" />
+            <MarkdownView
+              :source="t.answer"
+              :allow-images="false"
+            />
           </div>
         </div>
       </template>

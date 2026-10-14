@@ -168,8 +168,6 @@ class TutorAgent:
         profile_brief: str,
         conversation_history: list[dict[str, str]],
         evidence_chunks: list[RagHit],
-        *,
-        allow_diagram: bool = True,
     ) -> TutorResponse:
         return await run_autogen_tutor_call(
             self.AGENT_NAME,
@@ -178,7 +176,6 @@ class TutorAgent:
                 profile_brief,
                 conversation_history,
                 evidence_chunks,
-                allow_diagram=allow_diagram,
             ),
         )
 
@@ -188,8 +185,6 @@ class TutorAgent:
         profile_brief: str,
         conversation_history: list[dict[str, str]],
         evidence_chunks: list[RagHit],
-        *,
-        allow_diagram: bool = True,
     ) -> TutorResponse:
         messages = self._build_messages(
             question, profile_brief, conversation_history, evidence_chunks,
@@ -200,11 +195,7 @@ class TutorAgent:
             messages, json_mode=False, max_tokens=_ANSWER_MAX_TOKENS,
         )
         answer = response.content_text or ""
-        built = self._build_response(answer, evidence_chunks)
-        # allow_diagram=False 供修订等内部调用关闭图解附加（保证恰好一次 LLM 调用）。
-        if allow_diagram and built.safety_result.passed and self.wants_diagram(question):
-            built.visual_aids = await self.build_diagram(question, evidence_chunks)
-        return built
+        return self._build_response(answer, evidence_chunks)
 
     async def ask_stream(
         self,

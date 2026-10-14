@@ -393,6 +393,7 @@ function goToPanel(step: OrchestratorPlanStep): void {
             <MarkdownView
               v-if="m.content"
               :source="humanizeKcText(m.content)"
+              :allow-images="false"
             />
             <span
               v-else-if="m.streaming"

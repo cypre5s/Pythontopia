@@ -7,7 +7,6 @@ import { useSseStream } from '@/composables/useSseStream';
 import { playSfx } from '@/composables/useAudio';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import CoursewareMentionMenu from '@/components/tutor/CoursewareMentionMenu.vue';
-import TutorVisualAids, { type TutorVisualAid } from '@/components/tutor/TutorVisualAids.vue';
 import { listChapters, listKnowledgeComponents } from '@/api/course';
 import {
   buildMentionItems,
@@ -25,8 +24,6 @@ interface TutorStreamResult {
   answerMd: string;
   evidencePageIds: number[];
   groundingStatus: string;
-  // Python TutorResponse 原样透传（snake_case）：多模态图解。
-  visual_aids?: TutorVisualAid[];
 }
 
 // 可选上下文 props：让本面板可复用到做题页（TrainingPanel），带上「当前题目 KC + 题面摘要」；
@@ -106,10 +103,6 @@ const evidencePageIds = computed<number[]>(() => {
   if (tutor.currentSession) return tutor.currentSession.evidencePageIds;
   return [];
 });
-
-const visualAids = computed<TutorVisualAid[]>(
-  () => sse.result.value?.visual_aids ?? [],
-);
 
 // 一次提问的原样参数（题面 / KC / 上下文 / 图片），供 runAsk 复用。
 interface AskParams {
@@ -409,7 +402,10 @@ onMounted(async () => {
           </div>
           <div class="msg msg--tutor">
             <span class="msg__role">AI 助教</span>
-            <MarkdownView :source="turn.answerMd ?? ''" />
+            <MarkdownView
+              :source="turn.answerMd ?? ''"
+              :allow-images="false"
+            />
             <div
               v-if="turn.groundingStatus"
               class="grounding-bar"
@@ -456,15 +452,14 @@ onMounted(async () => {
           class="msg msg--tutor"
         >
           <span class="msg__role">AI 助教</span>
-          <MarkdownView :source="displayedAnswer" />
+          <MarkdownView
+            :source="displayedAnswer"
+            :allow-images="false"
+          />
           <span
             v-if="isStreaming"
             class="streaming-cursor"
           >▌</span>
-          <TutorVisualAids
-            v-if="!isStreaming && visualAids.length > 0"
-            :aids="visualAids"
-          />
           <div
             v-if="groundingStatus"
             class="grounding-bar"
