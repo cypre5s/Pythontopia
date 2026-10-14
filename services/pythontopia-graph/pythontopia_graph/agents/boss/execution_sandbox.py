@@ -8,12 +8,14 @@ closed when that service is not configured or unavailable.
 
 from __future__ import annotations
 
+import json
 import os
 from dataclasses import dataclass
 
 import httpx
 
 MEMORY_LIMIT_BYTES = 256 * 1024 * 1024
+MAX_RESPONSE_BYTES = 1024 * 1024
 MAX_STDOUT_CHARS = 64 * 1024
 MAX_STDERR_CHARS = 16 * 1024
 PISTON_FAILURE_STATUSES = frozenset({"RE", "SG", "TO", "OL", "EL", "XX"})
@@ -58,15 +60,21 @@ def run_python(code: str, stdin: str, timeout_sec: int) -> PythonExecutionResult
         headers["Authorization"] = f"Bearer {auth_token}"
 
     try:
-        response = httpx.post(
+        with httpx.stream(
+            "POST",
             f"{base_url}/api/v2/execute",
             json=payload,
             headers=headers,
             timeout=max(3.0, timeout_sec + 3.0),
             trust_env=False,
-        )
-        response.raise_for_status()
-        body = response.json()
+        ) as response:
+            response.raise_for_status()
+            response_body = bytearray()
+            for chunk in response.iter_bytes(chunk_size=64 * 1024):
+                if len(response_body) + len(chunk) > MAX_RESPONSE_BYTES:
+                    return PythonExecutionResult(runtime_error="sandbox_unavailable")
+                response_body.extend(chunk)
+            body = json.loads(response_body)
     except (httpx.HTTPError, ValueError):
         return PythonExecutionResult(runtime_error="sandbox_unavailable")
 

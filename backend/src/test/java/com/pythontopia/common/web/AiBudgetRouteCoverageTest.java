@@ -26,7 +26,7 @@ class AiBudgetRouteCoverageTest {
   }
 
   @Test
-  void deterministicOrDisabledRoutesDoNotConsumeAiBudget() throws NoSuchMethodException {
+  void aiBudgetCoverageMatchesRuntimeCalls() throws NoSuchMethodException {
     assertThat(new com.pythontopia.media.ImageProperties(null, null, null, null, 50).isEnabled())
         .isFalse();
     assertThat(new com.pythontopia.media.TtsProperties(null, null, null, 100).isEnabled())
@@ -43,10 +43,10 @@ class AiBudgetRouteCoverageTest {
             "create",
             com.pythontopia.auth.security.CurrentUserPrincipal.class,
             com.pythontopia.browse.dto.BrowseRunCreateRequest.class));
-    assertNotBudgeted(
+    assertBudgeted(
         LearningPathController.class.getMethod(
             "plan", com.pythontopia.auth.security.CurrentUserPrincipal.class));
-    assertNotBudgeted(
+    assertBudgeted(
         LearnerEvaluationController.class.getMethod(
             "compute",
             com.pythontopia.auth.security.CurrentUserPrincipal.class,

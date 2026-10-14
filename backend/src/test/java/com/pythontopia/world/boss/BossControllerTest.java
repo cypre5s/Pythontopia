@@ -275,6 +275,21 @@ class BossControllerTest {
   }
 
   @Test
+  void rejectsAttemptCodeOverJudgeLimitBeforeCallingService() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/world/boss/1/attempt")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new BossAttemptRequest(
+                            "ai-1", 1, 1, "x".repeat(8193), 10, UUID.randomUUID()))))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(service);
+  }
+
+  @Test
   void rejects500WhenChapterParamMismatchBody() throws Exception {
     // Service-layer IllegalArgumentException 会被 GlobalExceptionHandler 兜底成 500
     mockMvc

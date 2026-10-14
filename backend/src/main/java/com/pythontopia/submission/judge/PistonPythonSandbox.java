@@ -1,6 +1,8 @@
 package com.pythontopia.submission.judge;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -27,22 +29,26 @@ public class PistonPythonSandbox implements PythonSandbox {
 
   private static final Logger log = LoggerFactory.getLogger(PistonPythonSandbox.class);
   private static final long MEMORY_LIMIT_BYTES = 256L * 1024 * 1024;
+  private static final int MAX_RESPONSE_BYTES = 1024 * 1024;
   private static final int MAX_STDOUT_CHARS = 64 * 1024;
   private static final int MAX_STDERR_CHARS = 16 * 1024;
   private static final Set<String> PISTON_FAILURE_STATUSES =
       Set.of("RE", "SG", "TO", "OL", "EL", "XX");
 
   private final RestTemplate restTemplate;
+  private final ObjectMapper objectMapper;
   private final String baseUrl;
   private final String pythonVersion;
   private final String authToken;
 
   public PistonPythonSandbox(
       @Qualifier("pistonRestTemplate") RestTemplate restTemplate,
+      ObjectMapper objectMapper,
       @Value("${pythontopia.judge.piston.base-url:}") String baseUrl,
       @Value("${pythontopia.judge.piston.python-version:}") String pythonVersion,
       @Value("${pythontopia.judge.piston.auth-token:}") String authToken) {
     this.restTemplate = restTemplate;
+    this.objectMapper = objectMapper;
     this.baseUrl = baseUrl == null ? "" : stripTrailingSlash(baseUrl.trim());
     this.pythonVersion = pythonVersion == null ? "" : pythonVersion.trim();
     this.authToken = authToken == null ? "" : authToken.trim();
@@ -73,10 +79,17 @@ public class PistonPythonSandbox implements PythonSandbox {
             Map.entry("compile_memory_limit", MEMORY_LIMIT_BYTES));
     try {
       JsonNode body =
-          restTemplate
-              .exchange(
-                  baseUrl + "/api/v2/execute", HttpMethod.POST, entity(request), JsonNode.class)
-              .getBody();
+          restTemplate.execute(
+              baseUrl + "/api/v2/execute",
+              HttpMethod.POST,
+              restTemplate.httpEntityCallback(entity(request), JsonNode.class),
+              response -> {
+                byte[] responseBody = response.getBody().readNBytes(MAX_RESPONSE_BYTES + 1);
+                if (responseBody.length > MAX_RESPONSE_BYTES) {
+                  throw new IOException("Piston response exceeded the size limit");
+                }
+                return objectMapper.readTree(responseBody);
+              });
       return mapResponse(body);
     } catch (RestClientException ex) {
       log.warn("Piston sandbox unavailable: {}", ex.getMessage());

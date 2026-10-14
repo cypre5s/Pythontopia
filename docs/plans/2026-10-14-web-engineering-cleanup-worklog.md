@@ -160,3 +160,26 @@
 - 正向真实调用：课程库确认 `PY43-KC-012` 没有静态编程题，DeepSeek 首轮生成问候语输入输出题并通过五层审查，返回 `aiGenerated=true` / `reviewed=true`；正常路径自动审核通过并写入共享题库。负向复测 `PY43-KC-001` 的 6 个候选被拒，未进入题库、未生成学习记录。两项都由临时学生账号发起；验后删除该账号及其题目/审核记录。
 - 验证：`tests/agents/boss` 234 passed；改动文件 Ruff 通过；`git diff --check` 通过。Graph 容器日志确认 DeepSeek API HTTP 200；Web API 成功题目响应没有 reference solution / test cases。开发请求限额为 false。
 - 未完成：`PY43-KC-001` 尚无合格编程题；Phaser 远征端到端答题和画像回流未由本次候选验证；Maven 全量最新仍为 1392 tests / 7 环境错误（相关隔离用例 20/20）；Twin A/B、7 日复测、供应商账单/token 对账和生产 Piston 未验证。性能按用户要求后置。
+
+## 2026-10-14 — 安全审计续修与 DeepSeek 文本输出边界复核
+
+- DeepSeek 聊天和 SSE provider 回归覆盖图片作为输入、仅提取文本输出、丢弃多模态图片输出块；AutoGen Tutor 继续复用同一 provider。定向回归 65 passed，1 个测试标记警告。随后按用户要求发出 2 次真实低 token DeepSeek 请求：纯文本与合成黄底蓝方块图片识别均成功，视觉响应为纯文字且未包含图片 payload/Markdown 图片。
+- RED/GREEN：Graph Boss 评测新增最多 10 个用例、代码 8192 字符、单用例输入/期望输出各 8192 字符及 256 字符题目 ID 上限；Web Boss 请求代码上限从 10000 对齐到判题器的 8192。越界请求在进入评测/服务层前返回 422/400。Boss Graph 全部回归 243 passed。
+- RED/GREEN：为学习路径生成和学习评估两个真实调用 Graph/DeepSeek 的接口补上学生角色级日额度预留；路由覆盖与额度拦截器 Maven 定向测试通过。开发脚本仍明确将本地限额设为 false；生产 Compose 固定覆盖为 true，避免 `.env` 中的本地值关闭生产上限。生产 AI/readiness 合约通过。
+- 生产 Compose：直接使用当前本地 `.env` 的 `config -q` 因未配置 `PYT_ROUTE_EXECUTION_SECRET` 而失败；提供仅用于语法检查的临时占位变量后 `docker compose config -q` 通过，未输出或读取密钥值。
+- 本次只读安全审计未确认 P0；已修正两条 DeepSeek 路径绕过日额度与 Graph Boss 评测无界用例/字段长度。仍需关闭的发现：登录仅按 IP 限速、注册无累计来源额度、教师邀请码熵取决于部署值、CORS 接受广泛 origin pattern；这些没有在本轮改动。
+- 仍未验证：生产 Piston 的实际网络 ACL/运行隔离、provider token/账单、Twin A/B 与 7 日延迟学习结果、生产/Nginx 运行配置。没有访问 ECS/GitHub；性能留到功能与安全验证收尾后。
+
+## 2026-10-14 — 最新全量复验
+
+- DeepSeek 的契约是图片只作输入、输出只保留文本；本轮两次真实调用（纯文本和合成图像识别）都返回文本。Provider/Tutor/SSE 定向测试 65 passed；这些结果不能证明供应商账单或 token 总量。
+- Graph Boss 全量 243 passed，Python lint 通过；后端 Boss 与 AI 额度定向 Maven 测试 19 passed。全量 Maven 为 1401 tests、0 assertion failures、7 环境错误；6 个 Testcontainers 用例遇 Docker 宿主端口绑定冲突，长时仿真单测在全量运行时数据库连接被拒，单独重跑仿真类 1/1 通过。
+- Web 最新 Vitest 271 files / 2576 tests、typecheck、build 通过；lint 为 0 errors / 5 warnings，警告位于既有账号隔离测试。build 仍报告 Pyodide 的 Node 内建模块 externalize、eval 和大 chunk 警告。同步脚本只改了课程清单生成时间戳，已恢复该构建副产物。
+- `git diff --check` 通过。未完成或不可本地确认：生产 Piston 隔离与 Nginx 实际配置、供应商用量对账、Twin A/B 与 7 日延迟结果；性能按约定暂缓。没有访问 ECS 或推送 GitHub。
+
+## 2026-10-14 — Piston 判题响应上限
+
+- Java 与 Graph 的 Piston 适配器先前会完整读取 JSON 响应后才截断 stdout/stderr。新增 1 MiB 流式响应上限，超限时 fail closed；Graph 每次最多保留 1 MiB 加单个 64 KiB 分块，Java 最多读取 1 MiB + 1 byte 来检测超限。
+- RED/GREEN：两个超大响应回归先失败，修改后通过。Graph Boss fixtures 随适配器由 `httpx.post` 切到 `httpx.stream`；Graph Boss 全组 244 passed、Ruff 通过；Java Piston/Judge 定向 39 passed。
+- 该上限约束适配层的响应缓冲，不替代 Piston 的 OS 隔离或部署网络 ACL；生产运行配置仍未验证。
+- 当前快照 Maven 全量：1405 tests、0 assertion failures、6 环境错误；5 个 Testcontainers PostgreSQL 类因 Docker 动态宿主端口 `address already in use` 未启动，长期仿真类因 PostgreSQL 连接拒绝失败。没有把全量标记为通过。

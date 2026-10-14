@@ -84,15 +84,15 @@ class BossProblemRequest(BaseModel):
 
 
 class TestCasePayload(BaseModel):
-    input: str
-    expectedOutput: str
+    input: str = Field(max_length=8192)
+    expectedOutput: str = Field(max_length=8192)
     isSample: bool = False
 
 
 class BossEvaluateRequest(BaseModel):
-    problemId: str
-    code: str
-    testCases: list[TestCasePayload]
+    problemId: str = Field(max_length=256)
+    code: str = Field(max_length=8192)
+    testCases: list[TestCasePayload] = Field(max_length=10)
     timeoutSec: int = Field(default=5, ge=1, le=15)
     kind: str | None = Field(
         default=None,

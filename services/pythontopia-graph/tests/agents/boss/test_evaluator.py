@@ -134,7 +134,7 @@ def test_unavailable_piston_fails_closed_without_local_fallback(
     def forbidden_local_execution(*args: object, **kwargs: object) -> None:
         pytest.fail("Piston errors must not fall back to Graph worker execution")
 
-    monkeypatch.setattr(execution_sandbox.httpx, "post", unreachable)
+    monkeypatch.setattr(execution_sandbox.httpx, "stream", unreachable)
     monkeypatch.setattr(subprocess, "run", forbidden_local_execution)
 
     result = evaluate_student_code("print('must not execute')", [_tc("", "")])

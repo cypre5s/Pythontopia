@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from collections.abc import Callable
+from contextlib import contextmanager
 from typing import Any
 
 import httpx
@@ -8,13 +11,25 @@ import pytest
 from pythontopia_graph.agents.boss import execution_sandbox
 
 
+def _mock_stream(
+    monkeypatch: pytest.MonkeyPatch,
+    response_factory: Callable[..., httpx.Response],
+) -> None:
+    @contextmanager
+    def stream(method: str, url: str, **kwargs: Any):
+        yield response_factory(method, url, **kwargs)
+
+    monkeypatch.setattr(execution_sandbox.httpx, "stream", stream)
+
+
 def test_piston_request_uses_existing_judge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example/")
     monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
     monkeypatch.setenv("PYT_PISTON_AUTH_TOKEN", "test-token")
     captured: dict[str, Any] = {}
 
-    def post(
+    def response(
+        method: str,
         url: str,
         *,
         json: dict[str, Any],
@@ -26,10 +41,10 @@ def test_piston_request_uses_existing_judge_contract(monkeypatch: pytest.MonkeyP
         return httpx.Response(
             200,
             json={"run": {"status": None, "code": 0, "stdout": "ok\n", "stderr": ""}},
-            request=httpx.Request("POST", url),
+            request=httpx.Request(method, url),
         )
 
-    monkeypatch.setattr(execution_sandbox.httpx, "post", post)
+    _mock_stream(monkeypatch, response)
 
     result = execution_sandbox.run_python("print('ok')", "stdin", timeout_sec=4)
 
@@ -51,13 +66,12 @@ def test_official_piston_success_with_null_status_is_accepted(
 ) -> None:
     monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example")
     monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
-    monkeypatch.setattr(
-        execution_sandbox.httpx,
-        "post",
-        lambda url, **kwargs: httpx.Response(
+    _mock_stream(
+        monkeypatch,
+        lambda method, url, **kwargs: httpx.Response(
             200,
             json={"run": {"status": None, "code": 0, "stdout": "ok\n", "stderr": ""}},
-            request=httpx.Request("POST", url),
+            request=httpx.Request(method, url),
         ),
     )
 
@@ -73,10 +87,9 @@ def test_piston_sigkill_without_status_or_exit_code_is_a_timeout(
 ) -> None:
     monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example")
     monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
-    monkeypatch.setattr(
-        execution_sandbox.httpx,
-        "post",
-        lambda url, **kwargs: httpx.Response(
+    _mock_stream(
+        monkeypatch,
+        lambda method, url, **kwargs: httpx.Response(
             200,
             json={
                 "run": {
@@ -87,7 +100,7 @@ def test_piston_sigkill_without_status_or_exit_code_is_a_timeout(
                     "stderr": "",
                 }
             },
-            request=httpx.Request("POST", url),
+            request=httpx.Request(method, url),
         ),
     )
 
@@ -103,13 +116,12 @@ def test_piston_output_limit_is_a_failed_execution_not_sandbox_outage(
 ) -> None:
     monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example")
     monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
-    monkeypatch.setattr(
-        execution_sandbox.httpx,
-        "post",
-        lambda url, **kwargs: httpx.Response(
+    _mock_stream(
+        monkeypatch,
+        lambda method, url, **kwargs: httpx.Response(
             200,
             json={"run": {"status": "OL", "code": 0, "stdout": "", "stderr": ""}},
-            request=httpx.Request("POST", url),
+            request=httpx.Request(method, url),
         ),
     )
 
@@ -122,13 +134,30 @@ def test_piston_output_limit_is_a_failed_execution_not_sandbox_outage(
 def test_unknown_piston_status_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example")
     monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
-    monkeypatch.setattr(
-        execution_sandbox.httpx,
-        "post",
-        lambda url, **kwargs: httpx.Response(
+    _mock_stream(
+        monkeypatch,
+        lambda method, url, **kwargs: httpx.Response(
             200,
             json={"run": {"status": "AC", "code": 0, "stdout": "ok\n", "stderr": ""}},
-            request=httpx.Request("POST", url),
+            request=httpx.Request(method, url),
+        ),
+    )
+
+    result = execution_sandbox.run_python("print('ok')", "", timeout_sec=4)
+
+    assert result.runtime_error == "sandbox_unavailable"
+
+
+def test_oversized_piston_response_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example")
+    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
+    body = json.dumps({"run": {"status": None, "code": 0, "stdout": "x" * 1_048_577, "stderr": ""}})
+    _mock_stream(
+        monkeypatch,
+        lambda method, url, **kwargs: httpx.Response(
+            200,
+            content=body,
+            request=httpx.Request(method, url),
         ),
     )
 

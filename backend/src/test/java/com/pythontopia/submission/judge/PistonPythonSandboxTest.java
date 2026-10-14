@@ -9,6 +9,7 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -28,7 +29,8 @@ class PistonPythonSandboxTest {
     restTemplate = new RestTemplate();
     server = MockRestServiceServer.bindTo(restTemplate).build();
     sandbox =
-        new PistonPythonSandbox(restTemplate, "https://judge.internal", "3.11.9", "release-token");
+        new PistonPythonSandbox(
+            restTemplate, new ObjectMapper(), "https://judge.internal", "3.11.9", "release-token");
   }
 
   @Test
@@ -140,7 +142,7 @@ class PistonPythonSandboxTest {
     assertThatCode(
             () -> {
               PistonPythonSandbox unconfigured =
-                  new PistonPythonSandbox(restTemplate, "", "3.11.9", "");
+                  new PistonPythonSandbox(restTemplate, new ObjectMapper(), "", "3.11.9", "");
               assertThat(unconfigured.readiness().ready()).isFalse();
               assertThat(
                       unconfigured
@@ -187,6 +189,21 @@ class PistonPythonSandboxTest {
 
     assertThat(result.errorKind()).isNull();
     assertThat(result.exitCode()).isNotZero();
+    server.verify();
+  }
+
+  @Test
+  void oversizedPistonResponseFailsClosedBeforeReturningOutput() {
+    String body =
+        "{\"run\":{\"stdout\":\"" + "x".repeat(1_048_577) + "\",\"stderr\":\"\",\"code\":0}}";
+    server
+        .expect(requestTo("https://judge.internal/api/v2/execute"))
+        .andRespond(withSuccess(body, MediaType.APPLICATION_JSON));
+
+    SandboxRunResult result = sandbox.run("print('ok')", new JudgeTestCase("", "ok", 1000));
+
+    assertThat(result.errorKind()).isEqualTo("SYSTEM_ERROR");
+    assertThat(result.stdout()).isEmpty();
     server.verify();
   }
 }

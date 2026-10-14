@@ -345,6 +345,74 @@ def test_evaluate_endpoint_rejects_empty_test_cases(client: TestClient) -> None:
     assert body["detail"]["code"] == "NO_TEST_CASES"
 
 
+def test_evaluate_endpoint_rejects_more_than_ten_cases(client: TestClient) -> None:
+    response = client.post(
+        "/agents/boss/evaluate",
+        json={
+            "problemId": "too-many-cases",
+            "code": "print(input())",
+            "testCases": [
+                {"input": str(index), "expectedOutput": str(index)}
+                for index in range(11)
+            ],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_evaluate_endpoint_rejects_oversized_code(client: TestClient) -> None:
+    response = client.post(
+        "/agents/boss/evaluate",
+        json={
+            "problemId": "oversized-code",
+            "code": " " * 8193,
+            "testCases": [{"input": "", "expectedOutput": ""}],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_evaluate_endpoint_rejects_oversized_case_fields(client: TestClient) -> None:
+    response = client.post(
+        "/agents/boss/evaluate",
+        json={
+            "problemId": "oversized-case",
+            "code": "print(input())",
+            "testCases": [{"input": "x" * 8193, "expectedOutput": ""}],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_evaluate_endpoint_accepts_problem_id_within_backend_limit(client: TestClient) -> None:
+    response = client.post(
+        "/agents/boss/evaluate",
+        json={
+            "problemId": "p" * 129,
+            "code": "a, b = map(int, input().split())\nprint(a + b)",
+            "testCases": [{"input": "1 2", "expectedOutput": "3", "isSample": True}],
+        },
+    )
+
+    assert response.status_code == 200
+
+
+def test_evaluate_endpoint_rejects_oversized_problem_id(client: TestClient) -> None:
+    response = client.post(
+        "/agents/boss/evaluate",
+        json={
+            "problemId": "p" * 257,
+            "code": "print(input())",
+            "testCases": [{"input": "", "expectedOutput": ""}],
+        },
+    )
+
+    assert response.status_code == 422
+
+
 def test_evaluate_endpoint_propagates_problem_id(client: TestClient) -> None:
     response = client.post(
         "/agents/boss/evaluate",

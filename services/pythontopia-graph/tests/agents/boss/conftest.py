@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 from typing import Any
 
 import httpx
@@ -103,7 +104,12 @@ def fake_piston_endpoint(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str
             request=httpx.Request("POST", url),
         )
 
-    monkeypatch.setattr("pythontopia_graph.agents.boss.execution_sandbox.httpx.post", post)
+    @contextmanager
+    def stream(method: str, url: str, **kwargs: Any):
+        del method
+        yield post(url, **kwargs)
+
+    monkeypatch.setattr("pythontopia_graph.agents.boss.execution_sandbox.httpx.stream", stream)
     return submissions
 
 

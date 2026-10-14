@@ -88,6 +88,8 @@ services:
     env_file:
       - .env
     environment:
+      # 生产必须保留共享 provider 与账号日限额；本地开发通过 dev.sh 明确关闭。
+      PYT_AI_REQUEST_LIMITS_ENABLED: "true"
       # ---- 数据库接线（bridge 网络内服务名，覆盖 env_file 可能带入的旧值）----
       PYT_DB_URL: jdbc:postgresql://postgres:5432/pythontopia
       # ---- graph / rag 接线：双写两种变量名 ----
