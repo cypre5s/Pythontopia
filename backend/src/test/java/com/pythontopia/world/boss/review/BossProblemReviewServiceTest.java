@@ -128,6 +128,7 @@ class BossProblemReviewServiceTest {
     assertThat(dto.id()).isEqualTo(41L);
     assertThat(dto.problem().problemId()).isEqualTo("source-1");
     assertThat(dto.decision()).isEqualTo(BossProblemReviewDecision.PENDING);
+    assertThat(dto.reviewSource()).isEqualTo(BossProblemReviewSource.TEACHER);
     verify(repository).create(10L, "debug", graphProblem);
   }
 
@@ -223,6 +224,7 @@ class BossProblemReviewServiceTest {
         "debug",
         problem,
         decision,
+        BossProblemReviewSource.TEACHER,
         10L,
         "teacher",
         OffsetDateTime.parse("2026-08-02T08:00:00Z"),

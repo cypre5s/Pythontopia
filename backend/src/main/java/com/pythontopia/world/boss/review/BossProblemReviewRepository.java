@@ -7,9 +7,11 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 /** PostgreSQL repository for the pack-43 review queue and global approved problem bank. */
 @Repository
@@ -18,7 +20,7 @@ public class BossProblemReviewRepository {
   private static final long PACK_ID = 43L;
   private static final String SELECT_REVIEW =
       "SELECT r.id, r.pack_id, r.source_problem_id, r.kind, r.payload::text AS payload,"
-          + " r.decision, r.requester_id, requester.username AS requester_username,"
+          + " r.decision, r.review_source, r.requester_id, requester.username AS requester_username,"
           + " r.requested_at, r.decider_id, decider.username AS decider_username,"
           + " r.decided_at, r.decision_reason, r.version"
           + " FROM boss_problem_review r"
@@ -65,8 +67,39 @@ public class BossProblemReviewRepository {
     return findById(id).orElseThrow(() -> new IllegalStateException("created review disappeared"));
   }
 
-  public boolean createIfNotDuplicate(
-      long requesterId, String kind, BossInternalProblem problem) {
+  @Transactional
+  public boolean approveAutomaticallyIfNotDuplicate(
+      Long requesterId,
+      String kind,
+      int requestedChapter,
+      int requestedStage,
+      String requestedKcCode,
+      Integer requestedDifficulty,
+      BossInternalProblem problem) {
+    if (!isEligibleForAutomaticApproval(
+        requesterId,
+        requestedChapter,
+        requestedStage,
+        requestedKcCode,
+        requestedDifficulty,
+        problem)) {
+      return false;
+    }
+    String normalizedKind = normalizeKind(kind);
+    String lockKey =
+        PACK_ID
+            + ":"
+            + requestedChapter
+            + ":"
+            + requestedStage
+            + ":"
+            + requestedKcCode
+            + ":"
+            + Objects.toString(normalizedKind, "")
+            + ":"
+            + problem.statement();
+    jdbcTemplate.queryForObject(
+        "SELECT pg_advisory_xact_lock(hashtextextended(?, 0))", Object.class, lockKey);
     Boolean exists =
         jdbcTemplate.queryForObject(
             "SELECT EXISTS (SELECT 1 FROM boss_problem_review"
@@ -74,16 +107,60 @@ public class BossProblemReviewRepository {
                 + " AND kind IS NOT DISTINCT FROM ? AND payload->>'statement' = ?)",
             Boolean.class,
             PACK_ID,
-            problem.chapter(),
-            problem.stage(),
-            problem.kcCode(),
-            normalizeKind(kind),
+            requestedChapter,
+            requestedStage,
+            requestedKcCode,
+            normalizedKind,
             problem.statement());
     if (Boolean.TRUE.equals(exists)) {
       return false;
     }
-    create(requesterId, kind, problem);
+    jdbcTemplate.update(
+        "INSERT INTO boss_problem_review"
+            + " (pack_id, source_problem_id, chapter, stage, kc_code, kind, difficulty, payload,"
+            + " decision, review_source, requester_id, decided_at, decision_reason, version)"
+            + " VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, 'APPROVED', 'AUTOMATED', ?, now(), ?, 2)",
+        PACK_ID,
+        problem.problemId(),
+        problem.chapter(),
+        problem.stage(),
+        problem.kcCode(),
+        normalizedKind,
+        problem.difficulty(),
+        serialize(problem),
+        requesterId,
+        "自动审核通过：题面结构、参考解全用例自测、KC 接地、难度与相似度检查通过");
     return true;
+  }
+
+  private static boolean isEligibleForAutomaticApproval(
+      Long requesterId,
+      int requestedChapter,
+      int requestedStage,
+      String requestedKcCode,
+      Integer requestedDifficulty,
+      BossInternalProblem problem) {
+    return requesterId != null
+        && requesterId > 0
+        && problem != null
+        && problem.aiGenerated()
+        && problem.reviewed()
+        && problem.chapter() == requestedChapter
+        && problem.stage() == requestedStage
+        && Objects.equals(problem.kcCode(), requestedKcCode)
+        && (requestedDifficulty == null || problem.difficulty() == requestedDifficulty)
+        && problem.difficulty() >= 1
+        && problem.difficulty() <= 5
+        && problem.problemId() != null
+        && !problem.problemId().isBlank()
+        && problem.statement() != null
+        && !problem.statement().isBlank()
+        && problem.referenceSolution() != null
+        && !problem.referenceSolution().isBlank()
+        && problem.totalTestCases() == problem.testCases().size()
+        && problem.testCases().size() >= 3
+        && problem.testCases().stream().anyMatch(testCase -> testCase.isSample())
+        && problem.testCases().stream().anyMatch(testCase -> !testCase.isSample());
   }
 
   public List<BossProblemReviewRecord> list(int limit) {
@@ -152,8 +229,8 @@ public class BossProblemReviewRepository {
   }
 
   /**
-   * Terminal decision with optimistic locking. Only a matching PENDING version can transition;
-   * approved/rejected history is immutable.
+   * Terminal decision with optimistic locking. Teachers may also confirm or reject auto-approved
+   * questions; manual decisions remain immutable.
    */
   public Optional<BossProblemReviewRecord> decide(
       long id,
@@ -164,9 +241,11 @@ public class BossProblemReviewRepository {
     List<Long> updatedIds =
         jdbcTemplate.query(
             "UPDATE boss_problem_review"
-                + " SET decision = ?, decider_id = ?, decided_at = now(), decision_reason = ?,"
+                + " SET decision = ?, review_source = 'TEACHER', decider_id = ?,"
+                + " decided_at = now(), decision_reason = ?,"
                 + " version = version + 1"
-                + " WHERE id = ? AND pack_id = ? AND decision = 'PENDING' AND version = ?"
+                + " WHERE id = ? AND pack_id = ? AND version = ?"
+                + " AND (decision = 'PENDING' OR (decision = 'APPROVED' AND review_source = 'AUTOMATED'))"
                 + " RETURNING id",
             (rs, rowNum) -> rs.getLong(1),
             decision.name(),
@@ -236,6 +315,7 @@ public class BossProblemReviewRepository {
         rs.getString("kind"),
         deserialize(rs.getString("payload")),
         BossProblemReviewDecision.valueOf(rs.getString("decision")),
+        BossProblemReviewSource.valueOf(rs.getString("review_source")),
         rs.getLong("requester_id"),
         rs.getString("requester_username"),
         rs.getObject("requested_at", OffsetDateTime.class),

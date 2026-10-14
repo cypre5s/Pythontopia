@@ -6,13 +6,19 @@
 
 ## 2026-10-14 当前续接
 
+- AI 编程题自动入库已完成真实 Web 全栈验证：Graph 五重审查/Piston 全用例自测通过后写入 `APPROVED/AUTOMATED`；新学生同 KC 请求命中该记录且没有再次调用模型。V213 迁移已在本地数据库生效。未启用 Piston 的首次真实模型请求因 `sandbox_unavailable` 拒收并回退 Golden（6 次模型 HTTP 200），没有污染题库。
+- 自动入库调用点覆盖 Boss 现场生成与 Endless 预生成；`review_source` 区分自动与教师审核，教师可撤下自动批准题，人工终态仍不可改写。入库 requester 测试账号为匿名随机账户，因审计外键保留；复用学生已清理。
+- 当前审核相关后端回归：76 项 PostgreSQL/服务/出题/预生成定向测试通过，另 `BossProblemReviewServiceTest` 7 项复跑通过；Web 相关 18 项、typecheck 与改动文件 ESLint 通过。本地进程 `PYT_AI_REQUEST_LIMITS_ENABLED=false`，全栈通过 `./dev.sh --sandbox` 保持运行。
+- 尚未完成：Twin 学习效果 A/B 与 7 日延迟复测、DeepSeek 账单/token 对账、生产 Piston/ECS 验证；性能仍后置。Maven 全量测试尚未稳定通过，最新失败原因见下方续验记录。
 - 本地 `./dev.sh` 默认关闭应用级 AI 每日次数限制，当前后端进程环境已实测为 `PYT_AI_REQUEST_LIMITS_ENABLED=false`；部署配置仍保留上限。Boss 判题 10 秒提交保护是独立的防重复机制。
 - KC 编程题生成链路已补齐课程库上下文：后端权威查找 KC 名称/摘要，Graph 用它构造提示并按摘要术语校验；真实 DeepSeek 生成题通过 Graph/Piston 自测与服务端正式判题后，进入教师 `PENDING` 队列。未自动批准。
 - 已实际调用 Tutor 文本和图片流，数据库会话答案非空且图片识别正确；验证完成后删除了本轮 4 个合成学生账号、关联 Tutor 会话/审核记录及用户数据。
-- 当前续验：前端全量 Vitest 270 files / 2555 tests 通过，typecheck、全量 lint（0 error / 7 warning）和生产 build 通过；Graph 1836 passed / 1 skipped、Ruff 全量通过。
-- 后端最新全量 Maven 1383 项、0 assertion failures、7 errors：6 个 Testcontainers Postgres 类的 Docker 宿主机端口绑定冲突及其引发的 1 个 JDBC 错误。6 类串行复跑 19 项通过，长期仿真单独复跑 1 项通过；本轮相关 Boss/Tutor/Twin/审核测试 86 项通过。Maven 全量仍不可标记为通过。
+- 当前续验：前端全量 Vitest 270 files / 2561 tests 通过。最新后端 `mvn test` 为 1386 项、0 断言失败、7 个错误；6 个错误是 Testcontainers PostgreSQL 动态端口绑定到 TCP TIME-WAIT 端口，另 1 个长期仿真类串行复跑通过。7 类串行复跑中长期仿真 1/1 通过，其余 6 类仍因相同端口占用失败。`TutorDailyRequestLimitServiceTest` 6/6 通过；本轮模型文本/图片真调用结果记录于下方“本地请求限额与模型真调用续验”。
 - 学情可信度补强：教师批准前的 AI 题可练习但不发 KC 掌握事件；仅与已批准题完整 payload 一致的题能入学情，查询失败时继续返回判题并跳过事件，反馈会说明暂不计入画像。新测试先复现旧行为；最新 Boss/Tutor/Twin/审核关键回归 86 项通过。
-- 下一步：完成最终 Phaser Boss 多阶段真实浏览器旅程与 Twin A/B / 7 日延迟效果核验；核对供应商实际用量，验证生产 Piston/ECS。性能仍后置；不要把模型自检/Piston 自测等同于教师题目质量批准。
+- Phaser Boss 多阶段真实浏览器旅程现已完成：三阶段 AI 题绑定、正式判题、服务端受击结算、胜利页与 Phaser 单实例连续性均通过；命中音效 HTTP 200，0 个浏览器 JS 错误。阶段间通过既有预生成/轮询取题，进入加载时清空上一阶段题目。
+- 最新 Playwright Tutor 真调用识别了文本校验词及合成图片的蓝色方形/黄色背景，2 条会话可回读；临时测试用户、关联记录和图片均清理。本地 Spring 进程仍为 `PYT_AI_REQUEST_LIMITS_ENABLED=false`，供应商本身费用和速率限制不受影响。
+- 最新受影响 Web 回归 4 files / 59 tests、typecheck、触及文件 ESLint、`git diff --check` 全通过。
+- 下一步：核对 DeepSeek 供应商实际用量；完成 Twin A/B / 7 日延迟效果核验、稳定全量 Maven 复验和生产 Piston/ECS 验证。性能仍后置；AI 自测/Piston 自测不等于教师题目质量批准。
 
 ### 2026-10-14 本地请求限额与模型真调用续验
 

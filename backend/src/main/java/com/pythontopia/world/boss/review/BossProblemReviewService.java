@@ -166,6 +166,7 @@ public class BossProblemReviewService {
         record.kind(),
         record.problem().toPublic(),
         record.decision(),
+        record.reviewSource(),
         record.requesterId(),
         record.requesterUsername(),
         record.requestedAt(),

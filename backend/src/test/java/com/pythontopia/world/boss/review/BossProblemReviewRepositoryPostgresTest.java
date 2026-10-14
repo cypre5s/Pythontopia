@@ -70,7 +70,7 @@ class BossProblemReviewRepositoryPostgresTest {
     assertThat(pending.decision()).isEqualTo(BossProblemReviewDecision.PENDING);
     assertThat(pending.version()).isEqualTo(1);
     assertThat(pending.problem().referenceSolution()).contains("print");
-    assertThat(pending.problem().testCases()).hasSize(2);
+    assertThat(pending.problem().testCases()).hasSize(3);
 
     BossProblemReviewRecord approved =
         repository
@@ -112,12 +112,83 @@ class BossProblemReviewRepositoryPostgresTest {
   }
 
   @Test
-  void generatedCandidateQueueDeduplicatesTheSameQuestion() {
-    BossInternalProblem candidate = problem("ai-c1-s1-kc1", 1);
+  void reviewedAiCandidateIsAutomaticallyApprovedAndReusedFromTheBank() {
+    BossInternalProblem candidate = problem("ai-approved-1", 2);
 
-    assertThat(repository.createIfNotDuplicate(requesterId, "debug", candidate)).isTrue();
-    assertThat(repository.createIfNotDuplicate(requesterId, "debug", candidate)).isFalse();
+    assertThat(
+            repository.approveAutomaticallyIfNotDuplicate(
+                requesterId, "debug", 1, 1, "PY43-KC-001", 2, candidate))
+        .isTrue();
+
+    BossProblemReviewRecord approved = repository.list(20).getFirst();
+    assertThat(approved.decision()).isEqualTo(BossProblemReviewDecision.APPROVED);
+    assertThat(approved.deciderId()).isNull();
+    assertThat(approved.decidedAt()).isNotNull();
+    assertThat(approved.decisionReason()).contains("KC 接地");
+    assertThat(approved.version()).isEqualTo(2);
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT review_source FROM boss_problem_review WHERE id = ?",
+                String.class,
+                approved.id()))
+        .isEqualTo("AUTOMATED");
+    assertThat(repository.findApproved(1, 1, "PY43-KC-001", "debug", 2)).isPresent();
+    assertThat(repository.isApproved(candidate)).isTrue();
+    assertThat(
+            repository.approveAutomaticallyIfNotDuplicate(
+                requesterId, "debug", 1, 1, "PY43-KC-001", 2, candidate))
+        .isFalse();
     assertThat(repository.list(20)).hasSize(1);
+  }
+
+  @Test
+  void automaticApprovalRejectsUnreviewedMismatchedAndIncompleteCandidates() {
+    BossInternalProblem unreviewed = withReviewFlags(problem("unreviewed", 2), false, true);
+    BossInternalProblem wrongKc = withKc(problem("wrong-kc", 2), "PY43-KC-002");
+    BossInternalProblem incomplete = withCases(problem("incomplete", 2), 1);
+    BossInternalProblem wrongDifficulty = problem("wrong-difficulty", 3);
+
+    assertThat(repository.approveAutomaticallyIfNotDuplicate(
+            requesterId, "debug", 1, 1, "PY43-KC-001", 2, unreviewed))
+        .isFalse();
+    assertThat(repository.approveAutomaticallyIfNotDuplicate(
+            requesterId, "debug", 1, 1, "PY43-KC-001", 2, wrongKc))
+        .isFalse();
+    assertThat(repository.approveAutomaticallyIfNotDuplicate(
+            requesterId, "debug", 1, 1, "PY43-KC-001", 2, incomplete))
+        .isFalse();
+    assertThat(repository.approveAutomaticallyIfNotDuplicate(
+            requesterId, "debug", 1, 1, "PY43-KC-001", 2, wrongDifficulty))
+        .isFalse();
+    assertThat(repository.list(20)).isEmpty();
+  }
+
+  @Test
+  void teacherCanRejectAutomaticApprovalButManualTerminalDecisionStaysImmutable() {
+    BossInternalProblem candidate = problem("ai-review-override", 2);
+    repository.approveAutomaticallyIfNotDuplicate(
+        requesterId, "debug", 1, 1, "PY43-KC-001", 2, candidate);
+    BossProblemReviewRecord autoApproved = repository.list(20).getFirst();
+    assertThat(autoApproved.decision()).isEqualTo(BossProblemReviewDecision.APPROVED);
+
+    BossProblemReviewRecord rejected =
+        repository
+            .decide(
+                autoApproved.id(),
+                autoApproved.version(),
+                BossProblemReviewDecision.REJECTED,
+                deciderId,
+                "教师复核发现题面歧义")
+            .orElseThrow();
+
+    assertThat(rejected.decision()).isEqualTo(BossProblemReviewDecision.REJECTED);
+    assertThat(rejected.deciderId()).isEqualTo(deciderId);
+    assertThat(rejected.version()).isEqualTo(3);
+    assertThat(repository.findApproved(1, 1, "PY43-KC-001", "debug", 2)).isEmpty();
+    assertThat(
+            repository.decide(
+                rejected.id(), 2, BossProblemReviewDecision.APPROVED, deciderId, "stale"))
+        .isEmpty();
   }
 
   @Test
@@ -172,7 +243,7 @@ class BossProblemReviewRepositoryPostgresTest {
     assertThat(first.reviewId()).isEqualTo(difficultyFour.id());
     assertThat(first.problem().problemId())
         .isEqualTo("approved-" + difficultyFour.id() + "-v2");
-    assertThat(first.problem().testCases()).hasSize(2);
+    assertThat(first.problem().testCases()).hasSize(3);
     assertThat(second).isEqualTo(first);
     assertThat(
             jdbcTemplate.queryForObject(
@@ -203,12 +274,38 @@ class BossProblemReviewRepositoryPostgresTest {
         List.of("读取输入"),
         "2 3",
         "5",
-        2,
+        3,
         true,
         true,
         List.of(
             new BossTestCasePayload("2 3", "5", true),
-            new BossTestCasePayload("-1 8", "7", false)),
+            new BossTestCasePayload("-1 8", "7", false),
+            new BossTestCasePayload("0 0", "0", false)),
         "a, b = map(int, input().split())\nprint(a + b)");
+  }
+
+  private static BossInternalProblem withReviewFlags(
+      BossInternalProblem problem, boolean reviewed, boolean aiGenerated) {
+    return new BossInternalProblem(
+        problem.problemId(), problem.chapter(), problem.stage(), problem.difficulty(),
+        problem.kcCode(), problem.statement(), problem.hints(), problem.sampleInput(),
+        problem.sampleOutput(), problem.totalTestCases(), reviewed, aiGenerated,
+        problem.testCases(), problem.referenceSolution());
+  }
+
+  private static BossInternalProblem withKc(BossInternalProblem problem, String kcCode) {
+    return new BossInternalProblem(
+        problem.problemId(), problem.chapter(), problem.stage(), problem.difficulty(), kcCode,
+        problem.statement(), problem.hints(), problem.sampleInput(), problem.sampleOutput(),
+        problem.totalTestCases(), problem.reviewed(), problem.aiGenerated(), problem.testCases(),
+        problem.referenceSolution());
+  }
+
+  private static BossInternalProblem withCases(BossInternalProblem problem, int caseCount) {
+    return new BossInternalProblem(
+        problem.problemId(), problem.chapter(), problem.stage(), problem.difficulty(),
+        problem.kcCode(), problem.statement(), problem.hints(), problem.sampleInput(),
+        problem.sampleOutput(), caseCount, problem.reviewed(), problem.aiGenerated(),
+        problem.testCases().subList(0, caseCount), problem.referenceSolution());
   }
 }

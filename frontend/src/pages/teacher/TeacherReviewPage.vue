@@ -44,6 +44,11 @@ const counts = computed(() => ({
   pending: entries.value.filter((entry) => entry.decision === "PENDING").length,
 }));
 
+function canReviewEntry(entry: BossProblemReviewDto): boolean {
+  return entry.decision === "PENDING"
+    || (entry.decision === "APPROVED" && entry.reviewSource === "AUTOMATED");
+}
+
 async function loadQueue(): Promise<void> {
   if (!isTeacherOrAdmin.value || loadingQueue.value) return;
   loadingQueue.value = true;
@@ -102,7 +107,7 @@ async function decideCurrent(
 ): Promise<void> {
   const entry = currentEntry.value;
   const reason = decisionReason.value.trim();
-  if (!entry || entry.decision !== "PENDING" || deciding.value) return;
+  if (!entry || !canReviewEntry(entry) || deciding.value) return;
   if (!reason) {
     toast.show("请填写审核意见", "error");
     return;
@@ -157,7 +162,8 @@ const currentEntry = computed<BossProblemReviewDto | null>(
 const canDecide = computed<boolean>(
   () =>
     isTeacherOrAdmin.value &&
-    currentEntry.value?.decision === "PENDING" &&
+    currentEntry.value !== null &&
+    canReviewEntry(currentEntry.value) &&
     decisionReason.value.trim().length > 0 &&
     !deciding.value,
 );
@@ -176,8 +182,7 @@ const canDecide = computed<boolean>(
           </h1>
           <p class="subtitle">
             AI
-            题经自动审查后进入后端持久化队列；教师决定、审核意见与版本均保留审计记录。
-            只有通过的题目会进入学生 Boss 题库，隐藏用例始终只保存在后端。
+            题通过自动审查后可直接进入 Boss 题库；教师可确认或撤下，隐藏用例始终只保存在后端。
           </p>
         </div>
         <button
@@ -366,6 +371,8 @@ const canDecide = computed<boolean>(
                 <strong>KC：</strong>{{ currentEntry.problem.kcCode }}
                 <strong>难度：</strong>{{ currentEntry.problem.difficulty }} / 5
                 <strong>测试用例数：</strong>{{ currentEntry.problem.totalTestCases }}
+                <strong>审核来源：</strong>
+                {{ currentEntry.reviewSource === "AUTOMATED" ? "AI 自动审核" : "教师审核" }}
               </p>
             </header>
             <section>
@@ -409,6 +416,9 @@ const canDecide = computed<boolean>(
               <span v-if="currentEntry.deciderUsername">
                 · 审核人：{{ currentEntry.deciderUsername }}
               </span>
+              <span v-if="currentEntry.reviewSource === 'AUTOMATED'">
+                · AI 自动审核
+              </span>
               <small>{{
                 currentEntry.decidedAt
                   ? new Date(currentEntry.decidedAt).toLocaleString()
@@ -423,14 +433,14 @@ const canDecide = computed<boolean>(
                 :disabled="!canDecide"
                 @click="approveCurrent"
               >
-                通过 · 上线该题
+                {{ currentEntry.reviewSource === "AUTOMATED" ? "教师确认" : "通过 · 上线该题" }}
               </button>
               <textarea
                 v-model="decisionReason"
                 class="reject-input"
                 rows="2"
                 maxlength="1000"
-                :disabled="currentEntry.decision !== 'PENDING' || deciding"
+                :disabled="!canReviewEntry(currentEntry) || deciding"
                 placeholder="审核意见（通过或驳回均必填，写入后端审计记录）"
                 data-testid="teacher-review-decision-reason"
               />
@@ -441,7 +451,7 @@ const canDecide = computed<boolean>(
                 :disabled="!canDecide"
                 @click="rejectCurrent"
               >
-                驳回该题
+                {{ currentEntry.reviewSource === "AUTOMATED" ? "撤下题库中的题目" : "驳回该题" }}
               </button>
             </footer>
           </article>

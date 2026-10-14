@@ -35,6 +35,7 @@ const pendingReview: BossProblemReviewDto = {
     aiGenerated: true,
   },
   decision: 'PENDING',
+  reviewSource: 'TEACHER',
   requesterId: 12,
   requesterUsername: 'student12',
   requestedAt: '2026-10-14T00:00:00Z',
@@ -64,6 +65,40 @@ beforeEach(() => {
 });
 
 describe('AdminProblemReviewsPage', () => {
+  it('labels automatic approvals and allows a teacher to remove them', async () => {
+    const autoApproved = {
+      ...pendingReview,
+      decision: 'APPROVED' as const,
+      reviewSource: 'AUTOMATED' as const,
+      version: 2,
+      decidedAt: '2026-10-14T00:01:00Z',
+      decisionReason: '自动审核通过：KC 接地',
+    };
+    searchProblemReviews.mockResolvedValueOnce(reviewPage([autoApproved]));
+    decideProblemReview.mockResolvedValueOnce({
+      ...autoApproved,
+      decision: 'REJECTED',
+      reviewSource: 'TEACHER',
+      version: 3,
+    });
+
+    const wrapper = mount(AdminProblemReviewsPage);
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('AI 自动审核');
+    await wrapper.get('button.review-decision--reject').trigger('click');
+    await flushPromises();
+    await wrapper.get('[data-testid="admin-review-reason"]').setValue('教师复核发现题面歧义');
+    await wrapper.get('[data-testid="admin-review-confirm"]').trigger('click');
+    await flushPromises();
+
+    expect(decideProblemReview).toHaveBeenCalledWith(7, {
+      decision: 'REJECTED',
+      reason: '教师复核发现题面歧义',
+      version: 2,
+    });
+  });
+
   it('searches and filters through the backend queue API', async () => {
     const wrapper = mount(AdminProblemReviewsPage);
     await flushPromises();

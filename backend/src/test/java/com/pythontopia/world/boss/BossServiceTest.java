@@ -962,8 +962,8 @@ class BossServiceTest {
   }
 
   @Test
-  @DisplayName("通过 AI 审查的现场题进入教师审核队列")
-  void generatedProblemIsQueuedForTeacherReview() {
+  @DisplayName("通过 AI 审查的现场题进入共享题库")
+  void generatedProblemIsAddedToSharedBank() {
     when(graphClient.requestProblem(
             anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
         .thenReturn(problemWithStage(1));
@@ -972,9 +972,13 @@ class BossServiceTest {
         1, new BossProblemRequest(1, null, 1, "PY43-KC-001", "debug", null, null, null), 7L);
 
     verify(reviewRepository)
-        .createIfNotDuplicate(
+        .approveAutomaticallyIfNotDuplicate(
             eq(7L),
             eq("debug"),
+            eq(1),
+            eq(1),
+            eq("PY43-KC-001"),
+            eq(1),
             org.mockito.ArgumentMatchers.argThat(
                 (BossInternalProblem problem) -> problem.aiGenerated() && problem.reviewed()));
   }
