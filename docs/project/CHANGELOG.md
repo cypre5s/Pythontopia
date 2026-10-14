@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-14 — 管理台真实 Web 联测与同视口复核
+
+- 在真实本地 Web→Spring→PostgreSQL 链路验证 AI 运维概览、用户搜索/角色与状态过滤/分页、停用及启用会话、题目审核搜索/驳回审计；坏分页参数返回统一 `VALIDATION_ERROR` 400 和 traceId。
+- 键盘验证确认操作弹窗可获得焦点、Escape 可取消并还原焦点；三页 320 CSS px 无横向溢出、浏览器控制台及 pageerror 为 0。临时用户、分页数据和待审题记录均在复验后清理。
+- 与 Alethicode 1440×900 本地视觉快照对照。其存档截图有 `ResizeObserver loop limit exceeded` 遮罩；Pythontopia 同视口页面无运行错误，布局已按本项目 Web 设计收敛，不照搬旧后台结构。验证：管理台 Vitest 10/10、`npm run typecheck`、定向 ESLint 通过。
+
 ## 2026-10-14 — Tutor 图片输入持久化与 SSE 超时收尾
 
 - 修复 Tutor 私有图片附件到期时间写入 PostgreSQL 的类型错误：将 `Instant` 显式转成 JDBC `Timestamp`；增加 Testcontainers 回归。增加 SSE emitter 超时回归，确认超时会取消 Graph 上游并中断活动运行。

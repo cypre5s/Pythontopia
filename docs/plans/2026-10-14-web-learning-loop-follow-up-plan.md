@@ -25,7 +25,7 @@
 4. 运行 Graph Tutor/provider 与 backend Tutor tests；本阶段至少执行一轮真实 DeepSeek 文本和图片输入全栈调用，确认文本结果与附件隐私边界。
 5. 更新 changelog/worklog 并提交。
 
-## Phase 4 — 管理台与 Web 交互核验
+## Phase 4 — 管理台与 Web 交互核验（已完成）
 
 1. 用 Alethicode 当前本地实现作只读参照，对 Pythontopia 运维、题目审核、用户管理页面做同视口桌面/窄屏截图对照。
 2. 只修复可观察到的版式差异，不添加没有真实 API 的管理入口。

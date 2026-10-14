@@ -11,7 +11,8 @@
 - Phase 1 完成：Boss 预加载和同步签发共用审核门槛；撤销批准的 AI 题不记远征分、排行榜或掌握度。定向 `BossServiceTest` + `EndlessPregenServiceTest`：64/64 通过。
 - Phase 2 完成：`useNextSteps` 消费服务端 Twin 推荐；无评估状态不再由前端推断弱项；远征自动开局不发送画像 weak KC，显式 `focusKc` 仍有效。定向 Vitest 20/20，`npm run typecheck` 通过。
 - Phase 3 完成：SSE/Graph 请求时限、断流取消、同会话活动锁和检查点恢复已核对，无需新增租约字段。修复 Tutor 图片附件 `Instant` PostgreSQL 参数绑定，并补充 emitter 超时会中止 Graph 流的回归测试。Tutor Maven 120/120、Graph Tutor/provider/附件 88 项通过；本地 DeepSeek 文本与相关蓝圆 PNG 输入各完成真实调用，响应为文本字符串，Tutor 持久化卡片与 checkpoint 未发现图像 payload。初始无关图片按课程相关性规则被拒答，改用圆面积相关图片后识别成功。
-- Phase 4 管理台真实 API/同视口对照、Phase 5 Boss Phaser 多阶段浏览器闭环和 Web 最终回归尚未完成；性能测试仍后置。
+- Phase 4 完成：管理台三页真实浏览器/API 联测通过，运维、用户搜索筛选分页、账号停用/启用、审核搜索与驳回均命中本地后端；非法分页参数返回带 traceId 的统一 400。键盘焦点、窄屏 320px（无横向溢出）、控制台检查通过；临时管理员、学生、24 个分页夹具及审核记录已清理。定向 Vitest 10/10、typecheck、ESLint 通过。与 Alethicode 1440×900 截图对照；其旧快照含 `ResizeObserver` 错误覆盖层，Pythontopia 页面无该运行错误，无需视觉修复。
+- Phase 5 Boss Phaser 多阶段浏览器闭环与 Web 最终回归尚未完成；性能测试仍后置。
 
 ### 本次补充
 
