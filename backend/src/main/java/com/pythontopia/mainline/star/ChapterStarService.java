@@ -60,6 +60,7 @@ public class ChapterStarService {
     if (!ChapterCatalog.isValidChapter(chapter)) {
       throw new IllegalArgumentException("chapter out of range 1..7: " + chapter);
     }
+    starRepository.lockForUserChapter(userId, chapter);
     boolean allStagesComplete = allStagesComplete(userId, chapter);
     Integer bestScore = chapterTestRepository.findBestScore(userId, chapter).orElse(null);
     double avgMastery = averageMastery(userId, chapter);

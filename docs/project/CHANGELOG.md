@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-14 — 远征补星并发审计重复修复
+
+- 无尽远征同一用户/章节并发提交合格总结时，旧实现可能让两个请求都通过每日次数检查并重复写入 `star_award_event`。新增 PostgreSQL 事务 advisory lock，覆盖错题/远征补星的检查与写入，并让章节核心星级重算使用相同锁；无新增表或迁移。
+- TDD：新 PostgreSQL 并发集成测试在修复前稳定返回 `[true, true]` 并失败；修复后并发请求结果为一次发放、一次拒绝，审计事件恰为一条。`MainlineRecoveryServiceTest`、`ChapterStarServiceTest` 与 Testcontainers 并发用例共 14 项通过。
+
 ## 2026-10-14 — AI 配额校验时序与全量复验
 
 - 将 AI 每日额度预留从 MVC `preHandle` 移至控制器方法拦截器，确保请求体/方法参数校验和标注角色校验先执行；为教师/学生端点显式登记允许角色。Spring MVC 原生方法校验失败统一返回 400。没有新增表或迁移。

@@ -2,6 +2,13 @@
 
 日期：2026-10-12 至 2026-10-14
 
+## 2026-10-14 补充：主线补星并发检查
+
+- 检查 `MainlineRecoveryService`、`ChapterStarService` 的全部调用方后，确认用户/章节的每日远征补星检查与星级写入之间存在 TOCTOU 竞态：同一日两个并发请求都可能通过检查并写入重复审计事件。错题补星与核心星级重算也会争用同一份 JSON breakdown。
+- 为用户/章节复用命名空间化的 PostgreSQL 事务 advisory lock；补星入口在资格检查前加锁，星级重算在读取已有 breakdown 前加同一把锁。没有增加迁移。
+- 新 PostgreSQL 并发测试先在旧实现下复现双重发放，再通过断言只发放一次且只留一条事件；相关 14 项 Maven 定向测试通过。
+- 未发起 DeepSeek 请求；项目当前的 DeepSeek 接口契约仍是接收图片并输出文本，不接入图片生成。
+
 ## 2026-10-14 增量：本地 Piston 最小权限
 
 - 固定 Piston API v3.1.0 不启动 Isolate/cgroup；实际用低权 uid、`prlimit` 和 `nosocket` 执行任务。临时 Docker 探针以只读根文件系统、`no-new-privileges`、五项必要 capabilities、768 MiB/1 CPU/128 PID 上限及 256 MiB 临时目录运行。
