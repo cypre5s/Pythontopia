@@ -8,6 +8,12 @@
 - Playwright 浏览器真实注册并登录临时学生账号，在工坊发送文本和 PNG 图片，检查两个 Tutor 流式回答和持久化记录，随后删除临时用户及其数据。
 - 验证：Tutor provider、ask stream、图片校验、AutoGen runtime 定向 pytest 共 62 项通过（1 条既有 pytest 标记警告）；管理员页面 Vitest 9 项通过；前端类型检查、Ruff 与 `TutorDailyRequestLimitServiceTest` 通过。供应商账单/token 核对仍待完成。
 
+## 2026-10-14 — Learner Twin 状态证据可见性
+
+- Twin 页已评估知识点现在将掌握度和证据充分度分开展示；证据指标明确注明不是答题正确概率。未评估知识点仍不绘制掌握分数。
+- 复核确认自评 DTO 不含 evidence/metadata 字段，学生接口限制为目标与偏好维度；周报统一上海时区的七日窗口，独立统计全量事件与最多 30 条记忆，批量读取掌握事件增量；页面按钮已连接到真实工坊和学习导航。
+- 验证：后端画像/Twin 测试 57 项通过，含 PostgreSQL Testcontainers 周报集成测试；Twin Web 页面 9 项通过，`npm run typecheck` 通过。学习效果 A/B 与 7 日延迟复测仍未做。
+
 ## 2026-10-14 — 本地 DeepSeek 复验与 KC 编程题接地
 
 - 本地 `./dev.sh` 启动时 `PYT_AI_REQUEST_LIMITS_ENABLED=false`，运行进程已核实为 `false`；部署默认日限额保持开启。Boss 判题的 10 秒防重复提交限制仍保留，它不限制 DeepSeek 请求数。

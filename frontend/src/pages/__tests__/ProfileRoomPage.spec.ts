@@ -90,6 +90,13 @@ describe('ProfileRoomPage', () => {
     expect(routerPush).toHaveBeenNthCalledWith(2, { path: '/expedition', query: { focus: '2', kcCode: 'PY43-KC-002' } });
   });
 
+  it('shows evidence sufficiency separately from mastery on assessed knowledge points', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="twin-evidence-list"]').text()).toContain('证据充分度 50%');
+  });
+
   it('hands weekly insight prompts to the workshop and navigates there', async () => {
     const wrapper = mountPage();
     await flushPromises();

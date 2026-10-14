@@ -111,3 +111,10 @@
 - 清理临时账号及 Tutor 历史；数据库前缀检查确认没有残留测试账号。
 - 第一次脚本的颜色断言与 Tutor 的苏格拉底式答疑不匹配；第二次断言提前命中用户气泡，过早选择图片。修正为等待助手流结束后，第三次浏览器闭环通过。
 - 本地真实 DeepSeek 文本与图片路径已覆盖到 Vite → Spring → Graph → 会话持久化。账单/token 用量仍未核对，Graph 内部每轮工作流的供应商调用数不由这个浏览器断言计数。
+
+## 2026-10-14 — Learner Twin P0 复核与画像证据展示
+
+- 自评请求只开放 `scoreDelta` / `tagsAdd`，学生仅能更新目标与偏好；证据计数和 metadata 由服务端事件维护。WeeklyReportService 使用一致的 Asia/Shanghai 7 日窗口，分别查询全量事件统计和有上限的记忆摘要，KC 增量通过批量事件查询获取。
+- ProfileRoom 已将服务端 mastery confidence 作为“证据充分度”单独展示，并说明它不是答题正确概率；此前推荐、周报按钮与真实学习导航/工坊事件处理均有页面级测试覆盖。
+- 新 UI 测试先失败后通过。当前验证：后端 57 项（含 PostgreSQL Testcontainers 集成）通过；Twin 页面 Vitest 9 项、TypeScript typecheck 通过。
+- 尚未完成个性化学习效果 A/B、7 日延迟复测，以及更大样本校准。不得把当前规则策略描述为已证明提高学习成绩。
