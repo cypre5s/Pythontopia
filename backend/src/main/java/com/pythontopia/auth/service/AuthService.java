@@ -107,7 +107,7 @@ public class AuthService {
                 () ->
                     new BusinessException(
                         HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_INVALID", "Token subject not found"));
-    if (user.tokenVersion() != principal.tokenVersion()) {
+    if (user.tokenVersion() != principal.tokenVersion() || user.role() != principal.role()) {
       throw new BusinessException(
           HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_INVALID", "Refresh token has been revoked");
     }

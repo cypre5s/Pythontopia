@@ -239,6 +239,22 @@ class AuthServiceSecurityTest {
     }
 
     @Test
+    @DisplayName("账号角色变更后，旧角色 token 不能续期为新角色")
+    void roleChangedTokenCannotBeRefreshed() {
+      when(jwtService.parse("old-role-token"))
+          .thenReturn(new CurrentUserPrincipal(9L, "stu01", Role.STUDENT, 0));
+      when(repository.findById(9L))
+          .thenReturn(Optional.of(user(Role.ADMIN, UserAccount.STATUS_ACTIVE, 0)));
+
+      assertBusiness(
+          catchThrowable(() -> service.refresh("old-role-token")),
+          HttpStatus.UNAUTHORIZED,
+          "REFRESH_TOKEN_INVALID");
+
+      verify(jwtService, never()).issue(any());
+    }
+
+    @Test
     @DisplayName("账号已停用时拒绝续期")
     void disabledAccountCannotRefresh() {
       when(jwtService.parse("valid-token"))

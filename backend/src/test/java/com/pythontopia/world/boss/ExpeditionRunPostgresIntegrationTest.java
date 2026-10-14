@@ -296,7 +296,12 @@ class ExpeditionRunPostgresIntegrationTest {
                 ExpeditionRunAction.EVENT_REVIEW,
                 null));
     assertThat(reviewed.phase()).isEqualTo("map");
-    assertThat(reviewed.hp()).isEqualTo(4);
+    int expectedReviewHp = Math.min(reviewed.maxHp(), event.hp() + 2);
+    if (((Number) eventNode.get("layer")).intValue()
+        == Math.floorDiv(reviewRun.layers() - 1, 2)) {
+      expectedReviewHp = Math.min(reviewed.maxHp(), expectedReviewHp + 1);
+    }
+    assertThat(reviewed.hp()).isEqualTo(expectedReviewHp);
     assertThat(nodeById(reviewed, (String) eventNode.get("id")).get("state")).isEqualTo("cleared");
 
     for (ExpeditionRunAction choice :

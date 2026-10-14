@@ -5,10 +5,12 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.learner.event.ClientLearningEventPolicy;
 import com.pythontopia.loop.LoopRunService;
 import com.pythontopia.loop.LoopRuntimeService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -21,7 +23,7 @@ import org.springframework.web.bind.annotation.RestController;
  * Agent Runtime 控制面（均需 STUDENT）：
  *
  * <ul>
- *   <li>{@code POST /api/events}：领域事件入库（graph / 前端上报）；
+ *   <li>{@code POST /api/events}：允许的前端反馈事件入库；
  *   <li>{@code POST /api/agent-runs/{id}/loop-states}：闭环状态机快照；
  *   <li>{@code POST /api/agent-runs/{id}/policy-decisions}：策略判定审计。
  * </ul>
@@ -51,9 +53,13 @@ public class AgentRuntimeController {
   @ResponseStatus(HttpStatus.CREATED)
   public AgentRuntimeEventService.EventRecord recordEvent(
       @CurrentUser CurrentUserPrincipal user,
-      @Valid @RequestBody AgentRuntimeEventService.EventRequest request) {
+      @Valid @RequestBody EventRequest request) {
     requireStudent(user);
-    return eventService.recordEvent(user.userId(), request);
+    if (!ClientLearningEventPolicy.allows(request.eventType())) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "INVALID_LEARNING_EVENT", "不允许客户端上报该事件");
+    }
+    return eventService.recordEvent(user.userId(), request.eventType(), request.payload());
   }
 
   @PostMapping("/agent-runs/{id}/loop-states")
@@ -116,4 +122,7 @@ public class AgentRuntimeController {
       JsonNode decision,
       String reason,
       @NotBlank String traceId) {}
+
+  public record EventRequest(
+      @NotBlank @Size(max = 64) String eventType, JsonNode payload) {}
 }

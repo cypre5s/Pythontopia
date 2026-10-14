@@ -2,6 +2,24 @@
 
 日期：2026-10-12 至 2026-10-14
 
+## 2026-10-14 增量：本地 Piston 最小权限
+
+- 固定 Piston API v3.1.0 不启动 Isolate/cgroup；实际用低权 uid、`prlimit` 和 `nosocket` 执行任务。临时 Docker 探针以只读根文件系统、`no-new-privileges`、五项必要 capabilities、768 MiB/1 CPU/128 PID 上限及 256 MiB 临时目录运行。
+- 探针确认 `print(42)` 成功，读取 `/etc/shadow` 与创建 socket 被拒，500 ms 超时被杀后 API 继续正常，超过 256 MiB 的运行内存参数被服务端拒绝。无 `CAP_SYS_ADMIN`。
+- 本地 Compose 与安全契约同步收紧；当前 API 实测无 Authorization 与伪造 Bearer 的 runtimes 请求均为 HTTP 200。生产部署文档注明 Piston API v3.1.0 的 Bearer token 不生效，必须确认部署端/代理实际鉴权并限制私网访问。
+- 未验证生产 Piston 的容器/内核隔离和逃逸；本地测试不能替代生产审计。
+
+## 2026-10-14 增量：学习事件客户端信任边界
+
+- `/api/events` 此前允许学生自选事件类型、`source` 和 `importance`，可把虚假的 `practice_failed` 作为高重要度 `graph` 事件写入学习记忆。现在与 `/api/learning/events` 共用客户端事件白名单，只允许 `quiz_finished` 和 `answer_feedback`；来源固定为 `frontend`，importance 由服务器计算。
+- RED/GREEN：先增加伪造正式判题事件的控制器测试，旧实现返回 201；限制后拒绝请求且不触达服务。控制器/服务、JWT 角色刷新共 30 个定向测试通过；`LearningEventControllerTest` 3 项与真 PostgreSQL + Flyway `LoopRunServiceTest` 14 项通过，后者空库迁移至 V212，并验证持久化 source/importance。
+- 服务器判题结果仍由正式提交业务链生成；本组事件策略改动没有触发 DeepSeek 请求。Piston 探针、浏览器联测与性能状态见同日其他记录。
+
+## 2026-10-14 增量：刷新 token 角色一致性
+
+- `AuthService.refresh` 之前未比较 JWT 中的角色与用户表当前角色；账号角色调整后，过滤器拒绝旧 token，但刷新会用旧 token 换发新角色 token。现在角色不匹配和 tokenVersion 失配一样返回 `REFRESH_TOKEN_INVALID`。
+- TDD 回归在旧实现下失败（刷新尝试签发），修复后 `AuthServiceSecurityTest`、`JwtAuthenticationFilterTest` 定向运行通过。
+
 ## 2026-10-14 Piston signal-only 响应与当前全层复验
 
 - 在本地受限 Piston 中运行 `uid/euid`、读取 `/etc/shadow`、创建 socket 和短超时样例：程序 uid/euid 为 1001，敏感路径与 socket 均返回 `PermissionError`。超时样例实际只返回 `signal=SIGKILL`，没有 `status` 或 `code`。
@@ -9,6 +27,11 @@
 - 当前全量：Graph `1818 passed, 1 skipped, 13 warnings`；RAG `158 passed, 2 skipped`；Web `264 files, 2521 tests passed`，typecheck/build/管理端改动文件 ESLint 通过。
 - 全量 Maven `1354 tests, 0 failures, 7 errors`。6 个 Testcontainers 测试容器因 Docker 随机宿主端口绑定冲突启动失败；另 `LongTermClassroomEffectSimulationTest` JDBC 被拒绝。Piston 定向 15 项已通过，未将全套 Maven 失败描述为代码通过。
 - 尚未验证生产 Piston 内核隔离或逃逸、认证后学生/教师逐页 Playwright、ECS/公网、真实硬件及全仓静态类型/格式债务；本地探针只验证所列边界。
+
+## 2026-10-14 Graph 沙箱 signal-only 结果
+
+- 固定 Piston v3.1.0 在超时后仅返回 `signal=SIGKILL`；Graph 执行适配器此前把缺少 `code/status` 当成沙箱不可用，导致现有超时判定未生效。现在映射 Linux signal-only 退出码，SIGKILL/SIGXCPU 分别沿用退出码 137/152。
+- RED/GREEN：新增 signal-only 回归后 Graph 沙箱、评估、自测定向套件共 37 项通过。保留升级 Piston 后区分超时与内存终止元数据的 shortcut。
 
 ## 2026-10-14 开发栈退出与 Web 角色浏览器联测
 

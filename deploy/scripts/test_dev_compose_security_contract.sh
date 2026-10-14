@@ -75,7 +75,7 @@ print("dev startup token order: PASS")
 PYT_JWT_SECRET="test-jwt-secret-for-compose-config-validation-123456" \
 PYT_TEACHER_INVITE_CODE="test-teacher-invite-code" \
 PYT_RAG_ADMIN_TOKEN="$TEST_TOKEN" \
-  docker compose --project-directory "$ROOT_DIR/deploy" \
+  docker compose --profile sandbox --project-directory "$ROOT_DIR/deploy" \
     -f "$ROOT_DIR/deploy/docker-compose.yml" config --format json |
   python3 -c '
 import json, sys
@@ -87,8 +87,23 @@ def assert_loopback_port(service, port):
     assert bindings and all(binding.get("host_ip") == "127.0.0.1" for binding in bindings), service
 
 for service, port in (("postgres", 15432), ("redis", 16379), ("backend", 18080),
-                      ("pythontopia-rag", 18092), ("frontend", 8080)):
+                      ("pythontopia-rag", 18092), ("frontend", 8080), ("piston", 2000)):
     assert_loopback_port(service, port)
+
+piston = services["piston"]
+assert not piston.get("privileged", False)
+assert piston["read_only"] is True
+assert set(piston["cap_drop"]) == {"ALL"}
+assert set(piston["cap_add"]) == {"CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID", "KILL"}
+assert "no-new-privileges:true" in piston["security_opt"]
+assert piston["mem_limit"] == piston["memswap_limit"] == "805306368"
+assert piston["cpus"] == 1 and piston["pids_limit"] == 128
+assert "/piston/jobs:exec,size=256m" in piston["tmpfs"]
+assert "/tmp:exec,size=256m" in piston["tmpfs"]
+assert piston["environment"]["PISTON_RUN_TIMEOUT"] == "10000"
+assert piston["environment"]["PISTON_RUN_MEMORY_LIMIT"] == "268435456"
+assert piston["environment"]["PISTON_MAX_CONCURRENT_JOBS"] == "2"
+assert piston["environment"]["PISTON_DISABLE_NETWORKING"] == "true"
 
 graph = services["pythontopia-graph"]
 assert graph["network_mode"] == "host"

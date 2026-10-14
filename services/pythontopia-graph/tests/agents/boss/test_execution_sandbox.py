@@ -68,6 +68,36 @@ def test_official_piston_success_with_null_status_is_accepted(
     assert result.stdout == "ok\n"
 
 
+def test_piston_sigkill_without_status_or_exit_code_is_a_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example")
+    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
+    monkeypatch.setattr(
+        execution_sandbox.httpx,
+        "post",
+        lambda url, **kwargs: httpx.Response(
+            200,
+            json={
+                "run": {
+                    "status": None,
+                    "code": None,
+                    "signal": "SIGKILL",
+                    "stdout": "",
+                    "stderr": "",
+                }
+            },
+            request=httpx.Request("POST", url),
+        ),
+    )
+
+    result = execution_sandbox.run_python("while True: pass", "", timeout_sec=1)
+
+    assert result.runtime_error is None
+    assert result.timed_out is True
+    assert result.exit_code == 137
+
+
 def test_piston_output_limit_is_a_failed_execution_not_sandbox_outage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

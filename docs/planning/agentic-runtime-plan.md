@@ -100,7 +100,7 @@ This means the new Phase 0-9 plan should not duplicate those pieces blindly. Ins
 
 ## Phase 1 Implementation Notes
 
-- `/api/events` is backed by the existing `learning_event_log` table, including its `importance` column and memory-stream usage. This avoids splitting the learning-event source of truth.
+- `/api/events` is backed by the existing `learning_event_log` table, but accepts only low-trust browser feedback (`quiz_finished`, `answer_feedback`). `source=frontend` and importance are assigned by the server; verified practice outcomes must come from server-side domain events, never this client endpoint.
 - `/api/agent-runs` reuses the existing `loop_run` service and table. The older `/api/loop/runs` endpoint remains compatible.
 - `V184__agent_runtime_control_plane.sql` adds only the missing Phase 1 control-plane tables:
   - `loop_state`,

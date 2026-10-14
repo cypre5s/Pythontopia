@@ -11,7 +11,7 @@
 - `backend/.../AgentStrategyController.java` 与 Tutor 内部附件端点：要求配置并匹配 `X-Internal-Token`，使用常数时间字节比较；附件读取还要求格式正确的 `X-Internal-Subject` 并按所有者读取。
 - `SecurityConfig`：API 默认要求 JWT；生产发布契约关闭 OpenAPI/Swagger 匿名访问。JWT 当前由前端保存在 `localStorage`。
 - Tutor 文本及工作流共用每账号、上海时区每日 30 次请求配额，conversationId 不会重置该额度。它限制请求数，不限制 token 数或实际费用；一次工作流请求仍可能触发多个模型调用。
-- 判题代码采用独立 Piston 适配器；远程错误 fail closed，不回退应用进程内执行。此前已在本地 Piston/Isolate 执行 Python、文件/网络边界和超时探针；生产内核、逃逸与部署策略仍未验证。
+- 判题代码采用独立 Piston 适配器；远程错误 fail closed，不回退应用进程内执行。固定 Piston API v3.1.0 的源码路径实际使用低权 uid、`prlimit` 和可选 `nosocket`，没有容器级 cgroup/namespace 隔离。临时受限容器的运行证据见下方；生产内核、逃逸与部署策略仍未验证。
 - ASR、TTS、讯飞文生图和讯飞图片理解在属性类中固定关闭；Tutor 图片输入走 DeepSeek 视觉路径。此前已完成真实 Tutor 文本与合成图片输入请求，本次增量复核没有发起上游请求。
 - `deploy/.env` 被 Git 忽略，文件权限为 `0600`；本复核只检查存在状态，没有读取或输出值。对话中出现过的 API key 尚未确认已轮换，后续真实请求前应在服务商控制台轮换。
 - `npm audit --registry=https://registry.npmjs.org --audit-level=high` 返回 0 vulnerabilities。Python 服务生产依赖审计与临时镜像构建结果见下方 2026-10-14 部分；未运行 OS 层镜像扫描，也没有部署镜像。
@@ -24,7 +24,7 @@
 - 每日 30 次请求上限不是成本上限，不能据此推断 DeepSeek 费用有硬上限。
 - 聊天中出现过的 API key 尚未确认轮换；此风险仍在，当前增量没有使用密钥发起新请求。
 - 本轮没有连接 ECS 或进行公网主动测试，因此 TLS、Nginx 限流、生产 Swagger 关闭和当前部署版本仍需从真实运行环境复核。
-- 本地 Piston 探针不等同于生产容器内核/网络隔离验证；实际生产威胁模型仍需部署环境复核。
+- 本地 Piston 探针不等同于生产容器内核/网络隔离验证；实际生产威胁模型仍需部署环境复核。Piston v3.1.0 不校验 Bearer token，生产需确保服务端或代理实际鉴权，并用私网 ACL 限制网络访问。
 
 ## 本地验证证据
 
@@ -71,6 +71,15 @@
 ## 2026-10-14 最新增量
 
 - 已有本地运行记录包含 DeepSeek 真实文本和合成 PNG 图片输入调用；两类调用都返回非空文本，视觉答复识别合成图中的黄色背景与蓝色图形。本次没有发起新的 DeepSeek 请求。密钥只核对过本地非空状态，未读取值；尚未确认其已轮换。
-- 本地 Piston/Isolate 曾以 uid 1001 实际运行学生样例；读取 `/etc/shadow` 与创建 socket 被拒绝，短时限程序由 SIGKILL 中止。Java 适配器已兼容该 signal-only 返回；该结果不是生产内核逃逸测试。
+- 本地 Piston v3.1.0 曾以 uid 1001 实际运行学生样例；读取 `/etc/shadow` 与创建 socket 被拒绝，短时限程序由 SIGKILL 中止。Java 适配器已兼容该 signal-only 返回；该结果不是生产内核逃逸测试。
 - AutoGen Tutor CHAT 增加完整 Python 函数、stdin/stdout 脚本及主入口代码的本地 AST 清理；Graph 全量回归 `1822 passed, 1 skipped`。这是结构启发式，不保证拦截所有等价答案表述；未调用模型进行红队复测。
 - 每账号每日 30 次、全站每日 300 次限制的是 AI 入口操作，不是模型请求、token 或金额硬上限。安全范围内没有访问 ECS/公网，也没有生产 Piston 威胁验证。
+
+## 2026-10-14 本地 Piston 容器收紧与边界实测
+
+- 用固定的 Piston API v3.1.0 源码确认：执行器将子进程降至 uid/gid 1001，使用 `prlimit` 设置进程/文件/文件大小限制；禁网时通过 `nosocket`，超时由 API 进程发送 SIGKILL。它没有自行建立 Isolate、namespace 或 cgroup，Piston 的 API Bearer token 也没有验证逻辑。
+- Compose 本地 sandbox 去掉 `privileged`，启用只读根文件系统、`no-new-privileges`，仅保留 `CHOWN/DAC_OVERRIDE/SETGID/SETUID/KILL` 五项 capabilities；容器限制 768 MiB 内存且禁 swap、1 CPU、128 PIDs，任务目录和 `/tmp` 各自 256 MiB tmpfs；Piston 同时封顶 2 个任务、每进程 256 MiB、10 秒运行时限并显式禁网。
+- 临时探针容器用上述限制配置，另将 runtime 包目录挂为只读。实际运行 `print(42)` 成功；读取 `/etc/shadow`、创建 socket 均返回 `PermissionError`；500 ms 无限循环收到 `SIGKILL` 后 API 仍可继续判题；请求 1 GiB 运行内存被服务端拒绝，原因是超过 256 MiB 封顶。最小 capabilities 不包含 `SYS_ADMIN`。
+- 当前 Compose Piston 的 `/api/v2/runtimes` 对无 Authorization 请求和伪造无效 Bearer 请求都返回 HTTP 200，确认本地 API 没有令牌鉴权。
+- Compose 安全契约测试已覆盖 loopback 发布、特权关闭、capability 白名单、只读根文件系统和容器资源上限。
+- 未验证：真实生产 Piston 的 API 鉴权、资源上限、容器/内核隔离和逃逸；生产仍必须私网 ACL 或由代理实际验证令牌。本地受限容器不是独立安全审计或生产证明。

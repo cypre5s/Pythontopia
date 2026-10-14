@@ -483,13 +483,7 @@ class LoopRunServiceTest {
   @Test
   void phase1ControlPlanePersistsEventLoopStateAndPolicyDecision() {
     var event =
-        eventService.recordEvent(
-            userId,
-            new AgentRuntimeEventService.EventRequest(
-                "submission.failed",
-                json("submissionId", 88),
-                "graph",
-                5));
+        eventService.recordEvent(userId, "answer_feedback", json("feedback", "helpful"));
     LoopRunDto run = service.record(userId, fullRequest());
 
     var state =
@@ -516,13 +510,13 @@ class LoopRunServiceTest {
 
     assertThat(event.id()).isPositive();
     assertThat(event.userId()).isEqualTo(userId);
-    assertThat(event.eventType()).isEqualTo("submission.failed");
-    assertThat(event.payload().get("submissionId").asDouble()).isEqualTo(88.0);
-    assertThat(event.source()).isEqualTo("graph");
-    assertThat(event.importance()).isEqualTo(5);
+    assertThat(event.eventType()).isEqualTo("answer_feedback");
+    assertThat(event.payload().get("feedback").asText()).isEqualTo("helpful");
+    assertThat(event.source()).isEqualTo("frontend");
+    assertThat(event.importance()).isEqualTo(1);
     assertThat(
             jdbcTemplate.queryForObject(
-                "SELECT COUNT(*) FROM learning_event_log WHERE id = ? AND user_id = ? AND source = 'graph'",
+                "SELECT COUNT(*) FROM learning_event_log WHERE id = ? AND user_id = ? AND source = 'frontend'",
                 Integer.class,
                 event.id(),
                 userId))
@@ -556,17 +550,11 @@ class LoopRunServiceTest {
 
     assertCode(
         () ->
-            eventService.recordEvent(
-                userId,
-                new AgentRuntimeEventService.EventRequest(
-                    "  ", objectMapper.createObjectNode(), "graph", 3)),
+            eventService.recordEvent(userId, "  ", objectMapper.createObjectNode()),
         HttpStatus.BAD_REQUEST);
     assertCode(
         () ->
-            eventService.recordEvent(
-                userId,
-                new AgentRuntimeEventService.EventRequest(
-                    "resource.generated", objectMapper.createObjectNode(), "graph", 6)),
+            eventService.recordEvent(userId, "practice_failed", objectMapper.createObjectNode()),
         HttpStatus.BAD_REQUEST);
     assertCode(
         () ->
