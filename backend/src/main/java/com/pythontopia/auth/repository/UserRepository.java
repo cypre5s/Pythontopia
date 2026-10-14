@@ -71,6 +71,53 @@ public class UserRepository {
         .findFirst();
   }
 
+  public boolean isLoginThrottled(Long userId) {
+    return Boolean.TRUE.equals(
+        jdbcTemplate.queryForObject(
+            "SELECT login_blocked_until > now() FROM users WHERE id = ?", Boolean.class, userId));
+  }
+
+  public int recordFailedLogin(Long userId) {
+    // Keep account denial brief while making repeated failures increasingly expensive.
+    return jdbcTemplate.update(
+        """
+        UPDATE users
+        SET login_failed_count = CASE
+              WHEN login_failure_window_started_at IS NULL
+                OR login_failure_window_started_at < now() - interval '15 minutes' THEN 1
+              ELSE LEAST(login_failed_count + 1, 7)
+            END,
+            login_failure_window_started_at = CASE
+              WHEN login_failure_window_started_at IS NULL
+                OR login_failure_window_started_at < now() - interval '15 minutes' THEN now()
+              ELSE login_failure_window_started_at
+            END,
+            login_blocked_until = CASE
+              WHEN login_failure_window_started_at IS NULL
+                OR login_failure_window_started_at < now() - interval '15 minutes' THEN NULL
+              WHEN login_failed_count >= 4
+                THEN now() + make_interval(secs => POWER(2.0, LEAST(login_failed_count - 4, 3))::integer)
+              ELSE NULL
+            END,
+            updated_at = now()
+        WHERE id = ?
+        """,
+        userId);
+  }
+
+  public int clearLoginFailures(Long userId) {
+    return jdbcTemplate.update(
+        """
+        UPDATE users
+        SET login_failed_count = 0,
+            login_failure_window_started_at = NULL,
+            login_blocked_until = NULL,
+            updated_at = now()
+        WHERE id = ?
+        """,
+        userId);
+  }
+
   /**
    * 自增会话代次：该用户全部已签发 JWT（携带旧 {@code tv}）随即失效。停用账号、重置密码或怀疑
    * token 泄露时调用；等价的运维手段是 {@code UPDATE users SET token_version = token_version + 1}。

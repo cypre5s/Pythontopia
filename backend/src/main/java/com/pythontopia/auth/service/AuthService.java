@@ -78,11 +78,17 @@ public class AuthService {
       passwordEncoder.matches(request.password(), loginTimingDummyHash);
       throw new BusinessException(HttpStatus.UNAUTHORIZED, "BAD_CREDENTIALS", "Bad credentials");
     }
+    if (userRepository.isLoginThrottled(user.id())) {
+      passwordEncoder.matches(request.password(), loginTimingDummyHash);
+      throw new BusinessException(HttpStatus.UNAUTHORIZED, "BAD_CREDENTIALS", "Bad credentials");
+    }
     if (!passwordEncoder.matches(request.password(), user.passwordHash())) {
+      userRepository.recordFailedLogin(user.id());
       throw new BusinessException(HttpStatus.UNAUTHORIZED, "BAD_CREDENTIALS", "Bad credentials");
     }
     // 状态校验放在口令校验之后：停用账号不会成为「用户名是否存在」的探测面。
     requireActive(user);
+    userRepository.clearLoginFailures(user.id());
     return issueFor(user);
   }
 

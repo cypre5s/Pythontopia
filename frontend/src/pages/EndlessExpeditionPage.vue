@@ -452,6 +452,22 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
             {{ run.dailyAvailable ? '☀ 今日挑战 · 弱项' : '今日挑战已完成' }}
           </PyButton>
         </div>
+        <div
+          v-if="run.errorCode === 'EXPEDITION_NO_PRACTICE_PROBLEMS'"
+          class="exp-error"
+          role="alert"
+          data-testid="expedition-mainline-guidance"
+        >
+          <p>{{ run.errorMessage }}</p>
+          <PyButton
+            variant="primary"
+            size="sm"
+            test-id="expedition-mainline-link"
+            @click="router.push('/mainline-map')"
+          >
+            前往主线地图
+          </PyButton>
+        </div>
         <button
           type="button"
           class="exp-constellation-toggle"

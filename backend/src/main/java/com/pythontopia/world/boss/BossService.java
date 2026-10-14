@@ -151,7 +151,7 @@ public class BossService {
       throw new BusinessException(
           org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
           "EXPEDITION_NO_PRACTICE_PROBLEMS",
-          "当前范围没有可用于 Python 编程的知识点。请先完成主线中的前置小测或练习，或切换到后续章节。");
+          "当前范围没有满足先修条件的 Python 编程知识点。请先前往主线地图完成已解锁章节的学习与测评，解锁后再来远征。");
     }
     return new FrontierSelectResultDto(picks.stream().limit(count).toList());
   }

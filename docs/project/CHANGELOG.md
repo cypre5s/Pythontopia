@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-15 — 账号级登录退避与 DeepSeek 全栈复验
+
+- 新增 V215，为账号累计错误登录并使用 15 分钟窗口和 1/2/4/8 秒封顶退避；冷却中仍返回通用凭据错误，成功登录清零。匿名账号枚举仍执行 dummy hash 比对。
+- RED/GREEN：账号限速服务单测与 PostgreSQL 空库迁移/退避回归共 19 项通过，Flyway 到 V215；触及 Java 文件 Spotless 定向检查和 `git diff --check` 通过。
+- 本地 Web 全栈经 Vite → Spring → Graph 发起两次真实 DeepSeek Tutor 请求：文本校验词原样返回，合成 PNG 识别黄色背景和蓝色方形；SSE 完成且答案落入会话，响应不含图片数据。临时用户与会话已清理；本地 AI 入口日限额确认为关闭。
+- 新生远征缺少可练编程 KC 时，起始页现在提供按错误码显示的主线地图入口；真实新生 422 → 按钮导航已用浏览器验证，临时账号已删除。主线学习、章测到首个可用题仍未走完。
+- 全量 Vitest 首轮发现旧 `@/api/boss` mock 缺少 request-ID helper、管理台样式断言仍引用旧变量名；只更新了过时测试夹具与断言。复跑 274 个文件 / 2591 项全通过；全仓 ESLint、TypeScript 检查与 Vite 生产构建通过。构建有 Pyodide 依赖的 Node 内建模块 externalize/eval 警告。
+- 真实 DeepSeek provider 续验各调用一次文本与合成 PNG：校验串精确返回，图片描述识别黄色背景和蓝色方形；响应均为文本，无图片块或工具调用。账号退避计数/指数封顶边界先红后绿，认证与空库迁移仍为 19/19 通过。
+- 后端全量 `mvn test` 为 1413 项、0 断言失败、7 errors；Docker 随机宿主端口冲突 6、长期仿真 JDBC reset 1。隔离合并复跑 7 项中长期仿真 1/1 通过，6 个容器集成类仍因 `address already in use` 未能启动；全量后端仍未通过。
+- 远征记录校准：已有先修证据账号曾完成三阶段 Phaser Boss 浏览器胜利链路；新生需要先完成主线学习与测评再进入编程远征。
+
 ## 2026-10-15 — 远征失败结算与媒体访问撤销
 
 - 失败判题由服务端同事务写入验证记录并结算扣血，前端不能通过跳过结算请求免伤；失败后同题新签发通过可升级同一账本且不会恢复体力。判题和结算都只接受节点最新签发的题，避免已结算后的旧预发题复活。
@@ -12,9 +23,9 @@
 - 对照 Alethicode 未提交 AutoGen 工作树后确认：Pythontopia 的 Tutor 与训练导学已在 AutoGen 主链路上；Pythontopia 保留 Java/SSE/数据库/私有附件契约和独立 `EXECUTION_TRACE` 事件，不直接换成 Alethicode 的 WebSocket/session 协议。
 - 管理台 CSS 变量改为与 Alethicode 一致的语义命名，保留原颜色、尺寸与页面行为。远征 Boss Phaser 场景增加 3 项回归，覆盖章节素材预载、通过后单次命中和失败时真实体力显示；CC0 音效已有双处授权登记。
 - 验证：本轮真实 DeepSeek 文本及合成 PNG 图片输入各 1 次，均返回文本；Graph Tutor/provider 定向 106 passed、AutoGen runtime/SSE 另 23 passed（首组有 1 条既有 pytest marker 警告）；Twin、Boss、Tutor workflow 与 AI 限额等 Maven 定向 110 tests 通过；前端定向 25 项与账号隔离回归 1 项、typecheck 通过；全仓 lint 0 errors / 0 warnings（5 个 Vue test stub 提示在对应测试文件局部标注为有意）。生产 AI 配置契约与 `bash -n dev.sh` 通过。
-- 补充对照：Pythontopia 与 Alethicode 共享 17 个 Tutor 事件，Pythontopia 另有独立执行轨迹事件；当前卡片映射 11 个 Pydantic 模型。新学生创建远征的真实浏览器请求在第 1 章和全局范围均返回 422 `EXPEDITION_NO_PRACTICE_PROBLEMS`，服务端未建 run；临时学生账号已清理。完整 Boss 浏览器通关因先修评估门槛未完成。
+- 补充对照：Pythontopia 与 Alethicode 共享 17 个 Tutor 事件，Pythontopia 另有独立执行轨迹事件；当前卡片映射 11 个 Pydantic 模型。新学生创建远征的真实浏览器请求在第 1 章和全局范围均返回 422 `EXPEDITION_NO_PRACTICE_PROBLEMS`，服务端未建 run；临时学生账号已清理。已有合格先修证据的账号曾完成三阶段 Phaser Boss 浏览器胜利链路，新生的主线到可用编程题引导仍未打通。
 - 续跑全量串行 Maven：1408 tests、0 断言失败、7 errors；6 个 Testcontainers 的 Docker 临时端口绑定失败，长期仿真在全量时 JDBC 连接失败。受影响 7 类隔离串行重跑后，长期仿真 1/1 通过，另外 6 类仍有端口绑定错误，故全量 Maven 未通过。
-- 未完成：Tutor 与 Alethicode 的逐行为等价、真实账号下远征 Boss 全程浏览器验证、全量 Maven 稳定全绿、Twin A/B 与 7 日延迟复测、供应商费用/token 对账和性能测试。
+- 未完成：Tutor 与 Alethicode 的逐事件 live 对照、全量 Maven 稳定全绿、Twin A/B 与 7 日延迟复测、供应商费用/token 对账、新生远征首个可用编程题引导和性能测试。
 
 ## 2026-10-15 — 会话期限、判题隔离与 Tutor 续跑复验
 

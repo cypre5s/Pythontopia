@@ -974,7 +974,7 @@ class BossServiceTest {
         .isInstanceOfSatisfying(
             com.pythontopia.common.error.BusinessException.class,
             exception -> assertThat(exception.getMessage())
-                .contains("主线中的前置小测"));
+                .contains("主线地图"));
     verifyNoInteractions(chapterProblemBankRepository, graphClient);
   }
 
@@ -1029,7 +1029,7 @@ class BossServiceTest {
               assertThat(exception.code()).isEqualTo("EXPEDITION_NO_PRACTICE_PROBLEMS");
               assertThat(exception.status())
                   .isEqualTo(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY);
-              assertThat(exception.getMessage()).contains("主线中的前置小测");
+              assertThat(exception.getMessage()).contains("主线地图");
             });
     verifyNoInteractions(chapterProblemBankRepository, graphClient);
   }

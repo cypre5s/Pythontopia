@@ -248,6 +248,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   const starting = ref(false);
   const elapsedSec = ref(0);
   const errorMessage = ref('');
+  const errorCode = ref<string | null>(null);
   const summaryReported = ref(false);
   // 概念事件：进入 event 节点先选应对；study 选项把本题得分 ×eventScoreMult。
   const activeEventText = ref('');
@@ -553,6 +554,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     loading.value = false;
     starting.value = true;
     errorMessage.value = '';
+    errorCode.value = null;
     focusChapter.value = focus;
     try {
       await actionQueue;
@@ -631,6 +633,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       persist();
       prefetchAvailable();
     } catch (error) {
+      errorCode.value = error instanceof ApiClientError ? error.code : null;
       if (daily && error instanceof ApiClientError && error.code === 'EXPEDITION_DAILY_ALREADY_CLAIMED') {
         const date = todayStr();
         dailyDoneDate.value = date;
@@ -666,6 +669,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     nextPhase.value = null;
     elapsedSec.value = 0;
     errorMessage.value = '';
+    errorCode.value = null;
     activeEventText.value = '';
     eventScoreMult.value = 1;
     rewardChoices.value = [];
@@ -1090,6 +1094,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     starting,
     elapsedSec,
     errorMessage,
+    errorCode,
     activeEventText,
     rewardChoices,
     hasSavedRun,

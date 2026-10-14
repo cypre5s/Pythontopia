@@ -2,7 +2,7 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-15）**：聚焦 Web。已完成本地基线提交 `f9744cca`；Tutor 与训练导学均走 DeepSeek AutoGen，图片只输入、响应只保留文本；`./dev.sh` 的本地 AI 日限额关闭，生产仍有限额。当前工作树有未提交的媒体配置/文档收敛、管理台 token 命名、Boss 场景回归测试和测试 fixture lint 例外说明。真实 DeepSeek 文本/PNG 输入本轮各验证 1 次。Graph Tutor/provider/workflow 定向 106 passed，另有 AutoGen runtime/SSE 23 passed；Java Twin/Boss/Tutor/媒体关闭/额度定向 135 tests 通过；前端定向 25 项与新增账号隔离测试 1 项通过，typecheck 通过，全仓 ESLint 0 errors / 0 warnings。全量串行 Maven 为 1408 tests、0 断言失败、7 errors；6 个 Testcontainers 因 Docker 临时端口绑定冲突失败，长期仿真在全量时数据库连接失败。受影响 7 类的隔离串行重跑为 1 pass、6 个同样的端口错误；不能称全绿。Tutor 静态事件/卡片对照完成但逐事件 live 重放未完成；新生远征实测因先修/可练 KC 门槛返回 422，Boss 全程判题演出仍未验证。Twin A/B/7 日复测、供应商费用/token 对账、生产 Piston 验证和性能测试也未完成。非 Web 客户端不在当前范围。
+> **当前快照（2026-10-15）**：聚焦 Web，当前本地基线为 `584f997b`。Tutor 与训练导学走 DeepSeek AutoGen，图片仅输入、响应只保留文本；本地后端 `PYT_AI_REQUEST_LIMITS_ENABLED=false`。本续接新增 V215 账号登录失败退避并封顶计数/指数，认证与空库迁移定向 19/19 通过。Vite → Spring → Graph 真实 Tutor 文本与合成 PNG 请求均已完成，SSE 完成并持久化文本；最新 provider 级续验同样只返回文本。新生远征 422 可直达主线地图，真实主线到首个编程 KC 仍待完成；已有先修证据账号通过三阶段 Phaser Boss 浏览器胜利链路。最新全量 Maven 为 1413 项、0 断言失败、7 errors（Docker 临时端口冲突 6、长周期仿真 JDBC reset 1）；受影响类隔离复跑中长周期仿真 1/1 通过，6 个容器类仍无法启动。未完成：新生首题学习链路、Tutor/Alethicode 逐事件 live 对照、全量 Maven 稳定全绿、Twin A/B/7 日延迟效果、供应商费用/token 对账、生产 Piston/ECS 验证及性能测试。管理台现有三页已做样式/交互联测；Alethicode 其他管理模块无 Pythontopia 同构 API/schema，未做盲目移植。非 Web 客户端不在范围。
 
 ## 2026-10-15 当前续接
 
@@ -16,16 +16,23 @@
 - 将管理台 CSS token 名称对齐 Alethicode 语义词汇，保持原值；增加远征 Boss 场景的受击/失败体力/素材预载自动回归。
 - 已跑真实 DeepSeek 文本与 PNG 输入各 1 次；Graph 106、Java 135、前端定向 25 项通过，前端 typecheck/lint、生产 AI readiness 契约、shell 语法通过。
 - 补跑 Graph AutoGen runtime/SSE 23 tests、前端账号隔离回归 1 test；全仓 lint 的 5 条 Vue mock stub 结构提示已在测试文件显式标注，当前 0 errors / 0 warnings。
-- 全量 Maven 串行：1408 tests、0 断言失败、7 errors；6 个 PostgreSQL Testcontainers 因 Docker 临时端口 `address already in use` 失败，长期仿真发生 JDBC 连接拒绝。受影响 7 类串行隔离重跑后，长期仿真 1/1 通过，另外 6 类仍因临时端口绑定失败。
+- 最新全量 Maven 串行：1413 tests、0 断言失败、7 errors；6 个 PostgreSQL Testcontainers 因 Docker 临时端口 `address already in use` 失败，长期仿真发生 PostgreSQL 连接 reset。7 类合并隔离复跑后，长期仿真 1/1 通过，另外 6 类仍因随机端口绑定错误。
 - Tutor 对照：共享 17 个事件，Pythontopia 另有独立执行轨迹事件；卡片映射为 11 个 Pydantic 模型。新生远征浏览器尝试在第 1 章和全局范围均收到 422 `EXPEDITION_NO_PRACTICE_PROBLEMS`；测试账号已清理。
+- 新增 V215 账号级登录退避；认证与 Testcontainers 空库迁移定向 19/19 通过，触及 Java 文件 Spotless 定向检查与 `git diff --check` 通过。
+- 本地全栈经 Vite → Spring → Graph 完成两次真实 DeepSeek Tutor SSE 请求，文本校验词与 PNG 颜色识别正确，文字回答落库且响应无图片数据；临时用户和会话已清理，本地 AI 日限额确认关闭。
+- 新生远征 422 起始页已提供直达 `/mainline-map` 的入口；Playwright 注册新生、重现 422、点击并导航通过，临时账号已清理。主线小节到首个可编程题仍未实走。
+- 前端全量 Vitest 274 files / 2591 tests、ESLint、TypeScript 检查和 Vite production build 均通过。首轮暴露两个旧测试契约未跟进当前 requestId/CSS token 更新，测试桩与断言已对齐。构建保留 Pyodide Node builtin externalize 与 eval 警告。
+- DeepSeek provider 真实文本/合成图片输入各 1 次，文字校验串和颜色形状识别通过；Graph 响应均为文本字符串且无图片块/工具调用。provider 级调用不覆盖 Web Tutor 持久化，费用/token 未核对。
+- 账号登录退避饱和边界回归先失败后通过：20 次额外失败后计数固定为 7，指数输入也封顶；认证+空库迁移 19/19 通过。
 
 ### 未完成 / 下一步
 
 - Tutor 静态事件/卡片结构对照已完成；逐事件 live 重放与证据/失败恢复行为的端到端对照仍待做。Pythontopia 保留 Java/SSE/私有附件契约，不移植不兼容的 WebSocket/session 数据层。
-- 远征 Boss 浏览器验证受真实学习门槛阻止：当前服务端不纳入第 1 章候选，后续 KC 需先修掌握证据。具备真实先修证据后再做判题至胜利联测，不伪造掌握记录。
+- 远征三阶段 Boss Phaser 浏览器胜利链路已有合格先修账号的通过记录；新生第 1 章/全局创建请求仍真实返回 422 `EXPEDITION_NO_PRACTICE_PROBLEMS`，现可直接前往主线地图。需验证完成真实主线学习和测评后能否自然解锁首个可用编程 KC，不通过伪造掌握度绕过门槛。
 - 解决 Docker/Testcontainers 临时端口占用后再跑全量 Maven；Twin A/B、7 日延迟效果、供应商用量/费用与远征性能继续待测，性能最后执行。
-- 远征真实完整 Boss 浏览器演出仍受真实先修/可练题门槛阻止；本轮验证的是 PostgreSQL 结算与服务边界，没有伪造画像证据。
+- 远征 Boss 胜利浏览器旅程已有真实通过记录；待补的是新生从主线评估到首个可用编程题的连续入口，本轮没有伪造画像证据。
 - 继续只做 Web 范围工程优化：以现有 Vue/TypeScript、Java、Python 项目约定和 Vue/WCAG 官方指南为依据，针对已观察到的重复逻辑、命名差异或无障碍缺口小步修复，不做无关大规模格式化。
+
 
 ## 2026-10-14 当前续接
 
@@ -37,7 +44,7 @@
 - Phase 2 完成：`useNextSteps` 消费服务端 Twin 推荐；无评估状态不再由前端推断弱项；远征自动开局不发送画像 weak KC，显式 `focusKc` 仍有效。定向 Vitest 20/20，`npm run typecheck` 通过。
 - Phase 3 完成：SSE/Graph 请求时限、断流取消、同会话活动锁和检查点恢复已核对，无需新增租约字段。修复 Tutor 图片附件 `Instant` PostgreSQL 参数绑定，并补充 emitter 超时会中止 Graph 流的回归测试。Tutor Maven 120/120、Graph Tutor/provider/附件 88 项通过；本地 DeepSeek 文本与相关蓝圆 PNG 输入各完成真实调用，响应为文本字符串，Tutor 持久化卡片与 checkpoint 未发现图像 payload。初始无关图片按课程相关性规则被拒答，改用圆面积相关图片后识别成功。
 - Phase 4 完成：管理台三页真实浏览器/API 联测通过，运维、用户搜索筛选分页、账号停用/启用、审核搜索与驳回均命中本地后端；非法分页参数返回带 traceId 的统一 400。键盘焦点、窄屏 320px（无横向溢出）、控制台检查通过；临时管理员、学生、24 个分页夹具及审核记录已清理。定向 Vitest 10/10、typecheck、ESLint 通过。与 Alethicode 1440×900 截图对照；其旧快照含 `ResizeObserver` 错误覆盖层，Pythontopia 页面无该运行错误，无需视觉修复。
-- Phase 5 Boss Phaser 多阶段浏览器闭环与 Web 最终回归尚未完成；性能测试仍后置。
+- Phase 5 Boss Phaser 多阶段浏览器闭环已对有合格先修证据的账号走通；新生可练题引导与 Web 最终回归仍未完成，性能测试后置。
 
 ### 本次补充
 

@@ -220,6 +220,26 @@ beforeEach(() => {
 });
 
 describe('rogueRun store', () => {
+  it('retains the no-practice error code so the page can route the learner to the mainline', async () => {
+    frontierApiMock.createExpeditionRun.mockRejectedValueOnce(
+      new ApiClientError(
+        {
+          code: 'EXPEDITION_NO_PRACTICE_PROBLEMS',
+          message: '请先完成主线学习',
+          details: [],
+          traceId: 'test',
+          timestamp: new Date().toISOString(),
+        },
+        422,
+      ),
+    );
+    const run = useRogueRunStore();
+
+    await run.startRun(1);
+
+    expect(run.errorCode).toBe('EXPEDITION_NO_PRACTICE_PROBLEMS');
+  });
+
   it('只把本地远征存档写入当前用户命名空间', async () => {
     localStorage.setItem(
       'pythontopia.user',

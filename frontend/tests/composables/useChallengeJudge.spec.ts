@@ -5,6 +5,7 @@ import type { BossPrefetchStatusDto, BossProblemDto } from '@/api/dto/Boss';
 const apiMock = vi.hoisted(() => ({
   prefetchBossProblem: vi.fn(),
   fetchBossPrefetchStatus: vi.fn(),
+  newBossProblemRequestId: vi.fn(() => 'boss-request-test'),
   requestBossProblem: vi.fn(),
   submitBossAttempt: vi.fn(),
 }));

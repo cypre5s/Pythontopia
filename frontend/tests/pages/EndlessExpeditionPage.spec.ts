@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
     settlementPending: false,
     loading: false,
     errorMessage: '',
+    errorCode: null as string | null,
     activeCode: '',
     dailyAvailable: true,
     loadLeaderboard: vi.fn(),
@@ -122,6 +123,8 @@ describe('EndlessExpeditionPage Boss scene integration', () => {
     mocks.run.challengeResult = null;
     mocks.run.settlementPending = false;
     mocks.run.loading = false;
+    mocks.run.errorCode = null;
+    mocks.run.errorMessage = '';
   });
 
   it('keeps the same stage beside the challenge and exposes settlement plus real HP', async () => {
@@ -303,5 +306,39 @@ describe('EndlessExpeditionPage Boss scene integration', () => {
     expect(wrapper.get('[data-testid="expedition-canvas"]').attributes('data-boss-attempt'))
       .toBe('run-2:problem-boss-1:2');
     wrapper.unmount();
+  });
+
+  it('offers the mainline map when the server reports no eligible programming KC', async () => {
+    runState.phase = 'idle';
+    runState.errorCode = 'EXPEDITION_NO_PRACTICE_PROBLEMS';
+    runState.errorMessage = '请先完成主线学习';
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: '/expedition', component: EndlessExpeditionPage },
+        { path: '/mainline-map', component: { template: '<main />' } },
+      ],
+    });
+    await router.push('/expedition');
+    await router.isReady();
+
+    const wrapper = mount(EndlessExpeditionPage, {
+      global: {
+        plugins: [router],
+        stubs: {
+          AppLayout: LAYOUT_STUB,
+          BossSprite: true,
+          ChallengeWorkspace: CHALLENGE_STUB,
+          ExpeditionCanvas: CANVAS_STUB,
+          ExpeditionLeaderboard: true,
+          KnowledgeConstellation: true,
+        },
+      },
+    });
+
+    await wrapper.get('[data-testid="expedition-mainline-guidance"]').get('button').trigger('click');
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe('/mainline-map');
   });
 });

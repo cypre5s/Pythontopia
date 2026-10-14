@@ -4,6 +4,19 @@
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
 
+## 2026-10-15 当前续接
+
+- 新增账号级登录失败退避：V215 加入失败计数、15 分钟窗口和 1/2/4/8 秒封顶冷却；匿名登录仍回通用错误，成功登录复位。
+- TDD 回归在旧代码下因仓储方法不存在而失败；实现后 `AuthServiceSecurityTest` 与 `UserEmailRegistrationMigrationTest` 共 19 项通过，临时 PostgreSQL 空库迁移至 V215。触及 Java 文件 Spotless 定向检查、`git diff --check` 通过。
+- 恢复本地全栈并通过 Vite → Spring → Graph 发出两次真实 DeepSeek Tutor SSE 请求。文本校验词复述正确；合成 PNG 的黄色背景和蓝色方形识别正确；会话各持久化一条非空文字回答，响应无图片数据。临时用户和记录已清理。本地后端 AI 每日入口限额实测 `false`；供应商调用 token/费用未核对。
+- 新生远征入口修复：保留 `EXPEDITION_NO_PRACTICE_PROBLEMS` 错误码，起始页给出“前往主线地图”按钮，后端说明先完成已解锁章节的学习与测评。页面/状态 RED 2 项后 GREEN 58/58，BossServiceTest RED 后 GREEN 53/53；typecheck、定向 ESLint、`git diff --check` 通过。Playwright 注册临时新生后真实创建远征收到 422，点击入口到达主线地图，页面错误为 0，账号已删除。
+- 完整前端回归初次发现两个旧测试文件与当前实现契约不符：Boss mock 缺少 `newBossProblemRequestId`，Admin shell test 仍断言 584f997b 前的 CSS 变量名。仅更新测试桩/断言，针对两文件 15/15、全量 274 files / 2591 tests 通过；全仓 ESLint、`vue-tsc` 与生产 build 通过。Vite 构建仍提示 Pyodide 依赖 externalize Node builtin 与使用 eval，未影响产物生成。
+- 后端全量 `mvn test` 复跑为 1413 项、0 assertion failures、7 errors：6 个 Testcontainers 集成类因 Docker 发布随机宿主端口报 `address already in use`，长期仿真类 PostgreSQL 连接 reset。7 个受影响类合并隔离复跑为 7 项、0 failures、6 errors；长期仿真 1/1 通过，6 个容器类仍被相同端口冲突挡住。
+- 对账号退避做边界复核后新增失败计数与指数封顶断言；新测试先红（20 次追加后计数为 30，预期上限 7），封顶实现后 `AuthServiceSecurityTest` + 空库迁移回归 19/19 通过，V215 保持可从空库升级。
+- Graph provider 直接真实调用 DeepSeek 两次：文本请求精确返回校验串；合成 PNG 识别为黄色背景、蓝色正方形；两个响应均为 Python 字符串，无图片块和工具调用。这是 provider 级验证，不替代 Web Tutor 联测；费用/token 未核对。
+- 已纠正文档状态：历史三阶段 Phaser Boss 浏览器胜利测试对有合格先修证据的账号通过；新生需要先完成真实主线学习与测评，未伪造掌握证据。
+- 本次未运行性能测试。下一步完成当前工作区全栈回归和工程质量收敛，并继续核对 Tutor live 对照与学习首题入口。
+
 ## 2026-10-14 当前续接
 
 - Twin/远征先修数据复核发现 V125 把未提供语义关系的旧课程 seed 按编号串成线性链，导致新学生第一章只有 KC-001 可选。新增 V214 按课程包 JSON 修正 65 个 KC 关系；回归先红（独立根 KC 1 个而非 4 个）后绿。策略、Twin、Boss、地图与课程库相关回归 66 项通过；空库 Flyway 集成类 4/4 通过，开发库关系与 JSON 逐条比较 65/65 一致，隔离 Spring 启动已将开发库 Flyway 版本推进到 214。

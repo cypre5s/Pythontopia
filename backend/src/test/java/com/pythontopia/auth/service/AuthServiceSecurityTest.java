@@ -144,6 +144,46 @@ class AuthServiceSecurityTest {
     }
 
     @Test
+    @DisplayName("账号处于渐进退避期时仍返回通用凭据错误")
+    void throttledAccountDoesNotCheckSubmittedPassword() {
+      when(repository.findByUsername("stu01"))
+          .thenReturn(Optional.of(user(Role.STUDENT, UserAccount.STATUS_ACTIVE, 0)));
+      when(repository.isLoginThrottled(9L)).thenReturn(true);
+      when(encoder.matches("P@ssw0rd1", DUMMY_HASH)).thenReturn(false);
+
+      assertBusiness(
+          catchThrowable(() -> service.login(new LoginRequest("stu01", "P@ssw0rd1"))),
+          HttpStatus.UNAUTHORIZED,
+          "BAD_CREDENTIALS");
+
+      verify(encoder).matches("P@ssw0rd1", DUMMY_HASH);
+      verify(encoder, never()).matches("P@ssw0rd1", "stored-hash");
+      verify(repository, never()).recordFailedLogin(9L);
+      verify(repository, never()).clearLoginFailures(9L);
+    }
+
+    @Test
+    @DisplayName("错误密码累计到账号级退避，成功登录后清零")
+    void failedPasswordIsCountedAndSuccessfulLoginResetsThrottle() {
+      when(repository.findByUsername("stu01"))
+          .thenReturn(Optional.of(user(Role.STUDENT, UserAccount.STATUS_ACTIVE, 0)));
+      when(repository.isLoginThrottled(9L)).thenReturn(false);
+      when(encoder.matches("wrong-password", "stored-hash")).thenReturn(false);
+      when(encoder.matches("P@ssw0rd1", "stored-hash")).thenReturn(true);
+      when(jwtService.issue(new CurrentUserPrincipal(9L, "stu01", Role.STUDENT, 0)))
+          .thenReturn(new JwtService.IssuedToken("signed-token", EXPIRES_AT));
+
+      assertBusiness(
+          catchThrowable(() -> service.login(new LoginRequest("stu01", "wrong-password"))),
+          HttpStatus.UNAUTHORIZED,
+          "BAD_CREDENTIALS");
+      service.login(new LoginRequest("stu01", "P@ssw0rd1"));
+
+      verify(repository).recordFailedLogin(9L);
+      verify(repository).clearLoginFailures(9L);
+    }
+
+    @Test
     @DisplayName("停用账号即使口令正确也不得登录，且不签发 token")
     void disabledAccountCannotLogIn() {
       when(repository.findByUsername("stu01"))

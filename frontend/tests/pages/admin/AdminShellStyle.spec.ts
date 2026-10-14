@@ -32,11 +32,11 @@ describe('admin visual shell contract', () => {
   });
 
   it('uses the scoped blue-gray shell and Alethicode active navigation treatment', () => {
-    expect(layoutStyles).toMatch(/--admin-bg:\s*linear-gradient\(180deg, #f8fbff 0%, #f3f7fc 100%\);/);
+    expect(layoutStyles).toMatch(/--admin-shell-bg:\s*linear-gradient\(180deg, #f8fbff 0%, #f3f7fc 100%\);/);
     expect(layoutStyles).toContain('--admin-panel-radius: 16px;');
     expect(layoutStyles).toContain('--admin-panel-shadow: 0 6px 18px rgb(15 23 42 / 8%);');
-    expect(layoutStyles).toContain('--admin-table-header: #eef4fb;');
-    expect(layoutStyles).toContain('--admin-table-hover: #f8fbff;');
+    expect(layoutStyles).toContain('--admin-table-header-bg: #eef4fb;');
+    expect(layoutStyles).toContain('--admin-table-hover-bg: #f8fbff;');
     expect(layoutStyles).toMatch(/\.admin-nav__link\s*\{[^}]*font-size:\s*15px;/);
     expect(layoutStyles).toMatch(/\.admin-nav__link\.is-active\s*\{[^}]*background:\s*linear-gradient\(90deg, #2563eb 0%, #3b82f6 100%\);/);
     expect(layoutStyles).toMatch(/\.admin-nav__link\.is-active\s*\{[^}]*color:\s*#fff;/);
@@ -63,7 +63,7 @@ describe('admin visual shell contract', () => {
     expect(panelStyles).toMatch(/padding:\s*18px 22px 22px;/);
     expect(panelStyles).toMatch(/@media \(max-width: 640px\) \{[\s\S]*?\.admin-panel__tools\s*\{[^}]*flex:\s*0 1 auto;/);
 
-    expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*background:\s*var\(--admin-table-header, #eef4fb\);/);
+    expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*background:\s*var\(--admin-table-header-bg, #eef4fb\);/);
     expect(tableStyles).toMatch(/\.admin-table-scroll > table th\.admin-table__sticky\s*\{[^}]*position:\s*sticky;[^}]*right:\s*0;/);
     expect(tableStyles).toMatch(/\.admin-table-scroll > table td\s*\{[^}]*padding:\s*10px 16px;/);
     expect(tableStyles).toContain('position: sticky;');
@@ -71,7 +71,7 @@ describe('admin visual shell contract', () => {
     expect(usersSource).toContain('class="admin-table__sticky"');
     expect(reviewSource).toContain(':min-width="1100"');
     expect(reviewStyles).toMatch(/\.review-table td:nth-child\(1\),[\s\S]*?white-space:\s*nowrap;/);
-    expect(reviewStyles).toContain('background: var(--admin-table-hover);');
+    expect(reviewStyles).toContain('background: var(--admin-table-hover-bg);');
     expect(layoutStyles).toContain('.admin-status--muted');
     expect(operationsStyles).toMatch(/\.admin-operations__panels\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/);
     expect(operationsStyles).not.toContain('.admin-page-heading');
@@ -80,8 +80,8 @@ describe('admin visual shell contract', () => {
   });
 
   it('keeps the user table on the same row and cell spacing as the review table', () => {
-    expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*height:\s*var\(--admin-table-header-height, 44px\);[^}]*padding:\s*0 16px;/);
-    expect(tableStyles).toMatch(/\.admin-table-scroll > table td\s*\{[^}]*height:\s*var\(--admin-table-row-height, 52px\);[^}]*padding:\s*10px 16px;/);
+    expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*height:\s*var\(--table-header-height, 44px\);[^}]*padding:\s*0 16px;/);
+    expect(tableStyles).toMatch(/\.admin-table-scroll > table td\s*\{[^}]*height:\s*var\(--table-row-height, 52px\);[^}]*padding:\s*10px 16px;/);
     expect(tableStyles).toContain('-webkit-overflow-scrolling: touch;');
     expect(tableStyles).toContain('overscroll-behavior-x: contain;');
     expect(usersSource).toContain(':min-width="820"');
