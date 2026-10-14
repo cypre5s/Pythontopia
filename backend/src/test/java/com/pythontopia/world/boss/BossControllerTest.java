@@ -17,6 +17,8 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.JwtAuthenticationFilter;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.GlobalExceptionHandler;
+import com.pythontopia.common.web.AiBudgetWebConfiguration;
+import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossAttemptResultDto;
 import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
@@ -40,7 +42,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 @WebMvcTest(BossController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@Import(GlobalExceptionHandler.class)
+@Import({GlobalExceptionHandler.class, AiBudgetWebConfiguration.class})
 class BossControllerTest {
 
   @Autowired MockMvc mockMvc;
@@ -50,6 +52,8 @@ class BossControllerTest {
   @MockBean BossService service;
 
   @MockBean JwtAuthenticationFilter jwtAuthenticationFilter;
+
+  @MockBean TutorDailyRequestLimitService requestLimitService;
 
   @BeforeEach
   void authenticateAsStudent() {
@@ -79,6 +83,8 @@ class BossControllerTest {
         .andExpect(jsonPath("$.problemId").value("ai-1"))
         .andExpect(jsonPath("$.aiGenerated").value(true))
         .andExpect(jsonPath("$.kcCode").value("PY43-KC-001"));
+
+    verify(requestLimitService).reserve(7L);
   }
 
   @Test
@@ -111,6 +117,8 @@ class BossControllerTest {
                     objectMapper.writeValueAsString(
                         new BossProblemRequest(1, null, 1, null, null, null, null, null))))
         .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(service, requestLimitService);
   }
 
   @Test
@@ -154,6 +162,23 @@ class BossControllerTest {
         .andExpect(status().isBadRequest());
 
     verifyNoInteractions(service);
+    verifyNoInteractions(requestLimitService);
+  }
+
+  @Test
+  void teacherCannotRequestBossProblemWithoutSpendingAiBudget() throws Exception {
+    authenticate(new CurrentUserPrincipal(2L, "teacher", Role.TEACHER));
+
+    mockMvc
+        .perform(
+            post("/api/world/boss/1/problem")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new BossProblemRequest(1, null, 2, null, null, null, null, null))))
+        .andExpect(status().isForbidden());
+
+    verifyNoInteractions(service, requestLimitService);
   }
 
   @Test

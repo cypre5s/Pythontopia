@@ -1,38 +1,39 @@
 package com.pythontopia.common.web;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
+import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.tutor.TutorDailyRequestLimitService;
+import java.util.Arrays;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.web.method.HandlerMethod;
-import org.springframework.web.servlet.HandlerInterceptor;
+import org.aopalliance.intercept.MethodInterceptor;
+import org.aopalliance.intercept.MethodInvocation;
 
-/** Applies the shared account cap to user-triggered model endpoints, including failed requests. */
-public class AiBudgetInterceptor implements HandlerInterceptor {
+/** Reserves the shared AI budget after MVC validation and before invoking the controller. */
+public class AiBudgetMethodInterceptor implements MethodInterceptor {
 
   private final TutorDailyRequestLimitService requestLimitService;
 
-  public AiBudgetInterceptor(TutorDailyRequestLimitService requestLimitService) {
+  public AiBudgetMethodInterceptor(TutorDailyRequestLimitService requestLimitService) {
     this.requestLimitService = requestLimitService;
   }
 
   @Override
-  public boolean preHandle(
-      jakarta.servlet.http.HttpServletRequest request,
-      jakarta.servlet.http.HttpServletResponse response,
-      Object handler) {
-    if (!(handler instanceof HandlerMethod method)
-        || !method.hasMethodAnnotation(AiBudgeted.class)) {
-      return true;
-    }
+  public Object invoke(MethodInvocation invocation) throws Throwable {
+    AiBudgeted budgeted = invocation.getMethod().getAnnotation(AiBudgeted.class);
     Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
     if (authentication == null
         || !(authentication.getPrincipal() instanceof CurrentUserPrincipal user)) {
       throw new BusinessException(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", "需要登录后使用 AI 功能");
     }
+    if (budgeted != null
+        && budgeted.roles().length > 0
+        && Arrays.stream(budgeted.roles()).noneMatch(role -> role == user.role())) {
+      throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "当前账号无权使用此 AI 功能");
+    }
     requestLimitService.reserve(user.userId());
-    return true;
+    return invocation.proceed();
   }
 }

@@ -30,7 +30,7 @@ public class IntentController {
   }
 
   @PostMapping("/route")
-  @AiBudgeted
+  @AiBudgeted(roles = Role.STUDENT)
   public IntentRouteResponse route(
       @CurrentUser CurrentUserPrincipal user, @Valid @RequestBody IntentRouteRequest request) {
     requireStudent(user);

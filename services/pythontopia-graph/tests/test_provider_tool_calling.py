@@ -111,6 +111,10 @@ def test_parse_chat_message_joins_array_content_parts() -> None:
                         "content": [
                             {"type": "text", "text": '{"ok": '},
                             {"type": "text", "text": "true}"},
+                            {
+                                "type": "image_url",
+                                "image_url": {"url": "data:image/png;base64,ignored"},
+                            },
                         ]
                     }
                 }

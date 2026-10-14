@@ -342,6 +342,15 @@ watch(navigationOpen, (open) => {
   line-height: 1.5;
 }
 
+.admin-shell :deep(button) {
+  box-shadow: none;
+}
+
+.admin-shell :deep(button:active) {
+  transform: none;
+  box-shadow: none;
+}
+
 .admin-shell :deep(.admin-control) {
   min-height: var(--admin-control-height);
   border: 1px solid var(--admin-border);

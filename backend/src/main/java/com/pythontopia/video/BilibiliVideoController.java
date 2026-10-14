@@ -2,7 +2,6 @@ package com.pythontopia.video;
 
 import com.pythontopia.common.web.AiBudgeted;
 import java.util.List;
-import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -15,7 +14,6 @@ import org.springframework.web.bind.annotation.RestController;
  * （不在 {@code SecurityConfig} 放行；axios 会带 JWT），无需改安全配置。取数实现在 Python 微服务，
  * 本控制器仅经 {@link BilibiliVideoService} 代理。
  */
-@Validated
 @RestController
 @RequestMapping("/api/videos/bilibili")
 public class BilibiliVideoController {

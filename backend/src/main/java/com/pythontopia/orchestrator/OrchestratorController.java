@@ -30,7 +30,7 @@ public class OrchestratorController {
   }
 
   @PostMapping(value = "/turn/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  @AiBudgeted
+  @AiBudgeted(roles = Role.STUDENT)
   public SseEmitter turnStream(
       @CurrentUser CurrentUserPrincipal user, @Valid @RequestBody OrchestratorTurnRequest request) {
     requireStudent(user);
@@ -39,7 +39,7 @@ public class OrchestratorController {
 
   /** 混合工具编排（Phase F）SSE：选择=确定性路由器，编排=有界工具循环；graph 侧 flag-gated。 */
   @PostMapping(value = "/tool-loop/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  @AiBudgeted
+  @AiBudgeted(roles = Role.STUDENT)
   public SseEmitter toolLoopStream(
       @CurrentUser CurrentUserPrincipal user, @Valid @RequestBody OrchestratorTurnRequest request) {
     requireStudent(user);
