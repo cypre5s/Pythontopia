@@ -84,6 +84,11 @@ describe('StageCoursewareReader（学 · 站内整章 PPT 精读）', () => {
     vi.clearAllMocks();
   });
 
+  it('defaults the optional KC filter to an empty list', () => {
+    const wrapper = mountReader({ ...BASE });
+    expect(wrapper.props('kcCodes')).toEqual([]);
+  });
+
   it('初始计数为「已读 0 / requiredPages 页」，并嵌入站内 PDF 阅读器', () => {
     const wrapper = mountReader({ ...BASE });
 

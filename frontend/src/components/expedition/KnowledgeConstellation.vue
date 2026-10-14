@@ -16,6 +16,7 @@ const props = withDefaults(
     /** KC 编码 → 掌握度 0..1。 */
     mastery?: Record<string, number>;
     /** 已有服务端评估证据的 KC；省略时兼容旧调用方按 mastery keys 判断。 */
+    // eslint-disable-next-line vue/require-default-prop -- undefined intentionally enables mastery-key inference.
     assessed?: string[];
   }>(),
   { mastery: () => ({}) },

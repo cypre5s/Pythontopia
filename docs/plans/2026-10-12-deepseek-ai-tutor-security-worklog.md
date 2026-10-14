@@ -403,3 +403,11 @@
 - 定向验证：`QuestServiceTest` 8、`Stage10BugMineAcceptanceIntegrationTest` 12、`ChapterTestServiceTest` 19、`ChapterTestSubmitConcurrencyIntegrationTest` 1、Boss 幂等 PostgreSQL 5、`BossControllerTest` 11、`BossGraphClientTest` 2、`BossServiceTest` 46，共 104 项通过；前端 Boss 场景和画布切换 5 项、typecheck、`git diff --check` 通过。
 - 尝试用第二个合成账号直开第 5 章远征时，服务端按真实先修画像返回 `EXPEDITION_NO_PRACTICE_PROBLEMS`：仅有一个真实通过记录且掌握度不足以满足先修条件，回退候选也没有课程编程题。没有伪造掌握度；两个临时测试账号及其级联学习数据已从本地数据库删除。
 - 未完成项：最终 Boss 节点的浏览器真实判题与命中动画旅程没有跑完；用户尚未完成先修评估的账号可能无法从高章直接开始远征。该限制需要有真实教学流程的产品决策，不用假数据掩盖。未发起新的 DeepSeek 请求；历史约 36 条应用日志与供应商用量仍未核对，因此继续保持 Graph 停止。
+
+## 2026-10-14 固定输出误接地修复与真实 Web/Twin 复核
+
+- RED/GREEN：新测例复现 KC-001 的摘要含 `print()` 时，固定字符串题被错误判为有教学接地；现在只有题面明确教授 `print`/输出语句才可用常量输出。Graph Boss 套件 235 passed，改动文件 Ruff 通过。
+- 本地 DeepSeek 实际无尽远征请求证明：KC-001 的回显/未接地/超纲候选未进入共享题库；预生成状态约 58.6 秒后由 PENDING 转 FAILED。KC-012 在空画像下因 KC-010 先修条件未满足而被权威策略排除。
+- 浏览器真实访问 Twin 状态与周报接口均为 HTTP 200；未评估 KC 不显示虚构掌握度，主推荐按钮导航到 `/expedition?focus=1&kcCode=PY43-KC-001`。页面和 API 测试账号已删除。
+- Web 工程复核参考 [Vue 官方风格指南](https://vuejs.org/style-guide/) 与 [WCAG 2.2 Focus Visible](https://www.w3.org/WAI/WCAG22/Understanding/focus-visible.html)。课件阅读器可选 `kcCodes` 明确默认为 `[]`（新增测试先失败后通过）；星图 `assessed` 的 `undefined` 仍保留其旧兼容语义。Boss/远征 61、Twin 18、阅读器/星图 13 项测试通过；typecheck、build 通过，ESLint 0 errors / 5 个测试桩告警。
+- `npm run build` 产生的课程 manifest 时间戳只由构建脚本刷新，已恢复，不作为产品改动。未重复运行全量 Maven；新空画像 Boss 路径仍受 KC-001 内容覆盖限制，性能阶段未启动。

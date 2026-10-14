@@ -83,6 +83,29 @@ def test_constant_output_does_not_auto_ground_non_programming_kc() -> None:
     assert any(issue.code == "trivial_constant_output" for issue in verdict.issues)
 
 
+def test_constant_output_is_rejected_when_print_is_only_a_kc_summary_keyword() -> None:
+    p = _problem(
+        1,
+        "PY43-KC-001",
+        "读取年份后输出对应的中国计算机成就名称；本题只需输出固定字符串，不要求判断逻辑。",
+        "print('银河一号超级计算机')",
+    )
+
+    verdict = verify_kc_grounding(
+        p,
+        kc_keywords={
+            "PY43-KC-001": [
+                "中国计算机发展成就",
+                "银河一号超级计算机",
+                "print()",
+            ]
+        },
+    )
+
+    assert not verdict.passed
+    assert any(issue.code == "trivial_constant_output" for issue in verdict.issues)
+
+
 def test_chapter_1_no_keyword_fails() -> None:
     p = _problem(
         1,

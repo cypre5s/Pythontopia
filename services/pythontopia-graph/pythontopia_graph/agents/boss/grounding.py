@@ -224,11 +224,15 @@ def verify_kc_grounding(
             )
         )
 
-    output_keywords = ("print", "打印", "输出语句", "打印语句")
+    output_keywords = ("打印", "输出语句", "打印语句")
+    statement = re.sub(r"\s+", "", problem.statement).lower()
     teaches_output = any(
-        any(term in re.sub(r"\s+", "", keyword).lower() for term in output_keywords)
-        for keyword in keywords
+        term in statement for term in output_keywords
+    ) or bool(
+        re.search(r"(?<![a-z0-9_])print(?![a-z0-9_])", statement, re.IGNORECASE)
     )
+    if not override:
+        teaches_output = teaches_output or "print" in keywords
     if _is_constant_output_only(problem.reference_solution) and not teaches_output:
         issues.append(
             ReviewIssue(

@@ -38,7 +38,7 @@ const props = withDefaults(
      */
     active?: boolean;
   }>(),
-  { active: true },
+  { active: true, kcCodes: () => [] },
 );
 
 const emit = defineEmits<{ (e: 'progress', p: StageTaskProgress): void }>();
