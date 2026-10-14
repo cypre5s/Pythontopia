@@ -142,6 +142,64 @@ def test_generate_boss_problem_accepts_factory_output() -> None:
     assert review.passed
 
 
+def test_generate_boss_problem_retries_when_calibration_misses_target_difficulty() -> None:
+    feedback_by_attempt: list[str | None] = []
+    candidate = BossProblem(
+        problem_id="ai-calibrated-harder-than-target",
+        chapter=2,
+        stage=1,
+        kc_code="PY43-KC-012",
+        title="加一",
+        statement=(
+            "读取一个整数 n。先将输入文本转换为整数，再把 n 加 1，"
+            "最后把结果转换成字符串并输出。请保证输出仅包含计算结果。"
+        ),
+        reference_solution="value = str(int(input()) + 1)\nprint(value)",
+        test_cases=[
+            build_test_case("1", "2", is_sample=True),
+            build_test_case("9", "10"),
+            build_test_case("0", "1"),
+        ],
+        difficulty=1,
+    )
+    simpler_candidate = BossProblem(
+        problem_id="ai-matches-target-difficulty",
+        chapter=2,
+        stage=1,
+        kc_code="PY43-KC-012",
+        title="名字后加感叹号",
+        statement="读取名字，在末尾追加感叹号后输出。",
+        reference_solution="print(input() + '!')",
+        test_cases=[
+            build_test_case("小明", "小明!", is_sample=True),
+            build_test_case("小红", "小红!"),
+            build_test_case("小李", "小李!"),
+        ],
+        difficulty=1,
+    )
+
+    async def factory(**kwargs) -> BossProblem:
+        feedback_by_attempt.append(kwargs.get("review_feedback"))
+        return candidate if len(feedback_by_attempt) == 1 else simpler_candidate
+
+    review = asyncio.run(
+        generate_boss_problem(
+            chapter=2,
+            stage=1,
+            kc_code="PY43-KC-012",
+            difficulty=1,
+            problem_factory=factory,
+            max_retries=2,
+            skip_self_test=True,
+        )
+    )
+
+    assert review.passed
+    assert len(feedback_by_attempt) == 2
+    assert "difficulty_target_mismatch" in (feedback_by_attempt[1] or "")
+    assert "requested 1, calibrated 3" in (feedback_by_attempt[1] or "")
+
+
 def test_generate_boss_problem_passes_review_feedback_to_retry() -> None:
     feedback_by_attempt: list[str | None] = []
     constant_output = BossProblem(

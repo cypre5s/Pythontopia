@@ -8,6 +8,9 @@
 
 - Twin/远征先修数据复核发现 V125 把未提供语义关系的旧课程 seed 按编号串成线性链，导致新学生第一章只有 KC-001 可选。新增 V214 按课程包 JSON 修正 65 个 KC 关系；回归先红（独立根 KC 1 个而非 4 个）后绿。策略、Twin、Boss、地图与课程库相关回归 66 项通过；空库 Flyway 集成类 4/4 通过，开发库关系与 JSON 逐条比较 65/65 一致，隔离 Spring 启动已将开发库 Flyway 版本推进到 214。
 - 门禁实施前，修正关系后的真实本地远征创建 API 曾返回 10 层、25 个挑战节点及 4 个第一章根 KC；临时 run 与学生已清理。真实 DeepSeek Boss API 对 KC-002 与 KC-012 各发起一次出题操作，均未产出通过审查的可用题并返回 503；没有将不合格题写入共享题库，临时学生与审核候选已清理。新玩家的远征可用编程题覆盖仍未解决，不能据此声称完整通关。
+- 后续定位出题 503 的第二个根因：Graph 的难度审查可将候选从请求难度 1 校准到 3，但仍标记通过；Java 自动入库要求与目标难度一致，因此拒收。Graph 编排现将校准后偏离目标的候选纳入既有 6 次限额重试，并把差异反馈给下一次生成；不会放宽质量门禁。回归先红后绿，Graph Boss 子集 238 passed，Ruff 通过。
+- 修复后真实 DeepSeek Web API 对 KC-012 执行 6 次候选尝试（4 次难度不符/接地拒绝、1 次回显拒绝、最终通过）；API 返回 difficulty=1、3 个测试用例、`reviewed=true` / `aiGenerated=true`，数据库写入 `APPROVED/AUTOMATED`。另一名临时学生复用同一题库记录，HTTP 200 且 Graph 没有新增生成成功记录；复用账号已清理，审核 requester 按外键保留。
+- 手动恢复 :18080 时第一次误用了新生成的临时服务间令牌，与现有 Graph/RAG 容器令牌不一致，导致一次尚未到模型的 503。之后从现有容器恢复共享令牌；当前本地模型计数限制关闭，Piston 已配置，backend/Graph/RAG 服务令牌匹配，:18080/:18091/:5173 均健康。
 - 为避免把没有 Python 编程目标的第一章概念题放进代码战，远征前沿现在排除第一章 KC；若无后续且满足先修的 KC，服务端返回 `EXPEDITION_NO_PRACTICE_PROBLEMS`，提示回主线小测/练习。Boss/Twin/选题/地图 63 项测试先红后绿；临时 Spring 实例与恢复后的本地 :18080 开发服务均通过真实 HTTP 验证新学生开局返回 422、未建 run，开发库确认临时账号与 run 均清理。
 - 本轮一次真实 DeepSeek 视觉 provider 调用返回纯文本；同/流式解析回归 3 passed。调用为 provider 级，不是浏览器重复测试；供应商实际 token/费用仍未核对。
 - 最新补充：DeepSeek 同步与 SSE provider 都只传文本块；混合文本/图片响应的回归确认图片块不会到达客户端，不调用图片生成接口。真实 provider smoke 两次成功（文本 + 合成 PNG 识别），响应均为文本；此次 provider 的请求体和模型未变，因此未再发送模型请求。
@@ -16,7 +19,7 @@
 - 最新验证：前端 270 files / 2568 tests、typecheck 与 build 通过；ESLint 0 errors / 7 warnings。Graph 全量 1842 passed / 1 skipped；RAG 全量 158 passed / 2 skipped。教师班级列表 320px Chromium 布局测试通过，使用模拟 API。
 - 安全与交互：Graph 隐藏测试失败现在只返回通用提示，不泄露隐藏 expected/actual；Twin 周报呈现最近失败与百分点单位；首页班级加入表单在班级列表 API 失败时仍可用；教师班级页签支持 ARIA tabs 键盘操作。
 - 远征：旧 `/endless` 预生成等待已有请求并轮询 READY，防止生成竞态；结算期间阻止重复提交；显示服务端题目难度。随机事件节点集成测试 fixture 已修，`ExpeditionRunPostgresIntegrationTest` 隔离 28/28 通过。修复后 Maven 全量 1389 tests / 0 failures / 7 errors：6 个 Testcontainers 宿主端口绑定 `address already in use`，长期仿真测试在全量运行中遇测试库连接 reset；该仿真类隔离 1/1 通过。
-- 未完成：Twin A/B 与 7 日延迟效果、DeepSeek 供应商账单/token 对账、稳定全量 Maven 复验、生产 Piston 验证；性能后置。非 Web 客户端、ECS 和 GitHub 不在范围内。
+- 未完成：KC-002 及其余缺题 KC 的自动出题质量/难度覆盖、远征完整胜利链路重跑、Twin A/B 与 7 日延迟效果、DeepSeek 账单/token 对账、稳定全量 Maven 复验、生产 Piston 验证；性能后置。非 Web 客户端、ECS 和 GitHub 不在范围内。
 
 - AI 编程题自动入库已完成真实 Web 全栈验证：Graph 五重审查/Piston 全用例自测通过后写入 `APPROVED/AUTOMATED`；新学生同 KC 请求命中该记录且没有再次调用模型。V213 迁移已在本地数据库生效。未启用 Piston 的首次真实模型请求因 `sandbox_unavailable` 拒收并回退 Golden（6 次模型 HTTP 200），没有污染题库。
 - 自动入库调用点覆盖 Boss 现场生成与 Endless 预生成；`review_source` 区分自动与教师审核，教师可撤下自动批准题，人工终态仍不可改写。入库 requester 测试账号为匿名随机账户，因审计外键保留；复用学生已清理。

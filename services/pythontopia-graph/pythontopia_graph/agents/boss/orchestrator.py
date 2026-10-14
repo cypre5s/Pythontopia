@@ -16,7 +16,7 @@ from .plagiarism_checker import (
     ExistingProblem,
     is_too_similar_to_existing,
 )
-from .schemas import BossProblem, BossProblemReview, ReviewVerdict, TestCase
+from .schemas import BossProblem, BossProblemReview, ReviewIssue, ReviewVerdict, TestCase
 from .self_tester import self_test_problem
 from .struct_validator import validate_problem_struct
 
@@ -122,6 +122,25 @@ async def generate_boss_problem(
             kc_keywords=kc_keywords,
             skip_self_test=skip_self_test,
         )
+        if review.passed and review.problem.difficulty != difficulty:
+            calibrated_difficulty = review.problem.difficulty
+            review.verdicts.append(
+                ReviewVerdict(
+                    review="difficulty",
+                    passed=False,
+                    issues=[
+                        ReviewIssue(
+                            review="difficulty",
+                            severity="error",
+                            code="difficulty_target_mismatch",
+                            message=(
+                                f"requested {difficulty}, calibrated {calibrated_difficulty}; "
+                                "retry at the requested difficulty"
+                            ),
+                        )
+                    ],
+                )
+            )
         last_review = review
         if review.passed:
             LOG.info(
