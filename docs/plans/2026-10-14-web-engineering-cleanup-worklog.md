@@ -47,6 +47,14 @@
 - Phaser Boss 场景的成功反馈测试扩展为玩家冲刺与像素命中爆点；复用现有素材与单 Phaser 实例。
 - 当前相关 Web 回归 4 files / 14 tests、typecheck、production build 与改动文件 ESLint 通过。未做管理台全栈截图，也未完成最终 Boss 多阶段真实判题浏览器旅程。
 
+## 2026-10-14 AI 题自动入库与 DeepSeek 全栈验证
+
+- 沿用 `boss_problem_review`，V213 增加 `review_source`。已审核 AI 题只有在章节、阶段、KC、请求难度一致且含参考解、至少 3 条覆盖样例与隐藏测试的情况下自动批准；事务级 advisory lock 保证同题并发请求去重。
+- Boss 现场题和 Endless 预生成均复用仓储入口。教师/管理员审核页显示自动来源，并可确认或撤下自动批准题；人工审核终态保持不可改写。
+- 真实验证先发现开发栈未启动 Piston，DeepSeek 的 6 次真实 HTTP 200 候选都因 `sandbox_unavailable` 被审查拒绝并回退 Golden。改用 `./dev.sh --sandbox` 后，真实候选通过 Piston 后入库；另一名学生命中相同共享题，无第二次生成请求。审计 requester 随机匿名账号保留，复用账号已清理。
+- 验证：审核仓储、V213 schema、Boss、预生成与服务定向后端测试 76 项通过；审核 DTO 服务类 7 项复跑通过。管理端、教师端和 API Vitest 18 项通过，typecheck、改动文件 ESLint 通过；本地数据库版本为 V213。
+- 本轮没有跑全量 Maven、供应商账单/token 核对、Twin A/B/7 日学习效果或生产 Piston/ECS；性能按用户要求后置。
+
 ## 2026-10-14 收尾复验
 
 - 修复 Tutor Markdown 外站图片隐私：DOMPurify 清洗后只保留 data:image 与同源图片，外站图片替换为 alt 文本；新增回归测试。
@@ -118,3 +126,12 @@
 - Twin 主页面已将 confidence 显示为独立的“证据充分度”，并说明非正确概率；未评估 KC 继续显示无测评值。补充页面级回归，先 RED 后 GREEN。
 - 验证：画像/Twin Java 定向 57 tests 通过（含 Testcontainers PostgreSQL 周报集成）；ProfileRoom/TwinWeekly 9 tests、前端 typecheck 通过。
 - 本阶段静态与测试检查确认推荐和周报操作已导航至真实复习/远征/工坊。学习效果 A/B、7 日延迟复测及足够样本的校准仍待做。
+
+## 2026-10-14 — Boss 多阶段实战与视觉模型续验
+
+- 真实浏览器验证暴露阶段切换问题：Boss 下一阶段同步出题会超过前端 15 秒超时，页面还保留上一阶段题。复用现有预生成/轮询路径预热后续 Boss 阶段，并在开始取题时清空旧题；页面在服务端 ENTER_NODE 的过渡帧继续挂载同一 Phaser 场景。
+- 测试先 RED 后 GREEN；定向 Vitest 4 files / 59 tests、TypeScript typecheck、触及文件 ESLint 和 `git diff --check` 通过。
+- Playwright 全栈三阶段实战通过：AI 题阶段 ID 分别为 1/2/3，正式判题 3/3 HTTP 200 且通过，服务端每阶段确认受击，Phaser 画布单实例连续复用，胜利结算正常，CC0 音效 HTTP 200，浏览器无 JS 错误。验证用临时学生账号和远征数据已删除。
+- 最新 Tutor 浏览器真调用：文本校验词正确；合成图中蓝色方形与黄色背景均被识别；2 条回答持久化。临时学生、Tutor 数据与图片文件均清理。
+- `./dev.sh` 本地后端环境 `PYT_AI_REQUEST_LIMITS_ENABLED=false`；此项只关闭本地应用内每日计数，Provider 自身的余额、速率限制及费用仍然有效。
+- 尚未完成：Twin 学习效果 A/B 与 7 日延迟复测、DeepSeek 账单/token 核对、稳定全量 Maven 复验，以及生产 Piston/ECS/公网验证。性能仍按用户要求置后。

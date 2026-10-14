@@ -682,6 +682,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     const requestGeneration = ++challengeGeneration;
     activeNode.value = node;
     activeBossPhase.value = node.kind === 'boss' ? bossPhase.value : 1;
+    activeProblem.value = null;
     activeCode.value = '';
     challengeResult.value = null;
     settlementPending.value = false;
@@ -887,7 +888,22 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     if (wasBoss && passed && destination === 'challenge') {
       toast.show(`BOSS 阶段 ${activeBossPhase.value}/${bossPhasesTotal.value} 通过，继续！`, 'success');
       const current = nodeById(node.id);
-      if (current) await beginChallenge(current);
+      if (current) {
+        const recentFailures = history.value.slice(0, 2).filter((entry) => !entry.passed).length;
+        const difficulty = computeRunDifficulty(current.difficulty, momentum.value, recentFailures);
+        try {
+          await challenge.retryPrefetch({
+            kc: current.kcCode ?? '',
+            kind: current.challengeKind,
+            difficulty,
+            expeditionRunId: runId.value,
+            expeditionNodeId: current.id,
+          });
+        } catch {
+          // Keep the current run playable if the background prefetch service is unavailable.
+        }
+        await beginChallenge(current);
+      }
       return;
     }
     clearActive();
@@ -1042,6 +1058,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   }
 
   return {
+    runId,
     phase,
     focusChapter,
     nodes,

@@ -58,6 +58,7 @@ class BossProblemReviewSchemaTest {
             "source_problem_id",
             "payload",
             "decision",
+            "review_source",
             "requester_id",
             "requested_at",
             "decider_id",
@@ -85,5 +86,29 @@ class BossProblemReviewSchemaTest {
                     teacherId,
                     teacherId))
         .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+  }
+
+  @Test
+  void databaseAcceptsAutomatedApprovalWithoutPretendingThereWasAUserDecider() {
+    Long requesterId =
+        jdbcTemplate.queryForObject(
+            "INSERT INTO users (username, display_name, password_hash, role)"
+                + " VALUES ('review-schema-automated', 'Requester', 'x', 'STUDENT') RETURNING id",
+            Long.class);
+
+    jdbcTemplate.update(
+        "INSERT INTO boss_problem_review"
+            + " (pack_id, source_problem_id, chapter, stage, kc_code, difficulty, payload,"
+            + " decision, review_source, requester_id, decided_at, decision_reason, version)"
+            + " VALUES (43, 'auto-source', 1, 1, 'PY43-KC-001', 2, '{}'::jsonb,"
+            + " 'APPROVED', 'AUTOMATED', ?, now(), 'passed automated checks', 2)",
+        requesterId);
+
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT review_source FROM boss_problem_review"
+                    + " WHERE source_problem_id = 'auto-source'",
+                String.class))
+        .isEqualTo("AUTOMATED");
   }
 }

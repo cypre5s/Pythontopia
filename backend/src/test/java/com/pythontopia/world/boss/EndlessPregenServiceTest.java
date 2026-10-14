@@ -44,7 +44,7 @@ class EndlessPregenServiceTest {
   }
 
   @Test
-  void reviewedAiProblemMovesPendingJobToReadyAtomically() {
+  void reviewedAiProblemMovesPendingJobToReadyAndAddsItToSharedBank() {
     when(graphClient.requestProblem(eq(7L), eq(1), eq(2), eq("PY43-KC-001"), eq(2),
             eq("PY43-KC-001"), eq("dual_track"), eq(null)))
         .thenReturn(reviewedProblem());
@@ -56,7 +56,9 @@ class EndlessPregenServiceTest {
     service.generatePrefetch(
         19L, 7L, 1, 2, "PY43-KC-001", 2, "PY43-KC-001", "dual_track", null, null, null, 1);
 
-    verify(reviewRepository).createIfNotDuplicate(7L, "dual_track", reviewedProblem());
+    verify(reviewRepository)
+        .approveAutomaticallyIfNotDuplicate(
+            7L, "dual_track", 1, 2, "PY43-KC-001", 2, reviewedProblem());
     verify(jdbcTemplate)
         .update(
             contains("status = 'READY'"), anyString(), eq("ai-1"), anyString(), eq(19L), eq(7L),
@@ -216,7 +218,7 @@ class EndlessPregenServiceTest {
     verify(jdbcTemplate)
         .update(
             contains("status = 'FAILED'"),
-            eq("generated problem chapter/stage did not match the request"),
+            eq("generated problem chapter/stage/KC/difficulty did not match the request"),
             eq(31L), eq(1));
     verify(jdbcTemplate, org.mockito.Mockito.never())
         .update(
@@ -226,7 +228,12 @@ class EndlessPregenServiceTest {
 
   private BossInternalProblem reviewedProblem() {
     return new BossInternalProblem(
-        "ai-1", 1, 2, 2, "PY43-KC-001", "statement", List.of(), "2 3", "5", 1,
-        true, true, List.of(new BossTestCasePayload("2 3", "5", false)), "print(5)");
+        "ai-1", 1, 2, 2, "PY43-KC-001", "statement", List.of(), "2 3", "5", 3,
+        true, true,
+        List.of(
+            new BossTestCasePayload("2 3", "5", true),
+            new BossTestCasePayload("-1 8", "7", false),
+            new BossTestCasePayload("0 0", "0", false)),
+        "a, b = map(int, input().split())\nprint(a + b)");
   }
 }

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   run: {
+    runId: 'run-1',
     phase: 'map',
     nodes: [] as Array<Record<string, unknown>>,
     nodesByLayer: [] as Array<Array<Record<string, unknown>>>,
@@ -111,9 +112,11 @@ function problem(): Record<string, unknown> {
 describe('EndlessExpeditionPage Boss scene integration', () => {
   afterEach(() => {
     vi.clearAllMocks();
+    mocks.run.runId = 'run-1';
     mocks.run.phase = 'map';
     mocks.run.nodes = [];
     mocks.run.nodesByLayer = [];
+    mocks.run.currentNodeId = null;
     mocks.run.activeNode = null;
     mocks.run.activeProblem = null;
     mocks.run.challengeResult = null;
@@ -185,7 +188,7 @@ describe('EndlessExpeditionPage Boss scene integration', () => {
     runState.loading = false;
     await nextTick();
     expect(wrapper.get('[data-testid="expedition-canvas"]').attributes('data-boss-status')).toBe('passed');
-    expect(wrapper.get('[data-testid="expedition-canvas"]').attributes('data-boss-attempt')).toBe('problem-boss-1:2');
+    expect(wrapper.get('[data-testid="expedition-canvas"]').attributes('data-boss-attempt')).toBe('run-1:problem-boss-1:2');
     expect(wrapper.get('[data-testid="expedition-canvas"]').attributes('data-boss-hp')).toBe('3');
 
     runState.challengeResult = {
@@ -207,6 +210,98 @@ describe('EndlessExpeditionPage Boss scene integration', () => {
     expect(wrapper.find('[data-testid="expedition-canvas"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="challenge-workspace"]').exists()).toBe(true);
 
+    wrapper.unmount();
+  });
+
+  it('keeps the Phaser tower mounted during the server-to-active-Boss transition', async () => {
+    const previousNode = { ...bossNode(), id: 'previous-1', kind: 'battle', state: 'cleared', layer: 0, next: ['boss-1'] };
+    const availableBoss = { ...bossNode(), state: 'available' };
+    runState.nodes = [previousNode, availableBoss];
+    runState.nodesByLayer = [[previousNode], [availableBoss]];
+    runState.currentNodeId = previousNode.id;
+
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/expedition', component: EndlessExpeditionPage }],
+    });
+    await router.push('/expedition');
+    await router.isReady();
+
+    const wrapper = mount(EndlessExpeditionPage, {
+      global: {
+        plugins: [router],
+        stubs: {
+          AppLayout: LAYOUT_STUB,
+          BossSprite: true,
+          ChallengeWorkspace: CHALLENGE_STUB,
+          ExpeditionCanvas: CANVAS_STUB,
+          ExpeditionLeaderboard: true,
+          KnowledgeConstellation: true,
+        },
+      },
+    });
+    await flushPromises();
+    const canvasElement = wrapper.get('[data-testid="expedition-canvas"]').element;
+
+    // ENTER_NODE returns currentNodeId and phase before beginChallenge fills activeNode.
+    runState.currentNodeId = 'boss-1';
+    runState.phase = 'challenge';
+    await nextTick();
+
+    expect(wrapper.get('[data-testid="expedition-canvas"]').element).toBe(canvasElement);
+    expect(wrapper.get('[data-testid="expedition-canvas"]').attributes('data-mode')).toBe('tower');
+
+    runState.activeNode = availableBoss;
+    runState.activeProblem = problem();
+    await nextTick();
+
+    expect(wrapper.get('[data-testid="expedition-canvas"]').element).toBe(canvasElement);
+    expect(wrapper.get('[data-testid="expedition-canvas"]').attributes('data-mode')).toBe('boss');
+    wrapper.unmount();
+  });
+
+  it('keeps identical cached problem ids unique across separate runs', async () => {
+    runState.phase = 'challenge';
+    runState.activeNode = bossNode();
+    runState.activeProblem = problem();
+    runState.challengeResult = {
+      problemId: 'problem-boss-1',
+      passed: true,
+      passedTestCases: 2,
+      totalTestCases: 2,
+      score: 100,
+      feedback: '通过',
+    };
+
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/expedition', component: EndlessExpeditionPage }],
+    });
+    await router.push('/expedition');
+    await router.isReady();
+    const wrapper = mount(EndlessExpeditionPage, {
+      global: {
+        plugins: [router],
+        stubs: {
+          AppLayout: LAYOUT_STUB,
+          BossSprite: true,
+          ChallengeWorkspace: CHALLENGE_STUB,
+          ExpeditionCanvas: CANVAS_STUB,
+          ExpeditionLeaderboard: true,
+          KnowledgeConstellation: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="expedition-canvas"]').attributes('data-boss-attempt'))
+      .toBe('run-1:problem-boss-1:2');
+
+    runState.runId = 'run-2';
+    await nextTick();
+
+    expect(wrapper.get('[data-testid="expedition-canvas"]').attributes('data-boss-attempt'))
+      .toBe('run-2:problem-boss-1:2');
     wrapper.unmount();
   });
 });

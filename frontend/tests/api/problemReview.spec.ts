@@ -36,6 +36,7 @@ const review: BossProblemReviewDto = {
     aiGenerated: true,
   },
   decision: "PENDING",
+  reviewSource: "TEACHER",
   requesterId: 10,
   requesterUsername: "teacher",
   requestedAt: "2026-08-02T08:00:00Z",

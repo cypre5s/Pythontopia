@@ -11,6 +11,7 @@ public record BossProblemReviewRecord(
     String kind,
     BossInternalProblem problem,
     BossProblemReviewDecision decision,
+    BossProblemReviewSource reviewSource,
     long requesterId,
     String requesterUsername,
     OffsetDateTime requestedAt,

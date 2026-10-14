@@ -11,6 +11,7 @@ import jakarta.annotation.PostConstruct;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 import org.slf4j.Logger;
@@ -299,18 +300,23 @@ public class EndlessPregenService {
       if (problem == null || problem.problemId() == null) {
         throw new IllegalStateException("graph returned an empty problem");
       }
-      if (problem.chapter() != chapter || problem.stage() != stage) {
-        throw new IllegalStateException("generated problem chapter/stage did not match the request");
+      if (problem.chapter() != chapter
+          || problem.stage() != stage
+          || !Objects.equals(problem.kcCode(), kcCode)
+          || (difficulty != null && problem.difficulty() != difficulty)) {
+        throw new IllegalStateException(
+            "generated problem chapter/stage/KC/difficulty did not match the request");
       }
       if (!problem.reviewed() || !problem.aiGenerated() || problem.testCases().isEmpty()) {
         throw new IllegalStateException("generated problem did not pass the reviewed AI contract");
       }
       if (reviewRepository != null) {
         try {
-          reviewRepository.createIfNotDuplicate(userId, kind, problem);
+          reviewRepository.approveAutomaticallyIfNotDuplicate(
+              userId, kind, chapter, stage, kcCode, difficulty, problem);
         } catch (DataAccessException ex) {
           log.warn(
-              "could not queue pre-generated Boss problem for teacher review: {}",
+              "could not add reviewed pre-generated Boss problem to the shared bank: {}",
               ex.getClass().getSimpleName());
         }
       }

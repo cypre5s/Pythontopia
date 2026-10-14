@@ -820,6 +820,13 @@ describe('rogueRun store', () => {
     expect(run.bossPhase).toBe(2);
     expect(run.nodes.find((n) => n.id === node!.id)?.state).toBe('available');
     await run.continueAfterChallenge();
+    expect(judgeMock.retryPrefetch).toHaveBeenLastCalledWith(expect.objectContaining({
+      kc: node!.kcCode,
+      expeditionRunId: EXPEDITION_RUN_ID,
+      expeditionNodeId: node!.id,
+    }));
+    expect(judgeMock.retryPrefetch.mock.invocationCallOrder.at(-1))
+      .toBeLessThan(judgeMock.fetchProblem.mock.invocationCallOrder.at(-1)!);
     await run.submitChallenge();
     expect(run.bossPhase).toBe(3);
     await run.continueAfterChallenge();
@@ -828,6 +835,30 @@ describe('rogueRun store', () => {
     await run.continueAfterChallenge();
     expect(run.phase).toBe('over');
     expect(run.isVictory).toBe(true);
+  });
+
+  it('clears the prior Boss question when loading the next phase fails', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const node = run.nodes.find((item) => item.layer === 0)!;
+    node.kind = 'boss';
+    node.kcCode = 'PY43-KC-001';
+    setServerNode(node.id, (serverNode) => {
+      serverNode.kind = 'boss';
+      serverNode.kcCode = 'PY43-KC-001';
+      serverNode.bossPhase = 1;
+    });
+    await run.enterNode(node.id);
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: true, passedTestCases: 1, totalTestCases: 1, score: 80, feedback: 'ok',
+    });
+    await run.submitChallenge();
+    judgeMock.fetchProblem.mockRejectedValueOnce(new Error('phase unavailable'));
+
+    await run.continueAfterChallenge();
+
+    expect(run.activeProblem).toBeNull();
+    expect(run.errorMessage).toBe('phase unavailable');
   });
 
   it('resumes an already claimed daily run instead of deleting it and claiming again', async () => {

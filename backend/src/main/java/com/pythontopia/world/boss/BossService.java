@@ -381,10 +381,17 @@ public class BossService {
       }
       if (fromGraph.aiGenerated() && fromGraph.reviewed()) {
         try {
-          reviewRepository.createIfNotDuplicate(userId, request.preferredKind(), fromGraph);
+          reviewRepository.approveAutomaticallyIfNotDuplicate(
+              userId,
+              request.preferredKind(),
+              chapter,
+              request.stage(),
+              kc,
+              difficulty,
+              fromGraph);
         } catch (DataAccessException ex) {
           LOG.warn(
-              "could not queue generated Boss problem for teacher review: {}",
+              "could not add reviewed Boss problem to the shared bank: {}",
               ex.getClass().getSimpleName());
         }
       }

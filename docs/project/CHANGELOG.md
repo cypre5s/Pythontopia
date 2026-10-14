@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-10-14 — AI 编程题自动入库与真实复用验证
+
+- 新增 V213 `review_source` 审计来源；仅 Graph 五重审查通过、章节/阶段/KC/难度匹配、含参考解及至少 3 条样例/隐藏用例的 AI 编程题会自动进入现有 approved bank。复用 PostgreSQL advisory lock 防并发重复，未新建题库表。
+- Boss 现场出题和 Endless 预生成共用这一门槛；教师/管理员可以确认或撤下自动批准题，人工终态记录仍不可覆盖。管理端和教师端显示来源。
+- 真实 DeepSeek 全栈验证：未启用 Piston 的第一次请求有 6 次 HTTP 200 模型尝试均因 `sandbox_unavailable` 被拒，最终安全回退 Golden，未入库。切换 `./dev.sh --sandbox` 后，新题通过 Piston 隔离判题并以 `AUTOMATED/APPROVED` 入库；第二个学生命中同一题库记录，没有再次生成。复用账号已清理；入库 requester 账号因审计外键保留，身份为随机匿名验证账号。
+- 验证：后端 PostgreSQL 仓储/迁移、服务、Boss、预生成定向测试 76 项通过，审核 DTO 服务测试 7 项复跑通过；Web 管理端/教师端/API 18 项通过，typecheck、触及文件 ESLint 通过。当前开发 Spring 进程的本地请求限额为 `false`，部署限额不变。
+- 仍未完成：供应商账单/token 对账、Twin A/B 与 7 日延迟复测、稳定全量 Maven 复验、生产 Piston/ECS 验证；本轮不做性能采样。
+
+## 2026-10-14 — Boss 多阶段实战与真实 DeepSeek 图像复验
+
+- Boss 阶段通过后复用现有预生成与状态轮询，为下一阶段提前取题；开始新阶段时清除旧题，生成失败不会留下可误提交的上一阶段题目。Phaser 地图到 Boss 挑战的服务器状态过渡期间保持同一画布实例。
+- TDD 回归先 RED 后 GREEN；Boss 场景、页面、画布与 store 定向 Vitest 共 4 files / 59 tests 通过，`npm run typecheck`、改动文件 ESLint 与 `git diff --check` 通过。
+- Playwright 本地全栈实战完成三阶段 Boss：三道 DeepSeek AI 题分别绑定阶段 1/2/3，正式判题 HTTP 200 均通过，服务端逐阶段结算，CC0 命中音效 HTTP 200，Phaser 根节点复用，最终胜利页正常，浏览器 JS 错误 0；临时用户及关联记录已清理。
+- 新一轮 Web 工坊真实 DeepSeek 调用验证文本校验词、合成 PNG 的蓝色图形/黄色背景识别、两条会话持久化均成功；测试用户与 PNG 已清理。本地应用级每日请求计数保持关闭，供应商余额/速率限制仍由 DeepSeek 控制。
+- 尚未完成：Twin 学习效果 A/B 与 7 日延迟复测、供应商账单/token 核对、全量 Maven 环境问题复验，以及生产 Piston/ECS/公网验证；本轮未做性能采样。
+
 ## 2026-10-14 — 本地 AI 不限额与 DeepSeek Tutor 复验
 
 - `./dev.sh` 本地运行关闭账号级与全站每日 AI 请求计数，运行中的 Spring 进程确认配置为 `false`；部署默认仍限额。模型供应商自己的额度与限流仍生效。

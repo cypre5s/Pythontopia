@@ -128,8 +128,12 @@ const bossName = computed<string>(
 const isBossChallenge = computed<boolean>(
   () => run.phase === 'challenge' && run.activeNode?.kind === 'boss',
 );
+const isCurrentBossNode = computed<boolean>(() =>
+  run.nodes.some((node) => node.id === run.currentNodeId && node.kind === 'boss'),
+);
 const showExpeditionStage = computed<boolean>(() =>
-  isBossChallenge.value || (run.phase === 'map' && mapView.value === 'pixel'),
+  isBossChallenge.value || (mapView.value === 'pixel'
+    && (run.phase === 'map' || (run.phase === 'challenge' && isCurrentBossNode.value))),
 );
 const bossBattleView = computed<ExpeditionBossView | null>(() => {
   if (!isBossChallenge.value) return null;
@@ -151,7 +155,7 @@ const bossBattleView = computed<ExpeditionBossView | null>(() => {
     maxHp: run.maxHp,
     status,
     attemptId: result && !run.loading && !run.settlementPending
-      ? `${result.problemId}:${run.activeBossPhase}`
+      ? `${run.runId ?? 'local'}:${result.problemId}:${run.activeBossPhase}`
       : null,
   };
 });

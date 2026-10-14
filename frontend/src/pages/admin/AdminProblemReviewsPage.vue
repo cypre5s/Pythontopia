@@ -58,6 +58,16 @@ function decisionClass(decision: BossProblemReviewDecision): string {
   return `review-status--${decision.toLowerCase()}`;
 }
 
+function reviewSourceLabel(source: BossProblemReviewDto['reviewSource']): string {
+  return source === 'AUTOMATED' ? 'AI 自动审核' : '教师审核';
+}
+
+function canDecide(entry: BossProblemReviewDto | null): boolean {
+  return entry !== null
+    && (entry.decision === 'PENDING'
+      || (entry.decision === 'APPROVED' && entry.reviewSource === 'AUTOMATED'));
+}
+
 function decisionTone(decision: BossProblemReviewDecision): string {
   if (decision === 'APPROVED') return 'admin-status--positive';
   if (decision === 'REJECTED') return 'admin-status--danger';
@@ -137,7 +147,7 @@ function changePageSize(nextSize: number): void {
 }
 
 function openDecision(decision: FinalDecision, event: MouseEvent): void {
-  if (!selectedEntry.value || selectedEntry.value.decision !== 'PENDING' || loading.value || deciding.value) return;
+  if (!selectedEntry.value || !canDecide(selectedEntry.value) || loading.value || deciding.value) return;
   decisionTrigger.value = event.currentTarget as HTMLButtonElement;
   pendingDecision.value = decision;
   decisionReason.value = '';
@@ -168,7 +178,7 @@ async function submitDecision(): Promise<void> {
   const entry = selectedEntry.value;
   const decision = pendingDecision.value;
   const reason = decisionReason.value.trim();
-  if (!entry || entry.decision !== 'PENDING' || !decision || deciding.value) return;
+  if (!entry || !canDecide(entry) || !decision || deciding.value) return;
   if (!reason) {
     decisionError.value = '请填写审核意见。';
     return;
@@ -208,7 +218,7 @@ onMounted(() => {
   >
     <AdminPanel
       title="AI 出题审核"
-      description="从后端审核队列搜索、筛选和分页；决定与审核意见会持久化。"
+      description="AI 通过审查的题目可自动进入题库；教师可复核并撤下，人工决定均保留审计记录。"
     >
       <template #actions>
         <button
@@ -510,9 +520,12 @@ onMounted(() => {
             <div><dt>申请人</dt><dd>{{ selectedEntry.requesterUsername }}</dd></div>
             <div><dt>申请时间</dt><dd>{{ formatDate(selectedEntry.requestedAt) }}</dd></div>
             <div><dt>当前状态</dt><dd>{{ decisionLabel(selectedEntry.decision) }}</dd></div>
-            <template v-if="selectedEntry.deciderUsername">
-              <div><dt>审核人</dt><dd>{{ selectedEntry.deciderUsername }}</dd></div>
-              <div v-if="selectedEntry.decidedAt">
+            <div><dt>审核来源</dt><dd>{{ reviewSourceLabel(selectedEntry.reviewSource) }}</dd></div>
+            <template v-if="selectedEntry.decidedAt">
+              <div v-if="selectedEntry.deciderUsername">
+                <dt>审核人</dt><dd>{{ selectedEntry.deciderUsername }}</dd>
+              </div>
+              <div>
                 <dt>审核时间</dt><dd>{{ formatDate(selectedEntry.decidedAt) }}</dd>
               </div>
               <div v-if="selectedEntry.decisionReason">
@@ -521,7 +534,7 @@ onMounted(() => {
             </template>
           </dl>
           <div
-            v-if="selectedEntry.decision === 'PENDING'"
+            v-if="canDecide(selectedEntry)"
             class="review-detail__actions"
           >
             <button
@@ -530,7 +543,7 @@ onMounted(() => {
               :disabled="loading"
               @click="openDecision('APPROVED', $event)"
             >
-              通过并发布
+              {{ selectedEntry.reviewSource === 'AUTOMATED' ? '教师确认' : '通过并发布' }}
             </button>
             <button
               class="admin-button admin-button--danger review-decision review-decision--reject"
@@ -538,7 +551,7 @@ onMounted(() => {
               :disabled="loading"
               @click="openDecision('REJECTED', $event)"
             >
-              驳回并留档
+              {{ selectedEntry.reviewSource === 'AUTOMATED' ? '撤下题库并留档' : '驳回并留档' }}
             </button>
           </div>
         </aside>

@@ -2,6 +2,7 @@ import { http } from "./http";
 import type { BossProblemDto } from "./dto/Boss";
 
 export type BossProblemReviewDecision = "PENDING" | "APPROVED" | "REJECTED";
+export type BossProblemReviewSource = "TEACHER" | "AUTOMATED";
 export type BossProblemReviewSortBy = "REQUESTED_AT" | "STATEMENT" | "REQUESTER_USERNAME";
 export type BossProblemReviewSortDirection = "ASC" | "DESC";
 
@@ -12,6 +13,7 @@ export interface BossProblemReviewDto {
   kind: string | null;
   problem: BossProblemDto;
   decision: BossProblemReviewDecision;
+  reviewSource: BossProblemReviewSource;
   requesterId: number;
   requesterUsername: string;
   requestedAt: string;

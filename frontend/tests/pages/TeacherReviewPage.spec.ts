@@ -57,6 +57,7 @@ const review = (
     aiGenerated: true,
   },
   decision: "PENDING",
+  reviewSource: "TEACHER",
   requesterId: 2,
   requesterUsername: "teach",
   requestedAt: "2026-08-02T08:00:00Z",
@@ -124,6 +125,46 @@ describe("TeacherReviewPage", () => {
       wrapper.find('[data-testid="teacher-review-counts"]').text(),
     ).toContain("通过 1");
     expect(wrapper.text()).toContain("题面与隐藏用例均已复核");
+  });
+
+  it("lets a teacher reject an automatically approved question", async () => {
+    const automaticApproval = {
+      ...review(),
+      decision: "APPROVED" as const,
+      reviewSource: "AUTOMATED" as const,
+      version: 2,
+      decisionReason: "自动审核通过：KC 接地",
+    };
+    reviewMocks.listProblemReviews.mockResolvedValue([automaticApproval]);
+    reviewMocks.decideProblemReview.mockResolvedValue({
+      ...automaticApproval,
+      decision: "REJECTED",
+      reviewSource: "TEACHER",
+      version: 3,
+      deciderUsername: "teach",
+    });
+    useSessionStore().user = {
+      id: 2,
+      username: "teach",
+      displayName: "老师",
+      role: "TEACHER",
+    };
+
+    const wrapper = mount(TeacherReviewPage);
+    await flushPromises();
+
+    const reason = wrapper.get('[data-testid="teacher-review-decision-reason"]');
+    expect((reason.element as HTMLTextAreaElement).disabled).toBe(false);
+    expect(wrapper.text()).toContain("AI 自动审核");
+    await reason.setValue("人工复核发现题面歧义");
+    await wrapper.get('[data-testid="teacher-review-reject"]').trigger("click");
+    await flushPromises();
+
+    expect(reviewMocks.decideProblemReview).toHaveBeenCalledWith(41, {
+      decision: "REJECTED",
+      reason: "人工复核发现题面歧义",
+      version: 2,
+    });
   });
 
   it("exposes queue selection as keyboard-operable buttons", async () => {
