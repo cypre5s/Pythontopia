@@ -59,3 +59,10 @@
 - 运维页审核路径仅对白名单站内路由启用 RouterLink，未知路径维持纯文本；运维侧栏改用内联 SVG 语义图标。运维数据刷新失败时不保留上次快照。
 - 最新全量 Web 结果：Vitest 269 files / 2546 tests、`npm run typecheck`、`npm run build` 通过；`npm run lint` 0 errors / 7 warnings，均位于未改组件或账号隔离测试。构建仍报告已有 Pyodide externalize、eval 与大 chunk 提示。
 - Tutor 轨迹测试 mock 了 Pyodide 服务，未验证真实浏览器解释器加载；无模型性能样本没有覆盖此次前端改动，未重测。没有发起 DeepSeek 请求；潜在 36 次请求事件与未知供应商账单仍为风险，Graph 保持停止。
+
+## 2026-10-14 管理台审核页补测与边界复核
+
+- AI 出题审核页补充页面级回归，覆盖搜索与状态筛选的服务端参数、审核意见必填、基于当前 `version` 提交决策，以及加载失败时清除过期行。管理台页面测试 4 文件 / 9 项通过；随后前端全量 Vitest 270 文件 / 2549 项通过；`npm run typecheck`、新增测试 ESLint 和 `git diff --check` 通过。没有变更业务 API 或视觉布局。
+- 安全复核未确认 P0 或本地可复现的代码级 P1。定向 Maven 140 项、Graph 判题 37 项、Compose 沙箱安全契约通过。生产 Piston endpoint 的私网 ACL/代理 token 校验仍需部署证据；本地 Compose Piston 仅监听 localhost 且阻断外联。媒体生成禁用状态下，队列拒绝可遗留 PENDING 属于 P2。
+- Alethicode 比对确认 Pythontopia 已具备固定阶段 AutoGen Tutor，应该保留 Pythontopia 的 API/SSE、V199 会话级检查点和附件/事件契约。管理台布局遵循相同视觉约定，但只保留本项目有真实 API 的运维、用户与题目审核页。
+- 未发 DeepSeek 请求。此前本地日志仍显示约 28 条远征预生成请求，加上 8 次 Tutor/provider 尝试可能达到 36；账单与 token 总量未核。Graph 保持停止；完整 Boss 多阶段实战和 Twin A/B/延迟效果仍未验证。
