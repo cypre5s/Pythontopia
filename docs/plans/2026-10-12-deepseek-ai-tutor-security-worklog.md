@@ -419,3 +419,13 @@
 - 根因是原有 KC-001 Golden 回退题只输出 Hello 文本，无法命中权威 KC。改成以 `print()` 输出课程资料中的“神威·太湖之光”；真实 provider 请求失败后，审核回退在正确配置的本地 Piston 上通过。临时调用只读课程种子数据，未创建测试账号或写题库。
 - RED/GREEN 端点回归、Boss Graph 套件 235 passed；改动文件 Ruff、`git diff --check` 通过。
 - 仍未验证新 KC-001 AI 候选可稳定通过并写入共享题库；空画像玩家可以由审核通过的 Golden 题继续。性能阶段仍未启动，供应商 Token/账单未核对。
+
+## 2026-10-14 DeepSeek 纯文本响应与当前快照全量复验
+
+- 用户确认 DeepSeek 不应返回图片。按 DeepSeek [Vision 官方文档](https://api-docs.deepseek.com/guides/vision/)核对：`deepseek-flash` 接收图片输入；本项目 provider 的响应 DTO 只有文本/JSON/工具调用，图片响应块被忽略。Tutor 可选的 Mermaid 图解是模型返回文本源码后由 Web 本地渲染，不是 DeepSeek 图片生成。
+- 本地真实 provider 各发 1 次纯文本与 PNG 图片输入请求，两者均成功，调用结果只投影为 `content_text`；另跑 provider 图片响应块过滤与视觉输入转发定向测试：2 passed。未生成或请求图片输出。
+- 真实 Web 全栈 Playwright 联测：文字与 PNG 图片各经 `/api/tutor/ask` 完成 SSE，HTTP 200，Web 均渲染出非空文字；图片请求含 1 个 `data:image/png;base64` 输入，回答气泡没有 `<img>`。当前运行 Graph 配置为 `deepseek-v4-pro` 文本、`deepseek-flash` 视觉输入。联测临时学生账号及其 Tutor session 已删除。
+- 当前快照验证：前端 `npm run typecheck` 通过；全量 Vitest 270 files / 2573 tests 通过；ESLint 0 errors / 5 个 `App.accountIsolation.spec.ts` 测试桩 warning；生产 build 通过，仍有 Pyodide Node builtin externalize / `eval` 构建提示，manifest 时间戳已恢复。Graph `ruff check .` 通过、全量 pytest 1848 passed / 1 skipped / 13 warnings，跳过项因可选 RAG scorer 依赖缺失。
+- 全量 `mvn -q test`：1399 tests、0 assertion failures、7 errors。6 项 PostgreSQL Testcontainers 创建容器时 Docker 报随机宿主端口 `address already in use`；1 项长期学习模拟连接重置。宿主当前 `ip_local_port_range=44620-48715`，`ss` 在冲突端口观察到 Docker/PostgreSQL 连接的 `TIME-WAIT`。7 个失败类改为单独 Maven 进程复跑均通过；全量 Maven 仍不能标为成功，修正宿主端口池需要管理员权限，本轮未改系统网络配置。
+- 当前配置 DeepSeek provider 的小样本延迟：纯文本 3 次 P50 1.326 s / P95（nearest-rank）5.978 s；8×8 合成 PNG 图片输入 3 次 P50 1.085 s / P95 2.515 s。每次均返回非空文本。该采样仅覆盖供应商调用，样本很小，不代表 Web 全链路、Boss 节点或线上 SLA。
+- 本轮未改业务代码；管理台、班级契约、AutoGen Tutor 的只读对照记录已完成，班级继续复用 Pythontopia 自有 API/schema；无尽远征完整场景性能与浏览器端最终交互仍未测。
