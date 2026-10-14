@@ -124,11 +124,7 @@ public class AdaptivePracticePolicy {
     for (String prerequisite : candidate.prerequisiteCodes()) {
       Candidate prerequisiteCandidate = byCode.get(prerequisite);
       if (!prerequisiteReady(prerequisiteCandidate)) {
-        // Unknown prerequisites do not prove weakness; allow only an unassessed target as a
-        // level-one diagnostic. Known low mastery still blocks the next topic.
-        if (prerequisiteCandidate == null
-            || candidate.assessed()
-            || prerequisiteCandidate.assessed()) return false;
+        return false;
       }
     }
     return true;

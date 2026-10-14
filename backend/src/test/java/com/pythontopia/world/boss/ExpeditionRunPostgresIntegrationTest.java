@@ -758,6 +758,33 @@ class ExpeditionRunPostgresIntegrationTest {
   }
 
   @Test
+  void excludesRecentQuestionsAcrossRunsButExpiresOlderFingerprints() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto previous = startRun(runs, userId, 1, false);
+    String recentFingerprint = "c".repeat(64);
+    String expiredFingerprint = "e".repeat(64);
+    insertConsumedProblem(
+        userId, previous.runId(), "L0-0", "recent-question", "PY43-KC-001", recentFingerprint);
+    insertConsumedProblem(
+        userId, previous.runId(), "L0-1", "expired-question", "PY43-KC-001", expiredFingerprint);
+    jdbc.update(
+        "UPDATE pregenerated_problem SET consumed_at = now() - interval '8 days'"
+            + " WHERE user_id = ? AND problem_id = 'expired-question'",
+        userId);
+
+    runs.abandon(userId);
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    String currentFingerprint = "f".repeat(64);
+    insertConsumedProblem(
+        userId, active.runId(), "L0-0", "current-question", "PY43-KC-001", currentFingerprint);
+
+    assertThat(runs.findIssuedQuestionFingerprints(userId, active.runId()))
+        .containsExactlyInAnyOrder(recentFingerprint, currentFingerprint)
+        .doesNotContain(expiredFingerprint);
+  }
+
+  @Test
   void bossNodeAdvancesOnlyThroughThreeVerifiedServerPhases() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());

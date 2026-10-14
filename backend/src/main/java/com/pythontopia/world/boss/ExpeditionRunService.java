@@ -126,7 +126,7 @@ public class ExpeditionRunService {
     return rows.stream().findFirst().map(this::withRewardChoices);
   }
 
-  /** Questions already issued in this run, used to avoid repeating them at another node. */
+  /** Recent issued questions for this user, retained across runs for the review window. */
   public Set<String> findIssuedQuestionFingerprints(Long userId, String runId) {
     if (userId == null || runId == null) return Set.of();
     try {
@@ -134,11 +134,14 @@ public class ExpeditionRunService {
     } catch (IllegalArgumentException exception) {
       return Set.of();
     }
+    // shortcut: keep a 7-day history window until question-bank reuse data supports tuning it.
     return Set.copyOf(
         jdbcTemplate.query(
             "SELECT DISTINCT question_fingerprint FROM pregenerated_problem"
-                + " WHERE user_id = ? AND expedition_run_id = ?::uuid"
-                + " AND status = 'CONSUMED' AND question_fingerprint IS NOT NULL",
+                + " WHERE user_id = ? AND status = 'CONSUMED'"
+                + " AND question_fingerprint IS NOT NULL"
+                + " AND (expedition_run_id = ?::uuid"
+                + " OR consumed_at >= now() - interval '7 days')",
             (rs, rowNum) -> rs.getString(1),
             userId,
             runId));

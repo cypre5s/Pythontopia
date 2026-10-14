@@ -28,6 +28,7 @@ describe('admin visual shell contract', () => {
     expect(layoutStyles).toContain('--admin-panel-shadow: 0 6px 18px rgb(15 23 42 / 8%);');
     expect(layoutStyles).toContain('--admin-table-header: #eef4fb;');
     expect(layoutStyles).toContain('--admin-table-hover: #f8fbff;');
+    expect(layoutStyles).toMatch(/\.admin-nav__link\s*\{[^}]*font-size:\s*15px;/);
     expect(layoutStyles).toMatch(/\.admin-nav__link\.is-active\s*\{[^}]*background:\s*linear-gradient\(90deg, #2563eb 0%, #3b82f6 100%\);/);
     expect(layoutStyles).toMatch(/\.admin-nav__link\.is-active\s*\{[^}]*color:\s*#fff;/);
     expect(layoutStyles).toContain('@media (max-width: 767px)');

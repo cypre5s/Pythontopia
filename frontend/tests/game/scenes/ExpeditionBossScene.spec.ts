@@ -22,7 +22,7 @@ function chain(methods: readonly string[]): Record<string, Spy> {
 
 const GRAPHICS_METHODS = [
   'fillStyle', 'fillRect', 'fillRoundedRect', 'lineStyle', 'lineBetween',
-  'strokeRoundedRect', 'setDepth', 'setAlpha',
+  'strokeRoundedRect', 'setDepth', 'setAlpha', 'setPosition', 'setScale',
 ] as const;
 const OBJECT_METHODS = ['setOrigin', 'setDepth', 'setDisplaySize', 'setPosition', 'setTint', 'clearTint'] as const;
 
@@ -117,6 +117,13 @@ describe('ExpeditionBossScene', () => {
 
     expect(scene.cameraShake).toHaveBeenCalledTimes(1);
     expect(scene.cameraFlash).toHaveBeenCalledTimes(1);
+    expect(scene.tweenAdd).toHaveBeenCalledWith(expect.objectContaining({
+      targets: expect.objectContaining({ setPosition: expect.any(Function) }),
+      x: expect.any(Number),
+      yoyo: true,
+      duration: 110,
+    }));
+    expect(scene.tweenAdd.mock.calls.filter(([tween]) => tween.duration === 180)).toHaveLength(1);
     expect(onBossHit).toHaveBeenCalledTimes(1);
   });
 

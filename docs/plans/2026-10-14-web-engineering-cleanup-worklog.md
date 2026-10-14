@@ -15,3 +15,9 @@
 - 当前快照 Web Vitest 为 266 files / 2533 tests，通过；TypeScript typecheck 通过；全量 ESLint 0 errors / 7 warnings，warning 仍限于未改文件中的可选 prop 提示和账号隔离测试 mock。远征地图/挑战入口 Chromium E2E 2 项通过，`git diff --check` 通过。
 - 本轮改动涉及的后端类隔离复跑 78 项通过。全量 Maven 为 1359 tests、0 assertion failures、7 errors；6 个 pgvector Testcontainers 在启动阶段失败，另一个长期仿真用例因 PostgreSQL 连接拒绝失败。没有将全量结果标记为通过。
 - 工程命名/格式遵循 Google Java、Vue 与 typescript-eslint 官方指引；保留已有 7 条 lint warning，不在此次功能收尾中扩大成全仓格式重排。功能验证完成后，经 Vite 代理对远征建局做 12 个计时样本，P50 20.14 ms、P95 24.75 ms；不包含模型生成与正式判题延迟。
+
+## 2026-10-14 增量复验
+
+- 对齐管理台侧栏导航字号至 Alethicode 当前的 15px，并用样式契约测试固定这一差异。
+- Phaser Boss 场景的成功反馈测试扩展为玩家冲刺与像素命中爆点；复用现有素材与单 Phaser 实例。
+- 当前相关 Web 回归 4 files / 14 tests、typecheck、production build 与改动文件 ESLint 通过。未做管理台全栈截图，也未完成最终 Boss 多阶段真实判题浏览器旅程。
