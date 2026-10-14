@@ -142,7 +142,8 @@ public class BossService {
       Long userId, Integer focusChapter, String preferredKcCode) {
     FrontierSelectResultDto frontier =
         learnerTwinService.frontier(userId, focusChapter, List.of(), 40, preferredKcCode);
-    return limitFrontierPicks(frontier.picks(), 40);
+    return limitFrontierPicks(
+        frontier.picks().stream().filter(pick -> pick.chapter() > 1).toList(), 40);
   }
 
   private FrontierSelectResultDto limitFrontierPicks(List<FrontierPickDto> picks, int count) {
@@ -150,7 +151,7 @@ public class BossService {
       throw new BusinessException(
           org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
           "EXPEDITION_NO_PRACTICE_PROBLEMS",
-          "当前范围没有满足先修条件的可练习知识点。请完成前置知识的小测或练习，或切换到其他章节后重试。");
+          "当前范围没有可用于 Python 编程的知识点。请先完成主线中的前置小测或练习，或切换到后续章节。");
     }
     return new FrontierSelectResultDto(picks.stream().limit(count).toList());
   }

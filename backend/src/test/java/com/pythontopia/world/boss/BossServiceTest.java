@@ -974,7 +974,7 @@ class BossServiceTest {
         .isInstanceOfSatisfying(
             com.pythontopia.common.error.BusinessException.class,
             exception -> assertThat(exception.getMessage())
-                .contains("先修条件"));
+                .contains("主线中的前置小测"));
     verifyNoInteractions(chapterProblemBankRepository, graphClient);
   }
 
@@ -991,8 +991,29 @@ class BossServiceTest {
     var result = service.selectFrontier(7L, null, "PY43-KC-001");
 
     assertThat(result.picks()).extracting(FrontierPickDto::kcCode)
-        .containsExactly("PY43-KC-001", "PY43-KC-016");
+        .containsExactly("PY43-KC-016");
     verifyNoInteractions(chapterProblemBankRepository, graphClient);
+  }
+
+  @Test
+  @DisplayName("远征不把第一章的概念根 KC 当作 Python 编程节点")
+  void expeditionExplainsWhenOnlyConceptRootsAreEligible() {
+    when(learnerTwinService.frontier(7L, null, List.of(), 40, null))
+        .thenReturn(
+            new FrontierSelectResultDto(
+                List.of(
+                    new FrontierPickDto("PY43-KC-001", 1, 1, "尚未评估"),
+                    new FrontierPickDto("PY43-KC-002", 1, 1, "尚未评估"),
+                    new FrontierPickDto("PY43-KC-004", 1, 1, "尚未评估"),
+                    new FrontierPickDto("PY43-KC-006", 1, 1, "尚未评估"))));
+
+    assertThatThrownBy(() -> service.selectFrontier(7L, null, null))
+        .isInstanceOfSatisfying(
+            com.pythontopia.common.error.BusinessException.class,
+            exception -> {
+              assertThat(exception.code()).isEqualTo("EXPEDITION_NO_PRACTICE_PROBLEMS");
+              assertThat(exception.getMessage()).contains("Python 编程");
+            });
   }
 
   @Test
@@ -1008,7 +1029,7 @@ class BossServiceTest {
               assertThat(exception.code()).isEqualTo("EXPEDITION_NO_PRACTICE_PROBLEMS");
               assertThat(exception.status())
                   .isEqualTo(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY);
-              assertThat(exception.getMessage()).contains("先修条件");
+              assertThat(exception.getMessage()).contains("主线中的前置小测");
             });
     verifyNoInteractions(chapterProblemBankRepository, graphClient);
   }
