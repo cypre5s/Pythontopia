@@ -143,8 +143,8 @@ onMounted(() => {
                     <span :title="loop.nextAction">{{ loop.nextAction }}</span>
                     <small
                       v-if="loop.latestTraceId"
-                      :title="`Trace ${loop.latestTraceId}`"
-                    >Trace {{ loop.latestTraceId }}</small>
+                      :title="`关联入口：${loop.latestTraceId}`"
+                    >关联入口：{{ loop.latestTraceId }}</small>
                   </div>
                   <span
                     v-if="loop.evidenceRefs.length"

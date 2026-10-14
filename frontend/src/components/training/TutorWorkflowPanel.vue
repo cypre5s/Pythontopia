@@ -71,6 +71,14 @@ interface RetryableWorkflowRequest {
   requestId: string;
 }
 
+interface PendingWorkflowRequestEnvelope {
+  version: 1;
+  problemId: number;
+  sessionKey: string;
+  savedAt: number;
+  request: RetryableWorkflowRequest;
+}
+
 const cards = ref<CardEntry[]>([]);
 const availableActions = ref<WorkflowActionDto[]>([]);
 const phase = ref<string>('READING');
@@ -92,11 +100,20 @@ const canSendChat = computed(() => !running.value && !chatImageReads.value
 const MAX_TUTOR_CODE_LENGTH = 20_000;
 const MAX_CHAT_IMAGES = 3;
 const MAX_CHAT_IMAGE_BYTES = 5 * 1024 * 1024;
+// shortcut: recovery stays in this tab for 25 minutes; use owner-scoped server storage for cross-device resume.
+const PENDING_WORKFLOW_TTL_MS = 25 * 60 * 1000;
+const MAX_PENDING_WORKFLOW_LENGTH = 32_000;
+const WORKFLOW_EVENT_NAMES: ReadonlySet<string> = new Set([
+  'READING', 'IDEATING', 'SKELETON', 'CODING', 'ERROR_FEEDBACK', 'AC_REVIEW', 'TRANSFER',
+  'CHAT', 'KNOWLEDGE_REVIEW', 'EXECUTION_TRACE', 'VISUALIZE', 'PARSONS', 'AGENT_FEEDBACK',
+  'COMPACT', 'PLAN_RECOMMEND', 'PLAN_START', 'PLAN_RESPONSE', 'PLAN_STEERING',
+]);
 const bodyRef = ref<HTMLElement | null>(null);
 const loaded = ref(false);
 const lastInitialNonce = ref(0);
 const cardFeedback = ref<Record<string, 'helpful' | 'not_helpful'>>({});
 const retryableRequest = ref<RetryableWorkflowRequest | null>(null);
+const recoveredRequest = ref(false);
 const localTraceRunning = ref(false);
 let localTraceSeq = 0;
 
@@ -214,14 +231,30 @@ onBeforeUnmount(() => {
   chatImages.value.forEach((image) => revokeImagePreview(image.previewUrl));
 });
 
+function timelineUserMessage(payload: WorkflowCardPayload): string | undefined {
+  return 'user_message' in payload && typeof payload.user_message === 'string'
+    ? payload.user_message
+    : undefined;
+}
+
 async function load(): Promise<void> {
   try {
     const snap = await getActiveWorkflowSession(props.problemId);
     if (!alive) return;
     sessionKey.value = snap.sessionKey;
-    cards.value = snap.cards.map((c) => ({ key: c.cardKey, payload: c.payload, seq: c.seq }));
+    cards.value = snap.cards.map((card) => {
+      const userMessage = timelineUserMessage(card.payload);
+      return {
+        key: card.cardKey,
+        payload: card.payload,
+        seq: card.seq,
+        ...(userMessage ? { userMessage } : {}),
+      };
+    });
     phase.value = snap.phase;
     episodePlan.value = snap.episodePlan ?? null;
+    retryableRequest.value = restorePendingWorkflowRequest(sessionKey.value);
+    recoveredRequest.value = retryableRequest.value !== null;
   } catch {
     if (!alive) return;
     cards.value = [];
@@ -231,6 +264,81 @@ async function load(): Promise<void> {
   loaded.value = true;
   void consumeInitialRequest();
   scrollBottom();
+}
+
+function pendingWorkflowStorageKey(): string {
+  return `pyt:tutor-workflow:pending:${props.problemId}`;
+}
+
+function removePendingWorkflowRequest(): void {
+  try {
+    sessionStorage.removeItem(pendingWorkflowStorageKey());
+  } catch {
+    // Storage can be unavailable in privacy-restricted browser contexts.
+  }
+}
+
+function restorePendingWorkflowRequest(activeSessionKey: string): RetryableWorkflowRequest | null {
+  try {
+    const raw = sessionStorage.getItem(pendingWorkflowStorageKey());
+    if (!raw) return null;
+    const value: unknown = JSON.parse(raw);
+    if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+      removePendingWorkflowRequest();
+      return null;
+    }
+    const envelope = value as Partial<PendingWorkflowRequestEnvelope>;
+    const request = envelope.request;
+    const age = Date.now() - Number(envelope.savedAt);
+    if (
+      raw.length > MAX_PENDING_WORKFLOW_LENGTH
+      || envelope.version !== 1
+      || envelope.problemId !== props.problemId
+      || envelope.sessionKey !== activeSessionKey
+      || !Number.isFinite(envelope.savedAt)
+      || age < 0
+      || age >= PENDING_WORKFLOW_TTL_MS
+      || !request
+      || !WORKFLOW_EVENT_NAMES.has(request.event)
+      || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(request.requestId)
+      || (request.eventData !== undefined
+        && (typeof request.eventData !== 'object' || request.eventData === null || Array.isArray(request.eventData)))
+    ) {
+      removePendingWorkflowRequest();
+      return null;
+    }
+    return request;
+  } catch {
+    removePendingWorkflowRequest();
+    return null;
+  }
+}
+
+function savePendingWorkflowRequest(request: RetryableWorkflowRequest): void {
+  if (!sessionKey.value) return;
+  const envelope: PendingWorkflowRequestEnvelope = {
+    version: 1,
+    problemId: props.problemId,
+    sessionKey: sessionKey.value,
+    savedAt: Date.now(),
+    request,
+  };
+  try {
+    const serialized = JSON.stringify(envelope);
+    if (serialized.length > MAX_PENDING_WORKFLOW_LENGTH) {
+      removePendingWorkflowRequest();
+      return;
+    }
+    sessionStorage.setItem(pendingWorkflowStorageKey(), serialized);
+  } catch {
+    // Recovery is best-effort; the current Tutor request still works without browser storage.
+  }
+}
+
+function discardPendingWorkflowRequest(): void {
+  removePendingWorkflowRequest();
+  retryableRequest.value = null;
+  recoveredRequest.value = false;
 }
 
 /** 关键节点感知环境：按事件携带 submission_id / 当前编辑器代码 / intent 等。 */
@@ -370,7 +478,7 @@ async function runLocalExecutionTrace(): Promise<void> {
 
   const stdin = learning.training.problem?.samples[0]?.input ?? '';
   localTraceRunning.value = true;
-  retryableRequest.value = null;
+  discardPendingWorkflowRequest();
   try {
     const trace = await runTrace(code, { stdin });
     if (!alive) return;
@@ -414,13 +522,16 @@ async function runEvent(
     requestId,
     ...(eventData ? { eventData } : {}),
   };
-  retryableRequest.value = { event, ...(eventData ? { eventData } : {}), requestId };
+  const retryRequest = { event, ...(eventData ? { eventData } : {}), requestId };
+  retryableRequest.value = retryRequest;
+  recoveredRequest.value = false;
+  savePendingWorkflowRequest(retryRequest);
   await sse.start(body);
   // 组件已销毁（含 onBeforeUnmount 的 abort：abort 会把 status 置成 done 但 result 为空）→
   // 不再落卡片、更不弹「导学助手暂时没响应」到别的页面。
   if (!alive) return;
   if (sse.status.value === 'done' && sse.result.value) {
-    retryableRequest.value = null;
+    discardPendingWorkflowRequest();
     const r = sse.result.value;
     sessionKey.value = r.session_id || sessionKey.value;
     phase.value = r.phase;
@@ -429,7 +540,9 @@ async function runEvent(
       const entry: CardEntry = { key: r.card_key, payload: r.card, seq: r.seq };
       const msg = eventData?.message;
       if (typeof msg === 'string' && msg) entry.userMessage = msg;
-      cards.value = [...cards.value, entry];
+      if (!cards.value.some((card) => !card.localOnly && card.seq === entry.seq)) {
+        cards.value = [...cards.value, entry];
+      }
     }
     // 严格以后端 available_actions 为准（已按 Phase 门控 + 推荐排序），不再前端补齐辅助动作。
     if (Array.isArray(r.available_actions) && r.available_actions.length > 0) {
@@ -1280,14 +1393,23 @@ function cardId(entry: CardEntry): string {
       class="tw-retry"
       role="status"
     >
-      <span>{{ sse.error.value?.message ?? '上次导学请求未完成，可以安全重试。' }}</span>
-      <button
-        type="button"
-        data-testid="tutor-workflow-retry"
-        @click="retryLastWorkflowRequest"
-      >
-        重试上次请求
-      </button>
+      <span>{{ recoveredRequest ? '发现未完成的导学请求；点击继续后才会恢复。' : sse.error.value?.message ?? '上次导学请求未完成，可以安全重试。' }}</span>
+      <div class="tw-retry__actions">
+        <button
+          type="button"
+          data-testid="tutor-workflow-retry"
+          @click="retryLastWorkflowRequest"
+        >
+          {{ recoveredRequest ? '继续上次请求' : '重试上次请求' }}
+        </button>
+        <button
+          type="button"
+          data-testid="tutor-workflow-discard"
+          @click="discardPendingWorkflowRequest"
+        >
+          放弃
+        </button>
+      </div>
     </div>
 
     <!-- 自由提问（CHAT） -->
@@ -1926,6 +2048,12 @@ function cardId(entry: CardEntry): string {
   cursor: pointer;
   font: inherit;
   font-weight: 700;
+}
+
+.tw-retry__actions {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8px;
 }
 
 .tw-retry button:focus-visible {

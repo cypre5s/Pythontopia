@@ -1,5 +1,7 @@
 package com.pythontopia.learner.evaluation.service;
 
+import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,12 +22,15 @@ public class WeeklyEvaluationScheduler {
   private static final Logger LOGGER = LoggerFactory.getLogger(WeeklyEvaluationScheduler.class);
 
   private final LearnerEvaluationService service;
+  private final TutorDailyRequestLimitService requestLimitService;
   private final boolean enabled;
 
   public WeeklyEvaluationScheduler(
       LearnerEvaluationService service,
+      TutorDailyRequestLimitService requestLimitService,
       @Value("${pyt.evaluation.weekly-auto-enabled:true}") boolean enabled) {
     this.service = service;
+    this.requestLimitService = requestLimitService;
     this.enabled = enabled;
   }
 
@@ -44,19 +49,28 @@ public class WeeklyEvaluationScheduler {
     }
     int generated = 0;
     int failed = 0;
+    int skipped = 0;
     for (Long userId : learners) {
       try {
+        requestLimitService.reserve(userId);
         service.compute(userId, null);
         generated++;
       } catch (RuntimeException ex) {
         failed++;
+        if (ex instanceof BusinessException business
+            && "AI_PROVIDER_DAILY_LIMIT_REACHED".equals(business.code())) {
+          skipped = learners.size() - generated - failed;
+          LOGGER.warn("Weekly evaluation batch stopped: shared AI provider daily budget reached");
+          break;
+        }
         LOGGER.warn("Weekly evaluation for user {} failed: {}", userId, ex.toString());
       }
     }
     LOGGER.info(
-        "Weekly evaluation batch done: {} eligible, {} generated, {} failed",
+        "Weekly evaluation batch done: {} eligible, {} generated, {} failed, {} skipped",
         learners.size(),
         generated,
-        failed);
+        failed,
+        skipped);
   }
 }

@@ -463,21 +463,21 @@ def _resolve_openai_env(
     """解析 OpenAI 兼容（DeepSeek 等）三件套，env 命名精度对齐既有 provider 约定。"""
     base_url = (
         base_url
+        or os.environ.get("PYT_OPENAI_BASE_URL")
         or os.environ.get("OPENAI_BASE_URL")
         or os.environ.get("LLM_BASE_URL")
-        or os.environ.get("PYT_OPENAI_BASE_URL")
     )
     api_key = (
         api_key
+        or os.environ.get("PYT_OPENAI_API_KEY")
         or os.environ.get("OPENAI_API_KEY")
         or os.environ.get("LLM_API_KEY")
-        or os.environ.get("PYT_OPENAI_API_KEY")
     )
     model = (
         model
+        or os.environ.get("PYT_OPENAI_MODEL")
         or os.environ.get("OPENAI_MODEL")
         or os.environ.get("LLM_MODEL")
-        or os.environ.get("PYT_OPENAI_MODEL")
     )
     return model, base_url, api_key
 

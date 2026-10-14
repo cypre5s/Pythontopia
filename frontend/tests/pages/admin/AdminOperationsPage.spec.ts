@@ -135,7 +135,7 @@ describe('AdminOperationsPage', () => {
     const details = wrapper.findAll('.operation-row__body small');
     expect(descriptions[0].attributes('title')).toBe(nextAction);
     expect(descriptions[1].attributes('title')).toBe(action);
-    expect(details[0].attributes('title')).toBe(`Trace ${traceId}`);
+    expect(details[0].attributes('title')).toBe(`关联入口：${traceId}`);
     expect(details[1].attributes('title')).toBe(`关联页面：${reviewRoute}`);
     expect(details[1].find('a').exists()).toBe(false);
   });

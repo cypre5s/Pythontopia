@@ -11,7 +11,14 @@ vi.mock('@/api/aiRuntime', () => ({ fetchAiRuntimeOperations }));
 
 const operations: AiRuntimeOperations = {
   subject: { scope: 'PLATFORM', label: '平台', learnerCount: 12, evidenceLearnerCount: 8 },
-  loops: [],
+  loops: [{
+    loopType: 'LEARNER',
+    label: '学生学习闭环',
+    status: 'PASS',
+    latestTraceId: 'open:student-learning-loop',
+    nextAction: '继续学习',
+    evidenceRefs: [],
+  }],
   governance: [],
 };
 
@@ -21,6 +28,15 @@ beforeEach(() => {
 });
 
 describe('AdminOperationsPage', () => {
+  it('labels the backend operation key without presenting it as a trace id', async () => {
+    const wrapper = mount(AdminOperationsPage);
+    await flushPromises();
+
+    const operationKey = wrapper.get('.operation-row__body small');
+    expect(operationKey.text()).toBe('关联入口：open:student-learning-loop');
+    expect(operationKey.attributes('title')).toBe('关联入口：open:student-learning-loop');
+  });
+
   it('provides a manual refresh action and disables it while loading', async () => {
     let resolveRefresh!: (value: AiRuntimeOperations) => void;
     fetchAiRuntimeOperations

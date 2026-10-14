@@ -466,6 +466,31 @@ def test_offline_optimizer_accepts_documented_deepseek_model(
     )
 
 
+def test_offline_optimizer_prefers_project_deepseek_settings(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from pythontopia_graph.optimize import compile as optimize_compile
+
+    monkeypatch.setenv("PYT_OPENAI_BASE_URL", "https://api.deepseek.com/v1")
+    monkeypatch.setenv("OPENAI_BASE_URL", "https://api.deepseek.com/other")
+    monkeypatch.setenv("PYT_OPENAI_API_KEY", "project-key")
+    monkeypatch.setenv("OPENAI_API_KEY", "generic-key")
+    monkeypatch.setenv("PYT_OPENAI_MODEL", "deepseek-v4-pro")
+    monkeypatch.setenv("OPENAI_MODEL", "deepseek-flash")
+
+    monkeypatch.setattr(
+        optimize_compile,
+        "_require_dspy",
+        lambda: SimpleNamespace(LM=lambda model, **kwargs: (model, kwargs)),
+    )
+
+    model, config = optimize_compile.build_openai_lm()
+
+    assert model == "openai/deepseek-v4-pro"
+    assert config["api_base"] == "https://api.deepseek.com/v1"
+    assert config["api_key"] == "project-key"
+
+
 @pytest.mark.asyncio
 async def test_chat_drops_guard_context_before_serializing_request_body(
     monkeypatch: pytest.MonkeyPatch,

@@ -11,7 +11,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Atomic per-account and shared provider daily caps for user-triggered AI requests. */
+/** Atomic per-account and shared provider daily caps for AI operations. */
 @Service
 public class TutorDailyRequestLimitService {
 
@@ -49,7 +49,7 @@ public class TutorDailyRequestLimitService {
     this.limitsEnabled = limitsEnabled;
   }
 
-  /** Reserves one request before contacting the model; conversation IDs do not affect the cap. */
+  /** Reserves one operation slot before model work; conversation IDs do not affect the cap. */
   @Transactional
   public void reserve(Long userId) {
     if (!limitsEnabled) {

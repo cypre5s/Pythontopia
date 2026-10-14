@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-15 — DeepSeek 文本输出与 AI 预算入口复核
+
+- 再次确认 DeepSeek 图像只用于输入：同步和 SSE 响应解析仅保留文本；混合响应内的图片块被丢弃；Tutor、工坊等 AI 输出视图禁用 Markdown 图片。经项目 provider 新发起两次真实调用：纯文本请求返回非空文字，合成四色 PNG 输入返回颜色描述文字；返回 DTO 只有文本/JSON/工具调用字段。provider + Tutor 图片输入测试 43 passed（含同步和 SSE 混合图片块回归），Ruff 通过。
+- 修复每周评估调度直接调用模型服务、绕过账号/全站每日预算的问题。每个待评估学生先预留一个 AI 操作额度；全站 provider 额度耗尽时停止批次并记录未处理人数。本地开发限额关闭时预留仍无操作。调度器和额度路由定向测试通过。
+- 离线 GEPA 优化脚本的 `PYT_OPENAI_*` 优先级对齐在线 provider；RED/GREEN 覆盖项目配置与通用环境变量冲突时仍选项目 DeepSeek 配置。
+- 管理台运维页将后端的入口键从“Trace”改标“关联入口”，不改 API/DTO/数据库字段；RED/GREEN 页面测试通过。
+- Tutor 在当前标签页以 `sessionStorage` 暂存最多 25 分钟的未完成请求信封（不存图片字节），仅匹配原题目和服务端会话后展示“继续”，继续沿用原请求 ID；成功或放弃即清除，学生可主动丢弃。恢复时重建学生消息气泡，重放按服务端卡片序号去重，避免刷新后的重复卡片。回归先红后绿覆盖恢复、跨会话拒绝、过期、放弃、成功清理和完成结果重放去重。
+- 完整前端 Vitest：272 个文件 / 2584 项通过；`npm run typecheck`、Tutor 页面定向 ESLint 通过。全量测试发现并同步修复另一个 Admin operations 旧标题断言。
+- 验证：后端 `WeeklyEvaluationSchedulerTest` 与 `AiBudgetRouteCoverageTest` 通过，相关 Java 文件定向 Spotless 通过；Graph provider + Tutor 图片输入 43 passed、Ruff 通过；前端运维页/Markdown 4 项通过，定向 ESLint 通过。全仓 Spotless 仍被 600 余个未修改文件的历史格式差异阻断。
+- 仍未完成：Tutor 刷新恢复尚未做真实 Web 全栈浏览器联测、Tutor 与 Alethicode 的逐行为等价、供应商 token/账单核对、生产 Piston 隔离验证、Twin 延迟效果验证及全量 Maven 稳定全绿。没有访问 ECS 或 GitHub。两次真实模型调用仅验证 provider 与文字/图片输入边界，不等同于完整 Web Tutor 工作流复测。
+
 ## 2026-10-14 — 恢复课程包权威先修关系
 
 - 新增 V214，把旧 V125 按 KC 编号生成的人工顺序链恢复为 `data/course-pack-43/json/course_kc.json` 中的 65 组课程先修关系；不新增表或 KC。
