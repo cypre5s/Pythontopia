@@ -100,3 +100,13 @@
 - Tutor 全栈真实文本与合成 PNG 图片各完成一次 DeepSeek 调用，回复成功持久化；图片答复识别黄色背景和蓝色方形。验证后删除本轮 4 个合成学生账号、3 条候选及相关 Tutor/判题记录。
 - 验证结果：Graph Boss 225 passed；Ruff 全量通过；Maven `BossGraphClientTest`、`BossServiceTest`、`EndlessPregenServiceTest`、`BossProblemReviewRepositoryPostgresTest` 共 65 passed；`TutorDailyRequestLimitServiceTest` 通过；`git diff --check` 通过。当前工作树仍有此前任务的其他未提交修改，未作清理或重置。
 - 尚未完成：学习 Twin P0–P3 计划、KC 全面个性化覆盖和 A/B 效果对照、Boss 最终 Phaser 浏览器旅程、全量 Maven 稳定复跑、Web 全量回归、全仓工程整理及素材授权/登记复核。队列候选仍须教师批准才能加入全局题库。
+
+
+## 2026-10-14 — 本地 DeepSeek 调用续验
+
+- 本地开发关闭账号级和全站每日 AI 请求计数；部署限额未变。运行中 Spring 环境和 `TutorDailyRequestLimitServiceTest` 均核实该行为。
+- Pythontopia 已具备与 Alethicode 当前 Tutor 方向一致的固定阶段 AutoGen 编排；继续复用本项目 SSE、会话持久化、V199 checkpoint、附件授权和 API 字段契约，不复制第二个 Tutor 服务。
+- 将 DeepSeek Chat/SSE 默认请求参数设为 `thinking: disabled`，Unit RED/GREEN 通过。变更后真实文本和图片 Tutor 调用分别经 TutorAgent 与 Tutor AutoGen/SSE 实际通过；图片为本地合成 PNG，无个人内容。
+- 已重启 Compose Graph 服务，经其本地 HTTP Tutor AutoGen/SSE 路由真实验证文本与图片。之后 Playwright 真实登录 Web 工坊发送文本与 PNG 图片，确认两个答复、图片请求载荷与两条持久化会话；清理临时学生账号。测试脚本前两轮等待条件不正确，第三轮通过。
+- 管理后台 Vitest 9 项、前端 typecheck、Graph 定向 pytest 62 项、Ruff 和本地不限额 Maven 单测通过。静态核对未发现管理台 DTO/API/数据库字段错位；布局色彩尺寸与 Alethicode 的 Admin tokens 对齐。
+- 仍未完成：学习 Twin P0–P3 计划、KC 个性化覆盖与 A/B 效果对照、Boss 最终 Phaser 浏览器旅程、全量 Maven 稳定复跑、Web 全量回归、全仓工程整理及素材授权/登记复核。账单/token 用量未核对。

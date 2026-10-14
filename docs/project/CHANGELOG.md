@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-14 — 本地 AI 不限额与 DeepSeek Tutor 复验
+
+- `./dev.sh` 本地运行关闭账号级与全站每日 AI 请求计数，运行中的 Spring 进程确认配置为 `false`；部署默认仍限额。模型供应商自己的额度与限流仍生效。
+- DeepSeek Chat Completions 的 reasoning 默认改为 `thinking: disabled`，Chat 与 SSE 流统一生效；显式 `thinking` 参数仍可覆盖。这样与 Alethicode Tutor 现有 `LlmClient` 保持一致，避免推理 token 用尽输出预算时正文为空。
+- 使用真实 DeepSeek API，通过 TutorAgent、FastAPI Tutor AutoGen/SSE、重启后的 Graph HTTP 路由和浏览器 Web→Java→Graph 链路验证文字及合成 PNG 图片输入；全链路回答写入 Tutor 会话记录。测试凭据与图片内容未写入仓库。
+- Playwright 浏览器真实注册并登录临时学生账号，在工坊发送文本和 PNG 图片，检查两个 Tutor 流式回答和持久化记录，随后删除临时用户及其数据。
+- 验证：Tutor provider、ask stream、图片校验、AutoGen runtime 定向 pytest 共 62 项通过（1 条既有 pytest 标记警告）；管理员页面 Vitest 9 项通过；前端类型检查、Ruff 与 `TutorDailyRequestLimitServiceTest` 通过。供应商账单/token 核对仍待完成。
+
 ## 2026-10-14 — 本地 DeepSeek 复验与 KC 编程题接地
 
 - 本地 `./dev.sh` 启动时 `PYT_AI_REQUEST_LIMITS_ENABLED=false`，运行进程已核实为 `false`；部署默认日限额保持开启。Boss 判题的 10 秒防重复提交限制仍保留，它不限制 DeepSeek 请求数。

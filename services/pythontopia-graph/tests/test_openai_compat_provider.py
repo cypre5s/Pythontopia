@@ -220,6 +220,46 @@ async def test_chat_uses_fast_model_when_tier_is_fast(
 
 
 @pytest.mark.asyncio
+async def test_chat_disables_deepseek_thinking_by_default_and_keeps_explicit_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bodies = _capture_request_bodies(monkeypatch)
+    provider = OpenAiCompatProvider()
+    messages = [{"role": "user", "content": "ping"}]
+
+    await provider.chat(messages, json_mode=False)
+    await provider.chat(messages, json_mode=False, thinking={"type": "enabled"})
+
+    assert bodies[0]["thinking"] == {"type": "disabled"}
+    assert bodies[1]["thinking"] == {"type": "enabled"}
+
+
+@pytest.mark.asyncio
+async def test_chat_stream_disables_deepseek_thinking_by_default_and_keeps_explicit_override(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    bodies: list[dict[str, Any]] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(json.loads(request.content))
+        return httpx.Response(
+            200,
+            text='data: {"choices":[{"delta":{"content":"ok"}}]}\n\n'
+            "data: [DONE]\n\n",
+        )
+
+    _capture_async_client_kwargs(monkeypatch, handler)
+    provider = OpenAiCompatProvider()
+    messages = [{"role": "user", "content": "ping"}]
+
+    for kwargs in ({}, {"thinking": {"type": "enabled"}}):
+        _ = [chunk async for chunk in provider.chat_stream(messages, **kwargs)]
+
+    assert bodies[0]["thinking"] == {"type": "disabled"}
+    assert bodies[1]["thinking"] == {"type": "enabled"}
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("stream", [False, True])
 async def test_request_model_override_is_rejected(
     monkeypatch: pytest.MonkeyPatch, stream: bool
