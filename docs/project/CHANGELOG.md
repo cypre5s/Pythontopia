@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-10-14 — 本地 Piston 最小权限与资源封顶
+
+- 本地可选 Piston sandbox 移除 `privileged`；改为只读根文件系统、`no-new-privileges`、最小 capability 白名单、容器内存/CPU/PID 限制、有限任务 tmpfs，并封顶每进程内存、运行时长和并发数。修正文档中把固定 Piston API 描述成自带 Isolate/cgroups 的说法。
+- 临时受限容器先验证 Python 正常判题、敏感文件/网络被拒、超时后 API 可继续工作、过高内存请求被服务端拒绝；随后按相同配置重建当前本地 Piston 服务并重复通过这些探针。Compose 安全契约脚本增加最小权限和资源限额断言。
+- 当前本地 API 对无 Authorization 与伪造 Bearer 的 runtimes 请求都返回 HTTP 200。生产 Piston 仍需确认 API/代理确实验证令牌，并由私有网络 ACL 隔离；本地探针不构成生产内核逃逸验证。
+
+## 2026-10-14 — 全量 Maven 复跑与远征随机地图断言
+
+- 一次全量 Maven 运行 `1363 tests, 1 failure, 10 errors`：9 个 Testcontainers 容器启动失败、1 个长期仿真数据库连接失败；10 个错误类单独重跑均退出 0。全量运行中的 `ExpeditionRunPostgresIntegrationTest` 还因随机地图把事件放在中点、触发额外 1 HP 后仍断言固定 4 而失败。
+- 修正测试预期，让它按是否中点首次通关计算额外恢复值；不改游戏逻辑。完整 `ExpeditionRunPostgresIntegrationTest` 现为 28 tests、0 failures/errors；当前定向后端 47 tests、Graph 沙箱/评估/自测 37 tests、Compose 安全契约均通过。
+- 全量 Maven 整体仍未通过，主要阻塞是 Docker 随机端口绑定/容器回收与长测数据库连接环境；本轮没有发 DeepSeek 请求，也没有新增性能采样。
+- Graph 的 Piston 适配器也接受 signal-only 结束结果，并将 `SIGKILL` / `SIGXCPU` 映射到退出码 137 / 152，避免把真实超时误报为沙箱不可用；沙箱、评估与自测定向套件 37 项通过。
+
+## 2026-10-14 — 学习事件客户端信任边界
+
+- `/api/events` 现在仅接收 `quiz_finished`、`answer_feedback`；source 固定为 `frontend`，importance 由后端规则计算，客户端不能再伪造高权重的正式判题事件或设置其可信来源。
+- 定向验证：控制器/服务与认证共 30 项通过；学习事件控制器 3 项及真 PostgreSQL/Flyway 集成 14 项通过。
+
+## 2026-10-14 — 刷新 token 角色一致性
+
+- JWT 请求过滤器会拒绝数据库角色已变化的旧 token，但 refresh 入口此前只校验账号状态和 token 代次，可能把旧角色 token 换发为当前账号角色。刷新现在要求 JWT 角色与数据库角色一致，否则统一返回 `REFRESH_TOKEN_INVALID`。
+- 回归测试先复现旧行为下刷新继续签发 token；修复后 `AuthServiceSecurityTest` 与 `JwtAuthenticationFilterTest` 定向测试通过。
+
 ## 2026-10-14 — 远征 Boss、Twin 与管理台收尾修正
 
 - Boss 结算成功时增加玩家短冲刺和像素命中爆点；仍只在服务端确认通过后播放，失败只呈现真实远征体力。复用现有 Phaser 单例与素材。

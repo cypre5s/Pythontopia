@@ -27,24 +27,36 @@ services:
       retries: 5
 
   piston:
-    # Optional local judge only. Piston uses Isolate/cgroups and requires a privileged
-    # container; the API is reachable only on host loopback. Production uses external Piston.
+    # Local development only. Piston API v3 uses uid/rlimit/nosocket; production needs an
+    # independently isolated, authenticated Piston endpoint.
     image: pythontopia-piston-dev:local
     build:
       context: ./piston-local
       dockerfile: Dockerfile
       network: host
     profiles: ["sandbox"]
-    privileged: true
+    read_only: true
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID", "KILL"]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 768m
+    memswap_limit: 768m
+    cpus: 1.0
+    pids_limit: 128
     environment:
       # Match the backend's 5s default per test while keeping a bounded local ceiling.
       PISTON_RUN_TIMEOUT: "10000"
+      PISTON_RUN_MEMORY_LIMIT: "268435456"
+      PISTON_MAX_CONCURRENT_JOBS: "2"
+      PISTON_DISABLE_NETWORKING: "true"
     ports:
       - "127.0.0.1:2000:2000"
     volumes:
       - piston_packages:/piston/packages
     tmpfs:
-      - /tmp:exec
+      - /tmp:exec,size=256m
+      - /piston/jobs:exec,size=256m
 
   backend:
     image: pythontopia-backend:dev

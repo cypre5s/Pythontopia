@@ -93,11 +93,15 @@ def run_python(code: str, stdin: str, timeout_sec: int) -> PythonExecutionResult
         or (code_value is not None and (not isinstance(code_value, int) or isinstance(code_value, bool)))
         or (signal is not None and not isinstance(signal, str))
         or (message is not None and not isinstance(message, str))
-        or (status is None and code_value is None)
+        or (status is None and code_value is None and signal is None)
     ):
         return PythonExecutionResult(runtime_error="sandbox_unavailable")
 
-    exit_code = code_value if isinstance(code_value, int) else -1
+    exit_code = (
+        code_value
+        if isinstance(code_value, int)
+        else {"SIGKILL": 137, "SIGXCPU": 152}.get(signal, -1)
+    )
     if status is not None and status != "TO" and exit_code == 0:
         exit_code = -1
     if status is None and signal is not None and exit_code == 0:
@@ -107,7 +111,9 @@ def run_python(code: str, stdin: str, timeout_sec: int) -> PythonExecutionResult
         stdout=_bounded_text(stdout, MAX_STDOUT_CHARS),
         stderr=_bounded_text(stderr, MAX_STDERR_CHARS),
         exit_code=exit_code,
-        timed_out=status == "TO",
+        # shortcut: Piston v2 omits the kill cause with signal-only responses; upgrade when it
+        # returns stable timeout versus memory-limit metadata.
+        timed_out=status == "TO" or signal == "SIGKILL",
     )
 
 

@@ -2,7 +2,30 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-14）**：本轮工作聚焦 Web。Tutor 已使用 DeepSeek 固定阶段 AutoGen；Twin 状态聚合/确定性推荐、Boss Phaser 场景、教师与管理 Web 交互已实现并有定向验证。本轮又修复教师切班直播订阅、审核队列并发、课件视频失败状态与请求竞态、图书馆索引错误状态。当前完整 Web Vitest 为 266 files / 2533 tests，typecheck 与 production build 通过。关闭开发栈后再次全量跑 Maven：1358 tests、0 assertion failures、6 errors（5 个 Testcontainers 随机宿主端口绑定冲突、1 个长期仿真测试连接 reset）；长期仿真单类隔离重跑 1 项通过，先前端口冲突类隔离重跑 19 项通过，但全量仍未通过。剩余项包括 Twin 学习效果对照、完整 Boss 最终节点真实判题浏览器演出、题库缺少当前 KC 时的 Graph 故障兜底、生产 Piston/ECS/公网验证；本轮不追加性能测量，历史本机样本见 CHANGELOG。下方阶段表与进度时间线保留早期历史，不代表当前工作焦点。
+> **当前快照（2026-10-14）**：本轮工作聚焦 Web。Tutor 已使用 DeepSeek 固定阶段 AutoGen；Twin 状态聚合/确定性推荐、Boss Phaser 场景、教师与管理 Web 交互已实现并有定向验证。本轮又修复教师切班直播订阅、审核队列并发、课件视频失败状态与请求竞态、图书馆索引错误状态。当前完整 Web Vitest 为 266 files / 2533 tests，typecheck 与 production build 通过。全量 Maven 最近一次为 1363 tests、1 failure、10 errors：9 个 Testcontainers 容器启动失败、1 个长期仿真数据库连接失败；唯一断言失败是已修正的随机地图 HP 预期，`ExpeditionRunPostgresIntegrationTest` 隔离复跑 28/28 通过，10 个全量错误类隔离复跑均退出 0。全量 Maven 仍未重新验证为全绿。剩余项包括 Twin 学习效果对照、完整 Boss 最终节点真实判题浏览器演出、同 KC 题库覆盖（无匹配题时已验证 fail closed 为 503，不跨 KC 借题）、生产 Piston/ECS/公网验证；本轮不追加性能测量，历史本机样本见 CHANGELOG。下方阶段表与进度时间线保留早期历史，不代表当前工作焦点。
+
+## 2026-10-14 本轮增量（08:46 CST）
+
+### 已完成
+
+- `AuthService.refresh` 拒绝数据库角色与 JWT 角色不一致的旧 token；`/api/events` 只接受低信任前端反馈类型，source 固定为 `frontend`，importance 由后端计算。
+- 本地 Piston Compose 去除 `privileged`，启用只读根文件系统、最小 capabilities、`no-new-privileges`、资源限制和禁网；当前运行容器已按新配置重建。
+- Graph 沙箱修复 Piston signal-only 超时响应识别，SIGKILL/SIGXCPU 现在按 Linux 退出码进入现有判题处理。
+- 依据真实随机地图奖励修正远征集成测试：事件节点在中点首次清除时会有额外 1 HP，测试按规则计算预期值。
+
+### 当前验证
+
+- 后端定向 47 tests 通过；`ExpeditionRunPostgresIntegrationTest` 28 tests、10 个全量失败类的单类重跑、Graph 沙箱/评估/自测 37 tests 及 Compose 安全契约均通过。
+- 本地 Piston 实测正常判题、敏感文件与 socket 拒绝、500 ms 超时回收、256 MiB 内存请求封顶；无认证和无效 Bearer 都能访问 runtimes，已记录为生产接入前必须验证的边界。
+- 全量 Maven（启用 Testcontainers 回收）仍为 1363 tests、1 failure、10 errors；失败的远征固定 HP 断言已修，集成类 28 项重跑通过。9 个 Testcontainers 容器/1 个长测数据库连接错误均单类通过，但全量环境仍不稳定。
+- 收尾复核：Graph 沙箱/评估/自测重新运行 37 项通过，Compose 安全契约通过；当前 Piston 容器检查为非特权、只读根文件系统、capability 白名单、768 MiB/1 CPU/128 PID。
+
+### 未完成或未验证
+
+- 未重跑全量 Maven 直到全绿；当前全量失败仍作为环境/集成稳定性风险记录。
+- 生产 Piston 的实际认证、网络隔离、资源限制与内核逃逸未验证；未访问 ECS 或公网。
+- 完整 Boss 最终节点真实判题浏览器旅程与 Twin 学习效果对照仍待验证。缺少同 KC 课程题时返回 503 的保护已在真实服务中验证，仍需补足当前题库覆盖。真实 DeepSeek 文本/图片调用证据已在既有日志中，本轮没有新增调用。
+- 本轮未重测性能；无尽远征上一轮本机建局采样数据见 CHANGELOG。
 
 ## 全局阶段进度
 

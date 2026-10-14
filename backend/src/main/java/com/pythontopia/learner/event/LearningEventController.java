@@ -7,7 +7,6 @@ import com.pythontopia.common.web.CurrentUser;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.springframework.http.HttpStatus;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -16,9 +15,6 @@ import org.springframework.web.bind.annotation.*;
 @RequestMapping("/api/learning/events")
 @Validated
 public class LearningEventController {
-
-  private static final Set<String> CLIENT_EVENT_TYPES =
-      Set.of("quiz_finished", "answer_feedback");
 
   private final LearningEventLogRepository repository;
 
@@ -62,7 +58,7 @@ public class LearningEventController {
   }
 
   private void validateClientEvent(LearningEventLogDto dto) {
-    if (dto == null || !CLIENT_EVENT_TYPES.contains(dto.eventType())) {
+    if (dto == null || !ClientLearningEventPolicy.allows(dto.eventType())) {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST,
           "INVALID_LEARNING_EVENT",

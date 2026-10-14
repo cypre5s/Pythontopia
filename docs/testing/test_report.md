@@ -57,7 +57,7 @@
 | `POST /api/auth/login` | < 200ms | BCrypt cost 10 |
 | `POST /api/learner/curriculum/bootstrap` | < 600ms | 65 KC 一次 upsert |
 | `POST /api/workshop/resources` | < 5s | 包含 RAG + Graph，演示前可热身 |
-| `POST /api/submissions` | < 2s | 独立 Piston/Isolate 沙箱；本地未配置时 fail closed |
+| `POST /api/submissions` | < 2s | 独立 Piston 服务；隔离边界依赖部署配置，本地未配置时 fail closed |
 | `POST /api/learner/evaluations` | < 2s | 6 SQL 聚合 + Graph |
 
 ## 5. 复测命令

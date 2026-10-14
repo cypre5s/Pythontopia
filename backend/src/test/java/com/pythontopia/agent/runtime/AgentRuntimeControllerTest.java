@@ -2,6 +2,7 @@ package com.pythontopia.agent.runtime;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -66,19 +67,19 @@ class AgentRuntimeControllerTest {
     ObjectNode payload = objectMapper.createObjectNode();
     payload.put("submissionId", 88);
     payload.putArray("kcCodes").add("PY43-KC-001");
-    when(eventService.recordEvent(eq(7L), any()))
+    when(eventService.recordEvent(eq(7L), eq("answer_feedback"), eq(payload)))
         .thenReturn(
             new AgentRuntimeEventService.EventRecord(
                 701L,
                 7L,
-                "submission.failed",
+                "answer_feedback",
                 payload,
-                "graph",
-                5,
+                "frontend",
+                1,
                 OffsetDateTime.parse("2026-06-30T00:00:00Z")));
 
     ObjectNode body = objectMapper.createObjectNode();
-    body.put("eventType", "submission.failed");
+    body.put("eventType", "answer_feedback");
     body.set("payload", payload);
     body.put("source", "graph");
     body.put("importance", 5);
@@ -91,10 +92,12 @@ class AgentRuntimeControllerTest {
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.id").value(701))
         .andExpect(jsonPath("$.userId").value(7))
-        .andExpect(jsonPath("$.eventType").value("submission.failed"))
+        .andExpect(jsonPath("$.eventType").value("answer_feedback"))
         .andExpect(jsonPath("$.payload.submissionId").value(88))
-        .andExpect(jsonPath("$.source").value("graph"))
-        .andExpect(jsonPath("$.importance").value(5));
+        .andExpect(jsonPath("$.source").value("frontend"))
+        .andExpect(jsonPath("$.importance").value(1));
+
+    verify(eventService).recordEvent(7L, "answer_feedback", payload);
   }
 
   @Test
@@ -113,6 +116,24 @@ class AgentRuntimeControllerTest {
         .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
     verifyNoInteractions(eventService, runtimeService);
+  }
+
+  @Test
+  void eventEndpointRejectsClientReportedPracticeEvidence() throws Exception {
+    ObjectNode body = objectMapper.createObjectNode();
+    body.put("eventType", "practice_failed");
+    body.put("source", "graph");
+    body.put("importance", 5);
+    body.set("payload", objectMapper.createObjectNode().put("kcCode", "PY43-KC-001"));
+
+    mockMvc
+        .perform(
+            post("/api/events")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(eventService);
   }
 
   /**
