@@ -4,6 +4,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import com.pythontopia.auth.domain.UserAccount;
+import com.pythontopia.auth.repository.UserRepository;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.JwtProperties;
 import com.pythontopia.auth.security.Role;
@@ -49,6 +51,7 @@ class MediaAssetControllerAuthorizationTest {
   private MediaAssetRepository repository;
   private MediaAssetStorage storage;
   private MediaAssetUrls assetUrls;
+  private UserRepository userRepository;
   private MediaAssetController controller;
   private Path tempFile;
 
@@ -56,6 +59,7 @@ class MediaAssetControllerAuthorizationTest {
   void setUp() throws IOException {
     repository = mock(MediaAssetRepository.class);
     storage = mock(MediaAssetStorage.class);
+    userRepository = mock(UserRepository.class);
     assetUrls = new MediaAssetUrls(new JwtProperties("media-url-test-secret-at-least-32-chars", 60));
     controller =
         new MediaAssetController(
@@ -63,11 +67,14 @@ class MediaAssetControllerAuthorizationTest {
             mock(StoryboardCompositionService.class),
             repository,
             storage,
-            assetUrls);
+            assetUrls,
+            userRepository);
 
     tempFile = Files.createTempFile("pyt-media-auth", ".png");
     Files.write(tempFile, new byte[] {1, 2, 3, 4});
     when(repository.findById(ASSET_ID)).thenReturn(Optional.of(asset(OWNER_ID)));
+    when(userRepository.findById(OWNER_ID))
+        .thenReturn(Optional.of(userAccount(UserAccount.STATUS_ACTIVE)));
     when(storage.resolveExisting("owned.png")).thenReturn(Optional.of(tempFile));
   }
 
@@ -97,6 +104,20 @@ class MediaAssetControllerAuthorizationTest {
         controller.serveAsset(ASSET_ID, assetUrls.sign(ASSET_ID, expiresAt), expiresAt, null);
 
     assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+  }
+
+  @Test
+  @DisplayName("资产所有者停用后，先前下发的签名链接失效")
+  void disabledOwnerCannotUsePreviouslyIssuedSignedUrl() {
+    when(userRepository.findById(OWNER_ID))
+        .thenReturn(Optional.of(userAccount("DISABLED")));
+    anonymous();
+    long expiresAt = Instant.now().plusSeconds(3600).getEpochSecond();
+
+    ResponseEntity<Resource> response =
+        controller.serveAsset(ASSET_ID, assetUrls.sign(ASSET_ID, expiresAt), expiresAt, null);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
   }
 
   @Test
@@ -204,6 +225,10 @@ class MediaAssetControllerAuthorizationTest {
         "PLACEHOLDER",
         List.of("PY43-KC-001"),
         createdAt);
+  }
+
+  private static UserAccount userAccount(String status) {
+    return new UserAccount(OWNER_ID, "owner", "Owner", "hash", null, Role.STUDENT, status, 0);
   }
 
   /** 模拟 permitAll 路径上的匿名请求：SecurityContext 里是 AnonymousAuthenticationToken。 */

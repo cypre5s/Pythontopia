@@ -411,7 +411,7 @@ onMounted(() => {
 .admin-users__role-filter {
   display: grid;
   gap: 4px;
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 11px;
 }
 
@@ -425,7 +425,7 @@ onMounted(() => {
 
 .admin-users__state {
   align-self: center;
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 13px;
 }
 
@@ -467,14 +467,14 @@ onMounted(() => {
 
 .admin-users__self-note {
   margin-left: 8px;
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 11px;
   white-space: nowrap;
 }
 
 .admin-users__dialog > p {
   margin: 12px 0 20px;
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 14px;
   line-height: 1.6;
 }

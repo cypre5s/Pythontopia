@@ -94,42 +94,11 @@ pythontopia:
     maxResourcesPerHour: 10
     masteryDailyCapPerKc: 0.15
     allowlist: []
-  tts:
-    appId: ${PYT_SPARK_APP_ID:}
-    apiKey: ${PYT_SPARK_API_KEY:}
-    apiSecret: ${PYT_SPARK_API_SECRET:}
-    dailyLimitPerUser: 100
-  image:
-    # 讯飞星火文生图：复用与 TTS / Spark LLM 相同的讯飞控制台应用凭据。
-    # 任一缺失返回 503，上游失败返回 502；不生成或落库占位图片。
-    appId: ${PYT_SPARK_APP_ID:}
-    apiKey: ${PYT_SPARK_API_KEY:}
-    apiSecret: ${PYT_SPARK_API_SECRET:}
-    baseUrl: ${PYT_SPARK_IMAGE_URL:https://spark-api.cn-huabei-1.xf-yun.com/v2.1/tti}
-    dailyLimitPerUser: 50
-  image-understanding:
-    # 讯飞星火「图片理解」(看图答疑)：复用同一套讯飞凭据；缺失则导师答疑回退纯文本，不阻塞链路。
-    appId: ${PYT_SPARK_APP_ID:}
-    apiKey: ${PYT_SPARK_API_KEY:}
-    apiSecret: ${PYT_SPARK_API_SECRET:}
-    baseUrl: ${PYT_SPARK_IMAGE_UNDERSTANDING_URL:wss://spark-api.cn-huabei-1.xf-yun.com/v2.1/image}
-    domain: ${PYT_SPARK_IMAGE_UNDERSTANDING_DOMAIN:imagev3}
-    maxTokens: 1024
-    dailyLimitPerUser: 50
-  asr:
-    # 讯飞「语音听写」(IAT)：随身助教语音输入在浏览器 Web Speech 不可用时的服务端回退；复用同一套讯飞凭据。
-    # 任一缺失则返回 degraded（前端提示改用键盘），不阻塞答疑。需服务端 ffmpeg 把上传音频转 16k 单声道 PCM。
-    appId: ${PYT_SPARK_APP_ID:}
-    apiKey: ${PYT_SPARK_API_KEY:}
-    apiSecret: ${PYT_SPARK_API_SECRET:}
-    baseUrl: ${PYT_SPARK_IAT_URL:wss://iat-api.xfyun.cn/v2/iat}
-    dailyLimitPerUser: 100
   media:
-    # 多模态生成产物（文生图/合成短视频）本地落盘目录，不入 git（见 .gitignore），可重生。
+    # 仅供旧媒体资产读取；AI 图片生成和配音入口保持关闭。
     generatedDir: ${PYT_MEDIA_GENERATED_DIR:./data/course-pack-43/generated-media}
     compose:
-      # 媒体异步合成作业（Track B）并发护栏：合成 worker 线程池 + 讯飞「文生图/语音合成」全局路数信号量。
-      # 突发提交时在阈值内排队/限流，避免击穿讯飞配额；缺 ffmpeg 时作业置 FAILED(VIDEO_COMPOSE_UNAVAILABLE)。
+      # 旧故事板任务的队列参数；其讯飞图片/语音 provider 固定关闭，不会发出上游请求。
       poolSize: ${PYT_MEDIA_COMPOSE_POOL:3}
       ttiConcurrency: ${PYT_MEDIA_COMPOSE_TTI_CONCURRENCY:2}
       ttsConcurrency: ${PYT_MEDIA_COMPOSE_TTS_CONCURRENCY:2}

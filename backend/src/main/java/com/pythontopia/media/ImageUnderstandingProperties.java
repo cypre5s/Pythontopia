@@ -2,12 +2,7 @@ package com.pythontopia.media;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/**
- * 讯飞星火「图片理解」(看图答疑) 接入配置。复用与 TTS / TTI / Spark LLM 相同的讯飞控制台应用凭据
- * （{@code PYT_SPARK_APP_ID} / {@code PYT_SPARK_API_KEY} / {@code PYT_SPARK_API_SECRET}）。
- *
- * <p>看图答疑由 Graph 的 DeepSeek 视觉模型处理，不启用讯飞图片理解。
- */
+/** Legacy image understanding settings; Tutor image input goes through DeepSeek. */
 @ConfigurationProperties(prefix = "pythontopia.image-understanding")
 public record ImageUnderstandingProperties(
     String appId,

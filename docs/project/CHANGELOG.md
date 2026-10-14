@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-10-15 — 远征失败结算与媒体访问撤销
+
+- 失败判题由服务端同事务写入验证记录并结算扣血，前端不能通过跳过结算请求免伤；失败后同题新签发通过可升级同一账本且不会恢复体力。判题和结算都只接受节点最新签发的题，避免已结算后的旧预发题复活。
+- owner 账号停用或删除后，既有媒体签名链接立即失效。合成 SSE 继续返回稳定错误码，客户端错误文案改为通用提示，底层异常只进入服务端日志。
+- RED/GREEN：远征 PostgreSQL、Boss、媒体授权和作业服务定向集合 111 tests 通过；Boss scene 与账号隔离 Vitest 4/4，前端 typecheck/lint 通过，`git diff --check` 通过。全量 Maven 未在本阶段重跑；本次改动 Java 文件无 Spotless 违规，全库仍有 612 个其他文件格式差异。
+
+## 2026-10-15 — DeepSeek 出口收敛、Tutor 对照与 Boss 场景回归
+
+- 本地 `./dev.sh` 保持 AI 日请求限额关闭，清除旧 Spark/讯飞凭据与代理变量；生产配置继续启用账号/全站限额。移除已关闭媒体服务的遗留密钥配置，并更新启动说明，Tutor 图片仅走 DeepSeek 视觉输入、响应只输出文本。
+- 对照 Alethicode 未提交 AutoGen 工作树后确认：Pythontopia 的 Tutor 与训练导学已在 AutoGen 主链路上；Pythontopia 保留 Java/SSE/数据库/私有附件契约和独立 `EXECUTION_TRACE` 事件，不直接换成 Alethicode 的 WebSocket/session 协议。
+- 管理台 CSS 变量改为与 Alethicode 一致的语义命名，保留原颜色、尺寸与页面行为。远征 Boss Phaser 场景增加 3 项回归，覆盖章节素材预载、通过后单次命中和失败时真实体力显示；CC0 音效已有双处授权登记。
+- 验证：本轮真实 DeepSeek 文本及合成 PNG 图片输入各 1 次，均返回文本；Graph Tutor/provider 定向 106 passed、AutoGen runtime/SSE 另 23 passed（首组有 1 条既有 pytest marker 警告）；Twin、Boss、Tutor workflow 与 AI 限额等 Maven 定向 110 tests 通过；前端定向 25 项与账号隔离回归 1 项、typecheck 通过；全仓 lint 0 errors / 0 warnings（5 个 Vue test stub 提示在对应测试文件局部标注为有意）。生产 AI 配置契约与 `bash -n dev.sh` 通过。
+- 补充对照：Pythontopia 与 Alethicode 共享 17 个 Tutor 事件，Pythontopia 另有独立执行轨迹事件；当前卡片映射 11 个 Pydantic 模型。新学生创建远征的真实浏览器请求在第 1 章和全局范围均返回 422 `EXPEDITION_NO_PRACTICE_PROBLEMS`，服务端未建 run；临时学生账号已清理。完整 Boss 浏览器通关因先修评估门槛未完成。
+- 续跑全量串行 Maven：1408 tests、0 断言失败、7 errors；6 个 Testcontainers 的 Docker 临时端口绑定失败，长期仿真在全量时 JDBC 连接失败。受影响 7 类隔离串行重跑后，长期仿真 1/1 通过，另外 6 类仍有端口绑定错误，故全量 Maven 未通过。
+- 未完成：Tutor 与 Alethicode 的逐行为等价、真实账号下远征 Boss 全程浏览器验证、全量 Maven 稳定全绿、Twin A/B 与 7 日延迟复测、供应商费用/token 对账和性能测试。
+
 ## 2026-10-15 — 会话期限、判题隔离与 Tutor 续跑复验
 
 - JWT 刷新保留原始登录时间，增加 30 天绝对期限，避免 access token 无限滑动续期；旧 token 的首次刷新按原签发周期推导边界。

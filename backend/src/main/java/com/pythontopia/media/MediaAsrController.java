@@ -14,9 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 /**
- * 语音听写端点：{@code POST /api/media/asr}（需登录，multipart 上传字段 {@code audio}）。随身助教在浏览器
- * Web Speech API 不可用时回退到此——把录音转写为文本回填 ask 栏。任何不可用情形返回
- * {@link AsrResponse#degraded()}（前端提示改用键盘），绝不阻塞答疑。
+ * 兼容保留的语音听写端点：服务开关固定关闭，返回 unavailable 且不会读取或转发上传音频。
  */
 @RestController
 @RequestMapping("/api/media")

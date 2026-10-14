@@ -179,7 +179,7 @@ function jump(): void {
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
 }

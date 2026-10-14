@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -58,7 +59,7 @@ class MediaJobServiceTest {
     compositionService = mock(StoryboardCompositionService.class);
     objectMapper = new ObjectMapper();
     MediaComposeProperties properties = new MediaComposeProperties(2, 2, 2, 64, 300_000L);
-    streamRegistry = new MediaJobStreamRegistry(objectMapper, properties);
+    streamRegistry = spy(new MediaJobStreamRegistry(objectMapper, properties));
     service =
         new MediaJobService(
             jobRepository,
@@ -231,6 +232,9 @@ class MediaJobServiceTest {
     service.submit(USER_ID, sampleRequest());
 
     verify(jobRepository).updateStatus(44L, MediaJobStatus.FAILED, null, "VIDEO_COMPOSE_FAILED");
+    ArgumentCaptor<Object> errorPayload = ArgumentCaptor.forClass(Object.class);
+    verify(streamRegistry).broadcast(eq(44L), eq("error"), errorPayload.capture());
+    assertThat(errorPayload.getValue().toString()).contains("合成失败").doesNotContain("boom");
   }
 
   @Test

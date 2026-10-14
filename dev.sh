@@ -129,12 +129,17 @@ mkdir -p "$WORK_DIR"
 # ---- deploy/.env ----
 if [[ ! -f "$DEPLOY_DIR/.env" ]]; then
   cp "$DEPLOY_DIR/.env.example" "$DEPLOY_DIR/.env"
-  c_warn "已从 .env.example 生成 deploy/.env（按需填 LLM / 讯飞 密钥）"
+  c_warn "已从 .env.example 生成 deploy/.env（按需填 DeepSeek 密钥）"
 fi
 set -a
 # shellcheck disable=SC1090
 source "$DEPLOY_DIR/.env"
 set +a
+# Retired media providers must not receive stale credentials from the local environment.
+unset PYT_SPARK_APP_ID PYT_SPARK_API_KEY PYT_SPARK_API_SECRET PYT_SPARK_BASE_URL \
+  PYT_SPARK_MODEL_ID PYT_SPARK_IMAGE_URL PYT_SPARK_IMAGE_UNDERSTANDING_URL \
+  PYT_SPARK_IMAGE_UNDERSTANDING_DOMAIN \
+  PYT_XFYUN_PROXY PYT_XFYUN_PROXY_HOST PYT_XFYUN_PROXY_PORT
 # Local development has no application-level model request cap; deployment keeps the daily caps.
 export PYT_AI_REQUEST_LIMITS_ENABLED=false
 
@@ -219,25 +224,6 @@ if [[ -z "${PYT_ROUTE_EXECUTION_SECRET:-}" ]]; then
   require_cmd openssl
   export PYT_ROUTE_EXECUTION_SECRET="$(openssl rand -hex 32)"
 fi
-# 多模态：复用讯飞 PYT_SPARK_*（缺失则文生图/合成自动降级为本地占位，不影响可用）
-export PYT_SPARK_APP_ID="${PYT_SPARK_APP_ID:-}"
-export PYT_SPARK_API_KEY="${PYT_SPARK_API_KEY:-}"
-export PYT_SPARK_API_SECRET="${PYT_SPARK_API_SECRET:-}"
-
-# 讯飞代理（关键踩坑）：部分本机网络用 fake-ip DNS（如 198.18.x.x），Java HttpClient
-# 默认不读 HTTPS_PROXY 环境变量，会导致文生图(TTI)/语音合成(TTS) connect timeout 而恒降级。
-# 这里把 PYT_BILI_PROXY（默认 7892）转成 JVM 代理参数注入后端，并用 nonProxyHosts 排除
-# 本地 PG/graph/rag，使「讯飞走代理、本地直连」。代理留空则不注入（直连网络无需代理）。
-# 详见 docs/dev-startup.md「讯飞多模态连不通（fake-ip DNS）」。
-XFYUN_PROXY="${PYT_XFYUN_PROXY:-${PYT_BILI_PROXY:-http://127.0.0.1:7892}}"
-BACKEND_JAVA_PROXY_OPTS=""
-if [[ -n "$XFYUN_PROXY" ]]; then
-  proxy_hostport="${XFYUN_PROXY#http://}"; proxy_hostport="${proxy_hostport#https://}"
-  proxy_host="${proxy_hostport%%:*}"; proxy_port="${proxy_hostport##*:}"
-  BACKEND_JAVA_PROXY_OPTS="-Dhttps.proxyHost=${proxy_host} -Dhttps.proxyPort=${proxy_port} -Dhttp.proxyHost=${proxy_host} -Dhttp.proxyPort=${proxy_port} -Dhttp.nonProxyHosts=localhost|127.0.0.1|::1"
-  c_info "后端讯飞调用经代理 ${proxy_host}:${proxy_port}（本地服务直连）"
-fi
-
 # ffmpeg：合成短视频(Track B media job)依赖。缺失则合成作业置 FAILED(VIDEO_COMPOSE_UNAVAILABLE)，
 # 其它链路不受影响。仅提示，不强制（无 root 可 pip install imageio-ffmpeg 后软链进 PATH）。
 if ! command -v ffmpeg >/dev/null 2>&1; then
@@ -257,7 +243,6 @@ else
   # exec 让 PID 文件记录新会话的进程组 ID，退出时能一并清理 Maven 与 Spring Boot 子进程。
   (
     cd "$BACKEND_DIR"
-    export JAVA_TOOL_OPTIONS="$BACKEND_JAVA_PROXY_OPTS"
     exec setsid mvn -q -s .mvn/settings.build.xml spring-boot:run
   ) >>"$BACKEND_LOG" 2>&1 &
   echo "$!" > "$BACKEND_PID_FILE"

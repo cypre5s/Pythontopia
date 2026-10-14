@@ -25,7 +25,7 @@ withDefaults(defineProps<{
   overflow-x: auto;
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
-  border: 1px solid var(--admin-border, #e2e8f0);
+  border: 1px solid var(--admin-panel-border, #e2e8f0);
   border-radius: 10px;
 }
 
@@ -39,18 +39,18 @@ withDefaults(defineProps<{
   min-width: var(--admin-table-min-width, 820px);
   border-collapse: separate;
   border-spacing: 0;
-  color: var(--admin-text, #0f172a);
+  color: var(--admin-text-strong, #0f172a);
   font-size: 13px;
   table-layout: fixed;
   text-align: left;
 }
 
 .admin-table-scroll > table th {
-  height: var(--admin-table-header-height, 44px);
+  height: var(--table-header-height, 44px);
   padding: 0 16px;
-  border-bottom: 1px solid var(--admin-border, #e2e8f0);
-  background: var(--admin-table-header, #eef4fb);
-  color: var(--admin-text, #0f172a);
+  border-bottom: 1px solid var(--admin-panel-border, #e2e8f0);
+  background: var(--admin-table-header-bg, #eef4fb);
+  color: var(--admin-text-strong, #0f172a);
   font-size: 13px;
   font-weight: 700;
   white-space: nowrap;
@@ -60,13 +60,13 @@ withDefaults(defineProps<{
   position: sticky;
   right: 0;
   z-index: 2;
-  background: var(--admin-table-header, #eef4fb);
+  background: var(--admin-table-header-bg, #eef4fb);
 }
 
 .admin-table-scroll > table td {
-  height: var(--admin-table-row-height, 52px);
+  height: var(--table-row-height, 52px);
   padding: 10px 16px;
-  border-bottom: 1px solid var(--admin-border, #e2e8f0);
+  border-bottom: 1px solid var(--admin-panel-border, #e2e8f0);
   color: #334155;
   vertical-align: middle;
 }
@@ -75,7 +75,7 @@ withDefaults(defineProps<{
   position: sticky;
   right: 0;
   z-index: 1;
-  background: var(--admin-surface, #fff);
+  background: var(--admin-panel-bg, #fff);
   box-shadow: -8px 0 8px rgb(15 23 42 / 5%);
 }
 
@@ -84,11 +84,11 @@ withDefaults(defineProps<{
 }
 
 .admin-table-scroll > table tbody tr:hover {
-  background: var(--admin-table-hover, #f8fbff);
+  background: var(--admin-table-hover-bg, #f8fbff);
 }
 
 .admin-table-scroll > table tbody tr:hover td.admin-table__sticky,
 .admin-table-scroll > table tbody tr.is-selected td.admin-table__sticky {
-  background: var(--admin-table-hover, #f8fbff);
+  background: var(--admin-table-hover-bg, #f8fbff);
 }
 </style>

@@ -1,5 +1,7 @@
 package com.pythontopia.media;
 
+import com.pythontopia.auth.domain.UserAccount;
+import com.pythontopia.auth.repository.UserRepository;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.media.domain.MediaAsset;
@@ -31,8 +33,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 多模态媒资端点：
  *
  * <ul>
- *   <li>{@code POST /api/media/image}（需登录）：按 prompt 生成真实图片，返回 {@link MediaAssetDto}；
- *       缺少讯飞凭据或上游失败时明确报错，不产生占位资产。
+ *   <li>{@code POST /api/media/image}（需登录）：保留的兼容路由；图片生成 provider 固定关闭并返回错误。
  *   <li>{@code GET /api/media/assets/{id}?k=<sig>}（匿名，供 {@code <img>}/{@code <video>} src）：
  *       按 id 流式分发已生成的媒资字节，支持 HTTP Range。
  * </ul>
@@ -59,18 +60,21 @@ public class MediaAssetController {
   private final MediaAssetRepository repository;
   private final MediaAssetStorage storage;
   private final MediaAssetUrls assetUrls;
+  private final UserRepository userRepository;
 
   public MediaAssetController(
       XfyunImageService imageService,
       StoryboardCompositionService compositionService,
       MediaAssetRepository repository,
       MediaAssetStorage storage,
-      MediaAssetUrls assetUrls) {
+      MediaAssetUrls assetUrls,
+      UserRepository userRepository) {
     this.imageService = imageService;
     this.compositionService = compositionService;
     this.repository = repository;
     this.storage = storage;
     this.assetUrls = assetUrls;
+    this.userRepository = userRepository;
   }
 
   @PostMapping("/image")
@@ -124,6 +128,9 @@ public class MediaAssetController {
     if (asset.userId() == null) {
       // 无 owner 的系统级资产：任何人可读，不含用户生成内容。
       return true;
+    }
+    if (userRepository.findById(asset.userId()).filter(UserAccount::isActive).isEmpty()) {
+      return false;
     }
     if (assetUrls.verify(asset.id(), expiresAtEpochSecond, signature)
         || (expiresAtEpochSecond == null

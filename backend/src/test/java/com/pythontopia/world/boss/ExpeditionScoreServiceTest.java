@@ -24,6 +24,7 @@ class ExpeditionScoreServiceTest {
   private static final String QUESTION_FINGERPRINT = "a".repeat(64);
 
   @Mock JdbcTemplate jdbcTemplate;
+  @Mock ExpeditionRunService expeditionRunService;
 
   @Test
   void settlesOnlyScoresDerivedFromServerJudgedAttempts() {
@@ -36,7 +37,7 @@ class ExpeditionScoreServiceTest {
                 new ExpeditionScoreService.VerifiedAttempt(true, 90),
                 new ExpeditionScoreService.VerifiedAttempt(false, 0),
                 new ExpeditionScoreService.VerifiedAttempt(true, 80)));
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
+    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
 
@@ -61,7 +62,7 @@ class ExpeditionScoreServiceTest {
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttempt(true, 80)));
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
+    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
 
@@ -84,7 +85,7 @@ class ExpeditionScoreServiceTest {
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttempt(true, 80)));
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
+    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
 
@@ -107,7 +108,7 @@ class ExpeditionScoreServiceTest {
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
+    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
 
@@ -121,7 +122,7 @@ class ExpeditionScoreServiceTest {
   void doesNotSettleAnInactiveOrDifferentRun() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
+    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
 
@@ -141,7 +142,7 @@ class ExpeditionScoreServiceTest {
             java.util.stream.IntStream.range(0, 36)
                 .mapToObj(index -> new ExpeditionScoreService.VerifiedAttempt(true, 80))
                 .toList());
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
+    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
 
@@ -168,7 +169,7 @@ class ExpeditionScoreServiceTest {
         .thenReturn(List.of());
     when(jdbcTemplate.query(contains("problem_id = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
+    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
 
     var result =
         service.recordVerifiedAttempt(
@@ -191,7 +192,7 @@ class ExpeditionScoreServiceTest {
         .thenReturn(List.of());
     when(jdbcTemplate.query(contains("problem_id = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
+    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
 
     service.recordVerifiedAttempt(
         7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, true, 80);
@@ -222,7 +223,7 @@ class ExpeditionScoreServiceTest {
         .thenReturn(1);
     when(jdbcTemplate.update(contains("UPDATE expedition_verified_attempt"), any(Object[].class)))
         .thenReturn(1, 1, 1, 1);
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
+    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
 
     var firstFailure =
         service.recordVerifiedAttempt(
@@ -256,7 +257,7 @@ class ExpeditionScoreServiceTest {
   void derivesChapterAttemptSummaryFromTheUsersActiveRunAndIssuedProblems() {
     when(jdbcTemplate.query(contains("pregenerated_problem"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttemptSummary(10, 8)));
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
+    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
 
     org.assertj.core.api.Assertions.assertThat(
             service.summarizeVerifiedAttempts(7L, RUN_ID.toString(), 1))

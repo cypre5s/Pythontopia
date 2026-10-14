@@ -314,30 +314,30 @@ watch(navigationOpen, (open) => {
 
 <style scoped>
 .admin-shell {
-  --admin-bg: linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
-  --admin-surface: #fff;
-  --admin-border: #e2e8f0;
-  --admin-text: #0f172a;
-  --admin-muted: #64748b;
-  --admin-primary: #2563eb;
-  --admin-primary-hover: #1d4ed8;
+  --admin-shell-bg: linear-gradient(180deg, #f8fbff 0%, #f3f7fc 100%);
+  --admin-panel-bg: #fff;
+  --admin-panel-border: #e2e8f0;
+  --admin-text-strong: #0f172a;
+  --admin-text-muted: #64748b;
+  --primary-color: #2563eb;
+  --primary-hover: #1d4ed8;
   --admin-primary-soft: rgb(37 99 235 / 8%);
   --admin-focus: #3b82f6;
-  --admin-control-height: 36px;
+  --control-height-md: 36px;
   --admin-toolbar-gap: 10px;
-  --admin-table-header-height: 44px;
-  --admin-table-row-height: 52px;
-  --admin-panel-muted: #f6f9fc;
-  --admin-table-header: #eef4fb;
-  --admin-table-hover: #f8fbff;
+  --table-header-height: 44px;
+  --table-row-height: 52px;
+  --admin-panel-muted-bg: #f6f9fc;
+  --admin-table-header-bg: #eef4fb;
+  --admin-table-hover-bg: #f8fbff;
   --admin-panel-radius: 16px;
   --admin-panel-shadow: 0 6px 18px rgb(15 23 42 / 8%);
   position: relative;
   display: flex;
   min-height: 100vh;
   min-height: 100dvh;
-  background: var(--admin-bg);
-  color: var(--admin-text);
+  background: var(--admin-shell-bg);
+  color: var(--admin-text-strong);
   font-family: var(--pyt-font-read, 'PingFang SC', 'Microsoft YaHei', sans-serif);
   line-height: 1.5;
 }
@@ -352,12 +352,12 @@ watch(navigationOpen, (open) => {
 }
 
 .admin-shell :deep(.admin-control) {
-  min-height: var(--admin-control-height);
-  border: 1px solid var(--admin-border);
+  min-height: var(--control-height-md);
+  border: 1px solid var(--admin-panel-border);
   border-radius: 8px;
   padding: 0 10px;
   background: #fff;
-  color: var(--admin-text);
+  color: var(--admin-text-strong);
   font: inherit;
   font-size: 13px;
 }
@@ -382,7 +382,7 @@ watch(navigationOpen, (open) => {
 
 .admin-shell :deep(.admin-button) {
   display: inline-flex;
-  min-height: var(--admin-control-height);
+  min-height: var(--control-height-md);
   align-items: center;
   justify-content: center;
   gap: 6px;
@@ -402,18 +402,18 @@ watch(navigationOpen, (open) => {
 
 .admin-shell :deep(.admin-button:hover:not(:disabled)) {
   border-color: var(--admin-focus);
-  color: var(--admin-primary-hover);
+  color: var(--primary-hover);
 }
 
 .admin-shell :deep(.admin-button--primary) {
-  border-color: var(--admin-primary);
-  background: var(--admin-primary);
+  border-color: var(--primary-color);
+  background: var(--primary-color);
   color: #fff;
 }
 
 .admin-shell :deep(.admin-button--primary:hover:not(:disabled)) {
-  border-color: var(--admin-primary-hover);
-  background: var(--admin-primary-hover);
+  border-color: var(--primary-hover);
+  background: var(--primary-hover);
   color: #fff;
 }
 
@@ -468,8 +468,8 @@ watch(navigationOpen, (open) => {
   border: 1px solid #dbe3ef;
   border-radius: var(--admin-panel-radius);
   padding: 22px 24px;
-  background: var(--admin-surface);
-  color: var(--admin-text);
+  background: var(--admin-panel-bg);
+  color: var(--admin-text-strong);
   box-shadow: 0 20px 60px rgb(15 23 42 / 20%);
 }
 
@@ -485,7 +485,7 @@ watch(navigationOpen, (open) => {
 
 .admin-shell :deep(.admin-dialog h2) {
   margin: 0;
-  color: var(--admin-text);
+  color: var(--admin-text-strong);
   font-size: 17px;
 }
 
@@ -498,7 +498,7 @@ watch(navigationOpen, (open) => {
   flex-direction: column;
   overflow-y: auto;
   overscroll-behavior: contain;
-  border-right: 1px solid var(--admin-border);
+  border-right: 1px solid var(--admin-panel-border);
   background: rgb(255 255 255 / 92%);
   backdrop-filter: blur(18px);
   box-shadow: 10px 0 30px rgb(15 23 42 / 4%);
@@ -511,7 +511,7 @@ watch(navigationOpen, (open) => {
   align-items: center;
   gap: 12px;
   padding: 16px 22px;
-  border-bottom: 1px solid var(--admin-border);
+  border-bottom: 1px solid var(--admin-panel-border);
   background: rgb(255 255 255 / 60%);
   color: inherit;
   text-decoration: none;
@@ -523,7 +523,7 @@ watch(navigationOpen, (open) => {
   height: 38px;
   place-items: center;
   border-radius: 10px;
-  background: var(--admin-primary);
+  background: var(--primary-color);
   color: #fff;
   font-size: 20px;
   font-weight: 800;
@@ -544,7 +544,7 @@ watch(navigationOpen, (open) => {
 .admin-brand small,
 .admin-sidebar__identity small {
   margin-top: 3px;
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 11px;
   letter-spacing: 0.08em;
 }
@@ -579,7 +579,7 @@ watch(navigationOpen, (open) => {
 
 .admin-nav__link:hover:not(.is-active) {
   background: var(--admin-primary-soft);
-  color: var(--admin-primary-hover);
+  color: var(--primary-hover);
 }
 
 .admin-nav__link.is-active {
@@ -601,7 +601,7 @@ watch(navigationOpen, (open) => {
   place-items: center;
   border: 1px solid #dbe6f7;
   border-radius: 7px;
-  color: var(--admin-primary);
+  color: var(--primary-color);
 }
 
 .admin-nav__icon svg {
@@ -617,7 +617,7 @@ watch(navigationOpen, (open) => {
   gap: 12px;
   margin-top: auto;
   padding: 12px;
-  border-top: 1px solid var(--admin-border);
+  border-top: 1px solid var(--admin-panel-border);
 }
 
 .admin-sidebar__account-user {
@@ -646,7 +646,7 @@ watch(navigationOpen, (open) => {
 .admin-sidebar__identity strong {
   overflow: hidden;
   max-width: 158px;
-  color: var(--admin-text);
+  color: var(--admin-text-strong);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -694,7 +694,7 @@ watch(navigationOpen, (open) => {
   border: 1px solid rgb(148 163 184 / 30%);
   border-radius: 8px;
   background: #fff;
-  color: var(--admin-text);
+  color: var(--admin-text-strong);
   font: inherit;
   font-size: 13px;
   cursor: pointer;
@@ -739,7 +739,7 @@ watch(navigationOpen, (open) => {
 }
 
 .admin-shell__footer-version {
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 12px;
 }
 

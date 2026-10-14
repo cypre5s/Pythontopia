@@ -1,6 +1,25 @@
 # DeepSeek 导学安全与数据边界工作日志
 
-日期：2026-10-12 至 2026-10-14
+日期：2026-10-12 至 2026-10-15
+
+## 2026-10-15 续：远征失败结算与媒体访问撤销
+
+- 远征判题失败此前要等前端另发结算请求才扣体力；现在服务端在同一事务内记录判题账本并结算失败，前端断线或跳过结算不能免除伤害。失败后重新签发的同指纹题通过时只更新原账本、保留已扣体力。
+- 回归发现较新题已结算后，旧的预发题会从“未结算题”筛选中复活；判题与结算现在都只接受该节点最新签发的已消费题。PostgreSQL 用例覆盖失败重试、旧题拒绝、同题指纹只留一条记录。
+- 媒体资源签名链接此前在账号停用后仍可在 24 小时内使用；取流时现检查资源 owner 仍为 ACTIVE，停用或已删除账号的签名链接立即返回 404。RED 用例旧实现返回 200。
+- 视频合成 SSE 错误此前透传底层异常文本；现保留稳定错误码、向客户端统一返回“合成失败，请稍后重试”，详细异常仍只写服务端日志。对应旧实现回归先因泄露 `boom` 失败。
+- 验证：`mvn -Dtest=MediaAssetControllerAuthorizationTest,MediaJobServiceTest,ExpeditionScoreServiceTest,ExpeditionRunPostgresIntegrationTest,BossServiceTest test` 通过，111 tests、0 failures/errors；`git diff --check` 通过。该集合不是全量 Maven 复验。
+- Web 复验：`npm run typecheck`、`npm run lint` 通过；Boss scene 与账号隔离两份 Vitest 共 4/4。全库 `spotless:check` 仍被 612 个既有 Java 格式违规阻断，本次触及的 Java 文件未出现在违规清单中。
+
+## 2026-10-15 增量：DeepSeek 配置、Tutor 对照与 Boss 演出测试
+
+- `dev.sh` 不再向 JVM 注入讯飞凭据或 7892 代理参数，并在读取本地 `.env` 后清除遗留 `PYT_SPARK_*` / `PYT_XFYUN_PROXY*` 变量；本地 AI 日限额仍关闭，生产仍由部署配置开启。后端 YAML 删除旧媒体 provider 的凭据注入，启动手册标明旧讯飞代理方案已停用。
+- Alethicode 最新 AutoGen 实现在其未提交工作树内，改用会话/WebSocket/Graph checkpoint 契约和更细的事件阶段；Pythontopia 目前的 Tutor 与训练导学已使用 AutoGen，分别保留通用 SSE API 与训练 SSE/checkpoint API。为避免换掉鉴权、持久化和私有附件边界，本次没有移植 WebSocket 与 Alethi 数据表；Pythontopia 单独的 `EXECUTION_TRACE` 事件继续保留。逐事件输出与卡片行为仍未完成等价验收。
+- Tutor 契约静态对照补齐：两边共享 17 个事件，Pythontopia 另有独立 `EXECUTION_TRACE`；Pythontopia 卡片映射为 11 个 Pydantic 强校验模型，Alethicode 当前 JSON Schema 映射含 10 个键。两边都按事件生成卡片、校验、生成后续动作并持久化状态；Pythontopia 使用 5 个固定 AutoGen stage 和逐 stage Java checkpoint，Alethicode 新实现采用细粒度运行事件及其 PostgreSQL checkpoint。Alethicode 另支持 4 类卡片可选 GenUI 组件落库；Pythontopia 没有对应 API/表/组件，本轮不扩建独立交互子系统。逐事件 live 重放仍未完成，因此不宣称全量行为等价。
+- 管理台在既有 Alethicode 视觉尺寸/配色基础上统一语义 CSS token 名称；原 token 值未变。Boss Phaser 场景增加 3 个测试，验证章节立绘和 CC0 命中音效预载、已结算通过触发一次受击、失败不触发受击且显示服务端体力。素材登记仍在 `LICENSE-ART.md` 与像素资产许可表中。
+- 本轮新发起 DeepSeek 文本与合成 PNG 视觉输入调用各 1 次，返回均为文本。Graph Tutor/provider/workflow 定向 106 passed，另补跑 AutoGen runtime/SSE 23 passed；前一组有 1 条既有 pytest asyncio marker 警告。Java Twin、Boss、Tutor workflow、媒体关闭边界和额度定向共 135 tests 通过；前端 ProfileRoom、Tutor workflow、管理台与 Boss 定向测试共 25 项通过，`npm run typecheck` 通过。全仓 ESLint 初始 0 errors / 5 个 Vue 测试 stub warning；对本地 mock 测试文件加精确规则注释后，lint 0 errors / 0 warnings，单文件回归 1/1 通过。AI readiness shell 契约与 `bash -n dev.sh` 通过。
+- 全量 Maven 串行运行结果为 1408 tests、0 断言失败、7 errors：6 个 Testcontainers 在 Docker 临时端口绑定时报 `address already in use`，长期仿真报 JDBC 连接拒绝。之后将 7 个受影响类单独串行重跑，长期仿真 1/1 通过，另外 6 个仍遇到端口绑定错误。没有把定向通过描述为全量全绿。此轮没有复跑真实 Web Tutor 浏览器流程、远征 Boss 真实学习账号通关、生产 Piston、供应商用量账单或性能测试；Twin A/B/7 日效果仍无数据。
+- 真实浏览器以新注册学生尝试创建远征；聚焦第 1 章和全局推荐均收到 `POST /api/world/expedition/run` HTTP 422 `EXPEDITION_NO_PRACTICE_PROBLEMS`，无 JS 错误且服务端未创建 run。源码显示远征会过滤第 1 章候选，后续 KC 还要满足真实先修掌握证据；测试账号与其空画像已删除。Boss 的真实判题/胜利演出仍需先完成真实先修评估。
 
 ## 2026-10-14 增量：在线模型出口与语音禁用复核
 

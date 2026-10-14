@@ -235,27 +235,27 @@ onMounted(() => {
   min-height: 112px;
   align-content: center;
   gap: 6px;
-  border: 1px solid var(--admin-border);
+  border: 1px solid var(--admin-panel-border);
   border-radius: 12px;
   padding: 16px 18px;
-  background: var(--admin-panel-muted);
+  background: var(--admin-panel-muted-bg);
 }
 
 .admin-stat-card span {
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 12px;
   font-weight: 600;
 }
 
 .admin-stat-card strong {
-  color: var(--admin-text);
+  color: var(--admin-text-strong);
   font-size: 28px;
   font-variant-numeric: tabular-nums;
   line-height: 1.1;
 }
 
 .admin-stat-card small {
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 11px;
 }
 
@@ -273,7 +273,7 @@ onMounted(() => {
   align-items: start;
   gap: 12px;
   padding: 12px 0;
-  border-bottom: 1px solid var(--admin-border);
+  border-bottom: 1px solid var(--admin-panel-border);
 }
 
 .operation-row:first-child {
@@ -300,7 +300,7 @@ onMounted(() => {
 }
 
 .operation-row__body strong {
-  color: var(--admin-text);
+  color: var(--admin-text-strong);
   font-size: 13px;
 }
 
@@ -310,24 +310,24 @@ onMounted(() => {
 }
 
 .operation-row__body small {
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 10px;
 }
 
 .operation-row__body a {
-  color: var(--admin-primary);
+  color: var(--primary-color);
   text-decoration: underline;
   text-underline-offset: 2px;
 }
 
 .operation-row__body a:focus-visible {
   border-radius: 2px;
-  outline: 2px solid var(--admin-primary);
+  outline: 2px solid var(--primary-color);
   outline-offset: 2px;
 }
 
 .operation-row__evidence {
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 11px;
   white-space: nowrap;
 }
@@ -335,7 +335,7 @@ onMounted(() => {
 .admin-operations__state,
 .admin-operations__empty {
   margin: 0;
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 13px;
 }
 

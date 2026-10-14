@@ -624,7 +624,7 @@ onMounted(() => {
   display: grid;
   min-width: 112px;
   gap: 4px;
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 11px;
 }
 
@@ -654,7 +654,7 @@ onMounted(() => {
   display: grid;
   min-width: 0;
   gap: 4px;
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 11px;
 }
 
@@ -674,7 +674,7 @@ onMounted(() => {
   padding: 6px 10px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
-  background: var(--admin-panel-muted);
+  background: var(--admin-panel-muted-bg);
   color: #64748b;
   font-size: 11px;
 }
@@ -688,7 +688,7 @@ onMounted(() => {
 .review-state {
   margin: 0;
   padding: 24px 12px;
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 13px;
   text-align: center;
 }
@@ -717,7 +717,7 @@ onMounted(() => {
 
 .review-table tbody tr:hover,
 .review-table tbody tr.is-selected {
-  background: var(--admin-table-hover);
+  background: var(--admin-table-hover-bg);
 }
 
 .review-table__id { width: 72px; }
@@ -756,7 +756,7 @@ onMounted(() => {
   padding: 0;
   border: 0;
   background: transparent;
-  color: var(--admin-primary);
+  color: var(--primary-color);
   font: inherit;
   font-weight: 700;
   cursor: pointer;
@@ -780,7 +780,7 @@ onMounted(() => {
 
 .review-detail h3 {
   margin: 0 0 10px;
-  color: var(--admin-text);
+  color: var(--admin-text-strong);
   font-size: 14px;
 }
 

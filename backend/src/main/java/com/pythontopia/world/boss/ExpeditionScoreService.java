@@ -23,9 +23,12 @@ public class ExpeditionScoreService {
   private static final int MAX_VERIFIED_ATTEMPTS_PER_RUN = 36;
 
   private final JdbcTemplate jdbcTemplate;
+  private final ExpeditionRunService expeditionRunService;
 
-  public ExpeditionScoreService(JdbcTemplate jdbcTemplate) {
+  public ExpeditionScoreService(
+      JdbcTemplate jdbcTemplate, ExpeditionRunService expeditionRunService) {
     this.jdbcTemplate = jdbcTemplate;
+    this.expeditionRunService = expeditionRunService;
   }
 
   /** 按服务端保存的判题结果结算一局；同一 user/run 只能结算一次。 */
@@ -137,10 +140,7 @@ public class ExpeditionScoreService {
                 + " AND s.node_id = p.expedition_node_id AND s.problem_id = p.problem_id)"
                 + " AND p.id = (SELECT MAX(open.id) FROM pregenerated_problem open"
                 + " WHERE open.user_id = p.user_id AND open.expedition_run_id = p.expedition_run_id"
-                + " AND open.expedition_node_id = p.expedition_node_id AND open.status = 'CONSUMED'"
-                + " AND NOT EXISTS (SELECT 1 FROM expedition_challenge_settlement settled"
-                + " WHERE settled.user_id = open.user_id AND settled.run_id = open.expedition_run_id"
-                + " AND settled.node_id = open.expedition_node_id AND settled.problem_id = open.problem_id)))",
+                + " AND open.expedition_node_id = p.expedition_node_id AND open.status = 'CONSUMED'))",
             Boolean.class,
             userId,
             runUuid,
@@ -179,8 +179,12 @@ public class ExpeditionScoreService {
               questionFingerprint,
               attempt.id());
       boolean publishLearningEvent = !attempt.passed() && passed;
-      return new VerifiedAttemptResult(
-          updated > 0, updated > 0 && publishLearningEvent);
+      return settleFailure(
+          userId,
+          runId,
+          problemId,
+          passed,
+          new VerifiedAttemptResult(updated > 0, updated > 0 && publishLearningEvent));
     }
 
     int inserted =
@@ -205,7 +209,24 @@ public class ExpeditionScoreService {
             runUuid,
             userId,
             runUuid);
-    return new VerifiedAttemptResult(inserted > 0, inserted > 0);
+    return settleFailure(
+        userId,
+        runId,
+        problemId,
+        passed,
+        new VerifiedAttemptResult(inserted > 0, inserted > 0));
+  }
+
+  private VerifiedAttemptResult settleFailure(
+      Long userId,
+      String runId,
+      String problemId,
+      boolean passed,
+      VerifiedAttemptResult result) {
+    if (!passed && result.accepted()) {
+      expeditionRunService.settleFailedAttempt(userId, runId, problemId);
+    }
+    return result;
   }
 
   /** 判定一个活动远征 run 在指定章节的真实答题汇总。 */

@@ -1,12 +1,5 @@
-// 多模态媒资前端访问层。
-//
-// 后端端点（MediaAssetController / MediaAsrController）：
-//   POST /api/media/image            → MediaAssetDto（真实文生图；缺 Provider/上游失败明确报错）
-//   POST /api/media/storyboard/video → MediaAssetDto（图序列+TTS 经 ffmpeg 合成 mp4；无 ffmpeg 抛降级错误）
-//   POST /api/media/asr              → AsrResponse（multipart 上传录音 → 讯飞语音听写转文本；不可用返回 degraded=true）
-//   GET  /api/media/assets/{id}      → 媒资字节流（匿名，支持 Range，供 <img>/<video> src 直连）
-//
-// 设计：生成走 http(axios) 带鉴权；展示用返回的 url 给 <img>/<video> src 直连（该 GET 端点匿名放行）。
+// Legacy media API shapes. Image generation, speech recognition, and dubbing are disabled;
+// Tutor image input uses the DeepSeek vision route and receives text responses.
 
 import { http } from './http';
 
@@ -34,6 +27,7 @@ export interface StoryboardSceneSpec {
 }
 
 /** 文生图：按 prompt 生成插画/知识点图解。失败由调用方决定回退。 */
+/** Disabled compatibility route; Tutor images are input to DeepSeek and never generated here. */
 export async function generateImage(
   prompt: string,
   label?: string,
@@ -47,7 +41,7 @@ export async function generateImage(
   return res.data;
 }
 
-/** 合成故事板短视频（图序列 + TTS）。无 ffmpeg 时后端抛 VIDEO_COMPOSE_UNAVAILABLE，调用方回退实时剧场。 */
+/** Legacy storyboard route; speech synthesis is disabled. */
 export async function composeStoryboardVideo(
   scenes: StoryboardSceneSpec[],
 ): Promise<MediaAssetDto> {
@@ -129,16 +123,13 @@ export async function getMediaJob(id: number): Promise<MediaJobDto> {
   return res.data;
 }
 
-/** 语音听写（ASR）结果。degraded=true 表示服务端 ASR 不可用（无讯飞凭据 / 无 ffmpeg / 转码失败）。 */
+/** Legacy ASR response; the server keeps this route disabled. */
 export interface AsrResponse {
   text: string;
   degraded: boolean;
 }
 
-/**
- * 把一段录音（MediaRecorder 的 Blob）上传到 /api/media/asr 转写为文本。随身助教在浏览器
- * Web Speech API 不可用时回退到此。失败 / 不可用由调用方处理（提示改用键盘输入），不抛全局网络 toast。
- */
+/** Uploads to the disabled compatibility route; callers should use text input. */
 export async function transcribeAudio(audio: Blob): Promise<AsrResponse> {
   const form = new FormData();
   form.append('audio', audio, 'speech.webm');

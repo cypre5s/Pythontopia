@@ -47,9 +47,9 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
 .admin-panel {
   min-width: 0;
   overflow: hidden;
-  border: 1px solid var(--admin-border);
+  border: 1px solid var(--admin-panel-border);
   border-radius: var(--admin-panel-radius);
-  background: var(--admin-surface);
+  background: var(--admin-panel-bg);
   box-shadow: var(--admin-panel-shadow);
 }
 
@@ -65,7 +65,7 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
 
 .admin-panel__header h2 {
   margin: 0;
-  color: var(--admin-text);
+  color: var(--admin-text-strong);
   font-size: 20px;
   font-weight: 700;
   line-height: 1.35;
@@ -74,7 +74,7 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
 
 .admin-panel__header p {
   margin: 4px 0 0;
-  color: var(--admin-muted);
+  color: var(--admin-text-muted);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -112,7 +112,7 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
 
 .admin-panel__footer {
   padding: 0 22px 22px;
-  border-top: 1px solid var(--admin-border);
+  border-top: 1px solid var(--admin-panel-border);
   background: #fbfdff;
 }
 

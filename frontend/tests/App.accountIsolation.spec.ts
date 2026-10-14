@@ -1,3 +1,4 @@
+/* eslint-disable vue/one-component-per-file -- These stubs are local to this isolated test. */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { flushPromises, mount } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';

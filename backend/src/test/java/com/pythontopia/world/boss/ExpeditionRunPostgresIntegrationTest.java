@@ -51,6 +51,10 @@ class ExpeditionRunPostgresIntegrationTest {
     jdbc = new JdbcTemplate(source);
   }
 
+  private static ExpeditionScoreService scoreService() {
+    return new ExpeditionScoreService(jdbc, new ExpeditionRunService(jdbc, new ObjectMapper()));
+  }
+
   @Test
   void serverOwnsRunIdentityAndSettlementState() {
     long userId = createStudent();
@@ -89,7 +93,7 @@ class ExpeditionRunPostgresIntegrationTest {
     ExpeditionRunDto updated = runs.save(userId, withScore(initial, 999_999));
     assertThat(updated.score()).isEqualTo(80);
 
-    ExpeditionScoreService scores = new ExpeditionScoreService(jdbc);
+    ExpeditionScoreService scores = scoreService();
     scores.record(userId, new ExpeditionScoreSubmitDto(initial.runId()));
     assertThat(
             jdbc.queryForObject(
@@ -135,7 +139,7 @@ class ExpeditionRunPostgresIntegrationTest {
                 initial.runId()))
         .isEqualTo(2);
 
-    new ExpeditionScoreService(jdbc)
+    scoreService()
         .recordVerifiedAttempt(
             userId, initial.runId(), "late-submission", "a".repeat(64), true, 100);
     assertThat(
@@ -855,7 +859,7 @@ class ExpeditionRunPostgresIntegrationTest {
     assertThat(state.phase()).isEqualTo("over");
     assertThat(nodeById(state, bossNodeId).get("state")).isEqualTo("cleared");
 
-    new ExpeditionScoreService(jdbc)
+    scoreService()
         .record(userId, new ExpeditionScoreSubmitDto(active.runId()));
     assertThat(
             jdbc.queryForObject(
@@ -1032,47 +1036,61 @@ class ExpeditionRunPostgresIntegrationTest {
         nodeId,
         "issued-problem",
         (String) nodeById(challenge, nodeId).get("kcCode"),
-        "c".repeat(64));
-    ExpeditionScoreService scores = new ExpeditionScoreService(jdbc);
+        "b".repeat(64));
+    ExpeditionScoreService scores = scoreService();
     String fingerprint = "b".repeat(64);
 
     var firstFailure =
         scores.recordVerifiedAttempt(
             userId, challenge.runId(), "issued-problem", fingerprint, false, 0);
+    ExpeditionRunDto afterFailure = runs.findActive(userId).orElseThrow();
     var repeatedFailure =
         scores.recordVerifiedAttempt(
             userId, challenge.runId(), "issued-problem", fingerprint, false, 0);
+    insertConsumedProblem(
+        userId,
+        challenge.runId(),
+        nodeId,
+        "issued-problem-retry",
+        (String) nodeById(challenge, nodeId).get("kcCode"),
+        fingerprint);
     var firstPass =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issued-problem", fingerprint, true, 100);
+            userId, challenge.runId(), "issued-problem-retry", fingerprint, true, 100);
+    var settledPass =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                challenge.runId(), nodeId, ExpeditionRunAction.SETTLE_CHALLENGE, null,
+                "issued-problem-retry"));
     var repeatedPass =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issued-problem", fingerprint, true, 100);
+            userId, challenge.runId(), "issued-problem-retry", fingerprint, true, 100);
     var failureAfterPass =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issued-problem", fingerprint, false, 0);
+            userId, challenge.runId(), "issued-problem-retry", fingerprint, false, 0);
 
     assertThat(firstFailure)
         .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
     assertThat(repeatedFailure)
-        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(false, false));
     assertThat(firstPass).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
+    assertThat(settledPass.hp()).isEqualTo(afterFailure.hp());
+    assertThat(nodeById(settledPass, nodeId).get("state")).isEqualTo("cleared");
     assertThat(repeatedPass)
-        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(false, false));
     assertThat(failureAfterPass)
-        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(false, false));
     assertThat(
             jdbc.queryForObject(
-                "SELECT passed FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid"
-                    + " AND problem_id = 'issued-problem'",
+                "SELECT passed FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
                 Boolean.class,
                 userId,
                 challenge.runId()))
         .isTrue();
     assertThat(
             jdbc.queryForObject(
-                "SELECT score FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid"
-                    + " AND problem_id = 'issued-problem'",
+                "SELECT score FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
                 Integer.class,
                 userId,
                 challenge.runId()))
@@ -1093,7 +1111,7 @@ class ExpeditionRunPostgresIntegrationTest {
     String kcCode = (String) nodeById(challenge, nodeId).get("kcCode");
     insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-first", kcCode, "1".repeat(64));
     insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-second", kcCode, "2".repeat(64));
-    ExpeditionScoreService scores = new ExpeditionScoreService(jdbc);
+    ExpeditionScoreService scores = scoreService();
 
     var olderIssue = scores.recordVerifiedAttempt(
         userId, challenge.runId(), "issue-first", "a".repeat(64), true, 80);
@@ -1105,6 +1123,63 @@ class ExpeditionRunPostgresIntegrationTest {
     assertThat(
             jdbc.queryForObject(
                 "SELECT COUNT(*) FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
+                Integer.class,
+                userId,
+                challenge.runId()))
+        .isEqualTo(1);
+  }
+
+  @Test
+  void failedAttemptAppliesHpLossBeforeClientSettlementAndPassCannotUndoIt() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    String nodeId = (String) active.nodes().getFirst().get("id");
+    ExpeditionRunDto challenge =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
+    String kcCode = (String) nodeById(challenge, nodeId).get("kcCode");
+    String fingerprint = "c".repeat(64);
+    insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-failed", kcCode, fingerprint);
+    ExpeditionScoreService scores = scoreService();
+
+    var failed = scores.recordVerifiedAttempt(
+        userId, challenge.runId(), "issue-failed", fingerprint, false, 0);
+
+    assertThat(failed.accepted()).isTrue();
+    ExpeditionRunDto afterFailure = runs.findActive(userId).orElseThrow();
+    assertThat(afterFailure.hp()).isLessThan(challenge.hp());
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM expedition_challenge_settlement"
+                    + " WHERE user_id = ? AND run_id = ?::uuid AND problem_id = 'issue-failed'",
+                Integer.class,
+                userId,
+                challenge.runId()))
+        .isEqualTo(1);
+
+    insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-retry", kcCode, fingerprint);
+    var passed = scores.recordVerifiedAttempt(
+        userId, challenge.runId(), "issue-retry", fingerprint, true, 100);
+    assertThat(passed.accepted()).isTrue();
+    ExpeditionRunDto settled =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                challenge.runId(),
+                nodeId,
+                ExpeditionRunAction.SETTLE_CHALLENGE,
+                null,
+                "issue-retry"));
+
+    assertThat(settled.hp()).isEqualTo(afterFailure.hp());
+    assertThat(nodeById(settled, nodeId).get("state")).isEqualTo("cleared");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM expedition_verified_attempt"
+                    + " WHERE user_id = ? AND run_id = ?::uuid",
                 Integer.class,
                 userId,
                 challenge.runId()))
@@ -1222,8 +1297,8 @@ class ExpeditionRunPostgresIntegrationTest {
     String kcCode = (String) nodeById(challenge, nodeId).get("kcCode");
     insertConsumedProblem(userId, challenge.runId(), nodeId, "issued-problem-1", kcCode, "d".repeat(64));
     insertConsumedProblem(userId, challenge.runId(), nodeId, "issued-problem-2", kcCode, "d".repeat(64));
-    ExpeditionScoreService scores = new ExpeditionScoreService(jdbc);
-    String fingerprint = "a".repeat(64);
+    ExpeditionScoreService scores = scoreService();
+    String fingerprint = "d".repeat(64);
 
     var firstFailure =
         scores.recordVerifiedAttempt(
@@ -1231,9 +1306,10 @@ class ExpeditionRunPostgresIntegrationTest {
     var duplicateFailure =
         scores.recordVerifiedAttempt(
             userId, challenge.runId(), "issued-problem-1", fingerprint, false, 0);
+    insertConsumedProblem(userId, challenge.runId(), nodeId, "issued-problem-3", kcCode, fingerprint);
     var firstPass =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issued-problem-2", fingerprint, true, 100);
+            userId, challenge.runId(), "issued-problem-3", fingerprint, true, 100);
     var duplicatePass =
         scores.recordVerifiedAttempt(
             userId, challenge.runId(), "issued-problem-1", fingerprint, true, 100);
@@ -1310,7 +1386,7 @@ class ExpeditionRunPostgresIntegrationTest {
         userId,
         new ExpeditionRunActionRequest(
             daily.runId(), null, ExpeditionRunAction.FINISH, null));
-    new ExpeditionScoreService(jdbc).record(userId, new ExpeditionScoreSubmitDto(daily.runId()));
+    scoreService().record(userId, new ExpeditionScoreSubmitDto(daily.runId()));
 
     assertThat(
             jdbc.queryForObject(

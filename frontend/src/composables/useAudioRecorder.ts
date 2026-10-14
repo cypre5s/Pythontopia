@@ -1,8 +1,7 @@
 import { ref, type Ref } from 'vue';
 
 /**
- * 极简录音 composable（MediaRecorder 包装）——随身助教语音输入在浏览器 Web Speech API 不可用时的回退：
- * 录一段音频上传后端讯飞语音听写转文本。仅负责采集，转写在 {@code api/media.ts::transcribeAudio}。
+ * Legacy MediaRecorder wrapper. The ASR upload route is disabled, so the Tutor uses text input.
  */
 export interface AudioRecorder {
   supported: Ref<boolean>;

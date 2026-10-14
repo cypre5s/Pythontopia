@@ -168,11 +168,12 @@ public class MediaJobService {
     } catch (BusinessException ex) {
       log.warn("media job {} failed: {} {}", jobId, ex.code(), ex.getMessage());
       jobRepository.updateStatus(jobId, MediaJobStatus.FAILED, null, ex.code());
-      streamRegistry.broadcast(jobId, "error", errorPayload(ex.code(), ex.getMessage()));
+      streamRegistry.broadcast(jobId, "error", errorPayload(ex.code(), "合成失败，请稍后重试"));
     } catch (Exception ex) {
       log.error("media job {} failed unexpectedly", jobId, ex);
       jobRepository.updateStatus(jobId, MediaJobStatus.FAILED, null, "VIDEO_COMPOSE_FAILED");
-      streamRegistry.broadcast(jobId, "error", errorPayload("VIDEO_COMPOSE_FAILED", ex.getMessage()));
+      streamRegistry.broadcast(
+          jobId, "error", errorPayload("VIDEO_COMPOSE_FAILED", "合成失败，请稍后重试"));
     } finally {
       streamRegistry.complete(jobId);
     }

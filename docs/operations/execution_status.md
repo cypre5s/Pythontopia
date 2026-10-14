@@ -2,7 +2,32 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-14）**：本轮聚焦 Web。Tutor 使用 DeepSeek 固定阶段 AutoGen；图片仅作为输入，provider 同步及流式接口只提取文本。前端 Vitest 最新为 270 files / 2568 tests；typecheck、build 通过；ESLint 0 errors / 7 warnings。Graph 全量为 1842 passed / 1 skipped，RAG 为 158 passed / 2 skipped。Maven 全量最新为 1392 tests、0 assertion failures、7 errors：6 个 Testcontainers 测试类出现 Docker 宿主动态端口 `address already in use`，长期仿真类在全量串跑中连接被拒；7 个受影响类后续隔离复跑共 20/20 通过。全量 Maven 仍未稳定全绿。剩余项包括 Twin A/B 与 7 日复测、DeepSeek 供应商 token/账单核对、稳定全量 Maven 复验、生产 Piston 验证；ECS/GitHub 与非 Web 客户端不在本轮范围。性能按用户要求后置。下方阶段表与时间线保留早期历史，不代表当前焦点。
+> **当前快照（2026-10-15）**：聚焦 Web。已完成本地基线提交 `f9744cca`；Tutor 与训练导学均走 DeepSeek AutoGen，图片只输入、响应只保留文本；`./dev.sh` 的本地 AI 日限额关闭，生产仍有限额。当前工作树有未提交的媒体配置/文档收敛、管理台 token 命名、Boss 场景回归测试和测试 fixture lint 例外说明。真实 DeepSeek 文本/PNG 输入本轮各验证 1 次。Graph Tutor/provider/workflow 定向 106 passed，另有 AutoGen runtime/SSE 23 passed；Java Twin/Boss/Tutor/媒体关闭/额度定向 135 tests 通过；前端定向 25 项与新增账号隔离测试 1 项通过，typecheck 通过，全仓 ESLint 0 errors / 0 warnings。全量串行 Maven 为 1408 tests、0 断言失败、7 errors；6 个 Testcontainers 因 Docker 临时端口绑定冲突失败，长期仿真在全量时数据库连接失败。受影响 7 类的隔离串行重跑为 1 pass、6 个同样的端口错误；不能称全绿。Tutor 静态事件/卡片对照完成但逐事件 live 重放未完成；新生远征实测因先修/可练 KC 门槛返回 422，Boss 全程判题演出仍未验证。Twin A/B/7 日复测、供应商费用/token 对账、生产 Piston 验证和性能测试也未完成。非 Web 客户端不在当前范围。
+
+## 2026-10-15 当前续接
+
+### 已完成
+
+- 继续安全与远征闭环：失败判题和扣体力现由服务端同事务完成；失败后新签发同题可更新去重账本但不恢复体力；判题与结算均拒绝已过期的旧题。签名媒体链接会在 owner 停用/删除后立即失效，合成 SSE 不再向客户端泄露底层异常文本。
+- 对应 RED/GREEN 验证完成：远征与 Boss、媒体授权/作业服务相关 Maven 定向集合 111/111 通过；Boss scene 与账号隔离 Vitest 4/4，前端 typecheck/lint 通过，`git diff --check` 通过。测试覆盖了旧题复活、失败漏扣体力、停用账号继续读资源、SSE 错误泄露。
+- 工程格式复核：本次改动 Java 文件未出现在 Spotless 违规列表；全库 Spotless 仍被 612 个未修改的历史文件格式差异阻断，没有批量格式化无关文件。
+- 清理旧讯飞密钥/代理的本地注入和开发手册操作指引；线上/本地实际 AI provider 继续固定 DeepSeek，`dev.sh` 仍将本地请求日限额设为关闭。
+- 核实 Tutor AutoGen 的现有主链路与 Alethicode 最新未提交实现的协议差异；保留 Pythontopia 当前 SSE、Java 鉴权、数据库和私有附件约束。
+- 将管理台 CSS token 名称对齐 Alethicode 语义词汇，保持原值；增加远征 Boss 场景的受击/失败体力/素材预载自动回归。
+- 已跑真实 DeepSeek 文本与 PNG 输入各 1 次；Graph 106、Java 135、前端定向 25 项通过，前端 typecheck/lint、生产 AI readiness 契约、shell 语法通过。
+- 补跑 Graph AutoGen runtime/SSE 23 tests、前端账号隔离回归 1 test；全仓 lint 的 5 条 Vue mock stub 结构提示已在测试文件显式标注，当前 0 errors / 0 warnings。
+- 全量 Maven 串行：1408 tests、0 断言失败、7 errors；6 个 PostgreSQL Testcontainers 因 Docker 临时端口 `address already in use` 失败，长期仿真发生 JDBC 连接拒绝。受影响 7 类串行隔离重跑后，长期仿真 1/1 通过，另外 6 类仍因临时端口绑定失败。
+- Tutor 对照：共享 17 个事件，Pythontopia 另有独立执行轨迹事件；卡片映射为 11 个 Pydantic 模型。新生远征浏览器尝试在第 1 章和全局范围均收到 422 `EXPEDITION_NO_PRACTICE_PROBLEMS`；测试账号已清理。
+
+### 未完成 / 下一步
+
+- Tutor 静态事件/卡片结构对照已完成；逐事件 live 重放与证据/失败恢复行为的端到端对照仍待做。Pythontopia 保留 Java/SSE/私有附件契约，不移植不兼容的 WebSocket/session 数据层。
+- 远征 Boss 浏览器验证受真实学习门槛阻止：当前服务端不纳入第 1 章候选，后续 KC 需先修掌握证据。具备真实先修证据后再做判题至胜利联测，不伪造掌握记录。
+- 解决 Docker/Testcontainers 临时端口占用后再跑全量 Maven；Twin A/B、7 日延迟效果、供应商用量/费用与远征性能继续待测，性能最后执行。
+- 远征真实完整 Boss 浏览器演出仍受真实先修/可练题门槛阻止；本轮验证的是 PostgreSQL 结算与服务边界，没有伪造画像证据。
+- 继续只做 Web 范围工程优化：以现有 Vue/TypeScript、Java、Python 项目约定和 Vue/WCAG 官方指南为依据，针对已观察到的重复逻辑、命名差异或无障碍缺口小步修复，不做无关大规模格式化。
+
+## 2026-10-14 当前续接
 
 ## 2026-10-14 当前续接
 
