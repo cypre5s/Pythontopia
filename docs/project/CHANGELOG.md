@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-14 — DeepSeek 编程题审查与 KC 兜底收紧
+
+- Boss 重试会把有限长度的上一轮审查诊断传给下一次 DeepSeek 出题；摘要中的 Python API 词（如 `format`、`split`、`input`）也参与代码接地。
+- 非输出类 KC 的固定文本程序、只在题面提及 KC 术语的参考解会被拒绝。Graph 不再在审查失败时把未审或不匹配的 Golden 题冒充为目标 KC；没有通过审查的 AI 题或同 KC 课程题时明确返回 503。
+- 真实 Web→Spring→Graph→DeepSeek 验证：无静态编程题的 `PY43-KC-012` 首轮生成并通过审查，响应 `aiGenerated=true`、`reviewed=true` 且未暴露参考解/测试用例；正常请求会自动审核通过并进入现有共享题库。验证账号与临时入库记录随后清理。对 `PY43-KC-001` 的质量复测中，6 个真实模型候选均未通过接地/回显/语法检查，Graph 返回 503，没有把题目入库或计入学习。
+- 验证：Boss Graph 测试 234 passed，触及文件 Ruff 检查通过；DeepSeek provider 日志确认真实 `api.deepseek.com` 请求成功。本地 `PYT_AI_REQUEST_LIMITS_ENABLED=false`。供应商 token/账单不可由本地请求日志核对。
+
 ## 2026-10-14 — DeepSeek 唯一在线 provider 与配音关闭复核
 
 - 复核 Graph 所有在线模型路由均经 DeepSeek provider 工厂；地址限制为 `https://api.deepseek.com`，模型为 DeepSeek 白名单。RAG 只用本地 hash/BGE 向量；研究实验室在线客户端也限制 DeepSeek 地址与模型。讯飞 TTS、ASR、文生图和图片理解的 `isEnabled()` 固定为 `false`，对应服务测试确认即使凭据非空也不能触发外发；浏览器语音输入 composable 当前没有产品代码调用方。

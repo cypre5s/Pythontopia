@@ -255,6 +255,24 @@ async def test_factory_uses_authoritative_kc_context_in_prompt() -> None:
 
 
 @pytest.mark.asyncio
+async def test_factory_includes_review_feedback_in_retry_prompt() -> None:
+    provider = _StubProvider(LlmResponse(content_json=_good_payload()))
+
+    await build_llm_problem_factory(provider)(
+        chapter=1,
+        stage=1,
+        kc_code="PY43-KC-001",
+        difficulty=1,
+        review_feedback="trivial_constant_output: 需要输入处理或计算。",
+    )
+
+    user_prompt = provider.last_messages[-1]["content"]
+    assert "上一次候选题审查未通过" in user_prompt
+    assert "trivial_constant_output" in user_prompt
+    assert "需要输入处理或计算" in user_prompt
+
+
+@pytest.mark.asyncio
 async def test_profile_prompt_uses_preferences_but_ignores_inferred_ability_and_emotion() -> None:
     provider = _StubProvider(LlmResponse(content_json=_good_payload()))
     factory = build_llm_problem_factory(provider)
@@ -295,6 +313,7 @@ async def test_boss_problem_prompt_uses_town_hub_learning_scenes() -> None:
     system_prompt = provider.last_messages[0]["content"]
     assert "图书馆" in system_prompt
     assert "工坊" in system_prompt
+    assert "不得只用 print 固定字符串" in system_prompt
     assert "浇花" not in system_prompt
     assert "收菜" not in system_prompt
 

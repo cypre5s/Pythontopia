@@ -45,6 +45,7 @@ PROBLEM_GEN_SYSTEM_PROMPT = """你是 Python 编程题命题官，专注「Pytho
    章 7 = import/try/except/with）。
 - 第 1 章必须特别克制：只能使用 print / input / 变量赋值 / int / float /
   str / 简单四则运算；禁止 if、for、while、list、dict、def、class、import。
+- 只有 KC 明确考查 print/控制台输出时，才允许程序只输出常量文本；其它 KC 不得只用 print 固定字符串充当编程题。
 - 题目必须明确扣紧给定 KC 关键词，至少在 statement 或 reference_solution 中
   出现 1 次中文关键词或对应英文语法。
 
@@ -202,6 +203,7 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
         temperature: float = 0.2,
         preferred_kind: str | None = None,
         profile_signals: dict[str, Any] | None = None,
+        review_feedback: str | None = None,
     ) -> BossProblem:
         # 将画像信号与关卡题型偏好写入 prompt。
         extras: list[str] = []
@@ -257,6 +259,11 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
                 extras.append("学生偏好可视化，可在 statement 末尾用 mermaid 或 ascii 简图。")
 
         extras_block = ("\n\n【画像与题型提示】\n" + "\n".join(extras)) if extras else ""
+        review_block = (
+            f"\n\n【上一次候选题审查未通过，请按诊断修改】\n{review_feedback}"
+            if review_feedback
+            else ""
+        )
         contract_lines = [
             "只输出合法 JSON 对象，不要 Markdown、解释文字或空 content。",
             "reference_solution 必须从 stdin 输入、向 stdout 输出，且必须给至少 3 条 test_cases。",
@@ -295,6 +302,7 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
             f"{kc_context}"
             f"难度参考：1=只需 1 行 print；3=两步运算；5=综合 3+ 步逻辑。"
             f"{extras_block}"
+            f"{review_block}"
             f"{contract_block}"
         )
         messages = [

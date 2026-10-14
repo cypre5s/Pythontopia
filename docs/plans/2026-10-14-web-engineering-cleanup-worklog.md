@@ -152,3 +152,11 @@
 - 最新 Tutor 浏览器真调用：文本校验词正确；合成图中蓝色方形与黄色背景均被识别；2 条回答持久化。临时学生、Tutor 数据与图片文件均清理。
 - `./dev.sh` 本地后端环境 `PYT_AI_REQUEST_LIMITS_ENABLED=false`；此项只关闭本地应用内每日计数，Provider 自身的余额、速率限制及费用仍然有效。
 - 尚未完成：Twin 学习效果 A/B 与 7 日延迟复测、DeepSeek 账单/token 核对、稳定全量 Maven 复验，以及生产 Piston/ECS/公网验证。性能仍按用户要求置后。
+
+## 2026-10-14 — KC AI 出题审查与真实 Web 复测
+
+- 真实请求发现：历史类 KC 的 AI 候选可用“读入任意成就名并追加固定说明”绕过只拦纯输入回显的检查，且未审题会被当作 Golden 回退返回。已加强常量输出与权威 KC 术语接地校验，并让失败审查诊断进入有界重试 prompt；摘要里的 `format` / `input` 等 Python API 词仍能用于证明代码类 KC 落地。
+- Graph 只在审查通过时返回题目；失败时返回 `BOSS_PROBLEM_GENERATION_UNAVAILABLE`。正常 Boss 服务仅在找到同 KC 的课程题时可自行兜底，不会把别的 KC 题冒充目标题。
+- 正向真实调用：课程库确认 `PY43-KC-012` 没有静态编程题，DeepSeek 首轮生成问候语输入输出题并通过五层审查，返回 `aiGenerated=true` / `reviewed=true`；正常路径自动审核通过并写入共享题库。负向复测 `PY43-KC-001` 的 6 个候选被拒，未进入题库、未生成学习记录。两项都由临时学生账号发起；验后删除该账号及其题目/审核记录。
+- 验证：`tests/agents/boss` 234 passed；改动文件 Ruff 通过；`git diff --check` 通过。Graph 容器日志确认 DeepSeek API HTTP 200；Web API 成功题目响应没有 reference solution / test cases。开发请求限额为 false。
+- 未完成：`PY43-KC-001` 尚无合格编程题；Phaser 远征端到端答题和画像回流未由本次候选验证；Maven 全量最新仍为 1392 tests / 7 环境错误（相关隔离用例 20/20）；Twin A/B、7 日复测、供应商账单/token 对账和生产 Piston 未验证。性能按用户要求后置。

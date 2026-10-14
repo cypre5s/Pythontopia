@@ -109,6 +109,11 @@ def extract_kc_grounding_keywords(kc_name: str, kc_summary: str) -> list[str]:
         keyword = re.sub(r"\s+", "", part).strip(" .,:;!?\"'`")
         if len(keyword) >= 2 and keyword not in _KC_KEYWORD_NOISE and keyword not in keywords:
             keywords.append(keyword)
+    for token in re.findall(r"\b[A-Za-z_][A-Za-z_0-9]*\b", kc_summary):
+        if len(token) >= 3 and token.lower() != "python" and token.lower() not in {
+            keyword.lower() for keyword in keywords
+        }:
+            keywords.append(token)
     return keywords
 
 
@@ -157,13 +162,31 @@ def _is_trivial_input_echo(code: str) -> bool:
     return echoes_input
 
 
+def _is_constant_output_only(code: str) -> bool:
+    try:
+        body = ast.parse(code).body
+    except (SyntaxError, TypeError):
+        return False
+
+    return bool(body) and all(
+        isinstance(statement, ast.Expr)
+        and isinstance(statement.value, ast.Call)
+        and isinstance(statement.value.func, ast.Name)
+        and statement.value.func.id == "print"
+        and not statement.value.keywords
+        and bool(statement.value.args)
+        and all(isinstance(argument, ast.Constant) for argument in statement.value.args)
+        for statement in body
+    )
+
+
 def verify_kc_grounding(
     problem: BossProblem,
     *,
     kc_keywords: Mapping[str, Iterable[str]] | None = None,
     min_keyword_hits: int = 1,
 ) -> ReviewVerdict:
-    """拒绝纯输入回显，并校验 KC 关键词接地与章节语法白名单。
+    """拒绝空洞输出，并校验 KC 关键词接地与章节语法白名单。
 
     关键词来源优先级：
     1. 外部 ``kc_keywords[kc_code]`` 显式词表；
@@ -174,17 +197,6 @@ def verify_kc_grounding(
     另外用 ``kc_map.is_known_kc`` 做防幻觉提示：KC 不在课程包内仅 warning，不阻断。
     """
     issues: list[ReviewIssue] = []
-
-    if _is_trivial_input_echo(problem.reference_solution):
-        issues.append(
-            ReviewIssue(
-                review="grounding",
-                severity="error",
-                code="trivial_echo_solution",
-                message="input-to-output echo does not assess a programming skill or the target KC",
-            )
-        )
-
     override = bool(kc_keywords and problem.kc_code in kc_keywords)
     if override:
         keywords = list(kc_keywords[problem.kc_code])  # type: ignore[index]
@@ -202,6 +214,30 @@ def verify_kc_grounding(
                     ),
                 )
             )
+    if _is_trivial_input_echo(problem.reference_solution):
+        issues.append(
+            ReviewIssue(
+                review="grounding",
+                severity="error",
+                code="trivial_echo_solution",
+                message="input-to-output echo does not assess a programming skill or the target KC",
+            )
+        )
+
+    output_keywords = ("print", "打印", "输出语句", "打印语句")
+    teaches_output = any(
+        any(term in re.sub(r"\s+", "", keyword).lower() for term in output_keywords)
+        for keyword in keywords
+    )
+    if _is_constant_output_only(problem.reference_solution) and not teaches_output:
+        issues.append(
+            ReviewIssue(
+                review="grounding",
+                severity="error",
+                code="trivial_constant_output",
+                message="printing fixed literals does not assess the target KC; require input processing or computation",
+            )
+        )
 
     def normalize(text: str) -> str:
         return re.sub(r"\s+", "", text).lower()
@@ -222,15 +258,20 @@ def verify_kc_grounding(
             )
         )
 
-    if override and keywords and not any(normalize(keyword) in solution for keyword in keywords):
+    if (
+        override
+        and keywords
+        and not teaches_output
+        and not any(normalize(keyword) in solution for keyword in keywords)
+    ):
         issues.append(
             ReviewIssue(
                 review="grounding",
-                severity="warning",
+                severity="error",
                 code="kc_solution_miss",
                 message=(
                     f"reference_solution uses none of the authoritative KC terms for {problem.kc_code}; "
-                    "a teacher should confirm that the subject is more than story context before bank approval"
+                    "the target KC cannot appear only in story context before bank approval"
                 ),
             )
         )

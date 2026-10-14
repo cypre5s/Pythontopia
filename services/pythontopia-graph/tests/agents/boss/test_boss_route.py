@@ -31,7 +31,7 @@ KC_CONTEXT = {
 # /agents/boss/problem
 
 
-def test_problem_endpoint_returns_golden_when_llm_unavailable(
+def test_problem_endpoint_rejects_unreviewed_golden_when_llm_unavailable(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from pythontopia_graph.routes import boss as boss_route
@@ -41,15 +41,8 @@ def test_problem_endpoint_returns_golden_when_llm_unavailable(
         "/agents/boss/problem",
         json={**KC_CONTEXT, "chapter": 1, "stage": 1, "kcCode": "PY43-KC-001", "difficulty": 1},
     )
-    assert response.status_code == 200
-    body = response.json()
-    # LLM 不可用时走 golden/dryrun 路径
-    assert body["chapter"] == 1
-    assert body["stage"] == 1
-    assert body["totalTestCases"] >= 3
-    assert "problemId" in body
-    assert body["reviewed"] is False
-    assert body["aiGenerated"] is False
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "BOSS_PROBLEM_GENERATION_UNAVAILABLE"
 
 
 def test_problem_endpoint_rejects_golden_for_a_different_requested_kc(
@@ -65,7 +58,7 @@ def test_problem_endpoint_rejects_golden_for_a_different_requested_kc(
     )
 
     assert response.status_code == 503
-    assert response.json()["detail"]["code"] == "BOSS_PROBLEM_KC_MISMATCH"
+    assert response.json()["detail"]["code"] == "BOSS_PROBLEM_GENERATION_UNAVAILABLE"
 
 
 def test_problem_logs_profile_signal_presence_without_signal_values(
@@ -124,16 +117,28 @@ def test_problem_endpoint_rejects_unconfigured_dry_run_provider(
 def test_problem_endpoint_default_kc_when_blank(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    from types import SimpleNamespace
+
+    from pythontopia_graph.agents.boss.golden_problems import get_golden_problem
     from pythontopia_graph.routes import boss as boss_route
 
-    monkeypatch.setattr(boss_route, "provider_from_env", lambda: _UnavailableProvider())
+    captured: dict[str, object] = {}
+
+    async def accepted_problem(*_args, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(problem=get_golden_problem(3, 2), passed=True)
+
+    monkeypatch.setattr(boss_route, "provider_from_env", lambda: object())
+    monkeypatch.setattr(boss_route, "build_llm_problem_factory", lambda _provider: object())
+    monkeypatch.setattr(boss_route, "generate_boss_problem", accepted_problem)
     response = client.post(
         "/agents/boss/problem",
         json={**KC_CONTEXT, "chapter": 3, "stage": 2, "kcCode": "", "difficulty": 2},
     )
     assert response.status_code == 200
     body = response.json()
-    assert body["kcCode"].startswith("PY43-KC-")
+    assert body["kcCode"] == "PY43-KC-017"
+    assert captured["kc_code"] == "PY43-KC-017"
 
 
 def test_problem_endpoint_rejects_invalid_chapter(client: TestClient) -> None:

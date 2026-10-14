@@ -86,6 +86,7 @@ async def generate_boss_problem(
 
     temperature_base = 0.2
     last_review: BossProblemReview | None = None
+    review_feedback: str | None = None
 
     for attempt in range(1, max_retries + 1):
         temperature = temperature_base + 0.05 * (attempt - 1)
@@ -102,6 +103,7 @@ async def generate_boss_problem(
                     temperature=temperature,
                     preferred_kind=preferred_kind,
                     profile_signals=dict(profile_signals) if profile_signals else None,
+                    review_feedback=review_feedback,
                 )
             except TypeError:
                 problem = await problem_factory(
@@ -135,6 +137,11 @@ async def generate_boss_problem(
             attempt,
             [issue.code for issue in review.issues if issue.severity == "error"],
         )
+        review_feedback = "\n".join(
+            f"- {issue.code}: {issue.message[:180]}"
+            for issue in review.issues
+            if issue.severity == "error"
+        )[:600]
 
     if golden_fallback is not None:
         LOG.warning(

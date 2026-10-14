@@ -80,8 +80,13 @@ def test_grounding_rejects_a_question_without_the_authoritative_kc_name() -> Non
 
 def test_grounding_accepts_a_concrete_term_from_kc_summary() -> None:
     problem = _good_problem()
-    problem.statement += " 本题展示神威·太湖之光的名称。"
-    problem.reference_solution = "print('神威·太湖之光')"
+    problem.statement += " 本题展示神威·太湖之光，并将输入数加一。"
+    problem.reference_solution = "value = int(input()) + 1\nprint('神威·太湖之光', value)"
+    problem.test_cases = [
+        build_test_case("1", "神威·太湖之光 2", is_sample=True),
+        build_test_case("2", "神威·太湖之光 3"),
+        build_test_case("3", "神威·太湖之光 4"),
+    ]
 
     review = run_all_reviews(
         problem,
@@ -135,6 +140,55 @@ def test_generate_boss_problem_accepts_factory_output() -> None:
         )
     )
     assert review.passed
+
+
+def test_generate_boss_problem_passes_review_feedback_to_retry() -> None:
+    feedback_by_attempt: list[str | None] = []
+    constant_output = BossProblem(
+        problem_id="ai-constant-output",
+        chapter=1,
+        stage=1,
+        kc_code="PY43-KC-001",
+        title="输出课程事实",
+        statement="输出神威·太湖之光。",
+        reference_solution="print('神威·太湖之光')",
+        test_cases=[
+            build_test_case("", "神威·太湖之光", is_sample=True),
+            build_test_case("", "神威·太湖之光"),
+            build_test_case("", "神威·太湖之光"),
+        ],
+        difficulty=1,
+    )
+    grounded_problem = _good_problem()
+    grounded_problem.statement += " 神威·太湖之光的编号加一。"
+    grounded_problem.reference_solution = "value = int(input()) + 1\nprint('神威·太湖之光', value)"
+    grounded_problem.test_cases = [
+        build_test_case("1", "神威·太湖之光 2", is_sample=True),
+        build_test_case("2", "神威·太湖之光 3"),
+        build_test_case("3", "神威·太湖之光 4"),
+    ]
+
+    async def factory(**kwargs) -> BossProblem:
+        feedback_by_attempt.append(kwargs.get("review_feedback"))
+        return constant_output if len(feedback_by_attempt) == 1 else grounded_problem
+
+    review = asyncio.run(
+        generate_boss_problem(
+            chapter=1,
+            stage=1,
+            kc_code="PY43-KC-001",
+            difficulty=1,
+            problem_factory=factory,
+            kc_keywords={"PY43-KC-001": ["神威·太湖之光"]},
+            max_retries=2,
+            skip_self_test=True,
+        )
+    )
+
+    assert review.passed
+    assert feedback_by_attempt[0] is None
+    assert "trivial_constant_output" in (feedback_by_attempt[1] or "")
+    assert "input processing or computation" in (feedback_by_attempt[1] or "")
 
 
 def test_generate_boss_problem_retries_then_fallback() -> None:

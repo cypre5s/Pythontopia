@@ -223,7 +223,16 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
             profile_signals=profile_signals_dict,
         )
 
-    problem = review.problem if review.passed else golden
+    if not review.passed:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "code": "BOSS_PROBLEM_GENERATION_UNAVAILABLE",
+                "message": "当前知识点没有通过审查的编程题，请稍后重试",
+            },
+        )
+
+    problem = review.problem
     if problem.kc_code != kc_code:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
