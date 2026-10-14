@@ -916,6 +916,26 @@ class BossServiceTest {
   }
 
   @Test
+  @DisplayName("远征前沿无可玩候选时说明先修与课程题条件")
+  void selectFrontierExplainsWhyNoCandidateIsPlayable() {
+    when(learnerTwinService.frontier(7L, 5, List.of(), 40))
+        .thenReturn(new FrontierSelectResultDto(
+            List.of(new FrontierPickDto("PY43-KC-001", 1, 1, "建议先复习前置知识"))));
+    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
+        .thenReturn(List.of());
+
+    assertThatThrownBy(
+            () ->
+                service.selectFrontier(
+                    7L, new FrontierSelectRequest(null, List.of(), 5, List.of(), 4)))
+        .isInstanceOfSatisfying(
+            com.pythontopia.common.error.BusinessException.class,
+            exception -> assertThat(exception.getMessage())
+                .contains("前置知识", "课程编程题"));
+    verifyNoInteractions(graphClient);
+  }
+
+  @Test
   @DisplayName("远征开局过滤没有课程编程题的 KC，避免新手落在不可玩的首节点")
   void expeditionFrontierOnlyIncludesKnowledgePointsWithCourseProblems() {
     var candidates = new FrontierSelectResultDto(
