@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-10-14 — DeepSeek 唯一在线 provider 与配音关闭复核
+
+- 复核 Graph 所有在线模型路由均经 DeepSeek provider 工厂；地址限制为 `https://api.deepseek.com`，模型为 DeepSeek 白名单。RAG 只用本地 hash/BGE 向量；研究实验室在线客户端也限制 DeepSeek 地址与模型。讯飞 TTS、ASR、文生图和图片理解的 `isEnabled()` 固定为 `false`，对应服务测试确认即使凭据非空也不能触发外发；浏览器语音输入 composable 当前没有产品代码调用方。
+- 本地 Graph 容器运行态复核为 `OpenAiCompatProvider` / `api.deepseek.com`，Spark key 缺失、fine-tuned 开关关闭。经项目 provider 发起 2 次真实请求：文本精确回显成功；合成 PNG 视觉识别成功，回答“背景是红色，中央方块是蓝色”。两次 response 都只含 `content_json`、`content_text`、`tool_calls` 字段，没有图片输出。
+- 验证：Graph provider/视觉输入 53 passed（1 条既有 pytest 标记警告）；研究 provider 边界 32 passed；RAG embedder 策略 6 passed；后端 TTS/ASR/图像服务及 AI 路由回归 17 passed；生产 DeepSeek readiness/model contract 脚本通过。
+- 未核对 DeepSeek 供应商 token/账单；本次输出和应用日志不能替代账单数据。
+
 ## 2026-10-14 — 远征补星并发审计重复修复
 
 - 无尽远征同一用户/章节并发提交合格总结时，旧实现可能让两个请求都通过每日次数检查并重复写入 `star_award_event`。新增 PostgreSQL 事务 advisory lock，覆盖错题/远征补星的检查与写入，并让章节核心星级重算使用相同锁；无新增表或迁移。
