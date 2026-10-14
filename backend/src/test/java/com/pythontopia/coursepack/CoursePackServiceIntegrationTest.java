@@ -76,6 +76,24 @@ class CoursePackServiceIntegrationTest {
   }
 
   @Test
+  void chapterOneKeepsTheFourIndependentKnowledgeRootsFromPack43() {
+    Integer chapterOneRoots =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM course_kc WHERE pack_id = 43 AND chapter_order = 1"
+                + " AND cardinality(prerequisite_codes) = 0",
+            Integer.class);
+
+    assertThat(chapterOneRoots).isEqualTo(4);
+    Boolean computationalThinkingUsesItsSourcePrerequisite =
+        jdbcTemplate.queryForObject(
+            "SELECT 'PY43-KC-004' = ANY(prerequisite_codes) FROM course_kc"
+                + " WHERE pack_id = 43 AND kc_code = 'PY43-KC-003'",
+            Boolean.class);
+
+    assertThat(computationalThinkingUsesItsSourcePrerequisite).isTrue();
+  }
+
+  @Test
   void coursePackKcPageRefsLinkPagesSoRagGetsKcCodes() {
     // R-14 S6-B：RAG loader 用 `p.id = ANY(kc.page_refs)` 把 KC 贴到课件页（见
     // services/pythontopia-rag/.../data/loader.py）。若 page_refs 缺失/悬挂（曾出现的

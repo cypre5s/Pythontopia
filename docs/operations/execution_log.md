@@ -6,6 +6,9 @@
 
 ## 2026-10-14 当前续接
 
+- Twin/远征先修数据复核发现 V125 把未提供语义关系的旧课程 seed 按编号串成线性链，导致新学生第一章只有 KC-001 可选。新增 V214 按课程包 JSON 修正 65 个 KC 关系；回归先红（独立根 KC 1 个而非 4 个）后绿。策略、Twin、Boss、地图与课程库相关回归 66 项通过；空库 Flyway 集成类 4/4 通过，开发库关系与 JSON 逐条比较 65/65 一致，隔离 Spring 启动已将开发库 Flyway 版本推进到 214。
+- 修正后真实本地远征创建 API 返回 10 层、25 个挑战节点及 4 个第一章根 KC；临时 run 与学生已清理。真实 DeepSeek Boss API 对 KC-002 与 KC-012 各发起一次出题操作，均未产出通过审查的可用题并返回 503；没有将不合格题写入共享题库，临时学生与审核候选已清理。新玩家的远征可用编程题覆盖仍未解决，不能据此声称完整通关。
+- 本轮一次真实 DeepSeek 视觉 provider 调用返回纯文本；同/流式解析回归 3 passed。调用为 provider 级，不是浏览器重复测试；供应商实际 token/费用仍未核对。
 - 最新补充：DeepSeek 同步与 SSE provider 都只传文本块；混合文本/图片响应的回归确认图片块不会到达客户端，不调用图片生成接口。真实 provider smoke 两次成功（文本 + 合成 PNG 识别），响应均为文本；此次 provider 的请求体和模型未变，因此未再发送模型请求。
 - Boss 重复请求修复已通过真实 Web API 复验：同类 KC-001 请求不再重放 Graph 的 HTTP 生成响应。首轮六次候选均被拒并返回 503（修复前同类请求曾产生 12 次模型 HTTP 200）；加上只记录审查错误码的诊断后，第二轮五次模型 HTTP 200，返回 `reviewed=true`、`aiGenerated=false` 的同 KC Golden 题。两轮临时学生均已删除。首轮为何未通过回退、第二轮能通过仍待复现。
 - 对应 Java `BossGraphClientTest`、`BossServiceTest`、`EndlessPregenServiceTest` 共 67 项通过；Graph Boss 全套 237 项、Ruff、修改 Java 文件 Spotless 检查均通过。全量 Maven 尚未稳定通过，见下方已记录的容器端口冲突与长期仿真连接错误。
@@ -137,3 +140,9 @@
 - ProfileRoom 已将服务端 mastery confidence 作为“证据充分度”单独展示，并说明它不是答题正确概率；此前推荐、周报按钮与真实学习导航/工坊事件处理均有页面级测试覆盖。
 - 新 UI 测试先失败后通过。当前验证：后端 57 项（含 PostgreSQL Testcontainers 集成）通过；Twin 页面 Vitest 9 项、TypeScript typecheck 通过。
 - 尚未完成个性化学习效果 A/B、7 日延迟复测，以及更大样本校准。不得把当前规则策略描述为已证明提高学习成绩。
+
+## 2026-10-14 — DeepSeek 图片输入/文本输出续验
+
+- 对本地 `OpenAiCompatProvider` 发起 1 次真实 `deepseek-flash` 视觉请求，输入为 64×64 合成蓝色方块 PNG；返回非空 Python `str`，同步响应对象不含图片块。
+- `tests/test_openai_compat_provider.py` 的多模态同步/流式文本过滤与未配置视觉模型用例：3 passed，33 deselected。
+- 此次为 Graph provider 级调用，不是 Tutor 浏览器链路复测；未记录或读取供应商 token/账单用量。
