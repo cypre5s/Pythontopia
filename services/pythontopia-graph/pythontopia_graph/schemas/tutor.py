@@ -23,7 +23,7 @@ def _image_mime_type(data: bytes) -> str | None:
 
 
 class TutorTurn(BaseModel):
-    role: str
+    role: Literal["user", "assistant"]
     content: str
 
 

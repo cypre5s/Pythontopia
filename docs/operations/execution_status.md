@@ -12,8 +12,14 @@
 - **仍未完成：** 本地安全边界续审；远征真实先修/题型/刷新闭环；未覆盖的 Web 动作与窄屏验收；Twin A/B 与 7 日延迟效果；工程收尾；性能（最后执行）。生产 Piston ACL/ECS 和供应商账单属于当前环境无法核验的外部项。
 - **本轮安全修复：** Tutor 图解的 Mermaid 分支曾将未清洗 SVG 直接写入 `v-html`，与已修复的工坊思维导图形成安全边界不一致。现在复用 `sanitizeMermaidSvgMarkup`，并设置 `htmlLabels: false`；新组件回归红测复现 `foreignObject`，修复后 Tutor 图解及 SVG sanitizer 测试 4/4、typecheck、定向 ESLint、`git diff --check` 通过。未调用模型。
 - **本轮媒体边界：** 新增 `MediaTtsControllerTest`，真实 service 使用旧凭据时 `POST /api/media/tts` 以 503 `TTS_DISABLED` 拒绝，避免发起讯飞 WebSocket；与 `TtsPropertiesTest` 合计 3/3 通过。没有模型或供应商外呼。
+- **本轮 Tutor 输入边界：** 历史消息 `role` 曾接受任意字符串，并直接映射到模型角色；现限制为 `user`/`assistant`，拒绝将学生内容伪装成 `system` 消息。回归先 RED 后 GREEN，Tutor SSE 与异常流定向测试 16/16；未调用模型。安全总审计仍未完成。
 - **HTML 注入点续审：** 扫描当前前端全部 `v-html` / `innerHTML` 写入，确认写入前都有 HTML/ SVG 清洗；未发现新增绕过点。此项是源码范围检查，后端与外部内容边界仍未全部闭合。
 - **最近动作：** 按用户要求消除重复验证项，核实当前唯一清单与提交状态，复用 DeepSeek provider 静态审计和 Alethicode 管理台/班级对照结果；修复全局 500、客户端断连、章星重算及工坊学情降级日志中的异常正文、原始 URL 和学生 ID。定向测试合计 10/10 + `ResourceWorkshopServiceTest` 34/34；本地 AI 限额配置已核实；`/bug-mine` 空态已做一次 Chromium 观察，清理临时账号。未发模型或网络请求。下一步继续未闭合的安全/远征/Web 项，不重做 DeepSeek、管理台样式或班级字段验收。
+
+## 2026-10-16 — 限制 Tutor 历史消息角色
+
+- Tutor 历史消息原允许任意 `role`，而消息会直接传给模型；将 schema 收窄到 `user`/`assistant`，防止学生输入被标成 `system` 角色覆盖系统规则。
+- 回归先 RED 后 GREEN；`test_tutor_ask_stream.py` 与 `test_streaming_errors.py` 共 16/16。没有模型或网络请求。
 
 ## 2026-10-16 — 本地 AI 请求上限核对
 
