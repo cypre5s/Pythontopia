@@ -165,3 +165,16 @@
 - 对本地 `OpenAiCompatProvider` 发起 1 次真实 `deepseek-flash` 视觉请求，输入为 64×64 合成蓝色方块 PNG；返回非空 Python `str`，同步响应对象不含图片块。
 - `tests/test_openai_compat_provider.py` 的多模态同步/流式文本过滤与未配置视觉模型用例：3 passed，33 deselected。
 - 此次为 Graph provider 级调用，不是 Tutor 浏览器链路复测；未记录或读取供应商 token/账单用量。
+
+## 2026-10-15 — 班级加入码限速续接
+
+- 后端加入服务先补 RED 用例：连续错误码后第 31 次请求仍查询并返回 404；已加入学生重复请求也未限制，返回 409。新增每账号滑动窗口后，两类行为都在数据库查询前于第 31 次被拒绝为 429。
+- 公网 Nginx 的来源 IP 限速已由 `test_https_forwarded_proto_contract.sh` 与 `verify_nginx_dual_protocol.sh` 覆盖。本轮新增 Java 账号层，不动邀请码格式和数据库。
+- 验证：`mvn -q -Dtest=ClassroomServiceTest,JoinCodeAttemptThrottleTest test`、HTTPS 转发契约、Nginx 双协议发布检查与 `git diff --check` 通过。
+- 风险：账号窗口是进程内状态，当前适用单 worker；生产公网入口实际运行态仍未从 ECS 确认。
+
+## 2026-10-15 — Tutor 工作流 SSE 错误信息隔离
+
+- 新增回归注入包含数据库主机/密码文本的异常；修复前 SSE 把异常原文发给客户端，RED 复现成功。
+- 修复后在服务端记录堆栈，SSE 返回 `TUTOR_WORKFLOW_FAILED` 与固定通用文案。
+- 验证：Tutor workflow、AutoGen runtime、附件、教练图、Task 7 事件、Tutor 流式答疑和图片输入测试 93 passed；Ruff 检查通过。

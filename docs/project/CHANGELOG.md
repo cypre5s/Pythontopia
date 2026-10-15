@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-10-15 — 班级加入码账号级限速
+
+- 保留公网 Nginx 已有的来源 IP 限速，并增加后端学生账号级 30 次/10 分钟窗口。错误码查询与成功入班都计数；超限在数据库查码前返回 429，旧 6 位邀请继续有效。
+- RED/GREEN：加入服务限速用例先以预期外的 404/409 失败，修复后 `ClassroomServiceTest` 和 `JoinCodeAttemptThrottleTest` 通过。HTTPS 转发契约与 Nginx 双协议发布检查通过。
+- 限制状态保存在单个 Spring 进程内；当前符合单 worker 部署约定，多实例扩展前需换共享存储。
+
+## 2026-10-15 — Tutor 工作流错误信息收敛
+
+- Tutor 工作流意外异常保留服务端堆栈日志，SSE 只返回固定通用错误，防止数据库或上游连接详情泄露。
+- RED/GREEN 回归后，Tutor workflow、AutoGen runtime、附件、图像输入与流式答疑相关测试 93 passed；改动文件 Ruff 检查通过。
+
 ## 2026-10-15 — RAG 与后端全量续验
 
 - RAG pytest 158 passed、2 skipped。串行 Maven 全量 1430 tests、0 assertion failures、7 环境 errors：六个 Testcontainers 随机宿主端口绑定冲突及一个长期仿真 PostgreSQL 连接拒绝；未标记为通过。

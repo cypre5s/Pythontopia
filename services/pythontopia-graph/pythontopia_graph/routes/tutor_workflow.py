@@ -14,6 +14,7 @@ POST /agents/tutor-workflow/run/stream：一次工作流事件 = 一次 SSE 请�
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import uuid
 from collections.abc import AsyncIterator
@@ -46,6 +47,7 @@ from pythontopia_graph.tutor_workflow_attachments import fetch_tutor_workflow_at
 from pythontopia_graph.tutor_workflow_checkpoints import persist_tutor_workflow_checkpoint
 
 router = APIRouter()
+LOG = logging.getLogger(__name__)
 
 
 class WorkflowRunEnvelope(WorkflowRunRequest):
@@ -286,9 +288,11 @@ async def tutor_workflow_run_stream(
                 seq=seq,
             )
             yield sse_agui.translate("result", result.model_dump(mode="json"))
-        except Exception as exc:  # noqa: BLE001 - 端点级兜底，fail fast 上报
+        except Exception:  # noqa: BLE001 - 端点级兜底，fail fast 上报
+            LOG.exception("Unexpected tutor workflow failure")
             yield sse_agui.translate(
-                "error", {"code": "TUTOR_WORKFLOW_FAILED", "message": str(exc)}
+                "error",
+                {"code": "TUTOR_WORKFLOW_FAILED", "message": "Tutor workflow run failed."},
             )
         finally:
             if not task.done():

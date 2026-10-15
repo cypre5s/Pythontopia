@@ -2,7 +2,15 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-15）**：聚焦 Web，本地提交基线为 `215d0028`，工作区另有未提交的教师审核队列、学习分身、主线地图和 Twin 章测证据回流修复。Tutor 与训练导学走 DeepSeek AutoGen，图片仅输入、响应只保留文本；本地后端 `PYT_AI_REQUEST_LIMITS_ENABLED=false`。Vite → Spring → Graph 的真实 Tutor 文本与合成 PNG 输入均已完成，本轮又经视频助教真实上传 PNG，API/provider 均 HTTP 200，视觉识别正确且回答无图片元素；文本 SSE 另收到 5 个步骤开始/结束事件、113 个文本片段和 `RUN_FINISHED`。Alethicode 对同一文本的 Graph/DeepSeek 隔离调用也返回 HTTP 200 和 `TASK_COMPLETED`，但使用空 Java 边界桩，不是完整联测。合成学生已在真实 Web 完成第一章三个学习小节和章末考试（98/100、2 星），并按真实 1× 播放、逐页翻阅与答题完成第二章第 1 小节（543/543 秒、29/29 页、4 道客观题）；该小节没有新增掌握度事件。另完成 3 道编程题小测，Piston 8/8 用例通过，Twin 从 0/65 更新到 3/65。章测生成现会约束单选唯一答案并拦截重复选项，但尚无语义正确性保证，客观题仍排除在掌握度证据外。教师审核分页/重试与主线缺题 KC 的 AI 补充练习已实现；当前全量 Web Vitest 275 files / 2604 tests、typecheck、lint 与 production build 通过，build 仍有既有 Pyodide Node 模块 externalize / eval 警告。主线地图→第 2 章第 5 小节→KC-010 已审 AI 题→正式判题已真实联测通过，Twin 从 3/65 到 4/65，数据库仅新增一条 `PRACTICE_PASS +0.140` 幂等事件；浏览器错误为 0。另按 WCAG 2.2 修复地图键盘焦点可见性，主线地图 E2E 2/2、局部 Vitest、typecheck 和 lint 通过。第二章三个主线小节已完成；仍待 KC-011 AI 题与远征先修 KC-008/KC-011 编程证据闭环。仍待：Alethicode Java 投影/证据与失败恢复对照、Maven 全量稳定通过、Twin A/B/7 日延迟效果、供应商费用/token 对账、生产 Piston/ECS 验证、最终第 7 章 Boss 实战、剩余 Web 工程审查和性能测试。性能最后执行，非 Web 客户端不在范围。
+> **当前快照（2026-10-15）**：聚焦 Web，本地最近已提交检查点为 `dfcc9dd1`。Tutor 已采用 DeepSeek AutoGen，文本与图片输入/文本输出路径此前做过真实 Web 联测；最近的新供应商调用连续遇到超时、空响应或 503，因此当前 DeepSeek completion 可用性未确认。前端全量 Vitest 275 files / 2604 tests、typecheck、lint 与 production build 曾新鲜通过；Graph 全量 1871 passed / 1 skipped，RAG 158 passed / 2 skipped。全量 Maven 最近一次 1446 tests 无断言失败，但有 7 个 Docker/PostgreSQL 环境错误，不能标记全量通过。KC-010 补题和第二章三个主线小节已有真实 Web 判题闭环；KC-011 新题与远征先修 KC-008/KC-011 证据仍待完成。Twin P0 数据源/周报/证据闭环已有代码和定向验证，个性化 A/B 与 7 日延迟效果尚未验证。Alethicode 对照确认 Tutor 已经是 AutoGen，不需整体替换；不兼容的 checkpoint、SSE/WebSocket 架构不迁移。当前续接正在增加班级加入码应用层账号限速；改动未提交。剩余项包括活跃远征 run 浏览器刷新恢复、公开接口/生产 Piston 配置核验、KC-011 真实闭环、Tutor 的 Java 投影/失败恢复差异抽查、管理台少量格式对齐、Maven 全量环境错误处理、Twin 学习效果评估和剩余 Web 审查。性能仍最后测，非 Web 客户端不在范围。
+
+## 2026-10-15 当前续接：班级加入码账号限速
+
+- 公网 Nginx 已有按来源 IP 的班级加入限速（5 次/分钟，额外突发 5 次），并由 HTTPS 契约脚本覆盖；本次只增加后端按已认证学生账号的第二层限速，避免更换来源 IP 绕过账号层配额。
+- 失败查码和成功入班请求都在查询前计入 30 次/10 分钟窗口；超限返回 429 `JOIN_CODE_RATE_LIMITED`。未修改既有 6 位码格式及已发放的邀请码，避免破坏现有班级邀请。
+- RED/GREEN：加入服务用例先分别观察到错误码仍返回 404、重复/成功加入仍返回 409；实现后 `ClassroomServiceTest` 与 `JoinCodeAttemptThrottleTest` 通过。Nginx HTTPS 契约和双协议发布检查脚本均通过。
+- 当前是单后端进程内账号窗口，适配项目单 worker 运行约定；若后续横向扩容，需迁移到共享限流存储。生产 Nginx/后端公网可达性未在 ECS 验证。
+- 顺手关闭一项确认的 Tutor 安全问题：异常 SSE 现写服务端堆栈、向学生只回固定错误文案，不再暴露 `str(exc)`。RED/GREEN 后 Tutor workflow / AutoGen runtime / 附件 / image input 定向集成共 93 passed，Ruff 通过。
 
 ## 2026-10-15 当前续接
 

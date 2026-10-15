@@ -308,6 +308,29 @@ async def test_courseware_retrieval_failure_stops_before_model_generation() -> N
 
 
 @pytest.mark.asyncio
+async def test_unexpected_workflow_error_does_not_expose_exception_message(monkeypatch) -> None:
+    async def fail_commit_run(*_args, **_kwargs):
+        raise RuntimeError("database host=internal; password=do-not-disclose")
+
+    monkeypatch.setattr(session_store, "commit_run", fail_commit_run)
+    session_id = "t-wf-internal-error"
+    await session_store.reset_session(1, session_id)
+    response = await tutor_workflow_run_stream(
+        _envelope(session_id, "READING"),
+        provider=JsonStubProvider([GUIDE_CARD]),
+        evidence_fetcher=StaticEvidenceFetcher([HIT]),
+        trusted_user_id=1,
+    )
+
+    events = await _collect_sse(response)
+    errors = [payload for event, payload in events if event == "error"]
+    assert errors == [
+        {"code": "TUTOR_WORKFLOW_FAILED", "message": "Tutor workflow run failed."}
+    ]
+    assert "do-not-disclose" not in json.dumps(events)
+
+
+@pytest.mark.asyncio
 async def test_illegal_transition_fails_fast() -> None:
     session_id = "t-wf-illegal"
     await session_store.reset_session(1, session_id)

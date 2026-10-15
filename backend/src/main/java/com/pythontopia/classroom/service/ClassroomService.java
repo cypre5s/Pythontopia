@@ -14,6 +14,7 @@ import com.pythontopia.common.error.ResourceNotFoundException;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.Optional;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -26,15 +27,26 @@ public class ClassroomService {
   private final ClassroomRepository repository;
   private final ClassroomGuard classroomGuard;
   private final ClassroomQuestService classroomQuestService;
+  private final JoinCodeAttemptThrottle joinCodeAttemptThrottle;
   private final SecureRandom random = new SecureRandom();
 
+  @Autowired
   public ClassroomService(
       ClassroomRepository repository,
       ClassroomGuard classroomGuard,
-      ClassroomQuestService classroomQuestService) {
+      ClassroomQuestService classroomQuestService,
+      JoinCodeAttemptThrottle joinCodeAttemptThrottle) {
     this.repository = repository;
     this.classroomGuard = classroomGuard;
     this.classroomQuestService = classroomQuestService;
+    this.joinCodeAttemptThrottle = joinCodeAttemptThrottle;
+  }
+
+  ClassroomService(
+      ClassroomRepository repository,
+      ClassroomGuard classroomGuard,
+      ClassroomQuestService classroomQuestService) {
+    this(repository, classroomGuard, classroomQuestService, new JoinCodeAttemptThrottle());
   }
 
   public ClassroomDto create(CurrentUserPrincipal user, CreateClassroomRequest request) {
@@ -71,6 +83,12 @@ public class ClassroomService {
    */
   public ClassroomDto join(CurrentUserPrincipal user, String joinCode) {
     requireRole(user, Role.STUDENT);
+    if (!joinCodeAttemptThrottle.tryAcquire(user.userId())) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "JOIN_CODE_RATE_LIMITED",
+          "Too many classroom join attempts. Try again later.");
+    }
     Classroom classroom =
         repository
             .findByJoinCode(joinCode)

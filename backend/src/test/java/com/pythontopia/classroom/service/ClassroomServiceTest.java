@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -19,6 +20,7 @@ import com.pythontopia.classroom.quest.service.ClassroomQuestService;
 import com.pythontopia.classroom.repository.ClassroomRepository;
 import com.pythontopia.classroom.security.ClassroomGuard;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.error.ResourceNotFoundException;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.DisplayName;
@@ -125,6 +127,57 @@ class ClassroomServiceTest {
 
     verify(repository, never()).addMember(9L, 7L);
     verifyNoInteractions(questService);
+  }
+
+  @Test
+  @DisplayName("错误加入码计入限额，避免同一学生枚举有效码")
+  void invalidJoinCodesAreRateLimitedBeforeLookup() {
+    ClassroomService limitedService =
+        new ClassroomService(repository, classroomGuard, questService);
+    CurrentUserPrincipal attacker = new CurrentUserPrincipal(77L, "stu77", Role.STUDENT);
+
+    for (int attempt = 0; attempt < 30; attempt++) {
+      assertThatThrownBy(() -> limitedService.join(attacker, "BAD123"))
+          .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    assertThatThrownBy(() -> limitedService.join(attacker, "ABC123"))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            ex -> {
+              assertThat(ex.status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+              assertThat(ex.code()).isEqualTo("JOIN_CODE_RATE_LIMITED");
+            });
+    verify(repository, never()).findByJoinCode("ABC123");
+  }
+
+  @Test
+  @DisplayName("成功加入以及随后重复加入的尝试都计入限额")
+  void successfulJoinAttemptsAreRateLimited() {
+    ClassroomService limitedService =
+        new ClassroomService(repository, classroomGuard, questService);
+    CurrentUserPrincipal attacker = new CurrentUserPrincipal(78L, "stu78", Role.STUDENT);
+    when(repository.findByJoinCode("ABC123")).thenReturn(Optional.of(classroom("ACTIVE")));
+    when(repository.findMemberStatus(9L, 78L))
+        .thenReturn(Optional.empty(), Optional.of("ACTIVE"));
+
+    assertThat(limitedService.join(attacker, "ABC123").classroomId()).isEqualTo(9L);
+
+    for (int attempt = 1; attempt < 30; attempt++) {
+      assertThatThrownBy(() -> limitedService.join(attacker, "ABC123"))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              ex -> assertThat(ex.code()).isEqualTo("CLASSROOM_ALREADY_JOINED"));
+    }
+
+    assertThatThrownBy(() -> limitedService.join(attacker, "ABC123"))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            ex -> {
+              assertThat(ex.status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+              assertThat(ex.code()).isEqualTo("JOIN_CODE_RATE_LIMITED");
+            });
+    verify(repository, times(30)).findByJoinCode("ABC123");
   }
 
   @Test
