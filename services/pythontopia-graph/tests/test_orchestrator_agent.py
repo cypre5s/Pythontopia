@@ -14,7 +14,7 @@ from pythontopia_graph.agents.orchestrator_agent import (
 from pythontopia_graph.graph.orchestrator_graph import OrchestratorGraph
 from pythontopia_graph.graph.orchestrator_session import get_history, reset_session
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
-from pythontopia_graph.schemas.orchestrator import OrchestratorRequest
+from pythontopia_graph.schemas.orchestrator import OrchestratorRequest, PlanStep
 from pythontopia_graph.tools.harness import reset_harness_state
 
 
@@ -51,6 +51,50 @@ def request_of(message: str, session_id: str, **overrides) -> OrchestratorReques
     }
     payload.update(overrides)
     return OrchestratorRequest(**payload)
+
+
+def test_dynamic_profile_and_previous_model_text_stay_out_of_system_messages() -> None:
+    agent = OrchestratorAgent(StubProvider([]))
+    profile = "PROFILE_INJECTION_SENTINEL"
+    clarify = "CLARIFICATION_INJECTION_SENTINEL"
+    plan_detail = "PLAN_INJECTION_SENTINEL"
+    req = request_of("继续", "t-prompt", profile_brief=profile)
+
+    message_sets = [
+        agent._understand_messages(req),
+        agent._decompose_messages(req, "GOAL_INJECTION_SENTINEL", []),
+        agent._reply_messages(req, [], clarify),
+        agent._reply_messages(
+            req,
+            [PlanStep(
+                id="step-1", phase="learn", title="讲解", detail=plan_detail,
+                agent="ResourceDesignerAgent",
+            )],
+            None,
+        ),
+    ]
+
+    for messages in message_sets:
+        system_text = "\n".join(m["content"] for m in messages if m["role"] == "system")
+        user_text = "\n".join(m["content"] for m in messages if m["role"] == "user")
+        assert profile not in system_text
+        assert profile in user_text
+    clarify_system = "\n".join(
+        m["content"] for m in message_sets[-2] if m["role"] == "system"
+    )
+    clarify_user = "\n".join(
+        m["content"] for m in message_sets[-2] if m["role"] == "user"
+    )
+    assert clarify not in clarify_system
+    assert clarify in clarify_user
+    plan_system = "\n".join(
+        m["content"] for m in message_sets[-1] if m["role"] == "system"
+    )
+    plan_user = "\n".join(
+        m["content"] for m in message_sets[-1] if m["role"] == "user"
+    )
+    assert plan_detail not in plan_system
+    assert plan_detail in plan_user
 
 
 # 任务分解

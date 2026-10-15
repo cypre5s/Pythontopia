@@ -73,15 +73,36 @@ def test_legacy_cognitive_style_wrapper_kept_for_compat() -> None:
     assert TutorAgent._cognitive_style_directive(None) is None
 
 
-def test_build_messages_injects_each_directive_as_system_message() -> None:
+def test_build_messages_keeps_profile_directives_out_of_system_messages() -> None:
     agent = TutorAgent(provider=None)  # _build_messages 不调用 provider
     messages = agent._build_messages("for 循环怎么写", FULL_BRIEF, [], [])
     system_contents = [m["content"] for m in messages if m["role"] == "system"]
-    assert any(c.startswith("学生画像:") for c in system_contents)
+    user_contents = [m["content"] for m in messages if m["role"] == "user"]
+    assert not any(c.startswith("学生画像:") for c in system_contents)
     for directive in TutorAgent._personalization_directives(FULL_BRIEF):
-        assert directive in system_contents
+        assert any(directive in content for content in user_contents)
     # 最后一条仍是 user 问题，个性化消息全部在其之前。
     assert messages[-1] == {"role": "user", "content": "for 循环怎么写"}
+
+
+def test_untrusted_profile_and_courseware_stay_out_of_system_messages() -> None:
+    from pythontopia_graph.nodes.evidence_fetcher import RagHit
+
+    profile_sentinel = "PROFILE_INJECTION_SENTINEL"
+    evidence_sentinel = "COURSEWARE_INJECTION_SENTINEL"
+    evidence = RagHit(
+        chunk_id="c1", page_id=1, page_no=1, text=evidence_sentinel, score=0.9,
+    )
+    messages = TutorAgent(provider=None)._build_messages(
+        "讲一下循环", f"目标: {profile_sentinel}", [], [evidence],
+    )
+
+    system_text = "\n".join(m["content"] for m in messages if m["role"] == "system")
+    user_text = "\n".join(m["content"] for m in messages if m["role"] == "user")
+    assert profile_sentinel not in system_text
+    assert evidence_sentinel not in system_text
+    assert profile_sentinel in user_text
+    assert evidence_sentinel in user_text
 
 
 def test_system_prompt_keeps_six_rules_and_adds_hint_ladder() -> None:
@@ -117,12 +138,13 @@ def test_personalization_note_empty_or_unrecognized_brief() -> None:
 
 
 def test_style_directive_coexists_with_personalization_directives() -> None:
-    """风格轮换指令与既有个性化指令组并存：各注入一份，互不挤占。"""
+    """系统固定风格轮换与 user 画像参考并存，个性化内容不提升到 system。"""
     agent = TutorAgent(provider=None)
     messages = agent._build_messages("for 循环怎么写", FULL_BRIEF, [], [])
     system_contents = [m["content"] for m in messages if m["role"] == "system"]
+    user_contents = [m["content"] for m in messages if m["role"] == "user"]
     style_hits = [c for c in system_contents if c.startswith("本轮讲解节奏")]
     assert len(style_hits) == 1
     for directive in TutorAgent._personalization_directives(FULL_BRIEF):
-        assert directive in system_contents
+        assert any(directive in content for content in user_contents)
     assert messages[-1] == {"role": "user", "content": "for 循环怎么写"}

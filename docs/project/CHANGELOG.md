@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-16 — 修复远征入口窄屏章节筛选布局
+
+- 320px 真实 Chromium 检查发现“聚焦章节”标签被横向布局挤成竖排；移动断点改为纵向排列标签和选择框。
+- 页面测试 5/5、typecheck、定向 ESLint 通过。修复后浏览器确认页面宽度无溢出、标签可读、保存退出可见，页面错误与模型 API 请求均为 0；临时账号已删除。
+
+## 2026-10-16 — 脱敏 Boss 缺题日志
+
+- 找不到已签发题目时，日志不再写题目 ID 或用户 ID，保留稳定的缺题/重发提示。
+- 哨兵回归先 RED 后 GREEN；`BossServiceTest#missingProblemPublishesNothing` 通过。没有模型请求。
+
 ## 2026-10-16 — 补充 Markdown XSS 回归覆盖
 
 - `MarkdownView` 新增恶意 Markdown 回归，断言 `<script>`、图片事件属性和 `javascript:` 链接地址不会进入渲染结果。

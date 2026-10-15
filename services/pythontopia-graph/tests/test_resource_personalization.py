@@ -301,6 +301,11 @@ def test_agent_strategy_directive_injected_when_present(agent_cls) -> None:
     text = " ".join(m["content"] for m in messages)
     assert _STRATEGY_DIRECTIVE in text
     assert "团队策略提示" in text
+    assert all(
+        message["role"] == "user"
+        for message in messages
+        if _STRATEGY_DIRECTIVE in message["content"]
+    )
 
 
 @pytest.mark.parametrize("agent_cls", _RESOURCE_AGENTS)

@@ -713,7 +713,7 @@ public class BossService {
     // 修复「内存缓存过期 / 进程重启 → 判题失效」。
     BossInternalProblem problem = resolveProblemForEval(request.problemId(), userId);
     if (problem == null) {
-      LOG.info("boss attempt problemId={} not issued to user={}", request.problemId(), userId);
+      LOG.info("boss attempt problem unavailable; reissue required");
       return new BossAttemptResultDto(
           request.problemId(), false, 0, 3, null, 0, "题目缓存过期且无持久化记录；请重新生成题目后再提交。");
     }

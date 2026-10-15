@@ -1378,11 +1378,34 @@ class BossServiceTest {
   @Test
   @DisplayName("题目缓存缺失（无判定）→ 不发任何学习事件")
   void missingProblemPublishesNothing() {
-    when(pregenService.findByProblemId(7L, "missing")).thenReturn(Optional.empty());
+    String privateProblemId = "private-boss-missing-problem-sentinel";
+    long privateUserId = 987654321L;
+    when(pregenService.findByProblemId(privateUserId, privateProblemId))
+        .thenReturn(Optional.empty());
 
-    service.evaluateAttempt(attemptRequest("missing", 1, 1, "print(1)", 10), 7L);
+    Logger logger = (Logger) LoggerFactory.getLogger(BossService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.INFO);
+    logger.addAppender(appender);
+    try {
+      service.evaluateAttempt(
+          attemptRequest(privateProblemId, 1, 1, "print(1)", 10), privateUserId);
 
-    verify(attemptIdempotencyService, never()).claim(eq(7L), any(), any());
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .allSatisfy(
+              message ->
+                  assertThat(message)
+                      .doesNotContain(privateProblemId)
+                      .doesNotContain(Long.toString(privateUserId)));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
+
+    verify(attemptIdempotencyService, never()).claim(eq(privateUserId), any(), any());
     verifyNoInteractions(eventPublisher);
   }
 

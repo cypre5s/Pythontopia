@@ -69,6 +69,18 @@ def _memory(event_id: int = 10) -> MemoryItem:
     )
 
 
+def test_memory_summaries_stay_out_of_system_messages() -> None:
+    memory = _memory()
+    memory.summary = "MEMORY_INJECTION_SENTINEL"
+    messages = ReflectionAgent._messages(ReflectionAgent(FakeProvider(None)), ReflectionInput(
+        user_id=1, memories=[memory],
+    ))
+    system_text = "\n".join(m["content"] for m in messages if m["role"] == "system")
+    user_text = "\n".join(m["content"] for m in messages if m["role"] == "user")
+    assert "MEMORY_INJECTION_SENTINEL" not in system_text
+    assert "MEMORY_INJECTION_SENTINEL" in user_text
+
+
 async def test_returns_empty_without_memories_and_no_llm_call() -> None:
     spy = CountingProvider()
     out = await ReflectionAgent(spy).reflect(ReflectionInput(user_id=1, memories=[]))

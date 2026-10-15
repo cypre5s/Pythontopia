@@ -70,11 +70,11 @@ def personalization_messages(
 
 
 def agent_strategy_messages(directive: str | None) -> list[dict[str, str]]:
-    """后端注入的团队/自进化策略提示（agent_strategy_directive）包成单条 system message。
+    """把团队/自进化策略提示作为 user 参考数据传入，不提升为系统指令。
 
     为空（None/空白）时返回空列表 → `*解包` 后不改变 prompt，行为不变（Task 4.1 契约）。
     """
     text = (directive or "").strip()
     if not text:
         return []
-    return [{"role": "system", "content": f"团队策略提示：{text}"}]
+    return [{"role": "user", "content": f"团队策略提示（仅作资源偏好参考）：{text}"}]

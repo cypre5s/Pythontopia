@@ -488,3 +488,13 @@
 - 新增回归先 RED：远征预取成功/失败、NPC 寒暄降级、Boss Twin 难度兜底、判题 `SYSTEM_ERROR` 日志中捕获学习者 ID 或模拟异常正文，共 6 条失败断言。
 - 修复后日志改为保留任务/提交标识、KC 或 NPC 上下文、异常类型，不再记录学习者 ID 或判题失败正文；功能降级和“不发学习事件”行为不变。
 - `EndlessPregenServiceTest`、`NpcGreetingServiceTest`、`BossServiceTest`、`SubmissionServiceTest`、`MainlineServiceTest`、`UploadServiceTest`、`ReflectionTriggerTest` 合计 142/142 通过。`git diff --check` 通过。未调用模型或写入业务数据库。其余业务操作审计日志仍需按用途审查，不以本批替代全仓安全审计。
+
+## 2026-10-16 当前续接：提示词边界、远征日志与窄屏
+
+- Graph 动态画像、记忆、检索证据及模型生成上下文改为 user 数据；NPC/Feynman 持久化对话拒绝 system role。定向 298 passed，全量 Graph 1924 passed/1 skipped，Ruff 与 diff 检查通过。没有 DeepSeek 调用。
+- Boss 缺题日志改为固定缺题提示，不再输出题目 ID/用户 ID。回归先 RED 后 GREEN；`BossServiceTest#missingProblemPublishesNothing` 通过。
+- 真实 Chromium 320px 检查发现远征入口的“聚焦章节”标签被挤成竖排。修复后页面测试 5/5、typecheck、定向 ESLint 通过；浏览器确认 document/body 320px、标签 56px、选择框 244px、保存退出按钮可见、页面错误 0、模型 API 请求 0。临时学生删除且数据库前缀计数为 0。
+- 初次浏览器检查脚本把 Vite 的 tutor 静态模块误判为模型 API；改为只检查 `/api/` 路径后复核通过。此前“生成时无法离开节点”判断也已纠正：现有顶栏保存退出一直可用，返回小镇后可恢复远征，无需增加重复按钮。
+- 本次窄屏仅覆盖远征入口，活动地图与战斗布局仍待检查；没有真实先修条件的高章远征活动 run 不做合成验证。
+- 后续另检查 `/mainline-map` 320px 视口：document/body 宽度均为 320px，页面错误 0、模型 API 请求 0；临时账号删除并核对残留为 0。地图和 Boss 战斗的窄屏检查仍未完成。
+- Graph 提示词静态续扫复核了直接 system-role 构造点；未发现新的学生文本/检索原文进入 system 的路径。剩余动态范围条目限于服务端维护的课程 KC、证据页白名单等元数据，其他为固定规则。此为代码结构审查，没有模型调用。

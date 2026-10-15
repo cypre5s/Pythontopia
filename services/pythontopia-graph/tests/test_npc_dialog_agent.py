@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
+import pytest
 from fastapi.testclient import TestClient
 
 from pythontopia_graph.agents.npc_dialog_agent import NpcDialogAgent
@@ -10,6 +11,7 @@ from pythontopia_graph.main import app
 from pythontopia_graph.schemas.npc_dialog import (
     NpcDialogInput,
     RecalledMemory,
+    Turn as NpcTurn,
 )
 
 
@@ -43,6 +45,23 @@ def _input(memories: list[RecalledMemory] | None = None, user_message: str = "æˆ
         memories=memories or [],
         user_message=user_message,
     )
+
+
+def test_memory_summaries_stay_out_of_system_messages() -> None:
+    memory_sentinel = "MEMORY_INJECTION_SENTINEL"
+    messages = NpcDialogAgent._messages(
+        NpcDialogAgent(JsonProvider({})),
+        _input([RecalledMemory(event_id=101, summary=memory_sentinel)]),
+    )
+    system_text = "\n".join(m["content"] for m in messages if m["role"] == "system")
+    user_text = "\n".join(m["content"] for m in messages if m["role"] == "user")
+    assert memory_sentinel not in system_text
+    assert memory_sentinel in user_text
+
+
+def test_npc_history_rejects_system_role() -> None:
+    with pytest.raises(ValueError):
+        NpcTurn(role="system", content="SYSTEM_ROLE_INJECTION_SENTINEL")
 
 
 async def test_uses_memories_and_cites_event_ids() -> None:

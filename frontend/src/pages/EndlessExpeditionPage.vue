@@ -1813,6 +1813,14 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
   .exp-head {
     grid-template-columns: auto 1fr;
   }
+  .exp-focus {
+    flex-direction: column;
+    width: min(100%, 320px);
+  }
+  .exp-focus select {
+    width: 100%;
+    min-width: 0;
+  }
   .exp-stats {
     grid-column: 1 / span 2;
     justify-content: space-around;

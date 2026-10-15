@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 
 
 class Turn(BaseModel):
-    role: Literal["system", "user", "assistant"]
+    role: Literal["user", "assistant"]
     content: str
 
 

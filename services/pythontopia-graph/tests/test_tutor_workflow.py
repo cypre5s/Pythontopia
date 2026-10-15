@@ -103,6 +103,19 @@ def test_decide_actions_gates_transfer_until_post_ac() -> None:
     assert any(action.event == "TRANSFER" for action in with_post_ac)
 
 
+def test_learner_profile_is_user_context_for_workflow_cards() -> None:
+    messages = TutorWorkflowCardAgent._messages(
+        TutorWorkflowCardAgent(JsonStubProvider([])),
+        "static rules",
+        "task context",
+        "PROFILE_INJECTION_SENTINEL",
+    )
+    system_text = "\n".join(m["content"] for m in messages if m["role"] == "system")
+    user_text = "\n".join(m["content"] for m in messages if m["role"] == "user")
+    assert "PROFILE_INJECTION_SENTINEL" not in system_text
+    assert "PROFILE_INJECTION_SENTINEL" in user_text
+
+
 # ── 卡片 agent ──
 
 

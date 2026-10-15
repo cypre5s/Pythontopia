@@ -78,3 +78,26 @@ async def test_any_step_failure_falls_back_to_none() -> None:
     result = await debate.run("任意问题", evidence_chunks=[])
 
     assert result is None
+
+
+@pytest.mark.asyncio
+async def test_solver_keeps_profile_and_courseware_out_of_system_messages() -> None:
+    from pythontopia_graph.nodes.evidence_fetcher import RagHit
+
+    profile_sentinel = "PROFILE_INJECTION_SENTINEL"
+    evidence_sentinel = "COURSEWARE_INJECTION_SENTINEL"
+    provider = ScriptedProvider([LlmResponse(content_json={"draft": "草答"})])
+    debate = DebateGraph(provider)
+    evidence = RagHit(
+        chunk_id="c1", page_id=1, page_no=1, text=evidence_sentinel, score=0.9,
+    )
+
+    await debate._solver("解释循环", [evidence], profile_sentinel)
+
+    messages = provider.calls[0]
+    system_text = "\n".join(m["content"] for m in messages if m["role"] == "system")
+    user_text = "\n".join(m["content"] for m in messages if m["role"] == "user")
+    assert profile_sentinel not in system_text
+    assert evidence_sentinel not in system_text
+    assert profile_sentinel in user_text
+    assert evidence_sentinel in user_text

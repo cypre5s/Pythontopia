@@ -3,6 +3,8 @@ from __future__ import annotations
 import random
 from collections.abc import AsyncIterator
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 from pythontopia_graph.agents.feynman import bug_bank as bug_bank_mod
@@ -24,6 +26,7 @@ from pythontopia_graph.schemas.feynman import (
     FeynmanBugExposureInput,
     FeynmanTuteeInput,
     Misconception,
+    Turn,
 )
 
 
@@ -375,6 +378,25 @@ def test_teaching_prompt_keeps_evaluation_voice() -> None:
     assert "中性" not in system
     user = [m for m in messages if m["role"] == "user"][-1]["content"]
     assert "range(1, 6)" in user  # 教学原文作为 user 轮
+
+
+def test_kc_and_misconceptions_stay_out_of_system_messages() -> None:
+    inp = FeynmanTuteeInput(
+        kc_code="KC_INJECTION_SENTINEL",
+        misconceptions=[Misconception(tag="MEMORY_INJECTION_SENTINEL")],
+    )
+    messages = FeynmanTuteeAgent(RaisingProvider())._messages(inp)
+    system_text = "\n".join(m["content"] for m in messages if m["role"] == "system")
+    user_text = "\n".join(m["content"] for m in messages if m["role"] == "user")
+    assert "KC_INJECTION_SENTINEL" not in system_text
+    assert "MEMORY_INJECTION_SENTINEL" not in system_text
+    assert "KC_INJECTION_SENTINEL" in user_text
+    assert "MEMORY_INJECTION_SENTINEL" in user_text
+
+
+def test_feynman_history_rejects_system_role() -> None:
+    with pytest.raises(ValueError):
+        Turn(role="system", content="SYSTEM_ROLE_INJECTION_SENTINEL")
 
 
 # ── TASK B：bug 库（bug_bank） ──────────────────────────────────────────────

@@ -14,7 +14,7 @@ class RecalledMemory(BaseModel):
 
 
 class Turn(BaseModel):
-    role: Literal["system", "user", "assistant"]
+    role: Literal["user", "assistant"]
     content: str
 
 

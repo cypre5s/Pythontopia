@@ -823,22 +823,26 @@ def test_messages_use_registry_catalog_and_inject_context() -> None:
     req = request_of(
         "再来几道",
         current_chapter=3,
-        manual_kc_codes=["PY43-KC-001"],
+        manual_kc_codes=["MANUAL_KC_INJECTION_SENTINEL"],
         recent_turns=[
-            IntentTurn(role="user", content="讲讲 for 循环"),
+            IntentTurn(role="user", content="TURN_INJECTION_SENTINEL"),
             IntentTurn(role="assistant", content="for 循环用于遍历……"),
         ],
-        last_intent="PRACTICE",
-        last_kc_codes=["PY43-KC-001"],
-        profile_brief="认知风格: visual; 情绪: 需鼓励",
+        last_intent="LAST_INTENT_INJECTION_SENTINEL",
+        last_kc_codes=["LAST_KC_INJECTION_SENTINEL"],
+        profile_brief="PROFILE_INJECTION_SENTINEL",
         session_corrections=[
-            SessionCorrection(message="出几道题", corrected_intent="PRACTICE")
+            SessionCorrection(
+                message="CORRECTION_INJECTION_SENTINEL", corrected_intent="PRACTICE",
+            )
         ],
     )
 
     messages = agent._messages(req)
     joined = "\n".join(m["content"] for m in messages)
     system = messages[0]["content"]
+    system_text = "\n".join(m["content"] for m in messages if m["role"] == "system")
+    user_text = "\n".join(m["content"] for m in messages if m["role"] == "user")
 
     # 工具目录来自注册表：17 工具名与中文名都在 system 提示里。
     for name in ALL_TOOL_NAMES:
@@ -851,10 +855,16 @@ def test_messages_use_registry_catalog_and_inject_context() -> None:
     assert "再来几道" in joined and "换个方式讲" in joined and "画成导图" in joined
     # 多轮上下文注入。
     assert "最近对话" in joined and "for 循环用于遍历" in joined
-    assert "上一轮已执行意图：PRACTICE" in joined
-    assert "PY43-KC-001" in joined
-    assert "认知风格: visual" in joined
-    assert "纠错记忆" in joined and "出几道题" in joined
+    for sentinel in (
+        "MANUAL_KC_INJECTION_SENTINEL",
+        "TURN_INJECTION_SENTINEL",
+        "LAST_INTENT_INJECTION_SENTINEL",
+        "LAST_KC_INJECTION_SENTINEL",
+        "PROFILE_INJECTION_SENTINEL",
+        "CORRECTION_INJECTION_SENTINEL",
+    ):
+        assert sentinel not in system_text
+        assert sentinel in user_text
     assert messages[-1] == {"role": "user", "content": "再来几道"}
 
 

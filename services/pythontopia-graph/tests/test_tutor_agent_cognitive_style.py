@@ -5,28 +5,28 @@ from __future__ import annotations
 from pythontopia_graph.agents.tutor_agent import TutorAgent
 
 
-def _system_text(profile_brief: str) -> str:
+def _profile_context(profile_brief: str) -> str:
     agent = TutorAgent(provider=None)  # _build_messages 不调用 provider
     messages = agent._build_messages("怎么写 for 循环", profile_brief, [], [])
-    return " ".join(m["content"] for m in messages if m["role"] == "system")
+    return " ".join(m["content"] for m in messages if m["role"] == "user")
 
 
 def test_visual_style_directive() -> None:
-    assert "图解" in _system_text("认知风格: visual; 易错: indent")
+    assert "图解" in _profile_context("认知风格: visual; 易错: indent")
 
 
 def test_logical_style_directive() -> None:
-    text = _system_text("认知风格: logical")
+    text = _profile_context("认知风格: logical")
     assert "推理链" in text or "步骤" in text
 
 
 def test_trial_style_directive() -> None:
-    text = _system_text("认知风格: trial")
+    text = _profile_context("认知风格: trial")
     assert "最小可运行" in text or "示例" in text
 
 
 def test_no_style_when_absent() -> None:
-    text = _system_text("")
+    text = _profile_context("")
     assert "图解" not in text and "推理链" not in text and "最小可运行" not in text
 
 

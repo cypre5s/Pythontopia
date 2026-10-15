@@ -59,6 +59,10 @@ async def test_ask_stream_injects_real_code_output(monkeypatch: pytest.MonkeyPat
     ]
     assert verification_messages
     assert "stdout=6" in verification_messages[0]
+    system_text = "\n".join(
+        message["content"] for message in provider.messages if message["role"] == "system"
+    )
+    assert "stdout=6" not in system_text
 
 
 @pytest.mark.asyncio
