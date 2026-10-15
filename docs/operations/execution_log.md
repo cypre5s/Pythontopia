@@ -20,7 +20,7 @@
 - 用户指出重复模型探针偏离整体任务后，停止新增 DeepSeek 调用。此前本轮 provider 级两次真实调用均成功：`PYT-TEXT-641` 原样返回；合成 PNG 识别为蓝圆和黄底。上一次 Tutor Web SSE 仍超时，本轮没有重复 Web 请求。
 - 管理台可访问性按 W3C WAI 数据表与 `aria-current` 指引复核；现有两张表的列标题均有 `scope="col"`，分页当前页使用 `aria-current="page"`，本项无需代码修改。
 - 数字孪生选题职责复核确认：`BossService.selectFrontier` 读取服务端 `LearnerTwinService.frontier`，由 `AdaptivePracticePolicy` 排序；Boss 难度通过同一 policy 的 `recommendedDifficulty` 计算。该服务类已有规则单测与此前 46 项 Twin 定向回归，无需再造第二套策略。
-- 建立总任务清单与优先顺序于 `docs/plans/2026-10-15-web-system-implementation-plan.md`；最新本地检查点 `36bb7abe`，未推送/部署。下一步聚焦远征活动 run 恢复和 Web 路由动作矩阵，不重复验证已通过的模型 provider 能力。
+- 建立总任务清单与优先顺序于 `docs/plans/2026-10-15-web-system-implementation-plan.md`；当前代码检查点 `36bb7abe`、最新文档检查点 `c492f6ae`，未推送/部署。下一步聚焦远征活动 run 恢复和 Web 路由动作矩阵，不重复验证已通过的模型 provider 能力。
 - 为 Web 路由动作矩阵补无模型浏览器检查：9 个学生保护入口在匿名状态全部去 `/login`；真实新注册学生访问 `/admin/operations`、`/admin/users`、`/teacher`、`/teacher/review` 均去 `/world`。临时账号 id 640 已退出并删除，数据库确认用户行数为 0。现有公网验收登录守卫/登录页测试 2/2 通过。
 - Piston 生产配置静态核对：Compose 要求配置 Piston URL、Python 版本和 token，ECS 预检仅允许 HTTPS 或契约认可的私网 URL；`bash deploy/scripts/test_piston_http_host_contract.sh` 已通过。Piston API 本身不验证 Bearer token，生产必须通过私网 ACL 或鉴权代理限制访问。ECS 运行态未核实；本机 SSH 直连路由需要不可用的 sudo 密码，未修改远端配置。
 - 工坊 `quiz_finished` 事件已由客户端写入通用审计日志，但后端周报权威统计和画像监听不采信 frontend 来源。删除暗示该事件将来可直接更新画像/任务 evidence 的过时 TODO，改为说明客户端 KC/轮次数据不可作为可信证据；无运行逻辑改动。
