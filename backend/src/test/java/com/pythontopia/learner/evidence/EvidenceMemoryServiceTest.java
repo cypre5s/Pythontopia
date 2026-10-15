@@ -142,6 +142,43 @@ class EvidenceMemoryServiceTest {
   }
 
   @Test
+  void retainsOnlyThe200MostRecentSnapshotsPerUser() {
+    EvidenceMemoryRepository repository = new EvidenceMemoryRepository(jdbc, new ObjectMapper());
+    EvidenceMemorySnapshotDto snapshot =
+        new EvidenceMemorySnapshotDto(null, userId, null, 0, 0, 0, 0.0, 0.0, List.of());
+
+    Long oldestSnapshotId = null;
+    Long latestSnapshotId = null;
+    for (int i = 0; i < 201; i++) {
+      Long snapshotId = repository.insert(snapshot);
+      if (oldestSnapshotId == null) {
+        oldestSnapshotId = snapshotId;
+      }
+      latestSnapshotId = snapshotId;
+    }
+
+    Integer count =
+        jdbc.queryForObject(
+            "SELECT COUNT(*) FROM learner_evidence_memory_snapshot WHERE user_id = ?",
+            Integer.class,
+            userId);
+    Integer oldestCount =
+        jdbc.queryForObject(
+            "SELECT COUNT(*) FROM learner_evidence_memory_snapshot WHERE id = ?",
+            Integer.class,
+            oldestSnapshotId);
+    Integer latestCount =
+        jdbc.queryForObject(
+            "SELECT COUNT(*) FROM learner_evidence_memory_snapshot WHERE id = ?",
+            Integer.class,
+            latestSnapshotId);
+
+    assertThat(count).isEqualTo(200);
+    assertThat(oldestCount).isZero();
+    assertThat(latestCount).isEqualTo(1);
+  }
+
+  @Test
   void graphBackedMemoryBeatsNaiveRecentEventMemoryByWideMargin() {
     EvidenceMemorySnapshotDto graphBacked = service.createSnapshot(userId, null, 120, false);
 

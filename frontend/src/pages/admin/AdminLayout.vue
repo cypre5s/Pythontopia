@@ -434,7 +434,7 @@ watch(navigationOpen, (open) => {
   --admin-primary-soft: rgb(37 99 235 / 8%);
   --admin-focus: #3b82f6;
   --control-height-md: 36px;
-  --admin-toolbar-gap: 10px;
+  --admin-toolbar-gap: 12px;
   --table-header-height: 44px;
   --table-row-height: 52px;
   --admin-panel-muted-bg: #f6f9fc;
@@ -866,9 +866,7 @@ watch(navigationOpen, (open) => {
 
 .admin-shell__content {
   width: 100%;
-  max-width: 1440px;
   flex: 1;
-  align-self: center;
   padding: 24px 28px 28px;
 }
 
@@ -944,7 +942,7 @@ watch(navigationOpen, (open) => {
   }
 
   .admin-shell__content {
-    padding: 20px 16px;
+    padding: 16px;
   }
 
   .admin-shell__footer {

@@ -127,6 +127,12 @@ public class StoryboardCompositionService {
     if (scenes.size() > MAX_SCENES) {
       scenes = scenes.subList(0, MAX_SCENES);
     }
+    if (!imageService.isEnabled()) {
+      throw new BusinessException(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "VIDEO_COMPOSE_UNAVAILABLE",
+          "故事板图片生成服务未启用，无法合成视频");
+    }
     if (!isAvailable()) {
       throw new BusinessException(
           HttpStatus.SERVICE_UNAVAILABLE,

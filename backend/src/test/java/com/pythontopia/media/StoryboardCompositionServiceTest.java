@@ -22,9 +22,11 @@ import org.slf4j.LoggerFactory;
 class StoryboardCompositionServiceTest {
 
   private StoryboardCompositionService serviceWith(String ffmpegPath) {
+    XfyunImageService imageService = Mockito.mock(XfyunImageService.class);
+    Mockito.when(imageService.isEnabled()).thenReturn(true);
     return new StoryboardCompositionService(
         ffmpegPath,
-        Mockito.mock(XfyunImageService.class),
+        imageService,
         Mockito.mock(XfyunTtsService.class),
         Mockito.mock(MediaAssetStorage.class),
         Mockito.mock(MediaAssetRepository.class));
@@ -35,6 +37,38 @@ class StoryboardCompositionServiceTest {
     StoryboardCompositionService service =
         serviceWith("/nonexistent/ffmpeg-binary-pyt-test");
     assertThat(service.isAvailable()).isFalse();
+  }
+
+  @Test
+  void rejectsDisabledImageProviderBeforeProbingFfmpeg(@TempDir Path tempDir) throws Exception {
+    Path invocationMarker = tempDir.resolve("ffmpeg-invoked");
+    Path ffmpeg = tempDir.resolve("ffmpeg");
+    Files.writeString(
+        ffmpeg,
+        "#!/bin/sh\n: > '" + invocationMarker + "'\nexit 0\n");
+    assertThat(ffmpeg.toFile().setExecutable(true)).isTrue();
+    XfyunImageService imageService = Mockito.mock(XfyunImageService.class);
+    StoryboardCompositionService service =
+        new StoryboardCompositionService(
+            ffmpeg.toString(),
+            imageService,
+            Mockito.mock(XfyunTtsService.class),
+            Mockito.mock(MediaAssetStorage.class),
+            Mockito.mock(MediaAssetRepository.class));
+
+    assertThatThrownBy(
+            () ->
+                service.compose(
+                    1L,
+                    List.of(
+                        new StoryboardCompositionService.SceneSpec(
+                            "像素插画", "旁白", "x4_yezi", 20, List.of("PY43-KC-001")))))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("图片生成服务未启用");
+
+    assertThat(Files.exists(invocationMarker)).isFalse();
+    Mockito.verify(imageService, Mockito.never())
+        .generate(Mockito.any(), Mockito.anyString(), Mockito.anyString(), Mockito.anyList());
   }
 
   @Test
@@ -66,6 +100,7 @@ class StoryboardCompositionServiceTest {
     Files.writeString(ffmpeg, "#!/bin/sh\nif [ \"$1\" = \"-version\" ]; then exit 0; fi\n");
     assertThat(ffmpeg.toFile().setExecutable(true)).isTrue();
     XfyunImageService imageService = Mockito.mock(XfyunImageService.class);
+    Mockito.when(imageService.isEnabled()).thenReturn(true);
     XfyunTtsService ttsService = Mockito.mock(XfyunTtsService.class);
     Mockito.when(imageService.generate(1L, sentinel, "PY43-KC-001", List.of("PY43-KC-001")))
         .thenThrow(new IllegalStateException(sentinel));
@@ -115,6 +150,7 @@ class StoryboardCompositionServiceTest {
 
     Path imagePath = Files.write(tempDir.resolve("image.jpg"), new byte[] {1});
     XfyunImageService imageService = Mockito.mock(XfyunImageService.class);
+    Mockito.when(imageService.isEnabled()).thenReturn(true);
     XfyunTtsService ttsService = Mockito.mock(XfyunTtsService.class);
     MediaAssetStorage storage = Mockito.mock(MediaAssetStorage.class);
     MediaAssetRepository repository = Mockito.mock(MediaAssetRepository.class);
@@ -174,6 +210,7 @@ class StoryboardCompositionServiceTest {
 
     Path imagePath = Files.write(tempDir.resolve("image.jpg"), new byte[] {1});
     XfyunImageService imageService = Mockito.mock(XfyunImageService.class);
+    Mockito.when(imageService.isEnabled()).thenReturn(true);
     XfyunTtsService ttsService = Mockito.mock(XfyunTtsService.class);
     MediaAssetStorage storage = Mockito.mock(MediaAssetStorage.class);
     MediaAsset image =

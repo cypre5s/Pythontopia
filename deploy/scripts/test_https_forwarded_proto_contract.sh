@@ -55,6 +55,23 @@ require_upload_limit_block() {
   fi
 }
 
+require_evidence_snapshot_limit_block() {
+  local edge_file="${ROOT_DIR}/deploy/nginx/pythontopia.conf"
+  local api_block
+  api_block="$(awk '
+    /location[[:space:]]+\/api\// { capture=1 }
+    capture { print }
+    capture && /^[[:space:]]*}/ { exit }
+  ' "${edge_file}")"
+  if grep -Eq 'limit_req[[:space:]]+zone=pythontopia_evidence_snapshot[[:space:]]+burst=2[[:space:]]+nodelay;' <<<"${api_block}" \
+      && grep -Eq 'limit_req_status[[:space:]]+429;' <<<"${api_block}"; then
+    echo "[PASS] 证据快照入口按需限速并返回 429"
+  else
+    echo "[FAIL] 证据快照入口按需限速并返回 429" >&2
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
 require_pattern "${FRONTEND_NGINX}" \
   "前端 Nginx 从上游请求头解析外部协议" \
   'map[[:space:]]+\$http_x_forwarded_proto[[:space:]]+\$pythontopia_forwarded_proto[[:space:]]*\{'
@@ -76,6 +93,9 @@ require_pattern "${INSTALLER}" \
 require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "公开入口对登录/注册按来源 IP 限速" \
   'limit_req_zone[[:space:]]+\$binary_remote_addr[[:space:]]+zone=pythontopia_auth:10m[[:space:]]+rate=5r/s;'
+require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "登录/注册/刷新均匹配公开认证限速路由" \
+  'location[[:space:]]+~[[:space:]]+\^/api/auth/\(login\|register\|refresh\)\$[[:space:]]*\{'
 require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "登录/注册路由实际使用来源 IP 限速" \
   'limit_req[[:space:]]+zone=pythontopia_auth[[:space:]]+burst=10[[:space:]]+nodelay;'
@@ -105,6 +125,16 @@ require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "上传限速作用于精确上传路由" \
   'location[[:space:]]+=[[:space:]]+/api/workshop/uploads[[:space:]]*\{'
 require_upload_limit_block
+require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "证据快照限速只接收 POST 快照请求的来源 IP" \
+  'map[[:space:]]+"\$request_method:\$uri"[[:space:]]+\$pythontopia_evidence_snapshot_limit_key[[:space:]]*\{'
+require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "证据快照限速对其它 API 请求使用空 key" \
+  '"POST:/api/learner/evidence-memory/snapshots"[[:space:]]+\$binary_remote_addr;'
+require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "证据快照限速区每秒允许一次" \
+  'limit_req_zone[[:space:]]+\$pythontopia_evidence_snapshot_limit_key[[:space:]]+zone=pythontopia_evidence_snapshot:10m[[:space:]]+rate=1r/s;'
+require_evidence_snapshot_limit_block
 
 if [ "${FAILURES}" -ne 0 ]; then
   echo "[RESULT] ${FAILURES} 项 HTTPS 转发链路契约未满足" >&2

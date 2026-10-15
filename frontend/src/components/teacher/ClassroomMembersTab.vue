@@ -8,10 +8,9 @@ const props = defineProps<{ members: ClassroomMemberDto[] }>();
 const emit = defineEmits<{ (event: 'remove', studentId: number): void }>();
 
 const columns = [
-  { key: 'studentId', label: '学号' },
+  { key: 'studentId', label: '用户编号' },
   { key: 'username', label: '用户名' },
   { key: 'displayName', label: '显示名' },
-  { key: 'status', label: '状态' },
   { key: 'action', label: '操作', align: 'right' as const },
 ];
 
@@ -46,14 +45,6 @@ function handleRemove(studentId: number) {
       :rows="rows"
       row-key="studentId"
     >
-      <template #status="{ value }">
-        <span
-          class="member-status"
-          :class="value === 'ACTIVE' ? 'member-status--active' : 'member-status--removed'"
-        >
-          {{ value === 'ACTIVE' ? '在班' : '已移除' }}
-        </span>
-      </template>
       <template #action="{ row }">
         <PyButton
           variant="ghost"
@@ -76,23 +67,5 @@ function handleRemove(studentId: number) {
   border-radius: var(--pyt-radius-lg);
   text-align: center;
   color: var(--pyt-color-text-hint);
-}
-.member-status {
-  display: inline-flex;
-  align-items: center;
-  padding: 1px 10px;
-  border-radius: var(--pyt-radius-full);
-  font-size: var(--pyt-font-size-xs);
-  font-weight: 600;
-  border: 1px solid var(--pyt-color-border);
-}
-.member-status--active {
-  background: var(--pyt-color-success-bg);
-  color: var(--pyt-color-success);
-  border-color: var(--pyt-color-success);
-}
-.member-status--removed {
-  background: var(--pyt-color-bg-sunken);
-  color: var(--pyt-color-text-muted);
 }
 </style>

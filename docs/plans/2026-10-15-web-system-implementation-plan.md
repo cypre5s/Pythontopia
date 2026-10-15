@@ -8,6 +8,11 @@
 
 **Tech Stack:** Java 21, Spring Boot, PostgreSQL/Flyway, Python 3.11+, FastAPI/LangGraph/AutoGen, Vue 3/TypeScript, Phaser 3, Vitest, Playwright.
 
+## 执行范围与检查点
+
+- 已读取用户提供的系统安全、无尽远征、数字孪生与全端质量要求；当前执行以 Web 为主，不操作 GitHub，也不审计 ECS 运行态。
+- 用户要求的首次本地检查点提交已存在：`9897b52d fix: redact quest completion log details`（2026-10-16）。当前实现继续保留为工作树改动，未推送。
+
 ## 总任务清单
 
 本节是当前唯一交付清单；已有验证按仓库记录复用，不重复模型探针或已通过的等价测试。各任务详情和验证证据保留在下方。
@@ -17,6 +22,16 @@
 **已完成并可复用的证据：** DeepSeek 文本及合成 PNG 输入曾通过真实调用，Tutor 响应为文本；最近 Tutor 浏览器流程触发题目导读与无帮助反馈两个事件，2 次 DeepSeek completion 均 HTTP 200，并显示非空文本卡片。另已完成 DeepSeek provider 静态审计：在线 LLM 只允许 `api.deepseek.com` 与批准模型，TTS/ASR/讯飞图片服务恒关闭。本机 `.env` 与运行 Graph 的 provider/host/model 配置一致，密钥未输出；浏览器语音识别、录音采集和 ASR 上传的无调用 Web 代码已删除，后端 ASR 禁用合同保留。账号级用量锁、事件专属 AutoGen 阶段、run 检查点、附件隔离、Boss Phaser 场景、Twin P0、共享选题策略、AI 题库审核、主要管理页操作、安全基线及多项敏感日志修复均已有实现和定向验证。DeepSeek 文本/图片调用与 Tutor 产品链路均封账，不再重复；仅当具体产品代码改变且必须走模型路径时，才做一次该路径验证。本轮已将资源/章测提示词的动态画像、记忆、检索证据、审查和错题上下文从 `system` 移至 `user`，Graph 全量测试 1911 passed/1 skipped；并对实际章测 prompt 发起一次 DeepSeek completion，基于 3 页 RAG 证据解析出 1 道单选题。图片 Web 中继稳定性保留为未验证项。
 
 **2026-10-16 审查去重：** AutoGen 六阶段导学、checkpoint、附件 owner/session 绑定已在 Pythontopia 实现；`/api/tutor/ask` 也通过 AutoGen 运行作答与审查阶段。两条路径保留各自 SSE/会话合同；Alethicode 新增的异步 run 生命周期不适配现有合同，无需重复移植。管理台共享样式与表格规格已对齐，剩余差异是业务页面编排与交互，不复制 Alethicode 不适用的指标/API。Provider 静态审计未发现可达的非 DeepSeek 模型或语音请求；本轮未重复 DeepSeek 调用。
+
+**2026-10-16 本轮续接：** 管理台视觉按 Alethicode 实际 CSS 再校正工具栏间距、内容宽度与窄屏内边距；学习事件拒绝 JSON `null` 批次并限制单条序列化 payload 为 4096 字节；派生证据快照串行化同账号写入并保留最新 200 条。相关前端管理页 12/12、`LearningEventControllerTest` 5/5、PostgreSQL `EvidenceMemoryServiceTest` 4/4，typecheck、定向 ESLint/Spotless 与 diff 检查通过。公共匿名路由方法合同 `PublicReadAccessTest` 新鲜复验 1/1，仍不代表全 API 通用限流已完成。本轮没有 DeepSeek 请求。
+
+**2026-10-16 班级成员表修正：** Alethicode 对照发现成员 `studentId` 实际映射 `users.id`，但页面误标为“学号”；同时默认 API 只返回 ACTIVE 成员，表格的“已移除”状态不可达。现显示“用户编号”并删除不可达状态列，不改 API/数据库。回归先 RED 后 GREEN，组件测试 1/1、前端 typecheck 与触及文件 ESLint 通过；未调用模型。
+
+**2026-10-16 AI 调用限额静态盘点：** 逐一追踪 Java Graph/生成调用点：用户触发的模型入口均由 `@AiBudgeted` 或调用前显式 `reserve()` 覆盖，背景反思/周评也走同一服务；Boss 判题调用是沙箱评测，远征前沿选择现为确定性 Learner Twin 规则。遗留讯飞媒资入口当前关闭并在服务层失败关闭。未发现绕过 DeepSeek 账号/全站日限额的可达模型请求。该盘点不等同于全 API 通用限流审计；后者仍开放。未运行测试或外部调用。
+
+**2026-10-16 公共路由权限收窄：** `/api/auth/**`、`/api/course/**`、`/api/media/assets/**`、`/api/downloads/**` 原按路径整体匿名放行。现仅开放注册/登录/刷新、限定下载计数写入、课程/媒资/下载读取及健康检查方法；logout 和未列出的写方法需要认证。静态盘点命中的 3 个 `/api/internal/**` controller 均先用常量时间比较服务令牌，Tutor 附件/checkpoint 另校验 owner subject。媒体资产仍由 controller 校验签名或 owner。哨兵先复现匿名写入 200，再修复后 15/15 定向测试通过；后续补跑内部 controller 令牌/owner 测试 7/7；未调用模型。
+
+**2026-10-16 公共认证限流补齐：** 复核公开认证写路由时发现 `/api/auth/refresh` 未匹配现有登录/注册来源 IP 限流；现纳入同一 Nginx 路由与 5 次/秒、突发 10 次规则。HTTPS 转发契约先 RED 后 GREEN；脚本 19 项通过，完整部署 Nginx 配置在 1.27 容器 `nginx -t` 通过（使用临时测试证书，不访问生产）。没有 DeepSeek 请求。全 API 通用限流审计仍开放，不增加可能影响共享网络课堂及 SSE 的全局 IP 总闸。
 
 **2026-10-16 Tutor 取消交互：** `TutorWorkflowPanel` 新增仅在请求进行中显示的“停止”按钮，复用 SSE abort；中止后保留原 requestId/checkpoint 恢复入口，并阻止误报“无响应”。组件回归先 RED 后 GREEN，8/8 通过；`npm run typecheck`、触及组件的 ESLint 与 diff 检查通过。无模型请求。
 
@@ -58,13 +73,17 @@ Graph 提示词静态续扫覆盖所有直接 `role=system` 构造点；除已�
 
 **2026-10-16 Web NPC 地图核对：** Web `town_hub.json` 的 7 个 NPC 锚点与 `data/npcs/index.json` 中 7 个 `spawnMap: town_hub` 条目完全一致；其余 4 个 `spawnMap` 为 null，属于未放置角色，不是遗漏锚点。本项只读核对，无需补图。
 
-**仍未完成：** 本地安全审计还需继续覆盖其余类别；NPC 对话状态的服务端可信迁移校验；有真实先修证据的第 2 章以上远征战斗题型、合格活动 run 的刷新恢复和异常恢复；剩余 Web 可见动作矩阵及远征地图/战斗真实浏览器窄屏验收（入口页和像素塔窄屏切换已有验证）；Twin A/B 和 7 日延迟效果；全栈功能收敛后的工程与性能收尾。讲座页“AI 助教→返回小镇”已由本轮真实 Chromium 验收。Python 开发 venv 的当前 OSV 复扫只剩 `diskcache`（Mem0 可选依赖）与 `ragas`（评估可选依赖）两项，公告未列修复版本；两者不在重建后的 Graph/RAG 运行镜像中。生产 Piston ACL/ECS 和 DeepSeek 供应商账单不在本地可验证范围内。
+**仍未完成：** 本地安全审计还需继续覆盖其余类别；NPC 对话状态的服务端可信迁移校验；有真实先修证据的第 2 章以上远征战斗题型、合格活动 run 的刷新恢复和异常恢复；剩余 Web 可见动作矩阵及远征地图/战斗真实浏览器窄屏验收（入口页、错题矿洞抽屉、像素塔窄屏切换已有验证）；Twin A/B 和 7 日延迟效果；全栈功能收敛后的工程与性能收尾。讲座页“AI 助教→返回小镇”已由本轮真实 Chromium 验收。Python 开发 venv 的当前 OSV 复扫只剩 `diskcache`（Mem0 可选依赖）与 `ragas`（评估可选依赖）两项，公告未列修复版本；两者不在重建后的 Graph/RAG 运行镜像中。生产 Piston ACL/ECS 和 DeepSeek 供应商账单不在本地可验证范围内。
 
 **接续顺序：** 不再安排通用 DeepSeek 测试。继续处理能在本地闭环的安全问题，再补 Web 动作矩阵和远征地图/战斗窄屏；远征正式闭环必须等真实先修证据和合格题型，不能改造真实用户数据。Twin 效果评估等真实样本，工程与性能收尾仍排在功能之后；性能最后测。管理台壳层/配色和 Pythontopia 班级 API、DTO、数据库字段已通过只读对齐复核，不复制 Alethicode 未提交的页面与 schema。
 
 ### 当前工作清单
 
 - [x] DeepSeek 文本和合成 PNG 输入、文本输出已有真实调用记录；Tutor 文本产品链路已有浏览器验证，不重复通用探针。
+- [x] 班级成员表显示真实字段含义“用户编号”，移除默认查询下不可达的成员状态列；组件回归 1/1、typecheck 与定向 ESLint 通过。
+- [x] AI/Graph 调用点与共享日预算静态盘点：可达模型入口由注解或显式 reserve 覆盖；Boss 评测是沙箱路径，媒资生成 provider 当前关闭。通用非 AI API 限流审计仍未完成。
+- [x] 公共 refresh 路由并入 Nginx 认证入口来源 IP 限速（5 次/秒、突发 10 次）；HTTPS 转发契约先 RED 后 GREEN，19 项通过。认证以外的通用 API 限流审计仍开放。
+- [x] 公共路由按 HTTP 方法收窄：匿名仅能访问注册/登录/刷新、下载 hit、课程和签名媒资读取及健康检查；其余写方法要求认证。RED/GREEN 后 SecurityConfig、资产授权与认证定向测试共 15/15。
 - [x] Web 没有活跃语音输入调用点；已移除闲置 SpeechRecognition、MediaRecorder 与 ASR 上传客户端代码/专属测试。后端仍保留硬关闭 ASR 端点以兼容现有非 Web 合同；无模型请求。
 - [x] 反思任务与 SSE 执行池隔离；队列满时跳过 best-effort 任务，不阻塞判题线程。
 - [x] 清理超过 24 小时无活动的反思用户计数，定时每 30 分钟扫描一次。
@@ -79,16 +98,19 @@ Graph 提示词静态续扫覆盖所有直接 `role=system` 构造点；除已�
 - [x] NPC 状态/对话只接受已支持的 12 个中央小镇角色 key；未知 key 返回 404 且不触库，保留 Android `captain_def`。
 - [x] Web `town_hub` NPC 锚点与目录中的 `spawnMap: town_hub` 完全相符（7/7）；未放置的 4 个角色保持不在地图。
 - [x] `./dev.sh` 启动的 Spring API 显式绑定 `127.0.0.1`；运行态确认后端不再监听所有网卡，内部接口缺少服务令牌返回 401。
-- [x] 登录/注册限流静态复核：公网 Nginx 对 `/api/auth/login` 与 `/register` 按 IP 限制 5 次/秒、突发 10 次；`AuthService` 另按账号记录失败并短时渐进退避，成功后清零。生产实例配置未远程核验。
+- [x] 认证入口限流静态复核：公网 Nginx 对 `/api/auth/login`、`/register`、`/refresh` 按 IP 限制 5 次/秒、突发 10 次；`AuthService` 另按账号记录登录失败并短时渐进退避，成功后清零。生产实例配置未远程核验。
 - [x] 异步资源边界：未指定 executor 的 `@Async` 共用 2 worker/16 队列 `taskExecutor`；章测队列拒绝后置 `FAILED`，预防包拒绝不影响预测，记忆向量化拒绝不阻断 NPC 记忆，上传索引拒绝不影响已保存文件；媒体合成队列拒绝后作业置 `FAILED` 并返回 503。公网上传 POST 按 IP 2 次/秒、突发 5 次，入口请求体 6 MiB；frontend Nginx 与 Spring 12 MiB multipart 请求上限对齐。相关异步回归 42/42、媒体作业回归 11/11、Nginx 契约 18 项及双层 Nginx 1.27 语法检查通过；无模型请求。
 - [x] 媒体访问静态复核：作业轮询与 SSE 都校验 owner；资产匿名 URL 使用带到期时间的 HMAC，登录 owner 可直连；无 owner 的系统级资产按设计公开。旧讯飞媒体 provider 的异常原文日志目前位于 `isEnabled() == false` 的不可达分支；若以后重新启用，需先脱敏。没有外部媒体调用或数据库写入。
 - [x] Tutor AutoGen 取消操作：导学面板运行时可显式中止现有 SSE，请求身份与 checkpoint 保留以便恢复；回归 8/8、typecheck、定向 ESLint 通过。Tutor AutoGen 实现已覆盖普通问答与六阶段导学，不移植不兼容的 Alethicode run/event API。
 - [x] 讲座页动作：真实 Chromium 学生打开 `/lecture/1`，切到 AI 助教侧栏，再点击“小镇”回到 `/world`；页面错误 0、Tutor 提问/资源生成 POST 0。临时学生 721 已删除并确认用户名残留 0。
-- [ ] 继续本地安全审计；2026-10-16 已核验远征快照 PUT 的账号归属、服务端 run ID/章节/地图绑定和权威状态回读，`ExpeditionRunServiceTest` 11/11 通过；客户端 HP、分数、节点状态及历史不会写回。B 站时长筛选日志已移除原始搜索词，Graph 开发与镜像 Uvicorn access log 已关闭，公网 Nginx 仅记录 `$uri`；搜索路由 17/17、日志契约和 Compose 配置通过。重建本地 Graph 后，带合成 query 的 `/healthz` 返回 200 且运行日志无该标记。10/16 对 Java/Graph/RAG 做了按敏感字段的同一行日志源码扫描：唯一 Java 候选位于 `isEnabled()` 恒为 false 的旧讯飞图像服务，调用在限流与日志分支前返回；Graph/RAG 未命中。该窄扫描不替代全量多行/包装器日志审计。其余安全审计仍开放；生产 Piston ACL/ECS 需部署侧核验，本轮未访问或修改生产主机。
+- [ ] 继续本地安全审计；2026-10-16 已核验远征快照 PUT 的账号归属、服务端 run ID/章节/地图绑定和权威状态回读，`ExpeditionRunServiceTest` 11/11 通过；客户端 HP、分数、节点状态及历史不会写回。B 站时长筛选日志已移除原始搜索词，Graph 开发与镜像 Uvicorn access log 已关闭，公网 Nginx 仅记录 `$uri`；搜索路由 17/17、日志契约和 Compose 配置通过。重建本地 Graph 后，带合成 query 的 `/healthz` 返回 200 且运行日志无该标记。匿名路由方法合同本轮 `PublicReadAccessTest` 1/1；学习事件写入已限批次/单 payload，证据快照保留上限及用户锁回归通过。媒体同步合成入口现于图片 provider 关闭时、`ffmpeg` 探测前返回 503，`StoryboardCompositionServiceTest` 7/7；当前 Web 无该同步 API 页面调用方。10/16 对 Java/Graph/RAG 做了按敏感字段的同一行日志源码扫描：唯一 Java 候选位于 `isEnabled()` 恒为 false 的旧讯飞图像服务，调用在限流与日志分支前返回；Graph/RAG 未命中。该窄扫描不替代全量多行/包装器日志审计。其余安全审计仍开放；生产 Piston ACL/ECS 需部署侧核验，本轮未访问或修改生产主机。
+  - 10/16 通用 API 限流续审：Nginx 已保护登录/注册/刷新、班级加入码、上传和下载计数；AI 入口另受账号预算，正式判题有 10 秒冷却。学习事件仍限两种非权威事件、批量最多 100 条，并新增单条序列化 payload 4096 字节边界与 null 批次拒绝（`LearningEventControllerTest` 5/5）。证据快照写入按用户行锁串行化并保留最新 200 条（PostgreSQL `EvidenceMemoryServiceTest` 4/4）；昂贵快照 POST 另按精确 method/path 配置来源 IP 每秒 1 次、突发 2，HTTPS/Nginx 契约 23 项与 Nginx 1.27 语法检查通过。通用非 AI API 的按账号请求频率仍未完成审计；不添加共享课堂可能误伤的全局 IP 总闸。
+  - 10/16 本轮：学习事件单条/批次与工坊聊天历史追加写共用每账号滚动 60 秒 100 条额度，超限在触库前拒绝；聊天历史 JSON payload 限制为 64 KiB。RED/GREEN 后学习事件控制器、共享限流、历史服务定向测试 13/13，Spotless 通过。续审确认 `@EnableScheduling` 已启用，过期窗口会定时回收；payload 由 `JsonNode` 序列化后按 UTF-8 字节数检查。计数器仅在单 Spring 实例内存态，扩成多实例前应改用共享存储；全 API 非 AI 限流与日志审计仍未闭合。
 - [x] NPC talk 当前只写本人存档且无任务/奖励/权限消费；每次写入已有节点 ID 128 字符、effects 32 项、type/key/value 64/128/1024 字符的边界。Web/Android 树继续各自运行，状态不作为可信学习或授权证据。
 - [ ] 补齐满足真实先修证据的第 2 章以上远征战斗题型，并验证有效活动 run 的刷新/异常恢复。选题策略先修回溯按课程候选总数有界；65 个 KC 跨 7 章链、`LearnerTwinServiceTest` 与 `BossServiceTest` 合计 63/63。另修复聚焦章节与先修 KC 实际章节不同导致出题/结算被误拒的问题；远征服务、PostgreSQL 集成、控制器、Boss 与预生成回归合计 126/126。真实先修账号的 battle-compatible 题型及有效 run 刷新恢复仍未完成。KC-003 原无主线编程题，已从第 1 章学生页经正常 AI 补题入口生成并自动批准入共享题库；题目是普通 `kind=NULL` 题，不满足远征 battle-compatible 类型，且没有正式判题/掌握度事件。KC-011 有已批准共享题（chapter 2 / stage 1 / kind `NULL` / difficulty 1），对应主线 stage ID 5；新学生未解锁第 2 章，按后端 `requireChapterUnlocked` 不应跳过门槛提交，因此仍未正式判题，本轮未调用模型。
   - 10/16 只读远征可行性复核（含 `focusChapter=null`）：11 个活跃的第 2 章以上挑战节点中，可信先修达标为 0；其中 7 个账号持有未结算 `CONSUMED` 题，4 个账号有 `READY` 题，身份均无法确认是临时 QA。审核共享库内第 2 章以上 `dual_track`/`closed_loop` 题为 0。不得消费未知账号 READY 题或操作其存档。单纯页面刷新走 GET 快照；点击“继续”会触发后台预取，可能调用模型，当前不执行。需要正常流程中真实先修达标且已确认授权的 QA 学生后再做联测。
-- [ ] 完成剩余 Web 可见动作矩阵与远征地图/战斗真实浏览器窄屏检查。10/16 临时学生的 `/mainline-map` 在 320px 加载成功、文档/页面宽度均为 320、浏览器错误 0；关闭章节详情后触摸 Phaser 画布能打开章节面板（选中第 3 章），模型请求 0。首次误点视觉隐藏的辅助列表未计通过。教师班级卡片 320px Playwright 布局回归 1/1，使用测试夹具，只证明窄屏显示和无页面横向溢出。地图触屏项已闭合；远征 Boss 战真实窄屏与其余页面动作矩阵仍待验。
+  - 10/16 修正通用题库兜底题型：无题型元数据的课程编程题只用于普通代码练习/`dual_track`；`debug` 等专用交互没有兼容题时返回可重试服务错误，避免前端按样例猜测错误代码。回归先 RED 后 GREEN，`BossServiceTest` 55/55；真实先修账号和活动 run 联测仍待完成。
+- [ ] 完成剩余 Web 可见动作矩阵与远征地图/战斗真实浏览器窄屏检查。10/16 临时学生的 `/mainline-map` 在 320px 加载成功、文档/页面宽度均为 320、浏览器错误 0；关闭章节详情后触摸 Phaser 画布能打开章节面板（选中第 3 章），模型请求 0。首次误点视觉隐藏的辅助列表未计通过。教师班级卡片 320px Playwright 布局回归 1/1，使用测试夹具，只证明窄屏显示和无页面横向溢出。`/bug-mine` 320×780 真实触屏下错题本收起/展开正常、无横向溢出，errorbook/echoes GET 200、浏览器错误 0、模型请求 0，临时用户 726 清理为 0。地图触屏项与错题矿洞抽屉窄屏项已闭合；远征 Boss 战真实窄屏与其余页面动作矩阵仍待验。本轮另以真实学生浏览器从世界目标 CTA 和地图章节入口进入 `/mainline/stage/1`，详情/视频/课件 GET 成功、浏览器错误 0；没有完成阶段或提交学习数据。此前未挂载现象由探针弹层拦截点击造成，已排除为测试脚本问题。
 - [ ] 等待足够真实样本后评估 Twin A/B 与 7 日延迟结果。
 - [ ] 功能收敛后完成工程整理，最后再测性能；不重复已通过的 DeepSeek 测试。
 - [ ] 后端全量 Maven 仍未通过：2026-10-16 新鲜复跑 `mvn -o test` 共 1509 项，0 个断言失败、7 个错误；6 个 Testcontainers 错误是 Docker 随机主机端口绑定返回 `address already in use`，长期仿真在全量运行中连接被重置。单独复跑长期仿真通过，`CoursePackServiceIntegrationTest` 仍随机端口冲突（46474）。只读诊断确认 Surefire 未配置并行，失败端口位于当前 `ip_local_port_range=44620-48715`，诊断时该范围观察到 44 个 socket 状态、失败端口无监听；端口占用发生时的具体进程仍未知，因此不归因为应用缺陷，也不能标记全量通过。未跳过或降级测试；不再为碰运气重跑全量。
@@ -147,7 +169,7 @@ pytest 的临时目录漏洞 CVE-2025-71176 仅在 pytest 9.0.3 修复；Graph/R
 - [x] 远征对服务端不可判定的无效题提供重新出题操作，不扣体力也不提交结算；加入 HUD 拖拽指针回归后，5 个受影响前端测试文件共 76 项、typecheck、ESLint、diff 检查通过。
 - [x] AutoGen 对照审查确认 Pythontopia 保留自有 Tutor SSE、授权、附件和 V199/V203/V208 run 检查点契约，并按事件选择阶段；不移植 Alethicode 的 V124/thread dispatcher。
 - [x] 既有只读复核未发现确认的 P0/P1 代码缺陷；认证、主要 IDOR、判题 fail-closed 与 CORS 有实现和测试落点。本轮复查确认注册/教师邀请码、停用账号/JWT 代次撤销、Piston 默认与 subprocess fail-closed、排行榜按服务端 verified attempt 结算均有代码实现。生产 Piston 若无私网 ACL 或鉴权代理，仍有未授权执行风险；本地无法代表生产确认。
-- [ ] 附件扩展安全审计：逐类闭合判题隔离与部署边界、远征状态篡改/幂等、媒体上传、SSRF、XSS、SQL、速率限制、依赖与敏感日志；只对确认问题修复并补回归。远征快照 PUT 的篡改边界已由代码审查和 `ExpeditionRunServiceTest` 11/11 核验：客户端进度不会写回，服务端只返回权威状态。SSRF 当前代码复核覆盖唯一用户目标触发的 BROWSE 导航，服务端注入 host allowlist，Graph 每次导航/重定向验证公网 DNS、scheme、标准端口并将 Chromium DNS pin 到公网地址；对应 allowlist/executor 测试 58/58 通过。敏感日志已修复上传、索引、trace、Piston、Mem0/Zep、Graph retry、画像访谈、NPC 对话、RAG embedding、B 站问答/搜索、Feynman、BROWSE、Boss 出题/判题与章测 Graph 错误中的已复现泄露；RAG 启动/自愈/索引重建和 embedding 降级异常现只记录异常类型，503 返回固定说明，哨兵与定向测试共 33/33。其余已有修复包括本地 Piston Compose 配置与运行态仅接入专用 `judge-execution` 网络、宿主端口限制为回环、Python 3.12.0 执行冒烟成功（输出 4）、Java 适配器对远端失败 fail-closed；MetaReflection 调度异常和反馈汇总日志、Tutor/视频 Graph 兜底、DialogContext、MemoryRetrieval、LearningPath、WorldState 降级日志也已移除异常正文。新扫到 Boss 题目存档反序列化异常会把 payload 片段及 owner/problem 标识写入日志；现改为仅记异常类型，`EndlessPregenServiceTest` 17/17（RED/GREEN）。本轮修复本地运行容器与开发 venv 中的 FastAPI/Starlette 和 pytest 漏洞版本；Graph/RAG 全量测试分别 1902 passed/1 skipped、166 passed。OSV 复扫剩余 `diskcache` 与 `ragas` 两项可选开发依赖告警（当前无修复版本），不在运行镜像中。其余异常日志与生产 Piston ACL 仍待核实；当前 `/readyz` 整体因已记录的 `VIDEO_TRANSCRIPT_UNAVAILABLE` 返回 503，judge readiness 本身为 ready。
+- 明细见“总任务清单”安全审计项：逐类闭合判题隔离与部署边界、远征状态篡改/幂等、媒体上传、SSRF、XSS、SQL、速率限制、依赖与敏感日志；只对确认问题修复并补回归。远征快照 PUT 的篡改边界已由代码审查和 `ExpeditionRunServiceTest` 11/11 核验：客户端进度不会写回，服务端只返回权威状态。SSRF 当前代码复核覆盖唯一用户目标触发的 BROWSE 导航，服务端注入 host allowlist，Graph 每次导航/重定向验证公网 DNS、scheme、标准端口并将 Chromium DNS pin 到公网地址；对应 allowlist/executor 测试 58/58 通过。敏感日志已修复上传、索引、trace、Piston、Mem0/Zep、Graph retry、画像访谈、NPC 对话、RAG embedding、B 站问答/搜索、Feynman、BROWSE、Boss 出题/判题与章测 Graph 错误中的已复现泄露；RAG 启动/自愈/索引重建和 embedding 降级异常现只记录异常类型，503 返回固定说明，哨兵与定向测试共 33/33。其余已有修复包括本地 Piston Compose 配置与运行态仅接入专用 `judge-execution` 网络、宿主端口限制为回环、Python 3.12.0 执行冒烟成功（输出 4）、Java 适配器对远端失败 fail-closed；MetaReflection 调度异常和反馈汇总日志、Tutor/视频 Graph 兜底、DialogContext、MemoryRetrieval、LearningPath、WorldState 降级日志也已移除异常正文。新扫到 Boss 题目存档反序列化异常会把 payload 片段及 owner/problem 标识写入日志；现改为仅记异常类型，`EndlessPregenServiceTest` 17/17（RED/GREEN）。本轮修复本地运行容器与开发 venv 中的 FastAPI/Starlette 和 pytest 漏洞版本；Graph/RAG 全量测试分别 1902 passed/1 skipped、166 passed。OSV 复扫剩余 `diskcache` 与 `ragas` 两项可选开发依赖告警（当前无修复版本），不在运行镜像中。其余异常日志与生产 Piston ACL 仍待核实；当前 `/readyz` 整体因已记录的 `VIDEO_TRANSCRIPT_UNAVAILABLE` 返回 503，judge readiness 本身为 ready。
   - 10/16 动态提示词边界：资源画像/记忆、审查反馈和检索证据，以及章测画像、侧重点、错因、已用题目和审查意见现作为 `user` 数据；章测证据页 ID 白名单及题量/输出/去重规则留在 `system`。已用题目的单条上下文保留原有 300 字上限。Graph 全量测试 1911 passed/1 skipped、Ruff 与 diff 检查通过。另对真实课件 RAG 证据的章测 prompt 发起 1 次 DeepSeek completion，解析出 1 道单选题；不再重复通用探针。
   - 10/16 Tutor 历史角色边界：发现 `TutorTurn.role` 任意字符串会原样变成模型消息角色；现限制为 `user`/`assistant`。回归先 RED 后 GREEN，Tutor SSE 与流异常定向测试 16/16。安全类别审计仍未完成。
   - 10/16 关联 Graph 历史角色静态扫描：Orchestrator/Profile 请求历史已用 `Literal` 限定 `user`/`assistant`，`DebateRound` 为内部固定阶段角色；未发现第二条请求历史升权路径。该结果不代表动态 prompt 字段审计完成。
@@ -158,7 +180,8 @@ pytest 的临时目录漏洞 CVE-2025-71176 仅在 pytest 9.0.3 修复；Graph/R
   - 10/16 Markdown XSS 回归：`MarkdownView` 新增恶意 Markdown 测试，断言脚本、`onerror` 和 `javascript:` 链接属性被清除；定向 Vitest 3/3 通过。仅闭合前端富文本渲染子项，安全总审计仍开放；没有模型调用。
   - 10/16 附件边界静态复核：工坊上传有扩展名白名单、5 MiB 单文件与每用户配额行锁；PDF 限页/文本长度，DOCX 限条目数及 16 MiB 解压量；Tutor 图片校验签名、5 MiB、用户/会话配额与 TTL 读取。现有测试源码覆盖主要拒绝和 owner/session 分支，本轮未重跑旧套件。未发现已证实漏洞；第三方解析器与生产代理限制仍需单独核实。
   - 10/16 SQL 拼接面静态复核：发现的动态片段均为固定可选条件、枚举映射的排序列/方向或按列表长度生成的 `?` 占位符；用户查询值继续走参数绑定。未发现用户输入进入 SQL 语法的路径；仅覆盖源码拼接点盘点。
-  - 10/16 限流静态复核（部分）：正式判题以用户锁串行且 10 秒 1 次；AI 操作默认有账号日额度与全站 provider 日额度，`dev.sh` 按本地开发要求关闭；Nginx 对登录及班级邀请码入口限 IP。未盘点所有 API 的通用限流，不据此关闭该审计类别。
+  - 10/16 限流静态复核（部分）：正式判题以用户锁串行且 10 秒 1 次；AI 操作默认有账号日额度与全站 provider 日额度，`dev.sh` 按本地开发要求关闭；Nginx 对认证入口、班级邀请码、上传及下载计数写入限 IP。公共 refresh 路由已补齐并解析验证。未盘点所有 API 的通用限流，不据此关闭该审计类别。
+  - 10/16 异常对象日志参数扫描：Java 命中只在硬关闭的旧讯飞 ASR/TTS/图片理解路径上的异常栈，以及课堂 SSE 首次发送失败的 `IOException`；日志参数未直接包含查询、代码、图片或用户消息。Graph/RAG 未发现 `logger.exception()`。这只是异常参数窄扫描，未覆盖所有包装器/多行动态字段，安全总审计仍开放；本轮没有代码改动。
   - 10/15 运行已有 `node deploy/scripts/test_dev_piston_sandbox.mjs`：Python 3.12.0 执行成功；宿主私有文件不可见、临时文件限定在 job 目录、共享 `/tmp` 写入被拒、loopback/compat socket 访问被阻断、超时进程以 SIGKILL 终止；临时标记文件已清理。Docker 运行态检查确认 Piston API 容器非 privileged、只读 rootfs、丢弃全部默认 capabilities、`no-new-privileges`、仅接入 `judge-execution`，并仅在 `127.0.0.1:2000` 暴露；该检查只覆盖本地开发运行态，完整安全审计及生产 ACL 仍未关闭。未发模型请求。
   - 10/15 续扫：周报定时任务的单人失败日志不再输出学生 ID 或异常正文，只记录异常类型；哨兵先 RED 后 GREEN，`WeeklyEvaluationSchedulerTest` 4/4。无模型请求。
   - 10/15 续扫远征预取：失败状态不再保存上游异常正文；claim/persist 异常日志只记异常类型。合并验证 `EndlessPregenServiceTest` 19/19、`WeeklyEvaluationSchedulerTest` 4/4；生产行为以外未调用模型。
@@ -188,32 +211,33 @@ pytest 的临时目录漏洞 CVE-2025-71176 仅在 pytest 9.0.3 修复；Graph/R
 - [x] 教师班级详情成员读取失败恢复：组件回归 `ClassroomDetail.spec.ts` 13/13；本地 Chromium 对成员 GET 模拟首读 503、重试 200，错误区域可见、成员恢复显示，页面错误 0。鉴权与 API 均模拟，不计后端授权联测。
 - [x] 管理台共享表格表头/圆角/分页已按 Alethicode 样式收敛；保留手动跳页和现有数据字段。
 - [x] 课堂核心、成员、任务和看板字段已与后端 DTO/迁移对照；发现前端 `RemediationResultDto.partial` 可选而后端必返，已改为必填并通过 `npm run typecheck`。
-- [x] 管理台格式对齐：对照 Alethicode 的 `Home.vue`、`Panel.vue`、`style.less` 与 `common.less`，Pythontopia 的侧栏/窄屏导航、面板、控件、表格密度、分页、蓝灰色 token 与圆角均已落到现有 3 个真实 API 页面；管理台定向组件/页面测试与 320px Chromium 抽样已有通过记录。Pythontopia 继续使用自身类型化 DTO 和真实业务接口；Alethicode 额外菜单对应的课程包、配置、判题服务等模型不属于“格式对齐”，不创建空页面或复制旧数据结构。剩余页面动作检查由 Web 动作矩阵跟踪。
+- [x] 管理台格式对齐：对照 Alethicode 的 `Home.vue`、`Panel.vue`、`style.less` 与 `common.less`，Pythontopia 的侧栏/窄屏导航、面板、控件、表格密度、分页、蓝灰色 token 与圆角均已落到现有 3 个真实 API 页面；最新校正工具栏间距为 12px、移除 1440px 内容宽度上限、窄屏内边距为 16px。管理台定向页面测试 12/12、typecheck、定向 ESLint 与 diff 检查通过。Pythontopia 继续使用自身类型化 DTO 和真实业务接口；Alethicode 额外菜单对应的课程包、配置、判题服务等模型不属于“格式对齐”，不创建空页面或复制旧数据结构。剩余页面动作检查由 Web 动作矩阵跟踪。
 - [x] 管理员真实浏览器用户管理流程：登录、搜索、停用/恢复、禁用账号登录拒绝；临时账号已清理。
 - [x] 运维概览将五个已知后端动作键映射为中文建议，原始键保留在提示文本中。
 - [x] KC-004 根知识点 AI 补题：从正常主线练习按钮发起请求，通过 Piston 自测和现有质量审查后写入共享题库为 `APPROVED/AUTOMATED`。实际请求 6 个 DeepSeek completions（前 5 个候选自测输出不符，第 6 个通过）；未提交答案或新增掌握证据。
 - [x] KC-002 主线 AI 补题：从第 1 章第 3 节正常学习页发起 1 次生成请求，题目 `APPROVED/AUTOMATED`（审核 ID 83）；第二名学生从共享题库取题并服务端判题 3/3。临时答题账号及其掌握事件已清理，审核请求者因审计外键保留在本地数据库。
-- [ ] 远征闭环：补齐有效先修解锁后的第 2 章以上前沿 KC 的 battle-compatible 题型并验证有效先修账号从服务端活动 run 刷新恢复；同时复核地图覆盖预检、超时取消、失败恢复、Boss 多阶段与客户端状态伪造边界。当前根 KC 审核库普通题为 KC-001 `debug` 与 KC-001/002/004/006 `kind=NULL`；新增 KC-001 普通 AI 题由真实主线流程生成并自动审核，另一学生账号正式判题 3/3，掌握度事件为 0.14。上述普通题仍不适配战斗节点 `dual_track`/`closed_loop`。KC-006 主线题由审核 ID 84 自动批准，第二名学生从共享库取题并正式判题通过；KC-011 也已有普通主线自动批准题，但尚无正式学生判题或掌握度证据。缺题时会按节点 `challengeKind` 生成并经质量门禁后自动入共享库。已修复地图默认预取绕开全局批准题库的问题：按章节/stage/KC/题型/难度先复用已批准题，再进入用户现有 READY 队列；`EndlessPregenServiceTest` 16/16。KC-001/002/004/006 属第 1 章根 KC，远征当前会过滤第 1 章；它们的题型库存不是该闭环的开局覆盖验收对象；尚无合格活动 run 的端到端题型生成与刷新恢复证据。地图不预检题库覆盖，生成失败仍可重试或结束本局。最新本地只读聚合为 21 条 `status=ACTIVE` run（16 challenge、3 map、2 over），有 1 个账号达到候选先修掌握门槛，但其当前没有活动 run。测试/历史账号构成未知，不能据此推断真实用户完成率；先修候选链包括 KC-004→KC-003→KC-008 与 KC-002→KC-005→KC-015；须通过真实判题达到门槛，再验证可恢复 run。 跨章节先修缺陷已修复：请求/结算以活动 run 节点绑定的 KC 与题目证据校验，不再要求前置 KC 的实际章节等于聚焦章节；相关远征服务、PostgreSQL 集成、控制器、Boss 与预生成定向回归 126/126。真实有效 run 的题型生成和刷新恢复仍未验收。 已有后端/PostgreSQL/预生成覆盖：服务端地图与快照权威、节点可达性、结算题目指纹幂等、Boss 三阶段、预取超时/失败/排队取消；跨章节修复相关套件 126/126。缺题地图覆盖预检及真实合格账号的浏览器地图/战斗仍待验收。 10/16 通过正常学生主线入口为无题 KC-003 生成一题并自动审查为 `APPROVED`，复核题面与 KC 相符；未提交答案。该题 `kind=NULL`，不计入战斗题型覆盖。
+- 明细见“总任务清单”远征项：补齐有效先修解锁后的第 2 章以上前沿 KC 的 battle-compatible 题型并验证有效先修账号从服务端活动 run 刷新恢复；同时复核地图覆盖预检、超时取消、失败恢复、Boss 多阶段与客户端状态伪造边界。当前根 KC 审核库普通题为 KC-001 `debug` 与 KC-001/002/004/006 `kind=NULL`；新增 KC-001 普通 AI 题由真实主线流程生成并自动审核，另一学生账号正式判题 3/3，掌握度事件为 0.14。上述普通题仍不适配战斗节点 `dual_track`/`closed_loop`。KC-006 主线题由审核 ID 84 自动批准，第二名学生从共享库取题并正式判题通过；KC-011 也已有普通主线自动批准题，但尚无正式学生判题或掌握度证据。缺题时会按节点 `challengeKind` 生成并经质量门禁后自动入共享库。已修复地图默认预取绕开全局批准题库的问题：按章节/stage/KC/题型/难度先复用已批准题，再进入用户现有 READY 队列；`EndlessPregenServiceTest` 16/16。KC-001/002/004/006 属第 1 章根 KC，远征当前会过滤第 1 章；它们的题型库存不是该闭环的开局覆盖验收对象；尚无合格活动 run 的端到端题型生成与刷新恢复证据。地图不预检题库覆盖，生成失败仍可重试或结束本局。最新本地只读聚合为 21 条 `status=ACTIVE` run（16 challenge、3 map、2 over），有 1 个账号达到候选先修掌握门槛，但其当前没有活动 run。测试/历史账号构成未知，不能据此推断真实用户完成率；先修候选链包括 KC-004→KC-003→KC-008 与 KC-002→KC-005→KC-015；须通过真实判题达到门槛，再验证可恢复 run。 跨章节先修缺陷已修复：请求/结算以活动 run 节点绑定的 KC 与题目证据校验，不再要求前置 KC 的实际章节等于聚焦章节；相关远征服务、PostgreSQL 集成、控制器、Boss 与预生成定向回归 126/126。真实有效 run 的题型生成和刷新恢复仍未验收。 已有后端/PostgreSQL/预生成覆盖：服务端地图与快照权威、节点可达性、结算题目指纹幂等、Boss 三阶段、预取超时/失败/排队取消；跨章节修复相关套件 126/126。缺题地图覆盖预检及真实合格账号的浏览器地图/战斗仍待验收。 10/16 通过正常学生主线入口为无题 KC-003 生成一题并自动审查为 `APPROVED`，复核题面与 KC 相符；未提交答案。该题 `kind=NULL`，不计入战斗题型覆盖。
   - 10/16 审核库只读复核：第 2 章当前有 KC-010 `fill_blank` 与 KC-010/011/012/013 的 `kind=NULL` 批准题；第 2 章以上仍无 `dual_track`/`closed_loop` 题。查询只聚合章节/KC/类型/数量，未读题面、隐藏测试或用户身份；未创建题目、判题或学情记录。合格先修账号与活动 run 的真实闭环仍待完成。
   - 10/16 远征真实浏览器验收可行性：后端健康、Graph、RAG、Web 均 HTTP 200；后端就绪仍因视频字幕 503。临时 QA 学生登录成功，但主线第 2 章锁定，首节要求真实观看 7:20 视频、阅读 6 页并完成 4 道题。未写入掌握度、提交或远征 run；账号已删除并核对为 0。未绕过先修门槛，活动 run 刷新恢复继续待验证；没有模型调用。
   - 10/15 通过 `/mainline/stage/3` 的正常 AI 补题入口为 KC-001 生成题目，浏览器 API HTTP 200，`aiGenerated=true`、`reviewed=true`、页面错误 0；同账号重新从审核库取题后正式判题 3/3。题目及审核 requester 已保留在本地库；QA 用户 ID 697 因审核审计外键不能删除。该学生 KC-001 掌握度只有 0.14，远征候选要求先修 KC 达到 0.6；没有重复作答凑分，也未尝试创建不合格 run。
 
-- [ ] Web 验收：学生、教师、管理员主要路由/动作矩阵仍需完成，逐项覆盖可见控件与成功/失败/空态。11 条主页面路由已有真实浏览器路由壳检查（0 页面错误、0 个 5xx）；当时为避免写入拦截了 `/api/game/bootstrap` 和认证刷新，因此不计为页面初始化或完整动作通过。刷新请求由每次整页加载时的 `hydrateFromStorage()` 正常触发，逐 URL 重载解释了多次请求；认证/角色守卫、管理员用户停用/恢复、World HUD 未评估 Twin → 主线地图另有真实验证。主线章节抽屉开合、进入学习页再返回通过 1/1；小镇 HUD/暂停菜单反复开关并进入工坊通过 1/1；主线章节键盘聚焦及 Enter 打开章节通过 1/1；指南页目录锚点更新 URL 并滚动到目标通过 1/1；本轮 `/library` 的「for循环」检索显示带页码证据，1/1；`/board?tab=classroom` 深链及班级→历史→今日页签切换通过 1/1；`/profile` 学习目标自评已更新，PUT 仅含 `scoreDelta`，`evidenceCount`/`confidence` 不变。`ProfileRoomPage.spec.ts` 已有页面层测试覆盖 Twin 主/备推荐与周报 insight/补强转到工坊；本轮空学情学生真实浏览器展开 `/profile-room` 近期变化、点击“生成下一步”并抵达 `/workshop`，工坊草稿已预填，周报 0 事件，模型/资源生成请求和页面错误均为 0。另一名临时学生通过真实 KC-016 编程题后，周报显示 1 条权威事件、1 个掌握变化；点击该 KC “补强”进入工坊并预填 KC 代码，没有模型请求或页面错误。临时账号（689、690、691）均已清理，KC-016 验收账号的判题与学情随账号级联删除。教师屋创建班级路径经真实浏览器验证：教师邀请码注册（201）、登录（200）、空班级态、新建班级并进入看板成功，页面错误 0；临时教师和班级分别核对为 0。此前新生点击“前往主线学习”到达 `/mainline-map`，页面错误 0，仅有认证刷新和学习状态读取，临时用户已清理。共享表格样式对齐已完成。管理台审核检索/驳回已有本地浏览器记录；当前无待审核项，不重复改变共享题库。本轮真实浏览器验证学生通过 `/home` 入班（HTTP 200），教师成员页看到并移除学生（HTTP 204），页面错误为 0，临时用户、班级和成员行均清理为 0；本轮另一真实 Chromium 路径完成班级任务发布与归档，HTTP 均为 2xx，页面经服务端刷新显示 `ARCHIVED`；最终直接 SQL 复核因 `status` 未限定表别名而失败，故 DB 状态交叉核验与页面错误计数不记为通过。临时用户、班级、任务清理计数均为 0。剩余 Web 页面动作与窄屏检查仍待验收。 新增真实导航回归修复已评估的第 1 章 KC 继续练习误入远征的问题：远征不开放第 1 章，现回到主线地图；`useNextSteps` 11/11、`ProfileRoomPage` 6/6、typecheck 与定向 ESLint 通过。
+- 明细见“总任务清单”Web 验收项：学生、教师、管理员主要路由/动作矩阵仍需完成，逐项覆盖可见控件与成功/失败/空态。11 条主页面路由已有真实浏览器路由壳检查（0 页面错误、0 个 5xx）；当时为避免写入拦截了 `/api/game/bootstrap` 和认证刷新，因此不计为页面初始化或完整动作通过。刷新请求由每次整页加载时的 `hydrateFromStorage()` 正常触发，逐 URL 重载解释了多次请求；认证/角色守卫、管理员用户停用/恢复、World HUD 未评估 Twin → 主线地图另有真实验证。主线章节抽屉开合、进入学习页再返回通过 1/1；小镇 HUD/暂停菜单反复开关并进入工坊通过 1/1；主线章节键盘聚焦及 Enter 打开章节通过 1/1；指南页目录锚点更新 URL 并滚动到目标通过 1/1；本轮 `/library` 的「for循环」检索显示带页码证据，1/1；`/board?tab=classroom` 深链及班级→历史→今日页签切换通过 1/1；`/profile` 学习目标自评已更新，PUT 仅含 `scoreDelta`，`evidenceCount`/`confidence` 不变。`ProfileRoomPage.spec.ts` 已有页面层测试覆盖 Twin 主/备推荐与周报 insight/补强转到工坊；本轮空学情学生真实浏览器展开 `/profile-room` 近期变化、点击“生成下一步”并抵达 `/workshop`，工坊草稿已预填，周报 0 事件，模型/资源生成请求和页面错误均为 0。另一名临时学生通过真实 KC-016 编程题后，周报显示 1 条权威事件、1 个掌握变化；点击该 KC “补强”进入工坊并预填 KC 代码，没有模型请求或页面错误。临时账号（689、690、691）均已清理，KC-016 验收账号的判题与学情随账号级联删除。教师屋创建班级路径经真实浏览器验证：教师邀请码注册（201）、登录（200）、空班级态、新建班级并进入看板成功，页面错误 0；临时教师和班级分别核对为 0。此前新生点击“前往主线学习”到达 `/mainline-map`，页面错误 0，仅有认证刷新和学习状态读取，临时用户已清理。共享表格样式对齐已完成。管理台审核检索/驳回已有本地浏览器记录；当前无待审核项，不重复改变共享题库。本轮真实浏览器验证学生通过 `/home` 入班（HTTP 200），教师成员页看到并移除学生（HTTP 204），页面错误为 0，临时用户、班级和成员行均清理为 0；本轮另一真实 Chromium 路径完成班级任务发布与归档，HTTP 均为 2xx，页面经服务端刷新显示 `ARCHIVED`；最终直接 SQL 复核因 `status` 未限定表别名而失败，故 DB 状态交叉核验与页面错误计数不记为通过。临时用户、班级、任务清理计数均为 0。剩余 Web 页面动作与窄屏检查仍待验收。 新增真实导航回归修复已评估的第 1 章 KC 继续练习误入远征的问题：远征不开放第 1 章，现回到主线地图；`useNextSteps` 11/11、`ProfileRoomPage` 6/6、typecheck 与定向 ESLint 通过。
   - 10/16 `/library?docId=186&page=1` 翻页动作真实 Chromium 续验：下一页、上一页均更新页码和查询参数，页面错误 0；B 站检索被拦截，Tutor/模型接口为 0。页面唯一写请求是会话恢复 `POST /api/auth/refresh`，未提交作答或学习事件；临时学生已删除，`qa_library_` 用户残留计数为 0。
   - 10/16 `/bug-mine` 空态真实 Chromium 观察：注册后进入独立矿洞页，标题、`暂无错题` 与未选会话空态可见；错题本和遗忘回声 GET 均 200，1280px 无横向溢出，页面错误 0。临时用户已删除。自动脚本最后一个过滤条件把 Vite `/src/api/tutor.ts` 静态模块误认成 Tutor API，进程因此以断言错误退出；已从捕获路径分离出实际 `/api/*` 请求，未发现判题或模型端点。此项记为浏览器观察，不记为脚本全绿。
+  - 10/16 `/bug-mine` 窄屏真实浏览器补验：320×780 触屏收起/展开错题本，页面无横向溢出；`/api/bug-mine/errorbook` 与 `/echoes` 均 200，页面错误 0、模型请求 0。一次性用户 ID 726 已按 ID/QA 前缀精确删除并确认残留为 0。
   - 10/15 复习大厅新生真实浏览器：空周报、服务端“尚未评估”基础 KC 推荐均显示，点击费曼入口到 `/feynman`；评估/Twin API 为 200，页面错误 0、模型请求 0，临时用户 700 已清理并确认无残留。
 - [x] Web 错误态抽样：真实 Chromium 临时学生打开 `/chapter-test/99`，看到明确 1–7 章范围提示并点击返回主线地图；测评 API、模型 API、判题 API 为 0，页面错误为 0，临时账号已删除。有效章节自动调用 `prepare` 且可能触发出题，因此本次只走无效章节分支。
 - [x] Web 页面动作续验：题库按 KC 筛选、题号搜索、清空恢复和“去做”进入训练题均由真实浏览器验证；复盘大厅未评估 Twin 推荐已修复并复验进入主线地图。`/examples` 已退役，路由静态重定向到 `/problems` 并保留 `kcCode` 筛选；其题库筛选动作已有浏览器证据。相关临时账号已清理，已验证动作页面错误与模型请求均为 0。
 - [x] 题库深链边界：有效 KC 暂无编程题时保留 `kcCode` 并显示“0 题”；未知 KC 仍回退到全部。回归先 RED 后 GREEN，`ProblemListPage` 10/10、typecheck、定向 ESLint 通过。修复后真实 Chromium 验证 `/examples?kcCode=PY43-KC-001` 跳转并保留所选 KC；320px 下无横向溢出，页面错误与模型请求均为 0。
 - [x] 窄屏抽样：320px Chromium 检查 `/mainline/stage/2`、`/problems`、`/profile-room`、`/library`，页面宽度均未溢出；学习分身“近期变化”折叠区在窄屏可展开。页面错误与 5xx 为 0，没有业务写入或模型请求，临时账号已清理。此为抽样，不代表完整路由矩阵。
-- [ ] 工程收尾：按全 Web 审查清单继续修复可复现的命名、交互、错误态、可访问性和窄屏缺陷；strict TypeScript 源码扫描未发现 `any` / `as any` 或空命名 `void` 函数；工坊 `quiz_finished` 的过时 TODO 已改为说明客户端事件不作可信证据，未改运行逻辑。已对照 Google Java Style、Vue 官方风格、typescript-eslint 命名规则与 OWASP Logging Cheat Sheet；仅整理本轮新增 Java imports 并应用敏感日志要求。全仓 Spotless 与本轮触及文件的定向检查都发现既有格式差异；未保留格式化造成的无关改动，也未做批量格式化。
+- 明细见“总任务清单”工程收尾项：按全 Web 审查清单继续修复可复现的命名、交互、错误态、可访问性和窄屏缺陷；strict TypeScript 源码扫描未发现 `any` / `as any` 或空命名 `void` 函数；工坊 `quiz_finished` 的过时 TODO 已改为说明客户端事件不作可信证据，未改运行逻辑。已对照 Google Java Style、Vue 官方风格、typescript-eslint 命名规则与 OWASP Logging Cheat Sheet；仅整理本轮新增 Java imports 并应用敏感日志要求。全仓 Spotless 与本轮触及文件的定向检查都发现既有格式差异；未保留格式化造成的无关改动，也未做批量格式化。
 - [x] Maven 全量失败已做报告归因：记录的 7 个错误里，6 个是 Testcontainers Docker 动态宿主端口绑定失败，1 个是长期仿真的 PostgreSQL 连接重置；0 个断言失败。尚未修复 Docker/连接环境，也未重跑全量套件。
 - [x] Tutor SSE 长等待的本地运行态根因已定位并修复：Graph 源文件比正在运行的容器新，Uvicorn 命令没有自动重载，旧进程未加载心跳改动。开发 Compose 限定监视 Graph 源码目录并启用 reload；Compose 契约先因缺少 reload 断言失败，修复后通过；重建容器后 `/healthz` 200、容器 healthy；临时 `.py` 文件触发 WatchFiles 重载后删除，服务仍健康。
 - 范围外/未核验：生产公网边缘限流、Piston ACL 与 ECS 运行态按用户要求不作为当前任务重点；Piston API 本身不验证 Bearer token，只有生产侧私网 ACL/鉴权代理能关闭该风险。当前仅维护本地配置和源码边界证据，不访问远端或部署。
-- [ ] Twin 效果：在不伪造画像的前提下设计并执行 Twin A/B 与 7 日延迟复测；样本不足时保持待测，不宣称提升。
+- 明细见“总任务清单”Twin 效果项：在不伪造画像的前提下设计并执行 Twin A/B 与 7 日延迟复测；样本不足时保持待测，不宣称提升。
 - [ ] 后续增强（已按精简计划暂缓）：未来分岔的真实学习结果评估与 BKT 概率模型不属于当前闭环验收门槛。
 - [x] DeepSeek Web Tutor 全链路文本验收：运行态先出现 Graph 意图路由 401，核实为 Java 缺内部令牌、Graph 使用 `.env` 占位令牌；按 `./dev.sh` 重启后两端共享临时强令牌。单次 Playwright 请求命中 `/agents/intent/route` 与 `/agents/tutor/ask/stream`，均 HTTP 200，非空文本断言通过（1/1，7.2 秒）；临时账号已清理。不要重复 provider 探针或图片调用。
-- [ ] 性能：最后执行；功能、安全和工程验证收敛后测量出题 P50/P95、缓存命中与失败恢复，不把目标值写成实测。
+- 明细见“总任务清单”性能项：最后执行；功能、安全和工程验证收敛后测量出题 P50/P95、缓存命中与失败恢复，不把目标值写成实测。
 
 
 ### 2026-10-15 最新续接
@@ -377,6 +401,6 @@ The configured SSH destination resolves through the TUN default route. The repos
 
 ## 2026-10-16 当前续接状态
 
-- 已完成：章测预生成、Orchestrator 与判题任务自动完成日志脱敏；三个相关测试类共 11/11。没有发起 DeepSeek 请求，也没有重复 provider 探针。
-- 未完成：本地安全审计剩余类别、远征合格真实账号的恢复/战斗闭环、未覆盖的 Web 路由与动作矩阵、Twin A/B 与 7 日复测；性能按计划最后测量。生产 Piston ACL/ECS 按本轮边界不核验。
+- 已完成：最近增量包括成员表真实字段展示、公共匿名权限按 HTTP 方法收窄、refresh 纳入认证入口 IP 限速，以及相关定向前端/后端/Nginx 契约验证；AI 调用预算静态覆盖已盘点。当前续接没有发起 DeepSeek 请求或重复 provider 探针。
+- 未完成：通用非 AI API 限流审计与其余本地安全类别、远征合格真实账号的恢复/战斗闭环、未覆盖的 Web 路由与动作矩阵、Twin A/B 与 7 日复测、工程收尾；性能按计划最后测量。生产 Piston ACL/ECS 与线上 Nginx 运行态按本轮边界不核验。
 - 下一步：沿本文件现有“接续顺序”继续，只调查尚未关闭项；除非具体修改了 DeepSeek 请求路径或配置，不再做模型调用验证。

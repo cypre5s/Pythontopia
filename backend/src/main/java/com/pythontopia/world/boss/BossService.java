@@ -367,7 +367,8 @@ public class BossService {
         LOG.warn(
             "graph boss problem unavailable ({})", ex.getClass().getSimpleName());
         Optional<BossInternalProblem> golden =
-            findGoldenProblem(kc, chapter, request.stage(), difficulty, issuedFingerprints);
+            findGoldenProblem(
+                kc, chapter, request.stage(), difficulty, request.preferredKind(), issuedFingerprints);
         if (golden.isEmpty()) {
           throw new com.pythontopia.common.error.BusinessException(
               org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
@@ -378,7 +379,8 @@ public class BossService {
       }
       if (fromGraph == null || fromGraph.problemId() == null) {
         fromGraph =
-            findGoldenProblem(kc, chapter, request.stage(), difficulty, issuedFingerprints)
+            findGoldenProblem(
+                    kc, chapter, request.stage(), difficulty, request.preferredKind(), issuedFingerprints)
                 .orElse(null);
         if (fromGraph == null) {
           throw new com.pythontopia.common.error.BusinessException(
@@ -390,7 +392,8 @@ public class BossService {
       requireProblemContext(fromGraph, chapter, request.stage(), kc);
       if (issuedFingerprints.contains(questionFingerprint(fromGraph))) {
         fromGraph =
-            findGoldenProblem(kc, chapter, request.stage(), difficulty, issuedFingerprints)
+            findGoldenProblem(
+                    kc, chapter, request.stage(), difficulty, request.preferredKind(), issuedFingerprints)
                 .orElseThrow(() -> repeatedProblemUnavailable());
       }
       if (fromGraph.aiGenerated()) {
@@ -415,7 +418,8 @@ public class BossService {
         }
         if (!autoApproved) {
           fromGraph =
-              findGoldenProblem(kc, chapter, request.stage(), difficulty, issuedFingerprints)
+              findGoldenProblem(
+                      kc, chapter, request.stage(), difficulty, request.preferredKind(), issuedFingerprints)
                   .orElseThrow(
                       () ->
                           new com.pythontopia.common.error.BusinessException(
@@ -437,7 +441,14 @@ public class BossService {
   }
 
   private Optional<BossInternalProblem> findGoldenProblem(
-      String kcCode, int chapter, int stage, int difficulty, Set<String> excludedFingerprints) {
+      String kcCode,
+      int chapter,
+      int stage,
+      int difficulty,
+      String preferredKind,
+      Set<String> excludedFingerprints) {
+    // The course bank stores plain coding exercises, so only code editor challenges can use it.
+    if (preferredKind != null && !"dual_track".equals(preferredKind)) return Optional.empty();
     return chapterProblemBankRepository.findByKcCodes(List.of(kcCode)).stream()
         .filter(question -> kcCode.equals(question.kcCode()))
         .map(question -> toGoldenProblem(question, chapter, stage, difficulty))

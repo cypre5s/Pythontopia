@@ -241,7 +241,7 @@ class BossServiceTest {
             true,
             List.of(new BossTestCasePayload("2 3", "5", false)),
             "print(5)");
-    when(pregenService.claimReady(7L, 1, 1, "PY43-KC-001", 2, "debug", null, null))
+    when(pregenService.claimReady(7L, 1, 1, "PY43-KC-001", 2, "dual_track", null, null))
         .thenReturn(Optional.of(revoked));
     when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
     when(reviewRepository.isApproved(revoked)).thenReturn(false);
@@ -259,7 +259,9 @@ class BossServiceTest {
 
     var dto =
         service.fetchProblem(
-            1, new BossProblemRequest(1, null, 2, "PY43-KC-001", "debug", null, null, null), 7L);
+            1,
+            new BossProblemRequest(1, null, 2, "PY43-KC-001", "dual_track", null, null, null),
+            7L);
 
     assertThat(dto.statement()).contains("课程题库 · 审核题");
     assertThat(dto.aiGenerated()).isFalse();
@@ -322,6 +324,41 @@ class BossServiceTest {
       logger.detachAppender(appender);
       logger.setLevel(previousLevel);
     }
+
+    verify(pregenService, never())
+        .persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any());
+  }
+
+  @Test
+  @DisplayName("Graph 不可用时不把普通课程题伪装成改错题")
+  void graphProblemUnavailableDoesNotIssueGenericCourseQuestionForDebugKind() {
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenThrow(new RestClientException("graph down"));
+    lenient()
+        .when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
+        .thenReturn(
+            List.of(
+                new PreferredCodingQuestion(
+                    120L,
+                    "打印和",
+                    "读入两个整数并输出它们的和。",
+                    List.of(new CodingCase("2 3", "5")),
+                    List.of(new CodingCase("2 3", "5")),
+                    "a, b = map(int, input().split())\\nprint(a + b)",
+                    "PY43-KC-001")));
+
+    assertThatThrownBy(
+            () ->
+                service.fetchProblem(
+                    1,
+                    new BossProblemRequest(
+                        1, null, 2, "PY43-KC-001", "debug", null, null, null),
+                    7L))
+        .isInstanceOfSatisfying(
+            com.pythontopia.common.error.BusinessException.class,
+            exception ->
+                assertThat(exception.code()).isEqualTo("BOSS_PROBLEM_GENERATION_UNAVAILABLE"));
 
     verify(pregenService, never())
         .persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any());

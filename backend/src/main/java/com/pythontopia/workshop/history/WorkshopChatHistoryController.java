@@ -26,8 +26,7 @@ public class WorkshopChatHistoryController {
 
   @GetMapping("/turns")
   public List<WorkshopChatHistoryTurnDto> listTurns(
-      @CurrentUser CurrentUserPrincipal user,
-      @RequestParam(defaultValue = "50") int limit) {
+      @CurrentUser CurrentUserPrincipal user, @RequestParam(defaultValue = "50") int limit) {
     requireStudent(user);
     return service.listTurns(user.userId(), limit);
   }
@@ -42,8 +41,7 @@ public class WorkshopChatHistoryController {
 
   private void requireStudent(CurrentUserPrincipal user) {
     if (user.role() != Role.STUDENT) {
-      throw new BusinessException(
-          HttpStatus.FORBIDDEN, "FORBIDDEN", "仅学生可保存百晓工坊聊天历史");
+      throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "仅学生可保存百晓工坊聊天历史");
     }
   }
 }

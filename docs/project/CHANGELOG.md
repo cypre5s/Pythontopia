@@ -1,5 +1,56 @@
 # Changelog
 
+## 2026-10-16 — 限制学生追加记录的写入频率与大小
+
+- 学习事件单条/批次与工坊聊天历史追加写共用每账号每分钟 100 条额度，超限在写入前返回 429；工坊历史 JSON payload 限制为 64 KiB。过期窗口自动回收。
+- 回归先 RED 后 GREEN：学习事件控制器、共享限流与历史服务定向测试 13/13，Spotless 检查通过。计数在单 Spring 实例内存中；横向扩容时需改为共享存储。
+
+## 2026-10-16 — 限制证据快照写入突发
+
+- 对 `POST /api/learner/evidence-memory/snapshots` 配置来源 IP 每秒 1 次、突发 2 的精确路由保护；其它 API 的限流 key 为空，不受影响。
+- HTTPS/Nginx 契约 23 项通过，部署配置在 Nginx 1.27 容器 `nginx -t` 通过。通用非 AI API 按账号限频审计仍开放；没有生产访问或外部模型请求。
+
+## 2026-10-16 — 关闭媒体 provider 时不再启动 ffmpeg
+
+- 旧同步故事板接口先探测 `ffmpeg`，再因硬关闭的图片 provider 失败；共享合成服务现于任何外部进程前拒绝该请求。异步入口仍在写入作业前拒绝。
+- 回归先 RED 后 GREEN，`StoryboardCompositionServiceTest` 7/7。没有 DeepSeek/讯飞调用或业务数据写入。
+
+## 2026-10-16 — 收紧学习数据写入边界并校正管理台视觉
+
+- 管理台内容宽度、窄屏间距与工具栏间隔对齐 Alethicode 实际样式；保持 Pythontopia API 与蓝白视觉。
+- 学习事件 payload 限制为每条 4096 字节，JSON `null` 批次被拒绝；派生证据快照每位学习者保留最近 200 条。
+- 回归：`LearningEventControllerTest` 5/5、PostgreSQL `EvidenceMemoryServiceTest` 4/4、管理页 Vitest 12/12；前端 typecheck、定向 ESLint/Spotless 和 diff 检查通过。未调用模型。
+
+## 2026-10-16 — 阻止远征通用题目错配专用交互
+
+- 无题型元数据的课程编程题只作为普通代码练习或 `dual_track` 兜底，不再发给 `debug`、`bug_mine`、`closed_loop` 等专用卡片；缺少兼容题时返回可重试服务错误。
+- 回归先 RED 后 GREEN，`BossServiceTest` 55/55 通过。没有模型请求或学习数据写入；真实先修远征闭环仍待验收。
+
+## 2026-10-16 — 为公开 refresh 路由补上来源 IP 限速
+
+- `/api/auth/refresh` 已纳入现有认证入口 Nginx 限速规则（每秒 5 次、突发 10 次），避免公开刷新端点绕过登录/注册边缘保护。
+- 契约先因缺少 refresh 路由匹配断言而失败，补齐后 HTTPS 转发契约 19 项通过；完整部署 Nginx 配置在 1.27 容器 `nginx -t` 通过（临时测试证书）。未验证线上 Nginx 运行态；未发起 DeepSeek 请求。
+
+## 2026-10-16 — 验收错题矿洞窄屏操作
+
+- 真实 Chromium 在 320×780 触屏视口验证错题本收起/展开，无横向溢出；错题本与遗忘回声 API 均返回 200，浏览器错误与模型请求为 0。
+- 一次性学生 ID 726 已删除并确认无残留；本项补齐窄屏抽样，不代表 Web 动作矩阵全部完成。
+
+## 2026-10-16 — 收窄公共 API 的匿名方法
+
+- `/api/auth/**`、`/api/course/**`、`/api/media/assets/**`、`/api/downloads/**` 不再整段路径匿名放行；公开规则仅匹配必要的注册/登录/刷新、下载计数、只读与健康检查方法。logout 与其它写请求需认证，内网接口继续验证服务令牌。
+- 匿名媒资读取仍需在 controller 验证签名或 owner。回归先 RED 复现匿名写入 200，修复后 SecurityConfig、资产归属、认证定向测试 15/15；内部策略/附件/checkpoint controller 另有 7/7 令牌与 owner 测试。本轮新鲜复验 `PublicReadAccessTest` 1/1。没有模型请求。
+
+## 2026-10-16 — 盘点可达 AI 调用的共享限额
+
+- 逐一追踪 Java Graph/生成调用点，确认可达模型入口由 `@AiBudgeted` 或显式 `reserve()` 覆盖；Boss 判题走沙箱，遗留媒资 provider 当前关闭。
+- 没有发现绕过 DeepSeek 日限额的可达模型路径。本项为静态盘点，无代码改动、测试或外部调用；通用非 AI API 限流审计仍开放。
+
+## 2026-10-16 — 修正教师班级成员列表字段
+
+- `studentId` 实际来自 `users.id`，表头改为“用户编号”；默认成员查询只返回 ACTIVE，移除不可达的“已移除”状态列。
+- 新增组件回归，先 RED 后 GREEN（1/1）；前端 typecheck 与定向 ESLint 通过。未调用模型。
+
 ## 2026-10-16 — 脱敏判题触发的任务完成日志
 
 - 练习 AC 后自动完成任务失败时，日志不再输出学习者任务 ID、提交 ID 或业务异常正文，仅记录错误码。

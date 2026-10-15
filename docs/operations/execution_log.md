@@ -4,6 +4,62 @@
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
 
+## 2026-10-16 当前续接：限制证据快照写入突发
+
+- `POST /api/learner/evidence-memory/snapshots` 会构建证据图、写历史行并重新组装响应；代码审计确认当前 Vue 页面没有调用方。现仅对这个 method/path 的来源 IP 设置每秒 1 次、突发 2；限流 key 对其它 `/api/` 请求为空，不影响普通 API 与 SSE。
+- HTTPS/Nginx 契约先 RED 后 GREEN，23 项通过；完整公网 Nginx 配置通过 1.27 容器 `nginx -t`，脚本语法检查通过。未访问生产、未请求 DeepSeek/其它 provider，也未写业务数据。
+- 这只补上一个有界路由的 IP 突发保护；全 API 按账号频率审计仍开放。
+
+## 2026-10-16 当前续接：关闭媒体 provider 时提前失败
+
+- 安全审计发现旧同步故事板接口会先探测 `ffmpeg`，随后才由恒关闭的图片 provider 拒绝；异步入口已有提前拒绝。本轮在共享合成服务入口加同一关闭检查，确保关闭状态下不启动外部进程、创建媒体文件或发起 provider 请求。
+- 回归先 RED（旧路径未返回预期禁用错误），修复后 `StoryboardCompositionServiceTest` 7/7；真实 provider 配置仍固定关闭。未调用 DeepSeek、讯飞或写入业务数据。
+- `frontend/src/api/media.ts` 导出的旧同步调用当前没有 Vue 页面调用方；异步路径仍由 `MediaJobService` 在落库前拒绝。全 API 按账号限频和完整日志扫描继续保持开放。
+
+## 2026-10-16 当前续接：管理台校正与学习数据写入边界
+
+- 按 Alethicode 实际 CSS 将管理台工具栏间距改为 12px、移除内容区 1440px 上限、窄屏内边距改为 16px；没有复制对方管理业务接口。管理页 Vitest 4 个文件 / 12 项、typecheck、定向 ESLint 与 `git diff --check` 通过。
+- 学习事件批次现在拒绝 JSON `null`，每条 payload 的序列化 UTF-8 JSON 不得超过 4096 字节；超限批次在任何事件写入前整体拒绝。回归先 RED 后 GREEN，`LearningEventControllerTest` 5/5。
+- 证据记忆快照写入按学习者行锁串行，并在每次新写后只保留最新 200 条；该表数据可从原始证据图重算。PostgreSQL `EvidenceMemoryServiceTest` 4/4，201 条写入后仅保留 200 条且最新记录存在。
+- 本轮定向 Java Spotless、前端 typecheck/ESLint、相关 Vitest 与 `git diff --check` 通过。未发起 DeepSeek 请求、未更改业务用户学习数据或生产服务。
+- 公共匿名方法规则单独新鲜复验：`PublicReadAccessTest` 1/1 通过，覆盖匿名读取/HEAD、登录与下载计数写入，以及 logout 和其它写方法必须认证；该 MockMvc 合同不代替全 API 限流审计。
+- 下一步仍是全局非 AI API 频率审计、真实合格远征 run/刷新恢复、剩余 Web 动作、Twin A/B 与 7 日结果；工程收尾后再测性能。Maven 全量历史 7 个环境错误未重跑。
+
+## 2026-10-16 当前续接：补齐公开认证 refresh 限流
+
+- 审计公开认证入口时发现 `/api/auth/refresh` 没有命中 login/register 共用的 Nginx 来源 IP 限速；现将其纳入同一路由（5 次/秒、突发 10 次）。
+- HTTPS 转发契约先 RED 后 GREEN，19 项通过；完整部署 Nginx 配置在 1.27 容器 `nginx -t` 通过（临时测试证书），Shell 语法与 `git diff --check` 通过。未验证生产 Nginx 运行态，没有 DeepSeek 请求。通用非 AI API 限流审计仍未完成；没有加全局 IP 限速。
+- 权限复核只找到 3 个 `/api/internal/**` controller，均在方法内常量时间校验共享服务令牌；Tutor 附件与 checkpoint 端点也校验 owner subject。未发现新增匿名入口，无代码改动。
+- 补跑 `AgentStrategyControllerSecurityTest`、`TutorWorkflowInternalAttachmentControllerTest`、`TutorWorkflowInternalCheckpointControllerTest`，共 7/7 通过；未运行全量 Maven。
+- 当前唯一清单见 `docs/plans/2026-10-15-web-system-implementation-plan.md`。
+
+## 2026-10-16 当前续接：错题矿洞窄屏触屏验收
+
+- 真实 Chromium 在 320×780 下点击错题本切换按钮两次，`aria-pressed` 状态正确、页面无横向溢出；错题本及遗忘回声 API 均 HTTP 200，页面错误 0、模型请求 0。
+- 临时学生 ID 726 已按 ID 和 `qa_bugmine_` 前缀删除，数据库残留计数 0；验收后已停止 Vite。
+
+## 2026-10-16 当前续接：异常对象日志参数静态扫描
+
+- Java 异常对象日志候选仅在硬关闭的旧讯飞 ASR/TTS/图片理解代码及课堂 SSE 初始发送 `IOException`；未看到把学生查询、代码、图片或消息直接作为日志参数。Graph/RAG 未发现 `logger.exception()`。
+- 本项是窄范围静态扫描，未关闭多行/包装器日志总审计；没有代码改动或模型请求。
+
+## 2026-10-16 当前续接：修正班级成员表字段展示
+
+- Alethicode 对照确认 Pythontopia 的 `studentId` 是 `users.id`，并非学号；默认 API 只返回 ACTIVE，状态列中的“已移除”分支不可达。页面改为“用户编号”并移除该状态列。
+- 组件回归先 RED 后 GREEN（1/1），`npm run typecheck` 与触及文件 ESLint 通过。未发起模型请求、未更改 API/数据库或学习数据。
+- 本地完成这一项；其余优先级与未完成内容只看 `docs/plans/2026-10-15-web-system-implementation-plan.md`。
+
+## 2026-10-16 当前续接：核对模型请求预算覆盖
+
+- 追踪 Java Graph/生成调用链：Controller 使用 `@AiBudgeted` 或 service 在请求前 `reserve()`；反思与周评后台任务也先预留日额度。Boss 评测走沙箱，当前远征前沿选择走确定性 Learner Twin 策略。遗留讯飞媒资 API 当前关闭并失败关闭。
+- 未发现绕过 DeepSeek 账号/全站日额度的可达模型调用路径。仅完成模型请求预算盘点；不代表所有非 AI API 都有通用限流，也未做压力测试或供应商请求。
+
+## 2026-10-16 当前续接：收窄公共 API 匿名权限
+
+- Spring Security 原按路径公开整个 `/api/auth/**`、课程、媒资资产与下载统计；测试夹具复现匿名 logout、课程写入和未列下载写入均可通过。
+- 现将匿名权限限定到登录/注册/刷新、`POST /api/downloads/*/hit`、课程/媒资/下载 GET/HEAD 与健康检查 GET；其它方法走认证。内部 Graph API 仍由各 controller 常量时间校验服务令牌，媒资 URL 仍由 controller 校验签名或 owner。
+- RED/GREEN 后 `PublicReadAccessTest`、`SecurityConfigCorsTest`、`MediaAssetControllerAuthorizationTest`、`AuthControllerTest` 共 15/15。仅本地定向测试，无模型请求、业务数据或生产配置变更。
+
 ## 2026-10-16 当前续接：脱敏判题触发的任务完成日志
 
 - 新增判题通过后任务自动完成的哨兵回归，先复现旧日志中的 quest ID、submission ID 与异常正文。
@@ -692,3 +748,22 @@
 
 - `npx playwright test e2e/teacherResponsive.spec.ts --project=chromium --retries=0`：320 CSS px 视口下教师班级卡片可见，document 宽度不超过 viewport，1/1 通过。
 - 此测试拦截认证刷新与班级列表 API，仅验证布局，不作为真实教师账号/班级动作证据。无模型调用和业务数据写入。
+
+## 2026-10-16 — 远征通用题库兜底题型校验
+
+- 新回归先 RED：Graph 不可用且存在普通课程编程题时，`debug` 请求仍会收到该题；前端会按样例输入合成错误代码，无法保证符合原题意。
+- 服务端现在只允许无题型元数据的课程题用于无指定题型或 `dual_track` 请求。专用题型仍优先复用同题型的审核题/预生成题或走 Graph；无兼容题时返回可重试服务错误，不创建错误题目记录。
+- `cd backend && mvn -o -Dtest=BossServiceTest test`：55/55 通过。此前第一次整类运行因新测试的严格 Mockito stub 未被安全过滤分支使用而报 1 个测试错误；将仅供描述的 fixture 改为 lenient 后重跑通过。未调用 DeepSeek、未写学习数据；真实账号远征刷新恢复仍待验。
+
+## 2026-10-16 — 通用 API 限流覆盖初盘
+
+- Nginx 已为登录/注册/刷新、班级加入码、上传和下载计数配置路由限流；AI 入口有账号日预算，正式判题有 10 秒用户冷却。
+- `POST /api/learning/events/batch` 最多接收 100 条，但 payload 未设单条大小；`POST /api/learner/evidence-memory/snapshots` 每次持久化一行派生 JSONB，源码中未发现调用方或清理任务。两者都是已认证写入口，是否加细粒度约束须先结合真实调用/保留意图判断。
+- 本项为静态盘点，没有改代码、跑测试、写数据库或调用模型；通用非 AI API 限流审计继续开放，不做全局 IP 闸门。
+
+## 2026-10-16 当前续接：学生追加写入边界与 Stage 站内导航验收
+
+- 客户端只允许上报 `quiz_finished` / `answer_feedback`；学习事件单条/批次与工坊聊天历史追加写现按学生账号共用滚动 60 秒 100 条额度，超额在持久化前返回 429，并自动清理过期窗口。限额为单 Spring 实例内存态，扩容前需共享计数器。工坊历史 `responsePayload` 限制为 64 KiB，超限返回 413。
+- 回归先 RED 后 GREEN：`LearningEventControllerTest` 6/6、`StudentWriteThrottleTest` 2/2、`WorkshopChatHistoryServiceTest` 5/5；触及 Java 文件 Spotless 检查通过。
+- 真实 Chromium 从小镇“下一步”与地图章节入口都进入 `/mainline/stage/1`，详情、视频与课件 GET 正常，页面/控制台错误 0、模型请求 0。首轮受首次探针遮挡，正确预置已回答状态后确认是测试入口问题，没有更改路由代码。临时 QA 用户 ID 728 删除并验证不存在；该用户学习事件与判题提交均为 0，临时凭据文件已清除。
+- 未完成仍见唯一清单：全 API 非 AI 安全/限流审计、远征真实先修战斗及刷新恢复、剩余 Web 动作和 Boss 窄屏、Twin A/B 与 7 日样本、工程整理；性能最后测。本轮没有 DeepSeek 调用。

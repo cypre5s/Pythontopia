@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -41,18 +42,34 @@ public class SecurityConfig {
         .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             requests -> {
-              // /api/media/assets/** 必须匿名可达（<img>/<video> src 不带 Authorization 头），
-              // 但端点内部按签名（MediaAssetUrls）或 owner JWT 授权，裸 id 直链一律 404，
-              // 不可按 BIGSERIAL 顺序枚举他人生成的图片/视频。
+              // Internal handlers verify the shared service token themselves.
+              requests
+                  .requestMatchers("/api/internal/**")
+                  .permitAll();
               requests
                   .requestMatchers(
-                      "/api/auth/**",
+                      HttpMethod.POST,
+                      "/api/auth/register",
+                      "/api/auth/login",
+                      "/api/auth/refresh",
+                      "/api/downloads/*/hit")
+                  .permitAll();
+              // Public course reads; the asset controller checks media signatures or ownership.
+              requests
+                  .requestMatchers(
+                      HttpMethod.GET,
                       "/api/course/**",
                       "/api/media/assets/**",
-                      "/api/internal/**",
                       "/api/downloads/**",
                       "/healthz",
                       "/readyz")
+                  .permitAll();
+              requests
+                  .requestMatchers(
+                      HttpMethod.HEAD,
+                      "/api/course/**",
+                      "/api/media/assets/**",
+                      "/api/downloads/**")
                   .permitAll();
               // OpenAPI/Swagger 默认开放（dev 联调方便）；生产设 PYT_EXPOSE_API_DOCS=false 后
               // 落到 anyRequest().authenticated()，需有效 JWT 才能访问，避免公开泄露完整 API 面。

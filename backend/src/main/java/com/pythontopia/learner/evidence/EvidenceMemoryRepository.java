@@ -5,9 +5,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
 
 @Repository
 public class EvidenceMemoryRepository {
+
+  private static final int MAX_SNAPSHOTS_PER_USER = 200;
 
   private final JdbcTemplate jdbc;
   private final ObjectMapper objectMapper;
@@ -17,10 +20,13 @@ public class EvidenceMemoryRepository {
     this.objectMapper = objectMapper;
   }
 
+  @Transactional
   public Long insert(EvidenceMemorySnapshotDto snapshot) {
     try {
       String json = objectMapper.writeValueAsString(snapshot);
-      return jdbc.queryForObject(
+      jdbc.queryForObject(
+          "SELECT id FROM users WHERE id = ? FOR UPDATE", Long.class, snapshot.userId());
+      Long snapshotId = jdbc.queryForObject(
           """
           INSERT INTO learner_evidence_memory_snapshot (
             user_id, focus_kc, direct_signal_count, propagated_signal_count,
@@ -37,6 +43,23 @@ public class EvidenceMemoryRepository {
           BigDecimal.valueOf(snapshot.graphMemoryScore()),
           BigDecimal.valueOf(snapshot.naiveMemoryScore()),
           json);
+      // shortcut: retain 200 snapshots per learner; raise only if Twin evaluation needs deeper history.
+      jdbc.update(
+          """
+          DELETE FROM learner_evidence_memory_snapshot
+          WHERE user_id = ?
+            AND id IN (
+              SELECT id
+              FROM learner_evidence_memory_snapshot
+              WHERE user_id = ?
+              ORDER BY created_at DESC, id DESC
+              OFFSET ?
+            )
+          """,
+          snapshot.userId(),
+          snapshot.userId(),
+          MAX_SNAPSHOTS_PER_USER);
+      return snapshotId;
     } catch (JsonProcessingException ex) {
       throw new IllegalStateException("failed to serialize evidence memory snapshot", ex);
     }

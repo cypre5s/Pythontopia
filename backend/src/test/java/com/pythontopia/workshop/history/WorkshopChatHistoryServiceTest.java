@@ -1,12 +1,16 @@
 package com.pythontopia.workshop.history;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import java.time.Instant;
@@ -15,8 +19,10 @@ import org.junit.jupiter.api.Test;
 
 class WorkshopChatHistoryServiceTest {
 
-  private final WorkshopChatHistoryRepository repository = mock(WorkshopChatHistoryRepository.class);
-  private final WorkshopChatHistoryService service = new WorkshopChatHistoryService(repository);
+  private final WorkshopChatHistoryRepository repository =
+      mock(WorkshopChatHistoryRepository.class);
+  private final WorkshopChatHistoryService service =
+      new WorkshopChatHistoryService(repository, new StudentWriteThrottle());
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final Validator validator = Validation.buildDefaultValidatorFactory().getValidator();
 
@@ -25,13 +31,7 @@ class WorkshopChatHistoryServiceTest {
     JsonNode payload = objectMapper.readTree("{\"planSteps\":[{\"title\":\"先看循环概念\"}]}");
     WorkshopChatHistoryRecordRequest request =
         new WorkshopChatHistoryRecordRequest(
-            "conv-plan",
-            "我想学循环，从哪开始",
-            "PLAN",
-            "plan",
-            "规划学习",
-            "计划如下",
-            payload);
+            "conv-plan", "我想学循环，从哪开始", "PLAN", "plan", "规划学习", "计划如下", payload);
     when(repository.insert(7L, request)).thenReturn(42L);
 
     WorkshopChatHistoryRecordResponse response = service.recordTurn(7L, request);
@@ -64,6 +64,44 @@ class WorkshopChatHistoryServiceTest {
 
     assertThat(validator.validate(browse)).isEmpty();
     assertThat(validator.validate(invalid)).isNotEmpty();
+  }
+
+  @Test
+  void rejectsOversizedResponsePayloadBeforeRepositoryWrite() {
+    WorkshopChatHistoryRecordRequest request =
+        new WorkshopChatHistoryRecordRequest(
+            "conv-large",
+            "question",
+            "ASK",
+            "browse",
+            null,
+            "answer",
+            objectMapper.createObjectNode().put("content", "x".repeat(64 * 1024)));
+
+    assertThatThrownBy(() -> service.recordTurn(7L, request))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("payload");
+
+    verifyNoInteractions(repository);
+  }
+
+  @Test
+  void rejectsHistoryAppendWhenAccountWriteWindowIsFull() {
+    StudentWriteThrottle throttle = new StudentWriteThrottle();
+    for (int write = 0; write < 100; write++) {
+      assertThat(throttle.tryAcquire(7L, 1)).isTrue();
+    }
+    WorkshopChatHistoryService throttledService =
+        new WorkshopChatHistoryService(repository, throttle);
+    WorkshopChatHistoryRecordRequest request =
+        new WorkshopChatHistoryRecordRequest(
+            "conversation", "question", "ASK", "browse", null, "answer", null);
+
+    assertThatThrownBy(() -> throttledService.recordTurn(7L, request))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("每分钟最多");
+
+    verifyNoInteractions(repository);
   }
 
   @Test
