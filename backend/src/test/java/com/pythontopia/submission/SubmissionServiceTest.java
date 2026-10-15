@@ -35,6 +35,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
 import org.mockito.ArgumentCaptor;
 
 class SubmissionServiceTest {
@@ -77,6 +78,55 @@ class SubmissionServiceTest {
         ArgumentCaptor.forClass(LearningEvent.PracticeSucceeded.class);
     verify(publisher).publishEvent(eventCaptor.capture());
     assertThat(eventCaptor.getValue().difficulty()).isEqualTo("basic");
+  }
+
+  @Test
+  void questAutoCompletionFailureDoesNotLogStudentIdentifiersOrExceptionMessage() {
+    String sentinel = "private-quest-completion-error-sentinel";
+    when(submissions.countSubmittedAfter(anyLong(), any())).thenReturn(0);
+    when(problems.findPublic(eq(43L), eq(101L)))
+        .thenReturn(
+            Optional.of(
+                new PublicProblemDto(
+                    101L,
+                    43L,
+                    "PY43-KC-001",
+                    "题目",
+                    "statement",
+                    "input",
+                    "output",
+                    "basic",
+                    null)));
+    when(submissions.insertSubmission(anyLong(), anyLong(), any(), any(), any())).thenReturn(903L);
+    when(judge.judge(eq(903L), eq(101L), any()))
+        .thenReturn(new JudgeOutcome(Verdict.AC, 3, 3, null));
+    when(problems.findKcCode(eq(101L))).thenReturn("PY43-KC-001");
+    when(submissions.findById(eq(903L)))
+        .thenReturn(Optional.of(sampleSubmission(903L, SubmissionStatus.PASSED)));
+    when(quests.complete(eq(7L), eq(55L), any()))
+        .thenThrow(
+            new BusinessException(HttpStatus.CONFLICT, "QUEST_STATE_CONFLICT", sentinel));
+
+    Logger logger = (Logger) LoggerFactory.getLogger(SubmissionService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      service.submit(
+          7L, new SubmissionCreateRequest(101L, "print(1)", 55L, SubmissionSource.TRAINING));
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anyMatch(message -> message.contains("QUEST_STATE_CONFLICT"))
+        .noneMatch(
+            message ->
+                message.contains(sentinel)
+                    || message.contains("Quest 55")
+                    || message.contains("submission 903"));
+    assertThat(appender.list).noneMatch(event -> event.getThrowableProxy() != null);
   }
 
   @Test

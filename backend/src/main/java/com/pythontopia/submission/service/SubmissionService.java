@@ -153,10 +153,7 @@ public class SubmissionService {
           log.info("Quest {} auto-completed via submission {}", quest.id(), submissionId);
         } catch (BusinessException exception) {
           log.warn(
-              "Quest {} could not be completed via submission {}: {}",
-              request.questId(),
-              submissionId,
-              exception.getMessage());
+              "Quest auto-completion failed after submission errorCode={}", exception.code());
         }
       }
     } else {
