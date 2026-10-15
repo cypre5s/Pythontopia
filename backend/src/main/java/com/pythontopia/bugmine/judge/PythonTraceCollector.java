@@ -63,7 +63,8 @@ public class PythonTraceCollector {
           }
         }
       } catch (Exception exception) {
-        log.warn("Failed to parse trace payload: {}", exception.getMessage());
+        log.warn(
+            "Failed to parse trace payload errorType={}", exception.getClass().getSimpleName());
       }
     }
     ObjectNode summary = objectMapper.createObjectNode();

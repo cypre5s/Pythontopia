@@ -80,7 +80,8 @@ public class BilibiliInsightService {
       }
       return response;
     } catch (RestClientException exception) {
-      LOG.warn("bilibili insight via graph failed: {}", exception.getMessage());
+      LOG.warn(
+          "bilibili insight via graph failed errorType={}", exception.getClass().getSimpleName());
       throw new BusinessException(
           HttpStatus.BAD_GATEWAY, "VIDEO_INSIGHT_UNAVAILABLE", "B站视频概述服务不可用");
     }

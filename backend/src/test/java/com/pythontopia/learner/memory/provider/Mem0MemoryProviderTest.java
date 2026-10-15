@@ -3,13 +3,19 @@ package com.pythontopia.learner.memory.provider;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.test.web.client.match.MockRestRequestMatchers;
@@ -112,19 +118,38 @@ class Mem0MemoryProviderTest {
   }
 
   @Test
-  void serverErrorRaisesMemoryProviderException() {
+  void serverErrorDoesNotExposeResponseBody() {
+    String privateContent = "private-student-memory-sentinel";
     RestTemplate restTemplate = new RestTemplate();
     MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
     server
         .expect(MockRestRequestMatchers.requestTo(BASE + "/v1/memories/search/"))
-        .andRespond(MockRestResponseCreators.withServerError());
+        .andRespond(
+            MockRestResponseCreators.withStatus(HttpStatus.INTERNAL_SERVER_ERROR)
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(privateContent));
 
     Mem0MemoryProvider provider =
         new Mem0MemoryProvider(restTemplate, objectMapper, props(BASE, "KEY"));
+    Logger logger = (Logger) LoggerFactory.getLogger(Mem0MemoryProvider.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.WARN);
+    logger.addAppender(appender);
+    try {
+      assertThatThrownBy(() -> provider.recall(7L, "x", 5))
+          .isInstanceOf(MemoryProviderException.class)
+          .hasMessageNotContaining(privateContent);
 
-    assertThatThrownBy(() -> provider.recall(7L, "x", 5))
-        .isInstanceOf(MemoryProviderException.class);
-    server.verify(Duration.ofSeconds(2));
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .allSatisfy(message -> assertThat(message).doesNotContain(privateContent));
+      server.verify(Duration.ofSeconds(2));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
   }
 
   @Test

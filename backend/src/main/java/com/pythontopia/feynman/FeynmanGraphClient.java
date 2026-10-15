@@ -71,7 +71,7 @@ public class FeynmanGraphClient {
               .getBody();
       return Optional.ofNullable(body).map(GraphFeynmanOutput::toDomain);
     } catch (RestClientException ex) {
-      log.warn("feynman graph unavailable: {}", ex.getMessage());
+      log.warn("feynman graph unavailable: {}", ex.getClass().getSimpleName());
       return Optional.empty();
     }
   }
@@ -101,7 +101,7 @@ public class FeynmanGraphClient {
               .getBody();
       return Optional.ofNullable(body).map(GraphBugExposure::toDomain);
     } catch (RestClientException ex) {
-      log.warn("feynman bug-exposure graph unavailable: {}", ex.getMessage());
+      log.warn("feynman bug-exposure graph unavailable: {}", ex.getClass().getSimpleName());
       return Optional.empty();
     }
   }

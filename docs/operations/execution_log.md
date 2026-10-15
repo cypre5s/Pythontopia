@@ -27,6 +27,10 @@
 - 查看本地课程可用题：无先修 KC-001/002/004/006 都没有静态编程题，也没有已批准 AI 编程题；所以无法用新生合法创建远征 run 验证刷新恢复，保持待办而不补造 mastery。
 - 生产只读 SSH 未尝试：`ip route get` 显示目标走 TUN；按 AGENTS 需要为当前 eth2 网关加 host route，但 sudo 要求未提供的本机密码。记录阻塞后转回本地工作，未连接/修改 ECS。
 - 在 `frontend/src/` 扫描显式 `any`/`as any` 与空命名 `void` 函数，未发现违规项；空箭头只用于 fullscreen Promise 错误捕获及测试待决 Promise。不为统一表面风格批量重命名或格式化。
+- 继续异常日志审计：Feynman 对话/找茬、BROWSE、B 站检索、Boss 生成/判题远端异常正文曾进入日志；章测 Graph 的原始错误也会被预生成日志记录。合成标记先触发 RED，再将日志改为异常类型或稳定错误消息。定向 GREEN：FeynmanGraphClientTest 4/4、BrowseGraphClientTest 5/5、BilibiliVideoServiceTest 2/2、BossServiceTest 53/53、ChapterTestGraphClientTest 2/2。模型调用数 0。
+- Web 清单审查确认 `ProfileRoomPage.spec.ts` 已有页面层覆盖 Twin 主/备推荐和周报 insight/补强到工坊；本轮不重复运行组件测试或模型路径。它们仍缺真实浏览器的 insight/补强动作验收；Web 矩阵继续按清单选择未覆盖操作。
+- Chromium 真实新生打开 `/profile-room`，点击“前往主线学习”到 `/mainline-map`；推荐来自服务端 0/65 学习状态，页面错误 0，仅发生认证刷新和学习状态读取。临时用户 688 删除后核对计数为 0，没有题目、Tutor 或判题请求。
+- 下一步转到有合法学习证据的远征活动 run 恢复/兼容题验收；如没有满足先修且活动 run 的可用样本，则先用正常判题路径构建，不写入伪造掌握证据。性能继续最后。
 
 ## 2026-10-14 当前续接
 
@@ -288,3 +292,78 @@
 - 只读核实远征题型链路：`RogueRunStore.beginChallenge()` 传入节点题型，`useChallengeJudge` 发送 `preferredKind`；Boss 服务精确读取同 KC/题型批准题，未命中时传题型给 Graph。端到端仍缺兼容题与合法活动 run。
 - Docker Graph 容器 healthy；`127.0.0.1:8000` 没有宿主机端口映射。本轮未调用模型或写入远征数据。
 - 320px Chromium 在 `/profile-room` 打开“近期变化”折叠区；前后文档宽度均为 320px，页面错误 0。脚本过滤器最初误把 Vite 静态模块 `/src/api/tutor.ts` 当成模型 API，实际模型端点请求为 0。测试用户 685、686 均已清除；用户、学习事件、掌握事件、访谈记录计数为 0。
+
+## 2026-10-15 — 汇总清单与提交
+
+- 完成用户要求的本地提交：`99126642 fix: consolidate problem routes and review actions`；提交后工作树干净。
+- `/examples` 退役页旧测试改为路由契约测试，静态重定向保留 KC 筛选；`npx vitest run tests/integration/routing.integration.spec.ts` 27/27 通过。
+- 更新唯一主任务清单，合并附件中的安全、远征、Twin 与全 Web 验收范围；DeepSeek 状态引用既有真实调用与错误记录，本轮 0 次调用。
+- 本轮只读检查确认注册角色/邀请码、DISABLED 与 JWT 代次撤销、subprocess fail-closed、服务端远征 verified-attempt 结算均已有实现；对应后端套件尚未在本轮重跑。Piston 生产网络 ACL/鉴权、扩展安全审计、battle-compatible KC 题与活动 run 恢复、完整路由动作矩阵、Twin A/B 与 7 日复测、性能仍未完成。
+
+## 2026-10-15 — 上传失败日志隐私修复
+
+- 根因：`UploadService` 在解析失败时把客户端原始文件名与解析器异常消息写入应用日志；前者可包含个人文件命名，后者可能携带内部解析细节。
+- 回归先 RED：Logback 捕获到合成敏感文件名和解析器详情；GREEN 后日志只记录内部用户 ID 与已白名单校验的扩展名。对上传者可见的失败记录未变。
+- `JAVA_HOME=/home/cypress/.local/tools/jdk-21 mvn -q -Dtest=UploadServiceTest test`：17/17 通过；`git diff --check` 通过。没有模型请求。
+
+## 2026-10-15 — 上传语料索引日志脱敏
+
+- `UploadCorpusIndexingService` 原先将向量化/分块异常原文写入 warn 日志；回归先 RED 并捕获到模拟的私密提取文本，随后仅记录 upload ID 与异常类型。
+- `JAVA_HOME=/home/cypress/.local/tools/jdk-21 mvn -q -Dtest=UploadCorpusIndexingServiceTest test`：GREEN 1/1。保留现有 fail-soft 行为，没有新增网络或模型请求。
+
+## 2026-10-15 — 前端依赖漏洞盘点
+
+- 默认 npm registry mirror 的 audit endpoint 返回 404（该镜像未实现安全审计接口）；改用官方 `https://registry.npmjs.org` 对当前前端 lockfile 执行一次审计，结果 0 项漏洞，未修改依赖或 lockfile。
+- 本结果只覆盖 Web 前端 npm 依赖；Python Graph/RAG 与 Maven 依赖扫描尚未执行，不扩大结论。
+
+## 2026-10-15 — Python 与 Maven 运行时依赖审计
+
+- Python：按 Graph `.[browse]` 与 RAG 核心安装约束生成临时运行时清单，再用 `pip-audit` 的 OSV 服务分别审计；Graph 72 项、RAG 28 项，均为 0 项已知漏洞。此前本机开发 venv 扫描仍有 25 个不同包名、212 条 advisory 行，包含可选 eval/dev 依赖及同包/跨环境重复；当前开发环境未升级。
+- Maven：通过 `dependency:tree -Dscope=runtime` 解析 95 个 `compile/runtime` JAR，向 OSV `/v1/querybatch` 按 Maven PURL 查询，0 项已知漏洞；测试 scope 不在本次范围。
+- OWASP Dependency-Check 13.0.0 插件已解析并启动，但 NVD 全量数据更新因本地没有 NVD API key 失败，报告未生成。该失败不是“无漏洞”结果；本记录只依据 OSV 的精确版本查询。参考：[OSV querybatch API](https://google.github.io/osv.dev/post-v1-querybatch/)、[OWASP Dependency-Check 使用说明](https://dependency-check.github.io/DependencyCheck/dependency-check-maven/)。
+
+## 2026-10-15 — BROWSE SSRF 安全墙复核
+
+- 服务端 `BrowseRunService` 只向 Graph 发送学生目标与服务端配置的域白名单；Graph 的 `validate_network_url` 对初始 URL 与每次导航/重定向检查 scheme、凭据、端口、域名和 DNS 公网地址，Chromium host resolver pin 到通过公网校验的地址，document-only GET route 阻断其他资源。
+- 复用现有回归：`services/pythontopia-graph/.venv/bin/python -m pytest -q tests/test_browse_allowlist.py tests/test_browse_executor.py`：58/58 通过，无新增代码。只覆盖 BROWSE SSRF 安全墙，不代表整套安全审计完成。
+
+## 2026-10-15 — 调试轨迹与 Piston 错误日志脱敏
+
+- 回归先 RED：畸形 trace JSON 让 Jackson 错误把学生输出 token 带入 warn 日志；Piston 模拟 502 响应把提交代码回显进日志。
+- GREEN 后，`PythonTraceCollector` 只记异常类型，`PistonPythonSandbox` 的执行与 readiness 错误也只记异常类型；原有 fail-closed 结果未改变。
+- `PythonTraceCollectorTest` 1/1、`UploadCorpusIndexingServiceTest` 1/1、`PistonPythonSandboxTest` 10/10 通过。配合 `UploadServiceTest` 17/17，已闭合本轮发现的四个敏感数据日志点；其他日志和完整安全审计仍待检查。
+
+## 2026-10-15 — Java 定向格式检查
+
+- 首次全仓 `mvn spotless:check` 失败，错误清单涉及 600 多个既有 Java 文件；没有对全仓运行 `spotless:apply`。
+- 对本轮文件的定向 `spotless:check` 同样发现既有格式差异；为避免把历史排版改动混入日志脱敏修复，撤销格式化带来的无关行变化。格式基线仍未收敛，后续按工程清理任务单独处理。
+
+## 2026-10-15 — 外部 HTTP 错误日志脱敏
+
+- Mem0/Zep 公共 HTTP 基类曾把异常原文（含远端 500 响应体）写入 warn 日志并拼入上层异常消息；合成学生记忆标记先 RED 复现，修复后只记录异常类型、抛稳定异常消息。`Mem0MemoryProviderTest` 4/4、`ZepMemoryProviderTest` 3/3。
+- Graph 重试助手曾把远端异常原文写入 retry DEBUG；合成响应标记先 RED 复现，修复后只记录异常类型。`GraphClientRetryHelperTest` 1/1。
+- 本轮回归均为本地隔离调用，没有请求 DeepSeek。其他直接 Graph/HTTP 客户端仍有异常消息日志候选，完整安全审计未结束。
+
+## 2026-10-15 — 画像访谈日志脱敏
+
+- `ProfileService` 向 Graph 发送学生自由文本；异常消息可能包含下游响应。模拟敏感标记先 RED 复现，修复后只记录异常类型，稳定错误码与用户提示不变。
+- `JAVA_HOME=/home/cypress/.local/tools/jdk-21 mvn -q -Dtest=ProfileServiceFailureTest test`：GREEN 1/1。没有 DeepSeek 请求；其余直连客户端和完整安全审计仍待处理。
+
+## 2026-10-15 — NPC、记忆向量与 B 站问答日志脱敏
+
+- NPC Graph 对话、RAG 记忆向量与 B 站视频问答的上游错误都能回显请求/响应文本；三个合成标记均先 RED 命中旧日志，再改为只记录异常类型。
+- 定向 GREEN：`NpcDialogGraphClientTest` 2/2、`EmbeddingClientTest` 7/7、`BilibiliInsightServiceTest` 4/4。没有 DeepSeek 请求或业务数据写入。
+- 仍有其他直连 Graph/HTTP 客户端与本地媒体/持久化降级日志未逐项确认；完整安全审计保持未完成。
+
+## 2026-10-15 — 章节测评无效路由恢复
+
+- 本地全栈 Chromium 以临时学生打开 `/chapter-test/99`，页面显示 1–7 章范围错误；点击“返回冒险地图”到达 `/mainline-map`，页面错误 0。
+- 该分支在挂载时跳过测评 `loadLatest/prepare`；测评、模型与判题 API 请求均为 0，仅有一次认证刷新。过滤器曾命中 `/src/components/tutor/...` 的 Vite 本地模块 GET，按请求类型复核并未算作模型 API。
+- 临时学生删除后数据库行计数为 0。仅验收无效章节错误态与恢复动作，不代表有效考试完整流程。
+
+## 2026-10-15 — 官方工程规范对照
+
+- Google Java Style Guide 规定 import 分为静态/普通两组并按 ASCII 顺序排列；据此修正 `EmbeddingClientTest` 与 `BilibiliInsightServiceTest` 的新增 import 顺序。仓库 Java 命名继续遵守 AGENTS 的类 PascalCase、成员 camelCase 规则。
+- OWASP Logging Cheat Sheet 建议不要直接记录源码、敏感个人信息、访问令牌等；本轮用合成标记回归并从上传、记忆、画像访谈、NPC、RAG 与外部服务异常日志中移除原文。
+- Vue 官方风格指南和 typescript-eslint 命名规则已加入工程收尾参考；本轮无 Vue/TS 行为改动。全仓 Spotless 及定向检查已有历史格式差异，不做全仓重写。
+- 参考：[Google Java Style Guide](https://google.github.io/styleguide/javaguide.html)、[Vue Style Guide](https://vuejs.org/style-guide/)、[typescript-eslint naming-convention](https://typescript-eslint.io/rules/naming-convention/)、[OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html)。

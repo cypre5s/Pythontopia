@@ -2,13 +2,66 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-15）**：聚焦 Web，HEAD 为 `d5e4823b`；当前工作树包含 ReviewHallPanel 路由修复、`/examples` 静态重定向与退役页面删除、题库有效零题 KC 筛选修复，以及对应回归和跟踪文档。历史记录已有 DeepSeek 文本与 PNG 输入真实成功；后来也有 Tutor relay 超时、空 JSON 和 503，因此不重复通用探针。Graph 只允许 DeepSeek host/model；TTS、ASR、旧讯飞文生图/图片理解硬关闭。Tutor 使用固定阶段 AutoGen 和现有 SSE/API/checkpoint 合同；当前无须再做一次运行时替换。AI 题闭环已有 KC-010 判题、KC-004/002/006/011 主线生成与自动审查；KC-002、KC-006 另有共享题库取题和服务端正式判题记录，测试账号与学习证据已清理；KC-011 尚无正式学生判题或掌握度证据。KC-006 最新生成题由审核 ID 84 自动批准，第二名学生已正式判题通过，但 `kind=NULL`，不算远征题型覆盖。远征根 KC 的批准题仍不匹配普通战斗节点题型，地图生成不预检覆盖；活动 run 刷新恢复及正式先修证据仍待。Twin P0、管理台已有对应代码与定向/浏览器记录，Twin A/B、7 日延迟复测及剩余 Web 路由/动作矩阵未完成。题库有效零题深链已修复并经 320px Chromium 复验；窄屏抽样还覆盖主线阶段、题库、学习分身折叠区和图书馆。当前静态安全审查未确认高危代码问题；生产 Piston 若无私网 ACL 或鉴权代理仍有未授权执行风险，ECS/公网状态不访问、不宣称通过。全量 Maven 最近记录有 0 断言失败、7 个本地 Docker/PostgreSQL 环境错误；不要重复触发已通过的验证。性能最后测。唯一待办清单见 [Web implementation checklist](../plans/2026-10-15-web-system-implementation-plan.md)。
+> **当前快照（2026-10-15）**：整体聚焦 Web 主线与其共享后端，HEAD 为 `99126642`；当前工作树包含多类敏感日志脱敏改动、配套回归和唯一清单/工作日志更新。最新本地提交包含 ReviewHallPanel 路由修复、`/examples` 静态重定向与退役页面删除、题库有效零题 KC 筛选修复，以及对应回归和跟踪文档；路由集成回归 27/27 通过。历史记录已有 DeepSeek 文本与 PNG 输入真实成功；后来也有 Tutor relay 超时、空 JSON 和 503，因此不重复通用探针。Graph 只允许 DeepSeek host/model；TTS、ASR、旧讯飞文生图/图片理解硬关闭。Tutor 使用固定阶段 AutoGen 和现有 SSE/API/checkpoint 合同；当前无须再做一次运行时替换。AI 题闭环已有 KC-010 判题、KC-004/002/006/011 主线生成与自动审查；KC-002、KC-006 另有共享题库取题和服务端正式判题记录，测试账号与学习证据已清理；KC-011 尚无正式学生判题或掌握度证据。KC-006 最新生成题由审核 ID 84 自动批准，第二名学生已正式判题通过，但 `kind=NULL`，不算远征题型覆盖。远征根 KC 的批准题仍不匹配普通战斗节点题型，地图生成不预检覆盖；活动 run 刷新恢复及正式先修证据仍待。Twin P0、管理台已有对应代码与定向/浏览器记录，Twin A/B、7 日延迟复测及剩余 Web 路由/动作矩阵未完成。题库有效零题深链已修复并经 320px Chromium 复验；窄屏抽样还覆盖主线阶段、题库、学习分身折叠区和图书馆。当前静态安全审查未确认高危代码问题；生产 Piston 若无私网 ACL 或鉴权代理仍有未授权执行风险，ECS/公网状态不访问、不宣称通过。全量 Maven 最近记录有 0 断言失败、7 个本地 Docker/PostgreSQL 环境错误；不要重复触发已通过的验证。性能最后测。唯一待办清单见 [总任务实施清单](../plans/2026-10-15-web-system-implementation-plan.md)。
 
 ## 当前清单摘要
 
-- **已完成：** KC-006 跨学生共享题库正式判题；有效零题 KC 题库深链修复；320px 下题库零题筛选与学习分身“近期变化”展开可用。临时账号均已清理。
-- **未完成：** 远征题型兼容的端到端生成与活动 run 刷新恢复；剩余 Web 动作矩阵；工程规范收敛；生产 Piston/ECS 运行态；Twin A/B 与 7 日复测。性能最后执行。
-- **下一步：** 先补未覆盖的非模型 Web 动作；之后在合法先修与活动 run 可用时做一次远征兼容题验证。当前没有 DeepSeek 重复探测计划。
+- **已完成：** 敏感学习数据日志脱敏（上传解析 17/17、语料索引 1/1、调试轨迹 1/1、Piston 10/10、Mem0/Zep 7/7、Graph 重试 1/1、画像访谈 1/1、NPC 2/2、记忆向量 7/7、B站问答 4/4、Feynman 4/4、BROWSE 5/5、B站搜索 2/2、BossService 53/53、章测 Graph 2/2）；Python/Maven 当前运行时 OSV 扫描 0 项已知漏洞；BROWSE SSRF 回归 58/58；KC-006 跨学生共享题库正式判题；有效零题 KC 题库深链修复；320px 下题库零题筛选与学习分身“近期变化”展开可用；学习分身推荐主线动作、无效章节测评错误态与返回地图动作已由浏览器验证。临时账号均已清理。
+- **未完成：** 远征题型兼容的端到端生成与活动 run 刷新恢复；剩余 Web 动作矩阵；扩展安全审计（其余异常日志类别仍待确认）；生产 Piston/ECS 运行态；Twin A/B 与 7 日复测。性能最后执行。Python 开发 venv 有旧包 advisory 待环境刷新；运行时 Python/Maven 的 OSV 版本查询均无已知漏洞。全仓 Spotless 仍有 600+ 既有格式违规，触及文件也存在既有格式差异；未做批量格式化。
+- **下一步：** 先验证符合真实学习证据的远征活动 run 恢复与兼容题路径，再补剩余 Web 页面动作矩阵；继续审计其余异常日志类别。本轮 DeepSeek 调用 0 次，不重复通用探针。
+
+## 2026-10-15 当前续接：运行时依赖与 SSRF 审计
+
+- 新解析的 Python Graph/RAG 运行时依赖分别 72/28 项，OSV 扫描 0 项已知漏洞；Maven compile/runtime 共 95 个 JAR，OSV PURL batch 查询 0 项。Python 本机开发 venv 另有 25 个旧包名、212 条 advisory 行，未据此推断容器运行时，也未在服务运行期间升级环境。
+- OWASP Dependency-Check 插件因缺 NVD API key 未能更新漏洞库，未产生报告；安全状态保持“未完成”，而非“通过”。
+- BROWSE 是唯一接受学生目标并访问外部 URL 的主路径。服务端注入域白名单，Graph 端按请求/重定向执行公网 DNS、scheme、端口与 host 校验，并固定浏览器 host resolver；`tests/test_browse_allowlist.py` + `tests/test_browse_executor.py` 58/58 通过。
+- 尚未验证所有日志路径、部署边缘限流和生产 Piston ACL；本轮没有 DeepSeek 请求。
+
+## 2026-10-15 当前续接：日志隐私与 Java 格式收敛
+
+- 上传解析/索引、学生 trace、Piston 错误响应、Mem0/Zep provider、Graph 重试、画像访谈、NPC 对话、RAG 记忆向量与 B 站问答日志均经 RED/GREEN 回归脱敏；其他直接 Graph/HTTP 客户端的异常日志仍待逐个核实。
+- 全仓 Spotless 检查失败于 600+ 文件既有格式差异；定向检查也发现本轮触及文件存在既有格式差异，因此撤销了格式化带来的无关行改动，未声称格式检查通过，也未扩散为全项目格式化。
+- 后续重点回到远征有效题型/活动 run 与未验收 Web 动作，性能仍最后。
+
+## 2026-10-15 当前续接：外部 HTTP 错误日志脱敏
+
+- Mem0/Zep 公共 HTTP 基类曾把异常原文（含远端 500 响应体）写入 warn 日志并拼入上层异常消息；合成学生记忆标记先 RED 复现，随后只记录异常类型并使用稳定异常消息。Mem0 4/4、Zep 3/3。
+- Graph 重试助手曾把远端异常原文写入 retry DEBUG；合成响应标记先 RED 复现，修复后只记录异常类型。`GraphClientRetryHelperTest` 1/1。
+- 这两组为本地隔离 HTTP/单元回归，没有 DeepSeek 请求。其他直接 Graph/HTTP 客户端仍有异常消息日志候选，完整安全审计未结束。
+
+## 2026-10-15 当前续接：画像访谈日志脱敏
+
+- `ProfileService` 向 Graph 发送学生自由文本；异常消息可能包含下游响应内容。模拟敏感响应标记先 RED 复现，修复后日志只写异常类型，稳定错误码和提示未变。`ProfileServiceFailureTest` 1/1。
+- 本轮不发 DeepSeek 请求。其他直连客户端日志与完整安全审计仍未闭合。
+
+## 2026-10-15 当前续接：其余用户输入日志脱敏
+
+- NPC Graph 对话、RAG 记忆向量与 B 站视频问答的上游错误都能回显请求/响应文本；三个合成标记均先 RED 命中旧日志，再改为仅记异常类型。
+- 定向 GREEN：`NpcDialogGraphClientTest` 2/2、`EmbeddingClientTest` 7/7、`BilibiliInsightServiceTest` 4/4。与前面画像访谈 1/1 一样，均未发起 DeepSeek 或产生业务写入。
+- 尚未逐项检查的直连 Graph/HTTP 客户端、生产 Piston ACL 和完整安全边界仍在待办。
+
+## 2026-10-15 当前续接：章节测评无效路由错误态
+
+- 本地全栈 Chromium 使用临时学生打开 `/chapter-test/99`，看到明确的 1–7 章范围错误；点击“返回冒险地图”到达 `/mainline-map`。页面错误 0，测评 API 请求 0，浏览器实际模型/判题 API 请求 0；只发生一次认证刷新。
+- 捕获到的 `/src/components/tutor/...` 是 Vite 本地源文件 GET，不是 Tutor API。该无效章节路径在挂载时跳过 `loadLatest/prepare`，没有生成题或提交答案。临时学生删除后数据库计数 0。
+- 这是错误态与恢复动作抽样，Web 全页面矩阵仍未完成。
+
+## 2026-10-15 当前续接：学习分身推荐主线动作
+
+- 临时新生打开 `/profile-room`，服务端返回 0/65 已评估 KC 和真实推荐；点击“前往主线学习”后到达 `/mainline-map`，浏览器页面错误 0。
+- 浏览器只发起认证刷新和学习状态读取，没有题目、Tutor 或判题请求。临时用户 688 删除并核对为 0；未创建学习证据。
+
+## 2026-10-15 当前续接：官方工程规范对照
+
+- 按 Google Java Style Guide 的 import 分组/排序规则，整理本轮新增测试中的 Java import；camelCase/PascalCase 继续遵循仓库 AGENTS 约定。
+- 按 OWASP Logging Cheat Sheet 对源码、个人信息和凭据的日志限制，脱敏回归覆盖上传、记忆、访谈、NPC、RAG 与外部调用错误。
+- Vue 与 TypeScript 命名规则已作为后续前端收尾基准；本轮没有 Vue/TS 业务改动或新增 lint 配置。全仓 Spotless 基线仍有既有违规，没有执行全仓格式化。
+
+## 2026-10-15 当前续接：Graph 学习内容异常日志脱敏
+
+- Feynman 对话/找茬、BROWSE、B 站检索、Boss 题目生成/判题的 RestClient 异常曾把远端错误正文写入日志；章测 Graph 客户端还把错误正文放进由预生成任务记录的异常消息。合成敏感标记均先 RED 命中，再改为仅记录异常类型或稳定错误消息。
+- 定向 GREEN：`FeynmanGraphClientTest` 4/4、`BrowseGraphClientTest` 5/5、`BilibiliVideoServiceTest` 2/2、`BossServiceTest` 53/53、`ChapterTestGraphClientTest` 2/2。判题本地回退、BROWSE 单次调用、章测 fail-fast 行为未变；没有模型 API 请求。
+- 其余内部服务异常日志、生产 Piston ACL 与公网运行态仍未核实；安全审计保持未完成。
 
 ## 2026-10-15 当前续接：KC 状态与远征题型链路复核
 

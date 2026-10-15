@@ -92,7 +92,7 @@ public class PistonPythonSandbox implements PythonSandbox {
               });
       return mapResponse(body);
     } catch (RestClientException ex) {
-      log.warn("Piston sandbox unavailable: {}", ex.getMessage());
+      log.warn("Piston sandbox unavailable: errorType={}", ex.getClass().getSimpleName());
       return systemError("Sandbox unavailable");
     }
   }
@@ -117,7 +117,7 @@ public class PistonPythonSandbox implements PythonSandbox {
       }
       return new Readiness(false, "piston python runtime not installed: " + pythonVersion);
     } catch (RestClientException ex) {
-      log.warn("Piston readiness probe failed: {}", ex.getMessage());
+      log.warn("Piston readiness probe failed: errorType={}", ex.getClass().getSimpleName());
       return new Readiness(false, "piston unavailable");
     }
   }

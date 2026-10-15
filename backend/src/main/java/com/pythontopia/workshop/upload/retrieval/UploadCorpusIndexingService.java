@@ -75,7 +75,10 @@ public class UploadCorpusIndexingService {
       repository.replaceChunks(uploadId, rows);
       return rows.size();
     } catch (RuntimeException ex) {
-      log.warn("upload corpus index failed uploadId={}: {}", uploadId, ex.getMessage());
+      log.warn(
+          "upload corpus index failed uploadId={} errorType={}",
+          uploadId,
+          ex.getClass().getSimpleName());
       return 0;
     }
   }

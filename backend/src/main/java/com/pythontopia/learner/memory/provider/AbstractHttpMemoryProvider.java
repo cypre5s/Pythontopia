@@ -70,8 +70,9 @@ abstract class AbstractHttpMemoryProvider implements MemoryProvider {
       }
       return node;
     } catch (RestClientException ex) {
-      log.warn("{} HTTP 调用失败 path={}: {}", name(), path, ex.getMessage());
-      throw new MemoryProviderException(name() + " HTTP call failed: " + ex.getMessage(), ex);
+      log.warn(
+          "{} HTTP 调用失败 path={} errorType={}", name(), path, ex.getClass().getSimpleName());
+      throw new MemoryProviderException(name() + " HTTP call failed", ex);
     }
   }
 

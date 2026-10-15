@@ -2,11 +2,16 @@ package com.pythontopia.learner.memory;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.common.config.GraphServiceProperties;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
@@ -78,16 +83,31 @@ class EmbeddingClientTest {
   }
 
   @Test
-  void timeoutYieldsEmptyWithoutThrowing() {
+  void timeoutYieldsEmptyWithoutLoggingRequestDetails() {
+    String privateText = "private-memory-vector-sentinel";
     MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
     server
         .expect(MockRestRequestMatchers.requestTo("http://rag.test/embed"))
         .andRespond(
             request -> {
-              throw new org.springframework.web.client.ResourceAccessException("timeout");
+              throw new org.springframework.web.client.ResourceAccessException(privateText);
             });
 
-    assertThat(client.embed("x")).isEmpty();
+    Logger logger = (Logger) LoggerFactory.getLogger(RagEmbeddingClient.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.WARN);
+    logger.addAppender(appender);
+    try {
+      assertThat(client.embed(privateText)).isEmpty();
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .allSatisfy(message -> assertThat(message).doesNotContain(privateText));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
   }
 
   @Test

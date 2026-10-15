@@ -70,7 +70,9 @@ public class BrowseGraphClient {
       }
       return body.toResult();
     } catch (RestClientException ex) {
-      log.warn("BROWSE graph call failed (no retry, non-idempotent): {}", ex.getMessage());
+      log.warn(
+          "BROWSE graph call failed (no retry, non-idempotent): {}",
+          ex.getClass().getSimpleName());
       throw unavailable("联网查证服务暂不可用");
     }
   }

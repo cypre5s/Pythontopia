@@ -16,6 +16,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.profile.dto.LearnerProfileSignals;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
@@ -57,6 +61,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestClientException;
@@ -284,23 +289,39 @@ class BossServiceTest {
   @Test
   @DisplayName("Graph 出题服务不可用时返回服务错误，不发放通用占位题")
   void graphProblemUnavailableDoesNotIssueGenericGoldenProblem() {
+    String privateContent = "private-boss-problem-response-sentinel";
     when(graphClient.requestProblem(
             anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
-        .thenThrow(new RestClientException("graph down"));
+        .thenThrow(new RestClientException(privateContent));
 
-    assertThatThrownBy(
-            () ->
-                service.fetchProblem(
-                    1,
-                    new BossProblemRequest(2, null, 2, "PY43-KC-001", "debug", null, null, null),
-                    7L))
-        .isInstanceOfSatisfying(
-            com.pythontopia.common.error.BusinessException.class,
-            exception -> {
-              assertThat(exception.code()).isEqualTo("BOSS_PROBLEM_GENERATION_UNAVAILABLE");
-              assertThat(exception.status())
-                  .isEqualTo(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE);
-            });
+    Logger logger = (Logger) LoggerFactory.getLogger(BossService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.WARN);
+    logger.addAppender(appender);
+    try {
+      assertThatThrownBy(
+              () ->
+                  service.fetchProblem(
+                      1,
+                      new BossProblemRequest(
+                          2, null, 2, "PY43-KC-001", "debug", null, null, null),
+                      7L))
+          .isInstanceOfSatisfying(
+              com.pythontopia.common.error.BusinessException.class,
+              exception -> {
+                assertThat(exception.code()).isEqualTo("BOSS_PROBLEM_GENERATION_UNAVAILABLE");
+                assertThat(exception.status())
+                    .isEqualTo(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE);
+              });
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .allSatisfy(message -> assertThat(message).doesNotContain(privateContent));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
 
     verify(pregenService, never())
         .persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any());
@@ -1386,9 +1407,10 @@ class BossServiceTest {
   @Test
   @DisplayName("Graph 评测不可用时由同一 Python 沙箱本地判题并回流真实结果")
   void graphUnavailableFallsBackToLocalJudge() {
+    String privateContent = "private-boss-evaluation-response-sentinel";
     when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problemWithTests(3)));
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
-        .thenThrow(new RestClientException("graph down"));
+        .thenThrow(new RestClientException(privateContent));
     when(judgeWorkerPool.submitAndWait(any()))
         .thenAnswer(invocation -> ((Callable<?>) invocation.getArgument(0)).call());
     when(staticCodeChecker.check("print(5)"))
@@ -1396,11 +1418,25 @@ class BossServiceTest {
     when(judgeCaseEvaluator.evaluate(eq("print(5)"), anyList()))
         .thenReturn(new JudgeCaseEvaluator.CaseEvaluation(Verdict.AC, 1, 2, null, null));
 
-    var result = service.evaluateAttempt(attemptRequest("p1", 1, 1, "print(5)", 10), 7L);
+    Logger logger = (Logger) LoggerFactory.getLogger(BossService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.WARN);
+    logger.addAppender(appender);
+    try {
+      var result = service.evaluateAttempt(attemptRequest("p1", 1, 1, "print(5)", 10), 7L);
 
-    assertThat(result.passed()).isTrue();
-    assertThat(result.passedTestCases()).isEqualTo(1);
-    verify(eventPublisher).publishEvent(any(LearningEvent.PracticeSucceeded.class));
+      assertThat(result.passed()).isTrue();
+      assertThat(result.passedTestCases()).isEqualTo(1);
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .allSatisfy(message -> assertThat(message).doesNotContain(privateContent));
+      verify(eventPublisher).publishEvent(any(LearningEvent.PracticeSucceeded.class));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
   }
 
   @Test

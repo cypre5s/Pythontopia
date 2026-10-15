@@ -93,7 +93,8 @@ public class ProfileService {
               new HttpEntity<>(agentRequest, headers),
               ProfileTurnResponse.class);
     } catch (RestClientException exception) {
-      log.warn("ProfileAgent request failed: {}", exception.getMessage());
+      log.warn(
+          "ProfileAgent request failed errorType={}", exception.getClass().getSimpleName());
       throw new BusinessException(
           HttpStatus.BAD_GATEWAY,
           "PROFILE_AGENT_UNAVAILABLE",

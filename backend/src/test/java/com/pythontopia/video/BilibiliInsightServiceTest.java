@@ -9,11 +9,16 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.error.BusinessException;
 import java.util.Arrays;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -127,22 +132,38 @@ class BilibiliInsightServiceTest {
   }
 
   @Test
-  void wrapsUpstreamFailureAsBusinessException() {
+  void wrapsUpstreamFailureWithoutLoggingResponseBody() {
+    String privateContent = "private-video-question-sentinel";
     MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
     server
         .expect(requestTo("http://graph.test/agents/video/bilibili/insight"))
-        .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE).body("down"));
+        .andRespond(withStatus(HttpStatus.SERVICE_UNAVAILABLE).body(privateContent));
 
-    assertThatThrownBy(
-            () ->
-                service.insight(
-                    new BilibiliInsightRequest("BV1xx411c7XD", "q", Arrays.asList("PY43-KC-030"))))
-        .isInstanceOfSatisfying(
-            BusinessException.class,
-            exception -> {
-              assertThat(exception.code()).isEqualTo("VIDEO_INSIGHT_UNAVAILABLE");
-              assertThat(exception.status()).isEqualTo(HttpStatus.BAD_GATEWAY);
-            });
-    server.verify();
+    Logger logger = (Logger) LoggerFactory.getLogger(BilibiliInsightService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.WARN);
+    logger.addAppender(appender);
+    try {
+      assertThatThrownBy(
+              () ->
+                  service.insight(
+                      new BilibiliInsightRequest(
+                          "BV1xx411c7XD", "q", Arrays.asList("PY43-KC-030"))))
+          .isInstanceOfSatisfying(
+              BusinessException.class,
+              exception -> {
+                assertThat(exception.code()).isEqualTo("VIDEO_INSIGHT_UNAVAILABLE");
+                assertThat(exception.status()).isEqualTo(HttpStatus.BAD_GATEWAY);
+              });
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .allSatisfy(message -> assertThat(message).doesNotContain(privateContent));
+      server.verify();
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
   }
 }

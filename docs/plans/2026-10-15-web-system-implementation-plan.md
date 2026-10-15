@@ -1,4 +1,4 @@
-# Pythontopia Web 系统审计与修复 Implementation Plan
+# Pythontopia 系统审计与改进 Implementation Plan
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
@@ -10,9 +10,9 @@
 
 ## 总任务清单
 
-本节是当前交付状态的速查清单；各任务详情和验证证据保留在下方。
+本节是当前唯一交付清单；已有验证按仓库记录复用，不重复模型探针或已通过的等价测试。各任务详情和验证证据保留在下方。
 
-- [x] Web 安全基线：凭据通配 CORS、媒体错误脱敏、公网注册/登录/加入码限流契约。
+- [x] 已落地的安全基线：凭据通配 CORS、媒体错误脱敏、注册角色白名单、教师邀请码、DISABLED 账号拦截、JWT tokenVersion 撤销、公网注册/登录/加入码限流契约；Auth/JWT/CORS 有回归测试。
 - [x] 课堂加入码账号限速：30 次/10 分钟；Tutor 工作流错误对学生脱敏。
 - [x] Tutor 用量锁按用户账号与上海自然日生效；本地开发明确关闭应用日限额，部署默认开启。
 - [x] DeepSeek 文本与合成 PNG 图片输入均有历史真实调用成功记录，Tutor 输出为文本；Graph 所有生成路由复用 DeepSeek host/model 白名单。RAG 向量使用本地 hash/BGE，讯飞 embedding 仅是不可选的未实现占位；TTS、ASR、旧讯飞文生图/图片理解硬关闭。较新的请求另出现 Tutor relay 超时和 DeepSeek 503，当前不重复探针，稳定性仍未验证。
@@ -23,25 +23,52 @@
 - [x] 世界 HUD 中未评估 Twin 推荐的真实浏览器点击：关闭可选探针后鼠标展开目标面板并到达主线地图，0/65 已评估、掌握证据未改变、浏览器错误为 0；修复 `role="button"` 标题被拖动手势拦截的问题。
 - [x] 远征对服务端不可判定的无效题提供重新出题操作，不扣体力也不提交结算；加入 HUD 拖拽指针回归后，5 个受影响前端测试文件共 76 项、typecheck、ESLint、diff 检查通过。
 - [x] AutoGen 对照审查确认 Pythontopia 已有固定阶段 Tutor；保留现有 SSE、授权、附件和 V199/V203/V208 run 检查点契约，不移植 Alethicode 的 V124/thread dispatcher。
-- [x] 当前 HEAD 的只读安全复核未发现确认的 P0/P1 代码缺陷；认证、主要 IDOR、判题 fail-closed 与 CORS 有实现和测试落点。生产 Piston 若无私网 ACL 或校验 Bearer 的代理，仍有未授权执行风险；本地无法代表生产确认。
+- [x] 既有只读复核未发现确认的 P0/P1 代码缺陷；认证、主要 IDOR、判题 fail-closed 与 CORS 有实现和测试落点。本轮复查确认注册/教师邀请码、停用账号/JWT 代次撤销、Piston 默认与 subprocess fail-closed、排行榜按服务端 verified attempt 结算均有代码实现。生产 Piston 若无私网 ACL 或鉴权代理，仍有未授权执行风险；本地无法代表生产确认。
+- [ ] 附件扩展安全审计：逐类闭合判题隔离与部署边界、远征状态篡改/幂等、媒体上传、SSRF、XSS、SQL、速率限制、依赖与敏感日志；只对确认问题修复并补回归。SSRF 当前代码复核覆盖唯一用户目标触发的 BROWSE 导航，服务端注入 host allowlist，Graph 每次导航/重定向验证公网 DNS、scheme、标准端口并将 Chromium DNS pin 到公网地址；对应 allowlist/executor 测试 58/58 通过。敏感日志已修复上传、索引、trace、Piston、Mem0/Zep、Graph retry、画像访谈、NPC 对话、RAG embedding、B 站问答/搜索、Feynman、BROWSE、Boss 出题/判题与章测 Graph 错误中的已复现泄露；其他异常日志类别和生产 Piston ACL 仍待核实。
+- [x] 敏感学习数据日志脱敏：上传解析、上传语料索引、学生调试轨迹、Piston 远端错误、Mem0/Zep 错误响应、通用 Graph retry、画像访谈、NPC 对话、RAG embedding、B 站问答/搜索、Feynman、BROWSE、Boss 出题/判题与章测 Graph 请求均不记录文件名、学习文本、学生输出/代码或异常原文；RED/GREEN 套件分别为 `UploadServiceTest` 17/17、`UploadCorpusIndexingServiceTest` 1/1、`PythonTraceCollectorTest` 1/1、`PistonPythonSandboxTest` 10/10、`Mem0MemoryProviderTest` 4/4、`ZepMemoryProviderTest` 3/3、`GraphClientRetryHelperTest` 1/1、`ProfileServiceFailureTest` 1/1、`NpcDialogGraphClientTest` 2/2、`EmbeddingClientTest` 7/7、`BilibiliInsightServiceTest` 4/4、`FeynmanGraphClientTest` 4/4、`BrowseGraphClientTest` 5/5、`BilibiliVideoServiceTest` 2/2、`BossServiceTest` 53/53、`ChapterTestGraphClientTest` 2/2。
+- [x] 依赖漏洞盘点：当前前端 lockfile 的 npm audit 为 0 项；按 Docker 安装约束重新解析的 Python Graph/RAG 运行时依赖（OSV）及 Maven 95 个 compile/runtime JAR（OSV querybatch）均为 0 项已知漏洞。Python 本机开发 venv 的旧环境扫描仍有 25 个包名、212 条 advisory 记录（含跨环境/同包公告重复），不代表当前 Docker 运行时；尚未刷新这两个开发环境。OWASP Dependency-Check 13.0.0 已启动但 NVD 更新因缺 API key 失败，不能作为扫描结果；完整安全清单继续开放。
 - [x] 管理台共享表格表头/圆角/分页已按 Alethicode 样式收敛；保留手动跳页和现有数据字段。
 - [x] 管理员真实浏览器用户管理流程：登录、搜索、停用/恢复、禁用账号登录拒绝；临时账号已清理。
 - [x] 运维概览将五个已知后端动作键映射为中文建议，原始键保留在提示文本中。
 - [x] KC-004 根知识点 AI 补题：从正常主线练习按钮发起请求，通过 Piston 自测和现有质量审查后写入共享题库为 `APPROVED/AUTOMATED`。实际请求 6 个 DeepSeek completions（前 5 个候选自测输出不符，第 6 个通过）；未提交答案或新增掌握证据。
 - [x] KC-002 主线 AI 补题：从第 1 章第 3 节正常学习页发起 1 次生成请求，题目 `APPROVED/AUTOMATED`（审核 ID 83）；第二名学生从共享题库取题并服务端判题 3/3。临时答题账号及其掌握事件已清理，审核请求者因审计外键保留在本地数据库。
-- [ ] 远征：用有效先修学习账号从服务端活动 run 刷新并恢复。当前根 KC 审核库题型为 KC-001 `debug`、KC-002/004/006 `kind=NULL`；均不适配普通战斗节点 `dual_track`/`closed_loop`。KC-006 主线题由审核 ID 84 自动批准，第二名学生从共享库取题并正式判题通过；KC-011 也已有普通主线自动批准题，但尚无正式学生判题或掌握度证据。源码链路已确认节点 `challengeKind` 会传给后端，后端按 KC/题型查审核库，未命中再把题型交给 Graph；尚无一次合格活动 run 的端到端题型生成与刷新恢复证据。地图不预检题库覆盖，生成失败时仍依赖重试或结束本局。10/15 本地只读聚合看到 21 条 `status=ACTIVE` run（16 challenge、3 map、2 over）；满足第 2 章以上前沿先修门槛的学生仅 1 个，且没有活动 run。测试/历史账号构成未知，不能据此推断真实用户完成率；仍需通过正常学习证据建立可恢复 run，不绕过先修或伪造掌握证据。
-- [ ] Web 验收：主要路由/动作矩阵仍需完成。11 条主页面路由已有真实浏览器路由壳检查（0 页面错误、0 个 5xx）；当时为避免写入拦截了 `/api/game/bootstrap` 和认证刷新，因此不计为页面初始化或完整动作通过。刷新请求由每次整页加载时的 `hydrateFromStorage()` 正常触发，逐 URL 重载解释了多次请求；认证/角色守卫、管理员用户停用/恢复、World HUD 未评估 Twin → 主线地图另有真实验证。主线章节抽屉开合、进入学习页再返回通过 1/1；小镇 HUD/暂停菜单反复开关并进入工坊通过 1/1；主线章节键盘聚焦及 Enter 打开章节通过 1/1；指南页目录锚点更新 URL 并滚动到目标通过 1/1；本轮 `/library` 的「for循环」检索显示带页码证据，1/1；`/board?tab=classroom` 深链及班级→历史→今日页签切换通过 1/1；`/profile` 学习目标自评已更新，PUT 仅含 `scoreDelta`，`evidenceCount`/`confidence` 不变。三条新动作均使用临时学生并已清理，没有手动触发模型或判题。共享表格样式对齐已完成。管理台审核检索/驳回已有本地浏览器记录；当前无待审核项，不重复改变共享题库。剩余 Web 页面动作仍待验收。
+- [ ] 远征闭环：补齐根 KC 的 battle-compatible 题型并验证有效先修账号从服务端活动 run 刷新恢复；同时复核地图覆盖预检、预生成/缓存去重、超时取消、失败恢复、Boss 多阶段与客户端状态伪造边界。当前根 KC 审核库题型为 KC-001 `debug`、KC-002/004/006 `kind=NULL`；均不适配普通战斗节点 `dual_track`/`closed_loop`。KC-006 主线题由审核 ID 84 自动批准，第二名学生从共享库取题并正式判题通过；KC-011 也已有普通主线自动批准题，但尚无正式学生判题或掌握度证据。源码链路已确认节点 `challengeKind` 会传给后端，后端按 KC/题型查审核库，未命中再把题型交给 Graph；尚无一次合格活动 run 的端到端题型生成与刷新恢复证据。地图不预检题库覆盖，生成失败时仍依赖重试或结束本局。10/15 本地只读聚合看到 21 条 `status=ACTIVE` run（16 challenge、3 map、2 over）；满足第 2 章以上前沿先修门槛的学生仅 1 个，且没有活动 run。测试/历史账号构成未知，不能据此推断真实用户完成率；仍需通过正常学习证据建立可恢复 run，不绕过先修或伪造掌握证据。
+- [ ] Web 验收：学生、教师、管理员主要路由/动作矩阵仍需完成，逐项覆盖可见控件与成功/失败/空态。11 条主页面路由已有真实浏览器路由壳检查（0 页面错误、0 个 5xx）；当时为避免写入拦截了 `/api/game/bootstrap` 和认证刷新，因此不计为页面初始化或完整动作通过。刷新请求由每次整页加载时的 `hydrateFromStorage()` 正常触发，逐 URL 重载解释了多次请求；认证/角色守卫、管理员用户停用/恢复、World HUD 未评估 Twin → 主线地图另有真实验证。主线章节抽屉开合、进入学习页再返回通过 1/1；小镇 HUD/暂停菜单反复开关并进入工坊通过 1/1；主线章节键盘聚焦及 Enter 打开章节通过 1/1；指南页目录锚点更新 URL 并滚动到目标通过 1/1；本轮 `/library` 的「for循环」检索显示带页码证据，1/1；`/board?tab=classroom` 深链及班级→历史→今日页签切换通过 1/1；`/profile` 学习目标自评已更新，PUT 仅含 `scoreDelta`，`evidenceCount`/`confidence` 不变。`ProfileRoomPage.spec.ts` 已有页面层测试覆盖 Twin 主/备推荐与周报 insight/补强转到工坊；本轮新生真实浏览器点击“前往主线学习”到达 `/mainline-map`，页面错误 0，仅有认证刷新和学习状态读取，临时用户已清理。共享表格样式对齐已完成。管理台审核检索/驳回已有本地浏览器记录；当前无待审核项，不重复改变共享题库。剩余 Web 页面动作仍待验收。
+- [x] Web 错误态抽样：真实 Chromium 临时学生打开 `/chapter-test/99`，看到明确 1–7 章范围提示并点击返回主线地图；测评 API、模型 API、判题 API 为 0，页面错误为 0，临时账号已删除。有效章节自动调用 `prepare` 且可能触发出题，因此本次只走无效章节分支。
 - [x] Web 页面动作续验：题库按 KC 筛选、题号搜索、清空恢复和“去做”进入训练题均由真实浏览器验证；复盘大厅未评估 Twin 推荐已修复并复验进入主线地图。`/examples` 已退役，路由静态重定向到 `/problems` 并保留 `kcCode` 筛选；其题库筛选动作已有浏览器证据。相关临时账号已清理，已验证动作页面错误与模型请求均为 0。
 - [x] 题库深链边界：有效 KC 暂无编程题时保留 `kcCode` 并显示“0 题”；未知 KC 仍回退到全部。回归先 RED 后 GREEN，`ProblemListPage` 10/10、typecheck、定向 ESLint 通过。修复后真实 Chromium 验证 `/examples?kcCode=PY43-KC-001` 跳转并保留所选 KC；320px 下无横向溢出，页面错误与模型请求均为 0。
 - [x] 窄屏抽样：320px Chromium 检查 `/mainline/stage/2`、`/problems`、`/profile-room`、`/library`，页面宽度均未溢出；学习分身“近期变化”折叠区在窄屏可展开。页面错误与 5xx 为 0，没有业务写入或模型请求，临时账号已清理。此为抽样，不代表完整路由矩阵。
-- [ ] 工程收尾：按 Web 审查清单继续修复可复现的命名、交互、错误态或可访问性缺陷；strict TypeScript 源码扫描未发现 `any` / `as any` 或空命名 `void` 函数；工坊 `quiz_finished` 的过时 TODO 已改为说明客户端事件不作可信证据，未改运行逻辑。
+- [ ] 工程收尾：按全 Web 审查清单继续修复可复现的命名、交互、错误态、可访问性和窄屏缺陷；strict TypeScript 源码扫描未发现 `any` / `as any` 或空命名 `void` 函数；工坊 `quiz_finished` 的过时 TODO 已改为说明客户端事件不作可信证据，未改运行逻辑。已对照 Google Java Style、Vue 官方风格、typescript-eslint 命名规则与 OWASP Logging Cheat Sheet；仅整理本轮新增 Java imports 并应用敏感日志要求。全仓 Spotless 与本轮触及文件的定向检查都发现既有格式差异；未保留格式化造成的无关改动，也未做批量格式化。
 - [x] Maven 全量失败已做报告归因：记录的 7 个错误里，6 个是 Testcontainers Docker 动态宿主端口绑定失败，1 个是长期仿真的 PostgreSQL 连接重置；0 个断言失败。尚未修复 Docker/连接环境，也未重跑全量套件。
 - [x] Tutor SSE 长等待的本地运行态根因已定位并修复：Graph 源文件比正在运行的容器新，Uvicorn 命令没有自动重载，旧进程未加载心跳改动。开发 Compose 限定监视 Graph 源码目录并启用 reload；Compose 契约先因缺少 reload 断言失败，修复后通过；重建容器后 `/healthz` 200、容器 healthy；临时 `.py` 文件触发 WatchFiles 重载后删除，服务仍健康。
 - [ ] 生产环境核对：公网边缘限流、Piston 网络 ACL 与 ECS 运行态待确认。Piston Compose/preflight 静态契约已通过，但 Piston API 本身不验证 Bearer token，必须由私网 ACL 或代理实施访问控制。当前 SSH 仍走 TUN 路由，需要 sudo 才能改本机直连路由；不尝试远端写入或部署。
-- [ ] 学习效果：Twin A/B 和 7 日延迟复测需有合适真实样本，现阶段不可宣称有效提升。
+- [ ] Twin 效果：在不伪造画像的前提下设计并执行 Twin A/B 与 7 日延迟复测；样本不足时保持待测，不宣称提升。
 - [ ] 后续增强（已按精简计划暂缓）：未来分岔的真实学习结果评估与 BKT 概率模型不属于当前闭环验收门槛。
 - [x] DeepSeek Web Tutor 全链路文本验收：运行态先出现 Graph 意图路由 401，核实为 Java 缺内部令牌、Graph 使用 `.env` 占位令牌；按 `./dev.sh` 重启后两端共享临时强令牌。单次 Playwright 请求命中 `/agents/intent/route` 与 `/agents/tutor/ask/stream`，均 HTTP 200，非空文本断言通过（1/1，7.2 秒）；临时账号已清理。不要重复 provider 探针或图片调用。
-- [ ] 性能：最后执行，功能和工程验证收敛后再测。
+- [ ] 性能：最后执行；功能、安全和工程验证收敛后测量出题 P50/P95、缓存命中与失败恢复，不把目标值写成实测。
+
+
+### 2026-10-15 最新续接
+
+- 本地提交 `99126642` 已完成；当时工作树干净。退役 `/examples` 改为静态重定向，旧页面及过期测试删除，KC 查询参数保留。路由集成回归 27/27 通过。
+- 后续审计确认上传解析失败日志曾写入原始文件名与底层异常；已按 RED/GREEN 修复，`UploadServiceTest` 17/17。当前工作树包含该代码/测试及清单更新，尚未提交。
+- 前端 `npm audit` 从默认镜像得到 404（不支持 audit API）；指定官方 npm registry 后完成，0 项漏洞，未改 lockfile。
+- 本轮未发起任何 DeepSeek 请求；文本/PNG 真实调用成功和后续 relay 超时、空 JSON、503 按历史记录保留，不重做通用探针。
+- 先推进附件扩展安全审计与远征真实恢复缺口；Twin 现有 P0 与管理台共享表格改造按已完成记录复用，不重复实现。
+
+### 调研结论与实施边界（2026-10-15）
+
+- 检索练习与分散练习在综述中被评为高效用方法，因此优先修好正式判题、复习到期和错误后的再练闭环；不以单次问卷或生成式模型改写掌握度。[APS 综述](https://www.psychologicalscience.org/publications/journals/pspi/learning-techniques.html)
+- 学习分析综述指出隐私、学生控制和可信度仍有明显缺口；学习分身只展示可追溯证据与置信度，不推断人格/心理状态，不在样本不足时给效果预测。[Human-centred LA/AIED systematic review](https://doi.org/10.1016/j.caeai.2024.100215)
+- 2026 年教育数字孪生综述指出概念定义常被混用、学习影响证据仍需加强；本项目采用轻量、行为驱动的“状态—策略—分身”闭环，BKT 和未来模拟暂缓到校准数据与评估方案具备后再做。[Frontiers review](https://www.frontiersin.org/journals/education/articles/10.3389/feduc.2026.1955212/abstract)
+- Mega Crit 在 GDC 分享中描述了用数据驱动平衡并结合玩家反馈迭代《Slay the Spire》；这里借鉴“记录选路/失败/退出并据真实数据调平”的方法，不把其玩法结构当作教育有效性证据。[GDC Vault](https://www.gdcvault.com/play/1025731/-Slay-the-Spire-Metrics)
+
+### 统一实现边界
+
+- Learner State 由服务端已验证判题、练习事件、KC mastery 与 ReviewState 聚合；自评只影响目标/偏好，AI 洞察不改能力事实。复用现有 `LearnerTwinService` 与 `AdaptivePracticePolicy`，不新增画像表、在线 Agent 或模型训练。
+- Expedition 的路线、难度、复习与补救依赖同一服务端学习状态；提交、体力、结算、排行榜和学习事件不得由客户端数值直接决定。题目优先查审核库与预生成队列，生成故障必须有有限恢复入口。
+- Twin 页面展示状态证据、置信度和推荐理由；不展示未评估 KC 的虚假 0/50%、不推断人格/心理状态，不对成绩收益做未经校准的预测。
+- 前端动作验收按学生/教师/管理员真实可见控件矩阵推进；性能采样安排在安全、功能和页面闭环后。
 
 ### 2026-10-15 当前续接快照
 

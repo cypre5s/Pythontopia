@@ -60,7 +60,7 @@ public class BilibiliVideoService {
       }
       return response.items();
     } catch (RestClientException exception) {
-      LOG.warn("bilibili search via graph failed: {}", exception.getMessage());
+      LOG.warn("bilibili search via graph failed: {}", exception.getClass().getSimpleName());
       throw new BusinessException(
           HttpStatus.BAD_GATEWAY, "VIDEO_SEARCH_UNAVAILABLE", "B站视频检索服务不可用");
     }

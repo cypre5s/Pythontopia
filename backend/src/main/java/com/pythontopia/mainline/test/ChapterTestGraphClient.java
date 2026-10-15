@@ -67,7 +67,7 @@ public class ChapterTestGraphClient {
                   JsonNode.class)
               .getBody();
     } catch (RestClientException ex) {
-      throw new ChapterTestGenerationException("chapter-test graph 调用失败: " + ex.getMessage(), ex);
+      throw new ChapterTestGenerationException("chapter-test graph 调用失败", ex);
     }
     JsonNode questionBody =
         body != null && body.path("questions").isObject() ? body.path("questions") : body;

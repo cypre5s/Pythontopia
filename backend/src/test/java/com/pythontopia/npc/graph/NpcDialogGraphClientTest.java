@@ -2,6 +2,10 @@ package com.pythontopia.npc.graph;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.npc.dto.NpcDialogResponse;
@@ -9,6 +13,8 @@ import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.test.web.client.match.MockRestRequestMatchers;
@@ -67,16 +73,34 @@ class NpcDialogGraphClientTest {
   }
 
   @Test
-  void upstreamFailureYieldsEmptyForStaticFallback() {
+  void upstreamFailureYieldsEmptyWithoutLoggingResponseBody() {
+    String privateContent = "private-npc-dialog-sentinel";
     MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
     server
         .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/npc/dialog"))
-        .andRespond(MockRestResponseCreators.withServerError());
+        .andRespond(
+            MockRestResponseCreators.withStatus(HttpStatus.BAD_GATEWAY)
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(privateContent));
 
-    Optional<NpcDialogResponse> response =
-        client.talk("coach_q", "core", List.of(memory()), "你好");
+    Logger logger = (Logger) LoggerFactory.getLogger(NpcDialogGraphClient.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.WARN);
+    logger.addAppender(appender);
+    try {
+      Optional<NpcDialogResponse> response =
+          client.talk("coach_q", "core", List.of(memory()), "你好");
 
-    assertThat(response).isEmpty();
-    server.verify(Duration.ofSeconds(2));
+      assertThat(response).isEmpty();
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .allSatisfy(message -> assertThat(message).doesNotContain(privateContent));
+      server.verify(Duration.ofSeconds(2));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
   }
 }

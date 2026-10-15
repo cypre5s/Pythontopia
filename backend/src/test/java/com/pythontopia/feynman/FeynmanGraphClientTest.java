@@ -2,12 +2,18 @@ package com.pythontopia.feynman;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.feynman.FeynmanGraphClient.FeynmanOutput;
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.test.web.client.match.MockRestRequestMatchers;
@@ -99,21 +105,49 @@ class FeynmanGraphClientTest {
   }
 
   @Test
-  void upstreamFailureYieldsEmptyForRuleFallback() {
+  void upstreamFailuresYieldEmptyWithoutLoggingStudentOrRemoteContent() {
+    String privateContent = "private-feynman-response-sentinel";
     MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
     server
         .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/feynman/tutee/step"))
-        .andRespond(MockRestResponseCreators.withServerError());
+        .andRespond(
+            MockRestResponseCreators.withStatus(HttpStatus.BAD_GATEWAY)
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(privateContent));
+    server
+        .expect(
+            MockRestRequestMatchers.requestTo("http://graph.test/agents/feynman/bug-exposure"))
+        .andRespond(
+            MockRestResponseCreators.withStatus(HttpStatus.BAD_GATEWAY)
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(privateContent));
 
-    Optional<FeynmanOutput> output =
-        client.step(
-            "PY43-KC-016",
-            List.of(new Misconception("off_by_one_range", List.of(501L), false)),
-            "随便讲",
-            List.of());
+    Logger logger = (Logger) LoggerFactory.getLogger(FeynmanGraphClient.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.WARN);
+    logger.addAppender(appender);
+    try {
+      Optional<FeynmanOutput> output =
+          client.step(
+              "PY43-KC-016",
+              List.of(new Misconception("off_by_one_range", List.of(501L), false)),
+              "随便讲",
+              List.of());
+      Optional<FeynmanGraphClient.BugExposure> bugExposure =
+          client.bugExposure("PY43-KC-016", privateContent, List.of());
 
-    assertThat(output).isEmpty();
-    server.verify(Duration.ofSeconds(2));
+      assertThat(output).isEmpty();
+      assertThat(bugExposure).isEmpty();
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .allSatisfy(message -> assertThat(message).doesNotContain(privateContent));
+      server.verify(Duration.ofSeconds(2));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
   }
 
   @Test

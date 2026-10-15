@@ -3,6 +3,10 @@ package com.pythontopia.browse;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.browse.graph.BrowseGraphClient;
 import com.pythontopia.browse.graph.BrowseGraphResult;
 import com.pythontopia.common.config.GraphServiceProperties;
@@ -10,6 +14,7 @@ import com.pythontopia.common.error.BusinessException;
 import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.ExpectedCount;
@@ -121,22 +126,41 @@ class BrowseGraphClientTest {
   }
 
   @Test
-  void browseWrapsTransportFailureAsBadGatewayWithoutRetry() {
+  void browseWrapsTransportFailureWithoutRetryOrLoggingRemoteContent() {
+    String privateContent = "private-browse-response-sentinel";
     MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
     // 仅允许 1 次请求：BROWSE 非幂等不重试，重试会触发 MockServer「未预期请求」失败。
     server
         .expect(ExpectedCount.once(), MockRestRequestMatchers.requestTo("http://graph.test/agents/browse/run"))
-        .andRespond(MockRestResponseCreators.withStatus(HttpStatus.SERVICE_UNAVAILABLE).body("down"));
+        .andRespond(
+            MockRestResponseCreators.withStatus(HttpStatus.SERVICE_UNAVAILABLE)
+                .contentType(MediaType.TEXT_PLAIN)
+                .body(privateContent));
 
-    assertThatThrownBy(() -> client.browse("goal", List.of("docs.python.org"), 6, 1L))
-        .isInstanceOf(BusinessException.class)
-        .satisfies(
-            ex -> {
-              BusinessException be = (BusinessException) ex;
-              assertThat(be.status()).isEqualTo(HttpStatus.BAD_GATEWAY);
-              assertThat(be.code()).isEqualTo("BROWSE_GRAPH_UNAVAILABLE");
-            });
-    server.verify(Duration.ofSeconds(2));
+    Logger logger = (Logger) LoggerFactory.getLogger(BrowseGraphClient.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.WARN);
+    logger.addAppender(appender);
+    try {
+      assertThatThrownBy(() -> client.browse("goal", List.of("docs.python.org"), 6, 1L))
+          .isInstanceOf(BusinessException.class)
+          .satisfies(
+              ex -> {
+                BusinessException be = (BusinessException) ex;
+                assertThat(be.status()).isEqualTo(HttpStatus.BAD_GATEWAY);
+                assertThat(be.code()).isEqualTo("BROWSE_GRAPH_UNAVAILABLE");
+                assertThat(be.getMessage()).doesNotContain(privateContent);
+              });
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .allSatisfy(message -> assertThat(message).doesNotContain(privateContent));
+      server.verify(Duration.ofSeconds(2));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
   }
 
   @Test

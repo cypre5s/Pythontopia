@@ -57,7 +57,10 @@ public class NpcDialogGraphClient {
               .getBody();
       return Optional.ofNullable(body).map(NpcDialogGraphResponse::toDomain);
     } catch (RestClientException ex) {
-      log.warn("npc dialog graph unavailable for npcKey={}: {}", npcKey, ex.getMessage());
+      log.warn(
+          "npc dialog graph unavailable for npcKey={} errorType={}",
+          npcKey,
+          ex.getClass().getSimpleName());
       return Optional.empty();
     }
   }

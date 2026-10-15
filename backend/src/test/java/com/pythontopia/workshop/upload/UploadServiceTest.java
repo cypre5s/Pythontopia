@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
@@ -14,11 +15,16 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.workshop.upload.dto.UploadDetailDto;
 import com.pythontopia.workshop.upload.dto.UploadDto;
 import com.pythontopia.workshop.upload.entity.UploadStatus;
 import com.pythontopia.workshop.upload.entity.WorkshopUpload;
+import com.pythontopia.workshop.upload.parser.UploadParseException;
 import com.pythontopia.workshop.upload.parser.UploadTextExtractor;
 import com.pythontopia.workshop.upload.repository.UploadRepository;
 import com.pythontopia.workshop.upload.service.UploadService;
@@ -36,6 +42,7 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 
@@ -76,8 +83,7 @@ class UploadServiceTest {
   @Test
   void uploadTextFileExtractsAndMarksReady() {
     MockMultipartFile file =
-        new MockMultipartFile(
-            "file", "main.py", "text/x-python", "print('hi')\nx = 1\n".getBytes(StandardCharsets.UTF_8));
+        new MockMultipartFile("file", "main.py", "text/x-python", "print('hi')\nx = 1\n".getBytes(StandardCharsets.UTF_8));
 
     UploadDto dto = service.upload(USER_ID, file);
 
@@ -93,8 +99,7 @@ class UploadServiceTest {
   @Test
   void uploadStripsClientPathFromFilename() {
     MockMultipartFile file =
-        new MockMultipartFile(
-            "file", "C:\\Users\\stu\\notes.md", "text/markdown", "# title".getBytes(StandardCharsets.UTF_8));
+        new MockMultipartFile("file", "C:\\Users\\stu\\notes.md", "text/markdown", "# title".getBytes(StandardCharsets.UTF_8));
 
     UploadDto dto = service.upload(USER_ID, file);
 
@@ -135,8 +140,7 @@ class UploadServiceTest {
         .isInstanceOf(BusinessException.class)
         .extracting(ex -> ((BusinessException) ex).status())
         .isEqualTo(HttpStatus.UNSUPPORTED_MEDIA_TYPE);
-    verify(repository, never())
-        .insert(anyLong(), anyString(), anyString(), anyLong(), any(), anyInt(), anyInt(), any(), any());
+    verify(repository, never()).insert(anyLong(), anyString(), anyString(), anyLong(), any(), anyInt(), anyInt(), any(), any());
     verify(extractor, never()).extract(anyString(), any(byte[].class));
   }
 
@@ -154,8 +158,7 @@ class UploadServiceTest {
   @Test
   void uploadRejectsWhenPerUserStorageQuotaIsExceeded() {
     when(repository.canAcceptUpload(USER_ID, 1L, 20, 50L * 1024 * 1024)).thenReturn(false);
-    MockMultipartFile file =
-        new MockMultipartFile("file", "note.txt", "text/plain", "x".getBytes(StandardCharsets.UTF_8));
+    MockMultipartFile file = new MockMultipartFile("file", "note.txt", "text/plain", "x".getBytes(StandardCharsets.UTF_8));
 
     assertThatThrownBy(() -> service.upload(USER_ID, file))
         .isInstanceOf(BusinessException.class)
@@ -166,8 +169,7 @@ class UploadServiceTest {
               assertThat(businessException.code()).isEqualTo("UPLOAD_QUOTA_EXCEEDED");
             });
 
-    verify(repository, never())
-        .insert(anyLong(), anyString(), anyString(), anyLong(), any(), anyInt(), anyInt(), any(), any());
+    verify(repository, never()).insert(anyLong(), anyString(), anyString(), anyLong(), any(), anyInt(), anyInt(), any(), any());
     verify(extractor, never()).extract(anyString(), any(byte[].class));
   }
 
@@ -203,6 +205,36 @@ class UploadServiceTest {
     assertThat(dto.error()).isNotBlank();
     assertThat(dto.charCount()).isZero();
     assertThat(dto.lineCount()).isZero();
+  }
+
+  @Test
+  void uploadParseFailureDoesNotLogFilenameOrParserDetails() {
+    String filename = "private-student-document.pdf";
+    String parserDetails = "internal-parser-path-and-content";
+    doThrow(new UploadParseException(parserDetails))
+        .when(extractor)
+        .extract(eq(".pdf"), any(byte[].class));
+    Logger logger = (Logger) LoggerFactory.getLogger(UploadService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.INFO);
+    logger.addAppender(appender);
+    try {
+      MockMultipartFile file =
+          new MockMultipartFile("file", filename, "application/pdf", new byte[] {1, 2, 3});
+
+      service.upload(USER_ID, file);
+
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .allSatisfy(
+              message ->
+                  assertThat(message).doesNotContain(filename).doesNotContain(parserDetails));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
   }
 
   @Test

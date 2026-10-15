@@ -60,7 +60,11 @@ public final class GraphClientRetryHelper {
         return result;
       } catch (RestClientException e) {
         if (attempt < MAX_RETRIES) {
-          log.debug("{} call failed (attempt {}), retrying: {}", clientName, attempt + 1, e.getMessage());
+          log.debug(
+              "{} call failed (attempt {}), retrying errorType={}",
+              clientName,
+              attempt + 1,
+              e.getClass().getSimpleName());
         }
       }
     }

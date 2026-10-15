@@ -67,7 +67,9 @@ public class RagEmbeddingClient implements EmbeddingClient {
               .getBody();
       return toVectors(texts.size(), body);
     } catch (RestClientException exception) {
-      log.warn("embedding 服务不可用，记忆向量降级为空：{}", exception.getMessage());
+      log.warn(
+          "embedding 服务不可用，记忆向量降级为空 errorType={}",
+          exception.getClass().getSimpleName());
       return emptyVectors(texts.size());
     }
   }

@@ -365,9 +365,7 @@ public class BossService {
                 authoritativeSignals(userId, request.profileSignals()));
       } catch (RestClientException ex) {
         LOG.warn(
-            "graph boss problem unavailable ({}): {}",
-            ex.getClass().getSimpleName(),
-            ex.getMessage());
+            "graph boss problem unavailable ({})", ex.getClass().getSimpleName());
         Optional<BossInternalProblem> golden =
             findGoldenProblem(kc, chapter, request.stage(), difficulty, issuedFingerprints);
         if (golden.isEmpty()) {
@@ -759,9 +757,8 @@ public class BossService {
         }
       } catch (RestClientException ex) {
         LOG.warn(
-            "graph evaluate failed ({}): {}; using the existing local Python judge",
-            ex.getClass().getSimpleName(),
-            ex.getMessage());
+            "graph evaluate failed ({}); using the existing local Python judge",
+            ex.getClass().getSimpleName());
         graphResult = evaluateLocally(request, testCases);
       }
       int score = scoreFor(graphResult);

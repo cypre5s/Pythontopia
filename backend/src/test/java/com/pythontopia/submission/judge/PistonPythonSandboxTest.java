@@ -7,13 +7,19 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withException;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
@@ -115,6 +121,29 @@ class PistonPythonSandboxTest {
     assertThat(result.errorKind()).isEqualTo("SYSTEM_ERROR");
     assertThat(result.stderr()).isEqualTo("Sandbox unavailable");
     assertThat(result.stdout()).isEmpty();
+    server.verify();
+  }
+
+  @Test
+  void remoteErrorDoesNotLogSubmittedCode() {
+    String source = "student_secret_source";
+    server
+        .expect(requestTo("https://judge.internal/api/v2/execute"))
+        .andRespond(withStatus(HttpStatus.BAD_GATEWAY).body(source));
+    Logger logger = (Logger) LoggerFactory.getLogger(PistonPythonSandbox.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      SandboxRunResult result = sandbox.run(source, new JudgeTestCase("", "", 1000));
+
+      assertThat(result.errorKind()).isEqualTo("SYSTEM_ERROR");
+      assertThat(appender.list).hasSize(1);
+      assertThat(appender.list.getFirst().getFormattedMessage()).doesNotContain(source);
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
     server.verify();
   }
 
