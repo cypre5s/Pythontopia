@@ -13,6 +13,7 @@
 - **本轮安全修复：** Tutor 图解的 Mermaid 分支曾将未清洗 SVG 直接写入 `v-html`，与已修复的工坊思维导图形成安全边界不一致。现在复用 `sanitizeMermaidSvgMarkup`，并设置 `htmlLabels: false`；新组件回归红测复现 `foreignObject`，修复后 Tutor 图解及 SVG sanitizer 测试 4/4、typecheck、定向 ESLint、`git diff --check` 通过。未调用模型。
 - **本轮媒体边界：** 新增 `MediaTtsControllerTest`，真实 service 使用旧凭据时 `POST /api/media/tts` 以 503 `TTS_DISABLED` 拒绝，避免发起讯飞 WebSocket；与 `TtsPropertiesTest` 合计 3/3 通过。没有模型或供应商外呼。
 - **本轮 Tutor 输入边界：** 历史消息 `role` 曾接受任意字符串，并直接映射到模型角色；现限制为 `user`/`assistant`，拒绝将学生内容伪装成 `system` 消息。回归先 RED 后 GREEN，Tutor SSE 与异常流定向测试 16/16；未调用模型。安全总审计仍未完成。
+- **本轮远征验收可行性：** 后端 `/healthz`、Graph `18091`、RAG `18092`、Web `5173` 均为 200；`/readyz` 因 `VIDEO_TRANSCRIPT_UNAVAILABLE` 为 503。临时 QA 学生登录成功，但第 2 章仍锁定，首节需完成 7:20 视频、6 页阅读和 4 道题。未创建提交、掌握度或 run；QA 账号已删除，精确用户名计数为 0。真实先修远征刷新恢复仍未验证，本轮无模型调用。
 - **HTML 注入点续审：** 扫描当前前端全部 `v-html` / `innerHTML` 写入，确认写入前都有 HTML/ SVG 清洗；未发现新增绕过点。此项是源码范围检查，后端与外部内容边界仍未全部闭合。
 - **最近动作：** 按用户要求消除重复验证项，核实当前唯一清单与提交状态，复用 DeepSeek provider 静态审计和 Alethicode 管理台/班级对照结果；修复全局 500、客户端断连、章星重算及工坊学情降级日志中的异常正文、原始 URL 和学生 ID。定向测试合计 10/10 + `ResourceWorkshopServiceTest` 34/34；本地 AI 限额配置已核实；`/bug-mine` 空态已做一次 Chromium 观察，清理临时账号。未发模型或网络请求。下一步继续未闭合的安全/远征/Web 项，不重做 DeepSeek、管理台样式或班级字段验收。
 
