@@ -57,6 +57,7 @@ function buildProblem(
 }
 
 const KCS = [
+  { kcId: 1809, kcCode: 'PY43-KC-001', kcName: '中国计算机发展成就', chapterId: 179, chapterOrder: 1, difficulty: 'basic', summaryMarkdown: '' },
   { kcId: 1847, kcCode: 'PY43-KC-016', kcName: '基础数值运算', chapterId: 180, chapterOrder: 2, difficulty: 'basic', summaryMarkdown: '' },
   { kcId: 1854, kcCode: 'PY43-KC-025', kcName: '整数位提取', chapterId: 181, chapterOrder: 3, difficulty: 'basic', summaryMarkdown: '' },
   { kcId: 1855, kcCode: 'PY43-KC-022', kcName: '字符串与字符编码', chapterId: 181, chapterOrder: 3, difficulty: 'basic', summaryMarkdown: '' },
@@ -225,6 +226,23 @@ describe('ProblemListPage', () => {
     expect(rows.length).toBe(1);
     expect(wrapper.text()).toContain('大写字母加密');
     expect(wrapper.text()).not.toContain('莱布尼茨级数');
+  });
+
+  it('有效 KC 暂无编程题时保留筛选并显示空结果', async () => {
+    const router = createTestRouter();
+    await router.push('/problems?kcCode=PY43-KC-001');
+    await router.isReady();
+    const wrapper = mount(ProblemListPage, {
+      global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
+    });
+    await flushPromises();
+
+    expect(
+      (wrapper.get('[data-testid="filter-kc"]').element as HTMLSelectElement).value,
+    ).toBe('PY43-KC-001');
+    expect(wrapper.get('[data-testid="filter-kc"]').text()).toContain('中国计算机发展成就（0 题）');
+    expect(wrapper.findAll('.problem-row:not(.problem-row--head)')).toHaveLength(0);
+    expect(router.currentRoute.value.query.kcCode).toBe('PY43-KC-001');
   });
 
   it('下拉切换知识点回写 URL；清空筛选移除 kcCode', async () => {

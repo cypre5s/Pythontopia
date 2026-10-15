@@ -1,5 +1,33 @@
 # Changelog
 
+## 2026-10-15 — 题库保留有效零题 KC 的深链筛选
+
+- 从已退役 `/examples` 重定向进入题库时，识别有效但暂无编程题的 KC，并保留筛选、显示“0 题”；无效 KC 仍回退到全部。
+- 新增 RED/GREEN 页面回归；`ProblemListPage` 定向测试 10/10，typecheck 和定向 ESLint 通过。修复后真实 Chromium 在 320px 下确认重定向、筛选保留、0 题和无横向溢出。
+- 同轮窄屏抽样覆盖主线阶段、题库、学习分身和图书馆；无页面错误、5xx、业务写入或模型请求，临时账号已清理。
+
+## 2026-10-15 — 学习分身窄屏近期变化展开
+
+- 真实 Chromium 在 320px 下展开 `/profile-room` 的“近期变化”区域；页面保持 320px 宽，无脚本错误，也没有模型请求或学习数据写入。临时账号已清理。
+
+## 2026-10-15 — KC-006 主线 AI 练习进入共享审核题库
+
+- 从正常主线学习页请求 KC-006 编程练习；模型生成结果经现有 5 重自动审查，以 `APPROVED/AUTOMATED` 写入共享 `boss_problem_review`（ID 84）。
+- 题目由另一名学生从共享库取出并通过正式服务端判题；临时账号和学习证据已清理。该题 `kind=NULL`，不满足普通远征节点的题型要求；远征兼容题和活动 run 恢复仍未完成。
+
+## 2026-10-15 — KC-002 主线 AI 编程题共享入库验证
+
+- 使用正常主线学习页面发起唯一一次 KC-002 补题请求；题目通过现有自动审查并进入共享题库（`APPROVED/AUTOMATED`，审核 ID 83）。
+- 第二名学生从已批准题库取题，服务端判题 3/3 通过；确认 `practice_succeeded` 与 KC-002 `+0.140` 后，删除临时答题账号并核实其学习事件与掌握度均清零。
+- 审核请求者因 `boss_problem_review.requester_id` 外键 `ON DELETE RESTRICT` 保留在本地，且没有学习事件，不计为学情。该题 `kind=NULL`，适用于主线补充练习，仍不适配远征 `dual_track`/`closed_loop` 节点。
+- 本轮未重复 DeepSeek provider/Tutor 探针；从共享题库取题后的判题未发起新模型生成。
+
+## 2026-10-15 — 复盘大厅按可信学情路由 Twin 推荐
+
+- 修复未评估 KC 的“按系统建议开始”误入远征问题：复盘大厅改为复用首页/学习分身的 `routeForTwinRecommendation`；未评估回主线，到期复习进 Bug 矿洞，已评估 KC 进远征。
+- RED/GREEN：新生 0/65 的回归先观察到 `/expedition?focus=1&kcCode=PY43-KC-001`，修复后定向组件测试 2/2 通过。
+- 真实浏览器验证新生点击后打开 `/mainline-map`，页面错误 0、模型请求 0；临时学生已清理。`npm run typecheck` 与触及文件 ESLint 通过。
+
 ## 2026-10-15 — KC-004 AI 编程题真实入库与沙箱失败快停
 
 - Graph Boss 出题在 Piston URL/Python 版本缺失时现在于模型调用前返回 `sandbox_unavailable`；候选自测遇到基础设施错误时立即停止，不继续消耗模型请求。普通题目质量重试逻辑保持原样。

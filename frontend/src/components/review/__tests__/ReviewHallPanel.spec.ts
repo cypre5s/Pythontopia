@@ -67,4 +67,36 @@ describe('ReviewHallPanel', () => {
       query: { review: 'PY43-KC-009' },
     });
   });
+
+  it('routes an unassessed recommendation to the mainline', async () => {
+    fetchTwinState.mockResolvedValue({
+      ...state,
+      assessedKcCount: 0,
+      kcs: [{
+        kcCode: 'PY43-KC-001', kcName: '计算思维', chapter: 1, chapterName: '计算思维',
+        assessed: false, masteryScore: null, confidence: null, reviewDue: false, dueAt: null,
+        lastPracticedAt: null, consecutiveFailures: 0,
+      }],
+      nextSteps: [{
+        kcCode: 'PY43-KC-001', kcName: '计算思维', chapter: 1, chapterName: '计算思维',
+        difficulty: 1, action: 'PRACTICE', reason: '尚未评估，先从基础题建立证据',
+        remediationRequired: false,
+      }],
+    });
+    const wrapper = mount(ReviewHallPanel, {
+      global: {
+        stubs: {
+          PyButton: { props: ['testId'], template: '<button :data-testid="testId"><slot /></button>' },
+          MetricCard: true,
+          KcGrowthList: true,
+          PathDiffView: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="review-twin-next"]').trigger('click');
+
+    expect(routerPush).toHaveBeenCalledWith({ path: '/mainline-map' });
+  });
 });

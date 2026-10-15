@@ -61,6 +61,12 @@ const kcsWithProblems = computed<CourseKcSummary[]>(() => {
       return a.kcCode.localeCompare(b.kcCode);
     });
 });
+const selectedKcWithoutProblems = computed<CourseKcSummary | null>(() => {
+  if (!filterKcCode.value || kcsWithProblems.value.some((kc) => kc.kcCode === filterKcCode.value)) {
+    return null;
+  }
+  return kcMap.value.get(filterKcCode.value) ?? null;
+});
 
 const difficulties = ['Low', 'Medium', 'High'] as const;
 const statusOptions: PlayerProblemStatus[] = ['NOT_TRIED', 'PASSED', 'FAILED'];
@@ -178,8 +184,13 @@ function kcOptionLabel(kc: CourseKcSummary): string {
   return `${prefix}${name}（${count} 题）`;
 }
 
-watch(kcsWithProblems, (kcs) => {
-  if (filterKcCode.value && !kcs.some((kc) => kc.kcCode === filterKcCode.value)) {
+watch([kcsWithProblems, kcMap], ([kcs, allKcs]) => {
+  if (
+    filterKcCode.value &&
+    !kcs.some((kc) => kc.kcCode === filterKcCode.value) &&
+    allKcs.size > 0 &&
+    !allKcs.has(filterKcCode.value)
+  ) {
     filterKcCode.value = '';
   }
 });
@@ -419,6 +430,12 @@ onMounted(async () => {
                   {{ kcOptionLabel(kc) }}
                 </option>
               </optgroup>
+              <option
+                v-if="selectedKcWithoutProblems"
+                :value="selectedKcWithoutProblems.kcCode"
+              >
+                {{ selectedKcWithoutProblems.kcName }}（0 题）
+              </option>
             </select>
           </label>
           <PyButton

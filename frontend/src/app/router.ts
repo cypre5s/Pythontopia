@@ -141,14 +141,12 @@ export const router = createRouter({
     {
       path: '/examples',
       name: 'examples',
-      component: () => import('@/pages/ExampleListPage.vue'),
       // 方案 C：隐藏独立「示例库」画廊，统一收敛到「题目列表 /problems」。
       // 站内零散入口（图书馆关联示例 / 工坊 PLAN / NPC open_panel 等）与直接 URL 访问
-      // 都在此重定向到 /problems（保留 kcCode 过滤），ExampleListPage 不再被渲染。
-      beforeEnter: (to) => ({
+      // 都在此重定向到 /problems（保留 kcCode 过滤）。
+      redirect: (to) => ({
         path: '/problems',
         query: typeof to.query.kcCode === 'string' ? { kcCode: to.query.kcCode } : {},
-        replace: true,
       }),
       meta: { requiresAuth: true },
     },

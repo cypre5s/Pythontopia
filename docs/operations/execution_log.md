@@ -214,3 +214,77 @@
 - 源码确认 `session.hydrateFromStorage()` 在每次整页启动时会后台刷新 token；测试逐 URL 使用 `page.goto` 反复启动 Vue 应用，触发多次刷新。该请求由测试拦截造成，现有证据不支持产品刷新循环，无需改认证代码。
 - 当前本地 `boss_problem_review` 没有 `PENDING` 项；不对既有已审核题目做破坏性操作，也不为制造测试记录重复调用 DeepSeek。Web 动作矩阵仍开放，后续只补尚无真实证据的动作。
 - 本次没有修改运行时代码、没有发起 DeepSeek 请求、没有重跑路由矩阵。
+
+## 2026-10-15 — 图书馆 RAG 页面动作
+
+- 在本地全栈以临时学生账号打开 `/library` 并查询「for循环」；带页码证据可见，Playwright 1/1 通过。学生角色的服务端 RAG 查询按权限回退本地检索，没有触发 DeepSeek。
+- 删除精确匹配的临时 QA 用户并确认记录为 0。其余 Web 页面动作仍按总清单逐项补齐；本轮不重复 Tutor、远征或性能测试。
+
+## 2026-10-15 — 公告板深链与页签切换
+
+- 以临时学生进入 `/board?tab=classroom`，确认班级任务深链选中正确；再切换历史路径、今日任务，目标内容和 `aria-selected` 状态均正确。
+- Playwright 页面错误 0、Tutor/Agent/工坊请求 0。临时用户已删除并验证不存在。
+
+## 2026-10-15 — 画像自评不增加能力证据
+
+- 临时学生在 `/profile` 调整“学习目标”自评。浏览器捕获的 PUT 仅含 `scoreDelta`；重新读取画像后 `evidenceCount` 与 `confidence` 均未变化，页面错误 0。
+- 临时用户已删除；没有正式练习、掌握度事件或模型请求。
+
+## 2026-10-15 — 执行器边界与远征恢复样本核对
+
+- 源码核对发现本地 Piston 端口已限定为 `127.0.0.1:2000`，开发 Compose 安全契约断言了回环地址；生产 Compose 不托管 Piston，要求外部 HTTPS 或契约认可的私网 HTTP。Piston 服务本身不校验 Bearer，因此生产端仍须由真实 ACL/鉴权代理保护；没有访问 ECS。
+- 只读数据库聚合：21 条 `status=ACTIVE` 记录（challenge 16、map 3、over 2）；满足第 2 章以上前沿先修条件的学生 1 个，该账号没有活动 run。未查询身份字段。此样本不能验证刷新续局，也不能代表实际用户完成率。
+- 没有 DeepSeek 请求、数据写入或运行时代码改动；当前需通过正常学习路径取得合格的活动 run 样本后再做唯一一次恢复验收。
+
+## 2026-10-15 — 复盘大厅 Twin 推荐路由修复
+
+- 真浏览器新生 0/65 点击复盘大厅推荐 KC-001 后进入 `/expedition?focus=1&kcCode=PY43-KC-001`；这是错误入口，因为未评估 KC 应返回主线。
+- 复用 `routeForTwinRecommendation` 统一首页、学习分身与复盘大厅目的地。回归先 RED（收到远征路由）后 GREEN（`ReviewHallPanel` 2/2）；`npm run typecheck`、定向 ESLint 通过。
+- 修复后临时学生浏览器验收进入 `/mainline-map`，主线地图可见，页面错误 0、模型请求 0；账号删除后计数为 0。没有 DeepSeek 请求或正式学习数据写入。
+
+## 2026-10-15 — KC-002 正常主线补题、共享入库与服务端判题
+
+- 配置核查：讯飞图片生成/图片理解、TTS、ASR 的 properties 均固定 `isEnabled() == false`；控制器与分镜合成都调用受此开关保护的服务，没有发现可绕过调用点。未改代码、未发媒体请求。
+- 新生页面从 `/mainline/stage/3` 点击 KC-002 AI 补题，唯一一次正常页面生成请求 HTTP 200，浏览器错误 0；题目 `APPROVED/AUTOMATED`，审核记录 ID 83，题型为 `kind=NULL`。没有重复探针。
+- 第二名临时学生经同一主线页面读取已批准 KC-002 题，未生成新题；服务端正式判题 HTTP 200，3/3 通过，产生一条 `practice_succeeded` 与 KC-002 `+0.140`。确认后删除该学生，事件与掌握度记录计数归零。
+- 生成题的请求者因 `boss_problem_review.requester_id ON DELETE RESTRICT` 保留为本地 QA 账号（用户 ID 675）；该账号没有学习事件，不作为画像证据。
+- 远征仍不能据此验收：KC-002 主线题为 `kind=NULL`，不满足 Boss `dual_track`/`closed_loop` 节点；活动 run 样本与真实先修证据仍待。没有重复 DeepSeek provider/Tutor 探针，也未做性能测试。
+
+## 2026-10-15 — AI provider 跨服务静态核查
+
+- Graph 的生成式模型路由统一通过 `provider_from_env()`；provider 固定要求 `https://api.deepseek.com`，模型白名单也限制为 DeepSeek。Boss 命题通过同一 provider 注入，没有独立厂商客户端。
+- RAG 无外部 embedding API：默认 `hash`，可选仅本地缓存权重 BGE；讯飞 Spark embedding 只有抛 `NotImplementedError` 的占位类，`select_embedder()` 对讯飞/智谱等 provider fail fast。
+- 前端没有直接调用生成式模型厂商域名；后端残留讯飞媒体类仍固定禁用（上一条已核查）。本次仅源码/配置静态检查，没有模型请求或 API 改动。
+
+## 2026-10-15 — 已退役示例库入口核对
+
+- `/examples` 页面已由 router `beforeEnter` 迁移到 `/problems`，并只保留字符串形式的 `kcCode` 查询参数；题库 KC 筛选此前已有真实浏览器证据。
+- 本轮一次 Playwright 探索误等已退役页面的标题而超时；未触发模型或业务写入。临时登录账号已删除并确认不存在，不重复重跑等价的题库筛选动作。
+
+## 2026-10-15 — 有效零题 KC 的题库深链筛选
+
+- 上次浏览器路由发现 `/examples?kcCode=PY43-KC-001` 重定向保留了 URL 参数，但题库加载后清空筛选。只读核对确认 KC-001 存在于课程 KC 元数据，当前编程题 fixture 没有该 KC 的题。
+- `ProblemListPage` 现在以完整 KC 元数据区分“有效但零题”与“未知 KC”；有效零题 KC 保留在当前筛选选项并显示 `0 题`，未知 KC 延续既有的清除行为。
+- 回归测试先 RED（下拉值从 `PY43-KC-001` 变为空）后 GREEN。定向测试 10/10，`npm run typecheck` 和触及文件 ESLint 通过；此前单独 `git diff --check` 通过。
+- 修复后真实 Chromium 在 320px 下复验 `/examples?kcCode=PY43-KC-001`：跳转到 `/problems`，所选 KC 保留，结果为 0 题；页面无溢出、脚本错误或模型请求。
+- 同一轮抽样检查 `/mainline/stage/2`、`/problems`、`/profile-room`、`/library`，均无 320px 横向溢出、页面错误或 5xx；没有业务写入或模型请求。用户 ID 678 与本轮临时账号均已清理。
+
+## 2026-10-15 — KC-006 主线 AI 编程练习入库
+
+- 只读查询确认静态 `course_problem` 和 `boss_problem_review` 均无 KC-006 题。通过正常主线第 1 章“计算与计算科学”页面点击 AI 补题一次；HTTP 200、页面展示可编辑的 Python 输出练习、浏览器错误 0。
+- 生成题用 `print` 输出“计算就是对符号串按规则做变换。”和“计算是科学研究工具。”；响应 `reviewed=true`、`aiGenerated=true`，界面显示“AI · 5 重审查”。审核表记录 ID 84，`decision=APPROVED`、`review_source=AUTOMATED`、`kc_code=PY43-KC-006`、难度 1、`kind=NULL`。它已在现有共享 AI 审核题库中，不新增表或迁移。
+- 本轮未提交代码，没有新增学习事件或掌握度。请求者 ID 679 因审核表 requester 外键保留；账号没有作为学习证据。题型为空意味着该批准题还不能覆盖要求 `dual_track` / `closed_loop` 的远征节点。
+- 这是一个正常主线出题流程，不是通用 provider 探针；没有再次发起生成或做性能测试。
+
+## 2026-10-15 — KC-006 跨学生共享题库与正式判题
+
+- 第二名临时学生从主线 KC-006 的正常“生成 AI 编程练习”入口取得审核 ID 84 的共享题，编辑两行输出代码后提交。响应 `reviewed=true`、`aiGenerated=true`；判题端点 HTTP 200，页面显示服务端通过，浏览器错误 0。
+- 本地审核表仍只有 1 条 KC-006 记录；测试产生 1 条 `learning_event_log` 和 1 条 `kc_mastery_event`。按该临时用户 ID 删除后核对用户、Boss attempt、学习事件、掌握度事件计数均为 0；共享审核记录 ID 84 保留。
+- 该动作验证共享库复用与正式判题，不重复模型生成。`kind=NULL` 仍是远征兼容缺口。
+
+## 2026-10-15 — KC 状态校正与 Twin 窄屏折叠动作
+
+- 交叉核对当前计划、执行状态与 Changelog 后，将 KC-011 状态由“最新生成失败、未入库”更正为“后续已有 `APPROVED/AUTOMATED` 入库成功，但没有正式学生判题或掌握度证据”；较早的失败日志保留为历史，不重跑生成。
+- 只读核实远征题型链路：`RogueRunStore.beginChallenge()` 传入节点题型，`useChallengeJudge` 发送 `preferredKind`；Boss 服务精确读取同 KC/题型批准题，未命中时传题型给 Graph。端到端仍缺兼容题与合法活动 run。
+- Docker Graph 容器 healthy；`127.0.0.1:8000` 没有宿主机端口映射。本轮未调用模型或写入远征数据。
+- 320px Chromium 在 `/profile-room` 打开“近期变化”折叠区；前后文档宽度均为 320px，页面错误 0。脚本过滤器最初误把 Vite 静态模块 `/src/api/tutor.ts` 当成模型 API，实际模型端点请求为 0。测试用户 685、686 均已清除；用户、学习事件、掌握事件、访谈记录计数为 0。

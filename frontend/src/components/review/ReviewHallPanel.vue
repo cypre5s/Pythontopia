@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import PyButton from '@/components/ui/PyButton.vue';
+import { routeForTwinRecommendation } from '@/composables/useNextSteps';
 import MetricCard from './MetricCard.vue';
 import KcGrowthList from './KcGrowthList.vue';
 import PathDiffView from './PathDiffView.vue';
@@ -41,15 +42,7 @@ async function loadTwinState(): Promise<void> {
 }
 
 function openNextStep(step: LearnerTwinNextStep): void {
-  const progress = twinState.value?.kcs.find((kc) => kc.kcCode === step.kcCode);
-  if (progress?.reviewDue) {
-    void router.push({ path: '/bug-mine', query: { review: step.kcCode } });
-    return;
-  }
-  void router.push({
-    path: '/expedition',
-    query: { focus: String(step.chapter), kcCode: step.kcCode },
-  });
+  void router.push(routeForTwinRecommendation(twinState.value, step));
 }
 
 // ── 周分组 ────────────────────────────────────────────────

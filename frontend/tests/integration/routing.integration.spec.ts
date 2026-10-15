@@ -4,7 +4,7 @@
 //   - 所有 R-13 新增路由（shop / merchant / placeholder / not-found）matched + props
 //   - 守卫：requiresAuth 未登录跳 login + 带 redirect 查询
 //   - 守卫：guestOnly 已登录跳 /world
-//   - redirect 路由（/town /field）与 /bug-mine 私有入口 query 清理
+//   - redirect 路由（/town /field /examples）与 /bug-mine 私有入口 query 清理
 //   - catch-all 兜底
 //   - 路由名 → name 映射
 //   - 路径解析 case sensitive / trailing slash 等边界
@@ -69,6 +69,14 @@ describe('routing.integration: 完整路由表（R-13 大爆炸）', () => {
   ])('redirect %s → %s (push)', async (from, to) => {
     await router.push(from);
     expect(router.currentRoute.value.path).toBe(to);
+  });
+
+  it('/examples redirects to /problems and preserves its KC filter', async () => {
+    await router.push('/examples?kcCode=PY43-KC-001');
+
+    expect(router.currentRoute.value.name).toBe('problems');
+    expect(router.currentRoute.value.path).toBe('/problems');
+    expect(router.currentRoute.value.query.kcCode).toBe('PY43-KC-001');
   });
 
   it('/bug-mine?submissionId=42 push 后剥离私有入口 query', async () => {
