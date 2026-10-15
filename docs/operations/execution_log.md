@@ -670,3 +670,8 @@
 
 - 对 Java、Graph、RAG 的单行日志语句按凭证、查询、提示词、内容、payload、文件名和用户标识做源码搜索。唯一 Java 候选是旧讯飞图片理解分支的数值 userId 日志；`ImageUnderstandingProperties.isEnabled()` 固定返回 false，入口在抵达该日志前即返回，因此当前运行路径不可达。Graph/RAG 此窄扫描无命中。
 - 没有代码改动或测试；该同一行搜索不能覆盖跨行 logger 调用或封装日志，全仓日志审计仍未完成。没有模型请求或业务数据写入。
+
+## 2026-10-16 — 本地 Piston 沙箱隔离复验
+
+- 运行现有 `node deploy/scripts/test_dev_piston_sandbox.mjs`，Python 3.12.0 冒烟通过，并验证宿主文件不可见、每个 job 的临时目录隔离、共享 `/tmp` 不可写、宿主 Piston loopback 不可达、x86_64 兼容 socket syscall 被拦截及超时作业 `SIGKILL`。
+- 这只覆盖本地开发容器，不证明对任意公网目标的网络 ACL 或生产 Piston 鉴权。本次没有外网请求、DeepSeek 请求或业务数据写入。

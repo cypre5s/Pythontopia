@@ -75,7 +75,7 @@ Graph 提示词静态续扫覆盖所有直接 `role=system` 构造点；除已�
 - [x] 公网 Nginx 对匿名下载计数写入按来源 IP 限速（5 次/秒、突发 10 次，超限返回 429）；仅保护 `hit` 路径，不影响计数读取和下载直出。
 - [x] BROWSE 满载请求立即 429；Graph 调用移出数据库事务，run 与 steps 保持短事务原子写；Graph 45 秒执行预算与 Java 50 秒专用读取超时对齐。
 - [x] BROWSE 创建接口复用生产账号每日 30 次/全站 300 次 AI 预算，本地按用户要求不限；90 天 run 清理级联删除 step，32 项 controller/服务/限额/数据库回归通过。
-- [x] Graph Boss 自测与正式评测都只忽略行尾空白；reference 与 debug 前导空格回归 RED/GREEN，Graph 全量 1928 passed/1 skipped。Piston 本地环境/输出探针完成；网络隔离探针结果不充分，不作为生产安全证明。
+- [x] Graph Boss 自测与正式评测都只忽略行尾空白；reference 与 debug 前导空格回归 RED/GREEN，Graph 全量 1928 passed/1 skipped。新鲜运行 `node deploy/scripts/test_dev_piston_sandbox.mjs` 通过：Python 3.12.0 可执行、宿主文件不可见、job 临时目录正确、共享 `/tmp` 不可写、loopback Piston API 不可达、兼容 socket syscall 被拦截、超时任务收到 SIGKILL。只证明本地容器配置，不证明生产 Piston 的公网 ACL/鉴权。
 - [x] NPC 状态/对话只接受已支持的 12 个中央小镇角色 key；未知 key 返回 404 且不触库，保留 Android `captain_def`。
 - [x] Web `town_hub` NPC 锚点与目录中的 `spawnMap: town_hub` 完全相符（7/7）；未放置的 4 个角色保持不在地图。
 - [x] `./dev.sh` 启动的 Spring API 显式绑定 `127.0.0.1`；运行态确认后端不再监听所有网卡，内部接口缺少服务令牌返回 401。
