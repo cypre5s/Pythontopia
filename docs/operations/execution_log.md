@@ -675,3 +675,8 @@
 
 - 运行现有 `node deploy/scripts/test_dev_piston_sandbox.mjs`，Python 3.12.0 冒烟通过，并验证宿主文件不可见、每个 job 的临时目录隔离、共享 `/tmp` 不可写、宿主 Piston loopback 不可达、x86_64 兼容 socket syscall 被拦截及超时作业 `SIGKILL`。
 - 这只覆盖本地开发容器，不证明对任意公网目标的网络 ACL 或生产 Piston 鉴权。本次没有外网请求、DeepSeek 请求或业务数据写入。
+
+## 2026-10-16 — 教师班级卡片窄屏布局
+
+- `npx playwright test e2e/teacherResponsive.spec.ts --project=chromium --retries=0`：320 CSS px 视口下教师班级卡片可见，document 宽度不超过 viewport，1/1 通过。
+- 此测试拦截认证刷新与班级列表 API，仅验证布局，不作为真实教师账号/班级动作证据。无模型调用和业务数据写入。
