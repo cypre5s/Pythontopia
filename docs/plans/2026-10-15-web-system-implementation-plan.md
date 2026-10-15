@@ -12,13 +12,15 @@
 
 本节是当前唯一交付清单；已有验证按仓库记录复用，不重复模型探针或已通过的等价测试。各任务详情和验证证据保留在下方。
 
-### 当前状态快照（2026-10-16，HEAD `05659384`）
+### 当前状态快照（2026-10-16；最近代码提交 `2cb67ce9`）
 
 **已完成并可复用的证据：** DeepSeek 文本及合成 PNG 输入曾通过真实调用，Tutor 响应为文本；最近 Tutor 浏览器流程触发题目导读与无帮助反馈两个事件，2 次 DeepSeek completion 均 HTTP 200，并显示非空文本卡片。另已完成 DeepSeek provider 静态审计：在线 LLM 只允许 `api.deepseek.com` 与批准模型，TTS/ASR/讯飞图片服务恒关闭。账号级用量锁、事件专属 AutoGen 阶段、run 检查点、附件隔离、Boss Phaser 场景、Twin P0、共享选题策略、AI 题库审核、主要管理页操作、安全基线及多项敏感日志修复均已有实现和定向验证。DeepSeek 文本/图片调用与 Tutor 产品链路均封账，不再重复；仅当具体产品代码改变且必须走模型路径时，才做一次该路径验证。图片 Web 中继稳定性保留为未验证项。
 
 **仍未完成：** 剩余本地安全类别审计；有真实先修证据的第 2 章以上远征题型、活动 run 刷新恢复和异常恢复；尚未覆盖的 Web 可见动作与窄屏交互；Twin A/B 和 7 日延迟效果；全栈功能收敛后的工程与性能收尾。Python 开发 venv 的当前 OSV 复扫只剩 `diskcache`（Mem0 可选依赖）与 `ragas`（评估可选依赖）两项，公告未列修复版本；两者不在重建后的 Graph/RAG 运行镜像中。生产 Piston ACL/ECS 和 DeepSeek 供应商账单不在本地可验证范围内。
 
 **接续顺序：** 不再安排通用 DeepSeek 测试。先完成可由现有代码与本地服务验证的安全/远征闭环，再补 Web 未覆盖动作和工程问题；长期效果依赖真实样本，性能最后测。只读复核确认管理台壳层/配色和 Pythontopia 班级 API、DTO、数据库字段已经满足本轮对齐目标；不复制 Alethicode 未提交的页面与 schema。
+
+- [x] 本地 AI 请求上限按用户要求关闭：`dev.sh` 在启动 Compose/Spring 前设置 `PYT_AI_REQUEST_LIMITS_ENABLED=false`，`TutorDailyRequestLimitService.reserve()` 因此直接返回、不写每日计数；生产 Compose 固定为 `true`。这关闭应用级每日上限，不改变 DeepSeek 供应商自身的额度或限流；本轮仅核对配置，没有发起请求。
 
 2026-10-16 安全续审发现 `TutorVisualAids.vue` 的 Mermaid 分支直接将 Mermaid 输出写入 `v-html`，绕过已用于工坊导图的 CSSOM/DOMPurify 清洗。现改为先调用共享 `sanitizeMermaidSvgMarkup`，并关闭 HTML labels 以保留 SVG 文本标签。新组件红测先复现 `foreignObject`，修复后 Tutor 图解与 sanitizer 定向测试 4/4、前端 typecheck、触及文件 ESLint 和 diff 检查通过。没有模型请求；安全审计其余类别仍开放。
 
