@@ -7,6 +7,12 @@
 - 失败响应仍是文字，助手消息 DOM 不含图片元素；前端 Markdown 图片关闭测试 2/2 通过。Graph provider / Tutor 图片与 SSE 定向测试 54/54 通过，1 条既有 pytest 标记警告。
 - 临时学生账号、2 条 `workshop_chat_turn` 与合成 PNG 已清理。Provider `/models` 可达并不能证明 completion 可用；未测性能，也未重试上游请求。
 
+## 2026-10-15 — Tutor 首 token 等待心跳
+
+- 真实请求的 Spring 日志指向 Graph SSE 120 秒空闲读超时。根因是 AutoGen 等待 Tutor 事件队列时直接 `await events.get()`；流式首 token 尚未到达时，该等待没有经过已有心跳器。
+- RED/GREEN：新增慢首 token 回归，修复前没有 ping；改为用心跳剩余时间限时等待事件，超时则发 SSE 注释 ping。Tutor route / ask stream / AutoGen runtime 定向 28 项通过；Ruff lint 通过。
+- 仅验证 Graph 的事件等待会定期发送 ping；本轮运行中的容器未重载改动，DeepSeek completion 仍不可用，Spring 120 秒总期限及真实慢模型整链路未验证。Ruff format check 对两个文件仍报告旧格式差异，未做整文件重排。
+
 ## 2026-10-15 — CORS 与媒体错误隔离
 
 - RED/GREEN：回归先复现 `https://*.example.com` 在带凭据 CORS 配置下被接受，再改用精确 `allowed-origins` 并拒绝任何含 `*` 的来源；ffmpeg stub 输出哨兵文本时，回归确认 API 不再返回内部错误内容，服务端日志仍保留异常。

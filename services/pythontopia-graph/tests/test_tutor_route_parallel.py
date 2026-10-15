@@ -188,6 +188,29 @@ async def test_heartbeat_pings_during_slow_non_stream_phases(
     assert result["answer_md"] == "参考 [页 12]，修订后的讲解。"
 
 
+async def test_heartbeat_pings_while_tutor_waits_for_first_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(tutor_routes, "_HEARTBEAT_S", 0.05)
+
+    async def slow_answer(self, **kwargs) -> AsyncIterator[str]:
+        await asyncio.sleep(0.2)
+        yield "参考 [页 12]，for 循环可遍历列表。"
+
+    monkeypatch.setattr(tutor_routes.TutorAgent, "ask_stream", slow_answer)
+    response = await tutor_routes.tutor_ask_stream(
+        TutorAskRequest(user_id=1, question="for 循环怎么用", kc_codes=["PY43-KC-001"]),
+        provider=CountingTailProvider(),
+        evidence_fetcher=StaticEvidenceFetcher([HIT]),
+    )
+    chunks = await _collect_raw(response)
+
+    assert ": ping\n\n" in chunks
+    events = _parse_events(chunks)
+    assert events[-1][0] == "result"
+    assert events[-1][1]["answer_md"] == "参考 [页 12]，for 循环可遍历列表。"
+
+
 def test_heartbeat_timer_logic_with_fake_clock() -> None:
     now = {"t": 100.0}
     heartbeat = tutor_routes._SseHeartbeat(heartbeat_s=10.0, clock=lambda: now["t"])

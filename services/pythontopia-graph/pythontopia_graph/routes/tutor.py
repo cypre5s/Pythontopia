@@ -622,7 +622,14 @@ async def tutor_ask_stream(
             workflow_task = asyncio.create_task(run_tutor_autogen())
             try:
                 while True:
-                    event = await events.get()
+                    try:
+                        event = await asyncio.wait_for(
+                            events.get(), timeout=heartbeat.seconds_until_due()
+                        )
+                    except TimeoutError:
+                        if heartbeat.due():
+                            yield _PING
+                        continue
                     if event is None:
                         break
                     yield event

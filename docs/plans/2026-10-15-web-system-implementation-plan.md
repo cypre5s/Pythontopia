@@ -52,7 +52,7 @@
 
 **Steps:** Verify supported model host/name allowlists, that image input reaches DeepSeek but response schema remains text-only, that voice is disabled, and that cancellation/checkpoint restore are scoped. Run focused pytest and Java Tutor authorization/checkpoint tests. Do not migrate Alethicode's uncommitted controller, WebSocket bus, or V124 table.
 
-**Status:** Static allowlists, text-only rendering, and disabled TTS are confirmed; mocked provider/image/SSE tests pass. Fresh text and image Web calls timed out at the 120 s Tutor→Graph relay, and a direct Flash stream probe produced no token within 65 s. DeepSeek `/models` returned 200, which does not verify completion. Keep real inference verification open until the provider responds.
+**Status:** Static allowlists, text-only rendering, and disabled TTS are confirmed; mocked provider/image/SSE tests pass. Fresh text and image Web calls timed out at the 120 s Tutor→Graph relay, and a direct Flash stream probe produced no token within 65 s. DeepSeek `/models` returned 200, which does not verify completion. A RED/GREEN fix now emits Graph SSE pings while the first Tutor token is pending; the runtime container has not reloaded it, so real inference and the 120 s end-to-end bound remain open.
 
 ## Task 5: Verify the existing expedition and twin loop in the browser
 
