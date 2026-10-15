@@ -2,7 +2,7 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-16）**：最近代码提交 `0d65365a`（分支 `codex/deepseek-autogen-admin`）；异常日志脱敏批次已提交。真实 DeepSeek 文本与合成 PNG 图片输入、文本输出已有全栈记录，Tutor AutoGen 产品流程也已完成真实浏览器联测；provider 静态审计确认服务端 LLM 路由只允许 DeepSeek，TTS/ASR/讯飞图片服务关闭。本轮没有模型或网络请求，DeepSeek 验证已封账，不重复通用探针。Tutor、Twin P0、Phaser Boss、管理台布局/班级字段对齐及部分 Web 动作有代码和验证记录。剩余工作以本地安全边界、远征真实闭环、Web 动作覆盖、Twin 效果研究及工程收尾为主，性能最后测。细项只维护在下方唯一任务清单。
+> **当前快照（2026-10-16）**：最近代码提交 `0d65365a`（分支 `codex/deepseek-autogen-admin`）；异常日志脱敏批次已提交。真实 DeepSeek 文本与合成 PNG 图片输入、文本输出已有全栈记录，Tutor AutoGen 产品流程也已完成真实浏览器联测；provider 静态审计确认服务端 LLM 路由只允许 DeepSeek，TTS/ASR/讯飞图片服务关闭。本轮没有模型或外部网络请求；本地配置/浏览器通过本地 HTTP 已核对，DeepSeek 验证已封账，不重复通用探针。Tutor、Twin P0、Phaser Boss、管理台布局/班级字段对齐及部分 Web 动作有代码和验证记录。剩余工作以本地安全边界、远征真实闭环、Web 动作覆盖、Twin 效果研究及工程收尾为主，性能最后测。细项只维护在下方唯一任务清单。
 
 ## 当前进度
 
