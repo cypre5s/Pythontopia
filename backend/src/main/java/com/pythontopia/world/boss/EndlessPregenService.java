@@ -393,7 +393,7 @@ public class EndlessPregenService {
           "prefetch ready job={} user={} ch={} kc={} difficulty={} problemId={}",
           jobId, userId, chapter, kcCode, difficulty, problem.problemId());
     } catch (RuntimeException ex) {
-      String reason = boundedError(ex.getMessage());
+      String reason = "题目预加载失败，可重试";
       jdbcTemplate.update(
           "UPDATE pregenerated_problem"
               + " SET status = 'FAILED', payload = NULL, problem_id = NULL, error_message = ?,"
@@ -586,8 +586,7 @@ public class EndlessPregenService {
     } catch (BusinessException exception) {
       throw exception;
     } catch (RuntimeException ex) {
-      log.warn(
-          "claimReady failed user={} ch={} kc={}: {}", userId, chapter, kcCode, ex.getMessage());
+      log.warn("claimReady failed errorType={}", ex.getClass().getSimpleName());
       return Optional.empty();
     }
   }
@@ -655,9 +654,7 @@ public class EndlessPregenService {
     } catch (BusinessException exception) {
       throw exception;
     } catch (RuntimeException ex) {
-      log.warn(
-          "persistConsumed failed user={} problemId={}: {}",
-          userId, problem.problemId(), ex.getMessage());
+      log.warn("persistConsumed failed errorType={}", ex.getClass().getSimpleName());
       return problem;
     }
   }
@@ -729,7 +726,7 @@ public class EndlessPregenService {
       }
       return Optional.ofNullable(deserialize(payloads.get(0)));
     } catch (RuntimeException ex) {
-      log.warn("findByProblemId failed user={} problemId={}: {}", userId, problemId, ex.getMessage());
+      log.warn("findByProblemId failed errorType={}", ex.getClass().getSimpleName());
       return Optional.empty();
     }
   }
@@ -823,7 +820,8 @@ public class EndlessPregenService {
     try {
       return objectMapper.readValue(payload, BossInternalProblem.class);
     } catch (JsonProcessingException e) {
-      log.warn("deserialize pregenerated payload failed: {}", e.getMessage());
+      log.warn(
+          "deserialize pregenerated payload failed errorType={}", e.getClass().getSimpleName());
       return null;
     }
   }

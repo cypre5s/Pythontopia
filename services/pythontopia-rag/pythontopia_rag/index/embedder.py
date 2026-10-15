@@ -127,8 +127,9 @@ class FallbackEmbedder:
                 self._validate(vectors, len(texts), self._primary.name)
                 return vectors
             except Exception as exc:  # noqa: BLE001 - 兜底边界需要吞掉 provider 细节
-                self._fallback_reason = f"{type(exc).__name__}: {exc}"
-                log.warning("embedding primary failed; switching to hash fallback: %s", exc)
+                error_type = type(exc).__name__
+                self._fallback_reason = error_type
+                log.warning("embedding primary failed; switching to hash fallback: %s", error_type)
         vectors = await self._fallback.embed(texts)
         self._validate(vectors, len(texts), self._fallback.name)
         return vectors

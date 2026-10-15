@@ -128,6 +128,24 @@ async def test_schema_violation_retries_once_then_fails() -> None:
 
 
 @pytest.mark.asyncio
+async def test_provider_error_does_not_flow_into_card_failure() -> None:
+    class BrokenProvider(LlmProvider):
+        async def chat(self, messages, **kwargs):  # type: ignore[override]
+            raise RuntimeError("student-card-secret-sentinel")
+
+        async def chat_stream(self, messages, **kwargs):  # type: ignore[override]
+            if False:
+                yield ""
+
+    agent = TutorWorkflowCardAgent(BrokenProvider())
+    with pytest.raises(CardGenerationError) as excinfo:
+        await agent.problem_guide(PROBLEM, [HIT], "")
+
+    assert excinfo.value.bucket == "SYSTEM_ERROR"
+    assert "student-card-secret-sentinel" not in str(excinfo.value)
+
+
+@pytest.mark.asyncio
 async def test_skeleton_requires_two_todos() -> None:
     bad = {
         "description": "骨架",

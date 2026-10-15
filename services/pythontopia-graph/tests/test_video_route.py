@@ -7,6 +7,9 @@
 
 from __future__ import annotations
 
+import asyncio
+import sys
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -77,6 +80,43 @@ def test_search_maps_and_cleans_sample_payload(monkeypatch: pytest.MonkeyPatch) 
     assert item["danmaku"] == 678  # video_review → danmaku
     assert item["pubdate"] == 1600000000
     assert item["url"] == "https://www.bilibili.com/video/BV1xx411c7XD"
+
+
+def test_bilibili_retry_log_does_not_include_search_error(monkeypatch, caplog) -> None:
+    async def fail_search(**kwargs):
+        raise RuntimeError("video-query-secret-sentinel")
+
+    fake_search = SimpleNamespace(
+        SearchObjectType=SimpleNamespace(VIDEO="video"), search_by_type=fail_search
+    )
+
+    async def no_sleep(_seconds: float) -> None:
+        return None
+
+    monkeypatch.setitem(sys.modules, "bilibili_api", SimpleNamespace(search=fake_search))
+    monkeypatch.setattr(video_route, "_configure_bilibili_proxy", lambda: None)
+    monkeypatch.setattr(video_route.asyncio, "sleep", no_sleep)
+
+    with pytest.raises(RuntimeError, match="video-query-secret-sentinel"):
+        asyncio.run(video_route._bilibili_search_videos("private query", page=1))
+
+    assert "RuntimeError" in caplog.text
+    assert "video-query-secret-sentinel" not in caplog.text
+
+
+def test_search_failure_response_does_not_include_upstream_error(monkeypatch) -> None:
+    async def fail_search(keyword: str, page: int) -> dict[str, Any]:
+        raise RuntimeError("video-query-secret-sentinel")
+
+    monkeypatch.setattr(video_route, "_bilibili_search_videos", fail_search)
+    response = TestClient(app).get(
+        "/agents/video/bilibili/search",
+        params={"keyword": "private query", "with_summary": "false"},
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "VIDEO_SEARCH_FAILED"
+    assert "video-query-secret-sentinel" not in response.text
 
 
 def test_limit_is_respected(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -362,4 +402,4 @@ def test_search_failure_returns_502_structured_error(monkeypatch: pytest.MonkeyP
     assert response.status_code == 502
     detail = response.json()["detail"]
     assert detail["code"] == "VIDEO_SEARCH_FAILED"
-    assert "风控拦截" in detail["message"]
+    assert detail["message"] == "视频检索暂时不可用，请稍后重试。"

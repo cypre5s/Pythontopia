@@ -156,7 +156,7 @@ async def courseware_answer(
         elif isinstance(resp.content_text, str):
             answer_md = resp.content_text.strip()
     except Exception as exc:  # noqa: BLE001 - LLM 故障：回退证据要点，不阻断、不伪造
-        LOG.warning("courseware answer LLM failed: %s", exc)
+        LOG.warning("courseware answer LLM failed: %s", type(exc).__name__)
 
     if not answer_md:
         answer_md = _fallback_answer(bundle)

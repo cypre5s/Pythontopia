@@ -799,8 +799,11 @@ async def tutor_ask_stream(
                     personalization_note=TutorAgent.personalization_note(body.profile_brief),
                 ),
             )
-        except Exception as exc:
-            yield _format_sse("error", {"code": "TUTOR_FAILED", "message": str(exc)})
+        except Exception:
+            yield _format_sse(
+                "error",
+                {"code": "TUTOR_FAILED", "message": "导师服务暂时不可用，请稍后重试。"},
+            )
 
     async def generate() -> AsyncIterator[str]:
         # 统一发送出口：每个 chunk 出站即刷新心跳时间戳（ping 本身也经此出站）。
@@ -915,13 +918,16 @@ async def _quiz_stages(
             yield ping
         try:
             quiz_q = await ask_task
-        except Exception as exc:  # noqa: BLE001 - 出题失败 fail-fast 报错，不静默降级
+        except Exception:  # noqa: BLE001 - 出题失败 fail-fast 报错，不静默降级
             yield _trace_finish(
                 "quiz_question",
                 "error",
                 int((time.monotonic() - q_started) * 1000),
             )
-            yield _format_sse("error", {"code": "QUIZ_FAILED", "message": str(exc)})
+            yield _format_sse(
+                "error",
+                {"code": "QUIZ_FAILED", "message": "测验暂时不可用，请稍后重试。"},
+            )
             return
         stem = quiz_q["stem"]
         blanks = quiz_q["blanks"]
@@ -988,13 +994,16 @@ async def _quiz_stages(
         yield ping
     try:
         judged = await judge_task
-    except Exception as exc:  # noqa: BLE001 - 评卷失败 fail-fast 报错
+    except Exception:  # noqa: BLE001 - 评卷失败 fail-fast 报错
         yield _trace_finish(
             "quiz_judge",
             "error",
             int((time.monotonic() - j_started) * 1000),
         )
-        yield _format_sse("error", {"code": "QUIZ_FAILED", "message": str(exc)})
+        yield _format_sse(
+            "error",
+            {"code": "QUIZ_FAILED", "message": "测验暂时不可用，请稍后重试。"},
+        )
         return
     explanation = judged["explanation_md"]
     verdict = judged["verdict"]

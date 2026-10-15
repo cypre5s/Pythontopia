@@ -353,8 +353,11 @@ async def _tool_loop_stream_generator(
                 on_step=on_step,
             )
             await emit("result", result.model_dump(mode="json"))
-        except Exception as exc:  # noqa: BLE001 - surface as SSE error event
-            await emit("error", {"code": "TOOL_LOOP_FAILED", "message": str(exc)})
+        except Exception:  # noqa: BLE001 - surface a stable SSE error event
+            await emit(
+                "error",
+                {"code": "TOOL_LOOP_FAILED", "message": "The tool workflow failed."},
+            )
         finally:
             await queue.put(None)
 

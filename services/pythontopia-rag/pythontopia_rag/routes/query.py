@@ -207,7 +207,9 @@ def _resolve_rebuild_source(request: Request) -> InMemoryPageSource:
     try:
         pages = page_records_to_indexable(fetch_pages(db_url))
     except Exception as exc:  # fail-soft：DB 不可用时回退启动快照
-        logger.warning("RAG rebuild DB fetch failed; using startup snapshot: %s", exc)
+        logger.warning(
+            "RAG rebuild DB fetch failed; using startup snapshot: %s", type(exc).__name__
+        )
         pages = None
     if pages:
         source = InMemoryPageSource(pages=pages)
@@ -231,9 +233,10 @@ async def rag_rebuild(
         )
     except EmbeddingDegradedError as exc:
         # 嵌入中途降级 → 索引未被触碰，旧索引仍在服务；诚实报错而非留下混合向量空间。
-        logger.error("RAG rebuild aborted: %s", exc)
+        logger.error("RAG rebuild aborted: %s", type(exc).__name__)
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="RAG index rebuild failed because embedding degraded; the existing index is unchanged.",
         ) from exc
     # 重建顺带刷新 KC 前置图（重灌库后前置关系可能变化；失败保留旧图）。
     refreshed = fetch_kc_graph(os.environ.get("PYT_DB_URL", DEFAULT_DB_URL))

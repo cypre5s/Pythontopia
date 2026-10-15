@@ -81,6 +81,59 @@ async def test_decompose_produces_ordered_watch_learn_practice_assess() -> None:
 
 
 @pytest.mark.asyncio
+async def test_chat_json_logs_only_provider_exception_type(caplog) -> None:
+    class BrokenProvider(StubProvider):
+        async def chat(self, messages, **kwargs):  # type: ignore[override]
+            raise RuntimeError("student-query-secret-sentinel")
+
+    agent = OrchestratorAgent(BrokenProvider())
+
+    result = await agent._chat_json([{"role": "user", "content": "private question"}])
+
+    assert result == {}
+    assert "RuntimeError" in caplog.text
+    assert "student-query-secret-sentinel" not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_run_streaming_does_not_return_exception_text(monkeypatch) -> None:
+    graph = OrchestratorGraph(provider=StubProvider([]))
+
+    async def fail_invoke(req, emit):
+        raise RuntimeError("student-content-secret-sentinel")
+
+    monkeypatch.setattr(graph, "_invoke", fail_invoke)
+    events: list[tuple[str, dict]] = []
+
+    async def emit(event: str, data: dict) -> None:
+        events.append((event, data))
+
+    await graph.run_streaming(request_of("学循环", "secret-error"), emit)
+
+    assert events == [
+        (
+            "error",
+            {"code": "ORCHESTRATOR_FAILED", "message": "The learning workflow failed."},
+        )
+    ]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_failure_does_not_return_exception_text(monkeypatch) -> None:
+    graph = OrchestratorGraph(provider=StubProvider([]))
+
+    async def fail_dispatch(step, user_id, focus_hint_extra):
+        raise RuntimeError("dispatch-content-secret-sentinel")
+
+    monkeypatch.setattr(graph, "_dispatch_step", fail_dispatch)
+    response = await graph.run(request_of("学循环", "dispatch-secret"))
+    serialized = str(response.model_dump(mode="json"))
+
+    assert "dispatch-content-secret-sentinel" not in serialized
+    assert all(not item.ok or "执行失败" in item.summary for item in response.dispatch_results)
+
+
+@pytest.mark.asyncio
 async def test_decompose_uses_llm_fields_and_filters_unknown_kc() -> None:
     payload = {
         "steps": [
@@ -286,10 +339,10 @@ class BoomProvider(LlmProvider):
     """chat 与 chat_stream 都抛错：模拟 LLM provider 整体不可用。"""
 
     async def chat(self, messages, **kwargs):  # type: ignore[override]
-        raise RuntimeError("llm upstream down")
+        raise RuntimeError("student-content-secret-sentinel")
 
     async def chat_stream(self, messages, **kwargs) -> AsyncIterator[str]:  # type: ignore[override]
-        raise RuntimeError("llm upstream down")
+        raise RuntimeError("student-content-secret-sentinel")
         yield  # pragma: no cover - 仅为构成异步生成器
 
 
@@ -475,7 +528,7 @@ def test_fallback_clarify_reply_asks_one_question_without_plan_dump() -> None:
 
 
 @pytest.mark.asyncio
-async def test_graph_provider_outage_yields_deterministic_structured_reply() -> None:
+async def test_graph_provider_outage_yields_deterministic_structured_reply(caplog) -> None:
     """LLM provider 不可用：整轮不崩溃，回复为确定性结构化教学内容并在 trace 标注降级。"""
     await reset_session(1, "t-outage")
     graph = OrchestratorGraph(provider=BoomProvider())
@@ -491,6 +544,8 @@ async def test_graph_provider_outage_yields_deterministic_structured_reply() -> 
         for step in resp.trace
     )
     assert resp.safety_result.passed is True
+    assert "RuntimeError" in caplog.text
+    assert "student-content-secret-sentinel" not in caplog.text
     assert resp.grounding_result.passed is True
 
 

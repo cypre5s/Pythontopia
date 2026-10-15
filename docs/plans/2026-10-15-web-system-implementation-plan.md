@@ -4,13 +4,31 @@
 
 **Goal:** Close the confirmed Web security leaks and finish evidence-based verification of the existing AutoGen tutor, expedition, learner twin, and admin flows without duplicating architecture.
 
-**Architecture:** Keep Spring APIs, PostgreSQL state, fixed-stage AutoGen, DeepSeek-only model routing, server-owned learning evidence, and existing Vue/Phaser components. Make only narrow fixes in current modules; use existing deployment limits, migrations, test helpers, and UI primitives.
+**Architecture:** Keep Spring APIs, PostgreSQL state, event-specific AutoGen stages, DeepSeek-only model routing, server-owned learning evidence, and existing Vue/Phaser components. Make only narrow fixes in current modules; use existing deployment limits, migrations, test helpers, and UI primitives.
 
 **Tech Stack:** Java 21, Spring Boot, PostgreSQL/Flyway, Python 3.11+, FastAPI/LangGraph/AutoGen, Vue 3/TypeScript, Phaser 3, Vitest, Playwright.
 
 ## 总任务清单
 
 本节是当前唯一交付清单；已有验证按仓库记录复用，不重复模型探针或已通过的等价测试。各任务详情和验证证据保留在下方。
+
+### 当前状态快照（2026-10-15）
+
+**已完成并可复用的证据：** DeepSeek 文本及合成 PNG 输入曾通过真实调用，Tutor 响应为文本；本轮新鲜 Tutor 浏览器流程触发题目导读与无帮助反馈两个事件，2 次 DeepSeek completion 均 HTTP 200，并显示非空文本卡片。账号级用量锁、事件专属 AutoGen 阶段、run 检查点、附件隔离、Boss Phaser 场景、Twin P0、共享选题策略、AI 题库审核、主要管理页操作、安全基线及多项敏感日志修复均已有实现和定向验证。现阶段不重跑通用 DeepSeek 探针；图片 Web 中继超时作为未验证的稳定性问题保留。
+
+**仍未完成：** 剩余安全类别与生产执行器边界审计；有真实先修证据的第 2 章以上远征题型、活动 run 刷新恢复和异常恢复；尚未覆盖的 Web 可见动作与路由；Twin A/B 和 7 日延迟效果；全栈功能收敛后的性能采样。管理台现有页面的 Alethicode 格式对齐已完成，剩余管理控件验收计入 Web 动作矩阵。生产 Piston ACL/ECS 不访问，按范围保留为外部未核验项。
+
+**接续顺序：** 不再做重复 DeepSeek 请求；先完成可由现有代码与本地服务验证的远征/安全闭环，再补 Web 未覆盖动作和工程问题；长期效果依赖真实样本，性能最后测。管理台保留 Pythontopia 的真实业务 API 和类型化 DTO，仅复用 Alethicode 的页面布局与视觉规范。
+
+**本轮续接记录：** 对照了 Alethicode 与 Pythontopia 当前 Tutor AutoGen 阶段及事件集合；Pythontopia 保留 SSE、附件私有解析与 run 检查点，并按事件选择所需阶段。初次浏览器联测发现本地 Java 进程早于当前编译类启动，旧固定阶段校验导致反馈事件在 SSE 内失败；按 `./dev.sh --sandbox` 重启后，新鲜 Chromium 流程注册/登录、加载训练题、完成导读与“没帮助→换种解释”两事件均通过，DeepSeek completion 2/2 HTTP 200、文本卡片分别 278/348 字符、页面错误 0，临时账号已删除。此证据不替代历史 PNG 输入测试，也不重复运行通用模型探针。
+
+本轮后续安全续扫复现 `WeeklyEvaluationScheduler` 将单个学生 ID 与异常正文写入失败日志；增加合成哨兵后先 RED，再改为只记录异常类型，定向 `WeeklyEvaluationSchedulerTest` 4/4。无模型请求。
+
+继续检查远征预取发现失败异常会被写入学生可读的 `error_message`，且领取题/落库失败日志带账号、KC/题目标识及异常正文；现统一使用固定重试提示并只记异常类型。新增哨兵先 RED 后 GREEN，`EndlessPregenServiceTest` 19/19；与周报测试合跑 23/23。未调用模型。
+
+另发现画像地图初始化失败会把 Graph 异常正文写入学生运行审计；现改为固定 `graph-service-error`。合成响应先 RED，`CurriculumMapperServiceTest` 1/1；本批三类服务合跑 24/24。未调用模型。
+
+本地运行态抽查：Vite、Graph `/healthz`、RAG `/healthz` 与 `/readyz` 返回 200；Spring `/readyz` 返回 503（现有记录指向可选视频字幕能力不可用）。此状态不作为 Tutor 或业务链路联测通过的证据。
 
 - [x] 已落地的安全基线：凭据通配 CORS、媒体错误脱敏、注册角色白名单、教师邀请码、DISABLED 账号拦截、JWT tokenVersion 撤销、公网注册/登录/加入码限流契约；Auth/JWT/CORS 有回归测试。
 - [x] 课堂加入码账号限速：30 次/10 分钟；Tutor 工作流错误对学生脱敏。
@@ -22,11 +40,20 @@
 - [x] 首页与学习分身对 Twin 推荐使用同一目的地规则；未评估 KC 返回主线、到期复习进入复习、已评估 KC 进入远征。
 - [x] 世界 HUD 中未评估 Twin 推荐的真实浏览器点击：关闭可选探针后鼠标展开目标面板并到达主线地图，0/65 已评估、掌握证据未改变、浏览器错误为 0；修复 `role="button"` 标题被拖动手势拦截的问题。
 - [x] 远征对服务端不可判定的无效题提供重新出题操作，不扣体力也不提交结算；加入 HUD 拖拽指针回归后，5 个受影响前端测试文件共 76 项、typecheck、ESLint、diff 检查通过。
-- [x] AutoGen 对照审查确认 Pythontopia 已有固定阶段 Tutor；保留现有 SSE、授权、附件和 V199/V203/V208 run 检查点契约，不移植 Alethicode 的 V124/thread dispatcher。
+- [x] AutoGen 对照审查确认 Pythontopia 保留自有 Tutor SSE、授权、附件和 V199/V203/V208 run 检查点契约，并按事件选择阶段；不移植 Alethicode 的 V124/thread dispatcher。
 - [x] 既有只读复核未发现确认的 P0/P1 代码缺陷；认证、主要 IDOR、判题 fail-closed 与 CORS 有实现和测试落点。本轮复查确认注册/教师邀请码、停用账号/JWT 代次撤销、Piston 默认与 subprocess fail-closed、排行榜按服务端 verified attempt 结算均有代码实现。生产 Piston 若无私网 ACL 或鉴权代理，仍有未授权执行风险；本地无法代表生产确认。
-- [ ] 附件扩展安全审计：逐类闭合判题隔离与部署边界、远征状态篡改/幂等、媒体上传、SSRF、XSS、SQL、速率限制、依赖与敏感日志；只对确认问题修复并补回归。SSRF 当前代码复核覆盖唯一用户目标触发的 BROWSE 导航，服务端注入 host allowlist，Graph 每次导航/重定向验证公网 DNS、scheme、标准端口并将 Chromium DNS pin 到公网地址；对应 allowlist/executor 测试 58/58 通过。敏感日志已修复上传、索引、trace、Piston、Mem0/Zep、Graph retry、画像访谈、NPC 对话、RAG embedding、B 站问答/搜索、Feynman、BROWSE、Boss 出题/判题与章测 Graph 错误中的已复现泄露；本地 Piston Compose 配置与运行态均仅接入专用 `judge-execution` 网络，宿主端口限制为回环，且 Python 3.12.0 执行冒烟成功（输出 4）；Java 适配器对远端失败 fail-closed。MetaReflection 调度异常和反馈汇总日志、Tutor/视频 Graph 兜底、DialogContext、MemoryRetrieval、LearningPath、WorldState 降级日志也已移除异常正文；其他异常日志类别和生产 Piston ACL 仍待核实。当前 `/readyz` 整体仍因已记录的 `VIDEO_TRANSCRIPT_UNAVAILABLE` 返回 503，judge readiness 本身为 ready。
+- [ ] 附件扩展安全审计：逐类闭合判题隔离与部署边界、远征状态篡改/幂等、媒体上传、SSRF、XSS、SQL、速率限制、依赖与敏感日志；只对确认问题修复并补回归。SSRF 当前代码复核覆盖唯一用户目标触发的 BROWSE 导航，服务端注入 host allowlist，Graph 每次导航/重定向验证公网 DNS、scheme、标准端口并将 Chromium DNS pin 到公网地址；对应 allowlist/executor 测试 58/58 通过。敏感日志已修复上传、索引、trace、Piston、Mem0/Zep、Graph retry、画像访谈、NPC 对话、RAG embedding、B 站问答/搜索、Feynman、BROWSE、Boss 出题/判题与章测 Graph 错误中的已复现泄露；RAG 启动/自愈/索引重建和 embedding 降级异常现只记录异常类型，503 返回固定说明，哨兵与定向测试共 33/33。其余已有修复包括本地 Piston Compose 配置与运行态仅接入专用 `judge-execution` 网络、宿主端口限制为回环、Python 3.12.0 执行冒烟成功（输出 4）、Java 适配器对远端失败 fail-closed；MetaReflection 调度异常和反馈汇总日志、Tutor/视频 Graph 兜底、DialogContext、MemoryRetrieval、LearningPath、WorldState 降级日志也已移除异常正文。新扫到 Boss 题目存档反序列化异常会把 payload 片段及 owner/problem 标识写入日志；现改为仅记异常类型，`EndlessPregenServiceTest` 17/17（RED/GREEN）。其余异常日志、开发 venv advisory 和生产 Piston ACL 仍待核实；当前 `/readyz` 整体因已记录的 `VIDEO_TRANSCRIPT_UNAVAILABLE` 返回 503，judge readiness 本身为 ready。
+  - 10/15 运行已有 `node deploy/scripts/test_dev_piston_sandbox.mjs`：Python 3.12.0 执行成功；宿主私有文件不可见、临时文件限定在 job 目录、共享 `/tmp` 写入被拒、loopback/compat socket 访问被阻断、超时进程以 SIGKILL 终止；临时标记文件已清理。Docker 运行态检查确认 Piston API 容器非 privileged、只读 rootfs、丢弃全部默认 capabilities、`no-new-privileges`、仅接入 `judge-execution`，并仅在 `127.0.0.1:2000` 暴露；该检查只覆盖本地开发运行态，完整安全审计及生产 ACL 仍未关闭。未发模型请求。
+  - 10/15 续扫：周报定时任务的单人失败日志不再输出学生 ID 或异常正文，只记录异常类型；哨兵先 RED 后 GREEN，`WeeklyEvaluationSchedulerTest` 4/4。无模型请求。
+  - 10/15 续扫远征预取：失败状态不再保存上游异常正文；claim/persist 异常日志只记异常类型。合并验证 `EndlessPregenServiceTest` 19/19、`WeeklyEvaluationSchedulerTest` 4/4；生产行为以外未调用模型。
+  - 10/15 画像地图初始化失败审计：`resource_run.output_artifact` 固定记录错误码，不再持久化 Graph 异常正文；`CurriculumMapperServiceTest` 1/1，三类服务测试合跑 24/24。
 - [x] 禁用媒体 provider 不分配无用请求状态：旧图片生成 provider 固定关闭；原入口会在返回 unavailable 前先创建 per-user rate-limit counter，第 51 次请求再错误返回 429。RED/GREEN 调整顺序后，`XfyunImageServiceTest` 2/2，重复调用始终返回 disabled 错误，无 DeepSeek/上游调用。
 - [x] 本轮安全续扫修复：MemoryBrief 网络异常和 schema 校验日志不再输出学生查询、记忆原文或异常栈；上传配额在 `getBytes()` 前检查，超额请求不再额外复制文件到堆。RED/GREEN：`test_memory_brief_client.py` 27/27、`UploadServiceTest` 18/18。未发 DeepSeek 请求。
+- [x] NPC 定时预热失败日志已去掉异常原文和学生 ID，只记录异常类型；合成哨兵先 RED 后 GREEN，`NpcGreetingPrewarmJobTest` 6/6。无模型请求。
+- [x] BROWSE 底层执行与外层派发异常不再把异常原文（例如含 token 的 URL）写入结果、SSE 步骤或日志；缺依赖保留固定提示。两条哨兵回归先 RED 后 GREEN，`test_browse_executor.py` 与 `test_agentic_loop.py` 共 79/79，Ruff 通过。无模型请求。
+- [x] 编排记忆 brief 与 loop 记录 sink 的失败日志不再输出学生查询或存档异常正文；两个哨兵先 RED 后 GREEN，`test_agentic_loop.py` 42/42、Ruff 与差异检查通过。无模型请求。
+- [x] 编排 Postgres checkpointer 连接失败日志不再输出异常正文或 DSN 密码；哨兵先 RED 后 GREEN。与记忆 brief/sink 回归合并验证 `test_agentic_loop.py`、`test_orchestrator_checkpoint.py` 共 48/48，Ruff 与差异检查通过。
+- [x] RAG KC 前置图数据库失败日志只保留异常类型；哨兵先 RED 后 GREEN，`test_kc_graph.py` 8/8。真实本地 RAG 查询 `input 函数`、`for 循环`、`列表` 均 HTTP 200、返回 5 条带 page_id/document_id 的引用；RAG health 200，Ruff 与差异检查通过，无 DeepSeek 请求。
 - [x] 敏感学习数据日志脱敏：上传解析、上传语料索引、学生调试轨迹、Piston 远端错误、Mem0/Zep 错误响应、通用 Graph retry、画像访谈、NPC 对话、RAG embedding、B 站问答/搜索、Feynman、BROWSE、Boss 出题/判题、章测 Graph 请求、ReflectionService、Tutor 落库/画像/班级/记忆/历史上下文/提交反馈、MemoryBriefService 降级、工作流检查点及 SSE 结果投影失败均不记录文件名、学习文本、学生输出/代码、模型回答、会话标识或异常原文；投影异常传给 SSE emitter 时改用固定错误文案。RED/GREEN 套件分别为 `UploadServiceTest` 17/17、`UploadCorpusIndexingServiceTest` 1/1、`PythonTraceCollectorTest` 1/1、`PistonPythonSandboxTest` 10/10、`Mem0MemoryProviderTest` 4/4、`ZepMemoryProviderTest` 3/3、`GraphClientRetryHelperTest` 1/1、`ProfileServiceFailureTest` 2/2、`NpcDialogGraphClientTest` 2/2、`EmbeddingClientTest` 7/7、`BilibiliInsightServiceTest` 4/4、`FeynmanGraphClientTest` 4/4、`BrowseGraphClientTest` 5/5、`BilibiliVideoServiceTest` 2/2、`BossServiceTest` 53/53、`ChapterTestGraphClientTest` 2/2、`TutorServiceFailureTest` 2/2、`TutorMemoryBriefTest` 4/4、`TutorHistoryBriefTest` 6/6、`TutorWorkflowServiceTest` 33/33、`TutorWorkflowGraphClientTest` 5/5、`MemoryBriefServiceTest` 7/7、`ReflectionServiceTest` 8/8、`WorkshopGraphClientTest` 4/4、`TutorWorkflowSubmissionFeedbackListenerTest` 6/6。
   - 10/15 续扫：工坊学情上下文、NPC 问候、记忆 embedding、资源工坊、画像 fallback、Feynman、Graph SSE、媒体任务、Tutor relay、章测预生成、远征存档反序列化和远征预取的异常日志不再输出上游/学生内容；新增 3 个测试类 29/29，`WorkshopGraphClientTest` 4/4、`TutorWorkflowSubmissionFeedbackListenerTest` 6/6。其他异常路径和生产 Piston ACL 仍在审计中。
 - [x] 本轮补齐 Graph 路由兜底日志：Tutor 工作流意外失败、B 站元数据抓取和概述生成异常都只记录异常类型，不输出异常原文或 traceback；Tutor SSE fail-fast、视频概述 fail-soft 保持原行为。`test_tutor_workflow.py` + `test_video_insight_route.py` 27/27，Ruff 通过。
@@ -37,6 +64,8 @@
 - [x] 管理运维页读取失败恢复：现有页面展示错误并提供“重试”；组件回归 `AdminOperationsPage.spec.ts` 3/3，真实本地 Chromium 通过路由模拟首读 503、重试 200、错误消失与数据展示（页面错误 0）。鉴权刷新与运维 API 均为模拟，未验证后端授权。
 - [x] 教师班级详情成员读取失败恢复：组件回归 `ClassroomDetail.spec.ts` 13/13；本地 Chromium 对成员 GET 模拟首读 503、重试 200，错误区域可见、成员恢复显示，页面错误 0。鉴权与 API 均模拟，不计后端授权联测。
 - [x] 管理台共享表格表头/圆角/分页已按 Alethicode 样式收敛；保留手动跳页和现有数据字段。
+- [x] 课堂核心、成员、任务和看板字段已与后端 DTO/迁移对照；发现前端 `RemediationResultDto.partial` 可选而后端必返，已改为必填并通过 `npm run typecheck`。
+- [x] 管理台格式对齐：对照 Alethicode 的 `Home.vue`、`Panel.vue`、`style.less` 与 `common.less`，Pythontopia 的侧栏/窄屏导航、面板、控件、表格密度、分页、蓝灰色 token 与圆角均已落到现有 3 个真实 API 页面；管理台定向组件/页面测试与 320px Chromium 抽样已有通过记录。Pythontopia 继续使用自身类型化 DTO 和真实业务接口；Alethicode 额外菜单对应的课程包、配置、判题服务等模型不属于“格式对齐”，不创建空页面或复制旧数据结构。剩余页面动作检查由 Web 动作矩阵跟踪。
 - [x] 管理员真实浏览器用户管理流程：登录、搜索、停用/恢复、禁用账号登录拒绝；临时账号已清理。
 - [x] 运维概览将五个已知后端动作键映射为中文建议，原始键保留在提示文本中。
 - [x] KC-004 根知识点 AI 补题：从正常主线练习按钮发起请求，通过 Piston 自测和现有质量审查后写入共享题库为 `APPROVED/AUTOMATED`。实际请求 6 个 DeepSeek completions（前 5 个候选自测输出不符，第 6 个通过）；未提交答案或新增掌握证据。
@@ -86,7 +115,7 @@
 ### 2026-10-15 当前续接快照
 
 - 开始时 HEAD：`d5e4823b`，工作树干净；只读 Tutor/Alethicode、远征与安全审查未重跑模型或云端操作。随后只做了 RAG/公告板/画像的 Web 功能核验，跟踪文档有未提交更新。
-- AutoGen Tutor 已按固定阶段运行并有 run-scoped checkpoint；与 Alethicode 的事件/API 生命周期有差异，但直接迁移其 V124/线程调度会重复持久化并破坏当前合同，无需再做一次“替换”。
+- 早期快照把固定阶段 AutoGen 视为足够的替换；更细的逐事件对照发现这结论过宽。当前已按事件选择 AutoGen 阶段并保留旧检查点恢复。断开取消由 SSE 上下游中止传递；相同请求的检查点恢复由 25 分钟 sessionStorage 请求封套支撑；刷新后由活动会话投影恢复卡片。通用 Tutor 图片受格式/体积限制，不进入落库字段、AutoGen 状态或 SSE；训练场工作流继续用 owner/session 绑定的附件 ID。Pythontopia 沿用这些现有合同，不新增 event bus、cancel API 或通用图片表。Alethicode 的 V124 表不会照搬。
 - 本轮已有的历史 DeepSeek 文本/PNG 成功不能证明服务持续稳定；随后出现过 relay 超时、空 JSON 与 503。只在具体未完成产品路径变化后再做一次有针对性的调用，不重复通用探针。
 - 本轮审查未发现确认的高危代码缺陷。Piston 生产访问控制、符合先修条件的活动远征 run 恢复、KC 题型覆盖、Web 动作矩阵与 Twin 学习成效仍开放；性能继续最后。
 - Piston 本地部署复核确认开发 Compose 只绑定 `127.0.0.1:2000`，现有安全契约也断言回环绑定；生产 Compose 不托管 Piston，依赖外部 URL 且只接受 HTTPS 或私网 HTTP。外部 Piston 是否真正有鉴权代理/网络 ACL 无法由源码确认，本轮未访问 ECS。
@@ -153,7 +182,7 @@
 
 **Status:** Complete in `f2176675`; all nine HTTPS/Nginx contract assertions pass. Public-edge runtime behavior remains unverified.
 
-## Task 4: Revalidate DeepSeek-only Tutor and fixed AutoGen lifecycle
+## Task 4: Align Tutor event orchestration and run lifecycle
 
 **Files:**
 - Check: `services/pythontopia-graph/pythontopia_graph/llm/provider.py`
@@ -162,9 +191,9 @@
 - Check: `services/pythontopia-graph/pythontopia_graph/routes/tutor_workflow.py`
 - Test: existing Tutor AutoGen, checkpoint, attachment, and provider tests
 
-**Steps:** Verify supported model host/name allowlists, that image input reaches DeepSeek but response schema remains text-only, that voice is disabled, and that cancellation/checkpoint restore are scoped. Run focused pytest and Java Tutor authorization/checkpoint tests. Do not migrate Alethicode's uncommitted controller, WebSocket bus, or V124 table.
+**Steps:** Verify supported model host/name allowlists, that image input reaches DeepSeek but response schema remains text-only, and that voice is disabled. Match event-specific AutoGen stages, then compare cancellation, checkpoint restore, reconnect/replay, and private image transport while preserving Pythontopia ownership and API contracts. Run focused Python and Java tests. Do not migrate Alethicode's V124 table or copy its controller wholesale.
 
-**Status:** Static model/host allowlists, image-input/text-only response filtering, disabled TTS, and fixed-stage AutoGen behavior are confirmed; mocked provider/image/SSE tests pass. On 2026-10-15 the latest Tutor SSE text+image requests timed out at the 120 s Tutor→Graph relay. In a later controlled provider-level check this turn, one direct text completion returned `PYT-TEXT-641`, and one synthetic PNG request returned the correct description “蓝色圆形 / 黄色背景”; both responses were text with no tool calls. Historical full Vite→Spring→Graph text+image verification also succeeded. The latest full Tutor Web relay remains unverified; do not repeat provider probes while progressing other tasks. The RED/GREEN first-token heartbeat change still needs a runtime-container reload and its separate slow-first-token verification.
+**Status: Partial, behavior adapted to existing contracts.** Static model/host allowlists, DeepSeek image-input/text-only response filtering, and disabled voice output remain confirmed. AutoGen selects stages per event; Graph Tutor workflow/runtime/attachment tests pass (49), Java service/checkpoint tests pass (37), and Ruff passes. Current tests also confirm workflow stage restore/disconnect cancellation (3), the general Tutor image is omitted from AutoGen state (1), and Java SSE relays close on downstream disconnect. Same-request recovery is retained in sessionStorage for 25 minutes; a fresh-page session snapshot restores persisted cards. General Tutor images are bounded and are not persisted; the workflow path uses owner/session-bound attachment IDs. A fresh Chromium product flow after this stage change passed: registration/login, problem load, active session, READING card, and AGENT_FEEDBACK text card all returned successfully; the two event streams and two DeepSeek completions returned HTTP 200, with no page errors and the disposable user deleted. The earlier first attempt used a stale Java process and is not counted as a pass. No separate cancel API, event bus, or image table is added because current user flows already cancel/recover and keep image bytes out of persisted state. Image Web relay stability remains unverified.
 
 ## Task 5: Verify the existing expedition and twin loop in the browser
 
@@ -173,9 +202,9 @@
 - Check: `backend/src/main/java/com/pythontopia/world/boss/ExpeditionRunService.java`, `BossService.java`, `LearnerTwinService.java`, `AdaptivePracticePolicy.java`
 - Test: existing boss scene, expedition run, Twin page/service tests
 
-**Steps:** Exercise map entry, challenge answer, server settlement, pass/fail visual result, reload/resume, and one Twin recommendation in local Web stack; inspect API/browser state and cleanup temporary test users/runs. Keep model generation off by selecting existing reviewed/golden tasks. Record the final Boss journey as pending if no valid accessible multi-phase task exists; do not bypass prerequisites or invent mastery.
+**Steps:** Exercise map entry, challenge answer, server settlement, pass/fail visual result, reload/resume, and one Twin recommendation in local Web stack; inspect API/browser state. Reuse reviewed/golden tasks where available. If a KC has no programming problem, allow its normal student-facing AI generation path; only retain it in the shared bank after the existing quality gate and automatic approval pass. Do not bypass expedition prerequisites or invent mastery. Record the final Boss journey as pending if no valid accessible multi-phase task exists.
 
-**Status:** Prior Web evidence records a real three-phase Boss victory, server settlement, and Phaser hit sequence. Twin home/profile routes now share one tested destination rule. An undecidable/stale expedition problem now has a tested replacement-question path that preserves health and settlement state. Current focused rerun passed 76 tests across Twin navigation, HUD drag, and expedition page/store, plus typecheck, touched-file ESLint, and `git diff --check`. The earlier root-KC question blocker is superseded: first-chapter roots are filtered from expedition frontiers; the remaining browser gap is a valid later-chapter learner with a live server run. Do not create synthetic mastery to bypass this.
+**Status:** Prior Web evidence records a real three-phase Boss victory, server settlement, and Phaser hit sequence. Twin home/profile routes now share one tested destination rule. An undecidable/stale expedition problem now has a tested replacement-question path that preserves health and settlement state. Current focused rerun passed 76 tests across Twin navigation, HUD drag, and expedition page/store, plus typecheck, touched-file ESLint, and `git diff --check`. A fresh read-only development DB aggregate shows 10 approved review rows across chapters 1–2, all ordinary/unsupported kinds (`kind=NULL`, `debug`, `fill_blank`), with no battle-compatible `dual_track`/`closed_loop` inventory in chapter 3+; the on-demand Graph generation → quality review → automatic bank approval path exists and has passed individual KC generation tests, and prior genuine generation produced an approved KC-011 record. A normal missing-KC generation may be used to build bank coverage, but it does not satisfy the separate run test. The remaining browser gap is a real later-chapter learner with a live server run and at least one battle-compatible question; do not create synthetic mastery to bypass it. One eligible account has no active run, so no account state was altered. A fresh local `/readyz` remains 503 from the known optional video transcript dependency, while Vite and Graph health are 200.
 
 ## Task 6: Audit Web interaction and admin table behavior
 

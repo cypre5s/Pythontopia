@@ -66,7 +66,9 @@ public class NpcGreetingPrewarmJob {
     try {
       users = eventRepository.findActiveUserIds(since, Math.max(1, maxUsers));
     } catch (RuntimeException ex) {
-      log.warn("npc greeting prewarm aborted: list active users failed: {}", ex.getMessage());
+      log.warn(
+          "npc greeting prewarm aborted: list active users failed errorType={}",
+          ex.getClass().getSimpleName());
       return;
     }
     int ok = 0;
@@ -83,7 +85,7 @@ public class NpcGreetingPrewarmJob {
           // 单个学生×NPC 失败不影响其余（异常隔离），下次定时或玩家实时访问可恢复。
           fail++;
           log.debug(
-              "npc greeting prewarm failed user={} npc={}: {}", userId, npcKey, ex.getMessage());
+              "npc greeting prewarm failed errorType={}", ex.getClass().getSimpleName());
         }
       }
     }

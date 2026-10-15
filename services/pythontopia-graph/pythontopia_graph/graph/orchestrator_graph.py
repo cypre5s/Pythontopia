@@ -143,7 +143,10 @@ def default_checkpointer() -> Any:
                 return AsyncPostgresSaver.from_conn_string(url)
             LOG.warning("PYT_ORCH_CHECKPOINT=postgres 但未配 PG_URL，降级 MemorySaver")
         except Exception as exc:  # noqa: BLE001 - 缺包/连不上一律降级
-            LOG.warning("Postgres checkpointer 不可用（%s），降级 MemorySaver", exc)
+            LOG.warning(
+                "Postgres checkpointer 不可用，error_type=%s，降级 MemorySaver",
+                type(exc).__name__,
+            )
     return MemorySaver()
 
 
@@ -231,8 +234,11 @@ class OrchestratorGraph:
         try:
             response = await self._invoke(req, emit)
             await emit("result", response.model_dump(mode="json"))
-        except Exception as exc:  # noqa: BLE001 – surface as an SSE error event
-            await emit("error", {"code": "ORCHESTRATOR_FAILED", "message": str(exc)})
+        except Exception:  # noqa: BLE001 – surface a stable SSE error event
+            await emit(
+                "error",
+                {"code": "ORCHESTRATOR_FAILED", "message": "The learning workflow failed."},
+            )
 
     def _build_compiled(self, checkpointer: Any | None) -> Any:
         graph = StateGraph(OrchestratorState)
@@ -350,7 +356,10 @@ class OrchestratorGraph:
                 user_id=req.user_id, query=req.user_message
             )
         except Exception as exc:  # noqa: BLE001 - 记忆层失败不拖垮主链路
-            LOG.warning("memory brief 获取失败（fail-soft 空 brief）：%s", exc)
+            LOG.warning(
+                "memory brief 获取失败（fail-soft 空 brief），error_type=%s",
+                type(exc).__name__,
+            )
             return MemoryBrief()
 
     def _build_loop_record(
@@ -389,7 +398,7 @@ class OrchestratorGraph:
         try:
             await self._loop_record_sink(record)
         except Exception as exc:  # noqa: BLE001 - 落库失败不拖垮主链路
-            LOG.warning("loop_record sink 失败（fail-soft）：%s", exc)
+            LOG.warning("loop_record sink 失败（fail-soft），error_type=%s", type(exc).__name__)
 
     async def _emit_loop_step(
         self,
@@ -644,7 +653,7 @@ class OrchestratorGraph:
                 started = time.monotonic()
                 try:
                     result = await self._dispatch_step(step, req.user_id, focus_hint_extra)
-                except Exception as exc:  # noqa: BLE001 – 单步失败不拖垮全局
+                except Exception:  # noqa: BLE001 – 单步失败不拖垮全局
                     elapsed_ms = int((time.monotonic() - started) * 1000)
                     # 用 step_error（非终止）而非 error：下游 SSE 中继与前端都把 error
                     # 视为整轮终止事件，单步失败若发 error 会把后续 STATE_DELTA/result
@@ -655,15 +664,15 @@ class OrchestratorGraph:
                             "code": "DISPATCH_FAILED",
                             "agent": step.agent,
                             "step_id": step.id,
-                            "message": str(exc),
+                            "message": "Agent execution failed. Please retry.",
                         },
                     )
                     result = DispatchResult(
                         step_id=step.id,
                         agent=step.agent,
                         ok=False,
-                        summary=f"{self._agent_display_name(step.agent)} 执行失败: {exc}",
-                        note=str(exc),
+                        summary=f"{self._agent_display_name(step.agent)} 执行失败",
+                        note="Agent execution failed.",
                         elapsed_ms=elapsed_ms,
                     )
                 else:
@@ -1201,7 +1210,10 @@ class OrchestratorGraph:
                 if not withheld:
                     await self._emit_cb("token", {"delta": "".join(buffer)})
         except Exception as exc:  # noqa: BLE001 – provider 不可用：确定性教学兜底
-            LOG.warning("compose_reply 流式失败（%s），改用确定性教学兜底回复", exc)
+            LOG.warning(
+                "compose_reply 流式失败（%s），改用确定性教学兜底回复",
+                type(exc).__name__,
+            )
             fallback_md = self._agent.fallback_reply(req, plan, clarifying)
             await self._emit_cb("token", {"delta": fallback_md})
             step = GraphTraceStep(

@@ -1,5 +1,70 @@
 # Changelog
 
+## 2026-10-15 — 固定画像地图初始化失败审计信息
+
+- Graph 地图初始化失败的 `resource_run` 审计记录只保留 `graph-service-error`，不再持久化异常正文。
+- 哨兵先 RED 后 GREEN；`CurriculumMapperServiceTest` 1/1，与周报、远征安全回归合跑 24/24。无模型请求。
+
+## 2026-10-15 — 收敛远征预取失败信息
+
+- 远征生成异常不再持久化进学生可读的预取状态；题目认领和展示题存档失败日志只保留异常类型，不输出账号、KC/题目标识或错误正文。
+- 两个日志哨兵与失败状态回归先 RED 后 GREEN；`EndlessPregenServiceTest` 19/19、`WeeklyEvaluationSchedulerTest` 4/4。无模型请求。
+
+## 2026-10-15 — 脱敏周报定时任务失败日志
+
+- 周报定时任务单个学生失败时，日志不再包含学生 ID 或异常正文，仅记录异常类型；批处理隔离和用量限额行为保持不变。
+- 哨兵先 RED 后 GREEN，`WeeklyEvaluationSchedulerTest` 4/4。无模型请求。
+
+## 2026-10-15 — 脱敏 RAG 数据库与 embedding 失败信息
+
+- RAG 启动、自愈、重建数据库读取异常与 embedding 降级只记录异常类型；embedding-derived fallback reason 只保留类型，索引重建 503 返回固定提示，失败时旧索引保持可用。
+- 五条哨兵先 RED 后 GREEN；相关 RAG 测试 33/33，Ruff 通过。无模型调用。
+
+## 2026-10-15 — Tutor 事件阶段真实浏览器联测
+
+- 单条 Chromium 产品流程完成训练题导读与“没帮助→换种解释”反馈；两个 DeepSeek completion 均 HTTP 200，文本卡片非空（278/348 字符），浏览器页面错误 0，临时学生已清理。
+- 首次尝试使用了早于新编译类启动的本地 Java 进程，反馈阶段失败；按 `./dev.sh --sandbox` 重启后复测通过。没有重复通用模型探针。
+
+## 2026-10-15 — 脱敏 RAG KC 图数据库失败日志
+
+- KC 前置关系图的数据库加载失败只记录异常类型，保留空图 fail-soft 行为。
+- DSN 哨兵 RED/GREEN：`test_kc_graph.py` 8/8；`input 函数`、`for 循环`、`列表`本地 RAG 查询均返回带引用结果。无模型调用。
+
+## 2026-10-15 — 脱敏 Postgres checkpointer 异常日志
+
+- Postgres checkpointer 连接失败日志只保留异常类型，避免记录连接串/密码；降级 MemorySaver 的行为不变。
+- DSN 哨兵 RED/GREEN：Graph 编排与 checkpoint 测试共 48/48，Ruff 通过。无模型调用。
+
+## 2026-10-15 — 脱敏编排记忆与审计失败日志
+
+- memory brief 和 loop record sink 的失败日志只保留异常类型，保留原有空 brief 与审计 fail-soft 行为。
+- 哨兵 RED/GREEN：`test_agentic_loop.py` 42/42，Ruff 通过。无模型调用。
+
+## 2026-10-15 — 脱敏 BROWSE 异常信息
+
+- BROWSE 执行异常不再把原始异常正文写入日志、编排结果或 SSE 步骤；缺少浏览依赖时保留固定提示。
+- URL token 哨兵 RED/GREEN：Graph 两个相关测试文件 79/79，Ruff 通过。无模型调用。
+
+## 2026-10-15 — 隐去远征题目存档异常正文
+
+- Boss 题目 payload 反序列化和存档读取失败日志不再输出 payload 片段、owner/problem 标识或异常正文，只保留异常类型；判题兜底行为不变。
+- `EndlessPregenServiceTest` 17/17；合成哨兵先 RED 后 GREEN。无模型调用。
+
+## 2026-10-15 — Tutor AutoGen 按事件编排
+
+- AutoGen 阶段按 Tutor 事件选择；跳过 coach 阶段时仍保留权威 `effective_event`，动态检查点校验仍接受已知阶段名，并兼容正在恢复的旧固定阶段检查点。
+- Graph workflow/runtime/attachment tests 49/49、Java Tutor service/checkpoint tests 37/37，Ruff 通过。现有取消、检查点恢复、普通 Tutor 图片不落库有定向代码/测试证据；后续真实浏览器联测结果记录于本 changelog 顶部。
+
+## 2026-10-15 — 对齐课堂补救结果 DTO
+
+- 前端 `RemediationResultDto.partial` 改为必填，与后端必返字段一致。
+- `npm run typecheck` 通过；没有触发模型调用。
+
+## 2026-10-15 — NPC 预热日志脱敏
+
+- NPC 定时预热任务只记录异常类型，不再输出异常原文或学生 ID；预热失败时仍继续处理其他 NPC。
+- RED/GREEN：`NpcGreetingPrewarmJobTest` 6/6；未调用模型。
+
 ## 2026-10-15 — 异常日志续扫
 
 - MetaReflection 与七个后端降级路径的异常正文不再进入日志，降级行为保持不变。

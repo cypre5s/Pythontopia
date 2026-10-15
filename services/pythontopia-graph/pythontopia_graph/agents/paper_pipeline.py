@@ -169,8 +169,15 @@ class ChapterTestGraph:
             result = await awaitable
         except Exception as exc:  # noqa: BLE001 - 任一节点异常都转结构化 502
             elapsed = int((time.monotonic() - started) * 1000)
-            trace.append(GraphTraceStep(node=name, elapsed_ms=elapsed, status="fail", note=str(exc)))
-            message = str(exc) if isinstance(exc, expected) else f"{type(exc).__name__}: {exc}"
+            trace.append(
+                GraphTraceStep(
+                    node=name,
+                    elapsed_ms=elapsed,
+                    status="fail",
+                    note=type(exc).__name__,
+                )
+            )
+            message = str(exc) if isinstance(exc, expected) else type(exc).__name__
             self._fail(
                 stage=name,
                 message=message,

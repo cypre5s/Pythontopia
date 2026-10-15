@@ -2,13 +2,52 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-15）**：整体聚焦 Web 主线与共享后端；HEAD 为 `49ee162a`，本次续接开始时工作树干净。该提交固化了此前已验证的上游异常日志脱敏、远征预取共享题复用与本地 Piston 网络隔离。历史真实 DeepSeek 文本/PNG 输入及 Tutor 文本链路已有成功记录，后来也出现 relay 超时、空 JSON 和 503；不重复通用探针，只有具体产品链路或配置变化后才做一次针对性验证。Tutor 已是固定阶段 AutoGen，并保留 Pythontopia 自有 SSE/API/checkpoint 合同；不迁移 Alethicode 不兼容的 V124/thread dispatcher。Twin P0、管理台样式与部分页面动作已有代码及定向/浏览器证据。尚未完成的是剩余安全审计、远征题型覆盖和合格活动 run 刷新恢复、主要 Web 路由/动作矩阵、Twin A/B 与 7 日复测、工程收尾；性能最后测。生产 Piston ACL 与 ECS 状态按用户要求不作为本轮工作重点，相关运行风险不宣称已关闭。唯一待办清单见 [总任务实施清单](../plans/2026-10-15-web-system-implementation-plan.md)。
+> **当前快照（2026-10-15）**：目标基线 `d38f1424`；保留工作树中已有修改。本轮在单条 Tutor 产品流程中发起 2 次 DeepSeek completion，均 HTTP 200；没有重复通用探针。历史合成 PNG 输入成功记录仍有效，Tutor 输出为文本；较早的 relay 超时、空 JSON、503 作为稳定性风险保留。Tutor 已按事件选择 AutoGen 阶段，Graph 49 项、Java 37 项定向测试通过；新鲜 Chromium 导读与无帮助反馈流程通过，文本卡片 278/348 字符、页面错误 0、临时账号已清理。首轮失败原因为 Java 服务加载旧编译阶段校验，重启全栈后复测通过。断开取消、同请求检查点恢复和图片数据不落库均有既有证据。Twin P0、Boss Phaser、管理台 Alethicode 页面格式、部分 Web 动作和本地 Piston 沙箱边界有代码及验证证据。RAG 图数据库、启动/自愈/重建/embedding 与 Graph 路由/SSE 异常现仅保留异常类型或固定错误正文；相关 Graph 测试 71 项、其他错误边界 8+3 项通过，RAG 图模式 49 项通过、2 项跳过。周报定时任务不再记录学生 ID 和异常正文（`WeeklyEvaluationSchedulerTest` 4/4）；远征预取错误正文不再落入学生可读状态，claim/persist 异常日志只记类型；画像地图生成异常不再写入运行审计（`EndlessPregenServiceTest` 19/19、`CurriculumMapperServiceTest` 1/1，三类后端回归合跑 24/24）。BROWSE 异常哨兵确认 URL token 不再进入日志或 SSE/结果字段（79/79）。仍未完成：剩余安全审计、远征后续章节题型及合格 run 刷新恢复、Web 动作矩阵、Twin A/B 与 7 日复测、工程收尾；性能最后测。生产 Piston ACL/ECS 不在本地审计范围。唯一待办清单见 [总任务实施清单](../plans/2026-10-15-web-system-implementation-plan.md)。
 
 ## 当前清单摘要
 
-- **已完成：** 敏感学习数据日志脱敏（含上传、判题、Tutor、Graph、媒体、画像、记忆等路径的定向回归；Tutor SSE 与 B 站概述路由兜底 27/27；MetaReflection 7/7；DialogContext、MemoryRetrieval、LearningPath、WorldState 四类降级日志 29/29；MemoryStreamMirror、InterviewDimensionMirror、PreventionPack 三类日志 19/19）；Python/Maven 当前运行时依赖 OSV 查询未发现已知漏洞；BROWSE SSRF 回归 58/58；本地 Piston 网络隔离配置和运行态已对齐（`deploy_judge-execution` 单网、回环端口、Python 3.12.0 冒烟输出 4）；远征预取复用精确题型审核题；Twin P0 与部分真实证据页面链路；管理台共享表格样式、管理员停用/恢复及部分教师/学生动作；禁用图片生成路由不再为请求者分配限流状态（RED/GREEN，`XfyunImageServiceTest` 2/2）；MemoryBrief 敏感异常日志回归 27/27；上传超额前置拒绝回归 18/18；管理员运维页错误恢复组件 3/3 + 本地 Chromium 模拟路由验收（页面错误 0）；教师班级详情重试 13/13 + 本地 Chromium 模拟路由验收（页面错误 0）。历史 DeepSeek 文本和 PNG 真实调用成功，本轮没有重复调用。
-- **未完成：** 扩展安全审计；第 2 章以上可达前沿 KC 的 battle-compatible 题型与合格活动 run 刷新恢复；剩余 Web 路由/控件和窄屏矩阵；Twin A/B 与 7 日复测；工程收尾。性能最后执行。Python 开发 venv 的旧包 advisory 和生产 Piston ACL 不作为本轮已关闭项；ECS 不在当前范围。全仓 Spotless 仍有 600+ 既有格式差异，不批量格式化。
-- **下一步：** 本地 Piston 隔离已完成运行态核验；继续处理剩余安全审计，再推进远征第 2 章以上题型覆盖与刷新恢复。当前无合格活动 run，若需要建立样本，使用临时 QA 学生和真实判题，保留题库审核外键要求的审计记录并清理其他学情数据。之后完成剩余 Web 动作矩阵与工程收尾；Twin 效果和性能最后测。本轮不做 DeepSeek 通用探针。
+- **已完成：** 敏感学习数据日志脱敏及定向测试；Boss 题目 payload 反序列化/读取错误日志改为只记异常类型（`EndlessPregenServiceTest` 19/19）；远征预取失败状态使用固定重试提示，claim/persist 失败日志不再输出用户/题目标识与异常正文；画像地图生成异常不再写入运行审计；三类后端回归合跑 24/24；BROWSE 结果与日志不再包含 executor 异常原文（Graph 79/79）；RAG 启动、自愈、重建和 embedding 失败不再记录/返回异常正文（哨兵 5/5、相关 RAG 测试 33/33）；Graph error-boundary 定向测试 71+8+3 通过，RAG 图模式 49 通过、2 跳过；周报定时任务错误日志去除学生 ID 与异常正文（`WeeklyEvaluationSchedulerTest` 4/4）；运行时依赖 OSV 查询未发现已知漏洞；BROWSE SSRF 回归 58/58；本地 Piston 隔离配置与攻击边界脚本；远征预取复用精确题型审核题；Twin P0；Boss Phaser；管理台三项页面的 Alethicode 布局；管理员停用/恢复及部分教师/学生动作；Tutor 事件专属 AutoGen 阶段与旧检查点兼容（Graph 49、Java 37）；新鲜 Tutor 浏览器导读与反馈闭环（两个 DeepSeek completion HTTP 200，非空文本卡片，临时账号清理）。历史合成 PNG 输入成功记录保留。
+- **未完成：** 剩余安全审计；远征后续章节 battle-compatible 题型与合法活动 run 刷新恢复；剩余 Web 路由/控件和窄屏矩阵；Twin A/B 与 7 日复测；工程收尾。性能最后执行。Python 开发 venv 的旧包 advisory、生产 Piston ACL/ECS 未关闭。管理台格式已对齐，缺少真实模型的数据页不做空壳。
+- **下一步：** 远征代码已有持久化与恢复测试，但真实先修学情下的后续章节题型和浏览器刷新流程仍未验证；不伪造掌握度，先继续剩余安全边界审计，再处理 Web 未覆盖动作与工程收尾。学习证据只走正式判题；每次临时账号测试后清理；性能最后测。
+
+## 2026-10-15 当前续接：Tutor 事件专属 AutoGen 阶段
+
+- Tutor/Alethicode 深度对照修正了早期“没有代码差距”的结论：原工作流无论事件类型都运行五个通用阶段。
+- 现按事件/coach 模式选择阶段；状态校验阶段初始化 `effective_event`，避免跳过 coach 阶段后丢失事件；Java 检查点接受动态索引，同时保留已知阶段名、固定上限与旧固定阶段恢复路径。
+- 新增测试先因固定五阶段失败，再通过。Graph Tutor workflow/runtime/attachment 定向测试 49/49，Java `TutorWorkflowServiceTest` 与 checkpoint controller 37/37，Ruff 与 `git diff --check` 通过；运行中发现并修复 `AGENT_FEEDBACK` 状态投影回归。这些单测未调用 DeepSeek。
+- Tutor 生命周期的等效行为与图片不落库边界经代码和定向测试确认；不新增独立 run API、事件总线或通用附件表。首次浏览器联测因 Java 服务未重启而使用旧阶段检查点校验，反馈事件在 SSE 内失败；全栈重启后同一产品流程通过，两个 Tutor 事件流和 DeepSeek completion 均为 200，卡片非空，页面错误 0，临时账号清理。没有重复普通 provider 文本/PNG 探针。
+
+## 2026-10-15 当前续接：RAG 异常日志与重建错误脱敏
+
+- 启动、自愈、索引重建数据库读取及 embedding 降级日志原先会输出异常正文；embedding 异常正文还会流入 fallback reason，重建 API 将异常原文写入 503 detail。
+- 现统一仅记录异常类型；embedding-derived fallback reason 只保留异常类型，管理重建失败返回固定说明，旧索引保护与 fail-soft 行为保持。
+- 5 条哨兵测试先 RED 后 GREEN；`test_embedder_policy.py`、`test_query_route.py`、`test_main.py`、`test_index_builder.py`、`test_admin_auth.py` 共 33/33，Ruff 和 `git diff --check` 通过。无模型或数据库写入。
+
+## 2026-10-15 当前续接：远征题目存档日志脱敏
+
+- 审计发现 `EndlessPregenService` 读取损坏的 Boss 题目 payload 时记录 Jackson 异常正文，外层存档读取异常还会带上 userId/problemId；payload 包含隐藏测试和参考解。
+- 新哨兵测试先 RED，两个异常路径都命中 secret sentinel/owner 标识；现统一只记录异常类型，不改变取题兜底行为。
+- `EndlessPregenServiceTest` 17/17，`git diff --check` 通过；本轮无模型调用或业务数据库写入。
+
+## 2026-10-15 当前续接：BROWSE 异常信息脱敏
+
+- 发现 BROWSE engine 异常正文可包含 URL 查询参数，并进入日志及编排结果/SSE 步骤；底层异常同样会写入 `BrowseResult.error`。
+- 两个 URL token 哨兵测试先 RED；现只输出异常类型，缺少 Playwright 依赖时保留固定可读提示。`test_browse_executor.py` 与 `test_agentic_loop.py` 共 79/79，Ruff、`git diff --check` 通过，无模型调用。
+
+## 2026-10-15 当前续接：编排记忆与审计异常日志脱敏
+
+- 哨兵确认 memory brief 失败会把学生查询写入日志，loop record sink 失败会输出异常正文；现只记录异常类型，fail-soft 结果保持不变。
+- 两条回归先 RED 后 GREEN；`test_agentic_loop.py` 42/42，Ruff、`git diff --check` 通过，无模型调用。
+
+## 2026-10-15 当前续接：Postgres checkpointer 异常日志脱敏
+
+- 合成数据库连接异常包含 DSN 密码；当前日志只记录异常类型并保留降级到 MemorySaver 的行为。
+- 哨兵先 RED 后 GREEN；与编排记忆/sink 测试合并后 `test_agentic_loop.py`、`test_orchestrator_checkpoint.py` 共 48/48，Ruff 与差异检查通过。
+
+## 2026-10-15 当前续接：RAG KC 图数据库错误日志脱敏
+
+- 数据库连接异常日志只记录异常类型，不再输出 DSN；fail-soft 空图行为保持。
+- 哨兵先 RED 后 GREEN，`test_kc_graph.py` 8/8；本地 RAG 对 `input 函数`、`for 循环`、`列表` 查询均 HTTP 200 并返回 5 条引用；Ruff 与差异检查通过，无模型请求。
 
 ## 2026-10-15 当前续接：补齐异常日志审计记录
 

@@ -253,7 +253,7 @@ async def execute_browse(
     except TimeoutError:
         error = f"浏览超过 {request.timeout_seconds:g} 秒总时限"
     except Exception as exc:  # noqa: BLE001 - 对上游返回结构化失败和已完成证据
-        error = _short_error(f"{type(exc).__name__}: {exc}")
+        error = "BROWSE 依赖缺失" if isinstance(exc, BrowseDependencyError) else type(exc).__name__
     finally:
         with contextlib.suppress(Exception):
             await asyncio.wait_for(browse_engine.close(), timeout=3.0)

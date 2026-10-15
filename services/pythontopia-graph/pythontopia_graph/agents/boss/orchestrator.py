@@ -145,7 +145,7 @@ async def generate_boss_problem(
                     temperature=temperature,
                 )
         except Exception as exc:  # noqa: BLE001
-            LOG.warning("boss factory raised on attempt %s: %s", attempt, exc)
+            LOG.warning("boss factory raised on attempt %s: %s", attempt, type(exc).__name__)
             continue
         review = run_all_reviews(
             problem,

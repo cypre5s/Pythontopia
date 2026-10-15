@@ -110,6 +110,49 @@ async def test_ask_stream_opens_with_five_station_plan() -> None:
 
 
 @pytest.mark.asyncio
+async def test_ask_stream_redacts_unexpected_exception(monkeypatch) -> None:
+    async def fail_workflow(*args, **kwargs):
+        raise RuntimeError("student-question-secret-sentinel")
+
+    monkeypatch.setattr(tutor_route, "run_autogen_tutor_workflow", fail_workflow)
+    response = await tutor_ask_stream(
+        TutorAskRequest(user_id=1, question="for 循环怎么用", kc_codes=["PY43-KC-001"]),
+        provider=StreamStubProvider("unused"),
+        evidence_fetcher=StaticEvidenceFetcher([HIT]),
+    )
+
+    errors = [data for event, data in await _collect_sse(response) if event == "error"]
+    assert len(errors) == 1
+    assert errors[0] == {
+        "code": "TUTOR_FAILED",
+        "message": "导师服务暂时不可用，请稍后重试。",
+    }
+
+
+@pytest.mark.asyncio
+async def test_quiz_generation_redacts_unexpected_exception(monkeypatch) -> None:
+    async def fail_call(*args, **kwargs):
+        raise RuntimeError("quiz-content-secret-sentinel")
+
+    monkeypatch.setattr(tutor_route, "run_autogen_tutor_call", fail_call)
+    response = await tutor_ask_stream(
+        TutorAskRequest(
+            user_id=1,
+            question="开始测验",
+            context="QUIZ_TURN_1",
+            kc_codes=["PY43-KC-001"],
+        ),
+        provider=StreamStubProvider("unused"),
+        evidence_fetcher=StaticEvidenceFetcher([HIT]),
+    )
+
+    errors = [data for event, data in await _collect_sse(response) if event == "error"]
+    assert errors == [
+        {"code": "QUIZ_FAILED", "message": "测验暂时不可用，请稍后重试。"}
+    ]
+
+
+@pytest.mark.asyncio
 async def test_ask_stream_runs_all_review_agents() -> None:
     events = await _run("for 循环怎么用", ["PY43-KC-001"], "参考 [页 12]，for 循环可遍历列表。")
     traces = [data for (event, data) in events if event == "trace"]

@@ -8,6 +8,7 @@ import pytest
 
 from pythontopia_graph.agents.paper_golden import build_golden_paper
 from pythontopia_graph.agents import paper_reviews
+from pythontopia_graph.agents.paper_designer import PaperDesignError, PaperDesignerAgent
 from pythontopia_graph.agents.paper_pipeline import (
     ChapterTestGraph,
     ChapterTestGraphError,
@@ -131,6 +132,35 @@ async def test_pipeline_dry_run_produces_contract_compliant_paper() -> None:
         "safety_critic",
     }
     assert resp.profile_snapshot["profile_brief"]["knowledge_level"] == 3
+
+
+@pytest.mark.asyncio
+async def test_provider_failure_does_not_expose_upstream_error_details() -> None:
+    class BrokenProvider(LlmProvider):
+        async def chat(self, messages, **kwargs):  # type: ignore[override]
+            raise RuntimeError("chapter-test-secret-sentinel")
+
+        async def chat_stream(self, messages, **kwargs):  # type: ignore[override]
+            if False:
+                yield ""
+
+    graph = ChapterTestGraph(
+        provider=BrokenProvider(),
+        evidence_fetcher=_fetcher(_DEFAULT_PAIRS),
+    )
+
+    with pytest.raises(ChapterTestGraphError) as raised:
+        await graph.run(_request())
+
+    detail = str(raised.value.detail.model_dump(mode="json"))
+    assert "chapter-test-secret-sentinel" not in detail
+    assert "LLM provider request failed" in detail
+
+    with pytest.raises(PaperDesignError) as schema_error:
+        PaperDesignerAgent(BrokenProvider())._parse(
+            {"items": [{"type": "CHOICE", "stem": "chapter-test-secret-sentinel"}]}, None
+        )
+    assert "chapter-test-secret-sentinel" not in str(schema_error.value)
 
 
 @pytest.mark.asyncio

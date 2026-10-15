@@ -78,15 +78,21 @@ class StubProvider(LlmProvider):
 class FakeBrowseExecutor:
     """注入式假浏览器 executor（零真实联网）：按白名单回带受界步骤 + 引用。"""
 
-    def __init__(self, result: BrowseResult | None = None, boom: bool = False) -> None:
+    def __init__(
+        self,
+        result: BrowseResult | None = None,
+        boom: bool = False,
+        error_message: str = "browser process crashed",
+    ) -> None:
         self._result = result
         self._boom = boom
+        self._error_message = error_message
         self.calls: list[BrowseRequest] = []
 
     async def run(self, request: BrowseRequest) -> BrowseResult:
         self.calls.append(request)
         if self._boom:
-            raise RuntimeError("browser process crashed")
+            raise RuntimeError(self._error_message)
         if self._result is not None:
             return self._result
         return BrowseResult(
@@ -359,14 +365,21 @@ async def test_run_browse_quiz_scope_not_dispatched_fallback_video() -> None:
 
 
 @pytest.mark.asyncio
-async def test_run_browse_executor_error_failsoft_fallback() -> None:
+async def test_run_browse_executor_error_failsoft_fallback(caplog: pytest.LogCaptureFixture) -> None:
     """⑤ 容错：executor 异常 → fail-soft，回退 VIDEO，捕获 error，不外抛。"""
     ctrl = AgenticLoopController(max_loop_steps=4, scope="default")
-    executor = FakeBrowseExecutor(boom=True)
+    secret = "token=private-browse-token"
+    executor = FakeBrowseExecutor(
+        boom=True,
+        error_message=f"browser failed at https://docs.python.org/?{secret}",
+    )
     dispatch = await ctrl.run_browse(
         executor, goal="查文档", user_id=7, allowed_domains=["docs.python.org"]
     )
-    assert dispatch.error != ""
+    assert dispatch.error == "RuntimeError"
+    assert dispatch.step.error == "RuntimeError"
+    assert secret not in caplog.text
+    assert "error_type=RuntimeError" in caplog.text
     assert dispatch.fallback == "VIDEO"
     assert dispatch.step.status == "failed"
 
@@ -608,6 +621,23 @@ async def test_orchestrator_default_no_provider_backward_compatible() -> None:
 
 
 @pytest.mark.asyncio
+async def test_orchestrator_memory_brief_failure_does_not_log_query(caplog: pytest.LogCaptureFixture) -> None:
+    secret = "private-student-query-sentinel"
+
+    class FailingMemoryBriefProvider:
+        async def fetch(self, *, user_id: int, query: str) -> MemoryBrief:
+            raise RuntimeError(query)
+
+    graph = make_graph(memory_brief_provider=FailingMemoryBriefProvider())
+
+    brief = await graph._fetch_memory_brief(request_of(secret))
+
+    assert brief == MemoryBrief()
+    assert secret not in caplog.text
+    assert "RuntimeError" in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_orchestrator_critic_reject_does_not_compose_unauthorized() -> None:
     """⑦ critic 拒绝（安全泄答）→ 不 surface 越权内容，给诚实降级；safety_result 如实 False。"""
     await reset_session(7, "t-reject")
@@ -656,16 +686,19 @@ async def test_orchestrator_loop_record_sink_wired() -> None:
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_loop_record_sink_failsoft() -> None:
+async def test_orchestrator_loop_record_sink_failsoft(caplog: pytest.LogCaptureFixture) -> None:
     """sink 抛错 → fail-soft，不拖垮主链路（仍正常返回响应）。"""
     await reset_session(7, "t-sink-boom")
+    secret = "private-loop-record-sentinel"
 
     async def boom_sink(record: AgenticLoopRunRecord) -> None:
-        raise RuntimeError("db down")
+        raise RuntimeError(secret)
 
     graph = make_graph(loop_record_sink=boom_sink)
     resp = await graph.run(request_of(session_id="t-sink-boom"))
     assert resp.reply_md == "规划完成。"
+    assert secret not in caplog.text
+    assert "RuntimeError" in caplog.text
 
 
 @pytest.mark.asyncio

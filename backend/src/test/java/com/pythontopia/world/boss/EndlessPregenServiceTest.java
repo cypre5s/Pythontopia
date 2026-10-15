@@ -174,7 +174,8 @@ class EndlessPregenServiceTest {
         19L, 7L, 1, 2, "PY43-KC-001", 2, "PY43-KC-001", "dual_track", null, null, null, 1);
 
     verify(jdbcTemplate)
-        .update(contains("status = 'FAILED'"), contains("approval"), eq(19L), eq(1));
+        .update(
+            contains("status = 'FAILED'"), eq("题目预加载失败，可重试"), eq(19L), eq(1));
     verify(jdbcTemplate, never())
         .update(
             contains("status = 'READY'"), anyString(), eq("ai-1"), anyString(), eq(19L),
@@ -194,7 +195,8 @@ class EndlessPregenServiceTest {
         19L, 7L, 1, 2, "PY43-KC-001", 2, "PY43-KC-001", "dual_track", null, null, null, 1);
 
     verify(jdbcTemplate)
-        .update(contains("status = 'FAILED'"), contains("approval"), eq(19L), eq(1));
+        .update(
+            contains("status = 'FAILED'"), eq("题目预加载失败，可重试"), eq(19L), eq(1));
     verify(jdbcTemplate, never())
         .update(
             contains("status = 'READY'"), anyString(), eq("ai-1"), anyString(), eq(19L),
@@ -202,16 +204,18 @@ class EndlessPregenServiceTest {
   }
 
   @Test
-  void generationFailureIsPersistedAsFailedForRetry() {
+  void generationFailurePersistsOnlySafeRetryMessage() {
+    String sentinel = "private-boss-status-error-sentinel";
     when(graphClient.requestProblem(eq(7L), eq(1), eq(2), eq("PY43-KC-001"), eq(4),
             eq("PY43-KC-001"), eq("dual_track"), eq(null)))
-        .thenThrow(new RestClientException("graph timeout"));
+        .thenThrow(new RestClientException(sentinel));
 
     service.generatePrefetch(
         23L, 7L, 1, 2, "PY43-KC-001", 4, "PY43-KC-001", "dual_track", null, null, null, 1);
 
     verify(jdbcTemplate)
-        .update(contains("status = 'FAILED'"), eq("graph timeout"), eq(23L), eq(1));
+        .update(
+            contains("status = 'FAILED'"), eq("题目预加载失败，可重试"), eq(23L), eq(1));
   }
 
   @Test
@@ -238,6 +242,64 @@ class EndlessPregenServiceTest {
   }
 
   @Test
+  void claimReadyFailureDoesNotLogStudentOrDatabaseDetails() {
+    long userId = 87654321L;
+    String sentinel = "private-boss-claim-error-sentinel";
+    when(jdbcTemplate.queryForList(anyString(), any(Object[].class)))
+        .thenThrow(new IllegalStateException(sentinel));
+    Logger logger = (Logger) LoggerFactory.getLogger(EndlessPregenService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThat(service.claimReady(userId, 1, 2, "PY43-KC-001", 2, "dual_track", null, null))
+          .isEmpty();
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anyMatch(message -> message.contains("errorType=IllegalStateException"))
+        .noneMatch(
+            message ->
+                message.contains(sentinel)
+                    || message.contains(Long.toString(userId))
+                    || message.contains("PY43-KC-001"));
+  }
+
+  @Test
+  void persistConsumedFailureDoesNotLogStudentOrDatabaseDetails() {
+    long userId = 87654321L;
+    String problemId = "private-boss-problem-id";
+    String sentinel = "private-boss-persist-error-sentinel";
+    BossInternalProblem problem = reviewedProblem().issueAs(problemId, "PY43-KC-001");
+    when(jdbcTemplate.update(anyString(), any(Object[].class)))
+        .thenThrow(new IllegalStateException(sentinel));
+    Logger logger = (Logger) LoggerFactory.getLogger(EndlessPregenService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThat(
+              service.persistConsumed(
+                  userId, 1, "PY43-KC-001", "dual_track", null, 2, problem, null))
+          .isSameAs(problem);
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anyMatch(message -> message.contains("errorType=IllegalStateException"))
+        .noneMatch(
+            message ->
+                message.contains(sentinel)
+                    || message.contains(Long.toString(userId))
+                    || message.contains(problemId));
+  }
+
+  @Test
   void unreviewedGoldenFallbackNeverBecomesReady() {
     BossInternalProblem golden =
         new BossInternalProblem(
@@ -253,7 +315,7 @@ class EndlessPregenServiceTest {
     verify(jdbcTemplate)
         .update(
             contains("status = 'FAILED'"),
-            eq("generated problem did not pass the reviewed AI contract"),
+            eq("题目预加载失败，可重试"),
             eq(29L), eq(1));
   }
 
@@ -286,6 +348,37 @@ class EndlessPregenServiceTest {
             isNull());
     assertThat(new ObjectMapper().readTree(savedPayload.getValue()).path("problemId").asText())
         .isEqualTo(claimed.orElseThrow().problemId());
+  }
+
+  @Test
+  void storedProblemPayloadErrorsNeverLogPayloadOrOwnerIdentifiers() {
+    String payloadSentinel = "private-boss-payload-log-sentinel";
+    String databaseSentinel = "private-boss-database-log-sentinel";
+    when(jdbcTemplate.query(
+            anyString(), any(org.springframework.jdbc.core.RowMapper.class), any(Object[].class)))
+        .thenReturn(List.of(payloadSentinel))
+        .thenThrow(new IllegalStateException(databaseSentinel));
+    Logger logger = (Logger) LoggerFactory.getLogger(EndlessPregenService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThat(service.findByProblemId(987654321L, "private-problem-id")).isEmpty();
+      assertThat(service.findByProblemId(987654321L, "private-problem-id")).isEmpty();
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anyMatch(message -> message.contains("errorType=JsonParseException"))
+        .anyMatch(message -> message.contains("errorType=IllegalStateException"))
+        .noneMatch(
+            message ->
+                message.contains(payloadSentinel)
+                    || message.contains(databaseSentinel)
+                    || message.contains("987654321")
+                    || message.contains("private-problem-id"));
   }
 
   @Test
@@ -381,7 +474,7 @@ class EndlessPregenServiceTest {
     verify(jdbcTemplate)
         .update(
             contains("status = 'FAILED'"),
-            eq("generated problem chapter/stage/KC/difficulty did not match the request"),
+            eq("题目预加载失败，可重试"),
             eq(31L), eq(1));
     verify(jdbcTemplate, org.mockito.Mockito.never())
         .update(

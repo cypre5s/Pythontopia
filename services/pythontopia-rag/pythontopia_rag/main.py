@@ -36,7 +36,7 @@ async def _self_heal_empty_index(
         try:
             pages = page_records_to_indexable(fetch_pages(db_url))
         except Exception as exc:  # noqa: BLE001 - 轮询期 DB 抖动不应中断自愈
-            logger.warning("RAG self-heal DB fetch failed; will retry: %s", exc)
+            logger.warning("RAG self-heal DB fetch failed; will retry: %s", type(exc).__name__)
             continue
         if not pages:
             continue
@@ -64,7 +64,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         pages = page_records_to_indexable(fetch_pages(db_url))
     except Exception as exc:  # fail-soft：DB 不可用时仍启动，索引为空
-        logger.warning("RAG page load failed; starting with empty index: %s", exc)
+        logger.warning("RAG page load failed; starting with empty index: %s", type(exc).__name__)
         pages = []
     app.state.rag_page_source = InMemoryPageSource(pages=pages)
     # KC 前置图：与课程页同源加载；失败为空图（检索退化为不扩展，fail-soft）。

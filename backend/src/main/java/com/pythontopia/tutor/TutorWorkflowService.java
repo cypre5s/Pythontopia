@@ -256,7 +256,7 @@ public class TutorWorkflowService {
         || stageIndexNode.asInt() < 0
         || stageIndexNode.asInt() >= stageNames.size()
         || !stageNameNode.isTextual()
-        || !stageNames.get(stageIndexNode.asInt()).equals(stageNameNode.asText())
+        || !stageNames.contains(stageNameNode.asText())
         || !teamState.isObject()
         || !workflowState.isTextual()
         || workflowState.asText().length() > 1_000_000) {

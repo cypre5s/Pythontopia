@@ -73,7 +73,10 @@ def fetch_kc_graph(db_url: str) -> KcGraph:
                 cur.execute(_FETCH_SQL)
                 rows = cur.fetchall()
     except Exception as exc:  # noqa: BLE001 - DB 不可用时退化为不扩展
-        logger.warning("KC graph load failed; prerequisite expansion disabled: %s", exc)
+        logger.warning(
+            "KC graph load failed; prerequisite expansion disabled; error_type=%s",
+            type(exc).__name__,
+        )
         return KcGraph()
     adjacency = {
         str(row["kc_code"]): [str(code) for code in (row["prerequisite_codes"] or []) if code]

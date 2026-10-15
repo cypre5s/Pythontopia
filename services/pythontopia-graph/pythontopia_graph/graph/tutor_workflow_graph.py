@@ -288,13 +288,46 @@ class TutorWorkflowGraph:
         request = state.get("request")
         if request is not None and "episode_plan" not in state:
             state = {**state, "episode_plan": request.episode_plan}
-        stages: list[tuple[str, StageHandler[WorkflowGraphState]]] = [
+        all_stages: list[tuple[str, StageHandler[WorkflowGraphState]]] = [
             ("validate_transition", self._node_validate_transition),
             ("coach_decide", self._node_coach_decide),
             ("fetch_evidence", self._node_fetch_evidence),
             ("generate_card", self._node_generate_card),
             ("decide_actions", self._node_decide_actions),
         ]
+        stages = [all_stages[0]]
+        coach_bypass_events = {
+            "AGENT_FEEDBACK",
+            "COMPACT",
+            "PLAN_START",
+            "PLAN_RESPONSE",
+            "PLAN_STEERING",
+        }
+        coach_stage = request.coach_mode and request.event not in coach_bypass_events
+        if coach_stage:
+            stages.append(all_stages[1])
+        if request.event in COURSEWARE_EVENTS or (
+            coach_stage and request.event != "PLAN_RECOMMEND"
+        ):
+            stages.append(all_stages[2])
+        stages.append(all_stages[3])
+        if request.event != "PLAN_RECOMMEND":
+            stages.append(all_stages[4])
+
+        if restore_checkpoint is not None:
+            checkpoint_index = restore_checkpoint.get("stage_index")
+            checkpoint_name = restore_checkpoint.get("stage_name")
+            if (
+                isinstance(checkpoint_index, int)
+                and not isinstance(checkpoint_index, bool)
+                and not (
+                    0 <= checkpoint_index < len(stages)
+                    and stages[checkpoint_index][0] == checkpoint_name
+                )
+                and 0 <= checkpoint_index < len(all_stages)
+                and all_stages[checkpoint_index][0] == checkpoint_name
+            ):
+                stages = all_stages
         return await run_autogen_tutor_workflow(
             state,
             stages,
@@ -453,7 +486,7 @@ class TutorWorkflowGraph:
                         "last_error": reason,
                     }
         await self._emit_step_finish("validate_transition", "ok", started)
-        return {**state, "new_phase": new_phase}
+        return {**state, "new_phase": new_phase, "effective_event": request.event}
 
     async def _node_coach_decide(self, state: WorkflowGraphState) -> WorkflowGraphState:
         request = state["request"]

@@ -57,6 +57,7 @@ class FakeBrowseEngine:
 
     plans: list[_Plan]
     raise_on_index: int | None = None
+    raise_message: str = "boom-exec"
     raise_on_open: bool = False
     _cursor: int = 0
     opened: bool = False
@@ -94,7 +95,7 @@ class FakeBrowseEngine:
         cur = self._cursor
         self._cursor += 1
         if self.raise_on_index is not None and cur == self.raise_on_index:
-            raise RuntimeError("boom-exec")
+            raise RuntimeError(self.raise_message)
         self.executed_urls.append(step.url)
         return self.plans[cur].content
 
@@ -176,6 +177,20 @@ async def test_env_judge_domain_enables_execution() -> None:
     assert result.error == ""
     assert len(result.steps) == 1
     assert "https://judge.pythontopia.cn/p/1" in result.citations
+
+
+async def test_executor_exception_message_is_not_returned() -> None:
+    secret = "token=private-browse-token"
+    engine = FakeBrowseEngine(
+        plans=[_Plan("read", "https://docs.python.org/3/")],
+        raise_on_index=0,
+        raise_message=f"request failed https://docs.python.org/3/?{secret}",
+    )
+
+    result = await execute_browse(_req(), engine=engine, env={})
+
+    assert result.error == "RuntimeError"
+    assert secret not in result.final_summary
 
 
 # ── ② 白名单外域 → 拒绝 fail-fast，不发请求 ──

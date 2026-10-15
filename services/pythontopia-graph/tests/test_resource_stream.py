@@ -162,3 +162,21 @@ async def test_stream_semantic_grounding_failure_retries_and_ends_error() -> Non
     assert all(data["status"] == "retry" for data in semantic_finishes)
     assert events[-1][0] == "error"
     assert events[-1][1]["code"] == "RESOURCE_GRAPH_FAILED"
+
+
+@pytest.mark.asyncio
+async def test_stream_unexpected_failure_does_not_return_exception_text(monkeypatch) -> None:
+    graph = _graph()
+
+    async def fail_fetch(request):
+        raise RuntimeError("resource-content-secret-sentinel")
+
+    monkeypatch.setattr(graph, "_fetch_evidence", fail_fetch)
+    events = await _collect(graph, request_of("HANDOUT"))
+
+    assert events[-1][0] == "error"
+    assert events[-1][1] == {
+        "code": "RESOURCE_GRAPH_FAILED",
+        "message": "Resource generation failed. Please retry.",
+    }
+    assert "resource-content-secret-sentinel" not in str(events)

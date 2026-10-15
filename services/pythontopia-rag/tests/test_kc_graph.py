@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pythontopia_rag.index import kc_graph
 from pythontopia_rag.index.kc_graph import KcGraph, fetch_kc_graph
 
 
@@ -50,3 +51,18 @@ def test_fetch_kc_graph_fail_soft_on_bad_db() -> None:
 
     assert graph.size == 0
     assert graph.prerequisites_of(["KC-001"]) == []
+
+
+def test_fetch_kc_graph_does_not_log_database_url(monkeypatch, caplog) -> None:
+    secret = "postgresql://student:private-db-password@db.internal/course"
+
+    def fail_connect(*args, **kwargs):
+        raise RuntimeError(f"connection refused for {secret}")
+
+    monkeypatch.setattr(kc_graph.psycopg, "connect", fail_connect)
+
+    graph = fetch_kc_graph(secret)
+
+    assert graph.size == 0
+    assert secret not in caplog.text
+    assert "RuntimeError" in caplog.text

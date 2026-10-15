@@ -435,7 +435,7 @@ class OrchestratorAgent:
                 except TypeError:
                     response = await self.provider.chat(messages)
         except Exception as exc:  # noqa: BLE001 - provider 不可用：确定性兜底，不让整轮崩溃
-            LOG.warning("LLM provider 调用失败（%s），转入确定性兜底路径", exc)
+            LOG.warning("LLM provider 调用失败（%s），转入确定性兜底路径", type(exc).__name__)
             return {}
         return self._coerce_json(response)
 

@@ -218,7 +218,12 @@ def _collect_subgraph(
         try:
             raw = neighbors(anchor, hops)
         except Exception as exc:  # noqa: BLE001 - 图扩展失败优雅退化，不拖垮检索
-            logger.warning("neighbors(%s, %d) failed; skipping anchor: %s", anchor, hops, exc)
+            logger.warning(
+                "neighbors(%s, %d) failed; skipping anchor: %s",
+                anchor,
+                hops,
+                type(exc).__name__,
+            )
             continue
         for edge in _normalize_edges(anchor, raw):
             key = (edge.from_kc, edge.to_kc, edge.relation)

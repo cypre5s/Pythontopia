@@ -44,7 +44,9 @@ public class WeeklyEvaluationScheduler {
     try {
       learners = service.findLearnersNeedingWeeklyEvaluation();
     } catch (RuntimeException ex) {
-      LOGGER.warn("Weekly evaluation batch aborted while listing learners: {}", ex.toString());
+      LOGGER.warn(
+          "Weekly evaluation batch aborted while listing learners errorType={}",
+          ex.getClass().getSimpleName());
       return;
     }
     int generated = 0;
@@ -63,7 +65,7 @@ public class WeeklyEvaluationScheduler {
           LOGGER.warn("Weekly evaluation batch stopped: shared AI provider daily budget reached");
           break;
         }
-        LOGGER.warn("Weekly evaluation for user {} failed: {}", userId, ex.toString());
+        LOGGER.warn("Weekly evaluation failed errorType={}", ex.getClass().getSimpleName());
       }
     }
     LOGGER.info(

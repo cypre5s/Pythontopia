@@ -335,14 +335,14 @@ class AgentDispatcher:
                     "node_count": len(response.nodes),
                 },
             )
-        except Exception as exc:
+        except Exception:
             elapsed_ms = int((time.monotonic() - started) * 1000)
             return DispatchResult(
                 step_id=step.id,
                 agent="PathPlannerAgent",
                 ok=False,
-                summary=f"路径规划失败: {exc}",
-                note=str(exc),
+                summary="路径规划失败，请稍后重试",
+                note="PathPlannerAgent failed.",
                 elapsed_ms=elapsed_ms,
             )
 

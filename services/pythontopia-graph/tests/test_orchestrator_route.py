@@ -8,10 +8,13 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.main import app
+from pythontopia_graph.routes import orchestrator as orchestrator_route
 from pythontopia_graph.nodes.evidence_fetcher import RagHit, StaticEvidenceFetcher
 from pythontopia_graph.routing.workshop_policy import compile_route_decision
 from pythontopia_graph.schemas.intent import IntentRouteRequest
@@ -29,6 +32,33 @@ class StubProvider(LlmProvider):
     async def chat_stream(self, messages, **kwargs) -> AsyncIterator[str]:  # type: ignore[override]
         for index in range(0, len(self._reply), 5):
             yield self._reply[index : index + 5]
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_stream_error_does_not_return_exception_text(monkeypatch) -> None:
+    class BrokenOrchestrator:
+        async def run(self, **kwargs):
+            raise RuntimeError("tool-loop-secret-sentinel")
+
+    monkeypatch.setattr(orchestrator_route, "_build_hybrid", lambda *args: BrokenOrchestrator())
+    body = {
+        "user_id": 1,
+        "session_id": "tool-loop-secret",
+        "user_message": "private question",
+        "course_kc_index": ["PY43-KC-001"],
+    }
+    request = orchestrator_route.OrchestratorRequest(**body)
+    chunks = [
+        chunk
+        async for chunk in orchestrator_route._tool_loop_stream_generator(
+            request, StubProvider(), StaticEvidenceFetcher([]), {"PY43-KC-001"}
+        )
+    ]
+    combined = "".join(chunks)
+
+    assert "TOOL_LOOP_FAILED" in combined
+    assert "The tool workflow failed." in combined
+    assert "tool-loop-secret-sentinel" not in combined
 
 
 def test_orchestrator_turn_returns_200_and_response_shape() -> None:

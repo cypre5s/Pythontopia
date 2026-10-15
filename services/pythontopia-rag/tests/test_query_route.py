@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from pythontopia_rag.app_state import AppState
 from pythontopia_rag.data.page_source import IndexablePage, InMemoryPageSource
-from pythontopia_rag.index.builder import rebuild_index
+from pythontopia_rag.index.builder import EmbeddingDegradedError, rebuild_index
 from pythontopia_rag.index.embedder import FallbackEmbedder, HashEmbedder
 from pythontopia_rag.index.store import InMemoryVectorStore
+from pythontopia_rag.routes import query as query_module
 from pythontopia_rag.main import app
 
 
@@ -285,6 +288,46 @@ async def test_index_status_reports_healthy_embedder_as_not_degraded() -> None:
     body = client.get("/rag/index/status").json()
     assert body["degraded"] is False
     assert body["fallback_reason"] is None
+
+
+def test_rebuild_source_does_not_log_database_exception_text(monkeypatch, caplog) -> None:
+    sentinel = "postgresql://reader:database-secret-sentinel@db.internal/course"
+
+    def fail_fetch(_db_url: str):
+        raise RuntimeError(sentinel)
+
+    monkeypatch.setattr(query_module, "fetch_pages", fail_fetch)
+    monkeypatch.setenv("PYT_DB_URL", sentinel)
+    app.state.rag_page_source = _seed_pages()
+    request = Request({"type": "http", "app": app})
+
+    source = query_module._resolve_rebuild_source(request)
+
+    assert source is app.state.rag_page_source
+    assert "RuntimeError" in caplog.text
+    assert sentinel not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_rebuild_failure_does_not_log_or_return_exception_details(
+    monkeypatch, caplog
+) -> None:
+    sentinel = "embedding-secret-sentinel"
+
+    async def fail_rebuild(**_kwargs):
+        raise EmbeddingDegradedError(sentinel)
+
+    monkeypatch.setattr(query_module, "_require_admin_token", lambda _token: None)
+    monkeypatch.setattr(query_module, "_resolve_rebuild_source", lambda _request: _seed_pages())
+    monkeypatch.setattr(query_module, "rebuild_index", fail_rebuild)
+    request = Request({"type": "http", "app": app})
+
+    with pytest.raises(HTTPException) as raised:
+        await query_module.rag_rebuild(request, x_internal_token="test-token")
+
+    assert "EmbeddingDegradedError" in caplog.text
+    assert sentinel not in caplog.text
+    assert sentinel not in str(raised.value.detail)
 
 
 @pytest.mark.asyncio

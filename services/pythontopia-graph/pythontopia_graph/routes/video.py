@@ -179,7 +179,11 @@ async def _bilibili_search_videos(keyword: str, page: int) -> dict[str, Any]:
         except Exception as exc:  # noqa: BLE001 - 重试一次；仍失败则上抛由路由转 502 结构化错误
             last_exc = exc
             if attempt == 0:
-                _LOG.warning("bilibili search 第 %d 次失败，重试: %s", attempt + 1, exc)
+                _LOG.warning(
+                    "bilibili search 第 %d 次失败，重试: %s",
+                    attempt + 1,
+                    type(exc).__name__,
+                )
                 await asyncio.sleep(0.8)
     raise last_exc if last_exc is not None else RuntimeError("bilibili search failed")
 
@@ -417,7 +421,7 @@ async def search_bilibili(
     except Exception as exc:  # noqa: BLE001 - fail-fast：结构化 502，不静默降级成空聊天
         raise HTTPException(
             status_code=502,
-            detail={"code": "VIDEO_SEARCH_FAILED", "message": str(exc)},
+            detail={"code": "VIDEO_SEARCH_FAILED", "message": "视频检索暂时不可用，请稍后重试。"},
         ) from exc
     items = _map_items(raw, limit, effective_keyword, max_duration_sec)
     # 渐进放宽兜底：严格过滤后为空 ≠ B站真没有结果。质量底线（付费过滤、跑题过滤）保留，

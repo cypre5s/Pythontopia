@@ -6,6 +6,15 @@
 
 ## 2026-10-15 当前续接
 
+- RAG KC 图数据库错误日志可能包含连接 URL/密码；合成 DSN 哨兵先 RED，现只记录异常类型，`test_kc_graph.py` 8/8。按仓库验收要求实际查询 `input 函数`、`for 循环`、`列表`，三项均 HTTP 200、有 5 条 page_id/document_id 引用；RAG `/healthz` 200，Ruff 通过，无 DeepSeek 调用。
+- Postgres checkpointer 异常日志哨兵复现 DSN 密码泄露；现只记录异常类型，仍降级 MemorySaver。与记忆 brief/loop sink 合并定向测试 48/48，Ruff、差异检查通过；无模型调用。
+- 编排异常日志续扫：memory brief provider 异常可把学生查询写入日志，loop record sink 异常可把存档错误正文写入日志。哨兵测试先 RED，改为只记异常类型后 `test_agentic_loop.py` 42/42，Ruff 与差异检查通过；fail-soft 行为不变，无模型请求。
+- BROWSE 异常信息核查：底层浏览器异常可能带有 URL 查询 token，异常会进入结果文本；外层 executor 异常还会记录日志并投影到 SSE。哨兵测试先 RED，现结果与日志只保留异常类型，缺少依赖时仍给固定提示；两个测试文件共 79/79，Ruff、`git diff --check` 通过，无 DeepSeek 调用。
+- Boss 题目存档日志审计：损坏 payload 的 Jackson 异常正文可能带出题目隐藏测试/参考解，外层读取失败还记录 owner/problem ID。回归先 RED，改为仅记录异常类型后 `EndlessPregenServiceTest` 全部 17/17 通过；`git diff --check` 通过，无数据库写入或模型调用。
+- 对照当前 Alethicode `Home.vue`/`Panel.vue`/`style.less`/`common.less` 与 Pythontopia 管理台：240px 分组侧栏、蓝灰面板 token、16px 面板圆角、36px 控件、44px 表头、52px 行、窄屏导航和可滚动列表已在三个真实管理页面落地。沿用既有组件/320px 浏览器与管理台定向测试记录；不复制 Alethicode 未映射到 Pythontopia 数据模型的管理菜单或 API，也不改现有 DTO 合同。管理台“格式对齐”完成，剩余动作覆盖归入 Web 矩阵；无模型请求。
+- 扩展本地判题隔离验证：运行既有 `node deploy/scripts/test_dev_piston_sandbox.mjs`，确认 Python 3.12.0、宿主文件隔离、job 私有临时目录、共享 `/tmp` 拒写、loopback 与 compat socket 阻断、超时 SIGKILL 均通过；脚本临时文件已清理。Docker inspect 确认 Piston API 容器非 privileged、只读 rootfs、capabilities 收紧、`no-new-privileges`、仅接入 `judge-execution`，端口只绑定回环。此项补足本地运行态隔离证据；生产 Piston ACL/ECS 与其余安全审计仍未验证，无模型请求。
+- 课堂 DTO 对照覆盖基础班级、成员、任务和看板字段；修正前端 `RemediationResultDto.partial` 为必填，与后端 primitive boolean 一致。`npm run typecheck` 通过；Admin 与 Alethicode 字段对照仍待做，无模型请求。
+- 安全续扫定位 NPC 定时预热任务把异常原文和活跃学生 ID 写入日志。先用异常哨兵让两条日志回归 RED，随后只保留异常类型；`NpcGreetingPrewarmJobTest` 6/6 通过。无模型请求。
 - MetaReflection 调度异常日志改为记录异常类型，策略更新日志只保留 agent 与版本，不再记录反馈采用率/评分汇总；两个合成哨兵先 RED，`MetaReflectionServiceTest` 7/7 通过。无模型或数据库状态变更。
 - DialogContext、MemoryRetrieval、LearningPath、WorldState 四个降级路径原先会把异常正文写入日志；合成哨兵先 RED 命中，现只记录异常类型，原有中性/空结果降级保持不变。四个测试类共 29/29 通过。
 - 学习事件镜像、访谈画像同步和预防讲义失败路径的异常正文也可携带学生/资源数据；哨兵 RED/GREEN，`MemoryStreamMirrorTest`、`InterviewDimensionMirrorTest`、`PreventionPackServiceTest` 共 19/19 通过，无模型请求。
@@ -24,6 +33,7 @@
 - 修复远征地图预取遗漏共享已批准题：按章节、阶段、KC、题型和难度优先查询审核题库，命中后写入当前玩家 READY 队列；未命中继续现有 Graph 生成与审核路径。RED/GREEN：`EndlessPregenServiceTest` 15/15。没有发起 Graph 或模型调用。
 - 修复 Tutor 会话落库、画像、班级、记忆、会话历史、工作流检查点和 SSE 结果投影失败路径可能包含学生数据或异常正文：日志只记录异常类型，投影异常传给 emitter 的也是固定错误文案。合成哨兵 RED/GREEN；`TutorServiceFailureTest` 2/2、`TutorMemoryBriefTest` 4/4、`TutorHistoryBriefTest` 6/6、`TutorWorkflowServiceTest` 33/33、`TutorWorkflowGraphClientTest` 5/5 通过；没有模型调用。
 - Tutor/Alethicode 只读对照确认 Pythontopia 已有固定阶段 AutoGen、SSE、授权、附件和检查点链路；未发现需要迁移的代码缺口。管理台主要视觉规范已对齐，不移植 Alethicode 后端 API。
+- **更正上述 Tutor 结论：** 更细的逐事件对照发现固定五阶段与 Alethicode 的事件专属阶段编排仍有差距。Tutor 现根据 event/coach 状态选择 AutoGen 阶段；状态校验阶段初始化 `effective_event`，Java checkpoint 校验支持动态索引且保留旧固定阶段恢复。Graph 49 项、Java Tutor 服务与 checkpoint controller 37 项、Ruff 及 `git diff --check` 通过；回归中发现并修复 AGENT_FEEDBACK 状态投影依赖 coach 阶段的问题。进一步确认断开会取消当前 AutoGen task 并释放 run；Java relay 关闭上游连接；同一 requestId/fingerprint 可恢复检查点，前端在 sessionStorage 暂存 25 分钟恢复请求，活动会话 API 返回已落库卡片。Graph cancellation/restore 3 项、通用 Tutor 图片脱离 AutoGen 状态 1 项、Java Graph SSE relay 定向测试通过。通用 Tutor 图片只在有界请求里临时转发，落库仅含问题/文本答案/引用；训练场工作流继续用 owner/session 私有附件 ID。独立 run API、event bus 和通用附件表不是当前闭环缺口；只待本轮新阶段排序的一次工作流端到端验证。本轮未调用 DeepSeek。
 - 用新注册的空学情学生做真实浏览器验收：展开“近期变化”并点“生成下一步”，实际进入 `/workshop` 且 `composer-input` 收到 Twin 提示草稿；本周统计为 0 条事件、没有掌握增量，模型/工坊生成请求为 0、页面错误为 0。成功验收账号 690 删除并核对为 0。第一版浏览器脚本因 Playwright API 参数写法失败，临时账号 689 随即删除并核实；修正脚本后完成验收。
 - 用另一名临时学生通过现有 KC-016 课程题并取得服务端 `PASSED`，周报汇总出 1 条正式练习事件与 1 个 KC 掌握变化；真实点击该 KC 的“补强”后进入工坊，草稿包含 `PY43-KC-016`。没有 Tutor/Graph/资源生成请求或页面错误；用户 691 及其判题/学情通过级联删除并核对不存在。
 - 主线正常 AI 补题为 KC-001 生成并自动审核了一道普通编程题；页面返回 `aiGenerated=true`、`reviewed=true`，同账号从共享审核库复取后服务端正式判题 3/3。该账号的 KC-001 真实掌握度为 0.14，低于远征先修门槛，因此不重复提交同题凑分；QA ID 697 因题库审计外键保留。没有再做 DeepSeek provider 探针。
@@ -431,3 +441,25 @@
 - 覆盖班级成员初次读取失败后，点击重试并恢复成员数据；`ClassroomDetail.spec.ts` 13/13。
 - 本地 Chromium 打开 `/teacher/classroom/9`，模拟首个成员 GET 503、重试 GET 200；错误区可见，重试后班级成员展示，页面错误 0。
 - 教师认证刷新与页面 API 都由浏览器路由模拟，未做后端授权联测或业务写入；没有模型请求。
+
+## 2026-10-15 — Tutor 事件阶段真实浏览器联测
+
+- 首次流程在旧 Java 运行进程上通过导读，但“没帮助→换种解释”没有返回 AI 回复卡。对照进程、源码和编译类时间发现 Java 进程早于本次动态检查点校验构建；旧版本仍按固定索引校验事件专属阶段，不能据此判定新代码失败。该次临时账号及级联 Tutor 数据已删除。
+- 按 `./dev.sh --down` 与 `./dev.sh --sandbox` 重启本地全栈（数据库卷保留），确认 backend/Graph/RAG/Piston/Vite 健康端点均为 HTTP 200；Spring `/readyz` 仍因可选视频字幕能力返回 503。新 Java 进程晚于当前编译类。
+- 新鲜 Chromium 学生流程：注册 201、登录 200、题目读取 200、Tutor 会话读取 200；题目导读与卡片反馈后的 `AGENT_FEEDBACK` 两条 SSE 均 200，DeepSeek completion 日志 2/2 为 HTTP 200；前端收到 278 与 348 字符的非空文本卡片，页面错误 0。临时学生及级联学习数据已删除。
+- 本次只验证 Tutor 产品流程，没有重复通用文本/PNG 探针；图片输入历史证据保持原记录，图片中继稳定性仍未验证。
+
+## 2026-10-15 当前续接：周报定时任务错误日志脱敏
+
+- 周报批处理失败日志曾输出学生 ID 和 exception message；哨兵回归先 RED，确认两类敏感内容都会进入日志。
+- 当前仅记录异常类型；学生级失败仍隔离并计入批次失败数，provider 日限额停止规则不变。`WeeklyEvaluationSchedulerTest` 4/4，RED/GREEN。无模型请求。
+
+## 2026-10-15 当前续接：远征预取错误信息与日志边界
+
+- 生成失败异常原文会写入学生可读 `error_message`；领取题及持久化已展示题的失败日志会输出 user/KC/problem 标识与数据库异常正文。合成哨兵与状态检查先 RED。
+- 生成失败状态现固定显示“题目预加载失败，可重试”；两个异常日志只保留异常类型。题目可重试和失败不置 READY 的行为不变。`EndlessPregenServiceTest` 19/19，含周报测试合跑 23/23。无模型请求。
+
+## 2026-10-15 当前续接：画像地图失败审计脱敏
+
+- `CurriculumMapperService.bootstrap` 失败时曾将 Graph 异常正文写入 `resource_run.output_artifact`。合成响应先 RED，确认运行记录会保存 sentinel。
+- 现在只记录固定 `graph-service-error`；失败仍返回原有 `CURRICULUM_MAPPER_UNAVAILABLE`。`CurriculumMapperServiceTest` 1/1，与周报和远征服务测试合跑 24/24。无模型或业务数据库请求。

@@ -112,7 +112,7 @@ public class CurriculumMapperService {
           "CurriculumMapperAgent",
           "CURRICULUM_BOOTSTRAP",
           Map.of("packId", DEFAULT_PACK_ID, "kcCount", kcs.size()),
-          Map.of("error", exception.getMessage() == null ? "graph-service-error" : exception.getMessage()),
+          Map.of("error", "graph-service-error"),
           List.of(),
           Map.of("passed", true),
           Map.of("passed", false, "reasons", List.of("graph-service-error")),

@@ -385,9 +385,9 @@ def test_generate_boss_problem_retries_then_fallback() -> None:
     assert review.problem.title == golden.title
 
 
-def test_generate_boss_problem_factory_raises_uses_fallback() -> None:
+def test_generate_boss_problem_factory_raises_uses_fallback(caplog) -> None:
     async def raising_factory(**kwargs) -> BossProblem:
-        raise RuntimeError("LLM rate limited")
+        raise RuntimeError("boss-content-secret-sentinel")
 
     golden = _good_problem()
     review = asyncio.run(
@@ -404,6 +404,8 @@ def test_generate_boss_problem_factory_raises_uses_fallback() -> None:
     )
     assert review.passed
     assert review.problem.problem_id == golden.problem_id
+    assert "boss-content-secret-sentinel" not in caplog.text
+    assert "RuntimeError" in caplog.text
 
 
 def test_to_payload_returns_frontend_dto_shape() -> None:

@@ -24,11 +24,11 @@ class _BrokenEmbedder:
     dim = DEFAULT_DIM
 
     async def embed(self, texts: list[str]) -> list[list[float]]:
-        raise RuntimeError("expired api key")
+        raise RuntimeError("embedding-secret-sentinel")
 
 
 @pytest.mark.asyncio
-async def test_fallback_embedder_returns_same_dimension_hash_vectors_after_primary_failure() -> None:
+async def test_fallback_embedder_redacts_primary_exception(caplog) -> None:
     embedder = FallbackEmbedder(
         primary=_BrokenEmbedder(),
         fallback=HashEmbedder(dim=DEFAULT_DIM),
@@ -45,7 +45,10 @@ async def test_fallback_embedder_returns_same_dimension_hash_vectors_after_prima
     assert embedder.dim == DEFAULT_DIM
     assert len(vectors) == 2
     assert all(len(vector) == DEFAULT_DIM for vector in vectors)
-    assert "expired api key" in (embedder.fallback_reason or "")
+    assert embedder.fallback_reason == "RuntimeError"
+    assert "RuntimeError" in caplog.text
+    assert "embedding-secret-sentinel" not in caplog.text
+    assert "embedding-secret-sentinel" not in (embedder.fallback_reason or "")
     assert embedder.using_fallback is True
 
 

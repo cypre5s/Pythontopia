@@ -72,7 +72,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         LOG.info("LLM provider 已初始化: %s", provider_label())
     except Exception as exc:  # noqa: BLE001 - 启动期容错，路由各自再兜底
         _app.state.llm_provider = None
-        LOG.warning("LLM provider 初始化失败，路由将各自兜底: %s", exc)
+        LOG.warning("LLM provider 初始化失败，路由将各自兜底: %s", type(exc).__name__)
     yield
 
 

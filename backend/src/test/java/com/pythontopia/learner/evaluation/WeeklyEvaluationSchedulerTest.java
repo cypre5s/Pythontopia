@@ -1,5 +1,6 @@
 package com.pythontopia.learner.evaluation;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -8,13 +9,17 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import com.pythontopia.learner.evaluation.service.LearnerEvaluationService;
 import com.pythontopia.learner.evaluation.service.WeeklyEvaluationScheduler;
 import java.util.List;
-import org.springframework.http.HttpStatus;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 
 class WeeklyEvaluationSchedulerTest {
 
@@ -69,5 +74,27 @@ class WeeklyEvaluationSchedulerTest {
 
     verify(service, never()).findLearnersNeedingWeeklyEvaluation();
     verify(service, never()).compute(any(), any());
+  }
+
+  @Test
+  void failedLearnerEvaluationDoesNotLogStudentIdOrExceptionMessage() {
+    long userId = 123456789L;
+    String sentinel = "private-weekly-evaluation-error-sentinel";
+    when(service.findLearnersNeedingWeeklyEvaluation()).thenReturn(List.of(userId));
+    when(service.compute(eq(userId), isNull())).thenThrow(new RuntimeException(sentinel));
+    Logger logger = (Logger) LoggerFactory.getLogger(WeeklyEvaluationScheduler.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      new WeeklyEvaluationScheduler(service, requestLimitService, true).generateWeeklyReports();
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anyMatch(message -> message.contains("errorType=RuntimeException"))
+        .noneMatch(message -> message.contains(sentinel) || message.contains(Long.toString(userId)));
   }
 }

@@ -319,10 +319,10 @@ class ResourceGraph:
                 "code": "RESOURCE_GRAPH_FAILED",
                 "message": "grounding failed after retry",
             })
-        except Exception as exc:
+        except Exception:
             await emit("error", {
                 "code": "RESOURCE_GRAPH_FAILED",
-                "message": str(exc),
+                "message": "Resource generation failed. Please retry.",
             })
 
     def _select_agent(self, request: ResourceProduceRequest):
@@ -369,7 +369,14 @@ class ResourceGraph:
             result = await awaitable
         except Exception as exc:  # noqa: BLE001
             elapsed_ms = int((time.monotonic() - started) * 1000)
-            trace.append(GraphTraceStep(node=name, elapsed_ms=elapsed_ms, status="fail", note=str(exc)))
+            trace.append(
+                GraphTraceStep(
+                    node=name,
+                    elapsed_ms=elapsed_ms,
+                    status="fail",
+                    note=type(exc).__name__,
+                )
+            )
             raise
         elapsed_ms = int((time.monotonic() - started) * 1000)
         trace.append(GraphTraceStep(node=name, elapsed_ms=elapsed_ms, status="ok"))

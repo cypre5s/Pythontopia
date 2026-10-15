@@ -438,6 +438,39 @@ async def test_dispatcher_path_planner_uses_authoritative_learning_facts(
 
 
 @pytest.mark.asyncio
+async def test_path_planner_failure_does_not_return_exception_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from pythontopia_graph.agents.path_planner_agent import PathPlannerAgent
+
+    def fail_plan(self, request):  # type: ignore[no-untyped-def]
+        raise RuntimeError("path-context-secret-sentinel")
+
+    monkeypatch.setattr(PathPlannerAgent, "plan", fail_plan)
+    dispatcher = AgentDispatcher(
+        DispatchContext(
+            provider=StubProvider([]),
+            evidence_fetcher=StaticEvidenceFetcher([HIT]),
+            valid_kc_codes={"PY43-KC-001"},
+        )
+    )
+    step = PlanStep(
+        id="s-path-error",
+        phase="learn",
+        title="规划下一步",
+        detail="根据当前学情规划",
+        agent="PathPlannerAgent",
+        kc_codes=["PY43-KC-001"],
+        panel="workshop",
+    )
+
+    result = await dispatcher.dispatch(step, user_id=7)
+
+    assert result.ok is False
+    assert "path-context-secret-sentinel" not in result.summary + (result.note or "")
+
+
+@pytest.mark.asyncio
 async def test_dispatcher_resource_graph_failure_is_structured_failure() -> None:
     """编排内坏资源草稿必须被 ResourceGraph 拦住并作为结构化失败返回。"""
     bad_payload = {

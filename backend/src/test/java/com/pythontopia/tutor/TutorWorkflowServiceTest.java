@@ -263,21 +263,37 @@ class TutorWorkflowServiceTest {
     JsonNode checkpoint =
         new ObjectMapper()
             .readTree(
-                "{\"stage_index\":3,\"stage_name\":\"generate_card\","
+                "{\"stage_index\":2,\"stage_name\":\"generate_card\","
                     + "\"team_state\":{\"agent_states\":[]},\"workflow_state\":\"state\"}");
     when(repository.findAutoGenCheckpoint(session.id(), runId))
         .thenReturn(
             Optional.of(
                 new TutorWorkflowRepository.AutoGenCheckpoint(
-                    runId, fingerprint, 2, "fetch_evidence", "{}", "RUNNING")));
+                    runId, fingerprint, 1, "fetch_evidence", "{}", "RUNNING")));
 
     service.persistAutoGenCheckpoint(USER, session.sessionKey(), runId, fingerprint, checkpoint);
 
     ArgumentCaptor<String> savedJson = ArgumentCaptor.forClass(String.class);
     verify(repository)
         .saveAutoGenCheckpoint(
-            eq(session.id()), eq(runId), eq(fingerprint), eq(3), eq("generate_card"), savedJson.capture());
+            eq(session.id()), eq(runId), eq(fingerprint), eq(2), eq("generate_card"), savedJson.capture());
     assertThat(new ObjectMapper().readTree(savedJson.getValue())).isEqualTo(checkpoint);
+  }
+
+  @Test
+  void checkpointWriteRejectsUnknownStageNames() throws Exception {
+    JsonNode checkpoint =
+        new ObjectMapper()
+            .readTree(
+                "{\"stage_index\":0,\"stage_name\":\"unknown\","
+                    + "\"team_state\":{},\"workflow_state\":\"state\"}");
+
+    assertThatThrownBy(
+            () ->
+                service.persistAutoGenCheckpoint(
+                    USER, session.sessionKey(), UUID.randomUUID(), "e".repeat(64), checkpoint))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("恢复点无效");
   }
 
   @Test

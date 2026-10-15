@@ -6,6 +6,7 @@ import pytest
 from pydantic import ValidationError
 
 from pythontopia_graph.graph.tutor_workflow_graph import TutorWorkflowGraph, validate_transition
+from pythontopia_graph.graph import tutor_workflow_graph as tutor_graph_module
 from pythontopia_graph.graph import tutor_workflow_session as session_store
 from pythontopia_graph.graph.autogen_tutor_runtime import _decode_state, _encode_state
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
@@ -93,6 +94,75 @@ async def _run_graph(
 )
 def test_task7_events_are_phase_preserving(event: str) -> None:
     assert validate_transition("CODING", event) == "CODING"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("event", "coach_mode", "expected_stages"),
+    [
+        ("COMPACT", True, ["validate_transition", "generate_card", "decide_actions"]),
+        ("CODING", False, ["validate_transition", "generate_card", "decide_actions"]),
+        (
+            "READING",
+            False,
+            ["validate_transition", "fetch_evidence", "generate_card", "decide_actions"],
+        ),
+        ("PLAN_RECOMMEND", True, ["validate_transition", "coach_decide", "generate_card"]),
+    ],
+)
+async def test_workflow_uses_event_specific_autogen_stages(
+    monkeypatch, event: str, coach_mode: bool, expected_stages: list[str]
+) -> None:
+    request = WorkflowRunRequest(
+        session_id="wf-stage-selection",
+        user_id=7,
+        event=event,  # type: ignore[arg-type]
+        coach_mode=coach_mode,
+        problem=WorkflowProblemContext(problem_id=42, title="循环求和"),
+    )
+    observed_stages: list[str] = []
+
+    async def capture_stages(state, stages, **_kwargs):
+        observed_stages.extend(name for name, _handler in stages)
+        return state
+
+    monkeypatch.setattr(tutor_graph_module, "run_autogen_tutor_workflow", capture_stages)
+    graph = TutorWorkflowGraph(_StubProvider(), StaticEvidenceFetcher([]), emit=lambda *_: None)
+
+    await graph.run({"request": request, "current_phase": "READING"})
+
+    assert observed_stages == expected_stages
+
+
+@pytest.mark.asyncio
+async def test_workflow_restores_legacy_fixed_stage_checkpoint(monkeypatch) -> None:
+    request = WorkflowRunRequest(
+        session_id="wf-stage-restore",
+        user_id=7,
+        event="COMPACT",
+        problem=WorkflowProblemContext(problem_id=42, title="循环求和"),
+    )
+    observed_stages: list[str] = []
+
+    async def capture_stages(state, stages, **_kwargs):
+        observed_stages.extend(name for name, _handler in stages)
+        return state
+
+    monkeypatch.setattr(tutor_graph_module, "run_autogen_tutor_workflow", capture_stages)
+    graph = TutorWorkflowGraph(_StubProvider(), StaticEvidenceFetcher([]), emit=lambda *_: None)
+
+    await graph.run(
+        {"request": request, "current_phase": "READING"},
+        restore_checkpoint={"stage_index": 1, "stage_name": "coach_decide"},
+    )
+
+    assert observed_stages == [
+        "validate_transition",
+        "coach_decide",
+        "fetch_evidence",
+        "generate_card",
+        "decide_actions",
+    ]
 
 
 def test_agent_feedback_requires_text_message() -> None:

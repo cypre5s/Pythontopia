@@ -212,7 +212,7 @@ class PaperDesignerAgent:
                 messages, response_format={"type": "json_object"}
             )
         except Exception as exc:  # noqa: BLE001 - 上游 provider 失败 → 出题失败
-            raise PaperDesignError(f"LLM provider error: {exc}") from exc
+            raise PaperDesignError("LLM provider request failed") from exc
         paper = self._parse(response.content_json, response.content_text)
         self._assert_counts(paper, request.counts)
         return paper
@@ -361,7 +361,7 @@ class PaperDesignerAgent:
         try:
             return QuestionPaper.model_validate(body)
         except Exception as exc:  # noqa: BLE001 - pydantic ValidationError → 出题失败
-            raise PaperDesignError(f"paper schema invalid: {exc}") from exc
+            raise PaperDesignError("paper schema invalid") from exc
 
     @staticmethod
     def _normalize_qids(body: dict[str, Any]) -> dict[str, Any]:

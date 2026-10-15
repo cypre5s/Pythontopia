@@ -27,6 +27,11 @@ class _AnswerProvider:
             yield ""
 
 
+class _FailingAnswerProvider(_AnswerProvider):
+    async def chat(self, messages, *, json_mode: bool = True, **kwargs: object) -> LlmResponse:
+        raise RuntimeError("courseware-query-secret-sentinel")
+
+
 @pytest.mark.asyncio
 async def test_courseware_answer_carries_graph_trace_to_student_endpoint() -> None:
     fetcher = StaticEvidenceFetcher(
@@ -88,3 +93,28 @@ async def test_courseware_answer_carries_graph_trace_to_student_endpoint() -> No
     ]
     assert output.graph_trace["co_occur_hit_count"] == 1
     assert output.graph_trace["supplemental_hit_limit"] == 2
+
+
+@pytest.mark.asyncio
+async def test_courseware_provider_error_logs_only_exception_type(caplog) -> None:
+    output = await courseware_answer(
+        CoursewareAnswerInput(query="解释列表"),
+        provider=_FailingAnswerProvider(),
+        fetcher=StaticEvidenceFetcher(
+            [
+                RagHit(
+                    chunk_id="p1:0",
+                    page_id=1,
+                    page_no=1,
+                    chapter_id=1,
+                    kc_codes=["PY43-KC-001"],
+                    text="列表是一种序列。",
+                    score=0.8,
+                )
+            ]
+        ),
+    )
+
+    assert "courseware-query-secret-sentinel" not in caplog.text
+    assert "RuntimeError" in caplog.text
+    assert "列表是一种序列" in output.answer_md

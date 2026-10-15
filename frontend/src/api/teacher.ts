@@ -134,7 +134,7 @@ export interface RemediationPackDto {
 export interface RemediationResultDto {
   classroomId: number;
   weakKcCount: number;
-  partial?: boolean;
+  partial: boolean;
   packs: RemediationPackDto[];
 }
 

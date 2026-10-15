@@ -560,7 +560,7 @@ class TutorWorkflowCardAgent:
             try:
                 response = await self._chat_json(attempt_messages, model_tier=model_tier)
             except Exception as exc:  # noqa: BLE001 - provider 故障归 SYSTEM_ERROR
-                raise CardGenerationError("SYSTEM_ERROR", f"LLM generation failed: {exc}") from exc
+                raise CardGenerationError("SYSTEM_ERROR", "LLM generation failed") from exc
             card = _coerce_json(response)
             if card:
                 last_error = self._schema_error(card_key, card)

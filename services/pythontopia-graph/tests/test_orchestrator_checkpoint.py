@@ -8,6 +8,8 @@
 from __future__ import annotations
 
 from collections.abc import AsyncIterator
+import sys
+from types import ModuleType
 
 import pytest
 
@@ -140,3 +142,26 @@ async def test_default_checkpointer_postgres_degrades_to_memory(monkeypatch) -> 
     graph = OrchestratorGraph(provider=ScriptedProvider(), checkpointer=saver)
     response = await graph.run(request_of("ckpt-s1"))
     assert response.reply_md
+
+
+def test_default_checkpointer_does_not_log_connection_error_details(monkeypatch, caplog) -> None:
+    from langgraph.checkpoint.memory import MemorySaver
+
+    secret = "postgresql://student:private-db-password@db.internal/learning"
+    fake_module = ModuleType("langgraph.checkpoint.postgres.aio")
+
+    class FailingPostgresSaver:
+        @staticmethod
+        def from_conn_string(url: str) -> object:
+            raise RuntimeError(f"connection failed for {url}")
+
+    fake_module.AsyncPostgresSaver = FailingPostgresSaver  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "langgraph.checkpoint.postgres.aio", fake_module)
+    monkeypatch.setenv("PYT_ORCH_CHECKPOINT", "postgres")
+    monkeypatch.setenv("PYT_ORCH_CHECKPOINT_PG_URL", secret)
+
+    saver = default_checkpointer()
+
+    assert isinstance(saver, MemorySaver)
+    assert secret not in caplog.text
+    assert "RuntimeError" in caplog.text

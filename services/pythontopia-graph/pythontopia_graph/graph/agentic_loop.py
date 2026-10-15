@@ -422,11 +422,16 @@ class AgenticLoopController:
         try:
             result = await executor.run(request)  # max_retries=0：不重试
         except Exception as exc:  # noqa: BLE001 - 浏览异常 fail-soft 回退，不外抛打断编排
-            LOG.warning("BROWSE executor 失败（fail-soft 回退 %s）：%s", BROWSE_FALLBACK, exc)
+            error_type = type(exc).__name__
+            LOG.warning(
+                "BROWSE executor 失败（fail-soft 回退 %s），error_type=%s",
+                BROWSE_FALLBACK,
+                error_type,
+            )
             return BrowseDispatch(
                 dispatched=True,
                 fallback=BROWSE_FALLBACK,
-                error=str(exc),
+                error=error_type,
                 step=LoopStep(
                     id="loop-browse",
                     phase="act",
@@ -434,7 +439,7 @@ class AgenticLoopController:
                     tool_name=BROWSE_TOOL_NAME,
                     status="failed",
                     reason_summary=f"BROWSE 执行失败，回退 {BROWSE_FALLBACK}",
-                    error=str(exc),
+                    error=error_type,
                 ),
             )
 

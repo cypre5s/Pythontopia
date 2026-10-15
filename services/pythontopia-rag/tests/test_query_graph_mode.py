@@ -28,6 +28,7 @@ from pythontopia_rag.index.store import InMemoryVectorStore
 from pythontopia_rag.graph.router import (
     MAX_PREREQ_HOPS,
     RouteResult,
+    _collect_subgraph,
     classify_query,
     route_and_retrieve,
 )
@@ -37,6 +38,15 @@ from pythontopia_rag.schemas.query import KcEdge
 RECURSION_KC = "PY43-KC-021R"
 FUNCTION_KC = "PY43-KC-021"
 LIST_KC = "PY43-KC-030"
+
+
+def test_neighbor_failure_log_contains_only_exception_type(caplog) -> None:
+    def fail_neighbors(anchor: str, hops: int) -> object:
+        raise RuntimeError("rag-query-secret-sentinel")
+
+    assert _collect_subgraph([RECURSION_KC], 1, fail_neighbors) == []
+    assert "RuntimeError" in caplog.text
+    assert "rag-query-secret-sentinel" not in caplog.text
 
 # 锚定 KC → 直接前置；既喂 index KcGraph 也喂 router 的 neighbors stub。
 PREREQ_GRAPH = IndexKcGraph(

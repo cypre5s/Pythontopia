@@ -118,8 +118,11 @@ async def profile_turn_stream(
             yield _format_sse("trace", {"node": "ProfileAgent", "status": "running", "elapsed_ms": 0})
             result = await agent.run(input_data)
             yield _format_sse("result", result.model_dump(mode="json"))
-        except Exception as exc:
-            yield _format_sse("error", {"code": "PROFILE_TURN_FAILED", "message": str(exc)})
+        except Exception:
+            yield _format_sse(
+                "error",
+                {"code": "PROFILE_TURN_FAILED", "message": "画像服务暂时不可用，请稍后重试。"},
+            )
 
     return StreamingResponse(
         generate(),
