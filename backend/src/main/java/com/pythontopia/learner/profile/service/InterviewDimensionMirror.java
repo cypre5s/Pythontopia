@@ -70,10 +70,10 @@ public class InterviewDimensionMirror {
       passiveProfileService.applyDimensionUpdate(userId, dimensionKey, delta);
     } catch (RuntimeException ex) {
       log.warn(
-          "Interview dimension mirror skipped userId={} dim={}: {}",
+          "Interview dimension mirror skipped userId={} dim={} errorType={}",
           userId,
           dimensionKey,
-          ex.getMessage());
+          ex.getClass().getSimpleName());
     }
   }
 

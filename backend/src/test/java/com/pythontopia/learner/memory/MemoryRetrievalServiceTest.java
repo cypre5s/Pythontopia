@@ -8,6 +8,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
@@ -18,6 +21,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 /** 记忆检索服务单测：打分排序、limit clamp、DTO 分数分解、中文摘要、同章相关性解析。 */
 class MemoryRetrievalServiceTest {
@@ -169,16 +173,30 @@ class MemoryRetrievalServiceTest {
   }
 
   @Test
-  void coursePackFailureDegradesToNoChapterRelevance() {
+  void coursePackFailureDegradesWithoutLoggingExceptionDetails() {
+    String sentinel = "course-pack-private-sentinel";
     when(eventRepo.findRecentForMemory(eq(7L), anyInt()))
         .thenReturn(List.of(row(1, "practice_failed", List.of("PY43-KC-015"), 3, NOW)));
     when(coursePackRepository.findKcs(eq(43L), eq(null)))
-        .thenThrow(new RuntimeException("course pack unavailable"));
+        .thenThrow(new RuntimeException(sentinel));
 
-    // 课程包读失败不应让检索崩溃，只是失去同章相关性。
-    List<MemoryItemDto> items = service.retrieve(7L, "PY43-KC-016", 8);
+    Logger logger = (Logger) LoggerFactory.getLogger(MemoryRetrievalService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    List<MemoryItemDto> items;
+    try {
+      // 课程包读失败不应让检索崩溃，只是失去同章相关性。
+      items = service.retrieve(7L, "PY43-KC-016", 8);
+    } finally {
+      logger.detachAppender(appender);
+    }
+
     assertThat(items).hasSize(1);
     assertThat(items.get(0).relevanceScore()).isEqualTo(0.0);
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .noneMatch(message -> message.contains(sentinel));
   }
 
   @Test

@@ -249,7 +249,10 @@ public class DialogContextService {
       String latest = tags.get(tags.size() - 1).asText(null);
       return normalizePresentationPreference(latest);
     } catch (RuntimeException ex) {
-      log.debug("learning preference unavailable for user {}: {}", userId, ex.getMessage());
+      log.debug(
+          "learning preference unavailable for user {} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return DialogContextDto.STYLE_UNKNOWN;
     }
   }

@@ -74,15 +74,14 @@ public class XfyunImageService {
     if (prompt == null || prompt.isBlank()) {
       throw new BusinessException(HttpStatus.BAD_REQUEST, "IMAGE_PROMPT_REQUIRED", "图片描述不能为空");
     }
-    if (userId != null) {
-      checkRateLimit(userId);
-    }
-
     if (!isEnabled()) {
       throw new BusinessException(
           HttpStatus.SERVICE_UNAVAILABLE,
           "IMAGE_PROVIDER_UNAVAILABLE",
           "图片生成服务尚未配置，请联系管理员");
+    }
+    if (userId != null) {
+      checkRateLimit(userId);
     }
     try {
       byte[] jpeg = callXfyun(userId, prompt);

@@ -10,6 +10,9 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.agent.run.ResourceRunRecorder;
 import com.pythontopia.common.config.GraphServiceProperties;
@@ -37,6 +40,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.http.HttpEntity;
 import org.springframework.transaction.TransactionDefinition;
@@ -113,12 +117,24 @@ class InterviewDimensionMirrorTest {
 
   @Test
   void singleDimensionFailureDoesNotAbortTheRest() {
+    String sentinel = "private-interview-answer-sentinel";
     when(passiveProfileService.applyDimensionUpdate(eq(7L), eq("knowledge_base"), any()))
-        .thenThrow(new IllegalStateException("dimensions column missing"));
+        .thenThrow(new IllegalStateException(sentinel));
 
-    mirror.mirror(7L, fullDraft());
+    Logger logger = (Logger) LoggerFactory.getLogger(InterviewDimensionMirror.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      mirror.mirror(7L, fullDraft());
+    } finally {
+      logger.detachAppender(appender);
+    }
 
     assertThat(capturedDeltas()).hasSize(4);
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .noneMatch(message -> message.contains(sentinel));
   }
 
   @Test

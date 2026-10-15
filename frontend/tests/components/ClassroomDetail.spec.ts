@@ -303,6 +303,27 @@ describe('ClassroomDetail', () => {
     expect(wrapper.find('[data-testid="teacher-detail-back"]').exists()).toBe(true);
   });
 
+  it('成员数据首次加载失败后可重试并恢复班级详情', async () => {
+    apiMocks.listClassroomMembersByStatus
+      .mockRejectedValueOnce(new Error('成员服务暂不可用'))
+      .mockResolvedValueOnce([
+        { studentId: 12, username: 'stu02', displayName: 'Stu 02', status: 'ACTIVE' },
+      ]);
+
+    await router.push('/teacher/classroom/9');
+    const wrapper = mountClassroomDetail();
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="classroom-error"]').text()).toContain('成员服务暂不可用');
+
+    await wrapper.get('[data-testid="classroom-retry"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="classroom-error"]').exists()).toBe(false);
+    expect(useTeacherStore().current.members.map((member) => member.username)).toEqual(['stu02']);
+    expect(apiMocks.listClassroomMembersByStatus).toHaveBeenCalledTimes(2);
+  });
+
   it('请求进行中 → 按钮禁用并显示「生成中…」，完成后恢复', async () => {
     let resolveFn: (value: RemediationResultDto) => void = () => {};
     const pending = new Promise<RemediationResultDto>((resolve) => {

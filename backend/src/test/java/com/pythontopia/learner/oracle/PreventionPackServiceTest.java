@@ -12,6 +12,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.workshop.dto.ResourceCreateRequest;
 import com.pythontopia.workshop.dto.ResourceCreateResponse;
@@ -25,6 +28,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /** P5.1：预防包预生成走真资源生成链并落库（带可溯源证据）；幂等去重；后台失败不抛。 */
@@ -105,13 +109,26 @@ class PreventionPackServiceTest {
   @Test
   @DisplayName("资源生成失败 → 后台 best-effort 不抛出、不落库")
   void swallowsGenerationFailure() {
+    String sentinel = "private-resource-generation-sentinel";
     when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(USER), anyString(), anyInt()))
         .thenReturn(0);
     when(resourceWorkshopService.create(eq(USER), any(ResourceCreateRequest.class)))
-        .thenThrow(new RuntimeException("graph down"));
+        .thenThrow(new RuntimeException(sentinel));
 
-    assertThatCode(() -> service.pregenerate(USER, prediction())).doesNotThrowAnyException();
+    Logger logger = (Logger) LoggerFactory.getLogger(PreventionPackService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThatCode(() -> service.pregenerate(USER, prediction())).doesNotThrowAnyException();
+    } finally {
+      logger.detachAppender(appender);
+    }
+
     verify(jdbcTemplate, never()).update(anyString(), any(), any(), any(), any());
     verify(resourceWorkshopService, times(1)).create(eq(USER), any());
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .noneMatch(message -> message.contains(sentinel));
   }
 }

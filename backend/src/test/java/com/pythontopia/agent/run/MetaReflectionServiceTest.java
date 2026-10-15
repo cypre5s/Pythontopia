@@ -10,6 +10,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -17,6 +21,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.slf4j.LoggerFactory;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -45,7 +50,22 @@ class MetaReflectionServiceTest {
             argThat(sql -> sql != null && sql.contains("MAX(version)")), eq(Integer.class), eq(AGENT)))
         .thenReturn(1);
 
-    service.reflect(AGENT);
+    Logger logger = (Logger) LoggerFactory.getLogger(MetaReflectionService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.INFO);
+    logger.addAppender(appender);
+    try {
+      service.reflect(AGENT);
+
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .noneMatch(message -> message.contains("采纳率") || message.contains("平均评分"));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
 
     verify(jdbc, times(1))
         .update(
@@ -80,6 +100,30 @@ class MetaReflectionServiceTest {
     service.reflect(AGENT);
 
     verify(jdbc, never()).update(anyString(), any(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("scheduler failure does not log database exception details")
+  void reflectAllDoesNotLogDatabaseExceptionDetails() {
+    String privateDetail = "PRIVATE_DATABASE_DETAIL_8c30";
+    when(jdbc.queryForList(anyString(), anyString()))
+        .thenThrow(new IllegalStateException(privateDetail));
+    Logger logger = (Logger) LoggerFactory.getLogger(MetaReflectionService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.WARN);
+    logger.addAppender(appender);
+    try {
+      service.reflectAll();
+
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .allSatisfy(message -> assertThat(message).doesNotContain(privateDetail));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
   }
 
   @Test

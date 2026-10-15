@@ -122,8 +122,8 @@ def _provider(request: Request) -> LlmProvider | None:
 async def _safe_fetch(bvid: str) -> VideoMeta:
     try:
         return await _fetch_bilibili_metadata(bvid)
-    except Exception:  # noqa: BLE001 - 取数失败：best-effort，仍给降级概述
-        _LOG.warning("bilibili insight fetch failed for %s", bvid, exc_info=True)
+    except Exception as exc:  # noqa: BLE001 - 取数失败：best-effort，仍给降级概述
+        _LOG.warning("bilibili insight fetch failed error_type=%s", type(exc).__name__)
         return VideoMeta()
 
 
@@ -140,8 +140,8 @@ async def _safe_insight(
             pages=meta.page_segments,
             outline=meta.outline_segments,
         )
-    except Exception:  # noqa: BLE001 - 纵深兜底：Agent 内部已 fail-soft，这里再保一层
-        _LOG.warning("video insight agent failed for %s", body.bvid, exc_info=True)
+    except Exception as exc:  # noqa: BLE001 - 纵深兜底：Agent 内部已 fail-soft，这里再保一层
+        _LOG.warning("video insight agent failed error_type=%s", type(exc).__name__)
         return build_degraded_response(body.bvid, meta.title)
 
 

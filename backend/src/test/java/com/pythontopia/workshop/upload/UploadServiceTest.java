@@ -45,6 +45,7 @@ import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 /** 上传服务单测：真实解析器 + mock 仓储。覆盖白名单(415)/大小(413)/空文件、解析成功与 fail-soft、越权隔离。 */
 class UploadServiceTest {
@@ -171,6 +172,22 @@ class UploadServiceTest {
 
     verify(repository, never()).insert(anyLong(), anyString(), anyString(), anyLong(), any(), anyInt(), anyInt(), any(), any());
     verify(extractor, never()).extract(anyString(), any(byte[].class));
+  }
+
+  @Test
+  void uploadChecksQuotaBeforeCopyingFileBytes() throws IOException {
+    MultipartFile file = mock(MultipartFile.class);
+    when(file.isEmpty()).thenReturn(false);
+    when(file.getOriginalFilename()).thenReturn("note.txt");
+    when(file.getSize()).thenReturn(1L);
+    when(repository.canAcceptUpload(USER_ID, 1L, 20, 50L * 1024 * 1024)).thenReturn(false);
+
+    assertThatThrownBy(() -> service.upload(USER_ID, file))
+        .isInstanceOf(BusinessException.class)
+        .extracting(ex -> ((BusinessException) ex).code())
+        .isEqualTo("UPLOAD_QUOTA_EXCEEDED");
+
+    verify(file, never()).getBytes();
   }
 
   @Test

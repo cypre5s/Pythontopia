@@ -37,7 +37,10 @@ public class WorldStateService {
     try {
       recent = submissionRepository.findRecentForPlanner(userId, RECENT_WINDOW);
     } catch (RuntimeException ex) {
-      log.warn("world-state streak read degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "world-state streak read degraded for user {} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return 0;
     }
     if (recent.isEmpty()) {

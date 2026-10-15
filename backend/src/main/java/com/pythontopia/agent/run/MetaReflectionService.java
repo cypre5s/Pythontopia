@@ -42,7 +42,7 @@ public class MetaReflectionService {
       try {
         reflect(name);
       } catch (RuntimeException e) {
-        log.warn("meta-reflect {} skipped: {}", name, e.getMessage());
+        log.warn("meta-reflect {} skipped errorType={}", name, e.getClass().getSimpleName());
       }
     }
   }
@@ -116,7 +116,7 @@ public class MetaReflectionService {
         toJson(params),
         ver,
         reason);
-    log.info("meta-reflect {} v{}: {}", agentName, ver, reason);
+    log.info("meta-reflect {} v{} strategy updated", agentName, ver);
   }
 
   /** 读近7天反馈聚合：条数 / 采纳数 / 平均评分（无评分则 null）。 */

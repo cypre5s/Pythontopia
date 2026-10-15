@@ -184,7 +184,10 @@ public class MemoryRetrievalService {
       }
       return codes;
     } catch (RuntimeException ex) {
-      log.warn("memory same-chapter resolution degraded for focusKc={}: {}", focusKc, ex.getMessage());
+      log.warn(
+          "memory same-chapter resolution degraded for focusKc={} errorType={}",
+          focusKc,
+          ex.getClass().getSimpleName());
       return Set.of();
     }
   }

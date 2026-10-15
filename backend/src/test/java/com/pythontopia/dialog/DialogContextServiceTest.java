@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -11,6 +15,7 @@ import com.pythontopia.auth.repository.UserRepository;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataAccessResourceFailureException;
 
 /**
@@ -99,9 +104,28 @@ class DialogContextServiceTest {
   }
 
   @Test
-  void dataAccessExceptionDegradesToUnknown() {
+  void dataAccessExceptionDegradesToUnknownWithoutLoggingExceptionDetails() {
+    String sentinel = "profile-row-private-sentinel";
     when(profileRepository.findDimensions(USER_ID))
-        .thenThrow(new DataAccessResourceFailureException("dimensions column missing"));
-    assertThat(build().cognitiveStyle()).isEqualTo(DialogContextDto.STYLE_UNKNOWN);
+        .thenThrow(new DataAccessResourceFailureException(sentinel));
+
+    Logger logger = (Logger) LoggerFactory.getLogger(DialogContextService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.DEBUG);
+    logger.addAppender(appender);
+    DialogContextDto dto;
+    try {
+      dto = build();
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
+
+    assertThat(dto.cognitiveStyle()).isEqualTo(DialogContextDto.STYLE_UNKNOWN);
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .noneMatch(message -> message.contains(sentinel));
   }
 }

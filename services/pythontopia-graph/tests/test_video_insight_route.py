@@ -218,6 +218,46 @@ def test_insight_degrades_when_llm_unavailable(
     assert "Python 列表推导式讲解" in data["overview"]
 
 
+@pytest.mark.asyncio
+async def test_metadata_fetch_failure_does_not_log_exception_text(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    sentinel = "PRIVATE_BILIBILI_FAILURE_72aa"
+
+    async def fail_fetch(_bvid: str) -> VideoMeta:
+        raise RuntimeError(sentinel)
+
+    monkeypatch.setattr(video_insight_route, "_fetch_bilibili_metadata", fail_fetch)
+    caplog.set_level(logging.WARNING, logger="pythontopia_graph.routes.video_insight")
+
+    await video_insight_route._safe_fetch("BV1test00000")
+
+    assert sentinel not in caplog.text
+
+
+def test_insight_failure_does_not_log_exception_text(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    sentinel = "PRIVATE_VIDEO_INSIGHT_FAILURE_591c"
+    _patch_fetch(monkeypatch, VideoMeta(title="Python 入门"))
+
+    class SensitiveRaisingProvider(_RaisingProvider):
+        async def chat(self, messages, **kwargs):  # type: ignore[override]
+            raise RuntimeError(sentinel)
+
+    _patch_provider(monkeypatch, SensitiveRaisingProvider())
+    caplog.set_level(logging.WARNING, logger="pythontopia_graph.routes.video_insight")
+
+    response = TestClient(app).post(
+        "/agents/video/bilibili/insight",
+        json={"bvid": "BV1failure000", "question": "敏感学习问题"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["degraded"] is True
+    assert sentinel not in caplog.text
+
+
 def test_insight_drops_hallucinated_timestamps(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

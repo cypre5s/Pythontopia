@@ -207,10 +207,10 @@ public class MemoryStreamMirror {
       npcKeyFor(eventType).ifPresent(npcKey -> npcMemoryService.remember(userId, npcKey, eventId, 0.5));
     } catch (RuntimeException ex) {
       log.warn(
-          "MemoryStreamMirror skip event userId={} type={}: {}",
+          "MemoryStreamMirror skip event userId={} type={} errorType={}",
           userId,
           eventType,
-          ex.getMessage());
+          ex.getClass().getSimpleName());
     }
   }
 

@@ -62,7 +62,7 @@ def _parse_brief(body: object) -> MemoryBrief:
     try:
         return MemoryBrief.model_validate(body)
     except Exception:  # noqa: BLE001 - 任何 schema 偏差都回退空 brief，绝不注入半成品
-        LOG.warning("memory_brief.parse_failed", exc_info=True)
+        LOG.warning("memory_brief.parse_failed")
         return MemoryBrief()
 
 
@@ -99,5 +99,9 @@ async def fetch_memory_brief(
             return MemoryBrief()
         return _parse_brief(response.json())
     except Exception as exc:  # noqa: BLE001 - 外部依赖 fail-soft：超时/断连/损坏统统回退空 brief
-        LOG.warning("memory_brief.fetch_failed user_id=%s error=%s", user_id, exc)
+        LOG.warning(
+            "memory_brief.fetch_failed user_id=%s error_type=%s",
+            user_id,
+            type(exc).__name__,
+        )
         return MemoryBrief()

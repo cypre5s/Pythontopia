@@ -6,6 +6,11 @@
 
 ## 2026-10-15 当前续接
 
+- MetaReflection 调度异常日志改为记录异常类型，策略更新日志只保留 agent 与版本，不再记录反馈采用率/评分汇总；两个合成哨兵先 RED，`MetaReflectionServiceTest` 7/7 通过。无模型或数据库状态变更。
+- DialogContext、MemoryRetrieval、LearningPath、WorldState 四个降级路径原先会把异常正文写入日志；合成哨兵先 RED 命中，现只记录异常类型，原有中性/空结果降级保持不变。四个测试类共 29/29 通过。
+- 学习事件镜像、访谈画像同步和预防讲义失败路径的异常正文也可携带学生/资源数据；哨兵 RED/GREEN，`MemoryStreamMirrorTest`、`InterviewDimensionMirrorTest`、`PreventionPackServiceTest` 共 19/19 通过，无模型请求。
+- 本地判题隔离复核发现 Piston 运行容器仍处于旧 `deploy_default` 网络，尽管 Compose 已声明专用网络；按当前文件只重建 Piston，确认运行态仅接入 `deploy_judge-execution`、宿主映射限于 `127.0.0.1:2000`。通过 Piston Python 3.12.0 HTTP 冒烟：输出 `4`、退出码 0；后端 `/readyz` 的 judge 项就绪，整体 readiness 仍因视频字幕服务不可用返回 503。生产 Piston ACL 未验证，无 DeepSeek 请求。
+- 最新只读数据库计数为 21 条活动远征记录；满足候选先修门槛的账号 1 个、其中活动 run 为 0。查询只返回聚合计数，未创建、修改学习数据或读取账号身份。
 - 补齐 `ProfileService` 画像访谈 SSE 日志脱敏：结果处理、流式传输、fallback 与 emitter 写入不再输出异常对象。结果持久化异常携带的合成学生文本哨兵先 RED 命中日志栈，`ProfileServiceFailureTest` 2/2 通过；原有非流式错误映射不变，无模型请求。
 - 修复 `TutorWorkflowSubmissionFeedbackListener` 提交反馈与状态 JSON 解析的异常栈日志泄露。两个合成哨兵先 RED 命中，随后只记录异常类型；原有提交状态更新保持不变，`TutorWorkflowSubmissionFeedbackListenerTest` 6/6 通过，无模型请求。
 - 修复 `WorkshopGraphClient` SSE 结果处理、上游读流、fallback、AG-UI payload 解析和错误事件发送路径会记录异常正文的问题。合成学生内容哨兵先 RED 出现在异常栈中，改为只记录异常类型后 `WorkshopGraphClientTest` 4/4 通过；未调用 Graph 模型或 DeepSeek。
@@ -396,3 +401,33 @@
 
 - 临时教师在真实班级看板发布任务后点击归档；两个写接口均返回 2xx，前端 store 重新读取服务器列表后呈现 `ARCHIVED`，归档按钮消失。
 - 直接数据库复核 SQL 因 `status` 列未限定表别名而报错，页面错误计数也未输出；不把这两项标成已验证。清理后临时用户、班级和任务计数均为 0。没有模型请求。
+
+## 2026-10-15 — 禁用图片 provider 请求计数修复
+
+- `XfyunImageService.generate()` 在确认图片 provider 固定关闭前先计入 per-user 日限流表；同一账号第 51 次请求会错误返回 `IMAGE_RATE_LIMITED`，并为关闭的服务保留用户计数。
+- 将 disabled 检查提前。回归 RED 先在第 51 次命中错误限流，GREEN 后 51 次均稳定返回 `IMAGE_PROVIDER_UNAVAILABLE`；`XfyunImageServiceTest` 2/2。
+- 代码静态审查同时确认 Graph 题目/答案执行走隔离 Piston、应用 subprocess 沙箱 fail closed、Graph LLM provider 强制 DeepSeek host/model、TTS/ASR/旧讯飞图片能力开关关闭。没有模型调用、数据库写入或 ECS 操作。
+
+## 2026-10-15 — MemoryBrief 日志与上传配额顺序修复
+
+- Graph MemoryBrief 的网络异常日志曾直接写异常原文（可包含带学生 query 的 URL），schema 校验日志还会输出 Pydantic traceback 与无效 `input_value`。两条哨兵回归先 RED 后 GREEN；网络日志只记录异常类型，schema 失败只记录固定类别，`test_memory_brief_client.py` 27/27。
+- 上传服务曾在额度锁定前复制完整文件字节。把额度查询移到 `getBytes()` 前，拒绝超额请求时避免这次额外堆内存复制；Spring multipart 文件大小仍先受 8 MB 上限、业务文件仍受 5 MB 上限约束。回归先 RED 后 GREEN，`UploadServiceTest` 18/18。
+- 本轮未发 DeepSeek 请求，未触发上传数据库写入。生产限流/部署边界与其他未审计路径仍开放。
+
+## 2026-10-15 — 管理运维页读取失败重试回归
+
+- `AdminOperationsPage` 已有失败提示与重试按钮；新增组件回归验证首次加载失败后可重试，并在成功响应后清除错误、展示运维数据。
+- 本地 Chromium 打开 `/admin/operations`，路由模拟认证刷新、运维 GET 503 后重试 200；错误清除、统计数据展示，API 请求两次，页面错误 0。`AdminOperationsPage.spec.ts` 3/3，定向 ESLint 通过。
+- 鉴权与运维读取均由浏览器路由模拟，不是后端授权或 API 联测；无模型请求和业务写入。
+
+## 2026-10-15 — Tutor 与视频概述异常日志脱敏
+
+- Tutor 工作流端点兜底原本通过 traceback 记录异常正文；B 站元数据和概述 Agent fail-soft 路径也记录 traceback。合成敏感标记回归确认旧日志会输出异常内容。
+- 三处现在只记录异常类型，Tutor 固定 SSE 错误与视频降级返回保持不变。`test_tutor_workflow.py`、`test_video_insight_route.py` 共 27/27，Ruff 通过。
+- 全程使用 stub，不调用 DeepSeek 或 B 站外部接口；完整安全审计未结束。
+
+## 2026-10-15 — 教师班级详情重试回归
+
+- 覆盖班级成员初次读取失败后，点击重试并恢复成员数据；`ClassroomDetail.spec.ts` 13/13。
+- 本地 Chromium 打开 `/teacher/classroom/9`，模拟首个成员 GET 503、重试 GET 200；错误区可见，重试后班级成员展示，页面错误 0。
+- 教师认证刷新与页面 API 都由浏览器路由模拟，未做后端授权联测或业务写入；没有模型请求。

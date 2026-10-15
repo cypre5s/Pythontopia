@@ -25,13 +25,15 @@ class XfyunImageServiceTest {
     XfyunImageService service =
         new XfyunImageService(disabled, new ObjectMapper(), storage, repository);
 
-    assertThatThrownBy(
-            () ->
-                service.generate(
-                    42L, "for 循环执行流程图解", "PY43-KC-030", List.of("PY43-KC-030")))
-        .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
-        .extracting(ex -> ((com.pythontopia.common.error.BusinessException) ex).code())
-        .isEqualTo("IMAGE_PROVIDER_UNAVAILABLE");
+    for (int attempt = 0; attempt < 51; attempt++) {
+      assertThatThrownBy(
+              () ->
+                  service.generate(
+                      42L, "for 循环执行流程图解", "PY43-KC-030", List.of("PY43-KC-030")))
+          .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
+          .extracting(ex -> ((com.pythontopia.common.error.BusinessException) ex).code())
+          .isEqualTo("IMAGE_PROVIDER_UNAVAILABLE");
+    }
     verifyNoInteractions(repository);
   }
 

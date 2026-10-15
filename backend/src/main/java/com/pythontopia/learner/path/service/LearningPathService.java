@@ -597,7 +597,10 @@ public class LearningPathService {
       }
       return new ArrayList<>(flagged);
     } catch (RuntimeException ex) {
-      log.warn("error_pattern KC extraction degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "error_pattern KC extraction degraded for user {} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return List.of();
     }
   }

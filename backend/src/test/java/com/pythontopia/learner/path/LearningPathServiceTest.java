@@ -12,6 +12,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.classroom.quest.repository.ClassroomQuestRepository;
 import com.pythontopia.common.error.BusinessException;
@@ -35,8 +38,10 @@ import com.pythontopia.learner.quest.repository.QuestRepository.QuestInsert;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 class LearningPathServiceTest {
 
@@ -191,6 +196,43 @@ class LearningPathServiceTest {
     verify(graphClient).plan(captor.capture());
     // 仅保留命中已知 KC 的 error_pattern tag：WA 被滤掉，cognitive_style 维度不计入。
     assertThat(captor.getValue().errorPatternKcs()).containsExactly("PY43-KC-002");
+  }
+
+  @Test
+  void insightReadFailureDoesNotLogExceptionDetails() {
+    String sentinel = "learner-insight-private-sentinel";
+    when(profileService.findProfile(7L)).thenReturn(Optional.of(profile()));
+    when(coursePackRepository.findKcs(eq(43L), eq(null)))
+        .thenReturn(List.of(new CourseKc(1L, 43L, "PY43-KC-001", "变量", 1L, 1, "basic", "summary")));
+    when(coursePackRepository.findKcPrerequisites(43L)).thenReturn(Map.of());
+    when(masteryEvaluator.snapshots(7L)).thenReturn(List.of());
+    when(classroomQuestRepository.listActiveForStudent(eq(7L), any())).thenReturn(List.of());
+    when(insightRepository.findByUser(eq(7L), anyInt())).thenThrow(new RuntimeException(sentinel));
+    when(graphClient.plan(any(PathPlannerGraphRequest.class)))
+        .thenReturn(
+            new PathPlannerGraphResponse(
+                7L,
+                43L,
+                "failed",
+                List.of(),
+                new PathPlannerGraphResponse.SafetyResult(true, List.of()),
+                new PathPlannerGraphResponse.GroundingResult(false, List.of("PROFILE_REQUIRED"), List.of()),
+                "sig",
+                "FAILED"));
+
+    Logger logger = (Logger) LoggerFactory.getLogger(LearningPathService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThatThrownBy(() -> service.plan(7L)).isInstanceOf(BusinessException.class);
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .noneMatch(message -> message.contains(sentinel));
   }
 
   @Test

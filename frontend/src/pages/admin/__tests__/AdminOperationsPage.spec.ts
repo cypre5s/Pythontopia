@@ -55,4 +55,21 @@ describe('AdminOperationsPage', () => {
     await flushPromises();
     expect(wrapper.get('[data-testid="admin-operations-refresh"]').attributes('disabled')).toBeUndefined();
   });
+
+  it('recovers from an initial load failure when the admin retries', async () => {
+    fetchAiRuntimeOperations
+      .mockRejectedValueOnce(new Error('运维数据暂不可用'))
+      .mockResolvedValueOnce(operations);
+    const wrapper = mount(AdminOperationsPage);
+    await flushPromises();
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('读取失败：运维数据暂不可用');
+
+    await wrapper.get('.admin-operations__error button').trigger('click');
+    await flushPromises();
+
+    expect(fetchAiRuntimeOperations).toHaveBeenCalledTimes(2);
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false);
+    expect(wrapper.get('.admin-operations__stats').text()).toContain('12');
+  });
 });

@@ -164,6 +164,21 @@ async def test_failsoft_on_connect_error(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 @pytest.mark.asyncio
+async def test_fetch_failure_does_not_log_student_query(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    query = "PRIVATE_STUDENT_QUERY_91a5"
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError(f"connection failed for {request.url}", request=request)
+
+    _install_transport(monkeypatch, handler)
+
+    assert await fetch_memory_brief(1, query) == MemoryBrief()
+    assert query not in caplog.text
+
+
+@pytest.mark.asyncio
 async def test_failsoft_on_read_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     def handler(_: httpx.Request) -> httpx.Response:
         raise httpx.ReadTimeout("slow backend")
@@ -333,6 +348,21 @@ async def test_failsoft_on_malformed_field_types(
     _install_transport(monkeypatch, handler)
 
     assert await fetch_memory_brief(1, "q") == MemoryBrief()
+
+
+@pytest.mark.asyncio
+async def test_parse_failure_does_not_log_memory_content(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    private_memory = "PRIVATE_MEMORY_CONTENT_3bd2"
+
+    def handler(_: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"facts": private_memory})
+
+    _install_transport(monkeypatch, handler)
+
+    assert await fetch_memory_brief(1, "q") == MemoryBrief()
+    assert private_memory not in caplog.text
 
 
 # ── ⑧ 可选内部令牌头 ──

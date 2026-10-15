@@ -77,10 +77,10 @@ public class PreventionPackService {
           prediction.risk());
     } catch (RuntimeException ex) {
       log.warn(
-          "prevention pack pregenerate failed user={} kc={}: {}",
+          "prevention pack pregenerate failed user={} kc={} errorType={}",
           userId,
           prediction.kcCode(),
-          ex.getMessage());
+          ex.getClass().getSimpleName());
     }
   }
 

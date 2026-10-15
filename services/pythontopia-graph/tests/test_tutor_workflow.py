@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import pytest
 import pythontopia_graph.routes.tutor_workflow as tutor_workflow_route
@@ -308,11 +309,16 @@ async def test_courseware_retrieval_failure_stops_before_model_generation() -> N
 
 
 @pytest.mark.asyncio
-async def test_unexpected_workflow_error_does_not_expose_exception_message(monkeypatch) -> None:
+async def test_unexpected_workflow_error_does_not_expose_exception_message(
+    monkeypatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    secret = "PRIVATE_TUTOR_FAILURE_3f8c"
+
     async def fail_commit_run(*_args, **_kwargs):
-        raise RuntimeError("database host=internal; password=do-not-disclose")
+        raise RuntimeError(f"database host=internal; password={secret}")
 
     monkeypatch.setattr(session_store, "commit_run", fail_commit_run)
+    caplog.set_level(logging.ERROR, logger="pythontopia_graph.routes.tutor_workflow")
     session_id = "t-wf-internal-error"
     await session_store.reset_session(1, session_id)
     response = await tutor_workflow_run_stream(
@@ -327,7 +333,8 @@ async def test_unexpected_workflow_error_does_not_expose_exception_message(monke
     assert errors == [
         {"code": "TUTOR_WORKFLOW_FAILED", "message": "Tutor workflow run failed."}
     ]
-    assert "do-not-disclose" not in json.dumps(events)
+    assert secret not in json.dumps(events)
+    assert secret not in caplog.text
 
 
 @pytest.mark.asyncio

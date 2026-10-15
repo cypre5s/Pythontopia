@@ -288,8 +288,8 @@ async def tutor_workflow_run_stream(
                 seq=seq,
             )
             yield sse_agui.translate("result", result.model_dump(mode="json"))
-        except Exception:  # noqa: BLE001 - 端点级兜底，fail fast 上报
-            LOG.exception("Unexpected tutor workflow failure")
+        except Exception as exc:  # noqa: BLE001 - 端点级兜底，fail fast 上报
+            LOG.error("Unexpected tutor workflow failure error_type=%s", type(exc).__name__)
             yield sse_agui.translate(
                 "error",
                 {"code": "TUTOR_WORKFLOW_FAILED", "message": "Tutor workflow run failed."},

@@ -11,11 +11,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.learner.memory.MemoryEmbeddingWriter;
 import com.pythontopia.npc.NpcMemoryService;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
 
 /** 进程内 LearningEvent → learning_event_log 镜像写表的单测（含 importance 规则与异常隔离）。 */
 class MemoryStreamMirrorTest {
@@ -122,13 +126,26 @@ class MemoryStreamMirrorTest {
 
   @Test
   void repositoryFailureIsSwallowedToProtectEventChain() {
-    doThrow(new RuntimeException("db down"))
+    String sentinel = "private-learning-event-sentinel";
+    doThrow(new RuntimeException(sentinel))
         .when(repository)
         .insert(anyLong(), anyString(), anyMap(), anyString(), anyInt());
 
     // 镜像写表抛异常时不得向上传播，否则会中断事件发布与 mastery/画像回写主链路。
-    mirror.onPracticeFailed(new LearningEvent.PracticeFailed(7L, "K", 1L, "WA", "medium"));
+    Logger logger = (Logger) LoggerFactory.getLogger(MemoryStreamMirror.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      mirror.onPracticeFailed(new LearningEvent.PracticeFailed(7L, "K", 1L, "WA", "medium"));
+    } finally {
+      logger.detachAppender(appender);
+    }
+
     verifyNoInteractions(embeddingWriter);
     verifyNoInteractions(npcMemoryService);
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .noneMatch(message -> message.contains(sentinel));
   }
 }

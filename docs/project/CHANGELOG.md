@@ -1,5 +1,40 @@
 # Changelog
 
+## 2026-10-15 — 异常日志续扫
+
+- MetaReflection 与七个后端降级路径的异常正文不再进入日志，降级行为保持不变。
+- 哨兵 RED/GREEN：`MetaReflectionServiceTest` 7/7；DialogContext、MemoryRetrieval、LearningPath、WorldState 四类 29/29；MemoryStreamMirror、InterviewDimensionMirror、PreventionPack 三类 19/19。无 DeepSeek 请求。
+
+## 2026-10-15 — 对齐本地 Piston 运行隔离
+
+- 发现运行容器仍连旧默认网络；按已提交 Compose 配置重建后仅接入 `judge-execution`，端口仍只绑定 loopback。
+- Piston Python 3.12.0 返回 `4` / code `0`；后端 judge readiness ready。整体 `/readyz` 仍因视频字幕依赖不可用而 503；未验证生产 ACL。
+
+## 2026-10-15 — MemoryBrief 隐私与上传额度资源修复
+
+- MemoryBrief 失败日志不再输出学生查询、记忆原文或 traceback；上传个人额度在复制文件字节前检查，超额请求直接拒绝。
+- RED/GREEN：Graph `test_memory_brief_client.py` 27/27、Java `UploadServiceTest` 18/18；无 DeepSeek 请求。
+
+## 2026-10-15 — Tutor 与 B 站概述异常日志脱敏
+
+- Tutor 工作流 SSE 兜底、B 站元数据抓取与视频概述生成异常日志只保留异常类型，不再记录异常正文或 traceback。
+- Graph 两个定向测试文件 27/27，Ruff 通过；均使用 stub，无真实模型/外部请求。
+
+## 2026-10-15 — 管理运维页重试回归
+
+- 覆盖 AI 运维页首次读取失败后的重试恢复；成功后错误提示消失并展示服务端返回数据。
+- 页面组件 3/3；本地 Chromium 的模拟 API 路由覆盖 503→重试 200，页面脚本错误为 0。未验证后端授权或写 API。
+
+## 2026-10-15 — 教师班级详情重试回归
+
+- 覆盖班级成员初次读取失败后，点击重试并恢复班级成员数据；组件 13/13，本地 Chromium 模拟路由验收页面错误 0。
+- 鉴权和数据端点由浏览器路由模拟，未验证后端授权或数据写入。
+
+## 2026-10-15 — 禁用图片 provider 资源修复
+
+- 固定关闭的旧图片生成接口不再为重复请求分配 per-user 限流状态，超出旧日限额也不会产生误导性 429。
+- `XfyunImageServiceTest` RED/GREEN 2/2；无上游模型请求。
+
 ## 2026-10-15 — 画像访谈 SSE 日志脱敏
 
 - 画像访谈 SSE 的结果解析、上游读取、fallback 与 emitter 写入异常日志只保留异常类型；流式 fallback、访谈状态和非流式错误映射保持原有行为。
