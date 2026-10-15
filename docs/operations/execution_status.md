@@ -2,14 +2,18 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-16）**：目标基线 `d38f1424`，当前 HEAD `8077e366`；保留工作树中已有修改。本轮在单条 Tutor 产品流程中发起 2 次 DeepSeek completion，均 HTTP 200；本次续接没有 DeepSeek 请求。之后从 KC-005 主线页面走过 1 次 AI 补题流程，并新增一条自动批准共享题目；该流程内部 completion 数未单独统计，不作为通用模型可用性复测。历史合成 PNG 输入成功记录仍有效，Tutor 输出为文本；较早的 relay 超时、空 JSON、503 作为稳定性风险保留。Tutor 已按事件选择 AutoGen 阶段，Graph 49 项、Java 37 项定向测试通过；新鲜 Chromium 导读与无帮助反馈流程通过，文本卡片 278/348 字符、页面错误 0、临时账号已清理。首轮失败原因为 Java 服务加载旧编译阶段校验，重启全栈后复测通过。断开取消、同请求检查点恢复和图片数据不落库均有既有证据。Twin P0、Boss Phaser、管理台 Alethicode 页面格式、部分 Web 动作和本地 Piston 沙箱边界有代码及验证证据。RAG 图数据库、启动/自愈/重建/embedding 与 Graph 路由/SSE 异常现仅保留异常类型或固定错误正文；相关 Graph 测试 71 项、其他错误边界 8+3 项通过，RAG 图模式 49 项通过、2 项跳过。周报定时任务不再记录学生 ID 和异常正文（`WeeklyEvaluationSchedulerTest` 4/4）；远征预取错误正文不再落入学生可读状态，claim/persist 异常日志只记类型；画像地图生成异常不再写入运行审计（`EndlessPregenServiceTest` 20/20、`CurriculumMapperServiceTest` 1/1，三类后端回归合跑 24/24）。本次又修复远征预取/NPC/Boss/判题日志中的学习者 ID 或错误正文，7 个 Java 定向测试类 142/142；BROWSE 异常哨兵确认 URL token 不再进入日志或 SSE/结果字段（79/79）。远征只读复核确认 KC-004→KC-003→KC-008 真实先修链、当前无第 2 章以上战斗题；满足 KC-003 门槛的账号没有活动 run，未借用该账号或伪造掌握度。完整功能清单见 [总任务实施清单](../plans/2026-10-15-web-system-implementation-plan.md)。
+> **当前快照（2026-10-16）**：当前 HEAD `bd70601b`；工作树有进行中的 Mermaid SVG 安全修复、媒体 TTS HTTP 回归和清单更新。真实 DeepSeek 文本与合成 PNG 图片输入、文本输出已有全栈记录；Tutor AutoGen 产品流程也已完成真实浏览器联测。按用户要求不再重复通用 DeepSeek 探针，只有后续具体产品路径发生改动且必须调用模型时才验证该路径。Tutor、Twin P0、Phaser Boss、管理台布局及部分 Web 动作有代码和验证记录。剩余工作以安全边界、远征真实闭环、Web 动作覆盖、Twin 效果研究及工程收尾为主，性能最后测。细项只维护在下方唯一任务清单。
 
-## 当前清单摘要
+## 当前进度
 
-- **已完成：** 敏感学习数据日志脱敏及定向测试；本轮新增远征预取、NPC 寒暄、Boss Twin 难度兜底、判题系统错误 4 处日志脱敏，7 个 Java 测试类 142/142 通过；Boss 题目 payload 反序列化/读取错误日志改为只记异常类型（`EndlessPregenServiceTest` 20/20）；远征预取失败状态使用固定重试提示，claim/persist 失败日志不再输出用户/题目标识与异常正文；画像地图生成异常不再写入运行审计；三类后端回归合跑 24/24；BROWSE 结果与日志不再包含 executor 异常原文（Graph 79/79）；RAG 启动、自愈、重建和 embedding 失败不再记录/返回异常正文（哨兵 5/5、相关 RAG 测试 33/33）；Graph error-boundary 定向测试 71+8+3 通过，RAG 图模式 49 通过、2 跳过；周报定时任务错误日志去除学生 ID 与异常正文（`WeeklyEvaluationSchedulerTest` 4/4）；BROWSE SSRF 回归 58/58；本地 Piston 隔离配置与攻击边界脚本；远征预取复用精确题型审核题；Twin P0；Boss Phaser；管理台三项页面的 Alethicode 布局；管理员停用/恢复及部分教师/学生动作；Tutor 事件专属 AutoGen 阶段与旧检查点兼容（Graph 49、Java 37）；新鲜 Tutor 浏览器导读与反馈闭环（两个 DeepSeek completion HTTP 200，非空文本卡片，临时账号清理）；本地 Graph/RAG 依赖更新与 OSV 开发环境复扫（仅剩 2 个无修复版本的可选依赖告警）。历史合成 PNG 输入成功记录保留。
-- **本轮新增：** Mermaid SVG CSS 清洗回归 3/3；睡觉、Tutor 编排、学习事件、NPC 种子及记忆引用降级日志只保留异常类型，五个对应后端定向测试类合跑通过。新增远征预取、NPC 寒暄、Boss 难度兜底、判题系统错误日志脱敏；红测 6 条，合并前一批日志边界后 7 个 Java 测试类 142/142 通过。KC-005 主线 AI 补题新增一条 `APPROVED/AUTOMATED` 题库记录；教师重置加入码后旧码 404、新码入班 200；四个动态 SQL repository 的主要构造点只拼接固定片段、用户值参数绑定，未发现确认注入点。没有重复通用模型探针，KC-005 内部 completion 数未统计。
-- **未完成：** 剩余安全审计（开发 venv OSV 只剩 `diskcache`/`ragas` 两个当前无修复版本的可选依赖告警）；远征后续章节 battle-compatible 题型与合法活动 run 刷新恢复；剩余 Web 路由/控件和窄屏矩阵；Twin A/B 与 7 日复测；工程收尾。性能最后执行。生产 Piston ACL/ECS 未关闭。管理台格式已对齐，缺少真实模型的数据页不做空壳。
-- **下一步：** 继续安全审计中尚未覆盖的附件、执行隔离与业务日志边界；远征合法 run 需要通过 KC-004→KC-003 的真实学习路径取得先修证据后再验证，不重复已通过的日志回归；随后补 Web 剩余动作矩阵和工程收尾。Twin A/B 需真实样本，性能最后测。
+唯一任务清单及按优先级排列的未完成项维护在[总任务实施计划](../plans/2026-10-15-web-system-implementation-plan.md)，本页只记录最近进度和详细历史，避免出现多份清单。
+
+- **已完成并有记录：** DeepSeek 文本、合成 PNG 图片输入（均为文本输出）、Tutor 浏览器流程；Tutor AutoGen 事件阶段；Twin P0；Phaser Boss；后台主要布局；部分 Web 操作；敏感日志与 SVG CSS 修复。最近批次已提交为 `bd70601b`。
+- **仍未完成：** 本地安全边界续审；远征真实先修/题型/刷新闭环；未覆盖的 Web 动作与窄屏验收；Twin A/B 与 7 日延迟效果；工程收尾；性能（最后执行）。生产 Piston ACL/ECS 和供应商账单属于当前环境无法核验的外部项。
+- **本轮安全修复：** Tutor 图解的 Mermaid 分支曾将未清洗 SVG 直接写入 `v-html`，与已修复的工坊思维导图形成安全边界不一致。现在复用 `sanitizeMermaidSvgMarkup`，并设置 `htmlLabels: false`；新组件回归红测复现 `foreignObject`，修复后 Tutor 图解及 SVG sanitizer 测试 4/4、typecheck、定向 ESLint、`git diff --check` 通过。未调用模型。
+- **本轮媒体边界：** 新增 `MediaTtsControllerTest`，真实 service 使用旧凭据时 `POST /api/media/tts` 以 503 `TTS_DISABLED` 拒绝，避免发起讯飞 WebSocket；与 `TtsPropertiesTest` 合计 3/3 通过。没有模型或供应商外呼。
+- **HTML 注入点续审：** 扫描当前前端全部 `v-html` / `innerHTML` 写入，确认写入前都有 HTML/ SVG 清洗；未发现新增绕过点。此项是源码范围检查，后端与外部内容边界仍未全部闭合。
+- **最近动作：** 维护唯一总任务清单，完成 Tutor Mermaid SVG 清洗、TTS HTTP 拒绝验证和前端 HTML 注入点清查；没有发 DeepSeek 请求。下一步推进远征缺题的合法学习路径，避免重跑通用模型探针。
 
 ## 2026-10-16 — 远征前置与本地运行态复核
 

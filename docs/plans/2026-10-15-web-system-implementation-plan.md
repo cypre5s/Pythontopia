@@ -12,13 +12,17 @@
 
 本节是当前唯一交付清单；已有验证按仓库记录复用，不重复模型探针或已通过的等价测试。各任务详情和验证证据保留在下方。
 
-### 当前状态快照（2026-10-16）
+### 当前状态快照（2026-10-16，HEAD `bd70601b`）
 
 **已完成并可复用的证据：** DeepSeek 文本及合成 PNG 输入曾通过真实调用，Tutor 响应为文本；本轮新鲜 Tutor 浏览器流程触发题目导读与无帮助反馈两个事件，2 次 DeepSeek completion 均 HTTP 200，并显示非空文本卡片。账号级用量锁、事件专属 AutoGen 阶段、run 检查点、附件隔离、Boss Phaser 场景、Twin P0、共享选题策略、AI 题库审核、主要管理页操作、安全基线及多项敏感日志修复均已有实现和定向验证。现阶段不重跑通用 DeepSeek 探针；图片 Web 中继超时作为未验证的稳定性问题保留。
 
-**仍未完成：** 剩余安全类别与生产执行器边界审计；有真实先修证据的第 2 章以上远征题型、活动 run 刷新恢复和异常恢复；尚未覆盖的 Web 可见动作与路由；Twin A/B 和 7 日延迟效果；全栈功能收敛后的性能采样。Python 开发 venv 的当前 OSV 复扫只剩 `diskcache`（Mem0 可选依赖）与 `ragas`（评估可选依赖）两项，公告未列修复版本；两者不在重建后的 Graph/RAG 运行镜像中。生产 Piston ACL/ECS 不访问，按范围保留为外部未核验项。
+**仍未完成：** 剩余本地安全类别审计；有真实先修证据的第 2 章以上远征题型、活动 run 刷新恢复和异常恢复；尚未覆盖的 Web 可见动作与窄屏交互；Twin A/B 和 7 日延迟效果；全栈功能收敛后的工程与性能收尾。Python 开发 venv 的当前 OSV 复扫只剩 `diskcache`（Mem0 可选依赖）与 `ragas`（评估可选依赖）两项，公告未列修复版本；两者不在重建后的 Graph/RAG 运行镜像中。生产 Piston ACL/ECS 和 DeepSeek 供应商账单不在本地可验证范围内。
 
-**接续顺序：** 不再做重复 DeepSeek 请求；先完成可由现有代码与本地服务验证的远征/安全闭环，再补 Web 未覆盖动作和工程问题；长期效果依赖真实样本，性能最后测。管理台保留 Pythontopia 的真实业务 API 和类型化 DTO，仅复用 Alethicode 的页面布局与视觉规范。
+**接续顺序：** 已完成的 DeepSeek 文本、图片输入和 Tutor 产品调用不重复；先完成可由现有代码与本地服务验证的安全/远征闭环，再补 Web 未覆盖动作和工程问题；长期效果依赖真实样本，性能最后测。管理台外壳、配色和卡片已接近 Alethicode；剩余差异以未验证的交互覆盖为主，保留 Pythontopia 的业务 API 和类型化 DTO。
+
+2026-10-16 安全续审发现 `TutorVisualAids.vue` 的 Mermaid 分支直接将 Mermaid 输出写入 `v-html`，绕过已用于工坊导图的 CSSOM/DOMPurify 清洗。现改为先调用共享 `sanitizeMermaidSvgMarkup`，并关闭 HTML labels 以保留 SVG 文本标签。新组件红测先复现 `foreignObject`，修复后 Tutor 图解与 sanitizer 定向测试 4/4、前端 typecheck、触及文件 ESLint 和 diff 检查通过。没有模型请求；安全审计其余类别仍开放。
+
+2026-10-16 前端 HTML 注入点续审：逐一检查当前 `src/` 下所有 `v-html`、`innerHTML` 写入，Tutor/Mermaid、工坊导图、讲义 Markdown 和课件页均在 DOM 写入前经过对应 SVG/HTML 清洗；未发现第二个绕过清洗的入口。此项是代码审查记录，不代表后端/第三方内容源的全量安全审计完成。
 
 **本轮续接记录：** 对照了 Alethicode 与 Pythontopia 当前 Tutor AutoGen 阶段及事件集合；Pythontopia 保留 SSE、附件私有解析与 run 检查点，并按事件选择所需阶段。初次浏览器联测发现本地 Java 进程早于当前编译类启动，旧固定阶段校验导致反馈事件在 SSE 内失败；按 `./dev.sh --sandbox` 重启后，新鲜 Chromium 流程注册/登录、加载训练题、完成导读与“没帮助→换种解释”两事件均通过，DeepSeek completion 2/2 HTTP 200、文本卡片分别 278/348 字符、页面错误 0，临时账号已删除。此证据不替代历史 PNG 输入测试，也不重复运行通用模型探针。
 
@@ -69,6 +73,7 @@ pytest 的临时目录漏洞 CVE-2025-71176 仅在 pytest 9.0.3 修复；Graph/R
 - [x] AutoGen 对照审查确认 Pythontopia 保留自有 Tutor SSE、授权、附件和 V199/V203/V208 run 检查点契约，并按事件选择阶段；不移植 Alethicode 的 V124/thread dispatcher。
 - [x] 既有只读复核未发现确认的 P0/P1 代码缺陷；认证、主要 IDOR、判题 fail-closed 与 CORS 有实现和测试落点。本轮复查确认注册/教师邀请码、停用账号/JWT 代次撤销、Piston 默认与 subprocess fail-closed、排行榜按服务端 verified attempt 结算均有代码实现。生产 Piston 若无私网 ACL 或鉴权代理，仍有未授权执行风险；本地无法代表生产确认。
 - [ ] 附件扩展安全审计：逐类闭合判题隔离与部署边界、远征状态篡改/幂等、媒体上传、SSRF、XSS、SQL、速率限制、依赖与敏感日志；只对确认问题修复并补回归。SSRF 当前代码复核覆盖唯一用户目标触发的 BROWSE 导航，服务端注入 host allowlist，Graph 每次导航/重定向验证公网 DNS、scheme、标准端口并将 Chromium DNS pin 到公网地址；对应 allowlist/executor 测试 58/58 通过。敏感日志已修复上传、索引、trace、Piston、Mem0/Zep、Graph retry、画像访谈、NPC 对话、RAG embedding、B 站问答/搜索、Feynman、BROWSE、Boss 出题/判题与章测 Graph 错误中的已复现泄露；RAG 启动/自愈/索引重建和 embedding 降级异常现只记录异常类型，503 返回固定说明，哨兵与定向测试共 33/33。其余已有修复包括本地 Piston Compose 配置与运行态仅接入专用 `judge-execution` 网络、宿主端口限制为回环、Python 3.12.0 执行冒烟成功（输出 4）、Java 适配器对远端失败 fail-closed；MetaReflection 调度异常和反馈汇总日志、Tutor/视频 Graph 兜底、DialogContext、MemoryRetrieval、LearningPath、WorldState 降级日志也已移除异常正文。新扫到 Boss 题目存档反序列化异常会把 payload 片段及 owner/problem 标识写入日志；现改为仅记异常类型，`EndlessPregenServiceTest` 17/17（RED/GREEN）。本轮修复本地运行容器与开发 venv 中的 FastAPI/Starlette 和 pytest 漏洞版本；Graph/RAG 全量测试分别 1902 passed/1 skipped、166 passed。OSV 复扫剩余 `diskcache` 与 `ragas` 两项可选开发依赖告警（当前无修复版本），不在运行镜像中。其余异常日志与生产 Piston ACL 仍待核实；当前 `/readyz` 整体因已记录的 `VIDEO_TRANSCRIPT_UNAVAILABLE` 返回 503，judge readiness 本身为 ready。
+  - 10/16 前端 HTML 注入点续审：扫描所有 `v-html`/`innerHTML` 写入，确认实际写入前均经过 DOMPurify 或 Mermaid 专用清洗；未发现新增绕过点。后端与第三方内容边界仍在总审计中。
   - 10/15 运行已有 `node deploy/scripts/test_dev_piston_sandbox.mjs`：Python 3.12.0 执行成功；宿主私有文件不可见、临时文件限定在 job 目录、共享 `/tmp` 写入被拒、loopback/compat socket 访问被阻断、超时进程以 SIGKILL 终止；临时标记文件已清理。Docker 运行态检查确认 Piston API 容器非 privileged、只读 rootfs、丢弃全部默认 capabilities、`no-new-privileges`、仅接入 `judge-execution`，并仅在 `127.0.0.1:2000` 暴露；该检查只覆盖本地开发运行态，完整安全审计及生产 ACL 仍未关闭。未发模型请求。
   - 10/15 续扫：周报定时任务的单人失败日志不再输出学生 ID 或异常正文，只记录异常类型；哨兵先 RED 后 GREEN，`WeeklyEvaluationSchedulerTest` 4/4。无模型请求。
   - 10/15 续扫远征预取：失败状态不再保存上游异常正文；claim/persist 异常日志只记异常类型。合并验证 `EndlessPregenServiceTest` 19/19、`WeeklyEvaluationSchedulerTest` 4/4；生产行为以外未调用模型。
@@ -80,6 +85,7 @@ pytest 的临时目录漏洞 CVE-2025-71176 仅在 pytest 9.0.3 修复；Graph/R
   - 10/15 启动日志续扫：NPC 人格种子失败只记录异常类型，仍 fail-soft 不阻断启动；哨兵先 RED 后 GREEN，四类日志回归合跑通过。剩余命中集中在已硬关闭的讯飞 provider 与不含学生上下文的资源/SSE 读取错误；整体安全审计仍开放。
   - 10/15 记忆审计续扫：`agent_memory_ref` best-effort 写入失败不再记录学生 ID 或数据库错误正文；同服务的外部 provider fallback 同样仅记异常类型。哨兵先 RED 后 GREEN，五类日志回归合跑通过。
 - [x] 禁用媒体 provider 不分配无用请求状态：旧图片生成 provider 固定关闭；原入口会在返回 unavailable 前先创建 per-user rate-limit counter，第 51 次请求再错误返回 429。RED/GREEN 调整顺序后，`XfyunImageServiceTest` 2/2，重复调用始终返回 disabled 错误，无 DeepSeek/上游调用。
+  - TTS 端点也有 HTTP 层回归：旧讯飞凭据下 `POST /api/media/tts` 返回 503 `TTS_DISABLED`，在服务启用检查前不创建 WebSocket。`MediaTtsControllerTest` 与 `TtsPropertiesTest` 合计 3/3 通过；没有外呼。
 - [x] 本轮安全续扫修复：MemoryBrief 网络异常和 schema 校验日志不再输出学生查询、记忆原文或异常栈；上传配额在 `getBytes()` 前检查，超额请求不再额外复制文件到堆。RED/GREEN：`test_memory_brief_client.py` 27/27、`UploadServiceTest` 18/18。未发 DeepSeek 请求。
 - [x] NPC 定时预热失败日志已去掉异常原文和学生 ID，只记录异常类型；合成哨兵先 RED 后 GREEN，`NpcGreetingPrewarmJobTest` 6/6。无模型请求。
 - [x] BROWSE 底层执行与外层派发异常不再把异常原文（例如含 token 的 URL）写入结果、SSE 步骤或日志；缺依赖保留固定提示。两条哨兵回归先 RED 后 GREEN，`test_browse_executor.py` 与 `test_agentic_loop.py` 共 79/79，Ruff 通过。无模型请求。

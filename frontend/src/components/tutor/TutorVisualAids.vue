@@ -7,7 +7,7 @@
  * 卡片化展示，配合文字答案构成「文字 + 图解」的多模态答疑。
  */
 import { onMounted, ref, watch } from 'vue';
-import { sanitizeSvgMarkup } from '@/utils/sanitizeSvg';
+import { sanitizeMermaidSvgMarkup, sanitizeSvgMarkup } from '@/utils/sanitizeSvg';
 
 export interface TutorVisualAid {
   kind: 'mermaid' | 'image' | 'ascii' | 'svg';
@@ -35,9 +35,17 @@ const rendered = ref<RenderedAid[]>([]);
 async function renderMermaid(text: string, idx: number): Promise<RenderedAid> {
   try {
     const mermaid = (await import('mermaid')).default;
-    mermaid.initialize({ startOnLoad: false, theme: 'base', securityLevel: 'strict' });
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'base',
+      securityLevel: 'strict',
+      htmlLabels: false,
+    });
     const { svg } = await mermaid.render(`tutor-mermaid-${Date.now()}-${idx}`, text);
-    return { kind: 'mermaid', caption: '', svg };
+    const safeSvg = sanitizeMermaidSvgMarkup(svg);
+    return safeSvg
+      ? { kind: 'mermaid', caption: '', svg: safeSvg }
+      : { kind: 'mermaid', caption: '', rawMermaid: text };
   } catch {
     return { kind: 'mermaid', caption: '', rawMermaid: text };
   }
@@ -84,7 +92,7 @@ watch(() => props.aids, build);
         :key="i"
         class="aid-card"
       >
-        <!-- eslint-disable vue/no-v-html — mermaid 以 securityLevel:'strict' 渲染；
+        <!-- eslint-disable vue/no-v-html — mermaid SVG 经 CSSOM + DOMPurify 清洗；
              kind=svg 经 服务端黑名单 + DOMPurify svg profile 双重消毒，均无脚本/事件，已审阅 -->
         <div
           v-if="card.kind === 'mermaid' && card.svg"

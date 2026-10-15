@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-10-16 — 清洗 Tutor 图解中的 Mermaid SVG
+
+- Tutor 图解此前仅依赖 Mermaid `securityLevel: strict`，并将生成 SVG 直接写入 `v-html`；它漏用了工坊导图已有的 CSSOM/DOMPurify 清洗，可能保留危险 CSS 和 `foreignObject`。
+- 设置 `htmlLabels: false` 并复用 `sanitizeMermaidSvgMarkup`；清洗拒绝时显示源码文本。组件红测先复现旧行为；修复后组件与 sanitizer 测试 4/4、typecheck、定向 ESLint、`git diff --check` 通过。无 DeepSeek 调用。
+
+## 2026-10-16 — 验证禁用的 TTS HTTP 行为
+
+- 新增 `MediaTtsControllerTest` 覆盖 `POST /api/media/tts`：即使配置含旧讯飞凭据，固定关闭的服务仍返回 `503 TTS_DISABLED`，不会开始供应商连接。与 `TtsPropertiesTest` 定向合跑 3/3；没有外呼或 DeepSeek 请求。
+
+## 2026-10-16 — 整理总任务进度清单
+
+- 将实时状态页收敛为一份唯一任务清单，区分已完成、待做和外部未核验项目，并校正当前检查点为 `bd70601b`。
+- 确认真实 DeepSeek 文本与合成 PNG 输入、文本输出及 Tutor 产品流程已有验证记录；本次没有发起模型请求或重复测试。
+
 ## 2026-10-15 — 脱敏远征、NPC、Boss 与判题日志
 
 - 远征预取状态、NPC 寒暄降级、Boss Twin 难度兜底与判题系统错误日志不再写入学习者 ID；判题错误日志也不再复述失败正文。
