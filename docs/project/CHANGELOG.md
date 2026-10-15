@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-15 — CORS 与媒体错误隔离
+
+- CORS 改为精确来源白名单并拒绝含通配符的来源，避免凭据请求允许任意子域；ffmpeg 合成失败仅写服务端日志，API 返回通用错误。
+- CORS 与媒体异常定向 Maven 测试 8/8 通过；HTTPS/Nginx 契约脚本 9 项通过，覆盖登录/注册和班级加入限流配置。
+- 公开限流只做 Nginx 配置契约验证，没有验证公网运行态；生产 CORS 域名仍需部署核对。
+
 ## 2026-10-15 — Web 全量与后端续验
 
 - 新鲜验证：前端全量 Vitest 275 文件 / 2604 项通过；`npm run typecheck`、全量 ESLint、Vite production build 通过。Graph Boss 与章测流水线 275 passed；改动相关 Java/PostgreSQL 定向用例 133/133 通过，其中 Twin 服务、策略、周报、掌握度和事件监听 46/46。

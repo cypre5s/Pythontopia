@@ -1,5 +1,11 @@
 # Web 工程可读性与规范清理工作日志
 
+## 2026-10-15 — CORS 与媒体错误隔离
+
+- RED/GREEN：回归先复现 `https://*.example.com` 在带凭据 CORS 配置下被接受，再改用精确 `allowed-origins` 并拒绝任何含 `*` 的来源；ffmpeg stub 输出哨兵文本时，回归确认 API 不再返回内部错误内容，服务端日志仍保留异常。
+- 定向 `SecurityConfigCorsTest` 与 `StoryboardCompositionServiceTest` 共 8/8 通过；HTTPS/Nginx 契约脚本 9 项通过，`git diff --check` 通过。
+- 确认公开 Nginx 配置已有登录/注册及班级加入 IP 限流；本次只增加契约断言，不新增数据库限额。公网运行时、生产 CORS 域名和代理链未验证。
+
 ## 2026-10-15 会话期限、判题隔离与 Tutor 浏览器续跑
 
 - JWT 使用 `auth_at` 保存会话起点；刷新时保持该值，访问与刷新都受 30 天绝对期限约束。兼容旧 token 时用 `exp - ttl` 推算起点，避免升级时无条件重开期限。

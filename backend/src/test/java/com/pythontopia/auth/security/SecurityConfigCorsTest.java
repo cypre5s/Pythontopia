@@ -17,10 +17,11 @@ class SecurityConfigCorsTest {
             .corsConfigurationSource(
                 java.util.List.of("http://localhost:8080", "http://127.0.0.1:8080"));
 
-    CorsConfiguration config = ((UrlBasedCorsConfigurationSource) source).getCorsConfigurations().get("/**");
+    CorsConfiguration config =
+        ((UrlBasedCorsConfigurationSource) source).getCorsConfigurations().get("/**");
 
     assertThat(config).isNotNull();
-    assertThat(config.getAllowedOriginPatterns())
+    assertThat(config.getAllowedOrigins())
         .contains("http://127.0.0.1:8080", "http://localhost:8080");
   }
 
@@ -28,6 +29,16 @@ class SecurityConfigCorsTest {
   void corsShouldRejectWildcardOriginWhenCredentialsAreEnabled() {
     assertThatThrownBy(
             () -> new SecurityConfig().corsConfigurationSource(java.util.List.of("*")))
+        .isInstanceOf(IllegalArgumentException.class)
+        .hasMessageContaining("wildcard");
+  }
+
+  @Test
+  void corsShouldRejectWildcardSubdomainsWhenCredentialsAreEnabled() {
+    assertThatThrownBy(
+            () ->
+                new SecurityConfig()
+                    .corsConfigurationSource(java.util.List.of("https://*.example.com")))
         .isInstanceOf(IllegalArgumentException.class)
         .hasMessageContaining("wildcard");
   }

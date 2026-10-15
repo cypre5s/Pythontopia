@@ -200,7 +200,7 @@ public class StoryboardCompositionService {
       }
       log.error("storyboard composition failed", ex);
       throw new BusinessException(
-          HttpStatus.BAD_GATEWAY, "VIDEO_COMPOSE_FAILED", "短视频合成失败：" + ex.getMessage());
+          HttpStatus.BAD_GATEWAY, "VIDEO_COMPOSE_FAILED", "短视频合成失败，请稍后重试");
     } finally {
       cleanup(work);
     }

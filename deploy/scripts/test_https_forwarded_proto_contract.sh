@@ -35,6 +35,18 @@ require_pattern "${INSTALLER}" \
 require_pattern "${INSTALLER}" \
   "发布终验要求 HTTP 入口固定跳转 HTTPS" \
   'HTTP_REDIRECT=.*%\{http_code\}.*%\{redirect_url\}.*http://127\.0\.0\.1/healthz'
+require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "公开入口对登录/注册按来源 IP 限速" \
+  'limit_req_zone[[:space:]]+\$binary_remote_addr[[:space:]]+zone=pythontopia_auth:10m[[:space:]]+rate=5r/s;'
+require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "登录/注册路由实际使用来源 IP 限速" \
+  'limit_req[[:space:]]+zone=pythontopia_auth[[:space:]]+burst=10[[:space:]]+nodelay;'
+require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "公开入口对班级加入码按来源 IP 限速" \
+  'limit_req_zone[[:space:]]+\$binary_remote_addr[[:space:]]+zone=pythontopia_classroom_join:10m[[:space:]]+rate=5r/m;'
+require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "班级加入路由实际使用来源 IP 限速" \
+  'limit_req[[:space:]]+zone=pythontopia_classroom_join[[:space:]]+burst=5[[:space:]]+nodelay;'
 
 if [ "${FAILURES}" -ne 0 ]; then
   echo "[RESULT] ${FAILURES} 项 HTTPS 转发链路契约未满足" >&2

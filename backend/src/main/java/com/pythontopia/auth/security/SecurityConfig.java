@@ -89,18 +89,17 @@ public class SecurityConfig {
   @Bean
   CorsConfigurationSource corsConfigurationSource(
       @Value(
-              "${pythontopia.security.cors.allowed-origin-patterns:"
+              "${pythontopia.security.cors.allowed-origins:"
                   + "http://localhost:8080,http://127.0.0.1:8080,"
                   + "http://localhost:5173,http://localhost:5174,"
                   + "http://127.0.0.1:5173,http://127.0.0.1:5174}")
-          List<String> allowedOriginPatterns) {
-    if (allowedOriginPatterns.stream().anyMatch(pattern -> "*".equals(pattern.trim()))) {
-      throw new IllegalArgumentException(
-          "CORS wildcard origin patterns cannot be used with credentials");
+          List<String> allowedOrigins) {
+    if (allowedOrigins.stream().anyMatch(origin -> origin.contains("*"))) {
+      throw new IllegalArgumentException("CORS wildcard origins cannot be used with credentials");
     }
     CorsConfiguration cfg = new CorsConfiguration();
-    // 允许来源外置：默认本地 dev 入口；生产用 PYT_CORS_ALLOWED_ORIGINS 覆盖为真实域名，无需改代码。
-    cfg.setAllowedOriginPatterns(allowedOriginPatterns);
+    // 允许来源外置：默认本地 dev 入口；生产用 PYT_CORS_ALLOWED_ORIGINS 配置精确来源。
+    cfg.setAllowedOrigins(allowedOrigins);
     cfg.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
     cfg.setAllowedHeaders(List.of("*"));
     cfg.setExposedHeaders(List.of("Authorization"));

@@ -68,10 +68,9 @@ pythontopia:
       queue-capacity: ${PYT_SSE_RELAY_QUEUE:200}
   security:
     teacherInviteCode: ${PYT_TEACHER_INVITE_CODE:}
-    # 允许的前端来源（CORS allowedOriginPatterns）。逗号分隔；生产用 PYT_CORS_ALLOWED_ORIGINS
-    # 覆盖为真实域名（如 https://pythontopia.example.com），无需改代码。
+    # 允许的精确前端来源。逗号分隔；生产用 PYT_CORS_ALLOWED_ORIGINS 覆盖为真实域名。
     cors:
-      allowed-origin-patterns: ${PYT_CORS_ALLOWED_ORIGINS:http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174}
+      allowed-origins: ${PYT_CORS_ALLOWED_ORIGINS:http://localhost:8080,http://127.0.0.1:8080,http://localhost:5173,http://localhost:5174,http://127.0.0.1:5173,http://127.0.0.1:5174}
     # 是否公开 OpenAPI/Swagger UI。dev=true 便于联调；生产设 PYT_EXPOSE_API_DOCS=false 后
     # 这些端点改为需鉴权访问，避免对公网泄露完整 API 面。
     expose-api-docs: ${PYT_EXPOSE_API_DOCS:true}
