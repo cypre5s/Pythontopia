@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-15 — 远征恢复与 Boss 回归续验
+
+- 当前快照的远征 run store、远征页、Boss 页与 Phaser Boss 场景 Vitest 共 76/76 通过，覆盖终局结算刷新恢复、已保存 run 续跑、体力/分数反馈、阶段转换和判题重试。
+- 三阶段 Boss 实际浏览器胜利已有历史联测；本轮恢复测试使用 mock API，活动服务端 run 的浏览器刷新续跑仍待一次运行态验证。
+
 ## 2026-10-15 — Tutor 首 token 等待心跳
 
 - 修复 Tutor AutoGen 阶段等待首 token 时不发 SSE 心跳的问题：等待事件队列按现有心跳周期超时并发送注释 ping。

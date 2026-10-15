@@ -14,6 +14,11 @@
 - 全量 Graph `pytest -q`：1871 passed、1 skipped、13 warnings；唯一跳过因可选 `ragas` 依赖环境缺失。Ruff lint 通过。
 - 仅验证 Graph 的事件等待会定期发送 ping；本轮运行中的容器未重载改动，DeepSeek completion 仍不可用，Spring 120 秒总期限及真实慢模型整链路未验证。Ruff format check 对两个文件仍报告旧格式差异，未做整文件重排。
 
+## 2026-10-15 — Expedition recovery regression recheck
+
+- Fresh Vitest: run store, Expedition page, Boss page, and Phaser Boss scene suites passed 76/76. Coverage includes terminal score settlement recovery after a page reload, saved run resume, challenge HP/score feedback, stage transitions, and challenge retry UI.
+- Earlier local-browser evidence covers a real three-stage Boss victory; current test suites use mocked API state for reload/resume, so a live browser refresh of an active server run remains unverified. No run or mastery data was created in this recheck.
+
 ## 2026-10-15 — CORS 与媒体错误隔离
 
 - RED/GREEN：回归先复现 `https://*.example.com` 在带凭据 CORS 配置下被接受，再改用精确 `allowed-origins` 并拒绝任何含 `*` 的来源；ffmpeg stub 输出哨兵文本时，回归确认 API 不再返回内部错误内容，服务端日志仍保留异常。
