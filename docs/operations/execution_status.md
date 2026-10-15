@@ -2,13 +2,13 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-16）**：最近代码提交 `0d65365a`（分支 `codex/deepseek-autogen-admin`）；异常日志脱敏批次已提交。真实 DeepSeek 文本与合成 PNG 图片输入、文本输出已有全栈记录，Tutor AutoGen 产品流程也已完成真实浏览器联测；provider 静态审计确认服务端 LLM 路由只允许 DeepSeek，TTS/ASR/讯飞图片服务关闭。本轮没有模型或外部网络请求；本地配置/浏览器通过本地 HTTP 已核对，DeepSeek 验证已封账，不重复通用探针。Tutor、Twin P0、Phaser Boss、管理台布局/班级字段对齐及部分 Web 动作有代码和验证记录。剩余工作以本地安全边界、远征真实闭环、Web 动作覆盖、Twin 效果研究及工程收尾为主，性能最后测。细项只维护在下方唯一任务清单。
+> **当前快照（2026-10-16）**：最近代码提交 `e4b8c1f2`（分支 `codex/deepseek-autogen-admin`）；Tutor 历史消息角色已限制为 user/assistant。真实 DeepSeek 文本与合成 PNG 图片输入、文本输出已有全栈记录，Tutor AutoGen 产品流程也已完成真实浏览器联测；provider 静态审计确认服务端 LLM 路由只允许 DeepSeek，TTS/ASR/讯飞图片服务关闭。本轮没有模型或外部网络请求；本地配置/浏览器通过本地 HTTP 已核对，DeepSeek 验证已封账，不重复通用探针。Tutor、Twin P0、Phaser Boss、管理台布局/班级字段对齐及部分 Web 动作有代码和验证记录。剩余工作以本地安全边界、远征真实闭环、Web 动作覆盖、Twin 效果研究及工程收尾为主，性能最后测。细项只维护在下方唯一任务清单。
 
 ## 当前进度
 
 唯一任务清单及按优先级排列的未完成项维护在[总任务实施计划](../plans/2026-10-15-web-system-implementation-plan.md)，本页只记录最近进度和详细历史，避免出现多份清单。
 
-- **已完成并有记录：** DeepSeek 文本、合成 PNG 图片输入（均为文本输出）、Tutor 浏览器流程；Tutor AutoGen 事件阶段；Twin P0；Phaser Boss；后台主要布局；部分 Web 操作；敏感日志与 SVG CSS 修复。本地 `dev.sh` 关闭应用级每日 AI 请求上限，生产 Compose 保持开启；DeepSeek 凭据变量已配置于 Git 忽略的 `deploy/.env`，本轮未读取或输出密钥值。最近代码提交为 `0d65365a`。
+- **已完成并有记录：** DeepSeek 文本、合成 PNG 图片输入（均为文本输出）、Tutor 浏览器流程；Tutor AutoGen 事件阶段；Twin P0；Phaser Boss；后台主要布局；部分 Web 操作；敏感日志与 SVG CSS 修复；Tutor 历史消息角色校验。本地 `dev.sh` 关闭应用级每日 AI 请求上限，生产 Compose 保持开启；DeepSeek 凭据变量已配置于 Git 忽略的 `deploy/.env`，本轮未读取或输出密钥值。最近代码提交为 `e4b8c1f2`。
 - **仍未完成：** 本地安全边界续审；远征真实先修/题型/刷新闭环；未覆盖的 Web 动作与窄屏验收；Twin A/B 与 7 日延迟效果；工程收尾；性能（最后执行）。生产 Piston ACL/ECS 和供应商账单属于当前环境无法核验的外部项。
 - **本轮安全修复：** Tutor 图解的 Mermaid 分支曾将未清洗 SVG 直接写入 `v-html`，与已修复的工坊思维导图形成安全边界不一致。现在复用 `sanitizeMermaidSvgMarkup`，并设置 `htmlLabels: false`；新组件回归红测复现 `foreignObject`，修复后 Tutor 图解及 SVG sanitizer 测试 4/4、typecheck、定向 ESLint、`git diff --check` 通过。未调用模型。
 - **本轮媒体边界：** 新增 `MediaTtsControllerTest`，真实 service 使用旧凭据时 `POST /api/media/tts` 以 503 `TTS_DISABLED` 拒绝，避免发起讯飞 WebSocket；与 `TtsPropertiesTest` 合计 3/3 通过。没有模型或供应商外呼。
