@@ -81,10 +81,14 @@ describe('admin visual shell contract', () => {
 
   it('keeps the user table on the same row and cell spacing as the review table', () => {
     expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*height:\s*var\(--table-header-height, 44px\);[^}]*padding:\s*0 16px;/);
+    expect(tableStyles).toMatch(/\.admin-table-scroll\s*\{[^}]*border-radius:\s*var\(--admin-panel-radius, 16px\);/);
+    expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*text-align:\s*center;/);
     expect(tableStyles).toMatch(/\.admin-table-scroll > table td\s*\{[^}]*height:\s*var\(--table-row-height, 52px\);[^}]*padding:\s*10px 16px;/);
     expect(tableStyles).toContain('-webkit-overflow-scrolling: touch;');
     expect(tableStyles).toContain('overscroll-behavior-x: contain;');
     expect(usersSource).toContain(':min-width="820"');
+    expect(componentSource('../../../src/pages/admin/AdminPagination.vue'))
+      .toMatch(/\.admin-pagination\s*\{[^}]*justify-content:\s*center;/);
   });
 
   it('provides a shared compact toolbar and consistent admin controls', () => {

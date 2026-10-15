@@ -176,12 +176,13 @@ function jump(): void {
 .admin-pagination {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  justify-content: center;
+  gap: 16px;
   flex-wrap: wrap;
   color: var(--admin-text-muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+  text-align: center;
 }
 
 .admin-pagination__controls,
@@ -191,6 +192,11 @@ function jump(): void {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.admin-pagination__controls {
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 .admin-pagination__controls form {
@@ -226,8 +232,8 @@ function jump(): void {
 }
 
 @media (max-width: 640px) {
-  .admin-pagination { align-items: flex-start; flex-direction: column; }
-  .admin-pagination__controls { flex-wrap: wrap; }
+  .admin-pagination { align-items: center; flex-direction: column; }
+  .admin-pagination__controls { width: 100%; }
   .admin-pagination__buttons { flex-wrap: wrap; }
 }
 </style>

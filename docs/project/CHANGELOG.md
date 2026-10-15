@@ -1,5 +1,13 @@
 # Changelog
 
+## 2026-10-15 — 管理台表格样式对齐
+
+- 共享表格表头改为居中并复用 16px 面板圆角；分页居中显示，保留手动跳页、现有 DTO 和可访问性行为。
+- AdminShellStyle、AdminTable、AdminPagination、AdminUsersPage、AdminProblemReviewsPage 定向测试 26/26 通过。
+- 本地真实管理员浏览器流程完成用户搜索、停用与恢复；停用账号登录为 401、恢复后为 200。320px 视口无页面横向溢出，临时账号已删除。
+- 运维概览将五个已知后端动作键转换为中文建议，同时保留原值提示；AdminOperationsPage 定向测试 5/5 通过。
+- `npm run typecheck` 与本轮触及文件的 ESLint 通过。
+
 ## 2026-10-15 — 明确工坊测验事件的证据边界
 
 - 工坊 `quiz_finished` 仍保留为客户端审计事件；KC 与轮次由客户端上报，不能直接更新掌握度或任务证据。

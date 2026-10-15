@@ -5,6 +5,13 @@ import { fetchAiRuntimeOperations, type AiRuntimeOperations, type RuntimeOperati
 import AdminPanel from './AdminPanel.vue';
 
 const REVIEW_ROUTE_PATHS = new Set(['/workshop', '/teacher/review', '/admin/problem-reviews']);
+const LOOP_ACTION_LABELS: Record<string, string> = {
+  'open:student-learning-loop': '建议查看学习证据覆盖',
+  'open:bug-mine-or-transfer': '建议进入错题矿洞或复盘',
+  'evaluate:resource_feedback_or_check': '建议核对资源反馈与练习记录',
+  'review:town_hub-world-patch': '建议复核小镇世界变更',
+  'review:policy-canary-dry-run': '建议复核策略灰度与回滚记录',
+};
 const operations = ref<AiRuntimeOperations | null>(null);
 const loading = ref(false);
 const error = ref<string | null>(null);
@@ -19,6 +26,10 @@ function statusLabel(status: RuntimeOperationStatus): string {
   if (status === 'PASS') return '通过';
   if (status === 'WARN') return '需关注';
   return '证据不足';
+}
+
+function loopActionLabel(action: string): string {
+  return LOOP_ACTION_LABELS[action] ?? action;
 }
 
 function statusClass(status: RuntimeOperationStatus): string {
@@ -140,7 +151,7 @@ onMounted(() => {
                   >{{ statusLabel(loop.status) }}</span>
                   <div class="operation-row__body">
                     <strong>{{ loop.label }}</strong>
-                    <span :title="loop.nextAction">{{ loop.nextAction }}</span>
+                    <span :title="loop.nextAction">{{ loopActionLabel(loop.nextAction) }}</span>
                     <small
                       v-if="loop.latestTraceId"
                       :title="`关联入口：${loop.latestTraceId}`"

@@ -26,7 +26,7 @@ withDefaults(defineProps<{
   overscroll-behavior-x: contain;
   -webkit-overflow-scrolling: touch;
   border: 1px solid var(--admin-panel-border, #e2e8f0);
-  border-radius: 10px;
+  border-radius: var(--admin-panel-radius, 16px);
 }
 
 .admin-table-scroll:focus-visible {
@@ -53,6 +53,7 @@ withDefaults(defineProps<{
   color: var(--admin-text-strong, #0f172a);
   font-size: 13px;
   font-weight: 700;
+  text-align: center;
   white-space: nowrap;
 }
 

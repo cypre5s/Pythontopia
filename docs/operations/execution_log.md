@@ -189,3 +189,28 @@
 - 新增回归注入包含数据库主机/密码文本的异常；修复前 SSE 把异常原文发给客户端，RED 复现成功。
 - 修复后在服务端记录堆栈，SSE 返回 `TUTOR_WORKFLOW_FAILED` 与固定通用文案。
 - 验证：Tutor workflow、AutoGen runtime、附件、教练图、Task 7 事件、Tutor 流式答疑和图片输入测试 93 passed；Ruff 检查通过。
+
+## 2026-10-15 — 管理台共享表格样式对齐
+
+- 依据 Alethicode 管理台和现有 Pythontopia 组件，只调整共享表格表头居中、圆角复用 16px 面板 token、分页居中；保留手动跳页、当前 DTO 字段和已有键盘/窄屏行为。详情对话框、窄屏导航此前已具备，不重复实现。
+- RED/GREEN：先观察 `AdminShellStyle.spec.ts` 对旧表格圆角的断言失败；修改后 AdminShellStyle、AdminTable、AdminPagination、AdminUsersPage、AdminProblemReviewsPage 五个定向文件共 26 项通过。
+- 样式阶段结束时尚未验证登录管理员的写操作；后续用户状态浏览器联测见下一节。其余 Web 路由动作继续按总清单处理，不进行 DeepSeek 重复探针。
+
+## 2026-10-15 — 管理员用户状态浏览器联测
+
+- 本地临时账号通过真实登录进入 `/admin/users`，搜索另一临时账号并执行停用/恢复；停用期间登录返回 401，恢复后登录返回 200。
+- 浏览器测得表头居中、表格圆角 16px、分页居中；320px 视口下 document 宽度为 320px，页面错误 0。
+- 删除临时管理员和临时用户，级联记录一并清理。本次仅验证本地用户管理 API/UI，没有调用模型 API；AI 题目审核的真实写入仍需安全的临时审核记录。
+
+## 2026-10-15 — 管理台运维动作文案
+
+- 后端学习闭环快照返回五个 `open:` / `evaluate:` / `review:` 机器键，页面此前直接展示原值。现在将已知键映射为中文建议，原始值仍可从元素 title 读取；未知值继续原样展示。
+- 新增的映射测试先因显示机器键而失败；修复后 `AdminOperationsPage.spec.ts` 5/5 通过。未调用模型 API。
+- `npm run typecheck` 与本轮触及 Vue/TypeScript 文件的 ESLint 通过。
+
+## 2026-10-15 — 路由壳联测拦截原因
+
+- 上一轮通过 Vite 实际打开 11 条主路由，浏览器页面错误和 5xx 均为 0；因路由测试拦截非 GET 写请求，`/api/game/bootstrap` 和 `/api/auth/refresh` 被挡，故仅记路由壳已渲染，不记完整初始化/动作验证。
+- 源码确认 `session.hydrateFromStorage()` 在每次整页启动时会后台刷新 token；测试逐 URL 使用 `page.goto` 反复启动 Vue 应用，触发多次刷新。该请求由测试拦截造成，现有证据不支持产品刷新循环，无需改认证代码。
+- 当前本地 `boss_problem_review` 没有 `PENDING` 项；不对既有已审核题目做破坏性操作，也不为制造测试记录重复调用 DeepSeek。Web 动作矩阵仍开放，后续只补尚无真实证据的动作。
+- 本次没有修改运行时代码、没有发起 DeepSeek 请求、没有重跑路由矩阵。

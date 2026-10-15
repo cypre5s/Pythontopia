@@ -86,6 +86,33 @@ describe('AdminOperationsPage', () => {
     expect(wrapper.get('a[href="/teacher/review"]').text()).toBe('/teacher/review');
   });
 
+  it('shows human-readable labels for backend loop action keys', async () => {
+    const actions = [
+      ['open:student-learning-loop', '建议查看学习证据覆盖'],
+      ['open:bug-mine-or-transfer', '建议进入错题矿洞或复盘'],
+      ['evaluate:resource_feedback_or_check', '建议核对资源反馈与练习记录'],
+      ['review:town_hub-world-patch', '建议复核小镇世界变更'],
+      ['review:policy-canary-dry-run', '建议复核策略灰度与回滚记录'],
+    ] as const;
+    api.fetchAiRuntimeOperations.mockResolvedValueOnce({
+      ...snapshot,
+      loops: actions.map(([nextAction], index) => ({
+        ...snapshot.loops[0],
+        loopType: `LOOP_${index}`,
+        nextAction,
+      })),
+    });
+
+    const wrapper = mountOperationsPage();
+    await flushPromises();
+
+    const loopRows = wrapper.findAll('.admin-operations__panels > .admin-panel')[0];
+    const labels = loopRows.findAll('.operation-row__body > span');
+    expect(labels.map((label) => label.text())).toEqual(actions.map(([, label]) => label));
+    expect(labels.map((label) => label.attributes('title')))
+      .toEqual(actions.map(([action]) => action));
+  });
+
   it('shows a real API error and retries the request', async () => {
     api.fetchAiRuntimeOperations
       .mockRejectedValueOnce(new Error('服务暂不可用'))
