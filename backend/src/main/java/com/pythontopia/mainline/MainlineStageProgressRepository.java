@@ -108,7 +108,7 @@ public class MainlineStageProgressRepository {
   }
 
   /**
-   * 课件页批量阅读打点：并集去重（幂等）。整章 PPT 一次上报多页，{@code pageIds} 去重后作为 bigint[]
+   * 课件页批量阅读打点：并集去重（幂等）。本小节 KC 关联页一次上报，{@code pageIds} 去重后作为 bigint[]
    * 并集合并；空集合也走 UPSERT（确保行存在，状态不变）。
    */
   public MainlineStageProgress addPagesRead(long userId, long stageId, List<Long> pageIds) {

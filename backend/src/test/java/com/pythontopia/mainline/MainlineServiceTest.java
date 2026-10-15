@@ -16,7 +16,6 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.coursepack.dto.CourseVideoDto;
-import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.coursepack.service.CourseVideoService;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.mainline.domain.ChapterStar;
@@ -60,7 +59,6 @@ class MainlineServiceTest {
   private final PracticeSubmissionRepository submissionRepo =
       mock(PracticeSubmissionRepository.class);
   private final CourseVideoService courseVideoService = mock(CourseVideoService.class);
-  private final CoursePackRepository coursePackRepository = mock(CoursePackRepository.class);
   private final MainlineOjCatalogRepository ojCatalogRepository =
       mock(MainlineOjCatalogRepository.class);
   private final MainlinePracticePort practicePort = mock(MainlinePracticePort.class);
@@ -72,14 +70,14 @@ class MainlineServiceTest {
   private final MainlineService service =
       new MainlineService(
           stageRepo, progressRepo, starRepo, testRepo, starService, properties, throttle,
-          submissionRepo, mapper, courseVideoService, coursePackRepository, ojCatalogRepository,
+          submissionRepo, mapper, courseVideoService, ojCatalogRepository,
           Optional.empty(), eventPublisher);
 
   // 题库 bean 就位（Optional.of）→ 过线计入「客观题是否全对」。
   private final MainlineService serviceWithPractice =
       new MainlineService(
           stageRepo, progressRepo, starRepo, testRepo, starService, properties, throttle,
-          submissionRepo, mapper, courseVideoService, coursePackRepository, ojCatalogRepository,
+          submissionRepo, mapper, courseVideoService, ojCatalogRepository,
           Optional.of(practicePort), eventPublisher);
 
   private MainlineStage stage(long id, int chapter) {
@@ -90,6 +88,13 @@ class MainlineServiceTest {
   private MainlineStage stage(long id, int chapter, int stageIndex, List<Long> exampleProblemIds) {
     return new MainlineStage(
         id, chapter, stageIndex, "s" + id, List.of("PY43-KC-001"), "kw", List.of(),
+        exampleProblemIds, 240, 0, 2);
+  }
+
+  private MainlineStage stageWithPages(
+      long id, int chapter, int stageIndex, List<Long> pageIds, List<Long> exampleProblemIds) {
+    return new MainlineStage(
+        id, chapter, stageIndex, "s" + id, List.of("PY43-KC-001"), "kw", pageIds,
         exampleProblemIds, 240, 0, 2);
   }
 
@@ -208,8 +213,8 @@ class MainlineServiceTest {
 
   @Test
   void coursewareConsumptionUsesCompletedServerPageProgress() {
-    when(stageRepo.findById(10L)).thenReturn(Optional.of(stage(10, 1)));
-    when(coursePackRepository.findPageIdsByDocument(186L)).thenReturn(List.of(5001L, 5002L));
+    when(stageRepo.findById(10L))
+        .thenReturn(Optional.of(stageWithPages(10, 1, 1, List.of(5001L, 5002L), List.of())));
     when(progressRepo.addPagesRead(USER, 10L, List.of(5001L, 5002L)))
         .thenReturn(progressWithPages(10L, List.of(5001L, 5002L)));
     when(progressRepo.claimCoursewareConsumed(USER, 10L)).thenReturn(true);
@@ -283,8 +288,8 @@ class MainlineServiceTest {
 
   @Test
   void stageCompletionTriggersRecalcOnceIdempotently() {
-    when(stageRepo.findById(10L)).thenReturn(Optional.of(stage(10, 1)));
-    when(coursePackRepository.findPageIdsByDocument(186L)).thenReturn(List.of(8001L));
+    when(stageRepo.findById(10L))
+        .thenReturn(Optional.of(stageWithPages(10, 1, 1, List.of(8001L), List.of())));
     stubPassedSubmission(2L);
     when(progressRepo.addExampleDone(USER, 10L, 2L))
         .thenReturn(
@@ -312,24 +317,22 @@ class MainlineServiceTest {
   }
 
   @Test
-  void chapterDocumentResolvedByPackOrderWhenSeeded() {
-    // R1：动态按 pack 顺位解析文档 id（重灌库 id 漂移场景），不再依赖 185+chapter 魔数。
-    when(stageRepo.findById(10L)).thenReturn(Optional.of(stage(10, 1)));
+  void stageDetailPreservesKcReferencedCoursewarePages() {
+    when(stageRepo.findById(10L))
+        .thenReturn(Optional.of(stageWithPages(10, 1, 1, List.of(8001L, 8002L), List.of())));
     when(progressRepo.find(USER, 10L)).thenReturn(Optional.empty());
     when(courseVideoService.listVideos(1)).thenReturn(List.of());
     when(ojCatalogRepository.examplesForStage(1, 1)).thenReturn(List.of());
-    when(coursePackRepository.findDocumentIdByPackOrder(43L, 1)).thenReturn(Optional.of(900L));
-    when(coursePackRepository.findPageIdsByDocument(900L)).thenReturn(List.of(8001L, 8002L));
-
     StageDetailDto dto = service.stageDetail(USER, 10L);
 
     assertThat(dto.coursewarePageIds()).containsExactly(8001L, 8002L);
-    verify(coursePackRepository, never()).findPageIdsByDocument(186L);
   }
 
   @Test
   void stageDetailFillsChapterStandardsVideosPagesExamplesQuestions() {
-    when(stageRepo.findById(10L)).thenReturn(Optional.of(stage(10, 1)));
+    when(stageRepo.findById(10L))
+        .thenReturn(Optional.of(stageWithPages(10, 1, 1,
+            List.of(5001L, 5002L, 5003L), List.of())));
     when(progressRepo.find(USER, 10L))
         .thenReturn(Optional.of(progress(10, 1000, List.of(9001L), null)));
     // 看：本章两段视频 600 + 400 = 1000s → requiredVideoSec = round(1000 × 0.8) = 800。
@@ -338,9 +341,7 @@ class MainlineServiceTest {
             List.of(
                 new CourseVideoDto(100L, 1, "v1", 600, List.of(), true),
                 new CourseVideoDto(101L, 1, "v2", 400, List.of(), true)));
-    // 学：本章文档（documentId = 185 + 1 = 186）全部 3 页。
-    when(coursePackRepository.findPageIdsByDocument(186L))
-        .thenReturn(List.of(5001L, 5002L, 5003L));
+    // 学：stage 读取该小节 KC 对应的课件页。
     // 练-OJ：catalog 展示层。
     when(ojCatalogRepository.examplesForStage(1, 1))
         .thenReturn(List.of(new StageExampleDto(9001L, "OJ-01", "两数之和", "PY43-KC-001")));
@@ -387,10 +388,10 @@ class MainlineServiceTest {
 
   @Test
   void reportPagesReadBatchAppendsAndCompletesViaPort() {
-    when(stageRepo.findById(10L)).thenReturn(Optional.of(stage(10, 1)));
-    // 学：本章 3 页；批量读齐 → 学过线。看（0）/练-OJ（[1,2]）也齐，客观题降级为已完成（无 port）。
-    when(coursePackRepository.findPageIdsByDocument(186L))
-        .thenReturn(List.of(5001L, 5002L, 5003L));
+    when(stageRepo.findById(10L))
+        .thenReturn(Optional.of(stageWithPages(10, 1, 1,
+            List.of(5001L, 5002L, 5003L), List.of())));
+    // 学：本小节 KC 的三张课件页读齐后过线。
     MainlineStageProgress full =
         new MainlineStageProgress(
             10L, USER, 10L, 0, List.of(5001L, 5002L, 5003L), List.of(1L, 2L), List.of(), null,
@@ -446,7 +447,9 @@ class MainlineServiceTest {
   @Test
   void chapterStandardsAreSplitAcrossStagesOfTheChapter() {
     stubChapterUnlocked(7);
-    MainlineStage second = stage(70L, 7, 2, List.of());
+    MainlineStage second = new MainlineStage(
+        70L, 7, 2, "s70", List.of("PY43-KC-006", "PY43-KC-007"), "kw",
+        List.of(9001L, 9002L), List.of(), 240, 0, 2);
     when(stageRepo.findById(70L)).thenReturn(Optional.of(second));
     when(stageRepo.findByChapter(7))
         .thenReturn(
@@ -457,24 +460,21 @@ class MainlineServiceTest {
     // 看：本章视频共 1000s → 章级 800s → 5 个小节各 160s。
     when(courseVideoService.listVideos(7))
         .thenReturn(List.of(new CourseVideoDto(700L, 7, "v", 1000, List.of(), true)));
-    // 学：整章 10 页 → 5 个小节各 2 页；第 2 小节拿第 3、4 页。
-    when(coursePackRepository.findDocumentIdByPackOrder(43L, 7)).thenReturn(Optional.of(900L));
-    when(coursePackRepository.findPageIdsByDocument(900L))
-        .thenReturn(List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L));
+    // 学：使用本小节 KC 在课程种子中的权威页引用，不按整章页数均分。
     when(ojCatalogRepository.examplesForStage(7, 2)).thenReturn(List.of());
 
     StageDetailDto dto = service.stageDetail(USER, 70L);
 
     assertThat(dto.requiredVideoSec()).isEqualTo(160);
-    assertThat(dto.coursewarePageIds()).containsExactly(3L, 4L);
+    assertThat(dto.coursewarePageIds()).containsExactly(9001L, 9002L);
     assertThat(dto.requiredPages()).isEqualTo(2);
   }
 
-  /** 「学」打点白名单：只接受本小节切片内的 pageId，整章 id 原样回灌无效。 */
+  /** 「学」打点白名单：只接受本小节 KC 引用的 pageId，其他课程页无效。 */
   @Test
-  void pagesReadKeepsOnlyPagesOfThisStageSlice() {
+  void pagesReadKeepsOnlyPagesReferencedByStageKcs() {
     stubChapterUnlocked(7);
-    MainlineStage second = stage(70L, 7, 2, List.of());
+    MainlineStage second = stageWithPages(70L, 7, 2, List.of(3L, 4L), List.of());
     when(stageRepo.findById(70L)).thenReturn(Optional.of(second));
     when(stageRepo.findByChapter(7))
         .thenReturn(
@@ -482,9 +482,6 @@ class MainlineServiceTest {
                 stage(69L, 7, 1, List.of()), second, stage(71L, 7, 3, List.of()),
                 stage(72L, 7, 4, List.of()), stage(73L, 7, 5, List.of())));
     when(courseVideoService.listVideos(7)).thenReturn(List.of());
-    when(coursePackRepository.findDocumentIdByPackOrder(43L, 7)).thenReturn(Optional.of(900L));
-    when(coursePackRepository.findPageIdsByDocument(900L))
-        .thenReturn(List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L, 8L, 9L, 10L));
     when(progressRepo.addPagesRead(USER, 70L, List.of(3L, 4L)))
         .thenReturn(progress(70, 0, List.of(), null));
 
@@ -506,7 +503,6 @@ class MainlineServiceTest {
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("尚未解锁");
 
-    verify(coursePackRepository, never()).findPageIdsByDocument(anyLong());
   }
 
   /** 打点写路径同样 gate（不只是读路径）。 */
@@ -524,16 +520,4 @@ class MainlineServiceTest {
     verify(progressRepo, never()).addVideoSeconds(anyLong(), anyLong(), anyInt());
   }
 
-  // --- 页切片纯函数 --------------------------------------------------------
-
-  @Test
-  void pageSliceSplitsWithoutGapOrOverlap() {
-    List<Long> pages = List.of(1L, 2L, 3L, 4L, 5L, 6L, 7L);
-    // 7 页 / 3 节 → 3 + 2 + 2（余数摊在前几节），并集正好等于全集。
-    assertThat(MainlineService.pageSlice(pages, 1, 3)).containsExactly(1L, 2L, 3L);
-    assertThat(MainlineService.pageSlice(pages, 2, 3)).containsExactly(4L, 5L);
-    assertThat(MainlineService.pageSlice(pages, 3, 3)).containsExactly(6L, 7L);
-    assertThat(MainlineService.pageSlice(pages, 1, 1)).isEqualTo(pages);
-    assertThat(MainlineService.pageSlice(List.of(), 2, 3)).isEmpty();
-  }
 }

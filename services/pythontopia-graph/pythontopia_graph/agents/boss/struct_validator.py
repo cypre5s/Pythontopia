@@ -64,6 +64,16 @@ def validate_problem_struct(problem: BossProblem) -> ReviewVerdict:
             )
         )
 
+    if problem.kind == "fill_blank" and (
+        "___" not in problem.statement or "___BLANK___" in problem.statement
+    ):
+        issues.append(
+            _err(
+                "fill_blank_marker_missing",
+                "fill_blank statement must use the Web UI placeholder ___",
+            )
+        )
+
     if len(problem.hints) > MAX_HINTS:
         issues.append(
             ReviewIssue(

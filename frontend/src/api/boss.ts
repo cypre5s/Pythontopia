@@ -19,7 +19,8 @@ import type {
 } from './dto/Boss';
 import { findBossByChapter } from '@/data/bossCatalog';
 
-const BOSS_PROBLEM_TIMEOUT_MS = 15_000;
+// Graph may spend 180 seconds on the five-review generation path; keep the client open for its response.
+const BOSS_PROBLEM_TIMEOUT_MS = 190_000;
 let pendingAttempt: { fingerprint: string; attemptId: string } | null = null;
 
 export function newBossProblemRequestId(): string {

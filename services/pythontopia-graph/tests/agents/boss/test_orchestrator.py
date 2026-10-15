@@ -142,6 +142,32 @@ def test_generate_boss_problem_accepts_factory_output() -> None:
     assert review.passed
 
 
+def test_golden_fallback_is_not_rejected_as_a_duplicate_of_itself() -> None:
+    fallback = _good_problem()
+    fallback.problem_id = "golden-c1-s1"
+
+    async def reject_candidate(**_kwargs) -> BossProblem:
+        invalid = _good_problem()
+        invalid.title = ""
+        return invalid
+
+    review = asyncio.run(
+        generate_boss_problem(
+            chapter=1,
+            stage=1,
+            kc_code="PY43-KC-001",
+            difficulty=1,
+            problem_factory=reject_candidate,
+            golden_fallback=fallback,
+            existing_problems=[ExistingProblem(fallback.problem_id, fallback.statement)],
+            max_retries=1,
+        )
+    )
+
+    assert review.problem.problem_id == fallback.problem_id
+    assert review.passed, review.issues
+
+
 def test_generate_boss_problem_retries_when_calibration_misses_target_difficulty() -> None:
     feedback_by_attempt: list[str | None] = []
     candidate = BossProblem(
@@ -154,7 +180,13 @@ def test_generate_boss_problem_retries_when_calibration_misses_target_difficulty
             "读取一个整数 n。先将输入文本转换为整数，再把 n 加 1，"
             "最后把结果转换成字符串并输出。请保证输出仅包含计算结果。"
         ),
-        reference_solution="value = str(int(input()) + 1)\nprint(value)",
+        reference_solution=(
+            "value = int(input())\n"
+            "next_value = value + 1\n"
+            "doubled = next_value * 2\n"
+            "result = ((doubled + value) - value) // 2\n"
+            "print(result)"
+        ),
         test_cases=[
             build_test_case("1", "2", is_sample=True),
             build_test_case("9", "10"),

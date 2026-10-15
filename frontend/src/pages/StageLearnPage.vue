@@ -96,11 +96,9 @@ const correctCount = computed<number>(() => {
 const videoPassed = computed<boolean>(() =>
   stage.value ? stage.value.videoWatchedSec >= stage.value.requiredVideoSec : false,
 );
-// 「学」过线：与后端 StageCompletion 对齐——本节没有关联课件页（requiredPages=0）即视为已过线，
-// 否则读满 requiredPages 页。旧写法把 0 判成「未过线」，导致章末小节的「进入章节小测」
-// 永久 disabled（V156 seed 的 courseware_page_ids 默认为空、required_pages 默认 0）。
+// 与后端 fail-closed 对齐：未关联 KC 课件页时不算完成，避免空映射放行章测。
 const coursewarePassed = computed<boolean>(
-  () => requiredPages.value === 0 || readCount.value >= requiredPages.value,
+  () => requiredPages.value > 0 && readCount.value >= requiredPages.value,
 );
 // 练过线 = 客观题全对（若有要求）且 OJ 完成（若有要求）；两者皆无要求时视为已过。
 const questionsPassed = computed<boolean>(
@@ -125,9 +123,9 @@ const allPassed = computed<boolean>(
     (videoPassed.value && coursewarePassed.value && practicePassed.value),
 );
 
-/** 课件阅读进度文本：本节无关联课件页时明说「无需阅读」，不显示误导的 0 / 0。 */
+/** 课件阅读进度文本：空 KC 页映射是数据缺失，不代表无需阅读。 */
 const coursewareProgressText = computed<string>(() =>
-  requiredPages.value === 0 ? '无需阅读' : `${readCount.value} / ${requiredPages.value} 页`,
+  requiredPages.value === 0 ? '课件未关联' : `${readCount.value} / ${requiredPages.value} 页`,
 );
 
 /** 练习进度文本（客观题 + OJ 合并展示）。 */
@@ -351,6 +349,7 @@ onMounted(load);
             </section>
             <StageExamplePractice
               :stage-id="stage.id"
+              :kc-codes="stage.kcCodes"
               :questions="stage.questions ?? []"
               :required-questions="stage.requiredQuestions ?? 0"
               :correct-question-ids="stage.questionsCorrectIds ?? []"

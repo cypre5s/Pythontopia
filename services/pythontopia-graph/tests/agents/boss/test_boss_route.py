@@ -138,6 +138,77 @@ def test_problem_endpoint_rejects_golden_for_a_different_requested_kc(
     assert response.json()["detail"]["code"] == "BOSS_PROBLEM_GENERATION_UNAVAILABLE"
 
 
+def test_problem_endpoint_does_not_return_a_different_kc_golden_after_generation_fails(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pythontopia_graph.routes import boss as boss_route
+
+    monkeypatch.setattr(boss_route, "provider_from_env", lambda: _UnavailableProvider())
+    response = client.post(
+        "/agents/boss/problem",
+        json={
+            "chapter": 2,
+            "stage": 1,
+            "kcCode": "PY43-KC-010",
+            "kcName": "变量与运算符",
+            "kcSummary": "变量赋值与算术运算符。",
+            "difficulty": 1,
+        },
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "BOSS_PROBLEM_GENERATION_UNAVAILABLE"
+
+
+def test_problem_endpoint_excludes_a_different_kc_golden_from_similarity_candidates(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pythontopia_graph.routes import boss as boss_route
+
+    captured: dict[str, object] = {}
+    problem = BossProblem(
+        problem_id="ai-kc010",
+        chapter=2,
+        stage=1,
+        kc_code="PY43-KC-010",
+        title="运算符计算",
+        statement="读取两个整数，使用算术运算符计算总和。",
+        reference_solution="left = int(input())\nright = int(input())\nprint(left + right)",
+        test_cases=[
+            TestCase("2\n3", "5", is_sample=True),
+            TestCase("1\n4", "5"),
+            TestCase("8\n9", "17"),
+        ],
+        difficulty=1,
+    )
+
+    async def accepted_problem(*_args, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(problem=problem, passed=True)
+
+    monkeypatch.setattr(boss_route, "provider_from_env", lambda: object())
+    monkeypatch.setattr(boss_route, "build_llm_problem_factory", lambda _provider: object())
+    monkeypatch.setattr(boss_route, "generate_boss_problem", accepted_problem)
+    response = client.post(
+        "/agents/boss/problem",
+        json={
+            "chapter": 2,
+            "stage": 1,
+            "kcCode": "PY43-KC-010",
+            "kcName": "变量与运算符",
+            "kcSummary": "变量赋值与算术运算符。",
+            "difficulty": 1,
+            "existingProblems": [
+                {"problemId": "same-kc", "statement": "已有变量运算题面。"}
+            ],
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured["golden_fallback"] is None
+    assert [item.problem_id for item in captured["existing_problems"]] == ["same-kc"]
+
+
 def test_problem_logs_profile_signal_presence_without_signal_values(
     client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
@@ -172,6 +243,42 @@ def test_problem_logs_profile_signal_presence_without_signal_values(
     assert "神威·太湖之光" in captured["kc_keywords"]["PY43-KC-001"]
     assert "profile-aware request" in caplog.text
     assert "PRIVATE_SIGNAL_SENTINEL" not in caplog.text
+
+
+def test_problem_endpoint_forwards_existing_statements_to_similarity_review(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pythontopia_graph.agents.boss.golden_problems import get_golden_problem
+    from pythontopia_graph.agents.boss.plagiarism_checker import ExistingProblem
+    from pythontopia_graph.routes import boss as boss_route
+
+    captured: dict[str, object] = {}
+
+    async def accepted_problem(*_args, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(problem=get_golden_problem(1, 1), passed=True)
+
+    monkeypatch.setattr(boss_route, "provider_from_env", lambda: object())
+    monkeypatch.setattr(boss_route, "build_llm_problem_factory", lambda _provider: object())
+    monkeypatch.setattr(boss_route, "generate_boss_problem", accepted_problem)
+    existing_problem = {"problemId": "existing-1", "statement": "读取温度并输出华氏值。"}
+
+    response = client.post(
+        "/agents/boss/problem",
+        json={
+            **KC_CONTEXT,
+            "chapter": 1,
+            "stage": 1,
+            "kcCode": "PY43-KC-001",
+            "difficulty": 1,
+            "existingProblems": [existing_problem],
+        },
+    )
+
+    assert response.status_code == 200
+    assert ExistingProblem(
+        problem_id="existing-1", statement="读取温度并输出华氏值。"
+    ) in captured.get("existing_problems", [])
 
 
 def test_problem_endpoint_rejects_unconfigured_dry_run_provider(

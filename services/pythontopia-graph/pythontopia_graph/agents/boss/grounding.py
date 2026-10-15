@@ -180,6 +180,25 @@ def _is_constant_output_only(code: str) -> bool:
     )
 
 
+def _uses_variable_assignment_and_arithmetic(code: str) -> bool:
+    try:
+        tree = ast.parse(code)
+    except (SyntaxError, TypeError):
+        return False
+
+    has_variable_assignment = any(
+        isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) for target in node.targets)
+        for node in ast.walk(tree)
+    )
+    arithmetic_operators = (ast.Add, ast.Sub, ast.Mult, ast.Div, ast.FloorDiv, ast.Mod, ast.Pow)
+    has_arithmetic_operation = any(
+        isinstance(node, ast.BinOp) and isinstance(node.op, arithmetic_operators)
+        for node in ast.walk(tree)
+    )
+    return has_variable_assignment and has_arithmetic_operation
+
+
 def verify_kc_grounding(
     problem: BossProblem,
     *,
@@ -262,11 +281,25 @@ def verify_kc_grounding(
             )
         )
 
-    if (
+    uses_kc010_semantics = (
+        problem.kc_code == "PY43-KC-010"
+        and _uses_variable_assignment_and_arithmetic(problem.reference_solution)
+    )
+    if override and keywords and problem.kc_code == "PY43-KC-010" and not uses_kc010_semantics:
+        issues.append(
+            ReviewIssue(
+                review="grounding",
+                severity="error",
+                code="kc_solution_miss",
+                message="PY43-KC-010 reference_solution must assign a variable and execute an arithmetic operation",
+            )
+        )
+    elif (
         override
         and keywords
         and not teaches_output
         and not any(normalize(keyword) in solution for keyword in keywords)
+        and not uses_kc010_semantics
     ):
         issues.append(
             ReviewIssue(

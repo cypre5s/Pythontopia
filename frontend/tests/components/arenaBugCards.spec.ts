@@ -2,6 +2,7 @@ import { mount } from '@vue/test-utils';
 import { describe, expect, it, vi } from 'vitest';
 import DebugCard from '@/components/arena/DebugCard.vue';
 import BugMineCard from '@/components/arena/BugMineCard.vue';
+import FillBlankCard from '@/components/arena/FillBlankCard.vue';
 import type { BossProblemDto } from '@/api/dto/Boss';
 
 function problem(overrides: Partial<BossProblemDto> = {}): BossProblemDto {
@@ -23,6 +24,32 @@ function problem(overrides: Partial<BossProblemDto> = {}): BossProblemDto {
 }
 
 describe('arena bug-oriented cards', () => {
+  it('reconstructs the Web fill-blank marker as executable student code', async () => {
+    const wrapper = mount(FillBlankCard, {
+      props: {
+        problem: problem({
+          statement: [
+            '# 变量与运算符：将两个整数分别存入变量，再求和输出',
+            '___ = int(input())',
+            '___ = int(input())',
+            'print(___ + ___)',
+          ].join('\n'),
+        }),
+        code: '',
+      },
+    });
+
+    expect(wrapper.findAll('[data-testid^="blank-"]')).toHaveLength(4);
+    await wrapper.get('[data-testid="blank-0"]').setValue('a');
+    await wrapper.get('[data-testid="blank-1"]').setValue('b');
+    await wrapper.get('[data-testid="blank-2"]').setValue('a');
+    await wrapper.get('[data-testid="blank-3"]').setValue('b');
+
+    expect(wrapper.emitted('update:code')?.at(-1)?.[0]).toBe(
+      '# 变量与运算符：将两个整数分别存入变量，再求和输出\na = int(input())\nb = int(input())\nprint(a + b)',
+    );
+  });
+
   it('DebugCard renders the buggy code from the problem payload', () => {
     const wrapper = mount(DebugCard, {
       props: {

@@ -75,6 +75,7 @@ function makeRouter() {
       { path: '/bug-mine', component: { template: '<div />' } },
       { path: '/problems', component: { template: '<div />' } },
       { path: '/expedition', component: { template: '<div />' } },
+      { path: '/mainline-map', component: { template: '<div />' } },
     ],
   });
 }
@@ -97,13 +98,29 @@ describe('ProfileRoomPage Learner Twin', () => {
     expect(wrapper.text()).toContain('还没有经判题确认的学习证据');
     expect(wrapper.text()).toContain('尚未评估，先从基础题建立证据');
     expect(wrapper.text()).not.toContain('掌握 0%');
+    expect(wrapper.get('[data-testid="twin-next-primary"]').text()).toContain('主线');
+
+    await wrapper.get('[data-testid="twin-next-primary"]').trigger('click');
+    await flushPromises();
+    expect(router.currentRoute.value.path).toBe('/mainline-map');
   });
 
   it('routes the main and distinct alternative recommendations to matching learning actions', async () => {
     setActivePinia(createPinia());
     vi.mocked(fetchLearnerTwinState).mockResolvedValue({
       ...unassessedState,
-      kcs: [{ ...unassessedState.kcs[0], assessed: true, masteryScore: 0.42, reviewDue: true }],
+      kcs: [
+        { ...unassessedState.kcs[0], assessed: true, masteryScore: 0.42, reviewDue: true },
+        {
+          ...unassessedState.kcs[0],
+          kcCode: 'PY43-KC-002',
+          kcName: '数值类型',
+          chapter: 2,
+          chapterName: '第二章',
+          assessed: true,
+          masteryScore: 0.42,
+        },
+      ],
       nextSteps: [
         { ...unassessedState.nextSteps[0], action: 'REVIEW', reason: 'FSRS-lite 复习已到期' },
         {

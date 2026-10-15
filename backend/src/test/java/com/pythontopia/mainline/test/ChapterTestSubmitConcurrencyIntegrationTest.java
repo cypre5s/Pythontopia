@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 import com.pythontopia.PythontopiaApplication;
+import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.mainline.dto.ChapterTestSubmitRequest;
 import com.pythontopia.mainline.test.ChapterTestJudge.JudgeReport;
 import java.util.List;
@@ -18,6 +19,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -57,6 +59,38 @@ class ChapterTestSubmitConcurrencyIntegrationTest {
 
   @Autowired ChapterTestService service;
   @Autowired JdbcTemplate jdbc;
+  @Autowired ApplicationEventPublisher eventPublisher;
+
+  @Test
+  void repeatedChapterAssessmentEventUpdatesTwinEvidenceOnlyOnce() {
+    long userId =
+        jdbc.queryForObject(
+            "INSERT INTO users (username, display_name, password_hash, role)"
+                + " VALUES (?, 'Chapter assessment learner', 'x', 'STUDENT') RETURNING id",
+            Long.class,
+            "chapter-assessment-" + UUID.randomUUID());
+    LearningEvent.ChapterAssessmentScored event =
+        new LearningEvent.ChapterAssessmentScored(
+            userId, 9001L, 1, "FINAL", "PY43-KC-003", 1, 1);
+
+    eventPublisher.publishEvent(event);
+    eventPublisher.publishEvent(event);
+
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ? AND idempotency_key = ?",
+                Integer.class,
+                userId,
+                event.idempotencyKey()))
+        .isEqualTo(1);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT mastery_score FROM kc_mastery WHERE user_id = ? AND kc_code = ?",
+                java.math.BigDecimal.class,
+                userId,
+                "PY43-KC-003"))
+        .isGreaterThan(java.math.BigDecimal.ZERO);
+  }
 
   @Test
   void concurrentSubmissionsJudgeOnceAndReturnTheStoredResult() throws Exception {

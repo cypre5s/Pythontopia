@@ -185,6 +185,21 @@ public class MemoryStreamMirror {
     mirror(event.userId(), "guide_checkpoint_completed", payload);
   }
 
+  @EventListener
+  public void onChapterAssessmentScored(LearningEvent.ChapterAssessmentScored event) {
+    Map<String, Object> payload = new LinkedHashMap<>();
+    put(payload, "assessmentId", event.assessmentId());
+    payload.put("chapter", event.chapter());
+    put(payload, "assessmentKind", event.assessmentKind());
+    put(payload, "kcCode", event.kcCode());
+    payload.put("correctCodingQuestions", event.correctCodingQuestions());
+    payload.put("codingQuestionCount", event.codingQuestionCount());
+    mirror(
+        event.userId(),
+        event.passed() ? "chapter_assessment_passed" : "chapter_assessment_failed",
+        payload);
+  }
+
   private void mirror(Long userId, String eventType, Map<String, Object> payload) {
     try {
       long eventId = repository.insert(userId, eventType, payload, SOURCE, EventImportance.of(eventType));

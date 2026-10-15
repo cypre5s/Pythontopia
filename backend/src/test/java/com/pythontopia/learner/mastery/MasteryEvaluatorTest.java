@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -61,6 +62,37 @@ class MasteryEvaluatorTest {
     verify(repository)
         .insertEvent(
             eq(1L), eq("PY43-KC-001"), eq(MasterySource.RESOURCE_READ), any(), any(), eq("test"));
+  }
+
+  @Test
+  void duplicateVerifiedAttemptDoesNotUpdateMasteryOrReviewStateAgain() {
+    MasterySnapshot existing =
+        new MasterySnapshot(
+            11L,
+            1L,
+            "PY43-KC-001",
+            new BigDecimal("0.400"),
+            new BigDecimal("0.300"),
+            OffsetDateTime.now(ZoneOffset.UTC),
+            OffsetDateTime.now(ZoneOffset.UTC));
+    when(repository.findSnapshot(1L, "PY43-KC-001")).thenReturn(Optional.of(existing));
+    when(repository.insertEventIfNew(
+            anyLong(), anyString(), any(MasterySource.class), any(), any(), anyString(), anyString()))
+        .thenReturn(false);
+
+    MasterySnapshot result =
+        evaluator.applyEvent(
+            1L,
+            "PY43-KC-001",
+            MasterySource.DEBUG_FIX,
+            null,
+            "debug:42",
+            "submission:900");
+
+    assertThat(result).isSameAs(existing);
+    verify(repository, never())
+        .upsertSnapshot(anyLong(), anyString(), any(), any(), any(OffsetDateTime.class));
+    verify(reviewStateService, never()).onMasteryEvent(anyLong(), anyString(), any(), any());
   }
 
   @Test

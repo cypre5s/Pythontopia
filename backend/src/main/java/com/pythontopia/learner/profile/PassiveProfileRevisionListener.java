@@ -99,7 +99,7 @@ public class PassiveProfileRevisionListener {
         event.userId(),
         "error_pattern",
         delta,
-        stableKey("debug_resolved", event.userId(), event.problemId()));
+        stableKey("debug_resolved", event.userId(), event.idempotencyKey()));
   }
 
   @EventListener

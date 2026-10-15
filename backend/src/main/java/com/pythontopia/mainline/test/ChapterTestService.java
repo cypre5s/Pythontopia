@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.mainline.ChapterCatalog;
 import com.pythontopia.mainline.ChapterUnlockGuard;
 import com.pythontopia.mainline.MainlineStageProgressRepository;
@@ -22,13 +23,19 @@ import com.pythontopia.mainline.star.ChapterStarRepository;
 import com.pythontopia.mainline.star.ChapterStarService;
 import com.pythontopia.mainline.star.StarSource;
 import com.pythontopia.mainline.test.ChapterTestJudge.JudgeReport;
+import com.pythontopia.mainline.test.ChapterTestJudge.QuestionJudgement;
+import com.pythontopia.mainline.test.question.QuestionItem;
 import com.pythontopia.mainline.test.question.QuestionPaper;
+import com.pythontopia.mainline.test.question.QuestionType;
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -53,6 +60,7 @@ public class ChapterTestService {
   private final MainlineStageRepository stageRepository;
   private final MainlineStageProgressRepository progressRepository;
   private final ObjectMapper objectMapper;
+  private final ApplicationEventPublisher eventPublisher;
 
   public ChapterTestService(
       ChapterTestRepository repository,
@@ -63,7 +71,8 @@ public class ChapterTestService {
       ChapterStarRepository starRepository,
       MainlineStageRepository stageRepository,
       MainlineStageProgressRepository progressRepository,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      ApplicationEventPublisher eventPublisher) {
     this.repository = repository;
     this.pregenService = pregenService;
     this.judge = judge;
@@ -73,6 +82,7 @@ public class ChapterTestService {
     this.stageRepository = stageRepository;
     this.progressRepository = progressRepository;
     this.objectMapper = objectMapper;
+    this.eventPublisher = eventPublisher;
   }
 
   /**
@@ -254,6 +264,8 @@ public class ChapterTestService {
           HttpStatus.CONFLICT, "CHAPTER_TEST_NOT_IN_PROGRESS", "提交状态冲突，请刷新重试");
     }
 
+    publishCodingAssessmentEvents(userId, chapter, testId, assessmentKind, paper, report);
+
     int stars =
         assessmentKind == ChapterAssessmentKind.FINAL
             ? starService.recalc(userId, chapter, StarSource.TEST).stars()
@@ -263,6 +275,36 @@ public class ChapterTestService {
         "章测提交 user={} ch={} testId={} score={}/{} stars={}",
         userId, chapter, testId, report.score(), report.maxScore(), stars);
     return mapper.toResult(submitted, report, stars, false);
+  }
+
+  private void publishCodingAssessmentEvents(
+      long userId,
+      int chapter,
+      long testId,
+      ChapterAssessmentKind assessmentKind,
+      QuestionPaper paper,
+      JudgeReport report) {
+    Map<String, QuestionJudgement> judgementsByQid =
+        report.items().stream()
+            .collect(
+                Collectors.toMap(
+                    QuestionJudgement::qid, Function.identity(), (first, duplicate) -> first));
+    Map<String, List<QuestionItem>> codingItemsByKc =
+        paper.items().stream()
+            .filter(item -> item.type() == QuestionType.CODING)
+            .filter(item -> item.kcCode() != null && !item.kcCode().isBlank())
+            .collect(Collectors.groupingBy(QuestionItem::kcCode));
+
+    codingItemsByKc.forEach(
+        (kcCode, items) -> {
+          int correct = (int) items.stream()
+              .map(item -> judgementsByQid.get(item.qid()))
+              .filter(judgement -> judgement != null && judgement.correct())
+              .count();
+          eventPublisher.publishEvent(
+              new LearningEvent.ChapterAssessmentScored(
+                  userId, testId, chapter, assessmentKind.name(), kcCode, correct, items.size()));
+        });
   }
 
   /** 该章最近一场结果（无则 null）。仅终态回填逐题明细 + 答案。 */

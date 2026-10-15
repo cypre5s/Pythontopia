@@ -12,7 +12,9 @@ import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
+import com.pythontopia.world.boss.dto.BossProblemReferenceDto;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
+import com.pythontopia.world.boss.review.BossProblemReviewRepository;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -29,8 +31,11 @@ class BossGraphClientTest {
     RestTemplate graphRestTemplate = new RestTemplate();
     RestTemplate bossProblemRestTemplate = new RestTemplate();
     CoursePackRepository coursePackRepository = mock(CoursePackRepository.class);
+    BossProblemReviewRepository problemReviewRepository = mock(BossProblemReviewRepository.class);
     when(coursePackRepository.findKcByCode(43L, "PY43-KC-001"))
         .thenReturn(Optional.of(kc("PY43-KC-001")));
+    when(problemReviewRepository.findRecentSimilarityCandidates("PY43-KC-001"))
+        .thenReturn(List.of());
     MockRestServiceServer server = MockRestServiceServer.bindTo(bossProblemRestTemplate).build();
     server
         .expect(requestTo("http://graph/agents/boss/problem"))
@@ -40,7 +45,8 @@ class BossGraphClientTest {
             graphRestTemplate,
             bossProblemRestTemplate,
             new GraphServiceProperties("http://graph", "http://rag", ""),
-            coursePackRepository);
+            coursePackRepository,
+            problemReviewRepository);
 
     assertThatThrownBy(() -> client.requestProblem(7L, 1, 1, "PY43-KC-001", 1))
         .isInstanceOf(RestClientException.class)
@@ -54,6 +60,7 @@ class BossGraphClientTest {
     RestTemplate graphRestTemplate = new RestTemplate();
     RestTemplate bossProblemRestTemplate = new RestTemplate();
     CoursePackRepository coursePackRepository = mock(CoursePackRepository.class);
+    BossProblemReviewRepository problemReviewRepository = mock(BossProblemReviewRepository.class);
     when(coursePackRepository.findKcByCode(43L, "PY43-KC-001"))
         .thenReturn(
             Optional.of(
@@ -66,18 +73,23 @@ class BossGraphClientTest {
                     1,
                     "Basic",
                     "了解银河一号、龙芯 CPU、神威·太湖之光等发展成果。")));
+    when(problemReviewRepository.findRecentSimilarityCandidates("PY43-KC-001"))
+        .thenReturn(List.of(new BossProblemReferenceDto("existing-1", "已有题面")));
     MockRestServiceServer server = MockRestServiceServer.bindTo(bossProblemRestTemplate).build();
     server
         .expect(requestTo("http://graph/agents/boss/problem"))
         .andExpect(jsonPath("$.kcName").value("中国计算机发展成就"))
         .andExpect(jsonPath("$.kcSummary").value("了解银河一号、龙芯 CPU、神威·太湖之光等发展成果。"))
+        .andExpect(jsonPath("$.existingProblems[0].problemId").value("existing-1"))
+        .andExpect(jsonPath("$.existingProblems[0].statement").value("已有题面"))
         .andRespond(withSuccess("{}", org.springframework.http.MediaType.APPLICATION_JSON));
     BossGraphClient client =
         new BossGraphClient(
             graphRestTemplate,
             bossProblemRestTemplate,
             new GraphServiceProperties("http://graph", "http://rag", ""),
-            coursePackRepository);
+            coursePackRepository,
+            problemReviewRepository);
 
     client.requestProblem(7L, 1, 1, "PY43-KC-001", 1);
 
@@ -89,6 +101,7 @@ class BossGraphClientTest {
     RestTemplate graphRestTemplate = new RestTemplate();
     RestTemplate bossProblemRestTemplate = new RestTemplate();
     CoursePackRepository coursePackRepository = mock(CoursePackRepository.class);
+    BossProblemReviewRepository problemReviewRepository = mock(BossProblemReviewRepository.class);
     MockRestServiceServer server = MockRestServiceServer.bindTo(graphRestTemplate).build();
     server
         .expect(ExpectedCount.times(2), requestTo("http://graph/agents/boss/evaluate"))
@@ -98,7 +111,8 @@ class BossGraphClientTest {
             graphRestTemplate,
             bossProblemRestTemplate,
             new GraphServiceProperties("http://graph", "http://rag", ""),
-            coursePackRepository);
+            coursePackRepository,
+            problemReviewRepository);
 
     assertThatThrownBy(
             () ->

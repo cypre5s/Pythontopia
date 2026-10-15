@@ -62,6 +62,7 @@ function videoEl(wrapper: ReturnType<typeof mount>): HTMLVideoElement {
 
 // 每个用例后自动卸载组件：移除其 document.visibilitychange 监听，避免跨用例污染。
 enableAutoUnmount(afterEach);
+afterEach(() => vi.useRealTimers());
 
 describe('StageVideoWatcher（看 · 站内课程视频计时）', () => {
   beforeEach(() => {
@@ -124,7 +125,10 @@ describe('StageVideoWatcher（看 · 站内课程视频计时）', () => {
     );
   });
 
-  it('timeupdate 按前进量累计观看，攒满 30s 批量上报一次 deltaSec=30（对齐服务端每分钟 2 次有效限频）', async () => {
+  it('timeupdate 按前进量累计观看，攒满 60s 批量上报且使用服务端进度', async () => {
+    vi.mocked(postVideoProgress)
+      .mockResolvedValueOnce(makeStageProgress({ videoWatchedSec: 60 }))
+      .mockResolvedValueOnce(makeStageProgress({ videoWatchedSec: 120 }));
     const wrapper = mount(StageVideoWatcher, {
       props: {
         stageId: 7,
@@ -141,22 +145,25 @@ describe('StageVideoWatcher（看 · 站内课程视频计时）', () => {
     await flushPromises();
     expect(vi.mocked(postVideoProgress)).not.toHaveBeenCalled();
 
-    // 播放到 30s → 攒满 1 批 → 上报一次。
+    // 播放到 30s 仍不足一批，不上报。
     advance(el, 30, 30);
     await flushPromises();
-    expect(vi.mocked(postVideoProgress)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(postVideoProgress)).toHaveBeenCalledWith(7, 30);
-    expect(wrapper.find('[data-testid="stage-video-count"]').text()).toContain('0:30');
-    // 成功后向上 emit 当前累计观看秒数。
-    const progress = wrapper.emitted('progress');
-    expect(progress?.[0]?.[0]).toMatchObject({ stageId: 7, videoWatchedSec: 30 });
+    expect(vi.mocked(postVideoProgress)).not.toHaveBeenCalled();
 
-    // 继续播放 30→60s → 第 2 批。
+    // 播放到 60s → 攒满 1 批；向父级同步后端确认的累计值。
     advance(el, 31, 60);
     await flushPromises();
-    expect(vi.mocked(postVideoProgress)).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(postVideoProgress)).toHaveBeenLastCalledWith(7, 30);
+    expect(vi.mocked(postVideoProgress)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(postVideoProgress)).toHaveBeenCalledWith(7, 60);
     expect(wrapper.find('[data-testid="stage-video-count"]').text()).toContain('1:00');
+    expect(wrapper.emitted('progress')?.[0]?.[0]).toMatchObject({
+      stageId: 7,
+      videoWatchedSec: 60,
+    });
+    advance(el, 61, 120);
+    await flushPromises();
+    expect(vi.mocked(postVideoProgress)).toHaveBeenCalledTimes(2);
+    expect(vi.mocked(postVideoProgress)).toHaveBeenLastCalledWith(7, 60);
   });
 
   it('单帧大跳（拖动/快进）不计入观看时长', async () => {
@@ -183,6 +190,9 @@ describe('StageVideoWatcher（看 · 站内课程视频计时）', () => {
   });
 
   it('累计达 requiredVideoSec 即停表、过线、不再上报', async () => {
+    vi.mocked(postVideoProgress).mockResolvedValue(
+      makeStageProgress({ videoWatchedSec: 5, requiredVideoSec: 5 }),
+    );
     const wrapper = mount(StageVideoWatcher, {
       props: {
         stageId: 7,
@@ -204,8 +214,37 @@ describe('StageVideoWatcher（看 · 站内课程视频计时）', () => {
     expect(wrapper.find('[data-testid="stage-video-count"]').text()).toContain('0:05 / 0:05');
   });
 
+  it('后端限频返回未增长进度时不把视频标记为已过线', async () => {
+    vi.useFakeTimers();
+    vi.mocked(postVideoProgress)
+      .mockResolvedValueOnce(makeStageProgress({ videoWatchedSec: 0, requiredVideoSec: 5 }))
+      .mockResolvedValueOnce(makeStageProgress({ videoWatchedSec: 5, requiredVideoSec: 5 }));
+    const wrapper = mount(StageVideoWatcher, {
+      props: {
+        stageId: 7,
+        videos: [makeVideo(1, '讲解', 60)],
+        requiredVideoSec: 5,
+        initialWatchedSec: 0,
+      },
+    });
+
+    advance(videoEl(wrapper), 1, 5);
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="stage-video-passed"]').exists()).toBe(false);
+    expect(wrapper.emitted('passed')).toBeUndefined();
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    await flushPromises();
+    expect(vi.mocked(postVideoProgress)).toHaveBeenCalledTimes(2);
+    expect(wrapper.find('[data-testid="stage-video-passed"]').exists()).toBe(true);
+    expect(wrapper.emitted('passed')).toBeTruthy();
+  });
+
   it('上报失败时退回 pending，下一批连同失败量一起补报（不丢量）', async () => {
-    vi.mocked(postVideoProgress).mockRejectedValueOnce(new Error('network'));
+    vi.mocked(postVideoProgress)
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValueOnce(makeStageProgress({ videoWatchedSec: 61 }));
     const wrapper = mount(StageVideoWatcher, {
       props: {
         stageId: 7,
@@ -216,19 +255,19 @@ describe('StageVideoWatcher（看 · 站内课程视频计时）', () => {
     });
     const el = videoEl(wrapper);
 
-    // 第 1 批 30s 上报失败 → pending 退回 30（watched 本地权威仍记 30）。
-    advance(el, 1, 30);
+    // 第 1 批 60s 上报失败 → pending 退回 60（本地仍展示真实观看时长）。
+    advance(el, 1, 60);
     await flushPromises();
     expect(vi.mocked(postVideoProgress)).toHaveBeenCalledTimes(1);
-    expect(vi.mocked(postVideoProgress)).toHaveBeenNthCalledWith(1, 7, 30);
-    expect(wrapper.find('[data-testid="stage-video-count"]').text()).toContain('0:30');
+    expect(vi.mocked(postVideoProgress)).toHaveBeenNthCalledWith(1, 7, 60);
+    expect(wrapper.find('[data-testid="stage-video-count"]').text()).toContain('1:00');
 
-    // 再播 1s → pending 达 31(≥批量阈值) → 立刻重试，把失败的 30 连同新增 1 一起补报。
-    advance(el, 31, 31);
+    // 再播 1s → 失败的 60s 与新增观看量合并重试。
+    advance(el, 61, 61);
     await flushPromises();
     expect(vi.mocked(postVideoProgress)).toHaveBeenCalledTimes(2);
-    expect(vi.mocked(postVideoProgress)).toHaveBeenLastCalledWith(7, 31);
-    expect(wrapper.find('[data-testid="stage-video-count"]').text()).toContain('0:31');
+    expect(vi.mocked(postVideoProgress)).toHaveBeenLastCalledWith(7, 61);
+    expect(wrapper.find('[data-testid="stage-video-count"]').text()).toContain('1:01');
   });
 
   it('标签页不可见时不计时、不上报，切回可见后恢复', async () => {

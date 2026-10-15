@@ -8,6 +8,23 @@ vi.mock('@/api/mainline', () => ({
   postExampleDone: vi.fn(),
 }));
 
+const { requestAiPracticeProblem, judgeAiPracticeProblem, refreshAfterEvent } = vi.hoisted(() => ({
+  requestAiPracticeProblem: vi.fn(),
+  judgeAiPracticeProblem: vi.fn(),
+  refreshAfterEvent: vi.fn(),
+}));
+
+vi.mock('@/composables/useChallengeJudge', () => ({
+  useChallengeJudge: () => ({
+    fetchProblem: requestAiPracticeProblem,
+    judge: judgeAiPracticeProblem,
+  }),
+}));
+
+vi.mock('@stores/learning', () => ({
+  useLearningStore: () => ({ refreshAfterEvent }),
+}));
+
 import StageExamplePractice from '@/components/mainline-stage/StageExamplePractice.vue';
 import { answerPracticeQuestion, postExampleDone } from '@/api/mainline';
 import type {
@@ -16,6 +33,7 @@ import type {
   StagePracticeQuestionDto,
   StageProgressDto,
 } from '@/api/mainline';
+import type { BossAttemptResultDto, BossProblemDto } from '@/api/dto/Boss';
 
 const STAGE_ID = 7;
 
@@ -70,6 +88,36 @@ function makeStageProgress(over: Partial<StageProgressDto> = {}): StageProgressD
   };
 }
 
+function makeBossProblem(over: Partial<BossProblemDto> = {}): BossProblemDto {
+  return {
+    problemId: 'ai-kc-010',
+    chapter: 2,
+    stage: 1,
+    difficulty: 1,
+    kcCode: 'PY43-KC-010',
+    statement: '读取两个整数并输出它们的和。',
+    hints: [],
+    sampleInput: '3 5',
+    sampleOutput: '8',
+    totalTestCases: 3,
+    reviewed: true,
+    aiGenerated: true,
+    ...over,
+  };
+}
+
+function makeBossAttempt(over: Partial<BossAttemptResultDto> = {}): BossAttemptResultDto {
+  return {
+    problemId: 'ai-kc-010',
+    passed: true,
+    passedTestCases: 3,
+    totalTestCases: 3,
+    score: 100,
+    feedback: '通过。',
+    ...over,
+  };
+}
+
 function createTestRouter(): Router {
   return createRouter({
     history: createMemoryHistory(),
@@ -82,6 +130,7 @@ function createTestRouter(): Router {
 
 interface MountProps {
   stageId: number;
+  kcCodes: string[];
   questions: StagePracticeQuestionDto[];
   requiredQuestions: number;
   correctQuestionIds: number[];
@@ -93,6 +142,7 @@ interface MountProps {
 function mountPractice(over: Partial<MountProps>, router: Router) {
   const props: MountProps = {
     stageId: STAGE_ID,
+    kcCodes: [],
     questions: [],
     requiredQuestions: 0,
     correctQuestionIds: [],
@@ -101,10 +151,20 @@ function mountPractice(over: Partial<MountProps>, router: Router) {
     doneProblemIds: [],
     ...over,
   };
-  return mount(StageExamplePractice, { props, global: { plugins: [router] } });
+  return mount(StageExamplePractice, {
+    props,
+    global: {
+      plugins: [router],
+      stubs: {
+        ChallengeWorkspace: {
+          template: '<div data-testid="challenge-workspace-stub"><slot name="actions" /></div>',
+        },
+      },
+    },
+  });
 }
 
-describe('StageExamplePractice（练 · 站内客观题 + OJ 跳训练场）', () => {
+describe('StageExamplePractice（练 · 客观题、OJ 与 AI 编程补充）', () => {
   let router: Router;
 
   beforeEach(async () => {
@@ -115,6 +175,9 @@ describe('StageExamplePractice（练 · 站内客观题 + OJ 跳训练场）', (
     await router.isReady();
     vi.mocked(answerPracticeQuestion).mockResolvedValue(makeAnswer({ correct: true }));
     vi.mocked(postExampleDone).mockResolvedValue(makeStageProgress());
+    requestAiPracticeProblem.mockResolvedValue(makeBossProblem());
+    judgeAiPracticeProblem.mockResolvedValue(makeBossAttempt());
+    refreshAfterEvent.mockResolvedValue(undefined);
   });
 
   afterEach(() => {
@@ -281,6 +344,76 @@ describe('StageExamplePractice（练 · 站内客观题 + OJ 跳训练场）', (
     expect(href).toContain('/training');
     expect(href).toContain('problemId=201');
     expect(wrapper.find('[data-testid="stage-practice-oj-count"]').text()).toContain('0 / 1');
+  });
+
+  it('主线 KC 暂无编程题时可按需请求经审核的 AI 编程练习', async () => {
+    const wrapper = mountPractice(
+      { kcCodes: ['PY43-KC-010', 'PY43-KC-011'] },
+      router,
+    );
+
+    const button = wrapper.find('[data-testid="stage-missing-oj-practice-PY43-KC-010"]');
+    expect(button.exists()).toBe(true);
+    expect(wrapper.find('[data-testid="stage-missing-oj-expedition-PY43-KC-010"]').exists()).toBe(false);
+
+    await button.trigger('click');
+    await flushPromises();
+    expect(requestAiPracticeProblem).toHaveBeenCalledWith({
+      kc: 'PY43-KC-010',
+      kind: null,
+      difficulty: 1,
+    });
+    expect(wrapper.find('[data-testid="stage-ai-practice-workspace"]').exists()).toBe(true);
+  });
+
+  it('只为当前小节未覆盖编程题的 KC 提供 AI 练习入口', () => {
+    const wrapper = mountPractice(
+      {
+        kcCodes: ['PY43-KC-010', 'PY43-KC-011'],
+        examples: [makeExample({ kcCode: 'PY43-KC-010' })],
+      },
+      router,
+    );
+
+    expect(
+      wrapper.find('[data-testid="stage-missing-oj-practice-PY43-KC-010"]').exists(),
+    ).toBe(false);
+    expect(
+      wrapper.find('[data-testid="stage-missing-oj-practice-PY43-KC-011"]').exists(),
+    ).toBe(true);
+  });
+
+  it('AI 题请求失败时不展示未审核题面，并保留明确错误提示', async () => {
+    requestAiPracticeProblem.mockRejectedValueOnce(new Error('unreviewed candidate'));
+    const wrapper = mountPractice({ kcCodes: ['PY43-KC-010'] }, router);
+
+    await wrapper.find('[data-testid="stage-missing-oj-practice-PY43-KC-010"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="stage-ai-practice-workspace"]').exists()).toBe(false);
+    expect(wrapper.find('[data-testid="stage-ai-practice-error"]').text()).toContain('暂不可用');
+  });
+
+  it('AI 练习使用正式服务端判题并显示判定结果', async () => {
+    const wrapper = mountPractice({ kcCodes: ['PY43-KC-010'] }, router);
+    await wrapper.find('[data-testid="stage-missing-oj-practice-PY43-KC-010"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="stage-ai-practice-workspace"]').exists()).toBe(true);
+    expect(judgeAiPracticeProblem).not.toHaveBeenCalled();
+
+    // 提交行为由工作区动作按钮触发，不能把生成成功误当作判题成功。
+    const submit = wrapper.find('[data-testid="stage-ai-practice-submit"]');
+    expect(submit.exists()).toBe(true);
+    await submit.trigger('click');
+    await flushPromises();
+    expect(judgeAiPracticeProblem).toHaveBeenCalledWith(
+      expect.objectContaining({ kcCode: 'PY43-KC-010' }),
+      expect.any(String),
+      expect.any(Number),
+    );
+    expect(wrapper.find('[data-testid="stage-ai-practice-result"]').text()).toContain('通过。');
+    expect(refreshAfterEvent).toHaveBeenCalledWith('PY43-KC-010');
   });
 
   it('OJ「标记完成」调 postExampleDone(stageId, problemId)（两参）并 emit doneProblemIds', async () => {

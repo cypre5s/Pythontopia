@@ -21,7 +21,7 @@ PROBLEM_GEN_SYSTEM_PROMPT = """你是 Python 编程题命题官，专注「Pytho
 你必须返回**合法 JSON 对象**（``response_format=json_object``），schema：
 {
   "title": "题目标题，中文，不超过 20 字",
-  "statement": "题面，中文，含输入格式 + 输出格式 + 1 个 sample；总长 <= 600 字",
+  "statement": "中文题面；代码填空题型只放 Python 代码骨架并以 ___ 标记空位；总长 <= 600 字",
   "reference_solution": "可以独立运行的 Python 3 代码字符串，stdin 读输入，stdout 写输出",
   "test_cases": [
     {"input": "...", "expected_output": "...", "is_sample": true},
@@ -33,6 +33,7 @@ PROBLEM_GEN_SYSTEM_PROMPT = """你是 Python 编程题命题官，专注「Pytho
 
 【硬性约束】
 - 至少 3 条 test_cases，且至少 1 条 is_sample=true。
+- fill_blank 仅放 Python 代码骨架并用 ___ 标记空位；样例输入输出放在 test_cases。
 - 所有字符串必须是合法 JSON 字符串：换行写成 \\n，双引号写成 \\"；
   不要输出 Markdown 围栏、解释文字或空 content。
 - reference_solution 必须能在 5 秒内跑过所有 test_cases。
@@ -40,7 +41,7 @@ PROBLEM_GEN_SYSTEM_PROMPT = """你是 Python 编程题命题官，专注「Pytho
 - reference_solution 禁止 import：socket / subprocess / shutil / ctypes /
   multiprocessing / urllib.request / requests / httpx / smtplib / ftplib / ssl。
 - reference_solution 仅使用对应章节及之前章节的 Python 语法
-  （章 1 = print/input/赋值；章 2 = list/dict/str；章 3 = if/elif/else；
+  （章 1 = print/input/变量赋值/基础算术；章 2 = 变量赋值/算术运算符/字符串/list/dict；章 3 = if/elif/else；
    章 4 = for/while/break/continue；章 5 = def/return；章 6 = class/继承；
    章 7 = import/try/except/with）。
 - 第 1 章必须特别克制：只能使用 print / input / 变量赋值 / int / float /
@@ -209,7 +210,10 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
         extras: list[str] = []
         if preferred_kind:
             kind_map = {
-                "fill_blank": "代码填空（题面包含 ___BLANK___ 让玩家填）",
+                "fill_blank": (
+                    "代码填空：statement 必须是 Python 代码骨架，使用 ___ 标记至少一个空位；"
+                    "不要混入自然语言、输入输出说明或样例，样例放在 test_cases"
+                ),
                 "debug": "改错题（给出有 bug 的代码片段让玩家修）",
                 "short_answer": "简答题（学生用 30-100 字解释概念，AI 评分）",
                 "closed_loop": "调试闭环（堆栈 trace 定位 → 修复）",
@@ -284,23 +288,36 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
 
         kc_context = ""
         if kc_name:
-            kc_context = (
-                f"\n权威 KC 名称：{kc_name}\n"
-                f"权威 KC 内容摘要：{kc_summary or '无额外摘要'}\n"
-                "题目必须实际考查该知识点，不能只把知识点名称贴在无关题面上；"
-                "题面至少出现一个摘要里的具体术语，不得编造摘要没有提供的课程事实；"
-                "参考程序必须把摘要里的具体术语作为字符串常量实际输出，且至少一条正确输出必须包含该术语；"
-                "不得只把课程事实当作背景或样例文字；至少一条测试用例的正确输出和参考程序都要实际用到该事实。"
-                "具体事实必须作为代码实际使用的数据，并出现在至少一个正确输出中；"
-                "不能让学生输入一个数值后原样回显来凑 KC，也不能假设摘要未给出的事实数值。"
-                "除 KC 核心就是标准输入输出外，不能仅设计把输入原样回显的题目。\n"
-            )
+            if kc_code == "PY43-KC-010":
+                kc_context = (
+                    f"\n权威 KC 名称：{kc_name}\n"
+                    f"权威 KC 内容摘要：{kc_summary or '无额外摘要'}\n"
+                    "本题直接考查变量与运算符：题面明确说明所用的算术运算，参考程序必须使用变量赋值并执行至少一个算术运算；"
+                    "优先使用两个小整数分别赋给变量，再用 + 求和；题面应包含“变量与运算符”这一知识点名称。"
+                    "不要输出“变量与运算符”等知识点名称作为固定文本，不要使用条件、循环或摘要没有要求的语法。\n"
+                )
+                if difficulty == 1:
+                    kc_context += "难度 1 也必须把两个小整数分别赋给变量，再用 + 求和并输出。\n"
+                if preferred_kind == "fill_blank":
+                    kc_context += "将“变量与运算符”写入代码骨架注释，不写入程序输出。\n"
+            else:
+                kc_context = (
+                    f"\n权威 KC 名称：{kc_name}\n"
+                    f"权威 KC 内容摘要：{kc_summary or '无额外摘要'}\n"
+                    "题目必须实际考查该知识点，不能只把知识点名称贴在无关题面上；"
+                    "题面至少出现一个摘要里的具体术语，不得编造摘要没有提供的课程事实；"
+                    "参考程序必须把摘要里的具体术语作为字符串常量实际输出，且至少一条正确输出必须包含该术语；"
+                    "不得只把课程事实当作背景或样例文字；至少一条测试用例的正确输出和参考程序都要实际用到该事实。"
+                    "具体事实必须作为代码实际使用的数据，并出现在至少一个正确输出中；"
+                    "不能让学生输入一个数值后原样回显来凑 KC，也不能假设摘要未给出的事实数值。"
+                    "除 KC 核心就是标准输入输出外，不能仅设计把输入原样回显的题目。\n"
+                )
 
         user_prompt = (
             f"请为第 {chapter} 章 Stage {stage} 出一道难度 {difficulty}/5 的 Python 题。\n"
             f"目标 KC: {kc_code}\n"
             f"{kc_context}"
-            f"难度参考：1=只需 1 行 print；3=两步运算；5=综合 3+ 步逻辑。"
+            f"难度参考：1=核心概念的一个基础步骤；3=两步运算；5=综合 3+ 步逻辑。"
             f"{extras_block}"
             f"{review_block}"
             f"{contract_block}"
@@ -315,6 +332,7 @@ def build_llm_problem_factory(provider: LlmProvider) -> ProblemFactory:
                 temperature=temperature,
                 max_tokens=1500,
                 reasoning_effort="none",
+                model_tier="fast",
                 response_format={"type": "json_object"},
             )
         except TypeError:

@@ -64,13 +64,31 @@ class PassiveProfileRevisionListenerTest {
 
   @Test
   void debugResolvedReducesErrorPatternScore() {
-    listener.onDebugResolved(new LearningEvent.DebugResolved(7L, "PY43-KC-003", 103L));
+    listener.onDebugResolved(
+        new LearningEvent.DebugResolved(7L, "PY43-KC-003", 103L, "submission:900"));
 
     ProfileDimensionProjection projection = singleProjection();
     DimensionDelta delta = projection.delta();
     assertThat(projection.dimensionKey()).isEqualTo("error_pattern");
+    assertThat(projection.idempotencyKey()).isEqualTo("debug_resolved:7:submission:900");
     assertThat(delta.scoreDelta()).isEqualTo(-0.02);
     assertThat(delta.source()).isEqualTo("DEBUG_FIX");
+  }
+
+  @Test
+  void separateVerifiedFixAttemptsForTheSameProblemKeepSeparateEvidence() {
+    listener.onDebugResolved(
+        new LearningEvent.DebugResolved(7L, "PY43-KC-003", 103L, "submission:900"));
+    listener.onDebugResolved(
+        new LearningEvent.DebugResolved(7L, "PY43-KC-003", 103L, "submission:901"));
+
+    ArgumentCaptor<ProfileDimensionProjection> captor =
+        ArgumentCaptor.forClass(ProfileDimensionProjection.class);
+    verify(outboxService, times(2)).enqueue(captor.capture());
+    assertThat(captor.getAllValues())
+        .extracting(ProfileDimensionProjection::idempotencyKey)
+        .containsExactly(
+            "debug_resolved:7:submission:900", "debug_resolved:7:submission:901");
   }
 
   @Test
@@ -202,7 +220,7 @@ class PassiveProfileRevisionListenerTest {
   void emitsFourDimensionUpdatesForFourEvents() {
     listener.onPracticeSucceeded(new LearningEvent.PracticeSucceeded(7L, "K1", 1L, "medium"));
     listener.onPracticeFailed(new LearningEvent.PracticeFailed(7L, "K2", 2L, "RE", "medium"));
-    listener.onDebugResolved(new LearningEvent.DebugResolved(7L, "K3", 3L));
+    listener.onDebugResolved(new LearningEvent.DebugResolved(7L, "K3", 3L, "quest:3"));
     listener.onResourceCheckCompleted(
         new LearningEvent.ResourceCheckCompleted(
             7L, 34L, 99L, "K4", "MICRO_QUIZ", true, new java.math.BigDecimal("0.05"), null));

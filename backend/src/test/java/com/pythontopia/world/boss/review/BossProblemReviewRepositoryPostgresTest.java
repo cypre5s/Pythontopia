@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
+import com.pythontopia.world.boss.dto.BossProblemReferenceDto;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
 import java.util.List;
 import org.flywaydb.core.Flyway;
@@ -139,6 +140,40 @@ class BossProblemReviewRepositoryPostgresTest {
                 requesterId, "debug", 1, 1, "PY43-KC-001", 2, candidate))
         .isFalse();
     assertThat(repository.list(20)).hasSize(1);
+  }
+
+  @Test
+  void similarityCandidatesExposeOnlyStatementsForTheRequestedKc() {
+    repository.create(requesterId, "debug", problem("same-kc-stage", 2));
+
+    assertThat(repository.findRecentSimilarityCandidates("PY43-KC-001"))
+        .containsExactly(
+            new BossProblemReferenceDto("same-kc-stage", "输入两个整数并输出和"));
+    assertThat(repository.findRecentSimilarityCandidates("PY43-KC-002")).isEmpty();
+  }
+
+  @Test
+  void similarityCandidatesIncludeCoursePackQuestionsForTheSameKc() {
+    List<BossProblemReferenceDto> candidates =
+        repository.findRecentSimilarityCandidates("PY43-KC-016");
+
+    assertThat(candidates)
+        .anySatisfy(
+            candidate -> {
+              assertThat(candidate.problemId()).isEqualTo("course:476");
+              assertThat(candidate.statement()).contains("3.1415");
+            });
+  }
+
+  @Test
+  void similarityCandidatesIncludeReviewedQuestionsFromOtherStagesOfTheSameKc() {
+    BossInternalProblem otherStage = withStage(problem("same-kc-other-stage", 2), 2);
+    repository.create(requesterId, "debug", problem("same-kc-stage-one", 2));
+    repository.create(requesterId, "debug", otherStage);
+
+    assertThat(repository.findRecentSimilarityCandidates("PY43-KC-001"))
+        .extracting(BossProblemReferenceDto::problemId)
+        .containsExactlyInAnyOrder("same-kc-stage-one", "same-kc-other-stage");
   }
 
   @Test
@@ -296,6 +331,14 @@ class BossProblemReviewRepositoryPostgresTest {
   private static BossInternalProblem withKc(BossInternalProblem problem, String kcCode) {
     return new BossInternalProblem(
         problem.problemId(), problem.chapter(), problem.stage(), problem.difficulty(), kcCode,
+        problem.statement(), problem.hints(), problem.sampleInput(), problem.sampleOutput(),
+        problem.totalTestCases(), problem.reviewed(), problem.aiGenerated(), problem.testCases(),
+        problem.referenceSolution());
+  }
+
+  private static BossInternalProblem withStage(BossInternalProblem problem, int stage) {
+    return new BossInternalProblem(
+        problem.problemId(), problem.chapter(), stage, problem.difficulty(), problem.kcCode(),
         problem.statement(), problem.hints(), problem.sampleInput(), problem.sampleOutput(),
         problem.totalTestCases(), problem.reviewed(), problem.aiGenerated(), problem.testCases(),
         problem.referenceSolution());

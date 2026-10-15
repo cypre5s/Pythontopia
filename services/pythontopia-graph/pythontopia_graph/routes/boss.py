@@ -24,6 +24,7 @@ from pythontopia_graph.agents.boss.grounding import extract_kc_grounding_keyword
 from pythontopia_graph.agents.boss.kc_map import chapter_default_kc
 from pythontopia_graph.agents.boss.llm_factory import build_llm_problem_factory
 from pythontopia_graph.agents.boss.orchestrator import generate_boss_problem
+from pythontopia_graph.agents.boss.plagiarism_checker import ExistingProblem
 from pythontopia_graph.agents.boss.schemas import TestCase
 from pythontopia_graph.llm.provider import (
     DryRunProvider,
@@ -70,6 +71,11 @@ class ProfileSignalsPayload(BaseModel):
     sessionMinutesPerDay: int | None = Field(default=None, ge=5, le=240)
 
 
+class ExistingProblemPayload(BaseModel):
+    problemId: str = Field(min_length=1, max_length=256)
+    statement: str = Field(min_length=1, max_length=2000)
+
+
 class BossProblemRequest(BaseModel):
     userId: int | None = Field(default=None, description="发起请求的玩家 id，可空")
     chapter: int = Field(ge=1, le=7)
@@ -81,6 +87,7 @@ class BossProblemRequest(BaseModel):
     preferredKc: str | None = Field(default=None)
     preferredKind: BossProblemKind | None = Field(default=None)
     profileSignals: ProfileSignalsPayload | None = Field(default=None)
+    existingProblems: list[ExistingProblemPayload] = Field(default_factory=list, max_length=50)
 
 
 class TestCasePayload(BaseModel):
@@ -174,6 +181,7 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
         if effective_kc_input.strip()
         else golden.kc_code
     )
+    golden_fallback = golden if golden.kc_code == kc_code else None
     difficulty = body.difficulty if body.difficulty is not None else min(5, stage)
     if body.profileSignals or body.preferredKind:
         LOG.info(
@@ -191,6 +199,16 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
     profile_signals_dict = (
         body.profileSignals.model_dump(exclude_none=True) if body.profileSignals else None
     )
+    existing_problems = [
+        ExistingProblem(problem_id=item.problemId, statement=item.statement)
+        for item in body.existingProblems
+    ]
+    if golden_fallback is not None and all(
+        problem.problem_id != golden.problem_id for problem in existing_problems
+    ):
+        existing_problems.append(
+            ExistingProblem(problem_id=golden.problem_id, statement=golden.statement)
+        )
     try:
         review = await generate_boss_problem(
             chapter,
@@ -200,7 +218,8 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
             kc_summary=body.kcSummary,
             difficulty=difficulty,
             problem_factory=factory,
-            golden_fallback=golden,
+            golden_fallback=golden_fallback,
+            existing_problems=existing_problems,
             kc_keywords=kc_keywords,
             max_retries=BOSS_PROBLEM_MAX_RETRIES,
             preferred_kind=body.preferredKind,
@@ -216,7 +235,8 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
             kc_summary=body.kcSummary,
             difficulty=difficulty,
             problem_factory=_async_raise_factory,
-            golden_fallback=golden,
+            golden_fallback=golden_fallback,
+            existing_problems=existing_problems,
             kc_keywords=kc_keywords,
             max_retries=0,
             preferred_kind=body.preferredKind,

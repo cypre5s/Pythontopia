@@ -4,14 +4,17 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.pythontopia.mainline.test.question.QuestionItem;
 import com.pythontopia.mainline.test.question.QuestionPaper;
 import com.pythontopia.mainline.test.question.QuestionType;
+import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.submission.judge.JudgeCaseEvaluator;
 import com.pythontopia.submission.judge.JudgeCaseEvaluator.CaseEvaluation;
 import com.pythontopia.submission.judge.JudgeTestCase;
 import com.pythontopia.submission.judge.JudgeWorkerPool;
+import com.pythontopia.submission.dto.Verdict;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 /**
@@ -103,7 +106,7 @@ public class ChapterTestJudge {
 
   private QuestionJudgement judgeCoding(QuestionItem item, String submitted) {
     List<JudgeTestCase> cases = extractCodingCases(item);
-    if (submitted == null || submitted.isBlank() || cases.isEmpty()) {
+    if (submitted == null || submitted.isBlank()) {
       return new QuestionJudgement(
           item.qid(),
           QuestionType.CODING,
@@ -116,9 +119,15 @@ public class ChapterTestJudge {
           0,
           cases.size());
     }
+    if (cases.isEmpty()) {
+      throw judgeUnavailable();
+    }
     // 沙箱子进程跑在既有判题并发池上（JudgeWorkerPool 控并发），与 JudgeService 同源。
     CaseEvaluation evaluation =
         judgeWorkerPool.submitAndWait(() -> caseEvaluator.evaluate(submitted, cases));
+    if (evaluation.finalVerdict() == Verdict.SYSTEM_ERROR) {
+      throw judgeUnavailable();
+    }
     int passed = evaluation.passedCases();
     int totalCases = cases.size();
     int awarded = totalCases == 0 ? 0 : Math.round((float) item.score() * passed / totalCases);
@@ -147,6 +156,13 @@ public class ChapterTestJudge {
       fromSamples.add(new JudgeTestCase(sample.input(), sample.output(), 5000));
     }
     return fromSamples;
+  }
+
+  private BusinessException judgeUnavailable() {
+    return new BusinessException(
+        HttpStatus.SERVICE_UNAVAILABLE,
+        "CHAPTER_TEST_JUDGE_UNAVAILABLE",
+        "编程判题暂不可用，请稍后重试");
   }
 
   private QuestionJudgement objective(
@@ -181,13 +197,16 @@ public class ChapterTestJudge {
     return value.replaceAll("\\s+", "").trim().toUpperCase(java.util.Locale.ROOT);
   }
 
-  /** 填空归一：NFKC（全/半角统一）+ 去全部空白 + 小写 + trim。 */
+  /** 填空归一：NFKC、去空白和大小写，并兼容函数名的空调用括号。 */
   static String normFill(String value) {
     if (value == null) {
       return "";
     }
     String nfkc = Normalizer.normalize(value, Normalizer.Form.NFKC);
-    return nfkc.replaceAll("\\s+", "").trim().toLowerCase(java.util.Locale.ROOT);
+    String normalized = nfkc.replaceAll("\\s+", "").trim().toLowerCase(java.util.Locale.ROOT);
+    return normalized.matches("[a-z_][a-z0-9_]*\\(\\)")
+        ? normalized.substring(0, normalized.length() - 2)
+        : normalized;
   }
 
   static int letterIndex(String letter) {

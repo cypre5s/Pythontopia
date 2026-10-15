@@ -59,12 +59,12 @@ const CHAPTER_OBJECTIVES: Record<number, string> = {
 };
 
 const nodes = computed<ChapterMapNode[]>(() =>
-  store.chapters.map((ch) => ({
-    chapter: ch.chapter,
-    title: ch.title,
-    state: chapterNodeState(ch),
-    stars: ch.stars,
-    objective: CHAPTER_OBJECTIVES[ch.chapter],
+  store.chapters.map((chapter) => ({
+    chapter: chapter.chapter,
+    title: chapter.title,
+    state: chapterNodeState(chapter),
+    stars: chapter.stars,
+    objective: CHAPTER_OBJECTIVES[chapter.chapter],
   })),
 );
 
@@ -74,7 +74,7 @@ const selectedView = computed(() => store.selectedChapterView);
 // 节点数据变化 → 喂给场景（setChapterMapData 在场景未就绪时只缓存，就绪后自动重绘）。
 watch(nodes, (next) => setChapterMapData(next), { immediate: true });
 // 选中章节变化 → 同步给场景高亮 + 弹出该节点目标说明牌。
-watch(selectedChapter, (ch) => setChapterMapSelection(ch), { immediate: true });
+watch(selectedChapter, (chapter) => setChapterMapSelection(chapter), { immediate: true });
 
 function onSelect(chapter: number): void {
   store.selectChapter(chapter);
@@ -191,7 +191,7 @@ async function onClaimErrorbook(chapter: number): Promise<void> {
 
 /** 毕业条件（与 GraduationPage / 后端权威星级同口径）：7 章全部 ≥1★。 */
 const graduated = computed<boolean>(
-  () => store.chapters.length >= 7 && store.chapters.every((c) => c.stars >= 1),
+  () => store.chapters.length >= 7 && store.chapters.every((chapter) => chapter.stars >= 1),
 );
 
 function closeDrawer(): void {
@@ -292,8 +292,11 @@ onBeforeUnmount(() => {
         v-else
         class="map-body"
       >
-        <!-- 键盘可达 / 测试可达的章节选择镜像：视觉隐藏，地图节点为主交互。 -->
-        <aside class="map-nodes-a11y">
+        <!-- 键盘可达的章节选择镜像：待焦点进入时展开，地图节点为主视觉交互。 -->
+        <aside
+          class="map-nodes-a11y"
+          aria-label="章节选择"
+        >
           <ChapterNodeList
             :chapters="store.chapters"
             :selected="selectedChapter"
@@ -305,6 +308,8 @@ onBeforeUnmount(() => {
           <aside
             v-if="selectedView"
             class="map-drawer"
+            @mousedown.stop
+            @mouseup.stop
             @pointerdown.stop
             @pointerup.stop
           >
@@ -429,7 +434,7 @@ onBeforeUnmount(() => {
   min-height: 0;
   pointer-events: none;
 }
-/* 章节列表镜像：视觉隐藏但保留在无障碍树 / DOM（键盘与测试可达）。 */
+/* 章节列表镜像：默认不挡画布；键盘聚焦时展开，保证焦点可见且可操作。 */
 .map-nodes-a11y {
   position: absolute;
   width: 1px;
@@ -440,6 +445,29 @@ onBeforeUnmount(() => {
   clip: rect(0 0 0 0);
   white-space: nowrap;
   border: 0;
+}
+.map-nodes-a11y:focus-within {
+  position: fixed;
+  z-index: var(--pyt-z-popover);
+  left: var(--pyt-space-4);
+  bottom: var(--pyt-space-4);
+  width: min(32rem, calc(100vw - 2rem));
+  height: auto;
+  max-height: min(60dvh, 480px);
+  margin: 0;
+  padding: var(--pyt-space-2);
+  overflow: auto;
+  clip: auto;
+  white-space: normal;
+  pointer-events: auto;
+  background: var(--pyt-color-bg-elevated);
+  border: 2px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-md);
+  box-shadow: var(--pyt-shadow-modal);
+}
+.map-nodes-a11y:focus-within :deep(.node__btn:focus-visible) {
+  outline: 3px solid var(--pyt-color-border-strong);
+  outline-offset: 2px;
 }
 /* 右侧玻璃抽屉：点击节点浮出，承载小节三件套与入口。 */
 .map-drawer {

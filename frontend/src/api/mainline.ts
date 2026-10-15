@@ -137,7 +137,7 @@ export interface PracticeAnswerResultDto {
  *
  * R-14 三件套契约新增字段（Phase 0 冻结，Phase 1 填充真实值；过渡期可选以兼容旧测试 fixture）：
  * - 看：`videos`（本章内置视频）+ `requiredVideoSec`（=本章总时长×80%）。
- * - 学：`coursewarePageIds`=本章 PPT 全部页，`requiredPages`=页数（全部看完过线）。
+ * - 学：`coursewarePageIds`=本小节 KC `page_refs` 对应页，`requiredPages`=页数（全部看完过线）。
  * - 练：`questions`（选/判/填，`requiredQuestions` 道全对）+ `questionsCorrectIds`（已答对）
  *   + OJ：`exampleProblemIds` / `requiredExamples`（走训练场判题）。
  */
@@ -244,8 +244,7 @@ export async function postPageRead(stageId: number, pageId: number): Promise<Sta
 }
 
 /**
- * 批量上报课件页阅读（「学」打点，并集去重幂等）。内置 PPT 整章页数多（最多 116 页），
- * 逐页打点不现实；阅读器读到末页 / 翻页时按批上报已看过的 pageIds（Phase 1 P3 实现端点）。
+ * 批量上报本小节 KC 关联课件页（「学」打点，并集去重幂等；后端会过滤越界 pageIds）。
  */
 export async function postPagesRead(
   stageId: number,

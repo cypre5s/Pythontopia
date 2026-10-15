@@ -10,7 +10,7 @@ import java.util.List;
  *
  * <ul>
  *   <li><b>看</b>：{@code videos} = 本章全部内置课程视频；{@code requiredVideoSec} = 本章总时长 × 80%。
- *   <li><b>学</b>：{@code coursewarePageIds} = 本章 PPT 全部页；{@code requiredPages} = 页数（全部看完过线）。
+ *   <li><b>学</b>：{@code coursewarePageIds} = 本小节 KC {@code page_refs} 对应页；{@code requiredPages} = 页数。
  *   <li><b>练</b>：{@code questions} = 本小节客观题（选/判/填，{@code requiredQuestions} 道全对）+
  *       {@code exampleProblemIds} OJ 编程题（{@code requiredExamples} 道走训练场判题）。
  * </ul>

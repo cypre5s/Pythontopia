@@ -503,6 +503,26 @@ test.describe('公网验收 · 主城 town_hub @world', () => {
 // ===========================================================================
 
 test.describe('公网验收 · 主线地图 @mainline', () => {
+  test('键盘焦点进入章节选择时列表应可见', async ({ page, request }, testInfo) => {
+    test.skip(!ACCOUNT_AVAILABLE, SKIP_REASON_NO_ACCOUNT);
+    await preparePage(page, request, testInfo.workerIndex);
+    await page.goto(u('/mainline-map'), { waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('mainline-map-page')).toBeVisible({ timeout: 60_000 });
+
+    const chapterList = page.locator('.map-nodes-a11y');
+    const firstChapter = page.getByTestId('mainline-node-btn-1');
+    await page.getByTestId('mainline-back').focus();
+    await page.keyboard.press('Tab');
+
+    await expect(firstChapter).toBeFocused();
+    await expect(chapterList).toHaveCSS('position', 'fixed');
+    await expect(chapterList).toBeInViewport();
+    await expect(firstChapter).toBeVisible();
+    await expect(firstChapter).toHaveCSS('outline-style', 'solid');
+    await page.keyboard.press('Enter');
+    await expect(page.getByTestId('mainline-chapter-title')).toContainText('第 1 章');
+  });
+
   test('右侧进入学习不穿透到底层章节节点', async ({ page, request }, testInfo) => {
     test.skip(!ACCOUNT_AVAILABLE, SKIP_REASON_NO_ACCOUNT);
     await preparePage(page, request, testInfo.workerIndex);

@@ -27,6 +27,19 @@ public class LearningEventListener {
   }
 
   @EventListener
+  public void onChapterAssessmentScored(LearningEvent.ChapterAssessmentScored event) {
+    masteryEvaluator.applyEvent(
+        event.userId(),
+        event.kcCode(),
+        event.passed() ? MasterySource.MICRO_CHECK_PASS : MasterySource.MICRO_CHECK_FAIL,
+        null,
+        "chapter_assessment:" + event.assessmentKind() + ":" + event.chapter() + ":"
+            + event.assessmentId()
+            + " coding=" + event.correctCodingQuestions() + "/" + event.codingQuestionCount(),
+        event.idempotencyKey());
+  }
+
+  @EventListener
   public void onResourceCheckCompleted(LearningEvent.ResourceCheckCompleted event) {
     BigDecimal delta = event.delta();
     if (delta == null || delta.compareTo(BigDecimal.ZERO) == 0) {
@@ -71,13 +84,13 @@ public class LearningEventListener {
 
   @EventListener
   public void onDebugResolved(LearningEvent.DebugResolved event) {
-    masteryEvaluator.applyEventWithDifficulty(
+    masteryEvaluator.applyEvent(
         event.userId(),
         event.kcCode(),
         MasterySource.DEBUG_FIX,
         null,
         "debug:" + event.problemId(),
-        null);
+        event.idempotencyKey());
   }
 
   @EventListener

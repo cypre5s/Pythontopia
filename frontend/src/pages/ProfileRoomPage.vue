@@ -55,6 +55,7 @@ function destination(step: LearnerTwinNextStep) {
   if (progress?.reviewDue) {
     return { path: '/bug-mine', query: { review: step.kcCode } };
   }
+  if (!progress?.assessed) return { path: '/mainline-map' };
   return { path: '/expedition', query: { focus: String(step.chapter), kcCode: step.kcCode } };
 }
 
@@ -71,6 +72,7 @@ function goToAlternative(): void {
 function actionLabel(step: LearnerTwinNextStep): string {
   const progress = state.value?.kcs.find((kc) => kc.kcCode === step.kcCode);
   if (progress?.reviewDue) return '进入到期复习';
+  if (!progress?.assessed) return '前往主线学习';
   if (step.action === 'REMEDIATION') return '前往补强练习';
   if (step.action === 'REVIEW') return '巩固先修知识';
   return '前往无尽远征';

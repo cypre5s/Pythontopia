@@ -245,6 +245,39 @@ def test_python_api_from_kc_summary_can_ground_reference_solution() -> None:
     assert verdict.passed, verdict.issues
 
 
+def test_kc010_accepts_executable_variable_and_arithmetic_use_without_outputting_topic_name() -> None:
+    kc_name = "变量与运算符"
+    kc_summary = "变量赋值与算术运算符。"
+    problem = _problem(
+        2,
+        "PY43-KC-010",
+        "本题练习变量与运算符：读取两个整数并使用算术运算符求和。",
+        "left = int(input())\nright = int(input())\ntotal = left + right\nprint(total)",
+    )
+
+    keywords = extract_kc_grounding_keywords(kc_name, kc_summary)
+    verdict = verify_kc_grounding(problem, kc_keywords={"PY43-KC-010": keywords})
+
+    assert verdict.passed, verdict.issues
+
+
+def test_kc010_rejects_a_solution_that_does_not_apply_an_operator() -> None:
+    kc_name = "变量与运算符"
+    kc_summary = "变量赋值与算术运算符。"
+    problem = _problem(
+        2,
+        "PY43-KC-010",
+        "本题练习变量与运算符：读取一个整数并输出。",
+        "topic = '变量与运算符'\nprint(topic)",
+    )
+
+    keywords = extract_kc_grounding_keywords(kc_name, kc_summary)
+    verdict = verify_kc_grounding(problem, kc_keywords={"PY43-KC-010": keywords})
+
+    assert not verdict.passed
+    assert any(issue.code == "kc_solution_miss" for issue in verdict.issues)
+
+
 def test_no_keywords_provided_emits_warning_only() -> None:
     """空 kc_keywords + 默认无法识别 kc 时，仅 warning，不阻断（除非有其它 error）。"""
 

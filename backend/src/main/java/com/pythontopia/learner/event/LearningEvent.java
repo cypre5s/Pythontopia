@@ -21,7 +21,8 @@ public sealed interface LearningEvent
         LearningEvent.TaughtAiSucceeded,
         LearningEvent.TaughtAiFailed,
         LearningEvent.GuideActionClicked,
-        LearningEvent.GuideCheckpointCompleted {
+        LearningEvent.GuideCheckpointCompleted,
+        LearningEvent.ChapterAssessmentScored {
 
   Long userId();
 
@@ -119,7 +120,8 @@ public sealed interface LearningEvent
     }
   }
 
-  record DebugResolved(Long userId, String kcCode, Long problemId) implements LearningEvent {}
+  record DebugResolved(Long userId, String kcCode, Long problemId, String idempotencyKey)
+      implements LearningEvent {}
 
   /**
    * 学生消费了学习内容（章节视频 / 课件 / AI 动画 / 知识点图解）。{@code mediaType} 形如 {@code video} / {@code courseware} /
@@ -155,4 +157,25 @@ public sealed interface LearningEvent
 
   record GuideCheckpointCompleted(Long userId, Long problemId, String kcCode, String cardKey)
       implements LearningEvent {}
+
+  /** Trusted coding outcomes from one submitted chapter assessment, aggregated once per KC. */
+  record ChapterAssessmentScored(
+      Long userId,
+      Long assessmentId,
+      int chapter,
+      String assessmentKind,
+      String kcCode,
+      int correctCodingQuestions,
+      int codingQuestionCount)
+      implements LearningEvent {
+
+    public boolean passed() {
+      return codingQuestionCount > 0 && correctCodingQuestions == codingQuestionCount;
+    }
+
+    public String idempotencyKey() {
+      return "chapter-assessment:" + assessmentKind.toLowerCase(java.util.Locale.ROOT)
+          + ":" + chapter + ":" + assessmentId + ":" + kcCode;
+    }
+  }
 }

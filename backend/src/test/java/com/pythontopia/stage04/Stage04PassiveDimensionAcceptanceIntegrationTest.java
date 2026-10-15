@@ -168,7 +168,9 @@ class Stage04PassiveDimensionAcceptanceIntegrationTest {
   void debugResolvedReducesErrorPatternScore() throws Exception {
     Long userId = insertUserWithProfile("dim-stu-03");
 
-    publisher.publishEvent(new LearningEvent.DebugResolved(userId, "PY43-KC-003", 103L));
+    publisher.publishEvent(
+        new LearningEvent.DebugResolved(
+            userId, "PY43-KC-003", 103L, "integration-debug:" + userId));
 
     JsonNode dimensions = readDimensions(userId);
     assertThat(dimensions.path("error_pattern").path("score").asDouble())

@@ -58,6 +58,30 @@ class MemoryStreamMirrorTest {
 
   @Test
   @SuppressWarnings("unchecked")
+  void chapterAssessmentOutcomeMirrorsItsVerifiedCodingEvidence() {
+    mirror.onChapterAssessmentScored(
+        new LearningEvent.ChapterAssessmentScored(
+            7L, 100L, 1, "FINAL", "PY43-KC-003", 1, 2));
+
+    ArgumentCaptor<Map<String, Object>> payloadCaptor = ArgumentCaptor.forClass(Map.class);
+    verify(repository)
+        .insert(
+            eq(7L),
+            eq("chapter_assessment_failed"),
+            payloadCaptor.capture(),
+            eq("backend"),
+            eq(4));
+    assertThat(payloadCaptor.getValue())
+        .containsEntry("assessmentId", 100L)
+        .containsEntry("chapter", 1)
+        .containsEntry("assessmentKind", "FINAL")
+        .containsEntry("kcCode", "PY43-KC-003")
+        .containsEntry("correctCodingQuestions", 1)
+        .containsEntry("codingQuestionCount", 2);
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
   void resourceCheckCompletedMirrorsPassAndFailWithEvidencePayload() {
     mirror.onResourceCheckCompleted(
         new LearningEvent.ResourceCheckCompleted(

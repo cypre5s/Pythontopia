@@ -84,6 +84,8 @@ pythontopia:
     confidenceLossPerDecay: 0.02
     deltas:
       RESOURCE_READ: 0.10
+      MICRO_CHECK_PASS: 0.08
+      MICRO_CHECK_FAIL: -0.02
       PRACTICE_PASS: 0.20
       PRACTICE_FAIL: -0.05
       DEBUG_FIX: 0.15

@@ -390,7 +390,7 @@ public class BugMineService {
                 session.questId(),
                 SubmissionSource.BUG_MINE_RETRY));
     if (submission.status() == SubmissionStatus.PASSED) {
-      resolveSession(userId, session.id(), session.problemId(), false);
+      resolveSession(userId, session.id(), session.problemId(), submission.id(), false);
     } else {
       repository.advanceDepthLayer(session.id());
     }
@@ -425,7 +425,7 @@ public class BugMineService {
     repository.updateVariantSubmission(session.id(), submission.id());
     if (submission.status() == SubmissionStatus.PASSED) {
       repository.markMasteryConfirmed(session.id());
-      resolveSession(userId, session.id(), session.variantProblem().id(), true);
+      resolveSession(userId, session.id(), session.variantProblem().id(), submission.id(), true);
     }
     return submission;
   }
@@ -462,7 +462,8 @@ public class BugMineService {
                         HttpStatus.INTERNAL_SERVER_ERROR, "BUG_MINE_CLOSE_FAILED", "关闭会话失败")));
   }
 
-  private void resolveSession(Long userId, Long sessionId, Long problemId, boolean masteryConfirmed) {
+  private void resolveSession(
+      Long userId, Long sessionId, Long problemId, Long submissionId, boolean masteryConfirmed) {
     if (repository.updateStatus(sessionId, BugMineSessionStatus.RESOLVED) == 0) {
       // 会话已是终态（并发请求先一步关闭）：不重复发 DebugResolved 事件。
       log.warn("Bug mine session {} already in terminal state; skipping DebugResolved", sessionId);
@@ -474,7 +475,8 @@ public class BugMineService {
     String kcCode = problemRepository.findKcCode(problemId);
     if (kcCode != null && !kcCode.isBlank()) {
       eventPublisher.publishEvent(
-          new LearningEvent.DebugResolved(userId, kcCode, problemId));
+          new LearningEvent.DebugResolved(
+              userId, kcCode, problemId, "submission:" + submissionId));
     }
   }
 

@@ -157,6 +157,7 @@ describe('/teacher 教师路由与角色边界', () => {
     for (const path of ['/teacher', '/teacher/classroom/9', '/teacher/review']) {
       expect(router.resolve(path).meta.teacherOnly).toBe(true);
     }
+    expect(router.resolve('/teacher/review').meta.hideCompanion).toBe(true);
   });
 
   it('redirects a signed-in student away from a teacher classroom URL', async () => {

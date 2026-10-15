@@ -3,6 +3,7 @@ package com.pythontopia.world.boss.review;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
+import com.pythontopia.world.boss.dto.BossProblemReferenceDto;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
@@ -18,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class BossProblemReviewRepository {
 
   private static final long PACK_ID = 43L;
+  private static final int MAX_SIMILARITY_CANDIDATES = 50;
   private static final String SELECT_REVIEW =
       "SELECT r.id, r.pack_id, r.source_problem_id, r.kind, r.payload::text AS payload,"
           + " r.decision, r.review_source, r.requester_id, requester.username AS requester_username,"
@@ -41,6 +43,39 @@ public class BossProblemReviewRepository {
   public BossProblemReviewRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
     this.jdbcTemplate = jdbcTemplate;
     this.objectMapper = objectMapper;
+  }
+
+  /**
+   * Return course-bank and reviewed statements for Graph's same-KC near-duplicate check.
+   *
+   * <p>shortcut: only the 50 latest AI review statements are screened; if misses rise with bank
+   * size, replace this bounded projection with indexed corpus retrieval.
+   */
+  public List<BossProblemReferenceDto> findRecentSimilarityCandidates(String kcCode) {
+    return jdbcTemplate.query(
+        "WITH candidates AS ("
+            + " SELECT 'course:' || p.id::text AS problem_id,"
+            + " left(p.statement_markdown, 2000) AS statement, p.create_time AS created_at, 0 AS source_order"
+            + " FROM course_problem p"
+            + " WHERE p.pack_id = ? AND p.kc_code = ?"
+            + " AND nullif(btrim(p.reference_solution_code), '') IS NOT NULL"
+            + " AND nullif(btrim(p.statement_markdown), '') IS NOT NULL"
+            + " UNION ALL"
+            + " SELECT r.source_problem_id AS problem_id,"
+            + " left(r.payload->>'statement', 2000) AS statement, r.requested_at AS created_at, 1 AS source_order"
+            + " FROM boss_problem_review r"
+            + " WHERE r.pack_id = ? AND r.kc_code = ?"
+            + " AND nullif(btrim(r.payload->>'statement'), '') IS NOT NULL"
+            + ") SELECT problem_id, statement FROM candidates"
+            + " ORDER BY source_order, created_at DESC NULLS LAST, problem_id LIMIT ?",
+        (rs, rowNum) ->
+            new BossProblemReferenceDto(
+                rs.getString("problem_id"), rs.getString("statement")),
+        PACK_ID,
+        kcCode,
+        PACK_ID,
+        kcCode,
+        MAX_SIMILARITY_CANDIDATES);
   }
 
   public BossProblemReviewRecord create(

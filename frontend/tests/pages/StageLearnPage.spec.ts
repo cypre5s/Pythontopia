@@ -148,6 +148,24 @@ describe('StageLearnPage（小节学习页 · 三件套编排）', () => {
     wrapper.unmount();
   });
 
+  it('主线小节未关联编程题时保留 KC 并提供 AI 练习入口', async () => {
+    vi.mocked(getStageDetail).mockResolvedValue(
+      makeStageDetail({
+        chapter: 2,
+        kcCodes: ['PY43-KC-010', 'PY43-KC-011'],
+        examples: [],
+        exampleProblemIds: [],
+        requiredExamples: 0,
+      }),
+    );
+    const { wrapper } = await mountAt(7);
+    await wrapper.find('[data-testid="stage-toc-practice"]').trigger('click');
+
+    expect(wrapper.find('[data-testid="stage-missing-oj-practice-PY43-KC-010"]').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="stage-missing-oj-practice-PY43-KC-011"]').exists()).toBe(true);
+    wrapper.unmount();
+  });
+
   it('每章最后小节完成视频与 PPT 后开放章节小测', async () => {
     vi.mocked(getStageDetail).mockResolvedValue(
       makeStageDetail({
@@ -198,9 +216,7 @@ describe('StageLearnPage（小节学习页 · 三件套编排）', () => {
     wrapper.unmount();
   });
 
-  it('本节无关联课件页（requiredPages=0）时「学」判为已过线，章节小测可进入', async () => {
-    // V156 seed：courseware_page_ids 默认 '{}'、required_pages 默认 0。
-    // 后端 StageCompletion 对空课件判「已过线」，前端必须一致，否则小测按钮永久锁死。
+  it('课件映射缺失时 fail closed，不开放章节小测', async () => {
     vi.mocked(getStageDetail).mockResolvedValue(
       makeStageDetail({
         chapter: 2,
@@ -213,15 +229,15 @@ describe('StageLearnPage（小节学习页 · 三件套编排）', () => {
     );
     const { wrapper } = await mountAt(7);
 
-    expect(wrapper.find('[data-testid="summary-courseware-val"]').text()).toBe('无需阅读');
-    expect(wrapper.find('[data-testid="stage-toc-courseware"]').classes()).toContain(
+    expect(wrapper.find('[data-testid="summary-courseware-val"]').text()).toBe('课件未关联');
+    expect(wrapper.find('[data-testid="stage-toc-courseware"]').classes()).not.toContain(
       'stage-learn__toc-item--done',
     );
 
     await wrapper.find('[data-testid="stage-toc-practice"]').trigger('click');
     const button = wrapper.find('[data-testid="stage-chapter-quiz"]');
-    expect(button.attributes('disabled')).toBeUndefined();
-    expect(button.text()).toContain('进入章节小测');
+    expect(button.attributes('disabled')).toBeDefined();
+    expect(button.text()).toContain('完成视频与 PPT 后解锁');
 
     wrapper.unmount();
   });

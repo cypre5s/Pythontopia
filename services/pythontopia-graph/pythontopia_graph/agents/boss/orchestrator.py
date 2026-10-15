@@ -170,7 +170,8 @@ async def generate_boss_problem(
         )
         fallback_review = run_all_reviews(
             golden_fallback,
-            existing_problems=existing_problems,
+            # Golden content is trusted; do not reject it as a duplicate of its stored copy.
+            existing_problems=None,
             kc_keywords=kc_keywords,
             skip_self_test=skip_self_test,
         )

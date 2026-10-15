@@ -19,7 +19,7 @@ class DifficultyFeatures:
 
     def score(self) -> float:
         return (
-            self.statement_len / 100.0
+            self.statement_len / 1000.0
             + self.solution_lines * 0.3
             + self.ast_depth * 0.5
             + self.loop_count * 1.0

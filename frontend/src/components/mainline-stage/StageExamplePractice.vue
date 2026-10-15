@@ -1,6 +1,6 @@
 <script setup lang="ts">
 /**
- * StageExamplePractice —— 主线小章节「练」：站内客观题 inline 答题 + OJ 跳训练场。
+ * StageExamplePractice —— 主线小章节「练」：站内客观题、课程 OJ 与 AI 补充编程题。
  *
  * 两个达标维度：
  * - 客观题区：渲染 `questions`（选/判/填，按 ordinal），逐题在 `PracticeQuestionCard` 内
@@ -15,12 +15,18 @@ import { computed, ref } from 'vue';
 import { useRouter } from 'vue-router';
 import { postExampleDone } from '@/api/mainline';
 import type { StageExampleDto, StagePracticeQuestionDto } from '@/api/mainline';
+import type { BossAttemptResultDto, BossProblemDto } from '@/api/dto/Boss';
+import type { ChallengeResult } from '@/api/dto/CodeChallenge';
+import { useChallengeJudge } from '@/composables/useChallengeJudge';
+import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import type { StageTaskProgress } from './stageTypes';
+import ChallengeWorkspace from '@/components/challenge/ChallengeWorkspace.vue';
 import PracticeQuestionCard from './practice/PracticeQuestionCard.vue';
 
 const props = defineProps<{
   stageId: number;
+  kcCodes: string[];
   questions: StagePracticeQuestionDto[];
   requiredQuestions: number;
   correctQuestionIds: number[];
@@ -32,20 +38,24 @@ const props = defineProps<{
 const emit = defineEmits<{ (e: 'progress', p: StageTaskProgress): void }>();
 
 const router = useRouter();
+const challenge = useChallengeJudge();
+const learning = useLearningStore();
 const toast = useToastStore();
-const correctSet = ref<Set<number>>(new Set(props.correctQuestionIds));
-const doneSet = ref<Set<number>>(new Set(props.doneProblemIds));
-const pending = ref<Set<number>>(new Set());
+const correctQuestionIdSet = ref<Set<number>>(new Set(props.correctQuestionIds));
+const completedProblemIdSet = ref<Set<number>>(new Set(props.doneProblemIds));
+const pendingProblemIds = ref<Set<number>>(new Set());
 
 // ——— 客观题维度 ———
 const sortedQuestions = computed<StagePracticeQuestionDto[]>(() =>
-  [...props.questions].sort((a, b) => a.ordinal - b.ordinal),
+  [...props.questions].sort(
+    (leftQuestion, rightQuestion) => leftQuestion.ordinal - rightQuestion.ordinal,
+  ),
 );
 const quizRequired = computed<number>(() =>
   props.requiredQuestions > 0 ? props.requiredQuestions : props.questions.length,
 );
 const quizCorrect = computed<number>(
-  () => props.questions.filter((q) => correctSet.value.has(q.id)).length,
+  () => props.questions.filter((question) => correctQuestionIdSet.value.has(question.id)).length,
 );
 const quizPassed = computed<boolean>(() => quizCorrect.value >= quizRequired.value);
 
@@ -53,8 +63,23 @@ const quizPassed = computed<boolean>(() => quizCorrect.value >= quizRequired.val
 const ojRequired = computed<number>(() =>
   props.requiredExamples > 0 ? props.requiredExamples : props.examples.length,
 );
-const ojDone = computed<number>(() => props.examples.filter((e) => doneSet.value.has(e.id)).length);
+const ojDone = computed<number>(
+  () => props.examples.filter((example) => completedProblemIdSet.value.has(example.id)).length,
+);
 const ojPassed = computed<boolean>(() => ojDone.value >= ojRequired.value);
+const missingExampleKcCodes = computed<string[]>(() =>
+  [...new Set(props.kcCodes)].filter(
+    (kcCode) => !props.examples.some((example) => example.kcCode === kcCode),
+  ),
+);
+const generatingAiKcCode = ref<string | null>(null);
+const judgingAiPractice = ref(false);
+const aiPracticeProblem = ref<BossProblemDto | null>(null);
+const aiPracticeKcCode = ref<string | null>(null);
+const aiPracticeCode = ref('');
+const aiPracticeStartedAt = ref(0);
+const aiPracticeResult = ref<ChallengeResult | null>(null);
+const aiPracticeError = ref<string | null>(null);
 
 // 两维都达标且至少有一项要求 → 「练」过线（空练习卡不误判过线）。
 const passed = computed<boolean>(
@@ -62,32 +87,92 @@ const passed = computed<boolean>(
 );
 
 function isQuestionDone(questionId: number): boolean {
-  return correctSet.value.has(questionId);
+  return correctQuestionIdSet.value.has(questionId);
 }
 
 function isExampleDone(problemId: number): boolean {
-  return doneSet.value.has(problemId);
+  return completedProblemIdSet.value.has(problemId);
 }
 
 function trainingHref(problemId: number): string {
   return router.resolve({ path: '/training', query: { problemId: String(problemId) } }).href;
 }
 
-/** 子卡答对回流：计入 correctSet 并向上 emit 客观题维度进度。 */
+async function generateAiPractice(kcCode: string): Promise<void> {
+  if (generatingAiKcCode.value !== null) return;
+  generatingAiKcCode.value = kcCode;
+  aiPracticeKcCode.value = kcCode;
+  aiPracticeProblem.value = null;
+  aiPracticeResult.value = null;
+  aiPracticeError.value = null;
+  try {
+    const problem = await challenge.fetchProblem({ kc: kcCode, kind: null, difficulty: 1 });
+    if (problem.kcCode !== kcCode) {
+      throw new Error('返回题目的知识点与当前选择不一致');
+    }
+    aiPracticeProblem.value = problem;
+    aiPracticeCode.value = problem.starterCode ?? '';
+    aiPracticeStartedAt.value = Date.now();
+  } catch {
+    aiPracticeError.value = 'AI 编程练习暂不可用，请稍后重试。';
+  } finally {
+    generatingAiKcCode.value = null;
+  }
+}
+
+function onAiPracticeCodeChange(code: string): void {
+  aiPracticeCode.value = code;
+  aiPracticeResult.value = null;
+}
+
+async function submitAiPractice(): Promise<void> {
+  const problem = aiPracticeProblem.value;
+  if (!problem || judgingAiPractice.value) return;
+  judgingAiPractice.value = true;
+  aiPracticeError.value = null;
+  try {
+    const attempt: BossAttemptResultDto = await challenge.judge(
+      problem,
+      aiPracticeCode.value,
+      Math.max(0, Math.floor((Date.now() - aiPracticeStartedAt.value) / 1000)),
+    );
+    aiPracticeResult.value = {
+      passed: attempt.passed,
+      passedCases: attempt.passedTestCases,
+      totalCases: attempt.totalTestCases,
+      feedback: attempt.feedback,
+      ...(attempt.failureFirstHint ? { firstHint: attempt.failureFirstHint } : {}),
+    };
+    try {
+      await learning.refreshAfterEvent(problem.kcCode);
+    } catch {
+      // A refresh failure must not hide a server-judged result.
+    }
+  } catch {
+    aiPracticeError.value = '服务端判题暂不可用，答案未判定，请重试。';
+  } finally {
+    judgingAiPractice.value = false;
+  }
+}
+
+/** 子卡答对回流：计入正确题号集合并向上 emit 客观题维度进度。 */
 function onQuestionCorrect(questionId: number): void {
-  if (correctSet.value.has(questionId)) return;
-  correctSet.value = new Set(correctSet.value).add(questionId);
-  emit('progress', { stageId: props.stageId, correctQuestionIds: [...correctSet.value] });
+  if (correctQuestionIdSet.value.has(questionId)) return;
+  correctQuestionIdSet.value = new Set(correctQuestionIdSet.value).add(questionId);
+  emit('progress', {
+    stageId: props.stageId,
+    correctQuestionIds: [...correctQuestionIdSet.value],
+  });
 }
 
 async function markExampleDone(problemId: number): Promise<void> {
-  if (doneSet.value.has(problemId) || pending.value.has(problemId)) return;
-  pending.value = new Set(pending.value).add(problemId);
+  if (completedProblemIdSet.value.has(problemId) || pendingProblemIds.value.has(problemId)) return;
+  pendingProblemIds.value = new Set(pendingProblemIds.value).add(problemId);
   try {
     // 只 await 成功；用已知 problemId 乐观更新（不读返回体，规避 DTO 形状差异）。
     await postExampleDone(props.stageId, problemId);
-    doneSet.value = new Set(doneSet.value).add(problemId);
-    emit('progress', { stageId: props.stageId, doneProblemIds: [...doneSet.value] });
+    completedProblemIdSet.value = new Set(completedProblemIdSet.value).add(problemId);
+    emit('progress', { stageId: props.stageId, doneProblemIds: [...completedProblemIdSet.value] });
   } catch (error) {
     // R2 evidence 收紧后，无通过提交的「标记完成」会被 400 拒绝——把原因说给学生听，
     // 引导先去训练场判题通过（其余错误也提示，可重试，服务端幂等）。
@@ -97,9 +182,9 @@ async function markExampleDone(problemId: number): Promise<void> {
         : '标记失败，请稍后重试';
     toast.show(message, 'error');
   } finally {
-    const next = new Set(pending.value);
-    next.delete(problemId);
-    pending.value = next;
+    const nextPendingProblemIds = new Set(pendingProblemIds.value);
+    nextPendingProblemIds.delete(problemId);
+    pendingProblemIds.value = nextPendingProblemIds;
   }
 }
 </script>
@@ -146,12 +231,12 @@ async function markExampleDone(problemId: number): Promise<void> {
         class="stage-practice__quiz"
       >
         <PracticeQuestionCard
-          v-for="(q, idx) in sortedQuestions"
-          :key="q.id"
+          v-for="(question, questionIndex) in sortedQuestions"
+          :key="question.id"
           :stage-id="stageId"
-          :question="q"
-          :index="idx + 1"
-          :done="isQuestionDone(q.id)"
+          :question="question"
+          :index="questionIndex + 1"
+          :done="isQuestionDone(question.id)"
           @correct="onQuestionCorrect"
         />
       </div>
@@ -177,39 +262,39 @@ async function markExampleDone(problemId: number): Promise<void> {
         class="stage-practice__list"
       >
         <li
-          v-for="ex in examples"
-          :key="ex.id"
+          v-for="example in examples"
+          :key="example.id"
           class="stage-practice__item"
-          :class="{ 'stage-practice__item--done': isExampleDone(ex.id) }"
+          :class="{ 'stage-practice__item--done': isExampleDone(example.id) }"
         >
           <span class="stage-practice__name">
             <span
               class="stage-practice__check"
               aria-hidden="true"
-            >{{ isExampleDone(ex.id) ? '✓' : '○' }}</span>
+            >{{ isExampleDone(example.id) ? '✓' : '○' }}</span>
             <span class="stage-practice__label">
-              <span class="stage-practice__no">{{ ex.displayNo }}</span>
-              {{ ex.displayName }}
+              <span class="stage-practice__no">{{ example.displayNo }}</span>
+              {{ example.displayName }}
               <span
-                v-if="ex.kcCode"
+                v-if="example.kcCode"
                 class="stage-practice__kc"
-              >{{ ex.kcCode }}</span>
+              >{{ example.kcCode }}</span>
             </span>
           </span>
           <span class="stage-practice__actions">
             <a
               class="stage-practice__open"
-              :data-testid="`ex-train-${ex.id}`"
-              :href="trainingHref(ex.id)"
+              :data-testid="`ex-train-${example.id}`"
+              :href="trainingHref(example.id)"
               target="_blank"
               rel="noopener noreferrer"
             >去训练场 →</a>
             <button
               type="button"
               class="stage-practice__mark"
-              :data-testid="`ex-mark-${ex.id}`"
-              :disabled="isExampleDone(ex.id)"
-              @click="markExampleDone(ex.id)"
+              :data-testid="`ex-mark-${example.id}`"
+              :disabled="isExampleDone(example.id)"
+              @click="markExampleDone(example.id)"
             >标记完成</button>
           </span>
         </li>
@@ -221,6 +306,73 @@ async function markExampleDone(problemId: number): Promise<void> {
       >
         本小节暂无编程题。
       </p>
+      <template v-if="missingExampleKcCodes.length > 0">
+        <p class="stage-practice__empty">
+          以下知识点暂无主线编程题，可申请 AI 补充练习；题目通过现有质量审查后，才会提供给学生并进入共享题库：
+        </p>
+        <ul class="stage-practice__list">
+          <li
+            v-for="kcCode in missingExampleKcCodes"
+            :key="kcCode"
+            class="stage-practice__item"
+          >
+            <span class="stage-practice__name">{{ kcCode }}</span>
+            <button
+              type="button"
+              class="stage-practice__mark"
+              :data-testid="`stage-missing-oj-practice-${kcCode}`"
+              :disabled="generatingAiKcCode !== null"
+              @click="generateAiPractice(kcCode)"
+            >
+              {{ generatingAiKcCode === kcCode ? '生成中…' : '生成 AI 编程练习 →' }}
+            </button>
+          </li>
+        </ul>
+        <p
+          v-if="aiPracticeError"
+          class="stage-practice__empty"
+          role="alert"
+          data-testid="stage-ai-practice-error"
+        >
+          {{ aiPracticeError }}
+        </p>
+        <div
+          v-if="aiPracticeProblem"
+          class="stage-practice__ai-workspace"
+          data-testid="stage-ai-practice-workspace"
+        >
+          <ChallengeWorkspace
+            :problem="aiPracticeProblem"
+            :kind="null"
+            :code="aiPracticeCode"
+            title="AI 编程补充练习"
+            :kc-code="aiPracticeKcCode"
+            :difficulty="aiPracticeProblem.difficulty"
+            :ai-generated="aiPracticeProblem.aiGenerated"
+            :result="aiPracticeResult"
+            @update:code="onAiPracticeCodeChange"
+          >
+            <template #actions>
+              <button
+                type="button"
+                class="stage-practice__mark"
+                data-testid="stage-ai-practice-submit"
+                :disabled="judgingAiPractice"
+                @click="submitAiPractice"
+              >
+                {{ judgingAiPractice ? '判题中…' : '提交并判题' }}
+              </button>
+            </template>
+          </ChallengeWorkspace>
+          <p
+            v-if="aiPracticeResult"
+            data-testid="stage-ai-practice-result"
+            role="status"
+          >
+            {{ aiPracticeResult.feedback }}
+          </p>
+        </div>
+      </template>
     </div>
   </section>
 </template>

@@ -209,7 +209,7 @@ export const router = createRouter({
       path: '/teacher/review',
       name: 'teacher-review',
       component: () => import('@/pages/teacher/TeacherReviewPage.vue'),
-      meta: { requiresAuth: true, teacherOnly: true },
+      meta: { requiresAuth: true, teacherOnly: true, hideCompanion: true },
     },
     // 章末 BOSS 副本（4 阶段 AI 出题）：本章通过章末大测试（≥1★）后开放的可选挑战。
     // 入口在冒险地图的章节抽屉（ChapterStagePanel「挑战第 N 章 BOSS」），

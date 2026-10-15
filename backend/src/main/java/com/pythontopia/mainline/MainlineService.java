@@ -5,7 +5,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.error.ResourceNotFoundException;
 import com.pythontopia.learner.event.LearningEvent;
-import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.coursepack.service.CourseVideoService;
 import com.pythontopia.mainline.domain.ChapterStar;
 import com.pythontopia.mainline.domain.MainlineStage;
@@ -51,12 +50,11 @@ import org.springframework.transaction.annotation.Transactional;
  * <ul>
  *   <li><b>看</b>：章级 {@code round(本章内置视频总时长 × 0.80)} ÷ 本章 stage 数（动态算，忽略
  *       {@code mainline_stage.required_video_sec} 占位列）。
- *   <li><b>学</b>：本章文档全部页（{@code documentId = 185 + chapter}）按 stage 均分切片，
- *       每小节只需读完<b>自己那片</b>；{@code pages_read} 打点也只接受本片内的 pageId。
+ *   <li><b>学</b>：每小节使用已校验的 KC {@code page_refs}；{@code pages_read} 打点只接受这些页。
  *   <li><b>练</b>：OJ 例题（同旧 {@code required_example_count}）+ 客观题全对（{@code MainlinePracticePort}）。
  * </ul>
  *
- * <p>overview 一次取齐 stage/进度/星级/章测状态内存拼装（§11.4 避免 N+1），章级视频时长 / 页数按章缓存；
+ * <p>overview 一次取齐 stage/进度/星级/章测状态内存拼装（§11.4 避免 N+1），章级视频时长按章缓存；
  * 实现 {@link MainlineStageCompletionPort} 供题库域（P2）答对客观题后回调重算完成。
  */
 @Service
@@ -66,19 +64,6 @@ public class MainlineService implements MainlineStageCompletionPort {
 
   /** 看：本章视频累计观看达「总时长 × 80%」即过线。 */
   private static final double VIDEO_PASS_RATIO = 0.80;
-
-  /** 课程底座 pack id（项目唯一课程《Python语言基础》）。 */
-  private static final long COURSE_PACK_ID = 43L;
-
-  /**
-   * 章 → 文档 id 的<b>回退</b>魔数映射：documentId = 185 + chapter（ch1=186 … ch7=192）。
-   * 正常路径按 pack 内 {@code sort_order} 顺位动态解析（R1：重灌库 id 漂移不再取错文档）；
-   * 仅当动态查询未命中（如空库启动早期）才回退此映射并告警。
-   */
-  private static final long COURSE_DOC_BASE = 185L;
-
-  /** 章 → 已解析文档 id 缓存（动态命中才缓存；回退魔数不缓存，便于 seed 完成后自愈）。 */
-  private final Map<Integer, Long> chapterDocumentIdCache = new java.util.concurrent.ConcurrentHashMap<>();
 
   private final MainlineStageRepository stageRepository;
   private final MainlineStageProgressRepository progressRepository;
@@ -90,7 +75,6 @@ public class MainlineService implements MainlineStageCompletionPort {
   private final PracticeSubmissionRepository submissionRepository;
   private final ObjectMapper objectMapper;
   private final CourseVideoService courseVideoService;
-  private final CoursePackRepository coursePackRepository;
   private final MainlineOjCatalogRepository ojCatalogRepository;
   private final Optional<MainlinePracticePort> practicePort;
   private final ApplicationEventPublisher eventPublisher;
@@ -106,7 +90,6 @@ public class MainlineService implements MainlineStageCompletionPort {
       PracticeSubmissionRepository submissionRepository,
       ObjectMapper objectMapper,
       CourseVideoService courseVideoService,
-      CoursePackRepository coursePackRepository,
       MainlineOjCatalogRepository ojCatalogRepository,
       Optional<MainlinePracticePort> practicePort,
       ApplicationEventPublisher eventPublisher) {
@@ -120,7 +103,6 @@ public class MainlineService implements MainlineStageCompletionPort {
     this.submissionRepository = submissionRepository;
     this.objectMapper = objectMapper;
     this.courseVideoService = courseVideoService;
-    this.coursePackRepository = coursePackRepository;
     this.ojCatalogRepository = ojCatalogRepository;
     this.practicePort = practicePort;
     this.eventPublisher = eventPublisher;
@@ -146,7 +128,6 @@ public class MainlineService implements MainlineStageCompletionPort {
 
     // 章级标准按章缓存，避免按 stage 重复读视频清单 / 文档页（§11.4 avoid N+1）。
     Map<Integer, Integer> requiredVideoSecByChapter = new HashMap<>();
-    Map<Integer, List<Long>> pageIdsByChapter = new HashMap<>();
 
     List<ChapterOverview> chapters = new ArrayList<>();
     int totalStars = 0;
@@ -167,11 +148,9 @@ public class MainlineService implements MainlineStageCompletionPort {
         MainlineStageProgress progress = progressByStage.get(raw.id());
         int requiredVideoSec =
             requiredVideoSecByChapter.computeIfAbsent(chapter, this::requiredVideoSec);
-        List<Long> chapterPageIds =
-            pageIdsByChapter.computeIfAbsent(chapter, this::chapterPageIds);
-        // 章级标准 → 本小节标准（视频秒数均分、课件页切片），避免把整章要求套在每个小节上。
+        // 视频秒数按小节数均分；课件页来自 stage 的 KC page_refs，不再均分整章页。
         MainlineStage stage =
-            withChapterStandards(raw, requiredVideoSec, chapterPageIds, chapterStages.size());
+            withChapterStandards(raw, requiredVideoSec, chapterStages.size());
         boolean questionsComplete = questionsComplete(userId, raw);
         stageViews.add(
             new StageOverview(
@@ -290,8 +269,8 @@ public class MainlineService implements MainlineStageCompletionPort {
   }
 
   /**
-   * 课件页阅读批量打点（并集去重，幂等）。<b>白名单过滤</b>：只接受本小节课件切片内的 pageId，
-   * 其余静默丢弃——否则把 stageDetail 回传的整章页 id 原样 POST 回来即可 0 秒过「学」。
+   * 课件页阅读批量打点（并集去重，幂等）。<b>白名单过滤</b>：只接受本小节 KC page_refs 中的 pageId，
+   * 其他课程页静默丢弃。
    */
   @Transactional
   public StageProgressDto reportPagesRead(long userId, long stageId, List<Long> pageIds) {
@@ -395,7 +374,7 @@ public class MainlineService implements MainlineStageCompletionPort {
     }
   }
 
-  // --- 章级动态标准（看 80% / 学 整章页 / 练 客观题） ----------------------------
+  // --- 章级视频标准与小节 KC 课件页 --------------------------------------------
 
   /** 本章视频累计过线秒数 = round(本章内置视频总时长 × 80%)（忽略 stage 占位列）。 */
   private int requiredVideoSec(int chapter) {
@@ -406,53 +385,21 @@ public class MainlineService implements MainlineStageCompletionPort {
     return (int) Math.round(totalSec * VIDEO_PASS_RATIO);
   }
 
-  /** 本章文档全部页 id：按 pack 内 sort_order 顺位动态解析文档，未命中回退魔数映射（R1）。 */
-  private List<Long> chapterPageIds(int chapter) {
-    return coursePackRepository.findPageIdsByDocument(chapterDocumentId(chapter));
-  }
-
-  /**
-   * 章 → 文档 id：第 N 章对应 pack 43 按 {@code sort_order, id} 排序的第 N 份文档。
-   * 动态命中缓存（重启清空）；未命中（空库/seed 未完成）回退 {@code 185 + chapter} 并告警，
-   * 且<b>不缓存</b>回退值——seed 完成后下次调用即自愈。
-   */
-  private long chapterDocumentId(int chapter) {
-    Long cached = chapterDocumentIdCache.get(chapter);
-    if (cached != null) {
-      return cached;
-    }
-    Optional<Long> resolved =
-        coursePackRepository.findDocumentIdByPackOrder(COURSE_PACK_ID, chapter);
-    if (resolved.isPresent()) {
-      chapterDocumentIdCache.put(chapter, resolved.get());
-      return resolved.get();
-    }
-    log.warn(
-        "course_document 按 pack={} 顺位 {} 未命中，回退魔数映射 documentId={}",
-        COURSE_PACK_ID,
-        chapter,
-        COURSE_DOC_BASE + chapter);
-    return COURSE_DOC_BASE + chapter;
-  }
-
-  /** 用动态章级标准覆盖 stage 的占位列（required_video_sec / courseware_page_ids / required_pages）。 */
+  /** 用动态章级视频标准覆盖 stage 的占位值，保留迁移校验过的 KC 课件页。 */
   private MainlineStage withChapterStandards(MainlineStage stage) {
     return withChapterStandards(
         stage,
         requiredVideoSec(stage.chapter()),
-        chapterPageIds(stage.chapter()),
         chapterStageCount(stage.chapter()));
   }
 
   /**
-   * 章级标准 → <b>小节级</b>标准：{@code required_video_sec} 取章级 80% 口径按 stage 数均分；
-   * {@code courseware_page_ids} 取整章页按 stage 均分后的本节切片；{@code required_pages} 置 0 以走
-   * 「覆盖全部 courseware_page_ids」判定（{@link StageCompletion}）。
+   * 章级视频 80% 要求按 stage 数均分；课件页来自课程包中该小节 KC 的 page_refs。
    *
-   * <p>计数器是每小节一份的，若把章级值原样塞进每个 stage，实际要求会被放大 stage 数倍。
+   * <p>课程页数组由迁移依据 {@code course_kc.page_refs} 回填，空数组时 {@link StageCompletion} 会 fail closed。
    */
   private MainlineStage withChapterStandards(
-      MainlineStage stage, int chapterVideoSec, List<Long> chapterPageIds, int chapterStageCount) {
+      MainlineStage stage, int chapterVideoSec, int chapterStageCount) {
     int stageCount = Math.max(1, chapterStageCount);
     return new MainlineStage(
         stage.id(),
@@ -461,7 +408,7 @@ public class MainlineService implements MainlineStageCompletionPort {
         stage.title(),
         stage.kcCodes(),
         stage.videoKeyword(),
-        pageSlice(chapterPageIds, stage.stageIndex(), stageCount),
+        stage.coursewarePageIds(),
         stage.exampleProblemIds(),
         chapterVideoSec / stageCount,
         0,
@@ -471,22 +418,6 @@ public class MainlineService implements MainlineStageCompletionPort {
   /** 本章 stage 数（seed 静态数据；用于把章级标准均摊到小节）。 */
   private int chapterStageCount(int chapter) {
     return stageRepository.findByChapter(chapter).size();
-  }
-
-  /**
-   * 整章课件页按 stage 均分的第 {@code stageIndex}（1 基）片：前 {@code size % stageCount} 片各多一页，
-   * 保证无遗漏无重叠。stage 数 ≤1 或无页时原样返回。
-   */
-  static List<Long> pageSlice(List<Long> chapterPageIds, int stageIndex, int stageCount) {
-    if (chapterPageIds.isEmpty() || stageCount <= 1) {
-      return chapterPageIds;
-    }
-    int index = Math.min(Math.max(stageIndex, 1), stageCount) - 1;
-    int base = chapterPageIds.size() / stageCount;
-    int remainder = chapterPageIds.size() % stageCount;
-    int from = index * base + Math.min(index, remainder);
-    int to = from + base + (index < remainder ? 1 : 0);
-    return List.copyOf(chapterPageIds.subList(from, to));
   }
 
   /** 该 pageId 是否属于本小节课件切片（切片为空=占位期，一律视为不可打点）。 */

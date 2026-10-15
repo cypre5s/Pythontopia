@@ -1,21 +1,18 @@
 <script setup lang="ts">
 /**
- * StageCoursewareReader —— 主线小章节「学」：站内内置 PPT（PDF）整章精读。
+ * StageCoursewareReader —— 主线小章节「学」：精读本节 KC 关联的课件页。
  *
  * R-14 改造（推翻旧「跳 /library 外链逐页标记」）：改为站内嵌入 pdfjs 阅读器
  * （复用 `@/components/library/PdfPageView`，pdfjs 动态对象隔离在 `@/lib/pdfjsLoader`），
- * 按【整章】展示本章 PPT（course_document id = 185 + chapter，即 docId）。
+ * 从本章 PDF 中按课程 page_id 读取对应原始页码，只展示本节 KC 引用的页面。
  *
- * 看完判定：整章页数可能很多（最多 116 页），逐页打点不现实 → 学生用「上一页 /
- * 下一页 / 末页」在章内翻阅；浏览到末页后启用「✅ 标记整章课件已读」按钮，点击
- * 一次性批量上报本章全部 pageIds（`postPagesRead`，后端并集去重幂等），本地置
- * 「已过线 ✓」并向上 emit 进度。过线 = 读满整章（readPageIds ∩ pageIds 数 ≥ requiredPages）。
+ * 浏览到末页后，学生可批量标记本节关联页已读；打点仍由后端校验 KC 页 ID 白名单。
  */
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import PdfPageView from '@/components/library/PdfPageView.vue';
 import StageContextTutor from './StageContextTutor.vue';
 import { postPagesRead } from '@/api/mainline';
-import { getDocumentPage } from '@/api/courseLibrary';
+import { getDocumentPage, listDocumentPages } from '@/api/courseLibrary';
 import type { StageTaskProgress } from './stageTypes';
 
 const props = withDefaults(
@@ -24,9 +21,9 @@ const props = withDefaults(
     chapter: number;
     /** course_document.id（= 185 + chapter）。 */
     docId: number;
-    /** 本章文档全部页 id（用于计数与批量打点）。 */
+    /** 本节 KC page_refs 对应的课程页 ID（用于计数与批量打点）。 */
     pageIds: number[];
-    /** 本章页数（全部看完过线）。 */
+    /** 本节要求阅读的课程页数。 */
     requiredPages: number;
     /** 已读页 id。 */
     readPageIds: number[];
@@ -43,29 +40,67 @@ const props = withDefaults(
 
 const emit = defineEmits<{ (e: 'progress', p: StageTaskProgress): void }>();
 
-/** 本章 PPT 总页数（= 关联 pageIds 数，与 PDF numPages 对齐，作章内翻页上界）。 */
+/** 本节关联的课程页数，也作为本节内翻页上界。 */
 const totalPages = computed<number>(() => props.pageIds.length);
+/** 当前浏览页在本节 KC 关联页列表中的位置（1-based）。 */
+const currentPage = ref<number>(1);
+/** 已浏览到的最大页号（到达末页才允许标记完成）。 */
+const maxVisited = ref<number>(1);
+/** 已读 page_id 集合（本地乐观维护：初始来自后端）。 */
+const readPageIdSet = ref<Set<number>>(new Set(props.readPageIds));
+const pageNumbersById = ref<Map<number, number>>(new Map());
+const pagesMapped = computed<boolean>(
+  () =>
+    props.pageIds.length > 0
+    && props.pageIds.every((pageId) => pageNumbersById.value.has(pageId)),
+);
+const pdfPageNo = computed<number>(
+  () => pageNumbersById.value.get(props.pageIds[currentPage.value - 1] ?? -1) ?? 1,
+);
 
-/** 已读 page_id 集合（本地乐观维护：初始来自后端，标记整章后并入全部 pageIds）。 */
-const readSet = ref<Set<number>>(new Set(props.readPageIds));
+let pageMapRequest = 0;
 
-/** 过线计数分母：本章页数（requiredPages 缺省 0 时退化为页数）。 */
+async function loadPageNumbers(): Promise<void> {
+  const requestId = ++pageMapRequest;
+  const documentId = props.docId;
+  pageNumbersById.value = new Map();
+  try {
+    const pages = await listDocumentPages(documentId);
+    if (props.docId !== documentId || requestId !== pageMapRequest) return;
+    pageNumbersById.value = new Map(pages.map((page) => [page.pageId, page.pageNo]));
+  } catch {
+    if (props.docId === documentId && requestId === pageMapRequest) {
+      pageNumbersById.value = new Map();
+    }
+  }
+}
+
+watch(
+  () => [props.stageId, props.docId, props.pageIds],
+  () => {
+    currentPage.value = 1;
+    maxVisited.value = 1;
+    readPageIdSet.value = new Set(props.readPageIds);
+    void loadPageNumbers();
+  },
+  { immediate: true },
+);
+
+/** 过线计数分母：本节关联页数（requiredPages 缺省 0 时退化为页数）。 */
 const requiredCount = computed<number>(() =>
   props.requiredPages > 0 ? props.requiredPages : totalPages.value,
 );
 
-/** 已读页数 = readSet 与本章 pageIds 的交集数（仅本章页计入）。 */
-const readCount = computed<number>(() => props.pageIds.filter((id) => readSet.value.has(id)).length);
-
-/** 过线：读满整章。 */
-const passed = computed<boolean>(
-  () => requiredCount.value > 0 && readCount.value >= requiredCount.value,
+/** 已读页数 = 已读页集合与本节 pageIds 的交集（仅本节页计入）。 */
+const readCount = computed<number>(
+  () => props.pageIds.filter((pageId) => readPageIdSet.value.has(pageId)).length,
 );
 
-/** 当前浏览页（1-based，章内页号，驱动 PdfPageView）。 */
-const currentPage = ref<number>(1);
-/** 已浏览到的最大页号（到达末页才允许标记完成）。 */
-const maxVisited = ref<number>(1);
+/** 过线：读满本节关联页。 */
+const passed = computed<boolean>(
+  () => pagesMapped.value && requiredCount.value > 0 && readCount.value >= requiredCount.value,
+);
+
 /** 是否已翻到/浏览到末页。 */
 const reachedEnd = computed<boolean>(
   () => totalPages.value > 0 && maxVisited.value >= totalPages.value,
@@ -95,17 +130,17 @@ function goLast(): void {
   goTo(totalPages.value);
 }
 
-/** 一次性上报本章全部 pageIds（并集去重幂等），本地置已过线并 emit 进度。 */
+/** 一次性上报本节全部 pageIds（并集去重幂等），本地置已过线并 emit 进度。 */
 async function markAllRead(): Promise<void> {
-  if (passed.value || marking.value || props.pageIds.length === 0) return;
+  if (passed.value || marking.value || !pagesMapped.value) return;
   if (!reachedEnd.value) return; // 防御：必须确实翻到末页再标记
   const allIds = Array.from(new Set(props.pageIds));
   marking.value = true;
   try {
     // 只 await 成功；用已知 pageIds 乐观更新（不读返回体，规避 DTO 形状差异）。
     await postPagesRead(props.stageId, allIds);
-    readSet.value = new Set([...readSet.value, ...allIds]);
-    emit('progress', { stageId: props.stageId, readPageIds: [...readSet.value] });
+    readPageIdSet.value = new Set([...readPageIdSet.value, ...allIds]);
+    emit('progress', { stageId: props.stageId, readPageIds: [...readPageIdSet.value] });
   } catch {
     // 打点失败静默：用户可再次点击重试（服务端幂等）。
   } finally {
@@ -146,13 +181,13 @@ const PAGE_CTX_MAX = 1600;
 
 async function currentPageContext(): Promise<string> {
   try {
-    const detail = await getDocumentPage(props.docId, currentPage.value);
+    const detail = await getDocumentPage(props.docId, pdfPageNo.value);
     const body = (detail?.contentMarkdown || detail?.excerpt || '').trim();
-    if (!body) return `（第 ${currentPage.value} 页课件，暂无可读文本）`;
-    const head = detail?.title ? `【第 ${currentPage.value} 页·${detail.title}】\n` : `【第 ${currentPage.value} 页课件】\n`;
+    if (!body) return `（第 ${pdfPageNo.value} 页课件，暂无可读文本）`;
+    const head = detail?.title ? `【第 ${pdfPageNo.value} 页·${detail.title}】\n` : `【第 ${pdfPageNo.value} 页课件】\n`;
     return (head + body).slice(0, PAGE_CTX_MAX);
   } catch {
-    return `（第 ${currentPage.value} 页课件）`;
+    return `（第 ${pdfPageNo.value} 页课件）`;
   }
 }
 </script>
@@ -169,7 +204,7 @@ async function currentPageContext(): Promise<string> {
           aria-hidden="true"
         >📖</span> 学 · 课件精读
       </h3>
-      <span class="stage-courseware__hint">逐页翻阅（支持键盘 ← →），浏览到末页后可标记整章已读</span>
+      <span class="stage-courseware__hint">逐页翻阅本节关联课件（支持键盘 ← →）</span>
       <span
         v-if="passed"
         class="stage-courseware__passed"
@@ -183,7 +218,7 @@ async function currentPageContext(): Promise<string> {
     </header>
 
     <div
-      v-if="pageIds.length > 0"
+      v-if="pagesMapped"
       class="stage-courseware__body"
     >
       <!-- 左：PDF 单屏自适应 + 紧凑翻页工具条（页面不再上下滚动） -->
@@ -194,7 +229,7 @@ async function currentPageContext(): Promise<string> {
         >
           <PdfPageView
             :doc-id="docId"
-            :page-no="currentPage"
+            :page-no="pdfPageNo"
             fit="contain"
           />
         </div>
@@ -213,6 +248,7 @@ async function currentPageContext(): Promise<string> {
             class="stage-courseware__pageno"
             data-testid="stage-courseware-pageno"
           >第 {{ currentPage }} / {{ totalPages }} 页</span>
+          <span class="stage-courseware__pageno">课件原页 {{ pdfPageNo }}</span>
           <button
             type="button"
             class="stage-courseware__navbtn"
@@ -246,16 +282,15 @@ async function currentPageContext(): Promise<string> {
             :disabled="!reachedEnd || marking"
             @click="markAllRead"
           >
-            {{ marking ? '标记中…' : '✅ 标记整章课件已读' }}
+            {{ marking ? '标记中…' : '✅ 标记本节课件已读' }}
           </button>
           <span
             v-else
             class="stage-courseware__done"
             data-testid="stage-courseware-done"
-          >本章课件已读完 ✓</span>
+          >本节课件已读完 ✓</span>
         </div>
       </div>
-
       <!-- 右：锚定当前页的「百晓助教」问答（基于这一页 PPT 内容作答） -->
       <StageContextTutor
         class="stage-courseware__tutor"
@@ -264,6 +299,15 @@ async function currentPageContext(): Promise<string> {
         :context-provider="currentPageContext"
       />
     </div>
+
+    <p
+      v-else-if="pageIds.length > 0"
+      class="stage-courseware__unavailable"
+      role="status"
+      data-testid="stage-courseware-map-error"
+    >
+      课程页与 PDF 页码未能对应，暂不能标记完成。
+    </p>
 
     <p
       v-else

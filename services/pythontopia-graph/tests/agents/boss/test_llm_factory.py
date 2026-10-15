@@ -66,6 +66,7 @@ async def test_factory_disables_reasoning_for_structured_problem_generation() ->
     )
 
     assert provider.last_kwargs["reasoning_effort"] == "none"
+    assert provider.last_kwargs["model_tier"] == "fast"
 
 
 @pytest.mark.asyncio
@@ -252,6 +253,38 @@ async def test_factory_uses_authoritative_kc_context_in_prompt() -> None:
     assert "不能让学生输入一个数值后原样回显来凑 KC" in user_prompt
     assert "摘要里的具体术语作为字符串常量实际输出" in user_prompt
     assert "不能仅设计把输入原样回显的题目" in user_prompt
+
+
+@pytest.mark.asyncio
+async def test_kc010_prompt_requires_variable_assignment_and_arithmetic_only() -> None:
+    provider = _StubProvider(LlmResponse(content_json=_good_payload()))
+
+    await build_llm_problem_factory(provider)(
+        chapter=2,
+        stage=1,
+        kc_code="PY43-KC-010",
+        difficulty=1,
+        preferred_kind="fill_blank",
+        kc_name="变量与运算符",
+        kc_summary="变量的概念与算术运算符。",
+    )
+
+    system_prompt = provider.last_messages[0]["content"]
+    user_prompt = provider.last_messages[-1]["content"]
+    assert "章 2 = 变量赋值/算术运算符/字符串/list/dict" in system_prompt
+    assert "fill_blank 仅放 Python 代码骨架并用 ___ 标记空位" in system_prompt
+    assert "样例输入输出放在 test_cases" in system_prompt
+    assert "参考程序必须使用变量赋值并执行至少一个算术运算" in user_prompt
+    assert "不要输出“变量与运算符”等知识点名称作为固定文本" in user_prompt
+    assert "优先使用两个小整数分别赋给变量，再用 + 求和" in user_prompt
+    assert "难度 1 也必须把两个小整数分别赋给变量，再用 + 求和并输出" in user_prompt
+    assert "难度参考：1=只需 1 行 print" not in user_prompt
+    assert "statement 必须是 Python 代码骨架" in user_prompt
+    assert "使用 ___ 标记至少一个空位" in user_prompt
+    assert "___BLANK___" not in user_prompt
+    assert "将“变量与运算符”写入代码骨架注释" in user_prompt
+    assert "题面应包含“变量与运算符”" in user_prompt
+    assert "摘要里的具体术语作为字符串常量实际输出" not in user_prompt
 
 
 @pytest.mark.asyncio

@@ -154,7 +154,10 @@ public class QuestService {
         if (request == null || request.submissionId() == null) {
           eventPublisher.publishEvent(
               new LearningEvent.DebugResolved(
-                  quest.userId(), quest.kcCode(), extractProblemId(quest)));
+                  quest.userId(),
+                  quest.kcCode(),
+                  extractProblemId(quest),
+                  "quest:" + quest.id()));
         }
       }
       case PLANT_KC, PROFILE_UPDATE -> {

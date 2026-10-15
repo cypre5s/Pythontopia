@@ -193,18 +193,29 @@ describe('MainlineMapPage', () => {
     expect(router.currentRoute.value.path).toBe('/chapter-test/1');
   });
 
-  it('keeps drawer pointerup events from reaching the Phaser window listener', async () => {
+  it('keeps drawer pointer and mouse events from reaching Phaser window listeners', async () => {
     const { wrapper: w } = await mountPage();
     await w.get('[data-testid="mainline-node-btn-3"]').trigger('click');
     await flushPromises();
 
     const phaserPointerUp = vi.fn();
+    const phaserMouseDown = vi.fn();
+    const phaserMouseUp = vi.fn();
     window.addEventListener('pointerup', phaserPointerUp);
+    window.addEventListener('mousedown', phaserMouseDown);
+    window.addEventListener('mouseup', phaserMouseUp);
     try {
-      await w.get('[data-testid="mainline-enter-stage-31"]').trigger('pointerup');
+      const enterStage = w.get('[data-testid="mainline-enter-stage-31"]');
+      await enterStage.trigger('pointerup');
+      await enterStage.trigger('mousedown');
+      await enterStage.trigger('mouseup');
       expect(phaserPointerUp).not.toHaveBeenCalled();
+      expect(phaserMouseDown).not.toHaveBeenCalled();
+      expect(phaserMouseUp).not.toHaveBeenCalled();
     } finally {
       window.removeEventListener('pointerup', phaserPointerUp);
+      window.removeEventListener('mousedown', phaserMouseDown);
+      window.removeEventListener('mouseup', phaserMouseUp);
     }
   });
 

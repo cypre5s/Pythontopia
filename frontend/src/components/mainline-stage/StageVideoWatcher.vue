@@ -8,16 +8,15 @@
  * 计时：监听 `<video>` 的 `timeupdate`，按「每次前进量」累加真实观看秒数（forward-delta）：
  *       - 仅在标签页可见且未过线时计；
  *       - 单次前进 >MAX_TICK_GAP_SEC（拖动/快进/切视频）视为跳转，不计入、只对齐基准；
- *       - totalWatched 跨视频累加，封顶 requiredVideoSec。
+ *       - totalWatched 跨视频累加，展示封顶 requiredVideoSec；尚未落库的真实观看秒继续缓冲。
  *       该模型天然规避「拖到末尾秒过」（快进不计）与后台挂机刷（不可见不计）。
  * 打点：每攒满 BATCH_SECONDS 秒批量 `postVideoProgress(stageId, deltaSec)` 一次；
- *       切后台 / 暂停 / 切视频 / 卸载时 flush 已攒秒数。成功后 emit('progress')；
- *       失败退回 pending，下一批重试（服务端打点幂等 + 限频兜底）。
- * 过线：累计达 requiredVideoSec 即停表、flush 收尾、emit('passed')，并显示「已过线 ✓」。
+ *       切后台 / 暂停 / 切视频 / 卸载时 flush 已攒秒数。只有服务端累计值增长才清除 pending。
+ * 过线：仅服务端累计达到 requiredVideoSec 才 emit('passed')，并显示「已过线 ✓」。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { postVideoProgress } from '@/api/mainline';
-import type { StageVideoDto } from '@/api/mainline';
+import type { StageProgressDto, StageVideoDto } from '@/api/mainline';
 import { videoStreamUrl } from '@/api/courseVideo';
 import StageContextTutor from './StageContextTutor.vue';
 import type { StageTaskProgress } from './stageTypes';
@@ -37,11 +36,10 @@ const emit = defineEmits<{
 }>();
 
 /**
- * 攒够多少秒批量上报一次。后端限频为「每 stage 每分钟至多 2 次**有效**计入」（超频静默 no-op
- * 且不报错，见 VideoProgressThrottle）——批间隔必须 ≥30s，否则多余批次会被服务端丢弃、
- * 本地却已清零 pending，导致服务端累计时长慢于真实观看（刷新后进度回退）。
+ * 攒够多少秒批量上报一次。60 秒批次与后端每 stage 每分钟至多 2 次有效写入对齐。
  */
-const BATCH_SECONDS = 30;
+const BATCH_SECONDS = 60;
+const THROTTLE_RETRY_DELAY_MS = 60_000;
 /** 单次 timeupdate 前进上限：超过即视为拖动/快进/换源，不计入观看时长（防刷）。 */
 const MAX_TICK_GAP_SEC = 2;
 
@@ -55,38 +53,45 @@ function clampInitial(): number {
 
 /** 当前累计已观看秒数（权威展示值，封顶 requiredSec）。 */
 const watchedSec = ref<number>(clampInitial());
-/** 已攒、尚未成功上报的秒数（上报成功清零；失败退回重试）。 */
+/** 服务端已确认的观看秒数；只有此值达到阈值才算完成。 */
+const confirmedWatchedSec = ref<number>(clampInitial());
+/** 已攒、尚未被服务端计入的秒数；失败或限频 no-op 时保留重试。 */
 const pendingDelta = ref<number>(0);
 /** 是否已过线（达标后停表、不再上报）。 */
 const crossed = ref<boolean>(clampInitial() >= requiredSec.value);
+const awaitingConfirmation = ref<boolean>(false);
 /** 当前播放的视频 id（默认清单第 1 个）。 */
-const currentId = ref<number | null>(props.videos[0]?.id ?? null);
+const currentVideoId = ref<number | null>(props.videos[0]?.id ?? null);
 /** 右栏「选集」是否展开（默认展开；收起后空间让给问答面板）。 */
-const listOpen = ref<boolean>(true);
+const isVideoListOpen = ref<boolean>(true);
 
 const currentTitle = computed<string>(
-  () => props.videos.find((v) => v.id === currentId.value)?.title ?? '',
+  () => props.videos.find((video) => video.id === currentVideoId.value)?.title ?? '',
 );
 
 function toggleList(): void {
-  listOpen.value = !listOpen.value;
+  isVideoListOpen.value = !isVideoListOpen.value;
 }
 
 /** 上一帧 timeupdate 的 currentTime，用于求前进量；切视频/换源时归零。 */
 let lastTime = 0;
 /** 不足 1 秒的前进量累加器（攒满 1 秒进位到 watchedSec）。 */
 let carry = 0;
+let thresholdFlushStarted = false;
+let flushing = false;
+let disposed = false;
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
 
 const currentStreamUrl = computed<string>(() =>
-  currentId.value !== null ? videoStreamUrl(currentId.value) : '',
+  currentVideoId.value !== null ? videoStreamUrl(currentVideoId.value) : '',
 );
 
 // 锚定「这段视频」的百晓助教问答：站内视频无字幕文本，context 用 视频标题 + 本节 KC，
 // 由助教结合课件 RAG 作答。contextProvider 取「此刻」所选视频标题（切片后变化）。
 const ctxKcCodes = computed<string[]>(() => props.kcCodes ?? []);
 function currentVideoContext(): string {
-  const v = props.videos.find((x) => x.id === currentId.value);
-  const title = v?.title ? `当前视频：《${v.title}》` : '当前课程视频';
+  const currentVideo = props.videos.find((video) => video.id === currentVideoId.value);
+  const title = currentVideo?.title ? `当前视频：《${currentVideo.title}》` : '当前课程视频';
   const kc = ctxKcCodes.value.length ? `；本节知识点：${ctxKcCodes.value.join('、')}` : '';
   return `${title}${kc}`;
 }
@@ -107,35 +112,71 @@ function isVisible(): boolean {
   return typeof document === 'undefined' || document.visibilityState === 'visible';
 }
 
+function scheduleRetry(delayMs: number): void {
+  if (disposed || retryTimer !== null) return;
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    void flush();
+  }, delayMs);
+}
+
+function markPassedIfConfirmed(): void {
+  if (confirmedWatchedSec.value < requiredSec.value || crossed.value) return;
+  crossed.value = true;
+  pendingDelta.value = 0;
+  carry = 0;
+  awaitingConfirmation.value = false;
+  if (retryTimer !== null) clearTimeout(retryTimer);
+  retryTimer = null;
+  emit('passed');
+}
+
 async function flush(): Promise<void> {
-  if (pendingDelta.value <= 0) return;
-  // 同步清零再 await：并发 flush 看到 0 直接返回，杜绝重复上报；失败再退回。
+  if (pendingDelta.value <= 0 || flushing || retryTimer !== null) return;
+  // 同步清零再 await；请求被限频时会按服务端增量退回未接受的部分。
   const delta = pendingDelta.value;
   pendingDelta.value = 0;
+  flushing = true;
   try {
-    // 只 await 成功；以本地 watchedSec 为权威向上汇报（不读返回体，规避 DTO 形状差异）。
-    await postVideoProgress(props.stageId, delta);
-    emit('progress', { stageId: props.stageId, videoWatchedSec: watchedSec.value });
+    const progress: StageProgressDto = await postVideoProgress(props.stageId, delta);
+    const previousConfirmed = confirmedWatchedSec.value;
+    const serverWatched = Math.max(previousConfirmed, progress.videoWatchedSec);
+    const acceptedDelta = Math.min(delta, serverWatched - previousConfirmed);
+    confirmedWatchedSec.value = serverWatched;
+    if (acceptedDelta < delta) {
+      pendingDelta.value += delta - acceptedDelta;
+      awaitingConfirmation.value = true;
+      scheduleRetry(THROTTLE_RETRY_DELAY_MS);
+    } else {
+      awaitingConfirmation.value = pendingDelta.value > 0;
+    }
+    if (serverWatched > previousConfirmed) {
+      emit('progress', { stageId: props.stageId, videoWatchedSec: serverWatched });
+    }
+    markPassedIfConfirmed();
   } catch {
     pendingDelta.value += delta;
+    awaitingConfirmation.value = true;
+  } finally {
+    flushing = false;
   }
 }
 
 function accumulate(delta: number): void {
   carry += delta;
-  while (carry >= 1 && watchedSec.value < requiredSec.value) {
+  while (carry >= 1 && !crossed.value) {
     carry -= 1;
-    watchedSec.value += 1;
+    if (watchedSec.value < requiredSec.value) watchedSec.value += 1;
     pendingDelta.value += 1;
   }
-  if (watchedSec.value >= requiredSec.value) {
-    crossed.value = true;
+  if (watchedSec.value >= requiredSec.value && !thresholdFlushStarted) {
+    thresholdFlushStarted = true;
     carry = 0;
+    awaitingConfirmation.value = true;
     void flush();
-    emit('passed');
     return;
   }
-  if (pendingDelta.value >= BATCH_SECONDS) {
+  if (pendingDelta.value >= BATCH_SECONDS && retryTimer === null) {
     void flush();
   }
 }
@@ -157,11 +198,11 @@ function onPause(): void {
   void flush();
 }
 
-function selectVideo(id: number): void {
-  if (id === currentId.value) return;
+function selectVideo(videoId: number): void {
+  if (videoId === currentVideoId.value) return;
   // 切视频前把已攒秒数报上去；新源 currentTime 归零，重置基准与小数累加器。
   void flush();
-  currentId.value = id;
+  currentVideoId.value = videoId;
   lastTime = 0;
   carry = 0;
 }
@@ -172,9 +213,12 @@ function onVisibilityChange(): void {
 
 watch(
   () => props.videos,
-  (list) => {
-    if (currentId.value === null || !list.some((v) => v.id === currentId.value)) {
-      currentId.value = list[0]?.id ?? null;
+  (videos) => {
+    if (
+      currentVideoId.value === null
+      || !videos.some((video) => video.id === currentVideoId.value)
+    ) {
+      currentVideoId.value = videos[0]?.id ?? null;
       lastTime = 0;
       carry = 0;
     }
@@ -188,6 +232,11 @@ onMounted(() => {
 });
 
 onBeforeUnmount(() => {
+  disposed = true;
+  if (retryTimer !== null) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
   if (typeof document !== 'undefined') {
     document.removeEventListener('visibilitychange', onVisibilityChange);
   }
@@ -223,7 +272,7 @@ onBeforeUnmount(() => {
       <div class="stage-video__main">
         <div class="stage-video__frame">
           <video
-            :key="currentId ?? 'none'"
+            :key="currentVideoId ?? 'none'"
             class="stage-video__el"
             data-testid="stage-video-el"
             :src="currentStreamUrl"
@@ -246,6 +295,12 @@ onBeforeUnmount(() => {
             data-testid="stage-video-count"
           >已观看 {{ mmss(watchedSec) }} / {{ mmss(requiredSec) }}</span>
           <span
+            v-if="awaitingConfirmation"
+            class="stage-video__syncing"
+            data-testid="stage-video-syncing"
+            role="status"
+          >进度正在同步</span>
+          <span
             v-if="currentTitle"
             class="stage-video__now"
           >正在播放：{{ currentTitle }}</span>
@@ -256,12 +311,12 @@ onBeforeUnmount(() => {
       <aside class="stage-video__side">
         <section
           class="stage-video__playlist"
-          :class="{ 'stage-video__playlist--open': listOpen }"
+          :class="{ 'stage-video__playlist--open': isVideoListOpen }"
         >
           <button
             type="button"
             class="stage-video__playlist-toggle"
-            :aria-expanded="listOpen"
+            :aria-expanded="isVideoListOpen"
             data-testid="stage-video-list-toggle"
             @click="toggleList"
           >
@@ -270,31 +325,31 @@ onBeforeUnmount(() => {
             <span
               class="stage-video__playlist-chev"
               aria-hidden="true"
-            >{{ listOpen ? '▾' : '▸' }}</span>
+            >{{ isVideoListOpen ? '▾' : '▸' }}</span>
           </button>
           <ul
-            v-show="listOpen"
+            v-show="isVideoListOpen"
             class="stage-video__list"
           >
             <li
-              v-for="(v, idx) in videos"
-              :key="v.id"
+              v-for="(video, videoIndex) in videos"
+              :key="video.id"
               class="stage-video__item"
-              :class="{ 'stage-video__item--current': v.id === currentId }"
-              :data-testid="`stage-video-item-${v.id}`"
+              :class="{ 'stage-video__item--current': video.id === currentVideoId }"
+              :data-testid="`stage-video-item-${video.id}`"
             >
               <button
                 type="button"
                 class="stage-video__pick"
-                :aria-current="v.id === currentId ? 'true' : undefined"
-                @click="selectVideo(v.id)"
+                :aria-current="video.id === currentVideoId ? 'true' : undefined"
+                @click="selectVideo(video.id)"
               >
                 <span
                   class="stage-video__no"
                   aria-hidden="true"
-                >{{ v.id === currentId ? '▶' : idx + 1 }}</span>
-                <span class="stage-video__name">{{ v.title }}</span>
-                <span class="stage-video__dur">{{ mmss(v.durationSec) }}</span>
+                >{{ video.id === currentVideoId ? '▶' : videoIndex + 1 }}</span>
+                <span class="stage-video__name">{{ video.title }}</span>
+                <span class="stage-video__dur">{{ mmss(video.durationSec) }}</span>
               </button>
             </li>
           </ul>
@@ -568,6 +623,11 @@ onBeforeUnmount(() => {
   font-size: var(--pyt-font-size-xs);
   font-family: var(--pyt-font-pixel-mono), monospace;
   color: var(--pyt-color-text-muted);
+  white-space: nowrap;
+}
+.stage-video__syncing {
+  font-size: var(--pyt-font-size-xs);
+  color: var(--pyt-color-text-hint);
   white-space: nowrap;
 }
 .stage-video__now {

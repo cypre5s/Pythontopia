@@ -1,6 +1,7 @@
 package com.pythontopia.mainline.test;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
@@ -9,6 +10,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.mainline.test.ChapterTestJudge.JudgeReport;
 import com.pythontopia.mainline.test.question.QuestionItem;
 import com.pythontopia.mainline.test.question.QuestionPaper;
@@ -17,6 +19,7 @@ import com.pythontopia.submission.judge.JudgeCaseEvaluator;
 import com.pythontopia.submission.judge.JudgeWorkerPool;
 import com.pythontopia.submission.judge.PythonSandbox;
 import com.pythontopia.submission.judge.SandboxRunResult;
+import com.pythontopia.submission.dto.Verdict;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -98,6 +101,13 @@ class ChapterTestJudgeTest {
   }
 
   @Test
+  void fillAcceptsFunctionNameWithOrWithoutEmptyCall() {
+    QuestionPaper paper = new QuestionPaper(List.of(fill("f1", List.of("input"), 5)));
+
+    assertThat(judge.judge(paper, Map.of("f1", "input()")).score()).isEqualTo(100);
+  }
+
+  @Test
   void codingAllCasesPassGivesFullScore() {
     when(sandbox.name()).thenReturn("subprocess");
     when(sandbox.run(any(), any()))
@@ -126,6 +136,22 @@ class ChapterTestJudgeTest {
     assertThat(report.score()).isEqualTo(50);
     assertThat(report.items().get(0).correct()).isFalse();
     assertThat(report.items().get(0).passedCases()).isEqualTo(2);
+  }
+
+  @Test
+  void codingSandboxFailureReturnsRetryableServiceError() {
+    when(sandbox.name()).thenReturn("piston:3.12.0");
+    when(sandbox.run(any(), any()))
+        .thenReturn(new SandboxRunResult(false, -1, "", "Sandbox not configured", 0, "SYSTEM_ERROR"));
+    QuestionPaper paper = new QuestionPaper(List.of(coding("p1", 1, 30)));
+
+    assertThatThrownBy(() -> judge.judge(paper, Map.of("p1", "print(5)")))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE);
+              assertThat(exception.code()).isEqualTo("CHAPTER_TEST_JUDGE_UNAVAILABLE");
+            });
   }
 
   @Test

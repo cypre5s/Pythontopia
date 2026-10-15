@@ -198,12 +198,20 @@ class Stage10BugMineAcceptanceIntegrationTest {
             sessionId);
     assertThat(status).isEqualTo("RESOLVED");
 
-    Integer debugFix =
+    Long resolvedSubmissionId = ((Number) retry.getBody().get("id")).longValue();
+    Integer practicePass =
         jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ? AND source = 'DEBUG_FIX'",
+            "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ? AND source = 'PRACTICE_PASS'",
             Integer.class,
             userId);
-    assertThat(debugFix).isEqualTo(1);
+    Integer duplicateAttemptEvents =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ? AND idempotency_key = ?",
+            Integer.class,
+            userId,
+            "submission:" + resolvedSubmissionId);
+    assertThat(practicePass).isEqualTo(1);
+    assertThat(duplicateAttemptEvents).isEqualTo(1);
     graphServer.verify(Duration.ofSeconds(2));
   }
 

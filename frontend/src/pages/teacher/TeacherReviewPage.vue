@@ -9,7 +9,7 @@ import { useToastStore } from "@stores/toast";
 import {
   createProblemReview,
   decideProblemReview,
-  listProblemReviews,
+  searchProblemReviews,
   type BossProblemReviewDecision,
   type BossProblemReviewDto,
 } from "@/api/problemReview";
@@ -17,6 +17,7 @@ import {
 const session = useSessionStore();
 const toast = useToastStore();
 const router = useRouter();
+const QUEUE_PAGE_SIZE = 100;
 
 const chapter = ref<number>(1);
 const stage = ref<number>(1);
@@ -26,6 +27,11 @@ const loading = ref<boolean>(false);
 const loadingQueue = ref<boolean>(false);
 const deciding = ref<boolean>(false);
 const entries = ref<BossProblemReviewDto[]>([]);
+const queuePage = ref(0);
+const queueTotal = ref(0);
+const queueTotalPages = ref(0);
+const queueError = ref<string | null>(null);
+const queueRetryPage = ref<number | null>(null);
 const decisionReason = ref<string>("");
 const selectedId = ref<number | null>(null);
 let queueRevision = 0;
@@ -36,7 +42,7 @@ const isTeacherOrAdmin = computed<boolean>(() => {
 });
 
 const counts = computed(() => ({
-  total: entries.value.length,
+  total: queueTotal.value,
   approved: entries.value.filter((entry) => entry.decision === "APPROVED")
     .length,
   rejected: entries.value.filter((entry) => entry.decision === "REJECTED")
@@ -49,26 +55,39 @@ function canReviewEntry(entry: BossProblemReviewDto): boolean {
     || (entry.decision === "APPROVED" && entry.reviewSource === "AUTOMATED");
 }
 
-async function loadQueue(): Promise<void> {
+async function loadQueue(targetPage = 0): Promise<void> {
   if (!isTeacherOrAdmin.value || loadingQueue.value) return;
   loadingQueue.value = true;
+  queueError.value = null;
   const revisionAtRequest = queueRevision;
   try {
-    const loadedEntries = await listProblemReviews(100);
-    entries.value =
-      revisionAtRequest === queueRevision
-        ? loadedEntries
-        : [
-            ...entries.value,
-            ...loadedEntries.filter(
-              (loaded) => !entries.value.some((current) => current.id === loaded.id),
-            ),
-          ];
-    if (selectedId.value === null && entries.value.length > 0) {
+    const result = await searchProblemReviews({
+      page: targetPage,
+      size: QUEUE_PAGE_SIZE,
+      sortBy: "REQUESTED_AT",
+      sortDirection: "DESC",
+    });
+    if (revisionAtRequest === queueRevision) {
+      entries.value = result.content;
+    } else {
+      const currentById = new Map(entries.value.map((entry) => [entry.id, entry]));
+      const loadedIds = new Set(result.content.map((entry) => entry.id));
+      entries.value = [
+        ...result.content.map((entry) => currentById.get(entry.id) ?? entry),
+        ...entries.value.filter((entry) => !loadedIds.has(entry.id)),
+      ];
+    }
+    queuePage.value = result.page;
+    queueTotal.value = result.totalElements;
+    queueTotalPages.value = result.totalPages;
+    queueRetryPage.value = null;
+    if (!entries.value.some((entry) => entry.id === selectedId.value)) {
       selectedId.value = entries.value[0]?.id ?? null;
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    queueError.value = message;
+    queueRetryPage.value = targetPage;
     toast.show(`审核队列加载失败：${message}`, "error");
   } finally {
     loadingQueue.value = false;
@@ -88,11 +107,12 @@ async function fetchProblem(): Promise<void> {
       ...(requestedKind ? { kind: requestedKind } : {}),
     });
     queueRevision += 1;
-    entries.value = [
-      candidate,
-      ...entries.value.filter((entry) => entry.id !== candidate.id),
-    ];
+    queuePage.value = 0;
+    queueTotal.value += 1;
+    queueTotalPages.value = Math.ceil(queueTotal.value / QUEUE_PAGE_SIZE);
+    entries.value = [candidate];
     selectedId.value = candidate.id;
+    await loadQueue(0);
     toast.show("AI 题已进入后端审核队列", "info");
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -120,8 +140,8 @@ async function decideCurrent(
       version: entry.version,
     });
     queueRevision += 1;
-    entries.value = entries.value.map((item) =>
-      item.id === updated.id ? updated : item,
+    entries.value = entries.value.map((entry) =>
+      entry.id === updated.id ? updated : entry,
     );
     decisionReason.value = "";
     toast.show(
@@ -215,10 +235,10 @@ const canDecide = computed<boolean>(
             data-testid="teacher-review-chapter"
           >
             <option
-              v-for="c in 7"
-              :key="c"
-              :value="c"
-            >第 {{ c }} 章</option>
+              v-for="chapterNumber in 7"
+              :key="chapterNumber"
+              :value="chapterNumber"
+            >第 {{ chapterNumber }} 章</option>
           </select>
         </label>
         <label class="toolbar-field">
@@ -228,10 +248,10 @@ const canDecide = computed<boolean>(
             data-testid="teacher-review-stage"
           >
             <option
-              v-for="s in 4"
-              :key="s"
-              :value="s"
-            >Stage {{ s }}</option>
+              v-for="stageNumber in 4"
+              :key="stageNumber"
+              :value="stageNumber"
+            >Stage {{ stageNumber }}</option>
           </select>
         </label>
         <label class="toolbar-field">
@@ -261,13 +281,22 @@ const canDecide = computed<boolean>(
         >
           {{ loading ? "拉题中…" : "调 graph 出 1 道题" }}
         </button>
+        <button
+          type="button"
+          class="btn"
+          data-testid="teacher-review-refresh"
+          :disabled="loadingQueue"
+          @click="loadQueue()"
+        >
+          {{ loadingQueue ? "正在刷新…" : "刷新队列" }}
+        </button>
         <span
           class="counts"
           data-testid="teacher-review-counts"
         >
-          总 {{ counts.total }} · 待审 {{ counts.pending }} ·
-          <span class="ok">通过 {{ counts.approved }}</span> ·
-          <span class="bad">驳回 {{ counts.rejected }}</span>
+          总 {{ counts.total }} · 本页待审 {{ counts.pending }} ·
+          <span class="ok">本页通过 {{ counts.approved }}</span> ·
+          <span class="bad">本页驳回 {{ counts.rejected }}</span>
         </span>
         <span
           v-if="loadingQueue"
@@ -282,12 +311,35 @@ const canDecide = computed<boolean>(
           data-testid="teacher-review-list"
         >
           <p
-            v-if="entries.length === 0"
+            v-if="queueError"
+            class="queue-error"
+            role="alert"
+          >
+            审核队列加载失败：{{ queueError }}
+            <button
+              type="button"
+              class="btn"
+              data-testid="teacher-review-retry"
+              :disabled="loadingQueue"
+              @click="loadQueue(queueRetryPage ?? queuePage)"
+            >
+              重试
+            </button>
+          </p>
+          <p
+            v-if="loadingQueue && entries.length === 0"
+            class="muted"
+            role="status"
+          >
+            正在读取审核队列…
+          </p>
+          <p
+            v-else-if="!queueError && entries.length === 0"
             class="muted"
           >
             队列为空：点击上方按钮调 graph 出题，结果会出现在这里。
           </p>
-          <ul v-else>
+          <ul v-if="entries.length > 0">
             <li
               v-for="entry in entries"
               :key="entry.id"
@@ -340,6 +392,33 @@ const canDecide = computed<boolean>(
               </button>
             </li>
           </ul>
+          <nav
+            v-if="queueTotalPages > 0"
+            class="queue-pagination"
+            aria-label="审核队列分页"
+          >
+            <span>第 {{ queuePage + 1 }} / {{ queueTotalPages }} 页</span>
+            <div>
+              <button
+                type="button"
+                class="btn"
+                data-testid="teacher-review-previous-page"
+                :disabled="loadingQueue || queuePage <= 0"
+                @click="loadQueue(queuePage - 1)"
+              >
+                上一页
+              </button>
+              <button
+                type="button"
+                class="btn"
+                data-testid="teacher-review-next-page"
+                :disabled="loadingQueue || queuePage + 1 >= queueTotalPages"
+                @click="loadQueue(queuePage + 1)"
+              >
+                下一页
+              </button>
+            </div>
+          </nav>
         </aside>
 
         <main
@@ -390,10 +469,10 @@ const canDecide = computed<boolean>(
               <h3>提示</h3>
               <ul>
                 <li
-                  v-for="(h, i) in currentEntry.problem.hints"
-                  :key="i"
+                  v-for="(hint, hintIndex) in currentEntry.problem.hints"
+                  :key="hintIndex"
                 >
-                  {{ h }}
+                  {{ hint }}
                 </li>
               </ul>
             </section>
@@ -584,6 +663,29 @@ const canDecide = computed<boolean>(
 }
 .counts .bad {
   color: #8c2a08;
+}
+.queue-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid #9a3f28;
+  background: #ffe2cc;
+  color: #5a1a08;
+}
+.queue-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--pyt-color-border);
+  font-size: 12px;
+}
+.queue-pagination > div {
+  display: flex;
+  gap: 6px;
 }
 .review-body {
   flex: 1 1 auto;

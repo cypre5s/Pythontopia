@@ -36,6 +36,24 @@ def test_valid_problem_passes() -> None:
     assert all(i.severity != "error" for i in verdict.issues)
 
 
+@pytest.mark.parametrize("statement", ["print(a + b)", "print(___BLANK___)"])
+def test_fill_blank_requires_frontend_placeholder(statement: str) -> None:
+    verdict = validate_problem_struct(
+        _valid_problem(kind="fill_blank", statement=statement)
+    )
+
+    assert not verdict.passed
+    assert any(issue.code == "fill_blank_marker_missing" for issue in verdict.issues)
+
+
+def test_fill_blank_accepts_frontend_placeholder() -> None:
+    verdict = validate_problem_struct(
+        _valid_problem(kind="fill_blank", statement="print(___)")
+    )
+
+    assert verdict.passed
+
+
 @pytest.mark.parametrize("field", ["title", "statement", "reference_solution"])
 def test_missing_required_string_field(field: str) -> None:
     verdict = validate_problem_struct(_valid_problem(**{field: ""}))

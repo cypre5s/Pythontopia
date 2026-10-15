@@ -8,9 +8,11 @@ import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.coursepack.service.CoursePackService;
 import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
+import com.pythontopia.world.boss.dto.BossProblemReferenceDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
 import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
+import com.pythontopia.world.boss.review.BossProblemReviewRepository;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -49,16 +51,19 @@ public class BossGraphClient {
   private final RestTemplate bossProblemRestTemplate;
   private final GraphServiceProperties properties;
   private final CoursePackRepository coursePackRepository;
+  private final BossProblemReviewRepository problemReviewRepository;
 
   public BossGraphClient(
       @Qualifier("graphRestTemplate") RestTemplate graphRestTemplate,
       @Qualifier("bossProblemRestTemplate") RestTemplate bossProblemRestTemplate,
       GraphServiceProperties properties,
-      CoursePackRepository coursePackRepository) {
+      CoursePackRepository coursePackRepository,
+      BossProblemReviewRepository problemReviewRepository) {
     this.restTemplate = graphRestTemplate;
     this.bossProblemRestTemplate = bossProblemRestTemplate;
     this.properties = properties;
     this.coursePackRepository = coursePackRepository;
+    this.problemReviewRepository = problemReviewRepository;
   }
 
   /**
@@ -97,6 +102,9 @@ public class BossGraphClient {
     body.put("kcName", kc.kcName());
     body.put("kcSummary", kc.summaryMarkdown() == null ? "" : kc.summaryMarkdown());
     body.put("difficulty", difficulty == null ? Math.min(5, Math.max(1, stage)) : difficulty);
+    List<BossProblemReferenceDto> existingProblems =
+        problemReviewRepository.findRecentSimilarityCandidates(effectiveKc);
+    body.put("existingProblems", existingProblems == null ? List.of() : existingProblems);
     if (preferredKc != null) {
       body.put("preferredKc", preferredKc);
     }

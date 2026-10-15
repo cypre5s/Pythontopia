@@ -31,6 +31,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
 
 class QuestServiceTest {
@@ -85,7 +86,10 @@ class QuestServiceTest {
 
     service.complete(7L, 15L, new QuestCompleteRequest("fixed"));
 
-    verify(publisher, times(1)).publishEvent(any(LearningEvent.DebugResolved.class));
+    ArgumentCaptor<LearningEvent.DebugResolved> event =
+        ArgumentCaptor.forClass(LearningEvent.DebugResolved.class);
+    verify(publisher, times(1)).publishEvent(event.capture());
+    assertThat(event.getValue().idempotencyKey()).isEqualTo("quest:15");
   }
 
   @Test

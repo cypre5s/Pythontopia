@@ -154,6 +154,17 @@ def test_long_statement_affects_score() -> None:
     assert v.metadata["features"]["statement_len"] == 1000
 
 
+def test_intro_arithmetic_stays_beginner_with_normal_problem_statement() -> None:
+    code = "a = int(input())\nb = int(input())\nprint(a + b)"
+    p = _problem(code, declared=1, statement="输入两个整数，分别保存到变量 a 和 b 中，计算并输出它们的和。" * 8)
+
+    verdict = estimate_difficulty(p)
+
+    assert verdict.passed
+    assert p.difficulty == 1
+    assert verdict.metadata["estimated"] <= 2
+
+
 def test_multiple_ifs_increase_score() -> None:
     code = "x=int(input())\nif x>0:\n    print(1)\nif x>1:\n    print(2)\nif x>2:\n    print(3)"
     p = _problem(code, declared=2)

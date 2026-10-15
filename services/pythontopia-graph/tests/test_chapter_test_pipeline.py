@@ -41,9 +41,11 @@ class StubProvider(LlmProvider):
     def __init__(self, payloads: list[dict | None]) -> None:
         self._payloads = list(payloads)
         self.calls = 0
+        self.messages: list[list[dict[str, str]]] = []
 
     async def chat(self, messages, **kwargs):  # type: ignore[override]
         self.calls += 1
+        self.messages.append(messages)
         payload = self._payloads.pop(0) if self._payloads else None
         return LlmResponse(content_json=payload)
 
@@ -141,6 +143,26 @@ async def test_pipeline_honors_custom_counts() -> None:
     resp = await graph.run(_request(counts=counts))
     assert resp.questions.type_counts() == {"CHOICE": 2, "JUDGE": 1, "FILL": 1, "CODING": 1}
     assert resp.questions.total_score() == 2 * 8 + 5 + 5 + 30
+
+
+@pytest.mark.asyncio
+async def test_choice_duplicate_option_is_rejected_and_prompt_requires_unique_answers() -> None:
+    counts = PaperCounts(choice=1, judge=0, fill=0, coding=0)
+    invalid = _golden_dict(counts, [101, 102])
+    invalid["items"][0]["options"][1] = invalid["items"][0]["options"][0]
+    provider = StubProvider([invalid, _golden_dict(counts, [101, 102])])
+    graph = ChapterTestGraph(
+        provider=provider,
+        evidence_fetcher=_fetcher(_DEFAULT_PAIRS),
+    )
+
+    response = await graph.run(_request(counts=counts))
+
+    assert provider.calls == 2
+    assert len(set(response.questions.items[0].options)) == 4
+    prompt = provider.messages[0][0]["content"]
+    assert "CHOICE 必须只有一个正确选项" in prompt
+    assert "FILL 的答案必须能自然填入题干" in prompt
 
 
 @pytest.mark.asyncio

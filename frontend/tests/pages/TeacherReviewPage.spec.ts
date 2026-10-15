@@ -3,14 +3,17 @@ import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { useSessionStore } from "@stores/session";
 import TeacherReviewPage from "@/pages/teacher/TeacherReviewPage.vue";
-import type { BossProblemReviewDto } from "@/api/problemReview";
+import type {
+  BossProblemReviewDto,
+  BossProblemReviewPageDto,
+} from "@/api/problemReview";
 
 const runtimeMocks = vi.hoisted(() => ({
   fetchAiRuntimeOperations: vi.fn(),
 }));
 
 const reviewMocks = vi.hoisted(() => ({
-  listProblemReviews: vi.fn(),
+  searchProblemReviews: vi.fn(),
   createProblemReview: vi.fn(),
   decideProblemReview: vi.fn(),
 }));
@@ -69,12 +72,24 @@ const review = (
   ...overrides,
 });
 
+const queuePage = (
+  content: BossProblemReviewDto[],
+  page = 0,
+  totalElements = content.length,
+): BossProblemReviewPageDto => ({
+  content,
+  page,
+  size: 100,
+  totalElements,
+  totalPages: Math.ceil(totalElements / 100),
+});
+
 describe("TeacherReviewPage", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     window.localStorage.clear();
     vi.clearAllMocks();
-    reviewMocks.listProblemReviews.mockResolvedValue([]);
+    reviewMocks.searchProblemReviews.mockResolvedValue(queuePage([]));
     runtimeMocks.fetchAiRuntimeOperations.mockResolvedValue({
       subject: {
         scope: "PLATFORM",
@@ -99,7 +114,7 @@ describe("TeacherReviewPage", () => {
   afterEach(() => window.localStorage.clear());
 
   it("loads the server queue for a teacher and renders persisted decisions", async () => {
-    reviewMocks.listProblemReviews.mockResolvedValue([
+    reviewMocks.searchProblemReviews.mockResolvedValue(queuePage([
       review({
         decision: "APPROVED",
         deciderId: 3,
@@ -108,7 +123,7 @@ describe("TeacherReviewPage", () => {
         decisionReason: "题面与隐藏用例均已复核",
         version: 2,
       }),
-    ]);
+    ]));
     useSessionStore().user = {
       id: 2,
       username: "teach",
@@ -119,7 +134,12 @@ describe("TeacherReviewPage", () => {
     const wrapper = mount(TeacherReviewPage);
     await flushPromises();
 
-    expect(reviewMocks.listProblemReviews).toHaveBeenCalledWith(100);
+    expect(reviewMocks.searchProblemReviews).toHaveBeenCalledWith({
+      page: 0,
+      size: 100,
+      sortBy: "REQUESTED_AT",
+      sortDirection: "DESC",
+    });
     expect(wrapper.findAll(".list-item")).toHaveLength(1);
     expect(
       wrapper.find('[data-testid="teacher-review-counts"]').text(),
@@ -135,7 +155,7 @@ describe("TeacherReviewPage", () => {
       version: 2,
       decisionReason: "自动审核通过：KC 接地",
     };
-    reviewMocks.listProblemReviews.mockResolvedValue([automaticApproval]);
+    reviewMocks.searchProblemReviews.mockResolvedValue(queuePage([automaticApproval]));
     reviewMocks.decideProblemReview.mockResolvedValue({
       ...automaticApproval,
       decision: "REJECTED",
@@ -168,14 +188,14 @@ describe("TeacherReviewPage", () => {
   });
 
   it("exposes queue selection as keyboard-operable buttons", async () => {
-    reviewMocks.listProblemReviews.mockResolvedValue([
+    reviewMocks.searchProblemReviews.mockResolvedValue(queuePage([
       review(),
       review({
         id: 42,
         sourceProblemId: "source-2",
         problem: { ...review().problem, problemId: "source-2" },
       }),
-    ]);
+    ]));
     useSessionStore().user = {
       id: 2,
       username: "teach",
@@ -212,7 +232,7 @@ describe("TeacherReviewPage", () => {
     const wrapper = mount(TeacherReviewPage);
     await flushPromises();
 
-    expect(reviewMocks.listProblemReviews).not.toHaveBeenCalled();
+    expect(reviewMocks.searchProblemReviews).not.toHaveBeenCalled();
     expect(
       wrapper.find('[data-testid="teacher-review-role-warning"]').exists(),
     ).toBe(true);
@@ -226,6 +246,9 @@ describe("TeacherReviewPage", () => {
 
   it("creates a backend review candidate using chapter, stage, KC and kind", async () => {
     reviewMocks.createProblemReview.mockResolvedValue(review());
+    reviewMocks.searchProblemReviews
+      .mockResolvedValueOnce(queuePage([]))
+      .mockResolvedValue(queuePage([review()]));
     useSessionStore().user = {
       id: 2,
       username: "teach",
@@ -255,9 +278,9 @@ describe("TeacherReviewPage", () => {
   });
 
   it("disables generation while the review queue is loading", async () => {
-    let resolveQueue!: (entries: BossProblemReviewDto[]) => void;
-    reviewMocks.listProblemReviews.mockReturnValue(
-      new Promise((resolve) => {
+    let resolveQueue!: (result: BossProblemReviewPageDto) => void;
+    reviewMocks.searchProblemReviews.mockReturnValue(
+      new Promise<BossProblemReviewPageDto>((resolve) => {
         resolveQueue = resolve;
       }),
     );
@@ -279,13 +302,13 @@ describe("TeacherReviewPage", () => {
     await flushPromises();
     expect(reviewMocks.createProblemReview).not.toHaveBeenCalled();
 
-    resolveQueue([]);
+    resolveQueue(queuePage([]));
     await flushPromises();
   });
 
   it("keeps a newly generated candidate when an older queue response finishes later", async () => {
     let rejectDecision!: (reason: Error) => void;
-    let resolveReload!: (entries: BossProblemReviewDto[]) => void;
+    let resolveReload!: (result: BossProblemReviewPageDto) => void;
     let resolveGenerated!: (entry: BossProblemReviewDto) => void;
     const generated = review({
       id: 42,
@@ -296,10 +319,10 @@ describe("TeacherReviewPage", () => {
         statement: "freshly generated question",
       },
     });
-    reviewMocks.listProblemReviews
-      .mockResolvedValueOnce([review()])
+    reviewMocks.searchProblemReviews
+      .mockResolvedValueOnce(queuePage([review()]))
       .mockReturnValueOnce(
-        new Promise((resolve) => {
+        new Promise<BossProblemReviewPageDto>((resolve) => {
           resolveReload = resolve;
         }),
       );
@@ -334,20 +357,20 @@ describe("TeacherReviewPage", () => {
 
     rejectDecision(new Error("decision conflict"));
     await flushPromises();
-    expect(reviewMocks.listProblemReviews).toHaveBeenCalledTimes(2);
+    expect(reviewMocks.searchProblemReviews).toHaveBeenCalledTimes(2);
 
     resolveGenerated(generated);
     await flushPromises();
     expect(wrapper.text()).toContain("freshly generated question");
 
-    resolveReload([review()]);
+    resolveReload(queuePage([review()]));
     await flushPromises();
 
     expect(wrapper.text()).toContain("freshly generated question");
   });
 
   it("approves through the API with a reason and optimistic version", async () => {
-    reviewMocks.listProblemReviews.mockResolvedValue([review()]);
+    reviewMocks.searchProblemReviews.mockResolvedValue(queuePage([review()]));
     reviewMocks.decideProblemReview.mockResolvedValue(
       review({
         decision: "APPROVED",
@@ -389,7 +412,7 @@ describe("TeacherReviewPage", () => {
   });
 
   it("rejects through the API and does not forge a LearningEvent", async () => {
-    reviewMocks.listProblemReviews.mockResolvedValue([review()]);
+    reviewMocks.searchProblemReviews.mockResolvedValue(queuePage([review()]));
     reviewMocks.decideProblemReview.mockResolvedValue(
       review({
         decision: "REJECTED",

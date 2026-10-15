@@ -248,7 +248,9 @@ class PaperDesignerAgent:
             "（程序从标准输入读、标准输出写），且只用本章及以前的语法，禁止 import 网络/子进程类模块。\n"
             "3) 不得在题面/选项/样例中出现 hidden_test_cases / answer_key / secret_test 等内部字段名。\n"
             "4) 严格按下方题量出题，qid 全局唯一。\n"
-            "5) FILL 题面必须**恰好一个**空位（一段连续下划线）；多个空请拆成多道单空题。"
+            "5) FILL 题面必须**恰好一个**空位（一段连续下划线）；多个空请拆成多道单空题。\n"
+            "6) CHOICE 必须只有一个正确选项；其余选项须明确错误，不能是同义答案或其他也能正确完成题目要求的写法。\n"
+            "7) FILL 的答案必须能自然填入题干且符合课件事实；answers 只能列该答案的等价写法，解析必须说明答案为何成立。"
         )
         whitelist = (
             "证据页白名单(evidence_page_ids 只能取这些): "
@@ -393,6 +395,7 @@ class PaperDesignerAgent:
         qids = [item.qid for item in paper.items]
         if len(set(qids)) != len(qids):
             raise PaperDesignError("duplicate qid in paper")
+        PaperDesignerAgent._assert_choice_options_distinct(paper)
         PaperDesignerAgent._assert_fill_single_blank(paper)
 
     @classmethod
@@ -575,3 +578,15 @@ class PaperDesignerAgent:
                 raise PaperDesignError(
                     f"FILL stem must contain exactly one blank, got {blanks} (qid={item.qid})"
                 )
+
+    @staticmethod
+    def _assert_choice_options_distinct(paper: QuestionPaper) -> None:
+        for item in paper.items:
+            if item.type != "CHOICE":
+                continue
+            normalized = [
+                re.sub(r"\s+", " ", option).strip().casefold()
+                for option in item.options
+            ]
+            if len(set(normalized)) != len(normalized):
+                raise PaperDesignError(f"CHOICE options contain duplicates (qid={item.qid})")
