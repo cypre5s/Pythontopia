@@ -2,7 +2,7 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-15）**：聚焦 Web，本地最近已提交检查点为 `dfcc9dd1`。Tutor 已采用 DeepSeek AutoGen，文本与图片输入/文本输出路径此前做过真实 Web 联测；最近的新供应商调用连续遇到超时、空响应或 503，因此当前 DeepSeek completion 可用性未确认。前端全量 Vitest 275 files / 2604 tests、typecheck、lint 与 production build 曾新鲜通过；Graph 全量 1871 passed / 1 skipped，RAG 158 passed / 2 skipped。全量 Maven 最近一次 1446 tests 无断言失败，但有 7 个 Docker/PostgreSQL 环境错误，不能标记全量通过。KC-010 补题和第二章三个主线小节已有真实 Web 判题闭环；KC-011 新题与远征先修 KC-008/KC-011 证据仍待完成。Twin P0 数据源/周报/证据闭环已有代码和定向验证，个性化 A/B 与 7 日延迟效果尚未验证。Alethicode 对照确认 Tutor 已经是 AutoGen，不需整体替换；不兼容的 checkpoint、SSE/WebSocket 架构不迁移。当前续接正在增加班级加入码应用层账号限速；改动未提交。剩余项包括活跃远征 run 浏览器刷新恢复、公开接口/生产 Piston 配置核验、KC-011 真实闭环、Tutor 的 Java 投影/失败恢复差异抽查、管理台少量格式对齐、Maven 全量环境错误处理、Twin 学习效果评估和剩余 Web 审查。性能仍最后测，非 Web 客户端不在范围。
+> **当前快照（2026-10-15）**：聚焦 Web，最新本地检查点为 `36bb7abe`。Tutor 固定阶段 AutoGen 继续复用现有 API；本轮 DeepSeek provider 层真实纯文本与 PNG 输入各 1 次成功，输出都是文本，图片识别结果正确；最新 Tutor SSE Web 联测曾超时，暂停重复模型探针，先推进其他事项。课堂加入码账号限速与 Tutor 错误脱敏已提交。Tutor 每账号 30 次/日、共享 300 次/日限额只在部署启用；`./dev.sh` 本地关闭应用级日限额，定向限额测试通过。全量 Maven 最近一次 1446 tests 无断言失败，但有 7 个 Docker/PostgreSQL 环境错误，不能标记全量通过。前端全量 Vitest 275 files / 2604 tests、typecheck、lint 与 production build 曾新鲜通过；Graph 全量 1871 passed / 1 skipped，RAG 158 passed / 2 skipped。KC-010 补题和第二章三个主线小节已有真实 Web 判题闭环；KC-011 新题与远征先修 KC-008/KC-011 证据仍待完成。Twin P0 数据源/周报/证据闭环已有代码和定向验证，个性化 A/B 与 7 日延迟效果尚未验证。剩余工作与执行顺序维护在 [2026-10-15 Web implementation checklist](../plans/2026-10-15-web-system-implementation-plan.md)：远征活动 run 刷新恢复、管理台管理员浏览器动作和 Web 路由矩阵、工程审查、Maven 环境错误、生产 Piston/边缘配置。性能最后测，非 Web 客户端不在范围。
 
 ## 2026-10-15 当前续接：班级加入码账号限速
 
@@ -11,6 +11,8 @@
 - RED/GREEN：加入服务用例先分别观察到错误码仍返回 404、重复/成功加入仍返回 409；实现后 `ClassroomServiceTest` 与 `JoinCodeAttemptThrottleTest` 通过。Nginx HTTPS 契约和双协议发布检查脚本均通过。
 - 当前是单后端进程内账号窗口，适配项目单 worker 运行约定；若后续横向扩容，需迁移到共享限流存储。生产 Nginx/后端公网可达性未在 ECS 验证。
 - 顺手关闭一项确认的 Tutor 安全问题：异常 SSE 现写服务端堆栈、向学生只回固定错误文案，不再暴露 `str(exc)`。RED/GREEN 后 Tutor workflow / AutoGen runtime / 附件 / image input 定向集成共 93 passed，Ruff 通过。
+- Tutor 普通问答与 AutoGen 工作流均按认证用户 ID 在模型调用前预留账号额度，不按 `conversationId` 计数；部署默认 30 次/账号/上海自然日、全站 300 次/日。本地 `./dev.sh` 显式关闭应用日额度，本轮 `TutorDailyRequestLimitServiceTest` 新鲜通过。
+- 本轮已停止重复 provider 探针：真实 DeepSeek 纯文本校验请求原样返回，合成 PNG 返回“蓝色圆形、黄色背景”，均为文本响应、无工具调用。上一次 Tutor Web SSE 联测仍超时，web→Java→Graph→DeepSeek 当前没有新鲜成功证据。
 
 ## 2026-10-15 当前续接
 
@@ -24,7 +26,12 @@
 - 尝试补齐 Alethicode Java/Tutor 同输入联测时，本地 `start.sh` 的 Alethicode RAG 依赖在 15 秒 DeepSeek smoke probe 超时后退出；已停止其失败重启循环并恢复 `java-oj-tutor-graph-local`，当前 RAG/Java 后端未运行。没有把 Graph 边界桩当成 Java 全链路证据，待 DeepSeek smoke 恢复后再重启本地开发栈。
 - 本轮续验：7892 代理在宿主机与 Pythontopia Graph 容器可连接；DeepSeek `/models` 使用项目凭证返回 HTTP 200。纯文本 completion 探针遇到连接超时、55 秒无结果超时与 HTTP 503 `Service is too busy`；默认 Pro 档调用 65 秒及最后一次 Flash 调用 40 秒均无响应。没有可用模型文本。当前 Pythontopia Graph/RAG 容器健康，Spring API 对未认证的 actuator 返回 401；Alethicode Graph `/health` 返回 200，RAG 容器为 exited，Java 后端未启动。
 - 受影响验证新鲜复跑：前端全量 Vitest 275 文件 / 2604 项通过，`npm run typecheck`、全量 ESLint、production build 通过；build 仍有 Pyodide 的 Node 模块 externalize 警告。Graph Boss + 章测流水线 275 passed；改动相关 Java 与 PostgreSQL/Testcontainers 定向类 133/133 通过；Twin 聚合/策略/周报/掌握度与事件监听 46/46 通过。全量 Maven 1,428 项、0 assertion failures、7 errors；6 个测试容器动态端口绑定失败，长期仿真 JDBC 连接失败。隔离复跑其中 7 类共 9 cases 再现 5 个容器绑定错误，无 assertion failure。
-- 当前 Web 工程审查已覆盖 README、Vite/TypeScript 构建配置、路由、主线学习组件、教师题库分页、Twin 页面和 Boss/学习 API；未发现能复现的新代码缺陷。扫描已跟踪文件与未暂存 diff 未发现 API key 格式字符串；没有跑性能测试。
+- 当前 Web 工程审查已覆盖 README、Vite/TypeScript 构建配置、路由、主线学习组件、教师题库分页、Twin 页面和 Boss/学习 API；未发现能复现的新代码缺陷。管理台表头使用 `scope="col"`、分页当前项使用 `aria-current="page"`。扫描已跟踪文件与未暂存 diff 未发现 API key 格式字符串；没有跑性能测试。
+- 总任务清单及执行顺序已集中更新到 `docs/plans/2026-10-15-web-system-implementation-plan.md`。当前代码检查点 `36bb7abe`；没有推送或部署。
+- 无登录态 Playwright 矩阵覆盖 `/world`、`/workshop`、`/expedition`、学习分身、教师页、审核页、管理台、Boss 和主线地图，共 9/9 正确重定向 `/login`；真实临时学生会话访问 4 个管理/教师路由均被送回 `/world`，随后账号 640 已删除。现有 E2E 两项登录页/未登录守卫用例也通过（2/2）。
+- 远征 active-run 浏览器恢复仍未验证：本地 4 个无先修根 KC（001/002/004/006）当前无课程编程题或已批准 AI 编程题；新账号无法合法开局，当前也没有可用的合格学习账号会话。未伪造掌握事件。
+- 生产 SSH 只读核查未执行：目标地址路由当前指向 TUN，添加仓库说明的 eth2 直连路由需要本机 sudo 密码，本会话不可用；ECS/Piston/Nginx 运行态继续未核实。
+- 局部工程扫描检查整个 `frontend/src/` 的显式 `any` / `as any` 和空命名 `void` 函数，未发现违反 strict TypeScript 的项；空箭头回调只命中 fullscreen 错误吞掉和测试待决 Promise。未做无依据的全库重命名/格式化。
 
 ### 实时状态更新（本节优先于下方较早进度记录）
 

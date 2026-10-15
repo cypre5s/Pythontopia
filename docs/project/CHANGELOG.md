@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-10-15 — 用量限额与 DeepSeek provider 真实续验
+
+- Tutor 普通问答和固定阶段 AutoGen 工作流都按认证用户账号预留模型额度；部署默认每账号 30 次、共享 300 次/上海自然日，本地 `./dev.sh` 明确关闭应用级日限额。`mvn -q -Dtest=TutorDailyRequestLimitServiceTest test` 通过。
+- 经运行中的项目 DeepSeek provider 发出 2 次受控真实请求：纯文本校验词原样返回；合成 PNG 的蓝色圆形/黄色背景被正确识别。两次响应均为文本，无工具调用；项目没有请求图片生成。
+- Tutor Web SSE 最新联测此前超时；本次按用户要求停止重复模型调用，因此没有把 provider 级成功写成当前 Vite→Spring→Graph 联测成功。
+
+## 2026-10-15 — Web 可访问性审查与总任务清单
+
+- 按 [W3C WAI 数据表指南](https://www.w3.org/WAI/tutorials/tables/) 与 [`aria-current` 指引](https://www.w3.org/WAI/WCAG21/Techniques/aria/ARIA26) 复核管理台表格/分页：列标题已有 `scope="col"`，当前页已有 `aria-current="page"`，未发现需改代码的缺口。
+- 在 `docs/plans/2026-10-15-web-system-implementation-plan.md` 增加总任务清单与续接顺序，汇总当前已完成、待验证和明确后置项。
+- Playwright 对 9 个匿名保护路由与 4 个学生角色访问管理/教师路由做了真实浏览器核对，均符合守卫预期；临时学生及其级联数据已清理。生产只读 SSH 因本机 TUN 直连路由需要 sudo 密码未执行；远征活动 run 刷新仍受缺少合法题目和账号会话限制。
+- 工程扫描覆盖 `frontend/src/` 的显式 `any`/`as any` 与空命名 `void` 函数，没有发现需要修复的类型/命名问题；空箭头只用于 fullscreen 错误捕获和测试待决 Promise。保留有意义的局部名称，避免无收益的全库 churn。
+- 追踪统一选题调用链确认 `BossService` 复用 `LearnerTwinService` 与 `AdaptivePracticePolicy` 的 KC 顺序和难度规则；沿用已有策略测试，不新增第二套远征排序逻辑。
+
 ## 2026-10-15 — 班级加入码账号级限速
 
 - 保留公网 Nginx 已有的来源 IP 限速，并增加后端学生账号级 30 次/10 分钟窗口。错误码查询与成功入班都计数；超限在数据库查码前返回 429，旧 6 位邀请继续有效。

@@ -8,6 +8,34 @@
 
 **Tech Stack:** Java 21, Spring Boot, PostgreSQL/Flyway, Python 3.11+, FastAPI/LangGraph/AutoGen, Vue 3/TypeScript, Phaser 3, Vitest, Playwright.
 
+## 总任务清单
+
+本节是当前交付状态的速查清单；各任务详情和验证证据保留在下方。
+
+- [x] Web 安全基线：凭据通配 CORS、媒体错误脱敏、公网注册/登录/加入码限流契约。
+- [x] 课堂加入码账号限速：30 次/10 分钟；Tutor 工作流错误对学生脱敏。
+- [x] Tutor 用量锁按用户账号与上海自然日生效；本地开发明确关闭应用日限额，部署默认开启。
+- [x] DeepSeek provider 真实文本和合成图片输入均成功返回文本；项目不请求图片生成，TTS 关闭。
+- [x] 无尽远征采用 Phaser Boss 场景，包含判题受击/失败体力反馈及登记过的 CC0 音效；真实三阶段通关已有浏览器记录。
+- [x] AI 编程题复用现有审核与共享题库；KC-010 已真实审核并由 Piston 判对，KC-011 仍待补题闭环。
+- [x] Twin P0 状态聚合、证据可信度、周报真实增量、共享 AdaptivePracticePolicy 和带证据/下一步的学习分身页面已有代码与定向验证。
+- [ ] 远征：用有效先修学习账号从服务端活动 run 刷新并恢复；本地根 KC-001/002/004/006 当前均无课程编程题或已批准 AI 编程题，且没有可用的合格账号会话；不要伪造掌握证据。
+- [ ] Web 验收：管理台真实管理员写操作和主要 Web 路由/动作矩阵仍需完成。匿名保护路由和学生角色拒绝管理/教师路由已验证。
+- [ ] 工程收尾：按 Web 审查清单继续修复可复现的命名、交互、错误态或可访问性缺陷；本轮 strict TypeScript 源码扫描未发现 `any` / `as any` 或空命名 `void` 函数；空箭头仅见 fullscreen Promise 错误吞掉及测试中的待决 Promise。
+- [ ] 环境/线上核对：全量 Maven 的 7 个环境错误、生产边缘限流运行态、Piston/ECS 配置待确认；当前 SSH 需要 sudo 修改本机直连路由，本轮未尝试远端连接；不得推送或部署。
+- [ ] 学习效果：Twin A/B 和 7 日延迟复测需有合适真实样本，现阶段不可宣称有效提升。
+- [ ] 后续增强（已按精简计划暂缓）：未来分岔的真实学习结果评估与 BKT 概率模型不属于当前闭环验收门槛。
+- [ ] DeepSeek Web Tutor：历史 Vite→Spring→Graph 文图闭环成功过；2026-10-15 最新 SSE 联测超时。provider 层本轮文字和图片输入复验成功；先完成其他功能，不重复发模型探针。
+- [ ] 性能：最后执行，功能和工程验证收敛后再测。
+
+### 接续顺序
+
+1. 先处理无需新增模型调用的远征服务端 run 恢复验证及 Web 交互检查。
+2. 完成可获得合法管理员会话时的管理台浏览器操作验收，并清理临时账号。
+3. 按复现结果做最小 Web 工程修复；每项只跑受影响验证。
+4. 单独归因 Maven/Testcontainers 环境错误并核对生产配置，不改远端状态。
+5. 在功能与工程项目收敛后才做性能采样。
+
 ---
 
 ## Task 1: Reject credentialed wildcard CORS origins
@@ -52,7 +80,7 @@
 
 **Steps:** Verify supported model host/name allowlists, that image input reaches DeepSeek but response schema remains text-only, that voice is disabled, and that cancellation/checkpoint restore are scoped. Run focused pytest and Java Tutor authorization/checkpoint tests. Do not migrate Alethicode's uncommitted controller, WebSocket bus, or V124 table.
 
-**Status:** Static allowlists, text-only rendering, and disabled TTS are confirmed; mocked provider/image/SSE tests pass. Fresh text and image Web calls timed out at the 120 s Tutor→Graph relay; a direct Flash stream produced no token within 65 s, and one additional direct fast-tier text completion timed out at 70 s. DeepSeek `/models` returned 200, which does not verify completion. A RED/GREEN fix now emits Graph SSE pings while the first Tutor token is pending; the runtime container has not reloaded it. Current completion and image-input runtime validation remain open; no further image request was sent after the text probe timed out.
+**Status:** Static model/host allowlists, image-input/text-only response filtering, disabled TTS, and fixed-stage AutoGen behavior are confirmed; mocked provider/image/SSE tests pass. On 2026-10-15 the latest Tutor SSE text+image requests timed out at the 120 s Tutor→Graph relay. In a later controlled provider-level check this turn, one direct text completion returned `PYT-TEXT-641`, and one synthetic PNG request returned the correct description “蓝色圆形 / 黄色背景”; both responses were text with no tool calls. Historical full Vite→Spring→Graph text+image verification also succeeded. The latest full Tutor Web relay remains unverified; do not repeat provider probes while progressing other tasks. The RED/GREEN first-token heartbeat change still needs a runtime-container reload and its separate slow-first-token verification.
 
 ## Task 5: Verify the existing expedition and twin loop in the browser
 
@@ -63,7 +91,7 @@
 
 **Steps:** Exercise map entry, challenge answer, server settlement, pass/fail visual result, reload/resume, and one Twin recommendation in local Web stack; inspect API/browser state and cleanup temporary test users/runs. Keep model generation off by selecting existing reviewed/golden tasks. Record the final Boss journey as pending if no valid accessible multi-phase task exists; do not bypass prerequisites or invent mastery.
 
-**Status:** Prior Web evidence records a real three-phase Boss victory, server settlement, and Phaser hit sequence; this turn freshly verified the zero-evidence Twin recommendation and mainline navigation. Current 76-test run-store/page/Boss/scene suites cover mocked reload settlement, resume, failure feedback, and retries. A browser refresh of an active server run remains open.
+**Status:** Prior Web evidence records a real three-phase Boss victory, server settlement, and Phaser hit sequence; recent Web evidence also verified the zero-evidence Twin recommendation and mainline navigation. Current 76-test run-store/page/Boss/scene suites cover mocked reload settlement, resume, failure feedback, and retries. A browser refresh of an active server run remains open: the current local course has no approved/playable code question for its four root KCs, and no valid eligible learner session is configured. Do not create synthetic mastery to bypass this.
 
 ## Task 6: Audit Web interaction and admin table behavior
 
@@ -73,7 +101,9 @@
 
 **Steps:** Build a route/action checklist from current routes; use Playwright to click visible actions and verify navigation, success/error/loading state, focus and narrow-screen overflow. Fix only confirmed dead actions/layout defects using existing components. Do not add pages without a real backend contract.
 
-**Status:** Partial: fresh Twin → mainline navigation and 320 px overflow checks passed. Admin component/page suites passed (8 files / 36 tests), admin user API and router suites passed (2 files / 22 tests), and current full frontend typecheck, lint, and production build passed. Authenticated admin browser actions and the broader route matrix remain open because no disposable ADMIN session is configured.
+**Status:** Partial: fresh Twin → mainline navigation and 320 px overflow checks passed. Admin component/page suites passed (8 files / 36 tests), admin user API and router suites passed (2 files / 22 tests), and current full frontend typecheck, lint, and production build passed. In this continuation, nine protected routes redirected an anonymous browser to `/login`; a newly registered student was redirected away from four admin/teacher routes to `/world`, then the account was deleted. W3C table and pagination semantics are already present. Admin authenticated write actions, remaining major route actions, and narrow-screen checks outside the previously tested pages remain open because no disposable ADMIN session is configured.
+
+**Engineering scan:** The current Web `src/` tree has no explicit `any`, `as any`, or empty named `void` functions in the scanned TypeScript/Vue source. Empty arrow callbacks found were two fullscreen error catches and intentionally pending test promises. No broad rename or formatting pass was justified by the findings.
 
 ## Task 7: Run final affected-surface verification and report measured limits
 
@@ -85,4 +115,16 @@
 
 Run performance sampling last. Separate deterministic API timing from Graph/DeepSeek and formal judging; report request counts and clean up disposable rows. Never describe prior or synthetic data as current performance evidence.
 
-**Status:** Affected-surface checks pass: frontend Twin/Boss recovery, admin components/pages/API/router, typecheck, lint, and production build; backend CORS/media focused tests (8), Graph full suite (1871 passed, 1 skipped), RAG full suite (158 passed, 2 skipped), and Nginx contract checks (9) also pass. A serial Maven rerun reached 1430 tests with 0 assertion failures but 7 environment errors: six Testcontainers containers could not bind random Docker host ports (`address already in use`) and the long-term simulation lost its PostgreSQL connection. Fresh end-to-end DeepSeek text/image calls timed out; the live Graph container has not loaded the SSE heartbeat fix. Performance remains intentionally unmeasured until the remaining functional/runtime checks close.
+**Status:** Affected-surface checks pass: frontend Twin/Boss recovery, admin components/pages/API/router, typecheck, lint, and production build; backend CORS/media focused tests (8), Graph full suite (1871 passed, 1 skipped), RAG full suite (158 passed, 2 skipped), Nginx contract checks (9), and `TutorDailyRequestLimitServiceTest` pass. A serial Maven rerun reached 1430 tests with 0 assertion failures but 7 environment errors: six Testcontainers containers could not bind random Docker host ports (`address already in use`) and the long-term simulation lost its PostgreSQL connection. Historical and current provider-level DeepSeek text/image calls succeeded, while the latest full Tutor Web relay timed out; no further model probe is planned during the remaining functional work. Performance remains intentionally unmeasured until the remaining functional/runtime checks close.
+
+## Task 8: Protect classroom join codes per authenticated account
+
+**Status:** Complete in `36bb7abe`. Existing Nginx source-IP rate limiting remains; backend additionally limits each signed-in account to 30 code attempts per 10 minutes before database lookup. RED/GREEN service tests, HTTPS proxy contract, and Nginx dual-protocol checks passed. `JoinCodeAttemptThrottleTest` and `ClassroomServiceTest` passed. Process-local state assumes the documented single-worker deployment; ECS runtime was not inspected.
+
+## Task 9: Redact unexpected Tutor workflow errors
+
+**Status:** Complete in `36bb7abe`. Unexpected exceptions are logged server-side with stack traces and returned to the browser as a fixed `TUTOR_WORKFLOW_FAILED` envelope. The regression test reproduced credential-like text in the old SSE response before the fix. Tutor workflow, AutoGen, attachment, coach graph, task events, ask stream, and image-input suites passed (93); Ruff passed.
+
+## Current environment note
+
+The configured SSH destination resolves through the TUN default route. The repository's WSL instructions require adding a direct host route, but this session cannot obtain the local sudo password, so no ECS SSH connection was attempted. Production Piston and Nginx runtime state remains unverified; repository configuration was not changed.

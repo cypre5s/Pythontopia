@@ -16,6 +16,15 @@
 - Graph provider 直接真实调用 DeepSeek 两次：文本请求精确返回校验串；合成 PNG 识别为黄色背景、蓝色正方形；两个响应均为 Python 字符串，无图片块和工具调用。这是 provider 级验证，不替代 Web Tutor 联测；费用/token 未核对。
 - 已纠正文档状态：历史三阶段 Phaser Boss 浏览器胜利测试对有合格先修证据的账号通过；新生需要先完成真实主线学习与测评，未伪造掌握证据。
 - 本次未运行性能测试。下一步完成当前工作区全栈回归和工程质量收敛，并继续核对 Tutor live 对照与学习首题入口。
+- 复核 Tutor 用量入口：普通 `/api/tutor/ask` 与固定阶段 workflow 都在请求模型前调用 `reserve(userId)`，不按 conversationId 计量。部署默认 30 次/账号/日及全站 300 次/日，`./dev.sh` 明确关闭应用级限额；本轮 `mvn -q -Dtest=TutorDailyRequestLimitServiceTest test` 退出码为 0。供应商自身余额/速率限制仍独立生效。
+- 用户指出重复模型探针偏离整体任务后，停止新增 DeepSeek 调用。此前本轮 provider 级两次真实调用均成功：`PYT-TEXT-641` 原样返回；合成 PNG 识别为蓝圆和黄底。上一次 Tutor Web SSE 仍超时，本轮没有重复 Web 请求。
+- 管理台可访问性按 W3C WAI 数据表与 `aria-current` 指引复核；现有两张表的列标题均有 `scope="col"`，分页当前页使用 `aria-current="page"`，本项无需代码修改。
+- 数字孪生选题职责复核确认：`BossService.selectFrontier` 读取服务端 `LearnerTwinService.frontier`，由 `AdaptivePracticePolicy` 排序；Boss 难度通过同一 policy 的 `recommendedDifficulty` 计算。该服务类已有规则单测与此前 46 项 Twin 定向回归，无需再造第二套策略。
+- 建立总任务清单与优先顺序于 `docs/plans/2026-10-15-web-system-implementation-plan.md`；最新本地检查点 `36bb7abe`，未推送/部署。下一步聚焦远征活动 run 恢复和 Web 路由动作矩阵，不重复验证已通过的模型 provider 能力。
+- 为 Web 路由动作矩阵补无模型浏览器检查：9 个学生保护入口在匿名状态全部去 `/login`；真实新注册学生访问 `/admin/operations`、`/admin/users`、`/teacher`、`/teacher/review` 均去 `/world`。临时账号 id 640 已退出并删除，数据库确认用户行数为 0。现有公网验收登录守卫/登录页测试 2/2 通过。
+- 查看本地课程可用题：无先修 KC-001/002/004/006 都没有静态编程题，也没有已批准 AI 编程题；所以无法用新生合法创建远征 run 验证刷新恢复，保持待办而不补造 mastery。
+- 生产只读 SSH 未尝试：`ip route get` 显示目标走 TUN；按 AGENTS 需要为当前 eth2 网关加 host route，但 sudo 要求未提供的本机密码。记录阻塞后转回本地工作，未连接/修改 ECS。
+- 在 `frontend/src/` 扫描显式 `any`/`as any` 与空命名 `void` 函数，未发现违规项；空箭头只用于 fullscreen Promise 错误捕获及测试待决 Promise。不为统一表面风格批量重命名或格式化。
 
 ## 2026-10-14 当前续接
 
