@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-16 — 移除 Web 闲置语音输入链路
+
+- 全仓调用点检查确认浏览器语音识别、录音采集与 ASR 上传 helper 均无产品调用；删除这些未接线的 Web 实现及仅覆盖它们的测试，保留后端禁用端点供既有跨端合同兼容。
+- ChatComposer 无语音控件回归 14/14，前端 typecheck、定向 ESLint、残留引用扫描与 diff 检查通过。DeepSeek 文本/图片能力没有重测；此项仅收敛 Web 输入能力为文本与图片。
+
 ## 2026-10-16 — 防止 B 站检索词写入日志
 
 - 放宽视频时长筛选时不再记录原始搜索词；Graph 开发 Compose 与生产镜像均关闭 Uvicorn access log，避免默认请求行记录 query string。公网 Nginx 仍记录不含参数的 `$uri`。

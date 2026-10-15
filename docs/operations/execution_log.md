@@ -652,5 +652,21 @@
 ## 2026-10-16 — KC-011 与主线地图窄屏续验
 
 - 只读核对共享审核库元数据：KC-011 已批准题为 chapter 2 / stage 1 / kind `NULL` / difficulty 1；对应主线 stage ID 5，第二章解锁检查位于 `MainlineService.stageDetail`。新学生没有第二章资格，本轮没有直访受限练习、提交题目或更改学习记录，也没有调用 DeepSeek。
-- 真实 Chromium 学生注册后打开 `/mainline-map`：320px 下地图页面及章节列表正常，`documentElement.scrollWidth` 和 `body.scrollWidth` 均为 320、页面错误 0、API 只有认证与主线 overview 读取。临时学生已删除并确认用户名残留为 0。
-- 首次点击的是默认视觉隐藏的 `.map-nodes-a11y` 镜像列表，页面提示其被地图画布/抽屉拦截；因此没有把它记作触屏交互通过。真正的 Phaser 画布触屏选章仍待验证。没有代码改动或模型请求。
+- 真实 Chromium 学生注册后打开 `/mainline-map`：320px 下地图页面及章节列表正常，`documentElement.scrollWidth` 和 `body.scrollWidth` 均为 320、页面错误 0、API 只有认证、刷新与主线 overview 读取。关闭章节详情后触摸 Phaser 画布（96, 550）选中第 3 章并重新打开详情；画布触屏链路通过，页面宽度仍为 320。模型请求 0。
+- 首次误点的是默认视觉隐藏的 `.map-nodes-a11y` 镜像列表，被画布/抽屉拦截；这是错误测试入口，不是触屏故障，未计入通过数。临时学生已删除并确认用户名残留为 0。没有代码改动或模型请求。
+
+## 2026-10-16 — 收敛 Web 输入为文本与图片
+
+- 全仓确认 `useVoiceInput`、`useAudioRecorder` 和 `transcribeAudio` 没有活跃 Web 调用点；移除闲置浏览器 SpeechRecognition/MediaRecorder 实现、ASR 上传 helper 和只覆盖这些代码的测试。后端 ASR endpoint 保持硬关闭，以兼容既有非 Web API 合同。
+- Provider 只读审计确认本机 `.env` 与运行 Graph 均使用 DeepSeek provider、host 和 allowlisted 模型；未读取或输出密钥。本轮没有重复 DeepSeek 调用。
+- 验收：ChatComposer 无语音控件回归 14/14、前端 typecheck、`media.ts` 与该组件测试的定向 ESLint、残留引用扫描和 diff 检查通过。DeepSeek 文本/图片、后端 ASR 和非 Web 客户端行为未重测或修改。
+
+## 2026-10-16 — 远征真实验收资格只读复核
+
+- 只读 Postgres 聚合覆盖 `focusChapter=null` 的后期挑战 run：11 个活跃的第 2 章以上挑战节点中，先修 KC 有真实通过事件且达到门槛的节点为 0；7 个账号当前题为未结算 `CONSUMED`，另 4 个账号题为 `READY`。账号身份未知，不能作为 QA 学情样本或消费 READY 题。
+- 审核共享库第 2 章以上 `dual_track`/`closed_loop` 题数量为 0。活动 run 页面刷新只读服务端快照；“继续”会启动后台预取，可能调用 DeepSeek。本次只读检查未操作业务数据或调用模型，等待已确认 QA 学生经正常学习达到先修门槛。
+
+## 2026-10-16 — 敏感字段日志窄扫描
+
+- 对 Java、Graph、RAG 的单行日志语句按凭证、查询、提示词、内容、payload、文件名和用户标识做源码搜索。唯一 Java 候选是旧讯飞图片理解分支的数值 userId 日志；`ImageUnderstandingProperties.isEnabled()` 固定返回 false，入口在抵达该日志前即返回，因此当前运行路径不可达。Graph/RAG 此窄扫描无命中。
+- 没有代码改动或测试；该同一行搜索不能覆盖跨行 logger 调用或封装日志，全仓日志审计仍未完成。没有模型请求或业务数据写入。

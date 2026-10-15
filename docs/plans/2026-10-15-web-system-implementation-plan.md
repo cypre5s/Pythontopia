@@ -14,7 +14,7 @@
 
 ### 当前状态快照（2026-10-16）
 
-**已完成并可复用的证据：** DeepSeek 文本及合成 PNG 输入曾通过真实调用，Tutor 响应为文本；最近 Tutor 浏览器流程触发题目导读与无帮助反馈两个事件，2 次 DeepSeek completion 均 HTTP 200，并显示非空文本卡片。另已完成 DeepSeek provider 静态审计：在线 LLM 只允许 `api.deepseek.com` 与批准模型，TTS/ASR/讯飞图片服务恒关闭。账号级用量锁、事件专属 AutoGen 阶段、run 检查点、附件隔离、Boss Phaser 场景、Twin P0、共享选题策略、AI 题库审核、主要管理页操作、安全基线及多项敏感日志修复均已有实现和定向验证。DeepSeek 文本/图片调用与 Tutor 产品链路均封账，不再重复；仅当具体产品代码改变且必须走模型路径时，才做一次该路径验证。本轮已将资源/章测提示词的动态画像、记忆、检索证据、审查和错题上下文从 `system` 移至 `user`，Graph 全量测试 1911 passed/1 skipped；并对实际章测 prompt 发起一次 DeepSeek completion，基于 3 页 RAG 证据解析出 1 道单选题。图片 Web 中继稳定性保留为未验证项。
+**已完成并可复用的证据：** DeepSeek 文本及合成 PNG 输入曾通过真实调用，Tutor 响应为文本；最近 Tutor 浏览器流程触发题目导读与无帮助反馈两个事件，2 次 DeepSeek completion 均 HTTP 200，并显示非空文本卡片。另已完成 DeepSeek provider 静态审计：在线 LLM 只允许 `api.deepseek.com` 与批准模型，TTS/ASR/讯飞图片服务恒关闭。本机 `.env` 与运行 Graph 的 provider/host/model 配置一致，密钥未输出；浏览器语音识别、录音采集和 ASR 上传的无调用 Web 代码已删除，后端 ASR 禁用合同保留。账号级用量锁、事件专属 AutoGen 阶段、run 检查点、附件隔离、Boss Phaser 场景、Twin P0、共享选题策略、AI 题库审核、主要管理页操作、安全基线及多项敏感日志修复均已有实现和定向验证。DeepSeek 文本/图片调用与 Tutor 产品链路均封账，不再重复；仅当具体产品代码改变且必须走模型路径时，才做一次该路径验证。本轮已将资源/章测提示词的动态画像、记忆、检索证据、审查和错题上下文从 `system` 移至 `user`，Graph 全量测试 1911 passed/1 skipped；并对实际章测 prompt 发起一次 DeepSeek completion，基于 3 页 RAG 证据解析出 1 道单选题。图片 Web 中继稳定性保留为未验证项。
 
 **2026-10-16 审查去重：** AutoGen 六阶段导学、checkpoint、附件 owner/session 绑定已在 Pythontopia 实现；`/api/tutor/ask` 也通过 AutoGen 运行作答与审查阶段。两条路径保留各自 SSE/会话合同；Alethicode 新增的异步 run 生命周期不适配现有合同，无需重复移植。管理台共享样式与表格规格已对齐，剩余差异是业务页面编排与交互，不复制 Alethicode 不适用的指标/API。Provider 静态审计未发现可达的非 DeepSeek 模型或语音请求；本轮未重复 DeepSeek 调用。
 
@@ -65,6 +65,7 @@ Graph 提示词静态续扫覆盖所有直接 `role=system` 构造点；除已�
 ### 当前工作清单
 
 - [x] DeepSeek 文本和合成 PNG 输入、文本输出已有真实调用记录；Tutor 文本产品链路已有浏览器验证，不重复通用探针。
+- [x] Web 没有活跃语音输入调用点；已移除闲置 SpeechRecognition、MediaRecorder 与 ASR 上传客户端代码/专属测试。后端仍保留硬关闭 ASR 端点以兼容现有非 Web 合同；无模型请求。
 - [x] 反思任务与 SSE 执行池隔离；队列满时跳过 best-effort 任务，不阻塞判题线程。
 - [x] 清理超过 24 小时无活动的反思用户计数，定时每 30 分钟扫描一次。
 - [x] 远征视口缩至 900px 以下时切回列表并隐藏像素塔切换；页面缩放回归覆盖 320px。
@@ -83,10 +84,11 @@ Graph 提示词静态续扫覆盖所有直接 `role=system` 构造点；除已�
 - [x] 媒体访问静态复核：作业轮询与 SSE 都校验 owner；资产匿名 URL 使用带到期时间的 HMAC，登录 owner 可直连；无 owner 的系统级资产按设计公开。旧讯飞媒体 provider 的异常原文日志目前位于 `isEnabled() == false` 的不可达分支；若以后重新启用，需先脱敏。没有外部媒体调用或数据库写入。
 - [x] Tutor AutoGen 取消操作：导学面板运行时可显式中止现有 SSE，请求身份与 checkpoint 保留以便恢复；回归 8/8、typecheck、定向 ESLint 通过。Tutor AutoGen 实现已覆盖普通问答与六阶段导学，不移植不兼容的 Alethicode run/event API。
 - [x] 讲座页动作：真实 Chromium 学生打开 `/lecture/1`，切到 AI 助教侧栏，再点击“小镇”回到 `/world`；页面错误 0、Tutor 提问/资源生成 POST 0。临时学生 721 已删除并确认用户名残留 0。
-- [ ] 继续本地安全审计；2026-10-16 已核验远征快照 PUT 的账号归属、服务端 run ID/章节/地图绑定和权威状态回读，`ExpeditionRunServiceTest` 11/11 通过；客户端 HP、分数、节点状态及历史不会写回。B 站时长筛选日志已移除原始搜索词，Graph 开发与镜像 Uvicorn access log 已关闭，公网 Nginx 仅记录 `$uri`；搜索路由 17/17、日志契约和 Compose 配置通过。重建本地 Graph 后，带合成 query 的 `/healthz` 返回 200 且运行日志无该标记。其余安全审计仍开放；生产 Piston ACL/ECS 需部署侧核验，本轮未访问或修改生产主机。
+- [ ] 继续本地安全审计；2026-10-16 已核验远征快照 PUT 的账号归属、服务端 run ID/章节/地图绑定和权威状态回读，`ExpeditionRunServiceTest` 11/11 通过；客户端 HP、分数、节点状态及历史不会写回。B 站时长筛选日志已移除原始搜索词，Graph 开发与镜像 Uvicorn access log 已关闭，公网 Nginx 仅记录 `$uri`；搜索路由 17/17、日志契约和 Compose 配置通过。重建本地 Graph 后，带合成 query 的 `/healthz` 返回 200 且运行日志无该标记。10/16 对 Java/Graph/RAG 做了按敏感字段的同一行日志源码扫描：唯一 Java 候选位于 `isEnabled()` 恒为 false 的旧讯飞图像服务，调用在限流与日志分支前返回；Graph/RAG 未命中。该窄扫描不替代全量多行/包装器日志审计。其余安全审计仍开放；生产 Piston ACL/ECS 需部署侧核验，本轮未访问或修改生产主机。
 - [x] NPC talk 当前只写本人存档且无任务/奖励/权限消费；每次写入已有节点 ID 128 字符、effects 32 项、type/key/value 64/128/1024 字符的边界。Web/Android 树继续各自运行，状态不作为可信学习或授权证据。
 - [ ] 补齐满足真实先修证据的第 2 章以上远征战斗题型，并验证有效活动 run 的刷新/异常恢复。选题策略先修回溯按课程候选总数有界；65 个 KC 跨 7 章链、`LearnerTwinServiceTest` 与 `BossServiceTest` 合计 63/63。另修复聚焦章节与先修 KC 实际章节不同导致出题/结算被误拒的问题；远征服务、PostgreSQL 集成、控制器、Boss 与预生成回归合计 126/126。真实先修账号的 battle-compatible 题型及有效 run 刷新恢复仍未完成。KC-003 原无主线编程题，已从第 1 章学生页经正常 AI 补题入口生成并自动批准入共享题库；题目是普通 `kind=NULL` 题，不满足远征 battle-compatible 类型，且没有正式判题/掌握度事件。KC-011 有已批准共享题（chapter 2 / stage 1 / kind `NULL` / difficulty 1），对应主线 stage ID 5；新学生未解锁第 2 章，按后端 `requireChapterUnlocked` 不应跳过门槛提交，因此仍未正式判题，本轮未调用模型。
-- [ ] 完成剩余 Web 可见动作矩阵与远征地图/战斗真实浏览器窄屏检查。10/16 临时学生的 `/mainline-map` 首屏在 320px 加载成功、页面/文档宽度均为 320、浏览器错误 0；章节镜像列表默认视觉隐藏，首次尝试点它被画布/抽屉挡住，不计为触屏交互通过。需从真实 Phaser 画布入口续验。
+  - 10/16 只读远征可行性复核（含 `focusChapter=null`）：11 个活跃的第 2 章以上挑战节点中，可信先修达标为 0；其中 7 个账号持有未结算 `CONSUMED` 题，4 个账号有 `READY` 题，身份均无法确认是临时 QA。审核共享库内第 2 章以上 `dual_track`/`closed_loop` 题为 0。不得消费未知账号 READY 题或操作其存档。单纯页面刷新走 GET 快照；点击“继续”会触发后台预取，可能调用模型，当前不执行。需要正常流程中真实先修达标且已确认授权的 QA 学生后再做联测。
+- [ ] 完成剩余 Web 可见动作矩阵与远征地图/战斗真实浏览器窄屏检查。10/16 临时学生的 `/mainline-map` 在 320px 加载成功、文档/页面宽度均为 320、浏览器错误 0；关闭章节详情后触摸 Phaser 画布能打开章节面板（选中第 3 章），模型请求 0。首次误点视觉隐藏的辅助列表未计通过。地图触屏项已闭合；远征 Boss 战窄屏与其余页面动作矩阵仍待验。
 - [ ] 等待足够真实样本后评估 Twin A/B 与 7 日延迟结果。
 - [ ] 功能收敛后完成工程整理，最后再测性能；不重复已通过的 DeepSeek 测试。
 - [ ] 后端全量 Maven 仍未通过：2026-10-16 新鲜复跑 `mvn -o test` 共 1509 项，0 个断言失败、7 个错误；6 个 Testcontainers 错误是 Docker 随机主机端口绑定返回 `address already in use`，长期仿真在全量运行中连接被重置。单独复跑长期仿真通过，`CoursePackServiceIntegrationTest` 仍随机端口冲突（46474）。只读诊断确认 Surefire 未配置并行，失败端口位于当前 `ip_local_port_range=44620-48715`，诊断时该范围观察到 44 个 socket 状态、失败端口无监听；端口占用发生时的具体进程仍未知，因此不归因为应用缺陷，也不能标记全量通过。未跳过或降级测试；不再为碰运气重跑全量。

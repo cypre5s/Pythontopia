@@ -122,19 +122,3 @@ export async function getMediaJob(id: number): Promise<MediaJobDto> {
   });
   return res.data;
 }
-
-/** Legacy ASR response; the server keeps this route disabled. */
-export interface AsrResponse {
-  text: string;
-  degraded: boolean;
-}
-
-/** Uploads to the disabled compatibility route; callers should use text input. */
-export async function transcribeAudio(audio: Blob): Promise<AsrResponse> {
-  const form = new FormData();
-  form.append('audio', audio, 'speech.webm');
-  const res = await http.post<AsrResponse>('/api/media/asr', form, {
-    suppressNetworkToast: true,
-  });
-  return res.data;
-}
