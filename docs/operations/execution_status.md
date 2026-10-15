@@ -2,7 +2,7 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-15）**：聚焦 Web，最新本地检查点为 `36bb7abe`。Tutor 固定阶段 AutoGen 继续复用现有 API；本轮 DeepSeek provider 层真实纯文本与 PNG 输入各 1 次成功，输出都是文本，图片识别结果正确；最新 Tutor SSE Web 联测曾超时，暂停重复模型探针，先推进其他事项。课堂加入码账号限速与 Tutor 错误脱敏已提交。Tutor 每账号 30 次/日、共享 300 次/日限额只在部署启用；`./dev.sh` 本地关闭应用级日限额，定向限额测试通过。全量 Maven 最近一次 1446 tests 无断言失败，但有 7 个 Docker/PostgreSQL 环境错误，不能标记全量通过。前端全量 Vitest 275 files / 2604 tests、typecheck、lint 与 production build 曾新鲜通过；Graph 全量 1871 passed / 1 skipped，RAG 158 passed / 2 skipped。KC-010 补题和第二章三个主线小节已有真实 Web 判题闭环；KC-011 新题与远征先修 KC-008/KC-011 证据仍待完成。Twin P0 数据源/周报/证据闭环已有代码和定向验证，个性化 A/B 与 7 日延迟效果尚未验证。剩余工作与执行顺序维护在 [2026-10-15 Web implementation checklist](../plans/2026-10-15-web-system-implementation-plan.md)：远征活动 run 刷新恢复、管理台管理员浏览器动作和 Web 路由矩阵、工程审查、Maven 环境错误、生产 Piston/边缘配置。性能最后测，非 Web 客户端不在范围。
+> **当前快照（2026-10-15）**：聚焦 Web，最新本地代码检查点为 `36bb7abe`（文档状态检查点 `09ae7f76`）。Tutor 固定阶段 AutoGen 继续复用现有 API；本轮 DeepSeek provider 层真实纯文本与 PNG 输入各 1 次成功，输出都是文本，图片识别结果正确；最新 Tutor SSE Web 联测曾超时，暂停重复模型探针，先推进其他事项。课堂加入码账号限速与 Tutor 错误脱敏已提交。Tutor 每账号 30 次/日、共享 300 次/日限额只在部署启用；`./dev.sh` 本地关闭应用级日限额，定向限额测试通过。全量 Maven 最近一次 1446 tests 无断言失败，但有 7 个 Docker/PostgreSQL 环境错误，不能标记全量通过。前端全量 Vitest 275 files / 2604 tests、typecheck、lint 与 production build 曾新鲜通过；Graph 全量 1871 passed / 1 skipped，RAG 158 passed / 2 skipped。KC-010 补题和第二章三个主线小节已有真实 Web 判题闭环；KC-011 新题与远征先修 KC-008/KC-011 证据仍待完成。Twin P0 数据源/周报/证据闭环已有代码和定向验证，个性化 A/B 与 7 日延迟效果尚未验证。剩余工作与执行顺序维护在 [2026-10-15 Web implementation checklist](../plans/2026-10-15-web-system-implementation-plan.md)：远征活动 run 刷新恢复、管理台管理员浏览器动作和 Web 路由矩阵、工程审查、Maven 环境错误、生产 Piston/边缘 ACL 运行态。性能最后测，非 Web 客户端不在范围。
 
 ## 2026-10-15 当前续接：班级加入码账号限速
 
@@ -31,6 +31,7 @@
 - 无登录态 Playwright 矩阵覆盖 `/world`、`/workshop`、`/expedition`、学习分身、教师页、审核页、管理台、Boss 和主线地图，共 9/9 正确重定向 `/login`；真实临时学生会话访问 4 个管理/教师路由均被送回 `/world`，随后账号 640 已删除。现有 E2E 两项登录页/未登录守卫用例也通过（2/2）。
 - 远征 active-run 浏览器恢复仍未验证：本地 4 个无先修根 KC（001/002/004/006）当前无课程编程题或已批准 AI 编程题；新账号无法合法开局，当前也没有可用的合格学习账号会话。未伪造掌握事件。
 - 生产 SSH 只读核查未执行：目标地址路由当前指向 TUN，添加仓库说明的 eth2 直连路由需要本机 sudo 密码，本会话不可用；ECS/Piston/Nginx 运行态继续未核实。
+- 生产 Piston 静态合同核对：Compose 强制配置 Piston URL/版本/token，ECS 预检只接受 HTTPS 或契约识别的私网 URL；`bash deploy/scripts/test_piston_http_host_contract.sh` 通过。安全源码审查显示 Piston 自己不校验 Bearer token，生产必须由真实私网 ACL 或代理做鉴权；当前 ECS 运行态尚未核实。
 - 局部工程扫描检查整个 `frontend/src/` 的显式 `any` / `as any` 和空命名 `void` 函数，未发现违反 strict TypeScript 的项；空箭头回调只命中 fullscreen 错误吞掉和测试待决 Promise。未做无依据的全库重命名/格式化。
 
 ### 实时状态更新（本节优先于下方较早进度记录）

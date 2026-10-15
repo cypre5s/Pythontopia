@@ -22,7 +22,7 @@
 - [ ] 远征：用有效先修学习账号从服务端活动 run 刷新并恢复；本地根 KC-001/002/004/006 当前均无课程编程题或已批准 AI 编程题，且没有可用的合格账号会话；不要伪造掌握证据。
 - [ ] Web 验收：管理台真实管理员写操作和主要 Web 路由/动作矩阵仍需完成。匿名保护路由和学生角色拒绝管理/教师路由已验证。
 - [ ] 工程收尾：按 Web 审查清单继续修复可复现的命名、交互、错误态或可访问性缺陷；本轮 strict TypeScript 源码扫描未发现 `any` / `as any` 或空命名 `void` 函数；空箭头仅见 fullscreen Promise 错误吞掉及测试中的待决 Promise。
-- [ ] 环境/线上核对：全量 Maven 的 7 个环境错误、生产边缘限流运行态、Piston/ECS 配置待确认；当前 SSH 需要 sudo 修改本机直连路由，本轮未尝试远端连接；不得推送或部署。
+- [ ] 环境/线上核对：全量 Maven 的 7 个环境错误、生产边缘限流与 Piston 网络 ACL 运行态、ECS 状态待确认；Piston Compose/preflight 静态契约已通过，但 Piston API 本身不验证 Bearer token，必须由私网 ACL 或代理实施访问控制。当前 SSH 需要 sudo 修改本机直连路由，本轮未尝试远端连接；不得推送或部署。
 - [ ] 学习效果：Twin A/B 和 7 日延迟复测需有合适真实样本，现阶段不可宣称有效提升。
 - [ ] 后续增强（已按精简计划暂缓）：未来分岔的真实学习结果评估与 BKT 概率模型不属于当前闭环验收门槛。
 - [ ] DeepSeek Web Tutor：历史 Vite→Spring→Graph 文图闭环成功过；2026-10-15 最新 SSE 联测超时。provider 层本轮文字和图片输入复验成功；先完成其他功能，不重复发模型探针。
@@ -127,4 +127,4 @@ Run performance sampling last. Separate deterministic API timing from Graph/Deep
 
 ## Current environment note
 
-The configured SSH destination resolves through the TUN default route. The repository's WSL instructions require adding a direct host route, but this session cannot obtain the local sudo password, so no ECS SSH connection was attempted. Production Piston and Nginx runtime state remains unverified; repository configuration was not changed.
+The configured SSH destination resolves through the TUN default route. The repository's WSL instructions require adding a direct host route, but this session cannot obtain the local sudo password, so no ECS SSH connection was attempted. Production Piston and Nginx runtime state remains unverified. Static production configuration requires the Piston URL/version/token and restricts the URL to HTTPS or a private address; the Piston API does not validate its Bearer token, so the real network ACL or an auth-checking proxy must be confirmed before production sign-off. Repository configuration was not changed.

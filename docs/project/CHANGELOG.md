@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-15 — Piston 生产接入边界核对
+
+- 核对生产 Compose 与 ECS 预检：Piston URL、运行时版本和 token 为必需配置；URL 限定 HTTPS 或受认可的私网地址。`bash deploy/scripts/test_piston_http_host_contract.sh` 通过。
+- 源码核查确认 Piston API 本身不验证 Bearer token，因此生产仍必须通过私网 ACL 或鉴权代理限制访问。
+- 本轮未连接 ECS；本机 SSH 直连路由需要不可用的 sudo 密码，生产运行态保持待核实。
+
 ## 2026-10-15 — 用量限额与 DeepSeek provider 真实续验
 
 - Tutor 普通问答和固定阶段 AutoGen 工作流都按认证用户账号预留模型额度；部署默认每账号 30 次、共享 300 次/上海自然日，本地 `./dev.sh` 明确关闭应用级日限额。`mvn -q -Dtest=TutorDailyRequestLimitServiceTest test` 通过。
