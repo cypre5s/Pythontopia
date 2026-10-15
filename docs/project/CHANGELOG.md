@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-15 — 明确工坊测验事件的证据边界
+
+- 工坊 `quiz_finished` 仍保留为客户端审计事件；KC 与轮次由客户端上报，不能直接更新掌握度或任务证据。
+- 将组件中过时的 TODO 改为信任边界说明，未改变事件处理行为。
+
 ## 2026-10-15 — Piston 生产接入边界核对
 
 - 核对生产 Compose 与 ECS 预检：Piston URL、运行时版本和 token 为必需配置；URL 限定 HTTPS 或受认可的私网地址。`bash deploy/scripts/test_piston_http_host_contract.sh` 通过。

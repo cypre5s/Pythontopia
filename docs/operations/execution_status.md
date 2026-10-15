@@ -33,6 +33,7 @@
 - 生产 SSH 只读核查未执行：目标地址路由当前指向 TUN，添加仓库说明的 eth2 直连路由需要本机 sudo 密码，本会话不可用；ECS/Piston/Nginx 运行态继续未核实。
 - 生产 Piston 静态合同核对：Compose 强制配置 Piston URL/版本/token，ECS 预检只接受 HTTPS 或契约识别的私网 URL；`bash deploy/scripts/test_piston_http_host_contract.sh` 通过。安全源码审查显示 Piston 自己不校验 Bearer token，生产必须由真实私网 ACL 或代理做鉴权；当前 ECS 运行态尚未核实。
 - 局部工程扫描检查整个 `frontend/src/` 的显式 `any` / `as any` 和空命名 `void` 函数，未发现违反 strict TypeScript 的项；空箭头回调只命中 fullscreen 错误吞掉和测试待决 Promise。未做无依据的全库重命名/格式化。
+- 核对工坊 `quiz_finished`：它是客户端来源的审计事件，不进入后端权威周报统计或画像掌握度监听；将过时 TODO 改成明确的信任边界说明，没有改变事件处理行为。
 
 ### 实时状态更新（本节优先于下方较早进度记录）
 

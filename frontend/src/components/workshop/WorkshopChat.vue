@@ -1575,7 +1575,7 @@ function finishQuiz(): void {
   playSfx("sfx_success");
   toast.show("考核结束：3 轮小测完成，小结与掌握度建议见上方点评", "success");
   // 考核完成回流学习事件（后端通用审计落库）。
-  // TODO(LearningEvent)：后续由后端把 quiz_finished 消费进画像「知识基础/情绪坚持」维度与任务 evidence。
+  // 客户端可伪造 KC/轮次，仅作审计记录，不能作为掌握度或任务 evidence。
   if (q) {
     void postLearningEvent({
       eventType: "quiz_finished",
