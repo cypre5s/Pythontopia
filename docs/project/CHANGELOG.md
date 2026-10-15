@@ -5,6 +5,11 @@
 - 全局 500 与客户端断连处理器不再把异常消息、堆栈或原始 URL 写入日志；保留请求方法、Spring 路由模板、异常类型及 traceId。章星重算失败日志去掉学生 ID 与异常正文。
 - 两项哨兵回归先 RED 后 GREEN；`GlobalExceptionHandlerSecurityTest` 与 `MainlineMasteryStarListenerTest` 合计 10/10。没有模型或网络请求。
 
+## 2026-10-16 — 脱敏工坊学情降级日志
+
+- 工坊画像维度、最近洞察、记忆 highlights/directives 和掌握度难度降级日志不再输出学生 ID，仍保留异常类型与原有空值 fallback。
+- 合成哨兵覆盖 5 种失败路径，修复前命中 `user=1`；`ResourceWorkshopServiceTest` 34/34。没有模型或网络请求。
+
 ## 2026-10-16 — 清洗 Tutor 图解中的 Mermaid SVG
 
 - Tutor 图解此前仅依赖 Mermaid `securityLevel: strict`，并将生成 SVG 直接写入 `v-html`；它漏用了工坊导图已有的 CSSOM/DOMPurify 清洗，可能保留危险 CSS 和 `foreignObject`。

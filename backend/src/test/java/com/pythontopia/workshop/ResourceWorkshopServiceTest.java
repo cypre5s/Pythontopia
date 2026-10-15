@@ -900,6 +900,44 @@ class ResourceWorkshopServiceTest {
   }
 
   @Test
+  void degradedLearnerContextDoesNotLogLearnerIdOrExceptionMessage() {
+    String sensitiveDetail = "private-mastery-detail-7fdc";
+    when(masteryEvaluator.snapshot(1L, "PY43-KC-001"))
+        .thenThrow(new IllegalStateException(sensitiveDetail));
+    when(passiveProfileService.getDimensions(1L))
+        .thenThrow(new IllegalStateException(sensitiveDetail));
+    when(insightRepository.findLatestText(1L))
+        .thenThrow(new IllegalStateException(sensitiveDetail));
+    when(memoryRetrievalService.retrieve(1L, "PY43-KC-001", 5))
+        .thenThrow(new IllegalStateException(sensitiveDetail));
+    when(memoryBriefService.buildBrief(1L, "PY43-KC-001"))
+        .thenThrow(new IllegalStateException(sensitiveDetail));
+    when(graphClient.produce(any())).thenReturn(successResponse());
+
+    Logger logger = (Logger) LoggerFactory.getLogger(ResourceWorkshopService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.DEBUG);
+    logger.addAppender(appender);
+    try {
+      service.create(
+          1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
+
+    assertThat(appender.list).hasSize(5);
+    for (ILoggingEvent event : appender.list) {
+      assertThat(event.getFormattedMessage())
+          .doesNotContain("user=1", "user 1", sensitiveDetail)
+          .contains("errorType=IllegalStateException");
+      assertThat(event.getThrowableProxy()).isNull();
+    }
+  }
+
+  @Test
   void injectsAgentStrategyDirectiveIntoGraphRequest() {
     when(graphClient.produce(any())).thenReturn(successResponse());
     when(metaReflectionService.latestDirective("ResourceDesignerAgent.handout"))

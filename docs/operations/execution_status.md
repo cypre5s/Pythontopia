@@ -13,12 +13,17 @@
 - **本轮安全修复：** Tutor 图解的 Mermaid 分支曾将未清洗 SVG 直接写入 `v-html`，与已修复的工坊思维导图形成安全边界不一致。现在复用 `sanitizeMermaidSvgMarkup`，并设置 `htmlLabels: false`；新组件回归红测复现 `foreignObject`，修复后 Tutor 图解及 SVG sanitizer 测试 4/4、typecheck、定向 ESLint、`git diff --check` 通过。未调用模型。
 - **本轮媒体边界：** 新增 `MediaTtsControllerTest`，真实 service 使用旧凭据时 `POST /api/media/tts` 以 503 `TTS_DISABLED` 拒绝，避免发起讯飞 WebSocket；与 `TtsPropertiesTest` 合计 3/3 通过。没有模型或供应商外呼。
 - **HTML 注入点续审：** 扫描当前前端全部 `v-html` / `innerHTML` 写入，确认写入前都有 HTML/ SVG 清洗；未发现新增绕过点。此项是源码范围检查，后端与外部内容边界仍未全部闭合。
-- **最近动作：** 按用户要求消除重复验证项，核实当前唯一清单与提交状态，复用 DeepSeek provider 静态审计和 Alethicode 管理台/班级对照结果；修复全局 500 与客户端断连日志中的异常正文/原始 URL，以及章星监听器日志中的学生 ID/异常正文。定向测试 10/10 通过；未发模型或网络请求。下一步继续远征与本地安全未完成项，不重做已验收的 DeepSeek、管理台样式或班级字段。
+- **最近动作：** 按用户要求消除重复验证项，核实当前唯一清单与提交状态，复用 DeepSeek provider 静态审计和 Alethicode 管理台/班级对照结果；修复全局 500、客户端断连、章星重算及工坊学情降级日志中的异常正文、原始 URL 和学生 ID。定向测试合计 10/10 + `ResourceWorkshopServiceTest` 34/34；本地 AI 限额配置已核实；未发模型或网络请求。下一步继续未闭合的安全/远征/Web 项，不重做 DeepSeek、管理台样式或班级字段验收。
 
 ## 2026-10-16 — 本地 AI 请求上限核对
 
 - `dev.sh` 在 Compose 与本地 Spring 启动前导出 `PYT_AI_REQUEST_LIMITS_ENABLED=false`；`TutorDailyRequestLimitService.reserve()` 在该配置下直接返回，应用不会写入或拒绝每日 AI 请求。生产 Compose 固定设为 `true`。
 - 这是应用级上限核对，不覆盖 DeepSeek 自身额度/限流。本轮没有发起模型请求，也没有重复 DeepSeek 测试。
+
+## 2026-10-16 — 工坊学情降级日志脱敏
+
+- 真实成功日志扫描发现工坊画像维度、最近洞察、记忆 highlights/directives 和掌握度难度降级时还会输出学生 ID。现保留原有空值 fallback，只记录异常类型。
+- 哨兵测试覆盖 5 种失败分支，修复前因 `user=1` 失败，修复后 `ResourceWorkshopServiceTest` 34/34。没有模型或网络请求。
 
 ## 2026-10-16 — 异常日志边界续审
 

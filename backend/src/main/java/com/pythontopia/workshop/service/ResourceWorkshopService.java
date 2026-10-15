@@ -547,10 +547,7 @@ public class ResourceWorkshopService {
     try {
       return insightRepository.findLatestText(userId).orElse("");
     } catch (RuntimeException ex) {
-      log.warn(
-          "workshop recent insight degraded for user={} errorType={}",
-          userId,
-          ex.getClass().getSimpleName());
+      log.warn("workshop recent insight degraded errorType={}", ex.getClass().getSimpleName());
       return "";
     }
   }
@@ -563,10 +560,7 @@ public class ResourceWorkshopService {
           .filter(s -> s != null && !s.isBlank())
           .toList();
     } catch (RuntimeException ex) {
-      log.warn(
-          "workshop memory highlights degraded for user={} errorType={}",
-          userId,
-          ex.getClass().getSimpleName());
+      log.warn("workshop memory highlights degraded errorType={}", ex.getClass().getSimpleName());
       return List.of();
     }
   }
@@ -584,9 +578,7 @@ public class ResourceWorkshopService {
       return directives.stream().limit(8).toList();
     } catch (RuntimeException ex) {
       log.warn(
-          "workshop deep memory directives degraded for user={} errorType={}",
-          userId,
-          ex.getClass().getSimpleName());
+          "workshop deep memory directives degraded errorType={}", ex.getClass().getSimpleName());
       return List.of();
     }
   }
@@ -612,10 +604,7 @@ public class ResourceWorkshopService {
     try {
       return passiveProfileService.getDimensions(userId);
     } catch (RuntimeException ex) {
-      log.warn(
-          "workshop profile dimensions degraded for user={} errorType={}",
-          userId,
-          ex.getClass().getSimpleName());
+      log.warn("workshop profile dimensions degraded errorType={}", ex.getClass().getSimpleName());
       return List.of();
     }
   }
@@ -646,7 +635,7 @@ public class ResourceWorkshopService {
               : snap.get().confidence().doubleValue();
       return difficultyBand(score, confidence);
     } catch (RuntimeException e) {
-      log.debug("targetDifficulty degraded for user {}", userId);
+      log.debug("targetDifficulty degraded errorType={}", e.getClass().getSimpleName());
       return null;
     }
   }
