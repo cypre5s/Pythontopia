@@ -3,7 +3,7 @@
 ## 2026-10-15 — Tutor 首 token 等待心跳
 
 - 修复 Tutor AutoGen 阶段等待首 token 时不发 SSE 心跳的问题：等待事件队列按现有心跳周期超时并发送注释 ping。
-- RED/GREEN：回归从“慢首 token 没有 ping”失败到通过；Tutor route / ask stream / AutoGen runtime 28 项通过，Ruff lint 通过。当前运行容器没有重载代码，真实慢模型端到端仍待验证。
+- RED/GREEN：回归从“慢首 token 没有 ping”失败到通过；全量 Graph 测试 1871 passed、1 skipped、13 warnings，Ruff lint 通过。可选 `ragas` scorer 因依赖缺失跳过；当前运行容器没有重载代码，真实慢模型端到端仍待验证。
 
 ## 2026-10-15 — 学习分身真实导航与窄屏复核
 

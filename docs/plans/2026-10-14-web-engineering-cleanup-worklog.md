@@ -11,6 +11,7 @@
 
 - 真实请求的 Spring 日志指向 Graph SSE 120 秒空闲读超时。根因是 AutoGen 等待 Tutor 事件队列时直接 `await events.get()`；流式首 token 尚未到达时，该等待没有经过已有心跳器。
 - RED/GREEN：新增慢首 token 回归，修复前没有 ping；改为用心跳剩余时间限时等待事件，超时则发 SSE 注释 ping。Tutor route / ask stream / AutoGen runtime 定向 28 项通过；Ruff lint 通过。
+- 全量 Graph `pytest -q`：1871 passed、1 skipped、13 warnings；唯一跳过因可选 `ragas` 依赖环境缺失。Ruff lint 通过。
 - 仅验证 Graph 的事件等待会定期发送 ping；本轮运行中的容器未重载改动，DeepSeek completion 仍不可用，Spring 120 秒总期限及真实慢模型整链路未验证。Ruff format check 对两个文件仍报告旧格式差异，未做整文件重排。
 
 ## 2026-10-15 — CORS 与媒体错误隔离
