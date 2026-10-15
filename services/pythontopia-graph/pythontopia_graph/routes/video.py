@@ -430,8 +430,7 @@ async def search_bilibili(
         items = _map_items(raw, limit, effective_keyword, 0)
         if items:
             _LOG.info(
-                "bilibili search '%s': duration filter relaxed -> %d items",
-                effective_keyword,
+                "bilibili search duration filter relaxed -> %d items",
                 len(items),
             )
     if with_summary:

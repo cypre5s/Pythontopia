@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import sys
 from types import SimpleNamespace
 from typing import Any
@@ -80,6 +81,39 @@ def test_search_maps_and_cleans_sample_payload(monkeypatch: pytest.MonkeyPatch) 
     assert item["danmaku"] == 678  # video_review → danmaku
     assert item["pubdate"] == 1600000000
     assert item["url"] == "https://www.bilibili.com/video/BV1xx411c7XD"
+
+
+def test_duration_fallback_log_does_not_include_search_keyword(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    async def fake_search(keyword: str, page: int) -> dict[str, Any]:
+        return {
+            "result": [
+                {
+                    "type": "video",
+                    "bvid": "BV1longvideo",
+                    "title": "Python 循环长讲解",
+                    "author": "UP主",
+                    "description": "循环教程",
+                    "pic": "//i0.hdslb.com/long.jpg",
+                    "duration": "12:00",
+                }
+            ]
+        }
+
+    sentinel = "private-search-query-sentinel"
+    monkeypatch.setattr(video_route, "_bilibili_search_videos", fake_search)
+    caplog.set_level(logging.INFO, logger=video_route.__name__)
+
+    response = TestClient(app).get(
+        "/agents/video/bilibili/search",
+        params={"keyword": sentinel, "with_summary": "false"},
+    )
+
+    assert response.status_code == 200
+    assert len(response.json()["items"]) == 1
+    assert "duration filter relaxed" in caplog.text
+    assert sentinel not in caplog.text
 
 
 def test_bilibili_retry_log_does_not_include_search_error(monkeypatch, caplog) -> None:

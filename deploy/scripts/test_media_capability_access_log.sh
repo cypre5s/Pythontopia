@@ -6,6 +6,8 @@ FORMAT_FILE="${ROOT_DIR}/deploy/nginx/pythontopia-log-format.conf"
 SITE_FILE="${ROOT_DIR}/deploy/nginx/pythontopia.conf"
 INSTALL_FILE="${ROOT_DIR}/deploy/scripts/install_release.sh"
 ROLLBACK_FILE="${ROOT_DIR}/deploy/scripts/rollback_release.sh"
+GRAPH_COMPOSE_FILE="${ROOT_DIR}/deploy/docker-compose.yml"
+GRAPH_DOCKERFILE="${ROOT_DIR}/services/pythontopia-graph/Dockerfile"
 
 fail() {
   echo "[FAIL] $1" >&2
@@ -30,5 +32,9 @@ grep -Fq 'install -m 644 "${RELEASE_DIR}/${NGINX_LOG_FORMAT_SRC_REL}" "${NGINX_L
   || fail "release installer 未安装 log_format 文件"
 grep -Fq 'TARGET}/deploy/nginx/pythontopia-log-format.conf' "${ROLLBACK_FILE}" \
   || fail "release rollback 未恢复目标版本所需的 log_format"
+grep -Fq -- '--no-access-log' "${GRAPH_COMPOSE_FILE}" \
+  || fail "Graph 开发服务仍会记录包含 query 的 Uvicorn 请求行"
+grep -Fq -- '--no-access-log' "${GRAPH_DOCKERFILE}" \
+  || fail "Graph 镜像启动仍会记录包含 query 的 Uvicorn 请求行"
 
-echo "[PASS] Nginx access log 只记录无 query 的 URI"
+echo "[PASS] Nginx 与 Graph HTTP access log 均不记录 query string"

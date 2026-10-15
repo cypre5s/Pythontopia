@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-16 — 防止 B 站检索词写入日志
+
+- 放宽视频时长筛选时不再记录原始搜索词；Graph 开发 Compose 与生产镜像均关闭 Uvicorn access log，避免默认请求行记录 query string。公网 Nginx 仍记录不含参数的 `$uri`。
+- 合成搜索词哨兵先 RED 后 GREEN；`test_video_route.py` 17/17、日志契约脚本、Compose 配置检查、Uvicorn 参数检查与定向 Ruff 通过。重建本地 Graph 后，带合成 query 的 `/healthz` 返回 200，运行日志没有该标记；未发起 B 站或模型请求。
+
 ## 2026-10-16 — 为 KC-003 主线补充编程练习
 
 - KC-003 原无课程编程题；学生从主线学习页正常申请后，生成并通过现有自动审查，题目进入共享批准库。题面是用 `print` 输出计算思维求解五步骤的入门练习。

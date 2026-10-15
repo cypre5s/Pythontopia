@@ -624,3 +624,33 @@
 - 真实 Chromium 注册临时学生后进入 `/lecture/1`，加载讲座页并展开 AI 助教侧栏，再用“小镇”按钮返回 `/world`；两个目标页面和嵌入侧栏均可见。
 - 页面错误 0，Tutor 提问与资源生成 POST 为 0；页面读取了课程视频、章节/KC、Tutor 会话和本地 B 站列表接口。没有答题、消费资源或上报学习事件。
 - 临时学生 `qa_lecture_nav_66871830`（ID 721）已删除，按用户名复查残留为 0。
+
+## 2026-10-16 — 后端全量 Maven 复跑
+
+- 新鲜执行 `mvn -o test`：1509 项、0 个断言失败、7 个错误。6 个 Testcontainers PostgreSQL 容器由 Docker 随机映射主机端口时返回 `address already in use`；长期仿真在全量套件运行中连接重置。
+- 单独复跑 `LongTermClassroomEffectSimulationTest` 通过；单独复跑 `CoursePackServiceIntegrationTest` 仍发生随机主机端口冲突（46474）。未定位占用端口的具体进程，故只记录为环境错误，不标记后端全量通过，也不跳过测试。
+- 本轮未调用 DeepSeek、未改业务代码、未操作生产环境。
+
+## 2026-10-16 — 远征快照客户端篡改边界核验
+
+- 审阅 `PUT /api/world/expedition/run` 与全部调用点：接口只接受本人当前活跃 run 的服务端 ID，校验章节及地图拓扑后读取并返回数据库快照；请求里的 HP、分数、节点进度、遗物和历史均不落库。节点动作另经带用户行锁的服务端命令处理。
+- 定向执行 `mvn -o -Dtest=ExpeditionRunServiceTest test`：11 项通过、0 失败、0 错误，包含伪造进度字段后仍返回规范快照的断言。没有发现需修复的代码问题。
+- 该证据只覆盖快照 PUT；不代表活动 run 的真实浏览器刷新、战斗结算与完整远征状态机均已端到端验收。没有模型调用或业务数据写入。
+
+## 2026-10-16 — B 站搜索词日志隐私修复
+
+- 发现 Graph 视频检索放宽时长筛选时将 `effective_keyword` 写入 INFO；此外 Uvicorn 默认 access log 会记录请求 query。公网 Nginx 已配置为只记 `$uri`，但这不能覆盖 Graph 自身日志。
+- 搜索词哨兵测试先 RED；现日志只记录筛选放宽及结果数，Graph 开发 Compose 与镜像启动均加 `--no-access-log`。既有 Nginx `$uri` 契约保持不变。
+- `tests/test_video_route.py` 17/17，Nginx/Graph 日志契约脚本、`docker compose config -q`、Uvicorn CLI 参数检查、定向 Ruff 与 `git diff --check` 通过。测试使用模拟 B 站响应；无外部视频或模型调用。
+- 重建仅本地 Graph 容器以应用运行命令配置；`/healthz` 加合成 query 标记返回 HTTP 200，容器命令带 `--no-access-log`，两分钟容器日志中未发现标记。没有重启其他服务。
+
+## 2026-10-16 — Maven 端口错误只读诊断
+
+- 未重跑 Maven。确认 Surefire 没有并行配置；Docker 错误端口（46413–46453、46474）处于当前 Linux 本地端口分配范围 44620–48715。诊断时该范围有 44 个 socket 状态，但失败端口均无监听者；无法回溯失败发生时的具体占用进程。
+- 将 Testcontainers `address already in use` 保留为未解决的环境错误，不据此修改业务代码或声称全量测试通过，也不继续重复碰运气重跑。
+
+## 2026-10-16 — KC-011 与主线地图窄屏续验
+
+- 只读核对共享审核库元数据：KC-011 已批准题为 chapter 2 / stage 1 / kind `NULL` / difficulty 1；对应主线 stage ID 5，第二章解锁检查位于 `MainlineService.stageDetail`。新学生没有第二章资格，本轮没有直访受限练习、提交题目或更改学习记录，也没有调用 DeepSeek。
+- 真实 Chromium 学生注册后打开 `/mainline-map`：320px 下地图页面及章节列表正常，`documentElement.scrollWidth` 和 `body.scrollWidth` 均为 320、页面错误 0、API 只有认证与主线 overview 读取。临时学生已删除并确认用户名残留为 0。
+- 首次点击的是默认视觉隐藏的 `.map-nodes-a11y` 镜像列表，页面提示其被地图画布/抽屉拦截；因此没有把它记作触屏交互通过。真正的 Phaser 画布触屏选章仍待验证。没有代码改动或模型请求。
