@@ -58,11 +58,10 @@ public class MainlineMasteryStarListener {
                 starService.recalc(userId, chapter, StarSource.MASTERY);
               } catch (RuntimeException ex) {
                 log.warn(
-                    "掌握度触发的章星重算失败 user={} kc={} ch={}: {}",
-                    userId,
+                    "掌握度触发的章星重算失败 kc={} ch={} errorType={}",
                     kcCode,
                     chapter,
-                    ex.getMessage());
+                    ex.getClass().getSimpleName());
               }
             });
   }

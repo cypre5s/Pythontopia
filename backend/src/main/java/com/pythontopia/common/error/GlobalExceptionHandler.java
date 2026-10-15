@@ -5,26 +5,27 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.ConstraintViolationException;
 import java.util.List;
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.AuthenticationException;
-import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
+import org.springframework.web.HttpMediaTypeNotSupportedException;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
-import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
-import org.springframework.web.servlet.NoHandlerFoundException;
-import org.springframework.web.servlet.resource.NoResourceFoundException;
+import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
+import org.springframework.web.method.annotation.HandlerMethodValidationException;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.multipart.support.MissingServletRequestPartException;
-import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.web.servlet.HandlerMapping;
+import org.springframework.web.servlet.NoHandlerFoundException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -176,20 +177,21 @@ public class GlobalExceptionHandler {
   ResponseEntity<Void> handleClientAbort(
       AsyncRequestNotUsableException exception, HttpServletRequest request) {
     log.debug(
-        "Client aborted response stream for {} {}: {}",
+        "Client aborted response stream for {} {} traceId={}",
         request.getMethod(),
-        request.getRequestURI(),
-        exception.getMessage());
+        routePattern(request),
+        traceId(request));
     return ResponseEntity.status(499).build();
   }
 
   @ExceptionHandler(Exception.class)
   ResponseEntity<ApiError> handleException(Exception exception, HttpServletRequest request) {
     log.error(
-        "Unhandled exception for {} {}",
+        "Unhandled exception for {} {} errorType={} traceId={}",
         request.getMethod(),
-        request.getRequestURI(),
-        exception);
+        routePattern(request),
+        exception.getClass().getSimpleName(),
+        traceId(request));
     return error(
         HttpStatus.INTERNAL_SERVER_ERROR,
         "INTERNAL_ERROR",
@@ -204,10 +206,22 @@ public class GlobalExceptionHandler {
       String message,
       List<String> details,
       HttpServletRequest request) {
+    String traceId = traceId(request);
+    return ResponseEntity.status(status).body(ApiError.of(code, message, details, traceId));
+  }
+
+  private String traceId(HttpServletRequest request) {
     String traceId = (String) request.getAttribute("traceId");
     if (traceId == null || traceId.isBlank()) {
       traceId = request.getRequestId();
     }
-    return ResponseEntity.status(status).body(ApiError.of(code, message, details, traceId));
+    return traceId;
+  }
+
+  private String routePattern(HttpServletRequest request) {
+    Object mappedPattern = request.getAttribute(HandlerMapping.BEST_MATCHING_PATTERN_ATTRIBUTE);
+    return mappedPattern instanceof String pattern && !pattern.isBlank()
+        ? pattern
+        : "unmatched";
   }
 }

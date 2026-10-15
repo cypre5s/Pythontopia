@@ -2,18 +2,23 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-16）**：当前 HEAD `bd70601b`；工作树有进行中的 Mermaid SVG 安全修复、媒体 TTS HTTP 回归和清单更新。真实 DeepSeek 文本与合成 PNG 图片输入、文本输出已有全栈记录；Tutor AutoGen 产品流程也已完成真实浏览器联测。按用户要求不再重复通用 DeepSeek 探针，只有后续具体产品路径发生改动且必须调用模型时才验证该路径。Tutor、Twin P0、Phaser Boss、管理台布局及部分 Web 动作有代码和验证记录。剩余工作以安全边界、远征真实闭环、Web 动作覆盖、Twin 效果研究及工程收尾为主，性能最后测。细项只维护在下方唯一任务清单。
+> **当前快照（2026-10-16）**：当前 HEAD `05659384`（分支 `codex/deepseek-autogen-admin`）；该提交时工作树干净，本轮新增两项日志脱敏与清单修订尚未提交。真实 DeepSeek 文本与合成 PNG 图片输入、文本输出已有全栈记录，Tutor AutoGen 产品流程也已完成真实浏览器联测；provider 静态审计确认服务端 LLM 路由只允许 DeepSeek，TTS/ASR/讯飞图片服务关闭。本轮没有模型或网络请求，DeepSeek 验证已封账，不重复通用探针。Tutor、Twin P0、Phaser Boss、管理台布局/班级字段对齐及部分 Web 动作有代码和验证记录。剩余工作以本地安全边界、远征真实闭环、Web 动作覆盖、Twin 效果研究及工程收尾为主，性能最后测。细项只维护在下方唯一任务清单。
 
 ## 当前进度
 
 唯一任务清单及按优先级排列的未完成项维护在[总任务实施计划](../plans/2026-10-15-web-system-implementation-plan.md)，本页只记录最近进度和详细历史，避免出现多份清单。
 
-- **已完成并有记录：** DeepSeek 文本、合成 PNG 图片输入（均为文本输出）、Tutor 浏览器流程；Tutor AutoGen 事件阶段；Twin P0；Phaser Boss；后台主要布局；部分 Web 操作；敏感日志与 SVG CSS 修复。最近批次已提交为 `bd70601b`。
+- **已完成并有记录：** DeepSeek 文本、合成 PNG 图片输入（均为文本输出）、Tutor 浏览器流程；Tutor AutoGen 事件阶段；Twin P0；Phaser Boss；后台主要布局；部分 Web 操作；敏感日志与 SVG CSS 修复。最近已提交批次为 `05659384`。
 - **仍未完成：** 本地安全边界续审；远征真实先修/题型/刷新闭环；未覆盖的 Web 动作与窄屏验收；Twin A/B 与 7 日延迟效果；工程收尾；性能（最后执行）。生产 Piston ACL/ECS 和供应商账单属于当前环境无法核验的外部项。
 - **本轮安全修复：** Tutor 图解的 Mermaid 分支曾将未清洗 SVG 直接写入 `v-html`，与已修复的工坊思维导图形成安全边界不一致。现在复用 `sanitizeMermaidSvgMarkup`，并设置 `htmlLabels: false`；新组件回归红测复现 `foreignObject`，修复后 Tutor 图解及 SVG sanitizer 测试 4/4、typecheck、定向 ESLint、`git diff --check` 通过。未调用模型。
 - **本轮媒体边界：** 新增 `MediaTtsControllerTest`，真实 service 使用旧凭据时 `POST /api/media/tts` 以 503 `TTS_DISABLED` 拒绝，避免发起讯飞 WebSocket；与 `TtsPropertiesTest` 合计 3/3 通过。没有模型或供应商外呼。
 - **HTML 注入点续审：** 扫描当前前端全部 `v-html` / `innerHTML` 写入，确认写入前都有 HTML/ SVG 清洗；未发现新增绕过点。此项是源码范围检查，后端与外部内容边界仍未全部闭合。
-- **最近动作：** 维护唯一总任务清单，完成 Tutor Mermaid SVG 清洗、TTS HTTP 拒绝验证和前端 HTML 注入点清查；没有发 DeepSeek 请求。下一步推进远征缺题的合法学习路径，避免重跑通用模型探针。
+- **最近动作：** 按用户要求消除重复验证项，核实当前唯一清单与提交状态，复用 DeepSeek provider 静态审计和 Alethicode 管理台/班级对照结果；修复全局 500 与客户端断连日志中的异常正文/原始 URL，以及章星监听器日志中的学生 ID/异常正文。定向测试 10/10 通过；未发模型或网络请求。下一步继续远征与本地安全未完成项，不重做已验收的 DeepSeek、管理台样式或班级字段。
+
+## 2026-10-16 — 异常日志边界续审
+
+- `GlobalExceptionHandler` 的未处理异常日志原先输出完整 Throwable，客户端断连日志也记录异常正文和原始 URL；现只记录方法、Spring 路由模板、异常类型和响应 traceId。`MainlineMasteryStarListener` 原先记录学生 ID 与异常正文；现保留 KC/章节和异常类型，不记录学生 ID。
+- 两项回归各先 RED 再 GREEN；`GlobalExceptionHandlerSecurityTest` 与 `MainlineMasteryStarListenerTest` 合计 10/10。未发 DeepSeek 或其他网络请求。
 
 ## 2026-10-16 — 远征前置与本地运行态复核
 
