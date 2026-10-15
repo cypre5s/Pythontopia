@@ -157,7 +157,10 @@ public class WorkshopLearningContextService {
       payload.put("masteryWrite", false);
       eventRepository.insert(userId, "workshop_route_selected", payload, "backend", 2);
     } catch (RuntimeException ex) {
-      log.warn("workshop route observation degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "workshop route observation degraded for user={} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
     }
   }
 
@@ -166,7 +169,10 @@ public class WorkshopLearningContextService {
       String brief = profileService.profileBrief(userId);
       return brief == null ? "" : brief;
     } catch (RuntimeException ex) {
-      log.warn("workshop profile brief degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "workshop profile brief degraded for user={} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return "";
     }
   }
@@ -176,7 +182,10 @@ public class WorkshopLearningContextService {
       List<ProfileDimensionDto> values = profileService.getDimensions(userId);
       return values == null ? List.of() : values;
     } catch (RuntimeException ex) {
-      log.warn("workshop profile dimensions degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "workshop profile dimensions degraded for user={} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return List.of();
     }
   }
@@ -185,7 +194,10 @@ public class WorkshopLearningContextService {
     try {
       return memoryBriefService.buildAuthoritativeBrief(userId, query);
     } catch (RuntimeException ex) {
-      log.warn("workshop memory brief degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "workshop memory brief degraded for user={} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return new MemoryBriefDto(List.of(), List.of(), List.of(), "");
     }
   }
@@ -195,7 +207,10 @@ public class WorkshopLearningContextService {
       List<MasterySnapshotDto> values = masteryService.listSnapshots(userId);
       return values == null ? List.of() : values;
     } catch (RuntimeException ex) {
-      log.warn("workshop mastery degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "workshop mastery degraded for user={} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return List.of();
     }
   }
@@ -206,7 +221,10 @@ public class WorkshopLearningContextService {
           submissionRepository.findRecentForPlanner(userId, RECENT_SUBMISSION_LIMIT);
       return values == null ? List.of() : values;
     } catch (RuntimeException ex) {
-      log.warn("workshop submissions degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "workshop submissions degraded for user={} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return List.of();
     }
   }
@@ -217,7 +235,10 @@ public class WorkshopLearningContextService {
           eventRepository.findRecentResourceConsumptions(userId, RECENT_RESOURCE_LIMIT);
       return values == null ? List.of() : values;
     } catch (RuntimeException ex) {
-      log.warn("workshop resource usage degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "workshop resource usage degraded for user={} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return List.of();
     }
   }

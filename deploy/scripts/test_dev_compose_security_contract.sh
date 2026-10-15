@@ -81,7 +81,8 @@ PYT_RAG_ADMIN_TOKEN="$TEST_TOKEN" \
     -f "$ROOT_DIR/deploy/docker-compose.yml" config --format json |
   python3 -c '
 import json, sys
-services = json.load(sys.stdin)["services"]
+compose_config = json.load(sys.stdin)
+services = compose_config["services"]
 
 def assert_loopback_port(service, port):
     bindings = [binding for binding in services[service].get("ports", [])
@@ -93,6 +94,15 @@ for service, port in (("postgres", 15432), ("redis", 16379), ("backend", 18080),
     assert_loopback_port(service, port)
 
 piston = services["piston"]
+judge_networks = set(piston.get("networks", {}))
+assert len(judge_networks) == 1, "Piston must use a dedicated execution network"
+judge_network = next(iter(judge_networks))
+assert compose_config["networks"][judge_network].get("internal", False) is False
+assert judge_network in services["backend"].get("networks", {})
+assert "default" in services["backend"].get("networks", {})
+for service_name, service in services.items():
+    if service_name not in {"backend", "piston"}:
+        assert judge_network not in service.get("networks", {}), service_name
 assert not piston.get("privileged", False)
 assert piston["read_only"] is True
 assert set(piston["cap_drop"]) == {"ALL"}

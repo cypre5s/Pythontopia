@@ -198,7 +198,8 @@ public class StoryboardCompositionService {
       if (ex instanceof InterruptedException) {
         Thread.currentThread().interrupt();
       }
-      log.error("storyboard composition failed", ex);
+      log.error(
+          "storyboard composition failed errorType={}", ex.getClass().getSimpleName());
       throw new BusinessException(
           HttpStatus.BAD_GATEWAY, "VIDEO_COMPOSE_FAILED", "短视频合成失败，请稍后重试");
     } finally {

@@ -129,7 +129,10 @@ public class MemoryBriefService {
       }
       return items.stream().map(MemoryBriefService::toRecalledMemory).toList();
     } catch (RuntimeException ex) {
-      log.warn("authoritative memory brief degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "authoritative memory brief degraded for user {}: errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return List.of();
     }
   }
@@ -162,7 +165,10 @@ public class MemoryBriefService {
       List<RecalledMemory> recalled = providerRouter.recall(userId, query, RECALL_LIMIT);
       return recalled == null ? List.of() : recalled;
     } catch (RuntimeException ex) {
-      log.warn("memory brief recall degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "memory brief recall degraded for user {}: errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return List.of();
     }
   }
@@ -299,7 +305,10 @@ public class MemoryBriefService {
     try {
       reviews = reviewStateRepository.findAll(userId);
     } catch (RuntimeException ex) {
-      log.warn("memory brief review-state degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "memory brief review-state degraded for user {}: errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return List.of();
     }
     if (reviews == null || reviews.isEmpty()) {
@@ -347,7 +356,10 @@ public class MemoryBriefService {
     try {
       dims = profileService.getDimensions(userId);
     } catch (RuntimeException ex) {
-      log.warn("memory brief profile degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "memory brief profile degraded for user {}: errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return Map.of();
     }
     if (dims == null || dims.isEmpty()) {

@@ -48,7 +48,8 @@ public class MemoryEmbeddingWriter {
       }
       memoryEmbeddingRepository.upsert(eventId, embedding, MEMORY_EMBEDDING_MODEL);
     } catch (RuntimeException ex) {
-      log.warn("memory embedding skip eventId={}: {}", eventId, ex.getMessage());
+      log.warn(
+          "memory embedding skip eventId={} errorType={}", eventId, ex.getClass().getSimpleName());
     }
   }
 

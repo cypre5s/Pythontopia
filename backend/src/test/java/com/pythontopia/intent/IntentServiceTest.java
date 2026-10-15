@@ -7,6 +7,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.coursepack.domain.CourseKc;
@@ -23,8 +26,9 @@ import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
-import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
 
 /**
  * 验证 {@link IntentService} 的画像注入：仅学生角色把 {@link PassiveProfileService#profileBrief(Long)}
@@ -100,11 +104,24 @@ class IntentServiceTest {
   void profileFailureDegradesToEmptyBrief() {
     CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
     IntentRouteRequest req = request();
-    when(passiveProfileService.profileBrief(7L)).thenThrow(new IllegalStateException("db down"));
+    String sentinel = "private-intent-profile-log-sentinel";
+    when(passiveProfileService.profileBrief(7L)).thenThrow(new IllegalStateException(sentinel));
     when(graphClient.route(eq(req), eq(""))).thenReturn(RESPONSE);
 
-    assertThat(service.route(student, req)).isSameAs(RESPONSE);
+    Logger logger = (Logger) LoggerFactory.getLogger(IntentService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThat(service.route(student, req)).isSameAs(RESPONSE);
+    } finally {
+      logger.detachAppender(appender);
+    }
     verify(graphClient).route(req, "");
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=IllegalStateException"))
+        .noneMatch(message -> message.contains(sentinel));
   }
 
   @Test

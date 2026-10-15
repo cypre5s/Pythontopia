@@ -11,6 +11,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.pythontopia.feynman.dto.FeynmanDtos.Verdict;
@@ -28,6 +31,7 @@ import java.util.Optional;
 import java.util.concurrent.Callable;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
@@ -138,12 +142,27 @@ class FeynmanJudgeServiceTest {
     givenSession("TAUGHT", 101L);
     givenProducedCode("print(1)");
     givenHiddenCase("2\n", SECRET_EXPECTED);
-    doThrow(new IllegalStateException("pool down")).when(judgeWorkerPool).submitAndWait(any());
+    String sentinel = "private-feynman-judge-error-sentinel";
+    doThrow(new IllegalStateException(sentinel)).when(judgeWorkerPool).submitAndWait(any());
 
-    Verdict verdict = service.judge(7L, 10L);
+    Logger logger = (Logger) LoggerFactory.getLogger(FeynmanJudgeService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    Verdict verdict;
+    try {
+      verdict = service.judge(7L, 10L);
+    } finally {
+      logger.detachAppender(appender);
+    }
 
     assertThat(verdict.status()).isEqualTo("ERROR");
-    assertThat(verdict.message()).doesNotContain("pool down");
+    assertThat(verdict.message()).doesNotContain(sentinel);
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=IllegalStateException"))
+        .noneMatch(message -> message.contains(sentinel));
+    assertThat(appender.list).allSatisfy(event -> assertThat(event.getThrowableProxy()).isNull());
     verify(publisher, never()).publishEvent(any(LearningEvent.TaughtAiFailed.class));
     verify(jdbc, never()).update(eq(FAIL_CLAIM_SQL), eq(10L));
   }

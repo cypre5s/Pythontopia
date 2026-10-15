@@ -7,6 +7,7 @@ import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
 import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
+import com.pythontopia.world.boss.review.ApprovedBossProblem;
 import com.pythontopia.world.boss.review.BossProblemReviewRepository;
 import jakarta.annotation.PostConstruct;
 import java.time.Duration;
@@ -319,16 +320,27 @@ public class EndlessPregenService {
         log.info("skip cancelled prefetch job={} attempt={}", jobId, generationAttempt);
         return;
       }
+      Optional<ApprovedBossProblem> approved =
+          reviewRepository == null
+              ? Optional.empty()
+              : reviewRepository.findApproved(chapter, stage, kcCode, kind, difficulty);
+      boolean reusedApprovedProblem = approved.isPresent();
       BossInternalProblem problem =
-          graphClient.requestProblem(
-              userId, chapter, stage, kcCode, difficulty, preferredKc, kind, signals);
+          approved
+              .map(ApprovedBossProblem::problem)
+              .orElseGet(
+                  () ->
+                      graphClient.requestProblem(
+                          userId, chapter, stage, kcCode, difficulty, preferredKc, kind, signals));
       if (problem == null || problem.problemId() == null) {
         throw new IllegalStateException("graph returned an empty problem");
       }
       if (problem.chapter() != chapter
           || problem.stage() != stage
           || !Objects.equals(problem.kcCode(), kcCode)
-          || (difficulty != null && problem.difficulty() != difficulty)) {
+          || (!reusedApprovedProblem
+              && difficulty != null
+              && problem.difficulty() != difficulty)) {
         throw new IllegalStateException(
             "generated problem chapter/stage/KC/difficulty did not match the request");
       }
@@ -338,18 +350,20 @@ public class EndlessPregenService {
       if (reviewRepository == null) {
         throw new IllegalStateException("Boss problem approval is unavailable");
       }
-      try {
-        boolean approved =
-            reviewRepository.approveAutomaticallyIfNotDuplicate(
-                userId, kind, chapter, stage, kcCode, difficulty, problem);
-        if (!approved && !reviewRepository.isApproved(problem)) {
-          throw new IllegalStateException("Boss problem failed automatic approval");
+      if (!reusedApprovedProblem) {
+        try {
+          boolean autoApproved =
+              reviewRepository.approveAutomaticallyIfNotDuplicate(
+                  userId, kind, chapter, stage, kcCode, difficulty, problem);
+          if (!autoApproved && !reviewRepository.isApproved(problem)) {
+            throw new IllegalStateException("Boss problem failed automatic approval");
+          }
+        } catch (DataAccessException ex) {
+          log.warn(
+              "could not approve pre-generated Boss problem: {}",
+              ex.getClass().getSimpleName());
+          throw new IllegalStateException("Boss problem approval failed", ex);
         }
-      } catch (DataAccessException ex) {
-        log.warn(
-            "could not approve pre-generated Boss problem: {}",
-            ex.getClass().getSimpleName());
-        throw new IllegalStateException("Boss problem approval failed", ex);
       }
       int updated =
           jdbcTemplate.update(
@@ -388,8 +402,13 @@ public class EndlessPregenService {
           jobId,
           generationAttempt);
       log.warn(
-          "prefetch failed job={} user={} ch={} kc={} difficulty={}: {}",
-          jobId, userId, chapter, kcCode, difficulty, reason);
+          "prefetch failed job={} user={} ch={} kc={} difficulty={} errorType={}",
+          jobId,
+          userId,
+          chapter,
+          kcCode,
+          difficulty,
+          ex.getClass().getSimpleName());
     }
   }
 

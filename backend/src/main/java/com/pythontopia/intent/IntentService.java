@@ -163,7 +163,10 @@ public class IntentService {
       String brief = passiveProfileService.profileBrief(user.userId());
       return brief == null ? "" : brief;
     } catch (RuntimeException ex) {
-      log.warn("intent profile brief degraded for user {}: {}", user.userId(), ex.getMessage());
+      log.warn(
+          "intent profile brief degraded for user={} errorType={}",
+          user.userId(),
+          ex.getClass().getSimpleName());
       return "";
     }
   }

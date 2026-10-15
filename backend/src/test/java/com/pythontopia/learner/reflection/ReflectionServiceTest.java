@@ -1,5 +1,6 @@
 package com.pythontopia.learner.reflection;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -12,6 +13,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.reflection.graph.InsightPayload;
@@ -20,6 +24,7 @@ import com.pythontopia.learner.reflection.graph.ReflectionGraphResponse;
 import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 /** 反思编排单测：洞察只作为建议落库，graph 故障规则兜底，空结果与空记忆早退。 */
 class ReflectionServiceTest {
@@ -91,6 +96,51 @@ class ReflectionServiceTest {
             eq("RULE"));
     // 兜底取最高频失败 KC（PY43-KC-016 出现 2 次）作为 error_pattern tag。
     // 兜底只引用真实失败事件，不含成功事件 12。
+  }
+
+  @Test
+  void graphFailureDoesNotLogStudentReflectionOrUpstreamErrorText() {
+    String sentinel = "student-reflection-graph-body-sentinel";
+    when(memoryRetrievalService.retrieve(eq(7L), isNull(), anyInt()))
+        .thenReturn(List.of(memory(10, "practice_failed", "PY43-KC-016")));
+    when(graphClient.reflect(eq(7L), anyList())).thenThrow(new RuntimeException(sentinel));
+
+    Logger logger = (Logger) LoggerFactory.getLogger(ReflectionService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      service.reflect(7L);
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=RuntimeException"))
+        .noneMatch(message -> message.contains(sentinel));
+  }
+
+  @Test
+  void memoryRetrievalFailureDoesNotLogStudentErrorText() {
+    String sentinel = "student-memory-retrieval-error-sentinel";
+    when(memoryRetrievalService.retrieve(eq(7L), isNull(), anyInt()))
+        .thenThrow(new RuntimeException(sentinel));
+
+    Logger logger = (Logger) LoggerFactory.getLogger(ReflectionService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      service.reflect(7L);
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=RuntimeException"))
+        .noneMatch(message -> message.contains(sentinel));
   }
 
   @Test

@@ -11,6 +11,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
@@ -27,10 +31,10 @@ import com.pythontopia.submission.dto.Verdict;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import com.pythontopia.submission.service.SubmissionService;
 import com.pythontopia.tutor.TutorWorkflowAttachmentService;
-import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
-import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowAgentStateDto;
 import com.pythontopia.tutor.dto.TutorWorkflowCardDto;
+import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
+import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -41,8 +45,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 
 /**
  * 导学工作流编排单测：
@@ -113,6 +118,30 @@ class TutorWorkflowServiceTest {
                       runId, fingerprint, -1, "", "{}", "RUNNING"));
             });
     when(tutorService.resolveProfileBrief(USER, null)).thenReturn("认知风格: visual");
+  }
+
+  @Test
+  void malformedCheckpointDoesNotLogStoredLearnerText() {
+    String privateAnswer = "privateStudentAnswerSentinel";
+    when(repository.findAgentState(session.id()))
+        .thenReturn(
+            Optional.of(new TutorWorkflowAgentStateDto(session.id(), privateAnswer, "{}")));
+    Logger logger = (Logger) LoggerFactory.getLogger(TutorWorkflowService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.WARN);
+    logger.addAppender(appender);
+    try {
+      service.activeSession(USER, PROBLEM);
+
+      assertThat(appender.list).hasSize(1);
+      assertThat(appender.list.getFirst().getFormattedMessage()).doesNotContain(privateAnswer);
+      assertThat(appender.list.getFirst().getThrowableProxy()).isNull();
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
   }
 
   @SuppressWarnings("unchecked")

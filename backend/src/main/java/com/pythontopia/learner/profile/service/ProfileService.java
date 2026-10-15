@@ -21,8 +21,8 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
-import org.springframework.web.client.RestTemplate;
 import org.springframework.web.client.RestClientException;
+import org.springframework.web.client.RestTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Service
@@ -154,19 +154,25 @@ public class ProfileService {
               handleTurnResult(userId, sessionId, request, data);
             }
           } catch (IOException e) {
-            log.debug("Profile SSE emitter write failed", e);
+            log.debug(
+                "Profile SSE emitter write failed errorType={}",
+                e.getClass().getSimpleName());
           }
         });
         emitter.complete();
       } catch (IOException e) {
-        log.warn("Profile turn SSE stream failed, falling back to non-streaming", e);
+        log.warn(
+            "Profile turn SSE stream failed, falling back to non-streaming errorType={}",
+            e.getClass().getSimpleName());
         try {
           ProfileTurnResponse fallback = sendTurn(userId, sessionId, request);
           String json = objectMapper.writeValueAsString(fallback);
           emitter.send(SseEmitter.event().name("result").data(json));
           emitter.complete();
         } catch (Exception fallbackEx) {
-          log.error("Profile turn SSE fallback failed", fallbackEx);
+          log.error(
+              "Profile turn SSE fallback failed errorType={}",
+              fallbackEx.getClass().getSimpleName());
           emitter.completeWithError(fallbackEx);
         }
       }
@@ -195,7 +201,9 @@ public class ProfileService {
           response.groundingResult(),
           status);
     } catch (Exception e) {
-      log.warn("Failed to handle profile turn SSE result", e);
+      log.warn(
+          "Failed to handle profile turn SSE result errorType={}",
+          e.getClass().getSimpleName());
     }
   }
 

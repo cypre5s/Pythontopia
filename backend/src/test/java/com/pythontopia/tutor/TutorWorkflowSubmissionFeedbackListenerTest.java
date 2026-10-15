@@ -7,6 +7,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.learner.event.LearningEvent;
@@ -15,6 +18,7 @@ import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
 
 class TutorWorkflowSubmissionFeedbackListenerTest {
 
@@ -161,6 +165,57 @@ class TutorWorkflowSubmissionFeedbackListenerTest {
     assertThat(plan.path("current_step_id").asText()).isEqualTo("step-1");
     assertThat(plan.path("revision").asInt()).isEqualTo(1);
     assertThat(plan.path("steps").get(0).path("status").asText()).isEqualTo("ACTIVE");
+  }
+
+  @Test
+  void malformedStoredStateDoesNotLogStudentContent() {
+    String sentinel = "private-tutor-feedback-log-sentinel";
+    when(repository.findActive(USER, PROBLEM)).thenReturn(Optional.of(session));
+    when(repository.findAgentState(session.id()))
+        .thenReturn(
+            Optional.of(
+                new TutorWorkflowAgentStateDto(
+                    session.id(), "{\"student_text\":\"" + sentinel, "{}")));
+    Logger logger = (Logger) LoggerFactory.getLogger(TutorWorkflowSubmissionFeedbackListener.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      listener.onPracticeFailed(
+          new LearningEvent.PracticeFailed(USER, "PY43-KC-016", PROBLEM, "WA", "basic"));
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=JsonEOFException"));
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getThrowableProxy)
+        .allSatisfy(throwable -> assertThat(throwable).isNull());
+  }
+
+  @Test
+  void repositoryFailureDoesNotLogExceptionBody() {
+    String sentinel = "private-tutor-feedback-db-log-sentinel";
+    when(repository.findActive(USER, PROBLEM)).thenThrow(new IllegalStateException(sentinel));
+    Logger logger = (Logger) LoggerFactory.getLogger(TutorWorkflowSubmissionFeedbackListener.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      listener.onPracticeFailed(
+          new LearningEvent.PracticeFailed(USER, "PY43-KC-016", PROBLEM, "WA", "basic"));
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=IllegalStateException"));
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getThrowableProxy)
+        .allSatisfy(throwable -> assertThat(throwable).isNull());
   }
 
   private TutorWorkflowRepository.SubmissionFeedbackProjection capturedProjection() {

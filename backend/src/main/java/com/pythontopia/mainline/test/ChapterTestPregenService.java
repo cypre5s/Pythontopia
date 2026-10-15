@@ -83,7 +83,11 @@ public class ChapterTestPregenService {
       log.warn("pregenerate 被中断 testId={} ch={}", testId, chapter);
       repository.markStatus(testId, ChapterTestStatus.FAILED);
     } catch (RuntimeException ex) {
-      log.warn("pregenerate 异常 testId={} ch={}: {}", testId, chapter, ex.getMessage());
+      log.warn(
+          "pregenerate 异常 testId={} ch={} errorType={}",
+          testId,
+          chapter,
+          ex.getClass().getSimpleName());
       repository.markStatus(testId, ChapterTestStatus.FAILED);
     } finally {
       if (acquired) {

@@ -120,10 +120,13 @@ public final class GraphStreamRelay {
         sendTerminalError(emitter, CODE_INTERRUPTED, MSG_INTERRUPTED);
       }
     } catch (SocketTimeoutException e) {
-      log.error("Graph SSE relay timed out (read-timeout {} ms) for {}", readTimeoutMs, url, e);
+      log.error(
+          "Graph SSE relay timed out readTimeoutMs={} errorType={}",
+          readTimeoutMs,
+          e.getClass().getSimpleName());
       sendTerminalError(emitter, CODE_TIMEOUT, MSG_TIMEOUT);
     } catch (IOException | RuntimeException e) {
-      log.error("Graph SSE relay failed for {}", url, e);
+      log.error("Graph SSE relay failed errorType={}", e.getClass().getSimpleName());
       sendTerminalError(emitter, CODE_UNAVAILABLE, MSG_UNAVAILABLE);
     } finally {
       if (connection != null) {
@@ -157,7 +160,9 @@ public final class GraphStreamRelay {
           try {
             emitter.send(SseEmitter.event().name(eventName).data(data));
           } catch (IOException | IllegalStateException sendFailure) {
-            log.debug("SSE client gone, aborting graph relay", sendFailure);
+            log.debug(
+                "SSE client gone, aborting graph relay errorType={}",
+                sendFailure.getClass().getSimpleName());
             return StreamEnd.CLIENT_GONE;
           }
           notifyPeek(onEvent, eventName, data);
@@ -209,7 +214,10 @@ public final class GraphStreamRelay {
       payload.put("message", message);
       emitter.send(SseEmitter.event().name("error").data(objectMapper.writeValueAsString(payload)));
     } catch (Exception sendFailure) {
-      log.debug("Failed to deliver terminal SSE error {} (client likely gone)", code, sendFailure);
+      log.debug(
+          "Failed to deliver terminal SSE error {} errorType={}",
+          code,
+          sendFailure.getClass().getSimpleName());
     }
   }
 
@@ -220,7 +228,10 @@ public final class GraphStreamRelay {
     try {
       onEvent.accept(event, data);
     } catch (RuntimeException e) {
-      log.warn("SSE relay peek callback failed for event={}", event, e);
+      log.warn(
+          "SSE relay peek callback failed for event={} errorType={}",
+          event,
+          e.getClass().getSimpleName());
     }
   }
 
@@ -228,7 +239,7 @@ public final class GraphStreamRelay {
     try {
       emitter.complete();
     } catch (Exception e) {
-      log.debug("SSE emitter already terminated", e);
+      log.debug("SSE emitter already terminated errorType={}", e.getClass().getSimpleName());
     }
   }
 
@@ -239,7 +250,7 @@ public final class GraphStreamRelay {
     try {
       onFinished.run();
     } catch (RuntimeException e) {
-      log.warn("SSE relay onFinished callback failed", e);
+      log.warn("SSE relay onFinished callback failed errorType={}", e.getClass().getSimpleName());
     }
   }
 }

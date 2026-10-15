@@ -11,6 +11,10 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.JwtProperties;
@@ -28,6 +32,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mockito;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 
 /**
@@ -221,20 +226,79 @@ class MediaJobServiceTest {
   void composeBusinessFailurePropagatesErrorCode() {
     when(jobRepository.findCachedSuccess(eq(USER_ID), Mockito.anyString()))
         .thenReturn(Optional.empty());
+    String sentinel = "private-storyboard-input-error-sentinel";
     when(jobRepository.insert(eq(USER_ID), eq("STORYBOARD_VIDEO"), Mockito.anyString(), Mockito.anyString()))
-        .thenReturn(job(44L, MediaJobStatus.PENDING, null, null));
+        .thenReturn(job(44L, MediaJobStatus.PENDING, null, null))
+        .thenReturn(job(45L, MediaJobStatus.PENDING, null, null));
     when(compositionService.isImageGenerationEnabled()).thenReturn(true);
     when(compositionService.isAvailable()).thenReturn(true);
     when(compositionService.compose(
             eq(USER_ID), anyList(), any(StoryboardCompositionService.ProgressSink.class)))
-        .thenThrow(new BusinessException(HttpStatus.BAD_GATEWAY, "VIDEO_COMPOSE_FAILED", "短视频合成失败：boom"));
+        .thenThrow(new BusinessException(HttpStatus.BAD_GATEWAY, "VIDEO_COMPOSE_FAILED", sentinel))
+        .thenThrow(new IllegalStateException(sentinel));
 
-    service.submit(USER_ID, sampleRequest());
+    Logger logger = (Logger) LoggerFactory.getLogger(MediaJobService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      service.submit(USER_ID, sampleRequest());
+      service.submit(USER_ID, sampleRequest());
+    } finally {
+      logger.detachAppender(appender);
+    }
 
     verify(jobRepository).updateStatus(44L, MediaJobStatus.FAILED, null, "VIDEO_COMPOSE_FAILED");
+    verify(jobRepository).updateStatus(45L, MediaJobStatus.FAILED, null, "VIDEO_COMPOSE_FAILED");
     ArgumentCaptor<Object> errorPayload = ArgumentCaptor.forClass(Object.class);
-    verify(streamRegistry).broadcast(eq(44L), eq("error"), errorPayload.capture());
-    assertThat(errorPayload.getValue().toString()).contains("合成失败").doesNotContain("boom");
+    verify(streamRegistry, Mockito.times(2))
+        .broadcast(Mockito.anyLong(), eq("error"), errorPayload.capture());
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=BusinessException"))
+        .anySatisfy(message -> assertThat(message).contains("errorType=IllegalStateException"))
+        .noneMatch(message -> message.contains(sentinel));
+    assertThat(appender.list).allSatisfy(event -> assertThat(event.getThrowableProxy()).isNull());
+    assertThat(errorPayload.getAllValues().toString()).contains("合成失败").doesNotContain(sentinel);
+  }
+
+  @Test
+  void malformedProgressDoesNotLogStoredStreamContent() {
+    String sentinel = "private-media-progress-log-sentinel";
+    Instant now = Instant.now();
+    when(jobRepository.findById(46L))
+        .thenReturn(
+            Optional.of(
+                new MediaJob(
+                    46L,
+                    USER_ID,
+                    "STORYBOARD_VIDEO",
+                    MediaJobStatus.PENDING,
+                    "fingerprint-46",
+                    "{}",
+                    sentinel,
+                    null,
+                    null,
+                    now,
+                    now)));
+    Logger logger = (Logger) LoggerFactory.getLogger(MediaJobService.class);
+    Level previousLevel = logger.getLevel();
+    logger.setLevel(Level.DEBUG);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      service.stream(46L, USER_ID);
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType="))
+        .noneMatch(message -> message.contains(sentinel));
+    assertThat(appender.list).allSatisfy(event -> assertThat(event.getThrowableProxy()).isNull());
   }
 
   @Test

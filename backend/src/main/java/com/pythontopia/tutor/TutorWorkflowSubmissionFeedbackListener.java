@@ -1,18 +1,18 @@
 package com.pythontopia.tutor;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.tutor.dto.TutorWorkflowAgentStateDto;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
-import java.util.Optional;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.regex.Pattern;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
@@ -60,7 +60,9 @@ public class TutorWorkflowSubmissionFeedbackListener {
     try {
       observeSubmission(userId, problemId, verdict, accepted);
     } catch (Exception e) {
-      log.warn("Failed to update tutor workflow coach state from submission", e);
+      log.warn(
+          "Failed to update tutor workflow coach state from submission errorType={}",
+          e.getClass().getSimpleName());
     }
   }
 
@@ -124,7 +126,9 @@ public class TutorWorkflowSubmissionFeedbackListener {
         return (ObjectNode) node;
       }
     } catch (Exception e) {
-      log.warn("Invalid tutor workflow agent state JSON; rebuilding minimal state", e);
+      log.warn(
+          "Invalid tutor workflow agent state JSON; rebuilding minimal state errorType={}",
+          e.getClass().getSimpleName());
     }
     return objectMapper.createObjectNode();
   }

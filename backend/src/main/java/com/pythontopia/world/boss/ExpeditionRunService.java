@@ -1314,7 +1314,9 @@ public class ExpeditionRunService {
     try {
       return objectMapper.readValue(json, LIST_OF_MAP);
     } catch (JsonProcessingException e) {
-      log.warn("deserialize expedition_run list-of-map failed: {}", e.getMessage());
+      log.warn(
+          "deserialize expedition_run list-of-map failed errorType={}",
+          e.getClass().getSimpleName());
       return List.of();
     }
   }
@@ -1326,7 +1328,9 @@ public class ExpeditionRunService {
     try {
       return objectMapper.readValue(json, LIST_OF_STRING);
     } catch (JsonProcessingException e) {
-      log.warn("deserialize expedition_run list-of-string failed: {}", e.getMessage());
+      log.warn(
+          "deserialize expedition_run list-of-string failed errorType={}",
+          e.getClass().getSimpleName());
       return List.of();
     }
   }

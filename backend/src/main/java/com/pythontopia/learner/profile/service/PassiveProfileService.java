@@ -442,7 +442,10 @@ public class PassiveProfileService {
     try {
       return assembleBrief(getDimensions(userId));
     } catch (RuntimeException ex) {
-      log.warn("profileBrief degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "profileBrief degraded for user={} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return "";
     }
   }

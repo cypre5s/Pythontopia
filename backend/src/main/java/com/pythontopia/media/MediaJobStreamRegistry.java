@@ -74,7 +74,8 @@ public class MediaJobStreamRegistry {
       }
       return true;
     } catch (Exception ex) {
-      log.debug("media job SSE send '{}' failed (client likely disconnected): {}", event, ex.toString());
+      log.debug(
+          "media job SSE send '{}' failed errorType={}", event, ex.getClass().getSimpleName());
       return false;
     }
   }

@@ -123,7 +123,7 @@ public class TutorService {
           try {
             persistSession(userId, request.question(), request.conversationId(), resultJson);
           } catch (Exception e) {
-            log.warn("Failed to persist tutor session", e);
+            log.warn("Failed to persist tutor session errorType={}", e.getClass().getSimpleName());
           }
         },
         release);
@@ -154,7 +154,7 @@ public class TutorService {
     try {
       return classroomDashboardService.copilotBrief(user, classroomId);
     } catch (RuntimeException ex) {
-      log.warn("Classroom copilot brief degraded for classroom {}: {}", classroomId, ex.getMessage());
+      log.warn("Classroom copilot brief degraded errorType={}", ex.getClass().getSimpleName());
       return "";
     }
   }
@@ -184,7 +184,7 @@ public class TutorService {
       return buildMemoryBrief(
           memoryRetrievalService.retrieve(userId, focusKc, MEMORY_HIGHLIGHT_LIMIT));
     } catch (RuntimeException ex) {
-      log.warn("resolveMemoryBrief degraded for user {}: {}", userId, ex.getMessage());
+      log.warn("resolveMemoryBrief degraded errorType={}", ex.getClass().getSimpleName());
       return "";
     }
   }
@@ -215,8 +215,7 @@ public class TutorService {
       return buildHistoryBrief(
           sessionRepository.findByConversation(userId, conversationId, HISTORY_TURN_LIMIT));
     } catch (RuntimeException ex) {
-      log.warn(
-          "resolveHistoryBrief degraded for conversation {}: {}", conversationId, ex.getMessage());
+      log.warn("resolveHistoryBrief degraded errorType={}", ex.getClass().getSimpleName());
       return "";
     }
   }
@@ -270,7 +269,7 @@ public class TutorService {
     try {
       brief = passiveProfileService.profileBrief(userId);
     } catch (RuntimeException ex) {
-      log.warn("resolveProfileBrief degraded for user {}: {}", userId, ex.getMessage());
+      log.warn("resolveProfileBrief degraded errorType={}", ex.getClass().getSimpleName());
       // 画像取数失败时，仍尊重学生的显式换讲法选择（无画像 brief，仅靠 override）。
       brief = "";
     }
@@ -384,7 +383,7 @@ public class TutorService {
       sessionRepository.insert(
           userId, question, answerMd, evidencePageIds, groundingStatus, conversationId);
     } catch (Exception e) {
-      log.warn("Failed to parse tutor result for persistence", e);
+      log.warn("Failed to persist tutor session errorType={}", e.getClass().getSimpleName());
     }
   }
 

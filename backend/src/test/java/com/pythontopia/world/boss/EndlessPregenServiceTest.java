@@ -14,22 +14,28 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.config.BossProblemHttpClientProperties;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
 import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
+import com.pythontopia.world.boss.review.ApprovedBossProblem;
 import java.util.List;
 import java.util.Map;
-import org.mockito.ArgumentCaptor;
-import org.mockito.InOrder;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
-import org.springframework.jdbc.core.RowMapper;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.RowMapper;
 import org.springframework.web.client.RestClientException;
 
 @ExtendWith(MockitoExtension.class)
@@ -104,6 +110,30 @@ class EndlessPregenServiceTest {
             eq(19L), eq(7L), eq(1));
     order.verify(graphClient)
         .requestProblem(7L, 1, 2, "PY43-KC-001", 2, "PY43-KC-001", "dual_track", null);
+  }
+
+  @Test
+  void approvedBankProblemMovesPendingJobToReadyWithoutCallingGraph() {
+    BossInternalProblem bankProblem = reviewedProblem().issueAs("approved-12-v2", "PY43-KC-001");
+    when(reviewRepository.findApproved(1, 2, "PY43-KC-001", "dual_track", 2))
+        .thenReturn(Optional.of(new ApprovedBossProblem(12L, 2, bankProblem)));
+    when(jdbcTemplate.update(
+            contains("status = 'READY'"), anyString(), anyString(), anyString(),
+            eq(19L), eq(7L), eq(1), eq(2), isNull(), isNull(), eq(1)))
+        .thenReturn(1);
+
+    service.generatePrefetch(
+        19L, 7L, 1, 2, "PY43-KC-001", 2, "PY43-KC-001", "dual_track", null, null, null, 1);
+
+    verify(reviewRepository).findApproved(1, 2, "PY43-KC-001", "dual_track", 2);
+    verify(reviewRepository, never())
+        .approveAutomaticallyIfNotDuplicate(anyLong(), anyString(), anyInt(), anyInt(), anyString(),
+            anyInt(), any(BossInternalProblem.class));
+    verify(jdbcTemplate)
+        .update(
+            contains("status = 'READY'"), anyString(), eq("approved-12-v2"), anyString(),
+            eq(19L), eq(7L), eq(1), eq(2), isNull(), isNull(), eq(1));
+    org.mockito.Mockito.verifyNoInteractions(graphClient);
   }
 
   @Test
@@ -182,6 +212,29 @@ class EndlessPregenServiceTest {
 
     verify(jdbcTemplate)
         .update(contains("status = 'FAILED'"), eq("graph timeout"), eq(23L), eq(1));
+  }
+
+  @Test
+  void generationFailureDoesNotLogUpstreamResponseText() {
+    String sentinel = "private-boss-question-error-sentinel";
+    when(graphClient.requestProblem(eq(7L), eq(1), eq(2), eq("PY43-KC-001"), eq(4),
+            eq("PY43-KC-001"), eq("dual_track"), eq(null)))
+        .thenThrow(new RestClientException(sentinel));
+    Logger logger = (Logger) LoggerFactory.getLogger(EndlessPregenService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      service.generatePrefetch(
+          23L, 7L, 1, 2, "PY43-KC-001", 4, "PY43-KC-001", "dual_track", null, null, null, 1);
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=RestClientException"))
+        .noneMatch(message -> message.contains(sentinel));
   }
 
   @Test

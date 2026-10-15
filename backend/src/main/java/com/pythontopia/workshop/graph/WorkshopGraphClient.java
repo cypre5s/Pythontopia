@@ -88,15 +88,21 @@ public class WorkshopGraphClient {
               emitter.send(SseEmitter.event().name(event).data(data));
             }
           } catch (IOException e) {
-            log.debug("SSE emitter write failed, client likely disconnected", e);
+            log.debug(
+                "SSE emitter write failed, client likely disconnected errorType={}",
+                e.getClass().getSimpleName());
           } catch (Exception e) {
-            log.warn("Failed to process Graph SSE result", e);
+            log.warn(
+                "Failed to process Graph SSE result errorType={}",
+                e.getClass().getSimpleName());
             sendError(emitter, "RESOURCE_STREAM_RESULT_FAILED", "资源生成结果保存失败");
           }
         });
         emitter.complete();
       } catch (IOException e) {
-        log.warn("Graph SSE stream failed, falling back to non-streaming", e);
+        log.warn(
+            "Graph SSE stream failed, falling back to non-streaming errorType={}",
+            e.getClass().getSimpleName());
         try {
           ResourceProduceResponseDto fallback = produce(request);
           String fallbackJson = objectMapper.writeValueAsString(fallback);
@@ -104,7 +110,9 @@ public class WorkshopGraphClient {
           emitter.send(SseEmitter.event().name("result").data(outboundJson));
           emitter.complete();
         } catch (Exception fallbackEx) {
-          log.error("SSE fallback also failed", fallbackEx);
+          log.error(
+              "SSE fallback also failed errorType={}",
+              fallbackEx.getClass().getSimpleName());
           sendError(emitter, "RESOURCE_STREAM_FALLBACK_FAILED", "资源生成服务暂不可用");
           emitter.completeWithError(fallbackEx);
         }
@@ -120,7 +128,9 @@ public class WorkshopGraphClient {
         return objectMapper.writeValueAsString(inner);
       }
     } catch (IOException e) {
-      log.debug("RUN_FINISHED payload parse failed, using raw data", e);
+      log.debug(
+          "RUN_FINISHED payload parse failed, using raw data errorType={}",
+          e.getClass().getSimpleName());
     }
     return data;
   }
@@ -130,7 +140,9 @@ public class WorkshopGraphClient {
       String payload = objectMapper.writeValueAsString(Map.of("code", code, "message", message));
       emitter.send(SseEmitter.event().name("error").data(payload));
     } catch (Exception sendFailure) {
-      log.debug("Failed to send SSE error event", sendFailure);
+      log.debug(
+          "Failed to send SSE error event errorType={}",
+          sendFailure.getClass().getSimpleName());
     }
   }
 }

@@ -119,7 +119,11 @@ public class NpcGreetingService {
       memories = memoryRetrievalService.retrieve(userId, null, MEMORY_LIMIT);
     } catch (RuntimeException ex) {
       // 记忆检索失败属下游故障 → 结构化降级，不伪造寒暄。
-      log.warn("npc greeting memory retrieval failed for user={} npc={}: {}", userId, npcKey, ex.getMessage());
+      log.warn(
+          "npc greeting memory retrieval failed for user={} npc={} errorType={}",
+          userId,
+          npcKey,
+          ex.getClass().getSimpleName());
       return NpcGreetingResponse.serviceUnavailable();
     }
     if (memories == null || memories.isEmpty()) {
@@ -167,7 +171,10 @@ public class NpcGreetingService {
     try {
       return buildProfileBrief(passiveProfileService.getDimensions(userId));
     } catch (RuntimeException ex) {
-      log.warn("npc greeting profile brief degraded for user={}: {}", userId, ex.getMessage());
+      log.warn(
+          "npc greeting profile brief degraded for user={} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return "";
     }
   }

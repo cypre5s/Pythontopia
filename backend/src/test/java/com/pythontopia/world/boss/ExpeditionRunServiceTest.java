@@ -9,9 +9,13 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
+import java.sql.ResultSet;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -19,6 +23,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -28,6 +33,44 @@ class ExpeditionRunServiceTest {
   private static final String RUN_ID = "123e4567-e89b-12d3-a456-426614174000";
 
   @Mock JdbcTemplate jdbcTemplate;
+
+  @Test
+  void malformedRunSnapshotDoesNotLogStoredJsonOrParserError() throws Exception {
+    String sentinel = "private-expedition-snapshot-log-sentinel";
+    ResultSet row = org.mockito.Mockito.mock(ResultSet.class);
+    when(row.getString("phase")).thenReturn("map");
+    when(row.getString("nodes")).thenReturn(sentinel);
+    when(row.getString("relics")).thenReturn(sentinel);
+    when(row.getString("history")).thenReturn("[]");
+    when(row.getString("run_id")).thenReturn(RUN_ID);
+    when(row.getString("current_node_id")).thenReturn("L0-0");
+    when(row.getObject("focus_chapter")).thenReturn(2);
+    when(jdbcTemplate.query(
+            org.mockito.ArgumentMatchers.anyString(),
+            org.mockito.ArgumentMatchers.<RowMapper<ExpeditionRunDto>>any(),
+            eq(7L)))
+        .thenAnswer(
+            invocation -> {
+              RowMapper<ExpeditionRunDto> rowMapper = invocation.getArgument(1);
+              return List.of(rowMapper.mapRow(row, 0));
+            });
+    ExpeditionRunService service = new ExpeditionRunService(jdbcTemplate, new ObjectMapper());
+
+    Logger logger = (Logger) LoggerFactory.getLogger(ExpeditionRunService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThat(service.findActive(7L)).isPresent();
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=JsonParseException"))
+        .noneMatch(message -> message.contains(sentinel));
+  }
 
   @Test
   void aNewRunGetsAServerIssuedIdAndDoesNotPersistClientScore() {

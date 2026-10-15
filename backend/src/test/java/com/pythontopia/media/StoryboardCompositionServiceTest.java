@@ -3,6 +3,9 @@ package com.pythontopia.media;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.media.domain.MediaAsset;
 import java.nio.file.Files;
@@ -14,6 +17,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
+import org.slf4j.LoggerFactory;
 
 class StoryboardCompositionServiceTest {
 
@@ -53,6 +57,49 @@ class StoryboardCompositionServiceTest {
     StoryboardCompositionService service = serviceWith("/nonexistent/ffmpeg-binary-pyt-test");
     assertThatThrownBy(() -> service.compose(1L, List.of()))
         .isInstanceOf(BusinessException.class);
+  }
+
+  @Test
+  void composeFailureDoesNotLogScenePromptOrExceptionBody(@TempDir Path tempDir) throws Exception {
+    String sentinel = "private-storyboard-scene-log-sentinel";
+    Path ffmpeg = tempDir.resolve("ffmpeg");
+    Files.writeString(ffmpeg, "#!/bin/sh\nif [ \"$1\" = \"-version\" ]; then exit 0; fi\n");
+    assertThat(ffmpeg.toFile().setExecutable(true)).isTrue();
+    XfyunImageService imageService = Mockito.mock(XfyunImageService.class);
+    XfyunTtsService ttsService = Mockito.mock(XfyunTtsService.class);
+    Mockito.when(imageService.generate(1L, sentinel, "PY43-KC-001", List.of("PY43-KC-001")))
+        .thenThrow(new IllegalStateException(sentinel));
+    StoryboardCompositionService service =
+        new StoryboardCompositionService(
+            ffmpeg.toString(),
+            imageService,
+            ttsService,
+            Mockito.mock(MediaAssetStorage.class),
+            Mockito.mock(MediaAssetRepository.class));
+
+    Logger logger = (Logger) LoggerFactory.getLogger(StoryboardCompositionService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThatThrownBy(
+              () ->
+                  service.compose(
+                      1L,
+                      List.of(
+                          new StoryboardCompositionService.SceneSpec(
+                              sentinel, "旁白", "x4_yezi", 20, List.of("PY43-KC-001")))))
+          .isInstanceOf(BusinessException.class)
+          .hasMessageNotContaining(sentinel);
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=IllegalStateException"))
+        .noneMatch(message -> message.contains(sentinel));
+    assertThat(appender.list).allSatisfy(event -> assertThat(event.getThrowableProxy()).isNull());
   }
 
   @Test

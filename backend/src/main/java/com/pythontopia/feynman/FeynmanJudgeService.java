@@ -5,8 +5,8 @@ import com.pythontopia.feynman.dto.FeynmanDtos.Verdict;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.mastery.MasteryEvaluator;
 import com.pythontopia.learner.mastery.MasterySource;
-import com.pythontopia.submission.judge.JudgeCaseEvaluator;
 import com.pythontopia.submission.judge.JudgeCaseEvaluator.CaseEvaluation;
+import com.pythontopia.submission.judge.JudgeCaseEvaluator;
 import com.pythontopia.submission.judge.JudgeTestCase;
 import com.pythontopia.submission.judge.JudgeWorkerPool;
 import com.pythontopia.submission.judge.PythonSandbox;
@@ -95,7 +95,10 @@ public class FeynmanJudgeService {
       evaluation =
           judgeWorkerPool.submitAndWait(() -> caseEvaluator.evaluate(code, cases));
     } catch (RuntimeException exception) {
-      log.error("Feynman judge worker failed for session {}", sessionId, exception);
+      log.error(
+          "Feynman judge worker failed for session={} errorType={}",
+          sessionId,
+          exception.getClass().getSimpleName());
       return new Verdict(
           sessionId, JudgeStatus.ERROR, "判题系统暂时不可用，本次未判定教学成败，请稍后重试。");
     }

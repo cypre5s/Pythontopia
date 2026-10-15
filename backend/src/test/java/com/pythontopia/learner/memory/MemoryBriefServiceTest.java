@@ -10,6 +10,9 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.learner.mastery.review.ReviewState;
 import com.pythontopia.learner.mastery.review.ReviewStateRepository;
@@ -30,6 +33,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestTemplate;
 
@@ -206,6 +210,30 @@ class MemoryBriefServiceTest {
 
     assertThat(brief.facts()).containsExactly("练习失败：PY43-KC-07");
     verifyNoInteractions(providerRouter);
+  }
+
+  @Test
+  void authoritativeRecallFailureDoesNotLogStudentQueryOrUpstreamErrorBody() {
+    String sentinel = "student-query-and-upstream-body-sentinel";
+    when(retrieval.retrieveAuthoritative(eq(USER), isNull(), eq("循环"), anyInt()))
+        .thenThrow(new RuntimeException(sentinel));
+    when(profileService.getDimensions(USER)).thenReturn(List.of());
+    when(reviewStateRepository.findAll(USER)).thenReturn(List.of());
+
+    Logger logger = (Logger) LoggerFactory.getLogger(MemoryBriefService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      service(localProps(), new RestTemplate()).buildAuthoritativeBrief(USER, "循环");
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=RuntimeException"))
+        .noneMatch(message -> message.contains(sentinel));
   }
 
   // ── ⑤ 画像缺失 / 各来源故障 → 优雅降级，brief 仍返回（空列表 + as_of）──

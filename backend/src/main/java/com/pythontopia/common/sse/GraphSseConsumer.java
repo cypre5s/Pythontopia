@@ -11,8 +11,8 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.function.BooleanSupplier;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -144,7 +144,10 @@ public final class GraphSseConsumer {
           } catch (AbortSseConsumption e) {
             throw e;
           } catch (Exception e) {
-            log.warn("SSE event handler error for event={}", currentEvent, e);
+            log.warn(
+                "SSE event handler error for event={} errorType={}",
+                currentEvent,
+                e.getClass().getSimpleName());
           }
           currentEvent = "message";
           dataBuffer.setLength(0);
@@ -156,7 +159,10 @@ public final class GraphSseConsumer {
         } catch (AbortSseConsumption e) {
           throw e;
         } catch (Exception e) {
-          log.warn("SSE event handler error for trailing event={}", currentEvent, e);
+          log.warn(
+              "SSE event handler error for trailing event={} errorType={}",
+              currentEvent,
+              e.getClass().getSimpleName());
         }
       }
     }

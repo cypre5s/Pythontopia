@@ -8,11 +8,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.mainline.MainlineProperties;
 import com.pythontopia.mainline.domain.ChapterAssessmentKind;
+import com.pythontopia.mainline.domain.ChapterTestStatus;
 import com.pythontopia.mainline.test.ChapterProblemBankRepository.CodingCase;
 import com.pythontopia.mainline.test.ChapterProblemBankRepository.PreferredCodingQuestion;
 import com.pythontopia.mainline.test.ChapterTestGraphClient.GenerateRequest;
@@ -21,6 +25,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
 
 class ChapterTestPregenServiceTest {
 
@@ -97,6 +102,27 @@ class ChapterTestPregenServiceTest {
     assertThat(request.getValue().excludedQuestions())
         .containsExactly("小测已经使用的题目");
     verify(repository).markReady(eq(10L), any(), any(), any());
+  }
+
+  @Test
+  void graphFailureDoesNotLogGeneratedPaperOrUpstreamError() {
+    String sentinel = "private-chapter-paper-error-sentinel";
+    when(graphClient.generate(any())).thenThrow(new IllegalStateException(sentinel));
+    Logger logger = (Logger) LoggerFactory.getLogger(ChapterTestPregenService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      service.pregenerate(11L, 7L, 2, ChapterAssessmentKind.FINAL, List.of());
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    verify(repository).markStatus(11L, ChapterTestStatus.FAILED);
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=IllegalStateException"))
+        .noneMatch(message -> message.contains(sentinel));
   }
 
   private ObjectNode paper(int choices, int judges, int fills, int coding) {

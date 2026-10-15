@@ -84,8 +84,11 @@ public class TutorWorkflowGraphClient {
                       projectionFailed.set(true);
                       terminalError.set(true);
                       invokeError(onError, "Tutor workflow result projection failed");
-                      log.error("Tutor workflow result projection failed", e);
-                      emitter.completeWithError(e);
+                      log.error(
+                          "Tutor workflow result projection failed errorType={}",
+                          e.getClass().getSimpleName());
+                      emitter.completeWithError(
+                          new IllegalStateException("Tutor workflow result projection failed"));
                       return;
                     }
                   } else if ("error".equals(event) || "RUN_ERROR".equals(event)) {
@@ -95,7 +98,9 @@ public class TutorWorkflowGraphClient {
                   try {
                     emitter.send(SseEmitter.event().name(event).data(data));
                   } catch (IOException e) {
-                    log.debug("Tutor workflow SSE write failed, client likely disconnected", e);
+                    log.debug(
+                        "Tutor workflow SSE write failed, client likely disconnected errorType={}",
+                        e.getClass().getSimpleName());
                     throw new GraphSseConsumer.AbortSseConsumption(e);
                   }
                 });
@@ -115,7 +120,9 @@ public class TutorWorkflowGraphClient {
             if (!terminalResult.get() && !terminalError.get()) {
               invokeInterrupted(onInterrupted);
             }
-            log.error("Tutor workflow graph SSE stream failed", e);
+            log.error(
+                "Tutor workflow graph SSE stream failed errorType={}",
+                e.getClass().getSimpleName());
             emitter.completeWithError(e);
           }
         });
@@ -125,7 +132,9 @@ public class TutorWorkflowGraphClient {
     try {
       callback.accept(detail);
     } catch (RuntimeException e) {
-      log.error("Tutor workflow failure checkpoint update failed", e);
+      log.error(
+          "Tutor workflow failure checkpoint update failed errorType={}",
+          e.getClass().getSimpleName());
     }
   }
 
@@ -133,7 +142,9 @@ public class TutorWorkflowGraphClient {
     try {
       callback.run();
     } catch (RuntimeException e) {
-      log.error("Tutor workflow interruption checkpoint update failed", e);
+      log.error(
+          "Tutor workflow interruption checkpoint update failed errorType={}",
+          e.getClass().getSimpleName());
     }
   }
 }

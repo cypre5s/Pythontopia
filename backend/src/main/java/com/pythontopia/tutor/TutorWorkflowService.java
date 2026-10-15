@@ -1,8 +1,8 @@
 package com.pythontopia.tutor;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.common.error.BusinessException;
@@ -16,17 +16,17 @@ import com.pythontopia.submission.dto.SubmissionStatus;
 import com.pythontopia.submission.dto.Verdict;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import com.pythontopia.submission.service.SubmissionService;
-import com.pythontopia.tutor.dto.TutorWorkflowCardDto;
 import com.pythontopia.tutor.dto.TutorWorkflowAgentStateDto;
 import com.pythontopia.tutor.dto.TutorWorkflowAttachmentDto;
+import com.pythontopia.tutor.dto.TutorWorkflowCardDto;
 import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
 import java.io.IOException;
-import java.security.SecureRandom;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -792,7 +792,7 @@ public class TutorWorkflowService {
       }
       return count;
     } catch (RuntimeException ex) {
-      log.warn("countConsecutiveErrors degraded: {}", ex.getMessage());
+      log.warn("countConsecutiveErrors degraded errorType={}", ex.getClass().getSimpleName());
       return 0;
     }
   }
@@ -918,7 +918,7 @@ public class TutorWorkflowService {
         body.put("restore_chat_history", safeChatHistory(chatHistory));
       }
     } catch (Exception e) {
-      log.warn("Failed to restore tutor workflow agent state", e);
+      log.warn("Failed to restore tutor workflow agent state errorType={}", e.getClass().getSimpleName());
     }
   }
 
@@ -958,7 +958,7 @@ public class TutorWorkflowService {
       JsonNode state = objectMapper.readTree(stateJson);
       return state != null && state.isObject() ? state : objectMapper.createObjectNode();
     } catch (Exception e) {
-      log.warn("Failed to read tutor workflow checkpoint", e);
+      log.warn("Failed to read tutor workflow checkpoint errorType={}", e.getClass().getSimpleName());
       return objectMapper.createObjectNode();
     }
   }

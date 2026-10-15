@@ -14,12 +14,14 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
+import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.profile.dto.ProfileDimensionDto;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
-import com.pythontopia.common.error.BusinessException;
-import org.springframework.http.HttpStatus;
 import com.pythontopia.npc.dto.NpcDialogResponse;
 import com.pythontopia.npc.dto.NpcGreetingResponse;
 import com.pythontopia.npc.graph.NpcDialogGraphClient;
@@ -32,6 +34,8 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
 
 class NpcGreetingServiceTest {
 
@@ -184,6 +188,53 @@ class NpcGreetingServiceTest {
     service.greeting(7L, "foreman_bug");
     verify(memoryRetrievalService, times(2)).retrieve(eq(7L), isNull(), anyInt());
     verify(graphClient, never()).talk(anyString(), anyString(), any(), anyString());
+  }
+
+  @Test
+  void memoryRetrievalFailureDoesNotLogStudentMemoryOrUpstreamError() {
+    String sentinel = "private-npc-memory-log-sentinel";
+    when(memoryRetrievalService.retrieve(eq(7L), isNull(), anyInt()))
+        .thenThrow(new RuntimeException(sentinel));
+    Logger logger = (Logger) LoggerFactory.getLogger(NpcGreetingService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      service.greeting(7L, "foreman_bug");
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=RuntimeException"))
+        .noneMatch(message -> message.contains(sentinel));
+  }
+
+  @Test
+  void profileFailureDoesNotLogLearnerProfileOrUpstreamError() {
+    String sentinel = "private-npc-profile-log-sentinel";
+    when(memoryRetrievalService.retrieve(eq(7L), isNull(), anyInt()))
+        .thenReturn(List.of(memory(9L, "练习失败：PY43-KC-016", "PY43-KC-016")));
+    when(personaService.load("foreman_bug"))
+        .thenReturn(new NpcPersona("foreman_bug", "矿洞工头", "core"));
+    when(passiveProfileService.getDimensions(7L)).thenThrow(new RuntimeException(sentinel));
+    when(graphClient.talk(eq("foreman_bug"), anyString(), any(), anyString()))
+        .thenReturn(Optional.of(new NpcDialogResponse("嗨", List.of(9L), true)));
+    Logger logger = (Logger) LoggerFactory.getLogger(NpcGreetingService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      service.greeting(7L, "foreman_bug");
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=RuntimeException"))
+        .noneMatch(message -> message.contains(sentinel));
   }
 
   @Test

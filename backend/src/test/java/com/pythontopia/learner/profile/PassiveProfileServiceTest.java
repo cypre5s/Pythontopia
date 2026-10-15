@@ -11,6 +11,9 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -26,6 +29,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 
 class PassiveProfileServiceTest {
@@ -480,6 +484,26 @@ class PassiveProfileServiceTest {
 
     assertThat(brief).contains("自述目标: exam", "自述偏好: video");
     assertThat(brief).doesNotContain("认知风格", "知识基础", "情绪", "实践");
+  }
+
+  @Test
+  void profileBriefFailureDoesNotLogProfileOrDatabaseErrorText() {
+    String sentinel = "private-profile-brief-log-sentinel";
+    when(profileRepository.findDimensions(7L)).thenThrow(new IllegalStateException(sentinel));
+    Logger logger = (Logger) LoggerFactory.getLogger(PassiveProfileService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThat(service.profileBrief(7L)).isEmpty();
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=IllegalStateException"))
+        .noneMatch(message -> message.contains(sentinel));
   }
 
   @Test

@@ -6,6 +6,24 @@
 
 ## 2026-10-15 当前续接
 
+- 补齐 `ProfileService` 画像访谈 SSE 日志脱敏：结果处理、流式传输、fallback 与 emitter 写入不再输出异常对象。结果持久化异常携带的合成学生文本哨兵先 RED 命中日志栈，`ProfileServiceFailureTest` 2/2 通过；原有非流式错误映射不变，无模型请求。
+- 修复 `TutorWorkflowSubmissionFeedbackListener` 提交反馈与状态 JSON 解析的异常栈日志泄露。两个合成哨兵先 RED 命中，随后只记录异常类型；原有提交状态更新保持不变，`TutorWorkflowSubmissionFeedbackListenerTest` 6/6 通过，无模型请求。
+- 修复 `WorkshopGraphClient` SSE 结果处理、上游读流、fallback、AG-UI payload 解析和错误事件发送路径会记录异常正文的问题。合成学生内容哨兵先 RED 出现在异常栈中，改为只记录异常类型后 `WorkshopGraphClientTest` 4/4 通过；未调用 Graph 模型或 DeepSeek。
+- 复习大厅新生真实浏览器验收：空周报与服务端首个基础 KC 推荐加载成功，费曼入口导航至 `/feynman`；评估/Twin 接口返回 200，页面错误 0、模型请求 0。临时账号 700 已清理并核对为 0。首轮脚本因断言 API 不兼容和错误地假设推荐为空而失败，均未产生学习记录；按实际新生状态调整断言后完成。
+- 收尾本轮 Java import 顺序：仅整理 15 个已改动源码/测试文件的 import 区，遵循静态/普通 import 分组与 ASCII 排序；`git diff --check` 通过，没有扩大成全仓格式化。
+- 修复 `ReflectionService` 两类异常日志：Graph 反思和记忆读取异常原文可能包含学生输入/上游响应；两个合成哨兵先 RED 命中，再改为只记录异常类型。规则兜底与 fail-soft 行为不变；`ReflectionServiceTest` 8/8 通过，无模型请求。
+- 延伸敏感日志回归：工坊学情上下文、NPC 问候、记忆 embedding、资源工坊、画像 fallback、Feynman 判分、Graph SSE、媒体任务和 Tutor relay 等 12 个定向测试类通过。另修复远征预生成失败日志会输出 Graph 错误正文；章测预生成、远征存档反序列化、远征题目预取三类共 29/29 通过。无 DeepSeek 请求。
+- 修复 `MemoryBriefService` 降级日志：权威检索异常可能携带学生查询或上游响应正文。合成哨兵先 RED 命中日志，随后 4 个降级分支统一只记异常类型；`MemoryBriefServiceTest` 7/7 通过。无 DeepSeek 请求。
+- 教师屋真实浏览器验收：临时教师经邀请码注册（201）并登录（200），看到真实空班级态，创建班级后进入该班看板；页面错误 0。测试期间未调用模型。临时教师和班级在本地数据库中分别查询为 0，确认级联清理完成。
+- 收紧开发 Compose 判题边界：Piston 从共享默认网络移入 `judge-execution` 专用 bridge，仅 Compose backend 与 Piston 相连；保留 backend 默认网以访问 PostgreSQL、Redis 和 Graph/RAG。保留 Piston 服务出站以安装 Python runtime，提交代码仍由 `PISTON_DISABLE_NETWORKING=true` 禁网。本地安全合同先因缺少专网而 RED，配置完成后 `bash deploy/scripts/test_dev_compose_security_contract.sh` 全通过。未启动/重建容器；生产 Piston ACL 仍未验证，本轮 DeepSeek 请求 0 次。
+- 修复远征地图预取遗漏共享已批准题：按章节、阶段、KC、题型和难度优先查询审核题库，命中后写入当前玩家 READY 队列；未命中继续现有 Graph 生成与审核路径。RED/GREEN：`EndlessPregenServiceTest` 15/15。没有发起 Graph 或模型调用。
+- 修复 Tutor 会话落库、画像、班级、记忆、会话历史、工作流检查点和 SSE 结果投影失败路径可能包含学生数据或异常正文：日志只记录异常类型，投影异常传给 emitter 的也是固定错误文案。合成哨兵 RED/GREEN；`TutorServiceFailureTest` 2/2、`TutorMemoryBriefTest` 4/4、`TutorHistoryBriefTest` 6/6、`TutorWorkflowServiceTest` 33/33、`TutorWorkflowGraphClientTest` 5/5 通过；没有模型调用。
+- Tutor/Alethicode 只读对照确认 Pythontopia 已有固定阶段 AutoGen、SSE、授权、附件和检查点链路；未发现需要迁移的代码缺口。管理台主要视觉规范已对齐，不移植 Alethicode 后端 API。
+- 用新注册的空学情学生做真实浏览器验收：展开“近期变化”并点“生成下一步”，实际进入 `/workshop` 且 `composer-input` 收到 Twin 提示草稿；本周统计为 0 条事件、没有掌握增量，模型/工坊生成请求为 0、页面错误为 0。成功验收账号 690 删除并核对为 0。第一版浏览器脚本因 Playwright API 参数写法失败，临时账号 689 随即删除并核实；修正脚本后完成验收。
+- 用另一名临时学生通过现有 KC-016 课程题并取得服务端 `PASSED`，周报汇总出 1 条正式练习事件与 1 个 KC 掌握变化；真实点击该 KC 的“补强”后进入工坊，草稿包含 `PY43-KC-016`。没有 Tutor/Graph/资源生成请求或页面错误；用户 691 及其判题/学情通过级联删除并核对不存在。
+- 主线正常 AI 补题为 KC-001 生成并自动审核了一道普通编程题；页面返回 `aiGenerated=true`、`reviewed=true`，同账号从共享审核库复取后服务端正式判题 3/3。该账号的 KC-001 真实掌握度为 0.14，低于远征先修门槛，因此不重复提交同题凑分；QA ID 697 因题库审计外键保留。没有再做 DeepSeek provider 探针。
+- 当前下一步见 `docs/plans/2026-10-15-web-system-implementation-plan.md`：补远征兼容题与合法活动 run 恢复，再完成未覆盖 Web 动作和工程收尾；性能最后测。
+
 - 新增账号级登录失败退避：V215 加入失败计数、15 分钟窗口和 1/2/4/8 秒封顶冷却；匿名登录仍回通用错误，成功登录复位。
 - TDD 回归在旧代码下因仓储方法不存在而失败；实现后 `AuthServiceSecurityTest` 与 `UserEmailRegistrationMigrationTest` 共 19 项通过，临时 PostgreSQL 空库迁移至 V215。触及 Java 文件 Spotless 定向检查、`git diff --check` 通过。
 - 恢复本地全栈并通过 Vite → Spring → Graph 发出两次真实 DeepSeek Tutor SSE 请求。文本校验词复述正确；合成 PNG 的黄色背景和蓝色方形识别正确；会话各持久化一条非空文字回答，响应无图片数据。临时用户和记录已清理。本地后端 AI 每日入口限额实测 `false`；供应商调用 token/费用未核对。
@@ -367,3 +385,14 @@
 - OWASP Logging Cheat Sheet 建议不要直接记录源码、敏感个人信息、访问令牌等；本轮用合成标记回归并从上传、记忆、画像访谈、NPC、RAG 与外部服务异常日志中移除原文。
 - Vue 官方风格指南和 typescript-eslint 命名规则已加入工程收尾参考；本轮无 Vue/TS 行为改动。全仓 Spotless 及定向检查已有历史格式差异，不做全仓重写。
 - 参考：[Google Java Style Guide](https://google.github.io/styleguide/javaguide.html)、[Vue Style Guide](https://vuejs.org/style-guide/)、[typescript-eslint naming-convention](https://typescript-eslint.io/rules/naming-convention/)、[OWASP Logging Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Logging_Cheat_Sheet.html)。
+
+## 2026-10-15 — 班级成员加入与移除真实浏览器验收
+
+- Chromium 临时教师建班，学生从 `/home` 输入小写加入码，真实接口成功（`POST /api/classrooms/join` HTTP 200）。
+- 教师“成员”页显示学生；确认弹窗后移除成功（HTTP 204），成员页返回真实空态，浏览器页面错误为 0。
+- 首次自动化误等旧 `/town` 地址；路由实际重定向 `/world`，修正等待条件后复测通过。临时用户、班级及成员行清理后分别计数为 0。无模型请求；教师任务发布/归档后续结果见执行状态记录。
+
+## 2026-10-15 — 教师任务发布与归档浏览器动作
+
+- 临时教师在真实班级看板发布任务后点击归档；两个写接口均返回 2xx，前端 store 重新读取服务器列表后呈现 `ARCHIVED`，归档按钮消失。
+- 直接数据库复核 SQL 因 `status` 列未限定表别名而报错，页面错误计数也未输出；不把这两项标成已验证。清理后临时用户、班级和任务计数均为 0。没有模型请求。

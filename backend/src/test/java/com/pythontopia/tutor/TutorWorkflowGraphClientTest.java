@@ -2,23 +2,28 @@ package com.pythontopia.tutor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.sse.SseRelayExecutor;
 import com.sun.net.httpserver.HttpServer;
-import java.io.OutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class TutorWorkflowGraphClientTest {
@@ -93,17 +98,32 @@ class TutorWorkflowGraphClientTest {
     List<String> order = new CopyOnWriteArrayList<>();
     RecordingEmitter emitter = new RecordingEmitter(order);
     TutorWorkflowGraphClient client = newClient();
+    String privateResult = "privateTutorResultSentinel";
+    Logger logger = (Logger) LoggerFactory.getLogger(TutorWorkflowGraphClient.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.ERROR);
+    logger.addAppender(appender);
+    try {
+      client.runStream(
+          73L,
+          Map.of("user_id", 73L, "session_id", "wf-shared"),
+          emitter,
+          ignored -> {
+            throw new IllegalStateException(privateResult);
+          });
 
-    client.runStream(
-        73L,
-        Map.of("user_id", 73L, "session_id", "wf-shared"),
-        emitter,
-        ignored -> {
-          throw new IllegalStateException("projection failed");
-        });
-
-    assertThat(emitter.finished.await(5, TimeUnit.SECONDS)).isTrue();
-    assertThat(order).contains("error").doesNotContain("send");
+      assertThat(emitter.finished.await(5, TimeUnit.SECONDS)).isTrue();
+      assertThat(order).contains("error").doesNotContain("send");
+      assertThat(emitter.failure.getMessage()).doesNotContain(privateResult);
+      assertThat(appender.list).hasSize(1);
+      assertThat(appender.list.getFirst().getFormattedMessage()).doesNotContain(privateResult);
+      assertThat(appender.list.getFirst().getThrowableProxy()).isNull();
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
   }
 
   @Test
@@ -233,6 +253,7 @@ class TutorWorkflowGraphClientTest {
   private static final class RecordingEmitter extends SseEmitter {
     private final List<String> order;
     private final CountDownLatch finished = new CountDownLatch(1);
+    private Throwable failure;
 
     private RecordingEmitter(List<String> order) {
       super(5_000L);
@@ -253,6 +274,7 @@ class TutorWorkflowGraphClientTest {
     @Override
     public void completeWithError(Throwable failure) {
       order.add("error");
+      this.failure = failure;
       finished.countDown();
     }
   }

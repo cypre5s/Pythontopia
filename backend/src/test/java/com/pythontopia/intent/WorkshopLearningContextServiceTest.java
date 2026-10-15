@@ -1,11 +1,18 @@
 package com.pythontopia.intent;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyMap;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.ArgumentMatchers.eq;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.intent.dto.IntentRouteResponse;
 import com.pythontopia.learner.event.LearningEventLogRepository;
 import com.pythontopia.learner.mastery.MasteryService;
@@ -21,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
 
 class WorkshopLearningContextServiceTest {
 
@@ -141,6 +149,54 @@ class WorkshopLearningContextServiceTest {
     assertThat(payload.getValue())
         .containsEntry("routeId", "route_0123456789abcdef")
         .containsEntry("masteryWrite", false);
+  }
+
+  @Test
+  void degradedLearnerContextPathsDoNotLogStudentInputOrUpstreamErrors() {
+    String sentinel = "private-student-context-log-sentinel";
+    RuntimeException failure = new IllegalStateException(sentinel);
+    when(profileService.profileBrief(7L)).thenThrow(failure);
+    when(profileService.getDimensions(7L)).thenThrow(failure);
+    when(memoryBriefService.buildAuthoritativeBrief(7L, sentinel)).thenThrow(failure);
+    when(masteryService.listSnapshots(7L)).thenThrow(failure);
+    when(submissionRepository.findRecentForPlanner(7L, 12)).thenThrow(failure);
+    when(eventRepository.findRecentResourceConsumptions(7L, 8)).thenThrow(failure);
+    doThrow(failure)
+        .when(eventRepository)
+        .insert(eq(7L), eq("workshop_route_selected"), anyMap(), eq("backend"), eq(2));
+    IntentRouteResponse response =
+        new IntentRouteResponse(
+            "ASK",
+            List.of("PY43-KC-031"),
+            "循环",
+            0.9,
+            "ok",
+            "",
+            null,
+            "ask",
+            List.of("ASK"),
+            false,
+            "",
+            "generative",
+            "answer",
+            "contextual_match",
+            RouteExecutionTokenSignerTest.multiDecision("route_0123456789abcdef"));
+
+    Logger logger = (Logger) LoggerFactory.getLogger(WorkshopLearningContextService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      var context = service.build(7L, sentinel);
+      service.recordRoute(7L, response, context);
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=IllegalStateException"))
+        .noneMatch(message -> message.contains(sentinel));
   }
 
   private static ProfileDimensionDto dimension(

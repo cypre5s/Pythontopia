@@ -75,7 +75,10 @@ public class ReflectionService {
           return;
         }
       } catch (RuntimeException ex) {
-        log.warn("reflection model call unavailable, falling back to rule for user {}: {}", userId, ex.getMessage());
+        log.warn(
+            "reflection model call unavailable, falling back to rule for user {}: errorType={}",
+            userId,
+            ex.getClass().getSimpleName());
         insights = ruleFallback(memories);
         sourceTag = "RULE";
       }
@@ -93,7 +96,10 @@ public class ReflectionService {
         }
       }
     } catch (RuntimeException ex) {
-      log.warn("reflection skipped for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "reflection skipped for user {}: errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
     }
   }
 

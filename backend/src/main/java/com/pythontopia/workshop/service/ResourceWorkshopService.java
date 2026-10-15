@@ -10,8 +10,8 @@ import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.mastery.MasteryEvaluator;
-import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.memory.MemoryBriefService;
+import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.memory.dto.MemoryBriefDto;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
@@ -42,8 +42,8 @@ import com.pythontopia.workshop.graph.ResourceProduceRequestDto;
 import com.pythontopia.workshop.graph.ResourceProduceResponseDto;
 import com.pythontopia.workshop.graph.WorkshopGraphClient;
 import com.pythontopia.workshop.repository.LearningResourceRepository;
-import com.pythontopia.workshop.repository.ResourceLearningCheckRepository;
 import com.pythontopia.workshop.repository.ResourceFeedbackRepository;
+import com.pythontopia.workshop.repository.ResourceLearningCheckRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.OffsetDateTime;
@@ -547,7 +547,10 @@ public class ResourceWorkshopService {
     try {
       return insightRepository.findLatestText(userId).orElse("");
     } catch (RuntimeException ex) {
-      log.warn("workshop recent insight degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "workshop recent insight degraded for user={} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return "";
     }
   }
@@ -560,7 +563,10 @@ public class ResourceWorkshopService {
           .filter(s -> s != null && !s.isBlank())
           .toList();
     } catch (RuntimeException ex) {
-      log.warn("workshop memory highlights degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "workshop memory highlights degraded for user={} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return List.of();
     }
   }
@@ -577,7 +583,10 @@ public class ResourceWorkshopService {
       }
       return directives.stream().limit(8).toList();
     } catch (RuntimeException ex) {
-      log.warn("workshop deep memory directives degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "workshop deep memory directives degraded for user={} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return List.of();
     }
   }
@@ -603,7 +612,10 @@ public class ResourceWorkshopService {
     try {
       return passiveProfileService.getDimensions(userId);
     } catch (RuntimeException ex) {
-      log.warn("workshop profile dimensions degraded for user {}: {}", userId, ex.getMessage());
+      log.warn(
+          "workshop profile dimensions degraded for user={} errorType={}",
+          userId,
+          ex.getClass().getSimpleName());
       return List.of();
     }
   }
@@ -1025,7 +1037,10 @@ public class ResourceWorkshopService {
     try {
       return metaReflectionService.latestDirective(agentName(type));
     } catch (RuntimeException ex) {
-      log.debug("agent strategy directive degraded for type {}: {}", type, ex.getMessage());
+      log.debug(
+          "agent strategy directive degraded for type={} errorType={}",
+          type,
+          ex.getClass().getSimpleName());
       return null;
     }
   }

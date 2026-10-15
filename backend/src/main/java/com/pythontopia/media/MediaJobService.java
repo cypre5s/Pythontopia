@@ -166,11 +166,18 @@ public class MediaJobService {
       jobRepository.updateStatus(jobId, MediaJobStatus.SUCCESS, asset.id(), null);
       streamRegistry.broadcast(jobId, "result", resultPayload(jobId, asset.id()));
     } catch (BusinessException ex) {
-      log.warn("media job {} failed: {} {}", jobId, ex.code(), ex.getMessage());
+      log.warn(
+          "media job={} failed code={} errorType={}",
+          jobId,
+          ex.code(),
+          ex.getClass().getSimpleName());
       jobRepository.updateStatus(jobId, MediaJobStatus.FAILED, null, ex.code());
       streamRegistry.broadcast(jobId, "error", errorPayload(ex.code(), "合成失败，请稍后重试"));
     } catch (Exception ex) {
-      log.error("media job {} failed unexpectedly", jobId, ex);
+      log.error(
+          "media job={} failed unexpectedly errorType={}",
+          jobId,
+          ex.getClass().getSimpleName());
       jobRepository.updateStatus(jobId, MediaJobStatus.FAILED, null, "VIDEO_COMPOSE_FAILED");
       streamRegistry.broadcast(
           jobId, "error", errorPayload("VIDEO_COMPOSE_FAILED", "合成失败，请稍后重试"));
@@ -269,7 +276,9 @@ public class MediaJobService {
     try {
       return objectMapper.readValue(json, new TypeReference<LinkedHashMap<String, Object>>() {});
     } catch (Exception ex) {
-      log.debug("failed to parse media job progress json, replaying nothing: {}", ex.toString());
+      log.debug(
+          "failed to parse media job progress json, replaying nothing errorType={}",
+          ex.getClass().getSimpleName());
       return Map.of();
     }
   }

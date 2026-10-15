@@ -13,6 +13,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.agent.run.MetaReflectionService;
@@ -24,8 +28,8 @@ import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.mastery.MasteryEvaluator;
 import com.pythontopia.learner.mastery.MasterySnapshot;
 import com.pythontopia.learner.mastery.MasterySource;
-import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.memory.MemoryBriefService;
+import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.memory.dto.MemoryBriefDto;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.profile.dto.BaseLevelDto;
@@ -57,8 +61,8 @@ import com.pythontopia.workshop.graph.ResourceProduceRequestDto;
 import com.pythontopia.workshop.graph.ResourceProduceResponseDto;
 import com.pythontopia.workshop.graph.WorkshopGraphClient;
 import com.pythontopia.workshop.repository.LearningResourceRepository;
-import com.pythontopia.workshop.repository.ResourceLearningCheckRepository;
 import com.pythontopia.workshop.repository.ResourceFeedbackRepository;
+import com.pythontopia.workshop.repository.ResourceLearningCheckRepository;
 import com.pythontopia.workshop.service.ResourceWorkshopService;
 import com.pythontopia.workshop.service.WorkshopRunRecorder;
 import java.math.BigDecimal;
@@ -69,9 +73,10 @@ import java.util.UUID;
 import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
+import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class ResourceWorkshopServiceTest {
@@ -200,6 +205,36 @@ class ResourceWorkshopServiceTest {
     verify(masteryEvaluator, Mockito.never())
         .applyEvent(eq(1L), eq("PY43-KC-001"), eq(MasterySource.RESOURCE_READ), any(), anyString());
     verify(eventPublisher, Mockito.never()).publishEvent(any(LearningEvent.ResourceConsumed.class));
+  }
+
+  @Test
+  void learnerContextFallbacksDoNotLogStudentMemoryOrUpstreamErrors() {
+    String sentinel = "private-resource-context-log-sentinel";
+    RuntimeException failure = new IllegalStateException(sentinel);
+    when(insightRepository.findLatestText(1L)).thenThrow(failure);
+    when(memoryRetrievalService.retrieve(1L, "PY43-KC-001", 5)).thenThrow(failure);
+    when(memoryBriefService.buildBrief(1L, "PY43-KC-001")).thenThrow(failure);
+    when(passiveProfileService.getDimensions(1L)).thenThrow(failure);
+    when(metaReflectionService.latestDirective(anyString())).thenThrow(failure);
+    when(graphClient.produce(any())).thenReturn(successResponse());
+
+    Logger logger = (Logger) LoggerFactory.getLogger(ResourceWorkshopService.class);
+    Level previousLevel = logger.getLevel();
+    logger.setLevel(Level.DEBUG);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      service.create(1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=IllegalStateException"))
+        .noneMatch(message -> message.contains(sentinel));
   }
 
   @Test

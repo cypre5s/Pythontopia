@@ -3,7 +3,11 @@ package com.pythontopia.learner.profile;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -21,6 +25,9 @@ import com.pythontopia.learner.profile.dto.ProfileTurnRequest;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
 import com.pythontopia.learner.profile.service.ProfileDraftService;
 import com.pythontopia.learner.profile.service.ProfileService;
+import com.sun.net.httpserver.HttpServer;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -28,6 +35,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class ProfileServiceFailureTest {
 
@@ -76,5 +84,75 @@ class ProfileServiceFailureTest {
       logger.detachAppender(appender);
       logger.setLevel(previousLevel);
     }
+  }
+
+  @Test
+  void streamPersistenceFailureDoesNotLogExceptionBody() throws Exception {
+    String sentinel = "private-profile-stream-log-sentinel";
+    HttpServer sseServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    sseServer.createContext(
+        "/agents/profile/turn/stream",
+        exchange -> {
+          byte[] body =
+              "event: result\ndata: {\"next_question\":\"继续说明\",\"done\":false}\n\n"
+                  .getBytes(StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+          exchange.sendResponseHeaders(200, body.length);
+          exchange.getResponseBody().write(body);
+          exchange.close();
+        });
+    sseServer.start();
+
+    ProfileRepository repository = mock(ProfileRepository.class);
+    CoursePackRepository coursePack = mock(CoursePackRepository.class);
+    RestTemplate graph = mock(RestTemplate.class);
+    SseRelayExecutor relayExecutor = mock(SseRelayExecutor.class);
+    ResourceRunRecorder runRecorder = mock(ResourceRunRecorder.class);
+    when(repository.ownsInterview(7L, "session-1")).thenReturn(true);
+    when(coursePack.findKcs(43L, null)).thenReturn(List.of());
+    doThrow(new IllegalStateException(sentinel))
+        .when(runRecorder)
+        .record(anyLong(), anyString(), anyString(), any(), any(), anyList(), any(), any(), any());
+    doAnswer(
+            invocation -> {
+              invocation.<Runnable>getArgument(0).run();
+              return null;
+            })
+        .when(relayExecutor)
+        .submit(any(Runnable.class));
+    ProfileService service =
+        new ProfileService(
+            repository,
+            coursePack,
+            runRecorder,
+            graph,
+            new GraphServiceProperties(
+                "http://127.0.0.1:" + sseServer.getAddress().getPort(), "http://rag", "token"),
+            new ObjectMapper(),
+            relayExecutor,
+            mock(ProfileDraftService.class));
+    Logger logger = (Logger) LoggerFactory.getLogger(ProfileService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.WARN);
+    logger.addAppender(appender);
+    try {
+      service.sendTurnStream(7L, "session-1", new ProfileTurnRequest("学生访谈", List.of()));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+      sseServer.stop(0);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("Failed to handle profile turn SSE result"));
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getThrowableProxy)
+        .allSatisfy(throwable -> assertThat(throwable).isNull());
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .noneMatch(message -> message.contains(sentinel));
   }
 }
