@@ -1,5 +1,16 @@
 # Web 工程可读性与规范清理工作日志
 
+## 2026-10-15 — DeepSeek 真实文本续探针
+
+- 在运行中的 Graph 容器调用现有 `OpenAiCompatProvider`，向配置的快档发出 1 次 96-token 文本请求；70 秒内没有完成，结果为 `TimeoutError`。探针只记录状态，不输出密钥或用户数据。
+- 因文本 completion 未恢复，未继续发新的视觉请求；本轮 Web 文本与 PNG 请求也都在 Tutor→Graph 120 秒 relay 超时。`/models` 可达不代表 completion 可用，当前不能把本地 DeepSeek 实时调用标为已验证成功。
+
+## 2026-10-15 — Web 后台与前端构建复核
+
+- 管理后台组件/页面回归 8 files / 36 tests 通过；管理用户 API 与路由回归 2 files / 22 tests 通过。前端 `npm run typecheck`、全量 ESLint 和 production build 均通过。
+- Production build 保留既有 Pyodide Node 内建模块 externalize、`eval` 与大 chunk 警告；构建更新时间戳的 course43 manifest 已恢复，工作区未保留构建副产物。
+- 本轮没有可用的 disposable ADMIN 登录会话，故未执行后台真实写操作浏览器联测；已验证 Twin → mainline 导航及相关窄屏页面，但更广的 Web 路由矩阵仍待做。
+
 ## 2026-10-15 — DeepSeek Tutor 真实调用续验
 
 - 运行中的 Graph 实际配置为 DeepSeek Pro 文本、Flash 视觉输入，后端 `TtsProperties.isEnabled()` 固定返回 false。Web 工坊注册与路由正常；真实浏览器文本和 PNG 图片各发起一次 `/api/tutor/ask`，两次 API 均为 HTTP 200，但都以 Tutor 回答超时/不可用结束，Spring 日志确认两次 Graph SSE 读超时为 120 秒。两条用户记录已落库，图片请求含 1 个 `data:image/png`，页面运行错误 0。

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-10-15 — DeepSeek 文本 completion 续探针
+
+- Graph 容器通过现有 provider 发出 1 次快档文本 completion，70 秒超时；未追加图片请求。API `/models` 可达不等于 completion 正常，当前真实调用仍未恢复。
+
+## 2026-10-15 — Web 管理台与前端构建续验
+
+- 管理台组件/页面 36 项、用户 API/路由 22 项通过；前端 typecheck、全量 ESLint 与 production build 通过。
+- 构建仍提示 Pyodide Node 模块 externalize、`eval` 和大 chunk；未进行管理台登录后写操作的浏览器验收。
+
 ## 2026-10-15 — 远征恢复与 Boss 回归续验
 
 - 当前快照的远征 run store、远征页、Boss 页与 Phaser Boss 场景 Vitest 共 76/76 通过，覆盖终局结算刷新恢复、已保存 run 续跑、体力/分数反馈、阶段转换和判题重试。

@@ -52,7 +52,7 @@
 
 **Steps:** Verify supported model host/name allowlists, that image input reaches DeepSeek but response schema remains text-only, that voice is disabled, and that cancellation/checkpoint restore are scoped. Run focused pytest and Java Tutor authorization/checkpoint tests. Do not migrate Alethicode's uncommitted controller, WebSocket bus, or V124 table.
 
-**Status:** Static allowlists, text-only rendering, and disabled TTS are confirmed; mocked provider/image/SSE tests pass. Fresh text and image Web calls timed out at the 120 s Tutor→Graph relay, and a direct Flash stream probe produced no token within 65 s. DeepSeek `/models` returned 200, which does not verify completion. A RED/GREEN fix now emits Graph SSE pings while the first Tutor token is pending; the runtime container has not reloaded it, so real inference and the 120 s end-to-end bound remain open.
+**Status:** Static allowlists, text-only rendering, and disabled TTS are confirmed; mocked provider/image/SSE tests pass. Fresh text and image Web calls timed out at the 120 s Tutor→Graph relay; a direct Flash stream produced no token within 65 s, and one additional direct fast-tier text completion timed out at 70 s. DeepSeek `/models` returned 200, which does not verify completion. A RED/GREEN fix now emits Graph SSE pings while the first Tutor token is pending; the runtime container has not reloaded it. Current completion and image-input runtime validation remain open; no further image request was sent after the text probe timed out.
 
 ## Task 5: Verify the existing expedition and twin loop in the browser
 
@@ -73,7 +73,7 @@
 
 **Steps:** Build a route/action checklist from current routes; use Playwright to click visible actions and verify navigation, success/error/loading state, focus and narrow-screen overflow. Fix only confirmed dead actions/layout defects using existing components. Do not add pages without a real backend contract.
 
-**Status:** Partial: this turn checked Twin → mainline navigation and 320 px overflow on Twin, mainline map, and expedition; admin action behavior and broader Web routes remain open.
+**Status:** Partial: fresh Twin → mainline navigation and 320 px overflow checks passed. Admin component/page suites passed (8 files / 36 tests), admin user API and router suites passed (2 files / 22 tests), and current full frontend typecheck, lint, and production build passed. Authenticated admin browser actions and the broader route matrix remain open because no disposable ADMIN session is configured.
 
 ## Task 7: Run final affected-surface verification and report measured limits
 
@@ -84,3 +84,5 @@
 - `git diff --check` and `deploy/scripts/test_https_forwarded_proto_contract.sh`
 
 Run performance sampling last. Separate deterministic API timing from Graph/DeepSeek and formal judging; report request counts and clean up disposable rows. Never describe prior or synthetic data as current performance evidence.
+
+**Status:** Affected-surface checks pass: frontend Twin/Boss recovery, admin components/pages/API/router, typecheck, lint, and production build; backend CORS/media focused tests (8), Graph full suite (1871 passed, 1 skipped), and Nginx contract checks (9) also pass. Fresh end-to-end DeepSeek text/image calls timed out in the current running stack; the live container has not loaded the SSE heartbeat fix. Full Maven remains blocked by previously observed Testcontainers/Docker host-port errors. Performance remains intentionally unmeasured until the remaining functional/runtime checks close.
