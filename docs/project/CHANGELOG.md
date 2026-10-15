@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-15 — DeepSeek Tutor 真实调用续验
+
+- 当前运行配置为 DeepSeek Pro 文本、Flash 视觉输入；服务端 TTS 固定关闭。浏览器经工坊真实提交 1 条文本和 1 张合成 PNG，Tutor SSE 均返回 HTTP 200，但页面最终收到超时/不可用错误；后端记录两次 120 秒 Tutor→Graph SSE 读超时。两条请求里图片以 `data:image/png` 传入，助手回答区域没有图片节点，浏览器页面错误为 0。
+- DeepSeek `/models` 返回 200，但不能证明 completion 可用；Flash 低 token 直连流式探针在 65 秒内无 token，故跳过视觉直连探针。本轮未验证到成功的模型回答，不重试等待供应商恢复。
+- 清理临时学生账号、两条工坊历史记录与合成 PNG。Mock 回归：Graph provider / Tutor 图片与流式测试 54 passed、1 条既有 pytest 标记警告；Markdown 图片关闭测试 2 passed。
+
 ## 2026-10-15 — CORS 与媒体错误隔离
 
 - CORS 改为精确来源白名单并拒绝含通配符的来源，避免凭据请求允许任意子域；ffmpeg 合成失败仅写服务端日志，API 返回通用错误。

@@ -19,6 +19,8 @@
 
 **Steps:** Add a failing assertion that a subdomain wildcard is rejected; run `mvn -q -Dtest=SecurityConfigCorsTest test`; change allowed origin patterns to exact origins and reject any `*`; verify configured exact origins still match; rerun the focused test and Spotless for touched Java.
 
+**Status:** Code and CORS regression tests complete in `f2176675`. Focused Maven tests pass; focused Spotless still reports existing formatting drift in the touched Java files, so whole-file formatting churn was not kept.
+
 ## Task 2: Stop returning raw media composition exceptions
 
 **Files:**
@@ -27,6 +29,8 @@
 
 **Steps:** Add a test using a temporary failing ffmpeg stub that emits a sentinel path; verify RED exposes the sentinel; return a stable generic `VIDEO_COMPOSE_FAILED` message while retaining the server log; verify GREEN, TTS stays disabled, and run the focused test.
 
+**Status:** Complete in `f2176675`; the sentinel test and media service tests pass. The focused Spotless limitation above also applies.
+
 ## Task 3: Lock existing public-edge request limits with a regression check
 
 **Files:**
@@ -34,6 +38,8 @@
 - Check: `deploy/nginx/pythontopia.conf`
 
 **Steps:** Add assertions for registration/login and classroom-join `limit_req_zone`/locations; run the script before and after the minimum test-only change; document that enforcement is at the public Nginx boundary and production edge behavior still needs deployment verification. Do not add a DB rate-limit table.
+
+**Status:** Complete in `f2176675`; all nine HTTPS/Nginx contract assertions pass. Public-edge runtime behavior remains unverified.
 
 ## Task 4: Revalidate DeepSeek-only Tutor and fixed AutoGen lifecycle
 
@@ -45,6 +51,8 @@
 - Test: existing Tutor AutoGen, checkpoint, attachment, and provider tests
 
 **Steps:** Verify supported model host/name allowlists, that image input reaches DeepSeek but response schema remains text-only, that voice is disabled, and that cancellation/checkpoint restore are scoped. Run focused pytest and Java Tutor authorization/checkpoint tests. Do not migrate Alethicode's uncommitted controller, WebSocket bus, or V124 table.
+
+**Status:** Static allowlists, text-only rendering, and disabled TTS are confirmed; mocked provider/image/SSE tests pass. Fresh text and image Web calls timed out at the 120 s Tutor→Graph relay, and a direct Flash stream probe produced no token within 65 s. DeepSeek `/models` returned 200, which does not verify completion. Keep real inference verification open until the provider responds.
 
 ## Task 5: Verify the existing expedition and twin loop in the browser
 

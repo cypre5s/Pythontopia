@@ -1,5 +1,12 @@
 # Web 工程可读性与规范清理工作日志
 
+## 2026-10-15 — DeepSeek Tutor 真实调用续验
+
+- 运行中的 Graph 实际配置为 DeepSeek Pro 文本、Flash 视觉输入，后端 `TtsProperties.isEnabled()` 固定返回 false。Web 工坊注册与路由正常；真实浏览器文本和 PNG 图片各发起一次 `/api/tutor/ask`，两次 API 均为 HTTP 200，但都以 Tutor 回答超时/不可用结束，Spring 日志确认两次 Graph SSE 读超时为 120 秒。两条用户记录已落库，图片请求含 1 个 `data:image/png`，页面运行错误 0。
+- DeepSeek `/models` 返回 HTTP 200；单次低 token Flash 流式直连探针在 65 秒内未产生 token，停止继续调用；视觉直连探针跳过。此次没有取得可验证的模型答案，故不能报文本/视觉成功；历史成功证据保留在 2026-10-12 Tutor 安全工作日志中。
+- 失败响应仍是文字，助手消息 DOM 不含图片元素；前端 Markdown 图片关闭测试 2/2 通过。Graph provider / Tutor 图片与 SSE 定向测试 54/54 通过，1 条既有 pytest 标记警告。
+- 临时学生账号、2 条 `workshop_chat_turn` 与合成 PNG 已清理。Provider `/models` 可达并不能证明 completion 可用；未测性能，也未重试上游请求。
+
 ## 2026-10-15 — CORS 与媒体错误隔离
 
 - RED/GREEN：回归先复现 `https://*.example.com` 在带凭据 CORS 配置下被接受，再改用精确 `allowed-origins` 并拒绝任何含 `*` 的来源；ffmpeg stub 输出哨兵文本时，回归确认 API 不再返回内部错误内容，服务端日志仍保留异常。
