@@ -60,9 +60,9 @@ public class MemoryProviderRouter {
       return provider.recall(userId, query, limit);
     } catch (MemoryProviderException ex) {
       log.warn(
-          "memory provider '{}' recall failed, fail-soft 回退 local: {}",
+          "memory provider '{}' recall failed, fail-soft 回退 local errorType={}",
           provider.name(),
-          ex.getMessage());
+          ex.getClass().getSimpleName());
       return local.recall(userId, query, limit);
     }
   }
@@ -80,9 +80,9 @@ public class MemoryProviderRouter {
         ref = provider.remember(userId, event);
       } catch (MemoryProviderException ex) {
         log.warn(
-            "memory provider '{}' remember failed, fail-soft 回退 local: {}",
+            "memory provider '{}' remember failed, fail-soft 回退 local errorType={}",
             provider.name(),
-            ex.getMessage());
+            ex.getClass().getSimpleName());
         ref = local.remember(userId, event);
       }
     }
@@ -99,12 +99,7 @@ public class MemoryProviderRouter {
       refRepository.record(userId, ref.provider(), ref.externalId(), ref.kind());
     } catch (DataAccessException ex) {
       log.warn(
-          "agent_memory_ref 落库降级 userId={} provider={}: {}",
-          userId,
-          ref.provider(),
-          ex.getMostSpecificCause() == null
-              ? ex.getMessage()
-              : ex.getMostSpecificCause().getMessage());
+          "agent_memory_ref 落库降级 errorType={}", ex.getClass().getSimpleName());
     }
   }
 }

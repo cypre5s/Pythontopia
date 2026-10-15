@@ -96,7 +96,7 @@ public class WorldAdvanceService {
     try {
       masteryEvaluator.decayAll(userId);
     } catch (Exception exception) {
-      log.warn("WorldAdvanceService.decayAll failed for user {}: {}", userId, exception.getMessage());
+      log.warn("WorldAdvanceService.decayAll failed errorType={}", exception.getClass().getSimpleName());
     }
 
     List<WorldEventDto> newEvents = new ArrayList<>();

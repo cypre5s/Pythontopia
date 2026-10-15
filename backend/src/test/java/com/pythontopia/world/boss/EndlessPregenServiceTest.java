@@ -149,8 +149,16 @@ class EndlessPregenServiceTest {
             eq(1), eq(2), isNull(), isNull(), eq(1)))
         .thenReturn(1);
 
-    service.generatePrefetch(
-        19L, 7L, 1, 2, "PY43-KC-001", 2, "PY43-KC-001", "dual_track", null, null, null, 1);
+    Logger logger = (Logger) LoggerFactory.getLogger(EndlessPregenService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      service.generatePrefetch(
+          19L, 7L, 1, 2, "PY43-KC-001", 2, "PY43-KC-001", "dual_track", null, null, null, 1);
+    } finally {
+      logger.detachAppender(appender);
+    }
 
     verify(reviewRepository)
         .approveAutomaticallyIfNotDuplicate(
@@ -159,6 +167,9 @@ class EndlessPregenServiceTest {
         .update(
             contains("status = 'READY'"), anyString(), eq("ai-1"), anyString(), eq(19L), eq(7L),
             eq(1), eq(2), isNull(), isNull(), eq(1));
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .noneMatch(message -> message.contains("user=7"));
   }
 
   @Test
@@ -238,7 +249,7 @@ class EndlessPregenServiceTest {
     assertThat(appender.list)
         .extracting(ILoggingEvent::getFormattedMessage)
         .anySatisfy(message -> assertThat(message).contains("errorType=RestClientException"))
-        .noneMatch(message -> message.contains(sentinel));
+        .noneMatch(message -> message.contains(sentinel) || message.contains("user=7"));
   }
 
   @Test
@@ -379,6 +390,31 @@ class EndlessPregenServiceTest {
                     || message.contains(databaseSentinel)
                     || message.contains("987654321")
                     || message.contains("private-problem-id"));
+  }
+
+  @Test
+  void ambiguousLegacyProblemIdDoesNotLogOwnerId() {
+    long userId = 987654321L;
+    when(jdbcTemplate.query(
+            anyString(), any(org.springframework.jdbc.core.RowMapper.class), any(Object[].class)))
+        .thenReturn(List.of("{}", "{}"));
+    Logger logger = (Logger) LoggerFactory.getLogger(EndlessPregenService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThat(service.findByProblemId(userId, "private-problem-id")).isEmpty();
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(
+            message ->
+                assertThat(message)
+                    .contains("ambiguous legacy problem id")
+                    .doesNotContain(Long.toString(userId)));
   }
 
   @Test

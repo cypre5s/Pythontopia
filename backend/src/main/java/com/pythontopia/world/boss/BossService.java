@@ -1189,7 +1189,8 @@ public class BossService {
       Integer recommended = learnerTwinService.recommendedDifficulty(userId, anchorKc);
       return recommended == null ? fallback : clampDifficulty(recommended);
     } catch (RuntimeException ex) {
-      LOG.debug("boss target difficulty degraded for user {}: {}", userId, ex.getMessage());
+      LOG.debug(
+          "boss target difficulty degraded errorType={}", ex.getClass().getSimpleName());
       return fallback;
     }
   }

@@ -216,7 +216,9 @@ public class OrchestratorService {
     try {
       return bugMineService.decayingKcCodes(userId, DECAYING_KC_LIMIT);
     } catch (RuntimeException e) {
-      log.warn("Failed to load decaying KCs for orchestrator, continuing without them", e);
+      log.warn(
+          "Failed to load decaying KCs for orchestrator, continuing without them errorType={}",
+          e.getClass().getSimpleName());
       return List.of();
     }
   }

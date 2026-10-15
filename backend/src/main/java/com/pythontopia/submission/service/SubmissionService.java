@@ -121,12 +121,7 @@ public class SubmissionService {
     if (outcome.verdict() == Verdict.SYSTEM_ERROR) {
       // 判题系统故障不是学生答错：不发 PracticeFailed（否则会扣掌握度、往画像写脏 error_pattern）。
       log.error(
-          "Submission {} (user {}, problem {}) ended in SYSTEM_ERROR: {}. "
-              + "Judge infrastructure failure — no learning event published.",
-          submissionId,
-          userId,
-          request.problemId(),
-          outcome.failureReason());
+          "Submission {} ended in SYSTEM_ERROR; no learning event published.", submissionId);
       return;
     }
     String kcCode = problemRepository.findKcCode(request.problemId());

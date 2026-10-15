@@ -111,7 +111,10 @@ public class LearningEventListener {
       return jdbc.queryForObject(
           "SELECT difficulty FROM course_problem WHERE id = ?", String.class, problemId);
     } catch (RuntimeException e) {
-      log.debug("difficulty lookup failed for problem {}: {}", problemId, e.getMessage());
+      log.debug(
+          "difficulty lookup failed for problem {} errorType={}",
+          problemId,
+          e.getClass().getSimpleName());
       return null;
     }
   }

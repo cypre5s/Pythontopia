@@ -14,7 +14,7 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debia
 
 COPY pyproject.toml ./
 COPY pythontopia_graph ./pythontopia_graph
-RUN pip install --no-cache-dir \
+RUN pip install --no-cache-dir --timeout 120 --retries 5 \
     --index-url https://mirrors.aliyun.com/pypi/simple/ \
     --trusted-host mirrors.aliyun.com \
     ".[browse]" \

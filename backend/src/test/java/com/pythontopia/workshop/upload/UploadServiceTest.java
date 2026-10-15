@@ -247,7 +247,10 @@ class UploadServiceTest {
           .extracting(ILoggingEvent::getFormattedMessage)
           .allSatisfy(
               message ->
-                  assertThat(message).doesNotContain(filename).doesNotContain(parserDetails));
+                  assertThat(message)
+                      .doesNotContain(filename)
+                      .doesNotContain(parserDetails)
+                      .doesNotContain(Long.toString(USER_ID)));
     } finally {
       logger.detachAppender(appender);
       logger.setLevel(previousLevel);

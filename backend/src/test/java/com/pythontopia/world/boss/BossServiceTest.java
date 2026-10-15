@@ -1105,6 +1105,33 @@ class BossServiceTest {
   }
 
   @Test
+  void targetDifficultyFailureDoesNotLogLearnerIdOrExceptionMessage() {
+    long userId = 87654321L;
+    String privateDetails = "private-twin-difficulty-error-sentinel";
+    when(learnerTwinService.recommendedDifficulty(userId, "PY43-KC-001"))
+        .thenThrow(new IllegalStateException(privateDetails));
+    Logger logger = (Logger) LoggerFactory.getLogger(BossService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.DEBUG);
+    logger.addAppender(appender);
+    try {
+      assertThat(service.computeTargetDifficulty(userId, "PY43-KC-001", 3)).isEqualTo(3);
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(message -> assertThat(message).contains("errorType=IllegalStateException"))
+        .noneMatch(
+            message ->
+                message.contains(Long.toString(userId)) || message.contains(privateDetails));
+  }
+
+  @Test
   @DisplayName("预加载轮询与取题使用相同 Twin 难度")
   void prefetchStatusUsesSharedLearnerDifficulty() {
     when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);

@@ -28,7 +28,7 @@ public class NpcPersonaSeeder implements ApplicationRunner {
     try {
       personaService.seedFromMeta();
     } catch (RuntimeException ex) {
-      log.warn("NPC persona seed skipped: {}", ex.getMessage());
+      log.warn("NPC persona seed skipped errorType={}", ex.getClass().getSimpleName());
     }
   }
 }

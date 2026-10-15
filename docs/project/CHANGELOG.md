@@ -1,5 +1,56 @@
 # Changelog
 
+## 2026-10-15 — 脱敏远征、NPC、Boss 与判题日志
+
+- 远征预取状态、NPC 寒暄降级、Boss Twin 难度兜底与判题系统错误日志不再写入学习者 ID；判题错误日志也不再复述失败正文。
+- RED/GREEN 哨兵回归通过；包含前一批日志修复的 7 个 Java 测试类共 142/142 通过。未调用模型。
+
+## 2026-10-15 — 修复本地 Graph/RAG 依赖版本漂移
+
+- Graph/RAG 本地运行容器切换到 FastAPI 0.143.1、Starlette 1.8.0；健康/就绪接口与依赖一致性检查通过。Graph 镜像安装改为 120 秒超时和 5 次重试，避免镜像源短暂超时。
+- Graph/RAG 开发约束将 pytest 更新为 `>=9.0.3,<10`、pytest-asyncio 更新为 `>=1.3,<2`，避开 CVE-2025-71176 并支持 pytest 9。
+- 依赖同步后 Graph 1902 passed/1 skipped，RAG 166 passed；OSV 合并复扫只剩不在运行镜像中的 `diskcache` 与 `ragas` 可选依赖告警，当前无修复版本。
+
+## 2026-10-15 — 验证教师重置班级加入码
+
+- Chromium 教师端重置加入码成功；学生用旧码收到 404、用新码入班收到 200，页面错误为 0。
+- 临时教师、学生、班级和成员数据清理后计数为 0。无模型请求。
+
+## 2026-10-15 — 将 KC-005 AI 编程补题加入共享审核库
+
+- 主线学生页面为 KC-005 走一次正常 AI 补题，题面匹配计算机发展知识点并通过现有自动审核路径，`totalTestCases=3`，后端新增 `APPROVED/AUTOMATED` 共享记录。
+- 浏览器请求 HTTP 200、页面错误 0；没有正式判题或学习事件。题目 kind 为空，仍不满足远征战斗题型。审核请求者账号停用保留来源外键，测试预取行已清理；未做通用 DeepSeek 探针。
+
+## 2026-10-15 — 脱敏记忆引用的降级日志
+
+- 记忆引用落库失败不再记录学生 ID 或数据库正文；记忆 provider fallback 与引用落库失败日志只保留异常类型，best-effort 行为不变。
+- 哨兵先 RED 后 GREEN，`MemoryProviderRouterTest` 与其他四类日志回归合跑通过。无模型请求。
+
+## 2026-10-15 — 脱敏 NPC 人格种子启动日志
+
+- NPC 人格种子失败日志只记录异常类型，仍以 fail-soft 方式继续启动。
+- 哨兵先 RED 后 GREEN，`NpcPersonaSeederTest` 与其他日志边界回归合跑通过。无模型请求。
+
+## 2026-10-15 — 脱敏判题失败的题目难度查询日志
+
+- 题目难度补查失败时，DEBUG 日志只记录题目 ID 与异常类型，不再记录数据库异常正文；掌握度使用空难度兜底。
+- 哨兵先 RED 后 GREEN，`LearningEventListenerTest` 与其他两类日志回归合跑通过。无模型请求。
+
+## 2026-10-15 — 脱敏学习编排器到期 KC 降级日志
+
+- Tutor 编排读取到期 KC 失败时，日志不再保存完整异常栈；只记录异常类型，空列表 fail-soft 行为不变。
+- 哨兵先 RED 后 GREEN，`OrchestratorServiceTest` 与睡觉日志回归合跑通过。无模型请求。
+
+## 2026-10-15 — 脱敏睡觉流程的遗忘曲线失败日志
+
+- `WorldAdvanceService.sleep` 的遗忘曲线降级日志不再写入学生 ID 或异常正文，只保留异常类型；失败后仍继续睡觉流程。
+- 哨兵先 RED 后 GREEN，`WorldAdvanceServiceTest` 1/1。无模型请求。
+
+## 2026-10-15 — 清洗 Mermaid SVG 中的危险 CSS
+
+- 真实 Mermaid 输出可通过 `classDef` 注入固定定位覆盖，也可通过 `init.themeCSS` 注入外部 URL；此前 SVG 清洗会保留这些 CSS。
+- 新增 CSSOM 清洗：移除危险布局/资源声明和 SVG 作用域外规则，同时保留安全颜色与布局样式。真实 Mermaid 渲染回归 3/3，typecheck 与定向 ESLint 通过。未调用模型。
+
 ## 2026-10-15 — 固定画像地图初始化失败审计信息
 
 - Graph 地图初始化失败的 `resource_run` 审计记录只保留 `graph-service-error`，不再持久化异常正文。

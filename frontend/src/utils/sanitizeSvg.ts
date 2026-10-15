@@ -21,6 +21,12 @@ const STRICT_FORBID_TAGS = [
   'a',
 ];
 const STRICT_FORBID_ATTR = ['href', 'xlink:href', 'style'];
+const BLOCKED_CSS_PROPERTIES = new Set([
+  'position', 'inset', 'inset-block', 'inset-block-end', 'inset-block-start',
+  'inset-inline', 'inset-inline-end', 'inset-inline-start', 'top', 'right', 'bottom', 'left',
+  'z-index', 'transform', 'transform-origin', 'overflow',
+]);
+const BLOCKED_CSS_VALUES = /[\\]|url\s*\(|expression\s*\(|javascript\s*:|var\s*\(|-moz-binding|@import/i;
 
 export function sanitizeSvgMarkup(source: string): string {
   return DOMPurify.sanitize(source, {
@@ -33,18 +39,86 @@ export function sanitizeSvgMarkup(source: string): string {
 /**
  * mermaid 渲染产物专用档。
  *
- * mermaid 把 100% 的主题着色与尺寸放在它自己生成的 <style> 块与 style 属性里（生成的 CSS 规则
- * 全部以 `#<diagramId>` 前缀作用域化），用上面的严格档清洗会得到一张无填充无尺寸的骨架图，
- * 因此这一档保留 style，但同样封掉脚本 / foreignObject / 外链 / 外部资源引用。
+ * Mermaid 的 classDef 和 init.themeCSS 可以生成任意 CSS；securityLevel='strict' 不会删除它们。
+ * 因此保留安全的绘图样式，同时用 CSSOM 丢弃定位覆盖、外部资源和非 SVG 作用域规则。
  *
  * 配套要求：调用方必须以 `htmlLabels: false` 渲染。mermaid 默认把节点标签塞进 foreignObject，
  * 而 foreignObject 在 DOMPurify 的默认 FORBID_CONTENTS 里（连同内容一起丢弃），
  * 否则整图文字会全部消失。
  */
 export function sanitizeMermaidSvgMarkup(source: string): string {
-  return DOMPurify.sanitize(source, {
+  const sanitized = DOMPurify.sanitize(source, {
     USE_PROFILES: { svg: true, svgFilters: true },
     FORBID_TAGS: ['script', 'foreignObject', 'image', 'iframe', 'embed', 'link', 'a'],
     FORBID_ATTR: ['href', 'xlink:href'],
   });
+  const document = new DOMParser().parseFromString(sanitized, 'image/svg+xml');
+  const svg = document.documentElement;
+  if (svg.localName !== 'svg') return '';
+
+  const svgId = svg.getAttribute('id') ?? '';
+  document.querySelectorAll('style').forEach((style) => {
+    const safeCss = sanitizeMermaidStylesheet(style.textContent ?? '', svgId);
+    if (safeCss) style.textContent = safeCss;
+    else style.remove();
+  });
+  document.querySelectorAll<SVGElement>('[style]').forEach((element) => {
+    sanitizeCssDeclarations(element.style);
+    if (element.style.length) element.setAttribute('style', element.style.cssText);
+    else element.removeAttribute('style');
+  });
+
+  return svg.outerHTML;
+}
+
+function sanitizeMermaidStylesheet(source: string, svgId: string): string {
+  if (!/^[A-Za-z_][A-Za-z0-9_-]*$/.test(svgId)) return '';
+  try {
+    const stylesheet = new CSSStyleSheet();
+    stylesheet.replaceSync(source);
+    return Array.from(stylesheet.cssRules)
+      .map((rule) => sanitizeMermaidCssRule(rule, svgId))
+      .filter(Boolean)
+      .join('');
+  } catch {
+    return '';
+  }
+}
+
+function sanitizeMermaidCssRule(rule: CSSRule, svgId: string, inKeyframes = false): string {
+  if (rule.type === CSSRule.STYLE_RULE) {
+    const styleRule = rule as CSSStyleRule;
+    if (!inKeyframes && !isSvgScopedSelector(styleRule.selectorText, svgId)) return '';
+    sanitizeCssDeclarations(styleRule.style);
+    return styleRule.style.length ? styleRule.cssText : '';
+  }
+  if (rule.type === CSSRule.KEYFRAMES_RULE) {
+    const keyframes = rule as CSSKeyframesRule;
+    const frames = Array.from(keyframes.cssRules)
+      .map((frame) => sanitizeMermaidCssRule(frame, svgId, true))
+      .filter(Boolean)
+      .join('');
+    return frames ? `@keyframes ${keyframes.name}{${frames}}` : '';
+  }
+  return '';
+}
+
+function isSvgScopedSelector(selectorText: string, svgId: string): boolean {
+  const prefix = `#${svgId}`;
+  return selectorText.split(',').every((selector) => {
+    const trimmed = selector.trim();
+    if (!trimmed.startsWith(prefix)) return false;
+    const boundary = trimmed[prefix.length];
+    return boundary === undefined || ' .:#>[+~'.includes(boundary);
+  });
+}
+
+function sanitizeCssDeclarations(style: CSSStyleDeclaration): void {
+  for (let index = style.length - 1; index >= 0; index -= 1) {
+    const property = style.item(index).toLowerCase();
+    const value = style.getPropertyValue(property);
+    if (BLOCKED_CSS_PROPERTIES.has(property) || BLOCKED_CSS_VALUES.test(value)) {
+      style.removeProperty(property);
+    }
+  }
 }

@@ -13,6 +13,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.coursepack.dto.CourseVideoDto;
@@ -40,6 +44,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.junit.jupiter.api.Test;
 
@@ -298,9 +303,57 @@ class MainlineServiceTest {
                 OffsetDateTime.now())); // 三件套齐全且确实读过课程页
     when(progressRepo.markCompleted(USER, 10L)).thenReturn(true);
 
-    service.reportExampleDone(USER, 10L, 2L, null);
+    Logger logger = (Logger) LoggerFactory.getLogger(MainlineService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.INFO);
+    logger.addAppender(appender);
+    try {
+      service.reportExampleDone(USER, 10L, 2L, null);
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
 
     verify(starService, times(1)).recalc(USER, 1, StarSource.STAGE_COMPLETE);
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(
+            message ->
+                assertThat(message)
+                    .contains("stage 完成")
+                    .doesNotContain("user=" + USER));
+  }
+
+  @Test
+  void outOfRangePageReadDoesNotLogUserId() {
+    long userId = 987654321L;
+    when(stageRepo.findById(10L))
+        .thenReturn(Optional.of(stageWithPages(10, 1, 1, List.of(8001L), List.of())));
+    when(progressRepo.find(userId, 10L)).thenReturn(Optional.empty());
+    when(courseVideoService.listVideos(1)).thenReturn(List.of());
+    when(ojCatalogRepository.examplesForStage(1, 1)).thenReturn(List.of());
+    Logger logger = (Logger) LoggerFactory.getLogger(MainlineService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.DEBUG);
+    logger.addAppender(appender);
+    try {
+      service.reportPageRead(userId, 10L, 9999L);
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(
+            message ->
+                assertThat(message)
+                    .contains("丢弃越界 pageId")
+                    .doesNotContain(Long.toString(userId)));
   }
 
   @Test

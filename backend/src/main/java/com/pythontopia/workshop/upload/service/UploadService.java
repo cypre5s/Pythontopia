@@ -98,7 +98,7 @@ public class UploadService {
       error = null;
     } catch (UploadParseException e) {
       // 解析失败是预期可恢复态：落 FAILED + error，返回 200 让前端 pill 显示错误并支持重试。
-      log.info("upload parse failed user={} ext={}", userId, ext);
+      log.info("upload parse failed ext={}", ext);
       text = "";
       charCount = 0;
       lineCount = 0;

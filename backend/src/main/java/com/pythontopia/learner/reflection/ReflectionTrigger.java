@@ -67,7 +67,7 @@ public class ReflectionTrigger {
       Instant now = Instant.now();
       if (counter.lastReflectedAt != null
           && Duration.between(counter.lastReflectedAt, now).toMinutes() < cooldownMinutes) {
-        log.debug("reflection cooldown active for user {}", userId);
+        log.debug("reflection cooldown active");
         return false;
       }
       counter.lastReflectedAt = now;

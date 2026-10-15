@@ -208,7 +208,7 @@ class NpcGreetingServiceTest {
     assertThat(appender.list)
         .extracting(ILoggingEvent::getFormattedMessage)
         .anySatisfy(message -> assertThat(message).contains("errorType=RuntimeException"))
-        .noneMatch(message -> message.contains(sentinel));
+        .noneMatch(message -> message.contains(sentinel) || message.contains("user=7"));
   }
 
   @Test
@@ -234,7 +234,7 @@ class NpcGreetingServiceTest {
     assertThat(appender.list)
         .extracting(ILoggingEvent::getFormattedMessage)
         .anySatisfy(message -> assertThat(message).contains("errorType=RuntimeException"))
-        .noneMatch(message -> message.contains(sentinel));
+        .noneMatch(message -> message.contains(sentinel) || message.contains("user=7"));
   }
 
   @Test

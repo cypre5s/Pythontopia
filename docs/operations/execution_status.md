@@ -2,13 +2,65 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-15）**：目标基线 `d38f1424`；保留工作树中已有修改。本轮在单条 Tutor 产品流程中发起 2 次 DeepSeek completion，均 HTTP 200；没有重复通用探针。历史合成 PNG 输入成功记录仍有效，Tutor 输出为文本；较早的 relay 超时、空 JSON、503 作为稳定性风险保留。Tutor 已按事件选择 AutoGen 阶段，Graph 49 项、Java 37 项定向测试通过；新鲜 Chromium 导读与无帮助反馈流程通过，文本卡片 278/348 字符、页面错误 0、临时账号已清理。首轮失败原因为 Java 服务加载旧编译阶段校验，重启全栈后复测通过。断开取消、同请求检查点恢复和图片数据不落库均有既有证据。Twin P0、Boss Phaser、管理台 Alethicode 页面格式、部分 Web 动作和本地 Piston 沙箱边界有代码及验证证据。RAG 图数据库、启动/自愈/重建/embedding 与 Graph 路由/SSE 异常现仅保留异常类型或固定错误正文；相关 Graph 测试 71 项、其他错误边界 8+3 项通过，RAG 图模式 49 项通过、2 项跳过。周报定时任务不再记录学生 ID 和异常正文（`WeeklyEvaluationSchedulerTest` 4/4）；远征预取错误正文不再落入学生可读状态，claim/persist 异常日志只记类型；画像地图生成异常不再写入运行审计（`EndlessPregenServiceTest` 19/19、`CurriculumMapperServiceTest` 1/1，三类后端回归合跑 24/24）。BROWSE 异常哨兵确认 URL token 不再进入日志或 SSE/结果字段（79/79）。仍未完成：剩余安全审计、远征后续章节题型及合格 run 刷新恢复、Web 动作矩阵、Twin A/B 与 7 日复测、工程收尾；性能最后测。生产 Piston ACL/ECS 不在本地审计范围。唯一待办清单见 [总任务实施清单](../plans/2026-10-15-web-system-implementation-plan.md)。
+> **当前快照（2026-10-16）**：目标基线 `d38f1424`，当前 HEAD `8077e366`；保留工作树中已有修改。本轮在单条 Tutor 产品流程中发起 2 次 DeepSeek completion，均 HTTP 200；本次续接没有 DeepSeek 请求。之后从 KC-005 主线页面走过 1 次 AI 补题流程，并新增一条自动批准共享题目；该流程内部 completion 数未单独统计，不作为通用模型可用性复测。历史合成 PNG 输入成功记录仍有效，Tutor 输出为文本；较早的 relay 超时、空 JSON、503 作为稳定性风险保留。Tutor 已按事件选择 AutoGen 阶段，Graph 49 项、Java 37 项定向测试通过；新鲜 Chromium 导读与无帮助反馈流程通过，文本卡片 278/348 字符、页面错误 0、临时账号已清理。首轮失败原因为 Java 服务加载旧编译阶段校验，重启全栈后复测通过。断开取消、同请求检查点恢复和图片数据不落库均有既有证据。Twin P0、Boss Phaser、管理台 Alethicode 页面格式、部分 Web 动作和本地 Piston 沙箱边界有代码及验证证据。RAG 图数据库、启动/自愈/重建/embedding 与 Graph 路由/SSE 异常现仅保留异常类型或固定错误正文；相关 Graph 测试 71 项、其他错误边界 8+3 项通过，RAG 图模式 49 项通过、2 项跳过。周报定时任务不再记录学生 ID 和异常正文（`WeeklyEvaluationSchedulerTest` 4/4）；远征预取错误正文不再落入学生可读状态，claim/persist 异常日志只记类型；画像地图生成异常不再写入运行审计（`EndlessPregenServiceTest` 20/20、`CurriculumMapperServiceTest` 1/1，三类后端回归合跑 24/24）。本次又修复远征预取/NPC/Boss/判题日志中的学习者 ID 或错误正文，7 个 Java 定向测试类 142/142；BROWSE 异常哨兵确认 URL token 不再进入日志或 SSE/结果字段（79/79）。远征只读复核确认 KC-004→KC-003→KC-008 真实先修链、当前无第 2 章以上战斗题；满足 KC-003 门槛的账号没有活动 run，未借用该账号或伪造掌握度。完整功能清单见 [总任务实施清单](../plans/2026-10-15-web-system-implementation-plan.md)。
 
 ## 当前清单摘要
 
-- **已完成：** 敏感学习数据日志脱敏及定向测试；Boss 题目 payload 反序列化/读取错误日志改为只记异常类型（`EndlessPregenServiceTest` 19/19）；远征预取失败状态使用固定重试提示，claim/persist 失败日志不再输出用户/题目标识与异常正文；画像地图生成异常不再写入运行审计；三类后端回归合跑 24/24；BROWSE 结果与日志不再包含 executor 异常原文（Graph 79/79）；RAG 启动、自愈、重建和 embedding 失败不再记录/返回异常正文（哨兵 5/5、相关 RAG 测试 33/33）；Graph error-boundary 定向测试 71+8+3 通过，RAG 图模式 49 通过、2 跳过；周报定时任务错误日志去除学生 ID 与异常正文（`WeeklyEvaluationSchedulerTest` 4/4）；运行时依赖 OSV 查询未发现已知漏洞；BROWSE SSRF 回归 58/58；本地 Piston 隔离配置与攻击边界脚本；远征预取复用精确题型审核题；Twin P0；Boss Phaser；管理台三项页面的 Alethicode 布局；管理员停用/恢复及部分教师/学生动作；Tutor 事件专属 AutoGen 阶段与旧检查点兼容（Graph 49、Java 37）；新鲜 Tutor 浏览器导读与反馈闭环（两个 DeepSeek completion HTTP 200，非空文本卡片，临时账号清理）。历史合成 PNG 输入成功记录保留。
-- **未完成：** 剩余安全审计；远征后续章节 battle-compatible 题型与合法活动 run 刷新恢复；剩余 Web 路由/控件和窄屏矩阵；Twin A/B 与 7 日复测；工程收尾。性能最后执行。Python 开发 venv 的旧包 advisory、生产 Piston ACL/ECS 未关闭。管理台格式已对齐，缺少真实模型的数据页不做空壳。
-- **下一步：** 远征代码已有持久化与恢复测试，但真实先修学情下的后续章节题型和浏览器刷新流程仍未验证；不伪造掌握度，先继续剩余安全边界审计，再处理 Web 未覆盖动作与工程收尾。学习证据只走正式判题；每次临时账号测试后清理；性能最后测。
+- **已完成：** 敏感学习数据日志脱敏及定向测试；本轮新增远征预取、NPC 寒暄、Boss Twin 难度兜底、判题系统错误 4 处日志脱敏，7 个 Java 测试类 142/142 通过；Boss 题目 payload 反序列化/读取错误日志改为只记异常类型（`EndlessPregenServiceTest` 20/20）；远征预取失败状态使用固定重试提示，claim/persist 失败日志不再输出用户/题目标识与异常正文；画像地图生成异常不再写入运行审计；三类后端回归合跑 24/24；BROWSE 结果与日志不再包含 executor 异常原文（Graph 79/79）；RAG 启动、自愈、重建和 embedding 失败不再记录/返回异常正文（哨兵 5/5、相关 RAG 测试 33/33）；Graph error-boundary 定向测试 71+8+3 通过，RAG 图模式 49 通过、2 跳过；周报定时任务错误日志去除学生 ID 与异常正文（`WeeklyEvaluationSchedulerTest` 4/4）；BROWSE SSRF 回归 58/58；本地 Piston 隔离配置与攻击边界脚本；远征预取复用精确题型审核题；Twin P0；Boss Phaser；管理台三项页面的 Alethicode 布局；管理员停用/恢复及部分教师/学生动作；Tutor 事件专属 AutoGen 阶段与旧检查点兼容（Graph 49、Java 37）；新鲜 Tutor 浏览器导读与反馈闭环（两个 DeepSeek completion HTTP 200，非空文本卡片，临时账号清理）；本地 Graph/RAG 依赖更新与 OSV 开发环境复扫（仅剩 2 个无修复版本的可选依赖告警）。历史合成 PNG 输入成功记录保留。
+- **本轮新增：** Mermaid SVG CSS 清洗回归 3/3；睡觉、Tutor 编排、学习事件、NPC 种子及记忆引用降级日志只保留异常类型，五个对应后端定向测试类合跑通过。新增远征预取、NPC 寒暄、Boss 难度兜底、判题系统错误日志脱敏；红测 6 条，合并前一批日志边界后 7 个 Java 测试类 142/142 通过。KC-005 主线 AI 补题新增一条 `APPROVED/AUTOMATED` 题库记录；教师重置加入码后旧码 404、新码入班 200；四个动态 SQL repository 的主要构造点只拼接固定片段、用户值参数绑定，未发现确认注入点。没有重复通用模型探针，KC-005 内部 completion 数未统计。
+- **未完成：** 剩余安全审计（开发 venv OSV 只剩 `diskcache`/`ragas` 两个当前无修复版本的可选依赖告警）；远征后续章节 battle-compatible 题型与合法活动 run 刷新恢复；剩余 Web 路由/控件和窄屏矩阵；Twin A/B 与 7 日复测；工程收尾。性能最后执行。生产 Piston ACL/ECS 未关闭。管理台格式已对齐，缺少真实模型的数据页不做空壳。
+- **下一步：** 继续安全审计中尚未覆盖的附件、执行隔离与业务日志边界；远征合法 run 需要通过 KC-004→KC-003 的真实学习路径取得先修证据后再验证，不重复已通过的日志回归；随后补 Web 剩余动作矩阵和工程收尾。Twin A/B 需真实样本，性能最后测。
+
+## 2026-10-16 — 远征前置与本地运行态复核
+
+- 只读数据库复核：已批准题库没有第 2 章及以上 `dual_track`/`closed_loop` 题；KC-008 需要 KC-003 达到 0.6，KC-003 本身需要 KC-004。满足 KC-003 门槛的账号没有活动 run，且未识别为可支配的 QA 账号，因此未登录或修改其学情。
+- `./dev.sh --sandbox` 因 5173 已有 Vite 不能重复启动；课程 manifest 的生成时间改动已撤回。为恢复本地 API，后端用当前 Graph 内部令牌单独启动并健康检查 HTTP 200；现有 Vite 保持不动。`.env` 的 JWT 配置是占位值，后端使用本次进程内临时密钥，旧浏览器登录会话可能需要重新登录。没有模型请求或业务数据写入。
+- 远征题型、合格 run 的刷新恢复保持未完成；下一步继续其它安全边界与 Web 动作，不重复本轮日志测试。
+
+## 2026-10-15 — Python Graph/RAG 依赖升级与 OSV 复扫
+
+- 本地 Graph/RAG 容器原运行 FastAPI 0.115.14、Starlette 0.46.2；重建并切换到 FastAPI 0.143.1、Starlette 1.8.0。Graph/RAG `/healthz` 与 `/readyz` HTTP 200，容器 healthy，两个 `pip check` 均无破损依赖。
+- Graph Dockerfile 为镜像源下载增加 120 秒超时、5 次重试。开发 venv 同步项目依赖，清除不属于 Graph/RAG 服务的旧安装残留。
+- OSV 合并扫描从旧开发环境的 25 个告警包收敛到 `diskcache 5.6.3` 与 `ragas 0.4.3` 两个 Graph 可选开发 extra 告警；OSV 当前未列修复版本，二者不在本地 Graph/RAG 运行镜像。
+- pytest 临时目录 CVE-2025-71176 的修复版为 9.0.3；项目开发约束现为 pytest `>=9.0.3,<10`、pytest-asyncio `>=1.3,<2`。同步后 Graph 1902 passed/1 skipped，RAG 166 passed；`pip check` 均通过。无 DeepSeek 请求。
+
+## 2026-10-15 当前续接：Mermaid SVG CSS 安全边界
+
+- 真实 Mermaid 输出证明 `classDef` 可注入 `position:fixed`，`init.themeCSS` 可注入外部 CSS URL；原 SVG 清洗会保留两者。
+- 现用 CSSOM 过滤危险定位/资源声明与 SVG 作用域外规则，同时保留安全配色。`sanitizeSvg.spec.ts` 3/3、typecheck、定向 ESLint 通过。远征服务动作与上传配额行锁复核未发现新问题；未调用模型。
+- 继续任务：安全审计尚未完成；后续章节远征样本、未覆盖 Web 动作、Twin A/B/7 日复测、工程收尾仍待处理；性能最后测。
+
+## 2026-10-15 当前续接：睡觉降级日志脱敏
+
+- `WorldAdvanceService.sleep` 的遗忘曲线失败日志原先包含学生 ID 和异常正文；现只记录异常类型，睡觉更新与返回行为保持不变。
+- `WorldAdvanceServiceTest` 哨兵先 RED 后 GREEN（1/1），`git diff --check` 通过。未调用模型。
+- 继续任务不变：安全审计、后续章节远征与刷新恢复、Web 动作矩阵、Twin 长期效果、工程收尾；性能最后测。
+
+## 2026-10-15 当前续接：编排器到期 KC 降级日志脱敏
+
+- 到期 KC 读取错误日志原先附带完整异常栈；现只记录异常类型，空列表 fail-soft 不变。
+- 哨兵先 RED 后 GREEN；`OrchestratorServiceTest` 与 `WorldAdvanceServiceTest` 合跑通过。未调用模型。
+
+## 2026-10-15 当前续接：判题失败难度查询日志脱敏
+
+- 题目难度补查失败原先写数据库异常正文；现只记录异常类型，保留题目 ID 与空难度兜底。
+- 哨兵先 RED 后 GREEN；`LearningEventListenerTest`、`OrchestratorServiceTest`、`WorldAdvanceServiceTest` 合跑通过。未调用模型。
+
+## 2026-10-15 当前续接：NPC 种子启动日志脱敏
+
+- NPC 人格种子失败原先记录异常正文；现只记录异常类型并继续 fail-soft，不影响应用启动。
+- 哨兵先 RED 后 GREEN；四类日志回归合跑通过。未调用模型。
+
+## 2026-10-15 当前续接：记忆引用落库日志脱敏
+
+- 本地记忆引用 best-effort 落库失败原先会记录学生 ID 与数据库正文；同服务 provider fallback 也改为只记录异常类型。
+- 哨兵先 RED 后 GREEN；`MemoryProviderRouterTest` 与其它四类日志回归合跑通过。未调用模型。
+
+## 2026-10-15 当前续接：KC-005 主线 AI 补题入库
+
+- 主线 `/mainline/stage/3` 的“练”页为 KC-005 调用一次正常 AI 补题。HTTP 200，题目与该 KC 的计算机发展五个时代内容一致，`aiGenerated=true`、`reviewed=true`、`totalTestCases=3`，页面错误 0。
+- DB 核对到新 `APPROVED/AUTOMATED` 共享审核记录，`kind=NULL`；章节 1–2 批准题由 10 增至 11。没有正式判题或学习事件，模型 completion 次数未单独统计。
+- 两个未触发出题的临时账号已删除；出题请求者因审核来源外键限制而停用并撤销会话，题目预取记录已清理，批准题和审计来源保留。后续章节 battle-compatible 题型与合法活动 run 恢复仍未完成。
 
 ## 2026-10-15 当前续接：Tutor 事件专属 AutoGen 阶段
 

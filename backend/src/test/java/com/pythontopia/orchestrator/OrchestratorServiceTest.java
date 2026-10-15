@@ -10,6 +10,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.bugmine.service.BugMineService;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.coursepack.domain.CourseKc;
@@ -24,6 +28,7 @@ import com.pythontopia.orchestrator.dto.OrchestratorTurnRequest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -60,18 +65,33 @@ class OrchestratorServiceTest {
   void degradesToEmptyDecayingKcsWhenBugMineFails() {
     OrchestratorGraphClient client = mock(OrchestratorGraphClient.class);
     BugMineService bugMine = mock(BugMineService.class);
-    when(bugMine.decayingKcCodes(eq(7L), anyInt())).thenThrow(new RuntimeException("db down"));
+    when(bugMine.decayingKcCodes(eq(7L), anyInt()))
+        .thenThrow(new RuntimeException("private-decay-error-sentinel"));
     OrchestratorService service = new OrchestratorService(client, bugMine);
     OrchestratorTurnRequest request = sampleRequest();
+    Logger logger = (Logger) LoggerFactory.getLogger(OrchestratorService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.WARN);
+    logger.addAppender(appender);
+    try {
+      SseEmitter emitter = service.turn(7L, request);
 
-    SseEmitter emitter = service.turn(7L, request);
-
-    assertThat(emitter).isNotNull();
-    @SuppressWarnings("unchecked")
-    ArgumentCaptor<List<String>> captor = ArgumentCaptor.forClass(List.class);
-    verify(client)
-        .turnStream(eq(7L), eq(request), captor.capture(), any(SseEmitter.class), any(Runnable.class));
-    assertThat(captor.getValue()).isEmpty();
+      assertThat(emitter).isNotNull();
+      @SuppressWarnings("unchecked")
+      ArgumentCaptor<List<String>> captor = ArgumentCaptor.forClass(List.class);
+      verify(client)
+          .turnStream(
+              eq(7L), eq(request), captor.capture(), any(SseEmitter.class), any(Runnable.class));
+      assertThat(captor.getValue()).isEmpty();
+      assertThat(appender.list)
+          .singleElement()
+          .satisfies(event -> assertThat(event.getThrowableProxy()).isNull());
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
   }
 
   @Test

@@ -120,8 +120,7 @@ public class NpcGreetingService {
     } catch (RuntimeException ex) {
       // 记忆检索失败属下游故障 → 结构化降级，不伪造寒暄。
       log.warn(
-          "npc greeting memory retrieval failed for user={} npc={} errorType={}",
-          userId,
+          "npc greeting memory retrieval failed for npc={} errorType={}",
           npcKey,
           ex.getClass().getSimpleName());
       return NpcGreetingResponse.serviceUnavailable();
@@ -141,9 +140,8 @@ public class NpcGreetingService {
       // graph NpcDialogAgent 不可达/超时/缺 token → 结构化降级（fail-fast，不静默降级成普通寒暄）。
       // 具体 RestClientException 由 NpcDialogGraphClient 记录；此处补一条 service 级 reason 便于定位「记忆服务暂不可用」。
       log.warn(
-          "npc greeting degraded for user={} npc={}: graph NpcDialogAgent unreachable (empty Optional; "
+          "npc greeting degraded for npc={}: graph NpcDialogAgent unreachable (empty Optional; "
               + "检查 graph 是否可达/超时，以及是否需配 PYT_RAG_ADMIN_TOKEN)",
-          userId,
           npcKey);
       return NpcGreetingResponse.serviceUnavailable();
     }
@@ -151,7 +149,7 @@ public class NpcGreetingService {
     if (reply.replyMd() == null || reply.replyMd().isBlank()) {
       // 下游可达但返回空文本（LLM 兜底缺失/被裁剪）：视为不可用，避免展示空寒暄。
       log.warn(
-          "npc greeting degraded for user={} npc={}: graph returned blank reply_md", userId, npcKey);
+          "npc greeting degraded for npc={}: graph returned blank reply_md", npcKey);
       return NpcGreetingResponse.serviceUnavailable();
     }
     return NpcGreetingResponse.personalized(reply.replyMd().trim(), reply.grounded(), reply.citedEventIds());
@@ -172,9 +170,7 @@ public class NpcGreetingService {
       return buildProfileBrief(passiveProfileService.getDimensions(userId));
     } catch (RuntimeException ex) {
       log.warn(
-          "npc greeting profile brief degraded for user={} errorType={}",
-          userId,
-          ex.getClass().getSimpleName());
+          "npc greeting profile brief degraded errorType={}", ex.getClass().getSimpleName());
       return "";
     }
   }

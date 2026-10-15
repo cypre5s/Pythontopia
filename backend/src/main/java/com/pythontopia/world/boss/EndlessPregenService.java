@@ -390,8 +390,8 @@ public class EndlessPregenService {
         return;
       }
       log.info(
-          "prefetch ready job={} user={} ch={} kc={} difficulty={} problemId={}",
-          jobId, userId, chapter, kcCode, difficulty, problem.problemId());
+          "prefetch ready job={} ch={} kc={} difficulty={} problemId={}",
+          jobId, chapter, kcCode, difficulty, problem.problemId());
     } catch (RuntimeException ex) {
       String reason = "题目预加载失败，可重试";
       jdbcTemplate.update(
@@ -402,9 +402,8 @@ public class EndlessPregenService {
           jobId,
           generationAttempt);
       log.warn(
-          "prefetch failed job={} user={} ch={} kc={} difficulty={} errorType={}",
+          "prefetch failed job={} ch={} kc={} difficulty={} errorType={}",
           jobId,
-          userId,
           chapter,
           kcCode,
           difficulty,
@@ -721,7 +720,7 @@ public class EndlessPregenService {
         return Optional.empty();
       }
       if (payloads.size() > 1) {
-        log.warn("ambiguous legacy problem id user={} problemId={}", userId, problemId);
+        log.warn("ambiguous legacy problem id problemId={}", problemId);
         return Optional.empty();
       }
       return Optional.ofNullable(deserialize(payloads.get(0)));

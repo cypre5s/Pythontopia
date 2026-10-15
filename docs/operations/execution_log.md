@@ -6,6 +6,13 @@
 
 ## 2026-10-15 当前续接
 
+- KC-005 主线“练”页正常 AI 补题返回 200，题面符合 KC、AI/审核标记为 true、`totalTestCases=3`；新 `APPROVED/AUTOMATED` 共享行落库，kind 为空。两账号删除，审核请求者停用保留审计，预取记录删除；未正式判题或写学习事件。模型 completion 数未单独统计。
+- 记忆引用 best-effort 落库失败日志原先包含学生 ID/数据库正文；哨兵先 RED 后 GREEN，外部 provider fallback 和落库降级现只记异常类型，记忆返回语义不变。五类后端回归合跑通过，无模型请求。
+- NPC 人格种子启动失败原先会记录异常正文；哨兵先 RED 后 GREEN，现只记异常类型并保留启动 fail-soft。`NpcPersonaSeederTest` 与其它三类日志回归合跑通过，无模型请求。
+- 判题失败补查题目难度的数据库错误曾写入 DEBUG 异常正文；合成哨兵先 RED 后 GREEN，现只记异常类型并保留题目 ID/空难度兜底。三类后端测试合跑通过，无模型请求。
+- Tutor 编排读取到期 KC 失败时原先会写完整异常栈；哨兵先 RED 后 GREEN，现只记录异常类型并保留空列表 fail-soft。`OrchestratorServiceTest` 与睡觉日志回归合跑通过。无模型请求。
+- 世界睡觉的遗忘曲线降级日志曾包含学生 ID 与异常正文；哨兵测试先 RED，现只记录异常类型，`WorldAdvanceServiceTest` 1/1，睡觉返回路径仍正常，差异检查通过。无模型请求。
+- XSS 续扫确认 Mermaid `classDef` 可产生 `position:fixed`，`init.themeCSS` 可注入外部 CSS URL；CSSOM 清洗已过滤布局覆盖、外部资源和 SVG 外作用域规则，同时保留安全配色。真实 Mermaid 输出回归 3/3、typecheck、定向 ESLint、diff 检查通过。远征 run 行锁/判题证据/题目指纹幂等与上传配额用户行锁复核未发现新问题；无模型调用。
 - RAG KC 图数据库错误日志可能包含连接 URL/密码；合成 DSN 哨兵先 RED，现只记录异常类型，`test_kc_graph.py` 8/8。按仓库验收要求实际查询 `input 函数`、`for 循环`、`列表`，三项均 HTTP 200、有 5 条 page_id/document_id 引用；RAG `/healthz` 200，Ruff 通过，无 DeepSeek 调用。
 - Postgres checkpointer 异常日志哨兵复现 DSN 密码泄露；现只记录异常类型，仍降级 MemorySaver。与记忆 brief/loop sink 合并定向测试 48/48，Ruff、差异检查通过；无模型调用。
 - 编排异常日志续扫：memory brief provider 异常可把学生查询写入日志，loop record sink 异常可把存档错误正文写入日志。哨兵测试先 RED，改为只记异常类型后 `test_agentic_loop.py` 42/42，Ruff 与差异检查通过；fail-soft 行为不变，无模型请求。
@@ -463,3 +470,21 @@
 
 - `CurriculumMapperService.bootstrap` 失败时曾将 Graph 异常正文写入 `resource_run.output_artifact`。合成响应先 RED，确认运行记录会保存 sentinel。
 - 现在只记录固定 `graph-service-error`；失败仍返回原有 `CURRICULUM_MAPPER_UNAVAILABLE`。`CurriculumMapperServiceTest` 1/1，与周报和远征服务测试合跑 24/24。无模型或业务数据库请求。
+
+## 2026-10-15 当前续接：Python 运行环境依赖安全
+
+- 实际 Graph/RAG 容器此前仍使用 FastAPI 0.115.14、Starlette 0.46.2，未与当前 `pyproject.toml` 保持一致。按当前约束重建后，Graph/RAG 均运行 FastAPI 0.143.1、Starlette 1.8.0；健康/就绪接口 HTTP 200，容器 healthy，`pip check` 无破损依赖。镜像下载增加 120 秒超时与 5 次重试以适应 Aliyun 镜像吞吐。
+- 两个本地开发 venv 同步到当前约束；Graph 中未声明的 `browser-use`/Google GenAI 包、RAG 中旧 LangGraph 栈已清理。Fresh OSV audit 当前只剩 Graph 可选 extra 的 `diskcache 5.6.3`（CVE-2025-69872）与 `ragas 0.4.3`（CVE-2026-6587），公告未列修复版本；两者未装入运行镜像。
+- pytest 8.4.2 命中 CVE-2025-71176；Graph/RAG 开发约束改为 pytest `>=9.0.3,<10` 与 pytest-asyncio `>=1.3,<2`，本机同步为 pytest 9.1.1 / pytest-asyncio 1.4.0。官方 pytest 9.0.3 发布说明记载该版本修复不安全临时目录问题，pytest-asyncio 官方发行记录注明 1.3 支持 pytest 9。
+- 变更后 `pip check` 两边通过；Graph 1902 passed、1 skipped、2 warnings，RAG 166 passed、1 warning。OSV 复扫针对两套 venv 合并执行；未触发 DeepSeek、未写业务数据库。
+
+## 2026-10-15 当前续接：班级加入码重置闭环与 SQL 静态核查
+
+- Chromium 临时教师在班级页重置加入码后，页面显示新码与成功提示；学生用旧码加入返回 HTTP 404，用新码加入返回 HTTP 200。页面错误 0，数据库确认临时用户、班级、成员行均为 0。无模型请求。
+- 审阅 `PracticeSubmissionRepository`、`LearningResourceRepository`、`JdbcUploadChunkRepository`、`QuestRepository` 的动态 SQL：动态拼接只选择固定 SQL 片段，用户值经参数绑定；未发现确认 SQL 注入问题。此项只覆盖这些动态构造点，不代表完整安全审计。
+
+## 2026-10-15 当前续接：远征、NPC、Boss 与判题日志隐私
+
+- 新增回归先 RED：远征预取成功/失败、NPC 寒暄降级、Boss Twin 难度兜底、判题 `SYSTEM_ERROR` 日志中捕获学习者 ID 或模拟异常正文，共 6 条失败断言。
+- 修复后日志改为保留任务/提交标识、KC 或 NPC 上下文、异常类型，不再记录学习者 ID 或判题失败正文；功能降级和“不发学习事件”行为不变。
+- `EndlessPregenServiceTest`、`NpcGreetingServiceTest`、`BossServiceTest`、`SubmissionServiceTest`、`MainlineServiceTest`、`UploadServiceTest`、`ReflectionTriggerTest` 合计 142/142 通过。`git diff --check` 通过。未调用模型或写入业务数据库。其余业务操作审计日志仍需按用途审查，不以本批替代全仓安全审计。

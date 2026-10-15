@@ -10,6 +10,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.quest.dto.QuestDto;
@@ -29,6 +33,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.mockito.ArgumentCaptor;
 
@@ -110,6 +115,7 @@ class SubmissionServiceTest {
    */
   @Test
   void submitSystemErrorDoesNotEmitPracticeFailedEvent() {
+    String privateDetails = "private-judge-infrastructure-error-sentinel";
     when(submissions.countSubmittedAfter(anyLong(), any())).thenReturn(0);
     when(problems.findPublic(eq(43L), eq(101L)))
         .thenReturn(
@@ -126,16 +132,31 @@ class SubmissionServiceTest {
                     null)));
     when(submissions.insertSubmission(anyLong(), anyLong(), any(), any(), any())).thenReturn(902L);
     when(judge.judge(eq(902L), eq(101L), any()))
-        .thenReturn(new JudgeOutcome(Verdict.SYSTEM_ERROR, 0, 0, "SYSTEM_ERROR:ast_whitelist_launch_failed"));
+        .thenReturn(new JudgeOutcome(Verdict.SYSTEM_ERROR, 0, 0, privateDetails));
     when(problems.findKcCode(eq(101L))).thenReturn("PY43-KC-001");
     when(submissions.findById(eq(902L)))
         .thenReturn(Optional.of(sampleSubmission(902L, SubmissionStatus.ERROR)));
 
-    SubmissionDto result =
-        service.submit(
-            7L, new SubmissionCreateRequest(101L, "print(1)", null, SubmissionSource.TRAINING));
+    Logger logger = (Logger) LoggerFactory.getLogger(SubmissionService.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.ERROR);
+    logger.addAppender(appender);
+    SubmissionDto result;
+    try {
+      result =
+          service.submit(
+              7L, new SubmissionCreateRequest(101L, "print(1)", null, SubmissionSource.TRAINING));
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
 
     assertThat(result.status()).isEqualTo(SubmissionStatus.ERROR);
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .noneMatch(message -> message.contains("user 7") || message.contains(privateDetails));
     verifyNoInteractions(publisher);
   }
 

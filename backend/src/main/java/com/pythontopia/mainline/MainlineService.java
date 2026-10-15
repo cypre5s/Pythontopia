@@ -260,7 +260,7 @@ public class MainlineService implements MainlineStageCompletionPort {
     requireChapterUnlocked(userId, raw.chapter());
     MainlineStage stage = withChapterStandards(raw);
     if (!isStagePage(stage, pageId)) {
-      log.debug("丢弃越界 pageId user={} stage={} page={}", userId, stageId, pageId);
+      log.debug("丢弃越界 pageId stage={} page={}", stageId, pageId);
       return progressDto(userId, stage, progressRepository.find(userId, stageId).orElse(null), false);
     }
     MainlineStageProgress progress = progressRepository.addPageRead(userId, stageId, pageId);
@@ -369,7 +369,7 @@ public class MainlineService implements MainlineStageCompletionPort {
       long userId, MainlineStage stage, MainlineStageProgress progress, boolean questionsComplete) {
     if (StageCompletion.allComplete(stage, progress, questionsComplete)
         && progressRepository.markCompleted(userId, stage.id())) {
-      log.info("stage 完成 user={} stage={} ch={}", userId, stage.id(), stage.chapter());
+      log.info("stage 完成 stage={} ch={}", stage.id(), stage.chapter());
       starService.recalc(userId, stage.chapter(), StarSource.STAGE_COMPLETE);
     }
   }

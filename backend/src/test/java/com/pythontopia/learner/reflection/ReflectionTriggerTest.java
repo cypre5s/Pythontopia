@@ -1,5 +1,6 @@
 package com.pythontopia.learner.reflection;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
@@ -8,10 +9,15 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+import ch.qos.logback.classic.Level;
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.common.sse.SseRelayExecutor;
 import com.pythontopia.learner.event.LearningEvent;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 
 /** 反思触发单测：攒够阈值才触发一次、冷却窗口内不重复触发、按用户独立计数。 */
 class ReflectionTriggerTest {
@@ -66,6 +72,33 @@ class ReflectionTriggerTest {
       fire(7L);
     }
     verify(reflectionService, times(1)).reflect(eq(7L));
+  }
+
+  @Test
+  void cooldownLogDoesNotIncludeUserId() {
+    long userId = 987654321L;
+    Logger logger = (Logger) LoggerFactory.getLogger(ReflectionTrigger.class);
+    Level previousLevel = logger.getLevel();
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.setLevel(Level.DEBUG);
+    logger.addAppender(appender);
+    try {
+      for (int i = 0; i < THRESHOLD * 2; i++) {
+        fire(userId);
+      }
+    } finally {
+      logger.detachAppender(appender);
+      logger.setLevel(previousLevel);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anySatisfy(
+            message ->
+                assertThat(message)
+                    .contains("reflection cooldown active")
+                    .doesNotContain(Long.toString(userId)));
   }
 
   @Test
