@@ -3,6 +3,7 @@ package com.pythontopia.world.npc;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -111,5 +112,58 @@ class NpcDialogControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.currentNodeId").value("intro_2"))
         .andExpect(jsonPath("$.completedNodeIds.length()").value(2));
+  }
+
+  @Test
+  void talkRejectsNodeIdsLongerThanTheDatabaseColumn() throws Exception {
+    String body =
+        objectMapper.writeValueAsString(
+            Map.of("nodeId", "n".repeat(129), "nextNodeId", "intro_2", "effects", List.of()));
+
+    mockMvc
+        .perform(
+            post("/api/world/npcs/mayor_py/talk")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void talkRejectsExcessiveEffectsAndValuesBeforeServiceCall() throws Exception {
+    List<Map<String, String>> effects =
+        java.util.Collections.nCopies(33, Map.of("type", "SET_FLAG", "key", "visited", "value", "yes"));
+    String body =
+        objectMapper.writeValueAsString(
+            Map.of("nodeId", "intro_1", "effects", effects));
+
+    mockMvc
+        .perform(
+            post("/api/world/npcs/mayor_py/talk")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void talkRejectsOversizedFlagValueBeforeServiceCall() throws Exception {
+    String body =
+        objectMapper.writeValueAsString(
+            Map.of(
+                "nodeId", "intro_1",
+                "effects",
+                    List.of(Map.of("type", "SET_FLAG", "key", "visited", "value", "v".repeat(1025)))));
+
+    mockMvc
+        .perform(
+            post("/api/world/npcs/mayor_py/talk")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(body))
+        .andExpect(status().isBadRequest());
+
+    verifyNoInteractions(service);
   }
 }

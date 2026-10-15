@@ -118,6 +118,24 @@ describe("deriveNextSteps", () => {
     expect(step?.route).toEqual({ path: "/mainline-map" });
   });
 
+  it("已评估的第 1 章知识点仍回到主线，因为远征不开放第 1 章", () => {
+    const recommendation = twinState({
+      kcs: [{
+        kcCode: "PY43-KC-003", kcName: "循环", chapter: 1, chapterName: "计算思维",
+        assessed: true, masteryScore: 0.4, confidence: 0.4, reviewDue: false,
+        dueAt: null, lastPracticedAt: null, consecutiveFailures: 0,
+      }],
+      nextSteps: [{
+        kcCode: "PY43-KC-003", kcName: "循环", chapter: 1, chapterName: "计算思维",
+        difficulty: 1, action: "PRACTICE", reason: "继续巩固", remediationRequired: false,
+      }],
+    });
+    const step = deriveNextSteps({ ...base, chapters: [chapter()], twinState: recommendation })
+      .find((item) => item.kind === "weak-kc");
+
+    expect(step?.route).toEqual({ path: "/mainline-map" });
+  });
+
   it("Twin 推荐到期复习时跳转错题矿洞；没有服务端建议时不伪造弱项", () => {
     const reviewState = twinState({
       kcs: [{

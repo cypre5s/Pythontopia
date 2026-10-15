@@ -5,6 +5,7 @@ import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.world.npc.dto.NpcDialogStateDto;
 import com.pythontopia.world.npc.dto.NpcTalkRequest;
+import jakarta.validation.Valid;
 import java.util.List;
 import java.util.regex.Pattern;
 import org.springframework.http.HttpStatus;
@@ -42,7 +43,7 @@ public class NpcDialogController {
   public NpcDialogStateDto talk(
       @CurrentUser CurrentUserPrincipal user,
       @PathVariable String npcKey,
-      @RequestBody(required = false) NpcTalkRequest request) {
+      @Valid @RequestBody(required = false) NpcTalkRequest request) {
     validateNpcKey(npcKey);
     return service.talk(user.userId(), npcKey, request == null ? new NpcTalkRequest(null, null, null) : request);
   }

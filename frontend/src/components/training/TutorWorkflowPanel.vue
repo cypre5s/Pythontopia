@@ -118,9 +118,11 @@ const localTraceRunning = ref(false);
 let localTraceSeq = 0;
 
 const sse = useSseStream<WorkflowRunResultDto>('/api/tutor/workflow/runs');
-const running = computed(
-  () => localTraceRunning.value || sse.status.value === 'streaming' || sse.status.value === 'connecting',
+let explicitStopSequence = 0;
+const streamRunning = computed(
+  () => sse.status.value === 'streaming' || sse.status.value === 'connecting',
 );
+const running = computed(() => localTraceRunning.value || streamRunning.value);
 interface CoachProgressItem {
   key: string;
   label: string;
@@ -211,6 +213,12 @@ function coachProgressStatus(trace: SseTraceEvent): string {
   if (trace.status === 'retry') return '重新调整';
   if (trace.status === 'fail') return '未通过';
   return '完成';
+}
+
+function stopCurrentRun(): void {
+  if (!streamRunning.value) return;
+  explicitStopSequence += 1;
+  sse.abort();
 }
 
 function scrollBottom(): void {
@@ -526,7 +534,9 @@ async function runEvent(
   retryableRequest.value = retryRequest;
   recoveredRequest.value = false;
   savePendingWorkflowRequest(retryRequest);
+  const stopSequence = explicitStopSequence;
   await sse.start(body);
+  if (stopSequence !== explicitStopSequence) return;
   // 组件已销毁（含 onBeforeUnmount 的 abort：abort 会把 status 置成 done 但 result 为空）→
   // 不再落卡片、更不弹「导学助手暂时没响应」到别的页面。
   if (!alive) return;
@@ -1279,6 +1289,16 @@ function cardId(entry: CardEntry): string {
           />
           <span class="tw-think__label">百晓思考中…</span>
           <button
+            v-if="streamRunning"
+            type="button"
+            class="tw-think__toggle tw-think__stop"
+            data-testid="tutor-workflow-stop"
+            aria-label="停止当前导学请求"
+            @click="stopCurrentRun"
+          >
+            停止
+          </button>
+          <button
             v-if="coachProgressItems.length"
             type="button"
             class="tw-think__toggle"
@@ -1832,6 +1852,11 @@ function cardId(entry: CardEntry): string {
   background: transparent;
   border: 1px solid rgba(42, 111, 151, 0.35);
   border-radius: 999px;
+}
+.tw-think__stop {
+  margin-left: 0;
+  color: #a33a35;
+  border-color: rgba(179, 38, 30, 0.35);
 }
 .tw-think__steps {
   margin: 7px 0 0;

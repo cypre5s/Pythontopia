@@ -2,6 +2,7 @@ package com.pythontopia.learner.twin;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -88,6 +89,31 @@ class AdaptivePracticePolicyTest {
     assertThat(picks).extracting(AdaptivePracticePolicy.Pick::kcCode)
         .containsExactly("KC-FOUNDATION")
         .doesNotContain("KC-DIAGNOSTIC");
+  }
+
+  @Test
+  void reachesTheFirstPrerequisiteAcrossTheFullCourseChain() {
+    List<AdaptivePracticePolicy.Candidate> course = new ArrayList<>();
+    String previousKc = null;
+    for (int number = 1; number <= 65; number++) {
+      String kcCode = "PY43-KC-%03d".formatted(number);
+      int chapter = number == 65 ? 7 : (number - 1) / 11 + 1;
+      course.add(kc(
+          kcCode,
+          chapter,
+          false,
+          null,
+          false,
+          List.of(),
+          previousKc == null ? List.of() : List.of(previousKc)));
+      previousKc = kcCode;
+    }
+
+    var picks = policy.select(course, Set.of(), 2, List.of(), 1);
+
+    assertThat(picks).extracting(AdaptivePracticePolicy.Pick::kcCode)
+        .containsExactly("PY43-KC-001");
+    assertThat(picks.getFirst().action()).isEqualTo("REVIEW");
   }
 
   @Test

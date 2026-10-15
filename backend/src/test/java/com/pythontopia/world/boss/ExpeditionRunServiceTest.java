@@ -1,6 +1,7 @@
 package com.pythontopia.world.boss;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
@@ -281,6 +282,46 @@ class ExpeditionRunServiceTest {
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("快照过大");
     verifyNoInteractions(jdbcTemplate);
+  }
+
+  @Test
+  void focusedExpeditionMayChallengeItsServerSelectedPrerequisiteChapter() throws Exception {
+    String nodes =
+        new ObjectMapper().writeValueAsString(
+            List.of(
+                Map.of(
+                    "id", "L0-0",
+                    "layer", 0,
+                    "col", 0,
+                    "kind", "battle",
+                    "kcCode", "PY43-KC-004",
+                    "challengeKind", "dual_track",
+                    "difficulty", 2,
+                    "next", List.of("L1-0"),
+                    "state", "current")));
+    ResultSet row = org.mockito.Mockito.mock(ResultSet.class);
+    when(row.getString("phase")).thenReturn("challenge");
+    when(row.getObject("focus_chapter")).thenReturn(2);
+    when(row.getString("nodes")).thenReturn(nodes);
+    when(row.getInt("layers")).thenReturn(10);
+    when(row.getString("current_node_id")).thenReturn("L0-0");
+    when(jdbcTemplate.query(
+            contains("SELECT phase, focus_chapter"),
+            any(RowMapper.class),
+            eq(7L),
+            eq(RUN_ID)))
+        .thenAnswer(
+            invocation -> {
+              RowMapper<?> rowMapper = invocation.getArgument(1);
+              return List.of(rowMapper.mapRow(row, 0));
+            });
+    ExpeditionRunService service = new ExpeditionRunService(jdbcTemplate, new ObjectMapper());
+
+    assertThatNoException()
+        .isThrownBy(
+            () ->
+                service.validateProblemRequest(
+                    7L, RUN_ID, "L0-0", 1, false, "PY43-KC-004"));
   }
 
   @Test

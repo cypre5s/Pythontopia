@@ -4,6 +4,30 @@
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
 
+## 2026-10-16 当前续接：修复远征先修跨章节出题与结算
+
+- 聚焦第 2 章或更高章节时，服务端策略可能选中更早章节的未掌握先修 KC；远征请求与结算此前又强制题目章节等于 run 聚焦章节，导致合法的先修题无法进入战斗或提交结算。
+- 校验现依赖服务端 run 节点绑定的 KC、题目身份/指纹与判题证据，不要求先修 KC 与 focus chapter 相同。新增服务层与 PostgreSQL 集成回归覆盖跨章节出题和结算；与远征控制器、Boss、预生成测试合计 126/126 通过。65 KC 七章先修策略回归及 Twin/Boss 测试 63/63 通过。
+- 真实远征闭环仍待有合格真实先修状态的账号、battle-compatible 题型和刷新恢复验证；本轮不调用 DeepSeek，不改写学习者数据。
+
+## 2026-10-16 当前续接：修复 Twin 对第 1 章练习的错误导航
+
+- 静态调用链发现 Twin 将已评估的第 1 章 KC 继续推荐到 `/expedition`，但远征开局只接受第 2 章以上的 KC；Review Hall 和学习分身共用同一导航 helper，因此两处都会遇到空前沿/错误目的地。
+- 新回归先 RED 复现路由为 `/expedition?focus=1`，现将第 1 章练习引回主线地图，学习分身按钮文案同步为“前往主线巩固”。`useNextSteps` 11/11、`ProfileRoomPage` 6/6、typecheck 与触及文件 ESLint 通过。无模型请求、无业务数据写入。
+- 远征状态伪造、节点绑定、Boss 三阶段、超时和队列取消已有后端/PostgreSQL/预生成测试覆盖（本轮已跑的相关合并套件 126/126）；真实合格账号的浏览器地图/战斗、缺题地图预检仍未验收。
+
+## 2026-10-16 当前续接：由正常主线入口补齐 KC-003 编程练习
+
+- 只读课程目录核对显示 KC-003 没有 course problem 或主线编程题。临时学生从 `/mainline/stage/1` 的“生成 AI 编程练习”按钮提交一次请求，HTTP 200；返回 KC 匹配、`aiGenerated=true`、`reviewed=true`，学生工作区可见，页面错误 0。
+- 题面要求用 `print` 按行输出计算思维求解的五个步骤，与 KC-003“计算思维的方法与特征”相符；审核库聚合显示 1 条 `APPROVED`、`kind=NULL`，可由共享库提供给后续学生。第二次页面加载复用该批准题以检查公开题面，没有重复生成。此题是普通主线题，不算远征的 `dual_track`/`closed_loop` 覆盖。
+- 未提交答案，没有掌握度/学习事件。因审核记录以 requester 外键保留，临时账号已停用并撤销 JWT 代次；该账号的预生成题行清零，审核题和审计来源保留。DeepSeek 内部 completion 数没有从这次学生请求单独计数。
+
+## 2026-10-16 当前续接：NPC talk 请求边界与任务去重
+
+- NPC 静态调用链确认节点、完成列表和 `SET_FLAG` 只写当前用户自己的对话存档，未发现任务、奖励或权限逻辑消费；Web 与 Android 使用不同对话树，不能只按 Web 数据硬编码服务端节点表。
+- `NpcTalkRequest` 限制 node IDs 为 128 字符、effects 最多 32 项；每个 effect 的 type/key/value 上限为 64/128/1024 字符。三个越界控制器回归先 RED（原实现均返回 200），修复后 `NpcDialogControllerTest` 6/6 通过；触及 Java 文件定向 Spotless 与 diff 检查通过。无模型调用。
+- AutoGen 对照确认普通 `/api/tutor/ask` 与六阶段导学都已使用 AutoGen；两者保留 Pythontopia 既有 SSE、附件和 checkpoint 合同，不移植不兼容的 Alethicode 异步 run API。导学面板现有请求期间显式“停止”按钮，abort 后可按原 requestId 恢复，不弹无响应错误；TutorWorkflowPanel 回归 8/8、typecheck、定向 ESLint 通过。管理台基础 token 与表格规格已对齐；页面编排差异保持在各自业务合同内。DeepSeek provider 审计没有发现可达的非 DeepSeek 模型请求或语音请求。
+
 ## 2026-10-16 当前续接：媒体合成队列拒绝后收敛为失败状态
 
 - 有界 `mediaComposeExecutor` 满载时，`MediaJobService.submit()` 原先直接向上抛 `RejectedExecutionException`，新建的 `media_job` 因而保持 `PENDING`。新增哨兵回归先 RED，复现原异常。
@@ -572,6 +596,11 @@
 - 对照 reference/debug 自测与玩家判题路径，确认自测原先对 stdout 和期望值调用 `strip()`，会忽略前导空格；正式评测使用 `rstrip()`。两条回归先 RED 后 GREEN，现保持两处自测与正式评测一致。
 - 本地 Piston 运行态抽查：`/proc/1/environ` 读取失败；执行环境敏感变量名计数为 0；打印 150,000 字符以 SIGKILL 结束，Graph 适配器返回上限为 65,536 字符。UDP socket 探针未成功连接，但退出为非零且本次未保留 stderr，因此不记作完整网络隔离证明。
 - Boss 自测定向 20/20；Graph 全量 1928 passed、1 skipped、2 warnings；Ruff 与 `git diff --check` 通过。无 DeepSeek 请求。
+
+## 2026-10-16 — 修正远征长先修链回归夹具
+
+- 将远征选题策略的 65 KC 回归构造为跨 7 章的先修链，确保聚焦第 7 章时必须回溯 64 层才能抵达基础 KC。复验发现旧夹具把前 64 个候选都放在第 1 章，因候选回退直接命中根 KC，未覆盖原固定深度缺陷；现修正夹具。
+- `AdaptivePracticePolicyTest`、`LearnerTwinServiceTest`、`BossServiceTest` 合计 63/63 通过，`git diff --check` 通过。只验证了共享选题策略；远征战斗题型与有效活动 run 的刷新恢复仍未验收。没有模型请求或业务数据写入。
 
 ## 2026-10-16 当前续接：提示词边界、远征日志与窄屏
 

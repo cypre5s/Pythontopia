@@ -75,7 +75,8 @@ public class AdaptivePracticePolicy {
         .toList();
     if (eligible.isEmpty() && focusChapter != null) {
       List<Candidate> unresolved = scope;
-      for (int depth = 0; depth < 7 && !unresolved.isEmpty(); depth++) {
+      // Bound traversal by course size without truncating a valid long prerequisite chain.
+      for (int depth = 0; depth < byCode.size() && !unresolved.isEmpty(); depth++) {
         Set<String> missing = new LinkedHashSet<>();
         for (Candidate candidate : unresolved) {
           for (String prerequisite : candidate.prerequisiteCodes()) {

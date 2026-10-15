@@ -90,6 +90,28 @@ describe('ProfileRoomPage', () => {
     expect(routerPush).toHaveBeenNthCalledWith(2, { path: '/expedition', query: { focus: '2', kcCode: 'PY43-KC-002' } });
   });
 
+  it('routes an assessed chapter-one recommendation back to the mainline map', async () => {
+    fetchTwinState.mockResolvedValueOnce({
+      ...state,
+      kcs: [{
+        kcCode: 'PY43-KC-001', kcName: '变量', chapter: 1, chapterName: '基础', assessed: true,
+        masteryScore: 0.4, confidence: 0.5, reviewDue: false, dueAt: null,
+        lastPracticedAt: '2026-10-12T00:00:00Z', consecutiveFailures: 0,
+      }],
+      nextSteps: [{
+        kcCode: 'PY43-KC-001', kcName: '变量', chapter: 1, chapterName: '基础', difficulty: 2,
+        action: 'PRACTICE', reason: '继续巩固', remediationRequired: false,
+      }],
+    });
+
+    const wrapper = mountPage();
+    await flushPromises();
+    await wrapper.get('[data-testid="twin-next-primary"]').trigger('click');
+
+    expect(wrapper.get('[data-testid="twin-next-primary"]').text()).toContain('前往主线巩固');
+    expect(routerPush).toHaveBeenCalledWith({ path: '/mainline-map' });
+  });
+
   it('routes an unassessed recommendation to the mainline map', async () => {
     fetchTwinState.mockResolvedValueOnce({
       ...state,

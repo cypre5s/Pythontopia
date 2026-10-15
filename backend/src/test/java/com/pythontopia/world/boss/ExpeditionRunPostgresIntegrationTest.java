@@ -754,6 +754,43 @@ class ExpeditionRunPostgresIntegrationTest {
   }
 
   @Test
+  void focusedRunCanSettleAChallengeForItsEarlierChapterPrerequisite() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active =
+        runs.start(
+            userId,
+            2,
+            false,
+            List.of(new FrontierPickDto("PY43-KC-004", 1, 2, "先修知识点")));
+    Map<String, Object> node = active.nodes().getFirst();
+    String nodeId = (String) node.get("id");
+    String problemId = "prerequisite-problem-" + UUID.randomUUID();
+    runs.performAction(
+        userId,
+        new ExpeditionRunActionRequest(
+            active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
+    insertIssuedProblem(
+        userId,
+        active.runId(),
+        nodeId,
+        problemId,
+        "PY43-KC-004",
+        "e".repeat(64),
+        true,
+        70);
+
+    ExpeditionRunDto settled =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                active.runId(), nodeId, ExpeditionRunAction.SETTLE_CHALLENGE, null, problemId));
+
+    assertThat(settled.phase()).isEqualTo("map");
+    assertThat(nodeById(settled, nodeId).get("state")).isEqualTo("cleared");
+  }
+
+  @Test
   void issuedQuestionFingerprintsAreScopedToTheAuthenticatedRun() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());

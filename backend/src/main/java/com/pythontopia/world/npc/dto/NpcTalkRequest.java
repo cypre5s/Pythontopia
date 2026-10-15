@@ -1,5 +1,7 @@
 package com.pythontopia.world.npc.dto;
 
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
@@ -9,4 +11,6 @@ import java.util.List;
  * （留空则停留在当前节点）；{@code effects} 为本次对话产生的副作用列表。
  */
 public record NpcTalkRequest(
-    String nodeId, String nextNodeId, List<NpcDialogEffectDto> effects) {}
+    @Size(max = 128) String nodeId,
+    @Size(max = 128) String nextNodeId,
+    @Size(max = 32) List<@Valid NpcDialogEffectDto> effects) {}

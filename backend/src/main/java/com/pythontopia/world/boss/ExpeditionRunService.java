@@ -673,8 +673,7 @@ public class ExpeditionRunService {
     Integer bossPhase = BossService.bossPhaseFromProblemId(issued.problemId());
     if (!request.nodeId().equals(issued.nodeId())
         || !Objects.equals(node.get("kcCode"), issued.kcCode())
-        || issued.questionFingerprint() == null
-        || (run.focusChapter() != null && issued.chapter() != run.focusChapter())) {
+        || issued.questionFingerprint() == null) {
       throw problemBindingMismatch();
     }
     String attemptFingerprint =
@@ -1077,8 +1076,8 @@ public class ExpeditionRunService {
             runId);
     if (rows.isEmpty()) throw staleRun();
     ProblemRunState state = rows.getFirst();
-    if (state.focusChapter() != null && state.focusChapter() != chapter) throw chapterChanged();
     Map<String, Object> node = findNode(state.nodes(), nodeId);
+    // A focused run may route to an earlier chapter when the selected KC is a prerequisite.
     if (!Objects.equals(node.get("kcCode"), kcCode)) {
       throw new BusinessException(
           HttpStatus.CONFLICT,

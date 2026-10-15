@@ -69,6 +69,7 @@ function actionLabel(step: LearnerTwinNextStep): string {
   const progress = state.value?.kcs.find((kc) => kc.kcCode === step.kcCode);
   if (progress?.reviewDue) return '进入到期复习';
   if (!progress?.assessed) return '前往主线学习';
+  if (progress.chapter === 1) return '前往主线巩固';
   if (step.action === 'REMEDIATION') return '前往补强练习';
   if (step.action === 'REVIEW') return '巩固先修知识';
   return '前往无尽远征';

@@ -2,10 +2,16 @@ import { flushPromises, shallowMount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TutorWorkflowPanel from '../TutorWorkflowPanel.vue';
 
-const { streamStart, getActiveWorkflowSession, streamConfig } = vi.hoisted(() => ({
+const { streamStart, streamAbort, getActiveWorkflowSession, streamConfig } = vi.hoisted(() => ({
   streamStart: vi.fn(),
+  streamAbort: vi.fn(),
   getActiveWorkflowSession: vi.fn(),
-  streamConfig: { completeRequest: false, result: null as unknown },
+  streamConfig: {
+    completeRequest: false,
+    holdRequest: false,
+    resolveRequest: null as (() => void) | null,
+    result: null as unknown,
+  },
 }));
 
 vi.mock('@/composables/useSseStream', async () => {
@@ -21,6 +27,12 @@ vi.mock('@/composables/useSseStream', async () => {
         traces: ref([]),
         start: async (...args: unknown[]) => {
         streamStart(...args);
+        if (streamConfig.holdRequest) {
+          status.value = 'streaming';
+          await new Promise<void>((resolve) => {
+            streamConfig.resolveRequest = resolve;
+          });
+        }
         if (streamConfig.completeRequest) {
           status.value = 'done';
           result.value = streamConfig.result ?? {
@@ -29,7 +41,12 @@ vi.mock('@/composables/useSseStream', async () => {
           };
         }
         },
-        abort: vi.fn(),
+        abort: () => {
+          streamAbort();
+          status.value = 'done';
+          streamConfig.resolveRequest?.();
+          streamConfig.resolveRequest = null;
+        },
       };
     },
   };
@@ -68,6 +85,8 @@ describe('TutorWorkflowPanel interrupted request recovery', () => {
     sessionStorage.clear();
     vi.clearAllMocks();
     streamConfig.completeRequest = false;
+    streamConfig.holdRequest = false;
+    streamConfig.resolveRequest = null;
     streamConfig.result = null;
     getActiveWorkflowSession.mockResolvedValue({
       sessionKey: 'session-42',
@@ -164,6 +183,26 @@ describe('TutorWorkflowPanel interrupted request recovery', () => {
       event: 'PLAN_RECOMMEND', requestId: sent.requestId,
     });
     expect(stored.sessionKey).toBe('session-42');
+  });
+
+  it('lets the student stop a running request and keeps it available to resume', async () => {
+    streamConfig.holdRequest = true;
+    const wrapper = shallowMount(TutorWorkflowPanel, {
+      props: { problemId: 42, kcCodes: [] },
+      global: { stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    await wrapper.get('[data-testid="plan-recommend"]').trigger('click');
+    await flushPromises();
+    expect(wrapper.find('[data-testid="tutor-workflow-stop"]').exists()).toBe(true);
+
+    await wrapper.get('[data-testid="tutor-workflow-stop"]').trigger('click');
+    await flushPromises();
+
+    expect(streamAbort).toHaveBeenCalledOnce();
+    expect(wrapper.find('[data-testid="tutor-workflow-retry"]').exists()).toBe(true);
+    expect(sessionStorage.getItem('pyt:tutor-workflow:pending:42')).not.toBeNull();
   });
 
   it('clears the saved request after a successful result', async () => {

@@ -1,5 +1,7 @@
 package com.pythontopia.world.npc.dto;
 
+import jakarta.validation.constraints.Size;
+
 /**
  * talk 接口（{@code POST /api/world/npcs/{npcKey}/talk}）应用的 effect 载荷。
  *
@@ -12,4 +14,7 @@ package com.pythontopia.world.npc.dto;
  *
  * <p>未知 {@code type} 静默忽略以保持前向兼容。
  */
-public record NpcDialogEffectDto(String type, String key, String value) {}
+public record NpcDialogEffectDto(
+    @Size(max = 64) String type,
+    @Size(max = 128) String key,
+    @Size(max = 1024) String value) {}
