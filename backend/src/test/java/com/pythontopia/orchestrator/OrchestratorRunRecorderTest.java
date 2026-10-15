@@ -1,16 +1,21 @@
 package com.pythontopia.orchestrator;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.intent.RouteExecutionTokenSignerTest;
@@ -23,6 +28,7 @@ import java.util.List;
 import java.util.function.BiConsumer;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.slf4j.LoggerFactory;
 
 class OrchestratorRunRecorderTest {
 
@@ -105,12 +111,52 @@ class OrchestratorRunRecorderTest {
   }
 
   @Test
-  void callbackIsFailSoftWhenPersistenceFails() {
-    when(loopRunService.record(eq(7L), any())).thenThrow(new RuntimeException("db down"));
-    BiConsumer<String, String> onEvent = recorder.onEvent(7L, multiRequest(), "sess-1");
+  void persistenceFailuresAreFailSoftAndDoNotLogExceptionMessages() {
+    String openFailure = "private-open-error-sentinel";
+    String callbackFailure = "private-callback-error-sentinel";
+    when(loopRunService.record(eq(7L), any())).thenThrow(new RuntimeException(openFailure));
+    Logger logger = (Logger) LoggerFactory.getLogger(OrchestratorRunRecorder.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      assertThatCode(() -> recorder.onEvent(7L, multiRequest(), "sess-1"))
+          .doesNotThrowAnyException();
 
-    assertThatCode(() -> onEvent.accept("STATE_DELTA", stateDelta()))
-        .doesNotThrowAnyException();
+      when(loopRunService.record(eq(7L), any()))
+          .thenReturn(
+              new LoopRunDto(
+                  99L,
+                  7L,
+                  "sess-1",
+                  0,
+                  4,
+                  0,
+                  0,
+                  List.of("HANDOUT", "PRACTICE"),
+                  true,
+                  true,
+                  0,
+                  0,
+                  "route_0123456789abcdef",
+                  OffsetDateTime.now()));
+      doThrow(new IllegalStateException(callbackFailure))
+          .when(runtimeService)
+          .saveLoopState(
+              anyLong(), anyLong(), anyString(), anyString(), anyString(), any(), anyString(), anyString());
+      BiConsumer<String, String> onEvent = recorder.onEvent(7L, multiRequest(), "sess-1");
+      assertThatCode(() -> onEvent.accept("STATE_DELTA", stateDelta()))
+          .doesNotThrowAnyException();
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .anyMatch(message -> message.contains("errorType=RuntimeException"))
+        .anyMatch(message -> message.contains("errorType=IllegalStateException"))
+        .noneMatch(message -> message.contains(openFailure) || message.contains(callbackFailure));
+    assertThat(appender.list).noneMatch(event -> event.getThrowableProxy() != null);
   }
 
   private static OrchestratorTurnRequest multiRequest() {

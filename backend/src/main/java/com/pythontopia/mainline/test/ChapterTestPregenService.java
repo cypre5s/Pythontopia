@@ -134,9 +134,14 @@ public class ChapterTestPregenService {
             attempt);
         return;
       } catch (ChapterTestGenerationException ex) {
+        Throwable cause = ex.getCause() == null ? ex : ex.getCause();
         log.warn(
-            "章测预生成失败 testId={} ch={} attempt={}/{}: {}",
-            testId, chapter, attempt, maxAttempts, ex.getMessage());
+            "章测预生成失败 testId={} ch={} attempt={}/{} errorType={}",
+            testId,
+            chapter,
+            attempt,
+            maxAttempts,
+            cause.getClass().getSimpleName());
       }
     }
     repository.markStatus(testId, ChapterTestStatus.FAILED);

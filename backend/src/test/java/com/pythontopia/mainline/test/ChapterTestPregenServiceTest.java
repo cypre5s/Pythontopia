@@ -107,7 +107,8 @@ class ChapterTestPregenServiceTest {
   @Test
   void graphFailureDoesNotLogGeneratedPaperOrUpstreamError() {
     String sentinel = "private-chapter-paper-error-sentinel";
-    when(graphClient.generate(any())).thenThrow(new IllegalStateException(sentinel));
+    when(graphClient.generate(any()))
+        .thenThrow(new ChapterTestGenerationException(sentinel, new IllegalStateException(sentinel)));
     Logger logger = (Logger) LoggerFactory.getLogger(ChapterTestPregenService.class);
     ListAppender<ILoggingEvent> appender = new ListAppender<>();
     appender.start();
@@ -123,6 +124,7 @@ class ChapterTestPregenServiceTest {
         .extracting(ILoggingEvent::getFormattedMessage)
         .anySatisfy(message -> assertThat(message).contains("errorType=IllegalStateException"))
         .noneMatch(message -> message.contains(sentinel));
+    assertThat(appender.list).noneMatch(event -> event.getThrowableProxy() != null);
   }
 
   private ObjectNode paper(int choices, int judges, int fills, int coding) {

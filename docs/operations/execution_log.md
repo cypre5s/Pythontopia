@@ -4,6 +4,12 @@
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
 
+## 2026-10-16 当前续接：修复两个 fail-soft 异常日志泄露
+
+- `ChapterTestPregenService` 与 `OrchestratorRunRecorder` 原先把异常对象写入日志；新增哨兵分别复现异常正文/堆栈泄露，现只记录异常类型，既有失败兜底行为不变。
+- `ChapterTestPregenServiceTest`、`OrchestratorRunRecorderTest` 合计 5/5 通过；两个测试都断言日志无异常正文且无 throwable stack。
+- 本次没有 DeepSeek 调用、业务数据写入或生产访问。总任务清单仍以 `docs/plans/2026-10-15-web-system-implementation-plan.md` 为准：安全续审、远征真实闭环、Web 路由动作矩阵、Twin 效果评估待继续；性能最后。
+
 ## 2026-10-16 当前续接：修复远征先修跨章节出题与结算
 
 - 聚焦第 2 章或更高章节时，服务端策略可能选中更早章节的未掌握先修 KC；远征请求与结算此前又强制题目章节等于 run 聚焦章节，导致合法的先修题无法进入战斗或提交结算。

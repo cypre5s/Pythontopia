@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-16 — 脱敏章测与 Orchestrator 失败日志
+
+- 章测预生成与 Orchestrator 的 fail-soft 失败日志只记录异常类型，不再附带上游异常正文或堆栈；失败兜底行为保持不变。
+- 合成哨兵先复现日志泄露，修复后 `ChapterTestPregenServiceTest` 与 `OrchestratorRunRecorderTest` 共 5/5 通过。没有 DeepSeek 调用；日志安全审计仍未完成。
+
 ## 2026-10-16 — 移除 Web 闲置语音输入链路
 
 - 全仓调用点检查确认浏览器语音识别、录音采集与 ASR 上传 helper 均无产品调用；删除这些未接线的 Web 实现及仅覆盖它们的测试，保留后端禁用端点供既有跨端合同兼容。

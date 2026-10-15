@@ -153,6 +153,7 @@ pytest 的临时目录漏洞 CVE-2025-71176 仅在 pytest 9.0.3 修复；Graph/R
   - 10/16 关联 Graph 历史角色静态扫描：Orchestrator/Profile 请求历史已用 `Literal` 限定 `user`/`assistant`，`DebateRound` 为内部固定阶段角色；未发现第二条请求历史升权路径。该结果不代表动态 prompt 字段审计完成。
   - 10/16 公共异常日志续审：全局 500 与客户端断连处理器不再输出异常消息/堆栈或原始 URL，改记方法、Spring 路由模板、异常类型和 traceId；章星重算降级日志不再包含学生 ID/异常正文。两个测试类先 RED 后 GREEN，合计 10/10。全量安全审计仍开放。
   - 10/16 工坊日志续审：画像维度、周报洞察、两类记忆摘要及掌握度难度降级日志去掉学生 ID，只保留异常类型和原有 fallback。一个合成哨兵覆盖 5 种失败路径，先 RED 后 GREEN；`ResourceWorkshopServiceTest` 34/34。未发模型请求。
+  - 10/16 本次续审：章测预生成与 Orchestrator 的 fail-soft 日志不再附带上游异常正文/堆栈，仅保留异常类型；哨兵 RED 后 GREEN，`ChapterTestPregenServiceTest` 与 `OrchestratorRunRecorderTest` 共 5/5。敏感日志审计仍未完整闭合。
   - 10/16 前端 HTML 注入点续审：扫描所有 `v-html`/`innerHTML` 写入，确认实际写入前均经过 DOMPurify 或 Mermaid 专用清洗；未发现新增绕过点。后端与第三方内容边界仍在总审计中。
   - 10/16 Markdown XSS 回归：`MarkdownView` 新增恶意 Markdown 测试，断言脚本、`onerror` 和 `javascript:` 链接属性被清除；定向 Vitest 3/3 通过。仅闭合前端富文本渲染子项，安全总审计仍开放；没有模型调用。
   - 10/16 附件边界静态复核：工坊上传有扩展名白名单、5 MiB 单文件与每用户配额行锁；PDF 限页/文本长度，DOCX 限条目数及 16 MiB 解压量；Tutor 图片校验签名、5 MiB、用户/会话配额与 TTL 读取。现有测试源码覆盖主要拒绝和 owner/session 分支，本轮未重跑旧套件。未发现已证实漏洞；第三方解析器与生产代理限制仍需单独核实。
@@ -373,3 +374,9 @@ Run performance sampling last. Separate deterministic API timing from Graph/Deep
 ## Current environment note
 
 The configured SSH destination resolves through the TUN default route. The repository's WSL instructions require adding a direct host route, but this session cannot obtain the local sudo password, so no ECS SSH connection was attempted. Production Piston and Nginx runtime state remains unverified. Static production configuration requires the Piston URL/version/token and restricts the URL to HTTPS or a private address; the Piston API does not validate its Bearer token, so the real network ACL or an auth-checking proxy must be confirmed before production sign-off. Repository configuration was not changed.
+
+## 2026-10-16 当前续接状态
+
+- 已完成：章测预生成与 Orchestrator 日志脱敏；两个相关测试类共 5/5。没有发起 DeepSeek 请求，也没有重复 provider 探针。
+- 未完成：本地安全审计剩余类别、远征合格真实账号的恢复/战斗闭环、未覆盖的 Web 路由与动作矩阵、Twin A/B 与 7 日复测；性能按计划最后测量。生产 Piston ACL/ECS 按本轮边界不核验。
+- 下一步：沿本文件现有“接续顺序”继续，只调查尚未关闭项；除非具体修改了 DeepSeek 请求路径或配置，不再做模型调用验证。

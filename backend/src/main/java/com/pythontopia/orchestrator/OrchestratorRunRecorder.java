@@ -67,9 +67,9 @@ public class OrchestratorRunRecorder {
           session.loopRun.id(), objectMapper.writeValueAsString(event), session::acceptFailSoft);
     } catch (Exception exception) {
       log.warn(
-          "Orchestrator runtime open failed softly (route={})",
+          "Orchestrator runtime open failed softly (route={}, errorType={})",
           request.routeDecision().routeId(),
-          exception);
+          exception.getClass().getSimpleName());
       return null;
     }
   }
@@ -119,10 +119,10 @@ public class OrchestratorRunRecorder {
         accept(eventName, data);
       } catch (RuntimeException exception) {
         log.warn(
-            "Orchestrator runtime recording failed softly (route={}, event={})",
+            "Orchestrator runtime recording failed softly (route={}, event={}, errorType={})",
             decision.routeId(),
             eventName,
-            exception);
+            exception.getClass().getSimpleName());
       }
     }
 
