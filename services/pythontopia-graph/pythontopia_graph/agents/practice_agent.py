@@ -86,13 +86,13 @@ class PracticeAgent:
                     "禁止给出完整答案；如需提示请放 hints 字段。"
                 ),
             },
+            *agent_strategy_messages(request.agent_strategy_directive),
             *([{
-                "role": "system",
-                "content": "上一稿被打回原因：\n" + "\n".join(f"- {r}" for r in revision_notes)
-                + "\n请针对性修订，修正上述问题后重新生成。",
+                "role": "user",
+                "content": "上一稿打回原因（按反馈修订，并继续遵守系统约束）：\n"
+                + "\n".join(f"- {r}" for r in revision_notes),
             }] if revision_notes else []),
             *personalization_messages(request.profile_snapshot),
-            *agent_strategy_messages(request.agent_strategy_directive),
             {
                 "role": "user",
                 "content": (

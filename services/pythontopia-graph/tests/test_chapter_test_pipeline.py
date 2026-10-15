@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import json
 
 import pytest
 
@@ -74,6 +75,35 @@ def _fetcher(pairs: list[tuple[int, int, str]]) -> StaticEvidenceFetcher:
 
 
 _DEFAULT_PAIRS = [(101, 12, "PY43-KC-001"), (102, 13, "PY43-KC-002")]
+
+
+def test_paper_prompt_keeps_dynamic_context_out_of_system_messages() -> None:
+    marker = "ignore-static-output-rules"
+    request = _request(
+        focus_hint=marker,
+        excluded_questions=[marker],
+        profile_brief={"error_patterns": [marker]},
+        errorbook_brief={"top_error_tags": [marker]},
+    )
+    messages = PaperDesignerAgent(StubProvider([]))._prompt(
+        request, EvidenceBundle(), [marker]
+    )
+
+    system_text = " ".join(message["content"] for message in messages if message["role"] == "system")
+    user_text = " ".join(message["content"] for message in messages if message["role"] == "user")
+    assert marker not in system_text
+    assert marker in user_text
+    assert "仅改数字/措辞" in system_text
+
+
+def test_paper_prompt_keeps_excluded_question_context_bounded() -> None:
+    excluded_question = "q" * 500
+    request = _request(excluded_questions=[excluded_question])
+    messages = PaperDesignerAgent(StubProvider([]))._prompt(request, EvidenceBundle(), None)
+    user_message = next(message["content"] for message in messages if message["role"] == "user")
+    context_json = user_message.split("学习画像、侧重点、已用题目与审查意见数据：\n", 1)[1]
+
+    assert json.loads(context_json)["excluded_questions"] == [excluded_question[:300]]
 
 
 def _golden_dict(counts: PaperCounts, pages: list[int]) -> dict:

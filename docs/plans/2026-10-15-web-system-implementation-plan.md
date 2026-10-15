@@ -12,9 +12,9 @@
 
 本节是当前唯一交付清单；已有验证按仓库记录复用，不重复模型探针或已通过的等价测试。各任务详情和验证证据保留在下方。
 
-### 当前状态快照（2026-10-16；最近代码提交 `e4b8c1f2`）
+### 当前状态快照（2026-10-16）
 
-**已完成并可复用的证据：** DeepSeek 文本及合成 PNG 输入曾通过真实调用，Tutor 响应为文本；最近 Tutor 浏览器流程触发题目导读与无帮助反馈两个事件，2 次 DeepSeek completion 均 HTTP 200，并显示非空文本卡片。另已完成 DeepSeek provider 静态审计：在线 LLM 只允许 `api.deepseek.com` 与批准模型，TTS/ASR/讯飞图片服务恒关闭。账号级用量锁、事件专属 AutoGen 阶段、run 检查点、附件隔离、Boss Phaser 场景、Twin P0、共享选题策略、AI 题库审核、主要管理页操作、安全基线及多项敏感日志修复均已有实现和定向验证。DeepSeek 文本/图片调用与 Tutor 产品链路均封账，不再重复；仅当具体产品代码改变且必须走模型路径时，才做一次该路径验证。图片 Web 中继稳定性保留为未验证项。
+**已完成并可复用的证据：** DeepSeek 文本及合成 PNG 输入曾通过真实调用，Tutor 响应为文本；最近 Tutor 浏览器流程触发题目导读与无帮助反馈两个事件，2 次 DeepSeek completion 均 HTTP 200，并显示非空文本卡片。另已完成 DeepSeek provider 静态审计：在线 LLM 只允许 `api.deepseek.com` 与批准模型，TTS/ASR/讯飞图片服务恒关闭。账号级用量锁、事件专属 AutoGen 阶段、run 检查点、附件隔离、Boss Phaser 场景、Twin P0、共享选题策略、AI 题库审核、主要管理页操作、安全基线及多项敏感日志修复均已有实现和定向验证。DeepSeek 文本/图片调用与 Tutor 产品链路均封账，不再重复；仅当具体产品代码改变且必须走模型路径时，才做一次该路径验证。本轮已将资源/章测提示词的动态画像、记忆、检索证据、审查和错题上下文从 `system` 移至 `user`，Graph 全量测试 1911 passed/1 skipped；并对实际章测 prompt 发起一次 DeepSeek completion，基于 3 页 RAG 证据解析出 1 道单选题。图片 Web 中继稳定性保留为未验证项。
 
 **仍未完成：** 剩余本地安全类别审计；有真实先修证据的第 2 章以上远征题型、活动 run 刷新恢复和异常恢复；尚未覆盖的 Web 可见动作与窄屏交互；Twin A/B 和 7 日延迟效果；全栈功能收敛后的工程与性能收尾。Python 开发 venv 的当前 OSV 复扫只剩 `diskcache`（Mem0 可选依赖）与 `ragas`（评估可选依赖）两项，公告未列修复版本；两者不在重建后的 Graph/RAG 运行镜像中。生产 Piston ACL/ECS 和 DeepSeek 供应商账单不在本地可验证范围内。
 
@@ -75,6 +75,7 @@ pytest 的临时目录漏洞 CVE-2025-71176 仅在 pytest 9.0.3 修复；Graph/R
 - [x] AutoGen 对照审查确认 Pythontopia 保留自有 Tutor SSE、授权、附件和 V199/V203/V208 run 检查点契约，并按事件选择阶段；不移植 Alethicode 的 V124/thread dispatcher。
 - [x] 既有只读复核未发现确认的 P0/P1 代码缺陷；认证、主要 IDOR、判题 fail-closed 与 CORS 有实现和测试落点。本轮复查确认注册/教师邀请码、停用账号/JWT 代次撤销、Piston 默认与 subprocess fail-closed、排行榜按服务端 verified attempt 结算均有代码实现。生产 Piston 若无私网 ACL 或鉴权代理，仍有未授权执行风险；本地无法代表生产确认。
 - [ ] 附件扩展安全审计：逐类闭合判题隔离与部署边界、远征状态篡改/幂等、媒体上传、SSRF、XSS、SQL、速率限制、依赖与敏感日志；只对确认问题修复并补回归。SSRF 当前代码复核覆盖唯一用户目标触发的 BROWSE 导航，服务端注入 host allowlist，Graph 每次导航/重定向验证公网 DNS、scheme、标准端口并将 Chromium DNS pin 到公网地址；对应 allowlist/executor 测试 58/58 通过。敏感日志已修复上传、索引、trace、Piston、Mem0/Zep、Graph retry、画像访谈、NPC 对话、RAG embedding、B 站问答/搜索、Feynman、BROWSE、Boss 出题/判题与章测 Graph 错误中的已复现泄露；RAG 启动/自愈/索引重建和 embedding 降级异常现只记录异常类型，503 返回固定说明，哨兵与定向测试共 33/33。其余已有修复包括本地 Piston Compose 配置与运行态仅接入专用 `judge-execution` 网络、宿主端口限制为回环、Python 3.12.0 执行冒烟成功（输出 4）、Java 适配器对远端失败 fail-closed；MetaReflection 调度异常和反馈汇总日志、Tutor/视频 Graph 兜底、DialogContext、MemoryRetrieval、LearningPath、WorldState 降级日志也已移除异常正文。新扫到 Boss 题目存档反序列化异常会把 payload 片段及 owner/problem 标识写入日志；现改为仅记异常类型，`EndlessPregenServiceTest` 17/17（RED/GREEN）。本轮修复本地运行容器与开发 venv 中的 FastAPI/Starlette 和 pytest 漏洞版本；Graph/RAG 全量测试分别 1902 passed/1 skipped、166 passed。OSV 复扫剩余 `diskcache` 与 `ragas` 两项可选开发依赖告警（当前无修复版本），不在运行镜像中。其余异常日志与生产 Piston ACL 仍待核实；当前 `/readyz` 整体因已记录的 `VIDEO_TRANSCRIPT_UNAVAILABLE` 返回 503，judge readiness 本身为 ready。
+  - 10/16 动态提示词边界：资源画像/记忆、审查反馈和检索证据，以及章测画像、侧重点、错因、已用题目和审查意见现作为 `user` 数据；章测证据页 ID 白名单及题量/输出/去重规则留在 `system`。已用题目的单条上下文保留原有 300 字上限。Graph 全量测试 1911 passed/1 skipped、Ruff 与 diff 检查通过。另对真实课件 RAG 证据的章测 prompt 发起 1 次 DeepSeek completion，解析出 1 道单选题；不再重复通用探针。
   - 10/16 Tutor 历史角色边界：发现 `TutorTurn.role` 任意字符串会原样变成模型消息角色；现限制为 `user`/`assistant`。回归先 RED 后 GREEN，Tutor SSE 与流异常定向测试 16/16。安全类别审计仍未完成。
   - 10/16 关联 Graph 历史角色静态扫描：Orchestrator/Profile 请求历史已用 `Literal` 限定 `user`/`assistant`，`DebateRound` 为内部固定阶段角色；未发现第二条请求历史升权路径。该结果不代表动态 prompt 字段审计完成。
   - 10/16 公共异常日志续审：全局 500 与客户端断连处理器不再输出异常消息/堆栈或原始 URL，改记方法、Spring 路由模板、异常类型和 traceId；章星重算降级日志不再包含学生 ID/异常正文。两个测试类先 RED 后 GREEN，合计 10/10。全量安全审计仍开放。

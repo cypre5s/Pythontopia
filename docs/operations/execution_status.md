@@ -2,21 +2,27 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-16）**：最近代码提交 `e4b8c1f2`（分支 `codex/deepseek-autogen-admin`）；Tutor 历史消息角色已限制为 user/assistant。真实 DeepSeek 文本与合成 PNG 图片输入、文本输出已有全栈记录，Tutor AutoGen 产品流程也已完成真实浏览器联测；provider 静态审计确认服务端 LLM 路由只允许 DeepSeek，TTS/ASR/讯飞图片服务关闭。本轮没有模型或外部网络请求；本地配置/浏览器通过本地 HTTP 已核对，DeepSeek 验证已封账，不重复通用探针。Tutor、Twin P0、Phaser Boss、管理台布局/班级字段对齐及部分 Web 动作有代码和验证记录。剩余工作以本地安全边界、远征真实闭环、Web 动作覆盖、Twin 效果研究及工程收尾为主，性能最后测。细项只维护在下方唯一任务清单。
+> **当前快照（2026-10-16）**：Tutor 历史消息角色已限制为 user/assistant；资源与章测提示词中的动态学习上下文现使用 user 数据角色。真实 DeepSeek 文本与合成 PNG 图片输入、文本输出已有全栈记录，Tutor AutoGen 产品流程也已完成真实浏览器联测；provider 静态审计确认服务端 LLM 路由只允许 DeepSeek，TTS/ASR/讯飞图片服务关闭。本轮只对修改后的章测 prompt 做了 1 次真实 DeepSeek completion（3 页本地 RAG 证据，解析为 1 道单选题），没有通用探针或重试。Tutor、Twin P0、Phaser Boss、管理台布局/班级字段对齐及部分 Web 动作有代码和验证记录。剩余工作以本地安全边界、远征真实闭环、Web 动作覆盖、Twin 效果研究及工程收尾为主，性能最后测。细项只维护在下方唯一任务清单。
 
 ## 当前进度
 
 唯一任务清单及按优先级排列的未完成项维护在[总任务实施计划](../plans/2026-10-15-web-system-implementation-plan.md)，本页只记录最近进度和详细历史，避免出现多份清单。
 
-- **已完成并有记录：** DeepSeek 文本、合成 PNG 图片输入（均为文本输出）、Tutor 浏览器流程；Tutor AutoGen 事件阶段；Twin P0；Phaser Boss；后台主要布局；部分 Web 操作；敏感日志与 SVG CSS 修复；Tutor 历史消息角色校验。本地 `dev.sh` 关闭应用级每日 AI 请求上限，生产 Compose 保持开启；DeepSeek 凭据变量已配置于 Git 忽略的 `deploy/.env`，本轮未读取或输出密钥值。最近代码提交为 `e4b8c1f2`。
+- **已完成并有记录：** DeepSeek 文本、合成 PNG 图片输入（均为文本输出）、Tutor 浏览器流程；Tutor AutoGen 事件阶段；Twin P0；Phaser Boss；后台主要布局；部分 Web 操作；敏感日志与 SVG CSS 修复；Tutor 历史消息角色校验。本地 `dev.sh` 关闭应用级每日 AI 请求上限，生产 Compose 保持开启；DeepSeek 凭据变量已配置于 Git 忽略的 `deploy/.env`，本轮未读取或输出密钥值。
 - **仍未完成：** 本地安全边界续审；远征真实先修/题型/刷新闭环；未覆盖的 Web 动作与窄屏验收；Twin A/B 与 7 日延迟效果；工程收尾；性能（最后执行）。生产 Piston ACL/ECS 和供应商账单属于当前环境无法核验的外部项。
 - **本轮安全修复：** Tutor 图解的 Mermaid 分支曾将未清洗 SVG 直接写入 `v-html`，与已修复的工坊思维导图形成安全边界不一致。现在复用 `sanitizeMermaidSvgMarkup`，并设置 `htmlLabels: false`；新组件回归红测复现 `foreignObject`，修复后 Tutor 图解及 SVG sanitizer 测试 4/4、typecheck、定向 ESLint、`git diff --check` 通过。未调用模型。
 - **本轮媒体边界：** 新增 `MediaTtsControllerTest`，真实 service 使用旧凭据时 `POST /api/media/tts` 以 503 `TTS_DISABLED` 拒绝，避免发起讯飞 WebSocket；与 `TtsPropertiesTest` 合计 3/3 通过。没有模型或供应商外呼。
 - **本轮 Tutor 输入边界：** 历史消息 `role` 曾接受任意字符串，并直接映射到模型角色；现限制为 `user`/`assistant`，拒绝将学生内容伪装成 `system` 消息。回归先 RED 后 GREEN，Tutor SSE 与异常流定向测试 16/16；未调用模型。安全总审计仍未完成。
+- **本轮动态提示词边界：** 资源画像/记忆、审查反馈与检索证据，以及章测侧重点、画像错因、历史题目和审查意见从 `system` 降为 `user`；固定格式、安全和去重约束保留在 `system`。章测每条已用题目仍限制 300 字。Graph 全量 1911 passed/1 skipped，Ruff 和 `git diff --check` 通过。随后只发起 1 次真实章测 prompt completion，基于 3 页本地 RAG 证据解析出 1 道单选题；没有写入学习数据。
 - **关联角色字段复核：** Graph 的 Orchestrator/Profile 对话历史已用 `Literal` 限定 `user`/`assistant`；`DebateRound` 是内部固定阶段角色。该项为 schema/调用点静态扫描，没有扩展为全部动态 prompt 审计。
 - **本轮远征验收可行性：** 后端 `/healthz`、Graph `18091`、RAG `18092`、Web `5173` 均为 200；`/readyz` 因 `VIDEO_TRANSCRIPT_UNAVAILABLE` 为 503。临时 QA 学生登录成功，但第 2 章仍锁定，首节需完成 7:20 视频、6 页阅读和 4 道题。未创建提交、掌握度或 run；QA 账号已删除，精确用户名计数为 0。真实先修远征刷新恢复仍未验证，本轮无模型调用。
 - **HTML 注入点续审：** 扫描当前前端全部 `v-html` / `innerHTML` 写入，确认写入前都有 HTML/ SVG 清洗；未发现新增绕过点。此项是源码范围检查，后端与外部内容边界仍未全部闭合。
-- **最近动作：** 按用户要求消除重复验证项，核实当前唯一清单与提交状态，复用 DeepSeek provider 静态审计和 Alethicode 管理台/班级对照结果；修复全局 500、客户端断连、章星重算及工坊学情降级日志中的异常正文、原始 URL 和学生 ID。定向测试合计 10/10 + `ResourceWorkshopServiceTest` 34/34；本地 AI 限额配置已核实；`/bug-mine` 空态已做一次 Chromium 观察，清理临时账号。未发模型或网络请求。下一步继续未闭合的安全/远征/Web 项，不重做 DeepSeek、管理台样式或班级字段验收。
+- **最近动作：** 按用户要求去除重复 DeepSeek 验证项，完成资源与章测动态提示词降权并保留题目上下文上限；Graph 全量回归和一次必要的章测产品路径调用已记录。接下来继续未闭合的安全/远征/Web 项，不重复 provider 探针、管理台样式或班级字段验收。
+
+## 2026-10-16 — 将动态学习上下文降为 user 数据
+
+- 资源画像、近期记忆及审查反馈，章测侧重点、画像错因、已用题目和审查意见均改为 `user` 消息；章测静态格式、隐藏测试保护、证据白名单和题目去重要求继续由 `system` 消息约束。
+- 回归先复现动态文本进入 system 的旧行为，并补测每条已用题目保留 300 字上限；Graph 全量 `1911 passed, 1 skipped`，Ruff 与 `git diff --check` 通过。为验证新消息结构兼容实际模型，仅运行一次章测 prompt completion：DeepSeek 解析返回 1 道 CHOICE，使用真实 RAG 查询的 3 页证据；未写入数据库，无重试。
 
 ## 2026-10-16 — 限制 Tutor 历史消息角色
 

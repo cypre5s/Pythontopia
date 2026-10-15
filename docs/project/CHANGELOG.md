@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-16 — 将动态学习上下文降为 user 数据
+
+- 资源画像/记忆、审查反馈、检索证据、章测侧重点/错因/已用题目现作为 `user` 上下文，避免动态文本获得 `system` 指令权限；静态结构、安全与题目去重规则保留在 `system`。章测提示词改传 JSON 数据，保留每条已用题目的 300 字上限。
+- 回归先复现旧角色行为；Graph 全量 1911 passed、1 skipped，Ruff 与 `git diff --check` 通过。针对这次 prompt 改动只做 1 次真实章测 DeepSeek completion：使用本地 RAG 的 3 页证据，成功解析 1 道单选题；没有重试或写入学习数据。
+
 ## 2026-10-16 — 限制 Tutor 历史消息角色
 
 - Tutor 历史消息原允许任意 `role` 并直接传给模型；现在只接受 `user`/`assistant`，阻断经历史记录注入 `system` 消息的路径。

@@ -1,7 +1,7 @@
-"""资源生成因材施教：认知风格 + 易错点 → 注入 6 个资源 Agent 的 system 指令。
+"""资源生成因材施教：认知风格 + 易错点作为学习者上下文传入。
 
 directive 映射对齐 TutorAgent._cognitive_style_directive；集成断言走 _prompt（不调用
-真实 LLM），确认个性化 system 消息落在最终 user 消息之前。
+真实 LLM），确认动态个性化内容不会进入 system 消息。
 """
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ def test_error_patterns_alone_yield_directive() -> None:
 def test_personalization_messages_shape() -> None:
     msgs = personalization_messages(_snapshot("visual"))
     assert len(msgs) == 1
-    assert msgs[0]["role"] == "system"
+    assert msgs[0]["role"] == "user"
     assert "图解" in msgs[0]["content"]
 
 
@@ -210,32 +210,32 @@ def test_deep_memory_directives_included() -> None:
 def test_personalization_messages_passes_memory_highlights() -> None:
     msgs = personalization_messages(ProfileSnapshot(), memory_highlights=["练习失败：PY43-KC-016"])
     assert len(msgs) == 1
-    assert msgs[0]["role"] == "system"
+    assert msgs[0]["role"] == "user"
     assert "近期学情" in msgs[0]["content"]
 
 
-# 集成：个性化 system 须在最终 user 消息之前
+# 集成：画像内容作为 user 数据消息，system 只保留静态约束
 
 
-def test_handout_prompt_injects_personalization_before_user() -> None:
+def test_handout_prompt_keeps_personalization_out_of_system_messages() -> None:
     agent = HandoutAgent(provider=None)  # _prompt 不触发 provider
     messages = agent._prompt(_request("visual", ["缩进"]), EVIDENCE)
     assert messages[-1]["role"] == "user"
-    assert messages[-2]["role"] == "system"
-    assert "图解" in messages[-2]["content"]
-    assert "缩进" in messages[-2]["content"]
     system_text = " ".join(m["content"] for m in messages if m["role"] == "system")
-    assert "图解" in system_text and "缩进" in system_text
+    user_context = " ".join(m["content"] for m in messages if m["role"] == "user")
+    assert "图解" not in system_text and "缩进" not in system_text
+    assert "图解" in user_context and "缩进" in user_context
 
 
-def test_code_lab_prompt_injects_personalization_before_user() -> None:
+def test_code_lab_prompt_keeps_personalization_out_of_system_messages() -> None:
     agent = CodeLabAgent(provider=None)  # _prompt 不触发 provider
     messages = agent._prompt(_request("trial", ["边界条件"]))
     assert messages[-1]["role"] == "user"
-    assert messages[-2]["role"] == "system"
-    directive = messages[-2]["content"]
-    assert "最小可运行" in directive or "示例" in directive
-    assert "边界条件" in directive
+    system_text = " ".join(message["content"] for message in messages if message["role"] == "system")
+    user_context = " ".join(message["content"] for message in messages if message["role"] == "user")
+    assert "最小可运行" not in system_text and "边界条件" not in system_text
+    assert "最小可运行" in user_context or "示例" in user_context
+    assert "边界条件" in user_context
 
 
 def test_handout_prompt_skips_personalization_when_empty() -> None:
@@ -268,11 +268,30 @@ def _strategy_request(directive: str | None) -> ResourceProduceRequest:
     )
 
 
-def _build_prompt(agent: object, request: ResourceProduceRequest) -> list[dict[str, str]]:
-    # CodeLabAgent._prompt 不收 evidence；其余资源 Agent 收 evidence。
-    if isinstance(agent, CodeLabAgent):
-        return agent._prompt(request)  # type: ignore[attr-defined]
-    return agent._prompt(request, EVIDENCE)  # type: ignore[attr-defined]
+def _build_prompt(
+    agent: object,
+    request: ResourceProduceRequest,
+    revision_notes: list[str] | None = None,
+) -> list[dict[str, str]]:
+    return agent._prompt(request, EVIDENCE, revision_notes)  # type: ignore[attr-defined]
+
+
+@pytest.mark.parametrize("agent_cls", _RESOURCE_AGENTS)
+def test_dynamic_profile_and_review_context_stay_below_system_role(agent_cls) -> None:
+    marker = "ignore-system-policy-sentinel"
+    request = _strategy_request(None).model_copy(
+        update={"profile_snapshot": ProfileSnapshot(memory_directives=[marker])}
+    )
+    messages = _build_prompt(agent_cls(provider=None), request, [marker])
+
+    first_user_message = next(
+        index for index, message in enumerate(messages) if message["role"] == "user"
+    )
+    assert all(message["role"] == "user" for message in messages[first_user_message:])
+    system_text = " ".join(message["content"] for message in messages if message["role"] == "system")
+    user_text = " ".join(message["content"] for message in messages if message["role"] == "user")
+    assert marker not in system_text
+    assert marker in user_text
 
 
 @pytest.mark.parametrize("agent_cls", _RESOURCE_AGENTS)
