@@ -1,5 +1,11 @@
 # Web 工程可读性与规范清理工作日志
 
+## 2026-10-15 — RAG 与 Maven 全量复核
+
+- RAG 全量 pytest：158 passed、2 skipped；两项均因测试环境未安装 `networkx`。
+- 使用 `mvn --settings /home/cypress/.m2/settings.xml -q -Djunit.jupiter.execution.parallel.enabled=false test` 串行复跑后端全量：Surefire 汇总 1430 tests、0 failures、7 errors。6 个 Testcontainers 用例因 Docker 随机宿主端口绑定返回 `address already in use`；`LongTermClassroomEffectSimulationTest` 因 PostgreSQL 连接拒绝失败。串行执行未消除环境错误，未将 Maven 全量标记为通过。
+- 定向后端 CORS/媒体 8 项、Graph 全量 1871 passed / 1 skipped 已有本轮通过记录；Maven 失败类没有断言失败，但全量后端仍未通过。
+
 ## 2026-10-15 — DeepSeek 真实文本续探针
 
 - 在运行中的 Graph 容器调用现有 `OpenAiCompatProvider`，向配置的快档发出 1 次 96-token 文本请求；70 秒内没有完成，结果为 `TimeoutError`。探针只记录状态，不输出密钥或用户数据。

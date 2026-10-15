@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-10-15 — RAG 与后端全量续验
+
+- RAG pytest 158 passed、2 skipped。串行 Maven 全量 1430 tests、0 assertion failures、7 环境 errors：六个 Testcontainers 随机宿主端口绑定冲突及一个长期仿真 PostgreSQL 连接拒绝；未标记为通过。
+
 ## 2026-10-15 — DeepSeek 文本 completion 续探针
 
 - Graph 容器通过现有 provider 发出 1 次快档文本 completion，70 秒超时；未追加图片请求。API `/models` 可达不等于 completion 正常，当前真实调用仍未恢复。
