@@ -45,3 +45,9 @@ This verifies the first action only. Completing the mainline lesson and assessme
 - RED/GREEN: the duplicate-choice regression first failed because the response was accepted, then passed after the structural guard. The chapter-paper Graph suite passed 20/20; Ruff passed for the touched Python files.
 - This does not establish semantic correctness for generated answer keys. Objective items remain excluded from Learner Twin mastery updates until their correctness can be verified independently.
 - Full backend Maven: `mvn -q test` ran 1,428 tests with 0 assertion failures and 7 environment errors (6 Docker dynamic host-port conflicts, 1 long-term simulation JDBC connection refusal). Re-running the 7 affected classes in separate JVMs passed 5 classes, including the simulation; `LearningEvidenceGraphServiceTest` and `RecommendationServiceTest` still hit `address already in use`. During a failure, the selected host port appeared in Docker bridge `TIME-WAIT`; the local ephemeral port range is 44620–48715. No system network setting was changed, and the full Maven suite remains unverified as green.
+
+## 2026-10-15 — Twin and mainline fresh Web smoke
+
+- Disposable student state returned 0/65 assessed KCs; the Twin displayed “尚未评估” and recommended the first mainline KC without inventing mastery. Clicking the primary recommendation navigated to `/mainline-map`, which showed chapter 1 available and later chapters locked.
+- `/profile-room`, `/mainline-map`, and `/expedition` each rendered at a 320 px viewport with `documentElement.scrollWidth=320`. No browser page errors or failed HTTP requests occurred.
+- Student fixture and account were deleted after the smoke. No practice submission or mastery change was created; actual lesson completion and assessment remain pending.

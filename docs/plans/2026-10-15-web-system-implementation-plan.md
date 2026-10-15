@@ -63,6 +63,8 @@
 
 **Steps:** Exercise map entry, challenge answer, server settlement, pass/fail visual result, reload/resume, and one Twin recommendation in local Web stack; inspect API/browser state and cleanup temporary test users/runs. Keep model generation off by selecting existing reviewed/golden tasks. Record the final Boss journey as pending if no valid accessible multi-phase task exists; do not bypass prerequisites or invent mastery.
 
+**Status:** Prior Web evidence records a real three-phase Boss victory, server settlement, and Phaser hit sequence; this turn freshly verified the zero-evidence Twin recommendation and mainline navigation. Reload/resume and a complete fail-result browser path are still open for a current end-to-end run.
+
 ## Task 6: Audit Web interaction and admin table behavior
 
 **Files:**
@@ -70,6 +72,8 @@
 - Test: existing Vitest and Playwright suites
 
 **Steps:** Build a route/action checklist from current routes; use Playwright to click visible actions and verify navigation, success/error/loading state, focus and narrow-screen overflow. Fix only confirmed dead actions/layout defects using existing components. Do not add pages without a real backend contract.
+
+**Status:** Partial: this turn checked Twin → mainline navigation and 320 px overflow on Twin, mainline map, and expedition; admin action behavior and broader Web routes remain open.
 
 ## Task 7: Run final affected-surface verification and report measured limits
 
