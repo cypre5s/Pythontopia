@@ -95,10 +95,27 @@ describe("deriveNextSteps", () => {
       label: "练习「循环」",
       hint: "尚未评估，先从基础题建立证据",
       route: {
-        path: "/expedition",
-        query: { focus: "1", kcCode: "PY43-KC-003" },
+        path: "/mainline-map",
       },
     });
+  });
+
+  it("未评估知识点从主线入口开始，不直接送入远征", () => {
+    const recommendation: LearnerTwinState = twinState({
+      kcs: [{
+        kcCode: "PY43-KC-003", kcName: "循环", chapter: 1, chapterName: "计算思维",
+        assessed: false, masteryScore: null, confidence: null, reviewDue: false,
+        dueAt: null, lastPracticedAt: null, consecutiveFailures: 0,
+      }],
+      nextSteps: [{
+        kcCode: "PY43-KC-003", kcName: "循环", chapter: 1, chapterName: "计算思维",
+        difficulty: 1, action: "PRACTICE", reason: "尚未评估，先从基础题建立证据",
+        remediationRequired: false,
+      }],
+    });
+    const step = deriveNextSteps({ ...base, chapters: [chapter()], twinState: recommendation })
+      .find((item) => item.kind === "weak-kc");
+    expect(step?.route).toEqual({ path: "/mainline-map" });
   });
 
   it("Twin 推荐到期复习时跳转错题矿洞；没有服务端建议时不伪造弱项", () => {

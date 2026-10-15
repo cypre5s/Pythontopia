@@ -2,7 +2,25 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-15）**：聚焦 Web。代码基线 `36bb7abe`，HEAD `68bc3258` 为文档检查点；当前有未提交的管理台样式、文案与记录更新。DeepSeek provider 文字/图片真实调用已有成功记录，历史 Vite→Spring→Graph 文图链路也成功过；最近 Tutor SSE 联测超时，因此停止重复模型探针。Tutor 固定阶段 AutoGen 复用现有 API；Tutor 每账号 30 次/日、共享 300 次/日限额只在部署启用，`./dev.sh` 本地关闭应用日限额。课堂加入码账号限速与 Tutor 错误脱敏已提交。全量 Maven 最近一次 1446 tests 无断言失败，但有 7 个 Docker/PostgreSQL 环境错误，不能标记全量通过。前端全量 Vitest 275 files / 2604 tests、typecheck、lint 与 production build 曾新鲜通过；Graph 全量 1871 passed / 1 skipped，RAG 158 passed / 2 skipped。KC-010 补题和第二章三个主线小节已有真实 Web 判题闭环；KC-011 新题与远征先修 KC-008/KC-011 证据仍待完成。Twin P0 数据源/周报/证据闭环已有代码和定向验证，个性化 A/B 与 7 日延迟效果尚未验证。管理台样式定向测试 26/26 通过，临时管理员实测停用/恢复与登录权限更新成功；运维概览五个后端动作键已有中文映射。11 条主路由壳检查无页面错误/5xx；测试拦截了认证刷新与游戏 bootstrap，完整初始化/动作仍待补。剩余工作与顺序见 [2026-10-15 Web implementation checklist](../plans/2026-10-15-web-system-implementation-plan.md)：远征活动 run 刷新恢复、Web 路由/动作矩阵、工程审查、Maven 环境错误、生产 Piston/边缘 ACL 运行态。性能最后测，非 Web 客户端不在范围。
+> **当前快照（2026-10-15）**：聚焦 Web，当前 HEAD 为 `471e55ea`，工作树有 20 个未提交文件（含 Twin 导航、HUD 指针、远征无效题恢复、Piston 出题 fail-fast 修复及对应记录/回归）。DeepSeek provider 文字/图片已有真实成功记录；Graph 只允许 DeepSeek host/model，旧讯飞 TTS/ASR/文生图/图片理解硬关闭。Tutor 固定阶段 AutoGen 复用现有 API；每账号 30 次/日、共享 300 次/日限额只在部署启用，`./dev.sh` 本地关闭应用日限额。Graph reload 与服务令牌运行态同步后，单次真实 Web → Spring → Graph Tutor 文本验收通过：意图路由和 `/agents/tutor/ask/stream` 均 HTTP 200，非空回复断言通过（1/1，7.2 秒）；测试账号已删除。此前一次失败根因为 Java 无内部令牌、Graph 使用 `.env` 占位令牌。全量 Maven 最近记录 1446 tests 无断言失败，但有 7 个 Docker/PostgreSQL 环境错误；前端全量 Vitest 275 files / 2604 tests、typecheck、lint 与 production build 曾通过；最近受影响前端回归 76 项通过。KC-010 正式判题闭环已完成；KC-011 题目为 `APPROVED/AUTOMATED`，但尚无学生正式判题/掌握证据；KC-004 通过正常主线按钮生成并自动审核入共享题库，尚无正式学生判题/掌握证据；KC-001 现有 `debug` 题不兼容主线 `kind=null` 请求，KC-002/006 仍待补题。Twin P0 数据源/周报/证据闭环已有代码和定向验证，个性化 A/B 与 7 日延迟效果尚未验证。管理台样式及管理员停用/恢复已有证据；11 条主路由壳检查、主线章节抽屉、小镇 HUD→暂停菜单→工坊、主线键盘章节选择及指南目录锚点均有浏览器记录，完整 Web 路由/动作矩阵仍未完成。生产 Piston 网络 ACL 与 ECS 运行态未核实；性能最后测，非 Web 客户端不在范围。完整待办见 [2026-10-15 Web implementation checklist](../plans/2026-10-15-web-system-implementation-plan.md)。
+
+## 2026-10-15 当前续接：根 KC-004 AI 编程题入库与 Piston 重试修复
+
+- 失败尝试复盘：从 Web 主线 KC-004 按钮触发的请求因 Graph 和 Java 缺少 `PYT_PISTON_URL`/版本配置而 503；一个业务请求消耗 6 次真实 DeepSeek completion（HTTP 200），六个候选都只因 `sandbox_unavailable` 被拒，未入库。该请求账号 661 没有学习/审核关联数据，已清理。
+- 修复 Graph Boss 编排：配置不完整时在调用 `problem_factory` 前失败，模型调用数为 0；候选生成后若自测发现沙箱不可用，立即返回失败，不按内容质量策略继续重试。两条回归先 RED（各复现 6 次调用），修复后通过；Graph Boss 全套 257 项与 Ruff 通过。
+- 标准重启 `./dev.sh --sandbox` 后，Graph 与 Java 均确认 Piston 配置存在、Python 3.12.0；后端/Graph/RAG/Piston 健康端点全为 HTTP 200。
+- 修复后从正常 Web 主线学习页只发起一次 KC-004 “生成 AI 编程练习”请求。6 次 DeepSeek completion 中前 5 个候选 reference 输出自测不符，第 6 个通过五重审查；API HTTP 200，题目 ID `issue-ba2acfc6-ea8e-4572-955b-fa68a10abea7`，`PY43-KC-004`，`APPROVED/AUTOMATED`，数据库审核记录 ID 82。浏览器 `pageerror=0`。
+- 题面是字符串重复输出计算思维定义的基础练习。本轮未提交学生答案，没有新增正式判题或 KC 掌握事件；QA 请求者 ID 663 因审核记录外键保留，不作为学习证据。
+- 第一轮 UI 自动化点击被 Phaser 画布拦截，在生成按钮之前终止；无模型请求，临时账号 662 已清理。后续按现有 DOM click 验收路径继续，只有上述一次真实生成请求。
+- 后续仍需按正常学习路径为 KC-001 取得主线兼容题、为 KC-002/006 补题，再正式判题并验证远征活动 run 恢复。不要重复 DeepSeek provider/Tutor 探针。
+
+## 2026-10-15 当前续接：Tutor 真实 Web 链路与运行令牌同步
+
+- 本轮先从 Playwright failure artifact 确认旧请求失败：工坊显示“路由服务暂时不可用”，Graph `POST /agents/intent/route` 为 401；未到 Tutor/DeepSeek。
+- 运行态检查发现 Java 后端未持有 `PYT_RAG_ADMIN_TOKEN`，Graph 使用 `.env` 中的占位令牌。按标准 `./dev.sh` 重启后，Graph 与 Java 持有相同 64 字符临时令牌指纹，三服务 healthz 均为 200；不输出令牌明文。
+- 只发起一次真实工坊文本问题。Chromium 1/1、7.2 秒通过；Graph `POST /agents/intent/route` 与 `/agents/tutor/ask/stream` 都是 HTTP 200，测试断言回复非空。没有重发 provider 探针或图片请求。
+- 临时学生、Tutor 会话和工坊轮次已清理；按测试用户名查询剩余账号为 0。原失败报告保留作根因证据。
+- 继续顺序以总清单为准：先补齐无编程题根 KC 的 AI 出题/审查和正式判题证据，再验证远征活动 run；其后补 Web 动作矩阵、工程收尾；性能最后。
 
 ## 2026-10-15 当前续接：班级加入码账号限速
 
@@ -12,7 +30,7 @@
 - 当前是单后端进程内账号窗口，适配项目单 worker 运行约定；若后续横向扩容，需迁移到共享限流存储。生产 Nginx/后端公网可达性未在 ECS 验证。
 - 顺手关闭一项确认的 Tutor 安全问题：异常 SSE 现写服务端堆栈、向学生只回固定错误文案，不再暴露 `str(exc)`。RED/GREEN 后 Tutor workflow / AutoGen runtime / 附件 / image input 定向集成共 93 passed，Ruff 通过。
 - Tutor 普通问答与 AutoGen 工作流均按认证用户 ID 在模型调用前预留账号额度，不按 `conversationId` 计数；部署默认 30 次/账号/上海自然日、全站 300 次/日。本地 `./dev.sh` 显式关闭应用日额度，本轮 `TutorDailyRequestLimitServiceTest` 新鲜通过。
-- 本轮已停止重复 provider 探针：真实 DeepSeek 纯文本校验请求原样返回，合成 PNG 返回“蓝色圆形、黄色背景”，均为文本响应、无工具调用。上一次 Tutor Web SSE 联测仍超时，web→Java→Graph→DeepSeek 当前没有新鲜成功证据。
+- 本轮已停止重复 provider 探针：真实 DeepSeek 纯文本校验请求原样返回，合成 PNG 返回“蓝色圆形、黄色背景”，均为文本响应、无工具调用。该时段 Tutor Web SSE 曾超时；后续状态以本文件上方“Tutor 真实 Web 链路与运行令牌同步”记录为准。
 
 ## 2026-10-15 当前续接
 
@@ -20,7 +38,7 @@
 
 - 第二章第 3 小节 `stage_id=6` 已在真实 Web 完成：视频 1× 播放至服务端确认 543/543 秒；课件依次翻至 19/19 页并完成标记；页面提交 4 道客观题全部答对；训练场圆面积题 `problem_id=476` 经 Piston 判题 AC、3/3，通过后再回到主线标记。PostgreSQL 确认 stage 完成、19 页、4 题、OJ 476、视频/课件消费记录；有一条 `practice_succeeded` 与 KC-016 `PRACTICE_PASS +0.140`。浏览器 `pageerror=0`。
 - 随后在同一真实账号打开学习分身页，页面返回 5/65 个有练习证据的 KC、列出 mastery/证据充分度与服务端推荐原因；主行动实际导航至 `/expedition`，浏览器错误 0。客观题未加掌握度，最新 KC-016 掌握事件仅来自 OJ 正式判题。
-- 所以第二章第 1～3 小节现已完成。KC-011 仍缺可信编程题证据：从第 2 小节正确入口发起真实 Web 补题，DeepSeek 部分响应 HTTP 200 但内容为空，之后有 503；页面最终提示暂不可用，`boss_problem_review` 没有 KC-011 新记录。服务恢复后需重试生成、审核、入库及正式判题；远征 KC-008/KC-011 先修门槛仍未验证通过。
+- 所以第二章第 1～3 小节现已完成。此前从第 2 小节入口补题曾遇 DeepSeek 空内容/503，未入库；本轮之后只发起一次 KC-011 学生请求 API，返回 HTTP 200 并由自动审查入共享题库。没有正式学生作答，KC-011 掌握证据仍为 0；远征 KC-008/KC-011 先修门槛仍未验证通过。
 - 空 JSON 行为已对照 [DeepSeek JSON Output 文档](https://api-docs.deepseek.com/guides/json_mode/)：供应商说明 JSON 模式偶尔返回空内容。应用按失败处理并重试，不将其当成题目；本次调用未核验供应商账单/token。
 - 持续模型续验中，一次从 Pythontopia Graph provider 发起的极短纯文本请求超过 4 分钟仍无响应，我终止了该本地探针；没有可用响应，因此不计作成功。此前真实 Web Tutor 文本与 PNG 输入成功记录仍有效。
 - 尝试补齐 Alethicode Java/Tutor 同输入联测时，本地 `start.sh` 的 Alethicode RAG 依赖在 15 秒 DeepSeek smoke probe 超时后退出；已停止其失败重启循环并恢复 `java-oj-tutor-graph-local`，当前 RAG/Java 后端未运行。没有把 Graph 边界桩当成 Java 全链路证据，待 DeepSeek smoke 恢复后再重启本地开发栈。
@@ -95,11 +113,13 @@
 ### 未完成 / 下一步
 
 - Tutor 静态事件/卡片结构与两侧同输入 Graph/模型实时调用已对照；Pythontopia 发送 `CUSTOM`、步骤、文本片段和 `RUN_FINISHED`，Alethicode 发送 `TASK_QUEUED/STARTED/COMPLETED`。Alethicode 调用使用空 Java 边界桩，真实证据装配、Java 投影和失败/恢复行为仍待端到端对照。保留 Pythontopia Java/SSE/私有附件契约，不移植不兼容的 WebSocket/session 数据层。
-- 远征三阶段 Boss Phaser 浏览器胜利链路已有合格先修账号的通过记录；当前学习账号完成第二章主线，但 KC-008/KC-011 仍缺合格编程证据，远征正确拒绝发题。待 KC-011 题库审核与正式判题完成后，再确认服务端先修选择能自然放行。
-- 解决 Docker/Testcontainers 临时端口占用后再跑全量 Maven；Twin A/B、7 日延迟效果、供应商用量/费用与远征性能继续待测，性能最后执行。
-- KC-011 无课程编程题时的 AI 补题入口已通过真实页面触发；模型空响应/503 导致本轮没有入库题。KC-010 的批准题、共享复用、正式判题、幂等事件和 Twin 回流已验证，KC-011 的对应闭环待供应商恢复后续验。
+- 远征三阶段 Boss Phaser 浏览器胜利链路已有合格先修账号的通过记录；当前学习账号完成第二章主线，但 KC-008/KC-011 仍缺正式判题证据，远征正确拒绝发题。KC-011 题目已自动审核入库；待该账号实际判题并补齐 KC-008 证据后，再确认服务端先修选择能自然放行。
+- Surefire XML 已将记录的 Maven 全量 7 个 error 归因为 6 个 Testcontainers Docker 宿主端口绑定冲突和 1 个长期仿真 PostgreSQL 连接重置；断言失败为 0。环境稳定后再决定全量重跑；Twin A/B、7 日延迟效果、供应商用量/费用与远征性能继续待测，性能最后执行。
+- Tutor SSE 超时的本地根因已定位：Graph 源码更新时间晚于运行容器，Compose 命令缺 `--reload`，导致旧进程未加载新心跳。开发 Compose 现在只监视 `/app/pythontopia_graph` 并使用 Uvicorn reload；先加契约断言看到预期失败，配置改完后脚本通过。Graph 容器已重建，临时 `.py` 文件确实触发 WatchFiles 重载并删除，日志确认目标目录、DeepSeek Pro/Flash provider 初始化，`/healthz` 200、容器 healthy。未发新模型请求；待做一次重启后的 Web Tutor 文本联测，provider 探针不重复。
+- 本次验收三条非模型 Playwright 动作链：小镇 HUD/暂停菜单→工坊（1/1，6.7 秒）、主线章节键盘焦点/Enter 打开第 1 章（1/1，3 秒）、指南页目录锚点跳转（1/1，2.2 秒）。临时学生分别在测试后删除并确认用户行计数为 0；没有 DeepSeek 请求、题目生成或判题。第一次缺少账号变量造成的快速失败只用于确认前置配置，后续动作测试显式关闭 retries。
+- KC-011 的页面补题入口此前触发过模型空响应/503；本轮通过同一学生请求 API 完成一次真实生成，题目以 `APPROVED/AUTOMATED` 写入共享题库。没有提交答案，KC-011 掌握证据仍为 0；保留随机匿名审核请求账号以满足审核记录外键。KC-010 的批准题、共享复用、正式判题、幂等事件和 Twin 回流已验证。
 - Twin 章测事件的单测、真实 PostgreSQL 幂等联测及 Web → Spring → Piston → Twin 实测均已通过。旧考试不自动回填，避免事后伪造评分证据；新小测留下了 3 条真实服务端代码判题证据。
-- 远征 Boss 胜利浏览器旅程已有真实通过记录；待补的是新生从主线评估到首个可用编程题的连续入口，本轮没有伪造画像证据。
+- 远征 Boss 胜利浏览器旅程已有真实通过记录；KC-011 现有可用编程题，但新生从主线评估到真实完成首题、画像增长与自然解锁的连续入口仍待验证，未伪造画像证据。
 - 继续只做 Web 范围工程优化：地图键盘焦点与主线练习局部命名已按项目约定及官方 Vue/WCAG 指南修正；剩余页面仍需逐步审查。性能测试留到功能与工程审查收敛后。
 
 

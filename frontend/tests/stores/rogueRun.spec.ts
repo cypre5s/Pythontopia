@@ -6,6 +6,7 @@ import { ApiClientError } from '@/api/http';
 const judgeMock = vi.hoisted(() => ({
   fetchProblem: vi.fn(),
   judge: vi.fn(),
+  isJudgeUnavailable: vi.fn(() => false),
   prefetchProblem: vi.fn(),
   retryPrefetch: vi.fn(),
   getPrefetchState: vi.fn(),
@@ -23,7 +24,7 @@ const frontierApiMock = vi.hoisted(() => ({
 const EXPEDITION_RUN_ID = '123e4567-e89b-12d3-a456-426614174000';
 
 vi.mock('@/composables/useChallengeJudge', () => ({
-  isJudgeUnavailable: () => false,
+  isJudgeUnavailable: judgeMock.isJudgeUnavailable,
   useChallengeJudge: () => ({
     fetchProblem: judgeMock.fetchProblem,
     judge: judgeMock.judge,
@@ -134,6 +135,7 @@ beforeEach(() => {
   mockServerRun = null;
   judgeMock.fetchProblem.mockReset().mockResolvedValue(problem());
   judgeMock.judge.mockReset();
+  judgeMock.isJudgeUnavailable.mockReset().mockReturnValue(false);
   judgeMock.prefetchProblem.mockReset().mockResolvedValue({ phase: 'pending', attempts: 1 });
   judgeMock.retryPrefetch.mockReset().mockResolvedValue({ phase: 'pending', attempts: 2 });
   judgeMock.getPrefetchState.mockReset().mockReturnValue({ phase: 'idle', attempts: 0 });
@@ -496,6 +498,34 @@ describe('rogueRun store', () => {
       expect.objectContaining({ action: 'SETTLE_CHALLENGE', problemId: 'p1' }),
       expect.objectContaining({ action: 'SETTLE_CHALLENGE', problemId: 'p1' }),
     ]);
+  });
+
+  it('offers a replacement problem when the issued question can no longer be judged', async () => {
+    const run = useRogueRunStore();
+    await run.startRun(null);
+    const start = run.nodes.find((node) => node.layer === 0)!;
+    await run.enterNode(start.id);
+    const hpBefore = run.hp;
+    judgeMock.isJudgeUnavailable.mockReturnValueOnce(true);
+    judgeMock.judge.mockResolvedValue({
+      problemId: 'p1', passed: false, passedTestCases: 0, totalTestCases: 1, score: 0,
+      feedback: '题目缓存过期且无持久化记录',
+    });
+
+    await run.submitChallenge();
+
+    expect(run.challengeResult).toBeNull();
+    expect(run.hp).toBe(hpBefore);
+    expect(run.problemRefreshRequired).toBe(true);
+    expect(frontierApiMock.performExpeditionAction).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'SETTLE_CHALLENGE' }),
+    );
+
+    judgeMock.fetchProblem.mockResolvedValueOnce({ ...problem(), problemId: 'p2' });
+    await run.retryChallenge();
+
+    expect(run.activeProblem?.problemId).toBe('p2');
+    expect(run.problemRefreshRequired).toBe(false);
   });
 
   it('does not accept client score fields in the leaderboard settlement payload', async () => {

@@ -32,12 +32,21 @@ class PythonExecutionResult:
     runtime_error: str | None = None
 
 
+def python_sandbox_configured() -> bool:
+    """Return whether the remote Python executor has the settings needed to run."""
+
+    return bool(
+        os.getenv("PYT_PISTON_URL", "").strip()
+        and os.getenv("PYT_PISTON_PYTHON_VERSION", "").strip()
+    )
+
+
 def run_python(code: str, stdin: str, timeout_sec: int) -> PythonExecutionResult:
     """Execute one Python case remotely; never fall back to a local process."""
 
     base_url = os.getenv("PYT_PISTON_URL", "").strip().rstrip("/")
     python_version = os.getenv("PYT_PISTON_PYTHON_VERSION", "").strip()
-    if not base_url or not python_version:
+    if not python_sandbox_configured():
         return PythonExecutionResult(runtime_error="sandbox_unavailable")
 
     timeout_ms = max(1, timeout_sec * 1000)
@@ -98,7 +107,10 @@ def run_python(code: str, stdin: str, timeout_sec: int) -> PythonExecutionResult
     if (
         not isinstance(stdout, str)
         or not isinstance(stderr, str)
-        or (code_value is not None and (not isinstance(code_value, int) or isinstance(code_value, bool)))
+        or (
+            code_value is not None
+            and (not isinstance(code_value, int) or isinstance(code_value, bool))
+        )
         or (signal is not None and not isinstance(signal, str))
         or (message is not None and not isinstance(message, str))
         or (status is None and code_value is None and signal is None)

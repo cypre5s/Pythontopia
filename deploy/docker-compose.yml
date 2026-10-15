@@ -105,7 +105,7 @@ services:
     # 127.0.0.1，bridge 网络下容器无法连到。host 网络下服务只绑定回环地址，
     # 后端仍从 http://127.0.0.1:18091 访问，外部网卡无法访问 Graph API。
     network_mode: host
-    command: ["uvicorn", "pythontopia_graph.main:app", "--host", "127.0.0.1", "--port", "18091", "--workers", "1"]
+    command: ["uvicorn", "pythontopia_graph.main:app", "--host", "127.0.0.1", "--port", "18091", "--reload", "--reload-dir", "/app/pythontopia_graph"]
     # R-13 §5 Phase 6 续：开发态把 host 源码 mount 进 /app，
     # 容器内 sys.path 优先 /app/pythontopia_graph，因此 hot reload 走这里；
     # site-packages 也保留原 wheel（pyproject 依赖照常工作）。

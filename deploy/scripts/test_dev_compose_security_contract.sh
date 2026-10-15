@@ -110,6 +110,10 @@ assert piston["environment"]["PISTON_DISABLE_NETWORKING"] == "true"
 graph = services["pythontopia-graph"]
 assert graph["network_mode"] == "host"
 assert graph["command"][2:4] == ["--host", "127.0.0.1"]
+assert "--reload" in graph["command"]
+reload_dir_index = graph["command"].index("--reload-dir")
+assert graph["command"][reload_dir_index + 1] == "/app/pythontopia_graph"
+assert "--workers" not in graph["command"]
 assert not graph.get("ports")
 print("dev compose security contract: PASS")
 '

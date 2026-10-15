@@ -10,6 +10,7 @@ import logging
 from typing import Awaitable, Callable, Mapping, Sequence
 
 from .difficulty_estimator import estimate_difficulty
+from .execution_sandbox import python_sandbox_configured
 from .grounding import verify_kc_grounding
 from .plagiarism_checker import (
     DEFAULT_SIMILARITY_THRESHOLD,
@@ -84,6 +85,36 @@ async def generate_boss_problem(
         profile_signals: 学生画像信号，透传给 factory 以个性化出题。
     """
 
+    if not skip_self_test and not python_sandbox_configured():
+        empty = BossProblem(
+            problem_id="invalid",
+            chapter=chapter,
+            stage=stage,
+            kc_code=kc_code,
+            title="",
+            statement="",
+            reference_solution="",
+            test_cases=[],
+            difficulty=difficulty,
+        )
+        return BossProblemReview(
+            problem=empty,
+            verdicts=[
+                ReviewVerdict(
+                    review="self_test",
+                    passed=False,
+                    issues=[
+                        ReviewIssue(
+                            review="self_test",
+                            severity="error",
+                            code="sandbox_unavailable",
+                            message="isolated Python executor is not configured",
+                        )
+                    ],
+                )
+            ],
+        )
+
     temperature_base = 0.2
     last_review: BossProblemReview | None = None
     review_feedback: str | None = None
@@ -122,6 +153,8 @@ async def generate_boss_problem(
             kc_keywords=kc_keywords,
             skip_self_test=skip_self_test,
         )
+        if any(issue.code == "sandbox_unavailable" for issue in review.issues):
+            return review
         if review.passed and review.problem.difficulty != difficulty:
             calibrated_difficulty = review.problem.difficulty
             review.verdicts.append(

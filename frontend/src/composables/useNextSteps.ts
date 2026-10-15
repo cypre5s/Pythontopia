@@ -8,7 +8,11 @@
 import { computed, onMounted, ref, type ComputedRef } from "vue";
 import { useMainlineStore } from "@stores/mainline";
 import { useProfileSignals } from "@/composables/useProfileSignals";
-import { fetchLearnerTwinState, type LearnerTwinState } from "@/api/twin";
+import {
+  fetchLearnerTwinState,
+  type LearnerTwinNextStep,
+  type LearnerTwinState,
+} from "@/api/twin";
 
 export interface NextStepRoute {
   path: string;
@@ -47,6 +51,22 @@ export interface NextStepsInput {
   mediaPriority?: readonly string[];
 }
 
+/** Use the same destination on the home panel and the learner twin page. */
+export function routeForTwinRecommendation(
+  twinState: LearnerTwinState | null,
+  recommendation: LearnerTwinNextStep,
+): NextStepRoute {
+  const progress = twinState?.kcs.find((kc) => kc.kcCode === recommendation.kcCode);
+  if (progress?.reviewDue) {
+    return { path: "/bug-mine", query: { review: recommendation.kcCode } };
+  }
+  if (!progress?.assessed) return { path: "/mainline-map" };
+  return {
+    path: "/expedition",
+    query: { focus: String(recommendation.chapter), kcCode: recommendation.kcCode },
+  };
+}
+
 /**
  * 推导「下一步」建议（最多 3 条，去重按 kind）：
  * 1. 主线断点：本章第一个未完成小节；全部完成但 0★ → 章末大测试。
@@ -80,7 +100,6 @@ export function deriveNextSteps(input: NextStepsInput): NextStep[] {
 
   const recommendation = input.twinState?.nextSteps[0];
   if (recommendation) {
-    const progress = input.twinState?.kcs.find((kc) => kc.kcCode === recommendation.kcCode);
     const label = recommendation.action === "REMEDIATION"
       ? `补强「${recommendation.kcName}」`
       : recommendation.action === "REVIEW"
@@ -90,12 +109,7 @@ export function deriveNextSteps(input: NextStepsInput): NextStep[] {
       kind: "weak-kc",
       label,
       hint: recommendation.reason,
-      route: progress?.reviewDue
-        ? { path: "/bug-mine", query: { review: recommendation.kcCode } }
-        : {
-          path: "/expedition",
-          query: { focus: String(recommendation.chapter), kcCode: recommendation.kcCode },
-        },
+      route: routeForTwinRecommendation(input.twinState, recommendation),
     });
   }
 

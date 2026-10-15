@@ -242,6 +242,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   const activeDifficulty = ref(0);
   const activeCode = ref('');
   const challengeResult = ref<BossAttemptResultDto | null>(null);
+  const problemRefreshRequired = ref(false);
   const settlementPending = ref(false);
   const nextPhase = ref<RogueRunPhase | null>(null);
   const loading = ref(false);
@@ -665,6 +666,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     activeDifficulty.value = 0;
     activeCode.value = '';
     challengeResult.value = null;
+    problemRefreshRequired.value = false;
     settlementPending.value = false;
     nextPhase.value = null;
     elapsedSec.value = 0;
@@ -689,6 +691,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     activeProblem.value = null;
     activeCode.value = '';
     challengeResult.value = null;
+    problemRefreshRequired.value = false;
     settlementPending.value = false;
     nextPhase.value = null;
     errorMessage.value = '';
@@ -837,6 +840,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       if (requestGeneration !== challengeGeneration) return;
       if (isJudgeUnavailable(result)) {
         errorMessage.value = '判题服务暂不可用，本次不计分，请稍后重试。';
+        problemRefreshRequired.value = true;
         return;
       }
       challengeResult.value = result;
@@ -1089,6 +1093,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     activeDifficulty,
     activeCode,
     challengeResult,
+    problemRefreshRequired,
     settlementPending,
     loading,
     starting,

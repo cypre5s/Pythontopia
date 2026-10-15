@@ -1,5 +1,56 @@
 # Changelog
 
+## 2026-10-15 — KC-004 AI 编程题真实入库与沙箱失败快停
+
+- Graph Boss 出题在 Piston URL/Python 版本缺失时现在于模型调用前返回 `sandbox_unavailable`；候选自测遇到基础设施错误时立即停止，不继续消耗模型请求。普通题目质量重试逻辑保持原样。
+- 回归测试先复现两处各 6 次 factory 调用，修复后为 0 次和 1 次；Graph Boss 全套 257 tests、Ruff 通过。
+- 使用 `./dev.sh --sandbox` 后从 Web 主线 KC-004 补题按钮发起一次请求，HTTP 200，题目通过现有审查并写入 `boss_problem_review`（ID 82，`APPROVED/AUTOMATED`）。请求发生 6 次 DeepSeek completions：前 5 个候选输出自测不符，第 6 个通过。未提交答案或产生掌握度事件，浏览器错误 0。
+- 沙箱未配置的失败尝试消耗 6 个 completions，均未入库；临时账号已清理。QA 请求者 663 因审核记录外键保留，不作为学习证据。
+- KC-004 题面用字符串重复输出计算思维定义；题库状态已批准，但还没有学生正式判题，不能据此声称学习者掌握该 KC。
+
+## 2026-10-15 — Tutor Web 全链路文本验收与本地令牌同步
+
+- 从此前失败的 Playwright 产物和 Graph 日志确认，工坊当时停在意图路由 401，没有进入 Tutor/DeepSeek；根因为运行中的 Java 进程缺少内部令牌，而 Graph 容器加载了 `.env` 占位值。
+- 使用标准 `./dev.sh` 重启本地开发栈，Graph/Java 重新共享临时强令牌，三服务健康检查通过。补充开发启动说明，避免单独重建 Graph/RAG 破坏运行中开发栈的令牌同步。
+- 唯一一次真实工坊文本 E2E 通过（Chromium 1/1，7.2 秒）：Graph 意图路由与 Tutor SSE 均 HTTP 200，页面收到非空文本；临时用户已清理并确认数量为 0。
+- 未重复 DeepSeek provider 探针或图片请求；后续只有新功能或传输改动需要时才再次调用模型。
+
+## 2026-10-15 — Web HUD 动作续验与 Maven 环境错误归因
+
+- Chromium 真浏览器验证小镇 HUD 收起/展开、暂停菜单关闭并进入工坊，1/1 通过；使用一次性学生账号，测试后删除并确认记录为 0。无模型调用或判题。
+- Chromium 真浏览器验证主线地图 Tab 焦点进入章节列表、焦点可见并按 Enter 展开第 1 章，1/1 通过；一次性学生账号已清理，无模型调用或判题。
+- Chromium 真浏览器验证指南页目录锚点点击后 URL hash 与滚动目标同步，1/1 通过；一次性学生账号已清理，无模型调用或判题。
+- 从 Surefire XML 核对最近记录的 Maven 全量错误：6 项 Testcontainers 绑定 Docker 宿主端口失败，1 项长期仿真 PostgreSQL 连接重置，断言失败为 0；未重跑全量套件。
+- E2E 临时账号未配置时同一前置错误会按默认 retries 立即重试；本次成功续验显式设为 `--retries=0`，后续按单项带齐前置条件再验收。
+
+## 2026-10-15 — 本地 Tutor Graph 热重载与 SSE 根因
+
+- Tutor SSE 旧请求在 Java 中继等待 120 秒后超时。Graph 心跳源文件比当前容器启动时间新，且本地 Compose 未启用 Uvicorn reload，因此运行进程没有加载新心跳实现。
+- 开发 Compose 现在启用 `--reload --reload-dir /app/pythontopia_graph`；按 [Uvicorn 配置说明](https://www.uvicorn.org/settings/)移除与 reload 互斥的 `--workers` 参数，默认维持单 worker。
+- Compose 契约对 reload 约束先失败后通过；Graph 容器按新命令重建，`/healthz` 返回 200，容器 healthy，日志确认 WatchFiles 监视目标目录。
+- 临时 `.py` 文件实际触发 WatchFiles 重载；探针文件删除后 Graph 健康检查仍通过。
+- 本轮没有重发 DeepSeek 请求；重启后的真实 Web Tutor 文本请求仍待一次定向验收。
+
+## 2026-10-15 — KC-011 AI 编程题入库
+
+- 确认 KC-011 没有课程编程题或已有 AI 题后，通过现有学生出题端点生成一道类型识别编程题。
+- 后端自动审查将题目写入共享题库，记录为 `APPROVED/AUTOMATED`；验证未提交学生答案且没有新增掌握度事件。
+- 未再次发起 DeepSeek 探针；远征根 KC 缺题问题仍待处理。
+
+## 2026-10-15 — 主线浏览器动作验收
+
+- fresh Chromium 路径验收覆盖章节抽屉开合、进入学习页、返回地图，1/1 通过；临时学生账号已删除。
+- 未触发模型请求或判题；Web 主要路由/动作矩阵仍有未覆盖项。
+
+## 2026-10-15 — Twin 推荐入口、HUD 点击与远征题目恢复
+
+- 首页与学习分身页面共用同一条推荐路由：到期复习进入复习入口，未评估 KC 回到主线建立证据，已评估 KC 进入对应远征。
+- `useDraggable` 不再拦截带 `role="button"` 的指针按下事件，避免学习目标标题的展开点击被当成拖动开始。新回归先失败于 `defaultPrevented=true`，修复后通过。
+- 远征判题返回不可判定的缓存/题目异常时，不扣体力、不结算，并显示“重新出题”入口，复用现有重试流程，避免反复提交同一无效题。
+- 真实浏览器：新学生 Twin 为 0/65 已评估，按页面按钮跳过可选探针后，鼠标展开学习目标并点未评估推荐，成功到达 `/mainline-map`；掌握度未变化、页面错误为 0，临时账号已删除。
+- RED/GREEN 后定向 Vitest 5 个 Twin/远征/拖动文件 76 项通过；TypeScript typecheck、触及文件 ESLint、`git diff --check` 通过。该次代码验证没有发起模型请求。
+- 未验证：活动服务端 expedition run 的浏览器续跑仍受当前缺少可用题目和合格账号限制。
+
 ## 2026-10-15 — 管理台表格样式对齐
 
 - 共享表格表头改为居中并复用 16px 面板圆角；分页居中显示，保留手动跳页、现有 DTO 和可访问性行为。

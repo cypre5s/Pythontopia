@@ -753,7 +753,16 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
                 {{ run.errorMessage }}
               </p>
               <PyButton
-                v-if="!run.challengeResult"
+                v-if="run.problemRefreshRequired && !run.challengeResult"
+                variant="primary"
+                test-id="expedition-problem-refresh"
+                :disabled="run.loading"
+                @click="run.retryChallenge()"
+              >
+                {{ run.loading ? '重新出题中…' : '重新出题' }}
+              </PyButton>
+              <PyButton
+                v-else-if="!run.challengeResult"
                 variant="primary"
                 test-id="expedition-submit"
                 :disabled="run.loading"

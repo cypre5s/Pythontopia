@@ -90,6 +90,27 @@ describe('ProfileRoomPage', () => {
     expect(routerPush).toHaveBeenNthCalledWith(2, { path: '/expedition', query: { focus: '2', kcCode: 'PY43-KC-002' } });
   });
 
+  it('routes an unassessed recommendation to the mainline map', async () => {
+    fetchTwinState.mockResolvedValueOnce({
+      ...state,
+      kcs: [{
+        kcCode: 'PY43-KC-003', kcName: '循环', chapter: 1, chapterName: '基础', assessed: false,
+        masteryScore: null, confidence: null, reviewDue: false, dueAt: null,
+        lastPracticedAt: null, consecutiveFailures: 0,
+      }],
+      nextSteps: [{
+        kcCode: 'PY43-KC-003', kcName: '循环', chapter: 1, chapterName: '基础', difficulty: 1,
+        action: 'PRACTICE', reason: '尚未评估，先从基础题建立证据', remediationRequired: false,
+      }],
+    });
+    const wrapper = mountPage();
+    await flushPromises();
+
+    await wrapper.get('[data-testid="twin-next-primary"]').trigger('click');
+
+    expect(routerPush).toHaveBeenCalledWith({ path: '/mainline-map' });
+  });
+
   it('shows evidence sufficiency separately from mastery on assessed knowledge points', async () => {
     const wrapper = mountPage();
     await flushPromises();

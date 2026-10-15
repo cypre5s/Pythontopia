@@ -90,7 +90,7 @@ export function useDraggable(
   function onPointerDown(e: PointerEvent): void {
     const el = elementRef.value;
     if (!el) return;
-    if ((e.target as HTMLElement)?.closest?.('button, a, input, select, textarea, canvas')) return;
+    if ((e.target as HTMLElement)?.closest?.('button, [role="button"], a, input, select, textarea, canvas')) return;
 
     e.preventDefault();
     dragging.value = true;

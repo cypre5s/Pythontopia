@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
     relics: [] as string[],
     elapsedSec: 0,
     challengeResult: null as Record<string, unknown> | null,
+    problemRefreshRequired: false,
     settlementPending: false,
     loading: false,
     errorMessage: '',
@@ -121,6 +122,7 @@ describe('EndlessExpeditionPage Boss scene integration', () => {
     mocks.run.activeNode = null;
     mocks.run.activeProblem = null;
     mocks.run.challengeResult = null;
+    mocks.run.problemRefreshRequired = false;
     mocks.run.settlementPending = false;
     mocks.run.loading = false;
     mocks.run.errorCode = null;
@@ -305,6 +307,40 @@ describe('EndlessExpeditionPage Boss scene integration', () => {
 
     expect(wrapper.get('[data-testid="expedition-canvas"]').attributes('data-boss-attempt'))
       .toBe('run-2:problem-boss-1:2');
+    wrapper.unmount();
+  });
+
+  it('offers a new question when the current issued problem cannot be judged', async () => {
+    runState.phase = 'challenge';
+    runState.activeNode = bossNode();
+    runState.activeProblem = problem();
+    runState.errorMessage = '判题服务暂不可用，本次不计分，请稍后重试。';
+    runState.problemRefreshRequired = true;
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/expedition', component: EndlessExpeditionPage }],
+    });
+    await router.push('/expedition');
+    await router.isReady();
+
+    const wrapper = mount(EndlessExpeditionPage, {
+      global: {
+        plugins: [router],
+        stubs: {
+          AppLayout: LAYOUT_STUB,
+          BossSprite: true,
+          ChallengeWorkspace: CHALLENGE_STUB,
+          ExpeditionCanvas: CANVAS_STUB,
+          ExpeditionLeaderboard: true,
+          KnowledgeConstellation: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    expect(wrapper.find('[data-testid="expedition-submit"]').exists()).toBe(false);
+    await wrapper.get('[data-testid="expedition-problem-refresh"]').trigger('click');
+    expect(mocks.run.retryChallenge).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
 

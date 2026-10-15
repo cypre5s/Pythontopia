@@ -22,6 +22,40 @@ An unassessed KC's server recommendation says to establish evidence with a basic
 
 This verifies the first action only. Completing the mainline lesson and assessment through the first eligible programming KC remains pending; no mastery was fabricated.
 
+## 2026-10-15 — Shared recommendation routing
+
+- Follow-up review found the home panel still sent an unassessed server recommendation to `/expedition`, while the Twin page correctly used `/mainline-map`. The shared `routeForTwinRecommendation` helper now applies the same rule in both callers: due review → `/bug-mine`, unassessed or missing KC evidence → `/mainline-map`, assessed KC → its focused expedition.
+- RED/GREEN: the home recommendation regression first failed on the old expedition destination; a page-level Twin regression covers the same unassessed entry. The combined current rerun passed Twin and expedition specs together.
+- Verification: 5 files / 76 Vitest tests, including the shared drag-hook regression; `npm run typecheck`; ESLint for changed source/spec files; `git diff --check`.
+- No model or Graph call was made. The first eligible real programming KC and active server-run browser recovery remain blocked by lack of an approved matching question and eligible test account.
+
+## 2026-10-15 — World HUD pointer acceptance
+
+- The first browser attempt exposed a real modal overlay: the optional `cog_intro` probe captures pointer input until dismissed. Following the visible “跳过” action exposed a second issue in the test selector only: expansion changes the header's accessible name from “展开” to “折叠”.
+- After using the actual probe dismiss button and querying the stable header element, a fresh learner's mouse click expanded the panel and the weak-KC recommendation navigated to `/mainline-map`. Twin state stayed 0/65 assessed, no browser page errors occurred, and the temporary account was deleted.
+- The drag hook regression covers the underlying pointer contract: ARIA button pointerdown must not call `preventDefault`. This test failed before the selector change and passed after it.
+
+## 2026-10-15 — AI provider egress static audit
+
+- No DeepSeek or other model request was sent during this audit.
+- Graph provider validates HTTPS `api.deepseek.com` and an explicit DeepSeek model allowlist; Compose maps its compatibility aliases to the same DeepSeek configuration. The RAG path uses local hash/BM25 retrieval.
+- Legacy Xfyun TTS, ASR, image generation, and image-understanding services all hard-return disabled. Their compatibility endpoints fail closed or return unavailable before any upstream call; the old image-understanding adapter has no production caller. Tutor image input stays on Graph's DeepSeek vision path and responses remain text-only.
+- No implementation change was needed. Provider-level real text/image coverage is already recorded above; the Tutor Web SSE relay's latest timeout remains a separate, open transport issue and will not be retried without a relevant code/configuration change.
+
+## 2026-10-15 — KC-011 AI 编程题闭环
+
+- 只读检查确认 `PY43-KC-011` 原本没有课程编程题、已批准题或待审题；所属主线为第 2 章「变量、类型与运算」。
+- 使用现有学生题目请求端点 `POST /api/world/boss/2/problem` 一次，锚定 KC-011。响应 HTTP 200、`aiGenerated=true`、`reviewed=true`；题目读入整数与浮点数并输出类型相关结果。数据库记录为 `APPROVED/AUTOMATED`，来自同 KC 共享题库路径。
+- 自动审查要求完整参考解逐条通过隔离 Piston 测试；不合格或沙箱不可用时 fail closed。只检查了公开题面与样例，没有读取或披露隐藏用例、参考答案。
+- 未提交学生作答；KC-011 的掌握度事件数为 0。保留一个仅用于题库审核外键的随机匿名请求账号。
+- 这是面向缺题 KC 的真实产品出题流程，不是 provider 探针；不重复请求。远征根 KC-001/002/004/006 缺题和活动 run 恢复仍未解决。
+
+## 2026-10-15 — 主线学习路径浏览器验收
+
+- 运行 `deliveryClickRobustness.spec.ts` 中主线章节抽屉场景：打开/关闭章节抽屉、进入学习页、切换目录后返回地图；Chromium 1/1 通过，5.1 秒。
+- 该流程只读取课程/主线数据，没有点击 AI 编程练习或提交判题；临时学生账号删除 1 条。没有发起 DeepSeek 请求。
+- 这只覆盖一条路径；其它未验证页面和动作仍保留在总清单中。
+
 ## 2026-10-15 P0 follow-up
 
 - Confirmed `SelfDimensionRequest` accepts only `scoreDelta` and `tagsAdd`; its conversion writes no evidence count or metadata. `LearnerTwinService` builds state from batched authoritative mastery, recent practice, last-practiced, prerequisite, and review-state reads. `WeeklyReportService` uses one Asia/Shanghai seven-day window, separates total authoritative events from its 30-memory display cap, and reads actual weekly mastery-event deltas in one grouped query.

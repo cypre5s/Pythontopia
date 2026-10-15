@@ -7,6 +7,7 @@ import AgentNotebook from '@/components/agents/AgentNotebook.vue';
 import KnowledgeConstellation from '@/components/expedition/KnowledgeConstellation.vue';
 import TwinWeekly from '@/components/companion/TwinWeekly.vue';
 import { fetchLearnerTwinState, type LearnerTwinNextStep, type LearnerTwinState } from '@/api/twin';
+import { routeForTwinRecommendation } from '@/composables/useNextSteps';
 import { useLearningStore } from '@/stores/learning';
 import { useSessionStore } from '@/stores/session';
 import { useWorkshopUiStore } from '@/stores/workshopUi';
@@ -51,12 +52,7 @@ async function loadState(): Promise<void> {
 onMounted(() => void loadState());
 
 function destination(step: LearnerTwinNextStep) {
-  const progress = state.value?.kcs.find((kc) => kc.kcCode === step.kcCode);
-  if (progress?.reviewDue) {
-    return { path: '/bug-mine', query: { review: step.kcCode } };
-  }
-  if (!progress?.assessed) return { path: '/mainline-map' };
-  return { path: '/expedition', query: { focus: String(step.chapter), kcCode: step.kcCode } };
+  return routeForTwinRecommendation(state.value, step);
 }
 
 function goToNextStep(): void {

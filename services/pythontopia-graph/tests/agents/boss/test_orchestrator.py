@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 
+import pytest
+
 from pythontopia_graph.agents.boss import (
     BossProblem,
     BossProblemReview,
@@ -12,6 +14,7 @@ from pythontopia_graph.agents.boss import (
 )
 from pythontopia_graph.agents.boss.orchestrator import build_test_case
 from pythontopia_graph.agents.boss.plagiarism_checker import ExistingProblem
+from pythontopia_graph.agents.boss.schemas import ReviewIssue, ReviewVerdict
 
 
 def _good_problem() -> BossProblem:
@@ -57,9 +60,7 @@ def test_debug_problem_accepts_a_snippet_that_fails_a_case(fake_piston_endpoint)
     problem = _good_problem()
     problem.kind = "debug"
     problem.statement = (
-        "修复下面的代码。错误代码：\n"
-        "print('always 0')\n\n"
-        "输入格式：一行两个整数。"
+        "修复下面的代码。错误代码：\n" "print('always 0')\n\n" "输入格式：一行两个整数。"
     )
 
     review = run_all_reviews(problem)
@@ -140,6 +141,82 @@ def test_generate_boss_problem_accepts_factory_output() -> None:
         )
     )
     assert review.passed
+
+
+def test_generate_boss_problem_skips_factory_when_sandbox_is_unconfigured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PYT_PISTON_URL", raising=False)
+    monkeypatch.delenv("PYT_PISTON_PYTHON_VERSION", raising=False)
+    factory_calls = 0
+
+    async def factory(**kwargs) -> BossProblem:
+        nonlocal factory_calls
+        factory_calls += 1
+        return _good_problem()
+
+    review = asyncio.run(
+        generate_boss_problem(
+            chapter=1,
+            stage=1,
+            kc_code="PY43-KC-001",
+            difficulty=1,
+            problem_factory=factory,
+            max_retries=6,
+        )
+    )
+
+    assert factory_calls == 0
+    assert not review.passed
+    assert any(issue.code == "sandbox_unavailable" for issue in review.issues)
+
+
+def test_generate_boss_problem_stops_after_sandbox_becomes_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import pythontopia_graph.agents.boss.orchestrator as orchestrator
+
+    factory_calls = 0
+
+    async def factory(**kwargs) -> BossProblem:
+        nonlocal factory_calls
+        factory_calls += 1
+        return _good_problem()
+
+    def unavailable_review(problem: BossProblem, **kwargs) -> BossProblemReview:
+        return BossProblemReview(
+            problem=problem,
+            verdicts=[
+                ReviewVerdict(
+                    review="self_test",
+                    passed=False,
+                    issues=[
+                        ReviewIssue(
+                            review="self_test",
+                            severity="error",
+                            code="sandbox_unavailable",
+                            message="isolated Python executor is unavailable",
+                        )
+                    ],
+                )
+            ],
+        )
+
+    monkeypatch.setattr(orchestrator, "run_all_reviews", unavailable_review)
+    review = asyncio.run(
+        generate_boss_problem(
+            chapter=1,
+            stage=1,
+            kc_code="PY43-KC-001",
+            difficulty=1,
+            problem_factory=factory,
+            max_retries=6,
+        )
+    )
+
+    assert factory_calls == 1
+    assert not review.passed
+    assert any(issue.code == "sandbox_unavailable" for issue in review.issues)
 
 
 def test_golden_fallback_is_not_rejected_as_a_duplicate_of_itself() -> None:
