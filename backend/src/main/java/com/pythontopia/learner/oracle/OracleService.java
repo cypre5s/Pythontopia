@@ -12,12 +12,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
 /** 预防式个性化预言家：据 mastery+confidence+failureKind 频次+先修DAG 预测高风险KC，并异步预生成预防包。 */
 @Service
 public class OracleService {
+
+  private static final Logger log = LoggerFactory.getLogger(OracleService.class);
 
   /** 进入预测（返回给前端 / 落证据）的风险门槛。 */
   private static final double RISK_THRESHOLD = 0.35;
@@ -124,7 +129,11 @@ public class OracleService {
     // 命中更高阈值 → 异步走真协同链预生成预防包（成本守恒：仅高风险 + 幂等去重在 service 内）。
     for (RiskPrediction prediction : top) {
       if (prediction.risk() >= PREVENTION_THRESHOLD) {
-        preventionPackService.pregenerate(userId, prediction);
+        try {
+          preventionPackService.pregenerate(userId, prediction);
+        } catch (TaskRejectedException ex) {
+          log.warn("预防包预生成队列已满，跳过后台任务");
+        }
       }
     }
     return top;

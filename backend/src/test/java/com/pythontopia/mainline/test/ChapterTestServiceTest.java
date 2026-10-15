@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -38,6 +39,7 @@ import com.pythontopia.mainline.test.question.QuestionType;
 import com.pythontopia.learner.event.LearningEvent;
 import org.mockito.ArgumentCaptor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.task.TaskRejectedException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import java.time.OffsetDateTime;
@@ -185,6 +187,23 @@ class ChapterTestServiceTest {
     verify(repo).markStatus(TEST_ID, ChapterTestStatus.GENERATING);
     verify(pregen)
         .pregenerate(TEST_ID, USER, CH, ChapterAssessmentKind.FINAL, List.of());
+  }
+
+  @Test
+  void prepareMarksAttemptFailedWhenAsyncQueueIsFull() {
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.FINAL)).thenReturn(Optional.empty());
+    when(repo.findLatest(USER, CH, ChapterAssessmentKind.QUIZ)).thenReturn(Optional.empty());
+    when(repo.nextAttemptNo(USER, CH, ChapterAssessmentKind.FINAL)).thenReturn(1);
+    when(repo.insertPending(USER, CH, ChapterAssessmentKind.FINAL, 1, 7200))
+        .thenReturn(TEST_ID);
+    doThrow(new TaskRejectedException("queue full"))
+        .when(pregen)
+        .pregenerate(TEST_ID, USER, CH, ChapterAssessmentKind.FINAL, List.of());
+
+    TestPrepareResponse response = service.prepare(USER, CH);
+
+    assertThat(response.status()).isEqualTo("FAILED");
+    verify(repo).markStatus(TEST_ID, ChapterTestStatus.FAILED);
   }
 
   @Test

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
 from pythontopia_graph.main import app
@@ -43,6 +44,26 @@ def test_browse_run_endpoint_returns_structured_evidence(monkeypatch) -> None:
     assert body["steps"][0]["title"] == "Built-in Functions"
     assert body["steps"][0]["snippet"] == "sorted returns a new sorted list."
     assert captured["request"].user_id == 7
+
+
+def test_browse_run_endpoint_returns_429_when_executor_is_at_capacity(monkeypatch) -> None:
+    monkeypatch.setenv("BROWSE_ENABLED", "on")
+
+    async def reject_busy(_request):
+        raise HTTPException(status_code=429, detail="联网查证繁忙，请稍后重试")
+
+    monkeypatch.setattr("pythontopia_graph.main.execute_browse", reject_busy)
+    response = TestClient(app).post(
+        "/agents/browse/run",
+        json={
+            "goal": "查证 sorted",
+            "allowed_domains": ["docs.python.org"],
+            "max_steps": 2,
+            "user_id": 7,
+        },
+    )
+
+    assert response.status_code == 429
 
 
 def test_browse_run_endpoint_rejects_client_supplied_oversized_limits() -> None:

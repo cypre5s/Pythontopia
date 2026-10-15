@@ -1,6 +1,7 @@
 package com.pythontopia.common.web;
 
 import com.pythontopia.common.config.BossProblemHttpClientProperties;
+import com.pythontopia.common.config.BrowseHttpClientProperties;
 import com.pythontopia.common.config.ChapterTestHttpClientProperties;
 import com.pythontopia.common.config.FeynmanTuteeHttpClientProperties;
 import com.pythontopia.common.config.GraphHttpClientProperties;
@@ -39,6 +40,18 @@ public class RestClientConfig {
     return builder
         .setConnectTimeout(Duration.ofMillis(httpProperties.connectTimeoutMs()))
         .setReadTimeout(Duration.ofMillis(httpProperties.readTimeoutMs()))
+        .build();
+  }
+
+  /** Bounded browser execution may take 45s plus shutdown; keep it outside Graph's 30s window. */
+  @Bean("browseRestTemplate")
+  RestTemplate browseRestTemplate(
+      RestTemplateBuilder builder,
+      GraphHttpClientProperties graphHttpProperties,
+      BrowseHttpClientProperties browseHttpProperties) {
+    return builder
+        .setConnectTimeout(Duration.ofMillis(graphHttpProperties.connectTimeoutMs()))
+        .setReadTimeout(Duration.ofMillis(browseHttpProperties.readTimeoutMs()))
         .build();
   }
 

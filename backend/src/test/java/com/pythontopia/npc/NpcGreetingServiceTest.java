@@ -26,12 +26,14 @@ import com.pythontopia.npc.dto.NpcDialogResponse;
 import com.pythontopia.npc.dto.NpcGreetingResponse;
 import com.pythontopia.npc.graph.NpcDialogGraphClient;
 import com.pythontopia.tutor.TutorDailyRequestLimitService;
+import java.lang.reflect.Field;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -122,6 +124,24 @@ class NpcGreetingServiceTest {
 
     assertThat(third.cached()).isFalse();
     verify(graphClient, times(2)).talk(anyString(), anyString(), any(), anyString());
+  }
+
+  @Test
+  void removesExpiredEntriesDuringScheduledCacheCleanup() throws ReflectiveOperationException {
+    when(memoryRetrievalService.retrieve(eq(7L), isNull(), anyInt()))
+        .thenReturn(List.of(memory(9L, "练习失败：PY43-KC-016", "PY43-KC-016")));
+    when(personaService.load(anyString())).thenReturn(new NpcPersona("foreman_bug", "工头", "core"));
+    when(passiveProfileService.getDimensions(anyLong())).thenReturn(List.of());
+    when(graphClient.talk(anyString(), anyString(), any(), anyString()))
+        .thenReturn(Optional.of(new NpcDialogResponse("嗨", List.of(9L), true)));
+    service.greeting(7L, "foreman_bug");
+    advance(NpcGreetingService.CACHE_TTL);
+
+    service.cleanupExpiredCache();
+
+    Field cacheField = NpcGreetingService.class.getDeclaredField("cache");
+    cacheField.setAccessible(true);
+    assertThat((Map<?, ?>) cacheField.get(service)).isEmpty();
   }
 
   @Test

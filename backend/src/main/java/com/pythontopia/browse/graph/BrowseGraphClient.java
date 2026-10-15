@@ -12,7 +12,9 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -22,18 +24,21 @@ import org.springframework.web.client.RestTemplate;
  * 命中 url。
  *
  * <p><b>不重试</b>：BROWSE 非幂等且有浏览器副作用（registry {@code idempotent=false, max_retries=0}），
- * 故传输失败时仅做一次调用并直接抛 {@link BusinessException}(502)——经 {@code GlobalExceptionHandler}
- * 统一成 {@code ApiError}，绝不冒泡成 500，也绝不重复发起浏览。
+ * 故传输失败时仅做一次调用并直接抛 {@link BusinessException}(502)；Graph 浏览并发满时保留 {@code 429}。
+ * 两者经 {@code GlobalExceptionHandler} 统一成 {@code ApiError}，绝不重试发起浏览。
  */
 @Component
 public class BrowseGraphClient {
 
   private static final Logger log = LoggerFactory.getLogger(BrowseGraphClient.class);
+  private static final double BROWSE_TIMEOUT_SECONDS = 45.0;
 
   private final RestTemplate restTemplate;
   private final GraphServiceProperties properties;
 
-  public BrowseGraphClient(RestTemplate graphRestTemplate, GraphServiceProperties properties) {
+  public BrowseGraphClient(
+      @Qualifier("browseRestTemplate") RestTemplate graphRestTemplate,
+      GraphServiceProperties properties) {
     this.restTemplate = graphRestTemplate;
     this.properties = properties;
   }
@@ -46,7 +51,7 @@ public class BrowseGraphClient {
    * @param maxSteps 有界步数上限
    * @param userId 发起人（graph 侧按此隔离 / 限流）
    * @return 浏览结果（业务 fail-fast 时 {@code error} 非空、{@code steps} 含已走部分）
-   * @throws BusinessException 502 当 graph 不可达 / HTTP 错误 / 空响应
+   * @throws BusinessException 429 当 Graph 浏览并发已满；502 当服务不可达 / 其它 HTTP 错误 / 空响应
    */
   public BrowseGraphResult browse(
       String goal, List<String> allowedDomains, int maxSteps, long userId) {
@@ -55,7 +60,11 @@ public class BrowseGraphClient {
     GraphInternalTokenSupport.apply(headers, properties);
     GraphBrowseRequest payload =
         new GraphBrowseRequest(
-            goal, allowedDomains == null ? List.of() : allowedDomains, maxSteps, userId);
+            goal,
+            allowedDomains == null ? List.of() : allowedDomains,
+            maxSteps,
+            BROWSE_TIMEOUT_SECONDS,
+            userId);
     try {
       GraphBrowseResponse body =
           restTemplate
@@ -69,6 +78,15 @@ public class BrowseGraphClient {
         throw unavailable("联网查证服务返回空响应");
       }
       return body.toResult();
+    } catch (HttpStatusCodeException ex) {
+      if (ex.getStatusCode().value() == HttpStatus.TOO_MANY_REQUESTS.value()) {
+        throw new BusinessException(
+            HttpStatus.TOO_MANY_REQUESTS, "BROWSE_BUSY", "联网查证繁忙，请稍后重试");
+      }
+      log.warn(
+          "BROWSE graph call failed (no retry, non-idempotent): {}",
+          ex.getClass().getSimpleName());
+      throw unavailable("联网查证服务暂不可用");
     } catch (RestClientException ex) {
       log.warn(
           "BROWSE graph call failed (no retry, non-idempotent): {}",
@@ -86,6 +104,7 @@ public class BrowseGraphClient {
       @JsonProperty("goal") String goal,
       @JsonProperty("allowed_domains") List<String> allowedDomains,
       @JsonProperty("max_steps") int maxSteps,
+      @JsonProperty("timeout_seconds") double timeoutSeconds,
       @JsonProperty("user_id") long userId) {}
 
   /** 响应体：对齐 {@code tools/browse/contract.py:BrowseResult}（snake_case）。 */

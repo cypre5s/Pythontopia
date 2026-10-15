@@ -35,7 +35,8 @@ public class NpcDialogStateRepository {
           "student_a",
           "class_president",
           "workshop_master",
-          "arena_guard");
+          "arena_guard",
+          "captain_def");
 
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
@@ -43,6 +44,10 @@ public class NpcDialogStateRepository {
   public NpcDialogStateRepository(JdbcTemplate jdbcTemplate, ObjectMapper objectMapper) {
     this.jdbcTemplate = jdbcTemplate;
     this.objectMapper = objectMapper;
+  }
+
+  static boolean supportsNpcKey(String npcKey) {
+    return npcKey != null && TOWN_HUB_NPC_KEYS.contains(npcKey);
   }
 
   public Optional<NpcDialogState> findOne(Long userId, String npcKey) {

@@ -9,10 +9,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass, field
 from typing import Any
 
 import pytest
+from fastapi import HTTPException
 
 from pythontopia_graph.tools.browse.contract import BrowseRequest
 from pythontopia_graph.tools.browse.executor import (
@@ -154,6 +156,20 @@ async def test_happy_path_bounded_steps_with_citations() -> None:
     # 有界 + 有效白名单透传给 engine。
     assert engine.open_args["allowed_domains"] == [DOCS]
     assert engine.open_args["max_steps"] == 6
+
+
+async def test_rejects_immediately_when_all_browse_slots_are_busy(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    gate = asyncio.Semaphore(0)
+    monkeypatch.setattr(browse_executor_module, "_BROWSE_GATE", gate)
+    engine = FakeBrowseEngine(plans=[])
+
+    with pytest.raises(HTTPException) as raised:
+        await asyncio.wait_for(execute_browse(_req(), engine=engine, env={}), timeout=0.05)
+
+    assert raised.value.status_code == 429
+    assert engine.opened is False
 
 
 async def test_final_summary_carries_external_content_label() -> None:

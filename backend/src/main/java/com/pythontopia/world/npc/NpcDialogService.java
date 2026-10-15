@@ -28,6 +28,7 @@ public class NpcDialogService {
   }
 
   public NpcDialogStateDto getOrInit(Long userId, String npcKey) {
+    requireSupportedNpcKey(npcKey);
     return NpcDialogStateDto.from(stateRepository.findOrInit(userId, npcKey));
   }
 
@@ -37,6 +38,7 @@ public class NpcDialogService {
 
   @Transactional
   public NpcDialogStateDto talk(Long userId, String npcKey, NpcTalkRequest request) {
+    requireSupportedNpcKey(npcKey);
     if (request == null) {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST, "NPC_TALK_REQUEST_EMPTY", "Dialog request body is required");
@@ -81,6 +83,12 @@ public class NpcDialogService {
       stateRepository.mergeFlags(userId, npcKey, flagsPatch);
     }
     return NpcDialogStateDto.from(stateRepository.findOrInit(userId, npcKey));
+  }
+
+  private void requireSupportedNpcKey(String npcKey) {
+    if (!NpcDialogStateRepository.supportsNpcKey(npcKey)) {
+      throw new BusinessException(HttpStatus.NOT_FOUND, "NPC_NOT_FOUND", "NPC does not exist");
+    }
   }
 
 }

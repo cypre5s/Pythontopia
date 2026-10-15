@@ -30,6 +30,7 @@ import org.springframework.transaction.annotation.Transactional;
  *
  * <ul>
  *   <li>白名单为空（配置异常）→ {@code 503}，不调 graph。
+ *   <li>graph 浏览并发已满 → {@code 429}，不排队等待浏览器。
  *   <li>graph 传输失败 → {@link BrowseGraphClient} 抛 {@code 502}。
  *   <li>graph 返回非法步骤动作（违约）→ {@code 502}。
  *   <li>graph 业务 fail-fast（{@code error} 非空）→ 正常落库为 {@code FAILED} 并连同已走步骤返回（§8.5）。
@@ -56,19 +57,21 @@ public class BrowseRunService {
   private final BrowseGraphClient graphClient;
   private final BrowseRunRepository runRepository;
   private final BrowseStepRepository stepRepository;
+  private final BrowseRunPersistenceService persistenceService;
 
   public BrowseRunService(
       BrowseProperties properties,
       BrowseGraphClient graphClient,
       BrowseRunRepository runRepository,
-      BrowseStepRepository stepRepository) {
+      BrowseStepRepository stepRepository,
+      BrowseRunPersistenceService persistenceService) {
     this.properties = properties;
     this.graphClient = graphClient;
     this.runRepository = runRepository;
     this.stepRepository = stepRepository;
+    this.persistenceService = persistenceService;
   }
 
-  @Transactional
   public BrowseRunDto create(long userId, BrowseRunCreateRequest request) {
     int maxSteps =
         request.maxSteps() == null ? BrowseProperties.DEFAULT_MAX_STEPS : request.maxSteps();
@@ -86,17 +89,14 @@ public class BrowseRunService {
     // 即使 graph 违约（非法动作）也先校验，避免坏数据落库；校验通过再 insert，保持事务一致。
     List<BrowseStepEntity> steps = toStepEntities(result.steps());
 
-    BrowseRunEntity run =
-        runRepository.insert(
-            userId,
-            request.goal(),
-            status,
-            result.finalSummary(),
-            result.truncated(),
-            blankToNull(truncate(result.error(), MAX_ERROR_LENGTH)));
-
-    stepRepository.insertAll(run.id(), withRunId(run.id(), steps));
-    return BrowseRunDto.from(run);
+    return persistenceService.persist(
+        userId,
+        request.goal(),
+        status,
+        result.finalSummary(),
+        result.truncated(),
+        blankToNull(truncate(result.error(), MAX_ERROR_LENGTH)),
+        steps);
   }
 
   @Transactional(readOnly = true)
@@ -148,22 +148,6 @@ public class BrowseRunService {
                   : step.snippet()));
     }
     return entities;
-  }
-
-  private static List<BrowseStepEntity> withRunId(long runId, List<BrowseStepEntity> steps) {
-    return steps.stream()
-        .map(
-            s ->
-                new BrowseStepEntity(
-                    null,
-                    runId,
-                    s.idx(),
-                    s.action(),
-                    s.url(),
-                    s.summary(),
-                    s.title(),
-                    s.snippet()))
-        .toList();
   }
 
   /** 外部命中引用 = 步骤中出现过的非空 url（去重、保序），统一标注「外部内容，非课件」。 */

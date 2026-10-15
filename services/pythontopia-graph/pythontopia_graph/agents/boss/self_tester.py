@@ -90,8 +90,8 @@ def self_test_problem(
                 )
             )
             return ReviewVerdict(review="self_test", passed=False, issues=issues)
-        actual = result.stdout.strip()
-        expected = tc.expected_output.strip()
+        actual = result.stdout.rstrip()
+        expected = tc.expected_output.rstrip()
         if actual != expected:
             issues.append(
                 ReviewIssue(
@@ -136,7 +136,7 @@ def _self_test_debug_snippet(problem: BossProblem, timeout_sec: int) -> ReviewVe
                 "debug_snippet_timeout",
                 f"debug statement code timed out on test_case[{index}]",
             )
-        if result.exit_code != 0 or result.stdout.strip() != case.expected_output.strip():
+        if result.exit_code != 0 or result.stdout.rstrip() != case.expected_output.rstrip():
             return ReviewVerdict(review="self_test", passed=True, issues=[])
 
     return _debug_failure(

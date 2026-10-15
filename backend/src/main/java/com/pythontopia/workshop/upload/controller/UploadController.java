@@ -10,6 +10,9 @@ import com.pythontopia.workshop.upload.entity.UploadStatus;
 import com.pythontopia.workshop.upload.retrieval.UploadCorpusIndexingService;
 import com.pythontopia.workshop.upload.service.UploadService;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -29,6 +32,8 @@ import org.springframework.web.multipart.MultipartFile;
 @RequestMapping("/api/workshop/uploads")
 public class UploadController {
 
+  private static final Logger log = LoggerFactory.getLogger(UploadController.class);
+
   private final UploadService service;
   private final UploadCorpusIndexingService indexingService;
 
@@ -45,7 +50,12 @@ public class UploadController {
     // 解析成功才触发 B 通路分块+向量化（异步即发即忘、fail-soft，不影响上传响应；
     // service.upload 的 @Transactional 已提交，异步线程可见该行）。
     if (dto.status() == UploadStatus.READY && dto.id() != null) {
-      indexingService.indexUploadAsync(dto.id());
+      try {
+        indexingService.indexUploadAsync(dto.id());
+      } catch (TaskRejectedException ex) {
+        // shortcut: a full queue drops indexing; add durable retries if retrieval becomes mandatory.
+        log.warn("upload corpus indexing skipped: executor queue is full");
+      }
     }
     return dto;
   }

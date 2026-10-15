@@ -3,8 +3,10 @@ package com.pythontopia.mainline;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.LongSupplier;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
@@ -16,6 +18,8 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class VideoProgressThrottle {
+
+  private static final long WINDOW_MILLIS = 60_000L;
 
   private final int writesPerMin;
   private final LongSupplier nowMillis;
@@ -34,17 +38,38 @@ public class VideoProgressThrottle {
   /** @return true 表示本次允许计入；false 表示已达 60s 窗口上限，应 no-op。 */
   public boolean tryAcquire(long userId, long stageId) {
     String key = userId + ":" + stageId;
-    Deque<Long> window = windows.computeIfAbsent(key, k -> new ArrayDeque<>());
     long now = nowMillis.getAsLong();
-    synchronized (window) {
-      while (!window.isEmpty() && now - window.peekFirst() >= 60_000L) {
-        window.pollFirst();
-      }
-      if (window.size() >= writesPerMin) {
-        return false;
-      }
-      window.addLast(now);
-      return true;
-    }
+    AtomicBoolean acquired = new AtomicBoolean();
+    windows.compute(
+        key,
+        (ignored, existing) -> {
+          Deque<Long> window = existing == null ? new ArrayDeque<>() : existing;
+          while (!window.isEmpty() && now - window.peekFirst() >= WINDOW_MILLIS) {
+            window.pollFirst();
+          }
+          if (window.size() < writesPerMin) {
+            window.addLast(now);
+            acquired.set(true);
+          }
+          return window;
+        });
+    return acquired.get();
+  }
+
+  @Scheduled(fixedDelay = WINDOW_MILLIS, initialDelay = WINDOW_MILLIS)
+  void cleanupExpiredWindows() {
+    long now = nowMillis.getAsLong();
+    windows
+        .keySet()
+        .forEach(
+            key ->
+                windows.computeIfPresent(
+                    key,
+                    (ignored, current) -> {
+                      Long lastRequestAt = current.peekLast();
+                      return lastRequestAt != null && now - lastRequestAt >= WINDOW_MILLIS
+                          ? null
+                          : current;
+                    }));
   }
 }

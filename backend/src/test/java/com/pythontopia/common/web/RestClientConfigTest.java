@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.pythontopia.common.config.BossProblemHttpClientProperties;
+import com.pythontopia.common.config.BrowseHttpClientProperties;
 import com.pythontopia.common.config.ChapterTestHttpClientProperties;
 import com.pythontopia.common.config.FeynmanTuteeHttpClientProperties;
 import com.pythontopia.common.config.GraphHttpClientProperties;
@@ -75,6 +76,7 @@ class RestClientConfigTest {
     assertThat(defaults.connectTimeoutMs()).isEqualTo(3000);
     assertThat(defaults.readTimeoutMs()).isEqualTo(30000);
     assertThat(new BossProblemHttpClientProperties(null).readTimeoutMs()).isEqualTo(180000);
+    assertThat(new BrowseHttpClientProperties(null).readTimeoutMs()).isEqualTo(50000);
     assertThat(new ChapterTestHttpClientProperties(null).readTimeoutMs()).isEqualTo(600000);
     assertThat(new FeynmanTuteeHttpClientProperties(null).readTimeoutMs()).isEqualTo(90000);
     assertThat(new WorkshopHttpClientProperties(null).readTimeoutMs()).isEqualTo(180000);
@@ -88,6 +90,24 @@ class RestClientConfigTest {
                 new RestTemplateBuilder(),
                 new GraphHttpClientProperties(1000, 30000),
                 new ChapterTestHttpClientProperties(300));
+    String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/slow";
+
+    long startNanos = System.nanoTime();
+    assertThatThrownBy(() -> restTemplate.getForObject(url, String.class))
+        .isInstanceOf(ResourceAccessException.class);
+    long elapsedMs = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
+
+    assertThat(elapsedMs).isLessThan(3000L);
+  }
+
+  @Test
+  void browseRestTemplateUsesItsDedicatedReadTimeout() {
+    RestTemplate restTemplate =
+        new RestClientConfig()
+            .browseRestTemplate(
+                new RestTemplateBuilder(),
+                new GraphHttpClientProperties(1000, 30000),
+                new BrowseHttpClientProperties(300));
     String url = "http://127.0.0.1:" + server.getAddress().getPort() + "/slow";
 
     long startNanos = System.nanoTime();

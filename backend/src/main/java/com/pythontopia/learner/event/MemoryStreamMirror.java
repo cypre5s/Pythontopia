@@ -203,12 +203,18 @@ public class MemoryStreamMirror {
   private void mirror(Long userId, String eventType, Map<String, Object> payload) {
     try {
       long eventId = repository.insert(userId, eventType, payload, SOURCE, EventImportance.of(eventType));
-      embeddingWriter.embedAndStore(eventId, eventType, payload);
+      try {
+        embeddingWriter.embedAndStore(eventId, eventType, payload);
+      } catch (RuntimeException ex) {
+        log.warn(
+            "MemoryStreamMirror embedding skip event type={} errorType={}",
+            eventType,
+            ex.getClass().getSimpleName());
+      }
       npcKeyFor(eventType).ifPresent(npcKey -> npcMemoryService.remember(userId, npcKey, eventId, 0.5));
     } catch (RuntimeException ex) {
       log.warn(
-          "MemoryStreamMirror skip event userId={} type={} errorType={}",
-          userId,
+          "MemoryStreamMirror skip event type={} errorType={}",
           eventType,
           ex.getClass().getSimpleName());
     }

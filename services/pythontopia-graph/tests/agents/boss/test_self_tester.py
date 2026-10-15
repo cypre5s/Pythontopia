@@ -6,6 +6,7 @@ import subprocess
 
 import pytest
 
+from pythontopia_graph.agents.boss.execution_sandbox import PythonExecutionResult
 from pythontopia_graph.agents.boss.schemas import BossProblem, TestCase
 from pythontopia_graph.agents.boss.self_tester import (
     list_forbidden_imports,
@@ -52,6 +53,38 @@ def test_reference_wrong_output_fails() -> None:
     verdict = self_test_problem(problem)
     assert not verdict.passed
     assert any(i.code == "reference_output_mismatch" for i in verdict.issues)
+
+
+def test_reference_leading_whitespace_is_not_ignored(monkeypatch: pytest.MonkeyPatch) -> None:
+    def run_python(code: str, stdin: str, timeout_sec: int) -> PythonExecutionResult:
+        del code, stdin, timeout_sec
+        return PythonExecutionResult(stdout=" 3\n", exit_code=0)
+
+    monkeypatch.setattr("pythontopia_graph.agents.boss.self_tester.run_python", run_python)
+    verdict = self_test_problem(_make("print(' 3')", [TestCase("", "3")]))
+
+    assert not verdict.passed
+    assert any(issue.code == "reference_output_mismatch" for issue in verdict.issues)
+
+
+def test_debug_snippet_leading_whitespace_is_a_real_bug(monkeypatch: pytest.MonkeyPatch) -> None:
+    def run_python(code: str, stdin: str, timeout_sec: int) -> PythonExecutionResult:
+        del stdin, timeout_sec
+        output = "3\n" if code == "print('3')" else " 3\n"
+        return PythonExecutionResult(stdout=output, exit_code=0)
+
+    monkeypatch.setattr("pythontopia_graph.agents.boss.self_tester.run_python", run_python)
+    problem = _make(
+        "print('3')",
+        [TestCase("", "3")],
+    )
+    problem.kind = "debug"
+    problem.statement = "错误代码：\nprint(' 3')\n输入格式：无"
+
+    verdict = self_test_problem(problem)
+
+    assert verdict.passed
+    assert verdict.issues == []
 
 
 def test_reference_nonzero_exit_fails() -> None:

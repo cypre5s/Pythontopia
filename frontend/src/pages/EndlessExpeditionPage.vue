@@ -63,9 +63,8 @@ const focusChoice = ref<number | null>(
 );
 
 // 地图视图：像素远征塔（Phaser 渐进增强）/ 列表（移动端 + 降级真源）。窄屏默认列表。
-const mapView = ref<'pixel' | 'list'>(
-  typeof window !== 'undefined' && window.innerWidth >= 900 ? 'pixel' : 'list',
-);
+const isCompactViewport = ref(typeof window === 'undefined' || window.innerWidth < 900);
+const mapView = ref<'pixel' | 'list'>(isCompactViewport.value ? 'list' : 'pixel');
 
 let timer: number | null = null;
 onMounted(() => {
@@ -262,11 +261,16 @@ function scheduleCompute(): void {
 }
 onMounted(() => {
   scheduleCompute();
-  if (typeof window !== 'undefined') window.addEventListener('resize', computeEdges);
+  if (typeof window !== 'undefined') window.addEventListener('resize', handleMapResize);
 });
 onBeforeUnmount(() => {
-  if (typeof window !== 'undefined') window.removeEventListener('resize', computeEdges);
+  if (typeof window !== 'undefined') window.removeEventListener('resize', handleMapResize);
 });
+function handleMapResize(): void {
+  isCompactViewport.value = window.innerWidth < 900;
+  if (isCompactViewport.value) mapView.value = 'list';
+  computeEdges();
+}
 // 进入地图 / 节点状态变化（通关解锁）后重算连线。
 watch(
   () => [run.phase, run.nodes.map((n) => n.state).join(',')],
@@ -517,6 +521,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
                 aria-label="地图视图切换"
               >
                 <button
+                  v-if="!isCompactViewport"
                   type="button"
                   class="exp-view-btn"
                   :class="{ 'is-active': mapView === 'pixel' }"

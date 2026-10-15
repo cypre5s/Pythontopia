@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -25,6 +26,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /** P5.1：预言家据真实信号预测高风险 KC，绑定 event 证据 + 先修依赖路径，并触发异步预防包。 */
@@ -71,7 +73,7 @@ class OracleServiceTest {
 
   @Test
   @DisplayName("先修弱 + 高频错 → 预测高风险 KC + 触发预防包 + 证据/依赖路径可溯源")
-  void predictsHighRiskTriggersPreventionWithTraceableEvidence() {
+  void predictionsSurviveWhenPreventionQueueIsFull() {
     // KC-016 掌握度低 + 置信度低；其先修 KC-015 无掌握记录（薄弱先修链）。
     when(masteryRepo.findAll(anyLong()))
         .thenReturn(
@@ -89,6 +91,9 @@ class OracleServiceTest {
     when(jdbc.queryForList(anyString(), eq(USER))).thenReturn(List.of(failureRow())); // 4 次失败
     when(jdbc.queryForList(anyString(), eq(Long.class), eq(USER), anyString()))
         .thenReturn(List.of(201L, 202L)); // 真实 event id
+    doThrow(new TaskRejectedException("queue full"))
+        .when(preventionPackService)
+        .pregenerate(eq(USER), any());
 
     List<OracleService.RiskPrediction> predictions = service.predict(USER);
 

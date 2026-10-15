@@ -49,7 +49,7 @@ class AiBudgetRouteCoverageTest {
                     null, null, null, null, null, 100, 50, 1024)
                 .isEnabled())
         .isFalse();
-    assertNotBudgeted(
+    assertStudentBudgeted(
         BrowseController.class.getMethod(
             "create",
             com.pythontopia.auth.security.CurrentUserPrincipal.class,

@@ -43,6 +43,7 @@ class BrowseGraphClientTest {
         .andExpect(MockRestRequestMatchers.header("X-Internal-Token", "secret"))
         .andExpect(MockRestRequestMatchers.jsonPath("$.goal").value("查 sorted 稳定性"))
         .andExpect(MockRestRequestMatchers.jsonPath("$.max_steps").value(6))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.timeout_seconds").value(45.0))
         .andExpect(MockRestRequestMatchers.jsonPath("$.user_id").value(7))
         .andExpect(MockRestRequestMatchers.jsonPath("$.allowed_domains[0]").value("docs.python.org"))
         .andRespond(
@@ -122,6 +123,22 @@ class BrowseGraphClientTest {
 
     assertThat(result.error()).isEqualTo("目标站点超时");
     assertThat(result.steps()).hasSize(1);
+    server.verify(Duration.ofSeconds(2));
+  }
+
+  @Test
+  void browseMapsGraphCapacityRejectionToTooManyRequests() {
+    MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
+    server
+        .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/browse/run"))
+        .andRespond(MockRestResponseCreators.withStatus(HttpStatus.TOO_MANY_REQUESTS));
+
+    assertThatThrownBy(() -> client.browse("goal", List.of("docs.python.org"), 6, 7L))
+        .isInstanceOf(BusinessException.class)
+        .satisfies(
+            ex ->
+                assertThat(((BusinessException) ex).status())
+                    .isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
     server.verify(Duration.ofSeconds(2));
   }
 

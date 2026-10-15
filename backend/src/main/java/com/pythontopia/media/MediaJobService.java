@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.Semaphore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -101,7 +102,16 @@ public class MediaJobService {
     MediaJob job = jobRepository.insert(userId, KIND_STORYBOARD_VIDEO, fingerprint, specJson);
     List<StoryboardCompositionService.SceneSpec> scenes = toSceneSpecs(request);
     long jobId = job.id();
-    composeExecutor.execute(() -> runJob(jobId, userId, scenes));
+    try {
+      composeExecutor.execute(() -> runJob(jobId, userId, scenes));
+    } catch (RejectedExecutionException rejected) {
+      jobRepository.updateStatus(jobId, MediaJobStatus.FAILED, null, "VIDEO_COMPOSE_QUEUE_FULL");
+      log.warn("media job={} rejected because composition queue is full", jobId);
+      throw new BusinessException(
+          HttpStatus.SERVICE_UNAVAILABLE,
+          "VIDEO_COMPOSE_QUEUE_FULL",
+          "合成服务繁忙，请稍后重试");
+    }
     return new SubmitResult(jobId, MediaJobStatus.PENDING, false, null);
   }
 

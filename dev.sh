@@ -217,6 +217,8 @@ mkdir -p "$ROOT_DIR/data/course-pack-43/generated-media"
 export PYT_DB_URL="jdbc:postgresql://127.0.0.1:15432/pythontopia"
 export PYT_DB_USERNAME="${PYT_DB_USERNAME:-pytopia}"
 export PYT_DB_PASSWORD="${PYT_DB_PASSWORD:-pytopia_dev_password}"
+# Keep the authenticated development API off LAN interfaces.
+export SERVER_ADDRESS="127.0.0.1"
 if [[ "$backend_preexisting" != "1" ]]; then
   configured_jwt_secret="${PYT_JWT_SECRET:-}"
   resolved_jwt_secret="$("$DEPLOY_DIR/scripts/resolve_dev_jwt_secret.sh" "$configured_jwt_secret")"

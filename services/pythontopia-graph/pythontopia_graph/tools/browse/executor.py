@@ -22,6 +22,8 @@ from pathlib import Path
 from typing import Any, Protocol, cast
 from urllib.parse import quote_plus, urlsplit
 
+from fastapi import HTTPException
+
 from pythontopia_graph.tools.browse.allowlist import enforce_allowlist, is_domain_allowed
 from pythontopia_graph.tools.browse.contract import (
     BrowseAction,
@@ -177,6 +179,9 @@ async def execute_browse(
             final_summary=f"未能完成联网查证：{message}",
             error=message,
         )
+
+    if _BROWSE_GATE.locked():
+        raise HTTPException(status_code=429, detail="联网查证繁忙，请稍后重试")
 
     browse_engine = engine if engine is not None else create_default_engine(env=env)
     steps: list[BrowseStep] = []

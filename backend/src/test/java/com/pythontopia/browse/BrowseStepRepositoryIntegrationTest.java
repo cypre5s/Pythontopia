@@ -6,6 +6,7 @@ import com.pythontopia.browse.entity.BrowseRunStatus;
 import com.pythontopia.browse.entity.BrowseStepEntity;
 import com.pythontopia.browse.repository.BrowseRunRepository;
 import com.pythontopia.browse.repository.BrowseStepRepository;
+import com.pythontopia.browse.service.BrowseRunPersistenceService;
 import java.util.List;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
@@ -85,5 +86,39 @@ class BrowseStepRepositoryIntegrationTest {
     assertThat(stored.get(0).title()).isEqualTo("Sorting HOW TO");
     assertThat(stored.get(0).snippet()).isEqualTo("Sorts are guaranteed to be stable.");
     assertThat(stored.get(0).summary()).isEqualTo("legacy summary");
+  }
+
+  @Test
+  void cleanupExpiredRunsDeletesOldHistoryAndCascadesSteps() {
+    long userId = createStudent();
+    var expired =
+        runRepository.insert(
+            userId, "old goal", BrowseRunStatus.PENDING, "", false, null);
+    var retained =
+        runRepository.insert(
+            userId, "recent goal", BrowseRunStatus.SUCCESS, "summary", false, null);
+    stepRepository.insertAll(
+        expired.id(), List.of(new BrowseStepEntity(null, expired.id(), 0, "read", "", "old", "", "old")));
+    stepRepository.insertAll(
+        retained.id(),
+        List.of(new BrowseStepEntity(null, retained.id(), 0, "read", "", "recent", "", "recent")));
+    jdbcTemplate.update(
+        "UPDATE browse_run SET created_at = now() - interval '91 days' WHERE id = ?", expired.id());
+
+    new BrowseRunPersistenceService(runRepository, stepRepository).cleanupExpiredRuns();
+
+    assertThat(runRepository.findByIdForUser(userId, expired.id())).isEmpty();
+    assertThat(runRepository.findByIdForUser(userId, retained.id())).isPresent();
+    assertThat(stepRepository.findByRunId(expired.id())).isEmpty();
+    assertThat(stepRepository.findByRunId(retained.id())).hasSize(1);
+  }
+
+  private long createStudent() {
+    jdbcTemplate.update(
+        "INSERT INTO users (username, display_name, password_hash, role) VALUES (?, 'Browse Test', 'hash', 'STUDENT')",
+        "browse-retention-" + System.nanoTime());
+    return jdbcTemplate.queryForObject(
+        "SELECT id FROM users WHERE username LIKE 'browse-retention-%' ORDER BY id DESC LIMIT 1",
+        Long.class);
   }
 }

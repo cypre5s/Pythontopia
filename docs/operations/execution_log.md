@@ -4,6 +4,71 @@
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
 
+## 2026-10-16 当前续接：媒体合成队列拒绝后收敛为失败状态
+
+- 有界 `mediaComposeExecutor` 满载时，`MediaJobService.submit()` 原先直接向上抛 `RejectedExecutionException`，新建的 `media_job` 因而保持 `PENDING`。新增哨兵回归先 RED，复现原异常。
+- 现在队列拒绝会把该作业写为 `FAILED/VIDEO_COMPOSE_QUEUE_FULL`，并返回统一 503 错误；日志只记录作业 ID 与固定原因，不暴露请求内容。`MediaJobServiceTest` 11/11 通过，`git diff --check` 通过；无模型调用或业务数据写入。
+- 静态核对同一媒体资源链：作业轮询/SSE 校验 owner，匿名媒资链接校验带 TTL 的 HMAC，登录 owner 可直接取流；无 owner 系统资产仍按设计公开。讯飞旧媒体 provider 当前 `isEnabled()` 固定 false，存在的 provider 异常原文日志不可由现行产品路径触发；若重新启用应先脱敏。本项未触发外部媒体服务。
+- 上一项上传与异步 executor 联合回归也已新鲜复跑 42/42。仍不重复 DeepSeek 测试。
+
+## 2026-10-16 当前续接：接入 BROWSE AI 预算并清理过期记录
+
+- BROWSE 创建接口现在复用 `@AiBudgeted`，加入已有的原子账号/全站 AI 每日预算：生产配置启用（每账号 30 次、全站 300 次，按上海日期重置）；`./dev.sh` 沿用本地无限制设置。没有新增计数表或第二套配额。
+- 新增每日 03:20（上海时间）删除 90 天以前的 `browse_run`；现有外键级联删除对应 `browse_step`。PostgreSQL Testcontainers 回归实际删除 91 天前的 PENDING run 与 step，同时保留 89 天内 run；BROWSE controller、服务、共享预算与拦截器定向测试合计 32/32。RED 先复现接口未预留额度，GREEN 后通过。
+- 本地开发库当前 BROWSE run/step 均为 0 条；生产数据未访问。`./dev.sh` 进程环境为 `PYT_AI_REQUEST_LIMITS_ENABLED=false`，生产 Compose 固定为 `true`。本轮无 DeepSeek 或其他模型请求。
+- 为加载刚完成的预算接线，已按 `./dev.sh --down` / `./dev.sh --sandbox` 重启本地全栈，PostgreSQL 数据卷保留；Vite、Spring `/healthz`、Graph、RAG 均 HTTP 200，Spring 监听仍为回环地址，运行中 JVM 环境确认限额开关为 `false`。重启后 run/step 与讲座临时账号计数仍为 0。
+- 上一轮讲座页浏览器脚本已结束且临时账号残留为 0，但工具没有保留可核对的浏览器通过结果；不计为验收完成，本轮不重复运行。
+
+## 2026-10-16 当前续接：生产 Piston 只读核验受本机路由权限阻塞
+
+- 尝试通过已配置的 ECS SSH 别名只读查看 Piston 容器网络与监听。当前 WSL 路由将目标发往 TUN；按仓库说明需要添加临时直连路由，但 `sudo -n` 因无本机管理员口令被拒绝。
+- 没有修改路由或连接生产主机；生产 Piston ACL/ECS 仍未核验。后续可在直连路由已配置的环境补做。
+
+## 2026-10-16 当前续接：限制本地开发后端监听范围
+
+- 安全复核发现本地 `./dev.sh` 启动的 Spring API 监听 `*:18080`，虽然 Compose 暴露端口绑定回环，但这个原生开发进程会直接对局域网接口开放。
+- `dev.sh` 现在导出 `SERVER_ADDRESS=127.0.0.1`。已重启开发栈并核对 `ss` 显示后端仅监听 IPv4 映射回环地址；后端、Graph、RAG、Vite health/root 请求均 HTTP 200，匿名访问内部策略接口返回 401。`bash -n dev.sh` 与 `git diff --check` 通过。
+- 初次重启复用了仍存活的旧后端，随后也遇到旧 Vite 占用 5173；终止旧开发进程组后重新启动成功。当前完整开发栈在运行，数据库卷保留。没有 DeepSeek 请求。
+- 本地安全审计仍未完成；生产 Piston ACL/ECS 及其他未审类别继续留在总清单。
+
+## 2026-10-16 当前续接：图书馆翻页动作浏览器验收
+
+- 使用一次性学生会话打开 `/library?docId=186&page=1`，真实点击“下一页”和“上一页”，页码面包屑与 URL 参数分别更新至第 2 页和第 1 页；页面错误为 0。
+- 为避免触发视频资源的外部检索/摘要，浏览器内拦截 B 站搜索；未发 Tutor 或模型请求。页面自动发起的唯一写请求是会话恢复 `POST /api/auth/refresh`，没有判题或学习事件写入。
+- 首次脚本在清理表名上出错，确认账号表实际为 `users` 后删除临时账号；一次关闭浏览器的脚本生命周期错误也已修正。最终清理删除 1 条用户记录，随后 `qa_library_` 残留计数为 0。没有 DeepSeek 请求。
+
+## 2026-10-16 当前续接：匿名登录暴力尝试边界复核
+
+- 只读检查确认公网 Nginx 对 `/api/auth/login` 与 `/api/auth/register` 按来源 IP 限制 5 次/秒、突发 10 次；`AuthService` 对已知账号以 15 分钟失败窗口累计尝试，随后施加最多 8 秒的渐进退避，成功登录清零。不存在用户名仍执行 dummy password hash，错误响应统一，降低账号枚举侧信道。
+- 仓库已有 Nginx 契约断言及 `AuthServiceSecurityTest` 覆盖；本轮不重复运行既有测试，也没有修改代码。公网服务器的 Nginx 运行配置未远程核验。
+
+## 2026-10-16 当前续接：BROWSE 并发与事务边界
+
+- 只读安全审计确认 Graph BROWSE 的 Python semaphore 会让请求排队；Graph 默认预算 45 秒，Java 共用 Graph 客户端读超时 30 秒。`BrowseRunService.create()` 还在同步远程调用期间开启事务。
+- 槽满时 Graph 现在立即返回 429，Java 将其映射为 `BROWSE_BUSY` 并保留 429。Graph 请求明确传入 45 秒，Java 使用独立 50 秒读超时。
+- Graph 调用结束后才调用 `BrowseRunPersistenceService.persist()`；只有会话行和步骤行写入处于事务内，保持原子性。
+- RED/GREEN 覆盖了饱和立即拒绝、HTTP 429 透传、执行超时字段和远程调用事务边界。Graph BROWSE 执行器/路由 42/42，Java `BrowseGraphClientTest`、`BrowseRunServiceTest`、`RestClientConfigTest` 共 25/25；Ruff、8 个 Java 文件定向 Spotless、`git diff --check` 通过。全仓 Spotless 仍报告 625+ 个文件格式违规；本轮未做批量格式化。无 DeepSeek 或其他模型调用。
+- 未覆盖账号级总请求量、会话保留/清理策略；并发满载拒绝只能防突发排队，不能代替每账号总量配额。
+- NPC 状态审计发现 talk 写接口信任客户端 `nodeId`、`nextNodeId` 与 `SET_FLAG`。确认影响仅是当前账号自己的对话存档，尚未确认奖励或权限绕过；Web 当前未调用，Android 的树与 `data/npcs` 不同，故先登记为待设计的共享后端兼容性问题，不按单一前端树加硬编码校验。
+- 对“320px 仍可切像素塔”审计意见核对了当前页面：小于 900px 已隐藏切换控件，初始列表视图，resize 也切回列表；1024→320 页面回归已存在。当前代码无法经页面触发该布局冲突，没有重复加场景测试。活动地图与 Boss 战斗实机窄屏仍未验收。
+
+## 2026-10-16 当前续接：匿名下载计数限流
+
+- 安全复查发现 `/api/downloads/{key}/hit` 匿名累计接口没有公网限流，重复请求可污染运营展示值。前端只在用户点击时请求一次，后端只更新已 seed 的 key。
+- Nginx 新增该写入路径的来源 IP 限流：5 次/秒、突发 10 次，超限返回 429；GET 计数与 `/downloads/` 文件直出不变。
+- 契约先因缺 zone/location 失败；缓存的 Nginx 1.27 镜像 `nginx -t` 又发现未引号包裹的 `{1,64}` 会被解析为配置块。入口正则修正后，Nginx 解析通过，12 项 HTTPS/Nginx 契约通过；限流只匹配 hit 路径。未调用模型或写数据库。
+- 开始下一项 320px 远征浏览器验收时，页面被路由守卫送到登录页；当前 shell 没有 E2E 学生凭证。没有注册账号或伪造先修证据，地图与 Boss 战斗验收仍开放；本轮无 DeepSeek 调用。
+
+## 2026-10-16 当前续接：隔离学习反思任务
+
+- 只读安全审计确认：提交事务同步发布学习事件，反思触发器共用 SSE `CallerRunsPolicy` 执行器；池与队列饱和时，反思会在判题线程等待 Graph。
+- 为反思增加独立的单 worker、32 项有界队列；队列饱和时显式跳过。饱和回归先 RED 后 GREEN；反思与 SSE 执行器测试共 9/9。无模型请求。
+- 随后为用户反思计数增加 30 分钟定时清理：至少 24 小时无活动后移除，且不早于配置的冷却周期。测试直接验证清理方法，不在每批学习事件后扫描整张 map。反思、SSE 执行器和 Spring 启动回归共 11/11；无模型请求。
+- 远征视口从宽屏缩至 320px 时自动切回可读列表并隐藏像素塔切换入口。新增缩放回归先 RED 后 GREEN；页面与 Phaser 场景 13/13、typecheck、触及文件 ESLint、`git diff --check` 通过。此处未做真实 Chromium 地图/战斗画布验收。
+- 安全续扫发现 `VideoProgressThrottle.windows` 的过期 user/stage 窗口和 NPC 寒暄缓存仅按需过期、不会回收；现分别按 60 秒和缓存 TTL 定时清理，并修正缓存注释与 26 小时配置不符。新增清理回归先 RED 后 GREEN；限频、主线、NPC 服务/控制器/预热任务与 Spring 启动测试共 54/54，通过。没有模型请求。
+- 随后发现教师主线看板 TTL 缓存也仅在同一班级再次请求时重载，过期班级矩阵会常驻；现在每 5 分钟清理过期条目。新增回归先 RED 后 GREEN，`MainlineDashboardServiceTest` 9/9 通过。
+- 收尾把反思/SSE、主线限频、NPC 和教师看板受影响测试合并复跑：9 个测试类共 73/73，含 Spring 启动 smoke；前端 2 个测试文件 13/13。Java 定向 Spotless、前端 typecheck/ESLint 与 diff 检查通过。没有 DeepSeek 请求。
+
 ## 2026-10-15 当前续接
 
 - KC-005 主线“练”页正常 AI 补题返回 200，题面符合 KC、AI/审核标记为 true、`totalTestCases=3`；新 `APPROVED/AUTOMATED` 共享行落库，kind 为空。两账号删除，审核请求者停用保留审计，预取记录删除；未正式判题或写学习事件。模型 completion 数未单独统计。
@@ -489,6 +554,25 @@
 - 修复后日志改为保留任务/提交标识、KC 或 NPC 上下文、异常类型，不再记录学习者 ID 或判题失败正文；功能降级和“不发学习事件”行为不变。
 - `EndlessPregenServiceTest`、`NpcGreetingServiceTest`、`BossServiceTest`、`SubmissionServiceTest`、`MainlineServiceTest`、`UploadServiceTest`、`ReflectionTriggerTest` 合计 142/142 通过。`git diff --check` 通过。未调用模型或写入业务数据库。其余业务操作审计日志仍需按用途审查，不以本批替代全仓安全审计。
 
+## 2026-10-16 — 核对 Web 小镇 NPC 锚点
+
+- Web `town_hub.json` 有 7 个 NPC 锚点，逐一与 `data/npcs/index.json` 核对后，正好匹配全部 `spawnMap: "town_hub"` 角色；目录另有 4 个角色的 `spawnMap` 为 null，不是地图漏项。
+- 只读检查，无代码改动、测试或模型调用。把结论记入唯一工作清单，避免重复补图审计。
+
+## 2026-10-16 — NPC 存档 key 白名单与后端全量回归结果
+
+- 安全复核发现 `GET /api/world/npcs/{npcKey}/state` 与 `POST /talk` 接受任意格式有效的 key，首次访问会写入当前用户的新状态行。现共用 repository 的中央小镇 12 key 清单，加入 Android 地图已有的 `captain_def`；未知 key 由 service 返回 404，且不触库、不清理历史行。
+- 两条未知 key 回归先 RED（旧代码触发空 Mock 返回的 NPE，并发生 repository 调用），GREEN 后 unknown state/talk 均被拒绝且 repository 零交互；Android `captain_def` 仍可读。NPC service/controller 8/8；合并 BROWSE、AI 预算、NPC 定向合跑 41/41；定向 Spotless、`git diff --check` 通过。
+- 后端 `mvn -o test` 全量为 1498 项、1 失败、7 错误。唯一断言失败是 `AiBudgetRouteCoverageTest` 仍认为 BROWSE 创建路由不应预算保护；更新为学生预算断言后，定向 41 项通过。未重跑全量。其余 7 个错误为 6 个 pgvector Testcontainers 启动失败和 `LongTermClassroomEffectSimulationTest` 的 JDBC 连接拒绝；全量不记为通过。
+- 对话节点、完成列表及 flags 仍由客户端提交，但只写当前用户自己的对话存档，静态搜索未发现下游任务、奖励或权限消费；Web/Android 对话树合同尚未统一，后续需合同层面再处理。
+- 本轮未发 DeepSeek 请求。
+
+## 2026-10-16 — Graph Boss 自测空白规则与本地 Piston 抽查
+
+- 对照 reference/debug 自测与玩家判题路径，确认自测原先对 stdout 和期望值调用 `strip()`，会忽略前导空格；正式评测使用 `rstrip()`。两条回归先 RED 后 GREEN，现保持两处自测与正式评测一致。
+- 本地 Piston 运行态抽查：`/proc/1/environ` 读取失败；执行环境敏感变量名计数为 0；打印 150,000 字符以 SIGKILL 结束，Graph 适配器返回上限为 65,536 字符。UDP socket 探针未成功连接，但退出为非零且本次未保留 stderr，因此不记作完整网络隔离证明。
+- Boss 自测定向 20/20；Graph 全量 1928 passed、1 skipped、2 warnings；Ruff 与 `git diff --check` 通过。无 DeepSeek 请求。
+
 ## 2026-10-16 当前续接：提示词边界、远征日志与窄屏
 
 - Graph 动态画像、记忆、检索证据及模型生成上下文改为 user 数据；NPC/Feynman 持久化对话拒绝 system role。定向 298 passed，全量 Graph 1924 passed/1 skipped，Ruff 与 diff 检查通过。没有 DeepSeek 调用。
@@ -498,3 +582,16 @@
 - 本次窄屏仅覆盖远征入口，活动地图与战斗布局仍待检查；没有真实先修条件的高章远征活动 run 不做合成验证。
 - 后续另检查 `/mainline-map` 320px 视口：document/body 宽度均为 320px，页面错误 0、模型 API 请求 0；临时账号删除并核对残留为 0。地图和 Boss 战斗的窄屏检查仍未完成。
 - Graph 提示词静态续扫复核了直接 system-role 构造点；未发现新的学生文本/检索原文进入 system 的路径。剩余动态范围条目限于服务端维护的课程 KC、证据页白名单等元数据，其他为固定规则。此为代码结构审查，没有模型调用。
+
+## 2026-10-16 — 上传解析与异步索引资源边界
+
+- 复核已有上限：服务端单文件 5 MiB、每账号 20 个/50 MiB；PDF 页数 100；DOCX 最多 100 个 ZIP 项、解压后 16 MiB；最终提取文本 100,000 字符。解析器既有测试未重复运行。
+- 新发现未指定 executor 的 `@Async` 会回退到无界线程执行器。现提供共享 `taskExecutor`，限制为 2 worker/16 队列，覆盖章测、预防包、记忆向量化与上传索引。队列满时章测状态改为 `FAILED`；预防包拒绝不影响预测返回；记忆向量化拒绝不再跳过 NPC 记忆且拒绝日志不包含用户 ID；上传仍返回已保存记录并记录固定提示。
+- 公网入口仅对精确 `POST /api/workshop/uploads` 按来源 IP 限速 2 次/秒、突发 5 次，超限返回 429；该路径请求体限制 6 MiB。追查双层代理发现 frontend Nginx 默认 1 MiB，现与 Spring `max-request-size=12MB` 对齐，恢复既有 5 MiB 文件及语音上传能力。
+- 执行器、章测、预防包、记忆事件、上传控制器与索引服务回归合计 42/42；HTTPS/Nginx 契约 18 项、Shell 语法和 diff 检查通过。Nginx 1.27 对公网边缘与 frontend 配置分别 `nginx -t` 通过。队列满时上传向量索引会丢弃，当前无持久重试。无 DeepSeek 请求、真实公网联测或业务数据写入。
+
+## 2026-10-16 — 讲座页助教与返回导航验收
+
+- 真实 Chromium 注册临时学生后进入 `/lecture/1`，加载讲座页并展开 AI 助教侧栏，再用“小镇”按钮返回 `/world`；两个目标页面和嵌入侧栏均可见。
+- 页面错误 0，Tutor 提问与资源生成 POST 为 0；页面读取了课程视频、章节/KC、Tutor 会话和本地 B 站列表接口。没有答题、消费资源或上报学习事件。
+- 临时学生 `qa_lecture_nav_66871830`（ID 721）已删除，按用户名复查残留为 0。

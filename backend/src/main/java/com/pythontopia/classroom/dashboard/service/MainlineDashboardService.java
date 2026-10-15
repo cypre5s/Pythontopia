@@ -35,6 +35,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 /**
@@ -317,6 +318,17 @@ public class MainlineDashboardService {
   }
 
   // ── TTL 缓存 ──
+
+  @Scheduled(fixedDelay = CACHE_TTL_MS, initialDelay = CACHE_TTL_MS)
+  void cleanupExpiredCache() {
+    long now = clockMillis.getAsLong();
+    cache
+        .keySet()
+        .forEach(
+            key ->
+                cache.computeIfPresent(
+                    key, (ignored, current) -> current.expiresAt() <= now ? null : current));
+  }
 
   @SuppressWarnings("unchecked")
   private <T> T cached(String endpoint, Long classroomId, Supplier<T> loader) {

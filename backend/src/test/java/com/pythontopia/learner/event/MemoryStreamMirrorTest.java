@@ -20,6 +20,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.task.TaskRejectedException;
 
 /** 进程内 LearningEvent → learning_event_log 镜像写表的单测（含 importance 规则与异常隔离）。 */
 class MemoryStreamMirrorTest {
@@ -147,5 +148,27 @@ class MemoryStreamMirrorTest {
     assertThat(appender.list)
         .extracting(ILoggingEvent::getFormattedMessage)
         .noneMatch(message -> message.contains(sentinel));
+  }
+
+  @Test
+  void embeddingQueueRejectionKeepsNpcMemoryAndDoesNotLogUserId() {
+    doThrow(new TaskRejectedException("queue full"))
+        .when(embeddingWriter)
+        .embedAndStore(anyLong(), anyString(), anyMap());
+    Logger logger = (Logger) LoggerFactory.getLogger(MemoryStreamMirror.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      mirror.onPracticeFailed(
+          new LearningEvent.PracticeFailed(701L, "PY43-KC-016", 5L, "WA", "medium"));
+    } finally {
+      logger.detachAppender(appender);
+    }
+
+    verify(npcMemoryService).remember(eq(701L), eq("coach_q"), eq(0L), eq(0.5));
+    assertThat(appender.list)
+        .extracting(ILoggingEvent::getFormattedMessage)
+        .noneMatch(message -> message.contains("701"));
   }
 }

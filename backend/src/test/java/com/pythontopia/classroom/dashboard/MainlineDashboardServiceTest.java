@@ -27,9 +27,12 @@ import com.pythontopia.classroom.dashboard.repository.MainlineDashboardRepositor
 import com.pythontopia.classroom.dashboard.repository.MainlineDashboardRepository.StudentStarTotalRow;
 import com.pythontopia.classroom.dashboard.service.MainlineDashboardService;
 import com.pythontopia.classroom.security.ClassroomGuard;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.function.LongSupplier;
 import org.junit.jupiter.api.Test;
 
@@ -213,6 +216,22 @@ class MainlineDashboardServiceTest {
     now[0] += MainlineDashboardService.CACHE_TTL_MS + 1; // 越过 5 分钟 TTL
     service.mainlineStars(teacher, 9L);
     verify(repository, times(2)).findStudentStarTotals(9L);
+  }
+
+  @Test
+  void removesExpiredAggregationEntriesDuringScheduledCacheCleanup() throws ReflectiveOperationException {
+    when(repository.findStudentStarTotals(9L)).thenReturn(List.of());
+    when(repository.findChapterStarBuckets(9L)).thenReturn(List.of());
+    service.mainlineStars(teacher, 9L);
+    now[0] += MainlineDashboardService.CACHE_TTL_MS;
+
+    Method cleanup = MainlineDashboardService.class.getDeclaredMethod("cleanupExpiredCache");
+    cleanup.setAccessible(true);
+    cleanup.invoke(service);
+
+    Field cacheField = MainlineDashboardService.class.getDeclaredField("cache");
+    cacheField.setAccessible(true);
+    assertThat((Map<?, ?>) cacheField.get(service)).isEmpty();
   }
 
   @Test

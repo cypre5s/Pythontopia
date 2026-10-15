@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -218,6 +219,45 @@ class MediaJobServiceTest {
     // ffmpeg 不可用：worker 不进入合成，直接置 FAILED + VIDEO_COMPOSE_UNAVAILABLE。
     verify(jobRepository).updateStatus(43L, MediaJobStatus.RUNNING, null, null);
     verify(jobRepository).updateStatus(43L, MediaJobStatus.FAILED, null, "VIDEO_COMPOSE_UNAVAILABLE");
+    verify(compositionService, never())
+        .compose(any(), anyList(), any(StoryboardCompositionService.ProgressSink.class));
+  }
+
+  @Test
+  void rejectedQueueMarksJobFailedAndReturnsServiceUnavailable() {
+    when(jobRepository.findCachedSuccess(eq(USER_ID), Mockito.anyString()))
+        .thenReturn(Optional.empty());
+    when(
+            jobRepository.insert(
+                eq(USER_ID),
+                eq("STORYBOARD_VIDEO"),
+                Mockito.anyString(),
+                Mockito.anyString()))
+        .thenReturn(job(50L, MediaJobStatus.PENDING, null, null));
+    when(compositionService.isImageGenerationEnabled()).thenReturn(true);
+    service =
+        new MediaJobService(
+            jobRepository,
+            assetRepository,
+            compositionService,
+            streamRegistry,
+            objectMapper,
+            new MediaAssetUrls(new JwtProperties("media-job-test-secret-at-least-32-chars", 60)),
+            new MediaComposeProperties(2, 2, 2, 64, 300_000L),
+            command -> {
+              throw new RejectedExecutionException("queue full");
+            });
+
+    assertThatThrownBy(() -> service.submit(USER_ID, sampleRequest()))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> {
+              assertThat(error.status()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+              assertThat(error.code()).isEqualTo("VIDEO_COMPOSE_QUEUE_FULL");
+            });
+
+    verify(jobRepository)
+        .updateStatus(50L, MediaJobStatus.FAILED, null, "VIDEO_COMPOSE_QUEUE_FULL");
     verify(compositionService, never())
         .compose(any(), anyList(), any(StoryboardCompositionService.ProgressSink.class));
   }

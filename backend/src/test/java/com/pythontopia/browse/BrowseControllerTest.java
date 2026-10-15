@@ -24,6 +24,7 @@ import com.pythontopia.browse.entity.BrowseRunStatus;
 import com.pythontopia.browse.service.BrowseRunService;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.error.GlobalExceptionHandler;
+import com.pythontopia.common.web.AiBudgetWebConfiguration;
 import com.pythontopia.common.web.CurrentUserArgumentResolver;
 import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import com.pythontopia.common.web.WebConfig;
@@ -54,7 +55,12 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @WebMvcTest(BrowseController.class)
 @AutoConfigureMockMvc(addFilters = false)
-@Import({GlobalExceptionHandler.class, WebConfig.class, CurrentUserArgumentResolver.class})
+@Import({
+  GlobalExceptionHandler.class,
+  WebConfig.class,
+  CurrentUserArgumentResolver.class,
+  AiBudgetWebConfiguration.class
+})
 class BrowseControllerTest {
 
   @Autowired MockMvc mockMvc;
@@ -103,6 +109,8 @@ class BrowseControllerTest {
         .andExpect(jsonPath("$.id").value(42))
         .andExpect(jsonPath("$.status").value("SUCCESS"))
         .andExpect(jsonPath("$.truncated").value(false));
+
+    org.mockito.Mockito.verify(requestLimitService).reserve(1L);
   }
 
   // ③ 非 student → 403（且不触达 service）。
@@ -119,6 +127,7 @@ class BrowseControllerTest {
         .andExpect(jsonPath("$.code").value("FORBIDDEN"));
 
     verifyNoInteractions(service);
+    verifyNoInteractions(requestLimitService);
   }
 
   // ② detail → 200，含 steps[] 与 citations[]（外部标注）。

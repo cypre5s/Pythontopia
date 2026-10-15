@@ -265,6 +265,46 @@ describe('EndlessExpeditionPage Boss scene integration', () => {
     wrapper.unmount();
   });
 
+  it('returns to the list map when the viewport narrows below the pixel tower breakpoint', async () => {
+    const originalWidth = window.innerWidth;
+    Object.defineProperty(window, 'innerWidth', { value: 1024, writable: true, configurable: true });
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/expedition', component: EndlessExpeditionPage }],
+    });
+    await router.push('/expedition');
+    await router.isReady();
+
+    const wrapper = mount(EndlessExpeditionPage, {
+      global: {
+        plugins: [router],
+        stubs: {
+          AppLayout: LAYOUT_STUB,
+          BossSprite: true,
+          ChallengeWorkspace: CHALLENGE_STUB,
+          ExpeditionCanvas: CANVAS_STUB,
+          ExpeditionLeaderboard: true,
+          KnowledgeConstellation: true,
+        },
+      },
+    });
+    await flushPromises();
+    try {
+      expect(wrapper.find('[data-testid="expedition-tower"]').exists()).toBe(true);
+
+      Object.defineProperty(window, 'innerWidth', { value: 320, writable: true, configurable: true });
+      window.dispatchEvent(new Event('resize'));
+      await nextTick();
+
+      expect(wrapper.find('[data-testid="expedition-tower"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="expedition-view-pixel"]').exists()).toBe(false);
+      expect(wrapper.find('[data-testid="expedition-view-list"]').exists()).toBe(true);
+    } finally {
+      wrapper.unmount();
+      Object.defineProperty(window, 'innerWidth', { value: originalWidth, writable: true, configurable: true });
+    }
+  });
+
   it('keeps identical cached problem ids unique across separate runs', async () => {
     runState.phase = 'challenge';
     runState.activeNode = bossNode();

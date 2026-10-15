@@ -36,6 +36,7 @@ import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -130,7 +131,13 @@ public class ChapterTestService {
                 .map(this::questionSignatures)
                 .orElse(List.of())
             : List.of();
-    pregenService.pregenerate(testId, userId, chapter, assessmentKind, exclusions);
+    try {
+      pregenService.pregenerate(testId, userId, chapter, assessmentKind, exclusions);
+    } catch (TaskRejectedException ex) {
+      repository.markStatus(testId, ChapterTestStatus.FAILED);
+      log.warn("章节测评预生成队列已满，跳过任务 testId={} chapter={}", testId, chapter);
+      return new TestPrepareResponse(ChapterTestStatus.FAILED.name());
+    }
     log.info(
         "章节测评预生成已触发 user={} ch={} kind={} testId={} attempt={}",
         userId,

@@ -2,6 +2,8 @@ package com.pythontopia.mainline;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import java.lang.reflect.Field;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
@@ -40,5 +42,19 @@ class VideoProgressThrottleTest {
     assertThat(throttle.tryAcquire(7L, 10L)).isFalse(); // 同 user 同 stage 超限
     assertThat(throttle.tryAcquire(7L, 11L)).isTrue(); // 不同 stage 独立
     assertThat(throttle.tryAcquire(8L, 10L)).isTrue(); // 不同 user 独立
+  }
+
+  @Test
+  void removesWindowsAfterTheirLastRequestExpires() throws ReflectiveOperationException {
+    AtomicLong clock = new AtomicLong(0);
+    VideoProgressThrottle throttle = new VideoProgressThrottle(2, clock::get);
+    throttle.tryAcquire(7L, 10L);
+
+    clock.set(60_000L);
+    throttle.cleanupExpiredWindows();
+
+    Field windowsField = VideoProgressThrottle.class.getDeclaredField("windows");
+    windowsField.setAccessible(true);
+    assertThat((Map<?, ?>) windowsField.get(throttle)).isEmpty();
   }
 }

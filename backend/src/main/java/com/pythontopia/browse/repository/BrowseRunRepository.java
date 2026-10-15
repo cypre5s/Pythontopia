@@ -62,6 +62,11 @@ public class BrowseRunRepository {
         .findFirst();
   }
 
+  /** Removes expired run headers; {@code browse_step} rows are deleted by their FK cascade. */
+  public int deleteCreatedBefore(OffsetDateTime cutoff) {
+    return jdbcTemplate.update("DELETE FROM browse_run WHERE created_at < ?", cutoff);
+  }
+
   private BrowseRunEntity map(ResultSet rs, int rowNum) throws SQLException {
     return new BrowseRunEntity(
         rs.getLong("id"),

@@ -3,6 +3,7 @@ package com.pythontopia.workshop.upload;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -20,6 +21,7 @@ import com.pythontopia.workshop.upload.service.UploadService;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.core.task.TaskRejectedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.web.MockMultipartFile;
 
@@ -64,6 +66,21 @@ class UploadControllerTest {
     assertThat(dto.id()).isEqualTo(1L);
     verify(service).upload(7L, file);
     // READY 上传应触发 B 通路异步分块+向量化。
+    verify(indexingService).indexUploadAsync(1L);
+  }
+
+  @Test
+  void uploadStillSucceedsWhenIndexingQueueIsFull() {
+    MockMultipartFile file = sampleFile();
+    when(service.upload(eq(7L), eq(file))).thenReturn(sampleDto());
+    doThrow(new TaskRejectedException("queue full"))
+        .when(indexingService)
+        .indexUploadAsync(1L);
+
+    UploadDto dto = controller.upload(STUDENT, file);
+
+    assertThat(dto.id()).isEqualTo(1L);
+    verify(service).upload(7L, file);
     verify(indexingService).indexUploadAsync(1L);
   }
 

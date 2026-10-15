@@ -27,15 +27,18 @@ import com.pythontopia.browse.graph.BrowseGraphResult;
 import com.pythontopia.browse.graph.BrowseGraphStep;
 import com.pythontopia.browse.repository.BrowseRunRepository;
 import com.pythontopia.browse.repository.BrowseStepRepository;
+import com.pythontopia.browse.service.BrowseRunPersistenceService;
 import com.pythontopia.browse.service.BrowseRunService;
 import com.pythontopia.common.error.BusinessException;
 import java.time.OffsetDateTime;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 联网查证落库服务单测。覆盖契约要求矩阵：①创建落库 ②detail 含 steps/citations ④graph 失败→统一错误
@@ -57,7 +60,9 @@ class BrowseRunServiceTest {
     graphClient = mock(BrowseGraphClient.class);
     runRepository = mock(BrowseRunRepository.class);
     stepRepository = mock(BrowseStepRepository.class);
-    service = new BrowseRunService(properties, graphClient, runRepository, stepRepository);
+    BrowseRunPersistenceService persistence =
+        new BrowseRunPersistenceService(runRepository, stepRepository);
+    service = new BrowseRunService(properties, graphClient, runRepository, stepRepository, persistence);
   }
 
   private BrowseRunEntity savedRun(BrowseRunStatus status, boolean truncated, String error) {
@@ -113,6 +118,21 @@ class BrowseRunServiceTest {
     assertThat(persisted.get(0).title()).isEqualTo("Sorting HOW TO");
     assertThat(persisted.get(1).snippet()).isEqualTo("sorts are guaranteed to be stable");
     assertThat(persisted.get(1).action()).isEqualTo("read");
+  }
+
+  @Test
+  void graphCallEntryPointDoesNotHoldDatabaseTransaction() throws Exception {
+    var createMethod =
+        BrowseRunService.class.getMethod("create", long.class, BrowseRunCreateRequest.class);
+
+    assertThat(createMethod.isAnnotationPresent(Transactional.class)).isFalse();
+    assertThat(
+            Arrays.stream(BrowseRunPersistenceService.class.getDeclaredMethods())
+                .filter(method -> method.getName().equals("persist"))
+                .findFirst()
+                .orElseThrow()
+                .isAnnotationPresent(Transactional.class))
+        .isTrue();
   }
 
   // ⑤ allowlist 由服务端注入（前端无法提供域）：注入的是 properties 白名单（冻结默认 + 配置项）。
@@ -234,7 +254,12 @@ class BrowseRunServiceTest {
     BrowseProperties empty = mock(BrowseProperties.class);
     when(empty.allowedDomains()).thenReturn(List.of());
     BrowseRunService guarded =
-        new BrowseRunService(empty, graphClient, runRepository, stepRepository);
+        new BrowseRunService(
+            empty,
+            graphClient,
+            runRepository,
+            stepRepository,
+            new BrowseRunPersistenceService(runRepository, stepRepository));
 
     assertThatThrownBy(() -> guarded.create(1L, new BrowseRunCreateRequest("goal", null)))
         .isInstanceOf(BusinessException.class)

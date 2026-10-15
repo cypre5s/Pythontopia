@@ -19,11 +19,12 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 /**
  * NPC 首句个性化寒暄服务（§8）：组装近期记忆摘要 + 8 维画像 brief，复用 graph NpcDialogAgent 产出 1–2 句，
- * 按 npc×学生缓存 30 分钟。fail-fast：记忆/agent 失败 → 结构化降级（不伪造）；新玩家无记忆 → none。
+ * 按 npc×学生缓存 26 小时。fail-fast：记忆/agent 失败 → 结构化降级（不伪造）；新玩家无记忆 → none。
  */
 @Service
 public class NpcGreetingService {
@@ -102,6 +103,18 @@ public class NpcGreetingService {
    */
   public NpcGreetingResponse prewarm(long userId, String npcKey) {
     return computeAndCache(userId, npcKey);
+  }
+
+  @Scheduled(fixedDelay = 1_800_000L, initialDelay = 1_800_000L)
+  void cleanupExpiredCache() {
+    Instant now = clock.instant();
+    cache
+        .keySet()
+        .forEach(
+            key ->
+                cache.computeIfPresent(
+                    key,
+                    (ignored, current) -> now.isBefore(current.expiresAt()) ? current : null));
   }
 
   /** 计算寒暄并按「非降级」写入缓存（成功寒暄 + 确定无记忆态才缓存；下游故障不缓存，下次重试）。 */
