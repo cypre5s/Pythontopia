@@ -22,4 +22,16 @@ describe('MarkdownView', () => {
 
     expect(wrapper.find('img').exists()).toBe(true);
   });
+
+  it('removes executable markup from untrusted Markdown', () => {
+    const wrapper = mount(MarkdownView, {
+      props: {
+        source: '<script>alert(1)</script><img src="/safe.png" onerror="alert(1)"><a href="javascript:alert(1)">链接</a>',
+      },
+    });
+
+    expect(wrapper.find('script').exists()).toBe(false);
+    expect(wrapper.find('img').attributes('onerror')).toBeUndefined();
+    expect(wrapper.find('a').attributes('href')).toBeUndefined();
+  });
 });

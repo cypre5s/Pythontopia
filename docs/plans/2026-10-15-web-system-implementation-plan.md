@@ -81,6 +81,10 @@ pytest 的临时目录漏洞 CVE-2025-71176 仅在 pytest 9.0.3 修复；Graph/R
   - 10/16 公共异常日志续审：全局 500 与客户端断连处理器不再输出异常消息/堆栈或原始 URL，改记方法、Spring 路由模板、异常类型和 traceId；章星重算降级日志不再包含学生 ID/异常正文。两个测试类先 RED 后 GREEN，合计 10/10。全量安全审计仍开放。
   - 10/16 工坊日志续审：画像维度、周报洞察、两类记忆摘要及掌握度难度降级日志去掉学生 ID，只保留异常类型和原有 fallback。一个合成哨兵覆盖 5 种失败路径，先 RED 后 GREEN；`ResourceWorkshopServiceTest` 34/34。未发模型请求。
   - 10/16 前端 HTML 注入点续审：扫描所有 `v-html`/`innerHTML` 写入，确认实际写入前均经过 DOMPurify 或 Mermaid 专用清洗；未发现新增绕过点。后端与第三方内容边界仍在总审计中。
+  - 10/16 Markdown XSS 回归：`MarkdownView` 新增恶意 Markdown 测试，断言脚本、`onerror` 和 `javascript:` 链接属性被清除；定向 Vitest 3/3 通过。仅闭合前端富文本渲染子项，安全总审计仍开放；没有模型调用。
+  - 10/16 附件边界静态复核：工坊上传有扩展名白名单、5 MiB 单文件与每用户配额行锁；PDF 限页/文本长度，DOCX 限条目数及 16 MiB 解压量；Tutor 图片校验签名、5 MiB、用户/会话配额与 TTL 读取。现有测试源码覆盖主要拒绝和 owner/session 分支，本轮未重跑旧套件。未发现已证实漏洞；第三方解析器与生产代理限制仍需单独核实。
+  - 10/16 SQL 拼接面静态复核：发现的动态片段均为固定可选条件、枚举映射的排序列/方向或按列表长度生成的 `?` 占位符；用户查询值继续走参数绑定。未发现用户输入进入 SQL 语法的路径；仅覆盖源码拼接点盘点。
+  - 10/16 限流静态复核（部分）：正式判题以用户锁串行且 10 秒 1 次；AI 操作默认有账号日额度与全站 provider 日额度，`dev.sh` 按本地开发要求关闭；Nginx 对登录及班级邀请码入口限 IP。未盘点所有 API 的通用限流，不据此关闭该审计类别。
   - 10/15 运行已有 `node deploy/scripts/test_dev_piston_sandbox.mjs`：Python 3.12.0 执行成功；宿主私有文件不可见、临时文件限定在 job 目录、共享 `/tmp` 写入被拒、loopback/compat socket 访问被阻断、超时进程以 SIGKILL 终止；临时标记文件已清理。Docker 运行态检查确认 Piston API 容器非 privileged、只读 rootfs、丢弃全部默认 capabilities、`no-new-privileges`、仅接入 `judge-execution`，并仅在 `127.0.0.1:2000` 暴露；该检查只覆盖本地开发运行态，完整安全审计及生产 ACL 仍未关闭。未发模型请求。
   - 10/15 续扫：周报定时任务的单人失败日志不再输出学生 ID 或异常正文，只记录异常类型；哨兵先 RED 后 GREEN，`WeeklyEvaluationSchedulerTest` 4/4。无模型请求。
   - 10/15 续扫远征预取：失败状态不再保存上游异常正文；claim/persist 异常日志只记异常类型。合并验证 `EndlessPregenServiceTest` 19/19、`WeeklyEvaluationSchedulerTest` 4/4；生产行为以外未调用模型。
