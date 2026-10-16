@@ -449,5 +449,6 @@ The configured SSH destination resolves through the TUN default route. The repos
 - 本轮续接：远征开局与 typed action 写入口各纳入共享账号额度 1 单位；超额请求在写服务前返回 429。`ExpeditionRunControllerTest` 先 RED 后 GREEN，13/13 通过；章节测验重复提交已有状态幂等，普通代码提交有 10 秒账号限频；`./dev.sh` 已关闭本地 AI 日请求额度。本轮没有模型请求。
 - 本轮静态路由筛查：班级 join 已有账号级加入码节流、下载计数已有公网 Nginx IP 节流、Tutor 内部 checkpoint 校验服务令牌和用户归属、TutorBench 仅学生可触发且为确定性评估；媒体 provider 关闭/作业授权已有先前验证。`PATCH /api/world/player` 现有专用 1 秒 10 次账号滑动窗口，前端约 500ms 合并频率未受共享学习写额度影响；`WorldControllerTest` + `StudentWriteThrottleTest` 4/4 通过。
 - 本轮续接：玩家位置写路由独立限制为 1 秒 10 次；Tutor 工作流反馈写路由纳入共享账号额度，序列化 payload 上限 4096 字节。`WorldControllerTest`/`StudentWriteThrottleTest` 4/4，`TutorWorkflowControllerTest`/`TutorWorkflowServiceTest` 38/38；`git diff --check` 通过。Tutor 工作流文件的定向 Spotless 检查受既有格式漂移阻断，未批量重排无关代码。未发起模型调用或业务数据写入。
+- 本轮续接：资源消费、微测与反馈路由复用每账号每分钟 100 次共享写额度；`operationEvidence` 持久化上限 4096 UTF-8 字节。大证据旧行为先 RED 后 GREEN，`ResourceWorkshopControllerTest` + `ResourceWorkshopServiceTest` 39/39 通过。JSON 字节校验发生在 Spring 解析后，未声称请求解析内存受限；无 DeepSeek 请求或业务数据写入。
 - 未完成：全 API 非 AI 限流审计与其余本地安全类别；远征合格真实账号的恢复/战斗闭环；未覆盖的 Web 路由与动作矩阵；Twin A/B 与 7 日复测；工程收尾，性能按计划最后测量。Loop Runtime 与 Tutor 反馈事件历史保留策略仍待审。生产 Piston ACL/ECS 与线上 Nginx 运行态未核验；全量 Spotless 仍受仓库已有格式漂移阻断，backend 全量 Maven 未验证全绿。
 - 下一步：继续未审非 AI 写接口与 Web 动作矩阵；已经完成的首节闭环及 QA 数据清理不重复执行。远征完整浏览器验收须使用真实先修进度与可用题型；性能最后测；除非 DeepSeek 请求路径或配置实质变更，不重复模型调用验证。

@@ -46,6 +46,7 @@ import com.pythontopia.workshop.repository.ResourceFeedbackRepository;
 import com.pythontopia.workshop.repository.ResourceLearningCheckRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.nio.charset.StandardCharsets;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
@@ -81,6 +82,7 @@ public class ResourceWorkshopService {
 
   /** 注入资源 prompt 的近期记忆要点条数（Task 2.1）。 */
   private static final int MEMORY_HIGHLIGHT_LIMIT = 5;
+  private static final int RESOURCE_CHECK_EVIDENCE_MAX_BYTES = 4096;
 
   private static final Pattern KC_CODE_PATTERN =
       Pattern.compile("(?i)^(PY43-)?KC-?\\d+$");
@@ -360,6 +362,7 @@ public class ResourceWorkshopService {
   @Transactional
   public ResourceCheckResponse submitCheck(
       Long userId, Long resourceId, ResourceCheckSubmitRequest request) {
+    validateOperationEvidenceSize(request.operationEvidence());
     LearningResourceDto resource = findOne(userId, resourceId);
     String kcCode = request.kcCode() == null ? "" : request.kcCode().trim();
     if (resource.kcCodes() == null || !resource.kcCodes().contains(kcCode)) {
@@ -415,6 +418,18 @@ public class ResourceWorkshopService {
         decision.loopState(),
         submission == null ? null : submission.id(),
         decision.reason());
+  }
+
+  private void validateOperationEvidenceSize(JsonNode operationEvidence) {
+    if (operationEvidence != null
+        && !operationEvidence.isNull()
+        && operationEvidence.toString().getBytes(StandardCharsets.UTF_8).length
+            > RESOURCE_CHECK_EVIDENCE_MAX_BYTES) {
+      throw new BusinessException(
+          HttpStatus.PAYLOAD_TOO_LARGE,
+          "RESOURCE_CHECK_EVIDENCE_TOO_LARGE",
+          "学习证据不能超过 4096 字节");
+    }
   }
 
   @Transactional

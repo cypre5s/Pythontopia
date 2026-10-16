@@ -77,6 +77,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class ResourceWorkshopServiceTest {
@@ -475,6 +476,25 @@ class ResourceWorkshopServiceTest {
     assertThat(eventCaptor.getValue().checkId()).isEqualTo(32L);
     assertThat(eventCaptor.getValue().resourceId()).isEqualTo(7L);
     assertThat(eventCaptor.getValue().delta()).isLessThan(BigDecimal.ZERO);
+  }
+
+  @Test
+  void submitCheckRejectsOversizedOperationEvidenceBeforeWriting() {
+    when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
+    JsonNode operationEvidence = objectMapper.createObjectNode().put("note", "x".repeat(5000));
+
+    assertThatThrownBy(
+            () ->
+                service.submitCheck(
+                    1L,
+                    7L,
+                    new ResourceCheckSubmitRequest(
+                        "PY43-KC-001", ResourceCheckEvidenceType.OPERATION, null, operationEvidence)))
+        .isInstanceOf(BusinessException.class)
+        .extracting(error -> ((BusinessException) error).status())
+        .isEqualTo(HttpStatus.PAYLOAD_TOO_LARGE);
+
+    verifyNoInteractions(checkRepository, eventPublisher);
   }
 
   @Test

@@ -5,6 +5,7 @@ import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.common.web.AiBudgeted;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.workshop.dto.LearningResourceDto;
 import com.pythontopia.workshop.dto.ResourceCheckResponse;
 import com.pythontopia.workshop.dto.ResourceCheckSubmitRequest;
@@ -34,9 +35,12 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class ResourceWorkshopController {
 
   private final ResourceWorkshopService service;
+  private final StudentWriteThrottle studentWriteThrottle;
 
-  public ResourceWorkshopController(ResourceWorkshopService service) {
+  public ResourceWorkshopController(
+      ResourceWorkshopService service, StudentWriteThrottle studentWriteThrottle) {
     this.service = service;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @PostMapping
@@ -86,6 +90,7 @@ public class ResourceWorkshopController {
   public ResourceConsumptionResponse consume(
       @CurrentUser CurrentUserPrincipal user, @PathVariable Long id) {
     requireStudent(user);
+    requireWriteCapacity(user.userId());
     return service.consume(user.userId(), id);
   }
 
@@ -95,6 +100,7 @@ public class ResourceWorkshopController {
       @PathVariable Long id,
       @Valid @RequestBody ResourceCheckSubmitRequest request) {
     requireStudent(user);
+    requireWriteCapacity(user.userId());
     return service.submitCheck(user.userId(), id, request);
   }
 
@@ -104,7 +110,17 @@ public class ResourceWorkshopController {
       @PathVariable Long id,
       @Valid @RequestBody ResourceFeedbackRequest request) {
     requireStudent(user);
+    requireWriteCapacity(user.userId());
     service.submitFeedback(user.userId(), id, request);
+  }
+
+  private void requireWriteCapacity(long userId) {
+    if (!studentWriteThrottle.tryAcquire(userId, 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "STUDENT_WRITE_RATE_LIMITED",
+          "每个账号每分钟最多写入 100 条学习记录");
+    }
   }
 
   private void requireStudent(CurrentUserPrincipal user) {
