@@ -60,6 +60,7 @@ public class TutorWorkflowService {
   private static final int MAX_RESTORE_CHAT_TURNS = 20;
   private static final int MAX_CHAT_MESSAGE_LENGTH = 2000;
   private static final int MAX_TUTOR_CODE_LENGTH = 20_000;
+  private static final int MAX_FEEDBACK_PAYLOAD_BYTES = 4 * 1024;
   private static final int MAX_REPLAY_RESULT_BYTES = 1_048_576;
   private static final Pattern IMAGE_DATA_URI =
       Pattern.compile("(?i)data:image/(?:png|jpeg|gif|webp);base64,");
@@ -413,13 +414,26 @@ public class TutorWorkflowService {
       payload.put("card_key", request.cardKey());
     }
     payload.put("payload", request.payloadOrEmpty());
+    String serializedPayload;
+    try {
+      serializedPayload = objectMapper.writeValueAsString(payload);
+    } catch (Exception e) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "WORKFLOW_FEEDBACK_INVALID", "导学反馈写入失败");
+    }
+    if (serializedPayload.getBytes(StandardCharsets.UTF_8).length > MAX_FEEDBACK_PAYLOAD_BYTES) {
+      throw new BusinessException(
+          HttpStatus.PAYLOAD_TOO_LARGE,
+          "WORKFLOW_FEEDBACK_TOO_LARGE",
+          "导学反馈 payload 不能超过 4096 字节");
+    }
     try {
       repository.insertActionEvent(
           session.id(),
           session.seq(),
           request.eventType(),
           targetKey,
-          objectMapper.writeValueAsString(payload));
+          serializedPayload);
     } catch (Exception e) {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST, "WORKFLOW_FEEDBACK_INVALID", "导学反馈写入失败");

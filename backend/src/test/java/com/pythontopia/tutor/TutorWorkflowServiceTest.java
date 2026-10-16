@@ -7,9 +7,11 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyString;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -914,6 +916,23 @@ class TutorWorkflowServiceTest {
         .publishEvent(
             new LearningEvent.GuideCheckpointCompleted(
                 USER, PROBLEM, "PY43-KC-016", "execution_trace"));
+  }
+
+  @Test
+  void rejectsOversizedFeedbackPayloadBeforePersistingEvent() {
+    var request =
+        new TutorWorkflowFeedbackRequest(
+            "ACTION_CLICKED", "execution_trace", null, Map.of("note", "x".repeat(5000)));
+
+    assertThatThrownBy(() -> service.recordFeedback(USER, session.sessionKey(), request))
+        .isInstanceOf(BusinessException.class)
+        .extracting(error -> ((BusinessException) error).status())
+        .isEqualTo(org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE);
+
+    verify(repository, never())
+        .insertActionEvent(
+            eq(session.id()), eq(session.seq()), eq("ACTION_CLICKED"), eq("execution_trace"), anyString());
+    verify(eventPublisher, never()).publishEvent(any());
   }
 
   @Test

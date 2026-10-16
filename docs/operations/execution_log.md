@@ -880,3 +880,9 @@
 - Web store 将位置 PATCH 合并到约每 500ms 一次；服务端现对每个账号设置独立的 1 秒 10 次滑动窗口，超限请求在 `WorldService` 前返回 429，不消耗普通学习写入额度。
 - 回归先复现旧路由第 31 次仍返回 200，确定限额后验证第 11 次被拒：`WorldControllerTest` + `StudentWriteThrottleTest` 4/4 通过；触及 Java 文件定向 Spotless 与 `git diff --check` 通过。无模型请求或业务数据写入。
 - 账号计数器仍是单 Spring 实例内存态。全 API 非 AI 写路由/日志审计、真实远征资格与恢复、剩余 Web 动作、Twin 真实样本和工程收尾仍按唯一清单推进；性能最后测。
+
+## 2026-10-16 — 限制导学工作流反馈写入
+
+- `/api/tutor/workflow/sessions/{sessionKey}/feedback` 过去可无限追加事件行，且允许 Map payload 任意大。现复用每账号每分钟 100 次共享写额度，并在入库前把序列化事件限制为 4096 字节；超限分别返回 429/413，不写 action event，也不发布学习事件。
+- 回归在旧代码下分别复现第 101 次仍被调用和 5000 字节 payload 仍被写入；修复后 `TutorWorkflowControllerTest` + `TutorWorkflowServiceTest` 38/38 通过，`git diff --check` 通过。定向 Spotless 检查命中触及文件既有的大段格式漂移，未重排无关代码。无模型调用或业务数据写入。
+- 持久化反馈事件仍无生命周期清理；账号额度依赖单 Spring 实例内存态。非 AI 写接口/日志审计、真实远征闭环、其余 Web 动作、Twin 样本、工程整理仍在唯一清单中；性能最后测。

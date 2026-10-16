@@ -11,7 +11,7 @@
 ## 执行范围与检查点
 
 - 已读取用户提供的系统安全、无尽远征、数字孪生与全端质量要求；当前执行以 Web 为主，不操作 GitHub，也不审计 ECS 运行态。
-- 本地检查点依次为 `9897b52d`、`feab5af1`、`c536e2d2`，最新为 `ce2a58b2 security: bound student writes and close stale quest routes`；没有推送。附件 `/home/cypress/.codex/attachments/79c8a798-eda1-424e-a8dd-eae0a4154834/pasted-text-1.txt` 已读取，全部要求合并到下方唯一清单。`frontend/public/data/course43/manifest.json` 只有生成时间戳差异，保留在工作树中；后续工作以同一清单续记，不重复 DeepSeek 已验证路径。
+- 已有本地检查点：`9897b52d`、`feab5af1`、`c536e2d2`、`ce2a58b2`、`46da30b8`；没有推送。附件 `/home/cypress/.codex/attachments/79c8a798-eda1-424e-a8dd-eae0a4154834/pasted-text-1.txt` 已读取，全部要求合并到下方唯一清单。`frontend/public/data/course43/manifest.json` 只有生成时间戳差异，保留在工作树中；后续工作以同一清单续记，不重复 DeepSeek 已验证路径。
 
 ## 总任务清单
 
@@ -23,7 +23,7 @@
 |---|---|---|
 | DeepSeek 路由、文本/图片输入、文本输出、语音关闭 | 已完成并有静态与真实调用证据；不再重复通用调用 | 仅在具体产品链路改动时做一次定向验证 |
 | AutoGen 导学助手、管理员样式、班级字段/API 对齐 | 已完成适配与对照；不复制不兼容 API | 只修复新发现的具体缺陷 |
-| 本地安全修复 | 持续中；学生写入额度覆盖主线、任务、存档、日历、技能、画像投影及远征开局/操作；玩家位置另限 10 次/秒；执行隔离、判题排队和主线角色问题已修复 | 继续非 AI 写接口与多行日志审计、聊天历史保留；生产 Piston 网络隔离与访问控制未验证 |
+| 本地安全修复 | 持续中；学生写入额度覆盖主线、任务、存档、日历、技能、画像投影、远征开局/操作及 Tutor 反馈；玩家位置另限 10 次/秒；执行隔离、判题排队和主线角色问题已修复 | 继续非 AI 写接口与多行日志审计、聊天/事件历史保留；生产 Piston 网络隔离与访问控制未验证 |
 | 无尽远征 | Phaser Boss 与服务端状态保护已实现 | 有真实先修证据后，补合格战斗题型、活动 run 恢复及地图/Boss 窄屏验收 |
 | 学习分身 | P0 状态聚合、证据、周报与统一推荐已完成 | 等待真实样本后做 A/B 与 7 日复测，不以合成数据代替 |
 | Web 可见交互 | 多条学生/教师/管理员路径已实测；本轮真实验收教师主线进度空态 | 补剩余页面动作、成功/失败态和远征 Boss 窄屏验收 |
@@ -448,5 +448,6 @@ The configured SSH destination resolves through the TUN default route. The repos
 - 本轮新完成：证据快照与学习探针写入口复用每账号每分钟 100 单位预算；定向回归 5/5、定向 Spotless、diff 检查通过；没有 DeepSeek 请求。
 - 本轮续接：远征开局与 typed action 写入口各纳入共享账号额度 1 单位；超额请求在写服务前返回 429。`ExpeditionRunControllerTest` 先 RED 后 GREEN，13/13 通过；章节测验重复提交已有状态幂等，普通代码提交有 10 秒账号限频；`./dev.sh` 已关闭本地 AI 日请求额度。本轮没有模型请求。
 - 本轮静态路由筛查：班级 join 已有账号级加入码节流、下载计数已有公网 Nginx IP 节流、Tutor 内部 checkpoint 校验服务令牌和用户归属、TutorBench 仅学生可触发且为确定性评估；媒体 provider 关闭/作业授权已有先前验证。`PATCH /api/world/player` 现有专用 1 秒 10 次账号滑动窗口，前端约 500ms 合并频率未受共享学习写额度影响；`WorldControllerTest` + `StudentWriteThrottleTest` 4/4 通过。
-- 未完成：全 API 非 AI 限流审计与其余本地安全类别；远征合格真实账号的恢复/战斗闭环；未覆盖的 Web 路由与动作矩阵；Twin A/B 与 7 日复测；工程收尾，性能按计划最后测量。Loop Runtime 历史保留策略仍待审。生产 Piston ACL/ECS 与线上 Nginx 运行态未核验；全量 Spotless 仍受仓库已有格式漂移阻断，backend 全量 Maven 未验证全绿。
+- 本轮续接：玩家位置写路由独立限制为 1 秒 10 次；Tutor 工作流反馈写路由纳入共享账号额度，序列化 payload 上限 4096 字节。`WorldControllerTest`/`StudentWriteThrottleTest` 4/4，`TutorWorkflowControllerTest`/`TutorWorkflowServiceTest` 38/38；`git diff --check` 通过。Tutor 工作流文件的定向 Spotless 检查受既有格式漂移阻断，未批量重排无关代码。未发起模型调用或业务数据写入。
+- 未完成：全 API 非 AI 限流审计与其余本地安全类别；远征合格真实账号的恢复/战斗闭环；未覆盖的 Web 路由与动作矩阵；Twin A/B 与 7 日复测；工程收尾，性能按计划最后测量。Loop Runtime 与 Tutor 反馈事件历史保留策略仍待审。生产 Piston ACL/ECS 与线上 Nginx 运行态未核验；全量 Spotless 仍受仓库已有格式漂移阻断，backend 全量 Maven 未验证全绿。
 - 下一步：继续未审非 AI 写接口与 Web 动作矩阵；已经完成的首节闭环及 QA 数据清理不重复执行。远征完整浏览器验收须使用真实先修进度与可用题型；性能最后测；除非 DeepSeek 请求路径或配置实质变更，不重复模型调用验证。
