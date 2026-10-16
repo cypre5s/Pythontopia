@@ -1,9 +1,9 @@
 {
   "_meta": {
-    "purpose": "R-14 主线「练」客观题题库（通识题，非课件原题）",
-    "count": 108,
+    "purpose": "R-14 主线客观题与 Boss 备用题（通识题和课件题，备用题不计入主线必答）",
+    "count": 140,
     "required_count": 96,
-    "supplemental_count": 12,
+    "supplemental_count": 44,
     "per_stage": 4,
     "type_order": [
       "CHOICE",
@@ -1797,8 +1797,15 @@
       "kc_code": "PY43-KC-014",
       "type": "CHOICE",
       "stem": "在 IDLE 中打开新的程序文件编辑窗口，应选择哪个菜单命令？",
-      "options": ["File → New File", "Run → Run Module", "Edit → Undo", "Shell → Restart Shell"],
-      "answer": ["File → New File"],
+      "options": [
+        "File → New File",
+        "Run → Run Module",
+        "Edit → Undo",
+        "Shell → Restart Shell"
+      ],
+      "answer": [
+        "File → New File"
+      ],
       "blank_count": 0,
       "explanation": "课程说明使用 File → New File 打开文件编辑窗口。",
       "source_label": "课件页 10757",
@@ -1813,7 +1820,9 @@
       "type": "JUDGE",
       "stem": "在 IDLE 中，选择 Run → Run Module 可以运行当前编辑的 Python 程序文件。",
       "options": [],
-      "answer": ["正确"],
+      "answer": [
+        "正确"
+      ],
       "blank_count": 0,
       "explanation": "课程说明使用 Run → Run Module 运行程序文件。",
       "source_label": "课件页 10757",
@@ -1828,7 +1837,9 @@
       "type": "FILL",
       "stem": "IDLE 中保存的 Python 程序文件通常使用 ______ 扩展名。",
       "options": [],
-      "answer": [".py"],
+      "answer": [
+        ".py"
+      ],
       "blank_count": 1,
       "explanation": "课程示例使用 .py 扩展名保存 Python 程序文件。",
       "source_label": "课件页 10757",
@@ -1842,8 +1853,15 @@
       "kc_code": "PY43-KC-017",
       "type": "CHOICE",
       "stem": "按课程中的二进制算术，1 + 1 的结果是？",
-      "options": ["10", "2", "11", "1"],
-      "answer": ["10"],
+      "options": [
+        "10",
+        "2",
+        "11",
+        "1"
+      ],
+      "answer": [
+        "10"
+      ],
       "blank_count": 0,
       "explanation": "课件列出的二进制加法为 1 + 1 = 10。",
       "source_label": "课件页 10820",
@@ -1858,7 +1876,9 @@
       "type": "JUDGE",
       "stem": "逻辑 AND 运算只要有一个输入为 0，结果就是 0。",
       "options": [],
-      "answer": ["正确"],
+      "answer": [
+        "正确"
+      ],
       "blank_count": 0,
       "explanation": "课件说明 AND 运算有 0 为 0，全 1 才为 1。",
       "source_label": "课件页 10820",
@@ -1873,7 +1893,9 @@
       "type": "FILL",
       "stem": "课程所述思维演进中，计算 0 和 1 化之后进入 ______ 自动化。",
       "options": [],
-      "answer": ["0和1"],
+      "answer": [
+        "0和1"
+      ],
       "blank_count": 1,
       "explanation": "课件列出“计算 0 和 1 化”之后是“0 和 1 自动化”。",
       "source_label": "课件页 10821",
@@ -1887,8 +1909,15 @@
       "kc_code": "PY43-KC-027",
       "type": "CHOICE",
       "stem": "GB2312-80 在课程中被称为哪一类汉字编码？",
-      "options": ["国标码", "机内码", "字形码", "输入码"],
-      "answer": ["国标码"],
+      "options": [
+        "国标码",
+        "机内码",
+        "字形码",
+        "输入码"
+      ],
+      "answer": [
+        "国标码"
+      ],
       "blank_count": 0,
       "explanation": "课程将 GB2312-80 称为国标码。",
       "source_label": "课件页 10860",
@@ -1903,7 +1932,9 @@
       "type": "JUDGE",
       "stem": "汉字字形码主要分为点阵式和矢量式。",
       "options": [],
-      "answer": ["正确"],
+      "answer": [
+        "正确"
+      ],
       "blank_count": 0,
       "explanation": "课件列出的汉字字形码有点阵式和矢量式两类。",
       "source_label": "课件页 10862",
@@ -1918,7 +1949,9 @@
       "type": "FILL",
       "stem": "汉字字形码主要分为点阵式和 ______。",
       "options": [],
-      "answer": ["矢量式"],
+      "answer": [
+        "矢量式"
+      ],
       "blank_count": 1,
       "explanation": "课程将汉字字形码分为点阵式与矢量式。",
       "source_label": "课件页 10862",
@@ -1932,8 +1965,15 @@
       "kc_code": "PY43-KC-051",
       "type": "CHOICE",
       "stem": "文件系统中的目录通常采用哪种结构来组织文件和子目录？",
-      "options": ["树状结构", "随机排列", "固定长度数组", "单层列表"],
-      "answer": ["树状结构"],
+      "options": [
+        "树状结构",
+        "随机排列",
+        "固定长度数组",
+        "单层列表"
+      ],
+      "answer": [
+        "树状结构"
+      ],
       "blank_count": 0,
       "explanation": "课程说明目录一般采用树状结构组织文件和子目录。",
       "source_label": "课件页 11082",
@@ -1948,7 +1988,9 @@
       "type": "JUDGE",
       "stem": "文本文件基于字符编码；二进制文件按用途组织数据，通常作为字节流处理。",
       "options": [],
-      "answer": ["正确"],
+      "answer": [
+        "正确"
+      ],
       "blank_count": 0,
       "explanation": "课程比较了文本文件的字符编码与二进制文件的字节流组织方式。",
       "source_label": "课件页 11083",
@@ -1963,10 +2005,591 @@
       "type": "FILL",
       "stem": "文本文件由使用统一字符 ______ 的字符组成。",
       "options": [],
-      "answer": ["编码"],
+      "answer": [
+        "编码"
+      ],
       "blank_count": 1,
       "explanation": "课程将文本文件描述为由单一特定编码的字符组成。",
       "source_label": "课件页 11083",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 2,
+      "stage_index": 1,
+      "ordinal": 5,
+      "stage_title": "Python 与程序语言入门",
+      "kc_code": "PY43-KC-008",
+      "type": "CHOICE",
+      "stem": "在 IDLE 的交互式环境中，输入一行 Python 代码后，通常怎样执行？",
+      "options": [
+        "按回车后立即执行",
+        "先保存为 .py 文件再运行",
+        "必须点击 Run Module",
+        "重启解释器后运行"
+      ],
+      "answer": [
+        "按回车后立即执行"
+      ],
+      "blank_count": 0,
+      "explanation": "课件说明交互式环境采用“一问一答”方式，输入代码后按回车即运行。",
+      "source_label": "课件页 10756",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 1,
+      "stage_index": 1,
+      "ordinal": 100,
+      "stage_title": "计算思维的概念与方法",
+      "kc_code": "PY43-KC-004",
+      "type": "JUDGE",
+      "stem": "2006年，周以真教授发表论文，对计算思维做了明确的定义。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "课件说明周以真教授于2006年发表论文并对计算思维做出定义。",
+      "source_label": "课件页 10722",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 1,
+      "stage_index": 1,
+      "ordinal": 101,
+      "stage_title": "计算思维的概念与方法",
+      "kc_code": "PY43-KC-004",
+      "type": "FILL",
+      "stem": "计算思维的本质是______和自动化。",
+      "options": [],
+      "answer": [
+        "抽象"
+      ],
+      "blank_count": 1,
+      "explanation": "课件明确说明计算思维的本质是抽象和自动化。",
+      "source_label": "课件页 10723",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 1,
+      "stage_index": 1,
+      "ordinal": 102,
+      "stage_title": "计算思维的概念与方法",
+      "kc_code": "PY43-KC-003",
+      "type": "CHOICE",
+      "stem": "计算思维求解问题流程中，“抽象建模”之后的下一步是？",
+      "options": [
+        "算法设计",
+        "程序实现",
+        "结果评价",
+        "发现问题"
+      ],
+      "answer": [
+        "算法设计"
+      ],
+      "blank_count": 0,
+      "explanation": "课件给出的流程中，建立模型后进入算法设计。",
+      "source_label": "课件页 10724",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 1,
+      "stage_index": 1,
+      "ordinal": 103,
+      "stage_title": "计算思维的概念与方法",
+      "kc_code": "PY43-KC-003",
+      "type": "FILL",
+      "stem": "计算思维的操作流程要求通过抽象建立______模型。",
+      "options": [],
+      "answer": [
+        "数学"
+      ],
+      "blank_count": 1,
+      "explanation": "课件说明通过抽象建立数学模型。",
+      "source_label": "课件页 10724",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 1,
+      "stage_index": 1,
+      "ordinal": 104,
+      "stage_title": "计算思维的概念与方法",
+      "kc_code": "PY43-KC-003",
+      "type": "JUDGE",
+      "stem": "计算思维的问题求解流程包括发现问题、抽象建模、算法设计、程序实现和结果评价。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "课件列出这五个操作步骤。",
+      "source_label": "课件页 10724",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 1,
+      "stage_index": 1,
+      "ordinal": 105,
+      "stage_title": "计算思维的概念与方法",
+      "kc_code": "PY43-KC-003",
+      "type": "CHOICE",
+      "stem": "课件列出的计算思维特征之一是？",
+      "options": [
+        "概念化",
+        "程序化",
+        "只用机器思考",
+        "只适用于程序员"
+      ],
+      "answer": [
+        "概念化"
+      ],
+      "blank_count": 0,
+      "explanation": "课件指出计算思维是概念化而非程序化。",
+      "source_label": "课件页 10725",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 1,
+      "stage_index": 3,
+      "ordinal": 110,
+      "stage_title": "计算工具与计算机发展",
+      "kc_code": "PY43-KC-001",
+      "type": "CHOICE",
+      "stem": "1983年，哪项成果使中国成为第三个能独立设计和研制超级计算机的国家？",
+      "options": [
+        "国防科技大学研制“银河一号”",
+        "中科院计算所研制第一台大型晶体管计算机",
+        "清华大学研制小型集成电路计算机",
+        "龙芯一号CPU问世"
+      ],
+      "answer": [
+        "国防科技大学研制“银河一号”"
+      ],
+      "blank_count": 0,
+      "explanation": "课程介绍“银河一号”使中国成为继美国、日本之后第三个能独立设计和研制超级计算机的国家。",
+      "source_label": "课件页 10708",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 1,
+      "stage_index": 3,
+      "ordinal": 111,
+      "stage_title": "计算工具与计算机发展",
+      "kc_code": "PY43-KC-001",
+      "type": "FILL",
+      "stem": "我国于2002年成功制造的首枚高性能通用CPU名为______。",
+      "options": [],
+      "answer": [
+        "龙芯一号"
+      ],
+      "blank_count": 1,
+      "explanation": "课件记载我国于2002年成功制造出首枚高性能通用CPU——龙芯一号。",
+      "source_label": "课件页 10708",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 1,
+      "stage_index": 3,
+      "ordinal": 112,
+      "stage_title": "计算工具与计算机发展",
+      "kc_code": "PY43-KC-002",
+      "type": "JUDGE",
+      "stem": "计算工具总体经历了从简单到复杂、从手动到自动的发展过程。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "课程概括计算工具从简单到复杂、从低级到高级、从手动到自动发展。",
+      "source_label": "课件页 10695",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 1,
+      "stage_index": 3,
+      "ordinal": 113,
+      "stage_title": "计算工具与计算机发展",
+      "kc_code": "PY43-KC-005",
+      "type": "JUDGE",
+      "stem": "计算机网络化趋势是将不同地点的计算机互联，以便用户共享资源。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "课件将网络化描述为连接不同地点的计算机并共享资源。",
+      "source_label": "课件页 10706",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 1,
+      "stage_index": 3,
+      "ordinal": 114,
+      "stage_title": "计算工具与计算机发展",
+      "kc_code": "PY43-KC-005",
+      "type": "FILL",
+      "stem": "计算机能够处理文字、数字、图片、声音和视频，体现了______化趋势。",
+      "options": [],
+      "answer": [
+        "多媒体"
+      ],
+      "blank_count": 1,
+      "explanation": "课件将处理文字、数字、图片、声音和视频的能力称为多媒体化。",
+      "source_label": "课件页 10706",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 1,
+      "stage_index": 2,
+      "ordinal": 110,
+      "stage_title": "计算与计算科学",
+      "kc_code": "PY43-KC-006",
+      "type": "JUDGE",
+      "stem": "广义的计算也可以是基于规则的物理状态变换。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "课件将计算概括为基于规则的符号串变换，广义上也包括物理状态变换。",
+      "source_label": "课件页 10715",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 1,
+      "stage_index": 2,
+      "ordinal": 111,
+      "stage_title": "计算与计算科学",
+      "kc_code": "PY43-KC-006",
+      "type": "FILL",
+      "stem": "任何给定输入经过处理和变换得到期望输出的过程都可以称为______。",
+      "options": [],
+      "answer": [
+        "计算"
+      ],
+      "blank_count": 1,
+      "explanation": "课件说明给定输入，经处理和变换得到期望输出的过程可以称为计算。",
+      "source_label": "课件页 10715",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 2,
+      "stage_index": 1,
+      "ordinal": 110,
+      "stage_title": "Python 与程序语言入门",
+      "kc_code": "PY43-KC-009",
+      "type": "JUDGE",
+      "stem": "课程将 Python 语法简洁、优美列为适合作为编程入门语言的原因之一。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "课件将语法简洁、优美列为选择 Python 的原因之一。",
+      "source_label": "课件页 10741",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 2,
+      "stage_index": 1,
+      "ordinal": 111,
+      "stage_title": "Python 与程序语言入门",
+      "kc_code": "PY43-KC-009",
+      "type": "FILL",
+      "stem": "Python 语言创立者 Guido van ______。",
+      "options": [],
+      "answer": [
+        "Rossum"
+      ],
+      "blank_count": 1,
+      "explanation": "课件将 Guido van Rossum 标注为 Python 语言创立者。",
+      "source_label": "课件页 10748",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 2,
+      "stage_index": 1,
+      "ordinal": 112,
+      "stage_title": "Python 与程序语言入门",
+      "kc_code": "PY43-KC-015",
+      "type": "JUDGE",
+      "stem": "机器语言使用二进制代码表达指令，计算机硬件可以直接识别和执行。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "课件将机器语言描述为硬件可直接识别和执行的二进制语言。",
+      "source_label": "课件页 10732",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 2,
+      "stage_index": 1,
+      "ordinal": 113,
+      "stage_title": "Python 与程序语言入门",
+      "kc_code": "PY43-KC-015",
+      "type": "FILL",
+      "stem": "课程把程序设计语言分为机器语言、汇编语言和______语言。",
+      "options": [],
+      "answer": [
+        "高级"
+      ],
+      "blank_count": 1,
+      "explanation": "课件列出的三类程序设计语言是机器语言、汇编语言和高级语言。",
+      "source_label": "课件页 10731",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 3,
+      "stage_index": 1,
+      "ordinal": 110,
+      "stage_title": "进制与二进制运算",
+      "kc_code": "PY43-KC-021",
+      "type": "CHOICE",
+      "stem": "按课件列出的二进制乘法规则，1 × 1 的结果是？",
+      "options": [
+        "1",
+        "10",
+        "0",
+        "2"
+      ],
+      "answer": [
+        "1"
+      ],
+      "blank_count": 0,
+      "explanation": "二进制乘法中，1 × 1 = 1。",
+      "source_label": "课件页 10815",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 3,
+      "stage_index": 1,
+      "ordinal": 111,
+      "stage_title": "进制与二进制运算",
+      "kc_code": "PY43-KC-021",
+      "type": "FILL",
+      "stem": "二进制减法需要借位时，遵循“借一当______”的规则。",
+      "options": [],
+      "answer": [
+        "二"
+      ],
+      "blank_count": 1,
+      "explanation": "二进制减法遵循“借一当二”的规则。",
+      "source_label": "课件页 10815",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 3,
+      "stage_index": 2,
+      "ordinal": 110,
+      "stage_title": "信息编码",
+      "kc_code": "PY43-KC-026",
+      "type": "CHOICE",
+      "stem": "课件中 ASCII 编码使用多少位二进制表示？",
+      "options": [
+        "7位",
+        "8位",
+        "16位",
+        "32位"
+      ],
+      "answer": [
+        "7位"
+      ],
+      "blank_count": 0,
+      "explanation": "课件说明 ASCII 采用 7 位二进制编码。",
+      "source_label": "课件页 10854",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 3,
+      "stage_index": 2,
+      "ordinal": 111,
+      "stage_title": "信息编码",
+      "kc_code": "PY43-KC-026",
+      "type": "FILL",
+      "stem": "ASCII 编码覆盖 0 到 127，共有______种不同编码。",
+      "options": [],
+      "answer": [
+        "128"
+      ],
+      "blank_count": 1,
+      "explanation": "0 至 127 共 128 个编码值。",
+      "source_label": "课件页 10854",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 3,
+      "stage_index": 1,
+      "ordinal": 112,
+      "stage_title": "进制与二进制运算",
+      "kc_code": "PY43-KC-029",
+      "type": "JUDGE",
+      "stem": "进位计数制中，不同数位具有不同的位权。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "课件说明不同数位上的数字具有不同的位权。",
+      "source_label": "课件页 10805",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 3,
+      "stage_index": 1,
+      "ordinal": 113,
+      "stage_title": "进制与二进制运算",
+      "kc_code": "PY43-KC-029",
+      "type": "FILL",
+      "stem": "在任意 R 进制表示中，R 称为该进制的______。",
+      "options": [],
+      "answer": [
+        "基数"
+      ],
+      "blank_count": 1,
+      "explanation": "课件把进制 R 称为基数。",
+      "source_label": "课件页 10805",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 3,
+      "stage_index": 1,
+      "ordinal": 114,
+      "stage_title": "进制与二进制运算",
+      "kc_code": "PY43-KC-030",
+      "type": "JUDGE",
+      "stem": "将十进制整数转换为二进制时，可以使用除 2 取余法，并将余数从低位到高位排列。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "课件说明整数部分采用除 2 取余法，余数从低到高排列。",
+      "source_label": "课件页 10828",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 5,
+      "stage_index": 1,
+      "ordinal": 110,
+      "stage_title": "序列与列表",
+      "kc_code": "PY43-KC-045",
+      "type": "JUDGE",
+      "stem": "元组是不可变序列，而列表可以修改其中的数据项。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "课程指出元组生成后固定，列表的数据项可以修改。",
+      "source_label": "课件页 10980",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 5,
+      "stage_index": 1,
+      "ordinal": 111,
+      "stage_title": "序列与列表",
+      "kc_code": "PY43-KC-045",
+      "type": "FILL",
+      "stem": "序列是有序的元素排列，可以通过______访问特定元素。",
+      "options": [],
+      "answer": [
+        "下标"
+      ],
+      "blank_count": 1,
+      "explanation": "课件说明序列中的元素有先后关系，并通过下标访问。",
+      "source_label": "课件页 10979",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 7,
+      "stage_index": 4,
+      "ordinal": 110,
+      "stage_title": "库与打包",
+      "kc_code": "PY43-KC-055",
+      "type": "CHOICE",
+      "stem": "课件中的 PyInstaller 命令 `PyInstaller -F app.py` 中，`-F` 用于生成什么形式的结果？",
+      "options": [
+        "单个可执行文件",
+        "仅输出调试日志",
+        "卸载 PyInstaller",
+        "列出已安装库"
+      ],
+      "answer": [
+        "单个可执行文件"
+      ],
+      "blank_count": 0,
+      "explanation": "课件将 `-F` 示例列为 PyInstaller 打包命令。",
+      "source_label": "课件页 11241",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 7,
+      "stage_index": 4,
+      "ordinal": 111,
+      "stage_title": "库与打包",
+      "kc_code": "PY43-KC-055",
+      "type": "FILL",
+      "stem": "使用 PyInstaller 生成单文件可执行程序时，课件给出的参数是______。",
+      "options": [],
+      "answer": [
+        "-F"
+      ],
+      "blank_count": 1,
+      "explanation": "课件示例使用 `-F` 参数打包程序。",
+      "source_label": "课件页 11241",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 7,
+      "stage_index": 4,
+      "ordinal": 112,
+      "stage_title": "库与打包",
+      "kc_code": "PY43-KC-057",
+      "type": "JUDGE",
+      "stem": "`pip download` 会下载第三方库安装包，但不会安装该库。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "课件说明 `pip download` 只下载第三方库安装包，不执行安装。",
+      "source_label": "课件页 11236",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 7,
+      "stage_index": 5,
+      "ordinal": 110,
+      "stage_title": "面向对象",
+      "kc_code": "PY43-KC-065",
+      "type": "JUDGE",
+      "stem": "封装是将数据和行为相结合，并隐藏类结构细节。",
+      "options": [],
+      "answer": [
+        "正确"
+      ],
+      "blank_count": 0,
+      "explanation": "课件将封装描述为数据与行为结合，并通过方法接口隐藏细节。",
+      "source_label": "课件页 11205",
+      "required_for_stage": false
+    },
+    {
+      "chapter": 7,
+      "stage_index": 5,
+      "ordinal": 111,
+      "stage_title": "面向对象",
+      "kc_code": "PY43-KC-065",
+      "type": "FILL",
+      "stem": "让下层类复用上层类属性的面向对象特性称为______。",
+      "options": [],
+      "answer": [
+        "继承"
+      ],
+      "blank_count": 1,
+      "explanation": "课件说明继承使下层类能够复用上层类的属性。",
+      "source_label": "课件页 11206",
       "required_for_stage": false
     }
   ]

@@ -8,6 +8,8 @@ import com.pythontopia.PythontopiaApplication;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.mainline.dto.ChapterTestSubmitRequest;
 import com.pythontopia.mainline.test.ChapterTestJudge.JudgeReport;
+import com.pythontopia.mainline.test.ChapterTestJudge.QuestionJudgement;
+import com.pythontopia.mainline.test.question.QuestionType;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -90,6 +92,65 @@ class ChapterTestSubmitConcurrencyIntegrationTest {
                 userId,
                 "PY43-KC-003"))
         .isGreaterThan(java.math.BigDecimal.ZERO);
+  }
+
+  @Test
+  void submittedObjectiveAndCodingQuestionsAllUpdateTheirKcEvidence() {
+    long userId =
+        jdbc.queryForObject(
+            "INSERT INTO users (username, display_name, password_hash, role)"
+                + " VALUES (?, 'Chapter test learner', 'x', 'STUDENT') RETURNING id",
+            Long.class,
+            "chapter-all-types-" + UUID.randomUUID());
+    String questions =
+        """
+        {"items":[
+          {"qid":"code1","type":"CODING","kc_code":"PY43-KC-001","score":30},
+          {"qid":"code2","type":"CODING","kc_code":"PY43-KC-001","score":30},
+          {"qid":"choice1","type":"CHOICE","kc_code":"PY43-KC-002","score":8},
+          {"qid":"judge1","type":"JUDGE","kc_code":"PY43-KC-003","score":5},
+          {"qid":"fill1","type":"FILL","kc_code":"PY43-KC-004","score":5}
+        ]}
+        """;
+    long testId =
+        jdbc.queryForObject(
+            "INSERT INTO chapter_test (user_id, chapter, assessment_kind, status, questions,"
+                + " started_at, deadline_at)"
+                + " VALUES (?, 1, 'QUIZ', 'IN_PROGRESS', ?::jsonb, now(),"
+                + " now() + interval '1 hour') RETURNING id",
+            Long.class,
+            userId,
+            questions);
+    when(judge.judge(any(), any()))
+        .thenReturn(
+            new JudgeReport(
+                43,
+                78,
+                List.of(
+                    new QuestionJudgement(
+                        "code1", QuestionType.CODING, true, 30, 30, "code", "ref", "ok", 2, 2),
+                    new QuestionJudgement(
+                        "code2", QuestionType.CODING, false, 0, 30, "code", "ref", "failed", 0, 2),
+                    new QuestionJudgement(
+                        "choice1", QuestionType.CHOICE, true, 8, 8, "A", "A", "ok", null, null),
+                    new QuestionJudgement(
+                        "judge1", QuestionType.JUDGE, false, 0, 5, "true", "false", "bad", null, null),
+                    new QuestionJudgement(
+                        "fill1", QuestionType.FILL, true, 5, 5, "len", "len", "ok", null, null))));
+
+    service.submitQuiz(userId, 1, testId, new ChapterTestSubmitRequest(Map.of(), null));
+
+    assertThat(
+            jdbc.queryForList(
+                "SELECT kc_code || ':' || source FROM kc_mastery_event"
+                    + " WHERE user_id = ? ORDER BY kc_code",
+                String.class,
+                userId))
+        .containsExactly(
+            "PY43-KC-001:MICRO_CHECK_FAIL",
+            "PY43-KC-002:MICRO_CHECK_PASS",
+            "PY43-KC-003:MICRO_CHECK_FAIL",
+            "PY43-KC-004:MICRO_CHECK_PASS");
   }
 
   @Test

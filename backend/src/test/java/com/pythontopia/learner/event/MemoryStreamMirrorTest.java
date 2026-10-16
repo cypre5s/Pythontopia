@@ -63,7 +63,7 @@ class MemoryStreamMirrorTest {
 
   @Test
   @SuppressWarnings("unchecked")
-  void chapterAssessmentOutcomeMirrorsItsVerifiedCodingEvidence() {
+  void chapterAssessmentOutcomeMirrorsItsVerifiedQuestionEvidence() {
     mirror.onChapterAssessmentScored(
         new LearningEvent.ChapterAssessmentScored(
             7L, 100L, 1, "FINAL", "PY43-KC-003", 1, 2));
@@ -81,8 +81,8 @@ class MemoryStreamMirrorTest {
         .containsEntry("chapter", 1)
         .containsEntry("assessmentKind", "FINAL")
         .containsEntry("kcCode", "PY43-KC-003")
-        .containsEntry("correctCodingQuestions", 1)
-        .containsEntry("codingQuestionCount", 2);
+        .containsEntry("correctQuestions", 1)
+        .containsEntry("questionCount", 2);
   }
 
   @Test

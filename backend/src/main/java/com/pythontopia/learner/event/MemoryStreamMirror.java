@@ -192,8 +192,8 @@ public class MemoryStreamMirror {
     payload.put("chapter", event.chapter());
     put(payload, "assessmentKind", event.assessmentKind());
     put(payload, "kcCode", event.kcCode());
-    payload.put("correctCodingQuestions", event.correctCodingQuestions());
-    payload.put("codingQuestionCount", event.codingQuestionCount());
+    payload.put("correctQuestions", event.correctQuestions());
+    payload.put("questionCount", event.questionCount());
     mirror(
         event.userId(),
         event.passed() ? "chapter_assessment_passed" : "chapter_assessment_failed",

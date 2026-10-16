@@ -37,13 +37,19 @@ class BossObjectiveQuestionMigrationTest {
   }
 
   @Test
-  void conceptOnlyKnowledgeCodesHaveThreeSupplementalObjectiveTypes() {
+  void nonCodingKnowledgeCodesHaveChoiceJudgeAndFillQuestions() {
     for (String kcCode :
-        new String[] {"PY43-KC-014", "PY43-KC-017", "PY43-KC-027", "PY43-KC-051"}) {
+        new String[] {
+          "PY43-KC-001", "PY43-KC-002", "PY43-KC-003", "PY43-KC-004", "PY43-KC-005",
+          "PY43-KC-006", "PY43-KC-007", "PY43-KC-008", "PY43-KC-009", "PY43-KC-014",
+          "PY43-KC-015", "PY43-KC-017", "PY43-KC-021", "PY43-KC-026", "PY43-KC-027",
+          "PY43-KC-029", "PY43-KC-030", "PY43-KC-045", "PY43-KC-051", "PY43-KC-055",
+          "PY43-KC-057", "PY43-KC-065"
+        }) {
       assertThat(
               jdbc.queryForList(
                   "SELECT type FROM mainline_practice_question"
-                      + " WHERE kc_code = ? AND required_for_stage = FALSE",
+                      + " WHERE kc_code = ? GROUP BY type",
                   String.class,
                   kcCode))
           .as(kcCode)

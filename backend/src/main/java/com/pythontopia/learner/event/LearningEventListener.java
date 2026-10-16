@@ -35,7 +35,7 @@ public class LearningEventListener {
         null,
         "chapter_assessment:" + event.assessmentKind() + ":" + event.chapter() + ":"
             + event.assessmentId()
-            + " coding=" + event.correctCodingQuestions() + "/" + event.codingQuestionCount(),
+            + " questions=" + event.correctQuestions() + "/" + event.questionCount(),
         event.idempotencyKey());
   }
 

@@ -158,19 +158,19 @@ public sealed interface LearningEvent
   record GuideCheckpointCompleted(Long userId, Long problemId, String kcCode, String cardKey)
       implements LearningEvent {}
 
-  /** Trusted coding outcomes from one submitted chapter assessment, aggregated once per KC. */
+  /** Trusted question outcomes from one submitted chapter assessment, aggregated once per KC. */
   record ChapterAssessmentScored(
       Long userId,
       Long assessmentId,
       int chapter,
       String assessmentKind,
       String kcCode,
-      int correctCodingQuestions,
-      int codingQuestionCount)
+      int correctQuestions,
+      int questionCount)
       implements LearningEvent {
 
     public boolean passed() {
-      return codingQuestionCount > 0 && correctCodingQuestions == codingQuestionCount;
+      return questionCount > 0 && correctQuestions == questionCount;
     }
 
     public String idempotencyKey() {

@@ -106,17 +106,54 @@ class ChapterTestServiceTest {
     }
   }
 
-  private JsonNode questionsWithCodingItems() {
+  private JsonNode questionsForAllTypes() {
     try {
       return mapper.readTree(
-          "{\"items\":["
-              + "{\"qid\":\"code1\",\"type\":\"CODING\",\"title\":\"one\","
-              + "\"statement_markdown\":\"one\",\"kc_code\":\"PY43-KC-001\",\"score\":30},"
-              + "{\"qid\":\"code2\",\"type\":\"CODING\",\"title\":\"two\","
-              + "\"statement_markdown\":\"two\",\"kc_code\":\"PY43-KC-001\",\"score\":30},"
-              + "{\"qid\":\"choice1\",\"type\":\"CHOICE\",\"stem\":\"s\","
-              + "\"options\":[\"A\",\"B\"],\"answer\":\"A\","
-              + "\"kc_code\":\"PY43-KC-002\",\"score\":8}]}" );
+          """
+          {
+            "items": [
+              {
+                "qid": "code1",
+                "type": "CODING",
+                "title": "one",
+                "statement_markdown": "one",
+                "kc_code": "PY43-KC-001",
+                "score": 30
+              },
+              {
+                "qid": "code2",
+                "type": "CODING",
+                "title": "two",
+                "statement_markdown": "two",
+                "kc_code": "PY43-KC-001",
+                "score": 30
+              },
+              {
+                "qid": "choice1",
+                "type": "CHOICE",
+                "stem": "s",
+                "options": ["A", "B"],
+                "answer": "A",
+                "kc_code": "PY43-KC-002",
+                "score": 8
+              },
+              {
+                "qid": "judge1",
+                "type": "JUDGE",
+                "answer": true,
+                "kc_code": "PY43-KC-003",
+                "score": 5
+              },
+              {
+                "qid": "fill1",
+                "type": "FILL",
+                "answers": ["len"],
+                "kc_code": "PY43-KC-004",
+                "score": 5
+              }
+            ]
+          }
+          """);
     } catch (Exception e) {
       throw new RuntimeException(e);
     }
@@ -467,32 +504,43 @@ class ChapterTestServiceTest {
   }
 
   @Test
-  void submitPublishesOneAssessmentEventPerKcForCodingOnly() {
-    JsonNode paper = questionsWithCodingItems();
+  void submitPublishesAssessmentEventsForEveryQuestionType() {
+    JsonNode paper = questionsForAllTypes();
     when(repo.findOwnedForUpdate(USER, TEST_ID))
         .thenReturn(Optional.of(record(ChapterTestStatus.IN_PROGRESS,
             OffsetDateTime.now().plusMinutes(20), paper, null)));
     when(judge.judge(any(), any()))
-        .thenReturn(new JudgeReport(68, 100, List.of(
+        .thenReturn(new JudgeReport(43, 78, List.of(
             new QuestionJudgement("code1", QuestionType.CODING, true, 30, 30,
                 "code", "reference", "passed", 2, 2),
             new QuestionJudgement("code2", QuestionType.CODING, false, 0, 30,
                 "code", "reference", "failed", 0, 2),
             new QuestionJudgement("choice1", QuestionType.CHOICE, true, 8, 8,
-                "A", "A", "correct", null, null))));
-    when(repo.markSubmitted(eq(TEST_ID), eq(68), any(), any(), any())).thenReturn(true);
+                "A", "A", "correct", null, null),
+            new QuestionJudgement("judge1", QuestionType.JUDGE, false, 0, 5,
+                "true", "false", "incorrect", null, null),
+            new QuestionJudgement("fill1", QuestionType.FILL, true, 5, 5,
+                "len", "len", "correct", null, null))));
+    when(repo.markSubmitted(eq(TEST_ID), eq(43), any(), any(), any())).thenReturn(true);
     when(starService.recalc(USER, CH, StarSource.TEST))
-        .thenReturn(new ChapterStar(1L, USER, CH, 2, 68, mapper.createObjectNode(), null));
+        .thenReturn(new ChapterStar(1L, USER, CH, 2, 43, mapper.createObjectNode(), null));
     when(repo.findById(TEST_ID))
         .thenReturn(Optional.of(record(ChapterTestStatus.SUBMITTED, OffsetDateTime.now(), paper, null)));
 
     service.submit(USER, CH, TEST_ID, new ChapterTestSubmitRequest(Map.of(), null));
 
     ArgumentCaptor<Object> eventCaptor = ArgumentCaptor.forClass(Object.class);
-    verify(eventPublisher, times(1)).publishEvent(eventCaptor.capture());
-    assertThat(eventCaptor.getValue())
-        .isEqualTo(new LearningEvent.ChapterAssessmentScored(
-            USER, TEST_ID, CH, "FINAL", "PY43-KC-001", 1, 2));
+    verify(eventPublisher, times(4)).publishEvent(eventCaptor.capture());
+    assertThat(eventCaptor.getAllValues())
+        .containsExactlyInAnyOrder(
+            new LearningEvent.ChapterAssessmentScored(
+                USER, TEST_ID, CH, "FINAL", "PY43-KC-001", 1, 2),
+            new LearningEvent.ChapterAssessmentScored(
+                USER, TEST_ID, CH, "FINAL", "PY43-KC-002", 1, 1),
+            new LearningEvent.ChapterAssessmentScored(
+                USER, TEST_ID, CH, "FINAL", "PY43-KC-003", 0, 1),
+            new LearningEvent.ChapterAssessmentScored(
+                USER, TEST_ID, CH, "FINAL", "PY43-KC-004", 1, 1));
   }
 
   @Test

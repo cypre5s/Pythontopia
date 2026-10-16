@@ -26,7 +26,6 @@ import com.pythontopia.mainline.test.ChapterTestJudge.JudgeReport;
 import com.pythontopia.mainline.test.ChapterTestJudge.QuestionJudgement;
 import com.pythontopia.mainline.test.question.QuestionItem;
 import com.pythontopia.mainline.test.question.QuestionPaper;
-import com.pythontopia.mainline.test.question.QuestionType;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -271,7 +270,7 @@ public class ChapterTestService {
           HttpStatus.CONFLICT, "CHAPTER_TEST_NOT_IN_PROGRESS", "提交状态冲突，请刷新重试");
     }
 
-    publishCodingAssessmentEvents(userId, chapter, testId, assessmentKind, paper, report);
+    publishAssessmentEvents(userId, chapter, testId, assessmentKind, paper, report);
 
     int stars =
         assessmentKind == ChapterAssessmentKind.FINAL
@@ -284,7 +283,7 @@ public class ChapterTestService {
     return mapper.toResult(submitted, report, stars, false);
   }
 
-  private void publishCodingAssessmentEvents(
+  private void publishAssessmentEvents(
       long userId,
       int chapter,
       long testId,
@@ -296,13 +295,12 @@ public class ChapterTestService {
             .collect(
                 Collectors.toMap(
                     QuestionJudgement::qid, Function.identity(), (first, duplicate) -> first));
-    Map<String, List<QuestionItem>> codingItemsByKc =
+    Map<String, List<QuestionItem>> questionsByKc =
         paper.items().stream()
-            .filter(item -> item.type() == QuestionType.CODING)
             .filter(item -> item.kcCode() != null && !item.kcCode().isBlank())
             .collect(Collectors.groupingBy(QuestionItem::kcCode));
 
-    codingItemsByKc.forEach(
+    questionsByKc.forEach(
         (kcCode, items) -> {
           int correct = (int) items.stream()
               .map(item -> judgementsByQid.get(item.qid()))

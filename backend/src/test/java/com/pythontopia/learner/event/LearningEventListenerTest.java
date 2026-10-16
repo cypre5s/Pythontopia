@@ -51,7 +51,7 @@ class LearningEventListenerTest {
   }
 
   @Test
-  void chapterAssessmentProjectsOnlyServerJudgedCodingOutcomeOncePerKc() {
+  void chapterAssessmentProjectsServerJudgedQuestionOutcomeOncePerKc() {
     LearningEvent.ChapterAssessmentScored event =
         new LearningEvent.ChapterAssessmentScored(7L, 100L, 1, "FINAL", "PY43-KC-003", 1, 1);
 
@@ -63,7 +63,7 @@ class LearningEventListenerTest {
             "PY43-KC-003",
             MasterySource.MICRO_CHECK_PASS,
             null,
-            "chapter_assessment:FINAL:1:100 coding=1/1",
+            "chapter_assessment:FINAL:1:100 questions=1/1",
             "chapter-assessment:final:1:100:PY43-KC-003");
   }
 
