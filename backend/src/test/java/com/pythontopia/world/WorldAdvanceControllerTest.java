@@ -3,6 +3,7 @@ package com.pythontopia.world;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -81,5 +82,27 @@ class WorldAdvanceControllerTest {
     mockMvc.perform(post("/api/world/sleep")).andExpect(status().isTooManyRequests());
 
     verify(service, never()).sleep(9L);
+  }
+
+  @Test
+  void rejectsTeacherBeforeCheckingWriteBudget() throws Exception {
+    authenticateAs(Role.TEACHER);
+
+    mockMvc
+        .perform(post("/api/world/sleep"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+    verifyNoInteractions(service, studentWriteThrottle);
+  }
+
+  private void authenticateAs(Role role) {
+    CurrentUserPrincipal principal = new CurrentUserPrincipal(9L, "account", role);
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_" + role.name()))));
   }
 }

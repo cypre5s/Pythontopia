@@ -1,6 +1,7 @@
 package com.pythontopia.world;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
+import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.common.web.StudentWriteThrottle;
@@ -29,6 +30,7 @@ public class GameBootstrapController {
 
   @PostMapping("/bootstrap")
   public GameBootstrapResponse bootstrap(@CurrentUser CurrentUserPrincipal user) {
+    requireStudentOrAdmin(user);
     if (!studentWriteThrottle.tryAcquireGameBootstrap(user.userId())) {
       throw new BusinessException(
           HttpStatus.TOO_MANY_REQUESTS,
@@ -36,5 +38,12 @@ public class GameBootstrapController {
           "每个账号每分钟最多请求小镇数据 10 次");
     }
     return service.bootstrap(user.userId());
+  }
+
+  private void requireStudentOrAdmin(CurrentUserPrincipal user) {
+    if (user.role() != Role.STUDENT && user.role() != Role.ADMIN) {
+      throw new BusinessException(
+          HttpStatus.FORBIDDEN, "FORBIDDEN", "Only students or admins have world state");
+    }
   }
 }

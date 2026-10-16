@@ -12,6 +12,7 @@
  *       该模型天然规避「拖到末尾秒过」（快进不计）与后台挂机刷（不可见不计）。
  * 打点：每攒满 BATCH_SECONDS 秒批量 `postVideoProgress(stageId, deltaSec)` 一次；
  *       切后台 / 暂停 / 切视频 / 卸载时 flush 已攒秒数。只有服务端累计值增长才清除 pending。
+ * 服务端以相邻上报的真实时间差限制可计入秒数；浏览器端仍负责只在可见、播放前进时采集。
  * 过线：仅服务端累计达到 requiredVideoSec 才 emit('passed')，并显示「已过线 ✓」。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
@@ -198,6 +199,12 @@ function onPause(): void {
   void flush();
 }
 
+function onPlay(event: Event): void {
+  const video = event.target as HTMLVideoElement | null;
+  if (video) lastTime = video.currentTime;
+  void postVideoProgress(props.stageId, 0).catch(() => undefined);
+}
+
 function selectVideo(videoId: number): void {
   if (videoId === currentVideoId.value) return;
   // 切视频前把已攒秒数报上去；新源 currentTime 归零，重置基准与小数累加器。
@@ -279,6 +286,7 @@ onBeforeUnmount(() => {
             controls
             playsinline
             preload="metadata"
+            @play="onPlay"
             @timeupdate="onTimeUpdate"
             @pause="onPause"
           />

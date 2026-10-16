@@ -71,6 +71,20 @@ def test_dynamic_import_returns_runtime_error_before_sandbox(
     assert "__import__" in result.runtime_error
 
 
+def test_importing_builtin_importer_under_alias_is_rejected_before_sandbox(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PYT_PISTON_URL", raising=False)
+    code = "from builtins import __import__ as load\nload('os').getcwd()"
+
+    result = evaluate_student_code(code, [_tc("", "")])
+
+    assert not result.passed
+    assert result.runtime_error is not None
+    assert "forbidden_imports" in result.runtime_error
+    assert "__import__" in result.runtime_error
+
+
 def test_syntax_error_is_reported_as_first_failure() -> None:
     code = "this is not python"
     cases = [_tc("", "ignored", sample=True), _tc("", "x"), _tc("", "y")]

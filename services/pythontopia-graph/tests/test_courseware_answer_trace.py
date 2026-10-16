@@ -3,10 +3,25 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 
 import pytest
+from pydantic import ValidationError
 
 from pythontopia_graph.llm.provider import LlmResponse
 from pythontopia_graph.nodes.evidence_fetcher import KcEdge, RagHit, StaticEvidenceFetcher
 from pythontopia_graph.routes.courseware import CoursewareAnswerInput, courseware_answer
+
+
+@pytest.mark.parametrize(
+    "kc_codes",
+    [
+        ["PY43-KC-001"] * 66,
+        ["x" * 33],
+    ],
+)
+def test_courseware_input_rejects_unbounded_knowledge_point_filters(
+    kc_codes: list[str],
+) -> None:
+    with pytest.raises(ValidationError):
+        CoursewareAnswerInput(query="python", kc_codes=kc_codes)
 
 
 class _AnswerProvider:

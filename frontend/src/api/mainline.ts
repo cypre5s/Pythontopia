@@ -221,7 +221,7 @@ export async function getStageDetail(stageId: number): Promise<StageDetailDto> {
 
 /**
  * 上报视频观看时长增量（「看」打点）。
- * 后端硬校验：deltaSec ≤ 真实流逝时间，单次 ≤120s、每分钟 ≤2 次（防挂机刷）。
+ * deltaSec=0 启动服务端计时；正增量受两次服务端上报间隔、单次上限和限频限制。
  */
 export async function postVideoProgress(
   stageId: number,
@@ -230,6 +230,7 @@ export async function postVideoProgress(
   const response = await http.post<StageProgressDto>(
     `/api/mainline/stages/${stageId}/video-progress`,
     { deltaSec },
+    { suppressNetworkToast: true },
   );
   return response.data;
 }

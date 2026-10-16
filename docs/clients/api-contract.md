@@ -242,7 +242,7 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 | --- | --- | --- | --- |
 | GET | `/api/mainline/overview` | STUDENT | 冒险地图一次拉齐 `MainlineOverviewDto`：`{ totalStars, chapters:[{ chapter,title,unlocked,stars,bestTestScore, stages:[{ id,index,title,videoWatchedSec,requiredVideoSec,pagesRead,requiredPages,examplesDone,requiredExamples,completed }], testStatus, starBreakdown, recovery }] }` |
 | GET | `/api/mainline/stages/{stageId}` | STUDENT | 单个小节学习页详情（静态定义 + 当前用户三件套已完成 id 集合）→ `StageDetailDto` |
-| POST | `/api/mainline/stages/{stageId}/video-progress` | STUDENT | 「看」打点，body `{ "deltaSec": <int> }`（服务端硬限频：单次 ≤120s、每分钟 ≤2 次，防挂机刷）→ `StageProgressDto` |
+| POST | `/api/mainline/stages/{stageId}/video-progress` | STUDENT | 「看」打点，body `{ "deltaSec": <int> }`；`0` 仅建立计时基准，正增量按相邻服务端上报间隔限速、单次 ≤120s、每分钟 ≤2 次。它限制加速虚报，不证明视频实际播放或页面持续可见 → `StageProgressDto` |
 | POST | `/api/mainline/stages/{stageId}/page-read` | STUDENT | 「学」打点，body `{ "pageId": <int> }`（幂等，重复同页只记一次）→ `StageProgressDto` |
 | POST | `/api/mainline/stages/{stageId}/example-done` | STUDENT | 「练」打点，body `{ "problemId": <int>, "submissionId"?: <int> }`（带 submissionId 则须本人且 PASSED）→ `StageProgressDto` |
 | POST | `/api/mainline/chapters/{chapter}/test/prepare` | STUDENT | 触发章末大测试**异步预生成**（画像驱动、考试期零 LLM 调用）→ `{ status }` |

@@ -53,13 +53,34 @@ async function skip(id: number): Promise<void> {
     data-testid="today-tab"
   >
     <p
-      v-if="quests.length === 0 && !learning.quests.loading"
+      v-if="learning.quests.loading"
+      class="feedback"
+      role="status"
+    >
+      正在加载今日任务…
+    </p>
+    <div
+      v-else-if="learning.quests.lastError"
+      class="feedback error"
+      role="alert"
+    >
+      <p>加载今日任务失败：{{ learning.quests.lastError }}</p>
+      <button
+        type="button"
+        data-testid="today-quests-retry"
+        @click="learning.loadTodayQuests()"
+      >
+        重试
+      </button>
+    </div>
+    <p
+      v-else-if="quests.length === 0"
       class="empty"
     >
       今日暂无待办任务。可以去公告板的“规划本周路径”重新生成。
     </p>
     <ul
-      v-else
+      v-else-if="quests.length > 0"
       class="quest-list"
       data-testid="quest-list"
     >
@@ -202,5 +223,26 @@ header h3 {
   border-radius: var(--pyt-radius-lg);
   text-align: center;
   color: var(--pyt-color-text-hint);
+}
+.feedback {
+  margin: 0;
+  padding: 14px;
+  background: var(--pyt-color-bg-soft);
+  border-radius: var(--pyt-radius-lg);
+  text-align: center;
+}
+.error {
+  color: var(--pyt-color-text-primary);
+}
+.error p {
+  margin: 0 0 8px;
+}
+.error button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 2px solid var(--pyt-color-text-hint);
+  background: var(--pyt-color-bg-elevated);
+  color: var(--pyt-color-text-hint);
+  cursor: pointer;
 }
 </style>

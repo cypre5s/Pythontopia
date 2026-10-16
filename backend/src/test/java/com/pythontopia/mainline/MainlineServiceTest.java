@@ -181,7 +181,21 @@ class MainlineServiceTest {
   }
 
   @Test
-  void videoProgressAcceptedClampsAndAccumulates() {
+  void zeroVideoProgressStartsTheServerClockWithoutAwardingWatchTime() {
+    when(stageRepo.findById(10L)).thenReturn(Optional.of(stage(10, 1)));
+    when(throttle.tryAcquire(USER, 10L)).thenReturn(true);
+    when(progressRepo.addVideoSeconds(USER, 10L, 0))
+        .thenReturn(progress(10, 0, List.of(), null));
+
+    StageProgressDto dto = service.reportVideoProgress(USER, 10L, 0);
+
+    assertThat(dto.videoWatchedSec()).isZero();
+    verify(progressRepo).addVideoSeconds(USER, 10L, 0);
+    verify(starService, never()).recalc(anyLong(), anyInt(), any());
+  }
+
+  @Test
+  void videoProgressDeltaIsClampedBeforePersistence() {
     when(stageRepo.findById(10L)).thenReturn(Optional.of(stage(10, 1)));
     when(throttle.tryAcquire(USER, 10L)).thenReturn(true);
     when(progressRepo.addVideoSeconds(eq(USER), eq(10L), eq(120)))

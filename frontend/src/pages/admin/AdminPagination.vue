@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed } from 'vue';
 
 const PAGE_SIZES = [10, 20, 50, 100] as const;
 
@@ -37,20 +37,6 @@ const emit = defineEmits<{
   (event: 'page-size-change', pageSize: number): void;
 }>();
 
-const jumpTarget = ref(props.page + 1);
-const canJump = computed(() =>
-  !props.disabled
-  && props.totalPages > 0
-  && Number.isInteger(jumpTarget.value)
-  && jumpTarget.value >= 1
-  && jumpTarget.value <= props.totalPages
-  && jumpTarget.value !== props.page + 1,
-);
-
-watch(() => props.page, (page) => {
-  jumpTarget.value = page + 1;
-});
-
 function changeSize(event: Event): void {
   const size = Number((event.target as HTMLSelectElement).value);
   if (PAGE_SIZES.includes(size as typeof PAGE_SIZES[number])) {
@@ -58,14 +44,6 @@ function changeSize(event: Event): void {
   }
 }
 
-function changeJumpTarget(event: Event): void {
-  const input = event.target as HTMLInputElement;
-  jumpTarget.value = input.value === '' ? 0 : Number(input.value);
-}
-
-function jump(): void {
-  if (canJump.value) emit('page-change', jumpTarget.value - 1);
-}
 </script>
 
 <template>
@@ -74,7 +52,7 @@ function jump(): void {
     aria-label="列表分页"
   >
     <span class="admin-pagination__summary">
-      共 {{ totalElements }} {{ itemLabel }} · 第 {{ totalPages === 0 ? 0 : page + 1 }} / {{ totalPages }} 页
+      共 {{ totalElements }} {{ itemLabel }}
     </span>
     <div class="admin-pagination__controls">
       <label>
@@ -96,33 +74,6 @@ function jump(): void {
           </option>
         </select>
       </label>
-      <form
-        data-testid="admin-pagination-jump-form"
-        @submit.prevent="jump"
-      >
-        <label>
-          <span>跳转到第</span>
-          <input
-            class="admin-control"
-            :value="jumpTarget || ''"
-            type="number"
-            min="1"
-            :max="Math.max(1, totalPages)"
-            aria-label="跳转到页码"
-            data-testid="admin-pagination-page-input"
-            :disabled="disabled || totalPages === 0"
-            @input="changeJumpTarget"
-          >
-          <span>页</span>
-        </label>
-        <button
-          class="admin-button"
-          type="submit"
-          :disabled="!canJump"
-        >
-          跳转
-        </button>
-      </form>
       <div class="admin-pagination__buttons">
         <button
           class="admin-button"
@@ -186,7 +137,6 @@ function jump(): void {
 }
 
 .admin-pagination__controls,
-.admin-pagination__controls form,
 .admin-pagination__controls label,
 .admin-pagination__buttons {
   display: flex;
@@ -199,26 +149,13 @@ function jump(): void {
   flex-wrap: wrap;
 }
 
-.admin-pagination__controls form {
-  margin: 0;
-}
-
 .admin-pagination__controls label {
   gap: 6px;
   white-space: nowrap;
 }
 
-.admin-pagination select,
-.admin-pagination input {
-  padding: 0 8px;
-}
-
 .admin-pagination select {
   min-width: 68px;
-}
-
-.admin-pagination input {
-  width: 68px;
 }
 
 .admin-pagination__page {

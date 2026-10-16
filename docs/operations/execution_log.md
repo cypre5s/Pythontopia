@@ -1001,3 +1001,35 @@
 - 运维面板证据引用从 hover-only `title` 改成原生 `<details>`，长标签允许换行；管理员用户名/显示名单元格在窄列内换行完整展示。RED/GREEN 组件测试 9/9，typecheck 与定向 ESLint 通过。
 - Tutor 迁移卡暂不含服务端判题 ID，旧逻辑会把原题提交当成 TRANSFER_ATTEMPT。Graph 新计划将其作为学生反思检查点，旧会话里的 TRANSFER_ATTEMPT 也不会被普通提交推进；Graph 计划测试 10/10、Tutor 前端与管理页定向回归 24/24、`TutorWorkflowSubmissionFeedbackListenerTest` 7/7、Ruff、typecheck 和 ESLint 通过。新增后端测试文件 Spotless 检查通过；Listener 实现文件仍有 HEAD 前已有的格式差异，未重排整文件。真实变式题判题仍未实现，不记录掌握度。没有调用模型。
 - 先前离线 Maven 因 Spring Boot 父 POM 未缓存失败；切换临时 7892 代理设置后，先观察到新增 Listener 测试在旧实现中失败，再通过修改后的定向测试。无模型请求、无业务库写入。
+
+## 2026-10-16 — 拦截 Python 内置动态导入别名绕过
+
+- Graph Boss/章测的共享 AST 扫描器会拒绝 `__import__` 调用，却漏掉 `from builtins import __import__ as load`；学生代码与 AI 参考解因此仍能进入 Piston 请求，而不是在调用前命中禁用规则。Piston 仍是实际隔离边界，本问题属于代码级纵深防御绕过，不代表发现宿主逃逸。
+- 新回归在旧实现下分别失败于 `evaluate_student_code` 与 `self_test_problem`，随后共享扫描器检查 `ImportFrom` 导入名并拒绝 `__import__`。Boss 与章测集成测试 295/295 通过，Ruff 与 `git diff --check` 通过；无模型调用和业务数据写入。
+- 仍未验证生产 Piston ACL/代理认证或其他动态导入混淆形式；该修补不是沙箱隔离的替代品。
+
+## 2026-10-16 — 修复任务板与课件阅读器失败态
+
+- 今日任务与班级任务区分加载中、真实空列表和读取失败，并提供重试。课件页码映射现在区分加载/失败/缺失映射；标记已读失败会显示错误与重试，只有成功的后端写入才更新本地已读进度。
+- 按 TDD 先复现：课件交互 3 项、任务板状态 4 项均在旧实现下失败。定向前端测试 2 个文件、7 项通过；typecheck、5 个文件 ESLint 和 `git diff --check` 通过。未做真实浏览器或后端写入。
+- 后续窄屏/键盘实浏览器验证、PDF.js 实际渲染和教师补救包 320/375px 布局仍未验证。
+
+## 2026-10-16 — 限制游戏写入口角色与存档请求体
+
+- 修复五类游戏写入口未限制账号角色的问题：学生与管理员保留原行为，教师在限流和业务服务调用前收到 403。
+- 存档快照现在在 Spring MVC 绑定前执行 256 KiB 字节上限；声明长度超限会立即拒绝，未知长度最多读取到第一个超限字节。边缘与前端直连 Nginx 都针对快照路径设 256 KiB 上限。
+- RED/GREEN：5 个 MVC 测试类 16 项通过，覆盖角色拒绝、已知/未知长度 413 和恰好 256 KiB 正常转交；HTTPS/Nginx 合同脚本、双协议脚本、两份 Nginx `nginx -t` 与 diff 检查通过。没有业务数据写入。
+- 追加 `PublicReadAccessTest` 全 `SecurityFilterChain` 联测：认证过滤器解析的测试主体为 ACTIVE STUDENT；超限请求返回 413，恰好 256 KiB 请求进入 MVC 且原样读到全部字节，测试 2/2 通过。该测试 mock 了 `JwtService.parse`，不验证 JWT 签名算法。没有业务数据写入。
+- 完整 Maven suite 仍未运行；保留既有 Testcontainers 环境错误记录。生产 Nginx 部署态未核验。
+
+## 2026-10-16 — 限制主线视频进度加速虚报
+
+- 审计发现视频进度接口把请求中的任意 `deltaSec` 直接计入（最大钳制 120 秒）；每分钟两次限频挡不住快速跨 stage 重复上报。现有学习状态表新增 `video_last_reported_at`，首个上报只建立服务端时间基准，之后单次计入不超过两次服务端上报间的已流逝秒数；播放开始由 Web 发 `deltaSec=0` 建立基准。旧观看秒数保留，历史时间不回填。
+- 按 TDD 在旧实现上复现：PostgreSQL 仓库测试分别观察到首报错误计入 120 秒、第二次累计到 240 秒；服务层零增量测试也确认旧逻辑不会建时钟。修复后带完整 Flyway 的 PostgreSQL 集成 2/2（含真实迁移列上的计时 SQL）、`MainlineServiceTest` 22/22、请求校验 5/5、`StageVideoWatcher` 10/10 通过。前端 typecheck、定向 ESLint 和 `git diff --check` 通过。
+- 这只限制加速虚报；服务器不能从普通视频流证明学生真的在播放或标签页持续可见。课件页阅读仍是客户端报告的白名单页 ID。没有调用 DeepSeek、真实业务 API 或改写学习账号数据。
+
+## 2026-10-16 — 收紧课件问答知识点过滤
+
+- Courseware 问答的 Java DTO 原先没有限制 `kcCodes` 数量/元素长度，也没有限制 `topK`，而 Graph 只限制 `top_k`。现两端统一为最多 65 个 KC、每项最多 32 字符；Java `topK` 为 1–12，空 `topK` 仍由既有客户端逻辑使用默认值 6。
+- 按 TDD 先复现：Java 旧 DTO 接受 66 个 KC，Graph 旧 schema 接受 66 个 KC 和 33 字符元素。修复后 Java DTO 与 Graph schema 回归分别通过（Java 3/3，Graph 4/4）；Graph 定向 Ruff、修改 Java 文件的 Google Java Format 与 `git diff --check` 通过。
+- 未做真实 HTTP/模型联测；前端当前调用只传 6 条检索结果上限且不带 KC 过滤。未调用 DeepSeek或写业务数据。

@@ -79,6 +79,29 @@ describe('AdminProblemReviewsPage', () => {
     expect(preview.text()).toContain('审核记录');
   });
 
+  it('opens the audited reject flow directly from a pending row', async () => {
+    const wrapper = mount(AdminProblemReviewsPage);
+    await flushPromises();
+
+    await wrapper.get('[data-testid="admin-review-reject-7"]').trigger('click');
+    await flushPromises();
+
+    const decision = wrapper.get('dialog.review-dialog');
+    expect(decision.attributes('open')).toBeDefined();
+    expect(decision.text()).toContain('确认驳回题目');
+    expect(decideProblemReview).not.toHaveBeenCalled();
+
+    await wrapper.get('[data-testid="admin-review-reason"]').setValue('题面说明不完整');
+    await wrapper.get('[data-testid="admin-review-confirm"]').trigger('click');
+    await flushPromises();
+
+    expect(decideProblemReview).toHaveBeenCalledWith(7, {
+      decision: 'REJECTED',
+      reason: '题面说明不完整',
+      version: 3,
+    });
+  });
+
   it('labels automatic approvals and allows a teacher to remove them', async () => {
     const autoApproved = {
       ...pendingReview,
@@ -100,10 +123,12 @@ describe('AdminProblemReviewsPage', () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain('AI 自动审核');
+    expect(wrapper.get('[data-testid="admin-review-reject-7"]').attributes('aria-label')).toBe('撤下题目 7');
     await wrapper.get('button.review-open').trigger('click');
     await flushPromises();
     await wrapper.get('button.review-decision--reject').trigger('click');
     await flushPromises();
+    expect(wrapper.get('dialog.review-dialog').text()).toContain('确认撤下题目');
     await wrapper.get('[data-testid="admin-review-reason"]').setValue('教师复核发现题面歧义');
     await wrapper.get('[data-testid="admin-review-confirm"]').trigger('click');
     await flushPromises();
@@ -113,11 +138,15 @@ describe('AdminProblemReviewsPage', () => {
       reason: '教师复核发现题面歧义',
       version: 2,
     });
+    expect(toastShow).toHaveBeenCalledWith('题目已撤下并留档。', 'success');
   });
 
   it('searches and filters through the backend queue API', async () => {
     const wrapper = mount(AdminProblemReviewsPage);
     await flushPromises();
+
+    expect(wrapper.get('.admin-pagination__summary').text()).toBe('共 21 条审核记录');
+    expect(wrapper.find('[data-testid="admin-pagination-page-input"]').exists()).toBe(false);
 
     await wrapper.get('[data-testid="admin-review-search"]').setValue('  循环  ');
     await wrapper.get('[data-testid="admin-review-search-form"]').trigger('submit');

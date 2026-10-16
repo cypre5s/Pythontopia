@@ -1,6 +1,7 @@
 package com.pythontopia.world;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
+import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.common.web.StudentWriteThrottle;
@@ -29,6 +30,7 @@ public class WorldAdvanceController {
    */
   @PostMapping("/sleep")
   public WorldAdvanceResponse sleep(@CurrentUser CurrentUserPrincipal user) {
+    requireStudentOrAdmin(user);
     if (!studentWriteThrottle.tryAcquire(user.userId(), 1)) {
       throw new BusinessException(
           HttpStatus.TOO_MANY_REQUESTS,
@@ -36,5 +38,12 @@ public class WorldAdvanceController {
           "每个账号每分钟最多写入 100 条记录");
     }
     return service.sleep(user.userId());
+  }
+
+  private void requireStudentOrAdmin(CurrentUserPrincipal user) {
+    if (user.role() != Role.STUDENT && user.role() != Role.ADMIN) {
+      throw new BusinessException(
+          HttpStatus.FORBIDDEN, "FORBIDDEN", "Only students or admins have world state");
+    }
   }
 }

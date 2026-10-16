@@ -1,6 +1,7 @@
 package com.pythontopia.world.save;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
+import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.common.web.StudentWriteThrottle;
@@ -36,6 +37,7 @@ public class SaveSlotController {
 
   @GetMapping
   public List<SaveSlotDto> list(@CurrentUser CurrentUserPrincipal user) {
+    requireStudentOrAdmin(user);
     return service.list(user.userId());
   }
 
@@ -44,6 +46,7 @@ public class SaveSlotController {
       @CurrentUser CurrentUserPrincipal user,
       @PathVariable @Min(0) @Max(5) int slotIndex,
       @Valid @RequestBody SaveSlotCreateRequest request) {
+    requireStudentOrAdmin(user);
     requireWriteCapacity(user.userId(), 1);
     return service.create(user.userId(), slotIndex, request.displayName());
   }
@@ -51,6 +54,7 @@ public class SaveSlotController {
   @PostMapping("/{slotIndex}/activate")
   public SaveSlotDto activate(
       @CurrentUser CurrentUserPrincipal user, @PathVariable @Min(0) @Max(5) int slotIndex) {
+    requireStudentOrAdmin(user);
     requireWriteCapacity(user.userId(), 1);
     return service.activate(user.userId(), slotIndex);
   }
@@ -60,6 +64,7 @@ public class SaveSlotController {
       @CurrentUser CurrentUserPrincipal user,
       @PathVariable @Min(0) @Max(5) int slotIndex,
       @RequestBody(required = false) String snapshot) {
+    requireStudentOrAdmin(user);
     requireWriteCapacity(user.userId(), SNAPSHOT_WRITE_COST);
     return service.saveSnapshot(user.userId(), slotIndex, snapshot);
   }
@@ -70,6 +75,13 @@ public class SaveSlotController {
           HttpStatus.TOO_MANY_REQUESTS,
           "STUDENT_WRITE_RATE_LIMITED",
           "每个账号每分钟最多写入 100 条记录");
+    }
+  }
+
+  private void requireStudentOrAdmin(CurrentUserPrincipal user) {
+    if (user.role() != Role.STUDENT && user.role() != Role.ADMIN) {
+      throw new BusinessException(
+          HttpStatus.FORBIDDEN, "FORBIDDEN", "Only students or admins have world state");
     }
   }
 }

@@ -5,6 +5,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.when;
 
 import com.pythontopia.PythontopiaApplication;
+import com.pythontopia.mainline.domain.MainlineStageProgress;
 import com.pythontopia.mainline.star.ChapterStarService;
 import com.pythontopia.mainline.star.StarSource;
 import com.pythontopia.world.boss.ExpeditionScoreService;
@@ -53,6 +54,8 @@ class MainlineRecoveryConcurrencyIntegrationTest {
   }
 
   @Autowired MainlineRecoveryService recoveryService;
+
+  @Autowired MainlineStageProgressRepository stageProgressRepository;
 
   @Autowired JdbcTemplate jdbc;
 
@@ -113,5 +116,28 @@ class MainlineRecoveryConcurrencyIntegrationTest {
     } finally {
       workers.shutdownNow();
     }
+  }
+
+  @Test
+  void videoProgressRepositoryUsesMigratedServerClockColumn() {
+    long userId =
+        jdbc.queryForObject(
+            "INSERT INTO users (username, display_name, password_hash, role)"
+                + " VALUES (?, 'Video clock', 'test-hash', 'STUDENT') RETURNING id",
+            Long.class,
+            "video-clock-" + UUID.randomUUID());
+    long stageId =
+        jdbc.queryForObject("SELECT id FROM mainline_stage ORDER BY id LIMIT 1", Long.class);
+
+    MainlineStageProgress first = stageProgressRepository.addVideoSeconds(userId, stageId, 120);
+    jdbc.update(
+        "UPDATE mainline_stage_progress SET video_last_reported_at = now() - interval '10 seconds'"
+            + " WHERE user_id = ? AND stage_id = ?",
+        userId,
+        stageId);
+    MainlineStageProgress second = stageProgressRepository.addVideoSeconds(userId, stageId, 120);
+
+    assertThat(first.videoWatchedSec()).isZero();
+    assertThat(second.videoWatchedSec()).isEqualTo(10);
   }
 }

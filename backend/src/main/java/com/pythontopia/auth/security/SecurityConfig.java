@@ -3,6 +3,7 @@ package com.pythontopia.auth.security;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.error.ApiError;
+import com.pythontopia.common.web.ApiRequestBodyLimitFilter;
 import jakarta.servlet.http.HttpServletResponse;
 import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
@@ -15,6 +16,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -39,13 +41,12 @@ public class SecurityConfig {
       throws Exception {
     return http.csrf(csrf -> csrf.disable())
         .cors(cors -> cors.configurationSource(corsConfigurationSource))
-        .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .sessionManagement(
+            session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .authorizeHttpRequests(
             requests -> {
               // Internal handlers verify the shared service token themselves.
-              requests
-                  .requestMatchers("/api/internal/**")
-                  .permitAll();
+              requests.requestMatchers("/api/internal/**").permitAll();
               requests
                   .requestMatchers(
                       HttpMethod.POST,
@@ -100,6 +101,7 @@ public class SecurityConfig {
                                 "FORBIDDEN",
                                 "Access denied")))
         .addFilterBefore(jwtFilter, UsernamePasswordAuthenticationFilter.class)
+        .addFilterAfter(new ApiRequestBodyLimitFilter(objectMapper), AuthorizationFilter.class)
         .build();
   }
 

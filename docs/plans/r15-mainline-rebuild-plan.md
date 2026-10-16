@@ -263,7 +263,7 @@ GET /api/teacher/classrooms/{id}/dashboard/endless-activity   → 7日无尽轮�
 GET /api/teacher/classrooms/{id}/dashboard/mainline-progress  → 成员×章节 stage 完成度矩阵
 ```
 
-校验要点：`video-progress` deltaSec ≤ 真实流逝时间（服务端节流，单次 ≤120s、每分钟 ≤2 次）；
+校验要点：`video-progress` 的 `deltaSec=0` 只建立服务端计时基准；正增量最多计入两次服务端上报间的已流逝秒数、单次 ≤120s、每分钟 ≤2 次。浏览器仍负责可见播放采集，服务端时间差只防止加速虚报，不能证明视频画面持续可见；
 `example-done` 若带 submissionId 必须 PASSED 且属本人；所有写接口幂等。
 
 ---

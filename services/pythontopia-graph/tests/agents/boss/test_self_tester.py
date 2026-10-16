@@ -144,6 +144,7 @@ def test_forbidden_imports_rejected(code: str) -> None:
     "code",
     [
         "__import__('os').system('true')",
+        "from builtins import __import__ as load\nload('os').getcwd()",
         "import importlib\nimportlib.import_module('os')",
     ],
 )

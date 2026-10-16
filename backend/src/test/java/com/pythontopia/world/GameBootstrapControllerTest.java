@@ -95,4 +95,26 @@ class GameBootstrapControllerTest {
 
     verifyNoInteractions(service);
   }
+
+  @Test
+  void rejectsTeacherBeforeCheckingWriteBudget() throws Exception {
+    authenticateAs(Role.TEACHER);
+
+    mockMvc
+        .perform(post("/api/game/bootstrap"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+
+    verifyNoInteractions(service, studentWriteThrottle);
+  }
+
+  private void authenticateAs(Role role) {
+    CurrentUserPrincipal principal = new CurrentUserPrincipal(42L, "account", role);
+    SecurityContextHolder.getContext()
+        .setAuthentication(
+            new UsernamePasswordAuthenticationToken(
+                principal,
+                null,
+                List.of(new SimpleGrantedAuthority("ROLE_" + role.name()))));
+  }
 }

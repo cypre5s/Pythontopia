@@ -10,9 +10,13 @@
 
 ### 2026-10-16 最近续接
 
+- 最近动作：收紧课件问答请求边界，Java 与 Graph 均限制最多 65 个 KC、每项最多 32 字符；Java `topK` 也限制为 Graph 使用的 1–12。保留空值默认行为，未更改当前前端调用。
+- 新鲜验证：Java DTO/Graph 客户端定向 Maven 3/3、Graph schema 与现有答疑测试 4/4、Ruff、定向 Google Java Format 与 `git diff --check` 通过。旧边界回归已先 RED；未发真实 API 或模型请求。
 - 最近动作：复验概念 KC 客观题优先级补丁后的完整远征；不适合代码判题的 KC 用同 KC 选择/判断/填空题，答案由服务端正式判定。
 - 新鲜验证：普通注册 STUDENT 完成 10 层服务端远征，11 道审核课程客观题全程通过；KC-004 Boss 三阶段结算成功，Phaser 受击画面可见，排行榜通关深度 11。Twin KC-004 掌握度 0.48、证据 `PRACTICE_PASS`；分身页正常。浏览器 pageerror=0、HTTP 5xx=0；账号与 57 个直接外键引用清理为 0。Boss 预生成在浏览器侧隔离为 IDLE，本次未调用 DeepSeek。
 - 执行时脚本先后遇到服务端 10 秒提交间隔与页面选择器假设，已按真实后端限制等待并使用现有 `.exp-boss-live` class；最终闭环通过。性能最后测。
+- 管理台差异续收尾：表格长文本可读、审核列表支持真实行内驳回/撤下、分页和弹窗按本项目已有功能对齐。Vitest 5 文件/17 项、typecheck、定向 ESLint、diff 检查通过；没有可支持就不新增字段/按钮，本轮未做管理员浏览器截图。
+- DeepSeek 出站路径静态复核完成：文本与 Tutor 图片输入的模型出口受限为 DeepSeek；TTS/ASR/图片生成与旧图片理解 provider 固定关闭。未读密钥、未发请求；运行容器环境变量和实际网络出口仍未验证。剩余非 AI 写路由与多行/包装器日志审计还在进行。
 - 接续本地安全复核：同步 `/api/media/storyboard/video` 之前没有 per-account budget，会执行分镜出图与 ffmpeg；现复用异步作业相同的每账号 3 次/分钟额度。旧代码新回归先失败；媒体限流、资源授权及 AI route coverage 合计 14/14 通过。尚未完成全 API 和日志审计。
 - 日志子项：`XfyunImageService` 旧错误日志会输出上游 message；本地 HTTP sentinel 回归先失败，改成只输出 exception type 后该类 3/3 通过。未访问讯飞；其余媒体 provider 日志仍待核。
 
@@ -20,7 +24,7 @@
 - 新鲜验证：LibraryPage 11/11、typecheck、定向 ESLint 通过；画像访谈/写入额度回归 20/20，远征地图/AdaptivePracticePolicy 10/10，RAG/上传检索相关定向回归 14/14；`git diff --check` 通过。未发起 DeepSeek 请求。
 - 浏览器复核：一次性本地学生注册/登录成功（201/200）；拦截课件问答为固定引用响应，并将对应页索引请求模拟为 503。点击引用后页面显示“课件页索引加载失败”，页面错误 0；账号已删除并查询确认同前缀残留 0。没有 DeepSeek 请求。
 - 唯一图片路径补验尝试：从 `/lecture/1` 选择合成 PNG 并提交一次 Tutor 图片问题；测试脚本监听了 `/api/tutor/ask/stream`，但真实 Web 接口为 `/api/tutor/ask`，因此未捕获 HTTP/SSE 结果，不能计为通过。临时账号已清理；不重复发起模型请求，保留为未验证。
-- 尚未完成：本轮已验证普通新手首章客观题的刷新恢复和 Twin 回流，但完整 Boss 三阶段路线未在最新取题优先级补丁后重跑；Web 动作矩阵、Twin A/B/7 日样本、安全审计和工程收尾仍开放，性能最后测。
+- 尚未完成：最新取题优先级补丁后的 KC-004 10 层远征、Boss 三阶段与 Twin 回流已完成，账号和外键清理为 0；不重复注册或重跑通关。剩余 Web 动作矩阵、非 AI 写路由/日志审计、Twin A/B/7 日样本和工程收尾仍开放，性能最后测。
 
 - 最近动作：修正管理员的世界补丁/策略审核链接，避免误进教师 AI 题目队列；学习分身 `/state` 增加每个 KC 的可信历史证据来源，复用现有 `kc_mastery_event`，不新增表。服务只批量查询一次，排除 BOOTSTRAP/DECAY 并按来源去重；未评估 KC 来源为空，页面显示中文标签。
 - 新鲜验证：`AiRuntimeSummaryServiceTest`、`LearnerTwinServiceTest` 通过；PostgreSQL 来源查询集成用例通过；4 个相关前端 spec 24/24、typecheck、定向 ESLint/Spotless、`git diff --check` 通过。没有 DeepSeek 请求或业务数据写入。

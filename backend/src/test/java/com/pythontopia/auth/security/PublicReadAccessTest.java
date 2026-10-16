@@ -1,16 +1,21 @@
 package com.pythontopia.auth.security;
 
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.pythontopia.auth.domain.UserAccount;
 import com.pythontopia.auth.repository.UserRepository;
-import org.springframework.beans.factory.annotation.Autowired;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
@@ -33,6 +38,8 @@ import org.springframework.web.bind.annotation.RestController;
     })
 class PublicReadAccessTest {
 
+  private static final int MAX_LOOP_RUNTIME_REQUEST_BYTES = 3 * 1024 * 1024;
+
   @Autowired private MockMvc mockMvc;
 
   @MockBean private JwtService jwtService;
@@ -51,6 +58,62 @@ class PublicReadAccessTest {
     mockMvc.perform(get("/api/downloads/security-test")).andExpect(status().isOk());
     mockMvc.perform(post("/api/downloads/security-test/hit")).andExpect(status().isOk());
     mockMvc.perform(post("/api/downloads/security-test")).andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void saveSnapshotBodyLimitRunsAfterAuthenticationAndBeforeMvcBinding() throws Exception {
+    CurrentUserPrincipal principal = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
+    when(jwtService.parse("signed-test-token")).thenReturn(principal);
+    when(userRepository.findById(7L))
+        .thenReturn(
+            Optional.of(
+                new UserAccount(
+                    7L, "student", "Student", "hash", null, Role.STUDENT, "ACTIVE", 0)));
+
+    mockMvc
+        .perform(
+            post("/api/world/saves/0/snapshot")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer signed-test-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("x".repeat(256 * 1024 + 1)))
+        .andExpect(status().isPayloadTooLarge());
+
+    mockMvc
+        .perform(
+            post("/api/world/saves/0/snapshot")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer signed-test-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("x".repeat(256 * 1024)))
+        .andExpect(status().isOk())
+        .andExpect(content().string(Integer.toString(256 * 1024)));
+  }
+
+  @Test
+  void agentLoopBodyLimitsRejectOversizedRequestsBeforeMvcBinding() throws Exception {
+    CurrentUserPrincipal principal = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
+    when(jwtService.parse("signed-test-token")).thenReturn(principal);
+    when(userRepository.findById(7L))
+        .thenReturn(
+            Optional.of(
+                new UserAccount(
+                    7L, "student", "Student", "hash", null, Role.STUDENT, "ACTIVE", 0)));
+    String oversizedBody = "x".repeat(MAX_LOOP_RUNTIME_REQUEST_BYTES + 1);
+
+    mockMvc
+        .perform(
+            post("/api/agent-runs/99/loop-states")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer signed-test-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(oversizedBody))
+        .andExpect(status().isPayloadTooLarge());
+
+    mockMvc
+        .perform(
+            post("/api/loop/runs/99/tool-calls")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer signed-test-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(oversizedBody))
+        .andExpect(status().isPayloadTooLarge());
   }
 
   @RestController
@@ -98,6 +161,23 @@ class PublicReadAccessTest {
     @PostMapping(value = "/api/downloads/security-test", produces = MediaType.TEXT_PLAIN_VALUE)
     String mutateDownloadConfig() {
       return "count";
+    }
+
+    @PostMapping(
+        value = "/api/world/saves/{slotIndex}/snapshot",
+        produces = MediaType.TEXT_PLAIN_VALUE)
+    String saveSnapshot(@org.springframework.web.bind.annotation.RequestBody String snapshot) {
+      return Integer.toString(snapshot.length());
+    }
+
+    @PostMapping(value = "/api/agent-runs/{id}/loop-states", produces = MediaType.TEXT_PLAIN_VALUE)
+    String saveAgentLoopState(@org.springframework.web.bind.annotation.RequestBody String state) {
+      return Integer.toString(state.length());
+    }
+
+    @PostMapping(value = "/api/loop/runs/{id}/tool-calls", produces = MediaType.TEXT_PLAIN_VALUE)
+    String saveLoopToolCall(@org.springframework.web.bind.annotation.RequestBody String call) {
+      return Integer.toString(call.length());
     }
   }
 }

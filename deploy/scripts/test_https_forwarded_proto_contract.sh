@@ -73,6 +73,57 @@ require_tutor_workflow_upload_limit_block() {
   fi
 }
 
+require_save_slot_snapshot_limit_block() {
+  local edge_file="${ROOT_DIR}/deploy/nginx/pythontopia.conf"
+  local front_file="${ROOT_DIR}/frontend/nginx.conf"
+  local snapshot_block
+
+  snapshot_block="$(awk '
+    /location[[:space:]]+~[[:space:]]+\^\/api\/world\/saves\/\[0-9\]\+\/snapshot\$/ { capture=1 }
+    capture { print }
+    capture && /^[[:space:]]*}/ { exit }
+  ' "${edge_file}")"
+  if grep -Eq 'client_max_body_size[[:space:]]+256k;' <<<"${snapshot_block}" \
+      && grep -Eq 'proxy_pass[[:space:]]+http:\/\/pythontopia_frontend;' <<<"${snapshot_block}"; then
+    echo "[PASS] 边缘 Nginx 将存档快照请求限制为 256 KiB 并正确代理"
+  else
+    echo "[FAIL] 边缘 Nginx 将存档快照请求限制为 256 KiB 并正确代理" >&2
+    FAILURES=$((FAILURES + 1))
+  fi
+
+  snapshot_block="$(awk '
+    /location[[:space:]]+~[[:space:]]+\^\/api\/world\/saves\/\[0-9\]\+\/snapshot\$/ { capture=1 }
+    capture { print }
+    capture && /^[[:space:]]*}/ { exit }
+  ' "${front_file}")"
+  if grep -Eq 'client_max_body_size[[:space:]]+256k;' <<<"${snapshot_block}" \
+      && grep -Eq 'proxy_pass[[:space:]]+http:\/\/backend:18080;' <<<"${snapshot_block}"; then
+    echo "[PASS] 前端 Nginx 将直连存档快照请求限制为 256 KiB 并正确代理"
+  else
+    echo "[FAIL] 前端 Nginx 将直连存档快照请求限制为 256 KiB 并正确代理" >&2
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
+require_loop_runtime_body_limit_block() {
+  local file="$1"
+  local description="$2"
+  local expected_upstream="$3"
+  local body_limit_block
+  body_limit_block="$(awk '
+    index($0, "location ~ ^/api/(?:agent-runs/") { capture=1 }
+    capture { print }
+    capture && /^[[:space:]]*}/ { exit }
+  ' "${file}")"
+  if grep -Eq 'client_max_body_size[[:space:]]+3m;' <<<"${body_limit_block}" \
+      && grep -Fq "proxy_pass ${expected_upstream};" <<<"${body_limit_block}"; then
+    echo "[PASS] ${description}"
+  else
+    echo "[FAIL] ${description}" >&2
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
 require_evidence_snapshot_limit_block() {
   local edge_file="${ROOT_DIR}/deploy/nginx/pythontopia.conf"
   local api_block
@@ -177,6 +228,15 @@ require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "Tutor 图片上传限速只匹配附件 POST" \
   '~\^POST:/api/tutor/workflow/sessions/\[\^/\]\+/attachments\$[[:space:]]+\$binary_remote_addr;'
 require_tutor_workflow_upload_limit_block
+require_save_slot_snapshot_limit_block
+require_loop_runtime_body_limit_block \
+  "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "边缘 Nginx 将 Loop Runtime JSON 写请求限制为 3 MiB 并正确代理" \
+  "http://pythontopia_frontend"
+require_loop_runtime_body_limit_block \
+  "${FRONTEND_NGINX}" \
+  "前端 Nginx 将 Loop Runtime JSON 写请求限制为 3 MiB 并正确代理" \
+  "http://backend:18080"
 require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "证据快照限速只接收 POST 快照请求的来源 IP" \
   'map[[:space:]]+"\$request_method:\$uri"[[:space:]]+\$pythontopia_evidence_snapshot_limit_key[[:space:]]*\{'

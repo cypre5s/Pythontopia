@@ -111,9 +111,7 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
 }
 
 .admin-panel__footer {
-  padding: 0 22px 22px;
-  border-top: 1px solid var(--admin-panel-border);
-  background: #fbfdff;
+  padding: 18px 22px 0;
 }
 
 @media (max-width: 640px) {
@@ -138,7 +136,7 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
   }
 
   .admin-panel__footer {
-    padding: 0 16px 16px;
+    padding: 18px 16px 0;
   }
 
   .admin-panel__header {

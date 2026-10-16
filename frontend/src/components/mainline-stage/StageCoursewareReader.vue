@@ -49,6 +49,9 @@ const maxVisited = ref<number>(1);
 /** 已读 page_id 集合（本地乐观维护：初始来自后端）。 */
 const readPageIdSet = ref<Set<number>>(new Set(props.readPageIds));
 const pageNumbersById = ref<Map<number, number>>(new Map());
+const pageMapLoading = ref(false);
+const pageMapError = ref<string | null>(null);
+const markError = ref<string | null>(null);
 const pagesMapped = computed<boolean>(
   () =>
     props.pageIds.length > 0
@@ -64,13 +67,30 @@ async function loadPageNumbers(): Promise<void> {
   const requestId = ++pageMapRequest;
   const documentId = props.docId;
   pageNumbersById.value = new Map();
+  pageMapError.value = null;
+  if (props.pageIds.length === 0) {
+    pageMapLoading.value = false;
+    return;
+  }
+  pageMapLoading.value = true;
   try {
     const pages = await listDocumentPages(documentId);
     if (props.docId !== documentId || requestId !== pageMapRequest) return;
-    pageNumbersById.value = new Map(pages.map((page) => [page.pageId, page.pageNo]));
-  } catch {
+    const pageNumbers = new Map(pages.map((page) => [page.pageId, page.pageNo]));
+    pageNumbersById.value = pageNumbers;
+    if (!props.pageIds.every((pageId) => pageNumbers.has(pageId))) {
+      pageMapError.value = '课程页与 PDF 页码未能对应，暂不能标记完成。';
+    }
+  } catch (error) {
     if (props.docId === documentId && requestId === pageMapRequest) {
       pageNumbersById.value = new Map();
+      pageMapError.value = error instanceof Error
+        ? `加载课件页码失败：${error.message}`
+        : '加载课件页码失败，请重试。';
+    }
+  } finally {
+    if (props.docId === documentId && requestId === pageMapRequest) {
+      pageMapLoading.value = false;
     }
   }
 }
@@ -81,6 +101,7 @@ watch(
     currentPage.value = 1;
     maxVisited.value = 1;
     readPageIdSet.value = new Set(props.readPageIds);
+    markError.value = null;
     void loadPageNumbers();
   },
   { immediate: true },
@@ -135,14 +156,17 @@ async function markAllRead(): Promise<void> {
   if (passed.value || marking.value || !pagesMapped.value) return;
   if (!reachedEnd.value) return; // 防御：必须确实翻到末页再标记
   const allIds = Array.from(new Set(props.pageIds));
+  markError.value = null;
   marking.value = true;
   try {
     // 只 await 成功；用已知 pageIds 乐观更新（不读返回体，规避 DTO 形状差异）。
     await postPagesRead(props.stageId, allIds);
     readPageIdSet.value = new Set([...readPageIdSet.value, ...allIds]);
     emit('progress', { stageId: props.stageId, readPageIds: [...readPageIdSet.value] });
-  } catch {
-    // 打点失败静默：用户可再次点击重试（服务端幂等）。
+  } catch (error) {
+    markError.value = error instanceof Error
+      ? `标记课件已读失败：${error.message}`
+      : '标记课件已读失败，请检查网络后重试。';
   } finally {
     marking.value = false;
   }
@@ -217,8 +241,34 @@ async function currentPageContext(): Promise<string> {
       >已读 {{ readCount }} / {{ requiredCount }} 页</span>
     </header>
 
+    <p
+      v-if="pageMapLoading"
+      class="stage-courseware__loading"
+      role="status"
+      data-testid="stage-courseware-map-loading"
+    >
+      正在加载课件页码…
+    </p>
+
     <div
-      v-if="pagesMapped"
+      v-else-if="pageMapError"
+      class="stage-courseware__error stage-courseware__map-error"
+      role="alert"
+      data-testid="stage-courseware-map-error"
+    >
+      <p>{{ pageMapError }}</p>
+      <button
+        type="button"
+        class="stage-courseware__navbtn"
+        data-testid="stage-courseware-map-retry"
+        @click="loadPageNumbers"
+      >
+        重试
+      </button>
+    </div>
+
+    <div
+      v-else-if="pagesMapped"
       class="stage-courseware__body"
     >
       <!-- 左：PDF 单屏自适应 + 紧凑翻页工具条（页面不再上下滚动） -->
@@ -274,6 +324,14 @@ async function currentPageContext(): Promise<string> {
             v-if="!passed && !reachedEnd"
             class="stage-courseware__tip"
           >翻到最后一页后可标记 ✓</span>
+          <p
+            v-if="markError"
+            class="stage-courseware__error stage-courseware__mark-error"
+            role="alert"
+            data-testid="stage-courseware-mark-error"
+          >
+            {{ markError }}
+          </p>
           <button
             v-if="!passed"
             type="button"
@@ -282,7 +340,7 @@ async function currentPageContext(): Promise<string> {
             :disabled="!reachedEnd || marking"
             @click="markAllRead"
           >
-            {{ marking ? '标记中…' : '✅ 标记本节课件已读' }}
+            {{ marking ? '标记中…' : markError ? '重试标记本节课件已读' : '✅ 标记本节课件已读' }}
           </button>
           <span
             v-else
@@ -299,15 +357,6 @@ async function currentPageContext(): Promise<string> {
         :context-provider="currentPageContext"
       />
     </div>
-
-    <p
-      v-else-if="pageIds.length > 0"
-      class="stage-courseware__unavailable"
-      role="status"
-      data-testid="stage-courseware-map-error"
-    >
-      课程页与 PDF 页码未能对应，暂不能标记完成。
-    </p>
 
     <p
       v-else
@@ -473,6 +522,33 @@ async function currentPageContext(): Promise<string> {
   background: var(--pyt-color-bg-elevated);
   border-color: var(--pyt-color-border);
   color: var(--pyt-color-text-muted);
+}
+.stage-courseware__loading,
+.stage-courseware__error {
+  margin: 0;
+  padding: var(--pyt-space-3);
+  border-radius: var(--pyt-radius-md);
+}
+.stage-courseware__loading {
+  color: var(--pyt-color-text-hint);
+  background: var(--pyt-color-bg-soft);
+}
+.stage-courseware__error {
+  color: var(--pyt-color-danger);
+  background: var(--pyt-color-danger-bg, var(--pyt-color-bg-soft));
+}
+.stage-courseware__map-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pyt-space-2);
+  flex-wrap: wrap;
+}
+.stage-courseware__map-error p {
+  margin: 0;
+}
+.stage-courseware__mark-error {
+  flex: 1 1 100%;
 }
 .stage-courseware__done {
   font-size: var(--pyt-font-size-xs);

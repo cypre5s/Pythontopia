@@ -170,6 +170,8 @@ def _scan_forbidden_imports(source: str) -> list[str]:
             mod = node.module or ""
             if _matches(mod):
                 forbidden.append(mod)
+            if any(alias.name == "__import__" for alias in node.names):
+                forbidden.append("__import__")
         elif isinstance(node, ast.Name) and node.id == "__import__":
             forbidden.append(node.id)
         elif isinstance(node, ast.Attribute) and node.attr == "__import__":

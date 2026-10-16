@@ -50,4 +50,12 @@ class MainlineRequestValidationTest {
                 new PagesReadRequest(Collections.nCopies(PagesReadRequest.MAX_BATCH_PAGES + 1, 1L))))
         .isNotEmpty();
   }
+
+  @Test
+  void videoProgressAllowsZeroToStartServerClockButRejectsNegativeValues() {
+    assertThat(validator.validate(new VideoProgressRequest(0))).isEmpty();
+    assertThat(validator.validate(new VideoProgressRequest(1))).isEmpty();
+    assertThat(validator.validate(new VideoProgressRequest(-1))).isNotEmpty();
+    assertThat(validator.validate(new VideoProgressRequest(null))).isNotEmpty();
+  }
 }

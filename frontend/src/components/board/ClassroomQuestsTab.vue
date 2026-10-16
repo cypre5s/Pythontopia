@@ -21,12 +21,26 @@ const submissionsByQuest = reactive<Record<number, SubmissionDto[]>>({});
 const selectedSubmissionByQuest = reactive<Record<number, number | null>>({});
 const evidenceLoading = ref<number | null>(null);
 const submitLoading = ref<number | null>(null);
+const classroomLoading = ref(false);
+const classroomLoadError = ref<string | null>(null);
 
 onMounted(async () => {
   if (learning.quests.classroom.length === 0) {
-    await learning.loadClassroomQuests();
+    await loadClassroomQuests();
   }
 });
+
+async function loadClassroomQuests(): Promise<void> {
+  classroomLoading.value = true;
+  classroomLoadError.value = null;
+  learning.clearQuestsError();
+  try {
+    await learning.loadClassroomQuests();
+    classroomLoadError.value = learning.quests.lastError;
+  } finally {
+    classroomLoading.value = false;
+  }
+}
 
 function deepLinkTitle(quest: ClassroomQuestDto): string {
   switch (quest.nodeType) {
@@ -101,7 +115,7 @@ async function submitComplete(quest: ClassroomQuestDto): Promise<void> {
   try {
     await learning.completeQuestById(quest.studentQuestId, request);
     toast.show('班级任务已提交完成。', 'success');
-    await learning.loadClassroomQuests();
+    await loadClassroomQuests();
   } catch (error) {
     const code = extractCode(error);
     const friendly = evidenceErrorMessage(code);
@@ -158,13 +172,34 @@ function isCompletable(quest: ClassroomQuestDto): boolean {
     data-testid="classroom-tab"
   >
     <p
-      v-if="quests.length === 0"
+      v-if="classroomLoading"
+      class="feedback"
+      role="status"
+    >
+      正在加载班级任务…
+    </p>
+    <div
+      v-else-if="classroomLoadError"
+      class="feedback error"
+      role="alert"
+    >
+      <p>加载班级任务失败：{{ classroomLoadError }}</p>
+      <button
+        type="button"
+        data-testid="classroom-quests-retry"
+        @click="loadClassroomQuests"
+      >
+        重试
+      </button>
+    </div>
+    <p
+      v-else-if="quests.length === 0"
       class="empty"
     >
       暂时没有班级任务。教师在阶段 12 上线后会在这里发布。
     </p>
     <ul
-      v-else
+      v-else-if="quests.length > 0"
       class="quest-list"
     >
       <li
@@ -259,6 +294,24 @@ function isCompletable(quest: ClassroomQuestDto): boolean {
   border-radius: var(--pyt-radius-lg);
   text-align: center;
   color: var(--pyt-color-text-hint);
+}
+.feedback {
+  margin: 0;
+  padding: 14px;
+  background: var(--pyt-color-bg-soft);
+  border-radius: var(--pyt-radius-lg);
+  text-align: center;
+}
+.error p {
+  margin: 0 0 8px;
+}
+.error button {
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 2px solid var(--pyt-color-text-hint);
+  background: var(--pyt-color-bg-elevated);
+  color: var(--pyt-color-text-hint);
+  cursor: pointer;
 }
 .quest-list {
   list-style: none;

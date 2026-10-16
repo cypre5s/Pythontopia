@@ -233,24 +233,25 @@ public class MainlineService implements MainlineStageCompletionPort {
 
   // --- 三件套打点 -----------------------------------------------------------
 
-  /** 视频时长上报：钳制单次上限 + 每分钟限频；超频 no-op（幂等软节流），不报错。 */
+  /** 视频时长上报：服务端计时限速 + 单次上限 + 每分钟限频；零增量只启动计时基准。 */
   @Transactional
   public StageProgressDto reportVideoProgress(long userId, long stageId, int deltaSec) {
     MainlineStage raw = requireStage(stageId);
     requireChapterUnlocked(userId, raw.chapter());
     MainlineStage stage = withChapterStandards(raw);
     int clamped = Math.min(Math.max(deltaSec, 0), properties.videoDeltaMaxSec());
-    if (clamped <= 0 || !videoThrottle.tryAcquire(userId, stageId)) {
+    if (!videoThrottle.tryAcquire(userId, stageId)) {
       return progressDto(userId, stage, progressRepository.find(userId, stageId).orElse(null), false);
     }
     MainlineStageProgress progress = progressRepository.addVideoSeconds(userId, stageId, clamped);
-    if (stage.requiredVideoSec() > 0
+    if (clamped > 0
+        && stage.requiredVideoSec() > 0
         && StageCompletion.videoComplete(stage, progress)
         && progressRepository.claimVideoConsumed(userId, stageId)) {
       eventPublisher.publishEvent(
           new LearningEvent.MediaConsumed(userId, "video", stage.chapter(), stage.kcCodes()));
     }
-    return progressDto(userId, stage, progress, true);
+    return progressDto(userId, stage, progress, clamped > 0);
   }
 
   /** 课件页阅读打点（单页，并集去重，幂等）。不属于本小节课件切片的 pageId 直接丢弃（no-op）。 */

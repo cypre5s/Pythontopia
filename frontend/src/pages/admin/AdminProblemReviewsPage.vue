@@ -164,8 +164,13 @@ function closeDetail(restoreTrigger = true): void {
   });
 }
 
-function openDecision(decision: FinalDecision, event: MouseEvent): void {
-  if (!selectedEntry.value || !canDecide(selectedEntry.value) || loading.value || deciding.value) return;
+function openDecision(
+  decision: FinalDecision,
+  event: MouseEvent,
+  entry: BossProblemReviewDto | null = selectedEntry.value,
+): void {
+  if (!entry || !canDecide(entry) || loading.value || deciding.value) return;
+  selectedId.value = entry.id;
   decisionTrigger.value = event.currentTarget as HTMLButtonElement;
   pendingDecision.value = decision;
   decisionReason.value = '';
@@ -204,6 +209,9 @@ async function submitDecision(): Promise<void> {
 
   deciding.value = true;
   decisionError.value = null;
+  const isRemovingAutoApproved = decision === 'REJECTED'
+    && entry.decision === 'APPROVED'
+    && entry.reviewSource === 'AUTOMATED';
   try {
     const updated = await decideProblemReview(entry.id, {
       decision,
@@ -213,7 +221,12 @@ async function submitDecision(): Promise<void> {
     entries.value = entries.value.map((item) => item.id === updated.id ? updated : item);
     dismissDecision(false);
     closeDetail(false);
-    toast.show(decision === 'APPROVED' ? '题目审核已通过。' : '题目已驳回，审核记录已保存。', 'success');
+    toast.show(
+      decision === 'APPROVED'
+        ? '题目审核已通过。'
+        : isRemovingAutoApproved ? '题目已撤下并留档。' : '题目已驳回，审核记录已保存。',
+      'success',
+    );
     await loadQueue();
   } catch (cause) {
     decisionError.value = cause instanceof Error ? cause.message : '审核提交失败，请刷新队列后重试。';
@@ -466,13 +479,26 @@ onMounted(() => {
                 >{{ decisionLabel(entry.decision) }}</span>
               </td>
               <td class="admin-table__sticky">
-                <button
-                  class="admin-button review-open"
-                  type="button"
-                  @click="openDetail(entry, $event)"
-                >
-                  查看
-                </button>
+                <div class="review-row-actions">
+                  <button
+                    class="admin-button review-open"
+                    type="button"
+                    @click="openDetail(entry, $event)"
+                  >
+                    查看
+                  </button>
+                  <button
+                    v-if="canDecide(entry)"
+                    class="admin-button admin-button--danger"
+                    type="button"
+                    :aria-label="`${entry.decision === 'APPROVED' ? '撤下' : '驳回'}题目 ${entry.id}`"
+                    :data-testid="`admin-review-reject-${entry.id}`"
+                    :disabled="loading || deciding"
+                    @click="openDecision('REJECTED', $event, entry)"
+                  >
+                    {{ entry.decision === 'APPROVED' ? '撤下' : '驳回' }}
+                  </button>
+                </div>
               </td>
             </tr>
           </tbody>
@@ -606,7 +632,9 @@ onMounted(() => {
       @click.self="closeDecision"
     >
       <h2 id="review-dialog-title">
-        {{ pendingDecision === 'APPROVED' ? '确认通过题目' : '确认驳回题目' }}
+        {{ pendingDecision === 'APPROVED'
+          ? '确认通过题目'
+          : selectedEntry?.decision === 'APPROVED' ? '确认撤下题目' : '确认驳回题目' }}
       </h2>
       <p>审核决定会写入后端题库和审计记录，请填写本次审核意见。</p>
       <label for="review-decision-reason">审核意见</label>
@@ -766,7 +794,13 @@ onMounted(() => {
 .review-table__difficulty { width: 70px; }
 .review-table__requester { width: 170px; }
 .review-table__status { width: 100px; }
-.review-table__action { width: 86px; text-align: center !important; }
+.review-table__action { width: 154px; text-align: center !important; }
+
+.review-row-actions {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
 
 .review-table__problem-cell,
 .review-table__kc-cell,
@@ -812,8 +846,8 @@ onMounted(() => {
   gap: 24px;
 }
 
-.review-detail-dialog {
-  width: min(920px, calc(100vw - 32px));
+dialog.admin-dialog.review-detail-dialog {
+  width: min(760px, calc(100vw - 32px));
 }
 
 .review-detail-dialog__header {

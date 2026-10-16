@@ -101,6 +101,23 @@ describe('StageVideoWatcher（看 · 站内课程视频计时）', () => {
     expect(wrapper.find('[data-testid="stage-video-count"]').text()).toContain('0:00 / 2:40');
   });
 
+  it('播放开始时以零增量启动服务端计时基准', async () => {
+    const wrapper = mount(StageVideoWatcher, {
+      props: {
+        stageId: 7,
+        videos: [makeVideo(101, '第一节 变量', 65)],
+        requiredVideoSec: 60,
+        initialWatchedSec: 0,
+      },
+    });
+
+    await wrapper.get('[data-testid="stage-video-el"]').trigger('play');
+    await flushPromises();
+
+    expect(vi.mocked(postVideoProgress)).toHaveBeenCalledWith(7, 0);
+    expect(wrapper.find('[data-testid="stage-video-count"]').text()).toContain('0:00 / 1:00');
+  });
+
   it('点击清单项切换当前播放视频（高亮迁移 + 换流地址）', async () => {
     const wrapper = mount(StageVideoWatcher, {
       props: {

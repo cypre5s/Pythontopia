@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json as _json
 import logging
-from typing import Any, cast
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel, Field
@@ -34,7 +34,9 @@ LOG = logging.getLogger(__name__)
 
 class CoursewareAnswerInput(BaseModel):
     query: str = Field(min_length=1, max_length=512)
-    kc_codes: list[str] = Field(default_factory=list)
+    kc_codes: list[Annotated[str, Field(max_length=32)]] = Field(
+        default_factory=list, max_length=65
+    )
     top_k: int = Field(default=6, ge=1, le=12)
 
 

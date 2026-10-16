@@ -16,7 +16,7 @@ import org.springframework.stereotype.Repository;
  * mainline_stage_progress 读写仓库。所有写路径都是<b>幂等 UPSERT</b>（§9「所有写接口幂等」）：
  *
  * <ul>
- *   <li>视频：{@code video_watched_sec += clamp(delta)}（delta 已在服务层钳制 + 限频）。
+ *   <li>视频：单次计入秒数不超过两次服务端上报间隔（并受服务层单次上限和限频约束）。
  *   <li>课件页 / 例题：数组并集去重（{@code DISTINCT unnest(old || new)}），重复打点不改状态。
  * </ul>
  */
@@ -54,14 +54,21 @@ public class MainlineStageProgressRepository {
         .findFirst();
   }
 
-  /** 视频时长累加（幂等：delta 已钳制 + 限频；此处只做单行原子累加）。 */
+  /** 视频时长累加；首个请求只建立服务端计时基准，后续请求受真实服务端间隔限制。 */
   public MainlineStageProgress addVideoSeconds(long userId, long stageId, int deltaSec) {
     jdbcTemplate.update(
         """
-        INSERT INTO mainline_stage_progress (user_id, stage_id, video_watched_sec, updated_at)
-        VALUES (?, ?, ?, now())
+        INSERT INTO mainline_stage_progress (
+          user_id, stage_id, video_watched_sec, video_last_reported_at, updated_at)
+        VALUES (?, ?, 0, now(), now())
         ON CONFLICT (user_id, stage_id) DO UPDATE SET
-          video_watched_sec = mainline_stage_progress.video_watched_sec + EXCLUDED.video_watched_sec,
+          video_watched_sec = mainline_stage_progress.video_watched_sec + LEAST(
+            ?,
+            GREATEST(0, FLOOR(EXTRACT(EPOCH FROM (
+              now() - COALESCE(mainline_stage_progress.video_last_reported_at, now())
+            )))::int)
+          ),
+          video_last_reported_at = now(),
           updated_at = now()
         """,
         userId,
