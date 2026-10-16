@@ -54,6 +54,8 @@ CHAPTER_SYNTAX_WHITELIST: Mapping[int, frozenset[str]] = {
     }),
     5: frozenset({
         "Module", "Expr", "Constant", "Name", "Assign", "Call", "Load", "Store",
+        # KC-039 explicitly teaches random-module use together with lists.
+        "Import", "ImportFrom", "alias",
         "If", "IfExp", "For", "While", "Break", "Continue", "AugAssign",
         "FunctionDef", "Return", "arguments", "arg", "Lambda", "Starred",
         "Compare", "BoolOp", "And", "Or", "Not", "Eq", "NotEq",

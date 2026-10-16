@@ -7,6 +7,7 @@ import pytest
 from pythontopia_graph.agents.boss.golden_problems import (
     all_golden_problems,
     get_golden_problem,
+    get_golden_problem_for_kc,
 )
 from pythontopia_graph.agents.boss.orchestrator import run_all_reviews
 
@@ -60,3 +61,8 @@ def test_golden_problem_each_chapter_has_distinct_kc() -> None:
     p2 = get_golden_problem(2, 1)
     p4 = get_golden_problem(4, 1)
     assert p1.kc_code != p2.kc_code != p4.kc_code
+
+
+def test_kc_golden_fallback_requires_matching_chapter_and_supported_kc() -> None:
+    assert get_golden_problem_for_kc(2, 2, "PY43-KC-039", 2) is None
+    assert get_golden_problem_for_kc(2, 2, "PY43-KC-010", 2) is None

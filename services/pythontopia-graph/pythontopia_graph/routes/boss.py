@@ -19,7 +19,10 @@ from pythontopia_graph.schemas.profile import GoalKind, Major
 
 from pythontopia_graph.agents.boss.evaluator import build_failure_hint, evaluate_boss_attempt
 from pythontopia_graph.agents.boss.expedition_selector import select_frontier
-from pythontopia_graph.agents.boss.golden_problems import get_golden_problem
+from pythontopia_graph.agents.boss.golden_problems import (
+    get_golden_problem,
+    get_golden_problem_for_kc,
+)
 from pythontopia_graph.agents.boss.grounding import extract_kc_grounding_keywords
 from pythontopia_graph.agents.boss.kc_map import chapter_default_kc
 from pythontopia_graph.agents.boss.llm_factory import build_llm_problem_factory
@@ -183,6 +186,9 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
     )
     golden_fallback = golden if golden.kc_code == kc_code else None
     difficulty = body.difficulty if body.difficulty is not None else min(5, stage)
+    golden_fallback = get_golden_problem_for_kc(
+        chapter, stage, kc_code, difficulty
+    ) or golden_fallback
     if body.profileSignals or body.preferredKind:
         LOG.info(
             "boss.problem profile-aware request: chapter=%d kc=%s kind=%s profile_signals_present=%s",
@@ -204,10 +210,12 @@ async def request_boss_problem(body: BossProblemRequest) -> dict[str, Any]:
         for item in body.existingProblems
     ]
     if golden_fallback is not None and all(
-        problem.problem_id != golden.problem_id for problem in existing_problems
+        problem.problem_id != golden_fallback.problem_id for problem in existing_problems
     ):
         existing_problems.append(
-            ExistingProblem(problem_id=golden.problem_id, statement=golden.statement)
+            ExistingProblem(
+                problem_id=golden_fallback.problem_id, statement=golden_fallback.statement
+            )
         )
     try:
         review = await generate_boss_problem(

@@ -24,6 +24,19 @@ _PRINT_ONE = "x = 1\nprint(x)"
 _PRINT_KC001_FACT = 'print("神威·太湖之光")'
 _KC001_FACT_PLUS_ONE = "n = int(input())\nprint('神威·太湖之光', n + 1)"
 _KC010_LABEL_PLUS_ONE = "x = int(input())\nprint('变量与运算符', x + 1)"
+_KC018_FORMAT = 'name = input()\nscore = float(input())\nprint("{}: {:.1f}".format(name, score))'
+_KC023_FORMAT = (
+    "# 字符串格式化：用 f-string 控制小数位\n"
+    'product = input()\nprice = float(input())\nprint(f"{product}:{price:.2f}")'
+)
+_KC039_RANDOM = (
+    "import random\nseed = int(input())\nitems = input().split()\n"
+    "random.seed(seed)\nprint(random.choice(items))"
+)
+_KC063_GCD = (
+    "# 模块化编程：调用 math 模块的功能\n"
+    "import math\na, b = map(int, input().split())\nprint(math.gcd(a, b))"
+)
 
 # Test snippets map to recorded outcomes; unknown source is a fixed runtime error.
 _FIXED_STDOUT: dict[tuple[str, str], str] = {
@@ -59,6 +72,18 @@ _FIXED_STDOUT: dict[tuple[str, str], str] = {
     (_KC010_LABEL_PLUS_ONE, "1"): "变量与运算符 2\n",
     (_KC010_LABEL_PLUS_ONE, "2"): "变量与运算符 3\n",
     (_KC010_LABEL_PLUS_ONE, "3"): "变量与运算符 4\n",
+    (_KC018_FORMAT, "林\n86.26"): "林: 86.3\n",
+    (_KC018_FORMAT, "Mia\n0"): "Mia: 0.0\n",
+    (_KC018_FORMAT, "张三\n100"): "张三: 100.0\n",
+    (_KC023_FORMAT, "茶\n12.5"): "茶:12.50\n",
+    (_KC023_FORMAT, "笔记本\n0"): "笔记本:0.00\n",
+    (_KC023_FORMAT, "book\n3.456"): "book:3.46\n",
+    (_KC039_RANDOM, "0\napple pear mango"): "pear\n",
+    (_KC039_RANDOM, "7\nred blue green"): "blue\n",
+    (_KC039_RANDOM, "42\na b c"): "c\n",
+    (_KC063_GCD, "18 24"): "6\n",
+    (_KC063_GCD, "7 13"): "1\n",
+    (_KC063_GCD, "-12 8"): "4\n",
 }
 
 

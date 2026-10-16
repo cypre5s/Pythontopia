@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from typing import Callable
 
+from .kc_map import chapter_for_kc
 from .schemas import BossProblem, TestCase
 
 
@@ -21,9 +22,10 @@ def _problem(
     reference_solution: str,
     test_cases: list[TestCase],
     hints: list[str],
+    problem_id: str | None = None,
 ) -> BossProblem:
     return BossProblem(
-        problem_id=f"golden-c{chapter}-s{stage}",
+        problem_id=problem_id or f"golden-c{chapter}-s{stage}",
         chapter=chapter,
         stage=stage,
         kc_code=kc_code,
@@ -632,3 +634,87 @@ def all_golden_problems() -> list[BossProblem]:
         for stage in range(1, 5):
             out.append(get_golden_problem(chapter, stage))
     return out
+
+
+def get_golden_problem_for_kc(
+    chapter: int, stage: int, kc_code: str, difficulty: int
+) -> BossProblem | None:
+    """Return a same-KC fallback for AI-only programming topics when generation fails."""
+    if chapter_for_kc(kc_code) != chapter:
+        return None
+
+    if kc_code == "PY43-KC-018":
+        return _problem(
+            chapter=chapter,
+            stage=stage,
+            kc_code=kc_code,
+            difficulty=difficulty,
+            title="格式化成绩",
+            statement="读入姓名和成绩，使用 format() 方法控制字符串格式，输出“姓名: 成绩”，成绩保留 1 位小数。",
+            reference_solution='name = input()\nscore = float(input())\nprint("{}: {:.1f}".format(name, score))',
+            test_cases=[
+                TestCase("林\n86.26", "林: 86.3", is_sample=True),
+                TestCase("Mia\n0", "Mia: 0.0"),
+                TestCase("张三\n100", "张三: 100.0"),
+            ],
+            hints=["用 format() 的位置参数填入姓名和成绩", "格式说明符 :.1f 保留一位小数"],
+            problem_id=f"golden-c{chapter}-s{stage}-{kc_code}",
+        )
+    if kc_code == "PY43-KC-023":
+        return _problem(
+            chapter=chapter,
+            stage=stage,
+            kc_code=kc_code,
+            difficulty=difficulty,
+            title="格式化商品信息",
+            statement="读入商品名和单价，使用 f-string 进行字符串格式化，输出“商品名:单价”，单价保留 2 位小数。",
+            reference_solution=(
+                "# 字符串格式化：用 f-string 控制小数位\n"
+                'product = input()\nprice = float(input())\nprint(f"{product}:{price:.2f}")'
+            ),
+            test_cases=[
+                TestCase("茶\n12.5", "茶:12.50", is_sample=True),
+                TestCase("笔记本\n0", "笔记本:0.00"),
+                TestCase("book\n3.456", "book:3.46"),
+            ],
+            hints=["f-string 用花括号嵌入变量", "格式说明符 :.2f 保留两位小数"],
+            problem_id=f"golden-c{chapter}-s{stage}-{kc_code}",
+        )
+    if kc_code == "PY43-KC-039":
+        return _problem(
+            chapter=chapter,
+            stage=stage,
+            kc_code=kc_code,
+            difficulty=difficulty,
+            title="按随机种子抽取列表元素",
+            statement="第一行输入随机种子，第二行输入空格分隔的列表元素。导入 random 模块并从列表随机选取一个元素输出。",
+            reference_solution="import random\nseed = int(input())\nitems = input().split()\nrandom.seed(seed)\nprint(random.choice(items))",
+            test_cases=[
+                TestCase("0\napple pear mango", "pear", is_sample=True),
+                TestCase("7\nred blue green", "blue"),
+                TestCase("42\na b c", "c"),
+            ],
+            hints=["用 random.seed() 固定随机序列", "random.choice() 从列表中选取一个元素"],
+            problem_id=f"golden-c{chapter}-s{stage}-{kc_code}",
+        )
+    if kc_code == "PY43-KC-063":
+        return _problem(
+            chapter=chapter,
+            stage=stage,
+            kc_code=kc_code,
+            difficulty=difficulty,
+            title="用模块计算最大公约数",
+            statement="通过模块化编程导入 math 模块，读取两个整数，并调用 math.gcd() 输出它们的最大公约数。",
+            reference_solution=(
+                "# 模块化编程：调用 math 模块的功能\n"
+                "import math\na, b = map(int, input().split())\nprint(math.gcd(a, b))"
+            ),
+            test_cases=[
+                TestCase("18 24", "6", is_sample=True),
+                TestCase("7 13", "1"),
+                TestCase("-12 8", "4"),
+            ],
+            hints=["先导入 math 模块", "用 math.gcd() 调用模块提供的功能"],
+            problem_id=f"golden-c{chapter}-s{stage}-{kc_code}",
+        )
+    return None

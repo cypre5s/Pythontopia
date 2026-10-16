@@ -67,6 +67,48 @@ def test_problem_endpoint_uses_grounded_golden_when_llm_unavailable(
     assert "神威·太湖之光" in response.json()["statement"]
 
 
+@pytest.mark.parametrize(
+    ("chapter", "kc_code", "kc_name", "kc_summary"),
+    [
+        (3, "PY43-KC-018", "format()方法的格式控制", "使用 format() 控制字符串格式。"),
+        (3, "PY43-KC-023", "字符串格式化", "使用字符串格式化输出数据。"),
+        (5, "PY43-KC-039", "Random模块与列表", "使用 random 模块处理列表。"),
+        (7, "PY43-KC-063", "模块化编程", "导入模块并使用模块功能。"),
+    ],
+)
+def test_problem_endpoint_uses_same_kc_golden_when_llm_unavailable(
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    chapter: int,
+    kc_code: str,
+    kc_name: str,
+    kc_summary: str,
+) -> None:
+    from pythontopia_graph.routes import boss as boss_route
+
+    monkeypatch.setattr(boss_route, "provider_from_env", lambda: _UnavailableProvider())
+    response = client.post(
+        "/agents/boss/problem",
+        json={
+            "chapter": chapter,
+            "stage": 2,
+            "kcCode": kc_code,
+            "kcName": kc_name,
+            "kcSummary": kc_summary,
+            "difficulty": 2,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["kcCode"] == kc_code
+    assert response.json()["chapter"] == chapter
+    assert response.json()["difficulty"] == 2
+    assert response.json()["problemId"] == f"golden-c{chapter}-s2-{kc_code}"
+    assert response.json()["reviewed"] is True
+    assert response.json()["aiGenerated"] is False
+    assert response.json()["totalTestCases"] >= 3
+
+
 def test_problem_endpoint_uses_golden_after_candidates_fail_review(
     client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
