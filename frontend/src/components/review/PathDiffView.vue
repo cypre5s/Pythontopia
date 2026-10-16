@@ -22,7 +22,7 @@ function nodeAction(node: LearningPathNodeDto): string {
     case 'FIX_BUG':
       return '矿洞';
     case 'PLANT_KC':
-      return '解锁';
+      return '主线解锁';
     case 'PROFILE_UPDATE':
       return '画像';
     default:

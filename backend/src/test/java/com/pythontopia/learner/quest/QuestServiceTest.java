@@ -47,6 +47,7 @@ class QuestServiceTest {
   void startMovesOpenToInProgress() {
     QuestDto quest = sampleQuest(QuestStatus.OPEN, QuestNodeType.READ_RESOURCE, 10L);
     when(repository.findById(eq(7L), eq(10L))).thenReturn(Optional.of(quest));
+    when(repository.updateStatus(7L, 10L, QuestStatus.IN_PROGRESS)).thenReturn(1);
     when(repository.findOwned(eq(7L), eq(10L)))
         .thenReturn(Optional.of(sampleQuest(QuestStatus.IN_PROGRESS, QuestNodeType.READ_RESOURCE, 10L)));
 
@@ -54,6 +55,20 @@ class QuestServiceTest {
     assertThat(result.status()).isEqualTo(QuestStatus.IN_PROGRESS);
     verify(repository).updateStatus(7L, 10L, QuestStatus.IN_PROGRESS);
     verify(repository).recordProgress(10L, "STARTED", null);
+  }
+
+  @Test
+  void startStopsWhenAnotherRequestAlreadyStartedQuest() {
+    QuestDto quest = sampleQuest(QuestStatus.OPEN, QuestNodeType.READ_RESOURCE, 10L);
+    when(repository.findById(eq(7L), eq(10L))).thenReturn(Optional.of(quest));
+    when(repository.updateStatus(7L, 10L, QuestStatus.IN_PROGRESS)).thenReturn(0);
+
+    assertThatThrownBy(() -> service.start(7L, 10L))
+        .isInstanceOf(BusinessException.class)
+        .extracting(exception -> ((BusinessException) exception).code())
+        .isEqualTo("QUEST_STATE_CHANGED");
+
+    verify(repository, never()).recordProgress(anyLong(), anyString(), any());
   }
 
   @Test
@@ -147,12 +162,27 @@ class QuestServiceTest {
   void skipTransitionsToSkipped() {
     QuestDto quest = sampleQuest(QuestStatus.IN_PROGRESS, QuestNodeType.PROFILE_UPDATE, 13L);
     when(repository.findById(eq(7L), eq(13L))).thenReturn(Optional.of(quest));
+    when(repository.updateStatus(7L, 13L, QuestStatus.SKIPPED)).thenReturn(1);
     when(repository.findOwned(eq(7L), eq(13L)))
         .thenReturn(
             Optional.of(sampleQuest(QuestStatus.SKIPPED, QuestNodeType.PROFILE_UPDATE, 13L)));
     QuestDto result = service.skip(7L, 13L, new QuestSkipRequest("用户主动跳过"));
     assertThat(result.status()).isEqualTo(QuestStatus.SKIPPED);
     verify(repository).recordProgress(13L, "SKIPPED", "用户主动跳过");
+  }
+
+  @Test
+  void skipStopsWhenAnotherRequestAlreadyFinalizedQuest() {
+    QuestDto quest = sampleQuest(QuestStatus.IN_PROGRESS, QuestNodeType.PROFILE_UPDATE, 13L);
+    when(repository.findById(eq(7L), eq(13L))).thenReturn(Optional.of(quest));
+    when(repository.updateStatus(7L, 13L, QuestStatus.SKIPPED)).thenReturn(0);
+
+    assertThatThrownBy(() -> service.skip(7L, 13L, new QuestSkipRequest("用户主动跳过")))
+        .isInstanceOf(BusinessException.class)
+        .extracting(exception -> ((BusinessException) exception).code())
+        .isEqualTo("QUEST_ALREADY_FINALIZED");
+
+    verify(repository, never()).recordProgress(anyLong(), anyString(), any());
   }
 
   private QuestDto sampleQuest(QuestStatus status, QuestNodeType nodeType, Long id) {

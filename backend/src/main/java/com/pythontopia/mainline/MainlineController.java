@@ -3,6 +3,7 @@ package com.pythontopia.mainline;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.mainline.dto.EndlessSummaryRequest;
 import com.pythontopia.mainline.dto.ExampleDoneRequest;
 import com.pythontopia.mainline.dto.MainlineOverviewDto;
@@ -36,10 +37,15 @@ public class MainlineController {
 
   private final MainlineService service;
   private final MainlineRecoveryService recoveryService;
+  private final StudentWriteThrottle studentWriteThrottle;
 
-  public MainlineController(MainlineService service, MainlineRecoveryService recoveryService) {
+  public MainlineController(
+      MainlineService service,
+      MainlineRecoveryService recoveryService,
+      StudentWriteThrottle studentWriteThrottle) {
     this.service = service;
     this.recoveryService = recoveryService;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @GetMapping("/overview")
@@ -66,7 +72,9 @@ public class MainlineController {
       @PathVariable @Positive long stageId,
       @Valid @RequestBody PageReadRequest request,
       @CurrentUser CurrentUserPrincipal user) {
-    return service.reportPageRead(requireUserId(user), stageId, request.pageId());
+    long userId = requireUserId(user);
+    requireWriteCapacity(userId);
+    return service.reportPageRead(userId, stageId, request.pageId());
   }
 
   @PostMapping("/stages/{stageId}/pages-read")
@@ -74,7 +82,9 @@ public class MainlineController {
       @PathVariable @Positive long stageId,
       @Valid @RequestBody PagesReadRequest request,
       @CurrentUser CurrentUserPrincipal user) {
-    return service.reportPagesRead(requireUserId(user), stageId, request.pageIds());
+    long userId = requireUserId(user);
+    requireWriteCapacity(userId);
+    return service.reportPagesRead(userId, stageId, request.pageIds());
   }
 
   @PostMapping("/stages/{stageId}/example-done")
@@ -82,24 +92,38 @@ public class MainlineController {
       @PathVariable @Positive long stageId,
       @Valid @RequestBody ExampleDoneRequest request,
       @CurrentUser CurrentUserPrincipal user) {
-    return service.reportExampleDone(
-        requireUserId(user), stageId, request.problemId(), request.submissionId());
+    long userId = requireUserId(user);
+    requireWriteCapacity(userId);
+    return service.reportExampleDone(userId, stageId, request.problemId(), request.submissionId());
   }
 
   @PostMapping("/endless/summary")
   public StarAwardResultDto endlessSummary(
       @Valid @RequestBody EndlessSummaryRequest request, @CurrentUser CurrentUserPrincipal user) {
+    long userId = requireUserId(user);
+    requireWriteCapacity(userId);
     boolean awarded =
         recoveryService.recordEndlessSummary(
-            requireUserId(user), request.chapter(), request.runId());
+            userId, request.chapter(), request.runId());
     return new StarAwardResultDto(awarded);
   }
 
   @PostMapping("/chapters/{chapter}/recovery/errorbook")
   public StarAwardResultDto recoveryErrorbook(
       @PathVariable @Positive int chapter, @CurrentUser CurrentUserPrincipal user) {
+    long userId = requireUserId(user);
+    requireWriteCapacity(userId);
     return new StarAwardResultDto(
-        recoveryService.claimErrorbookRecovery(requireUserId(user), chapter));
+        recoveryService.claimErrorbookRecovery(userId, chapter));
+  }
+
+  private void requireWriteCapacity(long userId) {
+    if (!studentWriteThrottle.tryAcquire(userId, 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "STUDENT_WRITE_RATE_LIMITED",
+          "每个账号每分钟最多写入 100 条记录");
+    }
   }
 
   private long requireUserId(CurrentUserPrincipal user) {

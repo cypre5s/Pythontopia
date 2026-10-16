@@ -42,5 +42,7 @@ describe('KcHeatmap', () => {
   it('shows empty hint when no data', () => {
     const wrapper = mount(KcHeatmap, { props: { entries: [] } });
     expect(wrapper.text()).toContain('暂无 KC 数据');
+    expect(wrapper.text()).toContain('主线学习');
+    expect(wrapper.text()).not.toContain('知识田');
   });
 });

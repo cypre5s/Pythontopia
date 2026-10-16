@@ -166,6 +166,8 @@ def test_idle_response_when_metrics_all_zero() -> None:
     )
     assert response.status == "PARTIAL"
     assert "近期无活动" in response.narrative_md
+    assert "主线地图" in response.narrative_md
+    assert "知识田" not in response.narrative_md
 
 
 def test_safety_rejects_forbidden_word() -> None:

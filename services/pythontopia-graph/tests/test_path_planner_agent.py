@@ -70,7 +70,7 @@ def test_plan_returns_seven_day_layout_with_focus_kcs() -> None:
     assert any(node.node_type == "PROFILE_UPDATE" for node in response.nodes)
     assert any(node.node_type == "READ_RESOURCE" for node in response.nodes)
     assert any(node.node_type == "SOLVE_PROBLEM" for node in response.nodes)
-    assert any(node.node_type == "PLANT_KC" for node in response.nodes)
+    assert all(node.node_type != "PLANT_KC" for node in response.nodes)
     grouped: dict[int, int] = {}
     for node in response.nodes:
         grouped[node.day_index] = grouped.get(node.day_index, 0) + 1
@@ -86,6 +86,23 @@ def test_plan_without_profile_uses_cold_start_defaults() -> None:
     assert any(node.node_type == "READ_RESOURCE" for node in response.nodes)
     assert any(node.node_type == "SOLVE_PROBLEM" for node in response.nodes)
     assert "缺少画像" not in response.goal_summary
+
+
+def test_plan_without_unlocked_kcs_points_to_the_mainline() -> None:
+    locked_kcs = [
+        PlannerKcSnapshot(
+            kc_code="PY43-KC-001",
+            mastery_score=0.0,
+            confidence=0.0,
+            unlocked=False,
+        )
+    ]
+
+    response = PathPlannerAgent().plan(_request(kcs=locked_kcs))
+
+    assert response.status == "FAILED"
+    assert "主线地图" in response.goal_summary
+    assert "知识田" not in response.goal_summary
 
 
 def test_classroom_quest_kcs_are_prioritised_on_day_one() -> None:
@@ -135,9 +152,9 @@ def test_recent_resource_skips_read_node() -> None:
 
 def test_topological_order_places_prerequisites_first() -> None:
     agent = PathPlannerAgent()
-    dependent_a = _CandidateKc("PY43-KC-003", 0.1, True, 1, ("PY43-KC-001",))
-    dependent_b = _CandidateKc("PY43-KC-002", 0.1, True, 1, ("PY43-KC-001",))
-    prereq = _CandidateKc("PY43-KC-001", 0.1, True, 1, ())
+    dependent_a = _CandidateKc("PY43-KC-003", 0.1, 1, ("PY43-KC-001",))
+    dependent_b = _CandidateKc("PY43-KC-002", 0.1, 1, ("PY43-KC-001",))
+    prereq = _CandidateKc("PY43-KC-001", 0.1, 1, ())
     ordered = agent._topological_order([dependent_a, dependent_b, prereq])
     codes = [c.kc_code for c in ordered]
     assert codes.index("PY43-KC-001") < codes.index("PY43-KC-002")
@@ -147,9 +164,9 @@ def test_topological_order_places_prerequisites_first() -> None:
 def test_topological_order_no_prerequisites_preserves_input() -> None:
     agent = PathPlannerAgent()
     items = [
-        _CandidateKc("PY43-KC-005", 0.1, True, 1, ()),
-        _CandidateKc("PY43-KC-002", 0.1, True, 1, ()),
-        _CandidateKc("PY43-KC-009", 0.1, True, 1, ()),
+        _CandidateKc("PY43-KC-005", 0.1, 1, ()),
+        _CandidateKc("PY43-KC-002", 0.1, 1, ()),
+        _CandidateKc("PY43-KC-009", 0.1, 1, ()),
     ]
     ordered = agent._topological_order(items)
     assert [c.kc_code for c in ordered] == ["PY43-KC-005", "PY43-KC-002", "PY43-KC-009"]

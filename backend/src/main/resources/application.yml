@@ -12,7 +12,7 @@ spring:
     open-in-view: false
   servlet:
     multipart:
-      # 随身助教语音输入回退（/api/media/asr）上传短录音；放宽到 8MB 容纳 ~60s 录音，余量足够。
+      # Multipart transport caps; individual endpoints enforce their own stricter size and content limits.
       max-file-size: 8MB
       max-request-size: 12MB
 

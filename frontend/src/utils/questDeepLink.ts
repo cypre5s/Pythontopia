@@ -8,8 +8,7 @@ import type { ClassroomQuestDto } from '@/api/dto/ClassroomQuest';
  *
  * - 后端写入 deep_link_route + deep_link_params 时优先使用后端版本，
  *   只在历史 quest 上兜底用 node_type / payload 推导（不破坏旧数据）。
- * - WorldScene 自身解析 `focus=kc_xxx` 等 query，
- *   这里只负责"把人送到那个 URL"。
+ * - 历史 PLANT_KC 节点统一进入主线地图，不再使用旧农场 query。
  */
 
 type QueryRecord = Record<string, string | number>;
@@ -53,9 +52,7 @@ function fallbackRoute(
     case 'FIX_BUG':
       return { path: '/world', query: { goto: 'town_hub' } };
     case 'PLANT_KC':
-      return options.kcCode
-        ? { path: '/world', query: { focus: `kc_${options.kcCode.toLowerCase()}` } }
-        : { path: '/world' };
+      return { path: '/mainline-map' };
     case 'PROFILE_UPDATE':
       return { path: '/profile-room' };
     default:
@@ -64,6 +61,9 @@ function fallbackRoute(
 }
 
 export function resolveQuestDeepLink(quest: QuestDto): RouteLocationRaw {
+  if (quest.nodeType === 'PLANT_KC') {
+    return { path: '/mainline-map' };
+  }
   const route = quest.deepLinkRoute;
   if (route && route.startsWith('/')) {
     return { path: route, query: paramsAsQuery(quest.deepLinkParams) };
@@ -86,6 +86,9 @@ export function resolvePathNodeDeepLink(node: LearningPathNodeDto): RouteLocatio
 export function resolveClassroomQuestDeepLink(
   classroomQuest: ClassroomQuestDto,
 ): RouteLocationRaw {
+  if (classroomQuest.nodeType === 'PLANT_KC') {
+    return { path: '/mainline-map' };
+  }
   if (classroomQuest.deepLinkRoute && classroomQuest.deepLinkRoute.startsWith('/')) {
     return {
       path: classroomQuest.deepLinkRoute,

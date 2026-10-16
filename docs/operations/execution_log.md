@@ -798,6 +798,17 @@
 - 两条控制器回归均先 RED 后 GREEN；与现有 `PassiveProfileProbeTest` 合并为 5/5 通过，触及 Java 文件定向 Spotless 与 `git diff --check` 通过。本轮没有 DeepSeek 请求或业务数据写入。
 - 非 AI 写路由和多行日志审计仍未完成；账号额度是单 Spring 实例内存态。
 
+## 2026-10-16 — 远征状态写入口额度
+
+- 无尽远征开局会读取服务端学习前沿并新建 run，玩家 typed action 会变更服务器权威进度；两条写路由过去未使用共享账号写预算。现在各占每账号每分钟 100 单位预算中的 1 单位，超额在服务/前沿选择前拒绝。
+- 快照 PUT 只校验既有 run 并返回服务器状态；Boss 判题另有 10 秒账号级限频和 attemptId 幂等；两者保留既有保护，不叠加限流。`./dev.sh` 设置 `PYT_AI_REQUEST_LIMITS_ENABLED=false`，本地 DeepSeek 请求不受日额度限制。
+- 新回归在旧代码下先 RED（超额开局未触发拒绝、超额操作仍 200），修复后 `ExpeditionRunControllerTest` 13/13 通过。没有模型调用或业务数据写入；`git diff --check` 通过。
+
+## 2026-10-16 — 非 AI 写路由续查
+
+- 只读筛查确认班级加入码使用账号级专用节流，下载计数由公网 Nginx 按来源 IP 限速，Tutor 内部 checkpoint 校验服务令牌并绑定用户，TutorBench 是学生可触发的确定性评估。媒体作业授权与 provider 关闭状态沿用已记录的验证。
+- 玩家坐标写入只更新当前账号自己的 town_hub 位置，Web store 把连续移动合并至最多约每 500ms 一次；现有共享 100 次/分额度会误伤正常连续移动，因此不在这里套用。它仍需基于吞吐数据决定专用服务端上限。未运行测试、没有模型请求或业务数据写入。
+
 ## 2026-10-16 — 续接本地沙箱 fail-closed 与教师看板验收
 
 - Piston `nosocket.c` 原先忽略 `seccomp_load()` 失败并继续执行目标程序。新增 linker-wrapper 回归，在构建时强制加载失败并断言 `execvp()` 不被调用；旧实现先 RED，新镜像构建通过。重建后运行一次 `node deploy/scripts/test_dev_piston_sandbox.mjs`，本地执行、文件/临时目录、loopback 与超时烟测通过。
@@ -826,3 +837,40 @@
 - `POST /api/world/npcs/{npcKey}/talk` 原先没有账号写入预算；客户端可通过重复提交不同 node ID 和 `SET_FLAG` 键，持续扩大该账号的 `npc_dialog_state` 数组与 JSONB。现复用每账号每分钟 100 单位写预算，并限制单 NPC 最多 128 个已完成节点、64 个 flags。
 - 更新在读取当前行时获取 `FOR UPDATE` 锁，避免并发请求同时通过累计上限检查；超限请求返回 `NPC_DIALOG_STATE_LIMIT_REACHED`，不会写节点或 flags。每个已支持 NPC 的课程数据实际最多 5 个节点，设定上限保留了充足扩展空间。
 - 回归先 RED 后 GREEN：控制器与世界 NPC 服务 12/12，通过的 Maven 命令也发现同名 memory NPC service 的 2 项测试，共计 14/14；触及 Java 文件定向 Spotless 5/5 clean。没有 DeepSeek 调用或业务数据库写入。未做 PostgreSQL 并发集成验证；预算计数仍为单实例内存态。
+
+## 2026-10-16 — 修正语音关闭后的 multipart 注释
+
+- 只读 provider 审查确认前端语音入口已移除，后端 ASR/TTS 硬关闭；`application.yml` 仍把通用 multipart 上限解释为 ASR 录音回退。现改为说明这是传输上限，端点仍执行更严格的文件/内容校验；配置值不变。
+- 静态审查未读取密钥、未请求模型；本次只改注释，`git diff --check` 通过。provider 路由结论不替代运行实例环境验证。
+
+## 2026-10-16 — R-14 旧种植任务回到主线
+
+- Graph 路径规划不再为锁定 KC 生成 `PLANT_KC`；没有已解锁 KC 时指引用户从主线地图继续。历史 `PLANT_KC` enum、数据库约束和行数据保留；路径任务的标题、路由、前端个人/班级深链指向 `/mainline-map`，不再带旧农场 `focus` 参数。
+- 删除已无调用方的 `LearningPathService.ensureDefaultsForNewStudent()` 及其中的种植默认任务。只读本地计数确认旧 quest/path 有少量 `PLANT_KC` 行；没有更新、迁移或删除用户数据。课程 bootstrap 兼容 API 与映射服务暂留，Web 当前没有调用方。
+- 新增旧节点后端路径回归；首跑复现标题仍为“解锁 KC”，修复实际任务标题映射后 `LearningPathServiceTest` 通过。Graph path planner 与 evaluation narrative 定向测试 23/23、Ruff 通过；前端深链/路径/热力图三个 spec 13/13 通过，typecheck、定向 ESLint 与 diff 检查已通过。
+- 教师「主线进度」失败重试另经 Chromium 用 API 拦截响应检查：首次 503 呈现错误与重试入口，重试后显示空态；11 个请求均为 mock，AI 请求 0、页面错误 0。真实后端 503 注入未做。无 DeepSeek 请求。
+
+## 2026-10-16 — 存档槽写入纳入账号额度
+
+- `POST /api/world/saves/{slotIndex}`、`/activate` 与 `/snapshot` 原先未占用现有账号级写入预算。现在建槽/切换各占 1 单位；受 262144 字符 JSON 上限约束的快照写入占 10 单位，超限请求统一 429，且在进入 service/数据库前拒绝。
+- `SaveSlotControllerTest` 先 RED（旧代码仍返回成功），修改后覆盖三个写入口共 3 个拒绝分支，确认服务零调用。只读调用方检查发现 Web 只有未被页面调用的 API helper；Windows 仅用列表/激活，Android 文档标为未接线。没有执行存档写入、没有模型请求。预算与既有守卫相同，为单实例内存态。
+
+## 2026-10-16 — 日历事件更新纳入账号额度
+
+- `POST /api/world/calendar/events/{eventId}/process` 过去没有写入频率限制，虽然 SQL 按 `(eventId, userId)` 约束本人事件且重复处理幂等，仍会重复执行数据库 UPDATE。现每次处理先占用账号共享预算 1 单位，超限 429 在服务层前返回。
+- `CalendarControllerTest` 先 RED 后 GREEN，确认拒绝状态、守卫被调用且服务零交互；`SaveSlotControllerTest` 与日历控制器回归合跑 2/2 通过。没有事件写入或模型请求。账户窗口是单实例内存态。
+
+## 2026-10-16 — 公告板任务写口限流与状态竞态保护
+
+- Quest `start`/`complete`/`skip` 原先没有共享账号写入预算；现在每次各占 1 单位，教师角色仍在预算前拒绝。`start` 的 SQL 状态条件收紧为仅 `OPEN`，并检查受影响行数；`skip` 也检查条件更新结果，另一请求已终结时返回 409、不会追加进度。完成路径原有证据验证与并发 CAS 保持不变。
+- `QuestControllerTest`、`QuestServiceTest`、`QuestRepositoryStatusGuardTest` 合计 13/13 通过；旧代码下限流回归和 start/skip 并发哨兵均先 RED。没有业务数据库写入或模型请求。完整 API 限流审计仍开放。
+
+## 2026-10-16 — 技能解锁纳入账号额度
+
+- 活跃 Web HUD 的 `POST /api/world/skills/{skillKey}/unlock` 原先只做掌握度门槛与幂等检查，缺少请求预算；现每次先占用共享预算 1 单位，超限在技能服务和掌握度查询前返回 429。
+- `SkillControllerTest` 先 RED 后 GREEN，确认守卫被调用且超限时 service 零交互。没有技能写入或模型请求。计数窗口仍为单实例内存态。
+
+## 2026-10-16 — 主线学习写口纳入账号额度
+
+- 主线单页/批量阅读、例题完成、远征补星、错题补星和客观题作答过去未占共享预算；现各占 1 单位，额度不足返回 429 且不进入服务。视频进度保留现有按 user/stage 的专用节流。
+- 扩展 `MainlineControllerAuthorizationTest` 覆盖五类进度/补星写路由及客观题作答的预算拒绝，同时确认教师被方法安全拒绝时不消耗额度。与 `MainlineServiceTest`、`MainlinePracticeServiceTest` 合计 46/46；没有数据库业务写入或模型请求。共享预算为单实例内存态。

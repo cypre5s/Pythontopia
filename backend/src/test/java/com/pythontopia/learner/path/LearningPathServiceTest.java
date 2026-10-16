@@ -118,6 +118,42 @@ class LearningPathServiceTest {
   }
 
   @Test
+  void legacyPlantNodeCreatesMainlineQuest() {
+    when(profileService.findProfile(7L)).thenReturn(Optional.of(profile()));
+    when(coursePackRepository.findKcs(eq(43L), eq(null)))
+        .thenReturn(List.of(new CourseKc(1L, 43L, "PY43-KC-001", "变量", 1L, 1, "basic", "summary")));
+    when(masteryEvaluator.snapshots(7L)).thenReturn(List.of());
+    when(classroomQuestRepository.listActiveForStudent(eq(7L), any())).thenReturn(List.of());
+    when(graphClient.plan(any(PathPlannerGraphRequest.class)))
+        .thenReturn(
+            new PathPlannerGraphResponse(
+                7L,
+                43L,
+                "legacy path",
+                List.of(
+                    new PathPlannerGraphResponse.NodeDraft(
+                        1, 1, "PY43-KC-001", "PLANT_KC", "unlock", "legacy", null, null, null)),
+                new PathPlannerGraphResponse.SafetyResult(true, List.of()),
+                new PathPlannerGraphResponse.GroundingResult(true, List.of(), List.of()),
+                "signature",
+                "SUCCESS"));
+    when(pathRepository.archiveActivePaths(7L, 43L)).thenReturn(List.of());
+    when(pathRepository.nextVersion(7L, 43L)).thenReturn(1);
+    when(pathRepository.insertPath(eq(7L), eq(43L), eq(1), any(), any(), any())).thenReturn(50L);
+    when(pathRepository.insertNode(eq(50L), any())).thenReturn(500L);
+    when(pathRepository.findById(7L, 50L)).thenReturn(Optional.of(samplePath(50L, 1)));
+
+    service.plan(7L);
+
+    org.mockito.ArgumentCaptor<QuestInsert> captor =
+        org.mockito.ArgumentCaptor.forClass(QuestInsert.class);
+    verify(questRepository).insert(captor.capture());
+    assertThat(captor.getValue().title()).isEqualTo("前往主线解锁 KC PY43-KC-001");
+    assertThat(captor.getValue().deepLinkRoute()).isEqualTo("/mainline-map");
+    assertThat(captor.getValue().deepLinkParams().toString()).doesNotContain("focus");
+  }
+
+  @Test
   void planDraftRequiresProfileSameAsPlan() {
     when(profileService.findProfile(9L)).thenReturn(Optional.empty());
     assertThatThrownBy(() -> service.planDraft(9L))

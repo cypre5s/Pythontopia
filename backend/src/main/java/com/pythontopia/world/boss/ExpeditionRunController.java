@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.world.boss.dto.ExpeditionRunActionRequest;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import com.pythontopia.world.boss.dto.ExpeditionRunStartRequest;
@@ -37,10 +38,15 @@ public class ExpeditionRunController {
 
   private final ExpeditionRunService service;
   private final BossService bossService;
+  private final StudentWriteThrottle studentWriteThrottle;
 
-  public ExpeditionRunController(ExpeditionRunService service, BossService bossService) {
+  public ExpeditionRunController(
+      ExpeditionRunService service,
+      BossService bossService,
+      StudentWriteThrottle studentWriteThrottle) {
     this.service = service;
     this.bossService = bossService;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @GetMapping("/run")
@@ -58,6 +64,7 @@ public class ExpeditionRunController {
       @CurrentUser CurrentUserPrincipal user,
       @Valid @RequestBody ExpeditionRunStartRequest request) {
     requireStudent(user);
+    requireWriteCapacity(user.userId());
     var frontier =
         bossService.selectFrontier(user.userId(), request.focusChapter(), request.preferredKcCode());
     return service.start(
@@ -76,6 +83,7 @@ public class ExpeditionRunController {
       @CurrentUser CurrentUserPrincipal user,
       @Valid @RequestBody ExpeditionRunActionRequest request) {
     requireStudent(user);
+    requireWriteCapacity(user.userId());
     return service.performAction(user.userId(), request);
   }
 
@@ -89,6 +97,15 @@ public class ExpeditionRunController {
   private void requireStudent(CurrentUserPrincipal user) {
     if (user == null || user.role() != Role.STUDENT) {
       throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "仅学生可使用无尽远征存档");
+    }
+  }
+
+  private void requireWriteCapacity(long userId) {
+    if (!studentWriteThrottle.tryAcquire(userId, 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "STUDENT_WRITE_RATE_LIMITED",
+          "每个账号每分钟最多写入 100 条记录");
     }
   }
 }

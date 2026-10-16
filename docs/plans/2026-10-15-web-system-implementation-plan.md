@@ -11,8 +11,7 @@
 ## 执行范围与检查点
 
 - 已读取用户提供的系统安全、无尽远征、数字孪生与全端质量要求；当前执行以 Web 为主，不操作 GitHub，也不审计 ECS 运行态。
-- 用户要求的首次本地检查点提交已存在：`9897b52d fix: redact quest completion log details`（2026-10-16）。当前实现继续保留为工作树改动，未推送。
-- 2026-10-16 后续检查点已提交：`feab5af1 fix: validate learning evidence and cap student writes`（31 个文件，含代码、回归测试与清单）；没有推送。附件 `/home/cypress/.codex/attachments/79c8a798-eda1-424e-a8dd-eae0a4154834/pasted-text-1.txt` 已读取，要求的 Web 安全、远征、Twin 与前端交付均合并到下方这份清单；不重复已验证的 DeepSeek 调用。之后增加的安全代码/测试与日志修改尚未提交；`frontend/public/data/course43/manifest.json` 只有生成时间戳差异，保留在工作树中。
+- 本地检查点依次为 `9897b52d`、`feab5af1`，最新为 `c536e2d2 security: harden student write paths and judging`（36 个文件，含代码、回归测试、执行日志与本计划）；没有推送。附件 `/home/cypress/.codex/attachments/79c8a798-eda1-424e-a8dd-eae0a4154834/pasted-text-1.txt` 已读取，全部要求合并到下方唯一清单。`frontend/public/data/course43/manifest.json` 只有生成时间戳差异，保留在工作树中；后续工作以同一清单续记，不重复 DeepSeek 已验证路径。
 
 ## 总任务清单
 
@@ -24,7 +23,7 @@
 |---|---|---|
 | DeepSeek 路由、文本/图片输入、文本输出、语音关闭 | 已完成并有静态与真实调用证据；不再重复通用调用 | 仅在具体产品链路改动时做一次定向验证 |
 | AutoGen 导学助手、管理员样式、班级字段/API 对齐 | 已完成适配与对照；不复制不兼容 API | 只修复新发现的具体缺陷 |
-| 本地安全修复 | 持续中；补齐学生写入额度，修复 Piston seccomp 失败、Java AST 中断残留、判题池无限排队及主线学生角色缺口 | 继续非 AI 写接口与多行日志审计、聊天历史保留；生产 Piston 网络隔离与访问控制未验证 |
+| 本地安全修复 | 持续中；学生写入额度已覆盖主线、任务、存档、日历、技能、画像投影及远征开局/操作；执行隔离、判题排队和主线角色问题已修复 | 继续非 AI 写接口与多行日志审计、聊天历史保留；生产 Piston 网络隔离与访问控制未验证 |
 | 无尽远征 | Phaser Boss 与服务端状态保护已实现 | 有真实先修证据后，补合格战斗题型、活动 run 恢复及地图/Boss 窄屏验收 |
 | 学习分身 | P0 状态聚合、证据、周报与统一推荐已完成 | 等待真实样本后做 A/B 与 7 日复测，不以合成数据代替 |
 | Web 可见交互 | 多条学生/教师/管理员路径已实测；本轮真实验收教师主线进度空态 | 补剩余页面动作、成功/失败态和远征 Boss 窄屏验收 |
@@ -45,6 +44,8 @@
 **2026-10-16 审查去重：** AutoGen 六阶段导学、checkpoint、附件 owner/session 绑定已在 Pythontopia 实现；`/api/tutor/ask` 也通过 AutoGen 运行作答与审查阶段。两条路径保留各自 SSE/会话合同；Alethicode 新增的异步 run 生命周期不适配现有合同，无需重复移植。管理台共享样式与表格规格已对齐，剩余差异是业务页面编排与交互，不复制 Alethicode 不适用的指标/API。Provider 静态审计未发现可达的非 DeepSeek 模型或语音请求；本轮未重复 DeepSeek 调用。
 
 **2026-10-16 本轮续接：** 管理台视觉按 Alethicode 实际 CSS 再校正工具栏间距、内容宽度与窄屏内边距；学习事件拒绝 JSON `null` 批次并限制单条序列化 payload 为 4096 字节；派生证据快照串行化同账号写入并保留最新 200 条。相关前端管理页 12/12、`LearningEventControllerTest` 5/5、PostgreSQL `EvidenceMemoryServiceTest` 4/4，typecheck、定向 ESLint/Spotless 与 diff 检查通过。公共匿名路由方法合同 `PublicReadAccessTest` 新鲜复验 1/1，仍不代表全 API 通用限流已完成。本轮没有 DeepSeek 请求。
+
+**2026-10-16 R-14 与教师看板续接：** Graph 选路不再为未解锁 KC 生成 `PLANT_KC`，无可推荐 KC 时引导回主线；旧 `PLANT_KC` 记录保留历史类型，但新路径任务标题/链接与前端深链统一转到主线地图。旧数据未改写，课程 bootstrap 兼容接口暂留。Graph 定向回归 23/23、Ruff 通过；`LearningPathServiceTest` 新增旧类型回归，确认标题、链接和参数。教师「主线进度」失败重试分支在 Chromium 中用拦截 API 的临时响应验证：首次 503 后显示重试，重试后显示空态；共 11 个 mock 请求、0 个 AI 请求、0 个页面错误，不代表真实后端失败注入。没有 DeepSeek 请求。
 
 **2026-10-16 本轮安全续审：** `POST /api/learner/evidence-memory/snapshots` 与 `/api/learner/probe` 现在复用每账号每分钟 100 单位写入额度，在构建证据图、落库或发布探针事件前拒绝超额请求。探针只更新自述媒介偏好、不增加能力证据；账号额度用于限制重复事件与画像投影。回归先 RED 后 GREEN，`EvidenceMemoryControllerTest`、`ProbeControllerSecurityTest` 与 `PassiveProfileProbeTest` 共 5/5；定向 Spotless 与 diff 检查通过。非 AI 写接口及多行日志全量审计仍开放；教师看板验收受本地 Web 未启动阻塞。本轮没有 DeepSeek 请求。
 
@@ -143,14 +144,16 @@ Graph 提示词静态续扫覆盖所有直接 `role=system` 构造点；除已�
   - 10/16 日志审查续扫：扩展检查异常文本与堆栈使用；Tutor provider 错误对外为固定消息，旧 Xfyun ASR/TTS/图片理解的原始上游错误分支受 `isEnabled() == false` 硬关闭；上传解析错误只回给上传者。未确认新的跨用户敏感数据泄露，本项仍属定向静态检查，不等同全量日志审计。
   - 10/16 画像写入续审：`PUT /api/learner/profile/dimensions/{dimensionKey}` 过去允许 `scoreDelta: 0` 且无标签的请求，每次仍更新时间并追加永久 `profile_revision`。现拒绝该空更新，并让有效画像自评复用每账号每分钟 100 单位写预算；超限在触库前返回 429。`ProfileControllerTest` 与 `SelfDimensionRequestValidationTest` 共 7/7，触及 Java 文件定向 Spotless 通过；无模型调用或业务库写入。非 AI 写接口与完整日志审计仍未闭合。
   - 10/16 非 AI 写入口续审：费曼会话创建现占用同一账号写预算，`kcCode` 最多 64 字符；旧课程画像 bootstrap 路由保留兼容，但限学生且占用账号写预算；Boss 前沿及出题请求的 KC/媒体画像列表限制条数与白名单值。RED/GREEN 后 `FeynmanControllerSecurityTest` + `FeynmanStartRequestValidationTest` 8/8、`CurriculumControllerSecurityTest` 3/3、`BossControllerTest` 16/16，触及 Java 文件定向 Spotless 与 diff 检查通过。非 AI 写接口/全量日志审计仍开放；工坊历史保留期及单实例限流是剩余容量风险。
-  - 10/16 路由清单未闭项：工坊聊天历史有每分钟预算和读取上限，但尚无历史保留上限；证据快照已同时受来源 IP 与每账号共享写入额度限制，并保留每用户 200 条；玩家位置允许重复更新本人存档，客户端按 500ms 合并写入，服务端限频需避免误伤正常移动，待后续吞吐阶段评估。10/16 只读续审确认日历处理按 `userId/eventId` 更新、技能解锁按掌握度且已解锁时幂等、远征成绩来自服务端判题账本；SaveSlot 快照限 262144 字符并校验 JSON 对象与本人槽位，但仍无账号写入预算，且 Web 当前没有调用方。该检查不关闭全量限流审计；保留策略可能影响学习记录可见性，未擅自删除历史。
+  - 10/16 路由清单未闭项：工坊聊天历史有每分钟预算和读取上限，但尚无历史保留上限；证据快照已同时受来源 IP 与每账号共享写入额度限制，并保留每用户 200 条；玩家位置允许重复更新本人存档，客户端按 500ms 合并写入，服务端限频需避免误伤正常移动，待后续吞吐阶段评估。10/16 只读续审确认日历处理按 `userId/eventId` 更新、技能解锁按掌握度且已解锁时幂等、远征成绩来自服务端判题账本；日历处理端点现增加每账号 1 单位预算，技能解锁也已接入 1 单位预算。SaveSlot 快照限 262144 字符并校验 JSON 对象与本人槽位，三个写端点现使用共享账号额度（建槽/切换 1、快照 10）。该预算仍是单实例内存态；Web 当前无存档槽 API 调用方。该检查不关闭全量限流审计；保留策略可能影响学习记录可见性，未擅自删除历史。
+  - 10/16 Quest 写入口续审：开始/完成/跳过现各占每账号共享预算 1 单位；状态迁移以 UPDATE 受影响行数为准，开始只从 `OPEN` 推进，跳过遇到并发终结不再写重复进度。`QuestControllerTest`、`QuestServiceTest` 与状态 SQL 回归通过，账号预算仍是单实例内存态。
+  - 10/16 主线进度写入口续审：单页/批量阅读、例题完成、两种补星及客观题作答现各占共享预算 1 单位；视频继续用专用关卡限频。控制器角色/额度、Mainline 与 Practice 服务回归 46/46。
 - [x] NPC talk 只写本人存档，状态不参与服务端任务/奖励/权限判断；每次写入已有节点 ID、effects、type/key/value 字段长度校验。10/16 续审发现累计状态与请求频率仍无上限，现接入每账号每分钟 100 单位预算；每 NPC 最多存 128 个已完成节点和 64 个 flags，并在 `FOR UPDATE` 锁内读取后校验，避免并发绕过。数据目录中单角色最多 5 个节点。红测后 `NpcDialogControllerTest` 与世界 NPC `NpcDialogServiceTest` 共 12/12；Web/Android 对话树仍各自运行，状态不作为可信学习或授权证据。
 - [ ] 补齐满足真实先修证据的第 2 章以上远征战斗题型，并验证有效活动 run 的刷新/异常恢复。选题策略先修回溯按课程候选总数有界；65 个 KC 跨 7 章链、`LearnerTwinServiceTest` 与 `BossServiceTest` 合计 63/63。另修复聚焦章节与先修 KC 实际章节不同导致出题/结算被误拒的问题；远征服务、PostgreSQL 集成、控制器、Boss 与预生成回归合计 126/126。真实先修账号的 battle-compatible 题型及有效 run 刷新恢复仍未完成。KC-003 原无主线编程题，已从第 1 章学生页经正常 AI 补题入口生成并自动批准入共享题库；题目是普通 `kind=NULL` 题，不满足远征 battle-compatible 类型，且没有正式判题/掌握度事件。KC-011 有已批准共享题（chapter 2 / stage 1 / kind `NULL` / difficulty 1），对应主线 stage ID 5；新学生未解锁第 2 章，按后端 `requireChapterUnlocked` 不应跳过门槛提交，因此仍未正式判题，本轮未调用模型。
   - 10/16 只读远征可行性复核（含 `focusChapter=null`）：11 个活跃的第 2 章以上挑战节点中，可信先修达标为 0；其中 7 个账号持有未结算 `CONSUMED` 题，4 个账号有 `READY` 题，身份均无法确认是临时 QA。审核共享库内第 2 章以上 `dual_track`/`closed_loop` 题为 0。不得消费未知账号 READY 题或操作其存档。单纯页面刷新走 GET 快照；点击“继续”会触发后台预取，可能调用模型，当前不执行。需要正常流程中真实先修达标且已确认授权的 QA 学生后再做联测。
   - 10/16 修正通用题库兜底题型：无题型元数据的课程编程题只用于普通代码练习/`dual_track`；`debug` 等专用交互没有兼容题时返回可重试服务错误，避免前端按样例猜测错误代码。回归先 RED 后 GREEN，`BossServiceTest` 55/55；真实先修账号和活动 run 联测仍待完成。
 - [ ] 完成剩余 Web 可见动作矩阵与远征地图/战斗真实浏览器窄屏检查。10/16 临时学生的 `/mainline-map` 在 320px 加载成功、文档/页面宽度均为 320、浏览器错误 0；关闭章节详情后触摸 Phaser 画布能打开章节面板（选中第 3 章），模型请求 0。首次误点视觉隐藏的辅助列表未计通过。教师班级卡片 320px Playwright 布局回归 1/1，使用测试夹具，只证明窄屏显示和无页面横向溢出。`/bug-mine` 320×780 真实触屏下错题本收起/展开正常、无横向溢出，errorbook/echoes GET 200、浏览器错误 0、模型请求 0，临时用户 726 清理为 0。地图触屏项与错题矿洞抽屉窄屏项已闭合；远征 Boss 战真实窄屏与其余页面动作矩阵仍待验。本轮另以真实学生浏览器从世界目标 CTA 和地图章节入口进入 `/mainline/stage/1`，详情/视频/课件 GET 成功、浏览器错误 0；随后一次性学生按原速看满 7:20、逐页阅读原课件 40–45、提交 4 道客观题且 4/4 获服务端正确判定，刷新后仍显示 6/6 页和 4/4 题；相关提交 HTTP 200，浏览器错误 0，未调用模型。QA 用户 729 删除后，users、learning_event_log、mainline_stage_progress、kc_mastery、world_session、player_state、expedition_run 查询均为 0。这个第一章单节闭环不满足第 2 章以上远征先修条件。此前 PDF 翻页截图过早的问题来自自动化没有等待 PDF 渲染，等待条件修正后页面正常。
   - 10/16 `/guide` 上一篇/下一篇真实 Chromium 交互通过：`topic` 查询参数随正文切换，切页后正文滚动回顶，返回键路由恢复正确；页面运行错误 0。认证刷新及 Companion GET 由测试路由模拟，所有 API 均未触及真实后端，模型 API 请求与业务写入为 0。Guide pager 已验收，页面动作矩阵其余项仍开放。
-  - [x] 教师班级看板「主线进度」页签：一次性本地教师创建空班，真实 Chromium 点击页签后显示空态，页面错误 0、模型请求 0；真实 API 返回 200 且 `members=[]`。按精确 classroom/user ID 清理并核对不存在。未验失败重试态。
+  - [x] 教师班级看板「主线进度」页签：一次性本地教师创建空班，真实 Chromium 点击页签后显示空态，真实 API 返回 200 且 `members=[]`；按精确 classroom/user ID 清理并核对不存在。失败重试分支另用 Chromium 拦截 API：首次 503 显示可重试错误，第二次成功显示空态，11 个 mock 请求、0 AI 请求、0 页面错误；不作为真实后端失败注入证据。
 - [ ] 等待足够真实样本后评估 Twin A/B 与 7 日延迟结果。
 - [ ] 功能收敛后完成工程整理，最后再测性能；不重复已通过的 DeepSeek 测试。
 - [ ] 后端全量 Maven 仍未通过：2026-10-16 新鲜复跑 `mvn -o test` 共 1509 项，0 个断言失败、7 个错误；6 个 Testcontainers 错误是 Docker 随机主机端口绑定返回 `address already in use`，长期仿真在全量运行中连接被重置。单独复跑长期仿真通过，`CoursePackServiceIntegrationTest` 仍随机端口冲突（46474）。只读诊断确认 Surefire 未配置并行，失败端口位于当前 `ip_local_port_range=44620-48715`，诊断时该范围观察到 44 个 socket 状态、失败端口无监听；端口占用发生时的具体进程仍未知，因此不归因为应用缺陷，也不能标记全量通过。未跳过或降级测试；不再为碰运气重跑全量。
@@ -443,5 +446,7 @@ The configured SSH destination resolves through the TUN default route. The repos
 
 - 已完成：本续接为 Graph Boss 生成题增加判题边界（最多 10 个用例、每项输入/输出和参考代码最多 8192 字符），结构与编排测试 50/50、Ruff 通过，超限用例未触发 Piston；修复 `/api/events` 限流绕过，服务及两个入口测试 17/17；玩家位置、主线答案分别增加边界（2/2、2/2）；真实完成并清理第一章首节浏览器学习闭环。新增 Bug 矿洞新会话账号预算（定向 7/7、Spring/PostgreSQL 2/2）、Tutor 偏好事件预算（3/3）、Loop 检查点 `maxSteps` 边界（PostgreSQL 新边界与既有产物回归各 1/1），并给 Loop Runtime 浏览器写入口加 100 单位/分预算与 1 MiB JSON 字段上限（控制器 13/13）；Quest `page_read`、`resource` 与 `kc_mastery` 均改为核对服务端证据（`QuestCompleteWithEvidenceTest` 12/12，本地 PostgreSQL 哨兵查询通过）；世界睡眠推进复用每账号写预算（`WorldAdvanceControllerTest` 2/2）。本续接未发起 DeepSeek 请求。
 - 本轮新完成：证据快照与学习探针写入口复用每账号每分钟 100 单位预算；定向回归 5/5、定向 Spotless、diff 检查通过；没有 DeepSeek 请求。
-- 未完成：全 API 非 AI 限流审计与其余本地安全类别；远征合格真实账号的恢复/战斗闭环；未覆盖的 Web 路由与动作矩阵；Twin A/B 与 7 日复测；工程收尾，性能按计划最后测量。Loop Runtime 历史保留策略仍待审。生产 Piston ACL/ECS 与线上 Nginx 运行态未核验；全量 Spotless 仍受仓库已有格式漂移阻断，backend 全量 Maven 未验证全绿。
-- 下一步：继续未审非 AI 写接口与 Web 动作矩阵；已经完成的首节闭环及 QA 数据清理不重复执行。远征浏览器验收须使用真实先修进度与可用题型；性能最后测；除非 DeepSeek 请求路径或配置实质变更，不重复模型调用验证。
+- 本轮续接：远征开局与 typed action 写入口各纳入共享账号额度 1 单位；超额请求在写服务前返回 429。`ExpeditionRunControllerTest` 先 RED 后 GREEN，13/13 通过；章节测验重复提交已有状态幂等，普通代码提交有 10 秒账号限频；`./dev.sh` 已关闭本地 AI 日请求额度。本轮没有模型请求。
+- 本轮静态路由筛查：班级 join 已有账号级加入码节流、下载计数已有公网 Nginx IP 节流、Tutor 内部 checkpoint 校验服务令牌和用户归属、TutorBench 仅学生可触发且为确定性评估；媒体 provider 关闭/作业授权已有先前验证。`PATCH /api/world/player` 是高频本人位置存档写入，Web 客户端合并为最多约每 500ms 一次；不套用共享 100 次/分额度以免正常移动受阻，保留为需按吞吐选择专用服务器节流的风险项。此轮只读检查，未重放旧路线。
+- 未完成：全 API 非 AI 限流审计与其余本地安全类别（高频玩家位置写入的服务端专用节流仍待按吞吐确定）；远征合格真实账号的恢复/战斗闭环；未覆盖的 Web 路由与动作矩阵；Twin A/B 与 7 日复测；工程收尾，性能按计划最后测量。Loop Runtime 历史保留策略仍待审。生产 Piston ACL/ECS 与线上 Nginx 运行态未核验；全量 Spotless 仍受仓库已有格式漂移阻断，backend 全量 Maven 未验证全绿。
+- 下一步：继续未审非 AI 写接口与 Web 动作矩阵；已经完成的首节闭环及 QA 数据清理不重复执行。远征完整浏览器验收须使用真实先修进度与可用题型；性能最后测；除非 DeepSeek 请求路径或配置实质变更，不重复模型调用验证。

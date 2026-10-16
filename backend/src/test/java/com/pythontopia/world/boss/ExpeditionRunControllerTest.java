@@ -19,6 +19,7 @@ import com.pythontopia.auth.security.JwtAuthenticationFilter;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.common.web.CurrentUserArgumentResolver;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import com.pythontopia.common.web.WebConfig;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
@@ -54,9 +55,11 @@ class ExpeditionRunControllerTest {
   @MockBean BossService bossService;
   @MockBean JwtAuthenticationFilter jwtAuthenticationFilter;
   @MockBean TutorDailyRequestLimitService requestLimitService;
+  @MockBean StudentWriteThrottle studentWriteThrottle;
 
   @BeforeEach
   void authenticateAsStudent() {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(true);
     CurrentUserPrincipal principal = new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
     SecurityContextHolder.getContext()
         .setAuthentication(
@@ -121,6 +124,25 @@ class ExpeditionRunControllerTest {
         .andExpect(jsonPath("$.phase").value("map"));
 
     verify(service).performAction(eq(7L), any(ExpeditionRunActionRequest.class));
+    verify(studentWriteThrottle).tryAcquire(7L, 1);
+  }
+
+  @Test
+  void runActionIsRejectedWhenAccountWriteBudgetIsExhausted() throws Exception {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(false);
+
+    mockMvc
+        .perform(
+            post("/api/world/expedition/run/actions")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    "{\"runId\":\"123e4567-e89b-12d3-a456-426614174000\","
+                        + "\"nodeId\":\"L0-0\",\"action\":\"ENTER_NODE\"}"))
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.code").value("STUDENT_WRITE_RATE_LIMITED"));
+
+    verify(studentWriteThrottle).tryAcquire(7L, 1);
+    verifyNoInteractions(service, bossService);
   }
 
   @Test
@@ -153,6 +175,23 @@ class ExpeditionRunControllerTest {
 
     verify(bossService).selectFrontier(7L, 2, "PY43-KC-008");
     verify(service).start(eq(7L), eq(2), eq(false), anyList());
+    verify(studentWriteThrottle).tryAcquire(7L, 1);
+  }
+
+  @Test
+  void startRunIsRejectedWhenAccountWriteBudgetIsExhausted() throws Exception {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(false);
+
+    mockMvc
+        .perform(
+            post("/api/world/expedition/run")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"focusChapter\":2,\"isDaily\":false}"))
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.code").value("STUDENT_WRITE_RATE_LIMITED"));
+
+    verify(studentWriteThrottle).tryAcquire(7L, 1);
+    verifyNoInteractions(service, bossService);
   }
 
   @Test

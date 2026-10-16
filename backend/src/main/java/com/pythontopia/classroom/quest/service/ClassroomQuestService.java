@@ -350,7 +350,7 @@ public class ClassroomQuestService {
       return "/world";
     }
     if (nodeType == QuestNodeType.PLANT_KC) {
-      return "/world";
+      return "/mainline-map";
     }
     return "/world";
   }
@@ -372,9 +372,6 @@ public class ClassroomQuestService {
     if (nodeType == QuestNodeType.FIX_BUG) {
       // R-14：mine_south 风景地图已删；停在中央小镇，玩家经 town_hub 的「Bug 矿洞」building → /bug-mine 进入调试功能
       params.put("goto", "town_hub");
-    }
-    if (nodeType == QuestNodeType.PLANT_KC && kcCode != null) {
-      params.put("focus", "kc_" + kcCode.toLowerCase(Locale.ROOT));
     }
     return params;
   }

@@ -62,7 +62,7 @@ function pct(value: number): string {
       v-if="entries.length === 0"
       class="empty"
     >
-      暂无 KC 数据。学生进入知识田之后，热力图会被填充。
+      暂无 KC 数据。学生完成主线学习或练习后，这里会显示班级知识状态。
     </p>
     <template v-else>
       <div class="legend">

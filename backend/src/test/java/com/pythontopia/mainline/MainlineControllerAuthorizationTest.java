@@ -1,17 +1,31 @@
 package com.pythontopia.mainline;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
+import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
+import com.pythontopia.mainline.dto.EndlessSummaryRequest;
+import com.pythontopia.mainline.dto.ExampleDoneRequest;
+import com.pythontopia.mainline.dto.PageReadRequest;
+import com.pythontopia.mainline.dto.PagesReadRequest;
 import com.pythontopia.mainline.practice.MainlinePracticeController;
 import com.pythontopia.mainline.practice.MainlinePracticeService;
 import com.pythontopia.mainline.practice.dto.PracticeAnswerRequest;
 import com.pythontopia.mainline.test.ChapterQuizController;
 import com.pythontopia.mainline.test.ChapterTestController;
 import com.pythontopia.mainline.test.ChapterTestService;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +37,7 @@ import org.springframework.security.config.annotation.method.configuration.Enabl
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.http.HttpStatus;
 
 @ExtendWith(SpringExtension.class)
 @ContextConfiguration(classes = MainlineControllerAuthorizationTest.TestConfiguration.class)
@@ -31,17 +46,25 @@ class MainlineControllerAuthorizationTest {
   @Autowired private MainlineController mainlineController;
   @Autowired private MainlinePracticeController practiceController;
   @Autowired private MainlineService mainlineService;
+  @Autowired private MainlineRecoveryService mainlineRecoveryService;
   @Autowired private MainlinePracticeService practiceService;
   @Autowired private ChapterTestController chapterTestController;
   @Autowired private ChapterQuizController chapterQuizController;
   @Autowired private ChapterTestService chapterTestService;
+  @Autowired private StudentWriteThrottle studentWriteThrottle;
+
+  @BeforeEach
+  void clearMockInvocations() {
+    clearInvocations(
+        mainlineService, mainlineRecoveryService, practiceService, studentWriteThrottle);
+  }
 
   @Test
   @WithMockUser(roles = "TEACHER")
   void teacherCannotUseStudentMainlineApi() {
     assertThatThrownBy(() -> mainlineController.overview(principal(Role.TEACHER)))
         .isInstanceOf(AccessDeniedException.class);
-    verifyNoInteractions(mainlineService);
+    verifyNoInteractions(mainlineService, studentWriteThrottle);
   }
 
   @Test
@@ -55,7 +78,41 @@ class MainlineControllerAuthorizationTest {
                     new PracticeAnswerRequest(java.util.List.of("A")),
                     principal(Role.TEACHER)))
         .isInstanceOf(AccessDeniedException.class);
-    verifyNoInteractions(practiceService);
+    verifyNoInteractions(practiceService, studentWriteThrottle);
+  }
+
+  @Test
+  @WithMockUser(roles = "STUDENT")
+  void mainlineProgressAndPracticeWritesUseAccountBudget() {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(false);
+    CurrentUserPrincipal student = principal(Role.STUDENT);
+
+    assertWriteBudgetRejected(
+        () -> mainlineController.pageRead(1, new PageReadRequest(101L), student));
+    assertWriteBudgetRejected(
+        () -> mainlineController.pagesRead(1, new PagesReadRequest(List.of(101L)), student));
+    assertWriteBudgetRejected(
+        () -> mainlineController.exampleDone(1, new ExampleDoneRequest(11L, null), student));
+    assertWriteBudgetRejected(
+        () ->
+            mainlineController.endlessSummary(
+                new EndlessSummaryRequest(1, "123e4567-e89b-12d3-a456-426614174000"), student));
+    assertWriteBudgetRejected(() -> mainlineController.recoveryErrorbook(1, student));
+    assertWriteBudgetRejected(
+        () ->
+            practiceController.answer(
+                1, 1, new PracticeAnswerRequest(List.of("A")), student));
+
+    verify(studentWriteThrottle, times(6)).tryAcquire(7L, 1);
+    verifyNoInteractions(mainlineService, mainlineRecoveryService, practiceService);
+  }
+
+  private void assertWriteBudgetRejected(Runnable action) {
+    Throwable failure = catchThrowable(action::run);
+    assertThat(failure).isInstanceOf(BusinessException.class);
+    BusinessException business = (BusinessException) failure;
+    assertThat(business.code()).isEqualTo("STUDENT_WRITE_RATE_LIMITED");
+    assertThat(business.status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
   }
 
   @Test
@@ -101,6 +158,11 @@ class MainlineControllerAuthorizationTest {
     @Bean
     MainlinePracticeService mainlinePracticeService() {
       return mock(MainlinePracticeService.class);
+    }
+
+    @Bean
+    StudentWriteThrottle studentWriteThrottle() {
+      return mock(StudentWriteThrottle.class);
     }
 
     @Bean

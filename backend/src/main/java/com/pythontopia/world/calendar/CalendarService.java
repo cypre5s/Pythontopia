@@ -8,7 +8,7 @@ import java.util.List;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
-/** 面向游戏内日历 UI 的只读查询。 */
+/** 提供游戏内日历查询和本人事件的已处理状态更新。 */
 @Service
 public class CalendarService {
 

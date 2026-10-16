@@ -164,21 +164,22 @@ public class QuestRepository {
   }
 
   /**
-   * 把任务从「未终结」状态推进到 {@code newStatus}，并发安全。
+   * 原子推进任务状态。开始只允许 {@code OPEN}，终态迁移允许 {@code OPEN}/{@code IN_PROGRESS}，
+   * 防止并发重试重复写进度或发布完成事件。
    *
-   * <p>{@code AND status IN ('OPEN','IN_PROGRESS')} 是并发守卫：service 层的「读状态再判断」是无锁的，
-   * 双击 / 重试会让两个事务都通过前置校验并各自 UPDATE 成功，从而写出两行 COMPLETED 进度、发两次事件、
-   * 掌握度翻倍。把状态条件下推到 UPDATE 后，同一次推进只有一个事务能命中行。
-   *
-   * @return 受影响行数；0 表示任务已被并发请求终结（或不属于该用户），调用方必须据此中止后续副作用。
+   * @return 受影响行数；0 表示任务状态已变化或不属于该用户，调用方必须中止后续副作用。
    */
   public int updateStatus(Long userId, Long questId, QuestStatus newStatus) {
+    String activeStatusCondition =
+        newStatus == QuestStatus.IN_PROGRESS
+            ? "status = 'OPEN'"
+            : "status IN ('OPEN', 'IN_PROGRESS')";
     return jdbcTemplate.update(
         """
         UPDATE quest
         SET status = ?, updated_at = now()
-        WHERE id = ? AND user_id = ? AND status IN ('OPEN', 'IN_PROGRESS')
-        """,
+        WHERE id = ? AND user_id = ? AND %s
+        """.formatted(activeStatusCondition),
         newStatus.name(),
         questId,
         userId);

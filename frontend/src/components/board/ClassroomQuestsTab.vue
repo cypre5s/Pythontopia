@@ -37,8 +37,8 @@ function deepLinkTitle(quest: ClassroomQuestDto): string {
     case 'FIX_BUG':
       return '去矿洞修 Bug';
     case 'PLANT_KC':
-      // R-14 已废弃农场隐喻：该节点实际跳世界地图（/world?focus=kc_xxx），文案与行为对齐。
-      return '去世界解锁知识点';
+      // 兼容历史节点；新班级任务不再使用种植类型。
+      return '前往主线解锁知识点';
     case 'PROFILE_UPDATE':
       return '去画像屋';
     default:

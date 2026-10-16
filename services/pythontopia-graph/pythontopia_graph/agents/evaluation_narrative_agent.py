@@ -180,10 +180,10 @@ class EvaluationNarrativeAgent:
         return [alias for alias in aliases if alias]
 
     def _idle_response(self, request: EvaluationNarrativeRequest) -> EvaluationNarrativeResponse:
-        narrative = "# 本周复盘\n- 近期无活动\n本周指标全部为 0，建议先完成一次画像访谈或在知识田种 KC。"
+        narrative = "# 本周复盘\n- 近期无活动\n本周指标全部为 0，建议先完成一次画像访谈，再从主线地图开始学习。"
         return EvaluationNarrativeResponse(
             narrative_md=narrative,
-            key_recommendations=["先进入画像屋完成访谈。", "在知识田种植第一个 KC。"],
+            key_recommendations=["先进入画像屋完成访谈。", "从主线地图开始学习第一个知识点。"],
             path_diff_explainer="近期无数据，新路径保持系统默认。",
             safety_result=SafetyResult(passed=True),
             grounding_result=GroundingResult(passed=True),

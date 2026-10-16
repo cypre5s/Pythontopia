@@ -61,7 +61,11 @@ public class QuestService {
           "QUEST_INVALID_STATE",
           "任务当前状态 " + quest.status() + " 无法开始");
     }
-    repository.updateStatus(userId, questId, QuestStatus.IN_PROGRESS);
+    int affected = repository.updateStatus(userId, questId, QuestStatus.IN_PROGRESS);
+    if (affected == 0) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT, "QUEST_STATE_CHANGED", "任务状态已被其他请求更新，请刷新后查看");
+    }
     repository.recordProgress(questId, "STARTED", null);
     return refresh(userId, questId);
   }
@@ -98,7 +102,11 @@ public class QuestService {
           "QUEST_INVALID_STATE",
           "任务当前状态 " + quest.status() + " 无法跳过");
     }
-    repository.updateStatus(userId, questId, QuestStatus.SKIPPED);
+    int affected = repository.updateStatus(userId, questId, QuestStatus.SKIPPED);
+    if (affected == 0) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT, "QUEST_ALREADY_FINALIZED", "任务已被其他请求完成，请刷新后查看");
+    }
     repository.recordProgress(questId, "SKIPPED", request == null ? null : request.reason());
     return refresh(userId, questId);
   }

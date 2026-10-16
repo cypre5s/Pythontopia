@@ -61,18 +61,49 @@ describe('questDeepLink fallback routes', () => {
     });
   });
 
-  it('keeps FIX_BUG / PLANT_KC aligned with the backend deep link table', () => {
-    // 后端 LearningPathService.deepLinkParamsFor：FIX_BUG → /world?goto=town_hub，
-    // PLANT_KC → /world?focus=kc_<小写 kcCode>。前端兜底必须是同一张表，
-    // 否则「本周路径」与「今日任务」点同一节点会跳到两个地方。
+  it('routes bug fixing to town hub and legacy plant nodes to the mainline map', () => {
+    // PLANT_KC 仅为历史数据兼容项，R-14 后应进入主线学习，不再尝试种植 KC。
     expect(resolvePathNodeDeepLink(pathNode('FIX_BUG'))).toEqual({
       path: '/world',
       query: { goto: 'town_hub' },
     });
     expect(resolvePathNodeDeepLink(pathNode('PLANT_KC'))).toEqual({
-      path: '/world',
-      query: { focus: 'kc_py43-kc-016' },
+      path: '/mainline-map',
     });
+  });
+
+  it('routes persisted legacy plant quests to the mainline map even when they store an old route', () => {
+    const target = resolveQuestDeepLink(
+      quest('PLANT_KC', {
+        deepLinkRoute: '/world',
+        deepLinkParams: { focus: 'kc_py43-kc-016' },
+      } as Partial<QuestDto>),
+    );
+    expect(target).toEqual({ path: '/mainline-map' });
+  });
+
+  it('routes persisted legacy classroom plant quests to the mainline map', () => {
+    const target = resolveClassroomQuestDeepLink({
+      id: 3,
+      classroomId: 1,
+      teacherId: 2,
+      title: 'legacy',
+      description: null,
+      nodeType: 'PLANT_KC',
+      kcCodes: ['PY43-KC-016'],
+      targetProblemId: null,
+      targetProblemIds: [],
+      targetResourceType: null,
+      targetResourceId: null,
+      dueDate: null,
+      status: 'OPEN',
+      deepLinkRoute: '/world',
+      deepLinkParams: { focus: 'kc_py43-kc-016' },
+      createdAt: '2026-06-01T10:00:00Z',
+      updatedAt: '2026-06-01T10:00:00Z',
+    } as unknown as Parameters<typeof resolveClassroomQuestDeepLink>[0]);
+
+    expect(target).toEqual({ path: '/mainline-map' });
   });
 
   it('still honours a backend supplied deep link route for quests', () => {

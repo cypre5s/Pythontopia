@@ -38,8 +38,8 @@ function actionLabelFor(node: LearningPathNodeDto): string {
     case 'FIX_BUG':
       return '去矿洞修 Bug';
     case 'PLANT_KC':
-      // R-14 已废弃农场隐喻：该节点实际跳世界地图（/world?focus=kc_xxx），文案与行为对齐。
-      return '去世界解锁知识点';
+      // 兼容历史节点；新路径不再生成种植任务。
+      return '前往主线解锁知识点';
     case 'PROFILE_UPDATE':
       return '去画像屋更新';
     default:
@@ -98,7 +98,7 @@ async function clickNode(node: LearningPathNodeDto): Promise<void> {
                 :data-testid="`path-node-link-${node.id}`"
                 @click="clickNode(node)"
               >
-                <span class="type">{{ node.nodeType }}</span>
+                <span class="type">{{ node.nodeType === 'PLANT_KC' ? '主线' : node.nodeType }}</span>
                 <span class="kc">{{ kcDisplayName(node.kcCode) }}</span>
                 <p class="reason">
                   {{ node.reasonSummary }}

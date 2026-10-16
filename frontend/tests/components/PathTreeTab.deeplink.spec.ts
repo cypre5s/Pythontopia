@@ -65,6 +65,7 @@ function mountTab() {
       { path: '/training', name: 'training', component: { template: '<div />' } },
       { path: '/workshop', name: 'workshop', component: { template: '<div />' } },
       { path: '/world', name: 'world', component: { template: '<div />' } },
+      { path: '/mainline-map', name: 'mainline-map', component: { template: '<div />' } },
       { path: '/profile-room', name: 'profile-room', component: { template: '<div />' } },
     ],
   });
@@ -138,7 +139,7 @@ describe('PathTreeTab deep link', () => {
     expect(router.currentRoute.value.query.goto).toBe('town_hub');
   });
 
-  it('PLANT_KC node routes to /world?focus=kc_... like the backend deep link', async () => {
+  it('legacy PLANT_KC node routes to the mainline map', async () => {
     const wrapper = await setupNode({
       id: 4,
       nodeType: 'PLANT_KC',
@@ -149,9 +150,8 @@ describe('PathTreeTab deep link', () => {
     await wrapper.find('[data-testid="path-node-link-4"]').trigger('click');
     await flushPromises();
 
-    // 后端 quest 深链是 /world?focus=kc_xxx；前端兜底曾跳 /workshop，同一节点两种行为。
-    expect(router.currentRoute.value.path).toBe('/world');
-    expect(router.currentRoute.value.query.focus).toBe('kc_py43-kc-004');
+    expect(router.currentRoute.value.path).toBe('/mainline-map');
+    expect(wrapper.text()).toContain('前往主线解锁知识点');
   });
 
   it('PROFILE_UPDATE node routes to /profile-room', async () => {

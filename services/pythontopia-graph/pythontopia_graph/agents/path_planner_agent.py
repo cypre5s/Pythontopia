@@ -30,7 +30,6 @@ LOW_MASTERY_THRESHOLD = 0.4
 class _CandidateKc:
     kc_code: str
     mastery: float
-    unlocked: bool
     chapter_id: int | None
     prerequisite_codes: tuple[str, ...]
 
@@ -47,7 +46,7 @@ class PathPlannerAgent:
             return PathPlannerResponse(
                 user_id=request.user_id,
                 pack_id=request.pack_id,
-                goal_summary="未解锁任何 KC，请先在知识田初始化。",
+                goal_summary="当前没有可推荐的已解锁 KC，请先从主线地图继续学习。",
                 nodes=[],
                 safety_result=PathPlannerSafetyResult(passed=True),
                 grounding_result=PathPlannerGroundingResult(
@@ -127,20 +126,6 @@ class PathPlannerAgent:
                 suggested_resource_type=None,
             )
 
-        locked_kcs = [kc for kc in request.kcs if not kc.unlocked]
-        if locked_kcs:
-            target = locked_kcs[0]
-            self._append_node(
-                nodes,
-                day_counter,
-                day_index=2,
-                kc_code=target.kc_code,
-                node_type="PLANT_KC",
-                reason=f"解锁新 KC：{target.kc_code}",
-                evidence="基于知识田未解锁 KC 列表",
-                suggested_resource_type=None,
-            )
-
         anchor_kc = focus_candidates[0].kc_code if focus_candidates else unlocked_kcs[0].kc_code
         self._append_node(
             nodes,
@@ -215,7 +200,6 @@ class PathPlannerAgent:
             _CandidateKc(
                 kc_code=kc.kc_code,
                 mastery=kc.mastery_score,
-                unlocked=kc.unlocked,
                 chapter_id=kc.chapter_id,
                 prerequisite_codes=tuple(kc.prerequisite_codes),
             )

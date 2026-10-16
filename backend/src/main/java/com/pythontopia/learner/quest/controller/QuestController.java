@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.learner.quest.dto.QuestCompleteRequest;
 import com.pythontopia.learner.quest.dto.QuestDto;
 import com.pythontopia.learner.quest.dto.QuestSkipRequest;
@@ -25,10 +26,12 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/quests")
 public class QuestController {
 
+  private final StudentWriteThrottle studentWriteThrottle;
   private final QuestService service;
 
-  public QuestController(QuestService service) {
+  public QuestController(QuestService service, StudentWriteThrottle studentWriteThrottle) {
     this.service = service;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @GetMapping("/today")
@@ -51,6 +54,7 @@ public class QuestController {
   @PostMapping("/{id}/start")
   public QuestDto start(@CurrentUser CurrentUserPrincipal user, @PathVariable Long id) {
     requireStudent(user);
+    requireWriteCapacity(user.userId());
     return service.start(user.userId(), id);
   }
 
@@ -60,6 +64,7 @@ public class QuestController {
       @PathVariable Long id,
       @Valid @RequestBody(required = false) QuestCompleteRequest request) {
     requireStudent(user);
+    requireWriteCapacity(user.userId());
     return service.complete(user.userId(), id, request);
   }
 
@@ -69,7 +74,17 @@ public class QuestController {
       @PathVariable Long id,
       @Valid @RequestBody(required = false) QuestSkipRequest request) {
     requireStudent(user);
+    requireWriteCapacity(user.userId());
     return service.skip(user.userId(), id, request);
+  }
+
+  private void requireWriteCapacity(long userId) {
+    if (!studentWriteThrottle.tryAcquire(userId, 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "STUDENT_WRITE_RATE_LIMITED",
+          "每个账号每分钟最多写入 100 条记录");
+    }
   }
 
   private void requireStudent(CurrentUserPrincipal user) {

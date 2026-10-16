@@ -32,4 +32,15 @@ class QuestRepositoryStatusGuardTest {
     String sql = sqlCaptor.getValue().replaceAll("\\s+", " ").trim();
     assertThat(sql).contains("status IN ('OPEN', 'IN_PROGRESS')");
   }
+
+  @Test
+  void startOnlyMovesQuestsThatAreStillOpen() {
+    repository.updateStatus(7L, 10L, QuestStatus.IN_PROGRESS);
+
+    ArgumentCaptor<String> sqlCaptor = ArgumentCaptor.forClass(String.class);
+    verify(jdbcTemplate).update(sqlCaptor.capture(), eq("IN_PROGRESS"), eq(10L), eq(7L));
+
+    String sql = sqlCaptor.getValue().replaceAll("\\s+", " ").trim();
+    assertThat(sql).contains("status = 'OPEN'").doesNotContain("status IN");
+  }
 }

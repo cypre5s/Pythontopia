@@ -346,7 +346,7 @@ public class LearningPathService {
       case SOLVE_PROBLEM -> "/training";
       case READ_RESOURCE -> "/workshop";
       case FIX_BUG -> "/world";
-      case PLANT_KC -> "/world";
+      case PLANT_KC -> "/mainline-map";
       case PROFILE_UPDATE -> "/profile-room";
     };
   }
@@ -365,11 +365,7 @@ public class LearningPathService {
         }
       }
       case FIX_BUG -> params.put("goto", "town_hub"); // R-14：mine_south 已删，停小镇经 building → /bug-mine
-      case PLANT_KC -> {
-        if (kcCode != null) {
-          params.put("focus", "kc_" + kcCode.toLowerCase(Locale.ROOT));
-        }
-      }
+      case PLANT_KC -> { }
       case PROFILE_UPDATE -> {
         // 画像屋无附加参数
       }
@@ -382,7 +378,7 @@ public class LearningPathService {
       case READ_RESOURCE -> "阅读 " + node.kcCode() + " 资源";
       case SOLVE_PROBLEM -> "完成 " + node.kcCode() + " 练习";
       case FIX_BUG -> "矿洞修复 " + node.kcCode();
-      case PLANT_KC -> "解锁 KC " + node.kcCode();
+      case PLANT_KC -> "前往主线解锁 KC " + node.kcCode();
       case PROFILE_UPDATE -> "更新学习画像";
     };
   }
@@ -421,49 +417,6 @@ public class LearningPathService {
   @Transactional(readOnly = true)
   public List<LearningPathDto> listArchived(Long userId) {
     return pathRepository.listArchived(userId, DEFAULT_PACK_ID, ARCHIVED_HISTORY_LIMIT);
-  }
-
-  void ensureDefaultsForNewStudent(Long userId) {
-    if (questRepository.hasAnyQuest(userId)) {
-      return;
-    }
-    LocalDate due = LocalDate.now(ZoneOffset.UTC).plusDays(1);
-    questRepository.insert(
-        new QuestInsert(
-            userId,
-            QuestSource.SYSTEM_DEFAULT,
-            null,
-            "完成画像访谈",
-            "在画像屋与镇长聊聊，建立你的 8 维学习画像。",
-            null,
-            QuestNodeType.PROFILE_UPDATE,
-            Map.of("kind", "default"),
-            due,
-            7));
-    questRepository.insert(
-        new QuestInsert(
-            userId,
-            QuestSource.SYSTEM_DEFAULT,
-            null,
-            "初始化知识田",
-            "到知识田点击 bootstrap，把课程包导入到你的种植图。",
-            null,
-            QuestNodeType.PLANT_KC,
-            Map.of("kind", "default"),
-            due,
-            6));
-    questRepository.insert(
-        new QuestInsert(
-            userId,
-            QuestSource.SYSTEM_DEFAULT,
-            null,
-            "在资源工坊生成一份讲义",
-            "选 1 个 KC，让多智能体合作生成一份讲义。",
-            null,
-            QuestNodeType.READ_RESOURCE,
-            Map.of("kind", "default"),
-            due,
-            5));
   }
 
   private PathPlannerGraphRequest.ProfileSnapshot buildProfileSnapshot(LearnerProfileDto profile) {
@@ -638,7 +591,7 @@ public class LearningPathService {
       case READ_RESOURCE -> "阅读 " + node.kcCode() + " 资源";
       case SOLVE_PROBLEM -> "完成 " + node.kcCode() + " 练习";
       case FIX_BUG -> "矿洞修复 " + node.kcCode();
-      case PLANT_KC -> "解锁 KC " + node.kcCode();
+      case PLANT_KC -> "前往主线解锁 KC " + node.kcCode();
       case PROFILE_UPDATE -> "更新学习画像";
     };
   }
