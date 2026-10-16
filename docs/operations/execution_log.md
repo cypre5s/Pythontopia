@@ -874,3 +874,9 @@
 
 - 主线单页/批量阅读、例题完成、远征补星、错题补星和客观题作答过去未占共享预算；现各占 1 单位，额度不足返回 429 且不进入服务。视频进度保留现有按 user/stage 的专用节流。
 - 扩展 `MainlineControllerAuthorizationTest` 覆盖五类进度/补星写路由及客观题作答的预算拒绝，同时确认教师被方法安全拒绝时不消耗额度。与 `MainlineServiceTest`、`MainlinePracticeServiceTest` 合计 46/46；没有数据库业务写入或模型请求。共享预算为单实例内存态。
+
+## 2026-10-16 — 玩家位置写口独立限速
+
+- Web store 将位置 PATCH 合并到约每 500ms 一次；服务端现对每个账号设置独立的 1 秒 10 次滑动窗口，超限请求在 `WorldService` 前返回 429，不消耗普通学习写入额度。
+- 回归先复现旧路由第 31 次仍返回 200，确定限额后验证第 11 次被拒：`WorldControllerTest` + `StudentWriteThrottleTest` 4/4 通过；触及 Java 文件定向 Spotless 与 `git diff --check` 通过。无模型请求或业务数据写入。
+- 账号计数器仍是单 Spring 实例内存态。全 API 非 AI 写路由/日志审计、真实远征资格与恢复、剩余 Web 动作、Twin 真实样本和工程收尾仍按唯一清单推进；性能最后测。

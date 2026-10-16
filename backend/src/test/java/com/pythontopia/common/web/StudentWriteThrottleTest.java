@@ -29,4 +29,20 @@ class StudentWriteThrottleTest {
     assertThat(throttle.tryAcquire(7L, 101)).isFalse();
     assertThat(throttle.tryAcquire(7L, 100)).isTrue();
   }
+
+  @Test
+  void playerPositionWritesUseTheirOwnShortWindow() {
+    AtomicLong nowMillis = new AtomicLong();
+    StudentWriteThrottle throttle = new StudentWriteThrottle(nowMillis::get);
+
+    for (int update = 0; update < 10; update++) {
+      assertThat(throttle.tryAcquirePlayerPositionUpdate(7L)).isTrue();
+    }
+    assertThat(throttle.tryAcquirePlayerPositionUpdate(7L)).isFalse();
+    assertThat(throttle.tryAcquirePlayerPositionUpdate(8L)).isTrue();
+    assertThat(throttle.tryAcquire(7L, 100)).isTrue();
+
+    nowMillis.set(Duration.ofSeconds(1).toMillis());
+    assertThat(throttle.tryAcquirePlayerPositionUpdate(7L)).isTrue();
+  }
 }
