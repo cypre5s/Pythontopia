@@ -49,3 +49,22 @@
 - Ruff 对 AutoGen runtime、Tutor graph/session/route、checkpoint client 和定向测试通过。
 - Java Tutor 服务、Graph SSE、内部 checkpoint controller 与 Testcontainers repository integration 共 41 tests 通过；空 PostgreSQL 从旧 schema 迁移经过 V199，并与根任务的 V200 Boss migration 共存。
 - 未启动本地 Web 全栈、未调用 DeepSeek、未运行远征性能测量；没有 commit/push。真实模型恢复质量、跨服务浏览器断连仍未联测。
+
+## 2026-10-16 — 对照 Alethicode 当前 AutoGen Tutor 补齐可信欢迎提示
+
+### 当前实现对照
+
+- 复核 Alethicode 当前工作树（HEAD 仍为 `10a97fe`，AutoGen Tutor 改动尚未提交）、[ADR-0010](../../../Alethicode/docs/adr/0010-tutor-qa-autogen-runtime.md) 和 Codex rollout `01a12f26-6bab-7371-8763-06f922c1b13b`。该日志记录了 Tutor 禁止 ReAct、固定阶段 AutoGen、取消/恢复/idempotency 目标及离线验证边界；不能把脏工作树误称为已合并版本。
+- Alethicode 当前 Tutor 的用户可见能力包括个性化欢迎与起手建议、逐卡反馈、引用卡片/课件、会话与 checkpoint 恢复及高风险动作确认。Pythontopia 已有固定阶段 AutoGen + 原生 team checkpoint 恢复、owner 级 Java checkpoint、SSE/取消、卡片反馈（负反馈触发重新解释）、`@card` / `@courseware` 引用、计划控制和图片私有附件；接口与存储按本项目契约实现，不需要复制 Alethicode 的 Redis event bus、API 或数据库表。
+- 当前能直接补齐且不会复制造数的用户体验差异是起始欢迎提示：Pythontopia 之前只有固定空状态说明，没有把已验证学情用于开场。
+
+### 实施
+
+- `TutorWorkflowPanel.vue` 从现有 `learning.field.masterySnapshot` 读取当前题关联 KC，只采用 `assessed === true` 的独立练习记录，并用现有 `kcDisplayName` 显示 KC 名称；以最低已评估分数给出可核验的建议。
+- 学情尚未载入时明确显示“学情数据尚未载入”；载入后仍没有已验证记录时说明不会用默认分数推断能力。无需新 API、数据库迁移、模型调用或新依赖。
+- 新增三个组件用例覆盖未评估默认值、已评估 KC 欢迎内容以及学情尚未载入。RED 时新行为测试因缺少可信提示失败；GREEN 后 Tutor 组件 **19/19** 通过。`npm run typecheck` 与目标修改文件的 ESLint 均通过。
+
+### 未验证 / 风险
+
+- 本次只完成欢迎区的用户体验 parity，不代表逐项移植 Alethicode 全部 Tutor 产品行为；Pythontopia 仍保留自己的 Graph/Java REST+SSE/数据库边界，也未移植 Alethicode 的审批操作界面或 Redis 跨副本 run event bus。
+- 未启动全栈、未做浏览器端到端、未调用真实模型；欢迎提示依赖应用已有 mastery store 已载入。空快照会如实显示“暂无证据”，不会主动触发额外学情 API 请求。

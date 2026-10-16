@@ -19,7 +19,7 @@ import java.util.List;
  * @param kcCode 锚定 KC（兼容旧字段，等价于 preferredKc 的旧名）
  * @param difficulty 兼容旧客户端的提示字段；题目难度由服务端 Twin 规则决定，证据不足时回退到 stage
  * @param preferredKc 偏好锚定 KC（覆盖 kcCode；前端 ArenaPage 关卡传）
- * @param preferredKind 关卡题型（fill_blank/debug/multi_round 等），用于 LLM 模板选择
+ * @param preferredKind 关卡题型；objective 请求复用无编程题 KC 的课程客观题
  * @param profileSignals 学生画像信号，{@link ProfileSignalsPayload}
  * @param arenaLevel 闯关塔单关 id（如 "1-3"）：预生成 / 复用题的维度之一（endless / arena 传）
  * @param expeditionRunId 当前远征 run id；只有服务端当前活跃 run 可关联奖励
@@ -32,7 +32,7 @@ public record BossProblemRequest(
     @Min(1) @Max(5) @JsonProperty("difficulty") Integer difficulty,
     @JsonProperty("preferredKc") @Size(max = 64) String preferredKc,
     @JsonProperty("preferredKind")
-        @Pattern(regexp = "^(pdf_question|fill_blank|debug|short_answer|closed_loop|dual_track|multi_round|teach_back|bug_mine)$")
+        @Pattern(regexp = "^(pdf_question|fill_blank|debug|short_answer|closed_loop|dual_track|multi_round|teach_back|bug_mine|objective)$")
         String preferredKind,
     @JsonProperty("profileSignals") @Valid ProfileSignalsPayload profileSignals,
     @JsonProperty("arenaLevel") @Size(max = 16) String arenaLevel,

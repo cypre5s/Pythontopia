@@ -93,6 +93,27 @@ class BossControllerTest {
   }
 
   @Test
+  void acceptsObjectivePracticeKind() throws Exception {
+    BossProblemDto dto =
+        new BossProblemDto(
+            "issue-objective", 1, 1, 1, "PY43-KC-003", "statement", List.of(), "", "", 1, true, false);
+    when(service.fetchProblem(anyInt(), any(), any())).thenReturn(dto);
+
+    mockMvc
+        .perform(
+            post("/api/world/boss/1/problem")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new BossProblemRequest(
+                            1, null, null, "PY43-KC-003", "objective", null, null, null))))
+        .andExpect(status().isOk());
+
+    verify(service)
+        .fetchProblem(anyInt(), argThat(request -> "objective".equals(request.preferredKind())), any());
+  }
+
+  @Test
   void rejects400WhenStageOutOfRange() throws Exception {
     mockMvc
         .perform(

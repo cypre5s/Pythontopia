@@ -333,6 +333,47 @@ describe('TutorWorkflowPanel', () => {
     }));
   });
 
+  it('does not interpret unassessed KC defaults as learner ability in the welcome', async () => {
+    const wrapper = mountPanel();
+    const learning = useLearningStore();
+    learning.field.hydrated = true;
+    learning.field.masterySnapshot = [
+      {
+        kcCode: 'PY43-KC-016', masteryScore: 0.5, confidence: 0,
+        lastEventAt: null, latestSource: 'bootstrap_default', assessed: false,
+      },
+    ];
+    await nextTick();
+
+    const welcome = wrapper.get('[data-testid="tutor-welcome-evidence"]').text();
+    expect(welcome).toContain('暂无已验证的独立练习记录');
+    expect(welcome).not.toContain('50%');
+  });
+
+  it('personalizes the welcome with the lowest verified KC mastery for this problem', async () => {
+    const wrapper = mountPanel();
+    const learning = useLearningStore();
+    learning.field.hydrated = true;
+    learning.field.masterySnapshot = [
+      {
+        kcCode: 'PY43-KC-016', masteryScore: 0.24, confidence: 0.8,
+        lastEventAt: null, latestSource: 'verified_practice', assessed: true,
+      },
+    ];
+    await nextTick();
+
+    const welcome = wrapper.get('[data-testid="tutor-welcome-evidence"]').text();
+    expect(welcome).toContain('程序运行原理');
+    expect(welcome).toContain('24%');
+  });
+
+  it('keeps learner ability unknown before mastery data has loaded', () => {
+    const wrapper = mountPanel();
+
+    expect(wrapper.get('[data-testid="tutor-welcome-evidence"]').text())
+      .toContain('学情数据尚未载入');
+  });
+
   it('shows a generated episode plan and sends the server phase when starting it', async () => {
     const plan = {
       plan_id: 'ep-wf-test',

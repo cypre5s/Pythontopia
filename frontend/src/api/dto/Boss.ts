@@ -61,6 +61,12 @@ export interface BossProblemDto {
   reviewed: boolean;
   /** 是否来自 AI 出题（false = golden test 兜底）。 */
   aiGenerated: boolean;
+  /** Server-judged response format; omitted by older APIs means CODE. */
+  questionType?: 'CODE' | 'CHOICE' | 'JUDGE' | 'FILL';
+  /** Public options for CHOICE; answers remain server-only. */
+  options?: string[];
+  /** Number of answer fields for FILL. */
+  blankCount?: number;
   /** 课件引用页码（PdfQuestionCard 用于跳转 LibraryPage）。 */
   evidencePageIds?: number[];
 }
@@ -104,7 +110,9 @@ export interface BossAttemptRequest {
   problemId: string;
   chapter: number;
   stage: number;
-  code: string;
+  code?: string;
+  /** Submitted objective answer values; the server loads the key from its question bank. */
+  answers?: string[];
   /** 重试同一次网络提交时保持不变；后端据此返回原判题结果。 */
   attemptId?: string;
   /** 玩家做题时长（秒），用于自适应难度。 */

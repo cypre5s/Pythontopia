@@ -95,6 +95,27 @@ class BossAttemptIdempotencyPostgresTest {
   }
 
   @Test
+  void requestIdCannotBeReusedForDifferentObjectiveAnswer() {
+    long userId = createStudent();
+    UUID attemptId = UUID.randomUUID();
+    BossAttemptRequest request =
+        new BossAttemptRequest("p1", 2, 2, null, 3, attemptId, java.util.List.of("正确"));
+    BossAttemptIdempotencyService service =
+        new BossAttemptIdempotencyService(
+            jdbc, new ObjectMapper(), mock(ApplicationEventPublisher.class));
+    service.claim(userId, attemptId, request);
+
+    assertThatThrownBy(
+            () ->
+                service.claim(
+                    userId,
+                    attemptId,
+                    new BossAttemptRequest("p1", 2, 2, null, 3, attemptId, java.util.List.of("错误"))))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("不同提交内容");
+  }
+
+  @Test
   void staleClaimCanBeRecoveredAfterAWorkerCrash() {
     long userId = createStudent();
     UUID attemptId = UUID.randomUUID();

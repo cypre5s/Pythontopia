@@ -81,4 +81,29 @@ describe('useChallengeJudge', () => {
     const secondPayload = mocks.requestBossProblem.mock.calls[1]?.[1] as BossProblemRequest;
     expect(firstPayload.requestId).not.toBe(secondPayload.requestId);
   });
+
+  it('submits objective answers as typed values without sending a code field', async () => {
+    mocks.submitBossAttempt.mockResolvedValue({
+      problemId: 'issue-objective',
+      passed: true,
+      passedTestCases: 1,
+      totalTestCases: 1,
+      score: 100,
+      feedback: '回答正确',
+    });
+    const challenge = useChallengeJudge();
+    const objectiveProblem: BossProblemDto = {
+      ...PROBLEM,
+      problemId: 'issue-objective',
+      questionType: 'JUDGE',
+    };
+
+    await challenge.judge(objectiveProblem, '', 5, ['正确']);
+
+    expect(mocks.submitBossAttempt).toHaveBeenCalledWith(expect.objectContaining({
+      problemId: 'issue-objective',
+      answers: ['正确'],
+    }));
+    expect(mocks.submitBossAttempt.mock.calls[0]?.[0]).not.toHaveProperty('code');
+  });
 });

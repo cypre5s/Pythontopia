@@ -11,7 +11,7 @@ import {
 } from '@/api/boss';
 import { useProfileSignals } from '@/composables/useProfileSignals';
 import { kcChapter } from '@/data/rogueConfig';
-import type { BossAttemptResultDto, BossProblemDto } from '@/api/dto/Boss';
+import type { BossAttemptRequest, BossAttemptResultDto, BossProblemDto } from '@/api/dto/Boss';
 
 /**
  * 「本次没有真正判定」的后端 feedback 前缀集合。
@@ -74,7 +74,12 @@ export interface UseChallengeJudgeReturn {
   preloadStates: Ref<Record<string, ChallengePreloadState>>;
   /** 清空本局的状态视图（服务端 READY 题保留，仍可跨会话复用）。 */
   clearPrefetch: () => void;
-  judge: (problem: BossProblemDto, code: string, elapsedSec: number) => Promise<BossAttemptResultDto>;
+  judge: (
+    problem: BossProblemDto,
+    code: string,
+    elapsedSec: number,
+    answers?: string[],
+  ) => Promise<BossAttemptResultDto>;
 }
 
 export function useChallengeJudge(): UseChallengeJudgeReturn {
@@ -233,15 +238,17 @@ export function useChallengeJudge(): UseChallengeJudgeReturn {
     problem: BossProblemDto,
     code: string,
     elapsedSec: number,
+    answers?: string[],
   ): Promise<BossAttemptResultDto> {
-    return submitBossAttempt({
+    const submission: BossAttemptRequest = {
       problemId: problem.problemId,
       chapter: problem.chapter,
       stage: problem.stage,
-      code,
       elapsedSec,
+      ...(answers === undefined ? { code } : { answers }),
       ...(hasAnySignal.value ? { profileSignals: signals.value } : {}),
-    });
+    };
+    return submitBossAttempt(submission);
   }
 
   return {

@@ -21,11 +21,47 @@ public record BossProblemDto(
     @JsonProperty("sampleOutput") String sampleOutput,
     @JsonProperty("totalTestCases") int totalTestCases,
     @JsonProperty("reviewed") boolean reviewed,
-    @JsonProperty("aiGenerated") boolean aiGenerated) {
+    @JsonProperty("aiGenerated") boolean aiGenerated,
+    @JsonProperty("questionType") BossQuestionType questionType,
+    @JsonProperty("options") List<String> options,
+    @JsonProperty("blankCount") int blankCount) {
 
   public BossProblemDto {
     if (hints == null) {
       hints = List.of();
     }
+    if (questionType == null) questionType = BossQuestionType.CODE;
+    if (options == null) options = List.of();
+  }
+
+  public BossProblemDto(
+      String problemId,
+      int chapter,
+      int stage,
+      int difficulty,
+      String kcCode,
+      String statement,
+      List<String> hints,
+      String sampleInput,
+      String sampleOutput,
+      int totalTestCases,
+      boolean reviewed,
+      boolean aiGenerated) {
+    this(
+        problemId,
+        chapter,
+        stage,
+        difficulty,
+        kcCode,
+        statement,
+        hints,
+        sampleInput,
+        sampleOutput,
+        totalTestCases,
+        reviewed,
+        aiGenerated,
+        BossQuestionType.CODE,
+        List.of(),
+        0);
   }
 }

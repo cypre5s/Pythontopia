@@ -35,13 +35,9 @@ export function newBossProblemRequestId(): string {
 
 function attemptIdFor(payload: BossAttemptRequest): string {
   if (payload.attemptId) return payload.attemptId;
-  const fingerprint = JSON.stringify([
-    payload.problemId,
-    payload.chapter,
-    payload.stage,
-    payload.code,
-    payload.elapsedSec,
-  ]);
+  const fingerprint = JSON.stringify(payload.answers === undefined
+    ? [payload.problemId, payload.chapter, payload.stage, payload.code, payload.elapsedSec]
+    : [payload.problemId, payload.chapter, payload.stage, payload.code, payload.answers, payload.elapsedSec]);
   if (pendingAttempt?.fingerprint === fingerprint) return pendingAttempt.attemptId;
   pendingAttempt = { fingerprint, attemptId: newBossProblemRequestId() };
   return pendingAttempt.attemptId;

@@ -7,7 +7,7 @@
  * 头部 meta（KC / 难度 / 计时 / 额外 chips）、底部操作（actions 插槽）+ 统一 JudgeResultPanel 由本组件统一收口，
  * 供无尽远征 / 快速刷题等复用，避免各页各写一套丑陋的题面拼接。
  */
-import { computed } from 'vue';
+import { computed, watch } from 'vue';
 import { KindRouter } from '@/components/arena';
 import PythonCodeEditor from '@/components/training/PythonCodeEditor.vue';
 import JudgeResultPanel from '@/components/challenge/JudgeResultPanel.vue';
@@ -44,6 +44,40 @@ const codeProxy = computed<string>({
   get: () => props.code,
   set: (value) => emit('update:code', value),
 });
+const answers = defineModel<string[]>('answers', { default: () => [] });
+const isObjective = computed(() =>
+  Boolean(props.problem.questionType && props.problem.questionType !== 'CODE'),
+);
+const objectiveOptions = computed(() =>
+  props.problem.questionType === 'JUDGE'
+    ? ['正确', '错误']
+    : props.problem.questionType === 'CHOICE'
+      ? props.problem.options ?? []
+      : [],
+);
+const fillCount = computed(() => Math.max(1, props.problem.blankCount ?? 1));
+const selectedAnswer = computed<string>({
+  get: () => answers.value[0] ?? '',
+  set: (value) => { answers.value = value ? [value] : []; },
+});
+
+watch(
+  () => [props.problem.problemId, props.problem.questionType, props.problem.blankCount],
+  () => {
+    answers.value = props.problem.questionType === 'FILL'
+      ? Array.from({ length: fillCount.value }, () => '')
+      : [];
+  },
+  { immediate: true },
+);
+
+function setFillAnswer(index: number, event: Event): void {
+  const target = event.target;
+  if (!(target instanceof HTMLInputElement)) return;
+  const next = [...answers.value];
+  next[index] = target.value;
+  answers.value = next;
+}
 
 // 有 kind → 单栏铺自带卡；无 kind → 两栏题面|编辑器。
 const isTwoPane = computed<boolean>(() => props.kind === null);
@@ -153,8 +187,57 @@ async function copySample(text: string): Promise<void> {
         </div>
       </header>
       <div class="cw-work__body">
+        <div
+          v-if="isObjective"
+          class="cw-objective"
+          data-testid="objective-boss-question"
+          :data-question-type="problem.questionType"
+        >
+          <p class="cw-objective__statement">
+            {{ problem.statement }}
+          </p>
+          <fieldset
+            v-if="problem.questionType === 'CHOICE' || problem.questionType === 'JUDGE'"
+            class="cw-objective__options"
+          >
+            <legend>选择一个答案</legend>
+            <label
+              v-for="(option, index) in objectiveOptions"
+              :key="option"
+              class="cw-objective__option"
+            >
+              <input
+                v-model="selectedAnswer"
+                type="radio"
+                :name="`boss-answer-${problem.problemId}`"
+                :value="option"
+                :data-testid="`objective-option-${index}`"
+              >
+              <span>{{ option }}</span>
+            </label>
+          </fieldset>
+          <fieldset
+            v-else-if="problem.questionType === 'FILL'"
+            class="cw-objective__options"
+          >
+            <legend>填写答案</legend>
+            <label
+              v-for="index in fillCount"
+              :key="index"
+              class="cw-objective__fill"
+            >
+              <span>第 {{ index }} 空</span>
+              <input
+                :data-testid="`objective-blank-${index - 1}`"
+                :value="answers[index - 1] ?? ''"
+                autocomplete="off"
+                @input="setFillAnswer(index - 1, $event)"
+              >
+            </label>
+          </fieldset>
+        </div>
         <KindRouter
-          v-if="kind"
+          v-else-if="kind"
           v-model:code="codeProxy"
           :kind="kind"
           :problem="problem"
@@ -364,6 +447,14 @@ async function copySample(text: string): Promise<void> {
   flex-direction: column;
   gap: 12px;
 }
+.cw-objective { display: grid; gap: 16px; padding: 20px; overflow: auto; }
+.cw-objective__statement { margin: 0; white-space: pre-wrap; line-height: 1.6; }
+.cw-objective__options { display: grid; gap: 10px; border: 1px solid rgba(74, 54, 29, 0.3); padding: 14px; }
+.cw-objective__options legend { padding: 0 6px; font-weight: 700; }
+.cw-objective__option { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; }
+.cw-objective__option input { margin-top: 3px; accent-color: var(--pyt-color-success); }
+.cw-objective__fill { display: grid; gap: 6px; max-width: 420px; }
+.cw-objective__fill input { min-height: 40px; padding: 8px 10px; border: 1px solid var(--pyt-color-border-strong); border-radius: 4px; background: white; color: var(--pyt-color-text); }
 .cw-editor-host {
   flex: 1 1 auto;
   min-height: 240px;

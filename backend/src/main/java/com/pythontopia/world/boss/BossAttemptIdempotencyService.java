@@ -165,15 +165,23 @@ public class BossAttemptIdempotencyService {
 
   private String requestHash(BossAttemptRequest request) {
     try {
-      byte[] canonical =
-          objectMapper.writeValueAsBytes(
-              List.of(
+      List<Object> canonical =
+          request.answers() == null
+              ? List.of(
                   request.problemId(),
                   request.chapter(),
                   request.stage(),
                   request.code(),
-                  request.elapsedSec()));
-      return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(canonical));
+                  request.elapsedSec())
+              : List.of(
+                  request.problemId(),
+                  request.chapter(),
+                  request.stage(),
+                  request.code() == null ? "" : request.code(),
+                  request.answers(),
+                  request.elapsedSec());
+      byte[] bytes = objectMapper.writeValueAsBytes(canonical);
+      return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
     } catch (JsonProcessingException | NoSuchAlgorithmException exception) {
       throw new IllegalStateException("无法计算判题请求摘要", exception);
     }

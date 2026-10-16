@@ -50,9 +50,25 @@ public class MainlinePracticeRepository {
                 + SELECT_COLUMNS
                 + " FROM mainline_practice_question"
                 + " WHERE chapter = :chapter AND stage_index = :stageIndex"
+                + " AND required_for_stage = TRUE"
                 + " ORDER BY ordinal")
         .param("chapter", chapter)
         .param("stageIndex", stageIndex)
+        .query(this::map)
+        .list();
+  }
+
+  /** All objective questions for a KC, including supplemental rows excluded from stage completion. */
+  public List<MainlinePracticeQuestion> findForBossFallback(int chapter, String kcCode) {
+    return jdbcClient
+        .sql(
+            "SELECT "
+                + SELECT_COLUMNS
+                + " FROM mainline_practice_question"
+                + " WHERE chapter = :chapter AND kc_code = :kcCode"
+                + " ORDER BY required_for_stage DESC, stage_index, ordinal")
+        .param("chapter", chapter)
+        .param("kcCode", kcCode)
         .query(this::map)
         .list();
   }

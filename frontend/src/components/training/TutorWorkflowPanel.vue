@@ -16,6 +16,7 @@ import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import { runTrace } from '@/services/codeTheater/trace';
 import type { Trace, TraceEvent } from '@/services/codeTheater/types';
+import { kcDisplayName } from '@/data/kcNames';
 import {
   getActiveWorkflowSession,
   getEarlierWorkflowCards,
@@ -59,6 +60,23 @@ const emit = defineEmits<{
 const learning = useLearningStore();
 const toast = useToastStore();
 const router = useRouter();
+const tutorWelcomeEvidence = computed(() => {
+  if (!learning.field.hydrated) {
+    return '学情数据尚未载入；当前不会用默认分数推断能力。可以先从题目导读开始。';
+  }
+
+  const assessedMastery = props.kcCodes.flatMap((kcCode) => {
+    const snapshot = learning.field.masterySnapshot.find((entry) => entry.kcCode === kcCode);
+    return snapshot?.assessed === true ? [snapshot] : [];
+  });
+  const lowestMastery = assessedMastery.sort((left, right) => left.masteryScore - right.masteryScore)[0];
+
+  if (!lowestMastery) {
+    return '本题关联知识点暂无已验证的独立练习记录；当前不会用默认分数推断能力。可以先从题目导读开始。';
+  }
+
+  return `依据已验证的独立练习记录，本题已评估知识点中「${kcDisplayName(lowestMastery.kcCode)}」掌握度最低（${Math.round(lowestMastery.masteryScore * 100)}%）。可以先看题目导读，再按需要进行知识点复盘。`;
+});
 
 interface CardEntry {
   key: WorkflowCardKey;
@@ -877,6 +895,13 @@ function cardId(entry: CardEntry): string {
         点下面的「下一步」开始：先<strong>题目导读</strong>，再<strong>思路分析</strong>、<strong>骨架代码</strong>，
         提交后可看<strong>错因诊断</strong>/<strong>AC 复盘</strong>。助教只引导、不给完整答案。
       </p>
+      <p
+        v-if="cards.length === 0 && !running"
+        class="tw-empty__evidence"
+        data-testid="tutor-welcome-evidence"
+      >
+        {{ tutorWelcomeEvidence }}
+      </p>
 
       <article
         v-for="entry in cards"
@@ -1605,6 +1630,15 @@ function cardId(entry: CardEntry): string {
   font-size: 13px;
   line-height: 1.7;
   color: var(--pyt-color-text-hint);
+}
+.tw-empty__evidence {
+  margin: 0;
+  padding: 8px 10px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--pyt-color-text-hint);
+  background: var(--pyt-color-bg-soft);
+  border-left: 3px solid var(--pyt-color-primary);
 }
 .tw-card {
   border: 2px solid var(--pyt-color-border);

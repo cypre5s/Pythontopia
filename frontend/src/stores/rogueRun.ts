@@ -828,7 +828,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     persist();
   }
 
-  async function submitChallenge(): Promise<void> {
+  async function submitChallenge(answers: string[] = []): Promise<void> {
     const node = activeNode.value;
     const problem = activeProblem.value;
     if (!node || !problem || loading.value || settlementPending.value) return;
@@ -836,7 +836,12 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     loading.value = true;
     errorMessage.value = '';
     try {
-      const result = await challenge.judge(problem, activeCode.value, elapsedSec.value);
+      const result = await challenge.judge(
+        problem,
+        activeCode.value,
+        elapsedSec.value,
+        problem.questionType && problem.questionType !== 'CODE' ? answers : undefined,
+      );
       if (requestGeneration !== challengeGeneration) return;
       if (isJudgeUnavailable(result)) {
         errorMessage.value = '判题服务暂不可用，本次不计分，请稍后重试。';

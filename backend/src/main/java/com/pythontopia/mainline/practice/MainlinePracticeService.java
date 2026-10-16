@@ -121,14 +121,23 @@ public class MainlinePracticeService implements MainlinePracticePort {
   }
 
   private static boolean judge(MainlinePracticeQuestion question, List<String> submitted) {
-    return switch (question.type()) {
-      case CHOICE, JUDGE -> judgeObjective(question, submitted);
-      case FILL -> judgeFill(question, submitted);
+    return isCorrect(question.type(), question.answers(), submitted);
+  }
+
+  /** Shared server-side matcher for the mainline and objective Boss submissions. */
+  public static boolean isCorrect(
+      PracticeQuestionType type, List<String> expected, List<String> submitted) {
+    if (type == null) return false;
+    List<String> answers = expected == null ? List.of() : expected;
+    List<String> values = submitted == null ? List.of() : submitted;
+    return switch (type) {
+      case CHOICE, JUDGE -> judgeObjective(answers, values);
+      case FILL -> judgeFill(answers, values);
     };
   }
 
   /** 选择 / 判断：取首个提交项，与任一正确答案文本（NFKC + 去空白）相等即对。 */
-  private static boolean judgeObjective(MainlinePracticeQuestion question, List<String> submitted) {
+  private static boolean judgeObjective(List<String> answers, List<String> submitted) {
     if (submitted.isEmpty()) {
       return false;
     }
@@ -136,12 +145,11 @@ public class MainlinePracticeService implements MainlinePracticePort {
     if (picked.isEmpty()) {
       return false;
     }
-    return question.answers().stream().anyMatch(ans -> normalizeObjective(ans).equals(picked));
+    return answers.stream().anyMatch(ans -> normalizeObjective(ans).equals(picked));
   }
 
   /** 填空：提交空数须与答案空数一致，逐空规范化全等才算对。 */
-  private static boolean judgeFill(MainlinePracticeQuestion question, List<String> submitted) {
-    List<String> expected = question.answers();
+  private static boolean judgeFill(List<String> expected, List<String> submitted) {
     if (expected.isEmpty() || submitted.size() != expected.size()) {
       return false;
     }

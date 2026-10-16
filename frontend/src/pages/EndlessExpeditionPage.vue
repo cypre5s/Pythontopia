@@ -47,6 +47,12 @@ const assessedKcs = computed(() => learning.field.masterySnapshot
   .map((snapshot) => snapshot.kcCode));
 const showConstellation = ref(false);
 const showLeaderboard = ref(false);
+const challengeAnswers = ref<string[]>([]);
+
+watch(
+  () => run.activeProblem?.problemId,
+  () => { challengeAnswers.value = []; },
+);
 
 // ?focus=章 来自旧 /arena 重定向或聚焦练习。
 const focusFromQuery = computed<number | null>(() => {
@@ -108,7 +114,7 @@ function onEnterId(id: string): void {
   void run.enterNode(id);
 }
 function onSubmit(): void {
-  void run.submitChallenge();
+  void run.submitChallenge(challengeAnswers.value);
 }
 // 答题中「主动结束本局」→ 进结算（掌握度已入库不回滚）；「查看地图」只读弹窗。
 const showMapModal = ref(false);
@@ -729,6 +735,7 @@ function nodeClass(node: RogueNode): Record<string, boolean> {
           <ChallengeWorkspace
             v-else-if="run.activeProblem"
             v-model:code="run.activeCode"
+            v-model:answers="challengeAnswers"
             :kind="run.activeNode?.challengeKind ?? null"
             :problem="run.activeProblem"
             :title="NODE_KIND_LABEL[run.activeNode?.kind ?? 'battle']"

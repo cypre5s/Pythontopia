@@ -178,6 +178,26 @@ class MainlinePracticeServiceTest {
     verify(repository, never()).appendCorrect(anyLong(), anyLong(), anyLong());
   }
 
+  @Test
+  void sharedObjectiveJudgeSupportsChoiceJudgeAndFillAnswers() {
+    assertThat(
+            MainlinePracticeService.isCorrect(
+                PracticeQuestionType.CHOICE, List.of("选项 A"), List.of(" 选 项 A ")))
+        .isTrue();
+    assertThat(
+            MainlinePracticeService.isCorrect(
+                PracticeQuestionType.JUDGE, List.of("正确"), List.of(" 正 确 ")))
+        .isTrue();
+    assertThat(
+            MainlinePracticeService.isCorrect(
+                PracticeQuestionType.FILL, List.of("print", "True"), List.of("PRINT", "true")))
+        .isTrue();
+    assertThat(
+            MainlinePracticeService.isCorrect(
+                PracticeQuestionType.FILL, List.of("print", "True"), List.of("print")))
+        .isFalse();
+  }
+
   // --- 幂等 ----------------------------------------------------------------
 
   @Test

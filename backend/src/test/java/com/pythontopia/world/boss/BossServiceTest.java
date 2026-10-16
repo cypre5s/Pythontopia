@@ -24,6 +24,9 @@ import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.profile.dto.LearnerProfileSignals;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.twin.LearnerTwinService;
+import com.pythontopia.mainline.practice.MainlinePracticeQuestion;
+import com.pythontopia.mainline.practice.MainlinePracticeRepository;
+import com.pythontopia.mainline.practice.PracticeQuestionType;
 import com.pythontopia.mainline.test.ChapterProblemBankRepository;
 import com.pythontopia.mainline.test.ChapterProblemBankRepository.CodingCase;
 import com.pythontopia.mainline.test.ChapterProblemBankRepository.PreferredCodingQuestion;
@@ -37,6 +40,7 @@ import com.pythontopia.world.boss.dto.BossInternalProblem;
 import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest;
 import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
+import com.pythontopia.world.boss.dto.BossQuestionType;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
 import com.pythontopia.world.boss.dto.FrontierPickDto;
 import com.pythontopia.world.boss.dto.FrontierSelectRequest;
@@ -76,6 +80,7 @@ class BossServiceTest {
   @Mock BossGraphClient graphClient;
   @Mock PassiveProfileService passiveProfileService;
   @Mock LearnerTwinService learnerTwinService;
+  @Mock MainlinePracticeRepository mainlinePracticeRepository;
   @Mock ChapterProblemBankRepository chapterProblemBankRepository;
   @Mock JudgeWorkerPool judgeWorkerPool;
   @Mock StaticCodeChecker staticCodeChecker;
@@ -95,6 +100,7 @@ class BossServiceTest {
             graphClient,
             passiveProfileService,
             learnerTwinService,
+            mainlinePracticeRepository,
             chapterProblemBankRepository,
             judgeWorkerPool,
             staticCodeChecker,
@@ -130,6 +136,206 @@ class BossServiceTest {
               if (event != null) eventPublisher.publishEvent(event);
               return invocation.getArgument(3);
             });
+  }
+
+  @Test
+  @DisplayName("无同 KC 编程题时 Boss 使用客观题并把通过结果写回远征和学习事件")
+  void bossFallsBackToObjectiveQuestionAndPublishesVerifiedOutcome() {
+    String runId = UUID.randomUUID().toString();
+    String nodeId = "L9-0";
+    String kcCode = "PY43-KC-008";
+    var sourceQuestion =
+        new MainlinePracticeQuestion(
+            15L,
+            2,
+            1,
+            3,
+            kcCode,
+            PracticeQuestionType.JUDGE,
+            "在 Python 中可以使用 print() 函数把内容输出到屏幕。",
+            List.of(),
+            List.of("正确"),
+            0,
+            "print() 是 Python 的标准输出内置函数。",
+            "通识题（非课件原题）");
+    when(expeditionRunService.validateProblemRequest(7L, runId, nodeId, 2, false, kcCode))
+        .thenReturn(1);
+    when(expeditionRunService.findIssuedQuestionFingerprints(7L, runId)).thenReturn(Set.of());
+    when(chapterProblemBankRepository.findByKcCodes(List.of(kcCode))).thenReturn(List.of());
+    when(mainlinePracticeRepository.findForBossFallback(2, kcCode))
+        .thenReturn(List.of(sourceQuestion));
+
+    var problem =
+        service.fetchProblem(
+            2,
+            new BossProblemRequest(2, null, null, kcCode, "dual_track", null, null, runId, nodeId),
+            7L);
+
+    assertThat(problem.questionType()).isEqualTo(BossQuestionType.JUDGE);
+    assertThat(problem.statement()).contains("print()");
+    assertThat(problem.options()).isEmpty();
+    assertThat(problem.toString()).doesNotContain("正确");
+    verifyNoInteractions(graphClient);
+
+    BossInternalProblem issued =
+        new BossInternalProblem(
+            "boss-objective-15",
+            2,
+            problem.stage(),
+            problem.difficulty(),
+            kcCode,
+            sourceQuestion.stem(),
+            List.of(),
+            "",
+            "",
+            1,
+            true,
+            false,
+            List.of(),
+            "",
+            BossQuestionType.JUDGE,
+            List.of(),
+            sourceQuestion.answers(),
+            0)
+            .issueAs(problem.problemId(), kcCode);
+    when(pregenService.findExpeditionBinding(7L, problem.problemId()))
+        .thenReturn(
+            Optional.of(
+                new EndlessPregenService.ExpeditionProblemBinding(
+                    runId,
+                    nodeId,
+                    2,
+                    problem.stage(),
+                    kcCode,
+                    BossService.questionFingerprint(issued),
+                    1)));
+    when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
+    when(expeditionScoreService.recordVerifiedAttempt(
+            anyLong(), anyString(), anyString(), anyString(), anyBoolean(), anyInt()))
+        .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
+
+    var result =
+        service.evaluateAttempt(
+            new BossAttemptRequest(
+                problem.problemId(),
+                2,
+                problem.stage(),
+                null,
+                12,
+                UUID.randomUUID(),
+                List.of("正确")),
+            7L);
+
+    assertThat(result.passed()).isTrue();
+    assertThat(result.passedTestCases()).isEqualTo(1);
+    assertThat(result.feedback()).contains("服务端已确认");
+    verify(expeditionScoreService)
+        .recordVerifiedAttempt(
+            eq(7L), eq(runId), eq(problem.problemId()), anyString(), eq(true), eq(100));
+    verify(eventPublisher).publishEvent(any(LearningEvent.class));
+    verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
+  }
+
+  @Test
+  @DisplayName("明确请求客观练习时复用无编程题 KC 的课程审核题")
+  void objectivePracticeRequestUsesCourseQuestionWithoutGraph() {
+    String kcCode = "PY43-KC-003";
+    var sourceQuestion =
+        new MainlinePracticeQuestion(
+            31L,
+            1,
+            1,
+            1,
+            kcCode,
+            PracticeQuestionType.JUDGE,
+            "计算思维求解问题的一般流程可概括为：发现问题→抽象建模→算法设计→程序实现→结果评价。",
+            List.of(),
+            List.of("正确"),
+            0,
+            "该流程与课程知识点描述一致。",
+            "课件页 10724");
+    when(expeditionRunService.findIssuedQuestionFingerprints(7L, null)).thenReturn(Set.of());
+    when(mainlinePracticeRepository.findForBossFallback(1, kcCode))
+        .thenReturn(List.of(sourceQuestion));
+
+    var problem =
+        service.fetchProblem(
+            1,
+            new BossProblemRequest(1, null, null, kcCode, "objective", null, null, null, null),
+            7L);
+
+    assertThat(problem.questionType()).isEqualTo(BossQuestionType.JUDGE);
+    assertThat(problem.problemId()).startsWith("issue-").doesNotStartWith("issue-boss-phase-");
+    assertThat(problem.toString()).doesNotContain("正确");
+    verifyNoInteractions(graphClient);
+  }
+
+  @Test
+  @DisplayName("明确请求客观练习时不预取编程题")
+  void objectivePracticeRequestSkipsCodePrefetch() {
+    String kcCode = "PY43-KC-003";
+    var status =
+        service.prefetch(
+            1,
+            new BossProblemRequest(1, null, null, kcCode, "objective", null, null, null, null),
+            7L);
+
+    assertThat(status.status()).isEqualTo("IDLE");
+    verifyNoInteractions(pregenService);
+  }
+
+  @Test
+  @DisplayName("客观题库耗尽时明确失败，不静默请求代码题生成")
+  void objectivePracticeRequestFailsClosedWhenBankIsExhausted() {
+    String kcCode = "PY43-KC-003";
+    when(mainlinePracticeRepository.findForBossFallback(1, kcCode)).thenReturn(List.of());
+
+    assertThatThrownBy(
+            () ->
+                service.fetchProblem(
+                    1,
+                    new BossProblemRequest(
+                        1, null, null, kcCode, "objective", null, null, null, null),
+                    7L))
+        .hasMessageContaining("审核客观题");
+
+    verifyNoInteractions(graphClient);
+  }
+
+  @Test
+  @DisplayName("客观题 Boss 不预取编程题，不额外启动 Graph 出题")
+  void objectiveBossDoesNotStartCodeQuestionPrefetch() {
+    String runId = UUID.randomUUID().toString();
+    String nodeId = "L9-0";
+    String kcCode = "PY43-KC-008";
+    when(expeditionRunService.validateProblemRequest(7L, runId, nodeId, 2, true, kcCode))
+        .thenReturn(1);
+    when(chapterProblemBankRepository.findByKcCodes(List.of(kcCode))).thenReturn(List.of());
+    when(mainlinePracticeRepository.findForBossFallback(2, kcCode))
+        .thenReturn(
+            List.of(
+                new MainlinePracticeQuestion(
+                    15L,
+                    2,
+                    1,
+                    3,
+                    kcCode,
+                    PracticeQuestionType.JUDGE,
+                    "在 Python 中可以使用 print() 函数把内容输出到屏幕。",
+                    List.of(),
+                    List.of("正确"),
+                    0,
+                    "print() 是 Python 的标准输出内置函数。",
+                    "通识题（非课件原题）")));
+
+    var status =
+        service.prefetch(
+            2,
+            new BossProblemRequest(2, null, null, kcCode, "dual_track", null, null, runId, nodeId),
+            7L);
+
+    assertThat(status.status()).isEqualTo("IDLE");
+    verifyNoInteractions(pregenService);
   }
 
   @Test

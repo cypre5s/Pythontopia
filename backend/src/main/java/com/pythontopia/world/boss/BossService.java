@@ -6,6 +6,10 @@ import com.pythontopia.learner.profile.dto.LearnerProfileSignals;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
 import com.pythontopia.learner.twin.LearnerTwinService;
 import com.pythontopia.mainline.ChapterCatalog;
+import com.pythontopia.mainline.practice.MainlinePracticeQuestion;
+import com.pythontopia.mainline.practice.MainlinePracticeRepository;
+import com.pythontopia.mainline.practice.MainlinePracticeService;
+import com.pythontopia.mainline.practice.PracticeQuestionType;
 import com.pythontopia.mainline.test.ChapterProblemBankRepository;
 import com.pythontopia.mainline.test.ChapterProblemBankRepository.PreferredCodingQuestion;
 import com.pythontopia.submission.judge.JudgeCaseEvaluator;
@@ -20,6 +24,7 @@ import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
 import com.pythontopia.world.boss.dto.BossProblemDto;
 import com.pythontopia.world.boss.dto.BossProblemRequest;
 import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
+import com.pythontopia.world.boss.dto.BossQuestionType;
 import com.pythontopia.world.boss.dto.BossTestCasePayload;
 import com.pythontopia.world.boss.dto.FrontierPickDto;
 import com.pythontopia.world.boss.dto.FrontierSelectRequest;
@@ -78,6 +83,7 @@ public class BossService {
   private final BossGraphClient graphClient;
   private final PassiveProfileService passiveProfileService;
   private final LearnerTwinService learnerTwinService;
+  private final MainlinePracticeRepository mainlinePracticeRepository;
   private final ChapterProblemBankRepository chapterProblemBankRepository;
   private final JudgeWorkerPool judgeWorkerPool;
   private final StaticCodeChecker staticCodeChecker;
@@ -100,6 +106,7 @@ public class BossService {
       BossGraphClient graphClient,
       PassiveProfileService passiveProfileService,
       LearnerTwinService learnerTwinService,
+      MainlinePracticeRepository mainlinePracticeRepository,
       ChapterProblemBankRepository chapterProblemBankRepository,
       JudgeWorkerPool judgeWorkerPool,
       StaticCodeChecker staticCodeChecker,
@@ -113,6 +120,7 @@ public class BossService {
     this.graphClient = graphClient;
     this.passiveProfileService = passiveProfileService;
     this.learnerTwinService = learnerTwinService;
+    this.mainlinePracticeRepository = mainlinePracticeRepository;
     this.chapterProblemBankRepository = chapterProblemBankRepository;
     this.judgeWorkerPool = judgeWorkerPool;
     this.staticCodeChecker = staticCodeChecker;
@@ -344,6 +352,28 @@ public class BossService {
           org.springframework.http.HttpStatus.CONFLICT, "BOSS_PREFETCH_PENDING", "题目仍在生成，请稍后重试");
     }
 
+    boolean objectivePracticeRequested = isObjectivePracticeRequest(request);
+    if (objectivePracticeRequested
+        || (expeditionBinding.bossPhase() != null && !hasCourseProgrammingQuestion(kc))) {
+      Optional<BossInternalProblem> objective =
+          findObjectiveBossProblem(chapter, request.stage(), kc, difficulty, issuedFingerprints);
+      if (objective.isPresent()) {
+        BossInternalProblem problem =
+            objective.orElseThrow().issueAs(issueProblemId(expeditionBinding.bossPhase()), kc);
+        BossInternalProblem persisted =
+            persistConsumed(userId, chapter, kc, request, difficulty, problem, expeditionRunId);
+        if (persisted != null) problem = persisted;
+        cacheProblem(userId, problem);
+        return rememberRequest(userId, request, generationKey, problem);
+      }
+      if (objectivePracticeRequested) {
+        throw new com.pythontopia.common.error.BusinessException(
+            org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+            "BOSS_OBJECTIVE_BANK_EMPTY",
+            "当前知识点没有可用的审核客观题，请先补充课程题库题目");
+      }
+    }
+
     // 3) 个性化预生成与 approved bank 均未命中 → 现场走 graph 出题。
     if (!generationsInFlight.add(generationKey)) {
       throw generationPending();
@@ -454,6 +484,50 @@ public class BossService {
         .findFirst();
   }
 
+  private Optional<BossInternalProblem> findObjectiveBossProblem(
+      int chapter,
+      int stage,
+      String kcCode,
+      int difficulty,
+      Set<String> excludedFingerprints) {
+    return mainlinePracticeRepository.findForBossFallback(chapter, kcCode).stream()
+        .map(question -> toObjectiveBossProblem(question, stage, difficulty))
+        .filter(problem -> !excludedFingerprints.contains(questionFingerprint(problem)))
+        .findFirst();
+  }
+
+  private boolean hasCourseProgrammingQuestion(String kcCode) {
+    return chapterProblemBankRepository.findByKcCodes(List.of(kcCode)).stream()
+        .anyMatch(question -> kcCode.equals(question.kcCode()));
+  }
+
+  private static boolean isObjectivePracticeRequest(BossProblemRequest request) {
+    return "objective".equals(request.preferredKind());
+  }
+
+  private static BossInternalProblem toObjectiveBossProblem(
+      MainlinePracticeQuestion question, int stage, int difficulty) {
+    return new BossInternalProblem(
+        "mainline-objective-" + question.id(),
+        question.chapter(),
+        stage,
+        difficulty,
+        question.kcCode(),
+        question.stem(),
+        List.of(),
+        "",
+        "",
+        1,
+        true,
+        false,
+        List.of(),
+        "",
+        BossQuestionType.valueOf(question.type().name()),
+        question.options(),
+        question.answers(),
+        question.blankCount());
+  }
+
   private com.pythontopia.common.error.BusinessException repeatedProblemUnavailable() {
     return new com.pythontopia.common.error.BusinessException(
         org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
@@ -493,11 +567,23 @@ public class BossService {
   public BossPrefetchStatusDto prefetch(int chapter, BossProblemRequest request, Long userId) {
     String effectiveKc = request.preferredKc() != null ? request.preferredKc() : request.kcCode();
     String kc = resolveKc(chapter, effectiveKc);
-    String expeditionRunId =
+    ExpeditionRequestBinding expeditionBinding =
         validateExpeditionRun(
-                userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, true, kc)
-            .runId();
+            userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, true, kc);
+    String expeditionRunId = expeditionBinding.runId();
     int difficulty = computeTargetDifficulty(userId, kc, request.stage());
+    if (isObjectivePracticeRequest(request)
+        || (expeditionBinding.bossPhase() != null
+        && !hasCourseProgrammingQuestion(kc)
+        && findObjectiveBossProblem(
+                chapter,
+                request.stage(),
+                kc,
+                difficulty,
+                expeditionRunService.findIssuedQuestionFingerprints(userId, expeditionRunId))
+            .isPresent())) {
+      return BossPrefetchStatusDto.idle();
+    }
     EndlessPregenService.PrefetchStart start =
         expeditionRunId == null
             ? pregenService.beginPrefetch(
@@ -737,38 +823,61 @@ public class BossService {
               expeditionBinding.get().questionFingerprint(), questionFingerprint(problem))) {
         throw problemBindingMismatch();
       }
-      List<BossTestCasePayload> testCases = problem.testCases();
-      if (testCases.isEmpty()) {
-        LOG.warn("problem {} has empty testCases (graph schema drift?)", request.problemId());
-        return completeAttempt(
-            request,
-            userId,
-            claim,
-            new BossAttemptResultDto(
-                request.problemId(),
-                false,
-                0,
-                problem.totalTestCases(),
-                null,
-                0,
-                "题目缓存数据异常（缺 testCases），请重试生成题目。"),
-            null);
-      }
       BossEvaluateResultDto graphResult;
-      try {
-        graphResult =
-            graphClient.evaluateAttempt(
-                request.problemId(), request.code(), testCases, EVAL_TIMEOUT_SEC);
-        if (graphResult == null) throw new RestClientException("graph evaluate returned null body");
-        if ("sandbox_unavailable".equals(graphResult.runtimeError())) {
-          LOG.warn("graph sandbox unavailable; using the existing local Python judge");
+      if (problem.questionType() == BossQuestionType.CODE) {
+        requireSubmissionShape(request, problem.questionType());
+        List<BossTestCasePayload> testCases = problem.testCases();
+        if (testCases.isEmpty()) {
+          LOG.warn("problem {} has empty testCases (graph schema drift?)", request.problemId());
+          return completeAttempt(
+              request,
+              userId,
+              claim,
+              new BossAttemptResultDto(
+                  request.problemId(),
+                  false,
+                  0,
+                  problem.totalTestCases(),
+                  null,
+                  0,
+                  "题目缓存数据异常（缺 testCases），请重试生成题目。"),
+              null);
+        }
+        try {
+          graphResult =
+              graphClient.evaluateAttempt(
+                  request.problemId(), request.code(), testCases, EVAL_TIMEOUT_SEC);
+          if (graphResult == null) throw new RestClientException("graph evaluate returned null body");
+          if ("sandbox_unavailable".equals(graphResult.runtimeError())) {
+            LOG.warn("graph sandbox unavailable; using the existing local Python judge");
+            graphResult = evaluateLocally(request, testCases);
+          }
+        } catch (RestClientException ex) {
+          LOG.warn(
+              "graph evaluate failed ({}); using the existing local Python judge",
+              ex.getClass().getSimpleName());
           graphResult = evaluateLocally(request, testCases);
         }
-      } catch (RestClientException ex) {
-        LOG.warn(
-            "graph evaluate failed ({}); using the existing local Python judge",
-            ex.getClass().getSimpleName());
-        graphResult = evaluateLocally(request, testCases);
+      } else {
+        requireSubmissionShape(request, problem.questionType());
+        List<String> answers = request.answers() == null ? List.of() : request.answers();
+        boolean correct =
+            (problem.questionType() != BossQuestionType.CHOICE
+                    && problem.questionType() != BossQuestionType.JUDGE
+                || answers.size() == 1)
+                && MainlinePracticeService.isCorrect(
+                    PracticeQuestionType.valueOf(problem.questionType().name()),
+                    problem.answers(),
+                    answers);
+        graphResult =
+            new BossEvaluateResultDto(
+                request.problemId(),
+                correct,
+                correct ? 1 : 0,
+                1,
+                null,
+                null,
+                correct ? List.of() : List.of(0));
       }
       int score = scoreFor(graphResult);
       boolean masteryEligible = isMasteryEligible(problem);
@@ -794,10 +903,14 @@ public class BossService {
       }
       String feedback =
           graphResult.passed()
-              ? "通过 ✅ 服务端沙箱已确认。"
+              ? problem.questionType() == BossQuestionType.CODE
+                  ? "通过 ✅ 服务端沙箱已确认。"
+                  : "回答正确 ✅ 服务端已确认。"
               : graphResult.runtimeError() != null
                   ? "代码运行错误：" + graphResult.runtimeError()
-                  : "未通过 ❌ 部分用例失败，请参考下方 hint。";
+                  : problem.questionType() == BossQuestionType.CODE
+                      ? "未通过 ❌ 部分用例失败，请参考下方 hint。"
+                      : "回答未通过，请检查题意后重试。";
       boolean publishLearningEvent =
           attemptResult.publishLearningEvent() && masteryEligible;
       if (problem.aiGenerated() && !masteryEligible) {
@@ -840,6 +953,21 @@ public class BossService {
           "could not verify generated Boss problem approval; skip mastery evidence: {}",
           exception.getClass().getSimpleName());
       return false;
+    }
+  }
+
+  private static void requireSubmissionShape(
+      BossAttemptRequest request, BossQuestionType questionType) {
+    boolean codeQuestion = questionType == BossQuestionType.CODE;
+    boolean hasCode = request.code() != null && !request.code().isBlank();
+    boolean hasAnswers = request.answers() != null;
+    if (codeQuestion != hasCode
+        || (codeQuestion && hasAnswers)
+        || (!codeQuestion && hasCode)) {
+      throw new com.pythontopia.common.error.BusinessException(
+          org.springframework.http.HttpStatus.BAD_REQUEST,
+          "BOSS_SUBMISSION_SHAPE_INVALID",
+          "提交内容与题目类型不匹配");
     }
   }
 
@@ -998,6 +1126,12 @@ public class BossService {
       updateFingerprint(digest, problem.statement());
       updateFingerprint(digest, problem.sampleInput());
       updateFingerprint(digest, problem.sampleOutput());
+      if (problem.questionType() != BossQuestionType.CODE) {
+        updateFingerprint(digest, problem.questionType().name());
+        updateFingerprint(digest, Integer.toString(problem.blankCount()));
+        problem.options().forEach(option -> updateFingerprint(digest, option));
+        problem.answers().forEach(answer -> updateFingerprint(digest, answer));
+      }
       var testCases =
           problem.testCases().stream()
               .sorted(
