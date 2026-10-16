@@ -88,9 +88,9 @@ function setupRouter(): Router {
 
 let wrapper: VueWrapper | null = null;
 
-async function mountPage(): Promise<{ wrapper: VueWrapper; router: Router }> {
+async function mountPage(path = '/mainline-map'): Promise<{ wrapper: VueWrapper; router: Router }> {
   const router = setupRouter();
-  await router.push('/mainline-map');
+  await router.push(path);
   await router.isReady();
   const w = mount(MainlineMapPage, {
     attachTo: document.body,
@@ -132,6 +132,22 @@ describe('MainlineMapPage', () => {
     // firstActionableChapter → 第 2 章（已解锁、stars 1 < 3）。
     expect(w.get('[data-testid="mainline-chapter-title"]').text()).toContain('语言基础');
     expect(w.get('[data-testid="mainline-node-2"]').classes()).toContain('node--selected');
+  });
+
+  it('opens the unlocked chapter supplied by a Twin recommendation', async () => {
+    const { wrapper: w } = await mountPage('/mainline-map?chapter=1&kcCode=PY43-KC-004');
+
+    expect(w.get('[data-testid="mainline-chapter-title"]').text()).toContain('计算思维');
+    expect(w.get('[data-testid="mainline-node-1"]').classes()).toContain('node--selected');
+    expect(w.get('[data-testid="mainline-twin-target"]').text()).toContain('计算思维的概念与定义');
+  });
+
+  it('ignores a chapter query that is locked for the student', async () => {
+    const { wrapper: w } = await mountPage('/mainline-map?chapter=4&kcCode=PY43-KC-031');
+
+    expect(w.get('[data-testid="mainline-chapter-title"]').text()).toContain('语言基础');
+    expect(w.get('[data-testid="mainline-node-2"]').classes()).toContain('node--selected');
+    expect(w.find('[data-testid="mainline-twin-target"]').exists()).toBe(false);
   });
 
   it('clicking a node updates the stage panel to that chapter', async () => {

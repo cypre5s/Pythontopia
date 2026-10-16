@@ -128,7 +128,10 @@ describe('ProfileRoomPage', () => {
     await wrapper.get('[data-testid="twin-next-primary"]').trigger('click');
 
     expect(wrapper.get('[data-testid="twin-next-primary"]').text()).toContain('前往主线巩固');
-    expect(routerPush).toHaveBeenCalledWith({ path: '/mainline-map' });
+    expect(routerPush).toHaveBeenCalledWith({
+      path: '/mainline-map',
+      query: { chapter: '1', kcCode: 'PY43-KC-001' },
+    });
   });
 
   it('routes an unassessed recommendation to the mainline map', async () => {
@@ -149,7 +152,10 @@ describe('ProfileRoomPage', () => {
 
     await wrapper.get('[data-testid="twin-next-primary"]').trigger('click');
 
-    expect(routerPush).toHaveBeenCalledWith({ path: '/mainline-map' });
+    expect(routerPush).toHaveBeenCalledWith({
+      path: '/mainline-map',
+      query: { chapter: '1', kcCode: 'PY43-KC-003' },
+    });
   });
 
   it('shows evidence sufficiency separately from mastery on assessed knowledge points', async () => {

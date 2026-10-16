@@ -1,9 +1,9 @@
 package com.pythontopia.world.boss;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -14,6 +14,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 
@@ -25,6 +26,7 @@ class ExpeditionScoreServiceTest {
 
   @Mock JdbcTemplate jdbcTemplate;
   @Mock ExpeditionRunService expeditionRunService;
+  @Mock ApplicationEventPublisher eventPublisher;
 
   @Test
   void settlesOnlyScoresDerivedFromServerJudgedAttempts() {
@@ -37,7 +39,8 @@ class ExpeditionScoreServiceTest {
                 new ExpeditionScoreService.VerifiedAttempt(true, 90),
                 new ExpeditionScoreService.VerifiedAttempt(false, 0),
                 new ExpeditionScoreService.VerifiedAttempt(true, 80)));
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
+    ExpeditionScoreService service =
+        new ExpeditionScoreService(jdbcTemplate, expeditionRunService, eventPublisher);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
 
@@ -51,8 +54,7 @@ class ExpeditionScoreServiceTest {
             eq(1),
             eq(false),
             eq(false));
-    verify(jdbcTemplate)
-        .update(contains("SET status = 'SETTLED'"), eq(7L), eq(RUN_ID));
+    verify(jdbcTemplate).update(contains("SET status = 'SETTLED'"), eq(7L), eq(RUN_ID));
   }
 
   @Test
@@ -62,7 +64,8 @@ class ExpeditionScoreServiceTest {
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttempt(true, 80)));
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
+    ExpeditionScoreService service =
+        new ExpeditionScoreService(jdbcTemplate, expeditionRunService, eventPublisher);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
 
@@ -85,7 +88,8 @@ class ExpeditionScoreServiceTest {
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttempt(true, 80)));
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
+    ExpeditionScoreService service =
+        new ExpeditionScoreService(jdbcTemplate, expeditionRunService, eventPublisher);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
 
@@ -108,21 +112,22 @@ class ExpeditionScoreServiceTest {
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
+    ExpeditionScoreService service =
+        new ExpeditionScoreService(jdbcTemplate, expeditionRunService, eventPublisher);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
 
     org.mockito.Mockito.verify(jdbcTemplate, org.mockito.Mockito.never())
         .update(contains("INSERT INTO expedition_score"), any(Object[].class));
-    verify(jdbcTemplate)
-        .update(contains("SET status = 'SETTLED'"), eq(7L), eq(RUN_ID));
+    verify(jdbcTemplate).update(contains("SET status = 'SETTLED'"), eq(7L), eq(RUN_ID));
   }
 
   @Test
   void doesNotSettleAnInactiveOrDifferentRun() {
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
+    ExpeditionScoreService service =
+        new ExpeditionScoreService(jdbcTemplate, expeditionRunService, eventPublisher);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
 
@@ -142,12 +147,12 @@ class ExpeditionScoreServiceTest {
             java.util.stream.IntStream.range(0, 36)
                 .mapToObj(index -> new ExpeditionScoreService.VerifiedAttempt(true, 80))
                 .toList());
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
+    ExpeditionScoreService service =
+        new ExpeditionScoreService(jdbcTemplate, expeditionRunService, eventPublisher);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
 
-    verify(jdbcTemplate)
-        .query(contains("LIMIT 36"), any(RowMapper.class), any(Object[].class));
+    verify(jdbcTemplate).query(contains("LIMIT 36"), any(RowMapper.class), any(Object[].class));
     verify(jdbcTemplate)
         .update(
             contains("INSERT INTO expedition_score"),
@@ -165,11 +170,13 @@ class ExpeditionScoreServiceTest {
     stubCurrentOpenIssue();
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(false));
-    when(jdbcTemplate.query(contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
+    when(jdbcTemplate.query(
+            contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
     when(jdbcTemplate.query(contains("problem_id = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
+    ExpeditionScoreService service =
+        new ExpeditionScoreService(jdbcTemplate, expeditionRunService, eventPublisher);
 
     var result =
         service.recordVerifiedAttempt(
@@ -188,11 +195,13 @@ class ExpeditionScoreServiceTest {
     stubCurrentOpenIssue();
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(false));
-    when(jdbcTemplate.query(contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
+    when(jdbcTemplate.query(
+            contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
     when(jdbcTemplate.query(contains("problem_id = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
+    ExpeditionScoreService service =
+        new ExpeditionScoreService(jdbcTemplate, expeditionRunService, eventPublisher);
 
     service.recordVerifiedAttempt(
         7L, RUN_ID.toString(), "issue-one", QUESTION_FINGERPRINT, true, 80);
@@ -210,7 +219,8 @@ class ExpeditionScoreServiceTest {
     stubCurrentOpenIssue();
     when(jdbcTemplate.query(contains("FOR UPDATE"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(false));
-    when(jdbcTemplate.query(contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
+    when(jdbcTemplate.query(
+            contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(
             List.of(),
             List.of(new ExpeditionScoreService.ExistingAttempt(1, false)),
@@ -219,11 +229,13 @@ class ExpeditionScoreServiceTest {
             List.of(new ExpeditionScoreService.ExistingAttempt(1, true)));
     when(jdbcTemplate.query(contains("problem_id = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
-    when(jdbcTemplate.update(contains("INSERT INTO expedition_verified_attempt"), any(Object[].class)))
+    when(jdbcTemplate.update(
+            contains("INSERT INTO expedition_verified_attempt"), any(Object[].class)))
         .thenReturn(1);
     when(jdbcTemplate.update(contains("UPDATE expedition_verified_attempt"), any(Object[].class)))
         .thenReturn(1, 1, 1, 1);
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
+    ExpeditionScoreService service =
+        new ExpeditionScoreService(jdbcTemplate, expeditionRunService, eventPublisher);
 
     var firstFailure =
         service.recordVerifiedAttempt(
@@ -255,17 +267,18 @@ class ExpeditionScoreServiceTest {
 
   @Test
   void derivesChapterAttemptSummaryFromTheUsersActiveRunAndIssuedProblems() {
-    when(jdbcTemplate.query(contains("pregenerated_problem"), any(RowMapper.class), any(Object[].class)))
+    when(jdbcTemplate.query(
+            contains("pregenerated_problem"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttemptSummary(10, 8)));
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService);
+    ExpeditionScoreService service =
+        new ExpeditionScoreService(jdbcTemplate, expeditionRunService, eventPublisher);
 
     org.assertj.core.api.Assertions.assertThat(
             service.summarizeVerifiedAttempts(7L, RUN_ID.toString(), 1))
         .isEqualTo(new ExpeditionScoreService.VerifiedAttemptSummary(10, 8));
 
     org.mockito.ArgumentCaptor<String> sql = org.mockito.ArgumentCaptor.forClass(String.class);
-    verify(jdbcTemplate)
-        .query(sql.capture(), any(RowMapper.class), eq(7L), eq(RUN_ID), eq(1));
+    verify(jdbcTemplate).query(sql.capture(), any(RowMapper.class), eq(7L), eq(RUN_ID), eq(1));
     org.assertj.core.api.Assertions.assertThat(sql.getValue())
         .contains("r.status = 'ACTIVE'")
         .contains("p.expedition_run_id = a.run_id AND p.chapter = ?");

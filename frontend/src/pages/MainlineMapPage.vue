@@ -14,7 +14,7 @@
 defineOptions({ name: 'MainlineMapPage' });
 
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { useRouter } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import {
   createPhaserGame,
   getPhaserGame,
@@ -34,10 +34,13 @@ import {
 } from '@game/scenes/ChapterMapScene';
 import { chapterNodeState, useMainlineStore } from '@stores/mainline';
 import { useToastStore } from '@stores/toast';
+import { findChapterByKcCode } from '@/data/chapters';
+import { kcDisplayName } from '@/data/kcNames';
 import ChapterNodeList from '@/components/mainline/ChapterNodeList.vue';
 import ChapterStagePanel from '@/components/mainline/ChapterStagePanel.vue';
 
 const router = useRouter();
+const route = useRoute();
 const store = useMainlineStore();
 const toast = useToastStore();
 
@@ -70,6 +73,34 @@ const nodes = computed<ChapterMapNode[]>(() =>
 
 const selectedChapter = computed<number | null>(() => store.selectedChapter);
 const selectedView = computed(() => store.selectedChapterView);
+
+function requestedChapterFromQuery(): number | null {
+  const chapterQuery = route.query.chapter;
+  if (typeof chapterQuery !== 'string') return null;
+  const chapter = Number(chapterQuery);
+  if (!Number.isSafeInteger(chapter) || chapter < 1 || chapter > 7) return null;
+  return store.chapters.some((item) => item.chapter === chapter && item.unlocked) ? chapter : null;
+}
+
+const twinTargetKcName = computed(() => {
+  const chapter = requestedChapterFromQuery();
+  const kcCode = route.query.kcCode;
+  if (
+    chapter === null
+    || typeof kcCode !== 'string'
+    || findChapterByKcCode(kcCode)?.order !== chapter
+  ) {
+    return null;
+  }
+  return kcDisplayName(kcCode);
+});
+
+function selectRequestedChapter(): void {
+  const chapter = requestedChapterFromQuery();
+  if (chapter !== null) store.selectChapter(chapter);
+}
+
+watch(() => route.query.chapter, selectRequestedChapter);
 
 // 节点数据变化 → 喂给场景（setChapterMapData 在场景未就绪时只缓存，就绪后自动重绘）。
 watch(nodes, (next) => setChapterMapData(next), { immediate: true });
@@ -212,6 +243,7 @@ onMounted(async () => {
   // 返回地图时缓存的 overview 已过期；force 拉权威快照（有缓存时不闪 loading，
   // 页面 loading 态仅在 !isLoaded 时展示）。
   await store.load(true);
+  selectRequestedChapter();
   mountScene();
   setChapterMapData(nodes.value);
 });
@@ -264,6 +296,14 @@ onBeforeUnmount(() => {
           ★ {{ store.totalStars }}
         </span>
       </header>
+
+      <p
+        v-if="twinTargetKcName"
+        class="map-twin-target"
+        data-testid="mainline-twin-target"
+      >
+        学习分身建议巩固：{{ twinTargetKcName }}
+      </p>
 
       <p
         v-if="store.loading && !store.isLoaded"
@@ -378,6 +418,16 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: var(--pyt-space-3);
+}
+.map-twin-target {
+  align-self: flex-start;
+  margin: 0;
+  padding: var(--pyt-space-2) var(--pyt-space-4);
+  font-size: var(--pyt-font-size-sm);
+  background: rgba(255, 248, 226, 0.92);
+  border: 2px solid var(--pyt-color-border-strong);
+  border-radius: var(--pyt-radius-full);
+  box-shadow: var(--pyt-shadow-card);
 }
 .map-title {
   margin: 0;

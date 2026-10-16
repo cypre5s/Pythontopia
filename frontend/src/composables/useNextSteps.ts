@@ -60,7 +60,15 @@ export function routeForTwinRecommendation(
   if (progress?.reviewDue) {
     return { path: "/bug-mine", query: { review: recommendation.kcCode } };
   }
-  if (!progress?.assessed || progress.chapter === 1) return { path: "/mainline-map" };
+  if (!progress?.assessed || progress.chapter === 1) {
+    return {
+      path: "/mainline-map",
+      query: {
+        chapter: String(recommendation.chapter),
+        kcCode: recommendation.kcCode,
+      },
+    };
+  }
   return {
     path: "/expedition",
     query: { focus: String(recommendation.chapter), kcCode: recommendation.kcCode },

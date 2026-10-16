@@ -15,7 +15,9 @@
 - 修正旧 `/lecture/:chapter` 页面误报：视频进度明确标为会话内、不声称写入画像；B站外链点击不再冒充已观看；讲义失败时不亮完成标记。TDD 在旧实现上复现 4 项失败，修复后相关回归 22/22、typecheck、定向 ESLint、`git diff --check` 通过；未调用模型或写业务库。
 - 追踪并恢复本地 KC-004 AI 出题链路：Graph 需要隔离 Piston 和当前开发栈的临时内部令牌；按现有 `dev.sh --sandbox` 配置后，Graph `/readyz` 正常、令牌匹配，Piston 沙箱执行 `print(2 + 2)` 返回 4。最终一次 KC-004 请求由 DeepSeek 真实生成并返回 HTTP 200、`aiGenerated=true`、`reviewed=true`。排查中裸 `docker compose` 重建曾造成一次临时 401，已用运行中的令牌恢复。生成审查记录与临时学生账号已精确删除；该题未保留到本地题库。重启 Graph 时必须通过 `./dev.sh --sandbox` 或注入同一运行令牌，裸 `docker compose up` 会绕过临时令牌同步。
 - Boss 互动素材/场景已落地：Phaser Boss 场景加载 Kenney CC0 冲击音效，素材记录同步在 `LICENSE-ART.md` 与像素资源 license；场景回归 4/4、窄屏整页回归 1/1。按 KC 是否有可用代码判题题目选择题型；不适合代码判题的 KC 复用同 KC 审核客观题（选择、判断、填空），答案由服务端判定。浏览器真实通关已覆盖三种客观题。
-- **最新快照下完整 Boss 浏览器闭环已复验：** 普通注册的 STUDENT 完成 10 层服务端远征，11 道题均为已审核课程选择/判断/填空题；KC-004 Boss 三阶段通过，Phaser 画布显示受击反馈，DB 有 3 条通过结算，排行榜 `cleared=true` / depth 11。Twin KC-004 为掌握度 0.48、证据 `PRACTICE_PASS`，分身页加载成功；浏览器 `pageerror=0`、HTTP 5xx=0。临时账号及 57 个直接外键引用均清理为 0。预生成请求在浏览器侧隔离为 IDLE；本次没有调用 DeepSeek。
+- **事务修复之前已完成完整 Boss 浏览器闭环：** 普通注册的 STUDENT 完成 10 层服务端远征，11 道题均为已审核课程选择/判断/填空题；KC-004 Boss 三阶段通过，Phaser 画布显示受击反馈，DB 有 3 条通过结算，排行榜 `cleared=true` / depth 11。Twin KC-004 为掌握度 0.48、证据 `PRACTICE_PASS`，分身页加载成功；浏览器 `pageerror=0`、HTTP 5xx=0。临时账号及 57 个直接外键引用均清理为 0。预生成请求在浏览器侧隔离为 IDLE；本次没有调用 DeepSeek。本轮之后的事务改动由 PostgreSQL 故障注入回归覆盖，未重复跑浏览器 Boss 通关。
+- 修复远征判题已落账、Twin 学习事件随后失败时造成的证据丢失窗口：验证 attempt、掌握度事件与复习状态现同事务提交，失败回滚后同一 attempt 可重试。PostgreSQL 故障注入确认重试只留下 1 条掌握度证据、1 条复习记录，并重放已保存结果；Boss、计分、远征 PostgreSQL 集成与应用上下文测试共 108/108 通过，定向 Spotless 通过。
+- 修复 Twin 对未评估 KC 的主线推荐丢失章节/KC 目标：推荐 URL 携带 `chapter`/`kcCode`，地图只选中有效且已解锁章节并展示推荐 KC。相关四组前端测试 35/35、typecheck、定向 ESLint 通过。
 - 非 AI 写入路由续审发现同步 `/api/media/storyboard/video` 绕过既有每账号每分钟 3 次的合成额度。现与异步 job 端点共享 `StudentWriteThrottle`；旧代码下新回归先因缺少预算依赖失败，修复后媒体控制器授权、预算覆盖和新限流测试 14/14 通过。前端目前仅保留 API helper、没有页面调用者；全路由与多行日志审计仍未完成。
 - 日志续审发现图片生成失败时会原样输出上游 `message`；本地 HTTP 假响应先让脱敏回归失败，改成只记异常类型后 `XfyunImageServiceTest` 3/3 通过。没有访问讯飞。后续静态复核确认 TTS、ASR、旧讯飞图片理解服务的开关固定为关闭，相关上游错误日志分支当前不可达；未为不可达 provider 改代码。
 - 安全边界续审：匿名下载统计 `POST /api/downloads/{key}/hit` 仅用于展示，Nginx 对来源 IP 限制 5 次/秒、突发 10；Tutor 内部 checkpoint 与附件读取要求常量时间比较的 `X-Internal-Token`，并校验 `user:<id>` 主体。源码未发现这三项的新 P0/P1；这不代表全 API 限流与日志审计已经结束。
@@ -23,7 +25,7 @@
 - **4 个可编程 KC 的同 KC Golden 兜底已补齐：** KC-018/023/039/063 在 AI 出题或审查失败时返回经过接地审查的编程题，保留目标 KC、章节与请求难度，并使用独立题目 ID；KC-039 所需的 `import` 语法限定在第 5 章白名单。真实本地 Piston 执行 12/12 用例通过，Graph Boss 回归 270/270 通过，Ruff lint 与 `git diff --check` 通过；没有调用 DeepSeek。
 - **章测→Twin 缺口已修复：** 普通学生经 Web 完成一场第一章章测，33 题得分 100、pageerror=0、HTTP 5xx=0；旧实现只把 KC-006、KC-007 两个编程题 KC 回流。TDD 复现后改为所有带 KC 的题型按服务端判分发事件。修复后服务、listener、memory mirror、PostgreSQL 逐 KC 写入与提交幂等共 34/34 通过，选择、判断、填空、编程均有覆盖；没有重复发起 DeepSeek 请求。临时账号及关联记录均核实清理为 0。
 - **修复后全题型浏览器复验未做。** 全题型提交到 PostgreSQL 掌握度账本已有服务集成测试；真实浏览器章测发生在修复前。为避免重复的模型生成，本轮没有再生成试卷。
-- 工程规范轻量复核：对照 [Google Java Style](https://google.github.io/styleguide/javaguide.html)、[PEP 8](https://peps.python.org/pep-0008/) 与 [typescript-eslint 命名规则](https://typescript-eslint.io/rules/naming-convention/)；触及代码遵守项目 Java/TS/Python 命名约定，既有定向 lint/format/typecheck 通过。本轮不做全仓格式化；历史文件命名与格式基线仍未全量盘点。
+- 工程规范复核：对照 [Google Java Style](https://google.github.io/styleguide/javaguide.html)、[PEP 8](https://peps.python.org/pep-0008/)、[typescript-eslint 命名规则](https://typescript-eslint.io/rules/naming-convention/) 与 [Vue 风格指南](https://vuejs.org/style-guide/)。本轮触及代码遵守项目既定命名约定；完整前端 ESLint/typecheck、Graph 与 RAG 的 Ruff 检查通过，修改 Java 文件定向 Spotless 通过。整库 Spotless 检查报告 638 个 Java 文件格式不符；没有批量格式化这些历史文件。试运行全仓 TypeScript 命名规则产生 43 个合法 PascalCase 组件绑定/测试辅助名称误报，因此未启用会误伤现有约定的全局规则。全仓历史格式债务仍未清理。
 - 本轮快速只读安全续审未确认新的本地 P0/P1。公网 Piston ACL、ECS/Nginx 运行态及全 API 逐项审计仍未验证。
 
 ## 附加任务核对（2026-10-16）
@@ -56,6 +58,7 @@
 - KC-018/023/063 通过审查的 AI 候选因审核主体为临时账号而已清理，尚未进入长期题库；KC-039 仍需未来独立排查参考输出不匹配，当前不阻断其它 KC 的学习。
 - Twin 新旧选题 A/B、独立答题率与 7 日延迟复测需要真实学习样本及时间跨度，当前无结果。BKT/未来路线概率按计划暂缓。
 - 非 AI 写接口账号限额与多行/包装器日志尚未完成全量审计；当前已修复同步媒体合成绕过额度，并脱敏 Xfyun 图片生成失败日志。TTS/ASR/图片理解服务当前固定关闭，未调用其 provider；剩余路由、生产 Piston ACL、公网 CORS/Nginx 运行态仍未验证。
+- 匿名注册仍允许低速持续创建 STUDENT 账号，可能增加账号存储与清理负担。核实生产配置开启共享 AI 预算：每账号每日 30 次、全站每日 300 次，数据库原子计数，因此注册不能绕过全站 AI 日预算；本地按用户要求关闭该额度。是否需要持久化来源配额/邮箱验证仍未决定，现有 Nginx 5 次/秒、突发 10 只限制短时突发。
 - DeepSeek 供应商账单/token 需要从控制台核对；本地请求上限已关闭，但不代表供应商无额度或无费用。
 - 生产 Piston 私网 ACL/代理鉴权、生产 CORS/Nginx 运行态及公网安全未验证；本轮不访问 ECS。
 - 全仓历史格式债务与命名一致性尚未做破坏性批量整理；仅清理经过验证且本任务触及的范围。
@@ -64,7 +67,7 @@
 
 ## 下一步顺序
 
-1. 最新代码下普通学生浏览器已完成客观题远征 Boss 三阶段与 Twin 回流；预生成调用被隔离为 IDLE，因此实时预生成/Graph 生成未在这条验收中验证。
+1. 普通学生浏览器已完成客观题远征 Boss 三阶段与 Twin 回流；此后事务补丁由 PostgreSQL 故障注入测试验证，未重复跑完整浏览器通关。预生成调用被隔离为 IDLE，实时预生成/Graph 生成仍未在这条验收中验证。
 2. 仅在有稳定审核主体后再考虑把 KC-018/023/063 的 AI 候选入库；KC-039 仅在生成约束或模型状态变化后再单次复测。现有同 KC Golden 兜底已保障学习可继续。
-3. 跑剩余相关 Web 回归和工程检查；只修可复现的功能、可访问性、命名或格式问题。
+3. 继续完成非 AI 写接口与日志审计，优先处理可复现且不会误伤正常课堂 NAT/注册流程的风险；检查当前补丁与文档一致。
 4. 7 日效果对照到期后再评估个性化效果；最后补远征生成、正式判题与通关性能样本。

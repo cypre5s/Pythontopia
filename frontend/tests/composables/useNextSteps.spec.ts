@@ -97,6 +97,7 @@ describe("deriveNextSteps", () => {
       hint: "尚未评估，先从基础题建立证据",
       route: {
         path: "/mainline-map",
+        query: { chapter: "1", kcCode: "PY43-KC-003" },
       },
     });
   });
@@ -117,7 +118,10 @@ describe("deriveNextSteps", () => {
     });
     const step = deriveNextSteps({ ...base, chapters: [chapter()], twinState: recommendation })
       .find((item) => item.kind === "weak-kc");
-    expect(step?.route).toEqual({ path: "/mainline-map" });
+    expect(step?.route).toEqual({
+      path: "/mainline-map",
+      query: { chapter: "1", kcCode: "PY43-KC-003" },
+    });
   });
 
   it("已评估的第 1 章知识点仍回到主线，因为远征不开放第 1 章", () => {
@@ -136,7 +140,10 @@ describe("deriveNextSteps", () => {
     const step = deriveNextSteps({ ...base, chapters: [chapter()], twinState: recommendation })
       .find((item) => item.kind === "weak-kc");
 
-    expect(step?.route).toEqual({ path: "/mainline-map" });
+    expect(step?.route).toEqual({
+      path: "/mainline-map",
+      query: { chapter: "1", kcCode: "PY43-KC-003" },
+    });
   });
 
   it("Twin 推荐到期复习时跳转错题矿洞；没有服务端建议时不伪造弱项", () => {

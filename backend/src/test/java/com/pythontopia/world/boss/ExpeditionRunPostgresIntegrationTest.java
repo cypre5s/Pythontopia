@@ -6,21 +6,37 @@ import static org.mockito.Mockito.mock;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.learner.event.LearningEvent;
+import com.pythontopia.learner.event.LearningEventListener;
+import com.pythontopia.learner.mastery.MasteryEvaluator;
+import com.pythontopia.learner.mastery.MasteryProperties;
+import com.pythontopia.learner.mastery.MasteryRepository;
+import com.pythontopia.learner.mastery.review.ReviewScheduler;
+import com.pythontopia.learner.mastery.review.ReviewStateRepository;
+import com.pythontopia.learner.mastery.review.ReviewStateService;
+import com.pythontopia.world.boss.dto.BossAttemptRequest;
+import com.pythontopia.world.boss.dto.BossAttemptResultDto;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
-import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import com.pythontopia.world.boss.dto.ExpeditionRunAction;
 import com.pythontopia.world.boss.dto.ExpeditionRunActionRequest;
+import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import com.pythontopia.world.boss.dto.ExpeditionScoreSubmitDto;
 import com.pythontopia.world.boss.dto.FrontierPickDto;
+import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.flywaydb.core.Flyway;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEvent;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -39,6 +55,7 @@ class ExpeditionRunPostgresIntegrationTest {
           .withPassword("pytopia");
 
   private static JdbcTemplate jdbc;
+  private static TransactionTemplate transactions;
 
   @BeforeAll
   static void migrate() {
@@ -49,10 +66,14 @@ class ExpeditionRunPostgresIntegrationTest {
     source.setPassword(POSTGRES.getPassword());
     Flyway.configure().dataSource(source).locations("classpath:db/migration").load().migrate();
     jdbc = new JdbcTemplate(source);
+    transactions = new TransactionTemplate(new DataSourceTransactionManager(source));
   }
 
   private static ExpeditionScoreService scoreService() {
-    return new ExpeditionScoreService(jdbc, new ExpeditionRunService(jdbc, new ObjectMapper()));
+    return new ExpeditionScoreService(
+        jdbc,
+        new ExpeditionRunService(jdbc, new ObjectMapper()),
+        mock(ApplicationEventPublisher.class));
   }
 
   @Test
@@ -109,8 +130,7 @@ class ExpeditionRunPostgresIntegrationTest {
 
     runs.performAction(
         userId,
-        new ExpeditionRunActionRequest(
-            initial.runId(), null, ExpeditionRunAction.FINISH, null));
+        new ExpeditionRunActionRequest(initial.runId(), null, ExpeditionRunAction.FINISH, null));
     scores.record(userId, new ExpeditionScoreSubmitDto(initial.runId()));
     assertThat(
             jdbc.queryForObject(
@@ -274,7 +294,10 @@ class ExpeditionRunPostgresIntegrationTest {
         runs.performAction(
             restUserId,
             new ExpeditionRunActionRequest(
-                restRun.runId(), (String) restNode.get("id"), ExpeditionRunAction.ENTER_NODE, null));
+                restRun.runId(),
+                (String) restNode.get("id"),
+                ExpeditionRunAction.ENTER_NODE,
+                null));
     assertThat(rested.hp()).isEqualTo(4);
     assertThat(nodeById(rested, (String) restNode.get("id")).get("state")).isEqualTo("cleared");
 
@@ -302,8 +325,7 @@ class ExpeditionRunPostgresIntegrationTest {
                 null));
     assertThat(reviewed.phase()).isEqualTo("map");
     int expectedReviewHp = Math.min(reviewed.maxHp(), event.hp() + 2);
-    if (((Number) eventNode.get("layer")).intValue()
-        == Math.floorDiv(reviewRun.layers() - 1, 2)) {
+    if (((Number) eventNode.get("layer")).intValue() == Math.floorDiv(reviewRun.layers() - 1, 2)) {
       expectedReviewHp = Math.min(reviewed.maxHp(), expectedReviewHp + 1);
     }
     assertThat(reviewed.hp()).isEqualTo(expectedReviewHp);
@@ -325,8 +347,7 @@ class ExpeditionRunPostgresIntegrationTest {
       ExpeditionRunDto challenged =
           runs.performAction(
               userId,
-              new ExpeditionRunActionRequest(
-                  run.runId(), (String) node.get("id"), choice, null));
+              new ExpeditionRunActionRequest(run.runId(), (String) node.get("id"), choice, null));
       assertThat(challenged.phase()).isEqualTo("challenge");
       assertThat(challenged.currentNodeId()).isEqualTo(node.get("id"));
     }
@@ -405,7 +426,10 @@ class ExpeditionRunPostgresIntegrationTest {
         runs.performAction(
             userId,
             new ExpeditionRunActionRequest(
-                beforeSettlement.runId(), chosenId, ExpeditionRunAction.SETTLE_CHALLENGE, null,
+                beforeSettlement.runId(),
+                chosenId,
+                ExpeditionRunAction.SETTLE_CHALLENGE,
+                null,
                 chosenProblemId));
 
     List<String> bypassedIds =
@@ -500,10 +524,7 @@ class ExpeditionRunPostgresIntegrationTest {
         runs.performAction(
             eventUserId,
             new ExpeditionRunActionRequest(
-                map.runId(),
-                (String) eventNode.get("id"),
-                ExpeditionRunAction.ENTER_NODE,
-                null));
+                map.runId(), (String) eventNode.get("id"), ExpeditionRunAction.ENTER_NODE, null));
     markNodeCurrent(eventUserId, event, event.currentNodeId());
 
     ExpeditionRunDto resumedEvent = runs.findActive(eventUserId).orElseThrow();
@@ -511,10 +532,7 @@ class ExpeditionRunPostgresIntegrationTest {
         runs.performAction(
             eventUserId,
             new ExpeditionRunActionRequest(
-                eventRun.runId(),
-                event.currentNodeId(),
-                ExpeditionRunAction.ENTER_NODE,
-                null));
+                eventRun.runId(), event.currentNodeId(), ExpeditionRunAction.ENTER_NODE, null));
     assertThat(reenteredEvent.phase()).isEqualTo("event");
     assertThat(reenteredEvent.nodes()).isEqualTo(resumedEvent.nodes());
     assertThat(nodeById(reenteredEvent, event.currentNodeId()).get("state")).isEqualTo("current");
@@ -527,7 +545,13 @@ class ExpeditionRunPostgresIntegrationTest {
     ExpeditionRunDto active = startRun(runs, userId, 1, false);
     Map<String, Object> chestNode = findRewardNode(active);
     List<String> sixRelics =
-        List.of("calm_mind", "combo_scholar", "second_wind", "focus_lens", "quick_thinker", "first_aid");
+        List.of(
+            "calm_mind",
+            "combo_scholar",
+            "second_wind",
+            "focus_lens",
+            "quick_thinker",
+            "first_aid");
     seedReachableNode(userId, active, chestNode, "reward", 2, 5, sixRelics);
 
     assertThatThrownBy(
@@ -535,7 +559,9 @@ class ExpeditionRunPostgresIntegrationTest {
                 runs.performAction(
                     userId,
                     new ExpeditionRunActionRequest(
-                        active.runId(), (String) chestNode.get("id"), ExpeditionRunAction.CLAIM_RELIC,
+                        active.runId(),
+                        (String) chestNode.get("id"),
+                        ExpeditionRunAction.CLAIM_RELIC,
                         "not-a-relic")))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("遗物");
@@ -544,7 +570,9 @@ class ExpeditionRunPostgresIntegrationTest {
         runs.performAction(
             userId,
             new ExpeditionRunActionRequest(
-                active.runId(), (String) chestNode.get("id"), ExpeditionRunAction.CLAIM_RELIC,
+                active.runId(),
+                (String) chestNode.get("id"),
+                ExpeditionRunAction.CLAIM_RELIC,
                 "sturdy_notes"));
     assertThat(claimed.phase()).isEqualTo("map");
     assertThat(claimed.relics()).hasSize(7).contains("sturdy_notes");
@@ -573,8 +601,13 @@ class ExpeditionRunPostgresIntegrationTest {
     String offered = choices.getFirst();
     String unoffered =
         List.of(
-                "sturdy_notes", "calm_mind", "combo_scholar", "second_wind", "focus_lens",
-                "quick_thinker", "first_aid")
+                "sturdy_notes",
+                "calm_mind",
+                "combo_scholar",
+                "second_wind",
+                "focus_lens",
+                "quick_thinker",
+                "first_aid")
             .stream()
             .filter(id -> !choices.contains(id))
             .findFirst()
@@ -607,15 +640,29 @@ class ExpeditionRunPostgresIntegrationTest {
         runs.performAction(
             userId,
             new ExpeditionRunActionRequest(
-                active.runId(), (String) active.nodes().getFirst().get("id"),
-                ExpeditionRunAction.ENTER_NODE, null));
+                active.runId(),
+                (String) active.nodes().getFirst().get("id"),
+                ExpeditionRunAction.ENTER_NODE,
+                null));
     List<Map<String, Object>> spoofedNodes =
         changed.nodes().stream().<Map<String, Object>>map(HashMap::new).toList();
     spoofedNodes.getFirst().put("state", "cleared");
     ExpeditionRunDto spoofed =
         new ExpeditionRunDto(
-            "map", changed.focusChapter(), spoofedNodes, changed.layers(), null, 1, 5, 12, 12,
-            999_999, List.of("sturdy_notes"), changed.isDaily(), List.of(), changed.runId());
+            "map",
+            changed.focusChapter(),
+            spoofedNodes,
+            changed.layers(),
+            null,
+            1,
+            5,
+            12,
+            12,
+            999_999,
+            List.of("sturdy_notes"),
+            changed.isDaily(),
+            List.of(),
+            changed.runId());
 
     ExpeditionRunDto canonical = runs.save(userId, spoofed);
 
@@ -643,7 +690,9 @@ class ExpeditionRunPostgresIntegrationTest {
 
     org.assertj.core.api.Assertions.assertThatNoException()
         .isThrownBy(
-            () -> runs.validateProblemRequest(userId, active.runId(), rootNodeId, 1, true, rootKcCode));
+            () ->
+                runs.validateProblemRequest(
+                    userId, active.runId(), rootNodeId, 1, true, rootKcCode));
     assertThatThrownBy(
             () ->
                 runs.validateProblemRequest(
@@ -698,31 +747,20 @@ class ExpeditionRunPostgresIntegrationTest {
     String wrongNodeProblemId = "wrong-node-" + UUID.randomUUID();
     String validProblemId = "valid-problem-" + UUID.randomUUID();
     insertIssuedProblem(
-        userId,
-        active.runId(),
-        "L1-0",
-        wrongNodeProblemId,
-        kcCode,
-        "c".repeat(64),
-        false,
-        0);
+        userId, active.runId(), "L1-0", wrongNodeProblemId, kcCode, "c".repeat(64), false, 0);
     insertIssuedProblem(
-        userId,
-        active.runId(),
-        nodeId,
-        validProblemId,
-        kcCode,
-        "d".repeat(64),
-        true,
-        70);
+        userId, active.runId(), nodeId, validProblemId, kcCode, "d".repeat(64), true, 70);
 
     assertThatThrownBy(
             () ->
                 runs.performAction(
                     userId,
                     new ExpeditionRunActionRequest(
-                        active.runId(), nodeId, ExpeditionRunAction.SETTLE_CHALLENGE,
-                        null, wrongNodeProblemId)))
+                        active.runId(),
+                        nodeId,
+                        ExpeditionRunAction.SETTLE_CHALLENGE,
+                        null,
+                        wrongNodeProblemId)))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("绑定");
 
@@ -730,7 +768,11 @@ class ExpeditionRunPostgresIntegrationTest {
         runs.performAction(
             userId,
             new ExpeditionRunActionRequest(
-                active.runId(), nodeId, ExpeditionRunAction.SETTLE_CHALLENGE, null, validProblemId));
+                active.runId(),
+                nodeId,
+                ExpeditionRunAction.SETTLE_CHALLENGE,
+                null,
+                validProblemId));
     assertThat(settled.phase()).isEqualTo("map");
     assertThat(settled.score()).isEqualTo(70);
     assertThat(settled.momentum()).isEqualTo(1);
@@ -740,7 +782,11 @@ class ExpeditionRunPostgresIntegrationTest {
         runs.performAction(
             userId,
             new ExpeditionRunActionRequest(
-                active.runId(), nodeId, ExpeditionRunAction.SETTLE_CHALLENGE, null, validProblemId));
+                active.runId(),
+                nodeId,
+                ExpeditionRunAction.SETTLE_CHALLENGE,
+                null,
+                validProblemId));
     assertThat(repeated.momentum()).isEqualTo(1);
     assertThat(repeated.nodes()).isEqualTo(settled.nodes());
     assertThat(
@@ -758,11 +804,7 @@ class ExpeditionRunPostgresIntegrationTest {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
     ExpeditionRunDto active =
-        runs.start(
-            userId,
-            2,
-            false,
-            List.of(new FrontierPickDto("PY43-KC-004", 1, 2, "先修知识点")));
+        runs.start(userId, 2, false, List.of(new FrontierPickDto("PY43-KC-004", 1, 2, "先修知识点")));
     Map<String, Object> node = active.nodes().getFirst();
     String nodeId = (String) node.get("id");
     String problemId = "prerequisite-problem-" + UUID.randomUUID();
@@ -771,14 +813,7 @@ class ExpeditionRunPostgresIntegrationTest {
         new ExpeditionRunActionRequest(
             active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
     insertIssuedProblem(
-        userId,
-        active.runId(),
-        nodeId,
-        problemId,
-        "PY43-KC-004",
-        "e".repeat(64),
-        true,
-        70);
+        userId, active.runId(), nodeId, problemId, "PY43-KC-004", "e".repeat(64), true, 70);
 
     ExpeditionRunDto settled =
         runs.performAction(
@@ -870,12 +905,7 @@ class ExpeditionRunPostgresIntegrationTest {
     for (int phase = 1; phase <= 3; phase++) {
       assertThat(
               runs.validateProblemRequest(
-                  userId,
-                  active.runId(),
-                  bossNodeId,
-                  1,
-                  false,
-                  (String) boss.get("kcCode")))
+                  userId, active.runId(), bossNodeId, 1, false, (String) boss.get("kcCode")))
           .isEqualTo(phase);
       String problemId = "issue-boss-phase-" + phase + "-" + UUID.randomUUID();
       insertIssuedProblem(
@@ -902,20 +932,14 @@ class ExpeditionRunPostgresIntegrationTest {
         assertThat(nodeById(state, bossNodeId).get("bossPhase")).isEqualTo(phase + 1);
         assertThat(
                 runs.validateProblemRequest(
-                    userId,
-                    active.runId(),
-                    bossNodeId,
-                    1,
-                    false,
-                    (String) boss.get("kcCode")))
+                    userId, active.runId(), bossNodeId, 1, false, (String) boss.get("kcCode")))
             .isEqualTo(phase + 1);
       }
     }
     assertThat(state.phase()).isEqualTo("over");
     assertThat(nodeById(state, bossNodeId).get("state")).isEqualTo("cleared");
 
-    scoreService()
-        .record(userId, new ExpeditionScoreSubmitDto(active.runId()));
+    scoreService().record(userId, new ExpeditionScoreSubmitDto(active.runId()));
     assertThat(
             jdbc.queryForObject(
                 "SELECT cleared FROM expedition_score WHERE user_id = ? AND run_id = ?::uuid",
@@ -1046,8 +1070,7 @@ class ExpeditionRunPostgresIntegrationTest {
     String nodeId = (String) active.nodes().getFirst().get("id");
     String kcCode = (String) active.nodes().getFirst().get("kcCode");
     jdbc.update(
-        "UPDATE expedition_run SET relics = '[\"first_aid\"]'::jsonb WHERE user_id = ?",
-        userId);
+        "UPDATE expedition_run SET relics = '[\"first_aid\"]'::jsonb WHERE user_id = ?", userId);
     runs.performAction(
         userId,
         new ExpeditionRunActionRequest(
@@ -1116,7 +1139,10 @@ class ExpeditionRunPostgresIntegrationTest {
         runs.performAction(
             userId,
             new ExpeditionRunActionRequest(
-                challenge.runId(), nodeId, ExpeditionRunAction.SETTLE_CHALLENGE, null,
+                challenge.runId(),
+                nodeId,
+                ExpeditionRunAction.SETTLE_CHALLENGE,
+                null,
                 "issued-problem-retry"));
     var repeatedPass =
         scores.recordVerifiedAttempt(
@@ -1165,16 +1191,21 @@ class ExpeditionRunPostgresIntegrationTest {
                 active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
     String kcCode = (String) nodeById(challenge, nodeId).get("kcCode");
     insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-first", kcCode, "1".repeat(64));
-    insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-second", kcCode, "2".repeat(64));
+    insertConsumedProblem(
+        userId, challenge.runId(), nodeId, "issue-second", kcCode, "2".repeat(64));
     ExpeditionScoreService scores = scoreService();
 
-    var olderIssue = scores.recordVerifiedAttempt(
-        userId, challenge.runId(), "issue-first", "a".repeat(64), true, 80);
-    var currentIssue = scores.recordVerifiedAttempt(
-        userId, challenge.runId(), "issue-second", "b".repeat(64), true, 90);
+    var olderIssue =
+        scores.recordVerifiedAttempt(
+            userId, challenge.runId(), "issue-first", "a".repeat(64), true, 80);
+    var currentIssue =
+        scores.recordVerifiedAttempt(
+            userId, challenge.runId(), "issue-second", "b".repeat(64), true, 90);
 
-    assertThat(olderIssue).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(false, false));
-    assertThat(currentIssue).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
+    assertThat(olderIssue)
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(false, false));
+    assertThat(currentIssue)
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
     assertThat(
             jdbc.queryForObject(
                 "SELECT COUNT(*) FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
@@ -1182,6 +1213,108 @@ class ExpeditionRunPostgresIntegrationTest {
                 userId,
                 challenge.runId()))
         .isEqualTo(1);
+  }
+
+  @Test
+  void expeditionAttemptAndTwinEvidenceRollBackTogetherWhenLearningEventFails() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    String nodeId = (String) active.nodes().getFirst().get("id");
+    ExpeditionRunDto challenge =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
+    String kcCode = (String) nodeById(challenge, nodeId).get("kcCode");
+    String fingerprint = "e".repeat(64);
+    insertConsumedProblem(
+        userId, challenge.runId(), nodeId, "issue-twin-outbox", kcCode, fingerprint);
+
+    MasteryRepository masteryRepository = new MasteryRepository(jdbc);
+    ReviewStateRepository reviewRepository = new ReviewStateRepository(jdbc);
+    LearningEventListener listener =
+        new LearningEventListener(
+            new MasteryEvaluator(
+                masteryRepository,
+                new MasteryProperties(14, new BigDecimal("0.05"), new BigDecimal("0.02"), Map.of()),
+                new ReviewStateService(reviewRepository, new ReviewScheduler())),
+            jdbc);
+    UUID attemptId = UUID.randomUUID();
+    BossAttemptRequest request =
+        new BossAttemptRequest("issue-twin-outbox", 1, 1, "print(1)", 10, attemptId);
+    BossAttemptIdempotencyService idempotency =
+        new BossAttemptIdempotencyService(
+            jdbc, new ObjectMapper(), mock(ApplicationEventPublisher.class));
+    var firstClaim = transactions.execute(status -> idempotency.claim(userId, attemptId, request));
+    AtomicInteger publishCount = new AtomicInteger();
+    ApplicationEventPublisher publisher =
+        new ApplicationEventPublisher() {
+          @Override
+          public void publishEvent(Object event) {
+            if (publishCount.incrementAndGet() == 1) {
+              throw new IllegalStateException("temporary mastery database failure");
+            }
+            listener.onPracticePass((LearningEvent.PracticeSucceeded) event);
+          }
+
+          @Override
+          public void publishEvent(ApplicationEvent event) {
+            publishEvent((Object) event);
+          }
+        };
+    ExpeditionScoreService scores = new ExpeditionScoreService(jdbc, runs, publisher);
+    String idempotencyKey = "boss-attempt:" + userId + ":" + attemptId;
+    LearningEvent.PracticeSucceeded event =
+        new LearningEvent.PracticeSucceeded(userId, kcCode, null, "medium", null, idempotencyKey);
+
+    assertThatThrownBy(
+            () ->
+                transactions.execute(
+                    status ->
+                        scores.recordVerifiedAttempt(
+                            userId,
+                            challenge.runId(),
+                            "issue-twin-outbox",
+                            fingerprint,
+                            true,
+                            100,
+                            event)))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("temporary mastery database failure");
+    transactions.executeWithoutResult(status -> idempotency.release(userId, attemptId, firstClaim));
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
+                Integer.class,
+                userId,
+                challenge.runId()))
+        .isZero();
+
+    var retryClaim = transactions.execute(status -> idempotency.claim(userId, attemptId, request));
+    var retried =
+        transactions.execute(
+            status ->
+                scores.recordVerifiedAttempt(
+                    userId, challenge.runId(), "issue-twin-outbox", fingerprint, true, 100, event));
+
+    assertThat(retried).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
+    BossAttemptResultDto result =
+        new BossAttemptResultDto("issue-twin-outbox", true, 1, 1, null, 100, "PASS");
+    transactions.executeWithoutResult(
+        status -> idempotency.complete(userId, attemptId, retryClaim, result, null));
+    var replay = transactions.execute(status -> idempotency.claim(userId, attemptId, request));
+    assertThat(replay.replay()).isEqualTo(result);
+    assertThat(publishCount).hasValue(2);
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ? AND idempotency_key = ?",
+                Integer.class,
+                userId,
+                idempotencyKey))
+        .isEqualTo(1);
+    assertThat(masteryRepository.findAssessedKcCodes(userId)).contains(kcCode);
+    assertThat(reviewRepository.find(userId, kcCode).orElseThrow().reps()).isEqualTo(1);
   }
 
   @Test
@@ -1200,8 +1333,9 @@ class ExpeditionRunPostgresIntegrationTest {
     insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-failed", kcCode, fingerprint);
     ExpeditionScoreService scores = scoreService();
 
-    var failed = scores.recordVerifiedAttempt(
-        userId, challenge.runId(), "issue-failed", fingerprint, false, 0);
+    var failed =
+        scores.recordVerifiedAttempt(
+            userId, challenge.runId(), "issue-failed", fingerprint, false, 0);
 
     assertThat(failed.accepted()).isTrue();
     ExpeditionRunDto afterFailure = runs.findActive(userId).orElseThrow();
@@ -1216,8 +1350,9 @@ class ExpeditionRunPostgresIntegrationTest {
         .isEqualTo(1);
 
     insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-retry", kcCode, fingerprint);
-    var passed = scores.recordVerifiedAttempt(
-        userId, challenge.runId(), "issue-retry", fingerprint, true, 100);
+    var passed =
+        scores.recordVerifiedAttempt(
+            userId, challenge.runId(), "issue-retry", fingerprint, true, 100);
     assertThat(passed.accepted()).isTrue();
     ExpeditionRunDto settled =
         runs.performAction(
@@ -1269,8 +1404,7 @@ class ExpeditionRunPostgresIntegrationTest {
             false,
             List.of(new com.pythontopia.world.boss.dto.BossTestCasePayload("", "", false)),
             "");
-    EndlessPregenService pregen =
-        new EndlessPregenService(null, jdbc, new ObjectMapper(), runs);
+    EndlessPregenService pregen = new EndlessPregenService(null, jdbc, new ObjectMapper(), runs);
 
     BossInternalProblem first =
         pregen.persistConsumed(userId, 1, kcCode, null, null, 1, issued, challenge.runId(), nodeId);
@@ -1314,7 +1448,8 @@ class ExpeditionRunPostgresIntegrationTest {
                 active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
     String kcCode = (String) nodeById(challenge, nodeId).get("kcCode");
     String olderFingerprint = "1".repeat(64);
-    insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-older", kcCode, olderFingerprint);
+    insertConsumedProblem(
+        userId, challenge.runId(), nodeId, "issue-older", kcCode, olderFingerprint);
     insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-newer", kcCode, "2".repeat(64));
     jdbc.update(
         "INSERT INTO expedition_verified_attempt"
@@ -1350,8 +1485,10 @@ class ExpeditionRunPostgresIntegrationTest {
             new ExpeditionRunActionRequest(
                 active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
     String kcCode = (String) nodeById(challenge, nodeId).get("kcCode");
-    insertConsumedProblem(userId, challenge.runId(), nodeId, "issued-problem-1", kcCode, "d".repeat(64));
-    insertConsumedProblem(userId, challenge.runId(), nodeId, "issued-problem-2", kcCode, "d".repeat(64));
+    insertConsumedProblem(
+        userId, challenge.runId(), nodeId, "issued-problem-1", kcCode, "d".repeat(64));
+    insertConsumedProblem(
+        userId, challenge.runId(), nodeId, "issued-problem-2", kcCode, "d".repeat(64));
     ExpeditionScoreService scores = scoreService();
     String fingerprint = "d".repeat(64);
 
@@ -1361,7 +1498,8 @@ class ExpeditionRunPostgresIntegrationTest {
     var duplicateFailure =
         scores.recordVerifiedAttempt(
             userId, challenge.runId(), "issued-problem-1", fingerprint, false, 0);
-    insertConsumedProblem(userId, challenge.runId(), nodeId, "issued-problem-3", kcCode, fingerprint);
+    insertConsumedProblem(
+        userId, challenge.runId(), nodeId, "issued-problem-3", kcCode, fingerprint);
     var firstPass =
         scores.recordVerifiedAttempt(
             userId, challenge.runId(), "issued-problem-3", fingerprint, true, 100);
@@ -1439,8 +1577,7 @@ class ExpeditionRunPostgresIntegrationTest {
 
     runs.performAction(
         userId,
-        new ExpeditionRunActionRequest(
-            daily.runId(), null, ExpeditionRunAction.FINISH, null));
+        new ExpeditionRunActionRequest(daily.runId(), null, ExpeditionRunAction.FINISH, null));
     scoreService().record(userId, new ExpeditionScoreSubmitDto(daily.runId()));
 
     assertThat(
@@ -1509,7 +1646,12 @@ class ExpeditionRunPostgresIntegrationTest {
   }
 
   private void insertConsumedProblem(
-      long userId, String runId, String nodeId, String problemId, String kcCode, String fingerprint) {
+      long userId,
+      String runId,
+      String nodeId,
+      String problemId,
+      String kcCode,
+      String fingerprint) {
     jdbc.update(
         "INSERT INTO pregenerated_problem"
             + " (user_id, chapter, stage, kc_code, problem_id, payload, status, consumed_at,"
@@ -1639,21 +1781,17 @@ class ExpeditionRunPostgresIntegrationTest {
       int hp,
       int maxHp,
       List<String> relics) {
-    List<Map<String, Object>> nodes = run.nodes().stream().<Map<String, Object>>map(HashMap::new).toList();
+    List<Map<String, Object>> nodes =
+        run.nodes().stream().<Map<String, Object>>map(HashMap::new).toList();
     String targetId = (String) target.get("id");
     Map<String, Object> current =
         nodes.stream()
-            .filter(
-                node ->
-                    node.get("next") instanceof List<?> next && next.contains(targetId))
+            .filter(node -> node.get("next") instanceof List<?> next && next.contains(targetId))
             .findFirst()
             .orElseThrow();
     current.put("state", "cleared");
     Map<String, Object> targetNode =
-        nodes.stream()
-        .filter(node -> targetId.equals(node.get("id")))
-        .findFirst()
-        .orElseThrow();
+        nodes.stream().filter(node -> targetId.equals(node.get("id"))).findFirst().orElseThrow();
     targetNode.put("state", "reward".equals(phase) ? "cleared" : "available");
     boolean activeTarget = "reward".equals(phase) || "challenge".equals(phase);
     String currentNodeId = activeTarget ? targetId : (String) current.get("id");
@@ -1676,7 +1814,8 @@ class ExpeditionRunPostgresIntegrationTest {
   }
 
   private void markNodeCurrent(long userId, ExpeditionRunDto run, String nodeId) {
-    List<Map<String, Object>> nodes = run.nodes().stream().<Map<String, Object>>map(HashMap::new).toList();
+    List<Map<String, Object>> nodes =
+        run.nodes().stream().<Map<String, Object>>map(HashMap::new).toList();
     nodes.stream()
         .filter(node -> nodeId.equals(node.get("id")))
         .findFirst()

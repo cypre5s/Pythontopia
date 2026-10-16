@@ -179,24 +179,24 @@ class BossServiceTest {
 
     BossInternalProblem issued =
         new BossInternalProblem(
-            "boss-objective-15",
-            2,
-            problem.stage(),
-            problem.difficulty(),
-            kcCode,
-            sourceQuestion.stem(),
-            List.of(),
-            "",
-            "",
-            1,
-            true,
-            false,
-            List.of(),
-            "",
-            BossQuestionType.JUDGE,
-            List.of(),
-            sourceQuestion.answers(),
-            0)
+                "boss-objective-15",
+                2,
+                problem.stage(),
+                problem.difficulty(),
+                kcCode,
+                sourceQuestion.stem(),
+                List.of(),
+                "",
+                "",
+                1,
+                true,
+                false,
+                List.of(),
+                "",
+                BossQuestionType.JUDGE,
+                List.of(),
+                sourceQuestion.answers(),
+                0)
             .issueAs(problem.problemId(), kcCode);
     when(pregenService.findExpeditionBinding(7L, problem.problemId()))
         .thenReturn(
@@ -211,7 +211,13 @@ class BossServiceTest {
                     1)));
     when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
     when(expeditionScoreService.recordVerifiedAttempt(
-            anyLong(), anyString(), anyString(), anyString(), anyBoolean(), anyInt()))
+            anyLong(),
+            anyString(),
+            anyString(),
+            anyString(),
+            anyBoolean(),
+            anyInt(),
+            any(LearningEvent.class)))
         .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
 
     var result =
@@ -231,8 +237,14 @@ class BossServiceTest {
     assertThat(result.feedback()).contains("服务端已确认");
     verify(expeditionScoreService)
         .recordVerifiedAttempt(
-            eq(7L), eq(runId), eq(problem.problemId()), anyString(), eq(true), eq(100));
-    verify(eventPublisher).publishEvent(any(LearningEvent.class));
+            eq(7L),
+            eq(runId),
+            eq(problem.problemId()),
+            anyString(),
+            eq(true),
+            eq(100),
+            any(LearningEvent.class));
+    verifyNoInteractions(eventPublisher);
     verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
   }
 
@@ -247,17 +259,27 @@ class BossServiceTest {
     when(expeditionRunService.findIssuedQuestionFingerprints(7L, runId)).thenReturn(Set.of());
     when(chapterProblemBankRepository.findByKcCodes(List.of(kcCode))).thenReturn(List.of());
     when(mainlinePracticeRepository.findForBossFallback(1, kcCode))
-        .thenReturn(List.of(
-            new MainlinePracticeQuestion(
-                1001L, 1, 3, 110, kcCode, PracticeQuestionType.CHOICE,
-                "计算工具发展到电子计算机阶段后，主要实现了什么？",
-                List.of("自动化计算", "人工算盘"), List.of("自动化计算"), 0,
-                "依据课程材料。", "课件页 1")));
+        .thenReturn(
+            List.of(
+                new MainlinePracticeQuestion(
+                    1001L,
+                    1,
+                    3,
+                    110,
+                    kcCode,
+                    PracticeQuestionType.CHOICE,
+                    "计算工具发展到电子计算机阶段后，主要实现了什么？",
+                    List.of("自动化计算", "人工算盘"),
+                    List.of("自动化计算"),
+                    0,
+                    "依据课程材料。",
+                    "课件页 1")));
 
-    var problem = service.fetchProblem(
-        1,
-        new BossProblemRequest(1, null, null, kcCode, "dual_track", null, null, runId, nodeId),
-        7L);
+    var problem =
+        service.fetchProblem(
+            1,
+            new BossProblemRequest(1, null, null, kcCode, "dual_track", null, null, runId, nodeId),
+            7L);
 
     assertThat(problem.questionType()).isEqualTo(BossQuestionType.CHOICE);
     assertThat(problem.toString()).doesNotContain("answers=");
@@ -296,11 +318,21 @@ class BossServiceTest {
         .thenReturn(Set.of(BossService.questionFingerprint(prefetchedCode)));
     when(chapterProblemBankRepository.findByKcCodes(List.of(kcCode))).thenReturn(List.of());
     when(mainlinePracticeRepository.findForBossFallback(1, kcCode))
-        .thenReturn(List.of(
-            new MainlinePracticeQuestion(
-                1001L, 1, 3, 110, kcCode, PracticeQuestionType.JUDGE,
-                "中国自主研制超级计算机体现了计算机领域的发展成就。",
-                List.of(), List.of("正确"), 0, "依据课程材料。", "课件页 10708")));
+        .thenReturn(
+            List.of(
+                new MainlinePracticeQuestion(
+                    1001L,
+                    1,
+                    3,
+                    110,
+                    kcCode,
+                    PracticeQuestionType.JUDGE,
+                    "中国自主研制超级计算机体现了计算机领域的发展成就。",
+                    List.of(),
+                    List.of("正确"),
+                    0,
+                    "依据课程材料。",
+                    "课件页 10708")));
     var resumedObjective =
         new BossInternalProblem(
             "issue-saved-objective",
@@ -325,17 +357,19 @@ class BossServiceTest {
         .thenReturn(Optional.of(prefetchedCode), Optional.of(resumedObjective));
     when(reviewRepository.isApproved(prefetchedCode)).thenReturn(true);
 
-    var problem = service.fetchProblem(
-        1,
-        new BossProblemRequest(1, null, null, kcCode, "dual_track", null, null, runId, nodeId),
-        7L);
+    var problem =
+        service.fetchProblem(
+            1,
+            new BossProblemRequest(1, null, null, kcCode, "dual_track", null, null, runId, nodeId),
+            7L);
 
     assertThat(problem.questionType()).isEqualTo(BossQuestionType.JUDGE);
     assertThat(problem.statement()).contains("中国自主研制超级计算机");
-    var resumed = service.fetchProblem(
-        1,
-        new BossProblemRequest(1, null, null, kcCode, "dual_track", null, null, runId, nodeId),
-        7L);
+    var resumed =
+        service.fetchProblem(
+            1,
+            new BossProblemRequest(1, null, null, kcCode, "dual_track", null, null, runId, nodeId),
+            7L);
     assertThat(resumed.problemId()).isEqualTo("issue-saved-objective");
     assertThat(resumed.questionType()).isEqualTo(BossQuestionType.JUDGE);
     verifyNoInteractions(graphClient);
@@ -352,15 +386,27 @@ class BossServiceTest {
     when(expeditionRunService.findIssuedQuestionFingerprints(7L, runId)).thenReturn(Set.of());
     when(chapterProblemBankRepository.findByKcCodes(List.of(kcCode))).thenReturn(List.of());
     when(mainlinePracticeRepository.findForBossFallback(1, kcCode))
-        .thenReturn(List.of(
-            new MainlinePracticeQuestion(
-                1001L, 1, 3, 110, kcCode, PracticeQuestionType.CHOICE,
-                "客观题", List.of("A", "B"), List.of("A"), 0, "解释", "课件页 1")));
+        .thenReturn(
+            List.of(
+                new MainlinePracticeQuestion(
+                    1001L,
+                    1,
+                    3,
+                    110,
+                    kcCode,
+                    PracticeQuestionType.CHOICE,
+                    "客观题",
+                    List.of("A", "B"),
+                    List.of("A"),
+                    0,
+                    "解释",
+                    "课件页 1")));
 
-    var status = service.prefetch(
-        1,
-        new BossProblemRequest(1, null, null, kcCode, "dual_track", null, null, runId, nodeId),
-        7L);
+    var status =
+        service.prefetch(
+            1,
+            new BossProblemRequest(1, null, null, kcCode, "dual_track", null, null, runId, nodeId),
+            7L);
 
     assertThat(status.status()).isEqualTo("IDLE");
     verifyNoInteractions(pregenService);
@@ -679,8 +725,7 @@ class BossServiceTest {
               () ->
                   service.fetchProblem(
                       1,
-                      new BossProblemRequest(
-                          2, null, 2, "PY43-KC-001", "debug", null, null, null),
+                      new BossProblemRequest(2, null, 2, "PY43-KC-001", "debug", null, null, null),
                       7L))
           .isInstanceOfSatisfying(
               com.pythontopia.common.error.BusinessException.class,
@@ -724,8 +769,7 @@ class BossServiceTest {
             () ->
                 service.fetchProblem(
                     1,
-                    new BossProblemRequest(
-                        1, null, 2, "PY43-KC-001", "debug", null, null, null),
+                    new BossProblemRequest(1, null, 2, "PY43-KC-001", "debug", null, null, null),
                     7L))
         .isInstanceOfSatisfying(
             com.pythontopia.common.error.BusinessException.class,
@@ -1074,7 +1118,13 @@ class BossServiceTest {
     when(pregenService.findExpeditionBinding(eq(7L), anyString()))
         .thenReturn(Optional.of(binding(runId, "L0-0", 1, 1, issuedProblem)));
     when(expeditionScoreService.recordVerifiedAttempt(
-            eq(7L), eq(runId), anyString(), anyString(), eq(true), eq(100)))
+            eq(7L),
+            eq(runId),
+            anyString(),
+            anyString(),
+            eq(true),
+            eq(100),
+            any(LearningEvent.class)))
         .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
 
     BossProblemRequest request =
@@ -1097,12 +1147,13 @@ class BossServiceTest {
             eq("L0-0"));
     verify(expeditionScoreService)
         .recordVerifiedAttempt(
-            7L,
-            runId,
-            problem.problemId(),
-            BossService.questionFingerprint(internalProblem),
-            true,
-            100);
+            eq(7L),
+            eq(runId),
+            eq(problem.problemId()),
+            eq(BossService.questionFingerprint(internalProblem)),
+            eq(true),
+            eq(100),
+            any(LearningEvent.class));
   }
 
   @Test
@@ -1213,7 +1264,7 @@ class BossServiceTest {
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
     when(expeditionScoreService.recordVerifiedAttempt(
-            eq(7L), eq(runId), eq("p1"), anyString(), eq(true), eq(100)))
+            eq(7L), eq(runId), eq("p1"), anyString(), eq(true), eq(100), any(LearningEvent.class)))
         .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(false, false));
 
     assertThatThrownBy(
@@ -1225,7 +1276,7 @@ class BossServiceTest {
   }
 
   @Test
-  @DisplayName("远征题只记录首次失败和首次通过的学情，已通过后重判仍返回结果但不重复发事件")
+  @DisplayName("远征判题把结果交给事务记账服务，幂等响应不重复发布事件")
   void expeditionProblemPublishesOnlyFirstFailureAndFirstPass() {
     String runId = "123e4567-e89b-12d3-a456-426614174000";
     when(pregenService.findExpeditionBinding(7L, "p1"))
@@ -1247,10 +1298,10 @@ class BossServiceTest {
             new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()),
             new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
     when(expeditionScoreService.recordVerifiedAttempt(
-            eq(7L), eq(runId), eq("p1"), anyString(), eq(false), eq(0)))
+            eq(7L), eq(runId), eq("p1"), anyString(), eq(false), eq(0), any(LearningEvent.class)))
         .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
     when(expeditionScoreService.recordVerifiedAttempt(
-            eq(7L), eq(runId), eq("p1"), anyString(), eq(true), eq(100)))
+            eq(7L), eq(runId), eq("p1"), anyString(), eq(true), eq(100), any(LearningEvent.class)))
         .thenReturn(
             new ExpeditionScoreService.VerifiedAttemptResult(true, true),
             new ExpeditionScoreService.VerifiedAttemptResult(true, false));
@@ -1295,21 +1346,27 @@ class BossServiceTest {
     assertThat(secondResult.passed()).isTrue();
     assertThat(thirdResult.passed()).isTrue();
     assertThat(thirdResult.score()).isEqualTo(100);
+    ArgumentCaptor<LearningEvent> scoreEvents = ArgumentCaptor.forClass(LearningEvent.class);
+    verify(expeditionScoreService, times(3))
+        .recordVerifiedAttempt(
+            eq(7L),
+            eq(runId),
+            eq("p1"),
+            anyString(),
+            anyBoolean(),
+            anyInt(),
+            scoreEvents.capture());
+    assertThat(scoreEvents.getAllValues().get(0)).isInstanceOf(LearningEvent.PracticeFailed.class);
+    assertThat(scoreEvents.getAllValues().get(1))
+        .isInstanceOf(LearningEvent.PracticeSucceeded.class);
+    assertThat(scoreEvents.getAllValues().get(2))
+        .isInstanceOf(LearningEvent.PracticeSucceeded.class);
     verify(attemptIdempotencyService)
         .complete(
-            eq(7L),
-            eq(firstId),
-            eq(firstClaim),
-            any(),
-            org.mockito.ArgumentMatchers.argThat(LearningEvent.PracticeFailed.class::isInstance));
+            eq(7L), eq(firstId), eq(firstClaim), any(), org.mockito.ArgumentMatchers.isNull());
     verify(attemptIdempotencyService)
         .complete(
-            eq(7L),
-            eq(secondId),
-            eq(secondClaim),
-            any(),
-            org.mockito.ArgumentMatchers.argThat(
-                LearningEvent.PracticeSucceeded.class::isInstance));
+            eq(7L), eq(secondId), eq(secondClaim), any(), org.mockito.ArgumentMatchers.isNull());
     verify(attemptIdempotencyService)
         .complete(
             eq(7L), eq(thirdId), eq(thirdClaim), any(), org.mockito.ArgumentMatchers.isNull());
@@ -1366,7 +1423,8 @@ class BossServiceTest {
     when(learnerTwinService.frontier(7L, 1, List.of(), 40))
         .thenReturn(new FrontierSelectResultDto(List.of(pick)));
 
-    var result = service.selectFrontier(7L, new FrontierSelectRequest(null, List.of(), 1, List.of(), 1));
+    var result =
+        service.selectFrontier(7L, new FrontierSelectRequest(null, List.of(), 1, List.of(), 1));
 
     assertThat(result.picks()).containsExactly(pick);
     verifyNoInteractions(chapterProblemBankRepository, graphClient);
@@ -1403,29 +1461,41 @@ class BossServiceTest {
                     7L, new FrontierSelectRequest(null, List.of(), 5, List.of(), 4)))
         .isInstanceOfSatisfying(
             com.pythontopia.common.error.BusinessException.class,
-            exception -> assertThat(exception.getMessage())
-                .contains("主线地图"));
+            exception -> assertThat(exception.getMessage()).contains("主线地图"));
     verifyNoInteractions(chapterProblemBankRepository, graphClient);
   }
 
   @Test
   @DisplayName("远征开局允许有同 KC 客观题的第一章概念 KC")
   void expeditionFrontierKeepsPreferredConceptKcWithObjectiveQuestion() {
-    var candidates = new FrontierSelectResultDto(
-        List.of(
-            new FrontierPickDto("PY43-KC-001", 1, 1, "尚未评估"),
-            new FrontierPickDto("PY43-KC-016", 2, 1, "尚未评估")));
+    var candidates =
+        new FrontierSelectResultDto(
+            List.of(
+                new FrontierPickDto("PY43-KC-001", 1, 1, "尚未评估"),
+                new FrontierPickDto("PY43-KC-016", 2, 1, "尚未评估")));
     when(learnerTwinService.frontier(7L, null, List.of(), 40, "PY43-KC-001"))
         .thenReturn(candidates);
     when(mainlinePracticeRepository.findForBossFallback(1, "PY43-KC-001"))
-        .thenReturn(List.of(
-            new MainlinePracticeQuestion(
-                1001L, 1, 3, 110, "PY43-KC-001", PracticeQuestionType.CHOICE,
-                "选择题", List.of("A", "B"), List.of("A"), 0, "解释", "课件页 1")));
+        .thenReturn(
+            List.of(
+                new MainlinePracticeQuestion(
+                    1001L,
+                    1,
+                    3,
+                    110,
+                    "PY43-KC-001",
+                    PracticeQuestionType.CHOICE,
+                    "选择题",
+                    List.of("A", "B"),
+                    List.of("A"),
+                    0,
+                    "解释",
+                    "课件页 1")));
 
     var result = service.selectFrontier(7L, null, "PY43-KC-001");
 
-    assertThat(result.picks()).extracting(FrontierPickDto::kcCode)
+    assertThat(result.picks())
+        .extracting(FrontierPickDto::kcCode)
         .containsExactly("PY43-KC-001", "PY43-KC-016");
     verifyNoInteractions(chapterProblemBankRepository, graphClient);
   }
@@ -1541,8 +1611,7 @@ class BossServiceTest {
         .extracting(ILoggingEvent::getFormattedMessage)
         .anySatisfy(message -> assertThat(message).contains("errorType=IllegalStateException"))
         .noneMatch(
-            message ->
-                message.contains(Long.toString(userId)) || message.contains(privateDetails));
+            message -> message.contains(Long.toString(userId)) || message.contains(privateDetails));
   }
 
   @Test
@@ -1748,8 +1817,7 @@ class BossServiceTest {
   @Test
   @DisplayName("教师审核前的 AI 题可练习，但不计入 KC 掌握证据")
   void unapprovedAiProblemDoesNotPublishMasteryEvidence() {
-    when(pregenService.findByProblemId(7L, "p1"))
-        .thenReturn(Optional.of(problemWithTests(3)));
+    when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problemWithTests(3)));
     when(reviewRepository.isApproved(any())).thenReturn(false);
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));

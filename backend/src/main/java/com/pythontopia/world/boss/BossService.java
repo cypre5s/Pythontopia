@@ -199,8 +199,7 @@ public class BossService {
     int difficulty = computeTargetDifficulty(userId, kc, request.stage());
     boolean objectivePracticeRequested = isObjectivePracticeRequest(request);
     List<MainlinePracticeQuestion> objectiveQuestions =
-        objectivePracticeRequested
-                || (expeditionRunId != null && !hasCourseProgrammingQuestion(kc))
+        objectivePracticeRequested || (expeditionRunId != null && !hasCourseProgrammingQuestion(kc))
             ? mainlinePracticeRepository.findForBossFallback(chapter, kc)
             : List.of();
     boolean preferObjectivePractice =
@@ -412,11 +411,15 @@ public class BossService {
                 request.preferredKind(),
                 authoritativeSignals(userId, request.profileSignals()));
       } catch (RestClientException ex) {
-        LOG.warn(
-            "graph boss problem unavailable ({})", ex.getClass().getSimpleName());
+        LOG.warn("graph boss problem unavailable ({})", ex.getClass().getSimpleName());
         Optional<BossInternalProblem> golden =
             findGoldenProblem(
-                kc, chapter, request.stage(), difficulty, request.preferredKind(), issuedFingerprints);
+                kc,
+                chapter,
+                request.stage(),
+                difficulty,
+                request.preferredKind(),
+                issuedFingerprints);
         if (golden.isEmpty()) {
           throw new com.pythontopia.common.error.BusinessException(
               org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
@@ -428,7 +431,12 @@ public class BossService {
       if (fromGraph == null || fromGraph.problemId() == null) {
         fromGraph =
             findGoldenProblem(
-                    kc, chapter, request.stage(), difficulty, request.preferredKind(), issuedFingerprints)
+                    kc,
+                    chapter,
+                    request.stage(),
+                    difficulty,
+                    request.preferredKind(),
+                    issuedFingerprints)
                 .orElse(null);
         if (fromGraph == null) {
           throw new com.pythontopia.common.error.BusinessException(
@@ -441,7 +449,12 @@ public class BossService {
       if (issuedFingerprints.contains(questionFingerprint(fromGraph))) {
         fromGraph =
             findGoldenProblem(
-                    kc, chapter, request.stage(), difficulty, request.preferredKind(), issuedFingerprints)
+                    kc,
+                    chapter,
+                    request.stage(),
+                    difficulty,
+                    request.preferredKind(),
+                    issuedFingerprints)
                 .orElseThrow(() -> repeatedProblemUnavailable());
       }
       if (fromGraph.aiGenerated()) {
@@ -467,7 +480,12 @@ public class BossService {
         if (!autoApproved) {
           fromGraph =
               findGoldenProblem(
-                      kc, chapter, request.stage(), difficulty, request.preferredKind(), issuedFingerprints)
+                      kc,
+                      chapter,
+                      request.stage(),
+                      difficulty,
+                      request.preferredKind(),
+                      issuedFingerprints)
                   .orElseThrow(
                       () ->
                           new com.pythontopia.common.error.BusinessException(
@@ -505,11 +523,7 @@ public class BossService {
   }
 
   private Optional<BossInternalProblem> findObjectiveBossProblem(
-      int chapter,
-      int stage,
-      String kcCode,
-      int difficulty,
-      Set<String> excludedFingerprints) {
+      int chapter, int stage, String kcCode, int difficulty, Set<String> excludedFingerprints) {
     return mainlinePracticeRepository.findForBossFallback(chapter, kcCode).stream()
         .map(question -> toObjectiveBossProblem(question, stage, difficulty))
         .filter(problem -> !excludedFingerprints.contains(questionFingerprint(problem)))
@@ -594,14 +608,14 @@ public class BossService {
     int difficulty = computeTargetDifficulty(userId, kc, request.stage());
     if (isObjectivePracticeRequest(request)
         || (expeditionBinding.runId() != null
-        && !hasCourseProgrammingQuestion(kc)
-        && findObjectiveBossProblem(
-                chapter,
-                request.stage(),
-                kc,
-                difficulty,
-                expeditionRunService.findIssuedQuestionFingerprints(userId, expeditionRunId))
-            .isPresent())) {
+            && !hasCourseProgrammingQuestion(kc)
+            && findObjectiveBossProblem(
+                    chapter,
+                    request.stage(),
+                    kc,
+                    difficulty,
+                    expeditionRunService.findIssuedQuestionFingerprints(userId, expeditionRunId))
+                .isPresent())) {
       return BossPrefetchStatusDto.idle();
     }
     EndlessPregenService.PrefetchStart start =
@@ -867,7 +881,8 @@ public class BossService {
           graphResult =
               graphClient.evaluateAttempt(
                   request.problemId(), request.code(), testCases, EVAL_TIMEOUT_SEC);
-          if (graphResult == null) throw new RestClientException("graph evaluate returned null body");
+          if (graphResult == null)
+            throw new RestClientException("graph evaluate returned null body");
           if ("sandbox_unavailable".equals(graphResult.runtimeError())) {
             LOG.warn("graph sandbox unavailable; using the existing local Python judge");
             graphResult = evaluateLocally(request, testCases);
@@ -883,8 +898,8 @@ public class BossService {
         List<String> answers = request.answers() == null ? List.of() : request.answers();
         boolean correct =
             (problem.questionType() != BossQuestionType.CHOICE
-                    && problem.questionType() != BossQuestionType.JUDGE
-                || answers.size() == 1)
+                        && problem.questionType() != BossQuestionType.JUDGE
+                    || answers.size() == 1)
                 && MainlinePracticeService.isCorrect(
                     PracticeQuestionType.valueOf(problem.questionType().name()),
                     problem.answers(),
@@ -902,6 +917,10 @@ public class BossService {
       int score = scoreFor(graphResult);
       boolean masteryEligible = isMasteryEligible(problem);
       String runId = expeditionBinding.isPresent() ? expeditionBinding.get().runId() : null;
+      LearningEvent learningEvent =
+          masteryEligible
+              ? practiceOutcomeEvent(userId, problem, graphResult, request.attemptId(), runId)
+              : null;
       String attemptFingerprint =
           expeditionBinding.isPresent()
               ? expeditionAttemptFingerprint(
@@ -911,7 +930,14 @@ public class BossService {
               : questionFingerprint(problem);
       ExpeditionScoreService.VerifiedAttemptResult attemptResult =
           recordVerifiedExpeditionAttempt(
-              userId, runId, problem, attemptFingerprint, graphResult, score, masteryEligible);
+              userId,
+              runId,
+              problem,
+              attemptFingerprint,
+              graphResult,
+              score,
+              masteryEligible,
+              learningEvent);
       if (!attemptResult.accepted()) {
         if (!expeditionRunService.isActiveRun(userId, runId)) {
           throw expiredExpeditionRun();
@@ -931,14 +957,12 @@ public class BossService {
                   : problem.questionType() == BossQuestionType.CODE
                       ? "未通过 ❌ 部分用例失败，请参考下方 hint。"
                       : "回答未通过，请检查题意后重试。";
-      boolean publishLearningEvent =
-          attemptResult.publishLearningEvent() && masteryEligible;
+      boolean publishLearningEvent = attemptResult.publishLearningEvent() && masteryEligible;
       if (problem.aiGenerated() && !masteryEligible) {
         feedback += " 本题尚未确认经教师审核通过，不计入本局进度、排行榜与知识画像。";
       }
       // 闭环关键：服务端判定成功且题目已获准用于画像时才发学习事件；待教师审核的 AI 题只练习、不计掌握度。
-      // 事件与 SubmissionService 共用并驱动 KC 掌握度（测）+ 8 维画像被动修订；缓存过期 / 缺 testCases / graph 不可用等「未判定」路径不发，
-      // 避免把非判题结果污染进掌握度；web 重放由 attemptId 结果记录阻止二次发事件。
+      // 远征事件与已验证判题同事务落库；其他 Boss 模式由幂等响应事务发布。
       return completeAttempt(
           request,
           userId,
@@ -951,9 +975,7 @@ public class BossService {
               graphResult.failureFirstHint(),
               score,
               feedback),
-          publishLearningEvent
-              ? practiceOutcomeEvent(userId, problem, graphResult, request.attemptId(), runId)
-              : null);
+          runId == null && publishLearningEvent ? learningEvent : null);
     } catch (RuntimeException exception) {
       if (claim != null) {
         attemptIdempotencyService.release(userId, request.attemptId(), claim);
@@ -981,9 +1003,7 @@ public class BossService {
     boolean codeQuestion = questionType == BossQuestionType.CODE;
     boolean hasCode = request.code() != null && !request.code().isBlank();
     boolean hasAnswers = request.answers() != null;
-    if (codeQuestion != hasCode
-        || (codeQuestion && hasAnswers)
-        || (!codeQuestion && hasCode)) {
+    if (codeQuestion != hasCode || (codeQuestion && hasAnswers) || (!codeQuestion && hasCode)) {
       throw new com.pythontopia.common.error.BusinessException(
           org.springframework.http.HttpStatus.BAD_REQUEST,
           "BOSS_SUBMISSION_SHAPE_INVALID",
@@ -1126,7 +1146,8 @@ public class BossService {
       String attemptFingerprint,
       BossEvaluateResultDto result,
       int score,
-      boolean masteryEligible) {
+      boolean masteryEligible,
+      LearningEvent event) {
     if (userId == null || runId == null) {
       return new ExpeditionScoreService.VerifiedAttemptResult(true, true);
     }
@@ -1134,7 +1155,7 @@ public class BossService {
       return new ExpeditionScoreService.VerifiedAttemptResult(true, false);
     }
     return expeditionScoreService.recordVerifiedAttempt(
-        userId, runId, problem.problemId(), attemptFingerprint, result.passed(), score);
+        userId, runId, problem.problemId(), attemptFingerprint, result.passed(), score, event);
   }
 
   private record ExpeditionRequestBinding(String runId, Integer bossPhase) {}
@@ -1359,8 +1380,7 @@ public class BossService {
       Integer recommended = learnerTwinService.recommendedDifficulty(userId, anchorKc);
       return recommended == null ? fallback : clampDifficulty(recommended);
     } catch (RuntimeException ex) {
-      LOG.debug(
-          "boss target difficulty degraded errorType={}", ex.getClass().getSimpleName());
+      LOG.debug("boss target difficulty degraded errorType={}", ex.getClass().getSimpleName());
       return fallback;
     }
   }

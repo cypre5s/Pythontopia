@@ -3,6 +3,14 @@
 > 本文档实时记录每个 working session 的状态，作为跨会话的"工作记忆"。
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
+## 2026-10-16 当前续接：原子提交远征判题与 Twin 学习事件
+
+- 安全复核发现远征已验证 attempt 先提交、Twin 学习事件后发布；若事件监听失败，重试会被既有 attempt 记录挡住，导致无 Twin 证据。现把事件发布移入 `ExpeditionScoreService` 的同一事务；事件失败时 attempt 与掌握度/复习写入一并回滚。
+- PostgreSQL 故障注入覆盖首次事件发布失败、同一 attempt 重领重试、Twin 只落一条证据及响应重放。`PythontopiaApplicationTests`、`BossServiceTest`、`ExpeditionScoreServiceTest`、`ExpeditionRunPostgresIntegrationTest` 共 108/108 通过，定向 Spotless 通过。
+- Twin 未评估 KC 推荐现在带 `chapter`/`kcCode` 跳转主线地图；地图验证章节有效、已解锁后定位并显示 KC。相关前端 35/35、typecheck、定向 ESLint 通过。未重新跑 Boss 浏览器闭环，也未调用 DeepSeek。
+- 工程检查对照 Google Java Style、PEP 8、typescript-eslint 和 Vue 官方风格指南。完整前端 `npm run lint`、`npm run typecheck`，Graph/RAG Ruff 均通过；目标 Java 文件 Spotless 通过。整库 Spotless 发现 638 个文件格式不符，未批量重排历史代码；全仓命名规则试跑的 43 项主要是 Vue 组件绑定与测试辅助函数的合法 PascalCase，用一条僵硬规则会误报，故未加全局规则。
+- 核实匿名注册仅有 Nginx 突发速率限制，低速持续建号仍可增加存储与清理负担；生产共享 AI 数据库预算为每账号 30 次/日、全站 300 次/日，低速注册不能突破全站模型请求预算。开发态按用户要求关闭每日限制。已更新唯一任务清单与 changelog；全量审计与性能仍未完成。
+
 ## 2026-10-16 当前续接：概念 KC 远征优先使用同 KC 客观题
 
 - 浏览器探索中，KC-001 正常使用判断题；提交后 KC-002 在有同 KC 客观题时却收到了未作答代码预生成题。根因是取题服务在客观题兜底前先返回活动/预生成题。

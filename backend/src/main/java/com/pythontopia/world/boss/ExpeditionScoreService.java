@@ -1,11 +1,13 @@
 package com.pythontopia.world.boss;
 
+import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.world.boss.dto.ExpeditionLeaderboardDto;
 import com.pythontopia.world.boss.dto.ExpeditionLeaderboardEntry;
 import com.pythontopia.world.boss.dto.ExpeditionScoreSubmitDto;
-import java.util.UUID;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -19,16 +21,21 @@ import org.springframework.transaction.annotation.Transactional;
 public class ExpeditionScoreService {
 
   private static final int DEFAULT_LIMIT = 20;
-  // shortcut: 3 unique questions per each of the 12 challenge stages; revise if topology or retry policy changes.
+  // shortcut: 3 unique questions per each of the 12 challenge stages; revise if topology or retry
+  // policy changes.
   private static final int MAX_VERIFIED_ATTEMPTS_PER_RUN = 36;
 
   private final JdbcTemplate jdbcTemplate;
   private final ExpeditionRunService expeditionRunService;
+  private final ApplicationEventPublisher eventPublisher;
 
   public ExpeditionScoreService(
-      JdbcTemplate jdbcTemplate, ExpeditionRunService expeditionRunService) {
+      JdbcTemplate jdbcTemplate,
+      ExpeditionRunService expeditionRunService,
+      ApplicationEventPublisher eventPublisher) {
     this.jdbcTemplate = jdbcTemplate;
     this.expeditionRunService = expeditionRunService;
+    this.eventPublisher = eventPublisher;
   }
 
   /** 按服务端保存的判题结果结算一局；同一 user/run 只能结算一次。 */
@@ -53,7 +60,8 @@ public class ExpeditionScoreService {
         jdbcTemplate.query(
             "SELECT passed, score FROM expedition_verified_attempt"
                 + " WHERE user_id = ? AND run_id = ?::uuid"
-                + " ORDER BY created_at, id LIMIT " + MAX_VERIFIED_ATTEMPTS_PER_RUN,
+                + " ORDER BY created_at, id LIMIT "
+                + MAX_VERIFIED_ATTEMPTS_PER_RUN,
             (rs, rowNum) -> new VerifiedAttempt(rs.getBoolean("passed"), rs.getInt("score")),
             userId,
             runId);
@@ -108,6 +116,20 @@ public class ExpeditionScoreService {
       String questionFingerprint,
       boolean passed,
       int score) {
+    return recordVerifiedAttempt(
+        userId, runId, problemId, questionFingerprint, passed, score, null);
+  }
+
+  /** 让远征判题账本与掌握度事件同事务提交，避免分身漏记。 */
+  @Transactional
+  public VerifiedAttemptResult recordVerifiedAttempt(
+      Long userId,
+      String runId,
+      String problemId,
+      String questionFingerprint,
+      boolean passed,
+      int score,
+      LearningEvent event) {
     if (userId == null
         || runId == null
         || problemId == null
@@ -151,8 +173,7 @@ public class ExpeditionScoreService {
         jdbcTemplate.query(
             "SELECT id, passed FROM expedition_verified_attempt"
                 + " WHERE user_id = ? AND run_id = ?::uuid AND question_fingerprint = ? LIMIT 1",
-            (rs, rowNum) ->
-                new ExistingAttempt(rs.getLong("id"), rs.getBoolean("passed")),
+            (rs, rowNum) -> new ExistingAttempt(rs.getLong("id"), rs.getBoolean("passed")),
             userId,
             runUuid,
             questionFingerprint);
@@ -161,8 +182,7 @@ public class ExpeditionScoreService {
           jdbcTemplate.query(
               "SELECT id, passed FROM expedition_verified_attempt"
                   + " WHERE user_id = ? AND run_id = ?::uuid AND problem_id = ? LIMIT 1",
-              (rs, rowNum) ->
-                  new ExistingAttempt(rs.getLong("id"), rs.getBoolean("passed")),
+              (rs, rowNum) -> new ExistingAttempt(rs.getLong("id"), rs.getBoolean("passed")),
               userId,
               runUuid,
               problemId);
@@ -179,12 +199,15 @@ public class ExpeditionScoreService {
               questionFingerprint,
               attempt.id());
       boolean publishLearningEvent = !attempt.passed() && passed;
-      return settleFailure(
-          userId,
-          runId,
-          problemId,
-          passed,
-          new VerifiedAttemptResult(updated > 0, updated > 0 && publishLearningEvent));
+      VerifiedAttemptResult result =
+          settleFailure(
+              userId,
+              runId,
+              problemId,
+              passed,
+              new VerifiedAttemptResult(updated > 0, updated > 0 && publishLearningEvent));
+      publishLearningEvent(result, event);
+      return result;
     }
 
     int inserted =
@@ -196,7 +219,8 @@ public class ExpeditionScoreService {
                 + " AND run_id = ?::uuid AND status = 'ACTIVE')"
                 + " AND NOT EXISTS (SELECT 1 FROM expedition_score WHERE user_id = ? AND run_id = ?::uuid)"
                 + " AND (SELECT COUNT(*) FROM expedition_verified_attempt"
-                + " WHERE user_id = ? AND run_id = ?::uuid) < " + MAX_VERIFIED_ATTEMPTS_PER_RUN,
+                + " WHERE user_id = ? AND run_id = ?::uuid) < "
+                + MAX_VERIFIED_ATTEMPTS_PER_RUN,
             userId,
             runUuid,
             problemId,
@@ -209,20 +233,25 @@ public class ExpeditionScoreService {
             runUuid,
             userId,
             runUuid);
-    return settleFailure(
-        userId,
-        runId,
-        problemId,
-        passed,
-        new VerifiedAttemptResult(inserted > 0, inserted > 0));
+    VerifiedAttemptResult result =
+        settleFailure(
+            userId,
+            runId,
+            problemId,
+            passed,
+            new VerifiedAttemptResult(inserted > 0, inserted > 0));
+    publishLearningEvent(result, event);
+    return result;
+  }
+
+  private void publishLearningEvent(VerifiedAttemptResult result, LearningEvent event) {
+    if (result.publishLearningEvent() && event != null) {
+      eventPublisher.publishEvent(event);
+    }
   }
 
   private VerifiedAttemptResult settleFailure(
-      Long userId,
-      String runId,
-      String problemId,
-      boolean passed,
-      VerifiedAttemptResult result) {
+      Long userId, String runId, String problemId, boolean passed, VerifiedAttemptResult result) {
     if (!passed && result.accepted()) {
       expeditionRunService.settleFailedAttempt(userId, runId, problemId);
     }
@@ -230,8 +259,7 @@ public class ExpeditionScoreService {
   }
 
   /** 判定一个活动远征 run 在指定章节的真实答题汇总。 */
-  public VerifiedAttemptSummary summarizeVerifiedAttempts(
-      Long userId, String runId, int chapter) {
+  public VerifiedAttemptSummary summarizeVerifiedAttempts(Long userId, String runId, int chapter) {
     if (userId == null || runId == null) {
       return new VerifiedAttemptSummary(0, 0);
     }
@@ -251,8 +279,7 @@ public class ExpeditionScoreService {
                 + " AND EXISTS (SELECT 1 FROM pregenerated_problem p"
                 + " WHERE p.user_id = a.user_id AND p.problem_id = a.problem_id"
                 + " AND p.expedition_run_id = a.run_id AND p.chapter = ?)",
-            (rs, rowNum) ->
-                new VerifiedAttemptSummary(rs.getInt("total"), rs.getInt("correct")),
+            (rs, rowNum) -> new VerifiedAttemptSummary(rs.getInt("total"), rs.getInt("correct")),
             userId,
             runUuid,
             chapter)

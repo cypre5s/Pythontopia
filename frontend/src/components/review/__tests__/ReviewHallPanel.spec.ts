@@ -99,6 +99,9 @@ describe('ReviewHallPanel', () => {
 
     await wrapper.get('[data-testid="review-twin-next"]').trigger('click');
 
-    expect(routerPush).toHaveBeenCalledWith({ path: '/mainline-map' });
+    expect(routerPush).toHaveBeenCalledWith({
+      path: '/mainline-map',
+      query: { chapter: '1', kcCode: 'PY43-KC-001' },
+    });
   });
 });
