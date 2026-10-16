@@ -278,14 +278,14 @@ public class AiRuntimeSummaryService {
             metrics.touchedKcCount() > 0
                 ? "检测到知识点触达活动，待核验世界补丁与回滚审查"
                 : "暂无世界变更活动或审查证据",
-            "/teacher/review",
+            "",
             List.of()),
         new AiRuntimeOperationsDto.GovernanceItem(
             "policy_canary_review",
             "策略灰度审核",
             metrics.improveStatus(),
             "查看 canary dry-run 与 rollback 状态",
-            "/teacher/review",
+            "",
             List.of("agentic-m3-system-evolution-v1")));
   }
 

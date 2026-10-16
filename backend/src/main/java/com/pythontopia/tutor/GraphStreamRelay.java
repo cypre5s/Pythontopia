@@ -110,13 +110,13 @@ public final class GraphStreamRelay {
       connection = open(url, internalToken, internalSubject, payload);
       int status = connection.getResponseCode();
       if (status >= 400) {
-        log.error("Graph SSE endpoint {} returned HTTP {}", url, status);
+        log.error("Graph SSE endpoint returned HTTP {}", status);
         sendTerminalError(emitter, CODE_UNAVAILABLE, MSG_UNAVAILABLE);
         return;
       }
       StreamEnd end = relayEvents(connection, emitter, onEvent);
       if (end == StreamEnd.TRUNCATED) {
-        log.error("Graph SSE stream {} closed before terminal event", url);
+        log.error("Graph SSE stream closed before terminal event");
         sendTerminalError(emitter, CODE_INTERRUPTED, MSG_INTERRUPTED);
       }
     } catch (SocketTimeoutException e) {

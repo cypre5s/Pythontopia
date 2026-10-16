@@ -43,6 +43,7 @@ import {
   answerCourseware,
 } from '@/api/courseLibrary';
 import { listChapters, listKnowledgeComponents } from '@/api/course';
+import { useToastStore } from '@stores/toast';
 import type {
   CourseDocumentSummary,
   CourseExampleSummary,
@@ -428,6 +429,35 @@ describe('LibraryPage', () => {
     expect(trace.text()).toContain('co_occur');
     expect(trace.text()).toContain('补充证据 1 / 2');
     expect(trace.text()).toContain('共现补证据 1');
+  });
+
+  it('课件引用页索引加载失败时显示错误提示，不产生未处理拒绝', async () => {
+    vi.mocked(answerCourseware).mockResolvedValueOnce({
+      answerMd: '参考课件页。',
+      citations: [{ pageId: 4201, pageNo: 62, chapterId: 5, quote: '课件引用' }],
+      noEvidence: false,
+      route: 'rag',
+      retrievalMode: 'keyword',
+      subgraph: [],
+      graphTrace: null,
+    });
+
+    const router = createTestRouter();
+    await router.push('/library');
+    await router.isReady();
+    const wrapper = mount(LibraryPage, {
+      global: { plugins: [router], stubs: { AppLayout: APP_LAYOUT_STUB } },
+    });
+    await flushPromises();
+
+    await wrapper.find('[data-testid="library-rag-input"]').setValue('课件引用');
+    await wrapper.find('.rag-form').trigger('submit.prevent');
+    await flushPromises();
+    vi.mocked(listDocumentPages).mockRejectedValueOnce(new Error('page index offline'));
+    await wrapper.get('[data-testid="library-rag-cite"]').trigger('click');
+    await flushPromises();
+
+    expect(useToastStore().message).toContain('page index offline');
   });
 
   it('"返回小镇" 按钮 router.push 到 /world', async () => {

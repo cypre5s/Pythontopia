@@ -223,6 +223,39 @@ class ClassroomServiceTest {
   }
 
   @Test
+  @DisplayName("班级基础信息与成员写入共用账号写入额度")
+  void classroomMutationsShareAccountWriteBudget() {
+    when(classroomGuard.requireOwner(admin, 9L)).thenReturn(classroom("ACTIVE"));
+    when(repository.findById(9L)).thenReturn(Optional.of(classroom("ACTIVE")));
+    when(repository.create(eq("管理班"), eq("演示"), eq(admin.userId()), anyString()))
+        .thenReturn(new Classroom(99L, "管理班", "演示", admin.userId(), 43L, "ZXCVBN", "ACTIVE"));
+
+    for (int write = 0; write < 100; write++) {
+      service.update(admin, 9L, "管理班", "演示");
+    }
+
+    assertWriteRateLimited(() -> service.create(admin, new CreateClassroomRequest("管理班", "演示")));
+    assertWriteRateLimited(() -> service.update(admin, 9L, "管理班", "演示"));
+    assertWriteRateLimited(() -> service.regenerateJoinCode(admin, 9L));
+    assertWriteRateLimited(() -> service.removeMember(admin, 9L, 7L));
+
+    verify(repository, times(100)).updateBasics(9L, "管理班", "演示");
+    verify(repository, never()).create(eq("管理班"), eq("演示"), eq(admin.userId()), anyString());
+    verify(repository, never()).updateJoinCode(eq(9L), anyString());
+    verify(repository, never()).removeMember(9L, 7L);
+  }
+
+  private void assertWriteRateLimited(Runnable action) {
+    assertThatThrownBy(action::run)
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            ex -> {
+              assertThat(ex.status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+              assertThat(ex.code()).isEqualTo("CLASSROOM_WRITE_RATE_LIMITED");
+            });
+  }
+
+  @Test
   @DisplayName("非归属教师被 guard 拒绝时，写操作一律不落库")
   void nonOwnerTeacherCannotMutate() {
     CurrentUserPrincipal other = new CurrentUserPrincipal(99L, "t99", Role.TEACHER);

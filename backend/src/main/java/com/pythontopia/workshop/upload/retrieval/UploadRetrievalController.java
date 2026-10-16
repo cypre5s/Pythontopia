@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.workshop.upload.retrieval.dto.RetrieveRequest;
 import com.pythontopia.workshop.upload.retrieval.dto.RetrieveResponse;
 import jakarta.validation.Valid;
@@ -23,15 +24,24 @@ import org.springframework.web.bind.annotation.RestController;
 public class UploadRetrievalController {
 
   private final UploadRetrievalService service;
+  private final StudentWriteThrottle studentWriteThrottle;
 
-  public UploadRetrievalController(UploadRetrievalService service) {
+  public UploadRetrievalController(
+      UploadRetrievalService service, StudentWriteThrottle studentWriteThrottle) {
     this.service = service;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @PostMapping("/retrieve")
   public RetrieveResponse retrieve(
       @CurrentUser CurrentUserPrincipal user, @Valid @RequestBody RetrieveRequest request) {
     requireStudent(user);
+    if (!studentWriteThrottle.tryAcquireRetrievalRequest(user.userId())) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "RETRIEVAL_RATE_LIMITED",
+          "每个账号每分钟最多发起 30 次课件或个人语料检索");
+    }
     return new RetrieveResponse(
         service.retrieve(user.userId(), request.query(), request.uploadIds(), request.topK()));
   }

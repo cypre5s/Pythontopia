@@ -45,4 +45,51 @@ class StudentWriteThrottleTest {
     nowMillis.set(Duration.ofSeconds(1).toMillis());
     assertThat(throttle.tryAcquirePlayerPositionUpdate(7L)).isTrue();
   }
+
+  @Test
+  void retrievalUsesItsOwnPerAccountWindow() {
+    AtomicLong nowMillis = new AtomicLong();
+    StudentWriteThrottle throttle = new StudentWriteThrottle(nowMillis::get);
+
+    for (int request = 0; request < 30; request++) {
+      assertThat(throttle.tryAcquireRetrievalRequest(7L)).isTrue();
+    }
+    assertThat(throttle.tryAcquireRetrievalRequest(7L)).isFalse();
+    assertThat(throttle.tryAcquire(7L, 100)).isTrue();
+    assertThat(throttle.tryAcquireRetrievalRequest(8L)).isTrue();
+
+    nowMillis.set(Duration.ofMinutes(1).toMillis());
+    assertThat(throttle.tryAcquireRetrievalRequest(7L)).isTrue();
+  }
+
+  @Test
+  void gameBootstrapUsesASeparateTenPerMinuteAccountWindow() {
+    AtomicLong nowMillis = new AtomicLong();
+    StudentWriteThrottle throttle = new StudentWriteThrottle(nowMillis::get);
+
+    for (int request = 0; request < 10; request++) {
+      assertThat(throttle.tryAcquireGameBootstrap(7L)).isTrue();
+    }
+    assertThat(throttle.tryAcquireGameBootstrap(7L)).isFalse();
+    assertThat(throttle.tryAcquireGameBootstrap(8L)).isTrue();
+
+    nowMillis.set(Duration.ofMinutes(1).toMillis());
+    assertThat(throttle.tryAcquireGameBootstrap(7L)).isTrue();
+  }
+
+  @Test
+  void profileInterviewCreationUsesASeparateThreePerHourAccountWindow() {
+    AtomicLong nowMillis = new AtomicLong();
+    StudentWriteThrottle throttle = new StudentWriteThrottle(nowMillis::get);
+
+    for (int request = 0; request < 3; request++) {
+      assertThat(throttle.tryAcquireProfileInterview(7L)).isTrue();
+    }
+    assertThat(throttle.tryAcquireProfileInterview(7L)).isFalse();
+    assertThat(throttle.tryAcquireProfileInterview(8L)).isTrue();
+    assertThat(throttle.tryAcquire(7L, 100)).isTrue();
+
+    nowMillis.set(Duration.ofHours(1).toMillis());
+    assertThat(throttle.tryAcquireProfileInterview(7L)).isTrue();
+  }
 }

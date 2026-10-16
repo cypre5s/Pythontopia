@@ -396,8 +396,15 @@ async function resolvePageById(pageId: number): Promise<void> {
   // 按 page_id 跳转（导师课件证据回链 / KC 直达）一律落到能看见的「原 PDF」视图：
   // 否则用户上次停在「课件视频」时，点证据图会停在视频面板上看不到被引用的那页，像「跳转错误」。
   setViewMode('pdf');
+  let indexLoadError: unknown;
   for (const doc of documents.value) {
-    const pages = await listDocumentPages(doc.documentId);
+    let pages: CoursePageDetail[];
+    try {
+      pages = await listDocumentPages(doc.documentId);
+    } catch (error) {
+      indexLoadError ??= error;
+      continue;
+    }
     const match = pages.find((p) => p.pageId === pageId);
     if (match) {
       currentDocId.value = doc.documentId;
@@ -405,6 +412,11 @@ async function resolvePageById(pageId: number): Promise<void> {
       void loadPage(doc.documentId, match.pageNo);
       return;
     }
+  }
+  if (indexLoadError) {
+    const message = indexLoadError instanceof Error ? indexLoadError.message : String(indexLoadError);
+    toast.push({ kind: 'error', text: `课件页索引加载失败：${message}` });
+    return;
   }
   toast.push({ kind: 'error', text: `未找到 pageId=${pageId} 对应的课件页` });
 }

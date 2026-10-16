@@ -56,7 +56,7 @@ final class ExpeditionMapGenerator {
         node.put("kind", kind);
         node.put("kcCode", pick == null ? null : pick.kcCode());
         node.put("challengeKind", challengeKind(kind, random));
-        node.put("difficulty", difficulty(kind, layer, pick));
+        node.put("difficulty", pick == null ? 0 : pick.difficulty());
         node.put("next", new ArrayList<String>());
         node.put("state", layer == 0 ? "available" : "locked");
         row.add(node);
@@ -113,14 +113,6 @@ final class ExpeditionMapGenerator {
           default -> CHALLENGE_KINDS;
         };
     return pool.get(random.nextInt(pool.size()));
-  }
-
-  private static int difficulty(String kind, int layer, FrontierPickDto pick) {
-    if (pick == null) return 0;
-    int layered = Math.min(5, Math.max(1, pick.difficulty()) + Math.min(2, layer / 4));
-    if ("elite".equals(kind)) return Math.min(5, layered + 1);
-    if ("boss".equals(kind)) return Math.min(5, Math.max(3, layered + 1));
-    return layered;
   }
 
   private static void connectLayer(

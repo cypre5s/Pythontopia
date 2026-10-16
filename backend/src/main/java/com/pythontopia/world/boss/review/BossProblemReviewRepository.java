@@ -296,18 +296,20 @@ public class BossProblemReviewRepository {
   }
 
   /**
-   * Read-only global-bank selection. Match the requested chapter/stage/KC/kind exactly and choose
-   * the closest approved difficulty; no row is consumed or mutated.
+   * Read-only global-bank selection. Match chapter/stage/KC exactly; dual-track may fall back to a
+   * generic approved code problem. Prefer the requested kind, then the closest difficulty.
    */
   public Optional<ApprovedBossProblem> findApproved(
       int chapter, int stage, String kcCode, String kind, int targetDifficulty) {
+    String normalizedKind = normalizeKind(kind);
     return jdbcTemplate
         .query(
             "SELECT id, version, payload::text AS payload FROM boss_problem_review"
                 + " WHERE pack_id = ? AND decision = 'APPROVED'"
                 + " AND chapter = ? AND stage = ? AND kc_code = ?"
-                + " AND kind IS NOT DISTINCT FROM ?"
-                + " ORDER BY ABS(difficulty - ?), decided_at DESC, id DESC LIMIT 1",
+                + " AND (kind IS NOT DISTINCT FROM ? OR (? = 'dual_track' AND kind IS NULL))"
+                + " ORDER BY CASE WHEN kind IS NOT DISTINCT FROM ? THEN 0 ELSE 1 END,"
+                + " ABS(difficulty - ?), decided_at DESC, id DESC LIMIT 1",
             (rs, rowNum) -> {
               long reviewId = rs.getLong("id");
               int version = rs.getInt("version");
@@ -319,7 +321,9 @@ public class BossProblemReviewRepository {
             chapter,
             stage,
             kcCode,
-            normalizeKind(kind),
+            normalizedKind,
+            normalizedKind,
+            normalizedKind,
             targetDifficulty)
         .stream()
         .findFirst();

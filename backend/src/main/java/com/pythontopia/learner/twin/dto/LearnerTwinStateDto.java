@@ -28,7 +28,12 @@ public record LearnerTwinStateDto(
       boolean reviewDue,
       OffsetDateTime dueAt,
       OffsetDateTime lastPracticedAt,
-      int consecutiveFailures) {}
+      int consecutiveFailures,
+      List<String> evidenceSources) {
+    public KcProgress {
+      evidenceSources = evidenceSources == null ? List.of() : List.copyOf(evidenceSources);
+    }
+  }
 
   public record NextStep(
       String kcCode,

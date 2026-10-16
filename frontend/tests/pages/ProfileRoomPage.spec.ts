@@ -29,6 +29,7 @@ const unassessedState: LearnerTwinState = {
     dueAt: null,
     lastPracticedAt: null,
     consecutiveFailures: 0,
+    evidenceSources: [],
   }],
   nextSteps: [{
     kcCode: 'PY43-KC-001',
@@ -96,6 +97,7 @@ describe('ProfileRoomPage Learner Twin', () => {
 
     expect(wrapper.text()).toContain('我的学习分身');
     expect(wrapper.text()).toContain('还没有经判题确认的学习证据');
+    expect(wrapper.text()).not.toContain('依据：');
     expect(wrapper.text()).toContain('尚未评估，先从基础题建立证据');
     expect(wrapper.text()).not.toContain('掌握 0%');
     expect(wrapper.get('[data-testid="twin-next-primary"]').text()).toContain('主线');

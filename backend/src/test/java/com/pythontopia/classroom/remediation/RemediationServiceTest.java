@@ -10,6 +10,9 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
@@ -38,6 +41,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 
 /**
@@ -194,18 +198,30 @@ class RemediationServiceTest {
         .thenReturn(new ResourceCreateResponse(2L, 102L, "SUCCESS"))
         .thenThrow(
             new BusinessException(
-                HttpStatus.TOO_MANY_REQUESTS, "RESOURCE_THROTTLED", "每小时最多生成 10 份资源"));
+                HttpStatus.TOO_MANY_REQUESTS, "RESOURCE_THROTTLED", "SENSITIVE_SENTINEL"));
     when(workshop.findOne(eq(TEACHER_ID), anyLong())).thenReturn(resourceWithEvidence());
 
-    RemediationResultDto result = service.trigger(teacher, CLASSROOM_ID);
+    Logger logger = (Logger) LoggerFactory.getLogger(RemediationService.class);
+    ListAppender<ILoggingEvent> appender = new ListAppender<>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      RemediationResultDto result = service.trigger(teacher, CLASSROOM_ID);
 
-    assertThat(result.packs()).hasSize(1);
-    // ResourceCreateResponse(runId, resourceId, status) → 补救包收集的是 resourceId。
-    assertThat(result.packs().get(0).resourceIds()).containsExactly(101L, 102L);
-    assertThat(result.partial()).isTrue();
-    assertThat(result.weakKcCount()).isEqualTo(3);
-    // 失败后立即 break：第 3 次 create 之后不再继续尝试第 3 个 KC。
-    verify(workshop, times(3)).create(eq(TEACHER_ID), any(ResourceCreateRequest.class));
+      assertThat(result.packs()).hasSize(1);
+      // ResourceCreateResponse(runId, resourceId, status) → 补救包收集的是 resourceId。
+      assertThat(result.packs().get(0).resourceIds()).containsExactly(101L, 102L);
+      assertThat(result.partial()).isTrue();
+      assertThat(result.weakKcCount()).isEqualTo(3);
+      // 失败后立即 break：第 3 次 create 之后不再继续尝试第 3 个 KC。
+      verify(workshop, times(3)).create(eq(TEACHER_ID), any(ResourceCreateRequest.class));
+      assertThat(appender.list)
+          .extracting(ILoggingEvent::getFormattedMessage)
+          .noneMatch(message -> message.contains("SENSITIVE_SENTINEL"));
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
   }
 
   private static List<ErrorHotspotDto> hotspots(int count) {

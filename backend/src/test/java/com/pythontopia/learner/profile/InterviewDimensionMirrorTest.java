@@ -17,6 +17,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.agent.run.ResourceRunRecorder;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.sse.SseRelayExecutor;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.profile.dto.BaseLevelDto;
 import com.pythontopia.learner.profile.dto.CognitiveStyleDto;
@@ -197,7 +198,8 @@ class InterviewDimensionMirrorTest {
             new GraphServiceProperties("http://graph", "http://rag", "token"),
             new ObjectMapper(),
             mock(SseRelayExecutor.class),
-            proxiedDraft);
+            proxiedDraft,
+            new StudentWriteThrottle());
 
     service.sendTurn(7L, "session-1", new ProfileTurnRequest("我学过 Python", List.of()));
 

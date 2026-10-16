@@ -20,6 +20,7 @@ import com.pythontopia.agent.run.ResourceRunRecorder;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.sse.SseRelayExecutor;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.profile.dto.ProfileTurnRequest;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
@@ -58,7 +59,8 @@ class ProfileServiceFailureTest {
             new GraphServiceProperties("http://graph", "http://rag", "token"),
             new ObjectMapper(),
             mock(SseRelayExecutor.class),
-            mock(ProfileDraftService.class));
+            mock(ProfileDraftService.class),
+            new StudentWriteThrottle());
 
     Logger logger = (Logger) LoggerFactory.getLogger(ProfileService.class);
     Level previousLevel = logger.getLevel();
@@ -130,7 +132,8 @@ class ProfileServiceFailureTest {
                 "http://127.0.0.1:" + sseServer.getAddress().getPort(), "http://rag", "token"),
             new ObjectMapper(),
             relayExecutor,
-            mock(ProfileDraftService.class));
+            mock(ProfileDraftService.class),
+            new StudentWriteThrottle());
     Logger logger = (Logger) LoggerFactory.getLogger(ProfileService.class);
     Level previousLevel = logger.getLevel();
     ListAppender<ILoggingEvent> appender = new ListAppender<>();

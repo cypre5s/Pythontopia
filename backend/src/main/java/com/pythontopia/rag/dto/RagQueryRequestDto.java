@@ -16,8 +16,8 @@ import java.util.List;
 public record RagQueryRequestDto(
     @NotBlank @Size(max = 512) String query,
     @Min(1) @Max(20) @JsonProperty("top_k") int topK,
-    @JsonProperty("kc_codes") List<String> kcCodes,
-    @JsonProperty("chapter_ids") List<Long> chapterIds,
+    @Size(max = 65) @JsonProperty("kc_codes") List<@Size(max = 32) String> kcCodes,
+    @Size(max = 7) @JsonProperty("chapter_ids") List<Long> chapterIds,
     @JsonProperty("min_score") Double minScore,
     @Pattern(regexp = "off|auto|force") @JsonProperty("graph_mode") String graphMode,
     @Min(1) @Max(2) @JsonProperty("prereq_hops") int prereqHops,

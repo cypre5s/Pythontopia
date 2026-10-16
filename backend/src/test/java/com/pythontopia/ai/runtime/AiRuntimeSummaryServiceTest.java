@@ -150,7 +150,12 @@ class AiRuntimeSummaryServiceTest {
         .filteredOn(item -> "policy_canary_review".equals(item.key()))
         .first()
         .extracting(AiRuntimeOperationsDto.GovernanceItem::reviewRoute)
-        .isEqualTo("/teacher/review");
+        .isEqualTo("");
+    assertThat(operations.governance())
+        .filteredOn(item -> "world_patch_review".equals(item.key()))
+        .first()
+        .extracting(AiRuntimeOperationsDto.GovernanceItem::reviewRoute)
+        .isEqualTo("");
   }
 
   @Test

@@ -288,6 +288,26 @@ class BossProblemReviewRepositoryPostgresTest {
         .isEqualTo("APPROVED");
   }
 
+  @Test
+  void dualTrackReusesApprovedGenericCodeQuestionsAfterDedicatedQuestions() {
+    BossProblemReviewRecord generic = repository.create(requesterId, null, problem("generic-code", 2));
+    repository.decide(generic.id(), 1, BossProblemReviewDecision.APPROVED, deciderId, "普通编程题已审核");
+
+    ApprovedBossProblem fallback =
+        repository.findApproved(1, 1, "PY43-KC-001", "dual_track", 2).orElseThrow();
+    assertThat(fallback.reviewId()).isEqualTo(generic.id());
+    assertThat(fallback.problem().testCases()).hasSize(3);
+    assertThat(repository.findApproved(1, 1, "PY43-KC-001", "debug", 2)).isEmpty();
+
+    BossProblemReviewRecord dedicated =
+        repository.create(requesterId, "dual_track", problem("dedicated-dual-track", 4));
+    repository.decide(
+        dedicated.id(), 1, BossProblemReviewDecision.APPROVED, deciderId, "双轨题已审核");
+
+    assertThat(repository.findApproved(1, 1, "PY43-KC-001", "dual_track", 2).orElseThrow().reviewId())
+        .isEqualTo(dedicated.id());
+  }
+
   private Long insertUser(String username, String role) {
     return jdbcTemplate.queryForObject(
         "INSERT INTO users (username, display_name, password_hash, role)"

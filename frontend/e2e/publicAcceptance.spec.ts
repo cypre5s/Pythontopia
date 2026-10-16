@@ -611,32 +611,21 @@ test.describe('公网验收 · /guide 使用指南 @guide', () => {
         timeout: 30_000,
       });
 
-      const imgs = page.locator('main img, article img, .guide img, img').filter({
-        hasNot: page.locator('[aria-hidden="true"]'),
-      });
-      const imgCount = await imgs.count();
-      expect(imgCount, '/guide 页面应包含说明配图').toBeGreaterThan(0);
+      const zoomButton = page.getByTestId('guide-screenshot-zoom').first();
+      await expect(zoomButton, '/guide 页面应包含可放大的说明配图').toBeVisible();
+      await zoomButton.click();
 
-      const firstImg = imgs.first();
-      await firstImg.scrollIntoViewIfNeeded();
-      await firstImg.click();
-
-      // 放大层兼容多种实现：lightbox/viewer/zoom 类名、dialog 元素或 role=dialog。
-      const lightbox = page
-        .locator(
-          '[class*="lightbox"], [class*="viewer"], [class*="zoom"], [class*="preview"], dialog[open], [role="dialog"]',
-        )
-        .filter({ has: page.locator('img') })
-        .first();
+      const lightbox = page.getByTestId('guide-screenshot-lightbox');
       await expect(lightbox, '点击图片后未出现放大查看层').toBeVisible({ timeout: 10_000 });
       await evidence(page, 'guide-桌面-图片放大');
 
       await page.keyboard.press('Escape');
-      const stillOpen = await lightbox.isVisible().catch(() => false);
-      if (stillOpen) {
-        // Esc 不生效时尝试点击遮罩/关闭按钮关闭。
-        await lightbox.click({ position: { x: 8, y: 8 } }).catch(() => undefined);
-      }
+      await expect(lightbox, '按 Escape 后放大层仍打开').toBeHidden();
+
+      await zoomButton.click();
+      await expect(lightbox).toBeVisible();
+      await lightbox.getByRole('button', { name: '关闭放大图' }).click();
+      await expect(lightbox, '点击关闭按钮后放大层仍打开').toBeHidden();
     });
   });
 
@@ -663,15 +652,27 @@ test.describe('公网验收 · /guide 使用指南 @guide', () => {
       const heading = page.locator('h1, h2').first();
       await expect(heading, '移动端首屏未见标题内容').toBeVisible({ timeout: 10_000 });
 
-      // 移动端导航可用：目录锚点直接可见，或存在可点开的菜单/目录按钮。
-      const anchors = page.locator(
-        '[data-testid="guide-content"] a[href^="#"], [data-testid="guide-content"] a[href*="/guide#"], [data-testid="guide-outline"] a[href^="#"], [data-testid="guide-outline"] a[href*="/guide#"]',
+      const navToggle = page.getByTestId('guide-nav-toggle');
+      await expect(navToggle, '移动端缺少章节导航按钮').toBeVisible();
+      await navToggle.click();
+      await expect(navToggle).toHaveAttribute('aria-expanded', 'true');
+
+      const nextSection = page
+        .getByTestId('guide-sidebar')
+        .locator('a.guide-sidebar__link:not([aria-current="location"])')
+        .first();
+      await expect(nextSection, '移动端目录中没有可切换的章节').toBeVisible();
+      const nextSectionTestId = await nextSection.getAttribute('data-testid');
+      if (!nextSectionTestId) throw new Error('移动端章节链接缺少稳定测试标识');
+      await nextSection.click();
+      await expect(navToggle, '选择章节后移动端目录未收起').toHaveAttribute(
+        'aria-expanded',
+        'false',
       );
-      const menuToggle = page.locator(
-        'button[aria-label*="目录"], button[aria-label*="菜单"], [class*="menu"], [class*="toc"]',
+      await expect(page.getByTestId(nextSectionTestId), '选择章节后当前目录项未更新').toHaveAttribute(
+        'aria-current',
+        'location',
       );
-      const navUsable = (await anchors.count()) > 0 || (await menuToggle.count()) > 0;
-      expect(navUsable, '移动端既无可见锚点目录、也无菜单入口').toBe(true);
 
       await evidence(page, 'guide-移动-布局');
       assertNoFatal(report, '/guide 移动端加载');

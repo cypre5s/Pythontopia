@@ -17,7 +17,6 @@ import com.pythontopia.learner.profile.service.PassiveProfileService;
 import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class LearnerTwinServiceTest {
@@ -44,7 +43,8 @@ class LearnerTwinServiceTest {
     when(mastery.findAll(7L)).thenReturn(List.of(
         snapshot("PY43-KC-001", "0.500", "0.000"),
         snapshot("PY43-KC-002", "0.550", "0.700")));
-    when(mastery.findAssessedKcCodes(7L)).thenReturn(Set.of("PY43-KC-002"));
+    when(mastery.findEvidenceSourcesByKc(7L)).thenReturn(Map.of(
+        "PY43-KC-002", List.of("MICRO_CHECK_FAIL", "PRACTICE_PASS")));
     when(mastery.findRecentPracticeOutcomesByUser(7L)).thenReturn(List.of());
     when(mastery.findLastPracticedAtByUser(7L)).thenReturn(Map.of());
     when(reviewRepository.findAll(7L)).thenReturn(List.of());
@@ -56,6 +56,9 @@ class LearnerTwinServiceTest {
     assertThat(state.assessedKcCount()).isEqualTo(1);
     assertThat(state.kcs().getFirst().assessed()).isFalse();
     assertThat(state.kcs().getFirst().masteryScore()).isNull();
+    assertThat(state.kcs().getFirst().evidenceSources()).isEmpty();
+    assertThat(state.kcs().get(1).evidenceSources())
+        .containsExactly("MICRO_CHECK_FAIL", "PRACTICE_PASS");
     assertThat(state.nextSteps().getFirst().kcCode()).isEqualTo("PY43-KC-001");
   }
 
@@ -66,7 +69,7 @@ class LearnerTwinServiceTest {
     when(coursePack.findChapters(43L)).thenReturn(List.of(new CourseChapter(1L, 43L, 1, "第一章", "")));
     when(coursePack.findKcPrerequisites(43L)).thenReturn(Map.of());
     when(mastery.findAll(7L)).thenReturn(List.of(snapshot(kcCode, "0.500", "0.700")));
-    when(mastery.findAssessedKcCodes(7L)).thenReturn(Set.of(kcCode));
+    when(mastery.findEvidenceSourcesByKc(7L)).thenReturn(Map.of(kcCode, List.of("PRACTICE_PASS")));
     when(mastery.findRecentPracticeOutcomesByUser(7L)).thenReturn(List.of(
         new MasteryRepository.PracticeOutcome(kcCode, true, null),
         new MasteryRepository.PracticeOutcome(kcCode, true, null)));

@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.workshop.upload.retrieval.dto.RetrievalHit;
 import com.pythontopia.workshop.upload.retrieval.dto.RetrieveRequest;
 import com.pythontopia.workshop.upload.retrieval.dto.RetrieveResponse;
@@ -22,7 +24,8 @@ import org.springframework.http.HttpStatus;
 class UploadRetrievalControllerTest {
 
   private final UploadRetrievalService service = mock(UploadRetrievalService.class);
-  private final UploadRetrievalController controller = new UploadRetrievalController(service);
+  private final UploadRetrievalController controller =
+      new UploadRetrievalController(service, new StudentWriteThrottle());
 
   @Test
   void rejectsNonStudentWithForbidden() {
@@ -50,5 +53,26 @@ class UploadRetrievalControllerTest {
     assertThat(response.hits()).containsExactly(hit);
     // 必须以登录者 userId 检索，杜绝越权读他人语料。
     verify(service).retrieve(eq(7L), eq("for循环"), eq(List.of(2L)), eq(3));
+  }
+
+  @Test
+  void rateLimitsRepeatedExpensiveRetrievalsPerStudent() {
+    CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
+    RetrieveRequest request = new RetrieveRequest("for循环", null, null);
+    when(service.retrieve(eq(7L), eq("for循环"), eq(null), eq(null))).thenReturn(List.of());
+
+    for (int requestIndex = 0; requestIndex < 30; requestIndex++) {
+      controller.retrieve(student, request);
+    }
+
+    assertThatThrownBy(() -> controller.retrieve(student, request))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            ex -> {
+              assertThat(ex.status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+              assertThat(ex.code()).isEqualTo("RETRIEVAL_RATE_LIMITED");
+            });
+
+    verify(service, times(30)).retrieve(eq(7L), eq("for循环"), eq(null), eq(null));
   }
 }

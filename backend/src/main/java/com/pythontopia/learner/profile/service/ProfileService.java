@@ -8,6 +8,7 @@ import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.sse.GraphSseConsumer;
 import com.pythontopia.common.sse.SseRelayExecutor;
 import com.pythontopia.common.web.GraphInternalTokenSupport;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.profile.dto.*;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
@@ -38,6 +39,7 @@ public class ProfileService {
   private final ObjectMapper objectMapper;
   private final SseRelayExecutor sseRelayExecutor;
   private final ProfileDraftService profileDraftService;
+  private final StudentWriteThrottle studentWriteThrottle;
 
   public ProfileService(
       ProfileRepository profileRepository,
@@ -47,7 +49,8 @@ public class ProfileService {
       GraphServiceProperties graphProperties,
       ObjectMapper objectMapper,
       SseRelayExecutor sseRelayExecutor,
-      ProfileDraftService profileDraftService) {
+      ProfileDraftService profileDraftService,
+      StudentWriteThrottle studentWriteThrottle) {
     this.profileRepository = profileRepository;
     this.coursePackRepository = coursePackRepository;
     this.resourceRunRecorder = resourceRunRecorder;
@@ -56,10 +59,22 @@ public class ProfileService {
     this.objectMapper = objectMapper;
     this.sseRelayExecutor = sseRelayExecutor;
     this.profileDraftService = profileDraftService;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   public ProfileInterviewStartResponse openOrResumeInterview(Long userId) {
-    return profileRepository.findOpenInterview(userId).orElseGet(() -> profileRepository.createInterview(userId));
+    return profileRepository
+        .findOpenInterview(userId)
+        .orElseGet(
+            () -> {
+              if (!studentWriteThrottle.tryAcquireProfileInterview(userId)) {
+                throw new BusinessException(
+                    HttpStatus.TOO_MANY_REQUESTS,
+                    "STUDENT_WRITE_RATE_LIMITED",
+                    "每个账号每小时最多新建 3 次画像访谈");
+              }
+              return profileRepository.createInterview(userId);
+            });
   }
 
   /** 拼接「本轮之前的多轮历史 + 当前用户消息」，让 ProfileAgent 具备多轮记忆。 */

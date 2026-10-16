@@ -189,16 +189,21 @@ class WeeklyReportServicePostgresIntegrationTest {
   void learnerEvidenceQueriesIgnoreBootstrapAndReturnRecentPracticeOutcomesNewestFirst() {
     long userId = insertUser("twin-evidence-owner");
     insertMasteryEvent(userId, "PRACTICE_PASS", new BigDecimal("0.100"), "2 days");
+    insertMasteryEvent(userId, "PRACTICE_PASS", new BigDecimal("0.100"), "3 days");
     insertMasteryEvent(userId, "PRACTICE_FAIL", new BigDecimal("-0.050"), "1 day");
     insertMasteryEvent(userId, "MICRO_CHECK_PASS", new BigDecimal("0.020"), "30 minutes");
     insertMasteryEvent(userId, "BOOTSTRAP", new BigDecimal("0.500"), "1 hour");
+    insertMasteryEvent(userId, "DECAY", new BigDecimal("-0.020"), "20 minutes");
 
     MasteryRepository repository = new MasteryRepository(jdbc);
 
     assertThat(repository.findAssessedKcCodes(userId)).containsExactly("PY43-KC-001");
     assertThat(repository.findRecentPracticeOutcomesByUser(userId))
         .extracting(MasteryRepository.PracticeOutcome::passed)
-        .containsExactly(false, true);
+        .containsExactly(false, true, true);
+    assertThat(repository.findEvidenceSourcesByKc(userId))
+        .containsEntry(
+            "PY43-KC-001", java.util.List.of("MICRO_CHECK_PASS", "PRACTICE_FAIL", "PRACTICE_PASS"));
   }
 
   @Test

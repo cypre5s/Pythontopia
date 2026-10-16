@@ -82,6 +82,7 @@ describe("deriveNextSteps", () => {
           kcCode: "PY43-KC-003", kcName: "循环", chapter: 1, chapterName: "计算思维",
           assessed: false, masteryScore: null, confidence: null, reviewDue: false,
           dueAt: null, lastPracticedAt: null, consecutiveFailures: 0,
+          evidenceSources: [],
         }],
         nextSteps: [{
           kcCode: "PY43-KC-003", kcName: "循环", chapter: 1, chapterName: "计算思维",
@@ -106,6 +107,7 @@ describe("deriveNextSteps", () => {
         kcCode: "PY43-KC-003", kcName: "循环", chapter: 1, chapterName: "计算思维",
         assessed: false, masteryScore: null, confidence: null, reviewDue: false,
         dueAt: null, lastPracticedAt: null, consecutiveFailures: 0,
+        evidenceSources: [],
       }],
       nextSteps: [{
         kcCode: "PY43-KC-003", kcName: "循环", chapter: 1, chapterName: "计算思维",
@@ -124,6 +126,7 @@ describe("deriveNextSteps", () => {
         kcCode: "PY43-KC-003", kcName: "循环", chapter: 1, chapterName: "计算思维",
         assessed: true, masteryScore: 0.4, confidence: 0.4, reviewDue: false,
         dueAt: null, lastPracticedAt: null, consecutiveFailures: 0,
+        evidenceSources: [],
       }],
       nextSteps: [{
         kcCode: "PY43-KC-003", kcName: "循环", chapter: 1, chapterName: "计算思维",
@@ -142,6 +145,7 @@ describe("deriveNextSteps", () => {
         kcCode: "PY43-KC-004", kcName: "循环", chapter: 1, chapterName: "计算思维",
         assessed: true, masteryScore: 0.2, confidence: 0.8, reviewDue: true,
         dueAt: "2026-10-14T00:00:00Z", lastPracticedAt: null, consecutiveFailures: 0,
+        evidenceSources: [],
       }],
       nextSteps: [{
         kcCode: "PY43-KC-004", kcName: "循环", chapter: 1, chapterName: "计算思维",

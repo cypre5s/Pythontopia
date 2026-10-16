@@ -1,6 +1,7 @@
 package com.pythontopia.world;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -11,6 +12,7 @@ import com.pythontopia.auth.security.JwtAuthenticationFilter;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.common.web.CurrentUserArgumentResolver;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import com.pythontopia.common.web.WebConfig;
 import com.pythontopia.world.calendar.dto.WorldEventDto;
@@ -40,6 +42,8 @@ class GameBootstrapControllerTest {
   @Autowired MockMvc mockMvc;
 
   @MockBean GameBootstrapService service;
+
+  @MockBean StudentWriteThrottle studentWriteThrottle;
 
   @MockBean JwtAuthenticationFilter jwtAuthenticationFilter;
   @MockBean TutorDailyRequestLimitService requestLimitService;
@@ -72,6 +76,7 @@ class GameBootstrapControllerTest {
             new SaveSlotDto(0, "Slot A", true, now, now, null),
             List.<WorldEventDto>of());
     when(service.bootstrap(eq(42L))).thenReturn(response);
+    when(studentWriteThrottle.tryAcquireGameBootstrap(42L)).thenReturn(true);
 
     mockMvc
         .perform(post("/api/game/bootstrap"))
@@ -80,5 +85,14 @@ class GameBootstrapControllerTest {
         .andExpect(jsonPath("$.world.weekday").value("monday"))
         .andExpect(jsonPath("$.player.tileX").value(12))
         .andExpect(jsonPath("$.activeSlot.displayName").value("Slot A"));
+  }
+
+  @Test
+  void rateLimitedBootstrapDoesNotRunAggregation() throws Exception {
+    when(studentWriteThrottle.tryAcquireGameBootstrap(42L)).thenReturn(false);
+
+    mockMvc.perform(post("/api/game/bootstrap")).andExpect(status().isTooManyRequests());
+
+    verifyNoInteractions(service);
   }
 }

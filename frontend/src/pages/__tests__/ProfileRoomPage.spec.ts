@@ -28,11 +28,13 @@ const state: LearnerTwinState = {
       kcCode: 'PY43-KC-001', kcName: '变量', chapter: 1, chapterName: '基础', assessed: true,
       masteryScore: 0.4, confidence: 0.5, reviewDue: true, dueAt: '2026-10-13T00:00:00Z',
       lastPracticedAt: '2026-10-12T00:00:00Z', consecutiveFailures: 0,
+      evidenceSources: ['PRACTICE_PASS'],
     },
     {
       kcCode: 'PY43-KC-002', kcName: '表达式', chapter: 2, chapterName: '运算', assessed: true,
       masteryScore: 0.5, confidence: 0.5, reviewDue: false, dueAt: null,
       lastPracticedAt: '2026-10-12T00:00:00Z', consecutiveFailures: 2,
+      evidenceSources: ['PRACTICE_FAIL'],
     },
   ],
   nextSteps: [
@@ -90,6 +92,22 @@ describe('ProfileRoomPage', () => {
     expect(routerPush).toHaveBeenNthCalledWith(2, { path: '/expedition', query: { focus: '2', kcCode: 'PY43-KC-002' } });
   });
 
+  it('shows the verified evidence sources for each assessed knowledge point', async () => {
+    fetchTwinState.mockResolvedValueOnce({
+      ...state,
+      kcs: [{
+        ...state.kcs[0],
+        evidenceSources: ['PRACTICE_PASS', 'MICRO_CHECK_FAIL'],
+      }],
+    } as LearnerTwinState);
+
+    const wrapper = mountPage();
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="twin-evidence-list"]').text())
+      .toContain('依据：练习通过、小测未过');
+  });
+
   it('routes an assessed chapter-one recommendation back to the mainline map', async () => {
     fetchTwinState.mockResolvedValueOnce({
       ...state,
@@ -97,6 +115,7 @@ describe('ProfileRoomPage', () => {
         kcCode: 'PY43-KC-001', kcName: '变量', chapter: 1, chapterName: '基础', assessed: true,
         masteryScore: 0.4, confidence: 0.5, reviewDue: false, dueAt: null,
         lastPracticedAt: '2026-10-12T00:00:00Z', consecutiveFailures: 0,
+        evidenceSources: ['PRACTICE_PASS'],
       }],
       nextSteps: [{
         kcCode: 'PY43-KC-001', kcName: '变量', chapter: 1, chapterName: '基础', difficulty: 2,
@@ -118,7 +137,7 @@ describe('ProfileRoomPage', () => {
       kcs: [{
         kcCode: 'PY43-KC-003', kcName: '循环', chapter: 1, chapterName: '基础', assessed: false,
         masteryScore: null, confidence: null, reviewDue: false, dueAt: null,
-        lastPracticedAt: null, consecutiveFailures: 0,
+        lastPracticedAt: null, consecutiveFailures: 0, evidenceSources: [],
       }],
       nextSteps: [{
         kcCode: 'PY43-KC-003', kcName: '循环', chapter: 1, chapterName: '基础', difficulty: 1,

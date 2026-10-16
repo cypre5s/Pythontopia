@@ -73,6 +73,19 @@ public class MasteryRepository {
         userId));
   }
 
+  public Map<String, List<String>> findEvidenceSourcesByKc(Long userId) {
+    return jdbcTemplate.query(
+            "SELECT kc_code, ARRAY_AGG(DISTINCT source ORDER BY source) AS evidence_sources"
+                + " FROM kc_mastery_event WHERE user_id = ? AND source IN"
+                + " ('PRACTICE_PASS', 'PRACTICE_FAIL', 'MICRO_CHECK_PASS',"
+                + " 'MICRO_CHECK_FAIL', 'DEBUG_FIX') GROUP BY kc_code ORDER BY kc_code",
+            (rs, rowNum) -> Map.entry(
+                rs.getString("kc_code"), readStringArray(rs.getArray("evidence_sources"))),
+            userId)
+        .stream()
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+  }
+
   /** Latest three server-recorded practice outcomes per KC, newest first. */
   public List<PracticeOutcome> findRecentPracticeOutcomesByUser(Long userId) {
     return jdbcTemplate.query(

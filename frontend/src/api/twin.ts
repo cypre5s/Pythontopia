@@ -54,6 +54,7 @@ export interface LearnerTwinKcProgress {
   dueAt: string | null;
   lastPracticedAt: string | null;
   consecutiveFailures: number;
+  evidenceSources: string[];
 }
 
 export interface LearnerTwinNextStep {

@@ -32,6 +32,7 @@ const state: LearnerTwinState = {
     kcCode: 'PY43-KC-009', kcName: '循环', chapter: 2, chapterName: '流程控制', assessed: true,
     masteryScore: 0.42, confidence: 0.6, reviewDue: true, dueAt: '2026-10-13T00:00:00Z',
     lastPracticedAt: '2026-10-12T00:00:00Z', consecutiveFailures: 0,
+    evidenceSources: ['PRACTICE_PASS'],
   }],
   nextSteps: [{
     kcCode: 'PY43-KC-009', kcName: '循环', chapter: 2, chapterName: '流程控制', difficulty: 2,
@@ -76,6 +77,7 @@ describe('ReviewHallPanel', () => {
         kcCode: 'PY43-KC-001', kcName: '计算思维', chapter: 1, chapterName: '计算思维',
         assessed: false, masteryScore: null, confidence: null, reviewDue: false, dueAt: null,
         lastPracticedAt: null, consecutiveFailures: 0,
+        evidenceSources: [],
       }],
       nextSteps: [{
         kcCode: 'PY43-KC-001', kcName: '计算思维', chapter: 1, chapterName: '计算思维',

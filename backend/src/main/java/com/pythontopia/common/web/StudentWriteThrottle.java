@@ -8,12 +8,16 @@ import java.util.function.LongSupplier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Limits weighted write operations per account. */
+/** Enforces account-scoped budgets for durable writes and expensive retrieval requests. */
 @Component
 public class StudentWriteThrottle {
 
   private static final int MAX_WRITES_PER_MINUTE = 100;
   private static final long WINDOW_MILLIS = 60_000L;
+  private static final int MAX_RETRIEVALS_PER_MINUTE = 30;
+  private static final int MAX_GAME_BOOTSTRAPS_PER_MINUTE = 10;
+  private static final int MAX_PROFILE_INTERVIEWS_PER_HOUR = 3;
+  private static final long HOUR_MILLIS = 3_600_000L;
   private static final int MAX_PLAYER_POSITION_UPDATES = 10;
   private static final long PLAYER_POSITION_WINDOW_MILLIS = 1_000L;
 
@@ -21,6 +25,12 @@ public class StudentWriteThrottle {
   // scaled out.
   private final ConcurrentHashMap<Long, Deque<Long>> windowsByUser = new ConcurrentHashMap<>();
   private final ConcurrentHashMap<Long, Deque<Long>> playerPositionWindowsByUser =
+      new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<Long, Deque<Long>> retrievalWindowsByUser =
+      new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<Long, Deque<Long>> gameBootstrapWindowsByUser =
+      new ConcurrentHashMap<>();
+  private final ConcurrentHashMap<Long, Deque<Long>> profileInterviewWindowsByUser =
       new ConcurrentHashMap<>();
   private final LongSupplier nowMillis;
 
@@ -45,6 +55,24 @@ public class StudentWriteThrottle {
         1,
         MAX_PLAYER_POSITION_UPDATES,
         PLAYER_POSITION_WINDOW_MILLIS);
+  }
+
+  /** Courseware and personal-corpus searches share one per-account retrieval window. */
+  public boolean tryAcquireRetrievalRequest(long userId) {
+    return tryAcquire(
+        retrievalWindowsByUser, userId, 1, MAX_RETRIEVALS_PER_MINUTE, WINDOW_MILLIS);
+  }
+
+  /** Bootstrap builds a multi-service snapshot, so cap repeated account refreshes separately. */
+  public boolean tryAcquireGameBootstrap(long userId) {
+    return tryAcquire(
+        gameBootstrapWindowsByUser, userId, 1, MAX_GAME_BOOTSTRAPS_PER_MINUTE, WINDOW_MILLIS);
+  }
+
+  /** New profile interviews are low-frequency durable records, so limit them per account hourly. */
+  public boolean tryAcquireProfileInterview(long userId) {
+    return tryAcquire(
+        profileInterviewWindowsByUser, userId, 1, MAX_PROFILE_INTERVIEWS_PER_HOUR, HOUR_MILLIS);
   }
 
   private boolean tryAcquire(
@@ -82,6 +110,9 @@ public class StudentWriteThrottle {
     long now = nowMillis.getAsLong();
     cleanupExpired(windowsByUser, now, WINDOW_MILLIS);
     cleanupExpired(playerPositionWindowsByUser, now, PLAYER_POSITION_WINDOW_MILLIS);
+    cleanupExpired(retrievalWindowsByUser, now, WINDOW_MILLIS);
+    cleanupExpired(gameBootstrapWindowsByUser, now, WINDOW_MILLIS);
+    cleanupExpired(profileInterviewWindowsByUser, now, HOUR_MILLIS);
   }
 
   private void cleanupExpired(

@@ -107,7 +107,7 @@ public class RemediationService {
             teacherId,
             spot.kcCode(),
             packs.size(),
-            failure.toString());
+            failure.getClass().getSimpleName());
         partial = true;
         break;
       }

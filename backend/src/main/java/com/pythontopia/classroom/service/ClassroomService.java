@@ -11,6 +11,7 @@ import com.pythontopia.classroom.repository.ClassroomRepository;
 import com.pythontopia.classroom.security.ClassroomGuard;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.error.ResourceNotFoundException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import java.security.SecureRandom;
 import java.util.List;
 import java.util.Optional;
@@ -28,6 +29,7 @@ public class ClassroomService {
   private final ClassroomGuard classroomGuard;
   private final ClassroomQuestService classroomQuestService;
   private final JoinCodeAttemptThrottle joinCodeAttemptThrottle;
+  private final StudentWriteThrottle studentWriteThrottle;
   private final SecureRandom random = new SecureRandom();
 
   @Autowired
@@ -35,24 +37,32 @@ public class ClassroomService {
       ClassroomRepository repository,
       ClassroomGuard classroomGuard,
       ClassroomQuestService classroomQuestService,
-      JoinCodeAttemptThrottle joinCodeAttemptThrottle) {
+      JoinCodeAttemptThrottle joinCodeAttemptThrottle,
+      StudentWriteThrottle studentWriteThrottle) {
     this.repository = repository;
     this.classroomGuard = classroomGuard;
     this.classroomQuestService = classroomQuestService;
     this.joinCodeAttemptThrottle = joinCodeAttemptThrottle;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   ClassroomService(
       ClassroomRepository repository,
       ClassroomGuard classroomGuard,
       ClassroomQuestService classroomQuestService) {
-    this(repository, classroomGuard, classroomQuestService, new JoinCodeAttemptThrottle());
+    this(
+        repository,
+        classroomGuard,
+        classroomQuestService,
+        new JoinCodeAttemptThrottle(),
+        new StudentWriteThrottle());
   }
 
   public ClassroomDto create(CurrentUserPrincipal user, CreateClassroomRequest request) {
     if (!canManageClassrooms(user)) {
       throw new BusinessException(HttpStatus.FORBIDDEN, "FORBIDDEN", "Role is not allowed");
     }
+    requireWriteBudget(user.userId());
     for (int i = 0; i < 10; i++) {
       try {
         return toDto(
@@ -119,12 +129,14 @@ public class ClassroomService {
 
   public void removeMember(CurrentUserPrincipal user, Long classroomId, Long studentId) {
     Classroom classroom = ownedClassroom(user, classroomId);
+    requireWriteBudget(user.userId());
     repository.removeMember(classroom.id(), studentId);
   }
 
   public ClassroomDto update(
       CurrentUserPrincipal user, Long classroomId, String name, String description) {
     Classroom classroom = ownedClassroom(user, classroomId);
+    requireWriteBudget(user.userId());
     repository.updateBasics(classroom.id(), name, description);
     Classroom refreshed = repository.findById(classroom.id()).orElseThrow();
     return toDto(refreshed, true);
@@ -132,6 +144,7 @@ public class ClassroomService {
 
   public ClassroomDto regenerateJoinCode(CurrentUserPrincipal user, Long classroomId) {
     Classroom classroom = ownedClassroom(user, classroomId);
+    requireWriteBudget(user.userId());
     for (int i = 0; i < 10; i++) {
       try {
         repository.updateJoinCode(classroom.id(), joinCode());
@@ -172,6 +185,15 @@ public class ClassroomService {
 
   private boolean canManageClassrooms(CurrentUserPrincipal user) {
     return user.role() == Role.TEACHER || user.role() == Role.ADMIN;
+  }
+
+  private void requireWriteBudget(long userId) {
+    if (!studentWriteThrottle.tryAcquire(userId, 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "CLASSROOM_WRITE_RATE_LIMITED",
+          "每个账号每分钟最多写入 100 次班级数据");
+    }
   }
 
   private String joinCode() {

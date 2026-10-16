@@ -1,8 +1,11 @@
 package com.pythontopia.world;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
+import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.world.dto.GameBootstrapResponse;
+import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -16,13 +19,22 @@ import org.springframework.web.bind.annotation.RestController;
 public class GameBootstrapController {
 
   private final GameBootstrapService service;
+  private final StudentWriteThrottle studentWriteThrottle;
 
-  public GameBootstrapController(GameBootstrapService service) {
+  public GameBootstrapController(
+      GameBootstrapService service, StudentWriteThrottle studentWriteThrottle) {
     this.service = service;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @PostMapping("/bootstrap")
   public GameBootstrapResponse bootstrap(@CurrentUser CurrentUserPrincipal user) {
+    if (!studentWriteThrottle.tryAcquireGameBootstrap(user.userId())) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "GAME_BOOTSTRAP_RATE_LIMITED",
+          "每个账号每分钟最多请求小镇数据 10 次");
+    }
     return service.bootstrap(user.userId());
   }
 }

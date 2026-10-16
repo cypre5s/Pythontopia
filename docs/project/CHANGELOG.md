@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-10-16 — 修复课件回链反馈并收紧远征难度与访谈创建
+
+- 课件引用/检索片段/KC 回链遇到某份页索引加载失败时继续检查其他文档；仍无法定位时明确提示索引错误，不再产生未处理异步拒绝。`LibraryPage` 定向测试 11/11、typecheck、ESLint 通过；真实 Chromium 故障注入显示错误提示，临时账号已清理。
+- 课件 RAG 与个人语料检索共用每账号每分钟 30 次额度；超限在进入检索服务前返回 429。
+- 远征地图节点不再按深度、精英或 Boss 类型抬高策略难度；直接使用服务端自适应策略选定值，挑战强度仍由节点和战斗阶段表达。地图生成与策略回归 10/10。
+- 新画像访谈每账号每小时最多创建 3 条；已有 OPEN 会话续接不消耗额度。没有新增表或模型请求。相关后端定向测试 20/20，`git diff --check` 通过。
+- RAG/上传检索与画像访谈限额回归合计 14/14；没有模型调用。
+- 远征真实刷新恢复仍缺有授权的合格账号；单实例内存额度在多实例部署前需迁移到共享存储。
+
+## 2026-10-16 — 补齐学习分身 KC 证据来源并修正管理审核链接
+
+- 学习分身状态按 KC 批量聚合可信历史判题、微测和调试事件来源，去重并排除初始分和时间衰减；页面显示中文依据，未评估 KC 不展示来源。
+- 管理运维页的世界补丁与策略灰度审核不再跳转到教师 AI 出题审核页。
+- 后端定向单测通过，PostgreSQL 集成查询覆盖来源去重/过滤；前端相关 spec 24/24、typecheck、定向 ESLint/Spotless 和 `git diff --check` 通过。没有 DeepSeek 请求或业务数据写入。
+
+## 2026-10-16 — 实测本地 Python 沙箱隔离
+
+- 执行仓库自带 `deploy/scripts/test_dev_piston_sandbox.mjs`：Piston Python 3.12.0 探针通过，验证沙箱不能读取宿主临时文件、不能经 loopback 访问宿主 API，并受超时强制终止。没有调用 DeepSeek。
+- 此结果只证明当前本地开发 Piston 配置；云端部署 ACL 明确不在本轮范围内。
+
+## 2026-10-16 — 将已批准普通编程题用于远征双轨战斗
+
+- `dual_track` 选题在没有专用双轨题时，现在可复用同章节、阶段、KC 的已批准普通编程题；若存在专用双轨题，仍优先使用专用题。填空、调试等非代码题型不走此兜底，服务端判题隐藏用例保留。
+- PostgreSQL 回归先 RED 后 GREEN，`BossProblemReviewRepositoryPostgresTest` 11/11 通过；没有模型调用或业务数据写入。
+
+## 2026-10-16 — 限制班级直播与小镇聚合请求
+
+- 班级直播 SSE 增加每位教师最多 3 条并发连接，完成、超时、错误及发送失败都会回收额度；`/api/game/bootstrap` 增加每账号每分钟 10 次独立额度，超限不会执行聚合服务。
+- `ClassroomLiveServiceTest`、`GameBootstrapControllerTest`、`StudentWriteThrottleTest` 定向回归共 8/8，6 个相关 Java 文件的定向 Spotless 检查及 `git diff --check` 通过。全仓 Spotless 仍被 633 个既有文件格式差异阻断；没有模型调用。
+
+## 2026-10-16 — 脱敏异常日志中的消息与 URL
+
+- 教师班级补救生成失败时只记录异常类名；Graph SSE 失败日志不再输出上游 URL/query。保留错误状态、异常类型和业务上下文用于定位。
+- 两条路径的合成敏感值都先在旧实现下命中日志，修复后消失；`RemediationServiceTest` 5/5、`GraphStreamRelayTest` 2/2 通过。没有调用模型或写入业务数据。
+
+## 2026-10-16 — 限制个人语料检索频率
+
+- `POST /api/workshop/uploads/retrieve` 现在按学生账号独立限制每分钟 30 次，限额不占用学习写入预算；学生角色校验先执行，超过上限在调用 embedding/向量查询服务前返回 429。
+- 旧行为回归先 RED 后 GREEN，`UploadRetrievalControllerTest` 与 `StudentWriteThrottleTest` 共 7/7，前端附件检索 fail-soft 回归 12/12。未调用 DeepSeek 或本地 embedding 服务。计数器为单后端实例内存态。
+
+## 2026-10-16 — 限制教师班级管理写入
+
+- 班级创建、改名、重置加入码与移除成员现在复用每账号每分钟 100 单位写入额度；角色与班级归属校验先于额度预留和数据库写入。加入码尝试继续使用原有专用限额。
+- RED/GREEN 后 `ClassroomServiceTest` 与 `ClassroomQuestServiceTest` 共 22/22 通过；未调用模型或写入业务数据。Spotless 全量检查报告另有 632 个文件格式违规；本次涉及的 Java 文件未出现在违规列表中。
+
+## 2026-10-16 — 限制课件 RAG 过滤参数
+
+- `/api/rag/query` 的 `kc_codes`、`chapter_ids` 分别限制为最多 65/7 项，单个 KC 代码最多 32 个字符，避免超大过滤列表继续进入检索调用。
+- `RagQueryRequestValidationTest` 与 `RagControllerTest` 共 3/3 通过；没有模型调用或学习数据写入。
+
 ## 2026-10-16 — 限制教师班级任务扇出写入
 
 - 发布和归档班级任务现复用每个教师账号每分钟 100 次共享写额度；配额在角色、班级归属与发布输入校验后、批量创建/撤回学生任务副本前检查。

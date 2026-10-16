@@ -114,7 +114,8 @@ public class LearnerTwinService {
     Map<String, MasterySnapshot> masteryByKc = masteryRepository.findAll(userId).stream()
         .filter(snapshot -> snapshot.kcCode() != null)
         .collect(Collectors.toMap(MasterySnapshot::kcCode, snapshot -> snapshot, (left, right) -> left));
-    Set<String> assessedKcs = masteryRepository.findAssessedKcCodes(userId);
+    Map<String, List<String>> evidenceSourcesByKc = masteryRepository.findEvidenceSourcesByKc(userId);
+    Set<String> assessedKcs = evidenceSourcesByKc.keySet();
     Map<String, List<Boolean>> outcomesByKc = new HashMap<>();
     for (MasteryRepository.PracticeOutcome outcome : masteryRepository.findRecentPracticeOutcomesByUser(userId)) {
       outcomesByKc.computeIfAbsent(outcome.kcCode(), ignored -> new ArrayList<>()).add(outcome.passed());
@@ -162,7 +163,8 @@ public class LearnerTwinService {
       int consecutiveFailures = consecutiveFailures(outcomes);
       progress.add(new KcProgress(
           kc.kcCode(), kc.kcName(), chapterOrder, chapterName, assessed, score, confidence,
-          reviewDue, dueAt, lastPracticed, consecutiveFailures));
+          reviewDue, dueAt, lastPracticed, consecutiveFailures,
+          assessed ? evidenceSourcesByKc.getOrDefault(kc.kcCode(), List.of()) : List.of()));
       candidates.add(new AdaptivePracticePolicy.Candidate(
           kc.kcCode(), kc.kcName(), chapterOrder, assessed, score, confidence,
           reviewDue, dueAt, lastPracticed, outcomes,

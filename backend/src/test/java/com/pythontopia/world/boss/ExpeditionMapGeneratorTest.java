@@ -25,6 +25,18 @@ class ExpeditionMapGeneratorTest {
   }
 
   @Test
+  void mapNodesKeepTheAdaptiveDifficultySelectedForTheFrontierPick() {
+    List<FrontierPickDto> picks =
+        List.of(new FrontierPickDto("PY43-KC-008", 2, 2, "recent independent failures"));
+
+    ExpeditionMapGenerator.MapData map = ExpeditionMapGenerator.generate(picks, 42L);
+
+    assertThat(map.nodes())
+        .filteredOn(node -> !Set.of("rest", "chest").contains(node.get("kind")))
+        .allSatisfy(node -> assertThat(node.get("difficulty")).isEqualTo(2));
+  }
+
+  @Test
   void serverMapIsAReachableTenLayerDagBuiltFromFrontierPicks() {
     List<FrontierPickDto> picks =
         List.of(

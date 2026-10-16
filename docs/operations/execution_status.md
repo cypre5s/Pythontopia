@@ -10,6 +10,22 @@
 
 ### 2026-10-16 最近续接
 
+- 最近动作：图书馆引用页索引异常现在由共享解析器捕获，继续查其它文档后给出错误提示，避免异步拒绝；远征地图节点难度改为直接采用服务端自适应策略值；画像访谈新建记录限每账号每小时 3 次、恢复已有会话不扣额度；课件 RAG 与个人语料检索合并为账号每分钟 30 次共享额度。
+- 新鲜验证：LibraryPage 11/11、typecheck、定向 ESLint 通过；画像访谈/写入额度回归 20/20，远征地图/AdaptivePracticePolicy 10/10，RAG/上传检索相关定向回归 14/14；`git diff --check` 通过。未发起 DeepSeek 请求。
+- 浏览器复核：一次性本地学生注册/登录成功（201/200）；拦截课件问答为固定引用响应，并将对应页索引请求模拟为 503。点击引用后页面显示“课件页索引加载失败”，页面错误 0；账号已删除并查询确认同前缀残留 0。没有 DeepSeek 请求。
+- 唯一图片路径补验尝试：从 `/lecture/1` 选择合成 PNG 并提交一次 Tutor 图片问题；测试脚本监听了 `/api/tutor/ask/stream`，但真实 Web 接口为 `/api/tutor/ask`，因此未捕获 HTTP/SSE 结果，不能计为通过。临时账号已清理；不重复发起模型请求，保留为未验证。
+- 尚未完成：真实合格远征 run 刷新恢复（当前本地没有“先修达标且有活动 run”的授权样本）；Web 动作矩阵与 Boss 窄屏验收；Twin A/B/7 日延迟样本；其余安全审计与工程收尾。性能最后测。额度仍依赖单 Spring 实例内存状态。
+
+- 最近动作：修正管理员的世界补丁/策略审核链接，避免误进教师 AI 题目队列；学习分身 `/state` 增加每个 KC 的可信历史证据来源，复用现有 `kc_mastery_event`，不新增表。服务只批量查询一次，排除 BOOTSTRAP/DECAY 并按来源去重；未评估 KC 来源为空，页面显示中文标签。
+- 新鲜验证：`AiRuntimeSummaryServiceTest`、`LearnerTwinServiceTest` 通过；PostgreSQL 来源查询集成用例通过；4 个相关前端 spec 24/24、typecheck、定向 ESLint/Spotless、`git diff --check` 通过。没有 DeepSeek 请求或业务数据写入。
+- 依赖安全续扫：pip-audit 对 RAG 当前虚拟环境的固定版本列表报告“未发现已知漏洞”；Graph 的 OSV 请求无响应，约 30 秒后停止，因此 Graph 本轮不计通过。之前记录的两个 Graph 可选开发依赖告警仍保留待核，未自动升级依赖。
+- 当前未完成仍是总计划列出的安全审计剩余项、真实合格远征战斗与刷新恢复、Web 动作矩阵、Twin A/B 和 7 日样本；工程整理及性能测量继续排后。本地全量 Maven 的既有基础设施失败不重跑碰运气。
+
+- 最近动作：`POST /api/workshop/uploads/retrieve` 现按学生账号独立限 30 次/分钟，过限在 embedding/vector 查询前拒绝，不占用写入额度。旧行为先 RED 后 GREEN，控制器与 throttle 测试 7/7；前端附件 fail-soft 测试 12/12。没有 DeepSeek 或本地 embedding 请求。本地计数器多实例部署需共享化。
+- 最近动作：Chromium 桌面指南图片预览按 Escape 和关闭按钮均可关闭，移动端目录可展开并切换章节；两项各通过 1/1。移动端首次失败来自测试定位器在状态更新后重新选中了别的链接，改用稳定 test id 后通过。临时账号 733、736 在确认无学习数据后精确删除；没有模型请求。上轮重复的锚点测试已有通过记录，不计新进度。
+- 最近动作：班级补救日志原输出完整异常 `toString()`，Graph SSE 上游失败日志原输出完整 URL/query；两条路径的合成敏感值均先 RED 命中，修复后分别只记录异常类名和 HTTP/截断状态。`RemediationServiceTest` 5/5、`GraphStreamRelayTest` 2/2。没有模型请求或业务写入；多行/包装器日志审计仍未完成。
+- 最近动作：非 AI 写接口续审补上教师班级创建/改名/重置加入码/移除成员的共享账号额度，权限与归属校验先执行；加入码尝试继续使用专用限额。旧行为回归先 RED 后 GREEN，班级服务与扇出回归 22/22。另限制 `/api/rag/query` 过滤列表为课程规模，RAG DTO/Controller 3/3。无 DeepSeek 请求。Spotless 全量检查报告另有 632 个文件违规，本次 Java 改动不在违规列表；`git diff --check` 通过。
+- 最近动作：RAG 查询 DTO 增加课程规模过滤上限（65 个 KC、7 个章节）及 KC 代码 32 字符上限；旧实现的越界请求回归先 RED 后 GREEN，RAG DTO/Controller 共 3/3 通过。没有调用 DeepSeek；唯一清单已更新。
 - 已完成：证据快照昂贵 POST 仅在公网对来源 IP 限制 1 次/秒、突发 2；其它 `/api/` 请求映射为空 key。契约先 RED 后 GREEN，23 项通过；Nginx 1.27 语法与 shell 检查通过。仍未完成的是通用非 AI API 按账号限频审计。
 - 已完成：故事板图片 provider 关闭时，同步合成服务现在在 `ffmpeg` 探测前返回 503；RED/GREEN 后 `StoryboardCompositionServiceTest` 7/7。调用链复核确认 Web 当前没有同步接口页面调用方，异步入口原已在落库前拒绝。无外部模型/provider 请求。
 - 已完成：世界内目标 CTA 与地图的第 1 章入口均经真实 Chromium 点击进入 `/mainline/stage/1`；详情、视频和课件请求成功，浏览器错误 0、模型请求 0。初次未进入是探针弹层拦截测试点击，排除后无需产品代码改动；临时 QA 用户已精确删除，且没有提交、掌握度或学习事件。
@@ -698,3 +714,20 @@
 
 - `ProfileService` 的 SSE 结果处理、流读取、fallback 和 emitter 写入异常日志曾记录异常对象；资源运行记录失败携带合成学生文本的用例先 RED 命中异常栈，随后仅记录异常类型，原有流式 fallback 与非流式错误映射不变。
 - `JAVA_HOME=/home/cypress/.local/tools/jdk-21 mvn -q -Dtest=ProfileServiceFailureTest test`：2 tests、0 failures、0 errors。没有模型调用；其他安全审计仍未完成。
+
+## 2026-10-16 当前续接：SSE 与小镇聚合限流
+
+- 班级直播每位教师最多 3 条并发 SSE，正常结束、超时、错误与发送失败都会释放额度；`POST /api/game/bootstrap` 每账号每分钟最多 10 次，超限在聚合服务前返回 429。
+- 测试先验证旧行为缺少配额，再实现并通过：`ClassroomLiveServiceTest`、`GameBootstrapControllerTest`、`StudentWriteThrottleTest` 共 8/8。6 个相关 Java 文件的定向 Spotless 和 `git diff --check` 通过；全仓 Spotless 仍被 633 个既有格式差异阻断。没有模型请求或业务数据写入。
+- 继续事项：本地非 AI 路由安全审计尚未全闭；远征需要真实先修进度与兼容题型才能做战斗恢复联测；Twin 7 日延迟样本仍需等待；性能最后测。
+
+## 2026-10-16 当前续接：远征复用已批准编程题
+
+- `BossProblemReviewRepository.findApproved` 对 `dual_track` 在无专用题时可读取同章节、阶段和 KC 的已批准普通编程题；专用题优先，其他题型不读取普通题。隐藏用例继续留在后端判题 payload。
+- 先加真实 PostgreSQL 回归，旧行为在 generic-question fallback 断言处失败；修复后 `BossProblemReviewRepositoryPostgresTest` 11/11 通过。无模型请求、无业务写入。
+- 本地 PostgreSQL 只读聚合显示有 2 个账号已解锁第 2 章，题库有 4 道第 2 章已批准普通编程题、0 道专用 `dual_track` 题；未查询或导出账号身份，也未改动其进度。自动化登录凭证未配置，因此真实浏览器战斗恢复联测仍待 QA 账号凭证。
+- 仍待：以真实先修状态启动可打的 run 并验证刷新/异常恢复；不能用伪造掌握度替代。
+
+## 2026-10-16 当前续接：本地 Python 隔离实测
+
+- `node deploy/scripts/test_dev_piston_sandbox.mjs` 通过：运行 Python 3.12.0，宿主临时文件与 loopback API 均不可达，超时任务被终止。此轮未调用模型；云端/ECS 部署检查按要求排除。
