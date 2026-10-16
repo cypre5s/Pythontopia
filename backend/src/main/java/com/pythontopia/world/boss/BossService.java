@@ -151,7 +151,14 @@ public class BossService {
     FrontierSelectResultDto frontier =
         learnerTwinService.frontier(userId, focusChapter, List.of(), 40, preferredKcCode);
     return limitFrontierPicks(
-        frontier.picks().stream().filter(pick -> pick.chapter() > 1).toList(), 40);
+        frontier.picks().stream()
+            .filter(pick -> pick.chapter() > 1 || hasObjectiveBossQuestion(pick))
+            .toList(),
+        40);
+  }
+
+  private boolean hasObjectiveBossQuestion(FrontierPickDto pick) {
+    return !mainlinePracticeRepository.findForBossFallback(pick.chapter(), pick.kcCode()).isEmpty();
   }
 
   private FrontierSelectResultDto limitFrontierPicks(List<FrontierPickDto> picks, int count) {
@@ -159,7 +166,7 @@ public class BossService {
       throw new BusinessException(
           org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY,
           "EXPEDITION_NO_PRACTICE_PROBLEMS",
-          "当前范围没有满足先修条件的 Python 编程知识点。请先前往主线地图完成已解锁章节的学习与测评，解锁后再来远征。");
+          "当前范围没有满足先修条件且有可用练习题的知识点。请先前往主线地图完成已解锁章节的学习与测评，解锁后再来远征。");
     }
     return new FrontierSelectResultDto(picks.stream().limit(count).toList());
   }
@@ -189,6 +196,15 @@ public class BossService {
         validateExpeditionRun(
             userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, false, kc);
     String expeditionRunId = expeditionBinding.runId();
+    int difficulty = computeTargetDifficulty(userId, kc, request.stage());
+    boolean objectivePracticeRequested = isObjectivePracticeRequest(request);
+    List<MainlinePracticeQuestion> objectiveQuestions =
+        objectivePracticeRequested
+                || (expeditionRunId != null && !hasCourseProgrammingQuestion(kc))
+            ? mainlinePracticeRepository.findForBossFallback(chapter, kc)
+            : List.of();
+    boolean preferObjectivePractice =
+        objectivePracticeRequested || (expeditionRunId != null && !objectiveQuestions.isEmpty());
     if (expeditionRunId != null) {
       Optional<BossInternalProblem> open =
           pregenService.findOpenExpeditionProblem(
@@ -197,17 +213,19 @@ public class BossService {
         BossInternalProblem problem = open.orElseThrow();
         requireProblemContext(problem, chapter, request.stage(), kc);
         if (isMasteryEligible(problem)) {
-          cacheProblem(userId, problem);
-          return problem.toPublic();
+          if (!preferObjectivePractice || problem.questionType() != BossQuestionType.CODE) {
+            cacheProblem(userId, problem);
+            return problem.toPublic();
+          }
+        } else {
+          LOG.warn(
+              "boss skipped revoked AI problemId={} user={} run={}",
+              problem.problemId(),
+              userId,
+              expeditionRunId);
         }
-        LOG.warn(
-            "boss skipped revoked AI problemId={} user={} run={}",
-            problem.problemId(),
-            userId,
-            expeditionRunId);
       }
     }
-    int difficulty = computeTargetDifficulty(userId, kc, request.stage());
     ProblemGenerationKey generationKey =
         new ProblemGenerationKey(
             userId,
@@ -232,7 +250,8 @@ public class BossService {
                       pregenService
                           .findByProblemId(userId, cachedRequest.problemId())
                           .orElse(null));
-      if (cachedProblem != null) {
+      if (cachedProblem != null
+          && (!preferObjectivePractice || cachedProblem.questionType() != BossQuestionType.CODE)) {
         cacheProblem(userId, cachedProblem);
         return cachedProblem.toPublic();
       }
@@ -240,6 +259,29 @@ public class BossService {
     }
     Set<String> issuedFingerprints =
         expeditionRunService.findIssuedQuestionFingerprints(userId, expeditionRunId);
+
+    if (preferObjectivePractice) {
+      Optional<BossInternalProblem> objective =
+          objectiveQuestions.stream()
+              .map(question -> toObjectiveBossProblem(question, request.stage(), difficulty))
+              .filter(problem -> !issuedFingerprints.contains(questionFingerprint(problem)))
+              .findFirst();
+      if (objective.isPresent()) {
+        BossInternalProblem problem =
+            objective.orElseThrow().issueAs(issueProblemId(expeditionBinding.bossPhase()), kc);
+        BossInternalProblem persisted =
+            persistConsumed(userId, chapter, kc, request, difficulty, problem, expeditionRunId);
+        if (persisted != null) problem = persisted;
+        cacheProblem(userId, problem);
+        return rememberRequest(userId, request, generationKey, problem);
+      }
+      if (objectivePracticeRequested) {
+        throw new com.pythontopia.common.error.BusinessException(
+            org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+            "BOSS_OBJECTIVE_BANK_EMPTY",
+            "当前知识点没有可用的审核客观题，请先补充课程题库题目");
+      }
+    }
 
     // 1) 复用「已预生成未做」(READY) 的同维度题：命中即原子标 CONSUMED，省去现场等 LLM。
     //    这条同时实现「学生中途退出，下次登入复用已生成未做的题」——上次会话预取留下的 READY 行。
@@ -350,28 +392,6 @@ public class BossService {
     if (prefetchStatus != null && "PENDING".equals(prefetchStatus.status())) {
       throw new com.pythontopia.common.error.BusinessException(
           org.springframework.http.HttpStatus.CONFLICT, "BOSS_PREFETCH_PENDING", "题目仍在生成，请稍后重试");
-    }
-
-    boolean objectivePracticeRequested = isObjectivePracticeRequest(request);
-    if (objectivePracticeRequested
-        || (expeditionBinding.bossPhase() != null && !hasCourseProgrammingQuestion(kc))) {
-      Optional<BossInternalProblem> objective =
-          findObjectiveBossProblem(chapter, request.stage(), kc, difficulty, issuedFingerprints);
-      if (objective.isPresent()) {
-        BossInternalProblem problem =
-            objective.orElseThrow().issueAs(issueProblemId(expeditionBinding.bossPhase()), kc);
-        BossInternalProblem persisted =
-            persistConsumed(userId, chapter, kc, request, difficulty, problem, expeditionRunId);
-        if (persisted != null) problem = persisted;
-        cacheProblem(userId, problem);
-        return rememberRequest(userId, request, generationKey, problem);
-      }
-      if (objectivePracticeRequested) {
-        throw new com.pythontopia.common.error.BusinessException(
-            org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
-            "BOSS_OBJECTIVE_BANK_EMPTY",
-            "当前知识点没有可用的审核客观题，请先补充课程题库题目");
-      }
     }
 
     // 3) 个性化预生成与 approved bank 均未命中 → 现场走 graph 出题。
@@ -573,7 +593,7 @@ public class BossService {
     String expeditionRunId = expeditionBinding.runId();
     int difficulty = computeTargetDifficulty(userId, kc, request.stage());
     if (isObjectivePracticeRequest(request)
-        || (expeditionBinding.bossPhase() != null
+        || (expeditionBinding.runId() != null
         && !hasCourseProgrammingQuestion(kc)
         && findObjectiveBossProblem(
                 chapter,

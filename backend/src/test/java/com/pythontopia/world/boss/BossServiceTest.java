@@ -237,6 +237,136 @@ class BossServiceTest {
   }
 
   @Test
+  @DisplayName("普通远征节点为无编程题 KC 复用同 KC 客观题")
+  void expeditionBattleFallsBackToObjectiveQuestionWithoutGraph() {
+    String runId = UUID.randomUUID().toString();
+    String nodeId = "L0-0";
+    String kcCode = "PY43-KC-001";
+    when(expeditionRunService.validateProblemRequest(7L, runId, nodeId, 1, false, kcCode))
+        .thenReturn(null);
+    when(expeditionRunService.findIssuedQuestionFingerprints(7L, runId)).thenReturn(Set.of());
+    when(chapterProblemBankRepository.findByKcCodes(List.of(kcCode))).thenReturn(List.of());
+    when(mainlinePracticeRepository.findForBossFallback(1, kcCode))
+        .thenReturn(List.of(
+            new MainlinePracticeQuestion(
+                1001L, 1, 3, 110, kcCode, PracticeQuestionType.CHOICE,
+                "计算工具发展到电子计算机阶段后，主要实现了什么？",
+                List.of("自动化计算", "人工算盘"), List.of("自动化计算"), 0,
+                "依据课程材料。", "课件页 1")));
+
+    var problem = service.fetchProblem(
+        1,
+        new BossProblemRequest(1, null, null, kcCode, "dual_track", null, null, runId, nodeId),
+        7L);
+
+    assertThat(problem.questionType()).isEqualTo(BossQuestionType.CHOICE);
+    assertThat(problem.toString()).doesNotContain("answers=");
+    verifyNoInteractions(graphClient);
+  }
+
+  @Test
+  @DisplayName("无课程编程题的远征节点优先发放同 KC 客观题而非预生成代码题")
+  void expeditionPrefersObjectiveQuestionOverOpenCodePrefetch() {
+    String runId = UUID.randomUUID().toString();
+    String nodeId = "L0-0";
+    String kcCode = "PY43-KC-001";
+    var prefetchedCode =
+        new BossInternalProblem(
+            "prefetched-code",
+            1,
+            1,
+            1,
+            kcCode,
+            "不适合编程练习的概念题",
+            List.of(),
+            "",
+            "",
+            1,
+            true,
+            true,
+            List.of(new BossTestCasePayload("", "1", false)),
+            "print(1)",
+            BossQuestionType.CODE,
+            List.of(),
+            List.of(),
+            0);
+    when(expeditionRunService.validateProblemRequest(7L, runId, nodeId, 1, false, kcCode))
+        .thenReturn(null);
+    when(expeditionRunService.findIssuedQuestionFingerprints(7L, runId))
+        .thenReturn(Set.of(BossService.questionFingerprint(prefetchedCode)));
+    when(chapterProblemBankRepository.findByKcCodes(List.of(kcCode))).thenReturn(List.of());
+    when(mainlinePracticeRepository.findForBossFallback(1, kcCode))
+        .thenReturn(List.of(
+            new MainlinePracticeQuestion(
+                1001L, 1, 3, 110, kcCode, PracticeQuestionType.JUDGE,
+                "中国自主研制超级计算机体现了计算机领域的发展成就。",
+                List.of(), List.of("正确"), 0, "依据课程材料。", "课件页 10708")));
+    var resumedObjective =
+        new BossInternalProblem(
+            "issue-saved-objective",
+            1,
+            1,
+            1,
+            kcCode,
+            "中国自主研制超级计算机体现了计算机领域的发展成就。",
+            List.of(),
+            "",
+            "",
+            1,
+            true,
+            false,
+            List.of(),
+            "",
+            BossQuestionType.JUDGE,
+            List.of(),
+            List.of("正确"),
+            0);
+    when(pregenService.findOpenExpeditionProblem(7L, runId, nodeId, null))
+        .thenReturn(Optional.of(prefetchedCode), Optional.of(resumedObjective));
+    when(reviewRepository.isApproved(prefetchedCode)).thenReturn(true);
+
+    var problem = service.fetchProblem(
+        1,
+        new BossProblemRequest(1, null, null, kcCode, "dual_track", null, null, runId, nodeId),
+        7L);
+
+    assertThat(problem.questionType()).isEqualTo(BossQuestionType.JUDGE);
+    assertThat(problem.statement()).contains("中国自主研制超级计算机");
+    var resumed = service.fetchProblem(
+        1,
+        new BossProblemRequest(1, null, null, kcCode, "dual_track", null, null, runId, nodeId),
+        7L);
+    assertThat(resumed.problemId()).isEqualTo("issue-saved-objective");
+    assertThat(resumed.questionType()).isEqualTo(BossQuestionType.JUDGE);
+    verifyNoInteractions(graphClient);
+  }
+
+  @Test
+  @DisplayName("普通远征客观题不触发代码题预取")
+  void expeditionObjectiveFallbackSkipsCodePrefetch() {
+    String runId = UUID.randomUUID().toString();
+    String nodeId = "L0-0";
+    String kcCode = "PY43-KC-001";
+    when(expeditionRunService.validateProblemRequest(7L, runId, nodeId, 1, true, kcCode))
+        .thenReturn(null);
+    when(expeditionRunService.findIssuedQuestionFingerprints(7L, runId)).thenReturn(Set.of());
+    when(chapterProblemBankRepository.findByKcCodes(List.of(kcCode))).thenReturn(List.of());
+    when(mainlinePracticeRepository.findForBossFallback(1, kcCode))
+        .thenReturn(List.of(
+            new MainlinePracticeQuestion(
+                1001L, 1, 3, 110, kcCode, PracticeQuestionType.CHOICE,
+                "客观题", List.of("A", "B"), List.of("A"), 0, "解释", "课件页 1")));
+
+    var status = service.prefetch(
+        1,
+        new BossProblemRequest(1, null, null, kcCode, "dual_track", null, null, runId, nodeId),
+        7L);
+
+    assertThat(status.status()).isEqualTo("IDLE");
+    verifyNoInteractions(pregenService);
+  }
+
+  @Test
   @DisplayName("明确请求客观练习时复用无编程题 KC 的课程审核题")
   void objectivePracticeRequestUsesCourseQuestionWithoutGraph() {
     String kcCode = "PY43-KC-003";
@@ -1279,24 +1409,29 @@ class BossServiceTest {
   }
 
   @Test
-  @DisplayName("远征开局保留无静态编程题的优先 KC 并允许按同 KC AI 出题")
-  void expeditionFrontierKeepsPreferredUnassessedKcForAiQuestion() {
+  @DisplayName("远征开局允许有同 KC 客观题的第一章概念 KC")
+  void expeditionFrontierKeepsPreferredConceptKcWithObjectiveQuestion() {
     var candidates = new FrontierSelectResultDto(
         List.of(
             new FrontierPickDto("PY43-KC-001", 1, 1, "尚未评估"),
             new FrontierPickDto("PY43-KC-016", 2, 1, "尚未评估")));
     when(learnerTwinService.frontier(7L, null, List.of(), 40, "PY43-KC-001"))
         .thenReturn(candidates);
+    when(mainlinePracticeRepository.findForBossFallback(1, "PY43-KC-001"))
+        .thenReturn(List.of(
+            new MainlinePracticeQuestion(
+                1001L, 1, 3, 110, "PY43-KC-001", PracticeQuestionType.CHOICE,
+                "选择题", List.of("A", "B"), List.of("A"), 0, "解释", "课件页 1")));
 
     var result = service.selectFrontier(7L, null, "PY43-KC-001");
 
     assertThat(result.picks()).extracting(FrontierPickDto::kcCode)
-        .containsExactly("PY43-KC-016");
+        .containsExactly("PY43-KC-001", "PY43-KC-016");
     verifyNoInteractions(chapterProblemBankRepository, graphClient);
   }
 
   @Test
-  @DisplayName("远征不把第一章的概念根 KC 当作 Python 编程节点")
+  @DisplayName("远征不放行没有同 KC 客观题的第一章概念 KC")
   void expeditionExplainsWhenOnlyConceptRootsAreEligible() {
     when(learnerTwinService.frontier(7L, null, List.of(), 40, null))
         .thenReturn(
@@ -1312,7 +1447,7 @@ class BossServiceTest {
             com.pythontopia.common.error.BusinessException.class,
             exception -> {
               assertThat(exception.code()).isEqualTo("EXPEDITION_NO_PRACTICE_PROBLEMS");
-              assertThat(exception.getMessage()).contains("Python 编程");
+              assertThat(exception.getMessage()).contains("可用练习题");
             });
   }
 
