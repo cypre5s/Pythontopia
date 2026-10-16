@@ -322,6 +322,30 @@ require_body_limit_location_block \
   "4k" \
   "http://backend:18080" \
   "前端 Nginx 将匿名认证请求体限制为 4 KiB 并正确代理"
+require_body_limit_location_block \
+  "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "location = /api/workshop/chat-history/turns" \
+  "128k" \
+  "http://pythontopia_frontend" \
+  "边缘 Nginx 将工坊聊天历史请求体限制为 128 KiB 并正确代理"
+require_body_limit_location_block \
+  "${FRONTEND_NGINX}" \
+  "location = /api/workshop/chat-history/turns" \
+  "128k" \
+  "http://backend:18080" \
+  "前端 Nginx 将工坊聊天历史请求体限制为 128 KiB 并正确代理"
+require_body_limit_location_block \
+  "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  'location ~ ^/api/(?:submissions|world/boss/[1-7]/attempt|bug-mine/sessions/[0-9]+/(?:retry-submit|variant-submit))$' \
+  "64k" \
+  "http://pythontopia_frontend" \
+  "边缘 Nginx 将代码判题请求体限制为 64 KiB 并正确代理"
+require_body_limit_location_block \
+  "${FRONTEND_NGINX}" \
+  'location ~ ^/api/(?:submissions|world/boss/[1-7]/attempt|bug-mine/sessions/[0-9]+/(?:retry-submit|variant-submit))$' \
+  "64k" \
+  "http://backend:18080" \
+  "前端 Nginx 将代码判题请求体限制为 64 KiB 并正确代理"
 require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "证据快照限速只接收 POST 快照请求的来源 IP" \
   'map[[:space:]]+"\$request_method:\$uri"[[:space:]]+\$pythontopia_evidence_snapshot_limit_key[[:space:]]*\{'

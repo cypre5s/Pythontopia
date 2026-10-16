@@ -1086,3 +1086,16 @@
 - 为 Boss FILL 客观题增加服务端归一化判分和 Twin `PRACTICE_PASS` 回流回归；主线既有的 22 个非编程 KC 继续使用同 KC 审核 CHOICE/JUDGE/FILL 题。
 - `BossServiceTest`、`LearningEventControllerTest`、`LearningEventBatchAtomicityPostgresTest` 合跑 75/75；4 个 Java 文件定向 Spotless 与 `git diff --check` 通过。未调用 DeepSeek，未重复运行已完成的普通学生浏览器 Boss/Twin 闭环。
 - 未运行全量 Maven suite、非 AI 写路由完整审计或生产代理验证；完整远征性能仍后置。
+
+## 2026-10-16 — 限制工坊聊天历史原始请求体
+
+- 续查非 AI 写路由时发现 `POST /api/workshop/chat-history/turns` 只在服务层把反序列化后的 `responsePayload` 限为 64 KiB；整份 DTO 含不受限的 `JsonNode`，因此大 JSON 会先消耗 MVC 解析内存，之后才被拒绝。
+- 请求过滤器现对精确路由在 Spring MVC 绑定前限为 128 KiB，超限返回 `WORKSHOP_CHAT_HISTORY_REQUEST_TOO_LARGE`；服务层 64 KiB payload 限制保留。边缘与前端 Nginx 同步配置 128 KiB。
+- RED/GREEN：旧行为先让超限请求通过（200），修复后返回 413 且不继续过滤链。`ApiRequestBodyLimitFilterTest` 4/4、HTTPS/Nginx 契约 47 项、Shell 语法、两份 Nginx 1.27 `nginx -t`、定向 Spotless 与 `git diff --check` 通过。没有模型请求或业务数据写入。
+- 其余写路由的完整逐项限额审计、管理员操作持久审计记录、多行日志调用点及生产代理运行态仍未完成。
+
+## 2026-10-17 — 限制代码判题入口原始请求体
+
+- 续查发现正式提交、Boss 判题与 Bug 矿洞重试/变式提交虽然 DTO 将代码限制为 8,192 字符，但原始 JSON 在 MVC 绑定前仍可达到全局 12 MiB。三个判题入口现复用同一过滤器，在绑定前限制为 64 KiB；边缘和前端 Nginx 同步限额。
+- RED/GREEN：旧过滤链对 64 KiB + 1 byte 请求返回 200；修改后三个路由均为 413 且不继续过滤链。`ApiRequestBodyLimitFilterTest` 5/5、HTTPS/Nginx 契约 49 项、Shell 语法、两份 Nginx 1.27 `nginx -t`、定向 Spotless 与 `git diff --check` 通过。无模型请求或业务数据写入。
+- 完整 112 个写路由逐项审计、管理员状态变更持久审计、多行日志调用点及生产代理运行态仍未完成；没有跑 Piston 判题或完整 Boss 浏览器流程，因为本次只改请求体边界。

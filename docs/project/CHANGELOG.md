@@ -1,5 +1,15 @@
 # Changelog
 
+## 2026-10-17 — 限制代码判题入口原始请求体
+
+- `/api/submissions`、Boss `/attempt` 与 Bug 矿洞重试/变式提交在 Spring MVC 绑定前限制为 64 KiB，边缘及前端 Nginx 同步限额；单次代码仍由 DTO 限制为最多 8,192 字符。
+- 回归先确认旧过滤链让超限请求通过，修复后 `ApiRequestBodyLimitFilterTest` 5/5、HTTPS/Nginx 契约 49 项、Shell 语法、两份 Nginx 1.27 `nginx -t`、定向 Spotless 与 diff 检查通过。无模型调用或业务数据写入。
+
+## 2026-10-16 — 限制工坊聊天历史原始请求体
+
+- 工坊聊天历史追加接口现在在 Spring MVC JSON 绑定前限制完整请求体为 128 KiB；服务原有 `responsePayload` 64 KiB 业务限制保持不变。
+- 边缘与前端 Nginx 对精确路由同步设置 128 KiB。过滤器回归 4/4、HTTPS/Nginx 契约、两份 Nginx 1.27 `nginx -t`、定向 Spotless 与 diff 检查通过；没有 DeepSeek 请求或业务数据写入。
+
 ## 2026-10-16 — 远征客观题与批量学习事件一致性
 
 - 同 KC 客观题已用尽时，远征不再回退领取 READY 编程题；明确返回客观题池耗尽错误。

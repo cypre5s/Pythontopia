@@ -1,6 +1,6 @@
 # Web 收尾工作清单
 
-更新时间：2026-10-16
+更新时间：2026-10-17
 范围：Web、Spring Boot、Graph/RAG 与本地开发栈；不含 Android、Electron、微信或 ECS。
 
 ## 已完成
@@ -46,6 +46,9 @@
 - 日志边界首轮静态扫描未找到应用自建的请求/响应体日志 filter、`RequestBodyAdvice`/`ResponseBodyAdvice` 或日志 aspect；Graph、RAG 和前端容器 access log 均关闭，公网 Nginx 安全格式只记录 `$uri`。全量多行日志调用点与生产运行日志仍未完整核对。
 
 ## 附加任务核对（2026-10-16）
+
+- 工坊聊天历史完整 JSON 现于 Spring MVC 绑定前限制为 128 KiB，保留原有 64 KiB payload 校验；过滤器回归 5/5、HTTPS/Nginx 契约、两层 Nginx 1.27 `nginx -t`、定向 Spotless 与 `git diff --check` 通过。
+- 正式提交、Boss 判题与 Bug 矿洞重试/变式提交现于 Spring MVC 绑定前统一限制原始 body 为 64 KiB，DTO 的 8,192 字符代码限制不变；旧过滤链下的超限回归为 200，修复后 5 个过滤器测试全绿，Nginx 契约与两层配置语法通过。
 
 - **Tutor / Alethicode 对齐：** fresh 对照确认 Pythontopia 已用同版本 AutoGen 固定阶段运行，并覆盖 Alethicode 的主线/辅助/PLAN 事件及图片隔离、取消和 checkpoint 恢复；保留 Pyth API 与存储更安全。一个用户可见差异仍开放：Alethicode 的 TRANSFER 会物化成可判题临时题，Pyth 目前只展示卡片；补齐需接通可信题目创建、正式判题和提交回流，不能把客户端草稿当作权威题目。Alethicode 对应 runtime 处于未提交工作树，不直接复制。
 - **DeepSeek / 图片 / 语音：** Web 模型出口固定为 DeepSeek，Tutor 图片走 vision 档并输出文本；源码复扫确认 Graph 在线路由共用 `provider_from_env`，客户端只接受 `api.deepseek.com` 与允许的 DeepSeek 模型，Mem0/Zep 记忆固定本地；TTS、ASR、图片生成/理解 provider 在属性层固定关闭，前端没有语音合成调用。已有真实文本与 PNG 输入记录，本次不重复发模型请求。隔离的 Qwen 研究脚本未接入 Web 路由。
