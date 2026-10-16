@@ -65,6 +65,20 @@ beforeEach(() => {
 });
 
 describe('AdminProblemReviewsPage', () => {
+  it('opens the selected review in a preview dialog from the table', async () => {
+    const wrapper = mount(AdminProblemReviewsPage);
+    await flushPromises();
+
+    const preview = wrapper.get('dialog.review-detail-dialog');
+    expect(preview.attributes('open')).toBeUndefined();
+    await wrapper.get('button.review-open').trigger('click');
+    await flushPromises();
+
+    expect(preview.attributes('open')).toBeDefined();
+    expect(preview.text()).toContain('输出循环结果');
+    expect(preview.text()).toContain('审核记录');
+  });
+
   it('labels automatic approvals and allows a teacher to remove them', async () => {
     const autoApproved = {
       ...pendingReview,
@@ -86,6 +100,8 @@ describe('AdminProblemReviewsPage', () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain('AI 自动审核');
+    await wrapper.get('button.review-open').trigger('click');
+    await flushPromises();
     await wrapper.get('button.review-decision--reject').trigger('click');
     await flushPromises();
     await wrapper.get('[data-testid="admin-review-reason"]').setValue('教师复核发现题面歧义');
@@ -136,6 +152,8 @@ describe('AdminProblemReviewsPage', () => {
 
   it('requires an audit reason and submits the selected decision with its version', async () => {
     const wrapper = mount(AdminProblemReviewsPage);
+    await flushPromises();
+    await wrapper.get('button.review-open').trigger('click');
     await flushPromises();
     await wrapper.get('button.review-decision--approve').trigger('click');
     await flushPromises();

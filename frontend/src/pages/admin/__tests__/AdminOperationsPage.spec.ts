@@ -17,7 +17,7 @@ const operations: AiRuntimeOperations = {
     status: 'PASS',
     latestTraceId: 'open:student-learning-loop',
     nextAction: '继续学习',
-    evidenceRefs: [],
+    evidenceRefs: ['submission:104', 'resource:208'],
   }],
   governance: [],
 };
@@ -35,6 +35,17 @@ describe('AdminOperationsPage', () => {
     const operationKey = wrapper.get('.operation-row__body small');
     expect(operationKey.text()).toBe('关联入口：open:student-learning-loop');
     expect(operationKey.attributes('title')).toBe('关联入口：open:student-learning-loop');
+  });
+
+  it('makes evidence references expandable without relying on a hover tooltip', async () => {
+    const wrapper = mount(AdminOperationsPage);
+    await flushPromises();
+
+    const evidence = wrapper.get('details.operation-row__evidence');
+    expect(evidence.get('summary').text()).toBe('2 项证据');
+    expect(evidence.text()).toContain('submission:104');
+    expect(evidence.text()).toContain('resource:208');
+    expect(evidence.attributes('title')).toBeUndefined();
   });
 
   it('provides a manual refresh action and disables it while loading', async () => {

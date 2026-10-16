@@ -3,6 +3,12 @@
 > 本文档实时记录每个 working session 的状态，作为跨会话的"工作记忆"。
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
+## 2026-10-16 当前续接：收紧匿名学生注册突发
+
+- 只读审计确认匿名 `POST /api/auth/register` 创建的新账号都会获得新的 `userId`，可绕过按账号计数的普通写额度。原公网规则与登录/刷新共用每秒 5 次、突发 10 次，无法限制同 IP 低速持续注册。
+- 注册现使用独立 Nginx zone：每来源 IP 每分钟 5 次、30 次初始突发，覆盖常见同校批量注册；登录与刷新保留原规则。HTTPS 转发契约在旧配置下先 RED，修改后 GREEN；`verify_nginx_dual_protocol.sh`、`git diff --check` 通过，完整主机配置在 Nginx 1.27 容器中 `nginx -t` 通过。
+- 没有发起注册请求、写业务数据或访问 ECS。多 IP/代理池仍可创建账号；生产未部署验证，开发时直连后端不会经过公网 Nginx。
+
 ## 2026-10-16 当前续接：原子提交远征判题与 Twin 学习事件
 
 - 安全复核发现远征已验证 attempt 先提交、Twin 学习事件后发布；若事件监听失败，重试会被既有 attempt 记录挡住，导致无 Twin 证据。现把事件发布移入 `ExpeditionScoreService` 的同一事务；事件失败时 attempt 与掌握度/复习写入一并回滚。
@@ -984,3 +990,14 @@
 - Graph 各在线生成路由均从 `provider_from_env` 获取模型 provider；唯一在线兼容客户端强制 HTTPS `api.deepseek.com`、DeepSeek 模型白名单与请求模型档位。RAG 未发现外部生成模型客户端；Mem0/Zep 学习记忆配置固定归一为本地 provider。
 - TTS、ASR、旧图片生成与图片理解属性的 `isEnabled()` 固定为 `false`，兼容路由在上游调用前检查；Web 源码没有浏览器语音合成或 TTS/ASR API 使用点。既有真实 DeepSeek 文本与图片输入证据沿用，本次未重复调用模型或讯飞。
 - 这是源码路径核查，不代替生产容器环境核对；未访问 ECS 或供应商控制台。
+
+## 2026-10-16 — 管理台审核详情对齐
+
+- 题目审核详情从常驻页面面板改为列表触发的原生预览弹窗，接近 Alethicode 的审核预览交互；题面、公开样例、审核记录和真实通过/驳回动作保持原有 DTO/API，不复制对方没有的字段。
+- RED/GREEN：新增预览交互测试，旧页面下失败；改后审核页与用户页组件测试 9/9、前端 typecheck、定向 ESLint、`git diff --check` 通过。没有调用模型或写业务数据。
+- 本轮未用登录态做浏览器截图，因此只确认组件交互与源码布局；外壳品牌区与 Alethicode 的非功能性差异及像素级 parity 仍待视觉核对。
+# 2026-10-16 — 管理台可读性与 Tutor 迁移证据修正
+
+- 运维面板证据引用从 hover-only `title` 改成原生 `<details>`，长标签允许换行；管理员用户名/显示名单元格在窄列内换行完整展示。RED/GREEN 组件测试 9/9，typecheck 与定向 ESLint 通过。
+- Tutor 迁移卡暂不含服务端判题 ID，旧逻辑会把原题提交当成 TRANSFER_ATTEMPT。Graph 新计划将其作为学生反思检查点，旧会话里的 TRANSFER_ATTEMPT 也不会被普通提交推进；Graph 计划测试 10/10、Tutor 前端与管理页定向回归 24/24、`TutorWorkflowSubmissionFeedbackListenerTest` 7/7、Ruff、typecheck 和 ESLint 通过。新增后端测试文件 Spotless 检查通过；Listener 实现文件仍有 HEAD 前已有的格式差异，未重排整文件。真实变式题判题仍未实现，不记录掌握度。没有调用模型。
+- 先前离线 Maven 因 Spring Boot 父 POM 未缓存失败；切换临时 7892 代理设置后，先观察到新增 Listener 测试在旧实现中失败，再通过修改后的定向测试。无模型请求、无业务库写入。

@@ -210,8 +210,7 @@ const planIsTerminal = computed(
 );
 const planNeedsSubmission = computed(
   () => activePlanStep.value?.expected_evidence === 'SUBMISSION_OBSERVED'
-    || activePlanStep.value?.expected_evidence === 'AC_SUBMISSION'
-    || activePlanStep.value?.expected_evidence === 'TRANSFER_ATTEMPT',
+    || activePlanStep.value?.expected_evidence === 'AC_SUBMISSION',
 );
 const compactAvailable = computed(() => cards.value.filter((card) => card.key === 'ai_reply').length > 4);
 

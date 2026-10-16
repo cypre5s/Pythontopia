@@ -73,6 +73,21 @@ describe('AdminUsersPage', () => {
     expect(wrapper.find('.admin-panel__header h2').text()).toBe('用户管理');
   });
 
+  it('keeps long account names readable without hover-only tooltips', async () => {
+    const longName = '一'.repeat(128);
+    searchAdminUsers.mockResolvedValueOnce(page([{
+      ...activeUser,
+      username: 'u'.repeat(64),
+      displayName: longName,
+    }]));
+    const wrapper = mount(AdminUsersPage);
+    await flushPromises();
+
+    const cells = wrapper.findAll('.admin-users__readable');
+    expect(cells.map((cell) => cell.text())).toEqual([longName, 'u'.repeat(64)]);
+    expect(cells.every((cell) => !cell.attributes('title'))).toBe(true);
+  });
+
   it('does not leave stale account actions available when a filtered reload fails', async () => {
     const wrapper = mount(AdminUsersPage);
     await flushPromises();

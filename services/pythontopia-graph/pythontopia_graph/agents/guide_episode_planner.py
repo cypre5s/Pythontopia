@@ -44,11 +44,11 @@ _CONTINUATION_PREF: tuple[str, ...] = (
 # 学生在某步达成后期望产生的证据类型（驱动 stop_policy 与提交/点击推进）。
 _EXPECTED_EVIDENCE: dict[str, str] = {
     "CODING": "SUBMISSION_OBSERVED",
-    "TRANSFER": "TRANSFER_ATTEMPT",
+    "TRANSFER": "CHECKPOINT_COMPLETED",
     "AC_REVIEW": "CHECKPOINT_COMPLETED",
 }
 
-_SUBMISSION_EVIDENCE = frozenset({"SUBMISSION_OBSERVED", "AC_SUBMISSION", "TRANSFER_ATTEMPT"})
+_SUBMISSION_EVIDENCE = frozenset({"SUBMISSION_OBSERVED", "AC_SUBMISSION"})
 
 # 每个事件对应的学生可见步骤文案（不含任何原始推理/系统提示痕迹）。
 _STEP_META: dict[str, dict[str, str]] = {
@@ -96,10 +96,10 @@ _STEP_META: dict[str, dict[str, str]] = {
     },
     "TRANSFER": {
         "tool_name": "transfer_practice",
-        "title": "做一道迁移练习",
-        "goal": "在变式情境里再用一次同一知识点。",
+        "title": "梳理迁移题思路",
+        "goal": "读一道变式题，并说明准备怎样复用同一知识点。",
         "student_visible_reason": "用一道变式题巩固刚学到的点。",
-        "stop_condition": "你接受并尝试这道迁移练习。",
+        "stop_condition": "读完变式题后，说出准备如何尝试。",
     },
     "KNOWLEDGE_REVIEW": {
         "tool_name": "knowledge_review",

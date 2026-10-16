@@ -90,6 +90,23 @@ require_evidence_snapshot_limit_block() {
   fi
 }
 
+require_registration_limit_block() {
+  local edge_file="${ROOT_DIR}/deploy/nginx/pythontopia.conf"
+  local register_block
+  register_block="$(awk '
+    /location[[:space:]]+=[[:space:]]+\/api\/auth\/register/ { capture=1 }
+    capture { print }
+    capture && /^[[:space:]]*}/ { exit }
+  ' "${edge_file}")"
+  if grep -Eq 'limit_req[[:space:]]+zone=pythontopia_register[[:space:]]+burst=30[[:space:]]+nodelay;' <<<"${register_block}" \
+      && grep -Eq 'limit_req_status[[:space:]]+429;' <<<"${register_block}"; then
+    echo "[PASS] 学生注册单独限速并返回 429"
+  else
+    echo "[FAIL] 学生注册单独限速并返回 429" >&2
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
 require_pattern "${FRONTEND_NGINX}" \
   "前端 Nginx 从上游请求头解析外部协议" \
   'map[[:space:]]+\$http_x_forwarded_proto[[:space:]]+\$pythontopia_forwarded_proto[[:space:]]*\{'
@@ -109,17 +126,27 @@ require_pattern "${INSTALLER}" \
   "发布终验要求 HTTP 入口固定跳转 HTTPS" \
   'HTTP_REDIRECT=.*%\{http_code\}.*%\{redirect_url\}.*http://127\.0\.0\.1/healthz'
 require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
-  "公开入口对登录/注册按来源 IP 限速" \
+  "公开登录入口按来源 IP 限速" \
   'limit_req_zone[[:space:]]+\$binary_remote_addr[[:space:]]+zone=pythontopia_auth:10m[[:space:]]+rate=5r/s;'
+require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "公开注册入口按来源 IP 单独限为每分钟 5 次" \
+  'limit_req_zone[[:space:]]+\$pythontopia_register_limit_key[[:space:]]+zone=pythontopia_register:10m[[:space:]]+rate=5r/m;'
+require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "注册限速只按 POST 注册请求计数" \
+  '"POST:/api/auth/register"[[:space:]]+\$binary_remote_addr;'
 require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "公网入口请求体上限与前端代理 12 MiB 限额对齐" \
   '^[[:space:]]+client_max_body_size[[:space:]]+12m;'
 require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
-  "登录/注册/刷新均匹配公开认证限速路由" \
-  'location[[:space:]]+~[[:space:]]+\^/api/auth/\(login\|register\|refresh\)\$[[:space:]]*\{'
+  "登录和刷新匹配快速认证限速路由" \
+  'location[[:space:]]+~[[:space:]]+\^/api/auth/\(login\|refresh\)\$[[:space:]]*\{'
 require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
-  "登录/注册路由实际使用来源 IP 限速" \
+  "登录和刷新实际使用来源 IP 限速" \
   'limit_req[[:space:]]+zone=pythontopia_auth[[:space:]]+burst=10[[:space:]]+nodelay;'
+require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "学生注册使用独立精确路由" \
+  'location[[:space:]]+=[[:space:]]+/api/auth/register[[:space:]]*\{'
+require_registration_limit_block
 require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "公开入口对班级加入码按来源 IP 限速" \
   'limit_req_zone[[:space:]]+\$binary_remote_addr[[:space:]]+zone=pythontopia_classroom_join:10m[[:space:]]+rate=5r/m;'

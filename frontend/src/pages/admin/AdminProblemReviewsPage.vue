@@ -35,8 +35,10 @@ const decisionReason = ref('');
 const decisionError = ref<string | null>(null);
 const deciding = ref(false);
 const reviewPage = ref<HTMLElement | null>(null);
+const detailDialog = ref<HTMLDialogElement | null>(null);
 const decisionDialog = ref<HTMLDialogElement | null>(null);
 const decisionTrigger = ref<HTMLButtonElement | null>(null);
+const detailTrigger = ref<HTMLButtonElement | null>(null);
 
 const selectedEntry = computed(
   () => entries.value.find((entry) => entry.id === selectedId.value) ?? null,
@@ -106,6 +108,8 @@ async function loadQueue(): Promise<void> {
       page.value = lastPage;
       result = await readPage();
     }
+    const selectionStillPresent = result.content.some((entry) => entry.id === selectedId.value);
+    if (!selectionStillPresent && detailDialog.value?.open) closeDetail(false);
     entries.value = result.content;
     totalElements.value = result.totalElements;
     totalPages.value = result.totalPages;
@@ -144,6 +148,20 @@ function changePageSize(nextSize: number): void {
   pageSize.value = nextSize;
   page.value = 0;
   void loadQueue();
+}
+
+function openDetail(entry: BossProblemReviewDto, event: MouseEvent): void {
+  selectedId.value = entry.id;
+  detailTrigger.value = event.currentTarget as HTMLButtonElement;
+  void nextTick(() => detailDialog.value?.showModal());
+}
+
+function closeDetail(restoreTrigger = true): void {
+  detailDialog.value?.close();
+  void nextTick(() => {
+    if (restoreTrigger && detailTrigger.value?.isConnected) detailTrigger.value.focus();
+    else reviewPage.value?.focus();
+  });
 }
 
 function openDecision(decision: FinalDecision, event: MouseEvent): void {
@@ -194,6 +212,7 @@ async function submitDecision(): Promise<void> {
     });
     entries.value = entries.value.map((item) => item.id === updated.id ? updated : item);
     dismissDecision(false);
+    closeDetail(false);
     toast.show(decision === 'APPROVED' ? '题目审核已通过。' : '题目已驳回，审核记录已保存。', 'success');
     await loadQueue();
   } catch (cause) {
@@ -414,7 +433,7 @@ onMounted(() => {
                   class="review-id"
                   type="button"
                   :aria-pressed="entry.id === selectedId"
-                  @click="selectedId = entry.id"
+                  @click="openDetail(entry, $event)"
                 >
                   #{{ entry.id }}
                 </button>
@@ -450,7 +469,7 @@ onMounted(() => {
                 <button
                   class="admin-button review-open"
                   type="button"
-                  @click="selectedId = entry.id"
+                  @click="openDetail(entry, $event)"
                 >
                   查看
                 </button>
@@ -473,11 +492,31 @@ onMounted(() => {
       </template>
     </AdminPanel>
 
-    <AdminPanel
+    <dialog
       v-if="selectedEntry"
-      title="题目详情"
-      :description="`#${selectedEntry.id} · 第 ${selectedEntry.problem.chapter} 章 · S${selectedEntry.problem.stage} · ${selectedEntry.problem.kcCode}`"
+      ref="detailDialog"
+      class="admin-dialog review-detail-dialog"
+      aria-modal="true"
+      aria-labelledby="review-detail-title"
+      @cancel.prevent="closeDetail()"
+      @click.self="closeDetail()"
     >
+      <header class="review-detail-dialog__header">
+        <div>
+          <h2 id="review-detail-title">
+            题目预览
+          </h2>
+          <p>#{{ selectedEntry.id }} · 第 {{ selectedEntry.problem.chapter }} 章 · S{{ selectedEntry.problem.stage }} · {{ selectedEntry.problem.kcCode }}</p>
+        </div>
+        <button
+          class="admin-button"
+          type="button"
+          aria-label="关闭题目预览"
+          @click="closeDetail()"
+        >
+          关闭
+        </button>
+      </header>
       <div class="review-detail">
         <div class="review-detail__body">
           <h3>题面</h3>
@@ -556,7 +595,7 @@ onMounted(() => {
           </div>
         </aside>
       </div>
-    </AdminPanel>
+    </dialog>
 
     <dialog
       v-if="pendingDecision"
@@ -771,6 +810,24 @@ onMounted(() => {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(240px, 0.8fr);
   gap: 24px;
+}
+
+.review-detail-dialog {
+  width: min(920px, calc(100vw - 32px));
+}
+
+.review-detail-dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.review-detail-dialog__header p {
+  margin: 6px 0 0;
+  color: var(--admin-text-muted);
+  font-size: 12px;
 }
 
 .review-detail__body,

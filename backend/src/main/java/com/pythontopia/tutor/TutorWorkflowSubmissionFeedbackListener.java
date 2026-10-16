@@ -10,7 +10,6 @@ import com.pythontopia.tutor.dto.TutorWorkflowAgentStateDto;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -186,7 +185,9 @@ public class TutorWorkflowSubmissionFeedbackListener {
     return switch (activeStep.path("expected_evidence").asText()) {
       case "SUBMISSION_OBSERVED" -> true;
       case "AC_SUBMISSION" -> accepted;
-      case "TRANSFER_ATTEMPT" -> "TRANSFER".equals(activeStep.path("event").asText());
+      // shortcut: transfer cards have no trusted judge binding yet; enable only after
+      // server-side materialization.
+      case "TRANSFER_ATTEMPT" -> false;
       default -> false;
     };
   }

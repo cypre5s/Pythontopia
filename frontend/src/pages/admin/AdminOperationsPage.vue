@@ -157,13 +157,20 @@ onMounted(() => {
                       :title="`关联入口：${loop.latestTraceId}`"
                     >关联入口：{{ loop.latestTraceId }}</small>
                   </div>
-                  <span
+                  <details
                     v-if="loop.evidenceRefs.length"
                     class="operation-row__evidence"
-                    :title="loop.evidenceRefs.join(' · ')"
                   >
-                    {{ loop.evidenceRefs.length }} 项证据
-                  </span>
+                    <summary>{{ loop.evidenceRefs.length }} 项证据</summary>
+                    <ul>
+                      <li
+                        v-for="reference in loop.evidenceRefs"
+                        :key="reference"
+                      >
+                        {{ reference }}
+                      </li>
+                    </ul>
+                  </details>
                 </li>
               </ul>
             </AdminPanel>
@@ -202,13 +209,20 @@ onMounted(() => {
                       :to="item.reviewRoute"
                     >{{ item.reviewRoute }}</RouterLink><span v-else>{{ item.reviewRoute }}</span></small>
                   </div>
-                  <span
+                  <details
                     v-if="item.evidenceRefs.length"
                     class="operation-row__evidence"
-                    :title="item.evidenceRefs.join(' · ')"
                   >
-                    {{ item.evidenceRefs.length }} 项证据
-                  </span>
+                    <summary>{{ item.evidenceRefs.length }} 项证据</summary>
+                    <ul>
+                      <li
+                        v-for="reference in item.evidenceRefs"
+                        :key="reference"
+                      >
+                        {{ reference }}
+                      </li>
+                    </ul>
+                  </details>
                 </li>
               </ul>
             </AdminPanel>
@@ -305,9 +319,8 @@ onMounted(() => {
 .operation-row__body strong,
 .operation-row__body span,
 .operation-row__body small {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .operation-row__body strong {
@@ -338,9 +351,21 @@ onMounted(() => {
 }
 
 .operation-row__evidence {
+  min-width: 0;
   color: var(--admin-text-muted);
   font-size: 11px;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+}
+
+.operation-row__evidence summary {
+  cursor: pointer;
+}
+
+.operation-row__evidence ul {
+  display: grid;
+  gap: 4px;
+  margin: 6px 0 0;
+  padding-left: 16px;
 }
 
 .admin-operations__state,

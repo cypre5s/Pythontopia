@@ -1,7 +1,6 @@
 package com.pythontopia.tutor;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -154,6 +153,34 @@ class TutorWorkflowSubmissionFeedbackListenerTest {
                          {"step_id":"step-2","event":"AC_REVIEW","title":"通过后复盘",
                           "status":"PENDING","depends_on":["step-1"],
                           "expected_evidence":"AC_SUBMISSION"}]},
+                     "chat_history":[]}
+                    """,
+                    "{}")));
+
+    listener.onPracticeSucceeded(
+        new LearningEvent.PracticeSucceeded(USER, "PY43-KC-016", PROBLEM, "basic"));
+
+    JsonNode plan = objectMapper.readTree(capturedProjection().stateJson()).path("episode_plan");
+    assertThat(plan.path("current_step_id").asText()).isEqualTo("step-1");
+    assertThat(plan.path("revision").asInt()).isEqualTo(1);
+    assertThat(plan.path("steps").get(0).path("status").asText()).isEqualTo("ACTIVE");
+  }
+
+  @Test
+  void ordinarySubmissionDoesNotCountAsATutorTransferAttempt() throws Exception {
+    when(repository.findActive(USER, PROBLEM)).thenReturn(Optional.of(session));
+    when(repository.findAgentState(session.id()))
+        .thenReturn(
+            Optional.of(
+                new TutorWorkflowAgentStateDto(
+                    session.id(),
+                    """
+                    {"student_state":{"attempt_count":0},
+                     "episode_plan":{"plan_id":"plan-1","session_id":"wf-7-476-abc",
+                       "problem_id":476,"user_id":7,"objective":"finish","trigger_event":"AC_REVIEW",
+                       "revision":1,"current_step_id":"step-1","status":"ACTIVE",
+                       "steps":[{"step_id":"step-1","event":"TRANSFER","title":"尝试迁移题",
+                         "status":"ACTIVE","expected_evidence":"TRANSFER_ATTEMPT"}]},
                      "chat_history":[]}
                     """,
                     "{}")));

@@ -65,7 +65,10 @@ vi.mock('@/api/tutorWorkflow', () => ({
   uploadTutorWorkflowImage: vi.fn(),
 }));
 vi.mock('@stores/learning', () => ({
-  useLearningStore: () => ({ training: { code: '', problem: null } }),
+  useLearningStore: () => ({
+    field: { hydrated: false },
+    training: { code: '', problem: null },
+  }),
 }));
 vi.mock('@stores/toast', () => ({ useToastStore: () => ({ show: vi.fn() }) }));
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }));
@@ -250,6 +253,42 @@ describe('TutorWorkflowPanel interrupted request recovery', () => {
       event: 'PLAN_RECOMMEND', requestId: sent.requestId,
     });
     expect(stored.sessionKey).toBe('session-42');
+  });
+
+  it('does not treat an unjudged legacy transfer step as an automatic submission step', async () => {
+    getActiveWorkflowSession.mockResolvedValueOnce({
+      sessionKey: 'session-42',
+      problemId: 42,
+      phase: 'AC_REVIEW',
+      seq: 0,
+      cards: [],
+      episodePlan: {
+        plan_id: 'plan-1',
+        status: 'ACTIVE',
+        objective: '巩固知识点',
+        current_step_id: 'transfer-1',
+        revision: 1,
+        steps: [{
+          step_id: 'transfer-1',
+          event: 'TRANSFER',
+          title: '迁移练习',
+          goal: '练习变式题',
+          student_visible_reason: '迁移练习',
+          stop_condition: '说出准备如何尝试',
+          status: 'ACTIVE',
+          depends_on: [],
+          expected_evidence: 'TRANSFER_ATTEMPT',
+        }],
+      },
+    });
+    const wrapper = shallowMount(TutorWorkflowPanel, {
+      props: { problemId: 42, kcCodes: [] },
+      global: { stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    expect(wrapper.find('.tw-plan__response-label').exists()).toBe(true);
+    expect(wrapper.find('.tw-plan__stop').text()).not.toContain('正式提交后自动推进');
   });
 
   it('lets the student stop a running request and keeps it available to resume', async () => {

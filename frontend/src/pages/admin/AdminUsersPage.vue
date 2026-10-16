@@ -298,10 +298,10 @@ onMounted(() => {
               :key="user.id"
             >
               <td>{{ user.id }}</td>
-              <td :title="user.displayName">
+              <td class="admin-users__readable">
                 {{ user.displayName }}
               </td>
-              <td :title="user.username">
+              <td class="admin-users__readable">
                 {{ user.username }}
               </td>
               <td>{{ roleLabel(user.role) }}</td>
@@ -442,6 +442,11 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.admin-users__table td.admin-users__readable {
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .admin-users__table th:nth-child(1),
