@@ -6,11 +6,14 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.feynman.dto.FeynmanDtos.TeachRequest;
+import com.pythontopia.feynman.dto.FeynmanDtos.StartRequest;
 import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import org.junit.jupiter.api.Test;
 import org.mockito.InOrder;
@@ -22,8 +25,9 @@ class FeynmanControllerSecurityTest {
   private final FeynmanJudgeService judgeService = mock(FeynmanJudgeService.class);
   private final TutorDailyRequestLimitService requestLimitService =
       mock(TutorDailyRequestLimitService.class);
+  private final StudentWriteThrottle studentWriteThrottle = mock(StudentWriteThrottle.class);
   private final FeynmanController controller =
-      new FeynmanController(sessionService, judgeService, requestLimitService);
+      new FeynmanController(sessionService, judgeService, requestLimitService, studentWriteThrottle);
   private final CurrentUserPrincipal student =
       new CurrentUserPrincipal(7L, "audit-owner", Role.STUDENT);
 
@@ -66,5 +70,33 @@ class FeynmanControllerSecurityTest {
     controller.judge(student, 10L);
 
     verify(judgeService).judge(7L, 10L);
+  }
+
+  @Test
+  void startReservesAccountWriteCapacityBeforeCreatingSession() {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(true);
+
+    controller.start(student, new StartRequest("PY43-KC-001"));
+
+    InOrder order = inOrder(studentWriteThrottle, sessionService);
+    order.verify(studentWriteThrottle).tryAcquire(7L, 1);
+    order.verify(sessionService).start(7L, "PY43-KC-001");
+  }
+
+  @Test
+  void exhaustedAccountWriteCapacityPreventsSessionCreation() {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(false);
+
+    assertThatThrownBy(() -> controller.start(student, new StartRequest("PY43-KC-001")))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> {
+              org.assertj.core.api.Assertions.assertThat(error.status())
+                  .isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+              org.assertj.core.api.Assertions.assertThat(error.code())
+                  .isEqualTo("STUDENT_WRITE_RATE_LIMITED");
+            });
+
+    verify(sessionService, never()).start(7L, "PY43-KC-001");
   }
 }

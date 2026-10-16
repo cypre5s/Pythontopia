@@ -7,6 +7,7 @@ import com.pythontopia.common.error.BusinessException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.test.util.ReflectionTestUtils;
@@ -33,8 +34,7 @@ class JudgeWorkerPoolTest {
 
       var queued = requestThreads.submit(() -> pool.submitAndWait(() -> 2));
       var executor =
-          (java.util.concurrent.ThreadPoolExecutor)
-              ReflectionTestUtils.getField(pool, "executor");
+          (java.util.concurrent.ThreadPoolExecutor) ReflectionTestUtils.getField(pool, "executor");
       long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
       while (executor.getQueue().size() != 1 && System.nanoTime() < deadline) {
         Thread.onSpinWait();
@@ -51,6 +51,58 @@ class JudgeWorkerPoolTest {
       releaseWorker.countDown();
       assertThat(first.get(2, TimeUnit.SECONDS)).isEqualTo(1);
       assertThat(queued.get(2, TimeUnit.SECONDS)).isEqualTo(2);
+    } finally {
+      releaseWorker.countDown();
+      requestThreads.shutdownNow();
+      pool.shutdown();
+    }
+  }
+
+  @Test
+  void rejectsAndRemovesTaskThatWaitsTooLongInQueue() throws Exception {
+    JudgeWorkerPool pool = new JudgeWorkerPool(1, 1, 1);
+    var requestThreads = Executors.newFixedThreadPool(2);
+    CountDownLatch workerStarted = new CountDownLatch(1);
+    CountDownLatch releaseWorker = new CountDownLatch(1);
+    AtomicBoolean queuedTaskRan = new AtomicBoolean();
+    try {
+      var running =
+          requestThreads.submit(
+              () ->
+                  pool.submitAndWait(
+                      () -> {
+                        workerStarted.countDown();
+                        releaseWorker.await();
+                        return 1;
+                      }));
+      assertThat(workerStarted.await(2, TimeUnit.SECONDS)).isTrue();
+
+      var queued =
+          requestThreads.submit(
+              () -> {
+                try {
+                  pool.submitAndWait(
+                      () -> {
+                        queuedTaskRan.set(true);
+                        return 2;
+                      });
+                  return null;
+                } catch (BusinessException exception) {
+                  return exception;
+                }
+              });
+      BusinessException failure = queued.get(12, TimeUnit.SECONDS);
+
+      assertThat(failure).isNotNull();
+      assertThat(failure.status()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE);
+      var executor =
+          (java.util.concurrent.ThreadPoolExecutor) ReflectionTestUtils.getField(pool, "executor");
+      assertThat(executor.getQueue()).isEmpty();
+
+      releaseWorker.countDown();
+      assertThat(running.get(2, TimeUnit.SECONDS)).isEqualTo(1);
+      assertThat(pool.submitAndWait(() -> "barrier")).isEqualTo("barrier");
+      assertThat(queuedTaskRan.get()).isFalse();
     } finally {
       releaseWorker.countDown();
       requestThreads.shutdownNow();

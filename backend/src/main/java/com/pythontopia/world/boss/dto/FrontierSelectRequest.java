@@ -5,6 +5,8 @@ import com.pythontopia.world.boss.dto.BossProblemRequest.ProfileSignalsPayload;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.Pattern;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
@@ -20,9 +22,13 @@ import java.util.List;
  */
 public record FrontierSelectRequest(
     @JsonProperty("profileSignals") @Valid ProfileSignalsPayload profileSignals,
-    @JsonProperty("recentKcs") List<String> recentKcs,
+    @JsonProperty("recentKcs")
+        @Size(max = 65)
+        List<@Pattern(regexp = "PY43-KC-\\d{3}") String> recentKcs,
     @JsonProperty("focusChapter") @Min(1) @Max(7) Integer focusChapter,
-    @JsonProperty("exclude") List<String> exclude,
+    @JsonProperty("exclude")
+        @Size(max = 65)
+        List<@Pattern(regexp = "PY43-KC-\\d{3}") String> exclude,
     @JsonProperty("count") int count) {
 
   public FrontierSelectRequest {

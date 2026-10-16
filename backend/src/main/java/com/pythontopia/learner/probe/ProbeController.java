@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.probe.dto.ProbeRequest;
 import jakarta.validation.Valid;
@@ -24,9 +25,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class ProbeController {
 
   private final ApplicationEventPublisher eventPublisher;
+  private final StudentWriteThrottle studentWriteThrottle;
 
-  public ProbeController(ApplicationEventPublisher eventPublisher) {
+  public ProbeController(
+      ApplicationEventPublisher eventPublisher, StudentWriteThrottle studentWriteThrottle) {
     this.eventPublisher = eventPublisher;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @PostMapping
@@ -39,6 +43,12 @@ public class ProbeController {
           HttpStatus.BAD_REQUEST,
           "PROBE_INVALID",
           "Unknown probe choice: " + request.probeKey() + "/" + request.choiceId());
+    }
+    if (!studentWriteThrottle.tryAcquire(user.userId(), 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "STUDENT_WRITE_RATE_LIMITED",
+          "每个账号每分钟最多写入 100 条学习事件");
     }
     eventPublisher.publishEvent(
         new LearningEvent.ProbeChoiceMade(user.userId(), request.probeKey(), request.choiceId()));

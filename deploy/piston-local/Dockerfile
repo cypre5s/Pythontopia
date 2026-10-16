@@ -2,7 +2,12 @@ FROM ghcr.io/engineer-man/piston@sha256:61119510ea98fba5f45c95e2821990b598dba3f5
 
 # Keep Python's temporary files inside the per-job directory and deny runner access to shared /tmp.
 COPY harden-piston-runtime.cjs /tmp/harden-piston-runtime.cjs
+COPY test_nosocket_fail_closed.c /tmp/test_nosocket_fail_closed.c
 RUN node /tmp/harden-piston-runtime.cjs \
+    && gcc -O2 -Dmain=nosocket_main -c /piston_api/src/nosocket/nosocket.c -o /tmp/nosocket-test.o \
+    && gcc -O2 /tmp/nosocket-test.o /tmp/test_nosocket_fail_closed.c -Wl,--wrap=seccomp_load -Wl,--wrap=execvp -lseccomp -o /tmp/nosocket-fail-closed-test \
+    && /tmp/nosocket-fail-closed-test \
+    && rm /tmp/nosocket-test.o /tmp/nosocket-fail-closed-test /tmp/test_nosocket_fail_closed.c \
     && gcc -O2 /piston_api/src/nosocket/nosocket.c -o /usr/local/bin/nosocket -lseccomp \
     && rm /tmp/harden-piston-runtime.cjs
 

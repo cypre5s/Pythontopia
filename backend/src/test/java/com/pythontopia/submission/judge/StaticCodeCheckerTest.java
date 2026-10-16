@@ -3,6 +3,13 @@ package com.pythontopia.submission.judge;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 
@@ -120,5 +127,65 @@ class StaticCodeCheckerTest {
     assertThat(result.systemError()).isTrue();
     assertThat(result.failureReason()).isEqualTo("SYSTEM_ERROR:ast_whitelist_missing");
     assertThat(missingChecker.readiness().ready()).isFalse();
+  }
+
+  @Test
+  void interruptionKillsAstWhitelistProcess(@TempDir Path tempDir) throws Exception {
+    Path executable = tempDir.resolve("fake-python");
+    Path processIdFile = tempDir.resolve("pid");
+    Files.writeString(
+        executable,
+        "#!/usr/bin/env python3\n"
+            + "import os, sys, time\n"
+            + "from pathlib import Path\n"
+            + "sys.stdin.read()\n"
+            + "root = Path(__file__).parent\n"
+            + "count_file = root / 'count'\n"
+            + "count = int(count_file.read_text()) if count_file.exists() else 0\n"
+            + "count_file.write_text(str(count + 1))\n"
+            + "if count:\n"
+            + "    (root / 'pid').write_text(str(os.getpid()))\n"
+            + "    time.sleep(60)\n");
+    Files.setPosixFilePermissions(
+        executable,
+        Set.of(
+            PosixFilePermission.OWNER_READ,
+            PosixFilePermission.OWNER_WRITE,
+            PosixFilePermission.OWNER_EXECUTE));
+
+    StaticCodeChecker slowChecker = new StaticCodeChecker(executable.toString());
+    AtomicReference<StaticCodeChecker.CheckResult> result = new AtomicReference<>();
+    Thread checkThread = new Thread(() -> result.set(slowChecker.check("pass")));
+    checkThread.start();
+
+    try {
+      long startupDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+      while (!Files.exists(processIdFile) && System.nanoTime() < startupDeadline) {
+        Thread.sleep(10);
+      }
+      assertThat(processIdFile).exists();
+      long childPid = Long.parseLong(Files.readString(processIdFile));
+
+      checkThread.interrupt();
+      checkThread.join(5_000);
+
+      assertThat(checkThread.isAlive()).isFalse();
+      assertThat(result.get().failureReason()).isEqualTo("SYSTEM_ERROR:ast_whitelist_interrupted");
+      long exitDeadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+      while (ProcessHandle.of(childPid).map(ProcessHandle::isAlive).orElse(false)
+          && System.nanoTime() < exitDeadline) {
+        Thread.sleep(10);
+      }
+      assertThat(ProcessHandle.of(childPid).map(ProcessHandle::isAlive).orElse(false)).isFalse();
+    } finally {
+      if (checkThread.isAlive()) {
+        checkThread.interrupt();
+        checkThread.join(1_000);
+      }
+      if (Files.exists(processIdFile)) {
+        long childPid = Long.parseLong(Files.readString(processIdFile));
+        ProcessHandle.of(childPid).ifPresent(ProcessHandle::destroyForcibly);
+      }
+    }
   }
 }

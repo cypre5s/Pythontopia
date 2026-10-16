@@ -66,6 +66,23 @@ public class NpcDialogStateRepository {
         .findFirst();
   }
 
+  public Optional<NpcDialogState> findOneForUpdate(Long userId, String npcKey) {
+    return jdbcTemplate
+        .query(
+            """
+            SELECT id, user_id, npc_key, current_node_id, completed_node_ids,
+                   last_talked_at, flags, created_at, updated_at
+            FROM npc_dialog_state
+            WHERE user_id = ? AND npc_key = ?
+            FOR UPDATE
+            """,
+            this::map,
+            userId,
+            npcKey)
+        .stream()
+        .findFirst();
+  }
+
   public List<NpcDialogState> findAll(Long userId) {
     return jdbcTemplate.query(
         """
@@ -110,13 +127,21 @@ public class NpcDialogStateRepository {
     return findOne(userId, npcKey).orElseThrow();
   }
 
+  /** Loads the row under a write lock so cumulative JSON/array limits cannot race. */
+  public NpcDialogState findOrInitForUpdate(Long userId, String npcKey) {
+    findOrInit(userId, npcKey);
+    return findOneForUpdate(userId, npcKey).orElseThrow();
+  }
+
   /** upsert 指定 NPC 的对话节点进度；{@code completedNodeIds} 整体替换已存数组，合并由调用方负责。 */
   public NpcDialogState upsertNodeProgress(
       Long userId, String npcKey, String currentNodeId, List<String> completedNodeIds) {
     String[] nodes =
         completedNodeIds == null
             ? new String[0]
-            : completedNodeIds.stream().filter(s -> s != null && !s.isBlank()).toArray(String[]::new);
+            : completedNodeIds.stream()
+                .filter(s -> s != null && !s.isBlank())
+                .toArray(String[]::new);
     jdbcTemplate.update(
         """
         INSERT INTO npc_dialog_state (user_id, npc_key, current_node_id, completed_node_ids,
@@ -195,7 +220,8 @@ public class NpcDialogStateRepository {
 
   private String writeJson(JsonNode value) {
     try {
-      return objectMapper.writeValueAsString(value == null ? objectMapper.createObjectNode() : value);
+      return objectMapper.writeValueAsString(
+          value == null ? objectMapper.createObjectNode() : value);
     } catch (JsonProcessingException exception) {
       throw new IllegalStateException("Failed to serialise npc_dialog_state.flags JSON", exception);
     }

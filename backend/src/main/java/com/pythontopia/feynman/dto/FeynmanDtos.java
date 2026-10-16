@@ -2,13 +2,14 @@ package com.pythontopia.feynman.dto;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 
 public final class FeynmanDtos {
 
   private FeynmanDtos() {}
 
-  public record StartRequest(@NotBlank String kcCode) {}
+  public record StartRequest(@NotBlank @Size(max = 64) String kcCode) {}
 
   public record TeachRequest(@NotBlank String explanation) {}
 

@@ -8,6 +8,7 @@ import com.pythontopia.mainline.practice.dto.PracticeAnswerResultDto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -16,12 +17,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 主线学生端「练-客观题」作答（JWT + STUDENT）。鉴权由 JwtAuthenticationFilter 强制，
- * {@link CurrentUserPrincipal} 提供 userId；判分 + 进度打点在服务端（防泄题，见 {@link MainlinePracticeService}）。
+ * 主线学生端「练-客观题」作答（JWT + STUDENT）。角色校验由类级 {@code @PreAuthorize} 强制， {@link CurrentUserPrincipal} 提供
+ * userId；判分 + 进度打点在服务端（防泄题，见 {@link MainlinePracticeService}）。
  */
 @Validated
 @RestController
 @RequestMapping("/api/mainline")
+@PreAuthorize("hasRole('STUDENT')")
 public class MainlinePracticeController {
 
   private final MainlinePracticeService service;

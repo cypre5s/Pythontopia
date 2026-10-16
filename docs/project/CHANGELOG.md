@@ -1,5 +1,52 @@
 # Changelog
 
+## 2026-10-16 — 限制 NPC 对话存档累计增长
+
+- NPC talk 现使用每账号每分钟 100 次共享写预算；单 NPC 存档最多记录 128 个已完成节点和 64 个 flags，并在行锁内检查累计值，防止客户端反复追加持久化数据。
+- 回归先 RED 后 GREEN，控制器与世界 NPC 服务测试 12/12；定向 Spotless 通过。无模型调用。
+
+## 2026-10-16 — 限制主线学习接口为学生角色
+
+- 主线学习、客观题、章节测验和小测控制器现要求 `STUDENT` 角色；此前有效 JWT 即可调用，教师账号可写入自己的主线进度。
+- 方法安全回归先 RED 后 GREEN，`MainlineControllerAuthorizationTest` 4/4 通过；定向 Spotless 与 diff 检查通过，无模型请求。
+
+## 2026-10-16 — 限制判题任务排队时间
+
+- 共享 `JudgeWorkerPool` 中的任务最多等待 10 秒开始执行；超时任务取消并移出队列，API 返回现有 `JUDGE_CAPACITY`/503。
+- 回归先 RED 后 GREEN，`JudgeWorkerPoolTest` 2/2 通过；定向 Spotless 与 diff 检查通过，无模型请求。
+
+## 2026-10-16 — Piston seccomp 安装失败时停止执行
+
+- 本地 Piston 的 `nosocket` 包装器现检查 `seccomp_load()` 返回值；过滤器安装失败时释放上下文并返回错误，不启动用户代码。
+- 镜像构建运行 linker-wrapper 故障注入回归，确认失败时 `execvp()` 未调用；重建镜像后的本地沙箱烟测通过。compat `socketcall` 仅确认本次返回负值，阻断层及生产 Piston 网络隔离仍未验证。无 DeepSeek 请求。
+
+## 2026-10-16 — 中断 AST 检查时回收子进程
+
+- Java 判题线程被取消或中断时，现在强制终止并等待 AST 检查进程退出；超时和其它异常路径也会清理仍运行的进程。
+- 新增真实子进程回归：旧实现中断后子进程仍存活，先 RED；修复后 `StaticCodeCheckerTest` 16/16 通过。无 DeepSeek 请求。
+
+## 2026-10-16 — 为证据快照与学习探针增加账号写入预算
+
+- 证据快照生成和学习探针事件发布复用每账号每分钟 100 单位的共享额度；超过预算时不运行证据图构建、不发布学习事件。
+- 回归先 RED 后 GREEN，证据快照控制器、探针控制器与既有画像探针测试共 5/5 通过；定向 Spotless 和 diff 检查通过。没有模型请求或业务数据写入。
+
+## 2026-10-16 — 收紧费曼、课程画像与 Boss 请求边界
+
+- 费曼会话创建复用每账号每分钟 100 单位学生写入预算，`kcCode` 限制为 64 字符。
+- 课程画像 bootstrap 保留现有路由合同，限制为学生角色并复用同一写入预算。
+- Boss 前沿选择最多接收 65 个合法 KC；出题画像的弱项 KC、目标 KC 与媒体偏好列表也限制数量和允许值。
+- 回归先 RED 后 GREEN：`FeynmanControllerSecurityTest` + `FeynmanStartRequestValidationTest` 8/8、`CurriculumControllerSecurityTest` 3/3、`BossControllerTest` 16/16；触及文件定向 Spotless 通过。无 DeepSeek 请求或业务数据写入。
+
+## 2026-10-16 — 限制画像自评空变更与重复写入
+
+- `PUT /api/learner/profile/dimensions/{dimensionKey}` 拒绝零分差且无标签的空更新，并复用每账号每分钟 100 单位写入预算；超限在画像更新和修订审计前返回 429。
+- `ProfileControllerTest` 与 `SelfDimensionRequestValidationTest` 共 7/7；触及 Java 文件定向 Spotless 检查通过。未调用模型或写入业务数据库。
+
+## 2026-10-16 — 验收指南页上一篇/下一篇导航
+
+- 真实 Chromium 中点击「下一篇」与「上一篇」，URL 的 `topic`、正文主题和滚动回顶均正确；页面运行错误 0。
+- 该指南动作是静态前端导航；认证刷新及 Companion 读取均由浏览器测试路由模拟，模型 API 请求 0、业务写入 0。它只补齐指南分页验收，不代表全站动作矩阵完成。
+
 ## 2026-10-16 — 限制世界睡眠推进写入频率
 
 - `/api/world/sleep` 现在占用现有每账号每分钟 100 单位写预算；超限返回 429，且不会执行世界推进或掌握度扫描。

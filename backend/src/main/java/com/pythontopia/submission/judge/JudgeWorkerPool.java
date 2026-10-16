@@ -3,7 +3,8 @@ package com.pythontopia.submission.judge;
 import com.pythontopia.common.error.BusinessException;
 import jakarta.annotation.PreDestroy;
 import java.util.concurrent.Callable;
-import java.util.concurrent.Future;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.FutureTask;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.ThreadFactory;
@@ -16,11 +17,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
 /**
- * 判题任务有界线程池：限制并发 Python 子进程数（默认 core=2 / max=4），队列有界（缺省 100），
- * 满载时拒绝新任务并返回 503，避免请求线程绕过并发上限自行 fork Python 子进程。
+ * 判题任务有界线程池：限制并发 Python 子进程数（默认 core=2 / max=4），队列有界（缺省 100）， 队列满载或任务等待超过 10 秒时返回
+ * 503，避免请求线程绕过并发上限自行 fork Python 子进程。
  *
- * <p>每次判题提交一行代码，最多跑 {@link JudgeService#MAX_CASES} 个测试用例（串行），
- * 因此 pool size 不需很大；瓶颈在 CPU / 内存而非 IO。
+ * <p>每次判题提交一行代码，最多跑 {@link JudgeService#MAX_CASES} 个测试用例（串行）， 因此 pool size 不需很大；瓶颈在 CPU / 内存而非 IO。
  */
 @Component
 public class JudgeWorkerPool {
@@ -30,6 +30,7 @@ public class JudgeWorkerPool {
   static final int DEFAULT_CORE_SIZE = 2;
   static final int DEFAULT_MAX_SIZE = 4;
   static final int DEFAULT_QUEUE_CAPACITY = 100;
+  private static final long DEFAULT_QUEUE_WAIT_MILLIS = 10_000L;
   private static final long KEEP_ALIVE_SECONDS = 60L;
 
   private final ThreadPoolExecutor executor;
@@ -49,35 +50,39 @@ public class JudgeWorkerPool {
             new LinkedBlockingQueue<>(queueCapacity),
             namedDaemonThreadFactory(),
             new ThreadPoolExecutor.AbortPolicy());
-    log.info(
-        "JudgeWorkerPool started core={} max={} queue={}",
-        core,
-        max,
-        queueCapacity);
+    log.info("JudgeWorkerPool started core={} max={} queue={}", core, max, queueCapacity);
   }
 
   /**
    * 在判题工作线程上执行任务（阻塞直到完成或异常）。
    *
    * @param task 判题任务
-   * @param <T>  返回值类型
+   * @param <T> 返回值类型
    * @return task 的返回值
    * @throws RuntimeException 如果任务执行失败
    */
   public <T> T submitAndWait(Callable<T> task) {
-    Future<T> future = null;
+    CountDownLatch started = new CountDownLatch(1);
+    FutureTask<T> future =
+        new FutureTask<>(
+            () -> {
+              started.countDown();
+              return task.call();
+            });
     try {
-      future = executor.submit(task);
+      executor.execute(future);
+      if (!started.await(DEFAULT_QUEUE_WAIT_MILLIS, TimeUnit.MILLISECONDS)) {
+        future.cancel(true);
+        executor.remove(future);
+        throw new BusinessException(
+            HttpStatus.SERVICE_UNAVAILABLE, "JUDGE_CAPACITY", "判题服务繁忙，请稍后重试");
+      }
       return future.get();
     } catch (RejectedExecutionException e) {
-      throw new BusinessException(
-          HttpStatus.SERVICE_UNAVAILABLE,
-          "JUDGE_CAPACITY",
-          "判题服务繁忙，请稍后重试");
+      throw new BusinessException(HttpStatus.SERVICE_UNAVAILABLE, "JUDGE_CAPACITY", "判题服务繁忙，请稍后重试");
     } catch (InterruptedException e) {
-      if (future != null) {
-        future.cancel(true);
-      }
+      future.cancel(true);
+      executor.remove(future);
       Thread.currentThread().interrupt();
       throw new JudgeRejectedException("Judge interrupted", e);
     } catch (java.util.concurrent.ExecutionException e) {

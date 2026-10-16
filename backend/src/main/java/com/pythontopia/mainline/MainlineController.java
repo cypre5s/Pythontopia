@@ -15,6 +15,7 @@ import com.pythontopia.mainline.dto.VideoProgressRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Positive;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -24,12 +25,13 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 主线学生端：关卡地图总览 + stage 三件套打点（r15 计划 §9，全部 JWT + STUDENT）。
- * 鉴权由 JwtAuthenticationFilter 强制；{@link CurrentUserPrincipal} 提供 userId。
+ * 主线学生端：关卡地图总览 + stage 三件套打点（r15 计划 §9，全部 JWT + STUDENT）。 JWT 与类级学生角色校验共同保护接口；{@link
+ * CurrentUserPrincipal} 提供 userId。
  */
 @Validated
 @RestController
 @RequestMapping("/api/mainline")
+@PreAuthorize("hasRole('STUDENT')")
 public class MainlineController {
 
   private final MainlineService service;
@@ -89,9 +91,7 @@ public class MainlineController {
       @Valid @RequestBody EndlessSummaryRequest request, @CurrentUser CurrentUserPrincipal user) {
     boolean awarded =
         recoveryService.recordEndlessSummary(
-            requireUserId(user),
-            request.chapter(),
-            request.runId());
+            requireUserId(user), request.chapter(), request.runId());
     return new StarAwardResultDto(awarded);
   }
 

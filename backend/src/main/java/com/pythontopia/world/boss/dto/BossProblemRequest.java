@@ -89,10 +89,14 @@ public record BossProblemRequest(
 
   /** 学生画像信号 payload（与前端 ProfileSignalsDto 形状一致）。 */
   public record ProfileSignalsPayload(
-      @JsonProperty("weakKcCodes") List<String> weakKcCodes,
+      @JsonProperty("weakKcCodes")
+          @Size(max = 65)
+          List<@Pattern(regexp = "PY43-KC-\\d{3}") String> weakKcCodes,
       @JsonProperty("pythonSelfRatedLevel") Integer pythonSelfRatedLevel,
       @JsonProperty("successRate") Double successRate,
-      @JsonProperty("mediaPriority") List<String> mediaPriority,
+      @JsonProperty("mediaPriority")
+          @Size(max = 4)
+          List<@Pattern(regexp = "^(video|text|mindmap|code)$") String> mediaPriority,
       @JsonProperty("resilience") Double resilience,
       @JsonProperty("questPreferredKind")
           @Pattern(regexp = "^(pdf_question|fill_blank|debug|short_answer|closed_loop|dual_track|multi_round|teach_back|bug_mine)$")
@@ -101,7 +105,9 @@ public record BossProblemRequest(
       @JsonProperty("learningGoalKind")
           @Pattern(regexp = "^(EXAM|PROJECT|INTEREST|JOB)$")
           String learningGoalKind,
-      @JsonProperty("targetKcCodes") @Size(max = 6) List<String> targetKcCodes,
+      @JsonProperty("targetKcCodes")
+          @Size(max = 6)
+          List<@Pattern(regexp = "PY43-KC-\\d{3}") String> targetKcCodes,
       @JsonProperty("fieldDependent")
           @DecimalMin("0.0")
           @DecimalMax("1.0")

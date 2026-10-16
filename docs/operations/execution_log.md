@@ -767,3 +767,62 @@
 - 回归先 RED 后 GREEN：`LearningEventControllerTest` 6/6、`StudentWriteThrottleTest` 2/2、`WorkshopChatHistoryServiceTest` 5/5；触及 Java 文件 Spotless 检查通过。
 - 真实 Chromium 从小镇“下一步”与地图章节入口都进入 `/mainline/stage/1`，详情、视频与课件 GET 正常，页面/控制台错误 0、模型请求 0。首轮受首次探针遮挡，正确预置已回答状态后确认是测试入口问题，没有更改路由代码。临时 QA 用户 ID 728 删除并验证不存在；该用户学习事件与判题提交均为 0，临时凭据文件已清除。
 - 未完成仍见唯一清单：全 API 非 AI 安全/限流审计、远征真实先修战斗及刷新恢复、剩余 Web 动作和 Boss 窄屏、Twin A/B 与 7 日样本、工程整理；性能最后测。本轮没有 DeepSeek 调用。
+
+## 2026-10-16 — 画像自评空更新与写入限频
+
+- 静态审计发现 `PUT /api/learner/profile/dimensions/{dimensionKey}` 接受 `scoreDelta: 0` 且无标签的请求；每次都会更新画像时间并追加永久 `profile_revision`。有效自评此前也未占用账号写入预算。
+- 现将零分差且无标签判为空更新，并在角色/标签验证通过后复用 `StudentWriteThrottle`；预算耗尽时返回 429，画像服务不执行。
+- `mvn -o -Dtest=ProfileControllerTest,SelfDimensionRequestValidationTest test`：7/7 通过；触及 3 个 Java 文件的定向 Spotless 与 `git diff --check` 通过。没有模型调用或业务数据库写入。
+
+## 2026-10-16 — 指南页分页真实浏览器验收
+
+- 使用本地 Vite 与 Chromium，从 `/guide?topic=town-basics` 点击「下一篇」再点「上一篇」；主题查询参数、正文主题与返回顶部行为正确，页面运行错误 0。
+- 认证刷新和 Companion GET 使用测试路由模拟，所有 `/api/` 均被拦截；没有访问后端、模型调用或业务写入。仅闭合指南分页这一动作项。
+- 第一次脚本未进应用页面：Playwright glob 错将 Vite 的 `/src/api/*.ts` 模块当成业务 API 并回 JSON。改用只匹配 origin 根 `/api/` 的路由后复验通过；这是测试脚本范围问题，没有修改产品代码。
+
+## 2026-10-16 — 非 AI 写入口与 Boss 列表边界续审
+
+- `/api/feynman/sessions` 过去可无限新增记录且 `kcCode` 无长度限制；现占用每账号每分钟 100 单位学生写入预算，并限制输入为 64 字符。`/api/learner/curriculum/bootstrap` 保留兼容路由，但现限学生并复用同一写入预算；检查未发现当前 Web 调用 `bootstrapField()`。
+- `/api/world/boss/select-frontier` 的 `recentKcs` 和 `exclude` 各限制为最多 65 个规范 KC 编码。Boss 出题请求中的 `weakKcCodes`、`targetKcCodes`、`mediaPriority` 也限制列表大小和白名单，拒绝超量或提示注入字符串后才调用服务。
+- 红测确认费曼输入/预算、课程画像角色/预算及 Boss 列表边界均可绕过；修复后 `FeynmanControllerSecurityTest` + `FeynmanStartRequestValidationTest` 8/8、`CurriculumControllerSecurityTest` 3/3、`BossControllerTest` 16/16 通过；触及 Java 文件定向 Spotless 与 `git diff --check` 通过。没有 DeepSeek 请求、真实数据库写入或外部服务访问。
+- 剩余风险：账号写入预算为单 Spring 实例内存态；工坊聊天历史仍无生命周期保留上限；证据快照已接入账号预算；`PATCH /api/world/player` 可重复更新本人位置，需结合正常移动调用频率评估。还有非 AI 写路由与完整日志使用未逐项审完。性能项 `MasteryService` N+1 和证据图重复构建按计划留到功能/安全收尾后；不删除学习历史，以免破坏学生复盘。
+
+## 2026-10-16 — 记录下一项 Web 动作验收
+
+- 清单与页面源码对照后，下一项选教师班级看板「主线进度」页签：只读加载成员×章节进度，包含空态及请求失败重试。
+- 现有记录中的 QA 教师班级已清理；本轮前端 `:5173` 未运行，后端 `/readyz` 返回 503。未注册账号、创建班级、打开浏览器或写入数据；待本地依赖可用且有获授权 QA 班级时验收。无模型调用。
+
+## 2026-10-16 — 收紧证据快照与学习探针写入频率
+
+- `/api/learner/evidence-memory/snapshots` 与 `/api/learner/probe` 现在复用每账号每分钟 100 单位的共享写入额度，超限在构建证据图或发布事件前返回 429。探针只更新自述媒介偏好、不增加能力证据；重复事件仍可能在额度内发生。
+- 两条控制器回归均先 RED 后 GREEN；与现有 `PassiveProfileProbeTest` 合并为 5/5 通过，触及 Java 文件定向 Spotless 与 `git diff --check` 通过。本轮没有 DeepSeek 请求或业务数据写入。
+- 非 AI 写路由和多行日志审计仍未完成；账号额度是单 Spring 实例内存态。
+
+## 2026-10-16 — 续接本地沙箱 fail-closed 与教师看板验收
+
+- Piston `nosocket.c` 原先忽略 `seccomp_load()` 失败并继续执行目标程序。新增 linker-wrapper 回归，在构建时强制加载失败并断言 `execvp()` 不被调用；旧实现先 RED，新镜像构建通过。重建后运行一次 `node deploy/scripts/test_dev_piston_sandbox.mjs`，本地执行、文件/临时目录、loopback 与超时烟测通过。
+- 兼容 `socketcall` 探针返回负值，但原脚本不显示 errno，无法确认是自定义 `nosocket` 还是 Docker seccomp 阻断；不把它作为过滤器或生产网络隔离证明。每 job namespace、生产 Piston ACL/鉴权仍未核验。
+- 真实 Chromium 教师页点击“主线进度”并显示空班级状态；后端 API HTTP 200、members 0、页面错误 0、模型请求 0。临时教师 ID 730 与班级 ID 37 已按精确 ID 删除并确认无残留。
+- `StaticCodeChecker` 在调用线程取消时现在强杀并等待 AST 检查子进程结束；超时/异常清理也共用该处理。新回归用可记录 PID 的慢速测试解释器验证中断后子进程退出，旧实现 RED、修复后 `StaticCodeCheckerTest` 16/16 通过。
+- 本轮没有 DeepSeek 请求。继续项仍以 `docs/plans/2026-10-15-web-system-implementation-plan.md` 的唯一清单为准：非 AI 写入口/多行日志审计、远征真实先修战斗与刷新恢复、Web 动作矩阵、Twin 真实样本、工程整理；性能最后。
+
+## 2026-10-16 — 限制判题任务排队时间
+
+- 共享 `JudgeWorkerPool` 过去只限制队列容量；任务入队后调用线程可能无限等待。现在最多等 10 秒进入工作线程，超时取消并移除排队任务，复用现有 `JUDGE_CAPACITY`/503 响应。
+- 新回归在旧代码中因 12 秒等待超时而失败；修复后 `JudgeWorkerPoolTest` 2/2 通过，覆盖容量饱和与过期任务移除。触及的 Java 文件定向 Spotless 与 `git diff --check` 通过，没有模型请求。
+
+## 2026-10-16 — 收紧主线学习接口角色
+
+- 主线学习、客观题、章节测验和小测控制器面向学生；其中主线与测验的部分接口没有角色限制，教师 JWT 可进入本人名下的学习/考试流程。四组控制器现统一要求 `STUDENT`。
+- 教师角色调用回归覆盖四类入口，先 RED 后 GREEN，`MainlineControllerAuthorizationTest` 4/4；触及文件定向 Spotless 与 `git diff --check` 通过。无模型请求。
+- 同域只读复核确认 learner evaluation/events/path/profile interview/quest 已有学生角色检查，班级写入在服务层校验角色与归属；此项未运行测试。
+
+## 2026-10-16 — 校正定向格式检查范围
+
+- 复核发现先前传入 Spotless 的相对路径筛选未命中目标文件。改用绝对路径正则，仅格式化本轮 7 个 Java 文件；随后精准 `spotless:check` 7/7 clean，`JudgeWorkerPoolTest` + `MainlineControllerAuthorizationTest` 合跑 6/6，`git diff --check` 通过。
+
+## 2026-10-16 — 限制 NPC 对话存档累计增长
+
+- `POST /api/world/npcs/{npcKey}/talk` 原先没有账号写入预算；客户端可通过重复提交不同 node ID 和 `SET_FLAG` 键，持续扩大该账号的 `npc_dialog_state` 数组与 JSONB。现复用每账号每分钟 100 单位写预算，并限制单 NPC 最多 128 个已完成节点、64 个 flags。
+- 更新在读取当前行时获取 `FOR UPDATE` 锁，避免并发请求同时通过累计上限检查；超限请求返回 `NPC_DIALOG_STATE_LIMIT_REACHED`，不会写节点或 flags。每个已支持 NPC 的课程数据实际最多 5 个节点，设定上限保留了充足扩展空间。
+- 回归先 RED 后 GREEN：控制器与世界 NPC 服务 12/12，通过的 Maven 命令也发现同名 memory NPC service 的 2 项测试，共计 14/14；触及 Java 文件定向 Spotless 5/5 clean。没有 DeepSeek 调用或业务数据库写入。未做 PostgreSQL 并发集成验证；预算计数仍为单实例内存态。

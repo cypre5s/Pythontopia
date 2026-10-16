@@ -3,8 +3,8 @@ package com.pythontopia.mainline.test;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
-import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.common.web.AiBudgeted;
+import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.mainline.dto.ChapterTestPaperDto;
 import com.pythontopia.mainline.dto.ChapterTestResultDto;
 import com.pythontopia.mainline.dto.ChapterTestSubmitRequest;
@@ -14,6 +14,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -22,11 +23,12 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * 章末大测试学生端（r15 计划 §9）：prepare（触发预生成）/ start（去答案发卷）/ submit（服务端判分）/ latest。
- * 考试期间零 LLM；防作弊（去答案、时限硬校验、粘贴/失焦计数）见 ChapterTestService / §4.3。
+ * 章末大测试学生端（r15 计划 §9）：prepare（触发预生成）/ start（去答案发卷）/ submit（服务端判分）/ latest。 考试期间零
+ * LLM；防作弊（去答案、时限硬校验、粘贴/失焦计数）见 ChapterTestService / §4.3。
  */
 @RestController
 @RequestMapping("/api/mainline/chapters/{chapter}/test")
+@PreAuthorize("hasRole('STUDENT')")
 public class ChapterTestController {
 
   private final ChapterTestService service;

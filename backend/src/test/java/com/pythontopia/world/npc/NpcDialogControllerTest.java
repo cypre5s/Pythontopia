@@ -2,8 +2,8 @@ package com.pythontopia.world.npc;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -15,8 +15,9 @@ import com.pythontopia.auth.security.JwtAuthenticationFilter;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.common.web.CurrentUserArgumentResolver;
-import com.pythontopia.tutor.TutorDailyRequestLimitService;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.common.web.WebConfig;
+import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import com.pythontopia.world.npc.dto.NpcDialogStateDto;
 import com.pythontopia.world.npc.dto.NpcTalkRequest;
 import java.time.OffsetDateTime;
@@ -48,6 +49,7 @@ class NpcDialogControllerTest {
 
   @MockBean JwtAuthenticationFilter jwtAuthenticationFilter;
   @MockBean TutorDailyRequestLimitService requestLimitService;
+  @MockBean StudentWriteThrottle studentWriteThrottle;
 
   @BeforeEach
   void setUp() {
@@ -55,9 +57,7 @@ class NpcDialogControllerTest {
     SecurityContextHolder.getContext()
         .setAuthentication(
             new UsernamePasswordAuthenticationToken(
-                principal,
-                null,
-                List.of(new SimpleGrantedAuthority("ROLE_STUDENT"))));
+                principal, null, List.of(new SimpleGrantedAuthority("ROLE_STUDENT"))));
   }
 
   @Test
@@ -96,13 +96,13 @@ class NpcDialogControllerTest {
             OffsetDateTime.parse("2026-05-22T08:05:00Z"),
             objectMapper.createObjectNode());
     when(service.talk(eq(7L), eq("mayor_py"), any(NpcTalkRequest.class))).thenReturn(dto);
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(true);
     String body =
         objectMapper.writeValueAsString(
             Map.of(
                 "nodeId", "intro_1",
                 "nextNodeId", "intro_2",
-                "effects",
-                    List.of(Map.of("type", "COMPLETE_NODE", "key", "intro_1"))));
+                "effects", List.of(Map.of("type", "COMPLETE_NODE", "key", "intro_1"))));
 
     mockMvc
         .perform(
@@ -112,6 +112,21 @@ class NpcDialogControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.currentNodeId").value("intro_2"))
         .andExpect(jsonPath("$.completedNodeIds.length()").value(2));
+  }
+
+  @Test
+  void talkRejectsWhenAccountWriteBudgetIsExhausted() throws Exception {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(false);
+
+    mockMvc
+        .perform(
+            post("/api/world/npcs/mayor_py/talk")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"nodeId\":\"greet\",\"nextNodeId\":\"greet\",\"effects\":[]}"))
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.code").value("STUDENT_WRITE_RATE_LIMITED"));
+
+    verifyNoInteractions(service);
   }
 
   @Test
@@ -133,10 +148,9 @@ class NpcDialogControllerTest {
   @Test
   void talkRejectsExcessiveEffectsAndValuesBeforeServiceCall() throws Exception {
     List<Map<String, String>> effects =
-        java.util.Collections.nCopies(33, Map.of("type", "SET_FLAG", "key", "visited", "value", "yes"));
-    String body =
-        objectMapper.writeValueAsString(
-            Map.of("nodeId", "intro_1", "effects", effects));
+        java.util.Collections.nCopies(
+            33, Map.of("type", "SET_FLAG", "key", "visited", "value", "yes"));
+    String body = objectMapper.writeValueAsString(Map.of("nodeId", "intro_1", "effects", effects));
 
     mockMvc
         .perform(
@@ -153,9 +167,10 @@ class NpcDialogControllerTest {
     String body =
         objectMapper.writeValueAsString(
             Map.of(
-                "nodeId", "intro_1",
+                "nodeId",
+                "intro_1",
                 "effects",
-                    List.of(Map.of("type", "SET_FLAG", "key", "visited", "value", "v".repeat(1025)))));
+                List.of(Map.of("type", "SET_FLAG", "key", "visited", "value", "v".repeat(1025)))));
 
     mockMvc
         .perform(

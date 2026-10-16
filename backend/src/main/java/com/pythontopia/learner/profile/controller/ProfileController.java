@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.learner.profile.dto.DimensionUpdateResult;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
 import com.pythontopia.learner.profile.dto.ProfileDimensionDto;
@@ -37,11 +38,15 @@ public class ProfileController {
 
   private final ProfileService profileService;
   private final PassiveProfileService passiveProfileService;
+  private final StudentWriteThrottle studentWriteThrottle;
 
   public ProfileController(
-      ProfileService profileService, PassiveProfileService passiveProfileService) {
+      ProfileService profileService,
+      PassiveProfileService passiveProfileService,
+      StudentWriteThrottle studentWriteThrottle) {
     this.profileService = profileService;
     this.passiveProfileService = passiveProfileService;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @GetMapping
@@ -97,6 +102,12 @@ public class ProfileController {
           HttpStatus.BAD_REQUEST,
           "PROFILE_SELF_UPDATE_TAG_NOT_ALLOWED",
           "自述标签必须是支持的目标或偏好选项");
+    }
+    if (!studentWriteThrottle.tryAcquire(user.userId(), 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "STUDENT_WRITE_RATE_LIMITED",
+          "每个账号每分钟最多写入 100 条学习记录");
     }
     return passiveProfileService.applyDimensionUpdate(
         user.userId(), dimensionKey, request.toDelta("INTERVIEW"));

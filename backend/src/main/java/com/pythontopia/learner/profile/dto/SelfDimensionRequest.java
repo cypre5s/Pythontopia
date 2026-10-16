@@ -21,6 +21,6 @@ public record SelfDimensionRequest(
 
   /** 防御性：返回是否为空请求（避免空 PUT 产生无意义 revision）。 */
   public boolean isEmpty() {
-    return scoreDelta == null && (tagsAdd == null || tagsAdd.isEmpty());
+    return (scoreDelta == null || scoreDelta == 0.0) && (tagsAdd == null || tagsAdd.isEmpty());
   }
 }

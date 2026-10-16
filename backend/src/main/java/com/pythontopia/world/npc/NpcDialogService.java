@@ -1,5 +1,6 @@
 package com.pythontopia.world.npc;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.common.error.BusinessException;
@@ -18,11 +19,13 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class NpcDialogService {
 
+  private static final int MAX_COMPLETED_NODES_PER_NPC = 128;
+  private static final int MAX_FLAGS_PER_NPC = 64;
+
   private final NpcDialogStateRepository stateRepository;
   private final ObjectMapper objectMapper;
 
-  public NpcDialogService(
-      NpcDialogStateRepository stateRepository, ObjectMapper objectMapper) {
+  public NpcDialogService(NpcDialogStateRepository stateRepository, ObjectMapper objectMapper) {
     this.stateRepository = stateRepository;
     this.objectMapper = objectMapper;
   }
@@ -43,15 +46,14 @@ public class NpcDialogService {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST, "NPC_TALK_REQUEST_EMPTY", "Dialog request body is required");
     }
-    NpcDialogState current = stateRepository.findOrInit(userId, npcKey);
+    NpcDialogState current = stateRepository.findOrInitForUpdate(userId, npcKey);
     Set<String> completed = new LinkedHashSet<>(current.completedNodeIds());
     if (request.nodeId() != null && !request.nodeId().isBlank()) {
       completed.add(request.nodeId());
     }
 
     ObjectNode flagsPatch = objectMapper.createObjectNode();
-    List<NpcDialogEffectDto> effects =
-        request.effects() == null ? List.of() : request.effects();
+    List<NpcDialogEffectDto> effects = request.effects() == null ? List.of() : request.effects();
     for (NpcDialogEffectDto effect : effects) {
       if (effect == null || effect.type() == null) {
         continue;
@@ -77,8 +79,8 @@ public class NpcDialogService {
     if (nextNodeId == null || nextNodeId.isBlank()) {
       nextNodeId = current.currentNodeId();
     }
-    stateRepository.upsertNodeProgress(
-        userId, npcKey, nextNodeId, new ArrayList<>(completed));
+    validateStateSize(completed, current.flags(), flagsPatch);
+    stateRepository.upsertNodeProgress(userId, npcKey, nextNodeId, new ArrayList<>(completed));
     if (flagsPatch.size() > 0) {
       stateRepository.mergeFlags(userId, npcKey, flagsPatch);
     }
@@ -91,4 +93,21 @@ public class NpcDialogService {
     }
   }
 
+  private void validateStateSize(
+      Set<String> completedNodeIds, JsonNode currentFlags, ObjectNode flagsPatch) {
+    ObjectNode mergedFlags =
+        currentFlags instanceof ObjectNode objectFlags
+            ? objectFlags.deepCopy()
+            : objectMapper.createObjectNode();
+    flagsPatch
+        .fields()
+        .forEachRemaining(entry -> mergedFlags.set(entry.getKey(), entry.getValue()));
+    if (completedNodeIds.size() > MAX_COMPLETED_NODES_PER_NPC
+        || mergedFlags.size() > MAX_FLAGS_PER_NPC) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT,
+          "NPC_DIALOG_STATE_LIMIT_REACHED",
+          "NPC dialog state has reached its storage limit");
+    }
+  }
 }

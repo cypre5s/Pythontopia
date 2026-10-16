@@ -152,6 +152,7 @@ public class StaticCodeChecker {
   /** Phase 2：AST 白名单（python3 ast_whitelist.py），拦截正则难覆盖的绕过写法。 */
   private CheckResult runAstWhitelist(String code) {
     Path scriptFile = null;
+    Process process = null;
     try {
       scriptFile = Files.createTempFile("pythontopia-ast-", ".py");
       try (InputStream in =
@@ -162,7 +163,7 @@ public class StaticCodeChecker {
         }
         Files.write(scriptFile, in.readAllBytes());
       }
-      Process process =
+      process =
           new ProcessBuilder(
                   List.of(pythonExecutable, scriptFile.toAbsolutePath().toString()))
               .redirectErrorStream(true)
@@ -171,7 +172,7 @@ public class StaticCodeChecker {
       process.getOutputStream().close();
       boolean finished = process.waitFor(AST_CHECK_TIMEOUT_SECONDS, TimeUnit.SECONDS);
       if (!finished) {
-        process.destroyForcibly();
+        terminate(process);
         return rejected("AST_CHECK_TIMEOUT");
       }
       String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8)
@@ -195,11 +196,15 @@ public class StaticCodeChecker {
           "AST whitelist could not launch (treated as SYSTEM_ERROR): {}", exception.getMessage());
       return infraError("SYSTEM_ERROR:ast_whitelist_launch_failed");
     } catch (InterruptedException exception) {
+      terminate(process);
       Thread.currentThread().interrupt();
       log.warn(
           "AST whitelist interrupted (treated as SYSTEM_ERROR): {}", exception.getMessage());
       return infraError("SYSTEM_ERROR:ast_whitelist_interrupted");
     } finally {
+      if (process != null && process.isAlive()) {
+        terminate(process);
+      }
       if (scriptFile != null) {
         try {
           Files.deleteIfExists(scriptFile);
@@ -207,6 +212,18 @@ public class StaticCodeChecker {
           // best effort cleanup
         }
       }
+    }
+  }
+
+  private static void terminate(Process process) {
+    if (process == null || !process.isAlive()) {
+      return;
+    }
+    process.destroyForcibly();
+    try {
+      process.waitFor(1, TimeUnit.SECONDS);
+    } catch (InterruptedException exception) {
+      Thread.currentThread().interrupt();
     }
   }
 

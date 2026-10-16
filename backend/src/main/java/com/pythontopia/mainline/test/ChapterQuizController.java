@@ -3,8 +3,8 @@ package com.pythontopia.mainline.test;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
-import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.common.web.AiBudgeted;
+import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.mainline.dto.ChapterTestPaperDto;
 import com.pythontopia.mainline.dto.ChapterTestResultDto;
 import com.pythontopia.mainline.dto.ChapterTestSubmitRequest;
@@ -14,6 +14,7 @@ import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/mainline/chapters/{chapter}/quiz")
+@PreAuthorize("hasRole('STUDENT')")
 public class ChapterQuizController {
 
   private final ChapterTestService service;
