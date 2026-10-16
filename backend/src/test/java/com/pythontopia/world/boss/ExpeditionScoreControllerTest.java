@@ -16,6 +16,7 @@ import com.pythontopia.auth.security.JwtAuthenticationFilter;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.common.web.CurrentUserArgumentResolver;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import com.pythontopia.common.web.WebConfig;
 import com.pythontopia.world.boss.dto.ExpeditionLeaderboardDto;
@@ -47,9 +48,11 @@ class ExpeditionScoreControllerTest {
   @MockBean ExpeditionScoreService service;
   @MockBean JwtAuthenticationFilter jwtAuthenticationFilter;
   @MockBean TutorDailyRequestLimitService requestLimitService;
+  @MockBean StudentWriteThrottle studentWriteThrottle;
 
   @BeforeEach
   void authenticateAsStudent() {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(true);
     CurrentUserPrincipal principal = new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
     SecurityContextHolder.getContext()
         .setAuthentication(
@@ -95,6 +98,23 @@ class ExpeditionScoreControllerTest {
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.inClass").value(false))
         .andExpect(jsonPath("$.selfBest").value(0));
+  }
+
+  @Test
+  void rejectsScoreResubmissionWhenTheSharedWriteBudgetIsExhausted() throws Exception {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(false);
+
+    mockMvc
+        .perform(
+            post("/api/world/expedition/score")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new ExpeditionScoreSubmitDto("123e4567-e89b-12d3-a456-426614174000"))))
+        .andExpect(status().isTooManyRequests());
+
+    verify(studentWriteThrottle).tryAcquire(7L, 1);
+    verifyNoInteractions(service);
   }
 
   @Test

@@ -3,12 +3,17 @@ package com.pythontopia.tutor;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.tutor.dto.TutorWorkflowAgentStateDto;
+import com.pythontopia.tutor.dto.TutorWorkflowCardCursorDto;
 import com.pythontopia.tutor.dto.TutorWorkflowCardDto;
+import com.pythontopia.tutor.dto.TutorWorkflowCardPageDto;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -177,6 +182,11 @@ public class TutorWorkflowRepository {
         eventType,
         actionKey,
         payloadJson);
+  }
+
+  public int deleteActionEventsCreatedBefore(OffsetDateTime cutoff) {
+    return jdbcTemplate.update(
+        "DELETE FROM tutor_workflow_action_event WHERE created_at < ?", cutoff);
   }
 
   /**
@@ -394,34 +404,99 @@ public class TutorWorkflowRepository {
         projection.actionPayloadJson());
   }
 
-  public List<TutorWorkflowCardDto> findCards(Long sessionId) {
-    return jdbcTemplate.query(
-        """
-        SELECT seq, event, card_key, payload, created_at
-        FROM tutor_workflow_card
-        WHERE session_id = ?
-        ORDER BY seq, id
-        """,
-        this::mapCard,
-        sessionId);
+  public TutorWorkflowCardPageDto findLatestCardPage(Long sessionId, int pageSize) {
+    List<StoredCard> rows =
+        jdbcTemplate.query(
+            """
+            SELECT id, seq, event, card_key, payload, created_at
+            FROM tutor_workflow_card
+            WHERE session_id = ?
+            ORDER BY seq DESC, id DESC
+            LIMIT ?
+            """,
+            this::mapStoredCard,
+            sessionId,
+            pageSize + 1);
+    return toCardPage(rows, pageSize);
   }
 
   public List<TutorWorkflowCardDto> findRecentCards(Long sessionId, int limit) {
-    return jdbcTemplate.query(
-        """
-        SELECT seq, event, card_key, payload, created_at
-        FROM (
-          SELECT id, seq, event, card_key, payload, created_at
-          FROM tutor_workflow_card
-          WHERE session_id = ?
-          ORDER BY seq DESC, id DESC
-          LIMIT ?
-        ) recent
-        ORDER BY seq, id
-        """,
-        this::mapCard,
-        sessionId,
-        limit);
+    return findLatestCardPage(sessionId, limit).cards();
+  }
+
+  public Optional<TutorWorkflowCardDto> findCardByStoredId(Long sessionId, String cardId) {
+    return jdbcTemplate
+        .query(
+            """
+            SELECT seq, event, card_key, payload, created_at
+            FROM tutor_workflow_card
+            WHERE session_id = ? AND payload->>'card_id' = ?
+            ORDER BY seq, id
+            LIMIT 1
+            """,
+            this::mapCard,
+            sessionId,
+            cardId)
+        .stream()
+        .findFirst();
+  }
+
+  public Optional<TutorWorkflowCardDto> findFirstCardBySeq(Long sessionId, int seq) {
+    return jdbcTemplate
+        .query(
+            """
+            SELECT seq, event, card_key, payload, created_at
+            FROM tutor_workflow_card
+            WHERE session_id = ? AND seq = ?
+            ORDER BY id
+            LIMIT 1
+            """,
+            this::mapCard,
+            sessionId,
+            seq)
+        .stream()
+        .findFirst();
+  }
+
+  public TutorWorkflowCardPageDto findCardsBefore(
+      Long sessionId, TutorWorkflowCardCursorDto cursor, int pageSize) {
+    List<StoredCard> rows =
+        jdbcTemplate.query(
+            """
+            SELECT id, seq, event, card_key, payload, created_at
+            FROM tutor_workflow_card
+            WHERE session_id = ? AND (seq < ? OR (seq = ? AND id < ?))
+            ORDER BY seq DESC, id DESC
+            LIMIT ?
+            """,
+            this::mapStoredCard,
+            sessionId,
+            cursor.seq(),
+            cursor.seq(),
+            cursor.id(),
+            pageSize + 1);
+    return toCardPage(rows, pageSize);
+  }
+
+  private TutorWorkflowCardPageDto toCardPage(List<StoredCard> rows, int pageSize) {
+    boolean hasOlder = rows.size() > pageSize;
+    List<StoredCard> page =
+        new ArrayList<>(rows.subList(0, Math.min(rows.size(), pageSize)));
+    TutorWorkflowCardCursorDto nextCursor = null;
+    if (hasOlder && !page.isEmpty()) {
+      StoredCard oldest = page.getLast();
+      nextCursor = new TutorWorkflowCardCursorDto(oldest.card().seq(), oldest.id());
+    }
+    Collections.reverse(page);
+    return new TutorWorkflowCardPageDto(
+        page.stream().map(StoredCard::card).toList(), nextCursor);
+  }
+
+  private StoredCard mapStoredCard(ResultSet rs, int rowNum) throws SQLException {
+    return new StoredCard(rs.getLong("id"), mapCard(rs, rowNum));
+  }
+
+  private record StoredCard(long id, TutorWorkflowCardDto card) {
   }
 
   private TutorWorkflowSessionDto mapSession(ResultSet rs, int rowNum) throws SQLException {

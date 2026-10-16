@@ -18,6 +18,7 @@ import { runTrace } from '@/services/codeTheater/trace';
 import type { Trace, TraceEvent } from '@/services/codeTheater/types';
 import {
   getActiveWorkflowSession,
+  getEarlierWorkflowCards,
   recordTutorWorkflowFeedback,
   uploadTutorWorkflowImage,
   type AiReplyCardDto,
@@ -37,8 +38,10 @@ import {
   type WorkflowActionDto,
   type WorkflowCardKey,
   type WorkflowCardPayload,
+  type WorkflowCardCursorDto,
   type WorkflowEvent,
   type WorkflowRunResultDto,
+  type WorkflowTimelineCardDto,
 } from '@/api/tutorWorkflow';
 
 const props = defineProps<{
@@ -80,6 +83,8 @@ interface PendingWorkflowRequestEnvelope {
 }
 
 const cards = ref<CardEntry[]>([]);
+const olderCardsCursor = ref<WorkflowCardCursorDto | null>(null);
+const olderCardsLoading = ref(false);
 const availableActions = ref<WorkflowActionDto[]>([]);
 const phase = ref<string>('READING');
 const sessionKey = ref('');
@@ -245,20 +250,23 @@ function timelineUserMessage(payload: WorkflowCardPayload): string | undefined {
     : undefined;
 }
 
+function toCardEntry(card: WorkflowTimelineCardDto): CardEntry {
+  const userMessage = timelineUserMessage(card.payload);
+  return {
+    key: card.cardKey,
+    payload: card.payload,
+    seq: card.seq,
+    ...(userMessage ? { userMessage } : {}),
+  };
+}
+
 async function load(): Promise<void> {
   try {
     const snap = await getActiveWorkflowSession(props.problemId);
     if (!alive) return;
     sessionKey.value = snap.sessionKey;
-    cards.value = snap.cards.map((card) => {
-      const userMessage = timelineUserMessage(card.payload);
-      return {
-        key: card.cardKey,
-        payload: card.payload,
-        seq: card.seq,
-        ...(userMessage ? { userMessage } : {}),
-      };
-    });
+    cards.value = snap.cards.map(toCardEntry);
+    olderCardsCursor.value = snap.olderCardsCursor ?? null;
     phase.value = snap.phase;
     episodePlan.value = snap.episodePlan ?? null;
     retryableRequest.value = restorePendingWorkflowRequest(sessionKey.value);
@@ -266,12 +274,36 @@ async function load(): Promise<void> {
   } catch {
     if (!alive) return;
     cards.value = [];
+    olderCardsCursor.value = null;
   }
   if (!alive) return;
   availableActions.value = INITIAL_ACTIONS;
   loaded.value = true;
   void consumeInitialRequest();
   scrollBottom();
+}
+
+async function loadOlderCards(): Promise<void> {
+  const cursor = olderCardsCursor.value;
+  if (!cursor || olderCardsLoading.value || !sessionKey.value) return;
+  const body = bodyRef.value;
+  const previousHeight = body?.scrollHeight ?? 0;
+  const previousTop = body?.scrollTop ?? 0;
+  olderCardsLoading.value = true;
+  try {
+    const page = await getEarlierWorkflowCards(sessionKey.value, cursor);
+    if (!alive) return;
+    cards.value = [...page.cards.map(toCardEntry), ...cards.value];
+    olderCardsCursor.value = page.nextCursor;
+    await nextTick();
+    if (body && bodyRef.value === body) {
+      body.scrollTop = previousTop + body.scrollHeight - previousHeight;
+    }
+  } catch {
+    if (alive) toast.show('加载更早的导学记录失败，请重试', 'error');
+  } finally {
+    olderCardsLoading.value = false;
+  }
 }
 
 function pendingWorkflowStorageKey(): string {
@@ -828,6 +860,16 @@ function cardId(entry: CardEntry): string {
       ref="bodyRef"
       class="tw-panel__body"
     >
+      <button
+        v-if="olderCardsCursor"
+        type="button"
+        class="tw-link"
+        data-testid="tutor-workflow-load-older"
+        :disabled="olderCardsLoading"
+        @click="loadOlderCards"
+      >
+        {{ olderCardsLoading ? '正在加载…' : '加载更早的导学记录' }}
+      </button>
       <p
         v-if="cards.length === 0 && !running"
         class="tw-empty"

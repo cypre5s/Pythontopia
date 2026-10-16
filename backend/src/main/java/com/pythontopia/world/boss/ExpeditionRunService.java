@@ -128,11 +128,13 @@ public class ExpeditionRunService {
 
   /** Recent issued questions for this user, retained across runs for the review window. */
   public Set<String> findIssuedQuestionFingerprints(Long userId, String runId) {
-    if (userId == null || runId == null) return Set.of();
-    try {
-      UUID.fromString(runId);
-    } catch (IllegalArgumentException exception) {
-      return Set.of();
+    if (userId == null) return Set.of();
+    if (runId != null) {
+      try {
+        UUID.fromString(runId);
+      } catch (IllegalArgumentException exception) {
+        return Set.of();
+      }
     }
     // shortcut: keep a 7-day history window until question-bank reuse data supports tuning it.
     return Set.copyOf(
@@ -140,10 +142,11 @@ public class ExpeditionRunService {
             "SELECT DISTINCT question_fingerprint FROM pregenerated_problem"
                 + " WHERE user_id = ? AND status = 'CONSUMED'"
                 + " AND question_fingerprint IS NOT NULL"
-                + " AND (expedition_run_id = ?::uuid"
-                + " OR consumed_at >= now() - interval '7 days')",
+                + " AND (consumed_at >= now() - interval '7 days'"
+                + " OR (?::uuid IS NOT NULL AND expedition_run_id = ?::uuid))",
             (rs, rowNum) -> rs.getString(1),
             userId,
+            runId,
             runId));
   }
 

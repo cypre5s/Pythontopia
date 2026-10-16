@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -20,6 +21,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.JwtProperties;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.media.domain.MediaAsset;
 import com.pythontopia.media.domain.MediaJob;
 import com.pythontopia.media.dto.StoryboardVideoRequest;
@@ -74,6 +76,7 @@ class MediaJobServiceTest {
             streamRegistry,
             objectMapper,
             new MediaAssetUrls(new JwtProperties("media-job-test-secret-at-least-32-chars", 60)),
+            new StudentWriteThrottle(),
             properties,
             SYNCHRONOUS);
   }
@@ -167,6 +170,44 @@ class MediaJobServiceTest {
   }
 
   @Test
+  void limitsNewCompositionJobsPerAccountBeforePersistence() {
+    when(jobRepository.findCachedSuccess(eq(USER_ID), Mockito.anyString()))
+        .thenReturn(Optional.empty());
+    when(jobRepository.insert(eq(USER_ID), eq("STORYBOARD_VIDEO"), Mockito.anyString(), Mockito.anyString()))
+        .thenReturn(
+            job(61L, MediaJobStatus.PENDING, null, null),
+            job(62L, MediaJobStatus.PENDING, null, null),
+            job(63L, MediaJobStatus.PENDING, null, null),
+            job(64L, MediaJobStatus.PENDING, null, null));
+    when(compositionService.isImageGenerationEnabled()).thenReturn(true);
+    service =
+        new MediaJobService(
+            jobRepository,
+            assetRepository,
+            compositionService,
+            streamRegistry,
+            objectMapper,
+            new MediaAssetUrls(new JwtProperties("media-job-test-secret-at-least-32-chars", 60)),
+            new StudentWriteThrottle(),
+            new MediaComposeProperties(2, 2, 2, 64, 300_000L),
+            command -> {});
+
+    service.submit(USER_ID, sampleRequest());
+    service.submit(USER_ID, sampleRequest());
+    service.submit(USER_ID, sampleRequest());
+
+    assertThatThrownBy(() -> service.submit(USER_ID, sampleRequest()))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> {
+              assertThat(error.status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+              assertThat(error.code()).isEqualTo("MEDIA_COMPOSE_RATE_LIMITED");
+            });
+    verify(jobRepository, times(3))
+        .insert(eq(USER_ID), eq("STORYBOARD_VIDEO"), Mockito.anyString(), Mockito.anyString());
+  }
+
+  @Test
   void disabledImageProviderRejectsCachedVideoInsteadOfReturningIt() {
     when(compositionService.isImageGenerationEnabled()).thenReturn(false);
 
@@ -243,6 +284,7 @@ class MediaJobServiceTest {
             streamRegistry,
             objectMapper,
             new MediaAssetUrls(new JwtProperties("media-job-test-secret-at-least-32-chars", 60)),
+            new StudentWriteThrottle(),
             new MediaComposeProperties(2, 2, 2, 64, 300_000L),
             command -> {
               throw new RejectedExecutionException("queue full");

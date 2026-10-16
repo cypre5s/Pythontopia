@@ -110,6 +110,10 @@ class TutorWorkflowServiceTest {
     when(repository.findActive(USER, PROBLEM)).thenReturn(Optional.of(session));
     when(repository.findBySessionKey(USER, session.sessionKey())).thenReturn(Optional.of(session));
     when(repository.findAgentState(session.id())).thenReturn(Optional.empty());
+    when(repository.findCardByStoredId(anyLong(), anyString())).thenReturn(Optional.empty());
+    when(repository.findFirstCardBySeq(anyLong(), anyInt())).thenReturn(Optional.empty());
+    when(repository.findLatestCardPage(anyLong(), anyInt()))
+        .thenReturn(new com.pythontopia.tutor.dto.TutorWorkflowCardPageDto(List.of(), null));
     when(repository.claimAutoGenRun(anyLong(), any(UUID.class), any()))
         .thenAnswer(
             invocation -> {
@@ -144,6 +148,18 @@ class TutorWorkflowServiceTest {
       logger.detachAppender(appender);
       logger.setLevel(previousLevel);
     }
+  }
+
+  @Test
+  void cleanupExpiredActionEventsUsesNinetyDayRetention() {
+    OffsetDateTime before = OffsetDateTime.now();
+
+    service.cleanupExpiredActionEvents();
+
+    OffsetDateTime after = OffsetDateTime.now();
+    ArgumentCaptor<OffsetDateTime> cutoff = ArgumentCaptor.forClass(OffsetDateTime.class);
+    verify(repository).deleteActionEventsCreatedBefore(cutoff.capture());
+    assertThat(cutoff.getValue()).isBetween(before.minusDays(90), after.minusDays(90));
   }
 
   @SuppressWarnings("unchecked")
@@ -337,18 +353,17 @@ class TutorWorkflowServiceTest {
   @Test
   void chatReferencesAreResolvedFromTheOwnedSessionCards() throws Exception {
     String cardId = "wf-7-476-abc:x1";
-    when(repository.findCards(session.id()))
-        .thenReturn(
-            List.of(
-                new TutorWorkflowCardDto(
-                    1,
-                    "CHAT",
-                    "ai_reply",
-                    new ObjectMapper().readTree(
-                        """
-                        {"card_id":"wf-7-476-abc:x1","content":"先检查半径输入是否正确。"}
-                        """),
-                    OffsetDateTime.parse("2026-10-12T12:00:00Z"))));
+    var referencedCard =
+        new TutorWorkflowCardDto(
+            1,
+            "CHAT",
+            "ai_reply",
+            new ObjectMapper().readTree(
+                """
+                {"card_id":"wf-7-476-abc:x1","content":"先检查半径输入是否正确。"}
+                """),
+            OffsetDateTime.parse("2026-10-12T12:00:00Z"));
+    when(repository.findCardByStoredId(session.id(), cardId)).thenReturn(Optional.of(referencedCard));
 
     service.run(
         USER,
@@ -369,6 +384,34 @@ class TutorWorkflowServiceTest {
                     "card_id", cardId,
                     "card_key", "ai_reply",
                     "snippet", "先检查半径输入是否正确。")));
+  }
+
+  @Test
+  void chatReferencesResolveLegacySequenceIdsWithoutLoadingFullHistory() throws Exception {
+    var referencedCard =
+        new TutorWorkflowCardDto(
+            1,
+            "CHAT",
+            "ai_reply",
+            new ObjectMapper().readTree("{\"content\":\"先核对循环边界。\"}"),
+            OffsetDateTime.parse("2026-10-12T12:00:00Z"));
+    when(repository.findFirstCardBySeq(session.id(), 1)).thenReturn(Optional.of(referencedCard));
+
+    service.run(
+        USER,
+        new TutorWorkflowRunRequest(
+            PROBLEM, "CHAT", Map.of("message", "@card:seq-1 请再举例")));
+
+    @SuppressWarnings("unchecked")
+    Map<String, Object> eventData = (Map<String, Object>) capturedBody().get("event_data");
+    assertThat(eventData.get("references"))
+        .isEqualTo(
+            List.of(
+                Map.of(
+                    "kind", "card",
+                    "card_id", "seq-1",
+                    "card_key", "ai_reply",
+                    "snippet", "先核对循环边界。")));
   }
 
   @Test
@@ -447,6 +490,55 @@ class TutorWorkflowServiceTest {
     @SuppressWarnings("unchecked")
     Map<String, Object> episodePlan = (Map<String, Object>) snapshot.get("episodePlan");
     assertThat(episodePlan).containsEntry("plan_id", "plan-1").containsEntry("revision", 3);
+  }
+
+  @Test
+  void activeSessionLoadsOnlyTheLatestFiftyCards() {
+    List<TutorWorkflowCardDto> history =
+        java.util.stream.IntStream.rangeClosed(1, 80)
+            .mapToObj(
+                seq ->
+                    new TutorWorkflowCardDto(
+                        seq,
+                        "CHAT",
+                        "ai_reply",
+                        new ObjectMapper().createObjectNode().put("content", "答复 " + seq),
+                        OffsetDateTime.parse("2026-10-12T12:00:00Z").plusSeconds(seq)))
+            .toList();
+    when(repository.findLatestCardPage(session.id(), 50))
+        .thenReturn(
+            new com.pythontopia.tutor.dto.TutorWorkflowCardPageDto(
+                history.subList(30, 80),
+                new com.pythontopia.tutor.dto.TutorWorkflowCardCursorDto(31, 31L)));
+
+    Map<String, Object> snapshot = service.activeSession(USER, PROBLEM);
+
+    assertThat((List<?>) snapshot.get("cards")).hasSize(50);
+    assertThat(snapshot.get("olderCardsCursor"))
+        .isEqualTo(new com.pythontopia.tutor.dto.TutorWorkflowCardCursorDto(31, 31L));
+    verify(repository).findLatestCardPage(session.id(), 50);
+  }
+
+  @Test
+  void olderCardsChecksSessionOwnerAndUsesCursor() {
+    var cursor = new com.pythontopia.tutor.dto.TutorWorkflowCardCursorDto(4, 91L);
+    var expected = new com.pythontopia.tutor.dto.TutorWorkflowCardPageDto(List.of(), null);
+    when(repository.findCardsBefore(session.id(), cursor, 50)).thenReturn(expected);
+
+    var result = service.olderCards(USER, session.sessionKey(), cursor.seq(), cursor.id());
+
+    assertThat(result).isEqualTo(expected);
+    verify(repository).findBySessionKey(USER, session.sessionKey());
+    verify(repository).findCardsBefore(session.id(), cursor, 50);
+  }
+
+  @Test
+  void olderCardsRejectsInvalidCursorBeforeQueryingHistory() {
+    assertThatThrownBy(() -> service.olderCards(USER, session.sessionKey(), -1, 91L))
+        .isInstanceOf(BusinessException.class)
+        .extracting(error -> ((BusinessException) error).code())
+        .isEqualTo("TUTOR_WORKFLOW_CARD_CURSOR_INVALID");
+    verify(repository, never()).findCardsBefore(anyLong(), any(), anyInt());
   }
 
   @Test

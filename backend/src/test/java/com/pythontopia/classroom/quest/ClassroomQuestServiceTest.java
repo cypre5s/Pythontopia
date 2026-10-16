@@ -3,6 +3,7 @@ package com.pythontopia.classroom.quest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -32,6 +33,7 @@ import com.pythontopia.learner.quest.repository.QuestRepository.QuestInsert;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,7 +62,8 @@ class ClassroomQuestServiceTest {
 
   @BeforeEach
   void allowNormalWrites() {
-    when(studentWriteThrottle.tryAcquire(anyLong(), eq(1))).thenReturn(true);
+    when(studentWriteThrottle.tryAcquire(anyLong(), anyInt())).thenReturn(true);
+    when(studentWriteThrottle.tryAcquireClassroomQuestFanOut(anyLong(), anyInt())).thenReturn(true);
   }
 
   @Test
@@ -68,9 +71,14 @@ class ClassroomQuestServiceTest {
     when(classroomGuard.requireOwner(teacher, 9L))
         .thenReturn(new Classroom(9L, "DemoClass", "desc", 42L, 43L, "ABC123", "ACTIVE"));
     when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of(kc("PY43-KC-001")));
-    when(studentWriteThrottle.tryAcquire(teacher.userId(), 1)).thenReturn(false);
+    when(studentWriteThrottle.tryAcquireClassroomQuestFanOut(teacher.userId(), 3))
+        .thenReturn(false);
     when(repository.insert(any(ClassroomQuestInsert.class))).thenReturn(77L);
-    when(classroomRepository.findMembers(9L)).thenReturn(List.of());
+    when(classroomRepository.findMembers(9L))
+        .thenReturn(
+            List.of(
+                new ClassroomMemberDto(11L, "stu01", "Stu 01", "ACTIVE"),
+                new ClassroomMemberDto(12L, "stu02", "Stu 02", "ACTIVE")));
     when(repository.findById(77L)).thenReturn(Optional.of(sampleQuest(77L, "ACTIVE")));
 
     assertThatThrownBy(
@@ -93,7 +101,8 @@ class ClassroomQuestServiceTest {
             });
 
     verify(repository, never()).insert(any(ClassroomQuestInsert.class));
-    verify(classroomRepository, never()).findMembers(9L);
+    verify(studentWriteThrottle).tryAcquireClassroomQuestFanOut(teacher.userId(), 3);
+    verify(classroomRepository).findMembers(9L);
   }
 
   @Test
@@ -136,6 +145,7 @@ class ClassroomQuestServiceTest {
                 new ClassroomMemberDto(13L, "stu03", "Stu 03", "ACTIVE")));
     when(repository.findById(77L))
         .thenReturn(Optional.of(sampleQuest(77L, "ACTIVE")));
+    when(studentWriteThrottle.tryAcquireClassroomQuestFanOut(teacher.userId(), 4)).thenReturn(true);
     when(repository.insertStudentQuestIfAbsent(any(QuestInsert.class)))
         .thenReturn(Optional.of(101L), Optional.of(102L), Optional.of(103L));
 
@@ -163,6 +173,42 @@ class ClassroomQuestServiceTest {
               assertThat(insert.deepLinkParams().toString()).contains("\"problemId\":12");
             });
     verify(repository).insert(any(ClassroomQuestInsert.class));
+    verify(studentWriteThrottle).tryAcquireClassroomQuestFanOut(teacher.userId(), 4);
+  }
+
+  @Test
+  void rejectsClassroomQuestFanOutAboveSynchronousLimitBeforeAnyWrite() {
+    when(classroomGuard.requireOwner(teacher, 9L))
+        .thenReturn(new Classroom(9L, "DemoClass", "desc", 42L, 43L, "ABC123", "ACTIVE"));
+    when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of(kc("PY43-KC-001")));
+    when(classroomRepository.findMembers(9L))
+        .thenReturn(
+            Collections.nCopies(
+                StudentWriteThrottle.MAX_CLASSROOM_QUEST_FANOUT_WRITES_PER_MINUTE,
+                new ClassroomMemberDto(11L, "stu01", "Stu 01", "ACTIVE")));
+
+    assertThatThrownBy(
+            () ->
+                service.publish(
+                    teacher,
+                    9L,
+                    new ClassroomQuestCreateRequest(
+                        "Task",
+                        null,
+                        List.of("PY43-KC-001"),
+                        null,
+                        "HANDOUT",
+                        LocalDate.now(ZoneOffset.UTC).plusDays(1))))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> {
+              assertThat(error.status()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY);
+              assertThat(error.code()).isEqualTo("CLASSROOM_QUEST_FANOUT_TOO_LARGE");
+            });
+
+    verify(repository, never()).insert(any(ClassroomQuestInsert.class));
+    verify(studentWriteThrottle, never())
+        .tryAcquireClassroomQuestFanOut(anyLong(), anyInt());
   }
 
   /**
@@ -185,6 +231,7 @@ class ClassroomQuestServiceTest {
                 new ClassroomMemberDto(12L, "stu02", "Stu 02", "ACTIVE")));
     when(repository.insertStudentQuestIfAbsent(any(QuestInsert.class)))
         .thenReturn(Optional.of(101L), Optional.empty());
+    when(studentWriteThrottle.tryAcquireClassroomQuestFanOut(teacher.userId(), 3)).thenReturn(true);
     when(repository.findById(78L)).thenReturn(Optional.of(sampleQuest(78L, "ACTIVE")));
 
     ClassroomQuestPublishResponse response =
@@ -200,6 +247,7 @@ class ClassroomQuestServiceTest {
                 LocalDate.now(ZoneOffset.UTC).plusDays(1)));
     assertThat(response.createdQuests()).isEqualTo(1);
     assertThat(response.skippedDuplicates()).isEqualTo(1);
+    verify(studentWriteThrottle).tryAcquireClassroomQuestFanOut(teacher.userId(), 3);
   }
 
   @Test

@@ -8,11 +8,14 @@ import com.pythontopia.classroom.dashboard.dto.RecentActivityDto;
 import com.pythontopia.classroom.dashboard.dto.ResourceUsageDto;
 import com.pythontopia.classroom.dashboard.repository.ClassroomDashboardRepository;
 import com.pythontopia.classroom.security.ClassroomGuard;
+import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,11 +32,15 @@ public class ClassroomDashboardService {
 
   private final ClassroomDashboardRepository repository;
   private final ClassroomGuard classroomGuard;
+  private final StudentWriteThrottle studentWriteThrottle;
 
   public ClassroomDashboardService(
-      ClassroomDashboardRepository repository, ClassroomGuard classroomGuard) {
+      ClassroomDashboardRepository repository,
+      ClassroomGuard classroomGuard,
+      StudentWriteThrottle studentWriteThrottle) {
     this.repository = repository;
     this.classroomGuard = classroomGuard;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   /**
@@ -44,6 +51,12 @@ public class ClassroomDashboardService {
   @Transactional
   public List<KcHeatmapEntryDto> kcHeatmap(CurrentUserPrincipal user, Long classroomId) {
     classroomGuard.requireOwner(user, classroomId);
+    if (!studentWriteThrottle.tryAcquireTeacherKcHeatmap(user.userId())) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "TEACHER_DASHBOARD_RATE_LIMITED",
+          "每个教师每分钟最多刷新 KC 热力图 10 次，请稍后再试");
+    }
     List<KcHeatmapEntryDto> entries = repository.findKcHeatmap(classroomId);
     repository.upsertSnapshots(classroomId, entries);
     return entries;

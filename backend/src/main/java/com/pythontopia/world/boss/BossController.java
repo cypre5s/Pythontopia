@@ -5,6 +5,7 @@ import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.common.web.AiBudgeted;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossAttemptResultDto;
 import com.pythontopia.world.boss.dto.BossPrefetchStatusDto;
@@ -41,9 +42,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class BossController {
 
   private final BossService service;
+  private final StudentWriteThrottle studentWriteThrottle;
 
-  public BossController(BossService service) {
+  public BossController(BossService service, StudentWriteThrottle studentWriteThrottle) {
     this.service = service;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @PostMapping("/{chapter}/problem")
@@ -114,7 +117,14 @@ public class BossController {
     if (request.chapter() != chapter) {
       throw new IllegalArgumentException("chapter param mismatch with body");
     }
-    return service.evaluateAttempt(request, requireStudent(user));
+    Long userId = requireStudent(user);
+    if (!studentWriteThrottle.tryAcquireSandboxJudge(userId)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "SANDBOX_JUDGE_RATE_LIMITED",
+          "代码判题每个账号每分钟最多 6 次，请稍后再试");
+    }
+    return service.evaluateAttempt(request, userId);
   }
 
   private Long requireStudent(CurrentUserPrincipal user) {

@@ -31,6 +31,20 @@ class StudentWriteThrottleTest {
   }
 
   @Test
+  void classroomQuestFanOutUsesASeparateWeightedWindow() {
+    AtomicLong nowMillis = new AtomicLong();
+    StudentWriteThrottle throttle = new StudentWriteThrottle(nowMillis::get);
+
+    assertThat(throttle.tryAcquireClassroomQuestFanOut(7L, 1000)).isTrue();
+    assertThat(throttle.tryAcquireClassroomQuestFanOut(7L, 1)).isFalse();
+    assertThat(throttle.tryAcquireClassroomQuestFanOut(8L, 1000)).isTrue();
+
+    nowMillis.set(Duration.ofMinutes(1).toMillis());
+    assertThat(throttle.tryAcquireClassroomQuestFanOut(7L, 1001)).isFalse();
+    assertThat(throttle.tryAcquireClassroomQuestFanOut(7L, 1000)).isTrue();
+  }
+
+  @Test
   void playerPositionWritesUseTheirOwnShortWindow() {
     AtomicLong nowMillis = new AtomicLong();
     StudentWriteThrottle throttle = new StudentWriteThrottle(nowMillis::get);
@@ -78,6 +92,22 @@ class StudentWriteThrottleTest {
   }
 
   @Test
+  void sandboxJudgingUsesASeparateSixPerMinuteAccountWindow() {
+    AtomicLong nowMillis = new AtomicLong();
+    StudentWriteThrottle throttle = new StudentWriteThrottle(nowMillis::get);
+
+    for (int request = 0; request < 6; request++) {
+      assertThat(throttle.tryAcquireSandboxJudge(7L)).isTrue();
+    }
+    assertThat(throttle.tryAcquireSandboxJudge(7L)).isFalse();
+    assertThat(throttle.tryAcquireSandboxJudge(8L)).isTrue();
+    assertThat(throttle.tryAcquire(7L, 100)).isTrue();
+
+    nowMillis.set(Duration.ofMinutes(1).toMillis());
+    assertThat(throttle.tryAcquireSandboxJudge(7L)).isTrue();
+  }
+
+  @Test
   void profileInterviewCreationUsesASeparateThreePerHourAccountWindow() {
     AtomicLong nowMillis = new AtomicLong();
     StudentWriteThrottle throttle = new StudentWriteThrottle(nowMillis::get);
@@ -91,5 +121,21 @@ class StudentWriteThrottleTest {
 
     nowMillis.set(Duration.ofHours(1).toMillis());
     assertThat(throttle.tryAcquireProfileInterview(7L)).isTrue();
+  }
+
+  @Test
+  void mediaCompositionUsesASeparateThreePerMinuteAccountWindow() {
+    AtomicLong nowMillis = new AtomicLong();
+    StudentWriteThrottle throttle = new StudentWriteThrottle(nowMillis::get);
+
+    for (int request = 0; request < 3; request++) {
+      assertThat(throttle.tryAcquireMediaComposition(7L)).isTrue();
+    }
+    assertThat(throttle.tryAcquireMediaComposition(7L)).isFalse();
+    assertThat(throttle.tryAcquireMediaComposition(8L)).isTrue();
+    assertThat(throttle.tryAcquire(7L, 100)).isTrue();
+
+    nowMillis.set(Duration.ofMinutes(1).toMillis());
+    assertThat(throttle.tryAcquireMediaComposition(7L)).isTrue();
   }
 }

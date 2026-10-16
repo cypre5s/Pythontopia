@@ -3,6 +3,7 @@ package com.pythontopia.media;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.media.domain.MediaAsset;
 import com.pythontopia.media.domain.MediaJob;
 import com.pythontopia.media.dto.StoryboardVideoRequest;
@@ -50,6 +51,7 @@ public class MediaJobService {
   private final MediaJobStreamRegistry streamRegistry;
   private final ObjectMapper objectMapper;
   private final MediaAssetUrls assetUrls;
+  private final StudentWriteThrottle studentWriteThrottle;
   private final Executor composeExecutor;
   private final Semaphore imageSemaphore;
   private final Semaphore ttsSemaphore;
@@ -61,6 +63,7 @@ public class MediaJobService {
       MediaJobStreamRegistry streamRegistry,
       ObjectMapper objectMapper,
       MediaAssetUrls assetUrls,
+      StudentWriteThrottle studentWriteThrottle,
       MediaComposeProperties properties,
       @Qualifier("mediaComposeExecutor") Executor composeExecutor) {
     this.jobRepository = jobRepository;
@@ -69,6 +72,7 @@ public class MediaJobService {
     this.streamRegistry = streamRegistry;
     this.objectMapper = objectMapper;
     this.assetUrls = assetUrls;
+    this.studentWriteThrottle = studentWriteThrottle;
     this.composeExecutor = composeExecutor;
     this.imageSemaphore = new Semaphore(properties.ttiConcurrency(), true);
     this.ttsSemaphore = new Semaphore(properties.ttsConcurrency(), true);
@@ -96,6 +100,13 @@ public class MediaJobService {
       if (hit.assetId() != null && assetRepository.findById(hit.assetId()).isPresent()) {
         return new SubmitResult(hit.id(), MediaJobStatus.SUCCESS, true, hit.assetId());
       }
+    }
+
+    if (!studentWriteThrottle.tryAcquireMediaComposition(userId)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "MEDIA_COMPOSE_RATE_LIMITED",
+          "视频合成请求过于频繁，请稍后再试");
     }
 
     String specJson = writeJson(request);

@@ -37,6 +37,10 @@ async function main() {
     const basic = await execute('print("piston-smoke-ok")');
     assert.equal(basic.stdout.trim(), 'piston-smoke-ok', 'Python runtime must execute code');
 
+    const identityProbe = await execute('import os\nprint(os.geteuid())');
+    assert.match(identityProbe.stdout.trim(), /^\d+$/, 'sandbox must report a numeric effective UID');
+    assert.notEqual(identityProbe.stdout.trim(), '0', 'sandboxed Python must not run as root');
+
     const fileProbe = await execute(
       `import os\nprint(os.path.exists(${JSON.stringify(markerPath)}))`,
     );
@@ -92,7 +96,7 @@ async function main() {
     assert.equal(timeout.signal, 'SIGKILL', 'Piston must kill work that exceeds its time budget');
 
     console.log(
-      `Piston sandbox passed: Python ${pythonVersion}, isolated host file and loopback, timeout enforced.`,
+      `Piston sandbox passed: Python ${pythonVersion}, non-root identity, isolated host file and loopback, timeout enforced.`,
     );
   } finally {
     await rm(markerDirectory, { recursive: true, force: true });

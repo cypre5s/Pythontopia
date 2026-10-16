@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.world.boss.dto.ExpeditionLeaderboardDto;
 import com.pythontopia.world.boss.dto.ExpeditionScoreSubmitDto;
 import jakarta.validation.Valid;
@@ -29,15 +30,24 @@ import org.springframework.web.bind.annotation.RestController;
 public class ExpeditionScoreController {
 
   private final ExpeditionScoreService service;
+  private final StudentWriteThrottle studentWriteThrottle;
 
-  public ExpeditionScoreController(ExpeditionScoreService service) {
+  public ExpeditionScoreController(
+      ExpeditionScoreService service, StudentWriteThrottle studentWriteThrottle) {
     this.service = service;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @PostMapping("/score")
   public ExpeditionLeaderboardDto submitScore(
       @CurrentUser CurrentUserPrincipal user, @Valid @RequestBody ExpeditionScoreSubmitDto dto) {
     requireStudent(user);
+    if (!studentWriteThrottle.tryAcquire(user.userId(), 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "EXPEDITION_SCORE_RATE_LIMITED",
+          "每个账号每分钟最多提交 100 次远征成绩");
+    }
     service.record(user.userId(), dto);
     return service.leaderboard(user.userId());
   }

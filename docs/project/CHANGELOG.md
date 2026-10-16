@@ -1,5 +1,86 @@
 # Changelog
 
+## 2026-10-16 — 阻止普通练习重复发放近期已做题
+
+- 普通练习与远征现在共用用户近 7 天已判题目的指纹过滤，防止同一道已批准题通过新发放 ID 重复计入掌握度。
+- PostgreSQL 集成测试验证用户范围、7 天窗口与无 run 查询；BossService 回归先 RED 后 GREEN，Boss 测试 56/56、远征 PostgreSQL 集成测试 31/31 通过。一次性取题账号已删除并确认用户及预生成题记录均为 0；未发起模型调用。
+
+## 2026-10-16 — 固定 Python 沙箱非 root 回归断言
+
+- 本地 Piston 烟测现在还会断言用户代码的有效 UID 非 0，防止开发镜像意外以 root 执行。
+- `node deploy/scripts/test_dev_piston_sandbox.mjs` 通过；未调用模型。
+
+## 2026-10-16 — 覆盖远征窄屏战斗并限制教师热力图刷新
+
+- 新增 320×780 Playwright 整页回归：从活动地图进入 Boss、提交失败判题、检查真实体力反馈与重试按钮，页面无横向溢出。所有 API 使用 fail-closed 路由模拟，没有后端/模型/学习数据写入。
+- 教师 KC 热力图按账号独立限制每分钟 10 次；归属校验后、65 项聚合与快照写入前拒绝超额请求，不占用普通写入额度。后端定向测试 25/25，Playwright 1/1，ESLint 与 `git diff --check` 通过。
+
+## 2026-10-16 — 对齐公网请求体上限并续审写路由
+
+- 公网 Nginx 的通用请求体上限从 32 MiB 降到与前端代理一致的 12 MiB；上传专用路径仍保留 6 MiB 限额。
+- 静态续审确认正式提交、Bug 矿洞重试、媒体作业已有服务层频率预算，TTS 与旧讯飞图片生成硬关闭。HTTPS/Nginx 契约先 RED 后 GREEN，所有契约项通过，`git diff --check` 通过；未发起模型请求。全 API 安全审计和公网运行态验证仍未完成。
+
+## 2026-10-16 — 修正远征 Boss 窄画布状态布局
+
+- 窄画布上将判题反馈移至体力条上方，并隐藏桌面专用的体力来源注释，避免与体力值重叠。
+- 回归先 RED 后 GREEN；`ExpeditionBossScene.spec.ts` 4/4、typecheck、触及文件 ESLint 与 `git diff --check` 通过。未创建远征 run，真实 Boss 浏览器窄屏仍待验收。
+
+## 2026-10-16 — 为 Loop Runtime 审计记录增加 90 天保留
+
+- 每天上海时间 03:30 清理创建超过 90 天的 Loop Runtime run；关联检查点、工具调用、Agent 记录、评估、状态与决策由现有外键级联删除。Tutor 学习会话历史不受影响。
+- PostgreSQL/Flyway 回归确认过期 run 及子记录删除、90 天内记录保留；`LoopRunServiceTest` 16/16 通过，无模型调用。
+
+## 2026-10-16 — 为 Tutor 工作流动作日志增加 90 天保留
+
+- 每天上海时间 03:40 删除超过 90 天的工作流动作审计行；Tutor 卡片历史与独立学习事件记录保留，刷新恢复和用户可见时间线不受影响。
+- RED/GREEN 后服务与 PostgreSQL/Flyway 定向回归通过；Tutor 工作流服务及 repository 两类 52/52，Spotless 与 `git diff --check` 通过，无模型调用。
+
+## 2026-10-16 — 限制重复沙箱判题
+
+- 费曼与无尽远征的代码判题入口共用每账号每分钟 6 次沙箱额度；超限时不进入判题服务。复用既有限流器，不改判题结果或学习记录语义。
+- `BossControllerTest`、`FeynmanControllerSecurityTest` 与 `StudentWriteThrottleTest` 通过；无模型调用或业务数据写入。
+
+## 2026-10-16 — 修正本地 Tutor 视频字幕路径
+
+- `./dev.sh` 现将 Tutor 视频字幕路径固定解析到仓库根 `data/course-pack-43/video_transcripts.json`，避免已有 `backend/data` 目录遮住真实字幕文件，导致看课页普通文本/图片提问在进入 Graph 前失败。
+- 可用 `PYT_COURSEPACK_VIDEO_TRANSCRIPTS` 覆盖路径；保留字幕缺失时 fail-closed 的后端行为。
+
+## 2026-10-16 — 限制远征成绩重复提交
+
+- `/api/world/expedition/score` 现使用每账号每分钟 100 次共享写额度；超限不会查询/结算成绩或再聚合排行榜。
+- 回归先 RED 后 GREEN，`ExpeditionScoreControllerTest` 4/4 通过，无业务数据写入。
+
+## 2026-10-16 — 限制故事板视频作业的账号级资源占用
+
+- 故事板视频作业现按账号每分钟最多提交 3 个；成功缓存命中不消耗额度，超限在插入作业或排入图像/配音队列前返回 429。
+- 回归先 RED 后 GREEN，`MediaJobServiceTest`、`StudentWriteThrottleTest` 与评估路径决定测试合计 21/21；未触发真实图像、配音或 DeepSeek 调用。
+
+## 2026-10-16 — 限制复盘评估路径决定写入
+
+- “采纳新路径”和“保留旧路径”现共用每账号每分钟 100 次写入额度，超限在路径变更服务前返回 429；评估生成仍走原 AI 预算。
+- 回归先 RED 后 GREEN，`LearnerEvaluationControllerTest` 1/1；无模型调用。
+
+## 2026-10-16 — 为 Tutor 历史增加游标分页
+
+- 会话恢复最多读取并显示最近 50 张卡片；面板可按 `(seq,id)` 向前加载旧记录，保留完整历史且不全量渲染。
+- 旧卡片引用改为按存储 ID 或序号单条读取，避免为解析引用重新装载整段历史；分页端点沿用会话 owner 校验。
+- RED/GREEN 后端定向测试 55/55（含 PostgreSQL 16 迁移与重复 seq 游标回归），面板测试 9/9，TypeScript、定向 ESLint 与 `git diff --check` 通过；无 DeepSeek 调用。
+
+## 2026-10-16 — 按实际写入量限制班级任务发布
+
+- 班级任务发布现在按“班级任务记录 + 每位有效成员的学生任务副本”计入独立账号额度，每位教师每分钟最多扇出 1,000 条写入，超额在落库前拒绝；普通课堂额度不受影响，单次同步仍支持最多 999 名学生。
+- 回归先 RED 后 GREEN，`ClassroomQuestServiceTest` + `StudentWriteThrottleTest` 18/18 通过；未写入业务数据。
+
+## 2026-10-16 — 收紧 Tutor 图片上传公网入口
+
+- Tutor 会话图片上传复用现有上传限流区，按来源 IP 限速；请求体从通用 32 MiB 收至 6 MiB，与服务端单图 5 MiB 上限对齐。
+- HTTPS/Nginx 契约先 RED 后 GREEN；`nginx:1.27 nginx -t` 与 `git diff --check` 通过。无模型请求。
+
+## 2026-10-16 — 限制 TutorBench 学情图聚合频率
+
+- TutorBench 每次运行会聚合学习证据图；现在按账号每分钟最多运行 10 次，超限在执行聚合前返回 429。复用现有限流组件，不加表或服务。
+- `TutorBenchControllerTest` + `StudentWriteThrottleTest` 7/7；本轮无模型调用。
+
 ## 2026-10-16 — 修复课件回链反馈并收紧远征难度与访谈创建
 
 - 课件引用/检索片段/KC 回链遇到某份页索引加载失败时继续检查其他文档；仍无法定位时明确提示索引错误，不再产生未处理异步拒绝。`LibraryPage` 定向测试 11/11、typecheck、ESLint 通过；真实 Chromium 故障注入显示错误提示，临时账号已清理。

@@ -331,12 +331,23 @@ export interface WorkflowTimelineCardDto {
   createdAt: string;
 }
 
+export interface WorkflowCardCursorDto {
+  seq: number;
+  id: number;
+}
+
+export interface WorkflowCardPageDto {
+  cards: WorkflowTimelineCardDto[];
+  nextCursor: WorkflowCardCursorDto | null;
+}
+
 export interface WorkflowSessionSnapshotDto {
   sessionKey: string;
   problemId: number;
   phase: WorkflowPhase;
   seq: number;
   cards: WorkflowTimelineCardDto[];
+  olderCardsCursor?: WorkflowCardCursorDto | null;
   episodePlan?: TutorEpisodePlanDto | null;
 }
 
@@ -360,6 +371,18 @@ export async function getActiveWorkflowSession(
   const response = await http.get<WorkflowSessionSnapshotDto>(
     '/api/tutor/workflow/sessions/active',
     { params: { problemId } },
+  );
+  return response.data;
+}
+
+/** 按会话 owner 权限读取游标之前的一页历史卡片。 */
+export async function getEarlierWorkflowCards(
+  sessionKey: string,
+  cursor: WorkflowCardCursorDto,
+): Promise<WorkflowCardPageDto> {
+  const response = await http.get<WorkflowCardPageDto>(
+    `/api/tutor/workflow/sessions/${encodeURIComponent(sessionKey)}/cards`,
+    { params: { beforeSeq: cursor.seq, beforeId: cursor.id } },
   );
   return response.data;
 }

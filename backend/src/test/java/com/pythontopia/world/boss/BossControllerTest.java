@@ -18,6 +18,7 @@ import com.pythontopia.auth.security.JwtAuthenticationFilter;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.common.web.AiBudgetWebConfiguration;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossAttemptResultDto;
@@ -56,9 +57,12 @@ class BossControllerTest {
 
   @MockBean TutorDailyRequestLimitService requestLimitService;
 
+  @MockBean StudentWriteThrottle studentWriteThrottle;
+
   @BeforeEach
   void authenticateAsStudent() {
     authenticate(new CurrentUserPrincipal(7L, "student", Role.STUDENT));
+    when(studentWriteThrottle.tryAcquireSandboxJudge(7L)).thenReturn(true);
   }
 
   @AfterEach
@@ -307,6 +311,23 @@ class BossControllerTest {
         .andExpect(jsonPath("$.score").value(95));
     verify(service)
         .evaluateAttempt(argThat(request -> attemptId.equals(request.attemptId())), any());
+    verify(studentWriteThrottle).tryAcquireSandboxJudge(7L);
+  }
+
+  @Test
+  void exhaustedSandboxJudgeBudgetRejectsBeforeCallingService() throws Exception {
+    when(studentWriteThrottle.tryAcquireSandboxJudge(7L)).thenReturn(false);
+
+    mockMvc
+        .perform(
+            post("/api/world/boss/1/attempt")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(
+                    objectMapper.writeValueAsString(
+                        new BossAttemptRequest("ai-1", 1, 1, "print(5)", 10, UUID.randomUUID()))))
+        .andExpect(status().isTooManyRequests());
+
+    verifyNoInteractions(service);
   }
 
   @Test

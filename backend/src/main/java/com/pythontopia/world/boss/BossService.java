@@ -231,9 +231,7 @@ public class BossService {
       requestCache.remove(new ProblemRequestKey(userId, request.requestId()), cachedRequest);
     }
     Set<String> issuedFingerprints =
-        expeditionRunId == null
-            ? Set.of()
-            : expeditionRunService.findIssuedQuestionFingerprints(userId, expeditionRunId);
+        expeditionRunService.findIssuedQuestionFingerprints(userId, expeditionRunId);
 
     // 1) 复用「已预生成未做」(READY) 的同维度题：命中即原子标 CONSUMED，省去现场等 LLM。
     //    这条同时实现「学生中途退出，下次登入复用已生成未做的题」——上次会话预取留下的 READY 行。

@@ -66,6 +66,12 @@ public class FeynmanController {
   @PostMapping("/sessions/{id}/judge")
   public Verdict judge(@CurrentUser CurrentUserPrincipal user, @PathVariable long id) {
     requireStudent(user);
+    if (!studentWriteThrottle.tryAcquireSandboxJudge(user.userId())) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "FEYNMAN_JUDGE_RATE_LIMITED",
+          "代码判题每个账号每分钟最多 6 次，请稍后再试");
+    }
     return judgeService.judge(user.userId(), id);
   }
 

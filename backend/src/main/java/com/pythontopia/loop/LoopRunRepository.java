@@ -87,6 +87,10 @@ public class LoopRunRepository {
         .findFirst();
   }
 
+  public int deleteCreatedBefore(OffsetDateTime cutoff) {
+    return jdbcTemplate.update("DELETE FROM loop_run WHERE created_at < ?", cutoff);
+  }
+
   private LoopRunEntity map(ResultSet rs, int rowNum) throws SQLException {
     return new LoopRunEntity(
         rs.getLong("id"),

@@ -137,6 +137,41 @@ class LoopRunServiceTest {
         "lf-trace-abcdef");
   }
 
+  @Test
+  void cleanupExpiredRunsDeletesNinetyDayHistoryAndCascadesRuntimeArtifacts() {
+    LoopRunDto expired = service.record(userId, fullRequest());
+    LoopRunDto retained = service.record(userId, fullRequest());
+    runtimeService.saveCheckpoint(
+        userId, expired.id(), 0, "COMPLETED", objectMapper.createObjectNode(), "old-cursor");
+    runtimeService.saveCheckpoint(
+        userId, retained.id(), 0, "COMPLETED", objectMapper.createObjectNode(), "new-cursor");
+    jdbcTemplate.update(
+        "UPDATE loop_run SET created_at = now() - interval '91 days' WHERE id = ?", expired.id());
+
+    service.cleanupExpiredRuns();
+
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM loop_run WHERE id = ?", Integer.class, expired.id()))
+        .isZero();
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM loop_checkpoint WHERE loop_run_id = ?",
+                Integer.class,
+                expired.id()))
+        .isZero();
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM loop_run WHERE id = ?", Integer.class, retained.id()))
+        .isEqualTo(1);
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT count(*) FROM loop_checkpoint WHERE loop_run_id = ?",
+                Integer.class,
+                retained.id()))
+        .isEqualTo(1);
+  }
+
   // ① 闭环 run 落库字段齐全（往返 DTO + 直接核对 DB 行）。
   @Test
   void recordPersistsEveryFieldAndReadsBack() {

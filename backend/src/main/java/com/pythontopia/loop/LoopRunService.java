@@ -4,9 +4,14 @@ import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.loop.LoopRunRepository.LoopRunInsert;
 import com.pythontopia.loop.dto.LoopRunDto;
 import com.pythontopia.loop.dto.LoopRunRecordRequest;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 /**
@@ -19,6 +24,9 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class LoopRunService {
+
+  private static final Logger log = LoggerFactory.getLogger(LoopRunService.class);
+  private static final int HISTORY_RETENTION_DAYS = 90;
 
   private static final int MAX_SESSION_ID_LEN = 120;
   private static final int MAX_TRACE_ID_LEN = 128;
@@ -95,6 +103,16 @@ public class LoopRunService {
                     new BusinessException(
                         HttpStatus.NOT_FOUND, "LOOP_RUN_NOT_FOUND", "闭环 run 不存在"));
     return LoopRunDto.from(entity);
+  }
+
+  @Scheduled(cron = "0 30 3 * * *", zone = "Asia/Shanghai")
+  public void cleanupExpiredRuns() {
+    int deleted =
+        repository.deleteCreatedBefore(
+            OffsetDateTime.now(ZoneOffset.UTC).minusDays(HISTORY_RETENTION_DAYS));
+    if (deleted > 0) {
+      log.info("Removed {} expired Loop Runtime runs", deleted);
+    }
   }
 
   private void requireOwnership(Long authUserId, Long bodyUserId) {

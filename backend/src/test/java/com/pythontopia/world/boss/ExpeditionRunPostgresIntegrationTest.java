@@ -833,6 +833,24 @@ class ExpeditionRunPostgresIntegrationTest {
   }
 
   @Test
+  void excludesRecentPracticeQuestionFingerprintsWhenThereIsNoExpeditionRun() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    String fingerprint = "b".repeat(64);
+    jdbc.update(
+        "INSERT INTO pregenerated_problem"
+            + " (user_id, chapter, stage, kc_code, problem_id, payload, status, consumed_at,"
+            + " question_fingerprint)"
+            + " VALUES (?, 1, 1, 'PY43-KC-004', 'practice-question', '{}'::jsonb, 'CONSUMED',"
+            + " now(), ?)",
+        userId,
+        fingerprint);
+
+    assertThat(runs.findIssuedQuestionFingerprints(userId, null)).containsExactly(fingerprint);
+    assertThat(runs.findIssuedQuestionFingerprints(userId + 1, null)).isEmpty();
+  }
+
+  @Test
   void bossNodeAdvancesOnlyThroughThreeVerifiedServerPhases() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());

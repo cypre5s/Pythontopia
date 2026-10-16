@@ -67,9 +67,30 @@ class FeynmanControllerSecurityTest {
 
   @Test
   void judgePropagatesAuthenticatedOwnerId() {
+    when(studentWriteThrottle.tryAcquireSandboxJudge(7L)).thenReturn(true);
+
     controller.judge(student, 10L);
 
-    verify(judgeService).judge(7L, 10L);
+    InOrder order = inOrder(studentWriteThrottle, judgeService);
+    order.verify(studentWriteThrottle).tryAcquireSandboxJudge(7L);
+    order.verify(judgeService).judge(7L, 10L);
+  }
+
+  @Test
+  void exhaustedJudgeBudgetPreventsSandboxJudging() {
+    when(studentWriteThrottle.tryAcquireSandboxJudge(7L)).thenReturn(false);
+
+    assertThatThrownBy(() -> controller.judge(student, 10L))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> {
+              org.assertj.core.api.Assertions.assertThat(error.status())
+                  .isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+              org.assertj.core.api.Assertions.assertThat(error.code())
+                  .isEqualTo("FEYNMAN_JUDGE_RATE_LIMITED");
+            });
+
+    verify(judgeService, never()).judge(7L, 10L);
   }
 
   @Test

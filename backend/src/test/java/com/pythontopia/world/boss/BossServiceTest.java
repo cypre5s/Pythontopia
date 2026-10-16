@@ -191,6 +191,42 @@ class BossServiceTest {
   }
 
   @Test
+  @DisplayName("普通练习跳过学生最近已做的 approved 题")
+  void regularPracticeSkipsRecentlyIssuedApprovedQuestion() {
+    when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
+    BossInternalProblem approved =
+        new BossInternalProblem(
+            "approved-33-v2",
+            1,
+            1,
+            2,
+            "PY43-KC-001",
+            "approved statement",
+            List.of("hint"),
+            "2 3",
+            "5",
+            1,
+            true,
+            true,
+            List.of(new BossTestCasePayload("2 3", "5", false)),
+            "print(5)");
+    when(expeditionRunService.findIssuedQuestionFingerprints(7L, null))
+        .thenReturn(Set.of(BossService.questionFingerprint(approved)));
+    when(reviewRepository.findApproved(1, 1, "PY43-KC-001", "debug", 2))
+        .thenReturn(Optional.of(new ApprovedBossProblem(33L, 2, approved)));
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenReturn(problemWithStage(1));
+
+    var dto =
+        service.fetchProblem(
+            1, new BossProblemRequest(1, null, 2, "PY43-KC-001", "debug", null, null, null), 7L);
+
+    assertThat(dto.statement()).isEqualTo("statement");
+    verify(expeditionRunService).findIssuedQuestionFingerprints(7L, null);
+  }
+
+  @Test
   @DisplayName("学生已有 READY 个性化预取题时先消费该题，再查询全局 approved bank")
   void readyPersonalizedProblemTakesPriorityOverApprovedBank() {
     BossInternalProblem ready =

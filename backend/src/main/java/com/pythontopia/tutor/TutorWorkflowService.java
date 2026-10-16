@@ -19,6 +19,8 @@ import com.pythontopia.submission.service.SubmissionService;
 import com.pythontopia.tutor.dto.TutorWorkflowAgentStateDto;
 import com.pythontopia.tutor.dto.TutorWorkflowAttachmentDto;
 import com.pythontopia.tutor.dto.TutorWorkflowCardDto;
+import com.pythontopia.tutor.dto.TutorWorkflowCardCursorDto;
+import com.pythontopia.tutor.dto.TutorWorkflowCardPageDto;
 import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
@@ -27,6 +29,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -42,7 +46,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
@@ -57,11 +63,13 @@ public class TutorWorkflowService {
 
   private static final Logger log = LoggerFactory.getLogger(TutorWorkflowService.class);
   private static final int MAX_RESTORE_CARDS = 12;
+  private static final int MAX_ACTIVE_CARD_HISTORY_PAGE_SIZE = 50;
   private static final int MAX_RESTORE_CHAT_TURNS = 20;
   private static final int MAX_CHAT_MESSAGE_LENGTH = 2000;
   private static final int MAX_TUTOR_CODE_LENGTH = 20_000;
   private static final int MAX_FEEDBACK_PAYLOAD_BYTES = 4 * 1024;
   private static final int MAX_REPLAY_RESULT_BYTES = 1_048_576;
+  private static final int ACTION_EVENT_RETENTION_DAYS = 90;
   private static final Pattern IMAGE_DATA_URI =
       Pattern.compile("(?i)data:image/(?:png|jpeg|gif|webp);base64,");
   private static final Pattern EXPLICIT_REFERENCE =
@@ -109,17 +117,29 @@ public class TutorWorkflowService {
     this.requestLimitService = requestLimitService;
   }
 
+  @Scheduled(cron = "0 40 3 * * *", zone = "Asia/Shanghai")
+  public void cleanupExpiredActionEvents() {
+    int deleted =
+        repository.deleteActionEventsCreatedBefore(
+            OffsetDateTime.now(ZoneOffset.UTC).minusDays(ACTION_EVENT_RETENTION_DAYS));
+    if (deleted > 0) {
+      log.info("Removed {} expired Tutor workflow action events", deleted);
+    }
+  }
+
   /** 取（或创建）该生该题的活跃会话快照 + 卡片时间线（前端恢复用）。 */
   public Map<String, Object> activeSession(Long userId, Long problemId) {
     requireProblem(problemId);
     TutorWorkflowSessionDto session = findOrCreate(userId, problemId);
-    List<TutorWorkflowCardDto> cards = repository.findCards(session.id());
+    TutorWorkflowCardPageDto cardPage =
+        repository.findLatestCardPage(session.id(), MAX_ACTIVE_CARD_HISTORY_PAGE_SIZE);
     Map<String, Object> snapshot = new LinkedHashMap<>();
     snapshot.put("sessionKey", session.sessionKey());
     snapshot.put("problemId", session.problemId());
     snapshot.put("phase", session.phase());
     snapshot.put("seq", session.seq());
-    snapshot.put("cards", cards);
+    snapshot.put("cards", cardPage.cards());
+    snapshot.put("olderCardsCursor", cardPage.nextCursor());
     repository
         .findAgentState(session.id())
         .map(this::readStoredState)
@@ -131,6 +151,27 @@ public class TutorWorkflowService {
                     "episodePlan",
                     objectMapper.convertValue(plan, new TypeReference<Map<String, Object>>() {})));
     return snapshot;
+  }
+
+  @Transactional(readOnly = true)
+  public TutorWorkflowCardPageDto olderCards(
+      Long userId, String sessionKey, int beforeSeq, long beforeId) {
+    TutorWorkflowSessionDto session =
+        repository
+            .findBySessionKey(userId, sessionKey)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.NOT_FOUND, "WORKFLOW_SESSION_NOT_FOUND", "导学会话不存在"));
+    if (beforeSeq < 0 || beforeId < 1) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST,
+          "TUTOR_WORKFLOW_CARD_CURSOR_INVALID",
+          "导学历史游标无效");
+    }
+    return repository.findCardsBefore(
+        session.id(), new TutorWorkflowCardCursorDto(beforeSeq, beforeId),
+        MAX_ACTIVE_CARD_HISTORY_PAGE_SIZE);
   }
 
   /** 执行一次工作流事件（SSE）：组装证据 → 转发 graph → result 投影落库。 */
@@ -603,18 +644,11 @@ public class TutorWorkflowService {
     }
 
     List<Map<String, Object>> references = new ArrayList<>();
-    List<TutorWorkflowCardDto> cards = null;
     for (String token : tokens) {
       if (token.startsWith("card:")) {
-        if (cards == null) {
-          cards = repository.findCards(session.id());
-        }
         String cardId = token.substring("card:".length());
         TutorWorkflowCardDto card =
-            cards.stream()
-                .filter(candidate -> matchesCardId(session, candidate, cardId))
-                .findFirst()
-                .orElseThrow(this::referenceNotFound);
+            findCardReference(session, cardId).orElseThrow(this::referenceNotFound);
         JsonNode payload = card.payload();
         references.add(
             Map.of(
@@ -651,12 +685,27 @@ public class TutorWorkflowService {
     eventData.put("references", references);
   }
 
-  private boolean matchesCardId(
-      TutorWorkflowSessionDto session, TutorWorkflowCardDto card, String requestedId) {
-    String storedId = card.payload().path("card_id").asText("");
-    return requestedId.equals(storedId)
-        || requestedId.equals(session.sessionKey() + ":" + card.seq())
-        || requestedId.equals("seq-" + card.seq());
+  private Optional<TutorWorkflowCardDto> findCardReference(
+      TutorWorkflowSessionDto session, String requestedId) {
+    Optional<TutorWorkflowCardDto> storedCard =
+        repository.findCardByStoredId(session.id(), requestedId);
+    if (storedCard.isPresent()) {
+      return storedCard;
+    }
+    String seq = null;
+    if (requestedId.startsWith(session.sessionKey() + ":")) {
+      seq = requestedId.substring(session.sessionKey().length() + 1);
+    } else if (requestedId.startsWith("seq-")) {
+      seq = requestedId.substring(4);
+    }
+    if (seq == null) {
+      return Optional.empty();
+    }
+    try {
+      return repository.findFirstCardBySeq(session.id(), Integer.parseInt(seq));
+    } catch (NumberFormatException e) {
+      return Optional.empty();
+    }
   }
 
   private BusinessException referenceNotFound() {

@@ -8,6 +8,7 @@ import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowRunRequest;
 import com.pythontopia.tutor.dto.TutorWorkflowAttachmentDto;
+import com.pythontopia.tutor.dto.TutorWorkflowCardPageDto;
 import jakarta.validation.Valid;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
@@ -54,6 +55,16 @@ public class TutorWorkflowController {
       @CurrentUser CurrentUserPrincipal user, @RequestParam Long problemId) {
     requireStudent(user);
     return service.activeSession(user.userId(), problemId);
+  }
+
+  @GetMapping("/sessions/{sessionKey}/cards")
+  public TutorWorkflowCardPageDto olderCards(
+      @CurrentUser CurrentUserPrincipal user,
+      @PathVariable String sessionKey,
+      @RequestParam int beforeSeq,
+      @RequestParam long beforeId) {
+    requireStudent(user);
+    return service.olderCards(user.userId(), sessionKey, beforeSeq, beforeId);
   }
 
   @PostMapping("/sessions/{sessionKey}/feedback")

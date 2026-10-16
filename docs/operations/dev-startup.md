@@ -20,6 +20,8 @@ cd /home/cypress/Pythontopia
 
 `./dev.sh` 默认关闭 Tutor/AI 入口的账号级与全站每日请求计数，便于本地连续调试模型；部署配置默认保留每账号 30 次、全站 300 次/日。开发栈无限请求仍受 DeepSeek 账号额度和供应商限流约束。
 
+本地导师视频上下文读取仓库根目录 `data/course-pack-43/video_transcripts.json`。启动脚本显式设置该路径，避免已有的 `backend/data` 目录导致相对路径指向缺少字幕文件的旧目录；可通过 `PYT_COURSEPACK_VIDEO_TRANSCRIPTS` 覆盖。
+
 通过 Graph 生成代码题时需要 Piston 自测环境，使用 `./dev.sh --sandbox` 启动并同步本地 Piston URL 与 Python 版本到 Graph/Java；普通 `./dev.sh` 不配置该沙箱。Graph 出题在未配置时会直接返回 `sandbox_unavailable`，不会为同一基础设施故障重复调用模型。
 
 开发脚本可能为当前运行生成未写入磁盘的临时 `PYT_RAG_ADMIN_TOKEN`，并同步给 Java、Graph 和 RAG。开发栈运行期间不要单独用 `docker compose` 重建 Graph/RAG，否则容器会重新读取 `.env`，造成服务间令牌失配；需要重启时使用 `./dev.sh` 统一重启。失配会让工坊意图路由返回 401 并进入不可用提示。

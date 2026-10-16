@@ -13,6 +13,7 @@ import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.tutor.dto.TutorWorkflowAttachmentDto;
+import com.pythontopia.tutor.dto.TutorWorkflowCardPageDto;
 import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,26 @@ class TutorWorkflowControllerTest {
     var file = new MockMultipartFile("file", "image.png", "image/png", new byte[] {1});
 
     assertThatThrownBy(() -> controller.uploadAttachment(TEACHER, "wf-7", file))
+        .isInstanceOf(BusinessException.class)
+        .extracting(error -> ((BusinessException) error).status())
+        .isEqualTo(HttpStatus.FORBIDDEN);
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void olderCardsDelegatesUsingAuthenticatedOwner() {
+    var expected = new TutorWorkflowCardPageDto(java.util.List.of(), null);
+    when(service.olderCards(7L, "wf-7", 4, 91L)).thenReturn(expected);
+
+    var result = controller.olderCards(STUDENT, "wf-7", 4, 91L);
+
+    assertThat(result).isEqualTo(expected);
+    verify(service).olderCards(7L, "wf-7", 4, 91L);
+  }
+
+  @Test
+  void olderCardsRejectsNonStudents() {
+    assertThatThrownBy(() -> controller.olderCards(TEACHER, "wf-7", 4, 91L))
         .isInstanceOf(BusinessException.class)
         .extracting(error -> ((BusinessException) error).status())
         .isEqualTo(HttpStatus.FORBIDDEN);

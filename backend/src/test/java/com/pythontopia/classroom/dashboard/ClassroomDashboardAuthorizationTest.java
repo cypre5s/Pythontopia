@@ -14,6 +14,7 @@ import com.pythontopia.classroom.domain.Classroom;
 import com.pythontopia.classroom.repository.ClassroomRepository;
 import com.pythontopia.classroom.security.ClassroomGuard;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import java.util.Optional;
 import org.assertj.core.api.ThrowableAssert.ThrowingCallable;
 import org.junit.jupiter.api.DisplayName;
@@ -36,8 +37,9 @@ class ClassroomDashboardAuthorizationTest {
   // requireOwner 在角色校验阶段即拒绝学生，不会触达 classrooms 表，故该仓储可为纯 mock。
   private final ClassroomRepository classroomRepository = mock(ClassroomRepository.class);
   private final ClassroomGuard classroomGuard = new ClassroomGuard(classroomRepository);
+  private final StudentWriteThrottle studentWriteThrottle = mock(StudentWriteThrottle.class);
   private final ClassroomDashboardService service =
-      new ClassroomDashboardService(dashboardRepository, classroomGuard);
+      new ClassroomDashboardService(dashboardRepository, classroomGuard, studentWriteThrottle);
 
   private final CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "stu01", Role.STUDENT);
 
@@ -78,7 +80,7 @@ class ClassroomDashboardAuthorizationTest {
             BusinessException.class,
             ex -> assertThat(ex.status()).isEqualTo(HttpStatus.FORBIDDEN));
     // 红线：学生被拒后绝不能读到任何班级聚合 → 聚合仓储零交互。
-    verifyNoInteractions(dashboardRepository);
+    verifyNoInteractions(dashboardRepository, studentWriteThrottle);
   }
 
   /**

@@ -187,7 +187,15 @@ function drawBossArena(scene: ExpeditionBossSceneContext): void {
   }
 
   drawHealth(scene, view, width, height);
-  addText(scene, width * 0.72, height - 20, statusText(view), '12px', view.status === 'failed' ? '#ffd5ce' : '#fff3c9');
+  const compact = width < 600;
+  addText(
+    scene,
+    compact ? width / 2 : width * 0.72,
+    compact ? height - 52 : height - 20,
+    statusText(view),
+    '12px',
+    view.status === 'failed' ? '#ffd5ce' : '#fff3c9',
+  );
 }
 
 function drawPhaseProgress(scene: ExpeditionBossSceneContext, view: ExpeditionBossView, width: number): void {
@@ -234,7 +242,9 @@ function drawHealth(
       .fillRoundedRect(112 + index * 16, height - 30, 11, 13, 2);
   }
   bar.setDepth(3);
-  addText(scene, width - 18, height - 23, '体力取自本局结算', '10px', '#d4dded', 1, 0.5);
+  if (width >= 600) {
+    addText(scene, width - 18, height - 23, '体力取自本局结算', '10px', '#d4dded', 1, 0.5);
+  }
 }
 
 function statusText(view: ExpeditionBossView): string {

@@ -4,8 +4,11 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.tutor.dto.TutorWorkflowCardCursorDto;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
 import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
@@ -146,6 +149,58 @@ class TutorWorkflowRepositoryIntegrationTest {
                         + "\"phase\":\"CODING\",\"card_key\":\"plan_card\","
                         + "\"card\":{\"content\":\"started\"},"
                         + "\"available_actions\":[],\"seq\":2}"));
+  }
+
+  @Test
+  void cardHistoryUsesStableCursorAndReturnsChronologicalPages() {
+    repository.insertCard(session.id(), 1, "CHAT", "ai_reply", "{\"content\":\"one\"}");
+    repository.insertCard(session.id(), 2, "CHAT", "ai_reply", "{\"content\":\"two-a\"}");
+    repository.insertCard(session.id(), 2, "CHAT", "ai_reply", "{\"content\":\"two-b\"}");
+    repository.insertCard(session.id(), 3, "CHAT", "ai_reply", "{\"content\":\"three\"}");
+
+    var latest = repository.findLatestCardPage(session.id(), 2);
+
+    assertThat(latest.cards()).extracting(card -> card.payload().get("content").asText())
+        .containsExactly("two-b", "three");
+    var cursor = latest.nextCursor();
+    assertThat(cursor)
+        .isEqualTo(
+            new TutorWorkflowCardCursorDto(
+                2,
+                jdbc.queryForObject(
+                    "SELECT id FROM tutor_workflow_card WHERE session_id = ?"
+                        + " AND payload->>'content' = 'two-b'",
+                    Long.class,
+                    session.id())));
+
+    var earlier = repository.findCardsBefore(session.id(), cursor, 2);
+
+    assertThat(earlier.cards()).extracting(card -> card.payload().get("content").asText())
+        .containsExactly("one", "two-a");
+    assertThat(earlier.nextCursor()).isNull();
+  }
+
+  @Test
+  void deleteExpiredActionEventsKeepsRecentSessionCardsAndEvents() {
+    repository.insertCard(session.id(), 1, "CHAT", "ai_reply", "{\"content\":\"kept\"}");
+    repository.insertActionEvent(session.id(), 1, "ACTION_CLICKED", "old", "{}");
+    repository.insertActionEvent(session.id(), 2, "ACTION_CLICKED", "recent", "{}");
+    jdbc.update(
+        "UPDATE tutor_workflow_action_event SET created_at = now() - interval '91 days'"
+            + " WHERE session_id = ? AND seq = 1",
+        session.id());
+
+    int deleted =
+        repository.deleteActionEventsCreatedBefore(
+            OffsetDateTime.now(ZoneOffset.UTC).minusDays(90));
+
+    assertThat(deleted).isEqualTo(1);
+    assertThat(jdbc.queryForObject(
+            "SELECT count(*) FROM tutor_workflow_action_event WHERE session_id = ?",
+            Integer.class,
+            session.id()))
+        .isEqualTo(1);
+    assertThat(repository.findRecentCards(session.id(), 10)).hasSize(1);
   }
 
   @Test

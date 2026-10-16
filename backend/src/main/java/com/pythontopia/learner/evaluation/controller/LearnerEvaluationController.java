@@ -5,6 +5,7 @@ import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.AiBudgeted;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.learner.evaluation.dto.EvaluationDto;
 import com.pythontopia.learner.evaluation.dto.EvaluationRequest;
 import com.pythontopia.learner.evaluation.service.LearnerEvaluationService;
@@ -24,9 +25,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class LearnerEvaluationController {
 
   private final LearnerEvaluationService service;
+  private final StudentWriteThrottle studentWriteThrottle;
 
-  public LearnerEvaluationController(LearnerEvaluationService service) {
+  public LearnerEvaluationController(
+      LearnerEvaluationService service, StudentWriteThrottle studentWriteThrottle) {
     this.service = service;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @PostMapping
@@ -57,6 +61,7 @@ public class LearnerEvaluationController {
   public EvaluationDto accept(
       @CurrentUser CurrentUserPrincipal user, @PathVariable Long evaluationId) {
     requireStudent(user);
+    requireWriteBudget(user.userId());
     return service.acceptNewPath(user.userId(), evaluationId);
   }
 
@@ -64,7 +69,17 @@ public class LearnerEvaluationController {
   public EvaluationDto keepOld(
       @CurrentUser CurrentUserPrincipal user, @PathVariable Long evaluationId) {
     requireStudent(user);
+    requireWriteBudget(user.userId());
     return service.keepOld(user.userId(), evaluationId);
+  }
+
+  private void requireWriteBudget(long userId) {
+    if (!studentWriteThrottle.tryAcquire(userId, 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "EVALUATION_WRITE_RATE_LIMITED",
+          "每个账号每分钟最多处理 100 次评估路径决定");
+    }
   }
 
   private void requireStudent(CurrentUserPrincipal user) {

@@ -55,6 +55,24 @@ require_upload_limit_block() {
   fi
 }
 
+require_tutor_workflow_upload_limit_block() {
+  local edge_file="${ROOT_DIR}/deploy/nginx/pythontopia.conf"
+  local upload_block
+  upload_block="$(awk '
+    /location[[:space:]]+~[[:space:]]+\^\/api\/tutor\/workflow\/sessions\/\[\^\/\]\+\/attachments\$/ { capture=1 }
+    capture { print }
+    capture && /^[[:space:]]*}/ { exit }
+  ' "${edge_file}")"
+  if grep -Eq 'client_max_body_size[[:space:]]+6m;' <<<"${upload_block}" \
+      && grep -Eq 'limit_req[[:space:]]+zone=pythontopia_upload[[:space:]]+burst=5[[:space:]]+nodelay;' <<<"${upload_block}" \
+      && grep -Eq 'limit_req_status[[:space:]]+429;' <<<"${upload_block}"; then
+    echo "[PASS] Tutor 图片上传限制请求体、限速并返回 429"
+  else
+    echo "[FAIL] Tutor 图片上传限制请求体、限速并返回 429" >&2
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
 require_evidence_snapshot_limit_block() {
   local edge_file="${ROOT_DIR}/deploy/nginx/pythontopia.conf"
   local api_block
@@ -94,6 +112,9 @@ require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "公开入口对登录/注册按来源 IP 限速" \
   'limit_req_zone[[:space:]]+\$binary_remote_addr[[:space:]]+zone=pythontopia_auth:10m[[:space:]]+rate=5r/s;'
 require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "公网入口请求体上限与前端代理 12 MiB 限额对齐" \
+  '^[[:space:]]+client_max_body_size[[:space:]]+12m;'
+require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "登录/注册/刷新均匹配公开认证限速路由" \
   'location[[:space:]]+~[[:space:]]+\^/api/auth/\(login\|register\|refresh\)\$[[:space:]]*\{'
 require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
@@ -125,6 +146,10 @@ require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "上传限速作用于精确上传路由" \
   'location[[:space:]]+=[[:space:]]+/api/workshop/uploads[[:space:]]*\{'
 require_upload_limit_block
+require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "Tutor 图片上传限速只匹配附件 POST" \
+  '~\^POST:/api/tutor/workflow/sessions/\[\^/\]\+/attachments\$[[:space:]]+\$binary_remote_addr;'
+require_tutor_workflow_upload_limit_block
 require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "证据快照限速只接收 POST 快照请求的来源 IP" \
   'map[[:space:]]+"\$request_method:\$uri"[[:space:]]+\$pythontopia_evidence_snapshot_limit_key[[:space:]]*\{'

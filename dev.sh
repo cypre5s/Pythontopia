@@ -238,6 +238,8 @@ fi
 # 后端默认即 localhost:18091/18092，这里显式声明对齐 dockerized graph/rag
 export PYT_GRAPH_URL="${PYT_GRAPH_URL:-http://127.0.0.1:18091}"
 export PYT_RAG_URL="${PYT_RAG_URL:-http://127.0.0.1:18092}"
+# Resolve transcripts from the repository root even when backend/data is an existing legacy directory.
+export PYT_COURSEPACK_VIDEO_TRANSCRIPTS="${PYT_COURSEPACK_VIDEO_TRANSCRIPTS:-$ROOT_DIR/data/course-pack-43/video_transcripts.json}"
 # 多 Agent RouteDecision 执行签名使用独立、每次开发栈启动随机的高熵密钥；不复用公开的
 # graph/rag internal token。外部显式配置时保持原值，便于多后端实例共享验证。
 if [[ "$backend_preexisting" != "1" && -z "${PYT_ROUTE_EXECUTION_SECRET:-}" ]]; then

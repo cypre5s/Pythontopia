@@ -2,10 +2,17 @@ import { flushPromises, shallowMount } from '@vue/test-utils';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import TutorWorkflowPanel from '../TutorWorkflowPanel.vue';
 
-const { streamStart, streamAbort, getActiveWorkflowSession, streamConfig } = vi.hoisted(() => ({
+const {
+  streamStart,
+  streamAbort,
+  getActiveWorkflowSession,
+  getEarlierWorkflowCards,
+  streamConfig,
+} = vi.hoisted(() => ({
   streamStart: vi.fn(),
   streamAbort: vi.fn(),
   getActiveWorkflowSession: vi.fn(),
+  getEarlierWorkflowCards: vi.fn(),
   streamConfig: {
     completeRequest: false,
     holdRequest: false,
@@ -53,6 +60,7 @@ vi.mock('@/composables/useSseStream', async () => {
 });
 vi.mock('@/api/tutorWorkflow', () => ({
   getActiveWorkflowSession,
+  getEarlierWorkflowCards,
   recordTutorWorkflowFeedback: vi.fn(),
   uploadTutorWorkflowImage: vi.fn(),
 }));
@@ -96,6 +104,7 @@ describe('TutorWorkflowPanel interrupted request recovery', () => {
       cards: [],
       episodePlan: null,
     });
+    getEarlierWorkflowCards.mockResolvedValue({ cards: [], nextCursor: null });
   });
 
   it('offers explicit recovery after refresh and reuses the original request ID', async () => {
@@ -117,6 +126,64 @@ describe('TutorWorkflowPanel interrupted request recovery', () => {
       requestId: '2c95c24f-76d7-4fa0-bf6e-d0ff45731f64',
       eventData: { message: '请解释这道题' },
     });
+  });
+
+  it('loads older cards before the current history without duplicating or dropping cards', async () => {
+    getActiveWorkflowSession.mockResolvedValueOnce({
+      sessionKey: 'session-42',
+      problemId: 42,
+      phase: 'READING',
+      seq: 2,
+      cards: [
+        {
+          seq: 2,
+          event: 'CHAT',
+          cardKey: 'ai_reply',
+          payload: {
+            card_id: 'latest-card',
+            content: '新回答',
+            user_message: '较新的提问',
+            referenced_card_ids: [],
+          },
+          createdAt: '2026-10-12T12:00:02Z',
+        },
+      ],
+      olderCardsCursor: { seq: 1, id: 41 },
+      episodePlan: null,
+    });
+    getEarlierWorkflowCards.mockResolvedValueOnce({
+      cards: [
+        {
+          seq: 1,
+          event: 'CHAT',
+          cardKey: 'ai_reply',
+          payload: {
+            card_id: 'older-card',
+            content: '旧回答',
+            user_message: '较早的提问',
+            referenced_card_ids: [],
+          },
+          createdAt: '2026-10-12T12:00:01Z',
+        },
+      ],
+      nextCursor: null,
+    });
+    const wrapper = shallowMount(TutorWorkflowPanel, {
+      props: { problemId: 42, kcCodes: [] },
+      global: { stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    const loadOlderButton = wrapper.get('[data-testid="tutor-workflow-load-older"]');
+    expect(loadOlderButton.text()).toContain('更早');
+    await loadOlderButton.trigger('click');
+    await flushPromises();
+
+    expect(getEarlierWorkflowCards).toHaveBeenCalledWith('session-42', { seq: 1, id: 41 });
+    expect(wrapper.findAll('.tw-card__title')).toHaveLength(2);
+    const history = wrapper.findAll('.tw-card__user').map((node) => node.text());
+    expect(history).toEqual(['🙋 较早的提问', '🙋 较新的提问']);
+    expect(wrapper.find('[data-testid="tutor-workflow-load-older"]').exists()).toBe(false);
   });
 
   it('clears a saved request when the active Tutor session no longer matches', async () => {

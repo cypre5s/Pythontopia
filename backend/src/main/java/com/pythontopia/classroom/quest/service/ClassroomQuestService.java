@@ -81,7 +81,15 @@ public class ClassroomQuestService {
       CurrentUserPrincipal user, Long classroomId, ClassroomQuestCreateRequest request) {
     classroomGuard.requireOwner(user, classroomId);
     validateRequest(request);
-    requireWriteCapacity(user.userId());
+    List<ClassroomMemberDto> members = classroomRepository.findMembers(classroomId);
+    int writeCount = members.size() + 1;
+    if (writeCount > StudentWriteThrottle.MAX_CLASSROOM_QUEST_FANOUT_WRITES_PER_MINUTE) {
+      throw new BusinessException(
+          HttpStatus.UNPROCESSABLE_ENTITY,
+          "CLASSROOM_QUEST_FANOUT_TOO_LARGE",
+          "同步发布最多支持 999 名学生");
+    }
+    requireQuestFanOutCapacity(user.userId(), writeCount);
 
     QuestNodeType nodeType =
         request.targetProblemId() != null
@@ -113,7 +121,6 @@ public class ClassroomQuestService {
                 request.targetProblemId(),
                 request.targetResourceType()));
 
-    List<ClassroomMemberDto> members = classroomRepository.findMembers(classroomId);
     StudentQuestTemplate template =
         template(
             classroomQuestId,
@@ -170,6 +177,15 @@ public class ClassroomQuestService {
             HttpStatus.INTERNAL_SERVER_ERROR,
             "CLASSROOM_QUEST_PERSIST_FAILED",
             "班级任务归档后未能读回"));
+  }
+
+  private void requireQuestFanOutCapacity(long userId, int writeCount) {
+    if (!studentWriteThrottle.tryAcquireClassroomQuestFanOut(userId, writeCount)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "CLASSROOM_WRITE_RATE_LIMITED",
+          "班级任务写入过于频繁，请稍后重试");
+    }
   }
 
   private void requireWriteCapacity(long userId) {

@@ -18,19 +18,23 @@ import com.pythontopia.classroom.dashboard.repository.ClassroomDashboardReposito
 import com.pythontopia.classroom.dashboard.service.ClassroomDashboardService;
 import com.pythontopia.classroom.domain.Classroom;
 import com.pythontopia.classroom.security.ClassroomGuard;
+import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.HttpStatus;
 
 class ClassroomDashboardServiceTest {
 
   private final ClassroomDashboardRepository repository = mock(ClassroomDashboardRepository.class);
   private final ClassroomGuard classroomGuard = mock(ClassroomGuard.class);
+  private final StudentWriteThrottle studentWriteThrottle = mock(StudentWriteThrottle.class);
   private final ClassroomDashboardService service =
-      new ClassroomDashboardService(repository, classroomGuard);
+      new ClassroomDashboardService(repository, classroomGuard, studentWriteThrottle);
   private final CurrentUserPrincipal teacher = new CurrentUserPrincipal(42L, "t01", Role.TEACHER);
 
   /**
@@ -42,6 +46,7 @@ class ClassroomDashboardServiceTest {
   void kcHeatmapWritesAllSnapshotsInOneBatch() {
     when(classroomGuard.requireOwner(teacher, 9L))
         .thenReturn(new Classroom(9L, "DemoClass", "", 42L, 43L, "ABC123", "ACTIVE"));
+    when(studentWriteThrottle.tryAcquireTeacherKcHeatmap(42L)).thenReturn(true);
     KcHeatmapEntryDto a =
         new KcHeatmapEntryDto("PY43-KC-001", "PY43-KC-001 名", 1L, 1, new BigDecimal("0.500"), 3, 1, 2, 0);
     KcHeatmapEntryDto b =
@@ -50,7 +55,47 @@ class ClassroomDashboardServiceTest {
 
     List<KcHeatmapEntryDto> result = service.kcHeatmap(teacher, 9L);
     assertThat(result).hasSize(2);
+    verify(studentWriteThrottle).tryAcquireTeacherKcHeatmap(42L);
     verify(repository, org.mockito.Mockito.times(1)).upsertSnapshots(9L, List.of(a, b));
+  }
+
+  @Test
+  void kcHeatmapRejectsOverBudgetBeforeAggregationOrSnapshotWrite() {
+    when(classroomGuard.requireOwner(teacher, 9L))
+        .thenReturn(new Classroom(9L, "DemoClass", "", 42L, 43L, "ABC123", "ACTIVE"));
+    when(studentWriteThrottle.tryAcquireTeacherKcHeatmap(42L)).thenReturn(false);
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.kcHeatmap(teacher, 9L))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            exception -> assertThat(exception.status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+
+    verify(studentWriteThrottle).tryAcquireTeacherKcHeatmap(42L);
+    org.mockito.Mockito.verifyNoInteractions(repository);
+  }
+
+  @Test
+  void eleventhHeatmapRefreshIsRejectedBeforeAggregationOrSnapshotWrite() {
+    when(classroomGuard.requireOwner(teacher, 9L))
+        .thenReturn(new Classroom(9L, "DemoClass", "", 42L, 43L, "ABC123", "ACTIVE"));
+    when(repository.findKcHeatmap(9L)).thenReturn(List.of());
+    StudentWriteThrottle throttle = new StudentWriteThrottle();
+    ClassroomDashboardService rateLimitedService =
+        new ClassroomDashboardService(repository, classroomGuard, throttle);
+
+    for (int request = 0; request < 10; request++) {
+      assertThat(rateLimitedService.kcHeatmap(teacher, 9L)).isEmpty();
+    }
+    assertThat(throttle.tryAcquire(42L, 100)).isTrue();
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> rateLimitedService.kcHeatmap(teacher, 9L))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            exception -> assertThat(exception.status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+
+    verify(repository, org.mockito.Mockito.times(10)).findKcHeatmap(9L);
+    verify(repository, org.mockito.Mockito.times(10)).upsertSnapshots(9L, List.of());
   }
 
   @Test
