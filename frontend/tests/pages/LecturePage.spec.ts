@@ -49,7 +49,10 @@ async function mountLecturePage(chapter: number) {
       plugins: [router],
       stubs: {
         AppLayout: { template: '<div><slot /></div>' },
-        BilibiliVideoCards: { template: '<div />' },
+        BilibiliVideoCards: {
+          emits: ['opened'],
+          template: '<button data-testid="external-video-open" @click="$emit(\'opened\')" />',
+        },
         PptView: { template: '<div data-testid="ppt-view" />' },
         TutorPanel: { template: '<div />' },
       },
@@ -109,6 +112,50 @@ describe('LecturePage resource evidence', () => {
 
     expect(apiMocks.consumeWorkshopResource).toHaveBeenCalledWith(77);
     expect(document.body.querySelector('[data-testid="ppt-view"]')).not.toBeNull();
+    expect(wrapper.get('.lecture-done').text()).toContain('本次已观看');
+  });
+
+  it('labels chapter video completion as session-only instead of saved learning progress', async () => {
+    apiMocks.listChapterVideos.mockResolvedValueOnce([{
+      id: 11,
+      chapter: 1,
+      title: '第一章讲解',
+      durationSec: 100,
+      kcCodes: ['PY43-KC-001'],
+      available: true,
+    }]);
+    const wrapper = await mountLecturePage(1);
+    await flushPromises();
+
+    const video = wrapper.get('[data-testid="lecture-video"]');
+    Object.defineProperty(video.element, 'duration', { configurable: true, value: 100 });
+    Object.defineProperty(video.element, 'currentTime', { configurable: true, value: 91 });
+    await video.trigger('timeupdate');
+
+    const status = wrapper.get('.lecture-done');
+    expect(status.text()).toContain('本次已观看');
+    expect(status.attributes('title')).toContain('不会保存到学习档案');
+  });
+
+  it('does not count opening an external video as viewing', async () => {
+    const wrapper = await mountLecturePage(1);
+    await flushPromises();
+
+    await wrapper.get('[data-testid="external-video-open"]').trigger('click');
+
+    expect(wrapper.find('.lecture-done').exists()).toBe(false);
+  });
+
+  it('does not show completed learning when handout consumption fails', async () => {
+    apiMocks.consumeWorkshopResource.mockRejectedValueOnce(new Error('offline'));
+    const wrapper = await mountLecturePage(1);
+    await flushPromises();
+
+    await wrapper.get('[data-testid="lecture-goto-ppt"]').trigger('click');
+    await flushPromises();
+
+    expect(document.body.querySelector('[data-testid="ppt-view"]')).not.toBeNull();
+    expect(wrapper.find('.lecture-done').exists()).toBe(false);
   });
 
   it('keeps the new chapter videos when an older request finishes later', async () => {

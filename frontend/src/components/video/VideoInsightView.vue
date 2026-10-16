@@ -44,7 +44,7 @@ function jumpUrl(tSec: number): string {
 }
 
 function onJump(point: BilibiliKeyPoint): void {
-  // 不阻止默认行为：让 <a target="_blank"> 原生打开新标签；仅冒泡给父组件计入学习闭环。
+  // 不阻止默认行为：让 <a target="_blank"> 原生打开新标签；外链点击不代表已观看。
   emit('jump', point);
 }
 </script>

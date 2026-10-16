@@ -819,7 +819,7 @@ public class BossService {
               score,
               feedback),
           publishLearningEvent
-              ? practiceOutcomeEvent(userId, problem, graphResult, request.attemptId())
+              ? practiceOutcomeEvent(userId, problem, graphResult, request.attemptId(), runId)
               : null);
     } catch (RuntimeException exception) {
       if (claim != null) {
@@ -1052,7 +1052,11 @@ public class BossService {
    * 时安全跳过，绝不抛错影响判题返回。
    */
   private LearningEvent practiceOutcomeEvent(
-      Long userId, BossInternalProblem problem, BossEvaluateResultDto result, UUID attemptId) {
+      Long userId,
+      BossInternalProblem problem,
+      BossEvaluateResultDto result,
+      UUID attemptId,
+      String runId) {
     if (userId == null) {
       return null;
     }
@@ -1062,7 +1066,10 @@ public class BossService {
       return null;
     }
     String difficulty = difficultyBand(problem.difficulty());
-    String idempotencyKey = "boss-attempt:" + userId + ":" + attemptId;
+    String idempotencyKey =
+        result.passed() && runId == null
+            ? "boss-pass:" + userId + ":" + questionFingerprint(problem)
+            : "boss-attempt:" + userId + ":" + attemptId;
     if (result.passed()) {
       return new LearningEvent.PracticeSucceeded(
           userId, kcCode, null, difficulty, null, idempotencyKey);

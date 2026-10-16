@@ -1302,7 +1302,31 @@ class BossServiceTest {
     assertThat(event.kcCode()).isEqualTo("PY43-KC-001");
     assertThat(event.problemId()).isNull(); // boss 题无 course_problem 数字主键
     assertThat(event.difficulty()).isEqualTo("hard"); // difficulty 4 → hard
-    assertThat(event.idempotencyKey()).isEqualTo("boss-attempt:7:" + attemptId);
+    assertThat(event.idempotencyKey())
+        .isEqualTo("boss-pass:7:" + BossService.questionFingerprint(problemWithTests(4)));
+  }
+
+  @Test
+  @DisplayName("同一普通 Boss 题换 attemptId 再次通过仍复用掌握度幂等键")
+  void repeatedPassForSameRegularBossProblemSharesMasteryIdempotencyKey() {
+    BossInternalProblem problem = problemWithTests(4);
+    when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problem));
+    when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
+        .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
+
+    service.evaluateAttempt(
+        new BossAttemptRequest("p1", 1, 1, "print(5)", 10, UUID.randomUUID()), 7L);
+    service.evaluateAttempt(
+        new BossAttemptRequest("p1", 1, 1, "print(5)", 10, UUID.randomUUID()), 7L);
+
+    ArgumentCaptor<LearningEvent.PracticeSucceeded> events =
+        ArgumentCaptor.forClass(LearningEvent.PracticeSucceeded.class);
+    verify(eventPublisher, times(2)).publishEvent(events.capture());
+    assertThat(events.getAllValues())
+        .extracting(LearningEvent.PracticeSucceeded::idempotencyKey)
+        .containsExactly(
+            "boss-pass:7:" + BossService.questionFingerprint(problem),
+            "boss-pass:7:" + BossService.questionFingerprint(problem));
   }
 
   @Test
@@ -1324,7 +1348,8 @@ class BossServiceTest {
     assertThat(events.getAllValues())
         .extracting(event -> ((LearningEvent.PracticeSucceeded) event).idempotencyKey())
         .containsExactly(
-            "boss-attempt:7:" + sharedAttemptId, "boss-attempt:8:" + sharedAttemptId);
+            "boss-pass:7:" + BossService.questionFingerprint(problemWithTests(4)),
+            "boss-pass:8:" + BossService.questionFingerprint(problemWithTests(4)));
   }
 
   @Test

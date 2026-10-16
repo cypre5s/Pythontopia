@@ -66,7 +66,7 @@ describe('sanitizeMermaidSvgMarkup · mermaid 档', () => {
 
     const clean = sanitizeMermaidSvgMarkup(rendered);
 
-    expect(clean).toContain('#fff7e6');
+    expect(clean).toMatch(/#fff7e6|rgb\(255,\s*247,\s*230\)/i);
     expect(clean).toContain('max-width: 76px');
     expect(clean).toContain('KC1');
   });

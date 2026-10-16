@@ -43,7 +43,8 @@ describe('MindMapView · mermaid 产物消毒', () => {
   it('保留 mermaid 主题着色（消毒没有把图洗成空骨架）', async () => {
     const wrapper = await renderMindMap('graph LR\n  A[KC1] --> B[KC2]');
 
-    expect(wrapper.find('[data-testid="mermaid-render"]').html()).toContain('#fff7e6');
+    expect(wrapper.find('[data-testid="mermaid-render"]').html())
+      .toMatch(/#fff7e6|rgb\(255,\s*247,\s*230\)/i);
     wrapper.unmount();
   });
 

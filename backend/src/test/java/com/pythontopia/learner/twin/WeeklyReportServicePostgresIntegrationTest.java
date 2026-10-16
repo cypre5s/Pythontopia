@@ -191,7 +191,8 @@ class WeeklyReportServicePostgresIntegrationTest {
     insertMasteryEvent(userId, "PRACTICE_PASS", new BigDecimal("0.100"), "2 days");
     insertMasteryEvent(userId, "PRACTICE_PASS", new BigDecimal("0.100"), "3 days");
     insertMasteryEvent(userId, "PRACTICE_FAIL", new BigDecimal("-0.050"), "1 day");
-    insertMasteryEvent(userId, "MICRO_CHECK_PASS", new BigDecimal("0.020"), "30 minutes");
+    insertMasteryEvent(userId, "MICRO_CHECK_PASS", new BigDecimal("0.020"), "10 minutes");
+    insertMasteryEvent(userId, "DEBUG_FIX", new BigDecimal("0.050"), "30 minutes");
     insertMasteryEvent(userId, "BOOTSTRAP", new BigDecimal("0.500"), "1 hour");
     insertMasteryEvent(userId, "DECAY", new BigDecimal("-0.020"), "20 minutes");
 
@@ -200,10 +201,13 @@ class WeeklyReportServicePostgresIntegrationTest {
     assertThat(repository.findAssessedKcCodes(userId)).containsExactly("PY43-KC-001");
     assertThat(repository.findRecentPracticeOutcomesByUser(userId))
         .extracting(MasteryRepository.PracticeOutcome::passed)
-        .containsExactly(false, true, true);
+        .containsExactly(true, true, false);
+    assertThat(repository.findLastPracticedAtByUser(userId).get("PY43-KC-001"))
+        .isAfter(java.time.OffsetDateTime.now().minusMinutes(15));
     assertThat(repository.findEvidenceSourcesByKc(userId))
         .containsEntry(
-            "PY43-KC-001", java.util.List.of("MICRO_CHECK_PASS", "PRACTICE_FAIL", "PRACTICE_PASS"));
+            "PY43-KC-001",
+            java.util.List.of("DEBUG_FIX", "MICRO_CHECK_PASS", "PRACTICE_FAIL", "PRACTICE_PASS"));
   }
 
   @Test
@@ -253,7 +257,7 @@ class WeeklyReportServicePostgresIntegrationTest {
   }
 
   @Test
-  void replayedBossAttemptEventOnlyChangesMasteryAndReviewStateOnce() {
+  void repeatedBossProblemPassOnlyChangesMasteryAndReviewStateOnce() {
     long userId = insertUser("boss-attempt-mastery-idempotency-owner");
     MasteryRepository repository = new MasteryRepository(jdbc);
     ReviewStateRepository reviewRepository = new ReviewStateRepository(jdbc);
@@ -267,7 +271,7 @@ class WeeklyReportServicePostgresIntegrationTest {
                 Map.of("PRACTICE_PASS", new BigDecimal("0.100"))),
             new ReviewStateService(reviewRepository, new ReviewScheduler()));
     LearningEventListener listener = new LearningEventListener(evaluator, jdbc);
-    String idempotencyKey = "boss-attempt:" + UUID.randomUUID();
+    String idempotencyKey = "boss-pass:" + userId + ":" + "a".repeat(64);
     LearningEvent.PracticeSucceeded event =
         new LearningEvent.PracticeSucceeded(
             userId, "PY43-KC-001", null, "medium", null, idempotencyKey);

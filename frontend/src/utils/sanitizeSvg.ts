@@ -62,9 +62,16 @@ export function sanitizeMermaidSvgMarkup(source: string): string {
     if (safeCss) style.textContent = safeCss;
     else style.remove();
   });
+  const inlineStyleParser = document.createElementNS(
+    'http://www.w3.org/1999/xhtml',
+    'div',
+  ) as HTMLDivElement;
   document.querySelectorAll<SVGElement>('[style]').forEach((element) => {
-    sanitizeCssDeclarations(element.style);
-    if (element.style.length) element.setAttribute('style', element.style.cssText);
+    inlineStyleParser.setAttribute('style', element.getAttribute('style') ?? '');
+    sanitizeCssDeclarations(inlineStyleParser.style);
+    if (inlineStyleParser.style.length) {
+      element.setAttribute('style', inlineStyleParser.style.cssText);
+    }
     else element.removeAttribute('style');
   });
 

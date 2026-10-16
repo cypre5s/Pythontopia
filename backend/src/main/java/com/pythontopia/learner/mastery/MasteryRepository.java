@@ -86,14 +86,15 @@ public class MasteryRepository {
         .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
   }
 
-  /** Latest three server-recorded practice outcomes per KC, newest first. */
+  /** Latest three verified practice outcomes per KC, newest first. */
   public List<PracticeOutcome> findRecentPracticeOutcomesByUser(Long userId) {
     return jdbcTemplate.query(
         "SELECT kc_code, source, created_at FROM ("
             + " SELECT kc_code, source, created_at, ROW_NUMBER() OVER (PARTITION BY kc_code"
             + " ORDER BY created_at DESC, id DESC) AS row_number"
             + " FROM kc_mastery_event WHERE user_id = ? AND source IN"
-            + " ('PRACTICE_PASS', 'PRACTICE_FAIL')"
+            + " ('PRACTICE_PASS', 'PRACTICE_FAIL', 'MICRO_CHECK_PASS',"
+            + " 'MICRO_CHECK_FAIL', 'DEBUG_FIX')"
             + ") recent WHERE row_number <= 3 ORDER BY kc_code, row_number",
         (rs, rowNum) ->
             new PracticeOutcome(
@@ -202,7 +203,8 @@ public class MasteryRepository {
   public Map<String, OffsetDateTime> findLastPracticedAtByUser(Long userId) {
     return jdbcTemplate.query(
             "SELECT kc_code, MAX(created_at) AS last_practiced_at FROM kc_mastery_event"
-                + " WHERE user_id = ? AND source IN ('PRACTICE_PASS', 'PRACTICE_FAIL', 'DEBUG_FIX')"
+                + " WHERE user_id = ? AND source IN ('PRACTICE_PASS', 'PRACTICE_FAIL',"
+                + " 'MICRO_CHECK_PASS', 'MICRO_CHECK_FAIL', 'DEBUG_FIX')"
                 + " GROUP BY kc_code",
             (rs, rowNum) ->
                 Map.entry(

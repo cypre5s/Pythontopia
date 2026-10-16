@@ -182,7 +182,7 @@ describe('BilibiliVideoCards · AI 讲解 / 看点', () => {
     ]);
   });
 
-  it('emits "consumed" when a key point jump is clicked', async () => {
+  it('reports a key point link opening without claiming that the video was consumed', async () => {
     vi.mocked(searchBilibili).mockResolvedValueOnce(SAMPLE_VIDEOS);
     vi.mocked(fetchBilibiliInsight).mockResolvedValueOnce(makeInsight());
 
@@ -192,7 +192,8 @@ describe('BilibiliVideoCards · AI 讲解 / 看点', () => {
     await flushPromises();
 
     await wrapper.find('[data-testid="video-insight-jump"]').trigger('click');
-    expect(wrapper.emitted('consumed')).toBeTruthy();
+    expect(wrapper.emitted('opened')).toBeTruthy();
+    expect(wrapper.emitted('consumed')).toBeUndefined();
   });
 
   it('renders only overview + neutral hint when the insight is degraded', async () => {

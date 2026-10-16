@@ -65,7 +65,7 @@ const biliKeyword = computed<string>(
   () => `${chapterName.value} Python ${kcDisplayName(chapterKcCodes.value[0] ?? '')}`,
 );
 
-// 视频只做会话内播放标记；打开工坊讲义时会另写服务端资源消费证据。
+// 这里只显示页面内状态；视频进度不写入学习档案，讲义消费由服务端单独记录。
 const mediaConsumed = ref(false);
 
 const chapterDocId = computed<number>(() => 185 + props.chapter);
@@ -94,18 +94,21 @@ function formatDuration(sec: number | null): string {
   return `${m}:${s.toString().padStart(2, '0')}`;
 }
 
-function reportMediaConsumed(_mediaType: string): void {
+function markPageMediaComplete(): void {
   if (mediaReported) return;
   mediaReported = true;
   mediaConsumed.value = true;
-  toast.show('已记录本章多模态讲解学习', 'success');
+}
+
+function onExternalVideoOpened(): void {
+  toast.show('B站视频已在新标签打开；观看进度不会保存到学习档案', 'info');
 }
 
 function onVideoProgress(e: Event): void {
   const v = e.target as HTMLVideoElement;
   videoTimeSec.value = Math.floor(v.currentTime);
   if (v.duration > 0 && v.currentTime / v.duration >= 0.9) {
-    reportMediaConsumed('video');
+    markPageMediaComplete();
   }
 }
 
@@ -143,12 +146,17 @@ async function goPpt(): Promise<void> {
     if (match) {
       pptResource.value = await getWorkshopResource(match.id);
       try {
-        await consumeWorkshopResource(match.id);
+        const consumption = await consumeWorkshopResource(match.id);
+        if (consumption.readRecorded) {
+          markPageMediaComplete();
+          toast.show('已保存本章讲义学习记录', 'success');
+        } else {
+          toast.show('PPT 已打开，但学习记录暂未同步', 'info');
+        }
       } catch {
         toast.show('PPT 已打开，但学习记录暂未同步', 'info');
       }
       showPpt.value = true;
-      reportMediaConsumed('ppt');
       return;
     }
     toast.show('本章暂无生成的 PPT，已打开课件原文；可在百晓工坊生成讲义 PPT', 'info');
@@ -201,8 +209,8 @@ watch(() => props.chapter, () => {
           <span
             v-if="mediaConsumed"
             class="lecture-done"
-            title="本章多模态讲解已学习"
-          >✓ 已学习</span>
+            title="页面内观看状态；视频进度不会保存到学习档案，讲义记录由服务端单独确认"
+          >✓ 本次已观看</span>
         </div>
         <PyButton
           test-id="lecture-back"
@@ -237,7 +245,7 @@ watch(() => props.chapter, () => {
               :src="activeSrc"
               data-testid="lecture-video"
               @timeupdate="onVideoProgress"
-              @ended="reportMediaConsumed('video')"
+              @ended="markPageMediaComplete"
             >
               你的浏览器不支持内嵌视频播放。
             </video>
@@ -283,7 +291,7 @@ watch(() => props.chapter, () => {
               class="lecture-empty-bili"
               :keyword="biliKeyword"
               heading="本章 B站精选"
-              @consumed="reportMediaConsumed('video')"
+              @opened="onExternalVideoOpened"
             />
           </div>
         </main>
@@ -424,7 +432,7 @@ watch(() => props.chapter, () => {
                 :keyword="biliKeyword"
                 :limit="6"
                 heading="本章 B站精选"
-                @consumed="reportMediaConsumed('video')"
+                @opened="onExternalVideoOpened"
               />
             </section>
           </template>

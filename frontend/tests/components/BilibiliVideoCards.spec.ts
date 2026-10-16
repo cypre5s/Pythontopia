@@ -53,13 +53,14 @@ describe('BilibiliVideoCards', () => {
     expect(desc.text()).not.toContain('UP 主原始简介');
   });
 
-  it('emits "consumed" when a card is opened', async () => {
+  it('reports link opening without claiming that the video was consumed', async () => {
     vi.mocked(searchBilibili).mockResolvedValueOnce(SAMPLE);
     const wrapper = mount(BilibiliVideoCards, { props: { keyword: 'for循环' } });
     await flushPromises();
 
     await wrapper.find('.bili-card__link').trigger('click');
-    expect(wrapper.emitted('consumed')).toBeTruthy();
+    expect(wrapper.emitted('opened')).toBeTruthy();
+    expect(wrapper.emitted('consumed')).toBeUndefined();
   });
 
   it('shows an empty placeholder (never a white screen) when there are no results', async () => {

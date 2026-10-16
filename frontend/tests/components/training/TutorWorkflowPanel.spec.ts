@@ -513,7 +513,7 @@ describe('TutorWorkflowPanel', () => {
     // 思考过程默认只露一行「思考中…」，详情收纳；展开后才显示各节点（用户要求缩小收纳）。
     expect(progress.text()).toContain('百晓思考中');
     expect(progress.text()).not.toContain('正在判断你卡在哪里');
-    await wrapper.get('.tw-think__toggle').trigger('click');
+    await wrapper.get('.tw-think__toggle:not(.tw-think__stop)').trigger('click');
     await nextTick();
     expect(progress.text()).toContain('正在判断你卡在哪里');
     expect(progress.text()).toContain('正在选择下一步提示');

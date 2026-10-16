@@ -5,7 +5,7 @@
  * 纯展示型外部资源：仅渲染封面缩略图 + 元数据，整卡是跳转 B 站的外链（新标签打开），
  * 不进课件 grounding、不内嵌下载。封面用 `referrerpolicy="no-referrer"` 规避 hdslb 防盗链，
  * 加载失败回退占位。检索失败 / 空结果都降级为占位文案（不报错、不白屏）。
- * 点击卡片时 emit('consumed')，供父组件计入多模态学习闭环。
+ * 点击卡片时 emit('opened')；打开外部链接不代表已观看，也不作为学习证据。
  */
 import { computed, onMounted, reactive, ref, watch } from 'vue';
 import {
@@ -41,7 +41,7 @@ const props = withDefaults(
   },
 );
 
-const emit = defineEmits<{ (e: 'consumed'): void }>();
+const emit = defineEmits<{ (e: 'opened'): void }>();
 
 type LoadStatus = 'loading' | 'ready' | 'empty' | 'error';
 
@@ -131,7 +131,7 @@ function onCoverError(bvid: string): void {
 }
 
 function onOpen(): void {
-  emit('consumed');
+  emit('opened');
 }
 
 async function load(): Promise<void> {
