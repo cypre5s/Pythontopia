@@ -8,6 +8,7 @@ import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
@@ -42,7 +43,8 @@ public class LearningEventController {
 
   @PostMapping("/batch")
   @ResponseStatus(HttpStatus.CREATED)
-  void logBatch(
+  @Transactional
+  public void logBatch(
       @CurrentUser CurrentUserPrincipal user,
       @Valid @RequestBody List<LearningEventLogDto> events) {
     requireStudent(user);

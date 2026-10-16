@@ -249,6 +249,55 @@ class BossServiceTest {
   }
 
   @Test
+  @DisplayName("远征填空题由服务端归一化判分并回流 Twin")
+  void fillObjectiveAttemptUsesServerMatcherAndPublishesVerifiedOutcome() {
+    BossInternalProblem fillProblem =
+        new BossInternalProblem(
+                "fill-objective",
+                1,
+                1,
+                2,
+                "PY43-KC-001",
+                "填写 print 与 True",
+                List.of(),
+                "",
+                "",
+                1,
+                true,
+                false,
+                List.of(),
+                "",
+                BossQuestionType.FILL,
+                List.of(),
+                List.of("print", "True"),
+                2)
+            .issueAs("fill-objective-user-7", "PY43-KC-001");
+    when(pregenService.findByProblemId(7L, fillProblem.problemId()))
+        .thenReturn(Optional.of(fillProblem));
+
+    var result =
+        service.evaluateAttempt(
+            new BossAttemptRequest(
+                fillProblem.problemId(),
+                1,
+                1,
+                null,
+                9,
+                UUID.randomUUID(),
+                List.of(" \u201CＰＲＩＮＴ\u201D ", "ＴＲＵＥ")),
+            7L);
+
+    assertThat(result.passed()).isTrue();
+    assertThat(result.passedTestCases()).isEqualTo(1);
+    assertThat(result.feedback()).contains("服务端已确认");
+    verify(graphClient, never()).evaluateAttempt(anyString(), anyString(), anyList(), anyInt());
+    org.mockito.ArgumentCaptor<LearningEvent.PracticeSucceeded> eventCaptor =
+        org.mockito.ArgumentCaptor.forClass(LearningEvent.PracticeSucceeded.class);
+    verify(eventPublisher).publishEvent(eventCaptor.capture());
+    assertThat(eventCaptor.getValue().kcCode()).isEqualTo("PY43-KC-001");
+  }
+
+  @Test
   @DisplayName("普通远征节点为无编程题 KC 复用同 KC 客观题")
   void expeditionBattleFallsBackToObjectiveQuestionWithoutGraph() {
     String runId = UUID.randomUUID().toString();
@@ -372,6 +421,91 @@ class BossServiceTest {
             7L);
     assertThat(resumed.problemId()).isEqualTo("issue-saved-objective");
     assertThat(resumed.questionType()).isEqualTo(BossQuestionType.JUDGE);
+    verifyNoInteractions(graphClient);
+  }
+
+  @Test
+  @DisplayName("远征客观题池用尽时不回退到 READY 编程题")
+  void expeditionFailsClosedInsteadOfClaimingReadyCodeWhenObjectivePoolIsExhausted() {
+    String runId = UUID.randomUUID().toString();
+    String nodeId = "L0-0";
+    String kcCode = "PY43-KC-001";
+    var objective =
+        new BossInternalProblem(
+            "mainline-objective-1001",
+            1,
+            1,
+            1,
+            kcCode,
+            "概念知识点的审核判断题",
+            List.of(),
+            "",
+            "",
+            1,
+            true,
+            false,
+            List.of(),
+            "",
+            BossQuestionType.JUDGE,
+            List.of(),
+            List.of("正确"),
+            0);
+    when(expeditionRunService.validateProblemRequest(7L, runId, nodeId, 1, false, kcCode))
+        .thenReturn(null);
+    when(expeditionRunService.findIssuedQuestionFingerprints(7L, runId))
+        .thenReturn(Set.of(BossService.questionFingerprint(objective)));
+    when(chapterProblemBankRepository.findByKcCodes(List.of(kcCode))).thenReturn(List.of());
+    when(mainlinePracticeRepository.findForBossFallback(1, kcCode))
+        .thenReturn(
+            List.of(
+                new MainlinePracticeQuestion(
+                    1001L,
+                    1,
+                    3,
+                    110,
+                    kcCode,
+                    PracticeQuestionType.JUDGE,
+                    objective.statement(),
+                    List.of(),
+                    List.of("正确"),
+                    0,
+                    "课程依据",
+                    "课件页 1")));
+    lenient()
+        .when(
+            pregenService.claimReady(
+                eq(7L),
+                eq(1),
+                eq(1),
+                eq(kcCode),
+                anyInt(),
+                eq("dual_track"),
+                org.mockito.ArgumentMatchers.isNull(),
+                eq(runId),
+                eq(nodeId)))
+        .thenReturn(Optional.of(problemWithTests(1).issueAs("ready-code", kcCode)));
+    assertThatThrownBy(
+            () ->
+                service.fetchProblem(
+                    1,
+                    new BossProblemRequest(
+                        1, null, null, kcCode, "dual_track", null, null, runId, nodeId),
+                    7L))
+        .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
+        .extracting(ex -> ((com.pythontopia.common.error.BusinessException) ex).code())
+        .isEqualTo("BOSS_OBJECTIVE_BANK_EMPTY");
+
+    verify(pregenService, never())
+        .claimReady(
+            eq(7L),
+            eq(1),
+            eq(1),
+            eq(kcCode),
+            anyInt(),
+            eq("dual_track"),
+            org.mockito.ArgumentMatchers.isNull(),
+            eq(runId),
+            eq(nodeId));
     verifyNoInteractions(graphClient);
   }
 

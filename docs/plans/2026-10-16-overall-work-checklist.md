@@ -60,6 +60,7 @@
 - 修复 Mermaid SVG 内联样式在 SVG CSSOM 缺失环境抛错的问题；原全量运行中相关图示用例失败。校正 Tutor 过程测试的按钮选择及颜色序列化断言后，聚焦测试 25/25、全量 Vitest 276 文件/2620 用例通过；typecheck、ESLint、`git diff --check` 均通过。
 - 实际 Boss 题目/判题 API 使用临时学生跑通：重启 Java 服务加载当前构建后，日志确认选中已审核题 `review=85/version=2`；公开题答案由服务端判题 3/3 通过。`aiGenerated=true` 是已审核题的来源标记，不是本次生成；没有调用 DeepSeek。每个临时账号都在脚本 `finally` 中按精确用户名删除。
 - **真实远征浏览器闭环（已完成）：** 通过普通注册表单建立临时 STUDENT 账号；KC-003、KC-004 各完成 4 道课程审核选择/判断/填空题，服务端判题通过，Twin 掌握度均到 0.78。10 层服务端远征中，4 道浏览器编程挑战通过；KC-008 Boss 的 3 个阶段分别以判断、填空、选择题通过。浏览器确认 Phaser 场景和每阶段受击反馈；数据库核对 3 条 Boss 阶段结算；Twin 页面将 KC-008 从“尚未评估”更新为掌握度 1，证据来源 `PRACTICE_PASS`。全程 `page_errors=0`、HTTP 5xx=0。脚本 finally 删除隔离账号并通过外键残留审计；本次没有调用 DeepSeek。
+- **继续收口本轮发现的两个数据正确性边界：** 自动选择 KC 客观题时，即使有同 KC READY 编程题，客观题池用尽也会明确返回 `BOSS_OBJECTIVE_BANK_EMPTY`，不回退成错误题型；学习事件批量接口写到第 N 条遇数据库错误时整批回滚。填空 Boss 题新增服务端归一化判分与 `PRACTICE_PASS` 回流测试。PostgreSQL 故障注入 RED 证实旧行为留下第 1 条事件，GREEN 后事件数为 0；`BossServiceTest`、`LearningEventControllerTest`、批量原子性 PostgreSQL 测试合跑 75/75，4 个 Java 文件定向 Spotless 与 `git diff --check` 通过。未重跑已通过的浏览器通关，也未调用模型。
 - **历史首次续测（已被上项取代）：** 当时 KC-008 没有可用审核题，生成服务也不可用，未能通关；临时账号已清理。之后增加了客观题路径与课程题库后，已由上项成功完成同一主链路。
 - Playwright 路由巡检：26 个路径，320px viewport，无横向溢出、前端运行错误或 5xx；管理员三页可打开，用户状态按钮真实 API 往返成功。
 - 客观题补充按 TDD 先在旧实现上复现 KC-001 缺少选择/填空题，再加 V220；Testcontainers 从空库全量应用 135 个 Flyway 迁移后，迁移覆盖测试 2/2 通过。22 个非编程 KC 均有 CHOICE/JUDGE/FILL，主线必答仍为 96；`BossServiceTest` 62/62、`MainlinePracticeServiceTest` 21/21 通过。题库 JSON 与 V217–V220 补充项核对为 140 道（96 + 44）。本次未调用 DeepSeek；本地开发库已升至 schema 220，SQL 核对 22/22 KC 全覆盖。

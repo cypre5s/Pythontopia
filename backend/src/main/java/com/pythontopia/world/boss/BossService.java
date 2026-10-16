@@ -274,7 +274,7 @@ public class BossService {
         cacheProblem(userId, problem);
         return rememberRequest(userId, request, generationKey, problem);
       }
-      if (objectivePracticeRequested) {
+      if (preferObjectivePractice) {
         throw new com.pythontopia.common.error.BusinessException(
             org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
             "BOSS_OBJECTIVE_BANK_EMPTY",

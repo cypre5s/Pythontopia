@@ -1078,3 +1078,11 @@
 - RED/GREEN：`ApiRequestBodyLimitFilterTest` 先观察到 oversized `/api/events` 和内部 checkpoint 请求穿过过滤器（200），修复后均 413 且过滤链不继续；`PublicReadAccessTest` 覆盖匿名内部路由和认证 Agent Runtime 路由的过滤顺序。`ApiRequestBodyLimitFilterTest`、`PublicReadAccessTest`、`AgentRuntimeEventServiceTest`、`TutorWorkflowInternalCheckpointControllerTest` 共 21/21；HTTPS/Nginx 请求限制契约、两层 Nginx 1.27 `nginx -t`、三个 Java 文件定向 Spotless 和 `git diff --check` 通过。
 - 全仓 `spotless:check` 仍被 639 个历史 Java 文件格式违规阻断；本次触及 Java 文件定向检查通过。未调用模型、写业务数据或访问生产环境。3 MiB checkpoint 上限未用最大真实 AutoGen 快照实测；生产 Nginx 部署态仍未验证。
 - 同步做了日志封装首轮静态搜索：未发现应用自建的请求/响应体日志 filter、`RequestBodyAdvice`/`ResponseBodyAdvice` 或日志 aspect；Graph、RAG、前端 Nginx access log 关闭，公网安全格式只记录 `$uri`。这未覆盖完整多行日志调用点、第三方库运行日志或生产日志。
+
+## 2026-10-16 — 约束远征客观题耗尽回退并保证批量事件原子性
+
+- 普通远征自动优先同 KC 审核客观题时，若本局已签发完客观题，之前仍可能领取同 KC READY 编程题。现在与明确 objective 请求统一失败关闭，不会把不适合编程的 KC 静默切回代码题；回归 fixture 同时提供 READY 编程题并验证未领取。
+- `POST /api/learning/events/batch` 现在在单个事务内写入；测试用 PostgreSQL trigger 在第二条事件注入持久化错误。旧行为先 RED 并观察到第一条记录残留，修复后整批记录数为 0。
+- 为 Boss FILL 客观题增加服务端归一化判分和 Twin `PRACTICE_PASS` 回流回归；主线既有的 22 个非编程 KC 继续使用同 KC 审核 CHOICE/JUDGE/FILL 题。
+- `BossServiceTest`、`LearningEventControllerTest`、`LearningEventBatchAtomicityPostgresTest` 合跑 75/75；4 个 Java 文件定向 Spotless 与 `git diff --check` 通过。未调用 DeepSeek，未重复运行已完成的普通学生浏览器 Boss/Twin 闭环。
+- 未运行全量 Maven suite、非 AI 写路由完整审计或生产代理验证；完整远征性能仍后置。
