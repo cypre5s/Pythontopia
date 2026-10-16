@@ -10,6 +10,7 @@ import jakarta.validation.constraints.Size;
  *
  * <p>当 quest.required_evidence_type 非空时，QuestService 须在 {@code complete()} 校验对应字段存在且合法；
  * 为 null 时保持旧行为（兼容 PATH_PLANNER / SYSTEM_DEFAULT 历史任务）。
+ * kcMasteryDelta 仅保留为客户端证据声明；权威增量从服务端掌握度事件读取。
  */
 public record QuestCompleteRequest(
     @Size(max = 256) String note,

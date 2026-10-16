@@ -4,7 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.contains;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -190,6 +190,13 @@ class QuestCompleteWithEvidenceTest {
     when(repository.findById(eq(7L), eq(11L))).thenReturn(Optional.of(quest));
     when(resources.findById(eq(7L), eq(55L)))
         .thenReturn(Optional.of(resource(55L, 7L)));
+    when(jdbcTemplate.queryForObject(
+            contains("learning_event_log"),
+            eq(Boolean.class),
+            eq(7L),
+            eq("55"),
+            any(OffsetDateTime.class)))
+        .thenReturn(true);
     QuestDto completed =
         quest(
             QuestNodeType.READ_RESOURCE,
@@ -209,6 +216,54 @@ class QuestCompleteWithEvidenceTest {
   }
 
   @Test
+  void testComplete_ownedResourceNotConsumed_rejected() {
+    QuestDto quest =
+        quest(
+            QuestNodeType.READ_RESOURCE,
+            QuestStatus.IN_PROGRESS,
+            "resource",
+            null,
+            List.of(),
+            55L);
+    when(repository.findById(eq(7L), eq(11L))).thenReturn(Optional.of(quest));
+    when(resources.findById(eq(7L), eq(55L)))
+        .thenReturn(Optional.of(resource(55L, 7L)));
+    when(jdbcTemplate.queryForObject(
+            contains("learning_event_log"),
+            eq(Boolean.class),
+            eq(7L),
+            eq("55"),
+            any(OffsetDateTime.class)))
+        .thenReturn(false);
+    when(repository.findOwned(eq(7L), eq(11L)))
+        .thenReturn(
+            Optional.of(
+                quest(
+                    QuestNodeType.READ_RESOURCE,
+                    QuestStatus.COMPLETED,
+                    "resource",
+                    null,
+                    List.of(),
+                    55L)));
+
+    assertThatThrownBy(
+            () -> service.complete(7L, 11L, new QuestCompleteRequest("unconsumed", null, 55L, null, null)))
+        .isInstanceOf(BusinessException.class)
+        .extracting(exception -> ((BusinessException) exception).code())
+        .isEqualTo("INVALID_RESOURCE");
+
+    verify(jdbcTemplate)
+        .queryForObject(
+            contains("learning_event_log"),
+            eq(Boolean.class),
+            eq(7L),
+            eq("55"),
+            any(OffsetDateTime.class));
+    verify(repository, never())
+        .updateStatus(anyLong(), anyLong(), eq(QuestStatus.COMPLETED));
+  }
+
+  @Test
   void testComplete_pageReadEvidence_passed() {
     QuestDto quest =
         quest(
@@ -219,7 +274,13 @@ class QuestCompleteWithEvidenceTest {
             List.of(),
             null);
     when(repository.findById(eq(7L), eq(12L))).thenReturn(Optional.of(quest));
-    when(jdbcTemplate.queryForObject(anyString(), eq(Integer.class), eq(77L))).thenReturn(1);
+    when(jdbcTemplate.queryForObject(
+            contains("mainline_stage_progress"),
+            eq(Boolean.class),
+            eq(77L),
+            eq(7L),
+            eq(77L)))
+        .thenReturn(true);
     QuestDto completed =
         quest(
             QuestNodeType.READ_RESOURCE,
@@ -239,6 +300,57 @@ class QuestCompleteWithEvidenceTest {
   }
 
   @Test
+  void testComplete_pageReadNotRecordedForStudent_rejected() {
+    QuestDto quest =
+        quest(
+            QuestNodeType.READ_RESOURCE,
+            QuestStatus.IN_PROGRESS,
+            "page_read",
+            null,
+            List.of(),
+            null);
+    when(repository.findById(eq(7L), eq(12L))).thenReturn(Optional.of(quest));
+    when(jdbcTemplate.queryForObject(
+            eq("SELECT COUNT(*) FROM course_page WHERE id = ?"), eq(Integer.class), eq(77L)))
+        .thenReturn(1);
+    when(jdbcTemplate.queryForObject(
+            contains("mainline_stage_progress"),
+            eq(Boolean.class),
+            eq(77L),
+            eq(7L),
+            eq(77L)))
+        .thenReturn(false);
+    when(repository.findOwned(eq(7L), eq(12L)))
+        .thenReturn(
+            Optional.of(
+                quest(
+                    QuestNodeType.READ_RESOURCE,
+                    QuestStatus.COMPLETED,
+                    "page_read",
+                    null,
+                    List.of(),
+                    null)));
+
+    assertThatThrownBy(
+            () ->
+                service.complete(
+                    7L, 12L, new QuestCompleteRequest("unread page", null, null, 77L, null)))
+        .isInstanceOf(BusinessException.class)
+        .extracting(exception -> ((BusinessException) exception).code())
+        .isEqualTo("INVALID_PAGE_READ");
+
+    verify(jdbcTemplate)
+        .queryForObject(
+            contains("mainline_stage_progress"),
+            eq(Boolean.class),
+            eq(77L),
+            eq(7L),
+            eq(77L));
+    verify(repository, never())
+        .updateStatus(anyLong(), anyLong(), eq(QuestStatus.COMPLETED));
+  }
+
+  @Test
   void testComplete_kcMasteryEvidence_insufficient_rejected() {
     QuestDto quest =
         quest(
@@ -249,6 +361,13 @@ class QuestCompleteWithEvidenceTest {
             List.of(),
             null);
     when(repository.findById(eq(7L), eq(13L))).thenReturn(Optional.of(quest));
+    when(jdbcTemplate.queryForObject(
+            contains("kc_mastery_event"),
+            eq(BigDecimal.class),
+            eq(7L),
+            eq("PY43-KC-001"),
+            any(OffsetDateTime.class)))
+        .thenReturn(new BigDecimal("0.10"));
 
     assertThatThrownBy(
             () ->
@@ -265,6 +384,54 @@ class QuestCompleteWithEvidenceTest {
   }
 
   @Test
+  void testComplete_kcMasteryClientClaimCannotReplaceServerEvidence() {
+    QuestDto quest =
+        quest(
+            QuestNodeType.PLANT_KC,
+            QuestStatus.IN_PROGRESS,
+            "kc_mastery",
+            new BigDecimal("0.30"),
+            List.of(),
+            null);
+    when(repository.findById(eq(7L), eq(13L))).thenReturn(Optional.of(quest));
+    when(jdbcTemplate.queryForObject(
+            contains("kc_mastery_event"),
+            eq(BigDecimal.class),
+            eq(7L),
+            eq("PY43-KC-001"),
+            any(OffsetDateTime.class)))
+        .thenReturn(BigDecimal.ZERO);
+    when(repository.findOwned(eq(7L), eq(13L)))
+        .thenReturn(
+            Optional.of(
+                quest(
+                    QuestNodeType.PLANT_KC,
+                    QuestStatus.COMPLETED,
+                    "kc_mastery",
+                    new BigDecimal("0.30"),
+                    List.of(),
+                    null)));
+
+    assertThatThrownBy(
+            () ->
+                service.complete(
+                    7L, 13L, new QuestCompleteRequest("claimed", null, null, null, 0.90)))
+        .isInstanceOf(BusinessException.class)
+        .extracting(exception -> ((BusinessException) exception).code())
+        .isEqualTo("EVIDENCE_REQUIRED_MASTERY");
+
+    verify(jdbcTemplate)
+        .queryForObject(
+            contains("kc_mastery_event"),
+            eq(BigDecimal.class),
+            eq(7L),
+            eq("PY43-KC-001"),
+            any(OffsetDateTime.class));
+    verify(repository, never())
+        .updateStatus(anyLong(), anyLong(), eq(QuestStatus.COMPLETED));
+  }
+
+  @Test
   void testComplete_kcMasteryEvidence_passed() {
     QuestDto quest =
         quest(
@@ -275,6 +442,13 @@ class QuestCompleteWithEvidenceTest {
             List.of(),
             null);
     when(repository.findById(eq(7L), eq(13L))).thenReturn(Optional.of(quest));
+    when(jdbcTemplate.queryForObject(
+            contains("kc_mastery_event"),
+            eq(BigDecimal.class),
+            eq(7L),
+            eq("PY43-KC-001"),
+            any(OffsetDateTime.class)))
+        .thenReturn(new BigDecimal("0.45"));
     QuestDto completed =
         quest(
             QuestNodeType.PLANT_KC,

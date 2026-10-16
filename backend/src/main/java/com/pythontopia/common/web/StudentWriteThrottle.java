@@ -8,7 +8,7 @@ import java.util.function.LongSupplier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Limits append-only student writes across learning events and workshop history. */
+/** Limits weighted student writes per account. */
 @Component
 public class StudentWriteThrottle {
 

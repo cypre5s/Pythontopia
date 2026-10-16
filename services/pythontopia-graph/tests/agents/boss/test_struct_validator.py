@@ -92,6 +92,61 @@ def test_too_few_test_cases() -> None:
     assert any(i.code == "insufficient_test_cases" for i in verdict.issues)
 
 
+def test_too_many_test_cases() -> None:
+    test_cases = [
+        TestCase(input=str(i), expected_output=str(i), is_sample=(i == 0))
+        for i in range(11)
+    ]
+    verdict = validate_problem_struct(_valid_problem(test_cases=test_cases))
+
+    assert not verdict.passed
+    assert any(issue.code == "too_many_test_cases" for issue in verdict.issues)
+
+
+@pytest.mark.parametrize(
+    ("case_field", "issue_code"),
+    [
+        ("input", "test_input_too_long"),
+        ("expected_output", "test_expected_output_too_long"),
+    ],
+)
+def test_test_case_fields_are_bounded(case_field: str, issue_code: str) -> None:
+    test_cases = _valid_problem().test_cases
+    setattr(test_cases[0], case_field, "x" * 8193)
+    verdict = validate_problem_struct(_valid_problem(test_cases=test_cases))
+
+    assert not verdict.passed
+    assert any(issue.code == issue_code for issue in verdict.issues)
+
+
+def test_reference_solution_is_bounded() -> None:
+    verdict = validate_problem_struct(
+        _valid_problem(reference_solution="x" * 8193)
+    )
+
+    assert not verdict.passed
+    assert any(issue.code == "reference_solution_too_long" for issue in verdict.issues)
+
+
+def test_maximum_test_case_limits_are_accepted() -> None:
+    test_cases = [
+        TestCase(
+            input="x" * 8192,
+            expected_output="x" * 8192,
+            is_sample=(i == 0),
+        )
+        for i in range(10)
+    ]
+    verdict = validate_problem_struct(
+        _valid_problem(
+            test_cases=test_cases,
+            reference_solution="x" * 8192,
+        )
+    )
+
+    assert verdict.passed
+
+
 def test_test_case_must_have_sample() -> None:
     problem = _valid_problem()
     problem.test_cases = [

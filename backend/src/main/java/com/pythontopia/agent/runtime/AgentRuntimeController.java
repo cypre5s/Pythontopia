@@ -5,12 +5,14 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.learner.event.ClientLearningEventPolicy;
 import com.pythontopia.loop.LoopRunService;
 import com.pythontopia.loop.LoopRuntimeService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
+import java.nio.charset.StandardCharsets;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,13 +42,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api")
 public class AgentRuntimeController {
 
+  private static final int MAX_JSON_PAYLOAD_BYTES = 1024 * 1024;
+
   private final AgentRuntimeEventService eventService;
   private final LoopRuntimeService runtimeService;
+  private final StudentWriteThrottle studentWriteThrottle;
 
   public AgentRuntimeController(
-      AgentRuntimeEventService eventService, LoopRuntimeService runtimeService) {
+      AgentRuntimeEventService eventService,
+      LoopRuntimeService runtimeService,
+      StudentWriteThrottle studentWriteThrottle) {
     this.eventService = eventService;
     this.runtimeService = runtimeService;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @PostMapping("/events")
@@ -69,6 +77,8 @@ public class AgentRuntimeController {
       @PathVariable Long id,
       @Valid @RequestBody LoopStateRequest request) {
     requireStudent(user);
+    requireJsonPayloadCapacity(request.state());
+    requireWriteCapacity(user.userId());
     return runtimeService.saveLoopState(
         user.userId(),
         id,
@@ -87,6 +97,8 @@ public class AgentRuntimeController {
       @PathVariable Long id,
       @Valid @RequestBody PolicyDecisionRequest request) {
     requireStudent(user);
+    requireJsonPayloadCapacity(request.decision());
+    requireWriteCapacity(user.userId());
     return runtimeService.recordPolicyDecision(
         user.userId(),
         id,
@@ -103,6 +115,28 @@ public class AgentRuntimeController {
     if (user == null || user.role() != Role.STUDENT) {
       throw new BusinessException(
           HttpStatus.FORBIDDEN, "FORBIDDEN", "仅学生可访问 Agent Runtime 控制面");
+    }
+  }
+
+  private void requireWriteCapacity(long userId) {
+    if (!studentWriteThrottle.tryAcquire(userId, 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "STUDENT_WRITE_RATE_LIMITED",
+          "每个账号每分钟最多写入 100 条学习记录");
+    }
+  }
+
+  private void requireJsonPayloadCapacity(JsonNode... payloads) {
+    for (JsonNode payload : payloads) {
+      if (payload != null
+          && !payload.isNull()
+          && payload.toString().getBytes(StandardCharsets.UTF_8).length > MAX_JSON_PAYLOAD_BYTES) {
+        throw new BusinessException(
+            HttpStatus.PAYLOAD_TOO_LARGE,
+            "LOOP_RUNTIME_PAYLOAD_TOO_LARGE",
+            "Loop Runtime JSON 字段不能超过 1 MiB");
+      }
     }
   }
 

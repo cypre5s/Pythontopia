@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.tutor.dto.StyleEngagedRequest;
 import com.pythontopia.tutor.dto.TutorAskRequest;
 import com.pythontopia.tutor.dto.TutorSessionDto;
@@ -32,9 +33,11 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class TutorController {
 
   private final TutorService service;
+  private final StudentWriteThrottle studentWriteThrottle;
 
-  public TutorController(TutorService service) {
+  public TutorController(TutorService service, StudentWriteThrottle studentWriteThrottle) {
     this.service = service;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @PostMapping(value = "/ask", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
@@ -52,6 +55,12 @@ public class TutorController {
       @CurrentUser CurrentUserPrincipal user,
       @Valid @RequestBody StyleEngagedRequest request) {
     requireStudent(user);
+    if (!studentWriteThrottle.tryAcquire(user.userId(), 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "STUDENT_WRITE_RATE_LIMITED",
+          "每个账号每分钟最多写入 100 条学习记录");
+    }
     service.recordStyleEngaged(user.userId(), request.style(), request.kcCode());
   }
 

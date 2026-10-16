@@ -107,6 +107,17 @@ def test_run_all_reviews_fails_struct_early() -> None:
     assert review.verdicts[0].review == "struct"
 
 
+def test_oversized_test_case_list_is_rejected_before_sandbox(fake_piston_endpoint) -> None:
+    problem = _good_problem()
+    problem.test_cases += [problem.test_cases[0]] * 8
+
+    review = run_all_reviews(problem)
+
+    assert not review.passed
+    assert any(issue.code == "too_many_test_cases" for issue in review.issues)
+    assert fake_piston_endpoint == []
+
+
 def test_run_all_reviews_skip_self_test_param() -> None:
     p = _good_problem()
     # reference 故意错误；skip_self_test 跳过沙箱

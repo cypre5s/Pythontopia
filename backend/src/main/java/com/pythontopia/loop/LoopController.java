@@ -5,12 +5,14 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.loop.dto.LoopRunDto;
 import com.pythontopia.loop.dto.LoopRunRecordRequest;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import java.nio.charset.StandardCharsets;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -29,12 +31,19 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/loop")
 public class LoopController {
 
+  private static final int MAX_JSON_PAYLOAD_BYTES = 1024 * 1024;
+
   private final LoopRunService service;
   private final LoopRuntimeService runtimeService;
+  private final StudentWriteThrottle studentWriteThrottle;
 
-  public LoopController(LoopRunService service, LoopRuntimeService runtimeService) {
+  public LoopController(
+      LoopRunService service,
+      LoopRuntimeService runtimeService,
+      StudentWriteThrottle studentWriteThrottle) {
     this.service = service;
     this.runtimeService = runtimeService;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @PostMapping("/runs")
@@ -42,6 +51,7 @@ public class LoopController {
   public LoopRunDto recordRun(
       @CurrentUser CurrentUserPrincipal user, @Valid @RequestBody LoopRunRecordRequest request) {
     requireStudent(user);
+    requireWriteCapacity(user.userId());
     return service.record(user.userId(), request);
   }
 
@@ -58,6 +68,8 @@ public class LoopController {
       @PathVariable Long id,
       @Valid @RequestBody CheckpointRequest request) {
     requireStudent(user);
+    requireJsonPayloadCapacity(request.state());
+    requireWriteCapacity(user.userId());
     return runtimeService.saveCheckpoint(
         user.userId(), id, request.stepIndex(), request.status(), request.state(), request.resumeCursor());
   }
@@ -69,6 +81,8 @@ public class LoopController {
       @PathVariable Long id,
       @Valid @RequestBody ToolCallRequest request) {
     requireStudent(user);
+    requireJsonPayloadCapacity(request.requestPayload(), request.responsePayload());
+    requireWriteCapacity(user.userId());
     return runtimeService.recordToolCall(
         user.userId(),
         id,
@@ -87,6 +101,8 @@ public class LoopController {
       @PathVariable Long id,
       @Valid @RequestBody AgentRunRequest request) {
     requireStudent(user);
+    requireJsonPayloadCapacity(request.outputArtifact());
+    requireWriteCapacity(user.userId());
     return runtimeService.recordAgentRun(
         user.userId(),
         id,
@@ -103,6 +119,8 @@ public class LoopController {
       @PathVariable Long id,
       @Valid @RequestBody EvalResultRequest request) {
     requireStudent(user);
+    requireJsonPayloadCapacity(request.metrics());
+    requireWriteCapacity(user.userId());
     return runtimeService.recordEvalResult(
         user.userId(),
         id,
@@ -132,6 +150,28 @@ public class LoopController {
     if (user == null || user.role() != Role.STUDENT) {
       throw new BusinessException(
           HttpStatus.FORBIDDEN, "FORBIDDEN", "仅学生可记录/查看闭环 run 审计");
+    }
+  }
+
+  private void requireWriteCapacity(long userId) {
+    if (!studentWriteThrottle.tryAcquire(userId, 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "STUDENT_WRITE_RATE_LIMITED",
+          "每个账号每分钟最多写入 100 条学习记录");
+    }
+  }
+
+  private void requireJsonPayloadCapacity(JsonNode... payloads) {
+    for (JsonNode payload : payloads) {
+      if (payload != null
+          && !payload.isNull()
+          && payload.toString().getBytes(StandardCharsets.UTF_8).length > MAX_JSON_PAYLOAD_BYTES) {
+        throw new BusinessException(
+            HttpStatus.PAYLOAD_TOO_LARGE,
+            "LOOP_RUNTIME_PAYLOAD_TOO_LARGE",
+            "Loop Runtime JSON 字段不能超过 1 MiB");
+      }
     }
   }
 

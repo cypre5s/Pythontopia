@@ -8,6 +8,8 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.agent.runtime.AgentRuntimeEventRepository;
 import com.pythontopia.agent.runtime.AgentRuntimeEventService;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
+import com.pythontopia.learner.event.ClientLearningEventGuard;
 import com.pythontopia.intent.RouteExecutionTokenSignerTest;
 import com.pythontopia.loop.dto.LoopRunDto;
 import com.pythontopia.loop.dto.LoopRunRecordRequest;
@@ -82,7 +84,8 @@ class LoopRunServiceTest {
             new LoopRuntimeRepository(jdbcTemplate, objectMapper));
     eventService =
         new AgentRuntimeEventService(
-            new AgentRuntimeEventRepository(jdbcTemplate, objectMapper));
+            new AgentRuntimeEventRepository(jdbcTemplate, objectMapper),
+            new ClientLearningEventGuard(objectMapper, new StudentWriteThrottle()));
   }
 
   @BeforeEach
@@ -428,6 +431,27 @@ class LoopRunServiceTest {
         .containsExactlyElementsOf(loopTypes);
     assertThat(snapshot.evalResults()).extracting(LoopRuntimeService.EvalResultRecord::datasetId)
         .containsOnly("agentic-ab-runtime");
+  }
+
+  @Test
+  void checkpointStepIndexCannotExceedRunStepLimit() {
+    LoopRunDto run = service.record(userId, fullRequest());
+
+    var lastAllowed =
+        runtimeService.saveCheckpoint(
+            userId, run.id(), run.maxSteps() - 1, "READY", json("node", "last"), "cursor-last");
+    assertThat(lastAllowed.stepIndex()).isEqualTo(run.maxSteps() - 1);
+
+    assertCode(
+        () ->
+            runtimeService.saveCheckpoint(
+                userId,
+                run.id(),
+                run.maxSteps(),
+                "READY",
+                json("node", "overflow"),
+                "cursor-overflow"),
+        HttpStatus.BAD_REQUEST);
   }
 
   @Test

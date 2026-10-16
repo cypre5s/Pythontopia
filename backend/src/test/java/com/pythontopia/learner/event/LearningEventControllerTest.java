@@ -24,10 +24,14 @@ class LearningEventControllerTest {
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final StudentWriteThrottle throttle = new StudentWriteThrottle();
 
+  private ClientLearningEventGuard eventGuard() {
+    return new ClientLearningEventGuard(objectMapper, throttle);
+  }
+
   @Test
   void clientCannotForgeFormalPracticeOutcome() {
     LearningEventController controller =
-        new LearningEventController(repository, objectMapper, throttle);
+        new LearningEventController(repository, eventGuard());
     CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
 
     assertThatThrownBy(
@@ -44,7 +48,7 @@ class LearningEventControllerTest {
   @Test
   void clientCannotForgeMediaConsumptionEvidence() {
     LearningEventController controller =
-        new LearningEventController(repository, objectMapper, throttle);
+        new LearningEventController(repository, eventGuard());
     CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
 
     assertThatThrownBy(
@@ -69,7 +73,7 @@ class LearningEventControllerTest {
   @Test
   void invalidBatchIsRejectedBeforeAnyEventIsWritten() {
     LearningEventController controller =
-        new LearningEventController(repository, objectMapper, throttle);
+        new LearningEventController(repository, eventGuard());
     CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
     List<LearningEventLogDto> batch =
         List.of(
@@ -85,7 +89,7 @@ class LearningEventControllerTest {
   @Test
   void oversizedBatchPayloadIsRejectedBeforeAnyEventIsWritten() {
     LearningEventController controller =
-        new LearningEventController(repository, objectMapper, throttle);
+        new LearningEventController(repository, eventGuard());
     CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
     List<LearningEventLogDto> batch =
         List.of(
@@ -102,7 +106,7 @@ class LearningEventControllerTest {
   @Test
   void nullBatchIsRejectedAsBadRequest() {
     LearningEventController controller =
-        new LearningEventController(repository, objectMapper, throttle);
+        new LearningEventController(repository, eventGuard());
     CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
 
     assertThatThrownBy(() -> controller.logBatch(student, null))
@@ -113,9 +117,21 @@ class LearningEventControllerTest {
   }
 
   @Test
+  void nullEventInBatchIsRejectedBeforeAnyEventIsWritten() {
+    LearningEventController controller = new LearningEventController(repository, eventGuard());
+    CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
+
+    assertThatThrownBy(
+            () -> controller.logBatch(student, java.util.Arrays.asList((LearningEventLogDto) null)))
+        .isInstanceOf(com.pythontopia.common.error.BusinessException.class);
+
+    verifyNoInteractions(repository);
+  }
+
+  @Test
   void rateLimitIsPerAccountAndRejectsBeforeWriting() {
     LearningEventController controller =
-        new LearningEventController(repository, objectMapper, throttle);
+        new LearningEventController(repository, eventGuard());
     CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
     List<LearningEventLogDto> batch =
         java.util.Collections.nCopies(

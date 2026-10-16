@@ -2,7 +2,7 @@ package com.pythontopia.agent.runtime;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.pythontopia.common.error.BusinessException;
-import com.pythontopia.learner.event.ClientLearningEventPolicy;
+import com.pythontopia.learner.event.ClientLearningEventGuard;
 import com.pythontopia.learner.event.EventImportance;
 import java.time.OffsetDateTime;
 import org.springframework.http.HttpStatus;
@@ -12,9 +12,12 @@ import org.springframework.stereotype.Service;
 public class AgentRuntimeEventService {
 
   private final AgentRuntimeEventRepository repository;
+  private final ClientLearningEventGuard eventGuard;
 
-  public AgentRuntimeEventService(AgentRuntimeEventRepository repository) {
+  public AgentRuntimeEventService(
+      AgentRuntimeEventRepository repository, ClientLearningEventGuard eventGuard) {
     this.repository = repository;
+    this.eventGuard = eventGuard;
   }
 
   public record EventRecord(
@@ -30,9 +33,8 @@ public class AgentRuntimeEventService {
     if (authUserId == null) {
       throw badRequest("AGENT_EVENT_USER_REQUIRED", "认证用户缺失");
     }
-    if (!ClientLearningEventPolicy.allows(eventType)) {
-      throw badRequest("INVALID_LEARNING_EVENT", "不允许客户端上报该事件");
-    }
+    eventGuard.validate(eventType, payload);
+    eventGuard.requireCapacity(authUserId, 1);
     return event(
         repository.insert(
             authUserId, eventType, payload, "frontend", EventImportance.of(eventType)));

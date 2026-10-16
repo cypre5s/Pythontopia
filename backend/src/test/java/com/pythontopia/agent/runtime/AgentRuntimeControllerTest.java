@@ -17,6 +17,7 @@ import com.pythontopia.auth.security.JwtAuthenticationFilter;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.common.web.CurrentUserArgumentResolver;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import com.pythontopia.common.web.WebConfig;
 import com.pythontopia.loop.LoopRuntimeService;
@@ -41,6 +42,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({GlobalExceptionHandler.class, WebConfig.class, CurrentUserArgumentResolver.class})
 class AgentRuntimeControllerTest {
 
+  private static final int MAX_JSON_PAYLOAD_BYTES = 1024 * 1024;
+
   @Autowired MockMvc mockMvc;
 
   @Autowired ObjectMapper objectMapper;
@@ -51,10 +54,12 @@ class AgentRuntimeControllerTest {
 
   @MockBean JwtAuthenticationFilter jwtAuthenticationFilter;
   @MockBean TutorDailyRequestLimitService requestLimitService;
+  @MockBean StudentWriteThrottle studentWriteThrottle;
 
   @BeforeEach
   void authenticateAsStudent() {
     authenticate(new CurrentUserPrincipal(7L, "stu-agent-runtime", Role.STUDENT), "ROLE_STUDENT");
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(true);
   }
 
   @AfterEach
@@ -236,6 +241,51 @@ class AgentRuntimeControllerTest {
         .andExpect(jsonPath("$.riskLevel").value("MEDIUM"))
         .andExpect(jsonPath("$.approvalRequired").value(false))
         .andExpect(jsonPath("$.traceId").value("trace-99"));
+  }
+
+  @Test
+  void loopStateEndpointRejectsWritesWhenAccountBudgetIsFull() throws Exception {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(false);
+
+    ObjectNode body = objectMapper.createObjectNode();
+    body.put("loopType", "LEARNER");
+    body.put("stateKey", "observe");
+    body.put("status", "READY");
+    body.put("policyVersion", "agentic_loop_v1");
+    body.put("traceId", "trace-99");
+
+    mockMvc
+        .perform(
+            post("/api/agent-runs/99/loop-states")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.code").value("STUDENT_WRITE_RATE_LIMITED"));
+
+    verifyNoInteractions(runtimeService);
+  }
+
+  @Test
+  void loopStateEndpointRejectsOversizedJsonBeforeReservingBudget() throws Exception {
+    ObjectNode body = objectMapper.createObjectNode();
+    body.put("loopType", "LEARNER");
+    body.put("stateKey", "observe");
+    body.put("status", "READY");
+    body.set(
+        "state",
+        objectMapper.createObjectNode().put("blob", "x".repeat(MAX_JSON_PAYLOAD_BYTES + 1)));
+    body.put("policyVersion", "agentic_loop_v1");
+    body.put("traceId", "trace-99");
+
+    mockMvc
+        .perform(
+            post("/api/agent-runs/99/loop-states")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+        .andExpect(status().isPayloadTooLarge())
+        .andExpect(jsonPath("$.code").value("LOOP_RUNTIME_PAYLOAD_TOO_LARGE"));
+
+    verifyNoInteractions(studentWriteThrottle, runtimeService);
   }
 
   private ObjectNode loopRunBody() {

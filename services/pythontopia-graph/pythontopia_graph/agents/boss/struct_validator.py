@@ -1,4 +1,4 @@
-"""题目对象结构校验：必填字段、KC 格式、难度范围、test_cases 数量与题面长度上限。"""
+"""题目对象结构校验：必填字段、KC 格式、难度范围与判题输入边界。"""
 
 from __future__ import annotations
 
@@ -9,6 +9,9 @@ from .schemas import BossProblem, ReviewIssue, ReviewVerdict
 KC_CODE_RE = re.compile(r"^PY43-KC-\d{3}$")
 MAX_STATEMENT_LEN = 1500  # 中文题面按字符计，上限略宽于纯 ASCII
 MIN_TEST_CASES = 3
+MAX_TEST_CASES = 10
+MAX_TEST_VALUE_LEN = 8192
+MAX_REFERENCE_SOLUTION_LEN = 8192
 MAX_HINTS = 3
 
 
@@ -22,6 +25,13 @@ def validate_problem_struct(problem: BossProblem) -> ReviewVerdict:
         issues.append(_err("missing_statement", "statement must be non-empty"))
     if not problem.reference_solution or not problem.reference_solution.strip():
         issues.append(_err("missing_reference_solution", "reference_solution required"))
+    elif len(problem.reference_solution) > MAX_REFERENCE_SOLUTION_LEN:
+        issues.append(
+            _err(
+                "reference_solution_too_long",
+                f"reference_solution length exceeds {MAX_REFERENCE_SOLUTION_LEN}",
+            )
+        )
 
     if not isinstance(problem.kc_code, str) or not KC_CODE_RE.match(problem.kc_code):
         issues.append(
@@ -40,13 +50,31 @@ def validate_problem_struct(problem: BossProblem) -> ReviewVerdict:
 
     if not isinstance(problem.test_cases, list) or len(problem.test_cases) < MIN_TEST_CASES:
         issues.append(_err("insufficient_test_cases", f"need >= {MIN_TEST_CASES} test_cases"))
+    elif len(problem.test_cases) > MAX_TEST_CASES:
+        issues.append(_err("too_many_test_cases", f"need <= {MAX_TEST_CASES} test_cases"))
     else:
         for i, tc in enumerate(problem.test_cases):
-            if not hasattr(tc, "input") or tc.input is None:
+            test_input = getattr(tc, "input", None)
+            expected_output = getattr(tc, "expected_output", None)
+            if not isinstance(test_input, str):
                 issues.append(_err("missing_test_input", f"test_case[{i}] missing input"))
-            if not hasattr(tc, "expected_output") or tc.expected_output is None:
+            elif len(test_input) > MAX_TEST_VALUE_LEN:
+                issues.append(
+                    _err(
+                        "test_input_too_long",
+                        f"test_case[{i}] input exceeds {MAX_TEST_VALUE_LEN} characters",
+                    )
+                )
+            if not isinstance(expected_output, str):
                 issues.append(
                     _err("missing_test_expected", f"test_case[{i}] missing expected_output")
+                )
+            elif len(expected_output) > MAX_TEST_VALUE_LEN:
+                issues.append(
+                    _err(
+                        "test_expected_output_too_long",
+                        f"test_case[{i}] expected_output exceeds {MAX_TEST_VALUE_LEN} characters",
+                    )
                 )
         if not any(tc.is_sample for tc in problem.test_cases):
             issues.append(

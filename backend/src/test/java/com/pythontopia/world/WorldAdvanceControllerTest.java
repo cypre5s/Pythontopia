@@ -1,6 +1,8 @@
 package com.pythontopia.world;
 
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -11,6 +13,7 @@ import com.pythontopia.auth.security.JwtAuthenticationFilter;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.common.web.CurrentUserArgumentResolver;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import com.pythontopia.common.web.WebConfig;
 import com.pythontopia.world.dto.WorldAdvanceResponse;
@@ -37,6 +40,7 @@ class WorldAdvanceControllerTest {
   @Autowired MockMvc mockMvc;
 
   @MockBean WorldAdvanceService service;
+  @MockBean StudentWriteThrottle studentWriteThrottle;
 
   @MockBean JwtAuthenticationFilter jwtAuthenticationFilter;
   @MockBean TutorDailyRequestLimitService requestLimitService;
@@ -54,6 +58,7 @@ class WorldAdvanceControllerTest {
 
   @Test
   void sleepAdvancesDayIndex() throws Exception {
+    when(studentWriteThrottle.tryAcquire(eq(9L), eq(1))).thenReturn(true);
     OffsetDateTime now = OffsetDateTime.parse("2026-05-22T08:00:00Z");
     WorldSnapshotDto snapshot =
         new WorldSnapshotDto(
@@ -67,5 +72,14 @@ class WorldAdvanceControllerTest {
         .andExpect(jsonPath("$.world.weekday").value("tuesday"))
         .andExpect(jsonPath("$.world.weather").value("RAIN"))
         .andExpect(jsonPath("$.newEvents.length()").value(0));
+  }
+
+  @Test
+  void rejectsSleepWhenStudentWriteBudgetIsExceeded() throws Exception {
+    when(studentWriteThrottle.tryAcquire(eq(9L), eq(1))).thenReturn(false);
+
+    mockMvc.perform(post("/api/world/sleep")).andExpect(status().isTooManyRequests());
+
+    verify(service, never()).sleep(9L);
   }
 }

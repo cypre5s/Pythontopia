@@ -1,5 +1,57 @@
 # Changelog
 
+## 2026-10-16 — 限制世界睡眠推进写入频率
+
+- `/api/world/sleep` 现在占用现有每账号每分钟 100 单位写预算；超限返回 429，且不会执行世界推进或掌握度扫描。
+- `WorldAdvanceControllerTest` 先 RED 后 GREEN，2/2；未调用模型。
+
+## 2026-10-16 — 任务页阅读证据校验学生归属
+
+- Quest `page_read` 证据现在要求对应 page ID 存在于课程中，且出现在当前学生的 `mainline_stage_progress.pages_read` 中；仅提交课程页面 ID 不再足以完成任务。
+- Quest `resource` 证据除验证资源归属外，还要求任务创建后存在当前学生通过后端领域事件记录的 `resource_consumed`。
+- Quest `kc_mastery` 证据现在读取任务创建后同一学生、同一 KC 的服务端 `applied_delta`，仅接受判题/微测/调试事件；客户端自报增量不再决定是否过线。
+- 回归先 RED 后 GREEN，覆盖三类伪造证据，`QuestCompleteWithEvidenceTest` 12/12；本地 PostgreSQL 用无匹配记录的哨兵值只读执行三条查询（结果 0 / false / false），未访问用户数据；未调用模型。
+
+## 2026-10-16 — 限制 Loop Runtime JSON 字段大小
+
+- 两个 Loop Runtime 浏览器控制器对每个 JSON 审计字段设置 1 MiB 上限，超限在账号预算扣减和服务写入前返回 413；服务端内部编排不经过该 HTTP 边界。
+- `LoopControllerTest` 与 `AgentRuntimeControllerTest` 共 13/13，含 1 MiB+1 哨兵请求；触及的四个 Java 文件定向 Spotless 通过。
+
+## 2026-10-16 — 为 Loop Runtime 浏览器写入口接入账号预算
+
+- `/api/loop/*` 的 run、checkpoint、tool、agent、eval 写入，以及 `/api/agent-runs/*` 的 loop-state/policy 写入均占用每账号每分钟 100 单位共享预算；学习事件路由继续由既有 guard 计费。
+- 两个控制器定向回归 11/11（含超限前不触库），四个 Java 文件定向 Spotless 通过；服务端内部编排调用不经过此 HTTP 限额。
+
+## 2026-10-16 — 将 Loop 检查点限制在 run 步数内
+
+- `LoopRuntimeService.saveCheckpoint` 现在要求 `0 <= stepIndex < run.maxSteps`，阻止单个闭环 run 通过任意步号持续追加检查点。
+- PostgreSQL 回归先复现越界写入，再验证最后合法步可写、首个越界步返回 400；既有运行产物往返回归通过，定向 Spotless 通过。其它 Loop Runtime JSON 载荷与追加记录的容量上限仍在审计。
+
+## 2026-10-16 — 限制导师偏好事件写入
+
+- `/api/tutor/style-engaged` 现在复用每账号每分钟 100 单位的学生写入预算；超限返回 429，教师在权限拒绝前不会占用学生额度。
+- `TutorStyleEngagedThrottleTest` 先 RED 后 GREEN，3/3；控制器与测试定向 Spotless 通过。没有调用模型。
+
+## 2026-10-16 — 为 Bug 矿洞新会话复用账号写入预算
+
+- 普通新会话与遗忘回声会话各预留 10 个现有账号预算单位；超限返回 429，且在沙箱处理或插入合成提交前拒绝。已存在会话的幂等重开不扣额度。
+- RED/GREEN 后 `BugMineOpenThrottleTest` 与 `BugMineCloseGuardTest` 共 7/7；PostgreSQL/Spring 集成中的新建与幂等重开 2/2；四个 Java 文件定向 Spotless 通过。限额沿用单后端实例内存计数器；未调用模型。
+
+## 2026-10-16 — 限制主线客观题作答载荷
+
+- `PracticeAnswerRequest` 将答案限制为最多 32 项、每项最多 8192 字符；确定性判题和答对幂等逻辑不变。
+- 回归先 RED 后 GREEN，`PracticeAnswerRequestValidationTest` 2/2，DTO 与测试定向 Spotless 通过。
+
+## 2026-10-16 — 校验玩家位置位于中央小镇地图内
+
+- `PATCH /api/world/player` 现在拒绝负坐标和超出 `town_hub` 50×40 边界的位置，防止客户端把自己的世界存档写到地图之外。
+- 验证先 RED 后 GREEN；`PlayerStatePatchValidationTest` 2/2，DTO 与测试文件定向 Spotless 通过。
+
+## 2026-10-16 — 封闭学习事件入口的限流绕过
+
+- `/api/events` 与 `/api/learning/events` 共用学生事件校验：每账号每分钟最多 100 条，单条 payload 最多 4096 字节；空批次项按无效事件返回 400。
+- 新增共享 `ClientLearningEventGuard`，避免两个写入入口对限额产生分歧。服务及两个接口定向回归 17/17；6 个触及 Java 文件定向 Spotless 通过。未调用模型。
+
 ## 2026-10-16 — 限制学生追加记录的写入频率与大小
 
 - 学习事件单条/批次与工坊聊天历史追加写共用每账号每分钟 100 条额度，超限在写入前返回 429；工坊历史 JSON payload 限制为 64 KiB。过期窗口自动回收。

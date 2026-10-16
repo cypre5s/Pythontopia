@@ -20,6 +20,7 @@ import com.pythontopia.bugmine.judge.PythonTraceCollector;
 import com.pythontopia.bugmine.repository.BugMineRepository;
 import com.pythontopia.bugmine.repository.BugMineRepository.SessionContextRow;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.mastery.review.ReviewSignal;
 import com.pythontopia.learner.mastery.review.ReviewStateService;
@@ -66,6 +67,8 @@ public class BugMineService {
   private static final double PROFILE_PATTERN_WEIGHT = 0.15;
   private static final double LOW_CONFIDENCE_WEIGHT = 0.10;
   private static final int ECHO_CANDIDATE_LIMIT = 5;
+  // shortcut: 10 budget units per new session; recalibrate if measured sandbox cost changes.
+  private static final int OPEN_WRITE_COST = 10;
   private static final long COURSE_PACK_ID = 43L;
   private static final String ECHO_ENTRY_CODE =
       "# 遗忘回声入口：重新读题后独立完成同知识点练习\nprint(\"\")\n";
@@ -81,6 +84,7 @@ public class BugMineService {
   private final ObjectMapper objectMapper;
   private final BugMineProfileAdvisor profileAdvisor;
   private final ReviewStateService reviewStateService;
+  private final StudentWriteThrottle studentWriteThrottle;
   private final int maxRetries;
 
   public BugMineService(
@@ -95,6 +99,7 @@ public class BugMineService {
       ObjectMapper objectMapper,
       BugMineProfileAdvisor profileAdvisor,
       ReviewStateService reviewStateService,
+      StudentWriteThrottle studentWriteThrottle,
       @Value("${pythontopia.bugMine.maxRetriesPerSession:3}") int maxRetries) {
     this.repository = repository;
     this.submissionRepository = submissionRepository;
@@ -107,11 +112,16 @@ public class BugMineService {
     this.objectMapper = objectMapper;
     this.profileAdvisor = profileAdvisor;
     this.reviewStateService = reviewStateService;
+    this.studentWriteThrottle = studentWriteThrottle;
     this.maxRetries = maxRetries;
   }
 
   @Transactional
   public BugMineSessionDto open(Long userId, Long submissionId) {
+    return open(userId, submissionId, false);
+  }
+
+  private BugMineSessionDto open(Long userId, Long submissionId, boolean writeBudgetReserved) {
     Optional<Long> existing = repository.findSessionIdBySubmission(userId, submissionId);
     if (existing.isPresent()) {
       return enrichSession(
@@ -121,6 +131,9 @@ public class BugMineService {
                   () ->
                       new BusinessException(
                           HttpStatus.NOT_FOUND, "BUG_MINE_NOT_FOUND", "Bug 矿洞会话不存在")));
+    }
+    if (!writeBudgetReserved) {
+      reserveOpenBudget(userId);
     }
 
     SubmissionDto submission =
@@ -312,6 +325,7 @@ public class BugMineService {
                         HttpStatus.NOT_FOUND,
                         "BUG_MINE_ECHO_NOT_FOUND",
                         "没有可入矿的遗忘回声 KC"));
+    reserveOpenBudget(userId);
     Long submissionId =
         submissionRepository.insertSubmission(
             userId,
@@ -331,9 +345,18 @@ public class BugMineService {
         "遗忘回声复习入口，需要重新确认该 KC。",
         trace);
 
-    BugMineSessionDto opened = open(userId, submissionId);
+    BugMineSessionDto opened = open(userId, submissionId, true);
     repository.updateProfileDepthTarget(opened.id(), Math.max(opened.profileDepthTarget(), 4));
     return find(userId, opened.id());
+  }
+
+  private void reserveOpenBudget(Long userId) {
+    if (!studentWriteThrottle.tryAcquire(userId, OPEN_WRITE_COST)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "BUG_MINE_OPEN_THROTTLED",
+          "Bug 矿洞开启过于频繁，请稍后再试");
+    }
   }
 
   @Transactional

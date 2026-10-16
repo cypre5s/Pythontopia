@@ -49,8 +49,8 @@ public class QuestEvidenceVerifier {
     switch (type) {
       case SUBMISSION -> verifySubmission(userId, quest, request);
       case RESOURCE -> verifyResource(userId, quest, request);
-      case PAGE_READ -> verifyPageRead(quest, request);
-      case KC_MASTERY -> verifyKcMastery(quest, request);
+      case PAGE_READ -> verifyPageRead(userId, request);
+      case KC_MASTERY -> verifyKcMastery(userId, quest, request);
       default ->
           throw new BusinessException(
               HttpStatus.INTERNAL_SERVER_ERROR,
@@ -112,45 +112,81 @@ public class QuestEvidenceVerifier {
           "WRONG_RESOURCE",
           "资源不是该任务指定的目标资源");
     }
+    Boolean consumedAfterQuest =
+        jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM learning_event_log"
+                + " WHERE user_id = ? AND event_type = 'resource_consumed'"
+                + " AND source IN ('backend', 'graph') AND payload->>'resourceId' = ?"
+                + " AND created_at >= ?)",
+            Boolean.class,
+            userId,
+            request.resourceId().toString(),
+            quest.createdAt());
+    if (!Boolean.TRUE.equals(consumedAfterQuest)) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST,
+          "INVALID_RESOURCE",
+          "资源尚未由当前学生消费：id=" + request.resourceId());
+    }
   }
 
-  private void verifyPageRead(QuestDto quest, QuestCompleteRequest request) {
+  private void verifyPageRead(Long userId, QuestCompleteRequest request) {
     if (request.pageReadId() == null) {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST,
           "EVIDENCE_REQUIRED_PAGE_READ",
           "完成此任务需要附带一次已读页码");
     }
-    Integer count =
+    Boolean readByStudent =
         jdbcTemplate.queryForObject(
-            "SELECT COUNT(*) FROM course_page WHERE id = ?",
-            Integer.class,
+            "SELECT EXISTS (SELECT 1 FROM course_page c WHERE c.id = ?"
+                + " AND EXISTS (SELECT 1 FROM mainline_stage_progress p"
+                + " WHERE p.user_id = ? AND ? = ANY(p.pages_read)))",
+            Boolean.class,
+            request.pageReadId(),
+            userId,
             request.pageReadId());
-    if (count == null || count == 0) {
+    if (!Boolean.TRUE.equals(readByStudent)) {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST,
           "INVALID_PAGE_READ",
-          "页面不存在：id=" + request.pageReadId());
+          "页面不存在或当前学生尚未阅读：id=" + request.pageReadId());
     }
   }
 
-  private void verifyKcMastery(QuestDto quest, QuestCompleteRequest request) {
+  private void verifyKcMastery(Long userId, QuestDto quest, QuestCompleteRequest request) {
     if (request.kcMasteryDelta() == null) {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST,
           "EVIDENCE_REQUIRED_MASTERY",
           "完成此任务需要附带 KC mastery 增量");
     }
+    if (quest.kcCode() == null || quest.kcCode().isBlank() || quest.createdAt() == null) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST,
+          "EVIDENCE_REQUIRED_MASTERY",
+          "该任务缺少可验证的 KC 掌握度目标");
+    }
+    BigDecimal actual =
+        jdbcTemplate.queryForObject(
+            "SELECT CASE WHEN COUNT(*) FILTER (WHERE applied_delta IS NULL) = 0"
+                + " THEN COALESCE(SUM(applied_delta), 0) END"
+                + " FROM kc_mastery_event WHERE user_id = ? AND kc_code = ? AND created_at >= ?"
+                + " AND source IN ('PRACTICE_PASS', 'PRACTICE_FAIL', 'MICRO_CHECK_PASS',"
+                + " 'MICRO_CHECK_FAIL', 'DEBUG_FIX')",
+            BigDecimal.class,
+            userId,
+            quest.kcCode(),
+            quest.createdAt());
     BigDecimal required = quest.requiredMasteryDelta();
     if (required == null) {
       required = BigDecimal.ZERO;
     }
-    BigDecimal actual = BigDecimal.valueOf(request.kcMasteryDelta());
-    if (actual.compareTo(required) < 0) {
+    if (actual == null || actual.signum() <= 0 || actual.compareTo(required) < 0) {
       throw new BusinessException(
           HttpStatus.BAD_REQUEST,
           "EVIDENCE_REQUIRED_MASTERY",
-          "提供的 mastery 增量 " + actual + " 低于任务要求的 " + required);
+          "服务端记录的 mastery 增量 " + actual + " 未达到任务要求的 " + required);
     }
   }
 

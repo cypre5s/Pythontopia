@@ -19,6 +19,7 @@ import com.pythontopia.bugmine.judge.CounterExampleSelector;
 import com.pythontopia.bugmine.judge.PythonTraceCollector;
 import com.pythontopia.bugmine.repository.BugMineRepository;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.mastery.review.ReviewStateService;
 import com.pythontopia.submission.repository.PracticeSubmissionRepository;
@@ -66,6 +67,7 @@ class BugMineCloseGuardTest {
             new ObjectMapper(),
             new BugMineProfileAdvisor(),
             reviewStateService,
+            mock(StudentWriteThrottle.class),
             3);
     // enrichSession 的旁路依赖：无上下文 / 无来源 / 无题干均按缺省处理。
     lenient()

@@ -182,9 +182,13 @@ public class LoopRuntimeService {
       String status,
       JsonNode state,
       String resumeCursor) {
-    requireOwnedRun(authUserId, loopRunId);
+    LoopRunDto run = requireOwnedRun(authUserId, loopRunId);
     if (stepIndex < 0) {
       throw badRequest("LOOP_CHECKPOINT_STEP_INVALID", "step_index 不能为负");
+    }
+    if (stepIndex >= run.maxSteps()) {
+      throw badRequest(
+          "LOOP_CHECKPOINT_STEP_INVALID", "step_index 必须小于 run.max_steps");
     }
     return checkpoint(
         runtimeRepository.upsertCheckpoint(

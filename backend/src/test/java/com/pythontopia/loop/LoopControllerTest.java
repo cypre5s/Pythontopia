@@ -16,6 +16,7 @@ import com.pythontopia.auth.security.JwtAuthenticationFilter;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.common.web.CurrentUserArgumentResolver;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import com.pythontopia.common.web.WebConfig;
 import com.pythontopia.loop.dto.LoopRunDto;
@@ -40,6 +41,8 @@ import org.springframework.test.web.servlet.MockMvc;
 @Import({GlobalExceptionHandler.class, WebConfig.class, CurrentUserArgumentResolver.class})
 class LoopControllerTest {
 
+  private static final int MAX_JSON_PAYLOAD_BYTES = 1024 * 1024;
+
   @Autowired MockMvc mockMvc;
 
   @Autowired ObjectMapper objectMapper;
@@ -50,10 +53,12 @@ class LoopControllerTest {
 
   @MockBean JwtAuthenticationFilter jwtAuthenticationFilter;
   @MockBean TutorDailyRequestLimitService requestLimitService;
+  @MockBean StudentWriteThrottle studentWriteThrottle;
 
   @BeforeEach
   void authenticateAsStudent() {
     authenticate(new CurrentUserPrincipal(7L, "stu-loop", Role.STUDENT), "ROLE_STUDENT");
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(true);
   }
 
   @AfterEach
@@ -85,6 +90,44 @@ class LoopControllerTest {
         .andExpect(jsonPath("$.loopRunId").value(99))
         .andExpect(jsonPath("$.stepIndex").value(2))
         .andExpect(jsonPath("$.resumeCursor").value("cursor-2"));
+  }
+
+  @Test
+  void checkpointEndpointRejectsWritesWhenAccountBudgetIsFull() throws Exception {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(false);
+    ObjectNode body = objectMapper.createObjectNode();
+    body.put("stepIndex", 2);
+    body.put("status", "READY");
+
+    mockMvc
+        .perform(
+            post("/api/loop/runs/99/checkpoints")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.code").value("STUDENT_WRITE_RATE_LIMITED"));
+
+    verifyNoInteractions(runtimeService);
+  }
+
+  @Test
+  void checkpointEndpointRejectsOversizedJsonBeforeReservingBudget() throws Exception {
+    ObjectNode body = objectMapper.createObjectNode();
+    body.put("stepIndex", 2);
+    body.put("status", "READY");
+    body.set(
+        "state",
+        objectMapper.createObjectNode().put("blob", "x".repeat(MAX_JSON_PAYLOAD_BYTES + 1)));
+
+    mockMvc
+        .perform(
+            post("/api/loop/runs/99/checkpoints")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(body)))
+        .andExpect(status().isPayloadTooLarge())
+        .andExpect(jsonPath("$.code").value("LOOP_RUNTIME_PAYLOAD_TOO_LARGE"));
+
+    verifyNoInteractions(studentWriteThrottle, runtimeService);
   }
 
   @Test
