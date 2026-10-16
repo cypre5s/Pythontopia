@@ -2,7 +2,7 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-16）**：Tutor 历史消息角色已限制为 user/assistant；资源与章测提示词中的动态学习上下文现使用 user 数据角色。真实 DeepSeek 文本与合成 PNG 图片输入、文本输出已有全栈记录，Tutor AutoGen 产品流程也已完成真实浏览器联测；provider 静态审计确认服务端 LLM 路由只允许 DeepSeek，TTS/ASR/讯飞图片服务关闭。本轮只对修改后的章测 prompt 做了 1 次真实 DeepSeek completion（3 页本地 RAG 证据，解析为 1 道单选题），没有通用探针或重试。Tutor、Twin P0、Phaser Boss、管理台布局/班级字段对齐及部分 Web 动作有代码和验证记录。剩余工作以本地安全边界、远征真实闭环、Web 动作覆盖、Twin 效果研究及工程收尾为主，性能最后测。细项只维护在下方唯一任务清单。
+> **当前快照（2026-10-16）**：Tutor 历史消息角色已限制为 user/assistant；资源与章测提示词中的动态学习上下文现使用 user 数据角色。真实 DeepSeek 文本与合成 PNG 图片输入、文本输出已有全栈记录，Tutor AutoGen 产品流程也已完成真实浏览器联测；provider 静态审计确认服务端 LLM 路由只允许 DeepSeek，TTS/ASR/讯飞图片服务关闭。本轮只对修改后的章测 prompt 做了 1 次真实 DeepSeek completion（3 页本地 RAG 证据，解析为 1 道单选题），没有通用探针或重试。Tutor、Twin P0、Phaser Boss、管理台布局/班级字段对齐及部分 Web 动作有代码和验证记录。远征 Boss 完整浏览器闭环已在当前快照验证；剩余工作以本地安全边界、其它 Web 动作覆盖、Twin 效果研究及工程收尾为主，性能最后测。细项只维护在下方唯一任务清单。
 
 ## 当前进度
 
@@ -10,9 +10,11 @@
 
 ### 2026-10-16 最近续接
 
-- 最近动作：远征首章有同 KC 客观题的概念 KC 现可作为新手候选；没有课程编程题时，客观题优先于已预生成代码题。刷新后可继续当前客观题。
-- 新鲜验证：最新构建的普通 Web 学生跑 10 层服务端远征，KC-001 判断题刷新后恢复，真实判题 1/1；Twin 状态出现该 KC 的 PRACTICE_PASS（0.14），学习分身页面加载，pageerror/HTTP 5xx 均为 0。临时账号清理及前缀残留核对通过。BossServiceTest 65/65、BossControllerTest 18/18、Spotless 通过；无 DeepSeek 请求。
-- 完整三阶段 Boss 路线未在这次取题优先级改动后重跑；更早的 KC-008 三阶段浏览器通关记录仍在唯一清单。性能最后测。
+- 最近动作：复验概念 KC 客观题优先级补丁后的完整远征；不适合代码判题的 KC 用同 KC 选择/判断/填空题，答案由服务端正式判定。
+- 新鲜验证：普通注册 STUDENT 完成 10 层服务端远征，11 道审核课程客观题全程通过；KC-004 Boss 三阶段结算成功，Phaser 受击画面可见，排行榜通关深度 11。Twin KC-004 掌握度 0.48、证据 `PRACTICE_PASS`；分身页正常。浏览器 pageerror=0、HTTP 5xx=0；账号与 57 个直接外键引用清理为 0。Boss 预生成在浏览器侧隔离为 IDLE，本次未调用 DeepSeek。
+- 执行时脚本先后遇到服务端 10 秒提交间隔与页面选择器假设，已按真实后端限制等待并使用现有 `.exp-boss-live` class；最终闭环通过。性能最后测。
+- 接续本地安全复核：同步 `/api/media/storyboard/video` 之前没有 per-account budget，会执行分镜出图与 ffmpeg；现复用异步作业相同的每账号 3 次/分钟额度。旧代码新回归先失败；媒体限流、资源授权及 AI route coverage 合计 14/14 通过。尚未完成全 API 和日志审计。
+- 日志子项：`XfyunImageService` 旧错误日志会输出上游 message；本地 HTTP sentinel 回归先失败，改成只输出 exception type 后该类 3/3 通过。未访问讯飞；其余媒体 provider 日志仍待核。
 
 - 最近动作：图书馆引用页索引异常现在由共享解析器捕获，继续查其它文档后给出错误提示，避免异步拒绝；远征地图节点难度改为直接采用服务端自适应策略值；画像访谈新建记录限每账号每小时 3 次、恢复已有会话不扣额度；课件 RAG 与个人语料检索合并为账号每分钟 30 次共享额度。
 - 新鲜验证：LibraryPage 11/11、typecheck、定向 ESLint 通过；画像访谈/写入额度回归 20/20，远征地图/AdaptivePracticePolicy 10/10，RAG/上传检索相关定向回归 14/14；`git diff --check` 通过。未发起 DeepSeek 请求。
@@ -735,3 +737,9 @@
 ## 2026-10-16 当前续接：本地 Python 隔离实测
 
 - `node deploy/scripts/test_dev_piston_sandbox.mjs` 通过：运行 Python 3.12.0，宿主临时文件与 loopback API 均不可达，超时任务被终止。此轮未调用模型；云端/ECS 部署检查按要求排除。
+
+## 2026-10-16 当前续接：客观题覆盖与剩余边界核对
+
+- KC 题型规则已有落地：22 个不适合代码判题的 KC 由同 KC 的选择/判断/填空题覆盖；本轮只读核对现有题库与选择逻辑，没有重复跑生成或 Boss 通关。
+- `/api/downloads/{key}/hit` 有 Nginx 来源 IP 限流；Tutor 内部 checkpoint/附件读取同时校验内部 token 与 `user:<id>` 主体。TTS、ASR、讯飞图片理解均代码硬关闭，对应 provider 不可达。
+- 下一步仍是继续清单中剩余非 AI 写路由与包装器/多行日志审计；生产网络运行态、Twin 7 日样本和性能尚未验证。

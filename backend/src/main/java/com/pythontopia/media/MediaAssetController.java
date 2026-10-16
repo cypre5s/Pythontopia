@@ -3,7 +3,9 @@ package com.pythontopia.media;
 import com.pythontopia.auth.domain.UserAccount;
 import com.pythontopia.auth.repository.UserRepository;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
+import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.media.domain.MediaAsset;
 import com.pythontopia.media.dto.ImageGenerationRequest;
 import com.pythontopia.media.dto.MediaAssetDto;
@@ -15,6 +17,7 @@ import java.util.List;
 import java.util.Optional;
 import org.springframework.core.io.Resource;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -61,6 +64,7 @@ public class MediaAssetController {
   private final MediaAssetStorage storage;
   private final MediaAssetUrls assetUrls;
   private final UserRepository userRepository;
+  private final StudentWriteThrottle studentWriteThrottle;
 
   public MediaAssetController(
       XfyunImageService imageService,
@@ -68,13 +72,15 @@ public class MediaAssetController {
       MediaAssetRepository repository,
       MediaAssetStorage storage,
       MediaAssetUrls assetUrls,
-      UserRepository userRepository) {
+      UserRepository userRepository,
+      StudentWriteThrottle studentWriteThrottle) {
     this.imageService = imageService;
     this.compositionService = compositionService;
     this.repository = repository;
     this.storage = storage;
     this.assetUrls = assetUrls;
     this.userRepository = userRepository;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @PostMapping("/image")
@@ -100,6 +106,13 @@ public class MediaAssetController {
                         s.resolvedDuration(),
                         s.resolvedKcCodes()))
             .toList();
+    if (compositionService.isImageGenerationEnabled()
+        && !studentWriteThrottle.tryAcquireMediaComposition(user.userId())) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "MEDIA_COMPOSE_RATE_LIMITED",
+          "视频合成请求过于频繁，请稍后再试");
+    }
     MediaAsset asset = compositionService.compose(user.userId(), specs);
     return MediaAssetDto.from(asset, assetUrls);
   }

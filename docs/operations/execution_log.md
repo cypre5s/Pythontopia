@@ -905,3 +905,26 @@
 - `/api/tutor/workflow/sessions/{sessionKey}/feedback` 过去可无限追加事件行，且允许 Map payload 任意大。现复用每账号每分钟 100 次共享写额度，并在入库前把序列化事件限制为 4096 字节；超限分别返回 429/413，不写 action event，也不发布学习事件。
 - 回归在旧代码下分别复现第 101 次仍被调用和 5000 字节 payload 仍被写入；修复后 `TutorWorkflowControllerTest` + `TutorWorkflowServiceTest` 38/38 通过，`git diff --check` 通过。定向 Spotless 检查命中触及文件既有的大段格式漂移，未重排无关代码。无模型调用或业务数据写入。
 - 持久化反馈事件仍无生命周期清理；账号额度依赖单 Spring 实例内存态。非 AI 写接口/日志审计、真实远征闭环、其余 Web 动作、Twin 样本、工程整理仍在唯一清单中；性能最后测。
+
+## 2026-10-16 — 最新快照 Boss 浏览器通关与 Twin 回流
+
+- 普通注册 STUDENT 走完 10 层服务端路线，11 道审核课程选择/判断/填空题均正式判题通过；KC-004 Boss 三阶段结算成功。截图确认 Phaser Boss 场景与命中反馈可见。
+- `/api/learner/twin/state` 与 `/profile-room` 确认 KC-004 掌握度 0.48、证据 `PRACTICE_PASS`；数据库有 3 条 Boss 通过结算，排行榜 `cleared=true`、depth 11。pageerror=0、HTTP 5xx=0。
+- 临时账号删除后核对 57 个直接外键引用均为 0。浏览器把 Boss 预生成隔离为 IDLE，因此本次没有模型调用，也未验证实时预生成；本次只完成浏览器功能联测，没有测性能。
+
+## 2026-10-16 — 限制同步故事板视频合成频率
+
+- 静态盘点发现旧同步 `/api/media/storyboard/video` 端点最多处理 8 个镜头，但未复用异步媒体作业端点已有的账号合成额度。现在复用同一 `tryAcquireMediaComposition`，限额时在 `StoryboardCompositionService.compose` 前返回 429；与异步 job 共享每账号每分钟 3 次额度。
+- RED 时新控制器回归因预算依赖尚不存在而编译失败；接入守卫后 `MediaAssetControllerWriteThrottleTest`、媒体资产授权和 AI 路由覆盖合计 14/14 通过。只改控制器及既有测试调用点，无模型调用或业务数据写入。全 API 写口和日志审计仍未完成。
+
+## 2026-10-16 — 避免记录图片服务上游错误正文
+
+- Xfyun 图片生成失败原会把上游错误 `message` 写入日志。用本地 HTTP 假服务返回 sentinel 验证该字符串实际进入旧日志，随后改为仅记录异常类型；对外仍返回通用失败响应。
+- 红测先命中 sentinel 泄露，修复后 `XfyunImageServiceTest` 3/3 通过。没有访问讯飞或其它模型。之后确认 ASR/TTS/图片理解 provider 固定关闭，相关日志分支当前不可达。
+
+## 2026-10-16 — 复核客观题覆盖与媒体/内部路由边界
+
+- 按用户确认的题型规则核对现有迁移和服务：22 个概念/操作型 KC 已有同 KC 的选择、判断或填空审核题，Boss 在缺少编程题时优先发放同 KC 客观题；该能力及 140 道题库、22/22 KC 覆盖已有迁移与回归记录，本轮不重复生成题目或重跑 Boss。
+- 只读核对发现匿名下载统计端点由 Nginx 按 IP 限流（5 次/秒，突发 10）；Tutor 内部 checkpoint/附件 API 要求 constant-time `X-Internal-Token` 比较，并验证 `user:<id>` 主体。
+- 讯飞 TTS、ASR、图片理解 properties 的 `isEnabled()` 均固定返回 `false`，对应服务在发起网络连接或记录上游错误前退出；本轮没有访问这些 provider，也未修改不可达日志代码。
+- 全 API 非 AI 写口、包装器/多行日志、生产 Piston ACL 与公网 Nginx/CORS 运行态仍未完成审计。

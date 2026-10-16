@@ -9,6 +9,7 @@ import com.pythontopia.auth.repository.UserRepository;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.JwtProperties;
 import com.pythontopia.auth.security.Role;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.media.domain.MediaAsset;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -68,7 +69,8 @@ class MediaAssetControllerAuthorizationTest {
             repository,
             storage,
             assetUrls,
-            userRepository);
+            userRepository,
+            new StudentWriteThrottle());
 
     tempFile = Files.createTempFile("pyt-media-auth", ".png");
     Files.write(tempFile, new byte[] {1, 2, 3, 4});

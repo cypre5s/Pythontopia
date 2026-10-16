@@ -89,7 +89,7 @@ public class XfyunImageService {
       return repository.insert(
           userId, MediaAssetKind.IMAGE, prompt, file, "image/jpeg", false, "XFYUN", kcCodes, null);
     } catch (Exception ex) {
-      log.warn("Xfyun image generation failed: {}", ex.getMessage());
+      log.warn("Xfyun image generation failed errorType={}", ex.getClass().getSimpleName());
       throw new BusinessException(
           HttpStatus.BAD_GATEWAY, "IMAGE_PROVIDER_FAILED", "图片生成服务暂时不可用，请稍后重试");
     }
