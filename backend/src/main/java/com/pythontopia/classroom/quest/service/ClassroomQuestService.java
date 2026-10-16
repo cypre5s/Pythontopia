@@ -12,6 +12,7 @@ import com.pythontopia.classroom.quest.repository.ClassroomQuestRepository.Class
 import com.pythontopia.classroom.repository.ClassroomRepository;
 import com.pythontopia.classroom.security.ClassroomGuard;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.quest.dto.QuestNodeType;
@@ -40,18 +41,21 @@ public class ClassroomQuestService {
   private final ClassroomGuard classroomGuard;
   private final CoursePackRepository coursePackRepository;
   private final ObjectMapper objectMapper;
+  private final StudentWriteThrottle studentWriteThrottle;
 
   public ClassroomQuestService(
       ClassroomQuestRepository repository,
       ClassroomRepository classroomRepository,
       ClassroomGuard classroomGuard,
       CoursePackRepository coursePackRepository,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      StudentWriteThrottle studentWriteThrottle) {
     this.repository = repository;
     this.classroomRepository = classroomRepository;
     this.classroomGuard = classroomGuard;
     this.coursePackRepository = coursePackRepository;
     this.objectMapper = objectMapper;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @Transactional(readOnly = true)
@@ -77,6 +81,7 @@ public class ClassroomQuestService {
       CurrentUserPrincipal user, Long classroomId, ClassroomQuestCreateRequest request) {
     classroomGuard.requireOwner(user, classroomId);
     validateRequest(request);
+    requireWriteCapacity(user.userId());
 
     QuestNodeType nodeType =
         request.targetProblemId() != null
@@ -154,6 +159,7 @@ public class ClassroomQuestService {
       throw new BusinessException(
           HttpStatus.FORBIDDEN, "FORBIDDEN", "班级任务不属于当前班级");
     }
+    requireWriteCapacity(user.userId());
     repository.archive(classroomQuestId);
     // 归档必须同时撤回已分发的学生副本，否则 /api/quests/today（只看 quest.status + due_date）
     // 仍会把它当今日任务展示、允许完成并触发 mastery 加分。
@@ -164,6 +170,15 @@ public class ClassroomQuestService {
             HttpStatus.INTERNAL_SERVER_ERROR,
             "CLASSROOM_QUEST_PERSIST_FAILED",
             "班级任务归档后未能读回"));
+  }
+
+  private void requireWriteCapacity(long userId) {
+    if (!studentWriteThrottle.tryAcquire(userId, 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "CLASSROOM_WRITE_RATE_LIMITED",
+          "班级任务操作过于频繁，请稍后重试");
+    }
   }
 
   /**

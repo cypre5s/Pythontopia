@@ -8,7 +8,7 @@ import java.util.function.LongSupplier;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** Limits weighted student writes per account. */
+/** Limits weighted write operations per account. */
 @Component
 public class StudentWriteThrottle {
 

@@ -3,8 +3,10 @@ package com.pythontopia.classroom.quest;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -23,6 +25,7 @@ import com.pythontopia.classroom.quest.service.ClassroomQuestService;
 import com.pythontopia.classroom.repository.ClassroomRepository;
 import com.pythontopia.classroom.security.ClassroomGuard;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.quest.repository.QuestRepository.QuestInsert;
@@ -31,8 +34,10 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.springframework.http.HttpStatus;
 
 class ClassroomQuestServiceTest {
 
@@ -41,11 +46,77 @@ class ClassroomQuestServiceTest {
   private final ClassroomGuard classroomGuard = mock(ClassroomGuard.class);
   private final CoursePackRepository coursePackRepository = mock(CoursePackRepository.class);
   private final ObjectMapper objectMapper = new ObjectMapper();
+  private final StudentWriteThrottle studentWriteThrottle = mock(StudentWriteThrottle.class);
   private final ClassroomQuestService service =
       new ClassroomQuestService(
-          repository, classroomRepository, classroomGuard, coursePackRepository, objectMapper);
+          repository,
+          classroomRepository,
+          classroomGuard,
+          coursePackRepository,
+          objectMapper,
+          studentWriteThrottle);
 
   private final CurrentUserPrincipal teacher = new CurrentUserPrincipal(42L, "t01", Role.TEACHER);
+
+  @BeforeEach
+  void allowNormalWrites() {
+    when(studentWriteThrottle.tryAcquire(anyLong(), eq(1))).thenReturn(true);
+  }
+
+  @Test
+  void rejectsTeacherQuestPublicationWhenAccountBudgetIsExhausted() {
+    when(classroomGuard.requireOwner(teacher, 9L))
+        .thenReturn(new Classroom(9L, "DemoClass", "desc", 42L, 43L, "ABC123", "ACTIVE"));
+    when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of(kc("PY43-KC-001")));
+    when(studentWriteThrottle.tryAcquire(teacher.userId(), 1)).thenReturn(false);
+    when(repository.insert(any(ClassroomQuestInsert.class))).thenReturn(77L);
+    when(classroomRepository.findMembers(9L)).thenReturn(List.of());
+    when(repository.findById(77L)).thenReturn(Optional.of(sampleQuest(77L, "ACTIVE")));
+
+    assertThatThrownBy(
+            () ->
+                service.publish(
+                    teacher,
+                    9L,
+                    new ClassroomQuestCreateRequest(
+                        "Task",
+                        null,
+                        List.of("PY43-KC-001"),
+                        null,
+                        "HANDOUT",
+                        LocalDate.now(ZoneOffset.UTC).plusDays(1))))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> {
+              assertThat(error.status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+              assertThat(error.code()).isEqualTo("CLASSROOM_WRITE_RATE_LIMITED");
+            });
+
+    verify(repository, never()).insert(any(ClassroomQuestInsert.class));
+    verify(classroomRepository, never()).findMembers(9L);
+  }
+
+  @Test
+  void rejectsTeacherQuestArchivalWhenAccountBudgetIsExhausted() {
+    when(classroomGuard.requireOwner(teacher, 9L))
+        .thenReturn(new Classroom(9L, "DemoClass", "desc", 42L, 43L, "ABC123", "ACTIVE"));
+    when(repository.findById(77L))
+        .thenReturn(
+            Optional.of(sampleQuest(77L, "ACTIVE")), Optional.of(sampleQuest(77L, "ARCHIVED")));
+    when(studentWriteThrottle.tryAcquire(teacher.userId(), 1)).thenReturn(false);
+
+    assertThatThrownBy(() -> service.archive(teacher, 9L, 77L))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> {
+              assertThat(error.status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+              assertThat(error.code()).isEqualTo("CLASSROOM_WRITE_RATE_LIMITED");
+            });
+
+    verify(studentWriteThrottle).tryAcquire(teacher.userId(), 1);
+    verify(repository, never()).archive(77L);
+    verify(repository, never()).skipDistributedQuests(77L);
+  }
 
   @Test
   void publishWritesClassroomQuestAndFanOutsToStudents() {
