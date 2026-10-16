@@ -75,6 +75,7 @@ export interface ChapterTestExam {
   totalCount: ComputedRef<number>;
   loadLatest: () => Promise<void>;
   prepare: () => Promise<void>;
+  resumePreparePolling: () => void;
   start: () => Promise<void>;
   submitNow: () => Promise<void>;
   setChoice: (qid: string, letter: string) => void;
@@ -182,11 +183,9 @@ export function useChapterTestExam(
     }
   }
 
-  // R3：GENERATING 期间轮询 prepare（后端幂等只返回状态，不重复触发生成），
-  // 个性化卷就绪即转 ready——避免学生在生成窗口点「开始」直接吃 golden 兜底卷。
-  // 上限 ~24s（8 次 × 3s），到点仍未就绪则停留 preparing（start 自然走 golden 兜底，不卡考试）。
-  const PREPARE_POLL_MAX = 8;
-  const PREPARE_POLL_INTERVAL_MS = 3000;
+  // Only the initial prepare call reserves AI budget; status checks use the unbudgeted latest endpoint.
+  const PREPARE_POLL_MAX = 40;
+  const PREPARE_POLL_INTERVAL_MS = 15_000;
   let preparePollTimer: ReturnType<typeof setTimeout> | null = null;
 
   function stopPreparePoll(): void {
@@ -196,22 +195,37 @@ export function useChapterTestExam(
     }
   }
 
+  function applyPrepareStatus(status: ChapterTestStatus): boolean {
+    prepareStatus.value = status;
+    if (status === 'READY' || status === 'IN_PROGRESS') {
+      phase.value = 'ready';
+      return true;
+    }
+    if (status === 'FAILED') {
+      phase.value = 'error';
+      errorMessage.value = '题目生成失败，请重新准备';
+      return true;
+    }
+    phase.value = 'preparing';
+    return false;
+  }
+
   function schedulePreparePoll(attempt: number): void {
-    if (attempt > PREPARE_POLL_MAX) return;
+    if (attempt > PREPARE_POLL_MAX) {
+      phase.value = 'error';
+      errorMessage.value = '题目仍在生成，可继续查询状态';
+      return;
+    }
     stopPreparePoll();
     preparePollTimer = setTimeout(() => {
       void (async () => {
         // 学生已手动开考/离开准备态则停止轮询。
         if (phase.value !== 'preparing') return;
         try {
-          const res = await prepareTest(chapter, assessment);
-          prepareStatus.value = res.status;
-          if (res.status === 'READY') {
-            phase.value = 'ready';
-            return;
-          }
+          const latest = await getLatestTest(chapter, assessment);
+          if (latest && applyPrepareStatus(latest.status)) return;
         } catch {
-          // 轮询失败静默（best-effort）：保持 preparing，start 仍可走兜底。
+          // Transient status failures do not spend another AI request; retry while this page is open.
         }
         schedulePreparePoll(attempt + 1);
       })();
@@ -220,17 +234,21 @@ export function useChapterTestExam(
 
   async function prepare(): Promise<void> {
     phase.value = 'preparing';
+    errorMessage.value = '';
     try {
       const res = await prepareTest(chapter, assessment);
-      prepareStatus.value = res.status;
-      phase.value = res.status === 'READY' ? 'ready' : 'preparing';
-      if (phase.value === 'preparing') {
-        schedulePreparePoll(1);
-      }
+      if (!applyPrepareStatus(res.status)) schedulePreparePoll(1);
     } catch (error) {
       errorMessage.value = errText(error);
       phase.value = 'error';
     }
+  }
+
+  function resumePreparePolling(): void {
+    if (prepareStatus.value !== 'PENDING' && prepareStatus.value !== 'GENERATING') return;
+    phase.value = 'preparing';
+    errorMessage.value = '';
+    schedulePreparePoll(1);
   }
 
   // 调用方组件卸载时清理轮询定时器（composable 随 effectScope 销毁）。
@@ -319,6 +337,7 @@ export function useChapterTestExam(
     totalCount,
     loadLatest,
     prepare,
+    resumePreparePolling,
     start,
     submitNow,
     setChoice,

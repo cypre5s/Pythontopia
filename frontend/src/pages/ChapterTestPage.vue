@@ -55,6 +55,9 @@ const showGate = computed<boolean>(() => validChapter.value && exam.paper.value 
 const inProgress = computed<boolean>(() => exam.phase.value === 'in_progress');
 const submitted = computed<boolean>(() => exam.phase.value === 'submitted');
 const submitError = computed<boolean>(() => exam.phase.value === 'error' && exam.paper.value !== null);
+const canResumePrepare = computed<boolean>(
+  () => exam.prepareStatus.value === 'PENDING' || exam.prepareStatus.value === 'GENERATING',
+);
 
 const prepareHint = computed<string>(() => {
   switch (exam.prepareStatus.value) {
@@ -92,6 +95,18 @@ function warn(message: string): void {
 
 async function onStart(): Promise<void> {
   await exam.start();
+}
+
+function onPrepareOrStart(): void {
+  if (exam.phase.value === 'ready') {
+    void onStart();
+    return;
+  }
+  if (canResumePrepare.value) {
+    exam.resumePreparePolling();
+    return;
+  }
+  void exam.prepare();
 }
 
 async function onSubmit(): Promise<void> {
@@ -237,10 +252,18 @@ onBeforeUnmount(() => {
           type="button"
           class="ct-btn ct-btn--primary"
           data-testid="ct-start"
-          :disabled="exam.phase.value === 'starting'"
-          @click="onStart"
+          :disabled="exam.phase.value === 'starting' || exam.phase.value === 'preparing'"
+          @click="onPrepareOrStart"
         >
-          {{ exam.phase.value === 'starting' ? '正在出卷…' : isQuiz ? '开始小测' : '开始考试' }}
+          {{
+            exam.phase.value === 'starting'
+              ? '正在开卷…'
+              : exam.phase.value === 'preparing'
+                ? '题目生成中…'
+                : exam.phase.value === 'ready'
+                  ? isQuiz ? '开始小测' : '开始考试'
+                  : canResumePrepare ? '继续查询' : '重新准备'
+          }}
         </button>
       </div>
 

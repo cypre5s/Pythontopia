@@ -151,6 +151,94 @@ describe('ChapterTestPage', () => {
     expect(apiMocks.getLatestTest).toHaveBeenCalledWith(1, 'test');
   });
 
+  it('keeps polling beyond 24 seconds until asynchronous generation is ready', async () => {
+    vi.useFakeTimers();
+    apiMocks.prepareTest.mockResolvedValue({ status: 'GENERATING' });
+    apiMocks.getLatestTest.mockImplementation(async () => {
+      const callCount = apiMocks.getLatestTest.mock.calls.length;
+      if (callCount === 1) return null;
+      return {
+        testId: 't-1',
+        chapter: 1,
+        attemptNo: 1,
+        status: callCount >= 7 ? 'READY' : 'GENERATING',
+        score: 0,
+        maxScore: 100,
+        passed: false,
+        submittedAt: '',
+        integrity: { paste_blocked: 0, blur_events: 0, overtime: false },
+        items: [],
+      };
+    });
+    try {
+      const wrapper = await mountAt(1);
+      expect((wrapper.find('[data-testid="ct-start"]').element as HTMLButtonElement).disabled).toBe(true);
+      await vi.advanceTimersByTimeAsync(90_000);
+      await flushPromises();
+
+      expect(apiMocks.prepareTest).toHaveBeenCalledTimes(1);
+      expect(apiMocks.getLatestTest).toHaveBeenCalledTimes(7);
+      expect(wrapper.find('[data-testid="ct-prepare-hint"]').text()).toContain('题目已就绪');
+      expect((wrapper.find('[data-testid="ct-start"]').element as HTMLButtonElement).disabled).toBe(false);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('resumes status polling after timeout without reserving AI budget again', async () => {
+    vi.useFakeTimers();
+    apiMocks.prepareTest.mockResolvedValue({ status: 'GENERATING' });
+    apiMocks.getLatestTest.mockImplementation(async () => {
+      const callCount = apiMocks.getLatestTest.mock.calls.length;
+      if (callCount === 1) return null;
+      return {
+        testId: 't-1',
+        chapter: 1,
+        attemptNo: 1,
+        status: callCount >= 42 ? 'READY' : 'GENERATING',
+        score: 0,
+        maxScore: 100,
+        passed: false,
+        submittedAt: '',
+        integrity: { paste_blocked: 0, blur_events: 0, overtime: false },
+        items: [],
+      };
+    });
+    try {
+      const wrapper = await mountAt(1);
+      await vi.advanceTimersByTimeAsync(600_000);
+      await flushPromises();
+
+      expect(apiMocks.prepareTest).toHaveBeenCalledTimes(1);
+      expect(wrapper.find('[data-testid="ct-gate-error"]').text()).toContain('可继续查询状态');
+      expect(wrapper.find('[data-testid="ct-start"]').text()).toBe('继续查询');
+
+      await wrapper.find('[data-testid="ct-start"]').trigger('click');
+      await vi.advanceTimersByTimeAsync(15_000);
+      await flushPromises();
+
+      expect(apiMocks.prepareTest).toHaveBeenCalledTimes(1);
+      expect(wrapper.find('[data-testid="ct-prepare-hint"]').text()).toContain('题目已就绪');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('retries preparation after the backend marks generation failed', async () => {
+    apiMocks.prepareTest
+      .mockResolvedValueOnce({ status: 'FAILED' })
+      .mockResolvedValueOnce({ status: 'READY' });
+    const wrapper = await mountAt(1);
+
+    expect(wrapper.find('[data-testid="ct-gate-error"]').text()).toContain('题目生成失败');
+    expect(wrapper.find('[data-testid="ct-start"]').text()).toBe('重新准备');
+    await wrapper.find('[data-testid="ct-start"]').trigger('click');
+    await flushPromises();
+
+    expect(apiMocks.prepareTest).toHaveBeenCalledTimes(2);
+    expect(wrapper.find('[data-testid="ct-prepare-hint"]').text()).toContain('题目已就绪');
+  });
+
   it('shows the 33-question chapter quiz contract and uses quiz APIs', async () => {
     const wrapper = await mountQuizAt(1);
     expect(wrapper.find('[data-testid="ct-gate"]').text()).toContain('章节小测');
