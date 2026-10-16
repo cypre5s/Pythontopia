@@ -1,5 +1,6 @@
 package com.pythontopia.auth.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
-public record RefreshRequest(@NotBlank String token) {}
+public record RefreshRequest(@NotBlank @Size(max = 2048) String token) {}

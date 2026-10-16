@@ -124,6 +124,27 @@ require_loop_runtime_body_limit_block() {
   fi
 }
 
+require_body_limit_location_block() {
+  local file="$1"
+  local location="$2"
+  local limit="$3"
+  local expected_upstream="$4"
+  local description="$5"
+  local body_limit_block
+  body_limit_block="$(awk -v location="${location}" '
+    index($0, location) { capture=1 }
+    capture { print }
+    capture && /^[[:space:]]*}/ { exit }
+  ' "${file}")"
+  if grep -Eq "client_max_body_size[[:space:]]+${limit};" <<<"${body_limit_block}" \
+      && grep -Fq "proxy_pass ${expected_upstream};" <<<"${body_limit_block}"; then
+    echo "[PASS] ${description}"
+  else
+    echo "[FAIL] ${description}" >&2
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
 require_evidence_snapshot_limit_block() {
   local edge_file="${ROOT_DIR}/deploy/nginx/pythontopia.conf"
   local api_block
@@ -149,11 +170,12 @@ require_registration_limit_block() {
     capture { print }
     capture && /^[[:space:]]*}/ { exit }
   ' "${edge_file}")"
-  if grep -Eq 'limit_req[[:space:]]+zone=pythontopia_register[[:space:]]+burst=30[[:space:]]+nodelay;' <<<"${register_block}" \
+  if grep -Eq 'client_max_body_size[[:space:]]+4k;' <<<"${register_block}" \
+      && grep -Eq 'limit_req[[:space:]]+zone=pythontopia_register[[:space:]]+burst=30[[:space:]]+nodelay;' <<<"${register_block}" \
       && grep -Eq 'limit_req_status[[:space:]]+429;' <<<"${register_block}"; then
-    echo "[PASS] 学生注册单独限速并返回 429"
+    echo "[PASS] 学生注册限制 4 KiB 请求体、单独限速并返回 429"
   else
-    echo "[FAIL] 学生注册单独限速并返回 429" >&2
+    echo "[FAIL] 学生注册限制 4 KiB 请求体、单独限速并返回 429" >&2
     FAILURES=$((FAILURES + 1))
   fi
 }
@@ -237,6 +259,42 @@ require_loop_runtime_body_limit_block \
   "${FRONTEND_NGINX}" \
   "前端 Nginx 将 Loop Runtime JSON 写请求限制为 3 MiB 并正确代理" \
   "http://backend:18080"
+require_body_limit_location_block \
+  "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "location = /api/learning/events" \
+  "16k" \
+  "http://pythontopia_frontend" \
+  "边缘 Nginx 将单条学习事件限制为 16 KiB 并正确代理"
+require_body_limit_location_block \
+  "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "location = /api/learning/events/batch" \
+  "512k" \
+  "http://pythontopia_frontend" \
+  "边缘 Nginx 将学习事件批次限制为 512 KiB 并正确代理"
+require_body_limit_location_block \
+  "${FRONTEND_NGINX}" \
+  "location = /api/learning/events" \
+  "16k" \
+  "http://backend:18080" \
+  "前端 Nginx 将单条学习事件限制为 16 KiB 并正确代理"
+require_body_limit_location_block \
+  "${FRONTEND_NGINX}" \
+  "location = /api/learning/events/batch" \
+  "512k" \
+  "http://backend:18080" \
+  "前端 Nginx 将学习事件批次限制为 512 KiB 并正确代理"
+require_body_limit_location_block \
+  "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  'location ~ ^/api/auth/(login|refresh)$' \
+  "4k" \
+  "http://pythontopia_frontend" \
+  "边缘 Nginx 将登录/刷新请求体限制为 4 KiB 并正确代理"
+require_body_limit_location_block \
+  "${FRONTEND_NGINX}" \
+  'location ~ ^/api/auth/(?:login|refresh|register)$' \
+  "4k" \
+  "http://backend:18080" \
+  "前端 Nginx 将匿名认证请求体限制为 4 KiB 并正确代理"
 require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "证据快照限速只接收 POST 快照请求的来源 IP" \
   'map[[:space:]]+"\$request_method:\$uri"[[:space:]]+\$pythontopia_evidence_snapshot_limit_key[[:space:]]*\{'

@@ -138,9 +138,7 @@ TutorEpisodeExpectedEvidence = Literal[
 ]
 
 TutorEpisodeStopPolicy = Literal["WAIT_FOR_CLICK", "WAIT_FOR_SUBMISSION", "DONE"]
-TutorEpisodePlanStatus = Literal[
-    "RECOMMENDED", "ACTIVE", "PAUSED", "COMPLETED", "SURRENDERED"
-]
+TutorEpisodePlanStatus = Literal["RECOMMENDED", "ACTIVE", "PAUSED", "COMPLETED", "SURRENDERED"]
 
 # 学生可见文本里禁止出现的原始推理痕迹标记（防把 chain-of-thought / system prompt 泄给前端）。
 _RAW_REASONING_MARKERS: tuple[str, ...] = (
@@ -150,6 +148,30 @@ _RAW_REASONING_MARKERS: tuple[str, ...] = (
     "system prompt",
     "思维链",
 )
+_INLINE_IMAGE_DATA_URI = re.compile(r"(?i)data:image/[^;,\s]+;base64,")
+
+
+def _contains_inline_image_payload(value: Any) -> bool:
+    pending = [value]
+    while pending:
+        current = pending.pop()
+        if isinstance(current, dict):
+            for key, nested in current.items():
+                normalized_key = re.sub(r"(?<!^)(?=[A-Z])", "_", str(key)).lower()
+                normalized_key = normalized_key.replace("-", "_")
+                if "image" in normalized_key or "img" in normalized_key:
+                    return True
+                if normalized_key.endswith(("bytes", "base64")):
+                    return True
+                if isinstance(nested, (dict, list)):
+                    pending.append(nested)
+                elif isinstance(nested, str) and _INLINE_IMAGE_DATA_URI.search(nested):
+                    return True
+        elif isinstance(current, list):
+            pending.extend(nested for nested in current if isinstance(nested, (dict, list)))
+        elif isinstance(current, str) and _INLINE_IMAGE_DATA_URI.search(current):
+            return True
+    return False
 
 
 def _assert_no_raw_reasoning(*texts: str) -> None:
@@ -351,8 +373,11 @@ class WorkflowRunRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_chat_attachments(self) -> "WorkflowRunRequest":
-        if "images" in self.event_data:
-            raise ValueError("workflow image bytes must use private attachment transport")
+        if _contains_inline_image_payload(self.event_data):
+            raise ValueError(
+                "workflow image payload must use private attachment transport; "
+                "inline image data URI is not allowed"
+            )
         code = self.event_data.get("code")
         if code is not None:
             if self.event not in {"CHAT", "EXECUTION_TRACE", "VISUALIZE"}:

@@ -747,3 +747,19 @@
 - KC 题型规则已有落地：22 个不适合代码判题的 KC 由同 KC 的选择/判断/填空题覆盖；本轮只读核对现有题库与选择逻辑，没有重复跑生成或 Boss 通关。
 - `/api/downloads/{key}/hit` 有 Nginx 来源 IP 限流；Tutor 内部 checkpoint/附件读取同时校验内部 token 与 `user:<id>` 主体。TTS、ASR、讯飞图片理解均代码硬关闭，对应 provider 不可达。
 - 下一步仍是继续清单中剩余非 AI 写路由与包装器/多行日志审计；生产网络运行态、Twin 7 日样本和性能尚未验证。
+
+## 2026-10-16 当前续接：限制学习事件原始请求体
+
+- `/api/learning/events` 与 `/batch` 原先先由 Spring 反序列化整个 JSON，随后才限制单条 payload 4 KiB、批次 100 条；公网 Nginx 默认允许 12 MiB。完整 SecurityFilterChain 回归先证实 16 KiB+ 单条 body 到达 Controller（HTTP 200）。
+- 复用 `ApiRequestBodyLimitFilter` 在 MVC 绑定前分别限制 16 KiB / 512 KiB；两层 Nginx 路由也同步限额。超限请求返回 413，边界请求通过。
+- `PublicReadAccessTest` 通过，HTTPS/Nginx 契约脚本和 bash 语法检查通过，`git diff --check` 通过。未做 Nginx 运行态及性能压测；剩余路由与日志审计继续按主清单推进。
+
+## 2026-10-16 当前续接：限制匿名认证输入
+
+- 登录、注册、刷新 body 在 Spring MVC 绑定前限制为 4 KiB，并在两层 Nginx 同步限制；登录字段与刷新 token 的长度限制可在密码散列/JWT 解析前拒绝明显异常输入。
+- `PublicReadAccessTest` 与 `AuthControllerTest` 通过；HTTPS/Nginx 契约脚本、`bash -n` 和两层 Nginx 1.27 容器语法检查通过（边缘使用临时自签测试证书）。未访问生产代理。
+
+## 2026-10-16 当前续接：收紧 Tutor 非聊天图片载荷
+
+- 非 CHAT `event_data` 拒绝常见图片字段别名、base64/bytes 命名载荷和图片 data URI；私有 CHAT 附件通道保持可用。
+- 旧实现先复现可绕过的四种别名；Graph 定向回归 72/72、Ruff 与格式检查通过。没有发起 DeepSeek 请求。

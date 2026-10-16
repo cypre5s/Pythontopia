@@ -25,6 +25,9 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
 
   public static final int MAX_SNAPSHOT_BYTES = 256 * 1024;
+  public static final int MAX_LEARNING_EVENT_BYTES = 16 * 1024;
+  public static final int MAX_LEARNING_EVENT_BATCH_BYTES = 512 * 1024;
+  public static final int MAX_AUTH_REQUEST_BYTES = 4 * 1024;
   // Tool-call requests carry two JSON fields, each independently limited to 1 MiB.
   public static final int MAX_AGENT_LOOP_REQUEST_BYTES = 3 * 1024 * 1024;
 
@@ -34,6 +37,11 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
       Pattern.compile(
           "^/api/(?:agent-runs/[0-9]+/(?:loop-states|policy-decisions)"
               + "|loop/runs/[0-9]+/(?:checkpoints|tool-calls|agent-runs|eval-results))$");
+  private static final Pattern LEARNING_EVENT_PATH = Pattern.compile("^/api/learning/events$");
+  private static final Pattern LEARNING_EVENT_BATCH_PATH =
+      Pattern.compile("^/api/learning/events/batch$");
+  private static final Pattern AUTH_REQUEST_PATH =
+      Pattern.compile("^/api/auth/(?:login|register|refresh)$");
 
   private final ObjectMapper objectMapper;
 
@@ -83,6 +91,15 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
     if (AGENT_LOOP_PATH.matcher(requestPath).matches()) {
       return MAX_AGENT_LOOP_REQUEST_BYTES;
     }
+    if (LEARNING_EVENT_PATH.matcher(requestPath).matches()) {
+      return MAX_LEARNING_EVENT_BYTES;
+    }
+    if (LEARNING_EVENT_BATCH_PATH.matcher(requestPath).matches()) {
+      return MAX_LEARNING_EVENT_BATCH_BYTES;
+    }
+    if (AUTH_REQUEST_PATH.matcher(requestPath).matches()) {
+      return MAX_AUTH_REQUEST_BYTES;
+    }
     return 0;
   }
 
@@ -113,18 +130,31 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
 
   private void writeTooLarge(HttpServletResponse response, String requestPath) throws IOException {
     boolean snapshotRequest = SNAPSHOT_PATH.matcher(requestPath).matches();
+    boolean learningEventRequest = LEARNING_EVENT_PATH.matcher(requestPath).matches();
+    boolean learningEventBatchRequest = LEARNING_EVENT_BATCH_PATH.matcher(requestPath).matches();
+    boolean authRequest = AUTH_REQUEST_PATH.matcher(requestPath).matches();
+    String errorCode = "LOOP_RUNTIME_REQUEST_TOO_LARGE";
+    String errorMessage = "Loop Runtime request body cannot exceed 3 MiB";
+    if (authRequest) {
+      errorCode = "AUTH_REQUEST_TOO_LARGE";
+      errorMessage = "Authentication request body cannot exceed 4 KiB";
+    } else if (snapshotRequest) {
+      errorCode = "SAVE_SLOT_SNAPSHOT_TOO_LARGE";
+      errorMessage = "Save slot snapshot is too large";
+    } else if (learningEventRequest) {
+      errorCode = "LEARNING_EVENT_REQUEST_TOO_LARGE";
+      errorMessage = "Learning event request body cannot exceed 16 KiB";
+    } else if (learningEventBatchRequest) {
+      errorCode = "LEARNING_EVENT_REQUEST_TOO_LARGE";
+      errorMessage = "Learning event batch body cannot exceed 512 KiB";
+    }
     response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
     response.setCharacterEncoding(StandardCharsets.UTF_8.name());
     objectMapper.writeValue(
         response.getOutputStream(),
         ApiError.of(
-            snapshotRequest ? "SAVE_SLOT_SNAPSHOT_TOO_LARGE" : "LOOP_RUNTIME_REQUEST_TOO_LARGE",
-            snapshotRequest
-                ? "Save slot snapshot is too large"
-                : "Loop Runtime request body cannot exceed 3 MiB",
-            List.of(),
-            ""));
+            errorCode, errorMessage, List.of(), ""));
   }
 
   private static final class CachedBodyRequest extends HttpServletRequestWrapper {

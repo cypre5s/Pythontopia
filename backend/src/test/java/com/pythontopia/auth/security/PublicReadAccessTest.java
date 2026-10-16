@@ -5,10 +5,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.pythontopia.auth.domain.UserAccount;
 import com.pythontopia.auth.repository.UserRepository;
+import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,6 +41,9 @@ import org.springframework.web.bind.annotation.RestController;
 class PublicReadAccessTest {
 
   private static final int MAX_LOOP_RUNTIME_REQUEST_BYTES = 3 * 1024 * 1024;
+  private static final int MAX_LEARNING_EVENT_REQUEST_BYTES = 16 * 1024;
+  private static final int MAX_LEARNING_EVENT_BATCH_REQUEST_BYTES = 512 * 1024;
+  private static final int MAX_AUTH_REQUEST_BYTES = 4 * 1024;
 
   @Autowired private MockMvc mockMvc;
 
@@ -58,6 +63,31 @@ class PublicReadAccessTest {
     mockMvc.perform(get("/api/downloads/security-test")).andExpect(status().isOk());
     mockMvc.perform(post("/api/downloads/security-test/hit")).andExpect(status().isOk());
     mockMvc.perform(post("/api/downloads/security-test")).andExpect(status().isUnauthorized());
+  }
+
+  @Test
+  void anonymousAuthRoutesRejectOversizedBodiesBeforeMvcBinding() throws Exception {
+    for (String route : List.of("/api/auth/login", "/api/auth/refresh", "/api/auth/register")) {
+      mockMvc
+          .perform(
+              post(route)
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content("x".repeat(MAX_AUTH_REQUEST_BYTES + 1)))
+          .andExpect(status().isPayloadTooLarge())
+          .andExpect(jsonPath("$.code").value("AUTH_REQUEST_TOO_LARGE"));
+    }
+  }
+
+  @Test
+  void anonymousAuthRoutesAcceptBodiesAtTheConfiguredLimit() throws Exception {
+    for (String route : List.of("/api/auth/login", "/api/auth/refresh", "/api/auth/register")) {
+      mockMvc
+          .perform(
+              post(route)
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content("x".repeat(MAX_AUTH_REQUEST_BYTES)))
+          .andExpect(status().isOk());
+    }
   }
 
   @Test
@@ -116,11 +146,80 @@ class PublicReadAccessTest {
         .andExpect(status().isPayloadTooLarge());
   }
 
+  @Test
+  void learningEventBodyLimitsRejectOversizedRequestsBeforeMvcBinding() throws Exception {
+    CurrentUserPrincipal principal = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
+    when(jwtService.parse("signed-test-token")).thenReturn(principal);
+    when(userRepository.findById(7L))
+        .thenReturn(
+            Optional.of(
+                new UserAccount(
+                    7L, "student", "Student", "hash", null, Role.STUDENT, "ACTIVE", 0)));
+
+    mockMvc
+        .perform(
+            post("/api/learning/events")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer signed-test-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("x".repeat(MAX_LEARNING_EVENT_REQUEST_BYTES + 1)))
+        .andExpect(status().isPayloadTooLarge())
+        .andExpect(jsonPath("$.code").value("LEARNING_EVENT_REQUEST_TOO_LARGE"));
+
+    mockMvc
+        .perform(
+            post("/api/learning/events/batch")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer signed-test-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("x".repeat(MAX_LEARNING_EVENT_BATCH_REQUEST_BYTES + 1)))
+        .andExpect(status().isPayloadTooLarge())
+        .andExpect(jsonPath("$.code").value("LEARNING_EVENT_REQUEST_TOO_LARGE"));
+  }
+
+  @Test
+  void learningEventBodyLimitsAcceptRequestsAtTheirByteBoundaries() throws Exception {
+    CurrentUserPrincipal principal = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
+    when(jwtService.parse("signed-test-token")).thenReturn(principal);
+    when(userRepository.findById(7L))
+        .thenReturn(
+            Optional.of(
+                new UserAccount(
+                    7L, "student", "Student", "hash", null, Role.STUDENT, "ACTIVE", 0)));
+
+    mockMvc
+        .perform(
+            post("/api/learning/events")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer signed-test-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("x".repeat(MAX_LEARNING_EVENT_REQUEST_BYTES)))
+        .andExpect(status().isOk());
+
+    mockMvc
+        .perform(
+            post("/api/learning/events/batch")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer signed-test-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("x".repeat(MAX_LEARNING_EVENT_BATCH_REQUEST_BYTES)))
+        .andExpect(status().isOk());
+  }
+
   @RestController
   static class PublicRouteController {
     @PostMapping(value = "/api/auth/login", produces = MediaType.TEXT_PLAIN_VALUE)
-    String login() {
+    String login(
+        @org.springframework.web.bind.annotation.RequestBody(required = false) String body) {
       return "login";
+    }
+
+    @PostMapping(value = "/api/auth/refresh", produces = MediaType.TEXT_PLAIN_VALUE)
+    String refresh(
+        @org.springframework.web.bind.annotation.RequestBody(required = false) String body) {
+      return "refresh";
+    }
+
+    @PostMapping(value = "/api/auth/register", produces = MediaType.TEXT_PLAIN_VALUE)
+    String register(
+        @org.springframework.web.bind.annotation.RequestBody(required = false) String body) {
+      return "register";
     }
 
     @PostMapping(value = "/api/auth/logout", produces = MediaType.TEXT_PLAIN_VALUE)
@@ -178,6 +277,17 @@ class PublicReadAccessTest {
     @PostMapping(value = "/api/loop/runs/{id}/tool-calls", produces = MediaType.TEXT_PLAIN_VALUE)
     String saveLoopToolCall(@org.springframework.web.bind.annotation.RequestBody String call) {
       return Integer.toString(call.length());
+    }
+
+    @PostMapping(value = "/api/learning/events", produces = MediaType.TEXT_PLAIN_VALUE)
+    String saveLearningEvent(@org.springframework.web.bind.annotation.RequestBody String event) {
+      return Integer.toString(event.length());
+    }
+
+    @PostMapping(value = "/api/learning/events/batch", produces = MediaType.TEXT_PLAIN_VALUE)
+    String saveLearningEventBatch(
+        @org.springframework.web.bind.annotation.RequestBody String events) {
+      return Integer.toString(events.length());
     }
   }
 }

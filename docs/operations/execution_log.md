@@ -3,6 +3,18 @@
 > 本文档实时记录每个 working session 的状态，作为跨会话的"工作记忆"。
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
+
+## 2026-10-16 当前续接：限制匿名认证请求体
+
+- 登录、注册与刷新原始 body 在 Spring MVC 绑定前限制为 4 KiB；登录用户名/密码与刷新 token 增加长度上限，避免异常输入继续进入 BCrypt/JWT 路径。两层 Nginx 同步限制。
+- 旧安全链用例先复现超限认证请求到达 Controller；修复后 `PublicReadAccessTest` 7/7、`AuthControllerTest` 2/2 通过。`JwtServiceTest` 通过，HTTPS/Nginx 契约、Shell 语法和两层 Nginx 1.27 容器语法检查通过。
+- 没有调用模型、创建业务数据或访问生产。剩余非 AI 写路由与日志审计、生产代理仍在唯一工作清单。
+
+## 2026-10-16 当前续接：拒绝 Tutor 非聊天图片内联别名
+
+- Tutor 非 CHAT 事件的 `event_data` 现在拒绝图片字段别名、base64/bytes 命名载荷与图片 data URI；CHAT 私有 `attachment_ids` 输入保留。
+- 旧实现对四组别名均放行；修复后 Tutor Graph 定向测试 72/72、Ruff 与格式检查通过。无 DeepSeek 请求。
+
 ## 2026-10-16 当前续接：收紧匿名学生注册突发
 
 - 只读审计确认匿名 `POST /api/auth/register` 创建的新账号都会获得新的 `userId`，可绕过按账号计数的普通写额度。原公网规则与登录/刷新共用每秒 5 次、突发 10 次，无法限制同 IP 低速持续注册。

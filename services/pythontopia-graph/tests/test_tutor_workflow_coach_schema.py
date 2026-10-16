@@ -134,8 +134,8 @@ def test_workflow_chat_rejects_embedded_image_data_and_oversized_messages() -> N
         )
 
 
-def test_workflow_chat_rejects_unrecognized_fields_that_could_bypass_attachment_transport() -> None:
-    with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+def test_workflow_chat_rejects_unrecognized_image_fields() -> None:
+    with pytest.raises(ValidationError, match="private attachment transport"):
         WorkflowRunRequest(
             session_id="wf-1",
             user_id=1,
@@ -157,4 +157,26 @@ def test_workflow_rejects_images_outside_chat_event() -> None:
             event="IDEATING",
             problem={"problem_id": 42},
             event_data={"attachment_ids": [attachment_id]},
+        )
+
+
+@pytest.mark.parametrize(
+    "event_data",
+    [
+        {"image": "encoded payload"},
+        {"image_url": "https://example.invalid/image.png"},
+        {"nested": {"screenshotBase64": "encoded payload"}},
+        {"attachment_bytes": "encoded payload"},
+    ],
+)
+def test_workflow_rejects_inline_image_payload_aliases_outside_private_attachments(
+    event_data: dict[str, object],
+) -> None:
+    with pytest.raises(ValidationError, match="private attachment transport"):
+        WorkflowRunRequest(
+            session_id="wf-1",
+            user_id=1,
+            event="IDEATING",
+            problem={"problem_id": 42},
+            event_data=event_data,
         )
