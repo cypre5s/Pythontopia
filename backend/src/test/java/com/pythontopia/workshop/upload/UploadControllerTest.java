@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.workshop.upload.controller.UploadController;
 import com.pythontopia.workshop.upload.dto.UploadDetailDto;
 import com.pythontopia.workshop.upload.dto.UploadDto;
@@ -31,7 +32,9 @@ class UploadControllerTest {
   private final UploadService service = mock(UploadService.class);
   private final UploadCorpusIndexingService indexingService =
       mock(UploadCorpusIndexingService.class);
-  private final UploadController controller = new UploadController(service, indexingService);
+  private final StudentWriteThrottle studentWriteThrottle = mock(StudentWriteThrottle.class);
+  private final UploadController controller =
+      new UploadController(service, indexingService, studentWriteThrottle);
 
   private static final CurrentUserPrincipal STUDENT =
       new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
@@ -59,6 +62,7 @@ class UploadControllerTest {
   @Test
   void uploadDelegatesToServiceWithCurrentUser() {
     MockMultipartFile file = sampleFile();
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(true);
     when(service.upload(eq(7L), eq(file))).thenReturn(sampleDto());
 
     UploadDto dto = controller.upload(STUDENT, file);
@@ -72,6 +76,7 @@ class UploadControllerTest {
   @Test
   void uploadStillSucceedsWhenIndexingQueueIsFull() {
     MockMultipartFile file = sampleFile();
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(true);
     when(service.upload(eq(7L), eq(file))).thenReturn(sampleDto());
     doThrow(new TaskRejectedException("queue full"))
         .when(indexingService)
@@ -82,6 +87,19 @@ class UploadControllerTest {
     assertThat(dto.id()).isEqualTo(1L);
     verify(service).upload(7L, file);
     verify(indexingService).indexUploadAsync(1L);
+  }
+
+  @Test
+  void uploadRejectsWhenStudentWriteBudgetIsExhausted() {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(false);
+
+    assertThatThrownBy(() -> controller.upload(STUDENT, sampleFile()))
+        .isInstanceOf(BusinessException.class)
+        .extracting(ex -> ((BusinessException) ex).status())
+        .isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+
+    verify(studentWriteThrottle).tryAcquire(7L, 1);
+    verifyNoInteractions(service, indexingService);
   }
 
   @Test
@@ -126,9 +144,24 @@ class UploadControllerTest {
 
   @Test
   void deleteDelegatesToServiceWithCurrentUser() {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(true);
+
     controller.delete(STUDENT, 5L);
 
     verify(service).delete(7L, 5L);
+  }
+
+  @Test
+  void deleteRejectsWhenStudentWriteBudgetIsExhausted() {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(false);
+
+    assertThatThrownBy(() -> controller.delete(STUDENT, 5L))
+        .isInstanceOf(BusinessException.class)
+        .extracting(ex -> ((BusinessException) ex).status())
+        .isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+
+    verify(studentWriteThrottle).tryAcquire(7L, 1);
+    verifyNoInteractions(service, indexingService);
   }
 
   @Test

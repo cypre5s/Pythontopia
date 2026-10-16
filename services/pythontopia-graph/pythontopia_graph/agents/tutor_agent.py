@@ -689,6 +689,8 @@ class TutorAgent:
     _SVG_BANNED = re.compile(
         r"<\s*(script|foreignobject|image|iframe|embed|link|style)\b"
         r"|javascript:"
+        r"|url\s*\(\s*(?![\"']?\s*#)"
+        r"|\\[0-9a-f]{1,6}"
         r"|\bon[a-z]+\s*="
         r"|(xlink:)?href\s*=\s*[\"'](?!#)",
         re.IGNORECASE,

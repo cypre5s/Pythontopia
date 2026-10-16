@@ -936,3 +936,51 @@
 - 只读核对发现匿名下载统计端点由 Nginx 按 IP 限流（5 次/秒，突发 10）；Tutor 内部 checkpoint/附件 API 要求 constant-time `X-Internal-Token` 比较，并验证 `user:<id>` 主体。
 - 讯飞 TTS、ASR、图片理解 properties 的 `isEnabled()` 均固定返回 `false`，对应服务在发起网络连接或记录上游错误前退出；本轮没有访问这些 provider，也未修改不可达日志代码。
 - 全 API 非 AI 写口、包装器/多行日志、生产 Piston ACL 与公网 Nginx/CORS 运行态仍未完成审计。
+
+## 2026-10-16 — Piston 本地边界与 Tutor AutoGen 替换范围复核
+
+- 当前 Docker 运行态确认 Piston 仅发布到 `127.0.0.1:2000`，并加入独立 `deploy_judge-execution` 网络；`/readyz` 返回 200。该结果只证明当前本地开发容器边界，不代表生产网络。
+- 只读复核已检查的判题沙箱、远征状态归属及高风险 Controller 路径，未发现已确认 P0/P1；全 API 路由未逐项审完。生产 Piston 如未由私网 ACL 或会验证令牌的代理保护，仍存在条件性执行服务暴露风险；未访问 ECS/公网。
+- 对照 Alethicode 当前脏工作树与相关 Codex 日志，Pythontopia 已有同版本 AutoGen 固定阶段 Tutor、Java 持久化 checkpoint、私有图片解析及 SSE 契约。Alethicode 新增的 Redis run/event 生命周期不是可直接覆盖的等价实现；单 worker 项目约束下暂不迁移，也不新增模型或依赖。
+- 续审粗盘 Spring 写映射 112 条及文件入口：除已由服务层校验 JSON 对象形状和 256 KiB 上限的存档快照外，未发现缺 Bean Validation 的 JSON 写请求；上传限制为 5 MiB，DOCX 另限 100 entries/16 MiB 展开量，PDF 限 100 页，导学图片绑定 owner/session 并校验文件签名。Nginx access log 只写规范化 `$uri`，不写 query/referrer；本轮所查 logger 未发现请求体或 Authorization header 输出。
+- 只读浏览器 SSRF 防线包含域白名单交集、scheme/标准端口、公网 DNS 校验、Chromium DNS pin、每次导航/重定向再校验及阻断脚本/子资源；Spring CORS 禁用带 credentials 的通配来源。当前本地预检实测：`http://localhost:5173` 返回 ACAO，`https://evil.example` 返回 403 且没有 ACAO；这不验证生产域名或公网 Nginx 运行态。
+- 当前未发现可复现的代码改动点；全量逐路由账号限额、所有包装器/多行日志、上传库漏洞和生产 CORS/Nginx 仍需专门验证。本轮未运行测试或调用外部服务。
+- 未改业务代码、未运行测试、未调用 DeepSeek、未写入业务数据。
+
+## 2026-10-16 — 前端富文本与 SVG 注入点复核
+
+- 复核应用中的 `v-html` / `innerHTML` 写入点后增加恶意输入回归，发现 DOMPurify 会保留 SVG `fill`/`filter` 属性中的外部 `url(...)`，CSS 转义形式也能绕过字面量 URL 检查；Graph `_sanitize_svg` 同样会放行。将其作为 P2 浏览器外部请求/隐私信标风险处理，不是已确认的脚本执行漏洞。
+- 前端 SVG 清洗现在只保留本地图内的 `url(#id)` 引用，删除外部和反斜线转义引用；Mermaid 输出复用同一过滤。Graph 源码拒绝外部 URL 与 CSS 十六进制转义，同时保留本地渐变引用。
+- RED/GREEN：前端 `sanitizeSvg.spec.ts` 7/7、Graph `test_tutor_visual_aids.py` 10/10；`vue-tsc`、定向 ESLint、Ruff 与 `git diff --check` 通过。修复前的 Chromium 探针触发 1 次 `https://attacker.invalid` 请求且被 Playwright route 拦截；去除外部 paint 属性后的同页探针没有额外请求，没有访问真实外网。
+- 未做任意脚本载荷、完整页面渗透、CSP/Trusted Types 或全 SVG 语法 fuzz；此前 Markdown/课件静态白名单检查仍不替代全应用 XSS 审计。
+
+## 2026-10-16 — 学生写接口限额窄域续审
+
+- 继续核对此前粗扫中 Controller 未直接标出限流器的路径：Bug 矿洞开局在服务层扣写预算，重试/变式提交复用每用户 10 秒 1 次的正式判题限制并受会话重试上限约束；学习事件单条/批量写入有账号容量预算及 100 条批量上限；班级创建、成员管理和更新在服务层使用账号预算，加入码另有尝试限流。
+- 本轮只读查看上述路径及提交服务；未发现需要新增 Controller 限流器的具体缺口。全量 112 写路由逐项核对仍未完成；无代码改动、测试、外部调用或业务写入。
+
+## 2026-10-16 — Web/Graph Python 依赖漏洞核查
+
+- 前端锁文件经 npm 官方 registry 的 `npm audit --audit-level=high` 检查为 0 个已知漏洞。Graph 当前 Python 环境的 220 个精确安装版本经 OSV `querybatch` 检查发现两个受影响版本：`diskcache 5.6.3`（pickle 反序列化）与 `ragas 0.4.3`（多模态评估集合模块 SSRF）。
+- 运行范围核对：Graph Dockerfile 仅安装 `.[browse]`，不安装 `.[eval]`；应用源码不导入 DiskCache，RAGAS 漏洞模块也没有调用点。现有离线 scorer 对 RAGAS 仅使用单轮 Faithfulness/Context Recall，且没有显式注入评审 LLM 时会跳过。两个包目前只存在于本机开发 venv 的可选评测依赖中，不进入 Graph 运行镜像。
+- 截至本次 PyPI 元数据查询，`diskcache 5.6.3` 与 `ragas 0.4.3` 仍分别是最新版本，暂无可升级的修复版；未伪造升级，也未改变离线评测功能。将它们记为可选开发依赖风险，评测 extra 不应进入运行镜像，等待上游修复后再升级。Maven 依赖尚未扫描。
+- OSV 官方批量扫描请求只发送包名与版本；未调用 AI，也未写入项目业务数据。
+
+## 2026-10-16 — Maven 依赖漏洞修复与复扫
+
+- 初始 Maven 依赖树 141 个坐标经 OSV 批量查询发现 Spring/Tomcat、Jackson、Logback、PostgreSQL JDBC 等运行依赖处于已知受影响版本，另有 3 个仅测试依赖告警。将 Spring Boot 从 3.3.6 升至 3.5.16、springdoc 从 2.6.0 升至 2.9.0，并固定 Jackson BOM 2.21.7、Tomcat 10.1.61、PostgreSQL JDBC 42.7.14、Log4j 2.26.1 与 Commons Lang 3.18.0；Boot 管理的 Spring、Security、Logback、Spring Data 与测试依赖随补丁线升级。
+- 更新后 OSV 复扫 140 个 Maven 坐标：无测试依赖告警；仅 `spring-webmvc 6.2.19` 命中 2 条记录。其中 `GHSA-pc63-qcmh-9cmg` 的影响版本止于旧 5.x，与当前 6.2.19 不匹配；`GHSA-j9f9-w8pj-32f8` 需要 SSE 与服务器端 view fragment 同时使用。本项目虽有 `SseEmitter`，但未配置 Spring view/fragment 渲染，SSE 发出 JSON/文本事件，因此该公告的利用条件不满足。Spring 官方公告列出的 Spring 6.2.20 修复版仅 Enterprise 可用，Maven Central 当前最新 OSS 构件为 6.2.19；不跨 Spring Boot 主版本强行覆盖依赖。
+- 全量 `mvn test` 实际运行 1647 项，断言失败 0、错误 6。5 项 Testcontainers 错误的 Docker 根因是动态映射端口绑定时报 `address already in use`；本机 `ip_local_port_range` 为 `44620 48715`，碰撞端口落在该范围内。另 1 项在容器关闭后连接已失效的测试 PostgreSQL。6 个错误不是断言失败，但全套测试不能标为通过。6 个相关类窄复跑为 9 项、断言失败 0、错误 4，仍复现动态端口冲突。
+- Maven 构建上下文以临时配置使用本机 7892 代理与 Maven Central；未读取或输出用户 Maven 凭据。测试库为 Testcontainers 临时实例，未对本地开发业务数据执行写入。
+
+## 2026-10-16 — 工坊上传写入口预算
+
+- 安全续审发现 `/api/workshop/uploads` 的上传与删除未占用账号级写入预算。上传会同步解析文件；虽有 5 MiB 单文件、20 个文件/50 MiB 存储配额和文档解析边界，删除后仍可反复消耗解析资源。
+- 两个写入口现复用 `StudentWriteThrottle` 的每账号 100 次/分钟共享限额；超限在解析、异步索引和数据库删除之前返回 429。没有改变文件格式、大小或存储配额，也没有改动前端 API。
+- `UploadControllerTest`、`UploadServiceTest`、`UploadRetrievalControllerTest` 定向回归 32/32 通过。首次离线 Maven 调用因仓库 ID 缓存不匹配未启动测试；改用已验证的本地 7892 代理设置后测试通过。没有 DeepSeek 请求或业务库写入。
+
+## 2026-10-16 — AI 与语音出口源码复核
+
+- Graph 各在线生成路由均从 `provider_from_env` 获取模型 provider；唯一在线兼容客户端强制 HTTPS `api.deepseek.com`、DeepSeek 模型白名单与请求模型档位。RAG 未发现外部生成模型客户端；Mem0/Zep 学习记忆配置固定归一为本地 provider。
+- TTS、ASR、旧图片生成与图片理解属性的 `isEnabled()` 固定为 `false`，兼容路由在上游调用前检查；Web 源码没有浏览器语音合成或 TTS/ASR API 使用点。既有真实 DeepSeek 文本与图片输入证据沿用，本次未重复调用模型或讯飞。
+- 这是源码路径核查，不代替生产容器环境核对；未访问 ECS 或供应商控制台。

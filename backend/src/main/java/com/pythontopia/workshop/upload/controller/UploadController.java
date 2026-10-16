@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.workshop.upload.dto.UploadDetailDto;
 import com.pythontopia.workshop.upload.dto.UploadDto;
 import com.pythontopia.workshop.upload.entity.UploadStatus;
@@ -36,16 +37,27 @@ public class UploadController {
 
   private final UploadService service;
   private final UploadCorpusIndexingService indexingService;
+  private final StudentWriteThrottle studentWriteThrottle;
 
-  public UploadController(UploadService service, UploadCorpusIndexingService indexingService) {
+  public UploadController(
+      UploadService service,
+      UploadCorpusIndexingService indexingService,
+      StudentWriteThrottle studentWriteThrottle) {
     this.service = service;
     this.indexingService = indexingService;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @PostMapping(consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
   public UploadDto upload(
       @CurrentUser CurrentUserPrincipal user, @RequestParam("file") MultipartFile file) {
     requireStudent(user);
+    if (!studentWriteThrottle.tryAcquire(user.userId(), 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "STUDENT_WRITE_RATE_LIMITED",
+          "写入操作过于频繁，请稍后再试");
+    }
     UploadDto dto = service.upload(user.userId(), file);
     // 解析成功才触发 B 通路分块+向量化（异步即发即忘、fail-soft，不影响上传响应；
     // service.upload 的 @Transactional 已提交，异步线程可见该行）。
@@ -75,6 +87,12 @@ public class UploadController {
   @DeleteMapping("/{id}")
   public void delete(@CurrentUser CurrentUserPrincipal user, @PathVariable long id) {
     requireStudent(user);
+    if (!studentWriteThrottle.tryAcquire(user.userId(), 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "STUDENT_WRITE_RATE_LIMITED",
+          "写入操作过于频繁，请稍后再试");
+    }
     service.delete(user.userId(), id);
   }
 

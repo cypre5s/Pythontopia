@@ -69,6 +69,8 @@ async def test_malicious_svg_falls_back_to_mermaid() -> None:
         '<svg viewBox="0 0 10 10"><script>alert(1)</script></svg>',
         '<svg viewBox="0 0 10 10"><rect onload="alert(1)"/></svg>',
         '<svg viewBox="0 0 10 10"><a href="https://evil.example"><text>x</text></a></svg>',
+        '<svg viewBox="0 0 10 10"><rect fill="url(https://evil.example/paint.svg#x)"/></svg>',
+        '<svg viewBox="0 0 10 10"><rect fill="u\\72l(https://evil.example/paint.svg#x)"/></svg>',
         '<svg viewBox="0 0 10 10"><foreignObject><body/></foreignObject></svg>',
         "<svg><rect/></svg>",  # 缺 viewBox 也拒绝（保证可缩放渲染）
     ):
@@ -117,3 +119,13 @@ def test_sanitize_ascii_strips_fences() -> None:
 def test_sanitize_svg_extracts_from_prose() -> None:
     text = f"给你画好了：\n```svg\n{VALID_SVG}\n```\n以上。"
     assert TutorAgent._sanitize_svg(text) == VALID_SVG
+
+
+def test_sanitize_svg_allows_local_paint_server_references() -> None:
+    svg = (
+        '<svg viewBox="0 0 10 10"><defs><linearGradient id="paint">'
+        '<stop offset="0" stop-color="#fff"/></linearGradient></defs>'
+        '<rect fill="url(#paint)"/></svg>'
+    )
+
+    assert TutorAgent._sanitize_svg(svg) == svg
