@@ -2,6 +2,7 @@ package com.pythontopia.video;
 
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -97,6 +98,19 @@ class BilibiliVideoControllerTest {
         .andExpect(status().isOk());
 
     verify(service).search("列表", 3);
+  }
+
+  @Test
+  void rejectsLimitsOutsideOneToEightBeforeCallingGraph() throws Exception {
+    mockMvc
+        .perform(get("/api/videos/bilibili").param("keyword", "列表").param("limit", "9"))
+        .andExpect(status().isBadRequest());
+
+    mockMvc
+        .perform(get("/api/videos/bilibili").param("keyword", "列表").param("limit", "0"))
+        .andExpect(status().isBadRequest());
+
+    verify(service, never()).search(eq("列表"), anyInt());
   }
 
   @Test

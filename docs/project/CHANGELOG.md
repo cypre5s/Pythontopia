@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-10-16 — 收紧 AI 输入、访问日志与事务边界
+
+- Graph 的 422 校验响应不再包含请求原文；前端 Nginx 和 RAG Uvicorn 关闭 access log，避免签名媒体 URL 的 query 被记录。
+- Agent Runtime 事件请求体在 JSON 绑定前限为 16 KiB；内部 Tutor AutoGen checkpoint PUT 在 token 校验与 JSON 绑定前限为 3 MiB，边缘和前端 Nginx 同步。
+- 费曼解释限制为 2,000 字；意图路由 KC 列表限制为 65 项、代码限制为 32 字符；B 站检索 `limit` 限定为 1–8。
+- 已关闭 ASR 路由在 Spring multipart 解析前返回既有 unavailable JSON；公网和前端 Nginx 限制其请求体为 1 KiB，公网复用上传 IP 限速。匿名访问仍受认证保护。
+- 评估选择通过条件更新原子认领 `PENDING` 状态；班级加入和任务补发共用事务，避免竞态与部分成功。
+- 定向 Java 回归 73/73，ASR/共享请求过滤回归 14/14，Graph 回归 1/1；Ruff、Spotless、Nginx 契约与两层 Nginx 1.27 语法检查通过。未调用模型或访问生产环境。
+
+## 2026-10-16 — 限制世界 NPC 存档角色
+
+- `/api/world/npcs` 及其 NPC 状态读取/对话写入原本允许任意已认证角色；状态读取还会初始化玩家存档。现统一要求 STUDENT 或 ADMIN，与世界状态接口一致。
+- TEACHER 回归先 RED（列表读取得到 200），修复后 NPC controller/service 与路径安全测试 17/17 通过。未写业务数据或调用模型。
+
 ## 2026-10-16 — 收紧匿名认证输入边界
 
 - 登录、注册、刷新请求在 Spring MVC 绑定前限制为 4 KiB，两层 Nginx 同步限制；登录名/密码与刷新 token 增加字段长度校验。

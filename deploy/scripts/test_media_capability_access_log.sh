@@ -4,10 +4,12 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 FORMAT_FILE="${ROOT_DIR}/deploy/nginx/pythontopia-log-format.conf"
 SITE_FILE="${ROOT_DIR}/deploy/nginx/pythontopia.conf"
+FRONTEND_NGINX_FILE="${ROOT_DIR}/frontend/nginx.conf"
 INSTALL_FILE="${ROOT_DIR}/deploy/scripts/install_release.sh"
 ROLLBACK_FILE="${ROOT_DIR}/deploy/scripts/rollback_release.sh"
 GRAPH_COMPOSE_FILE="${ROOT_DIR}/deploy/docker-compose.yml"
 GRAPH_DOCKERFILE="${ROOT_DIR}/services/pythontopia-graph/Dockerfile"
+RAG_DOCKERFILE="${ROOT_DIR}/services/pythontopia-rag/Dockerfile"
 
 fail() {
   echo "[FAIL] $1" >&2
@@ -36,5 +38,19 @@ grep -Fq -- '--no-access-log' "${GRAPH_COMPOSE_FILE}" \
   || fail "Graph 开发服务仍会记录包含 query 的 Uvicorn 请求行"
 grep -Fq -- '--no-access-log' "${GRAPH_DOCKERFILE}" \
   || fail "Graph 镜像启动仍会记录包含 query 的 Uvicorn 请求行"
+sed '/^[[:space:]]*location[[:space:]]/,$d' "${FRONTEND_NGINX_FILE}" \
+  | grep -Eq '^[[:space:]]+access_log[[:space:]]+off;' \
+  || fail "前端容器 Nginx 仍可能记录签名媒体 URL 的 query capability"
+grep -Fq -- '--no-access-log' "${RAG_DOCKERFILE}" \
+  || fail "RAG 镜像启动仍会记录包含 query 的 Uvicorn 请求行"
+grep -A3 -F 'location = /api/media/asr {' "${SITE_FILE}" \
+  | grep -Fq 'client_max_body_size 1k;' \
+  || fail "主机 Nginx 未限制已关闭 ASR 入口的 multipart 请求体"
+grep -A3 -F 'location = /api/media/asr {' "${SITE_FILE}" \
+  | grep -Fq 'limit_req zone=pythontopia_upload burst=5 nodelay;' \
+  || fail "主机 Nginx 未限制已关闭 ASR 入口的来源 IP 请求速率"
+grep -A3 -F 'location = /api/media/asr {' "${FRONTEND_NGINX_FILE}" \
+  | grep -Fq 'client_max_body_size 1k;' \
+  || fail "前端 Nginx 未限制已关闭 ASR 入口的 multipart 请求体"
 
-echo "[PASS] Nginx 与 Graph HTTP access log 均不记录 query string"
+echo "[PASS] 主机/前端 Nginx 与 Graph/RAG HTTP access log 均不记录 query string；已关闭 ASR 上传受限"

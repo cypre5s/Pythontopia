@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
 
 from fastapi import FastAPI, HTTPException, Request, status
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -78,6 +79,25 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(title="Pythontopia Graph", version="0.1.0", lifespan=lifespan)
 app.add_middleware(InternalTokenMiddleware)
+
+
+@app.exception_handler(RequestValidationError)
+async def request_validation_error(
+    _request: Request, exception: RequestValidationError
+) -> JSONResponse:
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        content={
+            "detail": [
+                {
+                    "loc": list(error["loc"]),
+                    "msg": error["msg"],
+                    "type": error["type"],
+                }
+                for error in exception.errors()
+            ]
+        },
+    )
 
 
 @app.exception_handler(LlmProviderNotConfigured)

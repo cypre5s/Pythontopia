@@ -1,6 +1,7 @@
 package com.pythontopia.world.npc;
 
 import com.pythontopia.auth.security.CurrentUserPrincipal;
+import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
 import com.pythontopia.common.web.StudentWriteThrottle;
@@ -32,12 +33,14 @@ public class NpcDialogController {
 
   @GetMapping
   public List<NpcDialogStateDto> listAll(@CurrentUser CurrentUserPrincipal user) {
+    requireStudentOrAdmin(user);
     return service.listAll(user.userId());
   }
 
   @GetMapping("/{npcKey}/state")
   public NpcDialogStateDto state(
       @CurrentUser CurrentUserPrincipal user, @PathVariable String npcKey) {
+    requireStudentOrAdmin(user);
     validateNpcKey(npcKey);
     return service.getOrInit(user.userId(), npcKey);
   }
@@ -47,6 +50,7 @@ public class NpcDialogController {
       @CurrentUser CurrentUserPrincipal user,
       @PathVariable String npcKey,
       @Valid @RequestBody(required = false) NpcTalkRequest request) {
+    requireStudentOrAdmin(user);
     validateNpcKey(npcKey);
     if (!studentWriteThrottle.tryAcquire(user.userId(), 1)) {
       throw new BusinessException(
@@ -54,6 +58,13 @@ public class NpcDialogController {
     }
     return service.talk(
         user.userId(), npcKey, request == null ? new NpcTalkRequest(null, null, null) : request);
+  }
+
+  private void requireStudentOrAdmin(CurrentUserPrincipal user) {
+    if (user.role() != Role.STUDENT && user.role() != Role.ADMIN) {
+      throw new BusinessException(
+          HttpStatus.FORBIDDEN, "FORBIDDEN", "Only students or admins have world state");
+    }
   }
 
   private void validateNpcKey(String npcKey) {

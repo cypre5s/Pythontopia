@@ -19,6 +19,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ClassroomService {
@@ -91,6 +92,7 @@ public class ClassroomService {
    * 学生凭加入码入班。<b>可重入</b>：只有当成员行已是 {@code ACTIVE} 时才回 409；被教师移出 （{@code REMOVED}）的学生可以再次加入（{@link
    * ClassroomRepository#addMember} 是 upsert）。 入班成功后立刻补发该班「进行中」的班级任务副本，避免发布后才入班的学生看得到任务卡却点不动。
    */
+  @Transactional
   public ClassroomDto join(CurrentUserPrincipal user, String joinCode) {
     requireRole(user, Role.STUDENT);
     if (!joinCodeAttemptThrottle.tryAcquire(user.userId())) {

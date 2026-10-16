@@ -182,11 +182,14 @@ public class EvaluationRepository {
         evaluationId);
   }
 
-  public int updateActedStatus(Long evaluationId, EvaluationActedStatus status) {
+  public int claimPendingStatus(
+      Long userId, Long evaluationId, EvaluationActedStatus status) {
     return jdbcTemplate.update(
-        "UPDATE learner_evaluation SET acted_status = ? WHERE id = ?",
+        "UPDATE learner_evaluation SET acted_status = ? "
+            + "WHERE id = ? AND user_id = ? AND acted_status = 'PENDING'",
         status.name(),
-        evaluationId);
+        evaluationId,
+        userId);
   }
 
   public int updateDraftPathId(Long evaluationId, Long draftPathId) {

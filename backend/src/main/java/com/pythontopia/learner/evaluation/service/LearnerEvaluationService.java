@@ -283,8 +283,15 @@ public class LearnerEvaluationService {
           "EVALUATION_NO_DRAFT",
           "该评估未生成可激活的 DRAFT 路径");
     }
+    if (evaluationRepository.claimPendingStatus(
+            userId, evaluationId, EvaluationActedStatus.ACCEPTED)
+        == 0) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT,
+          "EVALUATION_ALREADY_ACTED",
+          "该评估已处理，无法重复操作");
+    }
     pathService.promoteDraft(userId, evaluation.draftPathId());
-    evaluationRepository.updateActedStatus(evaluationId, EvaluationActedStatus.ACCEPTED);
     return findById(userId, evaluationId);
   }
 
@@ -297,10 +304,17 @@ public class LearnerEvaluationService {
           "EVALUATION_ALREADY_ACTED",
           "该评估已处理，无法重复操作");
     }
+    if (evaluationRepository.claimPendingStatus(
+            userId, evaluationId, EvaluationActedStatus.KEPT_OLD)
+        == 0) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT,
+          "EVALUATION_ALREADY_ACTED",
+          "该评估已处理，无法重复操作");
+    }
     if (evaluation.draftPathId() != null) {
       pathService.archiveDraft(userId, evaluation.draftPathId());
     }
-    evaluationRepository.updateActedStatus(evaluationId, EvaluationActedStatus.KEPT_OLD);
     return findById(userId, evaluationId);
   }
 

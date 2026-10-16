@@ -139,13 +139,14 @@ class LearnerEvaluationServiceTest {
             Optional.of(persisted(202L, 60L, 50L, EvaluationActedStatus.PENDING)))
         .thenReturn(
             Optional.of(persisted(202L, 60L, 50L, EvaluationActedStatus.ACCEPTED)));
+    when(repository.claimPendingStatus(7L, 202L, EvaluationActedStatus.ACCEPTED)).thenReturn(1);
     when(pathService.findById(eq(7L), eq(60L))).thenReturn(draftPath(60L));
 
     EvaluationDto accepted = service.acceptNewPath(7L, 202L);
 
     assertThat(accepted.actedStatus()).isEqualTo(EvaluationActedStatus.ACCEPTED);
     verify(pathService).promoteDraft(7L, 60L);
-    verify(repository).updateActedStatus(202L, EvaluationActedStatus.ACCEPTED);
+    verify(repository).claimPendingStatus(7L, 202L, EvaluationActedStatus.ACCEPTED);
   }
 
   @Test
@@ -162,19 +163,48 @@ class LearnerEvaluationServiceTest {
   }
 
   @Test
+  void concurrentAcceptLosingPendingClaimDoesNotPromoteDraft() {
+    when(repository.findById(7L, 202L))
+        .thenReturn(Optional.of(persisted(202L, 60L, 50L, EvaluationActedStatus.PENDING)));
+    when(repository.claimPendingStatus(7L, 202L, EvaluationActedStatus.ACCEPTED)).thenReturn(0);
+
+    assertThatThrownBy(() -> service.acceptNewPath(7L, 202L))
+        .isInstanceOf(BusinessException.class)
+        .extracting(ex -> ((BusinessException) ex).code())
+        .isEqualTo("EVALUATION_ALREADY_ACTED");
+
+    verify(pathService, never()).promoteDraft(anyLong(), anyLong());
+  }
+
+  @Test
   void keepOldArchivesDraftAndMarksStatus() {
     when(repository.findById(7L, 202L))
         .thenReturn(
             Optional.of(persisted(202L, 60L, 50L, EvaluationActedStatus.PENDING)))
         .thenReturn(
             Optional.of(persisted(202L, 60L, 50L, EvaluationActedStatus.KEPT_OLD)));
+    when(repository.claimPendingStatus(7L, 202L, EvaluationActedStatus.KEPT_OLD)).thenReturn(1);
     when(pathService.findById(eq(7L), eq(60L))).thenReturn(draftPath(60L));
 
     EvaluationDto kept = service.keepOld(7L, 202L);
 
     assertThat(kept.actedStatus()).isEqualTo(EvaluationActedStatus.KEPT_OLD);
     verify(pathService).archiveDraft(7L, 60L);
-    verify(repository).updateActedStatus(202L, EvaluationActedStatus.KEPT_OLD);
+    verify(repository).claimPendingStatus(7L, 202L, EvaluationActedStatus.KEPT_OLD);
+  }
+
+  @Test
+  void concurrentKeepLosingPendingClaimDoesNotArchiveDraft() {
+    when(repository.findById(7L, 202L))
+        .thenReturn(Optional.of(persisted(202L, 60L, 50L, EvaluationActedStatus.PENDING)));
+    when(repository.claimPendingStatus(7L, 202L, EvaluationActedStatus.KEPT_OLD)).thenReturn(0);
+
+    assertThatThrownBy(() -> service.keepOld(7L, 202L))
+        .isInstanceOf(BusinessException.class)
+        .extracting(ex -> ((BusinessException) ex).code())
+        .isEqualTo("EVALUATION_ALREADY_ACTED");
+
+    verify(pathService, never()).archiveDraft(anyLong(), anyLong());
   }
 
   @Test

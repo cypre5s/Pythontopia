@@ -4,6 +4,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.head;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -44,6 +45,7 @@ class PublicReadAccessTest {
   private static final int MAX_LEARNING_EVENT_REQUEST_BYTES = 16 * 1024;
   private static final int MAX_LEARNING_EVENT_BATCH_REQUEST_BYTES = 512 * 1024;
   private static final int MAX_AUTH_REQUEST_BYTES = 4 * 1024;
+  private static final int MAX_INTERNAL_TUTOR_CHECKPOINT_REQUEST_BYTES = 3 * 1024 * 1024;
 
   @Autowired private MockMvc mockMvc;
 
@@ -202,6 +204,75 @@ class PublicReadAccessTest {
         .andExpect(status().isOk());
   }
 
+  @Test
+  void agentRuntimeEventBodyLimitRunsAfterAuthenticationAndBeforeMvcBinding() throws Exception {
+    mockMvc
+        .perform(
+            post("/api/events")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("x".repeat(MAX_LEARNING_EVENT_REQUEST_BYTES + 1)))
+        .andExpect(status().isUnauthorized());
+
+    CurrentUserPrincipal principal = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
+    when(jwtService.parse("signed-test-token")).thenReturn(principal);
+    when(userRepository.findById(7L))
+        .thenReturn(
+            Optional.of(
+                new UserAccount(
+                    7L, "student", "Student", "hash", null, Role.STUDENT, "ACTIVE", 0)));
+
+    mockMvc
+        .perform(
+            post("/api/events")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer signed-test-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("x".repeat(MAX_LEARNING_EVENT_REQUEST_BYTES + 1)))
+        .andExpect(status().isPayloadTooLarge())
+        .andExpect(jsonPath("$.code").value("LEARNING_EVENT_REQUEST_TOO_LARGE"));
+  }
+
+  @Test
+  void internalTutorCheckpointBodyIsBoundedBeforeMvcBinding() throws Exception {
+    mockMvc
+        .perform(
+            put(
+                    "/api/internal/tutor/workflow/sessions/session-1/autogen-checkpoints/"
+                        + "6bcb4c5d-5b3a-4761-a2ec-03bf248f4199")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("x".repeat(MAX_INTERNAL_TUTOR_CHECKPOINT_REQUEST_BYTES + 1)))
+        .andExpect(status().isPayloadTooLarge())
+        .andExpect(jsonPath("$.code").value("TUTOR_CHECKPOINT_REQUEST_TOO_LARGE"));
+  }
+
+  @Test
+  void disabledAsrMultipartIsShortCircuitedBeforeMvcParsing() throws Exception {
+    CurrentUserPrincipal principal = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
+    when(jwtService.parse("signed-test-token")).thenReturn(principal);
+    when(userRepository.findById(7L))
+        .thenReturn(
+            Optional.of(
+                new UserAccount(
+                    7L, "student", "Student", "hash", null, Role.STUDENT, "ACTIVE", 0)));
+    byte[] multipartBody = new byte[9 * 1024 * 1024];
+
+    mockMvc
+        .perform(
+            post("/api/media/asr")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer signed-test-token")
+                .contentType("multipart/form-data; boundary=upload-boundary")
+                .content(multipartBody))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.text").value(""))
+        .andExpect(jsonPath("$.degraded").value(true));
+
+    mockMvc
+        .perform(
+            post("/api/media/asr")
+                .contentType("multipart/form-data; boundary=upload-boundary")
+                .content(new byte[0]))
+        .andExpect(status().isUnauthorized());
+  }
+
   @RestController
   static class PublicRouteController {
     @PostMapping(value = "/api/auth/login", produces = MediaType.TEXT_PLAIN_VALUE)
@@ -220,6 +291,12 @@ class PublicReadAccessTest {
     String register(
         @org.springframework.web.bind.annotation.RequestBody(required = false) String body) {
       return "register";
+    }
+
+    @PostMapping(value = "/api/events", produces = MediaType.TEXT_PLAIN_VALUE)
+    String recordAgentRuntimeEvent(
+        @org.springframework.web.bind.annotation.RequestBody(required = false) String body) {
+      return "event";
     }
 
     @PostMapping(value = "/api/auth/logout", produces = MediaType.TEXT_PLAIN_VALUE)

@@ -53,11 +53,42 @@ class NpcDialogControllerTest {
 
   @BeforeEach
   void setUp() {
-    CurrentUserPrincipal principal = new CurrentUserPrincipal(7L, "stu-npc", Role.STUDENT);
+    authenticateAs(Role.STUDENT);
+  }
+
+  private void authenticateAs(Role role) {
+    CurrentUserPrincipal principal = new CurrentUserPrincipal(7L, "npc-user", role);
     SecurityContextHolder.getContext()
         .setAuthentication(
             new UsernamePasswordAuthenticationToken(
-                principal, null, List.of(new SimpleGrantedAuthority("ROLE_STUDENT"))));
+                principal, null, List.of(new SimpleGrantedAuthority("ROLE_" + role.name()))));
+  }
+
+  @Test
+  void teacherCannotReadOrWriteWorldNpcState() throws Exception {
+    authenticateAs(Role.TEACHER);
+
+    mockMvc.perform(get("/api/world/npcs")).andExpect(status().isForbidden());
+    mockMvc
+        .perform(get("/api/world/npcs/mayor_py/state"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.code").value("FORBIDDEN"));
+    mockMvc
+        .perform(
+            post("/api/world/npcs/mayor_py/talk")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"nodeId\":\"intro_1\"}"))
+        .andExpect(status().isForbidden());
+
+    verifyNoInteractions(service, studentWriteThrottle);
+  }
+
+  @Test
+  void adminCanReadWorldNpcState() throws Exception {
+    authenticateAs(Role.ADMIN);
+    when(service.listAll(7L)).thenReturn(List.of());
+
+    mockMvc.perform(get("/api/world/npcs")).andExpect(status().isOk());
   }
 
   @Test

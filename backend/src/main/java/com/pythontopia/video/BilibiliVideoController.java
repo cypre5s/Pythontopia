@@ -1,7 +1,10 @@
 package com.pythontopia.video;
 
 import com.pythontopia.common.web.AiBudgeted;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import java.util.List;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -15,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
  * 本控制器仅经 {@link BilibiliVideoService} 代理。
  */
 @RestController
+@Validated
 @RequestMapping("/api/videos/bilibili")
 public class BilibiliVideoController {
 
@@ -28,7 +32,7 @@ public class BilibiliVideoController {
   @AiBudgeted
   public List<BilibiliVideoDto> search(
       @RequestParam String keyword,
-      @RequestParam(required = false, defaultValue = "8") int limit) {
+      @RequestParam(required = false, defaultValue = "8") @Min(1) @Max(8) int limit) {
     return service.search(keyword, limit);
   }
 }

@@ -31,6 +31,7 @@
 - 非 AI 写入路由续审发现同步 `/api/media/storyboard/video` 绕过既有每账号每分钟 3 次的合成额度。现与异步 job 端点共享 `StudentWriteThrottle`；旧代码下新回归先因缺少预算依赖失败，修复后媒体控制器授权、预算覆盖和新限流测试 14/14 通过。前端目前仅保留 API helper、没有页面调用者；全路由与多行日志审计仍未完成。
 - 日志续审发现图片生成失败时会原样输出上游 `message`；本地 HTTP 假响应先让脱敏回归失败，改成只记异常类型后 `XfyunImageServiceTest` 3/3 通过。没有访问讯飞。后续静态复核确认 TTS、ASR、旧讯飞图片理解服务的开关固定为关闭，相关上游错误日志分支当前不可达；未为不可达 provider 改代码。
 - 安全边界续审：匿名下载统计 `POST /api/downloads/{key}/hit` 仅用于展示，Nginx 对来源 IP 限制 5 次/秒、突发 10；Tutor 内部 checkpoint 与附件读取要求常量时间比较的 `X-Internal-Token`，并校验 `user:<id>` 主体。源码未发现这三项的新 P0/P1；这不代表全 API 限流与日志审计已经结束。
+- 补齐世界 NPC 状态路由的角色授权：原 `GET /api/world/npcs`、`GET /{npcKey}/state` 和 `POST /{npcKey}/talk` 未限制角色，且 GET 首次访问会建存档；现与世界状态接口一致，只允许 STUDENT/ADMIN，TEACHER 在限流/业务服务前收到 403。RED 先观察到 TEACHER 请求返回 200；修复后 NPC controller/service 与路由键回归 17/17 通过。无业务数据或模型请求。
 - 补齐 22 个不适合代码判题的概念/操作型 KC 的选择、判断、填空覆盖；新增 V220 的 25 道课件有据备用题，包含前次遗漏的 V217/V218 备用题后，题库清单为 140 道（96 道主线必答 + 44 道备用），不改变主线要求。KC-018/023/039/063 仍按可编程主题走 AI 编程题生成路径。
 - **4 个可编程 KC 的同 KC Golden 兜底已补齐：** KC-018/023/039/063 在 AI 出题或审查失败时返回经过接地审查的编程题，保留目标 KC、章节与请求难度，并使用独立题目 ID；KC-039 所需的 `import` 语法限定在第 5 章白名单。真实本地 Piston 执行 12/12 用例通过，Graph Boss 回归 270/270 通过，Ruff lint 与 `git diff --check` 通过；没有调用 DeepSeek。
 - **章测→Twin 缺口已修复：** 普通学生经 Web 完成一场第一章章测，33 题得分 100、pageerror=0、HTTP 5xx=0；旧实现只把 KC-006、KC-007 两个编程题 KC 回流。TDD 复现后改为所有带 KC 的题型按服务端判分发事件。修复后服务、listener、memory mirror、PostgreSQL 逐 KC 写入与提交幂等共 34/34 通过，选择、判断、填空、编程均有覆盖；没有重复发起 DeepSeek 请求。临时账号及关联记录均核实清理为 0。
@@ -38,6 +39,11 @@
 - 工程规范复核：对照 [Google Java Style](https://google.github.io/styleguide/javaguide.html)、[PEP 8](https://peps.python.org/pep-0008/)、[typescript-eslint 命名规则](https://typescript-eslint.io/rules/naming-convention/) 与 [Vue 风格指南](https://vuejs.org/style-guide/)。本轮触及代码遵守项目既定命名约定；完整前端 ESLint/typecheck、Graph 与 RAG 的 Ruff 检查通过，修改 Java 文件定向 Spotless 通过。整库 Spotless 检查报告 638 个 Java 文件格式不符；没有批量格式化这些历史文件。试运行全仓 TypeScript 命名规则产生 43 个合法 PascalCase 组件绑定/测试辅助名称误报，因此未启用会误伤现有约定的全局规则。全仓历史格式债务仍未清理。
 - 本轮快速只读安全续审未确认新的本地 P0/P1。公网 Piston ACL、ECS/Nginx 运行态及全 API 逐项审计仍未验证。
 - 注册额度审计后，为公网 `POST /api/auth/register` 增加独立每来源 IP 每分钟 5 次、突发 30 次的 Nginx 限速；登录和刷新仍保留原 5 次/秒规则。注册限速契约先 RED 后 GREEN，HTTPS/Nginx 契约脚本通过，Nginx 1.27 `nginx -t` 通过。未发注册请求或访问 ECS。
+- 收紧剩余已确认请求与日志边界：Graph 422 只返回错误位置/消息/类型，不回显原始输入；前端 Nginx 与 RAG Uvicorn 关闭 access log，避免第二层记录签名 query；费曼解释限 2,000 字，意图路由的 KC 列表/元素限为 65 项/32 字符，B 站条数限 1–8。RED 确认旧行为可接收超限解释、KC 列表和 `limit=9`；定向 Java 回归 73/73、Graph 回归 1/1、Ruff、Spotless、日志与 HTTPS 契约、`git diff --check` 通过。
+- 修复两个事务竞态：评估接受/保留先通过 `user_id + PENDING` 条件更新原子认领状态，认领失败返回 409 且不改路径；班级加入把成员写入和任务补发收进同一事务。评估服务与 PostgreSQL 接受路径回归、班级服务回归均通过；没有并发压力测试或班级补发故障注入。
+- ASR 已禁用，因此在 Spring multipart 解析前由安全过滤器返回既有 unavailable JSON；公网和前端 Nginx 将该路由限制为 1 KiB，公网复用上传 IP 限速 key。安全链回归确认匿名请求仍 401、认证请求不进入 MVC multipart 解析；前端与主机 Nginx 1.27 `nginx -t` 均通过。
+- 补齐两处 MVC 绑定前的原始请求体上限：`POST /api/events` 限 16 KiB；内部 Tutor AutoGen checkpoint `PUT` 限 3 MiB，避免共享 token 在 Controller 校验前先解析任意大 JSON。边缘/前端 Nginx 同步限额；Java 定向 21/21、HTTPS/Nginx 契约、两层 Nginx 1.27 语法检查及三个 Java 文件定向 Spotless 通过。checkpoint 3 MiB 上限尚未用最大真实 AutoGen 快照验证。
+- 日志边界首轮静态扫描未找到应用自建的请求/响应体日志 filter、`RequestBodyAdvice`/`ResponseBodyAdvice` 或日志 aspect；Graph、RAG 和前端容器 access log 均关闭，公网 Nginx 安全格式只记录 `$uri`。全量多行日志调用点与生产运行日志仍未完整核对。
 
 ## 附加任务核对（2026-10-16）
 
@@ -67,7 +73,9 @@
 - **AI 生成候选尚未进入长期题库。** KC-018/023/063 的单次 DeepSeek 候选通过 Graph 审查、自测，但因审核账号临时且关联外键不可删除，清理时一并删除；KC-039 的 AI 生成仍返回 HTTP 503（`reference_output_mismatch`，之前有 `ConnectTimeout`）。四个 KC 现均有经过审查的同 KC Golden 兜底，学习流程不再依赖 AI 生成成功。若要把 AI 候选入库，仍需稳定、真实的审核主体。
 - 管理台审核真实通过/驳回与一次性 fixture 的清理已验证；未新增可复用的账号清理脚本，因为本轮精确 finally 清理和外键残留核验已覆盖所需闭环。
 - Twin 新旧选题 A/B、独立答题率与 7 日延迟复测需要真实学习样本及时间跨度，当前无结果。BKT/未来路线概率按计划暂缓。
-- 非 AI 写接口账号限额与多行/包装器日志尚未完成全量审计；本轮粗盘 112 个写路由、上传边界与 Nginx 安全日志格式，未发现新的已确认漏洞。已续核 Bug 矿洞判题复用正式提交限频、学习事件和班级写入的服务层预算/批量上限；原始 JSON body 的存档快照、学习事件单条/批量入口均在 MVC 绑定前受限。此前已修复同步媒体合成绕过额度，并脱敏 Xfyun 图片生成失败日志；本轮又为工坊上传与删除补上既有每账号 100 次/分钟写入预算，阻断重复上传—删除循环无限重置解析负载。相关上传/服务/检索回归 32/32。TTS/ASR/图片生成/图片理解固定关闭；剩余逐路由审计、生产 Piston ACL、公网 CORS/Nginx 运行态仍未验证。课件阅读完成仍由客户端报告已读页 ID；服务端只校验 KC 页码白名单，不能证明页面被实际阅读。
+- 非 AI 写接口账号限额与多行/包装器日志尚未完成全量审计；本轮粗盘 112 个写路由，确认 `POST /api/events` 已有 4 KiB payload 校验与每账号 100 次/分钟预算，并补上整个 JSON 请求在 MVC 绑定前 16 KiB 上限；内部 Tutor checkpoint `PUT` 在共享 token Controller 校验前可解析请求体，本次补上 3 MiB 后端与双 Nginx 限额。日志首轮静态搜索未发现通用请求/响应体转储 wrapper；Graph、RAG、前端容器日志关闭，公网 Nginx 只记不含 query 的 `$uri`，但多行调用点和生产日志未逐项验证。此前已续核 Bug 矿洞判题、学习事件/班级预算、存档快照与 Loop Runtime 请求体；同步媒体合成额度、工坊上传额度及 Xfyun 图片生成日志也已修复。相关上传/服务/检索回归 32/32，本轮请求体 Java 定向回归 21/21。TTS/ASR/图片生成/图片理解固定关闭；剩余逐路由审计、生产 Piston ACL、公网 CORS/Nginx 运行态仍未验证。课件阅读完成仍由客户端报告已读页 ID；服务端只校验 KC 页码白名单，不能证明页面被实际阅读。
+- 本轮只读续审再次检查未显式标注限流的写入口：班级加入有每账号 30 次/10 分钟及边缘 IP 限速，媒体合成在服务层共用每账号额度；20 个 Java Controller 方法的 `@AiBudgeted` 均进入共享预算拦截器。Graph 资源失败消息为固定文本，Tutor provider 异常映射为固定错误；没有确认到可达路径把原始 provider 异常返回给学生。该轮仍是定向源码扫描，非全 112 路由与所有日志包装器审计。
+- ASR multipart 解析前风险已在本地收口：认证后 Spring 过滤器直接返回 unavailable，公网/前端 Nginx 限 1 KiB，公网复用每秒 2 次、突发 5 次上传限速。两层 Nginx 语法和静态限额契约通过；生产部署态未核验。
 - 匿名注册的同 IP 滥用已由独立边缘限速收窄，但代理池/多 IP 仍可持续创建账号；邮箱没有验证。该 Nginx 改动尚未部署到生产验证，本地直连开发 API 不经过此规则。生产共享 AI 日预算仍是每账号 30 次、全站 300 次，本地按用户要求关闭应用级请求限额。
 - DeepSeek 供应商账单/token 需要从控制台核对；本地请求上限已关闭，但不代表供应商无额度或无费用。
 - **依赖扫描已覆盖 Web 锁文件、Graph 本地 venv 与 Maven 树，但仍有未修复条件风险：** npm 官方审计为 0 项；Graph OSV 扫描 220 个精确版本发现 `diskcache 5.6.3`、`ragas 0.4.3` 两个可选评测依赖受影响，它们不进 Docker 运行镜像且目前无上游修复版。Maven 初始扫描发现多项运行依赖受影响，已把 Spring Boot/springdoc 及 Jackson、Tomcat、PostgreSQL JDBC、Log4j、Commons Lang 升至已核对的补丁版本；更新后 140 个 Maven 坐标仅剩 Spring MVC SSE + view fragment 条件告警，本项目没有 view fragment 用法。Spring 官方只把 Spring 6.2.20 修复版提供给 Enterprise，当前 Maven Central 最新 OSS 构件为 6.2.19；因此不为该不满足利用条件的告警跨 Boot 主版本迁移。Maven 全量测试 1647 项、0 断言失败但 6 项有 Testcontainers 端口/生命周期错误；因此测试套件未全绿，不能宣称依赖全无漏洞。
@@ -83,7 +91,7 @@
 ## 下一步顺序
 
 1. 普通学生浏览器 Boss 三阶段通关与 Twin 回流已完成，此后事务修复由 PostgreSQL 故障注入测试覆盖；不要重复注册账号或重跑通关。Boss 预生成隔离为 IDLE，实时 Graph 预生成未在该浏览器验收中覆盖。
-2. 完成剩余非 AI 写路由及包装器/多行日志审计，优先修复可复现缺口；学习事件原始 body 上限已补。公网注册同 IP 限速已加，代理池与生产运行态不在本地可验证范围。
+2. 继续剩余非 AI 写路由及包装器/多行日志审计。当前已修复已确认的请求体超限、访问日志与 ASR multipart 解析问题；112 个写路由的全量逐项审计仍未完成。公网注册同 IP 限速已加，代理池与生产运行态不在本地可验证范围。
 3. 若继续补齐 Tutor 的 Alethicode TRANSFER 行为，必须先打通服务端可信题目、正式判题和提交回流；不能把前端草稿当题目或证据。现有卡片只支持思路反思，不宣称完成了变式题判题。
 4. 不重复发起 DeepSeek 生成。AI 候选入库需有稳定审核主体；KC-039 仅在约束或模型状态变化后再单次复核。
 5. 等待足够真实样本完成 Twin 7 日延迟对照；BKT/未来路线概率按精简方案暂缓。完整远征生成、判题和通关性能最后测。

@@ -247,6 +247,9 @@ require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   'location[[:space:]]+=[[:space:]]+/api/workshop/uploads[[:space:]]*\{'
 require_upload_limit_block
 require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "禁用 ASR 上传也映射到来源 IP 限速 key" \
+  '"POST:/api/media/asr"[[:space:]]+\$binary_remote_addr;'
+require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "Tutor 图片上传限速只匹配附件 POST" \
   '~\^POST:/api/tutor/workflow/sessions/\[\^/\]\+/attachments\$[[:space:]]+\$binary_remote_addr;'
 require_tutor_workflow_upload_limit_block
@@ -267,6 +270,12 @@ require_body_limit_location_block \
   "边缘 Nginx 将单条学习事件限制为 16 KiB 并正确代理"
 require_body_limit_location_block \
   "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "location = /api/events" \
+  "16k" \
+  "http://pythontopia_frontend" \
+  "边缘 Nginx 将 Agent Runtime 事件限制为 16 KiB 并正确代理"
+require_body_limit_location_block \
+  "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "location = /api/learning/events/batch" \
   "512k" \
   "http://pythontopia_frontend" \
@@ -277,6 +286,24 @@ require_body_limit_location_block \
   "16k" \
   "http://backend:18080" \
   "前端 Nginx 将单条学习事件限制为 16 KiB 并正确代理"
+require_body_limit_location_block \
+  "${FRONTEND_NGINX}" \
+  "location = /api/events" \
+  "16k" \
+  "http://backend:18080" \
+  "前端 Nginx 将 Agent Runtime 事件限制为 16 KiB 并正确代理"
+require_body_limit_location_block \
+  "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  'location ~ ^/api/internal/tutor/workflow/sessions/[^/]+/autogen-checkpoints/[0-9a-fA-F-]+$' \
+  "3m" \
+  "http://pythontopia_frontend" \
+  "边缘 Nginx 将 Tutor checkpoint 限制为 3 MiB 并正确代理"
+require_body_limit_location_block \
+  "${FRONTEND_NGINX}" \
+  'location ~ ^/api/internal/tutor/workflow/sessions/[^/]+/autogen-checkpoints/[0-9a-fA-F-]+$' \
+  "3m" \
+  "http://backend:18080" \
+  "前端 Nginx 将 Tutor checkpoint 限制为 3 MiB 并正确代理"
 require_body_limit_location_block \
   "${FRONTEND_NGINX}" \
   "location = /api/learning/events/batch" \

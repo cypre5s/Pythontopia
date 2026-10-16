@@ -30,6 +30,7 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
   public static final int MAX_AUTH_REQUEST_BYTES = 4 * 1024;
   // Tool-call requests carry two JSON fields, each independently limited to 1 MiB.
   public static final int MAX_AGENT_LOOP_REQUEST_BYTES = 3 * 1024 * 1024;
+  private static final int MAX_INTERNAL_TUTOR_CHECKPOINT_REQUEST_BYTES = 3 * 1024 * 1024;
 
   private static final Pattern SNAPSHOT_PATH =
       Pattern.compile("^/api/world/saves/[0-9]+/snapshot$");
@@ -38,10 +39,17 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
           "^/api/(?:agent-runs/[0-9]+/(?:loop-states|policy-decisions)"
               + "|loop/runs/[0-9]+/(?:checkpoints|tool-calls|agent-runs|eval-results))$");
   private static final Pattern LEARNING_EVENT_PATH = Pattern.compile("^/api/learning/events$");
+  private static final Pattern AGENT_RUNTIME_EVENT_PATH = Pattern.compile("^/api/events$");
   private static final Pattern LEARNING_EVENT_BATCH_PATH =
       Pattern.compile("^/api/learning/events/batch$");
   private static final Pattern AUTH_REQUEST_PATH =
       Pattern.compile("^/api/auth/(?:login|register|refresh)$");
+  private static final Pattern INTERNAL_TUTOR_CHECKPOINT_PATH =
+      Pattern.compile(
+          "^/api/internal/tutor/workflow/sessions/[^/]+/autogen-checkpoints/"
+              + "[0-9a-fA-F-]{36}$");
+  // shortcut: ASR is hard-disabled; remove this pre-parser response if voice input is enabled.
+  private static final String DISABLED_ASR_PATH = "/api/media/asr";
 
   private final ObjectMapper objectMapper;
 
@@ -51,8 +59,13 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
 
   @Override
   protected boolean shouldNotFilter(HttpServletRequest request) {
+    String path = requestPath(request);
+    if ("PUT".equalsIgnoreCase(request.getMethod())
+        && INTERNAL_TUTOR_CHECKPOINT_PATH.matcher(path).matches()) {
+      return false;
+    }
     return !"POST".equalsIgnoreCase(request.getMethod())
-        || maxRequestBytes(requestPath(request)) == 0;
+        || (!DISABLED_ASR_PATH.equals(path) && maxRequestBytes(path) == 0);
   }
 
   @Override
@@ -60,15 +73,29 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
       HttpServletRequest request, HttpServletResponse response, FilterChain filterChain)
       throws ServletException, IOException {
     String requestPath = requestPath(request);
-    int maxBytes = maxRequestBytes(requestPath);
+    if (DISABLED_ASR_PATH.equals(requestPath)) {
+      response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+      response.setCharacterEncoding(StandardCharsets.UTF_8.name());
+      objectMapper.writeValue(
+          response.getOutputStream(),
+          objectMapper.createObjectNode().put("text", "").put("degraded", true));
+      return;
+    }
+    boolean internalTutorCheckpoint =
+        "PUT".equalsIgnoreCase(request.getMethod())
+            && INTERNAL_TUTOR_CHECKPOINT_PATH.matcher(requestPath).matches();
+    int maxBytes =
+        internalTutorCheckpoint
+            ? MAX_INTERNAL_TUTOR_CHECKPOINT_REQUEST_BYTES
+            : maxRequestBytes(requestPath);
     if (request.getContentLengthLong() > maxBytes) {
-      writeTooLarge(response, requestPath);
+      writeTooLarge(response, requestPath, internalTutorCheckpoint);
       return;
     }
 
     byte[] body = readWithinLimit(request, maxBytes);
     if (body == null) {
-      writeTooLarge(response, requestPath);
+      writeTooLarge(response, requestPath, internalTutorCheckpoint);
       return;
     }
 
@@ -91,7 +118,8 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
     if (AGENT_LOOP_PATH.matcher(requestPath).matches()) {
       return MAX_AGENT_LOOP_REQUEST_BYTES;
     }
-    if (LEARNING_EVENT_PATH.matcher(requestPath).matches()) {
+    if (LEARNING_EVENT_PATH.matcher(requestPath).matches()
+        || AGENT_RUNTIME_EVENT_PATH.matcher(requestPath).matches()) {
       return MAX_LEARNING_EVENT_BYTES;
     }
     if (LEARNING_EVENT_BATCH_PATH.matcher(requestPath).matches()) {
@@ -128,14 +156,21 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
     }
   }
 
-  private void writeTooLarge(HttpServletResponse response, String requestPath) throws IOException {
+  private void writeTooLarge(
+      HttpServletResponse response, String requestPath, boolean internalTutorCheckpoint)
+      throws IOException {
     boolean snapshotRequest = SNAPSHOT_PATH.matcher(requestPath).matches();
-    boolean learningEventRequest = LEARNING_EVENT_PATH.matcher(requestPath).matches();
+    boolean learningEventRequest =
+        LEARNING_EVENT_PATH.matcher(requestPath).matches()
+            || AGENT_RUNTIME_EVENT_PATH.matcher(requestPath).matches();
     boolean learningEventBatchRequest = LEARNING_EVENT_BATCH_PATH.matcher(requestPath).matches();
     boolean authRequest = AUTH_REQUEST_PATH.matcher(requestPath).matches();
     String errorCode = "LOOP_RUNTIME_REQUEST_TOO_LARGE";
     String errorMessage = "Loop Runtime request body cannot exceed 3 MiB";
-    if (authRequest) {
+    if (internalTutorCheckpoint) {
+      errorCode = "TUTOR_CHECKPOINT_REQUEST_TOO_LARGE";
+      errorMessage = "Tutor checkpoint request body cannot exceed 3 MiB";
+    } else if (authRequest) {
       errorCode = "AUTH_REQUEST_TOO_LARGE";
       errorMessage = "Authentication request body cannot exceed 4 KiB";
     } else if (snapshotRequest) {

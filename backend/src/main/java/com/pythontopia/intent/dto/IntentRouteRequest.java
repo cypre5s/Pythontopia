@@ -23,13 +23,13 @@ import java.util.List;
  */
 public record IntentRouteRequest(
     @NotBlank @Size(max = 4000) String message,
-    List<String> manualKcCodes,
-    @Valid List<CourseKc> courseKcs,
+    @Size(max = 65) List<@Size(max = 32) String> manualKcCodes,
+    @Valid @Size(max = 65) List<CourseKc> courseKcs,
     Integer currentChapter,
-    List<String> recentKcCodes,
+    @Size(max = 65) List<@Size(max = 32) String> recentKcCodes,
     @Valid @Size(max = 6) List<Turn> recentTurns,
     @Size(max = 32) String lastIntent,
-    @Size(max = 3) List<String> lastKcCodes,
+    @Size(max = 3) List<@Size(max = 32) String> lastKcCodes,
     @Valid @Size(max = 3) List<Correction> sessionCorrections,
     @Pattern(regexp = "default|quiz") String scope,
     @Pattern(regexp = "composer_text|slash_command|capability_launcher|contextual_suggestion")
@@ -42,7 +42,7 @@ public record IntentRouteRequest(
     @Valid InteractionContext interaction) {
 
   /** 课程 KC 目录条目：code 用于锚定，name 用于让 LLM 把语句主题映射到正确知识点。 */
-  public record CourseKc(@NotBlank @Size(max = 64) String code, @Size(max = 200) String name) {}
+  public record CourseKc(@NotBlank @Size(max = 32) String code, @Size(max = 200) String name) {}
 
   /** 近期对话轮（指代消解上下文）：role 限 user|assistant，content 为 ≤600 字摘要。 */
   public record Turn(

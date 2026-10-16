@@ -11,7 +11,7 @@ public final class FeynmanDtos {
 
   public record StartRequest(@NotBlank @Size(max = 64) String kcCode) {}
 
-  public record TeachRequest(@NotBlank String explanation) {}
+  public record TeachRequest(@NotBlank @Size(max = 2000) String explanation) {}
 
   public record SessionResponse(long id, long userId, String kcCode, String status, JsonNode tuteeState) {}
 

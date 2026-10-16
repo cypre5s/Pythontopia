@@ -23,9 +23,11 @@ import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.error.ResourceNotFoundException;
 import java.util.List;
 import java.util.Optional;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 班级链路第 2 步（学生加入）的服务层红线：
@@ -65,6 +67,14 @@ class ClassroomServiceTest {
     verify(repository).addMember(9L, 7L);
     // 缺陷 4：不补发的话，发布之后才入班的学生只能看到点不动的任务卡。
     verify(questService).backfillForStudent(9L, 7L);
+  }
+
+  @Test
+  @DisplayName("入班和班级任务补发共享事务")
+  void joinIsTransactional() throws NoSuchMethodException {
+    var join = ClassroomService.class.getMethod("join", CurrentUserPrincipal.class, String.class);
+
+    Assertions.assertNotNull(join.getAnnotation(Transactional.class));
   }
 
   @Test

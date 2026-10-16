@@ -4,6 +4,12 @@
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
 
+## 2026-10-16 当前续接：限制世界 NPC 存档角色
+
+- 剩余写路由复核发现 `/api/world/npcs` 列表、状态读取与对话提交未限定角色；状态读取通过 `getOrInit` 首次调用会写入存档。TEACHER 因此可以修改自己的游戏状态，而相邻世界存档接口明确只允许 STUDENT/ADMIN。
+- 先写 TEACHER 拒绝用例，旧实现返回 200；统一要求 STUDENT 或 ADMIN 后，`NpcDialogControllerTest`、`NpcDialogServiceTest`、`NpcRouteKeySecurityTest` 共 17/17 通过。没有业务数据写入或模型请求。
+- 全量写路由与多行/包装器日志复核仍继续；此处只修复已复现的角色边界。
+
 ## 2026-10-16 当前续接：限制匿名认证请求体
 
 - 登录、注册与刷新原始 body 在 Spring MVC 绑定前限制为 4 KiB；登录用户名/密码与刷新 token 增加长度上限，避免异常输入继续进入 BCrypt/JWT 路径。两层 Nginx 同步限制。
@@ -1045,3 +1051,30 @@
 - Courseware 问答的 Java DTO 原先没有限制 `kcCodes` 数量/元素长度，也没有限制 `topK`，而 Graph 只限制 `top_k`。现两端统一为最多 65 个 KC、每项最多 32 字符；Java `topK` 为 1–12，空 `topK` 仍由既有客户端逻辑使用默认值 6。
 - 按 TDD 先复现：Java 旧 DTO 接受 66 个 KC，Graph 旧 schema 接受 66 个 KC 和 33 字符元素。修复后 Java DTO 与 Graph schema 回归分别通过（Java 3/3，Graph 4/4）；Graph 定向 Ruff、修改 Java 文件的 Google Java Format 与 `git diff --check` 通过。
 - 未做真实 HTTP/模型联测；前端当前调用只传 6 条检索结果上限且不带 KC 过滤。未调用 DeepSeek或写业务数据。
+
+## 2026-10-16 — 安全续审：NPC 角色与模型错误边界
+
+- NPC 世界存档的三个入口现在统一限制为 STUDENT/ADMIN，教师请求在读取初始化、写入和限流前返回 403；fresh `mvn -o -Dtest=NpcDialogControllerTest,NpcDialogServiceTest,NpcRouteKeySecurityTest test` 为 17/17。
+- 续查 AI 预算和异常响应：20 个 Controller 方法使用共享 `@AiBudgeted` 拦截器；班级加入码、媒体合成及学习写入使用既有服务层限额。资源图失败的消息为固定错误短语，Tutor provider 异常转成固定 SYSTEM_ERROR 文案；失败资源响应内包含本次草稿和审查结果，属于调用者自己的生成结果。
+- 日志模式扫描未确认可达 provider 原文泄漏；讯飞 ASR/TTS/旧图片服务固定关闭。ASR multipart 仍可在 Controller 返回 unavailable 前解析最大 8 MiB 文件/12 MiB 请求，且没有解析前账号限速；仅有应用体积上限。该风险已登记，未改服务行为。
+- 本轮没有 DeepSeek/讯飞调用、业务数据写入或生产访问。全量写路由、日志包装器、多行日志、生产代理运行态仍未审完。
+
+## 2026-10-16 — 安全续审：请求回显、AI 输入边界与事务竞态
+
+- Graph 统一处理 `RequestValidationError`，422 仅保留 `loc/msg/type`，移除 Pydantic 原始 `input`/`ctx`，避免违规图片 data URI 或其他请求正文被回显。新 TestClient 回归验证状态码、错误结构和私有标记不出现在响应中。
+- 前端 Nginx server 与 RAG Uvicorn 关闭 access log；主机 Nginx 继续通过既有安全格式记录不含 query 的 URI。扩展媒体能力日志契约检查，验证前端 server 级设置、Graph/RAG 启动参数及主机日志格式。
+- 费曼解释增加 2,000 字上限；意图路由的 `manualKcCodes/courseKcs/recentKcCodes` 最多 65 项、KC 代码最多 32 字符，`lastKcCodes` 保持最多 3 项并增加同一元素限制；B 站检索参数 `limit` 校验为 1–8。旧实现回归先观察到超长输入未拒绝和 `limit=9` 到达服务层。
+- 评估接受/保留通过带 `user_id` 与 `acted_status='PENDING'` 条件的单条 UPDATE 原子认领，认领失败返回既有冲突错误，且不触发路径变更。评估操作仍在原事务中；PostgreSQL 接受/保留验收覆盖成功流程，单元测试覆盖竞争方认领失败。
+- `ClassroomService.join` 现在在一个 Spring 事务内写成员并补发活动任务；服务测试确认事务边界声明。没有注入任务补发故障验证数据库回滚。
+- 已禁用 ASR 的 POST 在认证过滤器之后、MVC multipart 解析之前直接返回 `{"text":"","degraded":true}`；公网 Nginx 对该路由限 1 KiB 并将 POST 纳入既有每秒 2 次、突发 5 次 IP key，前端 Nginx 同样限 1 KiB。完整 SecurityFilterChain 测试确认匿名请求仍 401、认证的大 multipart 请求短路成功；接口不会读取音频或调用 provider。
+- 定向 Java 回归共 73/73（包含 Stage13 PostgreSQL Testcontainers 3 项）；Graph TestClient 1/1；Ruff check、测试文件格式、Java 定向 Spotless、媒体 access log 契约、HTTPS/Nginx 请求限制契约与 `git diff --check` 通过。Uvicorn 帮助输出确认 `--no-access-log` 参数存在。
+- 共享请求过滤与 ASR 安全链回归另 14/14；前端和主机 Nginx 1.27 `nginx -t` 均通过，ASR 限额及上传 key 契约通过。
+- 未运行全量 Maven suite、浏览器 Boss 或 DeepSeek；未做并发压力、课堂任务补发故障注入、生产日志/代理验证。剩余非 AI 写路由与多行日志审计仍待处理；性能按要求留到最后。
+
+## 2026-10-16 — 补齐事件与 Tutor checkpoint 原始请求体上限
+
+- 写路由盘点确认 `POST /api/events` 已由 `ClientLearningEventGuard` 做 4 KiB payload 校验和每账号 100 次/分钟预算；缺口是 JSON 总请求体在 MVC 绑定前没有专属上限。现后端和两层 Nginx 统一限为 16 KiB。
+- 内部 `/api/internal/tutor/workflow/.../autogen-checkpoints/{runId}` 使用 `PUT`，共享 token 在 Controller 方法中校验；`/api/internal/**` 在 Spring Security 中 `permitAll`，因此此前可在 Controller token 校验前绑定/解析请求体。现请求过滤器在 MVC 前将该 UUID checkpoint 路由限制为 3 MiB，边缘和前端 Nginx 同步。
+- RED/GREEN：`ApiRequestBodyLimitFilterTest` 先观察到 oversized `/api/events` 和内部 checkpoint 请求穿过过滤器（200），修复后均 413 且过滤链不继续；`PublicReadAccessTest` 覆盖匿名内部路由和认证 Agent Runtime 路由的过滤顺序。`ApiRequestBodyLimitFilterTest`、`PublicReadAccessTest`、`AgentRuntimeEventServiceTest`、`TutorWorkflowInternalCheckpointControllerTest` 共 21/21；HTTPS/Nginx 请求限制契约、两层 Nginx 1.27 `nginx -t`、三个 Java 文件定向 Spotless 和 `git diff --check` 通过。
+- 全仓 `spotless:check` 仍被 639 个历史 Java 文件格式违规阻断；本次触及 Java 文件定向检查通过。未调用模型、写业务数据或访问生产环境。3 MiB checkpoint 上限未用最大真实 AutoGen 快照实测；生产 Nginx 部署态仍未验证。
+- 同步做了日志封装首轮静态搜索：未发现应用自建的请求/响应体日志 filter、`RequestBodyAdvice`/`ResponseBodyAdvice` 或日志 aspect；Graph、RAG、前端 Nginx access log 关闭，公网安全格式只记录 `$uri`。这未覆盖完整多行日志调用点、第三方库运行日志或生产日志。
