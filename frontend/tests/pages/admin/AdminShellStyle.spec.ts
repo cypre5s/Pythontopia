@@ -15,6 +15,7 @@ function scopedStyles(componentPath: string): string {
 const layoutStyles = scopedStyles('../../../src/pages/admin/AdminLayout.vue');
 const layoutSource = componentSource('../../../src/pages/admin/AdminLayout.vue');
 const panelStyles = scopedStyles('../../../src/pages/admin/AdminPanel.vue');
+const panelSource = componentSource('../../../src/pages/admin/AdminPanel.vue');
 const operationsStyles = scopedStyles('../../../src/pages/admin/AdminOperationsPage.vue');
 const reviewStyles = scopedStyles('../../../src/pages/admin/AdminProblemReviewsPage.vue');
 const userStyles = scopedStyles('../../../src/pages/admin/AdminUsersPage.vue');
@@ -61,6 +62,10 @@ describe('admin visual shell contract', () => {
     expect(panelStyles).toMatch(/box-shadow:\s*var\(--admin-panel-shadow\);/);
     expect(panelStyles).toMatch(/padding:\s*20px 22px 16px;/);
     expect(panelStyles).toMatch(/padding:\s*18px 22px 22px;/);
+    expect(panelSource).toContain("'admin-panel--with-footer': Boolean($slots.footer)");
+    expect(panelStyles).toMatch(/\.admin-panel--with-footer \.admin-panel__body\s*\{[^}]*padding-bottom:\s*0;/);
+    expect(panelStyles).toMatch(/\.admin-panel__footer\s*\{[^}]*padding:\s*18px 22px 22px;/);
+    expect(panelStyles).toMatch(/@media \(max-width: 640px\) \{[\s\S]*?\.admin-panel__footer\s*\{[^}]*padding:\s*18px 16px 22px;/);
     expect(panelStyles).toMatch(/@media \(max-width: 640px\) \{[\s\S]*?\.admin-panel__tools\s*\{[^}]*flex:\s*0 1 auto;/);
 
     expect(tableStyles).toMatch(/\.admin-table-scroll > table th\s*\{[^}]*background:\s*var\(--admin-table-header-bg, #eef4fb\);/);
@@ -71,6 +76,9 @@ describe('admin visual shell contract', () => {
     expect(usersSource).toContain('class="admin-table__sticky"');
     expect(reviewSource).toContain(':min-width="1100"');
     expect(reviewStyles).toMatch(/\.review-table td:nth-child\(1\),[\s\S]*?white-space:\s*nowrap;/);
+    expect(reviewStyles).toMatch(/\.review-table td:nth-child\(3\),\s*\.review-table td:nth-child\(5\),\s*\.review-table td:nth-child\(7\)\s*\{[^}]*text-align:\s*center;/);
+    expect(reviewStyles).toContain('.review-table__action { width: 140px;');
+    expect(reviewStyles).toContain('.review-row-actions .admin-button');
     expect(reviewStyles).toContain('background: var(--admin-table-hover-bg);');
     expect(layoutStyles).toContain('.admin-status--muted');
     expect(operationsStyles).toMatch(/\.admin-operations__panels\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/);
@@ -87,8 +95,13 @@ describe('admin visual shell contract', () => {
     expect(tableStyles).toContain('-webkit-overflow-scrolling: touch;');
     expect(tableStyles).toContain('overscroll-behavior-x: contain;');
     expect(usersSource).toContain(':min-width="820"');
+    expect(userStyles).toMatch(/\.admin-users__table td\.admin-users__readable\s*\{[^}]*overflow-wrap:\s*anywhere;[^}]*white-space:\s*normal;/);
     expect(componentSource('../../../src/pages/admin/AdminPagination.vue'))
       .toMatch(/\.admin-pagination\s*\{[^}]*justify-content:\s*center;/);
+    expect(componentSource('../../../src/pages/admin/AdminPagination.vue'))
+      .toMatch(/\.admin-pagination__buttons \.admin-button\s*\{[^}]*width:\s*34px;[^}]*height:\s*34px;[^}]*min-height:\s*34px;/);
+    expect(componentSource('../../../src/pages/admin/AdminPagination.vue'))
+      .toMatch(/\.admin-pagination__page\s*\{[^}]*min-width:\s*34px;/);
   });
 
   it('provides a shared compact toolbar and consistent admin controls', () => {

@@ -30,6 +30,7 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
   public static final int MAX_AUTH_REQUEST_BYTES = 4 * 1024;
   public static final int MAX_WORKSHOP_CHAT_HISTORY_BYTES = 128 * 1024;
   public static final int MAX_JUDGE_SUBMISSION_BYTES = 64 * 1024;
+  public static final int MAX_EXPEDITION_RUN_REQUEST_BYTES = 64 * 1024;
   // Tool-call requests carry two JSON fields, each independently limited to 1 MiB.
   public static final int MAX_AGENT_LOOP_REQUEST_BYTES = 3 * 1024 * 1024;
   private static final int MAX_INTERNAL_TUTOR_CHECKPOINT_REQUEST_BYTES = 3 * 1024 * 1024;
@@ -51,6 +52,7 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
           "^/api/(?:submissions|world/boss/[1-7]/attempt|bug-mine/sessions/[0-9]+/"
               + "(?:retry-submit|variant-submit))$");
   private static final String WORKSHOP_CHAT_HISTORY_PATH = "/api/workshop/chat-history/turns";
+  private static final String EXPEDITION_RUN_PATH = "/api/world/expedition/run";
   private static final Pattern INTERNAL_TUTOR_CHECKPOINT_PATH =
       Pattern.compile(
           "^/api/internal/tutor/workflow/sessions/[^/]+/autogen-checkpoints/"
@@ -69,6 +71,9 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
     String path = requestPath(request);
     if ("PUT".equalsIgnoreCase(request.getMethod())
         && INTERNAL_TUTOR_CHECKPOINT_PATH.matcher(path).matches()) {
+      return false;
+    }
+    if ("PUT".equalsIgnoreCase(request.getMethod()) && EXPEDITION_RUN_PATH.equals(path)) {
       return false;
     }
     return !"POST".equalsIgnoreCase(request.getMethod())
@@ -141,6 +146,9 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
     if (WORKSHOP_CHAT_HISTORY_PATH.equals(requestPath)) {
       return MAX_WORKSHOP_CHAT_HISTORY_BYTES;
     }
+    if (EXPEDITION_RUN_PATH.equals(requestPath)) {
+      return MAX_EXPEDITION_RUN_REQUEST_BYTES;
+    }
     return 0;
   }
 
@@ -180,6 +188,7 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
     boolean authRequest = AUTH_REQUEST_PATH.matcher(requestPath).matches();
     boolean judgeSubmissionRequest = JUDGE_SUBMISSION_PATH.matcher(requestPath).matches();
     boolean workshopChatHistoryRequest = WORKSHOP_CHAT_HISTORY_PATH.equals(requestPath);
+    boolean expeditionRunRequest = EXPEDITION_RUN_PATH.equals(requestPath);
     String errorCode = "LOOP_RUNTIME_REQUEST_TOO_LARGE";
     String errorMessage = "Loop Runtime request body cannot exceed 3 MiB";
     if (internalTutorCheckpoint) {
@@ -203,14 +212,15 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
     } else if (workshopChatHistoryRequest) {
       errorCode = "WORKSHOP_CHAT_HISTORY_REQUEST_TOO_LARGE";
       errorMessage = "Workshop chat history request body cannot exceed 128 KiB";
+    } else if (expeditionRunRequest) {
+      errorCode = "EXPEDITION_SNAPSHOT_REQUEST_TOO_LARGE";
+      errorMessage = "Expedition run request body cannot exceed 64 KiB";
     }
     response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
     response.setContentType(MediaType.APPLICATION_JSON_VALUE);
     response.setCharacterEncoding(StandardCharsets.UTF_8.name());
     objectMapper.writeValue(
-        response.getOutputStream(),
-        ApiError.of(
-            errorCode, errorMessage, List.of(), ""));
+        response.getOutputStream(), ApiError.of(errorCode, errorMessage, List.of(), ""));
   }
 
   private static final class CachedBodyRequest extends HttpServletRequestWrapper {

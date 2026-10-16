@@ -186,13 +186,12 @@ describe('AdminProblemReviewsPage', () => {
     });
   });
 
-  it('supports direct page jumps and selectable page sizes', async () => {
+  it('supports numbered page selection and selectable page sizes', async () => {
     api.searchProblemReviews.mockResolvedValue(page([review()], 45));
     const wrapper = mount(AdminProblemReviewsPage);
     await flushPromises();
 
-    await wrapper.get('[data-testid="admin-pagination-page-input"]').setValue('3');
-    await wrapper.get('[data-testid="admin-pagination-jump-form"]').trigger('submit');
+    await wrapper.get('[data-testid="admin-pagination-page-3"]').trigger('click');
     await flushPromises();
     expect(api.searchProblemReviews).toHaveBeenLastCalledWith({
       page: 2, size: 20, sortBy: 'REQUESTED_AT', sortDirection: 'DESC',

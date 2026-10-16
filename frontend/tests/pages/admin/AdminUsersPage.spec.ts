@@ -114,7 +114,7 @@ describe('AdminUsersPage', () => {
     });
   });
 
-  it('supports page-size changes and direct page jumps through the API', async () => {
+  it('supports page-size changes and numbered page selection through the API', async () => {
     vi.mocked(searchAdminUsers).mockResolvedValue({
       content: [activeUser], page: 0, size: 20, totalElements: 45, totalPages: 3,
     });
@@ -125,8 +125,7 @@ describe('AdminUsersPage', () => {
     await flushPromises();
     expect(searchAdminUsers).toHaveBeenLastCalledWith({ page: 0, size: 50 });
 
-    await wrapper.get('[data-testid="admin-pagination-page-input"]').setValue('3');
-    await wrapper.get('[data-testid="admin-pagination-jump-form"]').trigger('submit');
+    await wrapper.get('[data-testid="admin-pagination-page-3"]').trigger('click');
     await flushPromises();
     expect(searchAdminUsers).toHaveBeenLastCalledWith({ page: 2, size: 50 });
   });
@@ -151,7 +150,7 @@ describe('AdminUsersPage', () => {
     expect(wrapper.get('[data-testid="admin-user-status-1"]').attributes('disabled')).toBeDefined();
   });
 
-  it('keeps full display name and username available when long cells are truncated', async () => {
+  it('keeps long display names and usernames readable in the table', async () => {
     const displayName = '学生'.repeat(30);
     const username = 'student'.repeat(20);
     vi.mocked(searchAdminUsers).mockResolvedValueOnce({
@@ -165,7 +164,9 @@ describe('AdminUsersPage', () => {
     await flushPromises();
 
     const cells = wrapper.findAll('tbody td');
-    expect(cells[1].attributes('title')).toBe(displayName);
-    expect(cells[2].attributes('title')).toBe(username);
+    expect(cells[1].classes()).toContain('admin-users__readable');
+    expect(cells[2].classes()).toContain('admin-users__readable');
+    expect(cells[1].text()).toBe(displayName);
+    expect(cells[2].text()).toBe(username);
   });
 });

@@ -159,8 +159,14 @@ function changeSize(event: Event): void {
 }
 
 .admin-pagination__page {
-  min-width: 36px;
-  padding: 0 10px;
+  min-width: 34px;
+}
+
+.admin-pagination__buttons .admin-button {
+  width: 34px;
+  height: 34px;
+  min-height: 34px;
+  padding: 0;
 }
 
 .admin-pagination__ellipsis {

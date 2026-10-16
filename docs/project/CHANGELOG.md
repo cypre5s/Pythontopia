@@ -1,5 +1,21 @@
 # Changelog
 
+## 2026-10-17 — 约束远征存档请求与写入频率
+
+- `PUT /api/world/expedition/run` 在 MVC JSON 绑定前限制为 64 KiB；`PUT` 与 `DELETE` 复用每账号写入节流，过载请求不会进入远征服务。
+- 边缘 Nginx 与前端 Nginx 对该精确路由同步设置 64 KiB 上限。TDD 先复现过大请求返回 200、PUT/DELETE 未调用账号限流；修复后 `ApiRequestBodyLimitFilterTest` 与 `ExpeditionRunControllerTest` 共 21 项通过，Spotless、HTTPS/Nginx 契约、两份 Nginx 1.27 语法、Shell 语法及 `git diff --check` 通过。
+- 未跑浏览器远征或生产 Nginx；这项保护不替代部署态验证。
+
+## 2026-10-17 — 当前安全路径定向回归复核
+
+- 当前快照定向运行 JWT/账号状态、媒体与上传 owner、Boss 选题/判题幂等及远征存档/结算测试，共 168 项，0 failures、0 errors、0 skipped。
+- Boss 既有回归确认同 KC 审核客观题耗尽时 fail closed；CHOICE/JUDGE/FILL 判分和结果服务端回流继续有效。本轮未改业务代码、未发模型请求、未做浏览器复通关。
+
+## 2026-10-17 — 管理台表格与页脚布局对齐
+
+- 运营面板按是否有页脚处理底部留白，题目审核表格居中对齐章节/难度/状态并收窄操作列，分页按钮统一为 34px；没有改 API、DTO、权限或业务动作。
+- 修正与现有数字分页、长文本换行行为一致的回归断言。管理台 13 个测试文件、54 项通过；当前快照重跑 8 个相关文件、37 项通过，typecheck 与定向 ESLint 通过。未做浏览器全栈联测。
+
 ## 2026-10-17 — 限制代码判题入口原始请求体
 
 - `/api/submissions`、Boss `/attempt` 与 Bug 矿洞重试/变式提交在 Spring MVC 绑定前限制为 64 KiB，边缘及前端 Nginx 同步限额；单次代码仍由 DTO 限制为最多 8,192 字符。

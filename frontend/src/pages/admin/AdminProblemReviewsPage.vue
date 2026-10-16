@@ -782,6 +782,12 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+.review-table td:nth-child(3),
+.review-table td:nth-child(5),
+.review-table td:nth-child(7) {
+  text-align: center;
+}
+
 .review-table tbody tr:hover,
 .review-table tbody tr.is-selected {
   background: var(--admin-table-hover-bg);
@@ -794,12 +800,16 @@ onMounted(() => {
 .review-table__difficulty { width: 70px; }
 .review-table__requester { width: 170px; }
 .review-table__status { width: 100px; }
-.review-table__action { width: 154px; text-align: center !important; }
+.review-table__action { width: 140px; text-align: center !important; }
 
 .review-row-actions {
   display: flex;
   justify-content: center;
   gap: 6px;
+}
+
+.review-row-actions .admin-button {
+  padding: 0 10px;
 }
 
 .review-table__problem-cell,

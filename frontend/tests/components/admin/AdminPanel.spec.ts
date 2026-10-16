@@ -16,6 +16,7 @@ describe('AdminPanel', () => {
 
     const childClasses = Array.from(wrapper.element.children)
       .map((element) => (element as HTMLElement).className);
+    expect(wrapper.classes()).toContain('admin-panel--with-footer');
     expect(childClasses).toEqual([
       'admin-panel__header',
       'admin-panel__body',

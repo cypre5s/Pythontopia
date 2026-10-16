@@ -5,7 +5,10 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
 </script>
 
 <template>
-  <section class="admin-panel">
+  <section
+    class="admin-panel"
+    :class="{ 'admin-panel--with-footer': Boolean($slots.footer) }"
+  >
     <header class="admin-panel__header">
       <div>
         <h2>{{ title }}</h2>
@@ -110,14 +113,22 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
   padding: 18px 22px 22px;
 }
 
+.admin-panel--with-footer .admin-panel__body {
+  padding-bottom: 0;
+}
+
 .admin-panel__footer {
-  padding: 18px 22px 0;
+  padding: 18px 22px 22px;
 }
 
 @media (max-width: 640px) {
   .admin-panel__header,
   .admin-panel__body {
     padding: 16px;
+  }
+
+  .admin-panel--with-footer .admin-panel__body {
+    padding-bottom: 0;
   }
 
   .admin-panel__toolbar {
@@ -136,7 +147,7 @@ withDefaults(defineProps<{ title: string; description?: string }>(), {
   }
 
   .admin-panel__footer {
-    padding: 18px 16px 0;
+    padding: 18px 16px 22px;
   }
 
   .admin-panel__header {

@@ -66,7 +66,8 @@ public class ExpeditionRunController {
     requireStudent(user);
     requireWriteCapacity(user.userId());
     var frontier =
-        bossService.selectFrontier(user.userId(), request.focusChapter(), request.preferredKcCode());
+        bossService.selectFrontier(
+            user.userId(), request.focusChapter(), request.preferredKcCode());
     return service.start(
         user.userId(), request.focusChapter(), request.isDaily(), frontier.picks());
   }
@@ -75,6 +76,7 @@ public class ExpeditionRunController {
   public ExpeditionRunDto saveRun(
       @CurrentUser CurrentUserPrincipal user, @Valid @RequestBody ExpeditionRunDto run) {
     requireStudent(user);
+    requireWriteCapacity(user.userId());
     return service.save(user.userId(), run);
   }
 
@@ -91,6 +93,7 @@ public class ExpeditionRunController {
   @ResponseStatus(HttpStatus.NO_CONTENT)
   public void abandonRun(@CurrentUser CurrentUserPrincipal user) {
     requireStudent(user);
+    requireWriteCapacity(user.userId());
     service.abandon(user.userId());
   }
 
@@ -103,9 +106,7 @@ public class ExpeditionRunController {
   private void requireWriteCapacity(long userId) {
     if (!studentWriteThrottle.tryAcquire(userId, 1)) {
       throw new BusinessException(
-          HttpStatus.TOO_MANY_REQUESTS,
-          "STUDENT_WRITE_RATE_LIMITED",
-          "每个账号每分钟最多写入 100 条记录");
+          HttpStatus.TOO_MANY_REQUESTS, "STUDENT_WRITE_RATE_LIMITED", "每个账号每分钟最多写入 100 条记录");
     }
   }
 }

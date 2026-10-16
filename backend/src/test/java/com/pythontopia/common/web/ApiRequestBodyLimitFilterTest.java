@@ -41,8 +41,7 @@ class ApiRequestBodyLimitFilterTest {
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
 
-    new ApiRequestBodyLimitFilter(
-            new ObjectMapper().registerModule(new JavaTimeModule()))
+    new ApiRequestBodyLimitFilter(new ObjectMapper().registerModule(new JavaTimeModule()))
         .doFilter(request, response, chain);
 
     assertThat(response.getStatus()).isEqualTo(413);
@@ -60,8 +59,7 @@ class ApiRequestBodyLimitFilterTest {
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
 
-    new ApiRequestBodyLimitFilter(
-            new ObjectMapper().registerModule(new JavaTimeModule()))
+    new ApiRequestBodyLimitFilter(new ObjectMapper().registerModule(new JavaTimeModule()))
         .doFilter(request, response, chain);
 
     assertThat(response.getStatus()).isEqualTo(413);
@@ -84,8 +82,7 @@ class ApiRequestBodyLimitFilterTest {
       MockHttpServletResponse response = new MockHttpServletResponse();
       FilterChain chain = mock(FilterChain.class);
 
-      new ApiRequestBodyLimitFilter(
-              new ObjectMapper().registerModule(new JavaTimeModule()))
+      new ApiRequestBodyLimitFilter(new ObjectMapper().registerModule(new JavaTimeModule()))
           .doFilter(request, response, chain);
 
       assertThat(response.getStatus()).isEqualTo(413);
@@ -93,6 +90,23 @@ class ApiRequestBodyLimitFilterTest {
           .contains("JUDGE_SUBMISSION_REQUEST_TOO_LARGE");
       verifyNoInteractions(chain);
     }
+  }
+
+  @Test
+  void expeditionRunSnapshotPutIsRejectedBeforeJsonBindingWhenTooLarge() throws Exception {
+    MockHttpServletRequest request = new MockHttpServletRequest("PUT", "/api/world/expedition/run");
+    request.setContentType("application/json");
+    request.setContent(new byte[ApiRequestBodyLimitFilter.MAX_EXPEDITION_RUN_REQUEST_BYTES + 1]);
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+
+    new ApiRequestBodyLimitFilter(new ObjectMapper().registerModule(new JavaTimeModule()))
+        .doFilter(request, response, chain);
+
+    assertThat(response.getStatus()).isEqualTo(413);
+    assertThat(response.getContentAsString(StandardCharsets.UTF_8))
+        .contains("EXPEDITION_SNAPSHOT_REQUEST_TOO_LARGE");
+    verifyNoInteractions(chain);
   }
 
   @Test
@@ -107,8 +121,7 @@ class ApiRequestBodyLimitFilterTest {
     MockHttpServletResponse response = new MockHttpServletResponse();
     FilterChain chain = mock(FilterChain.class);
 
-    new ApiRequestBodyLimitFilter(
-            new ObjectMapper().registerModule(new JavaTimeModule()))
+    new ApiRequestBodyLimitFilter(new ObjectMapper().registerModule(new JavaTimeModule()))
         .doFilter(request, response, chain);
 
     assertThat(response.getStatus()).isEqualTo(413);

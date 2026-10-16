@@ -20,10 +20,10 @@ import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.common.web.CurrentUserArgumentResolver;
 import com.pythontopia.common.web.StudentWriteThrottle;
-import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import com.pythontopia.common.web.WebConfig;
-import com.pythontopia.world.boss.dto.ExpeditionRunDto;
+import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import com.pythontopia.world.boss.dto.ExpeditionRunActionRequest;
+import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import com.pythontopia.world.boss.dto.FrontierPickDto;
 import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
 import java.util.List;
@@ -105,6 +105,23 @@ class ExpeditionRunControllerTest {
         .andExpect(jsonPath("$.score").value(32));
 
     verify(service).save(eq(7L), any(ExpeditionRunDto.class));
+    verify(studentWriteThrottle).tryAcquire(7L, 1);
+  }
+
+  @Test
+  void putRunIsRejectedWhenAccountWriteBudgetIsExhausted() throws Exception {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(false);
+
+    mockMvc
+        .perform(
+            put("/api/world/expedition/run")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(runDto())))
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.code").value("STUDENT_WRITE_RATE_LIMITED"));
+
+    verify(studentWriteThrottle).tryAcquire(7L, 1);
+    verifyNoInteractions(service);
   }
 
   @Test
@@ -117,7 +134,9 @@ class ExpeditionRunControllerTest {
             post("/api/world/expedition/run/actions")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(
-                    "{\"runId\":\"" + dto.runId() + "\",\"nodeId\":\"L0-0\","
+                    "{\"runId\":\""
+                        + dto.runId()
+                        + "\",\"nodeId\":\"L0-0\","
                         + "\"action\":\"ENTER_NODE\"}"))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.runId").value(dto.runId()))
@@ -151,7 +170,8 @@ class ExpeditionRunControllerTest {
         .perform(
             post("/api/world/expedition/run/actions")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"runId\":\"123e4567-e89b-12d3-a456-426614174000\",\"action\":\"HACK\"}"))
+                .content(
+                    "{\"runId\":\"123e4567-e89b-12d3-a456-426614174000\",\"action\":\"HACK\"}"))
         .andExpect(status().isBadRequest());
 
     verifyNoInteractions(service);
@@ -169,7 +189,8 @@ class ExpeditionRunControllerTest {
         .perform(
             post("/api/world/expedition/run")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"focusChapter\":2,\"isDaily\":false,\"preferredKcCode\":\"PY43-KC-008\"}"))
+                .content(
+                    "{\"focusChapter\":2,\"isDaily\":false,\"preferredKcCode\":\"PY43-KC-008\"}"))
         .andExpect(status().isCreated())
         .andExpect(jsonPath("$.runId").value(dto.runId()));
 
@@ -212,7 +233,8 @@ class ExpeditionRunControllerTest {
         .perform(
             post("/api/world/expedition/run")
                 .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"focusChapter\":2,\"isDaily\":false,\"preferredKcCode\":\"other-course-kc\"}"))
+                .content(
+                    "{\"focusChapter\":2,\"isDaily\":false,\"preferredKcCode\":\"other-course-kc\"}"))
         .andExpect(status().isBadRequest());
 
     verifyNoInteractions(service, bossService);
@@ -238,6 +260,20 @@ class ExpeditionRunControllerTest {
   void deleteAbandonsActiveRunForCurrentStudent() throws Exception {
     mockMvc.perform(delete("/api/world/expedition/run")).andExpect(status().isNoContent());
     verify(service).abandon(7L);
+    verify(studentWriteThrottle).tryAcquire(7L, 1);
+  }
+
+  @Test
+  void deleteRunIsRejectedWhenAccountWriteBudgetIsExhausted() throws Exception {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(false);
+
+    mockMvc
+        .perform(delete("/api/world/expedition/run"))
+        .andExpect(status().isTooManyRequests())
+        .andExpect(jsonPath("$.code").value("STUDENT_WRITE_RATE_LIMITED"));
+
+    verify(studentWriteThrottle).tryAcquire(7L, 1);
+    verifyNoInteractions(service);
   }
 
   @Test

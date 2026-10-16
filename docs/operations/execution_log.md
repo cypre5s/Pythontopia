@@ -1099,3 +1099,9 @@
 - 续查发现正式提交、Boss 判题与 Bug 矿洞重试/变式提交虽然 DTO 将代码限制为 8,192 字符，但原始 JSON 在 MVC 绑定前仍可达到全局 12 MiB。三个判题入口现复用同一过滤器，在绑定前限制为 64 KiB；边缘和前端 Nginx 同步限额。
 - RED/GREEN：旧过滤链对 64 KiB + 1 byte 请求返回 200；修改后三个路由均为 413 且不继续过滤链。`ApiRequestBodyLimitFilterTest` 5/5、HTTPS/Nginx 契约 49 项、Shell 语法、两份 Nginx 1.27 `nginx -t`、定向 Spotless 与 `git diff --check` 通过。无模型请求或业务数据写入。
 - 完整 112 个写路由逐项审计、管理员状态变更持久审计、多行日志调用点及生产代理运行态仍未完成；没有跑 Piston 判题或完整 Boss 浏览器流程，因为本次只改请求体边界。
+
+## 2026-10-17 — 约束远征存档请求与写入频率
+
+- 源码复核发现远征 run 的 `PUT` 在 JSON 绑定前没有专属请求体上限，且 `PUT`/`DELETE` 没有调用现有 `StudentWriteThrottle`。复用已有绑定前过滤器和账号级节流，在后端限 64 KiB，并在边缘/前端 Nginx 精确路由同步限制。
+- TDD 先复现 oversized PUT 返回 200、PUT/DELETE 不触发限流；修复后 `ApiRequestBodyLimitFilterTest` 6/6、`ExpeditionRunControllerTest` 15/15，定向 Spotless、HTTPS/Nginx 契约、Shell 语法与 `git diff --check` 通过；主机与前端 Nginx 1.27 `nginx -t` 通过（本地临时证书及占位 upstream 仅用于解析语法）。
+- 没有修改数据库、创建账号或调用模型；未重跑已完成的 Boss 浏览器通关，生产 Nginx 部署态仍待验证。
