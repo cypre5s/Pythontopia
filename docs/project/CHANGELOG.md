@@ -2,6 +2,11 @@
 
 ## 2026-10-17
 
+- `Stage08PathBoardAcceptanceIntegrationTest` fixture 改用服务端支持的 `FIX_BUG` 节点，并以真实 resource consumption 作为阅读任务证据，定向类 3/3 通过。完整 Maven 首轮暴露 Testcontainers 随机宿主端口冲突和长期仿真测试高频 JDBC 短连接问题；长期仿真改用 `SingleConnectionDataSource` 复用连接，7 个受影响类隔离复跑 19/19 后，`mvn -B clean test` 全量 1,733/1,733（0 failures、0 errors、0 skipped）并 `BUILD SUCCESS`。`mvn -B -DskipTests package` 也成功，生成 `backend/target/pythontopia-backend-0.1.0-SNAPSHOT.jar`（86 MB）。
+- 前端 `npm run build` 成功。本机通过 `./dev.sh` 部署并保持运行；Vite、Spring `/healthz`、Graph `/healthz`、RAG `/healthz` 均返回 HTTP 200，Postgres、Redis、Piston、Graph、RAG 容器均 running。Vite 仍报告 Pyodide 的 Node 内置模块 externalization 与 `eval` 警告，本次未专项处理。此次没有发起 DeepSeek 请求。
+- 新学生浏览器巡查修复两项世界内叠层问题：首次进入时偏好探针会与帮助/镇长对话重叠；Esc 关闭 NPC 对话后可能继续触发 HUD 暂停菜单。探针现受 onboarding/dialog 状态约束，HudShell 先关闭 NPC 对话且 DialogTree 阻止 Escape 冒泡。相关 Vitest 3 文件 43/43、typecheck、触及文件 ESLint 通过。
+- 本地 Vite 代理性能采样（5 次预热 + 40 次样本）：远征建局 P50/P95 21.35/24.42 ms；远征状态串行 9.89/11.67 ms、并发 4 为 40.19/41.74 ms（98.04 req/s）；Twin state 串行 11.70/13.69 ms、并发 4 为 39.98/43.10 ms（97.76 req/s）。建局对比 2026-10-14 的 12 样本 23.32/27.37 ms 数值低约 8.4%/10.8%，但不是严格 A/B。未测 Graph/模型生成、Piston 判题和整场远征性能；临时账号已清理。
+- 浏览器直达世界、主线地图、复盘大厅、学习分身、工坊和远征均能加载，无 pageerror 或 5xx。新账号无活动路径时 `GET /api/learner/path/active` 返回 404 `PATH_NOT_FOUND`，前端按空状态处理；不是静态素材丢失。新生引导修复后复走确认帮助和镇长对话不再叠层，临时账号及其数据库记录已清理。
 - 主线课件现在有真实浏览器回归覆盖：检查原始 PDF canvas 已绘制，验证 `ArrowRight`/`ArrowLeft` 翻页、用 `End` 到末页、真实提交批量已读，并确认重载后进度保留。方向键场景 1/1（7.2 秒），临时账号及直接外键引用已清理；未触发模型或 Piston。
 - 本地 Piston 判题 400 已定位为 Java 21 客户端发出不兼容的 h2c Upgrade；Piston 专用客户端改用 HTTP/1.1 请求工厂并保留超时。wire 回归 RED/GREEN；普通学生浏览器 1/1 完成源题 AC、Tutor AC_REVIEW/TRANSFER、同 KC 审核迁移题正式 AC，并在 Twin state 确认 `PRACTICE_PASS`。临时账号精确删除且全部直接外键残留为 0。
 - 教师班级补救包的长证据页此前会在窄屏超出面板；改为单列并允许证据文本换行，API fixture 浏览器布局检查在 320px 和 375px 均无面板/页面溢出。

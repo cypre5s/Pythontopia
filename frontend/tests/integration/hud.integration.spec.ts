@@ -27,6 +27,8 @@ vi.mock('@/data/fastTravel', async (importOriginal) => {
 
 import HudShell from '@/components/hud/HudShell.vue';
 import { useHudStore } from '@stores/hud';
+import { useDialogStore } from '@stores/dialog';
+import { useGameSettingsStore } from '@stores/gameSettings';
 import { RESTORED_FAST_TRAVEL_ROUTES } from '../_helpers/fastTravelRoutes';
 
 function makeRouter(): Router {
@@ -93,6 +95,19 @@ describe('hud.integration: 全键位 + 工具区 + 边界', () => {
     expect(hud.activeSlot).toBe('inventory'); // 第一次只关 settings
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
     expect(hud.activeSlot).toBeNull();
+    wrapper.unmount();
+  });
+
+  it('keydown Escape closes an active NPC dialog before opening the pause menu', () => {
+    const dialog = useDialogStore();
+    const settings = useGameSettingsStore();
+    const wrapper = mountShell();
+    dialog.visible = true;
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    expect(dialog.visible).toBe(false);
+    expect(settings.pauseMenuOpen).toBe(false);
     wrapper.unmount();
   });
 

@@ -3,10 +3,11 @@ package com.pythontopia.learner.effect;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.flywaydb.core.Flyway;
+import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
+import org.springframework.jdbc.datasource.SingleConnectionDataSource;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -26,16 +27,21 @@ class LongTermClassroomEffectSimulationTest {
           .withPassword("pytopia");
 
   private static JdbcTemplate jdbc;
+  private static SingleConnectionDataSource dataSource;
 
   @BeforeAll
   static void migrateAndWire() {
-    DriverManagerDataSource dataSource = new DriverManagerDataSource();
+    dataSource = new SingleConnectionDataSource(POSTGRES.getJdbcUrl(), true);
     dataSource.setDriverClassName("org.postgresql.Driver");
-    dataSource.setUrl(POSTGRES.getJdbcUrl());
     dataSource.setUsername(POSTGRES.getUsername());
     dataSource.setPassword(POSTGRES.getPassword());
     Flyway.configure().dataSource(dataSource).locations("classpath:db/migration").load().migrate();
     jdbc = new JdbcTemplate(dataSource);
+  }
+
+  @AfterAll
+  static void closeDatabaseConnection() {
+    dataSource.destroy();
   }
 
   @Test

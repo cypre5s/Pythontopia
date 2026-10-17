@@ -3,6 +3,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { mount } from '@vue/test-utils';
 import ProbeCard from '@/components/world/ProbeCard.vue';
 import { useProbeStore } from '@stores/probe';
+import { useDialogStore } from '@stores/dialog';
 import { submitProbe } from '@/api/learner';
 
 vi.mock('@/api/learner', () => ({
@@ -30,6 +31,25 @@ describe('ProbeCard', () => {
   it('does not show again once the probe was answered', () => {
     useProbeStore().markAnswered('cog_intro');
     const wrapper = mount(ProbeCard);
+    expect(wrapper.find('[data-testid="probe-card"]').exists()).toBe(false);
+  });
+
+  it('hides an already queued probe while the world onboarding hold is active', async () => {
+    const wrapper = mount(ProbeCard);
+    expect(wrapper.find('[data-testid="probe-card"]').exists()).toBe(true);
+
+    await wrapper.setProps({ hold: true });
+
+    expect(wrapper.find('[data-testid="probe-card"]').exists()).toBe(false);
+  });
+
+  it('hides an already queued probe while an NPC dialog is open', async () => {
+    const wrapper = mount(ProbeCard);
+    expect(wrapper.find('[data-testid="probe-card"]').exists()).toBe(true);
+
+    useDialogStore().visible = true;
+    await wrapper.vm.$nextTick();
+
     expect(wrapper.find('[data-testid="probe-card"]').exists()).toBe(false);
   });
 

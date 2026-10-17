@@ -1,7 +1,21 @@
 # Web 收尾工作清单
 
-更新时间：2026-10-17
+更新时间：2026-10-17 18:46（Asia/Shanghai）
 范围：Web、Spring Boot、Graph/RAG 与本地开发栈；不含 Android、Electron、微信或 ECS。
+
+## 2026-10-17 快速收尾核验
+
+- 目标核心链路没有新增阻断：普通学生三阶段 Boss 通关和 Twin 证据回流、Tutor AutoGen 文本/图片聊天与 TRANSFER 正式判题回流、管理后台真实 API 操作均已有浏览器闭环记录；不重复生成题目、调用 DeepSeek 或注册账号。
+- 当前工作树完整验证：`mvn -B clean test` 为 1,733 项、0 failures、0 errors、0 skipped，`BUILD SUCCESS`；`mvn -B -DskipTests package` 成功并生成 86 MB 后端 jar；前端 `npm run build` 成功。未发模型请求。
+- 本机开发栈已通过 `./dev.sh` 启动并保持运行：Vite `:5173`、Spring `/healthz` `:18080`、Graph `:18091`、RAG `:18092` 均返回 HTTP 200；Postgres、Redis、Piston 和两个 Python 服务的 Compose 容器均为 running。
+- Pyth 管理台保留三项真实 API 页面并沿用项目 DTO/权限；Alethicode 没有对应 Pyth API 的菜单不复制。最新 CSS 的浏览器截图/像素级比对仍未做，不影响已覆盖的管理功能使用。
+
+## 2026-10-17 Maven、性能与游玩核验
+
+- 修正 `Stage08PathBoardAcceptanceIntegrationTest` 的 Graph fixture：使用服务端支持的 `FIX_BUG` 节点，并为完成阅读任务建立真实 resource consumption 证据，定向类 3/3 通过。完整 Maven 首次复跑曾因 Testcontainers 随机宿主端口冲突及长期仿真高频 JDBC 短连接报错；长期仿真测试改为复用 `SingleConnectionDataSource`，7 个受影响类隔离复跑 19/19，之后 `mvn -B clean test` 全量 1,733/1,733 通过，最终结果已覆盖此前失败记录。
+- 本地 Vite → Spring 性能采样：5 次预热后测 40 次建局，P50/P95 21.35/24.42 ms；远征状态读取串行 9.89/11.67 ms、4 并发 40.19/41.74 ms（98.04 req/s）；Twin state 串行 11.70/13.69 ms、4 并发 39.98/43.10 ms（97.76 req/s）。均低于项目通用 API P95 300 ms 目标。对比 2026-10-14 的 12 次建局采样 23.32/27.37 ms，数值低约 8.4%/10.8%，但账号状态与样本量不同，只作粗略参考；未测 Graph/模型生成、Piston 判题或整场远征 P95。临时学生、测试远征已清理，本轮未主动调用 DeepSeek。
+- 新学生浏览器巡查直达 `/world`、`/mainline-map`、`/review-hall`、`/profile-room`、`/workshop`、`/expedition`；均加载且无 pageerror/5xx。发现新生“帮助弹窗 + 镇长对话”会和偏好探针叠层，已让 `ProbeCard` 在 onboarding hold 或 NPC 对话期间隐藏；发现 Esc 会关不掉 NPC 对话且可能继续开暂停菜单，现由 HUD 先关闭对话，并阻止对话内 Esc 冒泡。相关 Vitest 43/43、typecheck、触及文件 ESLint 通过；新生浏览器复走确认帮助弹窗、镇长对话不再叠探针，临时账号及数据库关联记录已清理。
+- 首次空学习路径产生的 `GET /api/learner/path/active` 404 已定位为 `PATH_NOT_FOUND`，前端将其当作无路径 `null`；不是缺失静态素材。生产代理、图形化完整 Boss 流程、模型生成性能和真实硬件指标仍未在本次测量。
 
 ## 已完成
 
@@ -64,7 +78,7 @@
 - 工坊聊天历史完整 JSON 现于 Spring MVC 绑定前限制为 128 KiB，保留原有 64 KiB payload 校验；过滤器回归 5/5、HTTPS/Nginx 契约、两层 Nginx 1.27 `nginx -t`、定向 Spotless 与 `git diff --check` 通过。
 - 正式提交、Boss 判题与 Bug 矿洞重试/变式提交现于 Spring MVC 绑定前统一限制原始 body 为 64 KiB，DTO 的 8,192 字符代码限制不变；旧过滤链下的超限回归为 200，修复后 5 个过滤器测试全绿，Nginx 契约与两层配置语法通过。
 
-- **Tutor / Alethicode 对齐：** fresh 对照确认 Pythontopia 已用同版本 AutoGen 固定阶段运行，并覆盖 Alethicode 的主线/辅助/PLAN 事件及图片隔离、取消和 checkpoint 恢复；保留 Pyth API 与存储更安全。一个用户可见差异仍开放：Alethicode 的 TRANSFER 会物化成可判题临时题，Pyth 目前只展示卡片；补齐需接通可信题目创建、正式判题和提交回流，不能把客户端草稿当作权威题目。Alethicode 对应 runtime 处于未提交工作树，不直接复制。
+- **Tutor / Alethicode 对齐：** fresh 对照确认 Pythontopia 使用同版本 AutoGen 固定阶段运行，保留自身 API、DTO、会话与 checkpoint 契约；固定阶段覆盖 Tutor 主线、辅助事件、PLAN、图片隔离、取消和 checkpoint 恢复。此前 TRANSFER 卡片缺少正式判题路径已补齐：绑定同 KC 已审核题、正式服务端判题、结果回流 Twin，并由真实浏览器闭环验证。Alethicode 对应 runtime 仍处于未提交工作树，不直接复制其接口或表结构。
 - **DeepSeek / 图片 / 语音：** Web 模型出口固定为 DeepSeek，Tutor 图片走 vision 档并输出文本；源码复扫确认 Graph 在线路由共用 `provider_from_env`，客户端只接受 `api.deepseek.com` 与允许的 DeepSeek 模型，Mem0/Zep 记忆固定本地；TTS、ASR、图片生成/理解 provider 在属性层固定关闭，前端没有语音合成调用。已有真实文本与 PNG 输入记录，本次不重复发模型请求。隔离的 Qwen 研究脚本未接入 Web 路由。
 - **管理台对齐：** 运维、题目审核、用户管理三页已有真实 API、分页、筛选、状态反馈与窄屏布局，与 Alethicode 的可用视觉模式接近；Alethi 当前管理台有大量未提交改动，且多项菜单在本项目无对应契约，不复制。
 - **远征安全源码复核：** 未发现可复现的 P0/P1 越权。远征身份、HP/进度、节点动作、判题结算和排行榜分数以服务端状态为准；Boss 失败反馈真实体力，成功触发受击演出。2026-10-16 的合法学生浏览器实跑已完成 KC-008 Boss 三阶段，并核实 Twin 回流与账号清理。
@@ -100,20 +114,18 @@
 - ASR multipart 解析前风险已在本地收口：认证后 Spring 过滤器直接返回 unavailable，公网/前端 Nginx 限 1 KiB，公网复用每秒 2 次、突发 5 次上传限速。两层 Nginx 语法和静态限额契约通过；生产部署态未核验。
 - 匿名注册的同 IP 滥用已由独立边缘限速收窄，但代理池/多 IP 仍可持续创建账号；邮箱没有验证。该 Nginx 改动尚未部署到生产验证，本地直连开发 API 不经过此规则。生产共享 AI 日预算仍是每账号 30 次、全站 300 次，本地按用户要求关闭应用级请求限额。
 - DeepSeek 供应商账单/token 需要从控制台核对；本地请求上限已关闭，但不代表供应商无额度或无费用。
-- **依赖扫描已覆盖 Web 锁文件、Graph 本地 venv 与 Maven 树，但仍有未修复条件风险：** npm 官方审计为 0 项；Graph OSV 扫描 220 个精确版本发现 `diskcache 5.6.3`、`ragas 0.4.3` 两个可选评测依赖受影响，它们不进 Docker 运行镜像且目前无上游修复版。Maven 初始扫描发现多项运行依赖受影响，已把 Spring Boot/springdoc 及 Jackson、Tomcat、PostgreSQL JDBC、Log4j、Commons Lang 升至已核对的补丁版本；更新后 140 个 Maven 坐标仅剩 Spring MVC SSE + view fragment 条件告警，本项目没有 view fragment 用法。Spring 官方只把 Spring 6.2.20 修复版提供给 Enterprise，当前 Maven Central 最新 OSS 构件为 6.2.19；因此不为该不满足利用条件的告警跨 Boot 主版本迁移。Maven 全量测试 1647 项、0 断言失败但 6 项有 Testcontainers 端口/生命周期错误；因此测试套件未全绿，不能宣称依赖全无漏洞。
+- **依赖扫描已覆盖 Web 锁文件、Graph 本地 venv 与 Maven 树，但仍有未修复条件风险：** npm 官方审计为 0 项；Graph OSV 扫描 220 个精确版本发现 `diskcache 5.6.3`、`ragas 0.4.3` 两个可选评测依赖受影响，它们不进 Docker 运行镜像且目前无上游修复版。Maven 初始扫描发现多项运行依赖受影响，已把 Spring Boot/springdoc 及 Jackson、Tomcat、PostgreSQL JDBC、Log4j、Commons Lang 升至已核对的补丁版本；更新后 140 个 Maven 坐标仅剩 Spring MVC SSE + view fragment 条件告警，本项目没有 view fragment 用法。Spring 官方只把 Spring 6.2.20 修复版提供给 Enterprise，当前 Maven Central 最新 OSS 构件为 6.2.19；因此不为该不满足利用条件的告警跨 Boot 主版本迁移。当前完整 Maven 套件已通过，但依赖扫描仍有上述条件告警，不能宣称依赖全无漏洞。
 - 生产 Piston 私网 ACL/代理鉴权、生产 CORS/Nginx 运行态及公网安全未验证；本轮不访问 ECS。
 - 全仓历史格式债务与命名一致性尚未做破坏性批量整理；仅清理经过验证且本任务触及的范围。
 - 课件 PDF.js 实际渲染、`ArrowLeft`/`ArrowRight`、`End` 到末页、后端批量标已读及重载后进度保留均已做浏览器验证。教师/学生任务发布、判题、证据提交、跳过及 1/1 看板回流已通过真实浏览器闭环。教师补救包长证据列表先在 320px 复现内容宽度 838px、面板可视宽 276px 的溢出，现窄屏改为单列换行；使用 API fixture 的真实浏览器布局断言在 320px/375px 均通过，不调用生成模型。
-- 管理台本次 CSS/审核快捷操作改动尚未做浏览器截图和真实管理员账号联测；已有此前的真实审核通过/驳回 API 闭环。
-- 存档超限过滤器已有隔离 MVC 测试及 `PublicReadAccessTest` 完整 SecurityFilterChain 联测（测试主体经 mock JWT parser 解析）；签名校验本身未在该联测覆盖。全量 Maven suite 未运行，生产 Nginx 部署态仍未核验。
+- 管理台本次 CSS/审核快捷操作改动尚未做最新浏览器截图；已有真实管理员浏览器审核通过/驳回、用户停用/恢复 API 闭环，以及当前快照定向前端回归。像素级 Alethicode 对照仍未验证，但不阻断现有管理操作。
+- 存档超限过滤器已有隔离 MVC 测试及 `PublicReadAccessTest` 完整 SecurityFilterChain 联测（测试主体经 mock JWT parser 解析）；签名校验本身未在该联测覆盖。全量 Maven suite 已通过；生产 Nginx 部署态仍未核验。
 - Loop Runtime 原始请求体曾可到 12 MiB，Jackson 先绑定成 `JsonNode`，Controller 才做单字段 1 MiB 检查，且账号限流更晚；现复用绑定前过滤器，按 endpoint 聚合限制为 3 MiB（保留 tool-call 两个各 1 MiB 字段），两层 Nginx 同值。旧行为回归先对 3 MiB+ 请求返回 200，修复后安全链对 Agent Runtime/Loop Runtime 路由在 MVC 前返回 413；相关 Maven 8/8、Nginx 契约、两份 Nginx 1.27 语法检查通过。最大 12 MiB 的实际内存影响未压测。
-- 性能仍后置；既有本地采样仅覆盖建局 API/渲染，不覆盖完整 Graph 生成、Piston 判题与实际远征通关 P50/P95。
+- 本轮已补建局、远征状态与 Twin state 的本地 API P50/P95 及旧采样比较；完整 Graph 生成、Piston 判题、Boss 通关总耗时、真实用户负载与线上性能仍未测。
 - 最新完整路线目标 KC 为 KC-004；之前 KC-008 三阶段、KC-001 刷新恢复记录仍作为独立历史证据。题库审核题属于课程迁移种子，不是临时账号数据。
 
 ## 下一步顺序
 
-1. 普通学生浏览器 Boss 三阶段通关与 Twin 回流已在远征学习事件事务修复后重新验证；不要重复注册账号或重跑通关。当前浏览器闭环使用同 KC 课程题库客观题、预生成隔离为 IDLE，因此未覆盖实时 Graph 预生成。
-2. Tutor TRANSFER 浏览器闭环已验证，不重复注册账号或重跑；继续剩余非 AI 写路由与包装器/多行日志审计。
-3. 继续剩余非 AI 写路由及包装器/多行日志审计。当前已补章测/小测 `start`/`submit` 账号限额及 6 MiB 绑定前上限，也修复已确认的其他请求体超限、远征写限流、访问日志与 ASR multipart 解析问题；112 个写路由的全量逐项审计仍未完成。公网注册同 IP 限速已加，代理池与生产运行态不在本地可验证范围。
-4. 不重复发起 DeepSeek 生成。AI 候选入库需有稳定审核主体；KC-039 仅在约束或模型状态变化后再单次复核。
-5. 等待足够真实样本完成 Twin 7 日延迟对照；BKT/未来路线概率按精简方案暂缓。完整远征生成、判题和通关性能最后测。
+1. Boss 三阶段真实浏览器通关与 Twin 回流已在事务修复后验证；Tutor AutoGen 文本/图片链路、TRANSFER 正式判题回流和管理后台真实 API 操作也已有实际浏览器证据。按用户要求不重复跑这些流程或调用模型。
+2. 当前指定的核心功能没有已知阻断。若继续扩展验收，再处理完整 112 个写路由/日志审计、当前管理台截图比对、Twin 7 日延迟对照，以及 Graph/Piston/Boss 端到端性能。
+3. 生产 Piston ACL、生产代理部署和 DeepSeek 供应商账单属于外部验证项，不作为本地 Web 功能可用性的结论。

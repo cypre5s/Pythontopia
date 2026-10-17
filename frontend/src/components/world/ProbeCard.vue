@@ -65,7 +65,7 @@ function dismiss(): void {
 
 <template>
   <div
-    v-if="activeProbe"
+    v-if="activeProbe && !props.hold && !dialog.visible"
     class="pyt-probe"
     role="dialog"
     aria-modal="true"

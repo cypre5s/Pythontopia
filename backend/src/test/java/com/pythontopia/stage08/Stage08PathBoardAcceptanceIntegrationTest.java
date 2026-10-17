@@ -78,7 +78,9 @@ class Stage08PathBoardAcceptanceIntegrationTest {
     ResponseEntity<Map> planResponse =
         restTemplate.exchange(
             "/api/learner/path/plan", HttpMethod.POST, bearer(token, null), Map.class);
-    assertThat(planResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(planResponse.getStatusCode())
+        .as("planning response: %s", planResponse.getBody())
+        .isEqualTo(HttpStatus.OK);
     Number generatedQuestCount = (Number) planResponse.getBody().get("generatedQuestCount");
     assertThat(generatedQuestCount.intValue()).isEqualTo(3);
 
@@ -110,6 +112,23 @@ class Stage08PathBoardAcceptanceIntegrationTest {
     assertThat(today.getBody()).isNotEmpty();
     Map<String, Object> firstQuest = (Map<String, Object>) today.getBody().get(0);
     Long firstQuestId = ((Number) firstQuest.get("id")).longValue();
+    Long resourceId =
+        jdbcTemplate.queryForObject(
+            """
+            INSERT INTO learning_resource (
+              user_id, pack_id, kc_codes, type, title, content_format, content
+            ) VALUES (?, 43, ARRAY['PY43-KC-001']::text[], 'HANDOUT', 'stage08-resource',
+              'MARKDOWN', '{}'::jsonb) RETURNING id
+            """,
+            Long.class,
+            userId);
+    ResponseEntity<Map> consumed =
+        restTemplate.exchange(
+            "/api/workshop/resources/" + resourceId + "/consumptions",
+            HttpMethod.POST,
+            bearer(token, null),
+            Map.class);
+    assertThat(consumed.getStatusCode()).isEqualTo(HttpStatus.OK);
 
     ResponseEntity<Map> started =
         restTemplate.exchange(
@@ -124,7 +143,7 @@ class Stage08PathBoardAcceptanceIntegrationTest {
         restTemplate.exchange(
             "/api/quests/" + firstQuestId + "/complete",
             HttpMethod.POST,
-            bearer(token, Map.of("note", "done")),
+            bearer(token, Map.of("resourceId", resourceId)),
             Map.class);
     assertThat(completed.getStatusCode()).isEqualTo(HttpStatus.OK);
     assertThat(completed.getBody().get("status")).isEqualTo("COMPLETED");
@@ -154,7 +173,6 @@ class Stage08PathBoardAcceptanceIntegrationTest {
             Integer.class,
             userId);
     assertThat(directReadRewards).isZero();
-
     graphServer.verify(Duration.ofSeconds(2));
   }
 
@@ -226,7 +244,7 @@ class Stage08PathBoardAcceptanceIntegrationTest {
                         "day_index", 7,
                         "order_in_day", 1,
                         "kc_code", "PY43-KC-001",
-                        "node_type", "PROFILE_UPDATE",
+                        "node_type", "FIX_BUG",
                         "reason_summary", "回顾画像",
                         "evidence_summary", "ok")),
             "safety_result", Map.of("passed", true, "reasons", List.of()),

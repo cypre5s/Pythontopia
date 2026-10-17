@@ -277,6 +277,21 @@ describe('DialogTree.vue', () => {
     expect(closeSpy).toHaveBeenCalledTimes(1);
   });
 
+  it('stops Escape after closing so HUD shortcuts do not open another modal', () => {
+    const store = primeStore();
+    const globalKeydown = vi.fn();
+    const wrapper = mount(DialogTree, { attachTo: document.body });
+    window.addEventListener('keydown', globalKeydown);
+    const event = new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true });
+
+    wrapper.find('.dialog-overlay').element.dispatchEvent(event);
+
+    expect(store.visible).toBe(false);
+    expect(globalKeydown).not.toHaveBeenCalled();
+    window.removeEventListener('keydown', globalKeydown);
+    wrapper.unmount();
+  });
+
   it('renders only visible choices and clicks them by their raw index', async () => {
     // 真实 foreman_bug 树：greet 的 4 个选项里，0「上次失败的提交…」要求 has_failed_submission，
     // 2「我没失败过」要求 no_failed_submission —— 二者互斥，UI 任何时候只该出现其中一个。

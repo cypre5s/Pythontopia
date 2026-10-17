@@ -219,7 +219,7 @@ function onPortraitError(event: Event): void {
       aria-modal="true"
       tabindex="-1"
       @click.self="onAdvance"
-      @keydown.esc.prevent="onEscape"
+      @keydown.esc.stop.prevent="onEscape"
     >
       <div class="dialog-frame pyt-pixel-text">
         <aside

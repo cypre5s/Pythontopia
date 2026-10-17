@@ -3,6 +3,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useHudStore, type HudQuickSlot, bgmLabel } from '@stores/hud';
+import { useDialogStore } from '@stores/dialog';
 import { useWorldStore } from '@stores/world';
 import { useToastStore } from '@stores/toast';
 import { useMainlineStore, clampStars } from '@stores/mainline';
@@ -32,6 +33,7 @@ const SLOTS: readonly SlotDescriptor[] = [
 ] as const;
 
 const hud = useHudStore();
+const dialog = useDialogStore();
 const route = useRoute();
 const router = useRouter();
 const audio = useAudio();
@@ -253,7 +255,7 @@ function onKey(event: KeyboardEvent): void {
 
   const canvasOwned = isCanvasFocused(event.target);
 
-  // ESC 优先级链：暂停菜单 → 轮盘 → 设置 → 面板 → 打开暂停菜单
+  // ESC 优先级链：暂停菜单 → 轮盘 → 设置 → 面板 / 对话 → 打开暂停菜单
   if (event.key === 'Escape') {
     event.preventDefault();
     if (gameSettings.pauseMenuOpen) { gameSettings.closePauseMenu(); return; }
@@ -261,6 +263,7 @@ function onKey(event: KeyboardEvent): void {
     if (hud.settingsOpen) { hud.closeSettings(); return; }
     if (guide.open) { guide.closePanel(); return; }
     if (hud.activeSlot) { hud.closeAll(); return; }
+    if (dialog.visible || dialog.isOpen) { dialog.close(); return; }
     gameSettings.openPauseMenu();
     return;
   }
