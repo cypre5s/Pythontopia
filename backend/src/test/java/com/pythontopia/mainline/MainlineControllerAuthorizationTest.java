@@ -14,6 +14,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.StudentWriteThrottle;
+import com.pythontopia.mainline.dto.ChapterTestSubmitRequest;
 import com.pythontopia.mainline.dto.EndlessSummaryRequest;
 import com.pythontopia.mainline.dto.ExampleDoneRequest;
 import com.pythontopia.mainline.dto.PageReadRequest;
@@ -25,6 +26,7 @@ import com.pythontopia.mainline.test.ChapterQuizController;
 import com.pythontopia.mainline.test.ChapterTestController;
 import com.pythontopia.mainline.test.ChapterTestService;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -32,12 +34,12 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.ContextConfiguration;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
-import org.springframework.http.HttpStatus;
 
 @ExtendWith(SpringExtension.class)
 @ContextConfiguration(classes = MainlineControllerAuthorizationTest.TestConfiguration.class)
@@ -99,9 +101,7 @@ class MainlineControllerAuthorizationTest {
                 new EndlessSummaryRequest(1, "123e4567-e89b-12d3-a456-426614174000"), student));
     assertWriteBudgetRejected(() -> mainlineController.recoveryErrorbook(1, student));
     assertWriteBudgetRejected(
-        () ->
-            practiceController.answer(
-                1, 1, new PracticeAnswerRequest(List.of("A")), student));
+        () -> practiceController.answer(1, 1, new PracticeAnswerRequest(List.of("A")), student));
 
     verify(studentWriteThrottle, times(6)).tryAcquire(7L, 1);
     verifyNoInteractions(mainlineService, mainlineRecoveryService, practiceService);
@@ -120,7 +120,7 @@ class MainlineControllerAuthorizationTest {
   void teacherCannotStartStudentChapterTest() {
     assertThatThrownBy(() -> chapterTestController.start(1, principal(Role.TEACHER)))
         .isInstanceOf(AccessDeniedException.class);
-    verifyNoInteractions(chapterTestService);
+    verifyNoInteractions(chapterTestService, studentWriteThrottle);
   }
 
   @Test
@@ -128,6 +128,22 @@ class MainlineControllerAuthorizationTest {
   void teacherCannotStartStudentChapterQuiz() {
     assertThatThrownBy(() -> chapterQuizController.start(1, principal(Role.TEACHER)))
         .isInstanceOf(AccessDeniedException.class);
+    verifyNoInteractions(chapterTestService, studentWriteThrottle);
+  }
+
+  @Test
+  @WithMockUser(roles = "STUDENT")
+  void chapterAssessmentStartsAndSubmissionsUseAccountBudget() {
+    when(studentWriteThrottle.tryAcquire(7L, 1)).thenReturn(false);
+    CurrentUserPrincipal student = principal(Role.STUDENT);
+    ChapterTestSubmitRequest request = new ChapterTestSubmitRequest(Map.of(), null);
+
+    assertWriteBudgetRejected(() -> chapterTestController.start(1, student));
+    assertWriteBudgetRejected(() -> chapterTestController.submit(1, 1, request, student));
+    assertWriteBudgetRejected(() -> chapterQuizController.start(1, student));
+    assertWriteBudgetRejected(() -> chapterQuizController.submit(1, 1, request, student));
+
+    verify(studentWriteThrottle, times(4)).tryAcquire(7L, 1);
     verifyNoInteractions(chapterTestService);
   }
 

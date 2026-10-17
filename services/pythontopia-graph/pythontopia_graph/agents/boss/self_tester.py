@@ -28,6 +28,9 @@ FORBIDDEN_IMPORTS = (
     "ssl",
     "importlib",
 )
+FORBIDDEN_DYNAMIC_ACCESS = frozenset(
+    {"__builtins__", "compile", "eval", "exec", "getattr", "globals", "locals", "vars"}
+)
 
 DEFAULT_TIMEOUT_SEC = 5
 DEBUG_SNIPPET_RE = re.compile(
@@ -118,7 +121,9 @@ def _self_test_debug_snippet(problem: BossProblem, timeout_sec: int) -> ReviewVe
     snippet = re.sub(r"^```(?:python)?\s*", "", snippet, flags=re.IGNORECASE).strip()
     snippet = re.sub(r"\s*```$", "", snippet).strip()
     if not snippet:
-        return _debug_failure("debug_snippet_missing", "debug statement must include an error-code section")
+        return _debug_failure(
+            "debug_snippet_missing", "debug statement must include an error-code section"
+        )
 
     forbidden = _scan_forbidden_imports(snippet)
     if forbidden:
@@ -156,6 +161,7 @@ def _debug_failure(code: str, message: str) -> ReviewVerdict:
 def _scan_forbidden_imports(source: str) -> list[str]:
     import ast
 
+    # shortcut: deny-lists may miss new paths; use an AST allowlist before relying on syntax policy.
     try:
         tree = ast.parse(source)
     except SyntaxError as exc:
@@ -170,11 +176,20 @@ def _scan_forbidden_imports(source: str) -> list[str]:
             mod = node.module or ""
             if _matches(mod):
                 forbidden.append(mod)
-            if any(alias.name == "__import__" for alias in node.names):
-                forbidden.append("__import__")
+            forbidden.extend(
+                alias.name
+                for alias in node.names
+                if alias.name == "__import__" or alias.name in FORBIDDEN_DYNAMIC_ACCESS
+            )
         elif isinstance(node, ast.Name) and node.id == "__import__":
             forbidden.append(node.id)
-        elif isinstance(node, ast.Attribute) and node.attr == "__import__":
+        elif isinstance(node, ast.Name) and node.id in FORBIDDEN_DYNAMIC_ACCESS:
+            forbidden.append(node.id)
+        elif isinstance(node, ast.Attribute) and (
+            node.attr in FORBIDDEN_DYNAMIC_ACCESS
+            or (node.attr.startswith("__") and node.attr.endswith("__"))
+        ):
+            # Dunder reflection can recover builtins even when direct imports are filtered.
             forbidden.append(node.attr)
     return forbidden
 

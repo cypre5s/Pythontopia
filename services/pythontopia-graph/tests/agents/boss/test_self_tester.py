@@ -146,6 +146,10 @@ def test_forbidden_imports_rejected(code: str) -> None:
         "__import__('os').system('true')",
         "from builtins import __import__ as load\nload('os').getcwd()",
         "import importlib\nimportlib.import_module('os')",
+        "builtins_ref = __builtins__\nload = getattr(builtins_ref, '__import__')\nload('os').system('id')",
+        "load = globals()['__builtins__']['__import__']\nload('os').system('id')",
+        "eval(\"__import__('os').system('id')\")",
+        "import builtins\nbuiltins.getattr(builtins, '__import__')('os').system('id')",
     ],
 )
 def test_dynamic_imports_are_rejected_before_execution(
@@ -153,6 +157,13 @@ def test_dynamic_imports_are_rejected_before_execution(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.delenv("PYT_PISTON_URL", raising=False)
+
+    def forbidden_sandbox_call(*args: object, **kwargs: object) -> None:
+        pytest.fail("forbidden dynamic access must be rejected before reaching Piston")
+
+    monkeypatch.setattr(
+        "pythontopia_graph.agents.boss.self_tester.run_python", forbidden_sandbox_call
+    )
     verdict = self_test_problem(_make(code, [TestCase("", "")]))
 
     assert not verdict.passed

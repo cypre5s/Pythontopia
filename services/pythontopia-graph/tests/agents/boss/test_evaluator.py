@@ -85,6 +85,34 @@ def test_importing_builtin_importer_under_alias_is_rejected_before_sandbox(
     assert "__import__" in result.runtime_error
 
 
+@pytest.mark.parametrize(
+    "code",
+    [
+        "builtins_ref = __builtins__\nload = getattr(builtins_ref, '__import__')\nload('os').system('id')",
+        "load = globals()['__builtins__']['__import__']\nload('os').system('id')",
+        "eval(\"__import__('os').system('id')\")",
+        "import builtins\nbuiltins.getattr(builtins, '__import__')('os').system('id')",
+    ],
+)
+def test_reflective_import_is_rejected_before_sandbox(
+    code: str,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv("PYT_PISTON_URL", raising=False)
+
+    def forbidden_sandbox_call(*args: object, **kwargs: object) -> None:
+        pytest.fail("forbidden dynamic access must be rejected before reaching Piston")
+
+    monkeypatch.setattr(
+        "pythontopia_graph.agents.boss.evaluator.run_python", forbidden_sandbox_call
+    )
+    result = evaluate_student_code(code, [_tc("", "")])
+
+    assert not result.passed
+    assert result.runtime_error is not None
+    assert "forbidden_imports" in result.runtime_error
+
+
 def test_syntax_error_is_reported_as_first_failure() -> None:
     code = "this is not python"
     cases = [_tc("", "ignored", sample=True), _tc("", "x"), _tc("", "y")]
@@ -158,7 +186,9 @@ def test_unavailable_piston_fails_closed_without_local_fallback(
 
 
 def test_build_failure_hint_uses_runtime_error_first() -> None:
-    result = evaluate_student_code("import socket\nprint(0)", [_tc("", "0", sample=True), _tc("", "0"), _tc("", "0")])
+    result = evaluate_student_code(
+        "import socket\nprint(0)", [_tc("", "0", sample=True), _tc("", "0"), _tc("", "0")]
+    )
     hint = build_failure_hint(result)
     assert hint is not None
     assert "forbidden_imports" in hint

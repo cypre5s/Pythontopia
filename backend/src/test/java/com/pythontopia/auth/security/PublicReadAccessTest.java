@@ -47,6 +47,7 @@ class PublicReadAccessTest {
   private static final int MAX_AUTH_REQUEST_BYTES = 4 * 1024;
   private static final int MAX_TUTOR_ASK_REQUEST_BYTES = 17 * 1024 * 1024;
   private static final int MAX_WORKSHOP_RESOURCE_CHECK_REQUEST_BYTES = 16 * 1024;
+  private static final int MAX_CHAPTER_ASSESSMENT_SUBMIT_REQUEST_BYTES = 6 * 1024 * 1024;
   private static final int MAX_INTERNAL_TUTOR_CHECKPOINT_REQUEST_BYTES = 3 * 1024 * 1024;
 
   @Autowired private MockMvc mockMvc;
@@ -283,6 +284,32 @@ class PublicReadAccessTest {
                 .content(new byte[MAX_WORKSHOP_RESOURCE_CHECK_REQUEST_BYTES + 1]))
         .andExpect(status().isPayloadTooLarge())
         .andExpect(jsonPath("$.code").value("WORKSHOP_RESOURCE_CHECK_REQUEST_TOO_LARGE"));
+  }
+
+  @Test
+  void chapterAssessmentSubmitBodyLimitRunsAfterAuthenticationAndBeforeMvcBinding()
+      throws Exception {
+    CurrentUserPrincipal principal = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
+    when(jwtService.parse("signed-test-token")).thenReturn(principal);
+    when(userRepository.findById(7L))
+        .thenReturn(
+            Optional.of(
+                new UserAccount(
+                    7L, "student", "Student", "hash", null, Role.STUDENT, "ACTIVE", 0)));
+
+    for (String route :
+        List.of(
+            "/api/mainline/chapters/1/test/123/submit",
+            "/api/mainline/chapters/1/quiz/123/submit")) {
+      mockMvc
+          .perform(
+              post(route)
+                  .header(HttpHeaders.AUTHORIZATION, "Bearer signed-test-token")
+                  .contentType(MediaType.APPLICATION_JSON)
+                  .content(new byte[MAX_CHAPTER_ASSESSMENT_SUBMIT_REQUEST_BYTES + 1]))
+          .andExpect(status().isPayloadTooLarge())
+          .andExpect(jsonPath("$.code").value("CHAPTER_ASSESSMENT_SUBMIT_REQUEST_TOO_LARGE"));
+    }
   }
 
   @Test

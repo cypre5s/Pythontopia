@@ -31,6 +31,8 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
   public static final int MAX_WORKSHOP_CHAT_HISTORY_BYTES = 128 * 1024;
   public static final int MAX_JUDGE_SUBMISSION_BYTES = 64 * 1024;
   public static final int MAX_EXPEDITION_RUN_REQUEST_BYTES = 64 * 1024;
+  // 100 answers × 8192 characters fit under this bound even with worst-case JSON escaping.
+  public static final int MAX_CHAPTER_ASSESSMENT_SUBMIT_REQUEST_BYTES = 6 * 1024 * 1024;
   public static final int MAX_TUTOR_ASK_REQUEST_BYTES = 17 * 1024 * 1024;
   public static final int MAX_TUTOR_WORKFLOW_RUN_REQUEST_BYTES = 128 * 1024;
   public static final int MAX_TUTOR_WORKFLOW_FEEDBACK_REQUEST_BYTES = 16 * 1024;
@@ -57,6 +59,8 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
               + "(?:retry-submit|variant-submit))$");
   private static final String WORKSHOP_CHAT_HISTORY_PATH = "/api/workshop/chat-history/turns";
   private static final String EXPEDITION_RUN_PATH = "/api/world/expedition/run";
+  private static final Pattern CHAPTER_ASSESSMENT_SUBMIT_PATH =
+      Pattern.compile("^/api/mainline/chapters/[1-7]/(?:test|quiz)/[0-9]+/submit$");
   private static final String TUTOR_ASK_PATH = "/api/tutor/ask";
   private static final String TUTOR_WORKFLOW_RUN_PATH = "/api/tutor/workflow/runs";
   private static final Pattern TUTOR_WORKFLOW_FEEDBACK_PATH =
@@ -159,6 +163,9 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
     if (EXPEDITION_RUN_PATH.equals(requestPath)) {
       return MAX_EXPEDITION_RUN_REQUEST_BYTES;
     }
+    if (CHAPTER_ASSESSMENT_SUBMIT_PATH.matcher(requestPath).matches()) {
+      return MAX_CHAPTER_ASSESSMENT_SUBMIT_REQUEST_BYTES;
+    }
     if (TUTOR_ASK_PATH.equals(requestPath)) {
       return MAX_TUTOR_ASK_REQUEST_BYTES;
     }
@@ -211,6 +218,8 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
     boolean judgeSubmissionRequest = JUDGE_SUBMISSION_PATH.matcher(requestPath).matches();
     boolean workshopChatHistoryRequest = WORKSHOP_CHAT_HISTORY_PATH.equals(requestPath);
     boolean expeditionRunRequest = EXPEDITION_RUN_PATH.equals(requestPath);
+    boolean chapterAssessmentSubmitRequest =
+        CHAPTER_ASSESSMENT_SUBMIT_PATH.matcher(requestPath).matches();
     boolean tutorAskRequest = TUTOR_ASK_PATH.equals(requestPath);
     boolean tutorWorkflowRunRequest = TUTOR_WORKFLOW_RUN_PATH.equals(requestPath);
     boolean tutorWorkflowFeedbackRequest =
@@ -243,6 +252,9 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
     } else if (expeditionRunRequest) {
       errorCode = "EXPEDITION_SNAPSHOT_REQUEST_TOO_LARGE";
       errorMessage = "Expedition run request body cannot exceed 64 KiB";
+    } else if (chapterAssessmentSubmitRequest) {
+      errorCode = "CHAPTER_ASSESSMENT_SUBMIT_REQUEST_TOO_LARGE";
+      errorMessage = "Chapter assessment submission cannot exceed 6 MiB";
     } else if (tutorAskRequest) {
       errorCode = "TUTOR_ASK_REQUEST_TOO_LARGE";
       errorMessage = "Tutor ask request body cannot exceed 17 MiB";

@@ -406,6 +406,18 @@ require_body_limit_location_block \
   "64k" \
   "http://backend:18080" \
   "前端 Nginx 将远征存档请求体限制为 64 KiB 并正确代理"
+require_body_limit_location_block \
+  "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  'location ~ ^/api/mainline/chapters/[1-7]/(?:test|quiz)/[0-9]+/submit$' \
+  "6m" \
+  "http://pythontopia_frontend" \
+  "边缘 Nginx 将章测提交请求体限制为 6 MiB 并正确代理"
+require_body_limit_location_block \
+  "${FRONTEND_NGINX}" \
+  'location ~ ^/api/mainline/chapters/[1-7]/(?:test|quiz)/[0-9]+/submit$' \
+  "6m" \
+  "http://backend:18080" \
+  "前端 Nginx 将章测提交请求体限制为 6 MiB 并正确代理"
 require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "证据快照限速只接收 POST 快照请求的来源 IP" \
   'map[[:space:]]+"\$request_method:\$uri"[[:space:]]+\$pythontopia_evidence_snapshot_limit_key[[:space:]]*\{'

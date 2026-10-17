@@ -57,6 +57,7 @@ class HealthResponse(BaseModel):
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 logging.getLogger("autogen_core").setLevel(logging.WARNING)
 logging.getLogger("autogen_core.events").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.WARNING)
 
 LOG = logging.getLogger(__name__)
 _TRUTHY = frozenset({"1", "true", "yes", "on"})

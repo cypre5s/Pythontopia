@@ -4,7 +4,7 @@
  * 覆盖真实链路：
  *   教师创建班级 → 学生加入 → 教师发布带题目证据要求的任务 →
  *   学生公告板领取 → 训练场提交 AC → 公告板提交完成证据 →
- *   教师看板刷新后看到任务 1/1 完成。
+ *   教师看板刷新后看到任务 1/1 完成；另验学生跳过今日资源任务。
  */
 
 import fs from 'node:fs';
@@ -140,7 +140,9 @@ test('教师创建班级、发布任务，学生完成证据后教师看板同�
 
     await teacher.page.reload({ waitUntil: 'domcontentloaded' });
     await expect(teacher.page.getByTestId('teacher-detail')).toBeVisible({ timeout: 60_000 });
-    await teacher.page.getByRole('button', { name: /^成员$/ }).click();
+    const membersTab = teacher.page.getByRole('tab', { name: '成员', exact: true });
+    await expect(membersTab, '成员 tab 未渲染').toBeVisible();
+    await membersTab.click();
     await expect(teacher.page.getByTestId('members-tab'), '成员 tab 未渲染').toBeVisible();
     await expect(
       teacher.page.getByTestId('members-tab'),
@@ -148,7 +150,7 @@ test('教师创建班级、发布任务，学生完成证据后教师看板同�
     ).toContainText(studentSession.user.displayName, { timeout: 30_000 });
     await evidence(teacher.page, '02-teacher-member-visible');
 
-    await teacher.page.getByRole('button', { name: /^任务$/ }).click();
+    await teacher.page.getByRole('tab', { name: '任务', exact: true }).click();
     const questTab = teacher.page.getByTestId('quest-tab');
     await expect(questTab, '任务 tab 未渲染').toBeVisible();
     await questTab.locator('input[placeholder="例如 第 2 章随堂练习"]').fill(questTitle);
@@ -174,7 +176,7 @@ test('教师创建班级、发布任务，学生完成证据后教师看板同�
     await evidence(teacher.page, '03-teacher-published-quest');
 
     for (const tabName of ['KC 热力图', '高频误区', '资源使用', '直播'] as const) {
-      await teacher.page.getByRole('button', { name: tabName }).click();
+      await teacher.page.getByRole('tab', { name: tabName, exact: true }).click();
       await expect(teacher.page.getByTestId('teacher-detail')).not.toContainText('看板加载失败');
     }
     await expect(teacher.page.getByTestId('classroom-live-tab'), '直播 tab 未渲染').toBeVisible();
@@ -229,13 +231,44 @@ test('教师创建班级、发布任务，学生完成证据后教师看板同�
       waitUntil: 'domcontentloaded',
     });
     await expect(teacher.page.getByTestId('teacher-detail')).toBeVisible({ timeout: 60_000 });
-    await teacher.page.getByRole('button', { name: /^任务$/ }).click();
+    await teacher.page.getByRole('tab', { name: '任务', exact: true }).click();
     const finalQuestTab = teacher.page.getByTestId('quest-tab');
     await expect(finalQuestTab, '教师任务 tab 未渲染').toBeVisible();
     await expect(finalQuestTab, '教师任务列表未同步学生完成率 1/1').toContainText(/1\/1|100%/, {
       timeout: 60_000,
     });
     await evidence(teacher.page, '07-teacher-completion-synced');
+
+    const skipQuestTitle = `E2E 公告板跳过任务 ${classSuffix}`;
+    const skipQuestPublish = await request.post(
+      `${BASE_URL}/api/teacher/classrooms/${classroom.classroomId}/quests`,
+      {
+        headers: { Authorization: `Bearer ${teacherSession.token}` },
+        data: {
+          title: skipQuestTitle,
+          description: '浏览器验收：确认学生可以跳过今日任务。',
+          kcCodes: ['PY43-KC-005'],
+          targetResourceType: 'READING',
+          dueDate: futureDate(0),
+        },
+      },
+    );
+    expect(skipQuestPublish.ok(), `发布跳过路径任务失败：HTTP ${skipQuestPublish.status()}`).toBe(true);
+
+    await student.page.goto(`${BASE_URL}/board?tab=today`, { waitUntil: 'domcontentloaded' });
+    await expect(student.page.getByTestId('today-tab'), '今日任务页签未渲染').toBeVisible();
+    const skipQuest = student.page.locator('.quest-card', { hasText: skipQuestTitle }).first();
+    await expect(skipQuest, '今日任务列表未显示新发布的可跳过任务').toBeVisible({ timeout: 60_000 });
+    const skippedResponse = student.page.waitForResponse(
+      (response) => /\/api\/quests\/\d+\/skip(?:\?|$)/.test(response.url())
+        && response.request().method() === 'POST',
+      { timeout: 60_000 },
+    );
+    await skipQuest.getByRole('button', { name: '跳过' }).click();
+    const skipped = await skippedResponse;
+    expect(skipped.ok(), `跳过任务接口失败：HTTP ${skipped.status()}`).toBe(true);
+    expect(((await skipped.json()) as { status: string }).status).toBe('SKIPPED');
+    await expect(skipQuest, '已跳过任务仍留在今日待办').toHaveCount(0);
   } finally {
     await student.context.close();
     await teacher.context.close();

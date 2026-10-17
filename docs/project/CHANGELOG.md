@@ -1,5 +1,27 @@
 # Changelog
 
+## 2026-10-17
+
+- 主线课件现在有真实浏览器回归覆盖：检查原始 PDF canvas 已绘制，验证 `ArrowRight`/`ArrowLeft` 翻页、用 `End` 到末页、真实提交批量已读，并确认重载后进度保留。方向键场景 1/1（7.2 秒），临时账号及直接外键引用已清理；未触发模型或 Piston。
+- 本地 Piston 判题 400 已定位为 Java 21 客户端发出不兼容的 h2c Upgrade；Piston 专用客户端改用 HTTP/1.1 请求工厂并保留超时。wire 回归 RED/GREEN；普通学生浏览器 1/1 完成源题 AC、Tutor AC_REVIEW/TRANSFER、同 KC 审核迁移题正式 AC，并在 Twin state 确认 `PRACTICE_PASS`。临时账号精确删除且全部直接外键残留为 0。
+- 教师班级补救包的长证据页此前会在窄屏超出面板；改为单列并允许证据文本换行，API fixture 浏览器布局检查在 320px 和 375px 均无面板/页面溢出。
+- 前端全量 Vitest 新运行 279 个文件、2,653 项通过；typecheck 与全仓 ESLint 通过。
+- 章测与小测的开始/提交操作现在使用账号级写入额度；提交请求在 JSON 绑定前限制为 6 MiB，边缘与前端 Nginx 同步。AI 试卷准备仍由既有 AI 预算控制。
+- 教师/学生班级任务的真实浏览器闭环通过：建班、入班、发布 KC-005 课程题任务、学生经公告板深链完成题目 AC 并提交证据、教师看板同步为 1/1；今日阅读任务的“跳过”按钮也收到 `SKIPPED` 并从列表移除。修正 E2E 对 ARIA tab 的角色定位；浏览器场景 1/1（5.1 秒），临时账号与班级数据清理后残留为 0。无模型请求，仅一次 Piston 判题。
+
+## 2026-10-17 — 事务修复后复验 Boss 与 Twin 浏览器闭环
+
+- 普通 STUDENT 浏览器完成 10 层服务端远征，11 道同 KC 已审核题库题（选择、判断、填空）全部通过；Boss 三阶段通过并进入 Phaser 胜利态。
+- PostgreSQL 核验 3 条 Boss 通过结算、远征 cleared score 与 3 条 Boss KC `PRACTICE_PASS` 事件；Twin 页面读取目标 KC 的已评估状态和证据。浏览器 0 pageerror、0 HTTP 5xx，未调用 Graph/LLM/DeepSeek。
+- 临时学生账号精确删除且直接 user 外键引用为 0，原有 169 个旧测试账号未动。本次为此前事务修复后的新鲜浏览器复验；实时 Graph 预生成、Tutor TRANSFER 浏览器提交和性能仍未验证。
+
+## 2026-10-17 — 收紧判题反射过滤与 Tutor 迁移提交归属
+
+- Graph 共用 AST 扫描器此前可被 `__builtins__`、`getattr`、`globals` 和 `eval` 等入口绕过；现拒绝动态导入/反射访问及 dunder 属性。旧实现上的 8 个绕过回归均失败，修复后 Boss reference/self-tester 测试 45/45、Ruff 通过。Piston 仍是执行隔离边界；本轮未重测容器隔离或生产 ACL。
+- Memory Brief 请求把学生问题放在 URL 查询参数中，HTTPX INFO 请求日志会记录完整 URL。回归先复现哨兵 query 泄露，再将 HTTPX logger 提到 WARNING；敏感日志测试 2/2 通过，不影响业务请求和响应。
+- Tutor 的迁移题重复提交不再推进普通编码或复盘步骤；两项 RED/GREEN 回归后，`TutorWorkflowSubmissionFeedbackListenerTest` 通过，定向 Spotless 通过。
+- 同步管理台审核表样式契约的最小宽度断言至 1152px，Vitest 8/8 通过。非编程 KC 继续使用同 KC 已审核选择、判断、填空题。
+
 ## 2026-10-17 — 精确回流 Tutor TRANSFER 判题
 
 - 正式提交携带 Tutor 会话 key，服务端校验用户、活跃会话及最新绑定的审核迁移题，只更新发起会话；Graph 的 TRANSFER 计划统一等待正式判题证据。

@@ -11,9 +11,11 @@ import com.pythontopia.common.config.GraphHttpClientProperties;
 import com.pythontopia.common.config.WorkshopHttpClientProperties;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,8 @@ class RestClientConfigTest {
 
   private HttpServer server;
   private final CountDownLatch release = new CountDownLatch(1);
+  private final AtomicReference<String> connectionHeader = new AtomicReference<>();
+  private final AtomicReference<String> upgradeHeader = new AtomicReference<>();
 
   @BeforeEach
   void startSlowServer() throws Exception {
@@ -43,6 +47,17 @@ class RestClientConfigTest {
             Thread.currentThread().interrupt();
           }
           exchange.sendResponseHeaders(204, -1);
+          exchange.close();
+        });
+    server.createContext(
+        "/headers",
+        exchange -> {
+          connectionHeader.set(exchange.getRequestHeaders().getFirst("Connection"));
+          upgradeHeader.set(exchange.getRequestHeaders().getFirst("Upgrade"));
+          exchange.getRequestBody().readAllBytes();
+          byte[] body = "ok".getBytes(StandardCharsets.UTF_8);
+          exchange.sendResponseHeaders(200, body.length);
+          exchange.getResponseBody().write(body);
           exchange.close();
         });
     server.start();
@@ -68,6 +83,19 @@ class RestClientConfigTest {
 
     // 读超时设为 300ms，必须远早于服务端 5s 才触发，证明不会无限挂起。
     assertThat(elapsedMs).isLessThan(3000L);
+  }
+
+  @Test
+  void pistonRestTemplateDoesNotAttemptH2cUpgrade() {
+    RestTemplate restTemplate =
+        new RestClientConfig()
+            .pistonRestTemplate(new RestTemplateBuilder(), 1000, 1000);
+
+    restTemplate.postForObject(
+        "http://127.0.0.1:" + server.getAddress().getPort() + "/headers", "{}", String.class);
+
+    assertThat(upgradeHeader.get()).isNull();
+    assertThat(connectionHeader.get()).doesNotContain("Upgrade");
   }
 
   @Test

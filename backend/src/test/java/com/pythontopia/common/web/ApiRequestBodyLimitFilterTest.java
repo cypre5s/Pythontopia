@@ -163,6 +163,29 @@ class ApiRequestBodyLimitFilterTest {
   }
 
   @Test
+  void chapterAssessmentBodiesAreRejectedBeforeJsonBindingWhenTooLarge() throws Exception {
+    for (String path :
+        List.of(
+            "/api/mainline/chapters/1/test/123/submit",
+            "/api/mainline/chapters/1/quiz/123/submit")) {
+      MockHttpServletRequest request = new MockHttpServletRequest("POST", path);
+      request.setContentType("application/json");
+      request.setContent(
+          new byte[ApiRequestBodyLimitFilter.MAX_CHAPTER_ASSESSMENT_SUBMIT_REQUEST_BYTES + 1]);
+      MockHttpServletResponse response = new MockHttpServletResponse();
+      FilterChain chain = mock(FilterChain.class);
+
+      new ApiRequestBodyLimitFilter(new ObjectMapper().registerModule(new JavaTimeModule()))
+          .doFilter(request, response, chain);
+
+      assertThat(response.getStatus()).isEqualTo(413);
+      assertThat(response.getContentAsString(StandardCharsets.UTF_8))
+          .contains("CHAPTER_ASSESSMENT_SUBMIT_REQUEST_TOO_LARGE");
+      verifyNoInteractions(chain);
+    }
+  }
+
+  @Test
   void expeditionRunSnapshotPutIsRejectedBeforeJsonBindingWhenTooLarge() throws Exception {
     MockHttpServletRequest request = new MockHttpServletRequest("PUT", "/api/world/expedition/run");
     request.setContentType("application/json");

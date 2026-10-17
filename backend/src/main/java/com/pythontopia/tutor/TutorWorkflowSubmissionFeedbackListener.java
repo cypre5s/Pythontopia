@@ -224,8 +224,8 @@ public class TutorWorkflowSubmissionFeedbackListener {
   private boolean submissionMatches(
       ObjectNode activeStep, boolean accepted, boolean transferSubmission) {
     return switch (activeStep.path("expected_evidence").asText()) {
-      case "SUBMISSION_OBSERVED" -> true;
-      case "AC_SUBMISSION" -> accepted;
+      case "SUBMISSION_OBSERVED" -> !transferSubmission;
+      case "AC_SUBMISSION" -> accepted && !transferSubmission;
       case "TRANSFER_ATTEMPT" -> transferSubmission;
       default -> false;
     };

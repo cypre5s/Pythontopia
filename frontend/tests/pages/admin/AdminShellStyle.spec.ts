@@ -74,7 +74,7 @@ describe('admin visual shell contract', () => {
     expect(tableStyles).toContain('position: sticky;');
     expect(reviewSource).toContain('class="review-table__action admin-table__sticky"');
     expect(usersSource).toContain('class="admin-table__sticky"');
-    expect(reviewSource).toContain(':min-width="1100"');
+    expect(reviewSource).toContain(':min-width="1152"');
     expect(reviewStyles).toMatch(/\.review-table td:nth-child\(1\),[\s\S]*?white-space:\s*nowrap;/);
     expect(reviewStyles).toMatch(/\.review-table td:nth-child\(3\),\s*\.review-table td:nth-child\(5\),\s*\.review-table td:nth-child\(7\)\s*\{[^}]*text-align:\s*center;/);
     expect(reviewStyles).toContain('.review-table__action { width: 140px;');

@@ -12,6 +12,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.web.client.RestTemplateBuilder;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.web.client.RestTemplate;
 
 @Configuration
@@ -25,6 +26,8 @@ public class RestClientConfig {
       @Value("${pythontopia.judge.piston.connect-timeout-ms:3000}") int connectTimeoutMs,
       @Value("${pythontopia.judge.piston.read-timeout-ms:10000}") int readTimeoutMs) {
     return builder
+        // Local Piston's Node API rejects the JDK client's h2c Upgrade request.
+        .requestFactory(SimpleClientHttpRequestFactory.class)
         .setConnectTimeout(Duration.ofMillis(connectTimeoutMs))
         .setReadTimeout(Duration.ofMillis(readTimeoutMs))
         .build();

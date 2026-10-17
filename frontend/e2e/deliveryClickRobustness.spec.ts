@@ -207,6 +207,17 @@ test.describe('上线交付深链点击鲁棒性 @delivery-clicks', () => {
     test.setTimeout(180_000);
     await prepareStudent(context, request);
     const report = collectConsole(page);
+    const pdfResponseStatuses: number[] = [];
+    const pageReadResponseStatuses: number[] = [];
+    page.on('response', (response) => {
+      const pathname = new URL(response.url()).pathname;
+      if (/^\/api\/course\/documents\/[0-9]+\/pdf$/.test(pathname)) {
+        pdfResponseStatuses.push(response.status());
+      }
+      if (/^\/api\/mainline\/stages\/[0-9]+\/pages-read$/.test(pathname)) {
+        pageReadResponseStatuses.push(response.status());
+      }
+    });
 
     await page.goto('/mainline-map', { waitUntil: 'domcontentloaded' });
     await expect(page.getByTestId('mainline-map-page')).toBeVisible({ timeout: 60_000 });
@@ -236,10 +247,37 @@ test.describe('上线交付深链点击鲁棒性 @delivery-clicks', () => {
     await expect(page.getByTestId('stage-learn-error')).toHaveCount(0);
 
     const coursewareTab = page.getByTestId('stage-toc-courseware');
-    if (await coursewareTab.isVisible().catch(() => false)) {
-      await coursewareTab.click();
-      await expect(page.getByTestId('stage-learn-page')).toBeVisible();
-    }
+    await expect(coursewareTab).toBeVisible();
+    await coursewareTab.click();
+    await expect(page.getByTestId('stage-learn-page')).toBeVisible();
+    await expect(page.getByTestId('stage-courseware')).toBeVisible();
+    await expect(page.getByTestId('library-pdf-error')).toHaveCount(0);
+    const canvas = page.getByTestId('library-pdf-canvas');
+    await expect(canvas).toBeVisible({ timeout: 30_000 });
+    await expect.poll(() => canvas.evaluate((element) => (element as HTMLCanvasElement).width))
+      .toBeGreaterThan(0);
+    expect(pdfResponseStatuses.some((status) => status === 200 || status === 206))
+      .toBe(true);
+    const pageNumber = page.getByTestId('stage-courseware-pageno');
+    const pdfPage = page.getByTestId('library-pdf-page');
+    await expect(pageNumber).toContainText('第 1 /');
+    await page.keyboard.press('ArrowRight');
+    await expect(pageNumber).toContainText('第 2 /');
+    await expect(pdfPage).toHaveAttribute('data-loading', 'false');
+    await page.keyboard.press('ArrowLeft');
+    await expect(pageNumber).toContainText('第 1 /');
+    await expect(pdfPage).toHaveAttribute('data-loading', 'false');
+    await page.keyboard.press('End');
+    await expect(pdfPage).toHaveAttribute('data-loading', 'false');
+    await page.getByTestId('stage-courseware-mark-all').click();
+    await expect(page.getByTestId('stage-courseware-done')).toBeVisible();
+    expect(pageReadResponseStatuses).toContain(200);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await expect(page.getByTestId('stage-learn-page')).toBeVisible({ timeout: 60_000 });
+    await page.getByTestId('stage-toc-courseware').click();
+    await expect(page.getByTestId('stage-courseware-done')).toBeVisible();
+
     const practiceTab = page.getByTestId('stage-toc-practice');
     if (await practiceTab.isVisible().catch(() => false)) {
       await practiceTab.click();

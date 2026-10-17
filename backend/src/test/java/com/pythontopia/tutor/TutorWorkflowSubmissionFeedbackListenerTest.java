@@ -246,6 +246,106 @@ class TutorWorkflowSubmissionFeedbackListenerTest {
   }
 
   @Test
+  void duplicateTransferSubmissionDoesNotAdvanceTheCodingStep() throws Exception {
+    long transferProblemId = 500L;
+    TutorWorkflowSessionDto transferSession =
+        new TutorWorkflowSessionDto(12L, "wf-7-476-transfer", PROBLEM, "TRANSFER", 8, "ACTIVE");
+    when(repository.findActiveTransferSession(
+            USER, transferSession.sessionKey(), transferProblemId))
+        .thenReturn(Optional.of(transferSession));
+    when(repository.findAgentState(transferSession.id()))
+        .thenReturn(
+            Optional.of(
+                new TutorWorkflowAgentStateDto(
+                    transferSession.id(),
+                    """
+                    {"student_state":{"session_id":"wf-7-476-transfer","user_id":7,
+                      "problem_id":476,"attempt_count":1,"consecutive_errors":0},
+                     "episode_plan":{"plan_id":"plan-1","session_id":"wf-7-476-transfer",
+                       "problem_id":476,"user_id":7,"objective":"finish","trigger_event":"AC_REVIEW",
+                       "revision":2,"current_step_id":"step-coding","status":"ACTIVE",
+                       "steps":[
+                         {"step_id":"step-transfer","event":"TRANSFER","title":"迁移题",
+                          "status":"DONE","expected_evidence":"TRANSFER_ATTEMPT"},
+                         {"step_id":"step-coding","event":"CODING","title":"完成原题",
+                          "status":"ACTIVE","expected_evidence":"SUBMISSION_OBSERVED"},
+                         {"step_id":"step-review","event":"AC_REVIEW","title":"复盘",
+                          "status":"PENDING","depends_on":["step-coding"],
+                          "expected_evidence":"AC_SUBMISSION"}]},
+                     "chat_history":[]}
+                    """,
+                    "{}")));
+
+    listener.onPracticeSucceeded(
+        new LearningEvent.PracticeSucceeded(
+            USER,
+            "PY43-KC-016",
+            transferProblemId,
+            "basic",
+            801L,
+            null,
+            transferSession.sessionKey()));
+
+    ArgumentCaptor<TutorWorkflowRepository.SubmissionFeedbackProjection> projection =
+        ArgumentCaptor.forClass(TutorWorkflowRepository.SubmissionFeedbackProjection.class);
+    verify(repository).persistSubmissionFeedback(eq(transferSession.id()), projection.capture());
+    JsonNode plan = objectMapper.readTree(projection.getValue().stateJson()).path("episode_plan");
+    assertThat(plan.path("current_step_id").asText()).isEqualTo("step-coding");
+    assertThat(plan.path("revision").asInt()).isEqualTo(2);
+    assertThat(plan.path("steps").get(1).path("status").asText()).isEqualTo("ACTIVE");
+    assertThat(plan.path("steps").get(2).path("status").asText()).isEqualTo("PENDING");
+  }
+
+  @Test
+  void transferSubmissionDoesNotAdvanceTheReviewStep() throws Exception {
+    long transferProblemId = 500L;
+    TutorWorkflowSessionDto transferSession =
+        new TutorWorkflowSessionDto(12L, "wf-7-476-transfer", PROBLEM, "TRANSFER", 8, "ACTIVE");
+    when(repository.findActiveTransferSession(
+            USER, transferSession.sessionKey(), transferProblemId))
+        .thenReturn(Optional.of(transferSession));
+    when(repository.findAgentState(transferSession.id()))
+        .thenReturn(
+            Optional.of(
+                new TutorWorkflowAgentStateDto(
+                    transferSession.id(),
+                    """
+                    {"student_state":{"session_id":"wf-7-476-transfer","user_id":7,
+                      "problem_id":476,"attempt_count":2,"consecutive_errors":0},
+                     "episode_plan":{"plan_id":"plan-1","session_id":"wf-7-476-transfer",
+                       "problem_id":476,"user_id":7,"objective":"finish","trigger_event":"AC_REVIEW",
+                       "revision":3,"current_step_id":"step-review","status":"ACTIVE",
+                       "steps":[
+                         {"step_id":"step-transfer","event":"TRANSFER","title":"迁移题",
+                          "status":"DONE","expected_evidence":"TRANSFER_ATTEMPT"},
+                         {"step_id":"step-coding","event":"CODING","title":"完成原题",
+                          "status":"DONE","expected_evidence":"SUBMISSION_OBSERVED"},
+                         {"step_id":"step-review","event":"AC_REVIEW","title":"复盘",
+                          "status":"ACTIVE","expected_evidence":"AC_SUBMISSION"}]},
+                     "chat_history":[]}
+                    """,
+                    "{}")));
+
+    listener.onPracticeSucceeded(
+        new LearningEvent.PracticeSucceeded(
+            USER,
+            "PY43-KC-016",
+            transferProblemId,
+            "basic",
+            802L,
+            null,
+            transferSession.sessionKey()));
+
+    ArgumentCaptor<TutorWorkflowRepository.SubmissionFeedbackProjection> projection =
+        ArgumentCaptor.forClass(TutorWorkflowRepository.SubmissionFeedbackProjection.class);
+    verify(repository).persistSubmissionFeedback(eq(transferSession.id()), projection.capture());
+    JsonNode plan = objectMapper.readTree(projection.getValue().stateJson()).path("episode_plan");
+    assertThat(plan.path("current_step_id").asText()).isEqualTo("step-review");
+    assertThat(plan.path("revision").asInt()).isEqualTo(3);
+    assertThat(plan.path("steps").get(2).path("status").asText()).isEqualTo("ACTIVE");
+  }
+
+  @Test
   void malformedStoredStateDoesNotLogStudentContent() {
     String sentinel = "private-tutor-feedback-log-sentinel";
     when(repository.findActive(USER, PROBLEM)).thenReturn(Optional.of(session));

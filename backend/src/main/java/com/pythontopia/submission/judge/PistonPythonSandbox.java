@@ -77,12 +77,25 @@ public class PistonPythonSandbox implements PythonSandbox {
             Map.entry("compile_timeout", testCase.timeoutMs()),
             Map.entry("compile_cpu_time", testCase.timeoutMs()),
             Map.entry("compile_memory_limit", MEMORY_LIMIT_BYTES));
+    byte[] requestBody;
+    try {
+      requestBody = objectMapper.writeValueAsBytes(request);
+    } catch (com.fasterxml.jackson.core.JsonProcessingException exception) {
+      return systemError("Failed to serialize sandbox request");
+    }
     try {
       JsonNode body =
           restTemplate.execute(
               baseUrl + "/api/v2/execute",
               HttpMethod.POST,
-              restTemplate.httpEntityCallback(entity(request), JsonNode.class),
+              clientHttpRequest -> {
+                clientHttpRequest.getHeaders().setContentType(MediaType.APPLICATION_JSON);
+                clientHttpRequest.getHeaders().setContentLength(requestBody.length);
+                if (!authToken.isBlank()) {
+                  clientHttpRequest.getHeaders().setBearerAuth(authToken);
+                }
+                clientHttpRequest.getBody().write(requestBody);
+              },
               response -> {
                 byte[] responseBody = response.getBody().readNBytes(MAX_RESPONSE_BYTES + 1);
                 if (responseBody.length > MAX_RESPONSE_BYTES) {

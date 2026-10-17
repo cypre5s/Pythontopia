@@ -689,4 +689,10 @@ function back() {
   .cd-nav__list { flex-direction: row; flex-wrap: wrap; }
   .cd-nav__item { width: auto; }
 }
+@media (max-width: 480px) {
+  .cd-remediation__packs { min-width: 0; }
+  .cd-remediation__pack { min-width: 0; grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .cd-remediation__pack > * { min-width: 0; overflow-wrap: anywhere; }
+  .cd-remediation__count, .cd-remediation__pages { white-space: normal; }
+}
 </style>

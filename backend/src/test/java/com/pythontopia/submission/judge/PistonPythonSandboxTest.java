@@ -13,8 +13,11 @@ import static org.springframework.test.web.client.response.MockRestResponseCreat
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.sun.net.httpserver.HttpServer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -70,6 +73,45 @@ class PistonPythonSandboxTest {
     assertThat(result.durationMs()).isEqualTo(18);
     assertThat(result.errorKind()).isNull();
     server.verify();
+  }
+
+  @Test
+  void sendsPistonRequestWithContentLengthInsteadOfChunkedTransfer() throws IOException {
+    AtomicReference<String> contentLength = new AtomicReference<>();
+    AtomicReference<String> transferEncoding = new AtomicReference<>();
+    HttpServer httpServer = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    httpServer.createContext(
+        "/api/v2/execute",
+        exchange -> {
+          contentLength.set(exchange.getRequestHeaders().getFirst("Content-length"));
+          transferEncoding.set(exchange.getRequestHeaders().getFirst("Transfer-encoding"));
+          exchange.getRequestBody().readAllBytes();
+          byte[] response =
+              "{\"run\":{\"stdout\":\"1\\n\",\"stderr\":\"\",\"code\":0,\"signal\":null}}"
+                  .getBytes();
+          exchange.getResponseHeaders().set("Content-Type", "application/json");
+          exchange.sendResponseHeaders(200, response.length);
+          exchange.getResponseBody().write(response);
+          exchange.close();
+        });
+    httpServer.start();
+    try {
+      PistonPythonSandbox realHttpSandbox =
+          new PistonPythonSandbox(
+              new RestTemplate(),
+              new ObjectMapper(),
+              "http://127.0.0.1:" + httpServer.getAddress().getPort(),
+              "3.11.9",
+              "");
+
+      SandboxRunResult result = realHttpSandbox.run("print(1)", new JudgeTestCase("", "1", 1000));
+
+      assertThat(result.errorKind()).isNull();
+      assertThat(contentLength.get()).isNotBlank();
+      assertThat(transferEncoding.get()).isNull();
+    } finally {
+      httpServer.stop(0);
+    }
   }
 
   @Test

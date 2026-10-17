@@ -4,6 +4,40 @@
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
 
+
+## 2026-10-17 当前续接：修复 Piston HTTP 400 并完成 Tutor TRANSFER 浏览器闭环
+
+- Java 21 的 `RestTemplateBuilder` 为本机明文 HTTP Piston 请求发出 `Connection: Upgrade, HTTP2-Settings` / `Upgrade: h2c`；Piston 的 Node API 返回 HTTP 400 `Bad Request`。隔离回环接收器先捕获该头，Node `fetch` 同体请求成功；将 Piston 专用客户端固定到 `SimpleClientHttpRequestFactory` 后，定向 wire 回归旧实现 RED、修复 GREEN。连接与读取超时配置保留。
+- 普通学生浏览器一次完成源题 481 的正式 Piston AC、Tutor AC_REVIEW 和 TRANSFER、同 KC 审核迁移题 493 的正式 Piston AC；随后真实 Twin state API 返回 `PY43-KC-031` 已评估且证据含 `PRACTICE_PASS`。Playwright 1/1（18.9 秒、无重试）。
+- 唯一临时 STUDENT 通过精确 ID 删除；PostgreSQL 动态枚举 `users` 的全部直接外键并确认残留为 0。测试凭证未落盘；一次性浏览器 smoke spec 已删除，保留 wire 回归。
+- 已完成：真实 Piston 判题与 Tutor → Twin 迁移闭环。未完成：全量非 AI 写路由及日志审计、生产 Piston ACL/Nginx 运行态、完整远征/判题性能与 Twin 7 日对照；不重复本次 Tutor 或 Boss 浏览器流程。
+
+
+## 2026-10-17 当前续接：验证课件方向键翻页
+
+- 现有 `StageCoursewareReader` 已将 ← / → 映射到逐页翻阅。本轮在普通 STUDENT 浏览器中确认 ArrowRight 从第 1 页到第 2 页、ArrowLeft 返回第 1 页，随后 End、标已读、重载后状态保留均通过；定向 E2E 1/1（7.2 秒）。无 Tutor/DeepSeek/Piston 请求。
+- 首次紧邻切页时，尚未等待 canvas 完成新页加载的场景记录到 `Worker was terminated`；增加对 `data-loading=false` 的等待后场景通过。快速连按/加载中取消的竞态仍未单独验证，不将该事件当作已修复的前端错误。
+- 唯一临时 STUDENT 按 ID 清理，动态检查所有直接引用 `users` 的外键残留为 0。
+
+
+## 2026-10-17 当前续接：事务修复后复验 Boss → Twin 浏览器闭环
+
+- 按用户确认，概念/非编程 KC 以同 KC 审核 CHOICE/JUDGE/FILL 替代编程题。使用普通注册的 `STUDENT` 经真实 Web UI 打通服务端 10 层远征，11/11 道课程题库题判题通过，题型三类全覆盖；Boss UI 阶段 1/2/3 全通过，Phaser 画布受击并进入胜利态。
+- 数据库核验 11 个通过 attempt、3 个 Boss 通过 settlement、1 条远征 cleared score、3 条 Boss KC 的 `PRACTICE_PASS` 掌握度事件。`/profile-room` 分身页显示目标 KC 已评估且包含 `PRACTICE_PASS`；页面 `pageerror=0`、HTTP 5xx=0、未拦截题目请求。
+- 浏览器层将 23 个预生成请求固定为 IDLE；所有实题来自同 KC 已审核题库，`reviewed=true`、`aiGenerated=false`，没有触发 Graph/LLM/DeepSeek。每次实际 Boss 判题按服务端 10 秒间隔进行。
+- 通过后精确删除本次临时 STUDENT；扫描全部直接引用 `users` 的外键列确认 0 残留，本地原有 169 个 `pyt.e2e.s.*` 学生账号未修改。截图保存在 `/tmp/pythontopia-boss-twin-success.png` 和 `/tmp/pythontopia-twin-state.png`，仅为本地临时证据。
+- 本次是上一轮远征/Twin 同事务修复后的新鲜浏览器复验，填补此前“只有 PostgreSQL 故障注入验证，浏览器尚未复验”的缺口。实时 Graph 预生成、Tutor TRANSFER 浏览器提交、全量非 AI 写路由/多行日志审计、生产代理以及性能仍未验证。
+- 下一步：继续唯一清单中未完成的写入权限/限流和日志审计；不重复 DeepSeek 或 Boss 通关，性能最后测。
+
+## 2026-10-17 最新续接：判题反射过滤与 Tutor 重复提交
+
+- 安全复核发现 Graph 的共用 AST 扫描器允许学生代码、参考解和调试代码通过 `__builtins__`/`getattr`/`globals`/`eval` 等入口反射取回导入器。先增加 8 个绕过变体回归并在旧实现上确认会进入 Piston 调用；扩展扫描器拒绝这些反射入口及 dunder 属性后，self-tester/evaluator 定向测试 45/45、Ruff 通过。Piston 作业隔离仍是安全边界；本轮没有重新运行容器隔离烟测或检查生产 ACL。
+- 续查 HTTPX 日志发现 Memory Brief 学生 query 位于 URL 查询串，上游 HTTPX INFO 会把完整 URL 写入 Graph 日志。使用 MockTransport 哨兵 query 先 RED 确认泄露，然后把 `httpx` logger 级别设为 WARNING；敏感日志回归 2/2 通过。没有真实请求，其他多行日志调用点与生产日志仍未完整审计。
+- 复核 Tutor TRANSFER 的重复判题事件会推进活动的普通 CODING/AC_REVIEW 步骤。两项回归在旧实现上先 RED，修复后 `TutorWorkflowSubmissionFeedbackListenerTest` 10/10、触及 Java 文件定向 Spotless clean。Tutor 真实浏览器 TRANSFER 提交尚未验证。
+- 修正管理台样式测试中遗留的 1100px 断言；当前列宽与容器宽度均为 1152px，定向 Vitest 8/8 通过。
+- 不适合编程判题的 KC 继续复用同 KC 已审核选择/判断/填空题；题池为空时 fail-closed，不退回不匹配编程题。Boss/Twin 真实浏览器闭环已有既存记录，本轮未重跑。
+- 下一步：继续完整非 AI 写路由、IDOR 与多行日志审计；随后合并执行真实 Tutor TRANSFER 浏览器验收。7 日 Twin 延迟对照依赖自然样本；生产 Piston ACL / Nginx 和整栈性能仍未验证，性能最后测。
+
 ## 2026-10-17 当前续接：Tutor TRANSFER 会话绑定与 KC 题型规则
 
 - Tutor TRANSFER 的服务端投影现绑定同 KC 已审核编程题并覆盖模型生成题面与提示；缺少审核变式题或 graph 终态没有 `transfer_problem` 卡均失败关闭。前端刷新权威卡片后通过既有正式判题 API 提交当前编辑器代码，并携带会话 key；后端按用户、会话和最新绑定题核验，避免一条判题事件推进多个 Tutor 会话。Graph 计划将 TRANSFER 设为正式判题证据，判题结果复用已有 Twin 学习事件。
@@ -1120,3 +1154,32 @@
 - HTTPS/Nginx 契约、HTTP→HTTPS 双协议检查、Shell 语法、边缘与前端 Nginx 1.27 `nginx -t`、定向 Spotless 与 `git diff --check` 通过。
 - 管理台审核表 8 列显式宽度合计 1152px，横向滚动容器此前最小宽度为 1100px。定向测试先 RED，改为 1152px 后页面测试 7/7、typecheck 与定向 ESLint 通过。未做管理员浏览器截图。
 - 本轮未调用 DeepSeek、写业务数据或访问生产环境。
+
+## 2026-10-17 — 限制章测提交体积并计入账号写入预算
+
+- 章测与小测的 `start`/`submit` 会创建或更新学生考试记录，之前未使用共享 `StudentWriteThrottle`。现四个写入口在调用服务前按账号扣 1 个写额度；AI `prepare` 继续只走既有 `@AiBudgeted` 预算。
+- `/test/{testId}/submit` 与 `/quiz/{testId}/submit` 共用 DTO，允许最多 100 个答案、每个答案最多 8192 字符；现 Spring MVC 绑定前统一限 6 MiB，边缘及前端 Nginx 精确路径同步。超限统一返回 413 `CHAPTER_ASSESSMENT_SUBMIT_REQUEST_TOO_LARGE`。
+- TDD 先复现两种提交请求体穿过过滤器、完整安全链到达 MVC，以及四种写操作未扣账号额度。修复后 `ApiRequestBodyLimitFilterTest`、`PublicReadAccessTest`、`MainlineControllerAuthorizationTest` 共 30/30；定向 Spotless 6 个 Java 文件、HTTPS/Nginx 契约脚本、Shell 语法、主机及前端 Nginx 1.27 `nginx -t`、`git diff --check` 通过。
+- 未调用模型、写业务数据或访问生产环境。全量写路由逐项审计、多行日志调用点与生产代理运行态仍未完成。
+
+## 2026-10-17 — 浏览器验证主线 PDF 与课件已读回流
+
+- 扩展主线导航 Playwright 场景，补上真实 PDF 请求状态、canvas 非零绘制宽度、课件键盘 `End` 导航、批量已读 POST 与重载后状态保留断言。
+- 本地全栈普通 STUDENT 浏览器场景 1/1 通过：章节抽屉开关与进入学习正常，PDF 请求 200/206 且 canvas 绘制，`POST /api/mainline/stages/{id}/pages-read` 返回 200；重载后页面仍显示课件已读。测试未触发 Tutor、Graph 生成或 DeepSeek，致命 console/pageerror 断言通过。
+- 临时学生只产生课件进度数据，最终按唯一 ID 与用户名删除；用户行残留查询为 0。方向键逐页翻阅、任务板真实完成/跳过尚未验证。
+
+## 2026-10-17 — 浏览器验证教师学生班级任务闭环
+
+- 本地全栈 Playwright 真实账号闭环 1/1（5.1 秒）：教师创建班级，学生加入；教师发布绑定 KC-005 与课程题 476 的班级任务；学生公告板深链进入训练场，获得 AC 后选择正式提交作为 evidence 并完成任务；教师任务页显示 1/1。随后教师发布带 `READING` 资源类型的今日任务，学生从“今日任务”点击跳过，skip API 返回 `SKIPPED`，卡片从列表移除。
+- 复核教师班级导航用 ARIA `role="tab"`；旧 E2E 错用 `button` 角色导致等待超时，已只修正测试定位器。定向 ESLint 通过。只触发一次 Piston 判题，无 Tutor/Graph/DeepSeek 调用。
+- 临时 STUDENT/TEACHER、班级成员、班级和任务按精确 ID 清理；用户及相关班级行残留计数为 0。
+## 2026-10-17 — 续查写接口与日志边界
+
+- 复核管理员账号状态更新、匿名下载统计、异步媒体作业和工坊聊天历史：角色/owner 检查、token 撤销、已 seed key 限定、媒体作业账号节流、聊天历史 STUDENT 限制/写节流及 payload 上限均能在现有控制器/服务实现中确认；本轮未发现需要改代码的功能问题。
+- 扫描 Java 与 Graph/RAG Python 日志调用点共 204 项，并打开检查涉及消息/请求上下文的候选点。未确认当前可达 Tutor、判题、Boss 或学习画像路径会记录用户原文。剩余命中集中在固定关闭的讯飞媒体路径、静态资源加载异常和通用异常类型；生产日志仍未核验。
+- 这是限界源码续审，不代表 112 个写映射已全部逐项完成，也不验证生产 Nginx、管理员持久审计记录或生产 Piston ACL；未运行新增测试，因为本轮没有改业务代码。
+- 顺带核对本地审核主体状态时只查询了角色/状态计数：当前库没有 ADMIN 账号；虽有已启用 TEACHER 账号，但没有确认过可用的教师登录。没有为题库审批伪造稳定身份或自动批准候选，待有真实授权审核会话后再验证 AI 候选正式入库。
+- 定向窄屏浏览器复现教师班级补救包长证据列表溢出：320px viewport 下内容宽度 838px、面板可视宽 276px。补充 480px 以下单列和文本换行后，mock API 的同一布局检查在 320px/375px 均通过；测试仅 mock 请求，没有创建账号、提交业务数据或调用模型。
+- 前端现有全量测试 `npm run test` 新运行 279 文件、2,653 项通过；`npm run typecheck`、`npm run lint` 均退出 0。Vitest 有 jsdom 未实现 `scrollTo`/canvas 的提示，但无失败项。
+- 后端历史全量报告中 4 个 pgvector/Testcontainers 类报 `failed to bind host port ... address already in use`。本轮 `DecisionTraceControllerTest` 单独复跑 1/1，另将 `EvidenceMemoryServiceTest`、`RecommendationServiceTest`、`MemoryRetrievalSemanticIntegrationTest` 串行复跑 12/12；共 13 项通过。未重跑整个 Maven suite，仍保留全套状态未核实。
+- Graph 全量 pytest 1,961 passed / 1 skipped（缺少 ragas 可选评测依赖），RAG 166 passed。没有调用 DeepSeek；环境提示包括 Starlette/httpx 兼容告警和一项 async mark 告警，不影响通过结果。
