@@ -10,9 +10,9 @@ import java.util.List;
  *
  * <p>由 {@link BilibiliInsightService} 转发给 pythontopia-graph {@code POST
  * /agents/video/bilibili/insight}（graph 侧 snake_case {@code kc_codes}）。校验对齐 graph
- * {@code VideoInsightRequest}：{@code bvid} 必填且 ≤32，{@code question} ≤512，{@code kcCodes} ≤10。
+ * {@code VideoInsightRequest}：{@code bvid} 必填且 ≤32，{@code question} ≤512，{@code kcCodes} 至多 10 项且每项 ≤32。
  */
 public record BilibiliInsightRequest(
     @NotBlank @Size(max = 32) String bvid,
     @Size(max = 512) String question,
-    @Size(max = 10) List<String> kcCodes) {}
+    @Size(max = 10) List<@Size(max = 32) String> kcCodes) {}

@@ -11,7 +11,7 @@ outline / 分 P 时间轴；``timeline_grounding`` 节点剔除任何不在真�
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
@@ -24,7 +24,9 @@ class VideoInsightRequest(BaseModel):
     bvid: str = Field(min_length=1, max_length=32)
     # 学生的问题 / 学习意图：概述与看点排序都围绕它展开（空则给中性概述）。
     question: str = Field(default="", max_length=512)
-    kc_codes: list[str] = Field(default_factory=list, max_length=10)
+    kc_codes: list[Annotated[str, Field(max_length=32)]] = Field(
+        default_factory=list, max_length=10
+    )
     # 画像快照：影响概述措辞、看点优先级（复用资源生成同一 ProfileSnapshot）。
     profile_snapshot: ProfileSnapshot = Field(default_factory=ProfileSnapshot)
 

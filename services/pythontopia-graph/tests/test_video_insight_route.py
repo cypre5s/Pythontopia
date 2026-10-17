@@ -72,9 +72,7 @@ async def test_metadata_fetch_does_not_call_external_ai_summary(
     fake_video = FakeVideo()
     fake_module = SimpleNamespace(video=SimpleNamespace(Video=lambda **_kwargs: fake_video))
     monkeypatch.setitem(__import__("sys").modules, "bilibili_api", fake_module)
-    monkeypatch.setattr(
-        "pythontopia_graph.routes.video._configure_bilibili_proxy", lambda: None
-    )
+    monkeypatch.setattr("pythontopia_graph.routes.video._configure_bilibili_proxy", lambda: None)
 
     meta = await video_insight_route._fetch_bilibili_metadata("BV1test00000")
 
@@ -299,3 +297,16 @@ def test_insight_drops_hallucinated_timestamps(
     # 9999、7 不在真实时间集合 {12,45} → 剔除；仅留 45、12（保留相关度顺序）。
     assert [kp["t_sec"] for kp in data["key_points"]] == [45, 12]
     assert all(kp["source"] == "ai_conclusion" for kp in data["key_points"])
+
+
+def test_insight_rejects_oversized_kc_code_before_fetching_video(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_provider(monkeypatch, _JsonProvider({}))
+
+    response = TestClient(app).post(
+        "/agents/video/bilibili/insight",
+        json={"bvid": "BV1xx411c7XD", "kc_codes": ["K" * 33]},
+    )
+
+    assert response.status_code == 422

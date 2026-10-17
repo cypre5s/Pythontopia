@@ -67,7 +67,7 @@ def test_plan_returns_seven_day_layout_with_focus_kcs() -> None:
     assert response.status == "SUCCESS"
     days = {node.day_index for node in response.nodes}
     assert days.issubset(set(range(1, 8)))
-    assert any(node.node_type == "PROFILE_UPDATE" for node in response.nodes)
+    assert all(node.node_type != "PROFILE_UPDATE" for node in response.nodes)
     assert any(node.node_type == "READ_RESOURCE" for node in response.nodes)
     assert any(node.node_type == "SOLVE_PROBLEM" for node in response.nodes)
     assert all(node.node_type != "PLANT_KC" for node in response.nodes)
@@ -117,19 +117,15 @@ def test_classroom_quest_kcs_are_prioritised_on_day_one() -> None:
     response = PathPlannerAgent().plan(_request(classroom_quests=[quest]))
     day_one = [n for n in response.nodes if n.day_index == 1]
     assert any(
-        node.source_classroom_quest_id == 99 and node.kc_code == "PY43-KC-005"
-        for node in day_one
+        node.source_classroom_quest_id == 99 and node.kc_code == "PY43-KC-005" for node in day_one
     )
 
 
 def test_failed_submission_triggers_fix_bug_node() -> None:
-    submissions = [
-        PlannerProblemSubmission(problem_id=7, kc_code="PY43-KC-001", passed=False)
-    ]
+    submissions = [PlannerProblemSubmission(problem_id=7, kc_code="PY43-KC-001", passed=False)]
     response = PathPlannerAgent().plan(_request(recent_submissions=submissions))
     assert any(
-        node.kc_code == "PY43-KC-001" and node.node_type == "FIX_BUG"
-        for node in response.nodes
+        node.kc_code == "PY43-KC-001" and node.node_type == "FIX_BUG" for node in response.nodes
     )
 
 
@@ -143,9 +139,7 @@ def test_recent_resource_skips_read_node() -> None:
     ]
     response = PathPlannerAgent().plan(_request(recent_resources=resource_usage))
     kc1_reads = [
-        n
-        for n in response.nodes
-        if n.kc_code == "PY43-KC-001" and n.node_type == "READ_RESOURCE"
+        n for n in response.nodes if n.kc_code == "PY43-KC-001" and n.node_type == "READ_RESOURCE"
     ]
     assert kc1_reads == []
 
@@ -177,11 +171,15 @@ def test_prerequisite_chain_schedules_prereq_no_later_than_dependent() -> None:
     kcs = [
         PlannerKcSnapshot(kc_code="PY43-KC-001", mastery_score=0.1, unlocked=True),
         PlannerKcSnapshot(
-            kc_code="PY43-KC-002", mastery_score=0.1, unlocked=True,
+            kc_code="PY43-KC-002",
+            mastery_score=0.1,
+            unlocked=True,
             prerequisite_codes=["PY43-KC-001"],
         ),
         PlannerKcSnapshot(
-            kc_code="PY43-KC-003", mastery_score=0.1, unlocked=True,
+            kc_code="PY43-KC-003",
+            mastery_score=0.1,
+            unlocked=True,
             prerequisite_codes=["PY43-KC-001"],
         ),
     ]

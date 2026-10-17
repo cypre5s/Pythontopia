@@ -1,4 +1,4 @@
-"""确定性 7 日学习路径规划器；KC/节点类型/排期均由规则控制，保证可复现与可审计。"""
+"""确定性 7 日学习路径规划器；按掌握度、近期练习、资源、易错点与班级任务排期。"""
 
 from __future__ import annotations
 
@@ -72,9 +72,7 @@ class PathPlannerAgent:
                     node_type=classroom_quest.node_type,
                     reason=f"班级任务「{classroom_quest.title}」要求处理 {kc_code}",
                     evidence=f"班级任务 ID {classroom_quest.classroom_quest_id}",
-                    suggested_resource_type=self._suggest_resource_type(
-                        classroom_quest.node_type
-                    ),
+                    suggested_resource_type=self._suggest_resource_type(classroom_quest.node_type),
                     source_classroom_quest_id=classroom_quest.classroom_quest_id,
                 )
 
@@ -105,9 +103,7 @@ class PathPlannerAgent:
                     evidence="基于 mastery 评估 + 资源工坊推荐",
                     suggested_resource_type="HANDOUT",
                 )
-            failed_recently = self._failed_recently(
-                candidate.kc_code, request.recent_submissions
-            )
+            failed_recently = self._failed_recently(candidate.kc_code, request.recent_submissions)
             self._append_node(
                 nodes,
                 day_counter,
@@ -125,22 +121,6 @@ class PathPlannerAgent:
                 ),
                 suggested_resource_type=None,
             )
-
-        anchor_kc = focus_candidates[0].kc_code if focus_candidates else unlocked_kcs[0].kc_code
-        self._append_node(
-            nodes,
-            day_counter,
-            day_index=MAX_DAYS,
-            kc_code=anchor_kc,
-            node_type="PROFILE_UPDATE",
-            reason=(
-                "每 7 天回顾画像，调整偏好"
-                if request.profile.days_since_last_profile_update >= 7
-                else "保持画像同步，补充新偏好"
-            ),
-            evidence=f"距上次画像更新 {request.profile.days_since_last_profile_update} 天",
-            suggested_resource_type=None,
-        )
 
         grounding = self._grounding(nodes, kc_index)
         signature = self._signature(request, nodes)
@@ -167,9 +147,7 @@ class PathPlannerAgent:
         quests: list[PlannerClassroomQuest],
         kc_index: dict[str, PlannerKcSnapshot],
     ) -> set[str]:
-        return {
-            code for quest in quests for code in quest.kc_codes if code in kc_index
-        }
+        return {code for quest in quests for code in quest.kc_codes if code in kc_index}
 
     def _select_focus_kcs(
         self,
@@ -236,9 +214,7 @@ class PathPlannerAgent:
     def _already_read(self, kc_code: str, resources: list[PlannerResourceUsage]) -> bool:
         return any(usage.kc_code == kc_code for usage in resources)
 
-    def _failed_recently(
-        self, kc_code: str, submissions: list[PlannerProblemSubmission]
-    ) -> bool:
+    def _failed_recently(self, kc_code: str, submissions: list[PlannerProblemSubmission]) -> bool:
         recent = [sub for sub in submissions if sub.kc_code == kc_code]
         if not recent:
             return False

@@ -1,6 +1,7 @@
 package com.pythontopia.learner.quest;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -467,6 +468,115 @@ class QuestCompleteWithEvidenceTest {
   }
 
   @Test
+  void testComplete_pathPlannerTaskWithoutConfiguredEvidenceDerivesEvidenceFromNodeType() {
+    QuestDto quest =
+        quest(
+            QuestSource.PATH_PLANNER,
+            QuestNodeType.SOLVE_PROBLEM,
+            QuestStatus.IN_PROGRESS,
+            null,
+            null,
+            List.of(),
+            null);
+    assertThatThrownBy(() -> verifier.verify(7L, quest, new QuestCompleteRequest("done")))
+        .isInstanceOf(BusinessException.class)
+        .extracting(exception -> ((BusinessException) exception).code())
+        .isEqualTo("EVIDENCE_REQUIRED_SUBMISSION");
+  }
+
+  @Test
+  void pathPlannerSubmissionMustMatchTheQuestKc() {
+    QuestDto quest =
+        quest(
+            QuestSource.PATH_PLANNER,
+            QuestNodeType.SOLVE_PROBLEM,
+            QuestStatus.IN_PROGRESS,
+            "submission",
+            null,
+            List.of(),
+            null);
+    when(submissions.findSubmission(7L, 900L))
+        .thenReturn(Optional.of(submission(900L, 7L, 101L, SubmissionStatus.PASSED)));
+    when(submissions.findSubmissionKcCode(7L, 900L)).thenReturn(Optional.of("PY43-KC-002"));
+
+    assertThatThrownBy(
+            () ->
+                verifier.verify(
+                    7L, quest, new QuestCompleteRequest("wrong kc", 900L, null, null, null)))
+        .isInstanceOf(BusinessException.class)
+        .extracting(exception -> ((BusinessException) exception).code())
+        .isEqualTo("WRONG_KC");
+  }
+
+  @Test
+  void pathPlannerSubmissionForTheSameKcIsAccepted() {
+    QuestDto quest =
+        quest(
+            QuestSource.PATH_PLANNER,
+            QuestNodeType.SOLVE_PROBLEM,
+            QuestStatus.IN_PROGRESS,
+            "submission",
+            null,
+            List.of(),
+            null);
+    when(submissions.findSubmission(7L, 900L))
+        .thenReturn(Optional.of(submission(900L, 7L, 101L, SubmissionStatus.PASSED)));
+    when(submissions.findSubmissionKcCode(7L, 900L)).thenReturn(Optional.of("PY43-KC-001"));
+
+    assertThatCode(
+            () ->
+                verifier.verify(
+                    7L, quest, new QuestCompleteRequest("same kc", 900L, null, null, null)))
+        .doesNotThrowAnyException();
+  }
+
+  @Test
+  void pathPlannerResourceMustMatchTheQuestKc() {
+    QuestDto quest =
+        quest(
+            QuestSource.PATH_PLANNER,
+            QuestNodeType.READ_RESOURCE,
+            QuestStatus.IN_PROGRESS,
+            "resource",
+            null,
+            List.of(),
+            null);
+    when(resources.findById(7L, 55L))
+        .thenReturn(Optional.of(resource(55L, 7L, "PY43-KC-002")));
+
+    assertThatThrownBy(
+            () -> verifier.verify(7L, quest, new QuestCompleteRequest("wrong kc", null, 55L, null, null)))
+        .isInstanceOf(BusinessException.class)
+        .extracting(exception -> ((BusinessException) exception).code())
+        .isEqualTo("WRONG_RESOURCE");
+  }
+
+  @Test
+  void pathPlannerResourceForTheSameKcIsAcceptedWhenConsumed() {
+    QuestDto quest =
+        quest(
+            QuestSource.PATH_PLANNER,
+            QuestNodeType.READ_RESOURCE,
+            QuestStatus.IN_PROGRESS,
+            "resource",
+            null,
+            List.of(),
+            null);
+    when(resources.findById(7L, 55L)).thenReturn(Optional.of(resource(55L, 7L)));
+    when(jdbcTemplate.queryForObject(
+            contains("learning_event_log"),
+            eq(Boolean.class),
+            eq(7L),
+            eq("55"),
+            any(OffsetDateTime.class)))
+        .thenReturn(true);
+
+    assertThatCode(
+            () -> verifier.verify(7L, quest, new QuestCompleteRequest("same kc", null, 55L, null, null)))
+        .doesNotThrowAnyException();
+  }
+
+  @Test
   void testComplete_nullRequiredEvidence_legacyBypasses() {
     QuestDto quest =
         quest(QuestNodeType.PROFILE_UPDATE, QuestStatus.OPEN, null, null, List.of(), null);
@@ -494,12 +604,30 @@ class QuestCompleteWithEvidenceTest {
       BigDecimal requiredMasteryDelta,
       List<Long> targetProblemIds,
       Long targetResourceId) {
+    return quest(
+        QuestSource.CLASSROOM,
+        nodeType,
+        status,
+        requiredEvidenceType,
+        requiredMasteryDelta,
+        targetProblemIds,
+        targetResourceId);
+  }
+
+  private QuestDto quest(
+      QuestSource source,
+      QuestNodeType nodeType,
+      QuestStatus status,
+      String requiredEvidenceType,
+      BigDecimal requiredMasteryDelta,
+      List<Long> targetProblemIds,
+      Long targetResourceId) {
     ObjectNode payload = mapper.createObjectNode();
     JsonNode deepLink = mapper.createObjectNode();
     return new QuestDto(
         99L,
         7L,
-        QuestSource.CLASSROOM,
+        source,
         500L,
         "测试任务",
         "测试描述",
@@ -535,11 +663,15 @@ class QuestCompleteWithEvidenceTest {
   }
 
   private LearningResourceDto resource(Long id, Long userId) {
+    return resource(id, userId, "PY43-KC-001");
+  }
+
+  private LearningResourceDto resource(Long id, Long userId, String kcCode) {
     return new LearningResourceDto(
         id,
         userId,
         43L,
-        List.of("PY43-KC-001"),
+        List.of(kcCode),
         null,
         ResourceType.HANDOUT,
         "demo handout",

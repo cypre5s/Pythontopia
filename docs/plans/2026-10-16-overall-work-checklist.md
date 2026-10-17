@@ -71,6 +71,8 @@
 - **审计边界：** 前端 SVG 外部资源引用已用恶意输入回归及拦截式 Chromium 探针验证并修复；脚本载荷、全应用 XSS、CSP/Trusted Types 仍未动态验证。其余安全结论基于源码与既有测试阅读，不代表全 API、生产网络或屏幕阅读器运行态验证；安全复核未调用模型，也未访问 ECS/GitHub。
 
 ## 本轮验证证据
+- **学习路径任务可完成性补齐：** 路径节点创建任务时写入匹配的证据类型与建议题 ID；阅读资源深链使用工坊实际接受的 `kc` 参数。今日任务板可跳转去做、选择同 KC 已通过提交，或打开同 KC 工坊资源后再提交；服务端校验题目/资源的 KC 与任务一致。旧路径任务按节点类型推导证据，无法核验的历史画像更新任务关闭直接完成并提示跳过重规划。先用回归复现旧任务按钮缺失，修复后前端定向测试 8/8、typecheck、ESLint 通过；新增 UI 尚未做真实浏览器全栈复验。
+- **本轮可用性与边界修复：** Profile 访谈结束对不存在/未打开/不属于当前用户的会话返回 404，已完成会话幂等；学习事件读取 limit 限为 1–200；NPC 对话文本与 B 站洞察 KC 项限长；上传索引队列已满时同步执行既有索引，避免上传长期停留在未索引状态。后端定向 Maven 回归 89/89，Graph 定向 pytest 33/33、Ruff 与格式检查通过，所改 Java 文件 Spotless 和 `git diff --check` 通过。
 - **KC 客观题优先级与 Twin 最新实跑：** 浏览器发现 KC-002 有同 KC 审核客观题却返回预生成 CODE。TDD 先复现，再改为没有课程编程题时先发同 KC 客观题，覆盖活动代码预生成优先级；已有客观题仍能刷新恢复。第一章 KC 只在有同 KC 客观题时允许开局。最新普通学生 Web 账号创建 10 层远征，KC-001 判断题刷新恢复、真实判题 1/1；Twin 记录 PRACTICE_PASS（掌握度 0.14），真实分身页正常；pageerror=0、HTTP 5xx=0。BossServiceTest 65/65、BossControllerTest 18/18、定向 Spotless 通过。临时账号及关联记录已清理；使用审核题，没有调用 DeepSeek。完整三阶段 KC-008 路线不在此补丁后重跑，见下方范围说明。
 
 - RED/GREEN：最新 `BossServiceTest` 62/62、`BossControllerTest` 18/18、`BossAttemptIdempotencyPostgresTest` 6/6、`MainlinePracticeServiceTest` 21/21；V217/V218 已在本地开发库应用，schema version 为 218。

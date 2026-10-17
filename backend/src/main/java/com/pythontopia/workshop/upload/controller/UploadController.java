@@ -65,8 +65,8 @@ public class UploadController {
       try {
         indexingService.indexUploadAsync(dto.id());
       } catch (TaskRejectedException ex) {
-        // shortcut: a full queue drops indexing; add durable retries if retrieval becomes mandatory.
-        log.warn("upload corpus indexing skipped: executor queue is full");
+        log.warn("upload corpus indexing running inline because executor queue is full");
+        indexingService.indexUpload(dto.id());
       }
     }
     return dto;

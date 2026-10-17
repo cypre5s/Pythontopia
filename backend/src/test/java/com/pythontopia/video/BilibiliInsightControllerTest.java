@@ -3,6 +3,7 @@ package com.pythontopia.video;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -105,6 +106,21 @@ class BilibiliInsightControllerTest {
                 .content("{\"question\":\"for 循环怎么用\",\"kcCodes\":[]}"))
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+  }
+
+  @Test
+  void oversizedKcCodeReturns400BeforeCallingGraph() throws Exception {
+    String oversizedKc = "K".repeat(33);
+
+    mockMvc
+        .perform(
+            post("/api/videos/bilibili/insight")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"bvid\":\"BV1\",\"kcCodes\":[\"" + oversizedKc + "\"]}"))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.code").value("VALIDATION_ERROR"));
+
+    verify(service, never()).insight(any(BilibiliInsightRequest.class));
   }
 
   @Test

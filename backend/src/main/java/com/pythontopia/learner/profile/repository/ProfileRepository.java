@@ -169,6 +169,16 @@ public class ProfileRepository {
         sessionId) == 1;
   }
 
+  public boolean isInterviewCompleted(Long userId, String sessionId) {
+    Integer count =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM profile_interview WHERE user_id = ? AND session_id = ?::uuid AND status = 'COMPLETED'",
+            Integer.class,
+            userId,
+            sessionId);
+    return count != null && count > 0;
+  }
+
   public void abortInterview(Long userId, String sessionId) {
     jdbcTemplate.update(
         """

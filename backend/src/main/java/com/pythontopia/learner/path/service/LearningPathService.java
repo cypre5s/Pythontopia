@@ -198,9 +198,9 @@ public class LearningPathService {
                 payloadFromDto(node),
                 today.plusDays(Math.max(0, node.dayIndex() - 1)),
                 questPriority(node.dayIndex(), node.sourceClassroomQuestId()),
+                requiredEvidenceTypeFor(questNodeType),
                 null,
-                null,
-                List.of(),
+                targetProblemIds(node.suggestedProblemId()),
                 null,
                 deepLinkRouteFor(questNodeType),
                 deepLinkParamsFor(
@@ -328,9 +328,9 @@ public class LearningPathService {
               questPayload(nodeDraft),
               today.plusDays(Math.max(0, draft.dayIndex() - 1)),
               questPriority(draft.dayIndex(), nodeDraft.sourceClassroomQuestId()),
+              requiredEvidenceTypeFor(questNodeType),
               null,
-              null,
-              List.of(),
+              targetProblemIds(nodeDraft.suggestedProblemId()),
               null,
               deepLinkRouteFor(questNodeType),
               deepLinkParamsFor(
@@ -361,7 +361,7 @@ public class LearningPathService {
       }
       case READ_RESOURCE -> {
         if (kcCode != null) {
-          params.put("kcCode", kcCode);
+          params.put("kc", kcCode);
         }
       }
       case FIX_BUG -> params.put("goto", "town_hub"); // R-14：mine_south 已删，停小镇经 building → /bug-mine
@@ -427,9 +427,9 @@ public class LearningPathService {
     if (profile.baseLevel() != null && profile.baseLevel().pythonSelfRatedLevel() != null) {
       pythonLevel = profile.baseLevel().pythonSelfRatedLevel();
     }
-    // 末位恒传 7：让 planner 将画像视为已满 7 天，从而触发 PROFILE_UPDATE 节点。
+    // 画像 DTO 不含更新时间；999 与 Graph schema 的未知值约定一致。
     return new PathPlannerGraphRequest.ProfileSnapshot(
-        true, graphMajor(profile.major()), pythonLevel, 7);
+        true, graphMajor(profile.major()), pythonLevel, 999);
   }
 
   /**
@@ -598,6 +598,23 @@ public class LearningPathService {
 
   private QuestNodeType mapToQuestNodeType(PathNodeType type) {
     return QuestNodeType.valueOf(type.name());
+  }
+
+  private String requiredEvidenceTypeFor(QuestNodeType type) {
+    return switch (type) {
+      case READ_RESOURCE -> "resource";
+      case SOLVE_PROBLEM, FIX_BUG -> "submission";
+      case PLANT_KC -> "kc_mastery";
+      case PROFILE_UPDATE ->
+          throw new BusinessException(
+              HttpStatus.BAD_GATEWAY,
+              "PATH_NODE_UNSUPPORTED",
+              "学习路径包含无法验证的画像更新任务，请重新生成路径");
+    };
+  }
+
+  private List<Long> targetProblemIds(Long suggestedProblemId) {
+    return suggestedProblemId == null ? List.of() : List.of(suggestedProblemId);
   }
 
   private Object questPayload(LearningPathNodeDraft node) {

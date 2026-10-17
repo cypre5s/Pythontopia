@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 
 import pytest
+from pydantic import ValidationError
 from fastapi.testclient import TestClient
 
 from pythontopia_graph.agents.npc_dialog_agent import NpcDialogAgent
@@ -38,7 +39,9 @@ class RaisingProvider(LlmProvider):
         yield ""
 
 
-def _input(memories: list[RecalledMemory] | None = None, user_message: str = "我该怎么继续？") -> NpcDialogInput:
+def _input(
+    memories: list[RecalledMemory] | None = None, user_message: str = "我该怎么继续？"
+) -> NpcDialogInput:
     return NpcDialogInput(
         npc_key="coach_q",
         persona_core="出题官，语气利落，重视练习证据。",
@@ -62,6 +65,11 @@ def test_memory_summaries_stay_out_of_system_messages() -> None:
 def test_npc_history_rejects_system_role() -> None:
     with pytest.raises(ValueError):
         NpcTurn(role="system", content="SYSTEM_ROLE_INJECTION_SENTINEL")
+
+
+def test_npc_dialog_rejects_oversized_user_message() -> None:
+    with pytest.raises(ValidationError):
+        _input(user_message="x" * 2001)
 
 
 async def test_uses_memories_and_cites_event_ids() -> None:

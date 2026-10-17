@@ -3,19 +3,22 @@ package com.pythontopia.learner.quest.evidence;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.learner.quest.dto.QuestCompleteRequest;
 import com.pythontopia.learner.quest.dto.QuestDto;
+import com.pythontopia.learner.quest.dto.QuestNodeType;
+import com.pythontopia.learner.quest.dto.QuestSource;
 import com.pythontopia.submission.dto.SubmissionDto;
 import com.pythontopia.submission.dto.SubmissionStatus;
 import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import com.pythontopia.workshop.repository.LearningResourceRepository;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Objects;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 /**
  * 教育闭环关卡：在 QuestService.complete() 真正修改 quest_status 之前，按 quest.requiredEvidenceType
- * 校验证据来源，阻止"误点完成"。requiredEvidenceType == null 的旧 quest 走兼容路径（仅记录 note）。
+ * 校验证据来源，阻止"误点完成"。PATH_PLANNER 历史任务按节点类型推导证据，其它旧任务保留兼容路径。
  */
 @Component
 public class QuestEvidenceVerifier {
@@ -40,6 +43,9 @@ public class QuestEvidenceVerifier {
 
   public void verify(Long userId, QuestDto quest, QuestCompleteRequest request) {
     String type = quest.requiredEvidenceType();
+    if ((type == null || type.isBlank()) && quest.source() == QuestSource.PATH_PLANNER) {
+      type = legacyPathEvidenceType(quest.nodeType());
+    }
     if (type == null || type.isBlank()) {
       return;
     }
@@ -57,6 +63,19 @@ public class QuestEvidenceVerifier {
               "QUEST_EVIDENCE_TYPE_UNKNOWN",
               "未识别的证据类型：" + type);
     }
+  }
+
+  private String legacyPathEvidenceType(QuestNodeType nodeType) {
+    return switch (nodeType) {
+      case READ_RESOURCE -> RESOURCE;
+      case SOLVE_PROBLEM, FIX_BUG -> SUBMISSION;
+      case PLANT_KC -> KC_MASTERY;
+      case PROFILE_UPDATE ->
+          throw new BusinessException(
+              HttpStatus.CONFLICT,
+              "QUEST_EVIDENCE_UNAVAILABLE",
+              "此历史任务缺少可验证证据，请跳过后重新规划学习路径");
+    };
   }
 
   private void verifySubmission(Long userId, QuestDto quest, QuestCompleteRequest request) {
@@ -88,6 +107,14 @@ public class QuestEvidenceVerifier {
           "WRONG_PROBLEM",
           "提交对应的题目不在该任务的目标题集合内");
     }
+    if (quest.source() == QuestSource.PATH_PLANNER
+        && quest.kcCode() != null
+        && !Objects.equals(
+            quest.kcCode(),
+            submissionRepository.findSubmissionKcCode(userId, request.submissionId()).orElse(null))) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "WRONG_KC", "提交对应的知识点与该学习路径任务不匹配");
+    }
   }
 
   private void verifyResource(Long userId, QuestDto quest, QuestCompleteRequest request) {
@@ -97,7 +124,8 @@ public class QuestEvidenceVerifier {
           "EVIDENCE_REQUIRED_RESOURCE",
           "完成此任务需要附带一次资源消费记录");
     }
-    resourceRepository
+    var resource =
+        resourceRepository
         .findById(userId, request.resourceId())
         .orElseThrow(
             () ->
@@ -105,6 +133,12 @@ public class QuestEvidenceVerifier {
                     HttpStatus.BAD_REQUEST,
                     "INVALID_RESOURCE",
                     "资源不存在或不属于当前学生"));
+    if (quest.source() == QuestSource.PATH_PLANNER
+        && quest.kcCode() != null
+        && (resource.kcCodes() == null || !resource.kcCodes().contains(quest.kcCode()))) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST, "WRONG_RESOURCE", "资源对应的知识点与该学习路径任务不匹配");
+    }
     Long expected = quest.targetResourceId();
     if (expected != null && !expected.equals(request.resourceId())) {
       throw new BusinessException(

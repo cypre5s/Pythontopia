@@ -41,6 +41,51 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 class ProfileServiceFailureTest {
 
   @Test
+  void reportsWhenInterviewCannotBeFinished() {
+    ProfileRepository repository = mock(ProfileRepository.class);
+    when(repository.completeInterview(7L, "missing-session")).thenReturn(false);
+    ProfileService service =
+        new ProfileService(
+            repository,
+            mock(CoursePackRepository.class),
+            mock(ResourceRunRecorder.class),
+            mock(RestTemplate.class),
+            new GraphServiceProperties("http://graph", "http://rag", "token"),
+            new ObjectMapper(),
+            mock(SseRelayExecutor.class),
+            mock(ProfileDraftService.class),
+            new StudentWriteThrottle());
+
+    assertThatThrownBy(() -> service.finishInterview(7L, "missing-session"))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> {
+              assertThat(error.status()).isEqualTo(HttpStatus.NOT_FOUND);
+              assertThat(error.code()).isEqualTo("PROFILE_INTERVIEW_NOT_FOUND");
+            });
+  }
+
+  @Test
+  void finishingAnInterviewAlreadyCompletedByItsFinalTurnIsIdempotent() {
+    ProfileRepository repository = mock(ProfileRepository.class);
+    when(repository.completeInterview(7L, "session-1")).thenReturn(false);
+    when(repository.isInterviewCompleted(7L, "session-1")).thenReturn(true);
+    ProfileService service =
+        new ProfileService(
+            repository,
+            mock(CoursePackRepository.class),
+            mock(ResourceRunRecorder.class),
+            mock(RestTemplate.class),
+            new GraphServiceProperties("http://graph", "http://rag", "token"),
+            new ObjectMapper(),
+            mock(SseRelayExecutor.class),
+            mock(ProfileDraftService.class),
+            new StudentWriteThrottle());
+
+    service.finishInterview(7L, "session-1");
+  }
+
+  @Test
   void mapsGraphTimeoutWithoutLoggingRemoteDetails() {
     String privateContent = "private-profile-response-sentinel";
     ProfileRepository repository = mock(ProfileRepository.class);

@@ -223,7 +223,13 @@ public class ProfileService {
   }
 
   public void finishInterview(Long userId, String sessionId) {
-    profileRepository.completeInterview(userId, sessionId);
+    if (!profileRepository.completeInterview(userId, sessionId)
+        && !profileRepository.isInterviewCompleted(userId, sessionId)) {
+      throw new BusinessException(
+          HttpStatus.NOT_FOUND,
+          "PROFILE_INTERVIEW_NOT_FOUND",
+          "访谈不存在、未打开或不属于当前学生");
+    }
   }
 
   public void applyPassiveRevision(Long userId, String source, Object diff) {

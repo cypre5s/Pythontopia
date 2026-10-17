@@ -71,7 +71,7 @@ public class LearningEventController {
   @GetMapping
   List<Map<String, Object>> getEvents(
       @CurrentUser CurrentUserPrincipal user, @RequestParam(defaultValue = "50") int limit) {
-    return repository.findByUser(user.userId(), Math.min(limit, 200));
+    return repository.findByUser(user.userId(), Math.max(1, Math.min(limit, 200)));
   }
 
   private void requireStudent(CurrentUserPrincipal user) {

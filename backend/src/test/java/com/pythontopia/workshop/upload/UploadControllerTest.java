@@ -87,6 +87,7 @@ class UploadControllerTest {
     assertThat(dto.id()).isEqualTo(1L);
     verify(service).upload(7L, file);
     verify(indexingService).indexUploadAsync(1L);
+    verify(indexingService).indexUpload(1L);
   }
 
   @Test

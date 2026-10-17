@@ -130,8 +130,10 @@ export function evidenceErrorMessage(code: string | null | undefined): string | 
       return '所选提交不属于你或还未通过，请选择一次状态为 PASSED 的提交。';
     case 'WRONG_PROBLEM':
       return '所选提交对应的题目不在任务的目标题集合内。';
+    case 'WRONG_KC':
+      return '所选提交对应的知识点与学习路径任务不匹配。';
     case 'INVALID_RESOURCE':
-      return '所选资源不存在或不属于你。';
+      return '所选资源不存在、不是你的，或尚未打开学习。';
     case 'WRONG_RESOURCE':
       return '所选资源不是该任务指定的目标资源。';
     case 'INVALID_PAGE_READ':

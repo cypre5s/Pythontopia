@@ -70,11 +70,11 @@ export function createQuestsSlice() {
   }
 
   async function listRecentPassedSubmissions(
-    problemId: number,
+    problemId?: number,
     limit = 10,
   ): Promise<SubmissionDto[]> {
     const submissions = await listSubmissions({
-      problemId,
+      ...(problemId == null ? {} : { problemId }),
       status: 'PASSED',
       limit,
     });

@@ -22,7 +22,7 @@ class NpcDialogInput(BaseModel):
     npc_key: str
     persona_core: str
     memories: list[RecalledMemory] = Field(default_factory=list)
-    user_message: str
+    user_message: str = Field(min_length=1, max_length=2000)
     history: list[Turn] = Field(default_factory=list)
 
 

@@ -5,6 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
@@ -26,6 +29,18 @@ class LearningEventControllerTest {
 
   private ClientLearningEventGuard eventGuard() {
     return new ClientLearningEventGuard(objectMapper, throttle);
+  }
+
+  @Test
+  void negativeReadLimitIsClampedToOne() {
+    LearningEventController controller = new LearningEventController(repository, eventGuard());
+    CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
+    List<Map<String, Object>> events = List.of(Map.of("event_type", "quiz_finished"));
+    when(repository.findByUser(anyLong(), anyInt())).thenReturn(events);
+
+    assertThat(controller.getEvents(student, -1)).isEqualTo(events);
+
+    verify(repository).findByUser(7L, 1);
   }
 
   @Test

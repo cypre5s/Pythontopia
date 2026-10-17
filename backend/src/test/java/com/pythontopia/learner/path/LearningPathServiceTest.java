@@ -114,7 +114,16 @@ class LearningPathServiceTest {
     verify(questRepository).archiveQuestsForPath(7L, 10L, QuestStatus.EXPIRED);
     verify(questRepository).archiveQuestsForPath(7L, 11L, QuestStatus.EXPIRED);
     verify(questRepository, times(1)).archiveSystemDefaults(7L);
-    verify(questRepository, times(2)).insert(any(QuestInsert.class));
+    org.mockito.ArgumentCaptor<QuestInsert> quests =
+        org.mockito.ArgumentCaptor.forClass(QuestInsert.class);
+    verify(questRepository, times(2)).insert(quests.capture());
+    assertThat(quests.getAllValues())
+        .extracting(QuestInsert::requiredEvidenceType)
+        .containsExactly("resource", "submission");
+    assertThat(quests.getAllValues().getFirst().deepLinkParams().toString())
+        .contains("\"kc\":\"PY43-KC-001\"")
+        .doesNotContain("kcCode");
+    assertThat(quests.getAllValues().get(1).targetProblemIds()).containsExactly(7L);
   }
 
   @Test
@@ -149,6 +158,7 @@ class LearningPathServiceTest {
         org.mockito.ArgumentCaptor.forClass(QuestInsert.class);
     verify(questRepository).insert(captor.capture());
     assertThat(captor.getValue().title()).isEqualTo("前往主线解锁 KC PY43-KC-001");
+    assertThat(captor.getValue().requiredEvidenceType()).isEqualTo("kc_mastery");
     assertThat(captor.getValue().deepLinkRoute()).isEqualTo("/mainline-map");
     assertThat(captor.getValue().deepLinkParams().toString()).doesNotContain("focus");
   }
@@ -232,6 +242,7 @@ class LearningPathServiceTest {
     verify(graphClient).plan(captor.capture());
     // 仅保留命中已知 KC 的 error_pattern tag：WA 被滤掉，cognitive_style 维度不计入。
     assertThat(captor.getValue().errorPatternKcs()).containsExactly("PY43-KC-002");
+    assertThat(captor.getValue().profile().daysSinceLastProfileUpdate()).isEqualTo(999);
   }
 
   @Test
