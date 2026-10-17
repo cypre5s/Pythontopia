@@ -55,8 +55,7 @@ public class SubmissionService {
   @Transactional
   public SubmissionDto submit(Long userId, SubmissionCreateRequest request) {
     if (request.code() == null || request.code().isBlank()) {
-      throw new BusinessException(
-          HttpStatus.BAD_REQUEST, "SUBMISSION_CODE_EMPTY", "代码不能为空");
+      throw new BusinessException(HttpStatus.BAD_REQUEST, "SUBMISSION_CODE_EMPTY", "代码不能为空");
     }
     // 先取每用户事务咨询锁，让同一 userId 的并发提交串行化；之后的「count + insert」整体原子，
     // 消除限频 TOCTOU 竞态。锁在本事务提交/回滚时自动释放。
@@ -66,9 +65,9 @@ public class SubmissionService {
         .findPublic(43L, request.problemId())
         .orElseThrow(
             () ->
-                new BusinessException(
-                    HttpStatus.NOT_FOUND, "PROBLEM_NOT_FOUND", "题目不存在或不属于当前课程"));
-    SubmissionSource source = request.source() == null ? SubmissionSource.TRAINING : request.source();
+                new BusinessException(HttpStatus.NOT_FOUND, "PROBLEM_NOT_FOUND", "题目不存在或不属于当前课程"));
+    SubmissionSource source =
+        request.source() == null ? SubmissionSource.TRAINING : request.source();
     Long submissionId =
         submissionRepository.insertSubmission(
             userId, request.problemId(), request.questId(), source, request.code());
@@ -79,9 +78,7 @@ public class SubmissionService {
         .orElseThrow(
             () ->
                 new BusinessException(
-                    HttpStatus.INTERNAL_SERVER_ERROR,
-                    "SUBMISSION_PERSIST_FAILED",
-                    "提交写入后未能读回"));
+                    HttpStatus.INTERNAL_SERVER_ERROR, "SUBMISSION_PERSIST_FAILED", "提交写入后未能读回"));
   }
 
   @Transactional(readOnly = true)
@@ -90,9 +87,7 @@ public class SubmissionService {
         submissionRepository
             .findSubmission(userId, submissionId)
             .orElseThrow(
-                () ->
-                    new BusinessException(
-                        HttpStatus.NOT_FOUND, "SUBMISSION_NOT_FOUND", "提交不存在"));
+                () -> new BusinessException(HttpStatus.NOT_FOUND, "SUBMISSION_NOT_FOUND", "提交不存在"));
     JudgeResultDto judgeResult = submissionRepository.findJudgeResult(submissionId).orElse(null);
     return new SubmissionDetailDto(submission, judgeResult);
   }
@@ -120,8 +115,7 @@ public class SubmissionService {
       Long userId, Long submissionId, SubmissionCreateRequest request, JudgeOutcome outcome) {
     if (outcome.verdict() == Verdict.SYSTEM_ERROR) {
       // 判题系统故障不是学生答错：不发 PracticeFailed（否则会扣掌握度、往画像写脏 error_pattern）。
-      log.error(
-          "Submission {} ended in SYSTEM_ERROR; no learning event published.", submissionId);
+      log.error("Submission {} ended in SYSTEM_ERROR; no learning event published.", submissionId);
       return;
     }
     String kcCode = problemRepository.findKcCode(request.problemId());
@@ -135,11 +129,18 @@ public class SubmissionService {
             .map(PublicProblemDto::difficulty)
             .orElse(null);
     // 本次提交前同题失败次数，用于判定重试 / 逆袭行为信号。
-    int priorFails = submissionRepository.countPriorFailures(userId, request.problemId(), submissionId);
+    int priorFails =
+        submissionRepository.countPriorFailures(userId, request.problemId(), submissionId);
     if (outcome.verdict() == Verdict.AC) {
       eventPublisher.publishEvent(
           new LearningEvent.PracticeSucceeded(
-              userId, kcCode, request.problemId(), difficulty, submissionId));
+              userId,
+              kcCode,
+              request.problemId(),
+              difficulty,
+              submissionId,
+              null,
+              request.tutorWorkflowSessionKey()));
       if (priorFails >= 2) {
         eventPublisher.publishEvent(
             new LearningEvent.ComebackSolved(userId, request.problemId(), kcCode, priorFails));
@@ -152,14 +153,20 @@ public class SubmissionService {
           QuestDto quest = questService.complete(userId, request.questId(), autoEvidence);
           log.info("Quest {} auto-completed via submission {}", quest.id(), submissionId);
         } catch (BusinessException exception) {
-          log.warn(
-              "Quest auto-completion failed after submission errorCode={}", exception.code());
+          log.warn("Quest auto-completion failed after submission errorCode={}", exception.code());
         }
       }
     } else {
       eventPublisher.publishEvent(
           new LearningEvent.PracticeFailed(
-              userId, kcCode, request.problemId(), outcome.verdict().name(), difficulty, submissionId));
+              userId,
+              kcCode,
+              request.problemId(),
+              outcome.verdict().name(),
+              difficulty,
+              submissionId,
+              null,
+              request.tutorWorkflowSessionKey()));
       if (priorFails >= 1) {
         eventPublisher.publishEvent(
             new LearningEvent.PracticeRetried(userId, request.problemId(), kcCode));

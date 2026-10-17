@@ -16,7 +16,6 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.learner.event.LearningEvent;
-import com.pythontopia.learner.quest.dto.QuestDto;
 import com.pythontopia.learner.quest.service.QuestService;
 import com.pythontopia.submission.dto.PublicProblemDto;
 import com.pythontopia.submission.dto.SubmissionCreateRequest;
@@ -33,10 +32,10 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
-import org.mockito.ArgumentCaptor;
 
 class SubmissionServiceTest {
 
@@ -72,12 +71,16 @@ class SubmissionServiceTest {
         .thenReturn(Optional.of(sampleSubmission(900L, SubmissionStatus.PASSED)));
 
     SubmissionDto result =
-        service.submit(7L, new SubmissionCreateRequest(101L, "print(1)", null, SubmissionSource.TRAINING));
+        service.submit(
+            7L,
+            new SubmissionCreateRequest(
+                101L, "print(1)", null, SubmissionSource.TRAINING, "wf-7-101-cafe"));
     assertThat(result.status()).isEqualTo(SubmissionStatus.PASSED);
     ArgumentCaptor<LearningEvent.PracticeSucceeded> eventCaptor =
         ArgumentCaptor.forClass(LearningEvent.PracticeSucceeded.class);
     verify(publisher).publishEvent(eventCaptor.capture());
     assertThat(eventCaptor.getValue().difficulty()).isEqualTo("basic");
+    assertThat(eventCaptor.getValue().tutorWorkflowSessionKey()).isEqualTo("wf-7-101-cafe");
   }
 
   @Test
@@ -104,8 +107,7 @@ class SubmissionServiceTest {
     when(submissions.findById(eq(903L)))
         .thenReturn(Optional.of(sampleSubmission(903L, SubmissionStatus.PASSED)));
     when(quests.complete(eq(7L), eq(55L), any()))
-        .thenThrow(
-            new BusinessException(HttpStatus.CONFLICT, "QUEST_STATE_CONFLICT", sentinel));
+        .thenThrow(new BusinessException(HttpStatus.CONFLICT, "QUEST_STATE_CONFLICT", sentinel));
 
     Logger logger = (Logger) LoggerFactory.getLogger(SubmissionService.class);
     ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -152,7 +154,8 @@ class SubmissionServiceTest {
     when(submissions.findById(eq(901L)))
         .thenReturn(Optional.of(sampleSubmission(901L, SubmissionStatus.FAILED)));
 
-    service.submit(7L, new SubmissionCreateRequest(101L, "print(1)", null, SubmissionSource.TRAINING));
+    service.submit(
+        7L, new SubmissionCreateRequest(101L, "print(1)", null, SubmissionSource.TRAINING));
     ArgumentCaptor<LearningEvent.PracticeFailed> eventCaptor =
         ArgumentCaptor.forClass(LearningEvent.PracticeFailed.class);
     verify(publisher).publishEvent(eventCaptor.capture());
@@ -160,8 +163,8 @@ class SubmissionServiceTest {
   }
 
   /**
-   * 回归：判题系统故障（SYSTEM_ERROR）不是学生答错，不得发 PracticeFailed 学习事件
-   * （否则沙箱/解释器一挂，全体学生每次提交都扣掌握度、往画像写脏 error_pattern）。
+   * 回归：判题系统故障（SYSTEM_ERROR）不是学生答错，不得发 PracticeFailed 学习事件 （否则沙箱/解释器一挂，全体学生每次提交都扣掌握度、往画像写脏
+   * error_pattern）。
    */
   @Test
   void submitSystemErrorDoesNotEmitPracticeFailedEvent() {
@@ -216,20 +219,12 @@ class SubmissionServiceTest {
     when(problems.findPublic(eq(43L), eq(101L)))
         .thenReturn(
             Optional.of(
-                new PublicProblemDto(
-                    101L,
-                    43L,
-                    "PY43-KC-001",
-                    "题目",
-                    "",
-                    "",
-                    "",
-                    "basic",
-                    null)));
+                new PublicProblemDto(101L, 43L, "PY43-KC-001", "题目", "", "", "", "basic", null)));
     assertThatThrownBy(
             () ->
                 service.submit(
-                    7L, new SubmissionCreateRequest(101L, "print(1)", null, SubmissionSource.TRAINING)))
+                    7L,
+                    new SubmissionCreateRequest(101L, "print(1)", null, SubmissionSource.TRAINING)))
         .isInstanceOf(BusinessException.class)
         .extracting(exception -> ((BusinessException) exception).code())
         .isEqualTo("SUBMISSION_THROTTLED");
@@ -242,7 +237,8 @@ class SubmissionServiceTest {
     assertThatThrownBy(
             () ->
                 service.submit(
-                    7L, new SubmissionCreateRequest(101L, "print(1)", null, SubmissionSource.TRAINING)))
+                    7L,
+                    new SubmissionCreateRequest(101L, "print(1)", null, SubmissionSource.TRAINING)))
         .isInstanceOf(BusinessException.class)
         .extracting(exception -> ((BusinessException) exception).code())
         .isEqualTo("PROBLEM_NOT_FOUND");

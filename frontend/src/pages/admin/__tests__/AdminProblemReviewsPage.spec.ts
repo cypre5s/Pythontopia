@@ -4,6 +4,7 @@ import type {
   BossProblemReviewDto,
   BossProblemReviewPageDto,
 } from '@/api/problemReview';
+import AdminTable from '../AdminTable.vue';
 import AdminProblemReviewsPage from '../AdminProblemReviewsPage.vue';
 
 const { searchProblemReviews, decideProblemReview, toastShow } = vi.hoisted(() => ({
@@ -65,6 +66,13 @@ beforeEach(() => {
 });
 
 describe('AdminProblemReviewsPage', () => {
+  it('sets the horizontal scroll width to the review columns total', async () => {
+    const wrapper = mount(AdminProblemReviewsPage);
+    await flushPromises();
+
+    expect(wrapper.findComponent(AdminTable).props('minWidth')).toBe(1152);
+  });
+
   it('opens the selected review in a preview dialog from the table', async () => {
     const wrapper = mount(AdminProblemReviewsPage);
     await flushPromises();

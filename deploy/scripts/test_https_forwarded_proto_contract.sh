@@ -254,6 +254,54 @@ require_pattern "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   '~\^POST:/api/tutor/workflow/sessions/\[\^/\]\+/attachments\$[[:space:]]+\$binary_remote_addr;'
 require_tutor_workflow_upload_limit_block
 require_save_slot_snapshot_limit_block
+require_body_limit_location_block \
+  "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "location = /api/tutor/ask" \
+  "17m" \
+  "http://pythontopia_frontend" \
+  "边缘 Nginx 将带图 Tutor 请求限制为 17 MiB 并正确代理"
+require_body_limit_location_block \
+  "${FRONTEND_NGINX}" \
+  "location = /api/tutor/ask" \
+  "17m" \
+  "http://backend:18080" \
+  "前端 Nginx 将带图 Tutor 请求限制为 17 MiB 并正确代理"
+require_body_limit_location_block \
+  "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  "location = /api/tutor/workflow/runs" \
+  "128k" \
+  "http://pythontopia_frontend" \
+  "边缘 Nginx 将 Tutor 工作流运行请求限制为 128 KiB 并正确代理"
+require_body_limit_location_block \
+  "${FRONTEND_NGINX}" \
+  "location = /api/tutor/workflow/runs" \
+  "128k" \
+  "http://backend:18080" \
+  "前端 Nginx 将 Tutor 工作流运行请求限制为 128 KiB 并正确代理"
+require_body_limit_location_block \
+  "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  'location ~ ^/api/tutor/workflow/sessions/[^/]+/feedback$' \
+  "16k" \
+  "http://pythontopia_frontend" \
+  "边缘 Nginx 将 Tutor 工作流反馈请求限制为 16 KiB 并正确代理"
+require_body_limit_location_block \
+  "${FRONTEND_NGINX}" \
+  'location ~ ^/api/tutor/workflow/sessions/[^/]+/feedback$' \
+  "16k" \
+  "http://backend:18080" \
+  "前端 Nginx 将 Tutor 工作流反馈请求限制为 16 KiB 并正确代理"
+require_body_limit_location_block \
+  "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
+  'location ~ ^/api/workshop/resources/[0-9]+/checks$' \
+  "16k" \
+  "http://pythontopia_frontend" \
+  "边缘 Nginx 将工坊资源检查请求限制为 16 KiB 并正确代理"
+require_body_limit_location_block \
+  "${FRONTEND_NGINX}" \
+  'location ~ ^/api/workshop/resources/[0-9]+/checks$' \
+  "16k" \
+  "http://backend:18080" \
+  "前端 Nginx 将工坊资源检查请求限制为 16 KiB 并正确代理"
 require_loop_runtime_body_limit_block \
   "${ROOT_DIR}/deploy/nginx/pythontopia.conf" \
   "边缘 Nginx 将 Loop Runtime JSON 写请求限制为 3 MiB 并正确代理" \

@@ -31,6 +31,10 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
   public static final int MAX_WORKSHOP_CHAT_HISTORY_BYTES = 128 * 1024;
   public static final int MAX_JUDGE_SUBMISSION_BYTES = 64 * 1024;
   public static final int MAX_EXPEDITION_RUN_REQUEST_BYTES = 64 * 1024;
+  public static final int MAX_TUTOR_ASK_REQUEST_BYTES = 17 * 1024 * 1024;
+  public static final int MAX_TUTOR_WORKFLOW_RUN_REQUEST_BYTES = 128 * 1024;
+  public static final int MAX_TUTOR_WORKFLOW_FEEDBACK_REQUEST_BYTES = 16 * 1024;
+  public static final int MAX_WORKSHOP_RESOURCE_CHECK_REQUEST_BYTES = 16 * 1024;
   // Tool-call requests carry two JSON fields, each independently limited to 1 MiB.
   public static final int MAX_AGENT_LOOP_REQUEST_BYTES = 3 * 1024 * 1024;
   private static final int MAX_INTERNAL_TUTOR_CHECKPOINT_REQUEST_BYTES = 3 * 1024 * 1024;
@@ -53,6 +57,12 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
               + "(?:retry-submit|variant-submit))$");
   private static final String WORKSHOP_CHAT_HISTORY_PATH = "/api/workshop/chat-history/turns";
   private static final String EXPEDITION_RUN_PATH = "/api/world/expedition/run";
+  private static final String TUTOR_ASK_PATH = "/api/tutor/ask";
+  private static final String TUTOR_WORKFLOW_RUN_PATH = "/api/tutor/workflow/runs";
+  private static final Pattern TUTOR_WORKFLOW_FEEDBACK_PATH =
+      Pattern.compile("^/api/tutor/workflow/sessions/[^/]+/feedback$");
+  private static final Pattern WORKSHOP_RESOURCE_CHECK_PATH =
+      Pattern.compile("^/api/workshop/resources/[0-9]+/checks$");
   private static final Pattern INTERNAL_TUTOR_CHECKPOINT_PATH =
       Pattern.compile(
           "^/api/internal/tutor/workflow/sessions/[^/]+/autogen-checkpoints/"
@@ -149,6 +159,18 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
     if (EXPEDITION_RUN_PATH.equals(requestPath)) {
       return MAX_EXPEDITION_RUN_REQUEST_BYTES;
     }
+    if (TUTOR_ASK_PATH.equals(requestPath)) {
+      return MAX_TUTOR_ASK_REQUEST_BYTES;
+    }
+    if (TUTOR_WORKFLOW_RUN_PATH.equals(requestPath)) {
+      return MAX_TUTOR_WORKFLOW_RUN_REQUEST_BYTES;
+    }
+    if (TUTOR_WORKFLOW_FEEDBACK_PATH.matcher(requestPath).matches()) {
+      return MAX_TUTOR_WORKFLOW_FEEDBACK_REQUEST_BYTES;
+    }
+    if (WORKSHOP_RESOURCE_CHECK_PATH.matcher(requestPath).matches()) {
+      return MAX_WORKSHOP_RESOURCE_CHECK_REQUEST_BYTES;
+    }
     return 0;
   }
 
@@ -189,6 +211,12 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
     boolean judgeSubmissionRequest = JUDGE_SUBMISSION_PATH.matcher(requestPath).matches();
     boolean workshopChatHistoryRequest = WORKSHOP_CHAT_HISTORY_PATH.equals(requestPath);
     boolean expeditionRunRequest = EXPEDITION_RUN_PATH.equals(requestPath);
+    boolean tutorAskRequest = TUTOR_ASK_PATH.equals(requestPath);
+    boolean tutorWorkflowRunRequest = TUTOR_WORKFLOW_RUN_PATH.equals(requestPath);
+    boolean tutorWorkflowFeedbackRequest =
+        TUTOR_WORKFLOW_FEEDBACK_PATH.matcher(requestPath).matches();
+    boolean workshopResourceCheckRequest =
+        WORKSHOP_RESOURCE_CHECK_PATH.matcher(requestPath).matches();
     String errorCode = "LOOP_RUNTIME_REQUEST_TOO_LARGE";
     String errorMessage = "Loop Runtime request body cannot exceed 3 MiB";
     if (internalTutorCheckpoint) {
@@ -215,6 +243,18 @@ public class ApiRequestBodyLimitFilter extends OncePerRequestFilter {
     } else if (expeditionRunRequest) {
       errorCode = "EXPEDITION_SNAPSHOT_REQUEST_TOO_LARGE";
       errorMessage = "Expedition run request body cannot exceed 64 KiB";
+    } else if (tutorAskRequest) {
+      errorCode = "TUTOR_ASK_REQUEST_TOO_LARGE";
+      errorMessage = "Tutor ask request body cannot exceed 17 MiB";
+    } else if (tutorWorkflowRunRequest) {
+      errorCode = "TUTOR_WORKFLOW_REQUEST_TOO_LARGE";
+      errorMessage = "Tutor workflow run request body cannot exceed 128 KiB";
+    } else if (tutorWorkflowFeedbackRequest) {
+      errorCode = "TUTOR_WORKFLOW_FEEDBACK_REQUEST_TOO_LARGE";
+      errorMessage = "Tutor workflow feedback request body cannot exceed 16 KiB";
+    } else if (workshopResourceCheckRequest) {
+      errorCode = "WORKSHOP_RESOURCE_CHECK_REQUEST_TOO_LARGE";
+      errorMessage = "Workshop resource check request body cannot exceed 16 KiB";
     }
     response.setStatus(HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE);
     response.setContentType(MediaType.APPLICATION_JSON_VALUE);

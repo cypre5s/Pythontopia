@@ -50,6 +50,7 @@ export interface SubmissionCreateRequest {
   code: string;
   questId?: number;
   source?: SubmissionSource;
+  tutorWorkflowSessionKey?: string;
 }
 
 export interface PublicProblemDto {

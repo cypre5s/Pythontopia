@@ -124,13 +124,14 @@ def test_plan_dependencies_chain_in_order() -> None:
         assert prev.step_id in step.depends_on
 
 
-def test_transfer_step_uses_student_reflection_until_a_judged_variant_exists() -> None:
+def test_transfer_step_waits_for_the_formal_judge_result() -> None:
     scenario = next(s for s in _scenarios() if s["name"] == "AC_after_retries")
-    plan = GuideEpisodePlanner().plan(_ctx(scenario), _decision(scenario))
+    decision = _decision(scenario).model_copy(update={"next_event": "TRANSFER"})
+    plan = GuideEpisodePlanner().plan(_ctx(scenario), decision)
     transfer_step = next(step for step in plan.steps if step.event == "TRANSFER")
 
-    assert transfer_step.expected_evidence == "CHECKPOINT_COMPLETED"
-    assert "说出" in transfer_step.stop_condition
+    assert transfer_step.expected_evidence == "TRANSFER_ATTEMPT"
+    assert plan.stop_policy == "WAIT_FOR_SUBMISSION"
 
 
 def test_revise_bumps_revision_and_keeps_one_active() -> None:

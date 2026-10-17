@@ -44,11 +44,11 @@ _CONTINUATION_PREF: tuple[str, ...] = (
 # 学生在某步达成后期望产生的证据类型（驱动 stop_policy 与提交/点击推进）。
 _EXPECTED_EVIDENCE: dict[str, str] = {
     "CODING": "SUBMISSION_OBSERVED",
-    "TRANSFER": "CHECKPOINT_COMPLETED",
+    "TRANSFER": "TRANSFER_ATTEMPT",
     "AC_REVIEW": "CHECKPOINT_COMPLETED",
 }
 
-_SUBMISSION_EVIDENCE = frozenset({"SUBMISSION_OBSERVED", "AC_SUBMISSION"})
+_SUBMISSION_EVIDENCE = frozenset({"SUBMISSION_OBSERVED", "AC_SUBMISSION", "TRANSFER_ATTEMPT"})
 
 # 每个事件对应的学生可见步骤文案（不含任何原始推理/系统提示痕迹）。
 _STEP_META: dict[str, dict[str, str]] = {

@@ -4,6 +4,13 @@
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
 
+## 2026-10-17 当前续接：Tutor TRANSFER 会话绑定与 KC 题型规则
+
+- Tutor TRANSFER 的服务端投影现绑定同 KC 已审核编程题并覆盖模型生成题面与提示；缺少审核变式题或 graph 终态没有 `transfer_problem` 卡均失败关闭。前端刷新权威卡片后通过既有正式判题 API 提交当前编辑器代码，并携带会话 key；后端按用户、会话和最新绑定题核验，避免一条判题事件推进多个 Tutor 会话。Graph 计划将 TRANSFER 设为正式判题证据，判题结果复用已有 Twin 学习事件。
+- RED 先复现一条提交更新两个会话、AI 提示错配审核题、Graph 计划等待错误事件；修复后后端 58/58（含 Testcontainers/Postgres 绑定查询 1/1）、Graph 10/10、前端组件 12/12、typecheck、定向 ESLint、Google Java Format 与 `git diff --check` 通过。没有调用 DeepSeek，也没有重复跑 Boss 浏览器通关。Tutor TRANSFER 的真实浏览器提交仍待验证。
+- KC 不适合编程判题时继续用同 KC 已审核 CHOICE/JUDGE/FILL；服务端判分和 Twin 回流的 Boss 定向测试 3/3 通过。新鲜浏览器 Boss/Twin 闭环仍按清单不重复；Tutor Transfer 仍需真实浏览器提交验收。
+- 下一步：继续清单中的剩余非 AI 写路由与多行日志审计；Tutor 浏览器迁移题闭环可以和其他浏览器验收合并执行。7 日 Twin 对照、生产代理/Piston 运行态、整栈性能继续待办。
+
 ## 2026-10-16 当前续接：限制世界 NPC 存档角色
 
 - 剩余写路由复核发现 `/api/world/npcs` 列表、状态读取与对话提交未限定角色；状态读取通过 `getOrInit` 首次调用会写入存档。TEACHER 因此可以修改自己的游戏状态，而相邻世界存档接口明确只允许 STUDENT/ADMIN。
@@ -1105,3 +1112,11 @@
 - 源码复核发现远征 run 的 `PUT` 在 JSON 绑定前没有专属请求体上限，且 `PUT`/`DELETE` 没有调用现有 `StudentWriteThrottle`。复用已有绑定前过滤器和账号级节流，在后端限 64 KiB，并在边缘/前端 Nginx 精确路由同步限制。
 - TDD 先复现 oversized PUT 返回 200、PUT/DELETE 不触发限流；修复后 `ApiRequestBodyLimitFilterTest` 6/6、`ExpeditionRunControllerTest` 15/15，定向 Spotless、HTTPS/Nginx 契约、Shell 语法与 `git diff --check` 通过；主机与前端 Nginx 1.27 `nginx -t` 通过（本地临时证书及占位 upstream 仅用于解析语法）。
 - 没有修改数据库、创建账号或调用模型；未重跑已完成的 Boss 浏览器通关，生产 Nginx 部署态仍待验证。
+
+## 2026-10-17 — 限制 Tutor 图片请求并对齐审核表宽度
+
+- Tutor 页面允许最多三张、每张 4 MiB 图片；Base64 后请求可能超过 12 MiB。`POST /api/tutor/ask` 此前没有 Spring MVC 绑定前的请求体上限，边缘与前端 Nginx 的全局 12 MiB 又会拒绝最大允许图片组合。现仅该精确路由在后端和两层 Nginx 上限为 17 MiB，其余路由的 12 MiB 全局限制不变。
+- Tutor AutoGen `/runs` 接收可嵌套自由 Map，原先只在后续事件校验时限制字段；`/sessions/{sessionKey}/feedback` 的 4 KiB payload 检查也发生在 MVC 绑定之后。现分别在 Spring 绑定前限制为 128 KiB 和 16 KiB，边缘与前端 Nginx 同值。工坊资源检查 `operationEvidence` 的 4 KiB JSON 校验原先也在 MVC 绑定后，现在为原始请求体增加 16 KiB 预绑定上限并同步到两层 Nginx。TDD 先复现超限 JSON 通过（200），修复后 `ApiRequestBodyLimitFilterTest` 10/10、`PublicReadAccessTest` 完整安全链 12/12（安全链覆盖 Tutor 问答和工坊资源检查超限请求在 MVC 前返回 413）。
+- HTTPS/Nginx 契约、HTTP→HTTPS 双协议检查、Shell 语法、边缘与前端 Nginx 1.27 `nginx -t`、定向 Spotless 与 `git diff --check` 通过。
+- 管理台审核表 8 列显式宽度合计 1152px，横向滚动容器此前最小宽度为 1100px。定向测试先 RED，改为 1152px 后页面测试 7/7、typecheck 与定向 ESLint 通过。未做管理员浏览器截图。
+- 本轮未调用 DeepSeek、写业务数据或访问生产环境。

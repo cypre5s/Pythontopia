@@ -1,8 +1,10 @@
 package com.pythontopia.tutor;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -192,6 +194,55 @@ class TutorWorkflowSubmissionFeedbackListenerTest {
     assertThat(plan.path("current_step_id").asText()).isEqualTo("step-1");
     assertThat(plan.path("revision").asInt()).isEqualTo(1);
     assertThat(plan.path("steps").get(0).path("status").asText()).isEqualTo("ACTIVE");
+  }
+
+  @Test
+  void formallyJudgedSubmissionForBoundTransferProblemAdvancesOnlyOneSession() throws Exception {
+    long transferProblemId = 500L;
+    TutorWorkflowSessionDto transferSession =
+        new TutorWorkflowSessionDto(12L, "wf-7-476-transfer", PROBLEM, "TRANSFER", 8, "ACTIVE");
+    TutorWorkflowSessionDto otherTransferSession =
+        new TutorWorkflowSessionDto(13L, "wf-7-477-transfer", 477L, "TRANSFER", 8, "ACTIVE");
+    when(repository.findActiveTransferSession(
+            USER, transferSession.sessionKey(), transferProblemId))
+        .thenReturn(Optional.of(transferSession));
+    when(repository.findAgentState(transferSession.id()))
+        .thenReturn(
+            Optional.of(
+                new TutorWorkflowAgentStateDto(
+                    transferSession.id(),
+                    """
+                    {"student_state":{"session_id":"wf-7-476-transfer","user_id":7,
+                      "problem_id":476,"attempt_count":0,"consecutive_errors":0},
+                     "episode_plan":{"plan_id":"plan-1","session_id":"wf-7-476-transfer",
+                       "problem_id":476,"user_id":7,"objective":"finish","trigger_event":"AC_REVIEW",
+                       "revision":1,"current_step_id":"step-transfer","status":"ACTIVE",
+                       "steps":[{"step_id":"step-transfer","event":"TRANSFER","title":"正式提交迁移题",
+                         "status":"ACTIVE","expected_evidence":"TRANSFER_ATTEMPT"}]},
+                     "chat_history":[]}
+                    """,
+                    "{}")));
+    listener.onPracticeFailed(
+        new LearningEvent.PracticeFailed(
+            USER,
+            "PY43-KC-016",
+            transferProblemId,
+            "WA",
+            "basic",
+            800L,
+            null,
+            transferSession.sessionKey()));
+
+    ArgumentCaptor<TutorWorkflowRepository.SubmissionFeedbackProjection> projection =
+        ArgumentCaptor.forClass(TutorWorkflowRepository.SubmissionFeedbackProjection.class);
+    verify(repository, times(1))
+        .persistSubmissionFeedback(eq(transferSession.id()), projection.capture());
+    verify(repository, org.mockito.Mockito.never())
+        .persistSubmissionFeedback(eq(otherTransferSession.id()), any());
+    JsonNode state = objectMapper.readTree(projection.getValue().stateJson());
+    assertThat(state.path("episode_plan").path("status").asText()).isEqualTo("COMPLETED");
+    assertThat(state.path("episode_plan").path("steps").get(0).path("status").asText())
+        .isEqualTo("DONE");
   }
 
   @Test

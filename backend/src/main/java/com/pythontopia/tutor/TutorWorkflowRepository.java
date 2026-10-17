@@ -39,11 +39,7 @@ public class TutorWorkflowRepository {
       String resultJson) {}
 
   public record SubmissionFeedbackProjection(
-      int seq,
-      String verdict,
-      String stateJson,
-      String decisionJson,
-      String actionPayloadJson) {}
+      int seq, String verdict, String stateJson, String decisionJson, String actionPayloadJson) {}
 
   public record AutoGenCheckpoint(
       UUID runId,
@@ -72,6 +68,31 @@ public class TutorWorkflowRepository {
             this::mapSession,
             userId,
             problemId);
+    return rows.stream().findFirst();
+  }
+
+  public Optional<TutorWorkflowSessionDto> findActiveTransferSession(
+      Long userId, String sessionKey, Long transferProblemId) {
+    List<TutorWorkflowSessionDto> rows =
+        jdbcTemplate.query(
+            """
+        SELECT s.id, s.session_key, s.problem_id, s.phase, s.seq, s.status
+        FROM tutor_workflow_session s
+        JOIN LATERAL (
+            SELECT payload ->> 'problem_id' AS problem_id
+            FROM tutor_workflow_card
+            WHERE session_id = s.id AND card_key = 'transfer_problem'
+            ORDER BY seq DESC, id DESC
+            LIMIT 1
+        ) transfer ON TRUE
+        WHERE s.user_id = ? AND s.session_key = ?
+          AND s.status = 'ACTIVE' AND s.phase = 'TRANSFER'
+          AND transfer.problem_id = ?
+        """,
+            this::mapSession,
+            userId,
+            sessionKey,
+            transferProblemId.toString());
     return rows.stream().findFirst();
   }
 
@@ -110,7 +131,8 @@ public class TutorWorkflowRepository {
     if (key == null) {
       throw new IllegalStateException("tutor_workflow_session insert returned no key");
     }
-    return new TutorWorkflowSessionDto(key.longValue(), sessionKey, problemId, "READING", 0, "ACTIVE");
+    return new TutorWorkflowSessionDto(
+        key.longValue(), sessionKey, problemId, "READING", 0, "ACTIVE");
   }
 
   public void updateProgress(Long sessionId, String phase, int seq) {
@@ -125,7 +147,8 @@ public class TutorWorkflowRepository {
         sessionId);
   }
 
-  public void insertCard(Long sessionId, int seq, String event, String cardKey, String payloadJson) {
+  public void insertCard(
+      Long sessionId, int seq, String event, String cardKey, String payloadJson) {
     jdbcTemplate.update(
         """
         INSERT INTO tutor_workflow_card (session_id, seq, event, card_key, payload)
@@ -212,8 +235,7 @@ public class TutorWorkflowRepository {
     }
 
     updateProgress(sessionId, projection.phase(), projection.seq());
-    upsertAgentState(
-        sessionId, projection.stateJson(), projection.decisionJson());
+    upsertAgentState(sessionId, projection.stateJson(), projection.decisionJson());
     if (projection.cardKey() != null && projection.cardPayloadJson() != null) {
       insertCard(
           sessionId,
@@ -222,15 +244,10 @@ public class TutorWorkflowRepository {
           projection.cardKey(),
           projection.cardPayloadJson());
     }
-    String actionKey =
-        projection.cardKey() == null ? projection.event() : projection.cardKey();
+    String actionKey = projection.cardKey() == null ? projection.event() : projection.cardKey();
     String actionType = projection.cardKey() == null ? "WORKFLOW_RESULT" : "CARD_GENERATED";
     insertActionEvent(
-        sessionId,
-        projection.seq(),
-        actionType,
-        actionKey,
-        projection.actionPayloadJson());
+        sessionId, projection.seq(), actionType, actionKey, projection.actionPayloadJson());
     jdbcTemplate.update(
         "UPDATE tutor_workflow_autogen_checkpoint SET status = 'COMPLETED',"
             + " checkpoint = '{}'::jsonb, updated_at = now()"
@@ -393,8 +410,7 @@ public class TutorWorkflowRepository {
 
   /** Atomically stores a submission feedback checkpoint and its event log entry. */
   @Transactional
-  public void persistSubmissionFeedback(
-      Long sessionId, SubmissionFeedbackProjection projection) {
+  public void persistSubmissionFeedback(Long sessionId, SubmissionFeedbackProjection projection) {
     upsertAgentState(sessionId, projection.stateJson(), projection.decisionJson());
     insertActionEvent(
         sessionId,
@@ -480,24 +496,21 @@ public class TutorWorkflowRepository {
 
   private TutorWorkflowCardPageDto toCardPage(List<StoredCard> rows, int pageSize) {
     boolean hasOlder = rows.size() > pageSize;
-    List<StoredCard> page =
-        new ArrayList<>(rows.subList(0, Math.min(rows.size(), pageSize)));
+    List<StoredCard> page = new ArrayList<>(rows.subList(0, Math.min(rows.size(), pageSize)));
     TutorWorkflowCardCursorDto nextCursor = null;
     if (hasOlder && !page.isEmpty()) {
       StoredCard oldest = page.getLast();
       nextCursor = new TutorWorkflowCardCursorDto(oldest.card().seq(), oldest.id());
     }
     Collections.reverse(page);
-    return new TutorWorkflowCardPageDto(
-        page.stream().map(StoredCard::card).toList(), nextCursor);
+    return new TutorWorkflowCardPageDto(page.stream().map(StoredCard::card).toList(), nextCursor);
   }
 
   private StoredCard mapStoredCard(ResultSet rs, int rowNum) throws SQLException {
     return new StoredCard(rs.getLong("id"), mapCard(rs, rowNum));
   }
 
-  private record StoredCard(long id, TutorWorkflowCardDto card) {
-  }
+  private record StoredCard(long id, TutorWorkflowCardDto card) {}
 
   private TutorWorkflowSessionDto mapSession(ResultSet rs, int rowNum) throws SQLException {
     return new TutorWorkflowSessionDto(

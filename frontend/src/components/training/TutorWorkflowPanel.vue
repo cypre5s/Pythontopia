@@ -210,7 +210,8 @@ const planIsTerminal = computed(
 );
 const planNeedsSubmission = computed(
   () => activePlanStep.value?.expected_evidence === 'SUBMISSION_OBSERVED'
-    || activePlanStep.value?.expected_evidence === 'AC_SUBMISSION',
+    || activePlanStep.value?.expected_evidence === 'AC_SUBMISSION'
+    || activePlanStep.value?.expected_evidence === 'TRANSFER_ATTEMPT',
 );
 const compactAvailable = computed(() => cards.value.filter((card) => card.key === 'ai_reply').length > 4);
 
@@ -595,7 +596,14 @@ async function runEvent(
     sessionKey.value = r.session_id || sessionKey.value;
     phase.value = r.phase;
     episodePlan.value = r.episode_plan ?? null;
-    if (r.card && r.card_key) {
+    if (event === 'TRANSFER') {
+      try {
+        await refreshWorkflowSession();
+      } catch {
+        toast.show('迁移题已生成，但正式题目加载失败，请刷新后重试', 'error');
+        return;
+      }
+    } else if (r.card && r.card_key) {
       const entry: CardEntry = { key: r.card_key, payload: r.card, seq: r.seq };
       const msg = eventData?.message;
       if (typeof msg === 'string' && msg) entry.userMessage = msg;
@@ -610,6 +618,52 @@ async function runEvent(
     scrollBottom();
   } else {
     toast.show(sse.error.value?.message ?? '导学助手暂时没响应，再试一次', 'error');
+  }
+}
+
+async function refreshWorkflowSession(): Promise<void> {
+  const snapshot = await getActiveWorkflowSession(props.problemId);
+  if (!alive) return;
+  sessionKey.value = snapshot.sessionKey;
+  cards.value = snapshot.cards.map(toCardEntry);
+  olderCardsCursor.value = snapshot.olderCardsCursor ?? null;
+  phase.value = snapshot.phase;
+  episodePlan.value = snapshot.episodePlan ?? null;
+}
+
+async function submitTransfer(problem: TransferProblemCardDto): Promise<void> {
+  const problemId = problem.problem_id;
+  const tutorWorkflowSessionKey = sessionKey.value;
+  if (!problemId || !tutorWorkflowSessionKey || learning.training.submitPhase === 'submitting') return;
+  const code = learning.training.code.trim();
+  if (!code) {
+    toast.show('请先在代码编辑器中写好迁移题答案', 'error');
+    return;
+  }
+  const detail = await learning.submitToServer({
+    problemId,
+    code,
+    source: 'TRAINING',
+    tutorWorkflowSessionKey,
+  });
+  if (!detail) {
+    toast.show(learning.training.submitError ?? '迁移题提交失败', 'error');
+    return;
+  }
+  if (detail.judgeResult?.verdict !== 'SYSTEM_ERROR') {
+    try {
+      await refreshWorkflowSession();
+    } catch {
+      toast.show('判题结果已记录，但导学状态未刷新，请刷新页面查看', 'error');
+      return;
+    }
+  }
+  if (detail.judgeResult?.verdict === 'AC') {
+    toast.show('迁移题正式判题通过，学习记录已更新', 'success');
+  } else if (detail.judgeResult?.verdict === 'SYSTEM_ERROR') {
+    toast.show('判题服务暂不可用，本次不会记为答错', 'error');
+  } else {
+    toast.show(`迁移题尚未通过：${detail.judgeResult?.verdict ?? '未判定'}`, 'error');
   }
 }
 
@@ -1023,7 +1077,10 @@ function cardId(entry: CardEntry): string {
           <p class="tw-card__lead">
             <b>{{ asTransfer(entry.payload).title }}</b>
           </p>
-          <p>{{ asTransfer(entry.payload).description }}</p>
+          <MarkdownView
+            :source="asTransfer(entry.payload).description"
+            :allow-images="false"
+          />
           <p class="tw-kv">
             <b>输入：</b>{{ asTransfer(entry.payload).input_description }}
           </p>
@@ -1043,6 +1100,26 @@ function cardId(entry: CardEntry): string {
             class="tw-kv"
           >
             <b>提示：</b>{{ asTransfer(entry.payload).hint }}
+          </p>
+          <div
+            v-if="asTransfer(entry.payload).problem_id"
+            class="tw-transfer__judge"
+          >
+            <p>题目来自同知识点审核题库；提交结果由正式判题并回流学习画像。</p>
+            <button
+              type="button"
+              data-testid="submit-transfer"
+              :disabled="running || learning.training.submitPhase === 'submitting'"
+              @click="submitTransfer(asTransfer(entry.payload))"
+            >
+              {{ learning.training.submitPhase === 'submitting' ? '正在判题…' : '用当前编辑器代码正式提交' }}
+            </button>
+          </div>
+          <p
+            v-else
+            class="tw-transfer__unbound"
+          >
+            这张历史迁移卡没有绑定审核题，不能作为正式判题或学习证据。
           </p>
         </template>
 
@@ -2159,6 +2236,41 @@ function cardId(entry: CardEntry): string {
 .tw-retry button:focus-visible {
   outline: 2px solid #c2410c;
   outline-offset: 2px;
+}
+
+.tw-transfer__judge {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.tw-transfer__judge p,
+.tw-transfer__unbound {
+  margin: 0;
+  color: var(--pyt-color-text-muted);
+}
+
+.tw-transfer__judge button {
+  justify-self: start;
+  min-height: 36px;
+  border: 2px solid var(--pyt-color-border-strong, #2a1a05);
+  border-radius: 6px;
+  padding: 0 12px;
+  background: var(--pyt-color-info-bg, #e6f2fb);
+  color: var(--pyt-color-text-primary);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+}
+
+.tw-transfer__judge button:focus-visible {
+  outline: 3px solid var(--pyt-color-info, #2a6f97);
+  outline-offset: 2px;
+}
+
+.tw-transfer__judge button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 @media (max-width: 480px) {

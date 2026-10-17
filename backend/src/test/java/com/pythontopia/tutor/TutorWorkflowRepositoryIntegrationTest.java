@@ -32,8 +32,7 @@ class TutorWorkflowRepositoryIntegrationTest {
   @Container
   static final PostgreSQLContainer<?> POSTGRES =
       new PostgreSQLContainer<>(
-              DockerImageName.parse("pgvector/pgvector:pg16")
-                  .asCompatibleSubstituteFor("postgres"))
+              DockerImageName.parse("pgvector/pgvector:pg16").asCompatibleSubstituteFor("postgres"))
           .withDatabaseName("pythontopia")
           .withUsername("pytopia")
           .withPassword("pytopia");
@@ -118,26 +117,33 @@ class TutorWorkflowRepositoryIntegrationTest {
     assertThat(repository.persistRunProjection(session.id(), projection)).isTrue();
     assertThat(repository.persistRunProjection(session.id(), projection)).isFalse();
 
-    assertThat(jdbc.queryForObject(
-            "SELECT phase FROM tutor_workflow_session WHERE id = ?", String.class, session.id()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT phase FROM tutor_workflow_session WHERE id = ?",
+                String.class,
+                session.id()))
         .isEqualTo("CODING");
-    assertThat(jdbc.queryForObject(
-            "SELECT seq FROM tutor_workflow_session WHERE id = ?", Integer.class, session.id()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT seq FROM tutor_workflow_session WHERE id = ?", Integer.class, session.id()))
         .isEqualTo(2);
-    assertThat(jdbc.queryForObject(
-            "SELECT count(*) FROM tutor_workflow_run_projection WHERE session_id = ?",
-            Integer.class,
-            session.id()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM tutor_workflow_run_projection WHERE session_id = ?",
+                Integer.class,
+                session.id()))
         .isEqualTo(1);
-    assertThat(jdbc.queryForObject(
-            "SELECT count(*) FROM tutor_workflow_card WHERE session_id = ?",
-            Integer.class,
-            session.id()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM tutor_workflow_card WHERE session_id = ?",
+                Integer.class,
+                session.id()))
         .isEqualTo(1);
-    assertThat(jdbc.queryForObject(
-            "SELECT count(*) FROM tutor_workflow_action_event WHERE session_id = ?",
-            Integer.class,
-            session.id()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM tutor_workflow_action_event WHERE session_id = ?",
+                Integer.class,
+                session.id()))
         .isEqualTo(1);
     assertThat(
             new ObjectMapper()
@@ -160,7 +166,8 @@ class TutorWorkflowRepositoryIntegrationTest {
 
     var latest = repository.findLatestCardPage(session.id(), 2);
 
-    assertThat(latest.cards()).extracting(card -> card.payload().get("content").asText())
+    assertThat(latest.cards())
+        .extracting(card -> card.payload().get("content").asText())
         .containsExactly("two-b", "three");
     var cursor = latest.nextCursor();
     assertThat(cursor)
@@ -175,7 +182,8 @@ class TutorWorkflowRepositoryIntegrationTest {
 
     var earlier = repository.findCardsBefore(session.id(), cursor, 2);
 
-    assertThat(earlier.cards()).extracting(card -> card.payload().get("content").asText())
+    assertThat(earlier.cards())
+        .extracting(card -> card.payload().get("content").asText())
         .containsExactly("one", "two-a");
     assertThat(earlier.nextCursor()).isNull();
   }
@@ -195,10 +203,11 @@ class TutorWorkflowRepositoryIntegrationTest {
             OffsetDateTime.now(ZoneOffset.UTC).minusDays(90));
 
     assertThat(deleted).isEqualTo(1);
-    assertThat(jdbc.queryForObject(
-            "SELECT count(*) FROM tutor_workflow_action_event WHERE session_id = ?",
-            Integer.class,
-            session.id()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM tutor_workflow_action_event WHERE session_id = ?",
+                Integer.class,
+                session.id()))
         .isEqualTo(1);
     assertThat(repository.findRecentCards(session.id(), 10)).hasSize(1);
   }
@@ -240,8 +249,7 @@ class TutorWorkflowRepositoryIntegrationTest {
   void autogenCheckpointClaimResumeAndCompletionAreIdempotent() {
     UUID firstRunId = UUID.randomUUID();
     String fingerprint = "a".repeat(64);
-    var claimed =
-        repository.claimAutoGenRun(session.id(), firstRunId, fingerprint).orElseThrow();
+    var claimed = repository.claimAutoGenRun(session.id(), firstRunId, fingerprint).orElseThrow();
 
     assertThat(claimed.runId()).isEqualTo(firstRunId);
     assertThat(claimed.stageIndex()).isEqualTo(-1);
@@ -328,26 +336,33 @@ class TutorWorkflowRepositoryIntegrationTest {
     assertThatThrownBy(() -> repository.persistRunProjection(session.id(), projection))
         .isInstanceOf(RuntimeException.class);
 
-    assertThat(jdbc.queryForObject(
-            "SELECT phase FROM tutor_workflow_session WHERE id = ?", String.class, session.id()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT phase FROM tutor_workflow_session WHERE id = ?",
+                String.class,
+                session.id()))
         .isEqualTo("READING");
-    assertThat(jdbc.queryForObject(
-            "SELECT seq FROM tutor_workflow_session WHERE id = ?", Integer.class, session.id()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT seq FROM tutor_workflow_session WHERE id = ?", Integer.class, session.id()))
         .isZero();
-    assertThat(jdbc.queryForObject(
-            "SELECT count(*) FROM tutor_workflow_run_projection WHERE session_id = ?",
-            Integer.class,
-            session.id()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM tutor_workflow_run_projection WHERE session_id = ?",
+                Integer.class,
+                session.id()))
         .isZero();
-    assertThat(jdbc.queryForObject(
-            "SELECT count(*) FROM tutor_workflow_agent_state WHERE session_id = ?",
-            Integer.class,
-            session.id()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM tutor_workflow_agent_state WHERE session_id = ?",
+                Integer.class,
+                session.id()))
         .isZero();
-    assertThat(jdbc.queryForObject(
-            "SELECT count(*) FROM tutor_workflow_action_event WHERE session_id = ?",
-            Integer.class,
-            session.id()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM tutor_workflow_action_event WHERE session_id = ?",
+                Integer.class,
+                session.id()))
         .isZero();
   }
 
@@ -362,18 +377,57 @@ class TutorWorkflowRepositoryIntegrationTest {
             "{}",
             "{\"verdict\":\"AC\",\"accepted\":true}"));
 
-    assertThat(jdbc.queryForObject(
-            "SELECT state_json->'student_state'->>'attempt_count' FROM tutor_workflow_agent_state"
-                + " WHERE session_id = ?",
-            String.class,
-            session.id()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT state_json->'student_state'->>'attempt_count' FROM"
+                    + " tutor_workflow_agent_state WHERE session_id = ?",
+                String.class,
+                session.id()))
         .isEqualTo("2");
-    assertThat(jdbc.queryForObject(
-            "SELECT count(*) FROM tutor_workflow_action_event WHERE session_id = ?"
-                + " AND event_type = 'SUBMISSION_OBSERVED' AND action_key = 'AC'",
-            Integer.class,
-            session.id()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM tutor_workflow_action_event WHERE session_id = ?"
+                    + " AND event_type = 'SUBMISSION_OBSERVED' AND action_key = 'AC'",
+                Integer.class,
+                session.id()))
         .isEqualTo(1);
+  }
+
+  @Test
+  void activeTransferLookupUsesTheOwningWorkflowSessionAndLatestCard() {
+    TutorWorkflowSessionDto otherSession =
+        repository.insertSession(userId, session.problemId() + 1, "wf-" + userId + "-477-cafe");
+    jdbc.update(
+        "UPDATE tutor_workflow_session SET phase = 'TRANSFER' WHERE id IN (?, ?)",
+        session.id(),
+        otherSession.id());
+    jdbc.update(
+        """
+        INSERT INTO tutor_workflow_card (session_id, seq, event, card_key, payload)
+        VALUES (?, 4, 'TRANSFER', 'transfer_problem', '{"problem_id": 500}'::jsonb),
+               (?, 5, 'TRANSFER', 'transfer_problem', '{"problem_id": 501}'::jsonb),
+               (?, 5, 'TRANSFER', 'transfer_problem', '{"problem_id": 501}'::jsonb)
+        """,
+        session.id(),
+        session.id(),
+        otherSession.id());
+
+    assertThat(repository.findActiveTransferSession(userId, session.sessionKey(), 500L)).isEmpty();
+    assertThat(repository.findActiveTransferSession(userId, session.sessionKey(), 501L))
+        .contains(
+            new TutorWorkflowSessionDto(
+                session.id(), session.sessionKey(), session.problemId(), "TRANSFER", 0, "ACTIVE"));
+    assertThat(repository.findActiveTransferSession(userId, otherSession.sessionKey(), 501L))
+        .contains(
+            new TutorWorkflowSessionDto(
+                otherSession.id(),
+                otherSession.sessionKey(),
+                otherSession.problemId(),
+                "TRANSFER",
+                0,
+                "ACTIVE"));
+    assertThat(repository.findActiveTransferSession(userId + 1, session.sessionKey(), 501L))
+        .isEmpty();
   }
 
   @Test
@@ -383,22 +437,20 @@ class TutorWorkflowRepositoryIntegrationTest {
                 repository.persistSubmissionFeedback(
                     session.id(),
                     new TutorWorkflowRepository.SubmissionFeedbackProjection(
-                        4,
-                        "WA",
-                        "{\"student_state\":{\"attempt_count\":1}}",
-                        "{}",
-                        "not-json")))
+                        4, "WA", "{\"student_state\":{\"attempt_count\":1}}", "{}", "not-json")))
         .isInstanceOf(RuntimeException.class);
 
-    assertThat(jdbc.queryForObject(
-            "SELECT count(*) FROM tutor_workflow_agent_state WHERE session_id = ?",
-            Integer.class,
-            session.id()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM tutor_workflow_agent_state WHERE session_id = ?",
+                Integer.class,
+                session.id()))
         .isZero();
-    assertThat(jdbc.queryForObject(
-            "SELECT count(*) FROM tutor_workflow_action_event WHERE session_id = ?",
-            Integer.class,
-            session.id()))
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT count(*) FROM tutor_workflow_action_event WHERE session_id = ?",
+                Integer.class,
+                session.id()))
         .isZero();
   }
 
@@ -414,10 +466,17 @@ class TutorWorkflowRepositoryIntegrationTest {
         cardKey,
         cardPayload,
         "{\"event\":\"" + event + "\",\"run_id\":\"" + runId + "\"}",
-        "{\"session_id\":\"wf-test\",\"event\":\"" + event + "\","
-            + "\"phase\":\"" + phase + "\",\"card_key\":"
+        "{\"session_id\":\"wf-test\",\"event\":\""
+            + event
+            + "\","
+            + "\"phase\":\""
+            + phase
+            + "\",\"card_key\":"
             + (cardKey == null ? "null" : "\"" + cardKey + "\"")
-            + ",\"card\":" + (cardPayload == null ? "null" : cardPayload)
-            + ",\"available_actions\":[],\"seq\":" + seq + "}");
+            + ",\"card\":"
+            + (cardPayload == null ? "null" : cardPayload)
+            + ",\"available_actions\":[],\"seq\":"
+            + seq
+            + "}");
   }
 }

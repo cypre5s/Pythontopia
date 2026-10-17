@@ -211,6 +211,8 @@ public class TutorWorkflowService {
         return replay;
       }
     }
+    PublicProblemDto transferProblem =
+        "TRANSFER".equals(request.event()) ? requireTransferProblem(userId, problem) : null;
     Optional<TutorWorkflowRepository.AutoGenCheckpoint> claimed =
         repository.claimAutoGenRun(session.id(), proposedRunId, requestFingerprint);
     if (claimed.isEmpty() && idempotentRequest) {
@@ -260,7 +262,7 @@ public class TutorWorkflowService {
         emitter,
         resultJson -> {
           try {
-            persistProjection(session, request, runId, resultJson);
+            persistProjection(session, request, runId, resultJson, transferProblem);
           } catch (Exception e) {
             throw new IllegalStateException("Failed to persist tutor workflow projection", e);
           }
@@ -533,6 +535,34 @@ public class TutorWorkflowService {
         .findPublic(COURSE_PACK_ID, problemId)
         .orElseThrow(
             () -> new BusinessException(HttpStatus.NOT_FOUND, "PROBLEM_NOT_FOUND", "题目不存在"));
+  }
+
+  private PublicProblemDto requireTransferProblem(Long userId, PublicProblemDto sourceProblem) {
+    String kcCode = sourceProblem.kcCode();
+    PublicProblemRepository.VariantProblem variant =
+        kcCode == null || kcCode.isBlank()
+            ? null
+            : problemRepository
+                .findVariantProblem(userId, sourceProblem.id(), kcCode)
+                .orElse(null);
+    PublicProblemDto problem =
+        variant == null ? null : problemRepository.findPublic(COURSE_PACK_ID, variant.id()).orElse(null);
+    if (problem == null
+        || problem.id().equals(sourceProblem.id())
+        || !kcCode.equals(problem.kcCode())
+        || problem.title() == null
+        || problem.title().isBlank()
+        || problem.statementMarkdown() == null
+        || problem.statementMarkdown().isBlank()
+        || problem.samples() == null
+        || !problem.samples().isArray()
+        || problem.samples().isEmpty()) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT,
+          "TUTOR_TRANSFER_PROBLEM_UNAVAILABLE",
+          "当前知识点暂无审核过的同知识点迁移题，请继续当前练习");
+    }
+    return problem;
   }
 
   private Map<String, Object> problemContext(PublicProblemDto problem) {
@@ -865,7 +895,8 @@ public class TutorWorkflowService {
       TutorWorkflowSessionDto session,
       TutorWorkflowRunRequest request,
       UUID runId,
-      String resultJson)
+      String resultJson,
+      PublicProblemDto transferProblem)
       throws Exception {
     JsonNode root = objectMapper.readTree(resultJson);
     // AG-UI RUN_FINISHED 形状是 {"result": {...}}；历史名 result 是裸体。两种都接。
@@ -888,9 +919,28 @@ public class TutorWorkflowService {
     JsonNode card = result.path("card");
     String cardKey = result.path("card_key").asText(null);
     String cardPayloadJson = null;
+    if ("TRANSFER".equals(request.event())
+        && (!card.isObject() || !"transfer_problem".equals(cardKey) || transferProblem == null)) {
+      throw new IllegalStateException("Tutor transfer result has no trusted problem binding");
+    }
     if (card.isObject() && cardKey != null && !cardKey.isBlank()) {
       JsonNode payload = card;
-      if ("ai_reply".equals(cardKey)) {
+      if ("TRANSFER".equals(request.event())) {
+        ObjectNode enriched = card.deepCopy();
+        enriched.put("problem_id", transferProblem.id());
+        enriched.put("kc_code", transferProblem.kcCode());
+        enriched.put("title", transferProblem.title());
+        enriched.put("description", transferProblem.statementMarkdown());
+        enriched.put("input_description", nullSafe(transferProblem.inputDescription()));
+        enriched.put("output_description", nullSafe(transferProblem.outputDescription()));
+        enriched.set("samples", transferProblem.samples());
+        enriched.set("target_kcs", objectMapper.valueToTree(List.of(transferProblem.kcCode())));
+        enriched.put("hint", "请先读题明确输入、输出和约束，再结合样例独立完成。");
+        payload = enriched;
+        ObjectNode enrichedResult = result.deepCopy();
+        enrichedResult.set("card", enriched);
+        result = enrichedResult;
+      } else if ("ai_reply".equals(cardKey)) {
         ObjectNode enriched = card.deepCopy();
         enriched.put("user_message", chatMessage(request));
         payload = enriched;

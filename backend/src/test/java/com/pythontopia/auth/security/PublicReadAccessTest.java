@@ -45,6 +45,8 @@ class PublicReadAccessTest {
   private static final int MAX_LEARNING_EVENT_REQUEST_BYTES = 16 * 1024;
   private static final int MAX_LEARNING_EVENT_BATCH_REQUEST_BYTES = 512 * 1024;
   private static final int MAX_AUTH_REQUEST_BYTES = 4 * 1024;
+  private static final int MAX_TUTOR_ASK_REQUEST_BYTES = 17 * 1024 * 1024;
+  private static final int MAX_WORKSHOP_RESOURCE_CHECK_REQUEST_BYTES = 16 * 1024;
   private static final int MAX_INTERNAL_TUTOR_CHECKPOINT_REQUEST_BYTES = 3 * 1024 * 1024;
 
   @Autowired private MockMvc mockMvc;
@@ -235,13 +237,52 @@ class PublicReadAccessTest {
   void internalTutorCheckpointBodyIsBoundedBeforeMvcBinding() throws Exception {
     mockMvc
         .perform(
-            put(
-                    "/api/internal/tutor/workflow/sessions/session-1/autogen-checkpoints/"
-                        + "6bcb4c5d-5b3a-4761-a2ec-03bf248f4199")
+            put("/api/internal/tutor/workflow/sessions/session-1/autogen-checkpoints/"
+                    + "6bcb4c5d-5b3a-4761-a2ec-03bf248f4199")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("x".repeat(MAX_INTERNAL_TUTOR_CHECKPOINT_REQUEST_BYTES + 1)))
         .andExpect(status().isPayloadTooLarge())
         .andExpect(jsonPath("$.code").value("TUTOR_CHECKPOINT_REQUEST_TOO_LARGE"));
+  }
+
+  @Test
+  void tutorAskImageBodyIsBoundedBeforeMvcBinding() throws Exception {
+    CurrentUserPrincipal principal = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
+    when(jwtService.parse("signed-test-token")).thenReturn(principal);
+    when(userRepository.findById(7L))
+        .thenReturn(
+            Optional.of(
+                new UserAccount(
+                    7L, "student", "Student", "hash", null, Role.STUDENT, "ACTIVE", 0)));
+
+    mockMvc
+        .perform(
+            post("/api/tutor/ask")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer signed-test-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(new byte[MAX_TUTOR_ASK_REQUEST_BYTES + 1]))
+        .andExpect(status().isPayloadTooLarge())
+        .andExpect(jsonPath("$.code").value("TUTOR_ASK_REQUEST_TOO_LARGE"));
+  }
+
+  @Test
+  void workshopResourceCheckBodyIsBoundedBeforeMvcBinding() throws Exception {
+    CurrentUserPrincipal principal = new CurrentUserPrincipal(7L, "student", Role.STUDENT);
+    when(jwtService.parse("signed-test-token")).thenReturn(principal);
+    when(userRepository.findById(7L))
+        .thenReturn(
+            Optional.of(
+                new UserAccount(
+                    7L, "student", "Student", "hash", null, Role.STUDENT, "ACTIVE", 0)));
+
+    mockMvc
+        .perform(
+            post("/api/workshop/resources/12/checks")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer signed-test-token")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(new byte[MAX_WORKSHOP_RESOURCE_CHECK_REQUEST_BYTES + 1]))
+        .andExpect(status().isPayloadTooLarge())
+        .andExpect(jsonPath("$.code").value("WORKSHOP_RESOURCE_CHECK_REQUEST_TOO_LARGE"));
   }
 
   @Test
@@ -297,6 +338,16 @@ class PublicReadAccessTest {
     String recordAgentRuntimeEvent(
         @org.springframework.web.bind.annotation.RequestBody(required = false) String body) {
       return "event";
+    }
+
+    @PostMapping(value = "/api/tutor/ask", produces = MediaType.TEXT_PLAIN_VALUE)
+    String askTutor(@org.springframework.web.bind.annotation.RequestBody String body) {
+      return Integer.toString(body.length());
+    }
+
+    @PostMapping(value = "/api/workshop/resources/12/checks", produces = MediaType.TEXT_PLAIN_VALUE)
+    String submitResourceCheck(@org.springframework.web.bind.annotation.RequestBody String body) {
+      return Integer.toString(body.length());
     }
 
     @PostMapping(value = "/api/auth/logout", produces = MediaType.TEXT_PLAIN_VALUE)

@@ -83,15 +83,26 @@ public sealed interface LearningEvent
       Long problemId,
       String difficulty,
       Long submissionId,
-      String idempotencyKey)
+      String idempotencyKey,
+      String tutorWorkflowSessionKey)
       implements LearningEvent {
     public PracticeSucceeded(Long userId, String kcCode, Long problemId, String difficulty) {
-      this(userId, kcCode, problemId, difficulty, null, null);
+      this(userId, kcCode, problemId, difficulty, null, null, null);
     }
 
     public PracticeSucceeded(
         Long userId, String kcCode, Long problemId, String difficulty, Long submissionId) {
-      this(userId, kcCode, problemId, difficulty, submissionId, null);
+      this(userId, kcCode, problemId, difficulty, submissionId, null, null);
+    }
+
+    public PracticeSucceeded(
+        Long userId,
+        String kcCode,
+        Long problemId,
+        String difficulty,
+        Long submissionId,
+        String idempotencyKey) {
+      this(userId, kcCode, problemId, difficulty, submissionId, idempotencyKey, null);
     }
   }
 
@@ -102,11 +113,12 @@ public sealed interface LearningEvent
       String failureKind,
       String difficulty,
       Long submissionId,
-      String idempotencyKey)
+      String idempotencyKey,
+      String tutorWorkflowSessionKey)
       implements LearningEvent {
     public PracticeFailed(
         Long userId, String kcCode, Long problemId, String failureKind, String difficulty) {
-      this(userId, kcCode, problemId, failureKind, difficulty, null, null);
+      this(userId, kcCode, problemId, failureKind, difficulty, null, null, null);
     }
 
     public PracticeFailed(
@@ -116,7 +128,18 @@ public sealed interface LearningEvent
         String failureKind,
         String difficulty,
         Long submissionId) {
-      this(userId, kcCode, problemId, failureKind, difficulty, submissionId, null);
+      this(userId, kcCode, problemId, failureKind, difficulty, submissionId, null, null);
+    }
+
+    public PracticeFailed(
+        Long userId,
+        String kcCode,
+        Long problemId,
+        String failureKind,
+        String difficulty,
+        Long submissionId,
+        String idempotencyKey) {
+      this(userId, kcCode, problemId, failureKind, difficulty, submissionId, idempotencyKey, null);
     }
   }
 
@@ -174,8 +197,14 @@ public sealed interface LearningEvent
     }
 
     public String idempotencyKey() {
-      return "chapter-assessment:" + assessmentKind.toLowerCase(java.util.Locale.ROOT)
-          + ":" + chapter + ":" + assessmentId + ":" + kcCode;
+      return "chapter-assessment:"
+          + assessmentKind.toLowerCase(java.util.Locale.ROOT)
+          + ":"
+          + chapter
+          + ":"
+          + assessmentId
+          + ":"
+          + kcCode;
     }
   }
 }

@@ -69,6 +69,76 @@ class ApiRequestBodyLimitFilterTest {
   }
 
   @Test
+  void tutorAskImageBodyIsRejectedBeforeJsonBindingWhenTooLarge() throws Exception {
+    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/tutor/ask");
+    request.setContentType("application/json");
+    request.setContent(new byte[17 * 1024 * 1024 + 1]);
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+
+    new ApiRequestBodyLimitFilter(new ObjectMapper().registerModule(new JavaTimeModule()))
+        .doFilter(request, response, chain);
+
+    assertThat(response.getStatus()).isEqualTo(413);
+    assertThat(response.getContentAsString(StandardCharsets.UTF_8))
+        .contains("TUTOR_ASK_REQUEST_TOO_LARGE");
+    verifyNoInteractions(chain);
+  }
+
+  @Test
+  void tutorWorkflowRunBodyIsRejectedBeforeJsonBindingWhenTooLarge() throws Exception {
+    MockHttpServletRequest request = new MockHttpServletRequest("POST", "/api/tutor/workflow/runs");
+    request.setContentType("application/json");
+    request.setContent(new byte[128 * 1024 + 1]);
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+
+    new ApiRequestBodyLimitFilter(new ObjectMapper().registerModule(new JavaTimeModule()))
+        .doFilter(request, response, chain);
+
+    assertThat(response.getStatus()).isEqualTo(413);
+    assertThat(response.getContentAsString(StandardCharsets.UTF_8))
+        .contains("TUTOR_WORKFLOW_REQUEST_TOO_LARGE");
+    verifyNoInteractions(chain);
+  }
+
+  @Test
+  void tutorWorkflowFeedbackBodyIsRejectedBeforeJsonBindingWhenTooLarge() throws Exception {
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/api/tutor/workflow/sessions/session-1/feedback");
+    request.setContentType("application/json");
+    request.setContent(new byte[16 * 1024 + 1]);
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+
+    new ApiRequestBodyLimitFilter(new ObjectMapper().registerModule(new JavaTimeModule()))
+        .doFilter(request, response, chain);
+
+    assertThat(response.getStatus()).isEqualTo(413);
+    assertThat(response.getContentAsString(StandardCharsets.UTF_8))
+        .contains("TUTOR_WORKFLOW_FEEDBACK_REQUEST_TOO_LARGE");
+    verifyNoInteractions(chain);
+  }
+
+  @Test
+  void workshopResourceCheckBodyIsRejectedBeforeJsonBindingWhenTooLarge() throws Exception {
+    MockHttpServletRequest request =
+        new MockHttpServletRequest("POST", "/api/workshop/resources/12/checks");
+    request.setContentType("application/json");
+    request.setContent(new byte[16 * 1024 + 1]);
+    MockHttpServletResponse response = new MockHttpServletResponse();
+    FilterChain chain = mock(FilterChain.class);
+
+    new ApiRequestBodyLimitFilter(new ObjectMapper().registerModule(new JavaTimeModule()))
+        .doFilter(request, response, chain);
+
+    assertThat(response.getStatus()).isEqualTo(413);
+    assertThat(response.getContentAsString(StandardCharsets.UTF_8))
+        .contains("WORKSHOP_RESOURCE_CHECK_REQUEST_TOO_LARGE");
+    verifyNoInteractions(chain);
+  }
+
+  @Test
   void judgeSubmissionBodiesAreRejectedBeforeJsonBindingWhenTooLarge() throws Exception {
     for (String path :
         List.of(

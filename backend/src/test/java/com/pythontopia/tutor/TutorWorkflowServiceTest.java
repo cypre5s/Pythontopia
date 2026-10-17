@@ -5,13 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.ArgumentMatchers.anyString;
 
 import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
@@ -32,7 +32,6 @@ import com.pythontopia.submission.dto.SubmissionStatus;
 import com.pythontopia.submission.dto.Verdict;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import com.pythontopia.submission.service.SubmissionService;
-import com.pythontopia.tutor.TutorWorkflowAttachmentService;
 import com.pythontopia.tutor.dto.TutorWorkflowAgentStateDto;
 import com.pythontopia.tutor.dto.TutorWorkflowCardDto;
 import com.pythontopia.tutor.dto.TutorWorkflowFeedbackRequest;
@@ -130,8 +129,7 @@ class TutorWorkflowServiceTest {
   void malformedCheckpointDoesNotLogStoredLearnerText() {
     String privateAnswer = "privateStudentAnswerSentinel";
     when(repository.findAgentState(session.id()))
-        .thenReturn(
-            Optional.of(new TutorWorkflowAgentStateDto(session.id(), privateAnswer, "{}")));
+        .thenReturn(Optional.of(new TutorWorkflowAgentStateDto(session.id(), privateAnswer, "{}")));
     Logger logger = (Logger) LoggerFactory.getLogger(TutorWorkflowService.class);
     Level previousLevel = logger.getLevel();
     ListAppender<ILoggingEvent> appender = new ListAppender<>();
@@ -219,9 +217,11 @@ class TutorWorkflowServiceTest {
 
   @Test
   void runRejectsAnotherActiveRunForTheSameSession() {
-    when(repository.claimAutoGenRun(anyLong(), any(UUID.class), any())).thenReturn(Optional.empty());
+    when(repository.claimAutoGenRun(anyLong(), any(UUID.class), any()))
+        .thenReturn(Optional.empty());
 
-    assertThatThrownBy(() -> service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "READING", Map.of())))
+    assertThatThrownBy(
+            () -> service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "READING", Map.of())))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("导学会话正在处理其他请求");
   }
@@ -266,8 +266,7 @@ class TutorWorkflowServiceTest {
     assertThatThrownBy(
             () ->
                 service.run(
-                    USER,
-                    new TutorWorkflowRunRequest(requestId, PROBLEM, "READING", Map.of())))
+                    USER, new TutorWorkflowRunRequest(requestId, PROBLEM, "READING", Map.of())))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("请求标识");
 
@@ -294,7 +293,12 @@ class TutorWorkflowServiceTest {
     ArgumentCaptor<String> savedJson = ArgumentCaptor.forClass(String.class);
     verify(repository)
         .saveAutoGenCheckpoint(
-            eq(session.id()), eq(runId), eq(fingerprint), eq(2), eq("generate_card"), savedJson.capture());
+            eq(session.id()),
+            eq(runId),
+            eq(fingerprint),
+            eq(2),
+            eq("generate_card"),
+            savedJson.capture());
     assertThat(new ObjectMapper().readTree(savedJson.getValue())).isEqualTo(checkpoint);
   }
 
@@ -358,12 +362,14 @@ class TutorWorkflowServiceTest {
             1,
             "CHAT",
             "ai_reply",
-            new ObjectMapper().readTree(
-                """
+            new ObjectMapper()
+                .readTree(
+                    """
                 {"card_id":"wf-7-476-abc:x1","content":"先检查半径输入是否正确。"}
                 """),
             OffsetDateTime.parse("2026-10-12T12:00:00Z"));
-    when(repository.findCardByStoredId(session.id(), cardId)).thenReturn(Optional.of(referencedCard));
+    when(repository.findCardByStoredId(session.id(), cardId))
+        .thenReturn(Optional.of(referencedCard));
 
     service.run(
         USER,
@@ -371,8 +377,10 @@ class TutorWorkflowServiceTest {
             PROBLEM,
             "CHAT",
             Map.of(
-                "message", "@card:" + cardId + " 请继续解释",
-                "references", List.of(Map.of("kind", "card", "snippet", "伪造内容")))));
+                "message",
+                "@card:" + cardId + " 请继续解释",
+                "references",
+                List.of(Map.of("kind", "card", "snippet", "伪造内容")))));
 
     @SuppressWarnings("unchecked")
     Map<String, Object> eventData = (Map<String, Object>) capturedBody().get("event_data");
@@ -398,9 +406,7 @@ class TutorWorkflowServiceTest {
     when(repository.findFirstCardBySeq(session.id(), 1)).thenReturn(Optional.of(referencedCard));
 
     service.run(
-        USER,
-        new TutorWorkflowRunRequest(
-            PROBLEM, "CHAT", Map.of("message", "@card:seq-1 请再举例")));
+        USER, new TutorWorkflowRunRequest(PROBLEM, "CHAT", Map.of("message", "@card:seq-1 请再举例")));
 
     @SuppressWarnings("unchecked")
     Map<String, Object> eventData = (Map<String, Object>) capturedBody().get("event_data");
@@ -429,15 +435,11 @@ class TutorWorkflowServiceTest {
   @Test
   void chatReferencesOnlyPagesFromTheCoursePack() {
     when(coursePackRepository.findPageById(88L))
-        .thenReturn(
-            Optional.of(
-                new CoursePage(
-                    88L, 43L, 12L, 4L, 17, "for 循环", "课件完整内容", "课件摘录")));
+        .thenReturn(Optional.of(new CoursePage(88L, 43L, 12L, 4L, 17, "for 循环", "课件完整内容", "课件摘录")));
 
     service.run(
         USER,
-        new TutorWorkflowRunRequest(
-            PROBLEM, "CHAT", Map.of("message", "@courseware:88 请结合这页说明")));
+        new TutorWorkflowRunRequest(PROBLEM, "CHAT", Map.of("message", "@courseware:88 请结合这页说明")));
 
     @SuppressWarnings("unchecked")
     Map<String, Object> eventData = (Map<String, Object>) capturedBody().get("event_data");
@@ -445,21 +447,24 @@ class TutorWorkflowServiceTest {
         .isEqualTo(
             List.of(
                 Map.of(
-                    "kind", "courseware",
-                    "page_id", 88L,
-                    "page_no", 17,
-                    "chapter_id", 4L,
-                    "title", "for 循环",
-                    "snippet", "课件摘录")));
+                    "kind",
+                    "courseware",
+                    "page_id",
+                    88L,
+                    "page_no",
+                    17,
+                    "chapter_id",
+                    4L,
+                    "title",
+                    "for 循环",
+                    "snippet",
+                    "课件摘录")));
   }
 
   @Test
   void chatRejectsCoursewareOutsideTheCoursePack() {
     when(coursePackRepository.findPageById(88L))
-        .thenReturn(
-            Optional.of(
-                new CoursePage(
-                    88L, 99L, 12L, 4L, 17, "他人课件", "不应暴露", "不应暴露")));
+        .thenReturn(Optional.of(new CoursePage(88L, 99L, 12L, 4L, 17, "他人课件", "不应暴露", "不应暴露")));
 
     assertThatThrownBy(
             () ->
@@ -613,9 +618,7 @@ class TutorWorkflowServiceTest {
     service.run(
         USER,
         new TutorWorkflowRunRequest(
-            PROBLEM,
-            "CHAT",
-            Map.of("message", "解释当前代码", "code", "print(radius * radius)")));
+            PROBLEM, "CHAT", Map.of("message", "解释当前代码", "code", "print(radius * radius)")));
 
     @SuppressWarnings("unchecked")
     Map<String, Object> eventData = (Map<String, Object>) capturedBody().get("event_data");
@@ -631,9 +634,7 @@ class TutorWorkflowServiceTest {
                 service.run(
                     USER,
                     new TutorWorkflowRunRequest(
-                        PROBLEM,
-                        "CHAT",
-                        Map.of("message", "解释当前代码", "code", "x".repeat(20_001)))))
+                        PROBLEM, "CHAT", Map.of("message", "解释当前代码", "code", "x".repeat(20_001)))))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("代码");
 
@@ -657,8 +658,10 @@ class TutorWorkflowServiceTest {
                         PROBLEM,
                         "CHAT",
                         Map.of(
-                            "message", "请看图",
-                            "images", List.of("data:image/png;base64,aGVsbG8=")))))
+                            "message",
+                            "请看图",
+                            "images",
+                            List.of("data:image/png;base64,aGVsbG8=")))))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("私有附件");
   }
@@ -697,9 +700,7 @@ class TutorWorkflowServiceTest {
             """);
 
     TutorWorkflowRepository.RunProjection projection = capturedProjection();
-    assertThat(projection.cardPayloadJson())
-        .contains("请结合图片帮我分析")
-        .doesNotContain("data:image");
+    assertThat(projection.cardPayloadJson()).contains("请结合图片帮我分析").doesNotContain("data:image");
   }
 
   @Test
@@ -773,7 +774,8 @@ class TutorWorkflowServiceTest {
   @Test
   void errorFeedbackRequiresSubmissionId() {
     assertThatThrownBy(
-            () -> service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "ERROR_FEEDBACK", Map.of())))
+            () ->
+                service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "ERROR_FEEDBACK", Map.of())))
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("submission_id");
   }
@@ -850,8 +852,7 @@ class TutorWorkflowServiceTest {
         .when(graphClient)
         .runStream(any(), any(), any(), any(), any(), any());
 
-    service.run(
-        USER, new TutorWorkflowRunRequest(PROBLEM, "CHAT", Map.of("message", "怎么保留小数？")));
+    service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "CHAT", Map.of("message", "怎么保留小数？")));
 
     // 模拟 graph 终态（AG-UI RUN_FINISHED 包裹形状）。
     onResult
@@ -866,9 +867,109 @@ class TutorWorkflowServiceTest {
     TutorWorkflowRepository.RunProjection projection = capturedProjection();
     assertThat(projection.phase()).isEqualTo("READING");
     assertThat(projection.seq()).isEqualTo(3);
-    assertThat(projection.cardPayloadJson())
-        .contains("user_message")
-        .contains("怎么保留小数？");
+    assertThat(projection.cardPayloadJson()).contains("user_message").contains("怎么保留小数？");
+  }
+
+  @Test
+  void transferProjectionBindsAReviewedSameKcProblemForFormalSubmission() throws Exception {
+    PublicProblemDto transferProblem =
+        new PublicProblemDto(
+            500L,
+            43L,
+            "PY43-KC-016",
+            "审核变式题",
+            "读取边长并输出正方形面积",
+            "一个浮点数",
+            "面积保留 2 位",
+            "Basic",
+            new ObjectMapper().readTree("[{\"input\":\"2\",\"output\":\"4.00\"}]"));
+    when(problemRepository.findVariantProblem(USER, PROBLEM, "PY43-KC-016"))
+        .thenReturn(Optional.of(new PublicProblemRepository.VariantProblem(500L, "审核变式题")));
+    when(problemRepository.findPublic(43L, 500L)).thenReturn(Optional.of(transferProblem));
+
+    AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              onResult.set(invocation.getArgument(3));
+              return null;
+            })
+        .when(graphClient)
+        .runStream(any(), any(), any(), any(), any(), any());
+
+    service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "TRANSFER", Map.of()));
+    onResult
+        .get()
+        .accept(
+            """
+            {"result":{"event":"TRANSFER","phase":"TRANSFER","card_key":"transfer_problem",
+             "card":{"title":"模型题目","description":"模型自拟题面","input_description":"模型输入",
+               "output_description":"模型输出","samples":[{"input":"bad","output":"bad"}],
+               "hint":"先看输入输出关系","target_kcs":["PY43-KC-001"]},"seq":8}}
+            """);
+
+    JsonNode card = new ObjectMapper().readTree(capturedProjection().cardPayloadJson());
+    assertThat(card.path("problem_id").asLong()).isEqualTo(500L);
+    assertThat(card.path("kc_code").asText()).isEqualTo("PY43-KC-016");
+    assertThat(card.path("title").asText()).isEqualTo("审核变式题");
+    assertThat(card.path("description").asText()).isEqualTo("读取边长并输出正方形面积");
+    assertThat(card.path("samples").get(0).path("output").asText()).isEqualTo("4.00");
+    assertThat(card.path("target_kcs").get(0).asText()).isEqualTo("PY43-KC-016");
+    assertThat(card.path("hint").asText()).isEqualTo("请先读题明确输入、输出和约束，再结合样例独立完成。");
+  }
+
+  @Test
+  void transferProjectionRejectsMissingProblemCard() throws Exception {
+    PublicProblemDto transferProblem =
+        new PublicProblemDto(
+            500L,
+            43L,
+            "PY43-KC-016",
+            "审核变式题",
+            "读取边长并输出正方形面积",
+            "一个浮点数",
+            "面积保留 2 位",
+            "Basic",
+            new ObjectMapper().readTree("[{\"input\":\"2\",\"output\":\"4.00\"}]"));
+    when(problemRepository.findVariantProblem(USER, PROBLEM, "PY43-KC-016"))
+        .thenReturn(Optional.of(new PublicProblemRepository.VariantProblem(500L, "审核变式题")));
+    when(problemRepository.findPublic(43L, 500L)).thenReturn(Optional.of(transferProblem));
+
+    AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
+    org.mockito.Mockito.doAnswer(
+            invocation -> {
+              onResult.set(invocation.getArgument(3));
+              return null;
+            })
+        .when(graphClient)
+        .runStream(any(), any(), any(), any(), any(), any());
+
+    service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "TRANSFER", Map.of()));
+
+    assertThatThrownBy(
+            () ->
+                onResult
+                    .get()
+                    .accept(
+                        """
+                        {"result":{"event":"TRANSFER","phase":"TRANSFER",
+                         "card_key":null,"card":null,"seq":8}}
+                        """))
+        .isInstanceOf(IllegalStateException.class)
+        .hasMessageContaining("Failed to persist tutor workflow projection");
+    verify(repository, never())
+        .persistRunProjection(eq(session.id()), any(TutorWorkflowRepository.RunProjection.class));
+  }
+
+  @Test
+  void transferRunFailsClosedWhenThereIsNoReviewedSameKcVariant() {
+    when(problemRepository.findVariantProblem(USER, PROBLEM, "PY43-KC-016"))
+        .thenReturn(Optional.empty());
+
+    assertThatThrownBy(
+            () -> service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "TRANSFER", Map.of())))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("审核过的同知识点迁移题");
+    verify(graphClient, never()).runStream(any(), any(), any(), any(), any(), any());
   }
 
   @Test
@@ -882,8 +983,7 @@ class TutorWorkflowServiceTest {
         .when(graphClient)
         .runStream(any(), any(), any(), any(), any(), any());
 
-    service.run(
-        USER, new TutorWorkflowRunRequest(PROBLEM, "CHAT", Map.of("message", "先看哪里？")));
+    service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "CHAT", Map.of("message", "先看哪里？")));
 
     onResult
         .get()
@@ -930,7 +1030,8 @@ class TutorWorkflowServiceTest {
         .runStream(any(), any(), any(), any(), any(), any());
 
     service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "PLAN_START", Map.of("plan_id", "p1")));
-    String result = """
+    String result =
+        """
         {"result":{"event":"PLAN_START","phase":"READING","seq":2}}
         """;
     onResult.get().accept(result);
@@ -990,8 +1091,7 @@ class TutorWorkflowServiceTest {
     assertThat(payload.getValue()).contains("\"source\":\"button\"");
     verify(eventPublisher)
         .publishEvent(
-            new LearningEvent.GuideActionClicked(
-                USER, PROBLEM, "PY43-KC-016", "execution_trace"));
+            new LearningEvent.GuideActionClicked(USER, PROBLEM, "PY43-KC-016", "execution_trace"));
   }
 
   @Test
@@ -1003,7 +1103,8 @@ class TutorWorkflowServiceTest {
             "CHECKPOINT_COMPLETED", null, "execution_trace", Map.of("answer", "变量变了")));
 
     verify(repository)
-        .insertActionEvent(eq(11L), eq(0), eq("CHECKPOINT_COMPLETED"), eq("execution_trace"), any());
+        .insertActionEvent(
+            eq(11L), eq(0), eq("CHECKPOINT_COMPLETED"), eq("execution_trace"), any());
     verify(eventPublisher)
         .publishEvent(
             new LearningEvent.GuideCheckpointCompleted(
@@ -1023,7 +1124,11 @@ class TutorWorkflowServiceTest {
 
     verify(repository, never())
         .insertActionEvent(
-            eq(session.id()), eq(session.seq()), eq("ACTION_CLICKED"), eq("execution_trace"), anyString());
+            eq(session.id()),
+            eq(session.seq()),
+            eq("ACTION_CLICKED"),
+            eq("execution_trace"),
+            anyString());
     verify(eventPublisher, never()).publishEvent(any());
   }
 
@@ -1038,7 +1143,8 @@ class TutorWorkflowServiceTest {
       long submissionId, long problemId, Verdict verdict, SubmissionStatus status) {
     return new SubmissionDetailDto(
         submission(submissionId, problemId, status),
-        new JudgeResultDto(1L, submissionId, verdict, 1, 3, "WA on case 2", null, OffsetDateTime.now()));
+        new JudgeResultDto(
+            1L, submissionId, verdict, 1, 3, "WA on case 2", null, OffsetDateTime.now()));
   }
 
   private static SubmissionDto submission(long id, SubmissionStatus status) {

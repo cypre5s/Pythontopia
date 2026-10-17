@@ -149,6 +149,8 @@ export interface TransferSampleDto {
 
 export interface TransferProblemCardDto {
   card_id?: string;
+  problem_id?: number;
+  kc_code?: string;
   title: string;
   description: string;
   input_description: string;

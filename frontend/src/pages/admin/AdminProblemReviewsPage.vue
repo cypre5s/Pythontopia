@@ -380,7 +380,7 @@ onMounted(() => {
       <AdminTable
         v-else
         label="审核队列，可横向滚动"
-        :min-width="1100"
+        :min-width="1152"
       >
         <table class="review-table">
           <thead>

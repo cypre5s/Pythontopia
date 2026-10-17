@@ -7,12 +7,16 @@ const {
   streamAbort,
   getActiveWorkflowSession,
   getEarlierWorkflowCards,
+  submitToServer,
+  toastShow,
   streamConfig,
 } = vi.hoisted(() => ({
   streamStart: vi.fn(),
   streamAbort: vi.fn(),
   getActiveWorkflowSession: vi.fn(),
   getEarlierWorkflowCards: vi.fn(),
+  submitToServer: vi.fn(),
+  toastShow: vi.fn(),
   streamConfig: {
     completeRequest: false,
     holdRequest: false,
@@ -67,10 +71,11 @@ vi.mock('@/api/tutorWorkflow', () => ({
 vi.mock('@stores/learning', () => ({
   useLearningStore: () => ({
     field: { hydrated: false },
-    training: { code: '', problem: null },
+    training: { code: 'print(4)', problem: null, submitPhase: 'idle' },
+    submitToServer,
   }),
 }));
-vi.mock('@stores/toast', () => ({ useToastStore: () => ({ show: vi.fn() }) }));
+vi.mock('@stores/toast', () => ({ useToastStore: () => ({ show: toastShow }) }));
 vi.mock('vue-router', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 vi.mock('@/services/codeTheater/trace', () => ({ runTrace: vi.fn() }));
 
@@ -255,7 +260,7 @@ describe('TutorWorkflowPanel interrupted request recovery', () => {
     expect(stored.sessionKey).toBe('session-42');
   });
 
-  it('does not treat an unjudged legacy transfer step as an automatic submission step', async () => {
+  it('requires formal submission for an active transfer step', async () => {
     getActiveWorkflowSession.mockResolvedValueOnce({
       sessionKey: 'session-42',
       problemId: 42,
@@ -287,8 +292,8 @@ describe('TutorWorkflowPanel interrupted request recovery', () => {
     });
     await flushPromises();
 
-    expect(wrapper.find('.tw-plan__response-label').exists()).toBe(true);
-    expect(wrapper.find('.tw-plan__stop').text()).not.toContain('正式提交后自动推进');
+    expect(wrapper.find('.tw-plan__response-label').exists()).toBe(false);
+    expect(wrapper.find('.tw-plan__stop').text()).toContain('正式提交后自动推进');
   });
 
   it('lets the student stop a running request and keeps it available to resume', async () => {
@@ -357,5 +362,96 @@ describe('TutorWorkflowPanel interrupted request recovery', () => {
     expect(wrapper.findAll('.tw-card')).toHaveLength(1);
     expect(wrapper.findAll('.tw-card__user')).toHaveLength(1);
     expect(wrapper.get('.tw-card__user').text()).toContain('请解释这道题');
+  });
+});
+
+describe('Tutor transfer formal submission', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    vi.clearAllMocks();
+    getActiveWorkflowSession.mockResolvedValue({
+      sessionKey: 'wf-7-42-cafe',
+      problemId: 42,
+      phase: 'TRANSFER',
+      seq: 3,
+      cards: [{
+        seq: 3,
+        event: 'TRANSFER',
+        cardKey: 'transfer_problem',
+        payload: {
+          problem_id: 500,
+          kc_code: 'PY43-KC-016',
+          title: '审核变式题',
+          description: '读取边长并输出正方形面积',
+          input_description: '一个浮点数',
+          output_description: '面积保留 2 位',
+          samples: [{ input: '2', output: '4.00' }],
+          hint: '先看输入输出关系',
+          target_kcs: ['PY43-KC-016'],
+        },
+      }],
+      episodePlan: null,
+    });
+    getEarlierWorkflowCards.mockResolvedValue({ cards: [], nextCursor: null });
+  });
+
+  it('submits the server-bound transfer problem through the formal judge', async () => {
+    const wrapper = shallowMount(TutorWorkflowPanel, {
+      props: { problemId: 42, kcCodes: ['PY43-KC-016'] },
+      global: { stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    const submitButton = wrapper.find('[data-testid="submit-transfer"]');
+    expect(submitButton.exists()).toBe(true);
+    await submitButton.trigger('click');
+    await flushPromises();
+
+    expect(submitToServer).toHaveBeenCalledWith({
+      problemId: 500,
+      code: 'print(4)',
+      source: 'TRAINING',
+      tutorWorkflowSessionKey: 'wf-7-42-cafe',
+    });
+  });
+
+  it('refreshes the workflow plan after a formally judged transfer submission', async () => {
+    const wrapper = shallowMount(TutorWorkflowPanel, {
+      props: { problemId: 42, kcCodes: ['PY43-KC-016'] },
+      global: { stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+    const initialFetches = getActiveWorkflowSession.mock.calls.length;
+    getActiveWorkflowSession.mockResolvedValueOnce({
+      sessionKey: 'session-42',
+      problemId: 42,
+      phase: 'TRANSFER',
+      seq: 4,
+      cards: [],
+      episodePlan: {
+        plan_id: 'plan-1',
+        session_id: 'session-42',
+        problem_id: 42,
+        user_id: 7,
+        objective: '完成迁移题',
+        trigger_event: 'TRANSFER',
+        trigger_verdict: 'AC',
+        revision: 2,
+        current_step_id: '',
+        steps: [],
+        status: 'COMPLETED',
+        stop_policy: 'DONE',
+        revision_reason: '',
+        created_by: 'coach',
+        evidence_summary: '正式判题通过',
+      },
+    });
+    submitToServer.mockResolvedValue({ judgeResult: { verdict: 'AC' } });
+
+    await wrapper.get('[data-testid="submit-transfer"]').trigger('click');
+    await flushPromises();
+
+    expect(getActiveWorkflowSession).toHaveBeenCalledTimes(initialFetches + 1);
+    expect(wrapper.get('[data-testid="tutor-episode-plan"]').text()).toContain('已完成');
   });
 });
