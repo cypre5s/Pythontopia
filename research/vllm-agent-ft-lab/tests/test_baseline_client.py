@@ -104,8 +104,12 @@ def test_live_research_clis_do_not_accept_api_keys_in_argv(
     script: str, secret_flags: tuple[str, ...]
 ) -> None:
     script_path = Path(__file__).parents[1] / "scripts" / script
+    command = [sys.executable]
+    if script in {"run_graph_route_ab.py", "diagnose_graph_agent_prompts.py"}:
+        # Help must remain usable without installing the live Graph runtime dependencies.
+        command.append("-S")
     result = subprocess.run(
-        [sys.executable, str(script_path), "--help"],
+        [*command, str(script_path), "--help"],
         check=True,
         capture_output=True,
         text=True,

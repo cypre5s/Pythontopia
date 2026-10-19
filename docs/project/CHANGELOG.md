@@ -10,7 +10,7 @@
 - 闭环审计补上主线 stage KC 映射：overview DTO 暴露权威 `kcCodes`，学习分身推荐 KC 现在会高亮所属小节并提供直达 CTA，避免只带章节参数后默认继续到无关 stage。前后端定向回归通过。
 - 简化与素材：BossGraphClient 复用 `signalsToMap`，删除约 21 行重复映射；移除未引用的 711 B public 树桩副本，保留 inbox 原素材并更新 `LICENSE-ART.md`。构建验证该副本不在 dist。
 - 验证：`mvn -B -DskipTests=false test` 1,768/1,768（0 failures/errors/skips）；Vitest 279 文件 / 2,674 项、typecheck、lint、build 通过；Graph 1,963 passed/1 skipped、RAG 166 passed、Research 330 passed/4 skipped。Chromium 实测真实 Piston 学习闭环；另用 mock API 在 320/375px 验证 Twin 无横向溢出、推荐按钮路由正确。此次最后边界修正未重跑全栈真实旅程。
-- 本地验证完成后按用户要求推送到 `origin/main`；提交对应的 GitHub Actions 状态以交付回执为准。Maven 收尾仍有 Testcontainers 关闭后 Outbox scheduler 连接拒绝日志，但 Surefire 全量结果为 BUILD SUCCESS。无 DeepSeek 调用。
+- 首次托管 `ci #8` 暴露环境依赖：Graph 3 个路由测试缺少本地 provider stub 时被 503 遮蔽；Research 两个 Graph CLI 在 `--help` 阶段过早导入运行时依赖。测试现已注入确定性桩 provider，CLI 改为按需导入；本地 Graph 1,963 passed/1 skipped、Research 330 passed/4 skipped。该修复已本地验证并推送，后续 Actions 状态以交付回执为准。Maven 收尾仍有 Testcontainers 关闭后 Outbox scheduler 连接拒绝日志，但 Surefire 全量结果为 BUILD SUCCESS。无 DeepSeek 调用。
 - 局部减法包括删除重复画像映射与 1 份确认未引用素材；新增测试、迁移与校验代码超过删除量，因此不声称本轮降低了系统整体复杂度。真实 PostgreSQL 断连/进程重启、Outbox 管理员逐次重放审计和最新提交的托管 CI 仍未验证。
 
 ## 2026-10-17

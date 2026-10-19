@@ -331,7 +331,9 @@ async def test_generic_fallback_is_chapter_relevant() -> None:
     assert out.bug_line_indices
 
 
-def test_bug_exposure_route_returns_bug_lines() -> None:
+def test_bug_exposure_route_returns_bug_lines(monkeypatch) -> None:
+    # 代码找茬优先走本地 bug 库；测试不能依赖 runner 上配置真实 LLM。
+    monkeypatch.setattr(app.state, "llm_provider", RaisingProvider(), raising=False)
     client = TestClient(app)
 
     response = client.post(

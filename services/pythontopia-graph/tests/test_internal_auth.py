@@ -179,6 +179,8 @@ def test_stateful_route_accepts_matching_authenticated_subject(monkeypatch) -> N
 
 def test_tutor_workflow_rejects_forged_body_user_id_before_streaming(monkeypatch) -> None:
     monkeypatch.setenv("PYT_RAG_ADMIN_TOKEN", "secret")
+    # 该用例断言服务端身份校验；注入桩以免缺少线上 LLM 凭证时被 503 掩盖。
+    monkeypatch.setattr(app.state, "llm_provider", _StubProvider(), raising=False)
     client = TestClient(app)
 
     response = client.post(

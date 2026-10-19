@@ -11,25 +11,10 @@ from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
-import httpx
-
-
 REPO_ROOT = Path(__file__).resolve().parents[3]
 GRAPH_ROOT = REPO_ROOT / "services" / "pythontopia-graph"
 if str(GRAPH_ROOT) not in sys.path:
     sys.path.insert(0, str(GRAPH_ROOT))
-
-from pyt_agent_lab.graph_route_ab import (  # noqa: E402
-    build_graph_route_ab_report,
-    default_evidence_hits,
-    default_graph_route_cases,
-    summarize_graph_route_results,
-    write_graph_route_ab_report,
-)
-from pythontopia_graph.llm.provider import provider_from_env, provider_label  # noqa: E402
-from pythontopia_graph.main import app  # noqa: E402
-from pythontopia_graph.nodes.evidence_fetcher import RagHit, StaticEvidenceFetcher  # noqa: E402
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
@@ -73,6 +58,14 @@ async def main() -> int:
         raise SystemExit("Set PYT_OPENAI_API_KEY or OPENAI_API_KEY in the process environment.")
     if not internal_token:
         raise SystemExit("Set PYT_RAG_ADMIN_TOKEN in the process environment.")
+    from pyt_agent_lab.graph_route_ab import (
+        build_graph_route_ab_report,
+        default_evidence_hits,
+        default_graph_route_cases,
+        summarize_graph_route_results,
+        write_graph_route_ab_report,
+    )
+
     baseline_results = await _run_variant(
         variant="baseline_base_model",
         base_url=args.base_url,
@@ -139,6 +132,12 @@ async def _run_variant(
     fine_tuned_enabled: bool,
     timeout_seconds: float,
 ) -> list[dict[str, Any]]:
+    import httpx
+
+    from pythontopia_graph.llm.provider import provider_from_env, provider_label
+    from pythontopia_graph.main import app
+    from pythontopia_graph.nodes.evidence_fetcher import RagHit, StaticEvidenceFetcher
+
     env = {
         "PYT_RAG_ADMIN_TOKEN": internal_token,
         "PYT_LLM_PROVIDER": "openai_compat",

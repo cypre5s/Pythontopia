@@ -15,15 +15,6 @@ GRAPH_ROOT = REPO_ROOT / "services" / "pythontopia-graph"
 if str(GRAPH_ROOT) not in sys.path:
     sys.path.insert(0, str(GRAPH_ROOT))
 
-from pyt_agent_lab.graph_route_ab import default_evidence_hits, default_graph_route_cases  # noqa: E402
-from pythontopia_graph.agents.handout_agent import HandoutAgent  # noqa: E402
-from pythontopia_graph.agents.mind_map_agent import MindMapAgent  # noqa: E402
-from pythontopia_graph.agents.practice_agent import PracticeAgent  # noqa: E402
-from pythontopia_graph.llm.provider import provider_from_env, provider_label  # noqa: E402
-from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle, RagHit  # noqa: E402
-from pythontopia_graph.schemas.resource import ResourceProduceRequest  # noqa: E402
-
-
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Inspect raw fine-tuned responses for real graph Agent prompts."
@@ -43,6 +34,14 @@ async def main() -> int:
     api_key = os.environ.get("PYT_OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY")
     if not api_key:
         raise SystemExit("Set PYT_OPENAI_API_KEY or OPENAI_API_KEY in the process environment.")
+    from pyt_agent_lab.graph_route_ab import default_evidence_hits, default_graph_route_cases
+    from pythontopia_graph.agents.handout_agent import HandoutAgent
+    from pythontopia_graph.agents.mind_map_agent import MindMapAgent
+    from pythontopia_graph.agents.practice_agent import PracticeAgent
+    from pythontopia_graph.llm.provider import provider_from_env, provider_label
+    from pythontopia_graph.nodes.evidence_fetcher import EvidenceBundle, RagHit
+    from pythontopia_graph.schemas.resource import ResourceProduceRequest
+
     os.environ.update(
         {
             "PYT_LLM_PROVIDER": "openai_compat",
