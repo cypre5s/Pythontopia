@@ -17,6 +17,7 @@
 - Outbox 真实恢复：在画像行锁阻塞时，submission 248 对应的 outbox 244 持久保持 PENDING；停止后端进程组造成实际 HTTP 断连，重启 `./dev.sh --sandbox` 并释放行锁后自动转为 APPLIED，`attempt_count=1` 且画像证据仅增加一次。
 - P1 管理闭环：新增 ADMIN-only `GET /api/admin/profile-projection-outbox/failed` 分页列表与 `GET /{outboxId}` 状态详情；既有 `PUT /{outboxId}` 修复会记录最新操作者 ID/时间并累计次数。V226 在原表加两列及失败查询索引；GET 仅返回安全运维元数据，不暴露画像 delta 或幂等键。
 - P1 实测：本地 PostgreSQL 中准备 FAILED outbox 245，真实管理员登录后通过 HTTP 列表/详情定位，PUT 返回 202，随后详情和数据库均为 APPLIED、重放次数 1 且操作者/时间已保存；测试账号及级联数据已删除。Controller 10/10、Outbox PostgreSQL 8/8、后端全量 `mvn -B test` 1,775/1,775 通过（0 failures/errors/skips）。Surefire BUILD SUCCESS；Testcontainers 关闭时既有后台清理任务会记录连接拒绝日志。
+- 当前快照最终复跑：Piston submission 253 完成 Twin→主线→远征结算与刷新恢复，结算重放没有重复奖励；submission 254 在画像行锁等待期间断开后，outbox 256 经后端重启自动 APPLIED 且只增加一次证据。管理员 HTTP 对 outbox 258 完成 FAILED 列表、详情与修复重放，记录最新操作者/时间和累计次数。320/375px 六个页面无横向溢出或浏览器异常，缺失 stage 提示清楚；Outbox 定向后端测试 18/18 通过。临时账号与数据库记录已清理。
 
 ## 2026-10-17
 

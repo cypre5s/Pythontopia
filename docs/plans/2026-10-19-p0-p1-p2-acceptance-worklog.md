@@ -27,3 +27,11 @@
 - 一次性账号 ID 848 已删除，确认 users 表无此用户；其 outbox 与用户数据随外键级联清理。临时凭据文件已删除。
 - 本地开发栈已停止，数据库卷保留；启动钩子更新的 course43 manifest 时间戳已恢复。
 - P0/P1/P2 验收范围已完成；P1 接口提供运维 API，不包含单独的管理员前端页面。
+
+## 当前快照最终复跑（2026-10-19）
+
+- P0 在 disposable student 854 上重新完成注册、Twin 推荐到 stage 3、Piston 官方题 #476（submission 253，`PASSED/AC`）、Twin 证据更新、远征挑战和服务端结算。原 `SETTLE_CHALLENGE` 请求重放后 PostgreSQL 仍只有 1 条 verified attempt 和 1 条 settlement；刷新显示服务端存档并继续到相同 run `991738de-9bc2-4828-952e-39d8996d0741`。浏览器无 pageerror，账号已删除。
+- P1 断连恢复在 disposable student 856 上真实复跑：submission 254 判题为 `PASSED/AC`；锁住画像行期间 outbox 256 已提交为 `PENDING / attempt_count=0`，后端处理线程等待画像行锁。终止后端后提交请求收到 socket hang up；重启 `./dev.sh --sandbox`、释放锁后 outbox 自动转成 `APPLIED / attempt_count=1`，画像证据数从 0 增至 1。用户、提交及 outbox 级联数据已清理。
+- P1 管理接口使用最新操作者 ID/时间和累计重放次数形成单行审计摘要，不保存逐次历史。管理员真实登录可分页列出失败记录并读取详情；普通学生 GET 收到 403。以 DB fixture 准备 outbox 258 为 `FAILED` 后，经真实 HTTP PUT 收到 202，详情最终为 `APPLIED`、`manualReplayCount=1`、`lastReplayedBy=860` 且 `lastReplayedAt` 非空；画像 `practical_ability` 证据数为 1、分数为 0.52。响应不含 delta 或 idempotency key；测试管理员、学生及 outbox 级联数据已清理。
+- P2 在 Chromium 当前快照检查 `/world`、主线地图、`/mainline/stage/3`、`/training`、`/expedition`、`/workshop`，320px 和 375px 共 12 组均无横向溢出或 pageerror。`/world` 和主线地图分别只请求 1 次 `mainline/overview`；缺失 stage 999999 展示明确的未解锁/不存在提示且无 pageerror。
+- 当前快照 Outbox 定向后端测试 18/18（管理员 Controller 10、PostgreSQL 集成 8）通过。所有临时账号均已删除；本轮生成的临时脚本/凭据已删除；开发栈已停止、数据库卷保留；course43 manifest 已恢复。移动端截图保留在忽略目录 `qa-screens/p2-mobile/`，不会进入提交。
