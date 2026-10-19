@@ -11,7 +11,10 @@
 - 简化与素材：BossGraphClient 复用 `signalsToMap`，删除约 21 行重复映射；移除未引用的 711 B public 树桩副本，保留 inbox 原素材并更新 `LICENSE-ART.md`。构建验证该副本不在 dist。
 - 验证：`mvn -B -DskipTests=false test` 1,768/1,768（0 failures/errors/skips）；Vitest 279 文件 / 2,674 项、typecheck、lint、build 通过；Graph 1,963 passed/1 skipped、RAG 166 passed、Research 330 passed/4 skipped。Chromium 实测真实 Piston 学习闭环；另用 mock API 在 320/375px 验证 Twin 无横向溢出、推荐按钮路由正确。此次最后边界修正未重跑全栈真实旅程。
 - 首次托管 `ci #8` 暴露环境依赖：Graph 3 个路由测试缺少本地 provider stub 时被 503 遮蔽；Research 两个 Graph CLI 在 `--help` 阶段过早导入运行时依赖。测试现已注入确定性桩 provider，CLI 改为按需导入；本地 Graph 1,963 passed/1 skipped、Research 330 passed/4 skipped。修复提交 [`31c3276a`](https://github.com/cypre5s/Pythontopia/commit/31c3276a76ab2587b4682b521e64184b7f8f0ccb) 推送后，GitHub Actions [ci #9](https://github.com/cypre5s/Pythontopia/actions/runs/39201564618) 五项全部通过。Maven 收尾仍有 Testcontainers 关闭后 Outbox scheduler 连接拒绝日志，但 Surefire 全量结果为 BUILD SUCCESS。无 DeepSeek 调用。
-- 局部减法包括删除重复画像映射与 1 份确认未引用素材；新增测试、迁移与校验代码超过删除量，因此不声称本轮降低了系统整体复杂度。真实 PostgreSQL 断连/进程重启与 Outbox 管理员逐次重放审计仍未验证。
+- 局部减法包括删除重复画像映射与 1 份确认未引用素材；新增测试、迁移与校验代码超过删除量，因此不声称本轮降低了系统整体复杂度。真实 PostgreSQL 断连/进程重启现已验证；Outbox 管理员查询与重放审计接口仍待完成。
+- P0/P2 收尾：`/world` 原先由 HUD、学习目标面板、伴学指南并发请求 3 次 `mainline/overview`，现由 `WorldPage` 单点加载，真实 Chromium 请求数降为 1。新增页面回归；前端全量 Vitest 280 文件 / 2,676 项、typecheck 均通过。320px / 375px 的世界、冒险地图、关卡、训练、远征和工坊页面无横向溢出，缺失关卡显示可读错误。
+- 真实旅程补验：Piston 官方题 #476 的 submission 247 / 248 均为 PASSED，Twin 收到对应掌握事件；远征 `SETTLE_CHALLENGE` 精确重放后仍只有 1 条 verified attempt 和 1 条 settlement。AI 审核撤销结算 Postgres 集成测试 1/1、资源微测并发幂等 Postgres 集成测试 1/1、Outbox PostgreSQL 集成测试 7/7 通过。
+- Outbox 真实恢复：在画像行锁阻塞时，submission 248 对应的 outbox 244 持久保持 PENDING；停止后端进程组造成实际 HTTP 断连，重启 `./dev.sh --sandbox` 并释放行锁后自动转为 APPLIED，`attempt_count=1` 且画像证据仅增加一次。管理员失败任务查询与重放审计尚未实现；审计保留范围正在确认。
 
 ## 2026-10-17
 
