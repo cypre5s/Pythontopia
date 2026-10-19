@@ -11,8 +11,10 @@
 
 - 在本地 PostgreSQL 对学生画像行加事务锁，再经真实 `/api/submissions` 与 Piston 产生 submission 248。画像投影 outbox 244 提交后保持 `PENDING`、`attempt_count=0`；数据库确认应用线程正等待该行锁。
 - 中断并终止本机后端进程组，提交请求收到真实 `RemoteDisconnected`。后端停止期间 outbox 244 仍在 PostgreSQL 中；重启 `./dev.sh --sandbox`、释放行锁后，调度器自动将其处理为 `APPLIED`，`attempt_count=1`，画像证据计数只增加一次。
-- 现有 `ProfileDimensionProjectionOutboxPostgresTest` 全类 7/7 通过，覆盖重试退避、8 次失败隔离、修复重放和用户内顺序。
-- 管理员失败任务查询、详情核对与重放审计接口尚未实现。审计存储方案待确认后继续。
+- 现有 `ProfileDimensionProjectionOutboxPostgresTest` 全类 8/8 通过，覆盖重试退避、8 次失败隔离、修复重放、分页查询和用户内顺序。
+- 按确认的“最近一次操作者/时间 + 累计次数”实现 P1：ADMIN-only `GET /api/admin/profile-projection-outbox/failed?page=0&size=50` 分页列出最早失败记录，`GET /{outboxId}` 读取状态；既有 PUT 修复接口记录当前管理员 ID 和时间。V226 扩展原 Outbox 表并增加失败列表索引。读取接口不返回画像 delta 或幂等键。
+- 本地 PostgreSQL 准备 FAILED outbox 245，经真实 ADMIN 登录 HTTP 调用列表、详情、PUT 修复；PUT 返回 202，轮询详情最终为 APPLIED，`manualReplayCount=1`，`lastReplayedBy=848`、`lastReplayedAt` 非空，GET 响应无 delta/idempotency key。管理员测试账号提升权限后完成验收，随后删除账号及级联数据。
+- Controller 测试 10/10、PostgreSQL 集成测试 8/8、后端全量 `mvn -B test` 1,775/1,775（0 failures/errors/skips）通过。Testcontainers 关闭后有现存后台维护任务连接拒绝日志；Surefire 最终 BUILD SUCCESS。
 
 ## P2：请求与窄屏体验
 
@@ -22,6 +24,6 @@
 
 ## 清理与未完成项
 
-- 仅使用一次性学生账号和本地开发栈；该账号仍需在全部 P1 管理员验收结束后删除。
-- 本地栈当前运行以支持后续 P1 验收；启动钩子生成的课程 manifest 时间戳已恢复。
-- 尚未完成 Outbox 管理 API、迁移及管理员 HTTP 端到端重放核验；因此整体 P1 仍未完成。
+- 一次性账号 ID 848 已删除，确认 users 表无此用户；其 outbox 与用户数据随外键级联清理。临时凭据文件已删除。
+- 本地开发栈已停止，数据库卷保留；启动钩子更新的 course43 manifest 时间戳已恢复。
+- P0/P1/P2 验收范围已完成；P1 接口提供运维 API，不包含单独的管理员前端页面。

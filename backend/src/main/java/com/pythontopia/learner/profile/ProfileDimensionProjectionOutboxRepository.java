@@ -3,6 +3,8 @@ package com.pythontopia.learner.profile;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.learner.profile.dto.DimensionDelta;
+import com.pythontopia.learner.profile.dto.ProfileDimensionProjectionOutboxDto;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -118,7 +120,7 @@ class ProfileDimensionProjectionOutboxRepository {
         .orElse(null);
   }
 
-  boolean repairFailed(long id, String dimensionKey, DimensionDelta delta) {
+  boolean repairFailed(long id, long adminUserId, String dimensionKey, DimensionDelta delta) {
     String deltaJson;
     try {
       deltaJson = objectMapper.writeValueAsString(delta);
@@ -130,12 +132,66 @@ class ProfileDimensionProjectionOutboxRepository {
                 + " SET dimension_key = ?, delta = ?::jsonb, status = 'PENDING',"
                 + " attempt_count = 0, error_kind = NULL, failed_at = NULL,"
                 + " next_attempt_at = now(), processed_at = NULL,"
-                + " manual_replay_count = manual_replay_count + 1"
+                + " manual_replay_count = manual_replay_count + 1,"
+                + " last_replayed_by = ?, last_replayed_at = now()"
                 + " WHERE id = ? AND status = 'FAILED'",
             dimensionKey,
             deltaJson,
+            adminUserId,
             id)
         == 1;
+  }
+
+  long countFailed() {
+    Long count =
+        jdbc.queryForObject(
+            "SELECT COUNT(*) FROM learner_profile_projection_outbox WHERE status = 'FAILED'",
+            Long.class);
+    return count == null ? 0L : count;
+  }
+
+  List<ProfileDimensionProjectionOutboxDto> findFailed(int page, int size) {
+    int offset = Math.multiplyExact(page, size);
+    return jdbc.query(
+        "SELECT id, user_id, dimension_key, status, attempt_count, error_kind,"
+            + " manual_replay_count, last_replayed_by, last_replayed_at, created_at,"
+            + " failed_at, next_attempt_at, processed_at"
+            + " FROM learner_profile_projection_outbox WHERE status = 'FAILED'"
+            + " ORDER BY failed_at, id LIMIT ? OFFSET ?",
+        (rs, rowNum) -> mapAdminEntry(rs),
+        size,
+        offset);
+  }
+
+  Optional<ProfileDimensionProjectionOutboxDto> findForAdmin(long id) {
+    return jdbc
+        .query(
+            "SELECT id, user_id, dimension_key, status, attempt_count, error_kind,"
+                + " manual_replay_count, last_replayed_by, last_replayed_at, created_at,"
+                + " failed_at, next_attempt_at, processed_at"
+                + " FROM learner_profile_projection_outbox WHERE id = ?",
+            (rs, rowNum) -> mapAdminEntry(rs),
+            id)
+        .stream()
+        .findFirst();
+  }
+
+  private static ProfileDimensionProjectionOutboxDto mapAdminEntry(
+      java.sql.ResultSet rs) throws java.sql.SQLException {
+    return new ProfileDimensionProjectionOutboxDto(
+        rs.getLong("id"),
+        rs.getLong("user_id"),
+        rs.getString("dimension_key"),
+        rs.getString("status"),
+        rs.getInt("attempt_count"),
+        rs.getString("error_kind"),
+        rs.getInt("manual_replay_count"),
+        rs.getObject("last_replayed_by", Long.class),
+        rs.getObject("last_replayed_at", OffsetDateTime.class),
+        rs.getObject("created_at", OffsetDateTime.class),
+        rs.getObject("failed_at", OffsetDateTime.class),
+        rs.getObject("next_attempt_at", OffsetDateTime.class),
+        rs.getObject("processed_at", OffsetDateTime.class));
   }
 
   List<Long> findDuePendingIds(int limit) {

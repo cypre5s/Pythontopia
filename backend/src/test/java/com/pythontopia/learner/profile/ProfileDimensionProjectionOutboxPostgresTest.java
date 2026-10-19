@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.learner.profile.dto.DimensionDelta;
 import com.pythontopia.learner.profile.dto.DimensionUpdateResult;
+import com.pythontopia.learner.profile.dto.ProfileDimensionProjectionOutboxDto;
 import com.pythontopia.learner.profile.repository.ProfileRepository;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
 import java.util.List;
@@ -62,7 +63,7 @@ class ProfileDimensionProjectionOutboxPostgresTest {
     Flyway.configure()
         .dataSource(source)
         .locations("classpath:db/migration")
-        .target(MigrationVersion.fromVersion("222"))
+        .target(MigrationVersion.fromVersion("226"))
         .load()
         .migrate();
   }
@@ -262,11 +263,14 @@ class ProfileDimensionProjectionOutboxPostgresTest {
         new ProfileDimensionProjectionOutboxService(outboxRepository, ignored -> {});
     DimensionDelta repairedDelta =
         new DimensionDelta(0.02, 1, List.of("repaired"), Map.of(), "PRACTICE_PASS");
-    assertThatThrownBy(() -> outboxService.repairAndReplay(firstId, "unknown_dimension", repairedDelta))
+    assertThatThrownBy(
+            () -> outboxService.repairAndReplay(firstId, 900L, "unknown_dimension", repairedDelta))
         .isInstanceOf(IllegalArgumentException.class);
     assertThat(outboxStatus(firstId)).isEqualTo("FAILED");
 
-    assertThat(outboxService.repairAndReplay(firstId, "practical_ability", repairedDelta)).isTrue();
+    assertThat(
+            outboxService.repairAndReplay(firstId, 900L, "practical_ability", repairedDelta))
+        .isTrue();
     assertThat(outboxStatus(firstId)).isEqualTo("PENDING");
     assertThat(jdbc.queryForObject(
             "SELECT failed_at IS NULL FROM learner_profile_projection_outbox WHERE id = ?",
@@ -279,6 +283,16 @@ class ProfileDimensionProjectionOutboxPostgresTest {
             Integer.class,
             firstId))
         .isEqualTo(1);
+    assertThat(jdbc.queryForObject(
+            "SELECT last_replayed_by FROM learner_profile_projection_outbox WHERE id = ?",
+            Long.class,
+            firstId))
+        .isEqualTo(900L);
+    assertThat(jdbc.queryForObject(
+            "SELECT last_replayed_at IS NOT NULL FROM learner_profile_projection_outbox WHERE id = ?",
+            Boolean.class,
+            firstId))
+        .isTrue();
 
     ProfileDimensionProjectionProcessor healthyProcessor =
         new ProfileDimensionProjectionProcessor(
@@ -299,6 +313,39 @@ class ProfileDimensionProjectionOutboxPostgresTest {
             String.class,
             userId))
         .contains("repaired", "later");
+    assertThat(outboxRepository.findForAdmin(firstId))
+        .get()
+        .satisfies(entry -> {
+          assertThat(entry.status()).isEqualTo("APPLIED");
+          assertThat(entry.manualReplayCount()).isEqualTo(1);
+          assertThat(entry.lastReplayedBy()).isEqualTo(900L);
+          assertThat(entry.lastReplayedAt()).isNotNull();
+        });
+  }
+
+  @Test
+  void adminLookupPagesOldestFailuresAndShowsPersistedReplayAttribution() {
+    ProfileDimensionProjectionOutboxRepository repository =
+        new ProfileDimensionProjectionOutboxRepository(jdbc, objectMapper);
+    long oldestId = insertFailedOutbox("admin-list-oldest", "now() - interval '2 minutes'");
+    long newestId = insertFailedOutbox("admin-list-newest", "now() - interval '1 minute'");
+    ProfileDimensionProjectionOutboxService service =
+        new ProfileDimensionProjectionOutboxService(repository, ignored -> {});
+
+    var firstPage = service.pageFailed(0, 1);
+    var secondPage = service.pageFailed(1, 1);
+
+    assertThat(firstPage.content()).extracting(ProfileDimensionProjectionOutboxDto::id)
+        .containsExactly(oldestId);
+    assertThat(firstPage.totalElements()).isEqualTo(2);
+    assertThat(firstPage.totalPages()).isEqualTo(2);
+    assertThat(secondPage.content()).extracting(ProfileDimensionProjectionOutboxDto::id)
+        .containsExactly(newestId);
+    assertThat(service.findForAdmin(oldestId)).get().satisfies(entry -> {
+      assertThat(entry.status()).isEqualTo("FAILED");
+      assertThat(entry.errorKind()).isEqualTo("IllegalStateException");
+      assertThat(entry.lastReplayedBy()).isNull();
+    });
   }
 
   @Test
@@ -549,5 +596,20 @@ class ProfileDimensionProjectionOutboxPostgresTest {
   private int profileCount() {
     return jdbc.queryForObject(
         "SELECT COUNT(*) FROM learner_profile WHERE user_id = ?", Integer.class, userId);
+  }
+
+  private long insertFailedOutbox(String idempotencyKey, String failedAtExpression) {
+    return jdbc.queryForObject(
+        "INSERT INTO learner_profile_projection_outbox"
+            + " (user_id, idempotency_key, dimension_key, delta, status, attempt_count,"
+            + " error_kind, failed_at)"
+            + " VALUES (?, ?, 'practical_ability',"
+            + " '{\"scoreDelta\":0.02,\"evidenceIncrement\":1,\"source\":\"PRACTICE_PASS\"}'::jsonb,"
+            + " 'FAILED', 8, 'IllegalStateException', "
+            + failedAtExpression
+            + ") RETURNING id",
+        Long.class,
+        userId,
+        idempotencyKey);
   }
 }

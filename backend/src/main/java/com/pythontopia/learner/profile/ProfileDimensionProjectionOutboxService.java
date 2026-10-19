@@ -1,7 +1,10 @@
 package com.pythontopia.learner.profile;
 
 import com.pythontopia.learner.profile.dto.DimensionDelta;
+import com.pythontopia.learner.profile.dto.ProfileDimensionProjectionOutboxDto;
+import com.pythontopia.learner.profile.dto.ProfileDimensionProjectionOutboxPageDto;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
+import java.util.Optional;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -30,13 +33,27 @@ class ProfileDimensionProjectionOutboxService {
    * The learner and idempotency key stay bound to the original row.
    */
   @Transactional
-  public boolean repairAndReplay(long outboxId, String dimensionKey, DimensionDelta delta) {
+  public boolean repairAndReplay(
+      long outboxId, long adminUserId, String dimensionKey, DimensionDelta delta) {
     validateRepair(dimensionKey, delta);
-    if (!repository.repairFailed(outboxId, dimensionKey, delta)) {
+    if (!repository.repairFailed(outboxId, adminUserId, dimensionKey, delta)) {
       return false;
     }
     eventPublisher.publishEvent(new ProfileDimensionProjectionQueued(outboxId));
     return true;
+  }
+
+  @Transactional(readOnly = true)
+  public ProfileDimensionProjectionOutboxPageDto pageFailed(int page, int size) {
+    long total = repository.countFailed();
+    int totalPages = total == 0 ? 0 : Math.toIntExact((total + size - 1) / size);
+    return new ProfileDimensionProjectionOutboxPageDto(
+        repository.findFailed(page, size), page, size, total, totalPages);
+  }
+
+  @Transactional(readOnly = true)
+  public Optional<ProfileDimensionProjectionOutboxDto> findForAdmin(long outboxId) {
+    return repository.findForAdmin(outboxId);
   }
 
   private static void validateRepair(String dimensionKey, DimensionDelta delta) {
