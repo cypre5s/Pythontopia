@@ -323,8 +323,6 @@ function onKey(event: KeyboardEvent): void {
 }
 
 onMounted(() => {
-  // 拉取后端权威主线总览，填充 HUD 星星条（失败由 store 内部静默兜底）。
-  void mainline.load();
   if (typeof window !== 'undefined') {
     window.addEventListener('keydown', onKey);
     bgmPollTimer = window.setInterval(pollBgm, 1000);

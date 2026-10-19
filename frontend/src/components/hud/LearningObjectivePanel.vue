@@ -106,7 +106,6 @@ function onKey(event: KeyboardEvent): void {
 }
 
 onMounted(() => {
-  void mainline.load();
   if (typeof window !== 'undefined') {
     window.addEventListener('keydown', onKey);
   }

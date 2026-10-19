@@ -11,7 +11,7 @@
  * 数据源：POST /api/orchestrator/turn/stream（Java 代理 → Python 学习总管），
  * SSE 事件 trace/token/result/error 由 useSseStream 解析。
  */
-import { computed, markRaw, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, markRaw, nextTick, onUnmounted, ref, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import { useGuideStore } from '@stores/guide';
 import { useHudStore } from '@stores/hud';
@@ -74,10 +74,6 @@ watch(
   (events) => loop.syncFromEvents(events),
 );
 
-// 进入时拉一次主线总览，保证 firstActionableChapter 反映真实进度（失败由 store 静默兜底）。
-onMounted(() => {
-  void mainline.load();
-});
 onUnmounted(() => anim.dispose());
 
 function onLoopStop(): void {

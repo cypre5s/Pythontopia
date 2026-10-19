@@ -26,10 +26,12 @@ import { openNpcDialog } from '@game/adapters/dialog';
 import { useWorldStore } from '@stores/world';
 import { useCalendarStore } from '@stores/calendar';
 import { useGameSettingsStore } from '@stores/gameSettings';
+import { useMainlineStore } from '@stores/mainline';
 
 const world = useWorldStore();
 const calendar = useCalendarStore();
 const gameSettings = useGameSettingsStore();
+const mainline = useMainlineStore();
 
 const seasonClass = computed<string>(() => `world-page--season-${calendar.today?.season ?? 'spring'}`);
 
@@ -77,6 +79,8 @@ watch(() => gameSettings.display.fullscreen, (wantFs) => {
 });
 
 onMounted(async () => {
+  // HUD、学习目标面板和指南共用这份快照，由页面一次拉取。
+  void mainline.load();
   if (!world.session) {
     await world.loadSession();
   }
