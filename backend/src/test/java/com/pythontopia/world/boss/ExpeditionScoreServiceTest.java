@@ -223,10 +223,10 @@ class ExpeditionScoreServiceTest {
             contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(
             List.of(),
-            List.of(new ExpeditionScoreService.ExistingAttempt(1, false)),
-            List.of(new ExpeditionScoreService.ExistingAttempt(1, false)),
-            List.of(new ExpeditionScoreService.ExistingAttempt(1, true)),
-            List.of(new ExpeditionScoreService.ExistingAttempt(1, true)));
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, false, true)),
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, false, true)),
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, true, true)),
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, true, true)));
     when(jdbcTemplate.query(contains("problem_id = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
     when(jdbcTemplate.update(
@@ -281,6 +281,7 @@ class ExpeditionScoreServiceTest {
     verify(jdbcTemplate).query(sql.capture(), any(RowMapper.class), eq(7L), eq(RUN_ID), eq(1));
     org.assertj.core.api.Assertions.assertThat(sql.getValue())
         .contains("r.status = 'ACTIVE'")
+        .contains("a.reward_eligible = TRUE")
         .contains("p.expedition_run_id = a.run_id AND p.chapter = ?");
   }
 

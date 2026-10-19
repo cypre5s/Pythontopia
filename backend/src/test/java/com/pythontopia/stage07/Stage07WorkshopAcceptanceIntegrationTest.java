@@ -7,6 +7,11 @@ import com.pythontopia.PythontopiaApplication;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -325,6 +330,116 @@ class Stage07WorkshopAcceptanceIntegrationTest {
   }
 
   @Test
+  void concurrentMicroCheckRetryReplaysOnePersistedResultAndRejectsChangedPayload() throws Exception {
+    MockRestServiceServer graphServer = MockRestServiceServer.bindTo(workshopRestTemplate).build();
+    String token = registerAndLogin("workshop-check-idempotency");
+    Long userId = userId("workshop-check-idempotency");
+    seedProfile(userId);
+    graphServer
+        .expect(
+            MockRestRequestMatchers.requestTo("http://graph.test/agents/resource/produce"))
+        .andRespond(
+            MockRestResponseCreators.withSuccess(
+                successHandoutResponse(), MediaType.APPLICATION_JSON));
+
+    ResponseEntity<Map> createdResource =
+        restTemplate.exchange(
+            "/api/workshop/resources",
+            HttpMethod.POST,
+            bearer(token, Map.of("kcCodes", List.of("PY43-KC-001"), "type", "HANDOUT")),
+            Map.class);
+    assertThat(createdResource.getStatusCode()).isEqualTo(HttpStatus.OK);
+    Long resourceId = ((Number) createdResource.getBody().get("resourceId")).longValue();
+    Map<String, Object> checkBody =
+        Map.of(
+            "kcCode",
+            "PY43-KC-001",
+            "evidenceType",
+            "MICRO_QUIZ",
+            "answerText",
+            "input 函数用于读取用户在终端输入的内容");
+    HttpEntity<?> retryRequest =
+        bearerWithIdempotencyKey(token, checkBody, "micro-check-retry-1");
+    ExecutorService executor = Executors.newFixedThreadPool(2);
+    CountDownLatch ready = new CountDownLatch(2);
+    CountDownLatch start = new CountDownLatch(1);
+    Future<ResponseEntity<Map>> first =
+        executor.submit(
+            () -> {
+              ready.countDown();
+              start.await();
+              return restTemplate.exchange(
+                  "/api/workshop/resources/" + resourceId + "/checks",
+                  HttpMethod.POST,
+                  retryRequest,
+                  Map.class);
+            });
+    Future<ResponseEntity<Map>> second =
+        executor.submit(
+            () -> {
+              ready.countDown();
+              start.await();
+              return restTemplate.exchange(
+                  "/api/workshop/resources/" + resourceId + "/checks",
+                  HttpMethod.POST,
+                  retryRequest,
+                  Map.class);
+            });
+    try {
+      assertThat(ready.await(5, TimeUnit.SECONDS)).isTrue();
+      start.countDown();
+      ResponseEntity<Map> firstResponse = first.get(30, TimeUnit.SECONDS);
+      ResponseEntity<Map> replayResponse = second.get(30, TimeUnit.SECONDS);
+
+      assertThat(firstResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+      assertThat(replayResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+      assertThat(replayResponse.getBody()).isEqualTo(firstResponse.getBody());
+      assertThat(
+              jdbcTemplate.queryForObject(
+                  "SELECT COUNT(*) FROM resource_learning_check WHERE user_id = ? AND resource_id = ?",
+                  Integer.class,
+                  userId,
+                  resourceId))
+          .isEqualTo(1);
+      assertThat(
+              jdbcTemplate.queryForObject(
+                  "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ? AND kc_code = 'PY43-KC-001' AND source = 'MICRO_CHECK_PASS'",
+                  Integer.class,
+                  userId))
+          .isEqualTo(1);
+
+      ResponseEntity<Map> changedPayload =
+          restTemplate.exchange(
+              "/api/workshop/resources/" + resourceId + "/checks",
+              HttpMethod.POST,
+              bearerWithIdempotencyKey(
+                  token,
+                  Map.of(
+                      "kcCode",
+                      "PY43-KC-001",
+                      "evidenceType",
+                      "MICRO_QUIZ",
+                      "answerText",
+                      "changed answer"),
+                  "micro-check-retry-1"),
+              Map.class);
+      assertThat(changedPayload.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+      assertThat(changedPayload.getBody().get("code"))
+          .isEqualTo("RESOURCE_CHECK_IDEMPOTENCY_CONFLICT");
+      assertThat(
+              jdbcTemplate.queryForObject(
+                  "SELECT COUNT(*) FROM resource_learning_check WHERE user_id = ? AND resource_id = ?",
+                  Integer.class,
+                  userId,
+                  resourceId))
+          .isEqualTo(1);
+    } finally {
+      executor.shutdownNow();
+    }
+    graphServer.verify(Duration.ofSeconds(2));
+  }
+
+  @Test
   void unknownKcCodeReturns400() {
     String token = registerAndLogin("workshop-stu03");
     seedProfile(userId("workshop-stu03"));
@@ -486,6 +601,13 @@ class Stage07WorkshopAcceptanceIntegrationTest {
   private HttpEntity<?> bearer(String token, Object body) {
     HttpHeaders headers = new HttpHeaders();
     headers.setBearerAuth(token);
+    return new HttpEntity<>(body, headers);
+  }
+
+  private HttpEntity<?> bearerWithIdempotencyKey(String token, Object body, String key) {
+    HttpHeaders headers = new HttpHeaders();
+    headers.setBearerAuth(token);
+    headers.set("Idempotency-Key", key);
     return new HttpEntity<>(body, headers);
   }
 }

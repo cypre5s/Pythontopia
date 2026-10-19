@@ -13,6 +13,9 @@ class ProfileDimensionProjectionDispatcher {
 
   private static final Logger log = LoggerFactory.getLogger(ProfileDimensionProjectionDispatcher.class);
   private static final int MAX_BATCH_SIZE = 100;
+  private static final int MAX_ATTEMPTS = 8;
+  private static final int BASE_BACKOFF_SECONDS = 5;
+  private static final int MAX_BACKOFF_SECONDS = 300;
 
   private final ProfileDimensionProjectionOutboxRepository repository;
   private final ProfileDimensionProjectionProcessor processor;
@@ -40,8 +43,32 @@ class ProfileDimensionProjectionDispatcher {
       processor.process(id);
     } catch (RuntimeException ex) {
       String errorKind = ex.getClass().getSimpleName();
-      repository.recordFailure(id, errorKind);
-      log.warn("profile projection deferred for retry outboxId={} error={}", id, errorKind);
+      if (errorKind.isBlank()) {
+        errorKind = "RuntimeException";
+      }
+      ProfileDimensionProjectionOutboxRepository.Failure failure =
+          repository.recordFailure(
+              id,
+              errorKind,
+              MAX_ATTEMPTS,
+              BASE_BACKOFF_SECONDS,
+              MAX_BACKOFF_SECONDS);
+      if (failure == null) {
+        return;
+      }
+      if ("FAILED".equals(failure.status())) {
+        log.error(
+            "profile projection quarantined after retries outboxId={} attempts={} errorType={}",
+            id,
+            failure.attemptCount(),
+            errorKind);
+      } else {
+        log.warn(
+            "profile projection deferred for retry outboxId={} attempt={} errorType={}",
+            id,
+            failure.attemptCount(),
+            errorKind);
+      }
     }
   }
 }

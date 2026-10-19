@@ -222,6 +222,25 @@ beforeEach(() => {
 });
 
 describe('rogueRun store', () => {
+  it('ignores rapid duplicate start requests while the server creates a run', async () => {
+    let finishCreate!: (snapshot: ExpeditionRunSnapshot) => void;
+    frontierApiMock.createExpeditionRun.mockImplementationOnce(
+      () => new Promise((resolve) => { finishCreate = resolve; }),
+    );
+    const run = useRogueRunStore();
+
+    const firstStart = run.startRun(2, false, 'PY43-KC-011');
+    const secondStart = run.startRun(2, false, 'PY43-KC-011');
+    await vi.waitFor(() => expect(frontierApiMock.createExpeditionRun).toHaveBeenCalledTimes(1));
+    expect(run.starting).toBe(true);
+
+    finishCreate(serverRun(2, 'PY43-KC-011'));
+    await Promise.all([firstStart, secondStart]);
+
+    expect(frontierApiMock.createExpeditionRun).toHaveBeenCalledTimes(1);
+    expect(run.phase).toBe('map');
+  });
+
   it('retains the no-practice error code so the page can route the learner to the mainline', async () => {
     frontierApiMock.createExpeditionRun.mockRejectedValueOnce(
       new ApiClientError(

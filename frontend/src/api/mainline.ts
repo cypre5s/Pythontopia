@@ -56,6 +56,8 @@ export interface MainlineStageDto {
   id: number;
   index: number;
   title: string;
+  /** 服务端课程配置中归属此小节的知识点。 */
+  kcCodes: string[];
   videoWatchedSec: number;
   requiredVideoSec: number;
   pagesRead: number;

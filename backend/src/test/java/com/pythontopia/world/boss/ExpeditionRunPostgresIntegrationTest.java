@@ -2,7 +2,14 @@ package com.pythontopia.world.boss;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
@@ -16,12 +23,15 @@ import com.pythontopia.learner.mastery.review.ReviewStateRepository;
 import com.pythontopia.learner.mastery.review.ReviewStateService;
 import com.pythontopia.world.boss.dto.BossAttemptRequest;
 import com.pythontopia.world.boss.dto.BossAttemptResultDto;
+import com.pythontopia.world.boss.dto.BossEvaluateResultDto;
 import com.pythontopia.world.boss.dto.BossInternalProblem;
+import com.pythontopia.world.boss.dto.BossTestCasePayload;
 import com.pythontopia.world.boss.dto.ExpeditionRunAction;
 import com.pythontopia.world.boss.dto.ExpeditionRunActionRequest;
 import com.pythontopia.world.boss.dto.ExpeditionRunDto;
 import com.pythontopia.world.boss.dto.ExpeditionScoreSubmitDto;
 import com.pythontopia.world.boss.dto.FrontierPickDto;
+import com.pythontopia.world.boss.review.BossProblemReviewRepository;
 import java.math.BigDecimal;
 import java.util.HashMap;
 import java.util.List;
@@ -173,6 +183,171 @@ class ExpeditionRunPostgresIntegrationTest {
     ExpeditionRunDto next = startRun(runs, userId, 1, false);
     assertThat(next.runId()).isNotEqualTo(initial.runId());
     assertThat(next.score()).isZero();
+  }
+
+  @Test
+  void revokedAiJudgmentCanSettleExpeditionWithoutTrustedRewards() {
+    RevokedSettlementFixture fixture = createRevokedSettlementFixture();
+    when(fixture.graph().evaluateAttempt(
+            eq(fixture.problemId()), anyString(), anyList(), anyInt()))
+        .thenReturn(
+            new BossEvaluateResultDto(fixture.problemId(), true, 1, 1, null, null, List.of()));
+    when(fixture.reviews().isApproved(fixture.problem())).thenReturn(false);
+
+    BossAttemptResultDto judged =
+        fixture.bossService().evaluateAttempt(
+            new BossAttemptRequest(
+                fixture.problemId(), 1, 1, "print('output')", 1, UUID.randomUUID()),
+            fixture.userId());
+    ExpeditionRunDto settled =
+        fixture.runs().performAction(
+            fixture.userId(),
+            new ExpeditionRunActionRequest(
+                fixture.active().runId(),
+                fixture.nodeId(),
+                ExpeditionRunAction.SETTLE_CHALLENGE,
+                null,
+                fixture.problemId()));
+
+    assertThat(judged.passed()).isTrue();
+    assertThat(judged.score()).isZero();
+    assertThat(fixture.runs().findActive(fixture.userId()).orElseThrow().verifiedDepth()).isZero();
+    assertThat(
+            fixture
+                .scores()
+                .summarizeVerifiedAttempts(fixture.userId(), fixture.active().runId(), 1))
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptSummary(0, 0));
+    assertThat(settled.phase()).isEqualTo("map");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT score FROM expedition_challenge_settlement"
+                    + " WHERE user_id = ? AND run_id = ?::uuid AND problem_id = ?",
+                Integer.class,
+                fixture.userId(),
+                fixture.active().runId(),
+                fixture.problemId()))
+        .isZero();
+
+    fixture.runs().performAction(
+        fixture.userId(),
+        new ExpeditionRunActionRequest(
+            fixture.active().runId(), null, ExpeditionRunAction.FINISH, null));
+    fixture
+        .scores()
+        .record(fixture.userId(), new ExpeditionScoreSubmitDto(fixture.active().runId()));
+
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT status FROM expedition_run WHERE user_id = ? AND run_id = ?::uuid",
+                String.class,
+                fixture.userId(),
+                fixture.active().runId()))
+        .isEqualTo("SETTLED");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM expedition_score WHERE user_id = ? AND run_id = ?::uuid",
+                Integer.class,
+                fixture.userId(),
+                fixture.active().runId()))
+        .isZero();
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT score FROM expedition_verified_attempt"
+                    + " WHERE user_id = ? AND run_id = ?::uuid AND problem_id = ?",
+                Integer.class,
+                fixture.userId(),
+                fixture.active().runId(),
+                fixture.problemId()))
+        .isZero();
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT reward_eligible FROM expedition_verified_attempt"
+                    + " WHERE user_id = ? AND run_id = ?::uuid AND problem_id = ?",
+                Boolean.class,
+                fixture.userId(),
+                fixture.active().runId(),
+                fixture.problemId()))
+        .isFalse();
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT settlement_passed FROM expedition_verified_attempt"
+                    + " WHERE user_id = ? AND run_id = ?::uuid AND problem_id = ?",
+                Boolean.class,
+                fixture.userId(),
+                fixture.active().runId(),
+                fixture.problemId()))
+        .isTrue();
+    verifyNoInteractions(fixture.events());
+  }
+
+  @Test
+  void revokedPassDoesNotPromotePreviouslyTrustedFailureToRewards() {
+    RevokedSettlementFixture fixture = createRevokedSettlementFixture();
+    String fingerprint =
+        BossService.expeditionAttemptFingerprint(
+            BossService.questionFingerprint(fixture.problem()), fixture.nodeId(), null);
+    jdbc.update(
+        "INSERT INTO expedition_verified_attempt"
+            + " (user_id, run_id, problem_id, question_fingerprint, passed, score, reward_eligible)"
+            + " VALUES (?, ?::uuid, ?, ?, FALSE, 0, TRUE)",
+        fixture.userId(),
+        fixture.active().runId(),
+        fixture.problemId(),
+        fingerprint);
+    when(fixture.graph().evaluateAttempt(
+            eq(fixture.problemId()), anyString(), anyList(), anyInt()))
+        .thenReturn(
+            new BossEvaluateResultDto(fixture.problemId(), true, 1, 1, null, null, List.of()));
+    when(fixture.reviews().isApproved(fixture.problem())).thenReturn(false);
+
+    BossAttemptResultDto revokedPass =
+        fixture.bossService().evaluateAttempt(
+            new BossAttemptRequest(
+                fixture.problemId(), 1, 1, "print('output')", 1, UUID.randomUUID()),
+            fixture.userId());
+
+    assertThat(revokedPass.passed()).isTrue();
+    assertThat(fixture.runs().findActive(fixture.userId()).orElseThrow().verifiedDepth()).isZero();
+    assertThat(
+            fixture
+                .scores()
+                .summarizeVerifiedAttempts(fixture.userId(), fixture.active().runId(), 1))
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptSummary(1, 0));
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT passed FROM expedition_verified_attempt"
+                    + " WHERE user_id = ? AND run_id = ?::uuid AND problem_id = ?",
+                Boolean.class,
+                fixture.userId(),
+                fixture.active().runId(),
+                fixture.problemId()))
+        .isFalse();
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT settlement_passed FROM expedition_verified_attempt"
+                    + " WHERE user_id = ? AND run_id = ?::uuid AND problem_id = ?",
+                Boolean.class,
+                fixture.userId(),
+                fixture.active().runId(),
+                fixture.problemId()))
+        .isTrue();
+
+    ExpeditionRunDto settled =
+        fixture.runs().performAction(
+            fixture.userId(),
+            new ExpeditionRunActionRequest(
+                fixture.active().runId(),
+                fixture.nodeId(),
+                ExpeditionRunAction.SETTLE_CHALLENGE,
+                null,
+                fixture.problemId()));
+    assertThat(settled.phase()).isEqualTo("map");
+    assertThat(
+            fixture
+                .scores()
+                .summarizeVerifiedAttempts(fixture.userId(), fixture.active().runId(), 1))
+        .isEqualTo(new ExpeditionScoreService.VerifiedAttemptSummary(1, 0));
+    verifyNoInteractions(fixture.events());
   }
 
   @Test
@@ -1436,6 +1611,94 @@ class ExpeditionRunPostgresIntegrationTest {
   }
 
   @Test
+  void persistedOpenProblemIsNotReusedWhenFingerprintAlreadyAppearedEarlierInTheRun()
+      throws Exception {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    String nodeId = (String) active.nodes().getFirst().get("id");
+    ExpeditionRunDto challenge =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
+    String kcCode = (String) nodeById(challenge, nodeId).get("kcCode");
+    BossInternalProblem duplicate =
+        new BossInternalProblem(
+            "issue-current",
+            1,
+            1,
+            1,
+            kcCode,
+            "same question content",
+            List.of(),
+            "2 3",
+            "5",
+            1,
+            true,
+            false,
+            List.of(new com.pythontopia.world.boss.dto.BossTestCasePayload("2 3", "5", false)),
+            "print(5)");
+    String fingerprint = BossService.questionFingerprint(duplicate);
+    insertConsumedProblem(
+        userId, challenge.runId(), "earlier-node", "issue-previous", kcCode, fingerprint);
+    jdbc.update(
+        "INSERT INTO pregenerated_problem"
+            + " (user_id, chapter, stage, kc_code, difficulty, problem_id, payload, status,"
+            + " consumed_at, expedition_run_id, expedition_node_id, question_fingerprint)"
+            + " VALUES (?, 1, 1, ?, 1, ?, ?::jsonb, 'CONSUMED', now(), ?::uuid, ?, ?)",
+        userId,
+        kcCode,
+        duplicate.problemId(),
+        new ObjectMapper().writeValueAsString(duplicate),
+        challenge.runId(),
+        nodeId,
+        fingerprint);
+    EndlessPregenService pregen = new EndlessPregenService(null, jdbc, new ObjectMapper(), runs);
+
+    var open = pregen.findOpenExpeditionProblem(userId, challenge.runId(), nodeId, null);
+
+    assertThat(open).isEmpty();
+  }
+
+  @Test
+  void claimReadyDoesNotReturnOpenProblemAtDifferentRequestedDifficulty() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    String nodeId = (String) active.nodes().getFirst().get("id");
+    ExpeditionRunDto challenge =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
+    String kcCode = (String) nodeById(challenge, nodeId).get("kcCode");
+    BossInternalProblem openAtWrongDifficulty =
+        new BossInternalProblem(
+            BossService.issueProblemId(null),
+            1,
+            1,
+            1,
+            kcCode,
+            "open question",
+            List.of(),
+            "2 3",
+            "5",
+            1,
+            true,
+            false,
+            List.of(new com.pythontopia.world.boss.dto.BossTestCasePayload("2 3", "5", false)),
+            "print(5)");
+    EndlessPregenService pregen = new EndlessPregenService(null, jdbc, new ObjectMapper(), runs);
+    pregen.persistConsumed(
+        userId, 1, kcCode, null, null, 1, openAtWrongDifficulty, challenge.runId(), nodeId);
+
+    var reused = pregen.claimReady(userId, 1, 1, kcCode, 2, null, null, challenge.runId(), nodeId);
+
+    assertThat(reused).isEmpty();
+  }
+
+  @Test
   void settlementRejectsAnOlderUnsettledIssueWhenANewerIssueExists() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
@@ -1613,6 +1876,87 @@ class ExpeditionRunPostgresIntegrationTest {
         .isZero();
     assertThat(runs.findActive(userId)).isEmpty();
   }
+
+  private RevokedSettlementFixture createRevokedSettlementFixture() {
+    long userId = createStudent();
+    ObjectMapper objectMapper = new ObjectMapper();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, objectMapper);
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    String nodeId = (String) active.nodes().getFirst().get("id");
+    ExpeditionRunDto challenge =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
+    String kcCode = (String) nodeById(challenge, nodeId).get("kcCode");
+    Integer bossPhase = "boss".equals(nodeById(challenge, nodeId).get("kind")) ? 1 : null;
+    String problemId = BossService.issueProblemId(bossPhase);
+    BossInternalProblem problem =
+        new BossInternalProblem(
+            problemId,
+            1,
+            1,
+            2,
+            kcCode,
+            "revoked AI challenge",
+            List.of(),
+            "",
+            "",
+            1,
+            true,
+            true,
+            List.of(new BossTestCasePayload("input", "output", false)),
+            "print('output')");
+    EndlessPregenService pregen = new EndlessPregenService(null, jdbc, objectMapper, runs);
+    pregen.persistConsumed(userId, 1, kcCode, null, null, 2, problem, active.runId(), nodeId);
+    BossGraphClient graph = mock(BossGraphClient.class);
+    BossProblemReviewRepository reviews = mock(BossProblemReviewRepository.class);
+    ApplicationEventPublisher events = mock(ApplicationEventPublisher.class);
+    ExpeditionScoreService scores = new ExpeditionScoreService(jdbc, runs, events);
+    BossAttemptIdempotencyService idempotency = mock(BossAttemptIdempotencyService.class);
+    when(idempotency.claim(eq(userId), any(UUID.class), any(BossAttemptRequest.class)))
+        .thenReturn(
+            new BossAttemptIdempotencyService.Claim(UUID.randomUUID(), null, "fixture"),
+            new BossAttemptIdempotencyService.Claim(UUID.randomUUID(), null, "fixture"));
+    when(idempotency.complete(
+            eq(userId),
+            any(UUID.class),
+            any(BossAttemptIdempotencyService.Claim.class),
+            any(BossAttemptResultDto.class),
+            any()))
+        .thenAnswer(invocation -> invocation.getArgument(3));
+    BossService bossService =
+        new BossService(
+            graph,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            null,
+            pregen,
+            reviews,
+            runs,
+            scores,
+            idempotency,
+            events);
+    return new RevokedSettlementFixture(
+        userId, runs, active, nodeId, problemId, problem, graph, reviews, events, scores, bossService);
+  }
+
+  private record RevokedSettlementFixture(
+      long userId,
+      ExpeditionRunService runs,
+      ExpeditionRunDto active,
+      String nodeId,
+      String problemId,
+      BossInternalProblem problem,
+      BossGraphClient graph,
+      BossProblemReviewRepository reviews,
+      ApplicationEventPublisher events,
+      ExpeditionScoreService scores,
+      BossService bossService) {}
 
   private long createStudent() {
     return jdbc.queryForObject(

@@ -26,6 +26,8 @@ import com.pythontopia.learner.reflection.LearnerInsightRepository;
 import com.pythontopia.learner.twin.dto.WeeklyReportDto;
 import com.pythontopia.tutor.TutorDailyRequestLimitService;
 import java.math.BigDecimal;
+import java.time.Clock;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.UUID;
@@ -183,6 +185,53 @@ class WeeklyReportServicePostgresIntegrationTest {
               assertThat(delta.evidenceSources()).containsExactly("PRACTICE_PASS");
               assertThat(delta.currentScore()).isEqualTo(0.700);
             });
+  }
+
+  @Test
+  void sevenCalendarDayReportIncludesStartAndExcludesBeforeStartAndEnd() {
+    long userId = insertUser("weekly-window-boundary-owner");
+    Instant end = Instant.parse("2026-10-19T16:00:00Z");
+    Instant start = Instant.parse("2026-10-13T16:00:00Z");
+    insertLearningEventAt(userId, "practice_succeeded", start);
+    insertLearningEventAt(userId, "practice_failed", start.minusSeconds(1));
+    insertLearningEventAt(userId, "practice_failed", end);
+    insertMasteryEventAt(userId, "PRACTICE_PASS", new BigDecimal("0.100"), start);
+    insertMasteryEventAt(
+        userId, "PRACTICE_PASS", new BigDecimal("0.500"), start.minusSeconds(1));
+    insertMasteryEventAt(userId, "PRACTICE_PASS", new BigDecimal("-0.200"), end);
+    insertRunAt(userId, "StartAgent", start);
+    insertRunAt(userId, "BeforeAgent", start.minusSeconds(1));
+    insertRunAt(userId, "EndAgent", end);
+    MemoryRetrievalService memoryService = mock(MemoryRetrievalService.class);
+    LearnerInsightRepository insightRepository = mock(LearnerInsightRepository.class);
+    when(memoryService.retrieveAuthoritativeBetween(any(Long.class), any(), any(), any(Integer.class)))
+        .thenReturn(java.util.List.of());
+    when(insightRepository.findByUserBetween(any(Long.class), any(), any(), any(Integer.class)))
+        .thenReturn(java.util.List.of());
+    WeeklyReportService fixedService = new WeeklyReportService(
+        memoryService,
+        insightRepository,
+        new MasteryRepository(jdbc),
+        new LearningEventLogRepository(jdbc, new ObjectMapper()),
+        jdbc,
+        Clock.fixed(end, java.time.ZoneOffset.UTC));
+
+    WeeklyReportDto report = fixedService.build(userId);
+
+    assertThat(report.periodStart()).isEqualTo("2026-10-14");
+    assertThat(report.periodEnd()).isEqualTo("2026-10-20");
+    assertThat(report.memoryBrief().totalEvents()).isEqualTo(1);
+    assertThat(report.memoryBrief().succeededPractices()).isEqualTo(1);
+    assertThat(report.memoryBrief().failedPractices()).isZero();
+    assertThat(report.masteryDeltas())
+        .singleElement()
+        .satisfies(delta -> {
+          assertThat(delta.weeklyDelta()).isEqualTo(0.100);
+          assertThat(delta.evidenceCount()).isEqualTo(1);
+        });
+    assertThat(report.resourceRuns())
+        .singleElement()
+        .satisfies(run -> assertThat(run.agentName()).isEqualTo("StartAgent"));
   }
 
   @Test
@@ -577,6 +626,72 @@ class WeeklyReportServicePostgresIntegrationTest {
   }
 
   @Test
+  void concurrentRedeliveryWithSameIdempotencyKeyChangesMasteryAndReviewStateOnce()
+      throws Exception {
+    long userId = insertUser("concurrent-mastery-replay-owner");
+    int deliveries = 16;
+    MasteryRepository repository = new MasteryRepository(jdbc);
+    ReviewStateRepository reviewRepository = new ReviewStateRepository(jdbc);
+    MasteryEvaluator evaluator =
+        new MasteryEvaluator(
+            repository,
+            new MasteryProperties(
+                14,
+                new BigDecimal("0.05"),
+                new BigDecimal("0.02"),
+                Map.of("PRACTICE_PASS", new BigDecimal("0.100"))),
+            new ReviewStateService(reviewRepository, new ReviewScheduler()));
+    LearningEventListener listener = new LearningEventListener(evaluator, jdbc);
+    LearningEvent.PracticeSucceeded event =
+        new LearningEvent.PracticeSucceeded(
+            userId, "PY43-KC-001", 476L, "medium", 9876L, "submission:9876");
+    TransactionTemplate transaction =
+        new TransactionTemplate(new DataSourceTransactionManager(jdbc.getDataSource()));
+    CountDownLatch ready = new CountDownLatch(deliveries);
+    CountDownLatch start = new CountDownLatch(1);
+
+    try (var executor = Executors.newFixedThreadPool(deliveries)) {
+      var futures =
+          java.util.stream.IntStream.range(0, deliveries)
+              .mapToObj(
+                  ignored ->
+                      executor.submit(
+                          () -> {
+                            ready.countDown();
+                            if (!start.await(10, TimeUnit.SECONDS)) {
+                              throw new IllegalStateException(
+                                  "duplicate mastery deliveries did not start");
+                            }
+                            transaction.executeWithoutResult(
+                                status -> listener.onPracticePass(event));
+                            return null;
+                          }))
+              .toList();
+      assertThat(ready.await(10, TimeUnit.SECONDS)).isTrue();
+      start.countDown();
+      for (var future : futures) {
+        future.get(20, TimeUnit.SECONDS);
+      }
+    }
+
+    assertThat(repository.findAll(userId))
+        .singleElement()
+        .satisfies(
+            snapshot -> {
+              assertThat(snapshot.masteryScore()).isEqualByComparingTo("0.100");
+              assertThat(snapshot.confidence()).isEqualByComparingTo("0.050");
+            });
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT COUNT(*) FROM kc_mastery_event WHERE user_id = ? AND idempotency_key = ?",
+                Integer.class,
+                userId,
+                "submission:9876"))
+        .isEqualTo(1);
+    assertThat(reviewRepository.find(userId, "PY43-KC-001").orElseThrow().reps()).isEqualTo(1);
+  }
+
+  @Test
   void concurrentInterviewStartsResumeTheSameOpenSession() throws Exception {
     long userId = insertUser("concurrent-interview-owner");
     ProfileRepository repository = new ProfileRepository(jdbc, new ObjectMapper());
@@ -662,6 +777,15 @@ class WeeklyReportServicePostgresIntegrationTest {
         age);
   }
 
+  private void insertLearningEventAt(long userId, String eventType, Instant createdAt) {
+    jdbc.update(
+        "INSERT INTO learning_event_log (user_id, event_type, payload, source, created_at)"
+            + " VALUES (?, ?, '{}'::jsonb, 'backend', ?)",
+        userId,
+        eventType,
+        java.sql.Timestamp.from(createdAt));
+  }
+
   private void insertMasteryEvent(
       long userId, String source, java.math.BigDecimal delta, String age) {
     jdbc.update(
@@ -673,5 +797,28 @@ class WeeklyReportServicePostgresIntegrationTest {
         delta,
         delta,
         age);
+  }
+
+  private void insertMasteryEventAt(
+      long userId, String source, BigDecimal delta, Instant createdAt) {
+    jdbc.update(
+        "INSERT INTO kc_mastery_event"
+            + " (user_id, kc_code, source, delta, applied_delta, reason, created_at)"
+            + " VALUES (?, 'PY43-KC-001', ?, ?, ?, 'window boundary', ?)",
+        userId,
+        source,
+        delta,
+        delta,
+        java.sql.Timestamp.from(createdAt));
+  }
+
+  private void insertRunAt(long userId, String agent, Instant createdAt) {
+    jdbc.update(
+        "INSERT INTO resource_run"
+            + " (user_id, agent_name, scenario, status, evidence_page_ids, created_at)"
+            + " VALUES (?, ?, 'RESOURCE_HANDOUT', 'SUCCESS', ARRAY[11]::bigint[], ?)",
+        userId,
+        agent,
+        java.sql.Timestamp.from(createdAt));
   }
 }

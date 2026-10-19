@@ -111,30 +111,9 @@ public class BossGraphClient {
     if (preferredKind != null) {
       body.put("preferredKind", preferredKind);
     }
-    if (profileSignals != null) {
-      Map<String, Object> sig = new HashMap<>();
-      if (profileSignals.weakKcCodes() != null) sig.put("weakKcCodes", profileSignals.weakKcCodes());
-      if (profileSignals.pythonSelfRatedLevel() != null)
-        sig.put("pythonSelfRatedLevel", profileSignals.pythonSelfRatedLevel());
-      if (profileSignals.successRate() != null) sig.put("successRate", profileSignals.successRate());
-      if (profileSignals.mediaPriority() != null) sig.put("mediaPriority", profileSignals.mediaPriority());
-      if (profileSignals.resilience() != null) sig.put("resilience", profileSignals.resilience());
-      if (profileSignals.questPreferredKind() != null)
-        sig.put("questPreferredKind", profileSignals.questPreferredKind());
-      if (profileSignals.major() != null) sig.put("major", profileSignals.major());
-      if (profileSignals.learningGoalKind() != null)
-        sig.put("learningGoalKind", profileSignals.learningGoalKind());
-      if (profileSignals.targetKcCodes() != null)
-        sig.put("targetKcCodes", profileSignals.targetKcCodes());
-      if (profileSignals.fieldDependent() != null)
-        sig.put("fieldDependent", profileSignals.fieldDependent());
-      if (profileSignals.sequentialVsHolistic() != null)
-        sig.put("sequentialVsHolistic", profileSignals.sequentialVsHolistic());
-      if (profileSignals.sessionMinutesPerDay() != null)
-        sig.put("sessionMinutesPerDay", profileSignals.sessionMinutesPerDay());
-      if (!sig.isEmpty()) {
-        body.put("profileSignals", sig);
-      }
+    Map<String, Object> sig = signalsToMap(profileSignals);
+    if (!sig.isEmpty()) {
+      body.put("profileSignals", sig);
     }
     setInternalToken(headers);
     try {

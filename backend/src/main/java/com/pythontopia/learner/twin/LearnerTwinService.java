@@ -190,10 +190,9 @@ public class LearnerTwinService {
   }
 
   private static String growthStage(int assessed, int mastered, int total) {
-    if (total == 0 || assessed == 0) return "初识小镇";
+    if (assessed == 0) return "初识小镇";
     if (mastered >= Math.ceil(total * 0.5)) return "稳步精进";
-    if (assessed >= 10) return "持续练习";
-    return "启程练习";
+    return "持续练习";
   }
 
   private record LearnerSnapshot(

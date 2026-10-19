@@ -14,6 +14,7 @@ import com.pythontopia.learner.twin.dto.WeeklyReportDto.MasteryDeltaBrief;
 import com.pythontopia.learner.twin.dto.WeeklyReportDto.MemoryBrief;
 import com.pythontopia.learner.twin.dto.WeeklyReportDto.ResourceRunBrief;
 import java.sql.Types;
+import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -22,13 +23,14 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.SqlParameterValue;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * 数字孪生周报：聚合本周记忆流、反思洞察、掌握度变化与资源运行摘要，纯读、零
+ * 数字孪生周报：聚合包含今天在内的最近七个上海自然日的记忆流、反思洞察、掌握度变化与资源运行摘要，纯读、零
  * LLM。所有查询均按 userId 隔离，仅返回本人数据。
  */
 @Service
@@ -44,25 +46,45 @@ public class WeeklyReportService {
   private final MasteryRepository masteryRepository;
   private final LearningEventLogRepository eventRepository;
   private final JdbcTemplate jdbc;
+  private final Clock clock;
 
+  @Autowired
   public WeeklyReportService(
       MemoryRetrievalService memoryService,
       LearnerInsightRepository insightRepository,
       MasteryRepository masteryRepository,
       LearningEventLogRepository eventRepository,
       JdbcTemplate jdbc) {
+    this(
+        memoryService,
+        insightRepository,
+        masteryRepository,
+        eventRepository,
+        jdbc,
+        Clock.systemUTC());
+  }
+
+  WeeklyReportService(
+      MemoryRetrievalService memoryService,
+      LearnerInsightRepository insightRepository,
+      MasteryRepository masteryRepository,
+      LearningEventLogRepository eventRepository,
+      JdbcTemplate jdbc,
+      Clock clock) {
     this.memoryService = memoryService;
     this.insightRepository = insightRepository;
     this.masteryRepository = masteryRepository;
     this.eventRepository = eventRepository;
     this.jdbc = jdbc;
+    this.clock = clock;
   }
 
   @Transactional(readOnly = true)
   public WeeklyReportDto build(Long userId) {
-    Instant now = Instant.now();
+    Instant now = clock.instant();
     LocalDate today = now.atZone(REPORT_ZONE).toLocalDate();
-    Instant weekStart = today.minusDays(7).atStartOfDay(REPORT_ZONE).toInstant();
+    LocalDate periodStart = today.minusDays(6);
+    Instant weekStart = periodStart.atStartOfDay(REPORT_ZONE).toInstant();
 
     MemoryBrief memoryBrief = buildMemoryBrief(userId, weekStart, now);
     List<InsightBrief> insights = buildInsightBriefs(userId, weekStart, now);
@@ -71,7 +93,7 @@ public class WeeklyReportService {
 
     DateTimeFormatter fmt = DateTimeFormatter.ISO_LOCAL_DATE;
     return new WeeklyReportDto(
-        fmt.format(today.minusDays(7)),
+        fmt.format(periodStart),
         fmt.format(today),
         memoryBrief,
         insights,

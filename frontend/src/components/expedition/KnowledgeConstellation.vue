@@ -29,30 +29,39 @@ const nodeById = computed<Record<string, ConstellationNode>>(() => {
   return map;
 });
 
-function scoreOf(code: string): number {
-  return props.mastery[code] ?? 0;
+function scoreOf(code: string): number | null {
+  return props.mastery[code] ?? null;
 }
 const assessedCodes = computed(() => new Set(props.assessed ?? Object.keys(props.mastery)));
 function isAssessed(code: string): boolean {
   return assessedCodes.value.has(code);
 }
 function radiusOf(code: string): number {
-  return isAssessed(code) ? 4 + scoreOf(code) * 4 : 3.5;
+  const score = scoreOf(code);
+  return isAssessed(code) && score != null ? 4 + score * 4 : 3.5;
 }
 function fillOf(code: string): string {
   if (!isAssessed(code)) return 'rgba(177, 183, 196, 0.38)';
   const s = scoreOf(code);
+  if (s == null) return 'rgba(177, 183, 196, 0.38)';
   if (s >= CONSTELLATION_LIT_THRESHOLD) return '#43a45b'; // 已掌握：点亮绿
   if (s >= 0.2) return '#d99f3a'; // 学习中：金
   return 'rgba(74, 54, 29, 0.45)'; // 有评估证据但当前掌握度偏低
 }
 
-const litCount = computed(
-  () => constellation.nodes.filter((n) => isAssessed(n.code)
-    && scoreOf(n.code) >= CONSTELLATION_LIT_THRESHOLD).length,
-);
+const litCount = computed(() => constellation.nodes.filter((node) => {
+  const score = scoreOf(node.code);
+  return isAssessed(node.code) && score != null && score >= CONSTELLATION_LIT_THRESHOLD;
+}).length);
 const assessedCount = computed(() => constellation.nodes.filter((node) => isAssessed(node.code)).length);
 const total = computed(() => constellation.nodes.length);
+function titleFor(code: string): string {
+  if (!isAssessed(code)) return `${kcDisplayName(code)} · 尚未评估`;
+  const score = scoreOf(code);
+  return score == null
+    ? `${kcDisplayName(code)} · 已评估 · 掌握度暂无可比数据`
+    : `${kcDisplayName(code)} · 掌握 ${Math.round(score * 100)}%`;
+}
 </script>
 
 <template>
@@ -90,7 +99,7 @@ const total = computed(() => constellation.nodes.length);
           :fill="fillOf(n.code)"
           :data-testid="`kc-star-${n.code}`"
         >
-          <title>{{ kcDisplayName(n.code) }} · {{ isAssessed(n.code) ? `掌握 ${Math.round(scoreOf(n.code) * 100)}%` : '尚未评估' }}</title>
+          <title>{{ titleFor(n.code) }}</title>
         </circle>
       </g>
     </svg>

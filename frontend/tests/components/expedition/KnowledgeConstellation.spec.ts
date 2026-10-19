@@ -27,4 +27,14 @@ describe('KnowledgeConstellation', () => {
     expect(wrapper.get('[data-testid="kc-star-PY43-KC-001"] title').text()).toContain('尚未评估');
     expect(wrapper.text()).toContain('已评估 0 / 65');
   });
+
+  it('does not show zero mastery when an assessed KC has no comparable score', () => {
+    const wrapper = mount(KnowledgeConstellation, {
+      props: { mastery: {}, assessed: ['PY43-KC-001'] },
+    });
+
+    expect(wrapper.get('[data-testid="kc-star-PY43-KC-001"] title').text())
+      .toContain('已评估 · 掌握度暂无可比数据');
+    expect(wrapper.get('.kc-constellation__cap strong').text()).toBe('0');
+  });
 });

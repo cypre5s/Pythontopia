@@ -69,6 +69,17 @@ class ResourceWorkshopControllerTest {
   }
 
   @Test
+  void forwardsOptionalIdempotencyKeyToResourceCheckService() {
+    var request =
+        new ResourceCheckSubmitRequest(
+            "PY43-KC-001", ResourceCheckEvidenceType.MICRO_QUIZ, "x", null);
+
+    controller.submitCheck(STUDENT, 9L, "micro-check-1", request);
+
+    verify(service).submitCheck(7L, 9L, request, "micro-check-1");
+  }
+
+  @Test
   void limitsRepeatedFeedbackWritesPerAccount() {
     var request = new ResourceFeedbackRequest(ResourceFeedbackStatus.LIKED, null);
 
@@ -83,7 +94,7 @@ class ResourceWorkshopControllerTest {
   }
 
   @Test
-  void rejectsAllLearningWriteRoutesWhenAccountBudgetIsExhausted() {
+  void limitsControllerManagedLearningWriteRoutesWhenAccountBudgetIsExhausted() {
     StudentWriteThrottle throttle = mock(StudentWriteThrottle.class);
     when(throttle.tryAcquire(7L, 1)).thenReturn(false);
     ResourceWorkshopController limitedController =
@@ -93,11 +104,11 @@ class ResourceWorkshopControllerTest {
     var feedback = new ResourceFeedbackRequest(ResourceFeedbackStatus.LIKED, null);
 
     assertWriteRejected(() -> limitedController.consume(STUDENT, 9L));
-    assertWriteRejected(() -> limitedController.submitCheck(STUDENT, 9L, check));
+    limitedController.submitCheck(STUDENT, 9L, null, check);
     assertWriteRejected(() -> limitedController.feedback(STUDENT, 9L, feedback));
 
-    verify(throttle, times(3)).tryAcquire(7L, 1);
-    verifyNoInteractions(service);
+    verify(throttle, times(2)).tryAcquire(7L, 1);
+    verify(service).submitCheck(7L, 9L, check, null);
   }
 
   private void assertWriteRejected(org.assertj.core.api.ThrowableAssert.ThrowingCallable write) {

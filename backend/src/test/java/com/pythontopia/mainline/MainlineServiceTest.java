@@ -152,6 +152,8 @@ class MainlineServiceTest {
     assertThat(ch1.recovery().errorbookDone()).isTrue();
     assertThat(ch1.stages()).hasSize(1);
     assertThat(ch1.stages().get(0).completed()).isFalse(); // mock 中没有课程页数据时 fail closed
+    assertThat(mapper.valueToTree(ch1.stages().get(0)).path("kcCodes").toString())
+        .isEqualTo("[\"PY43-KC-001\"]");
 
     var ch2 = overview.chapters().get(1);
     assertThat(ch2.unlocked()).isTrue(); // 前章 2★ ≥1 → 解锁

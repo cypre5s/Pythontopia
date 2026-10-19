@@ -25,6 +25,7 @@ public record MainlineOverviewDto(int totalStars, List<ChapterOverview> chapters
       long id,
       int index,
       String title,
+      List<String> kcCodes,
       int videoWatchedSec,
       int requiredVideoSec,
       int pagesRead,

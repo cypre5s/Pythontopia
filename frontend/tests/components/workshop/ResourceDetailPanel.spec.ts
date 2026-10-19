@@ -216,7 +216,7 @@ describe('ResourceDetailPanel · 决策玻璃盒挂载（P7.1）', () => {
       kcCode: 'PY43-KC-001',
       evidenceType: 'MICRO_QUIZ',
       answerText: 'input 函数用于读取用户输入',
-    });
+    }, { headers: { 'Idempotency-Key': expect.stringMatching(/^[0-9a-f-]{36}$/) } });
     const result = wrapper.find('[data-testid="resource-check-result"]');
     expect(result.text()).toContain('PASSED');
     expect(result.text()).toContain('+0.05');
@@ -359,7 +359,7 @@ describe('ResourceDetailPanel · 决策玻璃盒挂载（P7.1）', () => {
         source: 'recent_submission',
         status: 'PASSED',
       },
-    });
+    }, { headers: { 'Idempotency-Key': expect.stringMatching(/^[0-9a-f-]{36}$/) } });
     expect(wrapper.find('[data-testid="resource-loop-state"]').text()).toContain('通过');
     expect(wrapper.find('[data-testid="resource-check-result"]').text()).toContain('+0.05');
   });
@@ -449,7 +449,7 @@ describe('ResourceDetailPanel · 决策玻璃盒挂载（P7.1）', () => {
         source: 'recent_submission',
         status: 'ERROR',
       },
-    });
+    }, { headers: { 'Idempotency-Key': expect.stringMatching(/^[0-9a-f-]{36}$/) } });
     expect(wrapper.find('[data-testid="resource-loop-state"]').text()).toContain('重规划');
   });
 });

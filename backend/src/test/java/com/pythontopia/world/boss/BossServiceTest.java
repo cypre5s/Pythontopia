@@ -732,7 +732,7 @@ class BossServiceTest {
         .thenReturn(Optional.of(new ApprovedBossProblem(33L, 2, approved)));
     when(graphClient.requestProblem(
             anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
-        .thenReturn(problemWithStage(1));
+        .thenReturn(problemWithStageAndDifficulty(1, 2));
 
     var dto =
         service.fetchProblem(
@@ -927,7 +927,7 @@ class BossServiceTest {
               graphStarted.countDown();
               if (!releaseGraph.await(3, TimeUnit.SECONDS))
                 throw new IllegalStateException("test timed out");
-              return problemWithStage(2);
+              return problemWithStageAndDifficulty(2, 2);
             });
     BossProblemRequest request =
         new BossProblemRequest(2, null, 2, "PY43-KC-001", "debug", null, null, null);
@@ -959,7 +959,7 @@ class BossServiceTest {
     when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
     when(graphClient.requestProblem(
             anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
-        .thenReturn(problemWithInput("generated-once"));
+        .thenReturn(problemWithInputAndDifficulty("generated-once", 1, 2));
     String requestId = UUID.randomUUID().toString();
     BossProblemRequest request =
         new BossProblemRequest(
@@ -1199,6 +1199,156 @@ class BossServiceTest {
   }
 
   @Test
+  @DisplayName("Graph 返回跨 KC 题目时使用同 KC 课程题库兜底")
+  void graphProblemWithMismatchedKcFallsBackToGoldenForRequestedKc() {
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
+        .thenReturn(problemWithInputAndKc("private-mismatch", "PY43-KC-002"));
+    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
+        .thenReturn(
+            List.of(
+                new PreferredCodingQuestion(
+                    121L,
+                    "目标 KC 课程题",
+                    "目标知识点题目说明。",
+                    List.of(new CodingCase("2 3", "5")),
+                    List.of(new CodingCase("2 3", "5")),
+                    "print(5)",
+                    "PY43-KC-001")));
+
+    var dto =
+        service.fetchProblem(
+            1,
+            new BossProblemRequest(1, null, 1, "PY43-KC-001", "dual_track", null, null, null),
+            7L);
+
+    assertThat(dto.statement()).contains("目标 KC 课程题");
+    assertThat(dto.kcCode()).isEqualTo("PY43-KC-001");
+    assertThat(dto.difficulty()).isEqualTo(1);
+    assertThat(dto.aiGenerated()).isFalse();
+    verify(pregenService)
+        .persistConsumed(
+            eq(7L),
+            eq(1),
+            eq("PY43-KC-001"),
+            eq("dual_track"),
+            any(),
+            eq(1),
+            org.mockito.ArgumentMatchers.argThat(p -> p.kcCode().equals("PY43-KC-001")),
+            org.mockito.ArgumentMatchers.isNull());
+    verify(reviewRepository, never())
+        .approveAutomaticallyIfNotDuplicate(
+            anyLong(), any(), anyInt(), anyInt(), anyString(), anyInt(), any());
+  }
+
+  @Test
+  @DisplayName("Graph 返回难度不匹配题目时使用目标难度的课程题库兜底")
+  void graphProblemWithMismatchedDifficultyFallsBackToGoldenAtTargetDifficulty() {
+    when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), eq(2), any(), any(), any()))
+        .thenReturn(problemWithStageAndDifficulty(1, 4));
+    when(chapterProblemBankRepository.findByKcCodes(List.of("PY43-KC-001")))
+        .thenReturn(
+            List.of(
+                new PreferredCodingQuestion(
+                    121L,
+                    "目标难度课程题",
+                    "目标知识点题目说明。",
+                    List.of(new CodingCase("2 3", "5")),
+                    List.of(new CodingCase("2 3", "5")),
+                    "print(5)",
+                    "PY43-KC-001")));
+
+    var dto =
+        service.fetchProblem(
+            1,
+            new BossProblemRequest(1, null, 5, "PY43-KC-001", "dual_track", null, null, null),
+            7L);
+
+    assertThat(dto.statement()).contains("目标难度课程题");
+    assertThat(dto.kcCode()).isEqualTo("PY43-KC-001");
+    assertThat(dto.difficulty()).isEqualTo(2);
+    assertThat(dto.aiGenerated()).isFalse();
+    verify(reviewRepository, never())
+        .approveAutomaticallyIfNotDuplicate(
+            anyLong(), any(), anyInt(), anyInt(), anyString(), anyInt(), any());
+  }
+
+  @Test
+  @DisplayName("approved bank 只有邻近难度题时不签发该题")
+  void approvedBankDoesNotIssueQuestionAtDifferentDifficulty() {
+    when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
+    BossInternalProblem approvedAtWrongDifficulty =
+        new BossInternalProblem(
+            "approved-33-v2",
+            1,
+            4,
+            1,
+            "PY43-KC-001",
+            "wrong difficulty approved statement",
+            List.of("hint"),
+            "2 3",
+            "5",
+            1,
+            true,
+            true,
+            List.of(new BossTestCasePayload("2 3", "5", false)),
+            "print(5)");
+    when(reviewRepository.findApproved(1, 4, "PY43-KC-001", "debug", 2))
+        .thenReturn(Optional.of(new ApprovedBossProblem(33L, 2, approvedAtWrongDifficulty)));
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), eq(2), any(), any(), any()))
+        .thenReturn(problemWithStageAndDifficulty(4, 2));
+
+    var dto =
+        service.fetchProblem(
+            1, new BossProblemRequest(4, null, 5, "PY43-KC-001", "debug", null, null, null), 7L);
+
+    assertThat(dto.statement()).isEqualTo("statement");
+    assertThat(dto.difficulty()).isEqualTo(2);
+    assertThat(dto.aiGenerated()).isTrue();
+    verify(graphClient)
+        .requestProblem(anyLong(), anyInt(), anyInt(), anyString(), eq(2), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("approved bank 载荷跨 KC 时跳过并向 Graph 请求目标 KC 题目")
+  void approvedBankPayloadWithWrongKcFallsThroughToGraph() {
+    BossInternalProblem approvedAtWrongKc =
+        new BossInternalProblem(
+            "approved-33-v2",
+            1,
+            1,
+            1,
+            "PY43-KC-002",
+            "wrong KC approved statement",
+            List.of("hint"),
+            "2 3",
+            "5",
+            1,
+            true,
+            true,
+            List.of(new BossTestCasePayload("2 3", "5", false)),
+            "print(5)");
+    when(reviewRepository.findApproved(1, 1, "PY43-KC-001", "debug", 1))
+        .thenReturn(Optional.of(new ApprovedBossProblem(33L, 2, approvedAtWrongKc)));
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), eq("PY43-KC-001"), eq(1), any(), any(), any()))
+        .thenReturn(problemWithStageAndDifficulty(1, 1));
+
+    var dto =
+        service.fetchProblem(
+            1, new BossProblemRequest(1, null, 4, "PY43-KC-001", "debug", null, null, null), 7L);
+
+    assertThat(dto.problemId()).startsWith("issue-");
+    assertThat(dto.kcCode()).isEqualTo("PY43-KC-001");
+    assertThat(dto.difficulty()).isEqualTo(1);
+    verify(graphClient)
+        .requestProblem(anyLong(), anyInt(), anyInt(), eq("PY43-KC-001"), eq(1), any(), any(), any());
+  }
+
+  @Test
   @DisplayName("其他用户不能用猜到的题目 ID 读取已发放题目的隐藏测试")
   void generatedProblemCannotBeEvaluatedByAnotherUser() {
     when(graphClient.requestProblem(
@@ -1220,7 +1370,7 @@ class BossServiceTest {
   void unapprovedGeneratedProblemIsNotIssued() {
     when(graphClient.requestProblem(
             anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any()))
-        .thenReturn(problemWithTests(3));
+        .thenReturn(problemWithTests(1));
     when(reviewRepository.approveAutomaticallyIfNotDuplicate(
             anyLong(), any(), anyInt(), anyInt(), anyString(), anyInt(), any()))
         .thenReturn(false);
@@ -1327,6 +1477,79 @@ class BossServiceTest {
         .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
         .hasMessageContaining("阶段");
     verifyNoInteractions(reviewRepository, graphClient);
+  }
+
+  @Test
+  @DisplayName("已打开的远征题难度不再匹配当前策略时不继续签发")
+  void openExpeditionProblemMustMatchCurrentDifficulty() {
+    String runId = "123e4567-e89b-12d3-a456-426614174000";
+    String nodeId = "L0-0";
+    when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
+    when(expeditionRunService.validateProblemRequest(7L, runId, nodeId, 1, false, "PY43-KC-001"))
+        .thenReturn(null);
+    when(pregenService.findOpenExpeditionProblem(7L, runId, nodeId, null))
+        .thenReturn(Optional.of(problemWithStageAndDifficulty(1, 1)));
+
+    assertThatThrownBy(
+            () ->
+                service.fetchProblem(
+                    1,
+                    new BossProblemRequest(
+                        1, null, 1, "PY43-KC-001", "dual_track", null, null, runId, nodeId),
+                    7L))
+        .isInstanceOfSatisfying(
+            com.pythontopia.common.error.BusinessException.class,
+            exception -> assertThat(exception.code()).isEqualTo("BOSS_PROBLEM_DIFFICULTY_MISMATCH"));
+
+    verify(pregenService, never())
+        .claimReady(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), anyString(), anyString());
+    verifyNoInteractions(graphClient);
+  }
+
+  @Test
+  @DisplayName("READY 题载荷难度不匹配时跳过并现场生成目标难度题")
+  void readyProblemWithWrongPayloadDifficultyFallsThroughToGraph() {
+    when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
+    when(pregenService.claimReady(7L, 1, 1, "PY43-KC-001", 2, "debug", null, null))
+        .thenReturn(Optional.of(problemWithStageAndDifficulty(1, 1)));
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), eq(2), any(), any(), any()))
+        .thenReturn(problemWithStageAndDifficulty(1, 2));
+
+    var dto =
+        service.fetchProblem(
+            1, new BossProblemRequest(1, null, 5, "PY43-KC-001", "debug", null, null, null), 7L);
+
+    assertThat(dto.problemId()).startsWith("issue-");
+    assertThat(dto.difficulty()).isEqualTo(2);
+    verify(graphClient)
+        .requestProblem(anyLong(), anyInt(), anyInt(), anyString(), eq(2), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("READY 题与本局已发题目重复时跳过并生成未重复题")
+  void repeatedReadyProblemFallsThroughToUnusedGraphQuestion() {
+    when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
+    BossInternalProblem repeated =
+        new BossInternalProblem(
+            "ready-duplicate", 1, 1, 2, "PY43-KC-001", "ready statement", List.of(), "", "", 1,
+            true, true, List.of(new BossTestCasePayload("ready", "expected", false)), "ref");
+    when(expeditionRunService.findIssuedQuestionFingerprints(7L, null))
+        .thenReturn(Set.of(BossService.questionFingerprint(repeated)));
+    when(pregenService.claimReady(7L, 1, 1, "PY43-KC-001", 2, "debug", null, null))
+        .thenReturn(Optional.of(repeated));
+    when(graphClient.requestProblem(
+            anyLong(), anyInt(), anyInt(), anyString(), eq(2), any(), any(), any()))
+        .thenReturn(problemWithInputAndDifficulty("graph-new", 1, 2));
+
+    var dto =
+        service.fetchProblem(
+            1, new BossProblemRequest(1, null, 5, "PY43-KC-001", "debug", null, null, null), 7L);
+
+    assertThat(dto.problemId()).startsWith("issue-");
+    assertThat(dto.difficulty()).isEqualTo(2);
+    verify(graphClient)
+        .requestProblem(anyLong(), anyInt(), anyInt(), anyString(), eq(2), any(), any(), any());
   }
 
   @Test
@@ -1635,6 +1858,28 @@ class BossServiceTest {
   }
 
   @Test
+  @DisplayName("指定 KC 因缺少客观题不可用时不替换为其他知识点")
+  void expeditionFrontierDoesNotReplaceUnavailablePreferredKc() {
+    when(learnerTwinService.frontier(7L, null, List.of(), 40, "PY43-KC-001"))
+        .thenReturn(
+            new FrontierSelectResultDto(
+                List.of(
+                    new FrontierPickDto("PY43-KC-001", 1, 1, "复习到期"),
+                    new FrontierPickDto("PY43-KC-016", 2, 1, "近期练习薄弱"))));
+    when(mainlinePracticeRepository.findForBossFallback(1, "PY43-KC-001"))
+        .thenReturn(List.of());
+
+    assertThatThrownBy(() -> service.selectFrontier(7L, null, "PY43-KC-001"))
+        .isInstanceOfSatisfying(
+            com.pythontopia.common.error.BusinessException.class,
+            exception -> {
+              assertThat(exception.code()).isEqualTo("EXPEDITION_NO_PRACTICE_PROBLEMS");
+              assertThat(exception.status())
+                  .isEqualTo(org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY);
+            });
+  }
+
+  @Test
   @DisplayName("远征不放行没有同 KC 客观题的第一章概念 KC")
   void expeditionExplainsWhenOnlyConceptRootsAreEligible() {
     when(learnerTwinService.frontier(7L, null, List.of(), 40, null))
@@ -1679,7 +1924,7 @@ class BossServiceTest {
     when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
     when(graphClient.requestProblem(
             anyLong(), anyInt(), anyInt(), anyString(), eq(2), any(), any(), any()))
-        .thenReturn(problemWithStage(4));
+        .thenReturn(problemWithStageAndDifficulty(4, 2));
 
     service.fetchProblem(
         1, new BossProblemRequest(4, null, 5, "PY43-KC-001", null, null, null, null), 7L);
@@ -1959,13 +2204,14 @@ class BossServiceTest {
     var result = service.evaluateAttempt(attemptRequest("p1", 1, 1, "print(5)", 10), 7L);
 
     assertThat(result.passed()).isTrue();
+    assertThat(result.score()).isZero();
     assertThat(result.feedback()).contains("不计入本局进度、排行榜与知识画像");
     verifyNoInteractions(eventPublisher);
   }
 
   @Test
-  @DisplayName("教师撤销审核后的远征 AI 题仍可练习，但不推进本局或排行榜")
-  void revokedAiProblemCanBePracticedWithoutExpeditionCredit() {
+  @DisplayName("教师撤销审核后的远征 AI 题保留结算证据，但不计入奖励")
+  void revokedAiProblemRecordsSettlementEvidenceWithoutRewards() {
     String runId = "123e4567-e89b-12d3-a456-426614174000";
     BossInternalProblem problem = problemWithTests(1);
     when(pregenService.findExpeditionBinding(eq(7L), eq("p1")))
@@ -1973,14 +2219,20 @@ class BossServiceTest {
     when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
     when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problem));
     when(reviewRepository.isApproved(problem)).thenReturn(false);
+    when(expeditionScoreService.recordSettlementEvidence(
+            eq(7L), eq(runId), eq("p1"), anyString(), eq(true)))
+        .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
 
     var result = service.evaluateAttempt(attemptRequest("p1", 1, 1, "print(5)", 10), 7L);
 
     assertThat(result.passed()).isTrue();
+    assertThat(result.score()).isZero();
     assertThat(result.feedback()).contains("不计入本局进度、排行榜与知识画像");
-    verifyNoInteractions(expeditionScoreService, eventPublisher);
+    verify(expeditionScoreService)
+        .recordSettlementEvidence(eq(7L), eq(runId), eq("p1"), anyString(), eq(true));
+    verifyNoInteractions(eventPublisher);
   }
 
   @Test
@@ -2241,11 +2493,15 @@ class BossServiceTest {
   }
 
   private static BossInternalProblem problemWithStage(int stage) {
+    return problemWithStageAndDifficulty(stage, 1);
+  }
+
+  private static BossInternalProblem problemWithStageAndDifficulty(int stage, int difficulty) {
     return new BossInternalProblem(
         "p1",
         1,
         stage,
-        1,
+        difficulty,
         "PY43-KC-001",
         "statement",
         List.of(),
@@ -2263,11 +2519,16 @@ class BossServiceTest {
   }
 
   private static BossInternalProblem problemWithInput(String input, int stage) {
+    return problemWithInputAndDifficulty(input, stage, 1);
+  }
+
+  private static BossInternalProblem problemWithInputAndDifficulty(
+      String input, int stage, int difficulty) {
     return new BossInternalProblem(
         "same-graph-id",
         1,
         stage,
-        1,
+        difficulty,
         "PY43-KC-001",
         "statement",
         List.of(),

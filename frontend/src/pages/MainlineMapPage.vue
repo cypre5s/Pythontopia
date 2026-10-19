@@ -82,7 +82,7 @@ function requestedChapterFromQuery(): number | null {
   return store.chapters.some((item) => item.chapter === chapter && item.unlocked) ? chapter : null;
 }
 
-const twinTargetKcName = computed(() => {
+const twinTargetKcCode = computed<string | null>(() => {
   const chapter = requestedChapterFromQuery();
   const kcCode = route.query.kcCode;
   if (
@@ -92,7 +92,16 @@ const twinTargetKcName = computed(() => {
   ) {
     return null;
   }
-  return kcDisplayName(kcCode);
+  return kcCode;
+});
+
+const recommendedKcCode = computed(() =>
+  selectedChapter.value === requestedChapterFromQuery() ? twinTargetKcCode.value : null,
+);
+
+const twinTargetKcName = computed(() => {
+  const kcCode = recommendedKcCode.value;
+  return kcCode ? kcDisplayName(kcCode) : null;
 });
 
 function selectRequestedChapter(): void {
@@ -364,6 +373,7 @@ onBeforeUnmount(() => {
             </button>
             <ChapterStagePanel
               :chapter="selectedView"
+              :recommended-kc-code="recommendedKcCode"
               :claiming-errorbook="claimingChapter === selectedView.chapter"
               @enter-stage="goEnterStage"
               @open-test="goOpenTest"

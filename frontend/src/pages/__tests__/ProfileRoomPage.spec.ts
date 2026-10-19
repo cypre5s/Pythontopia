@@ -22,7 +22,7 @@ const state: LearnerTwinState = {
   assessedKcCount: 2,
   totalKcCount: 65,
   masteredKcCount: 0,
-  growthStage: 'Python 见习学徒',
+  growthStage: '持续练习',
   kcs: [
     {
       kcCode: 'PY43-KC-001', kcName: '变量', chapter: 1, chapterName: '基础', assessed: true,
@@ -50,7 +50,7 @@ const state: LearnerTwinState = {
 };
 
 const weeklyReport: WeeklyReport = {
-  periodStart: '2026-10-06',
+  periodStart: '2026-10-07',
   periodEnd: '2026-10-13',
   memoryBrief: { totalEvents: 2, failedPractices: 1, succeededPractices: 1, topKcCodes: ['PY43-KC-002'], highlights: [] },
   insights: [{ id: 1, text: '巩固表达式', dimensionKey: 'error_pattern', tags: [], createdAt: '2026-10-12T00:00:00Z' }],
@@ -158,11 +158,13 @@ describe('ProfileRoomPage', () => {
     });
   });
 
-  it('shows evidence sufficiency separately from mastery on assessed knowledge points', async () => {
+  it('shows the confidence heuristic separately from mastery and evidence sources', async () => {
     const wrapper = mountPage();
     await flushPromises();
 
-    expect(wrapper.get('[data-testid="twin-evidence-list"]').text()).toContain('证据充分度 50%');
+    expect(wrapper.get('[data-testid="twin-evidence-list"]').text()).toContain('当前置信指标 50%');
+    expect(wrapper.get('[data-testid="twin-evidence-list"]').text()).not.toContain('证据充分度');
+    expect(wrapper.get('[data-testid="twin-growth-stage"]').text()).toBe('持续练习');
   });
 
   it('hands weekly insight prompts to the workshop and navigates there', async () => {
@@ -182,7 +184,7 @@ describe('ProfileRoomPage', () => {
     await wrapper.get('[data-testid="twin-mastery-prompt-PY43-KC-002"]').trigger('click');
 
     expect(setPendingPrompt).toHaveBeenCalledWith(expect.stringContaining('PY43-KC-002'));
-    expect(setPendingPrompt).toHaveBeenCalledWith(expect.stringContaining('2 条证据'));
+    expect(setPendingPrompt).toHaveBeenCalledWith(expect.stringContaining('2 条可信学习证据'));
     expect(routerPush).toHaveBeenCalledWith('/workshop');
   });
 });

@@ -20,11 +20,14 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@api/mainline', () => mocks);
 
-function stage(overrides: Partial<MainlineStageDto> = {}): MainlineStageDto {
+function stage(
+  overrides: Partial<MainlineStageDto> & { kcCodes?: string[] } = {},
+): MainlineStageDto {
   return {
     id: 1,
     index: 1,
     title: 's',
+    kcCodes: [],
     videoWatchedSec: 0,
     requiredVideoSec: 240,
     pagesRead: 0,
@@ -140,6 +143,30 @@ describe('MainlineMapPage', () => {
     expect(w.get('[data-testid="mainline-chapter-title"]').text()).toContain('计算思维');
     expect(w.get('[data-testid="mainline-node-1"]').classes()).toContain('node--selected');
     expect(w.get('[data-testid="mainline-twin-target"]').text()).toContain('计算思维的概念与定义');
+  });
+
+  it('opens the exact stage containing a Twin-recommended KC', async () => {
+    const overview = makeOverview();
+    overview.chapters[0] = chapter({
+      chapter: 1,
+      title: '计算思维',
+      unlocked: true,
+      stages: [
+        stage({ id: 11, index: 1, title: '基础思维', kcCodes: ['PY43-KC-004', 'PY43-KC-003'] }),
+        stage({ id: 12, index: 2, title: '计算科学', kcCodes: ['PY43-KC-006', 'PY43-KC-007'] }),
+        stage({ id: 13, index: 3, title: '计算工具', kcCodes: ['PY43-KC-001', 'PY43-KC-002', 'PY43-KC-005'] }),
+      ],
+    });
+    mocks.getMainlineOverview.mockResolvedValueOnce(overview);
+    const { wrapper: w, router } = await mountPage('/mainline-map?chapter=1&kcCode=PY43-KC-001');
+
+    expect(w.get('[data-testid="mainline-stage-13"]').attributes('data-recommended')).toBe('true');
+    expect(w.get('[data-testid="mainline-stage-13"]').text()).toContain('学习分身推荐');
+    expect(w.get('[data-testid="mainline-enter-stage-13"]').text()).toContain('开始推荐任务');
+    await w.get('[data-testid="mainline-enter-stage-13"]').trigger('click');
+    await flushPromises();
+
+    expect(router.currentRoute.value.path).toBe('/mainline/stage/13');
   });
 
   it('ignores a chapter query that is locked for the student', async () => {

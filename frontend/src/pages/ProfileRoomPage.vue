@@ -34,6 +34,16 @@ const focusKcs = computed(() => (state.value?.kcs ?? [])
   .sort((left, right) => Number(right.reviewDue) - Number(left.reviewDue)
     || (left.masteryScore ?? 1) - (right.masteryScore ?? 1))
   .slice(0, 4));
+const dueReviewCount = computed(() => (state.value?.kcs ?? [])
+  .filter((kc) => kc.assessed && kc.reviewDue).length);
+const growthStageClass = computed(() => {
+  switch (state.value?.growthStage) {
+    case '初识小镇': return 'twin-stage--initial';
+    case '持续练习': return 'twin-stage--practice';
+    case '稳步精进': return 'twin-stage--mastery';
+    default: return 'twin-stage--unknown';
+  }
+});
 const nextStep = computed(() => state.value?.nextSteps[0] ?? null);
 const alternativeStep = computed(() => state.value?.nextSteps[1] ?? null);
 
@@ -89,8 +99,8 @@ function percent(value: number | null): string {
   return value == null ? '掌握度暂无可比数据' : `掌握 ${Math.round(value * 100)}%`;
 }
 
-function evidenceSufficiency(value: number | null): string {
-  return value == null ? '证据充分度暂无数据' : `证据充分度 ${Math.round(value * 100)}%`;
+function confidenceMetric(value: number | null): string {
+  return value == null ? '置信指标暂无数据' : `当前置信指标 ${Math.round(value * 100)}%`;
 }
 
 const masterySourceLabels: Record<string, string> = {
@@ -106,8 +116,8 @@ function evidenceSourceLabel(sources: string[]): string {
 }
 
 function lastPractice(value: string | null): string {
-  if (!value) return '暂无正式练习记录';
-  return `最近练习 ${new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(new Date(value))}`;
+  if (!value) return '暂无学习证据记录';
+  return `最近学习证据 ${new Intl.DateTimeFormat('zh-CN', { month: 'numeric', day: 'numeric' }).format(new Date(value))}`;
 }
 </script>
 
@@ -129,10 +139,17 @@ function lastPractice(value: string | null): string {
           </p>
           <h1>我的学习分身</h1>
           <p class="twin-hero__summary">
-            {{ session.displayName }} · {{ state?.growthStage ?? '正在读取学习状态' }}
+            {{ session.displayName }} ·
+            <span
+              v-if="state"
+              class="twin-stage"
+              :class="growthStageClass"
+              data-testid="twin-growth-stage"
+            >{{ state.growthStage }}</span>
+            <span v-else>正在读取学习状态</span>
           </p>
           <p class="twin-hero__evidence">
-            分身依据服务端判题与复习记录成长；访谈偏好只用于推荐，不会代替能力测评。
+            分身依据服务端练习、小测、调试与复习记录成长；访谈偏好只用于推荐，不会代替能力测评。
           </p>
         </div>
         <button
@@ -173,15 +190,15 @@ function lastPractice(value: string | null): string {
         >
           <div class="twin-stat">
             <strong>{{ state.assessedKcCount }} / {{ state.totalKcCount }}</strong>
-            <span>已有练习证据</span>
+            <span>已有学习证据</span>
           </div>
           <div class="twin-stat">
             <strong>{{ state.masteredKcCount }}</strong>
             <span>掌握度达到 80% 的知识点</span>
           </div>
           <div class="twin-stat">
-            <strong>{{ focusKcs.filter((kc) => kc.reviewDue).length }}</strong>
-            <span>重点知识点中复习已到期</span>
+            <strong>{{ dueReviewCount }}</strong>
+            <span>已评估知识点中复习已到期</span>
           </div>
         </section>
 
@@ -201,7 +218,7 @@ function lastPractice(value: string | null): string {
               :assessed="assessedKcs"
             />
             <p class="twin-note">
-              只有经过练习判题的知识点才显示掌握度。灰色星点表示尚未评估。
+              只有经过练习判题、小测或调试记录确认的知识点才显示掌握度。灰色星点表示尚未评估或暂无可比掌握度数据。
             </p>
             <div
               v-if="focusKcs.length"
@@ -220,8 +237,8 @@ function lastPractice(value: string | null): string {
                 </div>
                 <div class="twin-kc-row__status">
                   <strong>{{ percent(kc.masteryScore) }}</strong>
-                  <span title="服务端依据学习事件维护的证据指标，不代表答题正确概率。">
-                    {{ evidenceSufficiency(kc.confidence) }}
+                  <span title="学习状态启发式指标，会随练习失败和遗忘衰减变化，不代表答题正确概率。">
+                    {{ confidenceMetric(kc.confidence) }}
                   </span>
                   <span
                     v-if="kc.reviewDue"
@@ -239,7 +256,7 @@ function lastPractice(value: string | null): string {
               class="twin-note"
               data-testid="twin-unassessed-hint"
             >
-              还没有经判题确认的学习证据。先完成一道基础练习，分身就会开始记录你的进步。
+              还没有可信学习证据。先完成一项有结果记录的学习活动，分身就会开始记录你的进步。
             </p>
           </article>
 
@@ -360,6 +377,11 @@ function lastPractice(value: string | null): string {
 .twin-hero h1, .twin-card h2 { margin: 0; }
 .twin-hero h1 { font-size: clamp(24px, 4vw, 34px); }
 .twin-hero__summary { margin: 8px 0 4px; font-size: 15px; }
+.twin-stage { display: inline-block; padding: 3px 8px; border: 1px solid currentColor; font-size: 12px; line-height: 1.4; }
+.twin-stage--initial { color: #f2d995; background: rgba(112, 81, 34, .36); }
+.twin-stage--practice { color: #c7e5a8; background: rgba(55, 101, 61, .38); }
+.twin-stage--mastery { color: #d7edff; background: rgba(48, 91, 127, .42); }
+.twin-stage--unknown { color: #f1f5e9; background: rgba(9, 25, 19, .28); }
 .twin-hero__evidence { margin: 0; color: #cfddcf; font-size: 12px; line-height: 1.6; }
 .twin-link {
   flex: 0 0 auto;

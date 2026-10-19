@@ -22,6 +22,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.agent.run.MetaReflectionService;
 import com.pythontopia.agent.run.RunStatus;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.event.LearningEvent;
@@ -70,6 +71,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -99,6 +101,7 @@ class ResourceWorkshopServiceTest {
   private PracticeSubmissionRepository submissionRepository;
   private ApplicationEventPublisher eventPublisher;
   private ObjectMapper objectMapper;
+  private StudentWriteThrottle studentWriteThrottle;
   private ResourceWorkshopService service;
 
   @BeforeEach
@@ -120,6 +123,8 @@ class ResourceWorkshopServiceTest {
     submissionRepository = Mockito.mock(PracticeSubmissionRepository.class);
     eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
     objectMapper = new ObjectMapper();
+    studentWriteThrottle = Mockito.mock(StudentWriteThrottle.class);
+    when(studentWriteThrottle.tryAcquire(anyLong(), anyInt())).thenReturn(true);
     service =
         new ResourceWorkshopService(
             properties,
@@ -138,7 +143,8 @@ class ResourceWorkshopServiceTest {
             resourceFeedbackRepository,
             submissionRepository,
             eventPublisher,
-            objectMapper);
+            objectMapper,
+            studentWriteThrottle);
 
     when(coursePackRepository.findKcs(eq(43L), eq(null)))
         .thenReturn(
@@ -444,6 +450,115 @@ class ResourceWorkshopServiceTest {
   }
 
   @Test
+  void submitCheckReplaysStoredResponseWithoutRepeatingTheLearningEvent() throws Exception {
+    when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
+    when(resourceRepository.sumMasteryRewardsToday(anyLong(), anyString(), any()))
+        .thenReturn(new BigDecimal("0.02"));
+    when(studentWriteThrottle.tryAcquire(1L, 1)).thenReturn(true, false);
+    AtomicReference<String> storedRequestHash = new AtomicReference<>();
+    when(checkRepository.insert(any()))
+        .thenAnswer(
+            invocation -> {
+              ResourceLearningCheckRepository.CheckInsert inserted = invocation.getArgument(0);
+              storedRequestHash.set(inserted.requestHash());
+              return 41L;
+            });
+    AtomicReference<ResourceCheckResponse> firstResponse = new AtomicReference<>();
+    when(checkRepository.findIdempotency(eq(1L), eq(7L), eq("retry-1")))
+        .thenAnswer(
+            invocation -> {
+              ResourceCheckResponse first = firstResponse.get();
+              if (first == null) {
+                return null;
+              }
+              return new ResourceLearningCheckRepository.StoredIdempotencyResponse(
+                  storedRequestHash.get(), objectMapper.writeValueAsString(first));
+            });
+    ResourceCheckSubmitRequest request =
+        new ResourceCheckSubmitRequest(
+            "PY43-KC-001",
+            ResourceCheckEvidenceType.MICRO_QUIZ,
+            "input 函数用于读取用户在终端输入的内容",
+            null);
+
+    ResourceCheckResponse first = service.submitCheck(1L, 7L, request, "retry-1");
+    firstResponse.set(first);
+    ResourceCheckResponse replay = service.submitCheck(1L, 7L, request, "retry-1");
+
+    assertThat(replay).isEqualTo(first);
+    verify(checkRepository, times(1)).insert(any());
+    verify(checkRepository).completeIdempotency(1L, 7L, "retry-1", 41L, first);
+    verify(eventPublisher, times(1)).publishEvent(any(LearningEvent.ResourceCheckCompleted.class));
+    verify(studentWriteThrottle, times(1)).tryAcquire(1L, 1);
+  }
+
+  @Test
+  void submitCheckRejectsReusingIdempotencyKeyForDifferentRequest() {
+    when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
+    when(resourceRepository.sumMasteryRewardsToday(anyLong(), anyString(), any()))
+        .thenReturn(new BigDecimal("0.02"));
+    when(checkRepository.insert(any())).thenReturn(42L);
+    when(checkRepository.findIdempotency(eq(1L), eq(7L), eq("retry-2")))
+        .thenReturn(
+            null,
+            new ResourceLearningCheckRepository.StoredIdempotencyResponse(
+                "different-request", "{}"));
+
+    service.submitCheck(
+        1L,
+        7L,
+        new ResourceCheckSubmitRequest(
+            "PY43-KC-001",
+            ResourceCheckEvidenceType.MICRO_QUIZ,
+            "input 函数用于读取用户在终端输入的内容",
+            null),
+        "retry-2");
+
+    assertThatThrownBy(
+            () ->
+                service.submitCheck(
+                    1L,
+                    7L,
+                    new ResourceCheckSubmitRequest(
+                        "PY43-KC-001",
+                        ResourceCheckEvidenceType.MICRO_QUIZ,
+                        "a different answer",
+                        null),
+                    "retry-2"))
+        .isInstanceOf(BusinessException.class)
+        .extracting(error -> ((BusinessException) error).status())
+        .isEqualTo(HttpStatus.CONFLICT);
+
+    verify(checkRepository, times(1)).insert(any());
+    verify(eventPublisher, times(1)).publishEvent(any(LearningEvent.ResourceCheckCompleted.class));
+  }
+
+  @Test
+  void submitCheckAppliesWriteThrottleToNewRequests() {
+    when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
+    when(checkRepository.findIdempotency(eq(1L), eq(7L), eq("retry-3"))).thenReturn(null);
+    when(studentWriteThrottle.tryAcquire(1L, 1)).thenReturn(false);
+
+    assertThatThrownBy(
+            () ->
+                service.submitCheck(
+                    1L,
+                    7L,
+                    new ResourceCheckSubmitRequest(
+                        "PY43-KC-001",
+                        ResourceCheckEvidenceType.MICRO_QUIZ,
+                        "input 函数用于读取用户在终端输入的内容",
+                        null),
+                    "retry-3"))
+        .isInstanceOf(BusinessException.class)
+        .extracting(error -> ((BusinessException) error).status())
+        .isEqualTo(HttpStatus.TOO_MANY_REQUESTS);
+
+    verifyNoInteractions(eventPublisher);
+    verify(checkRepository, times(0)).insert(any());
+  }
+
+  @Test
   void submitCheckFailedRecordsEvidenceAndTriggersRemediationWithoutPositiveReward() {
     when(resourceRepository.findById(1L, 7L)).thenReturn(Optional.of(resource()));
     when(checkRepository.insert(any())).thenReturn(32L);
@@ -718,7 +833,8 @@ class ResourceWorkshopServiceTest {
             resourceFeedbackRepository,
             submissionRepository,
             eventPublisher,
-            objectMapper);
+            objectMapper,
+            studentWriteThrottle);
     when(graphClient.produce(any())).thenReturn(successResponse());
     when(resourceRepository.countCreatedAfter(anyLong(), any())).thenReturn(5);
     when(coursePackRepository.findKcs(eq(43L), eq(null)))

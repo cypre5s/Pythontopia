@@ -25,6 +25,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -98,10 +99,10 @@ public class ResourceWorkshopController {
   public ResourceCheckResponse submitCheck(
       @CurrentUser CurrentUserPrincipal user,
       @PathVariable Long id,
+      @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
       @Valid @RequestBody ResourceCheckSubmitRequest request) {
     requireStudent(user);
-    requireWriteCapacity(user.userId());
-    return service.submitCheck(user.userId(), id, request);
+    return service.submitCheck(user.userId(), id, request, idempotencyKey);
   }
 
   @PostMapping("/{id}/feedback")

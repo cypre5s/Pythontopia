@@ -1,5 +1,21 @@
 # Pythontopia 数字孪生精简优化工作日志
 
+## 2026-10-19：数字孪生、微测幂等与远征可信结算
+
+- 周报窗口统一为北京时间六天前零点至一次性读取时刻的 `[start,end)`；`weeklyDelta` 仅表示可信判题/微测/调试事件的实际应用贡献。固定时钟、跨午夜、空数据与 PostgreSQL 边界测试通过。Twin 成长阶段用服务端三态；到期复习计数覆盖所有已评估 KC，远征页复用 URL query 时刷新 focus/KC。
+- 工坊微测复用 `resource_learning_check` 保存可选幂等键、请求哈希及原始响应；重试返回原响应，键冲突返回 409，未带 header 的旧客户端保持兼容。PostgreSQL 并发用例验证同键只产生一条检查与学习事件。
+- 远征取题按服务端 Twin 策略精确匹配 KC、章节、阶段和难度。V224/V225 扩展既有 attempt 表，区分可推进玩法结算的 `settlement_passed` 与可信奖励字段；撤销/未审核题可结束节点，但不增加掌握事件、可信进度或分数，响应 score 也为 0。首次全量测试发现审核题 integration fixture 难度不符合新生策略；修正测试夹具（保留“请求体难度不权威”的断言）后全量通过。120 项 Boss/远征目标集和混合历史 PostgreSQL 回归通过。
+- Twin 信息文案/阶段、周报入口和 route query 状态同步按最小改动调整；真实 Chromium 跑通新生 Twin→真实 Piston 判题→Twin 证据/周报/推荐→主线地图路由。资源幂等和撤销题边界随后由 API/PostgreSQL 测试覆盖，没有再次浏览器跑整条旅程。
+- 续审修正 3 项边界：指定 KC 不可用时远征开局返回 422，避免静默换 KC；动态 `confidence` 改标“置信指标”，与可信证据计数分开；已评估但无分数的星点不再显示 0%。回归先 RED 后 GREEN。Playwright 用 mock API 在 320/375px 检查页面无横向溢出、按钮可用并携带正确主线 KC；这不是生产 API 端到端测试。
+- 新生推荐闭环复审发现 `?chapter=1&kcCode=PY43-KC-001` 虽能进入主线地图，resume CTA 却仍默认指向章内第一个未完成 stage。为复用 `mainline_stage.kc_codes` 修正：overview DTO 带出 `kcCodes`，地图高亮推荐 KC 所属小节并提供直达 CTA。页面回归先 RED 后 GREEN；后端 DTO 回归先 RED 后 GREEN；前端 typecheck、lint 与推荐页面测试通过。
+- `BossGraphClient.requestProblem` 复用 `signalsToMap`，删除约 21 行重复的 12 字段画像转换，契约测试逐字段验证。移除 public 中未引用的 711 B `stump_agnaldo.png` 副本，保留 inbox 来源并同步更新 `LICENSE-ART.md`；生产构建确认该文件不在 dist。未批量删除其他素材。
+- 画像 Outbox 增加有界 5–300 秒退避、8 次失败隔离、同用户顺序阻塞、跨用户公平扫描及 ADMIN-only 校正重放。V222 扩展既有 Outbox 表；不新增队列表或状态表。
+- CI 将 Research 单独成 job，dev extra 与 workflow 安装 CPU Torch，Graph/RAG 矩阵关闭 fail-fast。最近已知托管 run 是旧 SHA `790dfb7` 的失败 `ci#7`；本地验证完成后按用户要求推送到 `origin/main`，对应托管 runner 状态以交付回执为准。
+- 验证：后端 `mvn -B -DskipTests=false test` 1,768 项全过，0 failures/errors/skips；前端 `npm ci`、typecheck、lint、279 文件 / 2,674 项 Vitest、build 通过；Graph 1,963 passed/1 skipped、RAG 166 passed、Research 330 passed/4 skipped。Testcontainers 关闭后 Spring 定时任务仍访问已关闭端口；Surefire 等待 30 秒后结束 fork，最终 BUILD SUCCESS。
+- 资产与构建没有引入商业素材、运行时依赖或新表。research dev/test 增加 CPU Torch；增加 Outbox admin controller/request DTO；数据库只扩展现有 Outbox、资源检查和远征 attempt 表。旧迁移 V222–V225 以追加方式管理，没有改写历史迁移。
+- 本地浏览器脚本首次退出后遗留 `dev.sh`/Spring 进程，覆盖了 ignored `.work/dev-backend.log` 且无法恢复；tracked source 未受影响，随后隔离重跑浏览器闭环通过。没有调用 DeepSeek。
+- Outbox 真实数据库断连和整进程重启未被测试；现有证据为注入数据库异常、事务回滚和同一 PostgreSQL 上由新 worker 接手。ADMIN 重放入口未提供失败任务列表，也未保留每次重放的操作者/时间。整体改动以补充测试、迁移和边界校验为主；本次只确认局部删减，不能认定系统整体复杂度下降。
+
 ## 2026-10-14：研究与治理原则复核
 
 - 在线复核 Jisc 的学习分析实践规范（2026-09-09 更新）与 UNESCO 教育/研究生成式 AI 指南（2026-01-16 更新）：画像用途应以学生受益为中心，说明指标和数据用途、验证数据质量、限制数据访问并最少化采集；学生应能查看/纠正相关信息，AI 分析需保留人类监督与质疑路径。[Jisc](https://www.jisc.ac.uk/guides/code-of-practice-for-learning-analytics)、[UNESCO](https://www.unesco.org/en/articles/guidance-generative-ai-education-and-research)。

@@ -83,7 +83,7 @@ class BossProblemReviewAuthorizationIntegrationTest {
             "source-auth-1",
             1,
             1,
-            2,
+            1,
             "PY43-KC-001",
             "z title",
             List.of("读取输入"),
@@ -242,7 +242,9 @@ class BossProblemReviewAuthorizationIntegrationTest {
     assertThat(studentBoss.getStatusCode()).isEqualTo(HttpStatus.OK);
     String issuedProblemId = (String) studentBoss.getBody().get("problemId");
     assertThat(studentBoss.getBody())
+        .containsEntry("difficulty", 1)
         .doesNotContainKeys("testCases", "referenceSolution", "payload");
+    assertThat((String) studentBoss.getBody().get("statement")).contains("z title");
     assertThat(issuedProblemId).startsWith("issue-");
     String persistedPayload =
         jdbcTemplate.queryForObject(
@@ -292,9 +294,10 @@ class BossProblemReviewAuthorizationIntegrationTest {
         "INSERT INTO boss_problem_review"
             + " (source_problem_id, chapter, stage, kc_code, kind, difficulty, payload,"
             + " requester_id)"
-            + " VALUES (?, 1, 1, 'PY43-KC-001', 'debug', 2, ?::jsonb, ?) RETURNING id",
+            + " VALUES (?, 1, 1, 'PY43-KC-001', 'debug', ?, ?::jsonb, ?) RETURNING id",
         Long.class,
         problem.problemId(),
+        problem.difficulty(),
         objectMapper.writeValueAsString(problem),
         requesterId);
   }

@@ -38,19 +38,38 @@ jobs:
   python-services:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         service:
           - { path: services/pythontopia-graph, name: pythontopia-graph }
           - { path: services/pythontopia-rag, name: pythontopia-rag }
-          - { path: research/vllm-agent-ft-lab, name: vllm-agent-ft-lab }
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+
       - name: Install ${{ matrix.service.name }}
         run: pip install -e ".[dev]"
         working-directory: ${{ matrix.service.path }}
       - name: Test ${{ matrix.service.name }}
         run: pytest -q
         working-directory: ${{ matrix.service.path }}
+
+  research-vllm-agent-ft-lab:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install CPU PyTorch for research tests
+        run: >-
+          pip install --index-url https://download.pytorch.org/whl/cpu
+          --extra-index-url https://pypi.org/simple "torch>=2.10,<3"
+      - name: Install vllm-agent-ft-lab
+        run: pip install -e ".[dev]"
+        working-directory: research/vllm-agent-ft-lab
+      - name: Test vllm-agent-ft-lab
+        run: pytest -q
+        working-directory: research/vllm-agent-ft-lab

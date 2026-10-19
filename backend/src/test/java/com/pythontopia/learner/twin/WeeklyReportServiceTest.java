@@ -21,6 +21,12 @@ import com.pythontopia.learner.reflection.LearnerInsightRepository;
 import com.pythontopia.learner.reflection.dto.LearnerInsightDto;
 import com.pythontopia.learner.twin.dto.WeeklyReportDto;
 import java.util.List;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
+import java.time.Clock;
+import java.time.ZoneOffset;
+import org.mockito.ArgumentCaptor;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -135,10 +141,80 @@ class WeeklyReportServiceTest {
 
     service.build(1L);
 
-    verify(memoryService).retrieveAuthoritativeBetween(eq(1L), any(), any(), eq(30));
-    verify(insightRepository).findByUserBetween(eq(1L), any(), any(), eq(5));
-    verify(eventRepository).summarizeAuthoritativeBetween(eq(1L), any(), any());
-    verify(masteryRepository).findWeeklyEvidence(eq(1L), any(), any());
+    ArgumentCaptor<Instant> memoryStart = ArgumentCaptor.forClass(Instant.class);
+    ArgumentCaptor<Instant> memoryEnd = ArgumentCaptor.forClass(Instant.class);
+    ArgumentCaptor<Instant> insightStart = ArgumentCaptor.forClass(Instant.class);
+    ArgumentCaptor<Instant> insightEnd = ArgumentCaptor.forClass(Instant.class);
+    ArgumentCaptor<Instant> eventStart = ArgumentCaptor.forClass(Instant.class);
+    ArgumentCaptor<Instant> eventEnd = ArgumentCaptor.forClass(Instant.class);
+    ArgumentCaptor<java.time.OffsetDateTime> masteryStart =
+        ArgumentCaptor.forClass(java.time.OffsetDateTime.class);
+    ArgumentCaptor<java.time.OffsetDateTime> masteryEnd =
+        ArgumentCaptor.forClass(java.time.OffsetDateTime.class);
+
+    verify(memoryService).retrieveAuthoritativeBetween(
+        eq(1L), memoryStart.capture(), memoryEnd.capture(), eq(30));
+    verify(insightRepository).findByUserBetween(
+        eq(1L), insightStart.capture(), insightEnd.capture(), eq(5));
+    verify(eventRepository).summarizeAuthoritativeBetween(
+        eq(1L), eventStart.capture(), eventEnd.capture());
+    verify(masteryRepository).findWeeklyEvidence(
+        eq(1L), masteryStart.capture(), masteryEnd.capture());
+    assertThat(insightStart.getValue()).isEqualTo(memoryStart.getValue());
+    assertThat(eventStart.getValue()).isEqualTo(memoryStart.getValue());
+    assertThat(masteryStart.getValue().toInstant()).isEqualTo(memoryStart.getValue());
+    assertThat(insightEnd.getValue()).isEqualTo(memoryEnd.getValue());
+    assertThat(eventEnd.getValue()).isEqualTo(memoryEnd.getValue());
+    assertThat(masteryEnd.getValue().toInstant()).isEqualTo(memoryEnd.getValue());
+  }
+
+  @Test
+  @DisplayName("周报覆盖包含今天在内的最近七个上海自然日")
+  void usesSevenCalendarDaysIncludingToday() {
+    when(masteryRepository.findAll(anyLong())).thenReturn(List.of());
+    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any(), any()))
+        .thenReturn(List.of());
+    ArgumentCaptor<Instant> startCaptor = ArgumentCaptor.forClass(Instant.class);
+    ArgumentCaptor<Instant> endCaptor = ArgumentCaptor.forClass(Instant.class);
+
+    WeeklyReportDto report = service.build(1L);
+
+    verify(memoryService).retrieveAuthoritativeBetween(
+        eq(1L), startCaptor.capture(), endCaptor.capture(), eq(30));
+    LocalDate reportedStart = LocalDate.parse(report.periodStart());
+    LocalDate reportedEnd = LocalDate.parse(report.periodEnd());
+    assertThat(reportedStart).isEqualTo(reportedEnd.minusDays(6));
+    assertThat(startCaptor.getValue().atZone(ZoneId.of("Asia/Shanghai")).toLocalDate())
+        .isEqualTo(reportedStart);
+    assertThat(endCaptor.getValue().atZone(ZoneId.of("Asia/Shanghai")).toLocalDate())
+        .isEqualTo(reportedEnd);
+  }
+
+  @Test
+  @DisplayName("上海午夜切换时周报按本地日期移动且统计窗口一致")
+  void usesShanghaiDateAcrossUtcMidnight() {
+    when(masteryRepository.findAll(anyLong())).thenReturn(List.of());
+    when(jdbc.query(any(String.class), any(RowMapper.class), any(), any(), any(), any()))
+        .thenReturn(List.of());
+
+    WeeklyReportDto beforeMidnight = buildAt("2026-10-19T15:59:59Z");
+    WeeklyReportDto atMidnight = buildAt("2026-10-19T16:00:00Z");
+
+    assertThat(beforeMidnight.periodStart()).isEqualTo("2026-10-13");
+    assertThat(beforeMidnight.periodEnd()).isEqualTo("2026-10-19");
+    assertThat(atMidnight.periodStart()).isEqualTo("2026-10-14");
+    assertThat(atMidnight.periodEnd()).isEqualTo("2026-10-20");
+  }
+
+  private WeeklyReportDto buildAt(String instant) {
+    WeeklyReportService fixedClockService = new WeeklyReportService(
+        memoryService,
+        insightRepository,
+        masteryRepository,
+        eventRepository,
+        jdbc,
+        Clock.fixed(Instant.parse(instant), ZoneOffset.UTC));
+    return fixedClockService.build(1L);
   }
 
   @Test

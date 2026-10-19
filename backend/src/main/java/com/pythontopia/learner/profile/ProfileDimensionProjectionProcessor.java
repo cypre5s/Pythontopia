@@ -28,7 +28,8 @@ class ProfileDimensionProjectionProcessor {
         transaction.execute(
             status -> {
               var projection = repository.findPendingForUpdate(outboxId).orElse(null);
-              if (projection == null || repository.hasEarlierPending(projection.userId(), outboxId)) {
+              if (projection == null
+                  || repository.hasEarlierUnresolved(projection.userId(), outboxId)) {
                 return false;
               }
               profileService.applyDimensionUpdate(

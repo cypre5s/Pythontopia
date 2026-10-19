@@ -150,11 +150,15 @@ public class BossService {
       Long userId, Integer focusChapter, String preferredKcCode) {
     FrontierSelectResultDto frontier =
         learnerTwinService.frontier(userId, focusChapter, List.of(), 40, preferredKcCode);
-    return limitFrontierPicks(
+    List<FrontierPickDto> eligiblePicks =
         frontier.picks().stream()
             .filter(pick -> pick.chapter() > 1 || hasObjectiveBossQuestion(pick))
-            .toList(),
-        40);
+            .toList();
+    if (preferredKcCode != null
+        && eligiblePicks.stream().noneMatch(pick -> pick.kcCode().equals(preferredKcCode))) {
+      eligiblePicks = List.of();
+    }
+    return limitFrontierPicks(eligiblePicks, 40);
   }
 
   private boolean hasObjectiveBossQuestion(FrontierPickDto pick) {
@@ -211,6 +215,7 @@ public class BossService {
       if (open != null && open.isPresent()) {
         BossInternalProblem problem = open.orElseThrow();
         requireProblemContext(problem, chapter, request.stage(), kc);
+        requireProblemDifficulty(problem, difficulty);
         if (isMasteryEligible(problem)) {
           if (!preferObjectivePractice || problem.questionType() != BossQuestionType.CODE) {
             cacheProblem(userId, problem);
@@ -251,6 +256,8 @@ public class BossService {
                           .orElse(null));
       if (cachedProblem != null
           && (!preferObjectivePractice || cachedProblem.questionType() != BossQuestionType.CODE)) {
+        requireProblemContext(cachedProblem, chapter, request.stage(), kc);
+        requireProblemDifficulty(cachedProblem, difficulty);
         cacheProblem(userId, cachedProblem);
         return cachedProblem.toPublic();
       }
@@ -310,7 +317,12 @@ public class BossService {
       // 展示时套用「本次请求」的 stage + 本次推断难度：预取时的 stage/难度不串到当前上下文
       // （也避免共享端点下复用题把异常 stage 显示给主线 boss）。
       requireProblemContext(p, chapter, request.stage(), kc);
-      if (!isMasteryEligible(p)) {
+      if (p.difficulty() != difficulty) {
+        LOG.warn(
+            "boss skipped pre-generated problem with wrong difficulty user={} run={}",
+            userId,
+            expeditionRunId);
+      } else if (!isMasteryEligible(p)) {
         LOG.warn(
             "boss skipped revoked AI problemId={} user={} run={}",
             p.problemId(),
@@ -340,16 +352,16 @@ public class BossService {
       }
     }
 
-    // 2) 没有该学生的 READY 个性化题时，再查教师已通过的全局题库：按
-    //    chapter/stage/KC/kind 只读选择最接近目标难度的版本。题库 payload 含 hidden tests，
-    //    只在后端回灌缓存并为当前学生落判题兜底，前端仅拿公开投影。
+    // 2) 没有该学生的 READY 个性化题时，再查教师已通过的全局题库；只签发 KC、阶段和难度均匹配的题。
+    //    题库 payload 含 hidden tests，只在后端回灌缓存并为当前学生落判题兜底，前端仅拿公开投影。
     Optional<ApprovedBossProblem> approved =
         reviewRepository.findApproved(
             chapter, request.stage(), kc, request.preferredKind(), difficulty);
     if (approved.isPresent()) {
       BossInternalProblem source = approved.get().problem();
-      requireProblemContext(source, chapter, request.stage(), kc);
-      if (!issuedFingerprints.contains(questionFingerprint(source))) {
+      if (hasProblemContext(source, chapter, request.stage(), kc)
+          && source.difficulty() == difficulty
+          && !issuedFingerprints.contains(questionFingerprint(source))) {
         BossInternalProblem problem =
             source.issueAs(issueProblemId(expeditionBinding.bossPhase()), kc);
         BossInternalProblem persisted =
@@ -445,7 +457,26 @@ public class BossService {
               "题目生成服务暂不可用，当前知识点也没有可用的课程题库题目，请稍后重试");
         }
       }
+      boolean contextMatches = hasProblemContext(fromGraph, chapter, request.stage(), kc);
+      boolean difficultyMatches = fromGraph.difficulty() == difficulty;
+      if (!contextMatches || !difficultyMatches) {
+        BossInternalProblem rejected = fromGraph;
+        fromGraph =
+            findGoldenProblem(
+                    kc,
+                    chapter,
+                    request.stage(),
+                    difficulty,
+                    request.preferredKind(),
+                    issuedFingerprints)
+                .orElse(null);
+        if (fromGraph == null) {
+          if (!contextMatches) requireProblemContext(rejected, chapter, request.stage(), kc);
+          throw problemDifficultyMismatch();
+        }
+      }
       requireProblemContext(fromGraph, chapter, request.stage(), kc);
+      requireProblemDifficulty(fromGraph, difficulty);
       if (issuedFingerprints.contains(questionFingerprint(fromGraph))) {
         fromGraph =
             findGoldenProblem(
@@ -973,7 +1004,7 @@ public class BossService {
               graphResult.passedTestCases(),
               graphResult.totalTestCases(),
               graphResult.failureFirstHint(),
-              score,
+              masteryEligible ? score : 0,
               feedback),
           runId == null && publishLearningEvent ? learningEvent : null);
     } catch (RuntimeException exception) {
@@ -1152,7 +1183,8 @@ public class BossService {
       return new ExpeditionScoreService.VerifiedAttemptResult(true, true);
     }
     if (!masteryEligible) {
-      return new ExpeditionScoreService.VerifiedAttemptResult(true, false);
+      return expeditionScoreService.recordSettlementEvidence(
+          userId, runId, problem.problemId(), attemptFingerprint, result.passed());
     }
     return expeditionScoreService.recordVerifiedAttempt(
         userId, runId, problem.problemId(), attemptFingerprint, result.passed(), score, event);
@@ -1202,14 +1234,30 @@ public class BossService {
 
   private void requireProblemContext(
       BossInternalProblem problem, int chapter, int stage, String expectedKcCode) {
-    if (problem.chapter() != chapter
-        || problem.stage() != stage
-        || (expectedKcCode != null && !Objects.equals(problem.kcCode(), expectedKcCode))) {
+    if (!hasProblemContext(problem, chapter, stage, expectedKcCode)) {
       throw new com.pythontopia.common.error.BusinessException(
           org.springframework.http.HttpStatus.CONFLICT,
           "BOSS_PROBLEM_CONTEXT_MISMATCH",
           "题目章节、阶段或知识点与签发内容不一致");
     }
+  }
+
+  private boolean hasProblemContext(
+      BossInternalProblem problem, int chapter, int stage, String expectedKcCode) {
+    return problem.chapter() == chapter
+        && problem.stage() == stage
+        && (expectedKcCode == null || Objects.equals(problem.kcCode(), expectedKcCode));
+  }
+
+  private void requireProblemDifficulty(BossInternalProblem problem, int difficulty) {
+    if (problem.difficulty() != difficulty) throw problemDifficultyMismatch();
+  }
+
+  private com.pythontopia.common.error.BusinessException problemDifficultyMismatch() {
+    return new com.pythontopia.common.error.BusinessException(
+        org.springframework.http.HttpStatus.CONFLICT,
+        "BOSS_PROBLEM_DIFFICULTY_MISMATCH",
+        "题目难度与当前学习目标不一致");
   }
 
   private com.pythontopia.common.error.BusinessException expiredExpeditionRun() {

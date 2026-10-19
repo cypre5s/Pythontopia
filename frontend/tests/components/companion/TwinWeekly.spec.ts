@@ -41,6 +41,15 @@ describe('TwinWeekly', () => {
     expect(wrapper.text()).toContain('Learner Twin');
   });
 
+  it('labels the exact report dates as the Beijing-time reporting period', async () => {
+    twinMocks.fetchWeeklyReport.mockResolvedValue(report);
+    const wrapper = mount(TwinWeekly);
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="twin-weekly-period"]').text())
+      .toBe('北京时间统计日期：2026-10-01 至 2026-10-07');
+  });
+
   it('shows recent failed-practice summaries from the weekly report', async () => {
     twinMocks.fetchWeeklyReport.mockResolvedValue({
       ...report,
@@ -72,8 +81,11 @@ describe('TwinWeekly', () => {
     const wrapper = mount(TwinWeekly);
     await flushPromises();
 
-    expect(wrapper.text()).toContain('本周 +12 个百分点');
-    expect(wrapper.text()).toContain('本周 -8 个百分点');
-    expect(wrapper.text()).toContain('本周 暂无可比数据');
+    expect(wrapper.text()).toContain('本周证据贡献 +12 个百分点');
+    expect(wrapper.text()).toContain('本周证据贡献 -8 个百分点');
+    expect(wrapper.text()).toContain('本周证据贡献 暂无可比数据');
+    expect(wrapper.text()).toContain('置信指标 80%');
+    expect(wrapper.text()).toContain('本周 2 条可信证据');
+    expect(wrapper.text()).not.toContain('证据充分度 80%');
   });
 });

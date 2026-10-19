@@ -17,6 +17,12 @@ export type { WorkshopResourceEffectivenessDto } from './dto/Workshop';
 // 覆盖后端工坊专用 180s read 上限，给双层公网代理和 JSON 映射留出余量。
 const WORKSHOP_GENERATION_TIMEOUT_MS = 190_000;
 
+interface ResourceCheckAttempt {
+  idempotencyKey: string;
+}
+
+const resourceCheckAttempts = new Map<number, Map<string, ResourceCheckAttempt>>();
+
 export async function createWorkshopResource(
   request: WorkshopCreateRequest,
 ): Promise<WorkshopCreateResponse> {
@@ -81,10 +87,28 @@ export async function submitWorkshopResourceCheck(
   id: number,
   request: WorkshopCheckSubmitRequest,
 ): Promise<WorkshopCheckResponse> {
+  const payload = JSON.stringify(request);
+  let attempts = resourceCheckAttempts.get(id);
+  if (!attempts) {
+    attempts = new Map<string, ResourceCheckAttempt>();
+    resourceCheckAttempts.set(id, attempts);
+  }
+  let attempt = attempts.get(payload);
+  if (!attempt) {
+    attempt = { idempotencyKey: crypto.randomUUID() };
+    attempts.set(payload, attempt);
+  }
   const response = await http.post<WorkshopCheckResponse>(
     `/api/workshop/resources/${id}/checks`,
     request,
+    { headers: { 'Idempotency-Key': attempt.idempotencyKey } },
   );
+  if (attempts.get(payload) === attempt) {
+    attempts.delete(payload);
+    if (attempts.size === 0 && resourceCheckAttempts.get(id) === attempts) {
+      resourceCheckAttempts.delete(id);
+    }
+  }
   return response.data;
 }
 

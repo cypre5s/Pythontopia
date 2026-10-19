@@ -1,5 +1,18 @@
 # Changelog
 
+## 2026-10-19
+
+- 学习分身周报统一使用北京时间六天前零点至一次性读取时刻的 `[start,end)`；`weeklyDelta` 明确为可信判题/微测/调试事件实际应用贡献。Twin 三阶段、全量已评估 KC 到期统计及远征 route query 状态同步保持服务端学习状态权威。
+- 工坊资源检查在既有表实现可选幂等键、请求指纹和原响应重放；相同键不同请求返回 409，旧客户端仍兼容。Stage07 PostgreSQL 并发集验证单次写入与学习事件。
+- 远征选题按服务端 KC/章节/阶段/难度精确匹配。V224/V225 在既有 verified-attempt 表区分结算 verdict 与可计分/学习事件的可信 verdict；撤销或未审核的通过题可结算节点但 score=0、不加 mastery。
+- 画像投影 Outbox 增加有限退避、8 次后 FAILED 隔离、学生内顺序约束与跨学生公平扫描，管理员校正重放为 ADMIN-only。V222 扩展原 Outbox 表；V223 扩展原资源检查表；未新增数据库表。
+- 后续边界审计：显式请求的远征 KC 不可用时返回 422，避免被替换成其它 KC；Twin 将会随失败与衰减变化的字段标成“置信指标”，与证据数量分开；已评估但缺少掌握分的星点显示无可比数据，不再显示 0%。另修正七日周报测试夹具日期。
+- 闭环审计补上主线 stage KC 映射：overview DTO 暴露权威 `kcCodes`，学习分身推荐 KC 现在会高亮所属小节并提供直达 CTA，避免只带章节参数后默认继续到无关 stage。前后端定向回归通过。
+- 简化与素材：BossGraphClient 复用 `signalsToMap`，删除约 21 行重复映射；移除未引用的 711 B public 树桩副本，保留 inbox 原素材并更新 `LICENSE-ART.md`。构建验证该副本不在 dist。
+- 验证：`mvn -B -DskipTests=false test` 1,768/1,768（0 failures/errors/skips）；Vitest 279 文件 / 2,674 项、typecheck、lint、build 通过；Graph 1,963 passed/1 skipped、RAG 166 passed、Research 330 passed/4 skipped。Chromium 实测真实 Piston 学习闭环；另用 mock API 在 320/375px 验证 Twin 无横向溢出、推荐按钮路由正确。此次最后边界修正未重跑全栈真实旅程。
+- 本地验证完成后按用户要求推送到 `origin/main`；提交对应的 GitHub Actions 状态以交付回执为准。Maven 收尾仍有 Testcontainers 关闭后 Outbox scheduler 连接拒绝日志，但 Surefire 全量结果为 BUILD SUCCESS。无 DeepSeek 调用。
+- 局部减法包括删除重复画像映射与 1 份确认未引用素材；新增测试、迁移与校验代码超过删除量，因此不声称本轮降低了系统整体复杂度。真实 PostgreSQL 断连/进程重启、Outbox 管理员逐次重放审计和最新提交的托管 CI 仍未验证。
+
 ## 2026-10-17
 
 - `Stage08PathBoardAcceptanceIntegrationTest` fixture 改用服务端支持的 `FIX_BUG` 节点，并以真实 resource consumption 作为阅读任务证据，定向类 3/3 通过。完整 Maven 首轮暴露 Testcontainers 随机宿主端口冲突和长期仿真测试高频 JDBC 短连接问题；长期仿真改用 `SingleConnectionDataSource` 复用连接，7 个受影响类隔离复跑 19/19 后，`mvn -B clean test` 全量 1,733/1,733（0 failures、0 errors、0 skipped）并 `BUILD SUCCESS`。`mvn -B -DskipTests package` 也成功，生成 `backend/target/pythontopia-backend-0.1.0-SNAPSHOT.jar`（86 MB）。

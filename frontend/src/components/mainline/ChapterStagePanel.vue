@@ -13,6 +13,8 @@ import StarBadge from './StarBadge.vue';
 
 const props = defineProps<{
   chapter: MainlineChapterDto;
+  /** Twin 深链的 KC；匹配后优先标出其课程配置所属小节。 */
+  recommendedKcCode?: string | null;
   /** 错题复盘补星申领进行中：禁用按钮，避免连点连弹「补星 +1 ★」与「尚未满足补星条件」两条互斥提示。 */
   claimingErrorbook?: boolean;
 }>();
@@ -41,6 +43,11 @@ const resumeStageId = computed<number | null>(() =>
     ? (props.chapter.stages.find((s) => !isStageComplete(s))?.id ?? null)
     : null,
 );
+const recommendedStageId = computed<number | null>(() => {
+  const kcCode = props.recommendedKcCode;
+  if (!unlocked.value || !kcCode) return null;
+  return props.chapter.stages.find((stage) => stage.kcCodes?.includes(kcCode))?.id ?? null;
+});
 
 const TEST_STATUS_LABEL: Record<ChapterTestStatus, string> = {
   NONE: '未开始',
@@ -155,14 +162,20 @@ function needsQuestionHint(stage: MainlineStageDto): boolean {
         :class="{
           'stage--done': isStageComplete(stage),
           'stage--resume': stage.id === resumeStageId,
+          'stage--recommended': stage.id === recommendedStageId,
         }"
         :data-testid="`mainline-stage-${stage.id}`"
         :data-done="isStageComplete(stage) ? 'true' : 'false'"
         :data-resume="stage.id === resumeStageId ? 'true' : 'false'"
+        :data-recommended="stage.id === recommendedStageId ? 'true' : 'false'"
       >
         <div class="stage__head">
           <span class="stage__index">{{ stage.index }}</span>
           <span class="stage__title">{{ stage.title }}</span>
+          <span
+            v-if="stage.id === recommendedStageId"
+            class="stage__recommended"
+          >学习分身推荐</span>
           <span
             v-if="stage.id === resumeStageId"
             class="stage__now"
@@ -203,12 +216,15 @@ function needsQuestionHint(stage: MainlineStageDto): boolean {
         <button
           type="button"
           class="stage__enter"
-          :class="{ 'stage__enter--resume': stage.id === resumeStageId }"
+          :class="{
+            'stage__enter--resume': stage.id === resumeStageId,
+            'stage__enter--recommended': stage.id === recommendedStageId,
+          }"
           :data-testid="`mainline-enter-stage-${stage.id}`"
           :disabled="!unlocked"
           @click="emit('enter-stage', stage.id)"
         >
-          {{ stage.id === resumeStageId ? '▶ 继续学习' : '进入学习' }}
+          {{ stage.id === recommendedStageId ? '▶ 开始推荐任务' : stage.id === resumeStageId ? '▶ 继续学习' : '进入学习' }}
         </button>
       </li>
     </ol>
@@ -390,6 +406,10 @@ function needsQuestionHint(stage: MainlineStageDto): boolean {
   border-color: var(--pyt-color-accent, #e8a33d);
   box-shadow: 0 0 0 1px var(--pyt-color-accent, #e8a33d);
 }
+.stage--recommended {
+  border-color: var(--pyt-color-gold);
+  box-shadow: 0 0 0 1px var(--pyt-color-gold);
+}
 .stage__now {
   padding: 0 6px;
   background: var(--pyt-color-accent, #e8a33d);
@@ -398,8 +418,21 @@ function needsQuestionHint(stage: MainlineStageDto): boolean {
   font-size: 11px;
   line-height: 18px;
 }
+.stage__recommended {
+  padding: 0 6px;
+  background: var(--pyt-color-gold);
+  border-radius: var(--pyt-radius-sm);
+  color: var(--pyt-color-text-primary);
+  font-size: 11px;
+  line-height: 18px;
+}
 .stage__enter--resume {
   border-color: var(--pyt-color-accent, #e8a33d);
+  font-weight: 700;
+}
+.stage__enter--recommended {
+  border-color: var(--pyt-color-gold);
+  background: var(--pyt-color-gold);
   font-weight: 700;
 }
 .stage__pieces {

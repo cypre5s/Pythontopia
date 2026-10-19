@@ -417,4 +417,42 @@ describe('EndlessExpeditionPage Boss scene integration', () => {
 
     expect(router.currentRoute.value.path).toBe('/mainline-map');
   });
+
+  it('uses the latest recommendation query when the expedition route is reused', async () => {
+    runState.phase = 'idle';
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/expedition', component: EndlessExpeditionPage }],
+    });
+    await router.push({
+      path: '/expedition',
+      query: { focus: '2', kcCode: 'PY43-KC-011' },
+    });
+    await router.isReady();
+
+    const wrapper = mount(EndlessExpeditionPage, {
+      global: {
+        plugins: [router],
+        stubs: {
+          AppLayout: LAYOUT_STUB,
+          BossSprite: true,
+          ChallengeWorkspace: CHALLENGE_STUB,
+          ExpeditionCanvas: CANVAS_STUB,
+          ExpeditionLeaderboard: true,
+          KnowledgeConstellation: true,
+        },
+      },
+    });
+    await flushPromises();
+
+    await router.push({
+      path: '/expedition',
+      query: { focus: '4', kcCode: 'PY43-KC-025' },
+    });
+    await flushPromises();
+    await wrapper.get('[data-testid="expedition-begin"]').trigger('click');
+
+    expect(mocks.run.startRun).toHaveBeenCalledWith(4, false, 'PY43-KC-025');
+    wrapper.unmount();
+  });
 });

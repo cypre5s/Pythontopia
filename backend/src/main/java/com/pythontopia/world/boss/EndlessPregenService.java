@@ -320,14 +320,19 @@ public class EndlessPregenService {
         log.info("skip cancelled prefetch job={} attempt={}", jobId, generationAttempt);
         return;
       }
-      Optional<ApprovedBossProblem> approved =
+      Optional<BossInternalProblem> approvedProblem =
           reviewRepository == null
               ? Optional.empty()
-              : reviewRepository.findApproved(chapter, stage, kcCode, kind, difficulty);
-      boolean reusedApprovedProblem = approved.isPresent();
+              : reviewRepository
+                  .findApproved(chapter, stage, kcCode, kind, difficulty)
+                  .map(ApprovedBossProblem::problem)
+                  .filter(
+                      candidate ->
+                          matchesProblemContext(
+                              candidate, chapter, stage, kcCode, difficulty));
+      boolean reusedApprovedProblem = approvedProblem.isPresent();
       BossInternalProblem problem =
-          approved
-              .map(ApprovedBossProblem::problem)
+          approvedProblem
               .orElseGet(
                   () ->
                       graphClient.requestProblem(
@@ -338,9 +343,7 @@ public class EndlessPregenService {
       if (problem.chapter() != chapter
           || problem.stage() != stage
           || !Objects.equals(problem.kcCode(), kcCode)
-          || (!reusedApprovedProblem
-              && difficulty != null
-              && problem.difficulty() != difficulty)) {
+          || (difficulty != null && problem.difficulty() != difficulty)) {
         throw new IllegalStateException(
             "generated problem chapter/stage/KC/difficulty did not match the request");
       }
@@ -525,7 +528,12 @@ public class EndlessPregenService {
           validateExpeditionNode(userId, expeditionRunId, expeditionNodeId, chapter, kcCode, false);
       Optional<BossInternalProblem> open =
           findOpenExpeditionProblem(userId, expeditionRunId, expeditionNodeId, bossPhase);
-      if (open.isPresent()) return open;
+      if (open.isPresent()) {
+        return matchesProblemContext(
+                open.orElseThrow(), chapter, stage, kcCode, difficulty)
+            ? open
+            : Optional.empty();
+      }
       List<Map<String, Object>> rows =
           jdbcTemplate.queryForList(
               "SELECT p.id, p.payload::text AS payload FROM pregenerated_problem p"
@@ -557,7 +565,8 @@ public class EndlessPregenService {
       Map<String, Object> row = rows.get(0);
       long id = ((Number) row.get("id")).longValue();
       BossInternalProblem problem = deserialize((String) row.get("payload"));
-      if (problem == null || problem.chapter() != chapter || problem.stage() != stage) {
+      if (problem == null
+          || !matchesProblemContext(problem, chapter, stage, kcCode, difficulty)) {
         return Optional.empty();
       }
       BossInternalProblem issued = problem.issueAs(BossService.issueProblemId(bossPhase), kcCode);
@@ -629,7 +638,7 @@ public class EndlessPregenService {
       return problem;
     }
     validateStage(problem.stage());
-    if (problem.chapter() != chapter) {
+    if (!matchesProblemContext(problem, chapter, problem.stage(), kcCode, difficulty)) {
       throw problemContextMismatch();
     }
     if (expeditionRunId != null) {
@@ -639,7 +648,13 @@ public class EndlessPregenService {
       requireIssuedBossPhase(problem.problemId(), bossPhase);
       Optional<BossInternalProblem> open =
           findOpenExpeditionProblem(userId, expeditionRunId, expeditionNodeId, bossPhase);
-      if (open.isPresent()) return open.orElseThrow();
+      if (open.isPresent()) {
+        BossInternalProblem current = open.orElseThrow();
+        if (!matchesProblemContext(current, chapter, problem.stage(), kcCode, difficulty)) {
+          throw problemContextMismatch();
+        }
+        return current;
+      }
       insert(
           userId, chapter, problem.stage(), kcCode, kind, arenaLevel, difficulty, problem,
           "CONSUMED", expeditionRunId, expeditionNodeId);
@@ -676,6 +691,12 @@ public class EndlessPregenService {
                 + " AND NOT EXISTS (SELECT 1 FROM expedition_challenge_settlement s"
                 + " WHERE s.user_id = p.user_id AND s.run_id = p.expedition_run_id"
                 + " AND s.node_id = p.expedition_node_id AND s.problem_id = p.problem_id)"
+                + " AND NOT EXISTS (SELECT 1 FROM pregenerated_problem prior"
+                + " WHERE prior.user_id = p.user_id"
+                + " AND prior.expedition_run_id = p.expedition_run_id"
+                + " AND prior.status = 'CONSUMED'"
+                + " AND prior.question_fingerprint = p.question_fingerprint"
+                + " AND prior.id < p.id)"
                 + " AND p.id = (SELECT MAX(candidate.id) FROM pregenerated_problem candidate"
                 + " WHERE candidate.user_id = p.user_id AND candidate.expedition_run_id = p.expedition_run_id"
                 + " AND candidate.expedition_node_id = p.expedition_node_id AND candidate.status = 'CONSUMED'"
@@ -931,11 +952,23 @@ public class EndlessPregenService {
     }
   }
 
+  private static boolean matchesProblemContext(
+      BossInternalProblem problem,
+      int chapter,
+      int stage,
+      String kcCode,
+      Integer difficulty) {
+    return problem.chapter() == chapter
+        && problem.stage() == stage
+        && Objects.equals(problem.kcCode(), kcCode)
+        && (difficulty == null || problem.difficulty() == difficulty);
+  }
+
   private BusinessException problemContextMismatch() {
     return new BusinessException(
         HttpStatus.CONFLICT,
         "BOSS_PROBLEM_CONTEXT_MISMATCH",
-        "题目章节或阶段与签发内容不一致");
+        "题目章节、阶段、知识点或难度与签发内容不一致");
   }
 
   private Optional<BossPrefetchStatusDto> statusById(long id) {

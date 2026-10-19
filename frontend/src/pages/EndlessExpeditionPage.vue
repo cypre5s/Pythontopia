@@ -67,6 +67,9 @@ const preferredKcFromQuery = computed<string | null>(() => {
 const focusChoice = ref<number | null>(
   focusFromQuery.value ?? (preferredKcFromQuery.value ? null : run.focusChapter ?? null),
 );
+watch([focusFromQuery, preferredKcFromQuery], ([focus, preferredKc]) => {
+  focusChoice.value = focus ?? (preferredKc ? null : run.focusChapter ?? null);
+});
 
 // 地图视图：像素远征塔（Phaser 渐进增强）/ 列表（移动端 + 降级真源）。窄屏默认列表。
 const isCompactViewport = ref(typeof window === 'undefined' || window.innerWidth < 900);

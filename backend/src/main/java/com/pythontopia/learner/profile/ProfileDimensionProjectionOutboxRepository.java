@@ -68,11 +68,11 @@ class ProfileDimensionProjectionOutboxRepository {
         .findFirst();
   }
 
-  boolean hasEarlierPending(long userId, long id) {
+  boolean hasEarlierUnresolved(long userId, long id) {
     Boolean exists =
         jdbc.queryForObject(
             "SELECT EXISTS (SELECT 1 FROM learner_profile_projection_outbox"
-                + " WHERE user_id = ? AND id < ? AND status = 'PENDING')",
+                + " WHERE user_id = ? AND id < ? AND status IN ('PENDING', 'FAILED'))",
             Boolean.class,
             userId,
             id);
@@ -83,30 +83,74 @@ class ProfileDimensionProjectionOutboxRepository {
     return jdbc.update(
             "UPDATE learner_profile_projection_outbox"
                 + " SET status = 'APPLIED', attempt_count = attempt_count + 1,"
-                + " error_kind = NULL, processed_at = now()"
+                + " error_kind = NULL, failed_at = NULL, processed_at = now()"
                 + " WHERE id = ? AND status = 'PENDING'",
             id)
         == 1;
   }
 
-  int recordFailure(long id, String errorKind) {
+  Failure recordFailure(
+      long id, String errorKind, int maxAttempts, int baseBackoffSeconds, int maxBackoffSeconds) {
+    String safeErrorKind =
+        errorKind == null ? "UnknownException" : errorKind.substring(0, Math.min(128, errorKind.length()));
+    return jdbc
+        .query(
+            "UPDATE learner_profile_projection_outbox"
+                + " SET attempt_count = attempt_count + 1,"
+                + " status = CASE WHEN attempt_count + 1 >= ? THEN 'FAILED' ELSE 'PENDING' END,"
+                + " error_kind = ?,"
+                + " failed_at = CASE WHEN attempt_count + 1 >= ? THEN now() ELSE NULL END,"
+                + " next_attempt_at = CASE WHEN attempt_count + 1 >= ? THEN now()"
+                + " ELSE now() + LEAST(?::double precision * power(2, attempt_count),"
+                + " ?::double precision) * interval '1 second' END"
+                + " WHERE id = ? AND status = 'PENDING'"
+                + " RETURNING attempt_count, status",
+            (rs, rowNum) -> new Failure(rs.getInt("attempt_count"), rs.getString("status")),
+            maxAttempts,
+            safeErrorKind,
+            maxAttempts,
+            maxAttempts,
+            baseBackoffSeconds,
+            maxBackoffSeconds,
+            id)
+        .stream()
+        .findFirst()
+        .orElse(null);
+  }
+
+  boolean repairFailed(long id, String dimensionKey, DimensionDelta delta) {
+    String deltaJson;
+    try {
+      deltaJson = objectMapper.writeValueAsString(delta);
+    } catch (JsonProcessingException ex) {
+      throw new IllegalArgumentException("serialize repaired profile projection failed", ex);
+    }
     return jdbc.update(
-        "UPDATE learner_profile_projection_outbox"
-            + " SET attempt_count = attempt_count + 1, error_kind = ?,"
-            + " next_attempt_at = now() + interval '10 seconds'"
-            + " WHERE id = ? AND status = 'PENDING'",
-        errorKind,
-        id);
+            "UPDATE learner_profile_projection_outbox"
+                + " SET dimension_key = ?, delta = ?::jsonb, status = 'PENDING',"
+                + " attempt_count = 0, error_kind = NULL, failed_at = NULL,"
+                + " next_attempt_at = now(), processed_at = NULL,"
+                + " manual_replay_count = manual_replay_count + 1"
+                + " WHERE id = ? AND status = 'FAILED'",
+            dimensionKey,
+            deltaJson,
+            id)
+        == 1;
   }
 
   List<Long> findDuePendingIds(int limit) {
     return jdbc.queryForList(
-        "SELECT id FROM learner_profile_projection_outbox"
-            + " WHERE status = 'PENDING' AND next_attempt_at <= now()"
-            + " ORDER BY id LIMIT ?",
+        "SELECT candidate.id FROM learner_profile_projection_outbox candidate"
+            + " WHERE candidate.status = 'PENDING' AND candidate.next_attempt_at <= now()"
+            + " AND NOT EXISTS (SELECT 1 FROM learner_profile_projection_outbox earlier"
+            + " WHERE earlier.user_id = candidate.user_id AND earlier.id < candidate.id"
+            + " AND earlier.status IN ('PENDING', 'FAILED'))"
+            + " ORDER BY candidate.id LIMIT ?",
         Long.class,
         limit);
   }
 
   record Entry(long id, long userId, String dimensionKey, DimensionDelta delta) {}
+
+  record Failure(int attemptCount, String status) {}
 }

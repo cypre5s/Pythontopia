@@ -2,11 +2,27 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-16）**：Tutor 历史消息角色已限制为 user/assistant；资源与章测提示词中的动态学习上下文现使用 user 数据角色。真实 DeepSeek 文本与合成 PNG 图片输入、文本输出已有全栈记录，Tutor AutoGen 产品流程也已完成真实浏览器联测；provider 静态审计确认服务端 LLM 路由只允许 DeepSeek，TTS/ASR/讯飞图片服务关闭。本轮只对修改后的章测 prompt 做了 1 次真实 DeepSeek completion（3 页本地 RAG 证据，解析为 1 道单选题），没有通用探针或重试。Tutor、Twin P0、Phaser Boss、管理台布局/班级字段对齐及部分 Web 动作有代码和验证记录。远征 Boss 完整浏览器闭环已在当前快照验证；剩余工作以本地安全边界、其它 Web 动作覆盖、Twin 效果研究及工程收尾为主，性能最后测。细项只维护在下方唯一任务清单。
+> **当前快照（2026-10-19）**：本地 P0–P2 修复与测试完成：Maven 1,768 项 0 failures/errors/skips；Vitest 279 文件 / 2,674 项通过，typecheck、lint、build 通过；Graph 1,963 passed/1 skipped、RAG 166 passed、Research 330 passed/4 skipped。此前真实 Chromium 新生成长→Piston 正式判题→Twin 更新证据/周报/推荐→主线路由闭环通过；本次另外以 API mock 在 320px / 375px 检查 Twin 无横向溢出、推荐按钮可见可用。资源微测幂等与远征撤销题结算边界由 API/PostgreSQL 测试覆盖，最近的边界修正未重跑全栈真实旅程。未调用模型。GitHub 最新仍是旧 SHA `790dfb7` 的失败 run [ci#7](https://github.com/cypre5s/Pythontopia/actions/runs/39030278070)，本地 workflow 修复未推送，托管 CI 未验证；改动尚未提交。Outbox 的真实断连/整进程重启未实测，管理员没有失败任务列表或逐次重放审计历史。后续安全审计、Twin 成效研究、生产 ECS/Piston 验证与工程收尾仍按下方唯一任务清单维护。
 
 ## 当前进度
 
 唯一任务清单及按优先级排列的未完成项维护在[总任务实施计划](../plans/2026-10-16-overall-work-checklist.md)，本页只记录最近进度和详细历史，避免出现多份清单。
+
+### 2026-10-19 数字孪生与学习闭环优化
+
+- 基线：任务开始时工作树干净，HEAD 与 `origin/main` 为 `790dfb7`。GitHub 最新托管 run 仍是旧提交的 `ci#7`；同 SHA 本地复现前端 BoardPanel fixture 与 research 缺少 Torch 两个问题。research 独立 job 保留，安装 CPU Torch；Python 矩阵关闭 fail-fast。本地 workflow 未推送，托管 runner 新配置未验证。
+- 周报用北京时间六天前零点至一次性读取时刻的 `[start,end)`；`weeklyDelta` 精确定义为可信练习/微测/调试事件的实际应用贡献，不冒充掌握度净变化。固定时钟、跨午夜、空数据和 PostgreSQL 边界测试通过。
+- Twin 展示三阶段标签、全部已评估 KC 的到期统计与后端证据；推荐始终读取 Twin 服务端结果。远征复用路由 query 时刷新 focus/KC。真实 Chromium 验证新生 Twin→服务端 Piston 判题→Twin 掌握证据/周报/推荐→主线地图路由；新加入的幂等与撤销题边界未做浏览器复跑。
+- 续审修正 3 项边界：指定远征 KC 经题目资格过滤后不可用时返回 422，不再静默替换成其它 KC；将会随失败/衰减变化的 `confidence` 标作“置信指标”，与可信事件数分开；已评估但缺失分数的星点不再显示掌握 0%。四个对应回归均先 RED，再修正后 GREEN。
+- Playwright 以 320px、375px 检查学习分身：页面宽度等于视口，主推荐按钮可见并点击到 `/mainline-map?chapter=1&kcCode=PY43-KC-001`，pageerror=0。接口由 mock 提供，因此只作为布局/路由验证，不代表生产 API 旅程。
+- 工坊资源微测在既有 `resource_learning_check` 上保存幂等键、请求指纹和响应；相同请求重放原响应，重用键但请求不同返回 409；旧客户端不带 header 仍兼容。并发 PostgreSQL Stage07 用例验证同键只写一份结果/事件。
+- 远征取题现在精确匹配服务端 KC/章节/阶段/难度，错误难度题不再重标。撤销/未审核判题用 V224/V225 扩展现有 attempt ledger：`settlement_passed` 仅推进玩法结算，`passed` 与 `reward_eligible` 控制可信进度、掌握事件与奖励；未授信题响应分数为 0。120 项目标集、两条混合历史 PostgreSQL 回归通过。
+- 画像 Outbox 使用 5–300 秒指数退避、8 次后隔离为 `FAILED`；同用户旧失败保持顺序阻塞，其他用户批次可继续。增加 ADMIN-only 校正重放入口，限制维度/来源/增量且不回显学生内容。V222 扩展原表；PostgreSQL 覆盖并发、重试、回放与事务回滚恢复。
+- 做减法：`BossGraphClient` 复用 `signalsToMap`，去掉约 21 行重复的 12 字段映射；移除未引用的 711 B public 树桩副本，保留 inbox 原素材并同步更新 `LICENSE-ART.md`。构建确认该文件不进入 `dist`；没有批量清理其他资产。
+- 验证：`cd backend && mvn -B -DskipTests=false test` 为 1,768 项、0 failures/errors/skips、BUILD SUCCESS；Surefire 在全部测试结束后等待 30 秒，再强制终止仍有定时任务的 fork。前端 `npm ci`、typecheck、lint、`npm run test -- --run`（279 文件 / 2,674 项）和 `npm run build` 通过；Graph 1,963/1 skip、RAG 166/0 skip、Research 330/4 skip。Vite 仍提示 Pyodide Node 内置模块 externalization 与 `eval` 警告。
+- Maven 收尾时 Testcontainers 容器关闭后，缓存 Spring 上下文中的 Outbox scheduler 会记录连接拒绝；Surefire 等待约 30 秒后仍以 0 failures/errors/skips 和 BUILD SUCCESS 退出。历史已授信 attempt 迁移时默认保留奖励资格，因此本次不会追溯撤回旧结果或已发学习事件。
+- 断连与恢复证据有限：Outbox 注入 `DataAccessResourceFailureException` 和事务回滚后由新 worker 恢复均有测试；没有停止真实 PostgreSQL 或重启 Spring 进程验证。管理员可按 ID 重放 FAILED 任务，但没有列出失败任务的 API，也未持久化逐次重放的操作者/时间/原失败历史。整体工作树增加了多项测试、4 个追加迁移和少量服务逻辑，因此只能确认删除重复映射与 1 份素材等局部减法，不能声称系统整体复杂度下降。
+- 一次浏览器脚本首次清理不完整，留下 `dev.sh`/Spring 进程并覆盖 ignored `.work/dev-backend.log`，该运行日志无法恢复；随后使用隔离方式重跑 E2E 并通过，tracked source 不受影响。未调用 DeepSeek，未提交或推送。
 
 ### 2026-10-16 最近续接
 

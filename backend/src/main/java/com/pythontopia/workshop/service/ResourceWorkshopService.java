@@ -1,11 +1,14 @@
 package com.pythontopia.workshop.service;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.agent.run.MetaReflectionService;
 import com.pythontopia.agent.run.RunStatus;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.coursepack.domain.CourseKc;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.event.LearningEvent;
@@ -47,10 +50,13 @@ import com.pythontopia.workshop.repository.ResourceLearningCheckRepository;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -83,6 +89,7 @@ public class ResourceWorkshopService {
   /** 注入资源 prompt 的近期记忆要点条数（Task 2.1）。 */
   private static final int MEMORY_HIGHLIGHT_LIMIT = 5;
   private static final int RESOURCE_CHECK_EVIDENCE_MAX_BYTES = 4096;
+  private static final int RESOURCE_CHECK_IDEMPOTENCY_KEY_MAX_LENGTH = 128;
 
   private static final Pattern KC_CODE_PATTERN =
       Pattern.compile("(?i)^(PY43-)?KC-?\\d+$");
@@ -106,6 +113,7 @@ public class ResourceWorkshopService {
   private final PracticeSubmissionRepository submissionRepository;
   private final ApplicationEventPublisher eventPublisher;
   private final ObjectMapper objectMapper;
+  private final StudentWriteThrottle studentWriteThrottle;
 
   public ResourceWorkshopService(
       WorkshopProperties properties,
@@ -124,7 +132,8 @@ public class ResourceWorkshopService {
       ResourceFeedbackRepository resourceFeedbackRepository,
       PracticeSubmissionRepository submissionRepository,
       ApplicationEventPublisher eventPublisher,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      StudentWriteThrottle studentWriteThrottle) {
     this.properties = properties;
     this.graphClient = graphClient;
     this.resourceRepository = resourceRepository;
@@ -142,6 +151,7 @@ public class ResourceWorkshopService {
     this.submissionRepository = submissionRepository;
     this.eventPublisher = eventPublisher;
     this.objectMapper = objectMapper;
+    this.studentWriteThrottle = studentWriteThrottle;
   }
 
   @Transactional
@@ -362,8 +372,43 @@ public class ResourceWorkshopService {
   @Transactional
   public ResourceCheckResponse submitCheck(
       Long userId, Long resourceId, ResourceCheckSubmitRequest request) {
-    validateOperationEvidenceSize(request.operationEvidence());
+    return submitCheck(userId, resourceId, request, null);
+  }
+
+  @Transactional
+  public ResourceCheckResponse submitCheck(
+      Long userId,
+      Long resourceId,
+      ResourceCheckSubmitRequest request,
+      String requestedIdempotencyKey) {
+    String idempotencyKey = normalizeIdempotencyKey(requestedIdempotencyKey);
     LearningResourceDto resource = findOne(userId, resourceId);
+    String requestHash = null;
+    if (idempotencyKey != null) {
+      requestHash = resourceCheckRequestHash(request);
+      checkRepository.acquireIdempotencyLock(userId, resourceId, idempotencyKey);
+      ResourceLearningCheckRepository.StoredIdempotencyResponse stored =
+          checkRepository.findIdempotency(userId, resourceId, idempotencyKey);
+      if (stored != null) {
+        if (!requestHash.equals(stored.requestHash())) {
+          throw new BusinessException(
+              HttpStatus.CONFLICT,
+              "RESOURCE_CHECK_IDEMPOTENCY_CONFLICT",
+              "Idempotency-Key 已用于不同的资源检查请求");
+        }
+        if (stored.responsePayload() == null) {
+          throw new BusinessException(
+              HttpStatus.CONFLICT,
+              "RESOURCE_CHECK_IDEMPOTENCY_IN_PROGRESS",
+              "相同的资源检查请求仍在处理中");
+        }
+        return readStoredResourceCheckResponse(stored.responsePayload());
+      }
+    }
+
+    requireWriteCapacity(userId);
+
+    validateOperationEvidenceSize(request.operationEvidence());
     String kcCode = request.kcCode() == null ? "" : request.kcCode().trim();
     if (resource.kcCodes() == null || !resource.kcCodes().contains(kcCode)) {
       throw new BusinessException(
@@ -394,7 +439,26 @@ public class ResourceWorkshopService {
                 status,
                 delta,
                 remediationType,
-                evaluation.reason()));
+                evaluation.reason(),
+                idempotencyKey,
+                requestHash));
+    ResourceCheckResponse response =
+        new ResourceCheckResponse(
+            checkId,
+            resource.id(),
+            kcCode,
+            status,
+            delta,
+            decision.nextAction(),
+            remediationType,
+            evaluation.feedback(),
+            decision.loopState(),
+            submission == null ? null : submission.id(),
+            decision.reason());
+    if (idempotencyKey != null) {
+      checkRepository.completeIdempotency(
+          userId, resourceId, idempotencyKey, checkId, response);
+    }
     eventPublisher.publishEvent(
         new LearningEvent.ResourceCheckCompleted(
             userId,
@@ -406,18 +470,71 @@ public class ResourceWorkshopService {
             delta,
             remediationType == null ? null : remediationType.name(),
             submission == null ? null : submission.id()));
-    return new ResourceCheckResponse(
-        checkId,
-        resource.id(),
-        kcCode,
-        status,
-        delta,
-        decision.nextAction(),
-        remediationType,
-        evaluation.feedback(),
-        decision.loopState(),
-        submission == null ? null : submission.id(),
-        decision.reason());
+    return response;
+  }
+
+  private String normalizeIdempotencyKey(String requestedKey) {
+    if (requestedKey == null) {
+      return null;
+    }
+    String idempotencyKey = requestedKey.trim();
+    if (idempotencyKey.isEmpty()
+        || idempotencyKey.length() > RESOURCE_CHECK_IDEMPOTENCY_KEY_MAX_LENGTH) {
+      throw new BusinessException(
+          HttpStatus.BAD_REQUEST,
+          "INVALID_IDEMPOTENCY_KEY",
+          "Idempotency-Key 必须为 1 到 128 个字符");
+    }
+    return idempotencyKey;
+  }
+
+  private String resourceCheckRequestHash(ResourceCheckSubmitRequest request) {
+    try {
+      byte[] canonicalRequest =
+          objectMapper.writeValueAsBytes(canonicalizeRequest(objectMapper.valueToTree(request)));
+      return HexFormat.of()
+          .formatHex(MessageDigest.getInstance("SHA-256").digest(canonicalRequest));
+    } catch (JsonProcessingException exception) {
+      throw new IllegalStateException("Could not fingerprint the resource check request", exception);
+    } catch (NoSuchAlgorithmException exception) {
+      throw new IllegalStateException("SHA-256 is unavailable", exception);
+    }
+  }
+
+  private JsonNode canonicalizeRequest(JsonNode node) {
+    if (node.isObject()) {
+      ObjectNode sorted = objectMapper.createObjectNode();
+      List<String> names = new ArrayList<>();
+      node.fieldNames().forEachRemaining(names::add);
+      names.sort(String::compareTo);
+      for (String name : names) {
+        sorted.set(name, canonicalizeRequest(node.get(name)));
+      }
+      return sorted;
+    }
+    if (node.isArray()) {
+      ArrayNode canonicalArray = objectMapper.createArrayNode();
+      node.forEach(child -> canonicalArray.add(canonicalizeRequest(child)));
+      return canonicalArray;
+    }
+    return node.deepCopy();
+  }
+
+  private ResourceCheckResponse readStoredResourceCheckResponse(String responsePayload) {
+    try {
+      return objectMapper.readValue(responsePayload, ResourceCheckResponse.class);
+    } catch (JsonProcessingException exception) {
+      throw new IllegalStateException("Could not read the stored resource check response", exception);
+    }
+  }
+
+  private void requireWriteCapacity(long userId) {
+    if (!studentWriteThrottle.tryAcquire(userId, 1)) {
+      throw new BusinessException(
+          HttpStatus.TOO_MANY_REQUESTS,
+          "STUDENT_WRITE_RATE_LIMITED",
+          "每个账号每分钟最多写入 100 条学习记录");
+    }
   }
 
   private void validateOperationEvidenceSize(JsonNode operationEvidence) {

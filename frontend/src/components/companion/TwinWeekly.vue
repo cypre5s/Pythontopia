@@ -94,7 +94,7 @@ function promptMastery(delta: {
 }): void {
   emit(
     'prompt',
-    `针对 ${delta.kcCode}，我当前掌握约 ${percent(delta.currentScore)}，证据充分度 ${percent(delta.confidence)}（当前启发式指标，不是概率），本周变化 ${deltaPercent(delta.weeklyDelta)}；本周有 ${delta.evidenceCount} 条证据（${evidenceSourceLabel(delta.evidenceSources)}）。请给我一组由浅入深的练习和课件复习建议。`,
+    `针对 ${delta.kcCode}，我当前掌握约 ${percent(delta.currentScore)}，当前置信指标 ${percent(delta.confidence)}（可能受练习失败和遗忘衰减影响，不是答题概率）；本周证据贡献 ${deltaPercent(delta.weeklyDelta)}，有 ${delta.evidenceCount} 条可信学习证据（${evidenceSourceLabel(delta.evidenceSources)}）。请给我一组由浅入深的练习和课件复习建议。`,
   );
 }
 </script>
@@ -134,7 +134,10 @@ function promptMastery(delta: {
       <div class="tw__hd">
         <div>
           <span class="tw__ttl">Learner Twin</span>
-          <span class="tw__rng">{{ report.periodStart }} → {{ report.periodEnd }}</span>
+          <span
+            class="tw__rng"
+            data-testid="twin-weekly-period"
+          >北京时间统计日期：{{ report.periodStart }} 至 {{ report.periodEnd }}</span>
         </div>
         <button
           type="button"
@@ -195,10 +198,10 @@ function promptMastery(delta: {
           <span class="tw__badge">{{ d.kcCode }}</span>
           掌握 {{ percent(d.currentScore) }} ·
           <span
-            data-testid="twin-evidence-coverage"
-            title="平台根据已有证据计算的启发式指标，不代表答题正确概率"
-          >证据充分度 {{ percent(d.confidence) }}</span>
-          · 本周 {{ deltaPercent(d.weeklyDelta) }} · {{ d.evidenceCount }} 条证据（{{ evidenceSourceLabel(d.evidenceSources) }}）
+            data-testid="twin-confidence-metric"
+            title="学习状态启发式指标，会随练习失败和遗忘衰减变化，不代表答题正确概率"
+          >置信指标 {{ percent(d.confidence) }}</span>
+          · 本周证据贡献 {{ deltaPercent(d.weeklyDelta) }} · 本周 {{ d.evidenceCount }} 条可信证据（{{ evidenceSourceLabel(d.evidenceSources) }}）
         </span>
         <button
           type="button"

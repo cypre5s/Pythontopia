@@ -98,11 +98,12 @@ public class ExpeditionRunService {
                 + " focus_chapter, nodes::text AS nodes, layers, current_node_id,"
                 + " hp, max_hp, momentum, best_momentum,"
                 + " (SELECT COALESCE(SUM(a.score), 0) FROM expedition_verified_attempt a"
-                + " WHERE a.user_id = expedition_run.user_id AND a.run_id = expedition_run.run_id)"
+                + " WHERE a.user_id = expedition_run.user_id AND a.run_id = expedition_run.run_id"
+                + " AND a.reward_eligible = TRUE)"
                 + " AS verified_score,"
                 + " (SELECT COUNT(*) FROM expedition_verified_attempt a"
                 + " WHERE a.user_id = expedition_run.user_id AND a.run_id = expedition_run.run_id"
-                + " AND a.passed) AS verified_depth, relics::text AS relics,"
+                + " AND a.passed AND a.reward_eligible = TRUE) AS verified_depth, relics::text AS relics,"
                 + " is_daily, history::text AS history"
                 + " FROM expedition_run WHERE user_id = ? AND status = 'ACTIVE'",
             (rs, i) ->
@@ -322,7 +323,8 @@ public class ExpeditionRunService {
             + " max_hp = EXCLUDED.max_hp, momentum = EXCLUDED.momentum,"
             + " best_momentum = EXCLUDED.best_momentum,"
             + " score = COALESCE((SELECT SUM(a.score) FROM expedition_verified_attempt a"
-            + " WHERE a.user_id = EXCLUDED.user_id AND a.run_id = EXCLUDED.run_id), 0),"
+            + " WHERE a.user_id = EXCLUDED.user_id AND a.run_id = EXCLUDED.run_id"
+            + " AND a.reward_eligible = TRUE), 0),"
             + " layers = EXCLUDED.layers, current_node_id = EXCLUDED.current_node_id,"
             + " is_daily = EXCLUDED.is_daily, nodes = EXCLUDED.nodes, relics = EXCLUDED.relics,"
             + " history = EXCLUDED.history, status = 'ACTIVE', updated_at = now()",
@@ -344,7 +346,7 @@ public class ExpeditionRunService {
         jdbcTemplate.queryForObject(
             "SELECT COALESCE(SUM(score), 0) AS score,"
                 + " COUNT(*) FILTER (WHERE passed) AS verified_depth FROM expedition_verified_attempt"
-                + " WHERE user_id = ? AND run_id = ?::uuid",
+                + " WHERE user_id = ? AND run_id = ?::uuid AND reward_eligible = TRUE",
             (rs, rowNum) -> new VerifiedProgress(rs.getInt("score"), rs.getInt("verified_depth")),
             userId,
             runId);
@@ -684,7 +686,8 @@ public class ExpeditionRunService {
             issued.questionFingerprint(), issued.nodeId(), bossPhase);
     List<ChallengeEvidence> attempts =
         jdbcTemplate.query(
-            "SELECT question_fingerprint, passed, score FROM expedition_verified_attempt"
+            "SELECT question_fingerprint, COALESCE(settlement_passed, passed) AS passed, score"
+                + " FROM expedition_verified_attempt"
                 + " WHERE user_id = ? AND run_id = ?::uuid"
                 + " AND (problem_id = ? OR question_fingerprint = ?)"
                 + " ORDER BY passed DESC, score DESC LIMIT 1",

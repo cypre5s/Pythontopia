@@ -60,6 +60,7 @@ public class ExpeditionScoreService {
         jdbcTemplate.query(
             "SELECT passed, score FROM expedition_verified_attempt"
                 + " WHERE user_id = ? AND run_id = ?::uuid"
+                + " AND reward_eligible = TRUE"
                 + " ORDER BY created_at, id LIMIT "
                 + MAX_VERIFIED_ATTEMPTS_PER_RUN,
             (rs, rowNum) -> new VerifiedAttempt(rs.getBoolean("passed"), rs.getInt("score")),
@@ -130,6 +131,25 @@ public class ExpeditionScoreService {
       boolean passed,
       int score,
       LearningEvent event) {
+    return recordAttempt(userId, runId, problemId, questionFingerprint, passed, score, true, event);
+  }
+
+  /** Persist challenge evidence for an ineligible question without creating trusted rewards. */
+  @Transactional
+  public VerifiedAttemptResult recordSettlementEvidence(
+      Long userId, String runId, String problemId, String questionFingerprint, boolean passed) {
+    return recordAttempt(userId, runId, problemId, questionFingerprint, passed, 0, false, null);
+  }
+
+  private VerifiedAttemptResult recordAttempt(
+      Long userId,
+      String runId,
+      String problemId,
+      String questionFingerprint,
+      boolean passed,
+      int score,
+      boolean rewardEligible,
+      LearningEvent event) {
     if (userId == null
         || runId == null
         || problemId == null
@@ -171,18 +191,22 @@ public class ExpeditionScoreService {
     }
     List<ExistingAttempt> existing =
         jdbcTemplate.query(
-            "SELECT id, passed FROM expedition_verified_attempt"
+            "SELECT id, passed, reward_eligible FROM expedition_verified_attempt"
                 + " WHERE user_id = ? AND run_id = ?::uuid AND question_fingerprint = ? LIMIT 1",
-            (rs, rowNum) -> new ExistingAttempt(rs.getLong("id"), rs.getBoolean("passed")),
+            (rs, rowNum) ->
+                new ExistingAttempt(
+                    rs.getLong("id"), rs.getBoolean("passed"), rs.getBoolean("reward_eligible")),
             userId,
             runUuid,
             questionFingerprint);
     if (existing.isEmpty()) {
       existing =
           jdbcTemplate.query(
-              "SELECT id, passed FROM expedition_verified_attempt"
+              "SELECT id, passed, reward_eligible FROM expedition_verified_attempt"
                   + " WHERE user_id = ? AND run_id = ?::uuid AND problem_id = ? LIMIT 1",
-              (rs, rowNum) -> new ExistingAttempt(rs.getLong("id"), rs.getBoolean("passed")),
+              (rs, rowNum) ->
+                  new ExistingAttempt(
+                      rs.getLong("id"), rs.getBoolean("passed"), rs.getBoolean("reward_eligible")),
               userId,
               runUuid,
               problemId);
@@ -192,13 +216,18 @@ public class ExpeditionScoreService {
       int updated =
           jdbcTemplate.update(
               "UPDATE expedition_verified_attempt SET passed = passed OR ?,"
+                  + " settlement_passed = COALESCE(settlement_passed, passed) OR ?,"
                   + " score = GREATEST(score, ?),"
+                  + " reward_eligible = reward_eligible OR ?,"
                   + " question_fingerprint = COALESCE(question_fingerprint, ?) WHERE id = ?",
+              rewardEligible && passed,
               passed,
-              passed ? Math.max(0, score) : 0,
+              rewardEligible && passed ? Math.max(0, score) : 0,
+              rewardEligible,
               questionFingerprint,
               attempt.id());
-      boolean publishLearningEvent = !attempt.passed() && passed;
+      boolean publishLearningEvent =
+          rewardEligible && passed && (!attempt.passed() || !attempt.rewardEligible());
       VerifiedAttemptResult result =
           settleFailure(
               userId,
@@ -213,8 +242,8 @@ public class ExpeditionScoreService {
     int inserted =
         jdbcTemplate.update(
             "INSERT INTO expedition_verified_attempt"
-                + " (user_id, run_id, problem_id, question_fingerprint, passed, score)"
-                + " SELECT ?, ?::uuid, ?, ?, ?, ?"
+                + " (user_id, run_id, problem_id, question_fingerprint, passed, settlement_passed, score, reward_eligible)"
+                + " SELECT ?, ?::uuid, ?, ?, ?, ?, ?, ?"
                 + " WHERE EXISTS (SELECT 1 FROM expedition_run WHERE user_id = ?"
                 + " AND run_id = ?::uuid AND status = 'ACTIVE')"
                 + " AND NOT EXISTS (SELECT 1 FROM expedition_score WHERE user_id = ? AND run_id = ?::uuid)"
@@ -225,8 +254,10 @@ public class ExpeditionScoreService {
             runUuid,
             problemId,
             questionFingerprint,
+            rewardEligible && passed,
             passed,
-            passed ? Math.max(0, score) : 0,
+            rewardEligible && passed ? Math.max(0, score) : 0,
+            rewardEligible,
             userId,
             runUuid,
             userId,
@@ -239,7 +270,7 @@ public class ExpeditionScoreService {
             runId,
             problemId,
             passed,
-            new VerifiedAttemptResult(inserted > 0, inserted > 0));
+            new VerifiedAttemptResult(inserted > 0, inserted > 0 && rewardEligible));
     publishLearningEvent(result, event);
     return result;
   }
@@ -276,6 +307,7 @@ public class ExpeditionScoreService {
                 + " JOIN expedition_run r ON r.user_id = a.user_id AND r.run_id = a.run_id"
                 + " AND r.status = 'ACTIVE'"
                 + " WHERE a.user_id = ? AND a.run_id = ?::uuid"
+                + " AND a.reward_eligible = TRUE"
                 + " AND EXISTS (SELECT 1 FROM pregenerated_problem p"
                 + " WHERE p.user_id = a.user_id AND p.problem_id = a.problem_id"
                 + " AND p.expedition_run_id = a.run_id AND p.chapter = ?)",
@@ -357,7 +389,7 @@ public class ExpeditionScoreService {
 
   record VerifiedAttempt(boolean passed, int score) {}
 
-  record ExistingAttempt(long id, boolean passed) {}
+  record ExistingAttempt(long id, boolean passed, boolean rewardEligible) {}
 
   public record VerifiedAttemptResult(boolean accepted, boolean publishLearningEvent) {}
 

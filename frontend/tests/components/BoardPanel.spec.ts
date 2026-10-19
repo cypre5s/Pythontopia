@@ -3,7 +3,6 @@ import { mount, flushPromises } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
 import { createMemoryHistory, createRouter, type Router } from 'vue-router';
 import BoardPanel from '@/components/board/BoardPanel.vue';
-import { useLearningStore } from '@stores/learning';
 import type { QuestDto } from '@/api/dto/Quest';
 
 vi.mock('@/api/path', () => ({
@@ -21,6 +20,9 @@ vi.mock('@/api/quests', () => ({
 vi.mock('@/api/classroomQuests', () => ({
   getMyClassroomQuests: vi.fn(),
 }));
+vi.mock('@/api/workshop', () => ({
+  listWorkshopResources: vi.fn(),
+}));
 
 import {
   planLearningPath,
@@ -34,6 +36,7 @@ import {
   skipQuest,
 } from '@/api/quests';
 import { getMyClassroomQuests } from '@/api/classroomQuests';
+import { listWorkshopResources } from '@/api/workshop';
 
 const SAMPLE_QUEST: QuestDto = {
   id: 1,
@@ -48,8 +51,25 @@ const SAMPLE_QUEST: QuestDto = {
   dueDate: '2026-06-05',
   priority: 7,
   status: 'OPEN',
+  requiredEvidenceType: 'resource',
+  requiredMasteryDelta: null,
+  targetProblemIds: [],
+  targetResourceId: null,
+  deepLinkRoute: '/workshop',
+  deepLinkParams: {},
   createdAt: '2026-05-21T18:00:00Z',
   updatedAt: '2026-05-21T18:00:00Z',
+};
+
+const SAMPLE_RESOURCE = {
+  id: 42,
+  type: 'HANDOUT' as const,
+  title: '变量与类型讲义',
+  summary: null,
+  kcCodes: ['PY43-KC-001'],
+  groundingStatus: 'PASSED' as const,
+  feedbackStatus: 'NONE' as const,
+  createdAt: '2026-05-21T19:00:00Z',
 };
 
 function mountWithRouter() {
@@ -74,6 +94,7 @@ describe('BoardPanel', () => {
     vi.mocked(startQuest).mockResolvedValue({ ...SAMPLE_QUEST, status: 'IN_PROGRESS' });
     vi.mocked(completeQuest).mockResolvedValue({ ...SAMPLE_QUEST, status: 'COMPLETED' });
     vi.mocked(skipQuest).mockResolvedValue({ ...SAMPLE_QUEST, status: 'SKIPPED' });
+    vi.mocked(listWorkshopResources).mockResolvedValue([SAMPLE_RESOURCE]);
     vi.mocked(planLearningPath).mockResolvedValue({
       path: {
         id: 99,
@@ -110,8 +131,6 @@ describe('BoardPanel', () => {
 
   it('renders todays quests by default and supports start/complete', async () => {
     const wrapper = mountWithRouter();
-    const learning = useLearningStore();
-    await learning.loadTodayQuests();
     await flushPromises();
 
     expect(wrapper.find('[data-testid="today-tab"]').exists()).toBe(true);
@@ -122,14 +141,19 @@ describe('BoardPanel', () => {
       .find((button) => button.text() === '开始');
     expect(startButton).toBeDefined();
     await startButton!.trigger('click');
+    await flushPromises();
     expect(startQuest).toHaveBeenCalledWith(1);
 
-    const completeButton = wrapper
-      .findAll('button')
-      .find((button) => button.text() === '完成');
-    expect(completeButton).toBeDefined();
-    await completeButton!.trigger('click');
-    expect(completeQuest).toHaveBeenCalledWith(1, { note: '在公告板完成' });
+    await wrapper.get('[data-testid="today-quest-load-evidence-1"]').trigger('click');
+    await flushPromises();
+    const completeButton = wrapper.get('[data-testid="today-quest-complete-1"]');
+    expect(completeButton.text()).toBe('提交完成');
+    await completeButton.trigger('click');
+    await flushPromises();
+
+    expect(listWorkshopResources).toHaveBeenCalledWith({ kcCode: 'PY43-KC-001', limit: 20 });
+    expect(completeQuest).toHaveBeenCalledWith(1, { note: '在公告板完成', resourceId: 42 });
+    expect(wrapper.text()).not.toContain('阅读 PY43-KC-001 资源');
   });
 
   it('switches to path tab and triggers planning', async () => {

@@ -157,6 +157,7 @@ public class MainlineService implements MainlineStageCompletionPort {
                 stage.id(),
                 stage.stageIndex(),
                 stage.title(),
+                stage.kcCodes(),
                 progress == null ? 0 : progress.videoWatchedSec(),
                 stage.requiredVideoSec(),
                 StageCompletion.distinctPages(progress),

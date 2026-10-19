@@ -137,6 +137,44 @@ class EndlessPregenServiceTest {
   }
 
   @Test
+  void approvedProblemAtWrongDifficultyFallsBackToGraphWithoutRelabelingItsDifficulty() throws Exception {
+    when(reviewRepository.findApproved(1, 2, "PY43-KC-001", "dual_track", 1))
+        .thenReturn(Optional.of(new ApprovedBossProblem(12L, 2, reviewedProblem())));
+    when(graphClient.requestProblem(eq(7L), eq(1), eq(2), eq("PY43-KC-001"), eq(1),
+            eq("PY43-KC-001"), eq("dual_track"), eq(null)))
+        .thenReturn(reviewedProblemAtDifficulty(1));
+    when(reviewRepository.approveAutomaticallyIfNotDuplicate(
+            7L, "dual_track", 1, 2, "PY43-KC-001", 1, reviewedProblemAtDifficulty(1)))
+        .thenReturn(true);
+    when(jdbcTemplate.update(
+            contains("status = 'READY'"), anyString(), eq("ai-1"), anyString(),
+            eq(19L), eq(7L), eq(1), eq(2), isNull(), isNull(), eq(1)))
+        .thenReturn(1);
+
+    service.generatePrefetch(
+        19L, 7L, 1, 2, "PY43-KC-001", 1, "PY43-KC-001", "dual_track", null, null, null, 1);
+
+    verify(graphClient)
+        .requestProblem(7L, 1, 2, "PY43-KC-001", 1, "PY43-KC-001", "dual_track", null);
+    ArgumentCaptor<String> payload = ArgumentCaptor.forClass(String.class);
+    verify(jdbcTemplate)
+        .update(
+            contains("status = 'READY'"),
+            payload.capture(),
+            eq("ai-1"),
+            anyString(),
+            eq(19L),
+            eq(7L),
+            eq(1),
+            eq(2),
+            isNull(),
+            isNull(),
+            eq(1));
+    assertThat(new ObjectMapper().readValue(payload.getValue(), BossInternalProblem.class).difficulty())
+        .isEqualTo(1);
+  }
+
+  @Test
   void reviewedAiProblemMovesPendingJobToReadyAndAddsItToSharedBank() {
     when(graphClient.requestProblem(eq(7L), eq(1), eq(2), eq("PY43-KC-001"), eq(2),
             eq("PY43-KC-001"), eq("dual_track"), eq(null)))
@@ -362,6 +400,58 @@ class EndlessPregenServiceTest {
   }
 
   @Test
+  void claimReadyDoesNotRewriteWrongKcPayloadToRequestedKc() throws Exception {
+    BossInternalProblem wrongKc = reviewedProblemAtContext(1, 2, 2, "PY43-KC-002");
+    when(jdbcTemplate.queryForList(anyString(), any(Object[].class)))
+        .thenReturn(
+            List.of(
+                Map.of(
+                    "id", 19L,
+                    "payload", new ObjectMapper().writeValueAsString(wrongKc))));
+
+    var claimed = service.claimReady(7L, 1, 2, "PY43-KC-001", 2, "dual_track", null, null);
+
+    assertThat(claimed).isEmpty();
+    verify(jdbcTemplate, never())
+        .update(
+            contains("status = 'CONSUMED'"),
+            anyString(),
+            anyString(),
+            any(),
+            any(),
+            anyString(),
+            anyLong(),
+            any(),
+            any());
+  }
+
+  @Test
+  void claimReadyRejectsPayloadWithDifficultyDifferentFromRequestedDimension() throws Exception {
+    BossInternalProblem wrongDifficulty = reviewedProblemAtDifficulty(1);
+    when(jdbcTemplate.queryForList(anyString(), any(Object[].class)))
+        .thenReturn(
+            List.of(
+                Map.of(
+                    "id", 19L,
+                    "payload", new ObjectMapper().writeValueAsString(wrongDifficulty))));
+
+    var claimed = service.claimReady(7L, 1, 2, "PY43-KC-001", 2, "dual_track", null, null);
+
+    assertThat(claimed).isEmpty();
+    verify(jdbcTemplate, never())
+        .update(
+            contains("status = 'CONSUMED'"),
+            anyString(),
+            anyString(),
+            any(),
+            any(),
+            anyString(),
+            anyLong(),
+            any(),
+            any());
+  }
+
+  @Test
   void storedProblemPayloadErrorsNeverLogPayloadOrOwnerIdentifiers() {
     String payloadSentinel = "private-boss-payload-log-sentinel";
     String databaseSentinel = "private-boss-database-log-sentinel";
@@ -519,8 +609,17 @@ class EndlessPregenServiceTest {
   }
 
   private BossInternalProblem reviewedProblem() {
+    return reviewedProblemAtDifficulty(2);
+  }
+
+  private BossInternalProblem reviewedProblemAtDifficulty(int difficulty) {
+    return reviewedProblemAtContext(1, 2, difficulty, "PY43-KC-001");
+  }
+
+  private BossInternalProblem reviewedProblemAtContext(
+      int chapter, int stage, int difficulty, String kcCode) {
     return new BossInternalProblem(
-        "ai-1", 1, 2, 2, "PY43-KC-001", "statement", List.of(), "2 3", "5", 3,
+        "ai-1", chapter, stage, difficulty, kcCode, "statement", List.of(), "2 3", "5", 3,
         true, true,
         List.of(
             new BossTestCasePayload("2 3", "5", true),

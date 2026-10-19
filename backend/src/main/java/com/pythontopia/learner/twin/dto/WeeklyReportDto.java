@@ -3,7 +3,7 @@ package com.pythontopia.learner.twin.dto;
 import java.util.List;
 
 /**
- * 数字孪生周报：聚合本周记忆流要点、反思洞察、掌握度变化与 AI
+ * 数字孪生周报：聚合包含今天在内的最近七个自然日的记忆流要点、反思洞察、掌握度变化与 AI
  * 团队为你生成过的资源摘要，供前端「本周你的 AI
  * 团队」时间线展示。所有字段仅包含当前学生本人的数据。
  */
@@ -31,7 +31,7 @@ public record WeeklyReportDto(
       List<String> tags,
       String createdAt) {}
 
-  /** 本周掌握度变化与服务端留存的证据覆盖。 */
+  /** 当前掌握度与近期可信练习/微测/调试事件的实际应用贡献（不含衰减与人工调整）。 */
   public record MasteryDeltaBrief(
       String kcCode,
       Double currentScore,

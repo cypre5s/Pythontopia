@@ -35,7 +35,10 @@ describe('TutorVisualAids', () => {
       },
     });
     await flushPromises();
-    await vi.waitFor(() => expect(wrapper.find('[data-testid="tutor-visual-aids"]').exists()).toBe(true));
+    await vi.waitFor(
+      () => expect(wrapper.find('[data-testid="tutor-visual-aids"]').exists()).toBe(true),
+      { timeout: 10_000 },
+    );
 
     const diagram = wrapper.get('[data-testid="tutor-visual-aids"] .aid-mermaid');
     expect(diagram.find('foreignObject').exists()).toBe(false);

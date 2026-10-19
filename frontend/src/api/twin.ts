@@ -19,7 +19,9 @@ export interface InsightBrief {
 export interface MasteryDeltaBrief {
   kcCode: string;
   currentScore: number | null;
+  /** Dynamic learning-state heuristic; it can fall after failures or decay and is not evidence coverage. */
   confidence: number | null;
+  /** Current-window evidence-event contribution; it is not an opening-to-closing score difference. */
   weeklyDelta: number | null;
   evidenceCount: number;
   evidenceSources: string[];
@@ -34,6 +36,7 @@ export interface ResourceRunBrief {
 }
 
 export interface WeeklyReport {
+  /** Inclusive Asia/Shanghai calendar dates supplied by the server. */
   periodStart: string;
   periodEnd: string;
   memoryBrief: MemoryBrief;
@@ -49,6 +52,7 @@ export interface LearnerTwinKcProgress {
   chapterName: string;
   assessed: boolean;
   masteryScore: number | null;
+  /** Dynamic learning-state heuristic; it can fall after failures or decay and is not evidence coverage. */
   confidence: number | null;
   reviewDue: boolean;
   dueAt: string | null;

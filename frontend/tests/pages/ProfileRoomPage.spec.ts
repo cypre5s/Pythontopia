@@ -44,7 +44,7 @@ const unassessedState: LearnerTwinState = {
 };
 
 const weeklyReport: WeeklyReport = {
-  periodStart: '2026-10-07',
+  periodStart: '2026-10-08',
   periodEnd: '2026-10-14',
   memoryBrief: {
     totalEvents: 2,
@@ -81,6 +81,19 @@ function makeRouter() {
   });
 }
 
+async function mountProfileRoomPage() {
+  setActivePinia(createPinia());
+  const router = makeRouter();
+  await router.push('/profile-room');
+  const wrapper = mount(ProfileRoomPage, {
+    global: {
+      plugins: [router],
+      stubs: { AppLayout: { template: '<div><slot /></div>' }, ProfileInterviewPanel: true },
+    },
+  });
+  return { wrapper, router };
+}
+
 describe('ProfileRoomPage Learner Twin', () => {
   it('shows unassessed points without presenting default scores as results', async () => {
     setActivePinia(createPinia());
@@ -96,7 +109,8 @@ describe('ProfileRoomPage Learner Twin', () => {
     await flushPromises();
 
     expect(wrapper.text()).toContain('我的学习分身');
-    expect(wrapper.text()).toContain('还没有经判题确认的学习证据');
+    expect(wrapper.text()).toContain('已有学习证据');
+    expect(wrapper.text()).toContain('还没有可信学习证据');
     expect(wrapper.text()).not.toContain('依据：');
     expect(wrapper.text()).toContain('尚未评估，先从基础题建立证据');
     expect(wrapper.text()).not.toContain('掌握 0%');
@@ -105,6 +119,110 @@ describe('ProfileRoomPage Learner Twin', () => {
     await wrapper.get('[data-testid="twin-next-primary"]').trigger('click');
     await flushPromises();
     expect(router.currentRoute.value.path).toBe('/mainline-map');
+  });
+
+  it.each([
+    ['初识小镇', 'twin-stage--initial'],
+    ['持续练习', 'twin-stage--practice'],
+    ['稳步精进', 'twin-stage--mastery'],
+  ])('shows the server growth stage %s as its matching badge', async (growthStage, className) => {
+    vi.mocked(fetchLearnerTwinState).mockResolvedValueOnce({ ...unassessedState, growthStage });
+
+    const { wrapper } = await mountProfileRoomPage();
+    await flushPromises();
+
+    const badge = wrapper.get('[data-testid="twin-growth-stage"]');
+    expect(badge.text()).toBe(growthStage);
+    expect(badge.classes()).toContain(className);
+  });
+
+  it('describes micro-check and debugging records as learning evidence', async () => {
+    vi.mocked(fetchLearnerTwinState).mockResolvedValueOnce({
+      ...unassessedState,
+      assessedKcCount: 1,
+      kcs: [{
+        ...unassessedState.kcs[0]!,
+        assessed: true,
+        masteryScore: 0.45,
+        confidence: 0.3,
+        lastPracticedAt: '2026-10-19T01:00:00Z',
+        evidenceSources: ['MICRO_CHECK_PASS', 'DEBUG_FIX'],
+      }],
+    });
+
+    const { wrapper } = await mountProfileRoomPage();
+    await flushPromises();
+
+    expect(wrapper.text()).toContain('练习、小测、调试与复习记录');
+    expect(wrapper.text()).toContain('已有学习证据');
+    expect(wrapper.text()).toContain('依据：小测通过、调试修复');
+    expect(wrapper.text()).toMatch(/最近学习证据/);
+    expect(wrapper.text()).not.toContain('最近练习');
+  });
+
+  it('reloads the authoritative Twin state after returning to the page', async () => {
+    setActivePinia(createPinia());
+    vi.mocked(fetchLearnerTwinState).mockReset()
+      .mockResolvedValueOnce(unassessedState)
+      .mockResolvedValueOnce({
+        ...unassessedState,
+        assessedKcCount: 1,
+        kcs: [{
+          ...unassessedState.kcs[0]!,
+          assessed: true,
+          masteryScore: 0.6,
+          confidence: 0.5,
+          evidenceSources: ['PRACTICE_PASS'],
+        }],
+      });
+    vi.mocked(fetchWeeklyReport).mockResolvedValue(weeklyReport);
+
+    const firstRouter = makeRouter();
+    await firstRouter.push('/profile-room');
+    const firstPage = mount(ProfileRoomPage, {
+      global: { plugins: [firstRouter], stubs: { AppLayout: { template: '<div><slot /></div>' } } },
+    });
+    await flushPromises();
+    expect(firstPage.get('.twin-overview .twin-stat:first-child strong').text()).toBe('0 / 65');
+    firstPage.unmount();
+
+    const secondRouter = makeRouter();
+    await secondRouter.push('/profile-room');
+    const secondPage = mount(ProfileRoomPage, {
+      global: { plugins: [secondRouter], stubs: { AppLayout: { template: '<div><slot /></div>' } } },
+    });
+    await flushPromises();
+
+    expect(fetchLearnerTwinState).toHaveBeenCalledTimes(2);
+    expect(secondPage.get('.twin-overview .twin-stat:first-child strong').text()).toBe('1 / 65');
+  });
+
+  it('counts due reviews across every assessed KC, not only the four focus rows', async () => {
+    setActivePinia(createPinia());
+    const kcs = Array.from({ length: 6 }, (_, index) => ({
+      ...unassessedState.kcs[0]!,
+      kcCode: `PY43-KC-${String(index + 1).padStart(3, '0')}`,
+      kcName: `知识点 ${index + 1}`,
+      assessed: index < 5,
+      masteryScore: index < 5 ? 0.5 : null,
+      confidence: index < 5 ? 0.5 : null,
+      reviewDue: true,
+    }));
+    vi.mocked(fetchLearnerTwinState).mockResolvedValue({
+      ...unassessedState,
+      assessedKcCount: 5,
+      kcs,
+      nextSteps: [],
+    });
+    const router = makeRouter();
+    await router.push('/profile-room');
+    const wrapper = mount(ProfileRoomPage, {
+      global: { plugins: [router], stubs: { AppLayout: { template: '<div><slot /></div>' } } },
+    });
+    await flushPromises();
+
+    expect(wrapper.get('.twin-overview .twin-stat:nth-child(3) strong').text()).toBe('5');
+    expect(wrapper.findAll('[data-testid="twin-evidence-list"] .twin-kc-row')).toHaveLength(4);
   });
 
   it('routes the main and distinct alternative recommendations to matching learning actions', async () => {

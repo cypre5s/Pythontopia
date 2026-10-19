@@ -26,7 +26,7 @@ class TwinWeeklyControllerTest {
 
   private static WeeklyReportDto sample() {
     return new WeeklyReportDto(
-        "2026-06-02",
+        "2026-06-03",
         "2026-06-09",
         new WeeklyReportDto.MemoryBrief(3, 1, 1, List.of("PY43-KC-001"), List.of("x")),
         List.of(),
@@ -54,7 +54,7 @@ class TwinWeeklyControllerTest {
 
     WeeklyReportDto result = controller.weekly(student);
 
-    assertThat(result.periodStart()).isEqualTo("2026-06-02");
+    assertThat(result.periodStart()).isEqualTo("2026-06-03");
     assertThat(result.resourceRuns().get(0).status()).isEqualTo("SUCCESS");
     // 必须用当前登录者 userId 聚合，杜绝越权读他人周报。
     verify(service).build(eq(7L));
@@ -63,7 +63,7 @@ class TwinWeeklyControllerTest {
   @Test
   void studentGetsOnlyTheirTwinState() {
     CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
-    LearnerTwinStateDto expected = new LearnerTwinStateDto(1, 65, 0, "启程练习", List.of(), List.of());
+    LearnerTwinStateDto expected = new LearnerTwinStateDto(1, 65, 0, "持续练习", List.of(), List.of());
     when(learnerTwinService.state(7L)).thenReturn(expected);
 
     assertThat(controller.state(student)).isSameAs(expected);

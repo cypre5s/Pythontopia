@@ -8,6 +8,7 @@ function stage(overrides: Partial<MainlineStageDto> = {}): MainlineStageDto {
     id: 1,
     index: 1,
     title: 's',
+    kcCodes: [],
     videoWatchedSec: 0,
     requiredVideoSec: 240,
     pagesRead: 0,
