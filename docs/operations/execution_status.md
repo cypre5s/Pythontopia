@@ -2,7 +2,7 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-19）**：本地 P0–P2 修复与测试完成：Maven 1,768 项 0 failures/errors/skips；Vitest 279 文件 / 2,674 项通过，typecheck、lint、build 通过；Graph 1,963 passed/1 skipped、RAG 166 passed、Research 330 passed/4 skipped。此前真实 Chromium 新生成长→Piston 正式判题→Twin 更新证据/周报/推荐→主线路由闭环通过；本次另外以 API mock 在 320px / 375px 检查 Twin 无横向溢出、推荐按钮可见可用。资源微测幂等与远征撤销题结算边界由 API/PostgreSQL 测试覆盖，最近的边界修正未重跑全栈真实旅程。未调用模型。GitHub 最新仍是旧 SHA `790dfb7` 的失败 run [ci#7](https://github.com/cypre5s/Pythontopia/actions/runs/39030278070)，本地 workflow 修复未推送，托管 CI 未验证；改动尚未提交。Outbox 的真实断连/整进程重启未实测，管理员没有失败任务列表或逐次重放审计历史。后续安全审计、Twin 成效研究、生产 ECS/Piston 验证与工程收尾仍按下方唯一任务清单维护。
+> **当前快照（2026-10-19）**：本地 P0–P2 修复与测试完成：Maven 1,768 项 0 failures/errors/skips；Vitest 279 文件 / 2,674 项通过，typecheck、lint、build 通过；Graph 1,963 passed/1 skipped、RAG 166 passed、Research 330 passed/4 skipped。此前真实 Chromium 新生→Piston 正式判题→Twin 更新证据/周报/推荐→主线路由闭环通过；另以 API mock 在 320px / 375px 检查 Twin 无横向溢出、推荐按钮可见可用。微测幂等、远征撤销题结算及主线推荐 stage 映射有 API/PostgreSQL/页面回归；最近边界修正未重跑全栈旅程。未调用模型。提交 [`31c3276a`](https://github.com/cypre5s/Pythontopia/commit/31c3276a76ab2587b4682b521e64184b7f8f0ccb) 已推送至 `origin/main`；GitHub Actions [ci #9](https://github.com/cypre5s/Pythontopia/actions/runs/39201564618) 的 backend、frontend、Graph、RAG、Research 五项全部通过。Outbox 的真实数据库断连/整进程重启未实测；管理员没有失败任务列表或逐次重放审计历史。后续安全审计、Twin 成效研究、生产 ECS/Piston 验证与工程收尾仍按下方唯一任务清单维护。
 
 ## 当前进度
 
@@ -11,6 +11,7 @@
 ### 2026-10-19 数字孪生与学习闭环优化
 
 - 基线：任务开始时工作树干净，HEAD 与 `origin/main` 为 `790dfb7`。GitHub 最新托管 run 仍是旧提交的 `ci#7`；同 SHA 本地复现前端 BoardPanel fixture 与 research 缺少 Torch 两个问题。research 独立 job 保留，安装 CPU Torch；Python 矩阵关闭 fail-fast。本地 workflow 未推送，托管 runner 新配置未验证。
+- 托管复验：首次推送 `24243f05` 的 `ci #8` 暴露 3 个 Graph 测试未注入 provider、2 个 Research CLI 在 `--help` 阶段导入 Graph 运行时依赖；本地按无凭证环境复现后修复并推送 `31c3276a`。GitHub Actions [ci #9](https://github.com/cypre5s/Pythontopia/actions/runs/39201564618) 全部 5 个 job 通过，`origin/main` 与该提交一致。
 - 周报用北京时间六天前零点至一次性读取时刻的 `[start,end)`；`weeklyDelta` 精确定义为可信练习/微测/调试事件的实际应用贡献，不冒充掌握度净变化。固定时钟、跨午夜、空数据和 PostgreSQL 边界测试通过。
 - Twin 展示三阶段标签、全部已评估 KC 的到期统计与后端证据；推荐始终读取 Twin 服务端结果。远征复用路由 query 时刷新 focus/KC。真实 Chromium 验证新生 Twin→服务端 Piston 判题→Twin 掌握证据/周报/推荐→主线地图路由；新加入的幂等与撤销题边界未做浏览器复跑。
 - 续审修正 3 项边界：指定远征 KC 经题目资格过滤后不可用时返回 422，不再静默替换成其它 KC；将会随失败/衰减变化的 `confidence` 标作“置信指标”，与可信事件数分开；已评估但缺失分数的星点不再显示掌握 0%。四个对应回归均先 RED，再修正后 GREEN。
@@ -22,7 +23,7 @@
 - 验证：`cd backend && mvn -B -DskipTests=false test` 为 1,768 项、0 failures/errors/skips、BUILD SUCCESS；Surefire 在全部测试结束后等待 30 秒，再强制终止仍有定时任务的 fork。前端 `npm ci`、typecheck、lint、`npm run test -- --run`（279 文件 / 2,674 项）和 `npm run build` 通过；Graph 1,963/1 skip、RAG 166/0 skip、Research 330/4 skip。Vite 仍提示 Pyodide Node 内置模块 externalization 与 `eval` 警告。
 - Maven 收尾时 Testcontainers 容器关闭后，缓存 Spring 上下文中的 Outbox scheduler 会记录连接拒绝；Surefire 等待约 30 秒后仍以 0 failures/errors/skips 和 BUILD SUCCESS 退出。历史已授信 attempt 迁移时默认保留奖励资格，因此本次不会追溯撤回旧结果或已发学习事件。
 - 断连与恢复证据有限：Outbox 注入 `DataAccessResourceFailureException` 和事务回滚后由新 worker 恢复均有测试；没有停止真实 PostgreSQL 或重启 Spring 进程验证。管理员可按 ID 重放 FAILED 任务，但没有列出失败任务的 API，也未持久化逐次重放的操作者/时间/原失败历史。整体工作树增加了多项测试、4 个追加迁移和少量服务逻辑，因此只能确认删除重复映射与 1 份素材等局部减法，不能声称系统整体复杂度下降。
-- 一次浏览器脚本首次清理不完整，留下 `dev.sh`/Spring 进程并覆盖 ignored `.work/dev-backend.log`，该运行日志无法恢复；随后使用隔离方式重跑 E2E 并通过，tracked source 不受影响。未调用 DeepSeek，未提交或推送。
+- 一次浏览器脚本首次清理不完整，留下 `dev.sh`/Spring 进程并覆盖 ignored `.work/dev-backend.log`，该运行日志无法恢复；随后使用隔离方式重跑 E2E 并通过，tracked source 不受影响。未调用 DeepSeek。
 
 ### 2026-10-16 最近续接
 

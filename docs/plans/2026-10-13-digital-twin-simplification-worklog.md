@@ -10,10 +10,10 @@
 - 新生推荐闭环复审发现 `?chapter=1&kcCode=PY43-KC-001` 虽能进入主线地图，resume CTA 却仍默认指向章内第一个未完成 stage。为复用 `mainline_stage.kc_codes` 修正：overview DTO 带出 `kcCodes`，地图高亮推荐 KC 所属小节并提供直达 CTA。页面回归先 RED 后 GREEN；后端 DTO 回归先 RED 后 GREEN；前端 typecheck、lint 与推荐页面测试通过。
 - `BossGraphClient.requestProblem` 复用 `signalsToMap`，删除约 21 行重复的 12 字段画像转换，契约测试逐字段验证。移除 public 中未引用的 711 B `stump_agnaldo.png` 副本，保留 inbox 来源并同步更新 `LICENSE-ART.md`；生产构建确认该文件不在 dist。未批量删除其他素材。
 - 画像 Outbox 增加有界 5–300 秒退避、8 次失败隔离、同用户顺序阻塞、跨用户公平扫描及 ADMIN-only 校正重放。V222 扩展既有 Outbox 表；不新增队列表或状态表。
-- CI 将 Research 单独成 job，dev extra 与 workflow 安装 CPU Torch，Graph/RAG 矩阵关闭 fail-fast。首次托管 `ci #8` 的前端/RAG 已通过，Graph 3 个路由测试与 Research 2 个 CLI `--help` 测试失败；根因是测试依赖未配置线上 LLM 凭证、Research CLI 在 help 阶段导入 Graph runtime。Graph 回归改为显式注入桩 provider；两支脚本延迟到实际执行时再加载 Graph 依赖，并在 `python -S` 下验证 help。修复后本地完整 Graph 1,963 passed/1 skipped、Research 330 passed/4 skipped；修复提交后的托管 Actions 待运行结果。
+- CI 将 Research 单独成 job，dev extra 与 workflow 安装 CPU Torch，Graph/RAG 矩阵关闭 fail-fast。首次托管 `ci #8` 的前端/RAG 已通过，Graph 3 个路由测试与 Research 2 个 CLI `--help` 测试失败；根因是测试依赖未配置线上 LLM 凭证、Research CLI 在 help 阶段导入 Graph runtime。Graph 回归改为显式注入桩 provider；两支脚本延迟到实际执行时再加载 Graph 依赖，并在 `python -S` 下验证 help。修复后本地完整 Graph 1,963 passed/1 skipped、Research 330 passed/4 skipped；修复提交 `31c3276a` 推送后，GitHub Actions [ci #9](https://github.com/cypre5s/Pythontopia/actions/runs/39201564618) 的五项全部通过。
 - 验证：后端 `mvn -B -DskipTests=false test` 1,768 项全过，0 failures/errors/skips；前端 `npm ci`、typecheck、lint、279 文件 / 2,674 项 Vitest、build 通过；Graph 1,963 passed/1 skipped、RAG 166 passed、Research 330 passed/4 skipped。Testcontainers 关闭后 Spring 定时任务仍访问已关闭端口；Surefire 等待 30 秒后结束 fork，最终 BUILD SUCCESS。
 - 资产与构建没有引入商业素材、运行时依赖或新表。research dev/test 增加 CPU Torch；增加 Outbox admin controller/request DTO；数据库只扩展现有 Outbox、资源检查和远征 attempt 表。旧迁移 V222–V225 以追加方式管理，没有改写历史迁移。
-- 本地浏览器脚本首次退出后遗留 `dev.sh`/Spring 进程，覆盖了 ignored `.work/dev-backend.log` 且无法恢复；tracked source 未受影响，随后隔离重跑浏览器闭环通过。没有调用 DeepSeek。
+- 本地浏览器脚本首次退出后遗留 `dev.sh`/Spring 进程，覆盖了 ignored `.work/dev-backend.log` 且无法恢复；tracked source 未受影响，随后隔离重跑浏览器闭环通过。没有调用 DeepSeek；本轮代码提交 `24243f05`、`31c3276a` 均已推送至 `origin/main`。
 - Outbox 真实数据库断连和整进程重启未被测试；现有证据为注入数据库异常、事务回滚和同一 PostgreSQL 上由新 worker 接手。ADMIN 重放入口未提供失败任务列表，也未保留每次重放的操作者/时间。整体改动以补充测试、迁移和边界校验为主；本次只确认局部删减，不能认定系统整体复杂度下降。
 
 ## 2026-10-14：研究与治理原则复核
@@ -75,7 +75,7 @@
 - 首轮没有启动全栈浏览器联测；后续补充联测已通过：本地 `./dev.sh` 全栈打开 `/profile-room`，等待 `networkidle` 后由真实 Twin API 渲染未评估空态与主推荐，浏览器错误及 HTTP 错误均为 0。未发起新的 DeepSeek 请求。DeepSeek 文本/图片接入与先前文图链路验收见本阶段前序 changelog，不应当作本轮新请求证据。
 - 周报/记忆投影仍依赖既有事件投影链路；若投影服务外部持久化失败，Twin 的权威掌握度读取仍基于掌握度账本，但记忆时间线可能缺项。
 - 对话中粘贴的 DeepSeek API 密钥已暴露，应在 provider 控制台轮换后再做真实请求；工作日志不保存密钥。
-- 未修改无关的 HTTP/HTTPS、部署与历史路线工作树内容；未提交代码。
+- 未修改无关的 HTTP/HTTPS、部署与历史路线工作树内容。
 
 ## 2026-10-13 补充复核
 
