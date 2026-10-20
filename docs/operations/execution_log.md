@@ -1225,3 +1225,10 @@
 - 真实 Chromium + DeepSeek 使用临时学生完成画像访谈、点击“完成访谈”，接口均返回 200；后续画像 API 读回 `CS / EXAM / 编程 1 年 / Python Lv.2 / 每日 30 分钟`，页面显示人类可读专业/目标卡片。console、pageerror、失败请求和 HTTP 错误均为 0；截图 `/tmp/pythontopia-profile-interview-final.png`。临时用户及级联数据删除后精确用户名计数为 0。
 - 浏览器画像布局回归 E2E 1/1；`ProfilePage.spec.ts` 5/5，路由定向测试通过，前端全量 Vitest 280 文件 / 2,687 项通过，typecheck、lint 通过；Graph 全量 1,969 passed / 3 skipped、Ruff 通过；费曼定向回归 frontend 12、Graph 34、后端 `FeynmanSessionServiceTest` 通过。
 - 前一次前端全量与多项检查并行时，280 文件 / 2,687 项断言均通过但 Vitest 因 ClassroomDetail worker teardown RPC 竞争以 1 个未处理错误退出；该文件单独运行 13/13 通过，随后串行重跑全量无错误。
+
+## 2026-10-21 — 管理台/画像修复发布至 ECS
+
+- 从已推送的 `codex/admin-profile-kc-video-rag` 提交 `8d470421` 本地构建归档 `pythontopia-web-20261020T193208Z.tar.gz`，大小 1,563,229,582 bytes，SHA-256 `4ac048a2f11526a404d59c635d02352d06098907b8044bfebee6e178fc76c2c3`。归档目录结构与内容白名单、五个 `docker save` 镜像、4,353 个文件 SHA-256 均验证通过。构建机缺少被 gitignore 的 PDF/视频，故跳过本地媒体校验；ECS 预检及安装器两次验证均确认 7 PDF、34 视频、34 transcript、848 段字幕。
+- ECS 预检复跑通过 32 项、0 失败；首次运行曾瞬时报告 `PYT_RAG_ADMIN_TOKEN` 变量名缺失，随即复跑和精确解析均通过，未修改生产 `.env`。预检警告主机内存 3,495 MB 低于 4 GB 基线、未安装 aliyun CLI；公网 HTTP 实测可达。scp 上传耗时约数分钟，远端 SHA-256 与本地一致。
+- 安装器在 `/opt/pythontopia/releases/20261021-033818` 保存切换前数据库备份（448 KB）、生产 `.env` 与 Nginx/Compose 配置，复用 `deploy_pytopia_pg`，没有删除或重建数据卷。七个服务均 healthy，runtime init exit 0，nginx -t、HTTP 308→HTTPS 和 HTTPS `/healthz` 200 通过；current 指向新版本，previous 指向 `20261021-024928`。删除唯一上传暂存包 `/tmp/pythontopia-web-20261020T193208Z.tar.gz` 后根盘空余 5.1 GB。
+- 生产 Chromium 无错题费曼往返真实 Graph/DeepSeek：空 misconceptions、无生成代码、无 judge 请求，console/pageerror/失败请求均为 0；截图 `/tmp/feynman-no-mistake.png`。画像访谈真实请求一次填充 4 个维度，Grounding/Safety 通过；finish 与画像读回均为 HTTP 200，页面保存 `CS / EXAM / 1 年 / Python Lv.2 / 每日 30 分钟`，浏览器错误为 0；截图 `/tmp/profile-interview-ecs-final.png`。两个测试学生账号、Feynman 会话、画像与访谈级联记录均已删除并查为 0。
