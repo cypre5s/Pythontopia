@@ -1209,3 +1209,11 @@
 - 原 Dockerfile 全镜像构建因构建容器需要的本机 `127.0.0.1:7892` 未监听而未完成。复用当前生产 backend 基础镜像，只替换通过 Maven 构建的新 JAR；保留旧 image tag `pythontopia/backend:rollback-20261020-191037` 与上一 release，Compose `--no-deps backend` 只重建后端。同步更新当前 release 的 `backend.tar` 与 SHA-256 清单，整份清单复验通过；旧 backend tar 和旧清单副本留在 `backups/20261020-191037/`。新后端健康，Postgres 数据卷和其余服务未重建。
 - 新 backend 上线后，工坊真实 SSE 定向验收 1/1；公网浏览器全套 28/28 通过（4.0 分钟）：认证/会话、town_hub、主线键盘导航、指南、真实 AI SSE、工坊流式回答、`input函数`/`for循环`/`列表` RAG 页码证据、AC/WA/RE 判题、复盘/画像、深链刷新和安全错误响应。
 - E2E 使用既有 QA 账号；生成的工坊对话、意图路由事件和判题提交保留在该 QA 账号下。未运行完整 Maven suite；部署镜像由当前生产基础层叠加新 JAR 构建，Dockerfile 的 apt 全镜像构建未验证。
+
+## 2026-10-21 — 费曼无错题自主讲题与 ECS 发布
+
+- 费曼无历史错题时可围绕所选课程 KC 中文主题自主讲解或讨论题目。Java 将当前学生讲解作为不可信输入传给 Graph，并只传递最小画像等级/偏好；空误区与 evidence 保持为空，丢弃模型代码，跳过错题判题和掌握度回流。开始新一轮时先清空上一轮本地对话/代码/判题状态。无错题找茬按 KC/难度复用共享样例；只保存 Graph 通过编译、长度、同位行 diff 校验的 AI 通用课程样例，不保存学生标识或真实错误。新增 Flyway V227 共享 bug 样例表。
+- 全量验证：frontend 280 个测试文件 / 2,686 项通过，typecheck 与 lint 通过；Graph 1,968 passed / 3 skipped，Ruff 通过；Maven 293 个测试类 / 1,782 项通过、0 failures/errors/skips，BUILD SUCCESS。新增 PostgreSQL 仓储集成测试在空库应用至 V227 并验证写入、去重、难度选择与使用计数。
+- 构建离线包 `pythontopia-web-20261020T184202Z.tar.gz`（1,563,214,166 bytes，SHA-256 `9005de67731269e8ee6fbc60a680b1c13bd897eb4b510d05cbdaccd98caffc86`）；完整归档结构、4,351 个文件 SHA-256、五个 Docker 镜像清单校验通过。构建 worktree 没有 PDF，故跳过本地媒体检查；候选字幕在 ECS 上先验并由安装器再次校验通过（7 PDFs、34 videos、34 transcripts、848 segments）。
+- 推送提交 `f2a692ef` 至 `origin/codex/admin-profile-kc-video-rag`。ECS 安装为 `/opt/pythontopia/releases/20261021-024928`，Flyway 当前版本 227；保留 `deploy_pytopia_pg`（创建时间未变）、上一版本 `20261021-014723` 和 444 KB pg_dump 备份。HTTPS/HTTP 跳转、backend/Graph/RAG readiness 与七个容器健康通过。生产 Chromium 新注册无练习历史学生、选择“for 循环与遍历”，真实 DeepSeek 往返成功；误区数组为空、未生成代码、未请求 judge，console/pageerror/失败请求为 0，截图 `/tmp/feynman-no-mistake.png`。两个临时账号及其 Feynman 会话已按确切用户名删除。
+- 清理本次 incoming 重复归档及两个不再被 current/previous 指向的旧 release；仅保留当前版 `20261021-024928`、回滚版 `20261021-014723` 和数据库卷。ECS 根盘剩余 8.8 GB。预检提示可用内存约 3.5 GB 低于 4 GB 基线、aliyun CLI 缺失；公网 HTTP/HTTPS 实测可达，部署后七个服务均 healthy。
