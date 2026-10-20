@@ -847,8 +847,8 @@ const ALL_GUIDE_SECTIONS: readonly GuideSectionContent[] = [
             kind: 'screenshot',
             shot: {
               src: `${SCREENSHOT_BASE}/live-workshop-answer.png`,
-              alt: '百晓工坊实拍：学生问「什么是列表推导式」，百晓给出带代码块的详细讲解，正文里标注课件「[页 25]」可点跳转，右侧多智能体工作室列出全员阵容',
-              caption: '工坊实拍：百晓的回答带课件页码引用（正文「[页 25]」可点直达原文），右侧是多智能体工作室阵容。',
+              alt: '百晓工坊真实答疑：学生询问列表推导式，回答补充通识知识并标出课件出处页码',
+              caption: '回答会区分课件依据与通识补充；出处页码可以点击核查。',
             },
           },
         ],

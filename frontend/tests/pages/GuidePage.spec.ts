@@ -336,7 +336,7 @@ describe('GuidePage 截图契约与优雅降级', () => {
     await nextTick();
 
     const fallback = firstFigure.get('[data-testid="guide-screenshot-fallback"]');
-    expect(fallback.text()).toContain('截图准备中');
+    expect(fallback.text()).toContain('截图暂不可用');
     expect(fallback.text()).toContain(alt);
     // 占位不是图片，不存在伪造截图
     expect(firstFigure.find('img').exists()).toBe(false);

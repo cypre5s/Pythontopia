@@ -239,7 +239,7 @@ watch(
 
           <footer class="guide-footnote">
             <p>
-              截图由集成阶段统一生成后落盘；某张截图尚未就绪时，页面会以文字占位说明替代，不影响指南阅读。
+              截图展示应用中的实际操作界面，点击图片可以放大查看。
             </p>
             <p>
               在游戏中迷路时，随时按 <kbd class="guide-footnote__kbd">ESC</kbd>

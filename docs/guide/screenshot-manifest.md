@@ -1,6 +1,6 @@
 # 引导手册截图清单（screenshot manifest）
 
-本文档是 `frontend/public/guide/screenshots/` 下 29 张引导截图的唯一权威说明：每张图的页面路径、前置状态、稳定等待条件、遮蔽规则与重拍方法。
+本文档记录 `frontend/public/guide/screenshots/` 下的编号截图与采集规则。代码剧场相关的 22、24、28 号图保留为历史素材，不在当前对外指南中显示。
 
 - 采集套件：`frontend/e2e/guideScreenshots.spec.ts`（Playwright，chromium 单 worker 串行）
 - 会话辅助：`frontend/e2e/support/demoSession.ts`（真实 API 注册/登录，注入 localStorage，无任何静态伪造）
@@ -54,7 +54,7 @@
 | 15 | `15-stage-reading.webp` | `/mainline/stage/:id` | 进入首个解锁小节，切换到「学」课件阅读 | 阶段页加载完成，课件渲染稳定 | 无 |
 | 16 | `16-stage-practice.webp` | `/mainline/stage/:id` | 在同一小节切换到「练」随堂练习 | 练习视图渲染稳定 | 无 |
 | 17 | `17-library-rag.webp` | `/library` | 查询 `input函数` | 检索结果可见且含真实页码证据 | 无 |
-| 18 | `18-workshop-agents.webp` | `/workshop` | 提交第 1 章完整学习规划请求 | 多智能体工作室可见，至少一个智能体工位出现 | 无 |
+| 18 | `18-workshop-agents.webp` | `/workshop` | 提交「总结 for 循环课件，然后根据总结出三道练习」 | 多智能体工作室可见，至少一个智能体工位出现 | 无 |
 | 19 | `19-training-verdict.webp` | `/training?problemId=476` | 提交真实可通过代码 | 判题结果出现 `AC` | 无 |
 | 20 | `20-bugmine-debug.webp` | `/bug-mine` | 同题提交 WA 后从训练场进入 Bug 矿洞 | 错题进入矿洞且逐层调试界面可见 | 无 |
 | 21 | `21-teacher-board.webp` | `/teacher` | **教师会话**；进入真实演示班级看板 | `teacher-detail` 可见 | 加入码、教师昵称 |
@@ -67,7 +67,7 @@
 | 28 | `28-code-theater-debug.webp` | `/code-theater` | 学生会话；模拟「从失败练习跳入」（载入一段未通过代码）运行后，世界目标未全部达成（如第 4 盏灯仍黑） | `code-theater-page` 与 `ct-quest` 可见 → 点 `ct-run` → `ct-world` 显示部分目标未点亮（未达成态） | 无 |
 | 29 | `29-endless-weak-kc.webp` | `/endless` | 学生会话；锁定 `endless-focus-chapter` 后连答，展示按画像弱项出题 + 历史记录 | `endless-page` → 选择 `endless-focus-chapter` → `endless-start` → `endless-history` 可见且含知识点 / 难度记录 | 无 |
 
-> 24–29 为 R-14「代码剧场 × 无尽闯关」统一玩法新增：与 01–23 一致，均走学生会话注入、视口 **1440×900**、`deviceScaleFactor=1`、全局遮蔽规则相同。这 6 张当前未落盘，指南页以「截图准备中」文字占位优雅降级；对应的 Playwright 采集用例待在 `frontend/e2e/guideScreenshots.spec.ts` 中补齐后再实拍（Wave 2）。
+> 当前对外指南使用 26 张编号 WebP（01–21、23、25–27、29）及 4 张 `live-*.png` 插图。22、24、28 号图仅保留为未上线代码剧场的历史素材；相关章节已从指南数据中隐藏。截图采集套件覆盖当前使用的编号 WebP，`live-*.png` 由各自的实际页面流程维护。
 
 等待策略说明：全套不使用长 `sleep`，也不使用 `networkidle`（应用挂有 SSE 长连接，`networkidle` 永远不触发）；统一用「目标元素可见 / 加载态元素从 DOM 消失 / N 帧 `requestAnimationFrame`」组合。
 

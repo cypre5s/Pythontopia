@@ -1,4 +1,4 @@
-// 引导手册 21 张截图采集套件。
+// 引导手册截图采集套件。
 //
 // 运行前置：本地栈已启动（vite :5173 + backend :18080 + Postgres/微服务，推荐根目录 ./dev.sh），
 // 并按 e2e/support/demoSession.ts 顶部说明设置 PYT_E2E_* 环境变量。
@@ -183,7 +183,7 @@ async function openMainlineChapterOne(page: Page): Promise<void> {
   await expect(page.locator('[data-testid="mainline-stage-panel"]')).toBeVisible();
 }
 
-test.describe('引导手册 23 张截图（输出 frontend/public/guide/screenshots）', () => {
+test.describe('引导手册截图采集（输出 frontend/public/guide/screenshots）', () => {
   test('01-town-hub 小镇主城', async ({ page, context, request }, testInfo) => {
     await prepareStudentContext(context, request);
     await openWorld(page);
@@ -438,7 +438,7 @@ test.describe('引导手册 23 张截图（输出 frontend/public/guide/screensh
     await expect(page.locator('[data-testid="workshop-page"]')).toBeVisible();
     const composer = page.locator('[data-testid="composer-input"]');
     await expect(composer).toBeVisible({ timeout: 30_000 });
-    await composer.fill('帮我规划第 1 章怎么学，安排看视频、读讲义、做练习的完整计划');
+    await composer.fill('总结 for 循环课件，然后根据总结出三道练习');
     await composer.press('Enter');
     await page.locator('[data-testid="workshop-open-calls"]').click();
     await expect(page.locator('[data-testid="workshop-drawer-calls"]')).toBeVisible({

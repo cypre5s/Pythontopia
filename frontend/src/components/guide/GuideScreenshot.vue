@@ -59,12 +59,12 @@ function closeZoom(): void {
         role="img"
         :aria-label="alt"
       >
-        <span class="guide-screenshot__badge pyt-pixel-text">截图准备中</span>
+        <span class="guide-screenshot__badge pyt-pixel-text">截图暂不可用</span>
         <p class="guide-screenshot__fallback-text">
           {{ alt }}
         </p>
         <p class="guide-screenshot__fallback-hint">
-          截图将在集成阶段统一生成；当前以文字说明代替，不影响阅读。
+          你仍可按下方文字说明继续操作。
         </p>
       </div>
     </div>
