@@ -59,6 +59,21 @@ pythontopia-web-<UTC>.tar.gz
 
 ## 3. 部署步骤
 
+### GitHub Release 直拉
+
+将 `web-vYYYYMMDD.N` tag 推送到 `main` 会触发 GitHub Actions：运行本指南所用的 release builder，并把校验后的包上传为公开 GitHub Release asset。ECS 不需要 GitHub token 或 deploy key。
+
+```bash
+# 首次使用；把 tag 替换为已发布版本
+curl -fsSL https://raw.githubusercontent.com/cypre5s/Pythontopia/main/deploy/scripts/install_github_release.sh \
+  | sudo bash -s -- web-v20261020.1
+
+# 之后使用 current 里的脚本
+sudo bash /opt/pythontopia/current/deploy/scripts/install_github_release.sh web-v20261020.1
+```
+
+脚本先执行 ECS 预检，再下载 release asset 并调用现有安装器；预检要求根分区至少有 5 GB 可用空间。成功安装后下载包会删除，失败时会保留供排查。
+
 ### 3.1 校验与解包
 
 ```bash

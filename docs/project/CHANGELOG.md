@@ -5,6 +5,7 @@
 - 生产 Compose 增加独立 Piston 判题容器与 Python runtime 初始化，默认版本对齐 Piston 实际可用的 `3.11.0`；补上 runtime 解包所需的 `FOWNER` capability，并同步发布、预检和回滚脚本。
 - 修正 Pyodide worker 与页面 CSP 的 `worker-src`，允许本地 blob Worker；未扩展主页面 `script-src`。
 - 部署到 ECS 并保留 `deploy_pytopia_pg` 数据卷。生产/根 Compose 配置、发布安全契约通过；Graph 沙箱定向测试 26/26 通过。真实 Piston 提交 AC 3/3；ECS Chromium 注册、登录、训练场与 Pyodide 本地预览通过，输入 `2` 输出 `12.5660`，console/pageerror/failed requests 均为 0。
+- 增加 GitHub Release 发布工作流与 ECS 直拉脚本：推送 `web-vYYYYMMDD.N` tag 后复用现有 builder，上传经校验的公开发布包；ECS 先预检，再下载并复用现有事务式安装器。完整工作流的 GitHub Action 尚待 tag 触发验证。
 
 ## 2026-10-19
 

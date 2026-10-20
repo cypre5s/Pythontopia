@@ -1,0 +1,51 @@
+name: Publish ECS release
+
+on:
+  push:
+    tags:
+      - "web-v*"
+
+permissions:
+  contents: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build verified release package
+        env:
+          PYT_BUILD_PROXY: none
+        run: bash deploy/scripts/build_release_archive.sh
+
+      - name: Name and size-check release asset
+        id: asset
+        shell: bash
+        run: |
+          shopt -s nullglob
+          archives=(output/packages/pythontopia-web-*.tar.gz)
+          if [[ ${#archives[@]} -ne 1 ]]; then
+            echo "Expected one release archive, found ${#archives[@]}" >&2
+            exit 1
+          fi
+          asset_path="${RUNNER_TEMP}/pythontopia-${GITHUB_REF_NAME}.tar.gz"
+          mv -- "${archives[0]}" "${asset_path}"
+          asset_size="$(stat -c '%s' "${asset_path}")"
+          if (( asset_size >= 2147483648 )); then
+            echo "Release asset is not below GitHub's 2 GiB asset limit" >&2
+            exit 1
+          fi
+          echo "path=${asset_path}" >>"${GITHUB_OUTPUT}"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ASSET_PATH: ${{ steps.asset.outputs.path }}
+        run: >-
+          gh release create "${GITHUB_REF_NAME}" "${ASSET_PATH}"
+          --repo "${GITHUB_REPOSITORY}"
+          --title "${GITHUB_REF_NAME}"
+          --notes "Verified Pythontopia ECS deployment package."
+          --verify-tag

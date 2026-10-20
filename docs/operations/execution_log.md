@@ -1192,4 +1192,4 @@
 - Chromium 在 ECS Graph 容器内通过 Docker 网络跑真实页面：学生注册/登录、`/world` 引导、题目 476 训练页正常；Pyodide lock、stdlib、WASM 均 HTTP 200，本地预览输入 `2` 输出 `12.5660`。console errors、pageerrors、failed requests 均为空。另一次公网浏览器验证覆盖登录、Phaser 画布及画像/任务/课程/题目 API；公网经本机代理下载完整 WASM 太慢，因此 Pyodide 端到端运行改在 ECS 内网 Chromium 完成。
 - 部署 Compose 配置校验、生产 AI/readiness 契约、安装密钥契约、开发 Compose/CSP 安全契约通过；Graph 判题器定向 pytest 26/26 通过；脚本语法和 `git diff --check` 通过。没有调用 LLM。
 - 六个临时 smoke 用户及关联数据已按精确 ID 删除。移除已安装版本的 1.56 GB 重复上传包，释放空间；没有删除 Docker 数据卷。
-- ECS 可访问 GitHub HTTPS 页面与 Git smart HTTP endpoint；本次实际部署仍由已构建 release 包安装，没有配置 GitHub Actions 镜像发布或 ECS 自动拉取流程，不能据此宣称后续部署已自动化。
+- ECS 可访问 GitHub HTTPS 页面与 Git smart HTTP endpoint。本次线上版本仍是已验证的 release 包；新增 tag 发布工作流和公开 Release 拉取脚本，静态契约、tag 校验、YAML 解析与 shell 语法通过。尚未触发 GitHub Actions 发布；当前 ECS 仅 2.2 GB 可用空间，低于安装器的 5 GB 门槛，因此没有从 GitHub 再次安装或触碰线上容器。
