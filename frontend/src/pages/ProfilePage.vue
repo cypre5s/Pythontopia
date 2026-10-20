@@ -536,6 +536,9 @@ const dimensionCards = computed(() => {
 .profile-input-panel > .profile-note {
   margin: 0 0 10px;
 }
+.profile-input-panel {
+  flex-shrink: 0;
+}
 .profile-interview {
   margin-top: 12px;
 }

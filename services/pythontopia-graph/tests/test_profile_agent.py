@@ -13,8 +13,10 @@ from pythontopia_graph.schemas.profile import (
 class FakeLlmProvider(LlmProvider):
     def __init__(self, response: dict):
         self.response = response
+        self.messages: list[dict[str, str]] = []
 
     async def chat(self, messages: list[dict[str, str]], **kwargs: object) -> LlmResponse:
+        self.messages = messages
         return LlmResponse(content_json=self.response)
 
 
@@ -30,6 +32,20 @@ def profile_input(message: str) -> ProfileAgentInput:
             KcIndexItem(kc_code="PY43-KC-003", kc_name="for循环"),
         ],
     )
+
+
+@pytest.mark.asyncio
+async def test_profile_agent_prompt_matches_the_output_envelope() -> None:
+    draft = ProfileDraft.example_complete(target_kc_codes=[])
+    provider = FakeLlmProvider({"profile_draft": draft.model_dump()})
+
+    await ProfileAgent(provider).run(profile_input("我在准备期末考试，喜欢练习。"))
+
+    system_prompt = "\n".join(message["content"] for message in provider.messages if message["role"] == "system")
+    assert '"profile_draft"' in system_prompt
+    assert '"next_question"' in system_prompt
+    assert "learning_goal 必须是含 kind、deadline_iso、target_kc_codes 的对象" in system_prompt
+    assert "信息不足的字段设为 null，不得猜测" in system_prompt
 
 
 @pytest.mark.asyncio

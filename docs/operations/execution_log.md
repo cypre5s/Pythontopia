@@ -1217,3 +1217,11 @@
 - 构建离线包 `pythontopia-web-20261020T184202Z.tar.gz`（1,563,214,166 bytes，SHA-256 `9005de67731269e8ee6fbc60a680b1c13bd897eb4b510d05cbdaccd98caffc86`）；完整归档结构、4,351 个文件 SHA-256、五个 Docker 镜像清单校验通过。构建 worktree 没有 PDF，故跳过本地媒体检查；候选字幕在 ECS 上先验并由安装器再次校验通过（7 PDFs、34 videos、34 transcripts、848 segments）。
 - 推送提交 `f2a692ef` 至 `origin/codex/admin-profile-kc-video-rag`。ECS 安装为 `/opt/pythontopia/releases/20261021-024928`，Flyway 当前版本 227；保留 `deploy_pytopia_pg`（创建时间未变）、上一版本 `20261021-014723` 和 444 KB pg_dump 备份。HTTPS/HTTP 跳转、backend/Graph/RAG readiness 与七个容器健康通过。生产 Chromium 新注册无练习历史学生、选择“for 循环与遍历”，真实 DeepSeek 往返成功；误区数组为空、未生成代码、未请求 judge，console/pageerror/失败请求为 0，截图 `/tmp/feynman-no-mistake.png`。两个临时账号及其 Feynman 会话已按确切用户名删除。
 - 清理本次 incoming 重复归档及两个不再被 current/previous 指向的旧 release；仅保留当前版 `20261021-024928`、回滚版 `20261021-014723` 和数据库卷。ECS 根盘剩余 8.8 GB。预检提示可用内存约 3.5 GB 低于 4 GB 基线、aliyun CLI 缺失；公网 HTTP/HTTPS 实测可达，部署后七个服务均 healthy。
+
+## 2026-10-21 — 管理员直达路由与画像访谈闭环
+
+- 已登录 ADMIN 直接访问 `/world` 原会挂载学生专属请求并产生 403；路由回归先 RED 后 GREEN，现转入 `/admin/operations`。无画像学生打开访谈时，右侧 PyPanel 在 flex 列中被压缩，后续空态卡片与访谈溢出内容重叠并截走点击；浏览器 E2E 先 RED 后 GREEN，给访谈面板设 `flex-shrink: 0` 后发送按钮可操作。
+- 真实本机 DeepSeek 首次暴露 ProfileAgent 输出协议不一致：提示词要求直接输出 ProfileDraft，而解析器读取顶层 `profile_draft`；对齐外层 JSON 键后又发现嵌套 `learning_goal` 类型不明确。提示词现列出所有嵌套字段、类型、枚举和边界，并要求未知资料置 null；契约测试先 RED 后 GREEN。
+- 真实 Chromium + DeepSeek 使用临时学生完成画像访谈、点击“完成访谈”，接口均返回 200；后续画像 API 读回 `CS / EXAM / 编程 1 年 / Python Lv.2 / 每日 30 分钟`，页面显示人类可读专业/目标卡片。console、pageerror、失败请求和 HTTP 错误均为 0；截图 `/tmp/pythontopia-profile-interview-final.png`。临时用户及级联数据删除后精确用户名计数为 0。
+- 浏览器画像布局回归 E2E 1/1；`ProfilePage.spec.ts` 5/5，路由定向测试通过，前端全量 Vitest 280 文件 / 2,687 项通过，typecheck、lint 通过；Graph 全量 1,969 passed / 3 skipped、Ruff 通过；费曼定向回归 frontend 12、Graph 34、后端 `FeynmanSessionServiceTest` 通过。
+- 前一次前端全量与多项检查并行时，280 文件 / 2,687 项断言均通过但 Vitest 因 ClassroomDetail worker teardown RPC 竞争以 1 个未处理错误退出；该文件单独运行 13/13 通过，随后串行重跑全量无错误。

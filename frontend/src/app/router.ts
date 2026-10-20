@@ -337,6 +337,9 @@ router.beforeEach((to: RouteLocationNormalized) => {
     );
     return { name: 'login', query: { redirect: to.fullPath } };
   }
+  if (to.name === 'world' && session.role === 'ADMIN') {
+    return { name: 'admin-operations', replace: true };
+  }
   if (to.meta.adminOnly && session.role !== 'ADMIN') {
     toast.show('需要管理员权限才能打开管理后台。', 'error');
     return { name: 'world', replace: true };

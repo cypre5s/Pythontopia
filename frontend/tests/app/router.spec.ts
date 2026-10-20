@@ -147,6 +147,22 @@ describe('/admin 管理后台路由与角色边界', () => {
     expect(router.currentRoute.value.name).toBe('admin-operations');
   });
 
+  it('redirects an authenticated ADMIN away from student world APIs', async () => {
+    const session = useSessionStore();
+    session.user = {
+      id: 1,
+      username: 'admin',
+      displayName: '管理员',
+      role: 'ADMIN',
+    };
+    session.token = 'test-token';
+    session.expiresAt = new Date(Date.now() + 3_600_000).toISOString();
+
+    await router.push('/world');
+
+    expect(router.currentRoute.value.name).toBe('admin-operations');
+  });
+
   it('root and authenticated /login land ADMIN in the admin operations page', async () => {
     const session = useSessionStore();
     session.user = {
