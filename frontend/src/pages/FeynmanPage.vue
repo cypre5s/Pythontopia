@@ -57,7 +57,7 @@ function resetPicker(): void {
               费曼反演
             </h1>
             <p class="feynman-page__lead">
-              找茬 → 讲明白 → 真判题出师。
+              有错题时复盘误区；没有错题，也能选个知识点直接讲给学弟听。
             </p>
           </div>
 
@@ -113,7 +113,7 @@ function resetPicker(): void {
           class="feynman-page__hint"
           data-testid="feynman-page-hint"
         >
-          选个知识点开始。
+          选个知识点开始，无需先有错题记录。
         </p>
       </div>
     </section>

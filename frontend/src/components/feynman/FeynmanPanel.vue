@@ -30,6 +30,10 @@ const teachFailed = ref(false);
 const prefersReducedMotion = useReducedMotion();
 // 概念模式：非课程 KC（课件外自由概念）→ 通识知识，以代码找茬为准、不计入掌握度。
 const isConcept = computed(() => !isFeynmanSelfTestKc(props.kcCode));
+const misconceptions = computed(() => currentSession.value?.tuteeState.misconceptions ?? []);
+const isIndependentTeaching = computed(
+  () => currentSession.value !== null && misconceptions.value.length === 0,
+);
 
 const canTeach = computed(
   () => currentSession.value !== null && teachingText.value.trim().length > 0 && !teaching.value,
@@ -39,13 +43,12 @@ const canJudge = computed(
   () =>
     currentSession.value !== null &&
     !isConcept.value &&
+    !isIndependentTeaching.value &&
     currentSession.value.status !== 'JUDGED_PASS' &&
     latestJudgeResult.value?.status !== 'PASSED' &&
     latestProducedCode.value.trim().length > 0 &&
     !judging.value,
 );
-
-const misconceptions = computed(() => currentSession.value?.tuteeState.misconceptions ?? []);
 
 const judgeText = computed(() => {
   const result = latestJudgeResult.value;
@@ -53,6 +56,9 @@ const judgeText = computed(() => {
     return result?.status === 'NA'
       ? result.messageZh
       : '通识概念以代码找茬为准，不进行代表题真判题，也不计入掌握度。';
+  }
+  if (isIndependentTeaching.value) {
+    return '自主讲题可以继续对话；当前没有真实错题记录，不进行错题专项真判题或掌握度回流。';
   }
   if (currentSession.value?.status === 'JUDGED_PASS' && !result) {
     return '本会话已经通过真判题，掌握度已完成回流。';
@@ -69,6 +75,9 @@ const judgeButtonText = computed(() => {
   }
   if (isConcept.value) {
     return '概念模式无需判题';
+  }
+  if (isIndependentTeaching.value) {
+    return '自主讲题不进行真判题';
   }
   if (
     currentSession.value?.status === 'JUDGED_PASS' ||
@@ -115,7 +124,7 @@ const hasChat = computed(
 );
 
 function judgeClass(result: FeynmanJudgeResultDto | null): string {
-  if (isConcept.value && (!result || result.status === 'PENDING')) {
+  if ((isConcept.value || isIndependentTeaching.value) && (!result || result.status === 'PENDING')) {
     return 'feynman-panel__judge--na';
   }
   if (currentSession.value?.status === 'JUDGED_PASS' && !result) {
@@ -220,6 +229,15 @@ async function submitJudge(): Promise<void> {
     </p>
 
     <p
+      v-if="isIndependentTeaching"
+      class="feynman-panel__independent-note"
+      data-testid="feynman-independent-teaching"
+      role="status"
+    >
+      当前知识点没有真实错题记录，可以直接讲解知识点或题目。本次不会创建错题记录，也不会进行错题专项判题。
+    </p>
+
+    <p
       v-if="!currentSession"
       class="feynman-panel__intro-hint"
     >
@@ -258,7 +276,7 @@ async function submitJudge(): Promise<void> {
               v-if="!hasChat"
               class="feynman-panel__muted"
             >
-              找茬后学弟会开口。
+              {{ isIndependentTeaching ? '直接向学弟讲解知识点，或把不会的题目描述给学弟。' : '找茬后学弟会开口。' }}
             </p>
 
             <div
@@ -325,7 +343,7 @@ async function submitJudge(): Promise<void> {
               v-model="teachingText"
               class="feynman-panel__teach-input"
               data-testid="feynman-teach-input"
-              placeholder="讲清错在哪…"
+              :placeholder="isIndependentTeaching ? '把题目或知识点讲给学弟听…' : '讲清错在哪…'"
               rows="2"
             />
             <div class="feynman-panel__chat-send-row">
@@ -426,6 +444,18 @@ async function submitJudge(): Promise<void> {
   min-width: 0;
   font-size: var(--pyt-font-size-sm);
   color: var(--pyt-color-text-hint);
+}
+
+.feynman-panel__independent-note {
+  flex-shrink: 0;
+  margin: 0;
+  padding: var(--pyt-space-2) var(--pyt-space-3);
+  border-left: 3px solid var(--pyt-color-info);
+  border-radius: var(--pyt-radius-sm);
+  background: var(--pyt-color-info-bg);
+  color: var(--pyt-color-info);
+  font-size: var(--pyt-font-size-sm);
+  line-height: 1.6;
 }
 
 .feynman-panel__misc-tag {

@@ -64,7 +64,7 @@ class FeynmanSessionServiceTest {
   }
 
   @Test
-  void emptyMisconceptionSetRemainsOpenAndReturnsHonestNotice() {
+  void emptyMisconceptionSetAllowsTeachingWithoutCreatingMistakeEvidence() {
     givenSession(NO_MISCONCEPTION);
     when(graphClient.step(anyString(), any(), anyString(), any()))
         .thenReturn(Optional.of(new FeynmanGraphClient.FeynmanOutput("我听懂了", List.of(), null)));
@@ -72,7 +72,12 @@ class FeynmanSessionServiceTest {
     TurnResponse response = service.teach(7L, 10L, "range 的右边界不包含在结果里");
 
     assertThat(capturedSessionStatus()).isEqualTo("OPEN");
-    assertThat(response.noticeMd()).contains("先去做题");
+    assertThat(response.noticeMd()).isNull();
+    verify(graphClient).step(eq("PY43-KC-016"), eq(List.of()), anyString(), any());
+    ArgumentCaptor<Object> state = ArgumentCaptor.forClass(Object.class);
+    verify(jdbc)
+        .update(contains("UPDATE feynman_session SET tutee_state"), state.capture(), eq("OPEN"), eq(10L));
+    assertThat(state.getValue()).isEqualTo("{\"misconceptions\":[]}");
   }
 
   @Test

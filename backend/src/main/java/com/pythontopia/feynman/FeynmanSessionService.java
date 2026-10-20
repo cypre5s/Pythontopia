@@ -114,7 +114,7 @@ public class FeynmanSessionService {
         "TUTEE",
         output.replyMd(),
         output.producedCode(),
-        noMisconceptionNotice(output.updatedMisconceptions()));
+        null);
   }
 
   private List<FeynmanGraphClient.ConversationTurn> recentHistory(long sessionId) {
@@ -147,14 +147,6 @@ public class FeynmanSessionService {
       firstKept++;
     }
     return List.copyOf(chronological.subList(firstKept, chronological.size()));
-  }
-
-  private static String noMisconceptionNotice(List<Misconception> misconceptions) {
-    if (misconceptions != null && !misconceptions.isEmpty()) {
-      return null;
-    }
-    return "你在这个知识点上还没有真实的做题错误记录，学弟没有可被纠正的误解。"
-        + "请先去做题积累真实错误，再回来完成费曼反演。";
   }
 
   /** 代码找茬：基于该会话的真实误解，让学弟写出含 bug 的代码 + 真实 bug 行号供学生找茬。 */
@@ -261,6 +253,10 @@ public class FeynmanSessionService {
     } catch (com.fasterxml.jackson.core.JsonProcessingException ex) {
       return List.of();
     }
+  }
+
+  boolean hasMisconceptions(String tuteeState) {
+    return !parseMisconceptions(tuteeState).isEmpty();
   }
 
   /**

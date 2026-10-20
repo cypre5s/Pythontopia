@@ -108,6 +108,19 @@ class FeynmanJudgeServiceTest {
   }
 
   @Test
+  void noMistakeHistoryCannotRunMistakeSpecificJudgeOrUpdateMastery() {
+    givenSession("OPEN", 101L, "{\"misconceptions\":[]}");
+
+    Verdict verdict = service.judge(7L, 10L);
+
+    assertThat(verdict.status()).isEqualTo("NA");
+    assertThat(verdict.message()).contains("没有真实错题记录");
+    verifyNoInteractions(masteryEvaluator, publisher, problemRepository);
+    verify(jdbc, never()).query(eq(LATEST_CODE_SQL), any(RowMapper.class), eq(10L));
+    verify(judgeWorkerPool, never()).submitAndWait(any());
+  }
+
+  @Test
   void missingTestCasesIsJudgeErrorNotStudentFailure() {
     givenSession("TAUGHT", 101L);
     givenProducedCode("print(1)");
@@ -273,10 +286,21 @@ class FeynmanJudgeServiceTest {
   }
 
   private void givenSession(String status, Long problemId) {
+    givenSession(
+        status,
+        problemId,
+        "{\"misconceptions\":[{\"tag\":\"test\",\"evidenceEventIds\":[501],\"resolved\":false}]}");
+    when(sessionService.hasMisconceptions(
+            "{\"misconceptions\":[{\"tag\":\"test\",\"evidenceEventIds\":[501],\"resolved\":false}]}"))
+        .thenReturn(true);
+  }
+
+  private void givenSession(String status, Long problemId, String tuteeState) {
     when(sessionService.loadSession(7L, 10L))
         .thenReturn(
             new FeynmanSessionService.SessionData(
-                10L, 7L, "PY43-KC-010", problemId, status, "{}"));
+                10L, 7L, "PY43-KC-010", problemId, status, tuteeState));
+    when(sessionService.hasMisconceptions(tuteeState)).thenReturn(false);
   }
 
   private void givenProducedCode(String code) {

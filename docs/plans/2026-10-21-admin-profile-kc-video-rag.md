@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Fix admin landing and reported 403s, remove user-facing KC identifiers, make learner profile input and evidence views useful, fix the mainline drawer overlap, then add timestamped video transcript retrieval that improves courseware evidence recall.
+**Goal:** Fix admin landing and reported 403s, remove user-facing KC identifiers, make learner profile input and evidence views useful, fix the mainline drawer overlap, let Feynman teaching start without wrong-answer history, then add timestamped video transcript retrieval that improves courseware evidence recall.
 
-**Architecture:** Keep role routing in the Vue router and use the existing 65-name KC map. Keep learner self-report separate from evidence-derived profile scores and reuse the existing interview API. Index video transcript segments in a separate RAG index; use timestamped transcript matches as bounded query expansion for the existing page retriever, so AI callers still receive authentic course-page evidence IDs.
+**Architecture:** Keep role routing in the Vue router and use the existing 65-name KC map. Keep learner self-report separate from evidence-derived profile scores and reuse the existing interview API. In Feynman sessions with no historical mistakes, allow an independent teaching conversation with an empty misconception list; do not synthesize mistake evidence or unlock mistake-based judging. Index video transcript segments in a separate RAG index; use timestamped transcript matches as bounded query expansion for the existing page retriever, so AI callers still receive authentic course-page evidence IDs.
 
 **Tech Stack:** Vue 3, TypeScript, Vue Router, Vitest, Spring Boot profile and tutor APIs, FastAPI RAG, existing BM25/hash embedder, Docker Compose release scripts, Playwright.
 
@@ -16,6 +16,7 @@
 - KC IDs remain valid internal/API values and route parameters. Every rendered label, badge, narrative, and selector uses the existing KC name map; unknown IDs are suppressed instead of echoed.
 - The profile radar only plots evidence-backed scores. Self-reported goal/background/preference values remain visibly labeled as self-report and continue to feed existing personalization signals.
 - Video transcripts are machine-generated and unreviewed. Video matches may select a bounded same-chapter course-page retrieval pass, but are never returned as page citations or used to satisfy evidence gates.
+- Feynman teaching works with or without historical practice failures. Empty history uses a clearly labeled independent teaching mode; misconception evidence stays empty and no mistake-based judgment is claimed.
 - Preserve existing deployment data and database volumes. Mount the already-packaged transcript JSON read-only into the RAG container.
 
 ## Implementation tasks
@@ -24,9 +25,10 @@
 2. Replace all visible raw KC renderings across learner, teacher, and admin Vue pages. Change unknown-code fallback and add seed-map completeness and rendering tests.
 3. Improve `ProfilePage` and `ProfileRadar`: expose the existing interview directly, format profile enums as human labels, display the purpose/source of each field, refresh profile dimensions after an interview, and fix chart clipping/empty-evidence explanation. Test update, error, and evidence gating behavior.
 4. Reserve vertical and horizontal space for the mainline drawer close button; assert no overlap with the star badge at desktop and narrow viewport widths.
-5. Add a typed timestamped video transcript source/index and query expansion to `pythontopia-rag`. Keep page and video indexes separate, bound video-derived supplemental page hits, expose retrieval trace/status, and test parsing, provenance, filters, ranking, and the existing golden retrieval set.
-6. Mount production and development transcript data read-only into RAG; validate one-time clean deployment configuration and preserve existing shared data/volumes.
-7. Update changelog and this work log, run frontend/backend/RAG/Graph checks and real-browser acceptance, then build and deploy ECS and push the verified changes to GitHub.
+5. Allow Feynman tutoring with an empty mistake history. The Graph agent should answer the student's explanation without inventing misconceptions, the backend should keep the session open with no mistake notice, and the UI should label independent teaching mode. Test real-error and no-error paths.
+6. Add a typed timestamped video transcript source/index and query expansion to `pythontopia-rag`. Keep page and video indexes separate, bound video-derived supplemental page hits, expose retrieval trace/status, and test parsing, provenance, filters, ranking, and the existing golden retrieval set.
+7. Mount production and development transcript data read-only into RAG; validate one-time clean deployment configuration and preserve existing shared data/volumes.
+8. Update changelog and this work log, run frontend/backend/RAG/Graph checks and real-browser acceptance, then build and deploy ECS and push the verified changes to GitHub.
 
 ## Acceptance evidence
 
@@ -34,6 +36,7 @@
 - Frontend source scan finds no rendered `KC-###`/`PY43-KC-###` labels; all 65 seeded knowledge points map to names.
 - Profile browser flow can open, submit, and finish the real interview; the displayed profile updates; radar distinguishes missing evidence from zero/neutral scores and labels self-report separately.
 - Mainline drawer screenshot and DOM geometry show the close button does not cover the star badge at desktop and mobile widths.
+- A student with no failed submissions can choose a course knowledge point, explain it to the AI tutee, receive a response, and see that no error record or mistake-based verdict was fabricated.
 - RAG evaluation compares baseline page retrieval with video-assisted retrieval on a fixed query set, reports Recall@5 and citation page IDs, and proves transcript matches never become courseware page IDs.
 - Deployed browser smoke confirms admin landing and student UI flows, no relevant `console`/`pageerror`/failed API requests, and the current release health checks pass.
 
@@ -43,3 +46,5 @@
 - 2026-10-21: Confirmed the KC map has exactly 65/65 seeded names and found direct identifier rendering in bug mine, teacher/admin review, stage, code theater, weekly companion, classroom, and NPC UI.
 - 2026-10-21: Confirmed the profile API returns eight dimensions with evidence confidence; current interview is reachable from a collapsed section on the learning-twin page, and the radar's horizontal labels can be clipped by its 320px viewBox.
 - 2026-10-21: Confirmed video transcripts exist for 34 videos and are marked `machine_generated_unreviewed`; current service only adds a ±30 second playhead window to tutor context. Production release already packages transcript JSON but RAG does not mount or index it.
+- 2026-10-21: The Feynman page already allowed selecting a KC without wrong-answer history and the bug-hunt path already had generic samples, but the tutor rejected an empty misconception set and displayed a misleading "do more problems" notice. The no-history teaching path must preserve an empty evidence list.
+- 2026-10-21: Implemented Feynman independent teaching across Vue, Graph, and Java. Empty-history replies keep misconceptions/evidence empty and produce no judgeable code; Java returns `NA` and skips mastery judging. Frontend Feynman tests 16/16, Graph Feynman tests 30/30 with Ruff clean, backend Feynman tests 19/19, and frontend typecheck passed. Real-browser acceptance remains pending with the overall local verification.

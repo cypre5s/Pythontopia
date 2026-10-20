@@ -138,6 +138,40 @@ print("1到5的和是", total)`,
     expect(wrapper.find('[data-testid="feynman-teach-submit"]').exists()).toBe(false);
   });
 
+  it('没有错题记录时仍可直接讲解知识点，且明确不会生成错题证据', async () => {
+    mocks.startFeynmanSession.mockResolvedValueOnce({
+      ...session,
+      tuteeState: { misconceptions: [], producedCode: null, judgeResult: null },
+    });
+    mocks.teachFeynmanSession.mockResolvedValueOnce({
+      id: 22,
+      role: 'TUTEE',
+      content: '我听懂了 for 会逐个取出元素。能用一个小例子带我走一遍吗？',
+      taughtFix: 'print(1)',
+      producedCode: 'print(1)',
+      noticeMd: null,
+    });
+    const wrapper = mount(FeynmanPanel, {
+      props: { kcCode: 'PY43-KC-031' },
+    });
+
+    await wrapper.get('[data-testid="feynman-start"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.get('[data-testid="feynman-independent-teaching"]').text()).toContain(
+      '不会创建错题记录',
+    );
+    await wrapper.get('[data-testid="feynman-teach-input"]').setValue('for 会逐个取出可迭代对象中的元素。');
+    await wrapper.get('[data-testid="feynman-teach-submit"]').trigger('click');
+    await flushPromises();
+
+    expect(mocks.teachFeynmanSession).toHaveBeenCalledWith(11, 'for 会逐个取出可迭代对象中的元素。');
+    expect(wrapper.get('[data-testid="feynman-dialog"]').text()).toContain('能用一个小例子');
+    expect(wrapper.find('[data-testid="feynman-tutee-state"]').exists()).toBe(false);
+    expect(wrapper.get('[data-testid="feynman-judge-submit"]').attributes('disabled')).toBeDefined();
+    expect(wrapper.get('[data-testid="feynman-judge-submit"]').text()).toContain('自主讲题');
+  });
+
   it('Graph 失败时保留学生解释并把提交动作变成明确重试', async () => {
     mocks.teachFeynmanSession.mockRejectedValueOnce(new Error('AI 学弟暂时不可用'));
     const wrapper = mount(FeynmanPanel, {
@@ -162,7 +196,7 @@ print("1到5的和是", total)`,
       role: 'TUTEE',
       content: '我可以继续听你解释。',
       taughtFix: null,
-      noticeMd: '请先去做题积累真实错误，再回来完成费曼反演。',
+      noticeMd: '服务暂时繁忙，请稍后重试。',
     });
     const wrapper = mount(FeynmanPanel, {
       props: { kcCode: 'PY43-KC-010' },
@@ -174,7 +208,7 @@ print("1到5的和是", total)`,
     await flushPromises();
 
     const notice = wrapper.get('[data-testid="feynman-system-notice"]');
-    expect(notice.text()).toContain('先去做题');
+    expect(notice.text()).toContain('服务暂时繁忙');
     expect(notice.classes()).toContain('feynman-panel__system-notice');
     expect(wrapper.get('.chat-msg__bubble').text()).not.toContain('先去做题');
   });

@@ -61,7 +61,7 @@ def _input(
 ) -> FeynmanTuteeInput:
     return FeynmanTuteeInput(
         kc_code="PY43-KC-021",
-        misconceptions=misconceptions or [_misconception()],
+        misconceptions=[_misconception()] if misconceptions is None else misconceptions,
         student_teaching=teaching,
     )
 
@@ -119,6 +119,35 @@ async def test_provider_failure_uses_rule_fallback() -> None:
     assert "累加" in out.reply_md or "range" in out.reply_md
     assert out.updated_misconceptions[0].tag == "off_by_one_range"
     assert out.updated_misconceptions[0].resolved is False
+
+
+async def test_no_mistake_history_allows_tutee_dialog_without_creating_misconceptions() -> None:
+    provider = JsonProvider(
+        {
+            "reply_md": "我听懂了 for 会逐个取出可迭代对象中的元素。能用一个小例子带我走一遍吗？",
+            "updated_misconceptions": [],
+            "produced_code": "print(1)",
+        }
+    )
+
+    out = await FeynmanTuteeAgent(provider).step(
+        _input(misconceptions=[], teaching="for 会逐个取出可迭代对象中的元素。")
+    )
+
+    assert provider.calls == 1
+    assert out.reply_md.startswith("我听懂了 for")
+    assert out.updated_misconceptions == []
+    assert out.produced_code is None
+
+
+async def test_no_mistake_history_has_a_useful_rule_fallback() -> None:
+    out = await FeynmanTuteeAgent(RaisingProvider()).step(
+        _input(misconceptions=[], teaching="for 会逐个取出可迭代对象中的元素。")
+    )
+
+    assert "例子" in out.reply_md
+    assert out.updated_misconceptions == []
+    assert out.produced_code is None
 
 
 async def test_teaching_is_evaluated_by_llm_for_arbitrary_tag() -> None:
@@ -380,6 +409,17 @@ def test_teaching_prompt_keeps_evaluation_voice() -> None:
     assert "中性" not in system
     user = [m for m in messages if m["role"] == "user"][-1]["content"]
     assert "range(1, 6)" in user  # 教学原文作为 user 轮
+
+
+def test_no_mistake_prompt_keeps_evidence_empty_and_uses_teaching_mode() -> None:
+    agent = FeynmanTuteeAgent(RaisingProvider())
+    messages = _input(misconceptions=[], teaching="列表的 append 会原地修改列表。")
+    prompt = agent._messages(messages)
+    system = "\n".join(m["content"] for m in prompt if m["role"] == "system")
+
+    assert "自主讲题" in system
+    assert "不得编造" in system
+    assert "保持为空" in system
 
 
 def test_kc_and_misconceptions_stay_out_of_system_messages() -> None:
