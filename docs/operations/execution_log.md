@@ -1201,3 +1201,11 @@
 - 安装后 ECS 上 frontend、backend、graph、piston、rag、redis、postgres 七个容器均 healthy；公网 `/healthz` 返回 200，错误登录返回预期 401。根目录和开发 Compose 配置通过 `docker compose config --quiet`；生产 Compose 使用 `deploy/.env`，本机缺少 `PYT_ROUTE_EXECUTION_SECRET`，故只在配置展开命令中临时提供校验占位值后通过，未写入文件。根 Compose 已推送到 GitHub `main`。GitHub Release 直拉脚本保留可续传下载并复用预检/安装器，但大包从 GitHub 下载约 12 KB/s，本次实际部署采用并行 SSH。数据库卷未清理。
 - 公网浏览器完整套件经本机 `7892` 代理时为 9 passed、2 failed、17 not run；两项失败与代理期间 Phaser/像素资源加载受阻有关，以及一个主线 Tab 焦点断言失败，尚未排除真实 UI 问题。补充安全页面检查 2 passed。RAG 查询 `input函数`、`for循环` 两项通过并返回页码证据；`列表` 测试在页面导航阶段超时，尚未执行查询。`ip route get 47.120.29.62` 仍经 WSL TUN (`198.18.0.2`)，完整公网浏览器回归待恢复直连后重跑。
 - 本次上传的 1.56 GB 包和先前断点续传的 `.part` 文件已从 `/opt/pythontopia/incoming/` 删除；部署脚本、日志、备份、当前与上一 release 及 Postgres 数据卷保留。
+
+## 2026-10-20 — 修复 Graph h2c 请求并完成公网验收
+
+- 复现工坊 502 后在 ECS 内网抓到 Java `RestTemplate` 发往 Graph 的 `Upgrade: h2c` / `HTTP2-Settings` 请求；Uvicorn 对该升级返回 HTTP 422（请求体缺失）。`RestClientConfig` 中 Graph、RAG 共享及专用的 7 个内部客户端现统一使用 HTTP/1.1 `SimpleClientHttpRequestFactory`，保留各自超时。新增本地 HTTP server 回归先 RED（检测到 `Upgrade: h2c`），修复后 GREEN；`RestClientConfigTest`、`IntentGraphClientTest`、`IntentServiceTest`、`GraphSseConsumerTest` 共 24/24。
+- 主线键盘验收在 Tab 操作前等待章节按钮出现，避免页面外壳先于章节数据加载时抢先移动焦点；公网单测及完整套件通过。
+- 原 Dockerfile 全镜像构建因构建容器需要的本机 `127.0.0.1:7892` 未监听而未完成。复用当前生产 backend 基础镜像，只替换通过 Maven 构建的新 JAR；保留旧 image tag `pythontopia/backend:rollback-20261020-191037` 与上一 release，Compose `--no-deps backend` 只重建后端。同步更新当前 release 的 `backend.tar` 与 SHA-256 清单，整份清单复验通过；旧 backend tar 和旧清单副本留在 `backups/20261020-191037/`。新后端健康，Postgres 数据卷和其余服务未重建。
+- 新 backend 上线后，工坊真实 SSE 定向验收 1/1；公网浏览器全套 28/28 通过（4.0 分钟）：认证/会话、town_hub、主线键盘导航、指南、真实 AI SSE、工坊流式回答、`input函数`/`for循环`/`列表` RAG 页码证据、AC/WA/RE 判题、复盘/画像、深链刷新和安全错误响应。
+- E2E 使用既有 QA 账号；生成的工坊对话、意图路由事件和判题提交保留在该 QA 账号下。未运行完整 Maven suite；部署镜像由当前生产基础层叠加新 JAR 构建，Dockerfile 的 apt 全镜像构建未验证。

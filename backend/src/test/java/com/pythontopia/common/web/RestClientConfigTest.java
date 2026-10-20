@@ -13,6 +13,7 @@ import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -96,6 +97,27 @@ class RestClientConfigTest {
 
     assertThat(upgradeHeader.get()).isNull();
     assertThat(connectionHeader.get()).doesNotContain("Upgrade");
+  }
+
+  @Test
+  void internalServiceRestTemplatesDoNotAttemptH2cUpgrade() {
+    RestClientConfig config = new RestClientConfig();
+    RestTemplateBuilder builder = new RestTemplateBuilder();
+    GraphHttpClientProperties graphProperties = new GraphHttpClientProperties(1000, 1000);
+
+    List.of(
+            config.graphRestTemplate(builder, graphProperties),
+            config.browseRestTemplate(builder, graphProperties, new BrowseHttpClientProperties(1000)),
+            config.chapterTestRestTemplate(
+                builder, graphProperties, new ChapterTestHttpClientProperties(1000)),
+            config.bossProblemRestTemplate(
+                builder, graphProperties, new BossProblemHttpClientProperties(1000)),
+            config.feynmanTuteeRestTemplate(
+                builder, graphProperties, new FeynmanTuteeHttpClientProperties(1000)),
+            config.workshopRestTemplate(
+                builder, graphProperties, new WorkshopHttpClientProperties(1000)),
+            config.ragRestTemplate(builder, graphProperties))
+        .forEach(this::assertNoH2cUpgrade);
   }
 
   @Test
@@ -198,5 +220,15 @@ class RestClientConfigTest {
     long elapsedMs = Duration.ofNanos(System.nanoTime() - startNanos).toMillis();
 
     assertThat(elapsedMs).isLessThan(3000L);
+  }
+
+  private void assertNoH2cUpgrade(RestTemplate restTemplate) {
+    upgradeHeader.set(null);
+    connectionHeader.set(null);
+    restTemplate.postForObject(
+        "http://127.0.0.1:" + server.getAddress().getPort() + "/headers", "{}", String.class);
+
+    assertThat(upgradeHeader.get()).isNull();
+    assertThat(connectionHeader.get()).doesNotContain("Upgrade");
   }
 }

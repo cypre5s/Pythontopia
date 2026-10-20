@@ -511,6 +511,7 @@ test.describe('公网验收 · 主线地图 @mainline', () => {
 
     const chapterList = page.locator('.map-nodes-a11y');
     const firstChapter = page.getByTestId('mainline-node-btn-1');
+    await expect(firstChapter).toBeVisible({ timeout: 30_000 });
     await page.getByTestId('mainline-back').focus();
     await page.keyboard.press('Tab');
 

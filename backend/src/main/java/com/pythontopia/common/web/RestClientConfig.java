@@ -41,6 +41,8 @@ public class RestClientConfig {
   RestTemplate graphRestTemplate(
       RestTemplateBuilder builder, GraphHttpClientProperties httpProperties) {
     return builder
+        // FastAPI/Uvicorn does not support the JDK client's h2c upgrade on internal HTTP calls.
+        .requestFactory(SimpleClientHttpRequestFactory.class)
         .setConnectTimeout(Duration.ofMillis(httpProperties.connectTimeoutMs()))
         .setReadTimeout(Duration.ofMillis(httpProperties.readTimeoutMs()))
         .build();
@@ -53,6 +55,7 @@ public class RestClientConfig {
       GraphHttpClientProperties graphHttpProperties,
       BrowseHttpClientProperties browseHttpProperties) {
     return builder
+        .requestFactory(SimpleClientHttpRequestFactory.class)
         .setConnectTimeout(Duration.ofMillis(graphHttpProperties.connectTimeoutMs()))
         .setReadTimeout(Duration.ofMillis(browseHttpProperties.readTimeoutMs()))
         .build();
@@ -68,6 +71,7 @@ public class RestClientConfig {
       GraphHttpClientProperties graphHttpProperties,
       ChapterTestHttpClientProperties chapterTestHttpProperties) {
     return builder
+        .requestFactory(SimpleClientHttpRequestFactory.class)
         .setConnectTimeout(Duration.ofMillis(graphHttpProperties.connectTimeoutMs()))
         .setReadTimeout(Duration.ofMillis(chapterTestHttpProperties.readTimeoutMs()))
         .build();
@@ -83,6 +87,7 @@ public class RestClientConfig {
       GraphHttpClientProperties graphHttpProperties,
       BossProblemHttpClientProperties bossProblemHttpProperties) {
     return builder
+        .requestFactory(SimpleClientHttpRequestFactory.class)
         .setConnectTimeout(Duration.ofMillis(graphHttpProperties.connectTimeoutMs()))
         .setReadTimeout(Duration.ofMillis(bossProblemHttpProperties.readTimeoutMs()))
         .build();
@@ -98,6 +103,7 @@ public class RestClientConfig {
       GraphHttpClientProperties graphHttpProperties,
       FeynmanTuteeHttpClientProperties feynmanTuteeHttpProperties) {
     return builder
+        .requestFactory(SimpleClientHttpRequestFactory.class)
         .setConnectTimeout(Duration.ofMillis(graphHttpProperties.connectTimeoutMs()))
         .setReadTimeout(Duration.ofMillis(feynmanTuteeHttpProperties.readTimeoutMs()))
         .build();
@@ -113,6 +119,7 @@ public class RestClientConfig {
       GraphHttpClientProperties graphHttpProperties,
       WorkshopHttpClientProperties workshopHttpProperties) {
     return builder
+        .requestFactory(SimpleClientHttpRequestFactory.class)
         .setConnectTimeout(Duration.ofMillis(graphHttpProperties.connectTimeoutMs()))
         .setReadTimeout(Duration.ofMillis(workshopHttpProperties.readTimeoutMs()))
         .build();
@@ -128,6 +135,7 @@ public class RestClientConfig {
   RestTemplate ragRestTemplate(
       RestTemplateBuilder builder, GraphHttpClientProperties httpProperties) {
     return builder
+        .requestFactory(SimpleClientHttpRequestFactory.class)
         .setConnectTimeout(Duration.ofMillis(httpProperties.connectTimeoutMs()))
         .setReadTimeout(Duration.ofMillis(httpProperties.readTimeoutMs()))
         .build();
