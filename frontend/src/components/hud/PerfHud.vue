@@ -144,29 +144,16 @@ function hide(): void {
   gameSettings.updateDisplay({ showPerfHud: false });
 }
 
-function onKey(event: KeyboardEvent): void {
-  if (event.key === 'F3') {
-    event.preventDefault();
-    gameSettings.updateDisplay({ showPerfHud: !gameSettings.display.showPerfHud });
-  }
-}
-
 watch(visible, (v) => {
   if (v) start();
   else stop();
 });
 
 onMounted(() => {
-  if (typeof window !== 'undefined') {
-    window.addEventListener('keydown', onKey);
-  }
   if (visible.value) start();
 });
 
 onUnmounted(() => {
-  if (typeof window !== 'undefined') {
-    window.removeEventListener('keydown', onKey);
-  }
   stop();
 });
 </script>

@@ -74,7 +74,7 @@ function expanded(t: string): string {
   </div>
 </template>
 <style scoped>
-.gb{font-family:'Zpix',monospace;font-size:12px;color:var(--pyt-color-text-primary);max-width:400px;image-rendering:pixelated}
+.gb{font-family:var(--pyt-font-pixel);font-size:12px;color:var(--pyt-color-text-primary);max-width:400px;image-rendering:pixelated}
 .gb__i{border-bottom:1px solid var(--pyt-color-border-soft);padding:6px 0}
 .gb__b{padding:0 4px;font-size:10px;background:var(--pyt-color-info-bg);color:var(--pyt-color-info)}
 .gb__b.ok{background:var(--pyt-color-success-bg);color:var(--pyt-color-success)}

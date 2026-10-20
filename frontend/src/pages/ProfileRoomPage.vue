@@ -404,7 +404,7 @@ function lastPractice(value: string | null): string {
   box-shadow: 3px 3px 0 #29382d;
 }
 .twin-stat { display: grid; gap: 4px; padding: 14px 18px; }
-.twin-stat strong { color: #28533f; font: 700 21px 'Zpix', monospace; }
+.twin-stat strong { color: #28533f; font: 700 21px var(--pyt-font-pixel); }
 .twin-stat span { color: #586459; font-size: 12px; }
 .twin-grid { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr); gap: 18px; }
 .twin-card { min-width: 0; padding: clamp(16px, 2vw, 24px); }
@@ -424,7 +424,7 @@ function lastPractice(value: string | null): string {
 .twin-recommendation__chapter { color: #56714c; font-size: 11px; font-weight: 700; }
 .twin-recommendation h3 { margin: 0; font-size: 20px; }
 .twin-recommendation p, .twin-recommendation small { margin: 0; color: #46564a; line-height: 1.6; }
-.twin-button { min-height: 42px; padding: 9px 14px; color: #fff; font: 700 13px 'Zpix', monospace; background: #315b43; border: 2px solid #203b2c; box-shadow: 2px 2px 0 #203b2c; cursor: pointer; }
+.twin-button { min-height: 42px; padding: 9px 14px; color: #fff; font: 700 13px var(--pyt-font-pixel); background: #315b43; border: 2px solid #203b2c; box-shadow: 2px 2px 0 #203b2c; cursor: pointer; }
 .twin-button--secondary { color: #31533c; background: transparent; }
 .twin-button--small { min-height: 34px; padding: 6px 10px; font-size: 11px; }
 .twin-details { display: grid; gap: 10px; margin-top: 22px; }

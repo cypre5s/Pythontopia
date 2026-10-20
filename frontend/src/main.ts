@@ -48,4 +48,4 @@ initWebVitals();
 
 // 空闲预取「下一步最可能去」的学习页路由分块与课程清单（仅登录态、非省流量），
 // 降低首次进入冒险地图 / 图书馆 / 工坊 / 训练场的等待。纯加法、失败静默。
-schedulePrefetch(() => session.isAuthenticated);
+schedulePrefetch(() => session.isAuthenticated && session.role !== 'ADMIN');

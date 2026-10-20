@@ -29,7 +29,7 @@
 
 | 场景 | 令牌 | 说明 |
 | --- | --- | --- |
-| 游戏 UI / 徽章 / 按钮 / 像素标签 | `--pyt-font-pixel`（Zpix → Ark Pixel 12） | 配 `.pyt-pixel-text`（`image-rendering: pixelated` + 关字体平滑） |
+| 游戏 UI / 徽章 / 按钮 / 像素标签 | `--pyt-font-pixel`（Ark Pixel 12） | 配 `.pyt-pixel-text`（`image-rendering: pixelated` + 关字体平滑） |
 | 学习正文（讲义 / 答疑 / 大段中文） | `--pyt-font-read`（PingFang/雅黑 系无衬线） | 长文用无衬线，**不要**用像素字撑长文本 |
 | 代码 / 样例 | `--pyt-font-mono` / `--pyt-font-pixel-mono` | 等宽 |
 

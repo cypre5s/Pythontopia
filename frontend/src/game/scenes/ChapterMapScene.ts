@@ -67,7 +67,7 @@ const COLOR_PANEL_EDGE = 0x6e4f1d;
 const COLOR_TEXT = '#4d3613';
 const COLOR_TEXT_MUTED = '#7a5a28';
 
-const PIXEL_FONT = '"Zpix", "Ark Pixel 12", monospace';
+const PIXEL_FONT = '"Ark Pixel 12", monospace';
 // 文本按设备像素比渲染，高分屏标签更锐利（封顶 2，避免超大纹理）。
 const TEXT_RES =
   typeof window !== 'undefined' ? Math.min(2, Math.max(1, window.devicePixelRatio || 1)) : 1;

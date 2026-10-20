@@ -156,14 +156,15 @@ Rive `.riv` 二进制动画属**素材层**，必须同步登记本文件与
 
 | 运行时路径 | 来源 | License | 用途 |
 | --- | --- | --- | --- |
-| `frontend/public/assets/pixel/ui/login-hero-stardew.png` | Pythontopia 原创（AI 辅助生成 + 人工审核） | Pythontopia-Proprietary / All rights reserved | LoginPage 暖色像素小镇 hero；NPC 与建筑均为原创，不复制任何商业像素游戏 |
+| `frontend/public/assets/pixel/ui/login-hero-stardew.png` | Pythontopia 原创（AI 辅助生成 + 人工审核） | Pythontopia-Proprietary / All rights reserved | 登录背景的原始 PNG |
+| `frontend/public/assets/pixel/ui/login-hero-stardew.webp` | Pythontopia 原创（AI 辅助生成 + 人工审核；WebP 格式优化） | Pythontopia-Proprietary / All rights reserved | LoginPage 暖色像素小镇运行时背景；由原始 PNG 编码，场景内容不变 |
 | `frontend/public/assets/pixel/bosses/boss-{1..7}-*.png` (7 张) | Pythontopia 原创（AI 辅助生成 + 人工审核 + 原创主题设计） | Pythontopia-Proprietary / All rights reserved | BossPage / Endless / Arena 第 10 关 Boss 立绘；7 章主题：算盘灵 / 解释器学徒 / 二进制独眼 / 流程钟楼 / 集合棱镜 / 文档守护神 / 归纳之镜；风格统一暖色像素，与 hero 同调 |
 | `frontend/public/assets/pixel/vendor/ansimuz-mountain-dusk/{5×PNG,LICENSE-CC0.txt}` | ansimuz "Mountain at Dusk Background" (https://opengameart.org/content/mountain-at-dusk-background) | **CC0-1.0** | 备用：4 层 parallax 远山日落剪影，预留 boss 终局 / 章末过场使用 |
 | `frontend/public/assets/pixel/portraits/heads/portrait_*_head.png` (29 张) | `frontend/public/assets/pixel/portraits/portrait_*.png` 子裁切；9 个 R-14 demo NPC 从 `sprites/npc-composites/npc_*.png` 的 down idle 正面帧裁切，由 `scripts/crop_portrait_heads.py` 输出 | 继承原 portrait / composite（CC0 / CC-BY 4.0 / OGA-BY 3.0 分文件） | DialogModal / DialogTree 单帧头像，每张 32×48 |
 | `assets/inbox/r13-overworld/pastoral-tileset-db32.png` | Ragnar Random Hat (https://opengameart.org/content/pastoral-overworld) | **CC0-1.0** | 备用：DawnBringer db32 32×32 乡村瓦片，未集成到运行时 |
 | `assets/inbox/r13-lpc-lamp/lpc_lamp_posts_rework-1.0.zip` | Curt, Sharm, William.Thompsonj, mold (LPC) | CC-BY 3.0 / OGA-BY 3.0 / GPL 3.0 | 备用：32×32 路灯柱多色，未集成到运行时；引入时需署名 4 位作者 |
 
-**AI 原创素材声明**：`login-hero-stardew.png` 与 `boss-{1..7}-*.png` 由项目以 GenerateImage 等工具辅助生成，prompt 与生成结果由维护者人工审核确认不包含任何受版权保护角色 / 建筑布局。它们作为 Pythontopia 原创项目资产，当前阶段不开放外部复用；如后续决定开放，将另行发布明确授权文件。
+**AI 原创素材声明**：`login-hero-stardew.png`、其 WebP 运行时副本与 `boss-{1..7}-*.png` 由项目以 GenerateImage 等工具辅助生成，prompt 与生成结果由维护者人工审核确认不包含任何受版权保护角色 / 建筑布局。它们作为 Pythontopia 原创项目资产，当前阶段不开放外部复用；如后续决定开放，将另行发布明确授权文件。
 
 ## R-12 Web 运行时补充索引（2026-05-24）
 

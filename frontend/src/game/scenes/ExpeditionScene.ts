@@ -41,7 +41,7 @@ const KIND_COLOR: Record<RogueNodeKind, number> = {
   boss: 0xe0b847,
 };
 
-const PIXEL_FONT = '"Zpix", "Ark Pixel 12", monospace';
+const PIXEL_FONT = '"Ark Pixel 12", monospace';
 
 // 塔身内边距（layout 与房间尺寸共用，保证两者一致；标题/BOSS 顶幅留在 TOP_PAD 内）。
 const TOP_PAD = 70;

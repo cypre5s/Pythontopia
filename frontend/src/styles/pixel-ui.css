@@ -101,7 +101,7 @@
     4px 4px 0 var(--pyt-panel-border-dark),
     0 8px 24px var(--pyt-panel-shadow);
   color: var(--pyt-text-primary);
-  font-family: var(--pyt-font-pixel, 'Zpix', 'Ark Pixel 12', monospace);
+  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
   image-rendering: pixelated;
 }
 
@@ -136,7 +136,7 @@
 
 /* ── 像素按钮 ──────────────────────────────────────────────── */
 .pyt-btn {
-  font-family: var(--pyt-font-pixel, 'Zpix', 'Ark Pixel 12', monospace);
+  font-family: var(--pyt-font-pixel, 'Ark Pixel 12', monospace);
   background: var(--pyt-btn-bg);
   border: 2px solid var(--pyt-btn-border);
   color: var(--pyt-text-primary);

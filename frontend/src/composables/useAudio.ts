@@ -1,7 +1,6 @@
 // 隔离原因：作为业务层与 Phaser sound manager 之间的唯一音频适配层，
 // 仅本文件允许直接 import phaser；业务代码统一通过本文件导出的 playBgm/playSfx 调用。
 import type Phaser from 'phaser';
-import { getPhaserGame } from '@game/adapters/phaserGame';
 
 export type BgmKey = 'bgm_town_day' | 'bgm_town_eve' | 'bgm_bug_mine' | 'bgm_quest';
 export type SfxKey =
@@ -44,6 +43,15 @@ let sfxVolumeMul = 1;
 let audioUnlocked = false;
 let pendingBgm: BgmKey | null = null;
 let pendingBgmOptions: PlayBgmOptions | undefined;
+let bgmRequestId = 0;
+
+// 避免仅为登录页音频解锁就预载整个 Phaser 引擎。
+function withPhaserGame(action: (game: Phaser.Game | null) => void): void {
+  void import('@game/adapters/phaserGame').then(
+    ({ getPhaserGame }) => action(getPhaserGame()),
+    () => undefined,
+  );
+}
 
 export function useAudio(): {
   playBgm: typeof playBgm;
@@ -97,6 +105,7 @@ export function setSfxVolume(value: number): void {
 }
 
 export function playBgm(key: BgmKey, options: PlayBgmOptions = {}): void {
+  const requestId = ++bgmRequestId;
   if (muted) {
     currentBgmKey = key;
     return;
@@ -107,57 +116,62 @@ export function playBgm(key: BgmKey, options: PlayBgmOptions = {}): void {
     currentBgmKey = key;
     return;
   }
-  const game = getPhaserGame();
-  if (!game) {
-    currentBgmKey = key;
-    return;
-  }
-  if (currentBgmKey === key && currentBgm && currentBgm.isPlaying) {
-    return;
-  }
+  withPhaserGame((game) => {
+    if (requestId !== bgmRequestId || muted) return;
+    if (!game) {
+      currentBgmKey = key;
+      return;
+    }
+    if (currentBgmKey === key && currentBgm && currentBgm.isPlaying) {
+      return;
+    }
 
-  const next = game.sound.add(key, { loop: true, volume: 0 });
-  next.play();
+    const next = game.sound.add(key, { loop: true, volume: 0 });
+    next.play();
 
-  const targetVolume = (options.volume ?? DEFAULT_BGM_VOLUME) * bgmVolumeMul;
-  const duration = options.crossfadeMs ?? DEFAULT_CROSSFADE_MS;
-  const scene = game.scene.scenes[0];
+    const targetVolume = (options.volume ?? DEFAULT_BGM_VOLUME) * bgmVolumeMul;
+    const duration = options.crossfadeMs ?? DEFAULT_CROSSFADE_MS;
+    const scene = game.scene.scenes[0];
 
-  if (currentBgm) {
-    const prev = currentBgm;
+    if (currentBgm) {
+      const prev = currentBgm;
+      if (scene) {
+        scene.tweens.add({
+          targets: prev,
+          volume: 0,
+          duration,
+          onComplete: () => prev.stop(),
+        });
+      } else {
+        prev.stop();
+      }
+    }
+
     if (scene) {
       scene.tweens.add({
-        targets: prev,
-        volume: 0,
+        targets: next,
+        volume: targetVolume,
         duration,
-        onComplete: () => prev.stop(),
       });
     } else {
-      prev.stop();
+      // 没场景时无法做 tween，降级为直接设音量
+      const withVolume = next as unknown as { setVolume?: (v: number) => void; volume?: number };
+      if (typeof withVolume.setVolume === 'function') {
+        withVolume.setVolume(targetVolume);
+      } else if (typeof withVolume.volume === 'number') {
+        withVolume.volume = targetVolume;
+      }
     }
-  }
 
-  if (scene) {
-    scene.tweens.add({
-      targets: next,
-      volume: targetVolume,
-      duration,
-    });
-  } else {
-    // 没场景时无法做 tween，降级为直接设音量
-    const withVolume = next as unknown as { setVolume?: (v: number) => void; volume?: number };
-    if (typeof withVolume.setVolume === 'function') {
-      withVolume.setVolume(targetVolume);
-    } else if (typeof withVolume.volume === 'number') {
-      withVolume.volume = targetVolume;
-    }
-  }
-
-  currentBgm = next;
-  currentBgmKey = key;
+    currentBgm = next;
+    currentBgmKey = key;
+  });
 }
 
 export function stopBgm(): void {
+  bgmRequestId += 1;
+  pendingBgm = null;
+  pendingBgmOptions = undefined;
   if (currentBgm) {
     currentBgm.stop();
     currentBgm = null;
@@ -172,16 +186,14 @@ export function playSfx(key: SfxKey, options: PlaySfxOptions = {}): void {
   if (!audioUnlocked) {
     return;
   }
-  const game = getPhaserGame();
-  if (!game) {
-    return;
-  }
   const base = options.volume ?? DEFAULT_SFX_VOLUME;
   const config: { volume: number; detune?: number } = { volume: base * sfxVolumeMul };
   if (typeof options.detune === 'number') {
     config.detune = options.detune;
   }
-  game.sound.play(key, config);
+  withPhaserGame((game) => {
+    if (!muted) game?.sound.play(key, config);
+  });
 }
 
 export function unlockAudio(): void {
@@ -213,10 +225,10 @@ if (typeof window !== 'undefined') {
 
 export function setMuted(value: boolean): void {
   muted = value;
-  const game = getPhaserGame();
-  if (game) {
-    game.sound.mute = value;
-  }
+  if (value) bgmRequestId += 1;
+  withPhaserGame((game) => {
+    if (game) game.sound.mute = value;
+  });
   if (value && currentBgm) {
     currentBgm.pause();
   } else if (!value && currentBgm) {

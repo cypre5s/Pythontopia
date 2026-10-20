@@ -116,3 +116,10 @@
 > 引入真实素材时：确认许可与作者来源 → 落盘 `frontend/public/assets/pixel/rive/mascot_loop.riv` →
 > 同步更新本文件与 `/LICENSE-ART.md` → CC-BY / CC-BY-SA / OFL 等强制署名进 `frontend/public/credits/`。
 > 缺 `.riv` 时动效 adapter 须 fail-soft 降级（Motion/Phaser tween / 静态表情），不硬依赖。
+
+## 登录页原创背景（2026-10-21 · 运行时格式优化）
+
+| 运行时路径 | 来源 | License | 用途 |
+| --- | --- | --- | --- |
+| `ui/login-hero-stardew.png` | Pythontopia 原创（AI 辅助生成 + 人工审核） | Pythontopia-Proprietary / All rights reserved | 登录背景原始 PNG |
+| `ui/login-hero-stardew.webp` | Pythontopia 原创（AI 辅助生成 + 人工审核；从同目录 PNG 编码为 WebP） | Pythontopia-Proprietary / All rights reserved | LoginPage 运行时背景；不含商业像素游戏官方素材 |

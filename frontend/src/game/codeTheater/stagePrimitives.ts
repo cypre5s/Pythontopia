@@ -69,7 +69,7 @@ export interface StageContext {
 }
 
 // ── 调色板 / 深度 ──
-const PIXEL_FONT = '"Zpix", "Ark Pixel 12", monospace';
+const PIXEL_FONT = '"Ark Pixel 12", monospace';
 const COLOR_RUNG = 0x243042;
 const COLOR_RUNG_ACTIVE = 0x3a567f;
 const COLOR_GLOW = 0xffd166;
