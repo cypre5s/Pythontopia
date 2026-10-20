@@ -2,17 +2,20 @@ package com.pythontopia.feynman;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.feynman.dto.FeynmanDtos.BugHuntResponse;
 import com.pythontopia.feynman.dto.FeynmanDtos.SessionResponse;
 import com.pythontopia.feynman.dto.FeynmanDtos.TurnResponse;
-import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.learner.profile.repository.ProfileRepository;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import org.springframework.http.HttpStatus;
+import java.util.Optional;
 import org.springframework.dao.EmptyResultDataAccessException;
+import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,18 +31,24 @@ public class FeynmanSessionService {
   private final MisconceptionExtractor extractor;
   private final FeynmanGraphClient graphClient;
   private final PublicProblemRepository problemRepository;
+  private final ProfileRepository profileRepository;
+  private final FeynmanBugBankRepository bugBank;
 
   public FeynmanSessionService(
       JdbcTemplate jdbc,
       ObjectMapper objectMapper,
       MisconceptionExtractor extractor,
       FeynmanGraphClient graphClient,
-      PublicProblemRepository problemRepository) {
+      PublicProblemRepository problemRepository,
+      ProfileRepository profileRepository,
+      FeynmanBugBankRepository bugBank) {
     this.jdbc = jdbc;
     this.objectMapper = objectMapper;
     this.extractor = extractor;
     this.graphClient = graphClient;
     this.problemRepository = problemRepository;
+    this.profileRepository = profileRepository;
+    this.bugBank = bugBank;
   }
 
   @Transactional
@@ -88,7 +97,13 @@ public class FeynmanSessionService {
 
     FeynmanGraphClient.FeynmanOutput output =
         graphClient
-            .step(session.kcCode(), misconceptions, explanation, history)
+            .step(
+                session.kcCode(),
+                misconceptions.isEmpty() ? kcTopic(session.kcCode()) : null,
+                learnerContext(userId),
+                misconceptions,
+                explanation,
+                history)
             .orElseThrow(
                 () ->
                     new BusinessException(
@@ -150,23 +165,40 @@ public class FeynmanSessionService {
   }
 
   /** 代码找茬：基于该会话的真实误解，让学弟写出含 bug 的代码 + 真实 bug 行号供学生找茬。 */
-  @Transactional(readOnly = true)
-  public com.pythontopia.feynman.dto.FeynmanDtos.BugHuntResponse bugHunt(
-      long userId, long sessionId) {
+  public BugHuntResponse bugHunt(long userId, long sessionId) {
     SessionData session = loadSession(userId, sessionId);
     List<Misconception> misconceptions = parseMisconceptions(session.tuteeState());
+    FeynmanGraphClient.LearnerContext learnerContext = learnerContext(userId);
+    String difficulty = difficultyFor(learnerContext.level());
+    if (misconceptions.isEmpty()) {
+      Optional<FeynmanBugBankRepository.BugSample> shared =
+          bugBank.findOne(session.kcCode(), difficulty);
+      if (shared.isPresent()) {
+        FeynmanBugBankRepository.BugSample sample = shared.get();
+        return new BugHuntResponse(
+            "generic_beginner_bug",
+            sample.misconceptionTag(),
+            sample.buggyCode(),
+            sample.bugLineIndices(),
+            sample.hintMd());
+      }
+    }
     // 主题：课程 KC 取中文名让 LLM 生成贴该 KC 的 bug；课件外概念 kcCode 本身即概念词。
-    String topic = kcTopic(session.kcCode());
+    Optional<String> courseTopic = courseKcTopic(session.kcCode());
+    String topic = courseTopic.orElse(session.kcCode());
     FeynmanGraphClient.BugExposure exposure =
         graphClient
-            .bugExposure(session.kcCode(), topic, misconceptions)
+            .bugExposure(session.kcCode(), topic, learnerContext, misconceptions)
             .orElseThrow(
                 () ->
                     new BusinessException(
                         HttpStatus.BAD_GATEWAY,
                         "FEYNMAN_BUG_EXPOSURE_UNAVAILABLE",
                         "代码找茬服务暂不可用，稍后再试"));
-    return new com.pythontopia.feynman.dto.FeynmanDtos.BugHuntResponse(
+    if (courseTopic.isPresent() && shareableGenericSample(misconceptions, topic, exposure)) {
+      bugBank.insertIfAbsent(session.kcCode(), topic, exposure);
+    }
+    return new BugHuntResponse(
         exposure.source(),
         exposure.misconceptionTag(),
         exposure.buggyCode(),
@@ -267,21 +299,101 @@ public class FeynmanSessionService {
     if (kcCode == null || kcCode.isBlank()) {
       return kcCode;
     }
+    return courseKcTopic(kcCode).orElse(kcCode);
+  }
+
+  private Optional<String> courseKcTopic(String kcCode) {
+    if (kcCode == null || kcCode.isBlank()) {
+      return Optional.empty();
+    }
     try {
-      String name =
-          jdbc
-              .query(
-                  "SELECT kc_name FROM course_kc WHERE pack_id = 43 AND kc_code = ? LIMIT 1",
-                  (rs, rowNum) -> rs.getString("kc_name"),
-                  kcCode)
-              .stream()
-              .findFirst()
-              .orElse(null);
-      return name == null || name.isBlank() ? kcCode : name;
-    } catch (RuntimeException ex) {
-      return kcCode;
+      return jdbc
+          .query(
+              "SELECT kc_name FROM course_kc WHERE pack_id = 43 AND kc_code = ? LIMIT 1",
+              (rs, rowNum) -> rs.getString("kc_name"),
+              kcCode)
+          .stream()
+          .filter(name -> name != null && !name.isBlank())
+          .findFirst();
+    } catch (RuntimeException exception) {
+      return Optional.empty();
     }
   }
 
-  record SessionData(long id, long userId, String kcCode, Long problemId, String status, String tuteeState) {}
+  private FeynmanGraphClient.LearnerContext learnerContext(long userId) {
+    try {
+      JsonNode dimensions = profileRepository.findDimensions(userId).orElse(null);
+      int selfRatedLevel =
+          dimensions == null
+              ? 0
+              : dimensions.path("knowledge_base").path("python_self_rated_level").asInt(0);
+      String level =
+          selfRatedLevel >= 4 ? "advanced" : selfRatedLevel == 3 ? "intermediate" : "beginner";
+      String responseStyle = "examples";
+      JsonNode mediaPriority =
+          dimensions == null ? null : dimensions.path("learning_preference").path("media_priority");
+      if (mediaPriority != null && mediaPriority.isArray()) {
+        for (JsonNode medium : mediaPriority) {
+          if ("code".equals(medium.asText())) {
+            responseStyle = "practice";
+            break;
+          }
+          if ("text".equals(medium.asText()) || "mindmap".equals(medium.asText())) {
+            responseStyle = "step_by_step";
+            break;
+          }
+          if ("video".equals(medium.asText())) {
+            break;
+          }
+        }
+      }
+      return new FeynmanGraphClient.LearnerContext(level, responseStyle);
+    } catch (RuntimeException exception) {
+      return new FeynmanGraphClient.LearnerContext("beginner", "examples");
+    }
+  }
+
+  private static String difficultyFor(String level) {
+    return switch (level) {
+      case "intermediate" -> "medium";
+      case "advanced" -> "hard";
+      default -> "easy";
+    };
+  }
+
+  private static boolean shareableGenericSample(
+      List<Misconception> misconceptions, String topic, FeynmanGraphClient.BugExposure sample) {
+    if (!misconceptions.isEmpty()
+        || topic == null
+        || topic.isBlank()
+        || topic.length() > 160
+        || !"generic_beginner_bug".equals(sample.source())
+        || !"topic_specific_bug".equals(sample.misconceptionTag())
+        || !sample.generatedByAi()
+        || sample.buggyCode() == null
+        || sample.fixedCode() == null
+        || sample.buggyCode().length() > 4000
+        || sample.fixedCode().length() > 4000
+        || sample.hintMd() == null
+        || sample.hintMd().isBlank()
+        || sample.hintMd().length() > 500
+        || !List.of("easy", "medium", "hard").contains(sample.difficulty())) {
+      return false;
+    }
+    String[] buggyLines = sample.buggyCode().split("\\n", -1);
+    String[] fixedLines = sample.fixedCode().split("\\n", -1);
+    if (buggyLines.length < 6 || buggyLines.length > 14 || buggyLines.length != fixedLines.length) {
+      return false;
+    }
+    List<Integer> diff = new ArrayList<>();
+    for (int index = 0; index < buggyLines.length; index++) {
+      if (!buggyLines[index].equals(fixedLines[index])) {
+        diff.add(index);
+      }
+    }
+    return !diff.isEmpty() && diff.equals(sample.bugLineIndices());
+  }
+
+  record SessionData(
+      long id, long userId, String kcCode, Long problemId, String status, String tuteeState) {}
 }

@@ -138,6 +138,7 @@ function judgeClass(result: FeynmanJudgeResultDto | null): string {
 
 async function start(): Promise<void> {
   teachFailed.value = false;
+  teachingText.value = '';
   try {
     await store.startSession(props.kcCode);
   } catch {
@@ -241,7 +242,7 @@ async function submitJudge(): Promise<void> {
       v-if="!currentSession"
       class="feynman-panel__intro-hint"
     >
-      点「开始」，召唤会犯同款错的 AI 学弟。
+      点「开始」，可以讲解知识点、讨论题目，或和 AI 学弟一起找代码问题。
     </p>
 
     <div

@@ -49,13 +49,16 @@ export const useFeynmanStore = defineStore('feynman', {
     async startSession(kcCode: string): Promise<FeynmanSessionDto> {
       this.loading = true;
       this.error = null;
+      this.currentSession = null;
+      this.turns = [];
+      this.latestProducedCode = '';
+      this.latestJudgeResult = null;
+      this.bugHunt = null;
       try {
         const session = await startFeynmanSession(kcCode);
         this.currentSession = session;
-        this.turns = [];
         this.latestProducedCode = session.tuteeState.producedCode ?? '';
         this.latestJudgeResult = session.tuteeState.judgeResult ?? null;
-        this.bugHunt = null;
         return session;
       } catch (error) {
         this.error = errorMessage(error);

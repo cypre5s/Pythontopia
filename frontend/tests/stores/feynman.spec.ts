@@ -69,4 +69,36 @@ describe('feynman store judge truth', () => {
     expect(store.latestJudgeResult?.status).toBe('PASSED');
     expect(store.currentSession?.status).toBe('JUDGED_PASS');
   });
+
+  it('clears the previous round before the new session request finishes', async () => {
+    const store = useFeynmanStore();
+    await store.startSession('PY43-KC-010');
+    store.turns = [{ id: 2, role: 'TUTEE', content: '旧对话', taughtFix: null, noticeMd: null }];
+    store.latestProducedCode = 'print("old")';
+    store.latestJudgeResult = { status: 'FAILED', messageZh: '旧判题', evidenceEventIds: [] };
+    store.bugHunt = {
+      source: 'generic_beginner_bug',
+      misconceptionTag: 'topic_specific_bug',
+      buggyCode: 'old code',
+      bugLineIndices: [0],
+      hintMd: 'old hint',
+    };
+
+    let resolveStart: ((value: typeof session) => void) | undefined;
+    mocks.startFeynmanSession.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveStart = resolve;
+      }),
+    );
+    const pending = store.startSession('PY43-KC-031');
+
+    expect(store.currentSession).toBeNull();
+    expect(store.turns).toEqual([]);
+    expect(store.latestProducedCode).toBe('');
+    expect(store.latestJudgeResult).toBeNull();
+    expect(store.bugHunt).toBeNull();
+
+    resolveStart?.(session);
+    await pending;
+  });
 });

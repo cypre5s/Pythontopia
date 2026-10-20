@@ -155,6 +155,7 @@ print("1到5的和是", total)`,
       props: { kcCode: 'PY43-KC-031' },
     });
 
+    expect(wrapper.get('.feynman-panel__intro-hint').text()).toContain('讲解知识点');
     await wrapper.get('[data-testid="feynman-start"]').trigger('click');
     await flushPromises();
 
@@ -170,6 +171,21 @@ print("1到5的和是", total)`,
     expect(wrapper.find('[data-testid="feynman-tutee-state"]').exists()).toBe(false);
     expect(wrapper.get('[data-testid="feynman-judge-submit"]').attributes('disabled')).toBeDefined();
     expect(wrapper.get('[data-testid="feynman-judge-submit"]').text()).toContain('自主讲题');
+  });
+
+  it('重来时清空尚未提交的旧轮次输入', async () => {
+    const wrapper = mount(FeynmanPanel, {
+      props: { kcCode: 'PY43-KC-031' },
+    });
+    await wrapper.get('[data-testid="feynman-start"]').trigger('click');
+    await flushPromises();
+    await wrapper.get('[data-testid="feynman-teach-input"]').setValue('上一轮还没提交的解释');
+
+    await wrapper.get('[data-testid="feynman-start"]').trigger('click');
+    await flushPromises();
+
+    expect((wrapper.get('[data-testid="feynman-teach-input"]').element as HTMLTextAreaElement).value)
+      .toBe('');
   });
 
   it('Graph 失败时保留学生解释并把提交动作变成明确重试', async () => {

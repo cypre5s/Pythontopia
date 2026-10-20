@@ -14,8 +14,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.feynman.dto.FeynmanDtos.TurnResponse;
+import com.pythontopia.learner.profile.repository.ProfileRepository;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import java.sql.ResultSet;
 import java.util.List;
@@ -36,19 +38,25 @@ class FeynmanSessionServiceTest {
   private static final String NO_MISCONCEPTION = "{\"misconceptions\":[]}";
 
   private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
+  private final ObjectMapper objectMapper = new ObjectMapper();
   private final FeynmanGraphClient graphClient = mock(FeynmanGraphClient.class);
+  private final ProfileRepository profileRepository = mock(ProfileRepository.class);
+  private final FeynmanBugBankRepository bugBank = mock(FeynmanBugBankRepository.class);
   private final FeynmanSessionService service =
       new FeynmanSessionService(
           jdbc,
-          new ObjectMapper(),
+          objectMapper,
           mock(MisconceptionExtractor.class),
           graphClient,
-          mock(PublicProblemRepository.class));
+          mock(PublicProblemRepository.class),
+          profileRepository,
+          bugBank);
 
   @Test
   void teachFailsFastWhenTuteeAgentIsUnavailable() {
     givenSession(OPEN_MISCONCEPTION);
-    when(graphClient.step(anyString(), any(), anyString(), any())).thenReturn(Optional.empty());
+    when(graphClient.step(anyString(), any(), any(), any(), anyString(), any()))
+        .thenReturn(Optional.empty());
 
     assertThatThrownBy(() -> service.teach(7L, 10L, "range 的右边界不包含在结果里"))
         .isInstanceOfSatisfying(
@@ -66,24 +74,141 @@ class FeynmanSessionServiceTest {
   @Test
   void emptyMisconceptionSetAllowsTeachingWithoutCreatingMistakeEvidence() {
     givenSession(NO_MISCONCEPTION);
-    when(graphClient.step(anyString(), any(), anyString(), any()))
+    ObjectNode dimensions = objectMapper.createObjectNode();
+    dimensions.putObject("knowledge_base").put("python_self_rated_level", 4);
+    dimensions
+        .putObject("learning_preference")
+        .set("media_priority", objectMapper.valueToTree(List.of("code", "text")));
+    when(profileRepository.findDimensions(7L)).thenReturn(Optional.of(dimensions));
+    when(jdbc.query(contains("FROM course_kc"), any(RowMapper.class), eq("PY43-KC-016")))
+        .thenReturn(List.of("for 循环与遍历"));
+    when(graphClient.step(anyString(), any(), any(), any(), anyString(), any()))
         .thenReturn(Optional.of(new FeynmanGraphClient.FeynmanOutput("我听懂了", List.of(), null)));
 
     TurnResponse response = service.teach(7L, 10L, "range 的右边界不包含在结果里");
 
     assertThat(capturedSessionStatus()).isEqualTo("OPEN");
     assertThat(response.noticeMd()).isNull();
-    verify(graphClient).step(eq("PY43-KC-016"), eq(List.of()), anyString(), any());
+    verify(graphClient)
+        .step(
+            eq("PY43-KC-016"),
+            eq("for 循环与遍历"),
+            eq(new FeynmanGraphClient.LearnerContext("advanced", "practice")),
+            eq(List.of()),
+            anyString(),
+            any());
     ArgumentCaptor<Object> state = ArgumentCaptor.forClass(Object.class);
     verify(jdbc)
-        .update(contains("UPDATE feynman_session SET tutee_state"), state.capture(), eq("OPEN"), eq(10L));
+        .update(
+            contains("UPDATE feynman_session SET tutee_state"),
+            state.capture(),
+            eq("OPEN"),
+            eq(10L));
     assertThat(state.getValue()).isEqualTo("{\"misconceptions\":[]}");
+  }
+
+  @Test
+  void noMistakeBugHuntReusesSharedSampleAtLearnerDifficulty() {
+    givenSession(NO_MISCONCEPTION);
+    ObjectNode dimensions = objectMapper.createObjectNode();
+    dimensions.putObject("knowledge_base").put("python_self_rated_level", 5);
+    when(profileRepository.findDimensions(7L)).thenReturn(Optional.of(dimensions));
+    when(bugBank.findOne("PY43-KC-016", "hard"))
+        .thenReturn(
+            Optional.of(
+                new FeynmanBugBankRepository.BugSample(
+                    "topic_specific_bug",
+                    "a = 1\nb = 2\nc = 3\nd = 4\ne = a - b\nprint(a)\nprint(e)",
+                    "a = 1\nb = 2\nc = 3\nd = 4\ne = a + b\nprint(a)\nprint(e)",
+                    List.of(4),
+                    "检查运算符。",
+                    "hard")));
+
+    var response = service.bugHunt(7L, 10L);
+
+    assertThat(response.source()).isEqualTo("generic_beginner_bug");
+    assertThat(response.buggyCode()).contains("e = a - b");
+    verify(graphClient, never()).bugExposure(anyString(), anyString(), any(), any());
+  }
+
+  @Test
+  void noMistakeAiSampleIsSavedOnlyWithMechanicalValidationAndCourseTopic() {
+    givenSession(NO_MISCONCEPTION);
+    when(profileRepository.findDimensions(7L)).thenReturn(Optional.empty());
+    when(bugBank.findOne("PY43-KC-016", "easy")).thenReturn(Optional.empty());
+    when(jdbc.query(contains("FROM course_kc"), any(RowMapper.class), eq("PY43-KC-016")))
+        .thenReturn(List.of("for 循环与遍历"));
+    FeynmanGraphClient.BugExposure generated =
+        new FeynmanGraphClient.BugExposure(
+            "generic_beginner_bug",
+            "topic_specific_bug",
+            "a = 1\nb = 2\nc = 3\nd = 4\ne = a - b\nprint(a)\nprint(e)",
+            "a = 1\nb = 2\nc = 3\nd = 4\ne = a + b\nprint(a)\nprint(e)",
+            List.of(4),
+            "检查运算符。",
+            "easy",
+            true);
+    when(graphClient.bugExposure(anyString(), anyString(), any(), any()))
+        .thenReturn(Optional.of(generated));
+
+    service.bugHunt(7L, 10L);
+
+    verify(bugBank).insertIfAbsent("PY43-KC-016", "for 循环与遍历", generated);
+  }
+
+  @Test
+  void actualMisconceptionSamplesAreNeverSavedToSharedBank() {
+    givenSession(OPEN_MISCONCEPTION);
+    when(profileRepository.findDimensions(7L)).thenReturn(Optional.empty());
+    when(jdbc.query(contains("FROM course_kc"), any(RowMapper.class), eq("PY43-KC-016")))
+        .thenReturn(List.of("for 循环与遍历"));
+    FeynmanGraphClient.BugExposure generated =
+        new FeynmanGraphClient.BugExposure(
+            "real_misconception",
+            "off_by_one_range",
+            "a = 1\nb = 2\nc = 3\nd = 4\ne = a - b\nprint(a)\nprint(e)",
+            "a = 1\nb = 2\nc = 3\nd = 4\ne = a + b\nprint(a)\nprint(e)",
+            List.of(4),
+            "检查运算符。",
+            "easy",
+            true);
+    when(graphClient.bugExposure(anyString(), anyString(), any(), any()))
+        .thenReturn(Optional.of(generated));
+
+    service.bugHunt(7L, 10L);
+
+    verify(bugBank, never()).insertIfAbsent(anyString(), anyString(), any());
+  }
+
+  @Test
+  void genericSampleWithForgedBugLineIndicesIsNotSaved() {
+    givenSession(NO_MISCONCEPTION);
+    when(profileRepository.findDimensions(7L)).thenReturn(Optional.empty());
+    when(bugBank.findOne("PY43-KC-016", "easy")).thenReturn(Optional.empty());
+    when(jdbc.query(contains("FROM course_kc"), any(RowMapper.class), eq("PY43-KC-016")))
+        .thenReturn(List.of("for 循环与遍历"));
+    FeynmanGraphClient.BugExposure invalid =
+        new FeynmanGraphClient.BugExposure(
+            "generic_beginner_bug",
+            "topic_specific_bug",
+            "a = 1\nb = 2\nc = 3\nd = 4\ne = a - b\nprint(a)\nprint(e)",
+            "a = 1\nb = 2\nc = 3\nd = 4\ne = a + b\nprint(a)\nprint(e)",
+            List.of(3),
+            "检查运算符。",
+            "easy",
+            true);
+    when(graphClient.bugExposure(anyString(), anyString(), any(), any()))
+        .thenReturn(Optional.of(invalid));
+
+    service.bugHunt(7L, 10L);
+
+    verify(bugBank, never()).insertIfAbsent(anyString(), anyString(), any());
   }
 
   @Test
   void resolvedNonEmptyMisconceptionsStillMarkSessionTaught() {
     givenSession(OPEN_MISCONCEPTION);
-    when(graphClient.step(anyString(), any(), anyString(), any()))
+    when(graphClient.step(anyString(), any(), any(), any(), anyString(), any()))
         .thenReturn(
             Optional.of(
                 new FeynmanGraphClient.FeynmanOutput(
@@ -113,24 +238,26 @@ class FeynmanSessionServiceTest {
               when(oldest.getString("content")).thenReturn("第一轮学生解释");
               return List.of(mapper.mapRow(newest, 0), mapper.mapRow(oldest, 1));
             });
-    when(graphClient.step(anyString(), any(), anyString(), any()))
+    when(graphClient.step(anyString(), any(), any(), any(), anyString(), any()))
         .thenReturn(Optional.of(new FeynmanGraphClient.FeynmanOutput("继续讲", List.of(), null)));
 
     service.teach(7L, 10L, "第二轮学生解释");
 
     ArgumentCaptor<List<FeynmanGraphClient.ConversationTurn>> history =
         ArgumentCaptor.forClass(List.class);
-    verify(graphClient).step(eq("PY43-KC-016"), any(), eq("第二轮学生解释"), history.capture());
+    verify(graphClient)
+        .step(eq("PY43-KC-016"), any(), any(), any(), eq("第二轮学生解释"), history.capture());
     assertThat(history.getValue())
         .extracting(
-            FeynmanGraphClient.ConversationTurn::role,
-            FeynmanGraphClient.ConversationTurn::content)
+            FeynmanGraphClient.ConversationTurn::role, FeynmanGraphClient.ConversationTurn::content)
         .containsExactly(
             org.assertj.core.groups.Tuple.tuple("user", "第一轮学生解释"),
             org.assertj.core.groups.Tuple.tuple("assistant", "第一轮学弟追问"));
 
     InOrder order = inOrder(jdbc);
-    order.verify(jdbc).query(contains("FROM feynman_turn"), any(RowMapper.class), eq(10L), anyInt());
+    order
+        .verify(jdbc)
+        .query(contains("FROM feynman_turn"), any(RowMapper.class), eq(10L), anyInt());
     order.verify(jdbc).update(contains("'STUDENT'"), eq(10L), eq("第二轮学生解释"));
   }
 
@@ -142,14 +269,14 @@ class FeynmanSessionServiceTest {
             List.of(
                 new FeynmanGraphClient.ConversationTurn("assistant", "新".repeat(4000)),
                 new FeynmanGraphClient.ConversationTurn("user", "旧".repeat(2500))));
-    when(graphClient.step(anyString(), any(), anyString(), any()))
+    when(graphClient.step(anyString(), any(), any(), any(), anyString(), any()))
         .thenReturn(Optional.of(new FeynmanGraphClient.FeynmanOutput("继续讲", List.of(), null)));
 
     service.teach(7L, 10L, "本轮解释");
 
     ArgumentCaptor<List<FeynmanGraphClient.ConversationTurn>> history =
         ArgumentCaptor.forClass(List.class);
-    verify(graphClient).step(anyString(), any(), anyString(), history.capture());
+    verify(graphClient).step(anyString(), any(), any(), any(), anyString(), history.capture());
     assertThat(history.getValue())
         .singleElement()
         .extracting(FeynmanGraphClient.ConversationTurn::content)
@@ -171,7 +298,8 @@ class FeynmanSessionServiceTest {
   private Object capturedSessionStatus() {
     ArgumentCaptor<Object> status = ArgumentCaptor.forClass(Object.class);
     verify(jdbc)
-        .update(contains("UPDATE feynman_session SET tutee_state"), any(), status.capture(), eq(10L));
+        .update(
+            contains("UPDATE feynman_session SET tutee_state"), any(), status.capture(), eq(10L));
     return status.getValue();
   }
 }
