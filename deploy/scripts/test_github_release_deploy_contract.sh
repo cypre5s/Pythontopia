@@ -31,6 +31,8 @@ require_fixed "$PULLER" "下载前执行 ECS 预检" 'preflight_ecs.sh'
 require_fixed "$PULLER" "下载后复用既有 release 安装器" 'install_release.sh'
 require_fixed "$PULLER" "成功安装后移除下载包" 'rm -- "${archive}"'
 require_fixed "$ROOT_DIR/deploy/scripts/build_release_archive.sh" "课程媒体校验默认仍开启" 'PYT_BUILD_SKIP_COURSE_RUNTIME_DATA_VALIDATION:-false'
+require_fixed "$ROOT_DIR/deploy/README.md" "ECS bootstrap 使用可达的 GitHub API raw endpoint" 'application/vnd.github.raw+json'
+require_fixed "$ROOT_DIR/deploy/release/README.md" "发布手册 bootstrap 使用 GitHub API raw endpoint" 'application/vnd.github.raw+json'
 
 python3 - "$PULLER" <<'PY'
 from pathlib import Path

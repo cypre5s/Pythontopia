@@ -64,12 +64,13 @@ pythontopia-web-<UTC>.tar.gz
 将 `web-vYYYYMMDD.N` tag 推送到 `main` 会触发 GitHub Actions：运行本指南所用的 release builder，并把校验后的包上传为公开 GitHub Release asset。PDF 与 MP4 不在公开仓库中，托管 runner 会跳过本机课程媒体检查；ECS 的预检和安装器仍会对共享课程数据执行完整校验，失败时不会切换线上版本。ECS 不需要 GitHub token 或 deploy key。
 
 ```bash
-# 首次使用；把 tag 替换为已发布版本
-curl -fsSL https://raw.githubusercontent.com/cypre5s/Pythontopia/main/deploy/scripts/install_github_release.sh \
-  | sudo bash -s -- web-v20261020.1
+# 首次使用；通过 GitHub API 读取脚本，把 tag 替换为已发布版本
+curl -fsSL -H 'Accept: application/vnd.github.raw+json' \
+  'https://api.github.com/repos/cypre5s/Pythontopia/contents/deploy/scripts/install_github_release.sh?ref=main' \
+  | sudo bash -s -- web-v20261020.2
 
 # 之后使用 current 里的脚本
-sudo bash /opt/pythontopia/current/deploy/scripts/install_github_release.sh web-v20261020.1
+sudo bash /opt/pythontopia/current/deploy/scripts/install_github_release.sh web-v20261020.2
 ```
 
 脚本先执行 ECS 预检，再下载 release asset 并调用现有安装器；预检要求根分区至少有 5 GB 可用空间。成功安装后下载包会删除，失败时会保留供排查。

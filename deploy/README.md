@@ -259,15 +259,16 @@ sudo bash <发布包内>/deploy/scripts/install_release.sh /path/to/pythontopia-
 把 `web-vYYYYMMDD.N` tag 推到 `main` 后，`.github/workflows/publish-ecs-release.yml` 会构建并发布公开 Release 包。GitHub runner 没有仓库忽略的 PDF/MP4；ECS 预检与安装器会在部署前完整校验共享课程数据。ECS 首次可从仓库拉取安装脚本，后续使用已安装版本中的脚本：
 
 ```bash
-# 首次使用；将示例 tag 换成已发布版本
-curl -fsSL https://raw.githubusercontent.com/cypre5s/Pythontopia/main/deploy/scripts/install_github_release.sh \
-  | sudo bash -s -- web-v20261020.1
+# 首次使用；通过 GitHub API 读取脚本，将示例 tag 换成已发布版本
+curl -fsSL -H 'Accept: application/vnd.github.raw+json' \
+  'https://api.github.com/repos/cypre5s/Pythontopia/contents/deploy/scripts/install_github_release.sh?ref=main' \
+  | sudo bash -s -- web-v20261020.2
 
 # 安装完成后
-sudo bash /opt/pythontopia/current/deploy/scripts/install_github_release.sh web-v20261020.1
+sudo bash /opt/pythontopia/current/deploy/scripts/install_github_release.sh web-v20261020.2
 ```
 
-脚本先运行 ECS 预检，根分区可用空间不足 5 GB 时会在下载前停止；安装成功后删除下载包，失败时保留包供排查。
+脚本先运行 ECS 预检，根分区可用空间不足 5 GB 时会在下载前停止；大包下载支持续传。安装成功后删除下载包，失败时保留包供排查。
 
 ### 健康检查
 
