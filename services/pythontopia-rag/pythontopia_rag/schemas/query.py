@@ -75,6 +75,23 @@ class RagCitation(BaseModel):
     via_relation: str | None = None
 
 
+class RagVideoMatchTrace(BaseModel):
+    video_id: int
+    title: str
+    chapter_no: int
+    start_sec: float
+    end_sec: float
+    score: float
+    review_status: str
+
+
+class RagVideoTrace(BaseModel):
+    """审计视频字幕如何辅助检索；不携带转录文本，也不充当课程页证据。"""
+
+    matches: list[RagVideoMatchTrace] = Field(default_factory=list)
+    supplemental_page_ids: list[int] = Field(default_factory=list)
+
+
 class RagQueryRequest(BaseModel):
     query: str = Field(min_length=1, max_length=512)
     top_k: int = Field(default=8, ge=1, le=20)
@@ -109,6 +126,7 @@ class RagQueryResponse(BaseModel):
     subgraph: list[KcEdge] = Field(default_factory=list)
     # GraphRAG 量化 trace：直接/补充命中、关系计数、补充配额等，用于证明丰富度未越过噪声线。
     graph_trace: RagGraphTrace | None = None
+    video_trace: RagVideoTrace = Field(default_factory=RagVideoTrace)
 
 
 class RagIndexStatus(BaseModel):
@@ -120,6 +138,7 @@ class RagIndexStatus(BaseModel):
     # 检索质量不可信。禁止静默降级——运维/前端应能直接看到。
     degraded: bool = False
     fallback_reason: str | None = None
+    video_segments: int = 0
 
 
 class RagRebuildResponse(BaseModel):

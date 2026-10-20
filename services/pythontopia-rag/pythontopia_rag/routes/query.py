@@ -2,17 +2,19 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
 from pythontopia_rag.app_state import AppState
 from pythontopia_rag.data.loader import DEFAULT_DB_URL, fetch_pages
 from pythontopia_rag.graph.kc_graph import build_kc_graph_from_chunks
-from pythontopia_rag.graph.router import route_and_retrieve
+from pythontopia_rag.graph.router import NeighborsFn, route_and_retrieve
 from pythontopia_rag.graph.traverse import traverse_subgraph
 from pythontopia_rag.index.builder import EmbeddingDegradedError, rebuild_index
 from pythontopia_rag.index.kc_graph import fetch_kc_graph
 from pythontopia_rag.data.page_source import InMemoryPageSource, page_records_to_indexable
+from pythontopia_rag.index.video_transcripts import VideoMatch
 from pythontopia_rag.safety.forbidden import is_forbidden
 from pythontopia_rag.schemas.query import (
     RagCitation,
@@ -21,6 +23,8 @@ from pythontopia_rag.schemas.query import (
     RagQueryRequest,
     RagQueryResponse,
     RagRebuildResponse,
+    RagVideoMatchTrace,
+    RagVideoTrace,
 )
 
 
@@ -35,7 +39,7 @@ def _state(request: Request) -> AppState:
     return state
 
 
-def _runtime_neighbors_fn(state: AppState):
+def _runtime_neighbors_fn(state: AppState) -> NeighborsFn | None:
     """Return a relation-aware neighbors function when the runtime KC graph is available."""
     graph = state.knowledge_graph
     if graph.is_empty:
@@ -47,7 +51,7 @@ def _runtime_neighbors_fn(state: AppState):
     if graph.is_empty:
         return None
 
-    def _neighbors(kc: str, hops: int):
+    def _neighbors(kc: str, hops: int) -> object:
         _nodes, edges = traverse_subgraph(graph, [kc], hops)
         return edges
 
@@ -104,9 +108,76 @@ def _route_reason(
     return f"hybrid: legacy hybrid retrieval used; retrieval_mode={safe_mode}; hits={hit_count}"
 
 
+def _video_candidates(
+    request: Request, state: AppState, body: RagQueryRequest
+) -> tuple[list[VideoMatch], list[int]]:
+    source = getattr(request.app.state, "rag_page_source", None)
+    pages = getattr(source, "pages", [])
+    chapter_ids_by_no: dict[int, set[int]] = {}
+    kcs_by_chapter: dict[int, set[str]] = {}
+    for page in pages:
+        if page.chapter_no is None or page.chapter_id is None:
+            continue
+        chapter_ids_by_no.setdefault(page.chapter_no, set()).add(page.chapter_id)
+        kcs_by_chapter.setdefault(page.chapter_id, set()).update(page.kc_codes)
+
+    requested_chapters = set(body.chapter_ids or [])
+    requested_kcs = set(body.kc_codes or [])
+    allowed_ids_by_no: dict[int, set[int]] = {}
+    for chapter_no, page_chapter_ids in chapter_ids_by_no.items():
+        chapter_ids = page_chapter_ids
+        if requested_chapters:
+            chapter_ids = chapter_ids & requested_chapters
+        if requested_kcs:
+            chapter_ids = {
+                chapter_id
+                for chapter_id in chapter_ids
+                if kcs_by_chapter.get(chapter_id, set()) & requested_kcs
+            }
+        if chapter_ids:
+            allowed_ids_by_no[chapter_no] = chapter_ids
+    matches = state.video_index.search(
+        body.query, top_k=2, chapter_nos=set(allowed_ids_by_no)
+    )
+    allowed_chapter_ids = {
+        chapter_id
+        for match in matches
+        for chapter_id in allowed_ids_by_no.get(match.segment.chapter_no, set())
+    }
+    return matches, sorted(allowed_chapter_ids)
+
+
+def _video_trace(matches: list[VideoMatch], supplemental_page_ids: list[int]) -> RagVideoTrace:
+    return RagVideoTrace(
+        matches=[
+            RagVideoMatchTrace(
+                video_id=match.segment.video_id,
+                title=match.segment.title,
+                chapter_no=match.segment.chapter_no,
+                start_sec=match.segment.start_sec,
+                end_sec=match.segment.end_sec,
+                score=round(match.score, 4),
+                review_status=match.segment.review_status,
+            )
+            for match in matches
+        ],
+        supplemental_page_ids=supplemental_page_ids,
+    )
+
+
+def _video_expansion_query(matches: list[VideoMatch]) -> str:
+    # Full ASR segments dilute the existing BM25 coverage gate; use title and code identifiers only.
+    terms: list[str] = []
+    for match in matches:
+        terms.append(match.segment.title)
+        terms.extend(re.findall(r"\b[A-Za-z_][A-Za-z0-9_]*\b", match.segment.text)[:3])
+    return " ".join(dict.fromkeys(term for term in terms if term))
+
+
 @router.post("/rag/query", response_model=RagQueryResponse)
 async def rag_query(
     body: RagQueryRequest,
+    request: Request,
     state: AppState = Depends(_state),
 ) -> RagQueryResponse:
     """课件检索 + GraphRAG 自适应路由（向后兼容）。
@@ -138,7 +209,37 @@ async def rag_query(
         expand_prerequisites=body.expand_prerequisites,
         neighbors_fn=_runtime_neighbors_fn(state),
     )
-    if not result.hits:
+    video_matches, video_chapter_ids = _video_candidates(request, state, body)
+    supplemental_hits = []
+    if video_matches and video_chapter_ids:
+        expanded_query = _video_expansion_query(video_matches)
+        supplemental_result = await route_and_retrieve(
+            query=expanded_query,
+            embedder=state.embedder,
+            store=state.store,
+            bm25=state.bm25,
+            top_k=2,
+            min_score=body.min_score,
+            kc_codes=body.kc_codes,
+            chapter_ids=video_chapter_ids,
+            index_kc_graph=state.kc_graph,
+            graph_mode=body.graph_mode,
+            prereq_hops=body.prereq_hops,
+            expand_prerequisites=body.expand_prerequisites,
+            neighbors_fn=_runtime_neighbors_fn(state),
+        )
+        seen_pages = {hit.chunk.page_id for hit in result.hits}
+        for hit in supplemental_result.hits:
+            if hit.chunk.page_id not in seen_pages:
+                supplemental_hits.append(hit)
+                seen_pages.add(hit.chunk.page_id)
+                if len(supplemental_hits) >= 2:
+                    break
+    all_hits = [*result.hits, *supplemental_hits]
+    video_trace = _video_trace(
+        video_matches, [hit.chunk.page_id for hit in supplemental_hits]
+    )
+    if not all_hits:
         return RagQueryResponse(
             hits=[],
             citations=[],
@@ -147,6 +248,7 @@ async def rag_query(
             route=result.route,
             subgraph=result.subgraph,
             graph_trace=result.graph_trace,
+            video_trace=video_trace,
             route_reason=_route_reason(
                 route=result.route,
                 retrieval_mode=result.retrieval_mode,
@@ -170,7 +272,7 @@ async def rag_query(
             via_prerequisite=hit.via_prerequisite,
             via_relation=hit.via_relation,
         )
-        for hit in result.hits
+        for hit in all_hits
     ]
     return RagQueryResponse(
         hits=response_hits,
@@ -180,6 +282,7 @@ async def rag_query(
         route=result.route,
         subgraph=result.subgraph,
         graph_trace=result.graph_trace,
+        video_trace=video_trace,
         route_reason=_route_reason(
             route=result.route,
             retrieval_mode=result.retrieval_mode,
@@ -269,4 +372,5 @@ async def rag_status(state: AppState = Depends(_state)) -> RagIndexStatus:
         degraded=status_info.degraded or live_degraded,
         fallback_reason=status_info.fallback_reason
         or getattr(state.embedder, "fallback_reason", None),
+        video_segments=state.video_index.segment_count,
     )

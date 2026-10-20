@@ -6,6 +6,7 @@ import type {
   QuestCompletionDto,
   RecentActivityDto,
 } from '@/api/dto/TeacherDashboard';
+import { kcDisplayName } from '@/data/kcNames';
 
 const props = defineProps<{
   classroom: ClassroomDto | null;
@@ -100,7 +101,7 @@ function fmtRate(value: number): string {
         <span
           v-if="event.kcCode"
           class="kc"
-        >{{ event.kcCode }}</span>
+        >{{ kcDisplayName(event.kcCode) }}</span>
         <span
           v-if="event.detail"
           class="detail"

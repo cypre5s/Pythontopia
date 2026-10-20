@@ -5,6 +5,7 @@ import { useToastStore } from '@stores/toast';
 import { useDialogStore } from '@stores/dialog';
 import { useMainlineStore } from '@stores/mainline';
 import { isExamActive, isExamBlockedPath } from '@/components/chaptertest';
+import { defaultLandingPath, toSafeInternalPath } from '@/app/landing';
 
 declare module 'vue-router' {
   interface RouteMeta {
@@ -16,7 +17,7 @@ declare module 'vue-router' {
 export const router = createRouter({
   history: createWebHistory(),
   routes: [
-    { path: '/', redirect: '/world' },
+    { path: '/', redirect: () => defaultLandingPath(useSessionStore().role) },
     {
       path: '/home',
       name: 'home',
@@ -345,7 +346,7 @@ router.beforeEach((to: RouteLocationNormalized) => {
     return { name: 'world', replace: true };
   }
   if (to.meta.guestOnly && session.isAuthenticated) {
-    return { name: 'world' };
+    return { path: defaultLandingPath(session.role) };
   }
   // 章末大测试进行中：全局拦截跳转到 AI / 答疑类页面（防作弊，§4.3）。
   // examActive 单例由 ChapterTestPage 维护；blocked 前缀见 useExamRouteGuard。
@@ -364,15 +365,6 @@ router.beforeEach((to: RouteLocationNormalized) => {
 // 两种都会让导航中断、页面卡住。这里统一拦截，做「一次性整页跳转到目标地址」自愈：
 // 整页加载会拉到最新 index.html 与正确的分块清单，路由随即正常解析。
 const CHUNK_RELOAD_KEY = 'pyt:chunk-reload-at';
-
-/**
- * 站内路径断言：只接受单个 `/` 开头的绝对站内路径。
- * `//evil.com` 这类协议相对 URL 传给 `location.assign` 会整页跳出本站（开放重定向），
- * 而 targetPath 源自 `to.fullPath`（含攻击者可构造的地址），必须先过滤。
- */
-export function toSafeInternalPath(targetPath: string): string {
-  return /^\/(?!\/)/.test(targetPath) ? targetPath : '/';
-}
 
 /** 是否为动态 import 分块加载失败（含跨浏览器措辞与 MIME 误判）。 */
 function isDynamicImportError(error: unknown): boolean {

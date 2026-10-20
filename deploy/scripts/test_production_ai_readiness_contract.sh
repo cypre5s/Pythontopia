@@ -147,6 +147,12 @@ require_fixed "${ENV_EXAMPLE}" \
 require_fixed "${COMPOSE_FILE}" \
   "Backend 固定挂载逐视频转写文件" \
   'PYT_COURSEPACK_VIDEO_TRANSCRIPTS: /data/course-pack-43/video_transcripts.json'
+require_fixed "${COMPOSE_FILE}" \
+  "RAG 固定挂载视频清单只读路径" \
+  'PYT_COURSEPACK_VIDEO_MANIFEST: /data/course-pack-43/video_manifest.json'
+require_fixed "${COMPOSE_FILE}" \
+  "RAG 只读挂载共享课程数据目录" \
+  '${PYT_SHARED_DATA_DIR:-/opt/pythontopia/shared/data}/course-pack-43:/data/course-pack-43:ro'
 require_fixed "${PREFLIGHT}" \
   "ECS 预检执行课程 PDF/视频/字幕来源校验" \
   'validate_course_runtime_data.py" "${COURSE_DATA_ROOT}'

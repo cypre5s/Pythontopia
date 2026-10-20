@@ -33,6 +33,26 @@ describe('ProfileInterviewPanel', () => {
     expect(wrapper.get('button.finish').text()).toContain('完成访谈');
   });
 
+  it('emits finished after the profile is saved', async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const store = useLearningStore();
+    store.profileInterview.sessionId = 'session-1';
+    store.profileInterview.done = true;
+    store.finishInterview = vi.fn(async () => undefined);
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/profile', component: { template: '<div />' } }],
+    });
+    await router.push('/profile');
+    const wrapper = mount(ProfileInterviewPanel, { global: { plugins: [pinia, router] } });
+
+    await wrapper.get('button.finish').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.emitted('finished')).toHaveLength(1);
+  });
+
   it('keeps the answer and shows an error when sending a turn fails', async () => {
     const pinia = createPinia();
     setActivePinia(pinia);

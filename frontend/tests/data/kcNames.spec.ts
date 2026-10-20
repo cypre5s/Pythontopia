@@ -9,7 +9,8 @@ describe('kcDisplayName', () => {
 
   it('falls back gracefully', () => {
     expect(kcDisplayName(undefined)).toBe('本知识点');
-    expect(kcDisplayName('PY43-KC-999')).toBe('PY43-KC-999');
+    expect(kcDisplayName('PY43-KC-999')).toBe('相关知识点');
+    expect(kcDisplayName('KC-1000')).toBe('相关知识点');
   });
 });
 
@@ -35,5 +36,11 @@ describe('humanizeKcText', () => {
     expect(out).not.toMatch(/KC-\d{3}/);
     expect(out).toContain('for 循环与遍历');
     expect(out).toContain('列表基本操作');
+  });
+
+  it('replaces unknown KC codes with a safe label', () => {
+    const out = humanizeKcText('暂未收录 PY43-KC-999 和 KC-1000');
+    expect(out.match(/「相关知识点」/g)).toHaveLength(2);
+    expect(out).not.toMatch(/KC-\d+/);
   });
 });

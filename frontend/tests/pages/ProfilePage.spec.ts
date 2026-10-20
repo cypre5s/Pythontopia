@@ -3,13 +3,20 @@ import { flushPromises, mount } from '@vue/test-utils';
 import { setActivePinia, createPinia } from 'pinia';
 import { createRouter, createMemoryHistory, type Router } from 'vue-router';
 import ProfilePage from '@/pages/ProfilePage.vue';
-import { selfUpdateDimension, type ProfileDimensionDto } from '@/api/learner';
+import { openProfileInterview, selfUpdateDimension, type ProfileDimensionDto } from '@/api/learner';
+import ProfileInterviewPanel from '@/components/profile/ProfileInterviewPanel.vue';
 
-const { getLearnerProfileMock, getProfileDimensionsMock, selfUpdateDimensionMock } = vi.hoisted(
+const {
+  getLearnerProfileMock,
+  getProfileDimensionsMock,
+  selfUpdateDimensionMock,
+  openProfileInterviewMock,
+} = vi.hoisted(
   () => ({
     getLearnerProfileMock: vi.fn(),
     getProfileDimensionsMock: vi.fn(),
     selfUpdateDimensionMock: vi.fn(),
+    openProfileInterviewMock: vi.fn(),
   }),
 );
 
@@ -17,7 +24,7 @@ vi.mock('@/api/learner', () => ({
   getLearnerProfile: getLearnerProfileMock,
   getProfileDimensions: getProfileDimensionsMock,
   selfUpdateDimension: selfUpdateDimensionMock,
-  openProfileInterview: vi.fn(),
+  openProfileInterview: openProfileInterviewMock,
   sendProfileTurn: vi.fn(),
   finishProfileInterview: vi.fn(),
 }));
@@ -88,6 +95,9 @@ describe('ProfilePage', () => {
     setActivePinia(createPinia());
     getLearnerProfileMock.mockReset().mockResolvedValue({ ...PROFILE });
     getProfileDimensionsMock.mockReset().mockResolvedValue(dims());
+    openProfileInterviewMock.mockReset().mockResolvedValue({
+      interviewSessionId: 'interview-1', status: 'OPEN', history: [], draft: null,
+    });
     selfUpdateDimensionMock
       .mockReset()
       .mockResolvedValue({ userId: 1, dimensionKey: 'professional_background', finalDimension: {} });
@@ -96,9 +106,11 @@ describe('ProfilePage', () => {
   it('shows profile context and only exposes dimensions marked self-editable by the server', async () => {
     const wrapper = await mountPage();
 
-    expect(wrapper.find('[data-testid="dim-major"]').text()).toContain('CS');
+    expect(wrapper.find('[data-testid="dim-major"]').text()).toContain('计算机相关专业');
     expect(wrapper.find('[data-testid="dim-baseLevel"]').text()).toContain('Python Lv.3');
-    expect(wrapper.find('[data-testid="dim-learningGoal"]').text()).toContain('EXAM');
+    expect(wrapper.find('[data-testid="dim-learningGoal"]').text()).toContain('备考考试');
+    expect(wrapper.find('[data-testid="dim-learningPreference"]').text()).toContain('编程练习');
+    expect(wrapper.find('[data-testid="dim-major"]').text()).toContain('访谈自述');
     expect(wrapper.find('[data-testid="self-rate-professional_background"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="self-rate-learning_goal"]').exists()).toBe(true);
     expect(wrapper.find('[data-testid="self-rate-learning_preference"]').exists()).toBe(true);
@@ -140,5 +152,18 @@ describe('ProfilePage', () => {
     await flushPromises();
 
     expect(selfUpdateDimension).toHaveBeenCalledWith('professional_background', 0.15);
+  });
+
+  it('opens the profile interview and refreshes evidence dimensions when it finishes', async () => {
+    const wrapper = await mountPage();
+    await wrapper.get('[data-testid="profile-interview-toggle"]').trigger('click');
+    await flushPromises();
+
+    expect(openProfileInterview).toHaveBeenCalledTimes(1);
+    expect(wrapper.findComponent(ProfileInterviewPanel).exists()).toBe(true);
+    const callsBeforeFinish = getProfileDimensionsMock.mock.calls.length;
+    wrapper.getComponent(ProfileInterviewPanel).vm.$emit('finished');
+    await flushPromises();
+    expect(getProfileDimensionsMock).toHaveBeenCalledTimes(callsBeforeFinish + 1);
   });
 });

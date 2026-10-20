@@ -12,6 +12,7 @@ import {
 import AdminPanel from './AdminPanel.vue';
 import AdminTable from './AdminTable.vue';
 import AdminPagination from './AdminPagination.vue';
+import { kcDisplayName } from '@/data/kcNames';
 
 type DecisionFilter = 'ALL' | BossProblemReviewDecision;
 type FinalDecision = Exclude<BossProblemReviewDecision, 'PENDING'>;
@@ -460,9 +461,9 @@ onMounted(() => {
               <td>第 {{ entry.problem.chapter }} 章 · S{{ entry.problem.stage }}</td>
               <td
                 class="review-table__kc-cell"
-                :title="entry.problem.kcCode"
+                :title="kcDisplayName(entry.problem.kcCode)"
               >
-                {{ entry.problem.kcCode }}
+                {{ kcDisplayName(entry.problem.kcCode) }}
               </td>
               <td>{{ entry.problem.difficulty }}</td>
               <td>
@@ -532,7 +533,7 @@ onMounted(() => {
           <h2 id="review-detail-title">
             题目预览
           </h2>
-          <p>#{{ selectedEntry.id }} · 第 {{ selectedEntry.problem.chapter }} 章 · S{{ selectedEntry.problem.stage }} · {{ selectedEntry.problem.kcCode }}</p>
+          <p>#{{ selectedEntry.id }} · 第 {{ selectedEntry.problem.chapter }} 章 · S{{ selectedEntry.problem.stage }} · {{ kcDisplayName(selectedEntry.problem.kcCode) }}</p>
         </div>
         <button
           class="admin-button"

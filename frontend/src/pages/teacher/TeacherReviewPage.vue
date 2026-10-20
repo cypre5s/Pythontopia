@@ -6,6 +6,7 @@ import AppLayout from "@/app/AppLayout.vue";
 import RuntimeOperationsPanel from "@/components/workshop/RuntimeOperationsPanel.vue";
 import { useSessionStore } from "@stores/session";
 import { useToastStore } from "@stores/toast";
+import { kcDisplayName } from "@/data/kcNames";
 import {
   createProblemReview,
   decideProblemReview,
@@ -255,7 +256,7 @@ const canDecide = computed<boolean>(
           </select>
         </label>
         <label class="toolbar-field">
-          <span>KC（可选）</span>
+          <span>知识点（可选）</span>
           <input
             v-model="kcCode"
             data-testid="teacher-review-kc"
@@ -360,7 +361,7 @@ const canDecide = computed<boolean>(
                   <strong>第 {{ entry.problem.chapter }} 章 S{{
                     entry.problem.stage
                   }}</strong>
-                  <span class="badge">{{ entry.problem.kcCode }}</span>
+                  <span class="badge">{{ kcDisplayName(entry.problem.kcCode) }}</span>
                   <span
                     class="badge"
                     :class="{
@@ -447,7 +448,7 @@ const canDecide = computed<boolean>(
                 </span>
               </h2>
               <p>
-                <strong>KC：</strong>{{ currentEntry.problem.kcCode }}
+                <strong>知识点：</strong>{{ kcDisplayName(currentEntry.problem.kcCode) }}
                 <strong>难度：</strong>{{ currentEntry.problem.difficulty }} / 5
                 <strong>测试用例数：</strong>{{ currentEntry.problem.totalTestCases }}
                 <strong>审核来源：</strong>

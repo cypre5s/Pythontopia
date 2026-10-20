@@ -94,6 +94,12 @@ for service, port in (("postgres", 15432), ("redis", 16379), ("backend", 18080),
                       ("pythontopia-rag", 18092), ("frontend", 8080), ("piston", 2000)):
     assert_loopback_port(service, port)
 
+rag = services["pythontopia-rag"]
+assert any(volume.get("target") == "/data/course-pack-43" and volume.get("read_only")
+           for volume in rag.get("volumes", [])), "RAG must mount course data read-only"
+assert rag["environment"]["PYT_COURSEPACK_VIDEO_MANIFEST"] == "/data/course-pack-43/video_manifest.json"
+assert rag["environment"]["PYT_COURSEPACK_VIDEO_TRANSCRIPTS"] == "/data/course-pack-43/video_transcripts.json"
+
 piston = services["piston"]
 judge_networks = set(piston.get("networks", {}))
 assert len(judge_networks) == 1, "Piston must use a dedicated execution network"

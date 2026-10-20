@@ -48,7 +48,7 @@ function actionLabelFor(node: LearningPathNodeDto): string {
 }
 
 function tooltipFor(node: LearningPathNodeDto): string {
-  return `${actionLabelFor(node)}：${node.kcCode}`;
+  return `${actionLabelFor(node)}：${kcDisplayName(node.kcCode)}`;
 }
 
 async function clickNode(node: LearningPathNodeDto): Promise<void> {

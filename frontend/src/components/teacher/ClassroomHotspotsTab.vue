@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { ErrorHotspotDto } from '@/api/dto/TeacherDashboard';
+import { kcDisplayName } from '@/data/kcNames';
 
 defineProps<{ hotspots: ErrorHotspotDto[] }>();
 </script>
@@ -21,7 +22,7 @@ defineProps<{ hotspots: ErrorHotspotDto[] }>();
     >
       <thead>
         <tr>
-          <th>KC</th>
+          <th>知识点</th>
           <th>错误次数</th>
           <th>影响学生</th>
           <th>错误类别分布</th>
@@ -32,7 +33,7 @@ defineProps<{ hotspots: ErrorHotspotDto[] }>();
           v-for="entry in hotspots"
           :key="entry.kcCode"
         >
-          <td>{{ entry.kcCode }} <small>{{ entry.kcName ?? '' }}</small></td>
+          <td>{{ entry.kcName ?? kcDisplayName(entry.kcCode) }}</td>
           <td>{{ entry.failedSubmissionCount }}</td>
           <td>{{ entry.affectedStudentCount }}</td>
           <td>

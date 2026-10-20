@@ -177,13 +177,13 @@ describe('ProfileRoomPage', () => {
     expect(routerPush).toHaveBeenCalledWith('/workshop');
   });
 
-  it('routes the weekly mastery reinforce action to the workshop with its KC context', async () => {
+  it('routes the weekly mastery reinforce action with the KC name', async () => {
     const wrapper = mountPage();
     await flushPromises();
 
     await wrapper.get('[data-testid="twin-mastery-prompt-PY43-KC-002"]').trigger('click');
 
-    expect(setPendingPrompt).toHaveBeenCalledWith(expect.stringContaining('PY43-KC-002'));
+    expect(setPendingPrompt).toHaveBeenCalledWith(expect.stringContaining('计算工具的演变'));
     expect(setPendingPrompt).toHaveBeenCalledWith(expect.stringContaining('2 条可信学习证据'));
     expect(routerPush).toHaveBeenCalledWith('/workshop');
   });

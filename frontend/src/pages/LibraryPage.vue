@@ -33,6 +33,7 @@ import type {
 } from '@/api/dto/Library';
 import type { ChapterDto } from '@/api/dto/ChapterDto';
 import type { KcDto } from '@/api/dto/KcDto';
+import { kcDisplayName } from '@/data/kcNames';
 import { useLibrarySplitLayout } from '@/composables/useLibrarySplitLayout';
 import { chapterTitleLabel } from '@/utils/chapterTitleLabel';
 
@@ -374,7 +375,7 @@ function selectDocument(docId: number): void {
 function jumpToKc(kc: CourseKcSummary): void {
   currentKcCode.value = kc.kcCode;
   if (kc.pageRefs.length === 0) {
-    toast.push({ kind: 'info', text: `KC ${kc.kcCode} 暂未关联课件页` });
+    toast.push({ kind: 'info', text: `${kcDisplayName(kc.kcCode)} 暂未关联课件页` });
     return;
   }
   // 找首个属于章节对应文档的页面

@@ -3,6 +3,7 @@ import { computed, onMounted, onBeforeUnmount, ref, nextTick } from 'vue';
 import Reveal from 'reveal.js';
 import 'reveal.js/dist/reveal.css';
 import type { HandoutContent } from '@/api/dto/Workshop';
+import { kcDisplayName } from '@/data/kcNames';
 
 const props = defineProps<{
   title: string;
@@ -79,7 +80,7 @@ const groundingClass = computed(() => {
 
 function exportMarpMd(): void {
   const lines = ['---', 'marp: true', 'theme: default', '---', ''];
-  lines.push(`# ${props.title}`, '', `KC: ${props.kcCodes.join(', ')}`, '', '---', '');
+  lines.push(`# ${props.title}`, '', `知识点：${props.kcCodes.map(kcDisplayName).join('、')}`, '', '---', '');
   for (const section of props.content.sections) {
     lines.push(`## ${section.heading}`, '');
     for (const p of section.paragraphs) lines.push(p, '');
@@ -130,7 +131,7 @@ function exportMarpMd(): void {
               v-for="kc in kcCodes"
               :key="kc"
               class="kc-chip"
-            >{{ kc }}</span>
+            >{{ kcDisplayName(kc) }}</span>
           </div>
           <div
             v-if="evidencePageIds.length > 0"
@@ -172,7 +173,7 @@ function exportMarpMd(): void {
               v-for="kc in kcCodes"
               :key="kc"
               class="kc-chip"
-            >{{ kc }}</span>
+            >{{ kcDisplayName(kc) }}</span>
           </div>
         </section>
       </div>

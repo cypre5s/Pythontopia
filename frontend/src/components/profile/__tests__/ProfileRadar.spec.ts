@@ -30,4 +30,15 @@ describe('ProfileRadar', () => {
     expect(wrapper.findAll('.radar__dot')).toHaveLength(8);
     expect(wrapper.findAll('.radar__area')).toHaveLength(1);
   });
+
+  it('keeps long outer labels inside the chart view and aligns them inward', () => {
+    const wrapper = mount(ProfileRadar, { props: { dimensions: dimensions(8) } });
+    const svg = wrapper.get('svg');
+    expect(svg.attributes('viewBox')).toBe('0 0 360 360');
+    const labels = wrapper.findAll('.radar__label');
+    const right = labels.find((label) => Number(label.attributes('x')) > 180);
+    const left = labels.find((label) => Number(label.attributes('x')) < 180);
+    expect(right?.attributes('text-anchor')).toBe('end');
+    expect(left?.attributes('text-anchor')).toBe('start');
+  });
 });

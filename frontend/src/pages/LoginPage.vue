@@ -10,6 +10,7 @@ import type { LoginRequest } from '@api/dto/LoginRequest';
 import { unlockAudio } from '@/composables/useAudio';
 import { useSessionStore } from '@stores/session';
 import { useToastStore } from '@stores/toast';
+import { loginDestination } from '@/app/landing';
 
 const session = useSessionStore();
 const toast = useToastStore();
@@ -44,8 +45,8 @@ async function submit(req: LoginRequest): Promise<void> {
   try {
     await session.login(req);
     toast.show(`欢迎回到 Pythontopia，${session.displayName}！`, 'info');
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/world';
-    await router.push(redirect);
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : undefined;
+    await router.push(loginDestination(session.role, redirect));
   } catch (error) {
     const message = error instanceof ApiClientError ? error.message : '登录失败';
     toast.show(message, 'error');

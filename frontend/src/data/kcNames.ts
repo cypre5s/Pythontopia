@@ -71,16 +71,18 @@ export const KC_NAMES: Readonly<Record<string, string>> = Object.freeze({
   'PY43-KC-065': '面向对象编程的特征',
 });
 
-/** KC code → 中文名；支持 `PY43-KC-002` 与 `KC-002` 两种写法；未知回退到原串。 */
+const OTHER_KC_NAME = '相关知识点';
+
+/** KC code → 中文名；支持 `PY43-KC-002` 与 `KC-002` 两种写法。 */
 export function kcDisplayName(code: string | undefined | null): string {
   if (!code) return '本知识点';
   const full = code.startsWith('PY43-') ? code : `PY43-${code}`;
-  return KC_NAMES[full] ?? KC_NAMES[code] ?? code;
+  return KC_NAMES[full] ?? KC_NAMES[code] ?? (/^(?:PY43-)?KC-\d+$/.test(code) ? OTHER_KC_NAME : code);
 }
 
-const KC_CODE_PATTERN = /(?:PY43-)?KC-(\d{3})/g;
+const KC_CODE_PATTERN = /(?:PY43-)?KC-(\d+)/g;
 // 标题里「（KC-002）」这类纯编码括注：直接去掉（标题本身已有中文描述），不展开成名字以免冗余。
-const KC_PAREN_PATTERN = /[（(]\s*(?:PY43-)?KC-\d{3}\s*[)）]/g;
+const KC_PAREN_PATTERN = /[（(]\s*(?:PY43-)?KC-\d+\s*[)）]/g;
 
 /**
  * 渲染期净化任务标题/提示中的 KC 编码，避免学生看到 `KC-002`：
@@ -92,8 +94,8 @@ export function humanizeKcText(text: string | undefined | null): string {
   return text
     .replace(KC_PAREN_PATTERN, '')
     .replace(KC_CODE_PATTERN, (match, digits: string) => {
-      const name = KC_NAMES[`PY43-KC-${digits}`];
-      return name ? `「${name}」` : match;
+      const name = KC_NAMES[`PY43-KC-${digits.padStart(3, '0')}`] ?? OTHER_KC_NAME;
+      return `「${name}」`;
     })
     .trim();
 }

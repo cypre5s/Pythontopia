@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router';
 import AppLayout from '@/app/AppLayout.vue';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import ProfileRadar from '@/components/profile/ProfileRadar.vue';
+import ProfileInterviewPanel from '@/components/profile/ProfileInterviewPanel.vue';
 import PyButton from '@/components/ui/PyButton.vue';
 import PyPanel from '@/components/ui/PyPanel.vue';
 import PyEmptyState from '@/components/ui/PyEmptyState.vue';
@@ -25,6 +26,7 @@ const router = useRouter();
 const dimensions = ref<ProfileDimensionDto[]>([]);
 const dimensionsError = ref('');
 const savingKey = ref<string | null>(null);
+const showInterview = ref(false);
 
 function goBack(): void {
   playUiClick();
@@ -44,6 +46,16 @@ async function loadDimensions(): Promise<void> {
 const selfEditable = computed(() =>
   dimensions.value.filter((d) => d.selfEditable),
 );
+
+async function toggleInterview(): Promise<void> {
+  showInterview.value = !showInterview.value;
+  if (!showInterview.value || learning.profileInterview.sessionId) return;
+  try {
+    await learning.openInterview();
+  } catch {
+    toast.show('画像访谈暂时无法开始，请重试。', 'error');
+  }
+}
 
 // 自评滑块的「本地草稿值」(0..100)：拖动即时跟手、提交后保留学生选定位置，
 // 不被后端 effective(decay) 分数拉回——否则松手就回弹，像「拉不动」。
@@ -93,14 +105,40 @@ onMounted(async () => {
 
 const p = computed(() => learning.profile);
 
+const majorLabels: Readonly<Record<string, string>> = {
+  CS: '计算机相关专业',
+  NON_CS_STEM: '非计算机理工专业',
+  NON_CS_HUMANITIES: '非计算机人文社科专业',
+  OTHER: '其他专业',
+};
+const goalLabels: Readonly<Record<string, string>> = {
+  EXAM: '备考考试',
+  PROJECT: '完成项目',
+  INTEREST: '兴趣学习',
+  JOB: '职业发展',
+};
+const mediaLabels: Readonly<Record<string, string>> = {
+  video: '视频',
+  text: '文字课件',
+  mindmap: '思维导图',
+  code: '编程练习',
+};
+
+function profileLabel(value: string, labels: Readonly<Record<string, string>>, fallback: string): string {
+  return labels[value] ?? labels[value.toLowerCase()] ?? fallback;
+}
+
 const dimensionCards = computed(() => {
   if (!p.value) return [];
   return [
     {
       key: 'major',
       title: '专业背景',
-      value: p.value.major ?? '未设定',
+      value: p.value.major
+        ? profileLabel(p.value.major, majorLabels, '其他专业')
+        : '未设定',
       detail: null,
+      source: '来源：访谈自述 · 用途：让学习例子贴近专业背景',
     },
     {
       key: 'baseLevel',
@@ -109,16 +147,20 @@ const dimensionCards = computed(() => {
         ? `编程 ${p.value.baseLevel.programmingYears} 年 / Python Lv.${p.value.baseLevel.pythonSelfRatedLevel}`
         : '待评估',
       detail: p.value.baseLevel?.languagesKnown.length
-        ? `已学语言: ${p.value.baseLevel.languagesKnown.join(', ')}`
+        ? `已学语言：${p.value.baseLevel.languagesKnown.join('、')}`
         : null,
+      source: '来源：访谈自述 · 用途：选择合适的练习起点',
     },
     {
       key: 'learningGoal',
       title: '学习目标',
-      value: p.value.learningGoal?.kind ?? '未设定',
+      value: p.value.learningGoal
+        ? profileLabel(p.value.learningGoal.kind, goalLabels, '其他目标')
+        : '未设定',
       detail: p.value.learningGoal?.deadlineIso
-        ? `截止: ${p.value.learningGoal.deadlineIso.slice(0, 10)}`
+        ? `目标日期：${p.value.learningGoal.deadlineIso.slice(0, 10)}`
         : null,
+      source: '来源：访谈自述 · 用途：安排学习路径和目标日期',
     },
     {
       key: 'learningPreference',
@@ -127,8 +169,11 @@ const dimensionCards = computed(() => {
         ? `每日 ${p.value.learningPreference.sessionMinutesPerDay} 分钟`
         : '待评估',
       detail: p.value.learningPreference?.mediaPriority.length
-        ? `偏好: ${p.value.learningPreference.mediaPriority.join(' > ')}`
+        ? `偏好顺序：${p.value.learningPreference.mediaPriority
+          .map((media) => profileLabel(media, mediaLabels, '其他形式'))
+          .join(' → ')}`
         : null,
+      source: '来源：访谈自述 · 用途：调整资源形式和每日学习量',
     },
   ];
 });
@@ -224,60 +269,85 @@ const dimensionCards = computed(() => {
           </PyPanel>
         </aside>
 
-        <div
-          v-if="p"
-          class="profile-col profile-col--right"
-        >
-          <div class="dimension-grid">
-            <article
-              v-for="dim in dimensionCards"
-              :key="dim.key"
-              class="dim-card"
-              :data-testid="`dim-${dim.key}`"
-            >
-              <div class="dim-card__header">
-                <h3 class="dim-card__title">
-                  {{ dim.title }}
-                </h3>
-              </div>
-              <p class="dim-card__value">
-                {{ dim.value }}
-              </p>
-              <p
-                v-if="dim.detail"
-                class="dim-card__detail"
-              >
-                {{ dim.detail }}
-              </p>
-            </article>
-          </div>
-
-          <PyPanel v-if="p?.narrativeSummary">
+        <div class="profile-col profile-col--right">
+          <PyPanel class="profile-input-panel">
             <h2 class="summary-title">
-              综合总结
+              补充画像信息
             </h2>
-            <MarkdownView
-              :source="p.narrativeSummary"
-              :allow-images="false"
+            <p class="profile-note">
+              访谈记录你的专业、基础、目标和偏好，用于个性化推荐；不会替代练习和小测的能力证据。
+            </p>
+            <PyButton
+              variant="secondary"
+              size="sm"
+              test-id="profile-interview-toggle"
+              :aria-expanded="showInterview"
+              @click="toggleInterview"
+            >
+              {{ showInterview ? '收起画像访谈' : '开始或继续画像访谈' }}
+            </PyButton>
+            <ProfileInterviewPanel
+              v-if="showInterview"
+              class="profile-interview"
+              @finished="loadDimensions"
             />
           </PyPanel>
-        </div>
 
-        <PyEmptyState
-          v-if="!p"
-          class="profile-empty"
-          title="画像尚未生成"
-          description="完成入学访谈或开始学习后自动生成。"
-          icon="🧭"
-        >
-          <PyButton
-            variant="primary"
-            size="sm"
-            @click="goBack"
+          <template v-if="p">
+            <div class="dimension-grid">
+              <article
+                v-for="dim in dimensionCards"
+                :key="dim.key"
+                class="dim-card"
+                :data-testid="`dim-${dim.key}`"
+              >
+                <div class="dim-card__header">
+                  <h3 class="dim-card__title">
+                    {{ dim.title }}
+                  </h3>
+                </div>
+                <p class="dim-card__value">
+                  {{ dim.value }}
+                </p>
+                <p
+                  v-if="dim.detail"
+                  class="dim-card__detail"
+                >
+                  {{ dim.detail }}
+                </p>
+                <p class="dim-card__source">
+                  {{ dim.source }}
+                </p>
+              </article>
+            </div>
+
+            <PyPanel v-if="p.narrativeSummary">
+              <h2 class="summary-title">
+                综合总结
+              </h2>
+              <MarkdownView
+                :source="p.narrativeSummary"
+                :allow-images="false"
+              />
+            </PyPanel>
+          </template>
+
+          <PyEmptyState
+            v-else
+            class="profile-empty"
+            title="画像尚未生成"
+            description="可以先通过画像访谈补充学习目标与偏好。"
+            icon="🧭"
           >
-            去小镇学习
-          </PyButton>
-        </PyEmptyState>
+            <PyButton
+              variant="primary"
+              size="sm"
+              @click="goBack"
+            >
+              去小镇学习
+            </PyButton>
+          </PyEmptyState>
+        </div>
       </div>
     </section>
   </AppLayout>
@@ -454,6 +524,20 @@ const dimensionCards = computed(() => {
   border-top: 1px dashed var(--pyt-color-border-soft);
   padding-top: 6px;
   margin-top: 6px;
+}
+.dim-card__source {
+  margin: 6px 0 0;
+  padding-top: 6px;
+  border-top: 1px dashed var(--pyt-color-border-soft);
+  color: var(--pyt-color-text-muted);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.profile-input-panel > .profile-note {
+  margin: 0 0 10px;
+}
+.profile-interview {
+  margin-top: 12px;
 }
 
 .cog-correct {

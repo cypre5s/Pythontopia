@@ -14,7 +14,7 @@ export type MentionKind = 'chapter' | 'kc';
 
 export interface MentionItem {
   kind: MentionKind;
-  /** 内联插入到问题文本中的引用 token（无空格），如 `@KC-012`、`@CH3`（已隐藏 PY43 内码）。 */
+  /** 内联插入到问题文本中的引用 token（无空格），如 `@for循环与遍历`、`@CH3`。 */
   token: string;
   /** 菜单展示名，如 `input 函数`。 */
   label: string;
@@ -217,9 +217,8 @@ export function buildMentionItems(
     .sort((a, b) => a.kcCode.localeCompare(b.kcCode))
     .map((kc) => ({
       kind: 'kc',
-      // token 仅作 UI 内联标记，去掉 PY43- 前缀（学生不该看到 PY43-KC-012 这种内码）；
-      // kcCode 仍保留全码用于驱动后端 RAG / 生成，DB 与规范码不变。
-      token: `@${kc.kcCode.replace(/^PY43-/, '')}`,
+      // token 仅作 UI 内联标记；结构化引用仍保留全码用于后端 RAG。
+      token: `@${kc.kcName.replace(/\s+/g, '')}`,
       label: kc.kcName,
       desc: kc.summaryMarkdown ?? kc.kcName,
       kcCode: kc.kcCode,

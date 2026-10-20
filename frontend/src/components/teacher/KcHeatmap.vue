@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import type { KcHeatmapEntryDto } from '@/api/dto/TeacherDashboard';
+import { kcDisplayName } from '@/data/kcNames';
 
 const props = defineProps<{ entries: KcHeatmapEntryDto[] }>();
 
@@ -22,7 +23,7 @@ const grouped = computed<Map<number, Cell[]>>(() => {
     }
     map.get(chapterId)!.push({
       kcCode: entry.kcCode,
-      kcName: entry.kcName ?? entry.kcCode,
+      kcName: entry.kcName ?? kcDisplayName(entry.kcCode),
       avgMastery: entry.avgMastery,
       studentCount: entry.studentCount,
       masteredCount: entry.masteredCount,
@@ -91,9 +92,9 @@ function pct(value: number): string {
             v-for="cell in cells"
             :key="cell.kcCode"
             class="cell"
-            :title="cell.kcName + '\n' + cell.kcCode + '\n平均掌握 ' + fmt(cell.avgMastery) + '\n已掌握 ' + cell.masteredCount + '/' + cell.studentCount"
+            :title="cell.kcName + '\n平均掌握 ' + fmt(cell.avgMastery) + '\n已掌握 ' + cell.masteredCount + '/' + cell.studentCount"
           >
-            <span class="cell__code">{{ cell.kcCode }}</span>
+            <span class="cell__code">{{ cell.kcName }}</span>
             <span
               class="cell__value"
               :style="{ color: color(cell.avgMastery) }"

@@ -6,6 +6,7 @@ import PyEmptyState from '@/components/ui/PyEmptyState.vue';
 import MarkdownView from '@/components/common/MarkdownView.vue';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
+import { kcDisplayName } from '@/data/kcNames';
 import type {
   BugMineCardDto,
   BugMineDepthStepDto,
@@ -383,7 +384,7 @@ async function retry(): Promise<void> {
               :data-testid="`echo-candidate-${candidate.kcCode}`"
             >
               <div class="echo-card__info">
-                <span class="kc-code">{{ candidate.kcCode }}</span>
+                <span class="kc-code">{{ kcDisplayName(candidate.kcCode) }}</span>
                 <span class="echo-card__title">{{ candidate.problemTitle }}</span>
               </div>
               <div class="echo-card__foot">
@@ -510,7 +511,7 @@ async function retry(): Promise<void> {
               >
                 <!-- 错题本接口只返回 OPEN 会话，故不再渲染恒为「进行中」的状态徽标。 -->
                 <span class="error-item__eyebrow">
-                  <span class="kc-code">{{ item.kcCode }}</span>
+                  <span class="kc-code">{{ kcDisplayName(item.kcCode) }}</span>
                 </span>
                 <span class="error-item__title">{{ item.problemTitle }}</span>
                 <span
@@ -564,7 +565,7 @@ async function retry(): Promise<void> {
                 {{ problem?.title ?? activeErrorItem?.problemTitle ?? `题目 #${session.problemId}` }}
               </h3>
               <div class="problem__tags">
-                <span class="chip chip--soft kc-code">{{ problem?.kcCode ?? activeErrorItem?.kcCode ?? '—' }}</span>
+                <span class="chip chip--soft kc-code">{{ kcDisplayName(problem?.kcCode ?? activeErrorItem?.kcCode) }}</span>
                 <span
                   v-if="problem"
                   class="chip chip--soft"
@@ -688,7 +689,7 @@ async function retry(): Promise<void> {
               <div class="kc-meta">
                 <p class="kv">
                   <span class="kv__key">知识点</span>
-                  <span class="kc-code">{{ problem?.kcCode ?? activeErrorItem?.kcCode ?? '—' }}</span>
+                  <span class="kc-code">{{ kcDisplayName(problem?.kcCode ?? activeErrorItem?.kcCode) }}</span>
                 </p>
                 <p
                   v-if="activeErrorItem"

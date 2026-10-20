@@ -60,7 +60,7 @@ describe('NpcMemoryBadge', () => {
     const item = wrapper.get('[data-testid="npc-memory-item-42"]');
     expect(item.text()).toContain('练习失败：变量命名把赋值号写反了');
     expect(item.text()).toContain('practice_failed');
-    expect(item.text()).toContain('PY43-KC-001');
+    expect(item.text()).toContain('中国计算机发展成就');
     expect(item.text()).toContain('近期 82%');
     expect(item.text()).toContain('重要 80%');
     expect(item.text()).toContain('相关 90%');

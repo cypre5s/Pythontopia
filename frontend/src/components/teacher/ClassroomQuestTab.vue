@@ -6,6 +6,7 @@ import type {
   ClassroomQuestDto,
 } from '@/api/dto/ClassroomQuest';
 import type { QuestCompletionDto } from '@/api/dto/TeacherDashboard';
+import { kcDisplayName } from '@/data/kcNames';
 
 const props = withDefaults(
   defineProps<{
@@ -138,11 +139,11 @@ function rateColor(value: number): string {
           />
         </label>
         <label>
-          KC 代码（空格或逗号分隔）
+          知识点（空格或逗号分隔）
           <input
             v-model="kcInput"
             required
-            placeholder="例如 PY43-KC-001 PY43-KC-002"
+            placeholder="输入关联知识点"
           >
         </label>
       </fieldset>
@@ -232,7 +233,7 @@ function rateColor(value: number): string {
           :key="quest.id"
         >
           <td>{{ quest.title }}</td>
-          <td>{{ quest.kcCodes.join(', ') }}</td>
+          <td>{{ quest.kcCodes.map(kcDisplayName).join('、') }}</td>
           <td>{{ quest.dueDate }}</td>
           <td>{{ quest.status }}</td>
           <td>

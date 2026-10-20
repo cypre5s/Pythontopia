@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import type { EvaluationDto } from '@/api/dto/Evaluation';
 import type { LearningPathDto, LearningPathNodeDto } from '@/api/dto/Path';
+import { kcDisplayName } from '@/data/kcNames';
 
 const props = defineProps<{ evaluation: EvaluationDto; activePath: LearningPathDto | null }>();
 
@@ -10,7 +11,7 @@ const activeSummary = computed<LearningPathNodeDto[]>(() => props.activePath?.no
 
 function nodeLabel(node: LearningPathNodeDto): string {
   const action = nodeAction(node);
-  return `Day ${node.dayIndex}.${node.orderInDay} · ${action} · ${node.kcCode}`;
+  return `Day ${node.dayIndex}.${node.orderInDay} · ${action} · ${kcDisplayName(node.kcCode)}`;
 }
 
 function nodeAction(node: LearningPathNodeDto): string {
