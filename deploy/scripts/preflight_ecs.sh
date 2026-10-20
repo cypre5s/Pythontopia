@@ -18,7 +18,6 @@ set -uo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/deepseek_model_contract.sh"
-source "${SCRIPT_DIR}/piston_url_contract.sh"
 PYT_PUBLIC_IP="${PYT_PUBLIC_IP:-47.120.29.62}"
 ENV_FILE="${PYT_ENV_FILE:-/opt/pythontopia/shared/.env}"
 ENV_FILE_FALLBACK="/opt/pythontopia/current/deploy/.env"
@@ -27,7 +26,6 @@ ENV_FILE_FALLBACK="/opt/pythontopia/current/deploy/.env"
 REQUIRED_VARS=(
   PYT_DB_USERNAME PYT_DB_PASSWORD PYT_JWT_SECRET PYT_TEACHER_INVITE_CODE
   PYT_RAG_ADMIN_TOKEN PYT_ROUTE_EXECUTION_SECRET
-  PYT_JUDGE_PROVIDER PYT_PISTON_URL PYT_PISTON_PYTHON_VERSION PYT_PISTON_AUTH_TOKEN
   PYT_LLM_PROVIDER PYT_OPENAI_BASE_URL PYT_OPENAI_API_KEY PYT_OPENAI_MODEL
   PYT_OPENAI_MODEL_VISION PYT_RAG_EMBEDDER
 )
@@ -137,30 +135,14 @@ validate_production_ai_env() {
 
 validate_production_judge_env() {
   local env_file="$1"
-  local provider piston_url
-  provider="$(env_file_value "${env_file}" PYT_JUDGE_PROVIDER)"
-  if [ "${provider,,}" = "piston" ]; then
-    pass "生产判题 provider 为 piston"
+  local python_version
+  python_version="$(env_file_value "${env_file}" PYT_PISTON_PYTHON_VERSION)"
+  python_version="${python_version:-3.11.0}"
+  if [[ "${python_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    pass "生产判题固定使用内部 Piston；Python runtime=${python_version}"
   else
-    fail "PYT_JUDGE_PROVIDER 必须为 piston；生产禁止 subprocess"
+    fail "PYT_PISTON_PYTHON_VERSION 必须是 x.y.z 版本号"
   fi
-  require_env_value "${env_file}" PYT_PISTON_URL || true
-  require_env_value "${env_file}" PYT_PISTON_PYTHON_VERSION || true
-  check_secret_strength PYT_PISTON_AUTH_TOKEN 32 fail "${env_file}"
-
-  piston_url="$(env_file_value "${env_file}" PYT_PISTON_URL)"
-  case "${piston_url}" in
-    https://*) pass "外部 Piston 使用 HTTPS" ;;
-    http://*)
-      if is_private_piston_http_url "${piston_url}"; then
-        warn "Piston 使用隔离内网 HTTP；请确保网络边界不可被公网访问"
-      else
-        fail "外部 Piston 地址必须使用 HTTPS"
-      fi
-      ;;
-    "") ;;
-    *) fail "PYT_PISTON_URL 必须是 http:// 或 https:// URL" ;;
-  esac
 }
 
 # 秘密强度校验：只读取长度与占位特征，任何分支都不打印变量值本身。
@@ -223,7 +205,7 @@ if [ -n "${DISK_AVAIL_GB}" ]; then
   if [ "${DISK_AVAIL_GB}" -ge 8 ]; then
     pass "根分区可用空间 ${DISK_AVAIL_GB}G（≥8G）"
   elif [ "${DISK_AVAIL_GB}" -ge 5 ]; then
-    warn "根分区可用空间仅 ${DISK_AVAIL_GB}G：四个镜像 tar + docker load + 备份会吃紧，建议清理旧镜像/日志"
+    warn "根分区可用空间仅 ${DISK_AVAIL_GB}G：五个镜像 tar + docker load + 备份会吃紧，建议清理旧镜像/日志"
   else
     fail "根分区可用空间仅 ${DISK_AVAIL_GB}G（<5G），不足以解包发布包并导入镜像"
   fi
@@ -236,7 +218,7 @@ if [ -n "${MEM_TOTAL_MB}" ]; then
   if [ "${MEM_TOTAL_MB}" -ge 3500 ]; then
     pass "物理内存 ${MEM_TOTAL_MB}MB（≥3.5G）"
   else
-    warn "物理内存 ${MEM_TOTAL_MB}MB 低于 4G 基线，六容器 + 主机 Nginx 可能触发 OOM"
+    warn "物理内存 ${MEM_TOTAL_MB}MB 低于 4G 基线，七个运行服务 + 主机 Nginx 可能触发 OOM"
   fi
 else
   warn "无法读取内存信息"
@@ -284,7 +266,7 @@ if docker info >/dev/null 2>&1; then
     if docker image inspect "${img}" >/dev/null 2>&1; then
       pass "基础镜像 ${img} 已在本机"
     else
-      warn "基础镜像 ${img} 不在本机：安装时需要联网拉取（发布包只携带四个应用镜像）"
+      warn "基础镜像 ${img} 不在本机：安装时需要联网拉取（发布包只携带应用与 Piston 镜像）"
     fi
   done
 

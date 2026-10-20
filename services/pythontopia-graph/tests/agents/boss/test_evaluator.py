@@ -168,7 +168,7 @@ def test_unavailable_piston_fails_closed_without_local_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("PYT_PISTON_URL", "http://piston.test")
-    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
+    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.0")
 
     def unreachable(*args: object, **kwargs: object) -> None:
         raise httpx.ConnectError("test endpoint unavailable")

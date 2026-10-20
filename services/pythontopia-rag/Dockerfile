@@ -13,8 +13,9 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g' /etc/apt/sources.list.d/debia
 
 COPY pyproject.toml ./
 COPY pythontopia_rag ./pythontopia_rag
+ARG PYT_PIP_INDEX_URL=https://pypi.org/simple/
 RUN pip install --no-cache-dir \
-    --index-url https://mirrors.aliyun.com/pypi/simple/ \
+    --index-url "${PYT_PIP_INDEX_URL}" \
     --trusted-host mirrors.aliyun.com \
     .
 

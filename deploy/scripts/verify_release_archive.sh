@@ -12,7 +12,7 @@
 #   3. 违禁内容：包内任何位置不得命中 allowlist [deny] 模式
 #      （.env、密钥、node_modules、target、dist、coverage、.git、PDF、视频、
 #       生成媒体、clients/、docs/references/ 等）；
-#   4. 镜像产物：deploy/runtime/images/ 下四个镜像 tar 齐全、非空，
+#   4. 镜像产物：deploy/runtime/images/ 下五个镜像 tar 齐全、非空，
 #      且为 docker save 导出形态（含 manifest.json 或 OCI index.json）；
 #   5. 校验和：deploy/runtime/sha256sums.txt 存在，逐文件核对一致，
 #      且覆盖包内全部常规文件（防篡改、防夹带）。
@@ -27,12 +27,13 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ARCHIVE="${1:-}"
 ALLOWLIST="${2:-$SCRIPT_DIR/../release/archive-allowlist.txt}"
 
-# 冻结契约：四个应用镜像在包内的固定路径
+# 冻结契约：五个运行镜像在包内的固定路径
 REQUIRED_IMAGES=(
   "deploy/runtime/images/frontend.tar"
   "deploy/runtime/images/backend.tar"
   "deploy/runtime/images/graph.tar"
   "deploy/runtime/images/rag.tar"
+  "deploy/runtime/images/piston.tar"
 )
 SUMS_PATH="deploy/runtime/sha256sums.txt"
 
@@ -214,7 +215,7 @@ done
 if [[ ${#MISSING_IMAGES[@]} -gt 0 ]]; then
   fail "缺少应用镜像 tar：${MISSING_IMAGES[*]}"
 else
-  pass "四个应用镜像 tar 均在 deploy/runtime/images/ 下"
+  pass "五个运行镜像 tar 均在 deploy/runtime/images/ 下"
 fi
 
 if ! grep -x "$SUMS_PATH" "$ENTRIES" >/dev/null 2>&1; then

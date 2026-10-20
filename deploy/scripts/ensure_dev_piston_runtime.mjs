@@ -1,13 +1,29 @@
 #!/usr/bin/env node
 
+import { createRequire } from 'node:module';
+
 const baseUrl = (process.env.PYT_PISTON_URL || 'http://127.0.0.1:2000').replace(/\/$/, '');
-const pythonVersion = process.env.PYT_PISTON_PYTHON_VERSION || '3.11.13';
+const pythonVersion = process.env.PYT_PISTON_PYTHON_VERSION || '3.11.0';
+const requireFromPiston = createRequire('/piston_api/package.json');
+const fetchRequest = globalThis.fetch || requireFromPiston('node-fetch');
 const wait = (milliseconds) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+async function request(url, options = {}, timeoutMs = 5_000) {
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = setTimeout(() => controller?.abort(), timeoutMs);
+  try {
+    return await fetchRequest(url, {
+      ...options,
+      ...(controller ? { signal: controller.signal } : {}),
+      timeout: timeoutMs,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 async function getRuntimes() {
-  const response = await fetch(`${baseUrl}/api/v2/runtimes`, {
-    signal: AbortSignal.timeout(5_000),
-  });
+  const response = await request(`${baseUrl}/api/v2/runtimes`);
   if (!response.ok) throw new Error(`Piston returned HTTP ${response.status}`);
   const runtimes = await response.json();
   return Array.isArray(runtimes) ? runtimes : [];
@@ -42,12 +58,11 @@ async function ensurePythonRuntime() {
     }
   }
 
-  const response = await fetch(`${baseUrl}/api/v2/packages`, {
+  const response = await request(`${baseUrl}/api/v2/packages`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ language: 'python', version: pythonVersion }),
-    signal: AbortSignal.timeout(20 * 60_000),
-  });
+  }, 20 * 60_000);
   const body = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(

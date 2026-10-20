@@ -21,6 +21,8 @@
 #   6. 去掉开发态的源码只读挂载与宿主代理 JAVA_OPTS 默认值（ECS 无本地 7892 代理）。
 #   7. 增加 mem_limit / 日志轮转上限，适配 2C4G 小机型，防止 JVM 按宿主 4G 取
 #      MaxRAMPercentage 以及 json-file 日志撑爆 40G 磁盘。
+#   8. 正式判题由独立 Piston 容器执行；只有 backend 和 runtime 初始化任务接入判题网，
+#      不发布宿主端口。初始化会联网安装缺失 runtime，学生代码仍由 nosocket 禁网。
 #
 # 数据目录约定（由 install_release.sh 创建）：
 #   /opt/pythontopia/shared/data/course-pack-43/   课件 PDF / 视频（只读挂载，主线闯关必需）
@@ -72,6 +74,62 @@ services:
       retries: 5
       start_period: 10s
 
+  piston:
+    image: pythontopia/piston:release
+    pull_policy: never
+    restart: unless-stopped
+    logging: *default-logging
+    read_only: true
+    cap_drop: ["ALL"]
+    # Piston extracts runtime archives with their file modes preserved.
+    cap_add: ["CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID", "KILL", "FOWNER"]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 768m
+    memswap_limit: 768m
+    cpus: 1.0
+    pids_limit: 128
+    environment:
+      PISTON_RUN_TIMEOUT: "10000"
+      PISTON_RUN_MEMORY_LIMIT: "268435456"
+      PISTON_MAX_CONCURRENT_JOBS: "1"
+      PISTON_DISABLE_NETWORKING: "true"
+    volumes:
+      - piston_packages:/piston/packages
+    tmpfs:
+      - /tmp:exec,size=256m,mode=700
+      - /piston/jobs:exec,size=256m
+    networks: [judge-execution]
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('node-fetch')('http://127.0.0.1:2000/api/v2/runtimes').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  piston-runtime-init:
+    image: pythontopia/piston:release
+    pull_policy: never
+    restart: "no"
+    logging: *default-logging
+    entrypoint: ["node", "/piston_api/ensure-python-runtime.mjs"]
+    environment:
+      PYT_PISTON_URL: http://piston:2000
+      PYT_PISTON_PYTHON_VERSION: ${PYT_PISTON_PYTHON_VERSION:-3.11.0}
+    depends_on:
+      piston:
+        condition: service_healthy
+    networks: [judge-execution]
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt:
+      - no-new-privileges:true
+    mem_limit: 128m
+    pids_limit: 32
+    volumes:
+      - piston_packages:/piston/packages
+      - ./scripts/ensure_dev_piston_runtime.mjs:/piston_api/ensure-python-runtime.mjs:ro
+
   backend:
     image: pythontopia/backend:release
     pull_policy: never
@@ -80,6 +138,8 @@ services:
     # JVM 按容器内存上限取 MaxRAMPercentage=70 ≈ 1.05G 堆。
     mem_limit: 1536m
     depends_on:
+      piston-runtime-init:
+        condition: service_completed_successfully
       postgres:
         condition: service_healthy
       redis:
@@ -110,9 +170,8 @@ services:
       PYT_ROUTE_EXECUTION_SECRET: ${PYT_ROUTE_EXECUTION_SECRET:?缺少 PYT_ROUTE_EXECUTION_SECRET}
       # 正式判题必须交给独立隔离的 Piston；生产不允许回落到 backend 容器内 subprocess。
       PYT_JUDGE_PROVIDER: piston
-      PYT_PISTON_URL: ${PYT_PISTON_URL:?缺少 PYT_PISTON_URL}
-      PYT_PISTON_PYTHON_VERSION: ${PYT_PISTON_PYTHON_VERSION:?缺少 PYT_PISTON_PYTHON_VERSION}
-      PYT_PISTON_AUTH_TOKEN: ${PYT_PISTON_AUTH_TOKEN:?缺少 PYT_PISTON_AUTH_TOKEN}
+      PYT_PISTON_URL: http://piston:2000
+      PYT_PISTON_PYTHON_VERSION: ${PYT_PISTON_PYTHON_VERSION:-3.11.0}
       # 生产环境不公开 Swagger/OpenAPI，避免匿名枚举完整接口与 DTO。
       PYT_EXPOSE_API_DOCS: "false"
       # ---- 数据目录接线：远端 .env 中的宿主相对路径在容器内无意义，统一覆盖 ----
@@ -142,6 +201,7 @@ services:
     # 仅绑定回环：供主机诊断（curl 127.0.0.1:18080/readyz），不对公网暴露。
     ports:
       - "127.0.0.1:18080:18080"
+    networks: [default, judge-execution]
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18080/readyz || exit 1"]
       interval: 15s
@@ -260,3 +320,10 @@ volumes:
   # 以 -p deploy 启动时实际卷名为 deploy_pytopia_pg，与现有线上数据卷同名复用；
   # 卷已存在且属于 deploy 项目时 Compose 直接挂载，不会重建、不会清空。
   pytopia_pg:
+  piston_packages:
+
+networks:
+  # 仅 backend、Piston 与一次性 runtime installer 接入；不映射宿主端口。
+  # 保留出站能力供官方 runtime 首次安装；runner 自身由 nosocket 禁网。
+  judge-execution:
+    driver: bridge

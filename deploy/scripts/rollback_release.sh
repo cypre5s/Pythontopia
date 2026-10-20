@@ -114,6 +114,13 @@ for required in \
     exit 1
   fi
 done
+if grep -Fq 'image: pythontopia/piston:release' "${TARGET}/deploy/${COMPOSE_FILE_NAME}"; then
+  if [ ! -f "${TARGET}/deploy/runtime/images/piston.tar" ]; then
+    echo "[回滚失败] 目标 release 使用 Piston，但缺少 runtime/images/piston.tar。" >&2
+    exit 1
+  fi
+  IMAGE_COMPONENTS+=(piston)
+fi
 if [ ! -f "${ENV_FILE}" ]; then
   echo "[回滚失败] 缺少生产秘密文件 ${ENV_FILE}，无法启动服务。" >&2
   exit 1
@@ -153,7 +160,11 @@ COMPOSE_FILE="${TARGET}/deploy/${COMPOSE_FILE_NAME}"
 ( cd "${TARGET}/deploy" && docker compose -p "${COMPOSE_PROJECT}" -f "${COMPOSE_FILE_NAME}" config -q )
 # --force-recreate：镜像 tag 未变（内容已变），必须强制重建容器才能用回旧镜像
 ( cd "${TARGET}/deploy" && docker compose -p "${COMPOSE_PROJECT}" -f "${COMPOSE_FILE_NAME}" up -d --remove-orphans --force-recreate )
-wait_healthy 480 postgres redis pythontopia-rag pythontopia-graph backend frontend
+HEALTHY_SERVICES=(postgres redis pythontopia-rag pythontopia-graph backend frontend)
+if grep -Fq 'image: pythontopia/piston:release' "${TARGET}/deploy/${COMPOSE_FILE_NAME}"; then
+  HEALTHY_SERVICES+=(piston)
+fi
+wait_healthy 480 "${HEALTHY_SERVICES[@]}"
 
 # ---------------------------------------------------------------------------
 step "回切主机 Nginx 配置"

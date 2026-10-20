@@ -38,7 +38,7 @@ services:
     networks: [judge-execution]
     read_only: true
     cap_drop: ["ALL"]
-    cap_add: ["CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID", "KILL"]
+    cap_add: ["CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID", "KILL", "FOWNER"]
     security_opt:
       - no-new-privileges:true
     mem_limit: 768m
@@ -82,7 +82,7 @@ services:
       PYT_ROUTE_EXECUTION_SECRET: ${PYT_ROUTE_EXECUTION_SECRET:-}
       PYT_JUDGE_PROVIDER: ${PYT_JUDGE_PROVIDER:-piston}
       PYT_PISTON_URL: ${PYT_PISTON_URL:-}
-      PYT_PISTON_PYTHON_VERSION: ${PYT_PISTON_PYTHON_VERSION:-3.11.13}
+      PYT_PISTON_PYTHON_VERSION: ${PYT_PISTON_PYTHON_VERSION:-3.11.0}
       PYT_PISTON_AUTH_TOKEN: ${PYT_PISTON_AUTH_TOKEN:-}
       JAVA_OPTS: >-
         -XX:MaxRAMPercentage=70 -Dfile.encoding=UTF-8
@@ -136,7 +136,7 @@ services:
       PYT_RAG_URL: http://127.0.0.1:18092
       PYT_RAG_ADMIN_TOKEN: ${PYT_RAG_ADMIN_TOKEN:-}
       PYT_PISTON_URL: ${PYT_PISTON_URL:-}
-      PYT_PISTON_PYTHON_VERSION: ${PYT_PISTON_PYTHON_VERSION:-3.11.13}
+      PYT_PISTON_PYTHON_VERSION: ${PYT_PISTON_PYTHON_VERSION:-3.11.0}
       PYT_PISTON_AUTH_TOKEN: ${PYT_PISTON_AUTH_TOKEN:-}
       # 与生产同一真实 Playwright 只读执行路径；单并发避免开发机被 Chromium 抢占。
       BROWSE_ENABLED: "on"

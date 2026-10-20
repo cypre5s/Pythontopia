@@ -44,7 +44,7 @@ assert directives.get("frame-ancestors") == "\u0027self\u0027"
 assert directives.get("img-src") == "\u0027self\u0027 data: blob: https://*.hdslb.com"
 assert directives.get("font-src") == "\u0027self\u0027"
 assert directives.get("connect-src") == "\u0027self\u0027"
-assert directives.get("worker-src") == "\u0027self\u0027"
+assert directives.get("worker-src") == "\u0027self\u0027 blob:"
 assert directives.get("frame-src") == "\u0027none\u0027"
 assert directives.get("media-src") == "\u0027self\u0027"
 assert directives.get("manifest-src") == "\u0027self\u0027"
@@ -56,6 +56,7 @@ worker_policy = re.search(
 assert worker_policy, "the Pyodide worker must carry its own CSP"
 assert "script-src \u0027self\u0027 \u0027unsafe-eval\u0027 \u0027wasm-unsafe-eval\u0027" in worker_policy.group("policy")
 assert "connect-src \u0027self\u0027" in worker_policy.group("policy")
+assert "worker-src \u0027self\u0027 blob:" in worker_policy.group("policy")
 assert "add_header X-Frame-Options \"SAMEORIGIN\" always;" in edge
 assert "add_header Content-Security-Policy" not in edge
 print("CSP document-response contract: PASS")
@@ -106,7 +107,7 @@ for service_name, service in services.items():
 assert not piston.get("privileged", False)
 assert piston["read_only"] is True
 assert set(piston["cap_drop"]) == {"ALL"}
-assert set(piston["cap_add"]) == {"CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID", "KILL"}
+assert set(piston["cap_add"]) == {"CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID", "KILL", "FOWNER"}
 assert "no-new-privileges:true" in piston["security_opt"]
 assert piston["mem_limit"] == piston["memswap_limit"] == "805306368"
 assert piston["cpus"] == 1 and piston["pids_limit"] == 128

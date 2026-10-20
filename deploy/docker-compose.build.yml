@@ -1,19 +1,34 @@
-# 本地受限网络构建覆盖：host 网络 + 127.0.0.1:7892 代理 + 国内镜像。
+# 本地受限网络构建覆盖：host 网络 + 127.0.0.1:7892 代理。
 # 用法：docker compose -f docker-compose.yml -f docker-compose.build.yml up -d --build
+x-proxy-build-args: &proxy-build-args
+  HTTP_PROXY: ${PYT_BUILD_PROXY:-http://127.0.0.1:7892}
+  HTTPS_PROXY: ${PYT_BUILD_PROXY:-http://127.0.0.1:7892}
+  NO_PROXY: localhost,127.0.0.1
 x-build-proxy: &build-proxy
   network: host
   pull: false
-  args:
-    HTTP_PROXY: ${PYT_BUILD_PROXY:-http://127.0.0.1:7892}
-    HTTPS_PROXY: ${PYT_BUILD_PROXY:-http://127.0.0.1:7892}
-    NO_PROXY: localhost,127.0.0.1
+  args: *proxy-build-args
 
 services:
   backend:
-    build: *build-proxy
+    build:
+      <<: *build-proxy
+      args:
+        <<: *proxy-build-args
+        MAVEN_PROXY_OPTS: "${MAVEN_PROXY_OPTS:--Dhttps.proxyHost=127.0.0.1 -Dhttps.proxyPort=7892}"
+        MAVEN_PROXY_HOST: ${MAVEN_PROXY_HOST:-127.0.0.1}
+        MAVEN_PROXY_PORT: ${MAVEN_PROXY_PORT:-7892}
   frontend:
     build: *build-proxy
   pythontopia-graph:
-    build: *build-proxy
+    build:
+      <<: *build-proxy
+      args:
+        <<: *proxy-build-args
+        PYT_PIP_INDEX_URL: ${PYT_PIP_INDEX_URL:-https://pypi.org/simple/}
   pythontopia-rag:
-    build: *build-proxy
+    build:
+      <<: *build-proxy
+      args:
+        <<: *proxy-build-args
+        PYT_PIP_INDEX_URL: ${PYT_PIP_INDEX_URL:-https://pypi.org/simple/}

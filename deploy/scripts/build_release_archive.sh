@@ -6,12 +6,13 @@
 #   bash deploy/scripts/build_release_archive.sh
 #
 # 流程（冻结契约见 deploy/release/archive-allowlist.txt）：
-#   1. docker build 四个应用镜像，按固定名打 tag：
+#   1. docker build 五个运行镜像，按固定名打 tag：
 #        pythontopia/frontend:release   ← frontend/Dockerfile
 #        pythontopia/backend:release    ← backend/Dockerfile
 #        pythontopia/graph:release      ← services/pythontopia-graph/Dockerfile
 #        pythontopia/rag:release        ← services/pythontopia-rag/Dockerfile
-#   2. docker save 导出到暂存区 deploy/runtime/images/{frontend,backend,graph,rag}.tar；
+#        pythontopia/piston:release    ← deploy/piston-local/Dockerfile
+#   2. docker save 导出到暂存区 deploy/runtime/images/{frontend,backend,graph,rag,piston}.tar；
 #   3. 只暂存 frontend/、backend/、deploy/ 三棵源码树，
 #      根 README.md 由 deploy/release/README.md 拷贝而来；
 #   4. 按 allowlist [deny] 清理本地专用文件（node_modules、target、.env、pem、
@@ -48,6 +49,7 @@ IMAGE_SPECS=(
   "backend|$ROOT/backend"
   "graph|$ROOT/services/pythontopia-graph"
   "rag|$ROOT/services/pythontopia-rag"
+  "piston|$ROOT/deploy/piston-local"
 )
 
 die() {
@@ -150,8 +152,8 @@ unset HTTP_PROXY HTTPS_PROXY http_proxy https_proxy ALL_PROXY all_proxy NO_PROXY
 # backend Dockerfile 使用 RUN --mount=type=cache，需要 BuildKit
 export DOCKER_BUILDKIT=1
 
-# ---------- 2. 构建四个镜像（冻结 tag）----------
-echo "==> [1/7] docker build 四个应用镜像"
+# ---------- 2. 构建五个镜像（冻结 tag）----------
+echo "==> [1/7] docker build 五个运行镜像"
 for spec in "${IMAGE_SPECS[@]}"; do
   short="${spec%%|*}"
   ctx="${spec#*|}"

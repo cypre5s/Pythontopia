@@ -91,7 +91,7 @@ _FIXED_STDOUT: dict[tuple[str, str], str] = {
 def fake_piston_endpoint(monkeypatch: pytest.MonkeyPatch) -> list[tuple[str, str]]:
     """Answer known unit snippets without interpreting or executing source."""
     monkeypatch.setenv("PYT_PISTON_URL", "http://piston.test")
-    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
+    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.0")
     submissions: list[tuple[str, str]] = []
 
     def post(

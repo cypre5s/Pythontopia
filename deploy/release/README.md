@@ -1,7 +1,7 @@
 # Pythontopia Web 发布包部署指南
 
 本压缩包是「Pythontopia 像素学习小镇」Web 端的离线发布包，面向目标服务器的部署人员。
-包内自带四个应用的 Docker 镜像导出文件，目标机**不需要**从源码构建，也不需要 Node / Maven / Python 工具链。
+包内自带四个应用与独立 Piston 判题服务的 Docker 镜像，目标机**不需要**从源码构建，也不需要 Node / Maven / Python 工具链。
 
 产物命名：`pythontopia-web-<UTC时间戳>.tar.gz`（例如 `pythontopia-web-20260612T120000Z.tar.gz`）。
 
@@ -29,14 +29,15 @@ pythontopia-web-<UTC>.tar.gz
         │   ├── frontend.tar           ← 镜像 pythontopia/frontend:release
         │   ├── backend.tar            ← 镜像 pythontopia/backend:release
         │   ├── graph.tar              ← 镜像 pythontopia/graph:release
-        │   └── rag.tar                ← 镜像 pythontopia/rag:release
+        │   ├── rag.tar                ← 镜像 pythontopia/rag:release
+        │   └── piston.tar             ← 镜像 pythontopia/piston:release
         └── sha256sums.txt             ← 包内全部文件的 SHA-256 清单
 ```
 
 说明：
 
 - Graph（多智能体）与 RAG（课件检索）两个 Python 微服务**只随镜像交付**，源码目录不在包内。
-- 四个镜像名固定为 `pythontopia/{frontend,backend,graph,rag}:release`，生产编排按此名引用。
+- 镜像名固定为 `pythontopia/{frontend,backend,graph,rag,piston}:release`，生产编排按此名引用。
 - 包内**不含**任何 `.env` 实值、密钥、课件 PDF/视频、`node_modules`、构建产物等本地文件；
   仅携带体积较小且经过源视频 SHA-256 校验的机器转写文本，安装器会在覆盖前备份旧字幕；
   内容契约见 `deploy/release/archive-allowlist.txt`。
@@ -48,8 +49,9 @@ pythontopia-web-<UTC>.tar.gz
 | 操作系统 | Linux x86_64（Ubuntu 22.04 实测） |
 | Docker | Docker Engine ≥ 24，含 Compose v2（`docker compose version` 可验证） |
 | 资源 | 最低 2C4G（生产编排已按此设 mem_limit），建议 4C8G；磁盘空闲 ≥ 20 GB（镜像 + 解包暂存 + 数据库） |
-| 端口 | 对外仅 `80/443`（主机 Nginx，配置见 `deploy/nginx/`）；容器侧只绑定回环 `127.0.0.1:8080`（frontend）与 `127.0.0.1:18080`（backend 诊断）；graph/rag/postgres/redis 不暴露宿主端口 |
+| 端口 | 对外仅 `80/443`（主机 Nginx，配置见 `deploy/nginx/`）；容器侧只绑定回环 `127.0.0.1:8080`（frontend）与 `127.0.0.1:18080`（backend 诊断）；graph/rag/postgres/redis/Piston 不暴露宿主端口 |
 | 基础镜像 | `pgvector/pgvector:pg16` 与 `redis:7-alpine` **不在包内**，目标机需可拉取（或由交付人另行提供镜像 tar 后 `docker load`） |
+| 网络 | Piston 不映射宿主端口；首次启动需访问 Piston 官方 runtime 包源，Python runtime 写入持久卷后可离线运行 |
 
 生产共享数据目录 `/opt/pythontopia/shared/data/course-pack-43/` 必须预置 7 份 PDF、
 `video_manifest.json` 与清单中的全部 MP4。打包、预检和安装均会核验 PDF 数量、视频存在性、
@@ -81,7 +83,7 @@ sha256sum -c deploy/runtime/sha256sums.txt --quiet && echo 校验和一致
 
 ```bash
 for f in deploy/runtime/images/*.tar; do docker load -i "$f"; done
-docker images | grep pythontopia   # 应看到 frontend/backend/graph/rag 四个 :release 镜像
+docker images | grep pythontopia   # 应看到 frontend/backend/graph/rag/piston 五个 :release 镜像
 ```
 
 ### 3.3 配置环境变量
@@ -99,7 +101,7 @@ vi .env
 - `PYT_JWT_SECRET`：至少 32 字符的随机串
 - `PYT_TEACHER_INVITE_CODE`：教师注册邀请码
 - `PYT_RAG_ADMIN_TOKEN`：RAG 管理接口令牌
-- `PYT_JUDGE_PROVIDER=piston`，并填写 `PYT_PISTON_URL`、`PYT_PISTON_PYTHON_VERSION`、至少 32 字符的 `PYT_PISTON_AUTH_TOKEN`；Piston 必须作为独立隔离服务部署，生产绝不回退 `subprocess`；公网/跨主机 URL 必须用 HTTPS，只有隔离内网允许 HTTP。注意：本地固定的 Piston API v3.1.0 已实测不校验 Bearer token；除非生产端或前置代理实际验证该 token，否则必须用私有网络 ACL 限制访问
+- 生产 Compose 固定使用内部 `http://piston:2000`，`PYT_PISTON_PYTHON_VERSION` 默认为 `3.11.0`；Piston 与 runtime 初始化任务只加入 backend 共用的 `judge-execution` 网络，不映射宿主端口，生产绝不回退 `subprocess`。Piston API v3.1.0 不校验 Bearer token，因此访问控制依赖 Docker 网络成员限制；该网络保留出站能力供首次 runtime 安装，学生提交代码由 `nosocket` 沙箱禁网
 - `PYT_LLM_PROVIDER=openai_compat`、`PYT_OPENAI_BASE_URL=https://api.deepseek.com`、`PYT_OPENAI_API_KEY`：只允许模型 `deepseek-v4-pro`（文本）和 `deepseek-flash`（文本/图片输入）；视觉模型必须为 `deepseek-flash`。生产禁止 dryrun、Spark 和其它兼容端点
 - `PYT_RAG_EMBEDDER=hash`：RAG 使用本地 hash 向量与 BM25，不要求外部 embedding API；语义向量降级时 `/readyz` 标记 `ready_degraded`，仍要求 BM25 课程索引可用
 - 配音、语音识别、语音输入和独立文生图入口关闭；导师图片通过 DeepSeek 视觉模型直接处理
@@ -134,7 +136,7 @@ docker compose -p deploy -f docker-compose.production.yml exec pythontopia-rag \
 
 ```bash
 cd deploy
-docker compose -p deploy -f docker-compose.production.yml ps   # 六个服务应为 healthy/running
+docker compose -p deploy -f docker-compose.production.yml ps   # 七个运行服务 healthy；piston-runtime-init 退出码为 0
 
 # 宿主回环口（生产编排只暴露这两个）
 curl -sf http://127.0.0.1:8080/healthz   && echo " frontend ok"

@@ -9,6 +9,7 @@ INSTALLER="${ROOT_DIR}/deploy/scripts/install_release.sh"
 ENV_EXAMPLE="${ROOT_DIR}/deploy/.env.example"
 RELEASE_README="${ROOT_DIR}/deploy/release/README.md"
 RELEASE_BUILDER="${ROOT_DIR}/deploy/scripts/build_release_archive.sh"
+ROLLBACK="${ROOT_DIR}/deploy/scripts/rollback_release.sh"
 FAILURES=0
 
 require_fixed() {
@@ -42,14 +43,23 @@ require_fixed "${COMPOSE_FILE}" \
   "生产判题固定使用 Piston" \
   'PYT_JUDGE_PROVIDER: piston'
 require_fixed "${COMPOSE_FILE}" \
-  "生产判题强制 Piston URL" \
-  'PYT_PISTON_URL: ${PYT_PISTON_URL:?缺少 PYT_PISTON_URL}'
+  "生产判题固定使用内网 Piston 服务" \
+  'PYT_PISTON_URL: http://piston:2000'
 require_fixed "${COMPOSE_FILE}" \
-  "生产判题强制 Piston Python 版本" \
-  'PYT_PISTON_PYTHON_VERSION: ${PYT_PISTON_PYTHON_VERSION:?缺少 PYT_PISTON_PYTHON_VERSION}'
+  "生产判题指定 Piston Python 版本默认值" \
+  'PYT_PISTON_PYTHON_VERSION: ${PYT_PISTON_PYTHON_VERSION:-3.11.0}'
 require_fixed "${COMPOSE_FILE}" \
-  "生产判题强制 Piston 鉴权令牌" \
-  'PYT_PISTON_AUTH_TOKEN: ${PYT_PISTON_AUTH_TOKEN:?缺少 PYT_PISTON_AUTH_TOKEN}'
+  "生产编排使用发布包内固定 Piston 镜像" \
+  'image: pythontopia/piston:release'
+require_fixed "${COMPOSE_FILE}" \
+  "Piston 执行服务不发布宿主端口" \
+  'networks: [judge-execution]'
+require_fixed "${COMPOSE_FILE}" \
+  "首次启动自动安装并持久化 Python runtime" \
+  'piston-runtime-init:'
+require_fixed "${COMPOSE_FILE}" \
+  "Piston runner 禁止用户代码联网" \
+  'PISTON_DISABLE_NETWORKING: "true"'
 require_fixed "${COMPOSE_FILE}" \
   "Graph 生产健康检查使用 readiness" \
   'curl -fsS http://127.0.0.1:18091/readyz'
@@ -104,30 +114,30 @@ require_fixed "${PREFLIGHT}" \
 require_fixed "${INSTALLER}" \
   "安装前对数据库密码执行值校验" \
   'require_env_value "${ENV_FILE}" PYT_DB_PASSWORD'
-require_fixed "${PREFLIGHT}" \
-  "ECS 预检强制 Piston token 至少 32 字符" \
-  'check_secret_strength PYT_PISTON_AUTH_TOKEN 32 fail "${env_file}"'
+require_fixed "${COMPOSE_FILE}" \
+  "安装时等待 Piston Python runtime 初始化成功" \
+  'service_completed_successfully'
 require_fixed "${INSTALLER}" \
-  "安装强制 Piston token 至少 32 字符" \
-  'check_env_secret PYT_PISTON_AUTH_TOKEN 32 "${env_file}"'
-require_fixed "${PREFLIGHT}" \
-  "ECS 预检拒绝外部 Piston 明文 HTTP" \
-  '外部 Piston 地址必须使用 HTTPS'
-require_fixed "${INSTALLER}" \
-  "安装拒绝外部 Piston 明文 HTTP" \
-  '外部 Piston 地址必须使用 HTTPS'
+  "发布包包含 Piston 执行镜像" \
+  'IMAGE_COMPONENTS=(frontend backend graph rag piston)'
+require_fixed "${ROLLBACK}" \
+  "回滚到不含 Piston 的旧 release 保持兼容" \
+  "if grep -Fq 'image: pythontopia/piston:release'"
+require_fixed "${ROLLBACK}" \
+  "回滚新 release 时恢复 Piston 镜像" \
+  'IMAGE_COMPONENTS+=(piston)'
 require_fixed "${RELEASE_README}" \
   "发布文档禁止 dryrun" \
   '禁止 dryrun'
 require_fixed "${ENV_EXAMPLE}" \
   ".env 样板声明 subprocess 仅限开发测试" \
-  'subprocess 仅限本地开发/测试，生产预检与安装会拒绝'
+  'subprocess 仅限本地开发/测试；生产 Compose 固定覆盖为 piston'
 require_fixed "${RELEASE_README}" \
   "发布文档声明 Piston 绝不回退 subprocess" \
   '绝不回退 `subprocess`'
 require_fixed "${RELEASE_README}" \
-  "发布文档要求外部 Piston 使用 HTTPS" \
-  '公网/跨主机 URL 必须用 HTTPS'
+  "发布文档说明内置 Piston 的网络隔离边界" \
+  'Piston API v3.1.0 不校验 Bearer token'
 require_fixed "${ENV_EXAMPLE}" \
   ".env 样板指定 DeepSeek 文本模型" \
   'PYT_OPENAI_MODEL=deepseek-v4-pro'

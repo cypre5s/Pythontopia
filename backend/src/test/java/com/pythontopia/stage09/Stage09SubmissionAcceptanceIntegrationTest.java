@@ -57,7 +57,7 @@ class Stage09SubmissionAcceptanceIntegrationTest {
     registry.add("pythontopia.judge.python", () -> "python3");
     registry.add("pythontopia.judge.provider", () -> "piston");
     registry.add("pythontopia.judge.piston.base-url", () -> "http://piston.test");
-    registry.add("pythontopia.judge.piston.python-version", () -> "3.11.13");
+    registry.add("pythontopia.judge.piston.python-version", () -> "3.11.0");
   }
 
   @Autowired TestRestTemplate restTemplate;

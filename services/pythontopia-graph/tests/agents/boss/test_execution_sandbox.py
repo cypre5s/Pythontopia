@@ -24,7 +24,7 @@ def _mock_stream(
 
 def test_piston_request_uses_existing_judge_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example/")
-    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
+    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.0")
     monkeypatch.setenv("PYT_PISTON_AUTH_TOKEN", "test-token")
     captured: dict[str, Any] = {}
 
@@ -52,7 +52,7 @@ def test_piston_request_uses_existing_judge_contract(monkeypatch: pytest.MonkeyP
     assert captured["headers"]["Authorization"] == "Bearer test-token"
     assert captured["payload"]["files"] == [{"name": "submission.py", "content": "print('ok')"}]
     assert captured["payload"]["stdin"] == "stdin"
-    assert captured["payload"]["version"] == "3.11.13"
+    assert captured["payload"]["version"] == "3.11.0"
     assert captured["payload"]["run_timeout"] == 4000
     assert captured["payload"]["run_memory_limit"] == execution_sandbox.MEMORY_LIMIT_BYTES
     assert captured["trust_env"] is False
@@ -65,7 +65,7 @@ def test_official_piston_success_with_null_status_is_accepted(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example")
-    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
+    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.0")
     _mock_stream(
         monkeypatch,
         lambda method, url, **kwargs: httpx.Response(
@@ -86,7 +86,7 @@ def test_piston_sigkill_without_status_or_exit_code_is_a_timeout(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example")
-    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
+    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.0")
     _mock_stream(
         monkeypatch,
         lambda method, url, **kwargs: httpx.Response(
@@ -115,7 +115,7 @@ def test_piston_output_limit_is_a_failed_execution_not_sandbox_outage(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example")
-    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
+    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.0")
     _mock_stream(
         monkeypatch,
         lambda method, url, **kwargs: httpx.Response(
@@ -133,7 +133,7 @@ def test_piston_output_limit_is_a_failed_execution_not_sandbox_outage(
 
 def test_unknown_piston_status_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example")
-    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
+    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.0")
     _mock_stream(
         monkeypatch,
         lambda method, url, **kwargs: httpx.Response(
@@ -150,7 +150,7 @@ def test_unknown_piston_status_fails_closed(monkeypatch: pytest.MonkeyPatch) -> 
 
 def test_oversized_piston_response_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PYT_PISTON_URL", "https://judge.example")
-    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.13")
+    monkeypatch.setenv("PYT_PISTON_PYTHON_VERSION", "3.11.0")
     body = json.dumps({"run": {"status": None, "code": 0, "stdout": "x" * 1_048_577, "stderr": ""}})
     _mock_stream(
         monkeypatch,

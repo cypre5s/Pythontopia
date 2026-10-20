@@ -19,7 +19,7 @@ bash scripts/build-with-proxy.sh
 - Docker build 使用 `network: host`，使容器内可访问 `127.0.0.1:7892`
 - Maven：`backend/.mvn/settings.build.xml`（腾讯云镜像 + 7892 代理）
 - npm：`registry.npmmirror.com`
-- pip：`mirrors.aliyun.com/pypi/simple/`
+- Python 服务默认通过官方 PyPI 索引安装依赖，保留上游包哈希校验；可用 `PYT_PIP_INDEX_URL` 覆盖。
 
 ## 开发模式（推荐日常改代码）
 
@@ -217,8 +217,8 @@ flowchart LR
 
 ### 发布包冻结契约
 
-- 镜像名：`pythontopia/{frontend,backend,graph,rag}:release`
-- 镜像 tar：发布包内 `deploy/runtime/images/{frontend,backend,graph,rag}.tar`
+- 镜像名：`pythontopia/{frontend,backend,graph,rag,piston}:release`
+- 镜像 tar：发布包内 `deploy/runtime/images/{frontend,backend,graph,rag,piston}.tar`
 - 校验和：`deploy/runtime/sha256sums.txt`
 - 发布包顶层目录：`backend/ deploy/ frontend/ README.md`
 
@@ -251,7 +251,7 @@ sudo bash /opt/pythontopia/current/deploy/scripts/preflight_ecs.sh   # 或发布
 sudo bash <发布包内>/deploy/scripts/install_release.sh /path/to/pythontopia-release.tar.gz
 ```
 
-安装脚本任何一步失败都会立即停止并输出中文错误；`current` 符号链接只在六个服务
+安装脚本任何一步失败都会立即停止并输出中文错误；`current` 符号链接只在七个运行服务
 全部健康、`nginx -t` 通过之后才切换。
 
 ### 健康检查
@@ -261,7 +261,7 @@ curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' http://127.0.0.1/healt
 curl --resolve 47.120.29.62:443:127.0.0.1 -s https://47.120.29.62/healthz
 curl -s http://127.0.0.1:8080/healthz     # frontend 容器直连
 curl -s http://127.0.0.1:18080/healthz    # backend 容器直连（主机诊断口）
-docker compose -p deploy ps               # 六个服务应全部 healthy
+docker compose -p deploy ps               # 七个运行服务应全部 healthy；runtime init 退出码为 0
 curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' http://47.120.29.62/healthz  # 预期 308
 curl -s https://47.120.29.62/healthz      # 公网 HTTPS + 可信 IP 证书
 ```

@@ -24,7 +24,6 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/deepseek_model_contract.sh"
-source "${SCRIPT_DIR}/piston_url_contract.sh"
 
 # ---------------------------------------------------------------------------
 # 常量与全局状态
@@ -39,7 +38,7 @@ ENV_FILE="${SHARED_DIR}/.env"
 
 COMPOSE_PROJECT="deploy"
 COMPOSE_FILE_NAME="docker-compose.production.yml"
-IMAGE_COMPONENTS=(frontend backend graph rag)
+IMAGE_COMPONENTS=(frontend backend graph rag piston)
 
 NGINX_SITE_SRC_REL="deploy/nginx/pythontopia.conf"
 NGINX_LOG_FORMAT_SRC_REL="deploy/nginx/pythontopia-log-format.conf"
@@ -220,33 +219,14 @@ validate_production_ai_env() {
 
 validate_production_judge_env() {
   local env_file="$1"
-  local provider piston_url
-  provider="$(env_file_value "${env_file}" PYT_JUDGE_PROVIDER)"
-  if [ "${provider,,}" != "piston" ]; then
-    echo "[安装失败] PYT_JUDGE_PROVIDER 必须为 piston；生产禁止 subprocess。" >&2
+  local python_version
+  python_version="$(env_file_value "${env_file}" PYT_PISTON_PYTHON_VERSION)"
+  python_version="${python_version:-3.11.0}"
+  if [[ ! "${python_version}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "[安装失败] PYT_PISTON_PYTHON_VERSION 必须是 x.y.z 版本号。" >&2
     return 1
   fi
-  require_env_value "${env_file}" PYT_PISTON_URL || return 1
-  require_env_value "${env_file}" PYT_PISTON_PYTHON_VERSION || return 1
-  check_env_secret PYT_PISTON_AUTH_TOKEN 32 "${env_file}" || return 1
-
-  piston_url="$(env_file_value "${env_file}" PYT_PISTON_URL)"
-  case "${piston_url}" in
-    https://*) ;;
-    http://*)
-      if is_private_piston_http_url "${piston_url}"; then
-        echo "    Piston 使用隔离内网 HTTP；请确保网络边界不可被公网访问"
-      else
-        echo "[安装失败] 外部 Piston 地址必须使用 HTTPS。" >&2
-        return 1
-      fi
-      ;;
-    *)
-      echo "[安装失败] PYT_PISTON_URL 必须是 http:// 或 https:// URL。" >&2
-      return 1
-      ;;
-  esac
-  echo "    Piston 独立判题配置校验通过"
+  echo "    生产判题固定使用内部 Piston；Python runtime=${python_version}（容器网络 ACL 隔离）"
 }
 
 # ---------------------------------------------------------------------------
@@ -373,7 +353,8 @@ for required in \
   "deploy/runtime/images/frontend.tar" \
   "deploy/runtime/images/backend.tar" \
   "deploy/runtime/images/graph.tar" \
-  "deploy/runtime/images/rag.tar"; do
+  "deploy/runtime/images/rag.tar" \
+  "deploy/runtime/images/piston.tar"; do
   if [ ! -f "${RELEASE_DIR}/${required}" ]; then
     echo "[安装失败] 发布包缺少必需文件：${required}（不符合发布包冻结契约）。" >&2
     exit 1
@@ -418,7 +399,7 @@ python3 "${COURSE_VALIDATOR}" "${COURSE_DATA_DIR}"
 echo "    7 份 PDF、视频清单/文件与逐视频字幕来源校验通过"
 
 # ---------------------------------------------------------------------------
-step "docker load 导入四个冻结镜像"
+step "docker load 导入五个冻结镜像"
 # ---------------------------------------------------------------------------
 for comp in "${IMAGE_COMPONENTS[@]}"; do
   echo "    导入 pythontopia/${comp}:release ..."
@@ -428,7 +409,7 @@ for comp in "${IMAGE_COMPONENTS[@]}"; do
     exit 1
   fi
 done
-echo "    四个镜像全部导入并核对完成"
+echo "    五个镜像全部导入并核对完成"
 
 # ---------------------------------------------------------------------------
 step "接线 .env 并校验 Compose 渲染"
@@ -473,7 +454,7 @@ step "启动应用服务（rag → graph → backend → frontend）并等待健
 # ---------------------------------------------------------------------------
 ( cd "${RELEASE_DIR}/deploy" && docker compose -p "${COMPOSE_PROJECT}" -f "${COMPOSE_FILE_NAME}" up -d --remove-orphans )
 # backend 冷启动含 Flyway 迁移，整体预算 8 分钟
-wait_healthy 480 pythontopia-rag pythontopia-graph backend frontend
+wait_healthy 480 pythontopia-rag pythontopia-graph piston backend frontend
 
 # ---------------------------------------------------------------------------
 step "安装主机 Nginx 配置并 nginx -t"

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-10-20
+
+- 生产 Compose 增加独立 Piston 判题容器与 Python runtime 初始化，默认版本对齐 Piston 实际可用的 `3.11.0`；补上 runtime 解包所需的 `FOWNER` capability，并同步发布、预检和回滚脚本。
+- 修正 Pyodide worker 与页面 CSP 的 `worker-src`，允许本地 blob Worker；未扩展主页面 `script-src`。
+- 部署到 ECS 并保留 `deploy_pytopia_pg` 数据卷。生产/根 Compose 配置、发布安全契约通过；Graph 沙箱定向测试 26/26 通过。真实 Piston 提交 AC 3/3；ECS Chromium 注册、登录、训练场与 Pyodide 本地预览通过，输入 `2` 输出 `12.5660`，console/pageerror/failed requests 均为 0。
+
 ## 2026-10-19
 
 - 学习分身周报统一使用北京时间六天前零点至一次性读取时刻的 `[start,end)`；`weeklyDelta` 明确为可信判题/微测/调试事件实际应用贡献。Twin 三阶段、全量已评估 KC 到期统计及远征 route query 状态同步保持服务端学习状态权威。

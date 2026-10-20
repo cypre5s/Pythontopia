@@ -1183,3 +1183,13 @@
 - 前端现有全量测试 `npm run test` 新运行 279 文件、2,653 项通过；`npm run typecheck`、`npm run lint` 均退出 0。Vitest 有 jsdom 未实现 `scrollTo`/canvas 的提示，但无失败项。
 - 后端历史全量报告中 4 个 pgvector/Testcontainers 类报 `failed to bind host port ... address already in use`。本轮 `DecisionTraceControllerTest` 单独复跑 1/1，另将 `EvidenceMemoryServiceTest`、`RecommendationServiceTest`、`MemoryRetrievalSemanticIntegrationTest` 串行复跑 12/12；共 13 项通过。未重跑整个 Maven suite，仍保留全套状态未核实。
 - Graph 全量 pytest 1,961 passed / 1 skipped（缺少 ragas 可选评测依赖），RAG 166 passed。没有调用 DeepSeek；环境提示包括 Starlette/httpx 兼容告警和一项 async mark 告警，不影响通过结果。
+
+## 2026-10-20 — ECS Docker Compose 部署与 Pyodide 验收
+
+- 生产部署使用独立 Piston 容器；Python runtime 默认设为 Piston 实际可用的 `3.11.0`，runtime 初始化成功，Piston 不发布宿主端口，学生代码禁网。`FOWNER` 修复 runtime 包权限还原失败。Postgres 数据卷 `deploy_pytopia_pg` 保留。
+- Pyodide worker CSP 原先不允许 module Worker 所需的 blob URL；页面和 worker 响应的 `worker-src` 现为 `'self' blob:`，`script-src` 未放宽。公开 HTTPS 的 worker 资源策略响应已检查。
+- 新部署全部健康；生产 Nginx `nginx -t`、TLS 1.2/1.3 与 HTTP→HTTPS 检查通过。真实 Piston 正式判题 `AC 3/3`。
+- Chromium 在 ECS Graph 容器内通过 Docker 网络跑真实页面：学生注册/登录、`/world` 引导、题目 476 训练页正常；Pyodide lock、stdlib、WASM 均 HTTP 200，本地预览输入 `2` 输出 `12.5660`。console errors、pageerrors、failed requests 均为空。另一次公网浏览器验证覆盖登录、Phaser 画布及画像/任务/课程/题目 API；公网经本机代理下载完整 WASM 太慢，因此 Pyodide 端到端运行改在 ECS 内网 Chromium 完成。
+- 部署 Compose 配置校验、生产 AI/readiness 契约、安装密钥契约、开发 Compose/CSP 安全契约通过；Graph 判题器定向 pytest 26/26 通过；脚本语法和 `git diff --check` 通过。没有调用 LLM。
+- 六个临时 smoke 用户及关联数据已按精确 ID 删除。移除已安装版本的 1.56 GB 重复上传包，释放空间；没有删除 Docker 数据卷。
+- ECS 可访问 GitHub HTTPS 页面与 Git smart HTTP endpoint；本次实际部署仍由已构建 release 包安装，没有配置 GitHub Actions 镜像发布或 ECS 自动拉取流程，不能据此宣称后续部署已自动化。

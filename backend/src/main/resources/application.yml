@@ -34,7 +34,7 @@ pythontopia:
     python: ${PYT_JUDGE_PYTHON:python3}
     piston:
       base-url: ${PYT_PISTON_URL:}
-      python-version: ${PYT_PISTON_PYTHON_VERSION:3.11.13}
+      python-version: ${PYT_PISTON_PYTHON_VERSION:3.11.0}
       auth-token: ${PYT_PISTON_AUTH_TOKEN:}
       connect-timeout-ms: ${PYT_PISTON_CONNECT_TIMEOUT_MS:3000}
       read-timeout-ms: ${PYT_PISTON_READ_TIMEOUT_MS:10000}
