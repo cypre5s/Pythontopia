@@ -26,6 +26,8 @@
 #                    一致；脚本会同时注入 HTTP(S)_PROXY 和 Maven JVM 代理参数，
 #                    因此构建始终使用 --network host）。设为 none 表示不注入代理
 #                    build-arg（仅适用于容器内可直连外网的环境）。
+#   PYT_BUILD_SKIP_COURSE_RUNTIME_DATA_VALIDATION  默认 false；只适用于构建机没有本地课程媒体时，
+#                    ECS 安装预检和安装器仍会校验共享数据后再切换线上版本。
 #   TMPDIR           暂存目录所在盘（镜像 tar 体积大，默认 /tmp，可指向大盘）。
 #
 # 安全性：全程使用 mktemp 暂存目录 + trap 清理，绝不改动源码目录本身；
@@ -67,8 +69,16 @@ command -v python3 >/dev/null 2>&1 || die "缺少 python3（用于验证课件/�
 [[ -f "$RELEASE_README" ]] || die "发布包根 README 源文件缺失：$RELEASE_README"
 [[ -f "$VERIFIER" ]] || die "校验脚本缺失：$VERIFIER"
 [[ -f "$COURSE_VALIDATOR" ]] || die "课程数据校验器缺失：$COURSE_VALIDATOR"
-python3 "$COURSE_VALIDATOR" "$COURSE_DATA_ROOT" \
-  || die "课程运行时数据不完整或字幕与源视频不匹配，禁止构建发布包"
+case "${PYT_BUILD_SKIP_COURSE_RUNTIME_DATA_VALIDATION:-false}" in
+  false)
+    python3 "$COURSE_VALIDATOR" "$COURSE_DATA_ROOT" \
+      || die "课程运行时数据不完整或字幕与源视频不匹配，禁止构建发布包"
+    ;;
+  true)
+    echo "==> 跳过构建机课程媒体校验；ECS 预检与安装器仍会完整校验共享数据"
+    ;;
+  *) die "PYT_BUILD_SKIP_COURSE_RUNTIME_DATA_VALIDATION 只能是 true 或 false" ;;
+esac
 for spec in "${IMAGE_SPECS[@]}"; do
   ctx="${spec#*|}"
   [[ -f "$ctx/Dockerfile" ]] || die "Dockerfile 缺失：$ctx/Dockerfile"

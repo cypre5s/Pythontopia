@@ -18,6 +18,7 @@ jobs:
       - name: Build verified release package
         env:
           PYT_BUILD_PROXY: none
+          PYT_BUILD_SKIP_COURSE_RUNTIME_DATA_VALIDATION: "true"
         run: bash deploy/scripts/build_release_archive.sh
 
       - name: Name and size-check release asset

@@ -256,7 +256,7 @@ sudo bash <发布包内>/deploy/scripts/install_release.sh /path/to/pythontopia-
 
 ### GitHub Release 直拉
 
-把 `web-vYYYYMMDD.N` tag 推到 `main` 后，`.github/workflows/publish-ecs-release.yml` 会构建并发布公开 Release 包。ECS 首次可从仓库拉取安装脚本，后续使用已安装版本中的脚本：
+把 `web-vYYYYMMDD.N` tag 推到 `main` 后，`.github/workflows/publish-ecs-release.yml` 会构建并发布公开 Release 包。GitHub runner 没有仓库忽略的 PDF/MP4；ECS 预检与安装器会在部署前完整校验共享课程数据。ECS 首次可从仓库拉取安装脚本，后续使用已安装版本中的脚本：
 
 ```bash
 # 首次使用；将示例 tag 换成已发布版本

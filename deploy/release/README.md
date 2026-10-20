@@ -61,7 +61,7 @@ pythontopia-web-<UTC>.tar.gz
 
 ### GitHub Release 直拉
 
-将 `web-vYYYYMMDD.N` tag 推送到 `main` 会触发 GitHub Actions：运行本指南所用的 release builder，并把校验后的包上传为公开 GitHub Release asset。ECS 不需要 GitHub token 或 deploy key。
+将 `web-vYYYYMMDD.N` tag 推送到 `main` 会触发 GitHub Actions：运行本指南所用的 release builder，并把校验后的包上传为公开 GitHub Release asset。PDF 与 MP4 不在公开仓库中，托管 runner 会跳过本机课程媒体检查；ECS 的预检和安装器仍会对共享课程数据执行完整校验，失败时不会切换线上版本。ECS 不需要 GitHub token 或 deploy key。
 
 ```bash
 # 首次使用；把 tag 替换为已发布版本

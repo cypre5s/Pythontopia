@@ -20,6 +20,7 @@ require_fixed() {
 require_fixed "$WORKFLOW" "发布工作流仅由版本 tag 触发" 'web-v*'
 require_fixed "$WORKFLOW" "发布工作流只使用现有 release builder" 'bash deploy/scripts/build_release_archive.sh'
 require_fixed "$WORKFLOW" "GitHub runner 不使用本机代理地址" 'PYT_BUILD_PROXY: none'
+require_fixed "$WORKFLOW" "GitHub runner 缺少的本地课程媒体校验交由 ECS 预检" 'PYT_BUILD_SKIP_COURSE_RUNTIME_DATA_VALIDATION: "true"'
 require_fixed "$WORKFLOW" "发布流程拥有创建 GitHub Release 的权限" 'contents: write'
 require_fixed "$WORKFLOW" "发布流程上传可公开下载的 release asset" 'gh release create'
 require_fixed "$WORKFLOW" "release asset 小于 GitHub 2 GiB 限制" 'asset_size >= 2147483648'
@@ -29,6 +30,7 @@ require_fixed "$PULLER" "续传使用跨进程稳定的临时文件" 'partial="$
 require_fixed "$PULLER" "下载前执行 ECS 预检" 'preflight_ecs.sh'
 require_fixed "$PULLER" "下载后复用既有 release 安装器" 'install_release.sh'
 require_fixed "$PULLER" "成功安装后移除下载包" 'rm -- "${archive}"'
+require_fixed "$ROOT_DIR/deploy/scripts/build_release_archive.sh" "课程媒体校验默认仍开启" 'PYT_BUILD_SKIP_COURSE_RUNTIME_DATA_VALIDATION:-false'
 
 python3 - "$PULLER" <<'PY'
 from pathlib import Path

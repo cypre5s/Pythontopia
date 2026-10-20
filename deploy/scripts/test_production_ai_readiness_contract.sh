@@ -154,7 +154,7 @@ require_fixed "${INSTALLER}" \
   "安装前先校验包内候选字幕与共享 MP4" \
   '--transcript "${TRANSCRIPT_CANDIDATE}"'
 require_fixed "${RELEASE_BUILDER}" \
-  "发布构建前拒绝不完整课程运行时数据" \
+  "默认发布构建前拒绝不完整课程运行时数据" \
   'python3 "$COURSE_VALIDATOR" "$COURSE_DATA_ROOT"'
 require_fixed "${RELEASE_BUILDER}" \
   "发布包携带版本化视频字幕" \
