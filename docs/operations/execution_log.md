@@ -1190,6 +1190,14 @@
 - Pyodide worker CSP 原先不允许 module Worker 所需的 blob URL；页面和 worker 响应的 `worker-src` 现为 `'self' blob:`，`script-src` 未放宽。公开 HTTPS 的 worker 资源策略响应已检查。
 - 新部署全部健康；生产 Nginx `nginx -t`、TLS 1.2/1.3 与 HTTP→HTTPS 检查通过。真实 Piston 正式判题 `AC 3/3`。
 - Chromium 在 ECS Graph 容器内通过 Docker 网络跑真实页面：学生注册/登录、`/world` 引导、题目 476 训练页正常；Pyodide lock、stdlib、WASM 均 HTTP 200，本地预览输入 `2` 输出 `12.5660`。console errors、pageerrors、failed requests 均为空。另一次公网浏览器验证覆盖登录、Phaser 画布及画像/任务/课程/题目 API；公网经本机代理下载完整 WASM 太慢，因此 Pyodide 端到端运行改在 ECS 内网 Chromium 完成。
+
 - 部署 Compose 配置校验、生产 AI/readiness 契约、安装密钥契约、开发 Compose/CSP 安全契约通过；Graph 判题器定向 pytest 26/26 通过；脚本语法和 `git diff --check` 通过。没有调用 LLM。
 - 六个临时 smoke 用户及关联数据已按精确 ID 删除。移除已安装版本的 1.56 GB 重复上传包，释放空间；没有删除 Docker 数据卷。
 - GitHub Actions 首次构建因 runner 缺少 `.gitignore` 排除的课程 PDF 而失败；发布构建器保留默认完整媒体校验，托管工作流显式跳过 runner 本地媒体检查，ECS 预检与安装器仍完整校验共享数据。tag `web-v20261020.2` 的 Actions 构建成功，公开 Release asset `pythontopia-web-v20261020.2.tar.gz` 上传完成，大小 1,534,153,100 bytes；ECS HEAD 返回 HTTP 200。ECS 通过 GitHub Contents API raw media type 可读取 bootstrap 脚本，预检通过 31 项、失败 0 项。完整资产 GET 实测约 12 KB/s，下载 1.4 MB 后因持续超时而停止，临时包保留以便断点续传；没有解包或触碰容器。按用户已选清理范围移除 6 个旧 release 目录、保留当前版本并将回滚指针重定向当前版本；`deploy_pytopia_pg` 卷未触碰。当前 7 服务 healthy、根分区可用 6.5 GB。另测本机并行 SSH 传输 16 MB 用时 11 秒，完整包上传估算约 17 分钟；当前线上应用代码已是先前验证部署版本，本次未安装重复应用包。
+
+### 随后续接：GitHub 发布包安装与公网验收
+
+- 本地发布包 `pythontopia-web-20261020T105528Z.tar.gz`（1,560,563,881 bytes，SHA-256 `0495e61c686f43778e96b1344a40ae0b1e8fe901fd684e7e3c23b4a8fdce74f2`）上传后校验一致，事务式安装到 `/opt/pythontopia/releases/20261020-191037`；保留上一版本 `/opt/pythontopia/releases/20261020-165341`、部署备份和 `deploy_pytopia_pg` 数据卷。安装器完成课程运行时数据校验（7 PDFs、34 videos、34 transcripts、848 segments），同步 11 条 NPC 种子数据。
+- 安装后 ECS 上 frontend、backend、graph、piston、rag、redis、postgres 七个容器均 healthy；公网 `/healthz` 返回 200，错误登录返回预期 401。根目录和开发 Compose 配置通过 `docker compose config --quiet`；生产 Compose 使用 `deploy/.env`，本机缺少 `PYT_ROUTE_EXECUTION_SECRET`，故只在配置展开命令中临时提供校验占位值后通过，未写入文件。根 Compose 已推送到 GitHub `main`。GitHub Release 直拉脚本保留可续传下载并复用预检/安装器，但大包从 GitHub 下载约 12 KB/s，本次实际部署采用并行 SSH。数据库卷未清理。
+- 公网浏览器完整套件经本机 `7892` 代理时为 9 passed、2 failed、17 not run；两项失败与代理期间 Phaser/像素资源加载受阻有关，以及一个主线 Tab 焦点断言失败，尚未排除真实 UI 问题。补充安全页面检查 2 passed。RAG 查询 `input函数`、`for循环` 两项通过并返回页码证据；`列表` 测试在页面导航阶段超时，尚未执行查询。`ip route get 47.120.29.62` 仍经 WSL TUN (`198.18.0.2`)，完整公网浏览器回归待恢复直连后重跑。
+- 本次上传的 1.56 GB 包和先前断点续传的 `.part` 文件已从 `/opt/pythontopia/incoming/` 删除；部署脚本、日志、备份、当前与上一 release 及 Postgres 数据卷保留。

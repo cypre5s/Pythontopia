@@ -5,7 +5,7 @@
 - 生产 Compose 增加独立 Piston 判题容器与 Python runtime 初始化，默认版本对齐 Piston 实际可用的 `3.11.0`；补上 runtime 解包所需的 `FOWNER` capability，并同步发布、预检和回滚脚本。
 - 修正 Pyodide worker 与页面 CSP 的 `worker-src`，允许本地 blob Worker；未扩展主页面 `script-src`。
 - 部署到 ECS 并保留 `deploy_pytopia_pg` 数据卷。生产/根 Compose 配置、发布安全契约通过；Graph 沙箱定向测试 26/26 通过。真实 Piston 提交 AC 3/3；ECS Chromium 注册、登录、训练场与 Pyodide 本地预览通过，输入 `2` 输出 `12.5660`，console/pageerror/failed requests 均为 0。
-- 增加 GitHub Release 发布工作流与 ECS 直拉脚本：推送 `web-vYYYYMMDD.N` tag 后复用现有 builder，上传经校验的公开发布包；ECS 先预检，再下载并复用现有事务式安装器。首轮 Actions 发现 runner 不含仓库忽略的 PDF/MP4；本地构建默认仍完整校验，托管工作流显式跳过 runner 媒体检查，ECS 预检和安装器仍完整校验共享数据。`web-v20261020.2` 构建成功并发布 1,534,153,100 bytes 资产；ECS 可读 GitHub API bootstrap，但该主机下载大文件约 12 KB/s，当前未完成新包安装，线上已验证部署保持 healthy。
+- 增加 GitHub Release 发布工作流与 ECS 直拉脚本：推送 `web-vYYYYMMDD.N` tag 后复用现有 builder，上传经校验的公开发布包；ECS 先预检，再下载并复用现有事务式安装器。首轮 Actions 发现 runner 不含仓库忽略的 PDF/MP4；本地构建默认仍完整校验，托管工作流显式跳过 runner 媒体检查，ECS 预检和安装器仍完整校验共享数据。`web-v20261020.2` 发布资产为 1,534,153,100 bytes；ECS 可读 GitHub API bootstrap，但大文件下载约 12 KB/s。本次改用并行 SSH 上传本地包并完成安装，当前版本 `20261020-191037`，保留数据库卷及上一版本；安装后 7 个容器健康。根目录 `docker-compose.yaml` 已推送至 GitHub `main`。公网浏览器回归受本机代理下载大资源超时影响，结果见执行日志。
 
 ## 2026-10-19
 
