@@ -18,6 +18,13 @@ const activeUser = {
   status: 'ACTIVE' as const,
 };
 
+function mountAdminUsersPage(attachTo?: HTMLElement) {
+  return mount(AdminUsersPage, {
+    global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } },
+    ...(attachTo ? { attachTo } : {}),
+  });
+}
+
 describe('AdminUsersPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -47,7 +54,7 @@ describe('AdminUsersPage', () => {
   });
 
   it('loads real paged users and lets an administrator disable an account', async () => {
-    const wrapper = mount(AdminUsersPage);
+    const wrapper = mountAdminUsersPage();
     await flushPromises();
 
     expect(searchAdminUsers).toHaveBeenCalledWith({ page: 0, size: 20 });
@@ -70,7 +77,7 @@ describe('AdminUsersPage', () => {
   });
 
   it('closes the themed account status dialog on Escape and restores focus', async () => {
-    const wrapper = mount(AdminUsersPage, { attachTo: document.body });
+    const wrapper = mountAdminUsersPage(document.body);
     await flushPromises();
     const opener = wrapper.get('[data-testid="admin-user-status-7"]').element as HTMLButtonElement;
     const focus = vi.spyOn(opener, 'focus');
@@ -90,7 +97,7 @@ describe('AdminUsersPage', () => {
     vi.mocked(setAdminUserStatus)
       .mockRejectedValueOnce(new Error('状态更新失败'))
       .mockResolvedValueOnce({ ...activeUser, status: 'DISABLED' });
-    const wrapper = mount(AdminUsersPage);
+    const wrapper = mountAdminUsersPage();
     await flushPromises();
 
     await wrapper.get('[data-testid="admin-user-status-7"]').trigger('click');
@@ -108,7 +115,7 @@ describe('AdminUsersPage', () => {
 
   it('removes old status actions while a list refresh is in flight', async () => {
     vi.mocked(setAdminUserStatus).mockClear();
-    const wrapper = mount(AdminUsersPage);
+    const wrapper = mountAdminUsersPage();
     await flushPromises();
 
     let resolveRefresh!: (value: {
@@ -139,7 +146,7 @@ describe('AdminUsersPage', () => {
   });
 
   it('filters the real user list by role', async () => {
-    const wrapper = mount(AdminUsersPage);
+    const wrapper = mountAdminUsersPage();
     await flushPromises();
 
     await wrapper.get('[data-testid="admin-users-role-filter"]').setValue('TEACHER');
@@ -156,7 +163,7 @@ describe('AdminUsersPage', () => {
     vi.mocked(searchAdminUsers).mockResolvedValue({
       content: [activeUser], page: 0, size: 20, totalElements: 45, totalPages: 3,
     });
-    const wrapper = mount(AdminUsersPage);
+    const wrapper = mountAdminUsersPage();
     await flushPromises();
 
     await wrapper.get('[data-testid="admin-pagination-size"]').setValue('50');
@@ -182,7 +189,7 @@ describe('AdminUsersPage', () => {
       totalElements: 1,
       totalPages: 1,
     });
-    const wrapper = mount(AdminUsersPage);
+    const wrapper = mountAdminUsersPage();
     await flushPromises();
 
     expect(wrapper.get('[data-testid="admin-user-status-1"]').attributes('disabled')).toBeDefined();
@@ -198,7 +205,7 @@ describe('AdminUsersPage', () => {
       totalElements: 1,
       totalPages: 1,
     });
-    const wrapper = mount(AdminUsersPage);
+    const wrapper = mountAdminUsersPage();
     await flushPromises();
 
     const cells = wrapper.findAll('tbody td');

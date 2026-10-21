@@ -43,7 +43,6 @@ const growthStageClass = computed(() => {
     case '稳步精进': return 'twin-stage--mastery';
     default: return 'twin-stage--unknown';
   }
-  return values;
 });
 const nextStep = computed(() => state.value?.nextSteps[0] ?? null);
 const alternativeStep = computed(() => state.value?.nextSteps[1] ?? null);

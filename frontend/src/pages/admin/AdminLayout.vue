@@ -10,9 +10,9 @@ const session = useSessionStore();
 type AdminNavigationGroupKey = 'platform' | 'review' | 'accounts';
 
 function navigationGroupForRoute(routeName: unknown): AdminNavigationGroupKey | null {
-  if (routeName === 'admin-operations') return 'platform';
-  if (routeName === 'admin-problem-reviews') return 'review';
-  if (routeName === 'admin-users') return 'accounts';
+  if (routeName === 'admin-operations' || routeName === 'admin-usage' || routeName === 'admin-ai-config') return 'platform';
+  if (routeName === 'admin-problem-reviews' || routeName === 'admin-course-resources') return 'review';
+  if (routeName === 'admin-users' || routeName === 'admin-student-detail' || routeName === 'admin-classrooms') return 'accounts';
   return null;
 }
 
@@ -231,6 +231,24 @@ watch(navigationOpen, (open) => {
               >
                 AI 运维概览
               </RouterLink>
+              <RouterLink
+                class="admin-nav__link"
+                :to="{ name: 'admin-ai-config' }"
+                exact-active-class="is-active"
+                data-testid="admin-nav-item-ai-config"
+                @click="closeNavigation"
+              >
+                AI API 配置
+              </RouterLink>
+              <RouterLink
+                class="admin-nav__link"
+                :to="{ name: 'admin-usage' }"
+                exact-active-class="is-active"
+                data-testid="admin-nav-item-usage"
+                @click="closeNavigation"
+              >
+                资源消耗
+              </RouterLink>
             </div>
           </section>
 
@@ -290,6 +308,15 @@ watch(navigationOpen, (open) => {
                 @click="closeNavigation"
               >
                 AI 出题审核
+              </RouterLink>
+              <RouterLink
+                class="admin-nav__link"
+                :to="{ name: 'admin-course-resources' }"
+                exact-active-class="is-active"
+                data-testid="admin-nav-item-course-resources"
+                @click="closeNavigation"
+              >
+                课程资源
               </RouterLink>
             </div>
           </section>
@@ -355,6 +382,15 @@ watch(navigationOpen, (open) => {
                 @click="closeNavigation"
               >
                 用户管理
+              </RouterLink>
+              <RouterLink
+                class="admin-nav__link"
+                :to="{ name: 'admin-classrooms' }"
+                exact-active-class="is-active"
+                data-testid="admin-nav-item-classrooms"
+                @click="closeNavigation"
+              >
+                班级管理
               </RouterLink>
             </div>
           </section>

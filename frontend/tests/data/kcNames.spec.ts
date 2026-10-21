@@ -11,6 +11,7 @@ describe('kcDisplayName', () => {
     expect(kcDisplayName(undefined)).toBe('本知识点');
     expect(kcDisplayName('PY43-KC-999')).toBe('相关知识点');
     expect(kcDisplayName('KC-1000')).toBe('相关知识点');
+    expect(kcDisplayName('PY43-KC-UNKNOWN')).toBe('相关知识点');
   });
 });
 
@@ -42,5 +43,9 @@ describe('humanizeKcText', () => {
     const out = humanizeKcText('暂未收录 PY43-KC-999 和 KC-1000');
     expect(out.match(/「相关知识点」/g)).toHaveLength(2);
     expect(out).not.toMatch(/KC-\d+/);
+  });
+
+  it('does not echo code-shaped identifiers with nonnumeric suffixes', () => {
+    expect(humanizeKcText('内容关联 PY43-KC-UNKNOWN')).toBe('内容关联 「相关知识点」');
   });
 });

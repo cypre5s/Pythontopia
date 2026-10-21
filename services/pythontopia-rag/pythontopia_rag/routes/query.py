@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import re
@@ -7,7 +8,11 @@ import re
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 
 from pythontopia_rag.app_state import AppState
-from pythontopia_rag.data.loader import DEFAULT_DB_URL, fetch_pages
+from pythontopia_rag.data.loader import (
+    DEFAULT_DB_URL,
+    fetch_disabled_course_resources,
+    fetch_pages,
+)
 from pythontopia_rag.graph.kc_graph import build_kc_graph_from_chunks
 from pythontopia_rag.graph.router import NeighborsFn, route_and_retrieve
 from pythontopia_rag.graph.traverse import traverse_subgraph
@@ -109,7 +114,10 @@ def _route_reason(
 
 
 def _video_candidates(
-    request: Request, state: AppState, body: RagQueryRequest
+    request: Request,
+    state: AppState,
+    body: RagQueryRequest,
+    kc_codes: list[str] | None,
 ) -> tuple[list[VideoMatch], list[int]]:
     source = getattr(request.app.state, "rag_page_source", None)
     pages = getattr(source, "pages", [])
@@ -122,7 +130,7 @@ def _video_candidates(
         kcs_by_chapter.setdefault(page.chapter_id, set()).update(page.kc_codes)
 
     requested_chapters = set(body.chapter_ids or [])
-    requested_kcs = set(body.kc_codes or [])
+    requested_kcs = set(kc_codes or [])
     allowed_ids_by_no: dict[int, set[int]] = {}
     for chapter_no, page_chapter_ids in chapter_ids_by_no.items():
         chapter_ids = page_chapter_ids
@@ -194,6 +202,30 @@ async def rag_query(
             no_evidence_found=True,
             route_reason="no_evidence: forbidden query blocked by safety filter",
         )
+    try:
+        disabled_resources = await asyncio.to_thread(
+            fetch_disabled_course_resources,
+            os.environ.get("PYT_DB_URL", DEFAULT_DB_URL),
+        )
+    except Exception as exc:  # fail closed so an unavailable state check cannot expose disabled courseware
+        logger.error("RAG course resource availability check failed: %s", type(exc).__name__)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Course resource availability is temporarily unavailable",
+        ) from exc
+
+    requested_kc_codes = (
+        None
+        if body.kc_codes is None
+        else [code for code in body.kc_codes if code not in disabled_resources.kc_codes]
+    )
+    if body.kc_codes and not requested_kc_codes:
+        return RagQueryResponse(
+            hits=[],
+            citations=[],
+            no_evidence_found=True,
+            route_reason="no_evidence: requested knowledge points are disabled",
+        )
     result = await route_and_retrieve(
         query=body.query,
         embedder=state.embedder,
@@ -201,7 +233,7 @@ async def rag_query(
         bm25=state.bm25,
         top_k=body.top_k,
         min_score=body.min_score,
-        kc_codes=body.kc_codes,
+        kc_codes=requested_kc_codes,
         chapter_ids=body.chapter_ids,
         index_kc_graph=state.kc_graph,
         graph_mode=body.graph_mode,
@@ -209,7 +241,29 @@ async def rag_query(
         expand_prerequisites=body.expand_prerequisites,
         neighbors_fn=_runtime_neighbors_fn(state),
     )
-    video_matches, video_chapter_ids = _video_candidates(request, state, body)
+    video_matches, video_chapter_ids = _video_candidates(
+        request, state, body, requested_kc_codes
+    )
+    active_chapter_nos = {
+        page.chapter_no
+        for page in getattr(getattr(request.app.state, "rag_page_source", None), "pages", [])
+        if page.page_id not in disabled_resources.page_ids
+        and page.chapter_no is not None
+    }
+    video_matches = [
+        match for match in video_matches if match.segment.chapter_no in active_chapter_nos
+    ]
+    result_hits = [
+        hit
+        for hit in result.hits
+        if hit.chunk.page_id not in disabled_resources.page_ids
+    ]
+    active_subgraph = [
+        edge
+        for edge in result.subgraph
+        if edge.from_kc not in disabled_resources.kc_codes
+        and edge.to_kc not in disabled_resources.kc_codes
+    ]
     supplemental_hits = []
     if video_matches and video_chapter_ids:
         expanded_query = _video_expansion_query(video_matches)
@@ -220,7 +274,7 @@ async def rag_query(
             bm25=state.bm25,
             top_k=2,
             min_score=body.min_score,
-            kc_codes=body.kc_codes,
+            kc_codes=requested_kc_codes,
             chapter_ids=video_chapter_ids,
             index_kc_graph=state.kc_graph,
             graph_mode=body.graph_mode,
@@ -228,14 +282,17 @@ async def rag_query(
             expand_prerequisites=body.expand_prerequisites,
             neighbors_fn=_runtime_neighbors_fn(state),
         )
-        seen_pages = {hit.chunk.page_id for hit in result.hits}
+        seen_pages = {hit.chunk.page_id for hit in result_hits}
         for hit in supplemental_result.hits:
-            if hit.chunk.page_id not in seen_pages:
+            if (
+                hit.chunk.page_id not in disabled_resources.page_ids
+                and hit.chunk.page_id not in seen_pages
+            ):
                 supplemental_hits.append(hit)
                 seen_pages.add(hit.chunk.page_id)
                 if len(supplemental_hits) >= 2:
                     break
-    all_hits = [*result.hits, *supplemental_hits]
+    all_hits = [*result_hits, *supplemental_hits]
     video_trace = _video_trace(
         video_matches, [hit.chunk.page_id for hit in supplemental_hits]
     )
@@ -246,14 +303,14 @@ async def rag_query(
             no_evidence_found=True,
             retrieval_mode=result.retrieval_mode,
             route=result.route,
-            subgraph=result.subgraph,
+            subgraph=active_subgraph,
             graph_trace=result.graph_trace,
             video_trace=video_trace,
             route_reason=_route_reason(
                 route=result.route,
                 retrieval_mode=result.retrieval_mode,
                 hit_count=0,
-                subgraph_count=len(result.subgraph),
+                subgraph_count=len(active_subgraph),
                 no_evidence=True,
             ),
         )
@@ -264,7 +321,9 @@ async def rag_query(
             page_no=hit.chunk.page_no,
             document_id=hit.chunk.document_id,
             chapter_id=hit.chunk.chapter_id,
-            kc_codes=hit.chunk.kc_codes,
+            kc_codes=[
+                code for code in hit.chunk.kc_codes if code not in disabled_resources.kc_codes
+            ],
             text=hit.chunk.text,
             score=round(hit.score, 4),
             vector_score=None if hit.vector_score is None else round(hit.vector_score, 4),
@@ -280,14 +339,14 @@ async def rag_query(
         no_evidence_found=False,
         retrieval_mode=result.retrieval_mode,
         route=result.route,
-        subgraph=result.subgraph,
+        subgraph=active_subgraph,
         graph_trace=result.graph_trace,
         video_trace=video_trace,
         route_reason=_route_reason(
             route=result.route,
             retrieval_mode=result.retrieval_mode,
             hit_count=len(response_hits),
-            subgraph_count=len(result.subgraph),
+            subgraph_count=len(active_subgraph),
             no_evidence=False,
         ),
     )

@@ -25,7 +25,7 @@ ENV_FILE_FALLBACK="/opt/pythontopia/current/deploy/.env"
 # 生产编排必需的变量名。密钥值只做本地强度校验，绝不打印。
 REQUIRED_VARS=(
   PYT_DB_USERNAME PYT_DB_PASSWORD PYT_JWT_SECRET PYT_TEACHER_INVITE_CODE
-  PYT_RAG_ADMIN_TOKEN PYT_ROUTE_EXECUTION_SECRET
+  PYT_RAG_ADMIN_TOKEN PYT_ROUTE_EXECUTION_SECRET PYT_ADMIN_ENCRYPTION_KEY
   PYT_LLM_PROVIDER PYT_OPENAI_BASE_URL PYT_OPENAI_API_KEY PYT_OPENAI_MODEL
   PYT_OPENAI_MODEL_VISION PYT_RAG_EMBEDDER
 )
@@ -319,6 +319,7 @@ if [ -f "${ENV_FILE}" ]; then
   check_secret_strength PYT_JWT_SECRET 32 fail
   check_secret_strength PYT_ROUTE_EXECUTION_SECRET 32 fail
   check_secret_strength PYT_RAG_ADMIN_TOKEN 32 fail
+  check_secret_strength PYT_ADMIN_ENCRYPTION_KEY 32 fail
   # 邀请码是人工分发的短串，长度只给建议值；但公开占位值同样一票否决。
   check_secret_strength PYT_TEACHER_INVITE_CODE 16 warn
   validate_production_ai_env "${ENV_FILE}"

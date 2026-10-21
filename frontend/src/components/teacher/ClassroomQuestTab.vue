@@ -220,6 +220,7 @@ function rateColor(value: number): string {
       aria-label="班级任务列表，可横向滚动"
       tabindex="0"
     >
+      <table>
       <thead>
         <tr>
           <th>标题</th>
@@ -250,10 +251,11 @@ function rateColor(value: number): string {
                   :style="{ width: fmtRate(findCompletion(quest.id)!.completionRate), background: rateColor(findCompletion(quest.id)!.completionRate) }"
                 />
               </div>
-              <span
-                v-else
-                class="rate-na"
-              >——</span>
+            </div>
+            <span
+              v-else
+              class="rate-na"
+            >——</span>
             </td>
             <td>
               <PyButton

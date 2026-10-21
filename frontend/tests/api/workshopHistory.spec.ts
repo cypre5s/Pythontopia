@@ -6,7 +6,6 @@ vi.mock('@/api/http', () => ({
 
 import { http } from '@/api/http';
 import {
-  clearWorkshopChatHistoryCache,
   listWorkshopChatHistoryTurns,
   rememberWorkshopChatHistoryTurn,
   resetWorkshopChatHistoryCacheForTest,

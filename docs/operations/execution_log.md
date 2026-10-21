@@ -1239,3 +1239,15 @@
 - `main` 已包含所有 27 个非主 worktree 的 HEAD；远端 `origin/main` 是 main 的祖先，推送无需改写历史。冲突迁移版本 V209/V210/V211 移到 V228/V229/V230；145 个迁移版本扫描无重复，Testcontainers 空库 Flyway 到 V230。
 - 后端 `mvn clean -DskipTests test-compile` 通过。完整 `mvn test` 跑 1,827 项、0 failures、4 errors：周报集成夹具未 stub 新增事件计数，远征结算夹具使用未绑定节点的旧 fingerprint；修正后 `WeeklyReportResourceRunIntegrationTest` 2/2、`ExpeditionRunPostgresIntegrationTest` 39/39 通过。完整套件未在这 4 个夹具修正后重跑。
 - SSE / Profile / Feynman / Tutor / Boss / Upload 定向测试此前复跑通过；`git diff --check` 通过。Cursor worktree 中有重复的未提交历史资产快照，未并入 main；按用户请求清理 worktree 时将一并移除这些未提交草稿。
+
+## 2026-10-21 — 管理后台与学习体验补齐
+
+- 管理台接入账号状态管理/学生详情、pack 43 课程资源目录与可用状态、既有 AI 出题审核队列、用量统计、按班级成员/任务/KC 热力图查看；后台 DeepSeek 配置只暴露模型与配置状态，API 密钥 AES-GCM 加密存储、不回显。V231 增加 AI 配置表，V232 增加课程资源状态表；现有课程种子和数据卷不删除。
+- 课程资源的停用状态已应用到章节/KC/练习读取、PDF 取页和正式判题。代码审阅发现 RAG 内存索引有机会绕过该状态，增加每次查询从 PostgreSQL 读取停用页/KC 并过滤；数据库状态查询失败时返回 503，不返回课件片段。回归先 RED（3 项），修复后 RAG route/loader 定向 23/23、GraphRAG 回归 27/27；真实本地 PostgreSQL + RAG HTTP 集成验证禁用课件不再返回，随后恢复原状态。
+- 其它前端完善：像素世界点击路径寻路、KC 展示中文名称、费曼在没有错题时可围绕课程主题自主讲题。执行期间一并修复全量前端套件暴露的页面 SFC、判题难度与已有测试夹具问题。
+- 本地验证：Frontend Vitest 287 文件 / 2,707 项通过、typecheck/build 通过，lint 0 error（405 warnings）；Graph 1,979 passed / 1 skipped，RAG 179 passed、Ruff 全通过；Maven 1,847 passed / 0 failures/errors/skips。Compose dev 与 production 配置、发布密钥契约、脚本语法、`git diff --check` 通过。`mvn spotless:check` 因全仓 669 个文件格式差异失败；检查输出未包含本次管理员/课程后端文件，未对全仓运行格式化。
+- 本地真实 Chromium 逐页加载管理员运营、用户、学生详情、课程资源、AI 审核、用量、班级与 AI 配置页；测试账号正常→停用→恢复，资源状态切换后恢复，AI GET 返回无密钥字段且密码输入框为空。浏览器 console、pageerror、失败请求和 API 错误均为 0，临时账号和资源覆盖状态已清理。没有触发真实 AI 出题/模型连接测试，避免生成题目或消耗模型额度。
+
+- ECS 发布验收：release `/opt/pythontopia/releases/20261021-134300`，包 SHA-256 `7f8f8320fcd83d0ba85d6868982081405015f5f6f2722092452f6bc5f9273f1c`；生产 schema 从 V227 更新到 V232。预先备份 PostgreSQL 448 KB、`.env`、Nginx 和 Compose 配置；`current` 指向新版本，`previous` 保留 `20261021-043220`，`deploy_pytopia_pg` 卷未删除或重建。七个服务均 healthy，HTTP 308 跳转、HTTPS `/healthz` 200，安装包内容和课程运行时 7 PDF/34 视频/34 字幕/848 段校验通过。
+- 生产 Chromium 逐页验证运营、用户、学生详情、课程资源、AI 题目审核、资源消耗、班级、AI API 配置；页面加载真实 API 数据。班级演示数据包含 3 名在班学生、65 个 KC 汇总、1 项任务，当前时间范围内资源使用为空。console、pageerror、失败请求和 API 错误均为 0；AI 密钥输入为空且未执行真实模型测试。临时冒烟账号按 ID 删除；另创建专用 ADMIN/STUDENT 账号并以登录 API 分别确认角色，凭据单独回传，不存入仓库或日志。
+- 删除上传包及本次临时安装器副本以恢复磁盘空间；当前 ECS 根盘剩余 2.6 GB。未清理 PostgreSQL 数据卷、当前/上一 release 或 Docker 镜像。预检仍提示 2C4G 实例内存低于 4 GB 基线，aliyun CLI 未安装；HTTP/HTTPS 公网探测实测通过。

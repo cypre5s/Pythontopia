@@ -2,7 +2,7 @@ import { createPinia, setActivePinia } from 'pinia';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { useSessionStore } from '@/stores/session';
 import { useGuideStore } from '@/stores/guide';
-import { logout, refresh } from '@/api/auth';
+import { login, logout, refresh } from '@/api/auth';
 
 const workshopHistoryMocks = vi.hoisted(() => ({
   clear: vi.fn(),
@@ -34,6 +34,7 @@ vi.mock('@/api/auth', () => ({
 
 const refreshMock = vi.mocked(refresh);
 const logoutMock = vi.mocked(logout);
+const loginMock = vi.mocked(login);
 
 async function flushAsync(): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 0));
@@ -61,7 +62,7 @@ describe('session store', () => {
       username: 'stu01',
       role: 'STUDENT',
     });
-    expect(historyMocks.clearWorkshopChatHistoryCache).toHaveBeenCalledTimes(1);
+    expect(workshopHistoryMocks.clear).toHaveBeenCalledTimes(2);
   });
 
   it('登录与登出都清理工坊历史模块缓存并推进账号世代', async () => {
@@ -70,12 +71,12 @@ describe('session store', () => {
 
     await store.login({ username: 'stu01', password: 'P@ssw0rd1' });
 
-    expect(workshopHistoryMocks.clear).toHaveBeenCalledTimes(1);
+    expect(workshopHistoryMocks.clear).toHaveBeenCalledTimes(2);
     expect(store.accountEpoch).toBe(1);
 
     store.logout();
 
-    expect(workshopHistoryMocks.clear).toHaveBeenCalledTimes(2);
+    expect(workshopHistoryMocks.clear).toHaveBeenCalledTimes(4);
     expect(store.accountEpoch).toBe(2);
   });
 
@@ -99,7 +100,7 @@ describe('session store', () => {
   it('clears token / expiry / user on logout', async () => {
     const store = useSessionStore();
     await store.login({ username: 'stu01', password: 'P@ssw0rd1' });
-    historyMocks.clearWorkshopChatHistoryCache.mockClear();
+    workshopHistoryMocks.clear.mockClear();
 
     store.logout();
 
@@ -107,7 +108,7 @@ describe('session store', () => {
     expect(store.user).toBeNull();
     expect(localStorage.getItem('pythontopia.token')).toBeNull();
     expect(localStorage.getItem('pythontopia.user')).toBeNull();
-    expect(historyMocks.clearWorkshopChatHistoryCache).toHaveBeenCalledTimes(1);
+    expect(workshopHistoryMocks.clear).toHaveBeenCalledTimes(2);
   });
 
   it('does not clear the active account cache when login fails', async () => {
@@ -118,7 +119,7 @@ describe('session store', () => {
       'bad credentials',
     );
 
-    expect(historyMocks.clearWorkshopChatHistoryCache).not.toHaveBeenCalled();
+    expect(workshopHistoryMocks.clear).not.toHaveBeenCalled();
   });
 
   it('revokes the current server token when logging out', async () => {

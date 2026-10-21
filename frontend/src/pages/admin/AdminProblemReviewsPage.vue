@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref } from 'vue';
 import { useToastStore } from '@stores/toast';
 import {
+  createProblemReview,
   decideProblemReview,
   searchProblemReviews,
   type BossProblemReviewDecision,
@@ -9,6 +10,9 @@ import {
   type BossProblemReviewSortBy,
   type BossProblemReviewSortDirection,
 } from '@/api/problemReview';
+import { listChapters, listKnowledgeComponents } from '@/api/course';
+import type { ChapterDto } from '@/api/dto/ChapterDto';
+import type { KcDto } from '@/api/dto/KcDto';
 import AdminPanel from './AdminPanel.vue';
 import AdminTable from './AdminTable.vue';
 import AdminPagination from './AdminPagination.vue';
@@ -40,6 +44,15 @@ const detailDialog = ref<HTMLDialogElement | null>(null);
 const decisionDialog = ref<HTMLDialogElement | null>(null);
 const decisionTrigger = ref<HTMLButtonElement | null>(null);
 const detailTrigger = ref<HTMLButtonElement | null>(null);
+const chapters = ref<ChapterDto[]>([]);
+const knowledgeComponents = ref<KcDto[]>([]);
+const generationChapter = ref(1);
+const generationStage = ref(1);
+const generationDifficulty = ref(2);
+const generationKcCode = ref('');
+const generationKind = ref('CODE');
+const generationLoading = ref(false);
+const generationError = ref('');
 
 const selectedEntry = computed(
   () => entries.value.find((entry) => entry.id === selectedId.value) ?? null,
@@ -88,6 +101,52 @@ function formatDate(value: string): string {
   return new Intl.DateTimeFormat('zh-CN', {
     year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
   }).format(date);
+}
+
+async function loadKnowledgeComponents(): Promise<void> {
+  const currentChapter = chapters.value.find((item) => item.orderIndex === generationChapter.value);
+  knowledgeComponents.value = currentChapter ? await listKnowledgeComponents(currentChapter.chapterId) : [];
+  if (!knowledgeComponents.value.some((item) => item.kcCode === generationKcCode.value)) {
+    generationKcCode.value = '';
+  }
+}
+
+async function generateProblem(): Promise<void> {
+  if (generationLoading.value || !chapters.value.some((item) => item.orderIndex === generationChapter.value)) return;
+  generationLoading.value = true;
+  generationError.value = '';
+  try {
+    await createProblemReview({
+      chapter: generationChapter.value,
+      stage: generationStage.value,
+      difficulty: generationDifficulty.value,
+      kind: generationKind.value,
+      ...(generationKcCode.value ? { kcCode: generationKcCode.value } : {}),
+    });
+    filter.value = 'ALL';
+    searchTerm.value = '';
+    searchInput.value = '';
+    page.value = 0;
+    await loadQueue();
+    toast.show('题目已生成并进入审核队列。', 'success');
+  } catch (cause) {
+    generationError.value = cause instanceof Error ? cause.message : 'AI 出题失败';
+  } finally {
+    generationLoading.value = false;
+  }
+}
+
+async function loadGenerationMetadata(): Promise<void> {
+  try {
+    chapters.value = await listChapters();
+    const [firstChapter] = chapters.value;
+    if (firstChapter) {
+      generationChapter.value = firstChapter.orderIndex;
+      await loadKnowledgeComponents();
+    }
+  } catch {
+    generationError.value = '课程章节信息暂不可用，无法生成题目。';
+  }
 }
 
 async function loadQueue(): Promise<void> {
@@ -247,6 +306,7 @@ async function submitDecision(): Promise<void> {
 
 onMounted(() => {
   void loadQueue();
+  void loadGenerationMetadata();
 });
 </script>
 
@@ -262,6 +322,27 @@ onMounted(() => {
       <p>复核服务端生成的题目，并保存审核决定与理由。</p>
     </header>
 
+    <AdminPanel title="生成 AI 练习题" description="题目生成后进入同一审核队列；审核通过前不会作为正式题目提供给学生。">
+      <form class="admin-problem-generation" @submit.prevent="generateProblem">
+        <label><span>章节</span>
+          <select v-model.number="generationChapter" class="admin-control" :disabled="generationLoading" data-testid="admin-generate-problem-chapter" @change="loadKnowledgeComponents">
+            <option v-for="chapterOption in chapters" :key="chapterOption.chapterId" :value="chapterOption.orderIndex">第 {{ chapterOption.orderIndex }} 章 · {{ chapterOption.title }}</option>
+          </select>
+        </label>
+        <label><span>阶段</span><select v-model.number="generationStage" class="admin-control" :disabled="generationLoading"><option v-for="value in [1, 2, 3, 4]" :key="value" :value="value">{{ value }}</option></select></label>
+        <label><span>知识点（可选）</span>
+          <select v-model="generationKcCode" class="admin-control" data-testid="admin-generate-problem-kc" :disabled="generationLoading">
+            <option value="">由 AI 按章节选择</option>
+            <option v-for="kc in knowledgeComponents" :key="kc.kcId" :value="kc.kcCode">{{ kc.kcName }}</option>
+          </select>
+        </label>
+        <label><span>难度</span><select v-model.number="generationDifficulty" class="admin-control" :disabled="generationLoading"><option v-for="value in [1, 2, 3, 4, 5]" :key="value" :value="value">{{ value }}</option></select></label>
+        <label><span>题目类型</span><select v-model="generationKind" class="admin-control" :disabled="generationLoading"><option value="CODE">编程题</option><option value="OBJECTIVE">客观题</option></select></label>
+        <button class="admin-button admin-button--primary" type="submit" data-testid="admin-generate-problem-submit" :disabled="generationLoading || chapters.length === 0">{{ generationLoading ? '生成中…' : '生成候选题' }}</button>
+      </form>
+      <p v-if="generationError" role="alert">{{ generationError }}</p>
+    </AdminPanel>
+
     <AdminPanel
       title="AI 出题审核"
       description="AI 通过审查的题目可自动进入题库；教师可复核并撤下，人工决定均保留审计记录。"
@@ -273,72 +354,8 @@ onMounted(() => {
           :disabled="loading"
           @click="loadQueue"
         >
-          <label class="review-filter">
-            <span>状态</span>
-            <select
-              v-model="filter"
-              aria-label="按审核状态筛选"
-              :disabled="loading"
-              @change="applyQueueFilters"
-            >
-              <option value="ALL">全部状态</option>
-              <option value="PENDING">待审核</option>
-              <option value="APPROVED">已通过</option>
-              <option value="REJECTED">已驳回</option>
-            </select>
-          </label>
-          <label class="review-filter">
-            <span>排序字段</span>
-            <select
-              v-model="sortBy"
-              aria-label="审核队列排序字段"
-              :disabled="loading"
-              @change="applyQueueFilters"
-            >
-              <option value="REQUESTED_AT">申请时间</option>
-              <option value="STATEMENT">题面</option>
-              <option value="REQUESTER_USERNAME">申请人</option>
-            </select>
-          </label>
-          <label class="review-filter">
-            <span>顺序</span>
-            <select
-              v-model="sortDirection"
-              aria-label="审核队列排序方向"
-              :disabled="loading"
-              @change="applyQueueFilters"
-            >
-              <option value="DESC">降序</option>
-              <option value="ASC">升序</option>
-            </select>
-          </label>
-          <label class="review-search">
-            <span>搜索题目、KC、申请人或编号</span>
-            <input
-              id="admin-review-search"
-              v-model="searchInput"
-              type="search"
-              maxlength="100"
-              :disabled="loading"
-              data-testid="admin-review-search"
-            >
-          </label>
-          <button
-            class="admin-button admin-button--primary"
-            type="submit"
-            :disabled="loading"
-          >
-            搜索
-          </button>
-          <button
-            class="admin-button"
-            type="button"
-            :disabled="loading"
-            @click="loadQueue"
-          >
-            {{ loading ? '正在刷新…' : '刷新队列' }}
-          </button>
-        </form>
+          {{ loading ? '正在刷新…' : '刷新队列' }}
+        </button>
       </template>
 
       <template #toolbar>
@@ -759,6 +776,13 @@ onMounted(() => {
     </dialog>
   </section>
 </template>
+
+<style scoped>
+.admin-problem-generation { display: flex; align-items: end; gap: 10px; flex-wrap: wrap; }
+.admin-problem-generation label { display: grid; gap: 5px; min-width: 120px; }
+.admin-problem-generation label:nth-child(1), .admin-problem-generation label:nth-child(3) { flex: 1 1 220px; }
+.admin-problem-generation label > span { color: var(--admin-text-muted); font-size: 12px; }
+</style>
 
 <style scoped>
 .admin-reviews {

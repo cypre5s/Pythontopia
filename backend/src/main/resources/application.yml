@@ -23,6 +23,8 @@ server:
   forward-headers-strategy: framework
 
 pythontopia:
+  admin:
+    encryption-key: ${PYT_ADMIN_ENCRYPTION_KEY:}
   ai:
     request-limits:
       # Deployment keeps the account and provider daily caps; ./dev.sh opts local iteration out.

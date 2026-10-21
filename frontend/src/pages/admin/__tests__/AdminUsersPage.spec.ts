@@ -27,6 +27,12 @@ function page(content: AdminUserDto[]): AdminUserPageDto {
   return { content, page: 0, size: 20, totalElements: content.length, totalPages: 1 };
 }
 
+function mountPage() {
+  return mount(AdminUsersPage, {
+    global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } },
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   searchAdminUsers.mockResolvedValue(page([activeUser]));
@@ -48,7 +54,7 @@ afterEach(() => {
 describe('AdminUsersPage', () => {
   it('confirms status changes in the shared admin dialog before calling the API', async () => {
     const nativeConfirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
-    const wrapper = mount(AdminUsersPage);
+    const wrapper = mountPage();
     await flushPromises();
 
     await wrapper.get('[data-testid="admin-user-status-7"]').trigger('click');
@@ -66,7 +72,7 @@ describe('AdminUsersPage', () => {
   });
 
   it('removes the redundant page heading and exposes the panel as the page heading', async () => {
-    const wrapper = mount(AdminUsersPage);
+    const wrapper = mountPage();
     await flushPromises();
 
     expect(wrapper.find('.admin-page-heading').exists()).toBe(false);
@@ -80,7 +86,7 @@ describe('AdminUsersPage', () => {
       username: 'u'.repeat(64),
       displayName: longName,
     }]));
-    const wrapper = mount(AdminUsersPage);
+    const wrapper = mountPage();
     await flushPromises();
 
     const cells = wrapper.findAll('.admin-users__readable');
@@ -89,7 +95,7 @@ describe('AdminUsersPage', () => {
   });
 
   it('does not leave stale account actions available when a filtered reload fails', async () => {
-    const wrapper = mount(AdminUsersPage);
+    const wrapper = mountPage();
     await flushPromises();
     searchAdminUsers.mockRejectedValueOnce(new Error('network error'));
 
@@ -101,7 +107,7 @@ describe('AdminUsersPage', () => {
   });
 
   it('leaves the account unchanged when the confirmation dialog is cancelled', async () => {
-    const wrapper = mount(AdminUsersPage);
+    const wrapper = mountPage();
     await flushPromises();
 
     await wrapper.get('[data-testid="admin-user-status-7"]').trigger('click');

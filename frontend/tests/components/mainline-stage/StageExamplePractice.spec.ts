@@ -335,7 +335,8 @@ describe('StageExamplePractice（练 · 客观题、OJ 与 AI 编程补充）', 
     const item = wrapper.find('.stage-practice__item');
     expect(item.text()).toContain('P1-01');
     expect(item.text()).toContain('两数之和');
-    expect(item.text()).toContain('KC-OP-02');
+    expect(item.text()).toContain('相关知识点');
+    expect(item.text()).not.toContain('KC-OP-02');
 
     const train = wrapper.find('[data-testid="ex-train-201"]');
     expect(train.exists()).toBe(true);

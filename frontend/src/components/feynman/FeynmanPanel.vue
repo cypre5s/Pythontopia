@@ -35,9 +35,6 @@ const isIndependentTeaching = computed(
   () => currentSession.value !== null && misconceptions.value.length === 0,
 );
 
-// 概念模式：非课程 KC（课件外自由概念）→ 通识知识，以代码找茬为准、不计入掌握度。
-const isConcept = computed(() => !isFeynmanSelfTestKc(props.kcCode));
-
 const canTeach = computed(
   () => currentSession.value !== null && teachingText.value.trim().length > 0 && !teaching.value,
 );
@@ -55,6 +52,14 @@ const canJudge = computed(
     latestProducedCode.value.trim().length > 0 &&
     !judging.value,
 );
+
+const judgeDisabledHint = computed(() => {
+  if (!currentSession.value) return '';
+  if (isConcept.value) return '通识概念没有代表题，本模式以代码找茬为准，不做真判题。';
+  if (isIndependentTeaching.value) return '当前没有真实错题记录，自主讲题不会进行错题专项判题或掌握度回流。';
+  if (alreadyPassed.value) return '本会话已判定教学成功，不重复计分。';
+  return '';
+});
 
 const judgeText = computed(() => {
   const result = latestJudgeResult.value;
@@ -100,6 +105,7 @@ const misconceptionSummary = computed(() =>
 const latestTurn = computed(() => turns.value.at(-1) ?? null);
 const teachHint = computed(() => store.bugHunt?.hintMd ?? '');
 const kcLabel = computed(() => kcDisplayName(props.kcCode));
+const latestNotice = computed(() => turns.value.at(-1)?.noticeMd ?? '');
 
 /** 学弟中性描述代码在做什么（不暴露「我以为…」式自我纠错）。 */
 const TUTEE_CODE_DESC: Record<string, string> = {

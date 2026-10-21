@@ -21,6 +21,14 @@ export async function listMyClassrooms(): Promise<ClassroomDto[]> {
   return response.data;
 }
 
+export async function updateClassroom(
+  classroomId: number,
+  request: CreateClassroomRequest,
+): Promise<ClassroomDto> {
+  const response = await http.put<ClassroomDto>(`/api/teacher/classrooms/${classroomId}`, request);
+  return response.data;
+}
+
 export async function joinClassroom(req: JoinClassroomRequest): Promise<ClassroomDto> {
   const response = await http.post<ClassroomDto>('/api/classrooms/join', req);
   return response.data;

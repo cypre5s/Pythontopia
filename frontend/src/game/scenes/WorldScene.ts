@@ -21,6 +21,7 @@ import {
   createDirectionController,
   toServerDirection,
   type DirectionController,
+  type ExtendedDirection,
 } from '@game/adapters/input';
 import { openNpcDialog } from '@game/adapters/dialog';
 import { createPlayerSprite } from '@game/adapters/sprite';
@@ -43,6 +44,7 @@ import {
 } from '@game/core/NpcFramework';
 import { attachLifecycle } from '@game/core/SceneLifecycle';
 import { resolveLowObstacleJump } from '@game/core/JumpSystem';
+import { findTilePath, type WorldTile } from '@game/core/WorldPathfinding';
 import {
   resolveSchedulePosition,
   getScheduleWaypoints,
@@ -213,6 +215,9 @@ interface WorldSceneState {
   entry: MapIndexEntry | null;
   player: PlayerSpriteHandle | null;
   controller: DirectionController | null;
+  clickPath: WorldTile[];
+  clickTarget: WorldTile | null;
+  groundClickHandler: ((pointer: Phaser.Input.Pointer, currentlyOver?: Phaser.GameObjects.GameObject[]) => void) | null;
   lastMoveAt: number;
   actionWasDown: boolean;
   jumpWasDown: boolean;
@@ -263,6 +268,9 @@ const state: WorldSceneState = {
   entry: null,
   player: null,
   controller: null,
+  clickPath: [],
+  clickTarget: null,
+  groundClickHandler: null,
   lastMoveAt: 0,
   actionWasDown: false,
   jumpWasDown: false,
@@ -298,6 +306,8 @@ export const WorldScene = {
     state.mapKey = SUPPORTED_MAP_KEYS.has(candidate) ? candidate : DEFAULT_MAP_KEY;
     state.switching = false;
     state.lastMoveAt = 0;
+    state.clickPath = [];
+    state.clickTarget = null;
     state.actionWasDown = false;
     state.hitStopUntil = 0;
     state.lastHitStopAt = 0;
@@ -338,6 +348,8 @@ export const WorldScene = {
     state.npcs = [];
     state.collisions = [];
     state.lowObstacles = [];
+    state.clickPath = [];
+    state.clickTarget = null;
 
     const index = phaserScene.cache.json.exists('map_index')
       ? (phaserScene.cache.json.get('map_index') as MapIndex)
@@ -406,6 +418,35 @@ export const WorldScene = {
     }
 
     state.controller = createDirectionController(this);
+    const canvas = phaserScene.game.canvas;
+    if (canvas) {
+      canvas.tabIndex = 0;
+      canvas.focus({ preventScroll: true });
+    }
+    state.groundClickHandler = (pointer, currentlyOver = []) => {
+      if (pointer.button !== 0) return;
+      // Clicks on NPC/building hotspots keep their existing interaction behavior and cancel walking.
+      if (currentlyOver.length > 0) {
+        state.clickPath = [];
+        state.clickTarget = null;
+        return;
+      }
+      const target = {
+        x: Math.floor(pointer.worldX / RENDER_TILE_SIZE),
+        y: Math.floor(pointer.worldY / RENDER_TILE_SIZE),
+      };
+      const path = findTilePath({
+        start: { x: player.tileX, y: player.tileY },
+        target,
+        width: state.width,
+        height: state.height,
+        isBlocked: (x, y) => isBlocked(x, y) || npcOverlapsTile(x, y),
+      });
+      state.clickPath = path ?? [];
+      state.clickTarget = path?.length ? target : null;
+      canvas?.focus({ preventScroll: true });
+    };
+    phaserScene.input.on('pointerdown', state.groundClickHandler);
 
     buildings.forEach((building) => {
       paintBuildingZone(phaserScene, building);
@@ -618,6 +659,10 @@ export const WorldScene = {
       phaserScene.scale?.off?.('resize', applyCoverZoom);
       window.removeEventListener('beforeunload', onBeforeUnload);
       window.removeEventListener('pythontopia:mood-changed', onMoodChanged);
+      if (state.groundClickHandler) {
+        phaserScene.input.off('pointerdown', state.groundClickHandler);
+        state.groundClickHandler = null;
+      }
       // 显示对象随场景销毁，这里只清引用，避免 restart 时对旧对象重复 destroy。
       state.questMarkerObjects = [];
       if (state.weather) {
@@ -631,6 +676,8 @@ export const WorldScene = {
       }
       state.player = null;
       state.controller = null;
+      state.clickPath = [];
+      state.clickTarget = null;
       state.collisions = [];
       state.lowObstacles = [];
       state.exits = [];
@@ -666,11 +713,28 @@ export const WorldScene = {
       return;
     }
 
-    const rawDirection = controller.getDirection();
+    let rawDirection = controller.getDirection();
+    if (rawDirection) {
+      state.clickPath = [];
+      state.clickTarget = null;
+    } else if (state.clickTarget) {
+      while (state.clickPath[0]?.x === player.tileX && state.clickPath[0]?.y === player.tileY) {
+        state.clickPath.shift();
+      }
+      if (player.tileX === state.clickTarget.x && player.tileY === state.clickTarget.y) {
+        state.clickPath = [];
+        state.clickTarget = null;
+      } else {
+        const next = state.clickPath[0];
+        rawDirection = next ? directionToTile(next, player.tileX, player.tileY) : null;
+      }
+    }
     const jumpIsDown = controller.isJumpPressed();
     const jumpPressedEdge = jumpIsDown && !state.jumpWasDown;
     state.jumpWasDown = jumpIsDown;
     if (jumpPressedEdge && !player.isJumping()) {
+      state.clickPath = [];
+      state.clickTarget = null;
       const facing = toCardinal(player.direction, 'DOWN');
       const jump = resolveLowObstacleJump({
         tileX: player.tileX,
@@ -750,6 +814,17 @@ export const WorldScene = {
         player.moveToTile(player.tileX, player.tileY, cardinal);
         if (blockedByNpc) {
           triggerHitStop(this);
+        }
+        if (state.clickTarget) {
+          const path = findTilePath({
+            start: { x: player.tileX, y: player.tileY },
+            target: state.clickTarget,
+            width: state.width,
+            height: state.height,
+            isBlocked: (x, y) => isBlocked(x, y) || npcOverlapsTile(x, y),
+          });
+          state.clickPath = path ?? [];
+          if (path === null || path.length === 0) state.clickTarget = null;
         }
       }
     }
@@ -1248,6 +1323,16 @@ function isBlocked(tileX: number, tileY: number): boolean {
   }
   const row = state.collisions[tileY];
   return Boolean(row?.[tileX]);
+}
+
+function directionToTile(target: WorldTile, fromX: number, fromY: number): ExtendedDirection | null {
+  const dx = target.x - fromX;
+  const dy = target.y - fromY;
+  if (dx === 0 && dy === -1) return 'UP';
+  if (dx === 0 && dy === 1) return 'DOWN';
+  if (dx === -1 && dy === 0) return 'LEFT';
+  if (dx === 1 && dy === 0) return 'RIGHT';
+  return null;
 }
 
 /**

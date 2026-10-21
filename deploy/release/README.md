@@ -121,6 +121,7 @@ vi .env
 - `PYT_JWT_SECRET`：至少 32 字符的随机串
 - `PYT_TEACHER_INVITE_CODE`：教师注册邀请码
 - `PYT_RAG_ADMIN_TOKEN`：RAG 管理接口令牌
+- `PYT_ADMIN_ENCRYPTION_KEY`：至少 32 字符的随机主密钥（`openssl rand -hex 32`）；用于 AES-GCM 加密后台保存的 DeepSeek API 密钥，升级时必须沿用同一值。请与数据库备份一并安全备份，丢失后无法解密后台保存的密钥。
 - 生产 Compose 固定使用内部 `http://piston:2000`，`PYT_PISTON_PYTHON_VERSION` 默认为 `3.11.0`；Piston 与 runtime 初始化任务只加入 backend 共用的 `judge-execution` 网络，不映射宿主端口，生产绝不回退 `subprocess`。Piston API v3.1.0 不校验 Bearer token，因此访问控制依赖 Docker 网络成员限制；该网络保留出站能力供首次 runtime 安装，学生提交代码由 `nosocket` 沙箱禁网
 - `PYT_LLM_PROVIDER=openai_compat`、`PYT_OPENAI_BASE_URL=https://api.deepseek.com`、`PYT_OPENAI_API_KEY`：只允许模型 `deepseek-v4-pro`（文本）和 `deepseek-flash`（文本/图片输入）；视觉模型必须为 `deepseek-flash`。生产禁止 dryrun、Spark 和其它兼容端点
 - `PYT_RAG_EMBEDDER=hash`：RAG 使用本地 hash 向量与 BM25，不要求外部 embedding API；语义向量降级时 `/readyz` 标记 `ready_degraded`，仍要求 BM25 课程索引可用

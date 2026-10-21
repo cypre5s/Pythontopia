@@ -74,3 +74,20 @@ def test_load_pages_maps_database_rows(monkeypatch: Any, tmp_path: Path) -> None
     assert result.pages[1].kc_codes == ["PY43-KC-002", "PY43-KC-003"]
     assert result.pages[1].chapter_id is None
     assert not (tmp_path / "pages.parquet").exists()
+
+
+def test_fetch_disabled_course_resources_maps_page_ids_and_kc_codes(
+    monkeypatch: Any,
+) -> None:
+    rows = [
+        {"resource_type": "PAGE", "resource_id": "10682"},
+        {"resource_type": "KNOWLEDGE_POINT", "resource_id": "PY43-KC-001"},
+    ]
+    monkeypatch.setattr(
+        loader.psycopg, "connect", lambda *_args, **_kwargs: FakeConnection(rows)
+    )
+
+    disabled = loader.fetch_disabled_course_resources("postgresql://example")
+
+    assert disabled.page_ids == frozenset({10682})
+    assert disabled.kc_codes == frozenset({"PY43-KC-001"})

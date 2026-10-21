@@ -46,9 +46,11 @@ public class CoursePackRepository {
             """
             SELECT id, pack_id AS packId, order_index AS orderIndex, title,
                    summary_markdown AS summaryMarkdown
-            FROM course_chapter
-            WHERE pack_id = :packId
-            ORDER BY order_index
+            FROM course_chapter c
+            WHERE c.pack_id = :packId
+              AND NOT EXISTS (SELECT 1 FROM course_resource_state s WHERE s.pack_id = c.pack_id
+                AND s.resource_type = 'CHAPTER' AND s.resource_id = c.id AND NOT s.enabled)
+            ORDER BY c.order_index
             """)
         .param("packId", packId)
         .query(CourseChapter.class)
@@ -56,7 +58,7 @@ public class CoursePackRepository {
   }
 
   public List<CourseKc> findKcs(Long packId, Long chapterId) {
-    String chapterFilter = chapterId == null ? "" : " AND chapter_id = :chapterId";
+    String chapterFilter = chapterId == null ? "" : " AND c.chapter_id = :chapterId";
     JdbcClient.StatementSpec spec =
         jdbcClient
             .sql(
@@ -64,8 +66,10 @@ public class CoursePackRepository {
                 SELECT id, pack_id AS packId, kc_code AS kcCode, kc_name AS kcName,
                        chapter_id AS chapterId, chapter_order AS chapterOrder, difficulty,
                        summary_markdown AS summaryMarkdown
-                FROM course_kc
-                WHERE pack_id = :packId
+                FROM course_kc c
+                WHERE c.pack_id = :packId
+                  AND NOT EXISTS (SELECT 1 FROM course_resource_state s WHERE s.pack_id = c.pack_id
+                    AND s.resource_type = 'KNOWLEDGE_POINT' AND s.resource_id = c.id AND NOT s.enabled)
                 """
                     + chapterFilter
                     + " ORDER BY chapter_order, id")
@@ -83,8 +87,10 @@ public class CoursePackRepository {
             SELECT id, pack_id AS packId, kc_code AS kcCode, kc_name AS kcName,
                    chapter_id AS chapterId, chapter_order AS chapterOrder, difficulty,
                    summary_markdown AS summaryMarkdown
-            FROM course_kc
-            WHERE pack_id = :packId AND kc_code = :kcCode
+            FROM course_kc c
+            WHERE c.pack_id = :packId AND c.kc_code = :kcCode
+              AND NOT EXISTS (SELECT 1 FROM course_resource_state s WHERE s.pack_id = c.pack_id
+                AND s.resource_type = 'KNOWLEDGE_POINT' AND s.resource_id = c.id AND NOT s.enabled)
             """)
         .param("packId", packId)
         .param("kcCode", kcCode)
@@ -102,8 +108,10 @@ public class CoursePackRepository {
         .sql(
             """
             SELECT kc_code, prerequisite_codes
-            FROM course_kc
-            WHERE pack_id = :packId
+            FROM course_kc c
+            WHERE c.pack_id = :packId
+              AND NOT EXISTS (SELECT 1 FROM course_resource_state s WHERE s.pack_id = c.pack_id
+                AND s.resource_type = 'KNOWLEDGE_POINT' AND s.resource_id = c.id AND NOT s.enabled)
             """)
         .param("packId", packId)
         .query(
@@ -137,8 +145,10 @@ public class CoursePackRepository {
                    input_description AS inputDescription,
                    output_description AS outputDescription, difficulty,
                    source_label AS sourceLabel
-            FROM course_problem
-            WHERE pack_id = :packId AND id = :problemId
+            FROM course_problem p
+            WHERE p.pack_id = :packId AND p.id = :problemId
+              AND NOT EXISTS (SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
+                AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled)
             """)
         .param("packId", packId)
         .param("problemId", problemId)
@@ -147,7 +157,7 @@ public class CoursePackRepository {
   }
 
   public List<CourseProblem> findProblems(Long packId, String kcCode) {
-    String kcFilter = kcCode == null || kcCode.isBlank() ? "" : " AND kc_code = :kcCode";
+    String kcFilter = kcCode == null || kcCode.isBlank() ? "" : " AND p.kc_code = :kcCode";
     JdbcClient.StatementSpec spec =
         jdbcClient
             .sql(
@@ -157,11 +167,13 @@ public class CoursePackRepository {
                        input_description AS inputDescription,
                        output_description AS outputDescription, difficulty,
                        source_label AS sourceLabel
-                FROM course_problem
-                WHERE pack_id = :packId
+                FROM course_problem p
+                WHERE p.pack_id = :packId
+                  AND NOT EXISTS (SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
+                    AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled)
                 """
                     + kcFilter
-                    + " ORDER BY id")
+                    + " ORDER BY p.id")
             .param("packId", packId);
     if (kcCode != null && !kcCode.isBlank()) {
       spec = spec.param("kcCode", kcCode);
@@ -170,17 +182,19 @@ public class CoursePackRepository {
   }
 
   public List<CourseExample> findExamples(Long packId, String kcCode) {
-    String kcFilter = kcCode == null || kcCode.isBlank() ? "" : " AND kc_code = :kcCode";
+    String kcFilter = kcCode == null || kcCode.isBlank() ? "" : " AND e.kc_code = :kcCode";
     JdbcClient.StatementSpec spec =
         jdbcClient
             .sql(
                 """
                 SELECT id, pack_id, kc_code, title, code, explanation_markdown, page_refs
-                FROM course_example
-                WHERE pack_id = :packId
+                FROM course_example e
+                WHERE e.pack_id = :packId
+                  AND NOT EXISTS (SELECT 1 FROM course_resource_state s WHERE s.pack_id = e.pack_id
+                    AND s.resource_type = 'EXAMPLE' AND s.resource_id = e.id AND NOT s.enabled)
                 """
                     + kcFilter
-                    + " ORDER BY id")
+                    + " ORDER BY e.id")
             .param("packId", packId);
     if (kcCode != null && !kcCode.isBlank()) {
       spec = spec.param("kcCode", kcCode);
@@ -193,8 +207,10 @@ public class CoursePackRepository {
         .sql(
             """
             SELECT id, pack_id, kc_code, title, code, explanation_markdown, page_refs
-            FROM course_example
-            WHERE pack_id = :packId AND id = :exampleId
+            FROM course_example e
+            WHERE e.pack_id = :packId AND e.id = :exampleId
+              AND NOT EXISTS (SELECT 1 FROM course_resource_state s WHERE s.pack_id = e.pack_id
+                AND s.resource_type = 'EXAMPLE' AND s.resource_id = e.id AND NOT s.enabled)
             """)
         .param("packId", packId)
         .param("exampleId", exampleId)
@@ -243,7 +259,9 @@ public class CoursePackRepository {
                    chapter_id AS chapterId, page_no AS pageNo,
                    title, content_markdown AS contentMarkdown, excerpt
             FROM course_page
-            WHERE id = :pageId
+            WHERE id = :pageId AND NOT EXISTS (
+              SELECT 1 FROM course_resource_state s WHERE s.pack_id = course_page.pack_id
+                AND s.resource_type = 'DOCUMENT' AND s.resource_id = course_page.document_id AND NOT s.enabled)
             """)
         .param("pageId", pageId)
         .query(CoursePage.class)
@@ -260,7 +278,9 @@ public class CoursePackRepository {
             """
             SELECT id
             FROM course_document
-            WHERE pack_id = :packId
+            WHERE pack_id = :packId AND NOT EXISTS (
+              SELECT 1 FROM course_resource_state s WHERE s.pack_id = course_document.pack_id
+                AND s.resource_type = 'DOCUMENT' AND s.resource_id = course_document.id AND NOT s.enabled)
             ORDER BY sort_order, id
             OFFSET :skip LIMIT 1
             """)
@@ -280,7 +300,9 @@ public class CoursePackRepository {
             """
             SELECT id
             FROM course_page
-            WHERE document_id = :documentId
+            WHERE document_id = :documentId AND NOT EXISTS (
+              SELECT 1 FROM course_resource_state s WHERE s.pack_id = 43 AND s.resource_type = 'DOCUMENT'
+                AND s.resource_id = course_page.document_id AND NOT s.enabled)
             ORDER BY page_no, chunk_index
             """)
         .param("documentId", documentId)
@@ -298,6 +320,10 @@ public class CoursePackRepository {
             FROM course_page p
             JOIN course_kc kc ON p.id = ANY(kc.page_refs)
             WHERE kc.pack_id = :packId AND kc.kc_code = :kcCode
+              AND NOT EXISTS (SELECT 1 FROM course_resource_state ks WHERE ks.pack_id = kc.pack_id
+                AND ks.resource_type = 'KNOWLEDGE_POINT' AND ks.resource_id = kc.id AND NOT ks.enabled)
+              AND NOT EXISTS (SELECT 1 FROM course_resource_state ds WHERE ds.pack_id = p.pack_id
+                AND ds.resource_type = 'DOCUMENT' AND ds.resource_id = p.document_id AND NOT ds.enabled)
             ORDER BY p.document_id, p.page_no, p.chunk_index
             """)
         .param("packId", packId)

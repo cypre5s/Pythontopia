@@ -4,6 +4,7 @@ import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from starlette.requests import Request
+from types import SimpleNamespace
 
 from pythontopia_rag.app_state import AppState
 from pythontopia_rag.data.page_source import IndexablePage, InMemoryPageSource
@@ -25,9 +26,15 @@ class _SemanticEmbedder:
 
 
 @pytest.fixture(autouse=True)
-def _reset_state() -> AppState:
+def _reset_state(monkeypatch: pytest.MonkeyPatch) -> AppState:
     state = AppState(embedder=HashEmbedder(), store=InMemoryVectorStore())
     app.state.rag = state
+    monkeypatch.setattr(
+        query_module,
+        "fetch_disabled_course_resources",
+        lambda _db_url: SimpleNamespace(page_ids=frozenset(), kc_codes=frozenset()),
+        raising=False,
+    )
     return state
 
 
@@ -107,6 +114,86 @@ async def test_query_returns_input_evidence() -> None:
     assert body["citations"][0]["page_id"] == 11
     assert body["citations"][0]["source"] == "courseware"
     assert body["citations"][0]["snippet"]
+
+
+@pytest.mark.asyncio
+async def test_query_does_not_return_course_pages_disabled_by_admin(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = app.state.rag
+    app.state.rag_page_source = _seed_pages()
+    await rebuild_index(source=app.state.rag_page_source, embedder=state.embedder, store=state.store)
+    monkeypatch.setattr(
+        query_module,
+        "fetch_disabled_course_resources",
+        lambda _db_url: SimpleNamespace(page_ids=frozenset({11}), kc_codes=frozenset()),
+        raising=False,
+    )
+
+    response = TestClient(app).post(
+        "/rag/query",
+        json={
+            "query": "input函数",
+            "kc_codes": ["PY43-KC-012"],
+            "top_k": 5,
+            "min_score": 0.1,
+        },
+    )
+
+    body = response.json()
+    assert body["no_evidence_found"] is True
+    assert body["hits"] == []
+    assert body["citations"] == []
+
+
+@pytest.mark.asyncio
+async def test_query_does_not_return_disabled_knowledge_point(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = app.state.rag
+    app.state.rag_page_source = _seed_pages()
+    await rebuild_index(source=app.state.rag_page_source, embedder=state.embedder, store=state.store)
+    monkeypatch.setattr(
+        query_module,
+        "fetch_disabled_course_resources",
+        lambda _db_url: SimpleNamespace(page_ids=frozenset(), kc_codes=frozenset({"PY43-KC-012"})),
+        raising=False,
+    )
+
+    response = TestClient(app).post(
+        "/rag/query",
+        json={
+            "query": "input函数",
+            "kc_codes": ["PY43-KC-012"],
+            "top_k": 5,
+            "min_score": 0.1,
+        },
+    )
+
+    body = response.json()
+    assert body["no_evidence_found"] is True
+    assert body["hits"] == []
+    assert body["citations"] == []
+
+
+@pytest.mark.asyncio
+async def test_query_fails_closed_when_resource_availability_cannot_be_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    state = app.state.rag
+    await rebuild_index(source=_seed_pages(), embedder=state.embedder, store=state.store)
+
+    def unavailable(_db_url: str) -> object:
+        raise RuntimeError("database unavailable")
+
+    monkeypatch.setattr(
+        query_module, "fetch_disabled_course_resources", unavailable, raising=False
+    )
+    response = TestClient(app, raise_server_exceptions=False).post(
+        "/rag/query", json={"query": "input函数", "top_k": 5, "min_score": 0.1}
+    )
+
+    assert response.status_code == 503
 
 
 @pytest.mark.asyncio

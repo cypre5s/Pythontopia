@@ -18,6 +18,7 @@ from pythontopia_graph.llm.provider import (
     provider_label,
 )
 from pythontopia_graph.routes.boss import router as boss_router
+from pythontopia_graph.routes.admin_config import router as admin_config_router
 from pythontopia_graph.routes.chapter_test import router as chapter_test_router
 from pythontopia_graph.routes.code_debug_runtime import router as code_debug_runtime_router
 from pythontopia_graph.routes.courseware import router as courseware_router
@@ -112,6 +113,7 @@ async def llm_provider_not_configured(
 
 
 app.include_router(resource_router)
+app.include_router(admin_config_router)
 app.include_router(path_router)
 app.include_router(debug_router)
 app.include_router(evaluation_router)

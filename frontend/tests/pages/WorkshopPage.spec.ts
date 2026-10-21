@@ -532,7 +532,7 @@ describe('WorkshopPage R-13 改造', () => {
     await flushPromises();
     expect(apiMocks.listWorkshopChatHistoryTurns).toHaveBeenCalledTimes(1);
     expect(apiMocks.listWorkshopChatHistoryTurns).toHaveBeenCalledWith(
-      101,
+      7,
       50,
       expect.objectContaining({ force: false }),
     );

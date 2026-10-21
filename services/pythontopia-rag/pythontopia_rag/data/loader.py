@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 import psycopg
@@ -32,6 +33,12 @@ class LoadResult(BaseModel):
     output_path: str
     dry_run: bool
     pages: list[PageRecord] = Field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class DisabledCourseResources:
+    page_ids: frozenset[int] = frozenset()
+    kc_codes: frozenset[str] = frozenset()
 
 
 def normalize_db_url(db_url: str) -> str:
@@ -70,6 +77,39 @@ def fetch_pages(db_url: str) -> list[PageRecord]:
             cur.execute(sql, {})
             rows = cur.fetchall()
     return [PageRecord.model_validate(row) for row in rows]
+
+
+def fetch_disabled_course_resources(db_url: str) -> DisabledCourseResources:
+    sql = """
+        SELECT 'PAGE' AS resource_type, p.id::text AS resource_id
+        FROM course_page p
+        WHERE p.pack_id = 43 AND (
+            EXISTS (
+                SELECT 1 FROM course_resource_state s
+                WHERE s.pack_id = p.pack_id AND s.resource_type = 'DOCUMENT'
+                  AND s.resource_id = p.document_id AND NOT s.enabled
+            )
+            OR EXISTS (
+                SELECT 1 FROM course_resource_state s
+                WHERE s.pack_id = p.pack_id AND s.resource_type = 'CHAPTER'
+                  AND s.resource_id = p.chapter_id AND NOT s.enabled
+            )
+        )
+        UNION ALL
+        SELECT 'KNOWLEDGE_POINT', kc.kc_code
+        FROM course_kc kc
+        JOIN course_resource_state s ON s.pack_id = kc.pack_id
+          AND s.resource_type = 'KNOWLEDGE_POINT' AND s.resource_id = kc.id
+        WHERE kc.pack_id = 43 AND NOT s.enabled
+    """
+    with psycopg.connect(normalize_db_url(db_url), row_factory=dict_row) as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, {})
+            rows = cur.fetchall()
+    return DisabledCourseResources(
+        page_ids=frozenset(int(row["resource_id"]) for row in rows if row["resource_type"] == "PAGE"),
+        kc_codes=frozenset(str(row["resource_id"]) for row in rows if row["resource_type"] == "KNOWLEDGE_POINT"),
+    )
 
 
 def write_parquet(pages: list[PageRecord], output_path: Path) -> None:

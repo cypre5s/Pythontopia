@@ -35,6 +35,17 @@ class StubProvider(LlmProvider):
             yield self._reply[index : index + 5]
 
 
+def _sse_events(body: str) -> list[tuple[str, dict]]:
+    events = []
+    for block in body.split("\n\n"):
+        lines = block.splitlines()
+        name = next((line[7:] for line in lines if line.startswith("event: ")), None)
+        data = [line[6:] for line in lines if line.startswith("data: ")]
+        if name and data:
+            events.append((name, json.loads("\n".join(data))))
+    return events
+
+
 @pytest.mark.asyncio
 async def test_tool_loop_stream_error_does_not_return_exception_text(monkeypatch) -> None:
     class BrokenOrchestrator:
@@ -132,7 +143,7 @@ def test_orchestrator_stream_emits_canonical_agui_events() -> None:
 
 def test_orchestrator_stream_uses_unique_run_id_per_request() -> None:
     app.state.llm_provider = StubProvider([], reply="本轮安排已就绪。")
-    client = TestClient(app)
+    client = TestClient(app, headers={"X-Internal-Subject": "user:1"})
     body = {
         "user_id": 1,
         "session_id": "route-run-identity",

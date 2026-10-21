@@ -46,17 +46,23 @@ function handleRemove(studentId: number) {
       aria-label="班级成员列表，可横向滚动"
       tabindex="0"
     >
-      <template #action="{ row }">
-        <PyButton
-          variant="ghost"
-          size="sm"
-          :disabled="row.status !== 'ACTIVE'"
-          @click="handleRemove(row.studentId as number)"
-        >
-          移除
-        </PyButton>
-      </template>
-    </PyTable>
+      <PyTable
+        :columns="columns"
+        :rows="rows"
+        row-key="studentId"
+      >
+        <template #action="{ row }">
+          <PyButton
+            variant="ghost"
+            size="sm"
+            :disabled="row.status !== 'ACTIVE'"
+            @click="handleRemove(row.studentId as number)"
+          >
+            移除
+          </PyButton>
+        </template>
+      </PyTable>
+    </div>
   </section>
 </template>
 

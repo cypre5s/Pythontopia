@@ -4,10 +4,14 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.when;
 
 import com.pythontopia.auth.security.JwtAuthenticationFilter;
 import com.pythontopia.common.error.GlobalExceptionHandler;
 import com.pythontopia.coursepack.controller.CourseDocumentPdfController;
+import com.pythontopia.coursepack.repository.CourseResourceAvailabilityRepository;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -38,10 +42,13 @@ class CourseDocumentPdfControllerTest {
 
   @MockBean JwtAuthenticationFilter jwtAuthenticationFilter;
 
+  @MockBean CourseResourceAvailabilityRepository availability;
+
   @TempDir static Path sharedTempDir;
 
   @BeforeEach
   void seedPdfDir() throws IOException {
+    when(availability.isEnabled(anyString(), anyLong())).thenReturn(true);
     Path target = Path.of(System.getProperty("java.io.tmpdir"), "pyt-test-pdfs");
     Files.createDirectories(target);
     Files.writeString(target.resolve("186.pdf"), "%PDF-1.4 stub", StandardCharsets.UTF_8);

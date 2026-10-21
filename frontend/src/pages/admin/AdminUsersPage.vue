@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref } from 'vue';
+import { RouterLink } from 'vue-router';
 import { useSessionStore } from '@stores/session';
 import { useToastStore } from '@stores/toast';
 import {
@@ -27,11 +28,7 @@ const page = ref(0);
 const totalPages = ref(0);
 const totalElements = ref(0);
 const updatingUserId = ref<number | null>(null);
-const statusChangeUser = ref<AdminUserDto | null>(null);
 const statusChangeError = ref<string | null>(null);
-const statusDialog = ref<HTMLDialogElement | null>(null);
-const statusChangeTrigger = ref<HTMLButtonElement | null>(null);
-const usersPage = ref<HTMLElement | null>(null);
 const listBusy = computed(() => loading.value || updatingUserId.value !== null);
 const pageSize = ref(20);
 const pendingStatusChange = ref<{
@@ -117,39 +114,22 @@ function changePageSize(nextSize: number): void {
 
 function openStatusConfirmation(user: AdminUserDto, event: MouseEvent): void {
   if (user.id === session.user?.id || updatingUserId.value !== null) return;
-  statusChangeTrigger.value = event.currentTarget as HTMLButtonElement;
-  statusChangeUser.value = user;
   statusChangeError.value = null;
+  const status: AdminUserStatus = user.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
+  const action = status === 'DISABLED' ? '停用' : '启用';
+  statusTrigger.value = event.currentTarget as HTMLButtonElement;
+  pendingStatusChange.value = { user, status, action };
   void nextTick(() => {
     statusDialog.value?.showModal();
     statusDialog.value?.querySelector<HTMLButtonElement>('[data-testid="admin-user-status-cancel"]')?.focus();
   });
 }
 
-function dismissStatusChange(restoreFocus = true): void {
-  statusDialog.value?.close();
-  statusChangeUser.value = null;
-  statusChangeError.value = null;
-  void nextTick(() => {
-    if (restoreFocus && statusChangeTrigger.value?.isConnected) statusChangeTrigger.value.focus();
-    else usersPage.value?.focus();
-  });
-}
-
-async function confirmStatusChange(): Promise<void> {
-  const user = statusChangeUser.value;
-  if (!user || updatingUserId.value !== null) return;
-  const status: AdminUserStatus = user.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
-  const action = status === 'DISABLED' ? '停用' : '启用';
-  statusTrigger.value = event.currentTarget as HTMLButtonElement;
-  pendingStatusChange.value = { user, status, action };
-  void nextTick(() => statusDialog.value?.showModal());
-}
-
 function closeStatusConfirmation(restoreTrigger = true): void {
   if (updatingUserId.value !== null) return;
   statusDialog.value?.close();
   pendingStatusChange.value = null;
+  statusChangeError.value = null;
   void nextTick(() => {
     if (restoreTrigger && statusTrigger.value?.isConnected) statusTrigger.value.focus();
     else usersPage.value?.focus();
@@ -160,6 +140,7 @@ async function confirmStatusChange(): Promise<void> {
   const pending = pendingStatusChange.value;
   if (!pending || updatingUserId.value !== null) return;
 
+  statusChangeError.value = null;
   updatingUserId.value = pending.user.id;
   try {
     await setAdminUserStatus(pending.user.id, pending.status);
@@ -168,6 +149,7 @@ async function confirmStatusChange(): Promise<void> {
     closeStatusConfirmation(false);
     await loadUsers();
   } catch (cause) {
+    statusChangeError.value = cause instanceof Error ? cause.message : `账号${pending.action}失败`;
     toast.show(cause instanceof Error ? cause.message : `账号${pending.action}失败`, 'error');
   } finally {
     updatingUserId.value = null;
@@ -185,7 +167,6 @@ onMounted(() => {
     class="admin-users"
     tabindex="-1"
     data-testid="admin-users"
-    tabindex="-1"
     :aria-busy="listBusy"
   >
     <AdminPanel
@@ -200,62 +181,8 @@ onMounted(() => {
           :disabled="listBusy"
           @click="loadUsers"
         >
-          <label class="admin-users__search">
-            <span>搜索账号或显示名</span>
-            <input
-              v-model="searchInput"
-              type="search"
-              maxlength="100"
-              :disabled="listBusy"
-              aria-label="搜索账号或显示名"
-              data-testid="admin-users-search"
-            >
-          </label>
-          <label class="admin-users__status-filter">
-            <span>账号状态</span>
-            <select
-              v-model="statusFilter"
-              aria-label="按账号状态筛选"
-              :disabled="listBusy"
-              @change="applyFilters"
-            >
-              <option value="ALL">全部状态</option>
-              <option value="ACTIVE">正常</option>
-              <option value="DISABLED">已停用</option>
-            </select>
-          </label>
-          <label class="admin-users__role-filter">
-            <span>用户角色</span>
-            <select
-              v-model="roleFilter"
-              aria-label="按用户角色筛选"
-              data-testid="admin-users-role-filter"
-              :disabled="listBusy"
-              @change="applyFilters"
-            >
-              <option value="ALL">全部角色</option>
-              <option value="STUDENT">学生</option>
-              <option value="TEACHER">教师</option>
-              <option value="ADMIN">管理员</option>
-            </select>
-          </label>
-          <button
-            class="admin-users__button admin-users__button--primary"
-            type="submit"
-            :disabled="listBusy"
-          >
-            搜索
-          </button>
-          <button
-            class="admin-users__button"
-            type="button"
-            data-testid="admin-users-refresh"
-            :disabled="listBusy"
-            @click="loadUsers"
-          >
-            {{ loading ? '正在刷新…' : '刷新列表' }}
-          </button>
-        </form>
+          {{ loading ? '正在刷新…' : '刷新列表' }}
+        </button>
       </template>
 
       <template #toolbar>
@@ -354,41 +281,28 @@ onMounted(() => {
         <table class="admin-users__table">
           <thead>
             <tr>
-              <th scope="col">
-                编号
-              </th>
-              <th scope="col">
-                显示名
-              </th>
-              <th scope="col">
-                用户名
-              </th>
-              <th scope="col">
-                角色
-              </th>
-              <th scope="col">
-                状态
-              </th>
-              <th
-                scope="col"
-                class="admin-table__sticky"
-              >
-                操作
-              </th>
+              <th scope="col">编号</th>
+              <th scope="col">显示名</th>
+              <th scope="col">用户名</th>
+              <th scope="col">角色</th>
+              <th scope="col">状态</th>
+              <th scope="col" class="admin-table__sticky">操作</th>
             </tr>
           </thead>
           <tbody>
-            <tr
-              v-for="user in entries"
-              :key="user.id"
-            >
+            <tr v-for="user in entries" :key="user.id">
               <td>{{ user.id }}</td>
               <td class="admin-users__readable">
-                {{ user.displayName }}
+                <RouterLink
+                  v-if="user.role === 'STUDENT'"
+                  :to="{ name: 'admin-student-detail', params: { userId: user.id } }"
+                  :data-testid="`admin-user-detail-${user.id}`"
+                >
+                  {{ user.displayName }}
+                </RouterLink>
+                <span v-else>{{ user.displayName }}</span>
               </td>
-              <td class="admin-users__readable">
-                {{ user.username }}
-              </td>
+              <td class="admin-users__readable">{{ user.username }}</td>
               <td>{{ roleLabel(user.role) }}</td>
               <td>
                 <span
@@ -409,10 +323,7 @@ onMounted(() => {
                 >
                   {{ updatingUserId === user.id ? '正在保存…' : user.status === 'ACTIVE' ? '停用' : '启用' }}
                 </button>
-                <span
-                  v-if="user.id === session.user?.id"
-                  class="admin-users__self-note"
-                >当前账号</span>
+                <span v-if="user.id === session.user?.id" class="admin-users__self-note">当前账号</span>
               </td>
             </tr>
           </tbody>
@@ -444,13 +355,12 @@ onMounted(() => {
       @cancel.prevent="closeStatusConfirmation()"
       @click.self="closeStatusConfirmation()"
     >
-      <h2 id="admin-user-status-title">
-        确认{{ pendingStatusChange.action }}账号
-      </h2>
+      <h2 id="admin-user-status-title">确认{{ pendingStatusChange.action }}账号</h2>
       <p id="admin-user-status-description">
         {{ pendingStatusChange.user.displayName }}（{{ pendingStatusChange.user.username }}）
         {{ pendingStatusChange.status === 'DISABLED' ? '将无法继续使用当前登录令牌。' : '将恢复登录权限。' }}
       </p>
+      <p v-if="statusChangeError" role="alert">{{ statusChangeError }}</p>
       <div class="admin-users__dialog-actions">
         <button
           class="admin-button"
@@ -475,7 +385,6 @@ onMounted(() => {
     </dialog>
   </section>
 </template>
-
 <style scoped>
 .admin-users {
   display: grid;

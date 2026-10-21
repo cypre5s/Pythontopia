@@ -99,7 +99,7 @@ const videoPassed = computed<boolean>(() =>
 );
 // 与后端 fail-closed 对齐：未关联 KC 课件页时不算完成，避免空映射放行章测。
 const coursewarePassed = computed<boolean>(
-  () => requiredPages.value === 0 || readCount.value >= requiredPages.value,
+  () => requiredPages.value > 0 && readCount.value >= requiredPages.value,
 );
 // 练过线 = 客观题全对（若有要求）且 OJ 完成（若有要求）；两者皆无要求时视为已过。
 const questionsPassed = computed<boolean>(

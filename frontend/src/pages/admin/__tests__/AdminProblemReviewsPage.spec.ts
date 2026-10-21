@@ -7,13 +7,17 @@ import type {
 import AdminTable from '../AdminTable.vue';
 import AdminProblemReviewsPage from '../AdminProblemReviewsPage.vue';
 
-const { searchProblemReviews, decideProblemReview, toastShow } = vi.hoisted(() => ({
+const { searchProblemReviews, decideProblemReview, createProblemReview, listChapters, listKnowledgeComponents, toastShow } = vi.hoisted(() => ({
   searchProblemReviews: vi.fn(),
   decideProblemReview: vi.fn(),
+  createProblemReview: vi.fn(),
+  listChapters: vi.fn(),
+  listKnowledgeComponents: vi.fn(),
   toastShow: vi.fn(),
 }));
 
-vi.mock('@/api/problemReview', () => ({ searchProblemReviews, decideProblemReview }));
+vi.mock('@/api/problemReview', () => ({ searchProblemReviews, decideProblemReview, createProblemReview }));
+vi.mock('@/api/course', () => ({ listChapters, listKnowledgeComponents }));
 vi.mock('@stores/toast', () => ({ useToastStore: () => ({ show: toastShow }) }));
 
 const pendingReview: BossProblemReviewDto = {
@@ -55,6 +59,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   searchProblemReviews.mockResolvedValue(reviewPage([pendingReview]));
   decideProblemReview.mockResolvedValue({ ...pendingReview, decision: 'APPROVED' });
+  createProblemReview.mockResolvedValue(pendingReview);
+  listChapters.mockResolvedValue([{ chapterId: 11, orderIndex: 1, title: 'Python 基础', summaryMarkdown: null }]);
+  listKnowledgeComponents.mockResolvedValue([{ kcId: 1, kcCode: 'PY43-KC-001', kcName: '中国计算机发展成就', chapterId: 11, chapterOrder: 1, difficulty: null, summaryMarkdown: null }]);
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
     configurable: true,
     value(this: HTMLDialogElement) { this.setAttribute('open', ''); },
@@ -66,6 +73,16 @@ beforeEach(() => {
 });
 
 describe('AdminProblemReviewsPage', () => {
+  it('generates a review candidate through the existing backend endpoint using course metadata', async () => {
+    const wrapper = mount(AdminProblemReviewsPage);
+    await flushPromises();
+    expect(wrapper.text()).toContain('Python 基础');
+    await wrapper.get('[data-testid="admin-generate-problem-kc"]').setValue('PY43-KC-001');
+    await wrapper.get('.admin-problem-generation').trigger('submit');
+    await flushPromises();
+    expect(createProblemReview).toHaveBeenCalledWith(expect.objectContaining({ chapter: 1, stage: 1, kcCode: 'PY43-KC-001', difficulty: 2 }));
+  });
+
   it('sets the horizontal scroll width to the review columns total', async () => {
     const wrapper = mount(AdminProblemReviewsPage);
     await flushPromises();

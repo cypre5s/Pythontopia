@@ -62,6 +62,33 @@ def test_select_embedder_rejects_external_providers(
         select_embedder()
 
 
+@pytest.mark.asyncio
+async def test_select_hash_embedder_uses_configured_dimension_and_precedence(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("PYT_RAG_EMBEDDER", "hash")
+    monkeypatch.setenv("EMBEDDING_DIM", "2048")
+    monkeypatch.setenv("PYT_RAG_EMBEDDING_DIM", "512")
+
+    selected = select_embedder()
+    vectors = await selected.embed(["Python 学习"])
+
+    assert selected.dim == 512
+    assert selected.name == "hash-bow-512"
+    assert len(vectors[0]) == 512
+
+
+@pytest.mark.parametrize("value", ["0", "-2", "not-a-number"])
+def test_select_hash_embedder_rejects_invalid_dimensions(
+    monkeypatch: pytest.MonkeyPatch, value: str
+) -> None:
+    monkeypatch.setenv("PYT_RAG_EMBEDDER", "hash")
+    monkeypatch.setenv("PYT_RAG_EMBEDDING_DIM", value)
+
+    with pytest.raises(ValueError, match="embedding dimension must be a positive integer"):
+        select_embedder()
+
+
 def test_bge_weights_are_loaded_from_local_cache_without_network(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

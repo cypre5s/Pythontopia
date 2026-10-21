@@ -151,15 +151,6 @@ async function ensureGameMounted(): Promise<void> {
   scheduleResize();
   window.setTimeout(scheduleResize, 150);
   window.setTimeout(scheduleResize, 600);
-  setTimeout(() => {
-    const canvas = root.value?.querySelector('canvas');
-    if (canvas instanceof HTMLCanvasElement) {
-      canvas.tabIndex = 0;
-      canvas.style.outline = 'none';
-      canvas.focus();
-      canvas.addEventListener('click', () => canvas.focus());
-    }
-  }, 300);
 }
 
 onMounted(() => {

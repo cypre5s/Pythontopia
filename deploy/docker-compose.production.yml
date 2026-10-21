@@ -140,6 +140,8 @@ services:
     depends_on:
       piston-runtime-init:
         condition: service_completed_successfully
+      pythontopia-graph:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       redis:
@@ -168,6 +170,7 @@ services:
       # 签名 RouteDecision/TaskPlan 的独立 HMAC 密钥；缺失时必须阻止生产启动，
       # 否则普通答疑仍可用但多 Agent 编排只能返回空执行令牌。
       PYT_ROUTE_EXECUTION_SECRET: ${PYT_ROUTE_EXECUTION_SECRET:?缺少 PYT_ROUTE_EXECUTION_SECRET}
+      PYT_ADMIN_ENCRYPTION_KEY: ${PYT_ADMIN_ENCRYPTION_KEY:?缺少 PYT_ADMIN_ENCRYPTION_KEY}
       # 正式判题必须交给独立隔离的 Piston；生产不允许回落到 backend 容器内 subprocess。
       PYT_JUDGE_PROVIDER: piston
       PYT_PISTON_URL: http://piston:2000

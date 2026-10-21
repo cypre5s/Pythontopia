@@ -59,9 +59,34 @@ export const router = createRouter({
           component: () => import('@/pages/admin/AdminProblemReviewsPage.vue'),
         },
         {
+          path: 'course-resources',
+          name: 'admin-course-resources',
+          component: () => import('@/pages/admin/AdminCourseResourcesPage.vue'),
+        },
+        {
           path: 'users',
           name: 'admin-users',
           component: () => import('@/pages/admin/AdminUsersPage.vue'),
+        },
+        {
+          path: 'users/:userId(\\d+)',
+          name: 'admin-student-detail',
+          component: () => import('@/pages/admin/AdminStudentDetailPage.vue'),
+        },
+        {
+          path: 'classrooms',
+          name: 'admin-classrooms',
+          component: () => import('@/pages/admin/AdminClassroomsPage.vue'),
+        },
+        {
+          path: 'usage',
+          name: 'admin-usage',
+          component: () => import('@/pages/admin/AdminUsagePage.vue'),
+        },
+        {
+          path: 'ai-config',
+          name: 'admin-ai-config',
+          component: () => import('@/pages/admin/AdminAiConfigPage.vue'),
         },
       ],
     },
@@ -375,15 +400,6 @@ router.beforeEach((to: RouteLocationNormalized) => {
 // 两种都会让导航中断、页面卡住。这里统一拦截，做「一次性整页跳转到目标地址」自愈：
 // 整页加载会拉到最新 index.html 与正确的分块清单，路由随即正常解析。
 const CHUNK_RELOAD_KEY = 'pyt:chunk-reload-at';
-
-/**
- * 站内路径断言：只接受单个 `/` 开头的绝对站内路径。
- * `//evil.com` 这类协议相对 URL 传给 `location.assign` 会整页跳出本站（开放重定向），
- * 而 targetPath 源自 `to.fullPath`（含攻击者可构造的地址），必须先过滤。
- */
-export function toSafeInternalPath(targetPath: string): string {
-  return /^\/(?!\/)/.test(targetPath) ? targetPath : '/';
-}
 
 /** 是否为动态 import 分块加载失败（含跨浏览器措辞与 MIME 误判）。 */
 function isDynamicImportError(error: unknown): boolean {

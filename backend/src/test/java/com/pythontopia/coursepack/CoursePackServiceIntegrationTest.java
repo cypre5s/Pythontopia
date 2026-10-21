@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.pythontopia.PythontopiaApplication;
 import com.pythontopia.coursepack.service.CoursePackService;
+import com.pythontopia.submission.repository.PublicProblemRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -42,6 +43,8 @@ class CoursePackServiceIntegrationTest {
 
   @Autowired JdbcTemplate jdbcTemplate;
 
+  @Autowired PublicProblemRepository publicProblemRepository;
+
   @Test
   void seedCountsMatchPack43AcceptanceNumbers() {
     assertThat(service.getActivePack().id()).isEqualTo(43L);
@@ -52,6 +55,41 @@ class CoursePackServiceIntegrationTest {
     assertCount("course_kc", 65);
     assertCount("course_example", 46);
     assertCount("course_problem", 39);
+  }
+
+  @Test
+  void disabledCourseExampleIsHiddenFromTheLearnerCatalogWithoutDeletingSeedData() {
+    Long exampleId =
+        jdbcTemplate.queryForObject(
+            "SELECT id FROM course_example WHERE pack_id = 43 ORDER BY id LIMIT 1", Long.class);
+    jdbcTemplate.update(
+        "INSERT INTO course_resource_state (pack_id, resource_type, resource_id, enabled)"
+            + " VALUES (43, 'EXAMPLE', ?, false)",
+        exampleId);
+
+    assertThat(service.listExamples(43L, null)).noneMatch(example -> example.id().equals(exampleId));
+    assertThat(new com.pythontopia.admin.AdminCourseResourceRepository(jdbcTemplate)
+        .page(0, 50, null, com.pythontopia.admin.AdminCourseResourceType.EXAMPLE).content())
+        .filteredOn(resource -> resource.resourceId() == exampleId)
+        .singleElement()
+        .satisfies(resource -> assertThat(resource.enabled()).isFalse());
+    assertThat(jdbcTemplate.queryForObject(
+        "SELECT count(*) FROM course_example WHERE id = ?", Integer.class, exampleId)).isEqualTo(1);
+  }
+
+  @Test
+  void disabledCourseProblemCannotBeReadOrUsedForFormalJudgeTests() {
+    Long problemId =
+        jdbcTemplate.queryForObject(
+            "SELECT id FROM course_problem WHERE pack_id = 43 ORDER BY id LIMIT 1", Long.class);
+    jdbcTemplate.update(
+        "INSERT INTO course_resource_state (pack_id, resource_type, resource_id, enabled)"
+            + " VALUES (43, 'PROBLEM', ?, false)",
+        problemId);
+
+    assertThat(service.listProblems(null)).noneMatch(problem -> problem.id().equals(problemId));
+    assertThat(publicProblemRepository.findPublic(43L, problemId)).isEmpty();
+    assertThat(publicProblemRepository.findTestCases(problemId)).isEmpty();
   }
 
   @Test

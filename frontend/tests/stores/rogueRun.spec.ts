@@ -799,7 +799,7 @@ describe('rogueRun store', () => {
     expect(judgeMock.fetchProblem).toHaveBeenLastCalledWith(
       expect.objectContaining({ difficulty: Math.min(5, d0 + 1) }),
     );
-    expect(run.activeDifficulty).toBe(problem().difficulty);
+    expect(run.activeDifficulty).toBe(3);
     expect(run.phase).toBe('challenge');
   });
 

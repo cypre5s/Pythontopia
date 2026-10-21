@@ -21,6 +21,40 @@ export interface AdminUserPageDto {
   totalPages: number;
 }
 
+export interface AdminStudentDetailDto {
+  account: AdminUserDto & { createdAt: string };
+  profileDimensions: Record<string, {
+    score?: number | null;
+    evidence_count?: number;
+    tags?: string[];
+    source?: string;
+  }>;
+  mastery: Array<{
+    kcName: string | null;
+    chapterOrder: number | null;
+    masteryScore: number | null;
+    confidence: number | null;
+    updatedAt: string | null;
+  }>;
+  activity: Array<{ id: number; eventType: string; source: string; occurredAt: string }>;
+  submissions: Array<{
+    id: number;
+    problemTitle: string | null;
+    status: string;
+    judgeVerdict: string | null;
+    passedCases: number;
+    totalCases: number;
+    submittedAt: string;
+  }>;
+  classrooms: Array<{
+    classroomId: number;
+    classroomName: string;
+    teacherName: string;
+    status: string;
+    joinedAt: string;
+  }>;
+}
+
 export interface AdminUserSearch {
   page: number;
   size: number;
@@ -47,5 +81,10 @@ export async function setAdminUserStatus(
   status: AdminUserStatus,
 ): Promise<AdminUserDto> {
   const response = await http.patch<AdminUserDto>(`/api/admin/users/${userId}`, { status });
+  return response.data;
+}
+
+export async function fetchAdminStudentDetail(userId: number): Promise<AdminStudentDetailDto> {
+  const response = await http.get<AdminStudentDetailDto>(`/api/admin/users/${userId}/detail`);
   return response.data;
 }

@@ -276,6 +276,7 @@ require_env_value "${ENV_FILE}" PYT_DB_PASSWORD
 check_env_secret PYT_JWT_SECRET 32
 check_env_secret PYT_RAG_ADMIN_TOKEN 32
 check_env_secret PYT_ROUTE_EXECUTION_SECRET 32
+check_env_secret PYT_ADMIN_ENCRYPTION_KEY 32
 validate_production_ai_env "${ENV_FILE}"
 validate_production_judge_env "${ENV_FILE}"
 echo "    秘密文件就绪：${ENV_FILE}（权限 600，仅做门禁校验且不输出值）"

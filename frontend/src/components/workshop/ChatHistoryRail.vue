@@ -147,19 +147,6 @@ watch(
 );
 
 watch(
-  () => props.userId,
-  () => {
-    loadGeneration += 1;
-    turns.value = [];
-    query.value = '';
-    loading.value = false;
-    loaded.value = false;
-    failed.value = false;
-    if (effectiveOpen.value) void load();
-  },
-);
-
-watch(
   () => props.pendingTurn,
   (turn) => {
     if (turn) mergeTurn(turn);

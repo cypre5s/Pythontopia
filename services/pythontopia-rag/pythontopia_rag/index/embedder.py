@@ -66,6 +66,21 @@ def _cjk_bigrams(text: str) -> list[str]:
     return bigrams
 
 
+def _configured_embedding_dim(default: int) -> int:
+    raw = (
+        os.environ.get("PYT_RAG_EMBEDDING_DIM")
+        or os.environ.get("EMBEDDING_DIM")
+        or str(default)
+    )
+    try:
+        dimension = int(raw)
+    except ValueError as exc:
+        raise ValueError("embedding dimension must be a positive integer") from exc
+    if dimension <= 0:
+        raise ValueError("embedding dimension must be a positive integer")
+    return dimension
+
+
 class BgeSmallEmbedder:
     """可选本地 BGE 中文嵌入；只读缓存/本地权重，不从 Hugging Face 下载。"""
 

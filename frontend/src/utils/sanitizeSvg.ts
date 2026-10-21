@@ -57,24 +57,6 @@ const BLOCKED_CSS_PROPERTIES = new Set([
 const BLOCKED_CSS_VALUES =
   /[\\]|url\s*\(|expression\s*\(|javascript\s*:|var\s*\(|-moz-binding|@import/i;
 
-// 脚本与 on* 事件属性由 DOMPurify 白名单本身兜住；这里显式封掉的是「不需要脚本也能作恶」的面。
-//
-// style 必须显式禁：DOMPurify 的 SVG 属性白名单含 style，且 style 在 DEFAULT_URI_SAFE_ATTRIBUTES
-// 里（值不做 URI 检查），于是
-//   <rect style="position:fixed;inset:0;z-index:99999;background:url(https://attacker/leak)">
-// 既能全屏覆盖做点击劫持，又能发出外部请求——而这些 SVG 是 LLM 生成的、消毒结果直接进 v-html。
-const STRICT_FORBID_TAGS = [
-  'script',
-  'foreignObject',
-  'style',
-  'image',
-  'iframe',
-  'embed',
-  'link',
-  'a',
-];
-const STRICT_FORBID_ATTR = ['href', 'xlink:href', 'style'];
-
 export function sanitizeSvgMarkup(source: string): string {
   const sanitized = DOMPurify.sanitize(source, {
     USE_PROFILES: { svg: true, svgFilters: true },

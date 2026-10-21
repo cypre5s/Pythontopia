@@ -274,10 +274,7 @@ describe('AdminProblemReviewsPage', () => {
     api.searchProblemReviews.mockReturnValueOnce(pendingRefresh);
 
     await wrapper.get('[aria-label="审核队列排序字段"]').setValue('STATEMENT');
-    const approveButton = wrapper.get('.review-decision--approve');
-    expect(approveButton.attributes('disabled')).toBeDefined();
-
-    await approveButton.trigger('click');
+    expect(wrapper.find('.review-decision--approve').exists()).toBe(false);
     await flushPromises();
     expect(wrapper.find('dialog.review-dialog').exists()).toBe(false);
     expect(api.decideProblemReview).not.toHaveBeenCalled();

@@ -1,6 +1,7 @@
 package com.pythontopia.coursepack.controller;
 
 import jakarta.validation.constraints.Positive;
+import com.pythontopia.coursepack.repository.CourseResourceAvailabilityRepository;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -42,16 +43,22 @@ public class CourseDocumentPdfController {
   private static final long MAX_DOC_ID = 192L;
 
   private final Path pdfDir;
+  private final CourseResourceAvailabilityRepository availability;
 
   public CourseDocumentPdfController(
-      @Value("${pythontopia.coursepack.pdfDir:./data/course-pack-43/pdfs}") String configuredDir) {
+      @Value("${pythontopia.coursepack.pdfDir:./data/course-pack-43/pdfs}") String configuredDir,
+      CourseResourceAvailabilityRepository availability) {
     this.pdfDir = Paths.get(configuredDir).toAbsolutePath().normalize();
+    this.availability = availability;
   }
 
   @GetMapping(value = "/{docId}/pdf")
   public ResponseEntity<Resource> streamPdf(@PathVariable @Positive Long docId) {
     if (docId < MIN_DOC_ID || docId > MAX_DOC_ID) {
       LOG.debug("course document {} out of pack 43 range", docId);
+      return ResponseEntity.notFound().build();
+    }
+    if (!availability.isEnabled("DOCUMENT", docId)) {
       return ResponseEntity.notFound().build();
     }
     Path candidate = pdfDir.resolve(docId + ".pdf").normalize();

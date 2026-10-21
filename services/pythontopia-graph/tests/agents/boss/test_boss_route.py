@@ -60,8 +60,11 @@ def test_problem_endpoint_uses_grounded_golden_when_llm_unavailable(
         "/agents/boss/problem",
         json={**KC_CONTEXT, "chapter": 1, "stage": 1, "kcCode": "PY43-KC-001", "difficulty": 1},
     )
-    assert response.status_code == 503
-    assert response.json()["detail"]["code"] == "BOSS_PROBLEM_GENERATION_UNAVAILABLE"
+    assert response.status_code == 200
+    assert response.json()["problemId"] == "golden-c1-s1"
+    assert response.json()["kcCode"] == "PY43-KC-001"
+    assert response.json()["reviewed"] is True
+    assert response.json()["aiGenerated"] is False
 
 
 def test_problem_endpoint_rejects_golden_for_a_different_requested_kc(

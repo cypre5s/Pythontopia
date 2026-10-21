@@ -804,7 +804,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       eventScoreMult.value = 1;
     }
     const current = nodeById(node.id);
-    if (current) await beginChallenge(current);
+    if (current) await beginChallenge(current, choice === 'study' ? current.difficulty + 1 : undefined);
   }
 
   function scoreFor(node: RogueNode): number {

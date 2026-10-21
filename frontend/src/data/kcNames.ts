@@ -76,13 +76,14 @@ const OTHER_KC_NAME = '相关知识点';
 /** KC code → 中文名；支持 `PY43-KC-002` 与 `KC-002` 两种写法。 */
 export function kcDisplayName(code: string | undefined | null): string {
   if (!code) return '本知识点';
-  const full = code.startsWith('PY43-') ? code : `PY43-${code}`;
-  return KC_NAMES[full] ?? KC_NAMES[code] ?? (/^(?:PY43-)?KC-\d+$/.test(code) ? OTHER_KC_NAME : code);
+  const normalized = code.trim().toUpperCase();
+  const full = normalized.startsWith('PY43-') ? normalized : `PY43-${normalized}`;
+  return KC_NAMES[full] ?? (/^(?:PY43-)?KC-[A-Z0-9]+(?:-[A-Z0-9]+)*$/.test(normalized) ? OTHER_KC_NAME : code);
 }
 
-const KC_CODE_PATTERN = /(?:PY43-)?KC-(\d+)/g;
+const KC_CODE_PATTERN = /\b(?:PY43-)?KC-[A-Z0-9]+(?:-[A-Z0-9]+)*\b/gi;
 // 标题里「（KC-002）」这类纯编码括注：直接去掉（标题本身已有中文描述），不展开成名字以免冗余。
-const KC_PAREN_PATTERN = /[（(]\s*(?:PY43-)?KC-\d+\s*[)）]/g;
+const KC_PAREN_PATTERN = /[（(]\s*(?:PY43-)?KC-[A-Z0-9]+(?:-[A-Z0-9]+)*\s*[)）]/gi;
 
 /**
  * 渲染期净化任务标题/提示中的 KC 编码，避免学生看到 `KC-002`：
@@ -93,9 +94,6 @@ export function humanizeKcText(text: string | undefined | null): string {
   if (!text) return '';
   return text
     .replace(KC_PAREN_PATTERN, '')
-    .replace(KC_CODE_PATTERN, (match, digits: string) => {
-      const name = KC_NAMES[`PY43-KC-${digits.padStart(3, '0')}`] ?? OTHER_KC_NAME;
-      return `「${name}」`;
-    })
+    .replace(KC_CODE_PATTERN, (match) => `「${kcDisplayName(match)}」`)
     .trim();
 }

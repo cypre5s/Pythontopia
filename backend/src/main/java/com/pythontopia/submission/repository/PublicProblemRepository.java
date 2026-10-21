@@ -25,10 +25,12 @@ public class PublicProblemRepository {
     return jdbcTemplate
         .query(
             """
-            SELECT id, pack_id, kc_code, title, statement_markdown, input_description,
-                   output_description, difficulty, samples
-            FROM course_problem
-            WHERE pack_id = ? AND id = ?
+            SELECT p.id, p.pack_id, p.kc_code, p.title, p.statement_markdown, p.input_description,
+                   p.output_description, p.difficulty, p.samples
+            FROM course_problem p
+            WHERE p.pack_id = ? AND p.id = ? AND NOT EXISTS (
+              SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
+                AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled)
             """,
             (rs, rowNum) -> map(rs),
             packId,
@@ -41,9 +43,11 @@ public class PublicProblemRepository {
     return jdbcTemplate
         .query(
             """
-            SELECT samples, hidden_test_cases
-            FROM course_problem
-            WHERE id = ?
+            SELECT p.samples, p.hidden_test_cases
+            FROM course_problem p
+            WHERE p.id = ? AND p.pack_id = 43 AND NOT EXISTS (
+              SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
+                AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled)
             """,
             (rs, rowNum) -> new JudgeTestCases(
                 readJson(rs.getString("samples")),
@@ -65,16 +69,18 @@ public class PublicProblemRepository {
     return jdbcTemplate
         .query(
             """
-            SELECT id, difficulty
-            FROM course_problem
-            WHERE pack_id = ? AND kc_code = ?
-            ORDER BY
+            SELECT p.id, p.difficulty
+            FROM course_problem p
+            WHERE p.pack_id = ? AND p.kc_code = ? AND NOT EXISTS (
+              SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
+                AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled)
+              ORDER BY
               CASE
-                WHEN jsonb_typeof(hidden_test_cases) = 'array' THEN
-                  CASE WHEN jsonb_array_length(hidden_test_cases) > 0 THEN 0 ELSE 1 END
+                WHEN jsonb_typeof(p.hidden_test_cases) = 'array' THEN
+                  CASE WHEN jsonb_array_length(p.hidden_test_cases) > 0 THEN 0 ELSE 1 END
                 ELSE 1
               END,
-              id
+              p.id
             LIMIT 1
             """,
             (rs, rowNum) -> new RepresentativeProblem(rs.getLong("id"), rs.getString("difficulty")),
@@ -94,7 +100,9 @@ public class PublicProblemRepository {
                 """
                 SELECT p.id, p.title
                 FROM course_problem p
-                WHERE p.kc_code = ? AND p.id <> ?
+                WHERE p.pack_id = 43 AND p.kc_code = ? AND p.id <> ? AND NOT EXISTS (
+                  SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
+                    AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled)
                   AND NOT EXISTS (
                     SELECT 1
                     FROM practice_submission ps
@@ -117,10 +125,12 @@ public class PublicProblemRepository {
     return jdbcTemplate
         .query(
             """
-            SELECT id, title
-            FROM course_problem
-            WHERE kc_code = ? AND id <> ?
-            ORDER BY id
+            SELECT p.id, p.title
+            FROM course_problem p
+            WHERE p.pack_id = 43 AND p.kc_code = ? AND p.id <> ? AND NOT EXISTS (
+              SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
+                AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled)
+            ORDER BY p.id
             LIMIT 1
             """,
             (rs, rowNum) -> new VariantProblem(rs.getLong("id"), rs.getString("title")),
