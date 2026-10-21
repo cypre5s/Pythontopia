@@ -104,6 +104,7 @@ public class TutorWorkflowService {
       CoursePackRepository coursePackRepository,
       SubmissionService submissionService,
       ApplicationEventPublisher eventPublisher,
+      TutorRequestBudgetService requestBudgetService,
       ObjectMapper objectMapper,
       TutorDailyRequestLimitService requestLimitService) {
     this.repository = repository;
@@ -251,6 +252,7 @@ public class TutorWorkflowService {
     }
 
     try {
+      requestBudgetService.reserve(userId);
       requestLimitService.reserve(userId);
     } catch (RuntimeException e) {
       repository.transitionAutoGenRun(session.id(), runId, "FAILED");

@@ -121,7 +121,7 @@ class AiRuntimeSummaryServiceTest {
         .isEqualTo("PASS");
 
     AiRuntimeOperationsDto operations =
-        service.operationsForSubject(AiRuntimeOperationsDto.OperationsSubject.student(userId));
+        service.operationsForUser(userId);
 
     assertThat(operations.subject().scope()).isEqualTo("SELF");
     assertThat(operations.subject().label()).isEqualTo("本人学习证据");

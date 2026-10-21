@@ -9,6 +9,7 @@ import com.pythontopia.common.web.GraphClientRetryHelper;
 import com.pythontopia.common.web.GraphInternalTokenSupport;
 import java.io.IOException;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,6 +71,7 @@ public class WorkshopGraphClient {
       Function<String, String> onResult) {
     String url = properties.graphUrl() + "/agents/resource/produce/stream";
     sseRelayExecutor.submit(() -> {
+      AtomicBoolean terminalSeen = new AtomicBoolean();
       try {
         GraphSseConsumer.consume(
             url,
@@ -77,6 +79,9 @@ public class WorkshopGraphClient {
             objectMapper,
             GraphInternalTokenSupport.tokenOrNull(properties),
             (event, data) -> {
+          if ("result".equals(event) || "RUN_FINISHED".equals(event) || "RUN_ERROR".equals(event)) {
+            terminalSeen.set(true);
+          }
           try {
             if ("result".equals(event) || "RUN_FINISHED".equals(event)) {
               // graph 已迁 AG-UI：终态走 RUN_FINISHED（形状 {"result":{...}}），历史名 result 是裸结果。
@@ -91,6 +96,7 @@ public class WorkshopGraphClient {
             log.debug(
                 "SSE emitter write failed, client likely disconnected errorType={}",
                 e.getClass().getSimpleName());
+            throw new GraphSseConsumer.AbortSseConsumption(e);
           } catch (Exception e) {
             log.warn(
                 "Failed to process Graph SSE result errorType={}",
@@ -98,6 +104,11 @@ public class WorkshopGraphClient {
             sendError(emitter, "RESOURCE_STREAM_RESULT_FAILED", "资源生成结果保存失败");
           }
         });
+        if (!terminalSeen.get()) {
+          throw new IOException("Graph SSE ended before a terminal event");
+        }
+        emitter.complete();
+      } catch (GraphSseConsumer.AbortSseConsumption e) {
         emitter.complete();
       } catch (IOException e) {
         log.warn(
@@ -114,7 +125,7 @@ public class WorkshopGraphClient {
               "SSE fallback also failed errorType={}",
               fallbackEx.getClass().getSimpleName());
           sendError(emitter, "RESOURCE_STREAM_FALLBACK_FAILED", "资源生成服务暂不可用");
-          emitter.completeWithError(fallbackEx);
+          emitter.complete();
         }
       }
     });

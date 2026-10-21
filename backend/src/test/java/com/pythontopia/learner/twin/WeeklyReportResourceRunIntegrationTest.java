@@ -4,15 +4,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.pythontopia.learner.mastery.MasteryRepository;
+import com.pythontopia.learner.event.LearningEventLogRepository;
 import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.reflection.LearnerInsightRepository;
 import com.pythontopia.learner.twin.dto.WeeklyReportDto;
 import java.sql.Timestamp;
+import java.time.Instant;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -65,7 +68,17 @@ class WeeklyReportResourceRunIntegrationTest {
     when(memoryService.retrieve(anyLong(), isNull(), anyInt())).thenReturn(List.of());
     when(insightRepository.findByUser(anyLong(), anyInt())).thenReturn(List.of());
     when(masteryRepository.findAll(anyLong())).thenReturn(List.of());
-    service = new WeeklyReportService(memoryService, insightRepository, masteryRepository, jdbc);
+    LearningEventLogRepository eventRepository = mock(LearningEventLogRepository.class);
+    when(eventRepository.summarizeAuthoritativeBetween(
+            anyLong(), any(Instant.class), any(Instant.class)))
+        .thenReturn(new LearningEventLogRepository.AuthoritativeEventCounts(0, 0, 0));
+    service =
+        new WeeklyReportService(
+            memoryService,
+            insightRepository,
+            masteryRepository,
+            eventRepository,
+            jdbc);
   }
 
   @Test

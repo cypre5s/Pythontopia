@@ -392,7 +392,7 @@ class ExpeditionRunPostgresIntegrationTest {
   void activeSnapshotCannotReturnAStoredClientTerminalPhase() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
-    ExpeditionRunDto active = seedChestNode(userId, startRun(runs, userId, 1, false), runs);
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
     jdbc.update(
         "UPDATE expedition_run SET phase = 'cleared' WHERE user_id = ? AND run_id = ?::uuid",
         userId,
@@ -1447,14 +1447,30 @@ class ExpeditionRunPostgresIntegrationTest {
         "b".repeat(64));
     ExpeditionScoreService scores = scoreService();
     String fingerprint = "b".repeat(64);
+    String attemptFingerprint =
+        BossService.expeditionAttemptFingerprint(fingerprint, nodeId, null);
 
     var firstFailure =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issued-problem", fingerprint, false, 0);
+            userId,
+            challenge.runId(),
+            nodeId,
+            null,
+            "issued-problem",
+            attemptFingerprint,
+            false,
+            0);
     ExpeditionRunDto afterFailure = runs.findActive(userId).orElseThrow();
     var repeatedFailure =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issued-problem", fingerprint, false, 0);
+            userId,
+            challenge.runId(),
+            nodeId,
+            null,
+            "issued-problem",
+            attemptFingerprint,
+            false,
+            0);
     insertConsumedProblem(
         userId,
         challenge.runId(),
@@ -1464,7 +1480,14 @@ class ExpeditionRunPostgresIntegrationTest {
         fingerprint);
     var firstPass =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issued-problem-retry", fingerprint, true, 100);
+            userId,
+            challenge.runId(),
+            nodeId,
+            null,
+            "issued-problem-retry",
+            attemptFingerprint,
+            true,
+            100);
     var settledPass =
         runs.performAction(
             userId,
@@ -1476,10 +1499,24 @@ class ExpeditionRunPostgresIntegrationTest {
                 "issued-problem-retry"));
     var repeatedPass =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issued-problem-retry", fingerprint, true, 100);
+            userId,
+            challenge.runId(),
+            nodeId,
+            null,
+            "issued-problem-retry",
+            attemptFingerprint,
+            true,
+            100);
     var failureAfterPass =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issued-problem-retry", fingerprint, false, 0);
+            userId,
+            challenge.runId(),
+            nodeId,
+            null,
+            "issued-problem-retry",
+            attemptFingerprint,
+            false,
+            0);
 
     assertThat(firstFailure)
         .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
@@ -1527,10 +1564,10 @@ class ExpeditionRunPostgresIntegrationTest {
 
     var olderIssue =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issue-first", "a".repeat(64), true, 80);
+            userId, challenge.runId(), nodeId, null, "issue-first", "a".repeat(64), true, 80);
     var currentIssue =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issue-second", "b".repeat(64), true, 90);
+            userId, challenge.runId(), nodeId, null, "issue-second", "b".repeat(64), true, 90);
 
     assertThat(olderIssue)
         .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(false, false));
@@ -1605,7 +1642,7 @@ class ExpeditionRunPostgresIntegrationTest {
                         scores.recordVerifiedAttempt(
                             userId,
                             challenge.runId(),
-                            "issue-twin-outbox",
+                            nodeId, null, "issue-twin-outbox",
                             fingerprint,
                             true,
                             100,
@@ -1626,7 +1663,7 @@ class ExpeditionRunPostgresIntegrationTest {
         transactions.execute(
             status ->
                 scores.recordVerifiedAttempt(
-                    userId, challenge.runId(), "issue-twin-outbox", fingerprint, true, 100, event));
+                    userId, challenge.runId(), nodeId, null, "issue-twin-outbox", fingerprint, true, 100, event));
 
     assertThat(retried).isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
     BossAttemptResultDto result =
@@ -1660,12 +1697,21 @@ class ExpeditionRunPostgresIntegrationTest {
                 active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
     String kcCode = (String) nodeById(challenge, nodeId).get("kcCode");
     String fingerprint = "c".repeat(64);
+    String attemptFingerprint =
+        BossService.expeditionAttemptFingerprint(fingerprint, nodeId, null);
     insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-failed", kcCode, fingerprint);
     ExpeditionScoreService scores = scoreService();
 
     var failed =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issue-failed", fingerprint, false, 0);
+            userId,
+            challenge.runId(),
+            nodeId,
+            null,
+            "issue-failed",
+            attemptFingerprint,
+            false,
+            0);
 
     assertThat(failed.accepted()).isTrue();
     ExpeditionRunDto afterFailure = runs.findActive(userId).orElseThrow();
@@ -1682,7 +1728,14 @@ class ExpeditionRunPostgresIntegrationTest {
     insertConsumedProblem(userId, challenge.runId(), nodeId, "issue-retry", kcCode, fingerprint);
     var passed =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issue-retry", fingerprint, true, 100);
+            userId,
+            challenge.runId(),
+            nodeId,
+            null,
+            "issue-retry",
+            attemptFingerprint,
+            true,
+            100);
     assertThat(passed.accepted()).isTrue();
     ExpeditionRunDto settled =
         runs.performAction(
@@ -1912,18 +1965,18 @@ class ExpeditionRunPostgresIntegrationTest {
 
     var firstFailure =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issued-problem-2", fingerprint, false, 0);
+            userId, challenge.runId(), nodeId, null, "issued-problem-2", fingerprint, false, 0);
     var duplicateFailure =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issued-problem-1", fingerprint, false, 0);
+            userId, challenge.runId(), nodeId, null, "issued-problem-1", fingerprint, false, 0);
     insertConsumedProblem(
         userId, challenge.runId(), nodeId, "issued-problem-3", kcCode, fingerprint);
     var firstPass =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issued-problem-3", fingerprint, true, 100);
+            userId, challenge.runId(), nodeId, null, "issued-problem-3", fingerprint, true, 100);
     var duplicatePass =
         scores.recordVerifiedAttempt(
-            userId, challenge.runId(), "issued-problem-1", fingerprint, true, 100);
+            userId, challenge.runId(), nodeId, null, "issued-problem-1", fingerprint, true, 100);
 
     assertThat(firstFailure)
         .isEqualTo(new ExpeditionScoreService.VerifiedAttemptResult(true, true));

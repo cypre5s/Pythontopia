@@ -1233,3 +1233,9 @@
 - 安装器在 `/opt/pythontopia/releases/20261021-033818` 保存切换前数据库备份（448 KB）、生产 `.env` 与 Nginx/Compose 配置，复用 `deploy_pytopia_pg`，没有删除或重建数据卷。七个服务均 healthy，runtime init exit 0，nginx -t、HTTP 308→HTTPS 和 HTTPS `/healthz` 200 通过；current 指向新版本，previous 指向 `20261021-024928`。删除唯一上传暂存包 `/tmp/pythontopia-web-20261020T193208Z.tar.gz` 后根盘空余 5.1 GB。
 - 生产 Chromium 无错题费曼往返真实 Graph/DeepSeek：空 misconceptions、无生成代码、无 judge 请求，console/pageerror/失败请求均为 0；截图 `/tmp/feynman-no-mistake.png`。画像访谈真实请求一次填充 4 个维度，Grounding/Safety 通过；finish 与画像读回均为 HTTP 200，页面保存 `CS / EXAM / 1 年 / Python Lv.2 / 每日 30 分钟`，浏览器错误为 0；截图 `/tmp/profile-interview-ecs-final.png`。两个测试学生账号、Feynman 会话、画像与访谈级联记录均已删除并查为 0。
 - 按用户请求新增专用 ADMIN 与 STUDENT 账号，认证 API 登录均 HTTP 200、角色分别为 `ADMIN`/`STUDENT`。以管理员真实登录后直接打开 `/world`，浏览器落到 `/admin/operations`，管理 API 无 4xx、console/pageerror/失败请求均为 0；截图 `/tmp/ecs-admin-operations.png`。随机口令只回传给用户，不写入仓库或运维日志。
+
+## 2026-10-21 — worktree 合并与 GitHub 推送
+
+- `main` 已包含所有 27 个非主 worktree 的 HEAD；远端 `origin/main` 是 main 的祖先，推送无需改写历史。冲突迁移版本 V209/V210/V211 移到 V228/V229/V230；145 个迁移版本扫描无重复，Testcontainers 空库 Flyway 到 V230。
+- 后端 `mvn clean -DskipTests test-compile` 通过。完整 `mvn test` 跑 1,827 项、0 failures、4 errors：周报集成夹具未 stub 新增事件计数，远征结算夹具使用未绑定节点的旧 fingerprint；修正后 `WeeklyReportResourceRunIntegrationTest` 2/2、`ExpeditionRunPostgresIntegrationTest` 39/39 通过。完整套件未在这 4 个夹具修正后重跑。
+- SSE / Profile / Feynman / Tutor / Boss / Upload 定向测试此前复跑通过；`git diff --check` 通过。Cursor worktree 中有重复的未提交历史资产快照，未并入 main；按用户请求清理 worktree 时将一并移除这些未提交草稿。

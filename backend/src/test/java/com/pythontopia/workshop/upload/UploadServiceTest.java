@@ -192,7 +192,7 @@ class UploadServiceTest {
 
   @Test
   void checksStorageQuotaBeforeParsingTheFile() {
-    when(repository.hasUploadCapacity(USER_ID, 1L, 20, 50L * 1024 * 1024)).thenReturn(false);
+    when(repository.canAcceptUpload(USER_ID, 1L, 20, 50L * 1024 * 1024)).thenReturn(false);
     UploadTextExtractor extractor = spy(new UploadTextExtractor());
     UploadService quotaService = new UploadService(repository, extractor);
     MockMultipartFile file =

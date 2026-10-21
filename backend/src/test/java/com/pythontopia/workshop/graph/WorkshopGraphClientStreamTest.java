@@ -98,7 +98,7 @@ class WorkshopGraphClientStreamTest {
     awaitTerminated(emitter);
 
     assertThat(objectMapper.readTree(receivedGraphResult.get()))
-        .isEqualTo(objectMapper.valueToTree(graphResponse));
+        .isEqualTo(objectMapper.readTree(objectMapper.writeValueAsString(graphResponse)));
     assertThat(eventsNamed(emitter, "result")).hasSize(1);
     assertThat(dataOf(eventsNamed(emitter, "result").get(0))).isEqualTo(persisted);
     assertThat(eventsNamed(emitter, "RUN_FINISHED")).isEmpty();
@@ -201,9 +201,7 @@ class WorkshopGraphClientStreamTest {
             new GraphServiceProperties(
                 "http://127.0.0.1:" + port, "http://rag.test", "internal-token"),
             objectMapper,
-            new SseRelayExecutor(),
-            1_000,
-            250);
+            new SseRelayExecutor());
     RecordingSseEmitter emitter = new RecordingSseEmitter();
 
     client.produceStream(

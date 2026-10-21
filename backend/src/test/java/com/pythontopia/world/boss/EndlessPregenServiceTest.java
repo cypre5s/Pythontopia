@@ -332,7 +332,7 @@ class EndlessPregenServiceTest {
     try {
       assertThat(
               service.persistConsumed(
-                  userId, 1, "PY43-KC-001", "dual_track", null, 2, problem, null))
+                  userId, 1, "PY43-KC-001", "dual_track", null, 2, problem, null, null))
           .isSameAs(problem);
     } finally {
       logger.detachAppender(appender);

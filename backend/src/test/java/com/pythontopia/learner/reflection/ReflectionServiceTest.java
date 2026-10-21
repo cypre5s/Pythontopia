@@ -1,8 +1,10 @@
 package com.pythontopia.learner.reflection;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
@@ -91,7 +93,7 @@ class ReflectionServiceTest {
             eq("error_pattern"),
             eq(List.of("PY43-KC-016")),
             eq(List.of(10L, 11L)),
-            anyDoubleArg(),
+            anyDouble(),
             eq("RULE"));
     // 兜底取最高频失败 KC（PY43-KC-016 出现 2 次）作为 error_pattern tag。
     // 兜底只引用真实失败事件，不含成功事件 12。
@@ -181,7 +183,7 @@ class ReflectionServiceTest {
     verify(insightRepository)
         .insert(
             eq(7L), any(), eq("error_pattern"), eq(List.of("PY43-KC-016")), eq(List.of(10L)),
-            anyDoubleArg(), eq("RULE"));
+            anyDouble(), eq("RULE"));
   }
 
   @Test
@@ -194,7 +196,7 @@ class ReflectionServiceTest {
     assertThatCode(() -> service.reflect(7L)).doesNotThrowAnyException();
 
     verify(insightRepository, never())
-        .insert(eq(7L), any(), any(), anyList(), anyList(), anyDoubleArg(), any());
+        .insert(eq(7L), any(), any(), anyList(), anyList(), anyDouble(), any());
   }
 
   private static double anyDoubleArg() {

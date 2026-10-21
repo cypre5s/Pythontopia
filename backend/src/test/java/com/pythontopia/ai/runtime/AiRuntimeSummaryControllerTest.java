@@ -63,7 +63,7 @@ class AiRuntimeSummaryControllerTest {
   @Test
   void teacherCannotReadPlatformRuntimeOperations() {
     CurrentUserPrincipal teacher = new CurrentUserPrincipal(2L, "teacher", Role.TEACHER);
-    assertThatThrownBy(() -> controller.operations(teacher))
+    assertThatThrownBy(() -> controller.operations(teacher, null))
         .isInstanceOf(BusinessException.class)
         .extracting(ex -> ((BusinessException) ex).status())
         .isEqualTo(HttpStatus.FORBIDDEN);
@@ -80,7 +80,7 @@ class AiRuntimeSummaryControllerTest {
             List.of());
     when(service.operationsForUser(eq(7L))).thenReturn(expected);
 
-    AiRuntimeOperationsDto result = controller.operations(student);
+    AiRuntimeOperationsDto result = controller.operations(student, null);
 
     assertThat(result).isSameAs(expected);
     assertThat(result.subject().scope()).isEqualTo("SELF");
@@ -97,7 +97,7 @@ class AiRuntimeSummaryControllerTest {
             List.of());
     when(service.operationsForPlatform()).thenReturn(expected);
 
-    assertThat(controller.operations(admin)).isSameAs(expected);
+    assertThat(controller.operations(admin, null)).isSameAs(expected);
     verify(service).operationsForPlatform();
   }
 }

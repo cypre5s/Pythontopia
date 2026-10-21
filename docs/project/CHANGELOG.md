@@ -2,6 +2,7 @@
 
 ## 2026-10-21
 
+- 并入并收敛所有已登记 worktree 的分支提交；远征节点评分、题目生成与导师每日限额迁移调整到唯一版本 V228–V230。答疑 SSE 接入共享流中继、传输失败恢复及每日请求预算；远征现场出题按服务端节点策略执行并预留生成额度。后端完整运行 1,827 项后修正 4 个过期测试夹具；周报与远征 PostgreSQL 集成类复跑 41 项通过。未发布到 ECS。
 - 登录页把 7.2 MB Zpix TTF 切到仓库已有 OFL Ark Pixel 子集，并用 468 KB WebP 显示原创背景（原 PNG 3.4 MB）；优先级高的图片元素提前请求。F3 性能面板与游戏音频改为按需加载 Phaser；管理员登录后跳过学习路由预取。自主讲题已覆盖无错题记录场景：可讲知识点或描述题目，不构造误区或错题证据。本地 Chromium 测得 FCP/LCP 均约 276 ms，首屏关键图与字体传输约 1.28 MB；登录时不请求 Phaser，打开 F3 后正常加载。前端 281 个测试文件、2,688 项通过，typecheck、lint、生产构建和 Playwright 回归通过。
 - 性能版本部署为 ECS release `20261021-043220`（commit `d06c1d05`，归档 1,561,557,313 bytes，SHA-256 `164d6cc6b2a3bd75ed2769cf0bf6e840cd35881419e837d81dd547bebc7723e1`）。七个服务 healthy；HTTP 308、HTTPS `/healthz` 正常；新数据库备份 444 KB，保留上一版本 `20261021-033818` 和 `deploy_pytopia_pg`。生产 Chromium 测得 FCP 1,504 ms、LCP 2,072 ms、TTFB 500 ms；关键图/字体约 1.28 MB，F3 前 0 次 Phaser 请求、F3 后成功加载，console/pageerror/失败请求均为 0。删除已安装上传包及更旧的 `20261021-024928` 后，可用磁盘 6.5 GB。
 - 将含管理员路由、画像访谈与费曼修复的版本部署到 ECS：release `20261021-033818`，基于提交 `8d470421`，归档 1,563,229,582 bytes，SHA-256 `4ac048a2f11526a404d59c635d02352d06098907b8044bfebee6e178fc76c2c3`。安装器校验归档与包内 4,353 个文件，七个服务 healthy、Piston runtime 初始化成功，HTTP 308/HTTPS `/healthz` 200；保留数据库卷 `deploy_pytopia_pg`、448 KB pg_dump 和上一版本 `20261021-024928`。生产 Chromium + DeepSeek 复验无错题费曼讲解及画像访谈，console/pageerror/失败请求均为 0；两个临时学生及级联测试数据已精确删除。临时上传包清理后根盘剩余 5.1 GB。

@@ -84,9 +84,6 @@ public class FeynmanSessionService {
     // 必须先读取再插入本轮，否则本轮解释会在 history 和 student_teaching 中重复。
     List<FeynmanGraphClient.ConversationTurn> history = recentHistory(sessionId);
 
-    // 历史必须在插入本轮 STUDENT 之前读，否则本轮教学会同时出现在 history 和 student_teaching 里。
-    List<FeynmanGraphClient.ConversationTurn> history = recentHistory(sessionId);
-
     // 学生本回合的教学先落库为 STUDENT 轮，支撑「误解→你的教学→判题→证据」玻璃盒可溯源。
     jdbc.update(
         "INSERT INTO feynman_turn (session_id, role, content, taught_fix) VALUES (?, 'STUDENT', ?, NULL)",

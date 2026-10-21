@@ -13,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
@@ -108,7 +109,19 @@ public final class GraphStreamTransport {
       SseEmitter emitter,
       BiConsumer<String, String> onEvent,
       Runnable onFinished) {
-    relay(url, bodySupplier, internalToken, null, emitter, onEvent, onFinished);
+    relay(url, bodySupplier, internalToken, null, emitter, onEvent, null, onFinished);
+  }
+
+  /** Relays with an optional business recovery callback for transport failures. */
+  public void relay(
+      String url,
+      Supplier<?> bodySupplier,
+      String internalToken,
+      SseEmitter emitter,
+      BiConsumer<String, String> onEvent,
+      FailureRecovery recovery,
+      Runnable onFinished) {
+    relay(url, bodySupplier, internalToken, null, emitter, onEvent, recovery, onFinished);
   }
 
   /**
@@ -122,6 +135,19 @@ public final class GraphStreamTransport {
       SseEmitter emitter,
       BiConsumer<String, String> onEvent,
       Runnable onFinished) {
+    relay(url, bodySupplier, internalToken, internalSubject, emitter, onEvent, null, onFinished);
+  }
+
+  /** Stateful Graph relay with an optional business recovery callback. */
+  public void relay(
+      String url,
+      Supplier<?> bodySupplier,
+      String internalToken,
+      String internalSubject,
+      SseEmitter emitter,
+      BiConsumer<String, String> onEvent,
+      FailureRecovery recovery,
+      Runnable onFinished) {
     HttpURLConnection connection = null;
     try {
       byte[] payload = objectMapper.writeValueAsBytes(bodySupplier.get());
@@ -129,23 +155,23 @@ public final class GraphStreamTransport {
       int status = connection.getResponseCode();
       if (status >= 400) {
         log.error("Graph SSE endpoint returned HTTP {}", status);
-        sendTerminalError(emitter, CODE_UNAVAILABLE, MSG_UNAVAILABLE);
+        handleFailure(emitter, recovery, FailureKind.UNAVAILABLE);
         return;
       }
       StreamEnd end = relayEvents(connection, emitter, onEvent);
       if (end == StreamEnd.TRUNCATED) {
         log.error("Graph SSE stream closed before terminal event");
-        sendTerminalError(emitter, CODE_INTERRUPTED, MSG_INTERRUPTED);
+        handleFailure(emitter, recovery, FailureKind.INTERRUPTED);
       }
     } catch (SocketTimeoutException e) {
       log.error(
           "Graph SSE relay timed out readTimeoutMs={} errorType={}",
           readTimeoutMs,
           e.getClass().getSimpleName());
-      sendTerminalError(emitter, CODE_TIMEOUT, MSG_TIMEOUT);
+      handleFailure(emitter, recovery, FailureKind.TIMEOUT);
     } catch (IOException | RuntimeException e) {
       log.error("Graph SSE relay failed errorType={}", e.getClass().getSimpleName());
-      sendTerminalError(emitter, CODE_UNAVAILABLE, MSG_UNAVAILABLE);
+      handleFailure(emitter, recovery, FailureKind.UNAVAILABLE);
     } finally {
       if (connection != null) {
         connection.disconnect();
@@ -189,38 +215,32 @@ public final class GraphStreamTransport {
     try (BufferedReader reader =
         new BufferedReader(
             new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))) {
-      String currentEvent = "message";
-      StringBuilder dataBuffer = new StringBuilder();
-      String line;
-      while ((line = reader.readLine()) != null) {
-        if (line.startsWith("event:")) {
-          currentEvent = line.substring("event:".length()).trim();
-        } else if (line.startsWith("data:")) {
-          dataBuffer.append(line.substring("data:".length()).trim());
-        } else if (line.isEmpty() && dataBuffer.length() > 0) {
-          String eventName = currentEvent;
-          String data = dataBuffer.toString();
-          currentEvent = "message";
-          dataBuffer.setLength(0);
-          try {
-            emitter.send(SseEmitter.event().name(eventName).data(data));
-          } catch (IOException | IllegalStateException sendFailure) {
-            log.debug(
-                "SSE client gone, aborting graph relay errorType={}",
-                sendFailure.getClass().getSimpleName());
-            return StreamEnd.CLIENT_GONE;
-          }
-          notifyPeek(onEvent, eventName, data);
-          if (TERMINAL_EVENTS.contains(eventName)) {
-            return StreamEnd.TERMINAL;
-          }
-        }
-      }
+      AtomicReference<StreamEnd> stopped = new AtomicReference<>();
+      SseFrameDecoder.DecodeResult result =
+          SseFrameDecoder.decode(
+              reader,
+              frame -> {
+                try {
+                  emitter.send(SseEmitter.event().name(frame.event()).data(frame.data()));
+                } catch (IOException | IllegalStateException sendFailure) {
+                  log.debug(
+                      "SSE client gone, aborting graph relay errorType={}",
+                      sendFailure.getClass().getSimpleName());
+                  stopped.set(StreamEnd.CLIENT_GONE);
+                  return false;
+                }
+                notifyPeek(onEvent, frame.event(), frame.data());
+                if (TERMINAL_EVENTS.contains(frame.event())) {
+                  stopped.set(StreamEnd.TERMINAL);
+                  return false;
+                }
+                return true;
+              });
       if (result == SseFrameDecoder.DecodeResult.TRUNCATED) {
         // 未以空行收束的半截帧：按 SSE 规范丢弃，防止把截断 JSON 当正常事件透传。
         log.warn("Discarding unterminated trailing SSE frame");
       }
-      return StreamEnd.TRUNCATED;
+      return stopped.get() == null ? StreamEnd.TRUNCATED : stopped.get();
     }
   }
 

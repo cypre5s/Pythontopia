@@ -36,9 +36,9 @@ class ExpeditionScoreServiceTest {
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(
             List.of(
-                new ExpeditionScoreService.VerifiedAttempt(true, 90),
-                new ExpeditionScoreService.VerifiedAttempt(false, 0),
-                new ExpeditionScoreService.VerifiedAttempt(true, 80)));
+                new ExpeditionScoreService.VerifiedAttempt(true, 90, true),
+                new ExpeditionScoreService.VerifiedAttempt(false, 0, false),
+                new ExpeditionScoreService.VerifiedAttempt(true, 80, true)));
     ExpeditionScoreService service =
         new ExpeditionScoreService(jdbcTemplate, expeditionRunService, eventPublisher);
 
@@ -63,7 +63,7 @@ class ExpeditionScoreServiceTest {
         .thenReturn(List.of(new ExpeditionScoreService.LockedRun(true, false)));
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
-        .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttempt(true, 80)));
+        .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttempt(true, 80, true)));
     ExpeditionScoreService service =
         new ExpeditionScoreService(jdbcTemplate, expeditionRunService, eventPublisher);
 
@@ -87,7 +87,7 @@ class ExpeditionScoreServiceTest {
         .thenReturn(List.of(new ExpeditionScoreService.LockedRun(false, true)));
     when(jdbcTemplate.query(
             contains("expedition_verified_attempt"), any(RowMapper.class), any(Object[].class)))
-        .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttempt(true, 80)));
+        .thenReturn(List.of(new ExpeditionScoreService.VerifiedAttempt(true, 80, true)));
     ExpeditionScoreService service =
         new ExpeditionScoreService(jdbcTemplate, expeditionRunService, eventPublisher);
 
@@ -178,7 +178,7 @@ class ExpeditionScoreServiceTest {
                 new ExpeditionScoreService.VerifiedAttempt(true, 100, true),
                 new ExpeditionScoreService.VerifiedAttempt(true, 100, false),
                 new ExpeditionScoreService.VerifiedAttempt(true, 80, true)));
-    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate);
+    ExpeditionScoreService service = new ExpeditionScoreService(jdbcTemplate, expeditionRunService, eventPublisher);
 
     service.record(7L, new ExpeditionScoreSubmitDto(RUN_ID.toString()));
 
@@ -252,10 +252,10 @@ class ExpeditionScoreServiceTest {
             contains("question_fingerprint = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(
             List.of(),
-            List.of(new ExpeditionScoreService.ExistingAttempt(1, false, true)),
-            List.of(new ExpeditionScoreService.ExistingAttempt(1, false, true)),
-            List.of(new ExpeditionScoreService.ExistingAttempt(1, true, true)),
-            List.of(new ExpeditionScoreService.ExistingAttempt(1, true, true)));
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, false, true, null, null)),
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, false, true, null, null)),
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, true, true, null, null)),
+            List.of(new ExpeditionScoreService.ExistingAttempt(1, true, true, null, null)));
     when(jdbcTemplate.query(contains("problem_id = ?"), any(RowMapper.class), any(Object[].class)))
         .thenReturn(List.of());
     when(jdbcTemplate.update(

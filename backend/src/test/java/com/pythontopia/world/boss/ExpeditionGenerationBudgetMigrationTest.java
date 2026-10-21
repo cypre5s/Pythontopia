@@ -13,7 +13,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
-/** Verifies V210 preserves the generation budget represented by legacy node-bound rows. */
+/** Verifies V229 preserves the generation budget represented by legacy node-bound rows. */
 @Testcontainers
 class ExpeditionGenerationBudgetMigrationTest {
 
@@ -29,7 +29,7 @@ class ExpeditionGenerationBudgetMigrationTest {
   private static JdbcTemplate jdbc;
 
   @BeforeAll
-  static void migrateToV209() {
+  static void migrateToV227() {
     source = new DriverManagerDataSource();
     source.setDriverClassName("org.postgresql.Driver");
     source.setUrl(POSTGRES.getJdbcUrl());
@@ -38,7 +38,7 @@ class ExpeditionGenerationBudgetMigrationTest {
     Flyway.configure()
         .dataSource(source)
         .locations("classpath:db/migration")
-        .target(MigrationVersion.fromVersion("209"))
+        .target(MigrationVersion.fromVersion("227"))
         .load()
         .migrate();
     jdbc = new JdbcTemplate(source);
@@ -76,9 +76,9 @@ class ExpeditionGenerationBudgetMigrationTest {
     assertThat(countRunSlots(userId, runId)).isEqualTo(36);
     assertThat(
             jdbc.queryForObject(
-                "SELECT version FROM flyway_schema_history WHERE version = '210'",
+                "SELECT version FROM flyway_schema_history WHERE version = '229'",
                 String.class))
-        .isEqualTo("210");
+        .isEqualTo("229");
   }
 
   private void insertProblem(

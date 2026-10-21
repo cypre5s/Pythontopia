@@ -32,6 +32,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class ProfileService {
 
   private static final Logger log = LoggerFactory.getLogger(ProfileService.class);
+  private static final int STREAM_CONNECT_TIMEOUT_MS = 3_000;
   private static final int STREAM_READ_TIMEOUT_MS = 120_000;
 
   private final ProfileRepository profileRepository;
@@ -43,6 +44,7 @@ public class ProfileService {
   private final SseRelayExecutor sseRelayExecutor;
   private final ProfileDraftService profileDraftService;
   private final StudentWriteThrottle studentWriteThrottle;
+  private final GraphStreamTransport streamTransport;
 
   @Autowired
   public ProfileService(
@@ -54,7 +56,8 @@ public class ProfileService {
       GraphHttpClientProperties graphHttpProperties,
       ObjectMapper objectMapper,
       SseRelayExecutor sseRelayExecutor,
-      InterviewDimensionMirror interviewDimensionMirror) {
+      ProfileDraftService profileDraftService,
+      StudentWriteThrottle studentWriteThrottle) {
     this(
         profileRepository,
         coursePackRepository,
@@ -63,8 +66,33 @@ public class ProfileService {
         graphProperties,
         objectMapper,
         sseRelayExecutor,
-        interviewDimensionMirror,
+        profileDraftService,
+        studentWriteThrottle,
         graphHttpProperties.connectTimeoutMs(),
+        STREAM_READ_TIMEOUT_MS);
+  }
+
+  public ProfileService(
+      ProfileRepository profileRepository,
+      CoursePackRepository coursePackRepository,
+      ResourceRunRecorder resourceRunRecorder,
+      RestTemplate graphRestTemplate,
+      GraphServiceProperties graphProperties,
+      ObjectMapper objectMapper,
+      SseRelayExecutor sseRelayExecutor,
+      ProfileDraftService profileDraftService,
+      StudentWriteThrottle studentWriteThrottle) {
+    this(
+        profileRepository,
+        coursePackRepository,
+        resourceRunRecorder,
+        graphRestTemplate,
+        graphProperties,
+        objectMapper,
+        sseRelayExecutor,
+        profileDraftService,
+        studentWriteThrottle,
+        STREAM_CONNECT_TIMEOUT_MS,
         STREAM_READ_TIMEOUT_MS);
   }
 
@@ -77,7 +105,9 @@ public class ProfileService {
       ObjectMapper objectMapper,
       SseRelayExecutor sseRelayExecutor,
       ProfileDraftService profileDraftService,
-      StudentWriteThrottle studentWriteThrottle) {
+      StudentWriteThrottle studentWriteThrottle,
+      int connectTimeoutMs,
+      int readTimeoutMs) {
     this.profileRepository = profileRepository;
     this.coursePackRepository = coursePackRepository;
     this.resourceRunRecorder = resourceRunRecorder;
@@ -87,6 +117,7 @@ public class ProfileService {
     this.sseRelayExecutor = sseRelayExecutor;
     this.profileDraftService = profileDraftService;
     this.studentWriteThrottle = studentWriteThrottle;
+    this.streamTransport = new GraphStreamTransport(objectMapper, connectTimeoutMs, readTimeoutMs);
   }
 
   public ProfileInterviewStartResponse openOrResumeInterview(Long userId) {
@@ -188,44 +219,51 @@ public class ProfileService {
 
     String url = graphProperties.graphUrl() + "/agents/profile/turn/stream";
 
-    sseRelayExecutor.submit(() -> {
-      try {
-        GraphSseConsumer.consume(
-            url,
-            agentRequest,
-            objectMapper,
-            GraphInternalTokenSupport.tokenOrNull(graphProperties),
-            (event, data) -> {
-          try {
-            emitter.send(SseEmitter.event().name(event).data(data));
-            if ("result".equals(event)) {
-              handleTurnResult(userId, sessionId, request, data);
-            }
-          } catch (IOException e) {
-            log.debug(
-                "Profile SSE emitter write failed errorType={}",
-                e.getClass().getSimpleName());
-          }
-        });
-        emitter.complete();
-      } catch (IOException e) {
-        log.warn(
-            "Profile turn SSE stream failed, falling back to non-streaming errorType={}",
-            e.getClass().getSimpleName());
-        try {
-          ProfileTurnResponse fallback = sendTurn(userId, sessionId, request);
-          String json = objectMapper.writeValueAsString(fallback);
-          emitter.send(SseEmitter.event().name("result").data(json));
-          emitter.complete();
-        } catch (Exception fallbackEx) {
-          log.error(
-              "Profile turn SSE fallback failed errorType={}",
-              fallbackEx.getClass().getSimpleName());
-          emitter.completeWithError(fallbackEx);
-        }
+    sseRelayExecutor.submit(
+        () ->
+            streamTransport.relay(
+                url,
+                () -> agentRequest,
+                GraphInternalTokenSupport.tokenOrNull(graphProperties),
+                emitter,
+                (event, data) -> {
+                  if ("result".equals(event)) {
+                    handleTurnResult(userId, sessionId, request, data);
+                  } else if ("RUN_FINISHED".equals(event)) {
+                    handleTurnResult(userId, sessionId, request, unwrapAguiResult(data));
+                  }
+                },
+                failure -> recoverProfileTurn(userId, sessionId, request, failure),
+                null));
+  }
+
+  private GraphStreamTransport.TerminalEvent recoverProfileTurn(
+      Long userId,
+      String sessionId,
+      ProfileTurnRequest request,
+      GraphStreamTransport.FailureKind failure) {
+    log.warn("Profile turn SSE failed as {}; trying synchronous ProfileAgent recovery", failure);
+    try {
+      ProfileTurnResponse fallback = sendTurn(userId, sessionId, request);
+      return new GraphStreamTransport.TerminalEvent(
+          "result", objectMapper.writeValueAsString(fallback));
+    } catch (Exception fallbackFailure) {
+      log.error(
+          "Profile turn synchronous recovery failed after SSE failure={} errorType={}",
+          failure,
+          fallbackFailure.getClass().getSimpleName());
+      return null;
+    }
+  }
+
+  private String unwrapAguiResult(String data) {
+    try {
+      JsonNode result = objectMapper.readTree(data).get("result");
+      if (result != null && result.isObject()) {
+        return objectMapper.writeValueAsString(result);
       }
     } catch (Exception e) {
-      log.warn("Failed to unwrap ProfileAgent RUN_FINISHED payload", e);
+      log.warn("Failed to unwrap ProfileAgent RUN_FINISHED payload errorType={}", e.getClass().getSimpleName());
     }
     return data;
   }

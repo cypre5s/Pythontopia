@@ -16,6 +16,7 @@ import com.pythontopia.agent.run.ResourceRunRecorder;
 import com.pythontopia.agent.run.RunStatus;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.sse.SseRelayExecutor;
+import com.pythontopia.common.web.StudentWriteThrottle;
 import com.pythontopia.coursepack.repository.CoursePackRepository;
 import com.pythontopia.learner.profile.dto.CheckResultDto;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
@@ -71,6 +72,7 @@ class ProfileServiceStreamTest {
     when(repository.ownsInterview(7L, "session-1")).thenReturn(true);
     CoursePackRepository coursePack = mock(CoursePackRepository.class);
     when(coursePack.findKcs(43L, null)).thenReturn(List.of());
+    when(repository.completeInterview(7L, "session-1")).thenReturn(true);
     ProfileService service =
         newService(
             port,
@@ -88,9 +90,11 @@ class ProfileServiceStreamTest {
         emitter);
     awaitTerminated(emitter);
 
-    verify(repository).upsertProfile(7L, draft);
-    verify(dimensionMirror).mirror(7L, draft);
-    verify(repository).addRevision(7L, "INTERVIEW", draft);
+    LearnerProfileDto selfReport =
+        new LearnerProfileDto(null, 7L, 43L, "计算机", null, null, null, null, null, null, null, null);
+    verify(repository).upsertProfile(7L, selfReport);
+    verify(dimensionMirror).mirror(7L, selfReport);
+    verify(repository).addRevision(7L, "INTERVIEW", selfReport);
     verify(repository).completeInterview(7L, "session-1");
     verify(runRecorder)
         .record(
@@ -114,6 +118,7 @@ class ProfileServiceStreamTest {
     int port = startHttpErrorServer(503);
     ProfileRepository repository = mock(ProfileRepository.class);
     when(repository.ownsInterview(7L, "session-1")).thenReturn(true);
+    when(repository.completeInterview(7L, "session-1")).thenReturn(true);
     CoursePackRepository coursePack = mock(CoursePackRepository.class);
     when(coursePack.findKcs(43L, null)).thenReturn(List.of());
     RestTemplate restTemplate = mock(RestTemplate.class);
@@ -141,9 +146,11 @@ class ProfileServiceStreamTest {
 
     assertThat(eventsNamed(emitter, "result")).hasSize(1);
     assertThat(eventsNamed(emitter, "error")).isEmpty();
-    verify(repository, times(1)).upsertProfile(7L, draft);
-    verify(dimensionMirror, times(1)).mirror(7L, draft);
-    verify(repository, times(1)).addRevision(7L, "INTERVIEW", draft);
+    LearnerProfileDto selfReport =
+        new LearnerProfileDto(null, 7L, 43L, "数学", null, null, null, null, null, null, null, null);
+    verify(repository, times(1)).upsertProfile(7L, selfReport);
+    verify(dimensionMirror, times(1)).mirror(7L, selfReport);
+    verify(repository, times(1)).addRevision(7L, "INTERVIEW", selfReport);
     verify(repository, times(1)).completeInterview(7L, "session-1");
     verify(runRecorder, times(1))
         .record(
@@ -239,7 +246,8 @@ class ProfileServiceStreamTest {
             "http://127.0.0.1:" + port, "http://rag.test", "internal-token"),
         objectMapper,
         new SseRelayExecutor(),
-        dimensionMirror,
+        new ProfileDraftService(repository, dimensionMirror),
+        new StudentWriteThrottle(),
         1_000,
         2_000);
   }

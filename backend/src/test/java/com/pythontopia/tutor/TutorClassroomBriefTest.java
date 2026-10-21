@@ -38,6 +38,7 @@ class TutorClassroomBriefTest {
           dashboard,
           mock(com.pythontopia.learner.memory.MemoryRetrievalService.class),
           mock(com.pythontopia.coursepack.service.CourseVideoTranscriptService.class),
+          mock(TutorRequestBudgetService.class),
           mock(TutorDailyRequestLimitService.class));
 
   private static CurrentUserPrincipal student() {

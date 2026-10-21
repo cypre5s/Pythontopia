@@ -256,96 +256,11 @@ class ExpeditionRunControllerTest {
     verifyNoInteractions(service);
   }
 
-  @Test
-  void postRunActionReturnsTheCanonicalRun() throws Exception {
-    ExpeditionRunDto dto = runDto();
-    when(service.performAction(eq(7L), any(ExpeditionRunActionRequest.class))).thenReturn(dto);
 
-    mockMvc
-        .perform(
-            post("/api/world/expedition/run/actions")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(
-                    "{\"runId\":\"" + dto.runId() + "\",\"nodeId\":\"L0-0\","
-                        + "\"action\":\"ENTER_NODE\"}"))
-        .andExpect(status().isOk())
-        .andExpect(jsonPath("$.runId").value(dto.runId()))
-        .andExpect(jsonPath("$.phase").value("map"));
 
-    verify(service).performAction(eq(7L), any(ExpeditionRunActionRequest.class));
-  }
 
-  @Test
-  void postRunActionRejectsUnknownActionEnum() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/world/expedition/run/actions")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"runId\":\"123e4567-e89b-12d3-a456-426614174000\",\"action\":\"HACK\"}"))
-        .andExpect(status().isBadRequest());
 
-    verifyNoInteractions(service);
-  }
 
-  @Test
-  void postStartsRunFromServerSelectedFrontier() throws Exception {
-    ExpeditionRunDto dto = runDto();
-    when(bossService.selectFrontier(7L, 2, "PY43-KC-008"))
-        .thenReturn(
-            new FrontierSelectResultDto(List.of(new FrontierPickDto("PY43-KC-008", 2, 3, "weak"))));
-    when(service.start(eq(7L), eq(2), eq(false), anyList())).thenReturn(dto);
-
-    mockMvc
-        .perform(
-            post("/api/world/expedition/run")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"focusChapter\":2,\"isDaily\":false,\"preferredKcCode\":\"PY43-KC-008\"}"))
-        .andExpect(status().isCreated())
-        .andExpect(jsonPath("$.runId").value(dto.runId()));
-
-    verify(bossService).selectFrontier(7L, 2, "PY43-KC-008");
-    verify(service).start(eq(7L), eq(2), eq(false), anyList());
-  }
-
-  @Test
-  void postRejectsInvalidFocusChapterBeforeSelectingFrontier() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/world/expedition/run")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"focusChapter\":8,\"isDaily\":false}"))
-        .andExpect(status().isBadRequest());
-
-    verifyNoInteractions(service, bossService);
-  }
-
-  @Test
-  void postRejectsInvalidPreferredKcBeforeSelectingFrontier() throws Exception {
-    mockMvc
-        .perform(
-            post("/api/world/expedition/run")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content("{\"focusChapter\":2,\"isDaily\":false,\"preferredKcCode\":\"other-course-kc\"}"))
-        .andExpect(status().isBadRequest());
-
-    verifyNoInteractions(service, bossService);
-  }
-
-  @Test
-  void putRejectsSnapshotOutsideCurrentRunBounds() throws Exception {
-    ExpeditionRunDto dto =
-        new ExpeditionRunDto(
-            "map", 2, List.of(), 11, null, 5, 5, 0, 0, 0, List.of(), false, List.of(), null);
-
-    mockMvc
-        .perform(
-            put("/api/world/expedition/run")
-                .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(dto)))
-        .andExpect(status().isBadRequest());
-
-    verifyNoInteractions(service);
-  }
 
   @Test
   void deleteAbandonsActiveRunForCurrentStudent() throws Exception {

@@ -47,6 +47,7 @@ class TutorServiceFailureTest {
             mock(ClassroomDashboardService.class),
             mock(MemoryRetrievalService.class),
             mock(CourseVideoTranscriptService.class),
+            mock(TutorRequestBudgetService.class),
             mock(TutorDailyRequestLimitService.class));
     doThrow(new IllegalStateException(privateAnswer))
         .when(sessionRepository)
@@ -119,6 +120,7 @@ class TutorServiceFailureTest {
             classroomService,
             memoryService,
             mock(CourseVideoTranscriptService.class),
+            mock(TutorRequestBudgetService.class),
             mock(TutorDailyRequestLimitService.class));
 
     Logger logger = (Logger) LoggerFactory.getLogger(TutorService.class);

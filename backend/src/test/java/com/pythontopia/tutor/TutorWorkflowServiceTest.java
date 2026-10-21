@@ -85,6 +85,7 @@ class TutorWorkflowServiceTest {
           coursePackRepository,
           submissionService,
           eventPublisher,
+          requestBudgetService,
           new ObjectMapper(),
           mock(TutorDailyRequestLimitService.class));
 

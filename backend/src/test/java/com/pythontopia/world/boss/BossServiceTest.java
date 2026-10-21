@@ -88,8 +88,8 @@ class BossServiceTest {
   @Mock EndlessPregenService pregenService;
   @Mock BossProblemReviewRepository reviewRepository;
   @Mock ExpeditionRunService expeditionRunService;
+  @Mock ExpeditionScoreService expeditionScoreService;
   @Mock BossAttemptIdempotencyService attemptIdempotencyService;
-  @Mock ExpeditionAttemptCompletionService expeditionAttemptCompletionService;
   @Mock ApplicationEventPublisher eventPublisher;
   private BossService service;
 
@@ -108,28 +108,9 @@ class BossServiceTest {
             pregenService,
             reviewRepository,
             expeditionRunService,
+            expeditionScoreService,
             attemptIdempotencyService,
-            expeditionAttemptCompletionService,
             eventPublisher);
-    lenient()
-        .when(
-            expeditionAttemptCompletionService.complete(
-                anyLong(),
-                anyString(),
-                anyString(),
-                org.mockito.ArgumentMatchers.nullable(Integer.class),
-                anyString(),
-                anyString(),
-                anyBoolean(),
-                anyInt(),
-                org.mockito.ArgumentMatchers.nullable(UUID.class),
-                org.mockito.ArgumentMatchers.nullable(BossAttemptIdempotencyService.Claim.class),
-                any(com.pythontopia.world.boss.dto.BossAttemptResultDto.class),
-                org.mockito.ArgumentMatchers.nullable(LearningEvent.class)))
-        .thenAnswer(
-            call ->
-                new ExpeditionAttemptCompletionService.Completion(
-                    true, call.getArgument(10)));
     lenient()
         .when(passiveProfileService.getPersonalizationSignals(anyLong()))
         .thenReturn(LearnerProfileSignals.empty());
@@ -142,6 +123,19 @@ class BossServiceTest {
             expeditionRunService.validateProblemRequest(
                 anyLong(), anyString(), anyString(), anyInt(), anyBoolean(), anyString()))
         .thenReturn(null);
+    lenient()
+        .when(
+            expeditionRunService.resolveProblemRequest(
+                anyLong(), anyString(), anyString(), anyInt(), anyBoolean(), anyString()))
+        .thenAnswer(
+            invocation ->
+                new ExpeditionRunService.ExpeditionProblemPolicy(
+                    invocation.getArgument(2, String.class),
+                    invocation.getArgument(5, String.class),
+                    invocation.getArgument(3, Integer.class),
+                    invocation.getArgument(3, Integer.class),
+                    "dual_track",
+                    null));
     lenient()
         .when(attemptIdempotencyService.claim(anyLong(), any(), any()))
         .thenAnswer(
@@ -177,6 +171,10 @@ class BossServiceTest {
             0,
             "print() 是 Python 的标准输出内置函数。",
             "通识题（非课件原题）");
+    when(expeditionRunService.resolveProblemRequest(7L, runId, nodeId, 2, false, kcCode))
+        .thenReturn(
+            new ExpeditionRunService.ExpeditionProblemPolicy(
+                nodeId, kcCode, 2, 2, "dual_track", 1));
     when(expeditionRunService.validateProblemRequest(7L, runId, nodeId, 2, false, kcCode))
         .thenReturn(1);
     when(expeditionRunService.findIssuedQuestionFingerprints(7L, runId)).thenReturn(Set.of());
@@ -229,9 +227,13 @@ class BossServiceTest {
                     BossService.questionFingerprint(issued),
                     1)));
     when(expeditionRunService.isActiveRun(7L, runId)).thenReturn(true);
+    when(expeditionRunService.validateProblemRequest(7L, runId, nodeId, 2, false, kcCode))
+        .thenReturn(1);
     when(expeditionScoreService.recordVerifiedAttempt(
             anyLong(),
             anyString(),
+            anyString(),
+            org.mockito.ArgumentMatchers.nullable(Integer.class),
             anyString(),
             anyString(),
             anyBoolean(),
@@ -258,6 +260,8 @@ class BossServiceTest {
         .recordVerifiedAttempt(
             eq(7L),
             eq(runId),
+            eq(nodeId),
+            eq(1),
             eq(problem.problemId()),
             anyString(),
             eq(true),
@@ -322,8 +326,10 @@ class BossServiceTest {
     String runId = UUID.randomUUID().toString();
     String nodeId = "L0-0";
     String kcCode = "PY43-KC-001";
-    when(expeditionRunService.validateProblemRequest(7L, runId, nodeId, 1, false, kcCode))
-        .thenReturn(null);
+    when(expeditionRunService.resolveProblemRequest(7L, runId, nodeId, 1, false, kcCode))
+        .thenReturn(
+            new ExpeditionRunService.ExpeditionProblemPolicy(
+                nodeId, kcCode, 1, 1, "dual_track", null));
     when(expeditionRunService.findIssuedQuestionFingerprints(7L, runId)).thenReturn(Set.of());
     when(chapterProblemBankRepository.findByKcCodes(List.of(kcCode))).thenReturn(List.of());
     when(mainlinePracticeRepository.findForBossFallback(1, kcCode))
@@ -380,8 +386,10 @@ class BossServiceTest {
             List.of(),
             List.of(),
             0);
-    when(expeditionRunService.validateProblemRequest(7L, runId, nodeId, 1, false, kcCode))
-        .thenReturn(null);
+    when(expeditionRunService.resolveProblemRequest(7L, runId, nodeId, 1, false, kcCode))
+        .thenReturn(
+            new ExpeditionRunService.ExpeditionProblemPolicy(
+                nodeId, kcCode, 1, 1, "dual_track", null));
     when(expeditionRunService.findIssuedQuestionFingerprints(7L, runId))
         .thenReturn(Set.of(BossService.questionFingerprint(prefetchedCode)));
     when(chapterProblemBankRepository.findByKcCodes(List.of(kcCode))).thenReturn(List.of());
@@ -469,8 +477,10 @@ class BossServiceTest {
             List.of(),
             List.of("正确"),
             0);
-    when(expeditionRunService.validateProblemRequest(7L, runId, nodeId, 1, false, kcCode))
-        .thenReturn(null);
+    when(expeditionRunService.resolveProblemRequest(7L, runId, nodeId, 1, false, kcCode))
+        .thenReturn(
+            new ExpeditionRunService.ExpeditionProblemPolicy(
+                nodeId, kcCode, 1, 1, "dual_track", null));
     when(expeditionRunService.findIssuedQuestionFingerprints(7L, runId))
         .thenReturn(Set.of(BossService.questionFingerprint(objective)));
     when(chapterProblemBankRepository.findByKcCodes(List.of(kcCode))).thenReturn(List.of());
@@ -534,8 +544,10 @@ class BossServiceTest {
     String runId = UUID.randomUUID().toString();
     String nodeId = "L0-0";
     String kcCode = "PY43-KC-001";
-    when(expeditionRunService.validateProblemRequest(7L, runId, nodeId, 1, true, kcCode))
-        .thenReturn(null);
+    when(expeditionRunService.resolveProblemRequest(7L, runId, nodeId, 1, true, kcCode))
+        .thenReturn(
+            new ExpeditionRunService.ExpeditionProblemPolicy(
+                nodeId, kcCode, 1, 1, "dual_track", null));
     when(expeditionRunService.findIssuedQuestionFingerprints(7L, runId)).thenReturn(Set.of());
     when(chapterProblemBankRepository.findByKcCodes(List.of(kcCode))).thenReturn(List.of());
     when(mainlinePracticeRepository.findForBossFallback(1, kcCode))
@@ -637,8 +649,10 @@ class BossServiceTest {
     String runId = UUID.randomUUID().toString();
     String nodeId = "L9-0";
     String kcCode = "PY43-KC-008";
-    when(expeditionRunService.validateProblemRequest(7L, runId, nodeId, 2, true, kcCode))
-        .thenReturn(1);
+    when(expeditionRunService.resolveProblemRequest(7L, runId, nodeId, 2, true, kcCode))
+        .thenReturn(
+            new ExpeditionRunService.ExpeditionProblemPolicy(
+                nodeId, kcCode, 2, 2, "dual_track", 1));
     when(chapterProblemBankRepository.findByKcCodes(List.of(kcCode))).thenReturn(List.of());
     when(mainlinePracticeRepository.findForBossFallback(2, kcCode))
         .thenReturn(
@@ -723,6 +737,7 @@ class BossServiceTest {
             org.mockito.ArgumentMatchers.isNull(),
             eq(2),
             org.mockito.ArgumentMatchers.argThat(p -> p.problemId().equals(dto.problemId())),
+            org.mockito.ArgumentMatchers.isNull(),
             org.mockito.ArgumentMatchers.isNull());
     verifyNoInteractions(graphClient);
   }
@@ -989,7 +1004,7 @@ class BossServiceTest {
     }
 
     verify(pregenService, never())
-        .persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any());
+        .persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any(), any());
   }
 
   @Test
@@ -1023,7 +1038,7 @@ class BossServiceTest {
                 assertThat(exception.code()).isEqualTo("BOSS_PROBLEM_GENERATION_UNAVAILABLE"));
 
     verify(pregenService, never())
-        .persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any());
+        .persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any(), any());
   }
 
   @Test
@@ -1307,7 +1322,7 @@ class BossServiceTest {
             });
 
     verify(pregenService, never())
-        .persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any());
+        .persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any(), any());
   }
 
   @Test
@@ -1347,6 +1362,7 @@ class BossServiceTest {
             any(),
             eq(1),
             org.mockito.ArgumentMatchers.argThat(p -> p.kcCode().equals("PY43-KC-001")),
+            org.mockito.ArgumentMatchers.isNull(),
             org.mockito.ArgumentMatchers.isNull());
     verify(reviewRepository, never())
         .approveAutomaticallyIfNotDuplicate(
@@ -1496,7 +1512,7 @@ class BossServiceTest {
         .hasMessageContaining("尚未通过审核");
 
     verify(pregenService, never())
-        .persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any());
+        .persistConsumed(any(), anyInt(), any(), any(), any(), anyInt(), any(), any(), any());
   }
 
   @Test
@@ -1516,6 +1532,8 @@ class BossServiceTest {
     when(expeditionScoreService.recordVerifiedAttempt(
             eq(7L),
             eq(runId),
+            anyString(),
+            org.mockito.ArgumentMatchers.nullable(Integer.class),
             anyString(),
             anyString(),
             eq(true),
@@ -1545,8 +1563,12 @@ class BossServiceTest {
         .recordVerifiedAttempt(
             eq(7L),
             eq(runId),
+            eq("L0-0"),
+            org.mockito.ArgumentMatchers.nullable(Integer.class),
             eq(problem.problemId()),
-            eq(BossService.questionFingerprint(internalProblem)),
+            eq(
+                BossService.expeditionAttemptFingerprint(
+                    BossService.questionFingerprint(internalProblem), "L0-0", null)),
             eq(true),
             eq(100),
             any(LearningEvent.class));
@@ -1597,8 +1619,10 @@ class BossServiceTest {
     String runId = "123e4567-e89b-12d3-a456-426614174000";
     String nodeId = "L0-0";
     when(learnerTwinService.recommendedDifficulty(7L, "PY43-KC-001")).thenReturn(2);
-    when(expeditionRunService.validateProblemRequest(7L, runId, nodeId, 1, false, "PY43-KC-001"))
-        .thenReturn(null);
+    when(expeditionRunService.resolveProblemRequest(7L, runId, nodeId, 1, false, "PY43-KC-001"))
+        .thenReturn(
+            new ExpeditionRunService.ExpeditionProblemPolicy(
+                nodeId, "PY43-KC-001", 1, 1, "dual_track", null));
     when(pregenService.findOpenExpeditionProblem(7L, runId, nodeId, null))
         .thenReturn(Optional.of(problemWithStageAndDifficulty(1, 1)));
 
@@ -1733,7 +1757,15 @@ class BossServiceTest {
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
     when(expeditionScoreService.recordVerifiedAttempt(
-            eq(7L), eq(runId), eq("p1"), anyString(), eq(true), eq(100), any(LearningEvent.class)))
+            eq(7L),
+            eq(runId),
+            eq("L0-0"),
+            org.mockito.ArgumentMatchers.nullable(Integer.class),
+            eq("p1"),
+            anyString(),
+            eq(true),
+            eq(100),
+            any(LearningEvent.class)))
         .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(false, false));
 
     assertThatThrownBy(
@@ -1767,10 +1799,26 @@ class BossServiceTest {
             new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()),
             new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
     when(expeditionScoreService.recordVerifiedAttempt(
-            eq(7L), eq(runId), eq("p1"), anyString(), eq(false), eq(0), any(LearningEvent.class)))
+            eq(7L),
+            eq(runId),
+            eq("L0-0"),
+            org.mockito.ArgumentMatchers.nullable(Integer.class),
+            eq("p1"),
+            anyString(),
+            eq(false),
+            eq(0),
+            any(LearningEvent.class)))
         .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(true, true));
     when(expeditionScoreService.recordVerifiedAttempt(
-            eq(7L), eq(runId), eq("p1"), anyString(), eq(true), eq(100), any(LearningEvent.class)))
+            eq(7L),
+            eq(runId),
+            eq("L0-0"),
+            org.mockito.ArgumentMatchers.nullable(Integer.class),
+            eq("p1"),
+            anyString(),
+            eq(true),
+            eq(100),
+            any(LearningEvent.class)))
         .thenReturn(
             new ExpeditionScoreService.VerifiedAttemptResult(true, true),
             new ExpeditionScoreService.VerifiedAttemptResult(true, false));
@@ -1820,6 +1868,8 @@ class BossServiceTest {
         .recordVerifiedAttempt(
             eq(7L),
             eq(runId),
+            eq("L0-0"),
+            org.mockito.ArgumentMatchers.nullable(Integer.class),
             eq("p1"),
             anyString(),
             anyBoolean(),
@@ -2332,7 +2382,13 @@ class BossServiceTest {
     when(pregenService.findByProblemId(7L, "p1")).thenReturn(Optional.of(problem));
     when(reviewRepository.isApproved(problem)).thenReturn(false);
     when(expeditionScoreService.recordSettlementEvidence(
-            eq(7L), eq(runId), eq("p1"), anyString(), eq(true)))
+            eq(7L),
+            eq(runId),
+            eq("L0-0"),
+            org.mockito.ArgumentMatchers.nullable(Integer.class),
+            eq("p1"),
+            anyString(),
+            eq(true)))
         .thenReturn(new ExpeditionScoreService.VerifiedAttemptResult(true, false));
     when(graphClient.evaluateAttempt(eq("p1"), anyString(), anyList(), anyInt()))
         .thenReturn(new BossEvaluateResultDto("p1", true, 1, 1, null, null, List.of()));
@@ -2343,7 +2399,14 @@ class BossServiceTest {
     assertThat(result.score()).isZero();
     assertThat(result.feedback()).contains("不计入本局进度、排行榜与知识画像");
     verify(expeditionScoreService)
-        .recordSettlementEvidence(eq(7L), eq(runId), eq("p1"), anyString(), eq(true));
+        .recordSettlementEvidence(
+            eq(7L),
+            eq(runId),
+            eq("L0-0"),
+            org.mockito.ArgumentMatchers.nullable(Integer.class),
+            eq("p1"),
+            anyString(),
+            eq(true));
     verifyNoInteractions(eventPublisher);
   }
 
@@ -2624,12 +2687,6 @@ class BossServiceTest {
         true,
         List.of(new BossTestCasePayload("2 3", "5", false)),
         "ref");
-  }
-
-  private static BossInternalProblem problemWithStageAndDifficulty(int stage, int difficulty) {
-    return new BossInternalProblem(
-        "p1", 1, stage, difficulty, "PY43-KC-001", "statement", List.of(), "2 3", "5", 1, true,
-        true, List.of(new BossTestCasePayload("2 3", "5", false)), "ref");
   }
 
   private static BossInternalProblem problemWithInput(String input) {

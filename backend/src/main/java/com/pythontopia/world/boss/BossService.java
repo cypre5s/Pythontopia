@@ -92,8 +92,8 @@ public class BossService {
   private final EndlessPregenService pregenService;
   private final BossProblemReviewRepository reviewRepository;
   private final ExpeditionRunService expeditionRunService;
+  private final ExpeditionScoreService expeditionScoreService;
   private final BossAttemptIdempotencyService attemptIdempotencyService;
-  private final ExpeditionAttemptCompletionService expeditionAttemptCompletionService;
   private final ApplicationEventPublisher eventPublisher;
   private final ConcurrentMap<ProblemCacheKey, CachedProblem> cache = new ConcurrentHashMap<>();
   private final Set<ProblemGenerationKey> generationsInFlight = ConcurrentHashMap.newKeySet();
@@ -115,8 +115,8 @@ public class BossService {
       EndlessPregenService pregenService,
       BossProblemReviewRepository reviewRepository,
       ExpeditionRunService expeditionRunService,
+      ExpeditionScoreService expeditionScoreService,
       BossAttemptIdempotencyService attemptIdempotencyService,
-      ExpeditionAttemptCompletionService expeditionAttemptCompletionService,
       ApplicationEventPublisher eventPublisher) {
     this.graphClient = graphClient;
     this.passiveProfileService = passiveProfileService;
@@ -129,8 +129,8 @@ public class BossService {
     this.pregenService = pregenService;
     this.reviewRepository = reviewRepository;
     this.expeditionRunService = expeditionRunService;
+    this.expeditionScoreService = expeditionScoreService;
     this.attemptIdempotencyService = attemptIdempotencyService;
-    this.expeditionAttemptCompletionService = expeditionAttemptCompletionService;
     this.eventPublisher = eventPublisher;
   }
 
@@ -202,12 +202,11 @@ public class BossService {
             userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, false, kc);
     ExpeditionProblemPolicy policy = expeditionBinding.policy();
     int progression = policy == null ? request.stage() : policy.stage();
-    Integer requestedDifficulty = request.difficulty();
-    if (policy != null) requestedDifficulty = policy.difficulty();
+    Integer requestedDifficulty = policy == null ? null : Integer.valueOf(policy.difficulty());
     int difficulty = computeTargetDifficulty(userId, kc, progression, requestedDifficulty);
     request = applyExpeditionPolicy(request, policy, difficulty);
+    int effectiveStage = request.stage();
     String expeditionRunId = expeditionBinding.runId();
-    int difficulty = computeTargetDifficulty(userId, kc, request.stage());
     boolean objectivePracticeRequested = isObjectivePracticeRequest(request);
     List<MainlinePracticeQuestion> objectiveQuestions =
         objectivePracticeRequested || (expeditionRunId != null && !hasCourseProgrammingQuestion(kc))
@@ -276,7 +275,7 @@ public class BossService {
     if (preferObjectivePractice) {
       Optional<BossInternalProblem> objective =
           objectiveQuestions.stream()
-              .map(question -> toObjectiveBossProblem(question, request.stage(), difficulty))
+              .map(question -> toObjectiveBossProblem(question, effectiveStage, difficulty))
               .filter(problem -> !issuedFingerprints.contains(questionFingerprint(problem)))
               .findFirst();
       if (objective.isPresent()) {
@@ -419,6 +418,15 @@ public class BossService {
     try {
       BossInternalProblem fromGraph;
       try {
+        if (expeditionRunId != null) {
+          expeditionRunService.reserveProblemGeneration(
+              userId,
+              expeditionRunId,
+              request.expeditionNodeId(),
+              chapter,
+              false,
+              kc);
+        }
         fromGraph =
             graphClient.requestProblem(
                 userId,
@@ -642,8 +650,13 @@ public class BossService {
     ExpeditionRequestBinding expeditionBinding =
         validateExpeditionRun(
             userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, true, kc);
+    ExpeditionProblemPolicy policy = expeditionBinding.policy();
+    int progression = policy == null ? request.stage() : policy.stage();
+    Integer requestedDifficulty = request.difficulty();
+    if (policy != null) requestedDifficulty = policy.difficulty();
+    int difficulty = computeTargetDifficulty(userId, kc, progression, requestedDifficulty);
+    request = applyExpeditionPolicy(request, policy, difficulty);
     String expeditionRunId = expeditionBinding.runId();
-    int difficulty = computeTargetDifficulty(userId, kc, request.stage());
     if (isObjectivePracticeRequest(request)
         || (expeditionBinding.runId() != null
             && !hasCourseProgrammingQuestion(kc)
@@ -774,9 +787,16 @@ public class BossService {
       String expeditionNodeId,
       Long userId) {
     String kc = resolveKc(chapter, preferredKc);
-    int difficulty = computeTargetDifficulty(userId, kc, stage == null ? 1 : stage);
-    String activeRunId =
-        validateExpeditionRun(userId, expeditionRunId, expeditionNodeId, chapter, true, kc).runId();
+    ExpeditionRequestBinding expeditionBinding =
+        validateExpeditionRun(userId, expeditionRunId, expeditionNodeId, chapter, true, kc);
+    ExpeditionProblemPolicy policy = expeditionBinding.policy();
+    Integer effectiveStage = policy == null ? stage : policy.stage();
+    Integer effectiveRequestedDifficulty = policy == null ? requestedDifficulty : policy.difficulty();
+    String effectiveKind = policy == null ? preferredKind : policy.challengeKind();
+    String effectiveArenaLevel = policy == null ? arenaLevel : null;
+    int progression = effectiveStage == null ? 1 : effectiveStage;
+    int difficulty = computeTargetDifficulty(userId, kc, progression, effectiveRequestedDifficulty);
+    String activeRunId = expeditionBinding.runId();
     return activeRunId == null
         ? pregenService.getPrefetchStatus(
             userId, chapter, effectiveStage, kc, difficulty, effectiveKind, effectiveArenaLevel, null)
@@ -834,6 +854,7 @@ public class BossService {
           request.arenaLevel(),
           difficulty,
           problem,
+          null,
           null);
     } else {
       return pregenService.persistConsumed(
@@ -990,6 +1011,8 @@ public class BossService {
           recordVerifiedExpeditionAttempt(
               userId,
               runId,
+              expeditionBinding.map(EndlessPregenService.ExpeditionProblemBinding::nodeId).orElse(null),
+              bossPhaseForAttempt,
               problem,
               attemptFingerprint,
               graphResult,
@@ -1147,7 +1170,7 @@ public class BossService {
       BossProblemRequest request, ExpeditionProblemPolicy policy, int targetDifficulty) {
     if (policy == null) return request;
     return new BossProblemRequest(
-        Math.min(4, targetDifficulty),
+        policy.stage(),
         request.kcCode(),
         targetDifficulty,
         request.preferredKc(),
@@ -1219,6 +1242,8 @@ public class BossService {
   private ExpeditionScoreService.VerifiedAttemptResult recordVerifiedExpeditionAttempt(
       Long userId,
       String runId,
+      String nodeId,
+      Integer bossPhase,
       BossInternalProblem problem,
       String attemptFingerprint,
       BossEvaluateResultDto result,
@@ -1230,13 +1255,28 @@ public class BossService {
     }
     if (!masteryEligible) {
       return expeditionScoreService.recordSettlementEvidence(
-          userId, runId, problem.problemId(), attemptFingerprint, result.passed());
+          userId,
+          runId,
+          nodeId,
+          bossPhase,
+          problem.problemId(),
+          attemptFingerprint,
+          result.passed());
     }
     return expeditionScoreService.recordVerifiedAttempt(
-        userId, runId, problem.problemId(), attemptFingerprint, result.passed(), score, event);
+        userId,
+        runId,
+        nodeId,
+        bossPhase,
+        problem.problemId(),
+        attemptFingerprint,
+        result.passed(),
+        score,
+        event);
   }
 
-  private record ExpeditionRequestBinding(String runId, Integer bossPhase) {}
+  private record ExpeditionRequestBinding(
+      String runId, Integer bossPhase, ExpeditionProblemPolicy policy) {}
 
   static String questionFingerprint(BossInternalProblem problem) {
     try {
@@ -1468,7 +1508,12 @@ public class BossService {
 
   /** Boss 目标难度复用 Twin 的 KC 规则；数据缺失或聚合故障时回到 stage 难度。 */
   int computeTargetDifficulty(Long userId, String anchorKc, int stage) {
-    int fallback = clampDifficulty(stage);
+    return computeTargetDifficulty(userId, anchorKc, stage, null);
+  }
+
+  int computeTargetDifficulty(
+      Long userId, String anchorKc, int stage, Integer requestedProgression) {
+    int fallback = clampDifficulty(requestedProgression == null ? stage : requestedProgression);
     if (userId == null || anchorKc == null) return fallback;
     try {
       Integer recommended = learnerTwinService.recommendedDifficulty(userId, anchorKc);

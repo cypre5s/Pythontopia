@@ -61,7 +61,6 @@ class FeynmanJudgeServiceTest {
   private final JudgeWorkerPool judgeWorkerPool = mock(JudgeWorkerPool.class);
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final JudgeCaseEvaluator caseEvaluator = new JudgeCaseEvaluator(sandbox, objectMapper);
-  private final JudgeWorkerPool judgeWorkerPool = new JudgeWorkerPool();
 
   private final FeynmanJudgeService service =
       new FeynmanJudgeService(
@@ -338,7 +337,8 @@ class FeynmanJudgeServiceTest {
   void sampleFallbackFailureIsNotDescribedAsHiddenCase() {
     givenSession("TAUGHT", 101L);
     givenProducedCode("print(1)");
-    givenSampleCase("2\n", SECRET_EXPECTED);
+    givenPublicCase("2\n", SECRET_EXPECTED);
+    givenFailureClaim();
     when(sandbox.name()).thenReturn("subprocess");
     when(sandbox.run(eq("print(1)"), any(JudgeTestCase.class)))
         .thenReturn(new SandboxRunResult(false, 0, "1\n", "", 8, null));
@@ -370,6 +370,7 @@ class FeynmanJudgeServiceTest {
     givenSession("TAUGHT", 101L);
     givenProducedCode("print(4242)");
     givenHiddenCase("2\n", SECRET_EXPECTED);
+    when(jdbc.update(PASS_CLAIM_SQL, 10L)).thenReturn(1);
     when(sandbox.name()).thenReturn("subprocess");
     when(sandbox.run(eq("print(4242)"), any(JudgeTestCase.class)))
         .thenReturn(new SandboxRunResult(false, 0, SECRET_EXPECTED + "\n", "", 8, null));
@@ -456,6 +457,7 @@ class FeynmanJudgeServiceTest {
   void answerKeyInProducedCodeIsStillRejected() {
     givenSession("TAUGHT", 101L);
     givenProducedCode("print(ANSWER_KEY)");
+    givenFailureClaim();
 
     Verdict verdict = service.judge(7L, 10L);
 

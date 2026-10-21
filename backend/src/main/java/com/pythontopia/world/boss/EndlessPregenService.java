@@ -636,11 +636,37 @@ public class EndlessPregenService {
       BossInternalProblem problem,
       String expeditionRunId,
       String expeditionNodeId) {
+    return persistConsumed(
+        userId,
+        chapter,
+        problem == null ? 1 : problem.stage(),
+        kcCode,
+        kind,
+        arenaLevel,
+        difficulty,
+        problem,
+        expeditionRunId,
+        expeditionNodeId);
+  }
+
+  /** Persist a displayed question with its authoritative stage and expedition node binding. */
+  @Transactional
+  public BossInternalProblem persistConsumed(
+      Long userId,
+      int chapter,
+      int stage,
+      String kcCode,
+      String kind,
+      String arenaLevel,
+      Integer difficulty,
+      BossInternalProblem problem,
+      String expeditionRunId,
+      String expeditionNodeId) {
     if (userId == null || problem == null || problem.problemId() == null) {
       return problem;
     }
-    validateStage(problem.stage());
-    if (!matchesProblemContext(problem, chapter, problem.stage(), kcCode, difficulty)) {
+    validateStage(stage);
+    if (!matchesProblemContext(problem, chapter, stage, kcCode, difficulty)) {
       throw problemContextMismatch();
     }
     if (expeditionRunId != null) {
@@ -652,19 +678,19 @@ public class EndlessPregenService {
           findOpenExpeditionProblem(userId, expeditionRunId, expeditionNodeId, bossPhase);
       if (open.isPresent()) {
         BossInternalProblem current = open.orElseThrow();
-        if (!matchesProblemContext(current, chapter, problem.stage(), kcCode, difficulty)) {
+        if (!matchesProblemContext(current, chapter, stage, kcCode, difficulty)) {
           throw problemContextMismatch();
         }
         return current;
       }
       insert(
-          userId, chapter, problem.stage(), kcCode, kind, arenaLevel, difficulty, problem,
+          userId, chapter, stage, kcCode, kind, arenaLevel, difficulty, problem,
           "CONSUMED", expeditionRunId, expeditionNodeId);
       return problem;
     }
     try {
       insert(
-          userId, chapter, problem.stage(), kcCode, kind, arenaLevel, difficulty, problem,
+          userId, chapter, stage, kcCode, kind, arenaLevel, difficulty, problem,
           "CONSUMED", null, null);
       return problem;
     } catch (BusinessException exception) {
