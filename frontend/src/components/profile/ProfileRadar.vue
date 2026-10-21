@@ -17,7 +17,7 @@ function displayLabel(dim: ProfileDimensionDto): string {
   return FRIENDLY_LABELS[dim.key] ?? dim.label;
 }
 
-const SIZE = 320;
+const SIZE = 360;
 const CENTER = SIZE / 2;
 const RADIUS = 120;
 const RINGS = [0.25, 0.5, 0.75, 1];
@@ -25,6 +25,7 @@ const RINGS = [0.25, 0.5, 0.75, 1];
 interface Axis {
   label: string;
   score: number | null;
+  anchor: 'start' | 'middle' | 'end';
   x: number;
   y: number;
   lx: number;
@@ -46,7 +47,8 @@ const axes = computed<Axis[]>(() => {
     const score = dim.confidence >= 0.3 ? Math.max(0, Math.min(1, dim.score)) : null;
     const tip = pointAt(angle, RADIUS * (score ?? 0));
     const label = pointAt(angle, RADIUS + 22);
-    return { label: displayLabel(dim), score, x: tip.x, y: tip.y, lx: label.x, ly: label.y };
+    const anchor = label.x < CENTER - 8 ? 'start' : label.x > CENTER + 8 ? 'end' : 'middle';
+    return { label: displayLabel(dim), score, anchor, x: tip.x, y: tip.y, lx: label.x, ly: label.y };
   });
 });
 
@@ -121,7 +123,7 @@ function axisLine(a: Axis): { x2: number; y2: number } {
         :x="a.lx"
         :y="a.ly"
         class="radar__label"
-        text-anchor="middle"
+        :text-anchor="a.anchor"
         dominant-baseline="middle"
       >{{ a.label }}<title>{{ a.score === null ? `${a.label}：尚未评估` : `${a.label}：${Math.round(a.score * 100)}%` }}</title></text>
     </svg>

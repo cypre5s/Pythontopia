@@ -24,6 +24,7 @@ import { prepareTest } from '@/api/chapterTest';
 import { getStageDetail } from '@/api/mainline';
 import type { StageDetailDto } from '@/api/mainline';
 import type { StageTaskProgress } from '@/components/mainline-stage/stageTypes';
+import { kcDisplayName } from '@/data/kcNames';
 
 const route = useRoute();
 const router = useRouter();
@@ -391,7 +392,7 @@ onMounted(load);
                 {{ stage.title }}
               </h2>
               <p class="stage-learn__toc-kc">
-                {{ stage.kcCodes.join(' · ') || '—' }}
+                {{ stage.kcCodes.map(kcDisplayName).join(' · ') || '—' }}
               </p>
             </header>
             <ul class="stage-learn__toc-list">

@@ -1,16 +1,19 @@
 <script setup lang="ts">
 // RouterView 包在 Suspense 内并叠加全局错误兜底：chunk 加载失败时给友好 toast，避免纯白屏。
-import { onBeforeUnmount, onErrorCaptured, onMounted, ref } from 'vue';
+import { defineAsyncComponent, onBeforeUnmount, onErrorCaptured, onMounted, ref } from 'vue';
 import { RouterView, useRouter } from 'vue-router';
 import AppToast from '@/components/system/AppToast.vue';
 import DialogTree from '@/components/game/DialogTree.vue';
-import PerfHud from '@/components/hud/PerfHud.vue';
 import { useSessionStore } from '@stores/session';
 import { useToastStore } from '@stores/toast';
+import { useGameSettingsStore } from '@stores/gameSettings';
+
+const PerfHud = defineAsyncComponent(() => import('@/components/hud/PerfHud.vue'));
 
 const router = useRouter();
 const session = useSessionStore();
 const toast = useToastStore();
+const gameSettings = useGameSettingsStore();
 const fatalError = ref<string | null>(null);
 
 // 这些路由自身用 watch/computed 响应式处理 query/param 变化（如 /library?pageId=、/lecture/:chapter），
@@ -54,12 +57,20 @@ function onDialogNavigate(e: Event): void {
   void router.push(route);
 }
 
+function onPerfHudKey(event: KeyboardEvent): void {
+  if (event.key !== 'F3') return;
+  event.preventDefault();
+  gameSettings.updateDisplay({ showPerfHud: !gameSettings.display.showPerfHud });
+}
+
 onMounted(() => {
   window.addEventListener('pythontopia:dialog-navigate', onDialogNavigate);
+  window.addEventListener('keydown', onPerfHudKey);
 });
 
 onBeforeUnmount(() => {
   window.removeEventListener('pythontopia:dialog-navigate', onDialogNavigate);
+  window.removeEventListener('keydown', onPerfHudKey);
 });
 </script>
 
@@ -101,8 +112,8 @@ onBeforeUnmount(() => {
   </Suspense>
   <AppToast />
   <DialogTree />
-  <!-- 全局性能诊断框（F3 切换，默认关闭）：单例挂在根组件，覆盖所有路由（含 Phaser 游戏页）。 -->
-  <PerfHud />
+  <!-- F3 首次打开时才加载诊断面板与 Phaser 适配器，避免登录页预加载游戏引擎。 -->
+  <PerfHud v-if="gameSettings.display.showPerfHud" />
 </template>
 
 <style scoped>

@@ -24,6 +24,7 @@ from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
 from pythontopia_graph.main import app
 from pythontopia_graph.schemas.feynman import (
     FeynmanBugExposureInput,
+    FeynmanLearnerContext,
     FeynmanTuteeInput,
     Misconception,
     Turn,
@@ -34,9 +35,11 @@ class JsonProvider(LlmProvider):
     def __init__(self, payload: dict) -> None:
         self.payload = payload
         self.calls = 0
+        self.messages: list[dict[str, str]] | None = None
 
     async def chat(self, messages, **kwargs):  # type: ignore[override]
         self.calls += 1
+        self.messages = messages
         return LlmResponse(content_json=self.payload)
 
     async def chat_stream(self, messages, **kwargs) -> AsyncIterator[str]:  # type: ignore[override]
@@ -61,7 +64,7 @@ def _input(
 ) -> FeynmanTuteeInput:
     return FeynmanTuteeInput(
         kc_code="PY43-KC-021",
-        misconceptions=misconceptions or [_misconception()],
+        misconceptions=[_misconception()] if misconceptions is None else misconceptions,
         student_teaching=teaching,
     )
 
@@ -111,6 +114,48 @@ async def test_wrong_teaching_does_not_resolve_misconception() -> None:
     assert out.produced_code is None
 
 
+async def test_no_mistake_history_can_teach_topic_without_fabricating_evidence() -> None:
+    provider = JsonProvider(
+        {
+            "reply_md": "你的解释抓住了 for 循环逐项遍历的意思。能再说明循环变量何时更新吗？",
+            "updated_misconceptions": [],
+            "produced_code": "print('不应进入判题')",
+        }
+    )
+    inp = FeynmanTuteeInput(
+        kc_code="PY43-KC-031",
+        topic="for 循环与遍历",
+        misconceptions=[],
+        student_teaching="for 循环会依次取出可迭代对象里的元素。",
+    )
+
+    out = await FeynmanTuteeAgent(provider).step(inp)
+
+    assert provider.calls == 1
+    assert out.reply_md.startswith("你的解释抓住了")
+    assert out.updated_misconceptions == []
+    assert out.produced_code is None
+    assert "for 循环与遍历" in " ".join(m["content"] for m in provider.messages or [])
+    assert "for 循环会依次取出可迭代对象里的元素。" in " ".join(
+        message["content"] for message in provider.messages or []
+    )
+
+
+async def test_no_mistake_history_provider_failure_keeps_topic_teaching_open() -> None:
+    out = await FeynmanTuteeAgent(RaisingProvider()).step(
+        FeynmanTuteeInput(
+            kc_code="PY43-KC-031",
+            topic="for 循环与遍历",
+            misconceptions=[],
+            student_teaching="for 循环会依次取出可迭代对象里的元素。",
+        )
+    )
+
+    assert "for 循环与遍历" in out.reply_md
+    assert out.updated_misconceptions == []
+    assert out.produced_code is None
+
+
 async def test_provider_failure_uses_rule_fallback() -> None:
     provider = RaisingProvider()
 
@@ -119,6 +164,35 @@ async def test_provider_failure_uses_rule_fallback() -> None:
     assert "累加" in out.reply_md or "range" in out.reply_md
     assert out.updated_misconceptions[0].tag == "off_by_one_range"
     assert out.updated_misconceptions[0].resolved is False
+
+
+async def test_no_mistake_history_allows_tutee_dialog_without_creating_misconceptions() -> None:
+    provider = JsonProvider(
+        {
+            "reply_md": "我听懂了 for 会逐个取出可迭代对象中的元素。能用一个小例子带我走一遍吗？",
+            "updated_misconceptions": [],
+            "produced_code": "print(1)",
+        }
+    )
+
+    out = await FeynmanTuteeAgent(provider).step(
+        _input(misconceptions=[], teaching="for 会逐个取出可迭代对象中的元素。")
+    )
+
+    assert provider.calls == 1
+    assert out.reply_md.startswith("我听懂了 for")
+    assert out.updated_misconceptions == []
+    assert out.produced_code is None
+
+
+async def test_no_mistake_history_has_a_useful_rule_fallback() -> None:
+    out = await FeynmanTuteeAgent(RaisingProvider()).step(
+        _input(misconceptions=[], teaching="for 会逐个取出可迭代对象中的元素。")
+    )
+
+    assert "例子" in out.reply_md
+    assert out.updated_misconceptions == []
+    assert out.produced_code is None
 
 
 async def test_teaching_is_evaluated_by_llm_for_arbitrary_tag() -> None:
@@ -244,8 +318,8 @@ async def test_expose_bug_canned_tag_marks_real_bug_line() -> None:
 async def test_expose_bug_unknown_tag_uses_llm_and_diffs() -> None:
     provider = JsonProvider(
         {
-            "buggy_code": "x = 1\nprint(x + '1')",
-            "fixed_code": "x = 1\nprint(x + 1)",
+            "buggy_code": "x = 1\ny = 2\nz = x + '1'\nprint(x)\nprint(y)\nprint(z)",
+            "fixed_code": "x = 1\ny = 2\nz = x + 1\nprint(x)\nprint(y)\nprint(z)",
             "hint_md": "类型对不上",
         }
     )
@@ -259,7 +333,7 @@ async def test_expose_bug_unknown_tag_uses_llm_and_diffs() -> None:
 
     assert provider.calls == 1
     assert out.source == "real_misconception"
-    assert out.bug_line_indices == [1]
+    assert out.bug_line_indices == [2]
     assert "x + '1'" in (out.buggy_code or "")
 
 
@@ -271,6 +345,55 @@ async def test_expose_bug_without_history_falls_back_to_generic() -> None:
     assert out.source == "generic_beginner_bug"
     assert out.buggy_code is not None
     assert out.bug_line_indices  # 至少标出一行 bug
+
+
+async def test_generic_generation_prefers_selected_topic_and_learner_level() -> None:
+    provider = JsonProvider(
+        {
+            "buggy_code": 'text = "A"\ncode = ord(text) + 1\nprint("字符", text)\n'
+            'print("编码", code)\nif code < 128:\n    print("ASCII")\nelse:\n'
+            '    print("其他编码")',
+            "fixed_code": 'text = "A"\ncode = ord(text)\nprint("字符", text)\n'
+            'print("编码", code)\nif code < 128:\n    print("ASCII")\nelse:\n'
+            '    print("其他编码")',
+            "hint_md": "ord() 返回字符本身还是下一个字符的编码？",
+        }
+    )
+
+    out = await FeynmanTuteeAgent(provider).expose_bug(
+        FeynmanBugExposureInput(
+            kc_code="PY43-KC-020",
+            topic="Unicode 编码与 ord 函数",
+            misconceptions=[],
+            learner_context=FeynmanLearnerContext(level="advanced", response_style="practice"),
+        )
+    )
+
+    assert provider.calls == 1
+    assert "ord(text)" in (out.buggy_code or "")
+    assert out.difficulty == "hard"
+    assert out.generated_by_ai is True
+    assert "Unicode 编码与 ord 函数" in " ".join(
+        message["content"] for message in provider.messages or []
+    )
+    assert "advanced" in " ".join(message["content"] for message in provider.messages or [])
+    assert out.bug_line_indices == bug_line_indices(out.buggy_code or "", out.fixed_code or "")
+
+
+def test_generic_llm_rejects_short_or_invalid_code_before_it_can_be_shared() -> None:
+    agent = FeynmanTuteeAgent(RaisingProvider())
+
+    out = agent._parse_bug_llm(
+        {
+            "buggy_code": "x = 1\nprint(x)",
+            "fixed_code": "x = 2\nprint(x)",
+            "hint_md": "看赋值。",
+        },
+        "topic_specific_bug",
+        "generic_beginner_bug",
+    )
+
+    assert out is None
 
 
 async def test_expose_bug_non_courseware_concept_uses_topic_in_prompt() -> None:
@@ -290,8 +413,8 @@ async def test_expose_bug_non_courseware_concept_uses_topic_in_prompt() -> None:
 
     provider = CapturingProvider(
         {
-            "buggy_code": "import re\nm = re.match('a', 'ba')\nprint(m.group())",
-            "fixed_code": "import re\nm = re.search('a', 'ba')\nprint(m.group())",
+            "buggy_code": "import re\npattern = 'a'\ntext = 'ba'\nm = re.match(pattern, text)\nprint('input', text)\nprint('found', m is not None)\nif m:\n    print(m.group())",
+            "fixed_code": "import re\npattern = 'a'\ntext = 'ba'\nm = re.search(pattern, text)\nprint('input', text)\nprint('found', m is not None)\nif m:\n    print(m.group())",
             "hint_md": "match 从头匹配还是任意位置？",
         }
     )
@@ -380,6 +503,17 @@ def test_teaching_prompt_keeps_evaluation_voice() -> None:
     assert "中性" not in system
     user = [m for m in messages if m["role"] == "user"][-1]["content"]
     assert "range(1, 6)" in user  # 教学原文作为 user 轮
+
+
+def test_no_mistake_prompt_keeps_evidence_empty_and_uses_teaching_mode() -> None:
+    agent = FeynmanTuteeAgent(RaisingProvider())
+    messages = _input(misconceptions=[], teaching="列表的 append 会原地修改列表。")
+    prompt = agent._messages(messages)
+    system = "\n".join(m["content"] for m in prompt if m["role"] == "system")
+
+    assert "自主讲题" in system
+    assert "不得编造" in system
+    assert "保持为空" in system
 
 
 def test_kc_and_misconceptions_stay_out_of_system_messages() -> None:

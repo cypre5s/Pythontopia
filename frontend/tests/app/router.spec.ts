@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createPinia, setActivePinia } from 'pinia';
-import { router, toSafeInternalPath } from '@/app/router';
+import { router } from '@/app/router';
+import { loginDestination, toSafeInternalPath } from '@/app/landing';
 import { useSessionStore } from '@stores/session';
 import { useMainlineStore } from '@stores/mainline';
 import { useToastStore } from '@stores/toast';
@@ -144,6 +145,66 @@ describe('/admin 管理后台路由与角色边界', () => {
 
     expect(router.currentRoute.value.path).toBe('/admin/operations');
     expect(router.currentRoute.value.name).toBe('admin-operations');
+  });
+
+  it('redirects an authenticated ADMIN away from student world APIs', async () => {
+    const session = useSessionStore();
+    session.user = {
+      id: 1,
+      username: 'admin',
+      displayName: '管理员',
+      role: 'ADMIN',
+    };
+    session.token = 'test-token';
+    session.expiresAt = new Date(Date.now() + 3_600_000).toISOString();
+
+    await router.push('/world');
+
+    expect(router.currentRoute.value.name).toBe('admin-operations');
+  });
+
+  it('root and authenticated /login land ADMIN in the admin operations page', async () => {
+    const session = useSessionStore();
+    session.user = {
+      id: 1,
+      username: 'admin',
+      displayName: '管理员',
+      role: 'ADMIN',
+    };
+    session.token = 'test-token';
+    session.expiresAt = new Date(Date.now() + 3_600_000).toISOString();
+
+    await router.push('/');
+    expect(router.currentRoute.value.name).toBe('admin-operations');
+
+    await router.push('/login');
+    expect(router.currentRoute.value.name).toBe('admin-operations');
+  });
+
+  it('keeps non-admin root and /login defaults on the world page', async () => {
+    const session = useSessionStore();
+    session.user = {
+      id: 12,
+      username: 'student',
+      displayName: '学生',
+      role: 'STUDENT',
+    };
+    session.token = 'test-token';
+    session.expiresAt = new Date(Date.now() + 3_600_000).toISOString();
+
+    await router.push('/');
+    expect(router.currentRoute.value.name).toBe('world');
+
+    await router.push('/login');
+    expect(router.currentRoute.value.name).toBe('world');
+  });
+
+  it('does not send an ADMIN back to a student redirect after login', () => {
+    expect(loginDestination('ADMIN', '/world')).toBe('/admin');
+    expect(loginDestination('ADMIN', '/admin/users')).toBe('/admin/users');
+    expect(loginDestination('ADMIN', '//evil.example')).toBe('/admin');
+    expect(loginDestination('STUDENT', '/world?welcome=1')).toBe('/world?welcome=1');
+    expect(loginDestination('STUDENT', undefined)).toBe('/world');
   });
 });
 

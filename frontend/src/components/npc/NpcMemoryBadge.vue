@@ -2,6 +2,7 @@
 import { computed } from 'vue';
 import { useReducedMotion } from '@/composables/useReducedMotion';
 import type { MemoryItemDto } from '@/api/npc';
+import { kcDisplayName } from '@/data/kcNames';
 
 const props = defineProps<{
   npcName: string;
@@ -94,7 +95,7 @@ function formatDate(createdAt: string | null): string {
               :key="kcCode"
               class="npc-memory-badge__kc"
             >
-              {{ kcCode }}
+              {{ kcDisplayName(kcCode) }}
             </span>
           </div>
 

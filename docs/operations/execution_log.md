@@ -1209,3 +1209,27 @@
 - 原 Dockerfile 全镜像构建因构建容器需要的本机 `127.0.0.1:7892` 未监听而未完成。复用当前生产 backend 基础镜像，只替换通过 Maven 构建的新 JAR；保留旧 image tag `pythontopia/backend:rollback-20261020-191037` 与上一 release，Compose `--no-deps backend` 只重建后端。同步更新当前 release 的 `backend.tar` 与 SHA-256 清单，整份清单复验通过；旧 backend tar 和旧清单副本留在 `backups/20261020-191037/`。新后端健康，Postgres 数据卷和其余服务未重建。
 - 新 backend 上线后，工坊真实 SSE 定向验收 1/1；公网浏览器全套 28/28 通过（4.0 分钟）：认证/会话、town_hub、主线键盘导航、指南、真实 AI SSE、工坊流式回答、`input函数`/`for循环`/`列表` RAG 页码证据、AC/WA/RE 判题、复盘/画像、深链刷新和安全错误响应。
 - E2E 使用既有 QA 账号；生成的工坊对话、意图路由事件和判题提交保留在该 QA 账号下。未运行完整 Maven suite；部署镜像由当前生产基础层叠加新 JAR 构建，Dockerfile 的 apt 全镜像构建未验证。
+
+## 2026-10-21 — 费曼无错题自主讲题与 ECS 发布
+
+- 费曼无历史错题时可围绕所选课程 KC 中文主题自主讲解或讨论题目。Java 将当前学生讲解作为不可信输入传给 Graph，并只传递最小画像等级/偏好；空误区与 evidence 保持为空，丢弃模型代码，跳过错题判题和掌握度回流。开始新一轮时先清空上一轮本地对话/代码/判题状态。无错题找茬按 KC/难度复用共享样例；只保存 Graph 通过编译、长度、同位行 diff 校验的 AI 通用课程样例，不保存学生标识或真实错误。新增 Flyway V227 共享 bug 样例表。
+- 全量验证：frontend 280 个测试文件 / 2,686 项通过，typecheck 与 lint 通过；Graph 1,968 passed / 3 skipped，Ruff 通过；Maven 293 个测试类 / 1,782 项通过、0 failures/errors/skips，BUILD SUCCESS。新增 PostgreSQL 仓储集成测试在空库应用至 V227 并验证写入、去重、难度选择与使用计数。
+- 构建离线包 `pythontopia-web-20261020T184202Z.tar.gz`（1,563,214,166 bytes，SHA-256 `9005de67731269e8ee6fbc60a680b1c13bd897eb4b510d05cbdaccd98caffc86`）；完整归档结构、4,351 个文件 SHA-256、五个 Docker 镜像清单校验通过。构建 worktree 没有 PDF，故跳过本地媒体检查；候选字幕在 ECS 上先验并由安装器再次校验通过（7 PDFs、34 videos、34 transcripts、848 segments）。
+- 推送提交 `f2a692ef` 至 `origin/codex/admin-profile-kc-video-rag`。ECS 安装为 `/opt/pythontopia/releases/20261021-024928`，Flyway 当前版本 227；保留 `deploy_pytopia_pg`（创建时间未变）、上一版本 `20261021-014723` 和 444 KB pg_dump 备份。HTTPS/HTTP 跳转、backend/Graph/RAG readiness 与七个容器健康通过。生产 Chromium 新注册无练习历史学生、选择“for 循环与遍历”，真实 DeepSeek 往返成功；误区数组为空、未生成代码、未请求 judge，console/pageerror/失败请求为 0，截图 `/tmp/feynman-no-mistake.png`。两个临时账号及其 Feynman 会话已按确切用户名删除。
+- 清理本次 incoming 重复归档及两个不再被 current/previous 指向的旧 release；仅保留当前版 `20261021-024928`、回滚版 `20261021-014723` 和数据库卷。ECS 根盘剩余 8.8 GB。预检提示可用内存约 3.5 GB 低于 4 GB 基线、aliyun CLI 缺失；公网 HTTP/HTTPS 实测可达，部署后七个服务均 healthy。
+
+## 2026-10-21 — 管理员直达路由与画像访谈闭环
+
+- 已登录 ADMIN 直接访问 `/world` 原会挂载学生专属请求并产生 403；路由回归先 RED 后 GREEN，现转入 `/admin/operations`。无画像学生打开访谈时，右侧 PyPanel 在 flex 列中被压缩，后续空态卡片与访谈溢出内容重叠并截走点击；浏览器 E2E 先 RED 后 GREEN，给访谈面板设 `flex-shrink: 0` 后发送按钮可操作。
+- 真实本机 DeepSeek 首次暴露 ProfileAgent 输出协议不一致：提示词要求直接输出 ProfileDraft，而解析器读取顶层 `profile_draft`；对齐外层 JSON 键后又发现嵌套 `learning_goal` 类型不明确。提示词现列出所有嵌套字段、类型、枚举和边界，并要求未知资料置 null；契约测试先 RED 后 GREEN。
+- 真实 Chromium + DeepSeek 使用临时学生完成画像访谈、点击“完成访谈”，接口均返回 200；后续画像 API 读回 `CS / EXAM / 编程 1 年 / Python Lv.2 / 每日 30 分钟`，页面显示人类可读专业/目标卡片。console、pageerror、失败请求和 HTTP 错误均为 0；截图 `/tmp/pythontopia-profile-interview-final.png`。临时用户及级联数据删除后精确用户名计数为 0。
+- 浏览器画像布局回归 E2E 1/1；`ProfilePage.spec.ts` 5/5，路由定向测试通过，前端全量 Vitest 280 文件 / 2,687 项通过，typecheck、lint 通过；Graph 全量 1,969 passed / 3 skipped、Ruff 通过；费曼定向回归 frontend 12、Graph 34、后端 `FeynmanSessionServiceTest` 通过。
+- 前一次前端全量与多项检查并行时，280 文件 / 2,687 项断言均通过但 Vitest 因 ClassroomDetail worker teardown RPC 竞争以 1 个未处理错误退出；该文件单独运行 13/13 通过，随后串行重跑全量无错误。
+
+## 2026-10-21 — 管理台/画像修复发布至 ECS
+
+- 从已推送的 `codex/admin-profile-kc-video-rag` 提交 `8d470421` 本地构建归档 `pythontopia-web-20261020T193208Z.tar.gz`，大小 1,563,229,582 bytes，SHA-256 `4ac048a2f11526a404d59c635d02352d06098907b8044bfebee6e178fc76c2c3`。归档目录结构与内容白名单、五个 `docker save` 镜像、4,353 个文件 SHA-256 均验证通过。构建机缺少被 gitignore 的 PDF/视频，故跳过本地媒体校验；ECS 预检及安装器两次验证均确认 7 PDF、34 视频、34 transcript、848 段字幕。
+- ECS 预检复跑通过 32 项、0 失败；首次运行曾瞬时报告 `PYT_RAG_ADMIN_TOKEN` 变量名缺失，随即复跑和精确解析均通过，未修改生产 `.env`。预检警告主机内存 3,495 MB 低于 4 GB 基线、未安装 aliyun CLI；公网 HTTP 实测可达。scp 上传耗时约数分钟，远端 SHA-256 与本地一致。
+- 安装器在 `/opt/pythontopia/releases/20261021-033818` 保存切换前数据库备份（448 KB）、生产 `.env` 与 Nginx/Compose 配置，复用 `deploy_pytopia_pg`，没有删除或重建数据卷。七个服务均 healthy，runtime init exit 0，nginx -t、HTTP 308→HTTPS 和 HTTPS `/healthz` 200 通过；current 指向新版本，previous 指向 `20261021-024928`。删除唯一上传暂存包 `/tmp/pythontopia-web-20261020T193208Z.tar.gz` 后根盘空余 5.1 GB。
+- 生产 Chromium 无错题费曼往返真实 Graph/DeepSeek：空 misconceptions、无生成代码、无 judge 请求，console/pageerror/失败请求均为 0；截图 `/tmp/feynman-no-mistake.png`。画像访谈真实请求一次填充 4 个维度，Grounding/Safety 通过；finish 与画像读回均为 HTTP 200，页面保存 `CS / EXAM / 1 年 / Python Lv.2 / 每日 30 分钟`，浏览器错误为 0；截图 `/tmp/profile-interview-ecs-final.png`。两个测试学生账号、Feynman 会话、画像与访谈级联记录均已删除并查为 0。
+- 按用户请求新增专用 ADMIN 与 STUDENT 账号，认证 API 登录均 HTTP 200、角色分别为 `ADMIN`/`STUDENT`。以管理员真实登录后直接打开 `/world`，浏览器落到 `/admin/operations`，管理 API 无 4xx、console/pageerror/失败请求均为 0；截图 `/tmp/ecs-admin-operations.png`。随机口令只回传给用户，不写入仓库或运维日志。

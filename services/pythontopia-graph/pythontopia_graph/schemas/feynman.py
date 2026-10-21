@@ -16,8 +16,15 @@ class Misconception(BaseModel):
     resolved: bool = False
 
 
+class FeynmanLearnerContext(BaseModel):
+    level: Literal["beginner", "intermediate", "advanced"] = "beginner"
+    response_style: Literal["examples", "step_by_step", "practice"] = "examples"
+
+
 class FeynmanTuteeInput(BaseModel):
     kc_code: str
+    topic: str | None = None
+    learner_context: FeynmanLearnerContext | None = None
     misconceptions: list[Misconception] = Field(default_factory=list)
     student_teaching: str | None = None
     history: list[Turn] = Field(default_factory=list)
@@ -36,6 +43,7 @@ class FeynmanBugExposureInput(BaseModel):
     # 人类可读的知识点/概念主题（课程 KC 传中文名；课件外概念直接传概念词）。
     # 用于让 LLM 生成「贴该 KC / 该概念」的 bug，而非只按章节泛化；缺省回退到章节主题/kc_code。
     topic: str | None = None
+    learner_context: FeynmanLearnerContext | None = None
     misconceptions: list[Misconception] = Field(default_factory=list)
 
 
@@ -54,3 +62,5 @@ class FeynmanBugExposureOutput(BaseModel):
     # buggy_code 中确属 bug 的 0-based 行号（与 fixed_code 逐行 diff 得出）。
     bug_line_indices: list[int] = Field(default_factory=list)
     hint_md: str = ""
+    difficulty: Literal["easy", "medium", "hard"] = "medium"
+    generated_by_ai: bool = False

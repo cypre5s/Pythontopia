@@ -19,6 +19,7 @@ import { TraceExecutionError } from '@/services/codeTheater/trace';
 import { CODE_THEATER_QUESTS, type CodeTheaterQuest } from '@/data/codeTheater/quests';
 import type { TraceEvent } from '@/services/codeTheater/types';
 import { useCodeTheaterStore } from '@stores/codeTheater';
+import { kcDisplayName } from '@/data/kcNames';
 
 const quests = CODE_THEATER_QUESTS;
 const activeQuestId = ref<string>(quests[0]?.id ?? '');
@@ -233,7 +234,7 @@ onMounted(() => {
       <div class="ct-quest__title">
         <span class="ct-quest__icon">🎯</span>
         <span>{{ activeQuest.title }}</span>
-        <span class="ct-quest__kc">{{ activeQuest.kcCodes.join(' / ') }}</span>
+        <span class="ct-quest__kc">{{ activeQuest.kcCodes.map(kcDisplayName).join(' / ') }}</span>
       </div>
       <p class="ct-quest__prompt">
         {{ activeQuest.prompt }}

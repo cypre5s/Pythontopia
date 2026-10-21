@@ -491,7 +491,7 @@ onMounted(async () => {
             <span class="badge">第 {{ chapterOf(p.kcCode) ?? '?' }} 章</span>
             <span
               class="badge kc"
-              :title="p.kcCode"
+              :title="kcNameOf(p.kcCode)"
             >{{ kcNameOf(p.kcCode) }}</span>
           </span>
           <span :class="['badge difficulty', `diff-${p.difficulty.toLowerCase()}`]">

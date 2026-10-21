@@ -16,7 +16,8 @@ public record RagQueryResponseDto(
     @JsonProperty("retrieval_mode") String retrievalMode,
     String route,
     List<KcEdgeDto> subgraph,
-    @JsonProperty("graph_trace") Map<String, Object> graphTrace) {
+    @JsonProperty("graph_trace") Map<String, Object> graphTrace,
+    @JsonProperty("video_trace") Map<String, Object> videoTrace) {
 
   public RagQueryResponseDto {
     if (hits == null) {
@@ -28,10 +29,13 @@ public record RagQueryResponseDto(
     if (graphTrace == null) {
       graphTrace = Map.of();
     }
+    if (videoTrace == null) {
+      videoTrace = Map.of();
+    }
   }
 
   public RagQueryResponseDto(
       List<RagHitDto> hits, boolean noEvidenceFound, String rewrittenQuery) {
-    this(hits, noEvidenceFound, rewrittenQuery, null, null, List.of(), Map.of());
+    this(hits, noEvidenceFound, rewrittenQuery, null, null, List.of(), Map.of(), Map.of());
   }
 }

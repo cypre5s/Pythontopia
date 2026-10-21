@@ -312,7 +312,7 @@ describe('ProfileRoomPage Learner Twin', () => {
     await flushPromises();
 
     expect(fetchWeeklyReport).toHaveBeenCalled();
-    expect(ui.pendingPrompt).toContain('PY43-KC-001');
+    expect(ui.pendingPrompt).toContain('中国计算机发展成就');
     expect(router.currentRoute.value.path).toBe('/workshop');
 
     await router.push('/profile-room');

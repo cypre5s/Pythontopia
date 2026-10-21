@@ -161,6 +161,20 @@ class RagClientIntegrationTest {
                     "supplemental_hit_ratio": 0.3333,
                     "relation_counts": {"co_occur": 1},
                     "noise_guard": "supplemental_hits_capped_at_top_k_div_3"
+                  },
+                  "video_trace": {
+                    "matches": [
+                      {
+                        "video_id": 7,
+                        "title": "字典操作",
+                        "chapter_no": 5,
+                        "start_sec": 42.0,
+                        "end_sec": 48.0,
+                        "score": 0.42,
+                        "review_status": "machine_generated_unreviewed"
+                      }
+                    ],
+                    "supplemental_page_ids": [11]
                   }
                 }
                 """,
@@ -184,6 +198,7 @@ class RagClientIntegrationTest {
     assertThat(response.subgraph().get(0).relation()).isEqualTo("co_occur");
     assertThat(response.graphTrace()).containsEntry("co_occur_hit_count", 1);
     assertThat(response.graphTrace()).containsEntry("supplemental_hit_limit", 2);
+    assertThat(response.videoTrace()).containsKey("matches");
     assertThat(response.hits().get(0).viaRelation()).isEqualTo("co_occur");
     assertThat(response.hits().get(0).viaPrerequisite()).isFalse();
     server.verify(Duration.ofSeconds(2));

@@ -10,13 +10,32 @@ from pydantic import BaseModel
 from pythontopia_rag.app_state import create_default_state
 from pythontopia_rag.data.loader import DEFAULT_DB_URL, fetch_pages
 from pythontopia_rag.data.page_source import InMemoryPageSource, page_records_to_indexable
+from pythontopia_rag.data.video_transcripts import load_video_segments
 from pythontopia_rag.graph.kc_graph import build_kc_graph_from_chunks
 from pythontopia_rag.index.builder import rebuild_index
 from pythontopia_rag.index.kc_graph import fetch_kc_graph
+from pythontopia_rag.index.video_transcripts import VideoTranscriptIndex
 from pythontopia_rag.routes.embed import router as embed_router
 from pythontopia_rag.routes.query import router as query_router
 
 logger = logging.getLogger(__name__)
+
+
+def _load_video_index() -> VideoTranscriptIndex:
+    index = VideoTranscriptIndex()
+    manifest = os.environ.get(
+        "PYT_COURSEPACK_VIDEO_MANIFEST", "/data/course-pack-43/video_manifest.json"
+    )
+    transcripts = os.environ.get(
+        "PYT_COURSEPACK_VIDEO_TRANSCRIPTS", "/data/course-pack-43/video_transcripts.json"
+    )
+    try:
+        index.build(load_video_segments(manifest, transcripts))
+    except (OSError, ValueError) as exc:
+        logger.warning(
+            "RAG video transcript load failed; video retrieval disabled: %s", type(exc).__name__
+        )
+    return index
 
 
 class HealthResponse(BaseModel):
@@ -61,6 +80,7 @@ async def _self_heal_empty_index(
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     db_url = os.environ.get("PYT_DB_URL", DEFAULT_DB_URL)
+    app.state.rag.video_index = _load_video_index()
     try:
         pages = page_records_to_indexable(fetch_pages(db_url))
     except Exception as exc:  # fail-soft：DB 不可用时仍启动，索引为空

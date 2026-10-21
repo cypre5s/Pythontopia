@@ -42,6 +42,8 @@ public class FeynmanGraphClient {
 
   public Optional<FeynmanOutput> step(
       String kcCode,
+      String topic,
+      LearnerContext learnerContext,
       List<Misconception> misconceptions,
       String studentTeaching,
       List<ConversationTurn> history) {
@@ -58,7 +60,8 @@ public class FeynmanGraphClient {
             .stream().map(GraphTurn::from).toList();
     HttpEntity<FeynmanInput> entity =
         new HttpEntity<>(
-            new FeynmanInput(kcCode, wire, studentTeaching, historyWire), headers);
+            new FeynmanInput(kcCode, topic, learnerContext, wire, studentTeaching, historyWire),
+            headers);
     try {
       GraphFeynmanOutput body =
           tuteeRestTemplate
@@ -77,11 +80,14 @@ public class FeynmanGraphClient {
   }
 
   /**
-   * 代码找茬：请求学弟写出含 bug 的代码 + 真实 bug 行号（graph /agents/feynman/bug-exposure）。
-   * 下游不可达返回 empty，由调用方决定降级或报错。
+   * 代码找茬：请求学弟写出含 bug 的代码 + 真实 bug 行号（graph /agents/feynman/bug-exposure）。 下游不可达返回
+   * empty，由调用方决定降级或报错。
    */
   public Optional<BugExposure> bugExposure(
-      String kcCode, String topic, List<Misconception> misconceptions) {
+      String kcCode,
+      String topic,
+      LearnerContext learnerContext,
+      List<Misconception> misconceptions) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     GraphInternalTokenSupport.apply(headers, properties);
@@ -89,7 +95,7 @@ public class FeynmanGraphClient {
         (misconceptions == null ? List.<Misconception>of() : misconceptions)
             .stream().map(GraphMisconception::from).toList();
     HttpEntity<BugExposureInput> entity =
-        new HttpEntity<>(new BugExposureInput(kcCode, topic, wire), headers);
+        new HttpEntity<>(new BugExposureInput(kcCode, topic, learnerContext, wire), headers);
     try {
       GraphBugExposure body =
           restTemplate
@@ -110,6 +116,7 @@ public class FeynmanGraphClient {
   record BugExposureInput(
       @JsonProperty("kc_code") String kcCode,
       @JsonProperty("topic") String topic,
+      @JsonProperty("learner_context") LearnerContext learnerContext,
       @JsonProperty("misconceptions") List<GraphMisconception> misconceptions) {}
 
   /** graph 代码找茬原始响应（snake_case）；fixed_code 是答案，不进领域/前端。 */
@@ -119,14 +126,19 @@ public class FeynmanGraphClient {
       @JsonProperty("buggy_code") String buggyCode,
       @JsonProperty("fixed_code") String fixedCode,
       @JsonProperty("bug_line_indices") List<Integer> bugLineIndices,
-      @JsonProperty("hint_md") String hintMd) {
+      @JsonProperty("hint_md") String hintMd,
+      @JsonProperty("difficulty") String difficulty,
+      @JsonProperty("generated_by_ai") boolean generatedByAi) {
     BugExposure toDomain() {
       return new BugExposure(
           source,
           misconceptionTag,
           buggyCode,
+          fixedCode,
           bugLineIndices == null ? List.of() : bugLineIndices,
-          hintMd);
+          hintMd,
+          difficulty,
+          generatedByAi);
     }
   }
 
@@ -135,20 +147,27 @@ public class FeynmanGraphClient {
       String source,
       String misconceptionTag,
       String buggyCode,
+      String fixedCode,
       List<Integer> bugLineIndices,
-      String hintMd) {}
+      String hintMd,
+      String difficulty,
+      boolean generatedByAi) {}
 
   /** 请求体：对齐 graph schemas.feynman.FeynmanTuteeInput（snake_case）。 */
   record FeynmanInput(
       @JsonProperty("kc_code") String kcCode,
+      @JsonProperty("topic") String topic,
+      @JsonProperty("learner_context") LearnerContext learnerContext,
       @JsonProperty("misconceptions") List<GraphMisconception> misconceptions,
       @JsonProperty("student_teaching") String studentTeaching,
       @JsonProperty("history") List<GraphTurn> history) {}
 
   public record ConversationTurn(String role, String content) {}
 
-  record GraphTurn(
-      @JsonProperty("role") String role, @JsonProperty("content") String content) {
+  public record LearnerContext(
+      String level, @JsonProperty("response_style") String responseStyle) {}
+
+  record GraphTurn(@JsonProperty("role") String role, @JsonProperty("content") String content) {
     static GraphTurn from(ConversationTurn turn) {
       return new GraphTurn(turn.role(), turn.content());
     }

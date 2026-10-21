@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue';
 import { fetchWeeklyReport, type WeeklyReport } from '@/api/twin';
+import { kcDisplayName } from '@/data/kcNames';
 
 const emit = defineEmits<{
   (event: 'prompt', text: string): void;
@@ -68,7 +69,7 @@ function promptWeeklyPlan(): void {
   const r = report.value;
   if (!r) return;
   const focus = r.memoryBrief.topKcCodes.length
-    ? r.memoryBrief.topKcCodes.slice(0, 3).join('、')
+    ? r.memoryBrief.topKcCodes.slice(0, 3).map(kcDisplayName).join('、')
     : '本周薄弱知识点';
   emit(
     'prompt',
@@ -94,7 +95,7 @@ function promptMastery(delta: {
 }): void {
   emit(
     'prompt',
-    `针对 ${delta.kcCode}，我当前掌握约 ${percent(delta.currentScore)}，当前置信指标 ${percent(delta.confidence)}（可能受练习失败和遗忘衰减影响，不是答题概率）；本周证据贡献 ${deltaPercent(delta.weeklyDelta)}，有 ${delta.evidenceCount} 条可信学习证据（${evidenceSourceLabel(delta.evidenceSources)}）。请给我一组由浅入深的练习和课件复习建议。`,
+    `针对 ${kcDisplayName(delta.kcCode)}，我当前掌握约 ${percent(delta.currentScore)}，当前置信指标 ${percent(delta.confidence)}（可能受练习失败和遗忘衰减影响，不是答题概率）；本周证据贡献 ${deltaPercent(delta.weeklyDelta)}，有 ${delta.evidenceCount} 条可信学习证据（${evidenceSourceLabel(delta.evidenceSources)}）。请给我一组由浅入深的练习和课件复习建议。`,
   );
 }
 </script>
@@ -195,7 +196,7 @@ function promptMastery(delta: {
       >
         <span class="tw__ic">↑</span>
         <span class="tw__tx">
-          <span class="tw__badge">{{ d.kcCode }}</span>
+          <span class="tw__badge">{{ kcDisplayName(d.kcCode) }}</span>
           掌握 {{ percent(d.currentScore) }} ·
           <span
             data-testid="twin-confidence-metric"

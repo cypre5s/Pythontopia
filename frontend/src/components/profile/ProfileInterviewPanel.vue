@@ -5,6 +5,7 @@ import { useLearningStore } from '@/stores/learning';
 
 const learning = useLearningStore();
 const router = useRouter();
+const emit = defineEmits<{ finished: [] }>();
 const answer = ref('');
 const errorMessage = ref<string | null>(null);
 const finishing = ref(false);
@@ -36,6 +37,7 @@ async function finish(): Promise<void> {
   errorMessage.value = null;
   try {
     await learning.finishInterview();
+    emit('finished');
     await router.push('/profile');
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '保存画像失败，请稍后重试。';

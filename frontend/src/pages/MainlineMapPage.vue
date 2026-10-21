@@ -546,6 +546,9 @@ onBeforeUnmount(() => {
   -webkit-backdrop-filter: blur(6px);
   padding-top: var(--pyt-space-5);
 }
+.map-drawer :deep(.stage-panel__head) {
+  padding-right: 36px;
+}
 .map-drawer__close {
   position: absolute;
   top: var(--pyt-space-2);

@@ -171,10 +171,13 @@ services:
     # （如 lifespan 课件加载等改动需重启容器生效）。
     volumes:
       - ../services/pythontopia-rag/pythontopia_rag:/app/pythontopia_rag:ro
+      - ../data/course-pack-43:/data/course-pack-43:ro
     environment:
       PYT_DB_URL: postgresql://${PYT_DB_USERNAME:-pytopia}:${PYT_DB_PASSWORD:-pytopia_dev_password}@postgres:5432/pythontopia
       PYT_RAG_ADMIN_TOKEN: ${PYT_RAG_ADMIN_TOKEN:-}
       PYT_RAG_EMBEDDER: hash
+      PYT_COURSEPACK_VIDEO_MANIFEST: /data/course-pack-43/video_manifest.json
+      PYT_COURSEPACK_VIDEO_TRANSCRIPTS: /data/course-pack-43/video_transcripts.json
     depends_on:
       postgres:
         condition: service_healthy

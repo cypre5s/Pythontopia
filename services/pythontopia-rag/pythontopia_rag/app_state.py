@@ -7,6 +7,7 @@ from pythontopia_rag.index.embedder import Embedder, select_embedder
 from pythontopia_rag.graph.kc_graph import KcKnowledgeGraph
 from pythontopia_rag.index.kc_graph import KcGraph
 from pythontopia_rag.index.store import InMemoryVectorStore, VectorStore
+from pythontopia_rag.index.video_transcripts import VideoTranscriptIndex
 
 
 @dataclass
@@ -18,6 +19,7 @@ class AppState:
     kc_graph: KcGraph = field(default_factory=KcGraph)
     # 运行态 typed KC 图（前置 + 共现），供 graph_mode=auto/force 的多跳遍历使用。
     knowledge_graph: KcKnowledgeGraph = field(default_factory=KcKnowledgeGraph)
+    video_index: VideoTranscriptIndex = field(default_factory=VideoTranscriptIndex)
 
 
 def create_default_state() -> AppState:

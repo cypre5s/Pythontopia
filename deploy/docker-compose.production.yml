@@ -286,6 +286,10 @@ services:
       PYT_DB_URL: postgresql://${PYT_DB_USERNAME:?缺少 PYT_DB_USERNAME，请检查远端 .env}:${PYT_DB_PASSWORD:?缺少 PYT_DB_PASSWORD，请检查远端 .env}@postgres:5432/pythontopia
       # 课程检索使用本地哈希向量与 BM25，不向第三方 embedding 服务发送数据。
       PYT_RAG_EMBEDDER: hash
+      PYT_COURSEPACK_VIDEO_MANIFEST: /data/course-pack-43/video_manifest.json
+      PYT_COURSEPACK_VIDEO_TRANSCRIPTS: /data/course-pack-43/video_transcripts.json
+    volumes:
+      - ${PYT_SHARED_DATA_DIR:-/opt/pythontopia/shared/data}/course-pack-43:/data/course-pack-43:ro
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:18092/readyz || exit 1"]
       interval: 15s

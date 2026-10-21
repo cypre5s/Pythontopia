@@ -11,6 +11,7 @@ import static org.mockito.Mockito.when;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.learner.profile.repository.ProfileRepository;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.dao.EmptyResultDataAccessException;
@@ -27,7 +28,9 @@ class FeynmanSessionServiceSecurityTest {
           new ObjectMapper(),
           mock(MisconceptionExtractor.class),
           mock(FeynmanGraphClient.class),
-          mock(PublicProblemRepository.class));
+          mock(PublicProblemRepository.class),
+          mock(ProfileRepository.class),
+          mock(FeynmanBugBankRepository.class));
 
   @Test
   void loadSessionScopesLookupToAuthenticatedOwner() {

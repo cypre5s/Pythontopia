@@ -10,6 +10,7 @@ import type { LoginRequest } from '@api/dto/LoginRequest';
 import { unlockAudio } from '@/composables/useAudio';
 import { useSessionStore } from '@stores/session';
 import { useToastStore } from '@stores/toast';
+import { loginDestination } from '@/app/landing';
 
 const session = useSessionStore();
 const toast = useToastStore();
@@ -44,8 +45,8 @@ async function submit(req: LoginRequest): Promise<void> {
   try {
     await session.login(req);
     toast.show(`欢迎回到 Pythontopia，${session.displayName}！`, 'info');
-    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : '/world';
-    await router.push(redirect);
+    const redirect = typeof route.query.redirect === 'string' ? route.query.redirect : undefined;
+    await router.push(loginDestination(session.role, redirect));
   } catch (error) {
     const message = error instanceof ApiClientError ? error.message : '登录失败';
     toast.show(message, 'error');
@@ -58,13 +59,15 @@ async function submit(req: LoginRequest): Promise<void> {
 
 <template>
   <main class="auth-page auth-page--pixel">
-    <!-- 远景层：星露谷暖色像素小镇 hero（AI 原创，CC-BY-SA 3.0+ 入库）
-         位置：/assets/pixel/ui/login-hero-stardew.png
-         样式：cover 撑满容器，pixelated 渲染保留像素感。 -->
-    <div
+    <!-- 远景层：Pythontopia 原创小镇图。 -->
+    <img
       class="auth-page__hero"
+      src="/assets/pixel/ui/login-hero-stardew.webp"
+      alt=""
       aria-hidden="true"
-    />
+      fetchpriority="high"
+      decoding="async"
+    >
 
     <!-- 主场景：星露谷小镇全景 -->
     <div
@@ -721,12 +724,11 @@ async function submit(req: LoginRequest): Promise<void> {
 .auth-page__hero {
   top: 0;
   bottom: 0;
+  width: 100%;
   height: 100%;
   z-index: 0;
-  background-image: url('/assets/pixel/ui/login-hero-stardew.png');
-  background-size: cover;
-  background-position: center bottom;
-  background-repeat: no-repeat;
+  object-fit: cover;
+  object-position: center bottom;
   image-rendering: pixelated;
   -ms-interpolation-mode: nearest-neighbor;
 }

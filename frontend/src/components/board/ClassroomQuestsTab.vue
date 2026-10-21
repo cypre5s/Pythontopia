@@ -6,6 +6,7 @@ import { useToastStore } from '@stores/toast';
 import type { ClassroomQuestDto } from '@/api/dto/ClassroomQuest';
 import type { QuestCompleteRequest } from '@/api/dto/Quest';
 import type { SubmissionDto } from '@/api/dto/Submission';
+import { kcDisplayName } from '@/data/kcNames';
 import {
   evidenceErrorMessage,
   resolveClassroomQuestDeepLink,
@@ -219,7 +220,7 @@ function isCompletable(quest: ClassroomQuestDto): boolean {
           {{ quest.description }}
         </p>
         <p class="meta">
-          KC：{{ quest.kcCodes.join(', ') || '未指定' }} · 类型：{{ quest.nodeType }} ·
+          知识点：{{ quest.kcCodes.map(kcDisplayName).join('、') || '未指定' }} · 类型：{{ quest.nodeType }} ·
           状态：{{ statusLabel(quest) }}
         </p>
         <div class="actions">

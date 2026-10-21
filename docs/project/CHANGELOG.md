@@ -1,5 +1,17 @@
 # Changelog
 
+## 2026-10-21
+
+- 登录页把 7.2 MB Zpix TTF 切到仓库已有 OFL Ark Pixel 子集，并用 468 KB WebP 显示原创背景（原 PNG 3.4 MB）；优先级高的图片元素提前请求。F3 性能面板与游戏音频改为按需加载 Phaser；管理员登录后跳过学习路由预取。自主讲题已覆盖无错题记录场景：可讲知识点或描述题目，不构造误区或错题证据。本地 Chromium 测得 FCP/LCP 均约 276 ms，首屏关键图与字体传输约 1.28 MB；登录时不请求 Phaser，打开 F3 后正常加载。前端 281 个测试文件、2,688 项通过，typecheck、lint、生产构建和 Playwright 回归通过。
+- 性能版本部署为 ECS release `20261021-043220`（commit `d06c1d05`，归档 1,561,557,313 bytes，SHA-256 `164d6cc6b2a3bd75ed2769cf0bf6e840cd35881419e837d81dd547bebc7723e1`）。七个服务 healthy；HTTP 308、HTTPS `/healthz` 正常；新数据库备份 444 KB，保留上一版本 `20261021-033818` 和 `deploy_pytopia_pg`。生产 Chromium 测得 FCP 1,504 ms、LCP 2,072 ms、TTFB 500 ms；关键图/字体约 1.28 MB，F3 前 0 次 Phaser 请求、F3 后成功加载，console/pageerror/失败请求均为 0。删除已安装上传包及更旧的 `20261021-024928` 后，可用磁盘 6.5 GB。
+- 将含管理员路由、画像访谈与费曼修复的版本部署到 ECS：release `20261021-033818`，基于提交 `8d470421`，归档 1,563,229,582 bytes，SHA-256 `4ac048a2f11526a404d59c635d02352d06098907b8044bfebee6e178fc76c2c3`。安装器校验归档与包内 4,353 个文件，七个服务 healthy、Piston runtime 初始化成功，HTTP 308/HTTPS `/healthz` 200；保留数据库卷 `deploy_pytopia_pg`、448 KB pg_dump 和上一版本 `20261021-024928`。生产 Chromium + DeepSeek 复验无错题费曼讲解及画像访谈，console/pageerror/失败请求均为 0；两个临时学生及级联测试数据已精确删除。临时上传包清理后根盘剩余 5.1 GB。
+- 管理员直接打开学生小镇路由时改为进入 `/admin/operations`，避免挂载学生专属接口产生 403。修复空画像页访谈面板被 flex 压缩、导致空态卡片挡住“发送”的问题；Graph ProfileAgent 提示补全输出 JSON 键、嵌套字段类型和枚举，并要求资料不足时置 null。真实 Chromium + DeepSeek 完成访谈与保存，画像卡片显示有效字段，console/pageerror/失败请求为 0。前端全量 2,687 项、typecheck、lint、浏览器 E2E 通过；Graph 全量 1,969 passed / 3 skipped、Ruff 通过。
+- 费曼自主讲题现在会把课程知识点中文名称与最小画像偏好传给 Graph，模型可围绕学生当前讲解/题目回应；空错题记录仍保持为空，模型返回的代码会被丢弃，不进入专项判题。无真实错题时可从共享库使用同知识点样例；经语法与行差校验的 AI 通用样例可入共享库，不保存真实学生错误。新一轮开始时立即清除上一轮对话和判题状态。前端全量 2,686 项、Graph 全量 1,968 项（3 项跳过）、后端 Maven 1,782 项通过；Ruff、前端 typecheck/lint 通过。ECS release `20261021-024928` 完成 V227 迁移，七个服务 healthy；真实 Chromium + DeepSeek 无错题讲题验收通过，console、pageerror、失败请求均为 0。
+- 费曼反演新增自主讲题模式：没有错题记录时仍可选择课程知识点或自由概念向 AI 学弟讲解；对话保持误区与错题证据为空，不生成可判题代码，也不触发错题专项判题或掌握度回流。前端、Graph、后端定向回归通过（16 个前端用例、30 个 Graph 用例、19 个后端用例）；ECS Chromium 以无错题学生账号选择“for 循环与遍历”并完成真实 DeepSeek 讲解往返，误区数为 0、未生成代码、未调用错题判题。
+- 管理员登录按角色进入管理台默认页，学生仍进入小镇；画像访谈入口可直接打开，雷达只绘制有证据分值；学习界面 KC 标签显示课程名称，主线抽屉关闭按钮避开星标。真实 Chromium 本地浏览器通过：管理员 `/admin/operations`、学生 `/world`，无 403/API 错误、console、pageerror 或失败请求，桌面与手机星标无重叠。前端全量 Vitest、typecheck、lint 通过；后端全量 Maven 1,777 项通过。
+- 视频 RAG 增加独立时间戳索引：加载 848 条机器字幕，字幕只用于定位视频与扩展同章真实课件页，API 引用仍全部为 `courseware`。RAG 全量 171 项与 Ruff 通过；真实语料三条输入函数/循环/列表查询返回课件页 ID 与视频时间戳。固定黄金集 Recall@5 已为 100%，因此未宣称整体召回提升；评估记录见 `docs/reports/2026-10-21-video-rag-evaluation.md`。
+- 部署到 ECS 版本 `20261021-014723`，SHA-256 `7210587d50ac200bf606942eefa6fdaf94c73e06594c2229f3b43568701c36b6`；复用数据库卷与共享课程数据，保留上一版本及 pg_dump 备份，安装后清理 incoming 压缩包。7 个服务健康，Nginx/HTTPS 健康检查通过。生产 RAG 查询真实课件页 `10996/10997/11042/11102` 并返回视频时间戳；状态为 591 个课件块、848 个视频片段，`hash-bow-1024` / `degraded=true` 是当前生产嵌入配置的限制，不能据此宣称语义向量质量已验证。
+
 ## 2026-10-20
 
 - 生产 Compose 增加独立 Piston 判题容器与 Python runtime 初始化，默认版本对齐 Piston 实际可用的 `3.11.0`；补上 runtime 解包所需的 `FOWNER` capability，并同步发布、预检和回滚脚本。

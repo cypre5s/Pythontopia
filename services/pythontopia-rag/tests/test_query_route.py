@@ -7,9 +7,11 @@ from starlette.requests import Request
 
 from pythontopia_rag.app_state import AppState
 from pythontopia_rag.data.page_source import IndexablePage, InMemoryPageSource
+from pythontopia_rag.data.video_transcripts import VideoSegment
 from pythontopia_rag.index.builder import EmbeddingDegradedError, rebuild_index
 from pythontopia_rag.index.embedder import FallbackEmbedder, HashEmbedder
 from pythontopia_rag.index.store import InMemoryVectorStore
+from pythontopia_rag.index.video_transcripts import VideoTranscriptIndex
 from pythontopia_rag.routes import query as query_module
 from pythontopia_rag.main import app
 
@@ -39,6 +41,7 @@ def _seed_pages() -> InMemoryPageSource:
             kc_codes=["PY43-KC-012"],
             title="input 函数",
             text=("input 函数 input() 用于从控制台读取一行字符串。" * 8),
+            chapter_no=3,
         ),
         IndexablePage(
             page_id=22,
@@ -48,6 +51,7 @@ def _seed_pages() -> InMemoryPageSource:
             kc_codes=["PY43-KC-020"],
             title="for 循环",
             text=("for 循环用于遍历序列，例如 for i in range(10)。" * 8),
+            chapter_no=4,
         ),
         IndexablePage(
             page_id=33,
@@ -57,6 +61,7 @@ def _seed_pages() -> InMemoryPageSource:
             kc_codes=["PY43-KC-030"],
             title="列表",
             text=("列表 list 是可变序列，可使用 append 和 pop。" * 8),
+            chapter_no=5,
         ),
         IndexablePage(
             page_id=44,
@@ -83,7 +88,8 @@ def _seed_pages() -> InMemoryPageSource:
 @pytest.mark.asyncio
 async def test_query_returns_input_evidence() -> None:
     state = app.state.rag
-    await rebuild_index(source=_seed_pages(), embedder=state.embedder, store=state.store)
+    app.state.rag_page_source = _seed_pages()
+    await rebuild_index(source=app.state.rag_page_source, embedder=state.embedder, store=state.store)
 
     client = TestClient(app)
     response = client.post(
@@ -101,6 +107,110 @@ async def test_query_returns_input_evidence() -> None:
     assert body["citations"][0]["page_id"] == 11
     assert body["citations"][0]["source"] == "courseware"
     assert body["citations"][0]["snippet"]
+
+
+@pytest.mark.asyncio
+async def test_video_match_expands_to_courseware_pages_without_transcript_citations() -> None:
+    state = app.state.rag
+    app.state.rag_page_source = _seed_pages()
+    await rebuild_index(
+        source=app.state.rag_page_source,
+        embedder=state.embedder,
+        store=state.store,
+        bm25=state.bm25,
+    )
+    video_index = VideoTranscriptIndex()
+    video_index.build(
+        [
+            VideoSegment(
+                video_id=7,
+                chapter_no=5,
+                title="列表操作",
+                start_sec=42.0,
+                end_sec=48.0,
+                text="列表末尾追加元素可以使用 append 方法",
+                avg_log_prob=-0.1,
+                no_speech_prob=0.0,
+                review_status="machine_generated_unreviewed",
+            )
+        ]
+    )
+    client = TestClient(app)
+    baseline = client.post(
+        "/rag/query",
+        json={"query": "末尾追加新成员", "top_k": 5, "min_score": 0.99},
+    )
+    assert baseline.json()["no_evidence_found"] is True
+    state.video_index = video_index
+
+    response = client.post(
+        "/rag/query",
+        json={"query": "末尾追加新成员", "top_k": 5, "min_score": 0.99},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["no_evidence_found"] is False
+    assert [citation["page_id"] for citation in body["citations"]] == [33]
+    assert body["citations"][0]["source"] == "courseware"
+    assert body["video_trace"]["matches"][0]["video_id"] == 7
+    assert body["video_trace"]["matches"][0]["start_sec"] == 42.0
+    assert body["video_trace"]["supplemental_page_ids"] == [33]
+    assert "列表末尾追加元素可以使用" not in body["citations"][0]["snippet"]
+    assert client.get("/rag/index/status").json()["video_segments"] == 1
+
+
+@pytest.mark.asyncio
+async def test_video_expansion_obeys_chapter_and_kc_filters() -> None:
+    state = app.state.rag
+    app.state.rag_page_source = _seed_pages()
+    await rebuild_index(
+        source=app.state.rag_page_source,
+        embedder=state.embedder,
+        store=state.store,
+        bm25=state.bm25,
+    )
+    video_index = VideoTranscriptIndex()
+    video_index.build(
+        [
+            VideoSegment(
+                video_id=7,
+                chapter_no=5,
+                title="列表操作",
+                start_sec=42.0,
+                end_sec=48.0,
+                text="列表末尾追加元素可以使用 append 方法",
+                avg_log_prob=-0.1,
+                no_speech_prob=0.0,
+                review_status="machine_generated_unreviewed",
+            )
+        ]
+    )
+    state.video_index = video_index
+
+    chapter_response = TestClient(app).post(
+        "/rag/query",
+        json={
+            "query": "末尾追加新成员",
+            "chapter_ids": [4],
+            "top_k": 5,
+            "min_score": 0.99,
+        },
+    )
+    kc_response = TestClient(app).post(
+        "/rag/query",
+        json={
+            "query": "末尾追加新成员",
+            "kc_codes": ["PY43-KC-040"],
+            "top_k": 5,
+            "min_score": 0.99,
+        },
+    )
+
+    assert chapter_response.json()["hits"] == []
+    assert chapter_response.json()["video_trace"]["matches"] == []
+    assert kc_response.json()["hits"] == []
+    assert kc_response.json()["video_trace"]["matches"] == []
 
 
 @pytest.mark.asyncio

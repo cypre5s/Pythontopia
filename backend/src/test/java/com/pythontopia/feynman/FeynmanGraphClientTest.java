@@ -38,6 +38,8 @@ class FeynmanGraphClientTest {
         new FeynmanGraphClient(shortGraphTemplate, tuteeTemplate, properties);
     tuteeServer
         .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/feynman/tutee/step"))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.topic").value("for 循环与遍历"))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.learner_context.level").value("beginner"))
         .andRespond(
             MockRestResponseCreators.withSuccess(
                 """
@@ -49,7 +51,14 @@ class FeynmanGraphClientTest {
                 """,
                 MediaType.APPLICATION_JSON));
 
-    assertThat(isolatedClient.step("PY43-KC-031", List.of(), "解释循环", List.of()))
+    assertThat(
+            isolatedClient.step(
+                "PY43-KC-031",
+                "for 循环与遍历",
+                new FeynmanGraphClient.LearnerContext("beginner", "examples"),
+                List.of(),
+                "解释循环",
+                List.of()))
         .isPresent();
     tuteeServer.verify(Duration.ofSeconds(2));
     shortGraphServer.verify(Duration.ofSeconds(2));
@@ -61,17 +70,20 @@ class FeynmanGraphClientTest {
     server
         .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/feynman/tutee/step"))
         .andExpect(MockRestRequestMatchers.jsonPath("$.kc_code").value("PY43-KC-016"))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.topic").value("循环"))
+        .andExpect(
+            MockRestRequestMatchers.jsonPath("$.learner_context.response_style")
+                .value("step_by_step"))
         .andExpect(MockRestRequestMatchers.jsonPath("$.student_teaching").value("range 右端不包含"))
         .andExpect(
             MockRestRequestMatchers.jsonPath("$.misconceptions[0].tag").value("off_by_one_range"))
         .andExpect(
-            MockRestRequestMatchers.jsonPath("$.misconceptions[0].evidence_event_ids[0]").value(501))
+            MockRestRequestMatchers.jsonPath("$.misconceptions[0].evidence_event_ids[0]")
+                .value(501))
         .andExpect(MockRestRequestMatchers.jsonPath("$.history[0].role").value("user"))
-        .andExpect(
-            MockRestRequestMatchers.jsonPath("$.history[0].content").value("第一轮学生解释"))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.history[0].content").value("第一轮学生解释"))
         .andExpect(MockRestRequestMatchers.jsonPath("$.history[1].role").value("assistant"))
-        .andExpect(
-            MockRestRequestMatchers.jsonPath("$.history[1].content").value("第一轮学弟追问"))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.history[1].content").value("第一轮学弟追问"))
         .andRespond(
             MockRestResponseCreators.withSuccess(
                 """
@@ -88,6 +100,8 @@ class FeynmanGraphClientTest {
     Optional<FeynmanOutput> output =
         client.step(
             "PY43-KC-016",
+            "循环",
+            new FeynmanGraphClient.LearnerContext("intermediate", "step_by_step"),
             List.of(new Misconception("off_by_one_range", List.of(501L), false)),
             "range 右端不包含",
             List.of(
@@ -98,7 +112,8 @@ class FeynmanGraphClientTest {
     assertThat(output.get().replyMd()).isEqualTo("我懂了");
     assertThat(output.get().updatedMisconceptions()).hasSize(1);
     assertThat(output.get().updatedMisconceptions().get(0).tag()).isEqualTo("off_by_one_range");
-    assertThat(output.get().updatedMisconceptions().get(0).evidenceEventIds()).containsExactly(501L);
+    assertThat(output.get().updatedMisconceptions().get(0).evidenceEventIds())
+        .containsExactly(501L);
     assertThat(output.get().updatedMisconceptions().get(0).resolved()).isTrue();
     assertThat(output.get().producedCode()).contains("range(1, 6)");
     server.verify(Duration.ofSeconds(2));
@@ -115,8 +130,7 @@ class FeynmanGraphClientTest {
                 .contentType(MediaType.TEXT_PLAIN)
                 .body(privateContent));
     server
-        .expect(
-            MockRestRequestMatchers.requestTo("http://graph.test/agents/feynman/bug-exposure"))
+        .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/feynman/bug-exposure"))
         .andRespond(
             MockRestResponseCreators.withStatus(HttpStatus.BAD_GATEWAY)
                 .contentType(MediaType.TEXT_PLAIN)
@@ -132,11 +146,17 @@ class FeynmanGraphClientTest {
       Optional<FeynmanOutput> output =
           client.step(
               "PY43-KC-016",
+              null,
+              new FeynmanGraphClient.LearnerContext("beginner", "examples"),
               List.of(new Misconception("off_by_one_range", List.of(501L), false)),
               "随便讲",
               List.of());
       Optional<FeynmanGraphClient.BugExposure> bugExposure =
-          client.bugExposure("PY43-KC-016", privateContent, List.of());
+          client.bugExposure(
+              "PY43-KC-016",
+              privateContent,
+              new FeynmanGraphClient.LearnerContext("beginner", "examples"),
+              List.of());
 
       assertThat(output).isEmpty();
       assertThat(bugExposure).isEmpty();
@@ -157,6 +177,7 @@ class FeynmanGraphClientTest {
         .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/feynman/bug-exposure"))
         .andExpect(MockRestRequestMatchers.jsonPath("$.kc_code").value("PY43-KC-004"))
         .andExpect(MockRestRequestMatchers.jsonPath("$.topic").value("控制台输入与数据类型转换"))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.learner_context.level").value("beginner"))
         .andExpect(
             MockRestRequestMatchers.jsonPath("$.misconceptions[0].tag").value("input_type_string"))
         .andRespond(
@@ -168,7 +189,9 @@ class FeynmanGraphClientTest {
                   "buggy_code": "age = input('age: ')\\nprint(age + 1)",
                   "fixed_code": "age = int(input('age: '))\\nprint(age + 1)",
                   "bug_line_indices": [0],
-                  "hint_md": "input() 返回什么类型？"
+                  "hint_md": "input() 返回什么类型？",
+                  "difficulty": "easy",
+                  "generated_by_ai": true
                 }
                 """,
                 MediaType.APPLICATION_JSON));
@@ -177,6 +200,7 @@ class FeynmanGraphClientTest {
         client.bugExposure(
             "PY43-KC-004",
             "控制台输入与数据类型转换",
+            new FeynmanGraphClient.LearnerContext("beginner", "examples"),
             List.of(new Misconception("input_type_string", List.of(601L), false)));
 
     assertThat(exposure).isPresent();
@@ -185,6 +209,8 @@ class FeynmanGraphClientTest {
     assertThat(exposure.get().buggyCode()).contains("input('age: ')");
     assertThat(exposure.get().bugLineIndices()).containsExactly(0);
     assertThat(exposure.get().hintMd()).isNotBlank();
+    assertThat(exposure.get().difficulty()).isEqualTo("easy");
+    assertThat(exposure.get().generatedByAi()).isTrue();
     server.verify(Duration.ofSeconds(2));
   }
 }

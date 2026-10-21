@@ -104,7 +104,7 @@ function onPractice(kcCode: string): void {
           >
             <span
               class="progress__name"
-              :title="row.kcCode"
+              :title="row.name"
             >{{ row.name }}</span>
             <span
               class="progress__bar"
@@ -146,7 +146,7 @@ function onPractice(kcCode: string): void {
           >
             <span
               class="progress__name"
-              :title="row.kcCode"
+              :title="row.name"
             >{{ row.name }}</span>
             <span
               class="progress__bar"

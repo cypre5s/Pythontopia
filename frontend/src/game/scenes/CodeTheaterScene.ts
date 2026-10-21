@@ -204,7 +204,7 @@ function rebuildStage(ctx: CodeTheaterSceneContext): void {
   backdrop.fillStyle(COLOR_BACKDROP, 1).fillRoundedRect(0, 0, width, height, 0).setDepth(0);
   ctx.add
     .text(width / 2, 28, '机关广场 · 代码剧场', {
-      fontFamily: '"Zpix", "Ark Pixel 12", monospace',
+      fontFamily: '"Ark Pixel 12", monospace',
       fontSize: '16px',
       color: '#ffd166',
     })

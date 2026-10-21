@@ -23,6 +23,7 @@ import { useToastStore } from '@stores/toast';
 import type { StageTaskProgress } from './stageTypes';
 import ChallengeWorkspace from '@/components/challenge/ChallengeWorkspace.vue';
 import PracticeQuestionCard from './practice/PracticeQuestionCard.vue';
+import { kcDisplayName } from '@/data/kcNames';
 
 const props = defineProps<{
   stageId: number;
@@ -278,7 +279,7 @@ async function markExampleDone(problemId: number): Promise<void> {
               <span
                 v-if="example.kcCode"
                 class="stage-practice__kc"
-              >{{ example.kcCode }}</span>
+              >{{ kcDisplayName(example.kcCode) }}</span>
             </span>
           </span>
           <span class="stage-practice__actions">
@@ -316,7 +317,7 @@ async function markExampleDone(problemId: number): Promise<void> {
             :key="kcCode"
             class="stage-practice__item"
           >
-            <span class="stage-practice__name">{{ kcCode }}</span>
+            <span class="stage-practice__name">{{ kcDisplayName(kcCode) }}</span>
             <button
               type="button"
               class="stage-practice__mark"

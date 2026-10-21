@@ -14,7 +14,7 @@ const BOSS_PORTRAITS: Readonly<Record<number, string>> = {
   7: '/assets/pixel/bosses/boss-7-mirror-abstraction.png',
 };
 const BOSS_IMPACT_SOUND_URL = '/assets/pixel/sfx/boss/impactSoft_medium_000.ogg';
-const PIXEL_FONT = '"Zpix", "Ark Pixel 12", monospace';
+const PIXEL_FONT = '"Ark Pixel 12", monospace';
 
 interface GraphicsLike {
   x?: number;
