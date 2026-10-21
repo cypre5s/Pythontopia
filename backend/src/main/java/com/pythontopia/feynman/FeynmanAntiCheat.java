@@ -15,6 +15,10 @@ import java.util.regex.Pattern;
  * </ul>
  *
  * <p>对「用自然语言讲边界、给一个 range(1,6) 这样的短示例」这类正常教学不会误伤。
+ *
+ * <p><strong>适用面</strong>：{@link #looksLikeAnswerDump} 只适用于<em>自然语言教学文本</em>。
+ * 学弟产出的 {@code produced_code} 本来就该是完整程序（第 6/7 章的 KC 必然出现 {@code def } /
+ * {@code import }），对它只能用 {@link #looksLikeLeakedAnswer}，否则合法代码会被判「泄答」。
  */
 public final class FeynmanAntiCheat {
 
@@ -23,6 +27,7 @@ public final class FeynmanAntiCheat {
 
   private FeynmanAntiCheat() {}
 
+  /** 教学文本侧：answer_key / 三反引号围栏 / 完整程序结构定义行，任一命中即视为贴答案。 */
   public static boolean looksLikeAnswerDump(String text) {
     if (text == null || text.isBlank()) {
       return false;

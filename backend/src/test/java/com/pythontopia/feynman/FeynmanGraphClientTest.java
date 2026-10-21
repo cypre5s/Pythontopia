@@ -119,6 +119,7 @@ class FeynmanGraphClientTest {
     server.verify(Duration.ofSeconds(2));
   }
 
+  /** 下游不可达只返回 empty；是否降级由调用方决定（teach 侧一律 fail fast）。 */
   @Test
   void upstreamFailuresYieldEmptyWithoutLoggingStudentOrRemoteContent() {
     String privateContent = "private-feynman-response-sentinel";

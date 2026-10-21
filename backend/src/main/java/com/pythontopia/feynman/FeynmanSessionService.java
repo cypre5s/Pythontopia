@@ -84,6 +84,9 @@ public class FeynmanSessionService {
     // 必须先读取再插入本轮，否则本轮解释会在 history 和 student_teaching 中重复。
     List<FeynmanGraphClient.ConversationTurn> history = recentHistory(sessionId);
 
+    // 历史必须在插入本轮 STUDENT 之前读，否则本轮教学会同时出现在 history 和 student_teaching 里。
+    List<FeynmanGraphClient.ConversationTurn> history = recentHistory(sessionId);
+
     // 学生本回合的教学先落库为 STUDENT 轮，支撑「误解→你的教学→判题→证据」玻璃盒可溯源。
     jdbc.update(
         "INSERT INTO feynman_turn (session_id, role, content, taught_fix) VALUES (?, 'STUDENT', ?, NULL)",
@@ -95,6 +98,10 @@ public class FeynmanSessionService {
       return refuseAnswerDump(sessionId, misconceptions);
     }
 
+    // AGENTS 红线：Agent 不可达必须 fail fast。绝不能靠「解释长度」这类本地规则伪造
+    // 「教会 + 学弟产出代码」，那会把误解全部置 resolved、写假 taught_fix，
+    // 再由真判题判 WA 反过来把 AI 故障记成学生的 teach_back_failed。
+    // 与同类的 bugHunt（FEYNMAN_BUG_EXPOSURE_UNAVAILABLE）保持同一策略。
     FeynmanGraphClient.FeynmanOutput output =
         graphClient
             .step(
@@ -119,10 +126,11 @@ public class FeynmanSessionService {
             sessionId,
             output.replyMd(),
             output.producedCode());
+    boolean taught = allResolved(output.updatedMisconceptions());
     jdbc.update(
         "UPDATE feynman_session SET tutee_state = ?::jsonb, status = ? WHERE id = ?",
         nextState,
-        allResolved(output.updatedMisconceptions()) ? "TAUGHT" : "OPEN",
+        taught ? "TAUGHT" : "OPEN",
         sessionId);
     return new TurnResponse(
         turnId == null ? 0L : turnId,

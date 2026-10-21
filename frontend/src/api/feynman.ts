@@ -46,6 +46,8 @@ export interface FeynmanTurnDto {
   noticeMd?: string | null;
   producedCode?: string | null;
   judgeResult?: FeynmanJudgeResultDto | null;
+  /** 系统侧诚实旁白（非 LLM 生成），例如「该知识点还没有真实错误记录，先去做题」。 */
+  noticeMd?: string | null;
 }
 
 export async function startFeynmanSession(kcCode: string): Promise<FeynmanSessionDto> {

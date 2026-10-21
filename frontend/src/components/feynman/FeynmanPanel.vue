@@ -35,9 +35,15 @@ const isIndependentTeaching = computed(
   () => currentSession.value !== null && misconceptions.value.length === 0,
 );
 
+// 概念模式：非课程 KC（课件外自由概念）→ 通识知识，以代码找茬为准、不计入掌握度。
+const isConcept = computed(() => !isFeynmanSelfTestKc(props.kcCode));
+
 const canTeach = computed(
   () => currentSession.value !== null && teachingText.value.trim().length > 0 && !teaching.value,
 );
+
+// 已判定通过的会话不能再判：后端幂等只回放旧结论，按钮继续可点只会误导学生反复等待。
+const alreadyPassed = computed(() => latestJudgeResult.value?.status === 'PASSED');
 
 const canJudge = computed(
   () =>
@@ -146,6 +152,10 @@ async function start(): Promise<void> {
   }
 }
 
+// AI 学弟不可用时后端 fail fast（FEYNMAN_TUTEE_UNAVAILABLE），本轮不落库也不判成败。
+// 保留学生这次讲的内容以便原样重试，绝不本地伪造一个「学弟已听懂」。
+const lastTeachAttempt = ref('');
+
 async function submitTeaching(): Promise<void> {
   const explanation = teachingText.value.trim();
   if (!canTeach.value || explanation.length === 0) {
@@ -155,10 +165,19 @@ async function submitTeaching(): Promise<void> {
   try {
     await store.teach(explanation);
     teachingText.value = '';
+    lastTeachAttempt.value = '';
   } catch {
     teachFailed.value = true;
     // 错误已写入 store.error 并在面板内提示，这里吞掉以避免未处理的 promise rejection。
   }
+}
+
+async function retryTeaching(): Promise<void> {
+  if (teaching.value || lastTeachAttempt.value.length === 0) {
+    return;
+  }
+  teachingText.value = lastTeachAttempt.value;
+  await submitTeaching();
 }
 
 async function submitJudge(): Promise<void> {
@@ -225,8 +244,19 @@ async function submitJudge(): Promise<void> {
       v-if="error"
       class="feynman-panel__error"
       role="alert"
+      data-testid="feynman-error"
     >
-      {{ error }}
+      <span>{{ error }}</span>
+      <button
+        v-if="lastTeachAttempt"
+        type="button"
+        class="feynman-panel__retry"
+        data-testid="feynman-teach-retry"
+        :disabled="teaching"
+        @click="retryTeaching"
+      >
+        {{ teaching ? '重试中…' : '重试这次讲解' }}
+      </button>
     </p>
 
     <p
@@ -331,6 +361,14 @@ async function submitJudge(): Promise<void> {
             </template>
 
             <p
+              v-if="latestNotice"
+              class="feynman-panel__notice"
+              data-testid="feynman-notice"
+            >
+              {{ latestNotice }}
+            </p>
+
+            <p
               v-if="teachHint"
               class="feynman-panel__teach-hint"
               data-testid="feynman-teach-hint"
@@ -377,6 +415,13 @@ async function submitJudge(): Promise<void> {
             {{ judgeText }}
           </p>
           <div class="feynman-panel__verdict-foot">
+            <span
+              v-if="judgeDisabledHint"
+              class="feynman-panel__judge-hint"
+              data-testid="feynman-judge-hint"
+            >
+              {{ judgeDisabledHint }}
+            </span>
             <button
               type="button"
               class="feynman-panel__teach-submit"
@@ -543,6 +588,10 @@ async function submitJudge(): Promise<void> {
 }
 
 .feynman-panel__error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pyt-space-3);
   flex-shrink: 0;
   margin: 0;
   padding: var(--pyt-space-2) var(--pyt-space-3);
@@ -551,6 +600,23 @@ async function submitJudge(): Promise<void> {
   background: var(--pyt-color-danger-bg);
   color: var(--pyt-color-danger);
   font-size: var(--pyt-font-size-sm);
+}
+
+.feynman-panel__retry {
+  flex-shrink: 0;
+  border: 2px solid var(--pyt-color-danger);
+  border-radius: var(--pyt-radius-sm);
+  padding: 2px var(--pyt-space-2);
+  background: transparent;
+  color: var(--pyt-color-danger);
+  font-family: var(--pyt-font-pixel);
+  font-size: var(--pyt-font-size-xs);
+  cursor: pointer;
+}
+
+.feynman-panel__retry:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .feynman-panel__intro-hint {
@@ -832,6 +898,24 @@ async function submitJudge(): Promise<void> {
 .feynman-panel__judge--pending {
   border-color: var(--pyt-color-warning);
   background: var(--pyt-color-warning-bg);
+}
+
+.feynman-panel__judge-hint {
+  margin-right: auto;
+  color: var(--pyt-color-text-hint);
+  font-size: var(--pyt-font-size-xs);
+  line-height: 1.4;
+}
+
+.feynman-panel__notice {
+  margin: 0;
+  padding: var(--pyt-space-2);
+  border: 1px dashed var(--pyt-color-info);
+  border-radius: var(--pyt-radius-sm);
+  background: var(--pyt-color-info-bg);
+  color: var(--pyt-color-text-hint);
+  font-size: var(--pyt-font-size-xs);
+  line-height: 1.5;
 }
 
 @media (max-width: 900px) {

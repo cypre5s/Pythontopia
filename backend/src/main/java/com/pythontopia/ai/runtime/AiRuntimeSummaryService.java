@@ -71,6 +71,7 @@ public class AiRuntimeSummaryService {
         gates(protocol, evidence, memory, externalResearch));
   }
 
+  /** 查看者本人的闭环运维状态（学生视角）。 */
   @Transactional(readOnly = true)
   public AiRuntimeOperationsDto operationsForUser(long userId) {
     AiRuntimeSummaryDto summary = summaryForUser(userId);

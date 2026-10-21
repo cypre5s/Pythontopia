@@ -120,7 +120,8 @@ class AiRuntimeSummaryServiceTest {
         .extracting(AiRuntimeSummaryDto.RuntimeGate::status)
         .isEqualTo("PASS");
 
-    AiRuntimeOperationsDto operations = service.operationsForUser(userId);
+    AiRuntimeOperationsDto operations =
+        service.operationsForSubject(AiRuntimeOperationsDto.OperationsSubject.student(userId));
 
     assertThat(operations.subject().scope()).isEqualTo("SELF");
     assertThat(operations.subject().label()).isEqualTo("本人学习证据");
@@ -197,6 +198,7 @@ class AiRuntimeSummaryServiceTest {
 
     AiRuntimeOperationsDto operations = service.operationsForUser(userId);
 
+    assertThat(operations.subject().scope()).isEqualTo("SELF");
     assertThat(operations.loops())
         .filteredOn(operation -> "LEARNER".equals(operation.loopType()))
         .first()

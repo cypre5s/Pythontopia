@@ -42,6 +42,13 @@ public class TutorBenchEvaluator {
             : "缺少资源消费后的微测或掌握度事件");
   }
 
+  /**
+   * 反作弊：掌握度增长不得超过通过微测应得的上限；失败微测必须触发补救。
+   *
+   * <p>「从未失败过微测」与「失败了但没补救」是两种<strong>完全不同</strong>的结论：前者是零失败的
+   * 优等生或全新零活跃用户，补救率不适用（N/A），只需检查有没有刷分；把它和后者一样报成
+   * 「失败微测未触发补救或存在刷分风险」是断言方向与命名相反的误报。
+   */
   private TutorBenchCaseDto antiCheatRemediation(LearningEffectSummaryDto summary) {
     boolean noFailedChecks = summary.failedCheckCount() == 0;
     boolean remediationSatisfied = noFailedChecks || summary.remediationRate() > 0.0;
