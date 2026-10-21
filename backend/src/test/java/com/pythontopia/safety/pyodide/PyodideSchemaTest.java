@@ -50,9 +50,8 @@ class PyodideSchemaTest {
     registry.add("spring.datasource.username", POSTGRES::getUsername);
     registry.add("spring.datasource.password", POSTGRES::getPassword);
     registry.add("spring.flyway.locations", () -> "classpath:db/migration");
-    // Schema smoke test only cares about V116; stopping migrations here keeps this test stable
-    // against any later (possibly in-flight) migrations authored in parallel.
-    registry.add("spring.flyway.target", () -> "116");
+    // The full application context starts services that depend on tables added after V116, so
+    // migrate the complete schema before checking the Pyodide audit table.
     registry.add(
         "pythontopia.security.jwt.secret", () -> "test-secret-must-be-long-enough-for-hs256");
     registry.add("pythontopia.security.teacherInviteCode", () -> "test-teacher-code");

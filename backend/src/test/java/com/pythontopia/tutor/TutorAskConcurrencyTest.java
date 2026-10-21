@@ -5,8 +5,11 @@ import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
@@ -29,6 +32,8 @@ import org.springframework.http.HttpStatus;
 class TutorAskConcurrencyTest {
 
   private final TutorGraphClient graphClient = mock(TutorGraphClient.class);
+  private final TutorRequestBudgetService requestBudgetService =
+      mock(TutorRequestBudgetService.class);
   private final TutorService service =
       new TutorService(
           graphClient,
@@ -62,6 +67,7 @@ class TutorAskConcurrencyTest {
               assertThat(ex.getMessage()).matches(".*[\\u4e00-\\u9fa5].*");
               assertThat(ex.getMessage().length()).isLessThanOrEqualTo(30);
             });
+    verify(requestBudgetService).reserve(7L);
   }
 
   @Test
@@ -95,5 +101,29 @@ class TutorAskConcurrencyTest {
               service.ask(STUDENT, ask("  "));
             })
         .doesNotThrowAnyException();
+  }
+
+  @Test
+  void exhaustedDailyBudgetRejectsBeforeGraphAndReleasesConversationLock() {
+    doThrow(
+            new BusinessException(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "TUTOR_DAILY_REQUEST_LIMIT_REACHED",
+                "今日导师请求次数已达上限"))
+        .when(requestBudgetService)
+        .reserve(7L);
+
+    assertThatThrownBy(() -> service.ask(STUDENT, ask("conv-budget")))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            exception -> assertThat(exception.status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+    // The next attempt must see the budget response again rather than a stale SESSION_BUSY lock.
+    assertThatThrownBy(() -> service.ask(STUDENT, ask("conv-budget")))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            exception -> assertThat(exception.status()).isEqualTo(HttpStatus.TOO_MANY_REQUESTS));
+
+    verify(requestBudgetService, times(2)).reserve(7L);
+    verifyNoInteractions(graphClient);
   }
 }

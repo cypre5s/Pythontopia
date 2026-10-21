@@ -11,10 +11,13 @@ based_on=metadata_only ③LLM 不可用→degraded ④LLM 编造的非法 t_sec 
 
 from __future__ import annotations
 
-import pytest
 import logging
-from fastapi.testclient import TestClient
+import os
+import sys
 from types import SimpleNamespace
+
+import pytest
+from fastapi.testclient import TestClient
 
 import pythontopia_graph.routes.video_insight as video_insight_route
 import pythontopia_graph.routes.video as video_route
@@ -37,7 +40,7 @@ def test_bilibili_proxy_configuration_does_not_log_proxy_credentials(
     )
     fake_bilibili = ModuleType("bilibili_api")
     fake_bilibili.request_settings = request_settings  # type: ignore[attr-defined]
-    monkeypatch.setitem(__import__("sys").modules, "bilibili_api", fake_bilibili)
+    monkeypatch.setitem(sys.modules, "bilibili_api", fake_bilibili)
     monkeypatch.setattr(video_route, "_proxy_configured", False)
     monkeypatch.setenv("PYT_BILI_PROXY", proxy)
     monkeypatch.delenv("HTTP_PROXY", raising=False)
@@ -48,6 +51,8 @@ def test_bilibili_proxy_configuration_does_not_log_proxy_credentials(
     video_route._configure_bilibili_proxy()
 
     assert calls == [proxy]
+    assert "HTTP_PROXY" not in os.environ
+    assert "HTTPS_PROXY" not in os.environ
     assert proxy not in caplog.text
     assert "proxy-secret" not in caplog.text
     assert "token=hidden" not in caplog.text

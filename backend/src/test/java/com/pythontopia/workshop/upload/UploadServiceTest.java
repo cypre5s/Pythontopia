@@ -191,6 +191,22 @@ class UploadServiceTest {
   }
 
   @Test
+  void checksStorageQuotaBeforeParsingTheFile() {
+    when(repository.hasUploadCapacity(USER_ID, 1L, 20, 50L * 1024 * 1024)).thenReturn(false);
+    UploadTextExtractor extractor = spy(new UploadTextExtractor());
+    UploadService quotaService = new UploadService(repository, extractor);
+    MockMultipartFile file =
+        new MockMultipartFile("file", "note.txt", "text/plain", "x".getBytes(StandardCharsets.UTF_8));
+
+    assertThatThrownBy(() -> quotaService.upload(USER_ID, file))
+        .isInstanceOf(BusinessException.class)
+        .extracting(ex -> ((BusinessException) ex).code())
+        .isEqualTo("UPLOAD_QUOTA_EXCEEDED");
+
+    verify(extractor, never()).extract(eq(".txt"), any(byte[].class));
+  }
+
+  @Test
   void uploadRejectsEmptyFile() {
     MockMultipartFile file = new MockMultipartFile("file", "empty.txt", "text/plain", new byte[0]);
 

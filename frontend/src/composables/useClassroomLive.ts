@@ -9,8 +9,10 @@ export interface LiveEvent {
 
 export interface UseClassroomLiveReturn {
   connected: Ref<boolean>;
+  connecting: Ref<boolean>;
+  retrying: Ref<boolean>;
   events: Ref<LiveEvent[]>;
-  /** 权限错误（401/403）提示；非空时已停止自动重连。 */
+  /** 当前连接失败原因；401/403 不自动重连，网络错误会展示重连提示。 */
   error: Ref<string | null>;
   connect: (classroomId: number) => void;
   disconnect: () => void;
@@ -28,6 +30,8 @@ const RECONNECT_DELAY_MS = 5000;
  */
 export function useClassroomLive(): UseClassroomLiveReturn {
   const connected = ref(false);
+  const connecting = ref(false);
+  const retrying = ref(false);
   const events = ref<LiveEvent[]>([]);
   const error = ref<string | null>(null);
 
@@ -60,6 +64,9 @@ export function useClassroomLive(): UseClassroomLiveReturn {
 
     if (event === 'connected') {
       connected.value = true;
+      connecting.value = false;
+      retrying.value = false;
+      error.value = null;
       return;
     }
     if (dataLines.length === 0) return;
@@ -68,16 +75,23 @@ export function useClassroomLive(): UseClassroomLiveReturn {
     }
   }
 
-  function scheduleReconnect(classroomId: number, gen: number): void {
+  function scheduleReconnect(classroomId: number, gen: number, message: string): void {
     if (gen !== generation) return;
     connected.value = false;
+    connecting.value = false;
+    retrying.value = true;
+    error.value = message;
     reconnectTimer = setTimeout(() => {
       reconnectTimer = null;
-      if (gen === generation) connect(classroomId);
+      if (gen === generation) {
+        retrying.value = false;
+        connect(classroomId);
+      }
     }, RECONNECT_DELAY_MS);
   }
 
   async function run(classroomId: number, gen: number): Promise<void> {
+    connecting.value = true;
     const session = useSessionStore();
     const headers: Record<string, string> = { Accept: 'text/event-stream' };
     if (session.token) {
@@ -93,7 +107,7 @@ export function useClassroomLive(): UseClassroomLiveReturn {
       });
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
-      scheduleReconnect(classroomId, gen);
+      scheduleReconnect(classroomId, gen, '直播连接失败，5 秒后自动重试。');
       return;
     }
 
@@ -101,18 +115,24 @@ export function useClassroomLive(): UseClassroomLiveReturn {
 
     if (response.status === 401 || response.status === 403) {
       connected.value = false;
+      connecting.value = false;
+      retrying.value = false;
       error.value = '无权订阅课堂直播：请确认已使用教师账号登录。';
       controller = null;
       return;
     }
 
     if (!response.ok || !response.body) {
-      scheduleReconnect(classroomId, gen);
+      const message = response.ok
+        ? '直播服务未返回事件流，5 秒后自动重试。'
+        : `直播服务返回 HTTP ${response.status}，5 秒后自动重试。`;
+      scheduleReconnect(classroomId, gen, message);
       return;
     }
 
     const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = '';
+    let disconnectMessage = '直播连接已中断，5 秒后自动重试。';
     try {
       for (;;) {
         const { done, value } = await reader.read();
@@ -131,10 +151,11 @@ export function useClassroomLive(): UseClassroomLiveReturn {
       if (buffer.trim() && gen === generation) handleBlock(buffer);
     } catch (err: unknown) {
       if (err instanceof DOMException && err.name === 'AbortError') return;
+      disconnectMessage = '直播读取中断，5 秒后自动重试。';
     }
 
     // 服务端关闭或网络中断：与原 EventSource 行为一致，5 秒后重连。
-    scheduleReconnect(classroomId, gen);
+    scheduleReconnect(classroomId, gen, disconnectMessage);
   }
 
   function connect(classroomId: number): void {
@@ -144,6 +165,7 @@ export function useClassroomLive(): UseClassroomLiveReturn {
     }
     disconnect();
     error.value = null;
+    connecting.value = true;
     const gen = ++generation;
     controller = new AbortController();
     void run(classroomId, gen);
@@ -158,11 +180,13 @@ export function useClassroomLive(): UseClassroomLiveReturn {
     controller?.abort();
     controller = null;
     connected.value = false;
+    connecting.value = false;
+    retrying.value = false;
   }
 
   onBeforeUnmount(() => {
     disconnect();
   });
 
-  return { connected, events, error, connect, disconnect };
+  return { connected, connecting, retrying, events, error, connect, disconnect };
 }

@@ -213,9 +213,12 @@ function rateColor(value: number): string {
     >
       还没有发布任务。
     </p>
-    <table
+    <div
       v-else
-      class="quest-table"
+      class="quest-table-scroll"
+      role="region"
+      aria-label="班级任务列表，可横向滚动"
+      tabindex="0"
     >
       <thead>
         <tr>
@@ -247,29 +250,25 @@ function rateColor(value: number): string {
                   :style="{ width: fmtRate(findCompletion(quest.id)!.completionRate), background: rateColor(findCompletion(quest.id)!.completionRate) }"
                 />
               </div>
-              <span class="rate-text">
-                {{ findCompletion(quest.id)!.completedCount }}/{{ findCompletion(quest.id)!.totalStudents }}
-                · {{ fmtRate(findCompletion(quest.id)!.completionRate) }}
-              </span>
-            </div>
-            <span
-              v-else
-              class="rate-na"
-            >——</span>
-          </td>
-          <td>
-            <PyButton
-              v-if="quest.status === 'ACTIVE'"
-              variant="secondary"
-              size="sm"
-              @click="emit('archive', quest.id)"
-            >
-              归档
-            </PyButton>
-          </td>
-        </tr>
-      </tbody>
-    </table>
+              <span
+                v-else
+                class="rate-na"
+              >——</span>
+            </td>
+            <td>
+              <PyButton
+                v-if="quest.status === 'ACTIVE'"
+                variant="secondary"
+                size="sm"
+                @click="emit('archive', quest.id)"
+              >
+                归档
+              </PyButton>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   </section>
 </template>
 
@@ -349,8 +348,19 @@ function rateColor(value: number): string {
   text-align: center;
   color: var(--pyt-color-text-hint);
 }
+.quest-table-scroll {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  border-radius: var(--pyt-radius-md);
+}
+.quest-table-scroll:focus-visible {
+  outline: 2px solid var(--pyt-color-gold);
+  outline-offset: 2px;
+}
 .quest-table {
   width: 100%;
+  min-width: 760px;
   border-collapse: collapse;
   font-size: var(--pyt-font-size-sm);
   border: 2px solid var(--pyt-color-border);

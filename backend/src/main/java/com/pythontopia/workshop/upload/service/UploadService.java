@@ -185,4 +185,11 @@ public class UploadService {
     }
     return value.length() <= max ? value : value.substring(0, max);
   }
+
+  private static BusinessException quotaExceeded() {
+    return new BusinessException(
+        HttpStatus.PAYLOAD_TOO_LARGE,
+        "UPLOAD_QUOTA_EXCEEDED",
+        "个人上传额度已用完，请删除旧文件后再上传");
+  }
 }

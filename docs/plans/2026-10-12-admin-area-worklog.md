@@ -43,7 +43,7 @@
 
 ## 2026-10-13：Alethicode 管理台样式对齐
 
-- 清点 Pythontopia `frontend/src/app/router.ts`：当前管理台只有 ADMIN-only `/admin/operations` 与 `/admin/problem-reviews` 两个页面。Alethicode 最新工作树（HEAD `10a97fe`，管理台最近一次提交 `d96f609` 后仍有多处未提交修改）包含用户、公告、判题服务、题目/导入导出、KC、AI 配置、课程包、使用统计、反馈等管理页面；这些 API/权限/页面在 Pythontopia 未暴露，本次不复制空壳或造数据。
+- 清点 Pythontopia `frontend/src/app/router.ts`：在本次样式对齐切片开始时，管理台只有 ADMIN-only `/admin/operations` 与 `/admin/problem-reviews` 两个页面；后续同日新增了真实的 `/admin/users` 页面与 API。Alethicode 最新工作树（HEAD `10a97fe`，管理台最近一次提交 `d96f609` 后仍有多处未提交修改）包含公告、判题服务、题目/导入导出、KC、AI 配置、课程包、使用统计、反馈等页面；这些 API/权限/页面在 Pythontopia 未暴露，本次不复制空壳或造数据。
 - 对照 Alethicode `frontend/src/pages/admin/views/Home.vue`、`components/SideMenu.vue`、`components/Panel.vue`、`style.less`、`elementPlusTheme.less`，以及 `views/general/User.vue`、`views/problem/ProblemList.vue` 的最新 dirty diff：沿用其 240px 分组侧栏、面板标题/工具栏、蓝灰表面、36px 控件、44px 表头、52px 行、表格横向滚动和溢出截断方式。
 - Pythontopia 管理台移除桌面重复顶栏；窄屏保留 Alethicode 风格的“管理导航”入口与侧栏抽屉。运维页补明确页标题，审核页维持面板标题；页脚改成 Alethicode 的分隔线与双栏结构。
 - 审核表最小宽度调整为其固定列宽合计（1100px），ID、章节、难度、状态和操作列禁止异常折行，长题面/KC 保持截断并能通过 title 查看全文。
@@ -99,3 +99,8 @@
 - 后台恢复并锁定 Alethicode 蓝灰 token，Tab 焦点色统一从 shell token 读取。样式契约改为检查共享组件，避免分别复制同一组表格样式。
 - 验证：管理样式和 AdminTable 定向 5 项通过；Web 全量 256 文件 / 2517 tests、typecheck、改动文件 ESLint 与 production build 通过。
 - 本次没有添加管理 API、菜单或假数据；未进行浏览器全栈联测。
+
+## 2026-10-13 补充：隔离全栈管理台浏览器验收
+
+- 用隔离 Compose 项目和临时数据库登录管理员账号，验证用户列表、停用/启用、确认框 Escape 关闭及焦点恢复；审核页及真实空队列也正常加载。页面异常和 API 5xx 均为 0。
+- 临时用户、数据库卷、本地配置和本轮启动的服务已清理；生产 DeepSeek/Piston 请求和性能基准未执行。

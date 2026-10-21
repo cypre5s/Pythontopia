@@ -29,6 +29,7 @@ import com.pythontopia.world.boss.dto.BossTestCasePayload;
 import com.pythontopia.world.boss.dto.FrontierPickDto;
 import com.pythontopia.world.boss.dto.FrontierSelectRequest;
 import com.pythontopia.world.boss.dto.FrontierSelectResultDto;
+import com.pythontopia.world.boss.ExpeditionRunService.ExpeditionProblemPolicy;
 import com.pythontopia.world.boss.review.ApprovedBossProblem;
 import com.pythontopia.world.boss.review.BossProblemReviewRepository;
 import java.nio.ByteBuffer;
@@ -91,8 +92,8 @@ public class BossService {
   private final EndlessPregenService pregenService;
   private final BossProblemReviewRepository reviewRepository;
   private final ExpeditionRunService expeditionRunService;
-  private final ExpeditionScoreService expeditionScoreService;
   private final BossAttemptIdempotencyService attemptIdempotencyService;
+  private final ExpeditionAttemptCompletionService expeditionAttemptCompletionService;
   private final ApplicationEventPublisher eventPublisher;
   private final ConcurrentMap<ProblemCacheKey, CachedProblem> cache = new ConcurrentHashMap<>();
   private final Set<ProblemGenerationKey> generationsInFlight = ConcurrentHashMap.newKeySet();
@@ -114,8 +115,8 @@ public class BossService {
       EndlessPregenService pregenService,
       BossProblemReviewRepository reviewRepository,
       ExpeditionRunService expeditionRunService,
-      ExpeditionScoreService expeditionScoreService,
       BossAttemptIdempotencyService attemptIdempotencyService,
+      ExpeditionAttemptCompletionService expeditionAttemptCompletionService,
       ApplicationEventPublisher eventPublisher) {
     this.graphClient = graphClient;
     this.passiveProfileService = passiveProfileService;
@@ -128,8 +129,8 @@ public class BossService {
     this.pregenService = pregenService;
     this.reviewRepository = reviewRepository;
     this.expeditionRunService = expeditionRunService;
-    this.expeditionScoreService = expeditionScoreService;
     this.attemptIdempotencyService = attemptIdempotencyService;
+    this.expeditionAttemptCompletionService = expeditionAttemptCompletionService;
     this.eventPublisher = eventPublisher;
   }
 
@@ -199,6 +200,12 @@ public class BossService {
     ExpeditionRequestBinding expeditionBinding =
         validateExpeditionRun(
             userId, request.expeditionRunId(), request.expeditionNodeId(), chapter, false, kc);
+    ExpeditionProblemPolicy policy = expeditionBinding.policy();
+    int progression = policy == null ? request.stage() : policy.stage();
+    Integer requestedDifficulty = request.difficulty();
+    if (policy != null) requestedDifficulty = policy.difficulty();
+    int difficulty = computeTargetDifficulty(userId, kc, progression, requestedDifficulty);
+    request = applyExpeditionPolicy(request, policy, difficulty);
     String expeditionRunId = expeditionBinding.runId();
     int difficulty = computeTargetDifficulty(userId, kc, request.stage());
     boolean objectivePracticeRequested = isObjectivePracticeRequest(request);
@@ -671,6 +678,23 @@ public class BossService {
                 expeditionRunId,
                 request.expeditionNodeId());
     if (start.shouldGenerate() && start.status().jobId() != null) {
+      Long generationReservation = null;
+      if (expeditionRunId != null) {
+        try {
+          generationReservation =
+              expeditionRunService.reserveProblemGeneration(
+                  userId,
+                  expeditionRunId,
+                  request.expeditionNodeId(),
+                  chapter,
+                  true,
+                  kc);
+        } catch (com.pythontopia.common.error.BusinessException exception) {
+          pregenService.failPrefetch(
+              start.status().jobId(), start.status().attempts(), exception.getMessage());
+          throw exception;
+        }
+      }
       try {
         if (expeditionRunId == null) {
           pregenService.generatePrefetch(
@@ -703,6 +727,9 @@ public class BossService {
               start.status().attempts());
         }
       } catch (TaskRejectedException rejected) {
+        if (generationReservation != null) {
+          expeditionRunService.releaseProblemGeneration(userId, generationReservation);
+        }
         pregenService.failPrefetch(
             start.status().jobId(), start.status().attempts(), "预加载队列已满，请稍后重试");
         throw new com.pythontopia.common.error.BusinessException(
@@ -752,15 +779,15 @@ public class BossService {
         validateExpeditionRun(userId, expeditionRunId, expeditionNodeId, chapter, true, kc).runId();
     return activeRunId == null
         ? pregenService.getPrefetchStatus(
-            userId, chapter, stage, kc, difficulty, preferredKind, arenaLevel, null)
+            userId, chapter, effectiveStage, kc, difficulty, effectiveKind, effectiveArenaLevel, null)
         : pregenService.getPrefetchStatus(
             userId,
             chapter,
-            stage,
+            effectiveStage,
             kc,
             difficulty,
-            preferredKind,
-            arenaLevel,
+            effectiveKind,
+            effectiveArenaLevel,
             activeRunId,
             expeditionNodeId);
   }
@@ -1103,12 +1130,32 @@ public class BossService {
       Long userId, String runId, String nodeId, int chapter, boolean allowPrefetch, String kcCode) {
     if (runId == null) {
       if (nodeId != null) throw problemBindingMismatch();
-      return new ExpeditionRequestBinding(null, null);
+      return new ExpeditionRequestBinding(null, null, null);
     }
-    Integer bossPhase =
-        expeditionRunService.validateProblemRequest(
+    ExpeditionProblemPolicy policy =
+        expeditionRunService.resolveProblemRequest(
             userId, runId, nodeId, chapter, allowPrefetch, kcCode);
-    return new ExpeditionRequestBinding(runId, bossPhase);
+    if (policy == null
+        || !Objects.equals(policy.nodeId(), nodeId)
+        || !Objects.equals(policy.kcCode(), kcCode)) {
+      throw problemBindingMismatch();
+    }
+    return new ExpeditionRequestBinding(runId, policy.bossPhase(), policy);
+  }
+
+  private BossProblemRequest applyExpeditionPolicy(
+      BossProblemRequest request, ExpeditionProblemPolicy policy, int targetDifficulty) {
+    if (policy == null) return request;
+    return new BossProblemRequest(
+        Math.min(4, targetDifficulty),
+        request.kcCode(),
+        targetDifficulty,
+        request.preferredKc(),
+        policy.challengeKind(),
+        request.profileSignals(),
+        null,
+        request.expeditionRunId(),
+        policy.nodeId());
   }
 
   static String issueProblemId(Integer bossPhase) {
@@ -1148,15 +1195,14 @@ public class BossService {
 
   static String expeditionAttemptFingerprint(
       String questionFingerprint, String nodeId, Integer bossPhase) {
-    if (bossPhase == null) return questionFingerprint;
-    if (nodeId == null || bossPhase < 1 || bossPhase > 3) {
+    if (nodeId == null || nodeId.isBlank() || (bossPhase != null && (bossPhase < 1 || bossPhase > 3))) {
       throw new IllegalArgumentException("boss attempt binding is invalid");
     }
     try {
       MessageDigest digest = MessageDigest.getInstance("SHA-256");
       updateFingerprint(digest, questionFingerprint);
       updateFingerprint(digest, nodeId);
-      updateFingerprint(digest, Integer.toString(bossPhase));
+      updateFingerprint(digest, bossPhase == null ? "" : Integer.toString(bossPhase));
       return HexFormat.of().formatHex(digest.digest());
     } catch (NoSuchAlgorithmException exception) {
       throw new IllegalStateException("SHA-256 is unavailable", exception);

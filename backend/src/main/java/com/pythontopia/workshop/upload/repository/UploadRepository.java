@@ -78,6 +78,23 @@ public class UploadRepository {
     return Boolean.TRUE.equals(withinQuota);
   }
 
+  /** Cheap preflight; {@link #canAcceptUpload} repeats the check under the owner-row lock before insert. */
+  public boolean hasUploadCapacity(
+      long userId, long incomingBytes, int maxFiles, long maxTotalBytes) {
+    Boolean withinQuota =
+        jdbcTemplate.queryForObject(
+            "SELECT (SELECT count(*) FROM workshop_upload WHERE user_id = ?) < ?"
+                + " AND (SELECT coalesce(sum(byte_size), 0) FROM workshop_upload WHERE user_id = ?)"
+                + " + ? <= ?",
+            Boolean.class,
+            userId,
+            maxFiles,
+            userId,
+            incomingBytes,
+            maxTotalBytes);
+    return Boolean.TRUE.equals(withinQuota);
+  }
+
   /** 列表：本人上传按时间倒序，不取 extracted_text（{@code extractedText} 置空串）。 */
   public List<WorkshopUpload> listByUser(long userId) {
     return jdbcTemplate.query(

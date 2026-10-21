@@ -45,6 +45,9 @@ describe('admin visual shell contract', () => {
     expect(layoutStyles).toContain('.admin-shell--nav-open .admin-sidebar');
     expect(layoutStyles).toContain('.admin-shell__navigation-toggle');
     expect(layoutStyles).not.toContain('.admin-topbar');
+    expect(layoutStyles).toContain('.admin-shell :deep(.admin-dialog)');
+    expect(componentSource('../../../src/pages/admin/AdminLayout.vue')).toContain('<svg');
+    expect(componentSource('../../../src/pages/admin/AdminLayout.vue')).not.toContain('>01</span>');
   });
 
   it('keeps the global pixel button effect out of the admin interface', () => {

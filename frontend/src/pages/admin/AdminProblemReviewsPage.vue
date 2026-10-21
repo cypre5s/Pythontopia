@@ -94,6 +94,10 @@ async function loadQueue(): Promise<void> {
   if (loading.value) return;
   loading.value = true;
   error.value = null;
+  entries.value = [];
+  selectedId.value = null;
+  totalElements.value = 0;
+  totalPages.value = 0;
   try {
     const readPage = () => searchProblemReviews({
       page: page.value,
@@ -123,6 +127,10 @@ async function loadQueue(): Promise<void> {
     totalElements.value = 0;
     totalPages.value = 0;
     error.value = cause instanceof Error ? cause.message : '审核队列暂不可用';
+    entries.value = [];
+    selectedId.value = null;
+    totalElements.value = 0;
+    totalPages.value = 0;
   } finally {
     loading.value = false;
   }
@@ -249,6 +257,11 @@ onMounted(() => {
     tabindex="-1"
     data-testid="admin-problem-reviews"
   >
+    <header class="admin-page-heading">
+      <h1>AI 出题审核</h1>
+      <p>复核服务端生成的题目，并保存审核决定与理由。</p>
+    </header>
+
     <AdminPanel
       title="AI 出题审核"
       description="AI 通过审查的题目可自动进入题库；教师可复核并撤下，人工决定均保留审计记录。"
@@ -260,8 +273,72 @@ onMounted(() => {
           :disabled="loading"
           @click="loadQueue"
         >
-          {{ loading ? '正在刷新…' : '刷新队列' }}
-        </button>
+          <label class="review-filter">
+            <span>状态</span>
+            <select
+              v-model="filter"
+              aria-label="按审核状态筛选"
+              :disabled="loading"
+              @change="applyQueueFilters"
+            >
+              <option value="ALL">全部状态</option>
+              <option value="PENDING">待审核</option>
+              <option value="APPROVED">已通过</option>
+              <option value="REJECTED">已驳回</option>
+            </select>
+          </label>
+          <label class="review-filter">
+            <span>排序字段</span>
+            <select
+              v-model="sortBy"
+              aria-label="审核队列排序字段"
+              :disabled="loading"
+              @change="applyQueueFilters"
+            >
+              <option value="REQUESTED_AT">申请时间</option>
+              <option value="STATEMENT">题面</option>
+              <option value="REQUESTER_USERNAME">申请人</option>
+            </select>
+          </label>
+          <label class="review-filter">
+            <span>顺序</span>
+            <select
+              v-model="sortDirection"
+              aria-label="审核队列排序方向"
+              :disabled="loading"
+              @change="applyQueueFilters"
+            >
+              <option value="DESC">降序</option>
+              <option value="ASC">升序</option>
+            </select>
+          </label>
+          <label class="review-search">
+            <span>搜索题目、KC、申请人或编号</span>
+            <input
+              id="admin-review-search"
+              v-model="searchInput"
+              type="search"
+              maxlength="100"
+              :disabled="loading"
+              data-testid="admin-review-search"
+            >
+          </label>
+          <button
+            class="admin-button admin-button--primary"
+            type="submit"
+            :disabled="loading"
+          >
+            搜索
+          </button>
+          <button
+            class="admin-button"
+            type="button"
+            :disabled="loading"
+            @click="loadQueue"
+          >
+            {{ loading ? '正在刷新…' : '刷新队列' }}
+          </button>
+        </form>
       </template>
 
       <template #toolbar>
@@ -637,7 +714,9 @@ onMounted(() => {
           ? '确认通过题目'
           : selectedEntry?.decision === 'APPROVED' ? '确认撤下题目' : '确认驳回题目' }}
       </h2>
-      <p>审核决定会写入后端题库和审计记录，请填写本次审核意见。</p>
+      <p class="admin-dialog__description">
+        审核决定会写入后端题库和审计记录，请填写本次审核意见。
+      </p>
       <label for="review-decision-reason">审核意见</label>
       <textarea
         id="review-decision-reason"
@@ -655,7 +734,7 @@ onMounted(() => {
       >
         {{ decisionError }}
       </p>
-      <div class="review-dialog__actions">
+      <div class="admin-dialog__actions">
         <button
           class="admin-button"
           type="button"
@@ -708,7 +787,7 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
-.review-search {
+.review-toolbar {
   display: flex;
   min-width: min(360px, 100%);
   align-items: flex-end;
@@ -1009,13 +1088,6 @@ dialog.admin-dialog.review-detail-dialog {
   color: #b91c1c !important;
 }
 
-.review-dialog__actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 16px;
-}
-
 @media (max-width: 760px) {
   .review-detail {
     grid-template-columns: 1fr;
@@ -1029,13 +1101,9 @@ dialog.admin-dialog.review-detail-dialog {
 }
 
 @media (max-width: 540px) {
-  .review-search {
-    align-items: stretch;
-  }
-
-  .review-search input {
-    flex: 1 1 100%;
-  }
+  .review-toolbar { justify-content: stretch; }
+  .review-toolbar > * { flex: 1 1 100%; }
+  .review-search { min-width: 0; }
 
   .review-counts {
     gap: 5px;

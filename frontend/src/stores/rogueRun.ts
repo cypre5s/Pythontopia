@@ -682,7 +682,6 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
   /** 拉取并进入某节点的判题（战斗/精英/抓bug/boss，以及事件选择后的挑战）。 */
   async function beginChallenge(
     node: RogueNode,
-    difficultyBonus = 0,
     difficultyOverride?: number,
   ): Promise<void> {
     const requestGeneration = ++challengeGeneration;
@@ -698,10 +697,10 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
     elapsedSec.value = 0;
     phase.value = 'challenge';
     loading.value = true;
-    // 局内自适应和事件加成只影响当前题，不改服务端签发的地图配置。
+    // 客户端难度只用于预取/加载提示；实际难度由服务端存档判题记录与事件选择决定。
     const recentFailures = history.value.slice(0, 2).filter((h) => !h.passed).length;
     activeDifficulty.value = Math.min(5, difficultyOverride ?? (
-      computeRunDifficulty(node.difficulty, momentum.value, recentFailures) + difficultyBonus
+      computeRunDifficulty(node.difficulty, momentum.value, recentFailures)
     ));
     persist();
     try {
@@ -805,7 +804,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       eventScoreMult.value = 1;
     }
     const current = nodeById(node.id);
-    if (current) await beginChallenge(current, choice === 'study' ? 1 : 0);
+    if (current) await beginChallenge(current);
   }
 
   function scoreFor(node: RogueNode): number {
@@ -977,7 +976,7 @@ export const useRogueRunStore = defineStore('rogueRun', () => {
       // 预取失败不阻断重试：beginChallenge 会走现场出题路径。
     }
     // beginChallenge 内部 finally 会把 loading 归位。
-    await beginChallenge(node, 0, difficulty);
+    await beginChallenge(node, difficulty);
   }
 
   /** UI/诊断按 node 查询预加载状态；ready 只来自后端 READY。 */

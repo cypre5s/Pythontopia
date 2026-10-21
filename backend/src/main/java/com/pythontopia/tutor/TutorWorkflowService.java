@@ -91,6 +91,7 @@ public class TutorWorkflowService {
   private final CoursePackRepository coursePackRepository;
   private final SubmissionService submissionService;
   private final ApplicationEventPublisher eventPublisher;
+  private final TutorRequestBudgetService requestBudgetService;
   private final ObjectMapper objectMapper;
   private final TutorDailyRequestLimitService requestLimitService;
 
@@ -113,6 +114,7 @@ public class TutorWorkflowService {
     this.coursePackRepository = coursePackRepository;
     this.submissionService = submissionService;
     this.eventPublisher = eventPublisher;
+    this.requestBudgetService = requestBudgetService;
     this.objectMapper = objectMapper;
     this.requestLimitService = requestLimitService;
   }

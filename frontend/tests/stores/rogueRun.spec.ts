@@ -781,14 +781,14 @@ describe('rogueRun store', () => {
     expect(run.verifiedScore).toBe(0);
   });
 
-  it('sends event study to the server and uses its challenge snapshot', async () => {
+  it('sends event study to the server and trusts the issued problem difficulty', async () => {
     const run = useRogueRunStore();
     await run.startRun(null);
     const node = run.nodes.find((n) => n.layer === 0);
     node!.kind = 'event';
     setServerNode(node!.id, (serverNode) => { serverNode.kind = 'event'; });
     const d0 = node!.difficulty;
-    judgeMock.fetchProblem.mockResolvedValue(problem());
+    judgeMock.fetchProblem.mockResolvedValue({ ...problem(), difficulty: 3 });
     await run.enterNode(node!.id);
     await run.chooseEvent('study');
 
@@ -916,7 +916,7 @@ describe('rogueRun store', () => {
     });
     const run = useRogueRunStore();
     await run.startRun(null);
-    // 直接把气势拉到 3，进入任一可战节点应出更高难度题。
+    // 模拟本地存档中的气势提示；服务端返回的签发难度仍是最终值。
     run.momentum = 3;
     if (mockServerRun) mockServerRun.momentum = 3;
     const start = run.nodes.find((n) => n.layer === 0);

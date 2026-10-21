@@ -27,6 +27,11 @@ const page = ref(0);
 const totalPages = ref(0);
 const totalElements = ref(0);
 const updatingUserId = ref<number | null>(null);
+const statusChangeUser = ref<AdminUserDto | null>(null);
+const statusChangeError = ref<string | null>(null);
+const statusDialog = ref<HTMLDialogElement | null>(null);
+const statusChangeTrigger = ref<HTMLButtonElement | null>(null);
+const usersPage = ref<HTMLElement | null>(null);
 const listBusy = computed(() => loading.value || updatingUserId.value !== null);
 const pageSize = ref(20);
 const pendingStatusChange = ref<{
@@ -56,6 +61,9 @@ async function loadUsers(): Promise<void> {
   if (loading.value) return;
   loading.value = true;
   error.value = null;
+  entries.value = [];
+  totalElements.value = 0;
+  totalPages.value = 0;
   try {
     const readPage = () => searchAdminUsers({
       page: page.value,
@@ -109,6 +117,28 @@ function changePageSize(nextSize: number): void {
 
 function openStatusConfirmation(user: AdminUserDto, event: MouseEvent): void {
   if (user.id === session.user?.id || updatingUserId.value !== null) return;
+  statusChangeTrigger.value = event.currentTarget as HTMLButtonElement;
+  statusChangeUser.value = user;
+  statusChangeError.value = null;
+  void nextTick(() => {
+    statusDialog.value?.showModal();
+    statusDialog.value?.querySelector<HTMLButtonElement>('[data-testid="admin-user-status-cancel"]')?.focus();
+  });
+}
+
+function dismissStatusChange(restoreFocus = true): void {
+  statusDialog.value?.close();
+  statusChangeUser.value = null;
+  statusChangeError.value = null;
+  void nextTick(() => {
+    if (restoreFocus && statusChangeTrigger.value?.isConnected) statusChangeTrigger.value.focus();
+    else usersPage.value?.focus();
+  });
+}
+
+async function confirmStatusChange(): Promise<void> {
+  const user = statusChangeUser.value;
+  if (!user || updatingUserId.value !== null) return;
   const status: AdminUserStatus = user.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
   const action = status === 'DISABLED' ? '停用' : '启用';
   statusTrigger.value = event.currentTarget as HTMLButtonElement;
@@ -153,6 +183,7 @@ onMounted(() => {
   <section
     ref="usersPage"
     class="admin-users"
+    tabindex="-1"
     data-testid="admin-users"
     tabindex="-1"
     :aria-busy="listBusy"
@@ -169,8 +200,62 @@ onMounted(() => {
           :disabled="listBusy"
           @click="loadUsers"
         >
-          {{ loading ? '正在刷新…' : '刷新列表' }}
-        </button>
+          <label class="admin-users__search">
+            <span>搜索账号或显示名</span>
+            <input
+              v-model="searchInput"
+              type="search"
+              maxlength="100"
+              :disabled="listBusy"
+              aria-label="搜索账号或显示名"
+              data-testid="admin-users-search"
+            >
+          </label>
+          <label class="admin-users__status-filter">
+            <span>账号状态</span>
+            <select
+              v-model="statusFilter"
+              aria-label="按账号状态筛选"
+              :disabled="listBusy"
+              @change="applyFilters"
+            >
+              <option value="ALL">全部状态</option>
+              <option value="ACTIVE">正常</option>
+              <option value="DISABLED">已停用</option>
+            </select>
+          </label>
+          <label class="admin-users__role-filter">
+            <span>用户角色</span>
+            <select
+              v-model="roleFilter"
+              aria-label="按用户角色筛选"
+              data-testid="admin-users-role-filter"
+              :disabled="listBusy"
+              @change="applyFilters"
+            >
+              <option value="ALL">全部角色</option>
+              <option value="STUDENT">学生</option>
+              <option value="TEACHER">教师</option>
+              <option value="ADMIN">管理员</option>
+            </select>
+          </label>
+          <button
+            class="admin-users__button admin-users__button--primary"
+            type="submit"
+            :disabled="listBusy"
+          >
+            搜索
+          </button>
+          <button
+            class="admin-users__button"
+            type="button"
+            data-testid="admin-users-refresh"
+            :disabled="listBusy"
+            @click="loadUsers"
+          >
+            {{ loading ? '正在刷新…' : '刷新列表' }}
+          </button>
+        </form>
       </template>
 
       <template #toolbar>

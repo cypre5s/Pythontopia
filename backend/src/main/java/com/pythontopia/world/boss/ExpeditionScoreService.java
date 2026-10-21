@@ -25,6 +25,7 @@ public class ExpeditionScoreService {
   // shortcut: 3 unique questions per each of the 12 challenge stages; revise if topology or retry
   // policy changes.
   private static final int MAX_VERIFIED_ATTEMPTS_PER_RUN = 36;
+  private static final int MAX_VERIFIED_ATTEMPTS_PER_NODE_PHASE = 3;
 
   private final JdbcTemplate jdbcTemplate;
   private final ExpeditionRunService expeditionRunService;
@@ -59,7 +60,7 @@ public class ExpeditionScoreService {
     LockedRun lockedRun = runs.getFirst();
     List<VerifiedAttempt> attempts =
         jdbcTemplate.query(
-            "SELECT passed, score FROM expedition_verified_attempt"
+            "SELECT passed, score, score_awarded FROM expedition_verified_attempt"
                 + " WHERE user_id = ? AND run_id = ?::uuid"
                 + " AND reward_eligible = TRUE"
                 + " ORDER BY created_at, id LIMIT "
@@ -73,12 +74,12 @@ public class ExpeditionScoreService {
       int momentum = 0;
       int bestMomentum = 0;
       for (VerifiedAttempt attempt : attempts) {
-        if (attempt.passed()) {
+        if (attempt.passed() && attempt.scoreAwarded()) {
           score += attempt.score();
           depth++;
           momentum++;
           bestMomentum = Math.max(bestMomentum, momentum);
-        } else {
+        } else if (!attempt.passed()) {
           momentum = 0;
         }
       }
@@ -114,6 +115,8 @@ public class ExpeditionScoreService {
   public VerifiedAttemptResult recordVerifiedAttempt(
       Long userId,
       String runId,
+      String nodeId,
+      Integer bossPhase,
       String problemId,
       String questionFingerprint,
       boolean passed,
@@ -153,6 +156,9 @@ public class ExpeditionScoreService {
       LearningEvent event) {
     if (userId == null
         || runId == null
+        || nodeId == null
+        || !nodeId.matches("[A-Za-z0-9_-]{1,32}")
+        || (bossPhase != null && (bossPhase < 1 || bossPhase > 3))
         || problemId == null
         || questionFingerprint == null
         || !questionFingerprint.matches("[0-9a-f]{64}")) {
@@ -214,6 +220,12 @@ public class ExpeditionScoreService {
     }
     if (!existing.isEmpty()) {
       ExistingAttempt attempt = existing.getFirst();
+      if ((attempt.nodeId() != null && !attempt.nodeId().equals(nodeId))
+          || (attempt.bossPhase() != null && !attempt.bossPhase().equals(bossPhase))) {
+        return new VerifiedAttemptResult(false, false);
+      }
+      boolean awardScore =
+          passed && !hasScoreAwarded(userId, runUuid, nodeId, bossPhase, attempt.id());
       int updated =
           jdbcTemplate.update(
               "UPDATE expedition_verified_attempt SET passed = passed OR ?,"
@@ -226,6 +238,9 @@ public class ExpeditionScoreService {
               rewardEligible && passed ? Math.max(0, score) : 0,
               rewardEligible,
               questionFingerprint,
+              nodeId,
+              bossPhase,
+              awardScore,
               attempt.id());
       boolean publishLearningEvent =
           rewardEligible && passed && (!attempt.passed() || !attempt.rewardEligible());
@@ -240,6 +255,22 @@ public class ExpeditionScoreService {
       return result;
     }
 
+    Integer attemptsForNode =
+        jdbcTemplate.queryForObject(
+            "SELECT COUNT(*) FROM expedition_verified_attempt"
+                + " WHERE user_id = ? AND run_id = ?::uuid AND node_id = ?"
+                + " AND boss_phase IS NOT DISTINCT FROM ?",
+            Integer.class,
+            userId,
+            runUuid,
+            nodeId,
+            bossPhase);
+    if (attemptsForNode != null && attemptsForNode >= MAX_VERIFIED_ATTEMPTS_PER_NODE_PHASE) {
+      return new VerifiedAttemptResult(false, false);
+    }
+    boolean awardScore =
+        passed && !hasScoreAwarded(userId, runUuid, nodeId, bossPhase, null);
+
     int inserted =
         jdbcTemplate.update(
             "INSERT INTO expedition_verified_attempt"
@@ -253,6 +284,8 @@ public class ExpeditionScoreService {
                 + MAX_VERIFIED_ATTEMPTS_PER_RUN,
             userId,
             runUuid,
+            nodeId,
+            bossPhase,
             problemId,
             questionFingerprint,
             rewardEligible && passed,
@@ -288,6 +321,24 @@ public class ExpeditionScoreService {
       expeditionRunService.settleFailedAttempt(userId, runId, problemId);
     }
     return result;
+  }
+
+  private boolean hasScoreAwarded(
+      Long userId, UUID runId, String nodeId, Integer bossPhase, Long exceptAttemptId) {
+    Boolean awarded =
+        jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM expedition_verified_attempt"
+                + " WHERE user_id = ? AND run_id = ?::uuid AND node_id = ?"
+                + " AND boss_phase IS NOT DISTINCT FROM ? AND score_awarded = TRUE"
+                + " AND (?::bigint IS NULL OR id <> ?))",
+            Boolean.class,
+            userId,
+            runId,
+            nodeId,
+            bossPhase,
+            exceptAttemptId,
+            exceptAttemptId);
+    return Boolean.TRUE.equals(awarded);
   }
 
   /** 判定一个活动远征 run 在指定章节的真实答题汇总。 */
@@ -388,7 +439,7 @@ public class ExpeditionScoreService {
 
   private record Ranked(long userId, String displayName, int bestScore, int bestDepth) {}
 
-  record VerifiedAttempt(boolean passed, int score) {}
+  record VerifiedAttempt(boolean passed, int score, boolean scoreAwarded) {}
 
   record ExistingAttempt(long id, boolean passed, boolean rewardEligible) {}
 

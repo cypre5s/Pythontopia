@@ -88,8 +88,8 @@ class BossServiceTest {
   @Mock EndlessPregenService pregenService;
   @Mock BossProblemReviewRepository reviewRepository;
   @Mock ExpeditionRunService expeditionRunService;
-  @Mock ExpeditionScoreService expeditionScoreService;
   @Mock BossAttemptIdempotencyService attemptIdempotencyService;
+  @Mock ExpeditionAttemptCompletionService expeditionAttemptCompletionService;
   @Mock ApplicationEventPublisher eventPublisher;
   private BossService service;
 
@@ -108,9 +108,28 @@ class BossServiceTest {
             pregenService,
             reviewRepository,
             expeditionRunService,
-            expeditionScoreService,
             attemptIdempotencyService,
+            expeditionAttemptCompletionService,
             eventPublisher);
+    lenient()
+        .when(
+            expeditionAttemptCompletionService.complete(
+                anyLong(),
+                anyString(),
+                anyString(),
+                org.mockito.ArgumentMatchers.nullable(Integer.class),
+                anyString(),
+                anyString(),
+                anyBoolean(),
+                anyInt(),
+                org.mockito.ArgumentMatchers.nullable(UUID.class),
+                org.mockito.ArgumentMatchers.nullable(BossAttemptIdempotencyService.Claim.class),
+                any(com.pythontopia.world.boss.dto.BossAttemptResultDto.class),
+                org.mockito.ArgumentMatchers.nullable(LearningEvent.class)))
+        .thenAnswer(
+            call ->
+                new ExpeditionAttemptCompletionService.Completion(
+                    true, call.getArgument(10)));
     lenient()
         .when(passiveProfileService.getPersonalizationSignals(anyLong()))
         .thenReturn(LearnerProfileSignals.empty());
@@ -662,6 +681,8 @@ class BossServiceTest {
         .isEqualTo(BossService.expeditionAttemptFingerprint(questionFingerprint, "L9-0", 1));
     assertThat(BossService.expeditionAttemptFingerprint(questionFingerprint, "L9-0", 1))
         .isNotEqualTo(BossService.expeditionAttemptFingerprint(questionFingerprint, "L9-0", 2));
+    assertThat(BossService.expeditionAttemptFingerprint(questionFingerprint, "L0-0", null))
+        .isNotEqualTo(BossService.expeditionAttemptFingerprint(questionFingerprint, "L0-1", null));
   }
 
   @Test
@@ -819,6 +840,97 @@ class BossServiceTest {
     assertThat(dto.aiGenerated()).isFalse();
     verify(graphClient)
         .requestProblem(anyLong(), anyInt(), anyInt(), anyString(), anyInt(), any(), any(), any());
+  }
+
+  @Test
+  @DisplayName("远征取题使用服务端地图节点的阶段、难度和题型")
+  void expeditionFetchUsesMapOwnedProblemPolicy() {
+    String runId = "123e4567-e89b-12d3-a456-426614174000";
+    var policy =
+        new ExpeditionRunService.ExpeditionProblemPolicy(
+            "L3-1", "PY43-KC-001", 4, 4, "closed_loop", null);
+    when(expeditionRunService.resolveProblemRequest(
+            7L, runId, "L3-1", 1, false, "PY43-KC-001"))
+        .thenReturn(policy);
+    when(reviewRepository.findApproved(1, 4, "PY43-KC-001", "closed_loop", 4))
+        .thenReturn(Optional.of(new ApprovedBossProblem(33L, 1, problemWithStageAndDifficulty(4, 4))));
+
+    var dto =
+        service.fetchProblem(
+            1,
+            new BossProblemRequest(
+                1, "PY43-KC-001", 1, "PY43-KC-001", "debug", null, null, runId, "L3-1"),
+            7L);
+
+    assertThat(dto.stage()).isEqualTo(4);
+    assertThat(dto.difficulty()).isEqualTo(4);
+    verify(pregenService)
+        .claimReady(
+            7L, 1, 4, "PY43-KC-001", 4, "closed_loop", null, runId, "L3-1");
+    verify(reviewRepository).findApproved(1, 4, "PY43-KC-001", "closed_loop", 4);
+  }
+
+  @Test
+  @DisplayName("远征现场出题先预留节点生成额度再请求 Graph")
+  void expeditionOnDemandGenerationReservesBudgetBeforeGraphCall() {
+    String runId = "123e4567-e89b-12d3-a456-426614174000";
+    var policy =
+        new ExpeditionRunService.ExpeditionProblemPolicy(
+            "L0-0", "PY43-KC-001", 1, 1, "debug", null);
+    when(expeditionRunService.resolveProblemRequest(7L, runId, "L0-0", 1, false, "PY43-KC-001"))
+        .thenReturn(policy);
+    when(expeditionRunService.reserveProblemGeneration(7L, runId, "L0-0", 1, false, "PY43-KC-001"))
+        .thenReturn(41L);
+    when(pregenService.claimReady(7L, 1, 1, "PY43-KC-001", 1, "debug", null, runId, "L0-0"))
+        .thenReturn(Optional.empty());
+    when(reviewRepository.findApproved(1, 1, "PY43-KC-001", "debug", 1))
+        .thenReturn(Optional.empty());
+    when(pregenService.getPrefetchStatus(7L, 1, 1, "PY43-KC-001", 1, "debug", null, runId, "L0-0"))
+        .thenReturn(BossPrefetchStatusDto.idle());
+    when(graphClient.requestProblem(anyLong(), eq(1), eq(1), eq("PY43-KC-001"), eq(1), any(),
+        eq("debug"), any()))
+        .thenReturn(problemWithInput("generated"));
+
+    service.fetchProblem(
+        1,
+        new BossProblemRequest(4, null, 5, "PY43-KC-001", "debug", null, null, runId, "L0-0"),
+        7L);
+
+    var order = org.mockito.Mockito.inOrder(expeditionRunService, graphClient);
+    order.verify(expeditionRunService)
+        .reserveProblemGeneration(7L, runId, "L0-0", 1, false, "PY43-KC-001");
+    order.verify(graphClient)
+        .requestProblem(anyLong(), eq(1), eq(1), eq("PY43-KC-001"), eq(1), any(), eq("debug"), any());
+  }
+
+  @Test
+  @DisplayName("远征后台预取也先预留节点生成额度")
+  void expeditionPrefetchReservesBudgetBeforeSchedulingGeneration() {
+    String runId = "123e4567-e89b-12d3-a456-426614174000";
+    var policy =
+        new ExpeditionRunService.ExpeditionProblemPolicy(
+            "L0-0", "PY43-KC-001", 1, 1, "debug", null);
+    var status = new BossPrefetchStatusDto(77L, "PENDING", 1, null, false, null);
+    when(expeditionRunService.resolveProblemRequest(7L, runId, "L0-0", 1, true, "PY43-KC-001"))
+        .thenReturn(policy);
+    when(expeditionRunService.reserveProblemGeneration(7L, runId, "L0-0", 1, true, "PY43-KC-001"))
+        .thenReturn(42L);
+    when(pregenService.beginPrefetch(
+            7L, 1, 1, "PY43-KC-001", 1, "debug", null, runId, "L0-0"))
+        .thenReturn(new EndlessPregenService.PrefetchStart(status, true));
+
+    service.prefetch(
+        1,
+        new BossProblemRequest(4, null, 5, "PY43-KC-001", "debug", null, null, runId, "L0-0"),
+        7L);
+
+    var order = org.mockito.Mockito.inOrder(expeditionRunService, pregenService);
+    order.verify(expeditionRunService)
+        .reserveProblemGeneration(7L, runId, "L0-0", 1, true, "PY43-KC-001");
+    order.verify(pregenService)
+        .generatePrefetch(
+            eq(77L), eq(7L), eq(1), eq(1), eq("PY43-KC-001"), eq(1), eq("PY43-KC-001"),
+            eq("debug"), org.mockito.ArgumentMatchers.isNull(), eq(runId), eq("L0-0"), any(), eq(1));
   }
 
   @Test
@@ -1423,7 +1535,7 @@ class BossServiceTest {
             eq(7L),
             eq(1),
             eq("PY43-KC-001"),
-            org.mockito.ArgumentMatchers.isNull(),
+            eq("dual_track"),
             org.mockito.ArgumentMatchers.isNull(),
             eq(1),
             org.mockito.ArgumentMatchers.argThat(p -> p.problemId().equals(problem.problemId())),
@@ -1450,7 +1562,7 @@ class BossServiceTest {
                 "EXPEDITION_RUN_CHANGED",
                 "远征存档已变化，请刷新后重试"))
         .when(expeditionRunService)
-        .validateProblemRequest(7L, staleRunId, "L0-0", 1, false, "PY43-KC-001");
+        .resolveProblemRequest(7L, staleRunId, "L0-0", 1, false, "PY43-KC-001");
     assertThatThrownBy(
             () ->
                 service.fetchProblem(
@@ -2512,6 +2624,12 @@ class BossServiceTest {
         true,
         List.of(new BossTestCasePayload("2 3", "5", false)),
         "ref");
+  }
+
+  private static BossInternalProblem problemWithStageAndDifficulty(int stage, int difficulty) {
+    return new BossInternalProblem(
+        "p1", 1, stage, difficulty, "PY43-KC-001", "statement", List.of(), "2 3", "5", 1, true,
+        true, List.of(new BossTestCasePayload("2 3", "5", false)), "ref");
   }
 
   private static BossInternalProblem problemWithInput(String input) {

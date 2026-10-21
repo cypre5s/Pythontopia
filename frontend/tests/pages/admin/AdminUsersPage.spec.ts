@@ -20,6 +20,7 @@ const activeUser = {
 
 describe('AdminUsersPage', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     setActivePinia(createPinia());
     useSessionStore().user = {
       id: 1,
@@ -68,7 +69,44 @@ describe('AdminUsersPage', () => {
     expect(searchAdminUsers).toHaveBeenCalledTimes(2);
   });
 
-  it('prevents a status change while a list refresh is in flight', async () => {
+  it('closes the themed account status dialog on Escape and restores focus', async () => {
+    const wrapper = mount(AdminUsersPage, { attachTo: document.body });
+    await flushPromises();
+    const opener = wrapper.get('[data-testid="admin-user-status-7"]').element as HTMLButtonElement;
+    const focus = vi.spyOn(opener, 'focus');
+
+    await wrapper.get('[data-testid="admin-user-status-7"]').trigger('click');
+    await flushPromises();
+    expect(document.activeElement).toBe(wrapper.get('[data-testid="admin-user-status-cancel"]').element);
+    await wrapper.get('dialog.admin-dialog').trigger('cancel');
+    await flushPromises();
+
+    expect(wrapper.find('dialog.admin-dialog').exists()).toBe(false);
+    expect(focus).toHaveBeenCalledOnce();
+    wrapper.unmount();
+  });
+
+  it('keeps the status dialog open after a failed update and allows retry', async () => {
+    vi.mocked(setAdminUserStatus)
+      .mockRejectedValueOnce(new Error('状态更新失败'))
+      .mockResolvedValueOnce({ ...activeUser, status: 'DISABLED' });
+    const wrapper = mount(AdminUsersPage);
+    await flushPromises();
+
+    await wrapper.get('[data-testid="admin-user-status-7"]').trigger('click');
+    await wrapper.get('[data-testid="admin-user-status-confirm"]').trigger('click');
+    await flushPromises();
+
+    expect(wrapper.get('[role="alert"]').text()).toContain('状态更新失败');
+    expect(wrapper.find('dialog.admin-dialog').exists()).toBe(true);
+    await wrapper.get('[data-testid="admin-user-status-confirm"]').trigger('click');
+    await flushPromises();
+
+    expect(setAdminUserStatus).toHaveBeenCalledTimes(2);
+    expect(wrapper.find('dialog.admin-dialog').exists()).toBe(false);
+  });
+
+  it('removes old status actions while a list refresh is in flight', async () => {
     vi.mocked(setAdminUserStatus).mockClear();
     const wrapper = mount(AdminUsersPage);
     await flushPromises();
@@ -86,7 +124,7 @@ describe('AdminUsersPage', () => {
 
     const refresh = wrapper.get('[data-testid="admin-users-refresh"]').trigger('click');
     await flushPromises();
-    expect(wrapper.get('[data-testid="admin-user-status-7"]').attributes('disabled')).toBeDefined();
+    expect(wrapper.find('[data-testid="admin-user-status-7"]').exists()).toBe(false);
 
     resolveRefresh({
       content: [activeUser],

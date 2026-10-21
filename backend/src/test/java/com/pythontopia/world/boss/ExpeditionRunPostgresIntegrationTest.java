@@ -103,11 +103,14 @@ class ExpeditionRunPostgresIntegrationTest {
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("章节");
 
+    String rootNodeId = (String) initial.nodes().getFirst().get("id");
     jdbc.update(
-        "INSERT INTO expedition_verified_attempt (user_id, run_id, problem_id, passed, score)"
-            + " VALUES (?, ?::uuid, 'issued-problem', TRUE, 80)",
+        "INSERT INTO expedition_verified_attempt"
+            + " (user_id, run_id, node_id, problem_id, passed, score, score_awarded)"
+            + " VALUES (?, ?::uuid, ?, 'issued-problem', TRUE, 80, TRUE)",
         userId,
-        initial.runId());
+        initial.runId(),
+        rootNodeId);
     jdbc.update(
         "INSERT INTO pregenerated_problem"
             + " (user_id, chapter, stage, kc_code, difficulty, status, attempt_count, expedition_run_id)"
@@ -171,7 +174,7 @@ class ExpeditionRunPostgresIntegrationTest {
 
     scoreService()
         .recordVerifiedAttempt(
-            userId, initial.runId(), "late-submission", "a".repeat(64), true, 100);
+            userId, initial.runId(), rootNodeId, null, "late-submission", "a".repeat(64), true, 100);
     assertThat(
             jdbc.queryForObject(
                 "SELECT COUNT(*) FROM expedition_verified_attempt WHERE user_id = ? AND run_id = ?::uuid",
@@ -389,7 +392,7 @@ class ExpeditionRunPostgresIntegrationTest {
   void activeSnapshotCannotReturnAStoredClientTerminalPhase() {
     long userId = createStudent();
     ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
-    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    ExpeditionRunDto active = seedChestNode(userId, startRun(runs, userId, 1, false), runs);
     jdbc.update(
         "UPDATE expedition_run SET phase = 'cleared' WHERE user_id = ? AND run_id = ?::uuid",
         userId,
@@ -905,6 +908,158 @@ class ExpeditionRunPostgresIntegrationTest {
                     false,
                     (String) lockedNode.get("kcCode")))
         .isInstanceOf(BusinessException.class);
+  }
+
+  @Test
+  void generatedProblemRequestsAreBoundedPerNodeAndBossPhase() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    Map<String, Object> root = active.nodes().getFirst();
+    String rootNodeId = (String) root.get("id");
+    String rootKc = (String) root.get("kcCode");
+
+    List<Long> rootReservations =
+        java.util.stream.IntStream.range(0, 3)
+            .mapToObj(i -> runs.reserveProblemGeneration(userId, active.runId(), rootNodeId, 1, true, rootKc))
+            .toList();
+    assertThat(rootReservations).doesNotHaveDuplicates();
+    assertThatThrownBy(
+            () -> runs.reserveProblemGeneration(userId, active.runId(), rootNodeId, 1, true, rootKc))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("上限");
+
+    long bossUserId = createStudent();
+    ExpeditionRunDto bossRun = startRun(runs, bossUserId, 1, false);
+    Map<String, Object> boss = findNode(bossRun, "boss");
+    String bossNodeId = (String) boss.get("id");
+    String bossKc = (String) boss.get("kcCode");
+    seedReachableNode(bossUserId, bossRun, boss, "challenge", 5, 5, List.of());
+
+    for (int phase = 1; phase <= 2; phase++) {
+      ExpeditionRunDto currentBossRun = runs.findActive(bossUserId).orElseThrow();
+      setBossPhase(bossUserId, currentBossRun, bossNodeId, phase);
+      int expectedPhase = phase;
+      List<Long> reservations =
+          java.util.stream.IntStream.range(0, 3)
+              .mapToObj(
+                  i ->
+                      runs.reserveProblemGeneration(
+                          bossUserId, bossRun.runId(), bossNodeId, 1, false, bossKc))
+              .toList();
+      assertThat(reservations).doesNotHaveDuplicates();
+      assertThatThrownBy(
+              () ->
+                  runs.reserveProblemGeneration(
+                      bossUserId, bossRun.runId(), bossNodeId, 1, false, bossKc))
+          .isInstanceOf(BusinessException.class)
+          .hasMessageContaining("上限");
+      assertThat(
+              jdbc.queryForObject(
+                  "SELECT COUNT(*) FROM expedition_problem_generation_attempt"
+                      + " WHERE user_id = ? AND run_id = ?::uuid AND node_id = ?"
+                      + " AND boss_phase = ?",
+                  Integer.class,
+                  bossUserId,
+                  bossRun.runId(),
+                  bossNodeId,
+                  expectedPhase))
+          .isEqualTo(3);
+    }
+
+    long cappedUserId = createStudent();
+    ExpeditionRunDto cappedRun = startRun(runs, cappedUserId, 1, false);
+    for (int i = 0; i < 36; i++) {
+      jdbc.update(
+          "INSERT INTO expedition_problem_generation_attempt"
+              + " (user_id, run_id, node_id, boss_phase) VALUES (?, ?::uuid, ?, NULL)",
+          cappedUserId,
+          cappedRun.runId(),
+          "legacy-" + i);
+    }
+    Map<String, Object> cappedRoot = cappedRun.nodes().getFirst();
+    assertThatThrownBy(
+            () ->
+                runs.reserveProblemGeneration(
+                    cappedUserId,
+                    cappedRun.runId(),
+                    (String) cappedRoot.get("id"),
+                    1,
+                    true,
+                    (String) cappedRoot.get("kcCode")))
+        .isInstanceOf(BusinessException.class)
+        .hasMessageContaining("本局");
+  }
+
+  @Test
+  void problemDifficultyUsesPersistedRunMomentumAndRecentVerifiedHistory() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    Map<String, Object> root = active.nodes().getFirst();
+    String nodeId = (String) root.get("id");
+    String kcCode = (String) root.get("kcCode");
+    int mapDifficulty = ((Number) root.get("difficulty")).intValue();
+    jdbc.update(
+        "UPDATE expedition_run SET momentum = 6, history = '[{\"passed\":false},"
+            + "{\"passed\":false}]'::jsonb WHERE user_id = ? AND run_id = ?::uuid",
+        userId,
+        active.runId());
+
+    ExpeditionRunDto forgedClientSnapshot =
+        new ExpeditionRunDto(
+            active.phase(),
+            active.focusChapter(),
+            active.nodes(),
+            active.layers(),
+            active.currentNodeId(),
+            active.hp(),
+            active.maxHp(),
+            0,
+            0,
+            999_999,
+            active.relics(),
+            active.isDaily(),
+            active.history(),
+            active.runId(),
+            999_999);
+    ExpeditionRunDto authoritative = runs.save(userId, forgedClientSnapshot);
+
+    var policy = runs.resolveProblemRequest(userId, active.runId(), nodeId, 1, true, kcCode);
+
+    assertThat(authoritative.momentum()).isEqualTo(6);
+    assertThat(authoritative.score()).isZero();
+    assertThat(policy.difficulty()).isEqualTo(Math.max(1, Math.min(5, mapDifficulty + 1)));
+  }
+
+  @Test
+  void eventStudyBonusIsStoredByTheServerAndAppliedToItsChallenge() {
+    long userId = createStudent();
+    ExpeditionRunService runs = new ExpeditionRunService(jdbc, new ObjectMapper());
+    ExpeditionRunDto active = startRun(runs, userId, 1, false);
+    Map<String, Object> root = active.nodes().getFirst();
+    String nodeId = (String) root.get("id");
+    String kcCode = (String) root.get("kcCode");
+    int mapDifficulty = ((Number) root.get("difficulty")).intValue();
+    jdbc.update(
+        "UPDATE expedition_run SET nodes = jsonb_set(nodes, '{0,kind}', '\"event\"'::jsonb)"
+            + " WHERE user_id = ? AND run_id = ?::uuid",
+        userId,
+        active.runId());
+
+    runs.performAction(
+        userId,
+        new ExpeditionRunActionRequest(
+            active.runId(), nodeId, ExpeditionRunAction.ENTER_NODE, null));
+    ExpeditionRunDto challenge =
+        runs.performAction(
+            userId,
+            new ExpeditionRunActionRequest(
+                active.runId(), nodeId, ExpeditionRunAction.EVENT_STUDY, null));
+    var policy = runs.resolveProblemRequest(userId, active.runId(), nodeId, 1, false, kcCode);
+
+    assertThat(challenge.nodes().getFirst().get("eventDifficultyBonus")).isEqualTo(1);
+    assertThat(policy.difficulty()).isEqualTo(Math.min(5, mapDifficulty + 1));
   }
 
   @Test
@@ -2115,6 +2270,24 @@ class ExpeditionRunPostgresIntegrationTest {
         .filter(node -> nodeId.equals(node.get("id")))
         .findFirst()
         .orElseThrow();
+  }
+
+  private void setBossPhase(long userId, ExpeditionRunDto run, String nodeId, int bossPhase) {
+    List<Map<String, Object>> nodes = run.nodes().stream().<Map<String, Object>>map(HashMap::new).toList();
+    nodes.stream()
+        .filter(node -> nodeId.equals(node.get("id")))
+        .findFirst()
+        .orElseThrow()
+        .put("bossPhase", bossPhase);
+    try {
+      jdbc.update(
+          "UPDATE expedition_run SET nodes = ?::jsonb WHERE user_id = ? AND run_id = ?::uuid",
+          new ObjectMapper().writeValueAsString(nodes),
+          userId,
+          run.runId());
+    } catch (com.fasterxml.jackson.core.JsonProcessingException e) {
+      throw new AssertionError(e);
+    }
   }
 
   private static void seedReachableNode(

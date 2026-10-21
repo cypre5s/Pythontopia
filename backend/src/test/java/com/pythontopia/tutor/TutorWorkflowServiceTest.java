@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -71,6 +72,8 @@ class TutorWorkflowServiceTest {
   private final CoursePackRepository coursePackRepository = mock(CoursePackRepository.class);
   private final SubmissionService submissionService = mock(SubmissionService.class);
   private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+  private final TutorRequestBudgetService requestBudgetService =
+      mock(TutorRequestBudgetService.class);
 
   private final TutorWorkflowService service =
       new TutorWorkflowService(
@@ -171,6 +174,7 @@ class TutorWorkflowServiceTest {
   void runBuildsGraphBodyWithProblemAndRestoreFields() {
     service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "READING", Map.of()));
 
+    verify(requestBudgetService).reserve(USER);
     Map<String, Object> body = capturedBody();
     assertThat(body.get("session_id")).isEqualTo("wf-7-476-abc");
     assertThat(body.get("event")).isEqualTo("READING");
@@ -252,6 +256,29 @@ class TutorWorkflowServiceTest {
 
     verify(graphClient, times(1)).runStream(eq(USER), any(), any(), any(), any(), any());
     verify(repository).findAutoGenRunResult(session.id(), requestId);
+    verify(requestBudgetService, times(1)).reserve(USER);
+  }
+
+  @Test
+  void exhaustedBudgetFailsClaimedRunBeforeGraphDispatch() {
+    doThrow(
+            new BusinessException(
+                org.springframework.http.HttpStatus.TOO_MANY_REQUESTS,
+                "TUTOR_DAILY_REQUEST_LIMIT_REACHED",
+                "今日导师请求次数已达上限"))
+        .when(requestBudgetService)
+        .reserve(USER);
+
+    assertThatThrownBy(() -> service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "READING", Map.of())))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            exception ->
+                assertThat(exception.status())
+                    .isEqualTo(org.springframework.http.HttpStatus.TOO_MANY_REQUESTS));
+
+    ArgumentCaptor<UUID> runId = ArgumentCaptor.forClass(UUID.class);
+    verify(repository).transitionAutoGenRun(eq(session.id()), runId.capture(), eq("FAILED"));
+    verify(graphClient, times(0)).runStream(eq(USER), any(), any(), any(), any(), any());
   }
 
   @Test

@@ -252,7 +252,10 @@ function back() {
           </button>
         </nav>
 
-        <div class="cd-nav__foot">
+        <div
+          v-if="!isForbidden"
+          class="cd-nav__foot"
+        >
           <PyButton
             variant="secondary"
             size="sm"
@@ -304,7 +307,7 @@ function back() {
         </p>
 
         <div
-          v-if="dashboard.lastError"
+          v-if="!isForbidden && dashboard.lastError"
           class="cd-banner cd-banner--error cd-banner--action"
           data-testid="dashboard-error"
         >
@@ -319,14 +322,14 @@ function back() {
           </PyButton>
         </div>
         <p
-          v-else-if="dashboard.loading"
+          v-else-if="!isForbidden && dashboard.loading"
           class="cd-banner"
         >
           看板加载中...
         </p>
 
         <section
-          v-if="remediationError || remediationResult"
+          v-if="!isForbidden && (remediationError || remediationResult)"
           class="cd-remediation"
           data-testid="remediation-panel"
         >
@@ -397,14 +400,22 @@ function back() {
           >
             <div class="live-header">
               <span :class="['live-dot', { 'live-dot--on': live.connected.value }]" />
-              <span>{{ live.connected.value ? '已连接直播' : '未连接' }}</span>
+              <span data-testid="live-connection-status">
+                {{ live.connected.value
+                  ? '已连接直播'
+                  : live.connecting.value
+                    ? '正在连接直播…'
+                    : live.retrying.value
+                      ? '直播断开，5 秒后自动重试'
+                      : '未连接' }}
+              </span>
               <PyButton
                 v-if="!live.connected.value"
                 variant="secondary"
                 size="sm"
                 @click="connectLive"
               >
-                开始直播
+                {{ live.connecting.value ? '正在连接…' : live.retrying.value ? '等待自动重试…' : '开始直播' }}
               </PyButton>
               <PyButton
                 v-else
