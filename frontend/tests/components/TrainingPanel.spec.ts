@@ -81,6 +81,9 @@ function mountPanel(options: { stubTutor?: boolean } = {}) {
 
 describe('TrainingPanel', () => {
   beforeEach(() => {
+    // 每个挂载实例都会创建 500ms 草稿去抖定时器。全量套件负载较高时，上一用例的
+    // 真实定时器可能跨过下一次 localStorage.clear() 后才回写，造成跨用例污染。
+    vi.useFakeTimers();
     setActivePinia(createPinia());
     window.localStorage.clear();
     vi.mocked(getPublicProblem).mockResolvedValue({
@@ -95,6 +98,11 @@ describe('TrainingPanel', () => {
       samples: [{ input: '5', output: '78.5375' }],
     });
     vi.mocked(getTodayQuests).mockResolvedValue([]);
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
   });
 
   it('preview button does NOT call /api/submissions', async () => {

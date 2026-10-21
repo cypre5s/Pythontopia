@@ -1,5 +1,6 @@
 import { ref, type Ref } from 'vue';
 import { useSessionStore } from '@stores/session';
+import { applyPatch } from 'fast-json-patch';
 import { toAguiEvent, type AguiEvent } from './agui';
 
 export interface SseTraceEvent {
@@ -246,7 +247,13 @@ export function useSseStream<T = unknown>(url: string): {
         state.value = { ...ev.snapshot };
         break;
       case 'STATE_DELTA':
-        state.value = { ...state.value, ...ev.delta };
+        state.value = applyPatch(
+          state.value,
+          ev.delta,
+          true,
+          false,
+          true,
+        ).newDocument;
         break;
       case 'CUSTOM':
         if (ev.name === 'plan') plan.value = ev.value as SsePlan;

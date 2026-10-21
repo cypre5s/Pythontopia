@@ -99,7 +99,11 @@ describe('useSseStream', () => {
     const encoder = new TextEncoder();
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
-        controller.enqueue(encoder.encode('event: RUN_STARTED\ndata: {}\n\n'));
+        controller.enqueue(
+          encoder.encode(
+            'event: RUN_STARTED\ndata: {"threadId":"thread-1","runId":"run-1"}\n\n',
+          ),
+        );
         controller.enqueue(
           encoder.encode(
             'event: STEP_STARTED\ndata: {"node":"evidence_fetcher","phase":"start","status":"running","elapsed_ms":0}\n\n',
@@ -114,7 +118,7 @@ describe('useSseStream', () => {
         controller.enqueue(encoder.encode('event: TEXT_MESSAGE_CONTENT\ndata: {"delta":"世界"}\n\n'));
         controller.enqueue(
           encoder.encode(
-            'event: RUN_FINISHED\ndata: {"result":{"runId":9,"resourceId":3,"status":"SUCCESS"}}\n\n',
+            'event: RUN_FINISHED\ndata: {"threadId":"thread-1","runId":"run-1","result":{"runId":9,"resourceId":3,"status":"SUCCESS"}}\n\n',
           ),
         );
         controller.close();
@@ -135,21 +139,39 @@ describe('useSseStream', () => {
     expect(sse.status.value).toBe('done');
     // 类型化事件流：RUN_STARTED + 2×STEP + 2×TEXT + RUN_FINISHED = 6。
     expect(sse.events.value).toHaveLength(6);
-    expect(sse.events.value[0]?.type).toBe('RUN_STARTED');
-    expect(sse.events.value.at(-1)?.type).toBe('RUN_FINISHED');
+    expect(sse.events.value[0]).toMatchObject({
+      type: 'RUN_STARTED',
+      threadId: 'thread-1',
+      runId: 'run-1',
+    });
+    expect(sse.events.value.at(-1)).toMatchObject({
+      type: 'RUN_FINISHED',
+      threadId: 'thread-1',
+      runId: 'run-1',
+    });
   });
 
-  it('accumulates STATE_SNAPSHOT and STATE_DELTA into the state bag', async () => {
+  it('applies RFC 6902 STATE_DELTA operations to the state bag', async () => {
     const encoder = new TextEncoder();
     const body = new ReadableStream<Uint8Array>({
       start(controller) {
         controller.enqueue(
           encoder.encode(
-            'event: STATE_SNAPSHOT\ndata: {"snapshot":{"masteryAvg":40,"energy":90}}\n\n',
+            'event: STATE_SNAPSHOT\ndata: {"snapshot":{"mastery":{"avg":40},"energy":90}}\n\n',
           ),
         );
-        controller.enqueue(encoder.encode('event: STATE_DELTA\ndata: {"delta":{"masteryAvg":55}}\n\n'));
-        controller.enqueue(encoder.encode('event: result\ndata: {"ok":true}\n\n'));
+        controller.enqueue(
+          encoder.encode(
+            'event: STATE_DELTA\ndata: {"delta":[' +
+              '{"op":"replace","path":"/mastery/avg","value":55},' +
+              '{"op":"remove","path":"/energy"},' +
+              '{"op":"add","path":"/plan_steps","value":[{"id":"learn","status":"active"}]}' +
+              ']}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode('event: result\ndata: {"ok":true}\n\n'),
+        );
         controller.close();
       },
     });
@@ -159,7 +181,41 @@ describe('useSseStream', () => {
     const sse = useSseStream('/stream');
     await sse.start({});
 
-    // 快照打底 + 增量浅合并：masteryAvg 被覆盖为 55，energy 保留 90。
+    expect(sse.state.value).toEqual({
+      mastery: { avg: 55 },
+      plan_steps: [{ id: 'learn', status: 'active' }],
+    });
+    expect(sse.status.value).toBe('done');
+  });
+
+  it('keeps the legacy object-form STATE_DELTA compatible during rolling deployment', async () => {
+    const encoder = new TextEncoder();
+    const body = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(
+          encoder.encode(
+            'event: STATE_SNAPSHOT\ndata: {"snapshot":{"masteryAvg":40,"energy":90}}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode(
+            'event: STATE_DELTA\ndata: {"delta":{"masteryAvg":55}}\n\n',
+          ),
+        );
+        controller.enqueue(
+          encoder.encode('event: result\ndata: {"ok":true}\n\n'),
+        );
+        controller.close();
+      },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(body, { status: 200 })),
+    );
+
+    const sse = useSseStream('/stream');
+    await sse.start({});
+
     expect(sse.state.value).toEqual({ masteryAvg: 55, energy: 90 });
     expect(sse.status.value).toBe('done');
   });

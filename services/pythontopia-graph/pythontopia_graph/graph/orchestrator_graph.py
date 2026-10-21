@@ -579,8 +579,8 @@ class OrchestratorGraph:
         await _emit_plan_nodes()
 
         # AG-UI STATE_DELTA：plan 步骤进度的累积状态映射（step_id → pending/active/done/failed），
-        # 随 dispatch 真实推进实时同步前端。区别于离散 trace 日志，这是「当前完整状态」快照，前端
-        # useSseStream.state 浅合并即得最新全量、可直接绑定计划卡，无需自行从 trace 流累积。
+        # 随 dispatch 真实推进实时同步前端。区别于离散 trace 日志，这是「当前完整状态」快照，
+        # 以 RFC 6902 add 写入根属性；add 对对象成员同时支持首次创建与后续替换。
         # ``done`` 是持久化恢复边界：候选切换前已经成功并产生副作用的步骤必须
         # 直接视为完成，不能因进程重启再次派发。active/failed/skipped 都不是可恢复
         # 的成功证明，恢复执行时回到 pending 并由稳定 idempotency_key 保护重试。
@@ -594,7 +594,18 @@ class OrchestratorGraph:
             steps_view = [
                 {**step.model_dump(mode="json"), "status": step_status[step.id]} for step in plan
             ]
-            await self._emit_cb("STATE_DELTA", {"delta": {"plan_steps": steps_view}})
+            await self._emit_cb(
+                "STATE_DELTA",
+                {
+                    "delta": [
+                        {
+                            "op": "add",
+                            "path": "/plan_steps",
+                            "value": steps_view,
+                        }
+                    ]
+                },
+            )
 
         await _emit_plan_progress()
 

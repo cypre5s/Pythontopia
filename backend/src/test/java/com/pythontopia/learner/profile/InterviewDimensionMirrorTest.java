@@ -15,6 +15,7 @@ import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.agent.run.ResourceRunRecorder;
+import com.pythontopia.common.config.GraphHttpClientProperties;
 import com.pythontopia.common.config.GraphServiceProperties;
 import com.pythontopia.common.sse.SseRelayExecutor;
 import com.pythontopia.common.web.StudentWriteThrottle;

@@ -7,10 +7,11 @@
 字段命名对齐前端 ``agui.ts`` 的 ``toAguiEvent``：
 * ``TEXT_MESSAGE_CONTENT`` → ``{"delta": str, "messageId"?: str}``
 * ``STEP_STARTED`` / ``STEP_FINISHED`` → 沿用历史 trace 形状 ``{node, phase, status, elapsed_ms, ...}``
-* ``RUN_FINISHED`` → ``{"result": <any>}``
+* ``RUN_FINISHED`` → ``{"threadId"?: str, "runId"?: str, "result": <any>}``
 * ``RUN_ERROR`` → ``{"code": str, "message": str}``
 * ``TOOL_CALL_*`` → ``{"toolCallId": str, ...}``
-* ``STATE_SNAPSHOT`` → ``{"snapshot": {...}}`` ; ``STATE_DELTA`` → ``{"delta": {...}}``
+* ``STATE_SNAPSHOT`` → ``{"snapshot": {...}}`` ;
+  ``STATE_DELTA`` → ``{"delta": [{"op": ..., "path": ...}]}``（RFC 6902）
 * ``CUSTOM`` → ``{"name": str, "value": <any>}``
 
 Java 中转层（``GraphSseConsumer`` + 各 ``*GraphClient``）按事件名原样透传，故新事件名穿过后端零改动。
@@ -137,9 +138,20 @@ def run_started(**extra: Any) -> str:
     return format_sse("RUN_STARTED", dict(extra))
 
 
-def run_finished(result: Any) -> str:
+def run_finished(
+    result: Any,
+    *,
+    thread_id: str | None = None,
+    run_id: str | None = None,
+) -> str:
     """运行成功结束，携带最终结构化结果（前端投影到 ``useSseStream.result``）。"""
-    return format_sse("RUN_FINISHED", {"result": result})
+    if (thread_id is None) != (run_id is None):
+        raise ValueError("thread_id and run_id must be provided together")
+    payload: dict[str, Any] = {}
+    if thread_id is not None and run_id is not None:
+        payload.update({"threadId": thread_id, "runId": run_id})
+    payload["result"] = result
+    return format_sse("RUN_FINISHED", payload)
 
 
 def run_finished_loop_result(result: LoopResult | dict[str, Any]) -> str:
@@ -226,8 +238,8 @@ def state_snapshot(snapshot: dict[str, Any]) -> str:
     return format_sse("STATE_SNAPSHOT", {"snapshot": snapshot})
 
 
-def state_delta(delta: dict[str, Any]) -> str:
-    """运行态增量（前端浅合并进 ``useSseStream.state``，模块 D：HUD 实时同步）。"""
+def state_delta(delta: list[dict[str, Any]]) -> str:
+    """运行态增量（RFC 6902 JSON Patch；前端应用到 ``useSseStream.state``）。"""
     return format_sse("STATE_DELTA", {"delta": delta})
 
 
@@ -236,7 +248,13 @@ def custom(name: str, value: Any) -> str:
     return format_sse("CUSTOM", {"name": name, "value": value})
 
 
-def translate(event: str, data: dict[str, Any]) -> str:
+def translate(
+    event: str,
+    data: dict[str, Any],
+    *,
+    thread_id: str | None = None,
+    run_id: str | None = None,
+) -> str:
     """把历史事件名（trace/token/result/error/plan）统一编码为 AG-UI 官方事件。
 
     供既有 route 的 ``_format_sse`` 一处改写、全量灰度迁移：调用点零改动即切到 AG-UI 命名，
@@ -249,7 +267,7 @@ def translate(event: str, data: dict[str, Any]) -> str:
     if name == "token":
         return text_message_content(str(data.get("delta", "")), data.get("messageId"))
     if name == "result":
-        return run_finished(data)
+        return run_finished(data, thread_id=thread_id, run_id=run_id)
     if name == "error":
         return run_error(str(data.get("code", "UNKNOWN")), str(data.get("message", "")))
     if name == "plan":

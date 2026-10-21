@@ -79,6 +79,7 @@ const drawerOpen = ref(restoredLayout.activeDrawer === 'study');
 const historyOpen = ref(restoredLayout.historyOpen);
 const activeDrawer = ref<WorkshopDrawer>(restoredLayout.activeDrawer);
 const historyPendingTurn = ref<WorkshopChatHistoryTurnDto | null>(null);
+const historyOwnerId = computed<number | null>(() => session.user?.id ?? null);
 
 // 面板布局变化即持久化，供刷新/重开后恢复（会话内保留仍由 KeepAlive 负责）。
 watch([historyOpen, activeDrawer], ([open, drawer]) => {
@@ -378,6 +379,8 @@ const bodyClass = computed<Record<string, boolean>>(() => ({
           </header>
           <div class="workshop-drawer__body">
             <ChatHistoryRail
+              v-if="historyOwnerId !== null"
+              :key="historyOwnerId"
               embedded-open
               :owner-id="ownerId"
               :pending-turn="historyPendingTurn"

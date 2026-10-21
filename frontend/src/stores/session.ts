@@ -196,7 +196,9 @@ export const useSessionStore = defineStore('session', {
      * 也需要在 user 落地后重建，才能读到新账号自己的持久化数据。
      */
     async login(req: LoginRequest): Promise<void> {
-      this.applySession(await loginApi(req));
+      const response = await loginApi(req);
+      clearWorkshopChatHistoryCache();
+      this.applySession(response);
       this.configureHttp();
       clearWorkshopChatHistoryCache();
       this.accountEpoch += 1;
@@ -242,6 +244,7 @@ export const useSessionStore = defineStore('session', {
     logout(): void {
       const token = this.token;
       const scope = currentUserScope();
+      clearWorkshopChatHistoryCache();
       this.token = null;
       this.user = null;
       this.expiresAt = null;

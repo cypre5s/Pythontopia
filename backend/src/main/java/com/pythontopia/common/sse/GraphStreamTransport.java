@@ -1,4 +1,4 @@
-package com.pythontopia.tutor;
+package com.pythontopia.common.sse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.web.GraphInternalSubjectSupport;
@@ -20,18 +20,18 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 /**
- * tutor / orchestrator 共用的有界 graph SSE 中继（学习总管按既有「镜像 tutor」约定复用本类；
- * 共享代码放本包是因为 {@code OrchestratorGraphClient} 自诞生起就是 {@code TutorGraphClient} 的镜像）。
+ * Graph SSE 共用的有界传输：统一读超时、净化错误、截断保护、客户端断开传播和资源收口。
  *
- * <p>相对直接用 {@code GraphSseConsumer} 的旧路径，收紧了故障语义：
+ * <p>相对直接用 {@link GraphSseConsumer} 的旧路径，收紧了故障语义：
  *
  * <ul>
  *   <li><b>连接失败 / 上游 HTTP ≥400</b>：在 connect/read 超时阈值内快速失败，绝不无限挂起；
  *   <li><b>读超时</b>：上游卡死时按 {@code readTimeoutMs}（socket 不活动上限）切断；
- *   <li><b>终止性 error 恰好一条</b>：任何故障只向客户端发一条 {@code event: error}（形状
- *       {@code {"code","message"}}，与 WorkshopGraphClient / MediaJobService 既有约定一致），
- *       文案中文、简短、可执行，<b>绝不泄漏</b>内部 URL / 端口 / 堆栈 / 内部 token（详情只进服务端日志）；
- *   <li><b>部分内容保留</b>：故障前已透传的 trace / token 原样保留，error 总在其后；
+ *   <li><b>终止事件恰好一条</b>：业务恢复成功时发送恢复给出的终态；否则发送一条 {@code event:
+ *       error}（形状 {@code {"code","message"}}，与 WorkshopGraphClient / MediaJobService
+ *       既有约定一致），文案中文、简短、可执行，<b>绝不泄漏</b>内部 URL / 端口 / 堆栈 / 内部 token
+ *       （详情只进服务端日志）；
+ *   <li><b>部分内容保留</b>：故障前已透传的 trace / token 原样保留，恢复终态或净化 error 总在其后；
  *   <li><b>坏损流</b>：未以空行收束的半截事件帧按 SSE 规范丢弃（防止半截 result 被当正常结果）；
  *       上游未发终态事件（{@code result} / {@code error} / AG-UI {@code RUN_FINISHED} /
  *       {@code RUN_ERROR}）即关闭时补一条终止性 error，绝不静默当成功收尾；
@@ -40,7 +40,25 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
  *       （不裸 {@code completeWithError} 断流）、执行一次 {@code onFinished} 释放回调。
  * </ul>
  */
-public final class GraphStreamRelay {
+public final class GraphStreamTransport {
+
+  /** 供业务恢复策略判定的传输故障类别，不暴露内部异常或地址。 */
+  public enum FailureKind {
+    UNAVAILABLE,
+    TIMEOUT,
+    INTERRUPTED
+  }
+
+  /** 恢复成功后由 transport 发出的终态事件。 */
+  public record TerminalEvent(String event, Object data) {}
+
+  /**
+   * 可选的业务恢复策略。返回 {@code null} 或非终态事件时，transport 回落到标准脱敏 error。
+   */
+  @FunctionalInterface
+  public interface FailureRecovery {
+    TerminalEvent recover(FailureKind failure) throws Exception;
+  }
 
   static final String CODE_UNAVAILABLE = "AI_SERVICE_UNAVAILABLE";
   static final String CODE_TIMEOUT = "AI_SERVICE_TIMEOUT";
@@ -54,13 +72,13 @@ public final class GraphStreamRelay {
   private static final Set<String> TERMINAL_EVENTS =
       Set.of("result", "error", "RUN_FINISHED", "RUN_ERROR");
 
-  private static final Logger log = LoggerFactory.getLogger(GraphStreamRelay.class);
+  private static final Logger log = LoggerFactory.getLogger(GraphStreamTransport.class);
 
   private final ObjectMapper objectMapper;
   private final int connectTimeoutMs;
   private final int readTimeoutMs;
 
-  public GraphStreamRelay(ObjectMapper objectMapper, int connectTimeoutMs, int readTimeoutMs) {
+  public GraphStreamTransport(ObjectMapper objectMapper, int connectTimeoutMs, int readTimeoutMs) {
     this.objectMapper = objectMapper;
     this.connectTimeoutMs = connectTimeoutMs;
     this.readTimeoutMs = readTimeoutMs;
@@ -137,7 +155,34 @@ public final class GraphStreamRelay {
     }
   }
 
-  /** 逐帧透传上游 SSE；解析规则与 {@code GraphSseConsumer} 一致（event:/data:/空行分发）。 */
+  private void handleFailure(
+      SseEmitter emitter, FailureRecovery recovery, FailureKind failureKind) {
+    if (recovery != null) {
+      try {
+        TerminalEvent recovered = recovery.recover(failureKind);
+        if (recovered != null && TERMINAL_EVENTS.contains(recovered.event())) {
+          emitter.send(SseEmitter.event().name(recovered.event()).data(recovered.data()));
+          return;
+        }
+        if (recovered != null) {
+          log.warn(
+              "Graph SSE recovery returned non-terminal event={} for failure={}",
+              recovered.event(),
+              failureKind);
+        }
+      } catch (Exception recoveryFailure) {
+        log.warn("Graph SSE recovery failed for failure={}", failureKind, recoveryFailure);
+      }
+    }
+
+    switch (failureKind) {
+      case TIMEOUT -> sendTerminalError(emitter, CODE_TIMEOUT, MSG_TIMEOUT);
+      case INTERRUPTED -> sendTerminalError(emitter, CODE_INTERRUPTED, MSG_INTERRUPTED);
+      case UNAVAILABLE -> sendTerminalError(emitter, CODE_UNAVAILABLE, MSG_UNAVAILABLE);
+    }
+  }
+
+  /** 逐帧透传上游 SSE；解析规则与 {@link GraphSseConsumer} 一致（event:/data:/空行分发）。 */
   private StreamEnd relayEvents(
       HttpURLConnection connection, SseEmitter emitter, BiConsumer<String, String> onEvent)
       throws IOException {
@@ -171,12 +216,9 @@ public final class GraphStreamRelay {
           }
         }
       }
-      if (dataBuffer.length() > 0) {
+      if (result == SseFrameDecoder.DecodeResult.TRUNCATED) {
         // 未以空行收束的半截帧：按 SSE 规范丢弃，防止把截断 JSON 当正常事件透传。
-        log.warn(
-            "Discarding unterminated trailing SSE frame (event={}, {} chars)",
-            currentEvent,
-            dataBuffer.length());
+        log.warn("Discarding unterminated trailing SSE frame");
       }
       return StreamEnd.TRUNCATED;
     }

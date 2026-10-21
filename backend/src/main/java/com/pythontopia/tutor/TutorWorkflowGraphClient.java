@@ -1,17 +1,16 @@
 package com.pythontopia.tutor;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.common.config.GraphHttpClientProperties;
 import com.pythontopia.common.config.GraphServiceProperties;
-import com.pythontopia.common.sse.GraphSseConsumer;
+import com.pythontopia.common.sse.GraphStreamTransport;
 import com.pythontopia.common.sse.SseRelayExecutor;
 import com.pythontopia.common.web.GraphInternalSubjectSupport;
 import com.pythontopia.common.web.GraphInternalTokenSupport;
-import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -19,24 +18,42 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Component
 public class TutorWorkflowGraphClient {
 
-  private static final Logger log = LoggerFactory.getLogger(TutorWorkflowGraphClient.class);
+  /** 流式读不活动上限：与 {@code TutorWorkflowService} 的 SseEmitter 180s 窗口对齐。 */
+  static final int STREAM_READ_TIMEOUT_MS = 180_000;
 
   private final GraphServiceProperties properties;
-  private final ObjectMapper objectMapper;
   private final SseRelayExecutor sseRelayExecutor;
+  private final GraphStreamTransport relay;
 
+  @Autowired
   public TutorWorkflowGraphClient(
       GraphServiceProperties properties,
+      GraphHttpClientProperties httpProperties,
       ObjectMapper objectMapper,
       SseRelayExecutor sseRelayExecutor) {
+    this(
+        properties,
+        objectMapper,
+        sseRelayExecutor,
+        httpProperties.connectTimeoutMs(),
+        STREAM_READ_TIMEOUT_MS);
+  }
+
+  /** 包内可见：测试用可控超时构造。 */
+  TutorWorkflowGraphClient(
+      GraphServiceProperties properties,
+      ObjectMapper objectMapper,
+      SseRelayExecutor sseRelayExecutor,
+      int connectTimeoutMs,
+      int readTimeoutMs) {
     this.properties = properties;
-    this.objectMapper = objectMapper;
     this.sseRelayExecutor = sseRelayExecutor;
+    this.relay = new GraphStreamTransport(objectMapper, connectTimeoutMs, readTimeoutMs);
   }
 
   /**
-   * 转发一次工作流事件 run：所有 SSE 事件经 {@code emitter} 透传；收到终态 {@code result}
-   * （AG-UI RUN_FINISHED 已由 GraphSseConsumer 归一为 result）时回调 {@code onResult} 做投影落库。
+   * 转发一次工作流事件 run：所有 SSE 事件经 {@code emitter} 原样透传；收到旧 {@code result} 或
+   * AG-UI {@code RUN_FINISHED} 时，以原始 data 回调 {@code onResult} 做投影落库。
    */
   public void runStream(
       Long userId,
@@ -63,9 +80,8 @@ public class TutorWorkflowGraphClient {
     emitter.onError(ignored -> downstreamGone.set(true));
     emitter.onCompletion(() -> downstreamGone.set(true));
     sseRelayExecutor.submit(
-        () -> {
-          try {
-            GraphSseConsumer.consume(
+        () ->
+            relay.relay(
                 url,
                 body,
                 objectMapper,

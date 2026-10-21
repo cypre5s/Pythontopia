@@ -6,6 +6,7 @@ vi.mock('@/api/http', () => ({
 
 import { http } from '@/api/http';
 import {
+  clearWorkshopChatHistoryCache,
   listWorkshopChatHistoryTurns,
   rememberWorkshopChatHistoryTurn,
   resetWorkshopChatHistoryCacheForTest,
@@ -57,6 +58,21 @@ describe('workshopHistory · 会话内历史缓存', () => {
       '/api/workshop/chat-history/turns',
       expect.objectContaining({ params: { limit: 50 } }),
     );
+  });
+
+  it('相同 limit 的不同用户各自请求并只读取自己的缓存', async () => {
+    vi.mocked(http.get)
+      .mockResolvedValueOnce({ data: [firstTurn] } as never)
+      .mockResolvedValueOnce({ data: [secondTurn] } as never);
+
+    const firstUser = await listWorkshopChatHistoryTurns(101, 50, { now: () => 1000 });
+    const secondUser = await listWorkshopChatHistoryTurns(202, 50, { now: () => 2000 });
+    const firstUserCached = await listWorkshopChatHistoryTurns(101, 50, { now: () => 3000 });
+
+    expect(firstUser).toEqual([firstTurn]);
+    expect(secondUser).toEqual([secondTurn]);
+    expect(firstUserCached).toEqual([firstTurn]);
+    expect(vi.mocked(http.get)).toHaveBeenCalledTimes(2);
   });
 
   it('返回数组副本，调用方改写不污染缓存', async () => {

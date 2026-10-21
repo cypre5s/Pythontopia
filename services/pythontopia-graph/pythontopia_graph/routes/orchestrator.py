@@ -14,6 +14,7 @@ import asyncio
 import os
 from collections.abc import AsyncIterator
 from typing import Any, cast
+from uuid import uuid4
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -174,9 +175,19 @@ async def _orchestrator_stream_generator(
     browse_executor: BrowseExecutor | None,
 ) -> AsyncIterator[str]:
     queue: asyncio.Queue[str | None] = asyncio.Queue()
+    thread_id = body.session_id
+    run_id = f"orchestrator:{uuid4().hex}"
+
+    def format_run_sse(event: str, data: dict[str, Any]) -> str:
+        return sse_agui.translate(
+            event,
+            data,
+            thread_id=thread_id,
+            run_id=run_id,
+        )
 
     async def emit(event: str, data: dict[str, Any]) -> None:
-        await queue.put(_format_sse(event, data))
+        await queue.put(format_run_sse(event, data))
 
     graph = OrchestratorGraph(
         provider=provider,
@@ -195,13 +206,13 @@ async def _orchestrator_stream_generator(
 
     task = asyncio.create_task(run_graph())
     await queue.put(
-        _format_sse(
+        format_run_sse(
             "RUN_STARTED",
-            {"runId": f"orchestrator:{body.session_id}", "threadId": body.session_id},
+            {"threadId": thread_id, "runId": run_id},
         )
     )
     await queue.put(
-        _format_sse(
+        format_run_sse(
             "STEP_STARTED",
             {
                 "node": "orchestrator",

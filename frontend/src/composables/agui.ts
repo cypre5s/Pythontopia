@@ -14,6 +14,7 @@
 // （运行时依赖单向：useSseStream → agui）。
 
 import type { SsePlan, SseTraceEvent } from './useSseStream';
+import type { Operation as JsonPatchOperation } from 'fast-json-patch';
 
 /** AG-UI 核心事件类型（判别式联合的 tag）。 */
 export type AguiEventType =
@@ -36,11 +37,19 @@ export type AguiEventType =
 /** 运行开始（一次 agent run 的生命周期起点）。 */
 export interface AguiRunStarted {
   type: 'RUN_STARTED';
+  /** canonical AG-UI 流必填；可选仅用于兼容仍在滚动迁移的历史端点。 */
+  threadId?: string;
+  /** canonical AG-UI 流必填；可选仅用于兼容仍在滚动迁移的历史端点。 */
+  runId?: string;
 }
 
 /** 运行成功结束，携带最终结构化结果（投影到 useSseStream.result）。 */
 export interface AguiRunFinished {
   type: 'RUN_FINISHED';
+  /** 与 RUN_STARTED 相同；历史 result 事件可能缺失。 */
+  threadId?: string;
+  /** 与 RUN_STARTED 相同；历史 result 事件可能缺失。 */
+  runId?: string;
   result: unknown;
 }
 
@@ -119,10 +128,16 @@ export interface AguiStateSnapshot {
   snapshot: Record<string, unknown>;
 }
 
-/** 状态增量（模块 D：浅合并进 useSseStream.state）。 */
+/** AG-UI 只接受 RFC 6902 标准操作；排除 fast-json-patch 的内部 `_get` 扩展。 */
+export type AguiJsonPatchOperation = Exclude<
+  JsonPatchOperation,
+  { op: '_get' }
+>;
+
+/** 状态增量（模块 D：RFC 6902 JSON Patch 应用到 useSseStream.state）。 */
 export interface AguiStateDelta {
   type: 'STATE_DELTA';
-  delta: Record<string, unknown>;
+  delta: AguiJsonPatchOperation[];
 }
 
 /** 自定义事件（承载无官方对应的语义，如历史 plan「工位清单」）。 */
@@ -151,6 +166,24 @@ export type AguiEvent =
 
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+}
+
+function escapeJsonPointerToken(value: string): string {
+  return value.replaceAll('~', '~0').replaceAll('/', '~1');
+}
+
+/**
+ * 旧 Graph 曾把 STATE_DELTA.delta 作为顶层浅合并对象发送。
+ * 只在输入边界转成等价的根属性 add，支持前后端滚动发布；新生产端不再输出该形状。
+ */
+function legacyObjectDeltaToPatch(
+  delta: Record<string, unknown>,
+): AguiJsonPatchOperation[] {
+  return Object.entries(delta).map(([key, value]) => ({
+    op: 'add',
+    path: `/${escapeJsonPointerToken(key)}`,
+    value,
+  }));
 }
 
 /**
@@ -196,7 +229,17 @@ export function toAguiEvent(eventName: string, raw: string): AguiEvent | null {
     try {
       const parsed = JSON.parse(raw);
       if (name === 'RUN_FINISHED' && parsed && typeof parsed === 'object' && 'result' in parsed) {
-        return { type: 'RUN_FINISHED', result: (parsed as { result: unknown }).result };
+        const terminal = parsed as {
+          threadId?: unknown;
+          runId?: unknown;
+          result: unknown;
+        };
+        return {
+          type: 'RUN_FINISHED',
+          ...(typeof terminal.threadId === 'string' ? { threadId: terminal.threadId } : {}),
+          ...(typeof terminal.runId === 'string' ? { runId: terminal.runId } : {}),
+          result: terminal.result,
+        };
       }
       return { type: 'RUN_FINISHED', result: parsed };
     } catch {
@@ -227,8 +270,14 @@ export function toAguiEvent(eventName: string, raw: string): AguiEvent | null {
     }
 
     // ── AG-UI 官方事件名 ──
-    case 'RUN_STARTED':
-      return { type: 'RUN_STARTED' };
+    case 'RUN_STARTED': {
+      const started = data as { threadId?: unknown; runId?: unknown };
+      return {
+        type: 'RUN_STARTED',
+        ...(typeof started.threadId === 'string' ? { threadId: started.threadId } : {}),
+        ...(typeof started.runId === 'string' ? { runId: started.runId } : {}),
+      };
+    }
     case 'STEP_STARTED':
       return { type: 'STEP_STARTED', step: data as SseTraceEvent };
     case 'STEP_FINISHED':
@@ -262,8 +311,14 @@ export function toAguiEvent(eventName: string, raw: string): AguiEvent | null {
       return { type: 'STATE_SNAPSHOT', snapshot: d.snapshot ?? asRecord(data) };
     }
     case 'STATE_DELTA': {
-      const d = data as { delta?: Record<string, unknown> };
-      return { type: 'STATE_DELTA', delta: d.delta ?? asRecord(data) };
+      const d = data as { delta?: unknown };
+      const delta = d.delta;
+      return {
+        type: 'STATE_DELTA',
+        delta: Array.isArray(delta)
+          ? (delta as AguiJsonPatchOperation[])
+          : legacyObjectDeltaToPatch(asRecord(delta)),
+      };
     }
     case 'CUSTOM': {
       const d = data as { name?: string; value?: unknown };

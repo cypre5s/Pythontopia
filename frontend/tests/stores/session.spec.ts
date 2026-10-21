@@ -61,6 +61,7 @@ describe('session store', () => {
       username: 'stu01',
       role: 'STUDENT',
     });
+    expect(historyMocks.clearWorkshopChatHistoryCache).toHaveBeenCalledTimes(1);
   });
 
   it('登录与登出都清理工坊历史模块缓存并推进账号世代', async () => {
@@ -98,6 +99,7 @@ describe('session store', () => {
   it('clears token / expiry / user on logout', async () => {
     const store = useSessionStore();
     await store.login({ username: 'stu01', password: 'P@ssw0rd1' });
+    historyMocks.clearWorkshopChatHistoryCache.mockClear();
 
     store.logout();
 
@@ -105,6 +107,18 @@ describe('session store', () => {
     expect(store.user).toBeNull();
     expect(localStorage.getItem('pythontopia.token')).toBeNull();
     expect(localStorage.getItem('pythontopia.user')).toBeNull();
+    expect(historyMocks.clearWorkshopChatHistoryCache).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not clear the active account cache when login fails', async () => {
+    loginMock.mockRejectedValueOnce(new Error('bad credentials'));
+    const store = useSessionStore();
+
+    await expect(store.login({ username: 'stu01', password: 'wrong-pass' })).rejects.toThrow(
+      'bad credentials',
+    );
+
+    expect(historyMocks.clearWorkshopChatHistoryCache).not.toHaveBeenCalled();
   });
 
   it('revokes the current server token when logging out', async () => {

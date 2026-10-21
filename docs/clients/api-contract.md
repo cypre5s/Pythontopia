@@ -121,6 +121,10 @@ Authorization: Bearer <token>
 | GET | `/api/learner/profile/revisions?limit=10` | Bearer | 画像修订历史 |
 | GET | `/api/learner/profile/dimensions` | Bearer | 8 维画像快照（雷达图 + 自评 UI 用） |
 | PUT | `/api/learner/profile/dimensions/{dimensionKey}` | Bearer | 自评直写单维；学生仅可改 4 个主观维度，越权改客观维度 → `403` |
+| POST | `/api/learner/profile/interview` | STUDENT | 创建或恢复当前学生的 OPEN 画像访谈 |
+| POST | `/api/learner/profile/interview/{sessionId}/turn` | STUDENT | 同步 ProfileAgent 回合；当前 Web 画像屋使用此端点 |
+| POST | `/api/learner/profile/interview/{sessionId}/turn/stream` | STUDENT | SSE ProfileAgent 回合；成功终态为 legacy `result` 或 canonical `RUN_FINISHED` |
+| POST | `/api/learner/profile/interview/{sessionId}/finish` | STUDENT | 主动结束本人访谈 |
 | GET | `/api/learner/mastery` | Bearer | KC 掌握度快照列表 |
 
 `/api/learner/mastery` 的快照包含 `assessed`：只有正式练习、微测或调试证据存在时为 `true`；`confidence` 不是评估状态标志。
@@ -317,6 +321,10 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 > `STEP_*` 当思考链、`RUN_FINISHED.result`（常再包一层 `{ "result": { ... } }`）为终态、`RUN_ERROR` 为错误、
 > `CUSTOM{name:"plan"}` 为工位清单。参考实现：`frontend/src/composables/agui.ts`、
 > `clients/wechat/miniprogram/miniprogram/utils/agui.ts`。
+> `/api/orchestrator/turn/stream` 的 canonical 成功生命周期还要求 `RUN_STARTED` 与
+> `RUN_FINISHED` 同时携带相同的 `threadId/runId`：`threadId` 等于请求的长期 `session_id`，
+> `runId` 是每次流请求唯一的 `orchestrator:<uuid>`。历史端点在滚动迁移期间可能缺少这两个字段，
+> 但客户端不得把同一 thread 的多轮请求当作同一个 run。
 > 另：资源工坊流 `/api/workshop/resources/stream` 的 `RUN_FINISHED.result` 只含 graph 内联
 > `artifact`（**无 `resourceId`**，`status` 可能为 `PARTIAL`）；要拿可渲染的**持久化**资源，请用非流式
 > `POST /api/workshop/resources`（返回 `resourceId`）→ `GET /api/workshop/resources/{id}`（返回 `LearningResource`）。
@@ -338,6 +346,18 @@ event: <name>
 data: <json>
 
 ```
+
+帧解释遵循 WHATWG SSE 规则：同一事件的多个 `data:` 字段以单个 LF（`\n`）连接，`: ...`
+注释心跳与未知字段忽略，缺省 `event` 为 `message`，只有空行才分发完整事件；连接在空行前结束时，
+未完成尾帧必须丢弃。Java 后端的旧 Graph consumer 与公共
+`common.sse.GraphStreamTransport` 共用 `common.sse.SseFrameDecoder` 执行该合同；终态识别、读超时、
+客户端断开与 fallback 仍由各 transport/业务 adapter 负责。跨端客户端自行解析时也必须保留上述
+语义，不能直接拼接多行 data 或分发 EOF 半帧。
+
+Java 内部 `/agents/tutor-workflow/run/stream` 中继已采用公共 `GraphStreamTransport`：连接超时复用
+Graph HTTP 配置，读不活动上限为 180 秒（上游每 10 秒注释 heartbeat 会续活）；上游无终态关闭时
+保留已到达事件并补唯一 `error`（`AI_STREAM_INTERRUPTED`），读超时为 `AI_SERVICE_TIMEOUT`，客户端
+断开会关闭上游。正常 `RUN_FINISHED/RUN_ERROR` 仍原样透传，不额外生成第二个终态。
 
 事件语义（并集 = `plan / trace / token / result / error`，并非每个流都发全部）：
 

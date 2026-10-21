@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import json
 from collections.abc import AsyncIterator
 
 import pytest
@@ -117,6 +118,43 @@ def test_orchestrator_stream_emits_canonical_agui_events() -> None:
     assert "event: token" not in text
     assert "event: result" not in text
 
+    events = _sse_events(text)
+    started = next(data for name, data in events if name == "RUN_STARTED")
+    finished = next(data for name, data in events if name == "RUN_FINISHED")
+    assert started["threadId"] == "route-stream"
+    assert started["runId"].startswith("orchestrator:")
+    assert started["runId"] != "orchestrator:route-stream"
+    assert finished["threadId"] == started["threadId"]
+    assert finished["runId"] == started["runId"]
+
+    del app.state.llm_provider
+
+
+def test_orchestrator_stream_uses_unique_run_id_per_request() -> None:
+    app.state.llm_provider = StubProvider([], reply="本轮安排已就绪。")
+    client = TestClient(app)
+    body = {
+        "user_id": 1,
+        "session_id": "route-run-identity",
+        "user_message": "帮我安排循环的学习",
+        "course_kc_index": ["PY43-KC-001"],
+    }
+
+    first = client.post("/agents/orchestrator/turn/stream", json=body)
+    second = client.post("/agents/orchestrator/turn/stream", json=body)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    starts = [
+        next(data for name, data in _sse_events(response.text) if name == "RUN_STARTED")
+        for response in (first, second)
+    ]
+    assert [event["threadId"] for event in starts] == [
+        "route-run-identity",
+        "route-run-identity",
+    ]
+    assert starts[0]["runId"] != starts[1]["runId"]
+
     del app.state.llm_provider
 
 
@@ -135,12 +173,22 @@ def test_orchestrator_stream_emits_state_delta_plan_progress() -> None:
 
     assert response.status_code == 200
     text = response.text
-    # AG-UI 官方事件名 + plan 进度袋，前端 useSseStream 双语兼容层可直接归一化进 state。
-    assert "event: STATE_DELTA" in text
-    assert "plan_steps" in text
+    state_deltas = [
+        json.loads(block.split("data: ", maxsplit=1)[1])["delta"]
+        for block in text.split("\n\n")
+        if block.startswith("event: STATE_DELTA\n")
+    ]
+    assert state_deltas
+    assert all(isinstance(delta, list) for delta in state_deltas)
+    assert all(
+        operation["op"] == "add" and operation["path"] == "/plan_steps"
+        for delta in state_deltas
+        for operation in delta
+    )
+    plan_steps = [operation["value"] for delta in state_deltas for operation in delta]
     # 开场全 pending 快照 + 每步真实推进到 active（done/failed 视 dispatch 结果）。
-    assert '"pending"' in text
-    assert '"active"' in text
+    assert any(step["status"] == "pending" for steps in plan_steps for step in steps)
+    assert any(step["status"] == "active" for steps in plan_steps for step in steps)
 
     del app.state.llm_provider
 

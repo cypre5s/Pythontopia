@@ -147,7 +147,7 @@ class FallbackEmbedder:
 def select_embedder() -> Embedder:
     kind = os.environ.get("PYT_RAG_EMBEDDER", "hash").lower()
     if kind == "hash":
-        return HashEmbedder()
+        return HashEmbedder(dim=_configured_embedding_dim(DEFAULT_DIM))
     if kind == "bge":
         return BgeSmallEmbedder()
     if kind in {

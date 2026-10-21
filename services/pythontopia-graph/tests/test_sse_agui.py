@@ -22,6 +22,33 @@ def test_run_finished_wraps_result() -> None:
     )
 
 
+def test_run_finished_includes_lifecycle_identity_when_provided() -> None:
+    assert (
+        sse_agui.run_finished(
+            {"ok": True},
+            thread_id="thread-1",
+            run_id="run-1",
+        )
+        == 'event: RUN_FINISHED\ndata: {"threadId": "thread-1", "runId": "run-1", "result": {"ok": true}}\n\n'
+    )
+
+
+@pytest.mark.parametrize(
+    ("thread_id", "run_id"),
+    [("thread-1", None), (None, "run-1")],
+)
+def test_run_finished_rejects_partial_lifecycle_identity(
+    thread_id: str | None,
+    run_id: str | None,
+) -> None:
+    with pytest.raises(ValueError, match="thread_id and run_id"):
+        sse_agui.run_finished(
+            {"ok": True},
+            thread_id=thread_id,
+            run_id=run_id,
+        )
+
+
 def test_run_error_shape() -> None:
     assert (
         sse_agui.run_error("BOOM", "炸了")
@@ -64,8 +91,8 @@ def test_step_finished_fields() -> None:
 
 def test_state_delta_wraps_delta() -> None:
     assert (
-        sse_agui.state_delta({"masteryAvg": 55})
-        == 'event: STATE_DELTA\ndata: {"delta": {"masteryAvg": 55}}\n\n'
+        sse_agui.state_delta([{"op": "add", "path": "/masteryAvg", "value": 55}])
+        == 'event: STATE_DELTA\ndata: {"delta": [{"op": "add", "path": "/masteryAvg", "value": 55}]}\n\n'
     )
 
 
@@ -101,6 +128,18 @@ def test_translate_result_wraps() -> None:
     assert (
         sse_agui.translate("result", {"answer_md": "x"})
         == 'event: RUN_FINISHED\ndata: {"result": {"answer_md": "x"}}\n\n'
+    )
+
+
+def test_translate_result_includes_lifecycle_context() -> None:
+    assert (
+        sse_agui.translate(
+            "result",
+            {"answer_md": "x"},
+            thread_id="thread-1",
+            run_id="run-1",
+        )
+        == 'event: RUN_FINISHED\ndata: {"threadId": "thread-1", "runId": "run-1", "result": {"answer_md": "x"}}\n\n'
     )
 
 
@@ -143,13 +182,10 @@ def test_translate_trace_without_phase_infers_finished_from_status() -> None:
 def test_translate_passthrough_agui_and_unknown_names() -> None:
     # 已是 AG-UI 官方名 / 未知名 → 原样 format_sse 透传。
     assert (
-        sse_agui.translate("STATE_DELTA", {"delta": {"a": 1}})
-        == 'event: STATE_DELTA\ndata: {"delta": {"a": 1}}\n\n'
+        sse_agui.translate("STATE_DELTA", {"delta": [{"op": "add", "path": "/a", "value": 1}]})
+        == 'event: STATE_DELTA\ndata: {"delta": [{"op": "add", "path": "/a", "value": 1}]}\n\n'
     )
-    assert (
-        sse_agui.translate("custom_thing", {"x": 1})
-        == 'event: custom_thing\ndata: {"x": 1}\n\n'
-    )
+    assert sse_agui.translate("custom_thing", {"x": 1}) == 'event: custom_thing\ndata: {"x": 1}\n\n'
 
 
 def test_stream_quality_scores_canonical_agui_higher_than_legacy_names() -> None:
@@ -157,7 +193,18 @@ def test_stream_quality_scores_canonical_agui_higher_than_legacy_names() -> None
         [
             ("RUN_STARTED", {"runId": "r1"}),
             ("STEP_STARTED", {"node": "evidence_fetcher"}),
-            ("STATE_DELTA", {"delta": {"plan_steps": [{"id": "learn", "status": "active"}]}}),
+            (
+                "STATE_DELTA",
+                {
+                    "delta": [
+                        {
+                            "op": "add",
+                            "path": "/plan_steps",
+                            "value": [{"id": "learn", "status": "active"}],
+                        }
+                    ]
+                },
+            ),
             ("TEXT_MESSAGE_CONTENT", {"delta": "你好"}),
             ("STEP_FINISHED", {"node": "evidence_fetcher", "status": "ok"}),
             ("RUN_FINISHED", {"result": {"ok": True}}),
@@ -190,7 +237,10 @@ def test_stream_quality_scores_canonical_agui_higher_than_legacy_names() -> None
             [
                 ("RUN_STARTED", {"runId": "r1"}),
                 ("STEP_STARTED", {"node": "resource_designer"}),
-                ("STATE_DELTA", {"delta": {"stage": "drafting"}}),
+                (
+                    "STATE_DELTA",
+                    {"delta": [{"op": "add", "path": "/stage", "value": "drafting"}]},
+                ),
                 ("TEXT_MESSAGE_CONTENT", {"delta": "生成讲义"}),
                 ("STEP_FINISHED", {"node": "resource_designer", "status": "ok"}),
                 ("RUN_FINISHED", {"result": {"resourceId": 1}}),

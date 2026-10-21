@@ -47,7 +47,8 @@ class OrchestratorGraphClientTest {
       "event: trace\n"
           + "data: {\"node\":\"planner\"}\n\n"
           + "event: token\n"
-          + "data: {\"text\":\"hi\"}\n\n"
+          + "data: {\"text\":\n"
+          + "data: \"hi\"}\n\n"
           + "event: result\n"
           + "data: {\"reply_md\":\"done\"}\n\n";
 
@@ -165,6 +166,7 @@ class OrchestratorGraphClientTest {
     assertThat(emitter.events()).anyMatch(e -> e.contains("event:token"));
     assertThat(emitter.events())
         .anyMatch(e -> e.contains("event:result") && e.contains("reply_md"));
+    verify(peek).accept("token", "{\"text\":\n\"hi\"}");
     verify(peek).accept("result", "{\"reply_md\":\"done\"}");
   }
 

@@ -72,6 +72,7 @@ vi.mock('@/api/learner', () => ({
 
 vi.mock('@/api/workshopHistory', () => {
   return {
+    clearWorkshopChatHistoryCache: vi.fn(),
     listWorkshopChatHistoryTurns: apiMocks.listWorkshopChatHistoryTurns,
     rememberWorkshopChatHistoryTurn: apiMocks.rememberWorkshopChatHistoryTurn,
     recordWorkshopChatHistoryTurn: vi.fn(),
@@ -530,6 +531,11 @@ describe('WorkshopPage R-13 改造', () => {
     expect(wrapper.find('[data-testid="workshop-drawer-history"]').exists()).toBe(true);
     await flushPromises();
     expect(apiMocks.listWorkshopChatHistoryTurns).toHaveBeenCalledTimes(1);
+    expect(apiMocks.listWorkshopChatHistoryTurns).toHaveBeenCalledWith(
+      101,
+      50,
+      expect.objectContaining({ force: false }),
+    );
     expect(wrapper.text()).toContain('还没有问答记录');
 
     wrapper.findComponent(WorkshopChat).vm.$emit('history-saved', savedTurn);

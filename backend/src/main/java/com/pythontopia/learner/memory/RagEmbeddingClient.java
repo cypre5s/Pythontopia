@@ -87,6 +87,15 @@ public class RagEmbeddingClient implements EmbeddingClient {
         result.add(Optional.empty());
         continue;
       }
+      if (vector.size() != body.dim()) {
+        log.warn(
+            "embedding 响应 profile 不一致：model={} declaredDim={} actualDim={}",
+            body.model(),
+            body.dim(),
+            vector.size());
+        result.add(Optional.empty());
+        continue;
+      }
       float[] floats = new float[vector.size()];
       for (int i = 0; i < vector.size(); i++) {
         Double value = vector.get(i);
