@@ -42,21 +42,38 @@ public class TutorBenchEvaluator {
             : "缺少资源消费后的微测或掌握度事件");
   }
 
+  /**
+   * 反作弊：掌握度增长不得超过通过微测应得的上限；失败微测必须触发补救。
+   *
+   * <p>「从未失败过微测」与「失败了但没补救」是两种<strong>完全不同</strong>的结论：前者是零失败的
+   * 优等生或全新零活跃用户，补救率不适用（N/A），只需检查有没有刷分；把它和后者一样报成
+   * 「失败微测未触发补救或存在刷分风险」是断言方向与命名相反的误报。
+   */
   private TutorBenchCaseDto antiCheatRemediation(LearningEffectSummaryDto summary) {
-    boolean passed =
-        summary.failedCheckCount() > 0
-            && summary.remediationRate() > 0.0
-            && summary.totalMasteryDelta().doubleValue() < summary.passedCheckCount() * 0.05 + 0.001;
-    double score =
-        average(
-            summary.failedCheckCount() > 0,
-            summary.remediationRate() > 0.0,
-            summary.totalMasteryDelta().doubleValue() < summary.passedCheckCount() * 0.05 + 0.001);
+    boolean noGaming =
+        summary.totalMasteryDelta().doubleValue() < summary.passedCheckCount() * 0.05 + 0.001;
+    if (summary.failedCheckCount() == 0) {
+      // 补救率的分母（失败微测）为 0 → 该维度 N/A，只按刷分维度定分，不因「没失败过」判负。
+      return new TutorBenchCaseDto(
+          "anti_cheat_remediation",
+          noGaming,
+          noGaming ? 1.0 : 0.0,
+          noGaming
+              ? "尚无失败微测，补救率不适用；掌握度增长未超过通过微测应得上限"
+              : "尚无失败微测，但掌握度增长已超过通过微测应得上限，存在刷分风险");
+    }
+    boolean remediated = summary.remediationRate() > 0.0;
+    boolean passed = remediated && noGaming;
+    double score = average(remediated, noGaming);
     return new TutorBenchCaseDto(
         "anti_cheat_remediation",
         passed,
         score,
-        passed ? "失败微测没有正向刷分，并触发补救" : "失败微测未触发补救或存在刷分风险");
+        passed
+            ? "失败微测没有正向刷分，并触发补救"
+            : remediated
+                ? "失败微测已触发补救，但掌握度增长超过通过微测应得上限，存在刷分风险"
+                : "存在失败微测但未触发任何补救");
   }
 
   private TutorBenchCaseDto evidenceConsistency(LearningEffectSummaryDto summary) {

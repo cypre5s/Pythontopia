@@ -32,6 +32,12 @@ class FeynmanGraphClientTest {
             MockRestRequestMatchers.jsonPath("$.misconceptions[0].tag").value("off_by_one_range"))
         .andExpect(
             MockRestRequestMatchers.jsonPath("$.misconceptions[0].evidence_event_ids[0]").value(501))
+        // graph 契约 schemas.feynman.FeynmanTuteeInput.history：agent 会把它拼进 messages，
+        // 字段名与 role 字面量必须严丝合缝，否则多轮上下文静默丢失（或被 pydantic 422）。
+        .andExpect(MockRestRequestMatchers.jsonPath("$.history[0].role").value("user"))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.history[0].content").value("上一轮我讲的"))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.history[1].role").value("assistant"))
+        .andExpect(MockRestRequestMatchers.jsonPath("$.history[1].content").value("上一轮学弟的回复"))
         .andRespond(
             MockRestResponseCreators.withSuccess(
                 """
@@ -49,7 +55,12 @@ class FeynmanGraphClientTest {
         client.step(
             "PY43-KC-016",
             List.of(new Misconception("off_by_one_range", List.of(501L), false)),
-            "range 右端不包含");
+            "range 右端不包含",
+            List.of(
+                new FeynmanGraphClient.ConversationTurn(
+                    FeynmanGraphClient.ConversationTurn.ROLE_USER, "上一轮我讲的"),
+                new FeynmanGraphClient.ConversationTurn(
+                    FeynmanGraphClient.ConversationTurn.ROLE_ASSISTANT, "上一轮学弟的回复")));
 
     assertThat(output).isPresent();
     assertThat(output.get().replyMd()).isEqualTo("我懂了");
@@ -61,8 +72,9 @@ class FeynmanGraphClientTest {
     server.verify(Duration.ofSeconds(2));
   }
 
+  /** 下游不可达只返回 empty；是否降级由调用方决定（teach 侧一律 fail fast）。 */
   @Test
-  void upstreamFailureYieldsEmptyForRuleFallback() {
+  void upstreamFailureYieldsEmptyForCallerToDecide() {
     MockRestServiceServer server = MockRestServiceServer.bindTo(restTemplate).build();
     server
         .expect(MockRestRequestMatchers.requestTo("http://graph.test/agents/feynman/tutee/step"))
@@ -72,7 +84,8 @@ class FeynmanGraphClientTest {
         client.step(
             "PY43-KC-016",
             List.of(new Misconception("off_by_one_range", List.of(501L), false)),
-            "随便讲");
+            "随便讲",
+            List.of());
 
     assertThat(output).isEmpty();
     server.verify(Duration.ofSeconds(2));

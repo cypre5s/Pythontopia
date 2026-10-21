@@ -116,8 +116,12 @@ class AiRuntimeSummaryServiceTest {
         .extracting(AiRuntimeSummaryDto.RuntimeGate::status)
         .isEqualTo("PASS");
 
-    AiRuntimeOperationsDto operations = service.operationsForUser(userId);
+    AiRuntimeOperationsDto operations =
+        service.operationsForSubject(AiRuntimeOperationsDto.OperationsSubject.student(userId));
 
+    // 数据主体必须随数据一起下发，否则无从判断这块面板在描述谁。
+    assertThat(operations.subject().scope()).isEqualTo("STUDENT");
+    assertThat(operations.subject().userId()).isEqualTo(userId);
     assertThat(operations.loops()).extracting(AiRuntimeOperationsDto.LoopOperation::loopType)
         .containsExactly("LEARNER", "DEBUG", "RESOURCE", "WORLD", "IMPROVE");
     assertThat(operations.loops())
@@ -174,6 +178,7 @@ class AiRuntimeSummaryServiceTest {
 
     AiRuntimeOperationsDto operations = service.operationsForUser(userId);
 
+    assertThat(operations.subject().scope()).isEqualTo("SELF");
     assertThat(operations.loops())
         .filteredOn(operation -> "LEARNER".equals(operation.loopType()))
         .first()

@@ -28,8 +28,18 @@ public class FeynmanGraphClient {
     this.properties = properties;
   }
 
+  /**
+   * 多轮教学对话：把该会话此前的轮次作为 {@code history} 一并送给 graph（契约见
+   * {@code schemas/feynman.py FeynmanTuteeInput.history}，agent 会把它拼进 messages），
+   * 否则 LLM 每轮只看得到最后一句，学生分几轮讲的因果链全部丢失。
+   *
+   * @param history 按时间正序的历史轮次（不含本轮 studentTeaching）；由调用方裁剪长度
+   */
   public Optional<FeynmanOutput> step(
-      String kcCode, List<Misconception> misconceptions, String studentTeaching) {
+      String kcCode,
+      List<Misconception> misconceptions,
+      String studentTeaching,
+      List<ConversationTurn> history) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     // 内部调用令牌：与 IntentGraphClient / RagEmbeddingClient 一致复用 ragAdminToken；
@@ -38,8 +48,11 @@ public class FeynmanGraphClient {
     List<GraphMisconception> wire =
         (misconceptions == null ? List.<Misconception>of() : misconceptions)
             .stream().map(GraphMisconception::from).toList();
+    List<GraphTurn> historyWire =
+        (history == null ? List.<ConversationTurn>of() : history)
+            .stream().map(GraphTurn::from).toList();
     HttpEntity<FeynmanInput> entity =
-        new HttpEntity<>(new FeynmanInput(kcCode, wire, studentTeaching), headers);
+        new HttpEntity<>(new FeynmanInput(kcCode, wire, studentTeaching, historyWire), headers);
     try {
       GraphFeynmanOutput body =
           restTemplate
@@ -123,7 +136,26 @@ public class FeynmanGraphClient {
   record FeynmanInput(
       @JsonProperty("kc_code") String kcCode,
       @JsonProperty("misconceptions") List<GraphMisconception> misconceptions,
-      @JsonProperty("student_teaching") String studentTeaching) {}
+      @JsonProperty("student_teaching") String studentTeaching,
+      @JsonProperty("history") List<GraphTurn> history) {}
+
+  /**
+   * 历史轮次的领域投影。{@code role} 只允许 graph schemas.feynman.Turn 的三个字面量
+   * （system/user/assistant），越界会被 pydantic 直接 422。
+   */
+  public record ConversationTurn(String role, String content) {
+
+    public static final String ROLE_USER = "user";
+    public static final String ROLE_ASSISTANT = "assistant";
+  }
+
+  /** 历史轮次在 graph 线缆上的形态：对齐 schemas.feynman.Turn（role/content）。 */
+  record GraphTurn(
+      @JsonProperty("role") String role, @JsonProperty("content") String content) {
+    static GraphTurn from(ConversationTurn turn) {
+      return new GraphTurn(turn.role(), turn.content());
+    }
+  }
 
   /** 误解在 graph 线缆上的 snake_case 投影，隔离 wire 格式与领域/DB/前端契约。 */
   record GraphMisconception(

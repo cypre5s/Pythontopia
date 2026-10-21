@@ -68,10 +68,24 @@ public class AiRuntimeSummaryService {
         gates(protocol, evidence, memory, externalResearch));
   }
 
+  /** 查看者本人的闭环运维状态（学生视角）。 */
   @Transactional(readOnly = true)
   public AiRuntimeOperationsDto operationsForUser(long userId) {
-    AiRuntimeSummaryDto summary = summaryForUser(userId);
-    return new AiRuntimeOperationsDto(loopOperations(summary), governanceItems(summary));
+    return operationsForSubject(AiRuntimeOperationsDto.OperationsSubject.self(userId));
+  }
+
+  /**
+   * 指定数据主体的闭环运维状态。
+   *
+   * <p>底层三个数据源（学习证据图 / Evidence Memory / 学习者数字孪生周报）都只有 per-user 维度，
+   * 因此这里必须显式收到「看谁」，而不是默认拿查看者自己的 userId——教师端曾因此把自己的空学习
+   * 证据当成平台状态展示。
+   */
+  @Transactional(readOnly = true)
+  public AiRuntimeOperationsDto operationsForSubject(
+      AiRuntimeOperationsDto.OperationsSubject subject) {
+    AiRuntimeSummaryDto summary = summaryForUser(subject.userId());
+    return new AiRuntimeOperationsDto(subject, loopOperations(summary), governanceItems(summary));
   }
 
   private static AiRuntimeSummaryDto.ProtocolSummary protocolSummary(

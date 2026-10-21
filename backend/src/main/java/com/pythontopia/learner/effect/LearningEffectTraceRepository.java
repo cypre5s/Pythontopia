@@ -78,7 +78,12 @@ public class LearningEffectTraceRepository {
         failed,
         ratio(passed, checks),
         ratio(checkedResources, consumed),
-        ratio(remedied, checks),
+        // 补救率的分母是「失败微测」而不是全部微测：remedied 只统计 status='FAILED' AND
+        // remediation_type IS NOT NULL，用全部微测作分母会让「1 次失败已补救 + 99 次通过」
+        // 算出 0.01，与「补救率」的自然定义（已补救 / 需补救）相差两个量级。
+        // failedCheckCount = 0 时返回 0.0 表示「不适用」（无失败即无需补救），
+        // 消费方必须结合 failedCheckCount 判读，见 TutorBenchEvaluator.antiCheatRemediation。
+        ratio(remedied, failed),
         totalDelta,
         positiveResourceRead,
         checkMasteryEvents);

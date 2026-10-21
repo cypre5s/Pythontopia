@@ -127,7 +127,10 @@ class LearningEffectTraceServiceTest {
     assertThat(summary.failedCheckCount()).isEqualTo(1);
     assertThat(summary.checkPassRate()).isEqualTo(0.5);
     assertThat(summary.evidenceCompletionRate()).isEqualTo(1.0);
-    assertThat(summary.remediationRate()).isEqualTo(0.5);
+    // 补救率 = 已补救的失败微测 / 失败微测。1 次失败已补救 → 1.0。
+    // 分母若用「全部微测」，这里会算成 0.5，而随着通过次数增加会被稀释到接近 0
+    //（1 次失败已补救 + 99 次通过 = 0.01），与「补救率」的语义相差两个量级。
+    assertThat(summary.remediationRate()).isEqualTo(1.0);
     assertThat(summary.totalMasteryDelta()).isEqualByComparingTo(new BigDecimal("0.030"));
     assertThat(summary.positiveResourceReadEvents()).isZero();
     assertThat(summary.checkMasteryEvents()).isEqualTo(2);
@@ -137,5 +140,40 @@ class LearningEffectTraceServiceTest {
     assertThat(summary.evidenceGraphMetrics().masteryEvidenceRate()).isEqualTo(1.0);
     assertThat(summary.evidenceGraphMetrics().graphCompletenessScore()).isGreaterThan(0.6);
     assertThat(summary.personalizationSignalCount()).isGreaterThanOrEqualTo(1);
+  }
+
+  /** 补救率不能被「通过的微测」稀释：唯一的失败已补救 → 恒为 1.0，与通过多少次无关。 */
+  @Test
+  void remediationRateIsNotDilutedByPassedChecks() {
+    for (int i = 0; i < 8; i++) {
+      jdbc.update(
+          """
+          INSERT INTO resource_learning_check (
+            user_id, resource_id, kc_code, evidence_type, answer_text, operation_evidence,
+            status, mastery_delta, remediation_type, reason
+          ) VALUES (?, ?, 'PY43-KC-001', 'MICRO_QUIZ', '答对了', '{}'::jsonb,
+            'PASSED', 0.050, NULL, 'hit keyword')
+          """,
+          userId,
+          resourceId);
+    }
+
+    LearningEffectSummaryDto summary = service.summary(userId);
+
+    assertThat(summary.checkCount()).isEqualTo(10);
+    assertThat(summary.failedCheckCount()).isEqualTo(1);
+    // 分母若是全部微测，这里会是 0.1，并随通过次数继续趋近 0。
+    assertThat(summary.remediationRate()).isEqualTo(1.0);
+  }
+
+  /** 从未失败过微测：补救率分母为 0，返回 0.0 表示「不适用」，消费方须结合 failedCheckCount 判读。 */
+  @Test
+  void remediationRateIsZeroWhenNothingEverFailed() {
+    jdbc.update("DELETE FROM resource_learning_check WHERE user_id = ? AND status = 'FAILED'", userId);
+
+    LearningEffectSummaryDto summary = service.summary(userId);
+
+    assertThat(summary.failedCheckCount()).isZero();
+    assertThat(summary.remediationRate()).isZero();
   }
 }

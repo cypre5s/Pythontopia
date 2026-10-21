@@ -60,10 +60,13 @@ class AiRuntimeSummaryControllerTest {
   }
 
   @Test
-  void teacherGetsRuntimeOperationsForGovernance() {
+  void teacherGetsRuntimeOperationsForTheStudentTheyExplicitlyName() {
     CurrentUserPrincipal teacher = new CurrentUserPrincipal(2L, "teacher", Role.TEACHER);
+    AiRuntimeOperationsDto.OperationsSubject subject =
+        AiRuntimeOperationsDto.OperationsSubject.student(31L);
     AiRuntimeOperationsDto expected =
         new AiRuntimeOperationsDto(
+            subject,
             List.of(
                 new AiRuntimeOperationsDto.LoopOperation(
                     "RESOURCE",
@@ -80,11 +83,57 @@ class AiRuntimeSummaryControllerTest {
                     "查看 canary dry-run 与 rollback 状态",
                     "/teacher/review",
                     List.of("agentic-m3-system-evolution-v1"))));
-    when(service.operationsForUser(eq(2L))).thenReturn(expected);
+    when(service.operationsForSubject(eq(subject))).thenReturn(expected);
 
-    AiRuntimeOperationsDto result = controller.operations(teacher);
+    AiRuntimeOperationsDto result = controller.operations(teacher, 31L);
 
     assertThat(result).isSameAs(expected);
-    verify(service).operationsForUser(eq(2L));
+    assertThat(result.subject().userId()).isEqualTo(31L);
+    verify(service).operationsForSubject(eq(subject));
+  }
+
+  /**
+   * 教师本人没有学习事件，用查看者自己的 userId 建证据图只会恒得 INSUFFICIENT_EVIDENCE，
+   * 与平台真实状态无关——必须 fail fast 要求指定数据主体，而不是静默拿教师自己的数据充数。
+   */
+  @Test
+  void teacherWithoutExplicitSubjectIsRejectedInsteadOfSilentlyReadingOwnEvidence() {
+    CurrentUserPrincipal teacher = new CurrentUserPrincipal(2L, "teacher", Role.TEACHER);
+
+    assertThatThrownBy(() -> controller.operations(teacher, null))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            exception -> {
+              assertThat(exception.status()).isEqualTo(HttpStatus.BAD_REQUEST);
+              assertThat(exception.code()).isEqualTo("AI_RUNTIME_SUBJECT_REQUIRED");
+            });
+
+    verifyNoInteractions(service);
+  }
+
+  @Test
+  void studentOperationsAreScopedToSelfAndLabelledAsSuch() {
+    CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
+    AiRuntimeOperationsDto.OperationsSubject subject =
+        AiRuntimeOperationsDto.OperationsSubject.self(7L);
+    AiRuntimeOperationsDto expected = new AiRuntimeOperationsDto(subject, List.of(), List.of());
+    when(service.operationsForSubject(eq(subject))).thenReturn(expected);
+
+    AiRuntimeOperationsDto result = controller.operations(student, null);
+
+    assertThat(result.subject().scope()).isEqualTo("SELF");
+    verify(service).operationsForSubject(eq(subject));
+  }
+
+  @Test
+  void studentCannotAskForAnotherUsersRuntimeOperations() {
+    CurrentUserPrincipal student = new CurrentUserPrincipal(7L, "stu", Role.STUDENT);
+
+    assertThatThrownBy(() -> controller.operations(student, 8L))
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            exception -> assertThat(exception.status()).isEqualTo(HttpStatus.FORBIDDEN));
+
+    verifyNoInteractions(service);
   }
 }

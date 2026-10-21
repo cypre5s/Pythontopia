@@ -121,7 +121,9 @@ export const useFeynmanStore = defineStore('feynman', {
       try {
         const verdict = await judgeFeynmanSession(sessionId);
         const result: FeynmanJudgeResultDto = {
-          status: verdict.passed ? 'PASSED' : 'FAILED',
+          // 后端 status 是权威：ERROR（判题系统故障）与 NA（概念模式不判题）都不是「学生失败」，
+          // 只在旧后端不返回 status 时才回落到 passed 的布尔投影。
+          status: verdict.status ?? (verdict.passed ? 'PASSED' : 'FAILED'),
           messageZh: verdict.message,
           // 判题证据回链到学弟当前误解的真实 event_id（零合成）。
           evidenceEventIds: this.misconceptions.flatMap((item) => item.evidenceEventIds),
