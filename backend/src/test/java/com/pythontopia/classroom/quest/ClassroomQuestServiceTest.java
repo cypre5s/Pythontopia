@@ -176,6 +176,10 @@ class ClassroomQuestServiceTest {
     verify(studentWriteThrottle).tryAcquireClassroomQuestFanOut(teacher.userId(), 4);
   }
 
+  /**
+   * 重复分发必须走「ON CONFLICT DO NOTHING」的真幂等：PostgreSQL 里唯一键冲突会把整个
+   * @Transactional 事务标记为 aborted，靠 catch DuplicateKeyException 续跑会让后续 insert 全部失败。
+   */
   @Test
   void rejectsClassroomQuestFanOutAboveSynchronousLimitBeforeAnyWrite() {
     when(classroomGuard.requireOwner(teacher, 9L))

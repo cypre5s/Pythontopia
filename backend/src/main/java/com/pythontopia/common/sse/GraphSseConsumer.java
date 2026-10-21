@@ -11,6 +11,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.function.BooleanSupplier;
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import org.slf4j.Logger;

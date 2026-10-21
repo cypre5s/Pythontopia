@@ -36,6 +36,10 @@ const assessedCodes = computed(() => new Set(props.assessed ?? Object.keys(props
 function isAssessed(code: string): boolean {
   return assessedCodes.value.has(code);
 }
+const assessedCodes = computed(() => new Set(props.assessed ?? Object.keys(props.mastery)));
+function isAssessed(code: string): boolean {
+  return assessedCodes.value.has(code);
+}
 function radiusOf(code: string): number {
   const score = scoreOf(code);
   return isAssessed(code) && score != null ? 4 + score * 4 : 3.5;

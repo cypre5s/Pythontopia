@@ -604,6 +604,7 @@ public class EndlessPregenService {
   public BossInternalProblem persistConsumed(
       Long userId,
       int chapter,
+      int stage,
       String kcCode,
       String kind,
       String arenaLevel,
@@ -613,6 +614,7 @@ public class EndlessPregenService {
     return persistConsumed(
         userId,
         chapter,
+        stage,
         kcCode,
         kind,
         arenaLevel,

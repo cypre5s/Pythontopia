@@ -60,6 +60,53 @@ def test_problem_endpoint_uses_grounded_golden_when_llm_unavailable(
         "/agents/boss/problem",
         json={**KC_CONTEXT, "chapter": 1, "stage": 1, "kcCode": "PY43-KC-001", "difficulty": 1},
     )
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "BOSS_PROBLEM_GENERATION_UNAVAILABLE"
+
+
+def test_problem_endpoint_rejects_golden_for_a_different_requested_kc(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from pythontopia_graph.routes import boss as boss_route
+
+    monkeypatch.setattr(boss_route, "provider_from_env", lambda: _UnavailableProvider())
+
+    response = client.post(
+        "/agents/boss/problem",
+        json={**KC_CONTEXT, "chapter": 1, "stage": 2, "kcCode": "PY43-KC-001", "difficulty": 2},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "BOSS_PROBLEM_GENERATION_UNAVAILABLE"
+
+
+def test_problem_logs_profile_signal_presence_without_signal_values(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    from pythontopia_graph.routes import boss as boss_route
+    from pythontopia_graph.agents.boss.golden_problems import get_golden_problem
+    captured: dict[str, object] = {}
+
+    async def accepted_problem(*_args, **kwargs):
+        captured.update(kwargs)
+        return SimpleNamespace(problem=get_golden_problem(1, 1), passed=True)
+
+    monkeypatch.setattr(boss_route, "provider_from_env", lambda: object())
+    monkeypatch.setattr(boss_route, "build_llm_problem_factory", lambda _provider: object())
+    monkeypatch.setattr(boss_route, "generate_boss_problem", accepted_problem)
+    caplog.set_level(logging.INFO, logger="pythontopia_graph.routes.boss")
+
+    response = client.post(
+        "/agents/boss/problem",
+        json={
+            **KC_CONTEXT,
+            "chapter": 1,
+            "stage": 1,
+            "kcCode": "PY43-KC-001",
+            "profileSignals": {"weakKcCodes": ["PRIVATE_SIGNAL_SENTINEL"]},
+        },
+    )
+
     assert response.status_code == 200
     assert response.json()["kcCode"] == "PY43-KC-001"
     assert response.json()["reviewed"] is True

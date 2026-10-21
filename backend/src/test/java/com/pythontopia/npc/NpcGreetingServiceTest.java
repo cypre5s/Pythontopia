@@ -22,6 +22,8 @@ import com.pythontopia.learner.memory.MemoryRetrievalService;
 import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import com.pythontopia.learner.profile.dto.ProfileDimensionDto;
 import com.pythontopia.learner.profile.service.PassiveProfileService;
+import com.pythontopia.common.error.BusinessException;
+import org.springframework.http.HttpStatus;
 import com.pythontopia.npc.dto.NpcDialogResponse;
 import com.pythontopia.npc.dto.NpcGreetingResponse;
 import com.pythontopia.npc.graph.NpcDialogGraphClient;

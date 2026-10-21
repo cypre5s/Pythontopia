@@ -57,6 +57,10 @@ pythontopia-web-<UTC>.tar.gz
 `video_manifest.json` 与清单中的全部 MP4。打包、预检和安装均会核验 PDF 数量、视频存在性、
 字幕覆盖、object id 与每个 MP4 的 SHA-256；任何一项缺失或错版都会终止，而不是降级成假内容。
 
+生产共享数据目录 `/opt/pythontopia/shared/data/course-pack-43/` 必须预置 7 份 PDF、
+`video_manifest.json` 与清单中的全部 MP4。打包、预检和安装均会核验 PDF 数量、视频存在性、
+字幕覆盖、object id 与每个 MP4 的 SHA-256；任何一项缺失或错版都会终止，而不是降级成假内容。
+
 ## 3. 部署步骤
 
 ### GitHub Release 直拉

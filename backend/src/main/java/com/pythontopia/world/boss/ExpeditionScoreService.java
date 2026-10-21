@@ -4,6 +4,7 @@ import com.pythontopia.learner.event.LearningEvent;
 import com.pythontopia.world.boss.dto.ExpeditionLeaderboardDto;
 import com.pythontopia.world.boss.dto.ExpeditionLeaderboardEntry;
 import com.pythontopia.world.boss.dto.ExpeditionScoreSubmitDto;
+import java.util.UUID;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;

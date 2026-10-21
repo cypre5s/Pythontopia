@@ -190,6 +190,26 @@ class TutorAgent:
         conversation_history: list[dict[str, str]],
         evidence_chunks: list[RagHit],
     ) -> TutorResponse:
+        return await run_autogen_tutor_call(
+            self.AGENT_NAME,
+            lambda: self._ask_once(
+                question,
+                profile_brief,
+                conversation_history,
+                evidence_chunks,
+                allow_diagram=allow_diagram,
+            ),
+        )
+
+    async def _ask_once(
+        self,
+        question: str,
+        profile_brief: str,
+        conversation_history: list[dict[str, str]],
+        evidence_chunks: list[RagHit],
+        *,
+        allow_diagram: bool = True,
+    ) -> TutorResponse:
         messages = self._build_messages(
             question, profile_brief, conversation_history, evidence_chunks,
         )
