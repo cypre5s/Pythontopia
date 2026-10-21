@@ -1,22 +1,14 @@
 // 「下一步」确定性建议：把主线断点、KC 掌握度与学生画像收敛成主界面上
 // 最多 3 条可点击行动，替代此前对所有学生一视同仁的静态章节要点。
 //
-// 只做纯规则推导（零 LLM、零新请求）——三个数据源都已由现有链路注水：
-//   主线进度  mainline store（HudShell 挂载即 load）
-//   KC 掌握度 learning.field.masterySnapshot（world bootstrap 下发）
-//   画像信号  useProfileSignals（易错 KC / 媒介偏好）
-// 数据未就绪时返回空数组，面板回退到静态章节要点，行为向后兼容。
+// 主线进度继续来自 mainline store；个性化 KC 推荐使用服务端 Twin 状态，
+// 画像仅保留媒介偏好展示，不在前端推断掌握度或重排 KC。
+// 数据未就绪时保留主线建议，个性化项暂不显示。
 
-import { computed, type ComputedRef } from "vue";
-import { useLearningStore } from "@stores/learning";
+import { computed, onMounted, ref, type ComputedRef } from "vue";
 import { useMainlineStore } from "@stores/mainline";
 import { useProfileSignals } from "@/composables/useProfileSignals";
-import { CHAPTERS, parseKcNumber } from "@/data/chapters";
-import { kcDisplayName } from "@/data/kcNames";
-import type { MasterySnapshotDto } from "@/api/dto/MasterySnapshotDto";
-
-/** 掌握度低于该阈值的 KC 才值得占用主界面一条建议位。 */
-const WEAK_MASTERY_THRESHOLD = 0.6;
+import { fetchLearnerTwinState, type LearnerTwinState } from "@/api/twin";
 
 export interface NextStepRoute {
   path: string;
@@ -51,44 +43,14 @@ export interface NextStepsChapter {
 export interface NextStepsInput {
   chapters: readonly NextStepsChapter[];
   currentChapter: number;
-  mastery: readonly MasterySnapshotDto[];
-  weakKcs: readonly string[];
+  twinState: LearnerTwinState | null;
   mediaPriority?: readonly string[];
-}
-
-function chapterKcRange(
-  chapter: number,
-): { start: number; end: number } | null {
-  const entry = CHAPTERS.find((c) => c.order === chapter);
-  return entry ? { start: entry.startKc, end: entry.endKc } : null;
-}
-
-/** 本章内最值得补的 KC：画像易错点优先，其次快照里掌握度最低且低于阈值的。 */
-function pickWeakKc(
-  chapter: number,
-  mastery: readonly MasterySnapshotDto[],
-  weakKcs: readonly string[],
-): { code: string; fromProfile: boolean } | null {
-  const range = chapterKcRange(chapter);
-  if (!range) return null;
-  const inChapter = (code: string): boolean => {
-    const num = parseKcNumber(code);
-    return num !== null && num >= range.start && num <= range.end;
-  };
-  const profileHit = weakKcs.find(inChapter);
-  if (profileHit) return { code: profileHit, fromProfile: true };
-  const weakest = mastery
-    .filter(
-      (m) => inChapter(m.kcCode) && m.masteryScore < WEAK_MASTERY_THRESHOLD,
-    )
-    .sort((a, b) => a.masteryScore - b.masteryScore)[0];
-  return weakest ? { code: weakest.kcCode, fromProfile: false } : null;
 }
 
 /**
  * 推导「下一步」建议（最多 3 条，去重按 kind）：
  * 1. 主线断点：本章第一个未完成小节；全部完成但 0★ → 章末大测试。
- * 2. 弱项补强：画像易错 KC ∩ 本章，否则本章掌握度最低（<0.6）→ 工坊定向练习深链。
+ * 2. 个性化练习：使用服务端 Twin 状态中的统一推荐与原因，不在前端重排能力信号。
  * 3. 冲星 / 偏好：小节全完成且 1–2★ → 无尽远征补星；否则按媒介偏好荐视频课。
  */
 export function deriveNextSteps(input: NextStepsInput): NextStep[] {
@@ -116,15 +78,24 @@ export function deriveNextSteps(input: NextStepsInput): NextStep[] {
     });
   }
 
-  const weak = pickWeakKc(input.currentChapter, input.mastery, input.weakKcs);
-  if (weak) {
+  const recommendation = input.twinState?.nextSteps[0];
+  if (recommendation) {
+    const progress = input.twinState?.kcs.find((kc) => kc.kcCode === recommendation.kcCode);
+    const label = recommendation.action === "REMEDIATION"
+      ? `补强「${recommendation.kcName}」`
+      : recommendation.action === "REVIEW"
+        ? `复习「${recommendation.kcName}」`
+        : `练习「${recommendation.kcName}」`;
     steps.push({
       kind: "weak-kc",
-      label: `补强「${kcDisplayName(weak.code)}」`,
-      hint: weak.fromProfile
-        ? "画像显示这是你的易错点"
-        : "本章掌握度最低的知识点",
-      route: { path: "/workshop", query: { kc: weak.code, type: "PRACTICE" } },
+      label,
+      hint: recommendation.reason,
+      route: progress?.reviewDue
+        ? { path: "/bug-mine", query: { review: recommendation.kcCode } }
+        : {
+          path: "/expedition",
+          query: { focus: String(recommendation.chapter), kcCode: recommendation.kcCode },
+        },
     });
   }
 
@@ -156,14 +127,18 @@ export interface UseNextStepsReturn {
 
 export function useNextSteps(): UseNextStepsReturn {
   const mainline = useMainlineStore();
-  const learning = useLearningStore();
-  const { signals, weakKcs } = useProfileSignals();
+  const { signals } = useProfileSignals();
+  const twinState = ref<LearnerTwinState | null>(null);
+  onMounted(() => {
+    void fetchLearnerTwinState()
+      .then((state) => { twinState.value = state; })
+      .catch(() => { twinState.value = null; });
+  });
   const steps = computed<NextStep[]>(() =>
     deriveNextSteps({
       chapters: mainline.chapters,
       currentChapter: mainline.firstActionableChapter,
-      mastery: learning.field.masterySnapshot,
-      weakKcs: weakKcs.value,
+      twinState: twinState.value,
       ...(signals.value.mediaPriority
         ? { mediaPriority: signals.value.mediaPriority }
         : {}),

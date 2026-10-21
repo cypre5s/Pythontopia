@@ -1,10 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { defineComponent, h } from "vue";
+import { createPinia, setActivePinia } from "pinia";
+import { flushPromises, mount } from "@vue/test-utils";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   deriveNextSteps,
+  useNextSteps,
   type NextStepsChapter,
 } from "@/composables/useNextSteps";
-import { kcDisplayName } from "@/data/kcNames";
-import type { MasterySnapshotDto } from "@/api/dto/MasterySnapshotDto";
+import { fetchLearnerTwinState, type LearnerTwinState } from "@/api/twin";
+import { useMainlineStore } from "@stores/mainline";
+
+vi.mock("@/api/twin", () => ({ fetchLearnerTwinState: vi.fn() }));
 
 function chapter(overrides: Partial<NextStepsChapter> = {}): NextStepsChapter {
   return {
@@ -20,17 +26,24 @@ function chapter(overrides: Partial<NextStepsChapter> = {}): NextStepsChapter {
   };
 }
 
-function mastery(kcCode: string, masteryScore: number): MasterySnapshotDto {
+function twinState(overrides: Partial<LearnerTwinState> = {}): LearnerTwinState {
   return {
-    kcCode,
-    masteryScore,
-    confidence: 0.5,
-    lastEventAt: null,
-    latestSource: null,
+    assessedKcCount: 0,
+    totalKcCount: 65,
+    masteredKcCount: 0,
+    growthStage: "启程练习",
+    kcs: [],
+    nextSteps: [],
+    ...overrides,
   };
 }
 
-const base = { currentChapter: 1, mastery: [], weakKcs: [] } as const;
+const base = { currentChapter: 1, twinState: null } as const;
+
+beforeEach(() => {
+  setActivePinia(createPinia());
+  vi.mocked(fetchLearnerTwinState).mockReset();
+});
 
 describe("deriveNextSteps", () => {
   it("章节数据未就绪或未解锁时返回空（面板回退静态要点）", () => {
@@ -60,44 +73,65 @@ describe("deriveNextSteps", () => {
     });
   });
 
-  it("画像易错 KC 命中本章时优先于掌握度最低项，并给出工坊练习深链", () => {
+  it("使用 Twin 服务端推荐顺序和原因，不从本地掌握度重排", () => {
     const steps = deriveNextSteps({
       ...base,
       chapters: [chapter()],
-      mastery: [mastery("PY43-KC-002", 0.1)],
-      weakKcs: ["PY43-KC-030", "PY43-KC-003"],
+      twinState: twinState({
+        kcs: [{
+          kcCode: "PY43-KC-003", kcName: "循环", chapter: 1, chapterName: "计算思维",
+          assessed: false, masteryScore: null, confidence: null, reviewDue: false,
+          dueAt: null, lastPracticedAt: null, consecutiveFailures: 0,
+        }],
+        nextSteps: [{
+          kcCode: "PY43-KC-003", kcName: "循环", chapter: 1, chapterName: "计算思维",
+          difficulty: 1, action: "PRACTICE", reason: "尚未评估，先从基础题建立证据",
+          remediationRequired: false,
+        }],
+      }),
     });
     const weak = steps.find((s) => s.kind === "weak-kc");
     expect(weak).toMatchObject({
-      label: `补强「${kcDisplayName("PY43-KC-003")}」`,
-      hint: "画像显示这是你的易错点",
+      label: "练习「循环」",
+      hint: "尚未评估，先从基础题建立证据",
       route: {
-        path: "/workshop",
-        query: { kc: "PY43-KC-003", type: "PRACTICE" },
+        path: "/expedition",
+        query: { focus: "1", kcCode: "PY43-KC-003" },
       },
     });
   });
 
-  it("无画像易错点时取本章掌握度最低且低于阈值的 KC；达标 KC 不推荐", () => {
-    const withWeak = deriveNextSteps({
+  it("Twin 推荐到期复习时跳转错题矿洞；没有服务端建议时不伪造弱项", () => {
+    const reviewState = twinState({
+      kcs: [{
+        kcCode: "PY43-KC-004", kcName: "循环", chapter: 1, chapterName: "计算思维",
+        assessed: true, masteryScore: 0.2, confidence: 0.8, reviewDue: true,
+        dueAt: "2026-10-14T00:00:00Z", lastPracticedAt: null, consecutiveFailures: 0,
+      }],
+      nextSteps: [{
+        kcCode: "PY43-KC-004", kcName: "循环", chapter: 1, chapterName: "计算思维",
+        difficulty: 1, action: "REVIEW", reason: "FSRS-lite 复习已到期",
+        remediationRequired: false,
+      }],
+    });
+    const recommended = deriveNextSteps({
       ...base,
       chapters: [chapter()],
-      mastery: [mastery("PY43-KC-002", 0.55), mastery("PY43-KC-004", 0.2)],
+      twinState: reviewState,
     });
-    expect(withWeak.find((s) => s.kind === "weak-kc")).toMatchObject({
-      hint: "本章掌握度最低的知识点",
+    expect(recommended.find((s) => s.kind === "weak-kc")).toMatchObject({
+      hint: "FSRS-lite 复习已到期",
       route: {
-        path: "/workshop",
-        query: { kc: "PY43-KC-004", type: "PRACTICE" },
+        path: "/bug-mine",
+        query: { review: "PY43-KC-004" },
       },
     });
 
-    const allGood = deriveNextSteps({
+    const noRecommendation = deriveNextSteps({
       ...base,
       chapters: [chapter()],
-      mastery: [mastery("PY43-KC-002", 0.8)],
     });
-    expect(allGood.find((s) => s.kind === "weak-kc")).toBeUndefined();
+    expect(noRecommendation.find((s) => s.kind === "weak-kc")).toBeUndefined();
   });
 
   it("小节全完成且 1–2★ 时推荐无尽远征补星（带 focus 参数）", () => {
@@ -115,6 +149,10 @@ describe("deriveNextSteps", () => {
     const steps = deriveNextSteps({
       ...base,
       chapters: [chapter()],
+      twinState: twinState({ nextSteps: [{
+        kcCode: "PY43-KC-004", kcName: "循环", chapter: 1, chapterName: "计算思维",
+        difficulty: 1, action: "PRACTICE", reason: "需继续巩固", remediationRequired: false,
+      }] }),
       mediaPriority: ["video", "text"],
     });
     expect(steps.find((s) => s.kind === "preference")).toMatchObject({
@@ -126,8 +164,10 @@ describe("deriveNextSteps", () => {
     const steps = deriveNextSteps({
       ...base,
       chapters: [chapter()],
-      mastery: [mastery("PY43-KC-004", 0.2)],
-      weakKcs: ["PY43-KC-003"],
+      twinState: twinState({ nextSteps: [{
+        kcCode: "PY43-KC-003", kcName: "循环", chapter: 1, chapterName: "计算思维",
+        difficulty: 1, action: "REMEDIATION", reason: "连续练习未通过", remediationRequired: true,
+      }] }),
       mediaPriority: ["video"],
     });
     expect(steps).toHaveLength(3);
@@ -136,5 +176,40 @@ describe("deriveNextSteps", () => {
       "weak-kc",
       "preference",
     ]);
+  });
+
+  it("composable loads the existing Twin state endpoint and keeps the mainline step", async () => {
+    vi.mocked(fetchLearnerTwinState).mockResolvedValue(twinState({
+      nextSteps: [{
+        kcCode: "PY43-KC-003", kcName: "循环", chapter: 1, chapterName: "计算思维",
+        difficulty: 1, action: "PRACTICE", reason: "服务端建议", remediationRequired: false,
+      }],
+    }));
+    const mainline = useMainlineStore();
+    mainline.overview = {
+      totalStars: 0,
+      chapters: [{
+        chapter: 1, title: "计算思维", unlocked: true, stars: 0, bestTestScore: null,
+        stages: [{
+          id: 12, index: 2, title: "算法与分解", videoWatchedSec: 0, requiredVideoSec: 0,
+          pagesRead: 0, requiredPages: 0, examplesDone: 0, requiredExamples: 0, completed: false,
+        }],
+        testStatus: "NONE", starBreakdown: {}, recovery: { errorbookDone: false, endlessDone: false },
+      }],
+    };
+
+    let result!: ReturnType<typeof useNextSteps>;
+    const wrapper = mount(defineComponent({
+      setup() {
+        result = useNextSteps();
+        return () => h("div");
+      },
+    }));
+    await flushPromises();
+
+    expect(fetchLearnerTwinState).toHaveBeenCalledOnce();
+    expect(result.steps.value.map((step) => step.kind)).toEqual(["mainline", "weak-kc"]);
+    expect(result.steps.value[1]?.hint).toBe("服务端建议");
+    wrapper.unmount();
   });
 });
