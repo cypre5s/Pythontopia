@@ -9,6 +9,7 @@
 #   PYT_ENV_FILE    远端 .env 路径（默认 /opt/pythontopia/shared/.env，
 #                   缺省时回退探测 /opt/pythontopia/current/deploy/.env）
 #   PYT_PUBLIC_IP   公网 IP（默认 47.120.29.62）
+#   PYT_RELEASE_STREAM_UNPACKED_BYTES  SSH 流式发布包的未压缩字节数；设置后按解包大小 + 1 GiB 校验
 #
 # 退出码：0 = 全部通过（允许 WARN）；1 = 存在 FAIL 项。
 # 特殊输出：主机本地 80 可达而公网 80 不可达时，单独输出一行
@@ -201,7 +202,19 @@ fi
 section "2. 磁盘与内存（2C4G 小机型基线）"
 # ---------------------------------------------------------------------------
 DISK_AVAIL_GB=$(df -BG --output=avail / 2>/dev/null | tail -n 1 | tr -dc '0-9' || echo "")
-if [ -n "${DISK_AVAIL_GB}" ]; then
+if [ -n "${PYT_RELEASE_STREAM_UNPACKED_BYTES:-}" ]; then
+  if [[ ! "${PYT_RELEASE_STREAM_UNPACKED_BYTES}" =~ ^[0-9]+$ ]]; then
+    fail "PYT_RELEASE_STREAM_UNPACKED_BYTES 必须是非负整数"
+  else
+    DISK_AVAIL_BYTES=$(df -B1 --output=avail / 2>/dev/null | tail -n 1 | tr -dc '0-9' || echo "")
+    PREFLIGHT_REQUIRED_BYTES=$((PYT_RELEASE_STREAM_UNPACKED_BYTES + 1073741824))
+    if [ -z "${DISK_AVAIL_BYTES}" ] || [ "${DISK_AVAIL_BYTES}" -lt "${PREFLIGHT_REQUIRED_BYTES}" ]; then
+      fail "流式发布包需 ${PYT_RELEASE_STREAM_UNPACKED_BYTES} 字节解包空间和 1 GiB 镜像导入余量；根分区空间不足"
+    else
+      pass "流式发布包空间满足：可用 ${DISK_AVAIL_BYTES} 字节，解包 ${PYT_RELEASE_STREAM_UNPACKED_BYTES} 字节 + 1 GiB 余量"
+    fi
+  fi
+elif [ -n "${DISK_AVAIL_GB}" ]; then
   if [ "${DISK_AVAIL_GB}" -ge 8 ]; then
     pass "根分区可用空间 ${DISK_AVAIL_GB}G（≥8G）"
   elif [ "${DISK_AVAIL_GB}" -ge 5 ]; then

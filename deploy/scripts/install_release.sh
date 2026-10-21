@@ -4,6 +4,7 @@
 # =============================================================================
 # 用法：
 #   bash install_release.sh /path/to/pythontopia-release-<版本>.tar.gz
+#   cat release.tar.gz | bash install_release.sh --stdin <包内未压缩字节数>
 #
 # 目录约定：
 #   /opt/pythontopia/releases/<时间戳>/   每次安装一个不可变 release 目录
@@ -233,11 +234,20 @@ validate_production_judge_env() {
 step "参数与运行环境检查"
 # ---------------------------------------------------------------------------
 ARCHIVE="${1:-}"
+STREAM_ARCHIVE=0
+UNPACKED_BYTES=0
 if [ -z "${ARCHIVE}" ]; then
-  echo "[安装失败] 用法：bash install_release.sh <发布包路径，如 pythontopia-release.tar.gz>" >&2
+  echo "[安装失败] 用法：bash install_release.sh <发布包路径>；或 bash install_release.sh --stdin <包内未压缩字节数>" >&2
   exit 1
 fi
-if [ ! -f "${ARCHIVE}" ]; then
+if [ "${ARCHIVE}" = "--stdin" ]; then
+  STREAM_ARCHIVE=1
+  UNPACKED_BYTES="${2:-}"
+  if [[ ! "${UNPACKED_BYTES}" =~ ^[0-9]+$ ]]; then
+    echo "[安装失败] --stdin 模式必须提供包内未压缩字节数。" >&2
+    exit 1
+  fi
+elif [ ! -f "${ARCHIVE}" ]; then
   echo "[安装失败] 发布包不存在：${ARCHIVE}" >&2
   exit 1
 fi
@@ -250,7 +260,15 @@ docker compose version >/dev/null 2>&1 || { echo "[安装失败] docker compose 
 docker info >/dev/null 2>&1 || { echo "[安装失败] docker daemon 不可访问。" >&2; exit 1; }
 
 DISK_AVAIL_GB=$(df -BG --output=avail / | tail -n 1 | tr -dc '0-9')
-if [ -n "${DISK_AVAIL_GB}" ] && [ "${DISK_AVAIL_GB}" -lt 5 ]; then
+if [ "${STREAM_ARCHIVE}" = "1" ]; then
+  DISK_AVAIL_BYTES=$(df -B1 --output=avail / | tail -n 1 | tr -dc '0-9')
+  REQUIRED_BYTES=$((UNPACKED_BYTES + 1073741824))
+  if [ -z "${DISK_AVAIL_BYTES}" ] || [ "${DISK_AVAIL_BYTES}" -lt "${REQUIRED_BYTES}" ]; then
+    echo "[安装失败] 流式发布需要 ${UNPACKED_BYTES} 字节解包空间和 1 GiB 镜像导入余量；根分区空间不足。" >&2
+    exit 1
+  fi
+  echo "    流式安装：包内 ${UNPACKED_BYTES} 字节，镜像导入余量 1 GiB"
+elif [ -n "${DISK_AVAIL_GB}" ] && [ "${DISK_AVAIL_GB}" -lt 5 ]; then
   echo "[安装失败] 根分区可用空间仅 ${DISK_AVAIL_GB}G（<5G），不足以完成解包与镜像导入，请先清理磁盘。" >&2
   exit 1
 fi
@@ -330,7 +348,11 @@ fi
 step "解包发布包并校验目录结构"
 # ---------------------------------------------------------------------------
 mkdir -p "${RELEASE_DIR}"
-tar -xf "${ARCHIVE}" -C "${RELEASE_DIR}"
+if [ "${STREAM_ARCHIVE}" = "1" ]; then
+  tar -xzf - -C "${RELEASE_DIR}"
+else
+  tar -xf "${ARCHIVE}" -C "${RELEASE_DIR}"
+fi
 
 # 兼容打包时多包了一层顶级目录的情况：归一化为 RELEASE_DIR 直接含 deploy/
 if [ ! -d "${RELEASE_DIR}/deploy" ]; then
@@ -402,6 +424,13 @@ echo "    7 份 PDF、视频清单/文件与逐视频字幕来源校验通过"
 # ---------------------------------------------------------------------------
 step "docker load 导入五个冻结镜像"
 # ---------------------------------------------------------------------------
+if [ "${STREAM_ARCHIVE}" = "1" ]; then
+  DISK_AVAIL_BYTES=$(df -B1 --output=avail / | tail -n 1 | tr -dc '0-9')
+  if [ -z "${DISK_AVAIL_BYTES}" ] || [ "${DISK_AVAIL_BYTES}" -lt 536870912 ]; then
+    echo "[安装失败] 解包后剩余空间不足 512 MiB，已在导入镜像/切换容器前停止。" >&2
+    exit 1
+  fi
+fi
 for comp in "${IMAGE_COMPONENTS[@]}"; do
   echo "    导入 pythontopia/${comp}:release ..."
   docker load -i "${RELEASE_DIR}/deploy/runtime/images/${comp}.tar" >/dev/null

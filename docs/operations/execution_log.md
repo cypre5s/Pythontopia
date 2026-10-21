@@ -1251,3 +1251,12 @@
 - ECS 发布验收：release `/opt/pythontopia/releases/20261021-134300`，包 SHA-256 `7f8f8320fcd83d0ba85d6868982081405015f5f6f2722092452f6bc5f9273f1c`；生产 schema 从 V227 更新到 V232。预先备份 PostgreSQL 448 KB、`.env`、Nginx 和 Compose 配置；`current` 指向新版本，`previous` 保留 `20261021-043220`，`deploy_pytopia_pg` 卷未删除或重建。七个服务均 healthy，HTTP 308 跳转、HTTPS `/healthz` 200，安装包内容和课程运行时 7 PDF/34 视频/34 字幕/848 段校验通过。
 - 生产 Chromium 逐页验证运营、用户、学生详情、课程资源、AI 题目审核、资源消耗、班级、AI API 配置；页面加载真实 API 数据。班级演示数据包含 3 名在班学生、65 个 KC 汇总、1 项任务，当前时间范围内资源使用为空。console、pageerror、失败请求和 API 错误均为 0；AI 密钥输入为空且未执行真实模型测试。临时冒烟账号按 ID 删除；另创建专用 ADMIN/STUDENT 账号并以登录 API 分别确认角色，凭据单独回传，不存入仓库或日志。
 - 删除上传包及本次临时安装器副本以恢复磁盘空间；当前 ECS 根盘剩余 2.6 GB。未清理 PostgreSQL 数据卷、当前/上一 release 或 Docker 镜像。预检仍提示 2C4G 实例内存低于 4 GB 基线，aliyun CLI 未安装；HTTP/HTTPS 公网探测实测通过。
+
+## 2026-10-21 — 修复小镇玩家出生点卡死（本地验证与 ECS 部署）
+
+- RED 复现：本地真实浏览器的初始 `player_state` 是 `(12,10)`，该格及四邻格落在 `town_hub` 图书馆建筑碰撞区；Phaser 键盘事件正常到达并能转向，但无法走格，点击寻路也无法从阻塞格出发。地图 spawn 是 `(25,20)`。
+- 新增 V233 修正新玩家坐标默认值、V234 把旧默认 `(12,10)` 的 town_hub 存档迁到 `(25,20)`；前端加载时还会恢复其他碰撞格存档并写回，避免无效坐标继续卡住。
+- 本地验证：Flyway V233/V234 成功，旧 `(12,10)` 行数归零，列默认值为 25/20；Chromium 验证新账号出生、模拟旧坐标后恢复，WASD 与地面点击均产生坐标更新。浏览器 console/pageerror/失败请求/API 错误均为 0。`WorldScene.spec.ts` 30/30、后端世界 API 定向测试通过、前端 287 文件 / 2,707 项、typecheck/build 通过。
+- ECS 流式部署：仅删除未被 current/previous/容器挂载引用的孤立 release `20261021-033818`，保留 PostgreSQL 数据卷和当前/回滚版本；包 SHA-256 `813599ee794fc6a78fed0ef09ae6705f481abfd139ec5a0d4aedec01c006eb6f`。备份 PostgreSQL 448 KB、`.env`、Nginx/Compose 配置；V233/V234 均成功。新 release `20261021-143335` 生效，回滚版 `20261021-134300` 保留；7 个服务 healthy，HTTP 308、HTTPS `/healthz` 200，安装器逐文件 SHA-256 和课程运行时数据校验通过。临时安装工具已移除，ECS 根盘剩余 2.3 GB。
+- 生产 Chromium 首次回归时页面仍在 96% 资源预加载，原测试过早检查坐标；trace 中 178 个资源请求全部 HTTP 200。回归改为等待加载覆盖层消失后重跑通过：旧坐标恢复到 `(25,20)`，WASD 与点击均移动成功；console、pageerror、失败请求和 API 错误均为 0。唯一临时线上学生账号已删除，DB 查询确认不存在该账号，也无 town_hub `(12,10)` 存档。
+- ECS 预检按发布包未压缩大小 + 1 GiB 计算磁盘空间，33 项通过、0 失败；另有内存低于 4 GB 基线和未安装 aliyun CLI 两项警告。GitHub 推送待完成。

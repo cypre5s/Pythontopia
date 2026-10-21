@@ -392,10 +392,13 @@ export const WorldScene = {
     state.collisions = mergeCollisionGrids(buildCollisions(map), state.lowObstacles);
 
     const worldStore = useWorldStore();
-    const persisted =
+    const savedTile =
       worldStore.player && worldStore.player.mapKey === state.mapKey
         ? { tileX: worldStore.player.tileX, tileY: worldStore.player.tileY }
         : spawnTile;
+    const recoveredBlockedSave = isBlocked(savedTile.tileX, savedTile.tileY);
+    const persisted = recoveredBlockedSave ? spawnTile : savedTile;
+    const playerDirection = cardinalize(worldStore.player?.direction ?? 'DOWN');
 
     const player = createPlayerSprite(this, {
       tileX: persisted.tileX,
@@ -403,7 +406,7 @@ export const WorldScene = {
       // 存档 DTO 的 direction 类型上仍允许 8 向（历史数据 / 其它客户端可能写入）；
       // 世界层只认 4 向，回读时先 cardinalize，避免把对角朝向塞进 sprite 后
       // 落到 LPC 表里找不到对应行。
-      direction: cardinalize(worldStore.player?.direction ?? 'DOWN'),
+      direction: playerDirection,
       tileSize: RENDER_TILE_SIZE,
     });
     state.player = player;
@@ -415,6 +418,9 @@ export const WorldScene = {
         tileX: player.tileX,
         tileY: player.tileY,
       };
+    }
+    if (recoveredBlockedSave) {
+      persistPlayerTile(player.tileX, player.tileY, playerDirection);
     }
 
     state.controller = createDirectionController(this);

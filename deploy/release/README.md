@@ -79,6 +79,19 @@ sudo bash /opt/pythontopia/current/deploy/scripts/install_github_release.sh web-
 
 脚本先执行 ECS 预检，再下载 release asset 并调用现有安装器；预检要求根分区至少有 5 GB 可用空间。成功安装后下载包会删除，失败时会保留供排查。
 
+### SSH 流式安装
+
+从本地发布机部署且 ECS 空间不足以同时保存压缩包和解包副本时，可将已校验的包通过 SSH 直接流入安装器。ECS 不落压缩包；解包前必须有“包内未压缩大小 + 1 GiB”可用空间，解包后还会确认至少剩余 512 MiB 再导入镜像。
+
+```bash
+ARCHIVE=output/packages/pythontopia-web-<UTC>.tar.gz
+UNPACKED_BYTES=$(python3 -c 'import sys,tarfile; print(sum(m.size for m in tarfile.open(sys.argv[1], "r:gz").getmembers()))' "$ARCHIVE")
+ssh user@ecs "PYT_ENV_FILE=/opt/pythontopia/shared/.env PYT_RELEASE_STREAM_UNPACKED_BYTES=$UNPACKED_BYTES bash /opt/pythontopia/current/deploy/scripts/preflight_ecs.sh"
+cat "$ARCHIVE" | ssh user@ecs "bash /opt/pythontopia/current/deploy/scripts/install_release.sh --stdin $UNPACKED_BYTES"
+```
+
+SSH 断开或校验失败时，安装器会在镜像导入和容器切换前停止；使用生产环境前仍须先运行 ECS 预检。
+
 ### 3.1 校验与解包
 
 ```bash

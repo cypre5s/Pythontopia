@@ -29,9 +29,18 @@ require_fixed "${COMPOSE_FILE}" \
 require_fixed "${INSTALLER}" \
   "安装前校验 AI 密钥加密主密钥强度" \
   "check_env_secret PYT_ADMIN_ENCRYPTION_KEY 32"
+require_fixed "${INSTALLER}" \
+  "安装器支持无上传包副本的 SSH 流式安装" \
+  'tar -xzf - -C "${RELEASE_DIR}"'
+require_fixed "${INSTALLER}" \
+  "流式安装保留镜像导入磁盘余量" \
+  'REQUIRED_BYTES=$((UNPACKED_BYTES + 1073741824))'
 require_fixed "${PREFLIGHT}" \
   "ECS 预检检查 AI 密钥加密主密钥强度" \
   "check_secret_strength PYT_ADMIN_ENCRYPTION_KEY 32 fail"
+require_fixed "${PREFLIGHT}" \
+  "ECS 预检按 SSH 流式发布包大小计算磁盘余量" \
+  'PREFLIGHT_REQUIRED_BYTES=$((PYT_RELEASE_STREAM_UNPACKED_BYTES + 1073741824))'
 require_fixed "${COMPOSE_FILE}" \
   "生产 Compose 对 AI 密钥加密主密钥 fail fast" \
   'PYT_ADMIN_ENCRYPTION_KEY: ${PYT_ADMIN_ENCRYPTION_KEY:?缺少 PYT_ADMIN_ENCRYPTION_KEY}'
