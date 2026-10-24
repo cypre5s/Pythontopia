@@ -697,12 +697,6 @@ async function submit(req: LoginRequest): Promise<void> {
         :loading="loading"
         @submit="submit"
       />
-      <RouterLink
-        to="/register"
-        class="auth-link"
-      >
-        还没有账号？创建新账号
-      </RouterLink>
     </section>
   </main>
 </template>

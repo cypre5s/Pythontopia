@@ -39,6 +39,26 @@ test('renders the login entry when unauthenticated', async () => {
   expect(wrapper.text()).toContain('登录');
 });
 
+test('redirects the retired registration route to login', async () => {
+  const pinia = createPinia();
+  setActivePinia(pinia);
+  const wrapper = mount(App, {
+    global: {
+      plugins: [pinia, router],
+    },
+  });
+
+  await router.push('/register');
+  await router.isReady();
+  await flushPromises();
+
+  expect(router.currentRoute.value.path).toBe('/login');
+  expect(wrapper.text()).toContain('登录');
+  expect(wrapper.find('input[type="password"]').exists()).toBe(true);
+  expect(wrapper.text()).not.toContain('创建新账号');
+  wrapper.unmount();
+});
+
 test('handles NPC dialog route navigation globally', async () => {
   const pinia = createPinia();
   setActivePinia(pinia);

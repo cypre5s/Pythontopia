@@ -4,8 +4,10 @@ import { RouterLink } from 'vue-router';
 import { useSessionStore } from '@stores/session';
 import { useToastStore } from '@stores/toast';
 import {
+  importAdminStudents,
   searchAdminUsers,
   setAdminUserStatus,
+  type AdminStudentImportResultDto,
   type AdminUserDto,
   type AdminUserRoleFilter,
   type AdminUserStatus,
@@ -28,8 +30,11 @@ const page = ref(0);
 const totalPages = ref(0);
 const totalElements = ref(0);
 const updatingUserId = ref<number | null>(null);
+const importing = ref(false);
+const importError = ref<string | null>(null);
+const importResult = ref<AdminStudentImportResultDto | null>(null);
 const statusChangeError = ref<string | null>(null);
-const listBusy = computed(() => loading.value || updatingUserId.value !== null);
+const listBusy = computed(() => loading.value || updatingUserId.value !== null || importing.value);
 const pageSize = ref(20);
 const pendingStatusChange = ref<{
   user: AdminUserDto;
@@ -156,6 +161,32 @@ async function confirmStatusChange(): Promise<void> {
   }
 }
 
+async function importRoster(event: Event): Promise<void> {
+  const input = event.currentTarget as HTMLInputElement;
+  const file = input.files?.[0];
+  if (!file || importing.value) return;
+
+  importError.value = null;
+  importResult.value = null;
+  importing.value = true;
+  let imported = false;
+  try {
+    importResult.value = await importAdminStudents(file);
+    imported = true;
+    toast.show(
+      `已新建 ${importResult.value.createdCount} 个学生账号，跳过 ${importResult.value.skippedCount} 个已有账号`,
+      'success',
+    );
+  } catch (cause) {
+    importError.value = cause instanceof Error ? cause.message : '名单导入失败';
+    toast.show(importError.value, 'error');
+  } finally {
+    importing.value = false;
+    input.value = '';
+  }
+  if (imported) await loadUsers();
+}
+
 onMounted(() => {
   void loadUsers();
 });
@@ -171,9 +202,63 @@ onMounted(() => {
   >
     <AdminPanel
       title="用户管理"
-      description="查看账号角色与状态并管理登录资格；列表不包含密码与凭据。"
+      description="查看账号角色与状态并管理登录资格；导入结果会显示新建账号的初始凭据。"
     >
       <template #actions>
+        <div class="admin-users__import-tools">
+          <label
+            class="admin-button admin-users__import-button"
+            :class="{ 'admin-users__import-button--disabled': listBusy }"
+          >
+            <input
+              type="file"
+              accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+              aria-label="导入学生名单"
+              data-testid="admin-student-roster"
+              :disabled="listBusy"
+              @change="importRoster"
+            >
+            <span>导入学生名单</span>
+          </label>
+          <span class="admin-users__help">
+            <button
+              class="admin-users__help-button"
+              type="button"
+              aria-label="查看推荐的 XLSX 名单格式"
+              aria-describedby="admin-student-roster-tooltip"
+              data-testid="admin-student-roster-help"
+            >
+              !
+            </button>
+            <span
+              id="admin-student-roster-tooltip"
+              class="admin-users__tooltip"
+              role="tooltip"
+            >
+              <strong>推荐的 XLSX 格式</strong>
+              <span>首个工作表建议使用以下表头，列顺序可以调整：</span>
+              <table aria-label="推荐学生名单格式">
+                <thead>
+                  <tr>
+                    <th scope="col">学号</th>
+                    <th scope="col">姓名</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>20260001</td>
+                    <td>张小明</td>
+                  </tr>
+                  <tr>
+                    <td>20260002</td>
+                    <td>李小红</td>
+                  </tr>
+                </tbody>
+              </table>
+              <span>按完整表头识别：学号 / 学生学号 / Student ID / studentid / student_id；姓名 / 学生姓名 / Name。其他列会忽略；若同类候选列超过一列，会提示错误。</span>
+            </span>
+          </span>
+        </div>
         <button
           class="admin-button"
           type="button"
@@ -242,6 +327,69 @@ onMounted(() => {
           </button>
         </form>
       </template>
+
+      <div
+        v-if="importError"
+        class="admin-users__error"
+        role="alert"
+      >
+        <span>导入失败：{{ importError }}</span>
+      </div>
+
+      <section
+        v-if="importResult"
+        class="admin-users__import-result"
+        aria-live="polite"
+        data-testid="admin-student-import-result"
+      >
+        <h3>导入完成：新建 {{ importResult.createdCount }} 个学生账号，跳过 {{ importResult.skippedCount }} 个已有账号</h3>
+        <p v-if="importResult.credentials.length > 0">
+          请保存并分发以下新账号的初始登录凭据。
+        </p>
+        <p v-else>
+          没有新建账号，因此没有新的登录凭据。
+        </p>
+        <AdminTable
+          v-if="importResult.credentials.length > 0"
+          label="本次新建学生的登录凭据"
+          :min-width="560"
+        >
+          <table
+            class="admin-users__table"
+            aria-label="本次新建学生的登录凭据"
+          >
+            <thead>
+              <tr>
+                <th scope="col">
+                  显示名
+                </th>
+                <th scope="col">
+                  学号 / 用户名
+                </th>
+                <th scope="col">
+                  初始密码
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                v-for="credential in importResult.credentials"
+                :key="credential.username"
+              >
+                <td class="admin-users__readable">
+                  {{ credential.displayName }}
+                </td>
+                <td class="admin-users__readable">
+                  {{ credential.username }}
+                </td>
+                <td class="admin-users__readable">
+                  {{ credential.password }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </AdminTable>
+      </section>
 
       <p
         v-if="loading && entries.length === 0"
@@ -407,6 +555,129 @@ onMounted(() => {
   gap: 4px;
   color: var(--admin-text-muted);
   font-size: 11px;
+}
+
+.admin-users__import-tools {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-users :deep(.admin-panel__actions) {
+  position: relative;
+}
+
+.admin-users__import-button {
+  position: relative;
+  overflow: hidden;
+  min-height: var(--control-height-md);
+  cursor: pointer;
+}
+
+.admin-users__import-button input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  cursor: pointer;
+  opacity: 0;
+}
+
+.admin-users__import-button input:focus-visible + span {
+  outline: 2px solid var(--admin-focus);
+  outline-offset: -3px;
+}
+
+.admin-users__import-button--disabled {
+  cursor: not-allowed;
+  opacity: 0.58;
+}
+
+.admin-users__help {
+  display: inline-flex;
+}
+
+.admin-users__help-button {
+  display: inline-grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border: 1px solid #94a3b8;
+  border-radius: 50%;
+  background: #f8fafc;
+  color: #475569;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: help;
+}
+
+.admin-users__help-button:focus-visible {
+  outline: 2px solid var(--admin-focus);
+  outline-offset: 2px;
+}
+
+.admin-users__tooltip {
+  position: absolute;
+  z-index: 30;
+  top: calc(100% + 8px);
+  right: 0;
+  display: none;
+  width: min(360px, calc(100vw - 48px));
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--admin-panel-border);
+  border-radius: 10px;
+  background: var(--admin-panel-bg);
+  box-shadow: 0 10px 28px rgb(15 23 42 / 18%);
+  color: var(--admin-text-strong);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  white-space: normal;
+}
+
+.admin-users__tooltip strong,
+.admin-users__tooltip span {
+  display: block;
+}
+
+.admin-users__help:hover .admin-users__tooltip,
+.admin-users__help:focus-within .admin-users__tooltip {
+  display: grid;
+}
+
+.admin-users__tooltip table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.admin-users__tooltip th,
+.admin-users__tooltip td {
+  padding: 5px 8px;
+  border: 1px solid var(--admin-panel-border);
+}
+
+.admin-users__tooltip th {
+  background: #f1f5f9;
+  font-weight: 700;
+}
+
+.admin-users__import-result {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-users__import-result h3,
+.admin-users__import-result p {
+  margin: 0;
+}
+
+.admin-users__import-result p {
+  color: var(--admin-text-muted);
+  font-size: 13px;
 }
 
 .admin-users__search input {

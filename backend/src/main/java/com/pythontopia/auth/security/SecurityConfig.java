@@ -37,6 +37,7 @@ public class SecurityConfig {
       JwtAuthenticationFilter jwtFilter,
       ObjectMapper objectMapper,
       CorsConfigurationSource corsConfigurationSource,
+      @Value("${pythontopia.auth.registration-enabled:false}") boolean registrationEnabled,
       @Value("${pythontopia.security.expose-api-docs:true}") boolean exposeApiDocs)
       throws Exception {
     return http.csrf(csrf -> csrf.disable())
@@ -50,11 +51,15 @@ public class SecurityConfig {
               requests
                   .requestMatchers(
                       HttpMethod.POST,
-                      "/api/auth/register",
                       "/api/auth/login",
                       "/api/auth/refresh",
                       "/api/downloads/*/hit")
                   .permitAll();
+              if (registrationEnabled) {
+                requests.requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll();
+              } else {
+                requests.requestMatchers(HttpMethod.POST, "/api/auth/register").denyAll();
+              }
               // Public course reads; the asset controller checks media signatures or ownership.
               requests
                   .requestMatchers(

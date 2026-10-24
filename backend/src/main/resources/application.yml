@@ -23,6 +23,8 @@ server:
   forward-headers-strategy: framework
 
 pythontopia:
+  auth:
+    registration-enabled: ${PYT_AUTH_REGISTRATION_ENABLED:false}
   admin:
     encryption-key: ${PYT_ADMIN_ENCRYPTION_KEY:}
   ai:

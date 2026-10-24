@@ -146,6 +146,7 @@
         <configuration>
           <environmentVariables>
             <TESTCONTAINERS_RYUK_DISABLED>true</TESTCONTAINERS_RYUK_DISABLED>
+            <PYT_AUTH_REGISTRATION_ENABLED>true</PYT_AUTH_REGISTRATION_ENABLED>
           </environmentVariables>
         </configuration>
       </plugin>

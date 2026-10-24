@@ -39,8 +39,7 @@ export const router = createRouter({
     {
       path: '/register',
       name: 'register',
-      component: () => import('@/pages/RegisterPage.vue'),
-      meta: { guestOnly: true },
+      redirect: { name: 'login' },
     },
     {
       path: '/admin',

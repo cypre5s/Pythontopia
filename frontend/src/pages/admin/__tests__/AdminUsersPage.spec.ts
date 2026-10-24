@@ -3,13 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AdminUserDto, AdminUserPageDto } from '@/api/adminUsers';
 import AdminUsersPage from '../AdminUsersPage.vue';
 
-const { searchAdminUsers, setAdminUserStatus, toastShow } = vi.hoisted(() => ({
+const { importAdminStudents, searchAdminUsers, setAdminUserStatus, toastShow } = vi.hoisted(() => ({
+  importAdminStudents: vi.fn(),
   searchAdminUsers: vi.fn(),
   setAdminUserStatus: vi.fn(),
   toastShow: vi.fn(),
 }));
 
-vi.mock('@/api/adminUsers', () => ({ searchAdminUsers, setAdminUserStatus }));
+vi.mock('@/api/adminUsers', () => ({
+  importAdminStudents,
+  searchAdminUsers,
+  setAdminUserStatus,
+}));
 vi.mock('@stores/session', () => ({ useSessionStore: () => ({ user: { id: 99 } }) }));
 vi.mock('@stores/toast', () => ({ useToastStore: () => ({ show: toastShow }) }));
 
@@ -36,6 +41,11 @@ function mountPage() {
 beforeEach(() => {
   vi.clearAllMocks();
   searchAdminUsers.mockResolvedValue(page([activeUser]));
+  importAdminStudents.mockResolvedValue({
+    createdCount: 1,
+    skippedCount: 0,
+    credentials: [{ username: '20260001', displayName: '张小明', password: '10006202' }],
+  });
   setAdminUserStatus.mockResolvedValue(disabledUser);
   Object.defineProperty(HTMLDialogElement.prototype, 'showModal', {
     configurable: true,
@@ -52,6 +62,36 @@ afterEach(() => {
 });
 
 describe('AdminUsersPage', () => {
+  it('shows the recommended XLSX columns beside the import control', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+
+    const help = wrapper.get('[data-testid="admin-student-roster-help"]');
+    expect(help.text()).toBe('!');
+    expect(help.attributes('aria-describedby')).toBe('admin-student-roster-tooltip');
+    expect(wrapper.get('#admin-student-roster-tooltip').text()).toContain('学号');
+    expect(wrapper.get('#admin-student-roster-tooltip').text()).toContain('姓名');
+    expect(wrapper.get('#admin-student-roster-tooltip').text()).toContain('其他列会忽略');
+  });
+
+  it('imports an XLSX roster and shows the new student credentials', async () => {
+    const wrapper = mountPage();
+    await flushPromises();
+    const file = new File(['roster'], 'students.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+    const input = wrapper.get('[data-testid="admin-student-roster"]');
+    Object.defineProperty(input.element, 'files', { value: [file], configurable: true });
+    await input.trigger('change');
+    await flushPromises();
+
+    expect(importAdminStudents).toHaveBeenCalledWith(file);
+    expect(wrapper.text()).toContain('新建 1 个学生账号');
+    expect(wrapper.text()).toContain('20260001');
+    expect(wrapper.text()).toContain('10006202');
+  });
+
   it('confirms status changes in the shared admin dialog before calling the API', async () => {
     const nativeConfirm = vi.spyOn(window, 'confirm').mockReturnValue(true);
     const wrapper = mountPage();

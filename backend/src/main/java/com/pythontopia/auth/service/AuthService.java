@@ -25,8 +25,8 @@ public class AuthService {
   private static final String LOGIN_TIMING_DUMMY_PASSWORD = "pythontopia-login-timing-dummy";
 
   /**
-   * 自助注册（{@code POST /api/auth/register} 是 permitAll）只开放这两个角色。ADMIN 绕过
-   * ClassroomGuard 的归属校验、可读写任意班级后台，绝不能由匿名请求体自选，只能由运维直接写库授予。
+   * 自助注册启用时只开放这两个角色。ADMIN 绕过 ClassroomGuard 的归属校验、可读写任意班级后台，
+   * 绝不能由匿名请求体自选，只能由运维直接写库授予。
    */
   private static final Set<Role> SELF_REGISTRABLE_ROLES = Set.of(Role.STUDENT, Role.TEACHER);
 

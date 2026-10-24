@@ -35,6 +35,7 @@ import org.springframework.web.bind.annotation.RestController;
 @TestPropertySource(
     properties = {
       "pythontopia.services.graph-url=http://localhost:18091",
+      "pythontopia.auth.registration-enabled=false",
       "pythontopia.security.jwt.secret=public-read-access-test-signing-secret-32-bytes",
       "pythontopia.security.jwt.ttl-minutes=720",
       "pythontopia.security.teacher-invite-code=test-teacher-invite-code-32"
@@ -58,6 +59,7 @@ class PublicReadAccessTest {
   @Test
   void publicRoutesAllowOnlyDocumentedAnonymousMethods() throws Exception {
     mockMvc.perform(post("/api/auth/login")).andExpect(status().isOk());
+    mockMvc.perform(post("/api/auth/register")).andExpect(status().isUnauthorized());
     mockMvc.perform(post("/api/auth/logout")).andExpect(status().isUnauthorized());
     mockMvc.perform(get("/api/course/security-test")).andExpect(status().isOk());
     mockMvc.perform(head("/api/course/security-test")).andExpect(status().isOk());
@@ -72,7 +74,7 @@ class PublicReadAccessTest {
 
   @Test
   void anonymousAuthRoutesRejectOversizedBodiesBeforeMvcBinding() throws Exception {
-    for (String route : List.of("/api/auth/login", "/api/auth/refresh", "/api/auth/register")) {
+    for (String route : List.of("/api/auth/login", "/api/auth/refresh")) {
       mockMvc
           .perform(
               post(route)
@@ -85,7 +87,7 @@ class PublicReadAccessTest {
 
   @Test
   void anonymousAuthRoutesAcceptBodiesAtTheConfiguredLimit() throws Exception {
-    for (String route : List.of("/api/auth/login", "/api/auth/refresh", "/api/auth/register")) {
+    for (String route : List.of("/api/auth/login", "/api/auth/refresh")) {
       mockMvc
           .perform(
               post(route)
@@ -93,6 +95,12 @@ class PublicReadAccessTest {
                   .content("x".repeat(MAX_AUTH_REQUEST_BYTES)))
           .andExpect(status().isOk());
     }
+    mockMvc
+        .perform(
+            post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("x".repeat(MAX_AUTH_REQUEST_BYTES)))
+        .andExpect(status().isUnauthorized());
   }
 
   @Test

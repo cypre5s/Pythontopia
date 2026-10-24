@@ -470,7 +470,7 @@ onMounted(async () => {
             variant="primary"
             @click="goLogin"
           >
-            登录 / 注册
+            登录
           </PyButton>
         </div>
       </template>

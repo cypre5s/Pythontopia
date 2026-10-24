@@ -21,6 +21,18 @@ export interface AdminUserPageDto {
   totalPages: number;
 }
 
+export interface AdminStudentImportCredentialDto {
+  username: string;
+  displayName: string;
+  password: string;
+}
+
+export interface AdminStudentImportResultDto {
+  createdCount: number;
+  skippedCount: number;
+  credentials: AdminStudentImportCredentialDto[];
+}
+
 export interface AdminStudentDetailDto {
   account: AdminUserDto & { createdAt: string };
   profileDimensions: Record<string, {
@@ -73,6 +85,13 @@ export async function searchAdminUsers(search: AdminUserSearch): Promise<AdminUs
     ...(search.role ? { role: search.role } : {}),
   };
   const response = await http.get<AdminUserPageDto>('/api/admin/users', { params });
+  return response.data;
+}
+
+export async function importAdminStudents(file: File): Promise<AdminStudentImportResultDto> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const response = await http.post<AdminStudentImportResultDto>('/api/admin/student-imports', formData);
   return response.data;
 }
 
