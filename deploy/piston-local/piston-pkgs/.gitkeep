@@ -1,0 +1,7 @@
+# 保持空目录存在于仓库中：`deploy/piston-local/Dockerfile` 需要 `COPY piston-pkgs/`，
+# 目录不存在时 docker build 会直接失败。
+#
+# 离线构建时把 piston 运行时包放进来（该文件不入库，见根 .gitignore）：
+#   piston-pkgs/python-3.11.0.pkg.tar.gz
+#   sha256 = ebb8b07d9c227829784d81ab56738574ac8461abf000a13568daffbc0eb89377
+# 来源：https://github.com/engineer-man/piston/releases/download/pkgs/python-3.11.0.pkg.tar.gz

@@ -1,0 +1,33 @@
+# 离线级联补丁：给「已构建好的 piston 镜像」补上 Python 运行时
+#
+# 适用场景：目标机（如生产 ECS / 内网机）访问不了 GitHub，但本地已经有
+# `pythontopia/piston:release` 镜像。此时不需要重跑 ghcr 基础镜像的硬化步骤
+# （gcc / npm install 都要联网），只需在现有镜像上叠一层解压后的运行时。
+#
+# 用法（在包含本文件和 piston-pkgs/ 的目录内）：
+#   docker build -f Dockerfile.runtime -t pythontopia/piston:release .
+#
+# 前置：把 python-3.11.0.pkg.tar.gz 放进本目录的 piston-pkgs/ 子目录
+#       （sha256 = ebb8b07d9c227829784d81ab56738574ac8461abf000a13568daffbc0eb89377）
+#
+# 构建后必须删除旧的 piston_packages 卷再起容器，否则卷会遮蔽镜像内的运行时：
+#   docker compose stop piston piston-runtime-init
+#   docker volume rm <project>_piston_packages
+#   docker compose up -d
+#
+# 关键细节：piston 的 src/index.js 用 `.ppman-installed` 标记文件判定“该版本已安装”；
+# 手工解压时不创建它，/api/v2/runtimes 会返回 []（backend /readyz 恒为 not_ready）。
+ARG BASE_IMAGE=pythontopia/piston:release
+FROM ${BASE_IMAGE}
+
+ARG PISTON_PYTHON_PKG_SHA256="ebb8b07d9c227829784d81ab56738574ac8461abf000a13568daffbc0eb89377"
+
+COPY piston-pkgs/python-3.11.0.pkg.tar.gz /tmp/py.pkg.tar.gz
+
+RUN set -eux; \
+    echo "${PISTON_PYTHON_PKG_SHA256}  /tmp/py.pkg.tar.gz" | sha256sum -c -; \
+    mkdir -p /piston/packages/python/3.11.0; \
+    tar -xzf /tmp/py.pkg.tar.gz -C /piston/packages/python/3.11.0; \
+    rm /tmp/py.pkg.tar.gz; \
+    touch /piston/packages/python/3.11.0/.ppman-installed; \
+    test -f /piston/packages/python/3.11.0/metadata.json

@@ -85,6 +85,9 @@ docs/testing/test.md
 # 发布包构建产物
 output/
 
+# Piston 运行时离线包（~217MB，可重生；构建时自动下载或由构建机预置）
+deploy/piston-local/piston-pkgs/*.pkg.tar.gz
+
 # 自托管 Pyodide 运行时（由 frontend/scripts/sync-pyodide.mjs 从 node_modules 复制，~13MB，可重生，不入库）
 frontend/public/pyodide/
 
