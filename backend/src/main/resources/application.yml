@@ -25,6 +25,12 @@ server:
 pythontopia:
   auth:
     registration-enabled: ${PYT_AUTH_REGISTRATION_ENABLED:false}
+    # 首次部署自举管理员：库中没有任何 ADMIN 时按以下配置创建一个（已有 ADMIN 则永远跳过，
+    # 不会重置既有账号口令）。两项都留空 = 完全关闭自举。
+    bootstrap-admin:
+      username: ${PYT_BOOTSTRAP_ADMIN_USERNAME:}
+      password: ${PYT_BOOTSTRAP_ADMIN_PASSWORD:}
+      display-name: ${PYT_BOOTSTRAP_ADMIN_DISPLAY_NAME:管理员}
   admin:
     encryption-key: ${PYT_ADMIN_ENCRYPTION_KEY:}
   ai:

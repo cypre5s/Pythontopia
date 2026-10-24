@@ -43,6 +43,34 @@ public class UserRepository {
     return findById(key.longValue()).orElseThrow();
   }
 
+  /** 是否已存在任意管理员；初始管理员自举用它判断「已经有主人了」。 */
+  public boolean existsAdmin() {
+    return Boolean.TRUE.equals(
+        jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM users WHERE role = 'ADMIN')", Boolean.class));
+  }
+
+  public boolean existsByUsername(String username) {
+    return Boolean.TRUE.equals(
+        jdbcTemplate.queryForObject(
+            "SELECT EXISTS (SELECT 1 FROM users WHERE username = ?)", Boolean.class, username));
+  }
+
+  /**
+   * 把既有账号提升为管理员，并自增会话代次使已签发的 JWT 立即失效。
+   *
+   * @return 受影响行数，0 表示用户名不存在
+   */
+  public int promoteToAdmin(String username) {
+    return jdbcTemplate.update(
+        """
+        UPDATE users
+        SET role = 'ADMIN', token_version = token_version + 1, updated_at = now()
+        WHERE username = ?
+        """,
+        username);
+  }
+
   public Optional<UserAccount> findById(Long id) {
     return jdbcTemplate
         .query(

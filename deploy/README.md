@@ -61,9 +61,31 @@ bash scripts/seed_demo_classroom.sh # 注册 1 教师 + 3 学生 + 1 班级 + 1 
 bash scripts/demo_smoke.sh          # 4 健康检查 + course pack 43 可读冒烟
 ```
 
-公网不创建共享演示账号；学生通过登录页注册，避免访客共用学习记录。
+公网不创建共享演示账号；自助注册默认关闭（`PYT_AUTH_REGISTRATION_ENABLED=false`），学生账号由管理员在
+`/admin/users` 上传 `.xlsx` 名单导入，避免访客共用学习记录。
 本地联动演示可运行 `bash scripts/seed_demo_classroom.sh`，脚本会把一次性密码打印到终端，**不会写入 .env、不会落盘**。
 演示后可用 `bash scripts/teardown_demo.sh` 清理 `demo-*` 账号。
+
+## 初始管理员
+
+全新数据库没有任何账号，注册又默认关闭，因此由 backend 在启动时**自举**一个管理员：
+
+```bash
+# /opt/pythontopia/shared/.env
+PYT_BOOTSTRAP_ADMIN_USERNAME=admin
+PYT_BOOTSTRAP_ADMIN_PASSWORD=<至少 8 位，openssl rand -hex 12>
+PYT_BOOTSTRAP_ADMIN_DISPLAY_NAME=管理员
+```
+
+规则：
+
+- 只有库里**一个 ADMIN 都没有**时才动作；已存在任意 ADMIN → 直接跳过，绝不重置口令。
+- 配置的用户名已被非管理员账号占用 → 提升为 ADMIN，并自增 `token_version` 让旧 JWT 立即失效。
+- 两项都留空 → 关闭自举；口令不足 8 位或只填一半 → 只打错误日志，不阻断启动。
+- `install_release.sh` 在 `.env` 缺口令时会自动生成并在安装结束时打印一次。
+
+管理员登录后可做的事：导入学生名单（`/admin/users`）、启停账号、看班级与用量、配 AI 供应商。
+教师账号目前仍需临时打开注册（`PYT_AUTH_REGISTRATION_ENABLED=true` + 邀请码）后创建，或由运维写库。
 
 ## 健康检查
 

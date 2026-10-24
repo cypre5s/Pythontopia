@@ -297,6 +297,43 @@ check_env_secret PYT_ROUTE_EXECUTION_SECRET 32
 check_env_secret PYT_ADMIN_ENCRYPTION_KEY 32
 validate_production_ai_env "${ENV_FILE}"
 validate_production_judge_env "${ENV_FILE}"
+
+# 初始管理员：自助注册默认关闭，全新库没有任何账号。backend 启动时若库中仍无任何 ADMIN，
+# 会按 .env 中的 PYT_BOOTSTRAP_ADMIN_* 自举一个（已有 ADMIN 则永远跳过，不会重置口令）。
+# 这里只负责保证这两项在 .env 里有可用值，口令仅在首次生成时打印一次。
+ensure_bootstrap_admin_env() {
+  local env_file="$1"
+  local username password generated=0
+  username="$(grep -E '^PYT_BOOTSTRAP_ADMIN_USERNAME=' "${env_file}" | tail -n 1 | cut -d= -f2-)"
+  password="$(grep -E '^PYT_BOOTSTRAP_ADMIN_PASSWORD=' "${env_file}" | tail -n 1 | cut -d= -f2-)"
+  [ -n "${username}" ] || username="admin"
+  if [ -z "${password}" ]; then
+    password="$(openssl rand -hex 12)"
+    generated=1
+  fi
+  if grep -qE '^PYT_BOOTSTRAP_ADMIN_USERNAME=' "${env_file}"; then
+    sed -i "s|^PYT_BOOTSTRAP_ADMIN_USERNAME=.*|PYT_BOOTSTRAP_ADMIN_USERNAME=${username}|" "${env_file}"
+  else
+    printf 'PYT_BOOTSTRAP_ADMIN_USERNAME=%s\n' "${username}" >> "${env_file}"
+  fi
+  if grep -qE '^PYT_BOOTSTRAP_ADMIN_PASSWORD=' "${env_file}"; then
+    sed -i "s|^PYT_BOOTSTRAP_ADMIN_PASSWORD=.*|PYT_BOOTSTRAP_ADMIN_PASSWORD=${password}|" "${env_file}"
+  else
+    printf 'PYT_BOOTSTRAP_ADMIN_PASSWORD=%s\n' "${password}" >> "${env_file}"
+  fi
+  chmod 600 "${env_file}"
+  if [ "${generated}" = "1" ]; then
+    echo "    初始管理员：${username} / ${password}"
+    echo "    （仅当库中还没有任何 ADMIN 时生效；已写入 .env，请立即记录，本次安装后会再次显示）"
+    BOOTSTRAP_ADMIN_USERNAME_PRINTED="${username}"
+    BOOTSTRAP_ADMIN_PASSWORD_PRINTED="${password}"
+  else
+    echo "    初始管理员配置已存在，保留原口令（不打印）"
+  fi
+}
+BOOTSTRAP_ADMIN_USERNAME_PRINTED=""
+BOOTSTRAP_ADMIN_PASSWORD_PRINTED=""
+ensure_bootstrap_admin_env "${ENV_FILE}"
 echo "    秘密文件就绪：${ENV_FILE}（权限 600，仅做门禁校验且不输出值）"
 
 # ---------------------------------------------------------------------------
@@ -571,6 +608,10 @@ echo "  本次备份：${BACKUP_DIR}"
 echo "  HTTP 入口：http://47.120.29.62/（308 跳转到 HTTPS）"
 echo "  HTTPS 入口：https://47.120.29.62/"
 echo "  回滚命令：bash ${CURRENT_LINK}/deploy/scripts/rollback_release.sh"
+if [ -n "${BOOTSTRAP_ADMIN_USERNAME_PRINTED}" ]; then
+  echo "  初始管理员：${BOOTSTRAP_ADMIN_USERNAME_PRINTED} / ${BOOTSTRAP_ADMIN_PASSWORD_PRINTED}"
+  echo "       （库中已有任意 ADMIN 时不会创建，也不会重置已有口令；登录后请立即修改）"
+fi
 RELEASE_COUNT="$(find "${RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d | wc -l)"
 if [ "${RELEASE_COUNT}" -gt 3 ]; then
   echo "  提示：releases 目录已有 ${RELEASE_COUNT} 个版本，可人工清理最旧版本释放磁盘"
