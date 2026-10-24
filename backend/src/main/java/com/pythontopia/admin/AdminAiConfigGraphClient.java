@@ -24,16 +24,16 @@ public class AdminAiConfigGraphClient {
     this.properties = properties;
   }
 
-  public GraphStatus status() { return exchange(HttpMethod.GET, null, GraphStatus.class); }
-  public GraphStatus apply(String model, String apiKey) { return exchange(HttpMethod.PUT, new GraphConfigRequest(model, apiKey), GraphStatus.class); }
-  public GraphTestResult test(String model, String apiKey) { return exchange(HttpMethod.POST, new GraphConfigRequest(model, apiKey), GraphTestResult.class); }
+  public GraphStatus status() { return exchange(HttpMethod.GET, null, GraphStatus.class, ""); }
+  public GraphStatus apply(String model, String apiKey) { return exchange(HttpMethod.PUT, new GraphConfigRequest(model, apiKey), GraphStatus.class, ""); }
+  public GraphTestResult test(String model, String apiKey) { return exchange(HttpMethod.POST, new GraphConfigRequest(model, apiKey), GraphTestResult.class, "/test"); }
 
-  private <T> T exchange(HttpMethod method, Object body, Class<T> type) {
+  private <T> T exchange(HttpMethod method, Object body, Class<T> type, String pathSuffix) {
     HttpHeaders headers = new HttpHeaders();
     headers.setContentType(MediaType.APPLICATION_JSON);
     GraphInternalTokenSupport.apply(headers, properties);
     try {
-      ResponseEntity<T> response = restTemplate.exchange(properties.graphUrl() + "/internal/admin/llm-config", method, new HttpEntity<>(body, headers), type);
+      ResponseEntity<T> response = restTemplate.exchange(properties.graphUrl() + "/internal/admin/llm-config" + pathSuffix, method, new HttpEntity<>(body, headers), type);
       return response.getBody();
     } catch (RestClientException exception) {
       throw new BusinessException(org.springframework.http.HttpStatus.BAD_GATEWAY, "AI_CONFIG_SERVICE_UNAVAILABLE", "AI 配置服务暂不可用，请确认 Graph 服务与内部令牌配置");

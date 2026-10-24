@@ -976,7 +976,7 @@ watch(navigationOpen, (open) => {
   padding: 24px;
   border: 1px solid var(--admin-border);
   border-radius: var(--admin-dialog-radius);
-  background: var(--admin-surface);
+  background: var(--admin-panel-bg, #fff);
   box-shadow: var(--admin-dialog-shadow);
   color: var(--admin-text);
 }
