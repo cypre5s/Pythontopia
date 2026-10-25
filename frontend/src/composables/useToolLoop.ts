@@ -33,8 +33,8 @@ export function useToolLoop(url: string = TOOL_LOOP_STREAM_URL): ToolLoopControl
 
   // 归一化 AG-UI 事件流增量喂入 loopSlice（loop_step/RUN_FINISHED/RUN_ERROR…）。
   watch(
-    () => sse.events.value,
-    (events) => loop.syncFromEvents(events),
+    () => sse.events.value.length,
+    () => loop.syncFromEvents(sse.events.value),
   );
 
   /**

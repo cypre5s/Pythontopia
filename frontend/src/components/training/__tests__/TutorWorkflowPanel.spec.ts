@@ -572,6 +572,90 @@ describe('Tutor transfer formal submission', () => {
     wrapper.unmount();
   });
 
+  it('does not continue stale AC feedback when a newer failed submission arrives', async () => {
+    streamConfig.holdRequest = true;
+    streamConfig.completeRequest = true;
+    const acReviewResult = {
+      session_id: 'session-42',
+      phase: 'AC_REVIEW',
+      episode_plan: null,
+      card_key: 'post_ac',
+      card: {
+        card_id: 'post-ac-42',
+        source_submission_id: 123,
+        success_summary: '通过',
+        key_action: '按公式计算',
+        code_quality_notes: [],
+        knowledge_points: [],
+        next_practice_direction: '再处理一个相关计算',
+        teaching_goal: '迁移',
+        checkpoint_prompt: '说出公式',
+        reflection_prompt: '如何迁移？',
+      },
+      seq: 1,
+      available_actions: [{ key: 'transfer', label: '迁移练习', event: 'TRANSFER' }],
+    };
+    const postAcCard = {
+      seq: 1,
+      event: 'AC_REVIEW',
+      cardKey: 'post_ac',
+      payload: acReviewResult.card,
+      createdAt: '2026-10-25T10:00:00Z',
+    };
+    const newerWaSnapshot = sessionSnapshot({
+      phase: 'ERROR_FEEDBACK',
+      latestSubmissionId: 124,
+      latestSubmissionProblemId: 42,
+      latestVerdict: 'WA',
+    });
+    getActiveWorkflowSession
+      .mockResolvedValueOnce(sessionSnapshot({
+        phase: 'AC_REVIEW',
+        latestSubmissionId: 123,
+        latestSubmissionProblemId: 42,
+        latestVerdict: 'AC',
+      }))
+      .mockResolvedValueOnce(newerWaSnapshot)
+      .mockResolvedValueOnce({ ...newerWaSnapshot, cards: [postAcCard] })
+      .mockResolvedValue({
+        ...newerWaSnapshot,
+        cards: [
+          postAcCard,
+          {
+            seq: 2,
+            event: 'ERROR_FEEDBACK',
+            cardKey: 'error_diagnosis',
+            payload: { source_submission_id: 124 },
+            createdAt: '2026-10-25T10:00:01Z',
+          },
+        ],
+      });
+
+    const wrapper = shallowMount(TutorWorkflowPanel, {
+      props: { problemId: 42, kcCodes: [] },
+      global: { stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+    expect(streamStart.mock.calls[0]?.[0]).toMatchObject({ event: 'AC_REVIEW' });
+
+    streamConfig.holdRequest = false;
+    await wrapper.setProps({ submissionId: 124 });
+    await flushPromises();
+    expect(streamStart).toHaveBeenCalledTimes(1);
+
+    streamConfig.result = acReviewResult;
+    streamConfig.resolveRequest?.();
+    await flushPromises();
+
+    expect(streamStart.mock.calls.map(([request]) => (request as { event: string }).event))
+      .toEqual(['AC_REVIEW', 'ERROR_FEEDBACK']);
+    expect(streamStart.mock.calls[1]?.[0]).toMatchObject({
+      event: 'ERROR_FEEDBACK',
+      eventData: { submission_id: 124 },
+    });
+    wrapper.unmount();
+  });
+
   it('uses a real failed submission to generate one error diagnosis', async () => {
     streamConfig.completeRequest = true;
     streamConfig.result = {

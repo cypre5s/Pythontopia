@@ -29,6 +29,7 @@ import com.pythontopia.submission.judge.JudgeService.JudgeOutcome;
 import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import com.pythontopia.submission.service.SubmissionService;
+import com.pythontopia.submission.service.SubmissionTransactionService;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -45,8 +46,10 @@ class SubmissionServiceTest {
   private final JudgeService judge = mock(JudgeService.class);
   private final QuestService quests = mock(QuestService.class);
   private final ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+  private final SubmissionTransactionService submissionTransactions =
+      new SubmissionTransactionService(submissions, problems, quests, publisher);
   private final SubmissionService service =
-      new SubmissionService(submissions, problems, judge, quests, publisher);
+      new SubmissionService(submissions, judge, submissionTransactions);
 
   @Test
   void submitAcEmitsPracticeSucceededEvent() {
@@ -110,7 +113,7 @@ class SubmissionServiceTest {
     when(quests.complete(eq(7L), eq(55L), any()))
         .thenThrow(new BusinessException(HttpStatus.CONFLICT, "QUEST_STATE_CONFLICT", sentinel));
 
-    Logger logger = (Logger) LoggerFactory.getLogger(SubmissionService.class);
+    Logger logger = (Logger) LoggerFactory.getLogger(SubmissionTransactionService.class);
     ListAppender<ILoggingEvent> appender = new ListAppender<>();
     appender.start();
     logger.addAppender(appender);
@@ -191,7 +194,7 @@ class SubmissionServiceTest {
     when(submissions.findById(eq(902L)))
         .thenReturn(Optional.of(sampleSubmission(902L, SubmissionStatus.ERROR)));
 
-    Logger logger = (Logger) LoggerFactory.getLogger(SubmissionService.class);
+    Logger logger = (Logger) LoggerFactory.getLogger(SubmissionTransactionService.class);
     Level previousLevel = logger.getLevel();
     ListAppender<ILoggingEvent> appender = new ListAppender<>();
     appender.start();

@@ -11,6 +11,7 @@ import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
+import java.util.UUID;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -87,6 +88,37 @@ public class ChapterTestRepository {
             userId)
         .stream()
         .findFirst();
+  }
+
+  public Optional<OffsetDateTime> findSubmissionClaimedAt(long testId) {
+    return jdbcTemplate
+        .query(
+            "SELECT submission_claimed_at FROM chapter_test"
+                + " WHERE id = ? AND submission_claimed_at IS NOT NULL",
+            (rs, rowNum) -> offset(rs, "submission_claimed_at"),
+            testId)
+        .stream()
+        .findFirst();
+  }
+
+  public boolean claimSubmission(long testId, UUID claimToken, OffsetDateTime staleBefore) {
+    return jdbcTemplate.update(
+            "UPDATE chapter_test SET submission_claim_token = ?, submission_claimed_at = now()"
+                + " WHERE id = ? AND status = 'IN_PROGRESS'"
+                + " AND (deadline_at IS NULL OR deadline_at >= now())"
+                + " AND (submission_claim_token IS NULL OR submission_claimed_at < ?)",
+            claimToken,
+            testId,
+            staleBefore)
+        == 1;
+  }
+
+  public void releaseSubmissionClaim(long testId, UUID claimToken) {
+    jdbcTemplate.update(
+        "UPDATE chapter_test SET submission_claim_token = NULL, submission_claimed_at = NULL"
+            + " WHERE id = ? AND status = 'IN_PROGRESS' AND submission_claim_token = ?",
+        testId,
+        claimToken);
   }
 
   /** 该学生该章最近一条章测（任意状态）。 */
@@ -186,25 +218,39 @@ public class ChapterTestRepository {
 
   /** 提交判分：score + detail + integrity，状态置 SUBMITTED（仅当当前 IN_PROGRESS）。 */
   public boolean markSubmitted(
-      long testId, int score, JsonNode detail, JsonNode integrity, OffsetDateTime submittedAt) {
+      long testId,
+      UUID claimToken,
+      int score,
+      JsonNode detail,
+      JsonNode integrity,
+      OffsetDateTime submittedAt) {
     int updated =
         jdbcTemplate.update(
             "UPDATE chapter_test SET status = 'SUBMITTED', score = ?, detail = ?::jsonb,"
-                + " integrity = ?::jsonb, submitted_at = ? WHERE id = ? AND status = 'IN_PROGRESS'",
+                + " integrity = ?::jsonb, submitted_at = ?, submission_claim_token = NULL,"
+                + " submission_claimed_at = NULL"
+                + " WHERE id = ? AND status = 'IN_PROGRESS' AND submission_claim_token = ?",
             score,
             writeJson(detail),
             writeJson(integrity),
             submittedAt,
-            testId);
+            testId,
+            claimToken);
     return updated == 1;
   }
 
   /** 超时拒收：状态置 EXPIRED + 记 integrity.overtime（§4.2）。 */
-  public void markExpiredOvertime(long testId, JsonNode integrity) {
-    jdbcTemplate.update(
-        "UPDATE chapter_test SET status = 'EXPIRED', integrity = ?::jsonb WHERE id = ?",
-        writeJson(integrity),
-        testId);
+  public boolean markExpiredOvertime(
+      long testId, JsonNode integrity, OffsetDateTime staleBefore) {
+    return jdbcTemplate.update(
+            "UPDATE chapter_test SET status = 'EXPIRED', integrity = ?::jsonb,"
+                + " submission_claim_token = NULL, submission_claimed_at = NULL"
+                + " WHERE id = ? AND status = 'IN_PROGRESS'"
+                + " AND (submission_claim_token IS NULL OR submission_claimed_at < ?)",
+            writeJson(integrity),
+            testId,
+            staleBefore)
+        == 1;
   }
 
   private ChapterTestRecord map(ResultSet rs, int rowNum) throws SQLException {

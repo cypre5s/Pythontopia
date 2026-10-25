@@ -11,7 +11,10 @@ import java.nio.file.Path;
 import java.util.List;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /** NPC 对话服务：回忆该 NPC 视角的记忆，调用 graph 个性化回复，失败时静态脚本兜底。 */
 @Service("memoryNpcDialogService")
@@ -25,6 +28,7 @@ public class NpcDialogService {
   private final NpcDialogGraphClient graphClient;
   private final JdbcTemplate jdbc;
   private final ObjectMapper objectMapper;
+  private final TransactionTemplate transaction;
 
   public NpcDialogService(
       NpcMemoryService memoryService,
@@ -32,16 +36,18 @@ public class NpcDialogService {
       NpcAffinityService affinityService,
       NpcDialogGraphClient graphClient,
       JdbcTemplate jdbc,
-      ObjectMapper objectMapper) {
+      ObjectMapper objectMapper,
+      PlatformTransactionManager transactionManager) {
     this.memoryService = memoryService;
     this.personaService = personaService;
     this.affinityService = affinityService;
     this.graphClient = graphClient;
     this.jdbc = jdbc;
     this.objectMapper = objectMapper;
+    this.transaction = new TransactionTemplate(transactionManager);
   }
 
-  @Transactional
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public NpcDialogResponse talk(long userId, String npcKey, String message) {
     List<MemoryItemDto> memories = memoryService.recall(userId, npcKey, null, 5);
     String personaCore = loadPersonaCore(npcKey);
@@ -49,8 +55,12 @@ public class NpcDialogService {
         graphClient
             .talk(npcKey, personaCore, memories, message)
             .orElseGet(() -> staticFallback(npcKey));
-    persistDialogState(userId, npcKey, response);
-    affinityService.bump(userId, npcKey, TALK_AFFINITY_DELTA);
+    transaction.execute(
+        status -> {
+          persistDialogState(userId, npcKey, response);
+          affinityService.bump(userId, npcKey, TALK_AFFINITY_DELTA);
+          return null;
+        });
     return response;
   }
 

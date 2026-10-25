@@ -9,6 +9,7 @@ under test prevents a future route refactor from accidentally returning to a bar
 from __future__ import annotations
 
 import asyncio
+from collections import OrderedDict
 
 import pytest
 
@@ -57,6 +58,26 @@ async def test_tutor_workflow_same_session_id_is_isolated_by_user() -> None:
     assert owner.cards[0]["short_text"] == "user-101-private"
     assert other.phase == "READING"
     assert other.cards == []
+
+
+@pytest.mark.asyncio
+async def test_tutor_cache_evicts_old_inactive_sessions_but_keeps_active_run(monkeypatch) -> None:
+    store = tutor_workflow_session
+    monkeypatch.setattr(store, "_STORE", OrderedDict())
+    monkeypatch.setattr(store, "_ACTIVE_RUNS", set())
+    monkeypatch.setattr(store, "MAX_CACHED_SESSIONS", 2, raising=False)
+
+    await store.restore_phase(303, "older", "CODING", 1)
+    await store.restore_phase(303, "active", "IDEATING", 2)
+    assert await store.claim_run(303, "active")
+    await store.restore_phase(303, "newer", "TRANSFER", 3)
+
+    assert len(store._STORE) == 2
+    assert (303, "active") in store._STORE
+    assert (303, "older") not in store._STORE
+    assert (await store.get_state(303, "active")).phase == "IDEATING"
+
+    await store.release_run(303, "active")
 
 
 @pytest.mark.asyncio

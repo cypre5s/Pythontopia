@@ -22,7 +22,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Materializes an AI Tutor transfer draft only after its reference solution passes the real
@@ -41,6 +44,7 @@ public class TutorTransferProblemService {
   private final StaticCodeChecker staticCodeChecker;
   private final JudgeWorkerPool judgeWorkerPool;
   private final JudgeCaseEvaluator caseEvaluator;
+  private final TransactionTemplate transaction;
 
   public TutorTransferProblemService(
       JdbcTemplate jdbcTemplate,
@@ -48,16 +52,18 @@ public class TutorTransferProblemService {
       PublicProblemRepository problemRepository,
       StaticCodeChecker staticCodeChecker,
       JudgeWorkerPool judgeWorkerPool,
-      JudgeCaseEvaluator caseEvaluator) {
+      JudgeCaseEvaluator caseEvaluator,
+      PlatformTransactionManager transactionManager) {
     this.jdbcTemplate = jdbcTemplate;
     this.objectMapper = objectMapper;
     this.problemRepository = problemRepository;
     this.staticCodeChecker = staticCodeChecker;
     this.judgeWorkerPool = judgeWorkerPool;
     this.caseEvaluator = caseEvaluator;
+    this.transaction = new TransactionTemplate(transactionManager);
   }
 
-  @Transactional
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public PublicProblemDto materialize(
       Long userId, Long sessionId, UUID runId, Long sourceProblemId, JsonNode rawDraft) {
     String stage = "request_validation";
@@ -129,14 +135,23 @@ public class TutorTransferProblemService {
       }
 
       stage = "persist";
-      Long problemId =
-          jdbcTemplate.queryForObject(
-              "SELECT nextval('tutor_transfer_problem_id_seq')", Long.class);
-      if (problemId == null) {
-        throw new IllegalStateException("无法分配迁移题编号");
-      }
-      jdbcTemplate.update(
-          """
+      return transaction.execute(
+          status -> {
+            ExistingTransfer latest = findExisting(userId, sessionId, runId);
+            if (latest != null) {
+              if (!requestHash.equals(latest.requestHash())) {
+                throw new IllegalStateException("迁移题运行标识对应了不同草稿");
+              }
+              return toPublicProblem(latest.id(), source, draft, transferDifficulty);
+            }
+            Long problemId =
+                jdbcTemplate.queryForObject(
+                    "SELECT nextval('tutor_transfer_problem_id_seq')", Long.class);
+            if (problemId == null) {
+              throw new IllegalStateException("无法分配迁移题编号");
+            }
+            jdbcTemplate.update(
+                """
         INSERT INTO course_problem (
           id, pack_id, kc_code, title, statement_markdown, input_description,
           output_description, difficulty, samples, hidden_test_cases, source_label,
@@ -144,23 +159,24 @@ public class TutorTransferProblemService {
           tutor_source_problem_id, tutor_session_id, tutor_run_id, tutor_request_hash
         ) VALUES (?, 43, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, 'AI Tutor transfer',
           'Python3', ?, ?, ?, ?, ?, ?)
-        """,
-          problemId,
-          source.kcCode(),
-          draft.title(),
-          draft.description(),
-          draft.inputDescription(),
-          draft.outputDescription(),
-          transferDifficulty,
-          writeJson(draft.samples()),
-          writeJson(draft.testCases()),
-          draft.referenceSolutionCode(),
-          userId,
-          sourceProblemId,
-          sessionId,
-          runId,
-          requestHash);
-      return toPublicProblem(problemId, source, draft, transferDifficulty);
+                """,
+                problemId,
+                source.kcCode(),
+                draft.title(),
+                draft.description(),
+                draft.inputDescription(),
+                draft.outputDescription(),
+                transferDifficulty,
+                writeJson(draft.samples()),
+                writeJson(draft.testCases()),
+                draft.referenceSolutionCode(),
+                userId,
+                sourceProblemId,
+                sessionId,
+                runId,
+                requestHash);
+            return toPublicProblem(problemId, source, draft, transferDifficulty);
+          });
     } catch (RuntimeException e) {
       log.warn(
           "AI Tutor transfer materialization failed stage={} errorType={}",

@@ -161,6 +161,36 @@ async def test_openai_compat_chat_trusts_proxy_environment(
 
 
 @pytest.mark.asyncio
+async def test_openai_compat_reuses_one_client_for_chat_and_stream(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def handler(request: httpx.Request) -> httpx.Response:
+        if json.loads(request.content).get("stream"):
+            return httpx.Response(
+                200,
+                text='data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'
+                "data: [DONE]\n\n",
+            )
+        return httpx.Response(
+            200,
+            json={"choices": [{"message": {"content": '{"ok": true}'}}]},
+        )
+
+    created_clients = _capture_async_client_kwargs(monkeypatch, handler)
+    provider = OpenAiCompatProvider()
+
+    await provider.chat([{"role": "user", "content": "ping"}])
+    chunks = [
+        chunk
+        async for chunk in provider.chat_stream([{"role": "user", "content": "ping"}])
+    ]
+
+    assert chunks == ["hi"]
+    assert len(created_clients) == 1
+    await provider.aclose()
+
+
+@pytest.mark.asyncio
 async def test_chat_returns_only_text_from_multimodal_response_blocks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -71,6 +71,7 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
@@ -80,6 +81,13 @@ import org.mockito.Mockito;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 class ResourceWorkshopServiceTest {
@@ -102,6 +110,7 @@ class ResourceWorkshopServiceTest {
   private ApplicationEventPublisher eventPublisher;
   private ObjectMapper objectMapper;
   private StudentWriteThrottle studentWriteThrottle;
+  private PlatformTransactionManager transactionManager;
   private ResourceWorkshopService service;
 
   @BeforeEach
@@ -124,6 +133,7 @@ class ResourceWorkshopServiceTest {
     eventPublisher = Mockito.mock(ApplicationEventPublisher.class);
     objectMapper = new ObjectMapper();
     studentWriteThrottle = Mockito.mock(StudentWriteThrottle.class);
+    transactionManager = new TestTransactionManager();
     when(studentWriteThrottle.tryAcquire(anyLong(), anyInt())).thenReturn(true);
     service =
         new ResourceWorkshopService(
@@ -144,7 +154,8 @@ class ResourceWorkshopServiceTest {
             submissionRepository,
             eventPublisher,
             objectMapper,
-            studentWriteThrottle);
+            studentWriteThrottle,
+            transactionManager);
 
     when(coursePackRepository.findKcs(eq(43L), eq(null)))
         .thenReturn(
@@ -212,6 +223,52 @@ class ResourceWorkshopServiceTest {
     verify(masteryEvaluator, Mockito.never())
         .applyEvent(eq(1L), eq("PY43-KC-001"), eq(MasterySource.RESOURCE_READ), any(), anyString());
     verify(eventPublisher, Mockito.never()).publishEvent(any(LearningEvent.ResourceConsumed.class));
+  }
+
+  @Test
+  void createDoesNotHoldDatabaseTransactionWhileWaitingForGraph() {
+    AtomicBoolean transactionDuringGraphCall = new AtomicBoolean(true);
+    AtomicBoolean transactionDuringResourceInsert = new AtomicBoolean(false);
+    when(graphClient.produce(any()))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringGraphCall.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return successResponse();
+            });
+    when(resourceRepository.insert(
+            anyLong(),
+            anyLong(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any()))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringResourceInsert.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return 7L;
+            });
+
+    ProxyFactory proxyFactory = new ProxyFactory(service);
+    proxyFactory.addAdvice(
+        new TransactionInterceptor(
+            transactionManager, new AnnotationTransactionAttributeSource()));
+    ResourceWorkshopService transactionalService =
+        (ResourceWorkshopService) proxyFactory.getProxy();
+
+    transactionalService.create(
+        1L, new ResourceCreateRequest(List.of("PY43-KC-001"), ResourceType.HANDOUT, null));
+
+    assertThat(transactionDuringGraphCall).isFalse();
+    assertThat(transactionDuringResourceInsert).isTrue();
   }
 
   @Test
@@ -834,7 +891,8 @@ class ResourceWorkshopServiceTest {
             submissionRepository,
             eventPublisher,
             objectMapper,
-            studentWriteThrottle);
+            studentWriteThrottle,
+            transactionManager);
     when(graphClient.produce(any())).thenReturn(successResponse());
     when(resourceRepository.countCreatedAfter(anyLong(), any())).thenReturn(5);
     when(coursePackRepository.findKcs(eq(43L), eq(null)))
@@ -1185,6 +1243,24 @@ class ResourceWorkshopServiceTest {
         new ResourceProduceResponseDto.SafetyResultDto(true, List.of()),
         List.of(),
         "SUCCESS");
+  }
+
+  private static final class TestTransactionManager extends AbstractPlatformTransactionManager {
+
+    @Override
+    protected Object doGetTransaction() {
+      return new Object();
+    }
+
+    @Override
+    protected void doBegin(
+        Object transaction, org.springframework.transaction.TransactionDefinition definition) {}
+
+    @Override
+    protected void doCommit(DefaultTransactionStatus status) {}
+
+    @Override
+    protected void doRollback(DefaultTransactionStatus status) {}
   }
 
   private ResourceProduceResponseDto failureResponse() {

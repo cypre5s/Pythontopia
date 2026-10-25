@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import threading
 from types import SimpleNamespace
 
 import pytest
@@ -52,3 +54,21 @@ async def test_self_heal_database_failure_does_not_log_database_url(monkeypatch,
 
     assert "RuntimeError" in caplog.text
     assert secret not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_self_heal_database_fetch_does_not_block_event_loop(monkeypatch) -> None:
+    loop = asyncio.get_running_loop()
+    callback_ran = threading.Event()
+    observed: list[bool] = []
+
+    def fetch_pages(_db_url: str):
+        loop.call_soon_threadsafe(callback_ran.set)
+        observed.append(callback_ran.wait(0.2))
+        return []
+
+    monkeypatch.setattr(rag_main, "fetch_pages", fetch_pages)
+
+    await rag_main._self_heal_empty_index(FastAPI(), "postgresql://example", attempts=1, delay_s=0)
+
+    assert observed == [True]

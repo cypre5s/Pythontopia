@@ -8,12 +8,14 @@ Java 侧另有持久化投影（tutor_workflow_session/card 表）承担跨重�
 from __future__ import annotations
 
 import asyncio
+from collections import OrderedDict
 from dataclasses import dataclass, field
 from typing import Any
 
 # CHAT 上下文最多引用最近几张卡（与 Alethicode get_last_cards(limit=5) 对齐）。
 MAX_CARDS = 12
 MAX_CHAT_TURNS = 20
+MAX_CACHED_SESSIONS = 512
 
 
 @dataclass
@@ -28,9 +30,18 @@ class WorkflowSessionState:
 
 SessionKey = tuple[int, str]
 
-_STORE: dict[SessionKey, WorkflowSessionState] = {}
+_STORE: OrderedDict[SessionKey, WorkflowSessionState] = OrderedDict()
 _ACTIVE_RUNS: set[SessionKey] = set()
 _LOCK = asyncio.Lock()
+
+
+def _trim_store() -> None:
+    # Java 持久化快照可恢复被淘汰会话；保留活跃运行态，限制已结束会话占用。
+    while len(_STORE) > MAX_CACHED_SESSIONS:
+        oldest_inactive = next((key for key in _STORE if key not in _ACTIVE_RUNS), None)
+        if oldest_inactive is None:
+            return
+        del _STORE[oldest_inactive]
 
 
 def _key(user_id: int, session_id: str) -> SessionKey:
@@ -43,9 +54,11 @@ def _key(user_id: int, session_id: str) -> SessionKey:
 
 async def get_state(user_id: int, session_id: str) -> WorkflowSessionState:
     async with _LOCK:
-        state = _STORE.get(_key(user_id, session_id))
+        key = _key(user_id, session_id)
+        state = _STORE.get(key)
         if state is None:
             return WorkflowSessionState()
+        _STORE.move_to_end(key)
         return WorkflowSessionState(
             phase=state.phase,
             seq=state.seq,
@@ -95,6 +108,9 @@ async def restore_phase(
                 cards=restored_cards,
                 chat_history=restored_history,
             )
+        if key in _STORE:
+            _STORE.move_to_end(key)
+            _trim_store()
 
 
 async def commit_run(
@@ -115,7 +131,9 @@ async def commit_run(
     供 TRANSFER 事件回查），不存整卡（整卡持久化归 Java 投影）。
     """
     async with _LOCK:
-        state = _STORE.setdefault(_key(user_id, session_id), WorkflowSessionState())
+        key = _key(user_id, session_id)
+        state = _STORE.setdefault(key, WorkflowSessionState())
+        _STORE.move_to_end(key)
         state.phase = phase
         if card_key is not None and card_id is not None:
             state.seq += 1
@@ -139,6 +157,7 @@ async def commit_run(
                 if turn.get("role") in {"user", "assistant"}
                 and isinstance(turn.get("content"), str)
             ]
+        _trim_store()
         return state.seq
 
 
@@ -156,9 +175,12 @@ async def claim_run(user_id: int, session_id: str) -> bool:
         if key in _ACTIVE_RUNS:
             return False
         _ACTIVE_RUNS.add(key)
+        if key in _STORE:
+            _STORE.move_to_end(key)
         return True
 
 
 async def release_run(user_id: int, session_id: str) -> None:
     async with _LOCK:
         _ACTIVE_RUNS.discard(_key(user_id, session_id))
+        _trim_store()

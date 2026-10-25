@@ -70,13 +70,20 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     init_tracing()
     # 启动时只加载本项目 deploy/.env，避免读取 Alethicode 的凭据。
     load_pythontopia_env()
+    provider: object | None = None
     try:
-        _app.state.llm_provider = provider_from_env()
+        provider = provider_from_env()
+        _app.state.llm_provider = provider
         LOG.info("LLM provider 已初始化: %s", provider_label())
     except Exception as exc:  # noqa: BLE001 - 启动期容错，路由各自再兜底
         _app.state.llm_provider = None
         LOG.warning("LLM provider 初始化失败，路由将各自兜底: %s", type(exc).__name__)
-    yield
+    try:
+        yield
+    finally:
+        close = getattr(provider, "aclose", None)
+        if callable(close):
+            await close()
 
 
 app = FastAPI(title="Pythontopia Graph", version="0.1.0", lifespan=lifespan)

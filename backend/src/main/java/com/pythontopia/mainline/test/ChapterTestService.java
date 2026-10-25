@@ -26,10 +26,12 @@ import com.pythontopia.mainline.test.ChapterTestJudge.JudgeReport;
 import com.pythontopia.mainline.test.ChapterTestJudge.QuestionJudgement;
 import com.pythontopia.mainline.test.question.QuestionItem;
 import com.pythontopia.mainline.test.question.QuestionPaper;
+import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
@@ -38,7 +40,10 @@ import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.core.task.TaskRejectedException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * 章末大测试编排（r15 计划 §4 / §9）：prepare（触发异步预生成）/ start（去答案发卷 + 限时）/
@@ -50,6 +55,10 @@ public class ChapterTestService {
   private static final Logger log = LoggerFactory.getLogger(ChapterTestService.class);
   private static final int QUIZ_TIME_LIMIT_SEC = 3600;
   private static final int FINAL_TIME_LIMIT_SEC = 7200;
+  // shortcut: reclaim after one hour; raise this if generated exam case limits increase.
+  private static final Duration SUBMISSION_CLAIM_TTL = Duration.ofHours(1);
+  private static final Duration SUBMISSION_WAIT_LIMIT = Duration.ofSeconds(30);
+  private static final Duration SUBMISSION_POLL_INTERVAL = Duration.ofMillis(50);
 
   private final ChapterTestRepository repository;
   private final ChapterTestPregenService pregenService;
@@ -61,6 +70,7 @@ public class ChapterTestService {
   private final MainlineStageProgressRepository progressRepository;
   private final ObjectMapper objectMapper;
   private final ApplicationEventPublisher eventPublisher;
+  private final TransactionTemplate transaction;
 
   public ChapterTestService(
       ChapterTestRepository repository,
@@ -72,7 +82,8 @@ public class ChapterTestService {
       MainlineStageRepository stageRepository,
       MainlineStageProgressRepository progressRepository,
       ObjectMapper objectMapper,
-      ApplicationEventPublisher eventPublisher) {
+      ApplicationEventPublisher eventPublisher,
+      PlatformTransactionManager transactionManager) {
     this.repository = repository;
     this.pregenService = pregenService;
     this.judge = judge;
@@ -83,6 +94,7 @@ public class ChapterTestService {
     this.progressRepository = progressRepository;
     this.objectMapper = objectMapper;
     this.eventPublisher = eventPublisher;
+    this.transaction = new TransactionTemplate(transactionManager);
   }
 
   /**
@@ -208,14 +220,14 @@ public class ChapterTestService {
    * 提交判分（服务端权威）。超时按 deadline 拒收并记 integrity.overtime；正常则判分入库 + 触发星级重算。
    * 幂等：对已 SUBMITTED 的同一 test 重复提交返回既有结果。
    */
-  @Transactional
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public ChapterTestResultDto submit(
       long userId, int chapter, long testId, ChapterTestSubmitRequest request) {
     return submit(
         userId, chapter, testId, request, ChapterAssessmentKind.FINAL);
   }
 
-  @Transactional
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public ChapterTestResultDto submitQuiz(
       long userId, int chapter, long testId, ChapterTestSubmitRequest request) {
     return submit(
@@ -231,7 +243,7 @@ public class ChapterTestService {
     requireChapter(chapter);
     ChapterTestRecord record =
         repository
-            .findOwnedForUpdate(userId, testId)
+            .findOwned(userId, testId)
             .filter(r -> r.chapter() == chapter && r.assessmentKind() == assessmentKind)
             .orElseThrow(
                 () ->
@@ -249,38 +261,123 @@ public class ChapterTestService {
           HttpStatus.CONFLICT, "CHAPTER_TEST_NOT_IN_PROGRESS", "请先开考再提交");
     }
 
-    // 超时拒收：单行 UPDATE 落 EXPIRED + integrity.overtime（先提交持久化再抛，避免回滚丢审计）。
-    if (isPastDeadline(record)) {
-      repository.markExpiredOvertime(testId, integrityNode(request, true));
-      throw new BusinessException(HttpStatus.CONFLICT, "CHAPTER_TEST_OVERTIME", "已超过考试时限，提交被拒收");
+    UUID claimToken = claimSubmission(userId, testId, request);
+    if (claimToken == null) {
+      ChapterTestRecord submitted = repository.findOwned(userId, testId).orElseThrow();
+      return mapper.fromStored(submitted, currentStars(userId, chapter));
     }
 
-    QuestionPaper paper = parsePaper(record);
-    JudgeReport report = judge.judge(paper, request.answers());
-    JsonNode detail = objectMapper.valueToTree(report);
-    OffsetDateTime now = OffsetDateTime.now();
-    boolean ok = repository.markSubmitted(testId, report.score(), detail, integrityNode(request, false), now);
-    if (!ok) {
-      // 并发下被他路转走：若已 SUBMITTED 幂等返回，否则报冲突。
-      ChapterTestRecord reread = repository.findById(testId).orElseThrow();
-      if (reread.status() == ChapterTestStatus.SUBMITTED) {
-        return mapper.fromStored(reread, currentStars(userId, chapter));
+    try {
+      QuestionPaper paper = parsePaper(record);
+      JudgeReport report = judge.judge(paper, request.answers());
+      JsonNode detail = objectMapper.valueToTree(report);
+      OffsetDateTime now = OffsetDateTime.now();
+      return transaction.execute(
+          status -> {
+            boolean ok =
+                repository.markSubmitted(
+                    testId,
+                    claimToken,
+                    report.score(),
+                    detail,
+                    integrityNode(request, false),
+                    now);
+            if (!ok) {
+              // 并发下只允许认领者落库；重复请求读取已提交结果，不重复运行沙箱。
+              ChapterTestRecord reread = repository.findById(testId).orElseThrow();
+              if (reread.status() == ChapterTestStatus.SUBMITTED) {
+                return mapper.fromStored(reread, currentStars(userId, chapter));
+              }
+              throw new BusinessException(
+                  HttpStatus.CONFLICT, "CHAPTER_TEST_NOT_IN_PROGRESS", "提交状态冲突，请刷新重试");
+            }
+
+            publishAssessmentEvents(userId, chapter, testId, assessmentKind, paper, report);
+
+            int stars =
+                assessmentKind == ChapterAssessmentKind.FINAL
+                    ? starService.recalc(userId, chapter, StarSource.TEST).stars()
+                    : currentStars(userId, chapter);
+            ChapterTestRecord submitted = repository.findById(testId).orElseThrow();
+            log.info(
+                "章测提交 user={} ch={} testId={} score={}/{} stars={}",
+                userId, chapter, testId, report.score(), report.maxScore(), stars);
+            return mapper.toResult(submitted, report, stars, false);
+          });
+    } catch (RuntimeException exception) {
+      try {
+        transaction.execute(
+            status -> {
+              repository.releaseSubmissionClaim(testId, claimToken);
+              return null;
+            });
+      } catch (RuntimeException cleanupFailure) {
+        exception.addSuppressed(cleanupFailure);
       }
-      throw new BusinessException(
-          HttpStatus.CONFLICT, "CHAPTER_TEST_NOT_IN_PROGRESS", "提交状态冲突，请刷新重试");
+      throw exception;
     }
+  }
 
-    publishAssessmentEvents(userId, chapter, testId, assessmentKind, paper, report);
+  private UUID claimSubmission(
+      long userId, long testId, ChapterTestSubmitRequest request) {
+    long waitUntil = System.nanoTime() + SUBMISSION_WAIT_LIMIT.toNanos();
+    OffsetDateTime staleBefore = OffsetDateTime.now().minus(SUBMISSION_CLAIM_TTL);
+    while (true) {
+      ChapterTestRecord current = repository.findOwned(userId, testId).orElseThrow();
+      if (current.status() == ChapterTestStatus.SUBMITTED) {
+        return null;
+      }
+      if (current.status() == ChapterTestStatus.EXPIRED) {
+        throw new BusinessException(
+            HttpStatus.CONFLICT, "CHAPTER_TEST_OVERTIME", "本场已超时，无法提交");
+      }
+      if (current.status() != ChapterTestStatus.IN_PROGRESS) {
+        throw new BusinessException(
+            HttpStatus.CONFLICT, "CHAPTER_TEST_NOT_IN_PROGRESS", "请先开考再提交");
+      }
 
-    int stars =
-        assessmentKind == ChapterAssessmentKind.FINAL
-            ? starService.recalc(userId, chapter, StarSource.TEST).stars()
-            : currentStars(userId, chapter);
-    ChapterTestRecord submitted = repository.findById(testId).orElseThrow();
-    log.info(
-        "章测提交 user={} ch={} testId={} score={}/{} stars={}",
-        userId, chapter, testId, report.score(), report.maxScore(), stars);
-    return mapper.toResult(submitted, report, stars, false);
+      OffsetDateTime claimedAt = repository.findSubmissionClaimedAt(testId).orElse(null);
+      boolean claimActive = claimedAt != null && !claimedAt.isBefore(staleBefore);
+      if (isPastDeadline(current)) {
+        if (!claimActive) {
+          boolean expired =
+              Boolean.TRUE.equals(
+                  transaction.execute(
+                      status ->
+                          repository.markExpiredOvertime(
+                              testId, integrityNode(request, true), staleBefore)));
+          if (expired) {
+            throw new BusinessException(
+                HttpStatus.CONFLICT, "CHAPTER_TEST_OVERTIME", "已超过考试时限，提交被拒收");
+          }
+        }
+      } else if (!claimActive) {
+        UUID token = UUID.randomUUID();
+        boolean claimed =
+            Boolean.TRUE.equals(
+                transaction.execute(
+                    status -> repository.claimSubmission(testId, token, staleBefore)));
+        if (claimed) {
+          return token;
+        }
+      }
+
+      if (System.nanoTime() >= waitUntil) {
+        throw new BusinessException(
+            HttpStatus.CONFLICT,
+            "CHAPTER_TEST_SUBMISSION_IN_PROGRESS",
+            "本场提交仍在判分，请稍后重试");
+      }
+      try {
+        Thread.sleep(SUBMISSION_POLL_INTERVAL.toMillis());
+      } catch (InterruptedException exception) {
+        Thread.currentThread().interrupt();
+        throw new BusinessException(
+            HttpStatus.CONFLICT,
+            "CHAPTER_TEST_SUBMISSION_IN_PROGRESS",
+            "本场提交仍在判分，请稍后重试");
+      }
+    }
   }
 
   private void publishAssessmentEvents(

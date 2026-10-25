@@ -47,7 +47,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class LearningPathService {
@@ -75,6 +78,7 @@ public class LearningPathService {
   private final PracticeSubmissionRepository submissionRepository;
   private final LearningResourceRepository learningResourceRepository;
   private final LearnerInsightRepository insightRepository;
+  private final TransactionTemplate transaction;
 
   static final int RECENT_SUBMISSION_LIMIT = 30;
   static final int RECENT_RESOURCE_LIMIT = 30;
@@ -90,7 +94,8 @@ public class LearningPathService {
       ObjectMapper objectMapper,
       PracticeSubmissionRepository submissionRepository,
       LearningResourceRepository learningResourceRepository,
-      LearnerInsightRepository insightRepository) {
+      LearnerInsightRepository insightRepository,
+      PlatformTransactionManager transactionManager) {
     this.pathRepository = pathRepository;
     this.questRepository = questRepository;
     this.classroomQuestRepository = classroomQuestRepository;
@@ -102,46 +107,61 @@ public class LearningPathService {
     this.submissionRepository = submissionRepository;
     this.learningResourceRepository = learningResourceRepository;
     this.insightRepository = insightRepository;
+    this.transaction = new TransactionTemplate(transactionManager);
   }
 
-  @Transactional
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public PlanPathResponse plan(Long userId) {
     PathPlannerGraphResponse response = invokePlanner(userId);
 
-    List<Long> archivedIds = pathRepository.archiveActivePaths(userId, DEFAULT_PACK_ID);
-    for (Long archivedId : archivedIds) {
-      questRepository.archiveQuestsForPath(userId, archivedId, QuestStatus.EXPIRED);
-    }
-    questRepository.archiveSystemDefaults(userId);
+    return transaction.execute(
+        status -> {
+          List<Long> archivedIds = pathRepository.archiveActivePaths(userId, DEFAULT_PACK_ID);
+          for (Long archivedId : archivedIds) {
+            questRepository.archiveQuestsForPath(userId, archivedId, QuestStatus.EXPIRED);
+          }
+          questRepository.archiveSystemDefaults(userId);
 
-    int version = pathRepository.nextVersion(userId, DEFAULT_PACK_ID);
-    OffsetDateTime nextReviewAt = OffsetDateTime.now(ZoneOffset.UTC).plus(Duration.ofDays(7));
-    Long pathId =
-        pathRepository.insertPath(
-            userId, DEFAULT_PACK_ID, version, response.goalSummary(), nextReviewAt, null);
+          int version = pathRepository.nextVersion(userId, DEFAULT_PACK_ID);
+          OffsetDateTime nextReviewAt = OffsetDateTime.now(ZoneOffset.UTC).plus(Duration.ofDays(7));
+          Long pathId =
+              pathRepository.insertPath(
+                  userId, DEFAULT_PACK_ID, version, response.goalSummary(), nextReviewAt, null);
 
-    int generatedQuestCount = writeNodesAndQuests(userId, pathId, response, true);
+          int generatedQuestCount = writeNodesAndQuests(userId, pathId, response, true);
 
-    LearningPathDto stored =
-        pathRepository
-            .findById(userId, pathId)
-            .orElseThrow(
-                () ->
-                    new BusinessException(
-                        HttpStatus.INTERNAL_SERVER_ERROR,
-                        "PATH_PERSIST_FAILED",
-                        "新路径写入后未能读回"));
-    return new PlanPathResponse(
-        stored, archivedIds, generatedQuestCount, response.status(), "OK");
+          LearningPathDto stored =
+              pathRepository
+                  .findById(userId, pathId)
+                  .orElseThrow(
+                      () ->
+                          new BusinessException(
+                              HttpStatus.INTERNAL_SERVER_ERROR,
+                              "PATH_PERSIST_FAILED",
+                              "新路径写入后未能读回"));
+          return new PlanPathResponse(
+              stored, archivedIds, generatedQuestCount, response.status(), "OK");
+        });
   }
 
   /**
    * 生成 DRAFT 路径：不归档当前 ACTIVE，也不发布 quest。
    * 学生在复盘大厅点击"接受新路径"后，须经 {@link #promoteDraft(Long, Long)} 才会真正激活。
    */
-  @Transactional
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public LearningPathDto planDraft(Long userId) {
-    PathPlannerGraphResponse response = invokePlanner(userId);
+    PathPlannerGraphResponse response = prepareDraft(userId);
+    return transaction.execute(
+        status -> persistDraft(userId, response));
+  }
+
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
+  public PathPlannerGraphResponse prepareDraft(Long userId) {
+    return invokePlanner(userId);
+  }
+
+  @Transactional(propagation = Propagation.MANDATORY)
+  public LearningPathDto persistDraft(Long userId, PathPlannerGraphResponse response) {
     int version = pathRepository.nextVersion(userId, DEFAULT_PACK_ID);
     OffsetDateTime nextReviewAt = OffsetDateTime.now(ZoneOffset.UTC).plus(Duration.ofDays(7));
     Long pathId =

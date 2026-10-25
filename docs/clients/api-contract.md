@@ -45,9 +45,17 @@ Authorization: Bearer <token>
 
 | 方法 | 路径 | 鉴权 | 说明 |
 | --- | --- | --- | --- |
-| POST | `/api/auth/register` | 匿名 | 注册 → `201` + `UserDto` |
+| POST | `/api/auth/register` | 已关闭 | 默认返回 `401`；学生账号由管理员导入名单创建 |
 | POST | `/api/auth/login` | 匿名 | 登录 → `LoginResponse` |
 | POST | `/api/auth/refresh` | 匿名（须带未过期 token） | 用**仍有效**的 token 换发新 token |
+
+### 2.2 管理员学生名单导入
+
+| 方法 | 路径 | 鉴权 | 说明 |
+| --- | --- | --- | --- |
+| POST | `/api/admin/student-imports` | ADMIN | `multipart/form-data`，字段 `file`，首个工作表需包含“学号”和“姓名”列；成功返回新建账号的一次性凭据清单 |
+
+仅接受 `.xlsx`。系统在首个工作表前 20 行按完整表头匹配学号列（`学号`、`学生学号`、`Student ID`、`studentid`、`student_id`）和姓名列（`姓名`、`学生姓名`、`Name`），忽略其他列且不要求固定列顺序；同类候选列多于一列时拒绝文件，避免误选。学号须为 8–64 位字母、数字、下划线、点或连字符；用户名为学号，密码为学号倒序，邮箱为空，角色为 `STUDENT`。已存在账号会跳过且不重置密码；文件内重复学号、缺列或无效行会拒绝整份文件，不写入部分账号。单次最多 1000 条学生记录。
 
 `LoginResponse`：
 
@@ -59,7 +67,7 @@ Authorization: Bearer <token>
 }
 ```
 
-### 2.2 Token 生命周期（重要）
+### 2.3 Token 生命周期（重要）
 
 - **TTL = 12 小时**（后端 `ttlMinutes: 720`）。
 - **没有真正的 refresh token**：`/api/auth/refresh` 把 access token 兼作续签源——**必须回传未过期的 token** 才能换新；一旦 token 过期，`refresh` 也会返回 `401`。

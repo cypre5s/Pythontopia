@@ -81,6 +81,34 @@ public class PracticeSubmissionRepository {
         submissionId);
   }
 
+  public void deleteUnjudgedSubmission(Long submissionId) {
+    jdbcTemplate.update(
+        """
+        DELETE FROM practice_submission s
+        WHERE s.id = ?
+          AND s.status IN ('PENDING', 'RUNNING')
+          AND NOT EXISTS (
+              SELECT 1 FROM judge_result r WHERE r.submission_id = s.id
+          )
+        """,
+        submissionId);
+  }
+
+  public void deleteSyntheticEchoSubmission(Long userId, Long submissionId) {
+    jdbcTemplate.update(
+        """
+        DELETE FROM practice_submission s
+        WHERE s.id = ?
+          AND s.user_id = ?
+          AND s.source = 'BUG_MINE_ECHO'
+          AND NOT EXISTS (
+            SELECT 1 FROM bug_mine_session bms WHERE bms.submission_id = s.id
+          )
+        """,
+        submissionId,
+        userId);
+  }
+
   public Long insertJudgeResult(
       Long submissionId,
       Verdict verdict,

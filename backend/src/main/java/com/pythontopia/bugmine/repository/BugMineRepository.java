@@ -286,6 +286,12 @@ public class BugMineRepository {
         sessionId);
   }
 
+  public int decrementRetry(Long sessionId) {
+    return jdbcTemplate.update(
+        "UPDATE bug_mine_session SET retry_count = GREATEST(0, retry_count - 1) WHERE id = ?",
+        sessionId);
+  }
+
   public int bumpDepthLayer(Long sessionId, int layer) {
     return jdbcTemplate.update(
         """

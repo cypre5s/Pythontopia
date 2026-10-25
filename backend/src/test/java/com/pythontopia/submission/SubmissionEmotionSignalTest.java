@@ -21,6 +21,7 @@ import com.pythontopia.submission.judge.JudgeService.JudgeOutcome;
 import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import com.pythontopia.submission.service.SubmissionService;
+import com.pythontopia.submission.service.SubmissionTransactionService;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Optional;
@@ -35,8 +36,10 @@ class SubmissionEmotionSignalTest {
   private final JudgeService judge = mock(JudgeService.class);
   private final QuestService quests = mock(QuestService.class);
   private final ApplicationEventPublisher publisher = mock(ApplicationEventPublisher.class);
+  private final SubmissionTransactionService submissionTransactions =
+      new SubmissionTransactionService(submissions, problems, quests, publisher);
   private final SubmissionService service =
-      new SubmissionService(submissions, problems, judge, quests, publisher);
+      new SubmissionService(submissions, judge, submissionTransactions);
 
   @Test
   void acAfterTwoPriorFails_emitsComeback() {

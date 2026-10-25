@@ -31,8 +31,8 @@ public class CounterExampleSelector {
    * 无用例或全部通过时返回 {@link Optional#empty()}。
    *
    * <p>用例扫描（fork Python 子进程）走 {@link JudgeWorkerPool}，与正式判题共用并发上限，
-   * 不在 Tomcat 请求线程上直接 fork。调用方（{@code BugMineService.open}）本身跑在请求线程上、
-   * 不在池线程内，因此不存在「池线程再向同一池提交」的嵌套死锁。DB 读取留在调用线程的事务里。
+   * 不在 Tomcat 请求线程上直接 fork。调用方（{@code BugMineService.open}）不在池线程内，
+   * 因此不存在「池线程再向同一池提交」的嵌套死锁；沙箱等待期间也不持有数据库事务。
    */
   public Optional<CounterExample> findFirstFailing(Long problemId, Long userId, String code) {
     Optional<PublicProblemRepository.JudgeTestCases> testCasesOpt =

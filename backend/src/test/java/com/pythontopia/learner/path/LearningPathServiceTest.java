@@ -40,8 +40,17 @@ import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class LearningPathServiceTest {
 
@@ -62,20 +71,31 @@ class LearningPathServiceTest {
           mock(com.pythontopia.workshop.repository.LearningResourceRepository.class);
   private final com.pythontopia.learner.reflection.LearnerInsightRepository insightRepository =
       mock(com.pythontopia.learner.reflection.LearnerInsightRepository.class);
+  private final PlatformTransactionManager transactionManager = new TestTransactionManager();
+  private LearningPathService service;
 
-  private final LearningPathService service =
-      new LearningPathService(
-          pathRepository,
-          questRepository,
-          classroomQuestRepository,
-          coursePackRepository,
-          profileService,
-          masteryEvaluator,
-          graphClient,
-          objectMapper,
-          submissionRepository,
-          learningResourceRepository,
-          insightRepository);
+  @BeforeEach
+  void createTransactionalProxy() {
+    LearningPathService target =
+        new LearningPathService(
+            pathRepository,
+            questRepository,
+            classroomQuestRepository,
+            coursePackRepository,
+            profileService,
+            masteryEvaluator,
+            graphClient,
+            objectMapper,
+            submissionRepository,
+            learningResourceRepository,
+            insightRepository,
+            transactionManager);
+    ProxyFactory proxyFactory = new ProxyFactory(target);
+    proxyFactory.addAdvice(
+        new TransactionInterceptor(
+            transactionManager, new AnnotationTransactionAttributeSource()));
+    service = (LearningPathService) proxyFactory.getProxy();
+  }
 
   @Test
   void planRequiresProfile() {
@@ -88,6 +108,8 @@ class LearningPathServiceTest {
 
   @Test
   void planArchivesPreviousActivePathsAndCreatesQuests() {
+    AtomicBoolean transactionDuringGraphCall = new AtomicBoolean(true);
+    AtomicBoolean transactionDuringPersistence = new AtomicBoolean(false);
     LearnerProfileDto profile = profile();
     when(profileService.findProfile(7L)).thenReturn(Optional.of(profile));
     when(coursePackRepository.findKcs(eq(43L), eq(null)))
@@ -98,8 +120,19 @@ class LearningPathServiceTest {
     when(masteryEvaluator.snapshots(7L)).thenReturn(List.of());
     when(classroomQuestRepository.listActiveForStudent(eq(7L), any())).thenReturn(List.of());
     when(graphClient.plan(any(PathPlannerGraphRequest.class)))
-        .thenReturn(graphResponse());
-    when(pathRepository.archiveActivePaths(7L, 43L)).thenReturn(List.of(10L, 11L));
+        .thenAnswer(
+            invocation -> {
+              transactionDuringGraphCall.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return graphResponse();
+            });
+    when(pathRepository.archiveActivePaths(7L, 43L))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringPersistence.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return List.of(10L, 11L);
+            });
     when(pathRepository.nextVersion(7L, 43L)).thenReturn(3);
     when(pathRepository.insertPath(eq(7L), eq(43L), eq(3), any(), any(), any()))
         .thenReturn(50L);
@@ -108,6 +141,8 @@ class LearningPathServiceTest {
 
     PlanPathResponse response = service.plan(7L);
 
+    assertThat(transactionDuringGraphCall).isFalse();
+    assertThat(transactionDuringPersistence).isTrue();
     assertThat(response.path().id()).isEqualTo(50L);
     assertThat(response.archivedPathIds()).containsExactly(10L, 11L);
     assertThat(response.generatedQuestCount()).isEqualTo(2);
@@ -380,5 +415,23 @@ class LearningPathServiceTest {
         OffsetDateTime.now(ZoneOffset.UTC).plusDays(7),
         null,
         List.of());
+  }
+
+  private static final class TestTransactionManager extends AbstractPlatformTransactionManager {
+
+    @Override
+    protected Object doGetTransaction() {
+      return new Object();
+    }
+
+    @Override
+    protected void doBegin(
+        Object transaction, org.springframework.transaction.TransactionDefinition definition) {}
+
+    @Override
+    protected void doCommit(DefaultTransactionStatus status) {}
+
+    @Override
+    protected void doRollback(DefaultTransactionStatus status) {}
   }
 }

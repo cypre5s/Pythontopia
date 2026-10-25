@@ -16,15 +16,24 @@ import com.pythontopia.submission.dto.Verdict;
 import com.pythontopia.submission.judge.JudgeService.JudgeOutcome;
 import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import com.pythontopia.submission.repository.PublicProblemRepository;
+import com.pythontopia.submission.service.SubmissionTransactionService;
+import com.pythontopia.learner.quest.service.QuestService;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 class JudgeServiceTest {
 
   private final PracticeSubmissionRepository submissions = mock(PracticeSubmissionRepository.class);
   private final PublicProblemRepository problems = mock(PublicProblemRepository.class);
+  private final SubmissionTransactionService submissionTransactions =
+      new SubmissionTransactionService(
+          submissions,
+          problems,
+          mock(QuestService.class),
+          mock(ApplicationEventPublisher.class));
   private final PythonSandbox sandbox = mock(PythonSandbox.class);
   private final StaticCodeChecker checker = new StaticCodeChecker("python3");
   private final ObjectMapper mapper = new ObjectMapper();
@@ -36,7 +45,7 @@ class JudgeServiceTest {
   void setUp() {
     judge =
         new JudgeService(
-            submissions, problems, sandbox, checker, mapper, workerPool, caseEvaluator);
+            submissionTransactions, problems, sandbox, checker, mapper, workerPool, caseEvaluator);
   }
 
   @Test
@@ -118,7 +127,7 @@ class JudgeServiceTest {
         new StaticCodeChecker("/nonexistent/python-that-cannot-be-launched");
     JudgeService brokenJudge =
         new JudgeService(
-            submissions, problems, sandbox, brokenChecker, mapper, workerPool, caseEvaluator);
+            submissionTransactions, problems, sandbox, brokenChecker, mapper, workerPool, caseEvaluator);
 
     JudgeOutcome outcome = brokenJudge.judge(1L, 2L, "print(1)", 7L);
 
@@ -142,7 +151,7 @@ class JudgeServiceTest {
         };
     JudgeService checkedJudge =
         new JudgeService(
-            submissions, problems, sandbox, threadRecordingChecker, mapper, workerPool, caseEvaluator);
+            submissionTransactions, problems, sandbox, threadRecordingChecker, mapper, workerPool, caseEvaluator);
 
     checkedJudge.judge(1L, 2L, "print(1)", 7L);
 

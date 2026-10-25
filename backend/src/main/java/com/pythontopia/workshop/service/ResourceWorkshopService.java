@@ -71,7 +71,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
 @Service
@@ -114,6 +117,7 @@ public class ResourceWorkshopService {
   private final ApplicationEventPublisher eventPublisher;
   private final ObjectMapper objectMapper;
   private final StudentWriteThrottle studentWriteThrottle;
+  private final TransactionTemplate transaction;
 
   public ResourceWorkshopService(
       WorkshopProperties properties,
@@ -133,7 +137,8 @@ public class ResourceWorkshopService {
       PracticeSubmissionRepository submissionRepository,
       ApplicationEventPublisher eventPublisher,
       ObjectMapper objectMapper,
-      StudentWriteThrottle studentWriteThrottle) {
+      StudentWriteThrottle studentWriteThrottle,
+      PlatformTransactionManager transactionManager) {
     this.properties = properties;
     this.graphClient = graphClient;
     this.resourceRepository = resourceRepository;
@@ -152,9 +157,10 @@ public class ResourceWorkshopService {
     this.eventPublisher = eventPublisher;
     this.objectMapper = objectMapper;
     this.studentWriteThrottle = studentWriteThrottle;
+    this.transaction = new TransactionTemplate(transactionManager);
   }
 
-  @Transactional
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public ResourceCreateResponse create(Long userId, ResourceCreateRequest request) {
     enforceThrottle(userId);
     Map<String, CourseKc> kcIndex = kcIndex();
@@ -179,55 +185,7 @@ public class ResourceWorkshopService {
           HttpStatus.BAD_GATEWAY, "RESOURCE_GRAPH_EMPTY", "资源生成服务返回空响应");
     }
 
-    RunStatus runStatus = parseRunStatus(graphResponse.status());
-    Long runId =
-        runRecorder.recordInNewTransaction(
-            userId,
-            agentName(request.type()),
-            scenarioForType(request.type()),
-            Map.of(
-                "kcCodes", validatedKcCodes,
-                "type", request.type().name(),
-                "focusHint", Optional.ofNullable(request.focusHint()).orElse("")),
-            graphResponse.artifact(),
-            Optional.ofNullable(graphResponse.evidencePageIds()).orElse(List.of()),
-            graphResponse.safetyResult(),
-            graphResponse.groundingResult(),
-            graphResponse.graphTrace(),
-            UUID.randomUUID(),
-            runStatus);
-
-    enforcePublicationGate(runStatus, graphResponse);
-
-    ResourceProduceResponseDto.ResourceDraftDto artifact = graphResponse.artifact();
-    if (artifact == null) {
-      throw new BusinessException(
-          HttpStatus.BAD_GATEWAY, "RESOURCE_GRAPH_NO_ARTIFACT", "资源生成结果缺失 artifact");
-    }
-    JsonNode content = artifact.contentPayload();
-    if (content == null) {
-      content = objectMapper.createObjectNode();
-    }
-    ResourceStatusFlag safetyFlag = flagFromSafety(graphResponse.safetyResult());
-    ResourceStatusFlag groundingFlag = flagFromGrounding(graphResponse.groundingResult());
-
-    Long resourceId =
-        resourceRepository.insert(
-            userId,
-            DEFAULT_PACK_ID,
-            validatedKcCodes,
-            chapterId,
-            request.type(),
-            artifact.title(),
-            ContentFormat.valueOf(artifact.contentFormat()),
-            content,
-            Optional.ofNullable(graphResponse.evidencePageIds()).orElse(List.of()),
-            artifact.summary(),
-            safetyFlag,
-            groundingFlag,
-            runId);
-
-    return new ResourceCreateResponse(runId, resourceId, runStatus.name());
+    return persistResource(userId, request, validatedKcCodes, chapterId, graphResponse);
   }
 
   public SseEmitter createStream(Long userId, ResourceCreateRequest request) {
@@ -279,54 +237,55 @@ public class ResourceWorkshopService {
       List<String> validatedKcCodes,
       Long chapterId,
       ResourceProduceResponseDto graphResponse) {
-    RunStatus runStatus = parseRunStatus(graphResponse.status());
-    ResourceProduceResponseDto.ResourceDraftDto artifact = graphResponse.artifact();
-    if (artifact == null) {
-      throw new BusinessException(
-          HttpStatus.BAD_GATEWAY, "RESOURCE_GRAPH_NO_ARTIFACT", "资源生成结果缺失 artifact");
-    }
-    com.fasterxml.jackson.databind.JsonNode content = artifact.contentPayload();
-    if (content == null) {
-      content = objectMapper.createObjectNode();
-    }
-    ResourceStatusFlag safetyFlag = flagFromSafety(graphResponse.safetyResult());
-    ResourceStatusFlag groundingFlag = flagFromGrounding(graphResponse.groundingResult());
+    return transaction.execute(
+        status -> {
+          RunStatus runStatus = parseRunStatus(graphResponse.status());
+          Long runId =
+              runRecorder.recordInNewTransaction(
+                  userId,
+                  agentName(request.type()),
+                  scenarioForType(request.type()),
+                  Map.of(
+                      "kcCodes", validatedKcCodes,
+                      "type", request.type().name(),
+                      "focusHint", Optional.ofNullable(request.focusHint()).orElse("")),
+                  graphResponse.artifact(),
+                  Optional.ofNullable(graphResponse.evidencePageIds()).orElse(List.of()),
+                  graphResponse.safetyResult(),
+                  graphResponse.groundingResult(),
+                  graphResponse.graphTrace(),
+                  UUID.randomUUID(),
+                  runStatus);
 
-    Long runId =
-        runRecorder.recordInNewTransaction(
-            userId,
-            agentName(request.type()),
-            scenarioForType(request.type()),
-            Map.of(
-                "kcCodes", validatedKcCodes,
-                "type", request.type().name(),
-                "focusHint", Optional.ofNullable(request.focusHint()).orElse("")),
-            graphResponse.artifact(),
-            Optional.ofNullable(graphResponse.evidencePageIds()).orElse(List.of()),
-            graphResponse.safetyResult(),
-            graphResponse.groundingResult(),
-            graphResponse.graphTrace(),
-            UUID.randomUUID(),
-            runStatus);
+          enforcePublicationGate(runStatus, graphResponse);
 
-    enforcePublicationGate(runStatus, graphResponse);
+          ResourceProduceResponseDto.ResourceDraftDto artifact = graphResponse.artifact();
+          if (artifact == null) {
+            throw new BusinessException(
+                HttpStatus.BAD_GATEWAY, "RESOURCE_GRAPH_NO_ARTIFACT", "资源生成结果缺失 artifact");
+          }
+          JsonNode content = artifact.contentPayload();
+          if (content == null) {
+            content = objectMapper.createObjectNode();
+          }
+          Long resourceId =
+              resourceRepository.insert(
+                  userId,
+                  DEFAULT_PACK_ID,
+                  validatedKcCodes,
+                  chapterId,
+                  request.type(),
+                  artifact.title(),
+                  ContentFormat.valueOf(artifact.contentFormat()),
+                  content,
+                  Optional.ofNullable(graphResponse.evidencePageIds()).orElse(List.of()),
+                  artifact.summary(),
+                  flagFromSafety(graphResponse.safetyResult()),
+                  flagFromGrounding(graphResponse.groundingResult()),
+                  runId);
 
-    Long resourceId = resourceRepository.insert(
-        userId,
-        DEFAULT_PACK_ID,
-        validatedKcCodes,
-        chapterId,
-        request.type(),
-        artifact.title(),
-        ContentFormat.valueOf(artifact.contentFormat()),
-        content,
-        Optional.ofNullable(graphResponse.evidencePageIds()).orElse(List.of()),
-        artifact.summary(),
-        safetyFlag,
-        groundingFlag,
-        runId);
-
-    return new ResourceCreateResponse(runId, resourceId, runStatus.name());
+          return new ResourceCreateResponse(runId, resourceId, runStatus.name());
+        });
   }
 
   @Transactional(readOnly = true)

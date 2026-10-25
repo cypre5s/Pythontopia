@@ -28,6 +28,7 @@ import com.pythontopia.learner.evaluation.repository.EvaluationRepository.Recent
 import com.pythontopia.learner.evaluation.service.LearnerEvaluationService;
 import com.pythontopia.learner.path.dto.LearningPathDto;
 import com.pythontopia.learner.path.dto.LearningPathStatus;
+import com.pythontopia.learner.path.graph.PathPlannerGraphResponse;
 import com.pythontopia.learner.path.service.LearningPathService;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
 import com.pythontopia.learner.profile.service.ProfileService;
@@ -36,7 +37,16 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class LearnerEvaluationServiceTest {
 
@@ -45,13 +55,30 @@ class LearnerEvaluationServiceTest {
   private final ProfileService profileService = mock(ProfileService.class);
   private final LearningPathService pathService = mock(LearningPathService.class);
   private final CoursePackRepository coursePackRepository = mock(CoursePackRepository.class);
+  private final PlatformTransactionManager transactionManager = new TestTransactionManager();
+  private LearnerEvaluationService service;
 
-  private final LearnerEvaluationService service =
-      new LearnerEvaluationService(
-          repository, narrativeClient, profileService, pathService, coursePackRepository);
+  @BeforeEach
+  void createTransactionalProxy() {
+    LearnerEvaluationService target =
+        new LearnerEvaluationService(
+            repository,
+            narrativeClient,
+            profileService,
+            pathService,
+            coursePackRepository,
+            transactionManager);
+    ProxyFactory proxyFactory = new ProxyFactory(target);
+    proxyFactory.addAdvice(
+        new TransactionInterceptor(
+            transactionManager, new AnnotationTransactionAttributeSource()));
+    service = (LearnerEvaluationService) proxyFactory.getProxy();
+  }
 
   @Test
   void computeWithoutActivityReturnsPartialAndSkipsDraft() {
+    AtomicBoolean transactionDuringNarrativeCall = new AtomicBoolean(true);
+    AtomicBoolean transactionDuringEvaluationWrite = new AtomicBoolean(false);
     when(profileService.findProfile(7L)).thenReturn(Optional.empty());
     when(coursePackRepository.findKcs(eq(43L), eq(null))).thenReturn(List.of());
     when(repository.sumMasteryTotal(7L)).thenReturn(BigDecimal.ZERO);
@@ -66,24 +93,39 @@ class LearnerEvaluationServiceTest {
     when(repository.findTopKcDelta(eq(7L), any(), anyInt())).thenReturn(List.of());
     when(repository.findRecentEvents(eq(7L), any(), anyInt())).thenReturn(List.of());
     when(narrativeClient.narrate(any(EvaluationNarrativeRequest.class)))
-        .thenReturn(idleNarrative());
+        .thenAnswer(
+            invocation -> {
+              transactionDuringNarrativeCall.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return idleNarrative();
+            });
     when(pathService.findActive(7L)).thenReturn(Optional.empty());
     when(repository.insert(eq(7L), eq(43L), any(), any(), any(), any(), any(), any()))
-        .thenReturn(101L);
+        .thenAnswer(
+            invocation -> {
+              transactionDuringEvaluationWrite.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return 101L;
+            });
     when(repository.findById(7L, 101L))
         .thenReturn(Optional.of(persisted(101L, null, null, EvaluationActedStatus.PENDING)));
 
     EvaluationDto dto = service.compute(7L, new EvaluationRequest(7));
 
+    assertThat(transactionDuringNarrativeCall).isFalse();
+    assertThat(transactionDuringEvaluationWrite).isTrue();
     assertThat(dto.id()).isEqualTo(101L);
     assertThat(dto.actedStatus()).isEqualTo(EvaluationActedStatus.PENDING);
-    verify(pathService, never()).planDraft(anyLong());
+    verify(pathService, never()).prepareDraft(anyLong());
     verify(repository, times(6)).insertMetric(eq(101L), any(EvaluationMetricDto.class));
     verify(profileService).applyPassiveRevision(eq(7L), eq("EVALUATION"), any(), eq(101L));
   }
 
   @Test
   void computeWithActivityGeneratesDraftPath() {
+    AtomicBoolean transactionDuringNarrativeCall = new AtomicBoolean(true);
+    AtomicBoolean transactionDuringPathPlanning = new AtomicBoolean(true);
+    AtomicBoolean transactionDuringPathPersistence = new AtomicBoolean(false);
     LearnerProfileDto profile = profile();
     when(profileService.findProfile(7L)).thenReturn(Optional.of(profile));
     when(coursePackRepository.findKcs(eq(43L), eq(null)))
@@ -112,9 +154,27 @@ class LearnerEvaluationServiceTest {
                 new RecentEvent(
                     "PRACTICE_AC", OffsetDateTime.now(ZoneOffset.UTC), "题目 1")));
     when(narrativeClient.narrate(any(EvaluationNarrativeRequest.class)))
-        .thenReturn(successNarrative());
+        .thenAnswer(
+            invocation -> {
+              transactionDuringNarrativeCall.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return successNarrative();
+            });
     when(pathService.findActive(7L)).thenReturn(Optional.of(activePath(50L)));
-    when(pathService.planDraft(7L)).thenReturn(draftPath(60L));
+    when(pathService.prepareDraft(7L))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringPathPlanning.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return pathPlannerResponse();
+            });
+    when(pathService.persistDraft(eq(7L), any()))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringPathPersistence.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return draftPath(60L);
+            });
     when(repository.insert(eq(7L), eq(43L), any(), any(), any(), any(), eq(60L), eq(50L)))
         .thenReturn(202L);
     when(repository.findById(7L, 202L))
@@ -124,11 +184,15 @@ class LearnerEvaluationServiceTest {
 
     EvaluationDto dto = service.compute(7L, null);
 
+    assertThat(transactionDuringNarrativeCall).isFalse();
+    assertThat(transactionDuringPathPlanning).isFalse();
+    assertThat(transactionDuringPathPersistence).isTrue();
     assertThat(dto.id()).isEqualTo(202L);
     assertThat(dto.draftPathId()).isEqualTo(60L);
     assertThat(dto.draftPath()).isNotNull();
     assertThat(dto.draftPath().status()).isEqualTo(LearningPathStatus.DRAFT);
-    verify(pathService, times(1)).planDraft(7L);
+    verify(pathService, times(1)).prepareDraft(7L);
+    verify(pathService, times(1)).persistDraft(eq(7L), any());
     verify(repository, times(6)).insertMetric(eq(202L), any(EvaluationMetricDto.class));
   }
 
@@ -315,5 +379,35 @@ class LearnerEvaluationServiceTest {
         new EvaluationNarrativeResponse.GroundingResult(true, List.of(), List.of(), List.of()),
         "sig",
         "SUCCESS");
+  }
+
+  private PathPlannerGraphResponse pathPlannerResponse() {
+    return new PathPlannerGraphResponse(
+        7L,
+        43L,
+        "本周聚焦 PY43-KC-001",
+        List.of(),
+        new PathPlannerGraphResponse.SafetyResult(true, List.of()),
+        new PathPlannerGraphResponse.GroundingResult(true, List.of(), List.of()),
+        "sig",
+        "SUCCESS");
+  }
+
+  private static final class TestTransactionManager extends AbstractPlatformTransactionManager {
+
+    @Override
+    protected Object doGetTransaction() {
+      return new Object();
+    }
+
+    @Override
+    protected void doBegin(
+        Object transaction, org.springframework.transaction.TransactionDefinition definition) {}
+
+    @Override
+    protected void doCommit(DefaultTransactionStatus status) {}
+
+    @Override
+    protected void doRollback(DefaultTransactionStatus status) {}
   }
 }

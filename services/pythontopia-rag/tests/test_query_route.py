@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from threading import get_ident
+
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
@@ -11,6 +13,7 @@ from pythontopia_rag.data.page_source import IndexablePage, InMemoryPageSource
 from pythontopia_rag.data.video_transcripts import VideoSegment
 from pythontopia_rag.index.builder import EmbeddingDegradedError, rebuild_index
 from pythontopia_rag.index.embedder import FallbackEmbedder, HashEmbedder
+from pythontopia_rag.index.kc_graph import KcGraph
 from pythontopia_rag.index.store import InMemoryVectorStore
 from pythontopia_rag.index.video_transcripts import VideoTranscriptIndex
 from pythontopia_rag.routes import query as query_module
@@ -525,6 +528,41 @@ async def test_rebuild_failure_does_not_log_or_return_exception_details(
     assert "EmbeddingDegradedError" in caplog.text
     assert sentinel not in caplog.text
     assert sentinel not in str(raised.value.detail)
+
+
+@pytest.mark.asyncio
+async def test_rebuild_runs_database_loaders_off_event_loop(monkeypatch) -> None:
+    event_loop_thread = get_ident()
+
+    def load_source(_request: Request) -> InMemoryPageSource:
+        assert get_ident() != event_loop_thread
+        return _seed_pages()
+
+    def load_graph(_db_url: str) -> KcGraph:
+        assert get_ident() != event_loop_thread
+        return KcGraph()
+
+    async def rebuild_without_embedding(**_kwargs):
+        return SimpleNamespace(
+            chunks=[],
+            built_chunks=0,
+            elapsed_ms=0,
+            embed_model="test",
+            store="memory",
+            degraded=False,
+            fallback_reason=None,
+        )
+
+    monkeypatch.setenv("PYT_RAG_ADMIN_TOKEN", "test-token")
+    monkeypatch.setattr(query_module, "_resolve_rebuild_source", load_source)
+    monkeypatch.setattr(query_module, "fetch_kc_graph", load_graph)
+    monkeypatch.setattr(query_module, "rebuild_index", rebuild_without_embedding)
+
+    result = await query_module.rag_rebuild(
+        Request({"type": "http", "app": app}), x_internal_token="test-token"
+    )
+
+    assert result.built_chunks == 0
 
 
 @pytest.mark.asyncio

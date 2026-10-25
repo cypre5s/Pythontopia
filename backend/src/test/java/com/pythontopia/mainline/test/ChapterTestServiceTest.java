@@ -11,21 +11,22 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
-import static org.mockito.Mockito.times;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.common.error.BusinessException;
+import com.pythontopia.learner.event.LearningEvent;
+import com.pythontopia.mainline.MainlineStageProgressRepository;
+import com.pythontopia.mainline.MainlineStageRepository;
 import com.pythontopia.mainline.domain.ChapterAssessmentKind;
 import com.pythontopia.mainline.domain.ChapterStar;
 import com.pythontopia.mainline.domain.ChapterTestRecord;
 import com.pythontopia.mainline.domain.ChapterTestStatus;
 import com.pythontopia.mainline.domain.MainlineStage;
 import com.pythontopia.mainline.domain.MainlineStageProgress;
-import com.pythontopia.mainline.MainlineStageProgressRepository;
-import com.pythontopia.mainline.MainlineStageRepository;
 import com.pythontopia.mainline.dto.ChapterTestPaperDto;
 import com.pythontopia.mainline.dto.ChapterTestResultDto;
 import com.pythontopia.mainline.dto.ChapterTestSubmitRequest;
@@ -36,18 +37,26 @@ import com.pythontopia.mainline.star.StarSource;
 import com.pythontopia.mainline.test.ChapterTestJudge.JudgeReport;
 import com.pythontopia.mainline.test.ChapterTestJudge.QuestionJudgement;
 import com.pythontopia.mainline.test.question.QuestionType;
-import com.pythontopia.learner.event.LearningEvent;
-import org.mockito.ArgumentCaptor;
-import org.springframework.context.ApplicationEventPublisher;
-import org.springframework.core.task.TaskRejectedException;
 import jakarta.validation.Validation;
 import jakarta.validation.Validator;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.core.task.TaskRejectedException;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /** ChapterTestService：小测/大测 prepare / start / submit / latest 编排。 */
 class ChapterTestServiceTest {
@@ -69,6 +78,7 @@ class ChapterTestServiceTest {
   private final MainlineStageProgressRepository progressRepo =
       mock(MainlineStageProgressRepository.class);
   private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
+  private final TestTransactionManager transactionManager = new TestTransactionManager();
 
   private final ChapterTestService service =
       new ChapterTestService(
@@ -81,12 +91,83 @@ class ChapterTestServiceTest {
           stageRepo,
           progressRepo,
           mapper,
-          eventPublisher);
+          eventPublisher,
+          transactionManager);
 
   @BeforeEach
   void setUp() {
+    transactionManager.reset();
+    lenient().when(repo.claimSubmission(anyLong(), any(), any())).thenReturn(true);
     stubChapterStagesComplete();
     stubPreviousChapterUnlocked();
+  }
+
+  @Test
+  void sandboxRunsWithoutTransactionAndResultPersistenceUsesShortTransaction() {
+    AtomicBoolean transactionDuringJudge = new AtomicBoolean(true);
+    AtomicBoolean transactionDuringPersist = new AtomicBoolean(false);
+    when(repo.findOwned(USER, TEST_ID))
+        .thenReturn(
+            Optional.of(
+                record(
+                    ChapterTestStatus.IN_PROGRESS,
+                    OffsetDateTime.now().plusMinutes(20),
+                    questions(),
+                    null)));
+    when(judge.judge(any(), any()))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringJudge.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return new JudgeReport(80, 100, List.of());
+            });
+    when(repo.markSubmitted(eq(TEST_ID), any(), eq(80), any(), any(), any()))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringPersist.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return true;
+            });
+    when(repo.findById(TEST_ID))
+        .thenReturn(
+            Optional.of(record(ChapterTestStatus.SUBMITTED, OffsetDateTime.now(), questions(), null)));
+    when(starService.recalc(USER, CH, StarSource.TEST))
+        .thenReturn(new ChapterStar(1L, USER, CH, 2, 80, mapper.createObjectNode(), null));
+
+    ProxyFactory proxyFactory = new ProxyFactory(service);
+    proxyFactory.addAdvice(
+        new TransactionInterceptor(
+            transactionManager, new AnnotationTransactionAttributeSource()));
+    ChapterTestService transactionalService = (ChapterTestService) proxyFactory.getProxy();
+    transactionalService.submit(USER, CH, TEST_ID, new ChapterTestSubmitRequest(Map.of(), null));
+
+    assertThat(transactionDuringJudge).isFalse();
+    assertThat(transactionDuringPersist).isTrue();
+  }
+
+  @Test
+  void overtimeStatusCommitsBeforeConflictIsReturned() {
+    when(repo.findOwned(USER, TEST_ID))
+        .thenReturn(
+            Optional.of(
+                record(
+                    ChapterTestStatus.IN_PROGRESS,
+                    OffsetDateTime.now().minusMinutes(5),
+                    questions(),
+                    null)));
+    when(repo.markExpiredOvertime(eq(TEST_ID), any(), any())).thenReturn(true);
+
+    assertThatThrownBy(
+            () ->
+                service.submit(
+                    USER,
+                    CH,
+                    TEST_ID,
+                    new ChapterTestSubmitRequest(Map.of(), null)))
+        .isInstanceOf(BusinessException.class);
+
+    verify(repo).markExpiredOvertime(eq(TEST_ID), any(), any());
+    assertThat(transactionManager.commitCount()).isEqualTo(1);
   }
 
   /** CH=2：开考需前一章 ≥1★，默认放行；锁章路径另有专测。 */
@@ -103,6 +184,35 @@ class ChapterTestServiceTest {
               + "\"options\":[\"A. x\",\"B. y\"],\"answer\":\"A\",\"explain\":\"e\",\"score\":8}]}");
     } catch (Exception e) {
       throw new RuntimeException(e);
+    }
+  }
+
+  private static final class TestTransactionManager extends AbstractPlatformTransactionManager {
+    private final AtomicInteger commits = new AtomicInteger();
+
+    @Override
+    protected Object doGetTransaction() {
+      return new Object();
+    }
+
+    @Override
+    protected void doBegin(
+        Object transaction, org.springframework.transaction.TransactionDefinition definition) {}
+
+    @Override
+    protected void doCommit(DefaultTransactionStatus status) {
+      commits.incrementAndGet();
+    }
+
+    @Override
+    protected void doRollback(DefaultTransactionStatus status) {}
+
+    void reset() {
+      commits.set(0);
+    }
+
+    int commitCount() {
+      return commits.get();
     }
   }
 
@@ -441,7 +551,7 @@ class ChapterTestServiceTest {
 
   @Test
   void submitRejectsOvertimeAndRecordsIntegrity() {
-    when(repo.findOwnedForUpdate(USER, TEST_ID))
+    when(repo.findOwned(USER, TEST_ID))
         .thenReturn(
             Optional.of(
                 record(
@@ -449,6 +559,7 @@ class ChapterTestServiceTest {
                     OffsetDateTime.now().minusMinutes(5), // 已过 deadline
                     questions(),
                     null)));
+    when(repo.markExpiredOvertime(eq(TEST_ID), any(), any())).thenReturn(true);
 
     ChapterTestSubmitRequest req =
         new ChapterTestSubmitRequest(
@@ -458,14 +569,67 @@ class ChapterTestServiceTest {
         .isInstanceOf(BusinessException.class)
         .hasMessageContaining("超过考试时限");
 
-    verify(repo).markExpiredOvertime(eq(TEST_ID), any());
+    verify(repo).markExpiredOvertime(eq(TEST_ID), any(), any());
     verify(judge, never()).judge(any(), any());
-    verify(repo, never()).markSubmitted(anyLong(), anyInt(), any(), any(), any());
+    verify(repo, never()).markSubmitted(anyLong(), any(), anyInt(), any(), any(), any());
+  }
+
+  @Test
+  void overtimeLosingRaceReturnsAlreadySubmittedResult() throws Exception {
+    JsonNode detail =
+        mapper.readTree(
+            "{\"score\":80,\"maxScore\":100,\"items\":[{\"qid\":\"c1\",\"type\":\"CHOICE\","
+                + "\"correct\":true,\"awardedScore\":8,\"maxScore\":8,\"yourAnswer\":\"A\","
+                + "\"correctAnswer\":\"A\",\"explain\":\"e\"}]}");
+    when(repo.findOwned(USER, TEST_ID))
+        .thenReturn(
+            Optional.of(
+                record(
+                    ChapterTestStatus.IN_PROGRESS,
+                    OffsetDateTime.now().minusMinutes(5),
+                    questions(),
+                    null)),
+            Optional.of(record(ChapterTestStatus.SUBMITTED, OffsetDateTime.now(), questions(), detail)));
+    when(repo.markExpiredOvertime(eq(TEST_ID), any(), any())).thenReturn(false);
+    when(starRepo.find(USER, CH))
+        .thenReturn(Optional.of(new ChapterStar(1L, USER, CH, 2, 80, mapper.createObjectNode(), null)));
+
+    ChapterTestResultDto result =
+        service.submit(USER, CH, TEST_ID, new ChapterTestSubmitRequest(Map.of("c1", "A"), null));
+
+    assertThat(result.status()).isEqualTo("SUBMITTED");
+    assertThat(result.score()).isEqualTo(80);
+    verify(judge, never()).judge(any(), any());
+  }
+
+  @Test
+  void judgeFailureReleasesSubmissionClaimForRetry() {
+    when(repo.findOwned(USER, TEST_ID))
+        .thenReturn(
+            Optional.of(
+                record(
+                    ChapterTestStatus.IN_PROGRESS,
+                    OffsetDateTime.now().plusMinutes(20),
+                    questions(),
+                    null)));
+    BusinessException unavailable =
+        new BusinessException(
+            org.springframework.http.HttpStatus.SERVICE_UNAVAILABLE,
+            "CHAPTER_TEST_JUDGE_UNAVAILABLE",
+            "判题暂不可用");
+    when(judge.judge(any(), any())).thenThrow(unavailable);
+
+    assertThatThrownBy(
+            () -> service.submit(USER, CH, TEST_ID, new ChapterTestSubmitRequest(Map.of(), null)))
+        .isSameAs(unavailable);
+
+    verify(repo).releaseSubmissionClaim(eq(TEST_ID), any());
+    verify(repo, never()).markSubmitted(anyLong(), any(), anyInt(), any(), any(), any());
   }
 
   @Test
   void submitJudgesPersistsAndRecalculatesStars() {
-    when(repo.findOwnedForUpdate(USER, TEST_ID))
+    when(repo.findOwned(USER, TEST_ID))
         .thenReturn(
             Optional.of(
                 record(
@@ -481,7 +645,7 @@ class ChapterTestServiceTest {
                 List.of(
                     new QuestionJudgement(
                         "c1", QuestionType.CHOICE, true, 8, 8, "A", "A", "e", null, null))));
-    when(repo.markSubmitted(eq(TEST_ID), eq(80), any(), any(), any())).thenReturn(true);
+    when(repo.markSubmitted(eq(TEST_ID), any(), eq(80), any(), any(), any())).thenReturn(true);
     when(starService.recalc(USER, CH, StarSource.TEST))
         .thenReturn(new ChapterStar(1L, USER, CH, 2, 80, mapper.createObjectNode(), null));
     when(repo.findById(TEST_ID))
@@ -498,7 +662,7 @@ class ChapterTestServiceTest {
     assertThat(result.passed()).isTrue();
     assertThat(result.stars()).isEqualTo(2);
     assertThat(result.overtime()).isFalse();
-    verify(repo).markSubmitted(eq(TEST_ID), eq(80), any(), any(), any());
+    verify(repo).markSubmitted(eq(TEST_ID), any(), eq(80), any(), any(), any());
     verify(starService).recalc(USER, CH, StarSource.TEST);
     verify(eventPublisher, never()).publishEvent(any());
   }
@@ -506,7 +670,7 @@ class ChapterTestServiceTest {
   @Test
   void submitPublishesAssessmentEventsForEveryQuestionType() {
     JsonNode paper = questionsForAllTypes();
-    when(repo.findOwnedForUpdate(USER, TEST_ID))
+    when(repo.findOwned(USER, TEST_ID))
         .thenReturn(Optional.of(record(ChapterTestStatus.IN_PROGRESS,
             OffsetDateTime.now().plusMinutes(20), paper, null)));
     when(judge.judge(any(), any()))
@@ -521,7 +685,7 @@ class ChapterTestServiceTest {
                 "true", "false", "incorrect", null, null),
             new QuestionJudgement("fill1", QuestionType.FILL, true, 5, 5,
                 "len", "len", "correct", null, null))));
-    when(repo.markSubmitted(eq(TEST_ID), eq(43), any(), any(), any())).thenReturn(true);
+    when(repo.markSubmitted(eq(TEST_ID), any(), eq(43), any(), any(), any())).thenReturn(true);
     when(starService.recalc(USER, CH, StarSource.TEST))
         .thenReturn(new ChapterStar(1L, USER, CH, 2, 43, mapper.createObjectNode(), null));
     when(repo.findById(TEST_ID))
@@ -550,7 +714,7 @@ class ChapterTestServiceTest {
             "{\"score\":80,\"maxScore\":100,\"items\":[{\"qid\":\"c1\",\"type\":\"CHOICE\","
                 + "\"correct\":true,\"awardedScore\":8,\"maxScore\":8,\"yourAnswer\":\"A\","
                 + "\"correctAnswer\":\"A\",\"explain\":\"e\"}]}");
-    when(repo.findOwnedForUpdate(USER, TEST_ID))
+    when(repo.findOwned(USER, TEST_ID))
         .thenReturn(
             Optional.of(record(ChapterTestStatus.SUBMITTED, OffsetDateTime.now(), questions(), detail)));
     when(starRepo.find(USER, CH))
@@ -564,12 +728,12 @@ class ChapterTestServiceTest {
     assertThat(result.score()).isEqualTo(80);
     assertThat(result.items()).hasSize(1);
     verify(judge, never()).judge(any(), any());
-    verify(repo, never()).markSubmitted(anyLong(), anyInt(), any(), any(), any());
+    verify(repo, never()).markSubmitted(anyLong(), any(), anyInt(), any(), any(), any());
   }
 
   @Test
   void submitRejectsWhenNotStarted() {
-    when(repo.findOwnedForUpdate(USER, TEST_ID))
+    when(repo.findOwned(USER, TEST_ID))
         .thenReturn(Optional.of(record(ChapterTestStatus.READY, null, questions(), null)));
 
     assertThatThrownBy(
@@ -615,4 +779,5 @@ class ChapterTestServiceTest {
     assertThat(result.items()).hasSize(1);
     assertThat(result.stars()).isEqualTo(1);
   }
+
 }

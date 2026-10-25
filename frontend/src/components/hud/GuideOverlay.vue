@@ -70,8 +70,8 @@ const showLoop = computed(() => loopPlan.value.steps.length > 0);
 
 // orchestrator SSE 的归一化 AG-UI 事件流增量喂入 loopSlice（loop_plan/loop_step/RUN_FINISHED…）。
 watch(
-  () => sse.events.value,
-  (events) => loop.syncFromEvents(events),
+  () => sse.events.value.length,
+  () => loop.syncFromEvents(sse.events.value),
 );
 
 onUnmounted(() => anim.dispose());
@@ -196,8 +196,9 @@ watch(
   },
 );
 watch(
-  () => sse.traces.value,
-  (tr) => {
+  () => sse.traces.value.length,
+  () => {
+    const tr = sse.traces.value;
     if (currentAssistantId.value) {
       guide.updateAssistantStream(currentAssistantId.value, sse.tokens.value, tr);
     }

@@ -30,7 +30,8 @@ class FeynmanSessionServiceSecurityTest {
           mock(FeynmanGraphClient.class),
           mock(PublicProblemRepository.class),
           mock(ProfileRepository.class),
-          mock(FeynmanBugBankRepository.class));
+          mock(FeynmanBugBankRepository.class),
+          mock(org.springframework.transaction.PlatformTransactionManager.class));
 
   @Test
   void loadSessionScopesLookupToAuthenticatedOwner() {

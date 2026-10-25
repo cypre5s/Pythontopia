@@ -6,6 +6,7 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
 
 import com.pythontopia.PythontopiaApplication;
+import com.pythontopia.bugmine.service.BugMineService;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.submission.dto.SubmissionCreateRequest;
 import com.pythontopia.submission.dto.SubmissionSource;
@@ -18,6 +19,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -25,6 +27,7 @@ import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
@@ -47,6 +50,8 @@ import org.testcontainers.utility.DockerImageName;
 class SubmissionRateLimitConcurrencyTest {
 
   private static final long RACE_PROBLEM_ID = 9_000_001L;
+  private static final long TX_PROBLEM_ID = 9_000_002L;
+  private static final long BUG_MINE_TX_PROBLEM_ID = 9_000_003L;
 
   @Container
   static final PostgreSQLContainer<?> POSTGRES =
@@ -75,6 +80,7 @@ class SubmissionRateLimitConcurrencyTest {
   @MockBean JudgeService judgeService;
 
   @Autowired SubmissionService submissionService;
+  @Autowired BugMineService bugMineService;
   @Autowired JdbcTemplate jdbcTemplate;
 
   @Test
@@ -139,5 +145,74 @@ class SubmissionRateLimitConcurrencyTest {
     assertThat(success.get()).as("at most the allowed number (1) succeed").isEqualTo(1);
     assertThat(throttled.get()).as("the rest are throttled with 429").isEqualTo(threads - 1);
     assertThat(rows).as("exactly one row persisted, no duplicates").isEqualTo(1);
+  }
+
+  @Test
+  void judgeWaitDoesNotHoldDatabaseTransaction() {
+    AtomicBoolean transactionActiveDuringJudge = new AtomicBoolean(true);
+    when(judgeService.judge(anyLong(), anyLong(), any(), anyLong()))
+        .thenAnswer(
+            _invocation -> {
+              transactionActiveDuringJudge.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return new JudgeOutcome(Verdict.AC, 1, 1, null);
+            });
+
+    Long userId =
+        jdbcTemplate.queryForObject(
+            "INSERT INTO users (username, display_name, password_hash, role)"
+                + " VALUES ('judge-tx-stu', 'judge-tx', 'x', 'STUDENT') RETURNING id",
+            Long.class);
+    jdbcTemplate.update(
+        "INSERT INTO course_problem (id, pack_id, kc_code, title) VALUES (?, 43, '', 'judge-tx')",
+        TX_PROBLEM_ID);
+
+    submissionService.submit(
+        userId,
+        new SubmissionCreateRequest(TX_PROBLEM_ID, "print(1)", null, SubmissionSource.TRAINING));
+
+    assertThat(transactionActiveDuringJudge).isFalse();
+  }
+
+  @Test
+  void bugMineRetryJudgeWaitDoesNotHoldDatabaseTransaction() {
+    AtomicBoolean transactionActiveDuringJudge = new AtomicBoolean(true);
+    when(judgeService.judge(anyLong(), anyLong(), any(), anyLong()))
+        .thenAnswer(
+            invocation -> {
+              if ("retry-code".equals(invocation.getArgument(2))) {
+                transactionActiveDuringJudge.set(
+                    TransactionSynchronizationManager.isActualTransactionActive());
+              }
+              return new JudgeOutcome(Verdict.AC, 1, 1, null);
+            });
+
+    Long userId =
+        jdbcTemplate.queryForObject(
+            "INSERT INTO users (username, display_name, password_hash, role)"
+                + " VALUES ('bugmine-tx-stu', 'bugmine-tx', 'x', 'STUDENT') RETURNING id",
+            Long.class);
+    jdbcTemplate.update(
+        "INSERT INTO course_problem (id, pack_id, kc_code, title) VALUES (?, 43, '', 'bugmine-tx')",
+        BUG_MINE_TX_PROBLEM_ID);
+    var original =
+        submissionService.submit(
+            userId,
+            new SubmissionCreateRequest(
+                BUG_MINE_TX_PROBLEM_ID, "initial-code", null, SubmissionSource.TRAINING));
+    jdbcTemplate.update(
+        "UPDATE practice_submission SET submitted_at = now() - interval '20 seconds' WHERE id = ?",
+        original.id());
+    Long sessionId =
+        jdbcTemplate.queryForObject(
+            "INSERT INTO bug_mine_session (user_id, submission_id, problem_id) VALUES (?, ?, ?) RETURNING id",
+            Long.class,
+            userId,
+            original.id(),
+            BUG_MINE_TX_PROBLEM_ID);
+
+    bugMineService.retrySubmit(userId, sessionId, "retry-code");
+
+    assertThat(transactionActiveDuringJudge).isFalse();
   }
 }

@@ -697,6 +697,8 @@ async function processLatestSubmission(): Promise<void> {
       }
       if (
         alive
+        && latestSubmission.value?.id === latest.id
+        && latestSubmission.value.verdict === 'AC'
         && latest.problemId === props.problemId
         && hasSourceCard('post_ac', latest.id)
         && !hasSourceCard('transfer_problem', latest.id)
@@ -719,6 +721,9 @@ async function processLatestSubmission(): Promise<void> {
     }
   } finally {
     autoFeedbackRunning = false;
+    if (alive && latestSubmission.value?.id !== latest.id) {
+      void processLatestSubmission();
+    }
   }
 }
 

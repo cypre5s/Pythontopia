@@ -16,6 +16,7 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -62,7 +63,7 @@ public class MemoryRetrievalService {
    * @param focusKc 可空；非空时启用相关性加权（精确命中 1.0 / 同章 0.5）。
    * @param limit 期望条数；clamp 到 {@value #MIN_LIMIT}..{@value #MAX_LIMIT}。
    */
-  @Transactional(readOnly = true)
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public List<MemoryItemDto> retrieve(Long userId, String focusKc, int limit) {
     return retrieve(userId, focusKc, null, limit);
   }
@@ -73,7 +74,7 @@ public class MemoryRetrievalService {
    * @param queryText 可空；非空且 embedding 可用时按余弦相似度并入 relevance（{@code max(KC 匹配, 余弦)}）；
    *     embedding 离线 / 返回空时静默退化为纯 KC 匹配（零回归）。
    */
-  @Transactional(readOnly = true)
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public List<MemoryItemDto> retrieve(Long userId, String focusKc, String queryText, int limit) {
     return retrieve(userId, focusKc, queryText, limit, false);
   }
@@ -81,7 +82,7 @@ public class MemoryRetrievalService {
   /**
    * 权威记忆召回：仅使用 backend/graph 已确认事件，供路由、权限和教学策略决策使用。
    */
-  @Transactional(readOnly = true)
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public List<MemoryItemDto> retrieveAuthoritative(
       Long userId, String focusKc, String queryText, int limit) {
     return retrieve(userId, focusKc, queryText, limit, true);

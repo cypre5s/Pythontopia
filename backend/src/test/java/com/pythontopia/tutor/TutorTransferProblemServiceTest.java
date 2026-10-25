@@ -19,11 +19,19 @@ import com.pythontopia.submission.judge.StaticCodeChecker;
 import com.pythontopia.submission.repository.PublicProblemRepository;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.mockito.ArgumentCaptor;
+import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class TutorTransferProblemServiceTest {
 
@@ -32,6 +40,7 @@ class TutorTransferProblemServiceTest {
   private final StaticCodeChecker staticCodeChecker = mock(StaticCodeChecker.class);
   private final JudgeWorkerPool judgeWorkerPool = mock(JudgeWorkerPool.class);
   private final JudgeCaseEvaluator caseEvaluator = mock(JudgeCaseEvaluator.class);
+  private final PlatformTransactionManager transactionManager = new TestTransactionManager();
   private final TutorTransferProblemService service =
       new TutorTransferProblemService(
           jdbcTemplate,
@@ -39,7 +48,55 @@ class TutorTransferProblemServiceTest {
           problemRepository,
           staticCodeChecker,
           judgeWorkerPool,
-          caseEvaluator);
+          caseEvaluator,
+          transactionManager);
+
+  @Test
+  void referenceSandboxRunsOutsideTransactionAndInsertUsesShortTransaction() throws Exception {
+    AtomicBoolean transactionDuringStaticCheck = new AtomicBoolean(true);
+    AtomicBoolean transactionDuringEvaluation = new AtomicBoolean(true);
+    AtomicBoolean transactionDuringInsert = new AtomicBoolean(false);
+    when(problemRepository.findPublic(43L, 476L))
+        .thenReturn(Optional.of(sourceProblem("basic")));
+    when(staticCodeChecker.check(anyString()))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringStaticCheck.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return new StaticCodeChecker.CheckResult(true, "", false);
+            });
+    when(judgeWorkerPool.submitAndWait(any()))
+        .thenAnswer(invocation -> invocation.<java.util.concurrent.Callable<?>>getArgument(0).call());
+    when(caseEvaluator.evaluate(anyString(), any()))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringEvaluation.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              var cases = (java.util.List<?>) invocation.getArgument(1);
+              return new JudgeCaseEvaluator.CaseEvaluation(
+                  Verdict.AC, cases.size(), 3, 64, null, new ObjectMapper().createObjectNode());
+            });
+    when(jdbcTemplate.queryForObject(anyString(), eq(Long.class))).thenReturn(1_000_000_001L);
+    when(jdbcTemplate.update(anyString(), any(Object[].class)))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringInsert.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return 1;
+            });
+
+    ProxyFactory proxyFactory = new ProxyFactory(service);
+    proxyFactory.addAdvice(
+        new TransactionInterceptor(
+            transactionManager, new AnnotationTransactionAttributeSource()));
+    TutorTransferProblemService transactionalService =
+        (TutorTransferProblemService) proxyFactory.getProxy();
+    transactionalService.materialize(7L, 11L, UUID.randomUUID(), 476L, transferDraft());
+
+    assertThat(transactionDuringStaticCheck).isFalse();
+    assertThat(transactionDuringEvaluation).isFalse();
+    assertThat(transactionDuringInsert).isTrue();
+  }
 
   @Test
   void refusesTransferWhenReferenceSolutionDoesNotPassGeneratedCases() throws Exception {
@@ -115,5 +172,23 @@ class TutorTransferProblemServiceTest {
               "test_cases":[{"input":"1.5 4","output":"6.00"}]
             }
             """);
+  }
+
+  private static final class TestTransactionManager extends AbstractPlatformTransactionManager {
+
+    @Override
+    protected Object doGetTransaction() {
+      return new Object();
+    }
+
+    @Override
+    protected void doBegin(
+        Object transaction, org.springframework.transaction.TransactionDefinition definition) {}
+
+    @Override
+    protected void doCommit(DefaultTransactionStatus status) {}
+
+    @Override
+    protected void doRollback(DefaultTransactionStatus status) {}
   }
 }
