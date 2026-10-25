@@ -166,8 +166,10 @@ services:
     env_file:
       - .env
     environment:
-      # 生产必须保留共享 provider 与账号日限额；本地开发通过 dev.sh 明确关闭。
-      PYT_AI_REQUEST_LIMITS_ENABLED: "true"
+      # AI 日限额开关：默认开启（账号 30 次/天 + 全站 300 次/天两道闸）。
+      # 关闭注册后的内部/演示部署可在远端 .env 置 false 统一放开；
+      # 放开后全站额度保护同时失效，仅适合「只有自己人用」的环境。
+      PYT_AI_REQUEST_LIMITS_ENABLED: ${PYT_AI_REQUEST_LIMITS_ENABLED:-true}
       # ---- 数据库接线（bridge 网络内服务名，覆盖 env_file 可能带入的旧值）----
       PYT_DB_URL: jdbc:postgresql://postgres:5432/pythontopia
       # ---- graph / rag 接线：双写两种变量名 ----
