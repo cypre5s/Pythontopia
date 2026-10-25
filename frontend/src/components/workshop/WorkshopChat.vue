@@ -24,6 +24,7 @@ import { useToastStore } from "@stores/toast";
 import { useWorkshopActivityStore } from "@stores/workshopActivity";
 import { playSfx } from "@/composables/useAudio";
 import { useSseStream, type SseTraceEvent } from "@/composables/useSseStream";
+import { findRuntimeRunId } from "@/components/workshop/workshopChatEvents";
 import ChatComposer, {
   type ComposerSubmitPayload,
 } from "@/components/workshop/ChatComposer.vue";
@@ -906,23 +907,15 @@ watch(orchestratorSse.state, (st) => {
   }
 });
 // 运行可发现性：把后端预创建 loop run 的 CUSTOM 事件投影到当前计划卡。
+// events 是整轮累计数组；用游标避免每个新分片都重扫已消费的历史。
+let consumedOrchestratorEventCount = 0;
 watch(orchestratorSse.events, (events) => {
   if (!streamingPlanId.value) return;
-  for (let index = events.length - 1; index >= 0; index -= 1) {
-    const event = events[index];
-    if (event?.type !== "CUSTOM" || event.name !== "runtime_run") continue;
-    const value = event.value;
-    if (!value || typeof value !== "object") return;
-    const loopRunId = (value as Record<string, unknown>)["loop_run_id"];
-    if (
-      typeof loopRunId === "number" &&
-      Number.isSafeInteger(loopRunId) &&
-      loopRunId > 0
-    ) {
-      updateMessage(streamingPlanId.value, { loopRunId });
-    }
-    return;
-  }
+  if (events.length < consumedOrchestratorEventCount) consumedOrchestratorEventCount = 0;
+  const startIndex = consumedOrchestratorEventCount;
+  consumedOrchestratorEventCount = events.length;
+  const loopRunId = findRuntimeRunId(events, startIndex);
+  if (loopRunId !== null) updateMessage(streamingPlanId.value, { loopRunId });
 });
 
 // ============ 多轮路由上下文 ============
