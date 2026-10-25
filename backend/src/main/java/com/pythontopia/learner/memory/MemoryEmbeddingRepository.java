@@ -1,6 +1,7 @@
 package com.pythontopia.learner.memory;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -16,6 +17,9 @@ public interface MemoryEmbeddingRepository {
 
   /** 取某事件的记忆向量；不存在 → {@link Optional#empty()}。 */
   Optional<float[]> find(long eventId);
+
+  /** 批量取记忆向量；不存在的事件不出现在结果中，空输入返回空映射。 */
+  Map<Long, float[]> findAll(List<Long> eventIds);
 
   /**
    * 按余弦相似度检索该用户记忆向量的 topK（{@code similarity = 1 - 余弦距离}，从高到低）。

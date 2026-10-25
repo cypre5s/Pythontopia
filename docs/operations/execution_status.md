@@ -6,6 +6,26 @@
 
 > **最新续更（2026-10-25）**：NPC 寒暄预热配额保护提交 [`0eeab5b3`](https://github.com/cypre5s/Pythontopia/commit/0eeab5b3782b940c244fa50876087370ceb1aedd) 已推送，GitHub CI [#40198503240](https://github.com/cypre5s/Pythontopia/actions/runs/40198503240) 5/5 通过。Release [`web-v20261025.9`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.9) 已上传；归档 1,535,061,980 字节，SHA-256 `42fe70b333aedb2d987ebe121960d03ebe4f3c65a4c705d0016123da9ad39fbb`，HEAD 200 且长度匹配。后端全量 1,896 项通过；完整性能审计仍在进行。
 
+> **本地审计续更（2026-10-25，未提交/推送）**：周报评估会同步调用 Graph，原先与其它定时维护任务共用 Spring Boot 默认单线程调度池；现将调度池设为 4。周报候选筛选的逐学生近期评估查询也合并为单条 SQL。后端全量 1,899/1,899 通过，完整审计仍在进行。
+
+> **最新本地续更（2026-10-25，未提交/推送）**：管理员 XLSX 名单导入从逐条查重、逐个插入并回读，改为一次批量查重与 JDBC 批量插入。服务、真实 PostgreSQL 导入集成和仓储测试合计 9/9 通过；未做大名单耗时基准，完整审计继续。
+
+> **当前本地续更（2026-10-25，未提交/推送）**：学习事件批量接口从逐条 `INSERT ... RETURNING id` 改为 JDBC batch；PostgreSQL 故障注入确认整批回滚。与名单导入一起重跑的定向测试 19/19 通过；并发基准和完整安全审计仍未完成。
+
+> **当前本地验证（2026-10-25，未提交/推送）**：合并本轮调度/周报候选、学生导入、学习事件写入和 NPC 记忆批量读取改动后，后端 `mvn -B test` 1,904/1,904 通过，0 failures/errors/skips，`BUILD SUCCESS`，约 6:42 正常退出。测试集成上下文间有关闭连接后的 Hikari 校验告警；仍未做生产并发基准，完整审计继续。
+
+> **当前本地续更（2026-10-25，未提交/推送）**：班级任务发布和新成员补发原先逐副本执行 INSERT，现改为每 1,000 条一条多行 SQL，保留唯一键幂等与创建/跳过统计。服务、真实 PostgreSQL 闭环和 1,001 条分块集成共 13/13 通过；后端全量 `mvn -B test` 1,907/1,907、0 failures/errors/skips，`BUILD SUCCESS`，约 6:45。格式化时保留了其他代码的原排版；最终 `git diff --check` 通过，未测生产吞吐，性能审计继续。
+
+> **当前本地续更（2026-10-25，未提交/推送）**：路径规划节点 INSERT 从逐节点写入改为单条多行 INSERT 并按 `(day_index, order_in_day)` 关联返回 ID；Quest 节点引用在乱序 Graph 响应下由真实 PostgreSQL 闭环核验。路径服务、评估流程、Stage08/Stage13 定向合计 24/24；合并工作区后后端全量 Maven 1,907/1,907、0 failures/errors/skips、`BUILD SUCCESS`，6:48 正常退出。容器关闭连接后仍有 Hikari 校验告警；Quest 写入仍逐条，未做生产并发基准，完整审计继续。
+
+> **复核续更（2026-10-25，未提交/推送）**：PostgreSQL 验证了掌握度最新来源在 `created_at` 并列时会选错记录；查询加 `id DESC` 后仓储集成与服务测试 3/3 通过。该微调在后端全量 1,907/1,907 后完成，未重跑全量。
+
+### 2026-10-25 性能审计续接：班级任务扇出批量写入（本地完成）
+
+- `ClassroomQuestService.publish` 最多支持 999 名学生，原先每位学生单独执行 `INSERT ... ON CONFLICT DO NOTHING RETURNING id`；新成员补发也逐条插入。现将副本组成列表后交给仓储按最多 1,000 条每批执行多行 INSERT，已存在副本仍跳过，返回的新建数继续用于计算跳过数。空列表不发 SQL。
+- RED/GREEN 后，`ClassroomQuestServiceTest` 11/11、Stage12 真实 PostgreSQL 班级任务闭环 1/1、仓储 PostgreSQL 1,001 条跨批插入与整批重试 1/1；合计 13/13。最终 `git diff --check` 通过；为避免改写既有排版，没有保留整文件 Spotless 格式化结果。
+- 写语句数量从每个学生一条降为发布时一条；超过 1,000 条的补发按 `ceil(N/1000)` 条执行。后端全量 `mvn -B test` 1,907/1,907 通过，0 failures/errors/skips，约 6:45 正常退出。未测真实班级吞吐或并发写压力；整体性能审计继续。
+
 ### 2026-10-25 性能审计续接：NPC 寒暄预热配额保护（进行中）
 
 - 代码上限是 200 名近期活跃学生 × 7 个 NPC，即每日最多 1,400 次 Graph 请求；有记忆的寒暄会预留 AI 额度，而全站 provider 额度为 300 次/日。仓库内未发现显式开启配置，实际部署环境变量未核验。
@@ -15,6 +35,31 @@
 ## 当前进度
 
 唯一任务清单及按优先级排列的未完成项维护在[总任务实施计划](../plans/2026-10-16-overall-work-checklist.md)，本页只记录最近进度和详细历史，避免出现多份清单。
+
+### 2026-10-25 性能审计续接：学习事件批量写入（本地完成）
+
+- `POST /api/learning/events/batch` 接受最多 100 条事件，旧实现每条单独执行 `INSERT ... RETURNING id`，Controller 不消费这些 ID。现在 Controller 仍先验证所有事件并预留同样的账号写入额度，再调用仓储 JDBC batch；单条事件接口保持原样。
+- TDD 回归先因缺少批量仓储 API 编译失败。实现后 `LearningEventControllerTest` 8/8；真实 PostgreSQL 测试覆盖两条成功插入，以及触发器拒绝中间行时全批回滚，2/2。含名单导入相关回归共 19/19 通过。
+- 合并本轮所有后端局部优化后，全量 `mvn -B test` 1,904/1,904 通过，0 failures/errors/skips，`BUILD SUCCESS`，约 6:42 正常退出；Testcontainers 上下文间可见关闭连接后的 Hikari 校验告警。未做高并发/吞吐基准；完整 API 限流/日志审计及性能审计继续，代码尚未提交/推送。
+
+### 2026-10-25 性能审计续接：NPC 记忆向量批量读取（本地完成）
+
+- `NpcMemoryService.bumpNearDuplicate` 最多检查 30 条近期记忆，旧实现对每条分别查询 embedding。现按事件 ID 一次批量读取，仍按原有时间顺序选择首个近重复项；缺失向量继续视为未命中。
+- TDD 回归先因仓储缺少批量 API 编译失败。NPC 服务和真实 PostgreSQL/pgvector 集成共 7/7 通过，覆盖首个近重复项、缺失向量及空列表；改动文件 Spotless 与 `git diff --check` 通过。合并本轮其它后端优化后的全量 `mvn -B test` 为 1,904/1,904，0 failures/errors/skips；未做生产吞吐基准，完整审计继续，代码尚未提交/推送。
+
+### 2026-10-25 性能审计续接：管理员名单导入批量数据库操作（本地完成）
+
+- 最多 1,000 行的 XLSX 导入原来每行执行 `findByUsername`，每个新账号还经 `save` 插入后调用 `findById` 回读。现先一次查询已存在用户名，只为新增学生计算密码哈希，再通过 `JdbcTemplate.batchUpdate` 写入；唯一约束仍负责并发重名，冲突会回滚整批并返回原有冲突错误。
+- TDD 回归先因缺少批量仓储接口而 RED；改造后 `AdminStudentImportServiceTest` 2/2、实际 PostgreSQL `AdminStudentImportIntegrationTest` 5/5、`UserRepositoryTest` 2/2 通过。
+- 暂未测 1,000 行导入的端到端耗时；BCrypt 哈希仍逐账号计算，可能继续主导大名单请求耗时。没有做生产负载或真实管理员浏览器复测，代码未提交/推送；总性能和写路由审计继续。
+
+### 2026-10-25 性能审计续接：调度池阻塞与周报候选 N+1（本地阶段完成）
+
+- 周报定时任务默认启用，并在调度线程里逐个同步调用评估服务；服务会等待 Graph 叙述和路径规划。当前 Spring Boot 3.5.16 依赖的调度池默认核心线程数为 1，仓库配置此前没有覆盖，因此长周报批次会延迟 5 秒一次的画像投影轮询及其它调度维护任务。
+- `spring.task.scheduling.pool.size` 设为 4。`SchedulingConfigTest` 加载实际 `application.yml` 检查调度器的核心池容量；原默认 1 的回归先 RED，改配置后 GREEN。测试 profile 仍按现有约定禁用自动调度。
+- 周报候选读取原来先查询活跃用户，再对每个用户查询近期是否已有评估，数据库往返为 `1 + N`。合并为 `NOT EXISTS` 的单 SQL；活动 7 天、评估去重 6 天、仅 STUDENT 和升序返回条件保持不变。N+1 回归先 RED；PostgreSQL 集成测试确认近期报告排除、旧报告仍可入选、不活跃学生和教师排除。
+- 验证：`SchedulingConfigTest` 3/3、`LearnerEvaluationServiceTest` 10/10、周报候选 PostgreSQL 集成测试 1/1；`cd backend && mvn -B test` 1,899/1,899，0 failures/errors/skips，`BUILD SUCCESS`，6:43 正常退出。5 个涉及 Java 文件的定向 Spotless 检查及 `git diff --check` 通过。
+- 未测生产环境是否覆盖调度池参数、长时间周报的真实并发影响或 Graph/模型流量；4 个调度线程是隔离长任务的配置修复，不代表整条周报生成耗时降低。代码尚未提交/推送；整体性能审计继续。
 
 ### 2026-10-25 事务持有时间审计（已完成）
 

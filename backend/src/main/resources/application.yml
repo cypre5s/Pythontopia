@@ -15,6 +15,11 @@ spring:
       # Multipart transport caps; individual endpoints enforce their own stricter size and content limits.
       max-file-size: 8MB
       max-request-size: 12MB
+  task:
+    scheduling:
+      # Keep slow weekly Graph work from blocking maintenance and outbox polling.
+      pool:
+        size: 4
 
 server:
   port: 18080

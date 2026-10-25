@@ -132,16 +132,10 @@ public class ClassroomQuestService {
             request.dueDate(),
             request.targetProblemId(),
             request.targetResourceType());
-    int created = 0;
-    int skipped = 0;
-    for (ClassroomMemberDto member : members) {
-      // 幂等分发：命中 uniq_quest_classroom_user 直接跳过，不会把 @Transactional 事务标脏。
-      if (repository.insertStudentQuestIfAbsent(template.forStudent(member.studentId())).isPresent()) {
-        created += 1;
-      } else {
-        skipped += 1;
-      }
-    }
+    List<QuestInsert> studentQuests =
+        members.stream().map(member -> template.forStudent(member.studentId())).toList();
+    int created = repository.insertStudentQuestsIfAbsent(studentQuests);
+    int skipped = members.size() - created;
 
     ClassroomQuestDto stored =
         repository
@@ -210,13 +204,9 @@ public class ClassroomQuestService {
   public int backfillForStudent(Long classroomId, Long studentId) {
     List<ClassroomQuestDto> active =
         repository.listActiveForClassroom(classroomId, LocalDate.now(ZoneOffset.UTC));
-    int created = 0;
-    for (ClassroomQuestDto quest : active) {
-      if (repository.insertStudentQuestIfAbsent(template(quest).forStudent(studentId)).isPresent()) {
-        created += 1;
-      }
-    }
-    return created;
+    List<QuestInsert> studentQuests =
+        active.stream().map(quest -> template(quest).forStudent(studentId)).toList();
+    return repository.insertStudentQuestsIfAbsent(studentQuests);
   }
 
   /** 由已落库的班级任务重建分发模板（补发路径与发布路径共用同一份投影规则）。 */

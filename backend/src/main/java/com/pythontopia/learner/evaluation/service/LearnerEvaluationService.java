@@ -272,13 +272,8 @@ public class LearnerEvaluationService {
     OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
     OffsetDateTime activitySince = now.minusDays(DEFAULT_PERIOD_DAYS);
     OffsetDateTime dedupeSince = now.minusDays(WEEKLY_DEDUPE_DAYS);
-    List<Long> needing = new ArrayList<>();
-    for (Long userId : evaluationRepository.findActiveLearnerIdsSince(activitySince)) {
-      if (!evaluationRepository.existsEvaluationCreatedAfter(userId, dedupeSince)) {
-        needing.add(userId);
-      }
-    }
-    return needing;
+    return evaluationRepository.findActiveLearnerIdsWithoutRecentEvaluation(
+        activitySince, dedupeSince);
   }
 
   @Transactional

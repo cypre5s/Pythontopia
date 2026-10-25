@@ -8,7 +8,6 @@ import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -146,8 +145,7 @@ class ClassroomQuestServiceTest {
     when(repository.findById(77L))
         .thenReturn(Optional.of(sampleQuest(77L, "ACTIVE")));
     when(studentWriteThrottle.tryAcquireClassroomQuestFanOut(teacher.userId(), 4)).thenReturn(true);
-    when(repository.insertStudentQuestIfAbsent(any(QuestInsert.class)))
-        .thenReturn(Optional.of(101L), Optional.of(102L), Optional.of(103L));
+    when(repository.insertStudentQuestsIfAbsent(any())).thenReturn(3);
 
     ClassroomQuestCreateRequest request =
         new ClassroomQuestCreateRequest(
@@ -162,9 +160,14 @@ class ClassroomQuestServiceTest {
     assertThat(response.totalStudents()).isEqualTo(3);
     assertThat(response.createdQuests()).isEqualTo(3);
     assertThat(response.skippedDuplicates()).isEqualTo(0);
-    ArgumentCaptor<QuestInsert> questInsertCaptor = ArgumentCaptor.forClass(QuestInsert.class);
-    verify(repository, times(3)).insertStudentQuestIfAbsent(questInsertCaptor.capture());
-    assertThat(questInsertCaptor.getAllValues())
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<QuestInsert>> questInsertCaptor =
+        (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
+    verify(repository).insertStudentQuestsIfAbsent(questInsertCaptor.capture());
+    assertThat(questInsertCaptor.getValue())
+        .extracting(QuestInsert::userId)
+        .containsExactly(11L, 12L, 13L);
+    assertThat(questInsertCaptor.getValue())
         .allSatisfy(
             insert -> {
               assertThat(insert.requiredEvidenceType()).isEqualTo("submission");
@@ -233,8 +236,7 @@ class ClassroomQuestServiceTest {
             List.of(
                 new ClassroomMemberDto(11L, "stu01", "Stu 01", "ACTIVE"),
                 new ClassroomMemberDto(12L, "stu02", "Stu 02", "ACTIVE")));
-    when(repository.insertStudentQuestIfAbsent(any(QuestInsert.class)))
-        .thenReturn(Optional.of(101L), Optional.empty());
+    when(repository.insertStudentQuestsIfAbsent(any())).thenReturn(1);
     when(studentWriteThrottle.tryAcquireClassroomQuestFanOut(teacher.userId(), 3)).thenReturn(true);
     when(repository.findById(78L)).thenReturn(Optional.of(sampleQuest(78L, "ACTIVE")));
 
@@ -323,15 +325,15 @@ class ClassroomQuestServiceTest {
   void backfillForStudentCreatesCopiesOfActiveClassroomQuests() {
     when(repository.listActiveForClassroom(eq(9L), any(LocalDate.class)))
         .thenReturn(List.of(sampleQuest(77L, "ACTIVE"), sampleQuest(78L, "ACTIVE")));
-    when(repository.insertStudentQuestIfAbsent(any(QuestInsert.class)))
-        .thenReturn(Optional.of(501L), Optional.of(502L));
+    when(repository.insertStudentQuestsIfAbsent(any())).thenReturn(2);
 
     int created = service.backfillForStudent(9L, 55L);
 
     assertThat(created).isEqualTo(2);
-    ArgumentCaptor<QuestInsert> captor = ArgumentCaptor.forClass(QuestInsert.class);
-    verify(repository, times(2)).insertStudentQuestIfAbsent(captor.capture());
-    assertThat(captor.getAllValues())
+    @SuppressWarnings("unchecked")
+    ArgumentCaptor<List<QuestInsert>> captor = (ArgumentCaptor) ArgumentCaptor.forClass(List.class);
+    verify(repository).insertStudentQuestsIfAbsent(captor.capture());
+    assertThat(captor.getValue())
         .allSatisfy(
             insert -> {
               assertThat(insert.userId()).isEqualTo(55L);
@@ -342,7 +344,7 @@ class ClassroomQuestServiceTest {
               assertThat(insert.requiredEvidenceType()).isEqualTo("submission");
               assertThat(insert.targetProblemIds()).containsExactly(12L);
             });
-    assertThat(captor.getAllValues())
+    assertThat(captor.getValue())
         .extracting(QuestInsert::sourceRefId)
         .containsExactly(77L, 78L);
   }
@@ -352,8 +354,7 @@ class ClassroomQuestServiceTest {
   void backfillForStudentIsIdempotent() {
     when(repository.listActiveForClassroom(eq(9L), any(LocalDate.class)))
         .thenReturn(List.of(sampleQuest(77L, "ACTIVE")));
-    when(repository.insertStudentQuestIfAbsent(any(QuestInsert.class)))
-        .thenReturn(Optional.empty());
+    when(repository.insertStudentQuestsIfAbsent(any())).thenReturn(0);
 
     assertThat(service.backfillForStudent(9L, 55L)).isZero();
   }

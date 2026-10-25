@@ -2,6 +2,12 @@
 
 ## 2026-10-25
 
+- 掌握度最新事件来源在 `created_at` 相同的并列记录中增加 `id DESC`，避免按数据库偶然扫描顺序返回旧来源。回归先 RED 后 GREEN；PostgreSQL 与服务定向测试 3/3 通过。全量 Maven 在此一行 SQL 排序修改之前通过，未做并发写排序测试。
+- 学习路径生成节点从逐节点 `INSERT ... RETURNING id` 改为单条多行 INSERT，返回 ID 按唯一日序键关联，确保 Quest 指向正确路径节点。服务/评估、Stage08/Stage13 PostgreSQL 流程合计 24/24，后端全量 1,907/1,907 通过（0 failures/errors/skips）；未做生产并发基准，Quest 插入仍逐条，改动尚未提交/推送。
+- 班级任务发布和新成员补发从逐个副本执行 INSERT 改为每批最多 1,000 条多行 SQL；最大 999 人班级的分发写语句从 999 条降为 1 条。保留 `ON CONFLICT DO NOTHING` 幂等与新建/跳过计数；TDD 后服务、真实 PostgreSQL 闭环及 1,001 条跨批集成合计 13/13 通过。后端全量 `mvn -B test` 1,907/1,907 通过，0 failures/errors/skips，约 6:45；未做生产吞吐或并发基准，改动未提交/推送。
+- NPC 记忆去重在检查最近 30 条记忆时原先逐条读取向量，现改为一次 `IN` 批量读取，并保留最近优先的匹配顺序。TDD 回归先因缺少批量 API 编译失败；NPC 服务与真实 PostgreSQL/pgvector 集成测试共 7/7 通过，覆盖首次近重复命中、缺失向量和空输入。本轮本地后端全量回归 1,904/1,904，0 failures/errors/skips，约 6:42 正常退出；未做生产吞吐基准，尚未提交/推送。
+- 性能审计续查发现 `POST /api/learning/events/batch` 最多接收 100 条事件，却逐条执行带 `RETURNING id` 的插入且不使用返回 ID。现改为 JDBC batch；验证、容量预算和事务边界保留。RED/GREEN 后控制器测试 8/8、PostgreSQL 成功写入及故障回滚 2/2；与名单导入优化的定向回归合计 19/19 通过。没有做高并发负载基准，尚未提交/推送。
+- 性能审计续查发现管理员 XLSX 学生导入最多 1,000 行时，原逻辑逐行查用户名，并为每个新账号插入后再按 ID 回读。现改为一次批量查重和 JDBC 批量插入，保留已存在账号跳过与并发唯一键冲突回滚。RED/GREEN 后，服务测试 2/2、PostgreSQL 导入集成 5/5、用户仓储测试 2/2 通过；尚未提交/推送。没有做 1,000 行端到端耗时基准，BCrypt 密码哈希仍逐个计算。
 - NPC 每日寒暄预热默认改为关闭：最多 200 名学生 × 7 个 NPC 会触发至多 1,400 次 Graph 请求；有记忆的请求会预留 AI 日额度，而全站额度为 300 次，后台预热可能耗尽当天交互额度。显式设置 `pythontopia.npc.greeting.prewarm.enabled=true` 仍可启用；未命中缓存的寒暄继续按需生成。回归先 RED 后 GREEN，定向测试 7/7、后端全量测试 1,896/1,896 通过；未调用模型。
 - 改动提交 `0eeab5b3` 已推送；GitHub CI 五个 job 全部通过。Release [`web-v20261025.9`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.9) 上传 `pythontopia-web-v20261025.9.tar.gz`，1,535,061,980 字节，SHA-256 `42fe70b333aedb2d987ebe121960d03ebe4f3c65a4c705d0016123da9ad39fbb`；下载 HEAD 返回 200，长度匹配。
 - 新增正式判题结果弹窗，展示 verdict、通过用例、运行时间/内存和安全失败原因；AC 后按同题同语言的提交记录展示 Beats 百分位，每项至少 10 条有效 AC 提交，同一用户的多次提交分别计数。
@@ -16,6 +22,7 @@
 - WorkshopChat 的 orchestrator SSE `runtime_run` 投影改为游标式增量扫描，仅查找新追加事件，避免每个 token/chunk 都重扫累计历史。回归先 RED 后 GREEN；前端 2,722 项、typecheck、改动文件 ESLint 和 Vite build 通过；GitHub CI 五个 job 全通过。全量 lint 0 errors / 405 warnings；已推送 `ffa7a249` 并发布 `web-v20261025.7`。附件 HEAD 200、长度核对通过；尚未测真实长流渲染延迟。
 - Maven 测试收尾修复：调度改由默认开启的条件配置注册，测试 classpath 的 `local`/`test` profile 关闭自动触发，保留业务方法直测。之前 Testcontainers 结束后缓存的 Spring 上下文仍运行周期任务，导致 Hikari 重试和 Surefire 30 秒强制收尾；RED/GREEN 回归后，后端全量 1,895 项通过并在 6 分 41 秒正常退出，无调度调用栈或强制收尾转储。触及 Java 文件定向 Spotless 通过；容器关闭后的少量 Hikari 连接校验警告仍存在，不影响测试结果。
 - 调度收尾修复已推送 `95f1eaec`，GitHub CI [#40195659398](https://github.com/cypre5s/Pythontopia/actions/runs/40195659398) 5/5 通过；release [`web-v20261025.8`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.8) 上传成功。归档 `pythontopia-web-v20261025.8.tar.gz` 为 1,535,011,460 字节，SHA-256 `2164deea7a0e74977b899bde5d6e1461d8ef96b327d9d5c675092eb5d7629638`，下载 HEAD 200 且长度匹配。百分位查询本地计划扫描 198 行、0.073 ms；未为当前小数据量添加索引。
+- 调度与周报候选查询优化：Spring 调度池从默认 1 个线程设为 4 个，避免同步等待 Graph 的每周评估占住唯一调度线程；活跃学生与近期评估筛选从 `1 + N` 次数据库查询合并为一条 `NOT EXISTS` 查询，7 天活动窗口和 6 天去重窗口不变。测试先 RED 后 GREEN；调度配置与服务测试、PostgreSQL 筛选集成测试通过，后端全量 1,899/1,899、0 failures/errors/skips，目标 Java Spotless 与 `git diff --check` 通过。没有真实模型请求、线上配置核验或调度并发压测；代码尚未推送。
 
 ## 2026-10-24
 

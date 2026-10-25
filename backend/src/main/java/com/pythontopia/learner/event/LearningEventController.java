@@ -4,6 +4,7 @@ import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.common.web.CurrentUser;
+import com.pythontopia.learner.event.LearningEventLogRepository.EventInput;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
@@ -58,14 +59,17 @@ public class LearningEventController {
     }
     events.forEach(eventGuard::validate);
     eventGuard.requireCapacity(user.userId(), events.size());
-    for (LearningEventLogDto dto : events) {
-      repository.insert(
-          user.userId(),
-          dto.eventType(),
-          dto.payload() != null ? dto.payload() : Map.of(),
-          "frontend",
-          EventImportance.of(dto.eventType()));
-    }
+    repository.insertBatch(
+        events.stream()
+            .map(
+                dto ->
+                    new EventInput(
+                        user.userId(),
+                        dto.eventType(),
+                        dto.payload() != null ? dto.payload() : Map.of(),
+                        "frontend",
+                        EventImportance.of(dto.eventType())))
+            .toList());
   }
 
   @GetMapping

@@ -7,6 +7,7 @@ import com.pythontopia.learner.memory.dto.MemoryItemDto;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -103,14 +104,11 @@ public class NpcMemoryService {
                       (rs, rowNum) -> rs.getLong("event_id"),
                       userId,
                       npcKey);
+              Map<Long, float[]> vectors = memoryEmbeddingRepository.findAll(existing);
               for (Long existingEventId : existing) {
-                if (memoryEmbeddingRepository
-                    .find(existingEventId)
-                    .map(
-                        vector ->
-                            NpcMemoryDedup.isNearDuplicate(
-                                current, vector, NpcMemoryDedup.DEFAULT_THRESHOLD))
-                    .orElse(false)) {
+                float[] vector = vectors.get(existingEventId);
+                if (NpcMemoryDedup.isNearDuplicate(
+                    current, vector, NpcMemoryDedup.DEFAULT_THRESHOLD)) {
                   jdbc.update(
                       "UPDATE npc_memory SET salience = LEAST(1.0, salience + 0.1), "
                           + "last_recalled_at = now() "

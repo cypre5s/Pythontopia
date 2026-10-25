@@ -136,7 +136,7 @@ class LearningPathServiceTest {
     when(pathRepository.nextVersion(7L, 43L)).thenReturn(3);
     when(pathRepository.insertPath(eq(7L), eq(43L), eq(3), any(), any(), any()))
         .thenReturn(50L);
-    when(pathRepository.insertNode(eq(50L), any())).thenReturn(500L).thenReturn(501L);
+    when(pathRepository.insertNodes(eq(50L), any())).thenReturn(List.of(500L, 501L));
     when(pathRepository.findById(7L, 50L)).thenReturn(Optional.of(samplePath(50L, 3)));
 
     PlanPathResponse response = service.plan(7L);
@@ -146,6 +146,12 @@ class LearningPathServiceTest {
     assertThat(response.path().id()).isEqualTo(50L);
     assertThat(response.archivedPathIds()).containsExactly(10L, 11L);
     assertThat(response.generatedQuestCount()).isEqualTo(2);
+    assertThat(
+            org.mockito.Mockito.mockingDetails(pathRepository).getInvocations().stream()
+                .map(invocation -> invocation.getMethod().getName())
+                .filter(name -> name.startsWith("insertNode"))
+                .toList())
+        .containsExactly("insertNodes");
     verify(questRepository).archiveQuestsForPath(7L, 10L, QuestStatus.EXPIRED);
     verify(questRepository).archiveQuestsForPath(7L, 11L, QuestStatus.EXPIRED);
     verify(questRepository, times(1)).archiveSystemDefaults(7L);
@@ -184,7 +190,7 @@ class LearningPathServiceTest {
     when(pathRepository.archiveActivePaths(7L, 43L)).thenReturn(List.of());
     when(pathRepository.nextVersion(7L, 43L)).thenReturn(1);
     when(pathRepository.insertPath(eq(7L), eq(43L), eq(1), any(), any(), any())).thenReturn(50L);
-    when(pathRepository.insertNode(eq(50L), any())).thenReturn(500L);
+    when(pathRepository.insertNodes(eq(50L), any())).thenReturn(List.of(500L));
     when(pathRepository.findById(7L, 50L)).thenReturn(Optional.of(samplePath(50L, 1)));
 
     service.plan(7L);
@@ -267,7 +273,7 @@ class LearningPathServiceTest {
     when(pathRepository.archiveActivePaths(7L, 43L)).thenReturn(List.of());
     when(pathRepository.nextVersion(7L, 43L)).thenReturn(1);
     when(pathRepository.insertPath(eq(7L), eq(43L), eq(1), any(), any(), any())).thenReturn(50L);
-    when(pathRepository.insertNode(eq(50L), any())).thenReturn(500L).thenReturn(501L);
+    when(pathRepository.insertNodes(eq(50L), any())).thenReturn(List.of(500L, 501L));
     when(pathRepository.findById(7L, 50L)).thenReturn(Optional.of(samplePath(50L, 1)));
 
     service.plan(7L);
@@ -343,7 +349,7 @@ class LearningPathServiceTest {
     when(pathRepository.archiveActivePaths(7L, 43L)).thenReturn(List.of());
     when(pathRepository.nextVersion(7L, 43L)).thenReturn(1);
     when(pathRepository.insertPath(eq(7L), eq(43L), eq(1), any(), any(), any())).thenReturn(50L);
-    when(pathRepository.insertNode(eq(50L), any())).thenReturn(500L).thenReturn(501L);
+    when(pathRepository.insertNodes(eq(50L), any())).thenReturn(List.of(500L, 501L));
     when(pathRepository.findById(7L, 50L)).thenReturn(Optional.of(samplePath(50L, 1)));
 
     service.plan(7L);

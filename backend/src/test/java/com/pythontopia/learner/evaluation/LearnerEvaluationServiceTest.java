@@ -286,15 +286,24 @@ class LearnerEvaluationServiceTest {
 
   @Test
   void weeklyEligibilitySkipsLearnersWithRecentReport() {
-    when(repository.findActiveLearnerIdsSince(any())).thenReturn(List.of(1L, 2L, 3L));
-    when(repository.existsEvaluationCreatedAfter(eq(1L), any())).thenReturn(false);
-    when(repository.existsEvaluationCreatedAfter(eq(2L), any())).thenReturn(true);
-    when(repository.existsEvaluationCreatedAfter(eq(3L), any())).thenReturn(false);
+    when(repository.findActiveLearnerIdsWithoutRecentEvaluation(any(), any()))
+        .thenReturn(List.of(1L, 3L));
 
     List<Long> needing = service.findLearnersNeedingWeeklyEvaluation();
 
     // 2 号本周已有评估（自动或手动）→ 跳过，幂等不重复生成。
     assertThat(needing).containsExactly(1L, 3L);
+    verify(repository).findActiveLearnerIdsWithoutRecentEvaluation(any(), any());
+  }
+
+  @Test
+  void weeklyEligibilityDoesNotRunOneRecentReportQueryPerLearner() {
+    when(repository.findActiveLearnerIdsWithoutRecentEvaluation(any(), any()))
+        .thenReturn(List.of(1L, 2L, 3L));
+
+    service.findLearnersNeedingWeeklyEvaluation();
+
+    verify(repository, times(1)).findActiveLearnerIdsWithoutRecentEvaluation(any(), any());
   }
 
   private EvaluationDto persisted(

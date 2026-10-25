@@ -105,6 +105,19 @@ class Stage08PathBoardAcceptanceIntegrationTest {
             userId);
     assertThat(quests).isEqualTo(3);
 
+    Integer correctlyBoundQuests =
+        jdbcTemplate.queryForObject(
+            """
+            SELECT COUNT(*)
+            FROM quest q
+            JOIN learning_path_node n ON n.id = q.source_ref_id
+            WHERE q.user_id = ? AND q.source = 'PATH_PLANNER'
+              AND q.kc_code = n.kc_code AND q.node_type = n.node_type
+            """,
+            Integer.class,
+            userId);
+    assertThat(correctlyBoundQuests).isEqualTo(3);
+
     ResponseEntity<List> today =
         restTemplate.exchange(
             "/api/quests/today", HttpMethod.GET, bearer(token, null), List.class);
@@ -234,19 +247,19 @@ class Stage08PathBoardAcceptanceIntegrationTest {
                         "evidence_summary", "evidence",
                         "suggested_resource_type", "HANDOUT"),
                     Map.of(
-                        "day_index", 1,
-                        "order_in_day", 2,
-                        "kc_code", "PY43-KC-001",
-                        "node_type", "SOLVE_PROBLEM",
-                        "reason_summary", "练习 1 题",
-                        "evidence_summary", "evidence"),
-                    Map.of(
                         "day_index", 7,
                         "order_in_day", 1,
-                        "kc_code", "PY43-KC-001",
+                        "kc_code", "PY43-KC-002",
                         "node_type", "FIX_BUG",
                         "reason_summary", "回顾画像",
-                        "evidence_summary", "ok")),
+                        "evidence_summary", "ok"),
+                    Map.of(
+                        "day_index", 1,
+                        "order_in_day", 2,
+                        "kc_code", "PY43-KC-003",
+                        "node_type", "SOLVE_PROBLEM",
+                        "reason_summary", "练习 1 题",
+                        "evidence_summary", "evidence")),
             "safety_result", Map.of("passed", true, "reasons", List.of()),
             "grounding_result", Map.of("passed", true, "reasons", List.of(), "unknown_kc", List.of()),
             "deterministic_signature", "stage08-test",

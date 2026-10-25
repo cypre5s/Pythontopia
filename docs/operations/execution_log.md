@@ -4,6 +4,41 @@
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
 
+## 2026-10-25 — 学习路径节点批量写入
+
+- `LearningPathService.writeNodesAndQuests` 原先逐个插入路径节点并读取生成 ID；Graph 规划器最多输出 7 天 × 每天 4 个节点。现在将节点组为单条多行 `INSERT ... RETURNING`，按数据库唯一位置键 `(day_index, order_in_day)` 还原 ID 顺序，Quest 继续引用对应节点。
+- TDD RED 命中旧逐条调用；服务层、评估路径及 Stage08/Stage13 PostgreSQL 闭环合计 24/24 通过。Stage08 还覆盖了打乱日期顺序后的 Quest→节点外键与内容对应。节点插入语句由每个节点一条降至每次规划一条。
+- 合并当前工作区后后端全量 `mvn -B test` 1,907/1,907 通过，0 failures/errors/skips，`BUILD SUCCESS`，6:48 正常退出；容器结束后仍有 Hikari 关闭连接校验告警。Quest 仍逐个写入，因此没有把完整路径写入降为两条 SQL；未做生产延迟/并发基准，性能审计未完成且本地改动未提交/推送。
+
+## 2026-10-25 — 掌握度最新事件来源并列排序
+
+- 完成 diff 复核时发现批量读取最新事件来源只按 `created_at` 排序；同一时间戳的多条事件可能选择较旧行。PostgreSQL 回归先 RED，复现同一 KC 同时写入 `PRACTICE_PASS` / `PRACTICE_FAIL` 时错误返回前一条来源。
+- 增加 `id DESC` 作为时间并列的确定性顺序；PostgreSQL 回归与 `MasteryServiceTest` 合计 3/3 通过。此窄改动发生在全量 Maven 1,907/1,907 之后，因此未重跑全量；未测并发写入排序或生产查询计划。
+
+## 2026-10-25 — 班级任务扇出批量写入
+
+- 发布班级任务最多可覆盖 999 名学生，原服务为每个学生单独发出一条带 `RETURNING` 的 INSERT；新成员补发也逐条执行。现在两条路径共用仓储多行插入，每 1,000 条一批，通过 `ON CONFLICT DO NOTHING RETURNING id` 保留唯一键幂等并准确统计新建数。最大班级发布由 999 条学生副本 INSERT 降至 1 条；更大的补发按 `ceil(N/1000)` 条执行。
+- TDD 先以缺少批量方法的编译失败确认 RED，再实现后验证 `ClassroomQuestServiceTest` 11/11、Stage12 真实 PostgreSQL 发布/归档闭环与部分冲突 1/1、PostgreSQL 1,001 条跨批插入/重试 1/1；合计 13/13。最终 `git diff --check` 通过；未保留会改写无关既有排版的全文件格式化。
+- 后端全量 `mvn -B test` 1,907/1,907 通过，0 failures/errors/skips，`BUILD SUCCESS`，约 6:45 正常退出；定向 Spotless 与 `git diff --check` 通过。
+- 未测生产班级吞吐、并发争抢或真实数据规模；审计未结束，改动未提交/推送。
+
+## 2026-10-25 — NPC 记忆向量批量读取
+
+- `NpcMemoryService.bumpNearDuplicate` 最多读取 30 个近期事件的向量，旧逻辑在循环内逐个访问数据库。现通过仓储批量查询一次加载已有向量，并保留原来的最近优先匹配顺序。
+- 回归先因批量 API 缺失而编译失败；修改后服务测试与 PostgreSQL/pgvector 集成测试 7/7 通过。合并本轮所有后端局部优化后，`mvn -B test` 1,904/1,904、0 failures/errors/skips，`BUILD SUCCESS`，约 6:42 正常退出。未测生产吞吐或并发负载，尚未提交/推送。
+
+## 2026-10-25 — 学习事件批量写入
+
+- `POST /api/learning/events/batch` 每批最多 100 条，旧 Controller 循环逐条调用 `INSERT ... RETURNING id`，但响应不使用 ID。现将校验与额度预留留在写入前，转换成 `EventInput` 列表后调用 JDBC batch；单条事件写入不变。
+- RED/GREEN 后 `LearningEventControllerTest` 8/8，PostgreSQL `LearningEventBatchAtomicityPostgresTest` 2/2：批次成功全部入库，数据库触发器拒绝其中一条时事务回滚、零条残留。与名单导入相关的三组回归重跑后合计 19/19 通过。
+- 验证覆盖目标路由及数据库原子性，没有测多并发吞吐或真实生产延迟；全套 Maven 测试未在此小改动后重跑。总 API/日志审计继续。
+
+## 2026-10-25 — 管理员学生名单导入批量数据库操作
+
+- 审计最多 1,000 行的 XLSX 名单导入时发现 N+1：原来逐行调用 `findByUsername`；每个新学生的 `save` 还会插入后按 ID 回读。现改为一条批量用户名查询和一次 JDBC batch 插入，不再为导入结果读取无用的用户行。
+- 并发创建相同用户名仍由数据库唯一约束拒绝；批量插入异常映射为既有 `STUDENT_IMPORT_CONFLICT`，事务回滚整批。成功/跳过语义、逆序学号初始密码保持不变。
+- RED/GREEN 后 `AdminStudentImportServiceTest` 2/2、PostgreSQL `AdminStudentImportIntegrationTest` 5/5、`UserRepositoryTest` 2/2 通过；定向 Spotless 通过。未做 1,000 行耗时或并发压测；BCrypt 哈希仍逐个执行。更广泛的接口/日志审计继续。
+
 ## 2026-10-25 AI 导学节点适配与提交结果详情
 
 - 对照 Alethicode Tutor Graph 的事件路由、证据、卡片校验、教练计划、迁移题 draft/materialize 和投影节点；复用 Pythontopia 的 `validate_transition → coach_decide → fetch_evidence → generate_card → guardrail → decide_actions` 及 Vue 导学卡片，不复制 LangGraph/旧 Java API。行为参考：[builder](https://github.com/cypre5s/Alethicode/blob/main/services/tutor-graph/app/graph/builder.py)、[transfer nodes](https://github.com/cypre5s/Alethicode/blob/main/services/tutor-graph/app/nodes/transfer.py)、[transition rules](https://github.com/cypre5s/Alethicode/blob/main/services/tutor-graph/app/graph/transitions.py)。
@@ -1313,3 +1348,11 @@
 - 按 TDD 先增加“未配置时不触达活跃用户查询”的回归。RED：`mvn -q -Dtest=NpcGreetingPrewarmJobTest test` 因事件仓库被调用失败。随后将默认值从 true 改为 false，显式开启路径与原任务逻辑不变；按需寒暄仍可在首次 NPC 访问时生成。
 - GREEN：同一目标测试 7/7 通过；`mvn -B test` 后端全量 1,896/1,896、0 failures/errors/skips，6:53 正常退出。只做了静态配置检查与单测，没有真实模型调用或生产环境变量核验。显式开启仍可能消耗交互额度，后续应先定义独立预热预算。
 - 提交 `0eeab5b3` 推送成功；GitHub CI [#40198503240](https://github.com/cypre5s/Pythontopia/actions/runs/40198503240) 5/5 成功。Release 构建 [#40199106285](https://github.com/cypre5s/Pythontopia/actions/runs/40199106285) 成功并上传 `web-v20261025.9`：1,535,061,980 字节，SHA-256 `42fe70b333aedb2d987ebe121960d03ebe4f3c65a4c705d0016123da9ad39fbb`；下载 HEAD 200 且 Content-Length 一致。
+
+## 2026-10-25 — 后台调度阻塞与周报候选 N+1 优化
+
+- 根因：默认启用的周报调度任务在唯一 Spring 调度线程里同步逐个执行学习评估；每个评估会等待 Graph 叙述及路径规划。配置未指定 `spring.task.scheduling.pool.size`，Spring Boot 3.5.16 的 `TaskSchedulingProperties.Pool` 默认值为 1，因此周报批次可挡住画像投影轮询和缓存/过期维护。将生产默认调度池设为 4 个线程，保持周报自身顺序处理。
+- 第二个相关性能点：候选筛选先查一批活跃用户，再对 N 个用户逐次检查近期评估，形成 `1 + N` 次 SQL。以 `NOT EXISTS` 把活动条件和评估去重合并为一次查询，保留 `DEFAULT_PERIOD_DAYS=7` 与 `WEEKLY_DEDUPE_DAYS=6`。
+- RED/GREEN：调度器集成回归先观察到核心池容量为 1，配置改为 4 后通过；周报服务回归先因逐人 `existsEvaluationCreatedAfter` 调用失败，改为单一候选查询后通过。PostgreSQL 集成测试覆盖有无近期评估、活动窗口、学生角色和结果排序。
+- 验证：`SchedulingConfigTest` 3/3，`LearnerEvaluationServiceTest` 10/10，`EvaluationRepositoryWeeklyEligibilityPostgresTest` 1/1；后端全量 `mvn -B test` 1,899/1,899，0 failures/errors/skips，`BUILD SUCCESS`，6:43 正常退出。5 个改动 Java 文件定向 `spotless:check` 通过，`git diff --check` 通过。
+- 限制：没有真实模型请求、ECS 配置核查、并发负载测试或端到端评估耗时基准；调度池扩到 4 能给后台维护留下并行 worker，不证明每周评估任务自身更快。代码和记录目前仅在本地，未提交/推送；总体审计未完成。

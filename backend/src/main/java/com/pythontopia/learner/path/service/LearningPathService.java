@@ -315,10 +315,10 @@ public class LearningPathService {
 
   private int writeNodesAndQuests(
       Long userId, Long pathId, PathPlannerGraphResponse response, boolean writeQuests) {
-    int generatedQuestCount = 0;
-    LocalDate today = LocalDate.now(ZoneOffset.UTC);
-    for (PathPlannerGraphResponse.NodeDraft draft : response.nodes()) {
-      LearningPathNodeDraft nodeDraft =
+    List<PathPlannerGraphResponse.NodeDraft> drafts = response.nodes();
+    List<LearningPathNodeDraft> nodeDrafts = new ArrayList<>(drafts.size());
+    for (PathPlannerGraphResponse.NodeDraft draft : drafts) {
+      nodeDrafts.add(
           new LearningPathNodeDraft(
               draft.dayIndex(),
               draft.orderInDay(),
@@ -330,11 +330,19 @@ public class LearningPathService {
                   ? null
                   : SuggestedResourceType.valueOf(draft.suggestedResourceType()),
               draft.suggestedProblemId(),
-              draft.sourceClassroomQuestId());
-      Long nodeId = pathRepository.insertNode(pathId, nodeDraft);
-      if (!writeQuests) {
-        continue;
-      }
+              draft.sourceClassroomQuestId()));
+    }
+    List<Long> nodeIds = pathRepository.insertNodes(pathId, nodeDrafts);
+    if (!writeQuests) {
+      return 0;
+    }
+
+    int generatedQuestCount = 0;
+    LocalDate today = LocalDate.now(ZoneOffset.UTC);
+    for (int i = 0; i < drafts.size(); i++) {
+      PathPlannerGraphResponse.NodeDraft draft = drafts.get(i);
+      LearningPathNodeDraft nodeDraft = nodeDrafts.get(i);
+      Long nodeId = nodeIds.get(i);
       QuestNodeType questNodeType = mapToQuestNodeType(nodeDraft.nodeType());
       QuestInsert insert =
           new QuestInsert(

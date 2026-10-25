@@ -2,6 +2,7 @@ package com.pythontopia.learner.mastery;
 
 import com.pythontopia.learner.mastery.dto.MasterySnapshotDto;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 
@@ -15,15 +16,25 @@ public class MasteryService {
   }
 
   public List<MasterySnapshotDto> listSnapshots(Long userId) {
+    List<MasterySnapshot> snapshots = evaluator.snapshots(userId);
+    if (snapshots.isEmpty()) {
+      return List.of();
+    }
     Set<String> assessedKcs = evaluator.assessedKcCodes(userId);
-    return evaluator.snapshots(userId).stream()
-        .map(snapshot -> toDto(userId, snapshot, assessedKcs.contains(snapshot.kcCode())))
+    Map<String, MasterySource> latestSources = evaluator.latestEventSourcesByKc(userId);
+    return snapshots.stream()
+        .map(
+            snapshot ->
+                toDto(
+                    snapshot,
+                    latestSources.get(snapshot.kcCode()),
+                    assessedKcs.contains(snapshot.kcCode())))
         .toList();
   }
 
-  private MasterySnapshotDto toDto(Long userId, MasterySnapshot snapshot, boolean assessed) {
-    List<MasteryEventRecord> events = evaluator.recentEvents(userId, snapshot.kcCode(), 1);
-    String latestSource = events.isEmpty() ? null : events.get(0).source().name();
+  private MasterySnapshotDto toDto(
+      MasterySnapshot snapshot, MasterySource source, boolean assessed) {
+    String latestSource = source == null ? null : source.name();
     String lastEventAt = snapshot.lastEventAt() == null ? null : snapshot.lastEventAt().toString();
     return new MasterySnapshotDto(
         snapshot.kcCode(),

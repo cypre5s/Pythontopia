@@ -14,6 +14,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -24,6 +25,10 @@ import org.springframework.stereotype.Repository;
 
 @Repository
 public class ClassroomQuestRepository {
+
+  private static final int MAX_QUESTS_PER_INSERT = 1000;
+  private static final String STUDENT_QUEST_VALUE_ROW =
+      "(?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, 'OPEN', ?, ?, ?, ?, ?, ?::jsonb)";
 
   private final JdbcTemplate jdbcTemplate;
   private final ObjectMapper objectMapper;
@@ -244,68 +249,71 @@ public class ClassroomQuestRepository {
         classroomQuestId);
   }
 
-  /**
-   * 幂等分发一条学生任务副本：命中 {@code uniq_quest_classroom_user}
-   * （{@code quest(user_id, source_ref_id) WHERE source='CLASSROOM'}）时静默跳过。
-   *
-   * <p>相比「先 INSERT 再 catch DuplicateKeyException」，这里不会在 @Transactional 里把整个事务
-   * 标脏（PostgreSQL 唯一键冲突会 abort 事务，后续 insert 全部失败）。
-   *
-   * @return 新建的 quest id；已存在则 empty。
-   */
-  public Optional<Long> insertStudentQuestIfAbsent(QuestInsert insert) {
-    List<Long> ids =
-        jdbcTemplate.query(
-            connection -> {
-              PreparedStatement ps =
-                  connection.prepareStatement(
-                      """
-                      INSERT INTO quest (
-                        user_id, source, source_ref_id, title, description, kc_code,
-                        node_type, payload, due_date, priority, status,
-                        required_evidence_type, required_mastery_delta,
-                        target_problem_ids, target_resource_id,
-                        deep_link_route, deep_link_params
-                      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?::jsonb, ?, ?, 'OPEN',
-                                ?, ?, ?, ?, ?, ?::jsonb)
-                      ON CONFLICT DO NOTHING
-                      RETURNING id
-                      """);
-              ps.setLong(1, insert.userId());
-              ps.setString(2, insert.source().name());
-              if (insert.sourceRefId() == null) {
-                ps.setNull(3, java.sql.Types.BIGINT);
-              } else {
-                ps.setLong(3, insert.sourceRefId());
-              }
-              ps.setString(4, insert.title());
-              ps.setString(5, insert.description());
-              ps.setString(6, insert.kcCode());
-              ps.setString(7, insert.nodeType().name());
-              ps.setString(8, writeJson(insert.payload()));
-              ps.setObject(9, insert.dueDate());
-              ps.setInt(10, insert.priority());
-              ps.setString(11, insert.requiredEvidenceType());
-              if (insert.requiredMasteryDelta() == null) {
-                ps.setNull(12, java.sql.Types.NUMERIC);
-              } else {
-                ps.setBigDecimal(12, insert.requiredMasteryDelta());
-              }
-              List<Long> targetProblemIds =
-                  insert.targetProblemIds() == null ? List.of() : insert.targetProblemIds();
-              ps.setArray(
-                  13, connection.createArrayOf("BIGINT", targetProblemIds.toArray(Long[]::new)));
-              if (insert.targetResourceId() == null) {
-                ps.setNull(14, java.sql.Types.BIGINT);
-              } else {
-                ps.setLong(14, insert.targetResourceId());
-              }
-              ps.setString(15, insert.deepLinkRoute());
-              ps.setString(16, writeJson(insert.deepLinkParams()));
-              return ps;
-            },
-            (rs, rowNum) -> rs.getLong("id"));
-    return ids.stream().findFirst();
+  /** Inserts student quest copies in bounded SQL statements and returns the number created. */
+  public int insertStudentQuestsIfAbsent(List<QuestInsert> inserts) {
+    int created = 0;
+    for (int start = 0; start < inserts.size(); start += MAX_QUESTS_PER_INSERT) {
+      List<QuestInsert> batch =
+          inserts.subList(start, Math.min(start + MAX_QUESTS_PER_INSERT, inserts.size()));
+      String values =
+          String.join(", ", Collections.nCopies(batch.size(), STUDENT_QUEST_VALUE_ROW));
+      List<Long> ids =
+          jdbcTemplate.query(
+              connection -> {
+                PreparedStatement ps =
+                    connection.prepareStatement(
+                        """
+                        INSERT INTO quest (
+                          user_id, source, source_ref_id, title, description, kc_code,
+                          node_type, payload, due_date, priority, status,
+                          required_evidence_type, required_mastery_delta,
+                          target_problem_ids, target_resource_id,
+                          deep_link_route, deep_link_params
+                        ) VALUES %s
+                        ON CONFLICT DO NOTHING
+                        RETURNING id
+                        """.formatted(values));
+                int index = 1;
+                for (QuestInsert insert : batch) {
+                  ps.setLong(index++, insert.userId());
+                  ps.setString(index++, insert.source().name());
+                  if (insert.sourceRefId() == null) {
+                    ps.setNull(index++, java.sql.Types.BIGINT);
+                  } else {
+                    ps.setLong(index++, insert.sourceRefId());
+                  }
+                  ps.setString(index++, insert.title());
+                  ps.setString(index++, insert.description());
+                  ps.setString(index++, insert.kcCode());
+                  ps.setString(index++, insert.nodeType().name());
+                  ps.setString(index++, writeJson(insert.payload()));
+                  ps.setObject(index++, insert.dueDate());
+                  ps.setInt(index++, insert.priority());
+                  ps.setString(index++, insert.requiredEvidenceType());
+                  if (insert.requiredMasteryDelta() == null) {
+                    ps.setNull(index++, java.sql.Types.NUMERIC);
+                  } else {
+                    ps.setBigDecimal(index++, insert.requiredMasteryDelta());
+                  }
+                  List<Long> targetProblemIds =
+                      insert.targetProblemIds() == null ? List.of() : insert.targetProblemIds();
+                  ps.setArray(
+                      index++,
+                      connection.createArrayOf("BIGINT", targetProblemIds.toArray(Long[]::new)));
+                  if (insert.targetResourceId() == null) {
+                    ps.setNull(index++, java.sql.Types.BIGINT);
+                  } else {
+                    ps.setLong(index++, insert.targetResourceId());
+                  }
+                  ps.setString(index++, insert.deepLinkRoute());
+                  ps.setString(index++, writeJson(insert.deepLinkParams()));
+                }
+                return ps;
+              },
+              (rs, rowNum) -> rs.getLong("id"));
+      created += ids.size();
+    }
+    return created;
   }
 
   private ClassroomQuestDto map(ResultSet rs) throws SQLException {

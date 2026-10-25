@@ -13,7 +13,10 @@ import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
@@ -130,46 +133,70 @@ public class LearningPathRepository {
     return key.longValue();
   }
 
-  public Long insertNode(Long pathId, LearningPathNodeDraft node) {
-    GeneratedKeyHolder keyHolder = new GeneratedKeyHolder();
-    jdbcTemplate.update(
-        connection -> {
-          PreparedStatement ps =
-              connection.prepareStatement(
-                  """
-                  INSERT INTO learning_path_node (
-                    path_id, day_index, order_in_day, kc_code, node_type,
-                    reason_summary, evidence_summary, suggested_resource_type,
-                    suggested_problem_id, payload
-                  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb)
-                  """,
-                  new String[] {"id"});
-          ps.setLong(1, pathId);
-          ps.setInt(2, node.dayIndex());
-          ps.setInt(3, node.orderInDay());
-          ps.setString(4, node.kcCode());
-          ps.setString(5, node.nodeType().name());
-          ps.setString(6, node.reasonSummary());
-          ps.setString(7, node.evidenceSummary());
-          if (node.suggestedResourceType() == null) {
-            ps.setNull(8, java.sql.Types.VARCHAR);
-          } else {
-            ps.setString(8, node.suggestedResourceType().name());
-          }
-          if (node.suggestedProblemId() == null) {
-            ps.setNull(9, java.sql.Types.BIGINT);
-          } else {
-            ps.setLong(9, node.suggestedProblemId());
-          }
-          ps.setString(10, writeJson(node.sourceClassroomQuestId()));
-          return ps;
-        },
-        keyHolder);
-    Number key = keyHolder.getKey();
-    if (key == null) {
-      throw new IllegalStateException("learning_path_node insert returned no key");
+  public List<Long> insertNodes(Long pathId, List<LearningPathNodeDraft> nodes) {
+    if (nodes.isEmpty()) {
+      return List.of();
     }
-    return key.longValue();
+    String values =
+        String.join(
+            ", ",
+            Collections.nCopies(nodes.size(), "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb)"));
+    String sql =
+        """
+        INSERT INTO learning_path_node (
+          path_id, day_index, order_in_day, kc_code, node_type,
+          reason_summary, evidence_summary, suggested_resource_type,
+          suggested_problem_id, payload
+        ) VALUES %s
+        RETURNING id, day_index, order_in_day
+        """.formatted(values);
+
+    Map<NodePosition, Long> idsByPosition =
+        jdbcTemplate.query(
+            connection -> {
+              PreparedStatement ps = connection.prepareStatement(sql);
+              int parameter = 1;
+              for (LearningPathNodeDraft node : nodes) {
+                ps.setLong(parameter++, pathId);
+                ps.setInt(parameter++, node.dayIndex());
+                ps.setInt(parameter++, node.orderInDay());
+                ps.setString(parameter++, node.kcCode());
+                ps.setString(parameter++, node.nodeType().name());
+                ps.setString(parameter++, node.reasonSummary());
+                ps.setString(parameter++, node.evidenceSummary());
+                if (node.suggestedResourceType() == null) {
+                  ps.setNull(parameter++, java.sql.Types.VARCHAR);
+                } else {
+                  ps.setString(parameter++, node.suggestedResourceType().name());
+                }
+                if (node.suggestedProblemId() == null) {
+                  ps.setNull(parameter++, java.sql.Types.BIGINT);
+                } else {
+                  ps.setLong(parameter++, node.suggestedProblemId());
+                }
+                ps.setString(parameter++, writeJson(node.sourceClassroomQuestId()));
+              }
+              return ps;
+            },
+            rs -> {
+              Map<NodePosition, Long> result = new HashMap<>();
+              while (rs.next()) {
+                result.put(
+                    new NodePosition(rs.getInt("day_index"), rs.getInt("order_in_day")),
+                    rs.getLong("id"));
+              }
+              return result;
+            });
+
+    List<Long> ids = new ArrayList<>(nodes.size());
+    for (LearningPathNodeDraft node : nodes) {
+      Long id = idsByPosition.get(new NodePosition(node.dayIndex(), node.orderInDay()));
+      if (id == null) {
+        throw new IllegalStateException("learning_path_node insert returned no key");
+      }
+      ids.add(id);
+    }
+    return ids;
   }
 
   public Optional<LearningPathDto> findActive(Long userId, Long packId) {
@@ -329,6 +356,8 @@ public class LearningPathRepository {
       SuggestedResourceType suggestedResourceType,
       Long suggestedProblemId,
       Long sourceClassroomQuestId) {}
+
+  private record NodePosition(int dayIndex, int orderInDay) {}
 
   public List<LearningPathNodeDraft> emptyDrafts() {
     return new ArrayList<>();

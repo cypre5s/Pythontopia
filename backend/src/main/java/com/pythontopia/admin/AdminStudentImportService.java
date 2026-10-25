@@ -1,6 +1,7 @@
 package com.pythontopia.admin;
 
 import com.pythontopia.auth.repository.UserRepository;
+import com.pythontopia.auth.repository.UserRepository.StudentImport;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.error.BusinessException;
@@ -44,28 +45,30 @@ public class AdminStudentImportService {
     requireAdmin(admin);
     List<RosterStudent> students = parse(file);
     List<AdminStudentCredentialDto> credentials = new ArrayList<>();
+    List<StudentImport> inserts = new ArrayList<>();
+    Set<String> existingUsernames =
+        userRepository.findExistingUsernames(
+            students.stream().map(RosterStudent::studentId).toList());
     int skippedCount = 0;
     for (RosterStudent student : students) {
-      if (userRepository.findByUsername(student.studentId()).isPresent()) {
+      if (existingUsernames.contains(student.studentId())) {
         skippedCount++;
         continue;
       }
       String password = new StringBuilder(student.studentId()).reverse().toString();
-      try {
-        userRepository.save(
-            student.studentId(),
-            student.name(),
-            passwordEncoder.encode(password),
-            null,
-            Role.STUDENT);
-      } catch (DuplicateKeyException exception) {
-        throw new BusinessException(
-            HttpStatus.CONFLICT,
-            "STUDENT_IMPORT_CONFLICT",
-            "导入期间账号发生冲突，请刷新名单后重试");
-      }
+      inserts.add(
+          new StudentImport(
+              student.studentId(), student.name(), passwordEncoder.encode(password)));
       credentials.add(
           new AdminStudentCredentialDto(student.studentId(), student.name(), password));
+    }
+    try {
+      userRepository.insertStudents(inserts);
+    } catch (DuplicateKeyException exception) {
+      throw new BusinessException(
+          HttpStatus.CONFLICT,
+          "STUDENT_IMPORT_CONFLICT",
+          "导入期间账号发生冲突，请刷新名单后重试");
     }
     return new AdminStudentImportResultDto(credentials.size(), skippedCount, credentials);
   }

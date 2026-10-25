@@ -1,7 +1,10 @@
 package com.pythontopia.learner.memory;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Collections;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Repository;
 
@@ -41,6 +44,27 @@ public class JdbcMemoryEmbeddingRepository implements MemoryEmbeddingRepository 
       return Optional.empty();
     }
     return Optional.of(parseVectorLiteral(rows.get(0)));
+  }
+
+  @Override
+  public Map<Long, float[]> findAll(List<Long> eventIds) {
+    if (eventIds.isEmpty()) {
+      return Map.of();
+    }
+    // shortcut: the caller caps this lookup at 30 events; chunk if reused for larger batches.
+    String placeholders = String.join(",", Collections.nCopies(eventIds.size(), "?"));
+    return jdbc.query(
+        "SELECT event_id, embedding::text FROM memory_embedding WHERE event_id IN ("
+            + placeholders
+            + ")",
+        rs -> {
+          Map<Long, float[]> vectors = new HashMap<>();
+          while (rs.next()) {
+            vectors.put(rs.getLong("event_id"), parseVectorLiteral(rs.getString("embedding")));
+          }
+          return vectors;
+        },
+        eventIds.toArray());
   }
 
   @Override
