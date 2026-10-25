@@ -20,8 +20,8 @@ import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
 /**
- * Piston 远程判题适配器。Piston/Isolate 负责 namespace、chroot、cgroup、无网络和逐提交低权用户隔离； 本类只转换 Pythontopia
- * 判题契约，任何远程异常均 fail closed，绝不回退到应用容器内执行。
+ * Piston 远程判题适配器。Piston 负责逐提交低权用户、资源限制和无网络执行；本类只转换 Pythontopia 判题契约，任何远程异常均 fail
+ * closed，绝不回退到应用容器内执行。
  */
 @Component
 @ConditionalOnProperty(name = "pythontopia.judge.provider", havingValue = "piston")

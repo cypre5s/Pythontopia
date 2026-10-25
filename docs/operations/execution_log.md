@@ -1287,3 +1287,10 @@
 - 本地验证：Maven 全量 `1870` 项通过（0 failures/errors/skips，BUILD SUCCESS）；Tutor 服务与提交监听器定向 59 项通过。Frontend typecheck 通过、lint 0 errors（405 warnings）、Vitest 288 文件 / 2,718 项通过；Tutor 面板定向 14 项、Admin Users 8 项通过。RAG 全量在故意不可用的 PostgreSQL URL 下 179 项通过；相关 GraphRAG 路由与 fail-closed 定向验证 28 项通过（1 warning）。
 - Maven 全量测试结束时 Surefire 因测试容器关闭后的 Hikari 后台连接重试，在 30 秒退出等待后回收了 fork JVM；测试报告为全绿且 Maven 返回 BUILD SUCCESS。GitHub 新提交 CI 与 `web-v20261025.2` Release 工作流待推送后确认。
 - 未运行真实 Judge/模型调用的浏览器端到端验收；本次 AI Tutor 前后端恢复由服务单测与 Vue 流程组件测试覆盖。未修改工作区原有的 `.gitignore`、API contract、CHANGELOG、课程 manifest 和 AstrBot 插件改动。
+
+## 2026-10-25 — Piston 计量与 Tutor 转题真实栈复验
+
+- 本地 Piston 增加 `wait4(2)` 峰值 RSS 计量和单调时钟 wall-time 计时；保持 `exit` 时清理同 UID 子进程，并等 `close` 后读取资源管道，避免超时作业和峰值内存计量竞态。重建镜像后烟测通过 Python 3.12.0、非 root、宿主文件/loopback 隔离及超时终止；真实训练提交弹窗显示 `73 ms`、`9600 KB`，运行时间按同题同语言 89 条 AC 提交显示快于 5.6%。内存样本不足 10 条时按规则不展示百分位。
+- Graph 迁移题提示收紧到 AST 允许的基础语法，确保样例/隐藏输出可由同一参考解验证；后端保存失败改为脱敏 SSE error 并正常结束，日志只记录 stage、错误类型、判定与用例数。真实 DeepSeek→Graph→Piston→数据库迁移题链路生成 3 个样例和 3 个隐藏用例并通过自测；参考解/隐藏用例不出现在公开卡片。
+- 真实 Chromium 复验 AC 结果弹窗、Escape/按钮关闭、运行/内存值、AC_REVIEW 与迁移题卡片：console errors 0、pageerrors 0；2 个 requestfailed 对应客户端收到终态后主动取消 SSE reader，迁移题卡片仍正常到达且无私有解答字段。截图保存在 `/tmp/pythontopia-submission-result.png` 和 `/tmp/pythontopia-transfer-card.png`。
+- 全量 Maven 1,870/1,870（0 failures/errors/skips，BUILD SUCCESS）；前端 typecheck、lint（0 errors、405 warnings）、Vitest 288 文件 / 2,719 项通过；Graph pytest 1,984 passed / 1 skipped、RAG 179 passed。浏览器和 API 验收生成的 12 个临时用户及其阻塞外键记录已删除，临时后端已停止。

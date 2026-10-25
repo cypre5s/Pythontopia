@@ -169,6 +169,7 @@ async def test_transfer_card_contains_private_judge_draft_for_backend_validation
     assert card["reference_solution_code"].startswith("length, width")
     assert card["test_cases"] == [{"input": "1.5 4", "output": "6.00"}]
     assert "reference_solution_code" in json.dumps(provider.messages)
+    assert "通过项目 AST 白名单" in json.dumps(provider.messages, ensure_ascii=False)
 
 
 @pytest.mark.asyncio

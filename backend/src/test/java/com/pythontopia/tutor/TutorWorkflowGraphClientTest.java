@@ -21,6 +21,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
@@ -59,9 +60,7 @@ class TutorWorkflowGraphClientTest {
 
     GraphServiceProperties properties =
         new GraphServiceProperties(
-            "http://127.0.0.1:" + server.getAddress().getPort(),
-            "http://rag.test",
-            "secret");
+            "http://127.0.0.1:" + server.getAddress().getPort(), "http://rag.test", "secret");
     TutorWorkflowGraphClient client =
         new TutorWorkflowGraphClient(properties, new ObjectMapper(), new SseRelayExecutor());
 
@@ -102,6 +101,7 @@ class TutorWorkflowGraphClientTest {
   void doesNotForwardTerminalSuccessWhenProjectionFails() throws Exception {
     startGraphServer("event: result\ndata: {}\n\n");
     List<String> order = new CopyOnWriteArrayList<>();
+    List<String> errors = new CopyOnWriteArrayList<>();
     RecordingEmitter emitter = new RecordingEmitter(order);
     TutorWorkflowGraphClient client = newClient();
     String privateResult = "privateTutorResultSentinel";
@@ -118,11 +118,19 @@ class TutorWorkflowGraphClientTest {
           emitter,
           ignored -> {
             throw new IllegalStateException(privateResult);
-          });
+          },
+          errors::add,
+          () -> {});
 
       assertThat(emitter.finished.await(5, TimeUnit.SECONDS)).isTrue();
-      assertThat(order).contains("error").doesNotContain("send");
-      assertThat(emitter.failure.getMessage()).doesNotContain(privateResult);
+      assertThat(order).containsSubsequence("send", "complete").doesNotContain("error");
+      assertThat(emitter.sentEvents)
+          .singleElement()
+          .asString()
+          .contains("event:error", "TUTOR_WORKFLOW_RESULT_PERSIST_FAILED")
+          .doesNotContain(privateResult);
+      assertThat(errors).containsExactly("Tutor workflow result projection failed");
+      assertThat(emitter.failure).isNull();
       assertThat(appender.list).hasSize(1);
       assertThat(appender.list.getFirst().getFormattedMessage()).doesNotContain(privateResult);
       assertThat(appender.list.getFirst().getThrowableProxy()).isNull();
@@ -217,13 +225,14 @@ class TutorWorkflowGraphClientTest {
     CompletableFuture<Void> markedInterrupted = new CompletableFuture<>();
     TimeoutEmitter emitter = new TimeoutEmitter();
 
-    newClient().runStream(
-        73L,
-        Map.of("user_id", 73L, "session_id", "wf-shared"),
-        emitter,
-        ignored -> ignored,
-        ignored -> {},
-        () -> markedInterrupted.complete(null));
+    newClient()
+        .runStream(
+            73L,
+            Map.of("user_id", 73L, "session_id", "wf-shared"),
+            emitter,
+            ignored -> ignored,
+            ignored -> {},
+            () -> markedInterrupted.complete(null));
 
     streamOpened.get(5, TimeUnit.SECONDS);
     emitter.triggerTimeout();
@@ -234,9 +243,7 @@ class TutorWorkflowGraphClientTest {
   private TutorWorkflowGraphClient newClient() {
     GraphServiceProperties properties =
         new GraphServiceProperties(
-            "http://127.0.0.1:" + server.getAddress().getPort(),
-            "http://rag.test",
-            "secret");
+            "http://127.0.0.1:" + server.getAddress().getPort(), "http://rag.test", "secret");
     return new TutorWorkflowGraphClient(properties, new ObjectMapper(), new SseRelayExecutor());
   }
 
@@ -258,6 +265,7 @@ class TutorWorkflowGraphClientTest {
 
   private static final class RecordingEmitter extends SseEmitter {
     private final List<String> order;
+    private final List<String> sentEvents = new CopyOnWriteArrayList<>();
     private final CountDownLatch finished = new CountDownLatch(1);
     private Throwable failure;
 
@@ -269,6 +277,10 @@ class TutorWorkflowGraphClientTest {
     @Override
     public void send(SseEventBuilder builder) {
       order.add("send");
+      sentEvents.add(
+          builder.build().stream()
+              .map(item -> String.valueOf(item.getData()))
+              .collect(Collectors.joining()));
     }
 
     @Override

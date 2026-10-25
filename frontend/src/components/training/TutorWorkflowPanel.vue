@@ -111,6 +111,7 @@ const cards = ref<CardEntry[]>([]);
 const olderCardsCursor = ref<WorkflowCardCursorDto | null>(null);
 const olderCardsLoading = ref(false);
 const availableActions = ref<WorkflowActionDto[]>([]);
+const eventProcessing = ref(false);
 const phase = ref<string>('READING');
 const sessionKey = ref('');
 const episodePlan = ref<TutorEpisodePlanDto | null>(null);
@@ -155,7 +156,7 @@ let explicitStopSequence = 0;
 const streamRunning = computed(
   () => sse.status.value === 'streaming' || sse.status.value === 'connecting',
 );
-const running = computed(() => localTraceRunning.value || streamRunning.value);
+const running = computed(() => eventProcessing.value || localTraceRunning.value || streamRunning.value);
 interface CoachProgressItem {
   key: string;
   label: string;
@@ -611,40 +612,45 @@ async function runEvent(
   recoveredRequest.value = false;
   savePendingWorkflowRequest(retryRequest);
   const stopSequence = explicitStopSequence;
-  await sse.start(body);
-  if (stopSequence !== explicitStopSequence) return;
-  // 组件已销毁（含 onBeforeUnmount 的 abort：abort 会把 status 置成 done 但 result 为空）→
-  // 不再落卡片、更不弹「导学助手暂时没响应」到别的页面。
-  if (!alive) return;
-  if (sse.status.value === 'done' && sse.result.value) {
-    discardPendingWorkflowRequest();
-    const r = sse.result.value;
-    sessionKey.value = r.session_id || sessionKey.value;
-    phase.value = r.phase;
-    episodePlan.value = r.episode_plan ?? null;
-    if (event === 'TRANSFER' || event === 'AC_REVIEW' || event === 'ERROR_FEEDBACK') {
-      try {
-        await refreshWorkflowSession();
-      } catch {
-        toast.show('导学结果已生成，但会话刷新失败，请刷新后重试', 'error');
-        return;
+  eventProcessing.value = true;
+  try {
+    await sse.start(body);
+    if (stopSequence !== explicitStopSequence) return;
+    // 组件已销毁（含 onBeforeUnmount 的 abort：abort 会把 status 置成 done 但 result 为空）→
+    // 不再落卡片、更不弹「导学助手暂时没响应」到别的页面。
+    if (!alive) return;
+    if (sse.status.value === 'done' && sse.result.value) {
+      discardPendingWorkflowRequest();
+      const r = sse.result.value;
+      sessionKey.value = r.session_id || sessionKey.value;
+      phase.value = r.phase;
+      episodePlan.value = r.episode_plan ?? null;
+      if (event === 'TRANSFER' || event === 'AC_REVIEW' || event === 'ERROR_FEEDBACK') {
+        try {
+          await refreshWorkflowSession();
+        } catch {
+          toast.show('导学结果已生成，但会话刷新失败，请刷新后重试', 'error');
+          return;
+        }
+      } else if (r.card && r.card_key) {
+        const entry: CardEntry = { key: r.card_key, payload: r.card, seq: r.seq };
+        const msg = eventData?.message;
+        if (typeof msg === 'string' && msg) entry.userMessage = msg;
+        if (!cards.value.some((card) => !card.localOnly && card.seq === entry.seq)) {
+          cards.value = [...cards.value, entry];
+        }
       }
-    } else if (r.card && r.card_key) {
-      const entry: CardEntry = { key: r.card_key, payload: r.card, seq: r.seq };
-      const msg = eventData?.message;
-      if (typeof msg === 'string' && msg) entry.userMessage = msg;
-      if (!cards.value.some((card) => !card.localOnly && card.seq === entry.seq)) {
-        cards.value = [...cards.value, entry];
+      // 严格以后端 available_actions 为准（已按 Phase 门控 + 推荐排序），不再前端补齐辅助动作。
+      if (Array.isArray(r.available_actions) && r.available_actions.length > 0) {
+        availableActions.value = r.available_actions;
       }
+      scrollBottom();
+      void processLatestSubmission();
+    } else {
+      toast.show(sse.error.value?.message ?? '导学助手暂时没响应，再试一次', 'error');
     }
-    // 严格以后端 available_actions 为准（已按 Phase 门控 + 推荐排序），不再前端补齐辅助动作。
-    if (Array.isArray(r.available_actions) && r.available_actions.length > 0) {
-      availableActions.value = r.available_actions;
-    }
-    scrollBottom();
-    void processLatestSubmission();
-  } else {
-    toast.show(sse.error.value?.message ?? '导学助手暂时没响应，再试一次', 'error');
+  } finally {
+    eventProcessing.value = false;
   }
 }
 

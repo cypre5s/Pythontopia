@@ -20,7 +20,9 @@ const {
   streamConfig: {
     completeRequest: false,
     holdRequest: false,
+    holdCompletedRequest: false,
     resolveRequest: null as (() => void) | null,
+    resolveCompletedRequests: [] as Array<() => void>,
     result: null as unknown,
   },
 }));
@@ -50,6 +52,9 @@ vi.mock('@/composables/useSseStream', async () => {
             session_id: 'session-42', phase: 'READING', episode_plan: null,
             card: null, card_key: null, seq: 0, available_actions: [],
           };
+          if (streamConfig.holdCompletedRequest) {
+            await new Promise<void>((resolve) => streamConfig.resolveCompletedRequests.push(resolve));
+          }
         }
         },
         abort: () => {
@@ -114,7 +119,9 @@ describe('TutorWorkflowPanel interrupted request recovery', () => {
     vi.clearAllMocks();
     streamConfig.completeRequest = false;
     streamConfig.holdRequest = false;
+    streamConfig.holdCompletedRequest = false;
     streamConfig.resolveRequest = null;
+    streamConfig.resolveCompletedRequests = [];
     streamConfig.result = null;
     getActiveWorkflowSession.mockResolvedValue({
       sessionKey: 'session-42',
@@ -340,6 +347,28 @@ describe('TutorWorkflowPanel interrupted request recovery', () => {
 
     expect(sessionStorage.getItem('pyt:tutor-workflow:pending:42')).toBeNull();
     expect(wrapper.find('[data-testid="tutor-workflow-retry"]').exists()).toBe(false);
+  });
+
+  it('blocks duplicate actions until the completed result has been applied', async () => {
+    streamConfig.completeRequest = true;
+    streamConfig.holdCompletedRequest = true;
+    const wrapper = shallowMount(TutorWorkflowPanel, {
+      props: { problemId: 42, kcCodes: [] },
+      global: { stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    const action = wrapper.get('[data-testid="coach-recommended-action"]');
+    await action.trigger('click');
+    await flushPromises();
+    const disabledWhileApplying = action.attributes('disabled') !== undefined;
+    await action.trigger('click');
+    streamConfig.resolveCompletedRequests.forEach((resolve) => resolve());
+    await flushPromises();
+
+    expect(disabledWhileApplying).toBe(true);
+    expect(streamStart).toHaveBeenCalledOnce();
+    wrapper.unmount();
   });
 
   it('does not append a duplicate card when a completed request is replayed after refresh', async () => {

@@ -18,14 +18,18 @@
 - Modify: `backend/src/main/java/com/pythontopia/submission/judge/JudgeCaseEvaluator.java`
 - Modify: `backend/src/main/java/com/pythontopia/submission/judge/JudgeService.java`
 - Modify: `backend/src/main/java/com/pythontopia/submission/repository/PracticeSubmissionRepository.java`
+- Modify: `deploy/piston-local/Dockerfile`
+- Modify: `deploy/piston-local/harden-piston-runtime.cjs`
+- Create: `deploy/piston-local/piston_resource_meter.c`
+- Modify: `deploy/scripts/test_dev_piston_sandbox.mjs`
 - Test: `backend/src/test/java/com/pythontopia/submission/judge/PistonPythonSandboxTest.java`
 - Test: `backend/src/test/java/com/pythontopia/submission/judge/JudgeCaseEvaluatorTest.java`
 - Test: `backend/src/test/java/com/pythontopia/submission/judge/JudgeServiceTest.java`
 
 **Steps:**
 
-1. Add Piston response fixtures asserting `run.memory` bytes convert to KB; assert an absent/invalid memory value remains null.
-2. Extend sandbox/evaluation results to carry nullable memory KB, summing per-case wall time as today and taking the maximum per-case memory.
+1. Add a Piston smoke assertion for measured wall time and peak RSS, including a larger allocation; keep absent/invalid metrics nullable in the backend parser.
+2. Patch the pinned Piston 3.1 image with a small `wait4(2)` wrapper for peak RSS and monotonic wall time, without granting extra container capabilities; extend sandbox/evaluation results to carry nullable memory KB, summing per-case wall time and taking the maximum per-case memory.
 3. Persist runtime and peak memory together for final judge status; preserve null for static-check/system errors or absent sandbox measurements.
 4. Run the three targeted backend test classes and fix any other `SandboxRunResult` constructor call sites reported by compilation.
 

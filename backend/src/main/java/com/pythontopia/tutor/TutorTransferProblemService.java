@@ -11,21 +11,26 @@ import com.pythontopia.submission.judge.JudgeTestCase;
 import com.pythontopia.submission.judge.JudgeWorkerPool;
 import com.pythontopia.submission.judge.StaticCodeChecker;
 import com.pythontopia.submission.repository.PublicProblemRepository;
-import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.UUID;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Materializes an AI Tutor transfer draft only after its reference solution passes the real sandbox. */
+/**
+ * Materializes an AI Tutor transfer draft only after its reference solution passes the real
+ * sandbox.
+ */
 @Service
 public class TutorTransferProblemService {
 
+  private static final Logger log = LoggerFactory.getLogger(TutorTransferProblemService.class);
   private static final int MAX_CASES = 10;
   private static final int CASE_TIMEOUT_MS = 5_000;
 
@@ -54,44 +59,82 @@ public class TutorTransferProblemService {
   @Transactional
   public PublicProblemDto materialize(
       Long userId, Long sessionId, UUID runId, Long sourceProblemId, JsonNode rawDraft) {
-    if (userId == null || userId < 1 || sessionId == null || sessionId < 1 || runId == null) {
-      throw new IllegalArgumentException("迁移题必须绑定有效的学生、会话和运行记录");
-    }
-    PublicProblemDto source =
-        problemRepository
-            .findPublic(43L, sourceProblemId)
-            .orElseThrow(() -> new IllegalArgumentException("迁移题源题不可用"));
-    TransferDraft draft = parseAndValidate(rawDraft, source.kcCode());
-    String requestHash = sha256(rawDraft);
-    ExistingTransfer existing = findExisting(userId, sessionId, runId);
-    if (existing != null) {
-      if (!requestHash.equals(existing.requestHash())) {
-        throw new IllegalStateException("迁移题运行标识对应了不同草稿");
+    String stage = "request_validation";
+    try {
+      if (userId == null || userId < 1 || sessionId == null || sessionId < 1 || runId == null) {
+        throw new IllegalArgumentException("迁移题必须绑定有效的学生、会话和运行记录");
       }
-      return toPublicProblem(existing.id(), source, draft);
-    }
+      stage = "source_problem";
+      PublicProblemDto source =
+          problemRepository
+              .findPublic(43L, sourceProblemId)
+              .orElseThrow(() -> new IllegalArgumentException("迁移题源题不可用"));
+      stage = "draft_validation";
+      TransferDraft draft = parseAndValidate(rawDraft, source.kcCode());
+      String requestHash = sha256(rawDraft);
+      ExistingTransfer existing = findExisting(userId, sessionId, runId);
+      if (existing != null) {
+        if (!requestHash.equals(existing.requestHash())) {
+          throw new IllegalStateException("迁移题运行标识对应了不同草稿");
+        }
+        return toPublicProblem(existing.id(), source, draft);
+      }
 
-    StaticCodeChecker.CheckResult syntax =
-        judgeWorkerPool.submitAndWait(() -> staticCodeChecker.check(draft.referenceSolutionCode()));
-    if (!syntax.passed()) {
-      throw new IllegalArgumentException("迁移题参考解未通过安全检查");
-    }
-    List<JudgeTestCase> cases = new ArrayList<>();
-    draft.samples().forEach(sample -> cases.add(new JudgeTestCase(sample.input(), sample.output(), CASE_TIMEOUT_MS)));
-    draft.testCases().forEach(
-        testCase -> cases.add(new JudgeTestCase(testCase.input(), testCase.output(), CASE_TIMEOUT_MS, true)));
-    JudgeCaseEvaluator.CaseEvaluation validation =
-        judgeWorkerPool.submitAndWait(() -> caseEvaluator.evaluate(draft.referenceSolutionCode(), cases));
-    if (validation.finalVerdict() != Verdict.AC || validation.passedCases() != cases.size()) {
-      throw new IllegalArgumentException("迁移题参考解自测未通过");
-    }
+      stage = "reference_security_check";
+      StaticCodeChecker.CheckResult syntax =
+          judgeWorkerPool.submitAndWait(
+              () -> staticCodeChecker.check(draft.referenceSolutionCode()));
+      if (!syntax.passed()) {
+        String failureCategory =
+            syntax.failureReason() == null ? "unknown" : syntax.failureReason().split(":", 2)[0];
+        String rejectedImport =
+            "banned_import".equals(failureCategory)
+                    && syntax.failureReason().split(":", 3).length > 1
+                ? syntax.failureReason().split(":", 3)[1]
+                : "none";
+        log.warn(
+            "AI Tutor transfer reference rejected by static checker category={} import={}"
+                + " systemError={}",
+            failureCategory,
+            rejectedImport,
+            syntax.systemError());
+        throw new IllegalArgumentException("迁移题参考解未通过安全检查");
+      }
+      stage = "reference_self_test";
+      List<JudgeTestCase> cases = new ArrayList<>();
+      draft
+          .samples()
+          .forEach(
+              sample ->
+                  cases.add(new JudgeTestCase(sample.input(), sample.output(), CASE_TIMEOUT_MS)));
+      draft
+          .testCases()
+          .forEach(
+              testCase ->
+                  cases.add(
+                      new JudgeTestCase(
+                          testCase.input(), testCase.output(), CASE_TIMEOUT_MS, true)));
+      JudgeCaseEvaluator.CaseEvaluation validation =
+          judgeWorkerPool.submitAndWait(
+              () -> caseEvaluator.evaluate(draft.referenceSolutionCode(), cases));
+      if (validation.finalVerdict() != Verdict.AC || validation.passedCases() != cases.size()) {
+        log.warn(
+            "AI Tutor transfer reference rejected verdict={} passedCases={} totalCases={}",
+            validation.finalVerdict(),
+            validation.passedCases(),
+            cases.size());
+        throw new IllegalArgumentException("迁移题参考解自测未通过");
+      }
 
-    Long problemId = jdbcTemplate.queryForObject("SELECT nextval('tutor_transfer_problem_id_seq')", Long.class);
-    if (problemId == null) {
-      throw new IllegalStateException("无法分配迁移题编号");
-    }
-    jdbcTemplate.update(
-        """
+      stage = "persist";
+      Long problemId =
+          jdbcTemplate.queryForObject(
+              "SELECT nextval('tutor_transfer_problem_id_seq')", Long.class);
+      if (problemId == null) {
+        throw new IllegalStateException("无法分配迁移题编号");
+      }
+      jdbcTemplate.update(
+          """
         INSERT INTO course_problem (
           id, pack_id, kc_code, title, statement_markdown, input_description,
           output_description, difficulty, samples, hidden_test_cases, source_label,
@@ -100,22 +143,29 @@ public class TutorTransferProblemService {
         ) VALUES (?, 43, ?, ?, ?, ?, ?, ?, ?::jsonb, ?::jsonb, 'AI Tutor transfer',
           'Python3', ?, ?, ?, ?, ?, ?)
         """,
-        problemId,
-        source.kcCode(),
-        draft.title(),
-        draft.description(),
-        draft.inputDescription(),
-        draft.outputDescription(),
-        source.difficulty(),
-        writeJson(draft.samples()),
-        writeJson(draft.testCases()),
-        draft.referenceSolutionCode(),
-        userId,
-        sourceProblemId,
-        sessionId,
-        runId,
-        requestHash);
-    return toPublicProblem(problemId, source, draft);
+          problemId,
+          source.kcCode(),
+          draft.title(),
+          draft.description(),
+          draft.inputDescription(),
+          draft.outputDescription(),
+          source.difficulty(),
+          writeJson(draft.samples()),
+          writeJson(draft.testCases()),
+          draft.referenceSolutionCode(),
+          userId,
+          sourceProblemId,
+          sessionId,
+          runId,
+          requestHash);
+      return toPublicProblem(problemId, source, draft);
+    } catch (RuntimeException e) {
+      log.warn(
+          "AI Tutor transfer materialization failed stage={} errorType={}",
+          stage,
+          e.getClass().getSimpleName());
+      throw e;
+    }
   }
 
   private ExistingTransfer findExisting(Long userId, Long sessionId, UUID runId) {
@@ -125,7 +175,8 @@ public class TutorTransferProblemService {
             SELECT id, tutor_request_hash FROM course_problem
             WHERE tutor_owner_user_id = ? AND tutor_session_id = ? AND tutor_run_id = ?
             """,
-            (rs, rowNum) -> new ExistingTransfer(rs.getLong("id"), rs.getString("tutor_request_hash")),
+            (rs, rowNum) ->
+                new ExistingTransfer(rs.getLong("id"), rs.getString("tutor_request_hash")),
             userId,
             sessionId,
             runId);
@@ -147,10 +198,13 @@ public class TutorTransferProblemService {
       if (!"Python3".equals(draft.referenceSolutionLanguage())) {
         throw new IllegalArgumentException("迁移题参考解语言必须是 Python3");
       }
-      if (sourceKcCode == null || sourceKcCode.isBlank() || !draft.targetKcs().contains(sourceKcCode)) {
+      if (sourceKcCode == null
+          || sourceKcCode.isBlank()
+          || !draft.targetKcs().contains(sourceKcCode)) {
         throw new IllegalArgumentException("迁移题知识点必须来自源题");
       }
-      if (draft.samples().isEmpty() || draft.testCases().isEmpty()
+      if (draft.samples().isEmpty()
+          || draft.testCases().isEmpty()
           || draft.samples().size() + draft.testCases().size() > MAX_CASES) {
         throw new IllegalArgumentException("迁移题至少需要一个样例和一个隐藏测试，最多十个用例");
       }
@@ -187,8 +241,7 @@ public class TutorTransferProblemService {
   private String sha256(JsonNode value) {
     try {
       byte[] digest =
-          MessageDigest.getInstance("SHA-256")
-              .digest(objectMapper.writeValueAsBytes(value));
+          MessageDigest.getInstance("SHA-256").digest(objectMapper.writeValueAsBytes(value));
       return java.util.HexFormat.of().formatHex(digest);
     } catch (NoSuchAlgorithmException | JsonProcessingException e) {
       throw new IllegalStateException("无法校验迁移题草稿", e);

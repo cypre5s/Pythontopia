@@ -119,8 +119,10 @@ TRANSFER_PROMPT = """你是面向非计算机专业 Python 初学者的 AI 导�
 - 难度与源题相当或略升半档，适合初学者独立完成；
 - 题面自洽完整：描述、输入说明、输出说明、至少 1 组输入输出样例、1 条不剧透的提示；
 - samples 数组中每项是 {"input": "...", "output": "..."}，输入输出必须与题面一致且正确；
-- 额外生成仅供服务端验证的 reference_solution_language（固定 Python3）、reference_solution_code 和 1-9 条 test_cases；
-- test_cases 是与公开样例不同的隐藏输入，覆盖边界和一般情况，输出必须与题面一致；
+- 额外生成仅供服务端验证的 reference_solution_language（固定 Python3）、reference_solution_code 和 1-3 条 test_cases；
+- reference_solution_code 只用基础语法和安全内置函数；尽量不导入模块，如需导入只能使用 math；必须通过项目 AST 白名单，不使用 sys、os、subprocess 等模块、文件、网络、进程、反射、动态执行或第三方库；
+- 先固定输入格式、输出格式和边界，再用同一参考解逐个核对样例与隐藏用例的输出；小数位、空格和换行必须与题面一致，不能凭空估算输出；
+- test_cases 是与公开样例不同的隐藏输入，至少覆盖一个边界和一个一般情况，输出必须与题面及参考解一致；
 - 参考解和隐藏测试只写入结构化字段，不能写进题面、样例或 hint；Java 会在发送学生前剔除这些字段；
 - 不在 hint 里给出解法步骤；
 - target_kcs 只能从【候选知识点】中选择；
