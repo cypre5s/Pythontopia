@@ -8,6 +8,9 @@
 // 只走带标签的展示通道（顶部 banner + 引用分区统一标注），绝不混入 packId=43 课件 evidence / 引用。
 // 本模块仅负责取数与纯展示辅助；不产出任何课件证据，不做判题。
 
+/** 覆盖后端 50s 的 BROWSE 读超时窗口。 */
+const BROWSE_RUN_TIMEOUT_MS = 60_000;
+
 import { http } from './http';
 
 // ============ DTO（camelCase JSON，镜像后端 BrowseRunDto / BrowseRunDetailDto） ============
@@ -76,7 +79,11 @@ export interface BrowseRunDetailDto extends BrowseRunDto {
 
 /** 创建一次联网查证会话（服务端注入安全墙 allowlist、调 graph BROWSE、落 V170）。 */
 export async function createBrowseRun(request: BrowseRunCreateRequest): Promise<BrowseRunDto> {
-  const res = await http.post<BrowseRunDto>('/api/browse/runs', request);
+  // 后端 BROWSE 读超时 50s（PYT_BROWSE_READ_TIMEOUT_MS）；全局 10s 会在检索中途断开，
+  // 后端却继续跑完整轮浏览并落库（白烧额度）。
+  const res = await http.post<BrowseRunDto>('/api/browse/runs', request, {
+    timeout: BROWSE_RUN_TIMEOUT_MS,
+  });
   return res.data;
 }
 

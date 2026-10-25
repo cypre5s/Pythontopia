@@ -4,8 +4,15 @@ import type {
   PlanPathResponse,
 } from './dto/Path';
 
+/** 覆盖 graph 30s 读超时 + 1 次重试的窗口。 */
+const PATH_PLAN_TIMEOUT_MS = 70_000;
+
 export async function planLearningPath(): Promise<PlanPathResponse> {
-  const response = await http.post<PlanPathResponse>('/api/learner/path/plan', {});
+  // 后端同步调 PathPlannerAgent（graph 读超时 30s，GraphClientRetryHelper 最多重试 1 次），
+  // 全局 10s 默认会在规划还没返回时就断开 → 学生看到失败，后端却继续烧模型额度。
+  const response = await http.post<PlanPathResponse>('/api/learner/path/plan', {}, {
+    timeout: PATH_PLAN_TIMEOUT_MS,
+  });
   return response.data;
 }
 

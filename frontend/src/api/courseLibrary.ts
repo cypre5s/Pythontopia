@@ -37,6 +37,8 @@ import type { SubmissionDto } from './dto/Submission';
 const FIXTURE_BASE = '/data/course43';
 const RAG_TOP_K = 6;
 const RAG_SNIPPET_LEN = 180;
+/** 课件问答由 graph 同步作答（后端 graph 读超时 30s），必须覆盖 10s 全局默认。 */
+const COURSEWARE_ANSWER_TIMEOUT_MS = 40_000;
 
 const documentsCache = new Map<number, CoursePageDetail[]>();
 let documentSummariesCache: CourseDocumentSummary[] | null = null;
@@ -337,6 +339,9 @@ export async function answerCourseware(
     query: trimmed,
     kcCodes: options.kcCodes ?? [],
     topK,
+  }, {
+    // 课件问答由 graph 同步生成（后端 graph 读超时 30s），不能沿用 10s 全局默认。
+    timeout: COURSEWARE_ANSWER_TIMEOUT_MS,
   });
   const data = response.data;
   return {

@@ -69,10 +69,15 @@ describe('browse.ts · REST 访问层（DTO 类型与序列化）', () => {
 
     expect(dto).toEqual(RUN);
     expect(http.post).toHaveBeenCalledTimes(1);
-    expect(http.post).toHaveBeenCalledWith('/api/browse/runs', {
-      goal: '查 sorted 的稳定性',
-      maxSteps: 4,
-    });
+    expect(http.post).toHaveBeenCalledWith(
+      '/api/browse/runs',
+      {
+        goal: '查 sorted 的稳定性',
+        maxSteps: 4,
+      },
+      // 后端 BROWSE 读超时 50s，前端必须显式指定超过 10s 全局默认的窗口。
+      expect.objectContaining({ timeout: 60_000 }),
+    );
   });
 
   it('createBrowseRun：仅 goal（maxSteps 可选省略，不下发该字段）', async () => {
@@ -80,7 +85,11 @@ describe('browse.ts · REST 访问层（DTO 类型与序列化）', () => {
 
     await createBrowseRun({ goal: '看看官方文档' });
 
-    expect(http.post).toHaveBeenCalledWith('/api/browse/runs', { goal: '看看官方文档' });
+    expect(http.post).toHaveBeenCalledWith(
+      '/api/browse/runs',
+      { goal: '看看官方文档' },
+      expect.objectContaining({ timeout: 60_000 }),
+    );
   });
 
   it('getBrowseRun：GET /api/browse/runs/{id} → BrowseRunDetailDto（含 steps/citations）', async () => {

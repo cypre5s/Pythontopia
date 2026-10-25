@@ -1,6 +1,9 @@
 import { http } from './http';
 import type { LearnerProfileDto } from './dto/LearnerProfileDto';
 
+/** 画像访谈单次作答由 ProfileAgent 生成，后端 graph 读超时 30s，前端必须覆盖同一窗口。 */
+const PROFILE_INTERVIEW_TIMEOUT_MS = 40_000;
+
 export interface ProfileMessageDto {
   role: 'assistant' | 'user';
   content: string;
@@ -69,6 +72,8 @@ export async function sendProfileTurn(
   const response = await http.post<ProfileTurnResponse>(
     `/api/learner/profile/interview/${sessionId}/turn`,
     req,
+    // 访谈转次同步调 ProfileAgent（graph 读超时 30s）；全局 10s 会在作答生成前就断开。
+    { timeout: PROFILE_INTERVIEW_TIMEOUT_MS },
   );
   return response.data;
 }
