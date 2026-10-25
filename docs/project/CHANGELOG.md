@@ -13,6 +13,7 @@
 - RAG 内存向量库在 upsert 时归一化索引向量，避免每次检索重复计算全部向量范数；KC/章节过滤集合也只构造一次。归一化次数由每次查询 N+1 次降为 1 次；回归先 RED 后 GREEN，RAG 全量 182 项与 Ruff lint 通过。改动文件 Ruff/format 检查通过；全目录 format 检查仍列出 22 个未改动文件。3,000×512 合成向量本地微测从 12.88 ms 降至 6.07 ms（2.12×），命中与分数一致；不代表线上延迟或并发吞吐。
 - WorkshopChat 的 orchestrator SSE `runtime_run` 投影改为游标式增量扫描，仅查找新追加事件，避免每个 token/chunk 都重扫累计历史。回归先 RED 后 GREEN；前端 2,722 项、typecheck、改动文件 ESLint 和 Vite build 通过；GitHub CI 五个 job 全通过。全量 lint 0 errors / 405 warnings；已推送 `ffa7a249` 并发布 `web-v20261025.7`。附件 HEAD 200、长度核对通过；尚未测真实长流渲染延迟。
 - Maven 测试收尾修复：调度改由默认开启的条件配置注册，测试 classpath 的 `local`/`test` profile 关闭自动触发，保留业务方法直测。之前 Testcontainers 结束后缓存的 Spring 上下文仍运行周期任务，导致 Hikari 重试和 Surefire 30 秒强制收尾；RED/GREEN 回归后，后端全量 1,895 项通过并在 6 分 41 秒正常退出，无调度调用栈或强制收尾转储。触及 Java 文件定向 Spotless 通过；容器关闭后的少量 Hikari 连接校验警告仍存在，不影响测试结果。
+- 调度收尾修复已推送 `95f1eaec`，GitHub CI [#40195659398](https://github.com/cypre5s/Pythontopia/actions/runs/40195659398) 5/5 通过；release [`web-v20261025.8`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.8) 上传成功。归档 `pythontopia-web-v20261025.8.tar.gz` 为 1,535,011,460 字节，SHA-256 `2164deea7a0e74977b899bde5d6e1461d8ef96b327d9d5c675092eb5d7629638`，下载 HEAD 200 且长度匹配。百分位查询本地计划扫描 198 行、0.073 ms；未为当前小数据量添加索引。
 
 ## 2026-10-24
 

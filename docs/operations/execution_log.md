@@ -22,6 +22,12 @@
 - 验证：`mvn -Dtest=SchedulingConfigTest,PythontopiaApplicationTests test` 3/3；`mvn test` 1,895/1,895，0 failures/errors/skips，6 分 41 秒正常退出。新测试日志没有调度方法调用栈或 Surefire 强制收尾转储。定向 Spotless 检查通过。
 - 容器停止后少量 Hikari housekeeper 连接校验警告仍见于全量日志；测试成功且进程正常退出。没有验证生产调度运行、真实数据库故障恢复或负载性能。
 
+## 2026-10-25 推送调度修复、发布与百分位查询核查
+
+- 修复 commit `95f1eaec1801a221ff98209921b281cc425b4c5f` 已推送到 `main`；GitHub CI run `40195659398` 的 backend、frontend、Graph、RAG、research 五个 job 全通过。
+- 推送 tag `web-v20261025.8` 后，release run `40196244903` 的构建、体积检查及发布步骤均成功。Release asset `pythontopia-web-v20261025.8.tar.gz` 为 1,535,011,460 字节，SHA-256 `2164deea7a0e74977b899bde5d6e1461d8ef96b327d9d5c675092eb5d7629638`；下载 HEAD 返回 200 且 Content-Length 匹配。
+- 只读核查同题同语言 AC 百分位查询：本地开发库 `practice_submission` 有 198 行、3 个题目；实际 `EXPLAIN ANALYZE` 顺序扫描 198 行、执行 0.073 ms。当前规模不值得新增索引；该数据不代表线上规模或负载。
+
 ## 2026-10-25 当前续接：本地正式判题 SYSTEM_ERROR
 
 - 后端日志中的提交 260/261 均以 `SYSTEM_ERROR` 结束；PostgreSQL 记录题目 476、沙箱名 `piston:3.11.0`。`/readyz` 返回 503，明示 `piston URL or Python runtime is not configured`。普通 `./dev.sh` 只拉起 Postgres/Redis/Graph/RAG，未拉起 profile 为 `sandbox` 的 Piston；此前同题在 Piston 3.12.0 下已有 AC 记录。

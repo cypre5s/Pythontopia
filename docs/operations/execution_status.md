@@ -4,6 +4,8 @@
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
 > **当前快照（2026-10-25）**：证据图/记忆快照与 RAG 性能修复已随 [`eb938f7c`](https://github.com/cypre5s/Pythontopia/commit/eb938f7cdea76a93675127abd20b2b895250786d) 推送，CI [#37](https://github.com/cypre5s/Pythontopia/actions/runs/40189566818) 5/5 通过，release [`web-v20261025.6`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.6) 已发布并通过 HEAD 下载检查。随后 WorkshopChat SSE 增量扫描改进已随 [`ffa7a249`](https://github.com/cypre5s/Pythontopia/commit/ffa7a2498bfe9f223b6527bb3359f24859de8b13) 推送，GitHub CI [此轮](https://github.com/cypre5s/Pythontopia/actions/runs/40192634123) 与包含最终记录的 CI [此轮](https://github.com/cypre5s/Pythontopia/actions/runs/40193318209) 均 5/5 通过。新 release [`web-v20261025.7`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.7) 已成功构建上传；`pythontopia-web-v20261025.7.tar.gz` 为 1,535,045,783 字节，下载 HEAD 返回 200 且长度匹配。前端 Vitest 2,722 项、typecheck、改动文件 ESLint、Vite build 通过。另做了 3,000×512 维合成向量本地微测，RAG 当前查询中位数 6.07 ms、基线 12.88 ms；不代表真实数据或并发负载。Maven 收尾问题已修复：测试 profile 关闭自动调度，后端全量 1,895 项通过且无 Surefire 30 秒强制收尾转储；完整审计仍在进行。
 
+> **最新续更（2026-10-25）**：修复提交 [`95f1eaec`](https://github.com/cypre5s/Pythontopia/commit/95f1eaec1801a221ff98209921b281cc425b4c5f) 已推送，GitHub CI [#40195659398](https://github.com/cypre5s/Pythontopia/actions/runs/40195659398) 5/5 通过。Release [`web-v20261025.8`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.8) 已完成；归档 1,535,011,460 字节，SHA-256 `2164deea7a0e74977b899bde5d6e1461d8ef96b327d9d5c675092eb5d7629638`，HEAD 200 且长度匹配。AI 百分位查询的本地 Postgres 计划扫 198 行、执行 0.073 ms；当前规模不增加索引。全量性能审计继续中。
+
 ## 当前进度
 
 唯一任务清单及按优先级排列的未完成项维护在[总任务实施计划](../plans/2026-10-16-overall-work-checklist.md)，本页只记录最近进度和详细历史，避免出现多份清单。
