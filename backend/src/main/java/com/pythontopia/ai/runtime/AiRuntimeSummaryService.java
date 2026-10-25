@@ -50,8 +50,7 @@ public class AiRuntimeSummaryService {
   public AiRuntimeSummaryDto summaryForUser(long userId) {
     ProtocolGatewayDescriptorDto descriptor = protocolGatewayService.descriptor();
     LearningEvidenceGraphDto graph = evidenceGraphService.buildForUser(userId, null, SUMMARY_LIMIT);
-    EvidenceMemorySnapshotDto memory =
-        evidenceMemoryService.createSnapshot(userId, null, SUMMARY_LIMIT, false);
+    EvidenceMemorySnapshotDto memory = evidenceMemoryService.createSnapshot(graph);
     WeeklyReportDto twin = weeklyReportService.build(userId);
 
     AiRuntimeSummaryDto.ProtocolSummary protocol = protocolSummary(descriptor);

@@ -34,22 +34,37 @@ public class EvidenceMemoryService {
   @Transactional
   public EvidenceMemorySnapshotDto createSnapshot(
       Long userId, String focusKc, int limit, boolean persist) {
-    EvidenceMemorySnapshotDto snapshot = buildSnapshot(userId, focusKc, limit, null);
+    LearningEvidenceGraphDto graph = graphService.buildForUser(userId, focusKc, limit);
+    EvidenceMemorySnapshotDto snapshot = buildSnapshot(userId, focusKc, graph);
     if (!persist) {
       return snapshot;
     }
     Long snapshotId = repository.insert(snapshot);
-    return buildSnapshot(userId, focusKc, limit, snapshotId);
+    return new EvidenceMemorySnapshotDto(
+        snapshotId,
+        snapshot.userId(),
+        snapshot.focusKc(),
+        snapshot.directSignalCount(),
+        snapshot.propagatedSignalCount(),
+        snapshot.retainedEvidenceCount(),
+        snapshot.graphMemoryScore(),
+        snapshot.naiveMemoryScore(),
+        snapshot.signals());
+  }
+
+  @Transactional(readOnly = true)
+  public EvidenceMemorySnapshotDto createSnapshot(LearningEvidenceGraphDto graph) {
+    return buildSnapshot(graph.userId(), graph.focusKc(), graph);
   }
 
   @Transactional(readOnly = true)
   public List<EvidenceMemorySignalDto> signalsForUser(Long userId) {
-    return buildSnapshot(userId, null, 160, null).signals();
+    LearningEvidenceGraphDto graph = graphService.buildForUser(userId, null, 160);
+    return buildSnapshot(userId, null, graph).signals();
   }
 
   private EvidenceMemorySnapshotDto buildSnapshot(
-      Long userId, String focusKc, int limit, Long snapshotId) {
-    LearningEvidenceGraphDto graph = graphService.buildForUser(userId, focusKc, limit);
+      Long userId, String focusKc, LearningEvidenceGraphDto graph) {
     List<EvidenceMemorySignalDto> direct = directSignals(graph.personalizationSignals());
     List<EvidenceMemorySignalDto> propagated = propagatedSignals(direct);
     List<EvidenceMemorySignalDto> all = new ArrayList<>();
@@ -61,7 +76,7 @@ public class EvidenceMemoryService {
     double naiveMemoryScore = naiveMemoryScore(userId, focusKc);
     double graphMemoryScore = graphMemoryScore(direct, propagated, retainedEvidenceCount);
     return new EvidenceMemorySnapshotDto(
-        snapshotId,
+        null,
         userId,
         focusKc,
         direct.size(),

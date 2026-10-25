@@ -77,6 +77,7 @@ public class LearningEvidenceGraphService {
       List<EvidenceNodeDto> nodes, List<EvidenceEdgeDto> edges) {
     Map<String, SignalAccumulator> acc = new LinkedHashMap<>();
     Map<String, EvidenceNodeDto> nodeIndex = new HashMap<>();
+    Map<String, List<String>> kcCodesByEvidenceId = new HashMap<>();
     for (EvidenceNodeDto node : nodes) {
       nodeIndex.put(node.id(), node);
       if ("KC".equals(node.type())) {
@@ -88,6 +89,7 @@ public class LearningEvidenceGraphService {
         continue;
       }
       String kc = edge.toId().substring("kc:".length());
+      kcCodesByEvidenceId.computeIfAbsent(edge.fromId(), ignored -> new ArrayList<>()).add(kc);
       SignalAccumulator signal = acc.computeIfAbsent(kc, SignalAccumulator::new);
       EvidenceNodeDto from = nodeIndex.get(edge.fromId());
       if (from == null) {
@@ -115,12 +117,9 @@ public class LearningEvidenceGraphService {
         continue;
       }
       Long pageId = parseLong(edge.toId().replace("page:", ""));
-      for (EvidenceEdgeDto sibling : edges) {
-        if (sibling.fromId().equals(edge.fromId()) && sibling.toId().startsWith("kc:")) {
-          String kc = sibling.toId().substring("kc:".length());
-          SignalAccumulator signal = acc.computeIfAbsent(kc, SignalAccumulator::new);
-          signal.pageIds.add(pageId);
-        }
+      for (String kc : kcCodesByEvidenceId.getOrDefault(edge.fromId(), List.of())) {
+        SignalAccumulator signal = acc.computeIfAbsent(kc, SignalAccumulator::new);
+        signal.pageIds.add(pageId);
       }
     }
     return acc.values().stream()
