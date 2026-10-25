@@ -8,6 +8,7 @@ import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.security.access.AccessDeniedException;
@@ -208,7 +209,13 @@ public class GlobalExceptionHandler {
       List<String> details,
       HttpServletRequest request) {
     String traceId = traceId(request);
-    return ResponseEntity.status(status).body(ApiError.of(code, message, details, traceId));
+    // 显式声明 JSON：流式端点（导师/工坊/导学/直播）的客户端只发 Accept: text/event-stream，
+    // 不预设 Content-Type 时 Spring 的内容协商因无兼容转换器抛 HttpMediaTypeNotAcceptableException，
+    // 业务错误（如 AI 额度用尽 429）被 406 吞掉，前端只能显示泛化失败文案。
+    // 预设 Content-Type 会跳过协商，保证错误体一定送达，由前端读取 code/message。
+    return ResponseEntity.status(status)
+        .contentType(MediaType.APPLICATION_JSON)
+        .body(ApiError.of(code, message, details, traceId));
   }
 
   private String traceId(HttpServletRequest request) {

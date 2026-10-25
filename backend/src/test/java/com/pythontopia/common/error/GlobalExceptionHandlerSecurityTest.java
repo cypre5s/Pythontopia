@@ -14,6 +14,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.MethodParameter;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.web.HttpMediaTypeNotAcceptableException;
 import org.springframework.web.context.request.async.AsyncRequestNotUsableException;
@@ -137,5 +138,26 @@ class GlobalExceptionHandlerSecurityTest {
             "security-test")
         .doesNotContain(sensitiveDetail, sensitivePath, "78234");
     assertThat(appender.list.getFirst().getThrowableProxy()).isNull();
+  }
+
+  // 回归：流式端点（Accept: text/event-stream）报错时不能落到 406。
+  // 不预设 Content-Type 时 Spring 的内容协商会抛 HttpMediaTypeNotAcceptableException，
+  // 把「今日 AI 额度用尽」这类业务错误吞成 No acceptable representation。
+  @Test
+  void businessErrorDeclaresJsonContentTypeEvenForEventStreamClients() {
+    when(request.getHeader("Accept")).thenReturn("text/event-stream");
+
+    var response =
+        handler.handleBusiness(
+            new BusinessException(
+                HttpStatus.TOO_MANY_REQUESTS,
+                "TUTOR_DAILY_LIMIT_REACHED",
+                "今日 AI 请求额度已达 30 次，请明天再试"),
+            request);
+
+    assertThat(response.getStatusCode().value()).isEqualTo(429);
+    assertThat(response.getHeaders().getContentType()).isEqualTo(MediaType.APPLICATION_JSON);
+    assertThat(response.getBody().code()).isEqualTo("TUTOR_DAILY_LIMIT_REACHED");
+    assertThat(response.getBody().message()).contains("额度");
   }
 }

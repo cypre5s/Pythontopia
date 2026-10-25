@@ -63,6 +63,32 @@ export interface SseStreamState<T = unknown> {
 
 type SseStatus = 'idle' | 'connecting' | 'streaming' | 'done' | 'error';
 
+/**
+ * 非 2xx 响应的错误投影。
+ *
+ * <p>流式端点出错时后端回的还是统一错误体（{@code {code,message}}，Content-Type: application/json），
+ * 若只看状态码会把「今日 AI 请求额度已达 30 次」这类可执行提示退化成 `HTTP_429`，学生无从处理。
+ * 解析失败（如 nginx 502 返回 HTML）时回退到 HTTP 状态描述。
+ */
+async function readHttpError(response: Response): Promise<{ code: string; message: string }> {
+  const fallback = {
+    code: `HTTP_${response.status}`,
+    message: response.statusText || `HTTP ${response.status}`,
+  };
+  try {
+    const body: unknown = await response.json();
+    if (!body || typeof body !== 'object') return fallback;
+    const record = body as { code?: unknown; message?: unknown };
+    return {
+      code: typeof record.code === 'string' && record.code ? record.code : fallback.code,
+      message:
+        typeof record.message === 'string' && record.message ? record.message : fallback.message,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
 export function useSseStream<T = unknown>(url: string): {
   start: (body: unknown) => Promise<void>;
   /** 类型化 AG-UI 事件流（按到达顺序累积；新名/旧名统一归一化）。 */
@@ -135,10 +161,7 @@ export function useSseStream<T = unknown>(url: string): {
     }
 
     if (!response.ok) {
-      error.value = {
-        code: `HTTP_${response.status}`,
-        message: response.statusText || `HTTP ${response.status}`,
-      };
+      error.value = await readHttpError(response);
       status.value = 'error';
       return;
     }
