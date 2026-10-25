@@ -4,6 +4,13 @@
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
 
+## 2026-10-26 — 性能审计提交与 Web Release 收尾
+
+- 批量学习数据库操作与掌握度并列时间确定性排序已提交为 `8e174ada830c26dc72287b0f1323d540c8d82010` 并推送至 `main`。提交前后验证为后端全量 Maven 1,907/1,907，掌握度排序后续定向测试 3/3；GitHub CI [#40207300002](https://github.com/cypre5s/Pythontopia/actions/runs/40207300002) 五个 job 全部成功。
+- Release run [#40208342200](https://github.com/cypre5s/Pythontopia/actions/runs/40208342200) 构建、体积检查和上传成功，发布 [`web-v20261025.10`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.10)。资产为 1,535,059,376 字节，GitHub SHA-256 为 `785f7e86879c52d708360d1895598283d865e1d93106942f50e1a6f5d7c514f3`；下载 HEAD 返回 200，Content-Length 一致。
+- 同一 tag 的延迟 push 事件又启动 run [#40208756259](https://github.com/cypre5s/Pythontopia/actions/runs/40208756259)；其构建和体积检查成功，但发布步骤因目标 release 已存在而退出 1。已有 release 资产正常，不需要二次上传。
+- 未进行生产并发/吞吐基准；本地无关改动 `.gitignore`、`frontend/public/data/course43/manifest.json` 与 `deploy/astrbot-custom-plugins/` 保留原状。
+
 ## 2026-10-25 — 学习路径节点批量写入
 
 - `LearningPathService.writeNodesAndQuests` 原先逐个插入路径节点并读取生成 ID；Graph 规划器最多输出 7 天 × 每天 4 个节点。现在将节点组为单条多行 `INSERT ... RETURNING`，按数据库唯一位置键 `(day_index, order_in_day)` 还原 ID 顺序，Quest 继续引用对应节点。

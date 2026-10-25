@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-10-26
+
+- 性能审计批量写入与查询确定性修复已随提交 [`8e174ada`](https://github.com/cypre5s/Pythontopia/commit/8e174ada830c26dc72287b0f1323d540c8d82010) 推送至 `main`。后端全量测试 1,907/1,907 通过；掌握度并列时间排序的后续定向测试 3/3 通过；GitHub CI [#40207300002](https://github.com/cypre5s/Pythontopia/actions/runs/40207300002) 五个 job 全部成功。
+- Release [`web-v20261025.10`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.10) 已发布；归档 `pythontopia-web-v20261025.10.tar.gz` 为 1,535,059,376 字节，SHA-256 `785f7e86879c52d708360d1895598283d865e1d93106942f50e1a6f5d7c514f3`，下载 HEAD 返回 200 且 Content-Length 匹配。由于 tag push 延迟重复触发，第二个相同提交的 release run [#40208756259](https://github.com/cypre5s/Pythontopia/actions/runs/40208756259) 在上传时因同 tag release 已存在而失败；首个 run [#40208342200](https://github.com/cypre5s/Pythontopia/actions/runs/40208342200) 已成功完成发布，资产不受影响。
+
 ## 2026-10-25
 
 - 掌握度最新事件来源在 `created_at` 相同的并列记录中增加 `id DESC`，避免按数据库偶然扫描顺序返回旧来源。回归先 RED 后 GREEN；PostgreSQL 与服务定向测试 3/3 通过。全量 Maven 在此一行 SQL 排序修改之前通过，未做并发写排序测试。
