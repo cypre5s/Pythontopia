@@ -172,6 +172,25 @@ public class TutorWorkflowService {
                     objectMapper.convertValue(plan, new TypeReference<Map<String, Object>>() {}));
               }
             });
+    long projectedSubmissionId =
+        ((Number) snapshot.getOrDefault("latestSubmissionId", 0L)).longValue();
+    // The submission listener cannot project into a Tutor session that did not exist yet.
+    SubmissionDto latestSubmission =
+        submissionService.list(userId, problemId, null, 1, 0).stream().findFirst().orElse(null);
+    if (latestSubmission != null && latestSubmission.id() > projectedSubmissionId) {
+      SubmissionDetailDto detail = submissionService.findOne(userId, latestSubmission.id());
+      Verdict verdict = detail.judgeResult() == null ? null : detail.judgeResult().verdict();
+      if (verdict != null) {
+        snapshot.put("latestSubmissionId", latestSubmission.id());
+        snapshot.put("latestSubmissionProblemId", latestSubmission.problemId());
+        snapshot.put("latestVerdict", verdict.name());
+        if (verdict == Verdict.AC) {
+          snapshot.put("phase", "AC_REVIEW");
+        } else if (verdict != Verdict.SYSTEM_ERROR) {
+          snapshot.put("phase", "ERROR_FEEDBACK");
+        }
+      }
+    }
     return snapshot;
   }
 

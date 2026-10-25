@@ -1279,3 +1279,11 @@
 - ECS 流式部署：仅删除未被 current/previous/容器挂载引用的孤立 release `20261021-033818`，保留 PostgreSQL 数据卷和当前/回滚版本；包 SHA-256 `813599ee794fc6a78fed0ef09ae6705f481abfd139ec5a0d4aedec01c006eb6f`。备份 PostgreSQL 448 KB、`.env`、Nginx/Compose 配置；V233/V234 均成功。新 release `20261021-143335` 生效，回滚版 `20261021-134300` 保留；7 个服务 healthy，HTTP 308、HTTPS `/healthz` 200，安装器逐文件 SHA-256 和课程运行时数据校验通过。临时安装工具已移除，ECS 根盘剩余 2.3 GB。
 - 生产 Chromium 首次回归时页面仍在 96% 资源预加载，原测试过早检查坐标；trace 中 178 个资源请求全部 HTTP 200。回归改为等待加载覆盖层消失后重跑通过：旧坐标恢复到 `(25,20)`，WASD 与点击均移动成功；console、pageerror、失败请求和 API 错误均为 0。唯一临时线上学生账号已删除，DB 查询确认不存在该账号，也无 town_hub `(12,10)` 存档。
 - ECS 预检按发布包未压缩大小 + 1 GiB 计算磁盘空间，33 项通过、0 失败；另有内存低于 4 GB 基线和未安装 aliyun CLI 两项警告。GitHub 推送待完成。
+
+## 2026-10-25 — Tutor 判题结果恢复与 GitHub CI 修复
+
+- 修复 AI Tutor 的提交时序缺口：学生在打开导学助手前已提交时，事件监听器没有已有会话可投影，助手快照会停在 `READING`。`activeSession` 现按同一用户/题目恢复最新正式判题结果；AC 进入 `AC_REVIEW`，WA/RE/TLE/CE/MLE 进入 `ERROR_FEEDBACK`，`SYSTEM_ERROR` 不触发错误指导。前端原有 AC 复盘→迁移题和错误反馈自动流程不变。
+- GitHub CI run `40165145198` 的失败原因：Admin 用户表测试误选页头帮助 tooltip 的嵌套表格；9 个 GraphRAG 路由单测在无 PostgreSQL 的 CI job 中触发课程资源状态查询。测试现使用明确的目标表选择器；两个路由测试模块 stub 为资源均启用，数据库不可用时生产 fail-closed 回归仍独立保留。
+- 本地验证：Maven 全量 `1870` 项通过（0 failures/errors/skips，BUILD SUCCESS）；Tutor 服务与提交监听器定向 59 项通过。Frontend typecheck 通过、lint 0 errors（405 warnings）、Vitest 288 文件 / 2,718 项通过；Tutor 面板定向 14 项、Admin Users 8 项通过。RAG 全量在故意不可用的 PostgreSQL URL 下 179 项通过；相关 GraphRAG 路由与 fail-closed 定向验证 28 项通过（1 warning）。
+- Maven 全量测试结束时 Surefire 因测试容器关闭后的 Hikari 后台连接重试，在 30 秒退出等待后回收了 fork JVM；测试报告为全绿且 Maven 返回 BUILD SUCCESS。GitHub 新提交 CI 与 `web-v20261025.2` Release 工作流待推送后确认。
+- 未运行真实 Judge/模型调用的浏览器端到端验收；本次 AI Tutor 前后端恢复由服务单测与 Vue 流程组件测试覆盖。未修改工作区原有的 `.gitignore`、API contract、CHANGELOG、课程 manifest 和 AstrBot 插件改动。

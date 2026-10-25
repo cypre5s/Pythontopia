@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import pytest
 from fastapi.testclient import TestClient
 
 from pythontopia_rag.app_state import AppState
+from pythontopia_rag.data.loader import DisabledCourseResources
 from pythontopia_rag.data.page_source import IndexablePage, InMemoryPageSource
 from pythontopia_rag.graph.kc_graph import RELATION_CO_OCCUR
 from pythontopia_rag.index.builder import rebuild_index
@@ -10,10 +12,18 @@ from pythontopia_rag.index.embedder import HashEmbedder
 from pythontopia_rag.index.kc_graph import KcGraph as IndexKcGraph
 from pythontopia_rag.index.store import InMemoryVectorStore
 from pythontopia_rag.main import app
+from pythontopia_rag.routes import query as query_route
 
 
 ANCHOR_KC = "PY43-KC-041"
 RELATED_KC = "PY43-KC-042"
+
+
+@pytest.fixture(autouse=True)
+def _course_resources_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        query_route, "fetch_disabled_course_resources", lambda _db_url: DisabledCourseResources()
+    )
 
 
 def _pages() -> InMemoryPageSource:

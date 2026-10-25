@@ -529,6 +529,70 @@ class TutorWorkflowServiceTest {
   }
 
   @Test
+  void activeSessionRecoversLatestSubmissionWhenTutorWasNotOpenAtSubmissionTime() {
+    OffsetDateTime submittedAt = OffsetDateTime.parse("2026-10-25T10:00:00Z");
+    SubmissionDto submission =
+        new SubmissionDto(
+            1234L,
+            USER,
+            PROBLEM,
+            null,
+            SubmissionSource.TRAINING,
+            "PYTHON_3_11",
+            "print(3.1415 * radius * radius)",
+            submittedAt,
+            SubmissionStatus.PASSED,
+            12,
+            512);
+    when(submissionService.list(USER, PROBLEM, null, 1, 0)).thenReturn(List.of(submission));
+    when(submissionService.findOne(USER, 1234L))
+        .thenReturn(
+            new SubmissionDetailDto(
+                submission,
+                new JudgeResultDto(8L, 1234L, Verdict.AC, 3, 3, null, null, submittedAt)));
+
+    Map<String, Object> snapshot = service.activeSession(USER, PROBLEM);
+
+    assertThat(snapshot)
+        .containsEntry("phase", "AC_REVIEW")
+        .containsEntry("latestSubmissionId", 1234L)
+        .containsEntry("latestSubmissionProblemId", PROBLEM)
+        .containsEntry("latestVerdict", "AC");
+  }
+
+  @Test
+  void activeSessionRecoversLatestFailedSubmissionAsErrorFeedback() {
+    OffsetDateTime submittedAt = OffsetDateTime.parse("2026-10-25T10:01:00Z");
+    SubmissionDto submission =
+        new SubmissionDto(
+            1235L,
+            USER,
+            PROBLEM,
+            null,
+            SubmissionSource.TRAINING,
+            "PYTHON_3_11",
+            "print('wrong')",
+            submittedAt,
+            SubmissionStatus.FAILED,
+            12,
+            512);
+    when(submissionService.list(USER, PROBLEM, null, 1, 0)).thenReturn(List.of(submission));
+    when(submissionService.findOne(USER, 1235L))
+        .thenReturn(
+            new SubmissionDetailDto(
+                submission,
+                new JudgeResultDto(9L, 1235L, Verdict.WA, 1, 3, null, null, submittedAt)));
+
+    Map<String, Object> snapshot = service.activeSession(USER, PROBLEM);
+
+    assertThat(snapshot)
+        .containsEntry("phase", "ERROR_FEEDBACK")
+        .containsEntry("latestSubmissionId", 1235L)
+        .containsEntry("latestSubmissionProblemId", PROBLEM)
+        .containsEntry("latestVerdict", "WA");
+  }
+
+  @Test
   void activeSessionReturnsLatestSubmissionFeedback() {
     when(repository.findAgentState(session.id()))
         .thenReturn(

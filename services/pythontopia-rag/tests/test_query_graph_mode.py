@@ -18,6 +18,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from pythontopia_rag.app_state import AppState
+from pythontopia_rag.data.loader import DisabledCourseResources
 from pythontopia_rag.data.page_source import IndexablePage, InMemoryPageSource
 from pythontopia_rag.index.bm25 import Bm25Index
 from pythontopia_rag.index.builder import rebuild_index
@@ -33,11 +34,19 @@ from pythontopia_rag.graph.router import (
     route_and_retrieve,
 )
 from pythontopia_rag.main import app
+from pythontopia_rag.routes import query as query_route
 from pythontopia_rag.schemas.query import KcEdge
 
 RECURSION_KC = "PY43-KC-021R"
 FUNCTION_KC = "PY43-KC-021"
 LIST_KC = "PY43-KC-030"
+
+
+@pytest.fixture(autouse=True)
+def _course_resources_enabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        query_route, "fetch_disabled_course_resources", lambda _db_url: DisabledCourseResources()
+    )
 
 
 def test_neighbor_failure_log_contains_only_exception_type(caplog) -> None:
