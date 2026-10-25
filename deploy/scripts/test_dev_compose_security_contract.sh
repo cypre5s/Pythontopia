@@ -64,8 +64,14 @@ print("CSP document-response contract: PASS")
 
 python3 -c '
 from pathlib import Path
+import re
 import sys
 script = (Path(sys.argv[1]) / "dev.sh").read_text()
+default_sandbox = re.search(r"(?m)^START_SANDBOX=(\d+)$", script)
+assert default_sandbox and default_sandbox.group(1) == "1", "local dev must enable the isolated judge by default"
+assert re.search(r"(?m)^\s*--no-sandbox\) START_SANDBOX=0 ;;$", script), "the sandbox opt-out must remain explicit"
+assert "compose --profile sandbox stop" in script, "--down must stop the profiled Piston service"
+assert "Piston 判题机未就绪" in script, "startup must reject an unconfigured judge instead of appearing ready"
 guard = script.index("if [[ \"$START_DEPS\" == \"0\" && \"$resolved_internal_token\" != \"$configured_internal_token\" ]]")
 export = script.index("export PYT_RAG_ADMIN_TOKEN=")
 compose = script.index("compose up -d \"${DEP_SERVICES[@]}\"")

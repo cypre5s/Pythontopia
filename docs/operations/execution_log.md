@@ -4,6 +4,13 @@
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
 
+## 2026-10-25 当前续接：本地正式判题 SYSTEM_ERROR
+
+- 后端日志中的提交 260/261 均以 `SYSTEM_ERROR` 结束；PostgreSQL 记录题目 476、沙箱名 `piston:3.11.0`。`/readyz` 返回 503，明示 `piston URL or Python runtime is not configured`。普通 `./dev.sh` 只拉起 Postgres/Redis/Graph/RAG，未拉起 profile 为 `sandbox` 的 Piston；此前同题在 Piston 3.12.0 下已有 AC 记录。
+- `dev.sh` 改为默认启动 Piston/Isolate、准备 Python 3.12.0，并在后端启动后核对 `/readyz` 中的 judge 运行时；保留 `--no-sandbox` 显式跳过，`--down` 现在激活 sandbox profile 以停止 Piston。未引入 QDUOJ：仓库已有隔离 Piston 适配器和加固容器。
+- `test_dev_compose_security_contract.sh` 先在旧脚本上因默认 sandbox 关闭而 RED，修改后 GREEN；`bash -n dev.sh` 与 `git diff --check` 通过。默认 `./dev.sh` 新鲜启动时 `/readyz` 为 200、Piston 报告 Python 3.12.0；真实 API 提交 ID 263 返回 AC 3/3，真实 Chromium 训练场提交 ID 264 也返回 AC 3/3。提交响应 HTTP 200，训练页 console/pageerror/失败请求均为 0。
+- 浏览器探索小镇路由时另观察到一次 `GET /api/dialog/context` HTTP 500；直接打开训练页的判题流程无此错误。该非判题请求不在本次修复范围。
+
 
 ## 2026-10-17 当前续接：修复 Piston HTTP 400 并完成 Tutor TRANSFER 浏览器闭环
 
