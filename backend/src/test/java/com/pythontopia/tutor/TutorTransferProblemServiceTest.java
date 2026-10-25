@@ -20,6 +20,9 @@ import com.pythontopia.submission.repository.PublicProblemRepository;
 import java.util.Optional;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.mockito.ArgumentCaptor;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 class TutorTransferProblemServiceTest {
@@ -41,7 +44,7 @@ class TutorTransferProblemServiceTest {
   @Test
   void refusesTransferWhenReferenceSolutionDoesNotPassGeneratedCases() throws Exception {
     when(problemRepository.findPublic(43L, 476L))
-        .thenReturn(Optional.of(sourceProblem()));
+        .thenReturn(Optional.of(sourceProblem("basic")));
     when(staticCodeChecker.check(anyString()))
         .thenReturn(new StaticCodeChecker.CheckResult(true, "", false));
     when(judgeWorkerPool.submitAndWait(any()))
@@ -59,10 +62,11 @@ class TutorTransferProblemServiceTest {
     verify(jdbcTemplate, never()).update(anyString(), any(Object[].class));
   }
 
-  @Test
-  void storesOnlyAValidatedPrivateProblemAndReturnsThePublicCardFields() throws Exception {
+  @ParameterizedTest
+  @CsvSource({"basic, medium", "medium, hard", "hard, hard"})
+  void raisesTransferDifficultyWithinTheSupportedRange(String sourceDifficulty, String expectedDifficulty) throws Exception {
     when(problemRepository.findPublic(43L, 476L))
-        .thenReturn(Optional.of(sourceProblem()));
+        .thenReturn(Optional.of(sourceProblem(sourceDifficulty)));
     when(staticCodeChecker.check(anyString()))
         .thenReturn(new StaticCodeChecker.CheckResult(true, "", false));
     when(judgeWorkerPool.submitAndWait(any()))
@@ -82,13 +86,16 @@ class TutorTransferProblemServiceTest {
     assertThat(result.id()).isEqualTo(1_000_000_001L);
     assertThat(result.kcCode()).isEqualTo("PY43-KC-016");
     assertThat(result.title()).isEqualTo("矩形面积");
+    assertThat(result.difficulty()).isEqualTo(expectedDifficulty);
     assertThat(result.samples().get(0).path("output").asText()).isEqualTo("6.00");
-    verify(jdbcTemplate).update(anyString(), any(Object[].class));
+    ArgumentCaptor<Object[]> insertArguments = ArgumentCaptor.forClass(Object[].class);
+    verify(jdbcTemplate).update(anyString(), insertArguments.capture());
+    assertThat(insertArguments.getValue()[6]).isEqualTo(expectedDifficulty);
   }
 
-  private PublicProblemDto sourceProblem() {
+  private PublicProblemDto sourceProblem(String difficulty) {
     return new PublicProblemDto(
-        476L, 43L, "PY43-KC-016", "圆面积", "计算圆面积", "半径", "面积", "Low", null);
+        476L, 43L, "PY43-KC-016", "圆面积", "计算圆面积", "半径", "面积", difficulty, null);
   }
 
   private com.fasterxml.jackson.databind.JsonNode transferDraft() throws Exception {

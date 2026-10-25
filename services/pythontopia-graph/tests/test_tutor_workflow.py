@@ -10,6 +10,7 @@ import pythontopia_graph.routes.tutor_workflow as tutor_workflow_route
 
 from pythontopia_graph.agents.tutor_workflow_cards import (
     CardGenerationError,
+    TRANSFER_PROMPT,
     TutorWorkflowCardAgent,
 )
 from pythontopia_graph.graph import tutor_workflow_session as session_store
@@ -75,6 +76,11 @@ HIT = RagHit(
     text="第 12 页讲解 float 与格式化输出。",
     score=0.8,
 )
+
+
+def test_transfer_prompt_requires_a_harder_problem_than_the_source() -> None:
+    assert "难度必须比源题高一档（basic→medium→hard）" in TRANSFER_PROMPT
+    assert "源题已是 hard" in TRANSFER_PROMPT
 
 
 # ── 阶段状态机 ──

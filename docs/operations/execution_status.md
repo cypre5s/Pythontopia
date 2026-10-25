@@ -8,6 +8,12 @@
 
 唯一任务清单及按优先级排列的未完成项维护在[总任务实施计划](../plans/2026-10-16-overall-work-checklist.md)，本页只记录最近进度和详细历史，避免出现多份清单。
 
+### 2026-10-25 AI 导学迁移题难度校准
+
+- 根因：Graph 提示允许与源题同难度，后端也照抄源题难度。现要求迁移题提升一档，`basic→medium→hard` 同步写入数据库和返回卡片；源题已是 `hard` 时保持该标签并要求增加一个必要推理/处理步骤。
+- 验证：后端迁移题服务定向 4/4、全量 `mvn -B test` 1872/1872 通过（0 failures/errors/skips，`BUILD SUCCESS`）；Graph 全量 1985 passed / 1 skipped。新增 Graph 提示回归 1/1 通过。
+- 格式：变更文件的定向 Spotless 检查通过；全库 Spotless 检查发现仓库现有 674/1087 个 Java 文件不符合格式规则，未对无关文件做批量改写。
+
 ### 2026-10-19 数字孪生与学习闭环优化
 
 - 基线：任务开始时工作树干净，HEAD 与 `origin/main` 为 `790dfb7`。GitHub 最新托管 run 仍是旧提交的 `ci#7`；同 SHA 本地复现前端 BoardPanel fixture 与 research 缺少 Torch 两个问题。research 独立 job 保留，安装 CPU Torch；Python 矩阵关闭 fail-fast。本地 workflow 未推送，托管 runner 新配置未验证。

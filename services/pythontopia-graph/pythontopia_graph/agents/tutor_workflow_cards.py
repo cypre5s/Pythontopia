@@ -116,7 +116,7 @@ TRANSFER_PROMPT = """你是面向非计算机专业 Python 初学者的 AI 导�
 请根据源题与复盘给出的「下一步练习方向」，出一道贴合的迁移变式题。
 硬约束：
 - 必须围绕 next_practice_direction 指向的知识点 / 技能变体出题，禁止与源题完全等价；
-- 难度与源题相当或略升半档，适合初学者独立完成；
+- 难度必须比源题高一档（basic→medium→hard）；源题已是 hard 时保留 hard 标签，但增加一个必要推理或处理步骤；
 - 题面自洽完整：描述、输入说明、输出说明、至少 1 组输入输出样例、1 条不剧透的提示；
 - samples 数组中每项是 {"input": "...", "output": "..."}，输入输出必须与题面一致且正确；
 - 额外生成仅供服务端验证的 reference_solution_language（固定 Python3）、reference_solution_code 和 1-3 条 test_cases；

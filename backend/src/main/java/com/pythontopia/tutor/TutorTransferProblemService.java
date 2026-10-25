@@ -16,6 +16,7 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -69,6 +70,7 @@ public class TutorTransferProblemService {
           problemRepository
               .findPublic(43L, sourceProblemId)
               .orElseThrow(() -> new IllegalArgumentException("迁移题源题不可用"));
+      String transferDifficulty = nextDifficulty(source.difficulty());
       stage = "draft_validation";
       TransferDraft draft = parseAndValidate(rawDraft, source.kcCode());
       String requestHash = sha256(rawDraft);
@@ -77,7 +79,7 @@ public class TutorTransferProblemService {
         if (!requestHash.equals(existing.requestHash())) {
           throw new IllegalStateException("迁移题运行标识对应了不同草稿");
         }
-        return toPublicProblem(existing.id(), source, draft);
+        return toPublicProblem(existing.id(), source, draft, transferDifficulty);
       }
 
       stage = "reference_security_check";
@@ -149,7 +151,7 @@ public class TutorTransferProblemService {
           draft.description(),
           draft.inputDescription(),
           draft.outputDescription(),
-          source.difficulty(),
+          transferDifficulty,
           writeJson(draft.samples()),
           writeJson(draft.testCases()),
           draft.referenceSolutionCode(),
@@ -158,7 +160,7 @@ public class TutorTransferProblemService {
           sessionId,
           runId,
           requestHash);
-      return toPublicProblem(problemId, source, draft);
+      return toPublicProblem(problemId, source, draft, transferDifficulty);
     } catch (RuntimeException e) {
       log.warn(
           "AI Tutor transfer materialization failed stage={} errorType={}",
@@ -256,7 +258,16 @@ public class TutorTransferProblemService {
     }
   }
 
-  private PublicProblemDto toPublicProblem(Long id, PublicProblemDto source, TransferDraft draft) {
+  private String nextDifficulty(String sourceDifficulty) {
+    return switch (sourceDifficulty == null ? "" : sourceDifficulty.toLowerCase(Locale.ROOT)) {
+      case "basic" -> "medium";
+      case "medium", "hard" -> "hard";
+      default -> throw new IllegalArgumentException("迁移题源题难度不可用");
+    };
+  }
+
+  private PublicProblemDto toPublicProblem(
+      Long id, PublicProblemDto source, TransferDraft draft, String difficulty) {
     return new PublicProblemDto(
         id,
         43L,
@@ -265,7 +276,7 @@ public class TutorTransferProblemService {
         draft.description(),
         draft.inputDescription(),
         draft.outputDescription(),
-        source.difficulty(),
+        difficulty,
         objectMapper.valueToTree(draft.samples()));
   }
 
