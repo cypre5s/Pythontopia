@@ -74,34 +74,50 @@ services:
       retries: 5
       start_period: 10s
 
+  # Piston 判题沙箱 —— 必须 privileged，这是上游官方用法，不是图省事。
+  # isolate 执行学生代码时要建 mount/pid 命名空间、挂 cgroup、降权到 uid 再 pivot_root，
+  # 这些系统调用需要 CAP_SYS_ADMIN；缺了它 isolate --init 直接失败，症状是提交后任务
+  # 卡在 "Executing job"、PISTON_MAX_CONCURRENT_JOBS=1 的唯一执行槽被占死、后续请求
+  # 全部排队直到 backend 读超时（日志里表现为 ResourceAccessException + SYSTEM_ERROR）。
+  # ⚠️ 不要再加 read_only / cap_drop / security_opt：同样会让 isolate 起不来。
+  # 安全边界由以下四层构成，不依赖容器层的限制：
+  #   1) isolate 自身：断网（PISTON_DISABLE_NETWORKING）、降权到 uid、只读 box root；
+  #   2) 本服务的 mem_limit / cpus / pids_limit 上限；
+  #   3) 独立 judge-execution 网络，不对公网暴露端口；
+  #   4) backend 侧提交限流与超时。
   piston:
     image: pythontopia/piston:release
     pull_policy: never
     restart: unless-stopped
     logging: *default-logging
-    read_only: true
-    cap_drop: ["ALL"]
-    # Piston extracts runtime archives with their file modes preserved.
-    cap_add: ["CHOWN", "DAC_OVERRIDE", "SETGID", "SETUID", "KILL", "FOWNER"]
-    security_opt:
-      - no-new-privileges:true
+    privileged: true
     mem_limit: 768m
     memswap_limit: 768m
     cpus: 1.0
     pids_limit: 128
     environment:
       PISTON_RUN_TIMEOUT: "10000"
+      # backend 每个用例都会显式下发 run_timeout / run_cpu_time（默认 5000ms），
+      # 而 piston 新版会拒绝任何超过自身配置上限的请求（直接 400，连作业都不建）。
+      # run_timeout 有 PISTON_RUN_TIMEOUT=10000 兑底，但 run_cpu_time 默认只有 3000，
+      # 因此必须同步抬高；否则提交永远报 SYSTEM_ERROR + BadRequest。
+      PISTON_RUN_CPU_TIME: "10000"
+      PISTON_COMPILE_CPU_TIME: "10000"
       PISTON_RUN_MEMORY_LIMIT: "268435456"
+      PISTON_COMPILE_MEMORY_LIMIT: "268435456"
       PISTON_MAX_CONCURRENT_JOBS: "1"
       PISTON_DISABLE_NETWORKING: "true"
     volumes:
       - piston_packages:/piston/packages
-    tmpfs:
-      - /tmp:exec,size=256m,mode=700
-      - /piston/jobs:exec,size=256m
+    # ⚠️ 不要再给 /tmp 挂 mode=700 的 tmpfs：容器以非 root 的 piston 用户运行，
+    # isolate 写 /tmp/<box>-metadata.txt 时会直接 EACCES（日志：Failed to open
+    # metafile '/tmp/N-metadata.txt'），每次提交都失败。read_only 已移除，
+    # 根文件系统可写，用镜像自带的 /tmp（1777）即可。
     networks: [judge-execution]
     healthcheck:
-      test: ["CMD", "node", "-e", "require('node-fetch')('http://127.0.0.1:2000/api/v2/runtimes').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      # 用 node 内置 http：官方镜像的 node-fetch 是 ESM，require('node-fetch') 会抛错，
+      # 那样 healthcheck 永远 unhealthy，进而卡住 piston-runtime-init 与 backend。
+      test: ["CMD", "node", "-e", "require('http').get('http://127.0.0.1:2000/api/v2/runtimes',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 10
