@@ -1312,3 +1312,4 @@
 - 代码配置最多选 200 名活跃学生 × 7 个 NPC，预热任务最多发起 1,400 次 Graph 寒暄请求；有记忆的请求会预留用户和全站模型额度，而全站额度为 300 次/日。仓库中没有显式 `enabled=true` 配置。
 - 按 TDD 先增加“未配置时不触达活跃用户查询”的回归。RED：`mvn -q -Dtest=NpcGreetingPrewarmJobTest test` 因事件仓库被调用失败。随后将默认值从 true 改为 false，显式开启路径与原任务逻辑不变；按需寒暄仍可在首次 NPC 访问时生成。
 - GREEN：同一目标测试 7/7 通过；`mvn -B test` 后端全量 1,896/1,896、0 failures/errors/skips，6:53 正常退出。只做了静态配置检查与单测，没有真实模型调用或生产环境变量核验。显式开启仍可能消耗交互额度，后续应先定义独立预热预算。
+- 提交 `0eeab5b3` 推送成功；GitHub CI [#40198503240](https://github.com/cypre5s/Pythontopia/actions/runs/40198503240) 5/5 成功。Release 构建 [#40199106285](https://github.com/cypre5s/Pythontopia/actions/runs/40199106285) 成功并上传 `web-v20261025.9`：1,535,061,980 字节，SHA-256 `42fe70b333aedb2d987ebe121960d03ebe4f3c65a4c705d0016123da9ad39fbb`；下载 HEAD 200 且 Content-Length 一致。
