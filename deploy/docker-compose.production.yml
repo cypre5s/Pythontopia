@@ -263,10 +263,15 @@ services:
       LLM_MODEL_VISION: ${PYT_OPENAI_MODEL_VISION:-}
       # bridge 网络内用服务名访问 RAG（开发 host 网络时是 127.0.0.1:18092）。
       PYT_RAG_URL: http://pythontopia-rag:18092
+      # 与 backend 同源：graph 侧代码执行（导师验证代码 / Boss 自测）必须能连到 Piston。
+      # 不配此值 + 不加入 judge-execution 网络 → python_sandbox_configured() 为假，
+      # 生产上代码执行永久 sandbox_unavailable（静默 fail-closed）。
+      PYT_PISTON_URL: http://piston:2000
+      PYT_PISTON_PYTHON_VERSION: ${PYT_PISTON_PYTHON_VERSION:-3.11.0}
       # 生产默认不走 B 站代理；确有需要时在远端 .env 设 PYT_BILI_PROXY 覆盖。
       PYT_BILI_PROXY: ${PYT_BILI_PROXY:-}
-      NO_PROXY: localhost,127.0.0.1,pythontopia-rag,postgres,redis,backend
-      no_proxy: localhost,127.0.0.1,pythontopia-rag,postgres,redis,backend
+      NO_PROXY: localhost,127.0.0.1,pythontopia-rag,postgres,redis,backend,piston
+      no_proxy: localhost,127.0.0.1,pythontopia-rag,postgres,redis,backend,piston
       # ── 可观测性对账（O3 / 主契约 §3.6 + §8.8）：导出 OTel span 到【外部】Langfuse ──
       # 2C4G 生产机【不】内置 Langfuse 重栈（clickhouse/minio/2×app 会撑爆内存，
       # 违背本文件 mem_limit 纪律），故此处只做 env 接线，不加 observability profile。
@@ -289,6 +294,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 30s
+    # piston 只在 judge-execution 网络；graph 必须同时进 default（放 rag）与该网络（放 piston）。
+    networks: [default, judge-execution]
 
   pythontopia-rag:
     image: pythontopia/rag:release
