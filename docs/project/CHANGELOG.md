@@ -12,6 +12,7 @@
 - 性能审计继续修复证据图 O(E²) 扫描和重复建图：按 evidence 建立 KC 索引；记忆快照复用已有图，AI 运行摘要不再重复加载；持久化快照插入后不重算。性能回归先 RED 后 GREEN，相关 PostgreSQL/服务定向组合 17 项及后端全量 1,893 项通过；GitHub CI 五个 job 全通过；6 个改动 Java 文件定向 Spotless 通过，全仓格式检查仍有大量既有差异。已推送 `eb938f7c` 并发布 `web-v20261025.6`；未做负载基准。
 - RAG 内存向量库在 upsert 时归一化索引向量，避免每次检索重复计算全部向量范数；KC/章节过滤集合也只构造一次。归一化次数由每次查询 N+1 次降为 1 次；回归先 RED 后 GREEN，RAG 全量 182 项与 Ruff lint 通过。改动文件 Ruff/format 检查通过；全目录 format 检查仍列出 22 个未改动文件。3,000×512 合成向量本地微测从 12.88 ms 降至 6.07 ms（2.12×），命中与分数一致；不代表线上延迟或并发吞吐。
 - WorkshopChat 的 orchestrator SSE `runtime_run` 投影改为游标式增量扫描，仅查找新追加事件，避免每个 token/chunk 都重扫累计历史。回归先 RED 后 GREEN；前端 2,722 项、typecheck、改动文件 ESLint 和 Vite build 通过；GitHub CI 五个 job 全通过。全量 lint 0 errors / 405 warnings；已推送 `ffa7a249` 并发布 `web-v20261025.7`。附件 HEAD 200、长度核对通过；尚未测真实长流渲染延迟。
+- Maven 测试收尾修复：调度改由默认开启的条件配置注册，测试 classpath 的 `local`/`test` profile 关闭自动触发，保留业务方法直测。之前 Testcontainers 结束后缓存的 Spring 上下文仍运行周期任务，导致 Hikari 重试和 Surefire 30 秒强制收尾；RED/GREEN 回归后，后端全量 1,895 项通过并在 6 分 41 秒正常退出，无调度调用栈或强制收尾转储。触及 Java 文件定向 Spotless 通过；容器关闭后的少量 Hikari 连接校验警告仍存在，不影响测试结果。
 
 ## 2026-10-24
 

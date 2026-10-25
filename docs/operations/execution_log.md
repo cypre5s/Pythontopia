@@ -15,6 +15,13 @@
 - 已推送代码提交 `1225c02a` 至 `main`，tag `web-v20261025.1`；GitHub Actions release run `40164200214` 的 build、size-check 与上传均成功。Release asset `pythontopia-web-v20261025.1.tar.gz` 为 1,534,979,244 bytes，SHA-256 `ba58e4dd89567ad378b76946a702db4f65666295008958885dc57dcfe573ff4d`。
 - 同次 push 触发的通用 CI 中，后端与 Graph job 通过；前端全量测试在未改动的 `AdminUsersPage.spec.ts:212` 因缺少 `admin-users__readable` class 失败，本机重跑 8 项中 7 项通过、同一断言复现。RAG job 的测试步骤退出 1，本次未改动 RAG，也未进一步定位该失败；独立 release workflow 已成功完成发布。
 
+## 2026-10-25 Maven 测试调度器收尾
+
+- 复查 Surefire 线程转储：Testcontainers 停止后，缓存的 Spring 测试上下文仍有 Outbox 轮询、Tutor 附件清理和 Quest 过期任务运行，部分线程阻塞在 JDBC 连接获取；Surefire 随后等待 30 秒并强制回收 fork JVM。
+- 将 `@EnableScheduling` 移到默认开启的条件配置；测试 `local`/`test` profile 关闭自动调度，业务方法单测保持直接调用。上下文断言先 RED（仍注册 `ScheduledAnnotationBeanPostProcessor`）后 GREEN，默认开启/显式关闭配置各有回归覆盖。
+- 验证：`mvn -Dtest=SchedulingConfigTest,PythontopiaApplicationTests test` 3/3；`mvn test` 1,895/1,895，0 failures/errors/skips，6 分 41 秒正常退出。新测试日志没有调度方法调用栈或 Surefire 强制收尾转储。定向 Spotless 检查通过。
+- 容器停止后少量 Hikari housekeeper 连接校验警告仍见于全量日志；测试成功且进程正常退出。没有验证生产调度运行、真实数据库故障恢复或负载性能。
+
 ## 2026-10-25 当前续接：本地正式判题 SYSTEM_ERROR
 
 - 后端日志中的提交 260/261 均以 `SYSTEM_ERROR` 结束；PostgreSQL 记录题目 476、沙箱名 `piston:3.11.0`。`/readyz` 返回 503，明示 `piston URL or Python runtime is not configured`。普通 `./dev.sh` 只拉起 Postgres/Redis/Graph/RAG，未拉起 profile 为 `sandbox` 的 Piston；此前同题在 Piston 3.12.0 下已有 AC 记录。
