@@ -1307,3 +1307,8 @@
 - Graph 迁移题提示收紧到 AST 允许的基础语法，确保样例/隐藏输出可由同一参考解验证；后端保存失败改为脱敏 SSE error 并正常结束，日志只记录 stage、错误类型、判定与用例数。真实 DeepSeek→Graph→Piston→数据库迁移题链路生成 3 个样例和 3 个隐藏用例并通过自测；参考解/隐藏用例不出现在公开卡片。
 - 真实 Chromium 复验 AC 结果弹窗、Escape/按钮关闭、运行/内存值、AC_REVIEW 与迁移题卡片：console errors 0、pageerrors 0；2 个 requestfailed 对应客户端收到终态后主动取消 SSE reader，迁移题卡片仍正常到达且无私有解答字段。截图保存在 `/tmp/pythontopia-submission-result.png` 和 `/tmp/pythontopia-transfer-card.png`。
 - 全量 Maven 1,870/1,870（0 failures/errors/skips，BUILD SUCCESS）；前端 typecheck、lint（0 errors、405 warnings）、Vitest 288 文件 / 2,719 项通过；Graph pytest 1,984 passed / 1 skipped、RAG 179 passed。浏览器和 API 验收生成的 12 个临时用户及其阻塞外键记录已删除，临时后端已停止。
+# 2026-10-25 — NPC 寒暄预热避免抢占交互 AI 额度
+
+- 代码配置最多选 200 名活跃学生 × 7 个 NPC，预热任务最多发起 1,400 次 Graph 寒暄请求；有记忆的请求会预留用户和全站模型额度，而全站额度为 300 次/日。仓库中没有显式 `enabled=true` 配置。
+- 按 TDD 先增加“未配置时不触达活跃用户查询”的回归。RED：`mvn -q -Dtest=NpcGreetingPrewarmJobTest test` 因事件仓库被调用失败。随后将默认值从 true 改为 false，显式开启路径与原任务逻辑不变；按需寒暄仍可在首次 NPC 访问时生成。
+- GREEN：同一目标测试 7/7 通过；`mvn -B test` 后端全量 1,896/1,896、0 failures/errors/skips，6:53 正常退出。只做了静态配置检查与单测，没有真实模型调用或生产环境变量核验。显式开启仍可能消耗交互额度，后续应先定义独立预热预算。

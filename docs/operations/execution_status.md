@@ -6,6 +6,12 @@
 
 > **最新续更（2026-10-25）**：修复提交 [`95f1eaec`](https://github.com/cypre5s/Pythontopia/commit/95f1eaec1801a221ff98209921b281cc425b4c5f) 已推送，GitHub CI [#40195659398](https://github.com/cypre5s/Pythontopia/actions/runs/40195659398) 5/5 通过。Release [`web-v20261025.8`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.8) 已完成；归档 1,535,011,460 字节，SHA-256 `2164deea7a0e74977b899bde5d6e1461d8ef96b327d9d5c675092eb5d7629638`，HEAD 200 且长度匹配。AI 百分位查询的本地 Postgres 计划扫 198 行、执行 0.073 ms；当前规模不增加索引。全量性能审计继续中。
 
+### 2026-10-25 性能审计续接：NPC 寒暄预热配额保护（进行中）
+
+- 代码上限是 200 名近期活跃学生 × 7 个 NPC，即每日最多 1,400 次 Graph 请求；有记忆的寒暄会预留 AI 额度，而全站 provider 额度为 300 次/日。仓库内未发现显式开启配置，实际部署环境变量未核验。
+- 默认关闭每日预热，保留显式 opt-in 和首次访问时的按需生成，避免后台任务抢占交互 AI 额度。RED/GREEN 定向测试 `NpcGreetingPrewarmJobTest` 7/7 通过；后端全量 `mvn -B test` 1,896/1,896、0 failures/errors/skips，6:53 正常退出；没有真实模型请求。
+- 尚未做后台并发时长、真实部署配置及服务端模型额度压测；若部署显式开启，仍需为预热单独分配预算后再评估。
+
 ## 当前进度
 
 唯一任务清单及按优先级排列的未完成项维护在[总任务实施计划](../plans/2026-10-16-overall-work-checklist.md)，本页只记录最近进度和详细历史，避免出现多份清单。

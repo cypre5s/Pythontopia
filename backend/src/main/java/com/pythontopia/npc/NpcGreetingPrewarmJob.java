@@ -17,7 +17,7 @@ import org.springframework.stereotype.Component;
  * {@link NpcGreetingService} 缓存（TTL 覆盖全天），玩家白天进对话直接命中缓存、零等待，一天一更新。
  *
  * <p><b>稳健性</b>：仅覆盖最近 {@code active-days} 天活跃、至多 {@code max-users} 个学生（避免给历史
- * 全量学生跑 LLM）；逐个调用、单个失败不影响其余（异常隔离）；{@code enabled=false} 可整体关闭。
+ * 全量学生跑 LLM）；逐个调用、单个失败不影响其余（异常隔离）；默认关闭，避免后台任务耗尽交互 AI 额度。
  * 无记忆的学生 {@code prewarm} 返回 none 且不缓存，天然跳过。
  */
 @Component
@@ -45,7 +45,8 @@ public class NpcGreetingPrewarmJob {
   public NpcGreetingPrewarmJob(
       LearningEventLogRepository eventRepository,
       NpcGreetingService greetingService,
-      @Value("${pythontopia.npc.greeting.prewarm.enabled:true}") boolean enabled,
+      // shortcut: prewarm stays opt-in until a separate budget protects interactive requests.
+      @Value("${pythontopia.npc.greeting.prewarm.enabled:false}") boolean enabled,
       @Value("${pythontopia.npc.greeting.prewarm.active-days:7}") int activeDays,
       @Value("${pythontopia.npc.greeting.prewarm.max-users:200}") int maxUsers) {
     this.eventRepository = eventRepository;
