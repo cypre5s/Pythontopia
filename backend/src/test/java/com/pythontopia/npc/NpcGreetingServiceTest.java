@@ -165,7 +165,9 @@ class NpcGreetingServiceTest {
     assertThat(hit.cached()).isTrue();
     assertThat(hit.greeting()).isEqualTo(warmed.greeting());
     verify(graphClient, times(1)).talk(anyString(), anyString(), any(), anyString());
-    verify(requestLimit).reserve(7L);
+    // 预热是系统代生成：只占全站 provider 额度，不扣学生个人 30 次/天。
+    verify(requestLimit).reserveProviderOnly();
+    verify(requestLimit, never()).reserve(7L);
   }
 
   @Test
@@ -173,9 +175,10 @@ class NpcGreetingServiceTest {
     when(memoryRetrievalService.retrieve(eq(7L), isNull(), anyInt()))
         .thenReturn(List.of(memory(9L, "练习失败：PY43-KC-016", "PY43-KC-016")));
     org.mockito.Mockito.doThrow(
-            new BusinessException(HttpStatus.TOO_MANY_REQUESTS, "TUTOR_DAILY_LIMIT_REACHED", "daily limit"))
+            new BusinessException(
+                HttpStatus.TOO_MANY_REQUESTS, "AI_PROVIDER_DAILY_LIMIT_REACHED", "provider limit"))
         .when(requestLimit)
-        .reserve(7L);
+        .reserveProviderOnly();
 
     assertThatThrownBy(() -> service.prewarm(7L, "foreman_bug"))
         .isInstanceOf(BusinessException.class);
@@ -300,6 +303,7 @@ class NpcGreetingServiceTest {
     service.prewarm(7L, "foreman_bug");
 
     verify(requestLimit, never()).reserve(7L);
+    verify(requestLimit, never()).reserveProviderOnly();
     verify(graphClient, never()).talk(anyString(), anyString(), any(), anyString());
   }
 

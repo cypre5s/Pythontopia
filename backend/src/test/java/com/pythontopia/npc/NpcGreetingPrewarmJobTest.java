@@ -16,6 +16,7 @@ import ch.qos.logback.classic.Level;
 import ch.qos.logback.classic.Logger;
 import ch.qos.logback.classic.spi.ILoggingEvent;
 import ch.qos.logback.core.read.ListAppender;
+import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.learner.event.LearningEventLogRepository;
 import com.pythontopia.npc.dto.NpcGreetingResponse;
 import java.util.List;
@@ -62,6 +63,22 @@ class NpcGreetingPrewarmJobTest {
 
     verify(greetingService, times(NpcGreetingPrewarmJob.CORE_NPCS.size()))
         .prewarm(eq(1L), anyString());
+  }
+
+  @Test
+  void providerBudgetExhaustionStopsTheWholeRunEarly() {
+    when(eventRepository.findActiveUserIds(any(), anyInt())).thenReturn(List.of(1L, 2L));
+    // 第一个 NPC 就撞上“全站 provider 额度用尽”：应立即收工，不再遍历剩余学生×NPC。
+    when(greetingService.prewarm(anyLong(), anyString()))
+        .thenThrow(
+            new BusinessException(
+                org.springframework.http.HttpStatus.TOO_MANY_REQUESTS,
+                "AI_PROVIDER_DAILY_LIMIT_REACHED",
+                "provider limit"));
+
+    job(true).prewarmDaily(); // 不抛
+
+    verify(greetingService, times(1)).prewarm(anyLong(), anyString());
   }
 
   @Test

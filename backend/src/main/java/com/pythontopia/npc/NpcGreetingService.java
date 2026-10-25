@@ -94,15 +94,17 @@ public class NpcGreetingService {
     if (cached != null && clock.instant().isBefore(cached.expiresAt())) {
       return cached.response().asCached();
     }
-    return computeAndCache(userId, npcKey);
+    return computeAndCache(userId, npcKey, false);
   }
 
   /**
    * 强制重算并刷新该生在某 NPC 的寒暄缓存（无视现有缓存），供 {@link NpcGreetingPrewarmJob}
    * 每日预生成调用：把当天缓存提前写好，玩家进对话直接命中。返回 degraded（下游故障）时不写缓存、可恢复。
+   *
+   * <p>预热是系统替学生预生成，只占全站 provider 额度，不扣学生个人 30 次/天。
    */
   public NpcGreetingResponse prewarm(long userId, String npcKey) {
-    return computeAndCache(userId, npcKey);
+    return computeAndCache(userId, npcKey, true);
   }
 
   @Scheduled(fixedDelay = 1_800_000L, initialDelay = 1_800_000L)
@@ -118,15 +120,15 @@ public class NpcGreetingService {
   }
 
   /** 计算寒暄并按「非降级」写入缓存（成功寒暄 + 确定无记忆态才缓存；下游故障不缓存，下次重试）。 */
-  private NpcGreetingResponse computeAndCache(long userId, String npcKey) {
-    NpcGreetingResponse fresh = compute(userId, npcKey);
+  private NpcGreetingResponse computeAndCache(long userId, String npcKey, boolean background) {
+    NpcGreetingResponse fresh = compute(userId, npcKey, background);
     if (!fresh.degraded()) {
       cache.put(cacheKey(userId, npcKey), new CacheEntry(fresh, clock.instant().plus(CACHE_TTL)));
     }
     return fresh;
   }
 
-  private NpcGreetingResponse compute(long userId, String npcKey) {
+  private NpcGreetingResponse compute(long userId, String npcKey, boolean background) {
     List<MemoryItemDto> memories;
     try {
       memories = memoryRetrievalService.retrieve(userId, null, MEMORY_LIMIT);
@@ -147,7 +149,11 @@ public class NpcGreetingService {
     String profileBrief = resolveProfileBrief(userId);
     String prompt = buildGreetingPrompt(profileBrief);
 
-    requestLimit.reserve(userId);
+    if (background) {
+      requestLimit.reserveProviderOnly();
+    } else {
+      requestLimit.reserve(userId);
+    }
     Optional<NpcDialogResponse> graphReply = graphClient.talk(npcKey, personaCore, memories, prompt);
     if (graphReply.isEmpty()) {
       // graph NpcDialogAgent 不可达/超时/缺 token → 结构化降级（fail-fast，不静默降级成普通寒暄）。

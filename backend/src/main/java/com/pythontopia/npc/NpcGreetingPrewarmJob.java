@@ -1,5 +1,6 @@
 package com.pythontopia.npc;
 
+import com.pythontopia.common.error.BusinessException;
 import com.pythontopia.learner.event.LearningEventLogRepository;
 import java.time.Duration;
 import java.time.Instant;
@@ -24,6 +25,9 @@ import org.springframework.stereotype.Component;
 public class NpcGreetingPrewarmJob {
 
   private static final Logger log = LoggerFactory.getLogger(NpcGreetingPrewarmJob.class);
+
+  /** 全站 provider 日额度用尽的错误码（TutorDailyRequestLimitService）。 */
+  private static final String PROVIDER_LIMIT_REACHED = "AI_PROVIDER_DAILY_LIMIT_REACHED";
 
   /** 预生成覆盖的核心教育 NPC（与 data/npcs/index.json 的 educator_core 对齐）。 */
   static final List<String> CORE_NPCS =
@@ -73,6 +77,7 @@ public class NpcGreetingPrewarmJob {
     }
     int ok = 0;
     int fail = 0;
+    boolean providerExhausted = false;
     for (Long userId : users) {
       if (userId == null) {
         continue;
@@ -81,6 +86,14 @@ public class NpcGreetingPrewarmJob {
         try {
           greetingService.prewarm(userId, npcKey);
           ok++;
+        } catch (BusinessException ex) {
+          if (PROVIDER_LIMIT_REACHED.equals(ex.code())) {
+            // 全站 provider 额度已用尽：继续跑只会逐个抛错，直接收工（剩余学生由实时访隮按额度重试）。
+            providerExhausted = true;
+            break;
+          }
+          fail++;
+          log.debug("npc greeting prewarm failed errorType={}", ex.getClass().getSimpleName());
         } catch (RuntimeException ex) {
           // 单个学生×NPC 失败不影响其余（异常隔离），下次定时或玩家实时访问可恢复。
           fail++;
@@ -88,12 +101,16 @@ public class NpcGreetingPrewarmJob {
               "npc greeting prewarm failed errorType={}", ex.getClass().getSimpleName());
         }
       }
+      if (providerExhausted) {
+        break;
+      }
     }
     log.info(
-        "npc greeting prewarm done: activeUsers={} core_npcs={} ok={} fail={}",
+        "npc greeting prewarm done: activeUsers={} core_npcs={} ok={} fail={} providerExhausted={}",
         users.size(),
         CORE_NPCS.size(),
         ok,
-        fail);
+        fail,
+        providerExhausted);
   }
 }

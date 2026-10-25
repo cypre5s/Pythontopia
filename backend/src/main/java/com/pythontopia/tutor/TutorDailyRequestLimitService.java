@@ -67,6 +67,24 @@ public class TutorDailyRequestLimitService {
       throw new BusinessException(
           HttpStatus.TOO_MANY_REQUESTS, "TUTOR_DAILY_LIMIT_REACHED", "今日 AI 请求额度已达 30 次，请明天再试");
     }
+    reserveProvider(usageDate);
+  }
+
+  /**
+   * 后台批处理（如 NPC 寒暄预热）只占全站 provider 额度，不扣学生个人的 30 次/天。
+   *
+   * <p>预热是系统替学生预生成的内容，学生一次请求都没发过；若走 {@link #reserve(Long)}，
+   * 7 个核心 NPC × N 个活跃学生会在凌晨把学生额度和全站额度一起烧光，白天所有 AI 入口 429。
+   */
+  @Transactional
+  public void reserveProviderOnly() {
+    if (!limitsEnabled) {
+      return;
+    }
+    reserveProvider(LocalDate.now(RESET_ZONE));
+  }
+
+  private void reserveProvider(LocalDate usageDate) {
     List<Integer> providerCounts =
         jdbc.query(
             RESERVE_PROVIDER_SQL,

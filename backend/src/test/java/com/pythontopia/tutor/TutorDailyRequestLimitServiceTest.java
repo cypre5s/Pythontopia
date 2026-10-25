@@ -139,6 +139,45 @@ class TutorDailyRequestLimitServiceTest {
   }
 
   @Test
+  void providerOnlyReservationSkipsThePerAccountCap() {
+    when(jdbc.query(
+            anyString(),
+            any(RowMapper.class),
+            any(LocalDate.class),
+            org.mockito.ArgumentMatchers.eq(300)))
+        .thenReturn(List.of(1));
+
+    service.reserveProviderOnly();
+
+    // 只对全站 provider 行计数，不碰 tutor_daily_request_usage（不扣学生个人额度）。
+    ArgumentCaptor<String> sql = ArgumentCaptor.forClass(String.class);
+    verify(jdbc)
+        .query(
+            sql.capture(),
+            any(RowMapper.class),
+            any(LocalDate.class),
+            org.mockito.ArgumentMatchers.eq(300));
+    assertThat(sql.getValue())
+        .contains("ai_provider_daily_request_usage")
+        .doesNotContain("tutor_daily_request_usage");
+  }
+
+  @Test
+  void providerOnlyReservationStillFailsWhenProviderBudgetIsExhausted() {
+    when(jdbc.query(
+            anyString(),
+            any(RowMapper.class),
+            any(LocalDate.class),
+            org.mockito.ArgumentMatchers.eq(300)))
+        .thenReturn(List.of());
+
+    assertThatThrownBy(() -> service.reserveProviderOnly())
+        .isInstanceOfSatisfying(
+            BusinessException.class,
+            error -> assertThat(error.code()).isEqualTo("AI_PROVIDER_DAILY_LIMIT_REACHED"));
+  }
+
+  @Test
   void retainsOnlyNinetyDaysOfDailyUsageRows() {
     service.removeExpiredUsage();
 
