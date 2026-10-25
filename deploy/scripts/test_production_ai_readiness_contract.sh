@@ -73,8 +73,8 @@ require_fixed "${COMPOSE_FILE}" \
   "生产必须显式选择 LLM provider" \
   'PYT_LLM_PROVIDER: ${PYT_LLM_PROVIDER:?缺少 PYT_LLM_PROVIDER}'
 require_fixed "${COMPOSE_FILE}" \
-  "生产强制启用 AI 日限额" \
-  'PYT_AI_REQUEST_LIMITS_ENABLED: "true"'
+  "生产必须默认启用 AI 日限额" \
+  'PYT_AI_REQUEST_LIMITS_ENABLED: ${PYT_AI_REQUEST_LIMITS_ENABLED:-true}'
 require_fixed "${COMPOSE_FILE}" \
   "生产 RAG 固定使用本地 hash 向量" \
   'PYT_RAG_EMBEDDER: hash'
