@@ -12,7 +12,8 @@
 - 代码审查补上 Bug 矿洞的私有迁移题边界：按提交者读取用例，隐藏输入/期望/实际值统一脱敏，Graph DebugAgent 输出占位说明并丢弃隐藏用例变量轨迹，避免私有用例出现在学生卡片或响应中。
 - 验证：后端最终源码 `mvn test` 310 个测试类 / 1,816 项，0 failures、0 errors、0 skipped；全量 clean 运行验证 V235 空库迁移，最终运行复用已 clean 构建目录。Surefire 在 Spring shutdown hook 延迟 30 秒后回收 fork JVM，Maven 最终退出码为 0。Java 私有反例定向测试和 Graph DebugAgent 定向 6 项通过；Graph 全量 1,984 passed、1 skipped；Ruff 通过。前端 typecheck/lint、结果弹窗与 Tutor 相关 20 个用例、生产构建通过。
 - 本地 Chromium 以 fixture 浏览 AC 结果弹窗（1440×900，738×582），运行/内存百分位与样本数正常显示，console、pageerror、失败请求均为 0；截图 `/tmp/pythontopia-submission-result-fixture.png`。未用真实认证学生执行模型与 Judge 的完整端到端闭环，fixture 结果不代表真实模型或判题验收。
-- GitHub 推送与 release tag 尚待本次提交后执行。
+- 已推送代码提交 `1225c02a` 至 `main`，tag `web-v20261025.1`；GitHub Actions release run `40164200214` 的 build、size-check 与上传均成功。Release asset `pythontopia-web-v20261025.1.tar.gz` 为 1,534,979,244 bytes，SHA-256 `ba58e4dd89567ad378b76946a702db4f65666295008958885dc57dcfe573ff4d`。
+- 同次 push 触发的通用 CI 中，后端与 Graph job 通过；前端全量测试在未改动的 `AdminUsersPage.spec.ts:212` 因缺少 `admin-users__readable` class 失败，本机重跑 8 项中 7 项通过、同一断言复现。RAG job 的测试步骤退出 1，本次未改动 RAG，也未进一步定位该失败；独立 release workflow 已成功完成发布。
 
 ## 2026-10-25 当前续接：本地正式判题 SYSTEM_ERROR
 
