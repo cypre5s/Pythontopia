@@ -2,7 +2,7 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-25）**：性能审计批次已推送至 `main`，提交 [`eb938f7c`](https://github.com/cypre5s/Pythontopia/commit/eb938f7cdea76a93675127abd20b2b895250786d)；GitHub CI [#37](https://github.com/cypre5s/Pythontopia/actions/runs/40189566818) 五个 job 全部通过。新 release [`web-v20261025.6`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.6) 构建成功并上传。基线与本批验证包括 Maven 1,893 项、Vitest 2,721 项、Graph 1,988 项（1 skipped）、RAG 182 项；证据图/记忆快照 PostgreSQL 定向 17 项通过。修改的 6 个 Java 文件定向 Spotless、RAG 全量 Ruff lint 与改动文件 format 检查通过。全仓 Spotless 和全目录 Ruff format 均有未改动文件格式差异。全量审计仍在进行，没有真实延迟/负载基准；Maven 结束时 Outbox/Tutor 定时任务连接拒绝待处理或明确界定，其他模块继续按证据检查。
+> **当前快照（2026-10-25）**：性能审计批次已推送至 `main`，提交 [`eb938f7c`](https://github.com/cypre5s/Pythontopia/commit/eb938f7cdea76a93675127abd20b2b895250786d)；GitHub CI [#37](https://github.com/cypre5s/Pythontopia/actions/runs/40189566818) 五个 job 全部通过。新 release [`web-v20261025.6`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.6) 构建成功并上传。基线与本批验证包括 Maven 1,893 项、Vitest 2,721 项、Graph 1,988 项（1 skipped）、RAG 182 项；证据图/记忆快照 PostgreSQL 定向 17 项通过。修改的 6 个 Java 文件定向 Spotless、RAG 全量 Ruff lint 与改动文件 format 检查通过。全仓 Spotless 和全目录 Ruff format 均有未改动文件格式差异。另做了 3,000×512 维合成向量本地微测，当前查询中位数 6.07 ms、基线 12.88 ms；不代表真实数据或并发负载。全量审计仍在进行；Maven 结束时 Outbox/Tutor 定时任务连接拒绝待处理或明确界定，其他模块继续按证据检查。
 
 ## 当前进度
 
@@ -22,6 +22,7 @@
 - RED/GREEN 与相关行为回归：`mvn -B -Dtest=EvidenceMemoryServiceTest,LearningEvidenceGraphServiceTest,LearningEffectTraceServiceTest,AiRuntimeSummaryServiceTest,EvidenceMemoryServicePerformanceTest,LearningEvidenceGraphPerformanceTest test`，17 项通过，覆盖 PostgreSQL 快照写入/证据图结果及新增性能约束；全量 `mvn -B test` 1,893 项通过，0 failures/errors/skips，`BUILD SUCCESS`。6 个改动 Java 文件的定向 Spotless 检查和 `git diff --check` 通过；全仓 Spotless 仍列出 679 个格式差异文件，未批量改写无关代码。
 - Maven 全量结束时，Outbox 每 5 秒轮询及 Tutor 附件清理会在 Testcontainers 已关闭后继续连接数据库，出现 Hikari 等待超时/拒绝连接；Surefire 等待 30 秒后强制清理 fork JVM，但测试汇总为零失败。需要继续验证安全、测试作用域内的处理方式。当前性能修复已随 `eb938f7c` 推送，CI 和 release 构建通过；尚无真实流量/负载基准。
 - 跨模块复核排除了 3 条旧报告：RAG 启动自愈/重建的数据库访问已经 `asyncio.to_thread`；Tutor Graph 会话状态已按 LRU 限制为 512 个且保留活跃运行态；DeepSeek provider 已复用 `httpx.AsyncClient`。RAG 的 `InMemoryVectorStore.search` 确认仍对每条索引向量重复计算归一化，并在每行重复构造 KC 过滤集合；改为 upsert 时归一化、查询仅归一化输入向量，过滤集合在循环外创建。性能回归先 RED 后 GREEN；RAG 全量 182/182、全量 Ruff lint 和改动文件 Ruff/format 检查通过。全目录 Ruff format 另列出 22 个未改动文件，没有批量格式化。以 N 条索引向量计，查询归一化次数从 N+1 降到 1；未做真实响应延迟基准。
+- RAG 本地微测用基线 `5b554737` 的旧实现与当前实现比较，3,000 条×512 维向量，7 次检索中位数为 12.88 ms→6.07 ms（2.12×）；命中顺序与得分一致。该结果是本机合成数据、单线程检索，不代表课件语料、生产硬件或并发吞吐。
 
 ### 2026-10-25 AI 导学迁移题难度校准
 
