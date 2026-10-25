@@ -185,7 +185,24 @@ public class PistonPythonSandbox implements PythonSandbox {
     stderr = truncate(stderr, MAX_STDERR_CHARS);
     String errorKind = timedOut ? "TLE" : ("XX".equals(status) ? "SYSTEM_ERROR" : null);
     return new SandboxRunResult(
-        timedOut, exitCode, stdout, stderr, run.path("wall_time").asLong(0L), errorKind);
+        timedOut,
+        exitCode,
+        stdout,
+        stderr,
+        run.path("wall_time").asLong(0L),
+        memoryKb(run.get("memory")),
+        errorKind);
+  }
+
+  private Integer memoryKb(JsonNode memoryNode) {
+    if (memoryNode == null || !memoryNode.isIntegralNumber() || !memoryNode.canConvertToLong()) {
+      return null;
+    }
+    long bytes = memoryNode.asLong();
+    if (bytes < 0 || bytes > (long) Integer.MAX_VALUE * 1024) {
+      return null;
+    }
+    return (int) ((bytes + 1023) / 1024);
   }
 
   private HttpEntity<?> entity(Object body) {

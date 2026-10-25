@@ -52,7 +52,7 @@ public class JudgeService {
    * 内部用 {@link JudgeWorkerPool#submitAndWait} 限制并发子进程数。
    */
   @Transactional
-  public JudgeOutcome judge(Long submissionId, Long problemId, String code) {
+  public JudgeOutcome judge(Long submissionId, Long problemId, String code, Long userId) {
     submissionRepository.markStatus(submissionId, SubmissionStatus.RUNNING, null, null);
     StaticCodeChecker.CheckResult check =
         judgeWorkerPool.submitAndWait(() -> staticChecker.check(code));
@@ -78,7 +78,7 @@ public class JudgeService {
 
     List<JudgeTestCase> cases =
         problemRepository
-            .findTestCases(problemId)
+            .findTestCases(problemId, userId)
             .map(this::extractCases)
             .orElse(List.of());
     if (cases.isEmpty()) {
@@ -97,7 +97,10 @@ public class JudgeService {
         judgeWorkerPool.submitAndWait(() -> caseEvaluator.evaluate(code, cases));
     persistEvaluation(submissionId, cases.size(), evaluation);
     submissionRepository.markStatus(
-        submissionId, statusFor(evaluation.finalVerdict()), evaluation.totalRuntimeMs(), null);
+        submissionId,
+        statusFor(evaluation.finalVerdict()),
+        evaluation.totalRuntimeMs(),
+        evaluation.maxMemoryKb());
     return new JudgeOutcome(
         evaluation.finalVerdict(),
         evaluation.passedCases(),

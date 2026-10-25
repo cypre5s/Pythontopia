@@ -37,6 +37,7 @@ public class ChapterProblemBankRepository {
                        reference_solution_code
                 FROM course_problem
                 WHERE pack_id = :packId
+                  AND tutor_owner_user_id IS NULL
                   AND kc_code IN (:kcCodes)
                   AND reference_solution_code IS NOT NULL
                   AND btrim(reference_solution_code) <> ''

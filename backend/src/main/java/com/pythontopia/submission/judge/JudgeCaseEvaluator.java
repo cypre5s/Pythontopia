@@ -31,6 +31,7 @@ public class JudgeCaseEvaluator {
     Verdict finalVerdict = Verdict.AC;
     String failureReason = null;
     int totalRuntime = 0;
+    Integer maxMemoryKb = null;
     ArrayNode caseTrace = objectMapper.createArrayNode();
     for (int i = 0; i < cases.size(); i++) {
       JudgeTestCase testCase = cases.get(i);
@@ -43,6 +44,9 @@ public class JudgeCaseEvaluator {
       entry.put("stdoutBytes", result.stdout() == null ? 0 : result.stdout().length());
       entry.put("stderrBytes", result.stderr() == null ? 0 : result.stderr().length());
       totalRuntime += (int) result.durationMs();
+      if (result.memoryKb() != null) {
+        maxMemoryKb = maxMemoryKb == null ? result.memoryKb() : Math.max(maxMemoryKb, result.memoryKb());
+      }
       Verdict verdict = verdictFor(result, testCase);
       entry.put("verdict", verdict.name());
       caseTrace.add(entry);
@@ -59,7 +63,7 @@ public class JudgeCaseEvaluator {
     trace.put("sandbox", sandbox.name());
     trace.put("totalRuntimeMs", totalRuntime);
     trace.set("cases", caseTrace);
-    return new CaseEvaluation(finalVerdict, passed, totalRuntime, failureReason, trace);
+    return new CaseEvaluation(finalVerdict, passed, totalRuntime, maxMemoryKb, failureReason, trace);
   }
 
   /** 解析公开样例用例（{@code hidden=false}）。 */
@@ -180,6 +184,7 @@ public class JudgeCaseEvaluator {
       Verdict finalVerdict,
       int passedCases,
       int totalRuntimeMs,
+      Integer maxMemoryKb,
       String failureReason,
       ObjectNode trace) {}
 }

@@ -95,6 +95,23 @@ class JudgeCaseEvaluatorTest {
   }
 
   @Test
+  void keepsMaximumPeakMemoryAcrossExecutedCases() {
+    when(sandbox.name()).thenReturn("piston");
+    when(sandbox.run(any(), any()))
+        .thenReturn(
+            new SandboxRunResult(false, 0, "1", "", 7, 13, null),
+            new SandboxRunResult(false, 0, "1", "", 8, 9, null));
+
+    JudgeCaseEvaluator.CaseEvaluation evaluation =
+        evaluator.evaluate(
+            "print(1)",
+            List.of(new JudgeTestCase("", "1", 1000), new JudgeTestCase("", "1", 1000)));
+
+    assertThat(evaluation.totalRuntimeMs()).isEqualTo(15);
+    assertThat(evaluation.maxMemoryKb()).isEqualTo(13);
+  }
+
+  @Test
   void extractCasesMarksHiddenFlag() {
     com.fasterxml.jackson.databind.node.ArrayNode array = mapper.createArrayNode();
     array.add(mapper.createObjectNode().put("input", "1").put("output", "2"));

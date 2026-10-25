@@ -39,7 +39,12 @@ public class TutorWorkflowRepository {
       String resultJson) {}
 
   public record SubmissionFeedbackProjection(
-      int seq, String verdict, String stateJson, String decisionJson, String actionPayloadJson) {}
+      int seq,
+      String phase,
+      String verdict,
+      String stateJson,
+      String decisionJson,
+      String actionPayloadJson) {}
 
   public record AutoGenCheckpoint(
       UUID runId,
@@ -86,7 +91,7 @@ public class TutorWorkflowRepository {
             LIMIT 1
         ) transfer ON TRUE
         WHERE s.user_id = ? AND s.session_key = ?
-          AND s.status = 'ACTIVE' AND s.phase = 'TRANSFER'
+          AND s.status = 'ACTIVE' AND s.phase IN ('TRANSFER', 'ERROR_FEEDBACK', 'AC_REVIEW')
           AND transfer.problem_id = ?
         """,
             this::mapSession,
@@ -94,6 +99,20 @@ public class TutorWorkflowRepository {
             sessionKey,
             transferProblemId.toString());
     return rows.stream().findFirst();
+  }
+
+  public boolean hasTransferProblem(Long sessionId, Long problemId) {
+    Integer count =
+        jdbcTemplate.queryForObject(
+            """
+            SELECT COUNT(*) FROM tutor_workflow_card
+            WHERE session_id = ? AND card_key = 'transfer_problem'
+              AND (payload ->> 'problem_id')::bigint = ?
+            """,
+            Integer.class,
+            sessionId,
+            problemId);
+    return count != null && count > 0;
   }
 
   public Optional<TutorWorkflowSessionDto> findBySessionKey(Long userId, String sessionKey) {
@@ -411,6 +430,7 @@ public class TutorWorkflowRepository {
   /** Atomically stores a submission feedback checkpoint and its event log entry. */
   @Transactional
   public void persistSubmissionFeedback(Long sessionId, SubmissionFeedbackProjection projection) {
+    updateProgress(sessionId, projection.phase(), projection.seq());
     upsertAgentState(sessionId, projection.stateJson(), projection.decisionJson());
     insertActionEvent(
         sessionId,

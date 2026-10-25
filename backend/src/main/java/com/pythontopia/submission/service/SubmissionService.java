@@ -10,6 +10,7 @@ import com.pythontopia.submission.dto.PublicProblemDto;
 import com.pythontopia.submission.dto.SubmissionCreateRequest;
 import com.pythontopia.submission.dto.SubmissionDetailDto;
 import com.pythontopia.submission.dto.SubmissionDto;
+import com.pythontopia.submission.dto.SubmissionPerformanceDto;
 import com.pythontopia.submission.dto.SubmissionSource;
 import com.pythontopia.submission.dto.SubmissionStatus;
 import com.pythontopia.submission.dto.Verdict;
@@ -62,7 +63,7 @@ public class SubmissionService {
     submissionRepository.acquireUserSubmitLock(userId);
     enforceRateLimit(userId);
     problemRepository
-        .findPublic(43L, request.problemId())
+        .findAccessible(43L, request.problemId(), userId)
         .orElseThrow(
             () ->
                 new BusinessException(HttpStatus.NOT_FOUND, "PROBLEM_NOT_FOUND", "题目不存在或不属于当前课程"));
@@ -71,7 +72,8 @@ public class SubmissionService {
     Long submissionId =
         submissionRepository.insertSubmission(
             userId, request.problemId(), request.questId(), source, request.code());
-    JudgeOutcome outcome = judgeService.judge(submissionId, request.problemId(), request.code());
+    JudgeOutcome outcome =
+        judgeService.judge(submissionId, request.problemId(), request.code(), userId);
     handleCompletion(userId, submissionId, request, outcome);
     return submissionRepository
         .findById(submissionId)
@@ -90,6 +92,37 @@ public class SubmissionService {
                 () -> new BusinessException(HttpStatus.NOT_FOUND, "SUBMISSION_NOT_FOUND", "提交不存在"));
     JudgeResultDto judgeResult = submissionRepository.findJudgeResult(submissionId).orElse(null);
     return new SubmissionDetailDto(submission, judgeResult);
+  }
+
+  @Transactional(readOnly = true)
+  public SubmissionPerformanceDto performance(Long userId, Long submissionId) {
+    SubmissionDto submission =
+        submissionRepository
+            .findSubmission(userId, submissionId)
+            .orElseThrow(
+                () ->
+                    new BusinessException(
+                        HttpStatus.NOT_FOUND, "SUBMISSION_NOT_FOUND", "提交不存在"));
+    if (submission.status() != SubmissionStatus.PASSED) {
+      return SubmissionPerformanceDto.hidden();
+    }
+    var samples =
+        submissionRepository.findPerformanceSamples(
+            submission.problemId(),
+            submission.language(),
+            submission.runtimeMs(),
+            submission.memoryKb());
+    boolean showRuntime = submission.runtimeMs() != null && samples.runtimeSamples() >= 10;
+    boolean showMemory = submission.memoryKb() != null && samples.memorySamples() >= 10;
+    return new SubmissionPerformanceDto(
+        showRuntime ? beatsPercent(samples.runtimeBeaten(), samples.runtimeSamples()) : null,
+        showRuntime ? samples.runtimeSamples() : null,
+        showMemory ? beatsPercent(samples.memoryBeaten(), samples.memorySamples()) : null,
+        showMemory ? samples.memorySamples() : null);
+  }
+
+  private double beatsPercent(int beaten, int samples) {
+    return Math.round(1000.0 * beaten / samples) / 10.0;
   }
 
   @Transactional(readOnly = true)
@@ -125,7 +158,7 @@ public class SubmissionService {
     }
     String difficulty =
         problemRepository
-            .findPublic(43L, request.problemId())
+            .findAccessible(43L, request.problemId(), userId)
             .map(PublicProblemDto::difficulty)
             .orElse(null);
     // 本次提交前同题失败次数，用于判定重试 / 逆袭行为信号。

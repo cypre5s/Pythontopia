@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.submission.repository.PublicProblemRepository;
 import com.pythontopia.tutor.dto.TutorWorkflowCardCursorDto;
 import com.pythontopia.tutor.dto.TutorWorkflowSessionDto;
 import java.time.Instant;
@@ -374,11 +375,18 @@ class TutorWorkflowRepositoryIntegrationTest {
         session.id(),
         new TutorWorkflowRepository.SubmissionFeedbackProjection(
             4,
+            "AC_REVIEW",
             "AC",
             "{\"student_state\":{\"attempt_count\":2},\"episode_plan\":null,\"chat_history\":[]}",
             "{}",
             "{\"verdict\":\"AC\",\"accepted\":true}"));
 
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT phase FROM tutor_workflow_session WHERE id = ?",
+                String.class,
+                session.id()))
+        .isEqualTo("AC_REVIEW");
     assertThat(
             jdbc.queryForObject(
                 "SELECT state_json->'student_state'->>'attempt_count' FROM"
@@ -439,7 +447,12 @@ class TutorWorkflowRepositoryIntegrationTest {
                 repository.persistSubmissionFeedback(
                     session.id(),
                     new TutorWorkflowRepository.SubmissionFeedbackProjection(
-                        4, "WA", "{\"student_state\":{\"attempt_count\":1}}", "{}", "not-json")))
+                        4,
+                        "ERROR_FEEDBACK",
+                        "WA",
+                        "{\"student_state\":{\"attempt_count\":1}}",
+                        "{}",
+                        "not-json")))
         .isInstanceOf(RuntimeException.class);
 
     assertThat(

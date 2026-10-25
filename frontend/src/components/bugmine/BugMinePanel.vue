@@ -4,6 +4,9 @@ import { useRouter } from 'vue-router';
 import PyButton from '@/components/ui/PyButton.vue';
 import PyEmptyState from '@/components/ui/PyEmptyState.vue';
 import MarkdownView from '@/components/common/MarkdownView.vue';
+import { getSubmission } from '@/api/submissions';
+import SubmissionResultModal from '@/components/training/SubmissionResultModal.vue';
+import type { SubmissionDetailDto } from '@/api/dto/Submission';
 import { useLearningStore } from '@stores/learning';
 import { useToastStore } from '@stores/toast';
 import { kcDisplayName } from '@/data/kcNames';
@@ -24,6 +27,8 @@ const toast = useToastStore();
 const router = useRouter();
 const props = defineProps<{ reviewKc?: string | null }>();
 const initialDataLoaded = ref(false);
+const retryResultDetail = ref<SubmissionDetailDto | null>(null);
+const retryResultOpen = ref(false);
 
 const session = computed(() => learning.bugMine.session);
 // 题干优先用后端随会话下发的 session.problem（零额外请求）；缺失时回退到单题接口结果。
@@ -311,6 +316,12 @@ async function retry(): Promise<void> {
   if (!result) {
     toast.show(learning.bugMine.lastError ?? '重试失败', 'error');
     return;
+  }
+  try {
+    retryResultDetail.value = await getSubmission(result.id);
+    retryResultOpen.value = true;
+  } catch {
+    toast.show('判题结果已保存，详情暂时无法加载。', 'error');
   }
   if (result.status === 'PASSED') {
     toast.show('修复成功！Bug 矿洞会话已 RESOLVED。', 'success');
@@ -1122,6 +1133,15 @@ async function retry(): Promise<void> {
               >
                 {{ learning.bugMine.lastRetry.status }} · {{ learning.bugMine.lastRetry.source }}
               </span>
+              <button
+                v-if="retryResultDetail"
+                type="button"
+                class="status-link"
+                data-testid="retry-result-reopen"
+                @click="retryResultOpen = true"
+              >
+                查看本次判题详情
+              </button>
             </div>
           </div>
         </section>
@@ -1133,6 +1153,12 @@ async function retry(): Promise<void> {
         description="从左侧错题本或遗忘回声选一条，进入逐层调试。"
       />
     </div>
+    <SubmissionResultModal
+      v-if="retryResultDetail"
+      :open="retryResultOpen"
+      :detail="retryResultDetail"
+      @close="retryResultOpen = false"
+    />
   </section>
 </template>
 
@@ -2005,6 +2031,17 @@ async function retry(): Promise<void> {
 .status {
   font-size: var(--pyt-font-size-sm);
   color: var(--pyt-color-text-muted);
+}
+.status-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--pyt-color-primary, #477c55);
+  cursor: pointer;
+  font: inherit;
+  font-size: var(--pyt-font-size-sm);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .notice {
   margin: 0;

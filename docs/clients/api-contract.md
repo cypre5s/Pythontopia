@@ -167,6 +167,7 @@ Authorization: Bearer <token>
 | --- | --- | --- | --- |
 | POST | `/api/submissions` | STUDENT | 提交代码判题 → `SubmissionDto` |
 | GET | `/api/submissions/{id}` | STUDENT | 提交详情（含判题结果），**轮询直到终态** |
+| GET | `/api/submissions/{id}/performance` | STUDENT | 本人 AC 提交的同题同语言运行/内存百分位；低于 10 条有效 AC 提交时对应字段为 `null` |
 | GET | `/api/submissions?problemId=&status=&limit=30&offset=0` | STUDENT | 提交历史列表 |
 
 提交体 `SubmissionCreateRequest`：
@@ -191,6 +192,8 @@ Authorization: Bearer <token>
 ```
 
 `verdict ∈ {AC, WA, RE, TLE, CE, MLE, SYSTEM_ERROR}`（AC=全部通过；WA=答案错误；RE=运行时错误；TLE=超时；CE=未过静态检查/超长/为空；MLE=超内存；SYSTEM_ERROR=判题系统异常）。轮询建议固定间隔（如 1s）+ 上限退避，命中终态即停。
+
+`SubmissionPerformanceDto` 的运行时间与内存分别按 `problemId + language` 统计 PASSED 提交记录；同一用户的多次提交分别计数。每项只比较已返回该指标的 AC 提交，样本数达到 10 后才返回 `runtimeBeatsPercent` / `memoryBeatsPercent` 与对应 `*SampleCount`，未达门槛时该项两个字段均为 `null`。该接口仅允许读取本人提交，百分位不包含失败提交。
 
 ### 4.7 Bug 矿洞（仅学生）
 
@@ -413,6 +416,8 @@ Graph HTTP 配置，读不活动上限为 180 秒（上游每 10 秒注释 heart
 ### 5.2 训练场导学工作流
 
 `POST /api/tutor/workflow/runs` 以 SSE 推进训练场导学事件；`GET /api/tutor/workflow/sessions/active?problemId=...` 恢复当前题目的会话。仅学生可用。
+
+活动会话快照在有正式提交反馈时附带 `latestSubmissionId`、`latestSubmissionProblemId` 和 `latestVerdict`。AC 后客户端以该提交触发 `AC_REVIEW`，再由 Tutor Graph 根据复盘方向生成迁移题；服务端要求草稿知识点匹配源题、Python3 参考解通过安全检查，并在隔离判题器中通过公开样例和隐藏用例后，才创建绑定学生、会话和 run 的私有题目。迁移题卡、正常题目详情和正式提交均走既有接口；私有题仅其所有者可读取题面和判题用例，参考解与隐藏用例不会进入卡片、SSE 或回放数据，也不会出现在公共课程题单。WA、RE、TLE、CE、MLE 进入 `ERROR_FEEDBACK`，`SYSTEM_ERROR` 不作为学生错误反馈。两种反馈事件均须绑定本人正式提交，服务端校验提交所属题目与判定结果。
 
 对 `CHAT`、`EXECUTION_TRACE` 和 `VISUALIZE` 事件，`eventData.code` 可选，最多 20,000 个字符。`CHAT` 会将当前编辑器代码作为学生提供的上下文交给导师；代码中的注释和字符串均按不可信内容处理，不作为系统指令或课程证据。图片必须先上传到会话私有附件端点，再通过 `eventData.attachment_ids` 引用，图片字节不得放入事件 JSON。
 

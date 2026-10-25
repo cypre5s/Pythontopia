@@ -69,7 +69,10 @@ class TutorWorkflowGraphClientTest {
         73L,
         Map.of("user_id", 73L, "session_id", "wf-shared"),
         new SseEmitter(5_000L),
-        capturedResult::complete);
+        result -> {
+          capturedResult.complete(result);
+          return result;
+        });
 
     assertThat(capturedSubject.get(5, TimeUnit.SECONDS)).isEqualTo("user:73");
     assertThat(capturedResult.get(5, TimeUnit.SECONDS)).isEqualTo("{}");
@@ -86,7 +89,10 @@ class TutorWorkflowGraphClientTest {
         73L,
         Map.of("user_id", 73L, "session_id", "wf-shared"),
         emitter,
-        ignored -> order.add("persist"));
+        ignored -> {
+          order.add("persist");
+          return "safe";
+        });
 
     assertThat(emitter.finished.await(5, TimeUnit.SECONDS)).isTrue();
     assertThat(order).containsSubsequence("persist", "send");
@@ -165,7 +171,7 @@ class TutorWorkflowGraphClientTest {
         73L,
         Map.of("user_id", 73L, "session_id", "wf-shared"),
         new DisconnectedEmitter(),
-        ignored -> {},
+        ignored -> ignored,
         ignored -> {},
         () -> {
           interrupted.set(true);
@@ -215,7 +221,7 @@ class TutorWorkflowGraphClientTest {
         73L,
         Map.of("user_id", 73L, "session_id", "wf-shared"),
         emitter,
-        ignored -> {},
+        ignored -> ignored,
         ignored -> {},
         () -> markedInterrupted.complete(null));
 

@@ -96,6 +96,18 @@ function savePendingRequest(overrides: Record<string, unknown> = {}): string {
   return raw;
 }
 
+function sessionSnapshot(overrides: Record<string, unknown> = {}) {
+  return {
+    sessionKey: 'session-42',
+    problemId: 42,
+    phase: 'READING',
+    seq: 0,
+    cards: [],
+    episodePlan: null,
+    ...overrides,
+  };
+}
+
 describe('TutorWorkflowPanel interrupted request recovery', () => {
   beforeEach(() => {
     sessionStorage.clear();
@@ -453,5 +465,127 @@ describe('Tutor transfer formal submission', () => {
 
     expect(getActiveWorkflowSession).toHaveBeenCalledTimes(initialFetches + 1);
     expect(wrapper.get('[data-testid="tutor-episode-plan"]').text()).toContain('已完成');
+  });
+
+  it('uses the saved AC to run review and generate one trusted transfer question', async () => {
+    streamConfig.completeRequest = true;
+    const acReviewResult = {
+      session_id: 'session-42',
+      phase: 'AC_REVIEW',
+      episode_plan: null,
+      card_key: 'post_ac',
+      card: {
+        card_id: 'post-ac-42',
+        source_submission_id: 123,
+        success_summary: '通过',
+        key_action: '按公式计算',
+        code_quality_notes: [],
+        knowledge_points: [],
+        next_practice_direction: '再处理一个相关计算',
+        teaching_goal: '迁移',
+        checkpoint_prompt: '说出公式',
+        reflection_prompt: '如何迁移？',
+      },
+      seq: 1,
+      available_actions: [{ key: 'transfer', label: '迁移练习', event: 'TRANSFER' }],
+    };
+    streamConfig.result = acReviewResult;
+    const postAcCard = {
+      seq: 1,
+      event: 'AC_REVIEW',
+      cardKey: 'post_ac',
+      payload: { ...acReviewResult.card },
+      createdAt: '2026-10-25T10:00:00Z',
+    };
+    getActiveWorkflowSession
+      .mockResolvedValueOnce(sessionSnapshot({
+        phase: 'AC_REVIEW',
+        latestSubmissionId: 123,
+        latestSubmissionProblemId: 42,
+        latestVerdict: 'AC',
+      }))
+      .mockResolvedValueOnce(sessionSnapshot({
+        phase: 'AC_REVIEW',
+        latestSubmissionId: 123,
+        latestSubmissionProblemId: 42,
+        latestVerdict: 'AC',
+        cards: [postAcCard],
+      }))
+      .mockResolvedValueOnce(sessionSnapshot({
+        phase: 'TRANSFER',
+        latestSubmissionId: 123,
+        latestSubmissionProblemId: 42,
+        latestVerdict: 'AC',
+        cards: [
+          postAcCard,
+          {
+            seq: 2,
+            event: 'TRANSFER',
+            cardKey: 'transfer_problem',
+            payload: { source_submission_id: 123, problem_id: 488, title: '圆周长和面积计算' },
+            createdAt: '2026-10-25T10:00:01Z',
+          },
+        ],
+      }));
+
+    const wrapper = shallowMount(TutorWorkflowPanel, {
+      props: { problemId: 42, kcCodes: [] },
+      global: { stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    expect(streamStart).toHaveBeenCalledTimes(2);
+    expect(streamStart.mock.calls[0]?.[0]).toMatchObject({
+      event: 'AC_REVIEW',
+      eventData: { submission_id: 123 },
+    });
+    expect(streamStart.mock.calls[1]?.[0]).toMatchObject({ event: 'TRANSFER' });
+    wrapper.unmount();
+  });
+
+  it('uses a real failed submission to generate one error diagnosis', async () => {
+    streamConfig.completeRequest = true;
+    streamConfig.result = {
+      session_id: 'session-42',
+      phase: 'ERROR_FEEDBACK',
+      episode_plan: null,
+      card_key: 'error_diagnosis',
+      card: { card_id: 'error-42', source_submission_id: 124 },
+      seq: 1,
+      available_actions: [],
+    };
+    getActiveWorkflowSession
+      .mockResolvedValueOnce(sessionSnapshot({
+        phase: 'ERROR_FEEDBACK',
+        latestSubmissionId: 124,
+        latestSubmissionProblemId: 42,
+        latestVerdict: 'WA',
+      }))
+      .mockResolvedValueOnce(sessionSnapshot({
+        phase: 'ERROR_FEEDBACK',
+        latestSubmissionId: 124,
+        latestSubmissionProblemId: 42,
+        latestVerdict: 'WA',
+        cards: [{
+          seq: 1,
+          event: 'ERROR_FEEDBACK',
+          cardKey: 'error_diagnosis',
+          payload: { source_submission_id: 124 },
+          createdAt: '2026-10-25T10:00:00Z',
+        }],
+      }));
+
+    const wrapper = shallowMount(TutorWorkflowPanel, {
+      props: { problemId: 42, kcCodes: [] },
+      global: { stubs: { RouterLink: true } },
+    });
+    await flushPromises();
+
+    expect(streamStart).toHaveBeenCalledTimes(1);
+    expect(streamStart.mock.calls[0]?.[0]).toMatchObject({
+      event: 'ERROR_FEEDBACK',
+      eventData: { submission_id: 124 },
+    });
+    wrapper.unmount();
   });
 });

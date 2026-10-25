@@ -47,6 +47,37 @@ def test_re_verdict_changes_assumption_copy() -> None:
     assert "运行时" in output.wrong_assumption.actually
 
 
+def test_redacted_counterexample_does_not_return_hidden_values() -> None:
+    payload = _input().model_copy(
+        update={
+            "counter_example": counter_example_from_payload(
+                stdin="PRIVATE_INPUT_123",
+                expected="PRIVATE_EXPECTED_456",
+                actual="PRIVATE_ACTUAL_789",
+                redacted=True,
+            ),
+            "variable_trace": VariableTrace(
+                steps=[{"line": 1, "locals": {"value": "PRIVATE_TRACE_987"}}],
+                truncated=False,
+            ),
+        }
+    )
+
+    output = DebugAgent().analyse(payload)
+
+    serialized = str(output.model_dump())
+    assert "PRIVATE_INPUT_123" not in serialized
+    assert "PRIVATE_EXPECTED_456" not in serialized
+    assert "PRIVATE_ACTUAL_789" not in serialized
+    assert "PRIVATE_TRACE_987" not in serialized
+    assert output.variable_trace_summary.steps == []
+    assert output.counter_example.stdin == "隐藏测试用例（输入已隐藏）"
+    assert output.counter_example.expected_stdout == "期望输出已隐藏"
+    assert output.counter_example.your_stdout == "实际输出已隐藏"
+    assert "隐藏测试数据已脱敏" in output.counter_example.diff_summary
+    assert "已隐藏" in output.wrong_assumption.actually
+
+
 def test_layer3_does_not_contain_copyable_code() -> None:
     output = DebugAgent().analyse(_input())
     layer3 = next(layer for layer in output.hint_layers if layer.layer == 3)

@@ -42,7 +42,7 @@ class SubmissionEmotionSignalTest {
   void acAfterTwoPriorFails_emitsComeback() {
     stubProblem();
     when(submissions.insertSubmission(anyLong(), anyLong(), any(), any(), any())).thenReturn(902L);
-    when(judge.judge(eq(902L), eq(101L), any())).thenReturn(new JudgeOutcome(Verdict.AC, 3, 3, null));
+    when(judge.judge(eq(902L), eq(101L), any(), eq(7L))).thenReturn(new JudgeOutcome(Verdict.AC, 3, 3, null));
     when(problems.findKcCode(eq(101L))).thenReturn("PY43-KC-001");
     when(submissions.countPriorFailures(eq(7L), eq(101L), eq(902L))).thenReturn(2);
     when(submissions.findById(eq(902L)))
@@ -57,7 +57,7 @@ class SubmissionEmotionSignalTest {
   void failAfterOnePriorFail_emitsRetried() {
     stubProblem();
     when(submissions.insertSubmission(anyLong(), anyLong(), any(), any(), any())).thenReturn(903L);
-    when(judge.judge(eq(903L), eq(101L), any())).thenReturn(new JudgeOutcome(Verdict.WA, 1, 3, "fail"));
+    when(judge.judge(eq(903L), eq(101L), any(), eq(7L))).thenReturn(new JudgeOutcome(Verdict.WA, 1, 3, "fail"));
     when(problems.findKcCode(eq(101L))).thenReturn("PY43-KC-001");
     when(submissions.countPriorFailures(eq(7L), eq(101L), eq(903L))).thenReturn(1);
     when(submissions.findById(eq(903L)))
@@ -72,7 +72,7 @@ class SubmissionEmotionSignalTest {
   void acFirstTry_noComeback() {
     stubProblem();
     when(submissions.insertSubmission(anyLong(), anyLong(), any(), any(), any())).thenReturn(904L);
-    when(judge.judge(eq(904L), eq(101L), any())).thenReturn(new JudgeOutcome(Verdict.AC, 3, 3, null));
+    when(judge.judge(eq(904L), eq(101L), any(), eq(7L))).thenReturn(new JudgeOutcome(Verdict.AC, 3, 3, null));
     when(problems.findKcCode(eq(101L))).thenReturn("PY43-KC-001");
     when(submissions.countPriorFailures(eq(7L), eq(101L), eq(904L))).thenReturn(0);
     when(submissions.findById(eq(904L)))
@@ -85,7 +85,7 @@ class SubmissionEmotionSignalTest {
 
   private void stubProblem() {
     when(submissions.countSubmittedAfter(anyLong(), any())).thenReturn(0);
-    when(problems.findPublic(eq(43L), eq(101L)))
+    when(problems.findAccessible(eq(43L), eq(101L), eq(7L)))
         .thenReturn(
             Optional.of(
                 new PublicProblemDto(

@@ -20,6 +20,7 @@ import com.pythontopia.learner.quest.service.QuestService;
 import com.pythontopia.submission.dto.PublicProblemDto;
 import com.pythontopia.submission.dto.SubmissionCreateRequest;
 import com.pythontopia.submission.dto.SubmissionDto;
+import com.pythontopia.submission.dto.SubmissionPerformanceDto;
 import com.pythontopia.submission.dto.SubmissionSource;
 import com.pythontopia.submission.dto.SubmissionStatus;
 import com.pythontopia.submission.dto.Verdict;
@@ -50,7 +51,7 @@ class SubmissionServiceTest {
   @Test
   void submitAcEmitsPracticeSucceededEvent() {
     when(submissions.countSubmittedAfter(anyLong(), any())).thenReturn(0);
-    when(problems.findPublic(eq(43L), eq(101L)))
+    when(problems.findAccessible(eq(43L), eq(101L), eq(7L)))
         .thenReturn(
             Optional.of(
                 new PublicProblemDto(
@@ -64,7 +65,7 @@ class SubmissionServiceTest {
                     "basic",
                     null)));
     when(submissions.insertSubmission(anyLong(), anyLong(), any(), any(), any())).thenReturn(900L);
-    when(judge.judge(eq(900L), eq(101L), any()))
+    when(judge.judge(eq(900L), eq(101L), any(), eq(7L)))
         .thenReturn(new JudgeOutcome(Verdict.AC, 3, 3, null));
     when(problems.findKcCode(eq(101L))).thenReturn("PY43-KC-001");
     when(submissions.findById(eq(900L)))
@@ -87,7 +88,7 @@ class SubmissionServiceTest {
   void questAutoCompletionFailureDoesNotLogStudentIdentifiersOrExceptionMessage() {
     String sentinel = "private-quest-completion-error-sentinel";
     when(submissions.countSubmittedAfter(anyLong(), any())).thenReturn(0);
-    when(problems.findPublic(eq(43L), eq(101L)))
+    when(problems.findAccessible(eq(43L), eq(101L), eq(7L)))
         .thenReturn(
             Optional.of(
                 new PublicProblemDto(
@@ -101,7 +102,7 @@ class SubmissionServiceTest {
                     "basic",
                     null)));
     when(submissions.insertSubmission(anyLong(), anyLong(), any(), any(), any())).thenReturn(903L);
-    when(judge.judge(eq(903L), eq(101L), any()))
+    when(judge.judge(eq(903L), eq(101L), any(), eq(7L)))
         .thenReturn(new JudgeOutcome(Verdict.AC, 3, 3, null));
     when(problems.findKcCode(eq(101L))).thenReturn("PY43-KC-001");
     when(submissions.findById(eq(903L)))
@@ -134,7 +135,7 @@ class SubmissionServiceTest {
   @Test
   void submitWaEmitsPracticeFailedEvent() {
     when(submissions.countSubmittedAfter(anyLong(), any())).thenReturn(0);
-    when(problems.findPublic(eq(43L), eq(101L)))
+    when(problems.findAccessible(eq(43L), eq(101L), eq(7L)))
         .thenReturn(
             Optional.of(
                 new PublicProblemDto(
@@ -148,7 +149,7 @@ class SubmissionServiceTest {
                     "basic",
                     null)));
     when(submissions.insertSubmission(anyLong(), anyLong(), any(), any(), any())).thenReturn(901L);
-    when(judge.judge(eq(901L), eq(101L), any()))
+    when(judge.judge(eq(901L), eq(101L), any(), eq(7L)))
         .thenReturn(new JudgeOutcome(Verdict.WA, 1, 3, "fail"));
     when(problems.findKcCode(eq(101L))).thenReturn("PY43-KC-001");
     when(submissions.findById(eq(901L)))
@@ -170,7 +171,7 @@ class SubmissionServiceTest {
   void submitSystemErrorDoesNotEmitPracticeFailedEvent() {
     String privateDetails = "private-judge-infrastructure-error-sentinel";
     when(submissions.countSubmittedAfter(anyLong(), any())).thenReturn(0);
-    when(problems.findPublic(eq(43L), eq(101L)))
+    when(problems.findAccessible(eq(43L), eq(101L), eq(7L)))
         .thenReturn(
             Optional.of(
                 new PublicProblemDto(
@@ -184,7 +185,7 @@ class SubmissionServiceTest {
                     "basic",
                     null)));
     when(submissions.insertSubmission(anyLong(), anyLong(), any(), any(), any())).thenReturn(902L);
-    when(judge.judge(eq(902L), eq(101L), any()))
+    when(judge.judge(eq(902L), eq(101L), any(), eq(7L)))
         .thenReturn(new JudgeOutcome(Verdict.SYSTEM_ERROR, 0, 0, privateDetails));
     when(problems.findKcCode(eq(101L))).thenReturn("PY43-KC-001");
     when(submissions.findById(eq(902L)))
@@ -216,7 +217,7 @@ class SubmissionServiceTest {
   @Test
   void submitRateLimited() {
     when(submissions.countSubmittedAfter(anyLong(), any())).thenReturn(1);
-    when(problems.findPublic(eq(43L), eq(101L)))
+    when(problems.findAccessible(eq(43L), eq(101L), eq(7L)))
         .thenReturn(
             Optional.of(
                 new PublicProblemDto(101L, 43L, "PY43-KC-001", "题目", "", "", "", "basic", null)));
@@ -233,7 +234,7 @@ class SubmissionServiceTest {
   @Test
   void submitFailsWhenProblemMissing() {
     when(submissions.countSubmittedAfter(anyLong(), any())).thenReturn(0);
-    when(problems.findPublic(eq(43L), eq(101L))).thenReturn(Optional.empty());
+    when(problems.findAccessible(eq(43L), eq(101L), eq(7L))).thenReturn(Optional.empty());
     assertThatThrownBy(
             () ->
                 service.submit(
@@ -242,6 +243,45 @@ class SubmissionServiceTest {
         .isInstanceOf(BusinessException.class)
         .extracting(exception -> ((BusinessException) exception).code())
         .isEqualTo("PROBLEM_NOT_FOUND");
+  }
+
+  @Test
+  void performanceUsesSubmissionSamplesAndHidesMetricsBelowTen() {
+    SubmissionDto submission =
+        new SubmissionDto(
+            901L, 7L, 101L, null, SubmissionSource.TRAINING, "PYTHON_3_11", "print(1)",
+            OffsetDateTime.now(ZoneOffset.UTC), SubmissionStatus.PASSED, 12, 20);
+    when(submissions.findSubmission(7L, 901L)).thenReturn(Optional.of(submission));
+    when(submissions.findPerformanceSamples(101L, "PYTHON_3_11", 12, 20))
+        .thenReturn(new PracticeSubmissionRepository.PerformanceSamples(10, 4, 9, 2));
+
+    SubmissionPerformanceDto performance = service.performance(7L, 901L);
+
+    assertThat(performance.runtimeBeatsPercent()).isEqualTo(40.0);
+    assertThat(performance.runtimeSampleCount()).isEqualTo(10);
+    assertThat(performance.memoryBeatsPercent()).isNull();
+    assertThat(performance.memorySampleCount()).isNull();
+  }
+
+  @Test
+  void performanceHidesAllMetricsForNonAcceptedSubmissions() {
+    when(submissions.findSubmission(7L, 902L))
+        .thenReturn(Optional.of(sampleSubmission(902L, SubmissionStatus.FAILED)));
+
+    assertThat(service.performance(7L, 902L))
+        .isEqualTo(SubmissionPerformanceDto.hidden());
+    verify(submissions, org.mockito.Mockito.never())
+        .findPerformanceSamples(anyLong(), any(), any(), any());
+  }
+
+  @Test
+  void performanceCannotReadAnotherStudentsSubmission() {
+    when(submissions.findSubmission(7L, 903L)).thenReturn(Optional.empty());
+
+    assertThatThrownBy(() -> service.performance(7L, 903L))
+        .isInstanceOf(BusinessException.class)
+        .extracting(exception -> ((BusinessException) exception).code())
+        .isEqualTo("SUBMISSION_NOT_FOUND");
   }
 
   private SubmissionDto sampleSubmission(Long id, SubmissionStatus status) {

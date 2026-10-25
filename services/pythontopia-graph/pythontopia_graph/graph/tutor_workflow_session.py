@@ -62,11 +62,12 @@ async def restore_phase(
     *,
     cards: list[dict[str, Any]] | None = None,
     chat_history: list[dict[str, str]] | None = None,
+    force: bool = False,
 ) -> None:
-    """从 Java 投影恢复 AutoGen 会话上下文，不覆盖进程内已有状态。"""
+    """从 Java 投影恢复权威会话上下文；常规调用不覆盖进程内状态。"""
     async with _LOCK:
         key = _key(user_id, session_id)
-        if key not in _STORE:
+        if force or key not in _STORE:
             restored_cards = [
                 {
                     "card_id": str(card.get("card_id", ""))[:120],

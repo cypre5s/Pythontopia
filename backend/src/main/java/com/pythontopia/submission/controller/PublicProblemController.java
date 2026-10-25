@@ -30,7 +30,7 @@ public class PublicProblemController {
           HttpStatus.FORBIDDEN, "FORBIDDEN", "仅学生可访问公开题目视图");
     }
     return repository
-        .findPublic(43L, id)
+        .findAccessible(43L, id, user.userId())
         .orElseThrow(
             () ->
                 new BusinessException(

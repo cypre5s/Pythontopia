@@ -4,6 +4,16 @@
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
 
+## 2026-10-25 AI 导学节点适配与提交结果详情
+
+- 对照 Alethicode Tutor Graph 的事件路由、证据、卡片校验、教练计划、迁移题 draft/materialize 和投影节点；复用 Pythontopia 的 `validate_transition → coach_decide → fetch_evidence → generate_card → guardrail → decide_actions` 及 Vue 导学卡片，不复制 LangGraph/旧 Java API。行为参考：[builder](https://github.com/cypre5s/Alethicode/blob/main/services/tutor-graph/app/graph/builder.py)、[transfer nodes](https://github.com/cypre5s/Alethicode/blob/main/services/tutor-graph/app/nodes/transfer.py)、[transition rules](https://github.com/cypre5s/Alethicode/blob/main/services/tutor-graph/app/graph/transitions.py)。
+- AC/失败提交闭环继续使用服务端 submission feedback；AI 迁移题草稿新增参考解与隐藏用例，经安全检查和隔离自测后创建 owner/session/run 绑定的私有正式题，仍使用现有正式判题 API。参考解/隐藏用例在投影写卡片、回放和 SSE 前剔除；公共题单、Bug 矿洞回声候选也排除其他用户的私有题。
+- 修复 Graph 乐观内存阶段可能领先 Java 持久化的问题：每轮 Graph run 都按 Java 权威快照恢复，因此迁移题自测或持久化失败后可从原阶段重试。结果弹窗支持关闭键、Escape、遮罩、通过/失败详情和 AC 百分位；百分位同题同语言按 AC 提交记录统计，每项至少 10 条有效样本。
+- 代码审查补上 Bug 矿洞的私有迁移题边界：按提交者读取用例，隐藏输入/期望/实际值统一脱敏，Graph DebugAgent 输出占位说明并丢弃隐藏用例变量轨迹，避免私有用例出现在学生卡片或响应中。
+- 验证：后端最终源码 `mvn test` 310 个测试类 / 1,816 项，0 failures、0 errors、0 skipped；全量 clean 运行验证 V235 空库迁移，最终运行复用已 clean 构建目录。Surefire 在 Spring shutdown hook 延迟 30 秒后回收 fork JVM，Maven 最终退出码为 0。Java 私有反例定向测试和 Graph DebugAgent 定向 6 项通过；Graph 全量 1,984 passed、1 skipped；Ruff 通过。前端 typecheck/lint、结果弹窗与 Tutor 相关 20 个用例、生产构建通过。
+- 本地 Chromium 以 fixture 浏览 AC 结果弹窗（1440×900，738×582），运行/内存百分位与样本数正常显示，console、pageerror、失败请求均为 0；截图 `/tmp/pythontopia-submission-result-fixture.png`。未用真实认证学生执行模型与 Judge 的完整端到端闭环，fixture 结果不代表真实模型或判题验收。
+- GitHub 推送与 release tag 尚待本次提交后执行。
+
 ## 2026-10-25 当前续接：本地正式判题 SYSTEM_ERROR
 
 - 后端日志中的提交 260/261 均以 `SYSTEM_ERROR` 结束；PostgreSQL 记录题目 476、沙箱名 `piston:3.11.0`。`/readyz` 返回 503，明示 `piston URL or Python runtime is not configured`。普通 `./dev.sh` 只拉起 Postgres/Redis/Graph/RAG，未拉起 profile 为 `sandbox` 的 Piston；此前同题在 Piston 3.12.0 下已有 AC 记录。

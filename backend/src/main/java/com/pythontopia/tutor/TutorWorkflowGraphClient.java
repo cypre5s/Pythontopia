@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -42,7 +43,7 @@ public class TutorWorkflowGraphClient {
       Long userId,
       Map<String, Object> body,
       SseEmitter emitter,
-      Consumer<String> onResult) {
+      Function<String, String> onResult) {
     runStream(userId, body, emitter, onResult, ignored -> {}, () -> {});
   }
 
@@ -51,7 +52,7 @@ public class TutorWorkflowGraphClient {
       Long userId,
       Map<String, Object> body,
       SseEmitter emitter,
-      Consumer<String> onResult,
+      Function<String, String> onResult,
       Consumer<String> onError,
       Runnable onInterrupted) {
     String url = properties.graphUrl() + "/agents/tutor-workflow/run/stream";
@@ -78,7 +79,7 @@ public class TutorWorkflowGraphClient {
                   }
                   if ("result".equals(event) || "RUN_FINISHED".equals(event)) {
                     try {
-                      onResult.accept(data);
+                      data = onResult.apply(data);
                       terminalResult.set(true);
                     } catch (RuntimeException e) {
                       projectionFailed.set(true);

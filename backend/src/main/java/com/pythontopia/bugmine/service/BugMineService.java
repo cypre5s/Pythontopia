@@ -171,12 +171,14 @@ public class BugMineService {
 
     CounterExampleSelector.CounterExample counterExample =
         counterExampleSelector
-            .findFirstFailing(submission.problemId(), submission.code())
+            .findFirstFailing(submission.problemId(), userId, submission.code())
             .orElseGet(
                 () -> new CounterExampleSelector.CounterExample("", "", "", false));
 
     PythonTraceCollector.TraceResult traceResult =
-        traceCollector.collect(submission.code(), counterExample.stdin());
+        counterExample.redacted()
+            ? new PythonTraceCollector.TraceResult(emptyTraceSummary(), 0, false)
+            : traceCollector.collect(submission.code(), counterExample.stdin());
 
     Verdict verdict =
         submissionRepository
@@ -195,7 +197,9 @@ public class BugMineService {
                 counterExample.stdin(),
                 counterExample.expected(),
                 counterExample.actual(),
-                buildDiffSummary(counterExample.expected(), counterExample.actual()),
+                counterExample.redacted()
+                    ? "隐藏测试数据已脱敏，请按题面检查边界条件。"
+                    : buildDiffSummary(counterExample.expected(), counterExample.actual()),
                 counterExample.redacted()),
             new DebugAgentRequest.VariableTracePayload(
                 stepsFromTrace(traceResult), traceResult.truncated()),
@@ -660,7 +664,9 @@ public class BugMineService {
             : profileAdvisor.guidanceLabel(depthTarget, context.patternMatched());
     // 题干上下文随会话一次性下发：客户端无需再请求 /api/problems/{id}/public。
     PublicProblemDto problem =
-        problemRepository.findPublic(COURSE_PACK_ID, session.problemId()).orElse(null);
+        problemRepository
+            .findAccessible(COURSE_PACK_ID, session.problemId(), session.userId())
+            .orElse(null);
     return new BugMineSessionDto(
         session.id(),
         session.userId(),

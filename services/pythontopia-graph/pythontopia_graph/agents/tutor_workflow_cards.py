@@ -4,7 +4,7 @@ prompt 移植自 Alethicode tutor-graph 各阶段节点（reading/ideating/skele
 ac_review/chat），保留全部防泄答硬约束；按 Pythontopia 适配：
 - mentor 三角色（Nene/Yoshino/Kanna）收敛为「百晓」单角色（本仓无该角色 IP）；
 - 课件证据走本仓 EvidenceBundle（RAG chunks），不再回调 Java 内部工具 API；
-- 迁移题不依赖 Java 出题主链路：LLM 直接生成展示型变式题卡（无判例/参考解）。
+- 迁移题由 LLM 生成题面、参考解和隐藏测试；Java 自测通过后物化私有正式判题题目。
 
 输出经 pydantic 卡片模型强校验（等价源版 jsonschema），失败重试一次后仍违规 →
 抛 CardGenerationError(SCHEMA_VIOLATION)，fail fast 不打补丁。
@@ -119,10 +119,14 @@ TRANSFER_PROMPT = """你是面向非计算机专业 Python 初学者的 AI 导�
 - 难度与源题相当或略升半档，适合初学者独立完成；
 - 题面自洽完整：描述、输入说明、输出说明、至少 1 组输入输出样例、1 条不剧透的提示；
 - samples 数组中每项是 {"input": "...", "output": "..."}，输入输出必须与题面一致且正确；
-- 不输出参考解、不输出测试用例、不在 hint 里给出解法步骤；
+- 额外生成仅供服务端验证的 reference_solution_language（固定 Python3）、reference_solution_code 和 1-9 条 test_cases；
+- test_cases 是与公开样例不同的隐藏输入，覆盖边界和一般情况，输出必须与题面一致；
+- 参考解和隐藏测试只写入结构化字段，不能写进题面、样例或 hint；Java 会在发送学生前剔除这些字段；
+- 不在 hint 里给出解法步骤；
 - target_kcs 只能从【候选知识点】中选择；
 - 输出 JSON 对象，字段：title, description, input_description, output_description,
-  samples(数组), hint, target_kcs(数组)"""
+  samples(数组), hint, target_kcs(数组), reference_solution_language,
+  reference_solution_code, test_cases(数组)"""
 
 CHAT_PROMPT = """你是面向非计算机专业 Python 初学者的 AI 导学助手「百晓」。
 在当前题目和当前学习阶段进行导学对话。

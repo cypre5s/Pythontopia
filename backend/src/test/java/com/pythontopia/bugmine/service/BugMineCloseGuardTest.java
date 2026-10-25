@@ -74,7 +74,8 @@ class BugMineCloseGuardTest {
         .when(repository.findSessionContext(anyLong(), anyLong(), anyLong()))
         .thenReturn(Optional.empty());
     lenient().when(repository.findSubmissionSource(anyLong())).thenReturn(Optional.empty());
-    lenient().when(problemRepository.findPublic(anyLong(), anyLong())).thenReturn(Optional.empty());
+    lenient().when(problemRepository.findAccessible(anyLong(), anyLong(), anyLong()))
+        .thenReturn(Optional.empty());
     lenient().when(problemRepository.findKcCode(anyLong())).thenReturn("PY43-KC-001");
   }
 

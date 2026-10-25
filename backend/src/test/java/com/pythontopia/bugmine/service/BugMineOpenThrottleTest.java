@@ -142,7 +142,8 @@ class BugMineOpenThrottleTest {
     when(repository.findSessionContext(USER_ID, existing.problemId(), submissionId))
         .thenReturn(java.util.Optional.empty());
     when(repository.findSubmissionSource(submissionId)).thenReturn(java.util.Optional.empty());
-    when(problemRepository.findPublic(43L, existing.problemId())).thenReturn(java.util.Optional.empty());
+    when(problemRepository.findAccessible(43L, existing.problemId(), USER_ID))
+        .thenReturn(java.util.Optional.empty());
 
     BugMineSessionDto result = service.open(USER_ID, submissionId);
 

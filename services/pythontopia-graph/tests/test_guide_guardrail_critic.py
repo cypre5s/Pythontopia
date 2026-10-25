@@ -38,7 +38,8 @@ def test_rejects_transfer_problem_with_reference_solution() -> None:
     card = {
         "title": "迁移题",
         "description": "求和",
-        "reference_solution": "print(sum(range(1, int(input()) + 1)))",
+        "reference_solution_code": "print(sum(range(1, int(input()) + 1)))",
+        "test_cases": [{"input": "1", "output": "1"}],
     }
 
     result = GuideGuardrailCritic().check("transfer_problem", card)

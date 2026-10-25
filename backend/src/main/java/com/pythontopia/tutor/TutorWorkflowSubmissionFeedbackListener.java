@@ -20,7 +20,7 @@ import org.springframework.stereotype.Component;
 /**
  * 将后续正式提交作为环境反馈写回导学 agent state。
  *
- * <p>这里不重新调 graph，也不主动生成新卡；只是让下一次学生点击导学动作时，manager agent 能读到 上一次提示之后的真实 AC/WA 结果。
+ * <p>这里只记录正式提交快照与会话阶段，不在判题事件线程调用 Graph；客户端读取快照后推进复盘、诊断或迁移。
  */
 @Component
 public class TutorWorkflowSubmissionFeedbackListener {
@@ -43,7 +43,13 @@ public class TutorWorkflowSubmissionFeedbackListener {
 
   @EventListener
   public void onPracticeSucceeded(LearningEvent.PracticeSucceeded event) {
-    observeSafely(event.userId(), event.problemId(), "AC", true, event.tutorWorkflowSessionKey());
+    observeSafely(
+        event.userId(),
+        event.problemId(),
+        "AC",
+        true,
+        event.submissionId(),
+        event.tutorWorkflowSessionKey());
   }
 
   @EventListener
@@ -53,7 +59,12 @@ public class TutorWorkflowSubmissionFeedbackListener {
             ? "FAILED"
             : event.failureKind();
     observeSafely(
-        event.userId(), event.problemId(), verdict, false, event.tutorWorkflowSessionKey());
+        event.userId(),
+        event.problemId(),
+        verdict,
+        false,
+        event.submissionId(),
+        event.tutorWorkflowSessionKey());
   }
 
   private void observeSafely(
@@ -61,18 +72,23 @@ public class TutorWorkflowSubmissionFeedbackListener {
       Long problemId,
       String verdict,
       boolean accepted,
+      Long submissionId,
       String tutorWorkflowSessionKey) {
     try {
       if (tutorWorkflowSessionKey != null && !tutorWorkflowSessionKey.isBlank()) {
         repository
             .findActiveTransferSession(userId, tutorWorkflowSessionKey, problemId)
             .ifPresent(
-                session -> observeSafely(session, userId, problemId, verdict, accepted, true));
+                session ->
+                    observeSafely(
+                        session, userId, problemId, verdict, accepted, submissionId, true));
       } else {
         repository
             .findActive(userId, problemId)
             .ifPresent(
-                session -> observeSafely(session, userId, problemId, verdict, accepted, false));
+                session ->
+                    observeSafely(
+                        session, userId, problemId, verdict, accepted, submissionId, false));
       }
     } catch (Exception e) {
       log.warn(
@@ -87,9 +103,11 @@ public class TutorWorkflowSubmissionFeedbackListener {
       Long problemId,
       String verdict,
       boolean accepted,
+      Long submissionId,
       boolean transferSubmission) {
     try {
-      observeSubmission(session, userId, problemId, verdict, accepted, transferSubmission);
+      observeSubmission(
+          session, userId, problemId, verdict, accepted, submissionId, transferSubmission);
     } catch (Exception e) {
       log.warn(
           "Failed to update tutor workflow coach state from submission errorType={}",
@@ -103,6 +121,7 @@ public class TutorWorkflowSubmissionFeedbackListener {
       Long problemId,
       String verdict,
       boolean accepted,
+      Long submissionId,
       boolean transferSubmission)
       throws JsonProcessingException {
     TutorWorkflowAgentStateDto agentState =
@@ -121,12 +140,14 @@ public class TutorWorkflowSubmissionFeedbackListener {
     state.put("user_id", userId);
     state.put("problem_id", session.problemId());
     state.put("latest_submission_problem_id", problemId);
-    if (!state.hasNonNull("phase")) {
-      state.put("phase", session.phase());
-    }
+    String phase = accepted ? "AC_REVIEW" : "ERROR_FEEDBACK";
+    state.put("phase", phase);
     state.put("attempt_count", previousAttempts + 1);
     state.put("latest_verdict", verdict);
     state.put("consecutive_errors", consecutiveErrors);
+    if (submissionId != null) {
+      state.put("latest_submission_id", submissionId);
+    }
     state.put("frustration_level", "low");
     if (state.hasNonNull("last_action") && !state.path("last_action").asText().isBlank()) {
       state.put("last_action_effective", accepted);
@@ -146,10 +167,12 @@ public class TutorWorkflowSubmissionFeedbackListener {
         session.id(),
         new TutorWorkflowRepository.SubmissionFeedbackProjection(
             session.seq(),
+            phase,
             verdict,
             objectMapper.writeValueAsString(checkpoint),
             safeDecision(agentState),
-            objectMapper.writeValueAsString(submissionPayload(verdict, accepted))));
+            objectMapper.writeValueAsString(
+                submissionPayload(verdict, accepted, problemId, submissionId))));
   }
 
   private ObjectNode readState(String stateJson) {
@@ -292,10 +315,15 @@ public class TutorWorkflowSubmissionFeedbackListener {
     return decisionJson == null || decisionJson.isBlank() ? "{}" : decisionJson;
   }
 
-  private ObjectNode submissionPayload(String verdict, boolean accepted) {
+  private ObjectNode submissionPayload(
+      String verdict, boolean accepted, Long problemId, Long submissionId) {
     ObjectNode payload = objectMapper.createObjectNode();
     payload.put("verdict", verdict);
     payload.put("accepted", accepted);
+    payload.put("problem_id", problemId);
+    if (submissionId != null) {
+      payload.put("submission_id", submissionId);
+    }
     return payload;
   }
 }

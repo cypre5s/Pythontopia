@@ -4,7 +4,7 @@
 
 **Goal:** Show every formal judge verdict in a dismissible training result modal; show truthful same-problem/same-language runtime and memory percentiles after at least ten usable AC submissions; and make the AI Tutor advance from real submissions into AC review/transfer or error feedback.
 
-**Architecture:** Extend the existing Piston result contract with measured peak memory and persist it through the existing `memory_kb` field. Add an owner-checked submission performance endpoint that computes independent per-submission percentiles server-side. Reuse one accessible Vue modal in TrainingPanel (including tutor/variant submissions) and BugMinePanel retries; keep a compact reopen control after dismissal. Persist the latest tutor submission ID/verdict/phase in the existing session state, auto-run the matching trusted feedback event once, and bind the 476→488 transfer relationship in course data because 476 has no same-KC variant.
+**Architecture:** Extend the existing Piston result contract with measured peak memory and persist it through the existing `memory_kb` field. Add an owner-checked submission performance endpoint that computes independent per-submission percentiles server-side. Reuse one accessible Vue modal in TrainingPanel (including tutor/variant submissions) and BugMinePanel retries; keep a compact reopen control after dismissal. Persist the latest tutor submission ID/verdict/phase in the existing session state and auto-run the matching trusted feedback event once. Generate transfer drafts with the existing Tutor Graph, then validate the reference solution in the isolated judge before inserting an owner-scoped private problem that uses the normal submission API.
 
 **Tech Stack:** Java 21, Spring Boot, JDBC, Piston API v2, Vue 3, TypeScript strict, Pinia, Vitest, Playwright.
 
@@ -85,7 +85,8 @@
 - Modify: `backend/src/main/java/com/pythontopia/tutor/TutorWorkflowRepository.java`
 - Modify: `backend/src/main/java/com/pythontopia/tutor/TutorWorkflowService.java`
 - Modify: `backend/src/main/java/com/pythontopia/tutor/dto/TutorWorkflowSessionDto.java` or active snapshot mapping
-- Modify: `backend/src/main/resources/db/migration/V235__tutor_transfer_problem_relation.sql`
+- Create: `backend/src/main/resources/db/migration/V235__tutor_ai_transfer_problem_privacy.sql`
+- Create: `backend/src/main/java/com/pythontopia/tutor/TutorTransferProblemService.java`
 - Modify: `backend/src/main/java/com/pythontopia/submission/repository/PublicProblemRepository.java`
 - Modify: `services/pythontopia-graph/pythontopia_graph/schemas/tutor_workflow.py`
 - Modify: `frontend/src/api/tutorWorkflow.ts`
@@ -99,9 +100,10 @@
 
 1. Preserve submission ID, problem ID, and verdict in tutor checkpoint/snapshot; update phase to AC_REVIEW for base AC or ERROR_FEEDBACK for learner failures. SYSTEM_ERROR remains outside this feedback path.
 2. Link generated AC_REVIEW / ERROR_FEEDBACK / TRANSFER cards to the source submission ID and have TutorWorkflowPanel use server snapshot state to recover a not-yet-generated event after submit or reload.
-3. After a source AC, run AC_REVIEW and then TRANSFER only when the persisted post-AC direction and trusted transfer problem are available; for WA/RE/TLE/CE/MLE run ERROR_FEEDBACK once. Do not reveal hidden tests.
-4. Search same-KC transfer variants first. When none exist for problem 476, use an explicit reversible 476→488 course-problem relation. 488 adds circumference alongside area and two output lines; retain its existing `Low` metadata and describe the exercise truthfully as a more involved application.
-5. Add focused tests for event feedback, phase restoration, duplicate suppression, trusted transfer binding, and migration data. Include transfer submissions in result modal handling while keeping the base session's problem binding intact.
+3. After a source AC, run AC_REVIEW and then TRANSFER using the persisted post-AC direction; for WA/RE/TLE/CE/MLE run ERROR_FEEDBACK once. Do not reveal hidden tests.
+4. Preserve the transfer draft's private reference solution and hidden tests only across the Java validation boundary. Require source-KC alignment, bounded fields/cases, static safety checks and isolated self-tests before idempotently creating an owner-scoped private `course_problem`; return only public fields to the card. Use the normal official judge API for later submissions and resolve private hidden tests by owner ID.
+5. Restore Graph session state from the Java projection before each run, so a failed projection/materialization cannot leave the in-memory phase ahead of the persisted session. Exclude private questions from public course lists and candidate queries.
+6. Add focused tests for event feedback, phase restoration, duplicate suppression, transfer self-test/rejection, reference/test-case redaction, owner-scoped viewing/submission and migration initialization. Include transfer submissions in result modal handling while keeping the base session's problem binding intact.
 
 ### Task 6: Verify, push, and publish the rebuilt release
 

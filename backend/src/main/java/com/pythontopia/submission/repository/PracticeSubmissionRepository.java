@@ -128,6 +128,32 @@ public class PracticeSubmissionRepository {
         .findFirst();
   }
 
+  public PerformanceSamples findPerformanceSamples(
+      Long problemId, String language, Integer runtimeMs, Integer memoryKb) {
+    return jdbcTemplate.queryForObject(
+        """
+        SELECT COUNT(runtime_ms) AS runtime_samples,
+               COUNT(*) FILTER (WHERE runtime_ms > ?) AS runtime_beaten,
+               COUNT(memory_kb) AS memory_samples,
+               COUNT(*) FILTER (WHERE memory_kb > ?) AS memory_beaten
+        FROM practice_submission
+        WHERE problem_id = ? AND language = ? AND status = 'PASSED'
+        """,
+        (rs, rowNum) ->
+            new PerformanceSamples(
+                rs.getInt("runtime_samples"),
+                rs.getInt("runtime_beaten"),
+                rs.getInt("memory_samples"),
+                rs.getInt("memory_beaten")),
+        runtimeMs,
+        memoryKb,
+        problemId,
+        language);
+  }
+
+  public record PerformanceSamples(
+      int runtimeSamples, int runtimeBeaten, int memorySamples, int memoryBeaten) {}
+
   public Optional<String> findSubmissionKcCode(Long userId, Long submissionId) {
     return jdbcTemplate
         .query(

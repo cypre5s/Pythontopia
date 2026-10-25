@@ -79,7 +79,7 @@ class SubmissionRateLimitConcurrencyTest {
 
   @Test
   void fiftyConcurrentSubmissionsAllowOnlyOneWithinWindow() throws Exception {
-    when(judgeService.judge(anyLong(), anyLong(), any()))
+    when(judgeService.judge(anyLong(), anyLong(), any(), anyLong()))
         .thenReturn(new JudgeOutcome(Verdict.AC, 1, 1, null));
 
     Long userId =
