@@ -2,7 +2,7 @@
 
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
-> **当前快照（2026-10-25）**：最近已推送基线为 `5b554737` / release `web-v20261025.5`，GitHub CI 的 5 个 job 和 release 构建均通过；该基线验证 Maven 1,890 项、Vitest 2,721 项、Graph 1,988 项（1 skipped）、RAG 181 项。当前本地性能审计在此基线上继续：证据图/记忆快照定向 17 项（含 PostgreSQL）和 RAG 全量 182 项通过；修改的 6 个 Java 文件定向 Spotless、RAG 全量 Ruff lint 与改动文件 format 检查通过，变更尚未推送。全仓 Spotless 和全目录 Ruff format 均有未改动文件格式差异。全量审计仍在进行，没有真实延迟/负载基准；Maven 结束时 Outbox/Tutor 定时任务连接拒绝待处理或明确界定，其他模块继续按证据检查。
+> **当前快照（2026-10-25）**：性能审计批次已推送至 `main`，提交 [`eb938f7c`](https://github.com/cypre5s/Pythontopia/commit/eb938f7cdea76a93675127abd20b2b895250786d)；GitHub CI [#37](https://github.com/cypre5s/Pythontopia/actions/runs/40189566818) 五个 job 全部通过。新 release [`web-v20261025.6`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.6) 构建成功并上传。基线与本批验证包括 Maven 1,893 项、Vitest 2,721 项、Graph 1,988 项（1 skipped）、RAG 182 项；证据图/记忆快照 PostgreSQL 定向 17 项通过。修改的 6 个 Java 文件定向 Spotless、RAG 全量 Ruff lint 与改动文件 format 检查通过。全仓 Spotless 和全目录 Ruff format 均有未改动文件格式差异。全量审计仍在进行，没有真实延迟/负载基准；Maven 结束时 Outbox/Tutor 定时任务连接拒绝待处理或明确界定，其他模块继续按证据检查。
 
 ## 当前进度
 
@@ -20,7 +20,7 @@
 - `LearningEvidenceGraphService.personalizationSignals` 原本对每条课件页边再次全扫所有边找 KC 兄弟边；合成 800 条边的回归先 RED，产生 261,600 次边读取（上限 16,000），现改为一趟建立 evidence→KC 索引，再按关联数处理。
 - `EvidenceMemoryService` 持久化快照原本插入后重建整张图；AI 运行摘要也已先取图、随后由记忆服务重复取同一张图。现一次建图后直接复用，插入后仅补回 ID，摘要把现有图传入记忆计算。
 - RED/GREEN 与相关行为回归：`mvn -B -Dtest=EvidenceMemoryServiceTest,LearningEvidenceGraphServiceTest,LearningEffectTraceServiceTest,AiRuntimeSummaryServiceTest,EvidenceMemoryServicePerformanceTest,LearningEvidenceGraphPerformanceTest test`，17 项通过，覆盖 PostgreSQL 快照写入/证据图结果及新增性能约束；全量 `mvn -B test` 1,893 项通过，0 failures/errors/skips，`BUILD SUCCESS`。6 个改动 Java 文件的定向 Spotless 检查和 `git diff --check` 通过；全仓 Spotless 仍列出 679 个格式差异文件，未批量改写无关代码。
-- Maven 全量结束时，Outbox 每 5 秒轮询及 Tutor 附件清理会在 Testcontainers 已关闭后继续连接数据库，出现 Hikari 等待超时/拒绝连接；Surefire 等待 30 秒后强制清理 fork JVM，但测试汇总为零失败。需要继续验证安全、测试作用域内的处理方式。当前性能修复尚无真实流量/负载基准，也未推送。
+- Maven 全量结束时，Outbox 每 5 秒轮询及 Tutor 附件清理会在 Testcontainers 已关闭后继续连接数据库，出现 Hikari 等待超时/拒绝连接；Surefire 等待 30 秒后强制清理 fork JVM，但测试汇总为零失败。需要继续验证安全、测试作用域内的处理方式。当前性能修复已随 `eb938f7c` 推送，CI 和 release 构建通过；尚无真实流量/负载基准。
 - 跨模块复核排除了 3 条旧报告：RAG 启动自愈/重建的数据库访问已经 `asyncio.to_thread`；Tutor Graph 会话状态已按 LRU 限制为 512 个且保留活跃运行态；DeepSeek provider 已复用 `httpx.AsyncClient`。RAG 的 `InMemoryVectorStore.search` 确认仍对每条索引向量重复计算归一化，并在每行重复构造 KC 过滤集合；改为 upsert 时归一化、查询仅归一化输入向量，过滤集合在循环外创建。性能回归先 RED 后 GREEN；RAG 全量 182/182、全量 Ruff lint 和改动文件 Ruff/format 检查通过。全目录 Ruff format 另列出 22 个未改动文件，没有批量格式化。以 N 条索引向量计，查询归一化次数从 N+1 降到 1；未做真实响应延迟基准。
 
 ### 2026-10-25 AI 导学迁移题难度校准
