@@ -118,6 +118,55 @@ async def test_orchestrator_session_cache_evicts_least_recently_used(monkeypatch
 
 
 @pytest.mark.asyncio
+async def test_orchestrator_runs_serialize_by_session_without_blocking_other_sessions(
+    monkeypatch,
+) -> None:
+    store = orchestrator_session
+    monkeypatch.setattr(store, "_STORE", OrderedDict())
+    monkeypatch.setattr(store, "_ACTIVE_RUNS", set(), raising=False)
+    monkeypatch.setattr(store, "_LOCK", asyncio.Lock())
+
+    await store.begin_session_run(407, "shared")
+    same_session = asyncio.create_task(store.begin_session_run(407, "shared"))
+    other_session = asyncio.create_task(store.begin_session_run(407, "other"))
+    await asyncio.sleep(0)
+    same_session_waited = not same_session.done()
+    other_session_did_not_wait = other_session.done()
+
+    await store.end_session_run(407, "shared")
+    await asyncio.gather(same_session, other_session)
+    await store.end_session_run(407, "shared")
+    await store.end_session_run(407, "other")
+
+    assert same_session_waited
+    assert other_session_did_not_wait
+
+
+@pytest.mark.asyncio
+async def test_cancelled_waiting_orchestrator_run_does_not_leak_session_pin(monkeypatch) -> None:
+    store = orchestrator_session
+    monkeypatch.setattr(store, "_STORE", OrderedDict())
+    monkeypatch.setattr(store, "_ACTIVE_RUNS", set(), raising=False)
+    monkeypatch.setattr(store, "_LOCK", asyncio.Lock())
+
+    await store.begin_session_run(408, "shared")
+    waiting_run = asyncio.create_task(store.begin_session_run(408, "shared"))
+    await asyncio.sleep(0)
+    waiting_run.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await waiting_run
+
+    state = store._STORE[(408, "shared")]
+    assert state.active_runs == 1
+    assert (408, "shared") in store._ACTIVE_RUNS
+
+    await store.end_session_run(408, "shared")
+    assert (408, "shared") not in store._ACTIVE_RUNS
+    assert (408, "shared") not in store._STORE
+
+
+@pytest.mark.asyncio
 async def test_orchestrator_cache_rehydrates_client_history_after_cold_start() -> None:
     prior = [
         OrchestratorTurn(role="user", content="earlier question"),

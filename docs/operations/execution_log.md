@@ -24,6 +24,14 @@
 - GitHub Release 工作流 [#40280721149](https://github.com/cypre5s/Pythontopia/actions/runs/40280721149) 构建、体积检查与上传均成功，发布 [`web-v20261026.1`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261026.1)。只上传一个资产 `pythontopia-web-v20261026.1.tar.gz`，1,535,055,672 字节，SHA-256 `dc2d09d86e40a0e84ffa304aab0bba65aaaa18cbd9a9788eb62220f332f45248`；下载 HEAD 返回 200，Content-Length 一致。
 - 本地此前清理 4 个过期归档；当前 `output/packages/` 没有 `pythontopia-web-*.tar.gz`，没有额外生成本地大包。未做生产并发/吞吐基准或真实 DeepSeek/浏览器往返；工作区其余未提交用户文件保持不变。
 
+## 2026-10-26 — 导学并发、流取消与增量更新（本地验证）
+
+- 深度复核发现同一用户在多个标签页使用相同导学 session 时，两个 Graph 请求可能并发读取同一份历史并使用相同检查点轮次；现在按用户/会话串行运行，不同会话仍可并行。等待中的请求若被取消，会减少活跃计数并解除缓存 pin。
+- Orchestrator、资源生成和工具流断连时原先只取消后台任务，没有等待其清理完成；现在统一等待任务结束并收取异常，避免锁释放延迟。三条流的事件队列限制为 32 项，形成慢客户端背压。
+- Guide 每个 token 原先会复制整个 messages 数组；更新路径改为原地修改当前助手消息。用数组身份回归测试确认热路径不再复制历史。
+- 并发串行、流取消、队列背压和前端增量更新均先加入 RED 回归，再修复。Graph 全量 1,997 passed / 1 skipped，前端全量 2,724 passed；typecheck、改动文件 ESLint、Vite production build、改动 Python 文件 Ruff check 通过。Graph 唯一跳过项依赖未安装的可选 ragas/Vertex AI 适配模块。
+- 未进行生产并发或吞吐压测；未触及后端、RAG 与非 Web 客户端，本轮对其余模块仍是静态抽样审计。工作区既有 `.gitignore`、课程 manifest 与 AstrBot 插件改动不属于本轮修改。
+
 ## 2026-10-25 — 学习路径节点批量写入
 
 - `LearningPathService.writeNodesAndQuests` 原先逐个插入路径节点并读取生成 ID；Graph 规划器最多输出 7 天 × 每天 4 个节点。现在将节点组为单条多行 `INSERT ... RETURNING`，按数据库唯一位置键 `(day_index, order_in_day)` 还原 ID 顺序，Quest 继续引用对应节点。

@@ -196,7 +196,7 @@ export const useGuideStore = defineStore('guide', {
     },
     pushUserMessage(content: string): string {
       const id = genId();
-      this.messages = [...this.messages, { id, role: 'user', content }];
+      this.messages.push({ id, role: 'user', content });
       this.lastTurn = { userMessageId: id, text: content };
       return id;
     },
@@ -204,10 +204,7 @@ export const useGuideStore = defineStore('guide', {
     beginAssistant(): string | null {
       if (this.status === 'streaming') return null;
       const id = genId();
-      this.messages = [
-        ...this.messages,
-        { id, role: 'assistant', content: '', streaming: true },
-      ];
+      this.messages.push({ id, role: 'assistant', content: '', streaming: true });
       this.status = 'streaming';
       this.lastError = null;
       return id;
@@ -237,36 +234,34 @@ export const useGuideStore = defineStore('guide', {
       return { assistantId, text, history };
     },
     updateAssistantStream(id: string, content: string, traces: OrchestratorTraceStep[]): void {
-      this.messages = this.messages.map((m) =>
-        m.id === id ? { ...m, content, traces } : m,
-      );
+      const message = this.messages.find((m) => m.id === id);
+      if (!message) return;
+      message.content = content;
+      message.traces = traces;
     },
     finalizeAssistant(id: string, result: OrchestratorResult, fallbackContent: string): void {
       const content = result.reply_md?.trim().length ? result.reply_md : fallbackContent;
-      this.messages = this.messages.map((m) =>
-        m.id === id
-          ? {
-              ...m,
-              content,
-              streaming: false,
-              plan: result.plan ?? [],
-              dispatchResults: result.dispatch_results ?? [],
-              clarifyingQuestion: result.clarifying_question ?? null,
-              needsUserInput: result.needs_user_input ?? false,
-              profileUpdates: result.profile_updates ?? [],
-              traces: result.trace ?? m.traces ?? [],
-              done: result.done ?? false,
-            }
-          : m,
-      );
+      const message = this.messages.find((m) => m.id === id);
+      if (message) {
+        message.content = content;
+        message.streaming = false;
+        message.plan = result.plan ?? [];
+        message.dispatchResults = result.dispatch_results ?? [];
+        message.clarifyingQuestion = result.clarifying_question ?? null;
+        message.needsUserInput = result.needs_user_input ?? false;
+        message.profileUpdates = result.profile_updates ?? [];
+        message.traces = result.trace ?? message.traces ?? [];
+        message.done = result.done ?? false;
+      }
       this.status = 'idle';
     },
     failAssistant(id: string, message: string): void {
-      this.messages = this.messages.map((m) =>
-        m.id === id
-          ? { ...m, streaming: false, failed: true, content: m.content || '抱歉，AI 助教暂时没法回应，过一会再试。' }
-          : m,
-      );
+      const assistant = this.messages.find((m) => m.id === id);
+      if (assistant) {
+        assistant.streaming = false;
+        assistant.failed = true;
+        assistant.content = assistant.content || '抱歉，AI 助教暂时没法回应，过一会再试。';
+      }
       this.status = 'error';
       this.lastError = message;
     },

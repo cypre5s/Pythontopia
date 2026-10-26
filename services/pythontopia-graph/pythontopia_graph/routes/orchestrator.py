@@ -174,7 +174,7 @@ async def _orchestrator_stream_generator(
     memory_brief_provider: MemoryBriefProvider | None,
     browse_executor: BrowseExecutor | None,
 ) -> AsyncIterator[str]:
-    queue: asyncio.Queue[str | None] = asyncio.Queue()
+    queue: asyncio.Queue[str | None] = asyncio.Queue(maxsize=32)
     thread_id = body.session_id
     run_id = f"orchestrator:{uuid4().hex}"
 
@@ -202,7 +202,9 @@ async def _orchestrator_stream_generator(
         try:
             await graph.run_streaming(body, emit)
         finally:
-            await queue.put(None)
+            task = asyncio.current_task()
+            if task is None or not task.cancelling():
+                await queue.put(None)
 
     task = asyncio.create_task(run_graph())
     await queue.put(
@@ -232,6 +234,7 @@ async def _orchestrator_stream_generator(
     finally:
         if not task.done():
             task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
 
 
 @router.post("/agents/orchestrator/turn/stream")
@@ -330,7 +333,7 @@ async def _tool_loop_stream_generator(
     evidence_fetcher: EvidenceFetcher,
     valid_kc_codes: set[str],
 ) -> AsyncIterator[str]:
-    queue: asyncio.Queue[str | None] = asyncio.Queue()
+    queue: asyncio.Queue[str | None] = asyncio.Queue(maxsize=32)
 
     async def emit(event: str, data: dict[str, Any]) -> None:
         await queue.put(_format_sse(event, data))
@@ -370,7 +373,9 @@ async def _tool_loop_stream_generator(
                 {"code": "TOOL_LOOP_FAILED", "message": "The tool workflow failed."},
             )
         finally:
-            await queue.put(None)
+            task = asyncio.current_task()
+            if task is None or not task.cancelling():
+                await queue.put(None)
 
     task = asyncio.create_task(run_hybrid())
     try:
@@ -382,6 +387,7 @@ async def _tool_loop_stream_generator(
     finally:
         if not task.done():
             task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
 
 
 @router.post("/agents/orchestrator/tool-loop/stream")

@@ -142,6 +142,20 @@ describe('useGuideStore（伴学向导多轮线程）', () => {
     expect(history.at(-1)?.content).toBe('回答 24');
   });
 
+  it('聊天增量更新不复制整条消息数组', () => {
+    const g = useGuideStore();
+    g.openPanel();
+    const messages = g.messages;
+
+    g.pushUserMessage('第一问');
+    const aid = mustBegin(g);
+    g.updateAssistantStream(aid, '逐步到达的回答', []);
+    g.finalizeAssistant(aid, makeResult({ reply_md: '完整回答' }), '完整回答');
+
+    expect(g.messages).toBe(messages);
+    expect(g.messages.find((message) => message.id === aid)?.content).toBe('完整回答');
+  });
+
   it('finalize 澄清追问设置 needsUserInput', () => {
     const g = useGuideStore();
     g.openPanel();

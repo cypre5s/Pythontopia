@@ -27,6 +27,8 @@ class SessionState:
     turns: list[OrchestratorTurn] = field(default_factory=list)
     plan: list[PlanStep] = field(default_factory=list)
     profile_signals: list[ProfileSignal] = field(default_factory=list)
+    run_lock: asyncio.Lock = field(default_factory=asyncio.Lock, repr=False)
+    active_runs: int = 0
 
 
 SessionKey = tuple[int, str]
@@ -134,18 +136,47 @@ async def merge_profile_signals(
 async def begin_session_run(user_id: int, session_id: str) -> None:
     async with _LOCK:
         key = _key(user_id, session_id)
+        state = _STORE.setdefault(key, SessionState())
+        _STORE.move_to_end(key)
+        state.active_runs += 1
         _ACTIVE_RUNS.add(key)
-        if key in _STORE:
-            _STORE.move_to_end(key)
+        run_lock = state.run_lock
+    try:
+        await run_lock.acquire()
+    except BaseException:
+        async with _LOCK:
+            state.active_runs -= 1
+            if state.active_runs == 0:
+                _ACTIVE_RUNS.discard(key)
+            _trim_store()
+        raise
 
 
 async def end_session_run(user_id: int, session_id: str) -> None:
     async with _LOCK:
-        _ACTIVE_RUNS.discard(_key(user_id, session_id))
+        key = _key(user_id, session_id)
+        state = _STORE.get(key)
+        if state is None or state.active_runs == 0:
+            return
+        state.run_lock.release()
+        state.active_runs -= 1
+        if state.active_runs == 0:
+            _ACTIVE_RUNS.discard(key)
+            if not state.turns and not state.plan and not state.profile_signals:
+                _STORE.pop(key, None)
         _trim_store()
 
 
 async def reset_session(user_id: int, session_id: str) -> None:
     async with _LOCK:
         key = _key(user_id, session_id)
-        _STORE.pop(key, None)
+        state = _STORE.get(key)
+        if state is None:
+            return
+        if state.active_runs:
+            state.turns.clear()
+            state.plan.clear()
+            state.profile_signals.clear()
+            _STORE.move_to_end(key)
+        else:
+            _STORE.pop(key, None)
