@@ -263,6 +263,12 @@ services:
       LLM_MODEL_VISION: ${PYT_OPENAI_MODEL_VISION:-}
       # bridge 网络内用服务名访问 RAG（开发 host 网络时是 127.0.0.1:18092）。
       PYT_RAG_URL: http://pythontopia-rag:18092
+      # graph 会回写 backend 的 /api/internal/**（导学工作流 checkpoint、卡片图片附件、
+      # 记忆 brief）。这三个模块缺省值是 http://localhost:18080 —— 开发编排里 graph 是
+      # network_mode: host 所以能直连；生产是 bridge，localhost 指向 graph 自己，
+      # 于是 TutorWorkflowService 拿到 httpx.ConnectError → 前端只看到
+      # 「Tutor workflow run failed」。必须显式指向 backend 服务名。
+      PYT_BACKEND_URL: http://backend:18080
       # 与 backend 同源：graph 侧代码执行（导师验证代码 / Boss 自测）必须能连到 Piston。
       # 不配此值 + 不加入 judge-execution 网络 → python_sandbox_configured() 为假，
       # 生产上代码执行永久 sandbox_unavailable（静默 fail-closed）。
