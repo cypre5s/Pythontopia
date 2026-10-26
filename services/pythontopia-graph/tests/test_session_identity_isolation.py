@@ -9,6 +9,7 @@ under test prevents a future route refactor from accidentally returning to a bar
 from __future__ import annotations
 
 import asyncio
+from collections import OrderedDict
 
 import pytest
 
@@ -57,6 +58,134 @@ async def test_tutor_workflow_same_session_id_is_isolated_by_user() -> None:
     assert owner.cards[0]["short_text"] == "user-101-private"
     assert other.phase == "READING"
     assert other.cards == []
+
+
+@pytest.mark.asyncio
+async def test_tutor_cache_evicts_old_inactive_sessions_but_keeps_active_run(monkeypatch) -> None:
+    store = tutor_workflow_session
+    monkeypatch.setattr(store, "_STORE", OrderedDict())
+    monkeypatch.setattr(store, "_ACTIVE_RUNS", set())
+    monkeypatch.setattr(store, "MAX_CACHED_SESSIONS", 2, raising=False)
+
+    await store.restore_phase(303, "older", "CODING", 1)
+    await store.restore_phase(303, "active", "IDEATING", 2)
+    assert await store.claim_run(303, "active")
+    await store.restore_phase(303, "newer", "TRANSFER", 3)
+
+    assert len(store._STORE) == 2
+    assert (303, "active") in store._STORE
+    assert (303, "older") not in store._STORE
+    assert (await store.get_state(303, "active")).phase == "IDEATING"
+
+    await store.release_run(303, "active")
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_session_cache_is_bounded_and_keeps_in_flight_session(monkeypatch) -> None:
+    store = orchestrator_session
+    monkeypatch.setattr(store, "_STORE", OrderedDict())
+    monkeypatch.setattr(store, "_ACTIVE_RUNS", set(), raising=False)
+    monkeypatch.setattr(store, "MAX_CACHED_SESSIONS", 2, raising=False)
+
+    await store.append_turns(404, "older", [OrchestratorTurn(role="user", content="old")])
+    await store.append_turns(404, "active", [OrchestratorTurn(role="user", content="active")])
+    await store.begin_session_run(404, "active")
+    await store.append_turns(404, "newer", [OrchestratorTurn(role="user", content="new")])
+
+    assert len(store._STORE) == 2
+    assert (404, "older") not in store._STORE
+    assert (404, "active") in store._STORE
+    assert [turn.content for turn in await store.get_history(404, "active")] == ["active"]
+
+    await store.end_session_run(404, "active")
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_session_cache_evicts_least_recently_used(monkeypatch) -> None:
+    store = orchestrator_session
+    monkeypatch.setattr(store, "_STORE", OrderedDict())
+    monkeypatch.setattr(store, "_ACTIVE_RUNS", set(), raising=False)
+    monkeypatch.setattr(store, "MAX_CACHED_SESSIONS", 2, raising=False)
+
+    await store.append_turns(406, "older", [OrchestratorTurn(role="user", content="old")])
+    await store.append_turns(406, "newer", [OrchestratorTurn(role="user", content="new")])
+    await store.get_history(406, "older")
+    await store.append_turns(406, "latest", [OrchestratorTurn(role="user", content="latest")])
+
+    assert len(store._STORE) == 2
+    assert (406, "older") in store._STORE
+    assert (406, "newer") not in store._STORE
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_runs_serialize_by_session_without_blocking_other_sessions(
+    monkeypatch,
+) -> None:
+    store = orchestrator_session
+    monkeypatch.setattr(store, "_STORE", OrderedDict())
+    monkeypatch.setattr(store, "_ACTIVE_RUNS", set(), raising=False)
+    monkeypatch.setattr(store, "_LOCK", asyncio.Lock())
+
+    await store.begin_session_run(407, "shared")
+    same_session = asyncio.create_task(store.begin_session_run(407, "shared"))
+    other_session = asyncio.create_task(store.begin_session_run(407, "other"))
+    await asyncio.sleep(0)
+    same_session_waited = not same_session.done()
+    other_session_did_not_wait = other_session.done()
+
+    await store.end_session_run(407, "shared")
+    await asyncio.gather(same_session, other_session)
+    await store.end_session_run(407, "shared")
+    await store.end_session_run(407, "other")
+
+    assert same_session_waited
+    assert other_session_did_not_wait
+
+
+@pytest.mark.asyncio
+async def test_cancelled_waiting_orchestrator_run_does_not_leak_session_pin(monkeypatch) -> None:
+    store = orchestrator_session
+    monkeypatch.setattr(store, "_STORE", OrderedDict())
+    monkeypatch.setattr(store, "_ACTIVE_RUNS", set(), raising=False)
+    monkeypatch.setattr(store, "_LOCK", asyncio.Lock())
+
+    await store.begin_session_run(408, "shared")
+    waiting_run = asyncio.create_task(store.begin_session_run(408, "shared"))
+    await asyncio.sleep(0)
+    waiting_run.cancel()
+
+    with pytest.raises(asyncio.CancelledError):
+        await waiting_run
+
+    state = store._STORE[(408, "shared")]
+    assert state.active_runs == 1
+    assert (408, "shared") in store._ACTIVE_RUNS
+
+    await store.end_session_run(408, "shared")
+    assert (408, "shared") not in store._ACTIVE_RUNS
+    assert (408, "shared") not in store._STORE
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_cache_rehydrates_client_history_after_cold_start() -> None:
+    prior = [
+        OrchestratorTurn(role="user", content="earlier question"),
+        OrchestratorTurn(role="assistant", content="earlier answer"),
+    ]
+    current = OrchestratorTurn(role="user", content="current question")
+
+    await orchestrator_session.append_turns(
+        405, "cold-start", [current], history_fallback=prior
+    )
+
+    assert [
+        (turn.role, turn.content)
+        for turn in await orchestrator_session.get_history(405, "cold-start")
+    ] == [
+        ("user", "earlier question"),
+        ("assistant", "earlier answer"),
+        ("user", "current question"),
+    ]
 
 
 @pytest.mark.asyncio

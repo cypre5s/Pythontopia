@@ -73,6 +73,18 @@ public class MasteryRepository {
         userId));
   }
 
+  public Map<String, MasterySource> findLatestEventSourcesByKc(Long userId) {
+    return jdbcTemplate.query(
+            "SELECT DISTINCT ON (kc_code) kc_code, source FROM kc_mastery_event"
+                + " WHERE user_id = ? ORDER BY kc_code, created_at DESC, id DESC",
+            (rs, rowNum) ->
+                Map.entry(
+                    rs.getString("kc_code"), MasterySource.valueOf(rs.getString("source"))),
+            userId)
+        .stream()
+        .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+  }
+
   public Map<String, List<String>> findEvidenceSourcesByKc(Long userId) {
     return jdbcTemplate.query(
             "SELECT kc_code, ARRAY_AGG(DISTINCT source ORDER BY source) AS evidence_sources"

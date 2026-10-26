@@ -14,8 +14,17 @@ import com.pythontopia.npc.dto.NpcDialogResponse;
 import com.pythontopia.npc.graph.NpcDialogGraphClient;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 class NpcDialogServiceTest {
 
@@ -24,9 +33,44 @@ class NpcDialogServiceTest {
   private final NpcAffinityService affinityService = mock(NpcAffinityService.class);
   private final NpcDialogGraphClient graphClient = mock(NpcDialogGraphClient.class);
   private final JdbcTemplate jdbc = mock(JdbcTemplate.class);
-  private final NpcDialogService service =
-      new NpcDialogService(
-          memoryService, personaService, affinityService, graphClient, jdbc, new ObjectMapper());
+  private final PlatformTransactionManager transactionManager = new TestTransactionManager();
+  private NpcDialogService service;
+
+  @BeforeEach
+  void createTransactionalProxy() {
+    NpcDialogService target =
+        new NpcDialogService(
+            memoryService,
+            personaService,
+            affinityService,
+            graphClient,
+            jdbc,
+            new ObjectMapper(),
+            transactionManager);
+    ProxyFactory proxyFactory = new ProxyFactory(target);
+    proxyFactory.addAdvice(
+        new TransactionInterceptor(
+            transactionManager, new AnnotationTransactionAttributeSource()));
+    service = (NpcDialogService) proxyFactory.getProxy();
+  }
+
+  @Test
+  void graphWaitDoesNotHoldDatabaseTransaction() {
+    when(memoryService.recall(7L, "coach_q", null, 5)).thenReturn(List.of());
+    when(personaService.load("coach_q")).thenReturn(new NpcPersona("coach_q", "教务 Q", "core"));
+    AtomicBoolean transactionDuringGraphCall = new AtomicBoolean(true);
+    when(graphClient.talk(eq("coach_q"), eq("core"), any(), eq("你好")))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringGraphCall.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return Optional.of(new NpcDialogResponse("你好", List.of(), true));
+            });
+
+    service.talk(7L, "coach_q", "你好");
+
+    assertThat(transactionDuringGraphCall).isFalse();
+  }
 
   @Test
   void talkRecallsMemoryCallsGraphPersistsStateAndBumpsAffinity() {
@@ -67,5 +111,23 @@ class NpcDialogServiceTest {
     assertThat(response.replyMd()).isNotBlank();
     assertThat(response.grounded()).isFalse();
     assertThat(response.citedEventIds()).isEmpty();
+  }
+
+  private static final class TestTransactionManager extends AbstractPlatformTransactionManager {
+
+    @Override
+    protected Object doGetTransaction() {
+      return new Object();
+    }
+
+    @Override
+    protected void doBegin(
+        Object transaction, org.springframework.transaction.TransactionDefinition definition) {}
+
+    @Override
+    protected void doCommit(DefaultTransactionStatus status) {}
+
+    @Override
+    protected void doRollback(DefaultTransactionStatus status) {}
   }
 }

@@ -31,12 +31,12 @@ public class CounterExampleSelector {
    * 无用例或全部通过时返回 {@link Optional#empty()}。
    *
    * <p>用例扫描（fork Python 子进程）走 {@link JudgeWorkerPool}，与正式判题共用并发上限，
-   * 不在 Tomcat 请求线程上直接 fork。调用方（{@code BugMineService.open}）本身跑在请求线程上、
-   * 不在池线程内，因此不存在「池线程再向同一池提交」的嵌套死锁。DB 读取留在调用线程的事务里。
+   * 不在 Tomcat 请求线程上直接 fork。调用方（{@code BugMineService.open}）不在池线程内，
+   * 因此不存在「池线程再向同一池提交」的嵌套死锁；沙箱等待期间也不持有数据库事务。
    */
-  public Optional<CounterExample> findFirstFailing(Long problemId, String code) {
+  public Optional<CounterExample> findFirstFailing(Long problemId, Long userId, String code) {
     Optional<PublicProblemRepository.JudgeTestCases> testCasesOpt =
-        problemRepository.findTestCases(problemId);
+        problemRepository.findTestCases(problemId, userId);
     if (testCasesOpt.isEmpty()) {
       return Optional.empty();
     }
@@ -69,8 +69,11 @@ public class CounterExampleSelector {
           sandbox.run(code, new JudgeTestCase(input, expected, 5000, redacted));
       String actual = result.stdout() == null ? "" : result.stdout();
       if (!normalise(expected).equals(normalise(actual))) {
-        String shownInput = redacted ? redact(input) : input;
-        return Optional.of(new CounterExample(shownInput, expected, actual, redacted));
+        return Optional.of(
+            redacted
+                ? new CounterExample(
+                    "隐藏测试用例（输入已隐藏）", "期望输出已隐藏", "实际输出已隐藏", true)
+                : new CounterExample(input, expected, actual, false));
       }
     }
     return Optional.empty();
@@ -81,16 +84,6 @@ public class CounterExampleSelector {
       return "";
     }
     return value.replace("\r\n", "\n").replace("\r", "\n").stripTrailing();
-  }
-
-  private String redact(String input) {
-    if (input == null) {
-      return "";
-    }
-    if (input.length() <= 32) {
-      return input;
-    }
-    return input.substring(0, 16) + "…[redacted " + (input.length() - 16) + "B]";
   }
 
   public record CounterExample(String stdin, String expected, String actual, boolean redacted) {}

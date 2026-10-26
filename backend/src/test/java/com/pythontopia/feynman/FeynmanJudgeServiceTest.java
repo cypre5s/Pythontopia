@@ -30,12 +30,20 @@ import java.math.BigDecimal;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Callable;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.springframework.aop.framework.ProxyFactory;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @SuppressWarnings("unchecked")
 class FeynmanJudgeServiceTest {
@@ -61,26 +69,62 @@ class FeynmanJudgeServiceTest {
   private final JudgeWorkerPool judgeWorkerPool = mock(JudgeWorkerPool.class);
   private final ObjectMapper objectMapper = new ObjectMapper();
   private final JudgeCaseEvaluator caseEvaluator = new JudgeCaseEvaluator(sandbox, objectMapper);
-
-  private final FeynmanJudgeService service =
-      new FeynmanJudgeService(
-          jdbc,
-          sandbox,
-          sessionService,
-          masteryEvaluator,
-          publisher,
-          problemRepository,
-          caseEvaluator,
-          judgeWorkerPool);
+  private final PlatformTransactionManager transactionManager = new TestTransactionManager();
+  private FeynmanJudgeService service;
 
   @BeforeEach
   void runWorkerTasksSynchronously() {
+    FeynmanJudgeService target =
+        new FeynmanJudgeService(
+            jdbc,
+            sandbox,
+            sessionService,
+            masteryEvaluator,
+            publisher,
+            problemRepository,
+            caseEvaluator,
+            judgeWorkerPool,
+            transactionManager);
+    ProxyFactory proxyFactory = new ProxyFactory(target);
+    proxyFactory.addAdvice(
+        new TransactionInterceptor(
+            transactionManager, new AnnotationTransactionAttributeSource()));
+    service = (FeynmanJudgeService) proxyFactory.getProxy();
     when(judgeWorkerPool.submitAndWait(any()))
         .thenAnswer(
             invocation -> {
               Callable<?> task = invocation.getArgument(0);
               return task.call();
             });
+  }
+
+  @Test
+  void sandboxWaitDoesNotHoldTransactionButVerdictWriteUsesOne() {
+    givenSession("TAUGHT", 101L);
+    givenProducedCode("print(4242)");
+    givenHiddenCase("2\n", SECRET_EXPECTED);
+    AtomicBoolean transactionDuringSandbox = new AtomicBoolean(true);
+    AtomicBoolean transactionDuringVerdictWrite = new AtomicBoolean(false);
+    when(sandbox.run(eq("print(4242)"), any(JudgeTestCase.class)))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringSandbox.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return new SandboxRunResult(false, 0, SECRET_EXPECTED + "\n", "", 8, null);
+            });
+    when(jdbc.update(PASS_CLAIM_SQL, 10L))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringVerdictWrite.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return 1;
+            });
+
+    Verdict verdict = service.judge(7L, 10L);
+
+    assertThat(verdict.status()).isEqualTo("PASSED");
+    assertThat(transactionDuringSandbox).isFalse();
+    assertThat(transactionDuringVerdictWrite).isTrue();
   }
 
   @Test
@@ -477,5 +521,23 @@ class FeynmanJudgeServiceTest {
     assertThat(verdict.passed()).isFalse();
     verifyNoInteractions(publisher);
     verifyNoInteractions(masteryEvaluator);
+  }
+
+  private static final class TestTransactionManager extends AbstractPlatformTransactionManager {
+
+    @Override
+    protected Object doGetTransaction() {
+      return new Object();
+    }
+
+    @Override
+    protected void doBegin(
+        Object transaction, org.springframework.transaction.TransactionDefinition definition) {}
+
+    @Override
+    protected void doCommit(DefaultTransactionStatus status) {}
+
+    @Override
+    protected void doRollback(DefaultTransactionStatus status) {}
   }
 }

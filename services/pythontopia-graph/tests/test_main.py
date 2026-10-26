@@ -23,3 +23,24 @@ async def test_lifespan_provider_failure_logs_only_exception_type(monkeypatch, c
 
     assert "RuntimeError" in caplog.text
     assert sentinel not in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_lifespan_closes_shared_provider_client(monkeypatch) -> None:
+    class Provider:
+        closed = False
+
+        async def aclose(self) -> None:
+            self.closed = True
+
+    provider = Provider()
+    monkeypatch.setattr(graph_main, "init_tracing", lambda: None)
+    monkeypatch.setattr(graph_main, "load_pythontopia_env", lambda: None)
+    monkeypatch.setattr(graph_main, "provider_from_env", lambda: provider)
+    test_app = FastAPI()
+
+    async with graph_main.lifespan(test_app):
+        assert test_app.state.llm_provider is provider
+        assert not provider.closed
+
+    assert provider.closed

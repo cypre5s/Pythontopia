@@ -28,7 +28,7 @@ public class PublicProblemRepository {
             SELECT p.id, p.pack_id, p.kc_code, p.title, p.statement_markdown, p.input_description,
                    p.output_description, p.difficulty, p.samples
             FROM course_problem p
-            WHERE p.pack_id = ? AND p.id = ? AND NOT EXISTS (
+            WHERE p.pack_id = ? AND p.id = ? AND p.tutor_owner_user_id IS NULL AND NOT EXISTS (
               SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
                 AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled)
             """,
@@ -39,13 +39,34 @@ public class PublicProblemRepository {
         .findFirst();
   }
 
+  public Optional<PublicProblemDto> findAccessible(Long packId, Long problemId, Long userId) {
+    return jdbcTemplate
+        .query(
+            """
+            SELECT p.id, p.pack_id, p.kc_code, p.title, p.statement_markdown, p.input_description,
+                   p.output_description, p.difficulty, p.samples
+            FROM course_problem p
+            WHERE p.pack_id = ? AND p.id = ?
+              AND (p.tutor_owner_user_id IS NULL OR p.tutor_owner_user_id = ?)
+              AND (p.tutor_owner_user_id IS NOT NULL OR NOT EXISTS (
+                SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
+                  AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled))
+            """,
+            (rs, rowNum) -> map(rs),
+            packId,
+            problemId,
+            userId)
+        .stream()
+        .findFirst();
+  }
+
   public Optional<JudgeTestCases> findTestCases(Long problemId) {
     return jdbcTemplate
         .query(
             """
             SELECT p.samples, p.hidden_test_cases
             FROM course_problem p
-            WHERE p.id = ? AND p.pack_id = 43 AND NOT EXISTS (
+            WHERE p.id = ? AND p.pack_id = 43 AND p.tutor_owner_user_id IS NULL AND NOT EXISTS (
               SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
                 AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled)
             """,
@@ -53,6 +74,27 @@ public class PublicProblemRepository {
                 readJson(rs.getString("samples")),
                 readJson(rs.getString("hidden_test_cases"))),
             problemId)
+        .stream()
+        .findFirst();
+  }
+
+  public Optional<JudgeTestCases> findTestCases(Long problemId, Long userId) {
+    return jdbcTemplate
+        .query(
+            """
+            SELECT p.samples, p.hidden_test_cases
+            FROM course_problem p
+            WHERE p.id = ? AND p.pack_id = 43
+              AND (p.tutor_owner_user_id IS NULL OR p.tutor_owner_user_id = ?)
+              AND (p.tutor_owner_user_id IS NOT NULL OR NOT EXISTS (
+                SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
+                  AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled))
+            """,
+            (rs, rowNum) -> new JudgeTestCases(
+                readJson(rs.getString("samples")),
+                readJson(rs.getString("hidden_test_cases"))),
+            problemId,
+            userId)
         .stream()
         .findFirst();
   }
@@ -71,7 +113,7 @@ public class PublicProblemRepository {
             """
             SELECT p.id, p.difficulty
             FROM course_problem p
-            WHERE p.pack_id = ? AND p.kc_code = ? AND NOT EXISTS (
+            WHERE p.pack_id = ? AND p.kc_code = ? AND p.tutor_owner_user_id IS NULL AND NOT EXISTS (
               SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
                 AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled)
               ORDER BY
@@ -100,7 +142,8 @@ public class PublicProblemRepository {
                 """
                 SELECT p.id, p.title
                 FROM course_problem p
-                WHERE p.pack_id = 43 AND p.kc_code = ? AND p.id <> ? AND NOT EXISTS (
+                WHERE p.pack_id = 43 AND p.kc_code = ? AND p.id <> ?
+                  AND p.tutor_owner_user_id IS NULL AND NOT EXISTS (
                   SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
                     AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled)
                   AND NOT EXISTS (
@@ -127,7 +170,8 @@ public class PublicProblemRepository {
             """
             SELECT p.id, p.title
             FROM course_problem p
-            WHERE p.pack_id = 43 AND p.kc_code = ? AND p.id <> ? AND NOT EXISTS (
+            WHERE p.pack_id = 43 AND p.kc_code = ? AND p.id <> ?
+              AND p.tutor_owner_user_id IS NULL AND NOT EXISTS (
               SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
                 AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled)
             ORDER BY p.id

@@ -59,7 +59,13 @@ def test_load_pages_maps_database_rows(monkeypatch: Any, tmp_path: Path) -> None
         },
     ]
 
-    monkeypatch.setattr(loader.psycopg, "connect", lambda *_args, **_kwargs: FakeConnection(rows))
+    connect_options: dict[str, object] = {}
+
+    def connect(*_args: object, **kwargs: object) -> FakeConnection:
+        connect_options.update(kwargs)
+        return FakeConnection(rows)
+
+    monkeypatch.setattr(loader.psycopg, "connect", connect)
 
     result = loader.load_pages("postgresql://example", tmp_path / "pages.parquet", dry_run=True)
 
@@ -74,6 +80,7 @@ def test_load_pages_maps_database_rows(monkeypatch: Any, tmp_path: Path) -> None
     assert result.pages[1].kc_codes == ["PY43-KC-002", "PY43-KC-003"]
     assert result.pages[1].chapter_id is None
     assert not (tmp_path / "pages.parquet").exists()
+    assert connect_options["connect_timeout"] == loader.DB_CONNECT_TIMEOUT_SECONDS
 
 
 def test_fetch_disabled_course_resources_maps_page_ids_and_kc_codes(
@@ -83,11 +90,16 @@ def test_fetch_disabled_course_resources_maps_page_ids_and_kc_codes(
         {"resource_type": "PAGE", "resource_id": "10682"},
         {"resource_type": "KNOWLEDGE_POINT", "resource_id": "PY43-KC-001"},
     ]
-    monkeypatch.setattr(
-        loader.psycopg, "connect", lambda *_args, **_kwargs: FakeConnection(rows)
-    )
+    connect_options: dict[str, object] = {}
+
+    def connect(*_args: object, **kwargs: object) -> FakeConnection:
+        connect_options.update(kwargs)
+        return FakeConnection(rows)
+
+    monkeypatch.setattr(loader.psycopg, "connect", connect)
 
     disabled = loader.fetch_disabled_course_resources("postgresql://example")
 
     assert disabled.page_ids == frozenset({10682})
     assert disabled.kc_codes == frozenset({"PY43-KC-001"})
+    assert connect_options["connect_timeout"] == loader.DB_CONNECT_TIMEOUT_SECONDS

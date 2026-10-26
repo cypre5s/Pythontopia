@@ -32,6 +32,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * BugMine {@code close} 终态守卫回归：重复 POST 不得重复发 {@code PracticeAbandoned}
@@ -68,13 +69,15 @@ class BugMineCloseGuardTest {
             new BugMineProfileAdvisor(),
             reviewStateService,
             mock(StudentWriteThrottle.class),
+            mock(PlatformTransactionManager.class),
             3);
     // enrichSession 的旁路依赖：无上下文 / 无来源 / 无题干均按缺省处理。
     lenient()
         .when(repository.findSessionContext(anyLong(), anyLong(), anyLong()))
         .thenReturn(Optional.empty());
     lenient().when(repository.findSubmissionSource(anyLong())).thenReturn(Optional.empty());
-    lenient().when(problemRepository.findPublic(anyLong(), anyLong())).thenReturn(Optional.empty());
+    lenient().when(problemRepository.findAccessible(anyLong(), anyLong(), anyLong()))
+        .thenReturn(Optional.empty());
     lenient().when(problemRepository.findKcCode(anyLong())).thenReturn("PY43-KC-001");
   }
 

@@ -17,8 +17,11 @@ import java.util.Optional;
 import org.springframework.dao.EmptyResultDataAccessException;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class FeynmanSessionService {
@@ -33,6 +36,7 @@ public class FeynmanSessionService {
   private final PublicProblemRepository problemRepository;
   private final ProfileRepository profileRepository;
   private final FeynmanBugBankRepository bugBank;
+  private final TransactionTemplate transaction;
 
   public FeynmanSessionService(
       JdbcTemplate jdbc,
@@ -41,7 +45,8 @@ public class FeynmanSessionService {
       FeynmanGraphClient graphClient,
       PublicProblemRepository problemRepository,
       ProfileRepository profileRepository,
-      FeynmanBugBankRepository bugBank) {
+      FeynmanBugBankRepository bugBank,
+      PlatformTransactionManager transactionManager) {
     this.jdbc = jdbc;
     this.objectMapper = objectMapper;
     this.extractor = extractor;
@@ -49,6 +54,7 @@ public class FeynmanSessionService {
     this.problemRepository = problemRepository;
     this.profileRepository = profileRepository;
     this.bugBank = bugBank;
+    this.transaction = new TransactionTemplate(transactionManager);
   }
 
   @Transactional
@@ -77,22 +83,20 @@ public class FeynmanSessionService {
     return new SessionResponse(id == null ? 0L : id, userId, kcCode, "OPEN", readJson(state));
   }
 
-  @Transactional
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public TurnResponse teach(long userId, long sessionId, String explanation) {
     SessionData session = loadSession(userId, sessionId);
     List<Misconception> misconceptions = parseMisconceptions(session.tuteeState());
     // 必须先读取再插入本轮，否则本轮解释会在 history 和 student_teaching 中重复。
     List<FeynmanGraphClient.ConversationTurn> history = recentHistory(sessionId);
 
-    // 学生本回合的教学先落库为 STUDENT 轮，支撑「误解→你的教学→判题→证据」玻璃盒可溯源。
-    jdbc.update(
-        "INSERT INTO feynman_turn (session_id, role, content, taught_fix) VALUES (?, 'STUDENT', ?, NULL)",
-        sessionId,
-        explanation == null ? "" : explanation);
-
     // 防作弊红线：贴 answer_key/完整代码不算「教会」，学弟拒收且误解不解除。
     if (FeynmanAntiCheat.looksLikeAnswerDump(explanation)) {
-      return refuseAnswerDump(sessionId, misconceptions);
+      return transaction.execute(
+          status -> {
+            insertStudentTurn(sessionId, explanation);
+            return refuseAnswerDump(sessionId, misconceptions);
+          });
     }
 
     // AGENTS 红线：Agent 不可达必须 fail fast。绝不能靠「解释长度」这类本地规则伪造
@@ -115,26 +119,37 @@ public class FeynmanSessionService {
                         "FEYNMAN_TUTEE_UNAVAILABLE",
                         "AI 学弟暂时不可用，本次教学未判定成败，请稍后重试"));
     String nextState = toState(output.updatedMisconceptions());
-    Long turnId =
-        jdbc.queryForObject(
-            "INSERT INTO feynman_turn (session_id, role, content, taught_fix) "
-                + "VALUES (?, 'TUTEE', ?, ?) RETURNING id",
-            Long.class,
-            sessionId,
-            output.replyMd(),
-            output.producedCode());
     boolean taught = allResolved(output.updatedMisconceptions());
+    return transaction.execute(
+        status -> {
+          insertStudentTurn(sessionId, explanation);
+          Long turnId =
+              jdbc.queryForObject(
+                  "INSERT INTO feynman_turn (session_id, role, content, taught_fix) "
+                      + "VALUES (?, 'TUTEE', ?, ?) RETURNING id",
+                  Long.class,
+                  sessionId,
+                  output.replyMd(),
+                  output.producedCode());
+          jdbc.update(
+              "UPDATE feynman_session SET tutee_state = ?::jsonb, status = ? WHERE id = ?",
+              nextState,
+              taught ? "TAUGHT" : "OPEN",
+              sessionId);
+          return new TurnResponse(
+              turnId == null ? 0L : turnId,
+              "TUTEE",
+              output.replyMd(),
+              output.producedCode(),
+              null);
+        });
+  }
+
+  private void insertStudentTurn(long sessionId, String explanation) {
     jdbc.update(
-        "UPDATE feynman_session SET tutee_state = ?::jsonb, status = ? WHERE id = ?",
-        nextState,
-        taught ? "TAUGHT" : "OPEN",
-        sessionId);
-    return new TurnResponse(
-        turnId == null ? 0L : turnId,
-        "TUTEE",
-        output.replyMd(),
-        output.producedCode(),
-        null);
+        "INSERT INTO feynman_turn (session_id, role, content, taught_fix) VALUES (?, 'STUDENT', ?, NULL)",
+        sessionId,
+        explanation == null ? "" : explanation);
   }
 
   private List<FeynmanGraphClient.ConversationTurn> recentHistory(long sessionId) {

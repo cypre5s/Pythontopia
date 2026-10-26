@@ -10,9 +10,11 @@ import pythontopia_graph.routes.tutor_workflow as tutor_workflow_route
 
 from pythontopia_graph.agents.tutor_workflow_cards import (
     CardGenerationError,
+    TRANSFER_PROMPT,
     TutorWorkflowCardAgent,
 )
 from pythontopia_graph.graph import tutor_workflow_session as session_store
+from pythontopia_graph.graph.tutor_workflow_graph import TutorWorkflowGraph
 from pythontopia_graph.graph.tutor_workflow_graph import (
     TransitionError,
     decide_actions,
@@ -24,7 +26,7 @@ from pythontopia_graph.routes.tutor_workflow import (
     WorkflowRunEnvelope,
     tutor_workflow_run_stream,
 )
-from pythontopia_graph.schemas.tutor_workflow import WorkflowProblemContext
+from pythontopia_graph.schemas.tutor_workflow import TutorStudentState, WorkflowProblemContext
 
 
 class JsonStubProvider(LlmProvider):
@@ -76,6 +78,11 @@ HIT = RagHit(
 )
 
 
+def test_transfer_prompt_requires_a_harder_problem_than_the_source() -> None:
+    assert "难度必须比源题高一档（basic→medium→hard）" in TRANSFER_PROMPT
+    assert "源题已是 hard" in TRANSFER_PROMPT
+
+
 # ── 阶段状态机 ──
 
 
@@ -94,6 +101,21 @@ def test_phase_transitions_legal_and_illegal() -> None:
         validate_transition("AC_REVIEW", "READING")
     with pytest.raises(TransitionError):
         validate_transition("IDEATING", "READING")
+
+
+def test_student_state_round_trips_authoritative_submission_identity() -> None:
+    state = TutorStudentState(
+        session_id="wf-7-476-test",
+        user_id=7,
+        problem_id=476,
+        phase="AC_REVIEW",
+        latest_verdict="AC",
+        latest_submission_id=1234,
+        latest_submission_problem_id=476,
+    )
+
+    assert state.model_dump()["latest_submission_id"] == 1234
+    assert state.model_dump()["latest_submission_problem_id"] == 476
 
 
 def test_decide_actions_gates_transfer_until_post_ac() -> None:
@@ -127,6 +149,67 @@ async def test_problem_guide_card_validates_and_fills_defaults() -> None:
     # 服务端默认值补齐（teaching_goal / checkpoint_prompt / reflection_prompt / mentor_role）。
     assert card["teaching_goal"]
     assert card["mentor_role"] == "百晓"
+
+
+@pytest.mark.asyncio
+async def test_transfer_card_contains_private_judge_draft_for_backend_validation() -> None:
+    provider = JsonStubProvider(
+        [
+            {
+                "title": "长方形面积",
+                "description": "读取长和宽，输出矩形面积。",
+                "input_description": "两个浮点数",
+                "output_description": "面积，保留两位小数",
+                "samples": [{"input": "2 3", "output": "6.00"}],
+                "hint": "先读清两个输入值。",
+                "target_kcs": ["PY43-KC-016"],
+                "reference_solution_language": "Python3",
+                "reference_solution_code": "length, width = map(float, input().split())\nprint(f'{length * width:.2f}')",
+                "test_cases": [{"input": "1.5 4", "output": "6.00"}],
+            }
+        ]
+    )
+    card = await TutorWorkflowCardAgent(provider).transfer(PROBLEM, "组合两个输入值", "")
+
+    assert card["reference_solution_language"] == "Python3"
+    assert card["reference_solution_code"].startswith("length, width")
+    assert card["test_cases"] == [{"input": "1.5 4", "output": "6.00"}]
+    assert "reference_solution_code" in json.dumps(provider.messages)
+    assert "通过项目 AST 白名单" in json.dumps(provider.messages, ensure_ascii=False)
+
+
+@pytest.mark.asyncio
+async def test_transfer_guardrail_checks_public_fields_and_preserves_private_draft() -> None:
+    provider = JsonStubProvider(
+        [
+            {
+                "title": "长方形面积",
+                "description": "读取长和宽，输出矩形面积。",
+                "input_description": "两个浮点数",
+                "output_description": "面积，保留两位小数",
+                "samples": [{"input": "2 3", "output": "6.00"}],
+                "hint": "先读清两个输入值。",
+                "target_kcs": ["PY43-KC-016"],
+                "reference_solution_language": "Python3",
+                "reference_solution_code": "print(6)",
+                "test_cases": [{"input": "1.5 4", "output": "6.00"}],
+            }
+        ]
+    )
+    async def emit(*_) -> None:
+        return None
+
+    graph = TutorWorkflowGraph(provider, StaticEvidenceFetcher([]), emit=emit)
+    state = {
+        "request": _envelope("wf-transfer-guardrail", "TRANSFER"),
+        "current_phase": "AC_REVIEW",
+        "next_practice_direction": "用两个输入值计算面积",
+    }
+
+    result = await graph._node_generate_card(state)
+
+    assert result["runtime_state"] == "SUCCEEDED"
+    assert result["card"]["test_cases"][0]["input"] == "1.5 4"
 
 
 @pytest.mark.asyncio
@@ -506,6 +589,37 @@ async def test_restore_phase_replays_java_projection() -> None:
     assert "当前编辑器代码" in messages
     assert "print(radius * radius)" in messages
     assert any(action["event"] == "TRANSFER" for action in result["available_actions"])
+
+
+@pytest.mark.asyncio
+async def test_authoritative_restore_replaces_stale_in_process_phase_after_projection_failure() -> None:
+    session_id = "t-wf-restore-stale"
+    await session_store.reset_session(1, session_id)
+    await session_store.commit_run(
+        1,
+        session_id,
+        phase="TRANSFER",
+        card_key="transfer_problem",
+        card_id="stale-card",
+        short_text="stale generated title",
+    )
+
+    await session_store.restore_phase(
+        1,
+        session_id,
+        "AC_REVIEW",
+        4,
+        cards=[{"card_id": "persisted-card", "card_key": "post_ac", "short_text": "复盘已保存"}],
+        force=True,
+    )
+
+    restored = await session_store.get_state(1, session_id)
+    assert restored.phase == "AC_REVIEW"
+    assert restored.seq == 4
+    assert restored.cards == [
+        {"card_id": "persisted-card", "card_key": "post_ac", "short_text": "复盘已保存"}
+    ]
+    await session_store.reset_session(1, session_id)
 
 
 @pytest.mark.asyncio

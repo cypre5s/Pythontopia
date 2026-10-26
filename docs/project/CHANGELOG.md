@@ -1,5 +1,55 @@
 # Changelog
 
+## 2026-10-26
+
+- AI 导学总管会话状态由无界进程字典改为最多 512 条 LRU 缓存，并在运行期间保护活跃会话。进程冷启动或会话缓存缺失时，已有请求历史现在会恢复到服务端存储，检查点轮次也按恢复后的历史计算，避免续聊时丢失上下文或复用旧检查点线程。
+- 导学向导只发送最近 40 条有效历史消息，重试时不再先复制整段历史；Java 与 Graph 同步限制历史条数为 40、单条内容为 8,000 字符，并统一只接受 `user` / `assistant` 角色。
+- 本轮验证：后端 Maven 1,909/1,909，Graph 1,993 passed / 1 skipped，RAG 182/182，前端 2,723/2,723；前端 typecheck、改动文件 ESLint、Vite production build 与 Graph Ruff 通过。完整 ESLint 为 0 errors / 405 existing warnings；Graph 唯一跳过项缺少可选 ragas 适配依赖。
+- 性能审计批量写入与查询确定性修复已随提交 [`8e174ada`](https://github.com/cypre5s/Pythontopia/commit/8e174ada830c26dc72287b0f1323d540c8d82010) 推送至 `main`。后端全量测试 1,907/1,907 通过；掌握度并列时间排序的后续定向测试 3/3 通过；GitHub CI [#40207300002](https://github.com/cypre5s/Pythontopia/actions/runs/40207300002) 五个 job 全部成功。
+- Release [`web-v20261025.10`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.10) 已发布；归档 `pythontopia-web-v20261025.10.tar.gz` 为 1,535,059,376 字节，SHA-256 `785f7e86879c52d708360d1895598283d865e1d93106942f50e1a6f5d7c514f3`，下载 HEAD 返回 200 且 Content-Length 匹配。由于 tag push 延迟重复触发，第二个相同提交的 release run [#40208756259](https://github.com/cypre5s/Pythontopia/actions/runs/40208756259) 在上传时因同 tag release 已存在而失败；首个 run [#40208342200](https://github.com/cypre5s/Pythontopia/actions/runs/40208342200) 已成功完成发布，资产不受影响。
+- 会话历史边界修复随提交 [`1fc0704d`](https://github.com/cypre5s/Pythontopia/commit/1fc0704db3fa8efc94930bf4322aeb60d82ff4ff) 推送；GitHub CI [#40279943079](https://github.com/cypre5s/Pythontopia/actions/runs/40279943079) 五个 job 全部成功。最终 Release [`web-v20261026.1`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261026.1) 仅上传一个归档，大小 1,535,055,672 字节，SHA-256 `dc2d09d86e40a0e84ffa304aab0bba65aaaa18cbd9a9788eb62220f332f45248`；下载 HEAD 返回 200 且 Content-Length 匹配。
+- 导学总管同一用户/会话的并发轮次现串行执行，避免跨标签页同时读取同一历史并复用轮次；等待中的请求取消会释放缓存 pin。Orchestrator、资源生成和工具流在断连时会等待后台任务退出，事件队列上限为 32，避免慢客户端积压。
+- 导学 token 增量、完成和失败状态改为原地更新对应消息，避免每次增量复制整个聊天记录数组。
+- 本轮验证：Graph 全量 1,997 passed / 1 skipped，前端全量 2,724 passed；前端 typecheck、改动文件 ESLint、Vite production build 和改动 Python 文件 Ruff check 通过。未做生产并发压测；1 项 Graph 可选 ragas 测试因缺少 `langchain_community.chat_models.vertexai` 跳过。
+
+## 2026-10-25
+
+- 掌握度最新事件来源在 `created_at` 相同的并列记录中增加 `id DESC`，避免按数据库偶然扫描顺序返回旧来源。回归先 RED 后 GREEN；PostgreSQL 与服务定向测试 3/3 通过。全量 Maven 在此一行 SQL 排序修改之前通过，未做并发写排序测试。
+- 学习路径生成节点从逐节点 `INSERT ... RETURNING id` 改为单条多行 INSERT，返回 ID 按唯一日序键关联，确保 Quest 指向正确路径节点。服务/评估、Stage08/Stage13 PostgreSQL 流程合计 24/24，后端全量 1,907/1,907 通过（0 failures/errors/skips）；未做生产并发基准，Quest 插入仍逐条，改动尚未提交/推送。
+- 班级任务发布和新成员补发从逐个副本执行 INSERT 改为每批最多 1,000 条多行 SQL；最大 999 人班级的分发写语句从 999 条降为 1 条。保留 `ON CONFLICT DO NOTHING` 幂等与新建/跳过计数；TDD 后服务、真实 PostgreSQL 闭环及 1,001 条跨批集成合计 13/13 通过。后端全量 `mvn -B test` 1,907/1,907 通过，0 failures/errors/skips，约 6:45；未做生产吞吐或并发基准，改动未提交/推送。
+- NPC 记忆去重在检查最近 30 条记忆时原先逐条读取向量，现改为一次 `IN` 批量读取，并保留最近优先的匹配顺序。TDD 回归先因缺少批量 API 编译失败；NPC 服务与真实 PostgreSQL/pgvector 集成测试共 7/7 通过，覆盖首次近重复命中、缺失向量和空输入。本轮本地后端全量回归 1,904/1,904，0 failures/errors/skips，约 6:42 正常退出；未做生产吞吐基准，尚未提交/推送。
+- 性能审计续查发现 `POST /api/learning/events/batch` 最多接收 100 条事件，却逐条执行带 `RETURNING id` 的插入且不使用返回 ID。现改为 JDBC batch；验证、容量预算和事务边界保留。RED/GREEN 后控制器测试 8/8、PostgreSQL 成功写入及故障回滚 2/2；与名单导入优化的定向回归合计 19/19 通过。没有做高并发负载基准，尚未提交/推送。
+- 性能审计续查发现管理员 XLSX 学生导入最多 1,000 行时，原逻辑逐行查用户名，并为每个新账号插入后再按 ID 回读。现改为一次批量查重和 JDBC 批量插入，保留已存在账号跳过与并发唯一键冲突回滚。RED/GREEN 后，服务测试 2/2、PostgreSQL 导入集成 5/5、用户仓储测试 2/2 通过；尚未提交/推送。没有做 1,000 行端到端耗时基准，BCrypt 密码哈希仍逐个计算。
+- NPC 每日寒暄预热默认改为关闭：最多 200 名学生 × 7 个 NPC 会触发至多 1,400 次 Graph 请求；有记忆的请求会预留 AI 日额度，而全站额度为 300 次，后台预热可能耗尽当天交互额度。显式设置 `pythontopia.npc.greeting.prewarm.enabled=true` 仍可启用；未命中缓存的寒暄继续按需生成。回归先 RED 后 GREEN，定向测试 7/7、后端全量测试 1,896/1,896 通过；未调用模型。
+- 改动提交 `0eeab5b3` 已推送；GitHub CI 五个 job 全部通过。Release [`web-v20261025.9`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.9) 上传 `pythontopia-web-v20261025.9.tar.gz`，1,535,061,980 字节，SHA-256 `42fe70b333aedb2d987ebe121960d03ebe4f3c65a4c705d0016123da9ad39fbb`；下载 HEAD 返回 200，长度匹配。
+- 新增正式判题结果弹窗，展示 verdict、通过用例、运行时间/内存和安全失败原因；AC 后按同题同语言的提交记录展示 Beats 百分位，每项至少 10 条有效 AC 提交，同一用户的多次提交分别计数。
+- 正式提交会驱动 AI 导学全流程：AC 进入复盘并生成 AI 迁移题，服务端在隔离判题器自测通过后创建仅本人可访问的正式题；WA、RE、TLE、CE、MLE 进入错因诊断，判题系统错误不会记作学生失败。参考解和隐藏用例不会进入前端卡片、SSE 或回放。
+- 修复本地正式判题统一返回 `SYSTEM_ERROR`：普通 `./dev.sh` 默认未启动 Piston/Isolate，后端虽存活但判题地址未配置。现在默认启动并检查 Piston Python 3.12.0，`--no-sandbox` 可显式跳过；真实训练场提交圆面积题返回 AC 3/3。
+- 增强本地 Piston 实际运行时间与峰值内存计量；修正 AI 迁移题提示中的安全语法和参考输出自测约束，并让转题结果落库失败以脱敏 SSE 错误正常结束。
+- AI 迁移变式题难度提高一档（basic→medium→hard），标签与题目记录同步；hard 源题维持 hard 标签并要求增加推理或处理步骤。
+- 性能审计：判题等待移出数据库事务（含 Bug 矿洞重试），Tutor 过期 AC 结果不再触发迁移；SSE 流改为原地追加，Graph 会话缓存设上限并复用 HTTP 客户端，RAG 数据库同步移出事件循环。后端 1,874 项、前端 2,721 项、Graph 1,988 项、RAG 181 项测试通过。
+- 继续缩短事务占用：BugMine 的沙箱/DebugAgent 调用、CurriculumMapper 的 Graph 调用和章测判分均在事务外等待，结果用短事务提交。章测新增 V236 数据库认领，防止事务外判分引入重复判分；判分异常释放认领，过期认领可回收。后端全量 1,890 项、定向组合 192 项通过；未做负载基准。
+- 性能审计继续修复证据图 O(E²) 扫描和重复建图：按 evidence 建立 KC 索引；记忆快照复用已有图，AI 运行摘要不再重复加载；持久化快照插入后不重算。性能回归先 RED 后 GREEN，相关 PostgreSQL/服务定向组合 17 项及后端全量 1,893 项通过；GitHub CI 五个 job 全通过；6 个改动 Java 文件定向 Spotless 通过，全仓格式检查仍有大量既有差异。已推送 `eb938f7c` 并发布 `web-v20261025.6`；未做负载基准。
+- RAG 内存向量库在 upsert 时归一化索引向量，避免每次检索重复计算全部向量范数；KC/章节过滤集合也只构造一次。归一化次数由每次查询 N+1 次降为 1 次；回归先 RED 后 GREEN，RAG 全量 182 项与 Ruff lint 通过。改动文件 Ruff/format 检查通过；全目录 format 检查仍列出 22 个未改动文件。3,000×512 合成向量本地微测从 12.88 ms 降至 6.07 ms（2.12×），命中与分数一致；不代表线上延迟或并发吞吐。
+- WorkshopChat 的 orchestrator SSE `runtime_run` 投影改为游标式增量扫描，仅查找新追加事件，避免每个 token/chunk 都重扫累计历史。回归先 RED 后 GREEN；前端 2,722 项、typecheck、改动文件 ESLint 和 Vite build 通过；GitHub CI 五个 job 全通过。全量 lint 0 errors / 405 warnings；已推送 `ffa7a249` 并发布 `web-v20261025.7`。附件 HEAD 200、长度核对通过；尚未测真实长流渲染延迟。
+- Maven 测试收尾修复：调度改由默认开启的条件配置注册，测试 classpath 的 `local`/`test` profile 关闭自动触发，保留业务方法直测。之前 Testcontainers 结束后缓存的 Spring 上下文仍运行周期任务，导致 Hikari 重试和 Surefire 30 秒强制收尾；RED/GREEN 回归后，后端全量 1,895 项通过并在 6 分 41 秒正常退出，无调度调用栈或强制收尾转储。触及 Java 文件定向 Spotless 通过；容器关闭后的少量 Hikari 连接校验警告仍存在，不影响测试结果。
+- 调度收尾修复已推送 `95f1eaec`，GitHub CI [#40195659398](https://github.com/cypre5s/Pythontopia/actions/runs/40195659398) 5/5 通过；release [`web-v20261025.8`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.8) 上传成功。归档 `pythontopia-web-v20261025.8.tar.gz` 为 1,535,011,460 字节，SHA-256 `2164deea7a0e74977b899bde5d6e1461d8ef96b327d9d5c675092eb5d7629638`，下载 HEAD 200 且长度匹配。百分位查询本地计划扫描 198 行、0.073 ms；未为当前小数据量添加索引。
+- 调度与周报候选查询优化：Spring 调度池从默认 1 个线程设为 4 个，避免同步等待 Graph 的每周评估占住唯一调度线程；活跃学生与近期评估筛选从 `1 + N` 次数据库查询合并为一条 `NOT EXISTS` 查询，7 天活动窗口和 6 天去重窗口不变。测试先 RED 后 GREEN；调度配置与服务测试、PostgreSQL 筛选集成测试通过，后端全量 1,899/1,899、0 failures/errors/skips，目标 Java Spotless 与 `git diff --check` 通过。没有真实模型请求、线上配置核验或调度并发压测；代码尚未推送。
+
+## 2026-10-24
+
+- 修复管理员 AI 连接测试 502：Graph 请求改为 `/internal/admin/llm-config/test`；修正题目预览弹窗背景变量，真实 Chromium 确认背景不透明、遮罩正常，console/pageerror/失败请求为 0。
+- 新增管理员 XLSX 学生名单导入（学号为用户名、逆序学号为初始密码），默认关闭注册页和匿名注册 API，保留登录；后端与前端回归、真实浏览器导入登录闭环通过。
+- 优化学生名单导入控件并增加 XLSX 格式悬浮提示；按完整表头匹配学号/姓名列，忽略其他列，多个候选时明确拒绝以避免误导入。
+- 在 ECS AstrBot 部署固定版本的 zssm_explain，支持引用 QQ 合并转发、视频关键帧、PDF 文本和 DOCX 内容解析；使用 DeepSeek Flash，关闭通用 URL 抓取和 B站自动拦截，并为短链跳转加域名校验。
+- 更新 DeepSeek Flash provider 密钥并重启 AstrBot；重启后文本和图像请求均返回 HTTP 200 与非空模型输出，重启后的 11 项 OneBot/文件/视频模拟用例通过。真实 QQ 样例端到端验收待补。
+- 在 `astrbot_zssm_explain` 中加入仅限 QQ 群 `962432943` 的合并转发、视频及支持文件自动触发；无需 `/zssm`、@ 或引用，复用现有解析、回复与媒体大小限制。部署前备份了旧插件；AstrBot 重启且加载 v4.7.3，线上目录运行 20 项测试全部通过。真实 QQ 消息验收待补。
+- 脱敏转发阅读器及媒体插件日志中的消息正文和临时文件 URL。确认 QQ `1822250281` 已在 AstrBot 管理员列表中，无需重复修改。
+
+## 2026-10-23
+
+- 为 AstrBot QQ 同学群新增随机抽签、平衡分组和限时斗图投票插件，超时自动公布结果；斗图图片不被机器人保存，参与状态仅存内存。Forward Reader 改为引用转发且 @ 机器人时触发，并移除日志中的正文片段。
+
 ## 2026-10-21
 
 - 修复小镇玩家无法移动：`player_state` 新用户默认出生点改为地图 spawn `(25,20)`；迁移已存的旧默认 `(12,10)`；世界场景检测到其他碰撞坐标时也会恢复至 spawn 并回写。新增真实浏览器回归覆盖旧档恢复、WASD 与点击移动。

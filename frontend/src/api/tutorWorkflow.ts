@@ -115,6 +115,7 @@ export interface FailedTestCaseDto {
 
 export interface ErrorDiagnosisCardDto {
   card_id?: string;
+  source_submission_id?: number;
   root_cause: string;
   what_program_is_doing: string;
   expected_behavior: string;
@@ -132,6 +133,7 @@ export interface ErrorDiagnosisCardDto {
 
 export interface PostAcCardDto {
   card_id?: string;
+  source_submission_id?: number;
   success_summary: string;
   key_action: string;
   code_quality_notes: string[];
@@ -149,6 +151,7 @@ export interface TransferSampleDto {
 
 export interface TransferProblemCardDto {
   card_id?: string;
+  source_submission_id?: number;
   problem_id?: number;
   kc_code?: string;
   title: string;
@@ -349,6 +352,9 @@ export interface WorkflowSessionSnapshotDto {
   phase: WorkflowPhase;
   seq: number;
   cards: WorkflowTimelineCardDto[];
+  latestSubmissionId?: number | null;
+  latestSubmissionProblemId?: number | null;
+  latestVerdict?: string | null;
   olderCardsCursor?: WorkflowCardCursorDto | null;
   episodePlan?: TutorEpisodePlanDto | null;
 }

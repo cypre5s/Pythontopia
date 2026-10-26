@@ -163,7 +163,7 @@ async def tutor_workflow_run_stream(
         async def run_graph() -> dict[str, Any]:
             try:
                 if body.restore_phase:
-                    # Java 投影回放：进程内尚无会话时按持久化快照恢复阶段（已存在则忽略）。
+                    # 每个 Java 请求快照权威；上次投影失败时需回滚进程内的乐观状态。
                     await session_store.restore_phase(
                         trusted_user_id,
                         body.session_id,
@@ -171,6 +171,7 @@ async def tutor_workflow_run_stream(
                         body.restore_seq,
                         cards=body.restore_cards,
                         chat_history=body.restore_chat_history,
+                        force=True,
                     )
                 session = await session_store.get_state(trusted_user_id, body.session_id)
                 graph = TutorWorkflowGraph(provider, evidence_fetcher, emit=emit)

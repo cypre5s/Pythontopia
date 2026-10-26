@@ -19,7 +19,7 @@ import java.util.List;
 public record OrchestratorTurnRequest(
     @NotBlank @Size(max = 4000) String message,
     @Size(max = 64) String sessionId,
-    @Valid List<OrchestratorTurnMessage> history,
+    @Valid @Size(max = 40) List<OrchestratorTurnMessage> history,
     Integer currentChapter,
     List<String> recentKcCodes,
     List<String> recentFailures,

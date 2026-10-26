@@ -919,7 +919,21 @@ class TutorWorkflowGraph:
         for attempt in range(2):
             started = time.monotonic()
             await self._emit_step_start("coach.guardrail")
-            result = self._guardrail.check(card_key, card)
+            visible_card = (
+                {
+                    key: value
+                    for key, value in card.items()
+                    if key
+                    not in {
+                        "reference_solution_language",
+                        "reference_solution_code",
+                        "test_cases",
+                    }
+                }
+                if card_key == "transfer_problem"
+                else card
+            )
+            result = self._guardrail.check(card_key, visible_card)
             if result.passed:
                 await self._emit_step_finish("coach.guardrail", "ok", started)
                 return card

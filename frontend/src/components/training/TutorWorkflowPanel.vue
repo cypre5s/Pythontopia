@@ -43,6 +43,7 @@ import {
   type WorkflowEvent,
   type WorkflowRunResultDto,
   type WorkflowTimelineCardDto,
+  type WorkflowSessionSnapshotDto,
 } from '@/api/tutorWorkflow';
 
 const props = defineProps<{
@@ -86,6 +87,12 @@ interface CardEntry {
   localOnly?: boolean;
 }
 
+interface LatestSubmissionFeedback {
+  id: number;
+  problemId: number;
+  verdict: string;
+}
+
 interface RetryableWorkflowRequest {
   event: WorkflowEvent;
   eventData?: Record<string, unknown>;
@@ -104,9 +111,11 @@ const cards = ref<CardEntry[]>([]);
 const olderCardsCursor = ref<WorkflowCardCursorDto | null>(null);
 const olderCardsLoading = ref(false);
 const availableActions = ref<WorkflowActionDto[]>([]);
+const eventProcessing = ref(false);
 const phase = ref<string>('READING');
 const sessionKey = ref('');
 const episodePlan = ref<TutorEpisodePlanDto | null>(null);
+const latestSubmission = ref<LatestSubmissionFeedback | null>(null);
 const planResponse = ref('');
 const planRedirect = ref('');
 const chatInput = ref('');
@@ -139,13 +148,15 @@ const retryableRequest = ref<RetryableWorkflowRequest | null>(null);
 const recoveredRequest = ref(false);
 const localTraceRunning = ref(false);
 let localTraceSeq = 0;
+let autoFeedbackRunning = false;
+const attemptedAutoFeedback = new Set<string>();
 
 const sse = useSseStream<WorkflowRunResultDto>('/api/tutor/workflow/runs');
 let explicitStopSequence = 0;
 const streamRunning = computed(
   () => sse.status.value === 'streaming' || sse.status.value === 'connecting',
 );
-const running = computed(() => localTraceRunning.value || streamRunning.value);
+const running = computed(() => eventProcessing.value || localTraceRunning.value || streamRunning.value);
 interface CoachProgressItem {
   key: string;
   label: string;
@@ -282,11 +293,7 @@ async function load(): Promise<void> {
   try {
     const snap = await getActiveWorkflowSession(props.problemId);
     if (!alive) return;
-    sessionKey.value = snap.sessionKey;
-    cards.value = snap.cards.map(toCardEntry);
-    olderCardsCursor.value = snap.olderCardsCursor ?? null;
-    phase.value = snap.phase;
-    episodePlan.value = snap.episodePlan ?? null;
+    applySessionSnapshot(snap);
     retryableRequest.value = restorePendingWorkflowRequest(sessionKey.value);
     recoveredRequest.value = retryableRequest.value !== null;
   } catch {
@@ -297,8 +304,27 @@ async function load(): Promise<void> {
   if (!alive) return;
   availableActions.value = INITIAL_ACTIONS;
   loaded.value = true;
+  void processLatestSubmission();
   void consumeInitialRequest();
   scrollBottom();
+}
+
+function applySessionSnapshot(snapshot: WorkflowSessionSnapshotDto): void {
+  sessionKey.value = snapshot.sessionKey;
+  cards.value = snapshot.cards.map(toCardEntry);
+  olderCardsCursor.value = snapshot.olderCardsCursor ?? null;
+  phase.value = snapshot.phase;
+  episodePlan.value = snapshot.episodePlan ?? null;
+  latestSubmission.value =
+    snapshot.latestSubmissionId != null
+    && snapshot.latestSubmissionProblemId != null
+    && snapshot.latestVerdict != null
+      ? {
+        id: snapshot.latestSubmissionId,
+        problemId: snapshot.latestSubmissionProblemId,
+        verdict: snapshot.latestVerdict,
+      }
+      : null;
 }
 
 async function loadOlderCards(): Promise<void> {
@@ -406,7 +432,8 @@ function eventDataFor(event: WorkflowEvent): Record<string, unknown> | undefined
     return code ? { code } : undefined;
   }
   if (event === 'ERROR_FEEDBACK' || event === 'AC_REVIEW') {
-    return props.submissionId ? { submission_id: props.submissionId } : undefined;
+    const submissionId = props.submissionId ?? latestSubmission.value?.id;
+    return submissionId ? { submission_id: submissionId } : undefined;
   }
   const plan = episodePlan.value;
   if (event === 'PLAN_START' && plan) {
@@ -585,50 +612,119 @@ async function runEvent(
   recoveredRequest.value = false;
   savePendingWorkflowRequest(retryRequest);
   const stopSequence = explicitStopSequence;
-  await sse.start(body);
-  if (stopSequence !== explicitStopSequence) return;
-  // 组件已销毁（含 onBeforeUnmount 的 abort：abort 会把 status 置成 done 但 result 为空）→
-  // 不再落卡片、更不弹「导学助手暂时没响应」到别的页面。
-  if (!alive) return;
-  if (sse.status.value === 'done' && sse.result.value) {
-    discardPendingWorkflowRequest();
-    const r = sse.result.value;
-    sessionKey.value = r.session_id || sessionKey.value;
-    phase.value = r.phase;
-    episodePlan.value = r.episode_plan ?? null;
-    if (event === 'TRANSFER') {
-      try {
-        await refreshWorkflowSession();
-      } catch {
-        toast.show('迁移题已生成，但正式题目加载失败，请刷新后重试', 'error');
-        return;
+  eventProcessing.value = true;
+  try {
+    await sse.start(body);
+    if (stopSequence !== explicitStopSequence) return;
+    // 组件已销毁（含 onBeforeUnmount 的 abort：abort 会把 status 置成 done 但 result 为空）→
+    // 不再落卡片、更不弹「导学助手暂时没响应」到别的页面。
+    if (!alive) return;
+    if (sse.status.value === 'done' && sse.result.value) {
+      discardPendingWorkflowRequest();
+      const r = sse.result.value;
+      sessionKey.value = r.session_id || sessionKey.value;
+      phase.value = r.phase;
+      episodePlan.value = r.episode_plan ?? null;
+      if (event === 'TRANSFER' || event === 'AC_REVIEW' || event === 'ERROR_FEEDBACK') {
+        try {
+          await refreshWorkflowSession();
+        } catch {
+          toast.show('导学结果已生成，但会话刷新失败，请刷新后重试', 'error');
+          return;
+        }
+      } else if (r.card && r.card_key) {
+        const entry: CardEntry = { key: r.card_key, payload: r.card, seq: r.seq };
+        const msg = eventData?.message;
+        if (typeof msg === 'string' && msg) entry.userMessage = msg;
+        if (!cards.value.some((card) => !card.localOnly && card.seq === entry.seq)) {
+          cards.value = [...cards.value, entry];
+        }
       }
-    } else if (r.card && r.card_key) {
-      const entry: CardEntry = { key: r.card_key, payload: r.card, seq: r.seq };
-      const msg = eventData?.message;
-      if (typeof msg === 'string' && msg) entry.userMessage = msg;
-      if (!cards.value.some((card) => !card.localOnly && card.seq === entry.seq)) {
-        cards.value = [...cards.value, entry];
+      // 严格以后端 available_actions 为准（已按 Phase 门控 + 推荐排序），不再前端补齐辅助动作。
+      if (Array.isArray(r.available_actions) && r.available_actions.length > 0) {
+        availableActions.value = r.available_actions;
       }
+      scrollBottom();
+      void processLatestSubmission();
+    } else {
+      toast.show(sse.error.value?.message ?? '导学助手暂时没响应，再试一次', 'error');
     }
-    // 严格以后端 available_actions 为准（已按 Phase 门控 + 推荐排序），不再前端补齐辅助动作。
-    if (Array.isArray(r.available_actions) && r.available_actions.length > 0) {
-      availableActions.value = r.available_actions;
-    }
-    scrollBottom();
-  } else {
-    toast.show(sse.error.value?.message ?? '导学助手暂时没响应，再试一次', 'error');
+  } finally {
+    eventProcessing.value = false;
   }
 }
 
 async function refreshWorkflowSession(): Promise<void> {
   const snapshot = await getActiveWorkflowSession(props.problemId);
   if (!alive) return;
-  sessionKey.value = snapshot.sessionKey;
-  cards.value = snapshot.cards.map(toCardEntry);
-  olderCardsCursor.value = snapshot.olderCardsCursor ?? null;
-  phase.value = snapshot.phase;
-  episodePlan.value = snapshot.episodePlan ?? null;
+  applySessionSnapshot(snapshot);
+}
+
+function hasSourceCard(cardKey: WorkflowCardKey, submissionId: number): boolean {
+  return cards.value.some(
+    (card) =>
+      card.key === cardKey
+      && 'source_submission_id' in card.payload
+      && card.payload.source_submission_id === submissionId,
+  );
+}
+
+function knowsSubmissionProblem(problemId: number): boolean {
+  return problemId === props.problemId
+    || cards.value.some(
+      (card) =>
+        card.key === 'transfer_problem'
+        && 'problem_id' in card.payload
+        && card.payload.problem_id === problemId,
+    );
+}
+
+async function processLatestSubmission(): Promise<void> {
+  const latest = latestSubmission.value;
+  if (!alive || !loaded.value || running.value || autoFeedbackRunning || !latest) return;
+  if (props.submissionId != null && props.submissionId > latest.id) return;
+  if (!knowsSubmissionProblem(latest.problemId)) return;
+  if (latest.verdict === 'SYSTEM_ERROR') return;
+
+  autoFeedbackRunning = true;
+  try {
+    if (latest.verdict === 'AC') {
+      if (!hasSourceCard('post_ac', latest.id)) {
+        const key = `${latest.id}:AC_REVIEW`;
+        if (attemptedAutoFeedback.has(key)) return;
+        attemptedAutoFeedback.add(key);
+        await runEvent('AC_REVIEW', { submission_id: latest.id });
+      }
+      if (
+        alive
+        && latestSubmission.value?.id === latest.id
+        && latestSubmission.value.verdict === 'AC'
+        && latest.problemId === props.problemId
+        && hasSourceCard('post_ac', latest.id)
+        && !hasSourceCard('transfer_problem', latest.id)
+      ) {
+        const key = `${latest.id}:TRANSFER`;
+        if (!attemptedAutoFeedback.has(key)) {
+          attemptedAutoFeedback.add(key);
+          await runEvent('TRANSFER');
+        }
+      }
+      return;
+    }
+
+    if (['WA', 'RE', 'TLE', 'CE', 'MLE'].includes(latest.verdict)
+      && !hasSourceCard('error_diagnosis', latest.id)) {
+      const key = `${latest.id}:ERROR_FEEDBACK`;
+      if (attemptedAutoFeedback.has(key)) return;
+      attemptedAutoFeedback.add(key);
+      await runEvent('ERROR_FEEDBACK', { submission_id: latest.id });
+    }
+  } finally {
+    autoFeedbackRunning = false;
+    if (alive && latestSubmission.value?.id !== latest.id) {
+      void processLatestSubmission();
+    }
+  }
 }
 
 async function submitTransfer(problem: TransferProblemCardDto): Promise<void> {
@@ -693,10 +789,17 @@ watch(() => props.submissionId, async () => {
   if (!loaded.value) return;
   try {
     const snapshot = await getActiveWorkflowSession(props.problemId);
-    if (alive) episodePlan.value = snapshot.episodePlan ?? null;
+    if (alive) {
+      applySessionSnapshot(snapshot);
+      void processLatestSubmission();
+    }
   } catch {
     // Keep the visible plan until the next successful session refresh.
   }
+});
+
+watch(running, (isRunning) => {
+  if (!isRunning) void processLatestSubmission();
 });
 
 function onAction(action: WorkflowActionDto): void {
@@ -1105,7 +1208,7 @@ function cardId(entry: CardEntry): string {
             v-if="asTransfer(entry.payload).problem_id"
             class="tw-transfer__judge"
           >
-            <p>题目来自同知识点审核题库；提交结果由正式判题并回流学习画像。</p>
+            <p>题目由 AI 生成并经服务端自测，提交后由正式判题并回流学习画像。</p>
             <button
               type="button"
               data-testid="submit-transfer"

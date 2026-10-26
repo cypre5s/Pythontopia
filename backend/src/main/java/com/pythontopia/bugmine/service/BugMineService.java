@@ -47,7 +47,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Bug 矿洞调试会话服务，维护 OPEN → RESOLVED/ABANDONED 状态机：
@@ -85,6 +88,7 @@ public class BugMineService {
   private final BugMineProfileAdvisor profileAdvisor;
   private final ReviewStateService reviewStateService;
   private final StudentWriteThrottle studentWriteThrottle;
+  private final TransactionTemplate transaction;
   private final int maxRetries;
 
   public BugMineService(
@@ -100,6 +104,7 @@ public class BugMineService {
       BugMineProfileAdvisor profileAdvisor,
       ReviewStateService reviewStateService,
       StudentWriteThrottle studentWriteThrottle,
+      PlatformTransactionManager transactionManager,
       @Value("${pythontopia.bugMine.maxRetriesPerSession:3}") int maxRetries) {
     this.repository = repository;
     this.submissionRepository = submissionRepository;
@@ -113,10 +118,11 @@ public class BugMineService {
     this.profileAdvisor = profileAdvisor;
     this.reviewStateService = reviewStateService;
     this.studentWriteThrottle = studentWriteThrottle;
+    this.transaction = new TransactionTemplate(transactionManager);
     this.maxRetries = maxRetries;
   }
 
-  @Transactional
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public BugMineSessionDto open(Long userId, Long submissionId) {
     return open(userId, submissionId, false);
   }
@@ -160,23 +166,16 @@ public class BugMineService {
             .map(PublicProblemRepository.VariantProblem::id)
             .orElse(null);
 
-    Long sessionId =
-        repository.insertSession(
-            userId,
-            submissionId,
-            submission.problemId(),
-            submission.questId(),
-            variantProblemId,
-            profileDepthTarget);
-
     CounterExampleSelector.CounterExample counterExample =
         counterExampleSelector
-            .findFirstFailing(submission.problemId(), submission.code())
+            .findFirstFailing(submission.problemId(), userId, submission.code())
             .orElseGet(
                 () -> new CounterExampleSelector.CounterExample("", "", "", false));
 
     PythonTraceCollector.TraceResult traceResult =
-        traceCollector.collect(submission.code(), counterExample.stdin());
+        counterExample.redacted()
+            ? new PythonTraceCollector.TraceResult(emptyTraceSummary(), 0, false)
+            : traceCollector.collect(submission.code(), counterExample.stdin());
 
     Verdict verdict =
         submissionRepository
@@ -195,7 +194,9 @@ public class BugMineService {
                 counterExample.stdin(),
                 counterExample.expected(),
                 counterExample.actual(),
-                buildDiffSummary(counterExample.expected(), counterExample.actual()),
+                counterExample.redacted()
+                    ? "隐藏测试数据已脱敏，请按题面检查边界条件。"
+                    : buildDiffSummary(counterExample.expected(), counterExample.actual()),
                 counterExample.redacted()),
             new DebugAgentRequest.VariableTracePayload(
                 stepsFromTrace(traceResult), traceResult.truncated()),
@@ -206,16 +207,35 @@ public class BugMineService {
           HttpStatus.BAD_GATEWAY, "DEBUG_GRAPH_EMPTY", "DebugAgent 返回空响应");
     }
 
-    persistCards(sessionId, response, traceResult);
-    return enrichSession(
-        repository
-            .findSession(userId, sessionId)
-            .orElseThrow(
-                () ->
-                    new BusinessException(
-                        HttpStatus.INTERNAL_SERVER_ERROR,
-                        "BUG_MINE_PERSIST_FAILED",
-                        "Bug 矿洞会话写入后未能读回")));
+    BugMineSessionDto persisted =
+        transaction.execute(
+            status -> {
+              Long sessionId =
+                  repository
+                      .findSessionIdBySubmission(userId, submissionId)
+                      .orElseGet(
+                          () -> {
+                            Long createdId =
+                                repository.insertSession(
+                                    userId,
+                                    submissionId,
+                                    submission.problemId(),
+                                    submission.questId(),
+                                    variantProblemId,
+                                    profileDepthTarget);
+                            persistCards(createdId, response, traceResult);
+                            return createdId;
+                          });
+              return repository
+                  .findSession(userId, sessionId)
+                  .orElseThrow(
+                      () ->
+                          new BusinessException(
+                              HttpStatus.INTERNAL_SERVER_ERROR,
+                              "BUG_MINE_PERSIST_FAILED",
+                              "Bug 矿洞会话写入后未能读回"));
+            });
+    return enrichSession(persisted);
   }
 
   @Transactional(readOnly = true)
@@ -313,7 +333,7 @@ public class BugMineService {
 
   private record ScoredEcho(BugMineRepository.EchoCandidateRow row, ReviewSignal signal) {}
 
-  @Transactional
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public BugMineSessionDto openEcho(Long userId, String kcCode) {
     BugMineRepository.EchoCandidateRow candidate =
         repository.findEchoCandidates(userId).stream()
@@ -327,26 +347,51 @@ public class BugMineService {
                         "没有可入矿的遗忘回声 KC"));
     reserveOpenBudget(userId);
     Long submissionId =
-        submissionRepository.insertSubmission(
-            userId,
-            candidate.problemId(),
-            null,
-            SubmissionSource.BUG_MINE_ECHO,
-            ECHO_ENTRY_CODE);
-    submissionRepository.markStatus(submissionId, SubmissionStatus.FAILED, null, null);
-    ObjectNode trace = emptyTraceSummary();
-    trace.put("kcCode", candidate.kcCode());
-    trace.put("reason", "forgetting_echo");
-    submissionRepository.insertJudgeResult(
-        submissionId,
-        Verdict.WA,
-        0,
-        1,
-        "遗忘回声复习入口，需要重新确认该 KC。",
-        trace);
+        transaction.execute(
+            status -> {
+              Long createdId =
+                  submissionRepository.insertSubmission(
+                      userId,
+                      candidate.problemId(),
+                      null,
+                      SubmissionSource.BUG_MINE_ECHO,
+                      ECHO_ENTRY_CODE);
+              submissionRepository.markStatus(
+                  createdId, SubmissionStatus.FAILED, null, null);
+              ObjectNode trace = emptyTraceSummary();
+              trace.put("kcCode", candidate.kcCode());
+              trace.put("reason", "forgetting_echo");
+              submissionRepository.insertJudgeResult(
+                  createdId,
+                  Verdict.WA,
+                  0,
+                  1,
+                  "遗忘回声复习入口，需要重新确认该 KC。",
+                  trace);
+              return createdId;
+            });
 
-    BugMineSessionDto opened = open(userId, submissionId, true);
-    repository.updateProfileDepthTarget(opened.id(), Math.max(opened.profileDepthTarget(), 4));
+    BugMineSessionDto opened;
+    try {
+      opened = open(userId, submissionId, true);
+    } catch (RuntimeException exception) {
+      try {
+        transaction.execute(
+            status -> {
+              submissionRepository.deleteSyntheticEchoSubmission(userId, submissionId);
+              return null;
+            });
+      } catch (RuntimeException cleanupFailure) {
+        exception.addSuppressed(cleanupFailure);
+      }
+      throw exception;
+    }
+    transaction.execute(
+        status -> {
+          repository.updateProfileDepthTarget(
+              opened.id(), Math.max(opened.profileDepthTarget(), 4));
+          return null;
+        });
     return find(userId, opened.id());
   }
 
@@ -389,54 +434,75 @@ public class BugMineService {
                     HttpStatus.INTERNAL_SERVER_ERROR, "BUG_MINE_REVEAL_FAILED", "卡片解锁失败"));
   }
 
-  @Transactional
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public SubmissionDto retrySubmit(Long userId, Long sessionId, String code) {
-    BugMineSessionDto session = find(userId, sessionId);
-    if (session.status() != BugMineSessionStatus.OPEN) {
-      throw new BusinessException(
-          HttpStatus.CONFLICT, "BUG_MINE_SESSION_CLOSED", "Bug 矿洞会话已关闭");
+    BugMineSessionDto session =
+        transaction.execute(
+            status -> {
+              BugMineSessionDto current = find(userId, sessionId);
+              if (current.status() != BugMineSessionStatus.OPEN) {
+                throw new BusinessException(
+                    HttpStatus.CONFLICT, "BUG_MINE_SESSION_CLOSED", "Bug 矿洞会话已关闭");
+              }
+              int currentRetry = repository.retryCount(current.id());
+              if (currentRetry >= maxRetries) {
+                throw new BusinessException(
+                    HttpStatus.TOO_MANY_REQUESTS,
+                    "BUG_MINE_RETRY_EXCEEDED",
+                    "Bug 矿洞重试次数已达上限 " + maxRetries);
+              }
+              repository.incrementRetry(current.id());
+              return current;
+            });
+    SubmissionDto submission;
+    try {
+      submission =
+          submissionService.submit(
+              userId,
+              new SubmissionCreateRequest(
+                  session.problemId(),
+                  code,
+                  session.questId(),
+                  SubmissionSource.BUG_MINE_RETRY));
+    } catch (RuntimeException exception) {
+      transaction.executeWithoutResult(status -> repository.decrementRetry(session.id()));
+      throw exception;
     }
-    int currentRetry = repository.retryCount(session.id());
-    if (currentRetry >= maxRetries) {
-      throw new BusinessException(
-          HttpStatus.TOO_MANY_REQUESTS,
-          "BUG_MINE_RETRY_EXCEEDED",
-          "Bug 矿洞重试次数已达上限 " + maxRetries);
-    }
-    repository.incrementRetry(session.id());
-    SubmissionDto submission =
-        submissionService.submit(
-            userId,
-            new SubmissionCreateRequest(
-                session.problemId(),
-                code,
-                session.questId(),
-                SubmissionSource.BUG_MINE_RETRY));
-    if (submission.status() == SubmissionStatus.PASSED) {
-      resolveSession(userId, session.id(), session.problemId(), submission.id(), false);
-    } else {
-      repository.advanceDepthLayer(session.id());
-    }
+    transaction.executeWithoutResult(
+        status -> {
+          if (submission.status() == SubmissionStatus.PASSED) {
+            resolveSession(userId, session.id(), session.problemId(), submission.id(), false);
+          } else {
+            repository.advanceDepthLayer(session.id());
+          }
+        });
     return submission;
   }
 
-  @Transactional
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public SubmissionDto variantSubmit(Long userId, Long sessionId, String code) {
-    BugMineSessionDto session = find(userId, sessionId);
-    if (session.status() != BugMineSessionStatus.OPEN) {
-      throw new BusinessException(
-          HttpStatus.CONFLICT, "BUG_MINE_SESSION_CLOSED", "Bug 矿洞会话已关闭");
-    }
-    if (session.depthLayer() < 5) {
-      throw new BusinessException(
-          HttpStatus.CONFLICT,
-          "BUG_MINE_VARIANT_LOCKED",
-          "需下探到 L5 才能提交同 KC 变式掌握确认。");
-    }
-    if (session.variantProblem() == null) {
-      throw new BusinessException(
-          HttpStatus.CONFLICT, "BUG_MINE_VARIANT_MISSING", "当前会话没有可用的同 KC 变式题。");
-    }
+    BugMineSessionDto session =
+        transaction.execute(
+            status -> {
+              BugMineSessionDto current = find(userId, sessionId);
+              if (current.status() != BugMineSessionStatus.OPEN) {
+                throw new BusinessException(
+                    HttpStatus.CONFLICT, "BUG_MINE_SESSION_CLOSED", "Bug 矿洞会话已关闭");
+              }
+              if (current.depthLayer() < 5) {
+                throw new BusinessException(
+                    HttpStatus.CONFLICT,
+                    "BUG_MINE_VARIANT_LOCKED",
+                    "需下探到 L5 才能提交同 KC 变式掌握确认。");
+              }
+              if (current.variantProblem() == null) {
+                throw new BusinessException(
+                    HttpStatus.CONFLICT,
+                    "BUG_MINE_VARIANT_MISSING",
+                    "当前会话没有可用的同 KC 变式题。");
+              }
+              return current;
+            });
     SubmissionDto submission =
         submissionService.submit(
             userId,
@@ -445,11 +511,15 @@ public class BugMineService {
                 code,
                 session.questId(),
                 SubmissionSource.BUG_MINE_VARIANT));
-    repository.updateVariantSubmission(session.id(), submission.id());
-    if (submission.status() == SubmissionStatus.PASSED) {
-      repository.markMasteryConfirmed(session.id());
-      resolveSession(userId, session.id(), session.variantProblem().id(), submission.id(), true);
-    }
+    transaction.executeWithoutResult(
+        status -> {
+          repository.updateVariantSubmission(session.id(), submission.id());
+          if (submission.status() == SubmissionStatus.PASSED) {
+            repository.markMasteryConfirmed(session.id());
+            resolveSession(
+                userId, session.id(), session.variantProblem().id(), submission.id(), true);
+          }
+        });
     return submission;
   }
 
@@ -660,7 +730,9 @@ public class BugMineService {
             : profileAdvisor.guidanceLabel(depthTarget, context.patternMatched());
     // 题干上下文随会话一次性下发：客户端无需再请求 /api/problems/{id}/public。
     PublicProblemDto problem =
-        problemRepository.findPublic(COURSE_PACK_ID, session.problemId()).orElse(null);
+        problemRepository
+            .findAccessible(COURSE_PACK_ID, session.problemId(), session.userId())
+            .orElse(null);
     return new BugMineSessionDto(
         session.id(),
         session.userId(),

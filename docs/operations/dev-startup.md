@@ -1,6 +1,6 @@
 # 本地开发启动备忘
 
-> 避免 Agent/开发者重复踩坑。最后更新：2026-06-04。
+> 避免 Agent/开发者重复踩坑。最后更新：2026-10-25。
 
 ## 推荐：一条命令开发栈
 
@@ -15,6 +15,7 @@ cd /home/cypress/Pythontopia
 | 后端 | http://127.0.0.1:18080 | 本机 `mvn spring-boot:run` |
 | Graph | http://127.0.0.1:18091 | Docker `pythontopia-graph` |
 | RAG | http://127.0.0.1:18092 | Docker `pythontopia-rag` |
+| 判题机 | http://127.0.0.1:2000 | Docker Piston/Isolate，Python 3.12.0 |
 | Postgres | 127.0.0.1:15432 | Docker 数据卷 `pytopia_pg` |
 | Redis | 127.0.0.1:16379 | Docker |
 
@@ -22,7 +23,7 @@ cd /home/cypress/Pythontopia
 
 本地导师视频上下文读取仓库根目录 `data/course-pack-43/video_transcripts.json`。启动脚本显式设置该路径，避免已有的 `backend/data` 目录导致相对路径指向缺少字幕文件的旧目录；可通过 `PYT_COURSEPACK_VIDEO_TRANSCRIPTS` 覆盖。
 
-通过 Graph 生成代码题时需要 Piston 自测环境，使用 `./dev.sh --sandbox` 启动并同步本地 Piston URL 与 Python 版本到 Graph/Java；普通 `./dev.sh` 不配置该沙箱。Graph 出题在未配置时会直接返回 `sandbox_unavailable`，不会为同一基础设施故障重复调用模型。
+普通 `./dev.sh` 会启动隔离 Piston/Isolate、安装或确认 Python 3.12.0，并把本地地址传给 Java 与 Graph；后端 `/readyz` 会核对判题运行时，缺失时启动失败并打印诊断。需要跳过真实判题环境时可用 `./dev.sh --no-sandbox`，此模式不支持服务端真实判题。`./dev.sh --no-deps` 要求 Postgres、Graph、RAG 和 Piston 已在本机运行，且 Piston 已安装 Python 3.12.0。
 
 开发脚本可能为当前运行生成未写入磁盘的临时 `PYT_RAG_ADMIN_TOKEN`，并同步给 Java、Graph 和 RAG。开发栈运行期间不要单独用 `docker compose` 重建 Graph/RAG，否则容器会重新读取 `.env`，造成服务间令牌失配；需要重启时使用 `./dev.sh` 统一重启。失配会让工坊意图路由返回 401 并进入不可用提示。
 

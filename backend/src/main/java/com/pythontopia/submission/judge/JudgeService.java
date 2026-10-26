@@ -2,17 +2,15 @@ package com.pythontopia.submission.judge;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import com.pythontopia.submission.judge.JudgeCaseEvaluator.CaseEvaluation;
-import com.pythontopia.submission.dto.SubmissionStatus;
 import com.pythontopia.submission.dto.Verdict;
-import com.pythontopia.submission.repository.PracticeSubmissionRepository;
+import com.pythontopia.submission.judge.JudgeCaseEvaluator.CaseEvaluation;
 import com.pythontopia.submission.repository.PublicProblemRepository;
+import com.pythontopia.submission.service.SubmissionTransactionService;
 import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class JudgeService {
@@ -21,7 +19,7 @@ public class JudgeService {
 
   static final int MAX_CASES = 10;
 
-  private final PracticeSubmissionRepository submissionRepository;
+  private final SubmissionTransactionService submissionTransactions;
   private final PublicProblemRepository problemRepository;
   private final PythonSandbox sandbox;
   private final StaticCodeChecker staticChecker;
@@ -30,14 +28,14 @@ public class JudgeService {
   private final JudgeCaseEvaluator caseEvaluator;
 
   public JudgeService(
-      PracticeSubmissionRepository submissionRepository,
+      SubmissionTransactionService submissionTransactions,
       PublicProblemRepository problemRepository,
       PythonSandbox sandbox,
       StaticCodeChecker staticChecker,
       ObjectMapper objectMapper,
       JudgeWorkerPool judgeWorkerPool,
       JudgeCaseEvaluator caseEvaluator) {
-    this.submissionRepository = submissionRepository;
+    this.submissionTransactions = submissionTransactions;
     this.problemRepository = problemRepository;
     this.sandbox = sandbox;
     this.staticChecker = staticChecker;
@@ -47,13 +45,11 @@ public class JudgeService {
   }
 
   /**
-   * AST 预检和判题沙箱调用均在判题工作线程池上执行（避免占用 Tomcat 请求线程），
-   * 但 DB 事务仍在调用线程上管理（由上层 {@code @Transactional} 控制）。
+   * AST 预检和判题沙箱调用均在判题工作线程池上执行；数据库写入由短事务单独提交。
    * 内部用 {@link JudgeWorkerPool#submitAndWait} 限制并发子进程数。
    */
-  @Transactional
-  public JudgeOutcome judge(Long submissionId, Long problemId, String code) {
-    submissionRepository.markStatus(submissionId, SubmissionStatus.RUNNING, null, null);
+  public JudgeOutcome judge(Long submissionId, Long problemId, String code, Long userId) {
+    submissionTransactions.markRunning(submissionId);
     StaticCodeChecker.CheckResult check =
         judgeWorkerPool.submitAndWait(() -> staticChecker.check(code));
     if (!check.passed()) {
@@ -70,25 +66,29 @@ public class JudgeService {
       ObjectNode trace = objectMapper.createObjectNode();
       trace.put("sandbox", sandbox.name());
       trace.put("checker", "static");
-      submissionRepository.insertJudgeResult(
-          submissionId, verdict, 0, 0, check.failureReason(), trace);
-      submissionRepository.markStatus(submissionId, statusFor(verdict), 0, null);
+      submissionTransactions.finishJudge(
+          submissionId, verdict, 0, 0, check.failureReason(), trace, 0, null);
       return new JudgeOutcome(verdict, 0, 0, check.failureReason());
     }
 
     List<JudgeTestCase> cases =
         problemRepository
-            .findTestCases(problemId)
+            .findTestCases(problemId, userId)
             .map(this::extractCases)
             .orElse(List.of());
     if (cases.isEmpty()) {
       ObjectNode trace = objectMapper.createObjectNode();
       trace.put("sandbox", sandbox.name());
       trace.put("checker", "no_test_cases");
-      submissionRepository.insertJudgeResult(
-          submissionId, Verdict.SYSTEM_ERROR, 0, 0, "题目没有可用测试用例", trace);
-      submissionRepository.markStatus(
-          submissionId, statusFor(Verdict.SYSTEM_ERROR), 0, null);
+      submissionTransactions.finishJudge(
+          submissionId,
+          Verdict.SYSTEM_ERROR,
+          0,
+          0,
+          "题目没有可用测试用例",
+          trace,
+          0,
+          null);
       return new JudgeOutcome(Verdict.SYSTEM_ERROR, 0, 0, "题目没有可用测试用例");
     }
 
@@ -96,8 +96,6 @@ public class JudgeService {
     CaseEvaluation evaluation =
         judgeWorkerPool.submitAndWait(() -> caseEvaluator.evaluate(code, cases));
     persistEvaluation(submissionId, cases.size(), evaluation);
-    submissionRepository.markStatus(
-        submissionId, statusFor(evaluation.finalVerdict()), evaluation.totalRuntimeMs(), null);
     return new JudgeOutcome(
         evaluation.finalVerdict(),
         evaluation.passedCases(),
@@ -105,27 +103,18 @@ public class JudgeService {
         evaluation.failureReason());
   }
 
-  /**
-   * verdict → 提交状态的<strong>单一映射</strong>：SYSTEM_ERROR 属判题系统故障，必须落 ERROR，
-   * 不能和学生答错一样计成 FAILED（否则沙箱 IOException 也会扣掌握度、写脏画像）。
-   */
-  private static SubmissionStatus statusFor(Verdict verdict) {
-    return switch (verdict) {
-      case AC -> SubmissionStatus.PASSED;
-      case SYSTEM_ERROR -> SubmissionStatus.ERROR;
-      default -> SubmissionStatus.FAILED;
-    };
-  }
-
+  /** Writes the verdict and final submission metrics together in one short transaction. */
   private void persistEvaluation(
       Long submissionId, int totalCases, CaseEvaluation evaluation) {
-    submissionRepository.insertJudgeResult(
+    submissionTransactions.finishJudge(
         submissionId,
         evaluation.finalVerdict(),
         evaluation.passedCases(),
         totalCases,
         evaluation.failureReason(),
-        evaluation.trace());
+        evaluation.trace(),
+        evaluation.totalRuntimeMs(),
+        evaluation.maxMemoryKb());
   }
 
   private List<JudgeTestCase> extractCases(PublicProblemRepository.JudgeTestCases tc) {

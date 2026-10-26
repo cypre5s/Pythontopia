@@ -6,6 +6,7 @@ import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -161,6 +162,10 @@ public class MasteryEvaluator {
 
   public java.util.Set<String> assessedKcCodes(Long userId) {
     return repository.findAssessedKcCodes(userId);
+  }
+
+  public Map<String, MasterySource> latestEventSourcesByKc(Long userId) {
+    return repository.findLatestEventSourcesByKc(userId);
   }
 
   public List<MasteryEventRecord> recentEvents(Long userId, String kcCode, int limit) {

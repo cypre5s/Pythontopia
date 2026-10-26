@@ -127,6 +127,35 @@ describe('useGuideStore（伴学向导多轮线程）', () => {
     expect(g.historyForRequest.map((m) => m.content)).toEqual(['第一句', '第一答', '第二句']);
   });
 
+  it('historyForRequest 只发送最近 40 条有效消息', () => {
+    const g = useGuideStore();
+    for (let i = 0; i < 25; i += 1) {
+      g.pushUserMessage(`问题 ${i}`);
+      const aid = mustBegin(g);
+      g.finalizeAssistant(aid, makeResult({ reply_md: `回答 ${i}` }), `回答 ${i}`);
+    }
+
+    const history = g.historyForRequest;
+
+    expect(history).toHaveLength(40);
+    expect(history[0]?.content).toBe('问题 5');
+    expect(history.at(-1)?.content).toBe('回答 24');
+  });
+
+  it('聊天增量更新不复制整条消息数组', () => {
+    const g = useGuideStore();
+    g.openPanel();
+    const messages = g.messages;
+
+    g.pushUserMessage('第一问');
+    const aid = mustBegin(g);
+    g.updateAssistantStream(aid, '逐步到达的回答', []);
+    g.finalizeAssistant(aid, makeResult({ reply_md: '完整回答' }), '完整回答');
+
+    expect(g.messages).toBe(messages);
+    expect(g.messages.find((message) => message.id === aid)?.content).toBe('完整回答');
+  });
+
   it('finalize 澄清追问设置 needsUserInput', () => {
     const g = useGuideStore();
     g.openPanel();

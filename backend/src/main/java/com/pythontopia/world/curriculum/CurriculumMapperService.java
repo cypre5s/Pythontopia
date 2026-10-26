@@ -21,7 +21,10 @@ import java.util.Set;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class CurriculumMapperService {
@@ -36,21 +39,24 @@ public class CurriculumMapperService {
   private final CurriculumMapperClient client;
   private final ResourceRunRecorder recorder;
   private final ApplicationEventPublisher eventPublisher;
+  private final TransactionTemplate transaction;
 
   public CurriculumMapperService(
       ProfileRepository profileRepository,
       CoursePackRepository coursePackRepository,
       CurriculumMapperClient client,
       ResourceRunRecorder recorder,
-      ApplicationEventPublisher eventPublisher) {
+      ApplicationEventPublisher eventPublisher,
+      PlatformTransactionManager transactionManager) {
     this.profileRepository = profileRepository;
     this.coursePackRepository = coursePackRepository;
     this.client = client;
     this.recorder = recorder;
     this.eventPublisher = eventPublisher;
+    this.transaction = new TransactionTemplate(transactionManager);
   }
 
-  @Transactional
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public CurriculumBootstrapResult bootstrap(Long userId) {
     LearnerProfileDto profile =
         profileRepository
@@ -107,16 +113,20 @@ public class CurriculumMapperService {
     try {
       response = client.callMap(request);
     } catch (Exception exception) {
-      recorder.record(
-          userId,
-          "CurriculumMapperAgent",
-          "CURRICULUM_BOOTSTRAP",
-          Map.of("packId", DEFAULT_PACK_ID, "kcCount", kcs.size()),
-          Map.of("error", "graph-service-error"),
-          List.of(),
-          Map.of("passed", true),
-          Map.of("passed", false, "reasons", List.of("graph-service-error")),
-          RunStatus.FAILED);
+      transaction.execute(
+          status -> {
+            recorder.record(
+                userId,
+                "CurriculumMapperAgent",
+                "CURRICULUM_BOOTSTRAP",
+                Map.of("packId", DEFAULT_PACK_ID, "kcCount", kcs.size()),
+                Map.of("error", "graph-service-error"),
+                List.of(),
+                Map.of("passed", true),
+                Map.of("passed", false, "reasons", List.of("graph-service-error")),
+                RunStatus.FAILED);
+            return null;
+          });
       throw new BusinessException(
           HttpStatus.BAD_GATEWAY,
           "CURRICULUM_MAPPER_UNAVAILABLE",
@@ -131,26 +141,28 @@ public class CurriculumMapperService {
           "知识田映射服务返回空数据。");
     }
 
-    eventPublisher.publishEvent(
-        new LearningEvent.ProfileBootstrapped(userId, response.unlockedKcs()));
+    return transaction.execute(
+        status -> {
+          eventPublisher.publishEvent(
+              new LearningEvent.ProfileBootstrapped(userId, response.unlockedKcs()));
+          recorder.record(
+              userId,
+              "CurriculumMapperAgent",
+              "CURRICULUM_BOOTSTRAP",
+              Map.of("packId", DEFAULT_PACK_ID, "kcCount", kcs.size()),
+              Map.of(
+                  "unlockedCount",
+                  response.unlockedKcs().size(),
+                  "signature",
+                  response.deterministicSignature()),
+              List.of(),
+              Map.of("passed", true),
+              Map.of("passed", true),
+              RunStatus.SUCCESS);
 
-    recorder.record(
-        userId,
-        "CurriculumMapperAgent",
-        "CURRICULUM_BOOTSTRAP",
-        Map.of("packId", DEFAULT_PACK_ID, "kcCount", kcs.size()),
-        Map.of(
-            "unlockedCount",
-            response.unlockedKcs().size(),
-            "signature",
-            response.deterministicSignature()),
-        List.of(),
-        Map.of("passed", true),
-        Map.of("passed", true),
-        RunStatus.SUCCESS);
-
-    return new CurriculumBootstrapResult(
-        kcs.size(), response.unlockedKcs().size(), response.deterministicSignature());
+          return new CurriculumBootstrapResult(
+              kcs.size(), response.unlockedKcs().size(), response.deterministicSignature());
+        });
   }
 
   static int mapDifficulty(String raw) {

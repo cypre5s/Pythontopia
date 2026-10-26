@@ -105,3 +105,6 @@ research/**/outputs/adapters/
 research/**/runs/
 research/**/__pycache__/
 research/**/*.pyc
+
+# 忽略本地新增文档草稿；已有跟踪文档保留在 Git 历史中
+/docs/

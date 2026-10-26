@@ -147,6 +147,7 @@ public class CoursePackRepository {
                    source_label AS sourceLabel
             FROM course_problem p
             WHERE p.pack_id = :packId AND p.id = :problemId
+              AND p.tutor_owner_user_id IS NULL
               AND NOT EXISTS (SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
                 AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled)
             """)
@@ -169,6 +170,7 @@ public class CoursePackRepository {
                        source_label AS sourceLabel
                 FROM course_problem p
                 WHERE p.pack_id = :packId
+                  AND p.tutor_owner_user_id IS NULL
                   AND NOT EXISTS (SELECT 1 FROM course_resource_state s WHERE s.pack_id = p.pack_id
                     AND s.resource_type = 'PROBLEM' AND s.resource_id = p.id AND NOT s.enabled)
                 """

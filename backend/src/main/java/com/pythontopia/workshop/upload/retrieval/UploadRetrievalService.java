@@ -5,6 +5,7 @@ import com.pythontopia.workshop.upload.retrieval.dto.RetrievalHit;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -40,7 +41,7 @@ public class UploadRetrievalService {
    * @param topK 期望条数；clamp 到 {@value #MIN_TOP_K}..{@value #MAX_TOP_K}，null 取默认 {@value
    *     #DEFAULT_TOP_K}。
    */
-  @Transactional(readOnly = true)
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public List<RetrievalHit> retrieve(long userId, String query, List<Long> uploadIds, Integer topK) {
     if (query == null || query.isBlank()) {
       return List.of();

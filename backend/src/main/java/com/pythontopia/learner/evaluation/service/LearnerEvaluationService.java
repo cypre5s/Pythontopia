@@ -14,6 +14,7 @@ import com.pythontopia.learner.evaluation.repository.EvaluationRepository;
 import com.pythontopia.learner.evaluation.repository.EvaluationRepository.KcDelta;
 import com.pythontopia.learner.evaluation.repository.EvaluationRepository.RecentEvent;
 import com.pythontopia.learner.path.dto.LearningPathDto;
+import com.pythontopia.learner.path.graph.PathPlannerGraphResponse;
 import com.pythontopia.learner.path.service.LearningPathService;
 import com.pythontopia.learner.profile.dto.LearnerProfileDto;
 import com.pythontopia.learner.profile.service.ProfileService;
@@ -30,7 +31,10 @@ import java.util.Map;
 import java.util.Optional;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class LearnerEvaluationService {
@@ -49,21 +53,24 @@ public class LearnerEvaluationService {
   private final ProfileService profileService;
   private final LearningPathService pathService;
   private final CoursePackRepository coursePackRepository;
+  private final TransactionTemplate transaction;
 
   public LearnerEvaluationService(
       EvaluationRepository evaluationRepository,
       EvaluationGraphClient narrativeClient,
       ProfileService profileService,
       LearningPathService pathService,
-      CoursePackRepository coursePackRepository) {
+      CoursePackRepository coursePackRepository,
+      PlatformTransactionManager transactionManager) {
     this.evaluationRepository = evaluationRepository;
     this.narrativeClient = narrativeClient;
     this.profileService = profileService;
     this.pathService = pathService;
     this.coursePackRepository = coursePackRepository;
+    this.transaction = new TransactionTemplate(transactionManager);
   }
 
-  @Transactional
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public EvaluationDto compute(Long userId, EvaluationRequest request) {
     int periodDays =
         request != null && request.periodDays() != null ? request.periodDays() : DEFAULT_PERIOD_DAYS;
@@ -174,12 +181,11 @@ public class LearnerEvaluationService {
     LearningPathDto activePath = pathService.findActive(userId).orElse(null);
     Long activePathId = activePath == null ? null : activePath.id();
 
-    Long draftPathId = null;
     String diffSummary = narrative.pathDiffExplainer() == null ? "" : narrative.pathDiffExplainer();
+    PathPlannerGraphResponse preparedDraft = null;
     if (hasActivity && profile != null) {
       try {
-        LearningPathDto draft = pathService.planDraft(userId);
-        draftPathId = draft.id();
+        preparedDraft = pathService.prepareDraft(userId);
       } catch (BusinessException ex) {
         // path planner 失败不会阻塞评估，但会在 diff_summary 注明
         diffSummary = diffSummary + "\n[规划失败] " + ex.getMessage();
@@ -188,28 +194,35 @@ public class LearnerEvaluationService {
       diffSummary = diffSummary.isBlank() ? "近期数据不足，未生成新路径建议。" : diffSummary;
     }
 
-    Long evaluationId =
-        evaluationRepository.insert(
-            userId,
-            DEFAULT_PACK_ID,
-            periodStart,
-            periodEnd,
-            narrative.narrativeMd() == null ? "" : narrative.narrativeMd(),
-            diffSummary,
-            draftPathId,
-            activePathId);
+    PathPlannerGraphResponse draftResponse = preparedDraft;
+    String pathDiffSummary = diffSummary;
+    return transaction.execute(
+        status -> {
+          Long draftPathId =
+              draftResponse == null ? null : pathService.persistDraft(userId, draftResponse).id();
+          Long evaluationId =
+              evaluationRepository.insert(
+                  userId,
+                  DEFAULT_PACK_ID,
+                  periodStart,
+                  periodEnd,
+                  narrative.narrativeMd() == null ? "" : narrative.narrativeMd(),
+                  pathDiffSummary,
+                  draftPathId,
+                  activePathId);
 
-    for (EvaluationMetricDto metric : metrics) {
-      evaluationRepository.insertMetric(evaluationId, metric);
-    }
+          for (EvaluationMetricDto metric : metrics) {
+            evaluationRepository.insertMetric(evaluationId, metric);
+          }
 
-    LinkedHashMap<String, Object> revisionDiff = new LinkedHashMap<>();
-    revisionDiff.put("evaluationId", evaluationId);
-    revisionDiff.put("narrativeRef", "evaluation:" + evaluationId);
-    revisionDiff.put("recommendations", narrative.keyRecommendations());
-    profileService.applyPassiveRevision(userId, "EVALUATION", revisionDiff, evaluationId);
+          LinkedHashMap<String, Object> revisionDiff = new LinkedHashMap<>();
+          revisionDiff.put("evaluationId", evaluationId);
+          revisionDiff.put("narrativeRef", "evaluation:" + evaluationId);
+          revisionDiff.put("recommendations", narrative.keyRecommendations());
+          profileService.applyPassiveRevision(userId, "EVALUATION", revisionDiff, evaluationId);
 
-    return findById(userId, evaluationId);
+          return findById(userId, evaluationId);
+        });
   }
 
   @Transactional(readOnly = true)
@@ -259,13 +272,8 @@ public class LearnerEvaluationService {
     OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
     OffsetDateTime activitySince = now.minusDays(DEFAULT_PERIOD_DAYS);
     OffsetDateTime dedupeSince = now.minusDays(WEEKLY_DEDUPE_DAYS);
-    List<Long> needing = new ArrayList<>();
-    for (Long userId : evaluationRepository.findActiveLearnerIdsSince(activitySince)) {
-      if (!evaluationRepository.existsEvaluationCreatedAfter(userId, dedupeSince)) {
-        needing.add(userId);
-      }
-    }
-    return needing;
+    return evaluationRepository.findActiveLearnerIdsWithoutRecentEvaluation(
+        activitySince, dedupeSince);
   }
 
   @Transactional

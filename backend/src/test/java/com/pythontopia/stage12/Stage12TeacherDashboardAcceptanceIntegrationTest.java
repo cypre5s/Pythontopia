@@ -4,6 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.pythontopia.PythontopiaApplication;
+import com.pythontopia.classroom.quest.repository.ClassroomQuestRepository;
+import com.pythontopia.learner.quest.dto.QuestNodeType;
+import com.pythontopia.learner.quest.dto.QuestSource;
+import com.pythontopia.learner.quest.repository.QuestRepository.QuestInsert;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
@@ -57,6 +61,7 @@ class Stage12TeacherDashboardAcceptanceIntegrationTest {
   @Autowired TestRestTemplate restTemplate;
   @Autowired JdbcTemplate jdbcTemplate;
   @Autowired ObjectMapper objectMapper;
+  @Autowired ClassroomQuestRepository classroomQuestRepository;
 
   @Test
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -110,6 +115,65 @@ class Stage12TeacherDashboardAcceptanceIntegrationTest {
         jdbcTemplate.queryForObject(
             "SELECT COUNT(*) FROM quest WHERE source = 'CLASSROOM'", Integer.class);
     assertThat(questCount).isEqualTo(3);
+
+    Long classroomQuestId =
+        jdbcTemplate.queryForObject(
+            "SELECT id FROM classroom_quest WHERE classroom_id = ? ORDER BY id DESC LIMIT 1",
+            Long.class,
+            classroomId);
+    registerStudent("stage12-stu-extra");
+    Long extraStudentId = userId("stage12-stu-extra");
+    List<QuestInsert> retryCopies =
+        List.of(
+            new QuestInsert(
+                aId,
+                QuestSource.CLASSROOM,
+                classroomQuestId,
+                "should keep existing copy",
+                "duplicate",
+                firstKc,
+                QuestNodeType.SOLVE_PROBLEM,
+                objectMapper.createObjectNode(),
+                LocalDate.now(ZoneOffset.UTC).plusDays(2),
+                9,
+                "submission",
+                null,
+                List.of(problemId),
+                null,
+                "/training",
+                objectMapper.createObjectNode().put("problemId", problemId)),
+            new QuestInsert(
+                extraStudentId,
+                QuestSource.CLASSROOM,
+                classroomQuestId,
+                "班级任务 · 完成 for 循环练习",
+                "对应 KC for-loop",
+                firstKc,
+                QuestNodeType.SOLVE_PROBLEM,
+                objectMapper.createObjectNode().put("classroomQuestSource", true),
+                LocalDate.now(ZoneOffset.UTC).plusDays(2),
+                9,
+                "submission",
+                null,
+                List.of(problemId),
+                null,
+                "/training",
+                objectMapper.createObjectNode().put("problemId", problemId)));
+    assertThat(classroomQuestRepository.insertStudentQuestsIfAbsent(retryCopies)).isEqualTo(1);
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT title FROM quest WHERE user_id = ? AND source = 'CLASSROOM' AND source_ref_id = ?",
+                String.class,
+                aId,
+                classroomQuestId))
+        .isEqualTo("班级任务 · 完成 for 循环练习");
+    assertThat(
+            jdbcTemplate.queryForObject(
+                "SELECT target_problem_ids[1] FROM quest WHERE user_id = ? AND source = 'CLASSROOM' AND source_ref_id = ?",
+                Long.class,
+                extraStudentId,
+                classroomQuestId))
+        .isEqualTo(problemId);
 
     // 两位学生完成任务，一位保持 OPEN，覆盖率约 0.67。
     completeFirstClassroomQuest(stuA, aId);
@@ -173,7 +237,7 @@ class Stage12TeacherDashboardAcceptanceIntegrationTest {
     assertThat(rotate.getBody().get("joinCode")).isNotEqualTo(joinCode);
 
     // 教师归档任务，但学生已生成 quest 不应被破坏（OPEN/COMPLETED 都不会丢失）。
-    Long classroomQuestId =
+    classroomQuestId =
         jdbcTemplate.queryForObject(
             "SELECT id FROM classroom_quest WHERE classroom_id = ? ORDER BY id ASC LIMIT 1",
             Long.class,
@@ -188,7 +252,7 @@ class Stage12TeacherDashboardAcceptanceIntegrationTest {
     assertThat(archived.getBody().get("status")).isEqualTo("ARCHIVED");
     Integer remainingQuests =
         jdbcTemplate.queryForObject("SELECT COUNT(*) FROM quest WHERE source = 'CLASSROOM'", Integer.class);
-    assertThat(remainingQuests).isEqualTo(3);
+    assertThat(remainingQuests).isEqualTo(4);
   }
 
   @SuppressWarnings("unchecked")

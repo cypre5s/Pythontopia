@@ -357,6 +357,19 @@ class OpenAiCompatProvider:
         selected_vision_model = vision_model or _openai_vision_model() or "deepseek-flash"
         self.vision_model = _require_deepseek_model(selected_vision_model, vision=True)
         self.enable_thinking = enable_thinking
+        self._client: httpx.AsyncClient | None = None
+
+    def _http_client(self) -> httpx.AsyncClient:
+        if self._client is None:
+            self._client = httpx.AsyncClient(
+                timeout=httpx.Timeout(90, connect=10), trust_env=True
+            )
+        return self._client
+
+    async def aclose(self) -> None:
+        if self._client is not None:
+            await self._client.aclose()
+            self._client = None
 
     def _resolve_model(self, kwargs: dict[str, object]) -> str:
         """按调用方声明的 model_tier 选模型：fast→快档、vision→视觉档，其余→默认档。
@@ -397,15 +410,12 @@ class OpenAiCompatProvider:
         # trust_env=True：有 HTTP(S)_PROXY 则走代理，否则直连；NO_PROXY 保护 localhost/RAG。
         # 读超时 90s：讲义/练习生成属长输出任务，30s 会让 ResourceDesigner 等 agent 高频
         # 超时（实测 DeepSeek 长文常超 30s）；连接超时仍保持 10s 快速失败。
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(90, connect=10), trust_env=True
-        ) as client:
-            response = await client.post(
-                f"{self.base_url.rstrip('/')}/chat/completions",
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json=body,
-            )
-            response.raise_for_status()
+        response = await self._http_client().post(
+            f"{self.base_url.rstrip('/')}/chat/completions",
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json=body,
+        )
+        response.raise_for_status()
         # 解析含原生 tool_calls（function calling）：工具调用轮 content 可能为 null。
         return _parse_chat_message(response.json())
 
@@ -425,25 +435,25 @@ class OpenAiCompatProvider:
             "thinking", {"type": "enabled" if self.enable_thinking else "disabled"}
         )
         # 同 chat()：trust_env 代理策略。
-        async with httpx.AsyncClient(timeout=60, trust_env=True) as client:
-            async with client.stream(
-                "POST",
-                url,
-                headers={"Authorization": f"Bearer {self.api_key}"},
-                json=payload,
-            ) as response:
-                response.raise_for_status()
-                async for line in response.aiter_lines():
-                    if not line.startswith("data: "):
-                        continue
-                    data_str = line[len("data: "):]
-                    if data_str.strip() == "[DONE]":
-                        break
-                    chunk = _json.loads(data_str)
-                    delta = chunk.get("choices", [{}])[0].get("delta", {})
-                    content = _message_content_to_text(delta.get("content"))
-                    if content:
-                        yield content
+        async with self._http_client().stream(
+            "POST",
+            url,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json=payload,
+            timeout=60,
+        ) as response:
+            response.raise_for_status()
+            async for line in response.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data_str = line[len("data: "):]
+                if data_str.strip() == "[DONE]":
+                    break
+                chunk = _json.loads(data_str)
+                delta = chunk.get("choices", [{}])[0].get("delta", {})
+                content = _message_content_to_text(delta.get("content"))
+                if content:
+                    yield content
 
 
 class FineTunedFallbackProvider:

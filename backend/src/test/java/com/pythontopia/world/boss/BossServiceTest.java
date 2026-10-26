@@ -2534,7 +2534,7 @@ class BossServiceTest {
     when(staticCodeChecker.check("print(5)"))
         .thenReturn(new StaticCodeChecker.CheckResult(true, null, false));
     when(judgeCaseEvaluator.evaluate(eq("print(5)"), anyList()))
-        .thenReturn(new JudgeCaseEvaluator.CaseEvaluation(Verdict.AC, 1, 2, null, null));
+        .thenReturn(new JudgeCaseEvaluator.CaseEvaluation(Verdict.AC, 1, 2, null, null, null));
 
     Logger logger = (Logger) LoggerFactory.getLogger(BossService.class);
     Level previousLevel = logger.getLevel();

@@ -94,6 +94,7 @@ public class TutorWorkflowService {
   private final TutorRequestBudgetService requestBudgetService;
   private final ObjectMapper objectMapper;
   private final TutorDailyRequestLimitService requestLimitService;
+  private final TutorTransferProblemService transferProblemService;
 
   public TutorWorkflowService(
       TutorWorkflowRepository repository,
@@ -106,7 +107,8 @@ public class TutorWorkflowService {
       ApplicationEventPublisher eventPublisher,
       TutorRequestBudgetService requestBudgetService,
       ObjectMapper objectMapper,
-      TutorDailyRequestLimitService requestLimitService) {
+      TutorDailyRequestLimitService requestLimitService,
+      TutorTransferProblemService transferProblemService) {
     this.repository = repository;
     this.attachmentService = attachmentService;
     this.graphClient = graphClient;
@@ -118,6 +120,7 @@ public class TutorWorkflowService {
     this.requestBudgetService = requestBudgetService;
     this.objectMapper = objectMapper;
     this.requestLimitService = requestLimitService;
+    this.transferProblemService = transferProblemService;
   }
 
   @Scheduled(cron = "0 40 3 * * *", zone = "Asia/Shanghai")
@@ -146,13 +149,48 @@ public class TutorWorkflowService {
     repository
         .findAgentState(session.id())
         .map(this::readStoredState)
-        .map(state -> state.path("episode_plan"))
-        .filter(JsonNode::isObject)
         .ifPresent(
-            plan ->
+            stored -> {
+              JsonNode studentState =
+                  stored.has("student_state") ? stored.path("student_state") : stored;
+              if (studentState.path("latest_submission_id").canConvertToLong()) {
+                snapshot.put(
+                    "latestSubmissionId", studentState.path("latest_submission_id").asLong());
+              }
+              if (studentState.path("latest_submission_problem_id").canConvertToLong()) {
+                snapshot.put(
+                    "latestSubmissionProblemId",
+                    studentState.path("latest_submission_problem_id").asLong());
+              }
+              if (studentState.path("latest_verdict").isTextual()) {
+                snapshot.put("latestVerdict", studentState.path("latest_verdict").asText());
+              }
+              JsonNode plan = stored.path("episode_plan");
+              if (plan.isObject()) {
                 snapshot.put(
                     "episodePlan",
-                    objectMapper.convertValue(plan, new TypeReference<Map<String, Object>>() {})));
+                    objectMapper.convertValue(plan, new TypeReference<Map<String, Object>>() {}));
+              }
+            });
+    long projectedSubmissionId =
+        ((Number) snapshot.getOrDefault("latestSubmissionId", 0L)).longValue();
+    // The submission listener cannot project into a Tutor session that did not exist yet.
+    SubmissionDto latestSubmission =
+        submissionService.list(userId, problemId, null, 1, 0).stream().findFirst().orElse(null);
+    if (latestSubmission != null && latestSubmission.id() > projectedSubmissionId) {
+      SubmissionDetailDto detail = submissionService.findOne(userId, latestSubmission.id());
+      Verdict verdict = detail.judgeResult() == null ? null : detail.judgeResult().verdict();
+      if (verdict != null) {
+        snapshot.put("latestSubmissionId", latestSubmission.id());
+        snapshot.put("latestSubmissionProblemId", latestSubmission.problemId());
+        snapshot.put("latestVerdict", verdict.name());
+        if (verdict == Verdict.AC) {
+          snapshot.put("phase", "AC_REVIEW");
+        } else if (verdict != Verdict.SYSTEM_ERROR) {
+          snapshot.put("phase", "ERROR_FEEDBACK");
+        }
+      }
+    }
     return snapshot;
   }
 
@@ -189,14 +227,15 @@ public class TutorWorkflowService {
     Map<String, Object> eventData = new LinkedHashMap<>(request.eventDataOrEmpty());
     validateEventData(request.event(), eventData);
     resolveReferences(request.event(), session, eventData);
-    Map<String, Object> diagnosis = resolveDiagnosis(userId, request, eventData);
+    ResolvedDiagnosis diagnosis = resolveDiagnosis(userId, session, problem, request, eventData);
     if (diagnosis != null) {
-      body.put("diagnosis", diagnosis);
+      body.put("diagnosis", diagnosis.payload());
+      body.put("problem", problemContext(diagnosis.problem()));
     }
     body.put("event_data", eventData);
     body.put("profile_brief", tutorService.resolveProfileBrief(userId, null));
     body.put("coach_mode", true);
-    // 投影回放：graph 进程内已有会话时忽略；重启后据此恢复阶段（持久化为权威）。
+    // Java 投影为权威状态；每次 run 都用于恢复 Graph 会话阶段与卡片上下文。
     body.put("restore_phase", session.phase());
     body.put("restore_seq", session.seq());
     List<TutorWorkflowCardDto> recentCards =
@@ -214,8 +253,6 @@ public class TutorWorkflowService {
         return replay;
       }
     }
-    PublicProblemDto transferProblem =
-        "TRANSFER".equals(request.event()) ? requireTransferProblem(userId, problem) : null;
     Optional<TutorWorkflowRepository.AutoGenCheckpoint> claimed =
         repository.claimAutoGenRun(session.id(), proposedRunId, requestFingerprint);
     if (claimed.isEmpty() && idempotentRequest) {
@@ -266,7 +303,7 @@ public class TutorWorkflowService {
         emitter,
         resultJson -> {
           try {
-            persistProjection(session, request, runId, resultJson, transferProblem);
+            return persistProjection(userId, session, request, runId, resultJson);
           } catch (Exception e) {
             throw new IllegalStateException("Failed to persist tutor workflow projection", e);
           }
@@ -541,34 +578,6 @@ public class TutorWorkflowService {
             () -> new BusinessException(HttpStatus.NOT_FOUND, "PROBLEM_NOT_FOUND", "题目不存在"));
   }
 
-  private PublicProblemDto requireTransferProblem(Long userId, PublicProblemDto sourceProblem) {
-    String kcCode = sourceProblem.kcCode();
-    PublicProblemRepository.VariantProblem variant =
-        kcCode == null || kcCode.isBlank()
-            ? null
-            : problemRepository
-                .findVariantProblem(userId, sourceProblem.id(), kcCode)
-                .orElse(null);
-    PublicProblemDto problem =
-        variant == null ? null : problemRepository.findPublic(COURSE_PACK_ID, variant.id()).orElse(null);
-    if (problem == null
-        || problem.id().equals(sourceProblem.id())
-        || !kcCode.equals(problem.kcCode())
-        || problem.title() == null
-        || problem.title().isBlank()
-        || problem.statementMarkdown() == null
-        || problem.statementMarkdown().isBlank()
-        || problem.samples() == null
-        || !problem.samples().isArray()
-        || problem.samples().isEmpty()) {
-      throw new BusinessException(
-          HttpStatus.CONFLICT,
-          "TUTOR_TRANSFER_PROBLEM_UNAVAILABLE",
-          "当前知识点暂无审核过的同知识点迁移题，请继续当前练习");
-    }
-    return problem;
-  }
-
   private Map<String, Object> problemContext(PublicProblemDto problem) {
     Map<String, Object> context = new LinkedHashMap<>();
     context.put("problem_id", problem.id());
@@ -827,8 +836,12 @@ public class TutorWorkflowService {
    * ERROR_FEEDBACK / AC_REVIEW 取判题证据：eventData.submission_id 必填，归属 / 题目 / 判定
    * 一致性校验后投影（AC_REVIEW 必须 AC、ERROR_FEEDBACK 必须非 AC）。其余事件返回 null。
    */
-  private Map<String, Object> resolveDiagnosis(
-      Long userId, TutorWorkflowRunRequest request, Map<String, Object> eventData) {
+  private ResolvedDiagnosis resolveDiagnosis(
+      Long userId,
+      TutorWorkflowSessionDto session,
+      PublicProblemDto sessionProblem,
+      TutorWorkflowRunRequest request,
+      Map<String, Object> eventData) {
     boolean needsDiagnosis =
         "ERROR_FEEDBACK".equals(request.event()) || "AC_REVIEW".equals(request.event());
     if (!needsDiagnosis) {
@@ -844,9 +857,20 @@ public class TutorWorkflowService {
     }
     // findOne 内置归属校验（非本人提交 404）。
     SubmissionDetailDto detail = submissionService.findOne(userId, submissionId);
-    if (!request.problemId().equals(detail.submission().problemId())) {
-      throw new BusinessException(
-          HttpStatus.BAD_REQUEST, "SUBMISSION_MISMATCH", "提交与当前题目不匹配");
+    Long submissionProblemId = detail.submission().problemId();
+    PublicProblemDto diagnosisProblem = sessionProblem;
+    if (!request.problemId().equals(submissionProblemId)) {
+      if (!repository.hasTransferProblem(session.id(), submissionProblemId)) {
+        throw new BusinessException(
+            HttpStatus.BAD_REQUEST, "SUBMISSION_MISMATCH", "提交与当前导学会话题目不匹配");
+      }
+      diagnosisProblem =
+          problemRepository
+              .findAccessible(COURSE_PACK_ID, submissionProblemId, userId)
+              .orElseThrow(
+                  () ->
+                      new BusinessException(
+                          HttpStatus.NOT_FOUND, "PROBLEM_NOT_FOUND", "迁移题不存在"));
     }
     Verdict verdict = detail.judgeResult() == null ? null : detail.judgeResult().verdict();
     boolean accepted = verdict == Verdict.AC;
@@ -870,9 +894,11 @@ public class TutorWorkflowService {
         "passed_cases", detail.judgeResult() == null ? 0 : detail.judgeResult().passedCases());
     diagnosis.put(
         "total_cases", detail.judgeResult() == null ? 0 : detail.judgeResult().totalCases());
-    diagnosis.put("consecutive_errors", countConsecutiveErrors(userId, request.problemId()));
-    return diagnosis;
+    diagnosis.put("consecutive_errors", countConsecutiveErrors(userId, submissionProblemId));
+    return new ResolvedDiagnosis(diagnosis, diagnosisProblem);
   }
+
+  private record ResolvedDiagnosis(Map<String, Object> payload, PublicProblemDto problem) {}
 
   /** 最近提交里该题的连续失败次数（客观事实，仅供选择分步补救内容）。 */
   int countConsecutiveErrors(Long userId, Long problemId) {
@@ -895,16 +921,17 @@ public class TutorWorkflowService {
   }
 
   /** result 投影落库：同一 run_id 下 progress/state/card/event 原子提交。 */
-  private void persistProjection(
+  private String persistProjection(
+      Long userId,
       TutorWorkflowSessionDto session,
       TutorWorkflowRunRequest request,
       UUID runId,
-      String resultJson,
-      PublicProblemDto transferProblem)
+      String resultJson)
       throws Exception {
     JsonNode root = objectMapper.readTree(resultJson);
     // AG-UI RUN_FINISHED 形状是 {"result": {...}}；历史名 result 是裸体。两种都接。
-    JsonNode result = root.has("result") && root.path("result").isObject() ? root.path("result") : root;
+    boolean wrapped = root.has("result") && root.path("result").isObject();
+    ObjectNode result = (wrapped ? root.path("result") : root).deepCopy();
     String phase = result.path("phase").asText(session.phase());
     int seq = result.path("seq").asInt(session.seq());
     String event = result.path("event").asText(request.event());
@@ -924,13 +951,23 @@ public class TutorWorkflowService {
     String cardKey = result.path("card_key").asText(null);
     String cardPayloadJson = null;
     if ("TRANSFER".equals(request.event())
-        && (!card.isObject() || !"transfer_problem".equals(cardKey) || transferProblem == null)) {
-      throw new IllegalStateException("Tutor transfer result has no trusted problem binding");
+        && (!card.isObject() || !"transfer_problem".equals(cardKey))) {
+      throw new IllegalStateException("Tutor transfer result has no problem draft");
     }
     if (card.isObject() && cardKey != null && !cardKey.isBlank()) {
       JsonNode payload = card;
+      ObjectNode enriched = null;
+      Long sourceSubmissionId = sourceSubmissionId(request.event(), request, previousState);
+      if (sourceSubmissionId != null) {
+        enriched = card.deepCopy();
+        enriched.put("source_submission_id", sourceSubmissionId);
+      }
       if ("TRANSFER".equals(request.event())) {
-        ObjectNode enriched = card.deepCopy();
+        PublicProblemDto transferProblem =
+            transferProblemService.materialize(
+                userId, session.id(), runId, request.problemId(), card);
+        enriched = card.deepCopy();
+        enriched.remove(List.of("reference_solution_language", "reference_solution_code", "test_cases"));
         enriched.put("problem_id", transferProblem.id());
         enriched.put("kc_code", transferProblem.kcCode());
         enriched.put("title", transferProblem.title());
@@ -939,21 +976,25 @@ public class TutorWorkflowService {
         enriched.put("output_description", nullSafe(transferProblem.outputDescription()));
         enriched.set("samples", transferProblem.samples());
         enriched.set("target_kcs", objectMapper.valueToTree(List.of(transferProblem.kcCode())));
-        enriched.put("hint", "请先读题明确输入、输出和约束，再结合样例独立完成。");
-        payload = enriched;
-        ObjectNode enrichedResult = result.deepCopy();
-        enrichedResult.set("card", enriched);
-        result = enrichedResult;
+        if (sourceSubmissionId != null) {
+          enriched.put("source_submission_id", sourceSubmissionId);
+        }
       } else if ("ai_reply".equals(cardKey)) {
-        ObjectNode enriched = card.deepCopy();
+        if (enriched == null) {
+          enriched = card.deepCopy();
+        }
         enriched.put("user_message", chatMessage(request));
+      }
+      if (enriched != null) {
         payload = enriched;
+        result.set("card", enriched);
       }
       ensureTextOnly(payload);
       cardPayloadJson = objectMapper.writeValueAsString(payload);
     }
     String actionPayloadJson =
         actionPayloadJson(runId, event, cardKey, result);
+    String replayResultJson = replayResultJson(session, event, phase, seq, result);
     repository.persistRunProjection(
         session.id(),
         new TutorWorkflowRepository.RunProjection(
@@ -966,7 +1007,32 @@ public class TutorWorkflowService {
             cardPayloadJson == null ? null : cardKey,
             cardPayloadJson,
             actionPayloadJson,
-            replayResultJson(session, event, phase, seq, result)));
+            replayResultJson));
+    if (wrapped) {
+      ObjectNode safeRoot = root.deepCopy();
+      safeRoot.set("result", result);
+      return objectMapper.writeValueAsString(safeRoot);
+    }
+    return objectMapper.writeValueAsString(result);
+  }
+
+  private Long sourceSubmissionId(
+      String event, TutorWorkflowRunRequest request, TutorWorkflowAgentStateDto previousState) {
+    if ("AC_REVIEW".equals(event) || "ERROR_FEEDBACK".equals(event)) {
+      Object raw = request.eventDataOrEmpty().get("submission_id");
+      try {
+        return Long.parseLong(String.valueOf(raw));
+      } catch (NumberFormatException ignored) {
+        return null;
+      }
+    }
+    if ("TRANSFER".equals(event)) {
+      JsonNode stored = readStoredState(previousState);
+      JsonNode studentState = stored.has("student_state") ? stored.path("student_state") : stored;
+      JsonNode latestId = studentState.path("latest_submission_id");
+      return latestId.canConvertToLong() ? latestId.asLong() : null;
+    }
+    return null;
   }
 
   private String replayResultJson(

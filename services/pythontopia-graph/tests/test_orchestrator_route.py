@@ -6,10 +6,12 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from collections.abc import AsyncIterator
 
 import pytest
+from pydantic import ValidationError
 
 from fastapi.testclient import TestClient
 
@@ -19,6 +21,7 @@ from pythontopia_graph.routes import orchestrator as orchestrator_route
 from pythontopia_graph.nodes.evidence_fetcher import RagHit, StaticEvidenceFetcher
 from pythontopia_graph.routing.workshop_policy import compile_route_decision
 from pythontopia_graph.schemas.intent import IntentRouteRequest
+from pythontopia_graph.schemas.orchestrator import OrchestratorTurn
 
 
 class StubProvider(LlmProvider):
@@ -73,6 +76,86 @@ async def test_tool_loop_stream_error_does_not_return_exception_text(monkeypatch
     assert "tool-loop-secret-sentinel" not in combined
 
 
+@pytest.mark.asyncio
+async def test_orchestrator_stream_disconnect_waits_for_graph_cleanup(monkeypatch) -> None:
+    from pythontopia_graph.graph import orchestrator_session
+
+    started = asyncio.Event()
+    cancelled = asyncio.Event()
+    session_id = "route-stream-cancel-cleanup"
+    await orchestrator_session.reset_session(1, session_id)
+
+    class BlockingGraph:
+        async def run_streaming(self, body, emit) -> None:
+            await orchestrator_session.begin_session_run(body.user_id, body.session_id)
+            started.set()
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+            finally:
+                await orchestrator_session.end_session_run(body.user_id, body.session_id)
+
+    monkeypatch.setattr(
+        orchestrator_route,
+        "OrchestratorGraph",
+        lambda **_: BlockingGraph(),
+    )
+    body = orchestrator_route.OrchestratorRequest(
+        user_id=1,
+        session_id=session_id,
+        user_message="请开始",
+        course_kc_index=["PY43-KC-001"],
+    )
+    stream = orchestrator_route._orchestrator_stream_generator(
+        body, StubProvider(), StaticEvidenceFetcher([]), {"PY43-KC-001"}, None, None
+    )
+
+    await stream.__anext__()
+    await stream.__anext__()
+    await asyncio.wait_for(started.wait(), timeout=1)
+    await stream.aclose()
+
+    assert cancelled.is_set()
+    assert (1, session_id) not in orchestrator_session._ACTIVE_RUNS
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_stream_backpressures_a_slow_consumer(monkeypatch) -> None:
+    at_capacity = asyncio.Event()
+    completed = asyncio.Event()
+
+    class BurstingGraph:
+        async def run_streaming(self, body, emit) -> None:
+            for index in range(64):
+                if index == 32:
+                    at_capacity.set()
+                await emit("trace", {"index": index})
+            completed.set()
+
+    monkeypatch.setattr(orchestrator_route, "OrchestratorGraph", lambda **_: BurstingGraph())
+    body = orchestrator_route.OrchestratorRequest(
+        user_id=1,
+        session_id="route-stream-backpressure",
+        user_message="请开始",
+        course_kc_index=["PY43-KC-001"],
+    )
+    stream = orchestrator_route._orchestrator_stream_generator(
+        body, StubProvider(), StaticEvidenceFetcher([]), {"PY43-KC-001"}, None, None
+    )
+
+    await stream.__anext__()
+    await stream.__anext__()
+    await asyncio.wait_for(at_capacity.wait(), timeout=1)
+    assert not completed.is_set()
+
+    async for _ in stream:
+        pass
+
+    assert completed.is_set()
+
+
 def test_orchestrator_turn_returns_200_and_response_shape() -> None:
     app.state.llm_provider = StubProvider([], reply="我们先看再学。")
     client = TestClient(app, headers={"X-Internal-Subject": "user:1"})
@@ -102,6 +185,24 @@ def test_orchestrator_turn_returns_200_and_response_shape() -> None:
     assert isinstance(data["dispatch_results"], list) and len(data["dispatch_results"]) >= 4
 
     del app.state.llm_provider
+
+
+def test_orchestrator_request_bounds_history_count_and_message_length() -> None:
+    with pytest.raises(ValidationError):
+        orchestrator_route.OrchestratorRequest(
+            user_id=1,
+            session_id="bounded-history",
+            user_message="continue",
+            history=[OrchestratorTurn(role="user", content="x") for _ in range(41)],
+        )
+
+    with pytest.raises(ValidationError):
+        orchestrator_route.OrchestratorRequest(
+            user_id=1,
+            session_id="bounded-history",
+            user_message="continue",
+            history=[OrchestratorTurn(role="user", content="x" * 8001)],
+        )
 
 
 def test_orchestrator_stream_emits_canonical_agui_events() -> None:

@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 import psycopg
 from psycopg.rows import dict_row
 
-from pythontopia_rag.data.loader import normalize_db_url
+from pythontopia_rag.data.loader import DB_CONNECT_TIMEOUT_SECONDS, normalize_db_url
 
 logger = logging.getLogger(__name__)
 
@@ -68,7 +68,11 @@ class KcGraph:
 def fetch_kc_graph(db_url: str) -> KcGraph:
     """从 DB 加载前置邻接表；任何失败返回空图 + 告警（fail-soft，不阻塞启动）。"""
     try:
-        with psycopg.connect(normalize_db_url(db_url), row_factory=dict_row) as conn:
+        with psycopg.connect(
+            normalize_db_url(db_url),
+            row_factory=dict_row,
+            connect_timeout=DB_CONNECT_TIMEOUT_SECONDS,
+        ) as conn:
             with conn.cursor() as cur:
                 cur.execute(_FETCH_SQL)
                 rows = cur.fetchall()

@@ -208,7 +208,7 @@ describe('AdminUsersPage', () => {
     const wrapper = mountAdminUsersPage();
     await flushPromises();
 
-    const cells = wrapper.findAll('tbody td');
+    const cells = wrapper.findAll('.admin-users__table tbody td');
     expect(cells[1].classes()).toContain('admin-users__readable');
     expect(cells[2].classes()).toContain('admin-users__readable');
     expect(cells[1].text()).toBe(displayName);

@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 DEFAULT_DB_URL = "postgresql://pytopia:pytopia_dev_password@localhost:15432/pythontopia"
 DEFAULT_OUTPUT = Path(__file__).resolve().parents[2] / "data" / "pages.parquet"
+DB_CONNECT_TIMEOUT_SECONDS = 5
 
 
 class PageRecord(BaseModel):
@@ -72,7 +73,11 @@ def fetch_pages(db_url: str) -> list[PageRecord]:
                  ch.order_index, ch.title
         ORDER BY p.document_id, p.page_no, p.chunk_index, p.id
     """
-    with psycopg.connect(normalize_db_url(db_url), row_factory=dict_row) as conn:
+    with psycopg.connect(
+        normalize_db_url(db_url),
+        row_factory=dict_row,
+        connect_timeout=DB_CONNECT_TIMEOUT_SECONDS,
+    ) as conn:
         with conn.cursor() as cur:
             cur.execute(sql, {})
             rows = cur.fetchall()
@@ -102,7 +107,11 @@ def fetch_disabled_course_resources(db_url: str) -> DisabledCourseResources:
           AND s.resource_type = 'KNOWLEDGE_POINT' AND s.resource_id = kc.id
         WHERE kc.pack_id = 43 AND NOT s.enabled
     """
-    with psycopg.connect(normalize_db_url(db_url), row_factory=dict_row) as conn:
+    with psycopg.connect(
+        normalize_db_url(db_url),
+        row_factory=dict_row,
+        connect_timeout=DB_CONNECT_TIMEOUT_SECONDS,
+    ) as conn:
         with conn.cursor() as cur:
             cur.execute(sql, {})
             rows = cur.fetchall()

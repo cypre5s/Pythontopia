@@ -59,7 +59,7 @@ class PistonPythonSandboxTest {
         .andRespond(
             withSuccess(
                 """
-                {"language":"python","version":"3.11.9","run":{"stdout":"hello\\n","stderr":"","code":0,"signal":null,"message":null,"status":null,"wall_time":18}}
+                {"language":"python","version":"3.11.9","run":{"stdout":"hello\\n","stderr":"","code":0,"signal":null,"message":null,"status":null,"wall_time":18,"memory":8192}}
                 """,
                 MediaType.APPLICATION_JSON));
 
@@ -71,7 +71,23 @@ class PistonPythonSandboxTest {
     assertThat(result.stdout()).isEqualTo("hello\n");
     assertThat(result.stderr()).isEmpty();
     assertThat(result.durationMs()).isEqualTo(18);
+    assertThat(result.memoryKb()).isEqualTo(8);
     assertThat(result.errorKind()).isNull();
+    server.verify();
+  }
+
+  @Test
+  void missingOrInvalidPistonMemoryRemainsUnknown() {
+    server
+        .expect(requestTo("https://judge.internal/api/v2/execute"))
+        .andRespond(
+            withSuccess(
+                "{\"run\":{\"stdout\":\"\",\"stderr\":\"\",\"code\":0,\"memory\":-1}}",
+                MediaType.APPLICATION_JSON));
+
+    SandboxRunResult result = sandbox.run("print(1)", new JudgeTestCase("", "1", 1000));
+
+    assertThat(result.memoryKb()).isNull();
     server.verify();
   }
 

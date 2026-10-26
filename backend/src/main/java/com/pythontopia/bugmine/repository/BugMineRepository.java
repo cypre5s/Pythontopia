@@ -35,6 +35,7 @@ public class BugMineRepository {
              vp.title AS variant_problem_title
       FROM bug_mine_session s
       LEFT JOIN course_problem vp ON vp.id = s.variant_problem_id
+        AND (vp.tutor_owner_user_id IS NULL OR vp.tutor_owner_user_id = s.user_id)
       """;
 
   private final JdbcTemplate jdbcTemplate;
@@ -161,6 +162,7 @@ public class BugMineRepository {
               WHERE lp.user_id = ?
             ) profile_tags ON TRUE
             WHERE p.id = ?
+              AND (p.tutor_owner_user_id IS NULL OR p.tutor_owner_user_id = ?)
             """,
             (rs, rowNum) ->
                 new SessionContextRow(
@@ -170,7 +172,8 @@ public class BugMineRepository {
             userId,
             submissionId,
             userId,
-            problemId)
+            problemId,
+            userId)
         .stream()
         .findFirst();
   }
@@ -280,6 +283,12 @@ public class BugMineRepository {
   public int incrementRetry(Long sessionId) {
     return jdbcTemplate.update(
         "UPDATE bug_mine_session SET retry_count = retry_count + 1 WHERE id = ?",
+        sessionId);
+  }
+
+  public int decrementRetry(Long sessionId) {
+    return jdbcTemplate.update(
+        "UPDATE bug_mine_session SET retry_count = GREATEST(0, retry_count - 1) WHERE id = ?",
         sessionId);
   }
 
@@ -423,6 +432,7 @@ public class BugMineRepository {
         LEFT JOIN kc_review_state rs ON rs.user_id = km.user_id AND rs.kc_code = km.kc_code
         WHERE km.user_id = ?
           AND km.kc_code <> ''
+          AND p.tutor_owner_user_id IS NULL
           AND km.last_event_at IS NOT NULL
           AND COALESCE(km.mastery_score, 0.000) >= 0.450
           AND now() > COALESCE(

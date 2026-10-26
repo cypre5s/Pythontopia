@@ -81,6 +81,34 @@ public class PracticeSubmissionRepository {
         submissionId);
   }
 
+  public void deleteUnjudgedSubmission(Long submissionId) {
+    jdbcTemplate.update(
+        """
+        DELETE FROM practice_submission s
+        WHERE s.id = ?
+          AND s.status IN ('PENDING', 'RUNNING')
+          AND NOT EXISTS (
+              SELECT 1 FROM judge_result r WHERE r.submission_id = s.id
+          )
+        """,
+        submissionId);
+  }
+
+  public void deleteSyntheticEchoSubmission(Long userId, Long submissionId) {
+    jdbcTemplate.update(
+        """
+        DELETE FROM practice_submission s
+        WHERE s.id = ?
+          AND s.user_id = ?
+          AND s.source = 'BUG_MINE_ECHO'
+          AND NOT EXISTS (
+            SELECT 1 FROM bug_mine_session bms WHERE bms.submission_id = s.id
+          )
+        """,
+        submissionId,
+        userId);
+  }
+
   public Long insertJudgeResult(
       Long submissionId,
       Verdict verdict,
@@ -127,6 +155,32 @@ public class PracticeSubmissionRepository {
         .stream()
         .findFirst();
   }
+
+  public PerformanceSamples findPerformanceSamples(
+      Long problemId, String language, Integer runtimeMs, Integer memoryKb) {
+    return jdbcTemplate.queryForObject(
+        """
+        SELECT COUNT(runtime_ms) AS runtime_samples,
+               COUNT(*) FILTER (WHERE runtime_ms > ?) AS runtime_beaten,
+               COUNT(memory_kb) AS memory_samples,
+               COUNT(*) FILTER (WHERE memory_kb > ?) AS memory_beaten
+        FROM practice_submission
+        WHERE problem_id = ? AND language = ? AND status = 'PASSED'
+        """,
+        (rs, rowNum) ->
+            new PerformanceSamples(
+                rs.getInt("runtime_samples"),
+                rs.getInt("runtime_beaten"),
+                rs.getInt("memory_samples"),
+                rs.getInt("memory_beaten")),
+        runtimeMs,
+        memoryKb,
+        problemId,
+        language);
+  }
+
+  public record PerformanceSamples(
+      int runtimeSamples, int runtimeBeaten, int memorySamples, int memoryBeaten) {}
 
   public Optional<String> findSubmissionKcCode(Long userId, Long submissionId) {
     return jdbcTemplate

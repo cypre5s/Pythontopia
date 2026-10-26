@@ -8,6 +8,7 @@ import com.pythontopia.submission.dto.SubmissionCreateRequest;
 import com.pythontopia.submission.dto.SubmissionDetailDto;
 import com.pythontopia.submission.dto.SubmissionDto;
 import com.pythontopia.submission.dto.SubmissionStatus;
+import com.pythontopia.submission.dto.SubmissionPerformanceDto;
 import com.pythontopia.submission.service.SubmissionService;
 import jakarta.validation.Valid;
 import java.util.List;
@@ -43,6 +44,13 @@ public class SubmissionController {
       @CurrentUser CurrentUserPrincipal user, @PathVariable Long id) {
     requireStudent(user);
     return service.findOne(user.userId(), id);
+  }
+
+  @GetMapping("/{id}/performance")
+  public SubmissionPerformanceDto performance(
+      @CurrentUser CurrentUserPrincipal user, @PathVariable Long id) {
+    requireStudent(user);
+    return service.performance(user.userId(), id);
   }
 
   @GetMapping

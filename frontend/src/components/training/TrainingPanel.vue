@@ -15,6 +15,9 @@ import PyButton from '@/components/ui/PyButton.vue';
 import GuideNudgeCard from '@/components/training/GuideNudgeCard.vue';
 import PythonCodeEditor from '@/components/training/PythonCodeEditor.vue';
 import TutorWorkflowPanel from '@/components/training/TutorWorkflowPanel.vue';
+import SubmissionResultModal from '@/components/training/SubmissionResultModal.vue';
+import { getSubmission } from '@/api/submissions';
+import type { SubmissionDetailDto } from '@/api/dto/Submission';
 import type { WorkflowEvent } from '@/api/tutorWorkflow';
 
 const learning = useLearningStore();
@@ -30,6 +33,8 @@ onMounted(() => warmPyodide());
 // 残留 store 在普通做题导航（无 variant 标志）下也不会误触发变式提交。
 const variantBugMineSessionId = computed<number | null>(() => learning.bugMine.pendingVariantSessionId);
 const isVariantMode = computed<boolean>(() => route.query.variant === '1' && variantBugMineSessionId.value != null);
+const variantResultDetail = ref<SubmissionDetailDto | null>(null);
+const variantResultSessionId = ref<number | null>(null);
 
 const problem = computed(() => learning.training.problem);
 
@@ -134,18 +139,22 @@ async function submit(): Promise<void> {
       // submitBugMineVariant 在 PASSED 时会清空 store 的 pendingVariantSessionId，
       // 故先把会话 id 捕获到局部，供成功后回错题矿洞用。
       const variantSessionId = variantBugMineSessionId.value;
+      variantResultSessionId.value = variantSessionId;
       const result = await learning.submitBugMineVariant(code, variantSessionId);
       if (!result) {
         playSfx('sfx_error');
         toast.show(learning.bugMine.lastError ?? '变式提交失败', 'error');
         return;
       }
+      try {
+        variantResultDetail.value = await getSubmission(result.id);
+        submissionResultOpen.value = true;
+      } catch {
+        toast.show('变式判题结果已保存，详情暂时无法加载。', 'error');
+      }
       if (result.status === 'PASSED') {
         playSfx('sfx_jingle_complete');
         toast.show('L5 变式掌握确认通过，错题矿洞会话已关闭。', 'success');
-        // S1：私有 sessionId 不写进 URL，改走 store 入口（BugMinePage consume 后加载会话）。
-        learning.setPendingBugMineEntry({ sessionId: variantSessionId });
-        await router.push('/bug-mine');
       } else {
         playSfx('sfx_error');
         toast.show('变式仍未通过，请继续调整。', 'error');
@@ -195,10 +204,11 @@ function onSampleHover(): void {
 }
 
 const showBugMineButton = computed(() => {
+  if (variantResultDetail.value) return false;
   const submission = learning.training.submission;
   if (!submission) return false;
   return submission.submission.status === 'FAILED'
-    && submission.judgeResult
+    && submission.judgeResult != null
     && submission.judgeResult.verdict !== 'CE';
 });
 
@@ -234,7 +244,38 @@ const tutorSubmissionId = computed<number | null>(
 const guideNudgeVerdict = computed<string>(
   () => learning.training.submission?.judgeResult?.verdict ?? '',
 );
+const latestSubmissionDetail = computed<SubmissionDetailDto | null>(
+  () => variantResultDetail.value ?? learning.training.submission ?? null,
+);
+const submissionResultOpen = ref(false);
 const tutorInitialRequest = ref<{ event: WorkflowEvent; nonce: number } | null>(null);
+
+watch(
+  () => latestSubmissionDetail.value?.submission.id ?? null,
+  (submissionId) => {
+    if (submissionId !== null) submissionResultOpen.value = true;
+  },
+);
+
+watch(
+  () => problem.value?.id ?? null,
+  (problemId, previousProblemId) => {
+    if (problemId !== null && previousProblemId !== undefined && problemId !== previousProblemId) {
+      variantResultDetail.value = null;
+      variantResultSessionId.value = null;
+      submissionResultOpen.value = false;
+    }
+  },
+);
+
+function closeSubmissionResult(): void {
+  submissionResultOpen.value = false;
+  if (variantResultDetail.value?.submission.status === 'PASSED'
+    && variantResultSessionId.value != null) {
+    learning.setPendingBugMineEntry({ sessionId: variantResultSessionId.value });
+    void router.push('/bug-mine');
+  }
+}
 
 function onGuideNudgeContinue(event: WorkflowEvent): void {
   playSfx('sfx_click');
@@ -484,26 +525,28 @@ async function copySample(text: string): Promise<void> {
           </div>
 
           <section
-            v-if="learning.training.submission"
+            v-if="latestSubmissionDetail"
             class="submission"
             :class="`submission--${judgeTone}`"
             data-testid="submission-result"
           >
-            <div class="submission__summary">
-              <strong>{{ learning.training.submission.judgeResult?.verdict ?? '未判' }}</strong>
-              <span>
-                {{ learning.training.submission.submission.status }} ·
-                通过 {{ learning.training.submission.judgeResult?.passedCases ?? 0 }}/{{
-                  learning.training.submission.judgeResult?.totalCases ?? 0
-                }}
-              </span>
-            </div>
-            <p
-              v-if="learning.training.submission.judgeResult?.failureReason"
-              class="reason"
+            <button
+              type="button"
+              class="submission__summary"
+              data-testid="submission-result-reopen"
+              @click="submissionResultOpen = true"
             >
-              {{ learning.training.submission.judgeResult.failureReason }}
-            </p>
+              <strong>{{ latestSubmissionDetail.judgeResult?.verdict ?? '未判' }}</strong>
+              <span>
+                {{ latestSubmissionDetail.judgeResult?.passedCases ?? 0 }}/{{
+                  latestSubmissionDetail.judgeResult?.totalCases ?? 0
+                }} 个用例通过 · 查看判题详情
+              </span>
+              <span
+                class="submission__arrow"
+                aria-hidden="true"
+              >↗</span>
+            </button>
             <div
               v-if="showBugMineButton"
               class="submission__actions"
@@ -568,6 +611,14 @@ async function copySample(text: string): Promise<void> {
         {{ learning.training.lastError }}
       </p>
     </section>
+    <SubmissionResultModal
+      v-if="latestSubmissionDetail"
+      :open="submissionResultOpen"
+      :detail="latestSubmissionDetail"
+      :can-open-bug-mine="showBugMineButton && !variantResultDetail"
+      @close="closeSubmissionResult"
+      @open-bug-mine="enterBugMine"
+    />
   </section>
 </template>
 
@@ -990,9 +1041,17 @@ async function copySample(text: string): Promise<void> {
 
 .submission__summary {
   display: flex;
-  align-items: baseline;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
 }
 
 .submission__summary strong {
@@ -1000,15 +1059,15 @@ async function copySample(text: string): Promise<void> {
   font-family: var(--pyt-font-read);
 }
 
-.submission__summary span,
-.reason {
+.submission__summary span {
   font-size: 13px;
   line-height: 1.6;
 }
 
-.reason {
-  margin: 0;
-  color: var(--pyt-color-danger);
+.submission__arrow {
+  margin-left: auto;
+  color: #70846a;
+  font-size: 17px !important;
 }
 
 .empty-training {

@@ -19,7 +19,10 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 @Service
 public class FeynmanJudgeService {
@@ -42,6 +45,7 @@ public class FeynmanJudgeService {
   private final PublicProblemRepository problemRepository;
   private final JudgeCaseEvaluator caseEvaluator;
   private final JudgeWorkerPool judgeWorkerPool;
+  private final TransactionTemplate transaction;
 
   public FeynmanJudgeService(
       JdbcTemplate jdbc,
@@ -51,7 +55,8 @@ public class FeynmanJudgeService {
       ApplicationEventPublisher eventPublisher,
       PublicProblemRepository problemRepository,
       JudgeCaseEvaluator caseEvaluator,
-      JudgeWorkerPool judgeWorkerPool) {
+      JudgeWorkerPool judgeWorkerPool,
+      PlatformTransactionManager transactionManager) {
     this.jdbc = jdbc;
     this.sandbox = sandbox;
     this.sessionService = sessionService;
@@ -60,9 +65,10 @@ public class FeynmanJudgeService {
     this.problemRepository = problemRepository;
     this.caseEvaluator = caseEvaluator;
     this.judgeWorkerPool = judgeWorkerPool;
+    this.transaction = new TransactionTemplate(transactionManager);
   }
 
-  @Transactional
+  @Transactional(propagation = Propagation.NOT_SUPPORTED)
   public Verdict judge(long userId, long sessionId) {
     FeynmanSessionService.SessionData session = sessionService.loadSession(userId, sessionId);
     if ("JUDGED_PASS".equals(session.status())) {
@@ -118,23 +124,43 @@ public class FeynmanJudgeService {
       return failUnlessAlreadyPassed(
           session, "学弟代码未通过代表题" + caseKind + "：" + finalVerdict.name());
     }
-    if (jdbc.update(PASS_CLAIM_SQL, sessionId) != 1) {
+    Boolean claimed =
+        transaction.execute(
+            status -> {
+              if (jdbc.update(PASS_CLAIM_SQL, sessionId) != 1) {
+                return false;
+              }
+              masteryEvaluator.applyEvent(
+                  session.userId(),
+                  session.kcCode(),
+                  MasterySource.PRACTICE_PASS,
+                  BigDecimal.valueOf(0.10),
+                  "feynman");
+              eventPublisher.publishEvent(
+                  new LearningEvent.TaughtAiSucceeded(session.userId(), session.kcCode(), sessionId));
+              return true;
+            });
+    if (!Boolean.TRUE.equals(claimed)) {
       return alreadyPassed(sessionId);
     }
-    masteryEvaluator.applyEvent(
-        session.userId(), session.kcCode(), MasterySource.PRACTICE_PASS, BigDecimal.valueOf(0.10), "feynman");
-    eventPublisher.publishEvent(
-        new LearningEvent.TaughtAiSucceeded(session.userId(), session.kcCode(), sessionId));
     return new Verdict(
         sessionId, JudgeStatus.PASSED, "教学成功：学弟代码通过沙箱运行，掌握度已回流。");
   }
 
   private Verdict failUnlessAlreadyPassed(
       FeynmanSessionService.SessionData session, String message) {
-    if (jdbc.update(FAIL_CLAIM_SQL, session.id()) != 1) {
+    Boolean claimed =
+        transaction.execute(
+            status -> {
+              if (jdbc.update(FAIL_CLAIM_SQL, session.id()) != 1) {
+                return false;
+              }
+              publishFailed(session);
+              return true;
+            });
+    if (!Boolean.TRUE.equals(claimed)) {
       return alreadyPassed(session.id());
     }
-    publishFailed(session);
     return new Verdict(session.id(), JudgeStatus.FAILED, message);
   }
 

@@ -55,8 +55,10 @@ def test_fetch_kc_graph_fail_soft_on_bad_db() -> None:
 
 def test_fetch_kc_graph_does_not_log_database_url(monkeypatch, caplog) -> None:
     secret = "postgresql://student:private-db-password@db.internal/course"
+    connect_options: dict[str, object] = {}
 
     def fail_connect(*args, **kwargs):
+        connect_options.update(kwargs)
         raise RuntimeError(f"connection refused for {secret}")
 
     monkeypatch.setattr(kc_graph.psycopg, "connect", fail_connect)
@@ -64,5 +66,6 @@ def test_fetch_kc_graph_does_not_log_database_url(monkeypatch, caplog) -> None:
     graph = fetch_kc_graph(secret)
 
     assert graph.size == 0
+    assert connect_options["connect_timeout"] == kc_graph.DB_CONNECT_TIMEOUT_SECONDS
     assert secret not in caplog.text
     assert "RuntimeError" in caplog.text

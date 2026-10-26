@@ -63,6 +63,7 @@ class TutorWorkflowSubmissionFeedbackListenerTest {
     assertThat(studentState.path("last_action_effective").asBoolean()).isFalse();
     assertThat(projection.seq()).isEqualTo(5);
     assertThat(projection.verdict()).isEqualTo("WA");
+    assertThat(projection.phase()).isEqualTo("ERROR_FEEDBACK");
   }
 
   @Test
@@ -93,6 +94,24 @@ class TutorWorkflowSubmissionFeedbackListenerTest {
     assertThat(studentState.path("last_action_effective").asBoolean()).isTrue();
     assertThat(projection.seq()).isEqualTo(5);
     assertThat(projection.verdict()).isEqualTo("AC");
+    assertThat(projection.phase()).isEqualTo("AC_REVIEW");
+  }
+
+  @Test
+  void persistsSubmissionIdentityForTutorRecovery() throws Exception {
+    when(repository.findActive(USER, PROBLEM)).thenReturn(Optional.of(session));
+    when(repository.findAgentState(session.id()))
+        .thenReturn(Optional.of(new TutorWorkflowAgentStateDto(session.id(), "{}", "{}")));
+
+    listener.onPracticeSucceeded(
+        new LearningEvent.PracticeSucceeded(USER, "PY43-KC-016", PROBLEM, "basic", 1234L));
+
+    TutorWorkflowRepository.SubmissionFeedbackProjection projection = capturedProjection();
+    JsonNode state = objectMapper.readTree(projection.stateJson()).path("student_state");
+    assertThat(state.path("latest_submission_id").asLong()).isEqualTo(1234L);
+    assertThat(state.path("latest_submission_problem_id").asLong()).isEqualTo(PROBLEM);
+    assertThat(state.path("latest_verdict").asText()).isEqualTo("AC");
+    assertThat(projection.actionPayloadJson()).contains("\"submission_id\":1234");
   }
 
   @Test

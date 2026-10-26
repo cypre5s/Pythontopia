@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass, field
-from typing import Iterable, Protocol
+from typing import Protocol
 
 from pythontopia_rag.index.chunker import Chunk
 
@@ -80,7 +80,7 @@ class InMemoryVectorStore:
             self.embed_dim = len(vectors[0])
         existing = {row.chunk.chunk_id: index for index, row in enumerate(self.rows)}
         for chunk, vector in zip(chunks, vectors, strict=False):
-            row = _Row(chunk=chunk, vector=list(vector))
+            row = _Row(chunk=chunk, vector=_normalize(list(vector)))
             if chunk.chunk_id in existing:
                 self.rows[existing[chunk.chunk_id]] = row
             else:
@@ -105,14 +105,15 @@ class InMemoryVectorStore:
         if not self.rows:
             return []
         normalized = _normalize(vector)
+        kc_filter = set(kc_codes or ())
+        chapter_filter = set(chapter_ids or ())
         scored: list[Hit] = []
         for row in self.rows:
-            if kc_codes and not _intersect(row.chunk.kc_codes, kc_codes):
+            if kc_filter and not any(code in kc_filter for code in row.chunk.kc_codes):
                 continue
-            if chapter_ids and row.chunk.chapter_id not in chapter_ids:
+            if chapter_filter and row.chunk.chapter_id not in chapter_filter:
                 continue
-            row_vector = _normalize(row.vector)
-            score = _cosine(normalized, row_vector)
+            score = _cosine(normalized, row.vector)
             scored.append(Hit(chunk=row.chunk, score=score))
         scored.sort(key=lambda hit: hit.score, reverse=True)
         return scored[:top_k]
@@ -134,11 +135,6 @@ class InMemoryVectorStore:
         """记录本次重建所用嵌入是否为降级兜底，供 /rag/index/status 暴露（禁止静默降级）。"""
         self.degraded = degraded
         self.fallback_reason = reason
-
-
-def _intersect(left: Iterable[str], right: Iterable[str]) -> bool:
-    right_set = set(right)
-    return any(value in right_set for value in left)
 
 
 def _normalize(vector: list[float]) -> list[float]:

@@ -45,6 +45,13 @@ export interface SubmissionDetailDto {
   judgeResult: JudgeResultDto | null;
 }
 
+export interface SubmissionPerformanceDto {
+  runtimeBeatsPercent: number | null;
+  runtimeSampleCount: number | null;
+  memoryBeatsPercent: number | null;
+  memorySampleCount: number | null;
+}
+
 export interface SubmissionCreateRequest {
   problemId: number;
   code: string;

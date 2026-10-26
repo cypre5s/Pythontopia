@@ -2,7 +2,6 @@ package com.pythontopia.learner.event;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -10,6 +9,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.pythontopia.learner.event.LearningEventLogRepository.EventInput;
 import com.pythontopia.auth.security.CurrentUserPrincipal;
 import com.pythontopia.auth.security.Role;
 import com.pythontopia.common.web.StudentWriteThrottle;
@@ -161,12 +161,15 @@ class LearningEventControllerTest {
         .isInstanceOf(com.pythontopia.common.error.BusinessException.class)
         .hasMessageContaining("每分钟最多");
     assertThat(throttle.tryAcquire(8L, 1)).isTrue();
-    verify(repository, times(100))
-        .insert(
-            7L,
-            "answer_feedback",
-            Map.of("useful", true),
-            "frontend",
-            EventImportance.of("answer_feedback"));
+    verify(repository)
+        .insertBatch(
+            java.util.Collections.nCopies(
+                100,
+                new EventInput(
+                    7L,
+                    "answer_feedback",
+                    Map.of("useful", true),
+                    "frontend",
+                    EventImportance.of("answer_feedback"))));
   }
 }

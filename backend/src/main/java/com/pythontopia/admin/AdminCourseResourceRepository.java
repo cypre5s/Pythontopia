@@ -37,7 +37,7 @@ public class AdminCourseResourceRepository {
                'COURSE_SEED', COALESCE(p.statement_markdown, ''), NULL::integer
         FROM course_problem p LEFT JOIN course_kc kc
           ON kc.pack_id = p.pack_id AND kc.kc_code = p.kc_code
-        WHERE p.pack_id = 43
+        WHERE p.pack_id = 43 AND p.tutor_owner_user_id IS NULL
       )
       """;
 

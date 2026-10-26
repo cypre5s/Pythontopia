@@ -110,6 +110,8 @@ class TutorStudentState(BaseModel):
     phase: Phase
     attempt_count: int = Field(default=0, ge=0)
     latest_verdict: str = ""
+    latest_submission_id: int | None = Field(default=None, ge=1)
+    latest_submission_problem_id: int | None = Field(default=None, ge=1)
     consecutive_errors: int = Field(default=0, ge=0)
     hint_level: int = Field(default=0, ge=0, le=3)
     # Legacy wire field kept neutral; failed submissions do not determine emotion.
@@ -542,7 +544,7 @@ class TransferSample(BaseModel):
 
 
 class TransferProblemCard(BaseModel):
-    """迁移练习卡（TRANSFER）：卡内展示的变式题（不物化判题）。"""
+    """迁移题草稿；参考解和隐藏测试只供后端自测、物化，Java 投影前必须剔除。"""
 
     title: str = Field(min_length=1)
     description: str = Field(min_length=1)
@@ -551,6 +553,9 @@ class TransferProblemCard(BaseModel):
     samples: list[TransferSample] = Field(min_length=1)
     hint: str = Field(min_length=1)
     target_kcs: list[str] = Field(default_factory=list)
+    reference_solution_language: str = Field(min_length=1, max_length=32)
+    reference_solution_code: str = Field(min_length=1, max_length=8192)
+    test_cases: list[TransferSample] = Field(min_length=1, max_length=9)
 
 
 class CoursewareRef(BaseModel):

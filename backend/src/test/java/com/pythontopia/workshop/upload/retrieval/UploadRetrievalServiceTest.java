@@ -15,7 +15,15 @@ import com.pythontopia.learner.memory.EmbeddingClient;
 import com.pythontopia.workshop.upload.retrieval.dto.RetrievalHit;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 /**
  * {@link UploadRetrievalService} 单测：语义优先 + 字面回退、user scoped 透传、topK clamp、向量维度护栏。
@@ -111,5 +119,49 @@ class UploadRetrievalServiceTest {
     assertThat(result).hasSize(1);
     // 999 → clamp 到 MAX(20)；uploadIds 原样透传作附加过滤。
     verify(repository).searchByCosine(eq(9L), any(float[].class), eq(List.of(3L, 4L)), eq(20));
+  }
+
+  @Test
+  void embeddingAndRetrievalDoNotHoldDatabaseTransaction() {
+    AtomicBoolean transactionDuringEmbedding = new AtomicBoolean(true);
+    when(embeddingClient.embed("课程内容"))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringEmbedding.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return Optional.empty();
+            });
+    when(repository.searchByLiteral(9L, "课程内容", List.of(), 5)).thenReturn(List.of());
+
+    PlatformTransactionManager transactionManager = new TestTransactionManager();
+    ProxyFactory proxyFactory = new ProxyFactory(service);
+    proxyFactory.addAdvice(
+        new TransactionInterceptor(
+            transactionManager, new AnnotationTransactionAttributeSource()));
+    UploadRetrievalService transactionalService =
+        (UploadRetrievalService) proxyFactory.getProxy();
+    transactionalService.retrieve(9L, "课程内容", null, null);
+
+    assertThat(transactionDuringEmbedding).isFalse();
+    verify(repository)
+        .searchByLiteral(eq(9L), eq("课程内容"), eq(List.of()), eq(5));
+  }
+
+  private static final class TestTransactionManager extends AbstractPlatformTransactionManager {
+
+    @Override
+    protected Object doGetTransaction() {
+      return new Object();
+    }
+
+    @Override
+    protected void doBegin(
+        Object transaction, org.springframework.transaction.TransactionDefinition definition) {}
+
+    @Override
+    protected void doCommit(DefaultTransactionStatus status) {}
+
+    @Override
+    protected void doRollback(DefaultTransactionStatus status) {}
   }
 }

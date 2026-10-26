@@ -20,11 +20,12 @@ from pythontopia_graph.schemas.workshop_route import RouteDecision, Topology
 
 Phase = Literal["watch", "learn", "practice", "assess"]
 StepStatus = Literal["pending", "active", "done", "failed", "skipped"]
+MAX_HISTORY_MESSAGES = 40
 
 
 class OrchestratorTurn(BaseModel):
     role: Literal["user", "assistant"]
-    content: str
+    content: str = Field(max_length=8000)
 
 
 class PlanStep(BaseModel):
@@ -146,7 +147,9 @@ class OrchestratorRequest(BaseModel):
     user_id: int = Field(ge=1)
     session_id: str = Field(min_length=1, max_length=128)
     user_message: str = Field(min_length=1, max_length=4000)
-    history: list[OrchestratorTurn] = Field(default_factory=list)
+    history: list[OrchestratorTurn] = Field(
+        default_factory=list, max_length=MAX_HISTORY_MESSAGES
+    )
     profile_brief: str | None = Field(default=None, max_length=2000)
     current_chapter: int | None = Field(default=None, ge=1, le=7)
     recent_kc_codes: list[str] = Field(default_factory=list)

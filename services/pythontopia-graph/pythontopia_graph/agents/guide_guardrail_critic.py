@@ -58,6 +58,8 @@ class GuideGuardrailCritic:
         reasons: list[str] = []
         forbidden_keys = {
             "reference_solution",
+            "reference_solution_language",
+            "reference_solution_code",
             "test_cases",
             "hidden_test_cases",
             "solution",

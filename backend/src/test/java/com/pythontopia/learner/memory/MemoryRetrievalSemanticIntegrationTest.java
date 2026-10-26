@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.pythontopia.PythontopiaApplication;
 import com.pythontopia.learner.memory.MemoryEmbeddingRepository.ScoredEvent;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import org.assertj.core.data.Offset;
 import org.junit.jupiter.api.Test;
@@ -117,6 +118,23 @@ class MemoryRetrievalSemanticIntegrationTest {
   @Test
   void findReturnsEmptyForUnknownEvent() {
     assertThat(repository.find(-1L)).isEmpty();
+  }
+
+  @Test
+  void findAllLoadsOnlyAvailableVectorsAndHandlesEmptyInput() {
+    long userId = insertUser("batch-find");
+    long first = insertEvent(userId, "practice_failed");
+    long second = insertEvent(userId, "practice_succeeded");
+    repository.upsert(first, axis(0), "bge-small-zh-v1.5");
+    repository.upsert(second, axis(1), "bge-small-zh-v1.5");
+
+    Map<Long, float[]> found = repository.findAll(List.of(first, -1L, second));
+
+    assertThat(found.keySet()).containsExactlyInAnyOrder(first, second);
+    assertThat(found.get(first)).hasSize(DIM);
+    assertThat(found.get(first)[0]).isCloseTo(1.0f, Offset.offset(1e-4f));
+    assertThat(found.get(second)[1]).isCloseTo(1.0f, Offset.offset(1e-4f));
+    assertThat(repository.findAll(List.of())).isEmpty();
   }
 
   private long insertUser(String username) {

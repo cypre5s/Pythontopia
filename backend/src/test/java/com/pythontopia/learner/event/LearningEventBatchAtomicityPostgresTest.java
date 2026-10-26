@@ -10,6 +10,7 @@ import com.pythontopia.common.web.StudentWriteThrottle;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -57,6 +58,32 @@ class LearningEventBatchAtomicityPostgresTest {
         "CREATE TRIGGER reject_selected_learning_event BEFORE INSERT ON learning_event_log "
             + "FOR EACH ROW EXECUTE FUNCTION reject_selected_learning_event()");
     jdbc.update("INSERT INTO users (id, username) VALUES (7, 'student')");
+  }
+
+  @BeforeEach
+  void clearEvents() {
+    jdbc.update("DELETE FROM learning_event_log");
+  }
+
+  @Test
+  void insertsEveryValidEventFromBatch() {
+    LearningEventController controller =
+        new LearningEventController(
+            new LearningEventLogRepository(jdbc, new ObjectMapper()),
+            new ClientLearningEventGuard(new ObjectMapper(), new StudentWriteThrottle()));
+
+    controller.logBatch(
+        new CurrentUserPrincipal(7L, "student", Role.STUDENT),
+        List.of(
+            new LearningEventLogDto("answer_feedback", Map.of("useful", true)),
+            new LearningEventLogDto("quiz_finished", Map.of("score", 80))));
+
+    assertThat(jdbc.queryForObject("SELECT COUNT(*) FROM learning_event_log", Integer.class))
+        .isEqualTo(2);
+    assertThat(
+            jdbc.queryForList(
+                "SELECT event_type FROM learning_event_log ORDER BY id", String.class))
+        .containsExactly("answer_feedback", "quiz_finished");
   }
 
   @Test

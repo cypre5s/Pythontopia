@@ -16,15 +16,24 @@ import com.pythontopia.submission.dto.Verdict;
 import com.pythontopia.submission.judge.JudgeService.JudgeOutcome;
 import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import com.pythontopia.submission.repository.PublicProblemRepository;
+import com.pythontopia.submission.service.SubmissionTransactionService;
+import com.pythontopia.learner.quest.service.QuestService;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.ApplicationEventPublisher;
 
 class JudgeServiceTest {
 
   private final PracticeSubmissionRepository submissions = mock(PracticeSubmissionRepository.class);
   private final PublicProblemRepository problems = mock(PublicProblemRepository.class);
+  private final SubmissionTransactionService submissionTransactions =
+      new SubmissionTransactionService(
+          submissions,
+          problems,
+          mock(QuestService.class),
+          mock(ApplicationEventPublisher.class));
   private final PythonSandbox sandbox = mock(PythonSandbox.class);
   private final StaticCodeChecker checker = new StaticCodeChecker("python3");
   private final ObjectMapper mapper = new ObjectMapper();
@@ -36,12 +45,12 @@ class JudgeServiceTest {
   void setUp() {
     judge =
         new JudgeService(
-            submissions, problems, sandbox, checker, mapper, workerPool, caseEvaluator);
+            submissionTransactions, problems, sandbox, checker, mapper, workerPool, caseEvaluator);
   }
 
   @Test
   void ceWhenStaticCheckFails() {
-    JudgeOutcome outcome = judge.judge(1L, 2L, "import os\nprint(1)");
+    JudgeOutcome outcome = judge.judge(1L, 2L, "import os\nprint(1)", 7L);
     assertThat(outcome.verdict()).isEqualTo(Verdict.CE);
     verify(submissions).markStatus(eq(1L), eq(SubmissionStatus.RUNNING), eq(null), eq(null));
     verify(submissions).markStatus(eq(1L), eq(SubmissionStatus.FAILED), eq(0), eq(null));
@@ -52,7 +61,7 @@ class JudgeServiceTest {
     setupTestCases("1\n", "1");
     when(sandbox.name()).thenReturn("subprocess");
     when(sandbox.run(any(), any())).thenReturn(new SandboxRunResult(false, 0, "1\n", "", 12, null));
-    JudgeOutcome outcome = judge.judge(1L, 2L, "print(input())");
+    JudgeOutcome outcome = judge.judge(1L, 2L, "print(input())", 7L);
     assertThat(outcome.verdict()).isEqualTo(Verdict.AC);
     assertThat(outcome.passedCases()).isEqualTo(1);
     assertThat(outcome.totalCases()).isEqualTo(1);
@@ -60,11 +69,23 @@ class JudgeServiceTest {
   }
 
   @Test
+  void persistsMeasuredPeakMemory() {
+    setupTestCases("1\n", "1");
+    when(sandbox.name()).thenReturn("piston");
+    when(sandbox.run(any(), any()))
+        .thenReturn(new SandboxRunResult(false, 0, "1\n", "", 12, 24, null));
+
+    judge.judge(1L, 2L, "print(input())", 7L);
+
+    verify(submissions).markStatus(eq(1L), eq(SubmissionStatus.PASSED), eq(12), eq(24));
+  }
+
+  @Test
   void waWhenOutputDiffers() {
     setupTestCases("1\n", "2");
     when(sandbox.name()).thenReturn("subprocess");
     when(sandbox.run(any(), any())).thenReturn(new SandboxRunResult(false, 0, "1\n", "", 10, null));
-    JudgeOutcome outcome = judge.judge(1L, 2L, "print(input())");
+    JudgeOutcome outcome = judge.judge(1L, 2L, "print(input())", 7L);
     assertThat(outcome.verdict()).isEqualTo(Verdict.WA);
     verify(submissions).markStatus(eq(1L), eq(SubmissionStatus.FAILED), anyInt(), eq(null));
   }
@@ -74,7 +95,7 @@ class JudgeServiceTest {
     setupTestCases("1\n", "1");
     when(sandbox.name()).thenReturn("subprocess");
     when(sandbox.run(any(), any())).thenReturn(new SandboxRunResult(true, -1, "", "", 5000, "TLE"));
-    JudgeOutcome outcome = judge.judge(1L, 2L, "while True:\n  pass");
+    JudgeOutcome outcome = judge.judge(1L, 2L, "while True:\n  pass", 7L);
     assertThat(outcome.verdict()).isEqualTo(Verdict.TLE);
   }
 
@@ -83,14 +104,14 @@ class JudgeServiceTest {
     setupTestCases("1\n", "1");
     when(sandbox.name()).thenReturn("subprocess");
     when(sandbox.run(any(), any())).thenReturn(new SandboxRunResult(false, 1, "", "Traceback", 8, null));
-    JudgeOutcome outcome = judge.judge(1L, 2L, "raise Exception()");
+    JudgeOutcome outcome = judge.judge(1L, 2L, "raise Exception()", 7L);
     assertThat(outcome.verdict()).isEqualTo(Verdict.RE);
   }
 
   @Test
   void systemErrorWhenNoTestCasesAvailable() {
-    when(problems.findTestCases(eq(2L))).thenReturn(Optional.empty());
-    JudgeOutcome outcome = judge.judge(1L, 2L, "print(1)");
+    when(problems.findTestCases(eq(2L), eq(7L))).thenReturn(Optional.empty());
+    JudgeOutcome outcome = judge.judge(1L, 2L, "print(1)", 7L);
     assertThat(outcome.verdict()).isEqualTo(Verdict.SYSTEM_ERROR);
     verify(submissions).markStatus(eq(1L), eq(SubmissionStatus.ERROR), eq(0), eq(null));
   }
@@ -106,9 +127,9 @@ class JudgeServiceTest {
         new StaticCodeChecker("/nonexistent/python-that-cannot-be-launched");
     JudgeService brokenJudge =
         new JudgeService(
-            submissions, problems, sandbox, brokenChecker, mapper, workerPool, caseEvaluator);
+            submissionTransactions, problems, sandbox, brokenChecker, mapper, workerPool, caseEvaluator);
 
-    JudgeOutcome outcome = brokenJudge.judge(1L, 2L, "print(1)");
+    JudgeOutcome outcome = brokenJudge.judge(1L, 2L, "print(1)", 7L);
 
     assertThat(outcome.verdict()).isEqualTo(Verdict.SYSTEM_ERROR);
     assertThat(outcome.failureReason()).startsWith("SYSTEM_ERROR:");
@@ -130,9 +151,9 @@ class JudgeServiceTest {
         };
     JudgeService checkedJudge =
         new JudgeService(
-            submissions, problems, sandbox, threadRecordingChecker, mapper, workerPool, caseEvaluator);
+            submissionTransactions, problems, sandbox, threadRecordingChecker, mapper, workerPool, caseEvaluator);
 
-    checkedJudge.judge(1L, 2L, "print(1)");
+    checkedJudge.judge(1L, 2L, "print(1)", 7L);
 
     assertThat(checkThread.get()).startsWith("judge-worker-");
   }
@@ -145,7 +166,7 @@ class JudgeServiceTest {
     when(sandbox.run(any(), any()))
         .thenReturn(new SandboxRunResult(false, -1, "", "Sandbox error", 0L, "SYSTEM_ERROR"));
 
-    JudgeOutcome outcome = judge.judge(1L, 2L, "print(1)");
+    JudgeOutcome outcome = judge.judge(1L, 2L, "print(1)", 7L);
 
     assertThat(outcome.verdict()).isEqualTo(Verdict.SYSTEM_ERROR);
     verify(submissions).markStatus(eq(1L), eq(SubmissionStatus.ERROR), anyInt(), eq(null));
@@ -156,14 +177,14 @@ class JudgeServiceTest {
   void hiddenCaseFailureNeverLeaksExpectedOutput() {
     com.fasterxml.jackson.databind.node.ArrayNode hidden = mapper.createArrayNode();
     hidden.add(mapper.createObjectNode().put("input", "1\n").put("output", "SECRET-42"));
-    when(problems.findTestCases(eq(2L)))
+    when(problems.findTestCases(eq(2L), eq(7L)))
         .thenReturn(
             Optional.of(
                 new PublicProblemRepository.JudgeTestCases(mapper.createArrayNode(), hidden)));
     when(sandbox.name()).thenReturn("subprocess");
     when(sandbox.run(any(), any())).thenReturn(new SandboxRunResult(false, 0, "0\n", "", 5, null));
 
-    JudgeOutcome outcome = judge.judge(1L, 2L, "print(0)");
+    JudgeOutcome outcome = judge.judge(1L, 2L, "print(0)", 7L);
 
     assertThat(outcome.verdict()).isEqualTo(Verdict.WA);
     assertThat(outcome.failureReason()).doesNotContain("SECRET-42");
@@ -175,6 +196,6 @@ class JudgeServiceTest {
     samples.add(mapper.createObjectNode().put("input", input).put("output", output));
     PublicProblemRepository.JudgeTestCases tc =
         new PublicProblemRepository.JudgeTestCases(samples, mapper.createArrayNode());
-    when(problems.findTestCases(eq(2L))).thenReturn(Optional.of(tc));
+    when(problems.findTestCases(eq(2L), eq(7L))).thenReturn(Optional.of(tc));
   }
 }

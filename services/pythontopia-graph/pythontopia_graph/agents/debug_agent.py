@@ -29,6 +29,15 @@ class DebugAgent:
     def analyse(self, payload: DebugAgentInput) -> DebugAgentOutput:
         counter_example = payload.counter_example
         trace = payload.variable_trace
+        if counter_example.redacted:
+            counter_example = CounterExampleCard(
+                stdin="隐藏测试用例（输入已隐藏）",
+                expected_stdout="期望输出已隐藏",
+                your_stdout="实际输出已隐藏",
+                diff_summary="隐藏测试数据已脱敏，请按题面检查边界条件。",
+                redacted=True,
+            )
+            trace = VariableTrace(steps=[], truncated=False)
         assumption = self._build_assumption(payload)
         hint_layers = self._build_hint_layers(payload)
         retry_advice = RetryAdvice(
@@ -54,7 +63,10 @@ class DebugAgent:
 
     def _build_assumption(self, payload: DebugAgentInput) -> WrongAssumptionCard:
         diff = payload.counter_example.diff_summary
-        if payload.verdict == "WA":
+        if payload.counter_example.redacted:
+            you_thought = "你的程序未能通过一条隐藏测试用例。"
+            actually = "具体输入和期望输出已隐藏，请根据题面检查边界条件和输出格式。"
+        elif payload.verdict == "WA":
             you_thought = f"你以为输出 '{payload.counter_example.your_stdout.strip()[:80]}' 已经满足题意。"
             actually = (
                 f"实际期望是 '{payload.counter_example.expected_stdout.strip()[:80]}'。"
@@ -83,10 +95,14 @@ class DebugAgent:
             layer=1,
             headline="先想清楚一个问题",
             body=(
-                "在你点开下一层提示之前，请尝试回答："
-                "如果给定输入 '"
-                + payload.counter_example.stdin.strip()[:80]
-                + "'，你的程序应该按什么步骤产生输出？"
+                "判题显示有一条隐藏测试用例未通过。请结合题面自行构造边界输入，逐步检查程序应如何产生输出。"
+                if payload.counter_example.redacted
+                else (
+                    "在你点开下一层提示之前，请尝试回答："
+                    "如果给定输入 '"
+                    + payload.counter_example.stdin.strip()[:80]
+                    + "'，你的程序应该按什么步骤产生输出？"
+                )
             ),
             related_pages=payload.rag_pages[:2],
         )
@@ -95,10 +111,14 @@ class DebugAgent:
             layer=2,
             headline="检查关键代码段",
             body=(
-                "对比变量轨迹与你的预期，重点检查第 "
-                + str(suspicious_line)
-                + " 行附近：变量取值、循环边界和分支条件。"
-                "若与题面输入/输出描述不符，先修正这一处。"
+                "具体输入和输出已隐藏，优先检查边界条件、分支和输出格式。"
+                if payload.counter_example.redacted
+                else (
+                    "对比变量轨迹与你的预期，重点检查第 "
+                    + str(suspicious_line)
+                    + " 行附近：变量取值、循环边界和分支条件。"
+                    "若与题面输入/输出描述不符，先修正这一处。"
+                )
             ),
             related_pages=payload.rag_pages[:3],
         )

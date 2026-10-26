@@ -22,12 +22,19 @@ import com.pythontopia.npc.dto.NpcGreetingResponse;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
+import org.springframework.boot.test.context.runner.ApplicationContextRunner;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 
 class NpcGreetingPrewarmJobTest {
 
   private final LearningEventLogRepository eventRepository =
       mock(LearningEventLogRepository.class);
   private final NpcGreetingService greetingService = mock(NpcGreetingService.class);
+
+  private final ApplicationContextRunner defaultConfigRunner =
+      new ApplicationContextRunner().withUserConfiguration(DefaultConfig.class);
 
   private NpcGreetingPrewarmJob job(boolean enabled) {
     return new NpcGreetingPrewarmJob(eventRepository, greetingService, enabled, 7, 200);
@@ -49,6 +56,19 @@ class NpcGreetingPrewarmJobTest {
   void disabledSkipsAllWork() {
     job(false).prewarmDaily();
     verifyNoInteractions(eventRepository, greetingService);
+  }
+
+  @Test
+  void prewarmingIsDisabledByDefault() {
+    defaultConfigRunner.run(
+        context -> {
+          LearningEventLogRepository eventRepo = context.getBean(LearningEventLogRepository.class);
+          when(eventRepo.findActiveUserIds(any(), anyInt())).thenReturn(List.of());
+
+          context.getBean(NpcGreetingPrewarmJob.class).prewarmDaily();
+
+          verifyNoInteractions(eventRepo, context.getBean(NpcGreetingService.class));
+        });
   }
 
   @Test
@@ -134,5 +154,20 @@ class NpcGreetingPrewarmJobTest {
         .extracting(ILoggingEvent::getFormattedMessage)
         .anySatisfy(message -> assertThat(message).contains("errorType=RuntimeException"))
         .noneMatch(message -> message.contains(sentinel) || message.contains("987654"));
+  }
+
+  @Configuration(proxyBeanMethods = false)
+  @Import(NpcGreetingPrewarmJob.class)
+  static class DefaultConfig {
+
+    @Bean
+    LearningEventLogRepository eventRepository() {
+      return mock(LearningEventLogRepository.class);
+    }
+
+    @Bean
+    NpcGreetingService greetingService() {
+      return mock(NpcGreetingService.class);
+    }
   }
 }

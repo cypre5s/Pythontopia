@@ -2,6 +2,7 @@ package com.pythontopia.ai.runtime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.same;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -41,16 +42,17 @@ class AiRuntimeSummaryServiceTest {
   @Test
   void summaryCombinesProtocolEvidenceMemoryTwinAndBrowseSafetyWall() {
     long userId = 7L;
+    LearningEvidenceGraphDto graph =
+        new LearningEvidenceGraphDto(
+            userId,
+            null,
+            List.of(),
+            List.of(),
+            new EvidenceGraphMetricsDto(18, 24, 4, 5, 0.75, 0.5, 0.8, 0.25, 0.66, 1),
+            List.of());
     when(evidenceGraphService.buildForUser(eq(userId), eq(null), eq(160)))
-        .thenReturn(
-            new LearningEvidenceGraphDto(
-                userId,
-                null,
-                List.of(),
-                List.of(),
-                new EvidenceGraphMetricsDto(18, 24, 4, 5, 0.75, 0.5, 0.8, 0.25, 0.66, 1),
-                List.of()));
-    when(evidenceMemoryService.createSnapshot(eq(userId), eq(null), eq(160), eq(false)))
+        .thenReturn(graph);
+    when(evidenceMemoryService.createSnapshot(same(graph)))
         .thenReturn(
             new EvidenceMemorySnapshotDto(
                 null,
@@ -162,16 +164,17 @@ class AiRuntimeSummaryServiceTest {
   @Test
   void emptyLearnerTraceIsMarkedInsufficientInsteadOfPretendingToPass() {
     long userId = 8L;
+    LearningEvidenceGraphDto graph =
+        new LearningEvidenceGraphDto(
+            userId,
+            null,
+            List.of(),
+            List.of(),
+            new EvidenceGraphMetricsDto(0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0),
+            List.of());
     when(evidenceGraphService.buildForUser(eq(userId), eq(null), eq(160)))
-        .thenReturn(
-            new LearningEvidenceGraphDto(
-                userId,
-                null,
-                List.of(),
-                List.of(),
-                new EvidenceGraphMetricsDto(0, 0, 0, 0, 0.0, 0.0, 0.0, 0.0, 0.0, 0),
-                List.of()));
-    when(evidenceMemoryService.createSnapshot(eq(userId), eq(null), eq(160), eq(false)))
+        .thenReturn(graph);
+    when(evidenceMemoryService.createSnapshot(same(graph)))
         .thenReturn(new EvidenceMemorySnapshotDto(null, userId, null, 0, 0, 0, 0.0, 0.0, List.of()));
     when(weeklyReportService.build(eq(userId)))
         .thenReturn(

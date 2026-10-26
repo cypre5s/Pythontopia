@@ -3,6 +3,8 @@ package com.pythontopia.stage09;
 import static org.assertj.core.api.Assertions.assertThat;
 import com.pythontopia.PythontopiaApplication;
 import com.pythontopia.learner.event.LearningEventLogRepository;
+import com.pythontopia.submission.dto.SubmissionSource;
+import com.pythontopia.submission.dto.SubmissionStatus;
 import com.pythontopia.submission.judge.StubPythonSandboxConfiguration;
 import com.pythontopia.submission.repository.PracticeSubmissionRepository;
 import java.time.OffsetDateTime;
@@ -126,6 +128,39 @@ class Stage09SubmissionAcceptanceIntegrationTest {
             Integer.class,
             userId);
     assertThat(mastery).isGreaterThanOrEqualTo(1);
+  }
+
+  @Test
+  void performanceRanksSubmissionRowsAndAppliesMetricThresholdsSeparately() {
+    String token = registerAndLogin("submit-stu-performance");
+    Long userId = userId("submit-stu-performance");
+    Long targetId = null;
+
+    for (int sample = 1; sample <= 10; sample++) {
+      Long submissionId =
+          submissionRepository.insertSubmission(
+              userId, 476L, null, SubmissionSource.TRAINING, "print(1)");
+      submissionRepository.markStatus(
+          submissionId,
+          SubmissionStatus.PASSED,
+          sample,
+          sample == 10 ? null : sample);
+      if (sample == 1) targetId = submissionId;
+    }
+
+    ResponseEntity<Map> response =
+        restTemplate.exchange(
+            "/api/submissions/{id}/performance",
+            HttpMethod.GET,
+            bearer(token, null),
+            Map.class,
+            targetId);
+
+    assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+    assertThat(response.getBody().get("runtimeBeatsPercent")).isEqualTo(90.0);
+    assertThat(response.getBody().get("runtimeSampleCount")).isEqualTo(10);
+    assertThat(response.getBody().get("memoryBeatsPercent")).isNull();
+    assertThat(response.getBody().get("memorySampleCount")).isNull();
   }
 
   @Test

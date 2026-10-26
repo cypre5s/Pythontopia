@@ -32,7 +32,7 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
-/** Concurrent submissions for one exam must wait on its database row before judging. */
+/** Concurrent submissions for one exam must use one sandbox judgment and return its stored result. */
 @Testcontainers
 @SpringBootTest(classes = PythontopiaApplication.class)
 class ChapterTestSubmitConcurrencyIntegrationTest {

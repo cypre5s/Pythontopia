@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -29,6 +29,16 @@ async function execute(code, runTimeoutMs = 3_000) {
 }
 
 async function main() {
+  const runtimePatch = await readFile(
+    new URL('../piston-local/harden-piston-runtime.cjs', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    runtimePatch,
+    /proc\.on\('close'/,
+    'resource metrics must wait for every child pipe to close',
+  );
+
   const markerDirectory = await mkdtemp(join(tmpdir(), 'pythontopia-piston-'));
   const markerPath = join(markerDirectory, 'host-only-marker.txt');
   try {
@@ -36,6 +46,11 @@ async function main() {
 
     const basic = await execute('print("piston-smoke-ok")');
     assert.equal(basic.stdout.trim(), 'piston-smoke-ok', 'Python runtime must execute code');
+    assert.ok(Number.isFinite(basic.wall_time) && basic.wall_time > 0, 'Piston must report measured wall time');
+    assert.ok(Number.isSafeInteger(basic.memory) && basic.memory > 0, 'Piston must report measured peak RSS in bytes');
+
+    const larger = await execute('buffer = bytearray(16 * 1024 * 1024)\nprint(len(buffer))');
+    assert.ok(larger.memory > basic.memory, 'peak RSS must reflect additional process memory');
 
     const identityProbe = await execute('import os\nprint(os.geteuid())');
     assert.match(identityProbe.stdout.trim(), /^\d+$/, 'sandbox must report a numeric effective UID');

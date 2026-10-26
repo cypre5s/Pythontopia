@@ -3,6 +3,7 @@ import type {
   SubmissionCreateRequest,
   SubmissionDetailDto,
   SubmissionDto,
+  SubmissionPerformanceDto,
   SubmissionStatus,
 } from './dto/Submission';
 
@@ -15,6 +16,11 @@ export async function createSubmission(
 
 export async function getSubmission(id: number): Promise<SubmissionDetailDto> {
   const response = await http.get<SubmissionDetailDto>(`/api/submissions/${id}`);
+  return response.data;
+}
+
+export async function getSubmissionPerformance(id: number): Promise<SubmissionPerformanceDto> {
+  const response = await http.get<SubmissionPerformanceDto>(`/api/submissions/${id}/performance`);
   return response.data;
 }
 

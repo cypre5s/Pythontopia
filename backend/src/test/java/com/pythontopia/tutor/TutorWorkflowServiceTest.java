@@ -44,7 +44,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Consumer;
+import java.util.function.Function;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -74,6 +74,8 @@ class TutorWorkflowServiceTest {
   private final ApplicationEventPublisher eventPublisher = mock(ApplicationEventPublisher.class);
   private final TutorRequestBudgetService requestBudgetService =
       mock(TutorRequestBudgetService.class);
+  private final TutorTransferProblemService transferProblemService =
+      mock(TutorTransferProblemService.class);
 
   private final TutorWorkflowService service =
       new TutorWorkflowService(
@@ -87,7 +89,8 @@ class TutorWorkflowServiceTest {
           eventPublisher,
           requestBudgetService,
           new ObjectMapper(),
-          mock(TutorDailyRequestLimitService.class));
+          mock(TutorDailyRequestLimitService.class),
+          transferProblemService);
 
   private static final long USER = 7L;
   private static final long PROBLEM = 476L;
@@ -526,6 +529,91 @@ class TutorWorkflowServiceTest {
   }
 
   @Test
+  void activeSessionRecoversLatestSubmissionWhenTutorWasNotOpenAtSubmissionTime() {
+    OffsetDateTime submittedAt = OffsetDateTime.parse("2026-10-25T10:00:00Z");
+    SubmissionDto submission =
+        new SubmissionDto(
+            1234L,
+            USER,
+            PROBLEM,
+            null,
+            SubmissionSource.TRAINING,
+            "PYTHON_3_11",
+            "print(3.1415 * radius * radius)",
+            submittedAt,
+            SubmissionStatus.PASSED,
+            12,
+            512);
+    when(submissionService.list(USER, PROBLEM, null, 1, 0)).thenReturn(List.of(submission));
+    when(submissionService.findOne(USER, 1234L))
+        .thenReturn(
+            new SubmissionDetailDto(
+                submission,
+                new JudgeResultDto(8L, 1234L, Verdict.AC, 3, 3, null, null, submittedAt)));
+
+    Map<String, Object> snapshot = service.activeSession(USER, PROBLEM);
+
+    assertThat(snapshot)
+        .containsEntry("phase", "AC_REVIEW")
+        .containsEntry("latestSubmissionId", 1234L)
+        .containsEntry("latestSubmissionProblemId", PROBLEM)
+        .containsEntry("latestVerdict", "AC");
+  }
+
+  @Test
+  void activeSessionRecoversLatestFailedSubmissionAsErrorFeedback() {
+    OffsetDateTime submittedAt = OffsetDateTime.parse("2026-10-25T10:01:00Z");
+    SubmissionDto submission =
+        new SubmissionDto(
+            1235L,
+            USER,
+            PROBLEM,
+            null,
+            SubmissionSource.TRAINING,
+            "PYTHON_3_11",
+            "print('wrong')",
+            submittedAt,
+            SubmissionStatus.FAILED,
+            12,
+            512);
+    when(submissionService.list(USER, PROBLEM, null, 1, 0)).thenReturn(List.of(submission));
+    when(submissionService.findOne(USER, 1235L))
+        .thenReturn(
+            new SubmissionDetailDto(
+                submission,
+                new JudgeResultDto(9L, 1235L, Verdict.WA, 1, 3, null, null, submittedAt)));
+
+    Map<String, Object> snapshot = service.activeSession(USER, PROBLEM);
+
+    assertThat(snapshot)
+        .containsEntry("phase", "ERROR_FEEDBACK")
+        .containsEntry("latestSubmissionId", 1235L)
+        .containsEntry("latestSubmissionProblemId", PROBLEM)
+        .containsEntry("latestVerdict", "WA");
+  }
+
+  @Test
+  void activeSessionReturnsLatestSubmissionFeedback() {
+    when(repository.findAgentState(session.id()))
+        .thenReturn(
+            Optional.of(
+                new TutorWorkflowAgentStateDto(
+                    session.id(),
+                    """
+                    {"student_state":{"latest_submission_id":1234,
+                      "latest_submission_problem_id":476,"latest_verdict":"AC"}}
+                    """,
+                    "{}")));
+
+    Map<String, Object> snapshot = service.activeSession(USER, PROBLEM);
+
+    assertThat(snapshot)
+        .containsEntry("latestSubmissionId", 1234L)
+        .containsEntry("latestSubmissionProblemId", PROBLEM)
+        .containsEntry("latestVerdict", "AC");
+  }
+
+  @Test
   void activeSessionLoadsOnlyTheLatestFiftyCards() {
     List<TutorWorkflowCardDto> history =
         java.util.stream.IntStream.rangeClosed(1, 80)
@@ -697,7 +785,7 @@ class TutorWorkflowServiceTest {
   @Test
   void imageOnlyChatGetsTextForPersistenceWithoutSavingImageData() throws Exception {
     String attachmentId = "5db6f261-913a-4c12-b1c8-f40303dbf8a9";
-    AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
+    AtomicReference<Function<String, String>> onResult = new AtomicReference<>();
     org.mockito.Mockito.doAnswer(
             invocation -> {
               onResult.set(invocation.getArgument(3));
@@ -720,7 +808,7 @@ class TutorWorkflowServiceTest {
 
     onResult
         .get()
-        .accept(
+        .apply(
             """
             {"result": {"session_id":"wf-7-476-abc","event":"CHAT","phase":"READING",
              "card_key":"ai_reply","card":{"card_id":"wf-7-476-abc:x1","content":"看起来是半径输入"},
@@ -847,6 +935,40 @@ class TutorWorkflowServiceTest {
   }
 
   @Test
+  void errorFeedbackAcceptsOnlyTheSessionBoundTransferProblem() throws Exception {
+    PublicProblemDto transferProblem =
+        new PublicProblemDto(
+            488L,
+            43L,
+            "PY43-KC-038",
+            "举例：圆周长和面积计算",
+            "计算周长和面积",
+            "一个浮点数",
+            "输出两行",
+            "Low",
+            new ObjectMapper().readTree("[{\"input\":\"2\",\"output\":\"12.57\\n12.57\"}]"));
+    when(submissionService.findOne(USER, 101L))
+        .thenReturn(detail(101L, 488L, Verdict.WA, SubmissionStatus.FAILED));
+    when(repository.hasTransferProblem(session.id(), 488L)).thenReturn(true);
+    when(problemRepository.findAccessible(43L, 488L, USER))
+        .thenReturn(Optional.of(transferProblem));
+
+    service.run(
+        USER,
+        new TutorWorkflowRunRequest(PROBLEM, "ERROR_FEEDBACK", Map.of("submission_id", 101)));
+
+    Map<String, Object> body = capturedBody();
+    @SuppressWarnings("unchecked")
+    Map<String, Object> problem = (Map<String, Object>) body.get("problem");
+    @SuppressWarnings("unchecked")
+    Map<String, Object> diagnosis = (Map<String, Object>) body.get("diagnosis");
+    assertThat(problem)
+        .containsEntry("problem_id", 488L)
+        .containsEntry("title", "举例：圆周长和面积计算");
+    assertThat(diagnosis).containsEntry("submission_id", 101L).containsEntry("verdict", "WA");
+  }
+
+  @Test
   void errorFeedbackAttachesDiagnosisWithConsecutiveErrors() {
     when(submissionService.findOne(USER, 99L))
         .thenReturn(detail(99L, PROBLEM, Verdict.WA, SubmissionStatus.FAILED));
@@ -871,7 +993,7 @@ class TutorWorkflowServiceTest {
 
   @Test
   void persistProjectionUpdatesPhaseAndInsertsCardWithUserMessage() throws Exception {
-    AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
+    AtomicReference<Function<String, String>> onResult = new AtomicReference<>();
     org.mockito.Mockito.doAnswer(
             invocation -> {
               onResult.set(invocation.getArgument(3));
@@ -885,7 +1007,7 @@ class TutorWorkflowServiceTest {
     // 模拟 graph 终态（AG-UI RUN_FINISHED 包裹形状）。
     onResult
         .get()
-        .accept(
+        .apply(
             """
             {"result": {"session_id": "wf-7-476-abc", "event": "CHAT", "phase": "READING",
              "card_key": "ai_reply", "card": {"card_id": "wf-7-476-abc:x1", "content": "想想格式化输出"},
@@ -899,23 +1021,23 @@ class TutorWorkflowServiceTest {
   }
 
   @Test
-  void transferProjectionBindsAReviewedSameKcProblemForFormalSubmission() throws Exception {
+  void transferProjectionMaterializesAndRedactsTheSelfTestedAiProblem() throws Exception {
     PublicProblemDto transferProblem =
         new PublicProblemDto(
-            500L,
+            488L,
             43L,
-            "PY43-KC-016",
-            "审核变式题",
-            "读取边长并输出正方形面积",
+            "PY43-KC-038",
+            "举例：圆周长和面积计算",
+            "读取半径并输出圆周长和面积",
             "一个浮点数",
-            "面积保留 2 位",
-            "Basic",
-            new ObjectMapper().readTree("[{\"input\":\"2\",\"output\":\"4.00\"}]"));
-    when(problemRepository.findVariantProblem(USER, PROBLEM, "PY43-KC-016"))
-        .thenReturn(Optional.of(new PublicProblemRepository.VariantProblem(500L, "审核变式题")));
-    when(problemRepository.findPublic(43L, 500L)).thenReturn(Optional.of(transferProblem));
+            "分别输出周长和面积",
+            "Low",
+            new ObjectMapper().readTree("[{\"input\":\"2\",\"output\":\"12.57\\n12.57\"}]"));
+    when(transferProblemService.materialize(
+            eq(USER), eq(session.id()), any(UUID.class), eq(PROBLEM), any()))
+        .thenReturn(transferProblem);
 
-    AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
+    AtomicReference<Function<String, String>> onResult = new AtomicReference<>();
     org.mockito.Mockito.doAnswer(
             invocation -> {
               onResult.set(invocation.getArgument(3));
@@ -925,44 +1047,38 @@ class TutorWorkflowServiceTest {
         .runStream(any(), any(), any(), any(), any(), any());
 
     service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "TRANSFER", Map.of()));
-    onResult
-        .get()
-        .accept(
+    String safeResult =
+        onResult
+            .get()
+            .apply(
             """
             {"result":{"event":"TRANSFER","phase":"TRANSFER","card_key":"transfer_problem",
              "card":{"title":"模型题目","description":"模型自拟题面","input_description":"模型输入",
                "output_description":"模型输出","samples":[{"input":"bad","output":"bad"}],
-               "hint":"先看输入输出关系","target_kcs":["PY43-KC-001"]},"seq":8}}
+               "hint":"先看输入输出关系","target_kcs":["PY43-KC-016"],
+               "reference_solution_language":"Python3","reference_solution_code":"SECRET_REFERENCE",
+               "test_cases":[{"input":"secret","output":"private"}]},"seq":8}}
             """);
 
     JsonNode card = new ObjectMapper().readTree(capturedProjection().cardPayloadJson());
-    assertThat(card.path("problem_id").asLong()).isEqualTo(500L);
-    assertThat(card.path("kc_code").asText()).isEqualTo("PY43-KC-016");
-    assertThat(card.path("title").asText()).isEqualTo("审核变式题");
-    assertThat(card.path("description").asText()).isEqualTo("读取边长并输出正方形面积");
-    assertThat(card.path("samples").get(0).path("output").asText()).isEqualTo("4.00");
-    assertThat(card.path("target_kcs").get(0).asText()).isEqualTo("PY43-KC-016");
-    assertThat(card.path("hint").asText()).isEqualTo("请先读题明确输入、输出和约束，再结合样例独立完成。");
+    assertThat(card.path("problem_id").asLong()).isEqualTo(488L);
+    assertThat(card.path("kc_code").asText()).isEqualTo("PY43-KC-038");
+    assertThat(card.path("title").asText()).isEqualTo("举例：圆周长和面积计算");
+    assertThat(card.path("description").asText()).isEqualTo("读取半径并输出圆周长和面积");
+    assertThat(card.path("samples").get(0).path("output").asText()).isEqualTo("12.57\n12.57");
+    assertThat(card.path("target_kcs").get(0).asText()).isEqualTo("PY43-KC-038");
+    assertThat(card.path("hint").asText()).isEqualTo("先看输入输出关系");
+    assertThat(card.has("reference_solution_code")).isFalse();
+    assertThat(card.has("reference_solution_language")).isFalse();
+    assertThat(card.has("test_cases")).isFalse();
+    assertThat(safeResult).doesNotContain("SECRET_REFERENCE", "private");
+    verify(transferProblemService)
+        .materialize(eq(USER), eq(session.id()), any(UUID.class), eq(PROBLEM), any());
   }
 
   @Test
   void transferProjectionRejectsMissingProblemCard() throws Exception {
-    PublicProblemDto transferProblem =
-        new PublicProblemDto(
-            500L,
-            43L,
-            "PY43-KC-016",
-            "审核变式题",
-            "读取边长并输出正方形面积",
-            "一个浮点数",
-            "面积保留 2 位",
-            "Basic",
-            new ObjectMapper().readTree("[{\"input\":\"2\",\"output\":\"4.00\"}]"));
-    when(problemRepository.findVariantProblem(USER, PROBLEM, "PY43-KC-016"))
-        .thenReturn(Optional.of(new PublicProblemRepository.VariantProblem(500L, "审核变式题")));
-    when(problemRepository.findPublic(43L, 500L)).thenReturn(Optional.of(transferProblem));
-
-    AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
+    AtomicReference<Function<String, String>> onResult = new AtomicReference<>();
     org.mockito.Mockito.doAnswer(
             invocation -> {
               onResult.set(invocation.getArgument(3));
@@ -977,7 +1093,7 @@ class TutorWorkflowServiceTest {
             () ->
                 onResult
                     .get()
-                    .accept(
+                    .apply(
                         """
                         {"result":{"event":"TRANSFER","phase":"TRANSFER",
                          "card_key":null,"card":null,"seq":8}}
@@ -989,20 +1105,15 @@ class TutorWorkflowServiceTest {
   }
 
   @Test
-  void transferRunFailsClosedWhenThereIsNoReviewedSameKcVariant() {
-    when(problemRepository.findVariantProblem(USER, PROBLEM, "PY43-KC-016"))
-        .thenReturn(Optional.empty());
+  void transferRunDoesNotRequireACuratedStaticVariant() {
+    service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "TRANSFER", Map.of()));
 
-    assertThatThrownBy(
-            () -> service.run(USER, new TutorWorkflowRunRequest(PROBLEM, "TRANSFER", Map.of())))
-        .isInstanceOf(BusinessException.class)
-        .hasMessageContaining("审核过的同知识点迁移题");
-    verify(graphClient, never()).runStream(any(), any(), any(), any(), any(), any());
+    verify(graphClient).runStream(eq(USER), any(), any(), any(), any(), any());
   }
 
   @Test
   void persistProjectionStoresWrappedStatePlanAndChatHistory() throws Exception {
-    AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
+    AtomicReference<Function<String, String>> onResult = new AtomicReference<>();
     org.mockito.Mockito.doAnswer(
             invocation -> {
               onResult.set(invocation.getArgument(3));
@@ -1015,7 +1126,7 @@ class TutorWorkflowServiceTest {
 
     onResult
         .get()
-        .accept(
+        .apply(
             """
             {"result": {"session_id": "wf-7-476-abc", "event": "EXECUTION_TRACE", "phase": "READING",
              "card_key": "execution_trace", "card": {"card_id": "wf-7-476-abc:x2", "summary": "看变量"},
@@ -1048,7 +1159,7 @@ class TutorWorkflowServiceTest {
 
   @Test
   void duplicateTerminalCallbacksShareOneRunId() {
-    AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
+    AtomicReference<Function<String, String>> onResult = new AtomicReference<>();
     org.mockito.Mockito.doAnswer(
             invocation -> {
               onResult.set(invocation.getArgument(3));
@@ -1062,8 +1173,8 @@ class TutorWorkflowServiceTest {
         """
         {"result":{"event":"PLAN_START","phase":"READING","seq":2}}
         """;
-    onResult.get().accept(result);
-    onResult.get().accept(result);
+    onResult.get().apply(result);
+    onResult.get().apply(result);
 
     ArgumentCaptor<TutorWorkflowRepository.RunProjection> projection =
         ArgumentCaptor.forClass(TutorWorkflowRepository.RunProjection.class);
@@ -1074,7 +1185,7 @@ class TutorWorkflowServiceTest {
 
   @Test
   void projectionFailurePropagatesToSseRelay() {
-    AtomicReference<Consumer<String>> onResult = new AtomicReference<>();
+    AtomicReference<Function<String, String>> onResult = new AtomicReference<>();
     org.mockito.Mockito.doAnswer(
             invocation -> {
               onResult.set(invocation.getArgument(3));
@@ -1092,7 +1203,7 @@ class TutorWorkflowServiceTest {
             () ->
                 onResult
                     .get()
-                    .accept("{\"result\":{\"event\":\"READING\",\"phase\":\"READING\",\"seq\":1}}"))
+                    .apply("{\"result\":{\"event\":\"READING\",\"phase\":\"READING\",\"seq\":1}}"))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("Failed to persist tutor workflow projection");
   }

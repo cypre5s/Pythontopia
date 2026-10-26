@@ -57,7 +57,7 @@ async def _resource_stream_generator(
     evidence_fetcher: EvidenceFetcher,
     valid_kc_codes: set[str],
 ) -> AsyncIterator[str]:
-    queue: asyncio.Queue[str | None] = asyncio.Queue()
+    queue: asyncio.Queue[str | None] = asyncio.Queue(maxsize=32)
 
     async def emit(event: str, data: dict[str, Any]) -> None:
         await queue.put(_format_sse(event, data))
@@ -74,7 +74,9 @@ async def _resource_stream_generator(
         try:
             await graph.run_streaming(body, emit)
         finally:
-            await queue.put(None)
+            task = asyncio.current_task()
+            if task is None or not task.cancelling():
+                await queue.put(None)
 
     task = asyncio.create_task(run_graph())
     try:
@@ -86,6 +88,7 @@ async def _resource_stream_generator(
     finally:
         if not task.done():
             task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
 
 
 @router.post("/agents/resource/produce/stream")

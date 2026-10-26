@@ -45,9 +45,17 @@ Authorization: Bearer <token>
 
 | 方法 | 路径 | 鉴权 | 说明 |
 | --- | --- | --- | --- |
-| POST | `/api/auth/register` | 匿名 | 注册 → `201` + `UserDto` |
+| POST | `/api/auth/register` | 已关闭 | 默认返回 `401`；学生账号由管理员导入名单创建 |
 | POST | `/api/auth/login` | 匿名 | 登录 → `LoginResponse` |
 | POST | `/api/auth/refresh` | 匿名（须带未过期 token） | 用**仍有效**的 token 换发新 token |
+
+### 2.2 管理员学生名单导入
+
+| 方法 | 路径 | 鉴权 | 说明 |
+| --- | --- | --- | --- |
+| POST | `/api/admin/student-imports` | ADMIN | `multipart/form-data`，字段 `file`，首个工作表需包含“学号”和“姓名”列；成功返回新建账号的一次性凭据清单 |
+
+仅接受 `.xlsx`。系统在首个工作表前 20 行按完整表头匹配学号列（`学号`、`学生学号`、`Student ID`、`studentid`、`student_id`）和姓名列（`姓名`、`学生姓名`、`Name`），忽略其他列且不要求固定列顺序；同类候选列多于一列时拒绝文件，避免误选。学号须为 8–64 位字母、数字、下划线、点或连字符；用户名为学号，密码为学号倒序，邮箱为空，角色为 `STUDENT`。已存在账号会跳过且不重置密码；文件内重复学号、缺列或无效行会拒绝整份文件，不写入部分账号。单次最多 1000 条学生记录。
 
 `LoginResponse`：
 
@@ -59,7 +67,7 @@ Authorization: Bearer <token>
 }
 ```
 
-### 2.2 Token 生命周期（重要）
+### 2.3 Token 生命周期（重要）
 
 - **TTL = 12 小时**（后端 `ttlMinutes: 720`）。
 - **没有真正的 refresh token**：`/api/auth/refresh` 把 access token 兼作续签源——**必须回传未过期的 token** 才能换新；一旦 token 过期，`refresh` 也会返回 `401`。
@@ -167,6 +175,7 @@ Authorization: Bearer <token>
 | --- | --- | --- | --- |
 | POST | `/api/submissions` | STUDENT | 提交代码判题 → `SubmissionDto` |
 | GET | `/api/submissions/{id}` | STUDENT | 提交详情（含判题结果），**轮询直到终态** |
+| GET | `/api/submissions/{id}/performance` | STUDENT | 本人 AC 提交的同题同语言运行/内存百分位；低于 10 条有效 AC 提交时对应字段为 `null` |
 | GET | `/api/submissions?problemId=&status=&limit=30&offset=0` | STUDENT | 提交历史列表 |
 
 提交体 `SubmissionCreateRequest`：
@@ -191,6 +200,8 @@ Authorization: Bearer <token>
 ```
 
 `verdict ∈ {AC, WA, RE, TLE, CE, MLE, SYSTEM_ERROR}`（AC=全部通过；WA=答案错误；RE=运行时错误；TLE=超时；CE=未过静态检查/超长/为空；MLE=超内存；SYSTEM_ERROR=判题系统异常）。轮询建议固定间隔（如 1s）+ 上限退避，命中终态即停。
+
+`SubmissionPerformanceDto` 的运行时间与内存分别按 `problemId + language` 统计 PASSED 提交记录；同一用户的多次提交分别计数。每项只比较已返回该指标的 AC 提交，样本数达到 10 后才返回 `runtimeBeatsPercent` / `memoryBeatsPercent` 与对应 `*SampleCount`，未达门槛时该项两个字段均为 `null`。该接口仅允许读取本人提交，百分位不包含失败提交。
 
 ### 4.7 Bug 矿洞（仅学生）
 
@@ -338,6 +349,7 @@ Bug 矿洞是错题复习支线：已有失败提交可进入矿洞；遗忘回�
 > **学习总管的记忆矿脉增强（Phase 2）**：`/api/orchestrator/turn/stream` 由后端**服务端注入** `decaying_kcs`
 > （当下 FSRS 到期、最该复盘的 KC，取自 Bug 矿洞遗忘回声），客户端**无需也不应**自己上送；总管据此把
 > 看/学/练/测计划优先锚定到待复习知识点。取数失败时降级为空、不阻断对话。
+> 多轮 `history` 最多 40 条，每条 `content` 最多 8,000 字符；`role` 只允许 `user` 或 `assistant`。Web 向导会发送最近 40 条有效消息。
 
 SSE 帧格式（标准）：
 
@@ -413,6 +425,8 @@ Graph HTTP 配置，读不活动上限为 180 秒（上游每 10 秒注释 heart
 ### 5.2 训练场导学工作流
 
 `POST /api/tutor/workflow/runs` 以 SSE 推进训练场导学事件；`GET /api/tutor/workflow/sessions/active?problemId=...` 恢复当前题目的会话。仅学生可用。
+
+活动会话快照在有正式提交反馈时附带 `latestSubmissionId`、`latestSubmissionProblemId` 和 `latestVerdict`。AC 后客户端以该提交触发 `AC_REVIEW`，再由 Tutor Graph 根据复盘方向生成迁移题；服务端要求草稿知识点匹配源题、Python3 参考解通过安全检查，并在隔离判题器中通过公开样例和隐藏用例后，才创建绑定学生、会话和 run 的私有题目。迁移题卡、正常题目详情和正式提交均走既有接口；私有题仅其所有者可读取题面和判题用例，参考解与隐藏用例不会进入卡片、SSE 或回放数据，也不会出现在公共课程题单。WA、RE、TLE、CE、MLE 进入 `ERROR_FEEDBACK`，`SYSTEM_ERROR` 不作为学生错误反馈。两种反馈事件均须绑定本人正式提交，服务端校验提交所属题目与判定结果。
 
 对 `CHAT`、`EXECUTION_TRACE` 和 `VISUALIZE` 事件，`eventData.code` 可选，最多 20,000 个字符。`CHAT` 会将当前编辑器代码作为学生提供的上下文交给导师；代码中的注释和字符串均按不可信内容处理，不作为系统指令或课程证据。图片必须先上传到会话私有附件端点，再通过 `eventData.attachment_ids` 引用，图片字节不得放入事件 JSON。
 

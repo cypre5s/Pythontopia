@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -20,6 +21,8 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class TutorWorkflowGraphClient {
 
   private static final Logger log = LoggerFactory.getLogger(TutorWorkflowGraphClient.class);
+  private static final String PROJECTION_FAILURE_EVENT =
+      "{\"code\":\"TUTOR_WORKFLOW_RESULT_PERSIST_FAILED\",\"message\":\"导学结果保存失败，请重试\"}";
 
   private final GraphServiceProperties properties;
   private final ObjectMapper objectMapper;
@@ -35,14 +38,14 @@ public class TutorWorkflowGraphClient {
   }
 
   /**
-   * 转发一次工作流事件 run：所有 SSE 事件经 {@code emitter} 透传；收到终态 {@code result}
-   * （AG-UI RUN_FINISHED 已由 GraphSseConsumer 归一为 result）时回调 {@code onResult} 做投影落库。
+   * 转发一次工作流事件 run：所有 SSE 事件经 {@code emitter} 透传；收到终态 {@code result} （AG-UI RUN_FINISHED 已由
+   * GraphSseConsumer 归一为 result）时回调 {@code onResult} 做投影落库。
    */
   public void runStream(
       Long userId,
       Map<String, Object> body,
       SseEmitter emitter,
-      Consumer<String> onResult) {
+      Function<String, String> onResult) {
     runStream(userId, body, emitter, onResult, ignored -> {}, () -> {});
   }
 
@@ -51,7 +54,7 @@ public class TutorWorkflowGraphClient {
       Long userId,
       Map<String, Object> body,
       SseEmitter emitter,
-      Consumer<String> onResult,
+      Function<String, String> onResult,
       Consumer<String> onError,
       Runnable onInterrupted) {
     String url = properties.graphUrl() + "/agents/tutor-workflow/run/stream";
@@ -78,7 +81,7 @@ public class TutorWorkflowGraphClient {
                   }
                   if ("result".equals(event) || "RUN_FINISHED".equals(event)) {
                     try {
-                      onResult.accept(data);
+                      data = onResult.apply(data);
                       terminalResult.set(true);
                     } catch (RuntimeException e) {
                       projectionFailed.set(true);
@@ -87,8 +90,12 @@ public class TutorWorkflowGraphClient {
                       log.error(
                           "Tutor workflow result projection failed errorType={}",
                           e.getClass().getSimpleName());
-                      emitter.completeWithError(
-                          new IllegalStateException("Tutor workflow result projection failed"));
+                      try {
+                        emitter.send(
+                            SseEmitter.event().name("error").data(PROJECTION_FAILURE_EVENT));
+                      } catch (IOException writeError) {
+                        throw new GraphSseConsumer.AbortSseConsumption(writeError);
+                      }
                       return;
                     }
                   } else if ("error".equals(event) || "RUN_ERROR".equals(event)) {
@@ -107,9 +114,7 @@ public class TutorWorkflowGraphClient {
             if (!projectionFailed.get() && !terminalResult.get() && !terminalError.get()) {
               invokeInterrupted(onInterrupted);
             }
-            if (!projectionFailed.get()) {
-              emitter.complete();
-            }
+            emitter.complete();
           } catch (GraphSseConsumer.AbortSseConsumption e) {
             if (!terminalResult.get() && !terminalError.get()) {
               invokeInterrupted(onInterrupted);

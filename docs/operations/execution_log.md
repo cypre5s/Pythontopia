@@ -4,6 +4,101 @@
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
 
+## 2026-10-26 — AI 导学会话缓存与历史边界（本地验证）
+
+- 查到 Orchestrator 会话字典没有总量上限，以及 Graph 服务重启后虽从客户端历史继续生成、却只把当前问答写回服务端的问题。实现最多 512 条 LRU 会话缓存，保护活跃请求；缓存缺失时将最多 40 条历史先恢复再追加本轮，并用恢复后历史计算检查点轮次。
+- 前端向导请求只发送最近 40 条有效消息；重试不再创建完整历史切片。Java DTO 与 Graph schema 同步限制历史 40 条、每条最多 8,000 字符，并修正 Java DTO 允许 `system` 而 Graph 只接受 `user` / `assistant` 的契约差异。
+- TDD 回归先复现未限制的请求、无界会话和冷启动历史丢失；修复后 Graph 相关测试 11/11、Java DTO/Graph 客户端定向测试 6/6 通过。全量验证：后端 `mvn -B test` 1,909/1,909（7:33）；Graph 1,993 passed、1 skipped；RAG 182 passed；前端 Vitest 2,723 passed，typecheck 和改动文件 ESLint 通过，完整 ESLint 0 errors / 405 warnings；Vite production build 与 Graph Ruff 通过。
+- 本地 release 目录已清除 4 个旧归档；最终 release 由 GitHub Actions 在优化验证后仅构建并上传一次，结果见下节。未做生产并发基准或真实 DeepSeek/浏览器往返；Graph 的 1 项 optional ragas 测试因缺少 `langchain_community.chat_models.vertexai` 跳过，Maven Testcontainers 收尾仍有关闭连接告警但退出码为 0。
+
+## 2026-10-26 — 性能审计提交与 Web Release 收尾
+
+- 批量学习数据库操作与掌握度并列时间确定性排序已提交为 `8e174ada830c26dc72287b0f1323d540c8d82010` 并推送至 `main`。提交前后验证为后端全量 Maven 1,907/1,907，掌握度排序后续定向测试 3/3；GitHub CI [#40207300002](https://github.com/cypre5s/Pythontopia/actions/runs/40207300002) 五个 job 全部成功。
+- Release run [#40208342200](https://github.com/cypre5s/Pythontopia/actions/runs/40208342200) 构建、体积检查和上传成功，发布 [`web-v20261025.10`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.10)。资产为 1,535,059,376 字节，GitHub SHA-256 为 `785f7e86879c52d708360d1895598283d865e1d93106942f50e1a6f5d7c514f3`；下载 HEAD 返回 200，Content-Length 一致。
+- 同一 tag 的延迟 push 事件又启动 run [#40208756259](https://github.com/cypre5s/Pythontopia/actions/runs/40208756259)；其构建和体积检查成功，但发布步骤因目标 release 已存在而退出 1。已有 release 资产正常，不需要二次上传。
+- 未进行生产并发/吞吐基准；本地无关改动 `.gitignore`、`frontend/public/data/course43/manifest.json` 与 `deploy/astrbot-custom-plugins/` 保留原状。
+
+## 2026-10-26 — 会话边界优化最终发布
+
+- 会话历史 LRU、冷启动恢复和跨层输入边界修复提交 [`1fc0704d`](https://github.com/cypre5s/Pythontopia/commit/1fc0704db3fa8efc94930bf4322aeb60d82ff4ff) 已推送；GitHub CI [#40279943079](https://github.com/cypre5s/Pythontopia/actions/runs/40279943079) 五个 job 全部成功。
+- GitHub Release 工作流 [#40280721149](https://github.com/cypre5s/Pythontopia/actions/runs/40280721149) 构建、体积检查与上传均成功，发布 [`web-v20261026.1`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261026.1)。只上传一个资产 `pythontopia-web-v20261026.1.tar.gz`，1,535,055,672 字节，SHA-256 `dc2d09d86e40a0e84ffa304aab0bba65aaaa18cbd9a9788eb62220f332f45248`；下载 HEAD 返回 200，Content-Length 一致。
+- 本地此前清理 4 个过期归档；当前 `output/packages/` 没有 `pythontopia-web-*.tar.gz`，没有额外生成本地大包。未做生产并发/吞吐基准或真实 DeepSeek/浏览器往返；工作区其余未提交用户文件保持不变。
+
+## 2026-10-26 — 导学并发、流取消与增量更新（本地验证）
+
+- 深度复核发现同一用户在多个标签页使用相同导学 session 时，两个 Graph 请求可能并发读取同一份历史并使用相同检查点轮次；现在按用户/会话串行运行，不同会话仍可并行。等待中的请求若被取消，会减少活跃计数并解除缓存 pin。
+- Orchestrator、资源生成和工具流断连时原先只取消后台任务，没有等待其清理完成；现在统一等待任务结束并收取异常，避免锁释放延迟。三条流的事件队列限制为 32 项，形成慢客户端背压。
+- Guide 每个 token 原先会复制整个 messages 数组；更新路径改为原地修改当前助手消息。用数组身份回归测试确认热路径不再复制历史。
+- 并发串行、流取消、队列背压和前端增量更新均先加入 RED 回归，再修复。Graph 全量 1,997 passed / 1 skipped，前端全量 2,724 passed；typecheck、改动文件 ESLint、Vite production build、改动 Python 文件 Ruff check 通过。Graph 唯一跳过项依赖未安装的可选 ragas/Vertex AI 适配模块。
+- 未进行生产并发或吞吐压测；未触及后端、RAG 与非 Web 客户端，本轮对其余模块仍是静态抽样审计。工作区既有 `.gitignore`、课程 manifest 与 AstrBot 插件改动不属于本轮修改。
+
+## 2026-10-25 — 学习路径节点批量写入
+
+- `LearningPathService.writeNodesAndQuests` 原先逐个插入路径节点并读取生成 ID；Graph 规划器最多输出 7 天 × 每天 4 个节点。现在将节点组为单条多行 `INSERT ... RETURNING`，按数据库唯一位置键 `(day_index, order_in_day)` 还原 ID 顺序，Quest 继续引用对应节点。
+- TDD RED 命中旧逐条调用；服务层、评估路径及 Stage08/Stage13 PostgreSQL 闭环合计 24/24 通过。Stage08 还覆盖了打乱日期顺序后的 Quest→节点外键与内容对应。节点插入语句由每个节点一条降至每次规划一条。
+- 合并当前工作区后后端全量 `mvn -B test` 1,907/1,907 通过，0 failures/errors/skips，`BUILD SUCCESS`，6:48 正常退出；容器结束后仍有 Hikari 关闭连接校验告警。Quest 仍逐个写入，因此没有把完整路径写入降为两条 SQL；未做生产延迟/并发基准，性能审计未完成且本地改动未提交/推送。
+
+## 2026-10-25 — 掌握度最新事件来源并列排序
+
+- 完成 diff 复核时发现批量读取最新事件来源只按 `created_at` 排序；同一时间戳的多条事件可能选择较旧行。PostgreSQL 回归先 RED，复现同一 KC 同时写入 `PRACTICE_PASS` / `PRACTICE_FAIL` 时错误返回前一条来源。
+- 增加 `id DESC` 作为时间并列的确定性顺序；PostgreSQL 回归与 `MasteryServiceTest` 合计 3/3 通过。此窄改动发生在全量 Maven 1,907/1,907 之后，因此未重跑全量；未测并发写入排序或生产查询计划。
+
+## 2026-10-25 — 班级任务扇出批量写入
+
+- 发布班级任务最多可覆盖 999 名学生，原服务为每个学生单独发出一条带 `RETURNING` 的 INSERT；新成员补发也逐条执行。现在两条路径共用仓储多行插入，每 1,000 条一批，通过 `ON CONFLICT DO NOTHING RETURNING id` 保留唯一键幂等并准确统计新建数。最大班级发布由 999 条学生副本 INSERT 降至 1 条；更大的补发按 `ceil(N/1000)` 条执行。
+- TDD 先以缺少批量方法的编译失败确认 RED，再实现后验证 `ClassroomQuestServiceTest` 11/11、Stage12 真实 PostgreSQL 发布/归档闭环与部分冲突 1/1、PostgreSQL 1,001 条跨批插入/重试 1/1；合计 13/13。最终 `git diff --check` 通过；未保留会改写无关既有排版的全文件格式化。
+- 后端全量 `mvn -B test` 1,907/1,907 通过，0 failures/errors/skips，`BUILD SUCCESS`，约 6:45 正常退出；定向 Spotless 与 `git diff --check` 通过。
+- 未测生产班级吞吐、并发争抢或真实数据规模；审计未结束，改动未提交/推送。
+
+## 2026-10-25 — NPC 记忆向量批量读取
+
+- `NpcMemoryService.bumpNearDuplicate` 最多读取 30 个近期事件的向量，旧逻辑在循环内逐个访问数据库。现通过仓储批量查询一次加载已有向量，并保留原来的最近优先匹配顺序。
+- 回归先因批量 API 缺失而编译失败；修改后服务测试与 PostgreSQL/pgvector 集成测试 7/7 通过。合并本轮所有后端局部优化后，`mvn -B test` 1,904/1,904、0 failures/errors/skips，`BUILD SUCCESS`，约 6:42 正常退出。未测生产吞吐或并发负载，尚未提交/推送。
+
+## 2026-10-25 — 学习事件批量写入
+
+- `POST /api/learning/events/batch` 每批最多 100 条，旧 Controller 循环逐条调用 `INSERT ... RETURNING id`，但响应不使用 ID。现将校验与额度预留留在写入前，转换成 `EventInput` 列表后调用 JDBC batch；单条事件写入不变。
+- RED/GREEN 后 `LearningEventControllerTest` 8/8，PostgreSQL `LearningEventBatchAtomicityPostgresTest` 2/2：批次成功全部入库，数据库触发器拒绝其中一条时事务回滚、零条残留。与名单导入相关的三组回归重跑后合计 19/19 通过。
+- 验证覆盖目标路由及数据库原子性，没有测多并发吞吐或真实生产延迟；全套 Maven 测试未在此小改动后重跑。总 API/日志审计继续。
+
+## 2026-10-25 — 管理员学生名单导入批量数据库操作
+
+- 审计最多 1,000 行的 XLSX 名单导入时发现 N+1：原来逐行调用 `findByUsername`；每个新学生的 `save` 还会插入后按 ID 回读。现改为一条批量用户名查询和一次 JDBC batch 插入，不再为导入结果读取无用的用户行。
+- 并发创建相同用户名仍由数据库唯一约束拒绝；批量插入异常映射为既有 `STUDENT_IMPORT_CONFLICT`，事务回滚整批。成功/跳过语义、逆序学号初始密码保持不变。
+- RED/GREEN 后 `AdminStudentImportServiceTest` 2/2、PostgreSQL `AdminStudentImportIntegrationTest` 5/5、`UserRepositoryTest` 2/2 通过；定向 Spotless 通过。未做 1,000 行耗时或并发压测；BCrypt 哈希仍逐个执行。更广泛的接口/日志审计继续。
+
+## 2026-10-25 AI 导学节点适配与提交结果详情
+
+- 对照 Alethicode Tutor Graph 的事件路由、证据、卡片校验、教练计划、迁移题 draft/materialize 和投影节点；复用 Pythontopia 的 `validate_transition → coach_decide → fetch_evidence → generate_card → guardrail → decide_actions` 及 Vue 导学卡片，不复制 LangGraph/旧 Java API。行为参考：[builder](https://github.com/cypre5s/Alethicode/blob/main/services/tutor-graph/app/graph/builder.py)、[transfer nodes](https://github.com/cypre5s/Alethicode/blob/main/services/tutor-graph/app/nodes/transfer.py)、[transition rules](https://github.com/cypre5s/Alethicode/blob/main/services/tutor-graph/app/graph/transitions.py)。
+- AC/失败提交闭环继续使用服务端 submission feedback；AI 迁移题草稿新增参考解与隐藏用例，经安全检查和隔离自测后创建 owner/session/run 绑定的私有正式题，仍使用现有正式判题 API。参考解/隐藏用例在投影写卡片、回放和 SSE 前剔除；公共题单、Bug 矿洞回声候选也排除其他用户的私有题。
+- 修复 Graph 乐观内存阶段可能领先 Java 持久化的问题：每轮 Graph run 都按 Java 权威快照恢复，因此迁移题自测或持久化失败后可从原阶段重试。结果弹窗支持关闭键、Escape、遮罩、通过/失败详情和 AC 百分位；百分位同题同语言按 AC 提交记录统计，每项至少 10 条有效样本。
+- 代码审查补上 Bug 矿洞的私有迁移题边界：按提交者读取用例，隐藏输入/期望/实际值统一脱敏，Graph DebugAgent 输出占位说明并丢弃隐藏用例变量轨迹，避免私有用例出现在学生卡片或响应中。
+- 验证：后端最终源码 `mvn test` 310 个测试类 / 1,816 项，0 failures、0 errors、0 skipped；全量 clean 运行验证 V235 空库迁移，最终运行复用已 clean 构建目录。Surefire 在 Spring shutdown hook 延迟 30 秒后回收 fork JVM，Maven 最终退出码为 0。Java 私有反例定向测试和 Graph DebugAgent 定向 6 项通过；Graph 全量 1,984 passed、1 skipped；Ruff 通过。前端 typecheck/lint、结果弹窗与 Tutor 相关 20 个用例、生产构建通过。
+- 本地 Chromium 以 fixture 浏览 AC 结果弹窗（1440×900，738×582），运行/内存百分位与样本数正常显示，console、pageerror、失败请求均为 0；截图 `/tmp/pythontopia-submission-result-fixture.png`。未用真实认证学生执行模型与 Judge 的完整端到端闭环，fixture 结果不代表真实模型或判题验收。
+- 已推送代码提交 `1225c02a` 至 `main`，tag `web-v20261025.1`；GitHub Actions release run `40164200214` 的 build、size-check 与上传均成功。Release asset `pythontopia-web-v20261025.1.tar.gz` 为 1,534,979,244 bytes，SHA-256 `ba58e4dd89567ad378b76946a702db4f65666295008958885dc57dcfe573ff4d`。
+- 同次 push 触发的通用 CI 中，后端与 Graph job 通过；前端全量测试在未改动的 `AdminUsersPage.spec.ts:212` 因缺少 `admin-users__readable` class 失败，本机重跑 8 项中 7 项通过、同一断言复现。RAG job 的测试步骤退出 1，本次未改动 RAG，也未进一步定位该失败；独立 release workflow 已成功完成发布。
+
+## 2026-10-25 Maven 测试调度器收尾
+
+- 复查 Surefire 线程转储：Testcontainers 停止后，缓存的 Spring 测试上下文仍有 Outbox 轮询、Tutor 附件清理和 Quest 过期任务运行，部分线程阻塞在 JDBC 连接获取；Surefire 随后等待 30 秒并强制回收 fork JVM。
+- 将 `@EnableScheduling` 移到默认开启的条件配置；测试 `local`/`test` profile 关闭自动调度，业务方法单测保持直接调用。上下文断言先 RED（仍注册 `ScheduledAnnotationBeanPostProcessor`）后 GREEN，默认开启/显式关闭配置各有回归覆盖。
+- 验证：`mvn -Dtest=SchedulingConfigTest,PythontopiaApplicationTests test` 3/3；`mvn test` 1,895/1,895，0 failures/errors/skips，6 分 41 秒正常退出。新测试日志没有调度方法调用栈或 Surefire 强制收尾转储。定向 Spotless 检查通过。
+- 容器停止后少量 Hikari housekeeper 连接校验警告仍见于全量日志；测试成功且进程正常退出。没有验证生产调度运行、真实数据库故障恢复或负载性能。
+
+## 2026-10-25 推送调度修复、发布与百分位查询核查
+
+- 修复 commit `95f1eaec1801a221ff98209921b281cc425b4c5f` 已推送到 `main`；GitHub CI run `40195659398` 的 backend、frontend、Graph、RAG、research 五个 job 全通过。
+- 推送 tag `web-v20261025.8` 后，release run `40196244903` 的构建、体积检查及发布步骤均成功。Release asset `pythontopia-web-v20261025.8.tar.gz` 为 1,535,011,460 字节，SHA-256 `2164deea7a0e74977b899bde5d6e1461d8ef96b327d9d5c675092eb5d7629638`；下载 HEAD 返回 200 且 Content-Length 匹配。
+- 只读核查同题同语言 AC 百分位查询：本地开发库 `practice_submission` 有 198 行、3 个题目；实际 `EXPLAIN ANALYZE` 顺序扫描 198 行、执行 0.073 ms。当前规模不值得新增索引；该数据不代表线上规模或负载。
+
+## 2026-10-25 当前续接：本地正式判题 SYSTEM_ERROR
+
+- 后端日志中的提交 260/261 均以 `SYSTEM_ERROR` 结束；PostgreSQL 记录题目 476、沙箱名 `piston:3.11.0`。`/readyz` 返回 503，明示 `piston URL or Python runtime is not configured`。普通 `./dev.sh` 只拉起 Postgres/Redis/Graph/RAG，未拉起 profile 为 `sandbox` 的 Piston；此前同题在 Piston 3.12.0 下已有 AC 记录。
+- `dev.sh` 改为默认启动 Piston/Isolate、准备 Python 3.12.0，并在后端启动后核对 `/readyz` 中的 judge 运行时；保留 `--no-sandbox` 显式跳过，`--down` 现在激活 sandbox profile 以停止 Piston。未引入 QDUOJ：仓库已有隔离 Piston 适配器和加固容器。
+- `test_dev_compose_security_contract.sh` 先在旧脚本上因默认 sandbox 关闭而 RED，修改后 GREEN；`bash -n dev.sh` 与 `git diff --check` 通过。默认 `./dev.sh` 新鲜启动时 `/readyz` 为 200、Piston 报告 Python 3.12.0；真实 API 提交 ID 263 返回 AC 3/3，真实 Chromium 训练场提交 ID 264 也返回 AC 3/3。提交响应 HTTP 200，训练页 console/pageerror/失败请求均为 0。
+- 补跑 `PistonPythonSandboxTest` 11/11 与 `JudgeCaseEvaluatorTest` 7/7；后者覆盖 WA 与 RE，真实 Piston AC 由 ID 263/264 覆盖。两类失败均保持正常错误判定，不误报 `SYSTEM_ERROR`。
+- 浏览器探索小镇路由时另观察到一次 `GET /api/dialog/context` HTTP 500；直接打开训练页的判题流程无此错误。该非判题请求不在本次修复范围。
+
 
 ## 2026-10-17 当前续接：修复 Piston HTTP 400 并完成 Tutor TRANSFER 浏览器闭环
 
@@ -1260,3 +1355,32 @@
 - ECS 流式部署：仅删除未被 current/previous/容器挂载引用的孤立 release `20261021-033818`，保留 PostgreSQL 数据卷和当前/回滚版本；包 SHA-256 `813599ee794fc6a78fed0ef09ae6705f481abfd139ec5a0d4aedec01c006eb6f`。备份 PostgreSQL 448 KB、`.env`、Nginx/Compose 配置；V233/V234 均成功。新 release `20261021-143335` 生效，回滚版 `20261021-134300` 保留；7 个服务 healthy，HTTP 308、HTTPS `/healthz` 200，安装器逐文件 SHA-256 和课程运行时数据校验通过。临时安装工具已移除，ECS 根盘剩余 2.3 GB。
 - 生产 Chromium 首次回归时页面仍在 96% 资源预加载，原测试过早检查坐标；trace 中 178 个资源请求全部 HTTP 200。回归改为等待加载覆盖层消失后重跑通过：旧坐标恢复到 `(25,20)`，WASD 与点击均移动成功；console、pageerror、失败请求和 API 错误均为 0。唯一临时线上学生账号已删除，DB 查询确认不存在该账号，也无 town_hub `(12,10)` 存档。
 - ECS 预检按发布包未压缩大小 + 1 GiB 计算磁盘空间，33 项通过、0 失败；另有内存低于 4 GB 基线和未安装 aliyun CLI 两项警告。GitHub 推送待完成。
+
+## 2026-10-25 — Tutor 判题结果恢复与 GitHub CI 修复
+
+- 修复 AI Tutor 的提交时序缺口：学生在打开导学助手前已提交时，事件监听器没有已有会话可投影，助手快照会停在 `READING`。`activeSession` 现按同一用户/题目恢复最新正式判题结果；AC 进入 `AC_REVIEW`，WA/RE/TLE/CE/MLE 进入 `ERROR_FEEDBACK`，`SYSTEM_ERROR` 不触发错误指导。前端原有 AC 复盘→迁移题和错误反馈自动流程不变。
+- GitHub CI run `40165145198` 的失败原因：Admin 用户表测试误选页头帮助 tooltip 的嵌套表格；9 个 GraphRAG 路由单测在无 PostgreSQL 的 CI job 中触发课程资源状态查询。测试现使用明确的目标表选择器；两个路由测试模块 stub 为资源均启用，数据库不可用时生产 fail-closed 回归仍独立保留。
+- 本地验证：Maven 全量 `1870` 项通过（0 failures/errors/skips，BUILD SUCCESS）；Tutor 服务与提交监听器定向 59 项通过。Frontend typecheck 通过、lint 0 errors（405 warnings）、Vitest 288 文件 / 2,718 项通过；Tutor 面板定向 14 项、Admin Users 8 项通过。RAG 全量在故意不可用的 PostgreSQL URL 下 179 项通过；相关 GraphRAG 路由与 fail-closed 定向验证 28 项通过（1 warning）。
+- Maven 全量测试结束时 Surefire 因测试容器关闭后的 Hikari 后台连接重试，在 30 秒退出等待后回收了 fork JVM；测试报告为全绿且 Maven 返回 BUILD SUCCESS。GitHub 新提交 CI 与 `web-v20261025.2` Release 工作流待推送后确认。
+- 未运行真实 Judge/模型调用的浏览器端到端验收；本次 AI Tutor 前后端恢复由服务单测与 Vue 流程组件测试覆盖。未修改工作区原有的 `.gitignore`、API contract、CHANGELOG、课程 manifest 和 AstrBot 插件改动。
+
+## 2026-10-25 — Piston 计量与 Tutor 转题真实栈复验
+
+- 本地 Piston 增加 `wait4(2)` 峰值 RSS 计量和单调时钟 wall-time 计时；保持 `exit` 时清理同 UID 子进程，并等 `close` 后读取资源管道，避免超时作业和峰值内存计量竞态。重建镜像后烟测通过 Python 3.12.0、非 root、宿主文件/loopback 隔离及超时终止；真实训练提交弹窗显示 `73 ms`、`9600 KB`，运行时间按同题同语言 89 条 AC 提交显示快于 5.6%。内存样本不足 10 条时按规则不展示百分位。
+- Graph 迁移题提示收紧到 AST 允许的基础语法，确保样例/隐藏输出可由同一参考解验证；后端保存失败改为脱敏 SSE error 并正常结束，日志只记录 stage、错误类型、判定与用例数。真实 DeepSeek→Graph→Piston→数据库迁移题链路生成 3 个样例和 3 个隐藏用例并通过自测；参考解/隐藏用例不出现在公开卡片。
+- 真实 Chromium 复验 AC 结果弹窗、Escape/按钮关闭、运行/内存值、AC_REVIEW 与迁移题卡片：console errors 0、pageerrors 0；2 个 requestfailed 对应客户端收到终态后主动取消 SSE reader，迁移题卡片仍正常到达且无私有解答字段。截图保存在 `/tmp/pythontopia-submission-result.png` 和 `/tmp/pythontopia-transfer-card.png`。
+- 全量 Maven 1,870/1,870（0 failures/errors/skips，BUILD SUCCESS）；前端 typecheck、lint（0 errors、405 warnings）、Vitest 288 文件 / 2,719 项通过；Graph pytest 1,984 passed / 1 skipped、RAG 179 passed。浏览器和 API 验收生成的 12 个临时用户及其阻塞外键记录已删除，临时后端已停止。
+# 2026-10-25 — NPC 寒暄预热避免抢占交互 AI 额度
+
+- 代码配置最多选 200 名活跃学生 × 7 个 NPC，预热任务最多发起 1,400 次 Graph 寒暄请求；有记忆的请求会预留用户和全站模型额度，而全站额度为 300 次/日。仓库中没有显式 `enabled=true` 配置。
+- 按 TDD 先增加“未配置时不触达活跃用户查询”的回归。RED：`mvn -q -Dtest=NpcGreetingPrewarmJobTest test` 因事件仓库被调用失败。随后将默认值从 true 改为 false，显式开启路径与原任务逻辑不变；按需寒暄仍可在首次 NPC 访问时生成。
+- GREEN：同一目标测试 7/7 通过；`mvn -B test` 后端全量 1,896/1,896、0 failures/errors/skips，6:53 正常退出。只做了静态配置检查与单测，没有真实模型调用或生产环境变量核验。显式开启仍可能消耗交互额度，后续应先定义独立预热预算。
+- 提交 `0eeab5b3` 推送成功；GitHub CI [#40198503240](https://github.com/cypre5s/Pythontopia/actions/runs/40198503240) 5/5 成功。Release 构建 [#40199106285](https://github.com/cypre5s/Pythontopia/actions/runs/40199106285) 成功并上传 `web-v20261025.9`：1,535,061,980 字节，SHA-256 `42fe70b333aedb2d987ebe121960d03ebe4f3c65a4c705d0016123da9ad39fbb`；下载 HEAD 200 且 Content-Length 一致。
+
+## 2026-10-25 — 后台调度阻塞与周报候选 N+1 优化
+
+- 根因：默认启用的周报调度任务在唯一 Spring 调度线程里同步逐个执行学习评估；每个评估会等待 Graph 叙述及路径规划。配置未指定 `spring.task.scheduling.pool.size`，Spring Boot 3.5.16 的 `TaskSchedulingProperties.Pool` 默认值为 1，因此周报批次可挡住画像投影轮询和缓存/过期维护。将生产默认调度池设为 4 个线程，保持周报自身顺序处理。
+- 第二个相关性能点：候选筛选先查一批活跃用户，再对 N 个用户逐次检查近期评估，形成 `1 + N` 次 SQL。以 `NOT EXISTS` 把活动条件和评估去重合并为一次查询，保留 `DEFAULT_PERIOD_DAYS=7` 与 `WEEKLY_DEDUPE_DAYS=6`。
+- RED/GREEN：调度器集成回归先观察到核心池容量为 1，配置改为 4 后通过；周报服务回归先因逐人 `existsEvaluationCreatedAfter` 调用失败，改为单一候选查询后通过。PostgreSQL 集成测试覆盖有无近期评估、活动窗口、学生角色和结果排序。
+- 验证：`SchedulingConfigTest` 3/3，`LearnerEvaluationServiceTest` 10/10，`EvaluationRepositoryWeeklyEligibilityPostgresTest` 1/1；后端全量 `mvn -B test` 1,899/1,899，0 failures/errors/skips，`BUILD SUCCESS`，6:43 正常退出。5 个改动 Java 文件定向 `spotless:check` 通过，`git diff --check` 通过。
+- 限制：没有真实模型请求、ECS 配置核查、并发负载测试或端到端评估耗时基准；调度池扩到 4 能给后台维护留下并行 worker，不证明每周评估任务自身更快。代码和记录目前仅在本地，未提交/推送；总体审计未完成。

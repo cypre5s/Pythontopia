@@ -7,8 +7,9 @@
 # 设计目标：跑完脚本即可用 —— 全程健康门禁，任一核心依赖未就绪直接 fail-fast 并打印日志。
 #
 # 用法：
-#   ./dev.sh            启动开发栈（前端在前台，Ctrl+C 退出并清理后端）
-#   ./dev.sh --sandbox  额外启动本机 Piston/Isolate 并安装 Python runtime
+#   ./dev.sh            启动开发栈和隔离 Piston 判题机（前端在前台）
+#   ./dev.sh --no-sandbox 跳过本机 Piston（不支持真实判题）
+#   ./dev.sh --sandbox  显式启用本机 Piston（与默认行为相同）
 #   ./dev.sh --down     停止本脚本拉起的一切（后端 + 前端 + docker 依赖）
 #   ./dev.sh --no-deps  跳过 docker 依赖（依赖已在别处运行时）
 #
@@ -89,7 +90,7 @@ stop_all() {
   fi
   # 兜底：按端口清理可能残留的后端
   pkill -f 'spring-boot:run' 2>/dev/null || true
-  compose stop "${STOP_SERVICES[@]}" 2>/dev/null || true
+  compose --profile sandbox stop "${STOP_SERVICES[@]}" 2>/dev/null || true
   c_ok "已停止后端 + docker 依赖（数据卷保留）。前端 Vite 若在前台已随 Ctrl+C 退出。"
 }
 
@@ -108,13 +109,14 @@ cleanup_on_exit() {
 
 # ---- 参数 ----
 START_DEPS=1
-START_SANDBOX=0
+START_SANDBOX=1
 case "${1:-}" in
   --down) require_cmd docker; stop_all; exit 0 ;;
   --no-deps) START_DEPS=0 ;;
   --sandbox) START_SANDBOX=1 ;;
+  --no-sandbox) START_SANDBOX=0 ;;
   "" ) ;;
-  * ) c_err "未知参数: $1（支持: --down / --no-deps / --sandbox）"; exit 1 ;;
+  * ) c_err "未知参数: $1（支持: --down / --no-deps / --sandbox / --no-sandbox）"; exit 1 ;;
 esac
 
 require_cmd docker
@@ -277,6 +279,15 @@ else
   fi
 fi
 c_ok "后端 ready (http://127.0.0.1:18080)"
+if [[ "$START_SANDBOX" == "1" ]]; then
+  judge_readiness="$(curl --noproxy '*' -sS http://127.0.0.1:18080/readyz 2>/dev/null || true)"
+  if [[ "$judge_readiness" != *"\"judge\":\"piston python ${PYT_PISTON_PYTHON_VERSION}\""* ]]; then
+    c_err "Piston 判题机未就绪（期望 Python ${PYT_PISTON_PYTHON_VERSION}）；请检查 Piston 容器和后端配置"
+    [[ -z "$judge_readiness" ]] || printf '%s\n' "$judge_readiness" >&2
+    exit 1
+  fi
+  c_ok "真实判题机 ready (Piston Python ${PYT_PISTON_PYTHON_VERSION})"
+fi
 
 # ---- 4. 前端依赖 ----
 if [[ ! -d "$FRONTEND_DIR/node_modules" ]]; then

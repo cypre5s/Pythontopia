@@ -25,12 +25,7 @@ public class LearningEventLogRepository {
 
   public long insert(
       Long userId, String eventType, Map<String, Object> payload, String source, int importance) {
-    String payloadJson;
-    try {
-      payloadJson = objectMapper.writeValueAsString(payload);
-    } catch (JsonProcessingException e) {
-      payloadJson = "{}";
-    }
+    String payloadJson = payloadJson(payload);
     Long id =
         jdbc.queryForObject(
             "INSERT INTO learning_event_log (user_id, event_type, payload, source, importance) "
@@ -42,6 +37,35 @@ public class LearningEventLogRepository {
             source,
             importance);
     return id == null ? 0L : id;
+  }
+
+  public void insertBatch(List<EventInput> events) {
+    if (events.isEmpty()) {
+      return;
+    }
+    jdbc.batchUpdate(
+        "INSERT INTO learning_event_log (user_id, event_type, payload, source, importance) "
+            + "VALUES (?, ?, ?::jsonb, ?, ?)",
+        events,
+        events.size(),
+        (statement, event) -> {
+          statement.setLong(1, event.userId());
+          statement.setString(2, event.eventType());
+          statement.setString(3, payloadJson(event.payload()));
+          statement.setString(4, event.source());
+          statement.setInt(5, event.importance());
+        });
+  }
+
+  public record EventInput(
+      long userId, String eventType, Map<String, Object> payload, String source, int importance) {}
+
+  private String payloadJson(Map<String, Object> payload) {
+    try {
+      return objectMapper.writeValueAsString(payload);
+    } catch (JsonProcessingException e) {
+      return "{}";
+    }
   }
 
   public AuthoritativeEventCounts summarizeAuthoritativeSince(Long userId, Instant since) {

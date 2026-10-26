@@ -50,3 +50,60 @@ if (!source.includes(failClosedMarker)) {
 }
 
 fs.writeFileSync(sourcePath, source);
+
+// Piston 3.1 enforces rlimits but does not include runtime measurements in its API response.
+const jobPath = '/piston_api/src/job.js';
+let jobSource = fs.readFileSync(jobPath, 'utf8');
+if (!jobSource.includes('/usr/local/bin/piston-resource-meter')) {
+  const commandAnchor = "const proc_call = [\n                'nice',";
+  if (jobSource.split(commandAnchor).length !== 2) {
+    throw new Error('Pinned Piston job source changed: missing unique command anchor');
+  }
+  jobSource = jobSource.replace(
+    commandAnchor,
+    "const proc_call = [\n                '/usr/local/bin/piston-resource-meter',\n                'nice',",
+  );
+
+  const outputAnchor = "            var output = '';\n";
+  if (jobSource.split(outputAnchor).length !== 2) {
+    throw new Error('Pinned Piston job source changed: missing unique output anchor');
+  }
+  jobSource = jobSource.replace(
+    outputAnchor,
+    outputAnchor + "            var resource_metrics = '';\n            var started_at = process.hrtime.bigint();\n",
+  );
+
+  const stdioAnchor = "                stdio: 'pipe',";
+  if (jobSource.split(stdioAnchor).length !== 2) {
+    throw new Error('Pinned Piston job source changed: missing unique stdio anchor');
+  }
+  jobSource = jobSource.replace(stdioAnchor, "                stdio: ['pipe', 'pipe', 'pipe', 'pipe'],");
+
+  const stdinAnchor = '            if (eventBus === null) {';
+  if (jobSource.split(stdinAnchor).length !== 2) {
+    throw new Error('Pinned Piston job source changed: missing unique stdin anchor');
+  }
+  jobSource = jobSource.replace(
+    stdinAnchor,
+    "            proc.stdio[3].on('data', data => {\n                resource_metrics += data.toString();\n            });\n\n" + stdinAnchor,
+  );
+
+  const exitAnchor = "            proc.on('exit', (code, signal) => {\n                exit_cleanup();\n\n                resolve({ stdout, stderr, code, signal, output });";
+  if (jobSource.split(exitAnchor).length !== 2) {
+    throw new Error('Pinned Piston job source changed: missing unique exit anchor');
+  }
+  jobSource = jobSource.replace(
+    exitAnchor,
+    "            proc.on('exit', () => {\n"
+      + "                exit_cleanup();\n"
+      + "            });\n\n"
+      + "            // close waits for the resource pipe to drain before metrics are read.\n"
+      + "            proc.on('close', (code, signal) => {\n"
+      + "                const wall_time = Number(process.hrtime.bigint() - started_at) / 1e6;\n"
+      + "                const memory_kb = Number.parseInt(resource_metrics.trim(), 10);\n"
+      + "                const memory = Number.isSafeInteger(memory_kb) && memory_kb > 0 ? memory_kb * 1024 : null;\n"
+      + "                resolve({ stdout, stderr, code, signal, output, wall_time, memory });",
+  );
+
+  fs.writeFileSync(jobPath, jobSource);
+}

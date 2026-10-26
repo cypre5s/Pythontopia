@@ -19,6 +19,7 @@ import type {
 } from '@/api/orchestrator';
 
 const SESSION_KEY = 'pyt_guide_session_v1';
+const MAX_HISTORY_MESSAGES = 40;
 
 export interface GuideMessage {
   id: string;
@@ -103,10 +104,28 @@ export interface GuideStoreState {
 }
 
 /** 过滤出可发给后端的多轮历史（剔除欢迎语与正在流式/失败的占位）。 */
-function toRequestHistory(messages: GuideMessage[]): OrchestratorTurnMessage[] {
-  return messages
-    .filter((m) => !m.streaming && !m.failed && m.id !== 'welcome' && m.content.trim().length > 0)
-    .map((m) => ({ role: m.role, content: m.content }));
+function toRequestHistory(
+  messages: GuideMessage[],
+  beforeIndex = messages.length,
+): OrchestratorTurnMessage[] {
+  const history: OrchestratorTurnMessage[] = [];
+  for (
+    let i = Math.min(beforeIndex, messages.length) - 1;
+    i >= 0 && history.length < MAX_HISTORY_MESSAGES;
+    i -= 1
+  ) {
+    const message = messages[i];
+    if (
+      message
+      && !message.streaming
+      && !message.failed
+      && message.id !== 'welcome'
+      && message.content.trim().length > 0
+    ) {
+      history.push({ role: message.role, content: message.content });
+    }
+  }
+  return history.reverse();
 }
 
 const WELCOME: GuideMessage = {
@@ -177,7 +196,7 @@ export const useGuideStore = defineStore('guide', {
     },
     pushUserMessage(content: string): string {
       const id = genId();
-      this.messages = [...this.messages, { id, role: 'user', content }];
+      this.messages.push({ id, role: 'user', content });
       this.lastTurn = { userMessageId: id, text: content };
       return id;
     },
@@ -185,10 +204,7 @@ export const useGuideStore = defineStore('guide', {
     beginAssistant(): string | null {
       if (this.status === 'streaming') return null;
       const id = genId();
-      this.messages = [
-        ...this.messages,
-        { id, role: 'assistant', content: '', streaming: true },
-      ];
+      this.messages.push({ id, role: 'assistant', content: '', streaming: true });
       this.status = 'streaming';
       this.lastError = null;
       return id;
@@ -203,7 +219,7 @@ export const useGuideStore = defineStore('guide', {
       const { userMessageId, text } = this.lastTurn;
       const turnIndex = this.messages.findIndex((m) => m.id === userMessageId);
       if (turnIndex < 0) return null;
-      const history = toRequestHistory(this.messages.slice(0, turnIndex));
+      const history = toRequestHistory(this.messages, turnIndex);
       // 移除本轮（含此前各次重试）的失败占位，再挂新的流式占位。
       this.messages = this.messages.filter(
         (m, idx) => !(idx > turnIndex && m.role === 'assistant' && m.failed),
@@ -218,36 +234,34 @@ export const useGuideStore = defineStore('guide', {
       return { assistantId, text, history };
     },
     updateAssistantStream(id: string, content: string, traces: OrchestratorTraceStep[]): void {
-      this.messages = this.messages.map((m) =>
-        m.id === id ? { ...m, content, traces } : m,
-      );
+      const message = this.messages.find((m) => m.id === id);
+      if (!message) return;
+      message.content = content;
+      message.traces = traces;
     },
     finalizeAssistant(id: string, result: OrchestratorResult, fallbackContent: string): void {
       const content = result.reply_md?.trim().length ? result.reply_md : fallbackContent;
-      this.messages = this.messages.map((m) =>
-        m.id === id
-          ? {
-              ...m,
-              content,
-              streaming: false,
-              plan: result.plan ?? [],
-              dispatchResults: result.dispatch_results ?? [],
-              clarifyingQuestion: result.clarifying_question ?? null,
-              needsUserInput: result.needs_user_input ?? false,
-              profileUpdates: result.profile_updates ?? [],
-              traces: result.trace ?? m.traces ?? [],
-              done: result.done ?? false,
-            }
-          : m,
-      );
+      const message = this.messages.find((m) => m.id === id);
+      if (message) {
+        message.content = content;
+        message.streaming = false;
+        message.plan = result.plan ?? [];
+        message.dispatchResults = result.dispatch_results ?? [];
+        message.clarifyingQuestion = result.clarifying_question ?? null;
+        message.needsUserInput = result.needs_user_input ?? false;
+        message.profileUpdates = result.profile_updates ?? [];
+        message.traces = result.trace ?? message.traces ?? [];
+        message.done = result.done ?? false;
+      }
       this.status = 'idle';
     },
     failAssistant(id: string, message: string): void {
-      this.messages = this.messages.map((m) =>
-        m.id === id
-          ? { ...m, streaming: false, failed: true, content: m.content || '抱歉，AI 助教暂时没法回应，过一会再试。' }
-          : m,
-      );
+      const assistant = this.messages.find((m) => m.id === id);
+      if (assistant) {
+        assistant.streaming = false;
+        assistant.failed = true;
+        assistant.content = assistant.content || '抱歉，AI 助教暂时没法回应，过一会再试。';
+      }
       this.status = 'error';
       this.lastError = message;
     },

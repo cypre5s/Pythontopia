@@ -22,12 +22,21 @@ import com.pythontopia.submission.repository.PublicProblemRepository;
 import java.sql.ResultSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
+import org.springframework.aop.framework.ProxyFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 @SuppressWarnings("unchecked")
 class FeynmanSessionServiceTest {
@@ -42,15 +51,45 @@ class FeynmanSessionServiceTest {
   private final FeynmanGraphClient graphClient = mock(FeynmanGraphClient.class);
   private final ProfileRepository profileRepository = mock(ProfileRepository.class);
   private final FeynmanBugBankRepository bugBank = mock(FeynmanBugBankRepository.class);
-  private final FeynmanSessionService service =
-      new FeynmanSessionService(
-          jdbc,
-          objectMapper,
-          mock(MisconceptionExtractor.class),
-          graphClient,
-          mock(PublicProblemRepository.class),
-          profileRepository,
-          bugBank);
+  private final PlatformTransactionManager transactionManager = new TestTransactionManager();
+  private FeynmanSessionService service;
+
+  @BeforeEach
+  void createTransactionalProxy() {
+    FeynmanSessionService target =
+        new FeynmanSessionService(
+            jdbc,
+            objectMapper,
+            mock(MisconceptionExtractor.class),
+            graphClient,
+            mock(PublicProblemRepository.class),
+            profileRepository,
+            bugBank,
+            transactionManager);
+    ProxyFactory proxyFactory = new ProxyFactory(target);
+    proxyFactory.addAdvice(
+        new TransactionInterceptor(
+            transactionManager, new AnnotationTransactionAttributeSource()));
+    service = (FeynmanSessionService) proxyFactory.getProxy();
+  }
+
+  @Test
+  void llmCallDoesNotHoldDatabaseTransaction() {
+    givenSession(OPEN_MISCONCEPTION);
+    AtomicBoolean transactionDuringGraphCall = new AtomicBoolean(true);
+    when(graphClient.step(anyString(), any(), any(), any(), anyString(), any()))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringGraphCall.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return Optional.of(
+                  new FeynmanGraphClient.FeynmanOutput("我听懂了", List.of(), null));
+            });
+
+    service.teach(7L, 10L, "range 的右边界不包含在结果里");
+
+    assertThat(transactionDuringGraphCall).isFalse();
+  }
 
   @Test
   void teachFailsFastWhenTuteeAgentIsUnavailable() {
@@ -301,5 +340,23 @@ class FeynmanSessionServiceTest {
         .update(
             contains("UPDATE feynman_session SET tutee_state"), any(), status.capture(), eq(10L));
     return status.getValue();
+  }
+
+  private static final class TestTransactionManager extends AbstractPlatformTransactionManager {
+
+    @Override
+    protected Object doGetTransaction() {
+      return new Object();
+    }
+
+    @Override
+    protected void doBegin(
+        Object transaction, org.springframework.transaction.TransactionDefinition definition) {}
+
+    @Override
+    protected void doCommit(DefaultTransactionStatus status) {}
+
+    @Override
+    protected void doRollback(DefaultTransactionStatus status) {}
   }
 }

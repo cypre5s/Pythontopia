@@ -1,4 +1,4 @@
-import { ref, type Ref } from 'vue';
+import { ref, shallowRef, triggerRef, type Ref } from 'vue';
 import { useSessionStore } from '@stores/session';
 import { applyPatch } from 'fast-json-patch';
 import { toAguiEvent, type AguiEvent } from './agui';
@@ -96,13 +96,13 @@ export function useSseStream<T = unknown>(url: string): {
   /** STATE_SNAPSHOT/STATE_DELTA 累积的运行态状态袋（模块 D：HUD 实时同步）。 */
   state: Ref<Record<string, unknown>>;
 } & SseStreamState<T> {
-  const traces = ref<SseTraceEvent[]>([]) as Ref<SseTraceEvent[]>;
+  const traces = shallowRef<SseTraceEvent[]>([]);
   const tokens = ref('');
   const result = ref<T | null>(null) as Ref<T | null>;
   const error = ref<{ code: string; message: string } | null>(null);
   const status = ref<SseStatus>('idle');
   const plan = ref<SsePlan | null>(null);
-  const events = ref<AguiEvent[]>([]) as Ref<AguiEvent[]>;
+  const events = shallowRef<AguiEvent[]>([]);
   const state = ref<Record<string, unknown>>({});
 
   let controller: AbortController | null = null;
@@ -241,7 +241,8 @@ export function useSseStream<T = unknown>(url: string): {
   function dispatch(eventName: string, raw: string): void {
     const ev = toAguiEvent(eventName, raw);
     if (!ev) return;
-    events.value = [...events.value, ev];
+    events.value.push(ev);
+    triggerRef(events);
     projectEvent(ev);
   }
 
@@ -256,7 +257,8 @@ export function useSseStream<T = unknown>(url: string): {
         break;
       case 'STEP_STARTED':
       case 'STEP_FINISHED':
-        traces.value = [...traces.value, ev.step];
+        traces.value.push(ev.step);
+        triggerRef(traces);
         break;
       case 'RUN_FINISHED':
         result.value = ev.result as T;

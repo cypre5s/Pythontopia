@@ -20,6 +20,14 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.springframework.aop.framework.ProxyFactory;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.AnnotationTransactionAttributeSource;
+import org.springframework.transaction.interceptor.TransactionInterceptor;
+import org.springframework.transaction.support.AbstractPlatformTransactionManager;
+import org.springframework.transaction.support.DefaultTransactionStatus;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
 
@@ -72,6 +80,38 @@ class MemoryRetrievalServiceTest {
         .isGreaterThanOrEqualTo(items.get(1).totalScore());
     assertThat(items.get(1).totalScore())
         .isGreaterThanOrEqualTo(items.get(2).totalScore());
+  }
+
+  @Test
+  void semanticRetrievalDoesNotHoldDatabaseTransactionDuringEmbedding() {
+    AtomicBoolean transactionDuringEventQuery = new AtomicBoolean(true);
+    AtomicBoolean transactionDuringEmbedding = new AtomicBoolean(true);
+    when(eventRepo.findRecentForMemory(eq(7L), anyInt()))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringEventQuery.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return List.of(row(1, "practice_failed", List.of(), 2, NOW));
+            });
+    when(embeddingClient.embed("query"))
+        .thenAnswer(
+            invocation -> {
+              transactionDuringEmbedding.set(
+                  TransactionSynchronizationManager.isActualTransactionActive());
+              return Optional.empty();
+            });
+
+    PlatformTransactionManager transactionManager = new TestTransactionManager();
+    ProxyFactory proxyFactory = new ProxyFactory(service);
+    proxyFactory.addAdvice(
+        new TransactionInterceptor(
+            transactionManager, new AnnotationTransactionAttributeSource()));
+    MemoryRetrievalService transactionalService =
+        (MemoryRetrievalService) proxyFactory.getProxy();
+    transactionalService.retrieve(7L, null, "query", 5);
+
+    assertThat(transactionDuringEventQuery).isFalse();
+    assertThat(transactionDuringEmbedding).isFalse();
   }
 
   @Test
@@ -150,6 +190,24 @@ class MemoryRetrievalServiceTest {
     assertThat(items.get(0).eventId()).isEqualTo(2);
     assertThat(items.get(0).relevanceScore()).isEqualTo(0.5);
     assertThat(items.get(1).relevanceScore()).isEqualTo(0.0);
+  }
+
+  private static final class TestTransactionManager extends AbstractPlatformTransactionManager {
+
+    @Override
+    protected Object doGetTransaction() {
+      return new Object();
+    }
+
+    @Override
+    protected void doBegin(
+        Object transaction, org.springframework.transaction.TransactionDefinition definition) {}
+
+    @Override
+    protected void doCommit(DefaultTransactionStatus status) {}
+
+    @Override
+    protected void doRollback(DefaultTransactionStatus status) {}
   }
 
   @Test

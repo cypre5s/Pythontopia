@@ -72,6 +72,8 @@ from pythontopia_graph.graph.agentic_loop import (
 )
 from pythontopia_graph.graph.orchestrator_session import (
     append_turns,
+    begin_session_run,
+    end_session_run,
     get_history,
     get_plan,
     merge_profile_signals,
@@ -296,6 +298,13 @@ class OrchestratorGraph:
         return dict(values) if values else {}
 
     async def _invoke(self, req: OrchestratorRequest, emit: Emit) -> OrchestratorResponse:
+        await begin_session_run(req.user_id, req.session_id)
+        try:
+            return await self._invoke_pinned(req, emit)
+        finally:
+            await end_session_run(req.user_id, req.session_id)
+
+    async def _invoke_pinned(self, req: OrchestratorRequest, emit: Emit) -> OrchestratorResponse:
         self._emit_cb = emit
 
         # 服务端记忆为权威；客户端 history 仅冷启动回退
@@ -334,7 +343,7 @@ class OrchestratorGraph:
             "tool_trail": [],
         }
         # 轮次 = 服务端已存对话轮数（user+assistant 成对，半开容忍）；thread 按轮独立。
-        turn_no = len(server_history) // 2
+        turn_no = len(merged_history) // 2
         config = {
             "configurable": {
                 "thread_id": self.turn_thread_id(req.user_id, req.session_id, turn_no)
@@ -346,7 +355,7 @@ class OrchestratorGraph:
         # 结构化闭环审计（镜像 V171）；落库由 S2-loop-backend 经 sink 负责（fail-soft）。
         self._last_loop_record = self._build_loop_record(merged_req, final, response, turn_no)
         await self._emit_loop_record(self._last_loop_record)
-        await self._persist(req, response)
+        await self._persist(merged_req, response)
         return response
 
     async def _fetch_memory_brief(self, req: OrchestratorRequest) -> MemoryBrief:
@@ -1347,6 +1356,7 @@ class OrchestratorGraph:
                 OrchestratorTurn(role="user", content=req.user_message),
                 OrchestratorTurn(role="assistant", content=response.reply_md),
             ],
+            history_fallback=req.history,
         )
         # 歧义澄清轮不覆盖已存 plan
         if not response.needs_user_input:

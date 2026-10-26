@@ -389,10 +389,13 @@ class WeeklyReportServicePostgresIntegrationTest {
     jdbc.update(
         "INSERT INTO kc_mastery (user_id, kc_code, mastery_score, confidence, updated_at)"
             + " VALUES (?, 'PY43-KC-001', 0.700, 0.800, now()),"
-            + " (?, 'PY43-KC-002', 0.000, 0.000, now())",
+            + " (?, 'PY43-KC-002', 0.000, 0.000, now()),"
+            + " (?, 'PY43-KC-003', 0.000, 0.000, now())",
+        userId,
         userId,
         userId);
     insertMasteryEvent(userId, "PRACTICE_PASS", new BigDecimal("0.100"), "1 day");
+    insertMasteryEvent(userId, "PRACTICE_FAIL", new BigDecimal("-0.050"), "1 hour");
     jdbc.update(
         "INSERT INTO kc_mastery_event (user_id, kc_code, source, delta, applied_delta, reason)"
             + " VALUES (?, 'PY43-KC-002', 'BOOTSTRAP', 0.000, 0.000, 'bootstrap')",
@@ -412,7 +415,19 @@ class WeeklyReportServicePostgresIntegrationTest {
     assertThat(snapshots)
         .filteredOn(snapshot -> snapshot.kcCode().equals("PY43-KC-002"))
         .singleElement()
-        .satisfies(snapshot -> assertThat(snapshot.assessed()).isFalse());
+        .satisfies(
+            snapshot -> {
+              assertThat(snapshot.assessed()).isFalse();
+              assertThat(snapshot.latestSource()).isEqualTo("BOOTSTRAP");
+            });
+    assertThat(snapshots)
+        .filteredOn(snapshot -> snapshot.kcCode().equals("PY43-KC-001"))
+        .singleElement()
+        .satisfies(snapshot -> assertThat(snapshot.latestSource()).isEqualTo("PRACTICE_FAIL"));
+    assertThat(snapshots)
+        .filteredOn(snapshot -> snapshot.kcCode().equals("PY43-KC-003"))
+        .singleElement()
+        .satisfies(snapshot -> assertThat(snapshot.latestSource()).isNull());
   }
 
   @Test

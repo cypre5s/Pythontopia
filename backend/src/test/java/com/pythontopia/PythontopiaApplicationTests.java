@@ -1,14 +1,19 @@
 package com.pythontopia;
 
+import static org.assertj.core.api.Assertions.assertThat;
+
 import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.ApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.scheduling.annotation.ScheduledAnnotationBeanPostProcessor;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.transaction.PlatformTransactionManager;
 
 /**
  * Smoke test that boots the Spring context without a real datasource. A no-op {@link JdbcTemplate}
@@ -19,8 +24,13 @@ import org.springframework.test.context.ActiveProfiles;
 @Import(PythontopiaApplicationTests.NoDatabaseConfig.class)
 class PythontopiaApplicationTests {
 
+  @Autowired private ApplicationContext applicationContext;
+
   @Test
-  void contextLoads() {}
+  void contextLoadsWithoutStartingBackgroundSchedulers() {
+    assertThat(applicationContext.getBeansOfType(ScheduledAnnotationBeanPostProcessor.class))
+        .isEmpty();
+  }
 
   @TestConfiguration(proxyBeanMethods = false)
   static class NoDatabaseConfig {

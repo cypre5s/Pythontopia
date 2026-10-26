@@ -57,7 +57,7 @@ public class BossProblemReviewRepository {
             + " SELECT 'course:' || p.id::text AS problem_id,"
             + " left(p.statement_markdown, 2000) AS statement, p.create_time AS created_at, 0 AS source_order"
             + " FROM course_problem p"
-            + " WHERE p.pack_id = ? AND p.kc_code = ?"
+            + " WHERE p.pack_id = ? AND p.kc_code = ? AND p.tutor_owner_user_id IS NULL"
             + " AND nullif(btrim(p.reference_solution_code), '') IS NOT NULL"
             + " AND nullif(btrim(p.statement_markdown), '') IS NOT NULL"
             + " UNION ALL"

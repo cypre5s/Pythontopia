@@ -388,7 +388,7 @@ async def rag_rebuild(
 ) -> RagRebuildResponse:
     _require_admin_token(x_internal_token)
     state: AppState = request.app.state.rag
-    source = _resolve_rebuild_source(request)
+    source = await asyncio.to_thread(_resolve_rebuild_source, request)
     try:
         result = await rebuild_index(
             source=source, embedder=state.embedder, store=state.store, bm25=state.bm25
@@ -401,7 +401,9 @@ async def rag_rebuild(
             detail="RAG index rebuild failed because embedding degraded; the existing index is unchanged.",
         ) from exc
     # 重建顺带刷新 KC 前置图（重灌库后前置关系可能变化；失败保留旧图）。
-    refreshed = fetch_kc_graph(os.environ.get("PYT_DB_URL", DEFAULT_DB_URL))
+    refreshed = await asyncio.to_thread(
+        fetch_kc_graph, os.environ.get("PYT_DB_URL", DEFAULT_DB_URL)
+    )
     if refreshed.size > 0:
         state.kc_graph = refreshed
     state.knowledge_graph = build_kc_graph_from_chunks(

@@ -4,7 +4,12 @@ import com.pythontopia.auth.domain.UserAccount;
 import com.pythontopia.auth.security.Role;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import org.springframework.jdbc.support.KeyHolder;
@@ -99,6 +104,36 @@ public class UserRepository {
         .stream()
         .findFirst();
   }
+
+  public Set<String> findExistingUsernames(Collection<String> usernames) {
+    if (usernames.isEmpty()) {
+      return Set.of();
+    }
+    String placeholders = String.join(", ", Collections.nCopies(usernames.size(), "?"));
+    return new HashSet<>(
+        jdbcTemplate.query(
+            "SELECT username FROM users WHERE username IN (" + placeholders + ")",
+            (rs, rowNum) -> rs.getString("username"),
+            usernames.toArray()));
+  }
+
+  public void insertStudents(List<StudentImport> students) {
+    if (students.isEmpty()) {
+      return;
+    }
+    jdbcTemplate.batchUpdate(
+        "INSERT INTO users (username, display_name, password_hash, email, role)"
+            + " VALUES (?, ?, ?, NULL, 'STUDENT')",
+        students,
+        1000,
+        (statement, student) -> {
+          statement.setString(1, student.username());
+          statement.setString(2, student.displayName());
+          statement.setString(3, student.passwordHash());
+        });
+  }
+
+  public record StudentImport(String username, String displayName, String passwordHash) {}
 
   public boolean isLoginThrottled(Long userId) {
     return Boolean.TRUE.equals(
