@@ -7,6 +7,7 @@
 - 本轮验证：后端 Maven 1,909/1,909，Graph 1,993 passed / 1 skipped，RAG 182/182，前端 2,723/2,723；前端 typecheck、改动文件 ESLint、Vite production build 与 Graph Ruff 通过。完整 ESLint 为 0 errors / 405 existing warnings；Graph 唯一跳过项缺少可选 ragas 适配依赖。
 - 性能审计批量写入与查询确定性修复已随提交 [`8e174ada`](https://github.com/cypre5s/Pythontopia/commit/8e174ada830c26dc72287b0f1323d540c8d82010) 推送至 `main`。后端全量测试 1,907/1,907 通过；掌握度并列时间排序的后续定向测试 3/3 通过；GitHub CI [#40207300002](https://github.com/cypre5s/Pythontopia/actions/runs/40207300002) 五个 job 全部成功。
 - Release [`web-v20261025.10`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.10) 已发布；归档 `pythontopia-web-v20261025.10.tar.gz` 为 1,535,059,376 字节，SHA-256 `785f7e86879c52d708360d1895598283d865e1d93106942f50e1a6f5d7c514f3`，下载 HEAD 返回 200 且 Content-Length 匹配。由于 tag push 延迟重复触发，第二个相同提交的 release run [#40208756259](https://github.com/cypre5s/Pythontopia/actions/runs/40208756259) 在上传时因同 tag release 已存在而失败；首个 run [#40208342200](https://github.com/cypre5s/Pythontopia/actions/runs/40208342200) 已成功完成发布，资产不受影响。
+- 会话历史边界修复随提交 [`1fc0704d`](https://github.com/cypre5s/Pythontopia/commit/1fc0704db3fa8efc94930bf4322aeb60d82ff4ff) 推送；GitHub CI [#40279943079](https://github.com/cypre5s/Pythontopia/actions/runs/40279943079) 五个 job 全部成功。最终 Release [`web-v20261026.1`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261026.1) 仅上传一个归档，大小 1,535,055,672 字节，SHA-256 `dc2d09d86e40a0e84ffa304aab0bba65aaaa18cbd9a9788eb62220f332f45248`；下载 HEAD 返回 200 且 Content-Length 匹配。
 
 ## 2026-10-25
 

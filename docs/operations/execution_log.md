@@ -9,7 +9,7 @@
 - 查到 Orchestrator 会话字典没有总量上限，以及 Graph 服务重启后虽从客户端历史继续生成、却只把当前问答写回服务端的问题。实现最多 512 条 LRU 会话缓存，保护活跃请求；缓存缺失时将最多 40 条历史先恢复再追加本轮，并用恢复后历史计算检查点轮次。
 - 前端向导请求只发送最近 40 条有效消息；重试不再创建完整历史切片。Java DTO 与 Graph schema 同步限制历史 40 条、每条最多 8,000 字符，并修正 Java DTO 允许 `system` 而 Graph 只接受 `user` / `assistant` 的契约差异。
 - TDD 回归先复现未限制的请求、无界会话和冷启动历史丢失；修复后 Graph 相关测试 11/11、Java DTO/Graph 客户端定向测试 6/6 通过。全量验证：后端 `mvn -B test` 1,909/1,909（7:33）；Graph 1,993 passed、1 skipped；RAG 182 passed；前端 Vitest 2,723 passed，typecheck 和改动文件 ESLint 通过，完整 ESLint 0 errors / 405 warnings；Vite production build 与 Graph Ruff 通过。
-- 本地 release 目录已清除 4 个旧归档；最终 release 尚未重新构建/上传，待优化验证完成后仅发布一次。未做生产并发基准或真实 DeepSeek/浏览器往返；Graph 的 1 项 optional ragas 测试因缺少 `langchain_community.chat_models.vertexai` 跳过，Maven Testcontainers 收尾仍有关闭连接告警但退出码为 0。
+- 本地 release 目录已清除 4 个旧归档；最终 release 由 GitHub Actions 在优化验证后仅构建并上传一次，结果见下节。未做生产并发基准或真实 DeepSeek/浏览器往返；Graph 的 1 项 optional ragas 测试因缺少 `langchain_community.chat_models.vertexai` 跳过，Maven Testcontainers 收尾仍有关闭连接告警但退出码为 0。
 
 ## 2026-10-26 — 性能审计提交与 Web Release 收尾
 
@@ -17,6 +17,12 @@
 - Release run [#40208342200](https://github.com/cypre5s/Pythontopia/actions/runs/40208342200) 构建、体积检查和上传成功，发布 [`web-v20261025.10`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.10)。资产为 1,535,059,376 字节，GitHub SHA-256 为 `785f7e86879c52d708360d1895598283d865e1d93106942f50e1a6f5d7c514f3`；下载 HEAD 返回 200，Content-Length 一致。
 - 同一 tag 的延迟 push 事件又启动 run [#40208756259](https://github.com/cypre5s/Pythontopia/actions/runs/40208756259)；其构建和体积检查成功，但发布步骤因目标 release 已存在而退出 1。已有 release 资产正常，不需要二次上传。
 - 未进行生产并发/吞吐基准；本地无关改动 `.gitignore`、`frontend/public/data/course43/manifest.json` 与 `deploy/astrbot-custom-plugins/` 保留原状。
+
+## 2026-10-26 — 会话边界优化最终发布
+
+- 会话历史 LRU、冷启动恢复和跨层输入边界修复提交 [`1fc0704d`](https://github.com/cypre5s/Pythontopia/commit/1fc0704db3fa8efc94930bf4322aeb60d82ff4ff) 已推送；GitHub CI [#40279943079](https://github.com/cypre5s/Pythontopia/actions/runs/40279943079) 五个 job 全部成功。
+- GitHub Release 工作流 [#40280721149](https://github.com/cypre5s/Pythontopia/actions/runs/40280721149) 构建、体积检查与上传均成功，发布 [`web-v20261026.1`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261026.1)。只上传一个资产 `pythontopia-web-v20261026.1.tar.gz`，1,535,055,672 字节，SHA-256 `dc2d09d86e40a0e84ffa304aab0bba65aaaa18cbd9a9788eb62220f332f45248`；下载 HEAD 返回 200，Content-Length 一致。
+- 本地此前清理 4 个过期归档；当前 `output/packages/` 没有 `pythontopia-web-*.tar.gz`，没有额外生成本地大包。未做生产并发/吞吐基准或真实 DeepSeek/浏览器往返；工作区其余未提交用户文件保持不变。
 
 ## 2026-10-25 — 学习路径节点批量写入
 
