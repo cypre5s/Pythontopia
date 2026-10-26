@@ -2,6 +2,9 @@
 
 ## 2026-10-26
 
+- AI 导学总管会话状态由无界进程字典改为最多 512 条 LRU 缓存，并在运行期间保护活跃会话。进程冷启动或会话缓存缺失时，已有请求历史现在会恢复到服务端存储，检查点轮次也按恢复后的历史计算，避免续聊时丢失上下文或复用旧检查点线程。
+- 导学向导只发送最近 40 条有效历史消息，重试时不再先复制整段历史；Java 与 Graph 同步限制历史条数为 40、单条内容为 8,000 字符，并统一只接受 `user` / `assistant` 角色。
+- 本轮验证：后端 Maven 1,909/1,909，Graph 1,993 passed / 1 skipped，RAG 182/182，前端 2,723/2,723；前端 typecheck、改动文件 ESLint、Vite production build 与 Graph Ruff 通过。完整 ESLint 为 0 errors / 405 existing warnings；Graph 唯一跳过项缺少可选 ragas 适配依赖。
 - 性能审计批量写入与查询确定性修复已随提交 [`8e174ada`](https://github.com/cypre5s/Pythontopia/commit/8e174ada830c26dc72287b0f1323d540c8d82010) 推送至 `main`。后端全量测试 1,907/1,907 通过；掌握度并列时间排序的后续定向测试 3/3 通过；GitHub CI [#40207300002](https://github.com/cypre5s/Pythontopia/actions/runs/40207300002) 五个 job 全部成功。
 - Release [`web-v20261025.10`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.10) 已发布；归档 `pythontopia-web-v20261025.10.tar.gz` 为 1,535,059,376 字节，SHA-256 `785f7e86879c52d708360d1895598283d865e1d93106942f50e1a6f5d7c514f3`，下载 HEAD 返回 200 且 Content-Length 匹配。由于 tag push 延迟重复触发，第二个相同提交的 release run [#40208756259](https://github.com/cypre5s/Pythontopia/actions/runs/40208756259) 在上传时因同 tag release 已存在而失败；首个 run [#40208342200](https://github.com/cypre5s/Pythontopia/actions/runs/40208342200) 已成功完成发布，资产不受影响。
 

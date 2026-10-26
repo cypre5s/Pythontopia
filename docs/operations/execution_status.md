@@ -1,5 +1,7 @@
 # Pythontopia 执行状态实时记录
 
+> **本轮本地验证（2026-10-26）**：AI 导学总管会话缓存现有 512 条 LRU 上限并保护运行中的会话；冷启动历史恢复和检查点轮次均有回归覆盖。导学请求只发送最近 40 条有效历史，Java/Graph 在入口限制历史为 40 条、单条 8,000 字符且角色只接受 `user` / `assistant`。验证：Maven 1,909/1,909，最终 DTO/客户端定向测试 6/6；Graph 1,993 passed / 1 skipped，RAG 182/182，前端 2,723/2,723；typecheck、改动文件 ESLint、Vite build、Graph Ruff 通过。完整 ESLint 0 errors / 405 warnings；Graph 可选 ragas 评估依赖缺失导致 1 项跳过。未测生产并发负载或真实模型往返。
+
 > 该文档与 `docs/project/CHANGELOG.md` 配合使用：CHANGELOG 记录“已完成”，本文档记录“正在做+下一步+卡点+最近 2 分钟动作”。
 > 每完成一个关键节点都要追加；每 2 分钟最低汇报一次。
 > **当前快照（2026-10-25）**：证据图/记忆快照与 RAG 性能修复已随 [`eb938f7c`](https://github.com/cypre5s/Pythontopia/commit/eb938f7cdea76a93675127abd20b2b895250786d) 推送，CI [#37](https://github.com/cypre5s/Pythontopia/actions/runs/40189566818) 5/5 通过，release [`web-v20261025.6`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.6) 已发布并通过 HEAD 下载检查。随后 WorkshopChat SSE 增量扫描改进已随 [`ffa7a249`](https://github.com/cypre5s/Pythontopia/commit/ffa7a2498bfe9f223b6527bb3359f24859de8b13) 推送，GitHub CI [此轮](https://github.com/cypre5s/Pythontopia/actions/runs/40192634123) 与包含最终记录的 CI [此轮](https://github.com/cypre5s/Pythontopia/actions/runs/40193318209) 均 5/5 通过。新 release [`web-v20261025.7`](https://github.com/cypre5s/Pythontopia/releases/tag/web-v20261025.7) 已成功构建上传；`pythontopia-web-v20261025.7.tar.gz` 为 1,535,045,783 字节，下载 HEAD 返回 200 且长度匹配。前端 Vitest 2,722 项、typecheck、改动文件 ESLint、Vite build 通过。另做了 3,000×512 维合成向量本地微测，RAG 当前查询中位数 6.07 ms、基线 12.88 ms；不代表真实数据或并发负载。Maven 收尾问题已修复：测试 profile 关闭自动调度，后端全量 1,895 项通过且无 Surefire 30 秒强制收尾转储；完整审计仍在进行。

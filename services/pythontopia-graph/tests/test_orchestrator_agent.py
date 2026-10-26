@@ -14,7 +14,7 @@ from pythontopia_graph.agents.orchestrator_agent import (
 from pythontopia_graph.graph.orchestrator_graph import OrchestratorGraph
 from pythontopia_graph.graph.orchestrator_session import get_history, reset_session
 from pythontopia_graph.llm.provider import LlmProvider, LlmResponse
-from pythontopia_graph.schemas.orchestrator import OrchestratorRequest, PlanStep
+from pythontopia_graph.schemas.orchestrator import OrchestratorRequest, OrchestratorTurn, PlanStep
 from pythontopia_graph.tools.harness import reset_harness_state
 
 
@@ -374,6 +374,39 @@ async def test_multi_turn_accumulates_history_in_session_store() -> None:
     assert second[0].role == "user"
     assert second[0].content == "第一句"
     assert second[2].content == "第二句"
+
+
+@pytest.mark.asyncio
+async def test_cold_start_fallback_history_is_restored_after_graph_turn(monkeypatch) -> None:
+    await reset_session(1, "t-cold-start")
+    graph = OrchestratorGraph(provider=StubProvider([], reply="继续安排。"))
+    original_build_loop_record = graph._build_loop_record
+    captured_turn_numbers: list[int] = []
+
+    def capture_turn_number(req, final, response, turn_no):
+        captured_turn_numbers.append(turn_no)
+        return original_build_loop_record(req, final, response, turn_no)
+
+    monkeypatch.setattr(graph, "_build_loop_record", capture_turn_number)
+    req = request_of(
+        "继续学习",
+        "t-cold-start",
+        history=[
+            OrchestratorTurn(role="user", content="先学循环"),
+            OrchestratorTurn(role="assistant", content="已经安排循环入门"),
+        ],
+        course_kc_index=["PY43-KC-001"],
+    )
+
+    await graph.run(req)
+
+    assert [turn.content for turn in await get_history(1, "t-cold-start")] == [
+        "先学循环",
+        "已经安排循环入门",
+        "继续学习",
+        "继续安排。",
+    ]
+    assert captured_turn_numbers == [1]
 
 
 # ── 教学风格目录 / packId=43 语境 / 确定性降级（TDD 新增） ──

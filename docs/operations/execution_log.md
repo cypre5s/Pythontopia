@@ -4,6 +4,13 @@
 > 一定要常翻 `AGENTS.md` 与 `/home/cypress/Pythontopia/plan/` 下的阶段计划，避免方向偏离。
 > 本文件下方的用户立场、Provider 决策和阶段列表是 2026-05 的历史记录，已由当前 `AGENTS.md` 与后续 CHANGELOG 更新覆盖。当前任务以 Web 为主，AI provider 为 DeepSeek；讯飞 Spark 与媒体出口已关闭。不要据旧日志启动非 Web 客户端或把旧阶段当作待办。
 
+## 2026-10-26 — AI 导学会话缓存与历史边界（本地验证）
+
+- 查到 Orchestrator 会话字典没有总量上限，以及 Graph 服务重启后虽从客户端历史继续生成、却只把当前问答写回服务端的问题。实现最多 512 条 LRU 会话缓存，保护活跃请求；缓存缺失时将最多 40 条历史先恢复再追加本轮，并用恢复后历史计算检查点轮次。
+- 前端向导请求只发送最近 40 条有效消息；重试不再创建完整历史切片。Java DTO 与 Graph schema 同步限制历史 40 条、每条最多 8,000 字符，并修正 Java DTO 允许 `system` 而 Graph 只接受 `user` / `assistant` 的契约差异。
+- TDD 回归先复现未限制的请求、无界会话和冷启动历史丢失；修复后 Graph 相关测试 11/11、Java DTO/Graph 客户端定向测试 6/6 通过。全量验证：后端 `mvn -B test` 1,909/1,909（7:33）；Graph 1,993 passed、1 skipped；RAG 182 passed；前端 Vitest 2,723 passed，typecheck 和改动文件 ESLint 通过，完整 ESLint 0 errors / 405 warnings；Vite production build 与 Graph Ruff 通过。
+- 本地 release 目录已清除 4 个旧归档；最终 release 尚未重新构建/上传，待优化验证完成后仅发布一次。未做生产并发基准或真实 DeepSeek/浏览器往返；Graph 的 1 项 optional ragas 测试因缺少 `langchain_community.chat_models.vertexai` 跳过，Maven Testcontainers 收尾仍有关闭连接告警但退出码为 0。
+
 ## 2026-10-26 — 性能审计提交与 Web Release 收尾
 
 - 批量学习数据库操作与掌握度并列时间确定性排序已提交为 `8e174ada830c26dc72287b0f1323d540c8d82010` 并推送至 `main`。提交前后验证为后端全量 Maven 1,907/1,907，掌握度排序后续定向测试 3/3；GitHub CI [#40207300002](https://github.com/cypre5s/Pythontopia/actions/runs/40207300002) 五个 job 全部成功。

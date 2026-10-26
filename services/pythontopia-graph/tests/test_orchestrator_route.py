@@ -10,6 +10,7 @@ import json
 from collections.abc import AsyncIterator
 
 import pytest
+from pydantic import ValidationError
 
 from fastapi.testclient import TestClient
 
@@ -19,6 +20,7 @@ from pythontopia_graph.routes import orchestrator as orchestrator_route
 from pythontopia_graph.nodes.evidence_fetcher import RagHit, StaticEvidenceFetcher
 from pythontopia_graph.routing.workshop_policy import compile_route_decision
 from pythontopia_graph.schemas.intent import IntentRouteRequest
+from pythontopia_graph.schemas.orchestrator import OrchestratorTurn
 
 
 class StubProvider(LlmProvider):
@@ -102,6 +104,24 @@ def test_orchestrator_turn_returns_200_and_response_shape() -> None:
     assert isinstance(data["dispatch_results"], list) and len(data["dispatch_results"]) >= 4
 
     del app.state.llm_provider
+
+
+def test_orchestrator_request_bounds_history_count_and_message_length() -> None:
+    with pytest.raises(ValidationError):
+        orchestrator_route.OrchestratorRequest(
+            user_id=1,
+            session_id="bounded-history",
+            user_message="continue",
+            history=[OrchestratorTurn(role="user", content="x") for _ in range(41)],
+        )
+
+    with pytest.raises(ValidationError):
+        orchestrator_route.OrchestratorRequest(
+            user_id=1,
+            session_id="bounded-history",
+            user_message="continue",
+            history=[OrchestratorTurn(role="user", content="x" * 8001)],
+        )
 
 
 def test_orchestrator_stream_emits_canonical_agui_events() -> None:

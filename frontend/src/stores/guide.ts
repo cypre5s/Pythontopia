@@ -19,6 +19,7 @@ import type {
 } from '@/api/orchestrator';
 
 const SESSION_KEY = 'pyt_guide_session_v1';
+const MAX_HISTORY_MESSAGES = 40;
 
 export interface GuideMessage {
   id: string;
@@ -103,10 +104,28 @@ export interface GuideStoreState {
 }
 
 /** 过滤出可发给后端的多轮历史（剔除欢迎语与正在流式/失败的占位）。 */
-function toRequestHistory(messages: GuideMessage[]): OrchestratorTurnMessage[] {
-  return messages
-    .filter((m) => !m.streaming && !m.failed && m.id !== 'welcome' && m.content.trim().length > 0)
-    .map((m) => ({ role: m.role, content: m.content }));
+function toRequestHistory(
+  messages: GuideMessage[],
+  beforeIndex = messages.length,
+): OrchestratorTurnMessage[] {
+  const history: OrchestratorTurnMessage[] = [];
+  for (
+    let i = Math.min(beforeIndex, messages.length) - 1;
+    i >= 0 && history.length < MAX_HISTORY_MESSAGES;
+    i -= 1
+  ) {
+    const message = messages[i];
+    if (
+      message
+      && !message.streaming
+      && !message.failed
+      && message.id !== 'welcome'
+      && message.content.trim().length > 0
+    ) {
+      history.push({ role: message.role, content: message.content });
+    }
+  }
+  return history.reverse();
 }
 
 const WELCOME: GuideMessage = {
@@ -203,7 +222,7 @@ export const useGuideStore = defineStore('guide', {
       const { userMessageId, text } = this.lastTurn;
       const turnIndex = this.messages.findIndex((m) => m.id === userMessageId);
       if (turnIndex < 0) return null;
-      const history = toRequestHistory(this.messages.slice(0, turnIndex));
+      const history = toRequestHistory(this.messages, turnIndex);
       // 移除本轮（含此前各次重试）的失败占位，再挂新的流式占位。
       this.messages = this.messages.filter(
         (m, idx) => !(idx > turnIndex && m.role === 'assistant' && m.failed),
