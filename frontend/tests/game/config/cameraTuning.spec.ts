@@ -17,13 +17,14 @@ import {
 
 describe('DEFAULT_CAMERA_TUNING 默认值', () => {
   it('与 R-12 主线缩放调参逐项一致', () => {
-    // R-12（commit e20cc7ad）星露谷大世界改造把镜头拉近、死区收紧：
-    // zoom 桌面 2.4 / 横屏 3.2 / 竖屏 2.8 / 节日 2.0 / 上限 5.0；死区 ±24。
-    expect(DEFAULT_CAMERA_TUNING.zoomBase).toBe(2.4);
-    expect(DEFAULT_CAMERA_TUNING.zoomMobile).toBe(3.2);
-    expect(DEFAULT_CAMERA_TUNING.zoomPortrait).toBe(2.8);
-    expect(DEFAULT_CAMERA_TUNING.zoomFestival).toBe(2.0);
-    expect(DEFAULT_CAMERA_TUNING.zoomMax).toBe(5.0);
+    // R-12（commit e20cc7ad）把镜头拉近、死区收紧；
+    // 2026-10-26 修 pixel crawl：zoom 从 2.4/3.2/2.8 统一改为整数 3，
+    // 节日 2.0 / 上限 5.0 不变；死区 ±24。
+    expect(DEFAULT_CAMERA_TUNING.zoomBase).toBe(3);
+    expect(DEFAULT_CAMERA_TUNING.zoomMobile).toBe(3);
+    expect(DEFAULT_CAMERA_TUNING.zoomPortrait).toBe(3);
+    expect(DEFAULT_CAMERA_TUNING.zoomFestival).toBe(2);
+    expect(DEFAULT_CAMERA_TUNING.zoomMax).toBe(5);
 
     expect(DEFAULT_CAMERA_TUNING.lerpFactorIdle).toBe(0.1);
     expect(DEFAULT_CAMERA_TUNING.lerpFactorWalk).toBe(0.15);
@@ -47,13 +48,22 @@ describe('DEFAULT_CAMERA_TUNING 默认值', () => {
     expect(DEFAULT_CAMERA_TUNING.lerpFactorRun).toBeLessThanOrEqual(1);
   });
 
-  it('数值合理性：所有 zoom > 0；zoomFestival < zoomBase < zoomMobile ≤ zoomMax', () => {
-    expect(DEFAULT_CAMERA_TUNING.zoomFestival).toBeGreaterThan(0);
+  it('数值合理性：zoom 全部为正整数倍，且 zoomFestival ≤ 各档 ≤ zoomMax', () => {
+    // 整数倍是硬约束：非整数 zoom 会让 16px 瓦片像素宽窄不匀（pixel crawl）。
+    [
+      DEFAULT_CAMERA_TUNING.zoomBase,
+      DEFAULT_CAMERA_TUNING.zoomMobile,
+      DEFAULT_CAMERA_TUNING.zoomPortrait,
+      DEFAULT_CAMERA_TUNING.zoomFestival,
+      DEFAULT_CAMERA_TUNING.zoomMax,
+    ].forEach((zoom) => {
+      expect(zoom).toBeGreaterThan(0);
+      expect(Number.isInteger(zoom)).toBe(true);
+    });
     expect(DEFAULT_CAMERA_TUNING.zoomFestival).toBeLessThan(DEFAULT_CAMERA_TUNING.zoomBase);
-    expect(DEFAULT_CAMERA_TUNING.zoomBase).toBeLessThan(DEFAULT_CAMERA_TUNING.zoomMobile);
+    expect(DEFAULT_CAMERA_TUNING.zoomBase).toBeLessThanOrEqual(DEFAULT_CAMERA_TUNING.zoomPortrait);
+    expect(DEFAULT_CAMERA_TUNING.zoomPortrait).toBeLessThanOrEqual(DEFAULT_CAMERA_TUNING.zoomMobile);
     expect(DEFAULT_CAMERA_TUNING.zoomMobile).toBeLessThanOrEqual(DEFAULT_CAMERA_TUNING.zoomMax);
-    expect(DEFAULT_CAMERA_TUNING.zoomPortrait).toBeGreaterThan(DEFAULT_CAMERA_TUNING.zoomBase);
-    expect(DEFAULT_CAMERA_TUNING.zoomPortrait).toBeLessThan(DEFAULT_CAMERA_TUNING.zoomMobile);
   });
 
   it('数值合理性：shake 三档严格递增；强度在 (0, 0.05] 安全区间', () => {
@@ -79,7 +89,7 @@ describe('DEFAULT_CAMERA_TUNING 默认值', () => {
     }).toThrow(TypeError);
 
     // 运行期仍是原值（freeze 让赋值无效或抛错）。
-    expect(DEFAULT_CAMERA_TUNING.zoomBase).toBe(2.4);
+    expect(DEFAULT_CAMERA_TUNING.zoomBase).toBe(3);
     expect(DEFAULT_CAMERA_TUNING.boundsClampEnabled).toBe(true);
     expect(Object.isFrozen(DEFAULT_CAMERA_TUNING)).toBe(true);
   });
@@ -131,23 +141,23 @@ describe('getLerpFactorByState', () => {
 });
 
 describe('getZoomForViewport', () => {
-  it('桌面（≥768，横屏）返回 zoomBase = 2.4', () => {
-    expect(getZoomForViewport(1920, false)).toBe(2.4);
-    expect(getZoomForViewport(1024, false)).toBe(2.4);
-    expect(getZoomForViewport(768, false)).toBe(2.4);
+  it('桌面（≥768，横屏）返回 zoomBase = 3', () => {
+    expect(getZoomForViewport(1920, false)).toBe(3);
+    expect(getZoomForViewport(1024, false)).toBe(3);
+    expect(getZoomForViewport(768, false)).toBe(3);
   });
 
-  it('手机横屏（<768，横屏）返回 zoomMobile = 3.2', () => {
-    expect(getZoomForViewport(767, false)).toBe(3.2);
-    expect(getZoomForViewport(640, false)).toBe(3.2);
-    expect(getZoomForViewport(360, false)).toBe(3.2);
+  it('手机横屏（<768，横屏）返回 zoomMobile = 3', () => {
+    expect(getZoomForViewport(767, false)).toBe(3);
+    expect(getZoomForViewport(640, false)).toBe(3);
+    expect(getZoomForViewport(360, false)).toBe(3);
   });
 
-  it('竖屏（任意宽度）返回 zoomPortrait = 2.8', () => {
-    expect(getZoomForViewport(360, true)).toBe(2.8);
-    expect(getZoomForViewport(720, true)).toBe(2.8);
-    expect(getZoomForViewport(1080, true)).toBe(2.8);
-    expect(getZoomForViewport(1920, true)).toBe(2.8);
+  it('竖屏（任意宽度）返回 zoomPortrait = 3', () => {
+    expect(getZoomForViewport(360, true)).toBe(3);
+    expect(getZoomForViewport(720, true)).toBe(3);
+    expect(getZoomForViewport(1080, true)).toBe(3);
+    expect(getZoomForViewport(1920, true)).toBe(3);
   });
 
   it('断点边界：768 走桌面、767 走手机', () => {

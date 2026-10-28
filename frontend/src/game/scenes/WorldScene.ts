@@ -1138,43 +1138,20 @@ function collectProperties(props: unknown): Record<string, unknown> {
   return Object.fromEntries(entries.map((p) => [p.name, p.value]));
 }
 
-// 用 LPC 茅草屋整屋 sprite 替换方块拼接建筑。屋子底沿对齐建筑区位底部、
-// 屋顶向上延伸（星露谷式），整屋遮住底下旧的瓦片建筑；点击进入对应房间。
-const COTTAGE_VARIANTS: ReadonlyArray<string> = ['cottage_tan', 'cottage_cream', 'cottage_stone'];
-const COTTAGE_FALLBACK_W = 200;
-
-function cottageVariantFor(route: string): string {
-  let hash = 0;
-  for (let i = 0; i < route.length; i += 1) hash = (hash + route.charCodeAt(i)) % COTTAGE_VARIANTS.length;
-  return COTTAGE_VARIANTS[hash] ?? COTTAGE_VARIANTS[0] ?? 'cottage_tan';
-}
+// 建筑完全由地图 buildings 层的瓦片拼成（generate-maps.mjs 的 house 四件套），
+// 这里只负责「可点击区域 + hover 名称」，不再叠 LPC 茅草屋大图：
+// 那张图被压到 0.37~0.46 倍才塞得进地基，细节糊成一片，且与 16px 瓦片像素密度/画风都不同。
 
 function paintBuildingZone(phaserScene: Phaser.Scene, building: BuildingZone): void {
   const px = (building.tileX + building.width / 2) * RENDER_TILE_SIZE;
   const footprintW = building.width * RENDER_TILE_SIZE;
   const bottomY = (building.tileY + building.height) * RENDER_TILE_SIZE;
-  // 屋子略宽于地基以盖住旧瓦片边缘；底沿坐在地基底部，屋顶往上探出。
-  const targetW = footprintW * 1.2;
 
-  const textures = (phaserScene as unknown as { textures?: { exists?: (k: string) => boolean } }).textures;
-  const variant = cottageVariantFor(building.route);
-  const useCottage = textures?.exists?.(variant) === true;
-
-  let interactive: Phaser.GameObjects.GameObject;
-  if (useCottage) {
-    const cottage = phaserScene.add.image(px, bottomY, variant).setOrigin(0.5, 1).setDepth(6);
-    // 按整屋实际像素宽缩放（不同变体宽度不一），底沿对齐地基底部。
-    const nativeW = cottage.width || COTTAGE_FALLBACK_W;
-    cottage.setScale(targetW / nativeW).setInteractive({ useHandCursor: true });
-    interactive = cottage;
-  } else {
-    // 兜底（纹理缺失，如测试桩）：保留透明可点击矩形。
-    const height = building.height * RENDER_TILE_SIZE;
-    interactive = phaserScene.add
-      .rectangle(px, building.tileY * RENDER_TILE_SIZE + height / 2, footprintW, height, 0x000000, 0)
-      .setInteractive({ useHandCursor: true })
-      .setDepth(6);
-  }
+  const height = building.height * RENDER_TILE_SIZE;
+  const interactive: Phaser.GameObjects.GameObject = phaserScene.add
+    .rectangle(px, building.tileY * RENDER_TILE_SIZE + height / 2, footprintW, height, 0x000000, 0)
+    .setInteractive({ useHandCursor: true })
+    .setDepth(6);
   interactive.on('pointerdown', () => {
     void router.push(building.route);
   });

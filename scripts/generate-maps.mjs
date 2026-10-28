@@ -33,44 +33,58 @@ const TILE = 16;
 const TILED_VERSION = '1.10';
 
 // ---------- 帧号清单（gid = frame + 1，因为 firstgid=1） ----------
-// Kenney tiny-town 132 帧已 PIL 抽样分析，下面只列入实际使用到的帧：
+// ⚠️ 2026-10-26 修复：旧表的帧号是凭印象猜的，建筑用的 14..25 实际是树丛/土丘/叶子，
+// 导致整座小镇一栋房子都没有（铺的全是“散落门板 + 草丛”），水井是蘑菇、路灯是墙砖。
+// 现在每个数字都对照 tilemap_packed.png（12×11 = 132 帧，无 margin/spacing）逐格核对：
+//   帧 0/1/2      纯草 / 杂点草 / 带花草地
+//   帧 12..14     沙地上边沿（左/中/右）  24..26 中段  36..38 下边沿  39..42 实心沙地
+//   帧 4          松树   16 大树冠   5 圆灌木   28 大灌木   15 小树   19 果树
+//   帧 44..47     木栅栏横段+立柱        56..59 竖段+立柱
+//   帧 48..51     灰石屋顶              52..55 红瓦屋顶
+//   帧 60..63     灰屋檐 / 山墙（63）     64..67 红屋檐 / 山墙（67）
+//   帧 72..75     木墙 + 门（74）        76..79 灰石墙 + 门（78）
+//   帧 83/95      路牌                  92 水井   93/94 金币/花环   104..107 木桶/木箱/壶
 const TOWN_GIDS = {
-  grass: 1, // frame 0 = 主草地（纯绿）
-  grassFlower: 3, // frame 2 = 带黄色小花的草地（农田路面/装饰）
-  sandPath: 13, // frame 12 = 砂石路面左上块，用于小镇主路 / 分岔路
-  // 4×N 建筑（沿用 M1-B BUILDING_FRAMES 约定，3 列对应房屋宽度归一化）
-  bld: [
-    [14, 15, 16], // 顶/屋顶：frame 13 / 14 / 15
-    [17, 18, 19], // 上层墙：frame 16 / 17 / 18
-    [20, 21, 22], // 中层墙：frame 19 / 20 / 21
-    [23, 24, 25], // 底层墙（中间是门）：frame 22 / 23 / 24
-  ],
-  grassAlt: 2, // frame 1 = 草地变种
-  grassTall: 4, // frame 3 = 高草
-  bushSmall: 5, // frame 4 = 小绿色灌木
-  bushBig: 17, // frame 16 = 较大绿色灌木（屋边树）
-  rockSmall: 6, // frame 5 = 小石头
-  rockMedium: 7, // frame 6 = 中石头
-  logPile: 8, // frame 7 = 木柴堆
-  mushroom: 9, // frame 8 = 蘑菇
-  flowerPink: 26, // frame 25 = 纯粉色（用作花坛 / 喷泉花池）
-  flowerYellow: 22, // frame 21 = 黄+棕（黄色花坛）
-  flowerBlue: 27, // frame 26 = 蓝色花
-  barrel: 28, // frame 27 = 木桶
-  crate: 29, // frame 28 = 木箱
-  well: 30, // frame 29 = 水井
-  fenceWoodH: 69, // frame 68 = 木质栅栏水平段
-  fenceWoodV: 81, // frame 80 = 木质栅栏竖向段
-  fencePost: 70, // frame 69 = 栅栏柱
-  water: 50, // frame 49 = 纯蓝水面
-  waterEdgeTop: 49, // frame 48 = 水边沿（上沿）
-  waterEdgeBottom: 51, // frame 50 = 水边沿（下沿）
-  waterDeep: 62, // frame 61 = 深蓝水（中央）
-  treeStump: 85, // frame 84 = 棕色 + 暗色（树桩 / 木箱外观）
-  treePine: 86, // frame 85 = 松树
-  signPost: 87, // frame 86 = 路标
-  lamp: 88, // frame 87 = 路灯
-  benchH: 89, // frame 88 = 横向长椅
+  // 草地
+  grass: 1,
+  grassSpeckle: 2,
+  grassFlower: 3,
+  grassAlt: 2,
+  grassTall: 3,
+  // 沙地
+  sandPath: 40,
+  sandPlain: 40,
+  // 植被
+  treePine: 5,
+  treeRound: 17,
+  treeFruit: 23,
+  bushSmall: 6,
+  bushBig: 31,
+  // 小物件
+  mushroom: 30,
+  well: 93,
+  signPost: 84,
+  signRed: 96,
+  coin: 94,
+  barrel: 105,
+  crate: 106,
+  rockSmall: 10,
+  rockMedium: 11,
+  logPile: 106,
+  treeStump: 48,
+  lamp: 48,
+  flowerPink: 3,
+  flowerYellow: 3,
+  flowerBlue: 3,
+  // 栅栏（横 / 竖 / 立柱）
+  fenceWoodH: 46,
+  fenceWoodV: 58,
+  fencePost: 48,
+  // 房屋四件套：屋顶 → 屋檐/山墙 → 墙体 → 门（墙体最后一排中间换门）
+  house: {
+    red: { roofL: 53, roofM: 54, roofR: 55, eaveL: 65, gable: 68, eaveR: 67, wallL: 73, wallM: 74, wallR: 76, door: 75, window: 56 },
+    grey: { roofL: 49, roofM: 50, roofR: 51, eaveL: 61, gable: 64, eaveR: 63, wallL: 77, wallM: 78, wallR: 80, door: 79, window: 52 },
+  },
 };
 
 // ---------- 通用工具 ----------
@@ -104,18 +118,56 @@ function setTile(data, w, x, y, gid) {
 }
 
 /**
- * 按 M1-B 约定绘制建筑（4 行格式，处理任意 width × height）。
- * 在 buildingsData 写入建筑帧，自动跳过空 frame。
+ * 按房屋四件套（屋顶 / 屋檐+山墙 / 墙体 / 门）拼一栋房子。
+ * 帧号全部经过图集核对，见 TOWN_GIDS.house 注释。
+ * variant 不传时按坐标奇偶选style，保证相邻房子屋顶颜色有变化。
  */
-function paintBuilding(buildingsData, w, x0, y0, bw, bh) {
-  const FRAMES = TOWN_GIDS.bld;
-  for (let dy = 0; dy < bh; dy += 1) {
-    for (let dx = 0; dx < bw; dx += 1) {
-      const col = dx === 0 ? 0 : dx === bw - 1 ? 2 : 1;
-      const rowIdx = dy === 0 ? 0 : dy === bh - 1 ? 3 : dy === 1 ? 1 : 2;
-      const gid = FRAMES[rowIdx]?.[col];
-      if (typeof gid !== 'number') continue;
+function paintBuilding(buildingsData, w, x0, y0, bw, bh, variant) {
+  const styles = TOWN_GIDS.house;
+  const style = styles[variant] ?? (((x0 + y0) % 2 === 0) ? styles.red : styles.grey);
+  const width = Math.max(2, bw);
+  const height = Math.max(2, bh);
+  const mid = Math.floor((width - 1) / 2);
+  const doorCol = Math.floor((width - 1) / 2);
+
+  for (let dx = 0; dx < width; dx += 1) {
+    const isLeft = dx === 0;
+    const isRight = dx === width - 1;
+    for (let dy = 0; dy < height; dy += 1) {
+      let gid;
+      if (dy === 0) {
+        // 屋顶斜坡
+        gid = isLeft ? style.roofL : isRight ? style.roofR : style.roofM;
+      } else if (dy === 1) {
+        // 屋檐；正中一列放山墙三角，形成人字屋顶轮廓
+        if (width >= 3 && dx === mid) gid = style.gable;
+        else gid = isLeft ? style.eaveL : isRight ? style.eaveR : style.roofM;
+      } else if (dy === height - 1) {
+        // 最底排：正中开门
+        gid = dx === doorCol ? style.door : isLeft ? style.wallL : isRight ? style.wallR : style.wallM;
+      } else {
+        // 中间墙体：宽房在正中开一扇窗，避免整面砖墙没细节
+        gid = width >= 4 && dx === mid ? style.window : isLeft ? style.wallL : isRight ? style.wallR : style.wallM;
+      }
       setTile(buildingsData, w, x0 + dx, y0 + dy, gid);
+    }
+  }
+}
+
+/** 用纯沙地铺一块矩形，四角/四边用圆角沙地帧，避免“硬方块路”。 */
+function paintSandRect(data, w, x0, y0, rw, rh) {
+  for (let dy = 0; dy < rh; dy += 1) {
+    for (let dx = 0; dx < rw; dx += 1) {
+      let gid = TOWN_GIDS.sandPlain;
+      const top = dy === 0;
+      const bottom = dy === rh - 1;
+      const left = dx === 0;
+      const right = dx === rw - 1;
+      if (top) gid = left ? 13 : right ? 14 : 13;
+      else if (bottom) gid = left ? 37 : right ? 38 : 37;
+      else if (left) gid = 25;
+      else if (right) gid = 26;
+      setTile(data, w, x0 + dx, y0 + dy, gid);
     }
   }
 }
@@ -145,8 +197,7 @@ function mulberry32(seed) {
 }
 
 /** 撒一些装饰 tile，给定区域内随机点，避开 buildings 层占用的位置 */
-function scatterDecoration(decoData, buildingsData, w, h, count, gids, rng, excludeRect = null) {
-  let placed = 0;
+function scatterDecoration(decoData, buildingsData, w, h, count, gids, rng, excludeRect = null) {  let placed = 0;
   let attempts = 0;
   while (placed < count && attempts < count * 12) {
     attempts += 1;
@@ -478,8 +529,32 @@ function generateTownHub() {
   resetObjectIds();
 
   fillAll(ground, TOWN_GIDS.grass);
-  // 中央广场铺一层略带花纹的草地（24,18 ~ 26,22，5×5）
-  fillRect(ground, W, 23, 18, 5, 5, TOWN_GIDS.grassFlower);
+  // 草地纹理：确定性噪点，避免 50×40 一整块死平绿（只做轻微点缀，不制造“草坪长满杂物”的观感）
+  const groundRng = mulberry32(0x9e3779b9);
+  for (let i = 0; i < ground.length; i += 1) {
+    const r = groundRng();
+    if (r < 0.045) ground[i] = TOWN_GIDS.grassSpeckle;
+    else if (r < 0.06) ground[i] = TOWN_GIDS.grassFlower;
+  }
+
+  // 中央广场：5×5 沙地，四边/四角圆化（喷泉就落在广场中央）
+  paintSandRect(ground, W, 23, 18, 5, 5);
+
+  // 主轴：喷泉往南的 2 格宽主街；副轴：贯穿东西的 2 格宽横街
+  for (let y = 21; y < H - 1; y += 1) {
+    setTile(ground, W, 24, y, TOWN_GIDS.sandPlain);
+    setTile(ground, W, 25, y, TOWN_GIDS.sandPlain);
+  }
+  for (let x = 1; x < W - 1; x += 1) {
+    if (x === 24 || x === 25) continue;
+    setTile(ground, W, x, 19, TOWN_GIDS.sandPlain);
+    setTile(ground, W, x, 20, TOWN_GIDS.sandPlain);
+  }
+  // 北向支路：广场 → 镇长大厅门前
+  for (let y = 13; y < 18; y += 1) {
+    setTile(ground, W, 24, y, TOWN_GIDS.sandPlain);
+    setTile(ground, W, 25, y, TOWN_GIDS.sandPlain);
+  }
 
   // 镇长大厅：北中央，4×5（叙事上对应「东校园老镇厅」，承担画像 / 主线推进）
   const mayorHall = { x: 23, y: 4, w: 4, h: 5, label: '镇长大厅', route: '/profile-room', name: 'building_mayor_hall' };
@@ -503,92 +578,6 @@ function generateTownHub() {
 
   // R-13 优化：货币/商店系统移除 —— 删除 东西商店（杂货铺/工具铺）。
 
-  // 中央喷泉（24-25, 19-20，2×2，用粉色块代替石雕）
-  fillRect(decoration, W, 24, 19, 2, 2, TOWN_GIDS.flowerPink);
-
-  // 大厅前的花圃（蓝水当装饰水池 + 黄色花坛）
-  fillRect(decoration, W, 24, 10, 2, 1, TOWN_GIDS.flowerYellow);
-
-  // 沿地图边界种灌木（北/南），避开出口口
-  for (let x = 2; x < W - 2; x += 3) {
-    if (x < W / 2 - 4 || x > W / 2 + 4) {
-      setTile(decoration, W, x, 1, TOWN_GIDS.bushBig);
-      setTile(decoration, W, x, H - 2, TOWN_GIDS.bushBig);
-    }
-  }
-  for (let y = 2; y < H - 2; y += 3) {
-    if (y < H / 2 - 4 || y > H / 2 + 4) {
-      setTile(decoration, W, 1, y, TOWN_GIDS.bushBig);
-      setTile(decoration, W, W - 2, y, TOWN_GIDS.bushBig);
-    }
-  }
-
-  // 高密度装饰：多种素材轮换，town_hub 更精致
-  const rng = mulberry32(0x10101);
-
-  // 地面变种：随机替换部分草地为花草/高草，增加地面层次感
-  for (let i = 0; i < ground.length; i += 1) {
-    if (ground[i] === TOWN_GIDS.grass && rng() < 0.12) {
-      ground[i] = rng() < 0.5 ? TOWN_GIDS.grassFlower : TOWN_GIDS.grassAlt;
-    }
-  }
-
-  scatterDecoration(
-    decoration,
-    buildings,
-    W,
-    H,
-    380,
-    [
-      TOWN_GIDS.bushSmall,
-      TOWN_GIDS.bushSmall,
-      TOWN_GIDS.bushBig,
-      TOWN_GIDS.flowerYellow,
-      TOWN_GIDS.flowerPink,
-      TOWN_GIDS.flowerBlue,
-      TOWN_GIDS.treeStump,
-      TOWN_GIDS.grassFlower,
-      TOWN_GIDS.grassTall,
-      TOWN_GIDS.rockSmall,
-      TOWN_GIDS.rockMedium,
-      TOWN_GIDS.mushroom,
-      TOWN_GIDS.barrel,
-      TOWN_GIDS.treePine,
-      TOWN_GIDS.lamp,
-    ],
-    rng,
-    { x: 22, y: 17, w: 7, h: 7 },
-  );
-
-  // R-13 §-1 后续：在喷泉广场四角撒 4 个对称粉花柱（2×1），让喷泉中心更醒目。
-  // 喷泉位置 (24,19) 2×2，四角偏 4 格放粉花，形成菱形花阵。
-  [
-    [22, 17], [27, 17], [22, 22], [27, 22],
-  ].forEach(([fx, fy]) => {
-    setTile(decoration, W, fx, fy, TOWN_GIDS.flowerPink);
-    setTile(decoration, W, fx, fy + 1, TOWN_GIDS.flowerYellow);
-  });
-
-  // R-13 §-1 后续：南北主轴贯穿砂石路（喷泉到南门），让玩家有"主街"叙事。
-  for (let y = 21; y < H - 1; y += 1) {
-    setTile(ground, W, 24, y, TOWN_GIDS.sandPath);
-    setTile(ground, W, 25, y, TOWN_GIDS.sandPath);
-  }
-  // 东西副轴砂石路（喷泉到东、西门）
-  for (let x = 1; x < W - 1; x += 1) {
-    if (x === 24 || x === 25) continue; // 跳过主轴交叉点
-    setTile(ground, W, x, 19, TOWN_GIDS.sandPath);
-    setTile(ground, W, x, 20, TOWN_GIDS.sandPath);
-  }
-  // 在主轴两侧每 6 格摆一个 treeStump（充当路灯桩占位，等爬到正式 streetlamp 替换）
-  for (let y = 22; y < H - 2; y += 6) {
-    setTile(decoration, W, 23, y, TOWN_GIDS.treeStump);
-    setTile(decoration, W, 26, y, TOWN_GIDS.treeStump);
-  }
-  // Space 跳跃教学：出生点右侧放一根低木桩，玩家可面朝右跨过。
-  setTile(decoration, W, 26, 20, TOWN_GIDS.treeStump);
-
-  // 专用低栅栏沿主街围出小路：中间 2 格保持通行，两侧是可跳过的低障碍。
   const lowPathFences = [];
   for (let y = 22; y <= 34; y += 2) {
     lowPathFences.push(
@@ -619,6 +608,91 @@ function generateTownHub() {
   const training = { x: 8, y: 34, w: 4, h: 3, label: '训练场', route: '/problems', name: 'building_training' };
   paintBuilding(buildings, W, training.x, training.y, training.w, training.h);
 
+  // ---------- 装饰层（构图化，不再全图随机撒）----------
+  const rng = mulberry32(0x10101);
+  const reserved = new Set();
+  const reserve = (tx, ty, pad = 0) => {
+    for (let dy = -pad; dy <= pad; dy += 1) {
+      for (let dx = -pad; dx <= pad; dx += 1) {
+        const x = tx + dx;
+        const y = ty + dy;
+        if (x >= 0 && y >= 0 && x < W && y < H) reserved.add(y * W + x);
+      }
+    }
+  };
+  [mayorHall, textileWest, textileEast, ...housesSouth, library, reviewHall, workshop, mine, arena, training]
+    .forEach((b) => {
+      for (let dy = b.y - 1; dy <= b.y + b.h; dy += 1) {
+        for (let dx = b.x - 1; dx <= b.x + b.w; dx += 1) {
+          if (dx >= 0 && dy >= 0 && dx < W && dy < H) reserved.add(dy * W + dx);
+        }
+      }
+    });
+  [[25, 10], [11, 12], [42, 28], [10, 33], [25, 33], [37, 12], [18, 21], [25, 20]]
+    .forEach(([tx, ty]) => reserve(tx, ty, 1));
+
+  const canDecorate = (tx, ty) => {
+    if (tx < 1 || ty < 1 || tx >= W - 1 || ty >= H - 1) return false;
+    const idx = ty * W + tx;
+    if (reserved.has(idx)) return false;
+    if (buildings[idx] !== 0) return false;
+    return ground[idx] === TOWN_GIDS.grass || ground[idx] === TOWN_GIDS.grassSpeckle;
+  };
+
+  const put = (tx, ty, gid) => {
+    if (!canDecorate(tx, ty)) return;
+    setTile(decoration, W, tx, ty, gid);
+    reserved.add(ty * W + tx);
+  };
+
+  // 1) 地图四周的林带：松树 + 树冠混种，形成天然边界
+  for (let x = 1; x < W - 1; x += 1) {
+    if (rng() < 0.82) put(x, 1, rng() < 0.55 ? TOWN_GIDS.treePine : TOWN_GIDS.treeRound);
+    if (rng() < 0.82) put(x, H - 2, rng() < 0.55 ? TOWN_GIDS.treePine : TOWN_GIDS.treeRound);
+  }
+  for (let y = 2; y < H - 2; y += 1) {
+    if (rng() < 0.78) put(1, y, rng() < 0.55 ? TOWN_GIDS.treePine : TOWN_GIDS.treeRound);
+    if (rng() < 0.78) put(W - 2, y, rng() < 0.55 ? TOWN_GIDS.treePine : TOWN_GIDS.treeRound);
+  }
+
+  // 2) 四块林丛：每个林丛 5×5 范围内按中心密、边缘疏散布，形成成片树林
+  const clusters = [[7, 16], [43, 16], [15, 30], [34, 30], [7, 25], [44, 25]];
+  clusters.forEach(([cx, cy]) => {
+    for (let dy = -2; dy <= 2; dy += 1) {
+      for (let dx = -2; dx <= 2; dx += 1) {
+        const dist = Math.abs(dx) + Math.abs(dy);
+        const chance = dist <= 1 ? 0.85 : dist === 2 ? 0.55 : 0.3;
+        if (rng() > chance) continue;
+        const gid = dist <= 1 ? (rng() < 0.55 ? TOWN_GIDS.treeRound : TOWN_GIDS.treePine) : TOWN_GIDS.bushBig;
+        put(cx + dx, cy + dy, gid);
+      }
+    }
+  });
+
+  // 3) 建筑门前：路牌 / 木桶 / 木箱，给每个入口一个“门口”语感
+  const doorFront = (b, gid, offset = 0) => {
+    const tx = b.x + Math.floor(b.w / 2) + offset;
+    const ty = b.y + b.h;
+    setTile(decoration, W, tx, ty, gid);
+    reserved.add(ty * W + tx);
+  };
+  doorFront(library, TOWN_GIDS.signPost, -2);
+  doorFront(reviewHall, TOWN_GIDS.signPost, 2);
+  doorFront(workshop, TOWN_GIDS.barrel, -2);
+  doorFront(arena, TOWN_GIDS.signRed, 2);
+  doorFront(training, TOWN_GIDS.crate, 2);
+  doorFront(mayorHall, TOWN_GIDS.signRed, 2);
+
+  // 4) 广场：水井 + 四角花带（原本用粉色块冒充喷泉，现改为实心沙地上摆水井 + 花）
+  setTile(decoration, W, 24, 19, TOWN_GIDS.well);
+  [[22, 17], [27, 17], [22, 22], [27, 22]].forEach(([fx, fy]) => {
+    setTile(decoration, W, fx, fy, TOWN_GIDS.grassFlower);
+  });
+
+  // 5) 主街两侧的低矮栅栏由 objects 层（low_fence_16 sprite）负责，这里不再重复铺瓦片，
+  //    避免同一格同时出现 sprite 与瓦片两层木桩。
+
+  // 专用低栅栏沿主街围出小路：中间 2 格保持通行，两侧是可跳过的低障碍。
   // objects ---------- (no exits, single map)
   // R-14 Phase 0: 纺织展馆与南面民居仅保留视觉瓦片（paintBuilding），移除无路由的点击对象；
   // 避免玩家点击后进入死路 placeholder 页面。视觉房屋仍参与碰撞（buildings layer）。

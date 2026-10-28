@@ -16,11 +16,19 @@ export type PlayerCameraState = 'idle' | 'walk' | 'run';
  * 镜头调参契约。所有字段 readonly，禁止业务层运行时修改。
  */
 export interface CameraTuningConfig {
-  /** 桌面 Web 默认 zoom。 */
+  /**
+   * 桌面 Web 默认 zoom。
+   * ⚠️ 必须是整数：16px 瓦片在非整数缩放下每个原始像素占 2~3 个屏幕像素，
+   * 宽度不均、走动时整屏轻抖（pixel crawl），是「像素画看著脏」的主因之一。
+   */
   readonly zoomBase: number;
-  /** 手机横屏 zoom，单 NPC ≥ 80 px 高便于点选。 */
+  /**
+   * 手机横屏 zoom。
+   * 与桌面同为 3：一旦调成非整数（原 3.2）16px 瓦片就会像素宽窄不匀，
+   * 因此这里宁可与桌面同档，也不再引入小数缩放。
+   */
   readonly zoomMobile: number;
-  /** 手机竖屏 zoom，扣 80 px HUD 后仍能看清场景。 */
+  /** 手机竖屏 zoom，扣 80 px HUD 后仍能看清场景；同样锁整数。 */
   readonly zoomPortrait: number;
   /** 节日烟花拉远 zoom，视野 20×13 tile 覆盖 town_hub 大半。 */
   readonly zoomFestival: number;
@@ -64,11 +72,13 @@ export interface CameraTuningConfig {
 // （例如测试里 @ts-expect-error 强赋会真的污染单例），所以再叠一层 Object.freeze
 // 防止跨测试污染 / 业务侧偷偷突变。
 export const DEFAULT_CAMERA_TUNING = Object.freeze({
-  zoomBase: 2.4,
-  zoomMobile: 3.2,
-  zoomPortrait: 2.8,
-  zoomFestival: 2.0,
-  zoomMax: 5.0,
+  // 2026-10-26：全部锁整数倍，消除非整数缩放导致的像素宽窄不均（pixel crawl）。
+  // 桌面/横屏/竖屏同龋 3（NPC 在 zoom 3 下 ≈134px 高，触控目标仍充足）；节日拉远用 2。
+  zoomBase: 3,
+  zoomMobile: 3,
+  zoomPortrait: 3,
+  zoomFestival: 2,
+  zoomMax: 5,
 
   lerpFactorIdle: 0.10,
   lerpFactorWalk: 0.15,
