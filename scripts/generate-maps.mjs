@@ -80,10 +80,19 @@ const TOWN_GIDS = {
   fenceWoodH: 46,
   fenceWoodV: 58,
   fencePost: 48,
-  // 房屋四件套：屋顶 → 屋檐/山墙 → 墙体 → 门（墙体最后一排中间换门）
+  // 建筑风格：屋顶 → 屋檐/山墙 → 墙体 → 门（墙体最后一排中间换门）
+  // 不同建筑用不同风格，避免“图书馆和竞技场长得一模一样”。
   house: {
+    // 红瓦民居：红屋顶 + 碎砖屋檐 + 土坯墙
     red: { roofL: 53, roofM: 54, roofR: 55, eaveL: 65, gable: 68, eaveR: 67, wallL: 73, wallM: 74, wallR: 76, door: 75, window: 56 },
+    // 灰石民居／公共建筑：石屋顶 + 浅色抹灰墙
     grey: { roofL: 49, roofM: 50, roofR: 51, eaveL: 61, gable: 64, eaveR: 63, wallL: 77, wallM: 78, wallR: 80, door: 79, window: 52 },
+    // 城堡式（镇长大厅 / 竞技场）：齿形城埵 + 石墙 + 城门
+    stone: { roofL: 99, roofM: 100, roofR: 101, eaveL: 97, gable: 98, eaveR: 98, wallL: 97, wallM: 97, wallR: 98, door: 104, window: 97 },
+    // 木匠／工坊：深木色墙 + 大木门
+    wood: { roofL: 53, roofM: 54, roofR: 55, eaveL: 73, gable: 66, eaveR: 76, wallL: 73, wallM: 74, wallR: 76, door: 86, window: 55 },
+    // 矿洞：石拱洞口（帧 111..113）
+    cave: { roofL: 97, roofM: 113, roofR: 98, eaveL: 97, gable: 113, eaveR: 98, wallL: 97, wallM: 112, wallR: 98, door: 112, window: 97 },
   },
 };
 
@@ -558,15 +567,15 @@ function generateTownHub() {
 
   // 镇长大厅：北中央，4×5（叙事上对应「东校园老镇厅」，承担画像 / 主线推进）
   const mayorHall = { x: 23, y: 4, w: 4, h: 5, label: '镇长大厅', route: '/profile-room', name: 'building_mayor_hall' };
-  paintBuilding(buildings, W, mayorHall.x, mayorHall.y, mayorHall.w, mayorHall.h);
+  paintBuilding(buildings, W, mayorHall.x, mayorHall.y, mayorHall.w, mayorHall.h, 'stone');
 
   // R-13 §-1 后续：在镇长大厅东西两侧加 2 栋纺织主题民居（不命名校名），
   // 叙事上呼应「松江纺织文化」+「东华纺织学院」一脉相承的小镇背景；
   // 实现：复用 paintBuilding 普通房屋瓦面，标记 building_textile_pavilion_*。
   const textileWest = { x: 16, y: 5, w: 4, h: 4, label: '纺织展馆·西', route: '/house-west', name: 'building_textile_pavilion_w' };
   const textileEast = { x: 30, y: 5, w: 4, h: 4, label: '纺织展馆·东', route: '/house-east', name: 'building_textile_pavilion_e' };
-  paintBuilding(buildings, W, textileWest.x, textileWest.y, textileWest.w, textileWest.h);
-  paintBuilding(buildings, W, textileEast.x, textileEast.y, textileEast.w, textileEast.h);
+  paintBuilding(buildings, W, textileWest.x, textileWest.y, textileWest.w, textileWest.h, 'red');
+  paintBuilding(buildings, W, textileEast.x, textileEast.y, textileEast.w, textileEast.h, 'grey');
 
   // 南面 3 栋民居（peasant 房子）
   const housesSouth = [
@@ -574,7 +583,7 @@ function generateTownHub() {
     { x: 22, y: 28, w: 4, h: 4, label: '民居·中', route: '/house-mid', name: 'building_house_b' },
     { x: 36, y: 28, w: 4, h: 4, label: '民居·西', route: '/house-west', name: 'building_house_c' },
   ];
-  housesSouth.forEach((h) => paintBuilding(buildings, W, h.x, h.y, h.w, h.h));
+  housesSouth.forEach((h, i) => paintBuilding(buildings, W, h.x, h.y, h.w, h.h, i % 2 === 0 ? 'red' : 'grey'));
 
   // R-13 优化：货币/商店系统移除 —— 删除 东西商店（杂货铺/工具铺）。
 
@@ -595,18 +604,18 @@ function generateTownHub() {
   const library = { x: 10, y: 8, w: 5, h: 4, label: '图书馆', route: '/library', name: 'building_library' };
   const reviewHall = { x: 36, y: 8, w: 4, h: 4, label: '复盘大厅', route: '/review-hall', name: 'building_review_hall' };
   const workshop = { x: 40, y: 24, w: 4, h: 4, label: '百晓工坊', route: '/workshop', name: 'building_workshop' };
-  paintBuilding(buildings, W, library.x, library.y, library.w, library.h);
-  paintBuilding(buildings, W, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h);
-  paintBuilding(buildings, W, workshop.x, workshop.y, workshop.w, workshop.h);
+  paintBuilding(buildings, W, library.x, library.y, library.w, library.h, 'grey');
+  paintBuilding(buildings, W, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h, 'grey');
+  paintBuilding(buildings, W, workshop.x, workshop.y, workshop.w, workshop.h, 'wood');
   // Bug 矿洞功能入口（点击 → /bug-mine 页面；R-14 已删除 mine_south 风景地图，此处仅作功能入口、不做地图传送）
-  const mine = { x: 22, y: 34, w: 3, h: 2, label: 'Bug 矿洞', route: '/bug-mine', name: 'building_mine' };
-  paintBuilding(buildings, W, mine.x, mine.y, mine.w, mine.h);
+  const mine = { x: 19, y: 34, w: 3, h: 2, label: 'Bug 矿洞', route: '/bug-mine', name: 'building_mine' };
+  paintBuilding(buildings, W, mine.x, mine.y, mine.w, mine.h, 'cave');
   // 竞技场
   const arena = { x: 36, y: 34, w: 4, h: 3, label: '闯关竞技场', route: '/arena/1', name: 'building_arena' };
-  paintBuilding(buildings, W, arena.x, arena.y, arena.w, arena.h);
+  paintBuilding(buildings, W, arena.x, arena.y, arena.w, arena.h, 'stone');
   // 训练场（点击 → 题库列表 /problems，先选题再去训练场做题界面）
   const training = { x: 8, y: 34, w: 4, h: 3, label: '训练场', route: '/problems', name: 'building_training' };
-  paintBuilding(buildings, W, training.x, training.y, training.w, training.h);
+  paintBuilding(buildings, W, training.x, training.y, training.w, training.h, 'wood');
 
   // ---------- 装饰层（构图化，不再全图随机撒）----------
   const rng = mulberry32(0x10101);
@@ -645,25 +654,33 @@ function generateTownHub() {
     reserved.add(ty * W + tx);
   };
 
-  // 1) 地图四周的林带：松树 + 树冠混种，形成天然边界
-  for (let x = 1; x < W - 1; x += 1) {
-    if (rng() < 0.82) put(x, 1, rng() < 0.55 ? TOWN_GIDS.treePine : TOWN_GIDS.treeRound);
-    if (rng() < 0.82) put(x, H - 2, rng() < 0.55 ? TOWN_GIDS.treePine : TOWN_GIDS.treeRound);
+  // 1) 地图四周的林带：隔格种，松树/树冠交替 + 留缺口，避免变成一排“∧∧∧”
+  const borderTree = () => (rng() < 0.5 ? TOWN_GIDS.treeRound : TOWN_GIDS.treePine);
+  for (let x = 1; x < W - 1; x += 2) {
+    if (rng() < 0.9) put(x, 1, borderTree());
+    if (rng() < 0.9) put(x, H - 2, borderTree());
   }
-  for (let y = 2; y < H - 2; y += 1) {
-    if (rng() < 0.78) put(1, y, rng() < 0.55 ? TOWN_GIDS.treePine : TOWN_GIDS.treeRound);
-    if (rng() < 0.78) put(W - 2, y, rng() < 0.55 ? TOWN_GIDS.treePine : TOWN_GIDS.treeRound);
+  for (let y = 2; y < H - 2; y += 2) {
+    if (rng() < 0.88) put(1, y, borderTree());
+    if (rng() < 0.88) put(W - 2, y, borderTree());
   }
 
-  // 2) 四块林丛：每个林丛 5×5 范围内按中心密、边缘疏散布，形成成片树林
-  const clusters = [[7, 16], [43, 16], [15, 30], [34, 30], [7, 25], [44, 25]];
-  clusters.forEach(([cx, cy]) => {
-    for (let dy = -2; dy <= 2; dy += 1) {
-      for (let dx = -2; dx <= 2; dx += 1) {
-        const dist = Math.abs(dx) + Math.abs(dy);
-        const chance = dist <= 1 ? 0.85 : dist === 2 ? 0.55 : 0.3;
-        if (rng() > chance) continue;
-        const gid = dist <= 1 ? (rng() < 0.55 ? TOWN_GIDS.treeRound : TOWN_GIDS.treePine) : TOWN_GIDS.bushBig;
+  // 2) 林丛：交错格（棋盘）布点而不是满铺，林地边缘用灌木过渡，视觉上才像树林而不是草坪长满草
+  const FOREST_TREES = [TOWN_GIDS.treeRound, TOWN_GIDS.treeRound, TOWN_GIDS.treeRound, TOWN_GIDS.treePine];
+  const FOREST_EDGE = [TOWN_GIDS.bushBig, TOWN_GIDS.treePine];
+  const clusterRng = mulberry32(0x5eed);
+  // 成片林：内部实心铺（满才像树林），外圈用灌木/松树过渡
+  const clusters = [[9, 15, 3], [42, 15, 3], [12, 32, 3], [38, 31, 3]];
+  clusters.forEach(([cx, cy, radius]) => {
+    for (let dy = -radius; dy <= radius; dy += 1) {
+      for (let dx = -radius; dx <= radius; dx += 1) {
+        const dist = Math.max(Math.abs(dx), Math.abs(dy));
+        if (dist > radius) continue;
+        const outer = dist === radius;
+        if (clusterRng() > (outer ? 0.55 : 0.92)) continue;
+        const gid = outer
+          ? FOREST_EDGE[Math.floor(clusterRng() * FOREST_EDGE.length)]
+          : FOREST_TREES[Math.floor(clusterRng() * FOREST_TREES.length)];
         put(cx + dx, cy + dy, gid);
       }
     }

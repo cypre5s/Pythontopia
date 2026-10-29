@@ -107,8 +107,14 @@ export function applyWeather(
   } else if (kind === 'cloudy') {
     if (textureReady(phaserScene, 'fx_cloud_drift')) {
       for (let i = 0; i < CLOUD_COUNT; i += 1) {
-        const cloud = phaserScene.add.image(Math.random() * mapWidth, 40 + i * 50, 'fx_cloud_drift');
-        cloud.setAlpha?.(0.5);
+        // 贴图现在是「单朵云 + 透明背景」（scripts/make_cloud_fx.py 从 cloud.png 抠出）；
+        // y 按地图高度均分，避免四朵云挤在同一条水平线上。
+        const cloud = phaserScene.add.image(
+          Math.random() * mapWidth,
+          ((i + 0.5) * Math.max(mapHeight, 240)) / CLOUD_COUNT,
+          'fx_cloud_drift',
+        );
+        cloud.setAlpha?.(0.7);
         cloud.setDepth?.(CLOUD_DEPTH);
         phaserScene.tweens.add({
           targets: cloud,

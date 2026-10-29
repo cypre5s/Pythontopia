@@ -168,7 +168,7 @@ const CHARACTER_SHEETS: ReadonlyArray<[string, string, number, number]> = [
 const PARTICLE_LIST: ReadonlyArray<[string, string]> = [
   ['fx_rain_drop', '/assets/pixel/effects/weather/rain_drop.png'],
   ['fx_snowflake', '/assets/pixel/effects/weather/snowflake.png'],
-  ['fx_cloud_drift', '/assets/pixel/effects/weather/cloud.png'],
+  ['fx_cloud_drift', '/assets/pixel/effects/weather/cloud_fx.png'],
   ['fx_confetti', '/assets/pixel/effects/weather/confetti.png'],
   ['fx_confetti_burst', '/assets/pixel/effects/weather/confetti_burst.png'],
 ];
