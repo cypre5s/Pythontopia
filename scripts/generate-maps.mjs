@@ -91,8 +91,6 @@ const TOWN_GIDS = {
     stone: { roofL: 99, roofM: 100, roofR: 101, eaveL: 97, gable: 98, eaveR: 98, wallL: 97, wallM: 97, wallR: 98, door: 104, window: 97 },
     // 木匠／工坊：深木色墙 + 大木门
     wood: { roofL: 53, roofM: 54, roofR: 55, eaveL: 73, gable: 66, eaveR: 76, wallL: 73, wallM: 74, wallR: 76, door: 86, window: 55 },
-    // 矿洞：石拱洞口（帧 111..113）
-    cave: { roofL: 97, roofM: 113, roofR: 98, eaveL: 97, gable: 113, eaveR: 98, wallL: 97, wallM: 112, wallR: 98, door: 112, window: 97 },
   },
 };
 
@@ -566,8 +564,8 @@ function generateTownHub() {
   }
 
   // 镇长大厅：北中央，4×5（叙事上对应「东校园老镇厅」，承担画像 / 主线推进）
-  const mayorHall = { x: 23, y: 4, w: 4, h: 5, label: '镇长大厅', route: '/profile-room', name: 'building_mayor_hall' };
-  paintBuilding(buildings, W, mayorHall.x, mayorHall.y, mayorHall.w, mayorHall.h, 'stone');
+  const mayorHall = { x: 22, y: 4, w: 5, h: 5, label: '镇长大厅', route: '/profile-room', name: 'building_mayor_hall' };
+  paintBuilding(buildings, W, mayorHall.x, mayorHall.y, mayorHall.w, mayorHall.h, 'red');
 
   // R-13 §-1 后续：在镇长大厅东西两侧加 2 栋纺织主题民居（不命名校名），
   // 叙事上呼应「松江纺织文化」+「东华纺织学院」一脉相承的小镇背景；
@@ -608,11 +606,22 @@ function generateTownHub() {
   paintBuilding(buildings, W, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h, 'grey');
   paintBuilding(buildings, W, workshop.x, workshop.y, workshop.w, workshop.h, 'wood');
   // Bug 矿洞功能入口（点击 → /bug-mine 页面；R-14 已删除 mine_south 风景地图，此处仅作功能入口、不做地图传送）
-  const mine = { x: 19, y: 34, w: 3, h: 2, label: 'Bug 矿洞', route: '/bug-mine', name: 'building_mine' };
-  paintBuilding(buildings, W, mine.x, mine.y, mine.w, mine.h, 'cave');
+  const mine = { x: 18, y: 33, w: 4, h: 3, label: 'Bug 矿洞', route: '/bug-mine', name: 'building_mine' };
+  // 矿洞单独拼：外框素石墙 + 中间 2×2 石拱洞口（帧 111..114 是拱的左右两半）。
+  const MINE_ARCH = [[112, 113], [111, 114]];
+  for (let dy = 0; dy < mine.h; dy += 1) {
+    for (let dx = 0; dx < mine.w; dx += 1) {
+      const archRow = dy - (mine.h - 2);
+      const archCol = dx - 1;
+      const inArch = archRow >= 0 && archRow <= 1 && archCol >= 0 && archCol <= 1;
+      const edge = dx === 0 || dx === mine.w - 1;
+      const gid = inArch ? MINE_ARCH[archRow][archCol] : edge ? 97 : 98;
+      setTile(buildings, W, mine.x + dx, mine.y + dy, gid);
+    }
+  }
   // 竞技场
   const arena = { x: 36, y: 34, w: 4, h: 3, label: '闯关竞技场', route: '/arena/1', name: 'building_arena' };
-  paintBuilding(buildings, W, arena.x, arena.y, arena.w, arena.h, 'stone');
+  paintBuilding(buildings, W, arena.x, arena.y, arena.w, arena.h, 'grey');
   // 训练场（点击 → 题库列表 /problems，先选题再去训练场做题界面）
   const training = { x: 8, y: 34, w: 4, h: 3, label: '训练场', route: '/problems', name: 'building_training' };
   paintBuilding(buildings, W, training.x, training.y, training.w, training.h, 'wood');
