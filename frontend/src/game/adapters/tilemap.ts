@@ -88,6 +88,16 @@ const NPC_ACTION_VARIANT: Readonly<Record<string, string>> = {
   npc_guard: 'ulpc_guard',
 };
 
+/**
+ * NPC 头顶「!」气泡的 y：始终跟着角色 y 走，再叠一个 ±4px 的呼吸偏移。
+ * 抽成纯函数是因为历史 bug：reposition() 只更新了 x，NPC 一上下走动，
+ * 感叹号就留在原地（线上看到「!」浮在离人物很远的地方）。
+ */
+export function npcHintY(spriteY: number, tileSize: number, nowMs: number): number {
+  const offset = Math.sin(((nowMs % 1600) / 1600) * Math.PI * 2) * 4;
+  return spriteY - tileSize * 3.4 + offset;
+}
+
 export function drawNpcSprite(
   scene: SceneLike,
   npc: NpcSpawn,
@@ -132,9 +142,11 @@ export function drawNpcSprite(
     .setOrigin(0.5)
     .setDepth(11);
 
-  const hintBaseY = y - tileSize * 3.4;
+  // 「!」气泡：位置由 reposition() 每帧按当前坐标重算。
+  // 不能用 tween 直接改 hint.y：那样 y 会锁在创建时的基准值上，NPC 上下走动后
+  // 气泡就留在原地（玩家看到的“感叹号不跟着人”）。上下呼吸改成时间函数叠加。
   const hint = phaserScene.add
-    .text(x, hintBaseY, '!', {
+    .text(x, npcHintY(y, tileSize, Date.now()), '!', {
       fontFamily: PIXEL_FONT_FAMILY,
       fontSize: '14px',
       color: '#4d3613',
@@ -143,17 +155,6 @@ export function drawNpcSprite(
     })
     .setOrigin(0.5)
     .setDepth(12);
-  if (phaserScene.tweens?.add) {
-    phaserScene.tweens.add({
-      targets: hint,
-      y: hintBaseY - 4,
-      duration: 800,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-  }
-
   let currentDir: Direction = 'DOWN';
   let walking = false;
   let gesturing = false;
@@ -169,6 +170,7 @@ export function drawNpcSprite(
     label.x = x;
     label.y = y - labelDy;
     hint.x = x;
+    hint.y = npcHintY(y, tileSize, Date.now());
     if (toolBg) {
       toolBg.x = x;
       toolBg.y = y;
