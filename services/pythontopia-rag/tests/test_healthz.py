@@ -35,6 +35,10 @@ async def _seed_one_chunk(state: AppState) -> None:
     state.bm25.build([chunk])
 
 
+# 注意：以下用例统一用 `monkeypatch.setattr(..., raising=False)`。
+# Starlette 1.x（经 fastapi 0.143 传递依赖）下，monkeypatch.undo() 不再把旧值写回
+# app.state，而是直接删掉该属性；若不带 raising=False，同一文件里第二个用例的
+# setattr 就会因「属性不存在」抛 AttributeError（CI 在 2026-10-29 起连续红）。
 def test_healthz_returns_ok() -> None:
     client = TestClient(app)
 
@@ -48,7 +52,7 @@ def test_healthz_returns_ok() -> None:
 async def test_hash_embedder_status_is_explicitly_degraded(monkeypatch) -> None:
     state = _state(HashEmbedder())
     await _seed_one_chunk(state)
-    monkeypatch.setattr(app.state, "rag", state)
+    monkeypatch.setattr(app.state, "rag", state, raising=False)
     client = TestClient(app)
 
     response = client.get("/rag/index/status")
@@ -59,7 +63,7 @@ async def test_hash_embedder_status_is_explicitly_degraded(monkeypatch) -> None:
 
 
 def test_readyz_rejects_empty_index(monkeypatch) -> None:
-    monkeypatch.setattr(app.state, "rag", _state(SemanticTestEmbedder()))
+    monkeypatch.setattr(app.state, "rag", _state(SemanticTestEmbedder()), raising=False)
     client = TestClient(app)
 
     response = client.get("/readyz")
@@ -72,7 +76,7 @@ def test_readyz_rejects_empty_index(monkeypatch) -> None:
 async def test_readyz_accepts_hash_index_as_degraded_lexical_service(monkeypatch) -> None:
     state = _state(HashEmbedder())
     await _seed_one_chunk(state)
-    monkeypatch.setattr(app.state, "rag", state)
+    monkeypatch.setattr(app.state, "rag", state, raising=False)
     client = TestClient(app)
 
     response = client.get("/readyz")
@@ -85,7 +89,7 @@ async def test_readyz_accepts_hash_index_as_degraded_lexical_service(monkeypatch
 async def test_readyz_accepts_nonempty_semantic_index(monkeypatch) -> None:
     state = _state(SemanticTestEmbedder())
     await _seed_one_chunk(state)
-    monkeypatch.setattr(app.state, "rag", state)
+    monkeypatch.setattr(app.state, "rag", state, raising=False)
     client = TestClient(app)
 
     response = client.get("/readyz")
