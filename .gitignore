@@ -108,3 +108,6 @@ research/**/*.pyc
 
 # 忽略本地新增文档草稿；已有跟踪文档保留在 Git 历史中
 /docs/
+
+# 素材暂存区（候选素材不入库，只保留最终选用的切片）
+assets/inbox/incoming/

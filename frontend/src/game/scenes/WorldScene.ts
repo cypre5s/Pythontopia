@@ -50,6 +50,7 @@ import {
   getScheduleWaypoints,
   type NpcSchedule,
 } from '@game/core/npcSchedule';
+import { mapDataUrl } from '@game/config/mapCache';
 import { useWorldStore } from '@stores/world';
 import { useMoodStore } from '@stores/mood';
 
@@ -149,6 +150,8 @@ interface BuildingZone {
   tileY: number;
   width: number;
   height: number;
+  /** 非空 = 用整栋高清精灵绘制（Super Retro World）；空 = 只有点击区（矿洞就是纯地表）。 */
+  sprite: string | null;
 }
 
 interface LowObstacleZone {
@@ -158,6 +161,19 @@ interface LowObstacleZone {
   height: number;
   sprite: string | null;
   frame: number | null;
+}
+
+/**
+ * 场景道具（`type='prop'`）：树 / 石 / 路灯 / 花盆 / 火把 / 整栋民居。
+ *
+ * 坐标语义与低阶障碍不同：这里是**锦点格**，精灵按底边中心对齐到格子底部
+ * （与 scripts/generate-maps.mjs 的 addProp、以及预览渲染一致）。
+ * 碰撞不靠这里推，而是由地图的 `collision` 瓦片层提供。
+ */
+interface PropZone {
+  tileX: number;
+  tileY: number;
+  sprite: string;
 }
 
 /**
@@ -335,11 +351,11 @@ export const WorldScene = {
   },
   preload(this: Phaser.Scene): void {
     if (!this.cache.json.exists('map_index')) {
-      this.load.json('map_index', '/assets/maps/index.json');
+      this.load.json('map_index', mapDataUrl('index.json'));
     }
     const mapAssetKey = `map_${state.mapKey}`;
     if (!this.cache.tilemap.exists(mapAssetKey)) {
-      this.load.tilemapTiledJSON(mapAssetKey, `/assets/maps/${state.mapKey}.json`);
+      this.load.tilemapTiledJSON(mapAssetKey, mapDataUrl(`${state.mapKey}.json`));
     }
   },
   create(this: SceneLike): void {
@@ -376,12 +392,18 @@ export const WorldScene = {
 
     const groundLayer = map.createLayer('ground', tileset, 0, 0);
     groundLayer?.setScale(RENDER_SCALE).setDepth(0);
+    // 装饰层现在只装地表细节（野花草甸 / 深叶 / 矿洞土丘 / 洞口）：它必须在地面之上、
+    // 所有立式精灵（树 / 房 / 角色）之下，否则草簇会盖在树干上、土丘会盖住矿洞石门。
+    const decorationLayer = map.createLayer('decoration', tileset, 0, 0);
+    decorationLayer?.setScale(RENDER_SCALE).setDepth(1);
     const buildingsLayer = map.createLayer('buildings', tileset, 0, 0);
     buildingsLayer?.setScale(RENDER_SCALE).setDepth(2);
-    const decorationLayer = map.createLayer('decoration', tileset, 0, 0);
-    decorationLayer?.setScale(RENDER_SCALE).setDepth(4);
+    // 专用碰撞层：buildCollisions 靠 layer.tilemapLayer 拿 tile，不先 createLayer
+    // 它就永远是 undefined，碰撞会默默全空（可穿墙）。层本身不可见。
+    const collisionLayer = map.createLayer('collision', tileset, 0, 0);
+    collisionLayer?.setVisible(false).setDepth(3);
 
-    const { spawnTile, exits, buildings, npcs, lowObstacles, landmarks } = parseObjects(
+    const { spawnTile, exits, buildings, npcs, lowObstacles, landmarks, props: sceneProps } = parseObjects(
       map,
       state.entry?.spawn,
       index,
@@ -456,6 +478,9 @@ export const WorldScene = {
 
     buildings.forEach((building) => {
       paintBuildingZone(phaserScene, building);
+    });
+    sceneProps.forEach((prop) => {
+      paintPropSprite(phaserScene, prop);
     });
     lowObstacles.forEach((obstacle) => {
       paintLowObstacleSprite(phaserScene, obstacle);
@@ -997,6 +1022,7 @@ export function parseObjects(
   npcs: NpcSpawn[];
   lowObstacles: LowObstacleZone[];
   landmarks: LandmarkZone[];
+  props: PropZone[];
 } {
   let spawnTile: { tileX: number; tileY: number } = fallbackSpawn ?? { tileX: 5, tileY: 5 };
   const exits: ExitTile[] = [];
@@ -1004,6 +1030,7 @@ export function parseObjects(
   const npcs: NpcSpawn[] = [];
   const lowObstacles: LowObstacleZone[] = [];
   const landmarks: LandmarkZone[] = [];
+  const sceneProps: PropZone[] = [];
 
   map.objects.forEach((group) => {
     group.objects.forEach((obj) => {
@@ -1051,6 +1078,7 @@ export function parseObjects(
         return;
       }
       if (type === 'building') {
+        const spriteValue = props['sprite'];
         buildings.push({
           route: String(props['route'] ?? '/'),
           label: String(props['label'] ?? obj.name ?? ''),
@@ -1058,7 +1086,16 @@ export function parseObjects(
           tileY,
           width: Math.max(1, Math.floor((obj.width ?? TILE_SIZE) / TILE_SIZE)),
           height: Math.max(1, Math.floor((obj.height ?? TILE_SIZE) / TILE_SIZE)),
+          sprite: typeof spriteValue === 'string' && spriteValue ? spriteValue : null,
         });
+        return;
+      }
+      if (type === 'prop') {
+        // 无 sprite 的 prop 直接忽略：宁可不画，也不能给 add.image 传 undefined。
+        const spriteValue = props['sprite'];
+        if (typeof spriteValue === 'string' && spriteValue) {
+          sceneProps.push({ tileX, tileY, sprite: spriteValue });
+        }
         return;
       }
       if (type === 'low_obstacle') {
@@ -1103,7 +1140,7 @@ export function parseObjects(
     });
   });
 
-  return { spawnTile, exits, buildings, npcs, lowObstacles, landmarks };
+  return { spawnTile, exits, buildings, npcs, lowObstacles, landmarks, props: sceneProps };
 }
 
 // 每种未知类型只 warn 一次：parseObjects 每次 create 都跑一遍，不去重会刷屏。
@@ -1146,6 +1183,18 @@ function paintBuildingZone(phaserScene: Phaser.Scene, building: BuildingZone): v
   const px = (building.tileX + building.width / 2) * RENDER_TILE_SIZE;
   const footprintW = building.width * RENDER_TILE_SIZE;
   const bottomY = (building.tileY + building.height) * RENDER_TILE_SIZE;
+
+  // 整栋高清精灵（Super Retro World）：底边中心对齐到占地矩形底边，与生成器的
+  // makeBuilding 约定一致；精灵宽可能比占地窄 4px（如 house_08 76px vs 80px），
+  // 居中后两侧各留 2px，不影响观感与碰撞。
+  if (building.sprite) {
+    paintSceneSprite(phaserScene, {
+      sprite: building.sprite,
+      x: px,
+      bottomY,
+      depth: DEPTH_PROP,
+    });
+  }
 
   const height = building.height * RENDER_TILE_SIZE;
   const interactive: Phaser.GameObjects.GameObject = phaserScene.add
@@ -1237,8 +1286,42 @@ function paintLowObstacleSprite(phaserScene: Phaser.Scene, obstacle: LowObstacle
           obstacle.frame,
         )
         .setScale(RENDER_SCALE)
-        .setDepth(5);
+        .setDepth(DEPTH_PROP);
     }
+  }
+}
+
+/**
+ * 立式精灵（树 / 石 / 路灯 / 花盆 / 火把 / 整栋房屋）的统一画法：
+ * 底边中心对齐到格子底部、原点 (0.5, 1)。
+ *
+ * 深度用单一常量而不做逐行 y-sort：角色与 NPC 本来就是固定深度（角色 15 / NPC 9-12），
+ * 只把道具 y-sort 起来反而会出现"房顶盖住人、人又盖住树干"的互相矛盾；
+ * 这里保持旧地图同样的平面层级（道具在角色身后），见 README 的 P6 视觉强化项。
+ */
+const DEPTH_PROP = 4;
+
+function paintPropSprite(phaserScene: Phaser.Scene, prop: PropZone): void {
+  paintSceneSprite(phaserScene, {
+    sprite: prop.sprite,
+    x: prop.tileX * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2,
+    bottomY: (prop.tileY + 1) * RENDER_TILE_SIZE,
+    depth: DEPTH_PROP,
+  });
+}
+
+function paintSceneSprite(
+  phaserScene: Phaser.Scene,
+  opts: { sprite: string; x: number; bottomY: number; depth: number },
+): void {
+  try {
+    phaserScene.add
+      .image(opts.x, opts.bottomY, opts.sprite)
+      .setOrigin(0.5, 1)
+      .setScale(RENDER_SCALE)
+      .setDepth(opts.depth);
+  } catch {
+    // jsdom / 测试桩没有 image 工厂时跳过，不影响碰撞与交互。
   }
 }
 

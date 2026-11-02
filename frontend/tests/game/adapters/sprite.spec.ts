@@ -150,9 +150,18 @@ describe('playAction ANIMATION_COMPLETE 解绑 (#9)', () => {
     return addSprite.mock.results[0]?.value as ReturnType<typeof chainSprite>;
   }
 
+  // 这两条覆盖 playAction 的 ANIMATION_COMPLETE 解绑：SRW 角色表没有动作帧，
+  // 现行主角走降级路径（不注册监听），因此显式传 layout:'ulpc' 走真正的动作路径，
+  // 否则回归用例会退化成永远为真的空转。
   it('unbinds the previous finish listener when a new action starts', () => {
     const scene = createSceneMock();
-    const handle = createPlayerSprite(scene, { tileX: 0, tileY: 0, direction: 'DOWN', tileSize: 32 });
+    const handle = createPlayerSprite(scene, {
+      tileX: 0,
+      tileY: 0,
+      direction: 'DOWN',
+      tileSize: 32,
+      layout: 'ulpc',
+    });
     const sprite = playerSpriteOf(scene);
 
     handle.playAction('celebrate');
@@ -169,7 +178,13 @@ describe('playAction ANIMATION_COMPLETE 解绑 (#9)', () => {
 
   it('unbinds the pending finish listener when the action is interrupted by walking', () => {
     const scene = createSceneMock();
-    const handle = createPlayerSprite(scene, { tileX: 0, tileY: 0, direction: 'DOWN', tileSize: 32 });
+    const handle = createPlayerSprite(scene, {
+      tileX: 0,
+      tileY: 0,
+      direction: 'DOWN',
+      tileSize: 32,
+      layout: 'ulpc',
+    });
     const sprite = playerSpriteOf(scene);
 
     handle.playAction('celebrate');

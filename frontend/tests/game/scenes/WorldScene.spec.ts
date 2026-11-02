@@ -29,6 +29,7 @@ import { useDialogStore } from '@/stores/dialog';
 import { useWorldStore } from '@/stores/world';
 import type { Direction } from '@/api/dto/Direction';
 import type { NpcSpawn } from '@/game/adapters/tilemap';
+import { mapDataUrl } from '@game/config/mapCache';
 
 const TILE_SIZE = 32;
 
@@ -81,7 +82,7 @@ describe('WorldScene map routing', () => {
     WorldScene.preload.call(scene);
 
     expect((scene.load as unknown as { tilemapTiledJSON: ReturnType<typeof vi.fn> }).tilemapTiledJSON)
-      .toHaveBeenCalledWith('map_town_hub', '/assets/maps/town_hub.json');
+      .toHaveBeenCalledWith('map_town_hub', mapDataUrl('town_hub.json'));
   });
 });
 

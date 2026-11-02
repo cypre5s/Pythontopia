@@ -12,6 +12,24 @@
 - **第三方资产层**：CC-BY-SA 3.0+ / OFL-1.1 / CC-BY 4.0 / CC-BY 3.0 / CC0 1.0（分文件标识）
 - **SA 注意**：LPC 等 CC-BY-SA 素材及其衍生文件仍按上游 share-alike 条款执行；这不等于授权 Pythontopia 代码、品牌、原创美术、课程集成或产品编排
 
+## R-14 运行时美术换源：Super Retro World（2026-11-02）
+
+网页端（`town_hub`）的地形 / 建筑 / 道具 / 角色已整体换成 **Super Retro World**，
+键名统一 `srw_<文件名>`，由 `scripts/build_srw_assets.py` 切片并生成
+`frontend/src/game/config/srwAssets.config.ts`（BootScene 按该清单注册贴图）。
+
+> 素材作者：**Gif** — https://ko-fi.com/gif — Super Retro World
+> 授权：作者商用条款（用户/项目所有者已确认可商用）。源包内未附 license 文本，
+> 上线前需把条款页面存档到 `assets/legal-proofs/` 补齐书面凭据。
+> 全仓库资产总声明见 `/LICENSE-ART.md`。
+
+| 运行时路径 | 内容 | 张数 |
+| --- | --- | ---: |
+| `tilesets/super-retro-world/town_tiles.png` | 地形图集（512×112，220 格：装饰 + 矿洞 + 4 组 47-blob） | 1 |
+| `sprites/super-retro-world/characters/chara_{0..31}.png` | 角色表 48×80 = 3 帧 × 4 朝向（DOWN/LEFT/RIGHT/UP） | 32 |
+| `buildings/super-retro-world/house_{01..12}.png` | 整栋房屋精灵 | 12 |
+| `props/super-retro-world/{trees,rocks,lamps,barrels,crates,potted_plants,pots,torches}/` | 场景道具（树/石/路灯/木桶/木箱/盆栽/陶罐/火把） | 139 |
+
 ## 必读署名清单（CC-BY / CC-BY-SA / OFL 强制）
 
 ### game-icons.net (CC-BY 3.0)

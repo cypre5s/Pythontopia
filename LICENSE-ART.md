@@ -320,6 +320,36 @@ P3-a2「智能体事务所」执行动画复用既有 NPC 行走帧（无新增�
 | --- | --- | --- | --- |
 | `frontend/public/assets/pixel/sprites/weapons/weapon_axe{,_bg}.png`（2 张，192×192） | [Universal-LPC-Spritesheet-Character-Generator](https://github.com/LiberatedPixelCup/Universal-LPC-Spritesheet-Character-Generator) 的 `weapon_blunt_waraxe`（LPC contributors） | **CC-BY-SA-3.0 / OGA-BY-3.0 / GPL** | 主角砍树/挖矿斧头挥砍叠加（与 slash 同步） |
 
+## R-14 前端美术全面换源：Super Retro World（2026-11-02）
+
+R-14「世界收缩方案 A」之后，用户判定原 Kenney tiny-town + ULPC 拼贴的网页端地图
+**全部不合格（含角色）**，改为一次性换到同一作者、同一套像素密度的 **Super Retro World**。
+选它的根因是像素密度统一：地形、建筑、道具、角色全部 16px 网格（角色单帧 16×20），
+不再出现「16px 瓦片配 64px 角色、缩放 0.7 倍」那种拼贴感。
+
+- 源包：用户自备 `B:\Godot\project\godot-one`（用户提供，本地副本不入库，见 `.gitignore` 的 `assets/inbox/incoming/`）
+- 作者：**Gif** — https://ko-fi.com/gif
+- 授权：用户（项目所有者）确认**可商用**；源包内**未附 license 文本文件**，
+  因此授权依据是作者在商店/发布页声明的商用条款。
+  ⚠️ **上线前必办**：把该条款页面存档（截图 + URL + 存档日期）放 `assets/legal-proofs/`，
+  否则本项属于「有口头确认、无书面凭据」的合规缺口。
+- 切片：`scripts/build_srw_assets.py`（配 `scripts/png_io.py` 最小 PNG 解码器）
+  从源包切到 `frontend/public/assets/pixel/`，全量 **约 158 KB**，并回写
+  `frontend/src/game/config/srwAssets.config.ts`（运行时清单）与
+  `scripts/generate-maps.mjs` 的 `SRW_ATLAS` 块（地图生成器图集表）。
+
+| 运行时路径 | 来源 | License | 用途 |
+| --- | --- | --- | --- |
+| `pixel/tilesets/super-retro-world/town_tiles.png` + `town_tiles.json` | Super Retro World（Gif） | 见上：作者商用条款 | 512×112 图集：22 单格装饰 + 矿洞土丘/洞口 10 格 + 4 组 × 47 blob（road / dirt / fence / water 掩码表取自源包 Godot `.tres` 的 `terrains_peering_bits`） |
+| `pixel/sprites/super-retro-world/characters/chara_{0..31}.png`（32 张） | 同上 | 同上 | 主角 + NPC 角色表，48×80 = 3 帧 × 4 朝向（行序 DOWN/LEFT/RIGHT/UP），单帧 16×20 |
+| `pixel/buildings/super-retro-world/house_{01..12}.png`（12 张） | 同上 | 同上 | 整栋房屋精灵（63×48 ~ 80×64），一文件一栋，取代旧「瓦片拼房」 |
+| `pixel/props/super-retro-world/{trees,rocks,lamps,barrels,crates,potted_plants,pots,torches}/`（139 张） | 同上 | 同上 | 树 / 石 / 路灯 / 木桶 / 木箱 / 盆栽 / 陶罐 / 火把；源包编号不连续，切片时统一重命名为 `{stem}_{01..NN}` |
+
+> 换源后仍未替换的遗留素材（**不删**，仍被其它入口引用）：
+> `pixel/tilesets/kenney-tiny-town/`、`pixel/sprites/ulpc/`、`pixel/props/fantastic-fence/`、
+> `pixel/characters_extra/`。它们各自的 license 与署名仍按本文档下方对应章节执行；
+> 待 Android / 微信端确认不再引用后再单独清理。
+
 ## 待办（backlog）
 
 1. `assets/inbox/tilesets/` 与 `assets/inbox/icons/`、`assets/inbox/buildings/`、`assets/inbox/characters/`、`assets/inbox/ui/`、`assets/inbox/mines/` 待补 LICENSE_AUDIT 二次确认

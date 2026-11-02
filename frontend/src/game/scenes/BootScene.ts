@@ -1,6 +1,15 @@
 import type Phaser from 'phaser';
 import { ensurePixelFontLoaded } from '@game/adapters/pixelFont';
 import { attachLifecycle } from '@game/core/SceneLifecycle';
+import { mapDataUrl } from '@game/config/mapCache';
+import {
+  SRW_CHARA_FRAME,
+  SRW_CHARA_KEYS,
+  SRW_HOUSE_KEYS,
+  SRW_PROP_GROUPS,
+  SRW_TILESET_KEY,
+  SRW_TILESET_URL,
+} from '@game/config/srwAssets.config';
 
 // 资源加载超时 fallback 默认 15s，超出后向外广播 pythontopia:load-timeout 让
 // WorldCanvas 给玩家提示，不强制中断 Phaser loader（loader 继续重试），避免在弱网/
@@ -105,6 +114,37 @@ const TILESET_SPRITESHEETS: ReadonlyArray<[string, string, number, number]> = [
   ['low_fence_16', '/assets/pixel/props/fantastic-fence/fence_00.png', 16, 16],
 ];
 
+/** Super Retro World 道具与房屋的 URL 前缀（贴图键统一为 `srw_<文件名>`）。 */
+const SRW_CHARA_URL_BASE = '/assets/pixel/sprites/super-retro-world/characters';
+const SRW_HOUSE_URL_BASE = '/assets/pixel/buildings/super-retro-world';
+const SRW_PROP_URL_BASE = '/assets/pixel/props/super-retro-world';
+
+// 运行时美术资产清单（Super Retro World）。切片脚本 scripts/build_srw_assets.py
+// 重新生成时清单跟真文件名一起变，这里按清单注册，不会出现“地图引用了不存在的贴图”。
+const SRW_SHEETS: ReadonlyArray<[string, string, number, number]> = [
+  // 地图瓦片图集：低阶障碍（栅栏）按 frame = 图集索引取块，必须当 spritesheet 加载。
+  [SRW_TILESET_KEY, SRW_TILESET_URL, 16, 16],
+  ...SRW_CHARA_KEYS.map((stem): [string, string, number, number] => [
+    `srw_${stem}`,
+    `${SRW_CHARA_URL_BASE}/${stem}.png`,
+    SRW_CHARA_FRAME.frameWidth,
+    SRW_CHARA_FRAME.frameHeight,
+  ]),
+];
+
+const SRW_IMAGES: ReadonlyArray<[string, string]> = [
+  ...SRW_HOUSE_KEYS.map((stem): [string, string] => [
+    `srw_${stem}`,
+    `${SRW_HOUSE_URL_BASE}/${stem}.png`,
+  ]),
+  ...SRW_PROP_GROUPS.flatMap((group) =>
+    group.stems.map((stem): [string, string] => [
+      `srw_${stem}`,
+      `${SRW_PROP_URL_BASE}/${group.dir}/${stem}.png`,
+    ]),
+  ),
+];
+
 const KC_ICONS: ReadonlyArray<[string, string]> = [
   ['icon_chapter_basics', '/assets/pixel/icons_kc/chapter_basics/lorc__brain.png'],
   ['icon_variable', '/assets/pixel/icons_kc/variable_assignment/lorc__padlock.png'],
@@ -200,6 +240,10 @@ export const BootScene = {
     setupTimeoutFallback(loader, progressUi);
 
     for (const [key, url] of TILESET_LIST) loader.image(key, url);
+    for (const [key, url, w, h] of SRW_SHEETS) {
+      loader.spritesheet(key, url, { frameWidth: w, frameHeight: h });
+    }
+    for (const [key, url] of SRW_IMAGES) loader.image(key, url);
     for (const [key, url] of COTTAGE_IMAGES) loader.image(key, url);
     for (const [key, url, w, h] of TILESET_SPRITESHEETS) {
       loader.spritesheet(key, url, { frameWidth: w, frameHeight: h });
@@ -216,9 +260,9 @@ export const BootScene = {
     for (const [key, url] of BGM_LIST) loader.audio(key, url);
 
     // 地图清单 + Tiled JSON（R-14 单 hub，仅 town_hub）：loader 桩可能未实现这两个方法，因此使用 ?.()。
-    loader.json?.('map_index', '/assets/maps/index.json');
+    loader.json?.('map_index', mapDataUrl('index.json'));
     for (const mapKey of WORLD_MAP_KEYS) {
-      loader.tilemapTiledJSON?.(`map_${mapKey}`, `/assets/maps/${mapKey}.json`);
+      loader.tilemapTiledJSON?.(`map_${mapKey}`, mapDataUrl(`${mapKey}.json`));
     }
   },
   create(this: BootSceneCreateContext) {

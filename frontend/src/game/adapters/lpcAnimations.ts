@@ -12,7 +12,7 @@ import type { Direction } from '@api/dto/Direction';
 
 export type CardinalDirection = 'UP' | 'LEFT' | 'DOWN' | 'RIGHT';
 
-export type LpcLayout = 'universal' | 'walk9' | 'ulpc';
+export type LpcLayout = 'universal' | 'walk9' | 'ulpc' | 'srw';
 
 /** 星露谷风高层动作。 */
 export type CharacterAction =
@@ -54,6 +54,14 @@ const DIR_ROW_ORDER: readonly CardinalDirection[] = ['UP', 'LEFT', 'DOWN', 'RIGH
 
 const UNIVERSAL_COLS = 13;
 const WALK9_COLS = 9;
+// Super Retro World 角色表：48x80 = 3 帧 x 4 朝向，单帧 16x20。
+// 朝向行序与 LPC 不同（LPC 是 UP,LEFT,DOWN,RIGHT），已对着 chara_*.png 逐行核实。
+const SRW_COLS = 3;
+const SRW_DIR_ROW: Readonly<Record<CardinalDirection, number>> = { DOWN: 0, LEFT: 1, RIGHT: 2, UP: 3 };
+// 走一步一格（MOVE_COOLDOWN_MS=130ms），3 帧走完一格 -> 3 / 0.13s ≈ 23 帧/秒；
+// run 每格 80.6ms -> ≈ 37 帧/秒。与 8 帧表折算出的 12.5 / 20 同源，只是帧数不同。
+const SRW_WALK_FRAME_RATE = 23;
+const SRW_RUN_FRAME_RATE = 37;
 
 interface BankSpec {
   firstRow: number;
@@ -84,6 +92,8 @@ const UNIVERSAL_BANKS: ReadonlySet<Bank> = new Set(['spellcast', 'thrust', 'walk
 
 function bankAvailable(layout: LpcLayout, bank: Bank): boolean {
   if (layout === 'walk9') return bank === 'walk';
+  // srw 素材只有行走帧，没有攻击 / 施法 / 坐下：其余动作一律走降级路径（小跳补间）。
+  if (layout === 'srw') return bank === 'walk';
   if (layout === 'universal') return UNIVERSAL_BANKS.has(bank);
   return true; // ulpc：全部
 }
@@ -163,13 +173,16 @@ export function cardinalize(dir: Direction): CardinalDirection {
 }
 
 function colsFor(layout: LpcLayout): number {
-  return layout === 'walk9' ? WALK9_COLS : UNIVERSAL_COLS;
+  if (layout === 'walk9') return WALK9_COLS;
+  if (layout === 'srw') return SRW_COLS;
+  return UNIVERSAL_COLS;
 }
 
 /** 某布局某朝向的「待机帧」绝对索引（走路周期第 0 帧）。 */
 export function idleFrame(layout: LpcLayout, dir: Direction): number {
   const cardinal = cardinalize(dir);
   if (layout === 'walk9') return WALK9_WALK_ROW[cardinal] * WALK9_COLS;
+  if (layout === 'srw') return SRW_DIR_ROW[cardinal] * SRW_COLS;
   return (BANKS_13.walk.firstRow + DIR_ROW_ORDER.indexOf(cardinal)) * UNIVERSAL_COLS;
 }
 
@@ -181,6 +194,12 @@ function bankFramesByBank(layout: LpcLayout, bank: Bank, dir: Direction): number
     if (bank !== 'walk') return [];
     const base = WALK9_WALK_ROW[cardinal] * cols;
     return [1, 2, 3, 4, 5, 6, 7, 8].map((o) => base + o);
+  }
+
+  if (layout === 'srw') {
+    if (bank !== 'walk') return [];
+    const base = SRW_DIR_ROW[cardinal] * cols;
+    return [0, 1, 2].map((o) => base + o);
   }
 
   if (!bankAvailable(layout, bank)) return [];
@@ -218,6 +237,7 @@ export function resolveAnimKey(
 const UNIVERSAL_SHEET_KEYS = new Set<string>(['player_sara']);
 
 export function spriteLayout(key: string): LpcLayout {
+  if (key.startsWith('srw_chara_')) return 'srw';
   if (key === 'player_sara2' || key.startsWith('ulpc_')) return 'ulpc';
   if (UNIVERSAL_SHEET_KEYS.has(key)) return 'universal';
   if (key.startsWith('npc_')) return 'walk9';
@@ -313,12 +333,12 @@ export function registerCharacterAnimations(
     if (!bank || !bankAvailable(layout, bank)) continue;
     const repeat = LOOP_ACTIONS.has(action) ? -1 : 0;
     // run 在非 ulpc 用走帧加速；ulpc 用真实 run 帧。
-    const frameRate = action === 'run' && layout !== 'ulpc' ? 16 : BANK_FRAME_RATE[bank];
+    let frameRate = action === 'run' && layout !== 'ulpc' ? 16 : BANK_FRAME_RATE[bank];
+    if (layout === 'srw') frameRate = action === 'run' ? SRW_RUN_FRAME_RATE : SRW_WALK_FRAME_RATE;
     for (const dir of CARDINALS) {
       const key = animKey(prefix, action, dir);
       if (anims.exists(key)) continue;
-      const frames = bankFramesByBank(layout, bank, dir).map((frame) => ({ key: textureKey, frame }));
-      if (frames.length === 0) continue;
+      const frames = bankFramesByBank(layout, bank, dir).map((frame) => ({ key: textureKey, frame }));      if (frames.length === 0) continue;
       anims.create({ key, frames, frameRate, repeat });
     }
   }

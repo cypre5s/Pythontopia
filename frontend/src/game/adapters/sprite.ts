@@ -20,23 +20,57 @@ import {
   type LpcLayout,
 } from './lpcAnimations';
 
-const LPC_SHEET_KEY = 'player_sara2';
-const PLAYER_ANIM_PREFIX = 'sara2';
-const PLAYER_LAYOUT: LpcLayout = 'ulpc';
-const SPRITE_FIXED_SCALE = 0.7;
+// Super Retro World 角色：48x80 三帧四向，单帧 16x20（与 16px 地瓦同源自同一素材包，
+// 不再出现旧版 16px 瓦片配 64px 角色、像素密度差 4 倍的拼贴感）。
+interface PlayerArt {
+  sheet: string;
+  prefix: string;
+  layout: LpcLayout;
+  /** 锚点 y：让脚底落在格子下沿。 */
+  originY: number;
+  scale: number;
+}
+
+const SRW_FRAME_H = 20;
+// 脚底落在 tile 下沿（cy + tileSize/2）：origin = 1 - 8/20，与地图预览图锚点一致。
+const SRW_FEET_INSET = 8;
+
+const PLAYER_ART_SRW: PlayerArt = {
+  sheet: 'srw_chara_0',
+  prefix: 'srw_player',
+  layout: 'srw',
+  originY: 1 - SRW_FEET_INSET / SRW_FRAME_H,
+  scale: 1,
+};
+// 旧 ULPC 表（13x42 帧 64px）：仅用于显式传 layout:'ulpc' 的动作路径回归用例。
+const PLAYER_ART_ULPC: PlayerArt = {
+  sheet: 'player_sara2',
+  prefix: 'sara2',
+  layout: 'ulpc',
+  originY: 0.75,
+  scale: 0.7,
+};
+
 const ACTION_FALLBACK_MS = 1400;
 
-function idleFrame(dir: Direction): number {
-  return lpcIdleFrame(PLAYER_LAYOUT, dir);
+function walkAnimKey(art: PlayerArt, dir: Direction): string {
+  return animKey(art.prefix, 'walk', dir);
 }
-function walkAnimKey(dir: Direction): string {
-  return animKey(PLAYER_ANIM_PREFIX, 'walk', dir);
-}
-function runAnimKey(dir: Direction): string {
-  return animKey(PLAYER_ANIM_PREFIX, 'run', dir);
+
+function runAnimKey(art: PlayerArt, dir: Direction): string {
+  return animKey(art.prefix, 'run', dir);
 }
 
 export interface CreatePlayerOptions {
+  /**
+   * 覆盖角色表布局。默认 `srw`（现行美术）。
+   *
+   * 存在的理由：Super Retro World 角色表只有行走帧，playAction 的整套一次性动作
+   * （施法/砍伐/浇水 + 工具叠加层 + 中断时 off ANIMATION_COMPLETE 的回归防护）
+   * 在 srw 布局下走降级路径、根本不会注册监听，那部分回归用例只能显式传
+   * `layout: 'ulpc'` 才测得到。不是给业务用的旋钮。
+   */
+  layout?: LpcLayout;
   tileX: number;
   tileY: number;
   direction: Direction;
@@ -60,8 +94,8 @@ const JUMP_ARC_PX = 18;
 // repeat 间隙）大于 tween 时长时，两格之间不再闪一帧站立，走路循环保持连贯。
 const IDLE_GRACE_MS = 90;
 
-function ensureAnims(phaserScene: Phaser.Scene): void {
-  registerCharacterAnimations(phaserScene.anims, LPC_SHEET_KEY, PLAYER_ANIM_PREFIX, PLAYER_LAYOUT);
+function ensureAnims(phaserScene: Phaser.Scene, art: PlayerArt): void {
+  registerCharacterAnimations(phaserScene.anims, art.sheet, art.prefix, art.layout);
   const textures = (phaserScene as unknown as { textures?: { exists?: (k: string) => boolean } }).textures;
   for (const texKey of TOOL_TEXTURE_KEYS) {
     if (textures?.exists?.(texKey)) {
@@ -101,19 +135,21 @@ interface TimeWithDelay {
 
 export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions): PlayerSpriteHandle {
   const phaserScene = scene as unknown as Phaser.Scene;
-  ensureAnims(phaserScene);
+  const art = opts.layout === 'ulpc' ? PLAYER_ART_ULPC : PLAYER_ART_SRW;
+  const layout = art.layout;
+  ensureAnims(phaserScene, art);
 
   const startX = opts.tileX * opts.tileSize + opts.tileSize / 2;
   const startY = opts.tileY * opts.tileSize + opts.tileSize / 2;
 
   const shadow = phaserScene.add
-    .ellipse(startX, startY + opts.tileSize / 2 - 4, opts.tileSize * 0.7, opts.tileSize * 0.3, 0x000000, 0.35)
+    .ellipse(startX, startY + opts.tileSize / 2 - 1, opts.tileSize * 0.7, opts.tileSize * 0.3, 0x000000, 0.35)
     .setDepth(14);
   const sprite = phaserScene.add
-    .sprite(startX, startY, LPC_SHEET_KEY, idleFrame(opts.direction))
-    .setOrigin(0.5, 0.75)
+    .sprite(startX, startY, art.sheet, lpcIdleFrame(layout, opts.direction))
+    .setOrigin(0.5, art.originY)
     .setDepth(15);
-  sprite.setScale(SPRITE_FIXED_SCALE);
+  sprite.setScale(art.scale);
 
   let jumping = false;
   let busy = false;
@@ -166,15 +202,15 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
     if (!textures?.exists?.(sampleTex)) return false;
     toolBg = phaserScene.add
       .sprite(sprite.x, sprite.y, sampleTex)
-      .setOrigin(0.5, 0.75)
+      .setOrigin(0.5, art.originY)
       .setDepth(14.6)
-      .setScale(SPRITE_FIXED_SCALE)
+      .setScale(art.scale)
       .setVisible(false);
     toolFg = phaserScene.add
       .sprite(sprite.x, sprite.y, sampleTex)
-      .setOrigin(0.5, 0.75)
+      .setOrigin(0.5, art.originY)
       .setDepth(15.4)
-      .setScale(SPRITE_FIXED_SCALE)
+      .setScale(art.scale)
       .setVisible(false);
     return true;
   }
@@ -214,13 +250,13 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
       .sprite(sprite.x, sprite.y, sampleTex)
       .setOrigin(0.5, WEAPON_ORIGIN_Y)
       .setDepth(14.5)
-      .setScale(SPRITE_FIXED_SCALE)
+      .setScale(art.scale)
       .setVisible(false);
     weaponFg = phaserScene.add
       .sprite(sprite.x, sprite.y, sampleTex)
       .setOrigin(0.5, WEAPON_ORIGIN_Y)
       .setDepth(15.6)
-      .setScale(SPRITE_FIXED_SCALE)
+      .setScale(art.scale)
       .setVisible(false);
     return true;
   }
@@ -256,7 +292,7 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
     sprite.x = cx;
     sprite.y = cy;
     shadow.x = cx;
-    shadow.y = cy + opts.tileSize / 2 - 4;
+    shadow.y = cy + opts.tileSize / 2 - 1;
     handle.x = cx;
     handle.y = cy;
   }
@@ -265,13 +301,13 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
   function playIdle(direction: Direction): void {
     hideTool();
     hideWeapon();
-    sprite.setScale(SPRITE_FIXED_SCALE);
-    const key = resolveAnimKey(PLAYER_ANIM_PREFIX, PLAYER_LAYOUT, 'idle', direction);
+    sprite.setScale(art.scale);
+    const key = resolveAnimKey(art.prefix, layout, 'idle', direction);
     if (key) {
       sprite.play(key, true);
     } else {
       sprite.stop();
-      sprite.setFrame(idleFrame(direction));
+      sprite.setFrame(lpcIdleFrame(layout, direction));
     }
   }
 
@@ -313,8 +349,8 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
       const targetX = tileX * opts.tileSize + opts.tileSize / 2;
       const targetY = tileY * opts.tileSize + opts.tileSize / 2;
       const duration = resolveMoveDuration(moveOpts?.durationMs);
-      sprite.setScale(SPRITE_FIXED_SCALE);
-      sprite.play(moveOpts?.running ? runAnimKey(direction) : walkAnimKey(direction), true);
+      sprite.setScale(art.scale);
+      sprite.play(moveOpts?.running ? runAnimKey(art, direction) : walkAnimKey(art, direction), true);
       phaserScene.tweens.killTweensOf(sprite);
       phaserScene.tweens.killTweensOf(shadow);
       phaserScene.tweens.add({
@@ -336,7 +372,7 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
       phaserScene.tweens.add({
         targets: shadow,
         x: targetX,
-        y: targetY + opts.tileSize / 2 - 4,
+        y: targetY + opts.tileSize / 2 - 1,
         duration,
         ease: 'Linear',
       });
@@ -348,7 +384,7 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
       const sourceShadowY = shadow.y;
       const targetX = tileX * opts.tileSize + opts.tileSize / 2;
       const targetY = tileY * opts.tileSize + opts.tileSize / 2;
-      const targetShadowY = targetY + opts.tileSize / 2 - 4;
+      const targetShadowY = targetY + opts.tileSize / 2 - 1;
       const progress = { t: 0 };
 
       jumping = true;
@@ -360,8 +396,8 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
       this.tileX = tileX;
       this.tileY = tileY;
       this.direction = direction;
-      sprite.setScale(SPRITE_FIXED_SCALE);
-      sprite.play(resolveAnimKey(PLAYER_ANIM_PREFIX, PLAYER_LAYOUT, 'jump', direction) ?? walkAnimKey(direction), true);
+      sprite.setScale(art.scale);
+      sprite.play(resolveAnimKey(art.prefix, layout, 'jump', direction) ?? walkAnimKey(art, direction), true);
       phaserScene.tweens.killTweensOf(sprite);
       phaserScene.tweens.killTweensOf(shadow);
 
@@ -399,12 +435,12 @@ export function createPlayerSprite(scene: SceneLike, opts: CreatePlayerOptions):
       }
       const direction = actionOpts?.direction ?? this.direction;
       this.direction = direction;
-      const key = resolveAnimKey(PLAYER_ANIM_PREFIX, PLAYER_LAYOUT, action, direction);
+      const key = resolveAnimKey(art.prefix, layout, action, direction);
       cancelPendingIdle();
       phaserScene.tweens.killTweensOf(sprite);
       phaserScene.tweens.killTweensOf(shadow);
       snapToTile(this);
-      sprite.setScale(SPRITE_FIXED_SCALE);
+      sprite.setScale(art.scale);
 
       if (!key) {
         playIdle(direction);

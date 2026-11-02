@@ -32,71 +32,34 @@ const MAPS_DIR = path.join(REPO_ROOT, 'frontend', 'public', 'assets', 'maps');
 const TILE = 16;
 const TILED_VERSION = '1.10';
 
-// ---------- 帧号清单（gid = frame + 1，因为 firstgid=1） ----------
-// ⚠️ 2026-10-26 修复：旧表的帧号是凭印象猜的，建筑用的 14..25 实际是树丛/土丘/叶子，
-// 导致整座小镇一栋房子都没有（铺的全是“散落门板 + 草丛”），水井是蘑菇、路灯是墙砖。
-// 现在每个数字都对照 tilemap_packed.png（12×11 = 132 帧，无 margin/spacing）逐格核对：
-//   帧 0/1/2      纯草 / 杂点草 / 带花草地
-//   帧 12..14     沙地上边沿（左/中/右）  24..26 中段  36..38 下边沿  39..42 实心沙地
-//   帧 4          松树   16 大树冠   5 圆灌木   28 大灌木   15 小树   19 果树
-//   帧 44..47     木栅栏横段+立柱        56..59 竖段+立柱
-//   帧 48..51     灰石屋顶              52..55 红瓦屋顶
-//   帧 60..63     灰屋檐 / 山墙（63）     64..67 红屋檐 / 山墙（67）
-//   帧 72..75     木墙 + 门（74）        76..79 灰石墙 + 门（78）
-//   帧 83/95      路牌                  92 水井   93/94 金币/花环   104..107 木桶/木箱/壶
-const TOWN_GIDS = {
-  // 草地
-  grass: 1,
-  grassSpeckle: 2,
-  grassFlower: 3,
-  grassAlt: 2,
-  grassTall: 3,
-  // 沙地
-  sandPath: 40,
-  sandPlain: 40,
-  // 植被
-  treePine: 5,
-  treeRound: 17,
-  treeFruit: 23,
-  bushSmall: 6,
-  bushBig: 31,
-  // 小物件
-  mushroom: 30,
-  well: 93,
-  signPost: 84,
-  signRed: 96,
-  coin: 94,
-  barrel: 105,
-  crate: 106,
-  rockSmall: 10,
-  rockMedium: 11,
-  logPile: 106,
-  treeStump: 48,
-  lamp: 48,
-  flowerPink: 3,
-  flowerYellow: 3,
-  flowerBlue: 3,
-  // 栅栏（横 / 竖 / 立柱）
-  fenceWoodH: 46,
-  fenceWoodV: 58,
-  fencePost: 48,
-  // 建筑风格：屋顶 → 屋檐/山墙 → 墙体 → 门（墙体最后一排中间换门）
-  // 不同建筑用不同风格，避免“图书馆和竞技场长得一模一样”。
-  house: {
-    // 红瓦民居：红屋顶 + 碎砖屋檐 + 土坯墙
-    red: { roofL: 53, roofM: 54, roofR: 55, eaveL: 65, gable: 68, eaveR: 67, wallL: 73, wallM: 74, wallR: 76, door: 75, window: 56 },
-    // 灰石民居／公共建筑：石屋顶 + 浅色抹灰墙
-    grey: { roofL: 49, roofM: 50, roofR: 51, eaveL: 61, gable: 64, eaveR: 63, wallL: 77, wallM: 78, wallR: 80, door: 79, window: 52 },
-    // 城堡式（镇长大厅 / 竞技场）：齿形城埵 + 石墙 + 城门
-    stone: { roofL: 99, roofM: 100, roofR: 101, eaveL: 97, gable: 98, eaveR: 98, wallL: 97, wallM: 97, wallR: 98, door: 104, window: 97 },
-    // 木匠／工坊：深木色墙 + 大木门
-    wood: { roofL: 53, roofM: 54, roofR: 55, eaveL: 73, gable: 66, eaveR: 76, wallL: 73, wallM: 74, wallR: 76, door: 86, window: 55 },
+// ---------- Super Retro World 切片图集（取代 kenney tiny-town 帧号表）----------
+// 帧号不再凭印象猜：整张表由 scripts/build_srw_assets.py 从 Godot TileSet 的
+// terrains_peering_bits 导出，与运行时 town_tiles.png 一一对应。
+// 内联而非运行时读 JSON 的原因见 build_srw_assets.sync_generator_atlas。
+// BEGIN SRW_ATLAS（由 scripts/build_srw_assets.py 从 town_tiles.json 回写，勿手改）
+const SRW_ATLAS = {
+  image: '../pixel/tilesets/super-retro-world/town_tiles.png',
+  columns: 32,
+  tileCount: 220,
+  tileSize: 16,
+  single: { grass: 0, grass_tall_a: 1, grass_tall_b: 2, tuft_a: 3, tuft_b: 4, tuft_c: 5, tuft_d: 6, tuft_e: 7, tuft_f: 8, flower_a: 9, flower_b: 10, flower_c: 11, flower_d: 12, flower_e: 13, bush_a: 14, bush_b: 15, bush_c: 16, bush_d: 17, bush_e: 18, blade_a: 19, blade_b: 20, blade_c: 21, mound_tl: 22, mound_tc: 23, mound_tr: 24, mound_ml: 25, mound_mc: 26, mound_mr: 27, mound_bl: 28, mound_bc: 29, mound_br: 30, cave_mouth: 31 },
+  blob: {
+    road: { 0: 32, 1: 33, 4: 34, 5: 35, 7: 36, 16: 37, 17: 38, 20: 39, 21: 40, 23: 41, 28: 42, 29: 43, 31: 44, 64: 45, 65: 46, 68: 47, 69: 48, 71: 49, 80: 50, 81: 51, 84: 52, 85: 53, 87: 54, 92: 55, 93: 56, 95: 57, 112: 58, 113: 59, 116: 60, 117: 61, 119: 62, 124: 63, 125: 64, 127: 65, 193: 66, 197: 67, 199: 68, 209: 69, 213: 70, 215: 71, 221: 72, 223: 73, 241: 74, 245: 75, 247: 76, 253: 77, 255: 78 },
+    dirt: { 0: 79, 1: 80, 4: 81, 5: 82, 7: 83, 16: 84, 17: 85, 20: 86, 21: 87, 23: 88, 28: 89, 29: 90, 31: 91, 64: 92, 65: 93, 68: 94, 69: 95, 71: 96, 80: 97, 81: 98, 84: 99, 85: 100, 87: 101, 92: 102, 93: 103, 95: 104, 112: 105, 113: 106, 116: 107, 117: 108, 119: 109, 124: 110, 125: 111, 127: 112, 193: 113, 197: 114, 199: 115, 209: 116, 213: 117, 215: 118, 221: 119, 223: 120, 241: 121, 245: 122, 247: 123, 253: 124, 255: 125 },
+    fence: { 0: 126, 1: 127, 4: 128, 5: 129, 7: 130, 16: 131, 17: 132, 20: 133, 21: 134, 23: 135, 28: 136, 29: 137, 31: 138, 64: 139, 65: 140, 68: 141, 69: 142, 71: 143, 80: 144, 81: 145, 84: 146, 85: 147, 87: 148, 92: 149, 93: 150, 95: 151, 112: 152, 113: 153, 116: 154, 117: 155, 119: 156, 124: 157, 125: 158, 127: 159, 193: 160, 197: 161, 199: 162, 209: 163, 213: 164, 215: 165, 221: 166, 223: 167, 241: 168, 245: 169, 247: 170, 253: 171, 255: 172 },
+    water: { 0: 173, 1: 174, 4: 175, 5: 176, 7: 177, 16: 178, 17: 179, 20: 180, 21: 181, 23: 182, 28: 183, 29: 184, 31: 185, 64: 186, 65: 187, 68: 188, 69: 189, 71: 190, 80: 191, 81: 192, 84: 193, 85: 194, 87: 195, 92: 196, 93: 197, 95: 198, 112: 199, 113: 200, 116: 201, 117: 202, 119: 203, 124: 204, 125: 205, 127: 206, 193: 207, 197: 208, 199: 209, 209: 210, 213: 211, 215: 212, 221: 213, 223: 214, 241: 215, 245: 216, 247: 217, 253: 218, 255: 219 },
   },
+  props: { barrel: 5, chara: 32, crate: 8, house: 12, lamp: 5, pot: 27, potted_plant: 15, rock: 46, torch: 18, tree: 15 },
+  charSheet: {'size': [48, 80], 'frame': [16, 20], 'framesPerDir': 3, 'dirRowOrder': ['DOWN', 'LEFT', 'RIGHT', 'UP'], 'idleFrame': 0},
 };
+// END SRW_ATLAS
+
+/** 图集索引 -> Tiled gid（firstgid = 1，0 = 空 tile）。 */
+const gid = (index) => index + 1;
+const SRW_SINGLE = SRW_ATLAS.single;
+const SRW_BLOB = SRW_ATLAS.blob;
 
 // ---------- 通用工具 ----------
-
-/** 生成 w*h 的零填充数组（gid 0 = 空 tile） */
 function emptyData(w, h) {
   return new Array(w * h).fill(0);
 }
@@ -124,74 +87,297 @@ function setTile(data, w, x, y, gid) {
   data[y * w + x] = gid;
 }
 
+// ---------- 布局引擎：材质网格 + 圆盘笔刷 + 47-blob autotile ----------
+//
+// 为什么不用矩形 fillRect 铺路：直上直下的方块路会让小镇读起来像"空地上一个加号"。
+// 这里先用圆盘笔刷沿折线拓出材质网格，交给 47-blob autotile 生成边缘，最后做一次
+// 形态学清理 + 连通校验。三步都各自解决一个真实踩过的坑：
+//   canonicalMask —— 笔刷抖动会造出 47 表里没有的掩码，查不到就会回退到内部块，
+//                    在路/水与草地之间留下硬切边（线上看到"半圈有岸线半圈硬切"）。
+//   cleanGrid     —— 笔刷留的 1 格草舌会让两侧都长毛边，看起来像路上长草。
+//   connectAll    —— 门前坪/支路容易成为孤立路面块，玩家走不到 NPC。
+
+const MAT = { GRASS: 0, ROAD: 1, WATER: 2, DIRT: 3 };
+const SIDES = ['top_side', 'top_right_corner', 'right_side', 'bottom_right_corner',
+               'bottom_side', 'bottom_left_corner', 'left_side', 'top_left_corner'];
+const NEIGHBOR_DELTAS = [[0, -1], [1, -1], [1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1]];
+
+function makeGrid(w, h) {
+  return Array.from({ length: h }, () => new Array(w).fill(MAT.GRASS));
+}
+
+function gridSet(grid, x, y, mat) {
+  if (x < 0 || y < 0 || y >= grid.length || x >= grid[0].length) return;
+  grid[y][x] = mat;
+}
+
+function gridFill(grid, x0, y0, x1, y1, mat) {
+  for (let y = Math.max(0, y0); y <= Math.min(grid.length - 1, y1); y += 1) {
+    for (let x = Math.max(0, x0); x <= Math.min(grid[0].length - 1, x1); x += 1) grid[y][x] = mat;
+  }
+}
+
+/** 圆盘笔刷：坐标可为小数，jitter 让边缘不规整。 */
+function gridStamp(grid, cx, cy, r, mat, jitter = 0, seed = 0) {
+  for (let y = Math.max(0, Math.floor(cy - r - 1)); y <= Math.min(grid.length - 1, Math.ceil(cy + r + 1)); y += 1) {
+    for (let x = Math.max(0, Math.floor(cx - r - 1)); x <= Math.min(grid[0].length - 1, Math.ceil(cx + r + 1)); x += 1) {
+      let rr = r;
+      if (jitter) rr += Math.sin(x * 0.9 + y * 1.7 + seed) * jitter;
+      if ((x - cx) ** 2 + (y - cy) ** 2 <= rr * rr) grid[y][x] = mat;
+    }
+  }
+}
+
+/** 沿折线拓一条路：宽度起伏、转角自动圆化、交叉口自然加宽。 */
+function gridStampPath(grid, pts, r, mat = MAT.ROAD, seed = 0, jitter = 0.22) {
+  for (let i = 0; i < pts.length - 1; i += 1) {
+    const [x0, y0] = pts[i];
+    const [x1, y1] = pts[i + 1];
+    const dist = Math.hypot(x1 - x0, y1 - y0);
+    const steps = Math.max(1, Math.round(dist * 4));
+    for (let s = 0; s <= steps; s += 1) {
+      const t = s / steps;
+      const rr = r + Math.sin((t * dist * 1.3) + i + seed) * jitter;
+      gridStamp(grid, x0 + ((x1 - x0) * t), y0 + ((y1 - y0) * t), rr, mat, 0, seed + i);
+    }
+  }
+}
+
+/** 有机团块（广场 / 湖）：椭圆 + 低频扰动，避免规则台阶感。 */
+function gridStampBlob(grid, cx, cy, rx, ry, mat = MAT.ROAD, seed = 0, wob = 0.35) {
+  for (let y = Math.max(0, Math.floor(cy - ry - 2)); y <= Math.min(grid.length - 1, Math.ceil(cy + ry + 2)); y += 1) {
+    for (let x = Math.max(0, Math.floor(cx - rx - 2)); x <= Math.min(grid[0].length - 1, Math.ceil(cx + rx + 2)); x += 1) {
+      const ang = Math.atan2(y - cy, x - cx);
+      const k = 1 + (Math.sin((ang * 3) + seed) * wob * 0.5)
+              + (Math.sin((ang * 5) - seed * 1.7) * wob * 0.35);
+      if (((x - cx) / (rx * k)) ** 2 + ((y - cy) / (ry * k)) ** 2 <= 1) grid[y][x] = mat;
+    }
+  }
+}
+
+function gridMaskOf(grid, mat, x, y) {
+  let m = 0;
+  NEIGHBOR_DELTAS.forEach(([dx, dy], bit) => {
+    const nx = x + dx;
+    const ny = y + dy;
+    if (nx >= 0 && ny >= 0 && ny < grid.length && nx < grid[0].length && grid[ny][nx] === mat) {
+      m |= 1 << bit;
+    }
+  });
+  return m;
+}
+
 /**
- * 按房屋四件套（屋顶 / 屋檐+山墙 / 墙体 / 门）拼一栋房子。
- * 帧号全部经过图集核对，见 TOWN_GIDS.house 注释。
- * variant 不传时按坐标奇偶选style，保证相邻房子屋顶颜色有变化。
+ * 掩码规范化：角落位只在其两侧侧边位都亮时才有意义（Godot blob 约定）。
+ * 不规范化就会查不到块 -> 回退内部块 -> 路/水边出现硬切。
  */
-function paintBuilding(buildingsData, w, x0, y0, bw, bh, variant) {
-  const styles = TOWN_GIDS.house;
-  const style = styles[variant] ?? (((x0 + y0) % 2 === 0) ? styles.red : styles.grey);
-  const width = Math.max(2, bw);
-  const height = Math.max(2, bh);
-  const mid = Math.floor((width - 1) / 2);
-  const doorCol = Math.floor((width - 1) / 2);
+function canonicalMask(m) {
+  const TOP = 0, TR = 1, RIGHT = 2, BR = 3, BOTTOM = 4, BL = 5, LEFT = 6, TL = 7;
+  [[TR, TOP, RIGHT], [BR, RIGHT, BOTTOM], [BL, BOTTOM, LEFT], [TL, LEFT, TOP]].forEach(
+    ([corner, a, b]) => {
+      if (!((m & (1 << a)) && (m & (1 << b)))) m &= ~(1 << corner);
+    },
+  );
+  return m;
+}
 
-  for (let dx = 0; dx < width; dx += 1) {
-    const isLeft = dx === 0;
-    const isRight = dx === width - 1;
-    for (let dy = 0; dy < height; dy += 1) {
-      let gid;
-      if (dy === 0) {
-        // 屋顶斜坡
-        gid = isLeft ? style.roofL : isRight ? style.roofR : style.roofM;
-      } else if (dy === 1) {
-        // 屋檐；正中一列放山墙三角，形成人字屋顶轮廓
-        if (width >= 3 && dx === mid) gid = style.gable;
-        else gid = isLeft ? style.eaveL : isRight ? style.eaveR : style.roofM;
-      } else if (dy === height - 1) {
-        // 最底排：正中开门
-        gid = dx === doorCol ? style.door : isLeft ? style.wallL : isRight ? style.wallR : style.wallM;
-      } else {
-        // 中间墙体：宽房在正中开一扇窗，避免整面砖墙没细节
-        gid = width >= 4 && dx === mid ? style.window : isLeft ? style.wallL : isRight ? style.wallR : style.wallM;
+/** 查 47-blob 表；仍不命中就按 Hamming 距离取最近的合法掩码，绝不回退内部块。 */
+function lookupBlob(table, m) {
+  const key = canonicalMask(m);
+  if (table[key] !== undefined) return table[key];
+  let best = null;
+  Object.keys(table).forEach((k) => {
+    const d = (Number(k) ^ key).toString(2).split('1').length - 1;
+    if (!best || d < best[0]) best = [d, Number(k)];
+  });
+  return best ? table[best[1]] : table[0];
+}
+
+/** 形态学开/闭：吞掉 1 格草洞与毛刺。顺序必须早于 connectAll。 */
+function cleanGrid(grid, mats = [MAT.ROAD, MAT.WATER, MAT.DIRT]) {
+  const w = grid[0].length;
+  const h = grid.length;
+  for (let iter = 0; iter < 3; iter += 1) {
+    let changed = false;
+    mats.forEach((mat) => {
+      const nb = grid.map((row, y) => row.map((_, x) => {
+        let n = 0;
+        NEIGHBOR_DELTAS.forEach(([dx, dy]) => {
+          if (!dx && !dy) return;
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx >= 0 && ny >= 0 && ny < h && nx < w && grid[ny][nx] === mat) n += 1;
+        });
+        return n;
+      }));
+      for (let y = 0; y < h; y += 1) {
+        for (let x = 0; x < w; x += 1) {
+          const orth = [[1, 0], [-1, 0], [0, 1], [0, -1]].filter(
+            ([dx, dy]) => grid[y + dy]?.[x + dx] === mat,
+          ).length;
+          const c = grid[y][x];
+          if (c !== mat && (nb[y][x] >= 6 || orth >= 3)) {
+            grid[y][x] = mat;
+            changed = true;
+          } else if (c === mat && nb[y][x] <= 1) {
+            grid[y][x] = MAT.GRASS;
+            changed = true;
+          }
+        }
       }
-      setTile(buildingsData, w, x0 + dx, y0 + dy, gid);
+    });
+    if (!changed) break;
+  }
+}
+
+/** 洪泛填充去掉湖里的"孤岛"（从图边可达的草地之外全部并入水面）。 */
+function fillLakes(grid) {
+  const w = grid[0].length;
+  const h = grid.length;
+  const seen = grid.map((row) => row.map(() => false));
+  const stack = [];
+  for (let x = 0; x < w; x += 1) {
+    stack.push([x, 0], [x, h - 1]);
+  }
+  for (let y = 0; y < h; y += 1) {
+    stack.push([0, y], [w - 1, y]);
+  }
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    if (x < 0 || y < 0 || y >= h || x >= w || seen[y][x]) continue;
+    seen[y][x] = true;
+    if (grid[y][x] === MAT.WATER) continue;
+    [[1, 0], [-1, 0], [0, 1], [0, -1]].forEach(([dx, dy]) => stack.push([x + dx, y + dy]));
+  }
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      if (grid[y][x] !== MAT.WATER && !seen[y][x]) grid[y][x] = MAT.WATER;
     }
   }
 }
 
-/** 用纯沙地铺一块矩形，四角/四边用圆角沙地帧，避免“硬方块路”。 */
-function paintSandRect(data, w, x0, y0, rw, rh) {
-  for (let dy = 0; dy < rh; dy += 1) {
-    for (let dx = 0; dx < rw; dx += 1) {
-      let gid = TOWN_GIDS.sandPlain;
-      const top = dy === 0;
-      const bottom = dy === rh - 1;
-      const left = dx === 0;
-      const right = dx === rw - 1;
-      if (top) gid = left ? 13 : right ? 14 : 13;
-      else if (bottom) gid = left ? 37 : right ? 38 : 37;
-      else if (left) gid = 25;
-      else if (right) gid = 26;
-      setTile(data, w, x0 + dx, y0 + dy, gid);
+function componentsOf(grid, mat) {
+  const w = grid[0].length;
+  const h = grid.length;
+  const seen = new Set();
+  const out = [];
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      if (grid[y][x] !== mat || seen.has(y * w + x)) continue;
+      const stack = [[x, y]];
+      const comp = [];
+      seen.add(y * w + x);
+      while (stack.length) {
+        const [cx, cy] = stack.pop();
+        comp.push([cx, cy]);
+        NEIGHBOR_DELTAS.forEach(([dx, dy]) => {
+          const nx = cx + dx;
+          const ny = cy + dy;
+          const k = ny * w + nx;
+          if (nx < 0 || ny < 0 || ny >= h || nx >= w || seen.has(k)) return;
+          if (grid[ny][nx] === mat) {
+            seen.add(k);
+            stack.push([nx, ny]);
+          }
+        });
+      }
+      out.push(comp);
     }
   }
+  return out;
 }
 
-/** 画一个矩形围栏（仅边框，4 条边），用于知识田/班级广场围合 */
-function paintFenceRect(data, w, x0, y0, rw, rh) {
-  for (let dx = 0; dx < rw; dx += 1) {
-    setTile(data, w, x0 + dx, y0, TOWN_GIDS.fenceWoodH);
-    setTile(data, w, x0 + dx, y0 + rh - 1, TOWN_GIDS.fenceWoodH);
-  }
-  for (let dy = 0; dy < rh; dy += 1) {
-    setTile(data, w, x0, y0 + dy, TOWN_GIDS.fenceWoodV);
-    setTile(data, w, x0 + rw - 1, y0 + dy, TOWN_GIDS.fenceWoodV);
-  }
+/** 把所有孤立块接回最大块（多源 BFS 最短桥接）。返回补接格数。 */
+function connectAll(grid, mat = MAT.ROAD, avoid = [MAT.WATER]) {
+  const comps = componentsOf(grid, mat).sort((a, b) => b.length - a.length);
+  if (comps.length <= 1) return 0;
+  const w = grid[0].length;
+  const h = grid.length;
+  const main = new Set(comps[0].map(([x, y]) => (y * w) + x));
+  let bridges = 0;
+  comps.slice(1).forEach((comp) => {
+    const target = new Set(comp.map(([x, y]) => (y * w) + x));
+    const prev = new Map();
+    const queue = [...comps[0]];
+    queue.forEach(([x, y]) => prev.set((y * w) + x, null));
+    let hit = null;
+    while (queue.length && !hit) {
+      const [x, y] = queue.shift();
+      for (let dy = -1; dy <= 1 && !hit; dy += 1) {
+        for (let dx = -1; dx <= 1 && !hit; dx += 1) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (nx < 0 || ny < 0 || ny >= h || nx >= w) continue;
+          const k = ny * w + nx;
+          if (prev.has(k)) continue;
+          prev.set(k, [x, y]);
+          if (target.has(k)) {
+            hit = k;
+            break;
+          }
+          const cell = grid[ny][nx];
+          if (avoid.includes(cell) || cell === mat) continue;
+          queue.push([nx, ny]);
+        }
+      }
+    }
+    if (hit === null) return;
+    let cur = hit;
+    while (cur !== null && !main.has(cur)) {
+      const [x, y] = [cur % w, Math.floor(cur / w)];
+      grid[y][x] = mat;
+      main.add(cur);
+      bridges += 1;
+      const p = prev.get(cur);
+      cur = p ? ((p[1] * w) + p[0]) : null;
+    }
+  });
+  return bridges;
 }
 
-/** 简单确定性 PRNG（mulberry32），用于在不同地图间得到可复现的 decoration 散布 */
+/** 门前坪：实心矩形（不能用圆盘笔刷——cleanGrid 会把小圆块当毛刺删掉）。 */
+function gridDoorApron(grid, cx, by, wTiles = 3, dTiles = 2, mat = MAT.ROAD) {
+  gridFill(grid, cx - Math.floor(wTiles / 2), by + 1,
+    cx - Math.floor(wTiles / 2) + wTiles - 1, by + dTiles, mat);
+}
+
+/** 校验：建筑占地互不重叠且至少隔 minGap 格。返回违规对。 */
+function footprintsGapOk(boxes, minGap = 2) {
+  const bad = [];
+  for (let i = 0; i < boxes.length; i += 1) {
+    for (let j = i + 1; j < boxes.length; j += 1) {
+      const [ax0, ay0, ax1, ay1] = boxes[i];
+      const [bx0, by0, bx1, by1] = boxes[j];
+      const dx = Math.max(bx0 - ax1 - 1, ax0 - bx1 - 1, 0);
+      const dy = Math.max(by0 - ay1 - 1, ay0 - by1 - 1, 0);
+      const gap = Math.max(dx, dy);
+      if (gap < minGap) bad.push([i, j, gap]);
+    }
+  }
+  return bad;
+}
+
+/**
+ * 把材质网格烘焙成 gid 数组：单格用 SRW_ATLAS.single，路/水/土/栅栏走 47-blob 查表。
+ * blobTables 可追加额外表（如 fence），按材质 -> 表名映射取。
+ */
+function bakeGrid(grid, blobFor) {
+  const w = grid[0].length;
+  const h = grid.length;
+  const data = emptyData(w, h);
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const mat = grid[y][x];
+      const table = blobFor(mat);
+      data[(y * w) + x] = table === undefined
+        ? gid(SRW_SINGLE.grass)
+        : gid(lookupBlob(table, gridMaskOf(grid, mat, x, y)));
+    }
+  }
+  return data;
+}
+
+
 function mulberry32(seed) {
   let a = seed >>> 0;
   return function rng() {
@@ -204,22 +390,7 @@ function mulberry32(seed) {
 }
 
 /** 撒一些装饰 tile，给定区域内随机点，避开 buildings 层占用的位置 */
-function scatterDecoration(decoData, buildingsData, w, h, count, gids, rng, excludeRect = null) {  let placed = 0;
-  let attempts = 0;
-  while (placed < count && attempts < count * 12) {
-    attempts += 1;
-    const x = Math.floor(rng() * w);
-    const y = Math.floor(rng() * h);
-    const idx = y * w + x;
-    if (buildingsData[idx] !== 0) continue;
-    if (decoData[idx] !== 0) continue;
-    if (excludeRect && x >= excludeRect.x && x < excludeRect.x + excludeRect.w &&
-        y >= excludeRect.y && y < excludeRect.y + excludeRect.h) continue;
-    const gid = gids[Math.floor(rng() * gids.length)];
-    decoData[idx] = gid;
-    placed += 1;
-  }
-}
+
 
 // ---------- 通用 Tilemap JSON 构造 ----------
 
@@ -252,7 +423,7 @@ function buildMapJson(spec) {
     tilewidth: TILE,
     tileheight: TILE,
     infinite: false,
-    nextlayerid: 5,
+    nextlayerid: 6,
     nextobjectid: spec.objects.length + 1,
     properties: [
       { name: 'mapKey', type: 'string', value: spec.key },
@@ -262,13 +433,13 @@ function buildMapJson(spec) {
       {
         firstgid: 1,
         name: tilesetMeta.name,
-        tilewidth: TILE,
-        tileheight: TILE,
-        tilecount: 132,
-        columns: 12,
+        tilewidth: tilesetMeta.tileWidth,
+        tileheight: tilesetMeta.tileHeight,
+        tilecount: tilesetMeta.tilecount,
+        columns: tilesetMeta.columns,
         image: tilesetMeta.image,
-        imagewidth: 192,
-        imageheight: 176,
+        imagewidth: tilesetMeta.imagewidth,
+        imageheight: tilesetMeta.imageheight,
         margin: 0,
         spacing: 0,
       },
@@ -311,6 +482,20 @@ function buildMapJson(spec) {
         data: spec.decoration,
       },
       {
+        // 专用碰撞层：只被 runtime 的 buildCollisions() 读取，本身不渲染。
+        // 建筑改整栋精灵、树/石改 prop 对象之后，碰撞不再能从 buildings 瓦片层推断。
+        id: 5,
+        name: 'collision',
+        type: 'tilelayer',
+        x: 0,
+        y: 0,
+        width: spec.width,
+        height: spec.height,
+        opacity: 1,
+        visible: false,
+        data: spec.collision ?? new Array(spec.width * spec.height).fill(0),
+      },
+      {
         id: 4,
         name: 'objects',
         type: 'objectgroup',
@@ -325,14 +510,35 @@ function buildMapJson(spec) {
   };
 }
 
+const KENNEY_META = {
+    tilecount: 132,
+    columns: 12,
+    tileWidth: TILE,
+    tileHeight: TILE,
+    imagewidth: 192,
+    imageheight: 176,
+  };
+
 const TILESET_META = {
+  srw_town: {
+    name: 'srw_town',
+    image: SRW_ATLAS.image,
+    tilecount: SRW_ATLAS.tileCount,
+    columns: SRW_ATLAS.columns,
+    tileWidth: SRW_ATLAS.tileSize,
+    tileHeight: SRW_ATLAS.tileSize,
+    imagewidth: SRW_ATLAS.columns * SRW_ATLAS.tileSize,
+    imageheight: Math.ceil(SRW_ATLAS.tileCount / SRW_ATLAS.columns) * SRW_ATLAS.tileSize,
+  },
   kenney_tiny_town: {
     name: 'kenney_tiny_town',
     image: '../pixel/tilesets/kenney-tiny-town/Tilemap/tilemap_packed.png',
+    ...KENNEY_META,
   },
   kenney_tiny_dungeon: {
     name: 'kenney_tiny_dungeon',
     image: '../pixel/tilesets/kenney-tiny-dungeon/Tilemap/tilemap_packed.png',
+    ...KENNEY_META,
   },
 };
 
@@ -422,7 +628,7 @@ function makeExit(name, side, mapW, mapH, target) {
 }
 
 /** 建筑标记对象（点击区） */
-function makeBuilding(name, label, route, tileX, tileY, bw, bh) {
+function makeBuilding(name, label, route, tileX, tileY, bw, bh, sprite = null) {
   return {
     id: nextObjectId(),
     name,
@@ -436,6 +642,8 @@ function makeBuilding(name, label, route, tileX, tileY, bw, bh) {
     properties: [
       { name: 'route', type: 'string', value: route },
       { name: 'label', type: 'string', value: label },
+      // sprite 非空 = 用整栋精灵绘制（Super Retro World）；null = 只保留点击区。
+      ...(sprite ? [{ name: 'sprite', type: 'string', value: sprite }] : []),
     ],
   };
 }
@@ -492,17 +700,10 @@ function makeLandmark(name, label, tileX, tileY, bw, bh, kind = 'landmark') {
   };
 }
 
-const LOW_FENCE_FRAMES = {
-  post: 0,
-  horizontal: 1,
-  vertical: 2,
-  corner: 3,
-  stump: 4,
-  cap: 5,
-};
+/* 旧 kenney 矮栅栏帧号表随 town_hub 重做移除：栅栏改由 SRW_ATLAS.blob.fence 逐格查表 */
 
 /** 低障碍对象：玩家不可直接走过，但可用 Space 按当前朝向跳过 1 格。 */
-function makeLowObstacle(name, label, tileX, tileY, bw = 1, bh = 1, kind = 'low', frame = LOW_FENCE_FRAMES.post) {
+function makeLowObstacle(name, label, tileX, tileY, bw = 1, bh = 1, kind = 'low', frame = 0) {
   return {
     id: nextObjectId(),
     name,
@@ -516,7 +717,7 @@ function makeLowObstacle(name, label, tileX, tileY, bw = 1, bh = 1, kind = 'low'
     properties: [
       { name: 'label', type: 'string', value: label },
       { name: 'kind', type: 'string', value: kind },
-      { name: 'sprite', type: 'string', value: 'low_fence_16' },
+      { name: 'sprite', type: 'string', value: 'srw_town' },
       { name: 'frame', type: 'int', value: frame },
     ],
   };
@@ -524,243 +725,437 @@ function makeLowObstacle(name, label, tileX, tileY, bw = 1, bh = 1, kind = 'low'
 
 // ---------- 各张地图配置 + 生成器 ----------
 
-// ============================================================
-// town_hub (50×40)
-// ============================================================
+// ---------- town_hub (50×40) —— Super Retro World 版 ----------
+//
+// 布局方法论与旧版相反：旧版"先画对称广场 → 建筑围着摆 → 剩下的洞用树填"，产出的是
+// "空地上一个加号 + 一圈绿墙"。这里改成地形先行：
+//   1. 先立骨架：S 形主街 + 广场（主街的加宽段）+ 支巷 + 东南湖 + 顶边树线
+//   2. 房子贴路摆：占地按精灵真实尺寸（HOUSE_TILES），门前自动铺门前坪
+//   3. 管线顺序固定：cleanGrid → 门前坪 → connectAll → 烘焙。
+//      先连通再清理会把刚接上的细桥当毛刺删掉；用圆盘笔刷铺门前坪会被 cleanGrid
+//      当孤点削掉 —— 两个坑都实测踩过，所以门前坪是实心矩形、且排在清理之后。
+//   4. 树不围成绿墙：顶边一条 1~2 排深的连续树线收边界，内部按衰减散布
+//   5. 收尾跑校验：建筑间距、道路单连通、NPC 必定落在路面上；不满足直接抛错
+
+/** 建筑：[key, 房屋图号, 中心 tileX, 底边 tileY, 中文名, 路由（null = 纯景观众）] */
+const TOWN_BUILDINGS = [
+  ['mayor_hall', 10, 24, 12, '镇长大厅', '/profile-room'],
+  ['cottage_a', 6, 31, 11, null, null],
+  ['review_hall', 4, 38, 14, '复盘大厅', '/review-hall'],
+  ['workshop', 2, 43, 21, '百晓工坊', '/workshop'],
+  ['cottage_e', 3, 44, 26, null, null],
+  ['library', 8, 8, 20, '图书馆', '/library'],
+  ['training', 11, 8, 30, '训练场', '/problems'],
+  ['cottage_b', 9, 15, 27, null, null],
+  ['cottage_c', 7, 22, 28, null, null],
+  ['cottage_d', 5, 17, 35, null, null],
+  ['arena', 12, 33, 34, '闯关竞技场', '/arena/1'],
+];
+
+/** 院墙：[x0, y0, x1, y1]（闭区间，圈内的地算院子） */
+const TOWN_YARDS = [[27, 13, 30, 15], [11, 24, 13, 26], [7, 33, 12, 36]];
+
+/** 矿洞：土丘 3×3 左上角；洞口在底边中心，主街向西直插到洞口面前 */
+const MINE = { x: 9, y: 8, label: 'Bug 矿洞', route: '/bug-mine' };
+
+/** NPC：[对象名, 数据 key, 名牌, 角色图号, 归属建筑（null = 矿洞）] */
+const TOWN_NPCS = [
+  ['npc_mayor_py', 'mayor_py', '镇长 Py', 2, 'mayor_hall'],
+  ['npc_librarian_doc', 'librarian_doc', '馆长 Doc', 6, 'library'],
+  ['npc_workshop_master', 'workshop_master', '工坊师傅', 12, 'workshop'],
+  ['npc_coach_q', 'coach_q', '教务 Q', 16, 'training'],
+  ['npc_foreman_bug', 'foreman_bug', '矿头 Bug', 22, null],
+  ['npc_sage_review', 'sage_review', '复盘师 Sage', 26, 'review_hall'],
+  ['npc_class_president', 'class_president', '班长', 30, null],
+];
+
+/** 玩家出生：南入口主街上 */
+const TOWN_SPAWN = { tileX: 22, tileY: 36 };
+
+/**
+ * 房屋精灵真实占地（tile 宽×高）。
+ * 旧版照抄 town_hub.json 里的 80×80 元数据占位，而新素材整栋图只有 4.7×3 ~ 5×4 tile，
+ * 于是每栋房子周围凭空一圈空地、只能拿树去填 —— "中间一堆、四周绿墙"就是这么来的。
+ */
+const HOUSE_TILES = {
+  1: [4, 3], 2: [5, 3], 3: [5, 3], 4: [5, 4], 5: [4, 3], 6: [5, 3],
+  7: [5, 3], 8: [5, 4], 9: [4, 3], 10: [5, 4], 11: [5, 3], 12: [5, 3],
+};
+
+function houseFootprint(houseIdx, cx, by) {
+  const [wt, ht] = HOUSE_TILES[houseIdx];
+  const x0 = Math.round(cx - (wt - 1) / 2);
+  return [x0, by - ht + 1, x0 + wt - 1, by];
+}
+
+const pad2 = (n) => String(n).padStart(2, '0');
+
 function generateTownHub() {
   const W = 50;
   const H = 40;
-  const ground = emptyData(W, H);
-  const buildings = emptyData(W, H);
-  const decoration = emptyData(W, H);
+  const grid = makeGrid(W, H);
+  const rand = mulberry32(0x51ee7);
+  const inB = (x, y) => x >= 0 && y >= 0 && y < H && x < W;
+  const isGrass = (x, y) => inB(x, y) && grid[y][x] === MAT.GRASS;
   resetObjectIds();
 
-  fillAll(ground, TOWN_GIDS.grass);
-  // 草地纹理：确定性噪点，避免 50×40 一整块死平绿（只做轻微点缀，不制造“草坪长满杂物”的观感）
-  const groundRng = mulberry32(0x9e3779b9);
-  for (let i = 0; i < ground.length; i += 1) {
-    const r = groundRng();
-    if (r < 0.045) ground[i] = TOWN_GIDS.grassSpeckle;
-    else if (r < 0.06) ground[i] = TOWN_GIDS.grassFlower;
-  }
+  // ---------- 1. 路网 ----------
+  const road = (pts, r, seed) => gridStampPath(grid, pts, r, MAT.ROAD, seed);
+  road([[23, 40], [22, 36], [21, 32], [22, 28], [24, 24], [25, 22],
+    [24.5, 19], [24, 15.5], [24, 13.6]], 1.35, 1);               // 主街：南门 → 广场 → 镇长府
+  gridStampBlob(grid, 25.5, 21, 3.2, 2.1, MAT.ROAD, 2, 0.28);     // 广场（就是主街的加宽段）
+  road([[24, 13.6], [20, 13], [16, 12], [12, 11.4], [MINE.x + 1.4, MINE.y + 3.2]], 1, 3);
+  road([[21, 22], [15, 22], [10, 22], [8, 22]], 1, 5);            // 西巷（图书馆）
+  road([[8, 22], [7, 26], [8, 30], [8, 31.5]], 0.95, 15);         // 西巷南下（训练场）
+  road([[13, 22], [16, 25], [19, 27], [22, 29]], 0.9, 14);        // 民居 b / c
+  road([[8, 31.5], [11, 33], [15, 34], [19, 33], [21, 31]], 0.95, 12);   // 南环路
+  road([[16, 34], [17, 36]], 0.9, 16);                            // 民居 d 门前
+  road([[28, 20], [32, 18], [36, 16], [38, 16]], 1, 6);           // 东环道（复盘厅）
+  road([[34, 17], [32, 14], [31, 12.6]], 0.9, 17);                // 民居 a 门前
+  road([[39, 17], [40, 20], [42, 22.5]], 0.95, 18);               // 工坊支巷
+  road([[43, 23], [44, 25], [44, 27.5]], 0.95, 19);               // cottage_e 支巷
+  road([[24, 26], [29, 28], [33, 30]], 1, 7);                     // 东南路
+  road([[33, 30], [32, 33], [33, 35.5]], 0.9, 13);                // 竞技场
+  road([[34, 31], [36, 32.5]], 0.85, 20);                         // 湖西岸观景台
 
-  // 中央广场：5×5 沙地，四边/四角圆化（喷泉就落在广场中央）
-  paintSandRect(ground, W, 23, 18, 5, 5);
+  // ---------- 2. 湖与训练沙坪 ----------
+  gridStampBlob(grid, 41.5, 31.5, 4.8, 3.6, MAT.WATER, 8, 0.26);
+  fillLakes(grid);                                                // 抖动会漏格，洪泛去掉"湖中孤岛"
+  gridStampBlob(grid, 9.5, 34.5, 2.4, 1.3, MAT.DIRT, 31, 0.1);     // 训练沙坪（沙子色在这里才成立）
 
-  // 主轴：喷泉往南的 2 格宽主街；副轴：贯穿东西的 2 格宽横街
-  for (let y = 21; y < H - 1; y += 1) {
-    setTile(ground, W, 24, y, TOWN_GIDS.sandPlain);
-    setTile(ground, W, 25, y, TOWN_GIDS.sandPlain);
-  }
-  for (let x = 1; x < W - 1; x += 1) {
-    if (x === 24 || x === 25) continue;
-    setTile(ground, W, x, 19, TOWN_GIDS.sandPlain);
-    setTile(ground, W, x, 20, TOWN_GIDS.sandPlain);
-  }
-  // 北向支路：广场 → 镇长大厅门前
-  for (let y = 13; y < 18; y += 1) {
-    setTile(ground, W, 24, y, TOWN_GIDS.sandPlain);
-    setTile(ground, W, 25, y, TOWN_GIDS.sandPlain);
-  }
-
-  // 镇长大厅：北中央，4×5（叙事上对应「东校园老镇厅」，承担画像 / 主线推进）
-  const mayorHall = { x: 22, y: 4, w: 5, h: 5, label: '镇长大厅', route: '/profile-room', name: 'building_mayor_hall' };
-  paintBuilding(buildings, W, mayorHall.x, mayorHall.y, mayorHall.w, mayorHall.h, 'red');
-
-  // R-13 §-1 后续：在镇长大厅东西两侧加 2 栋纺织主题民居（不命名校名），
-  // 叙事上呼应「松江纺织文化」+「东华纺织学院」一脉相承的小镇背景；
-  // 实现：复用 paintBuilding 普通房屋瓦面，标记 building_textile_pavilion_*。
-  const textileWest = { x: 16, y: 5, w: 4, h: 4, label: '纺织展馆·西', route: '/house-west', name: 'building_textile_pavilion_w' };
-  const textileEast = { x: 30, y: 5, w: 4, h: 4, label: '纺织展馆·东', route: '/house-east', name: 'building_textile_pavilion_e' };
-  paintBuilding(buildings, W, textileWest.x, textileWest.y, textileWest.w, textileWest.h, 'red');
-  paintBuilding(buildings, W, textileEast.x, textileEast.y, textileEast.w, textileEast.h, 'grey');
-
-  // 南面 3 栋民居（peasant 房子）
-  const housesSouth = [
-    { x: 8, y: 28, w: 4, h: 4, label: '民居·东', route: '/house-east', name: 'building_house_a' },
-    { x: 22, y: 28, w: 4, h: 4, label: '民居·中', route: '/house-mid', name: 'building_house_b' },
-    { x: 36, y: 28, w: 4, h: 4, label: '民居·西', route: '/house-west', name: 'building_house_c' },
-  ];
-  housesSouth.forEach((h, i) => paintBuilding(buildings, W, h.x, h.y, h.w, h.h, i % 2 === 0 ? 'red' : 'grey'));
-
-  // R-13 优化：货币/商店系统移除 —— 删除 东西商店（杂货铺/工具铺）。
-
-  const lowPathFences = [];
-  for (let y = 22; y <= 34; y += 2) {
-    lowPathFences.push(
-      makeLowObstacle(`low_path_fence_w_${y}`, '主街西侧矮栅栏', 23, y, 1, 1, 'fence', LOW_FENCE_FRAMES.vertical),
-      makeLowObstacle(`low_path_fence_e_${y}`, '主街东侧矮栅栏', 26, y, 1, 1, 'fence', LOW_FENCE_FRAMES.vertical),
-    );
-  }
-  lowPathFences.push(
-    makeLowObstacle('low_path_fence_gate_w', '主街低木桩', 23, 20, 1, 1, 'stump', LOW_FENCE_FRAMES.post),
-    makeLowObstacle('low_path_fence_gate_e', '主街低木桩', 26, 20, 1, 1, 'stump', LOW_FENCE_FRAMES.post),
-  );
-
-  // 原外围图建筑收进中央小镇（R-14 不再保留农场/作物玩法）
-  // campus_east 建筑
-  const library = { x: 10, y: 8, w: 5, h: 4, label: '图书馆', route: '/library', name: 'building_library' };
-  const reviewHall = { x: 36, y: 8, w: 4, h: 4, label: '复盘大厅', route: '/review-hall', name: 'building_review_hall' };
-  const workshop = { x: 40, y: 24, w: 4, h: 4, label: '百晓工坊', route: '/workshop', name: 'building_workshop' };
-  paintBuilding(buildings, W, library.x, library.y, library.w, library.h, 'grey');
-  paintBuilding(buildings, W, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h, 'grey');
-  paintBuilding(buildings, W, workshop.x, workshop.y, workshop.w, workshop.h, 'wood');
-  // Bug 矿洞功能入口（点击 → /bug-mine 页面；R-14 已删除 mine_south 风景地图，此处仅作功能入口、不做地图传送）
-  const mine = { x: 18, y: 33, w: 4, h: 3, label: 'Bug 矿洞', route: '/bug-mine', name: 'building_mine' };
-  // 矿洞单独拼：外框素石墙 + 中间 2×2 石拱洞口（帧 111..114 是拱的左右两半）。
-  const MINE_ARCH = [[112, 113], [111, 114]];
-  for (let dy = 0; dy < mine.h; dy += 1) {
-    for (let dx = 0; dx < mine.w; dx += 1) {
-      const archRow = dy - (mine.h - 2);
-      const archCol = dx - 1;
-      const inArch = archRow >= 0 && archRow <= 1 && archCol >= 0 && archCol <= 1;
-      const edge = dx === 0 || dx === mine.w - 1;
-      const gid = inArch ? MINE_ARCH[archRow][archCol] : edge ? 97 : 98;
-      setTile(buildings, W, mine.x + dx, mine.y + dy, gid);
-    }
-  }
-  // 竞技场
-  const arena = { x: 36, y: 34, w: 4, h: 3, label: '闯关竞技场', route: '/arena/1', name: 'building_arena' };
-  paintBuilding(buildings, W, arena.x, arena.y, arena.w, arena.h, 'grey');
-  // 训练场（点击 → 题库列表 /problems，先选题再去训练场做题界面）
-  const training = { x: 8, y: 34, w: 4, h: 3, label: '训练场', route: '/problems', name: 'building_training' };
-  paintBuilding(buildings, W, training.x, training.y, training.w, training.h, 'wood');
-
-  // ---------- 装饰层（构图化，不再全图随机撒）----------
-  const rng = mulberry32(0x10101);
+  // ---------- 3. 建筑：清出占地 + 登记禁区 ----------
   const reserved = new Set();
-  const reserve = (tx, ty, pad = 0) => {
-    for (let dy = -pad; dy <= pad; dy += 1) {
-      for (let dx = -pad; dx <= pad; dx += 1) {
-        const x = tx + dx;
-        const y = ty + dy;
-        if (x >= 0 && y >= 0 && x < W && y < H) reserved.add(y * W + x);
-      }
+  const reserve = (x0, y0, x1, y1, pad = 0) => {
+    for (let y = y0 - pad; y <= y1 + pad; y += 1) {
+      for (let x = x0 - pad; x <= x1 + pad; x += 1) reserved.add((y * W) + x);
     }
   };
-  [mayorHall, textileWest, textileEast, ...housesSouth, library, reviewHall, workshop, mine, arena, training]
-    .forEach((b) => {
-      for (let dy = b.y - 1; dy <= b.y + b.h; dy += 1) {
-        for (let dx = b.x - 1; dx <= b.x + b.w; dx += 1) {
-          if (dx >= 0 && dy >= 0 && dx < W && dy < H) reserved.add(dy * W + dx);
+  TOWN_BUILDINGS.forEach(([_k, house, cx, by]) => {
+    const [fx0, fy0, fx1, fy1] = houseFootprint(house, cx, by);
+    gridFill(grid, fx0, fy0 - 1, fx1, fy1 + 1, MAT.GRASS);
+    reserve(fx0, fy0, fx1, fy1, 3);
+  });
+  reserve(MINE.x - 3, MINE.y - 2, MINE.x + 4, MINE.y + 3);
+  TOWN_YARDS.forEach(([ax, ay, bx, by]) => reserve(ax - 1, ay - 1, bx + 1, by + 1));
+
+  // ---------- 4. 管线 + 校验 ----------
+  cleanGrid(grid);
+  TOWN_BUILDINGS.forEach(([_k, _h, cx, by]) => gridDoorApron(grid, cx, by));
+  gridFill(grid, MINE.x, MINE.y + 3, MINE.x + 2, MINE.y + 4, MAT.ROAD);   // 矿洞门前台阶
+  const bridges = connectAll(grid, MAT.ROAD);
+  const comps = componentsOf(grid, MAT.ROAD).length;
+  if (comps !== 1) throw new Error(`town_hub 道路未连通：${comps} 块（桥接 ${bridges} 格后仍不闭合）`);
+  const gaps = footprintsGapOk(TOWN_BUILDINGS.map(([, h, cx, by]) => houseFootprint(h, cx, by)), 2);
+  if (gaps.length) {
+    throw new Error(`town_hub 建筑间距违规：${gaps.map(([i, j, g]) => `${TOWN_BUILDINGS[i][0]}<->${TOWN_BUILDINGS[j][0]}=${g}`).join(' ')}`);
+  }
+
+  // ---------- 5. 烘焙地面 + 装饰层 ----------
+  const blobFor = (mat) => (mat === MAT.ROAD ? SRW_BLOB.road
+    : mat === MAT.WATER ? SRW_BLOB.water
+      : mat === MAT.DIRT ? SRW_BLOB.dirt : undefined);
+  const ground = bakeGrid(grid, blobFor);
+  const decoration = emptyData(W, H);
+  const collision = new Array(W * H).fill(0);
+
+  const S = SRW_SINGLE;
+  const pick = (names) => names.map((k) => S[k]);
+  const TALL = pick(['grass_tall_a', 'grass_tall_b']);
+  const TUFTS = pick(['tuft_a', 'tuft_b', 'tuft_c', 'tuft_d', 'tuft_e', 'tuft_f']);
+  const FLOWERS = pick(['flower_a', 'flower_b', 'flower_c', 'flower_d', 'flower_e']);
+  const BUSHES = pick(['bush_a', 'bush_b', 'bush_c', 'bush_d', 'bush_e']);
+  const BLADES = pick(['blade_a', 'blade_b', 'blade_c']);
+
+  const freeDeco = (x, y) => inB(x, y) && grid[y][x] === MAT.GRASS
+    && !reserved.has((y * W) + x) && decoration[(y * W) + x] === 0;
+  const putDeco = (x, y, index) => {
+    if (!freeDeco(x, y)) return false;
+    decoration[(y * W) + x] = gid(index);
+    return true;
+  };
+  /** 随机游走连成一团：单格散铺会出条纹/竖线，成团才读作草丛。 */
+  const patch = (cx0, cy0, steps, choose) => {
+    let cell = null;
+    for (let t = 0; t < 24 && !cell; t += 1) {
+      const x = cx0 + Math.floor(rand() * 7) - 3;
+      const y = cy0 + Math.floor(rand() * 7) - 3;
+      if (freeDeco(x, y)) cell = [x, y];
+    }
+    if (!cell) return 0;
+    let done = 0;
+    for (let s = 0; s < steps; s += 1) {
+      const [x, y] = cell;
+      if (putDeco(x, y, choose(x, y))) done += 1;
+      let moved = null;
+      for (let t = 0; t < 8 && !moved; t += 1) {
+        const nx = x + Math.floor(rand() * 3) - 1;
+        const ny = y + Math.floor(rand() * 3) - 1;
+        if (freeDeco(nx, ny)) moved = [nx, ny];
+      }
+      if (!moved) break;
+      cell = moved;
+    }
+    return done;
+  };
+
+  [[6, 13], [15, 15], [33, 24], [38, 30], [45, 20], [24, 34], [5, 22], [43, 13],
+    [19, 36], [29, 33], [47, 34], [36, 8], [11, 17], [26, 31]]
+    .forEach(([x, y]) => patch(x, y, 12, (px, py) => TALL[(px + py) % TALL.length]));
+
+  // 野花草甸：草簇45 / 小花25 / 深叶20 / 灌木10 的权重混铺
+  const MEADOW = [[4, 12], [8, 16], [14, 12], [19, 9], [26, 8], [33, 10], [39, 10], [45, 14],
+    [12, 19], [24, 15], [30, 14], [36, 24], [43, 22], [48, 28], [3, 20], [6, 34],
+    [14, 33], [22, 36], [28, 33], [38, 36], [46, 37], [41, 14], [33, 21], [20, 21],
+    [16, 30], [48, 16], [15, 9], [20, 10], [25, 9], [30, 10], [35, 9], [40, 10],
+    [45, 9], [48, 11], [18, 12], [28, 12], [38, 12], [44, 13], [13, 11], [26, 13]];
+  const MIX = []
+    .concat(Array(45).fill(TUFTS), Array(25).fill(FLOWERS),
+      Array(20).fill(BLADES), Array(10).fill(BUSHES))
+    .map((group) => group[Math.floor(rand() * group.length)]);
+  MEADOW.forEach(([x, y], i) => patch(x, y, 7 + Math.floor(rand() * 7),
+    () => MIX[(i * 5 + 1) % MIX.length]));
+
+  // 贴边草簇：紧挨路/水的草地边缘聚簇，消掉"铺装硬切到纯绿"
+  for (let t = 0, placed = 0; t < 2400 && placed < 320; t += 1) {
+    const x = 1 + Math.floor(rand() * (W - 2));
+    const y = 1 + Math.floor(rand() * (H - 2));
+    if (!freeDeco(x, y)) continue;
+    if (!NEIGHBOR_DELTAS.some(([dx, dy]) => inB(x + dx, y + dy)
+      && grid[y + dy][x + dx] !== MAT.GRASS)) continue;
+    putDeco(x, y, TUFTS[placed % TUFTS.length]);
+    placed += 1;
+  }
+
+  // ---------- 6. objects ----------
+  const objects = [];
+  /** 精灵物体：锚点 = 该 tile 底边中心；渲染层按 y 排序做前后遮挡。 */
+  const addProp = (name, sprite, tx, ty, blocks) => {
+    objects.push({
+      id: nextObjectId(),
+      name,
+      type: 'prop',
+      x: tx * TILE,
+      y: ty * TILE,
+      width: TILE,
+      height: TILE,
+      visible: true,
+      rotation: 0,
+      properties: [
+        { name: 'sprite', type: 'string', value: sprite },
+        { name: 'anchor', type: 'string', value: 'bottom' },
+      ],
+    });
+    if (blocks && inB(tx, ty)) collision[(ty * W) + tx] = 1;
+  };
+
+  // 6a. 房屋：整栋精灵 + 点击区。民居没有功能路由，就不发 building 对象（避免点进死路页）。
+  TOWN_BUILDINGS.forEach(([key, house, cx, by, label, route]) => {
+    const [fx0, fy0, fx1, fy1] = houseFootprint(house, cx, by);
+    const wt = fx1 - fx0 + 1;
+    const ht = fy1 - fy0 + 1;
+    for (let y = fy0; y <= fy1; y += 1) {
+      for (let x = fx0; x <= fx1; x += 1) collision[(y * W) + x] = 1;
+    }
+    if (route) {
+      objects.push(makeBuilding(`building_${key}`, label, route, fx0, fy0, wt, ht,
+        `srw_house_${pad2(house)}`));
+    } else {
+      addProp(`cottage_${key}`, `srw_house_${pad2(house)}`, cx, fy1, false);
+    }
+  });
+
+  // 6b. 矿洞：洞口土丘（逐格进 decoration，只留洞口可站）+ 身后巨石群 + 火把
+  [['mound_tl', 0, 0], ['mound_tc', 1, 0], ['mound_tr', 2, 0],
+    ['mound_ml', 0, 1], ['mound_mc', 1, 1], ['mound_mr', 2, 1],
+    ['mound_bl', 0, 2], ['cave_mouth', 1, 2], ['mound_br', 2, 2]].forEach(([name, dx, dy]) => {
+    const index = S[name];
+    if (index === undefined) {
+      throw new Error(`图集清单缺少矿洞块 ${name}：请重跑 python scripts/build_srw_assets.py`);
+    }
+    const x = MINE.x + dx;
+    const y = MINE.y + dy;
+    decoration[(y * W) + x] = gid(index);
+    if (name !== 'cave_mouth') collision[(y * W) + x] = 1;
+  });
+  objects.push(makeBuilding('building_mine', MINE.label, MINE.route, MINE.x, MINE.y, 3, 3, null));
+  [[-2, -3, 18], [2, -3, 25], [-4, -1, 36], [5, -1, 41], [1, -5, 20], [-3, -4, 27],
+    [4, -4, 46], [-5, 1, 19], [6, 1, 26]].forEach(([dx, dy, rock], i) => {
+    addProp(`mine_rock_${i}`, `srw_rock_${pad2(rock)}`, MINE.x + dx, MINE.y + dy, true);
+  });
+  addProp('mine_torch_w', 'srw_torch_01', MINE.x - 1, MINE.y + 2, false);
+  addProp('mine_torch_e', 'srw_torch_03', MINE.x + 3, MINE.y + 2, false);
+
+  // 6c. 树：顶边连续树线（收边界）→ 疏林溢出 → 矿洞背后林子 → 两条次排林 → 村周小丛
+  const used = new Set(reserved);
+  const treeFree = (x, y) => {
+    if (!inB(x, y) || used.has((y * W) + x)) return false;
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        if (!isGrass(x + dx, y + dy)) return false;
+      }
+    }
+    return true;
+  };
+  let treeN = 0;
+  const plantTree = (x, y) => {
+    if (!treeFree(x, y)) return false;
+    addProp(`tree_${treeN}`, `srw_tree_${pad2(((treeN * 7) % SRW_ATLAS.props.tree) + 1)}`, x, y, true);
+    used.add((y * W) + x);
+    treeN += 1;
+    return true;
+  };
+  for (let x = 0; x < W; x += 1) {                       // 顶线：横向几乎连续，靠噪声留小缺口
+    const noise = Math.sin(x * 0.31 + 0.7) * 0.6 + Math.sin(x * 1.7) * 0.4;
+    if (rand() > 0.93 + noise * 0.12) continue;
+    const t = Math.sin(x * 0.55) + Math.sin(x * 0.21 + 1.3);
+    const base = 1 + Math.max(0, Math.min(2, Math.round((t + 2) * 0.62)));
+    [base, base + 1, base - 1].some((y) => plantTree(x, y));
+  }
+  for (let band = 0; band < 3; band += 1) {              // 疏林溢出：只留"林线渐稀"的过渡
+    for (let x = 0; x < W; x += 3) {
+      const y = Math.round(1 + band * 1.9 + Math.sin(x * 0.42 + band * 2.1) * 1.8 * 0.7);
+      if (rand() < 0.1) plantTree(x, y);
+    }
+  }
+  for (let x = MINE.x - 7; x <= MINE.x + 8; x += 1) {    // 矿洞背后林子：把洞口嵌进林缘
+    [MINE.y - 4, MINE.y - 5, MINE.y - 6].forEach((y) => {
+      if (rand() < 0.52) plantTree(x, y);
+    });
+  }
+  [[5, 0.78], [7.4, 0.46]].forEach(([rowY, keep]) => {   // 树线与房屋之间的两条次排林
+    for (let x = MINE.x + 4; x < W; x += 1) {
+      const y = Math.round(rowY + Math.sin(x * 0.37 + rowY * 2.2) * 1.15);
+      if (rand() < keep) plantTree(x, y);
+    }
+  });
+  [[[3, 15, 4.2, 3.2], [6, 18, 3, 2.6]],
+    [[45, 12, 4.2, 3.2], [47, 16, 3, 3]],
+    [[3, 34, 4.2, 3], [6, 37, 3.2, 2.2]],
+    [[20, 37, 5, 2.2]], [[46, 30, 3.4, 2.6]], [[31, 8, 4.6, 2.4]],
+    [[12, 9, 3.6, 2.2]], [[26, 14, 2.6, 2]], [[14, 34, 3, 2]]].forEach((lobes, ci) => {
+    for (let t = 0; t < 320; t += 1) {
+      const [lx, ly, lrx, lry] = lobes[Math.floor(rand() * lobes.length)];
+      const ang = rand() * Math.PI * 2;
+      const rr = Math.sqrt(rand());
+      const x = Math.round(lx + Math.cos(ang) * lrx * rr);
+      const y = Math.round(ly + Math.sin(ang) * lry * rr);
+      const d = Math.min(...lobes.map((a) => Math.hypot((x - a[0]) / a[2], (y - a[1]) / a[3])));
+      if (rand() > 0.34 * Math.max(0, 1 - d * d) + 0.03) continue;
+      if (!plantTree(x, y)) continue;
+      if (d > 0.7) putDeco(x, y - 1, BUSHES[(ci + treeN) % BUSHES.length]);
+    }
+  });
+
+  // 6d. 院墙：逐格 low_obstacle（可跳），每格按 47-blob 掩码取该画的栅栏块。
+  //     落在路/水上的格子直接省略 —— 于是院墙与路相交处自然形成院门。
+  const cellInBuilding = (x, y) => TOWN_BUILDINGS.some(([, house, cx, by]) => {
+    const [fx0, fy0, fx1, fy1] = houseFootprint(house, cx, by);
+    return x >= fx0 && x <= fx1 && y >= fy0 && y <= fy1;
+  });
+  TOWN_YARDS.forEach(([ax, ay, bx, by], yi) => {
+    const ring = new Set();
+    for (let x = ax - 1; x <= bx + 1; x += 1) {
+      ring.add(`${x},${ay - 1}`);
+      ring.add(`${x},${by + 1}`);
+    }
+    for (let y = ay - 1; y <= by + 1; y += 1) {
+      ring.add(`${ax - 1},${y}`);
+      ring.add(`${bx + 1},${y}`);
+    }
+    ring.forEach((k) => {
+      const [x, y] = k.split(',').map(Number);
+      if (!isGrass(x, y) || cellInBuilding(x, y)) return;
+      let m = 0;
+      NEIGHBOR_DELTAS.forEach(([dx, dy], bit) => {
+        if (ring.has(`${x + dx},${y + dy}`) && isGrass(x + dx, y + dy)) m |= 1 << bit;
+      });
+      objects.push(makeLowObstacle(`low_path_fence_${yi}_${x}_${y}`, '院墙栅栏', x, y, 1, 1,
+        'fence', lookupBlob(SRW_BLOB.fence, m)));
+      used.add((y * W) + x);
+    });
+    [[ax, ay], [bx, ay], [ax, by], [bx, by]].forEach(([x, y], j) => {
+      addProp(`yard_${yi}_${j}_plant`, `srw_potted_plant_${pad2(((yi * 2 + j) % 12) + 1)}`, x, y, false);
+    });
+  });
+
+  // 6e. 路灯 / 木桶：站在紧邻路面的草地上（不挡路、不参与碰撞）
+  const roadside = (x, y) => {
+    for (let r = 0; r < 4; r += 1) {
+      for (let dy = -r; dy <= r; dy += 1) {
+        for (let dx = -r; dx <= r; dx += 1) {
+          const nx = x + dx;
+          const ny = y + dy;
+          if (!inB(nx, ny) || reserved.has((ny * W) + nx) || grid[ny][nx] !== MAT.GRASS) continue;
+          if (NEIGHBOR_DELTAS.some(([ux, uy]) => grid[ny + uy]?.[nx + ux] === MAT.ROAD)) return [nx, ny];
         }
       }
+    }
+    return null;
+  };
+  [[21, 27], [27, 25], [14, 22], [31, 19], [24, 16], [9, 32], [36, 31], [17, 24], [39, 20], [28, 30]]
+    .forEach(([x, y], i) => {
+      const spot = roadside(x, y);
+      if (spot) addProp(`lamp_${i}`, `srw_lamp_${pad2((i % 5) + 1)}`, spot[0], spot[1], false);
     });
-  [[25, 10], [11, 12], [42, 28], [10, 33], [25, 33], [37, 12], [18, 21], [25, 20]]
-    .forEach(([tx, ty]) => reserve(tx, ty, 1));
-
-  const canDecorate = (tx, ty) => {
-    if (tx < 1 || ty < 1 || tx >= W - 1 || ty >= H - 1) return false;
-    const idx = ty * W + tx;
-    if (reserved.has(idx)) return false;
-    if (buildings[idx] !== 0) return false;
-    return ground[idx] === TOWN_GIDS.grass || ground[idx] === TOWN_GIDS.grassSpeckle;
-  };
-
-  const put = (tx, ty, gid) => {
-    if (!canDecorate(tx, ty)) return;
-    setTile(decoration, W, tx, ty, gid);
-    reserved.add(ty * W + tx);
-  };
-
-  // 1) 地图四周的林带：隔格种，松树/树冠交替 + 留缺口，避免变成一排“∧∧∧”
-  const borderTree = () => (rng() < 0.5 ? TOWN_GIDS.treeRound : TOWN_GIDS.treePine);
-  for (let x = 1; x < W - 1; x += 2) {
-    if (rng() < 0.9) put(x, 1, borderTree());
-    if (rng() < 0.9) put(x, H - 2, borderTree());
-  }
-  for (let y = 2; y < H - 2; y += 2) {
-    if (rng() < 0.88) put(1, y, borderTree());
-    if (rng() < 0.88) put(W - 2, y, borderTree());
-  }
-
-  // 2) 林丛：交错格（棋盘）布点而不是满铺，林地边缘用灌木过渡，视觉上才像树林而不是草坪长满草
-  const FOREST_TREES = [TOWN_GIDS.treeRound, TOWN_GIDS.treeRound, TOWN_GIDS.treeRound, TOWN_GIDS.treePine];
-  const FOREST_EDGE = [TOWN_GIDS.bushBig, TOWN_GIDS.treePine];
-  const clusterRng = mulberry32(0x5eed);
-  // 成片林：内部实心铺（满才像树林），外圈用灌木/松树过渡
-  const clusters = [[9, 15, 3], [42, 15, 3], [12, 32, 3], [38, 31, 3]];
-  clusters.forEach(([cx, cy, radius]) => {
-    for (let dy = -radius; dy <= radius; dy += 1) {
-      for (let dx = -radius; dx <= radius; dx += 1) {
-        const dist = Math.max(Math.abs(dx), Math.abs(dy));
-        if (dist > radius) continue;
-        const outer = dist === radius;
-        if (clusterRng() > (outer ? 0.55 : 0.92)) continue;
-        const gid = outer
-          ? FOREST_EDGE[Math.floor(clusterRng() * FOREST_EDGE.length)]
-          : FOREST_TREES[Math.floor(clusterRng() * FOREST_TREES.length)];
-        put(cx + dx, cy + dy, gid);
-      }
+  [[47, 22], [48, 22], [47, 23]].forEach(([x, y], i) => {
+    if (isGrass(x, y) && !reserved.has((y * W) + x)) {
+      addProp(`workshop_barrel_${i}`, `srw_barrel_${pad2(i + 1)}`, x, y, false);
     }
   });
 
-  // 3) 建筑门前：路牌 / 木桶 / 木箱，给每个入口一个“门口”语感
-  const doorFront = (b, gid, offset = 0) => {
-    const tx = b.x + Math.floor(b.w / 2) + offset;
-    const ty = b.y + b.h;
-    setTile(decoration, W, tx, ty, gid);
-    reserved.add(ty * W + tx);
-  };
-  doorFront(library, TOWN_GIDS.signPost, -2);
-  doorFront(reviewHall, TOWN_GIDS.signPost, 2);
-  doorFront(workshop, TOWN_GIDS.barrel, -2);
-  doorFront(arena, TOWN_GIDS.signRed, 2);
-  doorFront(training, TOWN_GIDS.crate, 2);
-  doorFront(mayorHall, TOWN_GIDS.signRed, 2);
-
-  // 4) 广场：水井 + 四角花带（原本用粉色块冒充喷泉，现改为实心沙地上摆水井 + 花）
-  setTile(decoration, W, 24, 19, TOWN_GIDS.well);
-  [[22, 17], [27, 17], [22, 22], [27, 22]].forEach(([fx, fy]) => {
-    setTile(decoration, W, fx, fy, TOWN_GIDS.grassFlower);
+  // 精灵键越界校验：道具是切片脚本按 01..NN 重命名出来的，源包本身编号不连续
+  // （例 trees 没有 06/07）。少这道检查，运行时会静默画不出树。
+  objects.forEach((o) => {
+    const sprite = (o.properties ?? []).find((p) => p.name === 'sprite')?.value;
+    if (typeof sprite !== 'string' || sprite === 'srw_town') return;
+    const m = /^srw_([a-z_]+)_(\d+)$/.exec(sprite);
+    if (!m) throw new Error(`精灵键格式不认识：${sprite}`);
+    const [, kind, num] = m;
+    const total = SRW_ATLAS.props[kind];
+    if (total === undefined) throw new Error(`图集清单里没有道具种类 ${kind}（键 ${sprite}）`);
+    if (Number(num) > total) throw new Error(`精灵键 ${sprite} 越界：${kind} 只有 ${total} 张`);
   });
 
-  // 5) 主街两侧的低矮栅栏由 objects 层（low_fence_16 sprite）负责，这里不再重复铺瓦片，
-  //    避免同一格同时出现 sprite 与瓦片两层木桩。
+  // ---------- 7. spawn 与 NPC（一律吸附到路面，落不到就抛错）----------
+  const nearestRoad = (x, y) => {
+    for (let r = 0; r < 6; r += 1) {
+      for (let dy = -r; dy <= r; dy += 1) {
+        for (let dx = -r; dx <= r; dx += 1) {
+          if (Math.max(Math.abs(dx), Math.abs(dy)) !== r) continue;
+          if (inB(x + dx, y + dy) && grid[y + dy][x + dx] === MAT.ROAD) return [x + dx, y + dy];
+        }
+      }
+    }
+    return null;
+  };
+  const spawnTile = nearestRoad(TOWN_SPAWN.tileX, TOWN_SPAWN.tileY);
+  if (!spawnTile) throw new Error('玩家出生点附近找不到路面');
+  objects.push(makeSpawn(spawnTile[0], spawnTile[1]));
+  TOWN_NPCS.forEach(([objName, npcKey, label, chara, buildingKey]) => {
+    const found = buildingKey ? TOWN_BUILDINGS.find((b) => b[0] === buildingKey) : null;
+    if (buildingKey && !found) throw new Error(`NPC ${objName} 的归属建筑 ${buildingKey} 不存在`);
+    const raw = found ? [found[2], found[3] + 1] : [MINE.x + 1, MINE.y + 3];
+    const at = nearestRoad(raw[0], raw[1]);
+    if (!at) throw new Error(`NPC ${objName} 落不到路面上（起点 ${raw}）`);
+    objects.push(makeNpc(objName, npcKey, label, at[0], at[1], `srw_chara_${chara}`));
+  });
+  // 广场中心树：这套素材没有户外长椅 / 喷泉 / 水井，广场靠一棵大树收中心
+  addProp('plaza_tree', 'srw_tree_09', 25, 20, true);
+  objects.push(makeLandmark('plaza_tree', '中央广场古樟', 25, 20, 1, 1, 'landmark'));
 
-  // 专用低栅栏沿主街围出小路：中间 2 格保持通行，两侧是可跳过的低障碍。
-  // objects ---------- (no exits, single map)
-  // R-14 Phase 0: 纺织展馆与南面民居仅保留视觉瓦片（paintBuilding），移除无路由的点击对象；
-  // 避免玩家点击后进入死路 placeholder 页面。视觉房屋仍参与碰撞（buildings layer）。
-  const objects = [
-    makeBuilding(mayorHall.name, mayorHall.label, mayorHall.route, mayorHall.x, mayorHall.y, mayorHall.w, mayorHall.h),
-    makeBuilding(library.name, library.label, library.route, library.x, library.y, library.w, library.h),
-    makeBuilding(reviewHall.name, reviewHall.label, reviewHall.route, reviewHall.x, reviewHall.y, reviewHall.w, reviewHall.h),
-    makeBuilding(workshop.name, workshop.label, workshop.route, workshop.x, workshop.y, workshop.w, workshop.h),
-    makeBuilding(mine.name, mine.label, mine.route, mine.x, mine.y, mine.w, mine.h),
-    makeBuilding(arena.name, arena.label, arena.route, arena.x, arena.y, arena.w, arena.h),
-    makeBuilding(training.name, training.label, training.route, training.x, training.y, training.w, training.h),
-    makeLandmark('fountain', '镜月喷泉', 24, 19, 2, 2, 'landmark'),
-    ...lowPathFences,
-    makeLowObstacle('low_tutorial_log', '跳跃练习木桩', 26, 20, 1, 1, 'stump', LOW_FENCE_FRAMES.post),
-    // R-14 精简 NPC：移除与主线/合并后系统重复或失效的居民——
-    //   tutor_ai（导师已并入百晓工坊，与 workshop_master 重复）、trainer（与 coach_q 重复）、
-    //   miner（与守矿人 / 矿头 Bug 重复）、farmer + gardener（农场 / 作物系统已删）、
-    //   chef + sailor（纯装饰 + 已删的商店 / 商船）。保留的每个 NPC 各担一项学习闭环职责。
-    // 站位：贴近对应建筑入口，彼此错开 ≥2 tile，避免重叠。
-    // R-14 核心阵容收敛：只保留 7 个主线 NPC（镇长引导 / 馆长看 / 工坊师傅学 /
-    // 教务 Q 练·测 / 矿头 Bug 调试 / 复盘师复盘 / 班长班级）。移除 professor、student_a、
-    // arena_guard、mine_keeper 的「地图站位」——它们的数据文件保留（professor 头像仍被
-    // 工坊智能体工作室复用），仅不再在小镇里出现，降低首页 NPC 认知负荷。
-    makeNpc('npc_mayor_py', 'mayor_py', '镇长 Py', 25, 10, 'npc_mayor'),
-    makeNpc('npc_librarian_doc', 'librarian_doc', '馆长 Doc', 11, 12, 'npc_librarian'),
-    makeNpc('npc_workshop_master', 'workshop_master', '工坊师傅', 42, 28, 'npc_workshop'),
-    makeNpc('npc_coach_q', 'coach_q', '教务 Q', 10, 33, 'npc_coach'),
-    makeNpc('npc_foreman_bug', 'foreman_bug', '矿头 Bug', 25, 33, 'npc_guard'),
-    makeNpc('npc_sage_review', 'sage_review', '复盘师 Sage', 37, 12, 'npc_sage'),
-    makeNpc('npc_class_president', 'class_president', '班长', 18, 21, 'npc_student'),
-    makeSpawn(25, 20),
-  ];
-
+  // ---------- 8. 组装 ----------
+  console.log(`  town_hub: 树 ${treeN}，路面 ${componentsOf(grid, MAT.ROAD)[0].length} 格，`
+    + `桥接 ${bridges} 格，objects ${objects.length} 个`);
   return buildMapJson({
     key: 'town_hub',
     label: 'Pythontopia 小镇',
     width: W,
     height: H,
-    tileset: 'kenney_tiny_town',
+    tileset: 'srw_town',
     ground,
-    buildings,
+    buildings: emptyData(W, H),      // 建筑改整栋精灵后此层留空（保留层以兼容旧碰撞读取）
     decoration,
+    collision,
     objects,
   });
 }
@@ -779,11 +1174,11 @@ function buildIndex() {
         width: 50,
         height: 40,
         bgm: 'bgm_town_day',
-        tileset: 'kenney_tiny_town',
+        tileset: 'srw_town',
         // R-14 单中央 hub：town_hub.json 不含任何 exit 对象，index 出口声明须与地图一致（空）。
         // 进入 Bug 矿洞经 building → /bug-mine 路由，不走地图边缘 walk-exit。
         exits: [],
-        spawn: { tileX: 25, tileY: 20 },
+        spawn: { tileX: TOWN_SPAWN.tileX, tileY: TOWN_SPAWN.tileY },
       },
     ],
   };
@@ -900,14 +1295,16 @@ async function main() {
     const out = JSON.stringify(json, null, 2);
     const filePath = path.join(MAPS_DIR, g.name);
     if (!dryRun) await fs.writeFile(filePath, out, 'utf-8');
+    const layerByName = (n) => json.layers.find((l) => l.name === n);
     results.push({
       name: g.name,
       bytes: Buffer.byteLength(out, 'utf-8'),
       layers: json.layers.length,
-      groundCells: json.layers[0].data.length,
-      buildingCells: json.layers[1].data.length,
-      decorationCells: json.layers[2].data.length,
-      objects: json.layers[3].objects.length,
+      groundCells: layerByName('ground').data.length,
+      buildingCells: layerByName('buildings').data.length,
+      decorationCells: layerByName('decoration').data.length,
+      collisionCells: layerByName('collision').data.filter((v) => v > 0).length,
+      objects: layerByName('objects').objects.length,
     });
   }
 
@@ -921,7 +1318,7 @@ async function main() {
   console.log('[generate-maps] 写入完成：');
   for (const r of results) {
     console.log(
-      `  - ${r.name.padEnd(20)} ${String(r.bytes).padStart(8)} bytes | layers=${r.layers} | ground=${r.groundCells} | building=${r.buildingCells} | deco=${r.decorationCells} | objects=${r.objects}`,
+      `  - ${r.name.padEnd(20)} ${String(r.bytes).padStart(8)} bytes | layers=${r.layers} | ground=${r.groundCells} | building=${r.buildingCells} | deco=${r.decorationCells} | collide=${r.collisionCells} | objects=${r.objects}`,
     );
   }
   console.log(`  - index.json         ${String(Buffer.byteLength(indexStr, 'utf-8')).padStart(8)} bytes`);

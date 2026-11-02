@@ -88,7 +88,7 @@ describe('generated Tiled maps', () => {
     expect(
       lowObstacles.every((object) => {
         const props = propsFor(object);
-        return props['sprite'] === 'low_fence_16' && typeof props['frame'] === 'number';
+        return props['sprite'] === 'srw_town' && typeof props['frame'] === 'number';
       }),
     ).toBe(true);
   });

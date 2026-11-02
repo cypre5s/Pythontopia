@@ -6,7 +6,7 @@ R-14 方案 A：仅生成 **town_hub**（中央小镇）。外围图与 Bug 矿�
 
 | key | 中文名 | 尺寸（列×行） | tileset | BGM | 出口 | spawn |
 | --- | --- | --- | --- | --- | --- | --- |
-| town_hub | Pythontopia 小镇 | 50×40 | kenney_tiny_town | bgm_town_day |  | (25, 20) |
+| town_hub | Pythontopia 小镇 | 50×40 | srw_town | bgm_town_day |  | (22, 36) |
 
 ## town_hub.json（50×40）
 

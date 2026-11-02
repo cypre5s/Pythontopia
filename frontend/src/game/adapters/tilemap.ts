@@ -58,7 +58,7 @@ export interface NpcSpriteController {
   destroy(): void;
 }
 
-const NPC_SCALE = 0.7;
+const NPC_SCALE = 1;
 const NPC_IDLE_BOB_DURATION_MS = 1100;
 // 站桩 NPC 每隔一段时间做一次「工作手势」，给小镇生命感；带抖动避免整齐划一。
 const NPC_WORK_INTERVAL_MS = 7000;
@@ -88,6 +88,9 @@ const NPC_ACTION_VARIANT: Readonly<Record<string, string>> = {
   npc_guard: 'ulpc_guard',
 };
 
+/** 气泡离角色锚点（脚底）多高：SRW 角色 20px 高，1.5 格刚好悬在头顶上方。 */
+export const NPC_HINT_ABOVE_TILE = 1.5;
+
 /**
  * NPC 头顶「!」气泡的 y：始终跟着角色 y 走，再叠一个 ±4px 的呼吸偏移。
  * 抽成纯函数是因为历史 bug：reposition() 只更新了 x，NPC 一上下走动，
@@ -95,7 +98,7 @@ const NPC_ACTION_VARIANT: Readonly<Record<string, string>> = {
  */
 export function npcHintY(spriteY: number, tileSize: number, nowMs: number): number {
   const offset = Math.sin(((nowMs % 1600) / 1600) * Math.PI * 2) * 4;
-  return spriteY - tileSize * 3.4 + offset;
+  return spriteY - tileSize * NPC_HINT_ABOVE_TILE + offset;
 }
 
 export function drawNpcSprite(
@@ -119,18 +122,18 @@ export function drawNpcSprite(
 
   let x = npc.tileX * tileSize + tileSize / 2;
   let y = npc.tileY * tileSize + tileSize / 2;
-  const shadowDy = tileSize / 2 - 4;
+  const shadowDy = tileSize / 2 - 1;
 
   const shadow = phaserScene.add
     .ellipse(x, y + shadowDy, tileSize * 0.6, tileSize * 0.25, 0x000000, 0.3)
     .setDepth(9);
   const sprite = phaserScene.add
     .sprite(x, y, spriteKey, lpcIdleFrame(layout, 'DOWN'))
-    .setOrigin(0.5, 0.7)
+    .setOrigin(0.5, 0.6)
     .setDepth(10)
     .setScale(NPC_SCALE);
-  // 名牌放到头顶上方，避免遮挡身体（ULPC 角色较高）。
-  const labelDy = tileSize * 2.6;
+  // 名牌放到头顶上方：SRW 角色 20px 高（脚底在 cy+8），头在 cy-12，留 1 格余量即可。
+  const labelDy = tileSize * 1.7;
   const label = phaserScene.add
     .text(x, y - labelDy, npc.label, {
       fontFamily: PIXEL_FONT_FAMILY,
@@ -215,13 +218,13 @@ export function drawNpcSprite(
     if (!npcTextures?.exists?.(sampleTex)) return false;
     toolBg = phaserScene.add
       .sprite(sprite.x, sprite.y, sampleTex)
-      .setOrigin(0.5, 0.7)
+      .setOrigin(0.5, 0.6)
       .setDepth(9.6)
       .setScale(NPC_SCALE)
       .setVisible(false);
     toolFg = phaserScene.add
       .sprite(sprite.x, sprite.y, sampleTex)
-      .setOrigin(0.5, 0.7)
+      .setOrigin(0.5, 0.6)
       .setDepth(10.4)
       .setScale(NPC_SCALE)
       .setVisible(false);
