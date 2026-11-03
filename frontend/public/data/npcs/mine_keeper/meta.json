@@ -3,7 +3,7 @@
   "name": "矿洞守矿人",
   "category": "educator_core",
   "sprite": "player_sara",
-  "portrait": "portrait_miner.png",
+  "portrait": "galgame/mine_keeper.png",
   "spawnMap": "town_hub",
   "spawn": { "tileX": 21, "tileY": 33 },
   "tags": ["quest_giver", "chapter_3", "computational_thinking"],

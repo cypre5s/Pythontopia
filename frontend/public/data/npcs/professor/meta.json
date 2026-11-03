@@ -3,7 +3,7 @@
   "name": "教授",
   "category": "educator_core",
   "sprite": "npc_professor",
-  "portrait": "portrait_professor.png",
+  "portrait": "galgame/professor.png",
   "spawnMap": "town_hub",
   "spawn": {
     "tileX": 14,
