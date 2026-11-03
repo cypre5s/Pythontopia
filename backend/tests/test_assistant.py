@@ -220,7 +220,7 @@ def test_cancel_request_enforces_owner_and_cancels_active_task(client, db, stude
     async def scenario():
         task = asyncio.create_task(asyncio.sleep(30))
         assistant._active_tasks[row.id] = task
-        result = assistant.cancel(row.id, db.get(User, student["id"]), db)
+        result = await asyncio.to_thread(assistant.cancel, row.id, db.get(User, student["id"]), db)
         assert result["ok"] is True
         try:
             await task
@@ -230,7 +230,7 @@ def test_cancel_request_enforces_owner_and_cancels_active_task(client, db, stude
         finally:
             assistant._active_tasks.pop(row.id, None)
 
-    asyncio.run(scenario())
+    asyncio.run(scenario(), debug=True)
 
 
 def test_stale_assistant_call_after_database_outage_does_not_lock_session_forever(client, db, student, classroom):

@@ -2,7 +2,7 @@ import secrets
 from datetime import datetime
 from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .auth import current_user, require_teacher
@@ -146,7 +146,9 @@ def teacher_courses(db: Annotated[Session, Depends(get_db)], user: Annotated[Use
                 "assistant_allowed": a.assistant_allowed,
                 "material_id": a.material_id,
             }
-            for a in db.scalars(select(Activity))
+            for a in db.scalars(
+                select(Activity) if user.role == "admin" else select(Activity).where((Activity.owner_id.is_(None)) | (Activity.owner_id == user.id))
+            )
         ],
         "npcs": [{"key": n.key, "name": n.name, "map_key": n.map_key, "tile_x": n.tile_x, "tile_y": n.tile_y} for n in db.scalars(select(Npc))],
     }
@@ -277,8 +279,24 @@ class QuestionInput(BaseModel):
     options: list = Field(default_factory=list, max_length=20)
     samples: list = Field(default_factory=list, max_length=20)
     answer: dict | list | str | bool | None = None
-    hidden_cases: list = Field(default_factory=list, max_length=30)
+    hidden_cases: list = Field(default_factory=list, max_length=20)
     source: dict = Field(default_factory=dict)
+
+    @field_validator("samples", "hidden_cases")
+    @classmethod
+    def validate_cases(cls, cases):
+        for case in cases:
+            if not isinstance(case, dict) or set(case) not in ({"input", "output"}, {"input", "expected_output"}):
+                raise ValueError("用例必须包含 input 和 output 或 expected_output，不能附加其他字段")
+            if any(not isinstance(value, str) or len(value) > 10000 for value in case.values()):
+                raise ValueError("用例输入和输出必须为不超过10000字符的字符串")
+        return cases
+
+    @model_validator(mode="after")
+    def validate_judge_budget(self):
+        if self.kind == "python" and len(self.samples) + len(self.hidden_cases) > 20:
+            raise ValueError("编程题公开样例与隐藏用例合计不能超过20个")
+        return self
 
 
 @router.post("/teacher/questions", status_code=201)

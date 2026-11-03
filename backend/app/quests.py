@@ -10,6 +10,7 @@ from .courses import authorize_classroom, authorize_chapter, chapter_available
 from .db import get_db
 from .models import (
     Activity,
+    ActivityVersion,
     Chapter,
     ChapterRelease,
     LearningEvent,
@@ -50,7 +51,7 @@ def validate_definition(definition: dict, db: Session | None = None) -> dict:
     if (
         not isinstance(definition.get("id"), str)
         or not definition.get("title")
-        or not isinstance(definition.get("version"), int)
+        or type(definition.get("version")) is not int
         or definition["version"] < 1
     ):
         raise ValueError("任务需要 id、title 和正整数 version")
@@ -99,16 +100,22 @@ def validate_definition(definition: dict, db: Session | None = None) -> dict:
         choices = node.get("choices", [])
         if any(not isinstance(c, dict) or set(c) != {"id", "label"} for c in choices) or len({c["id"] for c in choices}) != len(choices):
             raise ValueError("选择项无效或重复")
+        activity_version = node.get("activity_version", 1)
+        if type(activity_version) is not int or activity_version < 1:
+            raise ValueError("活动版本必须是正整数")
         if node["type"] in {"STUDY_LESSON", "COMPLETE_PRACTICE", "PASS_ASSESSMENT"}:
             if not node.get("activity_id"):
                 raise ValueError("学习节点必须绑定活动")
             if db:
                 activity = db.get(Activity, node["activity_id"])
-                if not activity or node.get("activity_version", 1) > activity.version or activity.content.get("published") is False:
-                    raise ValueError("活动或活动版本不存在或尚未发布")
+                snapshot = db.get(ActivityVersion, (node["activity_id"], activity_version))
+                if not activity or activity_version > activity.version or not snapshot:
+                    raise ValueError("活动版本不存在")
+                if snapshot.snapshot.get("content", {}).get("published") is False:
+                    raise ValueError("活动版本尚未发布")
                 expected = {"STUDY_LESSON": {"lesson", "reading"}, "COMPLETE_PRACTICE": {"practice"}, "PASS_ASSESSMENT": {"assessment"}}[node["type"]]
-                if activity.kind not in expected:
-                    raise ValueError("任务节点与教学活动类型不匹配")
+                if snapshot.snapshot.get("kind") not in expected:
+                    raise ValueError("任务节点与教学活动版本类型不匹配")
         if node["type"] in {"TALK_TO_NPC", "PLAY_DIALOGUE", "REPORT_BACK"} and db and not db.get(Npc, node.get("target")):
             raise ValueError("NPC不存在")
         if node["type"] in {"REACH_LOCATION", "INTERACT_OBJECT"} and node.get("target") not in OBJECTS:
@@ -165,7 +172,12 @@ def node_statuses(definition: dict, states: dict) -> dict:
         if node.get("aggregation", "ALL") == "ANY" and deps:
             status = "ready" if "complete" in deps else "skipped" if all(x == "skipped" for x in deps) else "locked"
         else:
-            status = "skipped" if any(x == "skipped" for x in deps) else "ready" if all(x == "complete" for x in deps) else "locked"
+            if deps and all(status == "skipped" for status in deps):
+                status = "skipped"
+            elif all(status in {"complete", "skipped"} for status in deps):
+                status = "ready"
+            else:
+                status = "locked"
         if condition and not states.get(condition["node"]):
             status = "locked"
         memo[node_id] = status

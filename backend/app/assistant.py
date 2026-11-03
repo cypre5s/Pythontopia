@@ -422,7 +422,9 @@ def cancel(request_id: str, user: Annotated[User, Depends(current_user)], db: An
         raise HTTPException(404, "请求不存在")
     task = _active_tasks.get(request_id)
     if task:
-        task.cancel()
+        # Synchronous FastAPI endpoints run in a worker thread. Schedule the
+        # cancellation on the streaming task's owning event loop.
+        task.get_loop().call_soon_threadsafe(task.cancel)
     return {"ok": True, "status": call.status}
 
 

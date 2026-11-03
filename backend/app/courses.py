@@ -112,7 +112,10 @@ def authorize_activity(db: Session, user: User, classroom_id: int, activity_id: 
         raise HTTPException(404, "活动不存在")
     authorize_chapter(db, user, classroom_id, activity.chapter_id)
     classroom = db.get(Classroom, classroom_id)
-    if user.role == "student":
+    if user.role != "admin" and activity.owner_id is not None and activity.owner_id != classroom.teacher_id:
+        raise HTTPException(403, "无权访问其他教师的活动")
+    can_preview = user.role == "admin" or (user.role == "teacher" and classroom.teacher_id == user.id)
+    if not can_preview:
         versions, pinned = activity_versions(db, user, classroom_id, activity)
         chosen = version if version is not None else min(pinned) if pinned else max(versions)
         if chosen not in versions:
@@ -147,9 +150,10 @@ def authorize_material(db: Session, user: User, classroom_id: int, material_id: 
         raise HTTPException(404, "资料不存在")
     authorize_chapter(db, user, classroom_id, material.chapter_id)
     classroom = db.get(Classroom, classroom_id)
-    if material.owner_id and material.owner_id not in {classroom.teacher_id, user.id} and user.role != "admin":
+    if material.owner_id and material.owner_id != classroom.teacher_id and user.role != "admin":
         raise HTTPException(403, "无权访问其他班级教师资料")
-    if user.role == "student":
+    can_preview = user.role == "admin" or (user.role == "teacher" and classroom.teacher_id == user.id)
+    if not can_preview:
         allowed = material_versions_for_student(db, user, classroom_id, material_id)
         if not allowed or (version is not None and version not in allowed):
             raise HTTPException(403, "此资料版本未绑定当前班级已发布活动")
