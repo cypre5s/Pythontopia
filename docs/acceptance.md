@@ -42,7 +42,9 @@
 
 ## 远端 CI
 
-重建基线代码`8070d859c88d30af06f8982d60573eba6909b4fb`的[GitHub Actions运行41636978216](https://github.com/cypre5s/Pythontopia/actions/runs/41636978216)已完成，frontend、backend、browser三个job均为success。该结果不替代之后UI增量的远端验证；本轮推送后另行核对。CI使用独立临时测试环境，不修改当前体验数据；没有PPTX fixture的浏览器场景明确跳过，本机独立容器PPTX实测见上表。
+本轮UI代码`d450fc19501a85fb715c6a6ad02e7db29318437d`的[GitHub Actions运行41650312453](https://github.com/cypre5s/Pythontopia/actions/runs/41650312453)已完成，frontend、backend、browser三个job均为success。浏览器9 passed、1 skipped（6.0分钟）；跳过项仅因CI未提供PPTX fixture，独立Docker的真实PPTX链路已另外通过。CI从锁定依赖安装、执行完整前端检查与后端回归，并在独立PostgreSQL空库迁移/重复seed；不修改当前体验数据。本轮随后只补充验收记录，不改变运行代码。
+
+重建基线代码`8070d859c88d30af06f8982d60573eba6909b4fb`的[GitHub Actions运行41636978216](https://github.com/cypre5s/Pythontopia/actions/runs/41636978216)亦已三job通过，保留用于追溯。
 
 ## 明确限制
 
