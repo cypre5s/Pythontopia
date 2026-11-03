@@ -8,7 +8,7 @@
  *
  * 规则：**每次改动 `scripts/generate-maps.mjs` 的输出（地图 JSON）就把版本号 +1。**
  */
-export const MAP_DATA_REVISION = 3;
+export const MAP_DATA_REVISION = 4;
 
 export function mapDataUrl(fileName: string): string {
   return `/assets/maps/${fileName}?v=${MAP_DATA_REVISION}`;

@@ -825,18 +825,31 @@ function generateTownHub() {
 
   // ---------- 3. 建筑：清出占地 + 登记禁区 ----------
   const reserved = new Set();
+  /** 只挡“建筑本体+1 格 + 院子内部”的紧凑禁区，给边界林用。
+   *  3 格的宽禁区是为林块/道具留的；边界林离房子远，用宽禁区会把整条林带呑掉。 */
+  const reservedCore = new Set();
   const reserve = (x0, y0, x1, y1, pad = 0) => {
     for (let y = y0 - pad; y <= y1 + pad; y += 1) {
       for (let x = x0 - pad; x <= x1 + pad; x += 1) reserved.add((y * W) + x);
+    }
+  };
+  const reserveCore = (x0, y0, x1, y1, pad = 0) => {
+    for (let y = y0 - pad; y <= y1 + pad; y += 1) {
+      for (let x = x0 - pad; x <= x1 + pad; x += 1) reservedCore.add((y * W) + x);
     }
   };
   TOWN_BUILDINGS.forEach(([_k, house, cx, by]) => {
     const [fx0, fy0, fx1, fy1] = houseFootprint(house, cx, by);
     gridFill(grid, fx0, fy0 - 1, fx1, fy1 + 1, MAT.GRASS);
     reserve(fx0, fy0, fx1, fy1, 3);
+    reserveCore(fx0, fy0, fx1, fy1, 1);
   });
   reserve(MINE.x - 3, MINE.y - 2, MINE.x + 4, MINE.y + 3);
-  TOWN_YARDS.forEach(([ax, ay, bx, by]) => reserve(ax - 1, ay - 1, bx + 1, by + 1));
+  reserveCore(MINE.x - 1, MINE.y - 1, MINE.x + 3, MINE.y + 3, 1);
+  TOWN_YARDS.forEach(([ax, ay, bx, by]) => {
+    reserve(ax - 1, ay - 1, bx + 1, by + 1);
+    reserveCore(ax, ay, bx, by);
+  });
 
   // ---------- 4. 管线 + 校验 ----------
   cleanGrid(grid);
@@ -857,6 +870,13 @@ function generateTownHub() {
   const ground = bakeGrid(grid, blobFor);
   const decoration = emptyData(W, H);
   const collision = new Array(W * H).fill(0);
+  // 水面全部不可走。之前只给建筑/矿洞/树锚点写过 1，水是纯装饰色块，
+  // 结果角色能直接在水面上走（用户实机截图）。
+  for (let y = 0; y < H; y += 1) {
+    for (let x = 0; x < W; x += 1) {
+      if (grid[y][x] === MAT.WATER) collision[(y * W) + x] = 1;
+    }
+  }
 
   const S = SRW_SINGLE;
   const pick = (names) => names.map((k) => S[k]);
@@ -991,33 +1011,60 @@ function generateTownHub() {
   // 6c. 树：顶边连续树线（收边界）→ 疏林溢出 → 矿洞背后林子 → 两条次排林 → 村周小丛
   const used = new Set(reserved);
   const treeFree = (x, y) => {
-    if (!inB(x, y) || used.has((y * W) + x)) return false;
+    // 树冠宽 2~3 格、底边对齐锚点，所以锚点要离地图边界留余量，
+    // 否则树冠被边界硬切（旧版顶边 y=1~2 也种树，冠被切掉一半）。
+    if (x < 2 || x > W - 3 || y < 3 || y > H - 4) return false;
+    // 锚点本身必须是草地（不种在路上/水上）；邻域只要求“没有别的树”。
+    // 不要求整个 3×3 都是草地：树冠垂下路边是好看的，代价是候选点被砍掉一大半（实测只种得进 33 棵）。
+    if (!isGrass(x, y)) return false;
     for (let dy = -1; dy <= 1; dy += 1) {
       for (let dx = -1; dx <= 1; dx += 1) {
-        if (!isGrass(x + dx, y + dy)) return false;
+        if (used.has(((y + dy) * W) + (x + dx))) return false;
       }
     }
     return true;
   };
   let treeN = 0;
+  /** 已种下的树锤点。间距只拿树和树比：稠密禁区（reserved）是给林块用的，
+   *  边界林用 departmental 的 reservedCore，不该被整片吞掉。 */
+  const treeCells = new Set();
   const plantTree = (x, y) => {
     if (!treeFree(x, y)) return false;
     addProp(`tree_${treeN}`, `srw_tree_${pad2(((treeN * 7) % SRW_ATLAS.props.tree) + 1)}`, x, y, true);
     used.add((y * W) + x);
+    treeCells.add((y * W) + x);
     treeN += 1;
     return true;
   };
-  for (let x = 0; x < W; x += 1) {                       // 顶线：横向几乎连续，靠噪声留小缺口
-    const noise = Math.sin(x * 0.31 + 0.7) * 0.6 + Math.sin(x * 1.7) * 0.4;
-    if (rand() > 0.93 + noise * 0.12) continue;
-    const t = Math.sin(x * 0.55) + Math.sin(x * 0.21 + 1.3);
-    const base = 1 + Math.max(0, Math.min(2, Math.round((t + 2) * 0.62)));
-    [base, base + 1, base - 1].some((y) => plantTree(x, y));
-  }
-  for (let band = 0; band < 3; band += 1) {              // 疏林溢出：只留"林线渐稀"的过渡
-    for (let x = 0; x < W; x += 3) {
-      const y = Math.round(1 + band * 1.9 + Math.sin(x * 0.42 + band * 2.1) * 1.8 * 0.7);
-      if (rand() < 0.1) plantTree(x, y);
+  /** 边界林专用：挡建筑本体+院子，只与其它树比 3×3 间距。 */
+  const plantBandTree = (x, y) => {
+    if (x < 2 || x > W - 3 || y < 3 || y > H - 4) return false;
+    if (!isGrass(x, y) || reservedCore.has((y * W) + x)) return false;
+    for (let dy = -1; dy <= 1; dy += 1) {
+      for (let dx = -1; dx <= 1; dx += 1) {
+        if (treeCells.has(((y + dy) * W) + (x + dx))) return false;
+      }
+    }
+    return plantTreeForced(x, y);
+  };
+  const plantTreeForced = (x, y) => {
+    addProp(`tree_${treeN}`, `srw_tree_${pad2(((treeN * 7) % SRW_ATLAS.props.tree) + 1)}`, x, y, true);
+    used.add((y * W) + x);
+    treeCells.add((y * W) + x);
+    treeN += 1;
+    return true;
+  };
+  // 边界林：四周 6 格内用交错栅格种树（步伐 2 + 隔行错位 1，天然满足≥⃣2 格最小间距），
+  // 越靠边概率越高。顶线原来是一排“滤镜树”，看着像树篱而不是树林。
+  const BAND = 6;
+  for (let y = 3; y < H - 3; y += 2) {
+    const shift = y % 4 === 0 ? 0 : 1;
+    for (let x = 2 + shift; x < W - 2; x += 2) {
+      const d = Math.min(x, y, W - 1 - x, H - 1 - y);
+      if (d >= BAND) continue;
+      if (rand() > 0.95 - 0.14 * d) continue;
+      if (reservedCore.has((y * W) + x)) continue;
+      plantBandTree(x, y);
     }
   }
   for (let x = MINE.x - 7; x <= MINE.x + 8; x += 1) {    // 矿洞背后林子：把洞口嵌进林缘
@@ -1036,16 +1083,24 @@ function generateTownHub() {
     [[3, 34, 4.2, 3], [6, 37, 3.2, 2.2]],
     [[20, 37, 5, 2.2]], [[46, 30, 3.4, 2.6]], [[31, 8, 4.6, 2.4]],
     [[12, 9, 3.6, 2.2]], [[26, 14, 2.6, 2]], [[14, 34, 3, 2]]].forEach((lobes, ci) => {
-    for (let t = 0; t < 320; t += 1) {
-      const [lx, ly, lrx, lry] = lobes[Math.floor(rand() * lobes.length)];
-      const ang = rand() * Math.PI * 2;
-      const rr = Math.sqrt(rand());
-      const x = Math.round(lx + Math.cos(ang) * lrx * rr);
-      const y = Math.round(ly + Math.sin(ang) * lry * rr);
-      const d = Math.min(...lobes.map((a) => Math.hypot((x - a[0]) / a[2], (y - a[1]) / a[3])));
-      if (rand() > 0.34 * Math.max(0, 1 - d * d) + 0.03) continue;
-      if (!plantTree(x, y)) continue;
-      if (d > 0.7) putDeco(x, y - 1, BUSHES[(ci + treeN) % BUSHES.length]);
+    // 用交错栅格（步伐 2 + 隔行错位 1）扫描林块，而不是随机撒点：
+    // 引入“任意两树锤点至少隔 2 格”后，随机撒点会被 3×3 封区反复撞回，
+    // 一块林子只能种进一两棵（实测 320 次甚至 2000 次都填不满）。
+    // 栅格步 2 天然满足最小间距，(2,1) 的交错锤点切比雪夫距离也是 2，不会被拒。
+    const minX = Math.floor(Math.min(...lobes.map((a) => a[0] - a[2])));
+    const maxX = Math.ceil(Math.max(...lobes.map((a) => a[0] + a[2])));
+    const minY = Math.floor(Math.min(...lobes.map((a) => a[1] - a[3])));
+    const maxY = Math.ceil(Math.max(...lobes.map((a) => a[1] + a[3])));
+    for (let y = minY; y <= maxY; y += 2) {
+      const shift = Math.abs(y) % 4 === 0 ? 0 : 1;
+      for (let x = minX + shift; x <= maxX; x += 2) {
+        const d = Math.min(...lobes.map((a) => Math.hypot((x - a[0]) / a[2], (y - a[1]) / a[3])));
+        if (d > 1) continue;
+        // 林心密、林缘稀：d=0 约 0.85 保留，d=1 约 0.3。
+        if (rand() > 0.85 - 0.55 * d * d) continue;
+        if (!plantTree(x, y)) continue;
+        if (d > 0.7) putDeco(x, y - 1, BUSHES[(ci + treeN) % BUSHES.length]);
+      }
     }
   });
 
@@ -1147,6 +1202,9 @@ function generateTownHub() {
   objects.push(makeLandmark('plaza_tree', '中央广场古樟', 25, 20, 1, 1, 'landmark'));
 
   // ---------- 8. 组装 ----------
+  // 对象按锚点 y 升序输出：渲染时同深度的对象按创建顺序叠，于是“下面的树压在上面的树
+  // 之上”，林带有了前后关系；之前顺序是种植先后，树冠互相穿插、看不出层。
+  objects.sort((a, b) => (a.y - b.y) || (a.x - b.x));
   console.log(`  town_hub: 树 ${treeN}，路面 ${componentsOf(grid, MAT.ROAD)[0].length} 格，`
     + `桥接 ${bridges} 格，objects ${objects.length} 个`);
   return buildMapJson({
