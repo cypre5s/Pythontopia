@@ -1,0 +1,18 @@
+[project]
+name = "pythontopia-reborn-backend"
+version = "0.1.0"
+requires-python = ">=3.12,<3.14"
+dependencies = ["fastapi", "uvicorn", "sqlalchemy>=2,<3", "alembic", "psycopg[binary]", "pydantic>=2", "python-multipart", "httpx", "langchain", "langchain-openai", "pypdf", "boto3"]
+
+[project.optional-dependencies]
+dev = ["pytest", "ruff"]
+
+[tool.ruff]
+line-length = 150
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

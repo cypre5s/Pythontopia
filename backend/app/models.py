@@ -1,0 +1,244 @@
+from datetime import datetime, timezone
+from uuid import uuid4
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
+from sqlalchemy.orm import Mapped, mapped_column
+from .db import Base
+
+
+def now():
+    return datetime.now(timezone.utc)
+
+
+def uid():
+    return str(uuid4())
+
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(254), unique=True, index=True)
+    name: Mapped[str] = mapped_column(String(80))
+    role: Mapped[str] = mapped_column(String(16), default="student")
+    password_hash: Mapped[str] = mapped_column(Text)
+
+
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+    token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class Classroom(Base):
+    __tablename__ = "classrooms"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(100))
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    join_code: Mapped[str] = mapped_column(String(24), unique=True)
+
+
+class Membership(Base):
+    __tablename__ = "memberships"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id", ondelete="CASCADE"), primary_key=True)
+
+
+class Chapter(Base):
+    __tablename__ = "chapters"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    order_index: Mapped[int] = mapped_column(Integer, unique=True)
+    course_id: Mapped[int] = mapped_column(Integer, default=43)
+
+
+class KnowledgePoint(Base):
+    __tablename__ = "knowledge_points"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    content: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class Material(Base):
+    __tablename__ = "materials"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(24), default="text")
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
+class MaterialVersion(Base):
+    __tablename__ = "material_versions"
+    __table_args__ = (UniqueConstraint("material_id", "version"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    material_id: Mapped[int] = mapped_column(ForeignKey("materials.id"), index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    content: Mapped[dict] = mapped_column(JSON, default=dict)
+    storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(24), default="ready")
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Activity(Base):
+    __tablename__ = "activities"
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(24))
+    material_id: Mapped[int | None] = mapped_column(ForeignKey("materials.id"), nullable=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    assistant_allowed: Mapped[bool] = mapped_column(Boolean, default=True)
+    npc_key: Mapped[str] = mapped_column(String(80), default="professor")
+    content: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class ActivityVersion(Base):
+    __tablename__ = "activity_versions"
+    activity_id: Mapped[str] = mapped_column(ForeignKey("activities.id"), primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    snapshot: Mapped[dict] = mapped_column(JSON)
+
+
+class ChapterRelease(Base):
+    __tablename__ = "chapter_releases"
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), primary_key=True)
+    chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    status: Mapped[str] = mapped_column(String(24), default="published")
+    opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    prerequisite_chapter_id: Mapped[int | None] = mapped_column(ForeignKey("chapters.id"), nullable=True)
+
+
+class Npc(Base):
+    __tablename__ = "npcs"
+    key: Mapped[str] = mapped_column(String(80), primary_key=True)
+    name: Mapped[str] = mapped_column(String(80))
+    map_key: Mapped[str] = mapped_column(String(40), default="town_hub")
+    tile_x: Mapped[int] = mapped_column(Integer)
+    tile_y: Mapped[int] = mapped_column(Integer)
+    portrait: Mapped[str] = mapped_column(Text, default="")
+    dialogue: Mapped[list] = mapped_column(JSON, default=list)
+
+
+class QuestDefinition(Base):
+    __tablename__ = "quest_definitions"
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    version: Mapped[int] = mapped_column(Integer, primary_key=True)
+    chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), index=True)
+    title: Mapped[str] = mapped_column(String(200))
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    definition: Mapped[dict] = mapped_column(JSON)
+
+
+class PlayerQuest(Base):
+    __tablename__ = "player_quests"
+    __table_args__ = (UniqueConstraint("user_id", "classroom_id", "quest_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
+    quest_id: Mapped[str] = mapped_column(String(100))
+    quest_version: Mapped[int] = mapped_column(Integer)
+    status: Mapped[str] = mapped_column(String(24), default="active")
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class NodeState(Base):
+    __tablename__ = "node_states"
+    player_quest_id: Mapped[int] = mapped_column(ForeignKey("player_quests.id", ondelete="CASCADE"), primary_key=True)
+    node_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    status: Mapped[str] = mapped_column(String(24), default="complete")
+    choice: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    evidence: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class WorldFlag(Base):
+    __tablename__ = "world_flags"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), primary_key=True)
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+
+
+class PlayerPosition(Base):
+    __tablename__ = "player_positions"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), primary_key=True)
+    map_key: Mapped[str] = mapped_column(String(40), default="town_hub")
+    tile_x: Mapped[int] = mapped_column(Integer, default=22)
+    tile_y: Mapped[int] = mapped_column(Integer, default=36)
+    direction: Mapped[str] = mapped_column(String(8), default="down")
+
+
+class LearningEvent(Base):
+    __tablename__ = "learning_events"
+    __table_args__ = (UniqueConstraint("user_id", "classroom_id", "event_id"),)
+    id: Mapped[int] = mapped_column(primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(100))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
+    player_quest_id: Mapped[int] = mapped_column(ForeignKey("player_quests.id"))
+    node_id: Mapped[str] = mapped_column(String(100))
+    content_version: Mapped[int] = mapped_column(Integer)
+    evidence: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class LearningRecord(Base):
+    __tablename__ = "learning_records"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
+    activity_id: Mapped[str] = mapped_column(ForeignKey("activities.id"), index=True)
+    version: Mapped[int] = mapped_column(Integer)
+    kind: Mapped[str] = mapped_column(String(24), default="participation")
+    data: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class Question(Base):
+    __tablename__ = "questions"
+    id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), index=True)
+    activity_id: Mapped[str] = mapped_column(ForeignKey("activities.id"), index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    title: Mapped[str] = mapped_column(String(200))
+    kind: Mapped[str] = mapped_column(String(24))
+    prompt: Mapped[str] = mapped_column(Text)
+    options: Mapped[list] = mapped_column(JSON, default=list)
+    samples: Mapped[list] = mapped_column(JSON, default=list)
+    source: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class QuestionSecret(Base):
+    __tablename__ = "question_secrets"
+    question_id: Mapped[str] = mapped_column(ForeignKey("questions.id"), primary_key=True)
+    answer: Mapped[dict | list | str | bool | None] = mapped_column(JSON, nullable=True)
+    hidden_cases: Mapped[list] = mapped_column(JSON, default=list)
+
+
+class Submission(Base):
+    __tablename__ = "submissions"
+    __table_args__ = (UniqueConstraint("user_id", "classroom_id", "idempotency_key"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
+    activity_id: Mapped[str] = mapped_column(ForeignKey("activities.id"), index=True)
+    question_id: Mapped[str] = mapped_column(ForeignKey("questions.id"), index=True)
+    version: Mapped[int] = mapped_column(Integer, default=1)
+    idempotency_key: Mapped[str] = mapped_column(String(100))
+    mode: Mapped[str] = mapped_column(String(16), default="submit")
+    status: Mapped[str] = mapped_column(String(24), default="queued")
+    answer: Mapped[dict | list | str | bool | None] = mapped_column(JSON, nullable=True)
+    code: Mapped[str | None] = mapped_column(Text, nullable=True)
+    judge_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    feedback: Mapped[dict] = mapped_column(JSON, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class CourseExample(Base):
+    __tablename__ = "course_examples"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    content: Mapped[dict] = mapped_column(JSON)
