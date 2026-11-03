@@ -66,4 +66,3 @@ networks:
 volumes:
   reborn-judge-postgres:
   reborn-judge-redis:
-
