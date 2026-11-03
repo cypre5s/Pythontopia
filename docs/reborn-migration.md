@@ -1,6 +1,7 @@
 # Reborn migration
 
 - Branch: `reborn`.
+- Current demo: Docker http://localhost:15175 / API18082 only. Native15174/API18081 were stopped at the user's request; preserve their data and do not automatically restart them.
 - Source `origin/main`: `783f15d8d08fd739fea3f665ec83d819b5eebb51`.
 - Original checkout: `E:\AI\Pythontopia`; its existing changes remain untouched. It is detached at the source commit to release the branch for this managed worktree.
 - No production service, database, object store, volume, repository setting, or main branch is in scope.
@@ -46,3 +47,9 @@ A–F的仓库隔离、Python单体、单世界/唯一工作区、两章任务�
 当前前端51单测、后端113通过/7默认跳过；Docker真实UI四视口4项通过，三视口两章加教师媒体/创编/PPTX另6项通过。本机Vite因trace临时HTML触发连续重载，已排除测试产物监听，最终三视口两章3项通过。放大阅读视觉与远端CI见acceptance.md，不能使用旧基线CI替代本增量。仅更新Reborn web，开发Vite有一次已核实PID重启，未重建数据库或替换原体验数据；main不合并。
 
 UI代码d450fc19501a85fb715c6a6ad02e7db29318437d已通过远端CI运行41650312453的frontend/backend/browser三个job；浏览器9通过、1因无PPTX fixture明确跳过。后续仅补验收记录。原15174体验学生仍可登录，4个已完成节点保留；15175为独立数据。截图在qa-screens/reborn-ui，测试凭据与trace不入Git。
+
+## 最新运行状态：仅新版演示（2026-11-03）
+
+用户要求只保留新版：已核实并停止本项目Vite91928、Uvicorn71776及其82212启动进程，15174/18081不再监听，Docker Desktop与Reborn四容器继续运行，其他项目未操作。唯一界面15175、API18082，端口已持久写入本机deploy/.env。
+
+已建立独立干净演示教师及演示班（classroom31），两个学生分别为从头开始/两章已完成。真实Chrome完整旅程1 passed（36.4秒），教师学情含2成员、6提交、14事件；第二章对新手按第一章完成门槛开放。凭据/加入码/核查结果在忽略的.tmp/reborn-demo.json。这里覆盖前文曾同时运行15174与15175的历史状态，不恢复旧预览、不删除历史数据。

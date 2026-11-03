@@ -2,6 +2,12 @@
 
 要求 Docker Compose v2；本机开发使用 Python 3.12/3.13、Node 22。不要复用 main 的数据库连接、数据卷、对象存储前缀或凭据。项目根目录不依赖开发者绝对路径。
 
+## 当前唯一演示入口（2026-11-03）
+
+按用户最新要求，仅保留Docker新版http://localhost:15175（API18082）。重复的本机15174/18081已停止，旧数据文件保留，不自动重启。deploy/.env已持久配置REBORN_WEB_PORT=15175、REBORN_API_PORT=18082；常规Compose重启沿用这两个端口。
+
+专用“Pythontopia Reborn 演示班”包含教师、新手学生与两章已完成学生。两章完成状态、6次概念题成绩和14条任务事件来自真实界面流程；教师可直接查看学情。演示凭据、班级加入码与本机核查结果仅保存在忽略的.tmp/reborn-demo.json，不提交Git。
+
 ## 容器启动
 
 复制 deploy/.env.example 为 deploy/.env，生成独立的随机 REBORN_DB_PASSWORD（建议32字节十六进制）。默认 REBORN_API_PORT=18081、REBORN_WEB_PORT=15174，只监听本机。然后在仓库根运行：
@@ -94,9 +100,9 @@ Windows本机API也可设置REBORN_CONVERTER_IMAGE=pythontopia-reborn-converter:
 
 教师排课/显示默认Asia/Shanghai；本机通过frontend/.env.local的VITE_TIME_ZONE配置，容器通过deploy/.env的REBORN_TIME_ZONE构建参数配置，变更后重建前端。使用IANA时区名，DST不存在/歧义时间明确拒绝。服务端所有公开timestamp带UTC偏移，SQLite与PostgreSQL判定一致。
 
-## 继续当前本机预览数据
+## 历史本机预览数据（已停用）
 
-当前15174预览的账号与进度保存在仓库.tmp/reborn-native.db，私有文件在.tmp/native-storage（均不入Git）。不要用默认的另一份reborn.db误认为账号消失。重启本机API时，在backend目录设置：
+此前15174预览的账号与进度保存在仓库.tmp/reborn-native.db，私有文件在.tmp/native-storage（均不入Git）。该预览已按用户要求停止。以下仅保留恢复参考，不作为当前演示启动步骤：
 
 ```powershell
 $rebornRepo = (Resolve-Path '..').Path
