@@ -114,7 +114,7 @@ describe('attachPropGlow', () => {
     // 直径 = radiusTiles × tileSize，再除以贴图边长得到 scale。
     expect(glow.scale).toBeCloseTo((4.2 * 16) / 128, 5);
     expect(glow.depth).toBe(3.5);
-    expect(glow.alpha).toBeCloseTo(0.85, 5);
+    expect(glow.alpha).toBeCloseTo(1, 5);
     // 1 = Phaser.BlendModes.ADD。不能传字符串：setBlendMode 原样存值，
     // WebGL 渲染器用数字索引表，传 'ADD' 会静默退回 NORMAL。
     expect(glow.blend).toBe(1);

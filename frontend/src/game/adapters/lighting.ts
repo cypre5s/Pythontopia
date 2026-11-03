@@ -39,8 +39,8 @@ export interface LightSpec {
 const BLEND_MODE_ADD = 1;
 
 const LIGHT_SPECS: ReadonlyArray<readonly [prefix: string, spec: LightSpec]> = [
-  ['srw_torch', { color: 0xffa03a, radiusTiles: 4.2, offsetTiles: 1.05, strength: 0.85 }],
-  ['srw_lamp', { color: 0xffe6a0, radiusTiles: 3.6, offsetTiles: 1.75, strength: 0.65 }],
+  ['srw_torch', { color: 0xffa03a, radiusTiles: 4.2, offsetTiles: 1.05, strength: 1.0 }],
+  ['srw_lamp', { color: 0xffe6a0, radiusTiles: 3.6, offsetTiles: 1.75, strength: 0.8 }],
 ];
 
 /** 纯函数：贴图名 → 光参数（不是光源就返回 null）。 */
