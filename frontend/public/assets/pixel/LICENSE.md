@@ -30,6 +30,7 @@
 | `buildings/super-retro-world/house_{01..12}.png` | 整栋房屋精灵 | 12 |
 | `props/super-retro-world/{trees,rocks,lamps,barrels,crates,potted_plants,pots,torches}/` | 场景道具（树/石/路灯/木桶/木箱/盆栽/陶罐/火把） | 139 |
 | `portraits/galgame/<npcKey>.png` | galgame 对话左侧立绘 768×1024：占位图由 SRW 角色帧放大，成品图由团队生图模型产出（原创层） | 11 |
+| `effects/light/glow_soft.png` | 火把/路灯假光晕（纯白径向渐变 128×128，ADD 混合 + setTint 着色）。**程序生成**：`scripts/make_glow.py`，无第三方素材 | 1 |
 
 ## 必读署名清单（CC-BY / CC-BY-SA / OFL 强制）
 

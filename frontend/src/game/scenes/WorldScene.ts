@@ -29,7 +29,8 @@ import { cardinalize, type CharacterAction } from '@game/adapters/lpcAnimations'
 import { drawNpcSprite, type NpcSpawn, type NpcSpriteController, WORLD_TEXT_RESOLUTION } from '@game/adapters/tilemap';
 import type { PlayerSpriteHandle, SceneLike } from '@game/adapters/sceneTypes';
 import { applyWeather, normalizeWeatherKind, type WeatherHandle, type WeatherKind } from '@game/adapters/weather';
-import { applyTimeOfDay, deriveTimeOfDay } from '@game/adapters/daynight';
+import { applyTimeOfDay, deriveTimeOfDay, type TimeOfDay } from '@game/adapters/daynight';
+import { attachPropGlow } from '@game/adapters/lighting';
 import { applyMood, type MoodHandle, type MoodKind } from '@game/adapters/mood';
 import {
   InteractableSystem,
@@ -476,8 +477,13 @@ export const WorldScene = {
     buildings.forEach((building) => {
       paintBuildingZone(phaserScene, building);
     });
+    // 光晕必须和道具同一时间画（且要先算好时间）：「白天几乎不亮、夜里满亮」的系数
+    // 只在创建时取一次，不逐帧算。同一个 timeOfDay 给下面的 camera tint 复用。
+    const timeOfDay = deriveTimeOfDay({
+      inGameMinutes: worldStore.session ? worldStore.session.inGameMinutes : null,
+    });
     sceneProps.forEach((prop) => {
-      paintPropSprite(phaserScene, prop);
+      paintPropSprite(phaserScene, prop, timeOfDay);
     });
     lowObstacles.forEach((obstacle) => {
       paintLowObstacleSprite(phaserScene, obstacle);
@@ -611,12 +617,7 @@ export const WorldScene = {
     const weatherKind = normalizeWeatherKind(worldStore.session?.weather);
     state.weatherKind = weatherKind;
     state.weather = applyWeather(this, weatherKind, worldWidth, worldHeight);
-    const sessionForTime = worldStore.session;
-    const timeOfDay = deriveTimeOfDay({
-      inGameMinutes: sessionForTime ? sessionForTime.inGameMinutes : null,
-    });
     applyTimeOfDay(this, timeOfDay);
-
     // 在 weather/time 之后叠加「氛围层」（背景级、不抢 tint）。初始从 mood store
     // 读当前 mood；之后 mood store refresh / 开关变更派发的 window CustomEvent 实时重应用
     // （先销毁旧句柄再重建）；当前服务端仅返回中性氛围兼容值。
@@ -1293,12 +1294,29 @@ function paintLowObstacleSprite(phaserScene: Phaser.Scene, obstacle: LowObstacle
  * 这里保持旧地图同样的平面层级（道具在角色身后），见 README 的 P6 视觉强化项。
  */
 const DEPTH_PROP = 4;
+/** 光晕压在道具下面、瓦片层（0~3）上面。 */
+const DEPTH_PROP_GLOW = 3.5;
 
-function paintPropSprite(phaserScene: Phaser.Scene, prop: PropZone): void {
+function paintPropSprite(
+  phaserScene: Phaser.Scene,
+  prop: PropZone,
+  time: TimeOfDay,
+): void {
+  const x = prop.tileX * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2;
+  const bottomY = (prop.tileY + 1) * RENDER_TILE_SIZE;
+  // 火把/路灯额外叠一层假光晕（非光源 attachPropGlow 直接返回 null）。
+  attachPropGlow(phaserScene as unknown as SceneLike, {
+    sprite: prop.sprite,
+    x,
+    bottomY,
+    tileSize: RENDER_TILE_SIZE,
+    depth: DEPTH_PROP_GLOW,
+    time,
+  });
   paintSceneSprite(phaserScene, {
     sprite: prop.sprite,
-    x: prop.tileX * RENDER_TILE_SIZE + RENDER_TILE_SIZE / 2,
-    bottomY: (prop.tileY + 1) * RENDER_TILE_SIZE,
+    x,
+    bottomY,
     depth: DEPTH_PROP,
   });
 }

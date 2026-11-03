@@ -181,6 +181,8 @@ Rive `.riv` 二进制动画属**素材层**，必须同步登记本文件与
 | `assets/inbox/tree-stump/stump_agnaldo.png` | Agnaldo "Tree(Arvore) & stump" (https://opengameart.org/content/treearvore-stump)，通过本机代理 7892 下载 | CC0-1.0 | 未使用的源素材仅归档于 inbox；已移除对应 public 副本，不进入运行时 |
 | `effects/weather/` | Weather FX 审计池 (`assets/inbox/weather_fx/LICENSE.md`) + Pythontopia 粒子占位 | CC0-1.0 / Pythontopia-Proprietary | 云、雨滴、雪花来自已审计 CC0；项目运行时占位部分见根 `LICENSE` |<br>`cloud_fx.png` = 由 CC0 `cloud.png` 程序化派生（抠掉实心青底 + 裁成单朵云，脚本 `scripts/make_cloud_fx.py`），仍按 CC0-1.0 使用
 | `portraits/` | isaiah658 Pixel Pack #1 + Pepper&Carrot 24x32 + LPC Medieval Fantasy npc-composites | CC0-1.0 / CC-BY-4.0 / OGA-BY-3.0 | 29 NPC 对话立绘；Pepper&Carrot 必须署名 Cabbit 与 David Revoy，LPC composite 必须署名 Johannes Sjolund ("wulax") 与 base contributors |
+| `portraits/galgame/` | AI 生成（用户自备生成模型，提示词见 `docs/art/portrait-prompts.md`），背景由 `scripts/portraits.py` 自动抠除 | Pythontopia-Proprietary / All rights reserved | R-14 galgame 对话版式立绘（768×1024 框内等比缩放）；不含任何商业像素游戏素材 |
+| `effects/light/glow_soft.png` | Pythontopia 程序生成（脚本 `scripts/make_glow.py`，纯白径向渐变） | Pythontopia-Proprietary / All rights reserved | 火把/路灯「假光晕」贴图，运行时 ADD 混合 + setTint 着色，昼夜联动调 alpha；不含第三方素材 |
 | `vendor/opengameart/crates_and_sacks.png` | ScratchIO "Crates And Sacks" on OpenGameArt | CC0-1.0 | 港口/农场货箱与麻袋装饰 |
 
 ## 已删除的违规素材（不在本仓库分发）

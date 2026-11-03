@@ -213,6 +213,11 @@ const PARTICLE_LIST: ReadonlyArray<[string, string]> = [
   ['fx_confetti_burst', '/assets/pixel/effects/weather/confetti_burst.png'],
 ];
 
+// 光照贴图（scripts/make_glow.py 程序绘制的径向渐变，无第三方素材）。
+const LIGHT_LIST: ReadonlyArray<[string, string]> = [
+  ['fx_glow_soft', '/assets/pixel/effects/light/glow_soft.png'],
+];
+
 interface ProgressUi {
   update(progress: number): void;
   setMessage(message: string): void;
@@ -256,6 +261,7 @@ export const BootScene = {
       loader.spritesheet(key, url, { frameWidth: w, frameHeight: h });
     }
     for (const [key, url] of PARTICLE_LIST) loader.image(key, url);
+    for (const [key, url] of LIGHT_LIST) loader.image(key, url);
     for (const [key, url] of SFX_LIST) loader.audio(key, url);
     for (const [key, url] of BGM_LIST) loader.audio(key, url);
 
