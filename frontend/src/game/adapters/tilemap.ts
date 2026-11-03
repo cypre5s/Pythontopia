@@ -88,8 +88,20 @@ const NPC_ACTION_VARIANT: Readonly<Record<string, string>> = {
   npc_guard: 'ulpc_guard',
 };
 
-/** 气泡离角色锚点（脚底）多高：SRW 角色 20px 高，1.5 格刚好悬在头顶上方。 */
-export const NPC_HINT_ABOVE_TILE = 1.5;
+/**
+ * NPC 名牌离角色锚点多高（格）。名牌在头顶，与「!」气泡上下叠放。
+ */
+export const NPC_LABEL_ABOVE_TILE = 1.7;
+
+/**
+ * 「!」气泡离角色锚点多高（格）。**必须叠在名牌上方**：
+ * 气泡高约 18px、名牌高约 17px，两者若都在 1.5~1.7 格就会完全重叠，
+ * 实机上读成「矿头 ! Bug」这种糊在一起的乱码（用户截图实证）。
+ * 2.95 格 = 47px：名牌上沿再让出气泡高度的一半 + 2px 间隙。
+ * 写成 `47 / 16` 而不是 `2.95`，是为了让 `tileSize * NPC_HINT_ABOVE_TILE`（tileSize=16）
+ * 得到精确的 47，否则浮点尾差会让「角色下移 100px 气泡也下移 100px」那条回归用例炸。
+ */
+export const NPC_HINT_ABOVE_TILE = 47 / 16;
 
 /**
  * 场景内文字（NPC 名牌 / 头顶「!」/ 建筑名 / 地标）的栅格化分辨率。
@@ -145,7 +157,7 @@ export function drawNpcSprite(
     .setDepth(10)
     .setScale(NPC_SCALE);
   // 名牌放到头顶上方：SRW 角色 20px 高（脚底在 cy+8），头在 cy-12，留 1 格余量即可。
-  const labelDy = tileSize * 1.7;
+  const labelDy = tileSize * NPC_LABEL_ABOVE_TILE;
   const label = phaserScene.add
     .text(x, y - labelDy, npc.label, {
       fontFamily: PIXEL_FONT_FAMILY,
