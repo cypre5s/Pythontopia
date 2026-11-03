@@ -85,3 +85,20 @@ PPTX转换已在独立受限LibreOffice服务真实验收。容器部署设置RE
 Windows本机API也可设置REBORN_CONVERTER_IMAGE=pythontopia-reborn-converter:local并保持REBORN_CONVERTER_URL为空。先构建deploy/converter镜像；每次转换启动唯一命名的受限非root容器，禁网、只读输入、512MiB/1CPU/pids64、固定宏安全、限时，PDF通过stdout回到本机写入，避免挂载权限问题。若不配置转换器则明确failed，不伪成功。此模式需要本机Docker明确可用。
 
 教师排课/显示默认Asia/Shanghai；本机通过frontend/.env.local的VITE_TIME_ZONE配置，容器通过deploy/.env的REBORN_TIME_ZONE构建参数配置，变更后重建前端。使用IANA时区名，DST不存在/歧义时间明确拒绝。服务端所有公开timestamp带UTC偏移，SQLite与PostgreSQL判定一致。
+
+## 继续当前本机预览数据
+
+当前15174预览的账号与进度保存在仓库.tmp/reborn-native.db，私有文件在.tmp/native-storage（均不入Git）。不要用默认的另一份reborn.db误认为账号消失。重启本机API时，在backend目录设置：
+
+```powershell
+$rebornRepo = (Resolve-Path '..').Path
+$env:REBORN_DATABASE_URL = 'sqlite:///' + $rebornRepo.Replace('\','/') + '/.tmp/reborn-native.db'
+$env:REBORN_STORAGE_ROOT = Join-Path $rebornRepo '.tmp/native-storage'
+$env:REBORN_CONVERTER_IMAGE = 'pythontopia-reborn-converter:local'
+$env:REBORN_CONVERTER_URL = ''
+./.venv/Scripts/python.exe -m alembic upgrade head
+./.venv/Scripts/python.exe -m app.seed
+./.venv/Scripts/python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 18081
+```
+
+先确认对应旧进程已由操作者停止，避免端口冲突；不停止其他任务。前端仍运行15174。默认容器端口会与本机相撞，同时验收时使用REBORN_API_PORT=18082、REBORN_WEB_PORT=15175，保持本机预览不变。两个环境数据库独立，账号不自动共享。
