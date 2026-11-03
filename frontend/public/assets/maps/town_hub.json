@@ -8895,14 +8895,14 @@
           "rotation": 0,
           "properties": [
             {
-              "name": "route",
+              "name": "interaction",
               "type": "string",
-              "value": "/bug-mine"
+              "value": "scenery"
             },
             {
               "name": "label",
               "type": "string",
-              "value": "Bug 矿洞"
+              "value": "矿洞景观"
             }
           ]
         },
@@ -8987,9 +8987,9 @@
           "rotation": 0,
           "properties": [
             {
-              "name": "route",
+              "name": "interaction",
               "type": "string",
-              "value": "/profile-room"
+              "value": "town_hall"
             },
             {
               "name": "label",
@@ -9186,14 +9186,14 @@
           "rotation": 0,
           "properties": [
             {
-              "name": "route",
+              "name": "interaction",
               "type": "string",
-              "value": "/review-hall"
+              "value": "community_hall"
             },
             {
               "name": "label",
               "type": "string",
-              "value": "复盘大厅"
+              "value": "居民会馆"
             },
             {
               "name": "sprite",
@@ -9929,9 +9929,9 @@
           "rotation": 0,
           "properties": [
             {
-              "name": "route",
+              "name": "interaction",
               "type": "string",
-              "value": "/library"
+              "value": "library"
             },
             {
               "name": "label",
@@ -10049,14 +10049,14 @@
           "rotation": 0,
           "properties": [
             {
-              "name": "route",
+              "name": "interaction",
               "type": "string",
-              "value": "/workshop"
+              "value": "classroom"
             },
             {
               "name": "label",
               "type": "string",
-              "value": "百晓工坊"
+              "value": "教学工坊"
             },
             {
               "name": "sprite",
@@ -10872,9 +10872,9 @@
           "rotation": 0,
           "properties": [
             {
-              "name": "route",
+              "name": "interaction",
               "type": "string",
-              "value": "/problems"
+              "value": "practice"
             },
             {
               "name": "label",
@@ -11165,14 +11165,14 @@
           "rotation": 0,
           "properties": [
             {
-              "name": "route",
+              "name": "interaction",
               "type": "string",
-              "value": "/arena/1"
+              "value": "practice"
             },
             {
               "name": "label",
               "type": "string",
-              "value": "闯关竞技场"
+              "value": "练习广场"
             },
             {
               "name": "sprite",

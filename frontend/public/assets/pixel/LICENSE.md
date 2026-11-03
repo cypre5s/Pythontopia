@@ -1,5 +1,11 @@
 # Pythontopia Web 端集成像素资产 License
 
+## Reborn 运行范围（2026-11-03）
+
+新版保留原 SRW 小镇与实际依赖、Galgame 立绘、音乐/交互音、字体及光影，移除未使用的旧系统二进制素材；下文为保留的历史授权记录。旧全量同步脚本已经删除，不应重新生成退役素材。
+
+SRW 作者 Gif 的条款书面存档及原始源包未在 tracked 仓库中找到；本次未伪造或补写授权证明，也未宣称它属于 CC 素材。根 LICENSE-ART.md 记录此缺口和现有来源。
+
 > 本目录 (`frontend/public/assets/pixel/`) 是 Pythontopia 网页端运行所需像素资产的集成视图。
 > 源仓库 `assets/inbox/` 是已审计的离线镜像，由 `scripts/sync-assets.mjs` 增量复制到此处；
 > 少量自绘占位与手工挑选运行时素材以 manifest-only 方式登记。

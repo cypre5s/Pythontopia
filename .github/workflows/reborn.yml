@@ -1,0 +1,86 @@
+name: Reborn checks
+on:
+  push:
+    branches: [reborn]
+  pull_request:
+    branches: [reborn]
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27
+        env:
+          POSTGRES_USER: reborn
+          POSTGRES_PASSWORD: ci-only-not-production
+          POSTGRES_DB: reborn_ci
+        ports: ['5432:5432']
+        options: --health-cmd 'pg_isready -U reborn -d reborn_ci' --health-interval 3s --health-retries 20
+    env:
+      REBORN_DATABASE_URL: postgresql+psycopg://reborn:ci-only-not-production@localhost:5432/reborn_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - run: pip install -r backend/requirements.lock
+      - run: ruff check backend
+      - run: pytest backend/tests -q
+      - run: alembic upgrade head && python -m app.seed && python -m app.seed
+        working-directory: backend
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+        working-directory: frontend
+      - run: npm run typecheck && npm run lint && npm test && npm run build
+        working-directory: frontend
+  browser:
+    runs-on: ubuntu-latest
+    env:
+      REBORN_DATABASE_URL: sqlite:////tmp/reborn-ci.db
+      REBORN_STORAGE_ROOT: /tmp/reborn-ci-storage
+      E2E_URL: http://127.0.0.1:15174
+      E2E_TEACHER_EMAIL: reborn-ci@example.test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: pip install -r backend/requirements.lock
+      - run: npm ci && npx playwright install --with-deps chromium
+        working-directory: frontend
+      - name: Generate isolated test credential
+        run: echo "E2E_TEACHER_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+      - name: Start isolated native stack
+        run: |
+          cd backend
+          alembic upgrade head
+          python -m app.seed
+          python -m app.cli provision-user --email "$E2E_TEACHER_EMAIL" --role teacher --password-env E2E_TEACHER_PASSWORD
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 18081 --no-access-log > /tmp/reborn-api.log 2>&1 &
+          cd ../frontend
+          npm run dev -- --host 127.0.0.1 --port 15174 > /tmp/reborn-web.log 2>&1 &
+          for attempt in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:15174/api/health; then exit 0; fi
+            sleep 1
+          done
+          exit 1
+      - run: npx playwright test --workers=1
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: reborn-browser-results
+          path: frontend/test-results

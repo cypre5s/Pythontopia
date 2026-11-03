@@ -1,8 +1,0 @@
-node_modules/
-miniprogram_npm/
-dist/
-
-# WeChat DevTools 构建产物 / 缓存
-miniprogram/miniprogram_npm/
-.idea/
-*.log

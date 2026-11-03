@@ -6,7 +6,7 @@
  *   - town_hub   (50×40) 中央小镇
  *
  * @summary
- *   - 生成 1 个 .json + index.json + README.md（外围图与 Bug 矿洞风景图均已移除）。
+ *   - 生成 1 个 .json + index.json + README.md（外围图与 矿洞景观风景图均已移除）。
  *   - 全部基于 16×16 源 tile；Phaser 渲染时统一 2× 放大（与 M1-B tilemap.ts 一致）。
  *   - tilemap_packed.png 132 frame 中我们仅使用确认存在的视觉安全帧；frame → gid = frame + 1。
  *   - 决策性数据全部在 MAPS 数组里维护；要新增/调整地图，编辑 MAPS 即可。
@@ -397,7 +397,7 @@ function mulberry32(seed) {
 /**
  * 把 layer + objects spec 包成完整 Phaser tilemap JSON
  * @param {object} spec
- * @param {string} spec.key - 地图 key (town_hub / farm_north / ...)
+ * @param {string} spec.key - 地图 key (town_hub)
  * @param {number} spec.width - 列数
  * @param {number} spec.height - 行数
  * @param {string} spec.tileset - tileset name (kenney_tiny_town | kenney_tiny_dungeon)
@@ -640,7 +640,7 @@ function makeBuilding(name, label, route, tileX, tileY, bw, bh, sprite = null) {
     visible: true,
     rotation: 0,
     properties: [
-      { name: 'route', type: 'string', value: route },
+      { name: 'interaction', type: 'string', value: route },
       { name: 'label', type: 'string', value: label },
       // sprite 非空 = 用整栋精灵绘制（Super Retro World）；null = 只保留点击区。
       ...(sprite ? [{ name: 'sprite', type: 'string', value: sprite }] : []),
@@ -739,24 +739,24 @@ function makeLowObstacle(name, label, tileX, tileY, bw = 1, bh = 1, kind = 'low'
 
 /** 建筑：[key, 房屋图号, 中心 tileX, 底边 tileY, 中文名, 路由（null = 纯景观众）] */
 const TOWN_BUILDINGS = [
-  ['mayor_hall', 10, 24, 12, '镇长大厅', '/profile-room'],
+  ['mayor_hall', 10, 24, 12, '镇长大厅', 'town_hall'],
   ['cottage_a', 6, 31, 11, null, null],
-  ['review_hall', 4, 38, 14, '复盘大厅', '/review-hall'],
-  ['workshop', 2, 43, 21, '百晓工坊', '/workshop'],
+  ['review_hall', 4, 38, 14, '居民会馆', 'community_hall'],
+  ['workshop', 2, 43, 21, '教学工坊', 'classroom'],
   ['cottage_e', 3, 44, 26, null, null],
-  ['library', 8, 8, 20, '图书馆', '/library'],
-  ['training', 11, 8, 30, '训练场', '/problems'],
+  ['library', 8, 8, 20, '图书馆', 'library'],
+  ['training', 11, 8, 30, '训练场', 'practice'],
   ['cottage_b', 9, 15, 27, null, null],
   ['cottage_c', 7, 22, 28, null, null],
   ['cottage_d', 5, 17, 35, null, null],
-  ['arena', 12, 33, 34, '闯关竞技场', '/arena/1'],
+  ['arena', 12, 33, 34, '练习广场', 'practice'],
 ];
 
 /** 院墙：[x0, y0, x1, y1]（闭区间，圈内的地算院子） */
 const TOWN_YARDS = [[27, 13, 30, 15], [11, 24, 13, 26], [7, 33, 12, 36]];
 
 /** 矿洞：土丘 3×3 左上角；洞口在底边中心，主街向西直插到洞口面前 */
-const MINE = { x: 9, y: 8, label: 'Bug 矿洞', route: '/bug-mine' };
+const MINE = { x: 9, y: 8, label: '矿洞景观', route: 'scenery' };
 
 /** NPC：[对象名, 数据 key, 名牌, 角色图号, 归属建筑（null = 矿洞）] */
 const TOWN_NPCS = [
@@ -1237,105 +1237,12 @@ function buildIndex() {
         bgm: 'bgm_town_day',
         tileset: 'srw_town',
         // R-14 单中央 hub：town_hub.json 不含任何 exit 对象，index 出口声明须与地图一致（空）。
-        // 进入 Bug 矿洞经 building → /bug-mine 路由，不走地图边缘 walk-exit。
+        // 进入 矿洞景观经 building → scenery 路由，不走地图边缘 walk-exit。
         exits: [],
         spawn: { tileX: TOWN_SPAWN.tileX, tileY: TOWN_SPAWN.tileY },
       },
     ],
   };
-}
-
-// ---------- README.md ----------
-
-function buildReadme(indexObj) {
-  const rows = indexObj.maps
-    .map(
-      (m) =>
-        `| ${m.key} | ${m.label} | ${m.width}×${m.height} | ${m.tileset} | ${m.bgm} | ${m.exits.join(', ')} | (${m.spawn.tileX}, ${m.spawn.tileY}) |`,
-    )
-    .join('\n');
-
-  return `# Pythontopia 地图（R-14 世界收缩）
-
-R-14 方案 A：仅生成 **town_hub**（中央小镇）。外围图与 Bug 矿洞风景图（mine_south）均已移除；Bug 矿洞功能仍在，经 town_hub building → /bug-mine 进入。
-
-## 概览
-
-| key | 中文名 | 尺寸（列×行） | tileset | BGM | 出口 | spawn |
-| --- | --- | --- | --- | --- | --- | --- |
-${rows}
-
-## town_hub.json（50×40）
-
-- 出口：无（R-14 单中央 hub，外围图已移除；Bug 矿洞经 building → /bug-mine 路由进入）
-- 学习建筑：图书馆 / 工坊 / 训练场 / 竞技场 / 复盘大厅 / Bug 矿洞入口等
-- 7 核心 NPC 贴近建筑入口排布：镇长 Py / 馆长 Doc / 工坊师傅 / 教务 Q / 矿头 Bug / 复盘师 Sage / 班长（见 \`scripts/generate-maps.mjs\` 内 \`makeNpc\` 列表）
-
-## 文件结构
-
-\`\`\`
-frontend/public/assets/maps/
-├── index.json
-├── README.md
-└── town_hub.json
-\`\`\`
-
-## 字段约定
-
-### tileset 引用
-
-- 每张地图只用 1 个 tileset，\`firstgid = 1\`
-- \`tilesets[].image\` 路径相对 maps/ 目录：
-  - kenney_tiny_town → \`../pixel/tilesets/kenney-tiny-town/Tilemap/tilemap_packed.png\`
-  - kenney_tiny_dungeon → \`../pixel/tilesets/kenney-tiny-dungeon/Tilemap/tilemap_packed.png\`
-
-### layer 顺序
-
-| id | name | type | 说明 |
-| --- | --- | --- | --- |
-| 1 | ground | tilelayer | 草地 / 沙地 / 水面（不参与碰撞） |
-| 2 | buildings | tilelayer | 房屋外墙 + 矿洞入口（runtime 视为碰撞，玩家不可穿过） |
-| 3 | decoration | tilelayer | 树木、花坛、围栏、矿石（一般不参与碰撞，纯视觉） |
-| 4 | objects | objectgroup | exit / building / npc / spawn / landmark 等元数据 |
-
-### objects 对象类型
-
-- \`exit\`：边缘门洞，\`properties.target\` 指向下一张地图 key
-- \`building\`：建筑点击区，\`properties.route\` 指向 Vue 路由
-- \`npc\`：NPC 出生点，\`properties.key\` / \`label\` / \`sprite\`
-- \`spawn\`：玩家默认出生点（每张地图唯一）
-- \`low_obstacle\`：低障碍物，正常行走视为阻挡，玩家可面朝它按 Space 跳过 1 格
-- \`landmark\` / \`field\` / \`plaza\`：纯视觉锚点
-
-## 编辑流程
-
-### 方式 1：在 Tiled 编辑器里改
-
-1. 安装 [Tiled Map Editor](https://www.mapeditor.org/)（1.10+）
-2. 用 Tiled 打开任意 \`*.json\`
-3. 编辑后导出回原 JSON 即可
-
-### 方式 2：改脚本重新生成（推荐）
-
-地图布局都写在 \`scripts/generate-maps.mjs\` 顶部的常量 / 函数里：
-
-\`\`\`bash
-cd /home/cypress/Pythontopia
-node scripts/generate-maps.mjs
-\`\`\`
-
-执行后会重新覆盖：
-
-- \`frontend/public/assets/maps/*.json\`
-- \`frontend/public/assets/maps/index.json\`
-- 本 README.md 不会自动重写（只在脚本本体改动时更新一次）
-
-## 当前已知 TODO
-
-- decoration 层目前只散布 bush / flower / fence 三类瓷砖；后续 W2-MAPS 二期会引入更精细的 Tiled object（NPC 走路路径、商铺货架、矿洞机关等）。
-- 各地图碰撞规则现在由 buildings 层 + 边界 implicit 阻挡推断；M2-ROUTER 子代理可能需要额外的 \`collision\` 数据层来标记不可穿越的装饰（例如树木）。
-- 字段 \`spawn\` 在 index.json 与 map.objects 内重复出现：runtime 默认读 index.json，地图内的 \`spawn\` 对象作为权威覆盖。
-`;
 }
 
 // ---------- 主入口 ----------
@@ -1373,8 +1280,6 @@ async function main() {
   const indexStr = JSON.stringify(indexObj, null, 2);
   if (!dryRun) await fs.writeFile(path.join(MAPS_DIR, 'index.json'), indexStr, 'utf-8');
 
-  const readmeStr = buildReadme(indexObj);
-  if (!dryRun) await fs.writeFile(path.join(MAPS_DIR, 'README.md'), readmeStr, 'utf-8');
 
   console.log('[generate-maps] 写入完成：');
   for (const r of results) {
@@ -1383,7 +1288,6 @@ async function main() {
     );
   }
   console.log(`  - index.json         ${String(Buffer.byteLength(indexStr, 'utf-8')).padStart(8)} bytes`);
-  console.log(`  - README.md          ${String(Buffer.byteLength(readmeStr, 'utf-8')).padStart(8)} bytes`);
   if (dryRun) console.log('[generate-maps] --dry-run：未写入文件。');
 }
 

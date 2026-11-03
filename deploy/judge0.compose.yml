@@ -1,0 +1,69 @@
+# Optional Judge0 stack. Independent project, network and volumes.
+# Official security advisories GHSA-q7vg-26pg-v5hr / GHSA-3xpw-36v7-2cmg /
+# GHSA-h9g2-45c8-89cf: <=1.13.0 affected, >=1.13.1 patched. Never use latest.
+# Run on a dedicated trusted Linux VM: the official isolate worker needs privileged.
+# No student browser can reach this API. The application talks through its adapter.
+name: pythontopia-reborn-judge
+x-judge-env: &judge-env
+  POSTGRES_HOST: judge-db
+  POSTGRES_DB: reborn_judge
+  POSTGRES_USER: reborn_judge
+  POSTGRES_PASSWORD: ${REBORN_JUDGE_DB_PASSWORD:?Set a unique judge database password}
+  REDIS_HOST: judge-redis
+  REDIS_PASSWORD: ${REBORN_JUDGE_REDIS_PASSWORD:?Set a unique judge redis password}
+  AUTHN_TOKEN: ${REBORN_JUDGE0_AUTH_TOKEN:?Set a private Judge0 auth token}
+  RAILS_ENV: production
+  COUNT: "2"
+services:
+  judge0:
+    image: judge0/judge0:1.13.1
+    environment: *judge-env
+    volumes:
+      - ./judge0.conf:/api/judge0.conf:ro
+    ports:
+      - 127.0.0.1:${REBORN_JUDGE_PORT:-2359}:2358
+    networks: [judge-internal, judge-access]
+    depends_on:
+      judge-db: {condition: service_healthy}
+      judge-redis: {condition: service_started}
+    restart: unless-stopped
+    logging: {driver: json-file, options: {max-size: 10m, max-file: "3"}}
+  judge-workers:
+    image: judge0/judge0:1.13.1
+    command: ["./scripts/workers"]
+    privileged: true
+    environment: *judge-env
+    volumes:
+      - ./judge0.conf:/api/judge0.conf:ro
+    networks: [judge-internal]
+    depends_on: [judge0]
+    restart: unless-stopped
+    logging: {driver: json-file, options: {max-size: 10m, max-file: "3"}}
+  judge-db:
+    image: postgres:16.2
+    environment:
+      POSTGRES_DB: reborn_judge
+      POSTGRES_USER: reborn_judge
+      POSTGRES_PASSWORD: ${REBORN_JUDGE_DB_PASSWORD:?Set a unique judge database password}
+    volumes: [reborn-judge-postgres:/var/lib/postgresql/data]
+    networks: [judge-internal]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U reborn_judge -d reborn_judge"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+  judge-redis:
+    image: redis:7.2.4
+    command: ["sh", "-c", 'exec redis-server --appendonly yes --requirepass "$$REDIS_PASSWORD"']
+    environment:
+      REDIS_PASSWORD: ${REBORN_JUDGE_REDIS_PASSWORD:?Set a unique judge redis password}
+    volumes: [reborn-judge-redis:/data]
+    networks: [judge-internal]
+networks:
+  judge-access: {}
+  judge-internal:
+    internal: true
+volumes:
+  reborn-judge-postgres:
+  reborn-judge-redis:
+

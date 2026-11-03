@@ -1,0 +1,74 @@
+name: pythontopia-reborn
+services:
+  db:
+    image: postgres:17-bookworm@sha256:858bb5e98eed02eb8cafbcdc007f9a65d1b613972028944a8ec2133ccaf80d27
+    environment:
+      POSTGRES_DB: reborn
+      POSTGRES_USER: reborn
+      POSTGRES_PASSWORD: ${REBORN_DB_PASSWORD:?set REBORN_DB_PASSWORD in deploy/.env}
+    volumes:
+      - reborn-db:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U reborn -d reborn]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  api:
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
+    environment:
+      REBORN_DATABASE_URL: postgresql+psycopg://reborn:${REBORN_DB_PASSWORD}@db:5432/reborn
+      REBORN_ENV: production
+      REBORN_STORAGE_ROOT: /app/storage
+      REBORN_COURSE_ROOT: /app/data/course-pack-43
+      REBORN_AI_API_KEY: ${REBORN_AI_API_KEY:-}
+      REBORN_AI_BASE_URL: ${REBORN_AI_BASE_URL:-}
+      REBORN_AI_MODEL: ${REBORN_AI_MODEL:-}
+      REBORN_JUDGE0_URL: ${REBORN_JUDGE0_URL:-}
+      REBORN_JUDGE0_AUTH_TOKEN: ${REBORN_JUDGE0_AUTH_TOKEN:-}
+      REBORN_CONVERTER_URL: ${REBORN_CONVERTER_URL:-}
+      REBORN_CONVERTER_TOKEN: ${REBORN_CONVERTER_TOKEN:-}
+    ports:
+      - 127.0.0.1:${REBORN_API_PORT:-18081}:8000
+    volumes:
+      - reborn-storage:/app/storage
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks: [default, conversion]
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/web.Dockerfile
+    ports:
+      - 127.0.0.1:${REBORN_WEB_PORT:-15174}:80
+    depends_on: [api]
+    restart: unless-stopped
+  converter:
+    profiles: [documents]
+    build:
+      context: ./converter
+    image: pythontopia-reborn-converter:local
+    environment:
+      REBORN_CONVERTER_TOKEN: ${REBORN_CONVERTER_TOKEN:-}
+    read_only: true
+    tmpfs:
+      - /work:rw,nosuid,nodev,size=512m,mode=1777
+      - /tmp:rw,nosuid,nodev,size=64m,mode=1777
+    mem_limit: 512m
+    cpus: 1
+    pids_limit: 64
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    networks: [conversion]
+    restart: unless-stopped
+networks:
+  conversion:
+    internal: true
+volumes:
+  reborn-db:
+  reborn-storage:
+
