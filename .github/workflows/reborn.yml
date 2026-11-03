@@ -16,8 +16,10 @@ jobs:
           POSTGRES_USER: reborn
           POSTGRES_PASSWORD: ci-only-not-production
           POSTGRES_DB: reborn_ci
+          PGUSER: reborn
+          PGDATABASE: reborn_ci
         ports: ['5432:5432']
-        options: --health-cmd 'pg_isready -U reborn -d reborn_ci' --health-interval 3s --health-retries 20
+        options: --health-cmd=pg_isready --health-interval=3s --health-timeout=3s --health-retries=20
     env:
       REBORN_DATABASE_URL: postgresql+psycopg://reborn:ci-only-not-production@localhost:5432/reborn_ci
     steps:
