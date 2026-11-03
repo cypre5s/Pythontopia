@@ -22,6 +22,10 @@
 
 所有测试媒体明确标为Self-authored TEST MEDIA / not course content，不冒充缺失课件。媒体/创编/PPT浏览器验收不拦截或mock业务请求、不伪造前端进度。Native预览15174与备用Docker15175使用不同数据库。
 
+## 远端 CI
+
+代码提交`8070d859c88d30af06f8982d60573eba6909b4fb`的[GitHub Actions运行41636978216](https://github.com/cypre5s/Pythontopia/actions/runs/41636978216)已完成，frontend、backend、browser三个job均为success。CI使用独立临时测试环境，不修改当前体验数据；没有PPTX fixture的浏览器场景明确跳过，本机独立容器PPTX实测见上表。后续仅补充本验收记录，不改变已验证运行代码。
+
 ## 明确限制
 
 - **正式编程Judge仍阻塞**：实际启动过Judge0 1.13.1，API200且47语言，但AC、WA、运行错误、超时、内存超限五项真实执行全部返回infrastructure_error。Docker Desktop的cgroup v2与其内置isolate需要cgroup v1不兼容（缺少/sys/fs/cgroup/memory和/box/script.py）。未关闭隔离、改共享主机cgroup或切旧执行器。需要兼容的独立Linux运行环境后重跑。5个默认skip不会覆盖此前失败。官方仍有未合并cgroupv2工作：[发布](https://github.com/judge0/judge0/releases/tag/v1.13.1)、[PR571](https://github.com/judge0/judge0/pull/571)。
@@ -29,7 +33,7 @@
 - **源课件媒体**：tracked仓库无原PDF/PPT/PPTX/MP4/WebM。真实提取文本完整保留，34条视频清单不等于可播放媒体。PPTX已实测；原生旧PPT格式尚未单独端到端实测。
 - **素材凭据**：原SRW源包与作者条款书面存档未找到；保留原世界和原许可记录，不宣称本次已审计为CC授权。
 - **构建/容量**：Phaser/PDF阅读器存在已知大chunk提示；没有宣称支持数百人同时AI生成或判题。
-- **远端CI/依赖审计**：远端CI在推送后核实。npm已最小修复undici7.30.0→7.30.1，仅改锁中该包；当前0 high/0 critical，剩余24 moderate均属开发依赖，生产依赖树0。未做无关大版本升级，也不宣称全系统安全。
+- **依赖审计**：npm已最小修复undici7.30.0→7.30.1，仅改锁中该包；当前0 high/0 critical，剩余24 moderate均属开发依赖，生产依赖树0。未做无关大版本升级，也不宣称全系统安全。
 
 ## 可复现入口与证据
 
@@ -37,7 +41,7 @@
 
 真实浏览器用显式E2E_TEACHER_EMAIL/PASSWORD、可选第二教师env、E2E_URL和PLAYWRIGHT_CHANNEL=chrome。journey覆盖三视口；media/curriculum/presentation为桌面，其中presentation须显式E2E_PPTX_PATH（无fixture时skip）。测试凭据与原始trace不提交。
 
-真实截图归档qa-screens/reborn（忽略目录），包括三视口世界/图书馆/完成日志、PDF第二页/视频、教师创编/学情、代码草稿和PPTX真实PDF。各原始结果位于frontend的.tmp-*结果目录。本机转换器API证据在secrets/converter-fixture，均不提交私人运行数据。
+真实截图归档qa-screens/reborn（忽略目录），包括三视口世界/图书馆/完成日志、PDF第二页/视频、教师创编/学情、代码草稿和PPTX真实PDF。PPTX原始结果位于仓库根目录.tmp-presentation-results/，其余浏览器原始结果位于frontend的.tmp-*结果目录。本机转换器API证据在secrets/converter-fixture，均不提交私人运行数据。
 
 ## 安全边界
 

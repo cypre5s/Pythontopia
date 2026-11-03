@@ -27,7 +27,7 @@ No original PDF/PPT/PPTX/MP4/WebM was found. Old absolute Linux media paths are 
 
 ## Progress / resume
 
-Implementation and local/independent-container validation are complete for the available environment. External Judge0/real-model/S3 limits remain explicitly documented below and in acceptance.md. Continue from actual code and this file; do not automatically merge main.
+Implementation and local/independent-container validation are complete for the available environment. Remote frontend/backend/browser CI passed for code commit 8070d859c88d30af06f8982d60573eba6909b4fb (GitHub Actions run 41636978216); subsequent delivery-record updates do not change runtime code. External Judge0/real-model/S3 limits remain explicitly documented below and in acceptance.md. Continue from actual code and this file; do not automatically merge main.
 
 ## 当前实现与续做（2026-11-03）
 
