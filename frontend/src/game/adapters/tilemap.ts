@@ -92,6 +92,18 @@ const NPC_ACTION_VARIANT: Readonly<Record<string, string>> = {
 export const NPC_HINT_ABOVE_TILE = 1.5;
 
 /**
+ * 场景内文字（NPC 名牌 / 头顶「!」/ 建筑名 / 地标）的栅格化分辨率。
+ *
+ * Phaser 的 Text 默认按 1 倍栅格化，再被相机 cover-zoom（最高 3 倍）用最近邻放大，
+ * 于是 11~12px 的中文在屏幕上被拉成 33~36px 的糊块——R-14 换图后用户实机截图里
+ * 「冒险地图」标签和 NPC 头顶「!」都读不出字形。
+ *
+ * 按缩放上限等比栅格化后，纹理像素与屏幕像素 1:1，字才是锐的；代价是一张 3 倍
+ * 纹理（11px 字 → 33px 纹理），几十个标签的内存开销可以忽略。
+ */
+export const WORLD_TEXT_RESOLUTION = 3;
+
+/**
  * NPC 头顶「!」气泡的 y：始终跟着角色 y 走，再叠一个 ±4px 的呼吸偏移。
  * 抽成纯函数是因为历史 bug：reposition() 只更新了 x，NPC 一上下走动，
  * 感叹号就留在原地（线上看到「!」浮在离人物很远的地方）。
@@ -138,6 +150,7 @@ export function drawNpcSprite(
     .text(x, y - labelDy, npc.label, {
       fontFamily: PIXEL_FONT_FAMILY,
       fontSize: '11px',
+      resolution: WORLD_TEXT_RESOLUTION,
       color: '#fff8e1',
       backgroundColor: '#00000088',
       padding: { x: 4, y: 2 },
@@ -152,6 +165,7 @@ export function drawNpcSprite(
     .text(x, npcHintY(y, tileSize, Date.now()), '!', {
       fontFamily: PIXEL_FONT_FAMILY,
       fontSize: '14px',
+      resolution: WORLD_TEXT_RESOLUTION,
       color: '#4d3613',
       backgroundColor: '#ffd166',
       padding: { x: 5, y: 1 },

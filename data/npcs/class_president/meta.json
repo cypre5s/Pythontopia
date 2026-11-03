@@ -3,7 +3,7 @@
   "name": "班长",
   "category": "life",
   "sprite": "lpc_npc_president",
-  "portrait": "portrait_class_president.png",
+  "portrait": "galgame/class_president.png",
   "spawnMap": "town_hub",
   "spawn": { "tileX": 18, "tileY": 21 },
   "birthday": { "month": 9, "day": 10 },

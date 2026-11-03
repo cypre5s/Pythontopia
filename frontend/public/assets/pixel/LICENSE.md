@@ -29,6 +29,7 @@
 | `sprites/super-retro-world/characters/chara_{0..31}.png` | 角色表 48×80 = 3 帧 × 4 朝向（DOWN/LEFT/RIGHT/UP） | 32 |
 | `buildings/super-retro-world/house_{01..12}.png` | 整栋房屋精灵 | 12 |
 | `props/super-retro-world/{trees,rocks,lamps,barrels,crates,potted_plants,pots,torches}/` | 场景道具（树/石/路灯/木桶/木箱/盆栽/陶罐/火把） | 139 |
+| `portraits/galgame/<npcKey>.png` | galgame 对话左侧立绘 768×1024：占位图由 SRW 角色帧放大，成品图由团队生图模型产出（原创层） | 11 |
 
 ## 必读署名清单（CC-BY / CC-BY-SA / OFL 强制）
 

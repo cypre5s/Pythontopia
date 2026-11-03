@@ -3,7 +3,7 @@
   "name": "矿头 Bug",
   "category": "educator_core",
   "sprite": "lpc_npc_miner",
-  "portrait": "portrait_foreman_bug.png",
+  "portrait": "galgame/foreman_bug.png",
   "spawnMap": "town_hub",
   "spawn": { "tileX": 25, "tileY": 33 },
   "birthday": { "month": 8, "day": 10 },

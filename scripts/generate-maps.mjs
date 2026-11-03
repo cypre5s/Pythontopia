@@ -860,11 +860,15 @@ function generateTownHub() {
 
   const S = SRW_SINGLE;
   const pick = (names) => names.map((k) => S[k]);
-  const TALL = pick(['grass_tall_a', 'grass_tall_b']);
-  const TUFTS = pick(['tuft_a', 'tuft_b', 'tuft_c', 'tuft_d', 'tuft_e', 'tuft_f']);
+  // ⚠️ 只允许「能独立成株」的格子进装饰池。图集前 22 格逐格合成到草地上实测：
+  //   grass_tall_a/b + tuft_a..f（1..8）图案压在格子**上边缘**、自带暗绿渐变，是
+  //     草地↔道路交界的过渡覆盖片，散铺在开阔草地中间会连成悬空的深绿斑；
+  //   bush_c（16）是暗绿三角，看着像地上的洞；blade_a（19）是灰黑枯枝，像垃圾；
+  // 这几格的视觉故障在 R-14 换图后由用户实机截图为证（小镇中部一大坨深绿斑）。
+  // 保留的四组：花/蘑菇（9..13）、双蘑菇与蕨（14..15）、浅色草簇（17/18/20/21）。
   const FLOWERS = pick(['flower_a', 'flower_b', 'flower_c', 'flower_d', 'flower_e']);
-  const BUSHES = pick(['bush_a', 'bush_b', 'bush_c', 'bush_d', 'bush_e']);
-  const BLADES = pick(['blade_a', 'blade_b', 'blade_c']);
+  const BUSHES = pick(['bush_a', 'bush_b']);
+  const TUFTS = pick(['bush_d', 'bush_e', 'blade_b', 'blade_c']);
 
   const freeDeco = (x, y) => inB(x, y) && grid[y][x] === MAT.GRASS
     && !reserved.has((y * W) + x) && decoration[(y * W) + x] === 0;
@@ -900,17 +904,16 @@ function generateTownHub() {
 
   [[6, 13], [15, 15], [33, 24], [38, 30], [45, 20], [24, 34], [5, 22], [43, 13],
     [19, 36], [29, 33], [47, 34], [36, 8], [11, 17], [26, 31]]
-    .forEach(([x, y]) => patch(x, y, 12, (px, py) => TALL[(px + py) % TALL.length]));
+    .forEach(([x, y]) => patch(x, y, 10, (px, py) => TUFTS[(px + py) % TUFTS.length]));
 
-  // 野花草甸：草簇45 / 小花25 / 深叶20 / 灌木10 的权重混铺
+  // 野花草甸：草簇55 / 小花25 / 蘑菇与蕨20 的权重混铺
   const MEADOW = [[4, 12], [8, 16], [14, 12], [19, 9], [26, 8], [33, 10], [39, 10], [45, 14],
     [12, 19], [24, 15], [30, 14], [36, 24], [43, 22], [48, 28], [3, 20], [6, 34],
     [14, 33], [22, 36], [28, 33], [38, 36], [46, 37], [41, 14], [33, 21], [20, 21],
     [16, 30], [48, 16], [15, 9], [20, 10], [25, 9], [30, 10], [35, 9], [40, 10],
     [45, 9], [48, 11], [18, 12], [28, 12], [38, 12], [44, 13], [13, 11], [26, 13]];
   const MIX = []
-    .concat(Array(45).fill(TUFTS), Array(25).fill(FLOWERS),
-      Array(20).fill(BLADES), Array(10).fill(BUSHES))
+    .concat(Array(55).fill(TUFTS), Array(25).fill(FLOWERS), Array(20).fill(BUSHES))
     .map((group) => group[Math.floor(rand() * group.length)]);
   MEADOW.forEach(([x, y], i) => patch(x, y, 7 + Math.floor(rand() * 7),
     () => MIX[(i * 5 + 1) % MIX.length]));

@@ -79,7 +79,7 @@ function primeStore(text = 'hi'): ReturnType<typeof useDialogStore> {
   store.visible = true;
   store.npcKey = 'mayor_py';
   store.npcName = '镇长 Py';
-  store.portrait = 'portrait_mayor_py.png';
+  store.portrait = 'galgame/mayor_py.png';
   const tree = makeTree();
   tree.nodes.greet.text = text;
   store.tree = tree;
@@ -117,28 +117,28 @@ describe('DialogTree.vue', () => {
     expect(wrapper.find('.dialog-overlay').exists()).toBe(true);
     expect(wrapper.text()).toContain('镇长 Py');
     expect(wrapper.find('img.pixel-portrait').attributes('src')).toBe(
-      '/assets/pixel/portraits/heads/portrait_mayor_py_head.png',
+      '/assets/pixel/portraits/galgame/mayor_py.png',
     );
     expect(wrapper.find('[data-testid="dialog-text"]').text().trim()).toBe('▏');
   });
 
-  it('falls back to the full portrait when the cropped head asset is missing', async () => {
+  // R-14 立绘换源后不再有「切头头像 → 全身图」二级回退（旧 LPC 头像与 SRW 角色是两套画风）。
+  // 保留的语义是：立绘文件拉不到时不能留 broken-image 占位框、不能拖塌版面，
+  // 文字与选项必须照常可用。
+  it('hides the portrait when the asset fails to load, without breaking the panel', async () => {
     const store = primeStore();
     store.npcKey = 'workshop_master';
-    store.npcName = '工坊师傅';
-    store.portrait = 'portrait_workshop_master.png';
+    store.npcName = 'WORKSHOP';
+    store.portrait = 'galgame/workshop_master.png';
     const wrapper = mount(DialogTree);
     const img = wrapper.get('img.pixel-portrait');
 
-    expect(img.attributes('src')).toBe(
-      '/assets/pixel/portraits/heads/portrait_workshop_master_head.png',
-    );
+    expect(img.attributes('src')).toBe('/assets/pixel/portraits/galgame/workshop_master.png');
     await img.trigger('error');
 
-    expect(wrapper.get('img.pixel-portrait').attributes('src')).toBe(
-      '/assets/pixel/portraits/portrait_workshop_master.png',
-    );
-    expect((wrapper.get('img.pixel-portrait').element as HTMLImageElement).style.visibility).toBe('');
+    expect(wrapper.find('img.pixel-portrait').exists()).toBe(false);
+    expect(wrapper.find('.dialog-frame').exists()).toBe(true);
+    expect(wrapper.find('[data-testid="dialog-text"]').exists()).toBe(true);
   });
 
   it('renders playerName template with the session display name', async () => {

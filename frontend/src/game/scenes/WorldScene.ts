@@ -26,7 +26,7 @@ import {
 import { openNpcDialog } from '@game/adapters/dialog';
 import { createPlayerSprite } from '@game/adapters/sprite';
 import { cardinalize, type CharacterAction } from '@game/adapters/lpcAnimations';
-import { drawNpcSprite, type NpcSpawn, type NpcSpriteController } from '@game/adapters/tilemap';
+import { drawNpcSprite, type NpcSpawn, type NpcSpriteController, WORLD_TEXT_RESOLUTION } from '@game/adapters/tilemap';
 import type { PlayerSpriteHandle, SceneLike } from '@game/adapters/sceneTypes';
 import { applyWeather, normalizeWeatherKind, type WeatherHandle, type WeatherKind } from '@game/adapters/weather';
 import { applyTimeOfDay, deriveTimeOfDay } from '@game/adapters/daynight';
@@ -273,9 +273,6 @@ interface WorldSceneState {
   // 毫秒时钟，记录上一帧的值在本帧相减即可。0 表示首帧，跳过 NPC tick 防止
   // dt 巨大跳变。
   prevUpdateTimeMs: number;
-  // 「冒险地图」告示牌上的持久引导标记（「!」+ 标签）显示对象句柄：场景销毁时清理。
-  // R-15 退役旧 mainQuest 后，标记不再按 activeQuest 动态重绘，改为单一静态引导。
-  questMarkerObjects: Phaser.GameObjects.GameObject[];
 }
 
 const state: WorldSceneState = {
@@ -312,7 +309,6 @@ const state: WorldSceneState = {
   hintRendererHandle: null,
   lifecycleDetach: null,
   prevUpdateTimeMs: 0,
-  questMarkerObjects: [],
 };
 
 export const WorldScene = {
@@ -643,10 +639,6 @@ export const WorldScene = {
     };
     window.addEventListener('pythontopia:mood-changed', onMoodChanged);
 
-    // R-15：单一引导——在 town_hub「冒险地图」告示牌上画一次持久「!」标记，指引玩家去
-    // /mainline-map（主线 = 后端权威 mainline 域）。不再按旧 mainQuest activeQuest 动态重绘。
-    paintAdventureMapMarker(phaserScene, state.mapKey, RENDER_TILE_SIZE);
-
     const onBeforeUnload = (): void => {
       void worldStore.flushPlayerUpdate();
     };
@@ -694,8 +686,6 @@ export const WorldScene = {
         phaserScene.input.off('pointerdown', state.groundClickHandler);
         state.groundClickHandler = null;
       }
-      // 显示对象随场景销毁，这里只清引用，避免 restart 时对旧对象重复 destroy。
-      state.questMarkerObjects = [];
       if (state.weather) {
         state.weather.destroy();
         state.weather = null;
@@ -1209,6 +1199,7 @@ function paintBuildingZone(phaserScene: Phaser.Scene, building: BuildingZone): v
     .text(px, bottomY - building.height * RENDER_TILE_SIZE - 8, building.label, {
       fontFamily: 'monospace',
       fontSize: '12px',
+      resolution: WORLD_TEXT_RESOLUTION,
       color: '#fff8e1',
       backgroundColor: '#1c1810dd',
       padding: { x: 6, y: 3 },
@@ -1261,6 +1252,7 @@ function paintLandmarkLabel(phaserScene: Phaser.Scene, landmark: LandmarkZone): 
       .text(cx, topY, landmark.label, {
         fontFamily: 'monospace',
         fontSize: '10px',
+        resolution: WORLD_TEXT_RESOLUTION,
         color: '#fff8e1',
         backgroundColor: '#2b3a2199',
         padding: { x: 4, y: 2 },
@@ -1322,64 +1314,6 @@ function paintSceneSprite(
       .setDepth(opts.depth);
   } catch {
     // jsdom / 测试桩没有 image 工厂时跳过，不影响碰撞与交互。
-  }
-}
-
-/** 销毁当前主线标记（连带 tween），供重绘 / 任务完成清除复用。 */
-function clearQuestMarkers(phaserScene: Phaser.Scene): void {
-  state.questMarkerObjects.forEach((obj) => {
-    try {
-      phaserScene.tweens?.killTweensOf?.(obj);
-      obj.destroy();
-    } catch {
-      // 场景切换竞态下对象可能已被 Phaser 回收，忽略。
-    }
-  });
-  state.questMarkerObjects = [];
-}
-
-function paintAdventureMapMarker(
-  phaserScene: Phaser.Scene,
-  mapKey: string,
-  tileSize: number,
-): void {
-  try {
-    // 先清旧标记再画：场景 restart 不叠加多份。
-    clearQuestMarkers(phaserScene);
-    if (mapKey !== DEFAULT_MAP_KEY) return;
-    const cx = ADVENTURE_MAP_TILE_X * tileSize + tileSize / 2;
-    const topY = ADVENTURE_MAP_TILE_Y * tileSize - 4;
-    // 持久「!」+「冒险地图」标签：单一引导玩家走到告示牌按 E 进 /mainline-map（主线后端权威）。
-    const excl = phaserScene.add
-      .text(cx, topY, '!', {
-        fontFamily: 'monospace',
-        fontSize: '16px',
-        color: '#ffd166',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5, 1)
-      .setDepth(15);
-    phaserScene.tweens.add({
-      targets: excl,
-      y: topY - 6,
-      duration: 800,
-      yoyo: true,
-      repeat: -1,
-      ease: 'Sine.easeInOut',
-    });
-    const label = phaserScene.add
-      .text(cx, ADVENTURE_MAP_TILE_Y * tileSize + tileSize * 0.6, '冒险地图', {
-        fontFamily: 'monospace',
-        fontSize: '10px',
-        color: '#fff8e1',
-        backgroundColor: '#4d3613',
-        padding: { x: 4, y: 2 },
-      })
-      .setOrigin(0.5, 0)
-      .setDepth(15);
-    state.questMarkerObjects.push(excl, label);
-  } catch {
-    // jsdom / 测试环境无 phaser add，静默跳过。
   }
 }
 

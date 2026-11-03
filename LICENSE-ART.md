@@ -345,6 +345,8 @@ R-14「世界收缩方案 A」之后，用户判定原 Kenney tiny-town + ULPC �
 | `pixel/buildings/super-retro-world/house_{01..12}.png`（12 张） | 同上 | 同上 | 整栋房屋精灵（63×48 ~ 80×64），一文件一栋，取代旧「瓦片拼房」 |
 | `pixel/props/super-retro-world/{trees,rocks,lamps,barrels,crates,potted_plants,pots,torches}/`（139 张） | 同上 | 同上 | 树 / 石 / 路灯 / 木桶 / 木箱 / 盆栽 / 陶罐 / 火把；源包编号不连续，切片时统一重命名为 `{stem}_{01..NN}` |
 
+| `pixel/portraits/galgame/<npcKey>.png`（11 张） | 占位图 = SRW 角色表 16×20 站立帧 ×6 放大（96×120）；**成品图由团队生图模型产出**，属 Pythontopia 原创层（同「登录页原创背景」口径） | 占位图随 SRW；成品图 All rights reserved | galgame 对话版式的左侧立绘，768×1024；提示词见 `docs/art/portrait-prompts.md` |
+
 > 换源后仍未替换的遗留素材（**不删**，仍被其它入口引用）：
 > `pixel/tilesets/kenney-tiny-town/`、`pixel/sprites/ulpc/`、`pixel/props/fantastic-fence/`、
 > `pixel/characters_extra/`。它们各自的 license 与署名仍按本文档下方对应章节执行；
