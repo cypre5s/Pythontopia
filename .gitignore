@@ -38,5 +38,6 @@ data/course-pack-43/.transcript-work/
 .pytest-local/
 .pytest-*/
 .tmp-*/
+.tmp-*
 reborn-storage/
 *.log
