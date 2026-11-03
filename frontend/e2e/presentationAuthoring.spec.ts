@@ -1,0 +1,176 @@
+import { test, expect } from '@playwright/test';
+import { access, writeFile } from 'node:fs/promises';
+import { basename, extname } from 'node:path';
+import { randomUUID } from 'node:crypto';
+
+test.use({ actionTimeout: 20_000 });
+
+test('teacher uploads self-authored PPTX; student reads the converted private PDF and records learning', async ({ page, browser, request }, testInfo) => {
+  test.setTimeout(240_000);
+  const pptxPath = process.env.E2E_PPTX_PATH;
+  const email = process.env.E2E_TEACHER_EMAIL;
+  const password = process.env.E2E_TEACHER_PASSWORD;
+  test.skip(!pptxPath, 'Requires E2E_PPTX_PATH pointing to an explicitly supplied self-authored test presentation.');
+  test.skip(!email || !password, 'Requires explicit Reborn teacher credentials; no default accounts.');
+  await access(pptxPath!);
+  expect(extname(pptxPath!).toLowerCase()).toBe('.pptx');
+
+  const tag = randomUUID().slice(0, 8);
+  const classroomName = `PPTX 自制测试 ${tag}`;
+  const title = `TEST 自制 PPTX（非原课件）${tag}`;
+  const studentName = `PPT验收学生-${tag}`;
+  const chapterId = 185;
+  const activityId = `pptx-lesson-${tag}`;
+  const questId = `pptx-reading-${tag}`;
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+
+  await page.goto('/');
+  await page.getByLabel('邮箱', { exact: true }).fill(email!);
+  await page.getByLabel('密码', { exact: true }).fill(password!);
+  await page.getByRole('button', { name: '进入小镇', exact: true }).click();
+  await page.waitForURL('**/teacher', { timeout: 30_000 });
+  await expect(page.getByLabel('班级名称', { exact: true })).toBeVisible({ timeout: 30_000 });
+  await page.getByLabel('班级名称', { exact: true }).fill(classroomName);
+  const classCreated = page.waitForResponse(response => response.url().endsWith('/api/classrooms') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: '创建班级', exact: true }).click();
+  const classResponse = await classCreated;
+  expect(classResponse.status()).toBe(201);
+  const classroom = await classResponse.json() as { id: number; join_code: string };
+  await expect(page.locator('.class-card').filter({ has: page.getByRole('heading', { name: classroomName, exact: true }) })).toBeVisible();
+  await page.getByRole('combobox', { name: '当前班级', exact: true }).selectOption(String(classroom.id));
+
+  await page.getByRole('button', { name: '材料与版本', exact: true }).click();
+  await page.getByLabel('资料名称', { exact: true }).fill(title);
+  await page.getByLabel(/^所属章节/).selectOption(String(chapterId));
+  await page.getByLabel('文件', { exact: true }).setInputFiles(pptxPath!);
+  const uploaded = page.waitForResponse(response => response.url().endsWith('/api/teacher/materials/upload') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: '上传并处理', exact: true }).click();
+  const uploadResponse = await uploaded;
+  expect(uploadResponse.status()).toBe(201);
+  const material = await uploadResponse.json() as { id: number; version: number; status: string };
+  expect(material.version).toBe(1);
+  const row = page.locator('tbody tr').filter({ hasText: title }).first();
+  await expect(row).toContainText('presentation');
+  await expect(row).toContainText('ready', { timeout: 90_000 });
+  await row.getByRole('button', { name: '预览', exact: true }).click();
+  await expect(page.getByTitle('教师 PDF 预览')).toBeVisible();
+  expect(await page.getByTitle('教师 PDF 预览').getAttribute('src')).toMatch(/^blob:/);
+  await page.screenshot({ path: testInfo.outputPath('teacher-self-authored-pptx-ready.png'), fullPage: true });
+  await page.getByRole('button', { name: '收起预览', exact: true }).click();
+
+  await page.getByRole('button', { name: '活动与 NPC', exact: true }).click();
+  await page.getByLabel('活动 ID', { exact: true }).fill(activityId);
+  await page.getByLabel('标题', { exact: true }).fill(title);
+  await page.getByLabel(/^章节/).selectOption(String(chapterId));
+  await page.getByRole('combobox', { name: '类型', exact: true }).selectOption('lesson');
+  await page.getByRole('combobox', { name: 'NPC', exact: true }).selectOption('professor');
+  await page.getByRole('combobox', { name: '材料', exact: true }).selectOption(String(material.id));
+  await page.getByLabel('允许主动使用助教', { exact: true }).uncheck();
+  const activitySaved = page.waitForResponse(response => response.url().endsWith('/api/teacher/activities') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: '创建活动', exact: true }).click();
+  const activityResponse = await activitySaved;
+  expect(activityResponse.status()).toBe(201);
+  const activity = await activityResponse.json() as { version: number };
+
+  await page.getByRole('button', { name: '任务配置', exact: true }).click();
+  const definition = {
+    id: questId, title: `自制 PPTX 阅读验收 ${tag}`, chapter_id: chapterId, version: 1, kind: 'side',
+    nodes: [{ id: 'read-presentation', type: 'STUDY_LESSON', title, activity_id: activityId, activity_version: activity.version, dependencies: [] }],
+    effects: [{ type: 'set_world_flag', key: `pptx_test_${tag}` }],
+  };
+  await page.getByLabel('任务 JSON', { exact: true }).fill(JSON.stringify(definition));
+  const validation = page.waitForResponse(response => response.url().endsWith('/api/teacher/quests/validate') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: '校验任务', exact: true }).click();
+  expect((await validation).status()).toBe(200);
+  await expect(page.locator('pre.notice')).toContainText('"valid": true');
+  const questSaved = page.waitForResponse(response => response.url().endsWith('/api/teacher/quests') && response.request().method() === 'POST');
+  await page.getByRole('button', { name: '创建任务版本', exact: true }).click();
+  expect((await questSaved).status()).toBe(201);
+  await page.getByRole('button', { name: '章节发布', exact: true }).click();
+  await page.getByLabel(/^章节/).selectOption(String(chapterId));
+  await page.getByRole('combobox', { name: '状态', exact: true }).selectOption('published');
+  const releaseSaved = page.waitForResponse(response => response.url().endsWith(`/releases/${chapterId}`) && response.request().method() === 'PUT');
+  await page.getByRole('button', { name: '保存发布规则', exact: true }).click();
+  expect((await releaseSaved).status()).toBe(200);
+  await page.screenshot({ path: testInfo.outputPath('teacher-self-authored-pptx-published.png'), fullPage: true });
+
+  const context = await browser.newContext({ viewport: page.viewportSize() ?? { width: 1280, height: 800 } });
+  try {
+    const student = await context.newPage();
+    student.on('pageerror', error => errors.push(error.message));
+    await student.goto('/');
+    await student.getByRole('button', { name: '初次到访？注册居民证', exact: true }).click();
+    await student.getByLabel('名字', { exact: true }).fill(studentName);
+    await student.getByLabel('邮箱', { exact: true }).fill(`pptx-${randomUUID()}@example.test`);
+    await student.getByLabel('密码', { exact: true }).fill(`Pptx-${randomUUID()}`);
+    await student.getByRole('button', { name: '注册并进入', exact: true }).click();
+    await student.getByLabel('班级加入码', { exact: true }).fill(classroom.join_code);
+    await student.getByRole('button', { name: '加入班级', exact: true }).click();
+    await expect(student.locator('canvas')).toBeVisible({ timeout: 30_000 });
+    const token = await student.evaluate(() => sessionStorage.getItem('pythontopia-reborn-session'));
+    const headers = { Authorization: `Bearer ${token}` };
+    const fileUrl = `/api/materials/${material.id}/versions/${material.version}/file?classroom_id=${classroom.id}`;
+    expect((await request.get(fileUrl)).status()).toBe(401);
+    const ranged = await request.get(fileUrl, { headers: { ...headers, Range: 'bytes=0-15' } });
+    expect(ranged.status()).toBe(206);
+    expect((await ranged.body()).subarray(0, 5).toString()).toBe('%PDF-');
+
+    await student.getByRole('button', { name: /任务日志/ }).click();
+    const quest = student.locator('.journal-entry').filter({ has: student.getByRole('heading', { name: definition.title, exact: true }) });
+    const node = quest.locator('li').filter({ has: student.getByText(title, { exact: true }) });
+    await node.getByRole('button', { name: '打开课程', exact: true }).click();
+    await expect(student.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    await expect(student.locator('.pdf-reader .reader-toolbar')).toContainText('第 1 / 1 页', { timeout: 30_000 });
+    const pdfCanvas = student.getByLabel('PDF课件当前页', { exact: true });
+    await expect(pdfCanvas).toBeVisible();
+    await expect.poll(() => pdfCanvas.evaluate(element => {
+      const canvas = element as HTMLCanvasElement;
+      const pixels = canvas.getContext('2d')?.getImageData(0, 0, canvas.width, canvas.height).data;
+      if (!pixels) return 0;
+      let ink = 0;
+      for (let i = 0; i < pixels.length; i += 4) if (pixels[i]! < 80 && pixels[i + 1]! < 80 && pixels[i + 2]! < 80 && pixels[i + 3]! > 0) ink++;
+      return ink;
+    }), { timeout: 20_000, message: 'Converted self-authored PPTX must render real PDF text on canvas' }).toBeGreaterThan(100);
+    await student.getByText('当前第 1 页提取文本（可复制）', { exact: true }).click();
+    await expect(student.locator('.lesson-extracted-text .lesson-text')).toContainText('Self-authored PPT conversion test fixture.');
+    await expect(student.locator('.lesson-extracted-text .lesson-text')).toContainText('not original courseware');
+    await student.screenshot({ path: testInfo.outputPath('student-self-authored-pptx-real-pdf-canvas.png') });
+    expect(await student.getByRole('dialog', { name: '游戏工作区' }).count()).toBe(1);
+
+    const participation = student.waitForResponse(response => response.url().endsWith(`/api/activities/${activityId}/participation`) && response.request().method() === 'POST');
+    await student.getByRole('button', { name: '记录本次学习', exact: true }).click();
+    const record = await participation;
+    expect(record.status()).toBe(200);
+    expect((await record.json()).participation_only).toBe(true);
+    await expect(student.getByText('本次学习已记录，任务目标已更新。', { exact: true })).toBeVisible();
+    await expect.poll(async () => {
+      const response = await request.get(`/api/world?classroom_id=${classroom.id}`, { headers });
+      const world = await response.json() as { quests: { id: string; status: string }[] };
+      return world.quests.find(item => item.id === questId)?.status;
+    }, { timeout: 15_000 }).toBe('complete');
+    const assistant = await request.get('/api/assistant/status', { headers });
+    expect((await assistant.json()).model_calls).toBe(0);
+
+    await page.getByRole('button', { name: '学习记录', exact: true }).click();
+    await page.getByRole('button', { name: '刷新真实记录', exact: true }).click();
+    const member = page.locator('tbody tr').filter({ hasText: studentName });
+    await expect(member).toBeVisible();
+    await expect(member.locator('td').nth(1)).toHaveText('1');
+    await expect(member.locator('td').nth(3)).toHaveText('1');
+    await page.screenshot({ path: testInfo.outputPath('teacher-self-authored-pptx-learning-record.png'), fullPage: true });
+    expect(errors).toEqual([]);
+    const acceptancePath = testInfo.outputPath('presentation-acceptance.json');
+    await writeFile(acceptancePath, JSON.stringify({
+      fixture: basename(pptxPath!), notice: 'Self-authored test presentation; not original courseware',
+      teacher_upload_and_configuration: 'UI', converter: 'real private HTTP service',
+      material_id: material.id, classroom_id: classroom.id, chapter_id: chapterId,
+      student_pdf_canvas: true, reading_record: true, reading_is_mastery: false, model_calls: 0,
+    }, null, 2));
+    await testInfo.attach('presentation-acceptance.json', { contentType: 'application/json', path: acceptancePath });
+  } finally {
+    await context.close();
+  }
+});
+
+

@@ -1,51 +1,30 @@
 {
-  "name": "pythontopia-frontend",
+  "name": "pythontopia-reborn",
   "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "sync:npc": "node scripts/sync-npc-data.mjs",
-    "sync:course43": "node scripts/sync-course43.mjs",
-    "predev": "node scripts/sync-npc-data.mjs --quiet && node scripts/sync-course43.mjs --quiet && node scripts/sync-pyodide.mjs --quiet",
     "dev": "vite",
-    "prebuild": "node scripts/sync-npc-data.mjs --quiet && node scripts/sync-course43.mjs --quiet && node scripts/sync-pyodide.mjs --quiet",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "typecheck": "vue-tsc --noEmit",
-    "lint": "eslint . --ext .ts,.vue",
-    "test": "vitest run --exclude \"e2e/**\"",
-    "test:watch": "vitest --exclude \"e2e/**\"",
-    "test:e2e": "playwright test",
-    "capture:guide": "playwright test e2e/guideScreenshots.spec.ts --project=chromium"
+    "lint": "eslint . --ext .ts,.vue --max-warnings 0",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@codemirror/autocomplete": "^6.20.3",
-    "@codemirror/commands": "^6.10.3",
-    "@codemirror/lang-python": "^6.2.1",
-    "@codemirror/language": "^6.12.3",
-    "@codemirror/search": "^6.7.0",
-    "@codemirror/state": "^6.6.0",
-    "@codemirror/view": "^6.43.0",
-    "@rive-app/canvas": "^2.38.1",
-    "@types/dompurify": "^3.0.5",
-    "@vueuse/core": "^14.3.0",
-    "axios": "1.20.0",
-    "dompurify": "^3.4.5",
-    "fast-json-patch": "^3.1.1",
-    "gsap": "3.13",
-    "marked": "^14.1.4",
-    "mermaid": "^11.15.0",
-    "motion": "^12.40.0",
-    "pdfjs-dist": "4.10.38",
-    "phaser": "3.87.0",
-    "pinia": "2.3.0",
-    "reveal.js": "^5.2.1",
-    "tone": "^15.1.22",
     "vue": "3.5.43",
-    "vue-router": "4.5.0"
+    "vue-router": "4.5.0",
+    "pinia": "2.3.0",
+    "phaser": "3.87.0",
+    "pdfjs-dist": "4.10.38",
+    "@codemirror/state": "6.6.0",
+    "@codemirror/view": "6.43.0",
+    "@codemirror/lang-python": "6.2.1",
+    "@codemirror/commands": "6.10.3"
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0",
+    "@playwright/test": "1.60.0",
     "@types/node": "22.10.2",
     "@typescript-eslint/eslint-plugin": "8.71.2",
     "@typescript-eslint/parser": "8.71.2",
@@ -55,18 +34,10 @@
     "eslint": "8.57.1",
     "eslint-plugin-vue": "10.11.1",
     "jsdom": "29.1.1",
-    "prettier": "3.4.2",
-    "pyodide": "314.0.3",
-    "sharp": "0.35.5",
     "typescript": "5.7.2",
     "vite": "6.4.4",
     "vitest": "4.1.11",
     "vue-eslint-parser": "10.4.1",
     "vue-tsc": "2.2.0"
-  },
-  "overrides": {
-    "mermaid": {
-      "katex": "0.18.2"
-    }
   }
 }
