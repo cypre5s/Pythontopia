@@ -52,6 +52,7 @@ import {
 } from '@game/core/npcSchedule';
 import { mapDataUrl } from '@game/config/mapCache';
 import { useWorldStore } from '@stores/world';
+import { NPC_DATA_REVISION } from '@stores/dialog';
 import { useMoodStore } from '@stores/mood';
 
 const TILE_SIZE = 16;
@@ -1795,7 +1796,7 @@ async function applyNpcSchedules(
 
   const fetches = npcs.map(async (npc) => {
     try {
-      const res = await fetch(`/data/npcs/${npc.npcKey}/meta.json`, { headers: { Accept: 'application/json' } });
+      const res = await fetch(`/data/npcs/${npc.npcKey}/meta.json?v=${NPC_DATA_REVISION}`, { headers: { Accept: 'application/json' } });
       if (!res.ok) return;
       const meta = await res.json() as { schedule?: NpcSchedule };
       if (!meta.schedule) return;

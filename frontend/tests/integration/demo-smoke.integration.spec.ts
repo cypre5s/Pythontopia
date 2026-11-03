@@ -131,7 +131,7 @@ describe('demo-smoke.integration · 完整演示链路', () => {
   it('STEP 8 NPC 对话 → 选择后关闭', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();
-      if (url.endsWith('/meta.json')) {
+      if (url.includes('/meta.json')) {
         return { ok: true, json: async () => ({ key: 'mayor_py', name: '镇长', portrait: 'm.png' }) } as unknown as Response;
       }
       return {

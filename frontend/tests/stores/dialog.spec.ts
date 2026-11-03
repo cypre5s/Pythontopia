@@ -27,6 +27,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiClientError } from '@/api/http';
 import {
   useDialogStore,
+  NPC_DATA_REVISION,
   __resetChoiceListenersForTests,
   __resetDialogFlagsForTests,
   hasDialogFlag,
@@ -153,8 +154,8 @@ describe('dialog store - tree API', () => {
 
   it('openWithTree fills npcName/portrait/tree from fetched json', async () => {
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeTree();
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();
@@ -172,6 +173,26 @@ describe('dialog store - tree API', () => {
     expect(store.context?.stats.exercisesThisWeek).toBe('5');
   });
 
+  it('openWithTree 拿到的静态数据 URL 必须带缓存版本号', async () => {
+    // 回归：nginx 给 /data/*.json 7 天强缓存。不带版本号时，老用户刷新页面仍拿到旧
+    // meta.json——R-14 换立绘时那份旧数据指向已删除的 portrait_mayor_py.png，
+    // 对话面板左侧就整个没有立绘（用户实机复现）。
+    const urls: string[] = [];
+    installFetchMock(async (url) => {
+      urls.push(url);
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeTree();
+      throw new Error(`unexpected url ${url}`);
+    });
+    const store = useDialogStore();
+    await store.openWithTree('mayor_py');
+    const staticUrls = urls.filter((u) => u.includes('/data/npcs/'));
+    expect(staticUrls.length).toBeGreaterThanOrEqual(2);
+    for (const url of staticUrls) {
+      expect(url).toContain(`?v=${NPC_DATA_REVISION}`);
+    }
+  });
+
   it('openWithTree records loadError when fetch fails', async () => {
     const fn = vi.fn(async () => new Response('not found', { status: 404 }));
     vi.stubGlobal('fetch', fn);
@@ -184,8 +205,8 @@ describe('dialog store - tree API', () => {
 
   it('selectChoice navigates to nextNodeId then closes when nextNodeId is null', async () => {
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeTree();
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();
@@ -200,8 +221,8 @@ describe('dialog store - tree API', () => {
 
   it('close resets tree state', async () => {
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeTree();
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();
@@ -237,8 +258,8 @@ describe('dialog store - typewriter & branch API (W2-dialog-upgrade)', () => {
 
   it('markTypingDone snapshots currentNode.choices into branchChoices and is idempotent', async () => {
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeTree();
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();
@@ -268,8 +289,8 @@ describe('dialog store - typewriter & branch API (W2-dialog-upgrade)', () => {
 
   it('chooseBranch emits dialog:choice event and delegates to selectChoice for navigation', async () => {
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeTree();
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();
@@ -297,8 +318,8 @@ describe('dialog store - typewriter & branch API (W2-dialog-upgrade)', () => {
 
   it('chooseBranch delegates to selectChoice and closes when nextNodeId is null', async () => {
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeTree();
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();
@@ -327,8 +348,8 @@ describe('dialog store - typewriter & branch API (W2-dialog-upgrade)', () => {
 
   it('chooseBranch with unknown choiceId is a no-op', async () => {
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeTree();
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();
@@ -345,8 +366,8 @@ describe('dialog store - typewriter & branch API (W2-dialog-upgrade)', () => {
 
   it('onChoice returns a teardown that detaches the listener', async () => {
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeTree();
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();
@@ -363,8 +384,8 @@ describe('dialog store - typewriter & branch API (W2-dialog-upgrade)', () => {
 
   it('selectChoice navigation resets branchChoices and isTypingDone for the next node', async () => {
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeTree();
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();
@@ -451,8 +472,8 @@ describe('dialog store - condition system (P3 接通)', () => {
 
   it('每周插话节点抢占入口，且本周第二次打开回落 root', async () => {
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeConditionalTree();
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeConditionalTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();
@@ -467,8 +488,8 @@ describe('dialog store - condition system (P3 接通)', () => {
 
   it('markTypingDone 过滤条件不满足的分支（无失败提交 → 隐藏 last_failed 入口）', async () => {
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeConditionalTree();
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeConditionalTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();
@@ -487,8 +508,8 @@ describe('dialog store - condition system (P3 接通)', () => {
 
   it('完成 weekly_retro（写下心得）后，本周内该分支被隐藏', async () => {
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeConditionalTree();
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeConditionalTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();
@@ -509,8 +530,8 @@ describe('dialog store - condition system (P3 接通)', () => {
   it('只是「进入」weekly_retro 但没写完，不消耗本周额度', async () => {
     // 语义是「完成才算做过」：进入即记周记录会让选「我下周再写」的玩家本周再也进不去复盘。
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeConditionalTree();
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeConditionalTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();
@@ -531,8 +552,8 @@ describe('dialog store - condition system (P3 接通)', () => {
 
   it('set_flag / give_item 效果落持久 flag（不再被静默丢弃）', async () => {
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeConditionalTree();
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeConditionalTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();
@@ -552,8 +573,8 @@ describe('dialog store - condition system (P3 接通)', () => {
 
   it('quest_recommend claim_class_quest 导航到公告板班级任务页签', async () => {
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) {
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) {
         const tree: NpcDialogTree = {
           npcKey: 'class_president',
           rootNodeId: 'greet',
@@ -627,8 +648,8 @@ describe('dialog store - 入口插话每周阻尼（kc_mastered 不永久劫持 
       },
     };
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return tree;
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return tree;
       throw new Error(`unexpected url ${url}`);
     });
 
@@ -744,8 +765,8 @@ describe('dialog store - NPC greeting (R-15 §8)', () => {
   it('openWithTree fires the greeting fetch in parallel and resolves to ready', async () => {
     httpMocks.get.mockResolvedValue({ data: greetingDto({ greeting: '嗨，同学', available: true }) });
     installFetchMock(async (url) => {
-      if (url.endsWith('/meta.json')) return makeMeta();
-      if (url.endsWith('/dialog.json')) return makeTree();
+      if (url.includes('/meta.json')) return makeMeta();
+      if (url.includes('/dialog.json')) return makeTree();
       throw new Error(`unexpected url ${url}`);
     });
     const store = useDialogStore();

@@ -68,7 +68,8 @@ function installRealNpcFetch(): void {
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();
-      const matched = /\/data\/npcs\/([^/]+)\/(meta|dialog)\.json$/.exec(url);
+      // URL 带 `?v=<NPC_DATA_REVISION>` 缓存版本号，正则不能铺死结尾。
+      const matched = /\/data\/npcs\/([^/]+)\/(meta|dialog)\.json(?:\?[^#]*)?$/.exec(url);
       if (!matched) throw new Error(`unexpected url ${url}`);
       const body = readFileSync(npcFile(matched[1]!, matched[2] as 'meta' | 'dialog'), 'utf8');
       return new Response(body, {

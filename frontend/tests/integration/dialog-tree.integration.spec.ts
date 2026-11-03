@@ -56,10 +56,10 @@ beforeEach(() => {
   // 给 fetch 加 mock：根据 url 返回 meta 或 tree
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
-    if (url.endsWith('/meta.json')) {
+    if (url.includes('/meta.json')) {
       return { ok: true, json: async () => META } as unknown as Response;
     }
-    if (url.endsWith('/dialog.json')) {
+    if (url.includes('/dialog.json')) {
       return { ok: true, json: async () => TREE_MAYOR } as unknown as Response;
     }
     return { ok: false, json: async () => ({}) } as unknown as Response;
@@ -163,7 +163,7 @@ describe('dialog-tree.integration · selectChoice 状态机', () => {
     };
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: RequestInfo | URL) => {
       const url = typeof input === 'string' ? input : input.toString();
-      if (url.endsWith('/meta.json')) return { ok: true, json: async () => META } as unknown as Response;
+      if (url.includes('/meta.json')) return { ok: true, json: async () => META } as unknown as Response;
       return { ok: true, json: async () => broken } as unknown as Response;
     });
     const d = useDialogStore();

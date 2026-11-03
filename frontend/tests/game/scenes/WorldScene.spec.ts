@@ -249,7 +249,7 @@ describe('WorldScene integration: NPC triggers + dialog store + NpcFramework', (
     // fetch（meta + dialog）后才把 tree 写入。
     vi.spyOn(global, 'fetch').mockImplementation((input: RequestInfo | URL) => {
       const url = String(input);
-      if (url.endsWith('/meta.json')) {
+      if (url.includes('/meta.json')) {
         return Promise.resolve(
           new Response(
             JSON.stringify({ key: 'mayor_py', name: '镇长 Py', portrait: 'portrait_mayor_py.png' }),
@@ -257,7 +257,7 @@ describe('WorldScene integration: NPC triggers + dialog store + NpcFramework', (
           ),
         );
       }
-      if (url.endsWith('/dialog.json')) {
+      if (url.includes('/dialog.json')) {
         return Promise.resolve(
           new Response(
             JSON.stringify({

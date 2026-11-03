@@ -196,6 +196,16 @@ interface DialogState {
 const DEFAULT_NPC_DATA_BASE = '/data/npcs';
 
 /**
+ * NPC 静态数据（meta/dialog）的缓存版本号。**改动 data/npcs 下任何 JSON 后必须 +1**。
+ *
+ * 原因：nginx 对 `/data/*.json` 与 `/assets/**` 一律给 7 天强缓存（与地图 JSON 同一坑，
+ * 见 `@game/config/mapCache`）。不带版本号时，老用户刷新页面仍会拿到旧 meta.json：
+ * R-14 换立绘时 `portrait` 从 `portrait_mayor_py.png` 变成 `galgame/mayor_py.png`，
+ * 缓存住的那份指向一个已被删除的文件，对话面板左侧就干脆没有立绘了。
+ */
+export const NPC_DATA_REVISION = 2;
+
+/**
  * `open_panel` 效果的 `panel` 简称 → 前端学习面板路由映射。
  * 带参路由（如 `/lecture/:chapter`）请在 dialog.json 里直接用 `route` 字段指定，
  * 例如 `{ "type": "open_panel", "route": "/lecture/1" }`。
@@ -618,8 +628,8 @@ export const useDialogStore = defineStore('dialog', {
         // 只 await meta + dialog（本地静态、秒回）就立即显示对话，避免被 context（走后端
         // axios，最长 10s 超时）拖成长时间「加载中…」卡住。context 改为后台异步补。
         const [meta, tree] = await Promise.all([
-          fetchJson<NpcMeta>(`${baseUrl}/${npcKey}/meta.json`),
-          fetchJson<NpcDialogTree>(`${baseUrl}/${npcKey}/dialog.json`),
+          fetchJson<NpcMeta>(`${baseUrl}/${npcKey}/meta.json?v=${NPC_DATA_REVISION}`),
+          fetchJson<NpcDialogTree>(`${baseUrl}/${npcKey}/dialog.json?v=${NPC_DATA_REVISION}`),
         ]);
         this.npcName = meta.name || npcKey;
         this.portrait = meta.portrait ?? null;
