@@ -6,7 +6,7 @@
 // 历史坑：旧实现调的是 `camera.setTint()`，而 Phaser 3.87 的 Camera 没有这个方法，
 //        `?.()` 让它静默变成空操作——线上昼夜色调从来没生效过。所以这里改断叠色矩形，
 //        不再断「setTint 被调用」这种「调了就算过」的假证据。
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { applyTimeOfDay, deriveTimeOfDay, TIME_OVERLAY_DEPTH, __testing, type TimeOfDay } from '@/game/adapters/daynight';
 import type { SceneLike } from '@/game/adapters/sceneTypes';
 
