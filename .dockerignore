@@ -7,6 +7,12 @@
 **/.env.local
 **/storage
 **/*.sqlite*
+**/*.db
+**/.tmp
+**/.tmp-*
+**/.pytest-*
+**/reborn-storage
+secrets
 **/test-results
 **/playwright-report
 assets/inbox
