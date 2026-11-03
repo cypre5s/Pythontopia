@@ -1,5 +1,5 @@
 import { defineStore } from "pinia";
-import { ref, watch } from "vue";
+import { computed, ref, watch } from "vue";
 import { api } from "./api";
 import type {
   Activity,
@@ -18,20 +18,39 @@ export const useSession = defineStore("session", () => {
     world = ref<World | null>(null),
     workspace = ref<Workspace>(null),
     trackedQuest = ref("");
+  const workspaceHistory = ref<Exclude<Workspace, null>[]>([]);
+  const previousWorkspace = computed(() => workspaceHistory.value.at(-1));
+  const canGoBack = computed(() => workspaceHistory.value.length > 0);
   const drafts = ref<Record<string, string>>({}),
     audioEnabled = ref(false);
+  let loadGeneration = 0;
   async function load() {
-    user.value = await api.get<User>("/auth/me");
-    classes.value = await api.get<Classroom[]>("/classrooms");
-    if (classroomId.value === null) {
+    const generation = ++loadGeneration;
+    const token = api.token();
+    const current = () =>
+      generation === loadGeneration && api.token() === token;
+    const loadedUser = await api.get<User>("/auth/me");
+    if (!current()) return;
+    const loadedClasses = await api.get<Classroom[]>("/classrooms");
+    if (!current()) return;
+    let selectedId =
+      user.value?.id === loadedUser.id ? classroomId.value : null;
+    if (selectedId === null) {
       const saved = Number(
-        sessionStorage.getItem(`classroom:${user.value.id}`),
+        sessionStorage.getItem(`classroom:${loadedUser.id}`),
       );
-      if (classes.value.some((c) => c.id === saved)) classroomId.value = saved;
+      if (loadedClasses.some((c) => c.id === saved)) selectedId = saved;
     }
-    if (!classes.value.some((c) => c.id === classroomId.value))
-      classroomId.value = classes.value[0]?.id ?? null;
-    if (classroomId.value) await refresh();
+    if (!loadedClasses.some((c) => c.id === selectedId))
+      selectedId = loadedClasses[0]?.id ?? null;
+    const loadedWorld = selectedId
+      ? await api.get<World>(`/world?classroom_id=${selectedId}`)
+      : null;
+    if (!current()) return;
+    user.value = loadedUser;
+    classes.value = loadedClasses;
+    classroomId.value = selectedId;
+    world.value = loadedWorld;
   }
   async function refresh() {
     const id = classroomId.value,
@@ -60,13 +79,26 @@ export const useSession = defineStore("session", () => {
     );
   }
   function open(next: Workspace) {
+    workspaceHistory.value = [];
     workspace.value = next;
+  }
+  function navigate(next: Exclude<Workspace, null>) {
+    if (workspace.value)
+      workspaceHistory.value = [
+        ...workspaceHistory.value.slice(-5),
+        workspace.value,
+      ];
+    workspace.value = next;
+  }
+  function back() {
+    workspace.value = workspaceHistory.value.pop() ?? null;
   }
   watch(classroomId, (id) => {
     if (user.value && id)
       sessionStorage.setItem(`classroom:${user.value.id}`, String(id));
   });
   function reset() {
+    loadGeneration++;
     user.value = null;
     classes.value = [];
     classroomId.value = null;
@@ -74,6 +106,7 @@ export const useSession = defineStore("session", () => {
     workspace.value = null;
     drafts.value = {};
     trackedQuest.value = "";
+    workspaceHistory.value = [];
     audioEnabled.value = false;
     api.setToken(null);
   }
@@ -91,6 +124,10 @@ export const useSession = defineStore("session", () => {
     event,
     activity,
     open,
+    navigate,
+    back,
+    canGoBack,
+    previousWorkspace,
     reset,
   };
 });

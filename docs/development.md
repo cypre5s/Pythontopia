@@ -78,6 +78,14 @@ PostgreSQL并发测试须 REBORN_TEST_DATABASE_URL，使用临时schema并清理
 
 实际结果和未通过项见 acceptance.md。不得把跳过的外部服务测试计为通过。主分支只通过人工审查移植独立改动，不周期merge。
 
+## 游戏界面验收
+
+设置显式E2E教师凭据、E2E_URL与PLAYWRIGHT_CHANNEL后，运行`npx playwright test uiUsability.spec.ts --workers=1`。该验收真实创建独立班级与新学生，覆盖1440×900、1024×640、844×390触屏、2560×1080四视口；检查任务进度、折叠、键盘焦点、返回路径、200%字号、减少动效、触控热区和世界画布不重建。普通操作仍须model_calls=0。触屏项目显式hasTouch，不将鼠标点击算作实际触摸。
+
+两章旅程继续使用`npx playwright test rebornJourney.spec.ts --workers=1`。先冻结源码或使用编译后的独立web站点验收，避免HMR重新载入干扰正在执行的旅程。截图/trace使用忽略的输出目录，不能提交其中的临时账号或令牌。浏览器模拟视口不代表实体手机、电视或手柄已经验证。
+
+Vite已从文件监听中排除`.tmp*`目录、`test-results`与`playwright-report`。Playwright trace会生成HTML快照，不应被当作应用页面触发整页重载；验收输出须放在上述目录中。业务源码仍正常HMR。
+
 ## 当前文档转换与时区配置
 
 PPTX转换已在独立受限LibreOffice服务真实验收。容器部署设置REBORN_CONVERTER_URL=http://converter:8090、随机>=24字符REBORN_CONVERTER_TOKEN，然后使用--profile documents。主API与converter只在私有conversion网络交互，不挂Docker socket。

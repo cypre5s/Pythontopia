@@ -6,7 +6,8 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
   request,
 }, testInfo) => {
   test.setTimeout(240_000);
-  page.on("pageerror", (error) => console.log("Browser error:", error.message));
+  const browserErrors: string[] = [];
+  page.on("pageerror", (error) => browserErrors.push(error.message));
   const email = process.env.E2E_TEACHER_EMAIL,
     password = process.env.E2E_TEACHER_PASSWORD;
   test.skip(
@@ -113,7 +114,7 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
       )
     ).ok(),
   ).toBeTruthy();
-  await page.reload();
+  await page.reload({ waitUntil: "domcontentloaded" });
   await talk(page);
   await expect.poll(() => status("lost-language", "mission")).toBe("complete");
   await page.getByRole("button", { name: "寻找目标" }).click();
@@ -192,7 +193,7 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
   ).json();
   expect(ai.model_calls).toBe(0);
   expect(JSON.stringify(ai)).not.toContain("api_key");
-  await page.reload();
+  await page.reload({ waitUntil: "domcontentloaded" });
   await expect(page.locator(".world-hint")).not.toHaveText("", {
     timeout: 15000,
   });
@@ -223,6 +224,7 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
   expect(
     nextWorld.quests.find((q: { id: string }) => q.id === "arrival").status,
   ).toBe("active");
+  expect(browserErrors).toEqual([]);
 });
 
 async function talk(page: Page) {
@@ -256,7 +258,8 @@ async function finishTalk(page: Page) {
     expect(response.ok(), await response.text()).toBeTruthy();
     const result = await response.json();
     if (!result.next_id) {
-      await expect(dialogue).toBeHidden();
+      // Closing waits for the real event transaction and world refresh, not only the script response.
+      await expect(dialogue).toBeHidden({ timeout: 15_000 });
       return;
     }
     await page.waitForTimeout(100);

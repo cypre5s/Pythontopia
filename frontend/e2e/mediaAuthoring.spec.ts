@@ -220,7 +220,7 @@ test('teacher authors real private media; student reads PDF, plays video and com
       for (let index = 0; index < pixels.length; index += 4) if (pixels[index]! < 180 && pixels[index + 3]! > 0) dark++;
       return dark;
     })).toBeGreaterThan(100);
-    await student.locator('.pdf-reader').getByRole('button', { name: '→', exact: true }).click();
+    await student.locator('.pdf-reader').getByRole('button', { name: '下一页 PDF', exact: true }).click();
     await expect(student.locator('.pdf-reader .reader-toolbar')).toContainText('第 2 / 2 页');
     await student.screenshot({ path: testInfo.outputPath('student-pdf-page-two.png') });
     expect(await student.getByRole('dialog', { name: '游戏工作区' }).count()).toBe(1);

@@ -1,6 +1,6 @@
 # Reborn 实际验收（2026-11-03）
 
-本文件区分本机真实业务、隔离测试和外部服务实测。未通过与跳过均不算成功。
+本文件区分本机真实业务、隔离测试和外部服务实测。首表保留重建初验记录；后续UI增量的最新结果见“游戏界面优化复验”。未通过与跳过均不算成功。
 
 ## 已验证结果
 
@@ -22,9 +22,27 @@
 
 所有测试媒体明确标为Self-authored TEST MEDIA / not course content，不冒充缺失课件。媒体/创编/PPT浏览器验收不拦截或mock业务请求、不伪造前端进度。Native预览15174与备用Docker15175使用不同数据库。
 
+## 游戏界面优化复验（2026-11-03）
+
+按game-ui-design与game-ui-ux优化HUD、对话、唯一学习工作区与输入流程；不改后端契约、课程源数据和许可。当前界面保留原像素世界，使用真实任务步骤与资料版本，不生成假成绩或装饰统计。
+
+| 范围 | 本轮实际结果 |
+| --- | --- |
+| 静态与单测 | typecheck、lint通过；前端12文件51单测通过，含迟到NPC互动/对白响应、用户切换加载、原生summary反向Tab、长按Esc、返回历史及未作答判断题 |
+| 后端与初始化 | 锁定依赖安装核对、Ruff检查/格式通过；113 passed、7 skipped。另在全新独立SQLite库迁移到head并重复seed，两次均为7文档561页7章65KC46示例39原题；未改体验库 |
+| UI四视口 | 编译后的Docker15175+独立PostgreSQL，真实Chrome：1440×900、1024×640、844×390触摸、2560×1080，最终通知排版后4 passed（31.5秒）。任务步骤对照后端、折叠、正反Tab、Esc逐级返回、200%字号、减少动效、44/48px热区、同一世界canvas与0附带模型调用均通过 |
+| 完整教学流程 | 同一最终功能代码的Docker站点：两章三视口旅程、教师课程/KC创编与跨教师隔离、真实文本/PDF/视频、PPTX转换和学习回流，6 passed（2.8分钟），无mock业务请求 |
+| 本机开发预览 | 修正Vite监听范围后，15174真实两章、刷新/重登、账号隔离及桌面/笔记本/触屏横屏3 passed（2.0分钟）。没有重置原体验账号或进度 |
+| 放大阅读视觉 | 独立新学生真实对白/阅读后，1440×900的100%/200%与844×390触屏200%无横溢；助教可滚动到输入/发送区，课程/助教切换互斥，分页/记录/提交/关闭可达。手机200%内容区域仅135px高，需要纵向滚动；未调用AI或正式判题 |
+| 地图与资源 | 再次通过1701可达格/5必要地点、63项资源引用检查；未新增外部美术素材 |
+
+修复前native用例共有5次失败：初轮三视口的对白等待/导航超时，以及后两次桌面复测的导航超时/自动重载，均未计通过。日志最终确认Vite把Playwright生成的trace HTML当页面，连续触发reload；从监听中排除.tmp*/test-results/playwright-report后，最终本机三视口全部通过。对白另补充真实记录中反馈和防重入，刷新按DOMContentLoaded后实际世界状态断言。真实UI验收还复现并修复了summary反向焦点循环；200%助教裁切已改为容器滚动。通知去重限量并移至上方，最终截图确认不再挡互动提示。
+
+截图归档qa-screens/reborn-ui（忽略目录）；四视口world/dialogue/settings-200来自最终通知排版，learning-final中保留100%/200%阅读和助教滚动截图。原始UI输出frontend/.tmp-ui-notifications-final、教师/媒体/三视口旅程输出frontend/.tmp-ui-full，本机最终输出frontend/.tmp-ui-native-watch-fixed，不提交trace内的临时账号/令牌。触摸和视口为浏览器模拟，没有宣称实体手机、电视或手柄实测。Judge0、付费模型、S3、源课件和美术凭据限制仍按下文保留。
+
 ## 远端 CI
 
-代码提交`8070d859c88d30af06f8982d60573eba6909b4fb`的[GitHub Actions运行41636978216](https://github.com/cypre5s/Pythontopia/actions/runs/41636978216)已完成，frontend、backend、browser三个job均为success。CI使用独立临时测试环境，不修改当前体验数据；没有PPTX fixture的浏览器场景明确跳过，本机独立容器PPTX实测见上表。后续仅补充本验收记录，不改变已验证运行代码。
+重建基线代码`8070d859c88d30af06f8982d60573eba6909b4fb`的[GitHub Actions运行41636978216](https://github.com/cypre5s/Pythontopia/actions/runs/41636978216)已完成，frontend、backend、browser三个job均为success。该结果不替代之后UI增量的远端验证；本轮推送后另行核对。CI使用独立临时测试环境，不修改当前体验数据；没有PPTX fixture的浏览器场景明确跳过，本机独立容器PPTX实测见上表。
 
 ## 明确限制
 

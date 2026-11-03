@@ -1,27 +1,33 @@
 <template>
   <section class="journal workspace-padding">
     <p class="eyebrow">任务日志</p>
-    <h2>小镇里的未完故事</h2>
-    <nav class="journal-filters" aria-label="任务类型">
-      <button
-        v-for="item in kinds"
-        :key="item.key"
-        :class="{ selected: kindFilter === item.key }"
-        :aria-pressed="kindFilter === item.key"
-        @click="kindFilter = item.key"
-      >
-        {{ item.label }}
-      </button>
-    </nav>
-    <div class="journal-filters">
-      <button
-        v-for="item in filters"
-        :key="item.key"
-        :class="{ selected: filter === item.key }"
-        @click="filter = item.key"
-      >
-        {{ item.label }}
-      </button>
+    <div class="journal-heading">
+      <h2>小镇里的未完故事</h2>
+      <p>{{ activeCount }} 段进行中 · {{ completeCount }} 段已完成</p>
+    </div>
+    <div class="journal-toolbar">
+      <nav class="journal-filters" aria-label="任务类型">
+        <button
+          v-for="item in kinds"
+          :key="item.key"
+          :class="{ selected: kindFilter === item.key }"
+          :aria-pressed="kindFilter === item.key"
+          @click="kindFilter = item.key"
+        >
+          {{ item.label }}
+        </button>
+      </nav>
+      <div class="journal-filters" role="group" aria-label="任务状态">
+        <button
+          v-for="item in filters"
+          :key="item.key"
+          :class="{ selected: filter === item.key }"
+          :aria-pressed="filter === item.key"
+          @click="filter = item.key"
+        >
+          {{ item.label }}
+        </button>
+      </div>
     </div>
     <article v-for="quest in quests" :key="quest.id" class="journal-entry">
       <header>
@@ -34,6 +40,8 @@
           <h3>{{ quest.title }}</h3>
         </div>
         <button
+          v-if="quest.status !== 'complete'"
+          :aria-pressed="session.trackedQuest === quest.id"
           @click="
             session.trackedQuest = quest.id;
             notify('已追踪此委托');
@@ -42,14 +50,28 @@
           {{ session.trackedQuest === quest.id ? "正在追踪" : "追踪" }}
         </button>
       </header>
+      <p class="journal-progress-label">
+        {{
+          quest.nodes.filter((n) => n.status === "complete").length
+        }}
+        个目标已达成<span v-if="quest.nodes.some((n) => n.status === 'ready')">
+          · 高亮步骤可以现在进行</span
+        >
+      </p>
       <ol>
-        <li v-for="node in quest.nodes" :key="node.id" :class="node.status">
-          <span class="node-icon">{{
+        <li
+          v-for="(node, index) in quest.nodes"
+          :key="node.id"
+          :class="node.status"
+        >
+          <span class="node-icon" aria-hidden="true">{{
             node.status === "complete"
               ? "✓"
               : node.status === "ready"
                 ? "◇"
-                : "·"
+                : node.status === "skipped"
+                  ? "−"
+                  : index + 1
           }}</span>
           <div>
             <strong>{{ node.title }}</strong
@@ -61,7 +83,7 @@
           <button
             v-if="node.status === 'ready' && node.activity_id"
             @click="
-              session.open({
+              session.navigate({
                 kind: node.type === 'STUDY_LESSON' ? 'lesson' : 'practice',
                 activity_id: node.activity_id,
               })
@@ -119,6 +141,14 @@ const quests = computed(
             ? q.status === "complete"
             : q.status !== "complete")),
     ) ?? [],
+);
+const activeCount = computed(
+  () =>
+    session.world?.quests.filter((q) => q.status !== "complete").length ?? 0,
+);
+const completeCount = computed(
+  () =>
+    session.world?.quests.filter((q) => q.status === "complete").length ?? 0,
 );
 async function choose(quest: Quest, node: QuestNode, choice: string) {
   try {

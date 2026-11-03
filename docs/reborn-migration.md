@@ -27,7 +27,7 @@ No original PDF/PPT/PPTX/MP4/WebM was found. Old absolute Linux media paths are 
 
 ## Progress / resume
 
-Implementation and local/independent-container validation are complete for the available environment. Remote frontend/backend/browser CI passed for code commit 8070d859c88d30af06f8982d60573eba6909b4fb (GitHub Actions run 41636978216); subsequent delivery-record updates do not change runtime code. External Judge0/real-model/S3 limits remain explicitly documented below and in acceptance.md. Continue from actual code and this file; do not automatically merge main.
+Implementation and local/independent-container validation are complete for the available environment. Remote frontend/backend/browser CI passed for baseline code commit 8070d859c88d30af06f8982d60573eba6909b4fb (GitHub Actions run 41636978216). The UI follow-up below changes frontend runtime code and has its own validation record in acceptance.md. External Judge0/real-model/S3 limits remain explicitly documented below and in acceptance.md. Continue from actual code and this file; do not automatically merge main.
 
 ## 当前实现与续做（2026-11-03）
 
@@ -38,3 +38,9 @@ A–F的仓库隔离、Python单体、单世界/唯一工作区、两章任务�
 当前用户预览为本机15174/API18081/独立SQLite开发库，账号与用户已保存进度保留。备用15175/API18082使用Reborn PostgreSQL及私有文档转换器。仅操作Reborn容器，不替换main服务。Docker使用授权已恢复。
 
 下一步外部条件：提供兼容cgroupv1的独立Judge0环境后跑5项真实执行验收；配置真实模型后小额度流式/引用/取消验证；需要S3时再接真实服务；补原课件媒体与SRW授权书面凭据。禁止为判题绕过隔离或恢复旧Piston。main仍不自动合并，未来UI改动须逐个审查移植。
+
+## 游戏UI与交互增量（2026-11-03）
+
+参考game-ui-design、game-ui-ux后已实现：三行安全视口HUD、真实任务步骤与学习入口、可收起委托卡、底部菜单、统一焦点/返回、100%–200%文字与减少界面动效；窄屏内容/助教互斥，材料版本阅读位置与列表位置恢复。后台迟到响应不能重新打开已离开的对白或覆盖新账号，长按Esc不连续退多级；世界canvas不因工作区切换重建。
+
+当前前端51单测、后端113通过/7默认跳过；Docker真实UI四视口4项通过，三视口两章加教师媒体/创编/PPTX另6项通过。本机Vite因trace临时HTML触发连续重载，已排除测试产物监听，最终三视口两章3项通过。放大阅读视觉与远端CI见acceptance.md，不能使用旧基线CI替代本增量。仅更新Reborn web，开发Vite有一次已核实PID重启，未重建数据库或替换原体验数据；main不合并。

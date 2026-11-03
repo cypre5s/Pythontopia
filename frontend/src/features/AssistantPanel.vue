@@ -1,22 +1,54 @@
 <template>
-  <section class="assistant-panel">
+  <section class="assistant-panel" aria-label="课程助教">
     <header>
       <div>
-        <p class="eyebrow">课程助教</p>
+        <p class="eyebrow">当前学习助教</p>
         <h3>{{ roleName }}</h3>
       </div>
-      <span class="status-dot" :class="{ online: available }"></span>
+      <span
+        class="status-dot"
+        :class="{ online: available && allowed }"
+        aria-hidden="true"
+      ></span>
     </header>
-    <p class="assistant-intro">
-      只在你主动提问时工作。回答用于理解与提示；正式提交仍由你决定。
+    <p class="assistant-state" role="status">
+      {{
+        !allowed
+          ? "本活动未开放助教"
+          : available
+            ? "服务就绪 · 由你主动提问"
+            : "助教暂不可用"
+      }}
     </p>
-    <p v-if="!allowed" class="notice">本次测验不允许使用助教。</p>
+    <p class="assistant-intro">
+      围绕当前内容提问，获取概念与错误提示。按自己的节奏阅读，需要时再发送问题。
+    </p>
+    <p v-if="!allowed" class="notice">
+      本次活动不允许使用助教，可以继续独立阅读或练习。
+    </p>
     <p v-else-if="!available" class="notice">
       {{ unavailable || "助教尚未配置，请继续阅读或练习。" }}
     </p>
-    <div ref="history" class="chat-history" aria-live="polite">
-      <article v-for="(item, i) in messages" :key="i" :class="item.role">
-        <small>{{ item.role === "user" ? "你" : roleName }}</small>
+    <div
+      ref="history"
+      class="chat-history"
+      role="log"
+      aria-label="助教会话记录"
+      aria-live="polite"
+    >
+      <p v-if="!messages.length" class="assistant-empty">
+        {{
+          allowed && available
+            ? "从一个具体问题开始，例如：这一页的概念应该怎样理解？"
+            : "课程与练习仍可正常使用，学习进度不会因此受到影响。"
+        }}
+      </p>
+      <article
+        v-for="(item, index) in messages"
+        :key="index"
+        :class="item.role"
+      >
+        <small>{{ item.role === "user" ? "你的问题" : roleName }}</small>
         <p>{{ item.text }}</p>
       </article>
       <button
@@ -31,17 +63,20 @@
       </button>
     </div>
     <form @submit.prevent="send">
-      <label class="sr-only" for="assistant-message">向助教提问</label
+      <label class="assistant-composer-label" for="assistant-message"
+        >向助教提问</label
       ><textarea
         id="assistant-message"
         v-model="question"
-        placeholder="这页哪里还不明白？"
-        rows="2"
+        placeholder="描述你卡住的概念或错误…"
+        rows="3"
         :disabled="!available || !allowed || busy"
         maxlength="2000"
       ></textarea>
-      <div>
-        <button v-if="busy" type="button" @click="cancel">停止回复</button
+      <div class="assistant-form-actions">
+        <span class="assistant-character-count"
+          >{{ question.length }} / 2000 字</span
+        ><button v-if="busy" type="button" @click="cancel">停止回复</button
         ><button
           v-else
           class="primary"
@@ -56,6 +91,7 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { api, notify } from "../shared/api";
+import "./learningUi.css";
 import { useSession } from "../shared/session";
 const props = defineProps<{
   activityId: string;

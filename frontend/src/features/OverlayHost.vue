@@ -5,13 +5,26 @@
     role="dialog"
     aria-modal="true"
     aria-label="游戏工作区"
-    @pointerdown.self="close"
   >
-    <section ref="panel" class="workspace-shell" tabindex="-1">
+    <section
+      ref="panel"
+      class="workspace-shell"
+      :class="`workspace-${session.workspace.kind}`"
+      tabindex="-1"
+    >
       <header class="workspace-topbar">
-        <span>{{ title }}</span
-        ><button aria-label="关闭当前工作区" @click="close">
-          关闭 <kbd>Esc</kbd>
+        <div class="workspace-heading">
+          <button
+            v-if="session.canGoBack"
+            class="workspace-back"
+            @click="session.back()"
+          >
+            ← 返回{{ previousTitle }} <kbd>Esc</kbd></button
+          ><span>{{ title }}</span
+          ><small>已暂停世界移动</small>
+        </div>
+        <button aria-label="关闭当前工作区" @click="close">
+          <GameIcon name="close" /><span>回到小镇</span><kbd v-if="!session.canGoBack">Esc</kbd>
         </button>
       </header>
       <LessonWorkspace
@@ -42,17 +55,10 @@
   </div>
 </template>
 <script setup lang="ts">
-import {
-  computed,
-  defineAsyncComponent,
-  nextTick,
-  onMounted,
-  onBeforeUnmount,
-  ref,
-  watch,
-} from "vue";
+import { computed, defineAsyncComponent, ref } from "vue";
 import { useSession } from "../shared/session";
-import { isTextFocus } from "../game/pathfinding";
+import { useModalFocus } from "../shared/modalFocus";
+import GameIcon from "../shared/GameIcon.vue";
 const LessonWorkspace = defineAsyncComponent(
     () => import("./LessonWorkspace.vue"),
   ),
@@ -68,7 +74,6 @@ const LessonWorkspace = defineAsyncComponent(
 const session = useSession(),
   emit = defineEmits<{ close: [] }>(),
   panel = ref<HTMLElement>();
-let previousFocus: HTMLElement | null = null;
 const titles = {
     lesson: "教学工作区",
     material: "资料阅读",
@@ -81,53 +86,18 @@ const titles = {
   title = computed(() =>
     session.workspace ? titles[session.workspace.kind] : "",
   );
+const previousTitle = computed(() =>
+  session.previousWorkspace ? titles[session.previousWorkspace.kind] : "",
+);
 function close() {
   emit("close");
 }
-function keydown(e: KeyboardEvent) {
-  if (e.key === "Escape" && session.workspace) {
-    e.preventDefault();
-    e.stopImmediatePropagation();
-    close();
-    return;
-  }
-  if (
-    e.key.toLowerCase() === "j" &&
-    !isTextFocus(document.activeElement) &&
-    !session.workspace
-  ) {
-    session.open({ kind: "journal" });
-    return;
-  }
-  if (e.key === "Tab" && session.workspace && panel.value) {
-    const focusable = Array.from(
-      panel.value.querySelectorAll<HTMLElement>(
-        'button:not([disabled]),a,input,textarea,select,[tabindex="0"]',
-      ),
-    );
-    const first = focusable[0],
-      last = focusable[focusable.length - 1];
-    if (e.shiftKey && document.activeElement === first) {
-      e.preventDefault();
-      last?.focus();
-    } else if (!e.shiftKey && document.activeElement === last) {
-      e.preventDefault();
-      first?.focus();
-    }
-  }
-}
-watch(
+useModalFocus(
+  panel,
   () => session.workspace,
-  async (next, old) => {
-    if (next && !old) {
-      previousFocus = document.activeElement as HTMLElement;
-      await nextTick();
-      panel.value?.focus();
-    }
-    if (!next && old) previousFocus?.focus();
+  () => {
+    if (session.canGoBack) session.back();
+    else close();
   },
-  { flush: "post" },
 );
-onMounted(() => window.addEventListener("keydown", keydown, true));
-onBeforeUnmount(() => window.removeEventListener("keydown", keydown, true));
 </script>

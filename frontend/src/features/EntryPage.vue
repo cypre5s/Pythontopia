@@ -38,7 +38,7 @@
       <button class="text-button" @click="register = !register">
         {{ register ? "已有居民证？登录" : "初次到访？注册居民证" }}
       </button>
-      <p class="muted">教师账号由管理员显式创建；学生注册不会获得管理权限。</p>
+      <p class="muted">学生可直接领取居民证；教师请使用学校提供的账号登录。</p>
       <RouterLink to="/credits">素材许可与来源</RouterLink>
     </section>
   </main>

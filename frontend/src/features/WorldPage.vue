@@ -13,10 +13,13 @@
         ref="canvas"
         :paused="Boolean(session.workspace || npc)"
         @position="positionChanged"
-        @interact="interact" /><GameHUD @guide="guide" /><DialogueLayer
+        @interact="interact" /><GameHUD
+        :blocked="Boolean(session.workspace || npc)"
+        @guide="guide" /><DialogueLayer
         v-if="dialogueNpc"
         :npc="dialogueNpc"
         :actions="actions"
+        :settling="dialogueSaving"
         @close="npc = null"
         @complete="finishDialogue"
         @action="action" /><OverlayHost @close="session.open(null)"
@@ -38,7 +41,14 @@
   </main>
 </template>
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onMounted,
+  onBeforeUnmount,
+  ref,
+  watch,
+} from "vue";
 import { useRouter } from "vue-router";
 import WorldCanvas from "./WorldCanvas.vue";
 import GameHUD from "./GameHUD.vue";
@@ -47,11 +57,13 @@ import OverlayHost from "./OverlayHost.vue";
 import { useSession } from "../shared/session";
 import { api, notify } from "../shared/api";
 import type { Npc, Player, Quest, QuestNode } from "../shared/types";
+import { isTextFocus } from "../game/pathfinding";
 const session = useSession(),
   router = useRouter(),
   loading = ref(true),
   error = ref(""),
   npc = ref<Npc | null>(null),
+  dialogueSaving = ref(false),
   joinCode = ref(""),
   canvas = ref<InstanceType<typeof WorldCanvas>>(),
   activityNpcs = ref<Record<string, string>>({});
@@ -170,7 +182,8 @@ async function positionChanged(player: Player) {
 async function interact(target: string, type: "npc" | "object") {
   if (type === "npc") {
     session.open(null);
-    npc.value = session.world?.npcs.find((n) => n.key === target) ?? null;
+    const resident = session.world?.npcs.find((n) => n.key === target);
+    npc.value = resident ? { ...resident } : null;
     return;
   }
   try {
@@ -191,8 +204,10 @@ async function interact(target: string, type: "npc" | "object") {
   if (target === "library_shelf") session.open({ kind: "library" });
 }
 async function finishDialogue(choice?: string) {
-  if (!npc.value) return;
-  const key = npc.value.key;
+  if (!npc.value || dialogueSaving.value) return;
+  const activeNpc = npc.value;
+  const key = activeNpc.key;
+  dialogueSaving.value = true;
   try {
     for (const quest of [...(session.world?.quests ?? [])])
       for (const node of quest.nodes) {
@@ -217,7 +232,8 @@ async function finishDialogue(choice?: string) {
   } catch (e) {
     notify(e instanceof Error ? e.message : "对白进度保存失败");
   }
-  npc.value = null;
+  if (npc.value === activeNpc) npc.value = null;
+  dialogueSaving.value = false;
 }
 function action(_quest: Quest, node: QuestNode) {
   npc.value = null;
@@ -227,5 +243,28 @@ function action(_quest: Quest, node: QuestNode) {
       activity_id: node.activity_id,
     });
 }
-onMounted(load);
+function worldShortcut(event: KeyboardEvent) {
+  if (
+    event.defaultPrevented ||
+    event.isComposing ||
+    event.repeat ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey ||
+    isTextFocus(document.activeElement) ||
+    session.workspace ||
+    npc.value ||
+    !session.world
+  )
+    return;
+  if (event.key.toLowerCase() === "j" || event.key === "Escape") {
+    event.preventDefault();
+    session.open({ kind: event.key === "Escape" ? "settings" : "journal" });
+  }
+}
+onMounted(() => {
+  void load();
+  window.addEventListener("keydown", worldShortcut);
+});
+onBeforeUnmount(() => window.removeEventListener("keydown", worldShortcut));
 </script>

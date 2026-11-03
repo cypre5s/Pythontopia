@@ -1,28 +1,66 @@
 <template>
-  <div class="pdf-reader">
-    <div class="reader-toolbar">
-      <button :disabled="page <= 1" @click="turn(-1)">←</button
-      ><span>第 {{ page }} / {{ count }} 页</span
-      ><button :disabled="page >= count" @click="turn(1)">→</button>
+  <div class="pdf-reader" :aria-busy="loading">
+    <nav class="reader-toolbar" aria-label="PDF 分页">
+      <button
+        :disabled="loading || page <= 1"
+        aria-label="上一页 PDF"
+        @click="turn(-1)"
+      >
+        ← 上一页</button
+      ><span
+        id="pdf-reading-position"
+        class="reader-position"
+        aria-live="polite"
+        >第 <strong>{{ page }}</strong> / {{ count }} 页<span
+          >PDF 课件</span
+        ></span
+      ><button
+        :disabled="loading || page >= count"
+        aria-label="下一页 PDF"
+        @click="turn(1)"
+      >
+        下一页 →
+      </button>
+    </nav>
+    <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <p v-if="loading" class="learning-empty" role="status">
+      正在加载 PDF 课件…
+    </p>
+    <div class="pdf-page-surface">
+      <canvas
+        ref="canvas"
+        aria-label="PDF课件当前页"
+        aria-describedby="pdf-reading-position"
+        role="img"
+      ></canvas>
     </div>
-    <p v-if="error" class="error">{{ error }}</p>
-    <canvas ref="canvas" aria-label="PDF课件当前页"></canvas>
+    <p class="pdf-page-help">需要复制内容时，可展开下方当前页的提取文本。</p>
   </div>
 </template>
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { api } from "../shared/api";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
+import "./learningUi.css";
 const props = defineProps<{ url: string; page: number }>(),
   emit = defineEmits<{ page: [value: number] }>(),
   canvas = ref<HTMLCanvasElement>(),
   count = ref(1),
-  error = ref("");
-let doc: PDFDocumentProxy | undefined, task: RenderTask | undefined;
+  error = ref(""),
+  loading = ref(true);
+let doc: PDFDocumentProxy | undefined,
+  task: RenderTask | undefined,
+  resizeObserver: ResizeObserver | undefined,
+  resizeFrame = 0,
+  lastWidth = 0,
+  renderGeneration = 0;
 const controller = new AbortController();
 async function load() {
+  loading.value = true;
   error.value = "";
   try {
+    task?.cancel();
+    await doc?.destroy();
     const [{ getDocument, GlobalWorkerOptions }, worker] = await Promise.all([
       import("pdfjs-dist"),
       import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
@@ -34,24 +72,33 @@ async function load() {
       isEvalSupported: false,
     }).promise;
     count.value = doc.numPages;
+    const valid = Math.min(count.value, Math.max(1, props.page));
+    if (valid !== props.page) emit("page", valid);
     await render();
   } catch (e) {
     if (!(e instanceof Error && e.name === "AbortError"))
       error.value = e instanceof Error ? e.message : "PDF加载失败";
+  } finally {
+    loading.value = false;
   }
 }
 async function render() {
   if (!doc || !canvas.value) return;
+  const generation = ++renderGeneration;
   task?.cancel();
-  const page = await doc.getPage(
-    Math.min(Math.max(1, props.page), doc.numPages),
+  const document = doc;
+  const page = await document.getPage(
+    Math.min(Math.max(1, props.page), document.numPages),
   );
-  const unscaled = page.getViewport({ scale: 1 });
-  const width = Math.min(canvas.value.parentElement?.clientWidth ?? 800, 1200);
+  if (generation !== renderGeneration || document !== doc || !canvas.value)
+    return;
+  const unscaled = page.getViewport({ scale: 1 }),
+    width = Math.min(canvas.value.parentElement?.clientWidth ?? 800, 1200);
+  if (width <= 0) return;
   const view = page.getViewport({
-    scale: Math.max(0.3, width / unscaled.width) * devicePixelRatio,
-  });
-  const ctx = canvas.value.getContext("2d");
+      scale: Math.max(0.3, (width - 16) / unscaled.width) * devicePixelRatio,
+    }),
+    ctx = canvas.value.getContext("2d");
   if (!ctx) return;
   canvas.value.width = view.width;
   canvas.value.height = view.height;
@@ -70,10 +117,25 @@ function turn(delta: number) {
 }
 watch(() => props.page, render);
 watch(() => props.url, load);
-onMounted(load);
+onMounted(() => {
+  if (typeof ResizeObserver !== "undefined" && canvas.value?.parentElement) {
+    resizeObserver = new ResizeObserver((entries) => {
+      const width = Math.floor(entries[0]?.contentRect.width ?? 0);
+      if (width > 0 && width !== lastWidth) {
+        lastWidth = width;
+        cancelAnimationFrame(resizeFrame);
+        resizeFrame = requestAnimationFrame(() => void render());
+      }
+    });
+    resizeObserver.observe(canvas.value.parentElement);
+  }
+  void load();
+});
 onBeforeUnmount(() => {
   controller.abort();
   task?.cancel();
+  resizeObserver?.disconnect();
+  cancelAnimationFrame(resizeFrame);
   void doc?.destroy();
 });
 </script>

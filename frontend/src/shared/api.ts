@@ -2,8 +2,9 @@ import { ref } from "vue";
 export const notices = ref<{ id: number; text: string }[]>([]);
 let nextId = 0;
 export function notify(text: string) {
+  if (notices.value.some((notice) => notice.text === text)) return;
   const id = ++nextId;
-  notices.value.push({ id, text });
+  notices.value = [...notices.value.slice(-2), { id, text }];
   window.setTimeout(() => {
     notices.value = notices.value.filter((n) => n.id !== id);
   }, 6500);
