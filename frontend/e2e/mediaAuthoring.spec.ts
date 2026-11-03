@@ -238,7 +238,7 @@ test('teacher authors real private media; student reads PDF, plays video and com
       await expect(student.getByRole('heading', { name: material.title, exact: true })).toBeVisible();
       if (index === 0) await expect(student.locator('.lesson-text')).toContainText('Self-authored TEST MEDIA');
       await student.getByRole('button', { name: '记录本次学习', exact: true }).click();
-      await expect(student.getByText('本次学习已记录，任务目标已更新。', { exact: true })).toBeVisible();
+      await expect(student.getByText('本次学习已记录，任务目标已更新。', { exact: true }).last()).toBeVisible();
       await expect.poll(async () => {
         const response = await request.get(`/api/world?classroom_id=${classroom.id}`, { headers });
         const state = await response.json();

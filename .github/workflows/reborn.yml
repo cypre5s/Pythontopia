@@ -6,6 +6,9 @@ on:
     branches: [reborn]
 permissions:
   contents: read
+concurrency:
+  group: reborn-checks-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -66,8 +69,12 @@ jobs:
         working-directory: frontend
       - name: Generate isolated test credential
         run: |
-          echo "E2E_TEACHER_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
-          echo "E2E_OTHER_TEACHER_PASSWORD=$(openssl rand -hex 24)" >> "$GITHUB_ENV"
+          reborn_teacher_password=$(openssl rand -hex 24)
+          reborn_other_password=$(openssl rand -hex 24)
+          echo "::add-mask::$reborn_teacher_password"
+          echo "::add-mask::$reborn_other_password"
+          echo "E2E_TEACHER_PASSWORD=$reborn_teacher_password" >> "$GITHUB_ENV"
+          echo "E2E_OTHER_TEACHER_PASSWORD=$reborn_other_password" >> "$GITHUB_ENV"
       - name: Start isolated native stack
         run: |
           cd backend
