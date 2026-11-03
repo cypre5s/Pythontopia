@@ -1,17 +1,9 @@
-# Alethicode Export
+# 课程包43来源
 
-一次性导出脚本只用于从 Alethicode 本地只读数据库导出 `packId=43`。CI 不运行该脚本。
+../json/ 保存从 Alethicode Python语言基础课程包43取得的原始结构化导出。Reborn 从这些显式文件幂等导入，不连接旧 Alethicode 数据库，也不在运行时自动抓取课程平台。
 
-```bash
-ALETHICODE_DB_URL='postgresql://<user>:<password>@127.0.0.1:5436/alethicode' \
-  uv run --with 'psycopg[binary]' python export_from_alethicode.py
-```
+源文件实际数量：7份文档、561页、7章、65个KC、46个示例、39道原编程题。源ID、页码和证据关联保留。39道原题不等于39道全部已审查发布；当前只开放核对过的476，其余归档等待审阅。
 
-导出后 JSON 会写入 `../json/`，并立即校验：
+原PDF/PPT和课程视频未在tracked仓库中提供。JSON中旧机器的绝对媒体路径只是来源元数据，不是新版可用文件地址。新版展示真实提取文本，上传媒体另行版本化。原页面提取文本可能重复或截断，不能补写成伪课件。
 
-- 7 份文档
-- 561 页
-- 7 章
-- 65 个有课件页证据映射的 KC
-- 46 个示例
-- 39 道可见题目
+导入命令和限制见根docs/development.md，课程与任务配置见docs/content-authoring.md。

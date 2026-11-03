@@ -1,11 +1,11 @@
 import secrets
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from .auth import current_user, require_teacher
+from .auth import as_utc, current_user, require_teacher
 from .db import get_db
 from .models import (
     Activity,
@@ -14,6 +14,7 @@ from .models import (
     Classroom,
     LearningEvent,
     LearningRecord,
+    KnowledgePoint,
     Membership,
     Npc,
     Question,
@@ -101,18 +102,25 @@ class ReleaseInput(BaseModel):
     def timezone_required(cls, value):
         if value and value.tzinfo is None:
             raise ValueError("开放时间必须包含时区")
-        return value
+        return value.astimezone(timezone.utc) if value is not None else None
 
 
 @router.put("/teacher/classrooms/{classroom_id}/releases/{chapter_id}")
 def release_chapter(
     classroom_id: int, chapter_id: int, body: ReleaseInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]
 ):
-    own_classroom(db, user, classroom_id)
-    if not db.get(Chapter, chapter_id):
+    classroom = own_classroom(db, user, classroom_id)
+    chapter = db.get(Chapter, chapter_id)
+    if not chapter:
         raise HTTPException(404, "章节不存在")
+    if chapter.owner_id is not None and chapter.owner_id != classroom.teacher_id:
+        raise HTTPException(403, "不能向本班发布其他教师的私有章节")
     if body.prerequisite_chapter_id == chapter_id or (body.prerequisite_chapter_id and not db.get(Chapter, body.prerequisite_chapter_id)):
         raise HTTPException(422, "前置章节无效")
+    if body.prerequisite_chapter_id:
+        prerequisite = db.get(Chapter, body.prerequisite_chapter_id)
+        if prerequisite.owner_id is not None and prerequisite.owner_id != classroom.teacher_id:
+            raise HTTPException(403, "不能引用其他教师的私有前置章节")
     visited = {chapter_id}
     previous = body.prerequisite_chapter_id
     while previous:
@@ -128,13 +136,40 @@ def release_chapter(
     for key, value in body.model_dump().items():
         setattr(release, key, value)
     db.commit()
-    return {"classroom_id": classroom_id, "chapter_id": chapter_id, **body.model_dump(), "pause_policy": "deny_all_new_requests_preserve_history"}
+    return {
+        "classroom_id": classroom_id,
+        "chapter_id": chapter_id,
+        **body.model_dump(),
+        "opens_at": as_utc(release.opens_at).isoformat() if release.opens_at is not None else None,
+        "pause_policy": "deny_all_new_requests_preserve_history",
+    }
 
 
 @router.get("/teacher/courses")
 def teacher_courses(db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
     return {
-        "chapters": [{"id": c.id, "title": c.title, "order_index": c.order_index} for c in db.scalars(select(Chapter).order_by(Chapter.order_index))],
+        "chapters": [
+            {"id": c.id, "title": c.title, "order_index": c.order_index, "owner_id": c.owner_id}
+            for c in db.scalars(
+                select(Chapter)
+                .where(True if user.role == "admin" else (Chapter.owner_id.is_(None)) | (Chapter.owner_id == user.id))
+                .order_by(Chapter.order_index)
+            )
+        ],
+        "knowledge_points": [
+            {"id": k.id, "chapter_id": k.chapter_id, "title": k.title, "content": k.content, "owner_id": k.owner_id}
+            for k in db.scalars(
+                select(KnowledgePoint)
+                .join(Chapter, Chapter.id == KnowledgePoint.chapter_id)
+                .where(
+                    True
+                    if user.role == "admin"
+                    else ((KnowledgePoint.owner_id.is_(None)) | (KnowledgePoint.owner_id == user.id))
+                    & ((Chapter.owner_id.is_(None)) | (Chapter.owner_id == user.id))
+                )
+                .order_by(KnowledgePoint.id)
+            )
+        ],
         "activities": [
             {
                 "id": a.id,
@@ -145,6 +180,8 @@ def teacher_courses(db: Annotated[Session, Depends(get_db)], user: Annotated[Use
                 "npc_key": a.npc_key,
                 "assistant_allowed": a.assistant_allowed,
                 "material_id": a.material_id,
+                "owner_id": a.owner_id,
+                "knowledge_point_ids": a.content.get("knowledge_point_ids", []),
             }
             for a in db.scalars(
                 select(Activity) if user.role == "admin" else select(Activity).where((Activity.owner_id.is_(None)) | (Activity.owner_id == user.id))
@@ -177,10 +214,18 @@ def progress(classroom_id: int, db: Annotated[Session, Depends(get_db)], user: A
             for m in members
         ],
         "events": [
-            {"id": e.id, "user_id": e.user_id, "node_id": e.node_id, "content_version": e.content_version, "created_at": e.created_at} for e in events
+            {
+                "id": e.id,
+                "user_id": e.user_id,
+                "node_id": e.node_id,
+                "content_version": e.content_version,
+                "created_at": as_utc(e.created_at).isoformat(),
+            }
+            for e in events
         ],
         "submissions": [
-            {"id": s.id, "user_id": s.user_id, "question_id": s.question_id, "status": s.status, "created_at": s.created_at} for s in submissions
+            {"id": s.id, "user_id": s.user_id, "question_id": s.question_id, "status": s.status, "created_at": as_utc(s.created_at).isoformat()}
+            for s in submissions
         ],
         "error_distribution": distribution,
     }
@@ -195,6 +240,14 @@ class ActivityInput(BaseModel):
     material_id: int | None = None
     npc_key: str
     assistant_allowed: bool = True
+    knowledge_point_ids: list[int] = Field(default_factory=list, max_length=65)
+
+    @field_validator("knowledge_point_ids", mode="before")
+    @classmethod
+    def valid_points(cls, value):
+        from .curriculum import validate_id_list
+
+        return validate_id_list(value)
 
 
 @router.post("/teacher/activities", status_code=201)
@@ -203,8 +256,11 @@ def create_activity(body: ActivityInput, db: Annotated[Session, Depends(get_db)]
 
     if db.get(Activity, body.id):
         raise HTTPException(409, "活动ID已存在")
-    if not db.get(Chapter, body.chapter_id) or not db.get(Npc, body.npc_key):
-        raise HTTPException(422, "章节或NPC不存在")
+    from .curriculum import validate_activity_points
+
+    validate_activity_points(db, user, body.chapter_id, body.knowledge_point_ids)
+    if not db.get(Npc, body.npc_key):
+        raise HTTPException(422, "NPC不存在")
     material = db.get(Material, body.material_id) if body.material_id else None
     if material and (material.chapter_id != body.chapter_id or (material.owner_id and material.owner_id != user.id and user.role != "admin")):
         raise HTTPException(403, "资料不属于当前教师或章节")
@@ -216,11 +272,14 @@ def create_activity(body: ActivityInput, db: Annotated[Session, Depends(get_db)]
         else None
     )
     item = Activity(
-        **body.model_dump(), owner_id=user.id, version=1, content={"published": True, "material_version": material_version, "question_ids": []}
+        **body.model_dump(exclude={"knowledge_point_ids"}),
+        owner_id=user.id,
+        version=1,
+        content={"published": True, "material_version": material_version, "question_ids": [], "knowledge_point_ids": body.knowledge_point_ids},
     )
     db.add(item)
     db.flush()
-    db.add(ActivityVersion(activity_id=item.id, version=1, snapshot={**body.model_dump(), "content": item.content}))
+    db.add(ActivityVersion(activity_id=item.id, version=1, snapshot={**body.model_dump(exclude={"knowledge_point_ids"}), "content": item.content}))
     db.commit()
     return {"id": item.id, "version": item.version}
 
@@ -231,6 +290,14 @@ class ActivityUpdate(BaseModel):
     npc_key: str | None = None
     assistant_allowed: bool | None = None
     material_id: int | None = None
+    knowledge_point_ids: list[int] | None = Field(default=None, max_length=65)
+
+    @field_validator("knowledge_point_ids", mode="before")
+    @classmethod
+    def valid_points(cls, value):
+        from .curriculum import validate_id_list
+
+        return validate_id_list(value)
 
 
 @router.put("/teacher/activities/{activity_id}")
@@ -243,6 +310,11 @@ def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Sessio
     if item.owner_id != user.id and user.role != "admin":
         raise HTTPException(403, "共享种子不可覆盖，请创建教师自己的活动并绑定新任务版本")
     changes = body.model_dump(exclude_unset=True)
+    new_points = changes.pop("knowledge_point_ids", None)
+    if new_points is not None:
+        from .curriculum import validate_activity_points
+
+        validate_activity_points(db, user, item.chapter_id, new_points)
     if any(key in changes and changes[key] is None for key in ("title", "npc_key", "assistant_allowed")):
         raise HTTPException(422, "活动必填字段不能设为空")
     if changes.get("npc_key") and not db.get(Npc, changes["npc_key"]):
@@ -256,6 +328,8 @@ def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Sessio
         db.add(ActivityVersion(activity_id=item.id, version=item.version, snapshot={key: getattr(item, key) for key in fields}))
     for key, value in changes.items():
         setattr(item, key, value)
+    if new_points is not None:
+        item.content = {**item.content, "knowledge_point_ids": new_points}
     if changes.get("material_id"):
         from .models import MaterialVersion
 
@@ -389,7 +463,7 @@ def list_releases(classroom_id: int, db: Annotated[Session, Depends(get_db)], us
             "chapter_id": r.chapter_id,
             "version": r.version,
             "status": r.status,
-            "opens_at": r.opens_at,
+            "opens_at": as_utc(r.opens_at).isoformat() if r.opens_at is not None else None,
             "prerequisite_chapter_id": r.prerequisite_chapter_id,
             "pause_policy": "deny_all_new_requests_preserve_history",
         }
@@ -412,7 +486,7 @@ def student_record(classroom_id: int, student_id: int, db: Annotated[Session, De
                 "player_quest_id": e.player_quest_id,
                 "content_version": e.content_version,
                 "evidence": e.evidence,
-                "created_at": e.created_at,
+                "created_at": as_utc(e.created_at).isoformat(),
             }
             for e in db.scalars(
                 select(LearningEvent)
@@ -421,7 +495,14 @@ def student_record(classroom_id: int, student_id: int, db: Annotated[Session, De
             )
         ],
         "participation": [
-            {"id": r.id, "activity_id": r.activity_id, "version": r.version, "kind": r.kind, "data": r.data, "created_at": r.created_at}
+            {
+                "id": r.id,
+                "activity_id": r.activity_id,
+                "version": r.version,
+                "kind": r.kind,
+                "data": r.data,
+                "created_at": as_utc(r.created_at).isoformat(),
+            }
             for r in db.scalars(select(LearningRecord).where(LearningRecord.classroom_id == classroom_id, LearningRecord.user_id == student_id))
         ],
         "submissions": [
@@ -434,7 +515,7 @@ def student_record(classroom_id: int, student_id: int, db: Annotated[Session, De
                 "answer": s.answer,
                 "code": s.code,
                 "feedback": s.feedback,
-                "created_at": s.created_at,
+                "created_at": as_utc(s.created_at).isoformat(),
             }
             for s in db.scalars(
                 select(Submission).where(Submission.classroom_id == classroom_id, Submission.user_id == student_id).order_by(Submission.created_at)

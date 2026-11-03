@@ -10,9 +10,11 @@ from .db import get_db
 from .models import (
     Activity,
     ActivityVersion,
+    Chapter,
     ChapterRelease,
     Classroom,
     LearningRecord,
+    KnowledgePoint,
     Material,
     MaterialVersion,
     Membership,
@@ -35,6 +37,10 @@ def authorize_classroom(db: Session, user: User, classroom_id: int):
 
 
 def chapter_available(db: Session, user: User, classroom_id: int, chapter_id: int, visiting=None) -> bool:
+    chapter = db.get(Chapter, chapter_id)
+    classroom = db.get(Classroom, classroom_id)
+    if not chapter or not classroom or (chapter.owner_id is not None and chapter.owner_id != classroom.teacher_id and user.role != "admin"):
+        return False
     release = db.get(ChapterRelease, (classroom_id, chapter_id))
     if not release or release.status != "published" or (release.opens_at and as_utc(release.opens_at) > datetime.now(timezone.utc)):
         return False
@@ -48,13 +54,18 @@ def chapter_available(db: Session, user: User, classroom_id: int, chapter_id: in
         classroom = db.get(Classroom, classroom_id)
         prerequisite_release = db.get(ChapterRelease, (classroom_id, release.prerequisite_chapter_id))
         definitions = db.scalars(
-            select(QuestDefinition).where(
+            select(QuestDefinition)
+            .where(
                 QuestDefinition.chapter_id == release.prerequisite_chapter_id,
                 QuestDefinition.version <= prerequisite_release.version,
                 (QuestDefinition.owner_id.is_(None)) | (QuestDefinition.owner_id == classroom.teacher_id),
             )
+            .order_by(QuestDefinition.version.desc())
         ).all()
-        ids = {item.id for item in definitions}
+        latest = {}
+        for item in definitions:
+            latest.setdefault(item.id, item)
+        ids = {item.id for item in latest.values() if item.definition.get("kind", "main") == "main"}
         completed = set(
             db.scalars(
                 select(PlayerQuest.quest_id).where(
@@ -69,6 +80,11 @@ def chapter_available(db: Session, user: User, classroom_id: int, chapter_id: in
 
 def authorize_chapter(db: Session, user: User, classroom_id: int, chapter_id: int):
     classroom = authorize_classroom(db, user, classroom_id)
+    chapter = db.get(Chapter, chapter_id)
+    if not chapter:
+        raise HTTPException(404, "章节不存在")
+    if chapter.owner_id is not None and chapter.owner_id != classroom.teacher_id and user.role != "admin":
+        raise HTTPException(403, "章节不属于当前班级教师")
     if user.role == "admin" or classroom.teacher_id == user.id:
         return
     if not chapter_available(db, user, classroom_id, chapter_id):
@@ -206,6 +222,22 @@ def get_activity(activity_id: str, classroom_id: int, db: Annotated[Session, Dep
     material = db.get(Material, activity.material_id) if activity.material_id else None
     if material:
         authorize_material(db, user, classroom_id, material.id)
+    classroom = db.get(Classroom, classroom_id)
+    points = []
+    for point_id in activity.content.get("knowledge_point_ids", []):
+        point = db.get(KnowledgePoint, point_id)
+        if not point or point.chapter_id != activity.chapter_id:
+            raise HTTPException(409, "活动知识点关联无效")
+        if point.owner_id not in {None, classroom.teacher_id} and user.role != "admin":
+            raise HTTPException(403, "知识点不属于当前班级发布范围")
+        points.append(
+            {
+                "id": point.id,
+                "title": point.title,
+                "chapter_id": point.chapter_id,
+                "source": {"kc_code": point.content.get("kc_code"), "page_ids": point.content.get("page_refs", [])},
+            }
+        )
     return {
         "id": activity.id,
         "chapter_id": activity.chapter_id,
@@ -214,6 +246,8 @@ def get_activity(activity_id: str, classroom_id: int, db: Annotated[Session, Dep
         "version": activity.version,
         "npc_key": activity.npc_key,
         "assistant_allowed": activity.assistant_allowed,
+        "knowledge_point_ids": activity.content.get("knowledge_point_ids", []),
+        "knowledge_points": points,
         "material": material_payload(db, material, activity.content.get("material_version")) if material else None,
         "questions": [
             public_question(q)

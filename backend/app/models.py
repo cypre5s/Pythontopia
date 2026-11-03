@@ -49,11 +49,13 @@ class Chapter(Base):
     title: Mapped[str] = mapped_column(String(200))
     order_index: Mapped[int] = mapped_column(Integer, unique=True)
     course_id: Mapped[int] = mapped_column(Integer, default=43)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
 
 
 class KnowledgePoint(Base):
     __tablename__ = "knowledge_points"
     id: Mapped[int] = mapped_column(primary_key=True)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
     chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), index=True)
     title: Mapped[str] = mapped_column(String(200))
     content: Mapped[dict] = mapped_column(JSON, default=dict)

@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from .config import CORS_ORIGINS
 from .db import SessionLocal
-from . import auth, courses, classrooms, quests, practice, assistant, storage, dialogues
+from . import auth, courses, classrooms, quests, practice, assistant, storage, dialogues, curriculum
 
 
 @asynccontextmanager
@@ -26,7 +26,7 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type", "Range"],
 )
-for module in (auth, courses, classrooms, quests, practice, assistant, storage, dialogues):
+for module in (auth, courses, classrooms, quests, practice, assistant, storage, dialogues, curriculum):
     app.include_router(module.router, prefix="/api")
 
 

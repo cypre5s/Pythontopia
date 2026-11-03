@@ -10,6 +10,7 @@ class Base(DeclarativeBase):
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
+    hide_parameters=True,
     pool_timeout=10,
     connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {"connect_timeout": 5},
 )

@@ -295,6 +295,37 @@ def seed(db, source=None):
             activity.content = {**activity.content, "question_ids": question_ids}
             snapshot = db.get(ActivityVersion, (activity_id, 1))
             snapshot.snapshot = {**snapshot.snapshot, "content": activity.content}
+    # These IDs come from the exported KC/page evidence. This adds descriptive
+    # metadata only; question sets, evidence requirements and quest state do not change.
+    activity_pages = {
+        "ch1-practice": {10715, 10723, 10724},
+        "ch2-lesson": {10731, 10732, 10734, 10735, 10736, 10750},
+        "ch2-concept": {10731, 10732, 10734},
+        "ch2-io": {10771, 10786, 10787},
+    }
+    code_to_kc = {k["kc_code"]: k["id"] for k in kcs}
+    for activity_id, chapter_id, *_ in activities:
+        activity = db.get(Activity, activity_id)
+        if activity_id == "ch1-lesson":
+            point_ids = sorted(k["id"] for k in kcs if k["chapter_id"] == chapter_id)
+        elif activity_id == "ch2-code":
+            problem = next(p for p in problems if p["id"] == 476)
+            point_ids = [code_to_kc[problem["kc_code"]]]
+        else:
+            point_ids = sorted(
+                k["id"] for k in kcs if k["chapter_id"] == chapter_id and set(k.get("page_refs", [])) & activity_pages.get(activity_id, set())
+            )
+        if "knowledge_point_ids" not in activity.content:
+            activity.content = {**activity.content, "knowledge_point_ids": point_ids}
+        snapshot = db.get(ActivityVersion, (activity_id, 1))
+        old_content = snapshot.snapshot.get("content", {})
+        if "knowledge_point_ids" not in old_content:
+            snapshot.snapshot = {**snapshot.snapshot, "content": {**old_content, "knowledge_point_ids": point_ids}}
+    for problem in problems:
+        if problem["id"] != 476:
+            activity = db.get(Activity, "archive-" + str(problem["id"]))
+            if "knowledge_point_ids" not in activity.content:
+                activity.content = {**activity.content, "knowledge_point_ids": [code_to_kc[problem["kc_code"]]]}
     from .dialogues import validate_dialogue
 
     for key, name, map_key, x, y, dialogue_id, text in NPCS:

@@ -210,3 +210,54 @@ def test_private_http_converter_does_not_follow_redirects(tmp_path, monkeypatch)
     with pytest.raises(ValueError, match="转换服务"):
         storage.convert_presentation(source, tmp_path)
     assert requests == ["http://private-converter.test/convert"]
+
+
+def test_image_fallback_keeps_host_read_only_and_applies_isolation(tmp_path, monkeypatch):
+    import subprocess
+    from app import storage
+
+    source = tmp_path / "self authored.pptx"
+    source.write_bytes(b"explicit-test-presentation")
+    monkeypatch.delenv("REBORN_CONVERTER_URL", raising=False)
+    monkeypatch.setenv("REBORN_CONVERTER_IMAGE", "pythontopia-reborn-converter:test-only")
+    pdf = b"%PDF-1.4\nexplicit-test-output\n%%EOF"
+
+    def fake_process(command, **kwargs):
+        assert command[:3] == ["docker", "run", "--rm"]
+        assert "--network=none" in command and "--cap-drop=ALL" in command
+        assert "--security-opt=no-new-privileges:true" in command and "--read-only" in command
+        assert "HOME=/tmp" in command and "TMPDIR=/tmp" in command
+        mounts = [arg for arg in command if arg.startswith("type=bind,")]
+        assert len(mounts) == 1 and mounts[0].endswith("dst=/input,readonly")
+        assert "timeout" in command and "55s" in command
+        assert kwargs["timeout"] == 70 and kwargs.get("shell") is not True
+        assert command[command.index("--name") + 1].startswith("reborn-presentation-")
+        return subprocess.CompletedProcess(command, 0, stdout=pdf, stderr=b"")
+
+    monkeypatch.setattr(storage.subprocess, "run", fake_process)
+    result = storage.convert_presentation(source, tmp_path)
+    assert result.read_bytes() == pdf
+
+
+def test_image_fallback_timeout_only_removes_its_own_container(tmp_path, monkeypatch):
+    import subprocess
+    from app import storage
+
+    source = tmp_path / "source.pptx"
+    source.write_bytes(b"explicit-test-presentation")
+    monkeypatch.delenv("REBORN_CONVERTER_URL", raising=False)
+    monkeypatch.setenv("REBORN_CONVERTER_IMAGE", "pythontopia-reborn-converter:test-only")
+    calls = []
+
+    def fake_process(command, **kwargs):
+        calls.append(command)
+        if command[1] == "run":
+            raise subprocess.TimeoutExpired(command, 70)
+        return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")
+
+    monkeypatch.setattr(storage.subprocess, "run", fake_process)
+    with pytest.raises(ValueError, match="超时"):
+        storage.convert_presentation(source, tmp_path)
+    name = calls[0][calls[0].index("--name") + 1]
+    assert calls[1] == ["docker", "rm", "--force", name]
+    assert name.startswith("reborn-presentation-") and len(calls) == 2

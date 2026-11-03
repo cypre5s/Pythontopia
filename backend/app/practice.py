@@ -11,7 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
-from .auth import current_user
+from .auth import as_utc, current_user
 from .db import SessionLocal, get_db
 from .integration_models import SubmissionPayload
 from .judge import JudgeAdapter, JudgeSubmissionUnknown, JudgeUnavailable
@@ -40,7 +40,7 @@ def public_submission(row: Submission) -> dict:
         "mode": row.mode,
         "status": row.status,
         "feedback": row.feedback,
-        "created_at": row.created_at.isoformat(),
+        "created_at": as_utc(row.created_at).isoformat(),
     }
 
 

@@ -27,7 +27,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from .auth import current_user, require_teacher
 from .db import SessionLocal, get_db
-from .models import Chapter, Material, MaterialVersion, User
+from .models import Material, MaterialVersion, User
 
 router = APIRouter(tags=["materials"])
 MAX_UPLOAD = int(os.getenv("REBORN_MAX_UPLOAD_BYTES", str(128 * 1024 * 1024)))
@@ -168,8 +168,9 @@ async def upload_material(
     suffix = Path(name).suffix.lower()
     if suffix not in KINDS:
         raise HTTPException(415, "不支持此文件类型")
-    if not db.get(Chapter, chapter_id):
-        raise HTTPException(404, "章节不存在")
+    from .curriculum import authoring_chapter
+
+    authoring_chapter(db, user, chapter_id)
     material = db.get(Material, material_id) if material_id else None
     if material_id and (not material or (material.owner_id != user.id and user.role != "admin")):
         raise HTTPException(403, "只能更新自己上传的资料")
@@ -379,38 +380,71 @@ def convert_presentation(source: Path, tmp: Path) -> Path:
         raise ValueError("PPT转换器未配置：请配置经过审计的LibreOffice容器镜像")
     output = tmp / "converted"
     output.mkdir()
+    container_name = "reborn-presentation-" + uuid4().hex
+    macro_policy = (
+        '<?xml version="1.0" encoding="UTF-8"?><oor:items xmlns:oor="http://openoffice.org/2001/registry">'
+        '<item oor:path="/org.openoffice.Office.Common/Security/Scripting">'
+        '<prop oor:name="MacroSecurityLevel" oor:op="fuse"><value>3</value></prop></item></oor:items>'
+    )
     command = [
         "docker",
         "run",
         "--rm",
+        "--name",
+        container_name,
+        "--label",
+        "com.pythontopia.project=reborn",
         "--network=none",
         "--memory=512m",
         "--cpus=1",
         "--pids-limit=64",
+        "--cap-drop=ALL",
+        "--security-opt=no-new-privileges:true",
         "--read-only",
+        "--env",
+        "HOME=/tmp",
+        "--env",
+        "TMPDIR=/tmp",
         "--tmpfs",
         "/tmp:rw,noexec,nosuid,size=256m",
         "--mount",
         f"type=bind,src={source.parent},dst=/input,readonly",
-        "--mount",
-        f"type=bind,src={output},dst=/output",
         image,
-        "libreoffice",
-        "-env:UserInstallation=file:///tmp/lo",
-        "--headless",
-        "--convert-to",
-        "pdf",
-        "--outdir",
-        "/output",
+        "timeout",
+        "--signal=TERM",
+        "--kill-after=5",
+        "55s",
+        "python3",
+        "-c",
+        "import os,subprocess,sys;from pathlib import Path;"
+        "os.umask(0o022);source=Path(sys.argv[1]);output=Path(sys.argv[2]);output.mkdir();"
+        "profile=Path('/tmp/lo/user');profile.mkdir(parents=True);(profile/'registrymodifications.xcu').write_text(sys.argv[4]);"
+        "subprocess.run(['libreoffice','-env:UserInstallation=file:///tmp/lo','--headless','--convert-to','pdf','--outdir',str(output),str(source)],check=True,timeout=50,stdout=sys.stderr);"
+        "pdf=output/(source.stem+'.pdf');assert 0<pdf.stat().st_size<=int(sys.argv[3]);sys.stdout.buffer.write(pdf.read_bytes())",
         "/input/" + source.name,
+        "/tmp/output",
+        str(MAX_UPLOAD),
+        macro_policy,
     ]
     try:
-        subprocess.run(command, check=True, timeout=60, capture_output=True)
+        completed = subprocess.run(command, check=True, timeout=70, capture_output=True)
+    except subprocess.TimeoutExpired as exc:
+        # Killing the Docker client does not guarantee that its container stops.
+        # Scope cleanup to the generated name of this one conversion job.
+        try:
+            subprocess.run(["docker", "rm", "--force", container_name], timeout=10, capture_output=True)
+        except (OSError, subprocess.SubprocessError):
+            pass
+        raise ValueError("隔离PPT转换超时") from exc
     except (OSError, subprocess.SubprocessError) as exc:
-        raise ValueError("隔离PPT转换失败或超时；请检查转换服务") from exc
+        raise ValueError("隔离PPT转换失败；请检查转换服务") from exc
     result = output / (source.stem + ".pdf")
-    if not result.is_file() or result.stat().st_size > MAX_UPLOAD:
+    if not 0 < len(completed.stdout) <= MAX_UPLOAD:
+        raise ValueError("PPT转换输出为空或超过大小上限")
+    result.write_bytes(completed.stdout)
+    if not result.is_file() or not 0 < result.stat().st_size <= MAX_UPLOAD:
         raise ValueError("PPT转换未产生有效PDF")
+    validate_upload(result, ".pdf")
     return result
 
 

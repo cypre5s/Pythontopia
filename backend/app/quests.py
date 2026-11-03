@@ -46,25 +46,29 @@ OBJECTS = {
 
 
 def validate_definition(definition: dict, db: Session | None = None) -> dict:
+    if not isinstance(definition, dict):
+        raise ValueError("任务定义必须为对象")
     if set(definition) - {"id", "version", "title", "chapter_id", "nodes", "effects", "kind"}:
         raise ValueError("未知任务字段")
-    if (
-        not isinstance(definition.get("id"), str)
-        or not definition.get("title")
-        or type(definition.get("version")) is not int
-        or definition["version"] < 1
-    ):
-        raise ValueError("任务需要 id、title 和正整数 version")
+    if not isinstance(definition.get("id"), str) or not definition["id"].strip() or len(definition["id"]) > 100:
+        raise ValueError("任务id必须为非空短字符串")
+    if not isinstance(definition.get("title"), str) or not definition["title"].strip() or len(definition["title"]) > 200:
+        raise ValueError("任务标题必须为非空短字符串")
+    if type(definition.get("version")) is not int or definition["version"] < 1:
+        raise ValueError("任务version必须为正整数")
+    if type(definition.get("chapter_id")) is not int or definition["chapter_id"] < 1:
+        raise ValueError("章节id必须为正整数")
+    if definition.get("kind", "main") not in ("main", "side"):
+        raise ValueError("任务kind只能为main或side")
     nodes = definition.get("nodes", [])
-    if not isinstance(nodes, list) or not 1 <= len(nodes) <= 100:
-        raise ValueError("任务需要1至100个节点")
-    if any(not isinstance(node, dict) for node in nodes):
-        raise ValueError("任务节点必须为对象")
+    if not isinstance(nodes, list) or not 1 <= len(nodes) <= 100 or any(not isinstance(node, dict) for node in nodes):
+        raise ValueError("任务需要1至100个对象节点")
     ids = [node.get("id") for node in nodes]
-    if len(set(ids)) != len(ids) or any(not isinstance(i, str) or not i for i in ids):
-        raise ValueError("节点id缺失或重复")
+    if any(not isinstance(id, str) or not id.strip() or len(id) > 100 for id in ids):
+        raise ValueError("节点id必须为非空短字符串")
+    if len(set(ids)) != len(ids):
+        raise ValueError("节点id重复")
     mapping = {node["id"]: node for node in nodes}
-    roots = []
     for node in nodes:
         if set(node) - {
             "id",
@@ -81,25 +85,55 @@ def validate_definition(definition: dict, db: Session | None = None) -> dict:
             "dialogue_id",
         }:
             raise ValueError("未知节点字段")
-        if node.get("type") not in NODE_TYPES or not node.get("title"):
+        if (
+            not isinstance(node.get("type"), str)
+            or node["type"] not in NODE_TYPES
+            or not isinstance(node.get("title"), str)
+            or not node["title"].strip()
+        ):
             raise ValueError("节点类型或标题无效")
+        if "optional" in node and type(node["optional"]) is not bool:
+            raise ValueError("optional必须为布尔值")
+        for field in ("target", "activity_id", "dialogue_id"):
+            if field in node and (not isinstance(node[field], str) or not node[field].strip() or len(node[field]) > 100):
+                raise ValueError(f"{field}必须为非空短字符串")
         dependencies = node.get("dependencies", [])
-        if not isinstance(dependencies, list) or len(set(dependencies)) != len(dependencies) or any(dep not in mapping for dep in dependencies):
+        if not isinstance(dependencies, list) or any(not isinstance(dep, str) or not dep for dep in dependencies):
+            raise ValueError("dependencies必须为节点id字符串列表")
+        if len(set(dependencies)) != len(dependencies) or any(dep not in mapping for dep in dependencies):
             raise ValueError("悬空或重复依赖")
-        if node.get("aggregation", "ALL") not in {"ALL", "ANY"}:
+        if node.get("aggregation", "ALL") not in ("ALL", "ANY"):
             raise ValueError("聚合必须为ALL或ANY")
-        if not dependencies:
-            roots.append(node["id"])
-        condition = node.get("condition")
-        if condition:
-            if set(condition) != {"node", "choice"} or condition["node"] not in mapping or condition["node"] not in dependencies:
-                raise ValueError("分支条件必须引用直接前置节点")
-            choices = mapping[condition["node"]].get("choices", [])
-            if condition["choice"] not in [c["id"] for c in choices]:
-                raise ValueError("分支选项不存在")
         choices = node.get("choices", [])
-        if any(not isinstance(c, dict) or set(c) != {"id", "label"} for c in choices) or len({c["id"] for c in choices}) != len(choices):
-            raise ValueError("选择项无效或重复")
+        if not isinstance(choices, list) or any(not isinstance(choice, dict) or set(choice) != {"id", "label"} for choice in choices):
+            raise ValueError("choices必须为id/label对象列表")
+        if any(
+            not isinstance(choice["id"], str)
+            or not choice["id"].strip()
+            or len(choice["id"]) > 80
+            or not isinstance(choice["label"], str)
+            or not choice["label"].strip()
+            or len(choice["label"]) > 200
+            for choice in choices
+        ):
+            raise ValueError("选项id和label必须为非空短字符串")
+        if len({choice["id"] for choice in choices}) != len(choices):
+            raise ValueError("选择项id重复")
+        condition = node.get("condition")
+        if condition is not None:
+            if (
+                not isinstance(condition, dict)
+                or set(condition) != {"node", "choice"}
+                or any(not isinstance(condition[key], str) or not condition[key] for key in ("node", "choice"))
+            ):
+                raise ValueError("condition必须包含node和choice字符串")
+            if condition["node"] not in mapping or condition["node"] not in dependencies:
+                raise ValueError("分支条件必须引用直接前置节点")
+            parent_choices = mapping[condition["node"]].get("choices", [])
+            if not isinstance(parent_choices, list) or not any(
+                isinstance(choice, dict) and choice.get("id") == condition["choice"] for choice in parent_choices
+            ):
+                raise ValueError("分支选项不存在")
         activity_version = node.get("activity_version", 1)
         if type(activity_version) is not int or activity_version < 1:
             raise ValueError("活动版本必须是正整数")
@@ -116,8 +150,9 @@ def validate_definition(definition: dict, db: Session | None = None) -> dict:
                 expected = {"STUDY_LESSON": {"lesson", "reading"}, "COMPLETE_PRACTICE": {"practice"}, "PASS_ASSESSMENT": {"assessment"}}[node["type"]]
                 if snapshot.snapshot.get("kind") not in expected:
                     raise ValueError("任务节点与教学活动版本类型不匹配")
-        if node["type"] in {"TALK_TO_NPC", "PLAY_DIALOGUE", "REPORT_BACK"} and db and not db.get(Npc, node.get("target")):
-            raise ValueError("NPC不存在")
+        if node["type"] in {"TALK_TO_NPC", "PLAY_DIALOGUE", "REPORT_BACK"}:
+            if not node.get("target") or (db and not db.get(Npc, node["target"])):
+                raise ValueError("NPC不存在")
         if node["type"] in {"REACH_LOCATION", "INTERACT_OBJECT"} and node.get("target") not in OBJECTS:
             raise ValueError("目标对象不存在")
     visiting, done = set(), set()
@@ -135,16 +170,18 @@ def validate_definition(definition: dict, db: Session | None = None) -> dict:
 
     for node_id in mapping:
         visit(node_id)
-    if not roots:
-        raise ValueError("没有可达起点")
-    if db and not db.get(Chapter, definition.get("chapter_id")):
+    if db and not db.get(Chapter, definition["chapter_id"]):
         raise ValueError("章节不存在")
-    for effect in definition.get("effects", []):
+    effects = definition.get("effects", [])
+    if not isinstance(effects, list):
+        raise ValueError("effects必须为列表")
+    for effect in effects:
         if (
             not isinstance(effect, dict)
             or set(effect) != {"type", "key"}
-            or effect["type"] != "set_world_flag"
-            or not isinstance(effect["key"], str)
+            or effect.get("type") != "set_world_flag"
+            or not isinstance(effect.get("key"), str)
+            or not effect["key"].strip()
             or len(effect["key"]) > 100
         ):
             raise ValueError("只允许明确的世界标记效果")
@@ -217,7 +254,7 @@ def ensure_quests(db, user, classroom_id):
 
 
 def world_payload(db, user, classroom_id):
-    authorize_classroom(db, user, classroom_id)
+    classroom = authorize_classroom(db, user, classroom_id)
     ensure_quests(db, user, classroom_id)
     position = db.get(PlayerPosition, (user.id, classroom_id))
     player = (
@@ -267,6 +304,8 @@ def world_payload(db, user, classroom_id):
                 "available": chapter_available(db, user, classroom_id, chapter.id),
             }
             for chapter in db.scalars(select(Chapter).order_by(Chapter.order_index))
+            if (chapter.owner_id in {None, classroom.teacher_id} or user.role == "admin")
+            and (chapter.owner_id is None or user.role != "student" or chapter_available(db, user, classroom_id, chapter.id))
         ],
         "flags": list(db.scalars(select(WorldFlag.key).where(WorldFlag.user_id == user.id, WorldFlag.classroom_id == classroom_id))),
     }
@@ -481,7 +520,17 @@ class DefinitionInput(BaseModel):
 @router.post("/teacher/quests/validate")
 def validate_quest(body: DefinitionInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
     try:
-        return {"valid": True, "definition": validate_definition(body.definition, db)}
+        definition = validate_definition(body.definition, db)
+        from .curriculum import authoring_chapter
+
+        authoring_chapter(db, user, definition["chapter_id"])
+        for node in definition["nodes"]:
+            if node.get("activity_id"):
+                activity = db.get(Activity, node["activity_id"])
+                authoring_chapter(db, user, activity.chapter_id)
+                if activity.owner_id and activity.owner_id != user.id and user.role != "admin":
+                    raise HTTPException(403, "任务不能绑定其他教师的活动")
+        return {"valid": True, "definition": definition}
     except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(422, str(exc))
 
@@ -492,11 +541,15 @@ def create_quest(body: DefinitionInput, db: Annotated[Session, Depends(get_db)],
         definition = validate_definition(body.definition, db)
     except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(422, str(exc))
+    from .curriculum import authoring_chapter
+
+    authoring_chapter(db, user, definition["chapter_id"])
     if db.get(QuestDefinition, (definition["id"], definition["version"])):
         raise HTTPException(409, "已发布版本不可覆盖，请使用新版本号")
     for node in definition["nodes"]:
         if node.get("activity_id"):
             activity = db.get(Activity, node["activity_id"])
+            authoring_chapter(db, user, activity.chapter_id)
             if activity.owner_id and activity.owner_id != user.id and user.role != "admin":
                 raise HTTPException(403, "任务不能绑定其他教师的活动")
     db.add(
