@@ -315,7 +315,7 @@ describe("HUD next step and required progress", () => {
       ],
       "已交付的来信",
     );
-    expect(wrapper.get(".quest-tracker h2").text()).toBe("下一段主线");
+    expect(wrapper.get(".quest-title").text()).toBe("下一段主线");
     expect(wrapper.get(".quest-next").text()).toBe("阅读下一课");
     await wrapper.get(".quest-go").trigger("click");
     expect(session.workspace).toEqual({
@@ -325,7 +325,7 @@ describe("HUD next step and required progress", () => {
 
     session.trackedQuest = "支线找书";
     await nextTick();
-    expect(wrapper.get(".quest-tracker h2").text()).toBe("支线找书");
+    expect(wrapper.get(".quest-title").text()).toBe("支线找书");
   });
 
   it("counts only required steps on the selected branch", () => {

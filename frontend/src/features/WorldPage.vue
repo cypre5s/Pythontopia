@@ -1,6 +1,6 @@
 <template>
   <main class="world-page">
-    <div v-if="loading" class="screen-message">正在连接小镇存档…</div>
+    <div v-if="loading" class="screen-message" :class="{ 'arrival-blackout': welcome }">正在连接小镇存档…</div>
     <section v-else-if="error" class="screen-message">
       <h1>暂时无法进入小镇</h1>
       <p>{{ error }}</p>
@@ -11,10 +11,13 @@
       ><WorldCanvas
         :key="session.classroomId"
         ref="canvas"
-        :paused="Boolean(session.workspace || npc)"
+        :paused="Boolean(session.workspace || npc || welcome)"
+        @ready="onWorldReady"
         @position="positionChanged"
         @interact="interact" /><GameHUD
+        v-if="!welcome"
         :blocked="Boolean(session.workspace || npc)"
+        :class="{ 'is-entering': entered }"
         @guide="guide" /><DialogueLayer
         v-if="dialogueNpc"
         :npc="dialogueNpc"
@@ -24,7 +27,10 @@
         @complete="finishDialogue"
         @action="action" /><OverlayHost @close="session.open(null)"
     /></template>
-    <section v-else class="screen-message class-entry">
+    <section v-else class="arrival-page">
+
+      <strong class="arrival-brand">PYTHONTOPIA</strong>
+      <div class="arrival-panel">
       <p class="eyebrow">居民证已就绪</p>
       <h1>先加入你的班级</h1>
       <p>向教师领取加入码，开放的章节会出现在小镇里。</p>
@@ -37,7 +43,9 @@
         /><button class="primary">加入班级</button>
       </form>
       <button class="text-button" @click="logout">退出账号</button>
+      </div>
     </section>
+    <ArrivalWelcome v-if="welcome && !proceeding && session.world && session.classroomId && !loading && !error" :ready="worldReady && backdropReady" :name="session.user?.name ?? ''" @continue="finishArrival" />
   </main>
 </template>
 <script setup lang="ts">
@@ -58,6 +66,29 @@ import { useSession } from "../shared/session";
 import { api, notify } from "../shared/api";
 import type { Npc, Player, Quest, QuestNode } from "../shared/types";
 import { isTextFocus } from "../game/pathfinding";
+import { arrivalActive, arrivalCamera, arrivalFinished, backdropReady, startArrival, endArrival, type ArrivalCamera } from "../shared/arrival";
+import ArrivalWelcome from "./ArrivalWelcome.vue";
+const welcome = ref(true);
+if (!arrivalActive.value) startArrival();
+const worldReady = ref(false);
+const entered = ref(false);
+const proceeding = ref(false);
+const playerCamera = ref<ArrivalCamera | null>(null);
+function onWorldReady(camera: ArrivalCamera) {
+  playerCamera.value = camera;
+  worldReady.value = true;
+}
+watch(arrivalFinished, value => {
+  if (!value || !proceeding.value) return;
+  entered.value = true;
+  welcome.value = false;
+  sessionStorage.removeItem("reborn-arrival");
+});
+function finishArrival() {
+  if (proceeding.value || !playerCamera.value || !backdropReady.value) return;
+  proceeding.value = true;
+  arrivalCamera.value = playerCamera.value;
+}
 const session = useSession(),
   router = useRouter(),
   loading = ref(true),
@@ -112,7 +143,8 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    await session.load();
+    if (!session.world) await session.load();
+    if (!session.classroomId) endArrival();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "连接失败";
   } finally {
@@ -122,8 +154,12 @@ async function load() {
 async function join() {
   try {
     await api.post("/classrooms/join", { join_code: joinCode.value });
+    worldReady.value = false;
+    startArrival();
+    await session.load();
     await load();
   } catch (e) {
+    endArrival();
     notify(e instanceof Error ? e.message : "加入失败");
   }
 }
@@ -131,6 +167,7 @@ async function logout() {
   try {
     await api.post("/auth/logout", {});
   } finally {
+    sessionStorage.removeItem("reborn-arrival");
     session.reset();
     await router.push("/");
   }
@@ -252,6 +289,7 @@ function worldShortcut(event: KeyboardEvent) {
     event.metaKey ||
     event.altKey ||
     isTextFocus(document.activeElement) ||
+    welcome.value ||
     session.workspace ||
     npc.value ||
     !session.world

@@ -978,3 +978,31 @@ kbd {
   animation: none !important;
   transition: none !important;
 }
+
+/* Interaction prompt follows the bottom-centre position of the town HUD. */
+.world-page .world-hint {
+  position: absolute;
+  left: 50%;
+  bottom: calc(var(--safe-bottom) + 128px);
+  transform: translateX(-50%);
+  max-width: min(36rem, calc(100% - var(--safe-left) - var(--safe-right)));
+  padding: 10px 22px;
+  border: 1px solid #bda36b;
+  border-radius: 5px;
+  color: #fff3d4;
+  background: #142e26ed;
+  box-shadow: 0 3px 0 #0c201b80;
+  font-size: 1rem;
+  line-height: 1.5;
+  text-align: center;
+  white-space: normal;
+  pointer-events: none;
+}
+@media (max-width: 700px) {
+  .world-page .world-hint { bottom: calc(var(--safe-bottom) + 170px); padding: 8px 14px; font-size: .875rem; width: max-content; }
+}
+@media (max-height: 540px) {
+  .world-page .world-hint { bottom: calc(var(--safe-bottom) + 88px); padding: 6px 14px; font-size: .875rem; }
+}
+
+.world-canvas:focus-visible { outline: none; box-shadow: none; }

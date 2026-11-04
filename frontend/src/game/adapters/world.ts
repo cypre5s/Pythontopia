@@ -28,6 +28,7 @@ interface MapData {
 export interface WorldHandle {
   destroy(): void;
   setPaused(value: boolean): void;
+  setWelcomeDrift?(value: boolean): void;
   setNpcs(npcs: Npc[]): void;
   setFlags(flags: string[]): void;
   direction(key: string, down: boolean): void;
@@ -36,6 +37,7 @@ export interface WorldHandle {
   mute(value: boolean): void;
 }
 export interface WorldCallbacks {
+  cameraReady?: (view: { x: number; y: number; zoom: number; map: string }) => void;
   position: (player: Player) => void;
   interact: (target: string, type: "npc" | "object") => void;
   hint: (text: string) => void;
@@ -51,6 +53,7 @@ export function createWorld(
   callbacks: WorldCallbacks,
 ): WorldHandle {
   if (instance) throw new Error("一个游戏会话只能创建一个世界实例");
+  let drifting = false, driftStart = 0;
   let paused = false,
     currentNpcs = npcs,
     currentFlags = flags;
@@ -60,7 +63,11 @@ export function createWorld(
   const pressed = new Set<string>();
   let scene: TownScene;
   const keyDown = (e: KeyboardEvent) => {
-    if (paused || isTextFocus(document.activeElement)) return;
+    if (paused || e.isComposing || e.ctrlKey || e.metaKey || e.altKey || isTextFocus(document.activeElement)) return;
+    // Movement returns focus to the world after closing a keyboard-accessible menu.
+    if (["w", "a", "s", "d", "arrowup", "arrowdown", "arrowleft", "arrowright"].includes(e.key.toLowerCase()) && document.activeElement?.closest(".world-ui")) {
+      root.focus({ preventScroll: true });
+    }
     if (
       ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", " "].includes(e.key)
     )
@@ -98,7 +105,6 @@ export function createWorld(
     travelTarget: string | null = null;
     objects: { id: string; x: number; y: number }[] = [];
     weather!: Phaser.GameObjects.Graphics;
-    flagLabel: Phaser.GameObjects.Text | null = null;
     resident: Phaser.GameObjects.Sprite | null = null;
     patrolTime = 0;
     constructor() {
@@ -175,13 +181,16 @@ export function createWorld(
       );
       this.scale.on("resize", () => this.resize());
       callbacks.progress(1);
+      this.game.events.once("postrender", () => {
+        const camera = this.cameras.main;
+        callbacks.cameraReady?.({ x: camera.worldView.x, y: camera.worldView.y, zoom: camera.zoom, map: this.mapKey });
+      });
     }
     build() {
       this.tweens.killAll();
       this.busy = false;
       this.children.removeAll(true);
       this.activeNpcs = [];
-      this.flagLabel = null;
       this.resident = null;
       this.objects = [];
       const indoor = this.mapKey === "library";
@@ -324,7 +333,6 @@ export function createWorld(
       this.resize();
       this.cameras.main.startFollow(this.player, true, 0.18, 0.18);
       this.cameras.main.setBounds(0, 0, this.width * 16, this.height * 16);
-      this.renderFlags();
       if (!indoor) {
         const spot = [
           { x: 26, y: 35 },
@@ -483,31 +491,20 @@ export function createWorld(
         direction: this.direction.toLowerCase(),
       });
     }
-    renderFlags() {
-      this.flagLabel?.destroy();
-      this.flagLabel = null;
-      if (
-        currentFlags.includes("town_light_restored") &&
-        this.mapKey === "town_hub"
-      )
-        this.flagLabel = this.add
-          .text(
-            25 * 16,
-            18 * 16,
-            currentFlags.includes("language_archive_restored")
-              ? "✦ 语言档案重新开放"
-              : "✦ 图书馆的灯亮了",
-            {
-              fontSize: "10px",
-              resolution: 3,
-              color: "#ffe1a1",
-              backgroundColor: "#305036",
-            },
-          )
-          .setDepth(90);
-    }
     update(time: number) {
       if (!this.player) return;
+      const offset = this.cameras.main.followOffset;
+      if (drifting) {
+        if (!driftStart) driftStart = time;
+        const t = (time - driftStart) / 1000;
+        const easeIn = Math.min(1, t / 1.2);
+        offset.x = Math.sin(t * 0.38) * 18 * easeIn;
+        offset.y = Math.sin(t * 0.27) * 10 * easeIn;
+      } else {
+        offset.x *= 0.88; offset.y *= 0.88;
+        if (Math.abs(offset.x) < .01) offset.x = 0;
+        if (Math.abs(offset.y) < .01) offset.y = 0;
+      }
       if (time - this.saveTimer > 1500) {
         this.saveTimer = time;
         this.save();
@@ -591,7 +588,7 @@ export function createWorld(
             ? `E · 与${near.npc.name}对话`
             : obj
               ? `E · ${obj.id === "library_door" ? "进入图书馆" : obj.id === "library_exit" ? "离开图书馆" : "互动"}`
-              : "WASD / 方向键移动 · 点击道路前往",
+              : "",
         );
         return;
       }
@@ -639,6 +636,7 @@ export function createWorld(
       instance?.destroy(true);
       instance = null;
     },
+    setWelcomeDrift(value) { drifting = value; driftStart = 0; },
     setPaused(value) {
       paused = value;
       pressed.clear();
@@ -652,7 +650,6 @@ export function createWorld(
     },
     setFlags(value) {
       currentFlags = value;
-      scene?.renderFlags();
     },
     direction(key, down) {
       if (down) pressed.add(key);

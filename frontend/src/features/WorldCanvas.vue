@@ -1,5 +1,5 @@
 <template>
-  <div ref="root" class="world-canvas" aria-label="Pythontopia 像素小镇">
+  <div ref="root" class="world-canvas" tabindex="-1" aria-label="Pythontopia 像素小镇">
     <div v-if="progress < 1" class="world-loading">
       正在进入小镇 {{ Math.round(progress * 100) }}%
     </div>
@@ -53,20 +53,23 @@
       <GameIcon name="arrowDown"/>
     </button>
   </div>
-  <p v-show="!paused" class="world-hint">{{ displayHint }}</p>
+  <p v-show="!paused && displayHint" class="world-hint">{{ displayHint }}</p>
 </template>
 <script setup lang="ts">
+import { useUiPreferences } from "../shared/uiPreferences";
 import GameIcon from "../shared/GameIcon.vue";
 import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import type { Player } from "../shared/types";
 import { useSession } from "../shared/session";
 import { api, notify } from "../shared/api";
 import type { WorldHandle } from "../game/adapters/world";
-const props = defineProps<{ paused: boolean }>(),
+const props = defineProps<{ paused: boolean; welcomeDrift?: boolean }>(),
   emit = defineEmits<{
     interact: [target: string, type: "npc" | "object"];
     position: [player: Player];
+    ready: [view: { x: number; y: number; zoom: number; map: string }];
   }>();
+const preferences = useUiPreferences();
 const session = useSession(),
   root = ref<HTMLElement>(),
   progress = ref(0),
@@ -80,10 +83,7 @@ const displayHint = computed(() =>
   touchInput.value
     ? hint.value
         .replace(/^E · /, "轻点「互动」· ")
-        .replace(
-          "WASD / 方向键移动 · 点击道路前往",
-          "轻点道路前往 · 使用左侧方向键移动",
-        )
+
     : hint.value,
 );
 let game: WorldHandle | undefined,
@@ -158,11 +158,13 @@ onMounted(async () => {
         emit("interact", id, type);
       },
       hint: (value) => (hint.value = value),
-      progress: (value) => (progress.value = value),
+      progress: (value) => { progress.value = value; },
+      cameraReady: (view) => emit("ready", view),
       error: notify,
     },
   );
   game.setPaused(props.paused);
+  game.setWelcomeDrift?.(Boolean(props.welcomeDrift) && !preferences.reducedMotion);
 });
 watch(
   () => session.audioEnabled,
@@ -203,5 +205,6 @@ onBeforeUnmount(() => {
   game?.destroy();
   game = undefined;
 });
+watch(() => Boolean(props.welcomeDrift) && !preferences.reducedMotion, value => game?.setWelcomeDrift?.(value));
 defineExpose({ guide: (key: string) => game?.guide(key) });
 </script>

@@ -1,14 +1,10 @@
 <template>
-  <main class="entry-page">
-    <div class="entry-art">
-      <p class="eyebrow">PYTHONTOPIA · REBORN</p>
-      <h1>在小镇里，<br />写下你的<br /><em>第一行 Python。</em></h1>
-      <p>认识居民，接受委托，寻找知识。<br />每一步探索，都来自真实的学习。</p>
-      <span class="entry-seal">一座小镇 · 一个新的开始</span>
-    </div>
-    <section class="entry-form">
+  <main class="arrival-page">
+
+    <strong class="arrival-brand">PYTHONTOPIA</strong>
+    <section class="arrival-panel" :class="{ departing }" :inert="departing">
       <p class="eyebrow">欢迎来到小镇</p>
-      <h2>{{ register ? "领取你的居民证" : "继续你的旅程" }}</h2>
+      <h2>{{ register ? "注册" : "登录" }}</h2>
       <form @submit.prevent="submit">
         <label v-if="register"
           >名字<input
@@ -30,21 +26,23 @@
             required
             minlength="10"
         /></label>
-        <p v-if="error" class="error" role="alert">{{ error }}</p>
-        <button class="primary" :disabled="busy">
-          {{ busy ? "正在进入…" : register ? "注册并进入" : "进入小镇" }}
+        <p v-if="error || resourceError" class="error" role="alert">{{ error || resourceError }}</p>
+        <button class="primary" :disabled="busy || !backdropReady || !worldAssetsReady">
+          {{ !backdropReady || !worldAssetsReady ? "正在准备小镇…" : busy ? "正在进入…" : register ? "注册并进入" : "进入小镇" }}
         </button>
       </form>
-      <button class="text-button" @click="register = !register">
+      <button class="text-button" :disabled="busy" @click="register = !register; error = ''">
         {{ register ? "已有居民证？登录" : "初次到访？注册居民证" }}
       </button>
       <p class="muted">学生可直接领取居民证；教师请使用学校提供的账号登录。</p>
       <RouterLink to="/credits">素材许可与来源</RouterLink>
     </section>
+
   </main>
 </template>
 <script setup lang="ts">
-import { ref } from "vue";
+import { ref, onMounted } from "vue";
+import { preloadWorld, startArrival, endArrival, backdropReady, worldAssetsReady, resourceError } from "../shared/arrival";
 import { useRouter, RouterLink } from "vue-router";
 import { api } from "../shared/api";
 import { useSession } from "../shared/session";
@@ -55,9 +53,12 @@ const register = ref(false),
   password = ref(""),
   error = ref(""),
   busy = ref(false),
+  departing = ref(false),
   router = useRouter(),
   session = useSession();
+onMounted(() => { void preloadWorld().catch(() => { resourceError.value = "游戏资源加载失败，请刷新重试。"; }); });
 async function submit() {
+  if (busy.value) return;
   busy.value = true;
   error.value = "";
   try {
@@ -70,8 +71,18 @@ async function submit() {
     );
     api.setToken(result.access_token);
     session.user = result.user;
+    if (result.user.role === "student") {
+      sessionStorage.setItem("reborn-arrival", "yes");
+      await preloadWorld();
+      await session.load();
+      startArrival();
+      departing.value = true;
+      await new Promise(resolve => setTimeout(resolve, 450));
+    }
     await router.push(result.user.role === "student" ? "/world" : "/teacher");
   } catch (e) {
+    endArrival();
+    departing.value = false;
     error.value = e instanceof Error ? e.message : "进入失败";
   } finally {
     busy.value = false;

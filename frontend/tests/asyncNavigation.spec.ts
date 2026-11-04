@@ -187,6 +187,29 @@ const stepResult = () => ({
 });
 
 describe("late scripted dialogue responses", () => {
+  it("fast-forwards narration but stops before choices and completion", async () => {
+    const npc = resident();
+    npc.dialogue = [
+      { id: "intro", text: "Welcome", next: "decision" },
+      { id: "decision", text: "Your response?", choices: [{ id: "yes", label: "Let's begin", next: "end" }] },
+      { id: "end", text: "Ready" },
+    ];
+    const post = vi.spyOn(api, "post").mockResolvedValue({
+      node: npc.dialogue[0], next_id: "decision", effects: [],
+    });
+    const wrapper = dialogue();
+    await wrapper.setProps({ npc });
+    await wrapper.get(".dialogue-skip").trigger("click");
+    await flushPromises();
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(wrapper.get(".dialogue-response").text()).toContain("Let's begin");
+    await wrapper.get(".dialogue-skip").trigger("click");
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(wrapper.emitted("complete")).toBeUndefined();
+    await wrapper.trigger("keydown", { key: "ArrowDown" });
+    expect(document.activeElement).toBe(wrapper.get(".dialogue-response").element);
+  });
+
   it.each([
     "Escape",
     "unmount",

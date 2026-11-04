@@ -15,6 +15,7 @@
 <script setup lang="ts">
 defineProps<{
   name:
+    | "message"
     | "journal"
     | "book"
     | "people"
@@ -24,7 +25,7 @@ defineProps<{
     | "leaf"
     | "chevron" | "grid" | "folder" | "activity" | "chart" | "publish" | "logout" | "plus" | "copy" | "refresh" | "arrowLeft" | "arrowRight" | "arrowUp" | "arrowDown" | "external";
 }>();
-const paths = {grid: "M3 3h7v7H3ZM14 3h7v7h-7ZM3 14h7v7H3ZM14 14h7v7h-7Z",
+const paths = {message: "M4 4h16v12H9l-5 4V4ZM8 8h8M8 12h5", grid: "M3 3h7v7H3ZM14 3h7v7h-7ZM3 14h7v7H3ZM14 14h7v7h-7Z",
 folder: "M3 7V4h6l3 3h9v13H3Z",
 activity: "M3 12h4l3-8 4 16 3-8h4",
 chart: "M4 3v18h17M8 17v-5M13 17V7M18 17v-8",
