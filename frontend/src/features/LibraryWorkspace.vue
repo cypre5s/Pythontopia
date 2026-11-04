@@ -14,7 +14,7 @@
         :disabled="material.status !== 'ready'"
         @click="open(material)"
       >
-        <span class="book-spine" aria-hidden="true">▤</span
+        <span class="book-spine" aria-hidden="true"><GameIcon name="book"/></span
         ><span
           ><strong>{{ material.title }}</strong
           ><small
@@ -23,7 +23,7 @@
           ></span
         ><span>{{
           material.status === "ready"
-            ? "阅读 ↗"
+            ? "阅读"
             : material.status === "failed"
               ? "处理失败"
               : "处理中"
@@ -36,6 +36,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import GameIcon from "../shared/GameIcon.vue";
 import { onMounted, onBeforeUnmount, nextTick, ref } from "vue";
 import { api } from "../shared/api";
 import { useSession } from "../shared/session";

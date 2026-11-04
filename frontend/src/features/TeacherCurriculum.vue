@@ -35,7 +35,7 @@
         </button>
       </form>
       <div class="table-scroll">
-        <table>
+        <div class="admin-table-scroll"><table>
           <thead>
             <tr>
               <th>顺序</th>
@@ -69,7 +69,7 @@
               </td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
       </div>
       <form class="teacher-form" @submit.prevent="saveKnowledgePoint">
         <h2>{{ knowledgePoint.id === null ? "新增知识点" : "编辑知识点" }}</h2>
@@ -112,7 +112,7 @@
         </select></label
       >
       <div class="table-scroll">
-        <table>
+        <div class="admin-table-scroll"><table>
           <thead>
             <tr>
               <th>知识点</th>
@@ -148,7 +148,7 @@
               </td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
       </div>
       <p v-if="!filteredKnowledgePoints.length" class="notice">
         此章节尚未配置知识点。创建后可在活动编辑中绑定，任务继续通过活动引用课程内容。

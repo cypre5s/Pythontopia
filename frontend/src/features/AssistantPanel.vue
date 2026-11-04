@@ -59,7 +59,7 @@
           $emit('cite', refItem.material_id, refItem.version, refItem.page_no)
         "
       >
-        {{ refItem.title }} · 第{{ refItem.page_no }}页 ↗
+        {{ refItem.title }} · 第{{ refItem.page_no }}页 <GameIcon name="external"/>
       </button>
     </div>
     <form @submit.prevent="send">
@@ -89,6 +89,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import GameIcon from "../shared/GameIcon.vue";
 import { nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { api, notify } from "../shared/api";
 import "./learningUi.css";

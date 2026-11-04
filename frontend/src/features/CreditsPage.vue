@@ -1,6 +1,6 @@
 <template>
   <main class="credits-page">
-    <RouterLink to="/world">← 返回小镇</RouterLink>
+    <RouterLink to="/world"><GameIcon name="arrowLeft"/> 返回小镇</RouterLink>
     <p class="eyebrow">素材与课程来源</p>
     <h1>一座由许多人共同点亮的小镇。</h1>
     <p>
@@ -25,10 +25,11 @@
       href="https://github.com/cypre5s/Pythontopia/blob/reborn/LICENSE-ART.md"
       target="_blank"
       rel="noopener"
-      >完整美术授权记录 ↗</a
+      >完整美术授权记录 <GameIcon name="external"/></a
     >
   </main>
 </template>
 <script setup lang="ts">
+import GameIcon from "../shared/GameIcon.vue";
 import { RouterLink } from "vue-router";
 </script>

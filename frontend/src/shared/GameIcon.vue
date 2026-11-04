@@ -22,9 +22,22 @@ defineProps<{
     | "compass"
     | "close"
     | "leaf"
-    | "chevron";
+    | "chevron" | "grid" | "folder" | "activity" | "chart" | "publish" | "logout" | "plus" | "copy" | "refresh" | "arrowLeft" | "arrowRight" | "arrowUp" | "arrowDown" | "external";
 }>();
-const paths = {
+const paths = {grid: "M3 3h7v7H3ZM14 3h7v7h-7ZM3 14h7v7H3ZM14 14h7v7h-7Z",
+folder: "M3 7V4h6l3 3h9v13H3Z",
+activity: "M3 12h4l3-8 4 16 3-8h4",
+chart: "M4 3v18h17M8 17v-5M13 17V7M18 17v-8",
+publish: "M12 16V3m-5 5 5-5 5 5M4 15v6h16v-6",
+logout: "M9 4H3v16h6M9 12h12m-5-5 5 5-5 5",
+plus: "M12 5v14M5 12h14",
+copy: "M9 9h12v12H9ZM5 15H3V3h12v2",
+refresh: "M20 8a9 9 0 1 0 1 7M20 3v5h-5",
+arrowLeft: "M20 12H4m6-6-6 6 6 6",
+arrowRight: "M4 12h16m-6-6 6 6-6 6",
+arrowUp: "M12 20V4m-6 6 6-6 6 6",
+arrowDown: "M12 4v16m-6-6 6 6 6-6",
+external: "M14 3h7v7m0-7L10 14M10 3H3v18h18v-7",
   journal:
     "M6 3h14v18H6a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3ZM6 3v18M10 8h6M10 12h6M10 16h3",
   book: "M12 5v16M12 5C9 2 4 3 2 4v15c3-1 7-1 10 2 3-3 7-3 10-2V4c-2-1-7-2-10 1Z",

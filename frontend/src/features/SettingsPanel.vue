@@ -5,12 +5,12 @@
     <p class="muted">{{ session.user?.email }}</p>
     <div class="settings-links">
       <button @click="session.navigate({ kind: 'classroom' })">
-        班级与课程 →</button
+        班级与课程 <GameIcon name="arrowRight"/></button
       ><button @click="session.navigate({ kind: 'library' })">
-        已开放材料 →</button
+        已开放材料 <GameIcon name="arrowRight"/></button
       ><RouterLink v-if="session.user?.role !== 'student'" to="/teacher"
-        >教师工作台 →</RouterLink
-      ><RouterLink to="/credits">素材许可与来源 →</RouterLink>
+        >教师工作台 <GameIcon name="arrowRight"/></RouterLink
+      ><RouterLink to="/credits">素材许可与来源 <GameIcon name="arrowRight"/></RouterLink>
     </div>
     <fieldset class="interface-settings">
       <legend>让小镇更适合你</legend>
@@ -62,6 +62,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import GameIcon from "../shared/GameIcon.vue";
 import { RouterLink, useRouter } from "vue-router";
 import { useSession } from "../shared/session";
 import { api } from "../shared/api";

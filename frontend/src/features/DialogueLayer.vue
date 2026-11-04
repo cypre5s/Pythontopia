@@ -64,20 +64,21 @@
             session.open({ kind: 'library' });
           "
         >
-          浏览开放书籍 →
+          浏览开放书籍 <GameIcon name="arrowRight"/>
         </button>
         <button
           v-for="item in actions"
           :key="item.node.id"
           @click="$emit('action', item.quest, item.node)"
         >
-          {{ item.node.title }} →
+          {{ item.node.title }} <GameIcon name="arrowRight"/>
         </button>
       </div>
     </section>
   </div>
 </template>
 <script setup lang="ts">
+import GameIcon from "../shared/GameIcon.vue";
 import { computed, ref, watch, onBeforeUnmount } from "vue";
 import type { Npc, Quest, QuestNode, Dialogue } from "../shared/types";
 import { api } from "../shared/api";

@@ -19,7 +19,7 @@
             class="workspace-back"
             @click="session.back()"
           >
-            ← 返回{{ previousTitle }} <kbd>Esc</kbd></button
+            <GameIcon name="arrowLeft"/> 返回{{ previousTitle }} <kbd>Esc</kbd></button
           ><span>{{ title }}</span
           ><small>已暂停世界移动</small>
         </div>

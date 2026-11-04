@@ -6,7 +6,7 @@
         aria-label="上一页 PDF"
         @click="turn(-1)"
       >
-        ← 上一页</button
+        <GameIcon name="arrowLeft"/> 上一页</button
       ><span
         id="pdf-reading-position"
         class="reader-position"
@@ -19,7 +19,7 @@
         aria-label="下一页 PDF"
         @click="turn(1)"
       >
-        下一页 →
+        下一页 <GameIcon name="arrowRight"/>
       </button>
     </nav>
     <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -38,6 +38,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import GameIcon from "../shared/GameIcon.vue";
 import { onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { api } from "../shared/api";
 import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";

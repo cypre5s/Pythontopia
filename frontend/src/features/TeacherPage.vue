@@ -1,23 +1,21 @@
 <template>
   <main class="teacher-page">
-    <aside class="teacher-nav">
+    <aside class="teacher-nav" aria-label="教师管理导航">
       <RouterLink class="brand" to="/world"
-        >✦ PYTHONTOPIA<small>教师工作台</small></RouterLink
-      ><button
-        v-for="item in sections"
-        :key="item.id"
-        :class="{ selected: section === item.id }"
+        ><GameIcon name="grid"/><span>PYTHONTOPIA<small>教学管理后台</small></span></RouterLink
+      ><template v-for="item in sections" :key="item.id"><p v-if="['classes', 'curriculum', 'activities'].includes(item.id)" class="nav-group-title">{{ item.id === "classes" ? "班级教学" : item.id === "curriculum" ? "课程资源" : "学习体验" }}</p><button
+        :class="{ selected: section === item.id }" :aria-current="section === item.id ? 'page' : undefined"
         @click="section = item.id"
       >
-        {{ item.label }}</button
-      ><RouterLink to="/world">进入小镇 ↗</RouterLink
-      ><button @click="logout">退出账号</button>
+        <GameIcon :name="item.icon"/>{{ item.label }}</button></template
+      ><RouterLink to="/world"><GameIcon name="compass"/>进入小镇</RouterLink
+      ><button @click="logout"><GameIcon name="logout"/>退出账号</button>
     </aside>
     <section class="teacher-main">
       <header class="teacher-heading">
         <div>
-          <p class="eyebrow">TEACHER WORKSPACE</p>
-          <h1>{{ sections.find((s) => s.id === section)?.label }}</h1>
+          <p class="eyebrow">教学管理 / {{ sections.find((s) => s.id === section)?.label }}</p>
+          <h1>{{ sections.find((s) => s.id === section)?.label }}</h1><p class="page-description">{{ descriptions[section] }}</p>
         </div>
         <label
           >当前班级<select v-model="selectedClass" @change="loadProgress">
@@ -27,22 +25,22 @@
           </select></label
         >
       </header>
-      <p v-if="error" class="error">{{ error }}</p>
+      <p v-if="error" class="error" role="alert">{{ error }}</p>
       <p v-if="loading">正在读取工作台…</p>
       <template v-else-if="authorized"
         ><template v-if="section === 'classes'"
-          ><form class="teacher-form" @submit.prevent="createClass">
+          ><form class="teacher-form" @submit.prevent="createClass"><h2>创建班级</h2>
             <label
               >班级名称<input
                 v-model="className"
                 required
                 placeholder="Python 入门一班" /></label
-            ><button class="primary">创建班级</button>
+            ><button class="primary" :disabled="saving"><GameIcon name="plus"/>{{ saving ? "正在创建…" : "创建班级" }}</button>
           </form>
-          <article v-for="c in session.classes" :key="c.id" class="class-card">
+          <h2>我的班级 <span class="count-badge">{{ session.classes.length }}</span></h2><p v-if="!session.classes.length" class="notice">创建班级后，分享加入码邀请学生，再设置章节发布规则。</p><article v-for="c in session.classes" :key="c.id" class="class-card">
             <h3>{{ c.name }}</h3>
             <p>
-              加入码 <code>{{ c.join_code }}</code>
+              加入码 <code>{{ c.join_code }}</code> <button @click="copyCode(c.join_code)"><GameIcon name="copy"/>复制加入码</button>
             </p>
             <button
               @click="
@@ -51,7 +49,7 @@
                 section = 'progress';
               "
             >
-              查看成员与学习记录 →
+              查看成员与学习记录 <GameIcon name="arrowRight"/>
             </button>
           </article></template
         ><template v-else-if="section === 'release'"
@@ -123,10 +121,10 @@
               >正式提交
             </div>
           </div>
-          <button :disabled="!selectedClass" @click="loadProgress">
-            刷新真实记录
+          <button :disabled="!selectedClass || progressLoading" @click="loadProgress">
+            <GameIcon name="refresh"/>刷新真实记录
           </button>
-          <h2>班级成员</h2>
+          <div class="section-toolbar"><h2>班级成员</h2><label class="search-field"><span class="sr-only">搜索学生姓名或邮箱</span><input v-model="memberSearch" type="search" placeholder="搜索学生姓名或邮箱"/></label></div><p v-if="progressLoading" role="status">正在更新班级记录…</p><p v-if="memberSearch && !filteredMembers.length" class="notice">没有匹配的学生，请调整搜索关键词。</p>
           <div class="table-scroll">
             <table>
               <thead>
@@ -139,7 +137,7 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="s in progress.members" :key="s.id">
+                <tr v-for="s in filteredMembers" :key="s.id">
                   <td>
                     {{ s.name }}<small>{{ s.email }}</small>
                   </td>
@@ -148,7 +146,7 @@
                   <td>{{ s.records }}</td>
                   <td>
                     <button @click="studentId = s.id">查看记录</button
-                    ><button @click="removeMember(s.id)">移出班级</button>
+                    ><button class="danger" :disabled="saving" @click="removeMember(s.id)">移出班级</button>
                   </td>
                 </tr>
               </tbody>
@@ -162,7 +160,7 @@
             v-for="(count, status) in progress.error_distribution"
             :key="status"
           >
-            {{ status }}：{{ count }}
+            {{ statusLabels[status] ?? status }}：{{ count }}
           </p>
           <template v-if="studentId"
             ><h2>学生 #{{ studentId }} 的真实记录</h2>
@@ -193,7 +191,7 @@
                   :key="s.id"
                 >
                   <td>{{ s.question_id }}</td>
-                  <td>{{ s.status }}</td>
+                  <td>{{ statusLabels[s.status] ?? s.status }}</td>
                   <td>{{ time(s.created_at) }}</td>
                 </tr>
               </tbody>
@@ -205,13 +203,15 @@
   </main>
 </template>
 <script setup lang="ts">
-import { onMounted, ref, reactive } from "vue";
+import { computed, onMounted, ref, reactive } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import { api, notify } from "../shared/api";
 import { TIME_ZONE, localDateTimeToIso, formatTimestamp } from "../shared/time";
 import { useSession } from "../shared/session";
 import type { Chapter } from "../shared/types";
 import TeacherContent from "./TeacherContent.vue";
+import GameIcon from "../shared/GameIcon.vue";
+import "./teacherUi.css";
 interface Progress {
   members: {
     id: number;
@@ -241,14 +241,14 @@ const session = useSession(),
   router = useRouter(),
   section = ref("classes"),
   sections = [
-    { id: "classes", label: "班级" },
-    { id: "curriculum", label: "课程与知识点" },
-    { id: "release", label: "章节发布" },
-    { id: "materials", label: "材料与版本" },
-    { id: "activities", label: "活动与 NPC" },
-    { id: "quests", label: "任务配置" },
-    { id: "questions", label: "题库" },
-    { id: "progress", label: "学习记录" },
+    {id:"classes",label:"班级",icon:"people" as const},
+    {id:"progress",label:"学习记录",icon:"chart" as const},
+    {id:"release",label:"章节发布",icon:"publish" as const},
+    {id:"curriculum",label:"课程与知识点",icon:"book" as const},
+    {id:"materials",label:"材料与版本",icon:"folder" as const},
+    {id:"questions",label:"题库",icon:"grid" as const},
+    {id:"activities",label:"活动与 NPC",icon:"activity" as const},
+    {id:"quests",label:"任务配置",icon:"journal" as const},
   ],
   selectedClass = ref<number | null>(null),
   className = ref(""),
@@ -271,14 +271,20 @@ const session = useSession(),
     version: 1,
   }),
   releaseResult = ref("服务端按班级、版本、前置和当前时间判断开放状态。");
+const statusLabels: Record<string,string> = { accepted:"通过", wrong_answer:"答案错误", queued:"排队中", running:"运行中", runtime_error:"运行错误", time_limit_exceeded:"超时", infrastructure_error:"判题服务异常" };
+const descriptions: Record<string,string> = { classes: "管理教学班级与加入方式，查看学生学习情况。", curriculum: "组织课程章节与知识点，维护教学结构。", release: "设置当前班级的开放时间、前置章节与任务版本。", materials: "管理课程资料、文件版本和处理状态。", activities: "关联学习活动、课程材料与小镇角色。", quests: "配置任务节点、分支与完成条件。", questions: "编写和审核题目，确认来源后再发布。", progress: "查看当前班级的参与情况、任务进度与正式提交。" };
+const memberSearch = ref(""), saving = ref(false), progressLoading = ref(false);
+const filteredMembers = computed(() => progress.value.members.filter(s => (s.name + " " + s.email).toLowerCase().includes(memberSearch.value.trim().toLowerCase())));
+async function copyCode(code: string | undefined) { try { await navigator.clipboard.writeText(code ?? ""); notify("加入码已复制"); } catch { notify("复制失败，请选中加入码手动复制"); } }
+let progressRequest = 0;
 async function safe(job: () => Promise<void>) {
   try {
-    error.value = "";
+    error.value = ""; saving.value = true;
     await job();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "操作失败";
     notify(error.value);
-  }
+  } finally { saving.value = false; }
 }
 async function loadChapters() {
   chapters.value = (
@@ -286,12 +292,14 @@ async function loadChapters() {
   ).chapters;
 }
 async function loadProgress() {
-  if (selectedClass.value)
-    await safe(async () => {
-      progress.value = await api.get(
-        `/teacher/classrooms/${selectedClass.value}/progress`,
-      );
-    });
+  const classroom = selectedClass.value, request = ++progressRequest;
+  studentId.value = null;
+  progress.value = { members: [], events: [], submissions: [], error_distribution: {} };
+  if (!classroom) return;
+  progressLoading.value = true;
+  try { const result = await api.get<Progress>(`/teacher/classrooms/${classroom}/progress`); if (request === progressRequest) progress.value = result; }
+  catch (e) { if (request === progressRequest) error.value = e instanceof Error ? e.message : "记录加载失败"; }
+  finally { if (request === progressRequest) progressLoading.value = false; }
 }
 async function createClass() {
   await safe(async () => {
@@ -299,6 +307,7 @@ async function createClass() {
     await session.load();
     selectedClass.value =
       session.classes[session.classes.length - 1]?.id ?? null;
+    await loadProgress();
     className.value = "";
     notify("班级已创建，请分享加入码并发布章节。");
   });
@@ -321,6 +330,7 @@ async function release() {
   });
 }
 async function removeMember(id: number) {
+ if (!window.confirm("确认将「" + progress.value.members.find(s => s.id === id)?.name + "」移出当前班级？该学生将失去此班级的访问权限。")) return;
   await safe(async () => {
     await api.request(
       `/teacher/classrooms/${selectedClass.value}/members/${id}`,

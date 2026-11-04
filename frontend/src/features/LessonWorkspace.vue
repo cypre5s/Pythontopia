@@ -59,7 +59,7 @@
             aria-label="课件分页"
           >
             <button :disabled="pageIndex <= 0" @click="pageIndex--">
-              ← 上一页
+              <GameIcon name="arrowLeft"/> 上一页
             </button>
             <span class="reader-position" aria-live="polite"
               >资料第 <strong>{{ currentPage?.page_no }}</strong> 页<span
@@ -70,7 +70,7 @@
               :disabled="pageIndex >= material.pages.length - 1"
               @click="pageIndex++"
             >
-              下一页 →
+              下一页 <GameIcon name="arrowRight"/>
             </button>
           </nav>
           <article
@@ -159,6 +159,7 @@
   </div>
 </template>
 <script setup lang="ts">
+import GameIcon from "../shared/GameIcon.vue";
 import {
   computed,
   onMounted,

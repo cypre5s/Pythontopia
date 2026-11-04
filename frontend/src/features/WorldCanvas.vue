@@ -13,7 +13,7 @@
       @pointercancel="direction('arrowup', false)"
       @lostpointercapture="direction('arrowup', false)"
     >
-      ↑
+      <GameIcon name="arrowUp"/>
     </button>
     <div>
       <button
@@ -24,7 +24,7 @@
         @pointercancel="direction('arrowleft', false)"
         @lostpointercapture="direction('arrowleft', false)"
       >
-        ←</button
+        <GameIcon name="arrowLeft"/></button
       ><button
         class="touch-interact"
         aria-label="互动"
@@ -39,7 +39,7 @@
         @pointercancel="direction('arrowright', false)"
         @lostpointercapture="direction('arrowright', false)"
       >
-        →
+        <GameIcon name="arrowRight"/>
       </button>
     </div>
     <button
@@ -50,12 +50,13 @@
       @pointercancel="direction('arrowdown', false)"
       @lostpointercapture="direction('arrowdown', false)"
     >
-      ↓
+      <GameIcon name="arrowDown"/>
     </button>
   </div>
   <p v-show="!paused" class="world-hint">{{ displayHint }}</p>
 </template>
 <script setup lang="ts">
+import GameIcon from "../shared/GameIcon.vue";
 import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import type { Player } from "../shared/types";
 import { useSession } from "../shared/session";

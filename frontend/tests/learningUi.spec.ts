@@ -82,7 +82,7 @@ describe("learning workspace usability", () => {
     expect(wrapper.find(".assistant-panel").attributes("inert")).toBeDefined();
     await wrapper
       .findAll("button")
-      .find((b) => b.text() === "下一页 →")!
+      .find((b) => b.text().trim() === "下一页")!
       .trigger("click");
     await wrapper
       .findAll("button")

@@ -35,7 +35,7 @@
       </p>
       <button @click="loadMaterials">刷新状态</button>
       <div class="table-scroll">
-        <table>
+        <div class="admin-table-scroll"><table>
           <thead>
             <tr>
               <th>资料 / ID</th>
@@ -65,7 +65,7 @@
               </td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
       </div>
       <section v-if="preview" class="material-preview">
         <button @click="closePreview">收起预览</button
@@ -142,7 +142,7 @@
           另建活动
         </button>
       </form>
-      <table>
+      <div class="admin-table-scroll"><table>
         <thead>
           <tr>
             <th>活动</th>
@@ -183,7 +183,7 @@
             </td>
           </tr>
         </tbody>
-      </table></template
+      </table></div></template
     ><template v-else-if="section === 'quests'"
       ><p class="notice">
         先校验再发布。重复
@@ -233,7 +233,7 @@
       ><button class="primary" @click="createQuestion">创建题目</button>
       <h2>当前题库</h2>
       <div class="table-scroll">
-        <table>
+        <div class="admin-table-scroll"><table>
           <thead>
             <tr>
               <th>题目</th>
@@ -252,7 +252,7 @@
               <td>{{ q.version }}</td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
       </div></template
     >
   </div>
