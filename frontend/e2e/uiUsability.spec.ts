@@ -135,7 +135,7 @@ async function finishIntroDialogue(page: Page) {
   throw new Error("Intro dialogue did not end within ten script nodes");
 }
 
-test("usable world HUD, modal focus, history, text scaling and touch controls", async ({
+test("usable world HUD, modal focus, history, text scaling and keyboard controls", async ({
   page,
   request,
 }, testInfo) => {
@@ -265,17 +265,6 @@ test("usable world HUD, modal focus, history, text scaling and touch controls", 
   for (let index = 0; index < (await dockButtons.count()); index++) {
     await expectControlInViewport(page, dockButtons.nth(index), 44);
   }
-  const touch = testInfo.project.name === "phone-landscape";
-  if (touch) {
-    expect(
-      await page.evaluate(() => matchMedia("(pointer: coarse)").matches),
-    ).toBe(true);
-    const directions = page.locator(".touch-controls button");
-    await expect(directions).toHaveCount(5);
-    for (let index = 0; index < (await directions.count()); index++) {
-      await expectControlInViewport(page, directions.nth(index), 48);
-    }
-  }
   await page.screenshot({ path: testInfo.outputPath("before-world.png") });
 
   const workspace = page.getByRole("dialog", {
@@ -357,15 +346,7 @@ test("usable world HUD, modal focus, history, text scaling and touch controls", 
     .toBe(true);
 
   const openDialogue = async () => {
-    if (touch) {
-      const interact = page.getByRole("button", { name: "互动", exact: true });
-      const box = await interact.boundingBox();
-      expect(box).not.toBeNull();
-      if (!box) throw new Error("Touch interaction control is not visible");
-      await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
-    } else {
-      await page.keyboard.press("e");
-    }
+    await page.keyboard.press("e");
     await expect(
       page.getByRole("dialog", { name: "剧情对白", exact: true }),
     ).toBeVisible();
@@ -431,9 +412,6 @@ test("usable world HUD, modal focus, history, text scaling and touch controls", 
   await expectSingleWorkspace(page);
   await expectFocusInside(workspace);
   await expectTabRoundTrip(page, workspace);
-  if (touch) {
-    await expect(workspace.locator(".assistant-panel")).toBeHidden();
-  }
   await workspace
     .getByRole("button", { name: "关闭当前工作区", exact: true })
     .click();

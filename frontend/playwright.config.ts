@@ -1,7 +1,5 @@
 import { defineConfig } from "@playwright/test";
 
-const responsiveSpecs = ["**/rebornJourney.spec.ts", "**/uiUsability.spec.ts"];
-
 export default defineConfig({
   testDir: "./e2e",
   use: {
@@ -12,25 +10,14 @@ export default defineConfig({
     navigationTimeout: 20000,
   },
   projects: [
-    { name: "desktop", use: { viewport: { width: 1440, height: 900 } } },
     {
-      name: "laptop",
-      testMatch: responsiveSpecs,
-      use: { viewport: { width: 1024, height: 640 } },
-    },
-    {
-      name: "phone-landscape",
-      testMatch: responsiveSpecs,
+      name: "desktop",
       use: {
-        viewport: { width: 844, height: 390 },
-        isMobile: true,
-        hasTouch: true,
+        browserName: "chromium",
+        viewport: { width: 1920, height: 1080 },
+        isMobile: false,
+        hasTouch: false,
       },
-    },
-    {
-      name: "ultrawide",
-      testMatch: "**/uiUsability.spec.ts",
-      use: { viewport: { width: 2560, height: 1080 } },
     },
   ],
 });

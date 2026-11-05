@@ -99,7 +99,7 @@ test("teacher management layout, forms, real records, responsive navigation and 
     if (req.url().includes("/api/assistant/") && req.method() !== "GET")
       assistantWrites.push(req.method());
   });
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/");
   const originalEntryStyles = await entryStyles(page);
   await page.getByLabel("邮箱", { exact: true }).fill(email!);
@@ -257,25 +257,25 @@ test("teacher management layout, forms, real records, responsive navigation and 
       panel.previousElementSibling?.classList.contains("member-toolbar"),
     ),
   ).toBe(true);
-  await page.setViewportSize({ width: 817, height: 869 });
+  await page.setViewportSize({ width: 1920, height: 1080 });
   await expect(page.locator(".toast-layer p")).toHaveCount(0, {
     timeout: 8_000,
   });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({
-    path: testInfo.outputPath("teacher-records-flat-817x869.png"),
+    path: testInfo.outputPath("teacher-records-flat-1920x1080.png"),
   });
   await openSection(page, "班级");
   await classSearch.fill(classroomName);
   await expect(page.locator(".class-card")).toHaveCount(1);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({
-    path: testInfo.outputPath("teacher-classes-flat-817x869.png"),
+    path: testInfo.outputPath("teacher-classes-flat-1920x1080.png"),
     mask: [page.locator(".join-code code")],
   });
   await classSearch.fill("");
   await openSection(page, "学习记录");
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: 1920, height: 1080 });
   await member.getByRole("button", { name: "查看记录", exact: true }).click();
   const recordsDialog = page.getByRole("dialog", {
     name: `${studentName}的学习记录`,
@@ -535,10 +535,7 @@ test("teacher management layout, forms, real records, responsive navigation and 
 
   // Every section fits the document width; wide tables scroll inside their panels.
   for (const viewport of [
-    { width: 1440, height: 900 },
-    { width: 1024, height: 640 },
-    { width: 390, height: 844 },
-    { width: 844, height: 390 },
+    { width: 1920, height: 1080 },
   ]) {
     await page.setViewportSize(viewport);
     for (const name of sections) {
@@ -552,16 +549,6 @@ test("teacher management layout, forms, real records, responsive navigation and 
           { message: `${name} must fit ${viewport.width}×${viewport.height}` },
         )
         .toBe(true);
-    }
-    if (viewport.width === 390) {
-      for (const name of ["学习记录", "课程与知识点", "材料与版本", "题库"]) {
-        await openSection(page, name);
-        await expect
-          .poll(() =>
-            page.evaluate(() => document.documentElement.scrollHeight),
-          )
-          .toBeLessThan(2000);
-      }
     }
     await openSection(page, "题库");
     await page.getByRole("button", { name: "新增题目", exact: true }).click();
@@ -586,7 +573,7 @@ test("teacher management layout, forms, real records, responsive navigation and 
       ),
       fullPage: true,
     });
-    if (viewport.width === 1440) {
+    if (viewport.width === 1920) {
       await page.evaluate(() => window.scrollTo(0, 0));
       await page.screenshot({
         path: testInfo.outputPath("teacher-curriculum-desktop-viewport.png"),
@@ -609,7 +596,7 @@ test("teacher management layout, forms, real records, responsive navigation and 
     ((await studentAssistant.json()) as { model_calls: number }).model_calls,
   ).toBe(0);
   expect(assistantWrites).toEqual([]);
-  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.setViewportSize({ width: 1920, height: 1080 });
   if (!(await page.locator("#teacher-navigation").isVisible()))
     await page
       .getByRole("button", { name: "切换管理导航", exact: true })

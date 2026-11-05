@@ -106,7 +106,7 @@ test('teacher uploads self-authored PPTX; student reads the converted private PD
   await expect(chapterRow.locator('.status-badge')).toHaveText('已解锁');
   await page.screenshot({ path: testInfo.outputPath('teacher-self-authored-pptx-published.png'), fullPage: true });
 
-  const context = await browser.newContext({ viewport: page.viewportSize() ?? { width: 1280, height: 800 } });
+  const context = await browser.newContext({ viewport: page.viewportSize() ?? { width: 1920, height: 1080 } });
   try {
     const student = await context.newPage();
     student.on('pageerror', error => errors.push(error.message));

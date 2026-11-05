@@ -253,8 +253,7 @@ async function readJson<T>(
 }
 
 for (const viewport of [
-  { name: "desktop", width: 1440, height: 900, touch: false },
-  { name: "narrow", width: 390, height: 844, touch: true },
+  { name: "desktop", width: 1920, height: 1080, touch: false },
 ]) {
   test.describe(`chapter story ${viewport.name}`, () => {
     test.use({

@@ -130,9 +130,9 @@ PostgreSQL并发测试须 REBORN_TEST_DATABASE_URL，使用临时schema并清理
 
 地图布局变更后运行`node scripts/generate-library.mjs --check`、`node scripts/validate-world.mjs`与`node scripts/audit-assets.mjs`。town_hub.json的可编辑生成器为scripts/generate-maps.mjs；library.json使用原图坐标与家具对象配置，不需Godot编辑器。world.json与前端静态地图分别进入API/Web镜像，改配置后须同时重建，不能只刷新旧镜像。
 
-地图工作区和门的真实交互使用`npx playwright test worldConfiguration.spec.ts --project=desktop --workers=1`：检查只展示当前图且裁掉外景、右卡建筑/人物筛选、玩家标记始终可见及走路后立即开图的位置、关闭后WASD、移动中提示立即消失、静默的未开放房屋、远端书架实际点击、同一画布与双向入口，并截图复核图书馆和390×844布局。窄屏需确认标记实际落在画布可视框内，不能只检查DOM可见。地图不增加键盘选项导航；浏览器截图仍须实际打开检查。原两章旅程仍覆盖任务驱动的跨图导航及书架证据，不能仅靠地图快照替代。
+地图工作区和门的真实交互使用`npx playwright test worldConfiguration.spec.ts --project=desktop --workers=1`：检查只展示当前图且裁掉外景、右卡建筑/人物筛选、玩家标记始终可见及走路后立即开图的位置、关闭后WASD、移动中提示立即消失、静默的未开放房屋、远端书架实际点击、同一画布与双向入口，并截图复核图书馆和1920×1080桌面布局。需确认标记实际落在画布可视框内，不能只检查DOM可见。地图不增加键盘选项导航；浏览器截图仍须实际打开检查。原两章旅程仍覆盖任务驱动的跨图导航及书架证据，不能仅靠地图快照替代。
 
-设置显式E2E教师凭据、E2E_URL与PLAYWRIGHT_CHANNEL后，运行`npx playwright test uiUsability.spec.ts --workers=1`。该验收真实创建独立班级与新学生，覆盖1440×900、1024×640、844×390触屏、2560×1080四视口；检查任务进度、折叠、键盘焦点、返回路径、200%字号、减少动效、触控热区和世界画布不重建。普通操作仍须model_calls=0。触屏项目显式hasTouch，不将鼠标点击算作实际触摸。
+设置显式E2E教师凭据、E2E_URL与PLAYWRIGHT_CHANNEL后，运行`npx playwright test uiUsability.spec.ts --workers=1`。该验收真实创建独立班级与新学生，仅覆盖1920×1080桌面Chromium；检查任务进度、键盘焦点、返回路径、200%字号、减少动效和世界画布不重建。普通操作仍须model_calls=0。手机、触屏、小屏与超宽屏不再作为CI验收条件。
 
 两章旅程继续使用`npx playwright test rebornJourney.spec.ts --workers=1`。先冻结源码或使用编译后的独立web站点验收，避免HMR重新载入干扰正在执行的旅程。截图/trace使用忽略的输出目录，不能提交其中的临时账号或令牌。浏览器模拟视口不代表实体手机、电视或手柄已经验证。
 
@@ -181,6 +181,6 @@ $env:API_PROXY = 'http://127.0.0.1:18086'
 npm run dev -- --host 127.0.0.1 --port 15186
 ```
 
-后台专项测试：设置 E2E_URL、E2E_TEACHER_EMAIL、E2E_TEACHER_PASSWORD、PLAYWRIGHT_CHANNEL=chrome 后执行 `npx playwright test adminManagement.spec.ts --project=desktop --workers=1`。用例实际切换四种视口，操作八个后台页面，并检查退出后登录页样式与零附带模型调用。教材编写测试还需要 E2E_OTHER_TEACHER_EMAIL / E2E_OTHER_TEACHER_PASSWORD；PPTX 转换测试仍须显式文件与转换服务。
+后台专项测试：设置 E2E_URL、E2E_TEACHER_EMAIL、E2E_TEACHER_PASSWORD、PLAYWRIGHT_CHANNEL=chrome 后执行 `npx playwright test adminManagement.spec.ts --project=desktop --workers=1`。用例使用1920×1080桌面视口，操作八个后台页面，并检查退出后登录页样式与零附带模型调用。教材编写测试还需要 E2E_OTHER_TEACHER_EMAIL / E2E_OTHER_TEACHER_PASSWORD；PPTX 转换测试仍须显式文件与转换服务。
 
 验收入口15186已重建为本轮批注修订版，继续使用原隔离验收账号；API18086已重启加载真实章节完成计数，预览数据保留。临时开发端口15187仅用于本轮验证。

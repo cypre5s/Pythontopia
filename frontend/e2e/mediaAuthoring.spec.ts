@@ -204,7 +204,7 @@ test('teacher authors real private media; student reads PDF, plays video and com
   await expect(versionRow.locator('td').nth(1)).toHaveText('v2');
   await expect(versionRow).toContainText('可使用', { timeout: 45_000 });
 
-  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
   try {
     const student = await context.newPage();
     student.on('pageerror', error => errors.push(error.message));
