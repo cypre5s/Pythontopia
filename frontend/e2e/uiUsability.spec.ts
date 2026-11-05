@@ -185,7 +185,7 @@ test("usable world HUD, modal focus, history, text scaling and touch controls", 
   const worldCanvas = page.locator(".world-canvas canvas");
   await expect(worldCanvas).toHaveCount(1);
   await expect(worldCanvas).toBeVisible();
-  await expect(page.locator(".world-hint")).toContainText("镇长 Py", {
+  await expect(page.locator(".world-hint")).toContainText("交谈", {
     timeout: 15_000,
   });
   const canvasNode = await worldCanvas.elementHandle();

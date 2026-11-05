@@ -1,30 +1,11 @@
 import Phaser from "phaser";
 import type { Npc, Player } from "../../shared/types";
 import { findPath, isTextFocus } from "../pathfinding";
-import {
-  SRW_PROP_GROUPS,
-  SRW_HOUSE_KEYS,
-  SRW_CHARA_FRAME,
-} from "../config/srwAssets.config";
-interface TiledObject {
-  name: string;
-  type: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-  properties?: { name: string; value: unknown }[];
-}
-interface MapData {
-  width: number;
-  height: number;
-  layers: {
-    name: string;
-    type: string;
-    objects?: TiledObject[];
-    data?: number[];
-  }[];
-}
+import { fromWorldCanvas, startedOnWorldCanvas } from "../pointerBoundary";
+import { getWorldMap, mapCameraBounds, mapRenderBounds, mapTargets, nearbyWorldTarget, portalAvailable, portalRoute, reachableTargetApproach, resolveWorldTargets, withinWalkBounds, worldConfig, worldTargetHint, type WorldTarget } from "../config/worldConfig";
+import { drawTileLayers, mapTextureUrls, parseRenderMap, type RenderMap } from "../config/worldRender";
+import { SRW_CHARA_FRAME } from "../config/srwAssets.config";
+const textureKey = (url: string) => `world-image:${url}`;
 export interface WorldHandle {
   destroy(): void;
   setPaused(value: boolean): void;
@@ -35,10 +16,13 @@ export interface WorldHandle {
   interact(): void;
   guide(npcKey: string): void;
   mute(value: boolean): void;
+  getMapPosition?(): Player | undefined;
 }
 export interface WorldCallbacks {
   cameraReady?: (view: { x: number; y: number; zoom: number; map: string }) => void;
   position: (player: Player) => void;
+  mapPosition?: (player: Player) => void;
+  transition: (portalId: string, source: Player) => Promise<Player | null>;
   interact: (target: string, type: "npc" | "object") => void;
   hint: (text: string) => void;
   progress: (value: number) => void;
@@ -53,7 +37,7 @@ export function createWorld(
   callbacks: WorldCallbacks,
 ): WorldHandle {
   if (instance) throw new Error("一个游戏会话只能创建一个世界实例");
-  let drifting = false, driftStart = 0;
+  let drifting = false, driftStart = 0, destroyed = false;
   let paused = false,
     currentNpcs = npcs,
     currentFlags = flags;
@@ -88,10 +72,9 @@ export function createWorld(
     direction = (initial.direction ?? "down").toUpperCase();
     busy = false;
     path: { x: number; y: number }[] = [];
-    keys: MapData | null = null;
     collision: number[] = [];
-    width = 50;
-    height = 40;
+    width = getWorldMap(initial.map_key).width;
+    height = getWorldMap(initial.map_key).height;
     activeNpcs: {
       npc: Npc;
       sprite: Phaser.GameObjects.Sprite;
@@ -103,20 +86,19 @@ export function createWorld(
     saveTimer = 0;
     pendingTarget: string | null = null;
     travelTarget: string | null = null;
-    objects: { id: string; x: number; y: number }[] = [];
+    objects: WorldTarget[] = [];
+    transitioning = false;
     weather!: Phaser.GameObjects.Graphics;
     resident: Phaser.GameObjects.Sprite | null = null;
     patrolTime = 0;
+    renderMaps = new Map<string, RenderMap>();
+    queuedTextures = new Set<string>();
+    lastHint = "";
     constructor() {
       super("town");
     }
     preload() {
-      this.load.json("town-map", "/assets/maps/town_hub.json");
-      this.load.tilemapTiledJSON("town-tiled", "/assets/maps/town_hub.json");
-      this.load.image(
-        "town-tiles",
-        "/assets/pixel/tilesets/super-retro-world/town_tiles.png",
-      );
+      if (worldConfig.portal_marker) this.load.image("portal-marker", worldConfig.portal_marker.asset);
       this.load.spritesheet(
         "chara_0",
         "/assets/pixel/sprites/super-retro-world/characters/chara_0.png",
@@ -133,49 +115,34 @@ export function createWorld(
       this.load.on("loaderror", (file: Phaser.Loader.File) =>
         callbacks.error(`素材未能加载：${file.key}`),
       );
-      this.load.once("filecomplete-json-town-map", () => {
-        const map = this.cache.json.get("town-map") as MapData;
-        const used = new Set(
-          map.layers
-            .flatMap((l) => l.objects ?? [])
-            .map((o) =>
-              String(
-                o.properties?.find((p) => p.name === "sprite")?.value ?? "",
-              ),
-            ),
-        );
-        const paths = new Map<string, string>();
-        SRW_HOUSE_KEYS.forEach((k) =>
-          paths.set(
-            `srw_${k}`,
-            `/assets/pixel/buildings/super-retro-world/${k}.png`,
-          ),
-        );
-        SRW_PROP_GROUPS.forEach((g) =>
-          g.stems.forEach((k) =>
-            paths.set(
-              `srw_${k}`,
-              `/assets/pixel/props/super-retro-world/${g.dir}/${k}.png`,
-            ),
-          ),
-        );
-        used.forEach((k) => {
-          const url = paths.get(k);
-          if (url) this.load.image(k, url);
+      for (const [mapKey, config] of Object.entries(worldConfig.maps)) {
+        if (config.renderer !== "tiled" || !config.asset) continue;
+        const cacheKey = `world-map-${mapKey}`;
+        this.load.json(cacheKey, config.asset);
+        this.load.once(`filecomplete-json-${cacheKey}`, () => {
+          const map = parseRenderMap(this.cache.json.get(cacheKey), config.asset!);
+          this.renderMaps.set(mapKey, map);
+          for (const url of mapTextureUrls(map)) {
+            if (!this.queuedTextures.has(url)) {
+              this.queuedTextures.add(url);
+              this.load.image(textureKey(url), url);
+            }
+          }
         });
-      });
+      }
     }
     create() {
       scene = this;
-      this.keys = this.cache.json.get("town-map") as MapData;
       this.build();
       this.input.on(
         "pointerdown",
         (p: Phaser.Input.Pointer, objects: Phaser.GameObjects.GameObject[]) => {
-          if (paused || objects.length) return;
+          if (!startedOnWorldCanvas(p, this.game.canvas) || paused || objects.length) return;
           const world = p.positionToCamera(
             this.cameras.main,
           ) as Phaser.Math.Vector2;
+          this.pendingTarget = null;
+          this.travelTarget = null;
           this.walkTo(Math.floor(world.x / 16), Math.floor(world.y / 16));
         },
       );
@@ -193,105 +160,61 @@ export function createWorld(
       this.activeNpcs = [];
       this.resident = null;
       this.objects = [];
-      const indoor = this.mapKey === "library";
-      this.width = indoor ? 18 : 50;
-      this.height = indoor ? 14 : 40;
-      if (!this.textures.exists("tile-frames"))
-        this.textures.addSpriteSheet(
-          "tile-frames",
-          this.textures.get("town-tiles").getSourceImage() as HTMLImageElement,
-          { frameWidth: 16, frameHeight: 16 },
-        );
-      if (indoor) {
-        const room = this.add.graphics();
-        room.fillStyle(0x594b37).fillRect(0, 0, 288, 224);
-        room.fillStyle(0xd5bd86).fillRect(16, 16, 256, 192);
-        for (let y = 18; y < 206; y += 8) {
-          room.lineStyle(1, 0xb69b68, 0.5).lineBetween(16, y, 272, y);
-        }
-        room.fillStyle(0x4a6549).fillRect(100, 115, 88, 60);
-        for (let x = 32; x <= 224; x += 48) {
-          room.fillStyle(0x6d4e30).fillRect(x, 42, 32, 38);
-          room.fillStyle(0x332c25).fillRect(x + 3, 45, 26, 29);
-          for (let i = 0; i < 6; i++) {
-            room
-              .fillStyle([0x8a9b66, 0xc4966b, 0x728c91, 0xbdb481][i % 4]!)
-              .fillRect(x + 4 + i * 4, 48, 3, 19);
-          }
-          room.fillStyle(0x9d794a).fillRect(x, 68, 32, 3);
-        }
-        room.fillStyle(0x7ba1a0).fillRect(20, 90, 8, 25);
-        room.fillStyle(0xe9d49b).fillRect(23, 93, 2, 18);
-        this.add
-          .text(144, 22, "小镇图书馆", {
-            fontSize: "12px",
-            color: "#fff9dd",
-            resolution: 3,
-          })
-          .setOrigin(0.5);
-        this.objects = [
-          { id: "library_shelf", x: 4, y: 4 },
-          { id: "library_exit", x: 9, y: 12 },
-        ];
-        this.collision = [];
-      } else {
-        const data = this.keys!;
-        // Composite static ground once: adjacent WebGL tile quads can leave
-        // subpixel seams while the camera follows or uses a fractional zoom.
-        const groundKey = "town-ground";
-        if (!this.textures.exists(groundKey)) {
-          const ground = this.textures.createCanvas(groundKey, data.width * 16, data.height * 16);
-          if (!ground) throw new Error("无法创建小镇地面纹理");
-          const context = ground.getContext();
-          const tiles = this.textures.get("town-tiles").getSourceImage() as HTMLImageElement;
-          const columns = tiles.width / 16;
-          context.imageSmoothingEnabled = false;
-          for (const layer of data.layers.filter(
-            (item) => item.type === "tilelayer" && item.name !== "collision",
-          )) {
-            layer.data?.forEach((gid, index) => {
-              if (!gid) return;
-              const tile = gid - 1;
-              context.drawImage(tiles, (tile % columns) * 16, Math.floor(tile / columns) * 16,
-                16, 16, (index % data.width) * 16, Math.floor(index / data.width) * 16, 16, 16);
-            });
-          }
-          ground.refresh();
-        }
-        this.add.image(0, 0, groundKey).setOrigin(0);
-        this.collision =
-          data.layers.find((l) => l.name === "collision")?.data ?? [];
-        for (const o of data.layers.flatMap((l) => l.objects ?? [])) {
-          const props = Object.fromEntries(
-            (o.properties ?? []).map((p) => [p.name, p.value]),
-          );
-          const key = String(props.sprite ?? "");
-          if (this.textures.exists(key)) {
-            const isBuilding = o.type === "building",
-              x = o.x + (isBuilding ? o.width / 2 : o.width / 2),
-              y = o.y + (isBuilding ? o.height : o.height);
-            this.add
-              .image(x, y, key)
-              .setOrigin(0.5, 1)
-              .setDepth(y / 16 + 1);
-          }
-          if (o.type === "building") {
-            const id = String(props.key ?? o.name);
-            this.objects.push({
-              id,
-              x: Math.floor((o.x + o.width / 2) / 16),
-              y: Math.floor((o.y + o.height) / 16) + 1,
-            });
-          }
-        }
-        this.objects = [
-          { id: "library_door", x: 8, y: 22 },
-          { id: "practice_plaza", x: 38, y: 24 },
-        ];
+      this.lastHint = "";
+      callbacks.hint("");
+      const config = getWorldMap(this.mapKey);
+      const indoor = mapCameraBounds(config) === null;
+      this.width = config.width;
+      this.height = config.height;
+      this.objects = mapTargets(this.mapKey).flatMap(target => target.points?.map(point => ({ ...target, ...point })) ?? [target]);
+      const data = this.renderMaps.get(this.mapKey);
+      if (!data) throw new Error("地图素材尚未准备好。");
+      const bounds = mapRenderBounds(config);
+      const groundKey = `${this.mapKey}-ground`;
+      if (!this.textures.exists(groundKey)) {
+        const ground = this.textures.createCanvas(groundKey, bounds.width * 16, bounds.height * 16);
+        if (!ground) throw new Error("无法创建地图纹理");
+        const context = ground.getContext();
+        context.translate(-bounds.x * 16, -bounds.y * 16);
+        const images = new Map(mapTextureUrls(data).map(url => [url, this.textures.get(textureKey(url)).getSourceImage() as HTMLImageElement]));
+        drawTileLayers(context, data, images);
+        ground.refresh();
       }
-      const available = indoor
-        ? currentNpcs.filter((n) => n.key === "librarian_doc")
-        : currentNpcs.filter((n) => n.map_key === "town_hub");
+      this.add.image(bounds.x * 16, bounds.y * 16, groundKey).setOrigin(0).setDepth(-1000);
+      this.collision = data.collision;
+      for (const prop of data.props) {
+        const key = textureKey(prop.textureUrl), texture = this.textures.get(key);
+        const frameKey = prop.frame ? `crop:${prop.frame.x}:${prop.frame.y}:${prop.frame.width}:${prop.frame.height}` : undefined;
+        if (prop.frame && frameKey && !texture.has(frameKey)) texture.add(frameKey, 0, prop.frame.x, prop.frame.y, prop.frame.width, prop.frame.height);
+        const image = this.add.image(prop.x, prop.y, key, frameKey).setOrigin(0.5, 1).setDepth(prop.depth);
+        const building = config.buildings.find(item => item.object_name === prop.name);
+        if (building) {
+          image.setInteractive({ useHandCursor: true });
+          image.on("pointerdown", fromWorldCanvas(this.game.canvas, () => this.approach(building.id)));
+          const label = this.add.text(prop.x, prop.y - image.height - 3, building.label, {
+            fontSize: "8px", fontFamily: "sans-serif", resolution: 3, color: "#fff2d1", stroke: "#233a2b", strokeThickness: 2,
+          }).setOrigin(0.5, 1).setDepth(80).setInteractive({ useHandCursor: true });
+          label.on("pointerdown", fromWorldCanvas(this.game.canvas, () => this.approach(building.id)));
+        } else if (prop.interactionId) {
+          image.setInteractive({ useHandCursor: true });
+          image.on("pointerdown", fromWorldCanvas(this.game.canvas, () => this.approach(prop.interactionId!, { x: Math.floor(prop.x / 16), y: Math.floor(prop.y / 16) })));
+        }
+      }
+      if (worldConfig.portal_marker && this.textures.exists("portal-marker")) {
+        for (const target of this.objects.filter(item => item.portal)) {
+          const marker = worldConfig.portal_marker;
+          const angle: Record<string, number> = { up: 0, right: 90, down: 180, left: 270 };
+          const arrow = this.add.image(target.x * 16 + 8, target.y * 16 + 8, "portal-marker")
+            .setDisplaySize(marker.width, marker.height).setAngle(angle[target.portal!.to.direction] ?? 0)
+            .setAlpha(portalAvailable(target.portal!, currentFlags) ? 0.92 : 0.55).setDepth(target.y + 4);
+          // Enlarge only the invisible hit area; the source artwork remains a small unobtrusive chevron.
+          arrow.setInteractive({ useHandCursor: true,
+            hitArea: new Phaser.Geom.Rectangle(-arrow.width / 2, -arrow.height / 2, arrow.width * 2, arrow.height * 2),
+            hitAreaCallback: Phaser.Geom.Rectangle.Contains });
+          arrow.on("pointerdown", fromWorldCanvas(this.game.canvas, () => this.approach(target.id)));
+        }
+      }
+      const available = currentNpcs.filter((n) => n.map_key === this.mapKey);
       available.forEach((npc, i) => {
         const x = npc.tile_x,
           y = npc.tile_y;
@@ -312,13 +235,14 @@ export function createWorld(
           })
           .setOrigin(0.5, 1)
           .setDepth(90);
-        sprite.on("pointerdown", () => this.approach(npc.key));
+        sprite.on("pointerdown", fromWorldCanvas(this.game.canvas, () => this.approach(npc.key)));
         this.activeNpcs.push({ npc, sprite, label, homeX: x, homeY: y });
       });
       this.player = this.add
         .sprite(this.tileX * 16 + 8, this.tileY * 16 + 12, "chara_0", 1)
         .setOrigin(0.5, 1)
         .setDepth(this.tileY + 3);
+      callbacks.mapPosition?.(this.mapPosition());
       for (const name of [
         "chara_0",
         "chara_2",
@@ -340,14 +264,15 @@ export function createWorld(
             });
         }
       this.shade = this.add
-        .rectangle(0, 0, this.width * 16, this.height * 16, 0x14204f, 0.0)
+        .rectangle(bounds.x * 16, bounds.y * 16, bounds.width * 16, bounds.height * 16, 0x14204f, 0.0)
         .setOrigin(0)
         .setDepth(100)
         .setBlendMode(Phaser.BlendModes.MULTIPLY);
       this.weather = this.add.graphics().setDepth(101);
+      this.cameras.main.removeBounds();
+      this.cameras.main.setBackgroundColor(indoor ? "#142019" : "#324c36");
+      this.cameras.main.startFollow(this.player, true, indoor ? 1 : 0.18, indoor ? 1 : 0.18, 0, 10);
       this.resize();
-      this.cameras.main.startFollow(this.player, true, 0.18, 0.18);
-      this.cameras.main.setBounds(0, 0, this.width * 16, this.height * 16);
       if (!indoor) {
         const spot = [
           { x: 26, y: 35 },
@@ -371,21 +296,21 @@ export function createWorld(
           ),
         ),
       );
+      const bounds = mapCameraBounds(getWorldMap(this.mapKey));
+      const camera = this.cameras.main;
+      if (bounds) camera.setBounds(bounds.x * 16, bounds.y * 16, bounds.width * 16, bounds.height * 16);
+      else camera.removeBounds();
+      if (this.player) camera.centerOn(this.player.x - camera.followOffset.x, this.player.y - camera.followOffset.y);
     }
     blocked(x: number, y: number) {
       return (
-        x < 0 ||
-        y < 0 ||
-        x >= this.width ||
-        y >= this.height ||
-        (this.mapKey === "library"
-          ? x === 0 || y === 0 || x === 17 || y === 13
-          : Boolean(this.collision[y * this.width + x])) ||
+        !withinWalkBounds(getWorldMap(this.mapKey), x, y) ||
+        Boolean(this.collision[y * this.width + x]) ||
         this.activeNpcs.some((n) => n.homeX === x && n.homeY === y)
       );
     }
     walkTo(x: number, y: number) {
-      if (paused || this.busy || this.blocked(x, y)) return;
+      if (paused || this.busy || this.transitioning || this.blocked(x, y)) return;
       this.path = findPath(
         { x: this.tileX, y: this.tileY },
         { x, y },
@@ -394,59 +319,51 @@ export function createWorld(
         (a, b) => this.blocked(a, b),
       );
     }
-    approach(key: string) {
-      if (paused) return;
-      const targetNpc = currentNpcs.find((n) => n.key === key);
-      if (this.mapKey === "library" && targetNpc?.map_key === "town_hub") {
-        this.travelTarget = key;
-        key = "library_exit";
-      }
-      const n = this.activeNpcs.find((n) => n.npc.key === key);
-      if (!n) {
-        const target =
-          this.objects.find((o) => o.id === key) ||
-          (key === "librarian_doc" && this.mapKey === "town_hub"
-            ? this.objects.find((o) => o.id === "library_door")
-            : undefined);
-        if (target) {
-          this.pendingTarget = target.id;
-          const point = [
-            { x: target.x, y: target.y },
-            { x: target.x, y: target.y + 1 },
-            { x: target.x - 1, y: target.y },
-          ].find((p) => !this.blocked(p.x, p.y));
-          if (point) this.walkTo(point.x, point.y);
+    approach(key: string, preferredPoint?: { x: number; y: number }) {
+      if (paused || this.transitioning) return;
+      let targets = resolveWorldTargets(key, currentNpcs);
+      if (!targets.length) { callbacks.error("暂时找不到这个地点。"); return; }
+      const local = targets.filter(target => target.map_key === this.mapKey);
+      if (!local.length) {
+        const route = portalRoute(this.mapKey, targets[0]!.map_key, currentFlags);
+        if (!route?.length) {
+          const blockedPortal = worldConfig.portals.find(portal => portal.from.map_key === this.mapKey && portal.to.map_key === targets[0]!.map_key && !portalAvailable(portal, currentFlags));
+          callbacks.error(blockedPortal?.blocked_message ?? "暂时无法前往该地点。");
+          return;
         }
+        this.travelTarget = key;
+        targets = this.objects.filter(item => item.id === route[0]!.id);
+      } else { this.travelTarget = null; targets = local; }
+      const reachable = reachableTargetApproach({ x: this.tileX, y: this.tileY }, targets, this.width, this.height, (x, y) => this.blocked(x, y), preferredPoint);
+      if (!reachable) { callbacks.error("暂时无法走到门前，请换个位置再试。"); return; }
+      this.pendingTarget = reachable.target.id;
+      this.path = reachable.path;
+      if (!this.path.length) void this.interact(reachable.target.id);
+    }
+    nearbyTarget(preferredTarget?: string) {
+      const npcTargets: WorldTarget[] = this.activeNpcs.map(item => ({ id: item.npc.key, map_key: this.mapKey, label: item.npc.name,
+        x: item.homeX, y: item.homeY, kind: "npc", radius: 2 }));
+      return nearbyWorldTarget({ map_key: this.mapKey, x: this.player.x / 16 - 0.5, y: this.player.y / 16 - 0.75 },
+        [...npcTargets, ...this.objects], currentFlags, preferredTarget);
+    }
+    refreshHint() {
+      const target = !paused && !this.transitioning && !isTextFocus(document.activeElement) ? this.nearbyTarget() : undefined;
+      const hint = target ? `E · ${worldTargetHint(target, currentFlags)}` : "";
+      if (hint !== this.lastHint) { this.lastHint = hint; callbacks.hint(hint); }
+    }
+    async interact(preferredTarget?: string) {
+      if (paused || this.busy || this.transitioning) return;
+      const explicitLockedPortal = preferredTarget ? this.objects.find(target => target.id === preferredTarget && target.portal
+        && !portalAvailable(target.portal, currentFlags)
+        && Math.abs(target.x - (this.player.x / 16 - 0.5)) + Math.abs(target.y - (this.player.y / 16 - 0.75)) <= target.radius) : undefined;
+      if (explicitLockedPortal?.portal) {
+        this.pendingTarget = null;
+        this.path = [];
+        callbacks.error(explicitLockedPortal.portal.blocked_message);
         return;
       }
-      this.pendingTarget = key;
-      const adjacent = [
-        [0, 1],
-        [1, 0],
-        [-1, 0],
-        [0, -1],
-      ]
-        .map(([dx, dy]) => ({ x: n.homeX + dx!, y: n.homeY + dy! }))
-        .filter((p) => !this.blocked(p.x, p.y));
-      adjacent.sort(
-        (a, b) =>
-          Math.abs(a.x - this.tileX) +
-          Math.abs(a.y - this.tileY) -
-          Math.abs(b.x - this.tileX) -
-          Math.abs(b.y - this.tileY),
-      );
-      const p = adjacent[0];
-      if (p) this.walkTo(p.x, p.y);
-      if (Math.abs(n.homeX - this.tileX) + Math.abs(n.homeY - this.tileY) <= 2)
-        this.interact(key);
-    }
-    interact(preferredTarget?: string) {
-      if (paused || this.busy) return;
-      const near = this.activeNpcs.find(
-        (n) =>
-          (!preferredTarget || n.npc.key === preferredTarget) &&
-          Math.abs(n.homeX - this.tileX) + Math.abs(n.homeY - this.tileY) <= 2,
-      );
+      const target = this.nearbyTarget(preferredTarget);
+      const near = target?.kind === "npc" ? this.activeNpcs.find(item => item.npc.key === target.id) : undefined;
       if (near) {
         this.pendingTarget = null;
         this.path = [];
@@ -464,63 +381,69 @@ export function createWorld(
         callbacks.interact(near.npc.key, "npc");
         return;
       }
-      const obj = this.objects.find(
-        (o) =>
-          (!preferredTarget || o.id === preferredTarget) &&
-          Math.abs(o.x - this.tileX) + Math.abs(o.y - this.tileY) <= 2,
-      );
+      const obj = target?.kind !== "npc" ? target : undefined;
       if (obj) {
-        if (obj.id === "library_door") {
-          if (!currentFlags.includes("library_unlocked")) {
-            callbacks.error("图书馆正在修复。先完成镇长的委托。");
+        this.path = [];
+        this.pendingTarget = null;
+        if (obj.portal) {
+          if (!portalAvailable(obj.portal, currentFlags)) {
+            callbacks.error(obj.portal.blocked_message);
             return;
           }
-          this.changeMap("library", 9, 11);
-          return;
-        }
-        if (obj.id === "library_exit") {
-          this.changeMap("town_hub", 8, 22);
+          this.transitioning = true;
+          pressed.clear();
+          callbacks.hint("正在通过入口…");
+          try {
+            const player = await callbacks.transition(obj.portal.id, this.position());
+            if (player && !destroyed) this.changeMap(player);
+            else this.travelTarget = null;
+          } catch (error) {
+            callbacks.error(error instanceof Error ? error.message : "暂时无法通过入口，请重试。");
+          } finally { this.transitioning = false; }
           return;
         }
         this.save();
         callbacks.interact(obj.id, "object");
       }
     }
-    changeMap(key: string, x: number, y: number) {
-      this.mapKey = key;
-      this.tileX = x;
-      this.tileY = y;
+    changeMap(player: Player) {
+      this.mapKey = player.map_key;
+      this.tileX = player.tile_x;
+      this.tileY = player.tile_y;
+      this.direction = player.direction.toUpperCase();
       this.path = [];
       this.pendingTarget = null;
       this.build();
-      this.save();
-      if (this.travelTarget && key === "town_hub") {
+      if (this.travelTarget) {
         const finalTarget = this.travelTarget;
-        this.travelTarget = null;
-        this.time.delayedCall(200, () => this.approach(finalTarget));
+        this.time.delayedCall(200, () => { if (this.travelTarget === finalTarget) this.approach(finalTarget); });
       }
     }
+    position(): Player {
+      return { map_key: this.mapKey, tile_x: this.tileX, tile_y: this.tileY, direction: this.direction.toLowerCase() };
+    }
+    mapPosition(): Player {
+      return { map_key: this.mapKey, tile_x: this.player.x / 16 - 0.5, tile_y: this.player.y / 16 - 0.75,
+        direction: this.direction.toLowerCase() };
+    }
     save() {
-      callbacks.position({
-        map_key: this.mapKey,
-        tile_x: this.tileX,
-        tile_y: this.tileY,
-        direction: this.direction.toLowerCase(),
-      });
+      if (!this.transitioning) callbacks.position(this.position());
     }
     update(time: number) {
       if (!this.player) return;
       const offset = this.cameras.main.followOffset;
-      if (drifting) {
+      if (mapCameraBounds(getWorldMap(this.mapKey)) === null) {
+        offset.set(0, 10);
+      } else if (drifting) {
         if (!driftStart) driftStart = time;
         const t = (time - driftStart) / 1000;
         const easeIn = Math.min(1, t / 1.2);
         offset.x = Math.sin(t * 0.38) * 18 * easeIn;
-        offset.y = Math.sin(t * 0.27) * 10 * easeIn;
+        offset.y = 10 + Math.sin(t * 0.27) * 10 * easeIn;
       } else {
-        offset.x *= 0.88; offset.y *= 0.88;
+        offset.x *= 0.88; offset.y = 10 + (offset.y - 10) * 0.88;
         if (Math.abs(offset.x) < .01) offset.x = 0;
-        if (Math.abs(offset.y) < .01) offset.y = 0;
+        if (Math.abs(offset.y - 10) < .01) offset.y = 10;
       }
       if (time - this.saveTimer > 1500) {
         this.saveTimer = time;
@@ -549,20 +472,21 @@ export function createWorld(
       if (this.mapKey === "town_hub" && new Date().getDate() % 3 === 0) {
         this.weather.lineStyle(1, 0xa4ced3, 0.16);
         for (let i = 0; i < 36; i++) {
-          const x = (i * 47 + time * 0.016) % 800,
-            y = (i * 83 + time * 0.08) % 640;
+            const x = (i * 47 + time * 0.016) % (this.width * 16),
+            y = (i * 83 + time * 0.08) % (this.height * 16);
           this.weather.lineBetween(x, y, x - 2, y + 7);
         }
       }
       const hour = new Date().getHours(),
         night = hour >= 19 || hour < 6;
       this.shade.setAlpha(night ? 0.25 : 0);
+      this.refreshHint();
       if (paused || isTextFocus(document.activeElement)) {
         this.path = [];
         this.player.anims.stop();
         return;
       }
-      if (this.busy) return;
+      if (this.busy || this.transitioning) return;
       let dx = 0,
         dy = 0;
       if (pressed.has("arrowup") || pressed.has("w")) dy = -1;
@@ -572,6 +496,7 @@ export function createWorld(
       if (dx || dy) {
         this.path = [];
         this.pendingTarget = null;
+        this.travelTarget = null;
       } else {
         const next = this.path.shift();
         if (next) {
@@ -592,21 +517,6 @@ export function createWorld(
           this.saveTimer = time;
           this.save();
         }
-        const near = this.activeNpcs.find(
-          (n) =>
-            Math.abs(n.homeX - this.tileX) + Math.abs(n.homeY - this.tileY) <=
-            2,
-        );
-        const obj = this.objects.find(
-          (o) => Math.abs(o.x - this.tileX) + Math.abs(o.y - this.tileY) <= 2,
-        );
-        callbacks.hint(
-          near
-            ? `E · 与${near.npc.name}对话`
-            : obj
-              ? `E · ${obj.id === "library_door" ? "进入图书馆" : obj.id === "library_exit" ? "离开图书馆" : "互动"}`
-              : "",
-        );
         return;
       }
       this.direction =
@@ -626,6 +536,7 @@ export function createWorld(
         duration: 130,
         onComplete: () => {
           this.busy = false;
+          callbacks.mapPosition?.(this.mapPosition());
         },
       });
     }
@@ -644,6 +555,7 @@ export function createWorld(
   });
   return {
     destroy() {
+      destroyed = true;
       ambient.pause();
       ambient.src = "";
       pressed.clear();
@@ -660,6 +572,9 @@ export function createWorld(
       if (scene) {
         scene.path = [];
         scene.pendingTarget = null;
+        if (value) scene.travelTarget = null;
+        scene.refreshHint();
+        if (scene.player) callbacks.mapPosition?.(scene.mapPosition());
       }
     },
     setNpcs(value) {
@@ -669,7 +584,10 @@ export function createWorld(
       }
     },
     setFlags(value) {
-      currentFlags = value;
+      if (JSON.stringify(value) !== JSON.stringify(currentFlags)) {
+        currentFlags = value;
+        if (scene?.player) scene.build();
+      }
     },
     direction(key, down) {
       if (down) pressed.add(key);
@@ -679,6 +597,7 @@ export function createWorld(
       scene?.interact();
     },
     guide(key) {
+      if (scene) scene.travelTarget = null;
       scene?.approach(key);
     },
     mute(value) {
@@ -690,5 +609,6 @@ export function createWorld(
             callbacks.error("浏览器未允许播放音乐，请再次切换音乐选项。"),
           );
     },
+    getMapPosition() { return scene?.player ? scene.mapPosition() : undefined; },
   };
 }

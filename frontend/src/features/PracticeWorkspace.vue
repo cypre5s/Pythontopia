@@ -37,6 +37,7 @@
         <div class="learning-meta">
           <span>正式提交后记录成绩</span
           ><span v-if="activity">活动版本 {{ activity.version }}</span>
+          <span v-if="storySessionId && activityProgress">已完成 {{ activityProgress.accepted_question_ids?.length ?? 0 }} / {{ activity?.questions.length ?? 0 }} 题</span>
         </div>
       </header>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
@@ -187,15 +188,18 @@
       >
         此活动尚未绑定公开题目，请联系教师。
       </p>
+      <button v-if="storySessionId && activityProgress?.completed" class="primary" @click="$emit('complete')">完成练习</button>
     </section>
     <AssistantPanel
       v-if="activity"
+      :key="`${activity.id}:${activity.version}`"
       id="practice-assistant-region"
       tabindex="-1"
       :hidden="compact && !showAssistant"
       :inert="compact && !showAssistant"
       :aria-hidden="compact && !showAssistant"
       :activity-id="activity.id"
+      :activity-version="activity.version"
       :allowed="activity.assistant_allowed"
       :code="code"
       :role-name="roleName"
@@ -215,11 +219,11 @@ import {
 } from "vue";
 import { api, notify } from "../shared/api";
 import { useSession } from "../shared/session";
-import type { Activity, Submission, SubmissionStatus } from "../shared/types";
+import type { Activity, ActivityProgress, Submission, SubmissionStatus } from "../shared/types";
 import AssistantPanel from "./AssistantPanel.vue";
 import "./learningUi.css";
 const CodeEditor = defineAsyncComponent(() => import("./CodeEditor.vue")),
-  props = defineProps<{ activityId: string }>(),
+  props = defineProps<{ activityId: string; activityVersion?: number; storySessionId?: string }>(),
   session = useSession(),
   activity = ref<Activity>(),
   questionIndex = ref(0),
@@ -231,6 +235,8 @@ const CodeEditor = defineAsyncComponent(() => import("./CodeEditor.vue")),
   result = ref<Submission>(),
   showAssistant = ref(false),
   compact = ref(false);
+const emit = defineEmits<{ complete: [] }>();
+const activityProgress = ref<ActivityProgress>();
 const contextUserId = session.user?.id,
   contextClassroomId = session.classroomId;
 let timer: ReturnType<typeof setTimeout> | undefined,
@@ -297,7 +303,8 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    activity.value = await session.activity(props.activityId);
+    activity.value = await session.activity(props.activityId, props.activityVersion);
+    activityProgress.value = activity.value.progress;
     questionIndex.value = 0;
     restore();
   } catch (e) {
@@ -379,6 +386,13 @@ async function handleResult() {
     return;
   }
   if (result.value.status === "accepted" && result.value.mode === "submit") {
+    if (props.storySessionId) {
+      const progress = await api.get<ActivityProgress>(`/activities/${props.activityId}/progress?classroom_id=${contextClassroomId}&version=${activity.value?.version}`);
+      if (closed || session.user?.id !== contextUserId || session.classroomId !== contextClassroomId) return;
+      activityProgress.value = progress;
+      if (progress.completed) emit("complete");
+      return;
+    }
     for (const quest of session.world?.quests ?? [])
       for (const node of quest.nodes)
         if (
@@ -420,7 +434,7 @@ function cite(id: number, version: number, page: number) {
 }
 watch(current, restore);
 watch([answer, code], save);
-watch(() => props.activityId, load);
+watch([() => props.activityId, () => props.activityVersion], load);
 onMounted(() => {
   compactMedia = window.matchMedia?.("(max-width: 900px), (max-height: 540px)");
   updateCompact();

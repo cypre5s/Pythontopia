@@ -983,10 +983,12 @@ kbd {
 .world-page .world-hint {
   position: absolute;
   left: 50%;
+  right: auto;
+  width: max-content;
   bottom: calc(var(--safe-bottom) + 128px);
   transform: translateX(-50%);
   max-width: min(36rem, calc(100% - var(--safe-left) - var(--safe-right)));
-  padding: 10px 22px;
+  padding: 8px 14px;
   border: 1px solid #bda36b;
   border-radius: 5px;
   color: #fff3d4;

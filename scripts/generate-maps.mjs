@@ -737,7 +737,10 @@ function makeLowObstacle(name, label, tileX, tileY, bw = 1, bh = 1, kind = 'low'
 //   4. 树不围成绿墙：顶边一条 1~2 排深的连续树线收边界，内部按衰减散布
 //   5. 收尾跑校验：建筑间距、道路单连通、NPC 必定落在路面上；不满足直接抛错
 
-/** 建筑：[key, 房屋图号, 中心 tileX, 底边 tileY, 中文名, 路由（null = 纯景观众）] */
+/** 静态美术排布表。交互名称/用途/门前点/portal权威数据见data/world/world.json。
+ * 建筑：[key, 房屋图号, 中心 tileX, 底边 tileY, 历史中文名, 历史交互键]。
+ * 调整排布后同步检查配置中的object_name与门前点，运行validate-world.mjs。
+ */
 const TOWN_BUILDINGS = [
   ['mayor_hall', 10, 24, 12, '镇长大厅', 'town_hall'],
   ['cottage_a', 6, 31, 11, null, null],
@@ -789,6 +792,28 @@ function houseFootprint(houseIdx, cx, by) {
 }
 
 const pad2 = (n) => String(n).padStart(2, '0');
+
+function addTownLandscape(map) {
+  const bounds={x:-18,y:-14,width:86,height:68};
+  const data=Array(bounds.width*bounds.height).fill(0);
+  for(let y=0;y<bounds.height;y++)for(let x=0;x<bounds.width;x++){
+    const tx=x+bounds.x,ty=y+bounds.y;
+    if(tx<0||ty<0||tx>=map.width||ty>=map.height)data[y*bounds.width+x]=gid(SRW_ATLAS.single.grass);
+  }
+  const forest=[];
+  const variants=[1,2,3,4,5,8,9,10,11,12,13,14,15];
+  let id=map.nextobjectid;
+  for(let y=-12;y<53;y+=4)for(let x=-16;x<66;x+=5){
+    if(x>-4&&x<53&&y>-4&&y<43)continue;
+    const code=Math.abs(x*127+y*311),tileX=x+(code%3),tileY=y+(code%2);
+    const sprite=`srw_tree_${String(variants[code%variants.length]).padStart(2,'0')}`;
+    forest.push({id:id++,name:`landscape_tree_${forest.length+1}`,type:'prop',x:tileX*TILE,y:(tileY-1)*TILE,width:TILE,height:TILE,rotation:0,visible:true,properties:[{name:'sprite',type:'string',value:sprite},{name:'collidable',type:'bool',value:false}]});
+  }
+  map.layers.unshift({id:6,name:'landscape',type:'tilelayer',...bounds,opacity:1,visible:true,data});
+  map.layers.push({id:7,name:'landscape_trees',type:'objectgroup',x:0,y:0,opacity:1,visible:true,draworder:'topdown',objects:forest});
+  map.nextlayerid=8;map.nextobjectid=id;
+  return map;
+}
 
 function generateTownHub() {
   const W = 50;
@@ -1207,7 +1232,7 @@ function generateTownHub() {
   objects.sort((a, b) => (a.y - b.y) || (a.x - b.x));
   console.log(`  town_hub: 树 ${treeN}，路面 ${componentsOf(grid, MAT.ROAD)[0].length} 格，`
     + `桥接 ${bridges} 格，objects ${objects.length} 个`);
-  return buildMapJson({
+  return addTownLandscape(buildMapJson({
     key: 'town_hub',
     label: 'Pythontopia 小镇',
     width: W,
@@ -1218,7 +1243,7 @@ function generateTownHub() {
     decoration,
     collision,
     objects,
-  });
+  }));
 }
 
 // ---------- index.json ----------
@@ -1278,7 +1303,7 @@ async function main() {
 
   const indexObj = buildIndex();
   const indexStr = JSON.stringify(indexObj, null, 2);
-  if (!dryRun) await fs.writeFile(path.join(MAPS_DIR, 'index.json'), indexStr, 'utf-8');
+  if (!dryRun && !process.argv.includes('--town-only')) await fs.writeFile(path.join(MAPS_DIR, 'index.json'), indexStr, 'utf-8');
 
 
   console.log('[generate-maps] 写入完成：');

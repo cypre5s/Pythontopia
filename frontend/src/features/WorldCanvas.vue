@@ -59,9 +59,9 @@
 import { useUiPreferences } from "../shared/uiPreferences";
 import GameIcon from "../shared/GameIcon.vue";
 import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
-import type { Player } from "../shared/types";
+import type { Player, World } from "../shared/types";
 import { useSession } from "../shared/session";
-import { api, notify } from "../shared/api";
+import { api, ApiError, notify } from "../shared/api";
 import type { WorldHandle } from "../game/adapters/world";
 const props = defineProps<{ paused: boolean; welcomeDrift?: boolean }>(),
   emit = defineEmits<{
@@ -82,7 +82,7 @@ function updatePointer() {
 const displayHint = computed(() =>
   touchInput.value
     ? hint.value
-        .replace(/^E · /, "轻点「互动」· ")
+        .replace(/^E · /, "互动 · ")
 
     : hint.value,
 );
@@ -98,9 +98,12 @@ const contextClassroomId = session.classroomId,
   saveController = new AbortController();
 let disposed = false,
   interactionGeneration = 0;
+let contextGeneration = 0;
+watch([() => session.classroomId, () => session.user?.id], () => { contextGeneration++; }, { flush: "sync" });
 function currentContext() {
   return (
     !disposed &&
+    contextGeneration === 0 &&
     session.classroomId === contextClassroomId &&
     session.user?.id === contextUserId
   );
@@ -129,6 +132,13 @@ function save(player: Player) {
     });
   return saveTask;
 }
+function snapshotMapPosition() {
+  const player = game?.getMapPosition?.();
+  if (player && currentContext()) session.setMapPosition(player);
+}
+watch(() => session.workspace, workspace => {
+  if (workspace?.kind === "map") snapshotMapPosition();
+}, { flush: "sync" });
 onMounted(async () => {
   pointerMedia = window.matchMedia("(pointer: coarse)");
   updatePointer();
@@ -143,6 +153,38 @@ onMounted(async () => {
     session.world.flags,
     {
       position: save,
+      mapPosition: player => { if (currentContext()) session.setMapPosition(player); },
+      transition: async (portalId, source) => {
+        if (!currentContext()) return null;
+        await save(source);
+        if (!currentContext() || lastPosition !== JSON.stringify(source)) return null;
+        try {
+          const result = await api.post<{ player: Player; world: World }>("/world/transition", { classroom_id: contextClassroomId, portal_id: portalId });
+          if (!currentContext()) return null;
+          lastPosition = JSON.stringify(result.player);
+          session.world = result.world;
+          session.setMapPosition(result.player);
+          emit("position", result.player);
+          return result.player;
+        } catch (error) {
+          if (!currentContext()) return null;
+          if (!(error instanceof ApiError && error.status >= 400 && error.status < 500)) {
+            try {
+              const authoritative = await api.get<World>(`/world?classroom_id=${contextClassroomId}`);
+              if (!currentContext()) return null;
+              if (authoritative.player.map_key !== source.map_key) {
+                lastPosition = JSON.stringify(authoritative.player);
+                session.world = authoritative;
+                session.setMapPosition(authoritative.player);
+                emit("position", authoritative.player);
+                return authoritative.player;
+              }
+            } catch { /* Never replay an uncertain transition; a reload can restore the saved map. */ }
+          }
+          if (currentContext()) notify(error instanceof Error ? error.message : "地图同步中断，请刷新后继续。");
+          return null;
+        }
+      },
       interact: async (id, type) => {
         const generation = interactionGeneration;
         if (!currentContext() || props.paused || session.workspace) return;
@@ -178,7 +220,7 @@ watch(
 );
 watch(
   () => props.paused,
-  (v) => game?.setPaused(v),
+  (v) => { snapshotMapPosition(); game?.setPaused(v); },
 );
 watch(
   [
@@ -199,6 +241,7 @@ watch(
   },
 );
 onBeforeUnmount(() => {
+  if (currentContext()) session.clearMapPosition();
   pointerMedia?.removeEventListener("change", updatePointer);
   disposed = true;
   saveController.abort();

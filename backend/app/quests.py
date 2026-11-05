@@ -1,15 +1,17 @@
 from typing import Annotated, Literal
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from .auth import current_user, require_teacher
 from .courses import authorize_classroom, authorize_chapter, chapter_available
 from .db import get_db
+from .world_config import interaction_points, load_world_config, validate_point
 from .models import (
     Activity,
+    ActivityProgress,
     ActivityVersion,
     Chapter,
     ChapterRelease,
@@ -22,6 +24,7 @@ from .models import (
     QuestDefinition,
     Question,
     Submission,
+    StoryDefinition,
     User,
     WorldFlag,
 )
@@ -37,12 +40,7 @@ NODE_TYPES = {
     "PASS_ASSESSMENT",
     "REPORT_BACK",
 }
-OBJECTS = {
-    "library_shelf": ("library", 4, 4),
-    "practice_plaza": ("town_hub", 38, 24),
-    "library_door": ("town_hub", 8, 22),
-    "town_square": ("town_hub", 22, 34),
-}
+OBJECTS = interaction_points()
 
 
 def validate_definition(definition: dict, db: Session | None = None) -> dict:
@@ -83,6 +81,7 @@ def validate_definition(definition: dict, db: Session | None = None) -> dict:
             "condition",
             "choices",
             "dialogue_id",
+            "navigation_target",
         }:
             raise ValueError("未知节点字段")
         if (
@@ -94,9 +93,11 @@ def validate_definition(definition: dict, db: Session | None = None) -> dict:
             raise ValueError("节点类型或标题无效")
         if "optional" in node and type(node["optional"]) is not bool:
             raise ValueError("optional必须为布尔值")
-        for field in ("target", "activity_id", "dialogue_id"):
+        for field in ("target", "activity_id", "dialogue_id", "navigation_target"):
             if field in node and (not isinstance(node[field], str) or not node[field].strip() or len(node[field]) > 100):
                 raise ValueError(f"{field}必须为非空短字符串")
+        if node.get("navigation_target") and db and not db.get(Npc, node["navigation_target"]):
+            raise ValueError("导航NPC不存在")
         dependencies = node.get("dependencies", [])
         if not isinstance(dependencies, list) or any(not isinstance(dep, str) or not dep for dep in dependencies):
             raise ValueError("dependencies必须为节点id字符串列表")
@@ -260,8 +261,15 @@ def world_payload(db, user, classroom_id):
     player = (
         {"map_key": position.map_key, "tile_x": position.tile_x, "tile_y": position.tile_y, "direction": position.direction}
         if position
-        else {"map_key": "town_hub", "tile_x": 22, "tile_y": 36, "direction": "down"}
+        else dict(load_world_config()["default_spawn"])
     )
+    npcs = list(db.scalars(select(Npc)))
+    try:
+        validate_point(player["map_key"], player["tile_x"], player["tile_y"])
+        for npc in npcs:
+            validate_point(npc.map_key, npc.tile_x, npc.tile_y)
+    except ValueError as exc:
+        raise HTTPException(409, "存档或NPC位置与当前地图配置不一致，请联系管理员") from exc
     quests = []
     for instance in db.scalars(select(PlayerQuest).where(PlayerQuest.user_id == user.id, PlayerQuest.classroom_id == classroom_id)):
         definition = db.get(QuestDefinition, (instance.quest_id, instance.quest_version))
@@ -281,6 +289,9 @@ def world_payload(db, user, classroom_id):
                 ],
             }
         )
+        story = db.scalar(select(StoryDefinition).where(StoryDefinition.quest_id == definition.id, StoryDefinition.quest_version == definition.version))
+        if story:
+            quests[-1]["story_id"] = story.id
     return {
         "player": player,
         "npcs": [
@@ -293,7 +304,7 @@ def world_payload(db, user, classroom_id):
                 "portrait": npc.portrait,
                 "dialogue": npc.dialogue,
             }
-            for npc in db.scalars(select(Npc))
+            for npc in npcs
         ],
         "quests": quests,
         "chapters": [
@@ -319,21 +330,25 @@ def world(classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Anno
 class PositionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     classroom_id: int
-    map_key: Literal["town_hub", "library"]
-    tile_x: int = Field(ge=0, le=49)
-    tile_y: int = Field(ge=0, le=39)
+    map_key: str = Field(min_length=1, max_length=40)
+    tile_x: int = Field(ge=0)
+    tile_y: int = Field(ge=0)
     direction: Literal["up", "down", "left", "right"] = "down"
+
+    @model_validator(mode="after")
+    def validate_map_position(self):
+        validate_point(self.map_key, self.tile_x, self.tile_y)
+        return self
 
 
 @router.put("/world/position")
 def update_position(body: PositionInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
     authorize_classroom(db, user, body.classroom_id)
-    if body.map_key == "library":
-        if body.tile_x > 17 or body.tile_y > 13:
-            raise HTTPException(422, "室内坐标越界")
-        if not db.get(WorldFlag, (user.id, body.classroom_id, "library_unlocked")):
-            raise HTTPException(403, "图书馆尚未开放")
+    db.execute(select(User.id).where(User.id == user.id).with_for_update())
     position = db.get(PlayerPosition, (user.id, body.classroom_id))
+    current_map = position.map_key if position else load_world_config()["default_spawn"]["map_key"]
+    if body.map_key != current_map:
+        raise HTTPException(409, "跨地图移动必须通过对应入口")
     if not position:
         position = PlayerPosition(user_id=user.id, classroom_id=body.classroom_id)
         db.add(position)
@@ -341,6 +356,38 @@ def update_position(body: PositionInput, db: Annotated[Session, Depends(get_db)]
         setattr(position, key, getattr(body, key))
     db.commit()
     return {"map_key": position.map_key, "tile_x": position.tile_x, "tile_y": position.tile_y, "direction": position.direction}
+
+
+class TransitionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    classroom_id: int
+    portal_id: str = Field(min_length=1, max_length=100)
+
+
+@router.post("/world/transition")
+def transition(body: TransitionInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
+    authorize_classroom(db, user, body.classroom_id)
+    db.execute(select(User.id).where(User.id == user.id).with_for_update())
+    config = load_world_config()
+    portal = next((item for item in config["portals"] if item["id"] == body.portal_id), None)
+    if not portal:
+        raise HTTPException(404, "地图入口不存在")
+    position = db.get(PlayerPosition, (user.id, body.classroom_id))
+    current = ({"map_key": position.map_key, "tile_x": position.tile_x, "tile_y": position.tile_y}
+               if position else config["default_spawn"])
+    source = portal["from"]
+    if current["map_key"] != source["map_key"] or abs(current["tile_x"] - source["tile_x"]) + abs(current["tile_y"] - source["tile_y"]) > source["radius"]:
+        raise HTTPException(422, "请先到达对应地图入口附近")
+    if any(not db.get(WorldFlag, (user.id, body.classroom_id, flag)) for flag in portal["required_flags"]):
+        raise HTTPException(403, portal["blocked_message"])
+    if not position:
+        position = PlayerPosition(user_id=user.id, classroom_id=body.classroom_id)
+        db.add(position)
+    for key, value in portal["to"].items():
+        setattr(position, key, value)
+    db.commit()
+    payload = world_payload(db, user, body.classroom_id)
+    return {"player": payload["player"], "world": payload}
 
 
 class EventEvidence(BaseModel):
@@ -370,9 +417,16 @@ class EventInput(BaseModel):
         return EventEvidence.model_validate(value).model_dump(exclude_none=True)
 
 
-def check_near(db, user, classroom_id, target):
+def check_near(db, user, classroom_id, target, radius=5):
     position = db.get(PlayerPosition, (user.id, classroom_id))
-    if not position or position.map_key != target[0] or abs(position.tile_x - target[1]) + abs(position.tile_y - target[2]) > 5:
+    points = [target] if isinstance(target[0], str) else target
+    try:
+        for point in points:
+            validate_point(*point)
+    except ValueError as exc:
+        raise HTTPException(409, "任务目标位置与地图配置不一致") from exc
+    current = (position.map_key, position.tile_x, position.tile_y) if position else tuple(load_world_config()["default_spawn"][key] for key in ("map_key", "tile_x", "tile_y"))
+    if not any(current[0] == point[0] and abs(current[1] - point[1]) + abs(current[2] - point[2]) <= radius for point in points):
         raise HTTPException(422, "请先到达任务人物或目标附近")
 
 
@@ -391,8 +445,15 @@ def validate_evidence(db, user, classroom_id, node, evidence):
     elif kind in {"REACH_LOCATION", "INTERACT_OBJECT"}:
         if kind == "INTERACT_OBJECT" and evidence.get("object_id") != target:
             raise HTTPException(422, "互动对象不匹配")
-        check_near(db, user, classroom_id, OBJECTS[target])
+        check_near(db, user, classroom_id, OBJECTS[target], radius=2 if kind == "INTERACT_OBJECT" else 5)
     elif kind == "STUDY_LESSON":
+        from .courses import authorize_activity
+
+        activity = authorize_activity(db, user, classroom_id, node["activity_id"], node.get("activity_version", 1))
+        if activity.content.get("completion"):
+            progress = db.get(ActivityProgress, (user.id, classroom_id, activity.id, activity.version))
+            if not progress or not progress.completed:
+                raise HTTPException(422, "请先完成规定资料页的阅读参与")
         record = db.get(LearningRecord, evidence.get("record_id", ""))
         if not record or (record.user_id, record.classroom_id, record.activity_id, record.version) != (
             user.id,
@@ -413,7 +474,7 @@ def validate_evidence(db, user, classroom_id, node, evidence):
         if not questions:
             raise HTTPException(422, "题组为空")
         accepted = {
-            s.question_id
+            (s.question_id, s.version)
             for s in db.scalars(
                 select(Submission).where(
                     Submission.user_id == user.id,
@@ -424,7 +485,7 @@ def validate_evidence(db, user, classroom_id, node, evidence):
                 )
             ).all()
         }
-        if any(q.id not in accepted for q in questions):
+        if any((q.id, q.version) not in accepted for q in questions):
             raise HTTPException(422, "请先通过此活动的全部正式练习")
         if evidence.get("submission_id"):
             submission = db.get(Submission, evidence["submission_id"])
@@ -440,8 +501,8 @@ def validate_evidence(db, user, classroom_id, node, evidence):
         raise HTTPException(422, "请选择有效的剧情分支")
 
 
-@router.post("/events")
-def event(body: EventInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
+def apply_quest_event(db, user, body: EventInput):
+    """Validate and stage progress in the caller's transaction; return whether duplicated."""
     authorize_classroom(db, user, body.classroom_id)
     if user.role != "student":
         raise HTTPException(403, "教师预览不能写入学生成绩")
@@ -454,8 +515,7 @@ def event(body: EventInput, db: Annotated[Session, Depends(get_db)], user: Annot
         original = db.get(PlayerQuest, existing.player_quest_id)
         if existing.node_id != body.node_id or original.quest_id != body.quest_id or existing.evidence != body.evidence:
             raise HTTPException(409, "幂等键已用于另一事件")
-        return {"ok": True, "duplicate": True, "world": world_payload(db, user, body.classroom_id)}
-    ensure_quests(db, user, body.classroom_id)
+        return True
     instance = db.scalar(
         select(PlayerQuest)
         .where(PlayerQuest.user_id == user.id, PlayerQuest.classroom_id == body.classroom_id, PlayerQuest.quest_id == body.quest_id)
@@ -471,9 +531,17 @@ def event(body: EventInput, db: Annotated[Session, Depends(get_db)], user: Annot
         raise HTTPException(404, "任务节点不存在")
     statuses = node_statuses(definition.definition, states)
     if statuses[body.node_id] == "complete":
-        return {"ok": True, "duplicate": True, "world": world_payload(db, user, body.classroom_id)}
+        return True
     if statuses[body.node_id] != "ready":
         raise HTTPException(409, "任务前置尚未完成或不属于所选分支")
+    if node["type"] in {"TALK_TO_NPC", "REPORT_BACK"}:
+        story = db.scalar(select(StoryDefinition).where(StoryDefinition.quest_id == instance.quest_id,
+                                                       StoryDefinition.quest_version == instance.quest_version))
+        if story and any(item.get("checkpoint") == node["id"] for item in story.content["nodes"]):
+            marker = f"story:{story.id}:v{story.version}:{node['id']}"
+            if body.evidence.get("dialogue_id") != marker or not db.get(WorldFlag, (user.id, body.classroom_id,
+                                                                                   f"dialogue:completed:{node['target']}:{marker}")):
+                raise HTTPException(422, "请先确认当前版本的指定对白")
     validate_evidence(db, user, body.classroom_id, node, body.evidence)
     state = NodeState(player_quest_id=instance.id, node_id=node["id"], status="complete", choice=body.evidence.get("choice"), evidence=body.evidence)
     db.add(state)
@@ -497,6 +565,16 @@ def event(body: EventInput, db: Annotated[Session, Depends(get_db)], user: Annot
         for effect in definition.definition.get("effects", []):
             if not db.get(WorldFlag, (user.id, body.classroom_id, effect["key"])):
                 db.add(WorldFlag(user_id=user.id, classroom_id=body.classroom_id, key=effect["key"]))
+    return False
+
+
+@router.post("/events")
+def event(body: EventInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
+    authorize_classroom(db, user, body.classroom_id)
+    if user.role != "student":
+        raise HTTPException(403, "教师预览不能写入学生成绩")
+    ensure_quests(db, user, body.classroom_id)
+    duplicate = apply_quest_event(db, user, body)
     try:
         db.commit()
     except IntegrityError:
@@ -509,7 +587,7 @@ def event(body: EventInput, db: Annotated[Session, Depends(get_db)], user: Annot
         if not same:
             raise HTTPException(409, "任务状态已变化，请刷新重试")
         return {"ok": True, "duplicate": True, "world": world_payload(db, user, body.classroom_id)}
-    return {"ok": True, "duplicate": False, "world": world_payload(db, user, body.classroom_id)}
+    return {"ok": True, "duplicate": duplicate, "world": world_payload(db, user, body.classroom_id)}
 
 
 class DefinitionInput(BaseModel):

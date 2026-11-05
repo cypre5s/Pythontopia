@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia, type Pinia } from "pinia";
 import { nextTick } from "vue";
-import { api } from "../src/shared/api";
+import { api, ApiError } from "../src/shared/api";
 import { useSession } from "../src/shared/session";
 import { useUiPreferences } from "../src/shared/uiPreferences";
 import WorldCanvas from "../src/features/WorldCanvas.vue";
@@ -90,6 +90,7 @@ afterEach(async () => {
 
 async function canvas() {
   let callbacks!: WorldCallbacks;
+  const getMapPosition = vi.fn(() => world().player);
   const handle: WorldHandle = {
     destroy: vi.fn(),
     setPaused: vi.fn(),
@@ -99,6 +100,7 @@ async function canvas() {
     interact: vi.fn(),
     guide: vi.fn(),
     mute: vi.fn(),
+    getMapPosition,
   };
   vi.mocked(createWorld).mockImplementation(
     (_root, _player, _npcs, _flags, received) => {
@@ -112,10 +114,112 @@ async function canvas() {
   });
   mounted.push(wrapper);
   await flushPromises();
-  return { callbacks, wrapper };
+  return { callbacks, wrapper, getMapPosition };
 }
 
 describe("pending world interactions", () => {
+  it("snapshots the current sprite for the map synchronously without saving or changing server coordinates", async () => {
+    const request = vi.spyOn(api, "request").mockResolvedValue(undefined);
+    const { callbacks, wrapper, getMapPosition } = await canvas();
+    const session = useSession();
+    callbacks.mapPosition?.({ ...world().player, tile_x: 23, direction: "right" });
+    expect(session.mapPosition?.tile_x).toBe(23);
+    expect(session.world?.player.tile_x).toBe(22);
+    getMapPosition.mockReturnValue({ ...world().player, tile_x: 24.375, direction: "right" });
+    session.open({ kind: "map" });
+    expect(session.mapPosition?.tile_x).toBe(24.375);
+    expect(session.world?.player.tile_x).toBe(22);
+    await wrapper.setProps({ paused: true });
+    expect(session.mapPosition?.tile_x).toBe(24.375);
+    expect(request).not.toHaveBeenCalled();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+  it("keeps the latest live position when an older integer save finishes", async () => {
+    const saved = deferred<void>();
+    const request = vi.spyOn(api, "request").mockReturnValue(saved.promise);
+    const { callbacks } = await canvas();
+    callbacks.position({ ...world().player, tile_x: 23 });
+    callbacks.mapPosition?.({ ...world().player, tile_x: 24.5, direction: "right" });
+    await flushPromises();
+    expect(useSession().mapPosition?.tile_x).toBe(24.5);
+    saved.resolve();
+    await flushPromises();
+    useSession().world = { ...world(), player: { ...world().player, tile_x: 23 } };
+    expect(useSession().mapPosition?.tile_x).toBe(24.5);
+    expect(useSession().world?.player.tile_x).toBe(23);
+    expect(request).toHaveBeenCalledTimes(1);
+    expect(JSON.parse(request.mock.calls[0]![1]!.body as string).tile_x).toBe(23);
+  });
+  it("clears live map positions on account or classroom changes and ignores the old world's callbacks", async () => {
+    const { callbacks } = await canvas();
+    const session = useSession();
+    callbacks.mapPosition?.({ ...world().player, tile_x: 24.5 });
+    session.classroomId = 2;
+    expect(session.mapPosition).toBeNull();
+    session.world = { ...world(), player: { ...world().player, tile_x: 10 } };
+    expect(session.mapPosition?.tile_x).toBe(10);
+    callbacks.mapPosition?.({ ...world().player, tile_x: 45.5 });
+    expect(session.mapPosition?.tile_x).toBe(10);
+    session.classroomId = 1;
+    session.user = person(2);
+    expect(session.mapPosition).toBeNull();
+    session.world = { ...world(), player: { ...world().player, tile_x: 12 } };
+    callbacks.mapPosition?.({ ...world().player, tile_x: 45.5 });
+    expect(session.mapPosition?.tile_x).toBe(12);
+  });
+  it("saves the source before a transition and applies only the server's destination", async () => {
+    const saved = deferred<void>();
+    vi.spyOn(api, "request").mockReturnValue(saved.promise);
+    const authoritative = { ...world(), player: { map_key: "library", tile_x: 9, tile_y: 11, direction: "up" } };
+    const post = vi.spyOn(api, "post").mockResolvedValue({ player: authoritative.player, world: authoritative });
+    const { callbacks } = await canvas();
+    const transition = callbacks.transition("library_door", { ...world().player, tile_x: 8, tile_y: 22 });
+    await flushPromises();
+    expect(post).not.toHaveBeenCalled();
+    saved.resolve();
+    expect(await transition).toEqual(authoritative.player);
+    expect(post).toHaveBeenCalledWith("/world/transition", { classroom_id: 1, portal_id: "library_door" });
+    expect(useSession().world?.player).toEqual(authoritative.player);
+    expect(useSession().mapPosition).toEqual(authoritative.player);
+    callbacks.mapPosition?.({ ...world().player, tile_x: 40.5 });
+    expect(useSession().mapPosition).toEqual(authoritative.player);
+  });
+  it("reconciles a committed transition after a lost response without posting it again", async () => {
+    vi.spyOn(api, "request").mockResolvedValue(undefined);
+    const authoritative = { ...world(), player: { map_key: "library", tile_x: 9, tile_y: 11, direction: "up" } };
+    const post = vi.spyOn(api, "post").mockRejectedValue(new Error("connection lost"));
+    const get = vi.spyOn(api, "get").mockResolvedValue(authoritative);
+    const { callbacks } = await canvas();
+    expect(await callbacks.transition("library_door", { ...world().player, tile_x: 8, tile_y: 22 })).toEqual(authoritative.player);
+    expect(post).toHaveBeenCalledTimes(1);
+    expect(get).toHaveBeenCalledWith("/world?classroom_id=1");
+    expect(useSession().world?.player.map_key).toBe("library");
+  });
+  it("leaves the source unchanged after denied entry and drops another account's delayed transition", async () => {
+    vi.spyOn(api, "request").mockResolvedValue(undefined);
+    const post = vi.spyOn(api, "post").mockRejectedValueOnce(new ApiError(403, "入口尚未开放"));
+    const { callbacks } = await canvas();
+    expect(await callbacks.transition("library_door", world().player)).toBeNull();
+    expect(useSession().world?.player.map_key).toBe("town_hub");
+    const pending = deferred<{ player: World["player"]; world: World }>();
+    post.mockReturnValueOnce(pending.promise);
+    const transition = callbacks.transition("library_door", world().player);
+    await flushPromises();
+    useSession().user = person(2);
+    useSession().user = person(1);
+    const authoritative = { ...world(), player: { ...world().player, map_key: "library" } };
+    pending.resolve({ player: authoritative.player, world: authoritative });
+    expect(await transition).toBeNull();
+    expect(useSession().world?.player.map_key).toBe("town_hub");
+  });
+  it("keeps a single world surface without the removed location directory", async () => {
+    const { wrapper } = await canvas();
+    expect(wrapper.find(".location-toggle").exists()).toBe(false);
+    expect(wrapper.find(".world-location-directory").exists()).toBe(false);
+    expect(wrapper.get(".world-canvas").attributes("aria-label")).toBe("Pythontopia 像素小镇");
+    await wrapper.setProps({ paused: true });
+    expect(wrapper.findAll(".world-canvas")).toHaveLength(1);
+  });
   it.each([
     "workspace round trip",
     "pause round trip",

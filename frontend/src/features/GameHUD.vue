@@ -35,12 +35,15 @@
           {{ tracked.status === "complete" ? "委托已完成" : "当前目标" }}
         </p>
         <p class="quest-next">
-          {{ node?.title ?? "全部目标已达成，去看看下一段故事吧。" }}
+          {{ node ? displayQuestTitle(node) : "全部目标已达成，去看看下一段故事吧。" }}
         </p>
         <p v-if="readyCount > 1" class="quest-parallel">
           还有 {{ readyCount - 1 }} 个目标可在日志中查看
         </p>
-        <button v-if="node?.activity_id" class="quest-go" @click="openActivity">
+        <button v-if="node?.navigation_target" class="quest-go" @click="$emit('guide', node.navigation_target)">
+          <span>立即前往</span><GameIcon name="compass" />
+        </button>
+        <button v-else-if="node?.activity_id && !tracked?.story_id" class="quest-go" @click="openActivity">
           <span>{{
             node.type === "STUDY_LESSON" ? "继续学习" : "开始练习"
           }}</span
@@ -69,6 +72,9 @@
       <button @click="session.open({ kind: 'library' })">
         <GameIcon name="book" /><span>学习资料</span>
       </button>
+      <button @click="session.open({ kind: 'map' })">
+        <GameIcon name="compass" /><span>地图</span>
+      </button>
       <button @click="session.open({ kind: 'classroom' })">
         <GameIcon name="people" /><span>我的班级</span>
       </button>
@@ -82,6 +88,7 @@
 import { computed } from "vue";
 import { useSession } from "../shared/session";
 import GameIcon from "../shared/GameIcon.vue";
+import { displayQuestTitle } from "../game/config/worldConfig";
 defineProps<{ blocked?: boolean }>();
 const session = useSession();
 
@@ -275,6 +282,7 @@ function openActivity() {
 .is-entering .hud-dock button:nth-child(2) { animation-delay: .14s; }
 .is-entering .hud-dock button:nth-child(3) { animation-delay: .20s; }
 .is-entering .hud-dock button:nth-child(4) { animation-delay: .26s; }
+.is-entering .hud-dock button:nth-child(5) { animation-delay: .32s; }
 .is-entering .resident-badge { animation: hud-from-bottom .55s .18s ease-out both; }
 @keyframes hud-from-left { from {opacity:0; transform:translateX(-12px)} to {opacity:1;transform:translateX(0)} }
 @keyframes hud-from-bottom { from {opacity:0; transform:translateY(12px)} to {opacity:1;transform:translateY(0)} }

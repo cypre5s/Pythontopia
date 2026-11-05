@@ -1,12 +1,40 @@
 # Reborn migration
 
 - Branch: `reborn`.
-- Current demo: Docker http://localhost:15175 / API18082 only. Native15174/API18081 were stopped at the user's request; preserve their data and do not automatically restart them.
+- Current local runtime (2026-11-05): stopped at the user's request. Independent `pythontopia-story-qa` web/API/db are all stopped; Web15176/API18083 no longer listen. Containers and data volumes are retained. Existing15175 demo was already stopped and left unchanged; Native15174/API18081 remain stopped.
 - Source `origin/main`: `783f15d8d08fd739fea3f665ec83d819b5eebb51`.
-- Original checkout: `E:\AI\Pythontopia`; its existing changes remain untouched. It is detached at the source commit to release the branch for this managed worktree.
+- Current implementation checkout: `E:\AI\Pythontopia` on `reborn`. Unrelated untracked `deploy/piston-local/` remains untouched. Earlier managed-worktree records below are historical.
 - No production service, database, object store, volume, repository setting, or main branch is in scope.
 
 ## Retention decisions
+
+2026-11-05 最新玩家标记/家具修订：恢复地图上始终显示的青蓝玩家标记与“你在这里”，所有筛选保留。session.mapPosition独立内存记录Sprite即时浮点位置，打开地图同步快照，不等1.5秒保存；world.player整数权威位置/节流/跨图授权不变，账号班级与旧回调隔离。手机只滚map-stage使标记可见，不干扰焦点/手动平移。地图整页外层透明无大框，暖金标题、深绿与纸面卡片参考任务日志。
+
+桌椅根因是原16×32长条误作短椅，且小桌取帧不适合该组合。实看source后改为2张完整48×36宽桌与4张16×16独立短木凳，桌脚完整、桌凳间留空，碰撞覆盖桌面与凳占格。137室内/1838总可达格、353对象，10书架锚点与旧存档通路保留。原PNG/world.json不改。本次最终前端103项、后端164 passed/7 skipped、整组真实浏览器5项通过；样式与三视口截图已实际开图检查，详见acceptance.md首节。验收后按用户要求停止全部本项目服务并提交推送reborn；保留数据卷与未纳入提交的deploy/piston-local目录。
+
+2026-11-05 用户草图上一轮：地图按草图改为左大地图/右独立圆角卡，右卡顶部仅compass/building/people筛选；删除地图选择、位置/计数/图例说明，固定玩家当前图，小镇预览仅50×40逻辑范围，不画外景。图书馆改为10组满书书架、双阅览位、居中服务台、2行后墙和中央通道，去大毯/孤桌。147室内可达格，保留旧存档连通与关键坐标；原PNG不改。
+
+所有书架保留library_shelf语义并配置10个points，点击具体书柜与普通就近导航都可读；服务端INTERACT_OBJECT核对任一真实锚点半径2，REACH_LOCATION保留原范围。旧任务/事件/脚本版本不改写，任务标题与对白中旧“西侧书架”在显示层改称。互动提示改短文字和随文宽度，按角色真实插值位置逐帧更新，移动中离开立即消失；未开放建筑无E或未开放弹字。任务日志左目录底部装饰句已删除。当前15176/API18083。
+
+本次最终验证：前端99项、后端164 passed/7 skipped、PG竞争/历史迁移2项通过，类型/lint/构建、重复seed/Alembic check和地图生成/1848可达格/351对象/68资源审计通过。真实新旧章节3项及最终地图2项通过（分组执行）；持续按移动键时提示清除、远书架可读、当前图无选择器、窄屏和1464×1244日志删除均已实测/开图复核。首次地图用例失败仅为新增书目选择器不符合真实DOM，已修正并复测；细节见acceptance.md首节。未重置进度、未提交或推送。
+
+2026-11-05 地图工作区上一轮：删除地点导航浮层，在学习资料与我的班级之间加入地图入口；中央真实预览、右侧目标、顶部建筑/人物筛选与地图选择。切换预览不移动角色，明确前往后才导航；不新增WASD/方向键选择，关闭回到世界焦点。房屋上方与地图列表仅保留名称，门口改8×8原始透明箭头。图书馆已替换为library.json的同源地板、砖墙、书柜/书本、桌椅、地毯与出口门，Phaser/地图/登录背景共用worldRender绘制。
+
+小地图显式centered、resize保持居中；小镇逻辑50×40/原碰撞不变，render_bounds扩为(-18,-14,86,68)，外围草地/树林不可行走。前后端walk_bounds共同限制位置；新增家具阻挡保留旧室内存档走出邻格，不重写存档。新增3个原始PNG按需复制，保留生成器、原图和来源；没有批量导入源包或改图。当前预览仍为15176/API18083。
+
+最新工作区验证：前端19文件95项通过，后端完整157 passed/7 skipped、配置最终18项通过，PG竞争/历史迁移2项通过；真实浏览器整组5 passed，最后美术/手机显示修正后地图2 passed，正常动效入场另行通过。地图可达1861格/334对象、资源存在审计68项。截图已实际打开检查。所有本轮源码仍未提交/推送，体验进度保留；当前页面需刷新获取新版。
+
+2026-11-05 地图交互首轮：统一配置data/world/world.json涵盖2地图、11中文建筑和2双向portal，建筑锚点仅维护一次；前后端共同校验入口与落点，跨图不再使用任意位置PUT；旧室内存档保留。用户提供D:\godot-one并确认已购可用，现有184个SRW PNG可逐项重现；已增加source只读预检。来源与比对见assets/inbox/super-retro-world/SOURCES.md。
+
+地图交互首轮复验：后端156 passed/7 skipped、前端81项通过；地图2项真实UI+新旧章节3项真实UI全部通过，PG竞争/历史升级2项通过。真实手机模拟回归发现并修复DOM触摸穿透到地图民居的问题，全部场景pointerdown统一canvas来源边界；屋顶/入口箭头仍接受真实canvas点击。没有重置体验进度或提交/推送本轮变更。最新工作区验收见acceptance.md首节。
+
+2026-11-05：章节脚本首轮实现位于 `backend/content/chapters/`。原两章任务/对白/活动移入legacy.yaml，新第一章chapter01.yaml发布arrival v2 / first-steps v2，复用旧资料、练习与受限助教并新增独立章节测试。新增StoryDefinition/StorySession/ActivityProgress及迁移b63e1a4920d7；条件入口负责首访/提醒/续读，活动等待点处理主动关闭、完成与资料不可用，刷新恢复服务端页码。任务证据与剧情检查点同事务，revision/event_id处理重试；固定旧玩家版本。图书馆提前于镇长欢迎后开放，导航进馆后继续到馆员。章节完成后让出同NPC的第二章旧任务。
+
+内容继续受真实课程约束：第34/42/43页为本轮阅读参与目标，3练习与3章测各自形成正式成绩，章测禁用助教；源PPT仍缺失，当前展示真实提取文本。后续在现有YAML中迭代并发布新版本，格式与操作见content-authoring.md。卡片、镜头和可视化编辑器尚未扩展。本轮实际检查与限制见acceptance.md最新章节演出条目。
+
+收尾版本审查修正：每个活动版本显式固定question_ids；修订题目使用新ID，避免旧题集漂移或静默忽略修改。当前waiting演出优先绑定其活动版本，工作区/请求/助教缓存同步携带版本；已有助教会话保持创建版本。暂停章候选与会话不再挡住独立开放章节，本地工作区在403/404时可退出，服务器检查点保留。后台完整139 passed/7 skipped、前端71项通过，PostgreSQL竞争/历史迁移在最终镜像2 passed。
+
+最终API/Web已更新至独立15176预览；最终镜像浏览器整组3 passed（2.1分钟）：新版第一章桌面与窄屏、旧版两章回归。体验账号校验arrival v2、welcome ready、已完成目标0，仍处于起点。未提交或推送本轮修改；保留deploy/piston-local/。
 
 | Capability | Source | Reborn decision | Verification |
 | --- | --- | --- | --- |

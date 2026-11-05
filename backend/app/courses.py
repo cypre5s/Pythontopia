@@ -9,6 +9,7 @@ from .auth import as_utc, current_user
 from .db import get_db
 from .models import (
     Activity,
+    ActivityProgress,
     ActivityVersion,
     Chapter,
     ChapterRelease,
@@ -21,6 +22,8 @@ from .models import (
     PlayerQuest,
     QuestDefinition,
     Question,
+    Submission,
+    StorySession,
     User,
 )
 
@@ -133,7 +136,10 @@ def authorize_activity(db: Session, user: User, classroom_id: int, activity_id: 
     can_preview = user.role == "admin" or (user.role == "teacher" and classroom.teacher_id == user.id)
     if not can_preview:
         versions, pinned = activity_versions(db, user, classroom_id, activity)
-        chosen = version if version is not None else min(pinned) if pinned else max(versions)
+        waiting_version = db.scalar(select(StorySession.pending_activity_version).where(
+            StorySession.user_id == user.id, StorySession.classroom_id == classroom_id,
+            StorySession.pending_activity_id == activity.id, StorySession.status == "waiting"))
+        chosen = version if version is not None else waiting_version if waiting_version in versions else min(pinned) if pinned else max(versions)
         if chosen not in versions:
             raise HTTPException(403, "此活动版本尚未发布")
         activity = snapshot_activity(db, activity, chosen)
@@ -217,8 +223,10 @@ def material_payload(db, material, version=None):
 
 
 @router.get("/activities/{activity_id}")
-def get_activity(activity_id: str, classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
-    activity = authorize_activity(db, user, classroom_id, activity_id)
+def get_activity(
+    activity_id: str, classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)], version: int | None = None
+):
+    activity = authorize_activity(db, user, classroom_id, activity_id, version)
     material = db.get(Material, activity.material_id) if activity.material_id else None
     if material:
         authorize_material(db, user, classroom_id, material.id)
@@ -246,6 +254,8 @@ def get_activity(activity_id: str, classroom_id: int, db: Annotated[Session, Dep
         "version": activity.version,
         "npc_key": activity.npc_key,
         "assistant_allowed": activity.assistant_allowed,
+        "completion": activity.content.get("completion"),
+        "progress": progress_payload(db, user, classroom_id, activity),
         "knowledge_point_ids": activity.content.get("knowledge_point_ids", []),
         "knowledge_points": points,
         "material": material_payload(db, material, activity.content.get("material_version")) if material else None,
@@ -255,6 +265,71 @@ def get_activity(activity_id: str, classroom_id: int, db: Annotated[Session, Dep
             if activity.content.get("question_ids") is None or q.id in activity.content["question_ids"]
         ],
     }
+
+
+def progress_payload(db, user, classroom_id, activity):
+    if activity.kind in {"practice", "assessment"}:
+        questions = [question for question in db.scalars(select(Question).where(Question.activity_id == activity.id))
+                     if activity.content.get("question_ids") is None or question.id in activity.content["question_ids"]]
+        accepted = {(submission.question_id, submission.version) for submission in db.scalars(select(Submission).where(
+            Submission.user_id == user.id, Submission.classroom_id == classroom_id, Submission.activity_id == activity.id,
+            Submission.mode == "submit", Submission.status.in_(["accepted", "AC", "ac"])))}
+        passed = [question.id for question in questions if (question.id, question.version) in accepted]
+        return {"page_no": None, "visited_pages": [], "completed": bool(questions) and len(passed) == len(questions), "accepted_question_ids": passed}
+    progress = db.get(ActivityProgress, (user.id, classroom_id, activity.id, activity.version))
+    return {
+        "page_no": progress.page_no if progress else None,
+        "visited_pages": progress.visited_pages if progress else [],
+        "completed": progress.completed if progress else False,
+    }
+
+
+class ProgressInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    classroom_id: int
+    page_no: int = Field(ge=1)
+    version: int | None = Field(default=None, ge=1)
+
+
+@router.get("/activities/{activity_id}/progress")
+def get_progress(
+    activity_id: str, classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)], version: int | None = None
+):
+    activity = authorize_activity(db, user, classroom_id, activity_id, version)
+    return {**progress_payload(db, user, classroom_id, activity), "participation_only": activity.kind in {"lesson", "reading"}}
+
+
+@router.post("/activities/{activity_id}/progress")
+def save_progress(activity_id: str, body: ProgressInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
+    activity = authorize_activity(db, user, body.classroom_id, activity_id, body.version)
+    if user.role != "student":
+        raise HTTPException(403, "教师预览不能写入学生学习进度")
+    if activity.kind not in {"lesson", "reading"} or not activity.material_id:
+        raise HTTPException(422, "此活动不支持阅读进度")
+    material = authorize_material(db, user, body.classroom_id, activity.material_id)
+    payload = material_payload(db, material, activity.content.get("material_version"))
+    if payload["status"] != "ready":
+        raise HTTPException(409, "资料尚未就绪")
+    page = next((item for item in payload["pages"] if item["page_no"] == body.page_no), None)
+    if not page:
+        raise HTTPException(422, "资料中不存在此页")
+    required = activity.content.get("completion", {}).get("required_page_ids", [])
+    if required and (any(type(key) is not int for key in required) or not set(required).issubset({item["id"] for item in payload["pages"]})):
+        raise HTTPException(409, "阅读完成规则引用了不存在的资料页")
+    db.execute(select(User.id).where(User.id == user.id).with_for_update())
+    progress = db.get(ActivityProgress, (user.id, body.classroom_id, activity.id, activity.version))
+    if not progress:
+        progress = ActivityProgress(user_id=user.id, classroom_id=body.classroom_id, activity_id=activity.id, version=activity.version, visited_pages=[])
+        db.add(progress)
+    first_visit = page["id"] not in progress.visited_pages
+    progress.page_no = body.page_no
+    progress.visited_pages = sorted(set(progress.visited_pages) | {page["id"]})
+    progress.completed = bool(required) and set(required).issubset(progress.visited_pages)
+    if first_visit:
+        db.add(LearningRecord(user_id=user.id, classroom_id=body.classroom_id, activity_id=activity.id, version=activity.version,
+                              kind="participation", data={"page_no": body.page_no, "page_id": page["id"]}))
+    db.commit()
+    return {**progress_payload(db, user, body.classroom_id, activity), "participation_only": True}
 
 
 class ParticipationInput(BaseModel):

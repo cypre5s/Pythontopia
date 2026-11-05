@@ -43,6 +43,12 @@
           >
         </div>
         <p v-if="material?.notice" class="notice">{{ material.notice }}</p>
+        <nav v-if="requiredPages.length" class="reader-toolbar required-reading" aria-label="本章阅读目标">
+          <span>本次阅读：</span>
+          <button v-for="page in requiredPages" :key="page.id" :aria-current="currentContext.page_no === page.page_no ? 'page' : undefined" @click="readRequiredPage(page.page_no)">
+            {{ progress?.visited_pages.includes(Number(page.id)) ? '✓ ' : '' }}阅读第{{ page.page_no }}页
+          </button>
+        </nav>
       </header>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <p v-if="loading" class="learning-empty" role="status">
@@ -125,31 +131,34 @@
       </template>
       <footer v-if="activity" class="lesson-footer">
         <div>
-          <strong>留下一次学习记录</strong>
-          <p>阅读参与单独保存，知识掌握仍由正式练习与测验判定。</p>
+          <strong>{{ activity.completion ? "本章阅读进度" : "留下一次学习记录" }}</strong>
+          <p>{{ activity.completion ? `已阅读 ${requiredVisited} / ${activity.completion.required_page_ids.length} 页。完成阅读后，与${roleName}继续交谈。` : "阅读参与单独保存，知识掌握仍由正式练习与测验判定。" }}</p>
           <p v-if="participationMessage" class="learning-success" role="status">
             {{ participationMessage }}
           </p>
+          <p v-if="progressError" class="error" role="alert">{{ progressError }} <button :disabled="progressSaving" @click="persistProgress">重试保存</button></p>
         </div>
         <button
           class="primary"
           :disabled="
-            saving || loading || !material || material.status !== 'ready'
+            saving || loading || progressSaving || !material || material.status !== 'ready' || Boolean(activity.completion && !progress?.completed)
           "
           @click="participate"
         >
-          {{ saving ? "保存中…" : "记录本次学习" }}
+          {{ saving || progressSaving ? "保存中…" : activity.completion ? "完成阅读" : "记录本次学习" }}
         </button>
       </footer>
     </section>
     <AssistantPanel
       v-if="activity"
+      :key="`${activity.id}:${activity.version}`"
       id="lesson-assistant-region"
       tabindex="-1"
       :hidden="compact && !showAssistant"
       :inert="compact && !showAssistant"
       :aria-hidden="compact && !showAssistant"
       :activity-id="activity.id"
+      :activity-version="activity.version"
       :allowed="activity.assistant_allowed"
       :page-no="currentContext.page_no"
       :video-time="currentContext.video_time"
@@ -171,16 +180,18 @@ import {
 } from "vue";
 import { useSession } from "../shared/session";
 import { api, notify } from "../shared/api";
-import type { Activity, Material } from "../shared/types";
+import type { Activity, ActivityProgress, Material } from "../shared/types";
 import { learningContext } from "../shared/learningContext";
 import AssistantPanel from "./AssistantPanel.vue";
 import "./learningUi.css";
 const PdfReader = defineAsyncComponent(() => import("./PdfReader.vue"));
 const props = defineProps<{
     activityId: string;
+    activityVersion?: number;
     initialPage?: number;
     materialId?: number;
     materialVersion?: number;
+    storySessionId?: string;
   }>(),
   session = useSession(),
   activity = ref<Activity>(),
@@ -196,10 +207,18 @@ const props = defineProps<{
   mediaBlob = ref(""),
   mediaError = ref(""),
   participationMessage = ref("");
+const emit = defineEmits<{ complete: [] }>();
+const progress = ref<ActivityProgress>(), progressSaving = ref(false);
+const progressError = ref("");
+let disposed = false, loadGeneration = 0, progressGeneration = 0;
+let queuedPage = "";
 const controller = new AbortController(),
   contextUserId = session.user?.id,
   contextClassroomId = session.classroomId;
 let compactMedia: MediaQueryList | undefined;
+const currentOwner = () => !disposed && session.user?.id === contextUserId && session.classroomId === contextClassroomId;
+const requiredVisited = computed(() => activity.value?.completion?.required_page_ids.filter(id => progress.value?.visited_pages.includes(id)).length ?? 0);
+const requiredPages = computed(() => material.value?.pages.filter(page => activity.value?.completion?.required_page_ids.includes(Number(page.id))) ?? []);
 const currentPage = computed(() => material.value?.pages[pageIndex.value]),
   roleName = computed(
     () =>
@@ -255,7 +274,13 @@ async function switchView(assistant: boolean) {
     )
     ?.focus({ preventScroll: true });
 }
+function readRequiredPage(page: number) {
+  const index = material.value?.pages.findIndex(item => item.page_no === page) ?? -1;
+  if (index >= 0) pageIndex.value = index;
+  pdfPage.value = page;
+}
 async function load() {
+  const generation = ++loadGeneration;
   loading.value = true;
   error.value = "";
   participationMessage.value = "";
@@ -269,13 +294,22 @@ async function load() {
         `/materials/${props.materialId}/versions/${props.materialVersion}?classroom_id=${session.classroomId}`,
       );
     } else {
-      activity.value = await session.activity(props.activityId);
+      const loaded = await session.activity(props.activityId, props.activityVersion);
+      if (!currentOwner() || generation !== loadGeneration) return;
+      activity.value = loaded;
       material.value = activity.value.material ?? undefined;
     }
+    if (!currentOwner() || generation !== loadGeneration) return;
+    progress.value = activity.value?.progress;
+    if (activity.value?.completion) {
+      progress.value = await api.get<ActivityProgress>(`/activities/${activity.value.id}/progress?classroom_id=${contextClassroomId}&version=${activity.value.version}`);
+      if (!currentOwner() || generation !== loadGeneration) return;
+    }
     const saved = Number(sessionStorage.getItem(readingKey.value) ?? 0);
-    const requested = props.initialPage
+    const resumePage = props.initialPage ?? progress.value?.page_no;
+    const requested = resumePage
       ? (material.value?.pages.findIndex(
-          (p) => p.page_no === props.initialPage,
+          (p) => p.page_no === resumePage,
         ) ?? 0)
       : saved;
     pageIndex.value = Math.min(
@@ -286,7 +320,7 @@ async function load() {
       sessionStorage.getItem(`${readingKey.value}:pdf`) ?? 1,
     );
     pdfPage.value =
-      props.initialPage ??
+      resumePage ??
       Math.max(1, Number.isFinite(savedPdf) ? savedPdf : 1);
     if (material.value?.kind === "video") {
       try {
@@ -300,11 +334,41 @@ async function load() {
   } catch (e) {
     error.value = e instanceof Error ? e.message : "课程读取失败";
   } finally {
-    loading.value = false;
+    if (currentOwner() && generation === loadGeneration) {
+      loading.value = false;
+      void persistProgress();
+    }
+  }
+}
+async function persistProgress() {
+  if (!currentOwner() || loading.value || error.value || !activity.value?.completion || material.value?.status !== "ready") return;
+  if (material.value.id !== activity.value.material?.id || material.value.version !== activity.value.material.version) return;
+  const page = ["pdf", "presentation"].includes(material.value.kind) ? pdfPage.value : currentPage.value?.page_no;
+  if (!page) return;
+  const pageKey = `${activity.value.id}:${activity.value.version}:${page}`;
+  if (queuedPage === pageKey) return;
+  queuedPage = pageKey;
+  const generation = ++progressGeneration;
+  progressSaving.value = true;
+  progressError.value = "";
+  try {
+    const saved = await session.saveActivityProgress(activity.value.id, page, activity.value.version);
+    if (currentOwner() && generation === progressGeneration) progress.value = saved;
+  } catch (error) {
+    if (queuedPage === pageKey) queuedPage = "";
+    if (currentOwner()) progressError.value = error instanceof Error ? error.message : "阅读位置保存失败，请重试。";
+  } finally {
+    if (currentOwner() && generation === progressGeneration) progressSaving.value = false;
   }
 }
 async function participate() {
   if (!activity.value) return;
+  if (activity.value.completion) {
+    if (!progress.value?.completed || progressSaving.value) return;
+    if (props.storySessionId) emit("complete");
+    else { await session.refresh(); notify("本章阅读已完成。"); }
+    return;
+  }
   saving.value = true;
   try {
     const record = await api.post<{ record_id: string }>(
@@ -353,13 +417,18 @@ function restoreVideoPosition(event: Event) {
     video.currentTime = Math.min(saved, Math.max(0, video.duration - 0.1));
 }
 watch(pageIndex, (value) => {
-  if (!loading.value) sessionStorage.setItem(readingKey.value, String(value));
+  if (!loading.value) {
+    sessionStorage.setItem(readingKey.value, String(value));
+    void persistProgress();
+  }
 });
 watch(pdfPage, (value) => {
-  if (!loading.value)
+  if (!loading.value) {
     sessionStorage.setItem(`${readingKey.value}:pdf`, String(value));
+    void persistProgress();
+  }
 });
-watch(() => props.activityId, load);
+watch([() => props.activityId, () => props.activityVersion], load);
 watch(
   () => props.initialPage,
   (page) => {
@@ -378,6 +447,7 @@ onMounted(() => {
   void load();
 });
 onBeforeUnmount(() => {
+  disposed = true;
   controller.abort();
   compactMedia?.removeEventListener("change", updateCompact);
   if (mediaBlob.value) URL.revokeObjectURL(mediaBlob.value);

@@ -11,21 +11,22 @@
       ><WorldCanvas
         :key="session.classroomId"
         ref="canvas"
-        :paused="Boolean(session.workspace || npc || welcome)"
+        :paused="Boolean(session.workspace || dialogueNpc || welcome || session.storyBusy)"
         @ready="onWorldReady"
         @position="positionChanged"
         @interact="interact" /><GameHUD
         v-if="!welcome"
-        :blocked="Boolean(session.workspace || npc)"
+        :blocked="Boolean(session.workspace || dialogueNpc || session.storyBusy)"
         :class="{ 'is-entering': entered }"
         @guide="guide" /><DialogueLayer
         v-if="dialogueNpc"
         :npc="dialogueNpc"
+        :story="activeStory"
         :actions="actions"
         :settling="dialogueSaving"
-        @close="npc = null"
+        @close="closeDialogue"
         @complete="finishDialogue"
-        @action="action" /><OverlayHost @close="session.open(null)"
+        @action="action" /><OverlayHost @close="closeWorkspace" @complete="closeWorkspace"
     /></template>
     <section v-else class="arrival-page">
 
@@ -66,6 +67,7 @@ import { useSession } from "../shared/session";
 import { api, notify } from "../shared/api";
 import type { Npc, Player, Quest, QuestNode } from "../shared/types";
 import { isTextFocus } from "../game/pathfinding";
+import { resolveWorldTarget } from "../game/config/worldConfig";
 import { arrivalActive, arrivalCamera, arrivalFinished, backdropReady, startArrival, endArrival, type ArrivalCamera } from "../shared/arrival";
 import ArrivalWelcome from "./ArrivalWelcome.vue";
 const welcome = ref(true);
@@ -112,7 +114,31 @@ const actions = computed(
         .map((node) => ({ quest, node })),
     ) ?? [],
 );
-const dialogueNpc = computed(() => npc.value);
+const activeStory = computed(() =>
+  session.story?.status === "active" && !session.storyDismissed ? session.story : undefined,
+);
+const dialogueNpc = computed(() => {
+  if (!activeStory.value?.node) return npc.value;
+  const resident = session.world?.npcs.find(n => n.key === activeStory.value?.npc_key);
+  return resident ? { ...resident, dialogue: [activeStory.value.node] } : null;
+});
+function closeDialogue() {
+  npc.value = null;
+  session.dismissStory();
+}
+async function closeWorkspace() {
+  try {
+    if (session.story?.status === "waiting") await session.returnStoryActivity();
+    else session.open(null);
+  } catch (error) {
+    notify(error instanceof Error ? error.message : "活动进度保存失败，请重试。");
+  }
+}
+watch(() => session.navigationTarget, async target => {
+  if (!target) return;
+  session.navigationTarget = null;
+  await guide(target);
+});
 watch(
   () => session.workspace,
   (workspace) => {
@@ -144,6 +170,7 @@ async function load() {
   error.value = "";
   try {
     if (!session.world) await session.load();
+    await session.restoreStory();
     if (!session.classroomId) endArrival();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "连接失败";
@@ -175,26 +202,18 @@ async function logout() {
 async function guide(key: string) {
   session.open(null);
   npc.value = null;
+  session.dismissStory();
   await nextTick();
   canvas.value?.guide(key);
 }
 async function positionChanged(player: Player) {
   if (session.world) session.world.player = player;
   if (reachBusy) return;
-  const targetPositions: Record<
-    string,
-    { map_key: string; x: number; y: number }
-  > = {
-    practice_plaza: { map_key: "town_hub", x: 38, y: 24 },
-    library_door: { map_key: "town_hub", x: 8, y: 22 },
-    town_square: { map_key: "town_hub", x: 22, y: 34 },
-    library_shelf: { map_key: "library", x: 4, y: 4 },
-  };
   reachBusy = true;
   try {
     for (const quest of session.world?.quests ?? [])
       for (const node of quest.nodes) {
-        const target = targetPositions[node.target];
+        const target = resolveWorldTarget(node.target, session.world?.npcs ?? []);
         if (
           node.status === "ready" &&
           node.type === "REACH_LOCATION" &&
@@ -219,6 +238,12 @@ async function positionChanged(player: Player) {
 async function interact(target: string, type: "npc" | "object") {
   if (type === "npc") {
     session.open(null);
+    try {
+      if (await session.interactStory(target)) return;
+    } catch (error) {
+      notify(error instanceof Error ? error.message : "无法读取这段对话，请重试。");
+      return;
+    }
     const resident = session.world?.npcs.find((n) => n.key === target);
     npc.value = resident ? { ...resident } : null;
     return;
@@ -291,7 +316,8 @@ function worldShortcut(event: KeyboardEvent) {
     isTextFocus(document.activeElement) ||
     welcome.value ||
     session.workspace ||
-    npc.value ||
+    dialogueNpc.value ||
+    session.storyBusy ||
     !session.world
   )
     return;

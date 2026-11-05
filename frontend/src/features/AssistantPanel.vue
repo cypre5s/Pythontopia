@@ -90,12 +90,13 @@
 </template>
 <script setup lang="ts">
 import GameIcon from "../shared/GameIcon.vue";
-import { nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { api, notify } from "../shared/api";
 import "./learningUi.css";
 import { useSession } from "../shared/session";
 const props = defineProps<{
   activityId: string;
+  activityVersion?: number;
   allowed: boolean;
   pageNo?: number;
   videoTime?: number;
@@ -113,6 +114,7 @@ const session = useSession(),
   references = ref<
     { material_id: number; version: number; page_no: number; title: string }[]
   >([]);
+const storageKey = computed(() => `assistant:${session.user?.id}:${session.classroomId}:${props.activityId}${props.activityVersion === undefined ? "" : `:v${props.activityVersion}`}`);
 let sessionId = "",
   requestId = "",
   controller: AbortController | undefined;
@@ -152,7 +154,7 @@ async function send() {
       });
       sessionId = s.id;
       sessionStorage.setItem(
-        `assistant:${session.user?.id}:${session.classroomId}:${props.activityId}`,
+        storageKey.value,
         sessionId,
       );
     }
@@ -227,7 +229,7 @@ async function send() {
   }
 }
 watch(
-  () => props.activityId,
+  [() => props.activityId, () => props.activityVersion],
   () => {
     cancel();
     sessionId = "";
@@ -239,7 +241,7 @@ onMounted(async () => {
   await status();
   sessionId =
     sessionStorage.getItem(
-      `assistant:${session.user?.id}:${session.classroomId}:${props.activityId}`,
+      storageKey.value,
     ) ?? "";
   if (sessionId) {
     try {

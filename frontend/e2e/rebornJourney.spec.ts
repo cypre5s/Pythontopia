@@ -45,8 +45,9 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
   await page.getByRole("button", { name: "注册并进入", exact: true }).click();
   await page.getByLabel("班级加入码").fill(classroom.join_code);
   await page.getByRole("button", { name: "加入班级", exact: true }).click();
-  await expect(page.locator("canvas")).toBeVisible();
-  await expect(page.locator(".world-hint")).toContainText("镇长 Py", {
+  await dismissArrival(page);
+  await expect(page.locator(".world-canvas canvas")).toBeVisible();
+  await expect(page.locator(".world-hint")).toContainText("交谈", {
     timeout: 15000,
   });
   const token = await page.evaluate(() =>
@@ -81,13 +82,13 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
   await expect.poll(() => status("arrival", "opening")).toBe("complete");
   await study(page);
   await expect.poll(() => status("arrival", "study")).toBe("complete");
-  await page.getByRole("button", { name: "寻找目标" }).click();
+  await page.getByRole("button", { name: "立即前往" }).click();
   await expect
     .poll(() => status("arrival", "reach-practice"), { timeout: 30_000 })
     .toBe("complete");
   await practice(page, ["抽象与自动化", "正确", "建模"]);
   await expect.poll(() => status("arrival", "practice")).toBe("complete");
-  await page.getByRole("button", { name: "寻找目标" }).click();
+  await page.getByRole("button", { name: "立即前往" }).click();
   await expect(page.getByRole("dialog", { name: "剧情对白" })).toBeVisible({
     timeout: 30_000,
   });
@@ -115,9 +116,10 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
     ).ok(),
   ).toBeTruthy();
   await page.reload({ waitUntil: "domcontentloaded" });
+  await dismissArrival(page);
   await talk(page);
   await expect.poll(() => status("lost-language", "mission")).toBe("complete");
-  await page.getByRole("button", { name: "寻找目标" }).click();
+  await page.getByRole("button", { name: "立即前往" }).click();
   await expect(page.getByRole("dialog", { name: "剧情对白" })).toBeVisible({
     timeout: 30_000,
   });
@@ -134,15 +136,14 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
     .toBe("complete");
   expect(await status("lost-language", "code-practice")).toBe("skipped");
   // Enter the library via the real doorway; no business-page navigation.
-  await page.getByRole("button", { name: "寻找目标" }).click();
+  await page.getByRole("button", { name: "立即前往" }).click();
   await expect
     .poll(async () => (await world()).player.map_key, { timeout: 30_000 })
     .toBe("library");
   await page.screenshot({
     path: `test-results/${testInfo.project.name}-library.png`,
   });
-  // Remaining interior interactions are reached through the world controls.
-  await page.getByRole("button", { name: "寻找目标" }).click();
+  // Cross-map guidance continues from the doorway to the librarian automatically.
   await expect(page.getByRole("dialog", { name: "剧情对白" })).toBeVisible({
     timeout: 20_000,
   });
@@ -150,13 +151,13 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
   await expect
     .poll(() => status("lost-language", "meet-librarian"))
     .toBe("complete");
-  await page.getByRole("button", { name: "寻找目标" }).click();
+  await page.getByRole("button", { name: "立即前往" }).click();
   await expect
     .poll(() => status("lost-language", "read-shelf"), { timeout: 20_000 })
     .toBe("complete");
   if (await page.getByRole("button", { name: "关闭当前工作区" }).isVisible())
     await page.getByRole("button", { name: "关闭当前工作区" }).click();
-  await page.getByRole("button", { name: "寻找目标" }).click();
+  await page.getByRole("button", { name: "立即前往" }).click();
   await expect(page.getByRole("dialog", { name: "剧情对白" })).toBeVisible({
     timeout: 40_000,
   });
@@ -169,7 +170,8 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
     1,
   );
   await page.getByRole("button", { name: "已完成", exact: true }).click();
-  await expect(page.locator(".journal-entry")).toHaveCount(2);
+  await expect(page.locator(".quest-directory .quest-card")).toHaveCount(2);
+  await expect(page.locator(".journal-entry")).toHaveCount(1);
   await page.screenshot({
     path: `test-results/${testInfo.project.name}-completed.png`,
   });
@@ -194,6 +196,7 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
   expect(ai.model_calls).toBe(0);
   expect(JSON.stringify(ai)).not.toContain("api_key");
   await page.reload({ waitUntil: "domcontentloaded" });
+  await dismissArrival(page);
   await expect(page.locator(".world-hint")).not.toHaveText("", {
     timeout: 15000,
   });
@@ -209,6 +212,7 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
   await page.getByRole("button", { name: "注册并进入", exact: true }).click();
   await page.getByLabel("班级加入码").fill(classroom.join_code);
   await page.getByRole("button", { name: "加入班级", exact: true }).click();
+  await dismissArrival(page);
   await expect(
     page.getByText("在南侧广场找到镇长 Py", { exact: true }),
   ).toBeVisible();
@@ -227,8 +231,15 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
   expect(browserErrors).toEqual([]);
 });
 
+async function dismissArrival(page: Page) {
+  const welcome = page.getByRole("dialog", { name: "欢迎回到小镇", exact: true });
+  await expect(welcome).toBeVisible();
+  await welcome.getByRole("button", { name: "按任意键继续" }).click();
+  await expect(welcome).toBeHidden();
+  await expect(page.locator(".world-canvas canvas")).toHaveCount(1);
+}
 async function talk(page: Page) {
-  await expect(page.locator(".world-hint")).toContainText("镇长 Py", {
+  await expect(page.locator(".world-hint")).toContainText("交谈", {
     timeout: 15000,
   });
   await page.keyboard.press("e");
@@ -239,14 +250,16 @@ async function finishTalk(page: Page) {
   const dialogue = page.getByRole("dialog", { name: "剧情对白" });
   for (let i = 0; i < 10; i++) {
     if (!(await dialogue.isVisible())) return;
-    await dialogue.locator(".dialogue-text").click();
+    const text = dialogue.locator(".dialogue-text");
+    const fullText = await text.getAttribute("aria-label");
+    if (fullText && (await text.textContent()) !== fullText) await text.click();
+    if (fullText) await expect(text).toHaveText(fullText);
     const choice = dialogue.getByRole("button", {
       name: "辨认程序设计语言",
       exact: true,
     });
-    const button = (await choice.count())
-      ? choice
-      : dialogue.locator(".dialogue-actions .primary");
+    const responses = dialogue.locator(".dialogue-response");
+    const button = (await choice.count()) ? choice : (await responses.count()) ? responses.first() : text;
     const responsePromise = page.waitForResponse(
       (r) =>
         r.url().includes("/dialogues/") &&

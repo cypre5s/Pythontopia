@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .auth import as_utc, current_user, require_teacher
 from .db import get_db
+from .world_config import validate_point
 from .models import (
     Activity,
     Chapter,
@@ -427,11 +428,16 @@ class NpcInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     key: str = Field(min_length=1, max_length=80)
     name: str = Field(min_length=1, max_length=80)
-    map_key: Literal["town_hub", "library"]
-    tile_x: int = Field(ge=0, le=49)
-    tile_y: int = Field(ge=0, le=39)
+    map_key: str = Field(min_length=1, max_length=40)
+    tile_x: int = Field(ge=0)
+    tile_y: int = Field(ge=0)
     portrait: str = ""
     dialogue: list = Field(default_factory=list, max_length=100)
+
+    @model_validator(mode="after")
+    def validate_map_position(self):
+        validate_point(self.map_key, self.tile_x, self.tile_y)
+        return self
 
 
 @router.post("/teacher/npcs", status_code=201)

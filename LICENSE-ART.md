@@ -1,5 +1,9 @@
 # Pythontopia 美术资产 License 总声明
 
+## 本机SRW源包补充记录（2026-11-05）
+
+用户提供D:\godot-one并确认已购、可用于项目。技术比对确认现有184个SRW运行PNG可从该目录重现；已支持只读source预检，没有整包复制或扩大分发。作者官方产品页为 https://store.godotengine.org/asset/gif/super-retro-world/ ，页面标注Custom Commercial license。用户确认、官方来源与像素比对分别记录于assets/inbox/super-retro-world/SOURCES.md，不把用户确认写成找到了上游许可原文，也不把整包其他风格图标归为同一来源。下方2026-11-03“tracked仓库未附源包”的描述保留为当时记录；运行和部署继续只依赖仓库内切片。
+
 ## Reborn 当前使用范围（2026-11-03）
 
 Reborn 保留原 town_hub、Super Retro World 运行时图集/角色/房屋/道具、Galgame 立绘、部分音乐/交互音和字体，并删除已确认未使用的旧功能素材二进制。仍使用的素材源与原许可证/署名记录保留；下文历史清单并不表示所有旧素材仍被打包。

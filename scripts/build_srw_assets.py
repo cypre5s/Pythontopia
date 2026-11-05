@@ -21,6 +21,7 @@
 为什么用 Python 不用 Node：仓库既有同类作者工具 scripts/build_ulpc_characters.py、
 scripts/make_cloud_fx.py 走的是同一套约定（一次性切片 + 产物入库）。
 """
+import argparse
 import json
 import re
 import shutil
@@ -289,10 +290,27 @@ def sync_generator_atlas(manifest, entry_count):
     gen.write_text(new_text, encoding='utf-8')
 
 
-def main():
-    for d in (OUT_TILESET, OUT_CHARS, OUT_HOUSES, OUT_PROPS):
-        d.mkdir(parents=True, exist_ok=True)
+def source_files(directory, prefix):
+    """Godot exports can contain mixed-case names on case-sensitive filesystems."""
+    return sorted((p for p in directory.glob('*.png') if p.name.casefold().startswith(prefix.casefold() + '_')),
+                  key=lambda p: p.name.casefold())
 
+
+def main():
+    global SRC
+    parser = argparse.ArgumentParser(description='Prepare SRW slices, or compare a source pack without writing files.')
+    parser.add_argument('--source', type=Path, default=SRC, help='Source asset directory (read-only)')
+    parser.add_argument('--check', action='store_true', help='Validate and compare the source pack; do not write any outputs')
+    args = parser.parse_args()
+    SRC = args.source.resolve()
+    chars = SRC / 'Characters'
+    if not source_files(chars, 'chara'):
+        chars = chars / 'Characters'
+    characters = source_files(chars, 'chara')
+    houses = source_files(SRC / 'Props/Houses/Sprites', 'house')
+    props = {sub: source_files(SRC / 'Props' / src_dir / 'Sprites', prefix) for sub, src_dir, prefix, _stem in PROPS}
+    if not characters or not houses or any(not files for files in props.values()):
+        raise SystemExit('源包缺少角色、房屋或必需道具；未修改任何输出。')
     sheets = load_sheets()
     blobs = parse_blob_tables()
 
@@ -317,6 +335,15 @@ def main():
                 so = (y * T + x) * 4
                 do = ((oy + y) * W + ox + x) * 4
                 atlas[do:do + 4] = px[so:so + 4]
+    if args.check:
+        current = read_png(str(OUT_TILESET / 'town_tiles.png'))
+        print(json.dumps({'source': str(SRC), 'characters': len(characters), 'houses': len(houses),
+                          'props': {key: len(files) for key, files in props.items()},
+                          'atlas': [W, H], 'atlas_matches_current': current == (W, H, atlas), 'writes': False},
+                         ensure_ascii=False))
+        return
+    for d in (OUT_TILESET, OUT_CHARS, OUT_HOUSES, OUT_PROPS):
+        d.mkdir(parents=True, exist_ok=True)
     write_png(str(OUT_TILESET / 'town_tiles.png'), W, H, atlas)
 
     manifest = {
@@ -342,7 +369,7 @@ def main():
     for old in OUT_CHARS.glob('*.png'):
         old.unlink()
     n = 0
-    for p in sorted((SRC / 'Characters').glob('chara_*.png')):
+    for p in characters:
         shutil.copyfile(p, OUT_CHARS / p.name)
         n += 1
     manifest['props']['chara'] = n
@@ -350,7 +377,7 @@ def main():
     for old in OUT_HOUSES.glob('*.png'):
         old.unlink()
     n = 0
-    for p in sorted((SRC / 'Props/Houses/Sprites').glob('house_*.png')):
+    for p in houses:
         shutil.copyfile(p, OUT_HOUSES / p.name)
         n += 1
     manifest['props']['house'] = n
@@ -364,7 +391,7 @@ def main():
         dst.mkdir(parents=True, exist_ok=True)
         for old in dst.glob('*.png'):
             old.unlink()
-        files = sorted((SRC / 'Props' / src_dir / 'Sprites').glob(f'{prefix}_*.png'))
+        files = props[sub]
         for i, src in enumerate(files, 1):
             if stem == 'torch':
                 # 源是 48x32 的三帧横排动画表；小镇阶段只用静态第一帧，

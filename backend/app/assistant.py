@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from .auth import current_user
 from .db import SessionLocal, get_db
 from .integration_models import AssistantCall, AssistantSession
-from .models import ActivityVersion, Classroom, LearningRecord, Material, MaterialVersion, Npc, Question, Submission, User
+from .models import Activity, ActivityVersion, Classroom, LearningRecord, Material, MaterialVersion, Npc, Question, Submission, User
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 _active_tasks: dict[str, asyncio.Task] = {}
@@ -86,8 +86,9 @@ def authorized_session(db, user, session_id):
     session = db.get(AssistantSession, session_id)
     if not session or session.user_id != user.id:
         raise HTTPException(404, "会话不存在")
-    activity = authorize_activity(db, user, session.classroom_id, session.activity_id)
-    if not activity.assistant_allowed:
+    activity = authorize_activity(db, user, session.classroom_id, session.activity_id, session.version)
+    # A current activity disable also revokes sessions pinned to an earlier allowed snapshot.
+    if not activity.assistant_allowed or not db.get(Activity, activity.id).assistant_allowed:
         raise HTTPException(403, "此活动禁止使用助教")
     snapshot = db.get(ActivityVersion, (activity.id, session.version))
     if not snapshot:
@@ -112,7 +113,7 @@ def new_session(body: NewSession, user: Annotated[User, Depends(current_user)], 
     from .courses import authorize_activity, authorize_material
 
     activity = authorize_activity(db, user, body.classroom_id, body.activity_id)
-    if not activity.assistant_allowed:
+    if not activity.assistant_allowed or not db.get(Activity, activity.id).assistant_allowed:
         raise HTTPException(403, "此活动禁止使用助教")
     material_version = None
     if activity.material_id:

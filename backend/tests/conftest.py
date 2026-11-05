@@ -8,6 +8,25 @@ from app.main import app
 from app.models import User
 from app.auth import hash_password, issue
 from app.seed import seed
+from app.world_config import load_world_config
+
+
+def move_player(client, headers, classroom_id, map_key, tile_x, tile_y, direction="down"):
+    """Use actual configured portals before a test moves within its destination map."""
+    response = client.get(f"/api/world?classroom_id={classroom_id}", headers=headers)
+    assert response.status_code == 200, response.text
+    current = response.json()["player"]["map_key"]
+    if current != map_key:
+        portal = next(item for item in load_world_config()["portals"] if item["from"]["map_key"] == current and item["to"]["map_key"] == map_key)
+        source = {key: portal["from"][key] for key in ("map_key", "tile_x", "tile_y")}
+        response = client.put("/api/world/position", json={"classroom_id": classroom_id, **source, "direction": direction}, headers=headers)
+        assert response.status_code == 200, response.text
+        response = client.post("/api/world/transition", json={"classroom_id": classroom_id, "portal_id": portal["id"]}, headers=headers)
+        assert response.status_code == 200, response.text
+    response = client.put("/api/world/position", json={"classroom_id": classroom_id, "map_key": map_key, "tile_x": tile_x, "tile_y": tile_y,
+                                                      "direction": direction}, headers=headers)
+    assert response.status_code == 200, response.text
+    return response
 
 
 @pytest.fixture

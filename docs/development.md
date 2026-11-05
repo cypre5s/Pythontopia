@@ -1,10 +1,43 @@
 # 安装、启动与排查
 
+## 章节演出开发预览（2026-11-05）
+
+当前状态：验收后已按用户要求停止pythontopia-story-qa的web/API/db，15176/18083不再监听；容器、数据卷和本机体验凭据保留。下方启动命令仅供明确恢复服务时使用。
+
+同一15176预览现包含地图配置、建筑名称和入口导航。权威配置在data/world/world.json，修改后需重建API/Web；web镜像保留/app/frontend与/app/data/world的相对目录，避免本机可导入而容器丢配置。地图检查运行 `node scripts/validate-world.mjs`；只读素材源预检运行 `python scripts/build_srw_assets.py --source D:\godot-one --check`。素材提取脚本不要求本机Godot，不把外部源路径作为部署依赖。
+
+本轮新增独立预览 `http://127.0.0.1:15176`（API18083），Compose项目 `pythontopia-story-qa`，使用专属数据库/存储卷。原15175演示栈检查时已停止，本轮未启动或修改它，也未恢复15174/18081。体验学生从第一章版本2起点开始；本机凭据保存在忽略文件 `.tmp/story-preview.md`，验收教师凭据在 `.tmp/story-qa-credentials.json`，均不入Git。
+
+章节源文件校验与导入：
+
+```sh
+cd backend
+python -m app.chapter_content --check
+python -m alembic upgrade head
+python -m app.seed
+python -m app.seed
+python -m alembic check
+```
+
+沿用本机已生成的独立 `.tmp/story-qa.env`（DB随机密码、WEB15176、API18083），从仓库根启动/更新该预览：
+
+```sh
+docker compose --env-file .tmp/story-qa.env -p pythontopia-story-qa -f deploy/compose.yml up --build -d
+```
+
+停止并保留数据：
+
+```sh
+docker compose --env-file .tmp/story-qa.env -p pythontopia-story-qa -f deploy/compose.yml stop
+```
+
+真实新版旅程使用 `npx playwright test storyChapter.spec.ts --project=desktop --workers=1 --output=.tmp-story-e2e`，文件内部覆盖1440×900和390×844触摸视口。先设置E2E_URL、E2E_TEACHER_EMAIL/PASSWORD和PLAYWRIGHT_CHANNEL=chrome，不将凭据写入脚本。原两章回归继续使用rebornJourney.spec.ts。新版第一章发布任务版本2；已有玩家仍固定原任务版本，可在独立班级用新学生体验，不要清空旧存档。
+
 要求 Docker Compose v2；本机开发使用 Python 3.12/3.13、Node 22。不要复用 main 的数据库连接、数据卷、对象存储前缀或凭据。项目根目录不依赖开发者绝对路径。
 
-## 当前唯一演示入口（2026-11-03）
+## 历史演示入口（2026-11-03）
 
-按用户最新要求，仅保留Docker新版http://localhost:15175（API18082）。重复的本机15174/18081已停止，旧数据文件保留，不自动重启。deploy/.env已持久配置REBORN_WEB_PORT=15175、REBORN_API_PORT=18082；常规Compose重启沿用这两个端口。
+2026-11-03按用户当时要求，仅保留Docker新版http://localhost:15175（API18082）。重复的本机15174/18081已停止，旧数据文件保留，不自动重启。deploy/.env配置REBORN_WEB_PORT=15175、REBORN_API_PORT=18082；本轮新预览使用上方独立项目和环境文件。
 
 专用“Pythontopia Reborn 演示班”包含教师、新手学生与两章已完成学生。两章完成状态、6次概念题成绩和14条任务事件来自真实界面流程；教师可直接查看学情。演示凭据、班级加入码与本机核查结果仅保存在忽略的.tmp/reborn-demo.json，不提交Git。
 
@@ -85,6 +118,10 @@ PostgreSQL并发测试须 REBORN_TEST_DATABASE_URL，使用临时schema并清理
 实际结果和未通过项见 acceptance.md。不得把跳过的外部服务测试计为通过。主分支只通过人工审查移植独立改动，不周期merge。
 
 ## 游戏界面验收
+
+地图布局变更后运行`node scripts/generate-library.mjs --check`、`node scripts/validate-world.mjs`与`node scripts/audit-assets.mjs`。town_hub.json的可编辑生成器为scripts/generate-maps.mjs；library.json使用原图坐标与家具对象配置，不需Godot编辑器。world.json与前端静态地图分别进入API/Web镜像，改配置后须同时重建，不能只刷新旧镜像。
+
+地图工作区和门的真实交互使用`npx playwright test worldConfiguration.spec.ts --project=desktop --workers=1`：检查只展示当前图且裁掉外景、右卡建筑/人物筛选、玩家标记始终可见及走路后立即开图的位置、关闭后WASD、移动中提示立即消失、静默的未开放房屋、远端书架实际点击、同一画布与双向入口，并截图复核图书馆和390×844布局。窄屏需确认标记实际落在画布可视框内，不能只检查DOM可见。地图不增加键盘选项导航；浏览器截图仍须实际打开检查。原两章旅程仍覆盖任务驱动的跨图导航及书架证据，不能仅靠地图快照替代。
 
 设置显式E2E教师凭据、E2E_URL与PLAYWRIGHT_CHANNEL后，运行`npx playwright test uiUsability.spec.ts --workers=1`。该验收真实创建独立班级与新学生，覆盖1440×900、1024×640、844×390触屏、2560×1080四视口；检查任务进度、折叠、键盘焦点、返回路径、200%字号、减少动效、触控热区和世界画布不重建。普通操作仍须model_calls=0。触屏项目显式hasTouch，不将鼠标点击算作实际触摸。
 

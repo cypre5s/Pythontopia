@@ -6,12 +6,13 @@ from sqlalchemy import func, select
 from app.models import Question, QuestionSecret, LearningEvent, WorldFlag
 from app.quests import node_statuses, validate_definition
 from app.seed import QUESTS, seed
+from conftest import move_player
 
 
 def test_seed_idempotent_and_answers_private(client, db, student, classroom):
     counts = seed(db)
     assert counts == {"documents": 7, "pages": 561, "chapters": 7, "knowledge_points": 65, "examples": 46, "problems": 39}
-    assert db.scalar(select(func.count()).select_from(Question)) == 45
+    assert db.scalar(select(func.count()).select_from(Question)) == 48
     payload = client.get(f"/api/activities/ch1-practice?classroom_id={classroom['id']}", headers=student["headers"]).json()
     assert len(payload["questions"]) == 3
     assert all(not {"answer", "hidden_cases", "reference_solution_code"} & q.keys() for q in payload["questions"])
@@ -93,10 +94,7 @@ def test_first_chapter_full_loop_and_idempotency(client, db, student, teacher, c
     cid = classroom["id"]
 
     def position(x, y, map_key="town_hub"):
-        result = client.put(
-            "/api/world/position", json={"classroom_id": cid, "map_key": map_key, "tile_x": x, "tile_y": y, "direction": "down"}, headers=headers
-        )
-        assert result.status_code == 200, result.text
+        move_player(client, headers, cid, map_key, x, y)
 
     def event(node, evidence=None, event_id=None, quest_id="arrival"):
         result = client.post(
@@ -241,10 +239,7 @@ def test_second_chapter_different_branch_and_parallel_loop(client, db, student, 
     cid = classroom["id"]
 
     def position(x, y, map_key="town_hub"):
-        result = client.put(
-            "/api/world/position", json={"classroom_id": cid, "map_key": map_key, "tile_x": x, "tile_y": y, "direction": "down"}, headers=headers
-        )
-        assert result.status_code == 200, result.text
+        move_player(client, headers, cid, map_key, x, y)
 
     def event(node, evidence=None):
         result = client.post(

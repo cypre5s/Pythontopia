@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from app.auth import issue
 from app.db import Base, get_db
 from app.main import app
-from app.models import User, Classroom, Membership, ChapterRelease, PlayerPosition, LearningEvent, NodeState
+from app.models import User, Classroom, Membership, ChapterRelease, PlayerPosition, LearningEvent, NodeState, StorySession
 from app.seed import seed
 
 
@@ -74,6 +74,40 @@ def test_postgres_duplicate_events_under_contention():
         with factory() as db:
             assert db.scalar(select(func.count()).select_from(LearningEvent)) == 1
             assert db.scalar(select(func.count()).select_from(NodeState)) == 1
+            # A new student receives version2; the first student's version1 stays pinned.
+            db.get(ChapterRelease, (cid, 179)).version = 2
+            second = User(email="story@concurrency.test", name="story student", role="student", password_hash="unused")
+            db.add(second)
+            db.flush()
+            second_id = second.id
+            db.add(Membership(user_id=second.id, classroom_id=cid))
+            db.add(PlayerPosition(user_id=second.id, classroom_id=cid, map_key="town_hub", tile_x=22, tile_y=34, direction="up"))
+            db.commit()
+            story_headers = {"Authorization": "Bearer " + issue(db, second)["access_token"]}
+        started = client.post("/api/story/interactions", json={"classroom_id": cid, "npc_key": "mayor_py"}, headers=story_headers)
+        assert started.status_code == 200, started.text
+        story = started.json()
+        path = f"/api/story/sessions/{story['id']}/advance"
+        first_line = client.post(path, json={"classroom_id": cid, "revision": story["revision"], "event_id": str(uuid4())}, headers=story_headers)
+        assert first_line.status_code == 200, first_line.text
+        terminal = {"classroom_id": cid, "revision": first_line.json()["revision"], "event_id": str(uuid4())}
+
+        # Do not enter application lifespan: only this temporary schema may be used.
+        def advance_story(_):
+            story_client = TestClient(app)
+            try:
+                response = story_client.post(path, json=terminal, headers=story_headers)
+                return response.status_code, response.json()
+            finally:
+                story_client.close()
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            replies = list(executor.map(advance_story, range(4)))
+        assert all(code == 200 and result["revision"] == 2 and result["status"] == "ended" for code, result in replies), replies
+        with factory() as db:
+            assert db.scalar(select(func.count()).select_from(LearningEvent).where(LearningEvent.user_id == second_id)) == 1
+            assert db.scalar(select(func.count()).select_from(NodeState).where(NodeState.node_id == "welcome")) == 1
+            assert db.get(StorySession, story["id"]).revision == 2
         client.close()
     finally:
         app.dependency_overrides.clear()

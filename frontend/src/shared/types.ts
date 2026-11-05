@@ -41,6 +41,7 @@ export interface QuestNode {
   target: string;
   activity_id?: string;
   dialogue_id?: string;
+  navigation_target?: string;
   dependencies: string[];
   aggregation: "ALL" | "ANY";
   optional: boolean;
@@ -53,6 +54,7 @@ export interface Quest {
   title: string;
   chapter_id: number;
   version: number;
+  story_id?: string;
   status: string;
   nodes: QuestNode[];
 }
@@ -105,6 +107,23 @@ export interface Activity {
   assistant_allowed: boolean;
   material: Material | null;
   questions: Question[];
+  progress?: ActivityProgress;
+  completion?: { required_page_ids: number[] } | null;
+}
+export interface ActivityProgress {
+  page_no: number | null;
+  visited_pages: number[];
+  completed: boolean;
+  accepted_question_ids?: string[];
+}
+export interface StoryView {
+  id: string;
+  revision: number;
+  status: "active" | "waiting" | "ended";
+  npc_key: string;
+  node: Dialogue | null;
+  activity: { id: string; kind: string; version: number; page_no?: number | null } | null;
+  world?: World;
 }
 export type SubmissionStatus =
   | "prepared"
@@ -155,7 +174,7 @@ export interface EventEvidence {
   submission_id?: string;
 }
 export type Workspace =
-  | { kind: "lesson" | "practice"; activity_id: string; page_no?: number }
+  | { kind: "lesson" | "practice"; activity_id: string; activity_version?: number; page_no?: number; story_session_id?: string }
   | { kind: "material"; material_id: number; version: number; page_no?: number }
-  | { kind: "journal" | "library" | "classroom" | "settings" }
+  | { kind: "journal" | "library" | "classroom" | "settings" | "map" }
   | null;

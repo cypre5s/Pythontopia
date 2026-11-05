@@ -21,6 +21,7 @@ defineProps<{
     | "people"
     | "settings"
     | "compass"
+    | "building"
     | "close"
     | "leaf"
     | "chevron" | "grid" | "folder" | "activity" | "chart" | "publish" | "logout" | "plus" | "copy" | "refresh" | "arrowLeft" | "arrowRight" | "arrowUp" | "arrowDown" | "external";
@@ -47,6 +48,7 @@ external: "M14 3h7v7m0-7L10 14M10 3H3v18h18v-7",
   settings:
     "m9 3-1 3-3 1-2 4 2 3v4l4 3 3-1 3 1 4-3v-4l2-3-2-4-3-1-1-3ZM12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z",
   compass: "M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0ZM16 8l-3 5-5 3 3-5 5-3Z",
+  building: "M3 21h18M5 21V9l7-6 7 6v12M9 21v-6h6v6M9 10h1M14 10h1",
   close: "m6 6 12 12M6 18 18 6",
   leaf: "M19 3C10 2 3 6 5 13c2 6 11 4 14-10ZM4 21c1-6 5-10 11-14",
   chevron: "m9 5 7 7-7 7",

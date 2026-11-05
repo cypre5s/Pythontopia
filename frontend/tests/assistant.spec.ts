@@ -5,6 +5,34 @@ import AssistantPanel from "../src/features/AssistantPanel.vue";
 import { api } from "../src/shared/api";
 import { useSession } from "../src/shared/session";
 describe("explicit isolated assistant stream fixture", () => {
+  it("restores separate assistant histories for two versions of the same activity", async () => {
+    sessionStorage.clear();
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const session = useSession();
+    session.user = { id: 9, email: "fixture@example.test", name: "Fixture", role: "student" };
+    session.classroomId = 4;
+    sessionStorage.setItem("assistant:9:4:ch1-lesson:v1", "version-one");
+    sessionStorage.setItem("assistant:9:4:ch1-lesson:v2", "version-two");
+    const get = vi.spyOn(api, "get").mockImplementation(async path => {
+      if (path === "/assistant/status") return { available: true, reason: "" } as never;
+      return { messages: [{ role: "assistant", content: path.endsWith("version-two") ? "第二版历史" : "第一版历史" }] } as never;
+    });
+    const post = vi.spyOn(api, "post");
+    const second = mount(AssistantPanel, { props: { activityId: "ch1-lesson", activityVersion: 2, allowed: true, roleName: "图书管理员" }, global: { plugins: [pinia] } });
+    await flushPromises();
+    expect(second.text()).toContain("第二版历史");
+    expect(second.text()).not.toContain("第一版历史");
+    expect(get).not.toHaveBeenCalledWith("/assistant/sessions/version-one");
+    second.unmount();
+    const first = mount(AssistantPanel, { props: { activityId: "ch1-lesson", activityVersion: 1, allowed: true, roleName: "图书管理员" }, global: { plugins: [pinia] } });
+    await flushPromises();
+    expect(first.text()).toContain("第一版历史");
+    expect(first.text()).not.toContain("第二版历史");
+    expect(post).not.toHaveBeenCalled();
+    first.unmount();
+    get.mockRestore(); post.mockRestore(); sessionStorage.clear();
+  });
   it("only posts when asked and renders split SSE tokens and material references", async () => {
     sessionStorage.clear();
     const pinia = createPinia();

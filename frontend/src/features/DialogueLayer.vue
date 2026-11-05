@@ -25,7 +25,7 @@
         {{ displayed }}
       </p>
       <p v-if="error" class="error">{{ error }}</p>
-      <p v-if="settling" class="dialogue-saving" role="status">
+      <p v-if="settling || session.storyBusy" class="dialogue-saving" role="status">
         正在记录这次对话…
       </p>
       <div v-if="!typing" class="dialogue-actions" :aria-busy="busy || settling">
@@ -33,7 +33,7 @@
           v-for="(choice, index) in typing ? [] : (line?.choices ?? [])"
           :key="choice.id"
           class="dialogue-response"
-          :disabled="busy || settling"
+            :disabled="busy || settling || session.storyBusy"
           @click="advance(choice.id)"
         >
           <span class="response-number" aria-hidden="true">{{ index + 1 }}.</span>
@@ -41,7 +41,7 @@
         >
       </div>
       <div
-        v-if="!typing && !line?.next && !line?.choices?.length && !settling"
+        v-if="!story && !typing && !line?.next && !line?.choices?.length && !settling"
         class="dialogue-objectives"
       >
         <button
@@ -71,15 +71,17 @@
 <script setup lang="ts">
 import GameIcon from "../shared/GameIcon.vue";
 import { computed, ref, watch, onBeforeUnmount } from "vue";
-import type { Npc, Quest, QuestNode, Dialogue } from "../shared/types";
+import type { Npc, Quest, QuestNode, Dialogue, StoryView } from "../shared/types";
 import { api } from "../shared/api";
 import { useSession } from "../shared/session";
 import { useModalFocus } from "../shared/modalFocus";
 import { useUiPreferences } from "../shared/uiPreferences";
+import { displayWorldText } from "../game/config/worldConfig";
 const props = defineProps<{
     npc: Npc;
     actions: { quest: Quest; node: QuestNode }[];
     settling?: boolean;
+    story?: StoryView;
   }>(),
   emit = defineEmits<{
     close: [];
@@ -96,11 +98,10 @@ const props = defineProps<{
 const panel = ref<HTMLElement>();
 const preferences = useUiPreferences();
 useModalFocus(panel, () => props.npc.key, close);
-const line = computed(
-    () =>
-      props.npc.dialogue.find((d) => d.id === nodeId.value) ??
-      props.npc.dialogue[0],
-  ),
+const line = computed(() => {
+    const current = props.story?.node ?? props.npc.dialogue.find((d) => d.id === nodeId.value) ?? props.npc.dialogue[0];
+    return current ? { ...current, text: displayWorldText(current.text) } : undefined;
+  }),
   speaker = computed(() => line.value?.speaker ?? props.npc.name);
 const portrait = computed(() =>
   imageError.value ? "" : (line.value?.portrait ?? props.npc.portrait),
@@ -111,12 +112,13 @@ let disposed = false,
   closed = false,
   requestGeneration = 0;
 function close() {
+  if (session.storyBusy) return;
   closed = true;
   requestGeneration++;
   emit("close");
 }
 function continueDialogue() {
-  if (busy.value || props.settling) return;
+  if (busy.value || props.settling || session.storyBusy) return;
   if (typing.value) reveal();
   else if (!line.value?.choices?.length) void advance();
 }
@@ -155,12 +157,18 @@ function navigateResponses(event: KeyboardEvent) {
   buttons[next]?.focus();
 }
 async function advance(choice?: string) {
-  if (busy.value || props.settling || disposed || closed) return;
+  if (busy.value || props.settling || session.storyBusy || disposed || closed) return;
   if (typing.value) {
     reveal();
     if (!choice) return;
   }
   if (!line.value) return;
+  if (props.story) {
+    error.value = "";
+    try { await session.advanceStory(choice); }
+    catch (failure) { error.value = failure instanceof Error ? failure.message : "对白推进失败，请重试。"; }
+    return;
+  }
   const generation = ++requestGeneration,
     activeNpc = props.npc,
     userId = session.user?.id,

@@ -22,7 +22,6 @@
             <p v-if="!quests.length" class="empty-directory">暂无此类委托</p>
           </div>
         </div>
-        <div class="index-footer"><GameIcon name="leaf"/> 每一步探索，都值得记下来。</div>
       </aside>
       <article v-if="selectedQuest" :key="selectedQuest.id" class="journal-entry quest-detail">
         <header><div><span class="eyebrow">{{ selectedQuest.kind === 'side' ? '支线委托' : '主线委托' }} · {{ selectedQuest.status === 'complete' ? '已完成' : '进行中' }}</span><h3>{{ selectedQuest.title }}</h3></div></header>
@@ -32,9 +31,10 @@
           <li v-for="(node,index) in selectedQuest.nodes" :key="node.id" :class="node.status">
             <span class="node-icon" aria-hidden="true">{{ node.status === 'complete' ? '✓' : node.status === 'skipped' ? '−' : index+1 }}</span>
             <GameIcon class="step-icon" :name="node.type === 'STUDY_LESSON' ? 'book' : node.type === 'TALK_TO_NPC' || node.type === 'PLAY_DIALOGUE' ? 'message' : 'compass'"/>
-            <div><strong>{{ node.title }}</strong><small>{{ stateName[node.status] }}{{ node.optional ? ' · 可选' : '' }}</small></div>
-            <button v-if="node.status === 'ready' && node.activity_id" @click="session.navigate({kind:node.type === 'STUDY_LESSON' ? 'lesson' : 'practice', activity_id:node.activity_id})">{{ node.type === 'STUDY_LESSON' ? '打开课程' : '打开练习' }} <GameIcon name="chevron"/></button>
-            <template v-if="node.status === 'ready' && node.choices?.length"><button v-for="choice in node.choices" :key="choice.id" @click="choose(selectedQuest,node,choice.id)">{{ choice.label ?? choice.text }}</button></template>
+            <div><strong>{{ displayQuestTitle(node) }}</strong><small>{{ stateName[node.status] }}{{ node.optional ? ' · 可选' : '' }}</small></div>
+            <button v-if="node.status === 'ready' && node.navigation_target" @click="session.guideTo(node.navigation_target)">立即前往 <GameIcon name="compass"/></button>
+            <button v-else-if="node.status === 'ready' && node.activity_id && !selectedQuest.story_id" @click="session.navigate({kind:node.type === 'STUDY_LESSON' ? 'lesson' : 'practice', activity_id:node.activity_id})">{{ node.type === 'STUDY_LESSON' ? '打开课程' : '打开练习' }} <GameIcon name="chevron"/></button>
+            <template v-if="!selectedQuest.story_id && node.status === 'ready' && node.choices?.length"><button v-for="choice in node.choices" :key="choice.id" @click="choose(selectedQuest,node,choice.id)">{{ choice.label ?? choice.text }}</button></template>
             <span v-if="node.status === 'complete'" class="step-done">已完成</span>
           </li>
         </ol>
@@ -50,6 +50,7 @@ import { useSession } from "../shared/session";
 import { notify } from "../shared/api";
 import type { Quest, QuestNode } from "../shared/types";
 import GameIcon from "../shared/GameIcon.vue";
+import { displayQuestTitle } from "../game/config/worldConfig";
 const journalHouse = "/assets/pixel/buildings/super-retro-world/house_03.png";
 const selectedId = ref("");
 const session = useSession(),
@@ -133,8 +134,6 @@ async function choose(quest: Quest, node: QuestNode, choice: string) {
 .quest-card small { display:block; font-size:.65rem; color:#967245; margin-bottom:8px; }
 .quest-card strong { font-size:.9rem; line-height:1.7; }
 .quest-card svg { position:absolute; right:8px; top:50%; width:16px; color:#b98947; }
-.index-footer { display:flex; gap:8px; align-items:center; padding:16px; color:#8c795a; font-size:.7rem; border-top:1px solid #bda27d40; }
-.index-footer svg { width:18px; }
 .quest-detail { margin:0; padding:28px 30px 20px; border:0; border-radius:0; overflow:auto; min-height:0; display:flex; flex-direction:column; background:linear-gradient(90deg,#bba38230,transparent 4%),radial-gradient(ellipse at top,#fffcf2,#f5ead7); }
 .quest-detail header { display:block; margin:0; }
 .quest-detail .eyebrow { display:inline-block; background:#94613c; color:#fff2d5; font-size:.7rem; padding:5px 12px; letter-spacing:.05em; border-radius:3px; box-shadow:0 2px 0 #65472e; }

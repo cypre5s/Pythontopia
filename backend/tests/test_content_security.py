@@ -130,21 +130,23 @@ def test_actual_snapshot_must_exist_and_its_kind_and_publication_are_authoritati
     activity = db.get(Activity, "ch1-lesson")
     original = db.get(ActivityVersion, (activity.id, 1))
     old = deepcopy(original.snapshot)
-    activity.version = 3
+    current_version = activity.version + 2
+    missing_version = current_version - 1
+    activity.version = current_version
     activity.kind = "practice"
     activity.content = {"published": False}
-    db.add(ActivityVersion(activity_id=activity.id, version=3, snapshot={"kind": "practice", "content": {"published": True}}))
+    db.add(ActivityVersion(activity_id=activity.id, version=current_version, snapshot={"kind": "practice", "content": {"published": True}}))
     db.commit()
 
     def validate(version):
         return client.post("/api/teacher/quests/validate", json={"definition": lesson_definition(version)}, headers=teacher["headers"])
 
-    # Version 2 is below current=3 but has no snapshot.
-    assert validate(2).status_code == 422
+    # Choose a gap above the seeded versions so adding course releases keeps this test meaningful.
+    assert validate(missing_version).status_code == 422
     assert validate(99).status_code == 422
     # Current kind/publication must not silently change a lesson pinned to version 1.
     assert validate(1).status_code == 200
-    assert validate(3).status_code == 422
+    assert validate(current_version).status_code == 422
     original.snapshot = {**old, "content": {**old["content"], "published": False}}
     db.commit()
     assert validate(1).status_code == 422
