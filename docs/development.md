@@ -116,3 +116,25 @@ $env:REBORN_CONVERTER_URL = ''
 ```
 
 先确认对应旧进程已由操作者停止，避免端口冲突；不停止其他任务。前端仍运行15174。默认容器端口会与本机相撞，同时验收时使用REBORN_API_PORT=18082、REBORN_WEB_PORT=15175，保持本机预览不变。两个环境数据库独立，账号不自动共享。
+
+## 教师管理界面（2026-11-05）
+
+教师后台采用 shadcn-vue 的 Button、Card、Table、Dialog 源码，基于 Reka UI 与 Tailwind CSS 4；许可证保存在 frontend/src/components/ui/LICENSE.shadcn-vue。组件配置位于 frontend/components.json，依赖使用精确版本与 package-lock.json 锁定。
+
+后台入口仍为 /teacher。theme 只在教师路由加载；teacherTheme.css 不引入 Preflight，生成工具类限制在 .teacher-page / .teacher-dialog 的 CSS @scope 内，门户弹窗显式携带后台主题。新增后台组件时须保持这条边界，不向 main.ts 或学生页面导入后台样式。原生表单控件继续使用后台范围内的样式与浏览器语义。使用支持 CSS @scope 的现代浏览器，本次在本机 Chrome 验证。
+
+本次独立验收使用全新 SQLite 库与存储，不复用现有演示库。实际临时启动方式（在仓库根目录；账号由 provision-user 显式配置，密码不进源码）：
+
+```powershell
+$env:REBORN_DATABASE_URL = 'sqlite:///' + (Join-Path (Get-Location) '.tmp/admin-preview-20261105.db').Replace('\','/')
+$env:REBORN_STORAGE_ROOT = Join-Path (Get-Location) '.tmp/admin-preview-storage'
+Set-Location backend
+../.tmp/backend-venv/Scripts/python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 18086
+# 另一个终端，进入 frontend
+$env:API_PROXY = 'http://127.0.0.1:18086'
+npm run dev -- --host 127.0.0.1 --port 15186
+```
+
+后台专项测试：设置 E2E_URL、E2E_TEACHER_EMAIL、E2E_TEACHER_PASSWORD、PLAYWRIGHT_CHANNEL=chrome 后执行 `npx playwright test adminManagement.spec.ts --project=desktop --workers=1`。用例实际切换四种视口，操作八个后台页面，并检查退出后登录页样式与零附带模型调用。教材编写测试还需要 E2E_OTHER_TEACHER_EMAIL / E2E_OTHER_TEACHER_PASSWORD；PPTX 转换测试仍须显式文件与转换服务。
+
+验收入口15186已重建为本轮批注修订版，继续使用原隔离验收账号；API18086已重启加载真实章节完成计数，预览数据保留。临时开发端口15187仅用于本轮验证。

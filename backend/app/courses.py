@@ -36,6 +36,33 @@ def authorize_classroom(db: Session, user: User, classroom_id: int):
     raise HTTPException(403, "无权访问此班级")
 
 
+def chapter_completion_requirements(db: Session, classroom_id: int, chapter_id: int | None = None) -> dict[int, set[str]]:
+    """Required main quest IDs at the class release version, shared by gates and reports."""
+    classroom = db.get(Classroom, classroom_id)
+    if not classroom:
+        return {}
+    query = (
+        select(QuestDefinition)
+        .join(ChapterRelease, ChapterRelease.chapter_id == QuestDefinition.chapter_id)
+        .where(
+            ChapterRelease.classroom_id == classroom_id,
+            QuestDefinition.version <= ChapterRelease.version,
+            (QuestDefinition.owner_id.is_(None)) | (QuestDefinition.owner_id == classroom.teacher_id),
+        )
+        .order_by(QuestDefinition.version.desc())
+    )
+    if chapter_id is not None:
+        query = query.where(QuestDefinition.chapter_id == chapter_id)
+    latest = {}
+    for item in db.scalars(query):
+        latest.setdefault((item.chapter_id, item.id), item)
+    requirements: dict[int, set[str]] = {}
+    for item in latest.values():
+        if item.definition.get("kind", "main") == "main":
+            requirements.setdefault(item.chapter_id, set()).add(item.id)
+    return requirements
+
+
 def chapter_available(db: Session, user: User, classroom_id: int, chapter_id: int, visiting=None) -> bool:
     chapter = db.get(Chapter, chapter_id)
     classroom = db.get(Classroom, classroom_id)
@@ -51,21 +78,7 @@ def chapter_available(db: Session, user: User, classroom_id: int, chapter_id: in
         visiting.add(chapter_id)
         if not chapter_available(db, user, classroom_id, release.prerequisite_chapter_id, visiting):
             return False
-        classroom = db.get(Classroom, classroom_id)
-        prerequisite_release = db.get(ChapterRelease, (classroom_id, release.prerequisite_chapter_id))
-        definitions = db.scalars(
-            select(QuestDefinition)
-            .where(
-                QuestDefinition.chapter_id == release.prerequisite_chapter_id,
-                QuestDefinition.version <= prerequisite_release.version,
-                (QuestDefinition.owner_id.is_(None)) | (QuestDefinition.owner_id == classroom.teacher_id),
-            )
-            .order_by(QuestDefinition.version.desc())
-        ).all()
-        latest = {}
-        for item in definitions:
-            latest.setdefault(item.id, item)
-        ids = {item.id for item in latest.values() if item.definition.get("kind", "main") == "main"}
+        ids = chapter_completion_requirements(db, classroom_id, release.prerequisite_chapter_id).get(release.prerequisite_chapter_id, set())
         completed = set(
             db.scalars(
                 select(PlayerQuest.quest_id).where(

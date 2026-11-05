@@ -17,6 +17,7 @@ from .models import (
     KnowledgePoint,
     Membership,
     Npc,
+    PlayerQuest,
     Question,
     QuestionSecret,
     Submission,
@@ -194,6 +195,14 @@ def teacher_courses(db: Annotated[Session, Depends(get_db)], user: Annotated[Use
 @router.get("/teacher/classrooms/{classroom_id}/progress")
 def progress(classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
     own_classroom(db, user, classroom_id)
+    from .courses import chapter_completion_requirements
+
+    requirements = chapter_completion_requirements(db, classroom_id)
+    completed_by_user: dict[int, set[str]] = {}
+    for user_id, quest_id in db.execute(
+        select(PlayerQuest.user_id, PlayerQuest.quest_id).where(PlayerQuest.classroom_id == classroom_id, PlayerQuest.status == "complete")
+    ):
+        completed_by_user.setdefault(user_id, set()).add(quest_id)
     members = db.scalars(select(User).join(Membership, Membership.user_id == User.id).where(Membership.classroom_id == classroom_id)).all()
     events = db.scalars(select(LearningEvent).where(LearningEvent.classroom_id == classroom_id)).all()
     submissions = db.scalars(select(Submission).where(Submission.classroom_id == classroom_id, Submission.mode == "submit")).all()
@@ -207,6 +216,7 @@ def progress(classroom_id: int, db: Annotated[Session, Depends(get_db)], user: A
                 "id": m.id,
                 "name": m.name,
                 "email": m.email,
+                "completed_chapters": sum(ids.issubset(completed_by_user.get(m.id, set())) for ids in requirements.values()),
                 "completed_nodes": len([e for e in events if e.user_id == m.id]),
                 "submissions": len([s for s in submissions if s.user_id == m.id]),
                 "records": len([r for r in records if r.user_id == m.id]),

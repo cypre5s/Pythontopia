@@ -108,6 +108,8 @@ def test_first_chapter_full_loop_and_idempotency(client, db, student, teacher, c
         return result.json()
 
     client.get(f"/api/world?classroom_id={cid}", headers=headers)
+    initial_progress = client.get(f"/api/teacher/classrooms/{cid}/progress", headers=teacher["headers"]).json()
+    assert next(member for member in initial_progress["members"] if member["id"] == student["id"])["completed_chapters"] == 0
     assert (
         client.post(
             "/api/events",
@@ -155,6 +157,8 @@ def test_first_chapter_full_loop_and_idempotency(client, db, student, teacher, c
     assert db.scalar(select(func.count()).select_from(WorldFlag).where(~WorldFlag.key.like("dialogue:%"), ~WorldFlag.key.like("story:%"))) == 2
     again = client.get(f"/api/world?classroom_id={cid}", headers=headers).json()
     assert again["player"]["tile_x"] == 22 and again["flags"] == final["flags"]
+    progress = client.get(f"/api/teacher/classrooms/{cid}/progress", headers=teacher["headers"]).json()
+    assert next(member for member in progress["members"] if member["id"] == student["id"])["completed_chapters"] == 1
 
 
 def test_unbound_material_and_new_versions_are_private(client, db, student, teacher, classroom):
@@ -296,6 +300,8 @@ def test_second_chapter_different_branch_and_parallel_loop(client, db, student, 
     world = event("report-language", {"npc_key": "mayor_py"})
     assert "language_archive_restored" in world["flags"]
     assert next(q for q in world["quests"] if q["id"] == "lost-language")["status"] == "complete"
+    progress = client.get(f"/api/teacher/classrooms/{cid}/progress", headers=teacher["headers"]).json()
+    assert next(member for member in progress["members"] if member["id"] == student["id"])["completed_chapters"] == 2
     from app.integration_models import AssistantCall
 
     assert db.scalar(select(func.count()).select_from(AssistantCall)) == 0
