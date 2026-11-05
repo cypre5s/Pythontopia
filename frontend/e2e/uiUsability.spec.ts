@@ -121,7 +121,9 @@ async function finishIntroDialogue(page: Page) {
         response.url().endsWith("/steps") &&
         response.request().method() === "POST",
     );
-    await dialogue.locator(".dialogue-actions .primary").press("Enter");
+    const text = dialogue.locator(".dialogue-text");
+    await expect(text).toHaveText((await text.getAttribute("aria-label")) ?? "");
+    await dialogue.locator(".dialogue-box").press("Enter");
     const response = await responsePromise;
     expect(response.ok(), await response.text()).toBeTruthy();
     const result = (await response.json()) as { next_id: string | null };
@@ -182,6 +184,10 @@ test("usable world HUD, modal focus, history, text scaling and touch controls", 
     .getByLabel("班级加入码", { exact: true })
     .fill(classroom.join_code);
   await page.getByRole("button", { name: "加入班级", exact: true }).click();
+  const welcome = page.getByRole("dialog", { name: "欢迎回到小镇", exact: true });
+  await welcome.getByRole("button", { name: "按任意键继续", exact: true }).click();
+  await expect(welcome).toBeHidden();
+  await expect(page.locator(".hud-dock")).toBeVisible();
   const worldCanvas = page.locator(".world-canvas canvas");
   await expect(worldCanvas).toHaveCount(1);
   await expect(worldCanvas).toBeVisible();
@@ -212,25 +218,22 @@ test("usable world HUD, modal focus, history, text scaling and touch controls", 
     name: "游戏工作区",
     exact: true,
   });
+  await trackingWorkspace.locator(".quest-card").filter({ hasText: introQuest!.title }).click();
   const introEntry = trackingWorkspace.locator(".journal-entry").filter({
     has: page.getByRole("heading", {
       name: introQuest!.title,
       exact: true,
     }),
   });
-  await introEntry.getByRole("button", { name: /^(追踪|正在追踪)$/ }).click();
+  await introEntry.getByRole("button", { name: /^(追踪任务|正在追踪)$/ }).click();
   await trackingWorkspace
     .getByRole("button", { name: "关闭当前工作区", exact: true })
     .click();
   await expect(trackingWorkspace).toBeHidden();
 
   const tracker = page.locator(".quest-tracker");
-  const trackerToggle = tracker.locator(".quest-toggle");
-  const detailsId = await trackerToggle.getAttribute("aria-controls");
-  expect(detailsId).toBeTruthy();
-  const details = page.locator(`[id="${detailsId}"]`);
-  await expect(trackerToggle).toHaveAttribute("aria-expanded", "true");
-  await expect(details).toBeVisible();
+  // The current HUD keeps its tracked objective visible without a collapse control.
+  await expect(tracker.locator("#tracked-quest-details")).toBeVisible();
   const trackedTitle = (
     await tracker.getByRole("heading").textContent()
   )?.trim();
@@ -244,7 +247,9 @@ test("usable world HUD, modal focus, history, text scaling and touch controls", 
   const initialCompleted = required.filter(
     (node) => node.status === "complete",
   ).length;
-  const progress = tracker.getByRole("progressbar", { name: "委托步骤进度" });
+  // The current HUD hides its numerical progress bar but retains computed progress data.
+  const progress = tracker.locator(".quest-progress");
+  await expect(progress).toBeHidden();
   await expect(progress).toHaveAttribute(
     "aria-valuenow",
     String(initialCompleted),
@@ -254,11 +259,6 @@ test("usable world HUD, modal focus, history, text scaling and touch controls", 
     String(required.length),
   );
   expect(required.length).toBeGreaterThan(0);
-  await trackerToggle.click();
-  await expect(trackerToggle).toHaveAttribute("aria-expanded", "false");
-  await expect(details).toBeHidden();
-  await trackerToggle.click();
-  await expect(details).toBeVisible();
 
   const dockButtons = page.locator(".hud-dock button");
   expect(await dockButtons.count()).toBeGreaterThanOrEqual(4);
@@ -419,6 +419,7 @@ test("usable world HUD, modal focus, history, text scaling and touch controls", 
   );
   await page.keyboard.press("j");
   await expectSingleWorkspace(page);
+  await workspace.locator(".quest-card").filter({ hasText: arrival!.title }).click();
   const arrivalEntry = workspace.locator(".journal-entry").filter({
     has: page.getByRole("heading", { name: arrival!.title, exact: true }),
   });

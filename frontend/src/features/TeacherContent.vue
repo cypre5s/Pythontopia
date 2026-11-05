@@ -1,264 +1,731 @@
 <template>
-  <div>
-    <p v-if="error" class="error">{{ error }}</p>
-    <TeacherCurriculum
-      v-if="section === 'curriculum'"
-      @updated="curriculumUpdated"
-    /><template v-else-if="section === 'materials'"
-      ><form class="teacher-form" @submit.prevent="upload">
-        <h2>上传课程材料</h2>
-        <label>资料名称<input v-model="uploadForm.title" required /></label
-        ><label
-          >所属章节<select v-model.number="uploadForm.chapter_id">
-            <option v-for="c in courses.chapters" :key="c.id" :value="c.id">
-              {{ c.title }}
-            </option>
-          </select></label
-        ><label
-          >更新已有材料（留空创建）<input
-            v-model="uploadForm.material_id"
-            type="number"
-            placeholder="材料 ID" /></label
-        ><label
-          >文件<input
-            type="file"
-            accept=".pdf,.ppt,.pptx,.mp4,.webm,.txt,.md"
-            required
-            @change="selectFile" /></label
-        ><button class="primary" :disabled="uploadBusy">
-          {{ uploadBusy ? "上传中…" : "上传并处理" }}
-        </button>
-      </form>
-      <p class="notice">
-        PPT
-        转换在受限工作进程中处理；依赖缺失会标明失败。更新文件产生新版本，旧引用保留原版本。
-      </p>
-      <button @click="loadMaterials">刷新状态</button>
-      <div class="table-scroll">
-        <div class="admin-table-scroll"><table>
-          <thead>
-            <tr>
-              <th>资料 / ID</th>
-              <th>版本</th>
-              <th>类型</th>
-              <th>状态</th>
-              <th>处理反馈</th>
-              <th>预览</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="m in materials" :key="`${m.id}-${m.version}`">
-              <td>
-                {{ m.title }}<small>#{{ m.id }}</small>
-              </td>
-              <td>{{ m.version }}</td>
-              <td>{{ m.kind }}</td>
-              <td>{{ m.status }}</td>
-              <td>{{ m.error ?? m.notice }}</td>
-              <td>
-                <button
-                  :disabled="m.status !== 'ready' || !classroomId"
-                  @click="previewMaterial(m)"
-                >
-                  预览
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table></div>
-      </div>
-      <section v-if="preview" class="material-preview">
-        <button @click="closePreview">收起预览</button
-        ><iframe
+  <div class="admin-content admin-stack">
+    <p v-if="error" class="error" role="alert">{{ error }}</p>
+    <KeepAlive
+      ><TeacherCurriculum
+        v-if="section === 'curriculum'"
+        @updated="curriculumUpdated"
+    /></KeepAlive>
+    <template v-if="section === 'materials'">
+      <section class="admin-list materials-list" aria-label="课程材料列表">
+        <div class="list-toolbar table-toolbar">
+          <label class="search-field"
+            ><span class="sr-only">搜索材料名称或 ID</span
+            ><input
+              v-model="materialSearch"
+              type="search"
+              placeholder="搜索材料名称或 ID"
+          /></label>
+          <label
+            >处理状态<select v-model="materialStatus">
+              <option value="">全部状态</option>
+              <option value="ready">可使用</option>
+              <option value="queued">排队中</option>
+              <option value="processing">处理中</option>
+              <option value="failed">处理失败</option>
+              <option value="missing">媒体缺失</option>
+            </select></label
+          >
+          <div class="list-toolbar-actions inline-actions">
+            <Button variant="outline" @click="loadMaterials">刷新状态</Button
+            ><Button @click="openUploadEditor">上传课程材料</Button>
+          </div>
+        </div>
+        <div class="admin-panel">
+          <div class="admin-table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>资料 / ID</th>
+                  <th>版本</th>
+                  <th>类型</th>
+                  <th>状态</th>
+                  <th>处理反馈</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="m in pagedMaterials" :key="`${m.id}-${m.version}`">
+                  <td class="record-title">
+                    {{ m.title }}<small>#{{ m.id }}</small>
+                  </td>
+                  <td>v{{ m.version }}</td>
+                  <td>{{ materialKinds[m.kind] ?? m.kind }}</td>
+                  <td>
+                    <span class="status-badge" :data-status="m.status">{{
+                      materialStatuses[m.status] ?? m.status
+                    }}</span>
+                  </td>
+                  <td>{{ m.error ?? m.notice ?? "—" }}</td>
+                  <td>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      :disabled="m.status !== 'ready' || !classroomId"
+                      @click="previewMaterial(m)"
+                      >预览</Button
+                    >
+                  </td>
+                </tr>
+                <tr v-if="!filteredMaterials.length">
+                  <td colspan="6" class="admin-empty">
+                    {{
+                      materials.length
+                        ? "没有匹配的材料，请调整搜索或筛选条件。"
+                        : "还没有课程材料，上传文件后可在此查看处理状态。"
+                    }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <AdminPagination
+            v-model:page="materialPage"
+            v-model:page-size="materialPageSize"
+            :total="filteredMaterials.length"
+            label="个版本"
+          />
+        </div>
+        <p v-if="!classroomId" class="field-hint">
+          选择班级后可预览该班级可访问的材料。
+        </p>
+      </section>
+      <AdminDialog
+        v-model:open="uploadEditorOpen"
+        title="上传课程材料"
+        description="上传新材料，或为已有材料创建新版本。历史引用继续保留原版本。"
+        wide
+      >
+        <p v-if="uploadError" class="error" role="alert">{{ uploadError }}</p>
+        <form class="teacher-form" @submit.prevent="upload">
+          <label
+            >资料名称<input
+              v-model="uploadForm.title"
+              required
+              placeholder="例如：第二章课堂讲义"
+          /></label>
+          <label
+            >所属章节<select v-model.number="uploadForm.chapter_id">
+              <option v-for="c in courses.chapters" :key="c.id" :value="c.id">
+                {{ c.title }}
+              </option>
+            </select></label
+          >
+          <label class="full-width"
+            >文件<input
+              type="file"
+              accept=".pdf,.ppt,.pptx,.mp4,.webm,.txt,.md"
+              :required="!uploadFile"
+              @change="selectFile"
+            /><span class="field-hint"
+              >支持 PDF、PPT / PPTX、MP4 / WebM、TXT / Markdown。</span
+            ><span v-if="uploadFile" class="field-hint"
+              >已选择：{{ uploadFile.name }}</span
+            ></label
+          >
+          <label
+            >更新已有材料（选填）<input
+              v-model="uploadForm.material_id"
+              type="number"
+              min="1"
+              placeholder="填写材料 ID，留空创建新材料"
+            /><span class="field-hint">材料 ID 可从上方列表查看。</span></label
+          >
+          <div class="form-actions">
+            <Button type="submit" :disabled="uploadBusy">{{
+              uploadBusy ? "上传中…" : "上传并处理"
+            }}</Button
+            ><Button variant="outline" @click="uploadEditorOpen = false"
+              >取消</Button
+            >
+          </div>
+        </form>
+        <p class="field-hint">
+          文件处理状态会自动更新。PPT 转换失败时会显示原因，处理完成后才能预览。
+        </p>
+      </AdminDialog>
+      <section v-if="preview" class="admin-panel material-preview">
+        <header class="panel-heading">
+          <h2>材料预览</h2>
+          <Button variant="outline" @click="closePreview">收起预览</Button>
+        </header>
+        <iframe
           v-if="['pdf', 'presentation'].includes(preview.kind)"
           :src="preview.url"
           title="教师 PDF 预览"
-        ></iframe
-        ><video
+        ></iframe>
+        <video
           v-else-if="preview.kind === 'video'"
           :src="preview.url"
           controls
         ></video>
         <pre v-else>{{ preview.text }}</pre>
-      </section></template
-    ><template v-else-if="section === 'activities'"
-      ><p class="notice">
-        共享种子不可覆盖。创建教师自己的活动，将材料与 NPC
-        绑定，再发布引用活动的新任务版本。
-      </p>
-      <form class="teacher-form" @submit.prevent="saveActivity">
-        <h2>{{ activity.edit ? "编辑自建活动" : "新建活动" }}</h2>
-        <label>活动 ID<input v-model="activity.id" required /></label
-        ><label>标题<input v-model="activity.title" required /></label
-        ><label
-          >章节<select v-model.number="activity.chapter_id">
-            <option v-for="c in courses.chapters" :key="c.id" :value="c.id">
-              {{ c.title }}
-            </option>
-          </select></label
-        ><label
-          >类型<select v-model="activity.kind">
-            <option value="lesson">教学</option>
-            <option value="reading">阅读</option>
-            <option value="practice">练习</option>
-            <option value="assessment">测验</option>
-          </select></label
-        ><label
-          >NPC<select v-model="activity.npc_key">
-            <option v-for="n in courses.npcs" :key="n.key" :value="n.key">
-              {{ n.name }}
-            </option>
-          </select></label
-        ><label
-          >材料<select v-model="activity.material_id">
-            <option value="">无材料</option>
-            <option
-              v-for="m in materials"
-              :key="`${m.id}-${m.version}`"
-              :value="m.id"
-            >
-              {{ m.title }} · v{{ m.version }}
-            </option>
-          </select></label
-        ><KnowledgePointSelect
-          v-model="activity.knowledge_point_ids"
-          :chapter-id="activity.chapter_id"
-          :points="courses.knowledge_points ?? []"
-        /><label class="checkbox-label"
-          ><input
-            v-model="activity.assistant_allowed"
-            type="checkbox"
-          />允许主动使用助教</label
-        ><button class="primary">
-          {{ activity.edit ? "保存新版本" : "创建活动" }}</button
-        ><button
-          v-if="activity.edit"
-          type="button"
-          @click="
-            activity.edit = false;
-            activity.id = '';
-          "
-        >
-          另建活动
-        </button>
-      </form>
-      <div class="admin-table-scroll"><table>
-        <thead>
-          <tr>
-            <th>活动</th>
-            <th>NPC</th>
-            <th>知识点</th>
-            <th>版本</th>
-            <th>操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="a in courses.activities" :key="a.id">
-            <td>
-              {{ a.title }}<small>{{ a.id }}</small>
-            </td>
-            <td>{{ a.npc_key }}</td>
-            <td>
-              {{
-                (a.knowledge_point_ids ?? [])
-                  .map(
-                    (id) =>
-                      courses.knowledge_points?.find((k) => k.id === id)
-                        ?.title ?? id,
-                  )
-                  .join("、") || "未绑定"
-              }}
-            </td>
-            <td>{{ a.version }}</td>
-            <td>
-              <button
-                v-if="
-                  session.user?.role === 'admin' ||
-                  a.owner_id === session.user?.id
-                "
-                @click="editActivity(a)"
+      </section>
+    </template>
+    <template v-else-if="section === 'activities'">
+      <section class="admin-panel">
+        <header class="panel-heading">
+          <div>
+            <h2>
+              学习活动
+              <span class="count-badge">{{ courses.activities.length }}</span>
+            </h2>
+            <p class="panel-description">
+              查看章节活动，维护材料、知识点与 NPC 的关联。
+            </p>
+          </div>
+          <Button @click="startActivity">新建活动</Button>
+        </header>
+        <div class="table-toolbar">
+          <label class="search-field"
+            ><span class="sr-only">搜索活动标题或 ID</span
+            ><input
+              v-model="activitySearch"
+              type="search"
+              placeholder="搜索活动标题或 ID"
+          /></label>
+          <label
+            >章节<select v-model="activityChapter">
+              <option value="">全部章节</option>
+              <option
+                v-for="c in courses.chapters"
+                :key="c.id"
+                :value="String(c.id)"
               >
-                编辑绑定</button
-              ><span v-else class="muted">共享只读</span>
-            </td>
-          </tr>
-        </tbody>
-      </table></div></template
-    ><template v-else-if="section === 'quests'"
-      ><p class="notice">
-        先校验再发布。重复
-        ID、悬空引用、循环、非法效果和缺失内容会被拒绝；任务运行实例绑定原始版本。
-      </p>
-      <label
-        >已有任务<select @change="selectQuest">
-          <option value="">选择定义作为起点</option>
-          <option v-for="(q, index) in quests" :key="index" :value="index">
-            {{ String(q.title ?? q.id) }}
-          </option>
-        </select></label
-      ><label
-        >任务 JSON<textarea
-          v-model="questJson"
-          class="json-editor"
-          rows="20"
-          spellcheck="false"
-        ></textarea>
-      </label>
-      <div class="inline-actions">
-        <button @click="validateQuest">校验任务</button
-        ><button class="primary" @click="publishQuest">创建任务版本</button>
-      </div>
-      <pre v-if="validation" class="notice">{{ validation }}</pre>
-      <h2>新增 NPC</h2>
-      <p class="muted">配置地图坐标与脚本对白；绑定新活动无需复制业务页面。</p>
-      <label
-        >NPC JSON<textarea
-          v-model="npcJson"
-          class="json-editor"
-          rows="9"
-          spellcheck="false"
-        ></textarea></label
-      ><button @click="createNpc">创建 NPC</button></template
-    ><template v-else
-      ><p class="notice">
-        公开样例与私有答案、隐藏用例分开保存。题目必须绑定自己的活动，学生接口不会返回私有内容。
-      </p>
-      <label
-        >题目 JSON<textarea
-          v-model="questionJson"
-          class="json-editor"
-          rows="18"
-          spellcheck="false"
-        ></textarea></label
-      ><button class="primary" @click="createQuestion">创建题目</button>
-      <h2>当前题库</h2>
-      <div class="table-scroll">
-        <div class="admin-table-scroll"><table>
-          <thead>
-            <tr>
-              <th>题目</th>
-              <th>类型</th>
-              <th>活动</th>
-              <th>版本</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="q in questions" :key="q.id">
-              <td>
-                {{ q.title }}<small>{{ q.id }}</small>
-              </td>
-              <td>{{ q.kind }}</td>
-              <td>{{ q.activity_id }}</td>
-              <td>{{ q.version }}</td>
-            </tr>
-          </tbody>
-        </table></div>
-      </div></template
-    >
+                {{ c.title }}
+              </option>
+            </select></label
+          >
+          <span class="muted">{{ filteredActivities.length }} 个活动</span>
+        </div>
+        <div class="admin-table-scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>活动</th>
+                <th>类型 / 章节</th>
+                <th>NPC</th>
+                <th>知识点</th>
+                <th>版本</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="a in filteredActivities" :key="a.id">
+                <td class="record-title">
+                  {{ a.title }}<small>{{ a.id }}</small>
+                </td>
+                <td>
+                  {{ activityKinds[a.kind] ?? a.kind
+                  }}<small>{{ chapterTitle(a.chapter_id) }}</small>
+                </td>
+                <td>
+                  {{
+                    courses.npcs.find((n) => n.key === a.npc_key)?.name ??
+                    a.npc_key
+                  }}
+                </td>
+                <td>
+                  {{
+                    (a.knowledge_point_ids ?? [])
+                      .map(
+                        (id) =>
+                          courses.knowledge_points?.find((k) => k.id === id)
+                            ?.title ?? id,
+                      )
+                      .join("、") || "未绑定"
+                  }}
+                </td>
+                <td>v{{ a.version }}</td>
+                <td>
+                  <Button
+                    v-if="
+                      session.user?.role === 'admin' ||
+                      a.owner_id === session.user?.id
+                    "
+                    variant="outline"
+                    size="sm"
+                    @click="editActivity(a)"
+                    >编辑绑定</Button
+                  ><span v-else class="status-badge">共享只读</span>
+                </td>
+              </tr>
+              <tr v-if="!filteredActivities.length">
+                <td colspan="6" class="admin-empty">
+                  {{
+                    courses.activities.length
+                      ? "没有匹配的活动，请调整搜索或章节筛选。"
+                      : "还没有学习活动，可以先创建活动并绑定课程材料。"
+                  }}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <details
+        :open="activityEditorOpen"
+        class="admin-panel admin-editor"
+        @toggle="
+          activityEditorOpen = ($event.target as HTMLDetailsElement).open
+        "
+      >
+        <summary>{{ activity.edit ? "编辑自建活动" : "新建活动" }}</summary>
+        <p class="panel-description">
+          共享活动只读。保存自建活动后，再在任务配置中引用对应活动版本。
+        </p>
+        <form class="teacher-form" @submit.prevent="saveActivity">
+          <h3 class="form-section">基本信息</h3>
+          <label
+            >活动 ID<input
+              v-model="activity.id"
+              required
+              :disabled="activity.edit"
+              placeholder="例如：my-python-lesson"
+          /></label>
+          <label
+            >标题<input
+              v-model="activity.title"
+              required
+              placeholder="学生看到的活动名称"
+          /></label>
+          <label
+            >章节<select
+              v-model.number="activity.chapter_id"
+              :disabled="activity.edit"
+            >
+              <option v-for="c in courses.chapters" :key="c.id" :value="c.id">
+                {{ c.title }}
+              </option>
+            </select></label
+          >
+          <label
+            >类型<select v-model="activity.kind" :disabled="activity.edit">
+              <option value="lesson">教学</option>
+              <option value="reading">阅读</option>
+              <option value="practice">练习</option>
+              <option value="assessment">测验</option>
+            </select></label
+          >
+          <h3 class="form-section">内容与角色</h3>
+          <label
+            >NPC<select v-model="activity.npc_key">
+              <option v-for="n in courses.npcs" :key="n.key" :value="n.key">
+                {{ n.name }}
+              </option>
+            </select></label
+          >
+          <label
+            >材料<select v-model="activity.material_id">
+              <option value="">无材料</option>
+              <option
+                v-for="m in materials"
+                :key="`${m.id}-${m.version}`"
+                :value="m.id"
+              >
+                {{ m.title }} · v{{ m.version }}
+              </option>
+            </select></label
+          >
+          <KnowledgePointSelect
+            v-model="activity.knowledge_point_ids"
+            :chapter-id="activity.chapter_id"
+            :points="courses.knowledge_points ?? []"
+          />
+          <label class="checkbox-label full-width"
+            ><input
+              v-model="activity.assistant_allowed"
+              type="checkbox"
+            />允许学生在活动内主动使用助教</label
+          >
+          <div class="form-actions">
+            <Button type="submit" :disabled="saving">{{
+              saving ? "正在保存…" : activity.edit ? "保存新版本" : "创建活动"
+            }}</Button
+            ><Button
+              v-if="activity.edit"
+              variant="outline"
+              :disabled="saving"
+              @click="startActivity"
+              >另建活动</Button
+            ><Button variant="ghost" @click="activityEditorOpen = false"
+              >收起</Button
+            >
+          </div>
+        </form>
+      </details>
+    </template>
+    <template v-else-if="section === 'quests'">
+      <section class="admin-panel">
+        <header class="panel-heading">
+          <div>
+            <h2>任务定义</h2>
+            <p class="panel-description">
+              选择已有定义作为起点，修改并校验后创建新版本。
+            </p>
+          </div>
+          <span class="count-badge">{{ quests.length }} 个定义</span>
+        </header>
+        <ol class="admin-steps">
+          <li>选择任务定义</li>
+          <li>编辑并校验</li>
+          <li>创建版本后到「章节发布」设置开放规则</li>
+        </ol>
+        <label
+          >已有任务<select @change="selectQuest">
+            <option value="">选择定义作为起点</option>
+            <option v-for="(q, index) in quests" :key="index" :value="index">
+              {{ String(q.title ?? q.id) }}
+            </option>
+          </select></label
+        >
+        <p v-if="!quests.length" class="field-hint">
+          暂无任务定义，可在下方编辑完整任务 JSON。
+        </p>
+        <details open class="admin-editor">
+          <summary>任务 JSON 编辑器</summary>
+          <label
+            >任务 JSON<textarea
+              v-model="questJson"
+              class="json-editor"
+              rows="20"
+              spellcheck="false"
+              placeholder="选择已有任务，或填写新的任务定义"
+            ></textarea>
+          </label>
+        </details>
+        <p class="field-hint">
+          重复
+          ID、缺失引用、循环和非法效果会被拒绝；现有学生任务继续使用原版本。
+        </p>
+        <div class="form-actions">
+          <Button
+            variant="outline"
+            :disabled="saving || !questJson.trim()"
+            @click="validateQuest"
+            >校验任务</Button
+          ><Button
+            :disabled="saving || !questJson.trim()"
+            @click="publishQuest"
+            >{{ saving ? "正在处理…" : "创建任务版本" }}</Button
+          >
+        </div>
+        <pre v-if="validation" class="notice" role="status">{{
+          validation
+        }}</pre>
+      </section>
+      <details
+        v-if="session.user?.role === 'admin'"
+        class="admin-panel admin-editor"
+      >
+        <summary>新增 NPC</summary>
+        <p class="panel-description">
+          配置小镇角色的地图位置和脚本对白。已有角色可直接在活动表单中绑定。
+        </p>
+        <label
+          >NPC JSON<textarea
+            v-model="npcJson"
+            class="json-editor"
+            rows="10"
+            spellcheck="false"
+          ></textarea>
+        </label>
+        <div class="form-actions">
+          <Button :disabled="saving || !npcJson.trim()" @click="createNpc">{{
+            saving ? "正在创建…" : "创建 NPC"
+          }}</Button>
+        </div>
+      </details>
+    </template>
+    <template v-else-if="section === 'questions'">
+      <section class="admin-list questions-list" aria-label="题目列表">
+        <div class="list-toolbar table-toolbar">
+          <label class="search-field"
+            ><span class="sr-only">搜索题目标题、ID 或活动</span
+            ><input
+              v-model="questionSearch"
+              type="search"
+              placeholder="搜索题目标题、ID 或活动"
+          /></label>
+          <label
+            >题型<select v-model="questionKind">
+              <option value="">全部题型</option>
+              <option value="single_choice">单选题</option>
+              <option value="boolean">判断题</option>
+              <option value="fill">填空题</option>
+              <option value="python">编程题</option>
+            </select></label
+          >
+          <div class="list-toolbar-actions inline-actions">
+            <Button @click="openQuestionEditor">新增题目</Button>
+          </div>
+        </div>
+        <div class="admin-panel">
+          <div class="admin-table-scroll">
+            <table>
+              <thead>
+                <tr>
+                  <th>题目</th>
+                  <th>类型</th>
+                  <th>关联活动</th>
+                  <th>版本</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="q in pagedQuestions" :key="q.id">
+                  <td class="record-title">
+                    {{ q.title }}<small>{{ q.id }}</small>
+                  </td>
+                  <td>
+                    <span class="status-badge">{{
+                      questionKinds[q.kind] ?? q.kind
+                    }}</span>
+                  </td>
+                  <td>
+                    {{
+                      courses.activities.find((a) => a.id === q.activity_id)
+                        ?.title ?? q.activity_id
+                    }}<small>{{ q.activity_id }}</small>
+                  </td>
+                  <td>v{{ q.version }}</td>
+                </tr>
+                <tr v-if="!filteredQuestions.length">
+                  <td colspan="4" class="admin-empty">
+                    {{
+                      questions.length
+                        ? "没有匹配的题目，请调整搜索或题型筛选。"
+                        : "题库为空，可以创建经过核验并标明来源的题目。"
+                    }}
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <AdminPagination
+            v-model:page="questionPage"
+            v-model:page-size="questionPageSize"
+            :total="filteredQuestions.length"
+            label="道题目"
+          />
+        </div>
+      </section>
+      <AdminDialog
+        v-model:open="questionEditorOpen"
+        title="新增题目"
+        description="题目须关联自己的活动。填写经过核验的题干和真实来源，检查答案与测试用例后创建。"
+        wide
+      >
+        <p v-if="questionError" class="error" role="alert">
+          {{ questionError }}
+        </p>
+        <p v-if="questionJsonError" class="error" role="alert">
+          {{ questionJsonError }}。请在下方「完整 JSON」中修正，当前内容会保留。
+        </p>
+        <form class="teacher-form" @submit.prevent="createQuestion">
+          <h3 class="form-section">题目信息</h3>
+          <label
+            >题目 ID<input
+              v-model="questionId"
+              :disabled="!questionDraft"
+              required
+              placeholder="例如：my-concept-1"
+          /></label>
+          <label
+            >关联活动<select
+              v-model="questionActivity"
+              :disabled="!questionDraft"
+              required
+            >
+              <option value="">选择自己的活动</option>
+              <option
+                v-for="a in ownQuestionActivities"
+                :key="a.id"
+                :value="a.id"
+              >
+                {{ a.title }} · {{ a.id }}
+              </option>
+              <option
+                v-if="
+                  questionActivity &&
+                  !ownQuestionActivities.some((a) => a.id === questionActivity)
+                "
+                :value="questionActivity"
+              >
+                {{ questionActivity }}
+              </option>
+            </select></label
+          >
+          <label
+            >题目标题<input
+              v-model="questionTitle"
+              :disabled="!questionDraft"
+              required
+              placeholder="便于在题库中查找"
+          /></label>
+          <label
+            >题型<select v-model="questionType" :disabled="!questionDraft">
+              <option value="single_choice">单选题</option>
+              <option value="boolean">判断题</option>
+              <option value="fill">填空题</option>
+              <option value="python">编程题</option>
+            </select></label
+          >
+          <label class="full-width"
+            >题干<textarea
+              v-model="questionPrompt"
+              :disabled="!questionDraft"
+              required
+              rows="4"
+              placeholder="填写经过核验的题干"
+            ></textarea>
+          </label>
+          <label v-if="questionType === 'single_choice'" class="full-width"
+            >选项 JSON<textarea
+              :value="questionFragmentValue('options', [])"
+              :disabled="!questionDraft"
+              class="json-editor"
+              rows="4"
+              spellcheck="false"
+              @input="
+                setQuestionFragment(
+                  'options',
+                  ($event.target as HTMLTextAreaElement).value,
+                )
+              "
+            ></textarea
+            ><span class="field-hint"
+              >填写字符串数组，例如 ["选项一", "选项二"]。</span
+            ></label
+          >
+          <label v-if="questionType === 'boolean'"
+            >正确答案<select
+              v-model="questionAnswer"
+              :disabled="!questionDraft"
+              required
+            >
+              <option value="">选择正确答案</option>
+              <option value="true">正确（true）</option>
+              <option value="false">错误（false）</option>
+            </select></label
+          >
+          <label v-else-if="questionType !== 'python'"
+            >正确答案<input
+              v-model="questionAnswer"
+              :disabled="!questionDraft"
+              required
+              placeholder="与正确选项或预期填空内容一致"
+          /></label>
+          <details class="admin-editor full-width">
+            <summary>来源与测试用例</summary>
+            <p class="field-hint">
+              填写真实课程材料及页码。编程题至少提供一个私有测试用例；输入与预期输出的字段由服务端校验。
+            </p>
+            <label
+              >来源 JSON<textarea
+                :value="questionFragmentValue('source', {})"
+                :disabled="!questionDraft"
+                class="json-editor"
+                rows="5"
+                spellcheck="false"
+                @input="
+                  setQuestionFragment(
+                    'source',
+                    ($event.target as HTMLTextAreaElement).value,
+                  )
+                "
+              ></textarea>
+            </label>
+            <label
+              >公开样例 JSON<textarea
+                :value="questionFragmentValue('samples', [])"
+                :disabled="!questionDraft"
+                class="json-editor"
+                rows="5"
+                spellcheck="false"
+                @input="
+                  setQuestionFragment(
+                    'samples',
+                    ($event.target as HTMLTextAreaElement).value,
+                  )
+                "
+              ></textarea>
+            </label>
+            <label
+              >隐藏用例 JSON<textarea
+                :value="questionFragmentValue('hidden_cases', [])"
+                :disabled="!questionDraft"
+                class="json-editor"
+                rows="5"
+                spellcheck="false"
+                @input="
+                  setQuestionFragment(
+                    'hidden_cases',
+                    ($event.target as HTMLTextAreaElement).value,
+                  )
+                "
+              ></textarea>
+            </label>
+          </details>
+          <p
+            v-if="questionFragmentErrors.length"
+            class="error full-width"
+            role="alert"
+          >
+            {{
+              questionFragmentErrors.join("；")
+            }}。未完成的输入已保留，请修正后创建。
+          </p>
+          <details class="admin-editor full-width">
+            <summary>完整 JSON（导入或高级编辑）</summary>
+            <p class="field-hint">
+              完整 JSON 与上方表单同步。粘贴完整定义会替换表单和分项 JSON 内容。
+            </p>
+            <label
+              >题目 JSON<textarea
+                :value="questionJson"
+                class="json-editor"
+                rows="18"
+                spellcheck="false"
+                @input="
+                  replaceQuestionJson(
+                    ($event.target as HTMLTextAreaElement).value,
+                  )
+                "
+              ></textarea>
+            </label>
+          </details>
+          <div class="form-actions">
+            <Button
+              type="submit"
+              :disabled="
+                saving || !questionDraft || !!questionFragmentErrors.length
+              "
+              >{{ saving ? "正在创建…" : "创建题目" }}</Button
+            >
+            <Button variant="outline" @click="questionEditorOpen = false"
+              >取消</Button
+            >
+          </div>
+        </form>
+        <p class="field-hint">
+          公开样例与私有答案、隐藏用例分开保存；学生接口不返回私有内容。
+        </p>
+      </AdminDialog>
+    </template>
   </div>
 </template>
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, ref, reactive } from "vue";
+import {
+  computed,
+  onMounted,
+  onBeforeUnmount,
+  ref,
+  reactive,
+  watch,
+} from "vue";
+import { Button } from "../components/ui/button";
+import AdminDialog from "../components/admin/AdminDialog.vue";
+import AdminPagination from "../components/admin/AdminPagination.vue";
 import { api, notify } from "../shared/api";
 import TeacherCurriculum from "./TeacherCurriculum.vue";
 import KnowledgePointSelect from "./KnowledgePointSelect.vue";
@@ -338,15 +805,260 @@ const props = defineProps<{ section: string; classroomId: number | null }>(),
     ),
   ),
   preview = ref<{ kind: string; url: string; text: string } | null>(null);
-let uploadFile: File | undefined,
-  timer: ReturnType<typeof setTimeout> | undefined;
-async function safe(job: () => Promise<void>) {
+const uploadEditorOpen = ref(false),
+  activityEditorOpen = ref(false),
+  questionEditorOpen = ref(false),
+  materialSearch = ref(""),
+  materialStatus = ref(""),
+  activitySearch = ref(""),
+  activityChapter = ref(""),
+  questionSearch = ref(""),
+  questionKind = ref(""),
+  saving = ref(false),
+  materialPage = ref(1),
+  materialPageSize = ref(10),
+  questionPage = ref(1),
+  questionPageSize = ref(10),
+  uploadFile = ref<File>(),
+  uploadError = ref(""),
+  questionError = ref("");
+function openUploadEditor() {
+  uploadError.value = "";
+  uploadEditorOpen.value = true;
+}
+function openQuestionEditor() {
+  questionError.value = "";
+  questionEditorOpen.value = true;
+}
+watch(
+  () => props.section,
+  () => {
+    uploadEditorOpen.value = false;
+    questionEditorOpen.value = false;
+  },
+);
+const questionFragments = reactive<Record<string, string>>({});
+const questionDraft = computed<Record<string, unknown> | null>(() => {
+  try {
+    const value: unknown = JSON.parse(questionJson.value);
+    return value !== null && typeof value === "object" && !Array.isArray(value)
+      ? (value as Record<string, unknown>)
+      : null;
+  } catch {
+    return null;
+  }
+});
+const questionJsonError = computed(() => {
+  try {
+    JSON.parse(questionJson.value);
+    return questionDraft.value ? "" : "题目 JSON 必须是一个对象";
+  } catch {
+    return "题目 JSON 格式不正确";
+  }
+});
+const ownQuestionActivities = computed(() =>
+  courses.value.activities.filter(
+    (a) => session.user?.role === "admin" || a.owner_id === session.user?.id,
+  ),
+);
+function setQuestionField(key: string, value: unknown) {
+  if (!questionDraft.value) return;
+  questionJson.value = JSON.stringify(
+    { ...questionDraft.value, [key]: value },
+    null,
+    2,
+  );
+}
+function questionTextField(key: string) {
+  return computed({
+    get: () =>
+      typeof questionDraft.value?.[key] === "string"
+        ? String(questionDraft.value[key])
+        : "",
+    set: (value: string) => setQuestionField(key, value),
+  });
+}
+const questionId = questionTextField("id"),
+  questionActivity = questionTextField("activity_id"),
+  questionTitle = questionTextField("title"),
+  questionType = questionTextField("kind"),
+  questionPrompt = questionTextField("prompt");
+const questionAnswer = computed({
+  get: () => {
+    const answer = questionDraft.value?.answer;
+    return typeof answer === "string"
+      ? answer
+      : answer == null
+        ? ""
+        : JSON.stringify(answer);
+  },
+  set: (value: string) => {
+    if (questionType.value === "boolean")
+      setQuestionField(
+        "answer",
+        value === "true" ? true : value === "false" ? false : null,
+      );
+    else setQuestionField("answer", value);
+  },
+});
+const questionFragmentNames: Record<string, string> = {
+  options: "选项",
+  source: "来源",
+  samples: "公开样例",
+  hidden_cases: "隐藏用例",
+};
+const questionFragmentErrors = computed(() =>
+  Object.entries(questionFragments).flatMap(([key, value]) => {
+    try {
+      JSON.parse(value);
+      return [];
+    } catch {
+      return [`${questionFragmentNames[key] ?? key} JSON 格式不正确`];
+    }
+  }),
+);
+function questionFragmentValue(key: string, fallback: unknown) {
+  return (
+    questionFragments[key] ??
+    JSON.stringify(questionDraft.value?.[key] ?? fallback, null, 2)
+  );
+}
+function setQuestionFragment(key: string, value: string) {
+  questionFragments[key] = value;
+  try {
+    setQuestionField(key, JSON.parse(value));
+  } catch {
+    /* Preserve incomplete JSON until the teacher finishes editing. */
+  }
+}
+function replaceQuestionJson(value: string) {
+  questionJson.value = value;
+  for (const key of Object.keys(questionFragments))
+    delete questionFragments[key];
+}
+watch(questJson, () => {
+  validation.value = "";
+});
+const materialKinds: Record<string, string> = {
+  text: "文本",
+  pdf: "PDF",
+  presentation: "演示文稿",
+  video: "视频",
+};
+const materialStatuses: Record<string, string> = {
+  ready: "可使用",
+  queued: "排队中",
+  processing: "处理中",
+  failed: "处理失败",
+  missing: "媒体缺失",
+};
+const activityKinds: Record<string, string> = {
+  lesson: "教学",
+  reading: "阅读",
+  practice: "练习",
+  assessment: "测验",
+};
+const questionKinds: Record<string, string> = {
+  single_choice: "单选题",
+  boolean: "判断题",
+  fill: "填空题",
+  python: "编程题",
+};
+const filteredMaterials = computed(() =>
+  materials.value.filter(
+    (m) =>
+      (!materialStatus.value || m.status === materialStatus.value) &&
+      `${m.title} ${m.id}`
+        .toLowerCase()
+        .includes(materialSearch.value.trim().toLowerCase()),
+  ),
+);
+const filteredActivities = computed(() =>
+  courses.value.activities.filter(
+    (a) =>
+      (!activityChapter.value ||
+        String(a.chapter_id) === activityChapter.value) &&
+      `${a.title} ${a.id}`
+        .toLowerCase()
+        .includes(activitySearch.value.trim().toLowerCase()),
+  ),
+);
+const filteredQuestions = computed(() =>
+  questions.value.filter(
+    (q) =>
+      (!questionKind.value || q.kind === questionKind.value) &&
+      `${q.title} ${q.id} ${q.activity_id} ${courses.value.activities.find((a) => a.id === q.activity_id)?.title ?? ""}`
+        .toLowerCase()
+        .includes(questionSearch.value.trim().toLowerCase()),
+  ),
+);
+const pagedMaterials = computed(() =>
+  filteredMaterials.value.slice(
+    (materialPage.value - 1) * materialPageSize.value,
+    materialPage.value * materialPageSize.value,
+  ),
+);
+const pagedQuestions = computed(() =>
+  filteredQuestions.value.slice(
+    (questionPage.value - 1) * questionPageSize.value,
+    questionPage.value * questionPageSize.value,
+  ),
+);
+watch([materialSearch, materialStatus, materialPageSize], () => {
+  materialPage.value = 1;
+});
+watch([questionSearch, questionKind, questionPageSize], () => {
+  questionPage.value = 1;
+});
+watch(
+  () => filteredMaterials.value.length,
+  (total) => {
+    materialPage.value = Math.min(
+      materialPage.value,
+      Math.max(1, Math.ceil(total / materialPageSize.value)),
+    );
+  },
+);
+watch(
+  () => filteredQuestions.value.length,
+  (total) => {
+    questionPage.value = Math.min(
+      questionPage.value,
+      Math.max(1, Math.ceil(total / questionPageSize.value)),
+    );
+  },
+);
+function chapterTitle(id: number) {
+  return (
+    courses.value.chapters.find((c) => c.id === id)?.title ?? `章节 #${id}`
+  );
+}
+function startActivity() {
+  Object.assign(activity, {
+    edit: false,
+    id: "",
+    title: "",
+    chapter_id: courses.value.chapters[0]?.id ?? 179,
+    kind: "lesson",
+    npc_key: courses.value.npcs[0]?.key ?? "mayor_py",
+    material_id: "",
+    assistant_allowed: true,
+    knowledge_point_ids: [],
+  });
+  activityEditorOpen.value = true;
+}
+let timer: ReturnType<typeof setTimeout> | undefined;
+async function safe(job: () => Promise<void>, mutation = false) {
+  if (mutation && saving.value) return;
+  if (mutation) saving.value = true;
   try {
     error.value = "";
     await job();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "操作失败";
     notify(error.value);
+  } finally {
+    if (mutation) saving.value = false;
   }
 }
 async function loadCourses() {
@@ -375,14 +1087,16 @@ async function loadMaterials() {
   });
 }
 function selectFile(e: Event) {
-  uploadFile = (e.target as HTMLInputElement).files?.[0];
+  uploadFile.value =
+    (e.target as HTMLInputElement).files?.[0] ?? uploadFile.value;
 }
 async function upload() {
-  if (!uploadFile) return;
+  if (!uploadFile.value || uploadBusy.value) return;
   uploadBusy.value = true;
+  uploadError.value = "";
   await safe(async () => {
     const form = new FormData();
-    form.set("file", uploadFile!);
+    form.set("file", uploadFile.value!);
     form.set("title", uploadForm.title);
     form.set("chapter_id", String(uploadForm.chapter_id));
     if (uploadForm.material_id) form.set("material_id", uploadForm.material_id);
@@ -392,7 +1106,9 @@ async function upload() {
     });
     await loadMaterials();
     notify("已上传，处理状态将自动更新。");
+    uploadEditorOpen.value = false;
   });
+  if (uploadEditorOpen.value && error.value) uploadError.value = error.value;
   uploadBusy.value = false;
 }
 function editActivity(a: TeacherActivity) {
@@ -401,6 +1117,7 @@ function editActivity(a: TeacherActivity) {
     material_id: a.material_id ?? "",
     edit: true,
   });
+  activityEditorOpen.value = true;
 }
 async function saveActivity() {
   await safe(async () => {
@@ -422,7 +1139,7 @@ async function saveActivity() {
       });
     await loadCourses();
     notify("活动已保存。");
-  });
+  }, true);
 }
 function selectQuest(e: Event) {
   const index = (e.target as HTMLSelectElement).value;
@@ -432,14 +1149,13 @@ function selectQuest(e: Event) {
 }
 async function validateQuest() {
   await safe(async () => {
-    validation.value = JSON.stringify(
-      await api.post("/teacher/quests/validate", {
-        definition: JSON.parse(questJson.value),
-      }),
-      null,
-      2,
-    );
-  });
+    const definition = questJson.value;
+    const result = await api.post("/teacher/quests/validate", {
+      definition: JSON.parse(definition),
+    });
+    if (definition === questJson.value)
+      validation.value = JSON.stringify(result, null, 2);
+  }, true);
 }
 async function publishQuest() {
   await safe(async () => {
@@ -448,16 +1164,18 @@ async function publishQuest() {
     });
     await loadQuests();
     notify("新任务版本已创建，请更新班级发布规则。");
-  });
+  }, true);
 }
 async function createNpc() {
   await safe(async () => {
     await api.post("/teacher/npcs", JSON.parse(npcJson.value));
     await loadCourses();
     notify("NPC已创建。");
-  });
+  }, true);
 }
 async function createQuestion() {
+  if (!questionDraft.value || questionFragmentErrors.value.length) return;
+  questionError.value = "";
   await safe(async () => {
     const result = await api.post<{
       id: string;
@@ -468,7 +1186,10 @@ async function createQuestion() {
     notify(
       `题目已创建，关联活动已更新为版本 ${result.activity_version}。请在新任务定义中引用该版本。`,
     );
-  });
+    questionEditorOpen.value = false;
+  }, true);
+  if (questionEditorOpen.value && error.value)
+    questionError.value = error.value;
 }
 function closePreview() {
   if (preview.value?.url) URL.revokeObjectURL(preview.value.url);

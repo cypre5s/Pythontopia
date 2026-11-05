@@ -1,5 +1,14 @@
 # Reborn migration
 
+## 后台改版与 reborn 集成（2026-11-05）
+
+本轮以 reborn 的 b773f56a（章节脚本与配置地图）为基线，合入后台改版 0f2717ac，在隔离集成分支验证后更新本地 reborn，不推送或部署。原有未跟踪 deploy/piston-local/ 保留。合并保留新版剧情、地图、活动快照、旧任务兼容及教师后台的日期安排/分页/弹窗/章节完成数。新安排首次保存会重新读取任务定义，避免切换到编写页面后缓存旧版本；已有安排仍不自动升级。
+
+验证使用新的临时 API18186、Web15286 与独立 SQLite/存储，迁移到 b63e1a4920d7；不升级原验收库或覆盖原前端构建。此处以下的15175/15176/15186等端口、旧分支路径、通过项数量和“当前/最新”措辞均属于各次历史验收，不能作为本次集成部署状态的证明。本轮最终集成验证：前端锁定npm ci、typecheck、lint、127项单测及独立输出构建通过；后端71项锁依赖匹配、ruff、168 passed/7 skipped（2个PostgreSQL专项与5个liveJudge0未配置），全新Alembic到b63e1a4920d7、重复seed后29表行数一致。地图校验2图/11建筑/2portal/1838可达格/353美术对象与68项资源存在审计通过。真实Chrome：后台专项、课程编写、私有媒体各1通过，旧两章1、新第一章桌面/窄屏2、地图定义/交互2，共8项通过。新建排课刷新定义的回归已纳入127项。最初后台分页用例依赖历史上传数据，在全新库失败；改为显式上传11份自制文本fixture后通过，不将首次失败计通过。未实测本轮真实AI/Judge/PG或PPTX转换。合并只更新本地源码，不替换已有验收数据库、容器或生产构建。
+
+## 以下为历史记录
+
+
 - Branch: `reborn`.
 - Current local runtime (2026-11-05): stopped at the user's request. Independent `pythontopia-story-qa` web/API/db are all stopped; Web15176/API18083 no longer listen. Containers and data volumes are retained. Existing15175 demo was already stopped and left unchanged; Native15174/API18081 remain stopped.
 - Source `origin/main`: `783f15d8d08fd739fea3f665ec83d819b5eebb51`.
@@ -128,3 +137,11 @@ DialogueLayer 改为 main/DialogTree 同位置的左上立绘舞台与下方纵�
 2026-11-05：对白取消跳过入口，统一点击正文/Enter继续。
 
 2026-11-05：OverlayHost同步引入日志/资料/班级/设置，Lesson/Practice使用WorkspaceLoadState显示加载和错误，防止静默空白；回到小镇统一公共样式。旧浏览器需刷新获取新版本，15175已更新。
+
+2026-11-05：教师后台独立改版为本地shadcn-vue Button/Card/Table/Dialog + Reka UI + Tailwind4，无Preflight，工具类@scope仅后台/门户弹窗。导航三组，列表优先、表单按需展开、搜索筛选/空状态、班级弹窗与成员分页/记录、题目结构化表单与高级JSON。KeepAlive保留后台编辑草稿，退出路由卸载；权限/接口/版本语义维持服务端现有规则。学生生产界面无改动。新增adminManagement浏览器专项和teacherContent6项单测，适配既有authoring及student E2E到当前交互。独立SQLite/API18086和前端15186实际通过后台8页×4视口、课程编写、材料私有版本/阅读回流、两章旅程及UI回归；外部PostgreSQL/Judge0/PPTX转换仍明确跳过。后端113通过/7跳过，fresh迁移与重复seed通过；细节见acceptance.md，启动见development.md。基于reborn89d1802c工作区改动，未提交/推送或替换原演示部署。
+
+教师后台改版最终检查：npm ci/typecheck/lint/build通过，前端61项通过、后端113通过/7跳过；5项真实浏览器用例通过，PPTX转换用例显式跳过。界面截图保留在忽略目录.tmp/teacher-admin-desktop.png，仅为本机验收产物。
+
+2026-11-05用户批注修订：以教师日常操作重排后台，学习记录仅简单总人数+成员/已完成章节，去掉统计卡/状态分布。新增后端completed_chapters与前置门控共用主线需求查询、117通过/7跳过，无迁移。章节管理按行设置解锁日期，隐藏引擎版本且保留原内容绑定；课程标签页+独立分页，新建编辑使用弹窗，材料/题库分页与新增弹窗。活动/NPC/任务配置按用户要求暂缓。前端78项与后台/课程/媒体live通过，继续沿用15186验收入口及原账号；详情见acceptance.md，不另建计划文档。
+
+2026-11-05继续按界面批注精简：主标题前后的分类/描述删除；班级列表重复标题与介绍删除。学情、章节管理、课程子标签、材料、题库以无边框工具栏+单一数据/分页面板呈现，删除重复面板标题/介绍。业务与弹窗保持；仅前端展示结构，本轮不重跑无关后端/学生旅程。沿用15186验收账号，build后刷新可验收。

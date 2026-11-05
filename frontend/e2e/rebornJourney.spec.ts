@@ -74,21 +74,21 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
     ).status(),
   ).toBe(403);
   await page.screenshot({
-    path: `test-results/${testInfo.project.name}-world.png`,
+    path: testInfo.outputPath("world.png"),
   });
   await talk(page);
   await expect.poll(() => status("arrival", "greet")).toBe("complete");
   await talk(page);
   await expect.poll(() => status("arrival", "opening")).toBe("complete");
-  await study(page);
+  await study(page, testInfo.outputPath(`lesson-${randomUUID().slice(0, 6)}.png`));
   await expect.poll(() => status("arrival", "study")).toBe("complete");
-  await page.getByRole("button", { name: "立即前往" }).click();
+  await page.getByRole("button", { name: "立即前往", exact: true }).click();
   await expect
     .poll(() => status("arrival", "reach-practice"), { timeout: 30_000 })
     .toBe("complete");
   await practice(page, ["抽象与自动化", "正确", "建模"]);
   await expect.poll(() => status("arrival", "practice")).toBe("complete");
-  await page.getByRole("button", { name: "立即前往" }).click();
+  await page.getByRole("button", { name: "立即前往", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "剧情对白" })).toBeVisible({
     timeout: 30_000,
   });
@@ -97,7 +97,7 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
     .poll(async () => (await world()).flags)
     .toContain("library_unlocked");
   await page.screenshot({
-    path: `test-results/${testInfo.project.name}-chapter-one-complete.png`,
+    path: testInfo.outputPath("chapter-one-complete.png"),
   });
   // Teacher publishes the second chapter without rebuilding the client.
   expect(
@@ -119,12 +119,12 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
   await dismissArrival(page);
   await talk(page);
   await expect.poll(() => status("lost-language", "mission")).toBe("complete");
-  await page.getByRole("button", { name: "立即前往" }).click();
+  await page.getByRole("button", { name: "立即前往", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "剧情对白" })).toBeVisible({
     timeout: 30_000,
   });
   await finishTalk(page);
-  await study(page);
+  await study(page, testInfo.outputPath(`lesson-${randomUUID().slice(0, 6)}.png`));
   await page.getByRole("button", { name: /任务日志/ }).click();
   await page
     .getByRole("button", { name: "辨认程序设计语言", exact: true })
@@ -136,12 +136,12 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
     .toBe("complete");
   expect(await status("lost-language", "code-practice")).toBe("skipped");
   // Enter the library via the real doorway; no business-page navigation.
-  await page.getByRole("button", { name: "立即前往" }).click();
+  await page.getByRole("button", { name: "立即前往", exact: true }).click();
   await expect
     .poll(async () => (await world()).player.map_key, { timeout: 30_000 })
     .toBe("library");
   await page.screenshot({
-    path: `test-results/${testInfo.project.name}-library.png`,
+    path: testInfo.outputPath("library.png"),
   });
   // Cross-map guidance continues from the doorway to the librarian automatically.
   await expect(page.getByRole("dialog", { name: "剧情对白" })).toBeVisible({
@@ -151,13 +151,13 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
   await expect
     .poll(() => status("lost-language", "meet-librarian"))
     .toBe("complete");
-  await page.getByRole("button", { name: "立即前往" }).click();
+  await page.getByRole("button", { name: "立即前往", exact: true }).click();
   await expect
     .poll(() => status("lost-language", "read-shelf"), { timeout: 20_000 })
     .toBe("complete");
   if (await page.getByRole("button", { name: "关闭当前工作区" }).isVisible())
     await page.getByRole("button", { name: "关闭当前工作区" }).click();
-  await page.getByRole("button", { name: "立即前往" }).click();
+  await page.getByRole("button", { name: "立即前往", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "剧情对白" })).toBeVisible({
     timeout: 40_000,
   });
@@ -172,8 +172,17 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
   await page.getByRole("button", { name: "已完成", exact: true }).click();
   await expect(page.locator(".quest-directory .quest-card")).toHaveCount(2);
   await expect(page.locator(".journal-entry")).toHaveCount(1);
+  for (const card of await page.locator(".quest-directory .quest-card").all()) {
+    const title = await card.locator("strong").innerText();
+    await card.click();
+    await expect(page.locator(".journal-entry")).toHaveCount(1);
+    await expect(page.locator(".journal-entry h3")).toHaveText(title);
+    await expect(
+      page.locator(".journal-entry .quest-detail-footer"),
+    ).toContainText("故事已收录");
+  }
   await page.screenshot({
-    path: `test-results/${testInfo.project.name}-completed.png`,
+    path: testInfo.outputPath("completed.png"),
   });
   const progress = await (
     await request.get(`/api/teacher/classrooms/${classroom.id}/progress`, {
@@ -234,9 +243,10 @@ test("real teacher/class/student two-chapter journey and isolated workspaces", a
 async function dismissArrival(page: Page) {
   const welcome = page.getByRole("dialog", { name: "欢迎回到小镇", exact: true });
   await expect(welcome).toBeVisible();
-  await welcome.getByRole("button", { name: "按任意键继续" }).click();
+  await welcome.getByRole("button", { name: "按任意键继续", exact: true }).click();
   await expect(welcome).toBeHidden();
   await expect(page.locator(".world-canvas canvas")).toHaveCount(1);
+  await expect(page.locator(".hud-dock")).toBeVisible();
 }
 async function talk(page: Page) {
   await expect(page.locator(".world-hint")).toContainText("交谈", {
@@ -259,7 +269,11 @@ async function finishTalk(page: Page) {
       exact: true,
     });
     const responses = dialogue.locator(".dialogue-response");
-    const button = (await choice.count()) ? choice : (await responses.count()) ? responses.first() : text;
+    const button = (await choice.count())
+      ? choice
+      : (await responses.count())
+        ? responses.first()
+        : text;
     const responsePromise = page.waitForResponse(
       (r) =>
         r.url().includes("/dialogues/") &&
@@ -279,7 +293,7 @@ async function finishTalk(page: Page) {
   }
   throw new Error("Dialogue did not terminate within ten bounded nodes");
 }
-async function study(page: Page) {
+async function study(page: Page, screenshotPath: string) {
   await page.getByRole("button", { name: /任务日志/ }).click();
   await page
     .getByRole("button", { name: "打开课程", exact: true })
@@ -289,7 +303,7 @@ async function study(page: Page) {
     page.getByRole("button", { name: "记录本次学习" }),
   ).toBeVisible();
   await page.screenshot({
-    path: `test-results/lesson-${randomUUID().slice(0, 6)}.png`,
+    path: screenshotPath,
   });
   await page.getByRole("button", { name: "记录本次学习" }).click();
   await expect(

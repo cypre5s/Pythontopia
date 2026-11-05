@@ -39,12 +39,15 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
     return r.json();
   };
   await page.getByRole("button", { name: "课程与知识点", exact: true }).click();
-  const chapterForm = page.locator(".curriculum-workspace form").nth(0),
-    pointForm = page.locator(".curriculum-workspace form").nth(1);
+  await page.getByRole("button", { name: "新增章节", exact: true }).click();
+  const chapterForm = page.getByRole("dialog", { name: /^(新增|编辑)章节$/ }),
+    pointForm = page.getByRole("dialog", { name: /^(新增|编辑)知识点$/ });
   await chapterForm.getByLabel("章节标题").fill(chapterTitle);
   await chapterForm
     .getByRole("button", { name: "保存章节", exact: true })
     .click();
+  await expect(chapterForm).toBeHidden();
+  await page.getByRole("searchbox", { name: "搜索章节", exact: true }).fill(chapterTitle);
   await expect(
     page.getByRole("row").filter({ hasText: chapterTitle }),
   ).toBeVisible();
@@ -62,9 +65,13 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
   await chapterForm
     .getByRole("button", { name: "保存章节", exact: true })
     .click();
+  await expect(chapterForm).toBeHidden();
+  await page.getByRole("searchbox", { name: "搜索章节", exact: true }).fill(editedTitle);
   await expect(
     page.getByRole("row").filter({ hasText: editedTitle }),
   ).toBeVisible();
+  await page.getByRole("tab", { name: /^知识点/ }).click();
+  await page.getByRole("button", { name: "新增知识点", exact: true }).click();
   await pointForm
     .getByRole("combobox", { name: "所属章节", exact: true })
     .selectOption(String(chapter.id));
@@ -72,6 +79,8 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
   await pointForm
     .getByRole("button", { name: "保存知识点", exact: true })
     .click();
+  await expect(pointForm).toBeHidden();
+  await page.getByRole("searchbox", { name: "搜索知识点", exact: true }).fill(pointTitle);
   await expect(
     page.getByRole("row").filter({ hasText: pointTitle }),
   ).toBeVisible();
@@ -92,6 +101,8 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
   await pointForm
     .getByRole("button", { name: "保存知识点", exact: true })
     .click();
+  await expect(pointForm).toBeHidden();
+  await page.getByRole("searchbox", { name: "搜索知识点", exact: true }).fill(pointEdited);
   await expect(
     page.getByRole("row").filter({ hasText: pointEdited }),
   ).toBeVisible();
@@ -135,8 +146,10 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
   ).toBe(403);
   await page.getByRole("button", { name: "班级", exact: true }).click();
   const className = `课程配置验收 ${suffix}`;
-  await page.getByLabel("班级名称").fill(className);
-  await page.getByRole("button", { name: "创建班级", exact: true }).click();
+  await page.locator(".teacher-heading").getByRole("button", { name: "创建班级", exact: true }).click();
+  const classDialog = page.getByRole("dialog", { name: "创建班级", exact: true });
+  await classDialog.getByLabel("班级名称", { exact: true }).fill(className);
+  await classDialog.getByRole("button", { name: "创建班级", exact: true }).click();
   await expect(
     page.locator(".class-card").filter({ hasText: className }),
   ).toBeVisible();
@@ -145,7 +158,8 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
   ).find((c: { name: string }) => c.name === className);
   expect(classroom).toBeTruthy();
   await page.getByRole("button", { name: "活动与 NPC", exact: true }).click();
-  const activityForm = page.locator(".teacher-form");
+  await page.getByRole("button", { name: "新建活动", exact: true }).click();
+  const activityForm = page.locator(".admin-editor form");
   await activityForm.getByLabel("活动 ID", { exact: true }).fill(activityId);
   await activityForm
     .getByLabel("标题", { exact: true })
@@ -157,7 +171,7 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
     .getByRole("combobox", { name: "类型", exact: true })
     .selectOption("practice");
   await activityForm.getByLabel(pointEdited, { exact: true }).check();
-  await activityForm.getByLabel("允许主动使用助教", { exact: true }).uncheck();
+  await activityForm.getByLabel("允许学生在活动内主动使用助教", { exact: true }).uncheck();
   await activityForm
     .getByRole("button", { name: "创建活动", exact: true })
     .click();
@@ -215,15 +229,11 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
   await expect(
     page.getByText("新任务版本已创建，请更新班级发布规则。", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("button", { name: "章节发布", exact: true }).click();
-  await page
-    .getByRole("combobox", { name: "当前班级", exact: true })
-    .selectOption(String(classroom.id));
-  await page
-    .getByRole("combobox", { name: "章节", exact: true })
-    .selectOption(String(chapter.id));
-  await page.getByRole("button", { name: "保存发布规则", exact: true }).click();
-  await expect(page.getByText("发布规则已保存", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "章节管理", exact: true }).click();
+  await page.getByRole("combobox", { name: "当前班级", exact: true }).selectOption(String(classroom.id));
+  const chapterRow = page.locator(".chapter-management tbody tr").filter({ hasText: editedTitle });
+  await chapterRow.getByRole("button", { name: "立即解锁", exact: true }).click();
+  await expect(chapterRow.locator(".status-badge")).toHaveText("已解锁");
   const registration = await request.post("/api/auth/register", {
     data: {
       email: `${randomUUID()}@example.test`,
@@ -248,7 +258,8 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
   );
   await page.goto("/world");
   await expect(page.locator("canvas")).toBeVisible();
-  await expect(page.locator(".world-hint")).not.toHaveText("");
+  await page.getByRole("button", { name: "按任意键继续", exact: true }).click();
+  await expect(page.getByRole("button", { name: /任务日志/ })).toBeVisible();
   const position = async () => {
     const r = await request.get(`/api/world?classroom_id=${classroom.id}`, {
       headers: student,

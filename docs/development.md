@@ -1,5 +1,14 @@
 # 安装、启动与排查
 
+## 后台改版与 reborn 集成（2026-11-05）
+
+本轮以 reborn 的 b773f56a（章节脚本与配置地图）为基线，合入后台改版 0f2717ac，在隔离集成分支验证后更新本地 reborn，不推送或部署。原有未跟踪 deploy/piston-local/ 保留。合并保留新版剧情、地图、活动快照、旧任务兼容及教师后台的日期安排/分页/弹窗/章节完成数。新安排首次保存会重新读取任务定义，避免切换到编写页面后缓存旧版本；已有安排仍不自动升级。
+
+验证使用新的临时 API18186、Web15286 与独立 SQLite/存储，迁移到 b63e1a4920d7；不升级原验收库或覆盖原前端构建。此处以下的15175/15176/15186等端口、旧分支路径、通过项数量和“当前/最新”措辞均属于各次历史验收，不能作为本次集成部署状态的证明。本轮最终集成验证：前端锁定npm ci、typecheck、lint、127项单测及独立输出构建通过；后端71项锁依赖匹配、ruff、168 passed/7 skipped（2个PostgreSQL专项与5个liveJudge0未配置），全新Alembic到b63e1a4920d7、重复seed后29表行数一致。地图校验2图/11建筑/2portal/1838可达格/353美术对象与68项资源存在审计通过。真实Chrome：后台专项、课程编写、私有媒体各1通过，旧两章1、新第一章桌面/窄屏2、地图定义/交互2，共8项通过。新建排课刷新定义的回归已纳入127项。最初后台分页用例依赖历史上传数据，在全新库失败；改为显式上传11份自制文本fixture后通过，不将首次失败计通过。未实测本轮真实AI/Judge/PG或PPTX转换。合并只更新本地源码，不替换已有验收数据库、容器或生产构建。
+
+## 以下为历史记录
+
+
 ## 章节演出开发预览（2026-11-05）
 
 当前状态：验收后已按用户要求停止pythontopia-story-qa的web/API/db，15176/18083不再监听；容器、数据卷和本机体验凭据保留。下方启动命令仅供明确恢复服务时使用。
@@ -153,3 +162,25 @@ $env:REBORN_CONVERTER_URL = ''
 ```
 
 先确认对应旧进程已由操作者停止，避免端口冲突；不停止其他任务。前端仍运行15174。默认容器端口会与本机相撞，同时验收时使用REBORN_API_PORT=18082、REBORN_WEB_PORT=15175，保持本机预览不变。两个环境数据库独立，账号不自动共享。
+
+## 教师管理界面（2026-11-05）
+
+教师后台采用 shadcn-vue 的 Button、Card、Table、Dialog 源码，基于 Reka UI 与 Tailwind CSS 4；许可证保存在 frontend/src/components/ui/LICENSE.shadcn-vue。组件配置位于 frontend/components.json，依赖使用精确版本与 package-lock.json 锁定。
+
+后台入口仍为 /teacher。theme 只在教师路由加载；teacherTheme.css 不引入 Preflight，生成工具类限制在 .teacher-page / .teacher-dialog 的 CSS @scope 内，门户弹窗显式携带后台主题。新增后台组件时须保持这条边界，不向 main.ts 或学生页面导入后台样式。原生表单控件继续使用后台范围内的样式与浏览器语义。使用支持 CSS @scope 的现代浏览器，本次在本机 Chrome 验证。
+
+本次独立验收使用全新 SQLite 库与存储，不复用现有演示库。实际临时启动方式（在仓库根目录；账号由 provision-user 显式配置，密码不进源码）：
+
+```powershell
+$env:REBORN_DATABASE_URL = 'sqlite:///' + (Join-Path (Get-Location) '.tmp/admin-preview-20261105.db').Replace('\','/')
+$env:REBORN_STORAGE_ROOT = Join-Path (Get-Location) '.tmp/admin-preview-storage'
+Set-Location backend
+../.tmp/backend-venv/Scripts/python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 18086
+# 另一个终端，进入 frontend
+$env:API_PROXY = 'http://127.0.0.1:18086'
+npm run dev -- --host 127.0.0.1 --port 15186
+```
+
+后台专项测试：设置 E2E_URL、E2E_TEACHER_EMAIL、E2E_TEACHER_PASSWORD、PLAYWRIGHT_CHANNEL=chrome 后执行 `npx playwright test adminManagement.spec.ts --project=desktop --workers=1`。用例实际切换四种视口，操作八个后台页面，并检查退出后登录页样式与零附带模型调用。教材编写测试还需要 E2E_OTHER_TEACHER_EMAIL / E2E_OTHER_TEACHER_PASSWORD；PPTX 转换测试仍须显式文件与转换服务。
+
+验收入口15186已重建为本轮批注修订版，继续使用原隔离验收账号；API18086已重启加载真实章节完成计数，预览数据保留。临时开发端口15187仅用于本轮验证。

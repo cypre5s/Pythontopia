@@ -35,3 +35,5 @@ Vue会话协调对话、唯一工作区和Phaser导航。新任务的navigation_
 ## 环境隔离
 
 Reborn Compose 项目、数据库、卷、对象存储前缀和端口独立。主栈只有 db/api/web；Judge0 是可选独立隔离栈。默认数据库不对外发布，开发覆盖文件也只绑定 loopback。现有线上数据库、生产服务和 main 不参与迁移。CI 只检查 reborn，不发布生产。
+
+教师后台 /teacher 使用独立的管理布局与本地 shadcn-vue 组件源码，组件仅由教师路由引用。Tailwind 不加载 Preflight，工具类使用 CSS @scope 限定在 .teacher-page / .teacher-dialog；弹窗门户同样携带主题类，避免导航离开后台后影响学生/登录界面。TeacherContent 与课程编辑用 KeepAlive 保留未提交草稿，退出后台账号后随路由卸载。表单、筛选与分页为本地界面状态，权限、发布、版本与成绩仍由原有服务端接口判定。
