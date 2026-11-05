@@ -23,7 +23,7 @@
           ><span>{{ title }}</span
           ><small>已暂停世界移动</small>
         </div>
-        <button aria-label="关闭当前工作区" @click="close">
+        <button class="return-to-town" aria-label="关闭当前工作区" @click="close">
           <GameIcon name="close" /><span>回到小镇</span><kbd v-if="!session.canGoBack">Esc</kbd>
         </button>
       </header>
@@ -55,22 +55,20 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref } from "vue";
+import { computed, defineAsyncComponent, ref, type Component } from "vue";
 import { useSession } from "../shared/session";
 import { useModalFocus } from "../shared/modalFocus";
 import GameIcon from "../shared/GameIcon.vue";
-const LessonWorkspace = defineAsyncComponent(
-    () => import("./LessonWorkspace.vue"),
-  ),
-  PracticeWorkspace = defineAsyncComponent(
-    () => import("./PracticeWorkspace.vue"),
-  ),
-  QuestJournal = defineAsyncComponent(() => import("./QuestJournal.vue")),
-  LibraryWorkspace = defineAsyncComponent(
-    () => import("./LibraryWorkspace.vue"),
-  ),
-  ClassroomPanel = defineAsyncComponent(() => import("./ClassroomPanel.vue")),
-  SettingsPanel = defineAsyncComponent(() => import("./SettingsPanel.vue"));
+import WorkspaceLoadState from "../shared/WorkspaceLoadState.vue";
+import QuestJournal from "./QuestJournal.vue";
+import LibraryWorkspace from "./LibraryWorkspace.vue";
+import ClassroomPanel from "./ClassroomPanel.vue";
+import SettingsPanel from "./SettingsPanel.vue";
+function lazyWorkspace(loader: () => Promise<{ default: Component }>) {
+  return defineAsyncComponent({loader, loadingComponent: WorkspaceLoadState, errorComponent: WorkspaceLoadState, delay: 0, timeout: 20000});
+}
+const LessonWorkspace = lazyWorkspace(() => import("./LessonWorkspace.vue"));
+const PracticeWorkspace = lazyWorkspace(() => import("./PracticeWorkspace.vue"));
 const session = useSession(),
   emit = defineEmits<{ close: [] }>(),
   panel = ref<HTMLElement>();
@@ -101,3 +99,9 @@ useModalFocus(
   },
 );
 </script>
+
+<style scoped>
+.workspace-topbar .return-to-town { color:#f5e7ce;background:#203b32e8;border:1px solid #a9987170;border-radius:24px;min-height:44px;padding:8px 16px;box-shadow:0 2px 8px #10231b25; }
+.workspace-topbar .return-to-town:hover { background:#355646;color:#fff2d6; }
+.workspace-topbar .return-to-town > span { display:inline; }
+</style>

@@ -17,21 +17,18 @@
       @error="imageError = true"
     />
     </div>
-    <section class="dialogue-box">
+    <section class="dialogue-box" tabindex="0" aria-label="对白内容，点击或按回车继续" @click="clickDialogue" @keydown.enter.self.prevent="continueDialogue" @keydown.space.self.prevent="continueDialogue">
       <div class="dialogue-heading">
-        <p class="eyebrow">{{ speaker }} <span>· 小镇居民</span></p>
-        <button class="dialogue-skip" :disabled="busy || settling || skipping" title="快进对白，遇到选项停下" @click="skipDialogue">
-          跳过 <GameIcon name="arrowRight" />
-        </button>
+        <p class="eyebrow">{{ speaker }}</p>
       </div>
-      <p class="dialogue-text" :aria-label="line?.text" @click="reveal">
+      <p class="dialogue-text" :aria-label="line?.text">
         {{ displayed }}
       </p>
       <p v-if="error" class="error">{{ error }}</p>
       <p v-if="settling" class="dialogue-saving" role="status">
         正在记录这次对话…
       </p>
-      <div class="dialogue-actions" :aria-busy="busy || settling">
+      <div v-if="!typing" class="dialogue-actions" :aria-busy="busy || settling">
         <button
           v-for="(choice, index) in typing ? [] : (line?.choices ?? [])"
           :key="choice.id"
@@ -41,21 +38,6 @@
         >
           <span class="response-number" aria-hidden="true">{{ index + 1 }}.</span>
           <span>{{ choice.label ?? choice.text }}</span></button
-        ><button
-          v-if="typing || !line?.choices?.length"
-          class="primary dialogue-response"
-          :disabled="busy || settling"
-          @click="advance()"
-        >
-          {{
-            settling
-              ? "记录中…"
-              : typing
-                ? "显示全文"
-                : line?.next
-                  ? "继续"
-                  : "记下了"
-          }}</button
         >
       </div>
       <div
@@ -80,8 +62,8 @@
         </button>
       </div>
       <footer class="dialogue-footer">
-        <span>↑ ↓ 选择 · Enter 确认</span>
-        <button class="text-button" @click="close">稍后再聊 <kbd>Esc</kbd></button>
+        <span>{{ typing ? "点击显示全文" : line?.choices?.length ? "↑ ↓ 选择 · Enter 确认" : "点击继续 · Enter" }}</span>
+        <button class="text-button" @click="close">暂时离开 <kbd>Esc</kbd></button>
       </footer>
     </section>
   </div>
@@ -110,7 +92,6 @@ const props = defineProps<{
   typing = ref(false),
   imageError = ref(false),
   busy = ref(false),
-  skipping = ref(false),
   error = ref("");
 const panel = ref<HTMLElement>();
 const preferences = useUiPreferences();
@@ -134,6 +115,15 @@ function close() {
   requestGeneration++;
   emit("close");
 }
+function continueDialogue() {
+  if (busy.value || props.settling) return;
+  if (typing.value) reveal();
+  else if (!line.value?.choices?.length) void advance();
+}
+function clickDialogue(event: MouseEvent) {
+  if ((event.target as HTMLElement).closest("button")) return;
+  continueDialogue();
+}
 function reveal() {
   clearInterval(timer);
   displayed.value = line.value?.text ?? "";
@@ -145,7 +135,7 @@ function type() {
   typing.value = true;
   let i = 0;
   const text = line.value?.text ?? "";
-  if (preferences.reducedMotion || skipping.value) {
+  if (preferences.reducedMotion) {
     reveal();
     return;
   }
@@ -153,24 +143,6 @@ function type() {
     displayed.value = text.slice(0, ++i);
     if (i >= text.length) reveal();
   }, 20);
-}
-async function skipDialogue() {
-  if (busy.value || props.settling || skipping.value) return;
-  skipping.value = true;
-  const activeNpc = props.npc;
-  const visited = new Set<string>();
-  try {
-    reveal();
-    while (!closed && !disposed && props.npc === activeNpc && line.value?.next && !line.value.choices?.length) {
-      const id = nodeId.value;
-      if (visited.has(id)) break;
-      visited.add(id);
-      await advance();
-      if (error.value || nodeId.value === id) break;
-    }
-  } finally {
-    skipping.value = false;
-  }
 }
 function navigateResponses(event: KeyboardEvent) {
   if (!['ArrowUp', 'ArrowDown'].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
@@ -271,145 +243,40 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.dialogue-layer {
-  position: fixed;
-  inset: 0;
-  transform: none;
-  width: 100%;
-  max-height: none;
-  display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
-  align-items: center;
-  padding: var(--safe-top) var(--safe-right) var(--safe-bottom) var(--safe-left);
-  background: linear-gradient(180deg, #101b1810 15%, #101b1850 55%, #101b18e8 100%);
-  pointer-events: auto;
-}
-.dialogue-stage {
-  width: min(1080px, 100%);
-  min-height: 0;
-  flex: 0 1 auto;
-  display: flex;
-  padding-left: clamp(12px, 3vw, 40px);
-  pointer-events: none;
-  overflow: hidden;
-}
-.dialogue-layer .portrait {
-  display: block;
-  width: auto;
-  height: min(48dvh, 512px);
-  max-width: 46vw;
-  max-height: 100%;
-  object-fit: contain;
-  object-position: left bottom;
-  filter: drop-shadow(0 6px 12px #0008);
-}
-.dialogue-box {
-  flex: 0 1 auto;
-  width: min(1080px, 100%);
-  max-height: calc(100dvh - var(--safe-top) - var(--safe-bottom));
-  min-height: 0;
-  padding: clamp(16px, 2vw, 28px) clamp(20px, 4vw, 56px) 12px;
-  overflow: auto;
-  border: 1px solid #bfa26d80;
-  border-top: 2px solid #d6b979;
-  border-radius: 3px;
-  background: linear-gradient(115deg, #152a27fa, #142321fa);
-  color: #f5efdf;
-  box-shadow: 0 16px 60px #0006;
-}
-.dialogue-heading {
-  border: 0;
-  padding: 0;
-  margin-bottom: 12px;
-  gap: 12px;
-}
-.dialogue-box .eyebrow {
-  margin: 0;
-  color: #f0cc85;
-  font-size: 1.125rem;
-  letter-spacing: .06em;
-}
-.dialogue-box .eyebrow span { color: #b8c2b8; font-size: .8rem; }
-.dialogue-skip {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  min-height: 44px;
-  padding: 8px 12px;
-  border: 1px solid #a9946655;
-  background: transparent;
-  color: #ded1ac;
-  font-size: .9rem;
-}
-.dialogue-text {
-  margin: 0 0 18px;
-  min-height: 2.8em;
-  font-size: 1.125rem;
-  line-height: 1.8;
-  color: #f5efdf;
-}
-.dialogue-actions, .dialogue-objectives {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-  margin: 0;
-  padding: 12px 0 0;
-  border-top: 1px solid #c9ad7140;
-}
-.dialogue-actions button, .dialogue-objectives button {
-  display: flex;
-  align-items: baseline;
-  justify-content: flex-start;
-  gap: 12px;
-  width: 100%;
-  min-height: 44px;
-  padding: 10px 14px;
-  border: 1px solid transparent;
-  border-radius: 2px;
-  background: transparent;
-  color: #e8dfc8;
-  text-align: left;
-  font-size: 1rem;
-  line-height: 1.6;
-}
-.response-number { color: #c5a86b; min-width: 1.2em; }
-.dialogue-actions button:hover, .dialogue-actions button:focus-visible,
-.dialogue-objectives button:hover, .dialogue-objectives button:focus-visible {
-  color: #ffe3a5;
-  background: linear-gradient(90deg, #c7a45526, #c7a45505);
-  border-color: #c7a45570;
-  box-shadow: inset 3px 0 #e6c381;
-}
-.dialogue-box button:focus-visible { outline: 2px solid #f4d594; outline-offset: 2px; }
-.dialogue-box button:disabled { opacity: .5; cursor: wait; }
-.dialogue-saving { color: #c8d1c1; }
-.dialogue-box .error { color: #ffb8a8; }
-.dialogue-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 12px;
-  margin-top: 10px;
-  color: #aeb9ad;
-  font-size: .75rem;
-}
-.dialogue-footer button { min-height: 44px; color: #c5cdbf; background: transparent; border: 0; }
-.dialogue-footer kbd { border-color: #acb49c70; color: inherit; }
-@media (max-width: 600px) {
-  .dialogue-layer .portrait { height: min(32dvh, 280px); max-width: 55vw; }
-  .dialogue-box { padding: 14px 16px 8px; }
-  .dialogue-text { font-size: 1rem; }
-  .dialogue-box .eyebrow span, .dialogue-footer > span { display: none; }
-  .dialogue-footer { justify-content: flex-end; }
-}
-@media (max-height: 540px) {
-  .dialogue-layer .portrait { height: 25dvh; }
-  .dialogue-box { max-height: 70dvh; padding: 10px 20px 6px; }
-  .dialogue-heading { margin-bottom: 4px; }
-  .dialogue-text { min-height: 0; margin-bottom: 8px; }
-  .dialogue-footer { margin-top: 0; }
-}
+.dialogue-layer { position:fixed;inset:0;transform:none;width:100%;display:flex;align-items:flex-end;justify-content:center;padding:var(--safe-top) max(24px,var(--safe-right)) max(26px,var(--safe-bottom)) max(24px,var(--safe-left));background:linear-gradient(0deg,#17221b66,transparent 75%);pointer-events:auto; }
+.dialogue-stage { position:absolute;left:0;bottom:0;width:34%;height:80dvh;z-index:2;overflow:hidden;pointer-events:none; }
+.dialogue-layer .portrait { display:block;position:absolute;left:50%;transform:translateX(-50%);width:auto;height:145%;max-width:none;max-height:none;object-fit:contain;object-position:left top;filter:drop-shadow(4px 8px 10px #10171b88); }
+.dialogue-box { position:relative;flex:none;width:100%;max-width:1500px;max-height:63dvh;min-height:260px;overflow:auto;padding:24px 32px 18px max(30%,220px);border:2px solid #af8b50;border-radius:8px;background:radial-gradient(ellipse at 20% 0,#45392eeb,#242020f5 80%);box-shadow:inset 0 0 0 4px #211e1b,inset 0 0 0 5px #8f71443b,0 12px 40px #10191866;color:#f0dfbb; }
+.dialogue-box:focus { outline:none; }
+.dialogue-box:focus-visible { outline:2px solid #e7c884;outline-offset:3px; }
+.dialogue-heading { display:flex;align-items:center;justify-content:space-between;margin-bottom:14px; }
+.dialogue-box .eyebrow { margin:0;display:inline-block;background:#30291f;border:1px solid #b48d4e;border-radius:8px 22px 8px 22px;padding:8px 24px;color:#f0ce8d;font-size:1.25rem;letter-spacing:.04em;box-shadow:inset 0 0 0 3px #ad864c22; }
+.dialogue-box .eyebrow span { color:#c3ad87;font-size:.75rem; }
+
+
+.dialogue-text { color:#f0dfbb;font-size:clamp(1rem,1.6vw,1.4rem);line-height:1.8;min-height:3.6em;margin:0 0 18px;cursor:pointer;white-space:pre-wrap; }
+.dialogue-actions,.dialogue-objectives { display:flex;flex-direction:column;gap:4px;padding:0;margin:0;border:0;animation:responses-in .24s ease-out; }
+.dialogue-actions:empty,.dialogue-objectives:empty { display:none; }
+.dialogue-actions button,.dialogue-objectives button { display:flex;align-items:center;gap:14px;width:100%;min-height:46px;text-align:left;padding:10px 16px;border:1px solid transparent;border-radius:3px;background:transparent;color:#e6d4b0;font-size:1.05rem;line-height:1.5; }
+.dialogue-actions button:hover,.dialogue-actions button:focus-visible,.dialogue-objectives button:hover,.dialogue-objectives button:focus-visible { background:linear-gradient(90deg,#b185424d,#a9843910);border-color:#c89c52;color:#ffe1a1;box-shadow:inset 3px 0 #edc572,0 0 12px #bc8b2822; }
+.response-number { color:#dcb979;font-family:Georgia,serif;font-size:1.2rem;min-width:1.3em; }
+.dialogue-footer { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:12px;padding-top:10px;border-top:1px solid #a98c5733;color:#bba580;font-size:.78rem; }
+.dialogue-footer button { color:#e2c99d;min-height:44px;background:transparent;border:0; }
+.dialogue-footer button:hover { background:#b58c4326;color:#ffe1a1; }
+.dialogue-box button:disabled { opacity:.5;cursor:wait; }
+.dialogue-box .error { color:#ffb39e; }.dialogue-saving { color:#cdb986; }
+@keyframes responses-in { from {opacity:0;transform:translateY(6px)} to {opacity:1;transform:none} }
+@media(max-width:700px) { .dialogue-layer { padding:12px 12px 18px; }.dialogue-stage { width:48%;height:53dvh;bottom:42dvh; }.dialogue-layer .portrait { height:120%; }.dialogue-box { padding:18px;max-height:60dvh;min-height:220px;z-index:3; }.dialogue-box .eyebrow { padding:7px 16px;font-size:1.05rem; }.dialogue-text { font-size:1rem; }.dialogue-actions button,.dialogue-objectives button { font-size:.95rem; }.dialogue-box .eyebrow span { display:none; } }
+@media(max-height:540px) and (min-width:701px) { .dialogue-stage { height:90dvh;width:28%; }.dialogue-box { padding:16px 22px 12px 28%;max-height:80dvh;min-height:180px; }.dialogue-text { font-size:1rem;min-height:0;margin-bottom:10px; }.dialogue-heading { margin-bottom:8px; }.dialogue-box .eyebrow { font-size:1rem;padding:5px 14px; } }
+@media(prefers-reduced-motion:reduce) { .dialogue-actions,.dialogue-objectives { animation:none; } }
+:global([data-reduced-motion="true"]) .dialogue-actions,:global([data-reduced-motion="true"]) .dialogue-objectives { animation:none; }
+</style>
+
+<style scoped>
+.dialogue-box .eyebrow { background:none;border:0;border-radius:0;box-shadow:none;padding:0;color:#f0ce8d;font-size:1.2rem; }
+.dialogue-stage { width:min(30vw,440px);height:min(76dvh,780px); }
+.dialogue-layer .portrait { height:130%; }
+.dialogue-box { padding-left:max(min(30vw,440px),220px); }
+@media(max-width:700px) { .dialogue-stage { width:44%;height:44dvh; }.dialogue-box { padding-left:18px; } }
+@media(max-height:540px) and (min-width:701px) { .dialogue-stage { width:25%;height:80dvh; }.dialogue-box { padding-left:28%; } }
 </style>

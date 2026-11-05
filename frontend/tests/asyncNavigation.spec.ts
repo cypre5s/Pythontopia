@@ -187,7 +187,35 @@ const stepResult = () => ({
 });
 
 describe("late scripted dialogue responses", () => {
-  it("fast-forwards narration but stops before choices and completion", async () => {
+  it("reveals text on the first click and only advances on the next click", async () => {
+    useUiPreferences().reduceMotion = false;
+    const post = vi.spyOn(api, "post").mockReturnValue(new Promise(() => {}));
+    const wrapper = dialogue();
+    expect(wrapper.find(".primary").exists()).toBe(false);
+    await wrapper.get(".dialogue-text").trigger("click");
+    expect(wrapper.get(".dialogue-text").text()).toBe(resident().dialogue[0]!.text);
+    expect(post).not.toHaveBeenCalled();
+    await wrapper.get(".dialogue-text").trigger("click");
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it("reveals choices after the text, without choosing on a background click", async () => {
+    useUiPreferences().reduceMotion = false;
+    const post = vi.spyOn(api, "post").mockReturnValue(new Promise(() => {}));
+    const wrapper = dialogue();
+    const npc = resident();
+    npc.dialogue[0]!.choices = [{ id: "yes", label: "开始", next: "end" }];
+    await wrapper.setProps({ npc });
+    expect(wrapper.find(".dialogue-response").exists()).toBe(false);
+    await wrapper.get(".dialogue-text").trigger("click");
+    expect(wrapper.get(".dialogue-response").text()).toContain("开始");
+    await wrapper.get(".dialogue-box").trigger("click");
+    expect(post).not.toHaveBeenCalled();
+    await wrapper.get(".dialogue-response").trigger("click");
+    expect(post).toHaveBeenCalledTimes(1);
+  });
+
+  it("advances narration by clicking but stops before choices and completion", async () => {
     const npc = resident();
     npc.dialogue = [
       { id: "intro", text: "Welcome", next: "decision" },
@@ -199,11 +227,11 @@ describe("late scripted dialogue responses", () => {
     });
     const wrapper = dialogue();
     await wrapper.setProps({ npc });
-    await wrapper.get(".dialogue-skip").trigger("click");
+    await wrapper.get(".dialogue-box").trigger("click");
     await flushPromises();
     expect(post).toHaveBeenCalledTimes(1);
     expect(wrapper.get(".dialogue-response").text()).toContain("Let's begin");
-    await wrapper.get(".dialogue-skip").trigger("click");
+    await wrapper.get(".dialogue-box").trigger("click");
     expect(post).toHaveBeenCalledTimes(1);
     expect(wrapper.emitted("complete")).toBeUndefined();
     await wrapper.trigger("keydown", { key: "ArrowDown" });
@@ -221,7 +249,7 @@ describe("late scripted dialogue responses", () => {
     const pending = deferred<ReturnType<typeof stepResult>>();
     vi.spyOn(api, "post").mockReturnValue(pending.promise);
     const wrapper = dialogue();
-    await wrapper.get(".primary").trigger("click");
+    await wrapper.get(".dialogue-box").trigger("click");
     const session = useSession();
     if (interrupt === "Escape") {
       window.dispatchEvent(
@@ -249,8 +277,8 @@ describe("late scripted dialogue responses", () => {
     const pending = deferred<ReturnType<typeof stepResult>>();
     const post = vi.spyOn(api, "post").mockReturnValue(pending.promise);
     const wrapper = dialogue();
-    await wrapper.get(".primary").trigger("click");
-    await wrapper.get(".primary").trigger("click");
+    await wrapper.get(".dialogue-box").trigger("click");
+    await wrapper.get(".dialogue-box").trigger("click");
     expect(post).toHaveBeenCalledTimes(1);
     pending.resolve(stepResult());
     await flushPromises();

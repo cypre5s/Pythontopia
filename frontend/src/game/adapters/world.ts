@@ -73,7 +73,7 @@ export function createWorld(
     )
       e.preventDefault();
     pressed.add(e.key.toLowerCase());
-    if (e.key.toLowerCase() === "e") scene?.interact();
+    if (e.key.toLowerCase() === "e" && !e.repeat) scene?.interact();
   };
   const keyUp = (e: KeyboardEvent) => pressed.delete(e.key.toLowerCase());
   const blur = () => pressed.clear();
@@ -236,14 +236,29 @@ export function createWorld(
         this.collision = [];
       } else {
         const data = this.keys!;
-        const map = this.make.tilemap({ key: "town-tiled" });
-        const ts = map.addTilesetImage("srw_town", "town-tiles", 16, 16, 0, 0);
-        if (ts) {
+        // Composite static ground once: adjacent WebGL tile quads can leave
+        // subpixel seams while the camera follows or uses a fractional zoom.
+        const groundKey = "town-ground";
+        if (!this.textures.exists(groundKey)) {
+          const ground = this.textures.createCanvas(groundKey, data.width * 16, data.height * 16);
+          if (!ground) throw new Error("无法创建小镇地面纹理");
+          const context = ground.getContext();
+          const tiles = this.textures.get("town-tiles").getSourceImage() as HTMLImageElement;
+          const columns = tiles.width / 16;
+          context.imageSmoothingEnabled = false;
           for (const layer of data.layers.filter(
             (item) => item.type === "tilelayer" && item.name !== "collision",
-          ))
-            map.createLayer(layer.name, ts, 0, 0);
+          )) {
+            layer.data?.forEach((gid, index) => {
+              if (!gid) return;
+              const tile = gid - 1;
+              context.drawImage(tiles, (tile % columns) * 16, Math.floor(tile / columns) * 16,
+                16, 16, (index % data.width) * 16, Math.floor(index / data.width) * 16, 16, 16);
+            });
+          }
+          ground.refresh();
         }
+        this.add.image(0, 0, groundKey).setOrigin(0);
         this.collision =
           data.layers.find((l) => l.name === "collision")?.data ?? [];
         for (const o of data.layers.flatMap((l) => l.objects ?? [])) {
@@ -433,6 +448,8 @@ export function createWorld(
           Math.abs(n.homeX - this.tileX) + Math.abs(n.homeY - this.tileY) <= 2,
       );
       if (near) {
+        this.pendingTarget = null;
+        this.path = [];
         const dir =
           this.tileY > near.homeY
             ? 0
@@ -640,7 +657,10 @@ export function createWorld(
     setPaused(value) {
       paused = value;
       pressed.clear();
-      if (scene) scene.path = [];
+      if (scene) {
+        scene.path = [];
+        scene.pendingTarget = null;
+      }
     },
     setNpcs(value) {
       if (JSON.stringify(value) !== JSON.stringify(currentNpcs)) {
