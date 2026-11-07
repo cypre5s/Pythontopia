@@ -8,6 +8,7 @@ export interface Classroom {
   id: number;
   name: string;
   teacher_id: number;
+  teacher_name?: string;
   join_code?: string;
 }
 export interface Player {

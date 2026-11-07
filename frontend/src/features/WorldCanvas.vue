@@ -206,12 +206,15 @@ onMounted(async () => {
     },
   );
   game.setPaused(props.paused);
+  game.setVolume(preferences.musicVolume);
+  game.mute(!session.audioEnabled);
   game.setWelcomeDrift?.(Boolean(props.welcomeDrift) && !preferences.reducedMotion);
 });
 watch(
   () => session.audioEnabled,
   (v) => game?.mute(!v),
 );
+watch(() => preferences.musicVolume, volume => game?.setVolume(volume));
 watch(
   () => session.world?.npcs,
   (v) => {

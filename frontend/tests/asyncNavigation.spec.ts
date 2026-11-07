@@ -100,6 +100,7 @@ async function canvas() {
     interact: vi.fn(),
     guide: vi.fn(),
     mute: vi.fn(),
+    setVolume: vi.fn(),
     getMapPosition,
   };
   vi.mocked(createWorld).mockImplementation(
@@ -114,10 +115,21 @@ async function canvas() {
   });
   mounted.push(wrapper);
   await flushPromises();
-  return { callbacks, wrapper, getMapPosition };
+  return { callbacks, wrapper, getMapPosition, handle };
 }
 
 describe("pending world interactions", () => {
+  it("applies the actual environment music volume without recreating the world", async () => {
+    const { handle } = await canvas();
+    const preferences = useUiPreferences();
+    expect(handle.setVolume).toHaveBeenCalledWith(0.15);
+    preferences.musicVolume = 0.42;
+    useSession().audioEnabled = true;
+    await flushPromises();
+    expect(handle.setVolume).toHaveBeenLastCalledWith(0.42);
+    expect(handle.mute).toHaveBeenLastCalledWith(false);
+    expect(createWorld).toHaveBeenCalledTimes(1);
+  });
   it("snapshots the current sprite for the map synchronously without saving or changing server coordinates", async () => {
     const request = vi.spyOn(api, "request").mockResolvedValue(undefined);
     const { callbacks, wrapper, getMapPosition } = await canvas();

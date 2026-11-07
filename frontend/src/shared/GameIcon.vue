@@ -24,9 +24,15 @@ defineProps<{
     | "building"
     | "close"
     | "leaf"
+    | "music"
+    | "video"
+    | "practice"
     | "chevron" | "grid" | "folder" | "activity" | "chart" | "publish" | "logout" | "plus" | "copy" | "refresh" | "arrowLeft" | "arrowRight" | "arrowUp" | "arrowDown" | "external";
 }>();
 const paths = {message: "M4 4h16v12H9l-5 4V4ZM8 8h8M8 12h5", grid: "M3 3h7v7H3ZM14 3h7v7h-7ZM3 14h7v7H3ZM14 14h7v7h-7Z",
+music: "M9 18V5l11-2v13M9 8l11-2M9 18a3 3 0 1 1-3-3c1.7 0 3 1.3 3 3ZM20 16a3 3 0 1 1-3-3c1.7 0 3 1.3 3 3Z",
+video: "M3 4h18v16H3ZM10 8l6 4-6 4Z",
+practice: "M8 3H3v18h18v-5M10 14l1-4 9-9 3 3-9 9-4 1ZM17 4l3 3",
 folder: "M3 7V4h6l3 3h9v13H3Z",
 activity: "M3 12h4l3-8 4 16 3-8h4",
 chart: "M4 3v18h17M8 17v-5M13 17V7M18 17v-8",

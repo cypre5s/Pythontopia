@@ -281,9 +281,10 @@ test("usable world HUD, modal focus, history, text scaling and keyboard controls
   await expectFocusInside(workspace);
   await expectTabRoundTrip(page, workspace);
 
+  await workspace.getByRole("tab", { name: "界面", exact: true }).click();
   const textSize = workspace.getByLabel(/^文字大小/);
   await expect(textSize).toHaveValue("1");
-  const settingsProse = workspace.locator(".interface-settings .muted").first();
+  const settingsProse = workspace.locator(".setting-description").first();
   const normalFont = await settingsProse.evaluate((element) =>
     Number.parseFloat(getComputedStyle(element).fontSize),
   );
@@ -307,9 +308,8 @@ test("usable world HUD, modal focus, history, text scaling and keyboard controls
       () => document.documentElement.scrollWidth <= innerWidth + 1,
     ),
   ).toBe(true);
-  const reducedMotion = workspace.getByRole("checkbox", {
-    name: "减少界面动效",
-    exact: true,
+  const reducedMotion = workspace.getByRole("switch", {
+    name: /^减少界面动效/,
   });
   await reducedMotion.check();
   await expect(reducedMotion).toBeChecked();
@@ -323,19 +323,13 @@ test("usable world HUD, modal focus, history, text scaling and keyboard controls
   await textSize.selectOption("1");
   await expect(textSize).toHaveValue("1");
 
-  await workspace.getByRole("button", { name: /已开放材料/ }).click();
+  await page.keyboard.press("Escape");
+  await expect(workspace).toBeHidden();
+  await page.locator(".hud-dock").getByRole("button", { name: /学习资料/ }).click();
   await expect(workspace.locator(".library-workspace")).toBeVisible();
   await expectSingleWorkspace(page);
   await expectFocusInside(workspace);
   await expectTabRoundTrip(page, workspace);
-  await workspace.getByRole("button", { name: /返回设置/ }).click();
-  await expect(workspace.locator(".settings-workspace")).toBeVisible();
-  await expectSingleWorkspace(page);
-  await workspace.getByRole("button", { name: /已开放材料/ }).click();
-  await expect(workspace.locator(".library-workspace")).toBeVisible();
-  await page.keyboard.press("Escape");
-  await expect(workspace.locator(".settings-workspace")).toBeVisible();
-  await expectSingleWorkspace(page);
   await page.keyboard.press("Escape");
   await expect(workspace).toBeHidden();
   await expect

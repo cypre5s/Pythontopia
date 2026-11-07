@@ -4,7 +4,7 @@ import { computed, ref, watch } from "vue";
 const key = "pythontopia-reborn-interface";
 export const textScales = [1, 1.25, 1.5, 2] as const;
 export const useUiPreferences = defineStore("ui-preferences", () => {
-  let saved: { textScale?: number; reduceMotion?: boolean } = {};
+  let saved: { textScale?: number; reduceMotion?: boolean; musicVolume?: number } = {};
   try {
     saved = JSON.parse(localStorage.getItem(key) ?? "{}");
   } catch {
@@ -16,6 +16,11 @@ export const useUiPreferences = defineStore("ui-preferences", () => {
       : 1,
   );
   const reduceMotion = ref(saved?.reduceMotion === true);
+  const boundedVolume = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value)
+      ? Math.max(0, Math.min(1, value))
+      : 0.15;
+  const musicVolume = ref(boundedVolume(saved?.musicVolume));
   const systemMotion = ref(false);
   const reducedMotion = computed(
     () => reduceMotion.value || systemMotion.value,
@@ -28,8 +33,9 @@ export const useUiPreferences = defineStore("ui-preferences", () => {
     };
     media.addEventListener("change", update);
     const stop = watch(
-      [textScale, reduceMotion, reducedMotion],
+      [textScale, reduceMotion, reducedMotion, musicVolume],
       () => {
+        musicVolume.value = boundedVolume(musicVolume.value);
         document.documentElement.style.setProperty(
           "--text-scale",
           String(textScale.value),
@@ -43,6 +49,7 @@ export const useUiPreferences = defineStore("ui-preferences", () => {
             JSON.stringify({
               textScale: textScale.value,
               reduceMotion: reduceMotion.value,
+              musicVolume: musicVolume.value,
             }),
           );
         } catch {
@@ -56,5 +63,5 @@ export const useUiPreferences = defineStore("ui-preferences", () => {
       media.removeEventListener("change", update);
     };
   }
-  return { textScale, reduceMotion, reducedMotion, connect };
+  return { textScale, reduceMotion, reducedMotion, musicVolume, connect };
 });

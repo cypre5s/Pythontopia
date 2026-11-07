@@ -18,7 +18,7 @@
         </div>
       </div>
       <aside class="map-sidebar" aria-label="地图地点与人物">
-        <div class="map-filters" role="group" aria-label="地图标记筛选">
+        <div class="map-filters game-segmented" role="group" aria-label="地图标记筛选">
           <button v-for="item in filters" :key="item.id" :aria-label="item.label" :title="item.text" :aria-pressed="filter === item.id" @click="filter = item.id"><GameIcon :name="item.icon"/></button>
         </div>
         <div class="map-target-list" aria-label="地图目标列表">
@@ -144,8 +144,8 @@ onBeforeUnmount(() => { generation++; controller?.abort(); observer?.disconnect(
 
 <style scoped>
 .map-workspace { --map-border:#c5b98f;display:flex;flex-direction:column;min-height:0;flex:1;color:#344439; }
-.map-layout { display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,300px);gap:22px;min-height:0;flex:1;padding:8px 8px 12px; }
-.map-main { display:flex;flex-direction:column;min-width:0;min-height:0;border:1px solid #a9987170;border-radius:20px;background:#344e39;overflow:hidden; }
+.map-layout { display:grid;grid-template-columns:minmax(0,1fr) minmax(250px,300px);gap:var(--game-gap,22px);min-height:0;flex:1; }
+.map-main { display:flex;flex-direction:column;min-width:0;min-height:0;border:1px solid var(--game-line,#d7c7a9);border-radius:var(--game-radius,16px);background:#344e39;overflow:hidden; }
 .map-stage { position:relative;display:flex;align-items:center;justify-content:center;min-height:0;flex:1;overflow:auto;overscroll-behavior:contain;border-radius:inherit;background:#344e39; }
 .map-sheet { position:relative;flex-shrink:0;width:100%; }.map-sheet canvas { display:block;width:100%;height:100%;image-rendering:pixelated; }
 .map-marker { position:absolute;z-index:2;display:flex;align-items:center;flex-direction:column;gap:1px;min-height:34px;min-width:34px;padding:2px;transform:translate(-50%,-50%);background:transparent;border:0;color:#fff4cf;text-shadow:0 1px 2px #15251d; }
@@ -156,9 +156,8 @@ onBeforeUnmount(() => { generation++; controller?.abort(); observer?.disconnect(
 .map-player-label { position:absolute;left:calc(100% + 5px);bottom:calc(100% - 2px);padding:3px 7px;border:1px solid #c7ddce;border-radius:10px;background:#163f3aef;color:#fff7df;font-size:11px;font-weight:600;line-height:1.3;white-space:nowrap;text-shadow:0 1px 1px #10281e; }
 .map-player.label-left .map-player-label { left:auto;right:calc(100% + 5px); }.map-player.label-below .map-player-label { top:calc(100% - 2px);bottom:auto; }
 .map-load-message { position:absolute;z-index:5;left:50%;top:50%;transform:translate(-50%,-50%);margin:0;max-width:90%;padding:16px 22px;border:1px solid #c9b989;border-radius:8px;background:#f8f0da;color:#4c513a; }.map-load-message p { margin:0 0 12px; }
-.map-sidebar { display:flex;flex-direction:column;min-height:0;border:1px solid var(--map-border);border-radius:20px;background:#f7f1e3;overflow:hidden; }
-.map-filters { display:flex;justify-content:center;gap:12px;flex-shrink:0;padding:18px 16px 14px;border-bottom:1px solid #d4c8ad; }
-.map-filters button { display:flex;align-items:center;justify-content:center;min-width:48px;min-height:44px;padding:10px 14px;border:1px solid transparent;border-radius:10px;background:transparent;color:#6e7c5e; }.map-filters button[aria-pressed="true"] { color:#fff3d0;background:#385743;border-color:#385743; }.map-filters .game-icon { width:22px;height:22px; }
+.map-sidebar { display:flex;flex-direction:column;min-height:0;border:1px solid var(--game-line,#d7c7a9);border-radius:var(--game-radius,16px);background:var(--game-paper,#fbf5e9);overflow:hidden; }
+.map-filters { align-self:center;flex-shrink:0;margin:16px; }.map-filters .game-icon { width:22px;height:22px; }
 .map-target-list { flex:1;min-height:0;overflow:auto;overscroll-behavior:contain;padding:10px; }.map-target-list button { display:flex;align-items:center;gap:10px;width:100%;min-height:52px;padding:10px;border:1px solid transparent;border-radius:9px;background:transparent;text-align:left;color:#41513c; }.map-target-list button[aria-pressed="true"] { background:#e6dbb9;border-color:#b49d61; }.map-target-list button > .game-icon { width:22px;height:22px;flex-shrink:0;color:#7e8d63; }.map-target-list button > .game-icon:last-child { width:14px;margin-left:auto; }.map-target-list strong { font-size:.9rem; }.map-empty { padding:16px;color:#7e896e;line-height:1.8;font-size:.85rem; }
 .map-target-detail { flex-shrink:0;padding:16px;border-top:1px solid var(--map-border);background:#eee6d1; }.map-target-detail h3 { margin:0 0 8px;font-size:1rem; }.map-target-detail p { margin:0 0 14px;line-height:1.75;font-size:.82rem; }.map-target-detail button { display:flex;justify-content:center;align-items:center;gap:8px;width:100%;min-height:44px; }.map-target-detail .game-icon { width:20px;height:20px; }.map-access-message { color:#866033; }.map-workspace button:focus-visible { outline:2px solid #87703d;outline-offset:2px; }
 @media(max-width:800px) { .map-layout { grid-template-columns:minmax(0,1fr);gap:14px;padding:8px 3px 12px;overflow:auto; }.map-main { min-height:340px; }.map-stage { display:block;min-height:300px;max-height:50dvh; }.map-sheet { min-width:560px; }.map-sidebar { min-height:280px;max-height:560px; }.map-target-list { max-height:240px;flex:auto; }.map-filters { padding:12px; } }

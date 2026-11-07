@@ -1,4 +1,4 @@
-import { beforeEach, describe, it, expect, vi } from "vitest";
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { useSession } from "../src/shared/session";
 import { api } from "../src/shared/api";
@@ -73,4 +73,74 @@ it("ignores a late world response from a previously selected classroom", async (
   await refresh;
   expect(store.world).toBeNull();
   get.mockRestore();
+});
+
+describe("classroom switching", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    sessionStorage.clear();
+  });
+  afterEach(() => vi.restoreAllMocks());
+  function context() {
+    const store = useSession();
+    store.user = { id: 1, name: "同学", email: "student@example.test", role: "student" };
+    store.classes = [1, 2, 3].map(id => ({ id, name: `班级${id}`, teacher_id: 4 }));
+    store.classroomId = 1;
+    store.world = { player: { tile_x: 1, tile_y: 1, map_key: "town_hub", direction: "down" }, npcs: [], quests: [], chapters: [], flags: ["first"] };
+    store.open({ kind: "classroom" });
+    return store;
+  }
+  it("keeps the current class and page if the new class cannot load", async () => {
+    const store = context();
+    vi.spyOn(api, "get").mockRejectedValueOnce(new Error("网络中断"));
+    await expect(store.switchClassroom(2)).rejects.toThrow("网络中断");
+    expect(store.classroomId).toBe(1);
+    expect(store.world?.flags).toEqual(["first"]);
+    expect(store.workspace).toEqual({ kind: "classroom" });
+  });
+  it("atomically changes worlds and ignores the previous request", async () => {
+    const store = context();
+    let first!: (value: unknown) => void;
+    const get = vi.spyOn(api, "get").mockImplementation(path => path.endsWith("=2")
+      ? new Promise(resolve => { first = resolve; }) as Promise<never>
+      : Promise.resolve({ ...store.world, flags: ["third"] }) as Promise<never>);
+    const pending = store.switchClassroom(2);
+    await vi.waitFor(() => expect(get).toHaveBeenCalledWith("/world?classroom_id=2"));
+    await store.switchClassroom(3);
+    first({ ...store.world, flags: ["second"] });
+    expect(await pending).toBe(false);
+    expect(store.classroomId).toBe(3);
+    expect(store.world?.flags).toEqual(["third"]);
+    expect(store.workspace).toEqual({ kind: "classroom" });
+  });
+  it("does not switch after logout or accept a class outside membership", async () => {
+    const store = context();
+    await expect(store.switchClassroom(7)).rejects.toThrow("请先加入");
+    let resolve!: (value: unknown) => void;
+    const get = vi.spyOn(api, "get").mockReturnValue(new Promise(r => { resolve = r; }) as Promise<never>);
+    const pending = store.switchClassroom(2);
+    await vi.waitFor(() => expect(get).toHaveBeenCalledWith("/world?classroom_id=2"));
+    store.reset();
+    resolve({ flags: ["stale"] });
+    expect(await pending).toBe(false);
+    expect(store.world).toBeNull();
+    expect(store.classroomId).toBeNull();
+  });
+  it("ignores a switch superseded by a full session reload", async () => {
+    const store = context();
+    let resolve!: (value: unknown) => void;
+    const get = vi.spyOn(api, "get").mockImplementation(path => {
+      if (path === "/auth/me") return Promise.resolve(store.user) as Promise<never>;
+      if (path === "/classrooms") return Promise.resolve(store.classes) as Promise<never>;
+      if (path.endsWith("=2")) return new Promise(done => { resolve = done; }) as Promise<never>;
+      return Promise.resolve({ ...store.world, flags: ["reloaded"] }) as Promise<never>;
+    });
+    const pending = store.switchClassroom(2);
+    await vi.waitFor(() => expect(get).toHaveBeenCalledWith("/world?classroom_id=2"));
+    await store.load();
+    resolve({ ...store.world, flags: ["stale-switch"] });
+    expect(await pending).toBe(false);
+    expect(store.classroomId).toBe(1);
+    expect(store.world?.flags).toEqual(["reloaded"]);
+  });
 });

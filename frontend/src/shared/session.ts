@@ -49,6 +49,7 @@ export const useSession = defineStore("session", () => {
   let readingProgressTask: Promise<unknown> = Promise.resolve();
   let latestReading: { activityId: string; pageNo: number } | null = null;
   let loadGeneration = 0;
+  let classroomSwitchGeneration = 0;
   async function load() {
     const generation = ++loadGeneration;
     const token = api.token();
@@ -84,6 +85,24 @@ export const useSession = defineStore("session", () => {
     const result = await api.get<World>(`/world?classroom_id=${id}`);
     if (classroomId.value === id && user.value?.id === owner)
       world.value = result;
+  }
+  async function switchClassroom(id: number) {
+    if (!classes.value.some(item => item.id === id)) throw new Error("请先加入这个班级。");
+    if (id === classroomId.value) return true;
+    const generation = ++classroomSwitchGeneration;
+    const owner = user.value?.id, previous = classroomId.value, token = api.token();
+    const loadingGeneration = ++loadGeneration;
+    const current = () => generation === classroomSwitchGeneration && loadingGeneration === loadGeneration && owner === user.value?.id && previous === classroomId.value && token === api.token();
+    await readingProgressTask.catch(() => undefined);
+    if (!current()) return false;
+    const result = await api.get<World>(`/world?classroom_id=${id}`);
+    if (!current()) return false;
+    classroomId.value = id;
+    world.value = result;
+    drafts.value = {};
+    trackedQuest.value = "";
+    workspaceHistory.value = [];
+    return true;
   }
   async function event(quest: Quest, node: QuestNode, evidence: EventEvidence) {
     const id = classroomId.value,
@@ -273,6 +292,7 @@ export const useSession = defineStore("session", () => {
   });
   function reset() {
     loadGeneration++;
+    classroomSwitchGeneration++;
     user.value = null;
     classes.value = [];
     classroomId.value = null;
@@ -319,6 +339,7 @@ export const useSession = defineStore("session", () => {
     guideTo,
     load,
     refresh,
+    switchClassroom,
     event,
     activity,
     open,

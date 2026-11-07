@@ -1,8 +1,8 @@
 <template>
   <section class="assistant-panel" aria-label="课程助教">
-    <header>
-      <div>
-        <p class="eyebrow">当前学习助教</p>
+    <header class="assistant-heading">
+      <div class="assistant-identity">
+        <span class="assistant-emblem"><GameIcon name="message" /></span>
         <h3>{{ roleName }}</h3>
       </div>
       <span
@@ -21,7 +21,7 @@
       }}
     </p>
     <p class="assistant-intro">
-      围绕当前内容提问，获取概念与错误提示。按自己的节奏阅读，需要时再发送问题。
+      对当前内容有疑问时，可以在这里提问。
     </p>
     <p v-if="!allowed" class="notice">
       本次活动不允许使用助教，可以继续独立阅读或练习。

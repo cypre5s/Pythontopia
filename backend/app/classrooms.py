@@ -37,8 +37,10 @@ def own_classroom(db, user, classroom_id):
     return classroom
 
 
-def classroom_payload(item, user):
+def classroom_payload(item, user, teacher_name=None):
     payload = {"id": item.id, "name": item.name, "teacher_id": item.teacher_id}
+    if teacher_name is not None:
+        payload["teacher_name"] = teacher_name
     if item.teacher_id == user.id or user.role == "admin":
         payload["join_code"] = item.join_code
     return payload
@@ -47,10 +49,10 @@ def classroom_payload(item, user):
 @router.get("/classrooms")
 def list_classrooms(db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
     memberships = select(Membership.classroom_id).where(Membership.user_id == user.id)
-    query = select(Classroom)
+    query = select(Classroom, User.name).join(User, User.id == Classroom.teacher_id)
     if user.role != "admin":
         query = query.where((Classroom.teacher_id == user.id) | Classroom.id.in_(memberships))
-    return [classroom_payload(item, user) for item in db.scalars(query)]
+    return [classroom_payload(item, user, name) for item, name in db.execute(query)]
 
 
 class ClassroomInput(BaseModel):
@@ -63,7 +65,7 @@ def create_classroom(body: ClassroomInput, db: Annotated[Session, Depends(get_db
     item = Classroom(name=body.name.strip(), teacher_id=user.id, join_code=secrets.token_urlsafe(9))
     db.add(item)
     db.commit()
-    return classroom_payload(item, user)
+    return classroom_payload(item, user, user.name)
 
 
 class JoinInput(BaseModel):
@@ -79,7 +81,8 @@ def join_classroom(body: JoinInput, db: Annotated[Session, Depends(get_db)], use
     if not db.get(Membership, (user.id, classroom.id)):
         db.add(Membership(user_id=user.id, classroom_id=classroom.id))
         db.commit()
-    return classroom_payload(classroom, user)
+    teacher = db.get(User, classroom.teacher_id)
+    return classroom_payload(classroom, user, teacher.name if teacher else None)
 
 
 @router.delete("/teacher/classrooms/{classroom_id}/members/{student_id}")

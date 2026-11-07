@@ -5,7 +5,7 @@
   >
     <nav
       v-if="activity && compact"
-      class="workspace-view-switch"
+      class="workspace-view-switch game-segmented"
       aria-label="练习与助教视图"
     >
       <button
@@ -32,7 +32,6 @@
       :aria-busy="loading"
     >
       <header class="content-heading">
-        <p class="eyebrow">练习活动</p>
         <h2>{{ activity?.title ?? "正在读取练习" }}</h2>
         <div class="learning-meta">
           <span>正式提交后记录成绩</span

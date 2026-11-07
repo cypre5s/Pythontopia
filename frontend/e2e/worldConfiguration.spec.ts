@@ -329,7 +329,7 @@ test("map preview, filters, WASD, library doors and cross-map guidance share one
   });
   const readingLibrary = page.getByRole("dialog", { name: "游戏工作区", exact: true });
   await expect(readingLibrary).toBeVisible({ timeout: 20_000 });
-  await expect(readingLibrary).toContainText("已开放资料");
+  await expect(readingLibrary.getByRole("heading", { name: "小镇图书馆", exact: true })).toBeVisible();
   await expect(readingLibrary.getByRole("button", { name: /阅读$/ }).first()).toBeVisible();
   const atShelf = (await world()).player;
   expect(Math.abs(atShelf.tile_x - 4) + Math.abs(atShelf.tile_y - 4)).toBeGreaterThan(2);

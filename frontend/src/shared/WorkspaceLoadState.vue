@@ -10,6 +10,6 @@ defineProps<{ error?: Error }>();
 function reload() { window.location.reload(); }
 </script>
 <style scoped>
-.workspace-load-state { margin:24px;padding:32px;background:#f7efdc;color:#493b28;border:1px solid #bca77d;border-radius:12px; }
+.workspace-load-state { margin:0;padding:32px;background:var(--game-paper,#fbf5e9);color:var(--game-ink,#513b28);border:1px solid var(--game-line,#d7c7a9);border-radius:var(--game-radius,16px); }
 .workspace-load-state h2 { margin-top:0; }.workspace-load-state p { line-height:1.8; }
 </style>

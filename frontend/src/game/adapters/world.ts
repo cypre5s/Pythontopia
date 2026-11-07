@@ -16,6 +16,7 @@ export interface WorldHandle {
   interact(): void;
   guide(npcKey: string): void;
   mute(value: boolean): void;
+  setVolume(value: number): void;
   getMapPosition?(): Player | undefined;
 }
 export interface WorldCallbacks {
@@ -608,6 +609,9 @@ export function createWorld(
           .catch(() =>
             callbacks.error("浏览器未允许播放音乐，请再次切换音乐选项。"),
           );
+    },
+    setVolume(value) {
+      ambient.volume = Number.isFinite(value) ? Math.min(1, Math.max(0, value)) : 0.15;
     },
     getMapPosition() { return scene?.player ? scene.mapPosition() : undefined; },
   };

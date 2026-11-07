@@ -1,0 +1,142 @@
+/* Game workspaces only. Teacher administration has an independent design system. */
+.game-workspace {
+  --game-forest: #284b43;
+  --game-forest-deep: #203b32;
+  --game-paper: #fbf5e9;
+  --game-paper-raised: #fffaf0;
+  --game-gold: #e6be76;
+  --game-line: #d7c7a9;
+  --game-ink: #513b28;
+  --game-muted: #7c6b55;
+  --game-radius: 16px;
+  --game-control-radius: 8px;
+  --game-gap: 22px;
+  --game-focus: #b7812e;
+  --game-scroll-thumb: #a99b7e;
+  color: var(--game-ink);
+  color-scheme: light;
+}
+.overlay-host.game-workspace {
+  position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
+  padding: max(24px, env(safe-area-inset-top)) max(clamp(20px, 2vw, 40px), env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(clamp(20px, 2vw, 40px), env(safe-area-inset-left));
+  background: #10291f80;
+  backdrop-filter: blur(4px);
+}
+.game-workspace > .workspace-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+.game-workspace .workspace-topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-shrink: 0;
+  min-height: 70px;
+  height: auto;
+  padding: 0 4px 20px;
+  border: 0;
+  background: transparent;
+  color: #fff2d6;
+}
+.game-workspace .game-workspace-title { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.game-workspace .game-workspace-title > .game-icon { width: 42px; height: 42px; color: var(--game-gold); }
+.game-workspace .game-workspace-title h2 { margin: 0; color: #fff2d6; font-size: 1.7rem; font-weight: 650; line-height: 1.4; }
+.game-workspace .workspace-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 10px; margin-left: auto; }
+.game-workspace .workspace-topbar button {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; padding: 9px 18px; border: 1px solid #a9987170; border-radius: 24px;
+  background: #203b32e8; color: #f5e7ce; font-size: .875rem; font-weight: 500; white-space: nowrap;
+  box-shadow: 0 2px 8px #10231b25;
+}
+.game-workspace .workspace-topbar button:hover { color: #fff2d6; background: #355646; }
+.game-workspace .workspace-topbar .workspace-back { background: #203b32b8; }
+.game-workspace .workspace-topbar button > .game-icon { width: 18px; height: 18px; }
+.game-workspace .workspace-topbar button > span { display: inline; }
+.game-workspace .workspace-topbar :is(button, a):focus-visible { outline-color: #ffe8aa; box-shadow: none; }
+
+/* Keep native semantics, labels and keyboard behavior; share the visual treatment. */
+.game-workspace, .game-workspace * { scrollbar-width: thin; scrollbar-color: var(--game-scroll-thumb) transparent; }
+.game-workspace ::-webkit-scrollbar { width: 8px; height: 8px; }
+.game-workspace ::-webkit-scrollbar-track, .game-workspace ::-webkit-scrollbar-corner { background: transparent; }
+.game-workspace ::-webkit-scrollbar-thumb { background: var(--game-scroll-thumb); border: 2px solid transparent; background-clip: padding-box; border-radius: 8px; }
+.game-workspace ::-webkit-scrollbar-thumb:hover { background-color: #83745c; }
+.game-workspace :is(button, a, input, textarea, select, summary, [tabindex]):focus-visible { outline: 3px solid var(--game-focus); outline-offset: 3px; box-shadow: none; }
+.game-workspace button { min-height: 44px; border-radius: var(--game-control-radius); }
+.game-workspace button:disabled { cursor: not-allowed; opacity: .55; }
+.game-workspace :is(input:not([type="radio"]):not([type="checkbox"]):not([type="range"]), textarea, select) {
+  min-height: 44px; min-width: 0; max-width: 100%; padding: 10px var(--game-field-padding-end, 14px) 10px 14px;
+  border: 1px solid var(--game-line); border-radius: var(--game-control-radius);
+  color: var(--game-ink); background-color: #fffdf6; font: inherit; line-height: 1.5;
+}
+.game-workspace :is(input, textarea, select):disabled { opacity: .55; cursor: not-allowed; }
+.game-workspace input::placeholder, .game-workspace textarea::placeholder { color: var(--game-muted); opacity: .85; }
+.game-workspace select {
+  --game-field-padding-end: 2.6rem;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%237c6b55' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-position: right .85rem center; background-repeat: no-repeat; background-size: 16px;
+}
+.game-workspace select option { color: var(--game-ink); background: #fffdf6; }
+.game-workspace input:is([type="radio"], [type="checkbox"]):not([role="switch"]) {
+  appearance: none; flex: 0 0 20px; width: 20px; height: 20px; min-height: 20px;
+  margin: 0; padding: 0; border: 1.5px solid #ab9876; border-radius: 5px;
+  background: #fffdf6; cursor: pointer; vertical-align: middle;
+}
+.game-workspace input[type="radio"]:not([role="switch"]) { border-radius: 50%; }
+.game-workspace input[type="radio"]:checked { border-color: var(--game-forest); background: var(--game-forest); box-shadow: inset 0 0 0 4px #fffdf6; }
+.game-workspace input[type="checkbox"]:not([role="switch"]):checked {
+  border-color: var(--game-forest); background-color: var(--game-forest);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' viewBox='0 0 24 24' fill='none' stroke='%23fff4d8' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m5 12 4 4L19 6'/%3E%3C/svg%3E");
+  background-position: center; background-size: 16px; background-repeat: no-repeat;
+}
+.game-workspace input[type="checkbox"]:not([role="switch"]):indeterminate { background: linear-gradient(var(--game-forest), var(--game-forest)) center / 10px 2px no-repeat #fffdf6; }
+.game-workspace input[type="range"] { appearance: none; min-height: 44px; margin: 0; padding: 0; border: 0; background: transparent; cursor: pointer; accent-color: var(--game-forest); }
+.game-workspace input[type="range"]::-webkit-slider-runnable-track { height: 6px; border-radius: 8px; background: #d8ceb9; }
+.game-workspace input[type="range"]::-webkit-slider-thumb { appearance: none; width: 18px; height: 18px; margin-top: -6px; border: 2px solid #fff8e9; border-radius: 50%; background: var(--game-forest); box-shadow: 0 0 0 1px #56705d; }
+.game-workspace input[type="range"]::-moz-range-track { height: 6px; border-radius: 8px; background: #d8ceb9; }
+.game-workspace input[type="range"]::-moz-range-thumb { width: 15px; height: 15px; border: 2px solid #fff8e9; border-radius: 50%; background: var(--game-forest); }
+.game-workspace .game-switch { position: relative; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; min-width: 60px; min-height: 44px; }
+.game-workspace .game-switch input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; cursor: pointer; margin: 0; }
+.game-workspace .game-switch-track { width: 46px; height: 26px; border-radius: 18px; background: #c9c5b4; box-shadow: inset 0 1px 2px #3d3f242b; pointer-events: none; transition: background .16s; }
+.game-workspace .game-switch-track::after { content: ""; display: block; width: 20px; height: 20px; margin: 3px; border-radius: 50%; background: #fffdf6; box-shadow: 0 1px 3px #383e2f40; transform: translateX(0); transition: transform .16s; }
+.game-workspace .game-switch input:checked + .game-switch-track { background: var(--game-forest); }
+.game-workspace .game-switch input:checked + .game-switch-track::after { transform: translateX(20px); }
+.game-workspace .game-switch input:focus-visible + .game-switch-track { outline: 3px solid var(--game-focus); outline-offset: 4px; }
+.game-workspace .game-switch input:disabled + .game-switch-track { opacity: .55; }
+.game-workspace .game-segmented { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; padding: 4px; border: 1px solid var(--game-line); border-radius: 12px; background: #e9dfca; }
+.game-workspace .game-segmented button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 9px 16px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #6d624e; box-shadow: none; }
+.game-workspace .game-segmented button[aria-pressed="true"] { color: #533f29; border-color: #d4b475; background: linear-gradient(110deg, #f4dfab, #ead09a); box-shadow: inset 0 0 0 1px #fff0c2; font-weight: 600; }
+.game-workspace .game-segmented button:hover:not(:disabled):not([aria-pressed="true"]) { background: #fffaf080; }
+.game-workspace .town-primary, .game-workspace .primary { color: #fff3d7; background: var(--game-forest); border-color: #234438; }
+.game-workspace .town-primary:hover, .game-workspace .primary:hover { background: #3d6251; }
+.game-workspace .town-secondary { color: #624a32; border-color: #c9b18d; background: var(--game-paper-raised); }
+.game-workspace .town-sidebar :focus-visible { outline-color: #ffe8aa; }
+@media (max-width: 720px) {
+  .overlay-host.game-workspace { padding: max(14px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); }
+  .game-workspace .workspace-topbar { gap: 12px; min-height: 64px; padding-bottom: 16px; flex-wrap: wrap; }
+  .game-workspace .game-workspace-title { gap: 10px; }.game-workspace .game-workspace-title > .game-icon { width: 32px; height: 32px; }
+  .game-workspace .game-workspace-title h2 { font-size: 1.4rem; }
+  .game-workspace .workspace-actions { gap: 6px; }.game-workspace .workspace-topbar button { padding: 9px 12px; }
+  .game-workspace .workspace-topbar kbd { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .game-workspace .game-switch-track, .game-workspace .game-switch-track::after { transition: none; } }
+html[data-reduced-motion="true"] .game-workspace .game-switch-track, html[data-reduced-motion="true"] .game-workspace .game-switch-track::after { transition: none; }
+@media (forced-colors: active) {
+  .game-workspace input:is([type="radio"], [type="checkbox"]):not([role="switch"]) { appearance: auto; }
+  .game-workspace select { appearance: auto; background-image: none; }
+  .game-workspace .game-switch input { position: static; appearance: auto; opacity: 1; width: 44px; height: 44px; }
+  .game-workspace .game-switch-track { display: none; }
+}

@@ -5,7 +5,7 @@
   >
     <nav
       v-if="activity && compact"
-      class="workspace-view-switch"
+      class="workspace-view-switch game-segmented"
       aria-label="课程与助教视图"
     >
       <button
@@ -33,7 +33,6 @@
       :aria-busy="loading"
     >
       <header class="content-heading">
-        <p class="eyebrow">{{ activity ? "教学活动" : "图书馆阅读" }}</p>
         <h2>{{ activity?.title ?? material?.title ?? "正在读取课程" }}</h2>
         <div v-if="material" class="learning-meta">
           <span>{{ materialLabel }}</span

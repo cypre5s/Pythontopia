@@ -1,5 +1,27 @@
 # 安装、启动与排查
 
+## 游戏界面统一规范（2026-11-07）
+
+原本地15176已更新整套统一工作区，API18083沿用，刷新浏览器即可查看；独立15177验收后停止、卷保留。本轮只更新前端容器，数据库备份位于.tmp/pre-game-design-20261107.sql，原进度与成绩完整字段核对一致。
+
+修改游戏工作区前阅读[设计索引](design/README.md)与[游戏界面规范](design/game-interface.md)。共享页头和外壳位于OverlayHost.vue，公共令牌与原生控件位于gameDesign.css，目录/正文及阅读/练习布局分别由townWorkspaces.css与learningUi.css承担。不要重新添加旧workspace尺寸规则或将游戏控件样式作用于教师后台。
+
+已导入课程媒体的独立环境设置E2E_URL、E2E_TEACHER_EMAIL/PASSWORD、PLAYWRIGHT_CHANNEL=chrome、E2E_COURSE_MEDIA_IMPORTED=1后，在frontend执行 `npx playwright test gameDesign.spec.ts townWorkspaces.spec.ts uiUsability.spec.ts storyChapter.spec.ts worldConfiguration.spec.ts --project=desktop --workers=1 --output=.tmp-game-design-e2e`。新增设计专项走真实主线进入PDF和练习，检查七类工作区页头、透明间隙、控件和200%字号；单纯控件样式fixture不代表已新增学生多选题。结果与截图复核记录见acceptance.md。
+
+## 图书馆、班级与设置工作区（2026-11-07）
+
+原本地入口仍为http://127.0.0.1:15176/，API18083，已更新本轮界面；独立验收15177/API18084使用同一镜像验证后停止、数据卷保留。原服务数据库备份位于忽略目录.tmp/pre-town-workspaces-20261107.sql，更新没有重导入课程媒体或新增主线。
+
+本轮统一三页近满屏深绿/纸面/暖金布局与单一主标题。图书馆按章节目录组织已授权资料，提供搜索和课件/视频筛选，返回阅读列表时恢复搜索、章节和滚动位置。我的班级展示真实教师姓名和任务进度，切换先读取目标存档再提交客户端选择，失败保留当前班级；加入后由用户显式切换。设置使用账户优先的分类标签，音量滑块直接控制环境音乐，字号/减少动效/音量为本机偏好；许可与来源在关于分类，不再从设置跳转班级或材料。
+
+浏览器专项在独立、已导入真实课程媒体的部署中运行。设置E2E_URL指向该部署、显式E2E_TEACHER_EMAIL/PASSWORD、PLAYWRIGHT_CHANNEL=chrome和E2E_COURSE_MEDIA_IMPORTED=1；不要将账号或令牌写入测试文件。进入frontend后运行：
+
+```sh
+npx playwright test townWorkspaces.spec.ts --project=desktop --workers=1 --output=.tmp-town-workspaces-e2e
+```
+
+该专项自行建立验收班级与学生，检查图书馆目录/搜索/筛选与PDF返回位置、当前班级进度/切换/加入、账户优先设置/键盘分类/真实音量、字号和关于内容，并检查工作区切换复用同一世界画布、零附带模型调用。视觉与运行结果以acceptance.md对应条目为准，命令或用例发现成功不代表真实浏览器验收通过。GET /classrooms新增teacher_name仅需当前代码，无数据库迁移；学生响应不包含加入码或教师邮箱。
+
 ## 课程媒体导入（2026-11-07）
 
 最终本地状态：原15176/API18083已完成7PDF+34视频接入并运行，原材料186..192和561页编号保留；视频193..226。重启无需重导入。独立验收15177/API18084已停止，卷保留；原包未改，SQL备份在.tmp/pre-course-media-final-20261107.sql。
