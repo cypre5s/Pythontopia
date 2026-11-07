@@ -1,4 +1,4 @@
-"""Private versioned local/S3 storage and bounded material processing jobs."""
+"""Private current-material local/S3 storage and bounded material processing jobs."""
 
 from __future__ import annotations
 
@@ -22,12 +22,12 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select, update
+from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from .auth import current_user, require_teacher
 from .db import SessionLocal, get_db
-from .models import Material, MaterialVersion, User
+from .models import Material, User
 
 router = APIRouter(tags=["materials"])
 MAX_UPLOAD = int(os.getenv("REBORN_MAX_UPLOAD_BYTES", str(128 * 1024 * 1024)))
@@ -175,7 +175,7 @@ async def upload_material(
     if material_id and (not material or (material.owner_id != user.id and user.role != "admin")):
         raise HTTPException(403, "只能更新自己上传的资料")
     if material and (material.chapter_id != chapter_id or material.kind != KINDS[suffix]):
-        raise HTTPException(422, "新版本必须保留章节与材料类型")
+        raise HTTPException(422, "更新必须保留章节与材料类型")
     with tempfile.TemporaryDirectory(prefix="upload-", dir=storage_root()) as tmp:
         path = Path(tmp) / ("source" + suffix)
         size, digest = 0, hashlib.sha256()
@@ -195,40 +195,35 @@ async def upload_material(
         material = Material(chapter_id=chapter_id, title=title.strip(), kind=KINDS[suffix], owner_id=user.id)
         db.add(material)
         db.flush()
-    number = (db.scalar(select(func.max(MaterialVersion.version)).where(MaterialVersion.material_id == material.id)) or 0) + 1
-    version = MaterialVersion(
-        material_id=material.id,
-        version=number,
-        status="queued",
-        storage_key=key,
-        content={"filename": name, "size": size, "sha256": digest.hexdigest(), "pages": []},
-    )
-    db.add(version)
+    material.title = title.strip()
+    material.status = "queued"
+    material.error = None
+    material.storage_key = key
+    material.content = {"filename": name, "size": size, "sha256": digest.hexdigest(), "pages": []}
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(409, "资料同时更新，请刷新后重试")
-    return {"id": material.id, "version": number, "status": version.status, "title": material.title}
+    return {"id": material.id, "status": material.status, "title": material.title}
 
 
 @router.get("/teacher/materials")
 def teacher_materials(user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)]):
-    query = select(Material, MaterialVersion).join(MaterialVersion)
+    query = select(Material)
     if user.role != "admin":
         query = query.where(Material.owner_id == user.id)
     return [
         {
-            "id": m.id,
-            "title": m.title,
-            "chapter_id": m.chapter_id,
-            "kind": m.kind,
-            "version": v.version,
-            "status": v.status,
-            "error": v.error,
-            "pages": len(v.content.get("pages", [])),
+            "id": material.id,
+            "title": material.title,
+            "chapter_id": material.chapter_id,
+            "kind": material.kind,
+            "status": material.status,
+            "error": material.error,
+            "pages": len(material.content.get("pages", [])),
         }
-        for m, v in db.execute(query.order_by(Material.id, MaterialVersion.version.desc()))
+        for material in db.scalars(query.order_by(Material.id))
     ]
 
 
@@ -251,10 +246,9 @@ def byte_range(value: str | None, size: int) -> tuple[int, int, bool]:
     return start, end, True
 
 
-@router.get("/materials/{material_id}/versions/{version}/file")
+@router.get("/materials/{material_id}/file")
 def material_file(
     material_id: int,
-    version: int,
     classroom_id: int,
     request: Request,
     user: Annotated[User, Depends(current_user)],
@@ -262,8 +256,7 @@ def material_file(
 ):
     from .courses import authorize_material
 
-    material = authorize_material(db, user, classroom_id, material_id, version)
-    item = db.scalar(select(MaterialVersion).where(MaterialVersion.material_id == material.id, MaterialVersion.version == version))
+    item = authorize_material(db, user, classroom_id, material_id)
     if not item or not item.storage_key:
         raise HTTPException(404, "原媒体文件缺失")
     if item.status != "ready":
@@ -448,16 +441,17 @@ def convert_presentation(source: Path, tmp: Path) -> Path:
     return result
 
 
-def process_material(version_id: int):
+def process_material(material_id: int):
     with SessionLocal() as db:
-        changed = db.execute(
-            update(MaterialVersion).where(MaterialVersion.id == version_id, MaterialVersion.status == "queued").values(status="processing")
-        )
+        claimed = db.execute(
+            update(Material).where(Material.id == material_id, Material.status == "queued")
+            .values(status="processing").returning(Material.storage_key, Material.content)
+        ).first()
         db.commit()
-        if not changed.rowcount:
+        if not claimed:
             return
-        row = db.get(MaterialVersion, version_id)
-        key, metadata = row.storage_key, dict(row.content)
+        key, content = claimed
+        metadata = dict(content)
     try:
         with tempfile.TemporaryDirectory(prefix="parse-", dir=storage_root()) as tmp_name:
             tmp = Path(tmp_name)
@@ -479,20 +473,23 @@ def process_material(version_id: int):
         status = "failed"
         error = str(exc) if isinstance(exc, ValueError) else "资料处理失败，请检查存储或处理依赖"
     with SessionLocal() as db:
-        row = db.get(MaterialVersion, version_id)
-        row.status, row.error, row.content = status, error, metadata
+        # A replacement upload may have arrived while this file was processing.
+        # The unique storage key identifies the claimed file, without retaining history.
+        db.execute(update(Material).where(
+            Material.id == material_id, Material.storage_key == key, Material.status == "processing"
+        ).values(status=status, error=error, content=metadata))
         db.commit()
 
 
 def _recover_material_jobs():
     with SessionLocal() as db:
-        db.execute(update(MaterialVersion).where(MaterialVersion.status == "processing").values(status="queued"))
+        db.execute(update(Material).where(Material.status == "processing").values(status="queued"))
         db.commit()
 
 
 def _material_job_ids():
     with SessionLocal() as db:
-        return list(db.scalars(select(MaterialVersion.id).where(MaterialVersion.status == "queued").limit(5)))
+        return list(db.scalars(select(Material.id).where(Material.status == "queued").limit(5)))
 
 
 async def material_worker():
@@ -503,8 +500,8 @@ async def material_worker():
                 await asyncio.to_thread(_recover_material_jobs)
                 recovered = True
             ids = await asyncio.to_thread(_material_job_ids)
-            for version_id in ids:
-                await asyncio.to_thread(process_material, version_id)
+            for material_id in ids:
+                await asyncio.to_thread(process_material, material_id)
             delay = 1
         except SQLAlchemyError:
             logging.getLogger(__name__).warning("Material worker database unavailable; retrying in %ss", delay)

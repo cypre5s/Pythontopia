@@ -11,7 +11,7 @@ from sqlalchemy.orm import sessionmaker
 from app.auth import issue
 from app.db import Base, get_db
 from app.main import app
-from app.models import User, Classroom, Membership, ChapterRelease, PlayerPosition, LearningEvent, NodeState, StorySession
+from app.models import User, Classroom, Membership, ChapterRelease, PlayerPosition, LearningEvent, NodeState, StorySession, QuestDefinition
 from app.seed import seed
 
 
@@ -33,6 +33,9 @@ def test_postgres_duplicate_events_under_contention():
         Base.metadata.create_all(engine)
         with factory() as db:
             seed(db)
+            definition = {"id": "contention-talk", "title": "Contention", "chapter_id": 179, "kind": "side",
+                          "nodes": [{"id": "greet", "type": "TALK_TO_NPC", "title": "Talk", "target": "mayor_py", "dependencies": []}], "effects": []}
+            db.add(QuestDefinition(id=definition["id"], chapter_id=179, title="Contention", definition=definition))
             teacher = User(email="teacher@concurrency.test", name="teacher", role="teacher", password_hash="unused")
             student = User(email="student@concurrency.test", name="student", role="student", password_hash="unused")
             db.add_all([teacher, student])
@@ -41,7 +44,7 @@ def test_postgres_duplicate_events_under_contention():
             db.add(classroom)
             db.flush()
             db.add(Membership(user_id=student.id, classroom_id=classroom.id))
-            db.add(ChapterRelease(classroom_id=classroom.id, chapter_id=179, version=1, status="published"))
+            db.add(ChapterRelease(classroom_id=classroom.id, chapter_id=179, status="published"))
             db.add(PlayerPosition(user_id=student.id, classroom_id=classroom.id, map_key="town_hub", tile_x=22, tile_y=34, direction="up"))
             db.commit()
             token = issue(db, student)["access_token"]
@@ -56,7 +59,7 @@ def test_postgres_duplicate_events_under_contention():
         client = TestClient(app)
         assert client.get(f"/api/world?classroom_id={cid}", headers=headers).status_code == 200
         event_id = str(uuid4())
-        payload = {"classroom_id": cid, "event_id": event_id, "quest_id": "arrival", "node_id": "greet", "evidence": {"npc_key": "mayor_py"}}
+        payload = {"classroom_id": cid, "event_id": event_id, "quest_id": "contention-talk", "node_id": "greet", "evidence": {"npc_key": "mayor_py"}}
 
         # Do not enter lifespan: the service workers use the live app database and are unrelated to this isolated schema.
         def send(_):
@@ -74,8 +77,6 @@ def test_postgres_duplicate_events_under_contention():
         with factory() as db:
             assert db.scalar(select(func.count()).select_from(LearningEvent)) == 1
             assert db.scalar(select(func.count()).select_from(NodeState)) == 1
-            # A new student receives version2; the first student's version1 stays pinned.
-            db.get(ChapterRelease, (cid, 179)).version = 2
             second = User(email="story@concurrency.test", name="story student", role="student", password_hash="unused")
             db.add(second)
             db.flush()

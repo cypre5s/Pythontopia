@@ -1,5 +1,53 @@
 # 安装、启动与排查
 
+## 课程媒体导入（2026-11-07）
+
+最终本地状态：原15176/API18083已完成7PDF+34视频接入并运行，原材料186..192和561页编号保留；视频193..226。重启无需重导入。独立验收15177/API18084已停止，卷保留；原包未改，SQL备份在.tmp/pre-course-media-final-20261107.sql。
+
+先使用最新API镜像并完成Alembic/seed。媒体文件保存在独立私有存储卷，不放Git或frontend/public；API镜像仅增加可信video_manifest.json与video_transcripts.json，不包含884MB压缩包或视频文件。当前资料不再需要原包常驻挂载，正常启动仍按原Compose命令。
+
+导入前备份数据库并暂时停止API/Web写入，保留db。以下为本机PowerShell从仓库根目录执行的实际导入方式；只读挂载原包，运行一次性容器并复用当前项目的数据库/存储卷：
+
+```powershell
+$courseMediaArchive = (Resolve-Path (Read-Host '课程媒体包完整路径')).Path
+docker compose --env-file .tmp/story-qa.env -p pythontopia-story-qa -f deploy/compose.yml stop api web
+docker compose --env-file .tmp/story-qa.env -p pythontopia-story-qa -f deploy/compose.yml run --rm --no-deps -v "${courseMediaArchive}:/tmp/course-pack-43-media.tar.gz:ro" api python -m app.course_media /tmp/course-pack-43-media.tar.gz
+docker compose --env-file .tmp/story-qa.env -p pythontopia-story-qa -f deploy/compose.yml up -d --no-build
+```
+
+预期输出7份PDF、561页、34个补充视频。导入会校验与暂存约919MB文件，需预留足够临时/私有存储空间；当前默认上限压缩1GiB、总展开1GiB、单文件128MiB。相同原包重复运行保留同一视频材料ID，校验既有文件后复用；正常重启seed保留PDF类型、原页面和资料库发布信息。不自动导入或创建活动、主线和成绩。导入失败后不要在未核对数据库/存储状态时宣布媒体就绪。
+
+真实课程媒体浏览器专项仅在已导入媒体的独立验收环境运行，显式设置E2E_URL、E2E_TEACHER_EMAIL/PASSWORD、PLAYWRIGHT_CHANNEL=chrome、E2E_COURSE_MEDIA_IMPORTED=1；全34视频首帧检查另设E2E_ALL_COURSE_VIDEOS=1，再运行 `npx playwright test courseMediaPack.spec.ts rebornJourney.spec.ts storyChapter.spec.ts --project=desktop --workers=1 --output=.tmp-course-media-e2e`。测试会创建独立班级并开放7章，不修改原班级；不将跳过或未逐段完整播放的视频计为完整播放验收。
+
+资料库按原班级章节发布规则展示：只开放第一章时为该章PDF+3个补充视频；完整7章均开放的验收班可见7PDF+34视频。不会为接入材料修改原班级开放日期或前置，也不会恢复旧任务。
+
+
+## 当前唯一主线（2026-11-07）
+
+当前仅保留“初来小镇：第一堂 Python 课”（arrival），不再部署旧第二章委托。课程七章/65知识点/材料仍保留，旧学习成绩不清空。验证使用 `npx playwright test rebornJourney.spec.ts storyChapter.spec.ts --project=desktop --workers=1 --output=.tmp-only-arrival-e2e`：前者覆盖唯一主线完整学习/练习/测试、开放其他章不恢复旧任务、完成进度和换账号；后者覆盖同一主线的中断/刷新/续读/重复拜访等不同教学场景。不再要求保留已退出产品的第二章任务来满足历史“两章旅程”验收。以下旧旅程结果为历史记录。
+
+
+## 当前配置导入与迁移（2026-11-07）
+
+本轮完成后原预览 http://127.0.0.1:15176 （API18083）已更新并运行，账号和学生学习历史保留。独立验收15177/API18084已停止，不自动启动。升级前SQL备份保存在忽略目录.tmp/pre-current-config-final-20261107.sql，原镜像ID在.tmp/pre-current-config-images.json；均不入Git。
+
+当前实现取消教学内容快照和版本号，以下历史验收中的固定版本、快照和旧版并行描述不再代表当前行为。YAML按稳定ID更新当前配置，学生记录独立保留。操作说明见content-authoring.md；本次迁移head为c84f1a6d209e。
+
+本机在backend目录执行：
+
+```sh
+python -m app.chapter_content --check
+python -m alembic upgrade head
+python -m app.seed
+python -m app.seed
+python -m alembic check
+```
+
+旧库升级前备份。迁移将最新材料内容并入materials，任务/剧情按ID保留最高旧版，阅读进度合并参与页和完成标记，移除历史内容表与版本列；不删除提交、成绩、节点、事件或学习记录。历史内容版本合并后无法自动downgrade，只能用升级前备份恢复。迁移需要在线连接，不能用alembic --sql生成完整离线脚本。
+
+容器当前启动命令仍是 `alembic upgrade head && python -m app.seed && uvicorn ...`。每次API容器启动都会同步当前配置，相同ID原位更新。YAML复制在镜像中，编辑后需 `docker compose --env-file .tmp/story-qa.env -p pythontopia-story-qa -f deploy/compose.yml up --build -d` 才能更新15176预览；直接start旧容器不加载工作区修改。不要复用main数据库或其他项目卷。
+
+
 ## 后台改版与 reborn 集成（2026-11-05）
 
 本轮以 reborn 的 b773f56a（章节脚本与配置地图）为基线，合入后台改版 0f2717ac，在隔离集成分支验证后更新本地 reborn，不推送或部署。原有未跟踪 deploy/piston-local/ 保留。合并保留新版剧情、地图、活动快照、旧任务兼容及教师后台的日期安排/分页/弹窗/章节完成数。新安排首次保存会重新读取任务定义，避免切换到编写页面后缓存旧版本；已有安排仍不自动升级。

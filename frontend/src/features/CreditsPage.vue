@@ -19,7 +19,7 @@
     <p>
       Python语言基础，Alethicode 课程包
       43。课件提取文本保留原文档及页码关联。现有仓库未附原始 PDF/PPT
-      与课程视频文件；文本阅读会明确标识，上传的版本另行保存。
+      与课程视频文件；文本阅读会明确标识，上传文件保存在私有存储中。
     </p>
     <a
       href="https://github.com/cypre5s/Pythontopia/blob/reborn/LICENSE-ART.md"

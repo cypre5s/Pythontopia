@@ -56,7 +56,7 @@
         :key="`${refItem.material_id}-${refItem.page_no}`"
         class="citation"
         @click="
-          $emit('cite', refItem.material_id, refItem.version, refItem.page_no)
+          $emit('cite', refItem.material_id, refItem.page_no)
         "
       >
         {{ refItem.title }} · 第{{ refItem.page_no }}页 <GameIcon name="external"/>
@@ -96,14 +96,14 @@ import "./learningUi.css";
 import { useSession } from "../shared/session";
 const props = defineProps<{
   activityId: string;
-  activityVersion?: number;
+
   allowed: boolean;
   pageNo?: number;
   videoTime?: number;
   code?: string;
   roleName: string;
 }>();
-defineEmits<{ cite: [materialId: number, version: number, page: number] }>();
+defineEmits<{ cite: [materialId: number, page: number] }>();
 const session = useSession(),
   available = ref(false),
   unavailable = ref(""),
@@ -112,9 +112,9 @@ const session = useSession(),
   history = ref<HTMLElement>(),
   messages = ref<{ role: string; text: string }[]>([]),
   references = ref<
-    { material_id: number; version: number; page_no: number; title: string }[]
+    { material_id: number; page_no: number; title: string }[]
   >([]);
-const storageKey = computed(() => `assistant:${session.user?.id}:${session.classroomId}:${props.activityId}${props.activityVersion === undefined ? "" : `:v${props.activityVersion}`}`);
+const storageKey = computed(() => `assistant:${session.user?.id}:${session.classroomId}:${props.activityId}`);
 let sessionId = "",
   requestId = "",
   controller: AbortController | undefined;
@@ -229,7 +229,7 @@ async function send() {
   }
 }
 watch(
-  [() => props.activityId, () => props.activityVersion],
+  () => props.activityId,
   () => {
     cancel();
     sessionId = "";

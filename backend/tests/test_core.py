@@ -3,9 +3,9 @@ from uuid import uuid4
 from types import SimpleNamespace
 import pytest
 from sqlalchemy import func, select
-from app.models import Question, QuestionSecret, LearningEvent, WorldFlag
+from app.models import Question, QuestionSecret
 from app.quests import node_statuses, validate_definition
-from app.seed import QUESTS, seed
+from app.seed import seed
 from conftest import move_player
 
 
@@ -31,13 +31,13 @@ def test_registration_cannot_select_role_and_session_revoke(client):
     assert client.get("/api/auth/me", headers=headers).status_code == 401
 
 
-def test_release_server_time_and_cross_classroom(client, db, student, teacher, classroom):
+def test_release_server_time_and_cross_classroom(client, db, student, teacher, classroom, branching_course):
     cid = classroom["id"]
     future = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
     path = f"/api/teacher/classrooms/{cid}/releases/180"
     assert client.put(path, json={"status": "published", "opens_at": future}, headers=teacher["headers"]).status_code == 200
     assert client.get(f"/api/activities/ch2-lesson?classroom_id={cid}", headers=student["headers"]).status_code == 403
-    assert client.get(f"/api/materials/187/versions/1?classroom_id={cid}", headers=student["headers"]).status_code == 403
+    assert client.get(f"/api/materials/187?classroom_id={cid}", headers=student["headers"]).status_code == 403
     other = client.post("/api/classrooms", json={"name": "另一个班"}, headers=teacher["headers"]).json()
     assert client.get(f"/api/world?classroom_id={other['id']}", headers=student["headers"]).status_code == 403
     assert (
@@ -57,14 +57,12 @@ def test_dag_rejects_cycle_and_invalid_branch():
     definition = {
         "id": "x",
         "title": "x",
-        "version": 1,
         "chapter_id": 179,
         "nodes": [
             {"id": "a", "type": "TALK_TO_NPC", "title": "a", "target": "mayor_py", "dependencies": ["b"]},
             {"id": "b", "type": "TALK_TO_NPC", "title": "b", "target": "mayor_py", "dependencies": ["a"]},
         ],
-        "effects": [],
-    }
+        "effects": []}
     with pytest.raises(ValueError, match="循环"):
         validate_definition(definition)
     definition["nodes"][0]["dependencies"] = []
@@ -73,8 +71,8 @@ def test_dag_rejects_cycle_and_invalid_branch():
         validate_definition(definition)
 
 
-def test_branch_any_then_parallel_all():
-    definition = QUESTS[1]
+def test_branch_any_then_parallel_all(branching_course):
+    definition = branching_course
     states = {id: SimpleNamespace(choice=None) for id in ("mission", "professor", "learn-language")}
     states["choose-route"] = SimpleNamespace(choice="concept")
     statuses = node_statuses(definition, states)
@@ -90,154 +88,105 @@ def test_branch_any_then_parallel_all():
 
 
 def test_first_chapter_full_loop_and_idempotency(client, db, student, teacher, classroom):
-    headers = student["headers"]
-    cid = classroom["id"]
+    from app.models import Activity, Npc
 
-    def position(x, y, map_key="town_hub"):
-        move_player(client, headers, cid, map_key, x, y)
-
-    def event(node, evidence=None, event_id=None, quest_id="arrival"):
-        result = client.post(
-            "/api/events",
-            json={"classroom_id": cid, "event_id": event_id or str(uuid4()), "quest_id": quest_id, "node_id": node, "evidence": evidence or {}},
-            headers=headers,
-        )
+    headers, cid = student["headers"], classroom["id"]
+    world = client.get(f"/api/world?classroom_id={cid}", headers=headers).json()
+    assert next(q for q in world["quests"] if q["id"] == "arrival")["status"] == "active"
+    replay_checked = False
+    for npc_key in ("mayor_py", "librarian_doc", "arena_guard", "mayor_py"):
+        npc = db.get(Npc, npc_key)
+        move_player(client, headers, cid, npc.map_key, npc.tile_x, npc.tile_y)
+        result = client.post("/api/story/interactions", json={"classroom_id": cid, "npc_key": npc_key}, headers=headers)
         assert result.status_code == 200, result.text
-        return result.json()
-
-    client.get(f"/api/world?classroom_id={cid}", headers=headers)
-    initial_progress = client.get(f"/api/teacher/classrooms/{cid}/progress", headers=teacher["headers"]).json()
-    assert next(member for member in initial_progress["members"] if member["id"] == student["id"])["completed_chapters"] == 0
-    assert (
-        client.post(
-            "/api/events",
-            json={"classroom_id": cid, "event_id": str(uuid4()), "quest_id": "arrival", "node_id": "report", "evidence": {"npc_key": "mayor_py"}},
-            headers=headers,
-        ).status_code
-        == 409
-    )
-    position(22, 34)
-    event_id = str(uuid4())
-    event("greet", {"npc_key": "mayor_py"}, event_id)
-    assert event("greet", {"npc_key": "mayor_py"}, event_id)["duplicate"] is True
-    for node_id in ("welcome", "welcome-story"):
-        response = client.post("/api/dialogues/mayor_py/steps", json={"classroom_id": cid, "node_id": node_id}, headers=headers)
-        assert response.status_code == 200, response.text
-    event("opening", {"npc_key": "mayor_py", "dialogue_id": "welcome"})
-    record = client.post("/api/activities/ch1-lesson/participation", json={"classroom_id": cid, "page_no": 42}, headers=headers).json()["record_id"]
-    event("study", {"record_id": record})
-    position(38, 24)
-    event("reach-practice")
-    for question in db.scalars(select(Question).where(Question.activity_id == "ch1-practice")):
-        answer = db.get(QuestionSecret, question.id).answer
-        if question.kind == "fill" and isinstance(answer, list):
-            answer = answer[0]
-        result = client.post(
-            "/api/submissions",
-            json={
-                "classroom_id": cid,
-                "activity_id": question.activity_id,
-                "question_id": question.id,
-                "idempotency_key": str(uuid4()),
-                "answer": answer,
-                "mode": "submit",
-            },
-            headers=headers,
-        )
-        assert result.status_code == 201, result.text
-        assert result.json()["status"] == "accepted"
-    event("practice")
-    position(22, 34)
-    final = event("report", {"npc_key": "mayor_py"})["world"]
+        view = result.json()
+        for _ in range(30):
+            if view["status"] == "ended":
+                break
+            endpoint = "advance"
+            body = {"classroom_id": cid, "revision": view["revision"], "event_id": str(uuid4())}
+            if view["status"] == "waiting":
+                activity = db.get(Activity, view["activity"]["id"])
+                if activity.kind in {"lesson", "reading"}:
+                    payload = client.get(f"/api/activities/{activity.id}?classroom_id={cid}", headers=headers).json()
+                    for page in payload["material"]["pages"]:
+                        if page["id"] in activity.content["completion"]["required_page_ids"]:
+                            response = client.post(f"/api/activities/{activity.id}/progress", json={"classroom_id": cid, "page_no": page["page_no"]}, headers=headers)
+                            assert response.status_code == 200, response.text
+                else:
+                    for question in db.scalars(select(Question).where(Question.activity_id == activity.id)):
+                        if question.id not in activity.content["question_ids"]:
+                            continue
+                        answer = db.get(QuestionSecret, question.id).answer
+                        if question.kind == "fill" and isinstance(answer, list):
+                            answer = answer[0]
+                        response = client.post("/api/submissions", json={"classroom_id": cid, "activity_id": activity.id, "question_id": question.id,
+                            "idempotency_key": str(uuid4()), "mode": "submit", "answer": answer}, headers=headers)
+                        assert response.status_code == 201 and response.json()["status"] == "accepted", response.text
+                endpoint = "return"
+            elif view["node"].get("choices"):
+                body["choice"] = view["node"]["choices"][0]["id"]
+            path = f"/api/story/sessions/{view['id']}/{endpoint}"
+            response = client.post(path, json=body, headers=headers)
+            assert response.status_code == 200, response.text
+            if not replay_checked:
+                replay = client.post(path, json=body, headers=headers)
+                assert replay.status_code == 200 and replay.json()["revision"] == response.json()["revision"]
+                replay_checked = True
+            view = response.json()
+        else:
+            raise AssertionError("Story failed to reach an end")
+    final = client.get(f"/api/world?classroom_id={cid}", headers=headers).json()
     assert "library_unlocked" in final["flags"]
     assert next(q for q in final["quests"] if q["id"] == "arrival")["status"] == "complete"
-    assert db.scalar(select(func.count()).select_from(LearningEvent)) == 6
-    assert db.scalar(select(func.count()).select_from(WorldFlag).where(~WorldFlag.key.like("dialogue:%"), ~WorldFlag.key.like("story:%"))) == 2
-    again = client.get(f"/api/world?classroom_id={cid}", headers=headers).json()
-    assert again["player"]["tile_x"] == 22 and again["flags"] == final["flags"]
     progress = client.get(f"/api/teacher/classrooms/{cid}/progress", headers=teacher["headers"]).json()
     assert next(member for member in progress["members"] if member["id"] == student["id"])["completed_chapters"] == 1
+    from app.integration_models import AssistantCall
+    assert db.scalar(select(func.count()).select_from(AssistantCall)) == 0
 
 
-def test_unbound_material_and_new_versions_are_private(client, db, student, teacher, classroom):
-    from app.models import Material, MaterialVersion
+def test_unbound_material_is_private(client, db, student, teacher, classroom):
+    from app.models import Material
 
-    cid = classroom["id"]
-    headers = student["headers"]
-    db.add(Material(id=9000, chapter_id=179, title="尚未绑定的教师材料", kind="text", owner_id=teacher["id"]))
-    db.flush()
-    db.add(
-        MaterialVersion(
-            material_id=9000, version=1, status="ready", content={"pages": [{"id": 9000, "page_no": 1, "title": "private", "text": "unpublished"}]}
-        )
-    )
-    db.add(
-        MaterialVersion(
-            material_id=186,
-            version=2,
-            status="ready",
-            content={"pages": [{"id": 9999, "page_no": 1, "title": "draft", "text": "unpublished-version"}]},
-        )
-    )
+    cid, headers = classroom["id"], student["headers"]
+    db.add(Material(id=9000, chapter_id=179, title="Unbound material", kind="text", owner_id=teacher["id"],
+                    status="ready", content={"pages": [{"id": 9000, "page_no": 1, "title": "private", "text": "unpublished"}]}))
     db.commit()
-    assert client.get(f"/api/materials/9000/versions/1?classroom_id={cid}", headers=headers).status_code == 403
-    assert client.get(f"/api/materials/186/versions/2?classroom_id={cid}", headers=headers).status_code == 403
-    assert client.get(f"/api/materials/186/versions/1?classroom_id={cid}", headers=headers).status_code == 200
+    assert client.get(f"/api/materials/9000?classroom_id={cid}", headers=headers).status_code == 403
+    assert client.get(f"/api/materials/186?classroom_id={cid}", headers=headers).status_code == 200
     library = client.get(f"/api/library?classroom_id={cid}", headers=headers).json()
     assert all(item["id"] != 9000 for item in library)
-    assert next(item for item in library if item["id"] == 186)["version"] == 1
+    assert "version" not in next(item for item in library if item["id"] == 186)
 
 
-def test_activity_edits_preserve_running_version(client, db, student, teacher, classroom):
-    from app.models import Activity, ActivityVersion, PlayerQuest, QuestDefinition
+def test_activity_edits_update_current_configuration_and_keep_progress(client, db, student, teacher, classroom):
+    from app.models import Activity, ActivityProgress, PlayerQuest, QuestDefinition
 
     cid = classroom["id"]
-    activity = Activity(
-        id="teacher-lesson",
-        chapter_id=179,
-        title="版本一",
-        kind="lesson",
-        material_id=186,
-        npc_key="mayor_py",
-        owner_id=teacher["id"],
-        assistant_allowed=True,
-        version=1,
-        content={"published": True, "material_version": 1},
-    )
+    activity = Activity(id="teacher-lesson", chapter_id=179, title="Initial title", kind="lesson", material_id=186,
+                        npc_key="mayor_py", owner_id=teacher["id"], assistant_allowed=True, content={"published": True})
     db.add(activity)
     db.flush()
-    snapshot = {key: getattr(activity, key) for key in ("title", "kind", "material_id", "npc_key", "assistant_allowed", "content")}
-    db.add(ActivityVersion(activity_id=activity.id, version=1, snapshot=snapshot))
-    definition = {
-        "id": "versioned-quest",
-        "title": "versioned",
-        "chapter_id": 179,
-        "version": 1,
-        "nodes": [{"id": "study", "type": "STUDY_LESSON", "title": "read", "activity_id": activity.id, "activity_version": 1, "dependencies": []}],
-        "effects": [],
-    }
-    db.add(QuestDefinition(id=definition["id"], version=1, chapter_id=179, title="versioned", owner_id=teacher["id"], definition=definition))
+    definition = {"id": "current-quest", "title": "Current", "chapter_id": 179,
+        "nodes": [{"id": "study", "type": "STUDY_LESSON", "title": "read", "activity_id": activity.id, "dependencies": []}], "effects": []}
+    db.add(QuestDefinition(id=definition["id"], chapter_id=179, title="Current", owner_id=teacher["id"], definition=definition))
     db.flush()
-    db.add(PlayerQuest(user_id=student["id"], classroom_id=cid, quest_id=definition["id"], quest_version=1))
+    db.add(PlayerQuest(user_id=student["id"], classroom_id=cid, quest_id=definition["id"]))
+    db.add(ActivityProgress(user_id=student["id"], classroom_id=cid, activity_id=activity.id, page_no=42, visited_pages=[10723], completed=False))
     db.commit()
-    update = client.put("/api/teacher/activities/teacher-lesson", json={"title": "版本二", "assistant_allowed": False}, headers=teacher["headers"])
+    update = client.put("/api/teacher/activities/teacher-lesson", json={"title": "Updated title", "assistant_allowed": False}, headers=teacher["headers"])
     assert update.status_code == 200, update.text
-    assert update.json()["version"] == 2
-    old = client.get(f"/api/activities/teacher-lesson?classroom_id={cid}", headers=student["headers"])
-    assert old.status_code == 200, old.text
-    assert old.json()["title"] == "版本一" and old.json()["version"] == 1 and old.json()["assistant_allowed"] is True
-    record = client.post(
-        "/api/activities/teacher-lesson/participation", json={"classroom_id": cid, "page_no": 42}, headers=student["headers"]
-    ).json()["record_id"]
-    result = client.post(
-        "/api/events",
-        json={"classroom_id": cid, "event_id": str(uuid4()), "quest_id": definition["id"], "node_id": "study", "evidence": {"record_id": record}},
-        headers=student["headers"],
-    )
+    current = client.get(f"/api/activities/teacher-lesson?classroom_id={cid}", headers=student["headers"])
+    assert current.status_code == 200, current.text
+    assert current.json()["title"] == "Updated title" and current.json()["assistant_allowed"] is False
+    assert "version" not in current.json()
+    assert current.json()["progress"]["page_no"] == 42
+    record = client.post("/api/activities/teacher-lesson/participation", json={"classroom_id": cid, "page_no": 42}, headers=student["headers"]).json()["record_id"]
+    result = client.post("/api/events", json={"classroom_id": cid, "event_id": str(uuid4()), "quest_id": definition["id"], "node_id": "study", "evidence": {"record_id": record}}, headers=student["headers"])
     assert result.status_code == 200, result.text
 
 
-def test_second_chapter_different_branch_and_parallel_loop(client, db, student, teacher, classroom):
+def test_second_chapter_different_branch_and_parallel_loop(client, db, student, teacher, classroom, branching_course):
     test_first_chapter_full_loop_and_idempotency(client, db, student, teacher, classroom)
     headers = student["headers"]
     cid = classroom["id"]
@@ -248,7 +197,7 @@ def test_second_chapter_different_branch_and_parallel_loop(client, db, student, 
     def event(node, evidence=None):
         result = client.post(
             "/api/events",
-            json={"classroom_id": cid, "event_id": str(uuid4()), "quest_id": "lost-language", "node_id": node, "evidence": evidence or {}},
+            json={"classroom_id": cid, "event_id": str(uuid4()), "quest_id": "test-branching", "node_id": node, "evidence": evidence or {}},
             headers=headers,
         )
         assert result.status_code == 200, result.text
@@ -276,25 +225,24 @@ def test_second_chapter_different_branch_and_parallel_loop(client, db, student, 
                 "question_id": q.id,
                 "idempotency_key": str(uuid4()),
                 "mode": "submit",
-                "answer": answer,
-            },
+                "answer": answer},
             headers=headers,
         )
         assert result.status_code == 201 and result.json()["status"] == "accepted", result.text
     world = event("concept-practice")
-    quest = next(q for q in world["quests"] if q["id"] == "lost-language")
+    quest = next(q for q in world["quests"] if q["id"] == "test-branching")
     statuses = {n["id"]: n["status"] for n in quest["nodes"]}
     assert statuses["io-study"] == statuses["code-practice"] == "skipped"
     assert statuses["meet-librarian"] == statuses["read-shelf"] == "ready"
     position(9, 5, "library")
     world = event("meet-librarian", {"npc_key": "librarian_doc"})
-    assert next(n for q in world["quests"] if q["id"] == "lost-language" for n in q["nodes"] if n["id"] == "report-language")["status"] == "locked"
+    assert next(n for q in world["quests"] if q["id"] == "test-branching" for n in q["nodes"] if n["id"] == "report-language")["status"] == "locked"
     position(4, 4, "library")
     event("read-shelf", {"object_id": "library_shelf"})
     position(22, 34)
     world = event("report-language", {"npc_key": "mayor_py"})
     assert "language_archive_restored" in world["flags"]
-    assert next(q for q in world["quests"] if q["id"] == "lost-language")["status"] == "complete"
+    assert next(q for q in world["quests"] if q["id"] == "test-branching")["status"] == "complete"
     progress = client.get(f"/api/teacher/classrooms/{cid}/progress", headers=teacher["headers"]).json()
     assert next(member for member in progress["members"] if member["id"] == student["id"])["completed_chapters"] == 2
     from app.integration_models import AssistantCall
@@ -302,7 +250,7 @@ def test_second_chapter_different_branch_and_parallel_loop(client, db, student, 
     assert db.scalar(select(func.count()).select_from(AssistantCall)) == 0
 
 
-def test_dialogue_schema_and_sequence_and_teacher_npc_scope(client, db, student, teacher, classroom):
+def test_dialogue_schema_and_sequence_and_teacher_npc_scope(client, db, student, teacher, classroom, branching_course):
     from app.dialogues import validate_dialogue
 
     for invalid in (

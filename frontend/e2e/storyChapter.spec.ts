@@ -12,7 +12,6 @@ interface StoryWorld {
   flags: string[];
   quests: {
     id: string;
-    version: number;
     status: string;
     story_id?: string;
     nodes: { id: string; status: string }[];
@@ -24,12 +23,11 @@ interface StoryView {
   revision: number;
   status: "active" | "waiting" | "ended";
   node: { id: string; text: string } | null;
-  activity: { id: string; kind: string; version: number } | null;
+  activity: { id: string; kind: string; } | null;
 }
 
 interface ActivityView {
   id: string;
-  version: number;
   completion?: { required_page_ids: number[] };
   material: {
     pages: { id: number; page_no: number }[];
@@ -261,7 +259,7 @@ for (const viewport of [
       hasTouch: viewport.touch,
     });
 
-    test("real chapter v2, contextual NPCs, activity resume and account isolation", async ({
+    test("current chapter, contextual NPCs, activity resume and account isolation", async ({
       page,
       request,
     }, testInfo) => {
@@ -302,7 +300,7 @@ for (const viewport of [
       };
       const release = await request.put(
         `/api/teacher/classrooms/${classroom.id}/releases/179`,
-        { headers: teacher, data: { status: "published", version: 2 } },
+        { headers: teacher, data: { status: "published", } },
       );
       expect(release.ok(), await release.text()).toBeTruthy();
 
@@ -334,7 +332,7 @@ for (const viewport of [
         student,
       );
       expect(await quest()).toMatchObject({
-        version: 2,
+
         story_id: "first-steps",
         status: "active",
       });
@@ -366,7 +364,7 @@ for (const viewport of [
       const firstReading = await finishDialogue(page, "现在开始阅读");
       expect(firstReading.view).toMatchObject({
         status: "waiting",
-        activity: { id: "ch1-lesson", version: 2 },
+        activity: { id: "ch1-lesson", },
       });
       await expect(page.locator(".lesson-workspace")).toBeVisible();
       await expect(dialogue(page)).toHaveCount(0);
@@ -418,6 +416,12 @@ for (const viewport of [
       await expect.poll(async () => (await readLesson()).progress?.completed)
         .toBe(true);
       expect(await nodeStatus("study")).toBe("ready");
+      const pdfReader = page.locator(".pdf-reader");
+      if (await pdfReader.count()) {
+        await expect(pdfReader).toHaveAttribute("aria-busy", "false", { timeout: 60_000 });
+        await expect(pdfReader.locator(".reader-position")).toContainText(`/ ${lesson.material!.pages.length} 页`);
+        expect(await pdfReader.locator("canvas").evaluate(canvas => (canvas as HTMLCanvasElement).width)).toBeGreaterThan(100);
+      }
       await page.screenshot({ path: testInfo.outputPath("resumed-reading.png") });
       expect(await page.evaluate(() =>
         document.documentElement.scrollWidth <= window.innerWidth,
@@ -438,7 +442,7 @@ for (const viewport of [
       const practice = await finishDialogue(page, "开始练习");
       expect(practice.view).toMatchObject({
         status: "waiting",
-        activity: { id: "ch1-practice", version: 1 },
+        activity: { id: "ch1-practice", },
       });
       await answerConceptQuestions(page, [
         { title: "计算思维的核心", answer: "抽象与自动化" },
@@ -452,7 +456,7 @@ for (const viewport of [
       const assessment = await finishDialogue(page, "开始章节测试");
       expect(assessment.view).toMatchObject({
         status: "waiting",
-        activity: { id: "ch1-assessment", version: 1 },
+        activity: { id: "ch1-assessment", },
       });
       await answerConceptQuestions(page, [
         { title: "计算与规则", answer: "给定输入，按照规则处理并得到输出" },

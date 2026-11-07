@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from types import SimpleNamespace
+from math import isfinite
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -10,20 +10,17 @@ from .db import get_db
 from .models import (
     Activity,
     ActivityProgress,
-    ActivityVersion,
     Chapter,
     ChapterRelease,
     Classroom,
     LearningRecord,
     KnowledgePoint,
     Material,
-    MaterialVersion,
     Membership,
     PlayerQuest,
     QuestDefinition,
     Question,
     Submission,
-    StorySession,
     User,
 )
 
@@ -40,7 +37,7 @@ def authorize_classroom(db: Session, user: User, classroom_id: int):
 
 
 def chapter_completion_requirements(db: Session, classroom_id: int, chapter_id: int | None = None) -> dict[int, set[str]]:
-    """Required main quest IDs at the class release version, shared by gates and reports."""
+    """Required main quest IDs for the current class configuration, shared by gates and reports."""
     classroom = db.get(Classroom, classroom_id)
     if not classroom:
         return {}
@@ -49,18 +46,13 @@ def chapter_completion_requirements(db: Session, classroom_id: int, chapter_id: 
         .join(ChapterRelease, ChapterRelease.chapter_id == QuestDefinition.chapter_id)
         .where(
             ChapterRelease.classroom_id == classroom_id,
-            QuestDefinition.version <= ChapterRelease.version,
             (QuestDefinition.owner_id.is_(None)) | (QuestDefinition.owner_id == classroom.teacher_id),
         )
-        .order_by(QuestDefinition.version.desc())
     )
     if chapter_id is not None:
         query = query.where(QuestDefinition.chapter_id == chapter_id)
-    latest = {}
-    for item in db.scalars(query):
-        latest.setdefault((item.chapter_id, item.id), item)
     requirements: dict[int, set[str]] = {}
-    for item in latest.values():
+    for item in db.scalars(query):
         if item.definition.get("kind", "main") == "main":
             requirements.setdefault(item.chapter_id, set()).add(item.id)
     return requirements
@@ -107,38 +99,7 @@ def authorize_chapter(db: Session, user: User, classroom_id: int, chapter_id: in
         raise HTTPException(403, "章节未开放或尚未完成前置任务")
 
 
-def activity_versions(db, user, classroom_id, activity):
-    release = db.get(ChapterRelease, (classroom_id, activity.chapter_id))
-    if not release:
-        return set(), []
-    versions = {min(activity.version, release.version)}
-    pinned = []
-    for instance in db.scalars(select(PlayerQuest).where(PlayerQuest.user_id == user.id, PlayerQuest.classroom_id == classroom_id)):
-        definition = db.get(QuestDefinition, (instance.quest_id, instance.quest_version))
-        for node in definition.definition["nodes"]:
-            if node.get("activity_id") == activity.id:
-                version = node.get("activity_version", 1)
-                versions.add(version)
-                pinned.append(version)
-    return versions, pinned
-
-
-def snapshot_activity(db, activity, version):
-    if version == activity.version:
-        return activity
-    snapshot = db.get(ActivityVersion, (activity.id, version))
-    if not snapshot:
-        raise HTTPException(404, "活动版本不存在")
-    values = {
-        key: getattr(activity, key)
-        for key in ("id", "chapter_id", "owner_id", "title", "kind", "material_id", "npc_key", "assistant_allowed", "content")
-    }
-    values.update(snapshot.snapshot)
-    values["version"] = version
-    return SimpleNamespace(**values)
-
-
-def authorize_activity(db: Session, user: User, classroom_id: int, activity_id: str, version: int | None = None) -> Activity:
+def authorize_activity(db: Session, user: User, classroom_id: int, activity_id: str) -> Activity:
     activity = db.get(Activity, activity_id)
     if not activity:
         raise HTTPException(404, "活动不存在")
@@ -148,38 +109,23 @@ def authorize_activity(db: Session, user: User, classroom_id: int, activity_id: 
         raise HTTPException(403, "无权访问其他教师的活动")
     can_preview = user.role == "admin" or (user.role == "teacher" and classroom.teacher_id == user.id)
     if not can_preview:
-        versions, pinned = activity_versions(db, user, classroom_id, activity)
-        waiting_version = db.scalar(select(StorySession.pending_activity_version).where(
-            StorySession.user_id == user.id, StorySession.classroom_id == classroom_id,
-            StorySession.pending_activity_id == activity.id, StorySession.status == "waiting"))
-        chosen = version if version is not None else waiting_version if waiting_version in versions else min(pinned) if pinned else max(versions)
-        if chosen not in versions:
-            raise HTTPException(403, "此活动版本尚未发布")
-        activity = snapshot_activity(db, activity, chosen)
         if activity.content.get("published") is False or (activity.owner_id and activity.owner_id != classroom.teacher_id):
             raise HTTPException(403, "此活动不在当前班级发布范围")
-    elif version is not None:
-        activity = snapshot_activity(db, activity, version)
     return activity
 
 
-def material_versions_for_student(db, user, classroom_id, material_id):
-    allowed = set()
-    for activity in db.scalars(select(Activity)):
-        if not chapter_available(db, user, classroom_id, activity.chapter_id):
-            continue
-        versions, _ = activity_versions(db, user, classroom_id, activity)
-        for version in versions:
-            try:
-                item = authorize_activity(db, user, classroom_id, activity.id, version)
-            except HTTPException:
-                continue
-            if item.material_id == material_id:
-                allowed.add(item.content.get("material_version", 1))
-    return allowed
+def available_in_library(material: Material) -> bool:
+    """Only an explicit publication flag can publish materials without an activity."""
+    if material.content.get("library_available") is not True:
+        return False
+    if material.owner_id is not None:
+        return True
+    source = material.content.get("source")
+    return bool(isinstance(source, dict) and source.get("kind") == "course_media_pack"
+                and type(source.get("course_id")) is int and source["course_id"] == 43)
 
 
-def authorize_material(db: Session, user: User, classroom_id: int, material_id: int, version: int | None = None) -> Material:
+def authorize_material(db: Session, user: User, classroom_id: int, material_id: int) -> Material:
     material = db.get(Material, material_id)
     if not material:
         raise HTTPException(404, "资料不存在")
@@ -188,13 +134,11 @@ def authorize_material(db: Session, user: User, classroom_id: int, material_id: 
     if material.owner_id and material.owner_id != classroom.teacher_id and user.role != "admin":
         raise HTTPException(403, "无权访问其他班级教师资料")
     can_preview = user.role == "admin" or (user.role == "teacher" and classroom.teacher_id == user.id)
-    if not can_preview:
-        allowed = material_versions_for_student(db, user, classroom_id, material_id)
-        if not allowed or (version is not None and version not in allowed):
-            raise HTTPException(403, "此资料版本未绑定当前班级已发布活动")
-        material._authorized_versions = allowed
-    else:
-        material._authorized_versions = None
+    if not can_preview and not available_in_library(material):
+        published = db.scalars(select(Activity).where(Activity.material_id == material.id)).all()
+        if not any(a.owner_id in {None, classroom.teacher_id} and a.content.get("published") is not False
+                   and a.chapter_id == material.chapter_id for a in published):
+            raise HTTPException(403, "此资料未绑定当前班级已发布活动")
     return material
 
 
@@ -206,40 +150,31 @@ def public_question(question: Question):
         "prompt": question.prompt,
         "options": question.options,
         "samples": question.samples,
-        "version": question.version,
         "source": question.source,
     }
 
 
-def material_payload(db, material, version=None):
-    query = select(MaterialVersion).where(MaterialVersion.material_id == material.id)
-    if version is not None:
-        query = query.where(MaterialVersion.version == version)
-    allowed = getattr(material, "_authorized_versions", None)
-    if allowed is not None:
-        query = query.where(MaterialVersion.version.in_(allowed))
-    item = db.scalar(query.order_by(MaterialVersion.version.desc()))
-    if not item:
-        raise HTTPException(404, "资料版本不存在")
+def material_payload(db, material):
+    duration = material.content.get("duration_seconds")
+    if (material.kind != "video" or type(duration) not in (int, float)
+            or (type(duration) is float and not isfinite(duration)) or duration <= 0):
+        duration = None
     return {
-        "id": material.id,
-        "title": material.title,
-        "kind": material.kind,
-        "chapter_id": material.chapter_id,
-        "version": item.version,
-        "status": item.status,
-        "pages": item.content.get("pages", []),
-        "notice": item.content.get("notice"),
-        "media_url": f"/api/materials/{material.id}/versions/{item.version}/file" if item.storage_key and item.status == "ready" else None,
-        "error": item.error,
+        "id": material.id, "title": material.title, "kind": material.kind,
+        "chapter_id": material.chapter_id, "status": material.status,
+        "pages": material.content.get("pages", []), "notice": material.content.get("notice"),
+        "media_url": f"/api/materials/{material.id}/file" if material.storage_key and material.status == "ready" else None,
+        "error": material.error,
+        "supplementary": material.kind == "video" and material.content.get("supplementary") is True,
+        "duration_seconds": duration,
     }
 
 
 @router.get("/activities/{activity_id}")
 def get_activity(
-    activity_id: str, classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)], version: int | None = None
+    activity_id: str, classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]
 ):
-    activity = authorize_activity(db, user, classroom_id, activity_id, version)
+    activity = authorize_activity(db, user, classroom_id, activity_id)
     material = db.get(Material, activity.material_id) if activity.material_id else None
     if material:
         authorize_material(db, user, classroom_id, material.id)
@@ -264,14 +199,13 @@ def get_activity(
         "chapter_id": activity.chapter_id,
         "title": activity.title,
         "kind": activity.kind,
-        "version": activity.version,
         "npc_key": activity.npc_key,
         "assistant_allowed": activity.assistant_allowed,
         "completion": activity.content.get("completion"),
         "progress": progress_payload(db, user, classroom_id, activity),
         "knowledge_point_ids": activity.content.get("knowledge_point_ids", []),
         "knowledge_points": points,
-        "material": material_payload(db, material, activity.content.get("material_version")) if material else None,
+        "material": material_payload(db, material) if material else None,
         "questions": [
             public_question(q)
             for q in db.scalars(select(Question).where(Question.activity_id == activity.id)).all()
@@ -280,20 +214,25 @@ def get_activity(
     }
 
 
+def reading_completed(activity, progress):
+    required = activity.content.get("completion", {}).get("required_page_ids", [])
+    return bool(progress and required and set(required).issubset(progress.visited_pages))
+
+
 def progress_payload(db, user, classroom_id, activity):
     if activity.kind in {"practice", "assessment"}:
         questions = [question for question in db.scalars(select(Question).where(Question.activity_id == activity.id))
                      if activity.content.get("question_ids") is None or question.id in activity.content["question_ids"]]
-        accepted = {(submission.question_id, submission.version) for submission in db.scalars(select(Submission).where(
+        accepted = {submission.question_id for submission in db.scalars(select(Submission).where(
             Submission.user_id == user.id, Submission.classroom_id == classroom_id, Submission.activity_id == activity.id,
             Submission.mode == "submit", Submission.status.in_(["accepted", "AC", "ac"])))}
-        passed = [question.id for question in questions if (question.id, question.version) in accepted]
+        passed = [question.id for question in questions if question.id in accepted]
         return {"page_no": None, "visited_pages": [], "completed": bool(questions) and len(passed) == len(questions), "accepted_question_ids": passed}
-    progress = db.get(ActivityProgress, (user.id, classroom_id, activity.id, activity.version))
+    progress = db.get(ActivityProgress, (user.id, classroom_id, activity.id))
     return {
         "page_no": progress.page_no if progress else None,
         "visited_pages": progress.visited_pages if progress else [],
-        "completed": progress.completed if progress else False,
+        "completed": reading_completed(activity, progress),
     }
 
 
@@ -301,26 +240,25 @@ class ProgressInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     classroom_id: int
     page_no: int = Field(ge=1)
-    version: int | None = Field(default=None, ge=1)
 
 
 @router.get("/activities/{activity_id}/progress")
 def get_progress(
-    activity_id: str, classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)], version: int | None = None
+    activity_id: str, classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]
 ):
-    activity = authorize_activity(db, user, classroom_id, activity_id, version)
+    activity = authorize_activity(db, user, classroom_id, activity_id)
     return {**progress_payload(db, user, classroom_id, activity), "participation_only": activity.kind in {"lesson", "reading"}}
 
 
 @router.post("/activities/{activity_id}/progress")
 def save_progress(activity_id: str, body: ProgressInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
-    activity = authorize_activity(db, user, body.classroom_id, activity_id, body.version)
+    activity = authorize_activity(db, user, body.classroom_id, activity_id)
     if user.role != "student":
         raise HTTPException(403, "教师预览不能写入学生学习进度")
     if activity.kind not in {"lesson", "reading"} or not activity.material_id:
         raise HTTPException(422, "此活动不支持阅读进度")
     material = authorize_material(db, user, body.classroom_id, activity.material_id)
-    payload = material_payload(db, material, activity.content.get("material_version"))
+    payload = material_payload(db, material)
     if payload["status"] != "ready":
         raise HTTPException(409, "资料尚未就绪")
     page = next((item for item in payload["pages"] if item["page_no"] == body.page_no), None)
@@ -330,16 +268,16 @@ def save_progress(activity_id: str, body: ProgressInput, db: Annotated[Session, 
     if required and (any(type(key) is not int for key in required) or not set(required).issubset({item["id"] for item in payload["pages"]})):
         raise HTTPException(409, "阅读完成规则引用了不存在的资料页")
     db.execute(select(User.id).where(User.id == user.id).with_for_update())
-    progress = db.get(ActivityProgress, (user.id, body.classroom_id, activity.id, activity.version))
+    progress = db.get(ActivityProgress, (user.id, body.classroom_id, activity.id))
     if not progress:
-        progress = ActivityProgress(user_id=user.id, classroom_id=body.classroom_id, activity_id=activity.id, version=activity.version, visited_pages=[])
+        progress = ActivityProgress(user_id=user.id, classroom_id=body.classroom_id, activity_id=activity.id, visited_pages=[])
         db.add(progress)
     first_visit = page["id"] not in progress.visited_pages
     progress.page_no = body.page_no
     progress.visited_pages = sorted(set(progress.visited_pages) | {page["id"]})
-    progress.completed = bool(required) and set(required).issubset(progress.visited_pages)
+    progress.completed = reading_completed(activity, progress)
     if first_visit:
-        db.add(LearningRecord(user_id=user.id, classroom_id=body.classroom_id, activity_id=activity.id, version=activity.version,
+        db.add(LearningRecord(user_id=user.id, classroom_id=body.classroom_id, activity_id=activity.id,
                               kind="participation", data={"page_no": body.page_no, "page_id": page["id"]}))
     db.commit()
     return {**progress_payload(db, user, body.classroom_id, activity), "participation_only": True}
@@ -359,7 +297,7 @@ def participation(activity_id: str, body: ParticipationInput, db: Annotated[Sess
         raise HTTPException(422, "此活动不支持阅读记录")
     if activity.material_id:
         material = authorize_material(db, user, body.classroom_id, activity.material_id)
-        payload = material_payload(db, material, activity.content.get("material_version"))
+        payload = material_payload(db, material)
         if payload["status"] != "ready":
             raise HTTPException(409, "资料尚未就绪")
         if body.page_no is not None and body.page_no not in {p["page_no"] for p in payload["pages"]}:
@@ -370,7 +308,6 @@ def participation(activity_id: str, body: ParticipationInput, db: Annotated[Sess
         user_id=user.id,
         classroom_id=body.classroom_id,
         activity_id=activity.id,
-        version=activity.version,
         kind="participation",
         data=body.model_dump(exclude={"classroom_id"}, exclude_none=True),
     )
@@ -379,11 +316,11 @@ def participation(activity_id: str, body: ParticipationInput, db: Annotated[Sess
     return {"record_id": record.id, "participation_only": True}
 
 
-@router.get("/materials/{material_id}/versions/{version}")
+@router.get("/materials/{material_id}")
 def get_material(
-    material_id: int, version: int, classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]
+    material_id: int, classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]
 ):
-    return material_payload(db, authorize_material(db, user, classroom_id, material_id, version), version)
+    return material_payload(db, authorize_material(db, user, classroom_id, material_id))
 
 
 @router.get("/library")
@@ -396,5 +333,5 @@ def library(classroom_id: int, db: Annotated[Session, Depends(get_db)], user: An
         except HTTPException:
             continue
         payload = material_payload(db, material)
-        results.append({key: payload[key] for key in ("id", "title", "chapter_id", "kind", "version", "status")})
+        results.append({key: payload[key] for key in ("id", "title", "chapter_id", "kind", "status", "supplementary", "duration_seconds")})
     return results

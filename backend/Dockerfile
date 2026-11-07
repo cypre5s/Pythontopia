@@ -5,6 +5,7 @@ COPY backend/requirements.lock ./requirements.lock
 RUN pip install --no-cache-dir -r requirements.lock
 COPY backend/ ./
 COPY data/course-pack-43/json/ /app/data/course-pack-43/json/
+COPY data/course-pack-43/video_manifest.json data/course-pack-43/video_transcripts.json /app/data/course-pack-43/
 COPY data/world/ /app/data/world/
 RUN useradd --uid 10001 --create-home reborn && mkdir -p /app/storage && chown -R reborn:reborn /app
 USER reborn

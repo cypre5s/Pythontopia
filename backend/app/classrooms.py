@@ -97,7 +97,6 @@ class ReleaseInput(BaseModel):
     status: Literal["published", "paused"] = "published"
     opens_at: datetime | None = None
     prerequisite_chapter_id: int | None = None
-    version: int = Field(default=1, ge=1)
 
     @field_validator("opens_at")
     @classmethod
@@ -178,7 +177,6 @@ def teacher_courses(db: Annotated[Session, Depends(get_db)], user: Annotated[Use
                 "chapter_id": a.chapter_id,
                 "title": a.title,
                 "kind": a.kind,
-                "version": a.version,
                 "npc_key": a.npc_key,
                 "assistant_allowed": a.assistant_allowed,
                 "material_id": a.material_id,
@@ -229,7 +227,6 @@ def progress(classroom_id: int, db: Annotated[Session, Depends(get_db)], user: A
                 "id": e.id,
                 "user_id": e.user_id,
                 "node_id": e.node_id,
-                "content_version": e.content_version,
                 "created_at": as_utc(e.created_at).isoformat(),
             }
             for e in events
@@ -263,7 +260,7 @@ class ActivityInput(BaseModel):
 
 @router.post("/teacher/activities", status_code=201)
 def create_activity(body: ActivityInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
-    from .models import ActivityVersion, Material, MaterialVersion
+    from .models import Material
 
     if db.get(Activity, body.id):
         raise HTTPException(409, "活动ID已存在")
@@ -277,22 +274,15 @@ def create_activity(body: ActivityInput, db: Annotated[Session, Depends(get_db)]
         raise HTTPException(403, "资料不属于当前教师或章节")
     if body.material_id and not material:
         raise HTTPException(404, "资料不存在")
-    material_version = (
-        db.scalar(select(MaterialVersion.version).where(MaterialVersion.material_id == body.material_id).order_by(MaterialVersion.version.desc()))
-        if body.material_id
-        else None
-    )
     item = Activity(
         **body.model_dump(exclude={"knowledge_point_ids"}),
         owner_id=user.id,
-        version=1,
-        content={"published": True, "material_version": material_version, "question_ids": [], "knowledge_point_ids": body.knowledge_point_ids},
+        content={"published": True, "question_ids": [], "knowledge_point_ids": body.knowledge_point_ids},
     )
     db.add(item)
     db.flush()
-    db.add(ActivityVersion(activity_id=item.id, version=1, snapshot={**body.model_dump(exclude={"knowledge_point_ids"}), "content": item.content}))
     db.commit()
-    return {"id": item.id, "version": item.version}
+    return {"id": item.id}
 
 
 class ActivityUpdate(BaseModel):
@@ -313,13 +303,13 @@ class ActivityUpdate(BaseModel):
 
 @router.put("/teacher/activities/{activity_id}")
 def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
-    from .models import ActivityVersion, Material
+    from .models import Material
 
     item = db.get(Activity, activity_id)
     if not item:
         raise HTTPException(404, "活动不存在")
     if item.owner_id != user.id and user.role != "admin":
-        raise HTTPException(403, "共享种子不可覆盖，请创建教师自己的活动并绑定新任务版本")
+        raise HTTPException(403, "共享种子不可覆盖，请创建教师自己的活动并绑定任务")
     changes = body.model_dump(exclude_unset=True)
     new_points = changes.pop("knowledge_point_ids", None)
     if new_points is not None:
@@ -334,24 +324,12 @@ def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Sessio
         material = db.get(Material, changes["material_id"])
         if not material or material.chapter_id != item.chapter_id or (material.owner_id not in {None, user.id} and user.role != "admin"):
             raise HTTPException(403, "资料不属于当前教师或章节")
-    fields = ("title", "kind", "material_id", "npc_key", "assistant_allowed", "content")
-    if not db.get(ActivityVersion, (item.id, item.version)):
-        db.add(ActivityVersion(activity_id=item.id, version=item.version, snapshot={key: getattr(item, key) for key in fields}))
     for key, value in changes.items():
         setattr(item, key, value)
     if new_points is not None:
         item.content = {**item.content, "knowledge_point_ids": new_points}
-    if changes.get("material_id"):
-        from .models import MaterialVersion
-
-        material_version = db.scalar(
-            select(MaterialVersion.version).where(MaterialVersion.material_id == item.material_id).order_by(MaterialVersion.version.desc())
-        )
-        item.content = {**item.content, "material_version": material_version}
-    item.version += 1
-    db.add(ActivityVersion(activity_id=item.id, version=item.version, snapshot={key: getattr(item, key) for key in fields}))
     db.commit()
-    return {"id": item.id, "version": item.version}
+    return {"id": item.id}
 
 
 class QuestionInput(BaseModel):
@@ -390,27 +368,20 @@ def create_question(body: QuestionInput, db: Annotated[Session, Depends(get_db)]
     if not activity or (activity.owner_id != user.id and user.role != "admin"):
         raise HTTPException(403, "只能管理自己活动中的题目")
     if db.get(Question, body.id):
-        raise HTTPException(409, "题目ID已存在，修改请创建新ID并发布新任务版本")
+        raise HTTPException(409, "题目ID已存在")
     if body.kind == "python" and not body.hidden_cases:
         raise HTTPException(422, "编程题必须设置私有用例")
     if body.kind == "boolean" and not isinstance(body.answer, bool):
         raise HTTPException(422, "判断题答案必须是布尔值")
     if body.kind == "single_choice" and body.answer not in body.options:
         raise HTTPException(422, "单选答案必须属于选项")
-    question = Question(**body.model_dump(exclude={"answer", "hidden_cases"}), chapter_id=activity.chapter_id, version=1)
+    question = Question(**body.model_dump(exclude={"answer", "hidden_cases"}), chapter_id=activity.chapter_id)
     db.add(question)
     db.flush()
     db.add(QuestionSecret(question_id=question.id, answer=body.answer, hidden_cases=body.hidden_cases))
-    from .models import ActivityVersion
-
-    fields = ("title", "kind", "material_id", "npc_key", "assistant_allowed", "content")
-    if not db.get(ActivityVersion, (activity.id, activity.version)):
-        db.add(ActivityVersion(activity_id=activity.id, version=activity.version, snapshot={key: getattr(activity, key) for key in fields}))
     activity.content = {**activity.content, "question_ids": [*activity.content.get("question_ids", []), question.id]}
-    activity.version += 1
-    db.add(ActivityVersion(activity_id=activity.id, version=activity.version, snapshot={key: getattr(activity, key) for key in fields}))
     db.commit()
-    return {"id": question.id, "version": 1, "activity_version": activity.version}
+    return {"id": question.id}
 
 
 @router.get("/teacher/questions")
@@ -477,7 +448,6 @@ def list_releases(classroom_id: int, db: Annotated[Session, Depends(get_db)], us
         {
             "classroom_id": r.classroom_id,
             "chapter_id": r.chapter_id,
-            "version": r.version,
             "status": r.status,
             "opens_at": as_utc(r.opens_at).isoformat() if r.opens_at is not None else None,
             "prerequisite_chapter_id": r.prerequisite_chapter_id,
@@ -500,7 +470,6 @@ def student_record(classroom_id: int, student_id: int, db: Annotated[Session, De
                 "id": e.id,
                 "node_id": e.node_id,
                 "player_quest_id": e.player_quest_id,
-                "content_version": e.content_version,
                 "evidence": e.evidence,
                 "created_at": as_utc(e.created_at).isoformat(),
             }
@@ -514,7 +483,6 @@ def student_record(classroom_id: int, student_id: int, db: Annotated[Session, De
             {
                 "id": r.id,
                 "activity_id": r.activity_id,
-                "version": r.version,
                 "kind": r.kind,
                 "data": r.data,
                 "created_at": as_utc(r.created_at).isoformat(),
@@ -525,7 +493,6 @@ def student_record(classroom_id: int, student_id: int, db: Annotated[Session, De
             {
                 "id": s.id,
                 "question_id": s.question_id,
-                "version": s.version,
                 "mode": s.mode,
                 "status": s.status,
                 "answer": s.answer,

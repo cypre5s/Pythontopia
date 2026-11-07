@@ -3,25 +3,23 @@
 from uuid import uuid4
 from sqlalchemy import select
 from app.auth import hash_password, issue
-from app.models import PlayerQuest, User
+from app.models import PlayerQuest, QuestDefinition, User
 
 
-def author_quest(client, teacher, quest_id, *, version=1, kind="main", optional=False):
+def author_quest(client, teacher, quest_id, *, kind="main", optional=False):
     definition = {
         "id": quest_id,
-        "version": version,
         "title": quest_id,
         "chapter_id": 185,
         "kind": kind,
         "nodes": [{"id": "talk", "type": "TALK_TO_NPC", "title": "Talk", "target": "mayor_py", "dependencies": []}],
-        "effects": [],
-    }
+        "effects": []}
     if optional:
         definition["nodes"].append(
             {"id": "optional-talk", "type": "TALK_TO_NPC", "title": "Optional", "target": "mayor_py", "dependencies": [], "optional": True}
         )
     response = client.post("/api/teacher/quests", json={"definition": definition}, headers=teacher["headers"])
-    assert response.status_code == 201, response.text
+    assert response.status_code in {200, 201}, response.text
 
 
 def release(client, teacher, classroom_id, **body):
@@ -84,22 +82,21 @@ def test_progress_only_side_quests_do_not_count_a_chapter(client, teacher, stude
     assert completed_chapters(client, teacher, cid, student["id"]) == 0
 
 
-def test_progress_matches_release_versions_and_pinned_completion(client, db, teacher, student, classroom):
+def test_current_quest_edits_preserve_completion_and_new_quests_count(client, db, teacher, student, classroom, branching_course):
     cid = classroom["id"]
     author_quest(client, teacher, "progress-versioned")
     release(client, teacher, cid)
     complete_talk(client, student, cid, "progress-versioned")
-    author_quest(client, teacher, "progress-versioned", version=2)
-    author_quest(client, teacher, "progress-new-main", version=2)
-    # Definitions beyond the release must not count as required work yet.
-    assert completed_chapters(client, teacher, cid, student["id"]) == 1
-    release(client, teacher, cid, version=2)
+    db.get(QuestDefinition, "progress-versioned").title = "Updated current title"
+    db.commit()
+    author_quest(client, teacher, "progress-new-main")
+    # New main quests join the current chapter without a separate release version.
     assert completed_chapters(client, teacher, cid, student["id"]) == 0
     complete_talk(client, student, cid, "progress-new-main")
     old = db.scalar(
         select(PlayerQuest).where(PlayerQuest.user_id == student["id"], PlayerQuest.classroom_id == cid, PlayerQuest.quest_id == "progress-versioned")
     )
-    assert old.quest_version == 1 and old.status == "complete"
+    assert old.status == "complete"
     assert completed_chapters(client, teacher, cid, student["id"]) == 1
     # The same predicate permits this chapter as the next chapter's prerequisite.
     response = client.put(

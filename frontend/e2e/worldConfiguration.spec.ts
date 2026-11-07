@@ -206,7 +206,7 @@ test("map preview, filters, WASD, library doors and cross-map guidance share one
   expect(created.status()).toBe(201);
   const classroom = await created.json() as { id: number; join_code: string };
   const release = await request.put(`/api/teacher/classrooms/${classroom.id}/releases/179`, {
-    headers: teacher, data: { status: "published", version: 2 },
+    headers: teacher, data: { status: "published", },
   });
   expect(release.ok(), await release.text()).toBeTruthy();
   await page.goto("/");

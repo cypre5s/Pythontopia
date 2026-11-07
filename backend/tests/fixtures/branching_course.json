@@ -1,0 +1,240 @@
+{
+  "activities": [
+    {
+      "id": "ch2-lesson",
+      "chapter_id": 180,
+      "title": "Test ch2-lesson",
+      "kind": "lesson",
+      "material_id": 187,
+      "npc_key": "professor",
+      "assistant_allowed": true,
+      "content": {
+        "published": true,
+        "question_ids": []
+      },
+      "knowledge_point_pages": [
+        10731,
+        10732,
+        10734,
+        10735,
+        10736,
+        10750
+      ],
+      "knowledge_point_mode": "pages"
+    },
+    {
+      "id": "ch2-concept",
+      "chapter_id": 180,
+      "title": "Test ch2-concept",
+      "kind": "practice",
+      "material_id": null,
+      "npc_key": "arena_guard",
+      "assistant_allowed": true,
+      "content": {
+        "published": true,
+        "question_ids": [
+          "ch2-assembly",
+          "ch2-binary",
+          "ch2-language"
+        ]
+      },
+      "knowledge_point_pages": [
+        10731,
+        10732,
+        10734
+      ],
+      "knowledge_point_mode": "pages"
+    },
+    {
+      "id": "ch2-io",
+      "chapter_id": 180,
+      "title": "Test ch2-io",
+      "kind": "lesson",
+      "material_id": 187,
+      "npc_key": "professor",
+      "assistant_allowed": true,
+      "content": {
+        "published": true,
+        "question_ids": []
+      },
+      "knowledge_point_pages": [
+        10771,
+        10786,
+        10787
+      ],
+      "knowledge_point_mode": "pages"
+    },
+    {
+      "id": "ch2-code",
+      "chapter_id": 180,
+      "title": "Test ch2-code",
+      "kind": "practice",
+      "material_id": null,
+      "npc_key": "arena_guard",
+      "assistant_allowed": true,
+      "content": {
+        "published": true,
+        "question_ids": [
+          "course-476"
+        ]
+      },
+      "knowledge_point_pages": [],
+      "knowledge_point_mode": "problem"
+    }
+  ],
+  "quest": {
+    "id": "test-branching",
+    "title": "Test branch and parallel requirements",
+    "chapter_id": 180,
+    "kind": "main",
+    "nodes": [
+      {
+        "id": "mission",
+        "type": "TALK_TO_NPC",
+        "title": "Test mission",
+        "target": "mayor_py",
+        "dependencies": []
+      },
+      {
+        "id": "professor",
+        "type": "TALK_TO_NPC",
+        "title": "Test professor",
+        "target": "professor",
+        "dependencies": [
+          "mission"
+        ]
+      },
+      {
+        "id": "learn-language",
+        "type": "STUDY_LESSON",
+        "title": "Test learn-language",
+        "dependencies": [
+          "professor"
+        ],
+        "activity_id": "ch2-lesson"
+      },
+      {
+        "id": "choose-route",
+        "type": "PLAY_DIALOGUE",
+        "title": "Test choose-route",
+        "target": "professor",
+        "dependencies": [
+          "learn-language"
+        ],
+        "dialogue_id": "language",
+        "choices": [
+          {
+            "id": "concept",
+            "label": "辨认程序设计语言"
+          },
+          {
+            "id": "code",
+            "label": "补学输入输出并编程"
+          }
+        ]
+      },
+      {
+        "id": "concept-practice",
+        "type": "COMPLETE_PRACTICE",
+        "title": "Test concept-practice",
+        "dependencies": [
+          "choose-route"
+        ],
+        "condition": {
+          "node": "choose-route",
+          "choice": "concept"
+        },
+        "activity_id": "ch2-concept"
+      },
+      {
+        "id": "io-study",
+        "type": "STUDY_LESSON",
+        "title": "Test io-study",
+        "dependencies": [
+          "choose-route"
+        ],
+        "condition": {
+          "node": "choose-route",
+          "choice": "code"
+        },
+        "activity_id": "ch2-io"
+      },
+      {
+        "id": "code-practice",
+        "type": "COMPLETE_PRACTICE",
+        "title": "Test code-practice",
+        "dependencies": [
+          "io-study"
+        ],
+        "activity_id": "ch2-code"
+      },
+      {
+        "id": "meet-librarian",
+        "type": "TALK_TO_NPC",
+        "title": "Test meet-librarian",
+        "target": "librarian_doc",
+        "dependencies": [
+          "concept-practice",
+          "code-practice"
+        ],
+        "aggregation": "ANY"
+      },
+      {
+        "id": "read-shelf",
+        "type": "INTERACT_OBJECT",
+        "title": "Test read-shelf",
+        "target": "library_shelf",
+        "dependencies": [
+          "concept-practice",
+          "code-practice"
+        ],
+        "aggregation": "ANY"
+      },
+      {
+        "id": "report-language",
+        "type": "REPORT_BACK",
+        "title": "Test report-language",
+        "target": "mayor_py",
+        "dependencies": [
+          "meet-librarian",
+          "read-shelf"
+        ]
+      }
+    ],
+    "effects": [
+      {
+        "type": "set_world_flag",
+        "key": "language_archive_restored"
+      }
+    ]
+  },
+  "dialogue": [
+    {
+      "id": "language",
+      "speaker": "林教授",
+      "text": "Test dialogue language",
+      "choices": [
+        {
+          "id": "concept",
+          "label": "辨认程序设计语言",
+          "next": "concept-path"
+        },
+        {
+          "id": "code",
+          "label": "补学输入输出并编程",
+          "next": "code-path"
+        }
+      ]
+    },
+    {
+      "id": "concept-path",
+      "speaker": "林教授",
+      "text": "Test dialogue concept-path"
+    },
+    {
+      "id": "code-path",
+      "speaker": "林教授",
+      "text": "Test dialogue code-path"
+    }
+  ]
+}

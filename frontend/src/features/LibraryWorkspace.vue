@@ -10,7 +10,7 @@
     <div class="library-list">
       <button
         v-for="material in materials"
-        :key="`${material.id}-${material.version}`"
+        :key="material.id"
         :disabled="material.status !== 'ready'"
         @click="open(material)"
       >
@@ -18,12 +18,11 @@
         ><span
           ><strong>{{ material.title }}</strong
           ><small
-            >{{ kindLabels[material.kind] ?? "课程资料" }} · 版本
-            {{ material.version }}</small
+            >{{ material.supplementary ? "补充视频" : kindLabels[material.kind] ?? "课程资料" }}</small
           ></span
         ><span>{{
           material.status === "ready"
-            ? "阅读"
+            ? material.kind === "video" ? "观看" : "阅读"
             : material.status === "failed"
               ? "处理失败"
               : "处理中"
@@ -58,7 +57,6 @@ function open(material: Material) {
   session.navigate({
     kind: "material",
     material_id: material.id,
-    version: material.version,
   });
 }
 onMounted(async () => {

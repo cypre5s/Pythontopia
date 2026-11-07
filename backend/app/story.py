@@ -1,4 +1,4 @@
-"""Versioned deterministic story scenes. All progress is verified by business services."""
+"""Deterministic story scenes. All progress is verified by business services."""
 
 import hashlib
 import json
@@ -12,8 +12,8 @@ from sqlalchemy.orm import Session
 from .auth import current_user
 from .courses import authorize_activity, authorize_chapter, authorize_classroom, chapter_available, material_payload, authorize_material
 from .db import get_db
-from .models import Activity, ActivityProgress, ActivityVersion, ChapterRelease, LearningRecord, MaterialVersion, Npc, NodeState, PlayerQuest, QuestDefinition, StoryDefinition, StorySession, User, WorldFlag
-from .quests import EventInput, apply_quest_event, check_near, ensure_quests, node_statuses, validate_evidence, world_payload
+from .models import Activity, ActivityProgress, ChapterRelease, LearningRecord, Material, Npc, NodeState, PlayerQuest, QuestDefinition, StoryDefinition, StorySession, User, WorldFlag
+from .quests import EventInput, apply_quest_event, authorize_quest, check_near, ensure_quests, node_statuses, quest_visible, validate_evidence, world_payload
 
 router = APIRouter(tags=["story"])
 
@@ -23,7 +23,7 @@ def _short(value):
 
 
 def validate_story(
-    content: dict, db: Session | None = None, quest_definition: dict | None = None, story_id: str | None = None, story_version: int | None = None
+    content: dict, db: Session | None = None, quest_definition: dict | None = None, story_id: str | None = None
 ) -> dict:
     if not isinstance(content, dict) or set(content) - {"schema_version", "bindings", "entries", "nodes", "checkpoint_effects"}:
         raise ValueError("无效演出字段")
@@ -34,34 +34,32 @@ def validate_story(
         raise ValueError("演出需要有界活动绑定和NPC入口")
     goals = {node["id"]: node for node in quest_definition["nodes"]} if quest_definition else None
     for key, binding in bindings.items():
-        if not _short(key) or not isinstance(binding, dict) or set(binding) != {"activity_id", "version", "goal_id"}:
+        if not _short(key) or not isinstance(binding, dict) or set(binding) != {"activity_id", "goal_id"}:
             raise ValueError("无效活动绑定")
-        if not _short(binding["activity_id"]) or not _short(binding["goal_id"]) or type(binding["version"]) is not int or binding["version"] < 1:
-            raise ValueError("无效活动版本或目标")
+        if not _short(binding["activity_id"]) or not _short(binding["goal_id"]):
+            raise ValueError("无效活动或目标")
         if db:
-            snapshot = db.get(ActivityVersion, (binding["activity_id"], binding["version"]))
             activity = db.get(Activity, binding["activity_id"])
-            if not snapshot or not activity:
-                raise ValueError("活动绑定版本不存在")
-            if snapshot.snapshot.get("content", {}).get("published") is False:
+            if not activity:
+                raise ValueError("活动绑定不存在")
+            if activity.content.get("published") is False:
                 raise ValueError("演出不能绑定未发布活动")
             if quest_definition and activity.chapter_id != quest_definition["chapter_id"]:
                 raise ValueError("演出活动必须属于当前章节")
-            if snapshot.snapshot["kind"] in {"lesson", "reading"}:
-                completion = snapshot.snapshot.get("content", {}).get("completion")
+            if activity.kind in {"lesson", "reading"}:
+                completion = activity.content.get("completion")
                 if not isinstance(completion, dict) or set(completion) != {"required_page_ids"}:
                     raise ValueError("演出阅读活动必须声明阅读参与完成规则")
                 required = completion["required_page_ids"]
-                material_id = snapshot.snapshot.get("material_id")
-                material_version = snapshot.snapshot.get("content", {}).get("material_version", 1)
-                material = db.scalar(select(MaterialVersion).where(MaterialVersion.material_id == material_id, MaterialVersion.version == material_version))
+                material_id = activity.material_id
+                material = db.get(Material, material_id)
                 if not isinstance(required, list) or not required or any(type(key) is not int for key in required) or len(set(required)) != len(required):
                     raise ValueError("阅读参与规则必须引用非重复真实页面ID")
                 if not material or not set(required).issubset({page["id"] for page in material.content.get("pages", [])}):
                     raise ValueError("阅读参与规则引用了不存在的资料页")
         if goals is not None:
             goal = goals.get(binding["goal_id"])
-            if not goal or goal.get("activity_id") != binding["activity_id"] or goal.get("activity_version", 1) != binding["version"]:
+            if not goal or goal.get("activity_id") != binding["activity_id"]:
                 raise ValueError("活动绑定与任务目标不一致")
             if goal["type"] not in {"STUDY_LESSON", "COMPLETE_PRACTICE", "PASS_ASSESSMENT"}:
                 raise ValueError("活动绑定必须引用学习或正式练习目标")
@@ -99,12 +97,12 @@ def validate_story(
                 goal_id = node["checkpoint"]
                 if not _short(goal_id) or (goals is not None and (goal_id not in goals or goals[goal_id]["type"] not in {"TALK_TO_NPC", "PLAY_DIALOGUE", "REPORT_BACK"})):
                     raise ValueError("对白检查点必须引用交谈目标")
-                if goals is not None and story_id is not None and story_version is not None and goals[goal_id]["type"] == "PLAY_DIALOGUE":
-                    expected = f"story:{story_id}:v{story_version}:{goal_id}"
+                if goals is not None and story_id is not None and goals[goal_id]["type"] == "PLAY_DIALOGUE":
+                    expected = f"story:{story_id}:{goal_id}"
                     if goals[goal_id].get("dialogue_id") != expected:
-                        raise ValueError("对白检查点版本标记不匹配")
+                        raise ValueError("对白检查点标记不匹配")
                     if len(f"dialogue:completed:{goals[goal_id]['target']}:{expected}") > 100:
-                        raise ValueError("对白检查点版本标记过长")
+                        raise ValueError("对白检查点标记过长")
                 checkpoints.add(goal_id)
         elif kind == "activity":
             if set(node) != {"id", "type", "binding", "returns"} or not _short(node.get("binding")) or node["binding"] not in bindings:
@@ -228,27 +226,33 @@ def _open_session(db, user, classroom_id):
 
 
 def _definition(db, user, session):
-    story = db.get(StoryDefinition, (session.story_id, session.story_version))
+    story = db.get(StoryDefinition, session.story_id)
     if not story:
-        raise HTTPException(409, "演出版本不存在")
+        raise HTTPException(409, "演出不存在")
+    definition = authorize_quest(db, user, session.classroom_id, story.quest_id)
+    if definition.chapter_id != story.chapter_id:
+        raise HTTPException(409, "演出与当前任务章节不一致")
     authorize_chapter(db, user, session.classroom_id, story.chapter_id)
     instance = db.scalar(select(PlayerQuest).where(PlayerQuest.user_id == user.id, PlayerQuest.classroom_id == session.classroom_id,
                                                   PlayerQuest.quest_id == story.quest_id))
-    if not instance or instance.quest_version != story.quest_version:
-        raise HTTPException(403, "演出不属于当前任务版本")
+    if not instance:
+        raise HTTPException(403, "演出不属于当前任务")
     return story, instance
 
 
 def _states(db, instance):
-    definition = db.get(QuestDefinition, (instance.quest_id, instance.quest_version))
+    definition = db.get(QuestDefinition, instance.quest_id)
     states = {state.node_id: state for state in db.scalars(select(NodeState).where(NodeState.player_quest_id == instance.id))}
     return definition.definition, node_statuses(definition.definition, states)
 
 
 def _legacy_ready(db, user, classroom_id, npc_key):
+    classroom = authorize_classroom(db, user, classroom_id)
     for instance in db.scalars(select(PlayerQuest).where(PlayerQuest.user_id == user.id, PlayerQuest.classroom_id == classroom_id,
                                                         PlayerQuest.status != "complete")):
-        if db.scalar(select(StoryDefinition.id).where(StoryDefinition.quest_id == instance.quest_id, StoryDefinition.quest_version == instance.quest_version)):
+        if not quest_visible(db.get(QuestDefinition, instance.quest_id), user, classroom):
+            continue
+        if db.scalar(select(StoryDefinition.id).where(StoryDefinition.quest_id == instance.quest_id)):
             continue
         definition, statuses = _states(db, instance)
         if not chapter_available(db, user, classroom_id, definition["chapter_id"]):
@@ -270,10 +274,10 @@ def _nodes(story):
 
 def _available_activity(db, user, session, binding):
     try:
-        activity = authorize_activity(db, user, session.classroom_id, binding["activity_id"], binding["version"])
+        activity = authorize_activity(db, user, session.classroom_id, binding["activity_id"])
         if activity.material_id:
             material = authorize_material(db, user, session.classroom_id, activity.material_id)
-            if material_payload(db, material, activity.content.get("material_version"))["status"] != "ready":
+            if material_payload(db, material)["status"] != "ready":
                 return None
         return activity
     except HTTPException as exc:
@@ -289,7 +293,6 @@ def _settle(db, user, session, story):
         if node["type"] == "end":
             session.status = "ended"
             session.pending_activity_id = None
-            session.pending_activity_version = None
             session.return_mapping = {}
             return
         if node["type"] == "dialogue":
@@ -307,7 +310,6 @@ def _settle(db, user, session, story):
             continue
         session.status = "waiting"
         session.pending_activity_id = activity.id
-        session.pending_activity_version = activity.version
         session.return_mapping = node["returns"]
         return
     raise HTTPException(409, "演出自动推进超过限制")
@@ -320,9 +322,9 @@ def _view(db, user, session):
         source = _nodes(story)[session.node_id]
         node = {key: source[key] for key in ("id", "text", "speaker", "choices") if key in source}
     elif session.status == "waiting":
-        item = authorize_activity(db, user, session.classroom_id, session.pending_activity_id, session.pending_activity_version)
-        progress = db.get(ActivityProgress, (user.id, session.classroom_id, item.id, item.version))
-        activity = {"id": item.id, "kind": item.kind, "version": item.version, "page_no": progress.page_no if progress else None}
+        item = authorize_activity(db, user, session.classroom_id, session.pending_activity_id)
+        progress = db.get(ActivityProgress, (user.id, session.classroom_id, item.id))
+        activity = {"id": item.id, "kind": item.kind, "page_no": progress.page_no if progress else None}
     return {"id": session.id, "revision": session.revision, "status": session.status, "npc_key": session.npc_key, "node": node, "activity": activity}
 
 
@@ -334,7 +336,7 @@ def _response(db, user, session):
 
 @router.post("/story/interactions")
 def interact(body: InteractionInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
-    authorize_classroom(db, user, body.classroom_id)
+    classroom = authorize_classroom(db, user, body.classroom_id)
     ensure_quests(db, user, body.classroom_id)
     _student_lock(db, user, body.classroom_id)
     npc = db.get(Npc, body.npc_key)
@@ -344,12 +346,13 @@ def interact(body: InteractionInput, db: Annotated[Session, Depends(get_db)], us
     previous = _open_session(db, user, body.classroom_id)
     abandoned = False
     if previous:
-        previous_story = db.get(StoryDefinition, (previous.story_id, previous.story_version))
-        if previous_story and not chapter_available(db, user, body.classroom_id, previous_story.chapter_id):
+        previous_story = db.get(StoryDefinition, previous.story_id)
+        previous_quest = db.get(QuestDefinition, previous_story.quest_id) if previous_story else None
+        if (not previous_story or not quest_visible(previous_quest, user, classroom)
+                or not chapter_available(db, user, body.classroom_id, previous_story.chapter_id)):
             previous.status = "ended"
             previous.revision += 1
             previous.pending_activity_id = None
-            previous.pending_activity_version = None
             previous.return_mapping = {}
             db.flush()
             previous = None
@@ -363,14 +366,16 @@ def interact(body: InteractionInput, db: Annotated[Session, Depends(get_db)], us
     if previous and (previous.npc_key == body.npc_key or previous.status == "waiting"):
         return _response(db, user, previous)
     selected = None
-    for story in db.scalars(select(StoryDefinition).order_by(StoryDefinition.version.desc())):
+    for story in db.scalars(select(StoryDefinition)):
+        if not quest_visible(db.get(QuestDefinition, story.quest_id), user, classroom):
+            continue
         if body.npc_key not in story.content["entries"]:
             continue
         release = db.get(ChapterRelease, (body.classroom_id, story.chapter_id))
-        if not release or story.version > release.version or not chapter_available(db, user, body.classroom_id, story.chapter_id):
+        if not release or not chapter_available(db, user, body.classroom_id, story.chapter_id):
             continue
         instance = db.scalar(select(PlayerQuest).where(PlayerQuest.user_id == user.id, PlayerQuest.classroom_id == body.classroom_id,
-                                                      PlayerQuest.quest_id == story.quest_id, PlayerQuest.quest_version == story.quest_version))
+                                                      PlayerQuest.quest_id == story.quest_id))
         if instance:
             authorize_chapter(db, user, body.classroom_id, story.chapter_id)
             selected = story, instance
@@ -378,7 +383,7 @@ def interact(body: InteractionInput, db: Annotated[Session, Depends(get_db)], us
     if not selected:
         if abandoned:
             db.commit()
-        raise HTTPException(404, "此NPC尚未绑定当前版本演出")
+        raise HTTPException(404, "此NPC尚未绑定当前演出")
     story, instance = selected
     if instance.status == "complete" and _legacy_ready(db, user, body.classroom_id, body.npc_key):
         if previous:
@@ -392,14 +397,14 @@ def interact(body: InteractionInput, db: Annotated[Session, Depends(get_db)], us
         allowed = key == "always" or key == "goal_complete" and statuses[value] == "complete" or key == "goal_ready" and statuses[value] == "ready"
         if key == "activity_started":
             binding = story.content["bindings"][value]
-            allowed = bool(db.get(ActivityProgress, (user.id, body.classroom_id, binding["activity_id"], binding["version"])))
+            allowed = bool(db.get(ActivityProgress, (user.id, body.classroom_id, binding["activity_id"])))
         if allowed:
             root = route["node"]
             break
     if previous:
         previous.status = "ended"
         db.flush()
-    session = StorySession(user_id=user.id, classroom_id=body.classroom_id, story_id=story.id, story_version=story.version,
+    session = StorySession(user_id=user.id, classroom_id=body.classroom_id, story_id=story.id,
                            npc_key=body.npc_key, node_id=root, status="active", revision=0, receipts=[])
     db.add(session)
     _settle(db, user, session, story)
@@ -463,9 +468,9 @@ def advance(session_id: str, body: AdvanceInput, db: Annotated[Session, Depends(
         goal = next(item for item in definition["nodes"] if item["id"] == checkpoint)
         if goal.get("target") != session.npc_key:
             raise HTTPException(409, "对白检查点与NPC不匹配")
-        marker = f"story:{story.id}:v{story.version}:{checkpoint}"
+        marker = f"story:{story.id}:{checkpoint}"
         if goal["type"] == "PLAY_DIALOGUE" and goal.get("dialogue_id", session.npc_key) != marker:
-            raise HTTPException(409, "对白检查点版本标记不匹配")
+            raise HTTPException(409, "对白检查点标记不匹配")
         flag = f"dialogue:completed:{session.npc_key}:{marker}"
         if not db.get(WorldFlag, (user.id, session.classroom_id, flag)):
             db.add(WorldFlag(user_id=user.id, classroom_id=session.classroom_id, key=flag))
@@ -506,7 +511,7 @@ def return_activity(session_id: str, body: ReturnInput, db: Annotated[Session, D
     elif statuses[goal["id"]] == "ready":
         if activity.kind in {"lesson", "reading"}:
             record = db.scalar(select(LearningRecord).where(LearningRecord.user_id == user.id, LearningRecord.classroom_id == session.classroom_id,
-                                                            LearningRecord.activity_id == activity.id, LearningRecord.version == activity.version)
+                                                            LearningRecord.activity_id == activity.id)
                                .order_by(LearningRecord.created_at.desc()))
             evidence = {"record_id": record.id} if record else {}
         try:
@@ -519,7 +524,6 @@ def return_activity(session_id: str, body: ReturnInput, db: Annotated[Session, D
             outcome = "completed"
     session.node_id = session.return_mapping[outcome]
     session.pending_activity_id = None
-    session.pending_activity_version = None
     session.return_mapping = {}
     _settle(db, user, session, story)
     _receipt(session, body, signature)

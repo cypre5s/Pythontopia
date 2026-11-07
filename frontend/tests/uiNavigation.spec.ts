@@ -204,13 +204,13 @@ describe("workspace return navigation", () => {
     session.navigate({
       kind: "material",
       material_id: 43,
-      version: 2,
+
       page_no: 3,
     });
     expect(session.workspace).toEqual({
       kind: "material",
       material_id: 43,
-      version: 2,
+
       page_no: 3,
     });
     expect(session.previousWorkspace).toEqual({ kind: "library" });
@@ -271,7 +271,7 @@ function quest(id: string, options: Partial<Quest> = {}): Quest {
     title: id,
     kind: "main",
     chapter_id: 179,
-    version: 1,
+
     status: "active",
     nodes: [],
     ...options,

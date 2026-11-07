@@ -47,7 +47,7 @@ export const useSession = defineStore("session", () => {
   let storyGeneration = 0;
   let pendingStoryMutation: { key: string; eventId: string } | null = null;
   let readingProgressTask: Promise<unknown> = Promise.resolve();
-  let latestReading: { activityId: string; pageNo: number; version: number } | null = null;
+  let latestReading: { activityId: string; pageNo: number } | null = null;
   let loadGeneration = 0;
   async function load() {
     const generation = ++loadGeneration;
@@ -98,9 +98,9 @@ export const useSession = defineStore("session", () => {
     if (classroomId.value === id && user.value?.id === owner)
       world.value = result.world;
   }
-  async function activity(id: string, version?: number) {
+  async function activity(id: string) {
     return api.get<Activity>(
-      `/activities/${id}?classroom_id=${classroomId.value}${version === undefined ? "" : `&version=${version}`}`,
+      `/activities/${id}?classroom_id=${classroomId.value}`,
     );
   }
   function open(next: Workspace) {
@@ -127,7 +127,6 @@ export const useSession = defineStore("session", () => {
       open({
         kind: ["lesson", "reading"].includes(view.activity.kind) ? "lesson" : "practice",
         activity_id: view.activity.id,
-        activity_version: view.activity.version,
         ...(view.activity.page_no ? { page_no: view.activity.page_no } : {}),
         story_session_id: view.id,
       });
@@ -192,14 +191,14 @@ export const useSession = defineStore("session", () => {
     );
   }
   function advanceStory(choice?: string) { return mutateStory("advance", choice); }
-  function saveActivityProgress(activityId: string, pageNo: number, version: number): Promise<ActivityProgress> {
+  function saveActivityProgress(activityId: string, pageNo: number): Promise<ActivityProgress> {
     const owner = user.value?.id, classroom = classroomId.value, generation = storyGeneration;
-    latestReading = { activityId, pageNo, version };
+    latestReading = { activityId, pageNo };
     const task = readingProgressTask.catch(() => undefined).then(async () => {
       if (owner !== user.value?.id || classroom !== classroomId.value || generation !== storyGeneration)
         throw new Error("学习会话已切换。");
       return api.post<ActivityProgress>(`/activities/${activityId}/progress`, {
-        classroom_id: classroom, page_no: pageNo, version,
+        classroom_id: classroom, page_no: pageNo,
       });
     });
     readingProgressTask = task;
@@ -215,7 +214,7 @@ export const useSession = defineStore("session", () => {
         catch (error) {
           if (error instanceof ApiError && [403, 404].includes(error.status)) throw error;
           if (!latestReading || generation !== storyGeneration) throw error;
-          await saveActivityProgress(latestReading.activityId, latestReading.pageNo, latestReading.version);
+          await saveActivityProgress(latestReading.activityId, latestReading.pageNo);
         }
         if (pending === readingProgressTask || generation !== storyGeneration) break;
       }

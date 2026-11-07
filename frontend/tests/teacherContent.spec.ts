@@ -29,7 +29,7 @@ const courses = {
       chapter_id: 179,
       title: "变量练习",
       kind: "practice",
-      version: 2,
+
       npc_key: "professor",
       assistant_allowed: false,
       material_id: 186,
@@ -42,15 +42,15 @@ const material = {
   id: 186,
   title: "入门讲义",
   kind: "text",
-  version: 1,
+
   status: "ready",
   pages: [{ id: 1, page_no: 1, title: "变量", text: "Python 变量" }],
 };
-const question = { id: "variable-1", title: "变量题目", kind: "single_choice", prompt: "选择正确的赋值表达式。", options: ["x = 1", "x == 1"], samples: [], version: 1, activity_id: "my-practice" };
+const question = { id: "variable-1", title: "变量题目", kind: "single_choice", prompt: "选择正确的赋值表达式。", options: ["x = 1", "x == 1"], samples: [], activity_id: "my-practice" };
 const quest = {
   id: "variables",
   title: "初识变量",
-  version: 1,
+
   definition: {
     id: "variables",
     title: "初识变量",
@@ -182,14 +182,14 @@ describe("teacher question authoring", () => {
     expect(createButton(wrapper).attributes("disabled")).toBeUndefined();
   });
 
-  it("submits the full canonical payload including private cases and reports the returned activity version", async () => {
+  it("submits the full canonical payload including private cases and reports the current activity update", async () => {
     const { wrapper, notification } = await setup();
     const post = vi
       .spyOn(api, "post")
       .mockResolvedValue({
         id: "python-print",
-        version: 1,
-        activity_version: 3,
+
+
       });
     const payload = {
       id: "python-print",
@@ -208,7 +208,7 @@ describe("teacher question authoring", () => {
     await flushPromises();
     expect(post).toHaveBeenCalledExactlyOnceWith("/teacher/questions", payload);
     expect(notification).toHaveBeenCalledWith(
-      "题目已创建，关联活动已更新为版本 3。请在新任务定义中引用该版本。",
+      "题目已创建并加入当前活动。",
     );
     expect(wrapper.find("[role='dialog']").exists()).toBe(false);
     await buttonNamed(wrapper, "新增题目").trigger("click");
@@ -221,13 +221,9 @@ describe("teacher question authoring", () => {
     const { wrapper } = await setup();
     let resolveCreate!: (value: {
       id: string;
-      version: number;
-      activity_version: number;
     }) => void;
     const pending = new Promise<{
       id: string;
-      version: number;
-      activity_version: number;
     }>((resolve) => {
       resolveCreate = resolve;
     });
@@ -236,7 +232,7 @@ describe("teacher question authoring", () => {
     expect(createButton(wrapper).attributes("disabled")).toBeDefined();
     await wrapper.get("form").trigger("submit");
     expect(post).toHaveBeenCalledTimes(1);
-    resolveCreate({ id: "my-concept-1", version: 1, activity_version: 3 });
+    resolveCreate({ id: "my-concept-1", });
     await flushPromises();
     expect(wrapper.find("[role='dialog']").exists()).toBe(false);
     await buttonNamed(wrapper, "新增题目").trigger("click");
@@ -326,7 +322,7 @@ describe("teacher materials and question pagination", () => {
 
   it("clamps the question page after reloading a smaller result set on create", async () => {
     const { wrapper, records } = await setup("questions", { questions: Array.from({ length: 26 }, (_, i) => ({ ...question, id: `question-${i + 1}` })), openEditor: false });
-    vi.spyOn(api, "post").mockResolvedValue({ id: "my-concept-1", version: 1, activity_version: 3 });
+    vi.spyOn(api, "post").mockResolvedValue({ id: "my-concept-1", });
     await wrapper.get("button[aria-label='下一页']").trigger("click");
     await wrapper.get("button[aria-label='下一页']").trigger("click");
     records.questions = records.questions.slice(0, 11);

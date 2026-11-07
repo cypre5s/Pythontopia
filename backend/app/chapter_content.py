@@ -1,4 +1,4 @@
-"""Load bounded, data-only chapter sources; publish immutable JSON snapshots."""
+"""Load bounded, data-only chapter sources; import current teaching configuration."""
 
 import argparse
 import json
@@ -70,7 +70,7 @@ def load_content(root=CONTENT_ROOT):
     npcs, activities, quests, stories = [], [], [], []
     for bundle in bundles:
         expected = {"schema_version", "npcs", "activities", "quests"} if "quests" in bundle else {
-            "schema_version", "id", "version", "chapter_id", "quest", "story", "activities"
+            "schema_version", "id", "chapter_id", "quest", "story", "activities"
         }
         if set(bundle) - expected:
             raise ValueError("章节包包含未知字段")
@@ -80,19 +80,19 @@ def load_content(root=CONTENT_ROOT):
             quests.extend(bundle["quests"])
         else:
             quest = bundle["quest"]
-            if quest["chapter_id"] != bundle["chapter_id"] or quest["version"] != bundle["version"]:
-                raise ValueError("章节包与任务的章节/版本不一致")
+            if quest["chapter_id"] != bundle["chapter_id"]:
+                raise ValueError("章节包与任务的章节不一致")
             quests.append(quest)
-            stories.append({key: bundle[key] for key in ("id", "version", "chapter_id", "quest", "story")})
+            stories.append({key: bundle[key] for key in ("id", "chapter_id", "quest", "story")})
     for label, rows, keys in (
-        ("NPC", npcs, ("key",)), ("活动", activities, ("id", "version")),
-        ("任务", quests, ("id", "version")), ("演出", stories, ("id", "version")), ("题目", questions, ("id",)),
+        ("NPC", npcs, ("key",)), ("活动", activities, ("id",)),
+        ("任务", quests, ("id",)), ("演出", stories, ("id",)), ("题目", questions, ("id",)),
     ):
         ids = [tuple(row[key] for key in keys) for row in rows]
         if len(set(ids)) != len(ids):
             raise ValueError(f"{label}配置标识重复")
-    return dict(npcs=npcs, activities=sorted(activities, key=lambda a: (a["version"], a["id"])),
-                quests=sorted(quests, key=lambda q: (q["version"], q["id"])), stories=stories, questions=questions)
+    return dict(npcs=npcs, activities=sorted(activities, key=lambda a: a["id"]),
+                quests=sorted(quests, key=lambda q: q["id"]), stories=stories, questions=questions)
 
 
 def validate_sources():
@@ -105,13 +105,13 @@ def validate_sources():
         validate_dialogue(npc["dialogue"])
     for quest in content["quests"]:
         validate_definition(quest)
-    activities = {(item["id"], item["version"]) for item in content["activities"]}
+    activities = {item["id"] for item in content["activities"]}
     npc_keys = {item["key"] for item in content["npcs"]}
     questions = {item["id"]: item["activity_id"] for item in content["questions"]}
     for item in content["activities"]:
         ids = item["content"].get("question_ids")
         if not isinstance(ids, list) or any(not isinstance(key, str) for key in ids) or len(set(ids)) != len(ids):
-            raise ValueError("每个活动版本必须显式固定非重复question_ids")
+            raise ValueError("每个活动必须显式固定非重复question_ids")
         allowed = {key for key, owner in questions.items() if owner == item["id"]}
         if item.get("knowledge_point_mode") == "problem":
             # Reviewed original course problem is imported from the real course export.
@@ -119,17 +119,17 @@ def validate_sources():
         if set(ids) - allowed:
             raise ValueError("活动题集引用了未配置或不属于它的题目")
     for story in content["stories"]:
-        validate_story(story["story"], quest_definition=story["quest"], story_id=story["id"], story_version=story["version"])
+        validate_story(story["story"], quest_definition=story["quest"], story_id=story["id"])
         if set(story["story"]["entries"]) - npc_keys:
             raise ValueError("演出引用了未配置的NPC")
         for binding in story["story"]["bindings"].values():
-            if (binding["activity_id"], binding["version"]) not in activities:
-                raise ValueError("演出引用了未配置的活动版本")
+            if binding["activity_id"] not in activities:
+                raise ValueError("演出引用了未配置的活动")
     return {key: len(value) for key, value in content.items()}
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Validate versioned chapter YAML sources (no database writes).")
+    parser = argparse.ArgumentParser(description="Validate chapter YAML sources (no database writes).")
     parser.add_argument("--check", action="store_true", help="Validate chapter sources and print counts")
     parser.parse_args()
     print(json.dumps(validate_sources(), ensure_ascii=False))

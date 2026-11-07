@@ -118,7 +118,7 @@ test('teacher authors real private media; student reads PDF, plays video and com
   expect(classResponse.status()).toBe(201);
   const classroom = await classResponse.json() as { id: number; join_code: string };
   await expect(page.locator('.class-card').filter({ has: page.getByRole('heading', { name: classroomName, exact: true }) })).toBeVisible();
-  await page.getByRole('button', { name: '材料与版本', exact: true }).click();
+  await page.getByRole('button', { name: '课程材料', exact: true }).click();
   const videoBytes = await recordTestVideo(page);
   expect(videoBytes.length).toBeGreaterThan(200);
   const fixtures = [
@@ -126,7 +126,7 @@ test('teacher authors real private media; student reads PDF, plays video and com
     { title: pdfTitle, name: 'self-authored-two-pages.pdf', mimeType: 'application/pdf', buffer: twoPagePdf() },
     { title: videoTitle, name: 'self-authored-test.webm', mimeType: 'video/webm', buffer: videoBytes },
   ];
-  const materials: { id: number; version: number; title: string; activityId: string }[] = [];
+  const materials: { id: number; title: string; activityId: string }[] = [];
   const uploadDialog = page.getByRole('dialog', { name: '上传课程材料', exact: true });
   for (const [index, fixture] of fixtures.entries()) {
     await page.getByRole('button', { name: '上传课程材料', exact: true }).click();
@@ -137,7 +137,7 @@ test('teacher authors real private media; student reads PDF, plays video and com
     await uploadDialog.getByRole('button', { name: '上传并处理', exact: true }).click();
     const response = await uploaded;
     expect(response.status()).toBe(201);
-    const material = await response.json() as { id: number; version: number };
+    const material = await response.json() as { id: number; };
     materials.push({ ...material, title: fixture.title, activityId: `media-${tag}-${index}` });
     await expect(uploadDialog).toBeHidden();
     await page.getByRole('searchbox', { name: '搜索材料名称或 ID', exact: true }).fill(fixture.title);
@@ -167,15 +167,14 @@ test('teacher authors real private media; student reads PDF, plays video and com
   }
   await page.getByRole('button', { name: '任务配置', exact: true }).click();
   const definition = {
-    id: `media-lab-${tag}`, title: `自制测试材料实验 ${tag}`, chapter_id: chapterId, version: 1, kind: 'side',
-    nodes: materials.map((material, index) => ({ id: `read-${index}`, type: 'STUDY_LESSON', title: material.title, activity_id: material.activityId, activity_version: 1, dependencies: [] })),
-    effects: [{ type: 'set_world_flag', key: `media_lab_${tag}` }],
-  };
+    id: `media-lab-${tag}`, title: `自制测试材料实验 ${tag}`, chapter_id: chapterId, kind: 'side',
+    nodes: materials.map((material, index) => ({ id: `read-${index}`, type: 'STUDY_LESSON', title: material.title, activity_id: material.activityId, dependencies: [] })),
+    effects: [{ type: 'set_world_flag', key: `media_lab_${tag}` }] };
   await page.getByLabel('任务 JSON', { exact: true }).fill(JSON.stringify(definition));
   await page.getByRole('button', { name: '校验任务', exact: true }).click();
   await expect(page.locator('pre.notice')).toContainText('"valid": true');
   const published = page.waitForResponse(response => response.url().endsWith('/api/teacher/quests') && response.request().method() === 'POST');
-  await page.getByRole('button', { name: '创建任务版本', exact: true }).click();
+  await page.getByRole('button', { name: '保存任务配置', exact: true }).click();
   expect((await published).status()).toBe(201);
   await page.getByRole('button', { name: '章节管理', exact: true }).click();
   const teacherToken = await page.evaluate(() => sessionStorage.getItem('pythontopia-reborn-session'));
@@ -186,23 +185,22 @@ test('teacher authors real private media; student reads PDF, plays video and com
   await chapterRow.getByRole('button', { name: '立即解锁', exact: true }).click();
   expect((await released).status()).toBe(200);
   await expect(chapterRow.locator('.status-badge')).toHaveText('已解锁');
-  // Uploading another version does not publish it or change version-1 activity bindings.
-  await page.getByRole('button', { name: '材料与版本', exact: true }).click();
+  // Updating existing material keeps its stable ID and updates current activity content.
+  await page.getByRole('button', { name: '课程材料', exact: true }).click();
   await page.getByRole('button', { name: '上传课程材料', exact: true }).click();
   await uploadDialog.getByLabel('资料名称', { exact: true }).fill(textTitle);
   await uploadDialog.getByLabel(/^所属章节/).selectOption(String(chapterId));
   await uploadDialog.getByLabel(/^更新已有材料（选填）/).fill(String(materials[0]!.id));
-  await uploadDialog.getByLabel(/^文件/).setInputFiles({ name: 'self-authored-test-v2.txt', mimeType: 'text/plain', buffer: Buffer.from('UNPUBLISHED VERSION TWO - test fixture only.') });
-  const versioned = page.waitForResponse(response => response.url().endsWith('/api/teacher/materials/upload') && response.request().method() === 'POST');
+  await uploadDialog.getByLabel(/^文件/).setInputFiles({ name: 'self-authored-test-updated.txt', mimeType: 'text/plain', buffer: Buffer.from('Updated Self-authored TEST MEDIA - test fixture only.') });
+  const updated = page.waitForResponse(response => response.url().endsWith('/api/teacher/materials/upload') && response.request().method() === 'POST');
   await uploadDialog.getByRole('button', { name: '上传并处理', exact: true }).click();
-  const versionResponse = await versioned;
-  expect(versionResponse.status()).toBe(201);
-  expect((await versionResponse.json()).version).toBe(2);
+  const updateResponse = await updated;
+  expect(updateResponse.status()).toBe(201);
+  expect((await updateResponse.json()).id).toBe(materials[0]!.id);
   await expect(uploadDialog).toBeHidden();
   await page.getByRole('searchbox', { name: '搜索材料名称或 ID', exact: true }).fill(textTitle);
-  const versionRow = page.locator('tbody tr').filter({ hasText: textTitle }).first();
-  await expect(versionRow.locator('td').nth(1)).toHaveText('v2');
-  await expect(versionRow).toContainText('可使用', { timeout: 45_000 });
+  const updatedRow = page.locator('tbody tr').filter({ hasText: textTitle }).first();
+  await expect(updatedRow).toContainText('可使用', { timeout: 45_000 });
 
   const context = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
   try {
@@ -221,9 +219,10 @@ test('teacher authors real private media; student reads PDF, plays video and com
     await expect(student.getByRole('button', { name: /学习资料/ })).toBeVisible();
     const token = await student.evaluate(() => sessionStorage.getItem('pythontopia-reborn-session'));
     const headers = { Authorization: `Bearer ${token}` };
-    const unbound = await request.get(`/api/materials/${materials[0]!.id}/versions/2?classroom_id=${classroom.id}`, { headers });
-    expect(unbound.status()).toBe(403);
-    expect((await request.get(`/api/materials/${materials[0]!.id}/versions/2/file?classroom_id=${classroom.id}`, { headers })).status()).toBe(403);
+    const currentMaterial = await request.get(`/api/materials/${materials[0]!.id}?classroom_id=${classroom.id}`, { headers });
+    expect(currentMaterial.status()).toBe(200);
+    expect(JSON.stringify(await currentMaterial.json())).toContain('Updated Self-authored TEST MEDIA');
+    expect((await request.get(`/api/materials/${materials[0]!.id}/file?classroom_id=${classroom.id}`, { headers })).status()).toBe(200);
     await openLibrary(student);
     await student.getByRole('button', { name: new RegExp(pdfTitle) }).click();
     await expect(student.locator('.pdf-reader .reader-toolbar')).toContainText('第 1 / 2 页', { timeout: 30_000 });
@@ -266,7 +265,7 @@ test('teacher authors real private media; student reads PDF, plays video and com
     const world = await request.get(`/api/world?classroom_id=${classroom.id}`, { headers });
     expect((await world.json()).quests.find((quest: { id: string }) => quest.id === definition.id).status).toBe('complete');
     const library = await request.get(`/api/library?classroom_id=${classroom.id}`, { headers });
-    expect((await library.json()).find((material: { id: number }) => material.id === materials[0]!.id).version).toBe(1);
+    expect((await library.json()).filter((material: { id: number }) => material.id === materials[0]!.id)).toHaveLength(1);
     await page.getByRole('button', { name: '学习记录', exact: true }).click();
     await page.getByRole('button', { name: '刷新记录', exact: true }).click();
     const member = page.locator('tbody tr').filter({ hasText: '媒体验收学生' });

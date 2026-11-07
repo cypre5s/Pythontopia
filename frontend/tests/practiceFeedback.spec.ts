@@ -38,7 +38,7 @@ describe("public judge sample feedback", () => {
       chapter_id: 179,
       title: "公开反馈测试",
       kind: "practice",
-      version: 1,
+
       npc_key: "mayor_py",
       assistant_allowed: false,
       material: null,
@@ -50,7 +50,7 @@ describe("public judge sample feedback", () => {
           prompt: "只验证公开样例反馈",
           options: [],
           samples: [{ input: "", output: "hello" }],
-          version: 1,
+
         },
       ],
     });
@@ -60,7 +60,7 @@ describe("public judge sample feedback", () => {
       id: "fixture-submission",
       activity_id: "code-test",
       question_id: "q1",
-      version: 1,
+
       mode: "run",
       status: "runtime_error",
       created_at: "2026-11-03T00:00:00Z",

@@ -89,6 +89,7 @@ import { computed } from "vue";
 import { useSession } from "../shared/session";
 import GameIcon from "../shared/GameIcon.vue";
 import { displayQuestTitle } from "../game/config/worldConfig";
+import { requiredQuestNodes } from "../shared/questProgress";
 defineProps<{ blocked?: boolean }>();
 const session = useSession();
 
@@ -110,11 +111,7 @@ const node = computed(() =>
 const readyCount = computed(
   () => tracked.value?.nodes.filter((n) => n.status === "ready").length ?? 0,
 );
-const required = computed(
-  () =>
-    tracked.value?.nodes.filter((n) => !n.optional && n.status !== "skipped") ??
-    [],
-);
+const required = computed(() => requiredQuestNodes(tracked.value));
 const completed = computed(
   () => required.value.filter((n) => n.status === "complete").length,
 );

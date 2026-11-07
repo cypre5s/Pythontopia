@@ -3,8 +3,7 @@ import { randomUUID } from "node:crypto";
 
 test("teacher curriculum ownership, knowledge binding and isolated code drafts", async ({
   page,
-  request,
-}, testInfo) => {
+  request }, testInfo) => {
   test.setTimeout(240_000);
   const email = process.env.E2E_TEACHER_EMAIL,
     password = process.env.E2E_TEACHER_PASSWORD,
@@ -107,16 +106,13 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
     page.getByRole("row").filter({ hasText: pointEdited }),
   ).toBeVisible();
   await page.screenshot({
-    path: testInfo.outputPath("curriculum-authoring.png"),
-  });
+    path: testInfo.outputPath("curriculum-authoring.png") });
   // A second real teacher cannot see, update or delete another teacher's curriculum.
   const otherLogin = await request.post("/api/auth/login", {
-    data: { email: otherEmail, password: otherPassword },
-  });
+    data: { email: otherEmail, password: otherPassword } });
   expect(otherLogin.ok()).toBeTruthy();
   const other = {
-    Authorization: `Bearer ${(await otherLogin.json()).access_token}`,
-  };
+    Authorization: `Bearer ${(await otherLogin.json()).access_token}` };
   const otherCourses = await (
     await request.get("/api/teacher/courses", { headers: other })
   ).json();
@@ -132,16 +128,14 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
     (
       await request.put(`/api/teacher/chapters/${chapter.id}`, {
         headers: other,
-        data: { title: "Unauthorized change" },
-      })
+        data: { title: "Unauthorized change" } })
     ).status(),
   ).toBe(403);
   expect(
     (
       await request.put(`/api/teacher/knowledge-points/${point.id}`, {
         headers: other,
-        data: { title: "Unauthorized change" },
-      })
+        data: { title: "Unauthorized change" } })
     ).status(),
   ).toBe(403);
   await page.getByRole("button", { name: "班级", exact: true }).click();
@@ -195,16 +189,12 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
       options: [],
       samples: [{ input: "", output: "hello" }],
       hidden_cases: [{ input: "", expected_output: "hello" }],
-      source: { kind: "explicit_test_fixture" },
-    },
-  });
+      source: { kind: "explicit_test_fixture" } } });
   expect(q.status()).toBe(201);
-  const questionVersion = await q.json();
-  expect(questionVersion.activity_version).toBeGreaterThan(1);
+  expect((await q.json()).id).toBeTruthy();
   await page.getByRole("button", { name: "任务配置", exact: true }).click();
   const definition = {
     id: questId,
-    version: 1,
     title: `课程配置任务 ${suffix}`,
     chapter_id: chapter.id,
     kind: "main",
@@ -214,20 +204,17 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
         type: "COMPLETE_PRACTICE",
         title: "打开自建编程练习",
         activity_id: activityId,
-        activity_version: questionVersion.activity_version,
-        dependencies: [],
-      },
+        dependencies: [] },
     ],
-    effects: [],
-  };
+    effects: [] };
   await page
     .getByLabel("任务 JSON", { exact: true })
     .fill(JSON.stringify(definition));
   await page.getByRole("button", { name: "校验任务", exact: true }).click();
   await expect(page.locator("pre.notice")).toBeVisible();
-  await page.getByRole("button", { name: "创建任务版本", exact: true }).click();
+  await page.getByRole("button", { name: "保存任务配置", exact: true }).click();
   await expect(
-    page.getByText("新任务版本已创建，请更新班级发布规则。", { exact: true }),
+    page.getByText("任务配置已保存。", { exact: true }),
   ).toBeVisible();
   await page.getByRole("button", { name: "章节管理", exact: true }).click();
   await page.getByRole("combobox", { name: "当前班级", exact: true }).selectOption(String(classroom.id));
@@ -238,9 +225,7 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
     data: {
       email: `${randomUUID()}@example.test`,
       password: `Reborn-${randomUUID()}`,
-      name: "草稿验收学生",
-    },
-  });
+      name: "草稿验收学生" } });
   expect(registration.ok()).toBeTruthy();
   const studentToken = (await registration.json()).access_token,
     student = { Authorization: `Bearer ${studentToken}` };
@@ -248,8 +233,7 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
     (
       await request.post("/api/classrooms/join", {
         headers: student,
-        data: { join_code: classroom.join_code },
-      })
+        data: { join_code: classroom.join_code } })
     ).ok(),
   ).toBeTruthy();
   await page.evaluate(
@@ -262,8 +246,7 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
   await expect(page.getByRole("button", { name: /任务日志/ })).toBeVisible();
   const position = async () => {
     const r = await request.get(`/api/world?classroom_id=${classroom.id}`, {
-      headers: student,
-    });
+      headers: student });
     expect(r.ok()).toBeTruthy();
     return (await r.json()).player;
   };
@@ -271,8 +254,7 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
   const submissionsBefore = (
     await (
       await request.get(`/api/teacher/classrooms/${classroom.id}/progress`, {
-        headers: teacher,
-      })
+        headers: teacher })
     ).json()
   ).submissions.length;
   await page.getByRole("button", { name: /任务日志/ }).click();
@@ -283,8 +265,7 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
   await page.waitForTimeout(1800);
   expect(await position()).toEqual(before);
   await page.screenshot({
-    path: testInfo.outputPath("code-draft.png"),
-  });
+    path: testInfo.outputPath("code-draft.png") });
   await page.getByRole("button", { name: "关闭当前工作区" }).click();
   await page.getByRole("button", { name: /任务日志/ }).click();
   await page.getByRole("button", { name: "打开练习", exact: true }).click();
@@ -292,8 +273,7 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
   const after = (
     await (
       await request.get(`/api/teacher/classrooms/${classroom.id}/progress`, {
-        headers: teacher,
-      })
+        headers: teacher })
     ).json()
   ).submissions.length;
   expect(after).toBe(submissionsBefore);

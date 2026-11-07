@@ -10,15 +10,15 @@ import type { StoryView, World } from "../src/shared/types";
 
 const world = (): World => ({
   player: { map_key: "town_hub", tile_x: 22, tile_y: 36, direction: "down" },
-  npcs: [{ key: "librarian_doc", name: "图书管理员", map_key: "library", tile_x: 7, tile_y: 5, portrait: "", dialogue: [{ id: "legacy", text: "旧版对白" }] }],
-  quests: [{ id: "arrival", version: 2, chapter_id: 179, kind: "main", title: "第一章", story_id: "first-steps", status: "active", nodes: [
+  npcs: [{ key: "librarian_doc", name: "图书管理员", map_key: "library", tile_x: 7, tile_y: 5, portrait: "", dialogue: [{ id: "greeting", text: "你好，欢迎阅读" }] }],
+  quests: [{ id: "arrival", chapter_id: 179, kind: "main", title: "第一章", story_id: "first-steps", status: "active", nodes: [
     { id: "study", type: "STUDY_LESSON", title: "阅读第一章", target: "librarian_doc", navigation_target: "librarian_doc", activity_id: "ch1-lesson", dependencies: [], aggregation: "ALL", optional: false, status: "ready" },
   ] }], chapters: [], flags: [],
 });
 const view = (status: StoryView["status"] = "active", revision = 0): StoryView => ({
   id: "story-session", revision, status, npc_key: "librarian_doc",
   node: status === "active" ? { id: "welcome", text: "欢迎，第一次来图书馆吗？", choices: [{ id: "read", label: "开始阅读" }] } : null,
-  activity: status === "waiting" ? { id: "ch1-lesson", kind: "lesson", version: 2, page_no: 42 } : null,
+  activity: status === "waiting" ? { id: "ch1-lesson", kind: "lesson", page_no: 42 } : null,
 });
 function deferred<T>() {
   let resolve!: (result: T) => void;
@@ -39,7 +39,7 @@ describe("server-owned chapter performance", () => {
   it("keeps the authorized world usable when the previous chapter cannot be restored", async () => {
     const session = useSession();
     session.story = view("waiting", 4);
-    session.open({ kind: "lesson", activity_id: "ch1-lesson", activity_version: 2, story_session_id: "story-session" });
+    session.open({ kind: "lesson", activity_id: "ch1-lesson", story_session_id: "story-session" });
     vi.spyOn(api, "get").mockRejectedValue(new ApiError(403, "该章节已暂停开放"));
     const post = vi.spyOn(api, "post");
     await expect(session.restoreStory()).resolves.toBeUndefined();
@@ -51,7 +51,7 @@ describe("server-owned chapter performance", () => {
   it.each([403, 404])("lets students leave a waiting workspace when access is removed (%s)", async status => {
     const session = useSession();
     session.story = view("waiting", 4);
-    session.open({ kind: "lesson", activity_id: "ch1-lesson", activity_version: 2, story_session_id: "story-session" });
+    session.open({ kind: "lesson", activity_id: "ch1-lesson", story_session_id: "story-session" });
     const post = vi.spyOn(api, "post").mockRejectedValue(new ApiError(status, "该活动暂不可用"));
     await expect(session.returnStoryActivity()).resolves.toBe(false);
     expect(session.workspace).toBeNull();
@@ -63,7 +63,7 @@ describe("server-owned chapter performance", () => {
   it("keeps the waiting workspace and retry ID after a network failure", async () => {
     const session = useSession();
     session.story = view("waiting", 4);
-    const workspace = { kind: "lesson" as const, activity_id: "ch1-lesson", activity_version: 2, story_session_id: "story-session" };
+    const workspace = { kind: "lesson" as const, activity_id: "ch1-lesson", story_session_id: "story-session" };
     session.open(workspace);
     const post = vi.spyOn(api, "post").mockRejectedValueOnce(new Error("网络连接中断")).mockResolvedValueOnce(view("active", 5));
     await expect(session.returnStoryActivity()).rejects.toThrow("网络连接中断");
@@ -90,14 +90,14 @@ describe("server-owned chapter performance", () => {
     const post = vi.spyOn(api, "post");
     await session.restoreStory();
     expect(get).toHaveBeenCalledWith("/story/current?classroom_id=2");
-    expect(session.workspace).toEqual({ kind: "lesson", activity_id: "ch1-lesson", activity_version: 2, page_no: 42, story_session_id: "story-session" });
+    expect(session.workspace).toEqual({ kind: "lesson", activity_id: "ch1-lesson", page_no: 42, story_session_id: "story-session" });
     expect(post).not.toHaveBeenCalled();
   });
   it("shows the pause response after explicitly leaving, and resumes through a server choice", async () => {
     const session = useSession();
     session.story = view("waiting", 4);
     session.open({ kind: "lesson", activity_id: "ch1-lesson", story_session_id: "story-session" });
-    session.navigate({ kind: "material", material_id: 186, version: 1, page_no: 43 });
+    session.navigate({ kind: "material", material_id: 186, page_no: 43 });
     const paused = { ...view("active", 5), node: { id: "pause", text: "随时可以回来再看看。" } };
     const post = vi.spyOn(api, "post").mockResolvedValueOnce(paused).mockResolvedValueOnce(view("waiting", 6));
     await session.returnStoryActivity();

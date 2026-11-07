@@ -351,8 +351,7 @@
         <li v-for="event in studentEvents" :key="event.id">
           <strong>{{ event.node_id }}</strong
           ><span
-            >{{ time(event.created_at) }} · 版本
-            {{ event.content_version }}</span
+            >{{ time(event.created_at) }}</span
           >
         </li>
       </ol>
@@ -448,7 +447,7 @@ interface Progress {
     id: string;
     user_id: number;
     node_id: string;
-    content_version: number;
+
     created_at: string;
   }[];
   submissions: {
@@ -478,7 +477,7 @@ const navigation = [
     label: "课程资源",
     items: [
       { id: "curriculum", label: "课程与知识点", icon: BookOpen },
-      { id: "materials", label: "材料与版本", icon: FolderOpen },
+      { id: "materials", label: "课程材料", icon: FolderOpen },
       { id: "questions", label: "题库", icon: ListChecks },
     ],
   },

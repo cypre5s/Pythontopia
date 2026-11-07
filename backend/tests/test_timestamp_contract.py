@@ -7,7 +7,7 @@ from app.models import ChapterRelease, LearningEvent, LearningRecord, Submission
 from sqlalchemy import select
 
 
-def test_shanghai_and_utc_release_inputs_store_the_same_instant_and_preserve_boundary(client, db, teacher, student, classroom, monkeypatch):
+def test_shanghai_and_utc_release_inputs_store_the_same_instant_and_preserve_boundary(client, db, teacher, student, classroom, monkeypatch, branching_course):
     instant = datetime(2026, 11, 3, 12, 0, 0, tzinfo=timezone.utc)
 
     class ControlledClock(datetime):
@@ -53,11 +53,12 @@ def test_all_learning_timestamps_remain_explicit_utc_after_sqlite_requery(client
         "/api/world/position", json={"classroom_id": cid, "map_key": "town_hub", "tile_x": 22, "tile_y": 34, "direction": "up"}, headers=headers
     )
     assert position.status_code == 200
-    event = client.post(
-        "/api/events",
-        json={"classroom_id": cid, "event_id": str(uuid4()), "quest_id": "arrival", "node_id": "greet", "evidence": {"npc_key": "mayor_py"}},
-        headers=headers,
-    )
+    from app.models import QuestDefinition
+    definition = {"id": "timestamp-talk", "title": "Timestamp", "chapter_id": 179,
+        "nodes": [{"id": "talk", "type": "TALK_TO_NPC", "title": "Talk", "target": "mayor_py", "dependencies": []}], "effects": []}
+    db.add(QuestDefinition(id=definition["id"], chapter_id=179, title="Timestamp", definition=definition))
+    db.commit()
+    event = client.post("/api/events", json={"classroom_id": cid, "event_id": str(uuid4()), "quest_id": definition["id"], "node_id": "talk", "evidence": {"npc_key": "mayor_py"}}, headers=headers)
     assert event.status_code == 200, event.text
     record = client.post("/api/activities/ch1-lesson/participation", json={"classroom_id": cid, "page_no": 42}, headers=headers)
     assert record.status_code == 200, record.text
@@ -69,8 +70,7 @@ def test_all_learning_timestamps_remain_explicit_utc_after_sqlite_requery(client
             "question_id": "ch1-computation",
             "idempotency_key": str(uuid4()),
             "mode": "submit",
-            "answer": True,
-        },
+            "answer": True},
         headers=headers,
     )
     assert submission.status_code == 201, submission.text

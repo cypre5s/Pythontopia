@@ -117,17 +117,18 @@ async function finishIntroDialogue(page: Page) {
   for (let step = 0; step < 10; step++) {
     const responsePromise = page.waitForResponse(
       (response) =>
-        response.url().includes("/api/dialogues/") &&
-        response.url().endsWith("/steps") &&
+        (response.url().includes("/api/dialogues/") && response.url().endsWith("/steps") || /\/api\/story\/sessions\/[^/]+\/advance$/.test(response.url())) &&
         response.request().method() === "POST",
     );
     const text = dialogue.locator(".dialogue-text");
     await expect(text).toHaveText((await text.getAttribute("aria-label")) ?? "");
-    await dialogue.locator(".dialogue-box").press("Enter");
+    const choices = dialogue.locator(".dialogue-response");
+    if (await choices.count()) await choices.first().click();
+    else await dialogue.locator(".dialogue-box").press("Enter");
     const response = await responsePromise;
     expect(response.ok(), await response.text()).toBeTruthy();
-    const result = (await response.json()) as { next_id: string | null };
-    if (!result.next_id) {
+    const result = (await response.json()) as { next_id?: string | null; status?: string };
+    if (response.url().includes("/story/") ? result.status !== "active" : !result.next_id) {
       await expect(dialogue).toBeHidden({ timeout: 15_000 });
       return;
     }
@@ -168,7 +169,7 @@ test("usable world HUD, modal focus, history, text scaling and keyboard controls
   };
   const released = await request.put(
     `/api/teacher/classrooms/${classroom.id}/releases/179`,
-    { headers: teacherHeaders, data: { status: "published", version: 1 } },
+    { headers: teacherHeaders, data: { status: "published", } },
   );
   expect(released.ok()).toBeTruthy();
 
@@ -375,14 +376,9 @@ test("usable world HUD, modal focus, history, text scaling and keyboard controls
 
   // Reach a real lesson through the deterministic NPC script, never POST fake task evidence.
   for (let round = 0; round < 3; round++) {
-    const world = await state();
-    if (
-      world.quests
-        .find((quest) => quest.id === "arrival")
-        ?.nodes.find((node) => node.id === "study")?.status === "ready"
-    )
-      break;
-    await openDialogue();
+    if (await workspace.locator(".lesson-workspace").isVisible()) break;
+    await page.getByRole("button", { name: "立即前往", exact: true }).click();
+    await expect(dialogue).toBeVisible({ timeout: 40_000 });
     await finishIntroDialogue(page);
   }
   const learnedWorld = await state();
@@ -398,17 +394,8 @@ test("usable world HUD, modal focus, history, text scaling and keyboard controls
     "aria-valuenow",
     String(completedSteps),
   );
-  await page.keyboard.press("j");
-  await expectSingleWorkspace(page);
-  await workspace.locator(".quest-card").filter({ hasText: arrival!.title }).click();
-  const arrivalEntry = workspace.locator(".journal-entry").filter({
-    has: page.getByRole("heading", { name: arrival!.title, exact: true }),
-  });
-  await arrivalEntry
-    .getByRole("button", { name: "打开课程", exact: true })
-    .click();
   await expect(workspace.locator(".lesson-workspace")).toBeVisible();
-  await expect(workspace.locator(".lesson-text")).toBeVisible();
+  await expect(workspace.locator(".lesson-text:visible, .pdf-reader canvas")).toBeVisible();
   await expectSingleWorkspace(page);
   await expectFocusInside(workspace);
   await expectTabRoundTrip(page, workspace);

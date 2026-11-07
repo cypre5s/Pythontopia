@@ -19,65 +19,59 @@ def test_chapter_text_rejects_ambiguous_or_executable_yaml(tmp_path, text):
         load_yaml(source)
 
 
-def test_published_sources_validate_without_database():
+def test_current_sources_validate_without_database():
     counts = validate_sources()
-    assert counts == {"npcs": 4, "activities": 8, "quests": 3, "stories": 1, "questions": 9}
+    assert counts == {"npcs": 4, "activities": 3, "quests": 1, "stories": 1, "questions": 9}
     content = load_content()
-    story = content["stories"][0]
-    assert story["quest"]["version"] == 2
-    assert story["story"]["bindings"]["lesson"]["version"] == 2
-    assert len([q for q in content["questions"] if q["activity_id"] == "ch1-assessment"]) == 3
+    assert all("version" not in item for items in content.values() for item in items)
+    assert "version" not in content["stories"][0]["story"]["bindings"]["lesson"]
 
 
-def test_repeated_seed_refuses_same_version_story_changes(db, monkeypatch):
+def test_repeated_seed_updates_current_story_quest_activity_and_question(db, monkeypatch):
     from app import seed as seed_module
+    from app.models import Activity, QuestDefinition, StoryDefinition, Question
 
     changed = deepcopy(load_content())
-    changed["stories"][0]["story"]["nodes"][0]["text"] += "修改已发布稿件"
+    changed["stories"][0]["story"]["nodes"][0]["text"] += " updated"
+    quest = changed["quests"][0]
+    quest["title"] += " updated"
+    activity = next(a for a in changed["activities"] if a["id"] == "ch1-practice")
+    activity["title"] += " updated"
+    question = changed["questions"][0]
+    question["prompt"] += " revised"
     monkeypatch.setattr(seed_module, "load_content", lambda: changed)
-    with pytest.raises(ValueError, match="修改内容必须增加版本"):
-        seed_module.seed(db)
-    db.rollback()
+    seed_module.seed(db)
+    seed_module.seed(db)
+    assert db.get(StoryDefinition, changed["stories"][0]["id"]).content == changed["stories"][0]["story"]
+    assert db.get(QuestDefinition, quest["id"]).title == quest["title"]
+    assert db.get(Activity, activity["id"]).title == activity["title"]
+    assert db.get(Question, question["id"]).prompt == question["prompt"]
 
 
-def test_repeated_seed_refuses_same_version_quest_changes(db, monkeypatch):
+def test_reimport_revises_question_set_without_removing_grades_or_participation(db, monkeypatch, student, classroom):
+    from uuid import uuid4
     from app import seed as seed_module
+    from app.models import Activity, ActivityProgress, LearningRecord, Submission
 
     changed = deepcopy(load_content())
-    changed["quests"][0]["title"] += "修改"
-    monkeypatch.setattr(seed_module, "load_content", lambda: changed)
-    with pytest.raises(ValueError, match="修改内容必须增加版本"):
-        seed_module.seed(db)
-    db.rollback()
-
-
-def test_new_question_and_activity_version_preserve_old_question_set(db, monkeypatch):
-    from app import seed as seed_module
-    from app.models import ActivityVersion
-
-    changed = deepcopy(load_content())
-    question = deepcopy(next(q for q in changed["questions"] if q["activity_id"] == "ch1-practice"))
-    question["id"] = "new-edition-question"
-    question["title"] += "修订题"
+    activity = next(a for a in changed["activities"] if a["id"] == "ch1-practice")
+    original = activity["content"]["question_ids"][0]
+    submission = Submission(id=str(uuid4()), user_id=student["id"], classroom_id=classroom["id"], activity_id=activity["id"],
+                            question_id=original, idempotency_key=str(uuid4()), mode="submit", status="accepted", answer=True)
+    record = LearningRecord(user_id=student["id"], classroom_id=classroom["id"], activity_id="ch1-lesson", data={"page_no": 34})
+    progress = ActivityProgress(user_id=student["id"], classroom_id=classroom["id"], activity_id="ch1-lesson", page_no=34,
+                                visited_pages=[10715], completed=False)
+    db.add_all([submission, record, progress])
+    db.commit()
+    question = deepcopy(next(q for q in changed["questions"] if q["activity_id"] == activity["id"]))
+    question["id"] = "new-current-question"
     changed["questions"].append(question)
-    activity = deepcopy(next(a for a in changed["activities"] if a["id"] == "ch1-practice"))
-    original_ids = list(activity["content"]["question_ids"])
-    activity["version"] = 2
-    activity["content"]["question_ids"] = [*original_ids, question["id"]]
-    changed["activities"].append(activity)
+    activity["content"]["question_ids"].append(question["id"])
     monkeypatch.setattr(seed_module, "load_content", lambda: changed)
     seed_module.seed(db)
     seed_module.seed(db)
-    assert db.get(ActivityVersion, ("ch1-practice", 1)).snapshot["content"]["question_ids"] == original_ids
-    assert db.get(ActivityVersion, ("ch1-practice", 2)).snapshot["content"]["question_ids"] == [*original_ids, question["id"]]
-
-
-def test_same_question_id_cannot_silently_ignore_revised_text(db, monkeypatch):
-    from app import seed as seed_module
-
-    changed = deepcopy(load_content())
-    changed["questions"][0]["prompt"] += "修订"
-    monkeypatch.setattr(seed_module, "load_content", lambda: changed)
-    with pytest.raises(ValueError, match="修订必须使用新题目ID"):
-        seed_module.seed(db)
-    db.rollback()
+    assert db.get(Activity, activity["id"]).content["question_ids"] == activity["content"]["question_ids"]
+    assert db.get(Submission, submission.id).status == "accepted"
+    assert db.get(LearningRecord, record.id).data == {"page_no": 34}
+    saved = db.get(ActivityProgress, (student["id"], classroom["id"], "ch1-lesson"))
+    assert saved.page_no == 34 and saved.visited_pages == [10715]

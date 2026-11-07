@@ -53,7 +53,6 @@ export interface Quest {
   id: string;
   title: string;
   chapter_id: number;
-  version: number;
   story_id?: string;
   status: string;
   nodes: QuestNode[];
@@ -81,12 +80,13 @@ export interface Material {
   id: number;
   title: string;
   kind: string;
-  version: number;
   status: string;
   pages: Page[];
   media_url?: string;
   notice?: string;
   chapter_id?: number;
+  supplementary?: boolean;
+  duration_seconds?: number | null;
 }
 export interface Question {
   id: string;
@@ -95,14 +95,12 @@ export interface Question {
   prompt: string;
   options: string[];
   samples: { input: string; output: string }[];
-  version: number;
 }
 export interface Activity {
   id: string;
   chapter_id: number;
   title: string;
   kind: string;
-  version: number;
   npc_key: string;
   assistant_allowed: boolean;
   material: Material | null;
@@ -122,7 +120,7 @@ export interface StoryView {
   status: "active" | "waiting" | "ended";
   npc_key: string;
   node: Dialogue | null;
-  activity: { id: string; kind: string; version: number; page_no?: number | null } | null;
+  activity: { id: string; kind: string; page_no?: number | null } | null;
   world?: World;
 }
 export type SubmissionStatus =
@@ -156,7 +154,6 @@ export interface Submission {
   id: string;
   activity_id: string;
   question_id: string;
-  version: number;
   mode: "run" | "submit";
   status: SubmissionStatus;
   feedback: SubmissionFeedback;
@@ -174,7 +171,7 @@ export interface EventEvidence {
   submission_id?: string;
 }
 export type Workspace =
-  | { kind: "lesson" | "practice"; activity_id: string; activity_version?: number; page_no?: number; story_session_id?: string }
-  | { kind: "material"; material_id: number; version: number; page_no?: number }
+  | { kind: "lesson" | "practice"; activity_id: string; page_no?: number; story_session_id?: string }
+  | { kind: "material"; material_id: number; page_no?: number }
   | { kind: "journal" | "library" | "classroom" | "settings" | "map" }
   | null;

@@ -36,7 +36,7 @@
         <h2>{{ activity?.title ?? "正在读取练习" }}</h2>
         <div class="learning-meta">
           <span>正式提交后记录成绩</span
-          ><span v-if="activity">活动版本 {{ activity.version }}</span>
+          >
           <span v-if="storySessionId && activityProgress">已完成 {{ activityProgress.accepted_question_ids?.length ?? 0 }} / {{ activity?.questions.length ?? 0 }} 题</span>
         </div>
       </header>
@@ -192,14 +192,14 @@
     </section>
     <AssistantPanel
       v-if="activity"
-      :key="`${activity.id}:${activity.version}`"
+      :key="activity.id"
       id="practice-assistant-region"
       tabindex="-1"
       :hidden="compact && !showAssistant"
       :inert="compact && !showAssistant"
       :aria-hidden="compact && !showAssistant"
       :activity-id="activity.id"
-      :activity-version="activity.version"
+
       :allowed="activity.assistant_allowed"
       :code="code"
       :role-name="roleName"
@@ -223,7 +223,7 @@ import type { Activity, ActivityProgress, Submission, SubmissionStatus } from ".
 import AssistantPanel from "./AssistantPanel.vue";
 import "./learningUi.css";
 const CodeEditor = defineAsyncComponent(() => import("./CodeEditor.vue")),
-  props = defineProps<{ activityId: string; activityVersion?: number; storySessionId?: string }>(),
+  props = defineProps<{ activityId: string; storySessionId?: string }>(),
   session = useSession(),
   activity = ref<Activity>(),
   questionIndex = ref(0),
@@ -303,7 +303,7 @@ async function load() {
   loading.value = true;
   error.value = "";
   try {
-    activity.value = await session.activity(props.activityId, props.activityVersion);
+    activity.value = await session.activity(props.activityId);
     activityProgress.value = activity.value.progress;
     questionIndex.value = 0;
     restore();
@@ -387,7 +387,7 @@ async function handleResult() {
   }
   if (result.value.status === "accepted" && result.value.mode === "submit") {
     if (props.storySessionId) {
-      const progress = await api.get<ActivityProgress>(`/activities/${props.activityId}/progress?classroom_id=${contextClassroomId}&version=${activity.value?.version}`);
+      const progress = await api.get<ActivityProgress>(`/activities/${props.activityId}/progress?classroom_id=${contextClassroomId}`);
       if (closed || session.user?.id !== contextUserId || session.classroomId !== contextClassroomId) return;
       activityProgress.value = progress;
       if (progress.completed) emit("complete");
@@ -424,17 +424,16 @@ async function poll(id: string) {
     if (!closed) notify(e instanceof Error ? e.message : "结果读取失败");
   }
 }
-function cite(id: number, version: number, page: number) {
+function cite(id: number, page: number) {
   session.navigate({
     kind: "material",
     material_id: id,
-    version,
     page_no: page,
   });
 }
 watch(current, restore);
 watch([answer, code], save);
-watch([() => props.activityId, () => props.activityVersion], load);
+watch(() => props.activityId, load);
 onMounted(() => {
   compactMedia = window.matchMedia?.("(max-width: 900px), (max-height: 540px)");
   updateCompact();

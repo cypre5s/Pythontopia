@@ -11,7 +11,7 @@
         id="pdf-reading-position"
         class="reader-position"
         aria-live="polite"
-        >第 <strong>{{ page }}</strong> / {{ count }} 页<span
+        >第 <strong>{{ page }}</strong> / {{ loading ? "…" : count }} 页<span
           >PDF 课件</span
         ></span
       ><button

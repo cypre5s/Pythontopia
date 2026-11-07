@@ -38,14 +38,14 @@ def test_sessions_enforce_user_activity_and_assessment_policy(client, db, studen
 
 
 def test_retrieval_only_returns_real_scoped_pages():
-    page = {"material_id": 186, "version": 1, "page_no": 42, "page_id": 10723, "title": "计算思维", "excerpt": "计算思维的本质是抽象和自动化"}
+    page = {"material_id": 186, "page_no": 42, "page_id": 10723, "title": "计算思维", "excerpt": "计算思维的本质是抽象和自动化"}
     retrieval = assistant.LocalTextRetrieval([page])
     assert retrieval.search("计算思维")[0]["page_id"] == 10723
-    assert "error" in retrieval.excerpt(999, 1, 42)
-    assert "error" in retrieval.excerpt(186, 2, 42)
+    assert "error" in retrieval.excerpt(999, 42)
+    assert "error" in retrieval.excerpt(186, 999)
 
 
-def test_sse_records_versioned_session_and_daily_budget(client, db, student, classroom, monkeypatch):
+def test_sse_records_current_material_session_and_daily_budget(client, db, student, classroom, monkeypatch):
     from langchain_core.messages import AIMessageChunk
 
     monkeypatch.setenv("REBORN_AI_API_KEY", "test-only-credential")
@@ -77,7 +77,7 @@ def test_sse_records_versioned_session_and_daily_budget(client, db, student, cla
     log = db.scalar(select(AssistantCall))
     assert log.status == "complete" and log.tokens == 28 and log.model_calls == 1
     session = db.get(AssistantSession, sid)
-    assert session.user_id == student["id"] and session.classroom_id == classroom["id"] and session.material_version == 1
+    assert session.user_id == student["id"] and session.classroom_id == classroom["id"] and session.material_id == 186
     assert client.post(f"/api/assistant/sessions/{sid}/messages", json={"message": "再问一次"}, headers=student["headers"]).status_code == 429
 
 
@@ -145,7 +145,7 @@ def test_real_agent_runtime_tools_scope_and_pre_call_budget(monkeypatch):
                         {
                             "id": "forbidden-resource",
                             "name": "get_material_excerpt",
-                            "args": {"material_id": 999, "version": 1, "page_no": 1},
+                            "args": {"material_id": 999, "page_no": 1},
                             "type": "tool_call",
                         }
                     ],
@@ -252,3 +252,25 @@ def test_stale_assistant_call_after_database_outage_does_not_lock_session_foreve
     db.expire_all()
     assert db.get(AssistantCall, interrupted.id).status == "interrupted"
     assert fresh.id != interrupted.id and fresh.status == "running"
+
+
+def test_existing_session_reads_current_activity_configuration(client, db, student, classroom):
+    from app.models import Material, User
+
+    sid = create_session(client, student, classroom).json()["id"]
+    current = Material(chapter_id=179, title="替换的当前资料", kind="text", content={"pages": [
+        {"id": 1, "page_no": 1, "title": "当前页", "text": "当前教学内容"}
+    ]})
+    db.add(current)
+    db.flush()
+    activity = db.get(Activity, "ch1-lesson")
+    activity.material_id = current.id
+    activity.title = "更新后的活动"
+    db.commit()
+    session, activity = assistant.authorized_session(db, db.get(User, student["id"]), sid)
+    context = assistant.build_context(db, db.get(User, student["id"]), session, activity,
+                                      assistant.MessageInput(message="解释当前页", page_no=1))
+    assert session.material_id == current.id
+    assert context["activity"]["title"] == "更新后的活动"
+    assert context["current_page"]["excerpt"] == "当前教学内容"
+    assert "version" not in context["current_page"] and "version" not in context["activity"]

@@ -37,7 +37,6 @@
               <thead>
                 <tr>
                   <th>资料 / ID</th>
-                  <th>版本</th>
                   <th>类型</th>
                   <th>状态</th>
                   <th>处理反馈</th>
@@ -45,11 +44,10 @@
                 </tr>
               </thead>
               <tbody>
-                <tr v-for="m in pagedMaterials" :key="`${m.id}-${m.version}`">
+                <tr v-for="m in pagedMaterials" :key="m.id">
                   <td class="record-title">
                     {{ m.title }}<small>#{{ m.id }}</small>
                   </td>
-                  <td>v{{ m.version }}</td>
                   <td>{{ materialKinds[m.kind] ?? m.kind }}</td>
                   <td>
                     <span class="status-badge" :data-status="m.status">{{
@@ -68,7 +66,7 @@
                   </td>
                 </tr>
                 <tr v-if="!filteredMaterials.length">
-                  <td colspan="6" class="admin-empty">
+                  <td colspan="5" class="admin-empty">
                     {{
                       materials.length
                         ? "没有匹配的材料，请调整搜索或筛选条件。"
@@ -83,7 +81,7 @@
             v-model:page="materialPage"
             v-model:page-size="materialPageSize"
             :total="filteredMaterials.length"
-            label="个版本"
+            label="份材料"
           />
         </div>
         <p v-if="!classroomId" class="field-hint">
@@ -93,7 +91,7 @@
       <AdminDialog
         v-model:open="uploadEditorOpen"
         title="上传课程材料"
-        description="上传新材料，或为已有材料创建新版本。历史引用继续保留原版本。"
+        description="上传新材料，或更新已有材料。引用该材料的活动将使用更新后的内容。"
         wide
       >
         <p v-if="uploadError" class="error" role="alert">{{ uploadError }}</p>
@@ -206,7 +204,6 @@
                 <th>类型 / 章节</th>
                 <th>NPC</th>
                 <th>知识点</th>
-                <th>版本</th>
                 <th>操作</th>
               </tr>
             </thead>
@@ -236,7 +233,6 @@
                       .join("、") || "未绑定"
                   }}
                 </td>
-                <td>v{{ a.version }}</td>
                 <td>
                   <Button
                     v-if="
@@ -251,7 +247,7 @@
                 </td>
               </tr>
               <tr v-if="!filteredActivities.length">
-                <td colspan="6" class="admin-empty">
+                <td colspan="5" class="admin-empty">
                   {{
                     courses.activities.length
                       ? "没有匹配的活动，请调整搜索或章节筛选。"
@@ -272,7 +268,7 @@
       >
         <summary>{{ activity.edit ? "编辑自建活动" : "新建活动" }}</summary>
         <p class="panel-description">
-          共享活动只读。保存自建活动后，再在任务配置中引用对应活动版本。
+          共享活动只读。保存自建活动后，可在任务配置中引用活动 ID。
         </p>
         <form class="teacher-form" @submit.prevent="saveActivity">
           <h3 class="form-section">基本信息</h3>
@@ -320,10 +316,10 @@
               <option value="">无材料</option>
               <option
                 v-for="m in materials"
-                :key="`${m.id}-${m.version}`"
+                :key="m.id"
                 :value="m.id"
               >
-                {{ m.title }} · v{{ m.version }}
+                {{ m.title }}
               </option>
             </select></label
           >
@@ -340,7 +336,7 @@
           >
           <div class="form-actions">
             <Button type="submit" :disabled="saving">{{
-              saving ? "正在保存…" : activity.edit ? "保存新版本" : "创建活动"
+              saving ? "正在保存…" : activity.edit ? "保存活动" : "创建活动"
             }}</Button
             ><Button
               v-if="activity.edit"
@@ -361,7 +357,7 @@
           <div>
             <h2>任务定义</h2>
             <p class="panel-description">
-              选择已有定义作为起点，修改并校验后创建新版本。
+              选择已有定义作为起点，修改并校验后保存当前配置。
             </p>
           </div>
           <span class="count-badge">{{ quests.length }} 个定义</span>
@@ -369,7 +365,7 @@
         <ol class="admin-steps">
           <li>选择任务定义</li>
           <li>编辑并校验</li>
-          <li>创建版本后到「章节发布」设置开放规则</li>
+          <li>保存后到「章节管理」设置开放规则</li>
         </ol>
         <label
           >已有任务<select @change="selectQuest">
@@ -396,7 +392,7 @@
         </details>
         <p class="field-hint">
           重复
-          ID、缺失引用、循环和非法效果会被拒绝；现有学生任务继续使用原版本。
+          ID、缺失引用、循环和非法效果会被拒绝；学生进度和成绩继续保留。
         </p>
         <div class="form-actions">
           <Button
@@ -407,7 +403,7 @@
           ><Button
             :disabled="saving || !questJson.trim()"
             @click="publishQuest"
-            >{{ saving ? "正在处理…" : "创建任务版本" }}</Button
+            >{{ saving ? "正在处理…" : "保存任务配置" }}</Button
           >
         </div>
         <pre v-if="validation" class="notice" role="status">{{
@@ -468,7 +464,6 @@
                   <th>题目</th>
                   <th>类型</th>
                   <th>关联活动</th>
-                  <th>版本</th>
                 </tr>
               </thead>
               <tbody>
@@ -487,10 +482,9 @@
                         ?.title ?? q.activity_id
                     }}<small>{{ q.activity_id }}</small>
                   </td>
-                  <td>v{{ q.version }}</td>
                 </tr>
                 <tr v-if="!filteredQuestions.length">
-                  <td colspan="4" class="admin-empty">
+                  <td colspan="3" class="admin-empty">
                     {{
                       questions.length
                         ? "没有匹配的题目，请调整搜索或题型筛选。"
@@ -1163,7 +1157,7 @@ async function publishQuest() {
       definition: JSON.parse(questJson.value),
     });
     await loadQuests();
-    notify("新任务版本已创建，请更新班级发布规则。");
+    notify("任务配置已保存。");
   }, true);
 }
 async function createNpc() {
@@ -1177,15 +1171,9 @@ async function createQuestion() {
   if (!questionDraft.value || questionFragmentErrors.value.length) return;
   questionError.value = "";
   await safe(async () => {
-    const result = await api.post<{
-      id: string;
-      version: number;
-      activity_version: number;
-    }>("/teacher/questions", JSON.parse(questionJson.value));
+    await api.post<{ id: string }>("/teacher/questions", JSON.parse(questionJson.value));
     await Promise.all([loadQuestions(), loadCourses()]);
-    notify(
-      `题目已创建，关联活动已更新为版本 ${result.activity_version}。请在新任务定义中引用该版本。`,
-    );
+    notify("题目已创建并加入当前活动。");
     questionEditorOpen.value = false;
   }, true);
   if (questionEditorOpen.value && error.value)
@@ -1200,7 +1188,7 @@ async function previewMaterial(m: Material) {
     closePreview();
     if (m.kind === "text") {
       const content = await api.get<Material>(
-        `/materials/${m.id}/versions/${m.version}?classroom_id=${props.classroomId}`,
+        `/materials/${m.id}?classroom_id=${props.classroomId}`,
       );
       preview.value = {
         kind: "text",
@@ -1211,7 +1199,7 @@ async function previewMaterial(m: Material) {
       };
     } else {
       const blob = await api.blob(
-        `/materials/${m.id}/versions/${m.version}/file?classroom_id=${props.classroomId}`,
+        `/materials/${m.id}/file?classroom_id=${props.classroomId}`,
       );
       preview.value = {
         kind: m.kind,

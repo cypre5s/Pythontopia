@@ -1,10 +1,8 @@
 schema_version: 1
 id: first-steps
-version: 2
 chapter_id: 179
 quest:
   id: arrival
-  version: 2
   title: 初来小镇：第一堂 Python 课
   chapter_id: 179
   kind: main
@@ -15,7 +13,7 @@ quest:
     target: mayor_py
     navigation_target: mayor_py
     dependencies: []
-    dialogue_id: story:first-steps:v2:welcome
+    dialogue_id: story:first-steps:welcome
   - id: meet-librarian
     title: 进入图书馆，拜访图书管理员
     type: PLAY_DIALOGUE
@@ -23,7 +21,7 @@ quest:
     navigation_target: librarian_doc
     dependencies:
     - welcome
-    dialogue_id: story:first-steps:v2:meet-librarian
+    dialogue_id: story:first-steps:meet-librarian
   - id: study
     title: 阅读第一章：计算、抽象与问题求解
     type: STUDY_LESSON
@@ -32,7 +30,6 @@ quest:
     dependencies:
     - meet-librarian
     activity_id: ch1-lesson
-    activity_version: 2
   - id: meet-mentor
     title: 前往东侧练习场，拜访教练
     type: PLAY_DIALOGUE
@@ -40,7 +37,7 @@ quest:
     navigation_target: arena_guard
     dependencies:
     - study
-    dialogue_id: story:first-steps:v2:meet-mentor
+    dialogue_id: story:first-steps:meet-mentor
   - id: practice
     title: 完成计算思维练习
     type: COMPLETE_PRACTICE
@@ -49,7 +46,6 @@ quest:
     dependencies:
     - meet-mentor
     activity_id: ch1-practice
-    activity_version: 1
   - id: meet-assessment
     title: 回到镇长身边，领取章节测试
     type: PLAY_DIALOGUE
@@ -57,7 +53,7 @@ quest:
     navigation_target: mayor_py
     dependencies:
     - practice
-    dialogue_id: story:first-steps:v2:meet-assessment
+    dialogue_id: story:first-steps:meet-assessment
   - id: assessment
     title: 通过第一章章节测试
     type: PASS_ASSESSMENT
@@ -66,7 +62,6 @@ quest:
     dependencies:
     - meet-assessment
     activity_id: ch1-assessment
-    activity_version: 1
   - id: report
     title: 听取镇长的章节总结
     type: PLAY_DIALOGUE
@@ -74,22 +69,19 @@ quest:
     navigation_target: mayor_py
     dependencies:
     - assessment
-    dialogue_id: story:first-steps:v2:report
+    dialogue_id: story:first-steps:report
   effects: []
 story:
   schema_version: 1
   bindings:
     lesson:
       activity_id: ch1-lesson
-      version: 2
       goal_id: study
     practice:
       activity_id: ch1-practice
-      version: 1
       goal_id: practice
     assessment:
       activity_id: ch1-assessment
-      version: 1
       goal_id: assessment
   entries:
     mayor_py:
@@ -355,10 +347,8 @@ activities:
   kind: lesson
   material_id: 186
   npc_key: librarian_doc
-  version: 2
   assistant_allowed: true
   content:
-    material_version: 1
     published: true
     completion:
       required_page_ids:
@@ -374,7 +364,6 @@ activities:
   kind: assessment
   material_id: null
   npc_key: mayor_py
-  version: 1
   assistant_allowed: false
   content:
     published: true

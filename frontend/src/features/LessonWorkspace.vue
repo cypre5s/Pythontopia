@@ -37,7 +37,6 @@
         <h2>{{ activity?.title ?? material?.title ?? "正在读取课程" }}</h2>
         <div v-if="material" class="learning-meta">
           <span>{{ materialLabel }}</span
-          ><span>资料版本 {{ material.version }}</span
           ><span v-if="material.kind === 'text' && material.pages.length"
             >第 {{ pageIndex + 1 }} / {{ material.pages.length }} 页内容</span
           >
@@ -125,7 +124,7 @@
             "
             class="learning-empty"
           >
-            当前版本没有可展示内容。
+            当前材料没有可展示内容。
           </p>
         </template>
       </template>
@@ -151,14 +150,14 @@
     </section>
     <AssistantPanel
       v-if="activity"
-      :key="`${activity.id}:${activity.version}`"
+      :key="activity.id"
       id="lesson-assistant-region"
       tabindex="-1"
       :hidden="compact && !showAssistant"
       :inert="compact && !showAssistant"
       :aria-hidden="compact && !showAssistant"
       :activity-id="activity.id"
-      :activity-version="activity.version"
+
       :allowed="activity.assistant_allowed"
       :page-no="currentContext.page_no"
       :video-time="currentContext.video_time"
@@ -182,15 +181,16 @@ import { useSession } from "../shared/session";
 import { api, notify } from "../shared/api";
 import type { Activity, ActivityProgress, Material } from "../shared/types";
 import { learningContext } from "../shared/learningContext";
+import { migrateReadingPosition, pdfResumePage } from "../shared/readingPosition";
 import AssistantPanel from "./AssistantPanel.vue";
 import "./learningUi.css";
 const PdfReader = defineAsyncComponent(() => import("./PdfReader.vue"));
 const props = defineProps<{
     activityId: string;
-    activityVersion?: number;
+
     initialPage?: number;
     materialId?: number;
-    materialVersion?: number;
+
     storySessionId?: string;
   }>(),
   session = useSession(),
@@ -236,11 +236,11 @@ const currentPage = computed(() => material.value?.pages[pageIndex.value]),
   );
 const readingKey = computed(
   () =>
-    `read:${contextUserId}:${contextClassroomId}:${material.value ? `material-${material.value.id}-${material.value.version}` : props.activityId}`,
+    `read:${contextUserId}:${contextClassroomId}:${material.value ? `material-${material.value.id}` : props.activityId}`,
 );
 const fileUrl = computed(() =>
   material.value
-    ? `/materials/${material.value.id}/versions/${material.value.version}/file?classroom_id=${session.classroomId}`
+    ? `/materials/${material.value.id}/file?classroom_id=${session.classroomId}`
     : "",
 );
 const pdfTextPage = computed(() =>
@@ -291,10 +291,10 @@ async function load() {
     if (props.materialId) {
       activity.value = undefined;
       material.value = await api.get<Material>(
-        `/materials/${props.materialId}/versions/${props.materialVersion}?classroom_id=${session.classroomId}`,
+        `/materials/${props.materialId}?classroom_id=${session.classroomId}`,
       );
     } else {
-      const loaded = await session.activity(props.activityId, props.activityVersion);
+      const loaded = await session.activity(props.activityId);
       if (!currentOwner() || generation !== loadGeneration) return;
       activity.value = loaded;
       material.value = activity.value.material ?? undefined;
@@ -302,9 +302,11 @@ async function load() {
     if (!currentOwner() || generation !== loadGeneration) return;
     progress.value = activity.value?.progress;
     if (activity.value?.completion) {
-      progress.value = await api.get<ActivityProgress>(`/activities/${activity.value.id}/progress?classroom_id=${contextClassroomId}&version=${activity.value.version}`);
+      progress.value = await api.get<ActivityProgress>(`/activities/${activity.value.id}/progress?classroom_id=${contextClassroomId}`);
       if (!currentOwner() || generation !== loadGeneration) return;
     }
+    if (material.value && contextUserId !== undefined && contextClassroomId !== null)
+      migrateReadingPosition(sessionStorage, contextUserId, contextClassroomId, material.value.id);
     const saved = Number(sessionStorage.getItem(readingKey.value) ?? 0);
     const resumePage = props.initialPage ?? progress.value?.page_no;
     const requested = resumePage
@@ -316,12 +318,10 @@ async function load() {
       Math.max(0, Number.isFinite(requested) ? requested : 0),
       Math.max(0, (material.value?.pages.length ?? 1) - 1),
     );
-    const savedPdf = Number(
-      sessionStorage.getItem(`${readingKey.value}:pdf`) ?? 1,
+    pdfPage.value = pdfResumePage(
+      material.value?.pages ?? [], resumePage,
+      sessionStorage.getItem(`${readingKey.value}:pdf`), pageIndex.value,
     );
-    pdfPage.value =
-      resumePage ??
-      Math.max(1, Number.isFinite(savedPdf) ? savedPdf : 1);
     if (material.value?.kind === "video") {
       try {
         mediaBlob.value = URL.createObjectURL(
@@ -342,17 +342,17 @@ async function load() {
 }
 async function persistProgress() {
   if (!currentOwner() || loading.value || error.value || !activity.value?.completion || material.value?.status !== "ready") return;
-  if (material.value.id !== activity.value.material?.id || material.value.version !== activity.value.material.version) return;
+  if (material.value.id !== activity.value.material?.id) return;
   const page = ["pdf", "presentation"].includes(material.value.kind) ? pdfPage.value : currentPage.value?.page_no;
   if (!page) return;
-  const pageKey = `${activity.value.id}:${activity.value.version}:${page}`;
+  const pageKey = `${activity.value.id}:${page}`;
   if (queuedPage === pageKey) return;
   queuedPage = pageKey;
   const generation = ++progressGeneration;
   progressSaving.value = true;
   progressError.value = "";
   try {
-    const saved = await session.saveActivityProgress(activity.value.id, page, activity.value.version);
+    const saved = await session.saveActivityProgress(activity.value.id, page);
     if (currentOwner() && generation === progressGeneration) progress.value = saved;
   } catch (error) {
     if (queuedPage === pageKey) queuedPage = "";
@@ -392,11 +392,11 @@ async function participate() {
     saving.value = false;
   }
 }
-async function cite(id: number, version: number, page: number) {
+async function cite(id: number, page: number) {
   try {
-    if (id !== material.value?.id || version !== material.value.version)
+    if (id !== material.value?.id)
       material.value = await api.get<Material>(
-        `/materials/${id}/versions/${version}?classroom_id=${session.classroomId}`,
+        `/materials/${id}?classroom_id=${session.classroomId}`,
       );
     const index = material.value.pages.findIndex((p) => p.page_no === page);
     if (index >= 0) pageIndex.value = index;
@@ -428,7 +428,7 @@ watch(pdfPage, (value) => {
     void persistProgress();
   }
 });
-watch([() => props.activityId, () => props.activityVersion], load);
+watch(() => props.activityId, load);
 watch(
   () => props.initialPage,
   (page) => {

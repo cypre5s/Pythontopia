@@ -1,21 +1,18 @@
-"""Idempotent real course import and immutable chapter publication; no default accounts."""
+"""Idempotent real course import and current chapter configuration; no default accounts."""
 
 import json
 import os
 from pathlib import Path
+from sqlalchemy import select
 
 from .chapter_content import load_content
 from .config import ROOT
 from .db import SessionLocal
 from .models import (
-    Activity, ActivityVersion, Chapter, CourseExample, KnowledgePoint, Material, MaterialVersion,
+    Activity, Chapter, CourseExample, KnowledgePoint, Material,
     Npc, QuestDefinition, Question, QuestionSecret,
 )
 from .quests import validate_definition
-
-# Historical callers inspect the original definitions; content lives only in YAML.
-QUESTS = [quest for quest in load_content()["quests"] if quest["version"] == 1]
-
 
 def seed(db, source=None):
     root = Path(source) if source else Path(os.getenv("REBORN_COURSE_ROOT", str(ROOT / "data/course-pack-43"))) / "json"
@@ -31,26 +28,56 @@ def seed(db, source=None):
     if list(counts.values()) != [7, 561, 7, 65, 46, 39]:
         raise ValueError(f"Unexpected export: {counts}")
     content = load_content()
+    # YAML is the complete set of shared teaching tasks. Retire removed task
+    # definitions without deleting any learner instance, event or grade.
+    current_quests = {item["id"] for item in content["quests"]}
+    current_activities = {item["id"] for item in content["activities"]}
+    retired_quests = {item.id for item in db.scalars(select(QuestDefinition).where(QuestDefinition.owner_id.is_(None)))
+                      if item.id not in current_quests}
+    from .models import StoryDefinition
+
+    for story in db.scalars(select(StoryDefinition).where(StoryDefinition.quest_id.in_(retired_quests))):
+        db.delete(story)
+    for item in db.scalars(select(QuestDefinition).where(QuestDefinition.id.in_(retired_quests))):
+        db.delete(item)
+    for activity in db.scalars(select(Activity).where(Activity.owner_id.is_(None))):
+        if activity.id not in current_activities:
+            activity.content = {**activity.content, "published": False}
+            activity.assistant_allowed = False
     for chapter in chapters:
-        if not db.get(Chapter, chapter["id"]):
-            db.add(Chapter(id=chapter["id"], title=chapter["title"], order_index=chapter["order_index"]))
+        item = db.get(Chapter, chapter["id"])
+        if not item:
+            item = Chapter(id=chapter["id"])
+            db.add(item)
+        item.title, item.order_index = chapter["title"], chapter["order_index"]
     db.flush()
     for kc in kcs:
-        if not db.get(KnowledgePoint, kc["id"]):
-            db.add(KnowledgePoint(id=kc["id"], chapter_id=kc["chapter_id"], title=kc["kc_name"], content=kc))
+        item = db.get(KnowledgePoint, kc["id"])
+        if not item:
+            item = KnowledgePoint(id=kc["id"])
+            db.add(item)
+        item.chapter_id, item.title, item.content = kc["chapter_id"], kc["kc_name"], kc
     for example in examples:
-        if not db.get(CourseExample, example["id"]):
-            db.add(CourseExample(id=example["id"], content=example))
+        item = db.get(CourseExample, example["id"])
+        if not item:
+            item = CourseExample(id=example["id"])
+            db.add(item)
+        item.content = example
     for doc in docs:
         chapter = next(c for c in chapters if c["order_index"] == doc["sort_order"])
-        if not db.get(Material, doc["id"]):
-            db.add(Material(id=doc["id"], chapter_id=chapter["id"], title=chapter["title"], kind="text"))
-            db.flush()
-            db.add(MaterialVersion(material_id=doc["id"], version=1, status="ready", content={
+        item = db.get(Material, doc["id"])
+        if not item:
+            item = Material(id=doc["id"], chapter_id=chapter["id"], title=Path(doc["original_filename"]).stem, kind="text")
+            db.add(item)
+        # Imported and uploaded current files retain their pages and publication metadata.
+        if not item.storage_key:
+            item.title, item.chapter_id = Path(doc["original_filename"]).stem, chapter["id"]
+            item.kind, item.status = "text", "ready"
+            item.content = {
                 "notice": "原课件真实提取文本。原 PPT/PDF 和视频文件未随仓库提供，不代表完整幻灯片或视频。",
                 "pages": [{"id": p["id"], "page_no": p["page_no"], "title": p["title"], "text": p["content_markdown"]}
                           for p in pages if p["document_id"] == doc["id"]],
-            }))
+            }
     db.flush()
     code_to_kc = {kc["kc_code"]: kc["id"] for kc in kcs}
     reviewed_problem = next(p for p in problems if p["id"] == 476)
@@ -64,7 +91,7 @@ def seed(db, source=None):
             point_ids = [code_to_kc[reviewed_problem["kc_code"]]]
         question_ids = spec["content"].get("question_ids")
         if question_ids is None:
-            raise ValueError(f"活动 {spec['id']} v{spec['version']} 必须固定question_ids题集")
+            raise ValueError(f"活动 {spec['id']} 必须固定question_ids题集")
         known_questions = {q["id"] for q in content["questions"] if q["activity_id"] == spec["id"]}
         if mode == "problem":
             known_questions.add("course-" + str(reviewed_problem["id"]))
@@ -76,20 +103,21 @@ def seed(db, source=None):
         values["content"] = {**spec["content"], "question_ids": question_ids, "knowledge_point_ids": point_ids}
         item = db.get(Activity, spec["id"])
         if not item:
-            item = Activity(id=spec["id"], chapter_id=spec["chapter_id"], version=spec["version"], **values)
+            item = Activity(id=spec["id"], chapter_id=spec["chapter_id"], **values)
             db.add(item)
             db.flush()
-        snapshot = db.get(ActivityVersion, (spec["id"], spec["version"]))
-        if not snapshot:
-            db.add(ActivityVersion(activity_id=spec["id"], version=spec["version"], snapshot=values))
-        elif snapshot.snapshot != values:
-            raise ValueError(f"活动 {spec['id']} v{spec['version']} 已发布，修改内容必须增加版本")
-        if item.version < spec["version"]:
-            for key, value in values.items():
-                setattr(item, key, value)
-            item.version = spec["version"]
+        for key, value in values.items():
+            setattr(item, key, value)
+        item.chapter_id = spec["chapter_id"]
+        item.owner_id = None
     db.flush()
     for question in content["questions"]:
+        # Removed teaching activities remain private question archives, retaining
+        # stable question IDs and foreign keys of existing submissions.
+        if not db.get(Activity, question["activity_id"]):
+            db.add(Activity(id=question["activity_id"], chapter_id=question["chapter_id"], title="未发布的归档题目",
+                            kind="practice", assistant_allowed=False, content={"published": False, "question_ids": []}))
+            db.flush()
         public = {key: question[key] for key in ("id", "chapter_id", "activity_id", "title", "kind", "prompt", "options", "source")}
         existing = db.get(Question, question["id"])
         if not existing:
@@ -97,29 +125,39 @@ def seed(db, source=None):
             db.flush()
             db.add(QuestionSecret(question_id=question["id"], answer=question["answer"], hidden_cases=[]))
         else:
+            for key, value in public.items():
+                setattr(existing, key, value)
             secret = db.get(QuestionSecret, question["id"])
-            if any(getattr(existing, key) != value for key, value in public.items()) or not secret or secret.answer != question["answer"]:
-                raise ValueError(f"题目 {question['id']} 已发布，修订必须使用新题目ID并创建活动新版本")
+            if not secret:
+                secret = QuestionSecret(question_id=question["id"], hidden_cases=[])
+                db.add(secret)
+            secret.answer = question["answer"]
     chapter_by_kc = {kc["kc_code"]: kc["chapter_id"] for kc in kcs}
     for problem in problems:
         reviewed = problem["id"] == reviewed_problem["id"]
-        activity_id = "ch2-code" if reviewed else "archive-" + str(problem["id"])
+        activity_id = "archive-" + str(problem["id"])
         chapter_id = chapter_by_kc.get(problem["kc_code"], 180)
-        if not reviewed and not db.get(Activity, activity_id):
+        if not db.get(Activity, activity_id):
             db.add(Activity(id=activity_id, chapter_id=chapter_id, title=problem["title"], kind="practice", assistant_allowed=False,
                             content={"published": False, "knowledge_point_ids": [code_to_kc[problem["kc_code"]]]}))
             db.flush()
         question_id = "course-" + str(problem["id"])
-        if not db.get(Question, question_id):
-            db.add(Question(id=question_id, chapter_id=chapter_id, activity_id=activity_id, title=problem["title"], kind="python",
-                            prompt=problem["statement_markdown"], options=[], samples=problem["samples"],
-                            source={"kind": "course_export", "original_id": problem["id"], "page_ids": [10771] if reviewed else [],
-                                    "reviewed": reviewed}))
-            db.flush()
-            db.add(QuestionSecret(question_id=question_id, answer=None, hidden_cases=[
-                {"input": case["input"], "expected_output": case["expected_output"]}
-                for case in problem["test_cases"] if not case.get("is_sample")
-            ]))
+        question = db.get(Question, question_id)
+        if not question:
+            question = Question(id=question_id)
+            db.add(question)
+        question.chapter_id, question.activity_id = chapter_id, activity_id
+        question.title, question.kind, question.prompt = problem["title"], "python", problem["statement_markdown"]
+        question.options, question.samples = [], problem["samples"]
+        question.source = {"kind": "course_export", "original_id": problem["id"], "page_ids": [10771] if reviewed else [], "reviewed": reviewed}
+        db.flush()
+        secret = db.get(QuestionSecret, question_id)
+        if not secret:
+            secret = QuestionSecret(question_id=question_id)
+            db.add(secret)
+        secret.answer = None
+        secret.hidden_cases = [{"input": case["input"], "expected_output": case["expected_output"]}
+                               for case in problem["test_cases"] if not case.get("is_sample")]
     from .dialogues import validate_dialogue
 
     for spec in content["npcs"]:
@@ -127,29 +165,42 @@ def seed(db, source=None):
         npc = db.get(Npc, spec["key"])
         if not npc:
             db.add(Npc(**spec))
-        elif len(npc.dialogue) == 1 and npc.dialogue[0] == {key: spec["dialogue"][0][key] for key in ("id", "text")}:
-            npc.dialogue = spec["dialogue"]
+        else:
+            for key, value in spec.items():
+                setattr(npc, key, value)
     db.flush()
     for definition in content["quests"]:
         validate_definition(definition, db)
-        item = db.get(QuestDefinition, (definition["id"], definition["version"]))
+        item = db.get(QuestDefinition, definition["id"])
         if not item:
-            db.add(QuestDefinition(id=definition["id"], version=definition["version"], title=definition["title"],
-                                   chapter_id=definition["chapter_id"], definition=definition))
-        elif item.definition != definition:
-            raise ValueError(f"任务 {definition['id']} v{definition['version']} 已发布，修改内容必须增加版本")
+            item = QuestDefinition(id=definition["id"])
+            db.add(item)
+        item.title, item.chapter_id, item.definition = definition["title"], definition["chapter_id"], definition
+        item.owner_id = None
     db.flush()
-    from .models import StoryDefinition
     from .story import validate_story
 
     for spec in content["stories"]:
-        validate_story(spec["story"], db, spec["quest"], story_id=spec["id"], story_version=spec["version"])
-        item = db.get(StoryDefinition, (spec["id"], spec["version"]))
+        validate_story(spec["story"], db, spec["quest"], story_id=spec["id"])
+        item = db.get(StoryDefinition, spec["id"])
         if not item:
-            db.add(StoryDefinition(id=spec["id"], version=spec["version"], chapter_id=spec["chapter_id"],
-                                   quest_id=spec["quest"]["id"], quest_version=spec["quest"]["version"], content=spec["story"]))
-        elif item.content != spec["story"]:
-            raise ValueError(f"演出 {spec['id']} v{spec['version']} 已发布，修改内容必须增加版本")
+            item = StoryDefinition(id=spec["id"])
+            db.add(item)
+        item.chapter_id, item.quest_id, item.content = spec["chapter_id"], spec["quest"]["id"], spec["story"]
+    # Definition changes may invalidate an open dialogue cursor; preserve the session
+    # history and all learning data, and let the next interaction select a valid entry.
+    from .models import StorySession
+    for session in db.scalars(select(StorySession).where(StorySession.status.in_(["active", "waiting"]))):
+        story = db.get(StoryDefinition, session.story_id)
+        node = next((n for n in story.content["nodes"] if n["id"] == session.node_id), None) if story else None
+        binding = story.content["bindings"].get(node.get("binding")) if node and node["type"] == "activity" else None
+        valid = (node and ((session.status == "active" and node["type"] == "dialogue") or
+                          (session.status == "waiting" and binding and binding["activity_id"] == session.pending_activity_id)))
+        if not valid:
+            session.status, session.pending_activity_id, session.return_mapping = "ended", None, {}
+            session.revision += 1
+        elif session.status == "waiting":
+            session.return_mapping = node["returns"]
     db.commit()
     return counts
 

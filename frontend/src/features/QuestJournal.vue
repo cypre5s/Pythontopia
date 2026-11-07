@@ -25,7 +25,7 @@
       </aside>
       <article v-if="selectedQuest" :key="selectedQuest.id" class="journal-entry quest-detail">
         <header><div><span class="eyebrow">{{ selectedQuest.kind === 'side' ? '支线委托' : '主线委托' }} · {{ selectedQuest.status === 'complete' ? '已完成' : '进行中' }}</span><h3>{{ selectedQuest.title }}</h3></div></header>
-        <section class="journal-objectives"><div><h4><GameIcon name="chart"/>目标进度</h4><span>{{ completedNodes }} / {{ selectedQuest.nodes.length }}</span></div><progress :value="completedNodes" :max="Math.max(1, selectedQuest.nodes.length)" aria-label="目标进度"/><p>{{ selectedQuest.status === 'complete' ? '这段故事已完成，探索的足迹会留在这里。' : '循着线索，一步步完成这段小镇故事。' }}</p></section>
+        <section class="journal-objectives"><div><h4><GameIcon name="chart"/>目标进度</h4><span>{{ completedNodes }} / {{ requiredNodes.length }}</span></div><progress :value="completedNodes" :max="Math.max(1, requiredNodes.length)" aria-label="目标进度"/><p>{{ selectedQuest.status === 'complete' ? '这段故事已完成，探索的足迹会留在这里。' : '循着线索，一步步完成这段小镇故事。' }}</p></section>
         <h4 class="checklist-heading"><GameIcon name="journal"/>任务清单</h4>
         <ol>
           <li v-for="(node,index) in selectedQuest.nodes" :key="node.id" :class="node.status">
@@ -51,6 +51,7 @@ import { notify } from "../shared/api";
 import type { Quest, QuestNode } from "../shared/types";
 import GameIcon from "../shared/GameIcon.vue";
 import { displayQuestTitle } from "../game/config/worldConfig";
+import { requiredQuestNodes } from "../shared/questProgress";
 const journalHouse = "/assets/pixel/buildings/super-retro-world/house_03.png";
 const selectedId = ref("");
 const session = useSession(),
@@ -84,7 +85,8 @@ const quests = computed(
     ) ?? [],
 );
 const selectedQuest = computed(() => quests.value.find(q => q.id === selectedId.value) ?? quests.value.find(q => q.id === session.trackedQuest) ?? quests.value[0]);
-const completedNodes = computed(() => selectedQuest.value?.nodes.filter(n => n.status === "complete").length ?? 0);
+const requiredNodes = computed(() => requiredQuestNodes(selectedQuest.value));
+const completedNodes = computed(() => requiredNodes.value.filter(n => n.status === "complete").length);
 const activeCount = computed(
   () =>
     session.world?.quests.filter((q) => q.status !== "complete").length ?? 0,

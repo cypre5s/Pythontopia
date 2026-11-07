@@ -11,16 +11,14 @@ const existing = {
   chapter_id: 179,
   status: "published",
   opens_at: "2099-01-02T01:00:00+00:00",
-  version: 2,
-  prerequisite_chapter_id: 178,
-};
+  prerequisite_chapter_id: 178 };
 const wrappers: VueWrapper[] = [];
 async function setup(rules = [existing]) {
   vi.spyOn(api, "get").mockImplementation(async (path) => {
     if (path.endsWith("/releases")) return rules as never;
     return [
-      { chapter_id: 179, version: 9 },
-      { chapter_id: 180, version: 4 },
+      { chapter_id: 179 },
+      { chapter_id: 180 },
     ] as never;
   });
   const put = vi
@@ -30,8 +28,7 @@ async function setup(rules = [existing]) {
         ({ chapter_id: 179, ...(body as object) }) as never,
     );
   const wrapper = mount(TeacherChapters, {
-    props: { classroomId: 10, classroomName: "一班", chapters },
-  });
+    props: { classroomId: 10, classroomName: "一班", chapters } });
   wrappers.push(wrapper);
   await flushPromises();
   return { wrapper, put };
@@ -51,7 +48,7 @@ describe("teacher chapter schedules", () => {
     expect(wrapper.text()).not.toContain("发布任务版本");
     expect(wrapper.findAll("select")).toHaveLength(0);
   });
-  it("reschedules without silently upgrading an existing content version or dropping its prerequisite", async () => {
+  it("reschedules while preserving the existing prerequisite", async () => {
     const { wrapper, put } = await setup();
     const row = wrapper.findAll("tbody tr")[0]!;
     await row.find("input").setValue("2099-01-04T10:30");
@@ -63,11 +60,9 @@ describe("teacher chapter schedules", () => {
     expect(put).toHaveBeenCalledWith("/teacher/classrooms/10/releases/179", {
       status: "published",
       opens_at: "2099-01-04T02:30:00.000Z",
-      prerequisite_chapter_id: 178,
-      version: 2,
-    });
+      prerequisite_chapter_id: 178 });
   });
-  it("uses the authored definition for a new chapter and stores immediate unlock explicitly", async () => {
+  it("stores immediate unlock without a content selector", async () => {
     const { wrapper, put } = await setup([]);
     const row = wrapper.findAll("tbody tr")[1]!;
     await row
@@ -78,19 +73,17 @@ describe("teacher chapter schedules", () => {
     expect(put).toHaveBeenCalledWith("/teacher/classrooms/10/releases/180", {
       status: "published",
       opens_at: null,
-      prerequisite_chapter_id: null,
-      version: 4,
-    });
+      prerequisite_chapter_id: null });
   });
-  it("refreshes task definitions before scheduling an unarranged chapter after authoring elsewhere", async () => {
+  it("schedules an unarranged chapter without fetching task definitions", async () => {
     const { wrapper, put } = await setup([]);
-    vi.mocked(api.get).mockResolvedValueOnce([{ chapter_id: 180, version: 8 }]);
     const row = wrapper.findAll("tbody tr")[1]!;
     await row.findAll("button").find(b => b.text() === "立即解锁")!.trigger("click");
     await flushPromises();
     expect(put).toHaveBeenCalledWith("/teacher/classrooms/10/releases/180", {
-      status: "published", opens_at: null, prerequisite_chapter_id: null, version: 8,
+      status: "published", opens_at: null, prerequisite_chapter_id: null,
     });
+    expect(api.get).not.toHaveBeenCalledWith("/teacher/quests");
   });
   it("preserves a saved date when pausing a chapter", async () => {
     const { wrapper, put } = await setup();
@@ -103,9 +96,7 @@ describe("teacher chapter schedules", () => {
     expect(put).toHaveBeenCalledWith("/teacher/classrooms/10/releases/179", {
       status: "paused",
       opens_at: existing.opens_at,
-      prerequisite_chapter_id: 178,
-      version: 2,
-    });
+      prerequisite_chapter_id: 178 });
   });
   it("keeps the edited date on server failure instead of displaying an unsaved success", async () => {
     const { wrapper, put } = await setup();

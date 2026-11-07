@@ -1,7 +1,7 @@
 <template>
   <fieldset class="knowledge-point-select">
     <legend>关联知识点</legend>
-    <p class="muted">仅显示当前章节的知识点；更新活动会保存新的内容版本。</p>
+    <p class="muted">仅显示当前章节的知识点；更新后使用当前活动配置。</p>
     <label v-for="point in available" :key="point.id" class="checkbox-label"
       ><input
         type="checkbox"

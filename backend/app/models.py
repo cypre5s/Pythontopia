@@ -69,13 +69,6 @@ class Material(Base):
     kind: Mapped[str] = mapped_column(String(24), default="text")
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
 
-
-class MaterialVersion(Base):
-    __tablename__ = "material_versions"
-    __table_args__ = (UniqueConstraint("material_id", "version"),)
-    id: Mapped[int] = mapped_column(primary_key=True)
-    material_id: Mapped[int] = mapped_column(ForeignKey("materials.id"), index=True)
-    version: Mapped[int] = mapped_column(Integer, default=1)
     content: Mapped[dict] = mapped_column(JSON, default=dict)
     storage_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(24), default="ready")
@@ -90,25 +83,16 @@ class Activity(Base):
     title: Mapped[str] = mapped_column(String(200))
     kind: Mapped[str] = mapped_column(String(24))
     material_id: Mapped[int | None] = mapped_column(ForeignKey("materials.id"), nullable=True)
-    version: Mapped[int] = mapped_column(Integer, default=1)
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     assistant_allowed: Mapped[bool] = mapped_column(Boolean, default=True)
     npc_key: Mapped[str] = mapped_column(String(80), default="professor")
     content: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
-class ActivityVersion(Base):
-    __tablename__ = "activity_versions"
-    activity_id: Mapped[str] = mapped_column(ForeignKey("activities.id"), primary_key=True)
-    version: Mapped[int] = mapped_column(Integer, primary_key=True)
-    snapshot: Mapped[dict] = mapped_column(JSON)
-
-
 class ChapterRelease(Base):
     __tablename__ = "chapter_releases"
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), primary_key=True)
     chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), primary_key=True)
-    version: Mapped[int] = mapped_column(Integer, default=1)
     status: Mapped[str] = mapped_column(String(24), default="published")
     opens_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     prerequisite_chapter_id: Mapped[int | None] = mapped_column(ForeignKey("chapters.id"), nullable=True)
@@ -128,7 +112,6 @@ class Npc(Base):
 class QuestDefinition(Base):
     __tablename__ = "quest_definitions"
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
-    version: Mapped[int] = mapped_column(Integer, primary_key=True)
     chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), index=True)
     title: Mapped[str] = mapped_column(String(200))
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -142,7 +125,6 @@ class PlayerQuest(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
     quest_id: Mapped[str] = mapped_column(String(100))
-    quest_version: Mapped[int] = mapped_column(Integer)
     status: Mapped[str] = mapped_column(String(24), default="active")
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -182,7 +164,6 @@ class LearningEvent(Base):
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
     player_quest_id: Mapped[int] = mapped_column(ForeignKey("player_quests.id"))
     node_id: Mapped[str] = mapped_column(String(100))
-    content_version: Mapped[int] = mapped_column(Integer)
     evidence: Mapped[dict] = mapped_column(JSON)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
@@ -193,7 +174,6 @@ class LearningRecord(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
     activity_id: Mapped[str] = mapped_column(ForeignKey("activities.id"), index=True)
-    version: Mapped[int] = mapped_column(Integer)
     kind: Mapped[str] = mapped_column(String(24), default="participation")
     data: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
@@ -202,10 +182,8 @@ class LearningRecord(Base):
 class StoryDefinition(Base):
     __tablename__ = "story_definitions"
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
-    version: Mapped[int] = mapped_column(Integer, primary_key=True)
     chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"))
     quest_id: Mapped[str] = mapped_column(String(100))
-    quest_version: Mapped[int] = mapped_column(Integer)
     content: Mapped[dict] = mapped_column(JSON)
 
 
@@ -219,13 +197,11 @@ class StorySession(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
     story_id: Mapped[str] = mapped_column(String(100))
-    story_version: Mapped[int] = mapped_column(Integer)
     npc_key: Mapped[str] = mapped_column(ForeignKey("npcs.key"))
     node_id: Mapped[str] = mapped_column(String(100))
     status: Mapped[str] = mapped_column(String(16), default="active")
     revision: Mapped[int] = mapped_column(Integer, default=0)
     pending_activity_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    pending_activity_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
     return_mapping: Mapped[dict] = mapped_column(JSON, default=dict)
     receipts: Mapped[list] = mapped_column(JSON, default=list)
 
@@ -235,7 +211,6 @@ class ActivityProgress(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), primary_key=True)
     activity_id: Mapped[str] = mapped_column(ForeignKey("activities.id"), primary_key=True)
-    version: Mapped[int] = mapped_column(Integer, primary_key=True)
     page_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
     visited_pages: Mapped[list] = mapped_column(JSON, default=list)
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -246,7 +221,6 @@ class Question(Base):
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), index=True)
     activity_id: Mapped[str] = mapped_column(ForeignKey("activities.id"), index=True)
-    version: Mapped[int] = mapped_column(Integer, default=1)
     title: Mapped[str] = mapped_column(String(200))
     kind: Mapped[str] = mapped_column(String(24))
     prompt: Mapped[str] = mapped_column(Text)
@@ -270,7 +244,6 @@ class Submission(Base):
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
     activity_id: Mapped[str] = mapped_column(ForeignKey("activities.id"), index=True)
     question_id: Mapped[str] = mapped_column(ForeignKey("questions.id"), index=True)
-    version: Mapped[int] = mapped_column(Integer, default=1)
     idempotency_key: Mapped[str] = mapped_column(String(100))
     mode: Mapped[str] = mapped_column(String(16), default="submit")
     status: Mapped[str] = mapped_column(String(24), default="queued")

@@ -1,7 +1,7 @@
 from uuid import uuid4
 from sqlalchemy import select
 from app.auth import hash_password, issue
-from app.models import Activity, ActivityVersion, Chapter, KnowledgePoint, User
+from app.models import Activity, Chapter, KnowledgePoint, User
 from app.seed import seed
 
 
@@ -62,8 +62,7 @@ def test_private_chapter_cannot_be_seen_bound_or_published_by_another_teacher(cl
         "title": "Cross private chapter",
         "kind": "practice",
         "npc_key": "mayor_py",
-        "knowledge_point_ids": [point["id"]],
-    }
+        "knowledge_point_ids": [point["id"]]}
     assert client.post("/api/teacher/activities", json=bad_activity, headers=other["headers"]).status_code == 403
     assert (
         client.post(
@@ -76,12 +75,10 @@ def test_private_chapter_cannot_be_seen_bound_or_published_by_another_teacher(cl
     )
     definition = {
         "id": "stolen-quest",
-        "version": 1,
         "title": "Stolen",
         "chapter_id": cid,
         "nodes": [{"id": "talk", "type": "TALK_TO_NPC", "title": "Talk", "target": "mayor_py", "dependencies": []}],
-        "effects": [],
-    }
+        "effects": []}
     assert client.post("/api/teacher/quests", json={"definition": definition}, headers=other["headers"]).status_code == 403
     # Private chapter is hidden from students until their own class owner publishes it.
     assert "PRIVATE_CHAPTER" not in client.get(f"/api/world?classroom_id={classroom['id']}", headers=student["headers"]).text
@@ -99,7 +96,7 @@ def test_private_chapter_cannot_be_seen_bound_or_published_by_another_teacher(cl
     assert client.get(f"/api/activities/private-own?classroom_id={other_class['id']}", headers=other["headers"]).status_code == 403
 
 
-def test_activity_kc_binding_validates_owner_chapter_and_immutable_snapshot(client, db, teacher, classroom):
+def test_activity_kc_binding_validates_owner_chapter_and_current_binding(client, db, teacher, classroom):
     other = another_teacher(db)
     own = client.post("/api/teacher/knowledge-points", json={"chapter_id": 179, "title": "Own addition"}, headers=teacher["headers"]).json()
     foreign = client.post(
@@ -112,11 +109,10 @@ def test_activity_kc_binding_validates_owner_chapter_and_immutable_snapshot(clie
         "kind": "lesson",
         "npc_key": "mayor_py",
         "material_id": 186,
-        "knowledge_point_ids": [1809, own["id"]],
-    }
+        "knowledge_point_ids": [1809, own["id"]]}
     response = client.post("/api/teacher/activities", json=payload, headers=teacher["headers"])
     assert response.status_code == 201, response.text
-    assert db.get(ActivityVersion, ("point-bound", 1)).snapshot["content"]["knowledge_point_ids"] == [1809, own["id"]]
+    assert db.get(Activity, "point-bound").content["knowledge_point_ids"] == [1809, own["id"]]
     for ids in ([0], [-1], [True], ["1809"], [1809, 1809], None):
         bad = {**payload, "id": "bad-" + uuid4().hex, "knowledge_point_ids": ids}
         assert client.post("/api/teacher/activities", json=bad, headers=teacher["headers"]).status_code == 422
@@ -126,13 +122,12 @@ def test_activity_kc_binding_validates_owner_chapter_and_immutable_snapshot(clie
     )
     assert client.put("/api/teacher/activities/point-bound", json={"knowledge_point_ids": [1843]}, headers=teacher["headers"]).status_code == 422
     update = client.put("/api/teacher/activities/point-bound", json={"knowledge_point_ids": [1809]}, headers=teacher["headers"])
-    assert update.status_code == 200 and update.json()["version"] == 2
-    assert db.get(ActivityVersion, ("point-bound", 1)).snapshot["content"]["knowledge_point_ids"] == [1809, own["id"]]
-    assert db.get(ActivityVersion, ("point-bound", 2)).snapshot["content"]["knowledge_point_ids"] == [1809]
-    assert client.delete(f"/api/teacher/knowledge-points/{own['id']}", headers=teacher["headers"]).status_code == 409
+    assert update.status_code == 200
+    assert db.get(Activity, "point-bound").content["knowledge_point_ids"] == [1809]
+    assert client.delete(f"/api/teacher/knowledge-points/{own['id']}", headers=teacher["headers"]).status_code == 200
 
 
-def test_seed_binds_real_course_kcs_idempotently_and_admin_can_manage_shared(client, db, teacher):
+def test_seed_binds_real_course_kcs_idempotently_and_admin_can_manage_shared(client, db, teacher, branching_course):
     seed(db)
     seed(db)
     for activity in db.scalars(
@@ -140,7 +135,6 @@ def test_seed_binds_real_course_kcs_idempotently_and_admin_can_manage_shared(cli
     ):
         assert activity.content["knowledge_point_ids"]
         assert all(db.get(KnowledgePoint, id).chapter_id == activity.chapter_id for id in activity.content["knowledge_point_ids"])
-        assert db.get(ActivityVersion, (activity.id, 1)).snapshot["content"]["knowledge_point_ids"] == activity.content["knowledge_point_ids"]
     assert db.get(Activity, "ch2-code").content["knowledge_point_ids"] == [1844]
     user = db.get(User, teacher["id"])
     user.role = "admin"

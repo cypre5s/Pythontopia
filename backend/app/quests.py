@@ -12,9 +12,7 @@ from .world_config import interaction_points, load_world_config, validate_point
 from .models import (
     Activity,
     ActivityProgress,
-    ActivityVersion,
     Chapter,
-    ChapterRelease,
     LearningEvent,
     LearningRecord,
     NodeState,
@@ -43,17 +41,29 @@ NODE_TYPES = {
 OBJECTS = interaction_points()
 
 
+def quest_visible(definition, user, classroom):
+    return bool(definition and (user.role == "admin" or definition.owner_id in {None, classroom.teacher_id}))
+
+
+def authorize_quest(db, user, classroom_id, quest_id):
+    classroom = authorize_classroom(db, user, classroom_id)
+    definition = db.get(QuestDefinition, quest_id)
+    if not definition:
+        raise HTTPException(404, "任务定义不存在")
+    if not quest_visible(definition, user, classroom):
+        raise HTTPException(403, "任务不属于当前班级教师")
+    return definition
+
+
 def validate_definition(definition: dict, db: Session | None = None) -> dict:
     if not isinstance(definition, dict):
         raise ValueError("任务定义必须为对象")
-    if set(definition) - {"id", "version", "title", "chapter_id", "nodes", "effects", "kind"}:
+    if set(definition) - {"id", "title", "chapter_id", "nodes", "effects", "kind"}:
         raise ValueError("未知任务字段")
     if not isinstance(definition.get("id"), str) or not definition["id"].strip() or len(definition["id"]) > 100:
         raise ValueError("任务id必须为非空短字符串")
     if not isinstance(definition.get("title"), str) or not definition["title"].strip() or len(definition["title"]) > 200:
         raise ValueError("任务标题必须为非空短字符串")
-    if type(definition.get("version")) is not int or definition["version"] < 1:
-        raise ValueError("任务version必须为正整数")
     if type(definition.get("chapter_id")) is not int or definition["chapter_id"] < 1:
         raise ValueError("章节id必须为正整数")
     if definition.get("kind", "main") not in ("main", "side"):
@@ -77,7 +87,6 @@ def validate_definition(definition: dict, db: Session | None = None) -> dict:
             "aggregation",
             "optional",
             "activity_id",
-            "activity_version",
             "condition",
             "choices",
             "dialogue_id",
@@ -135,22 +144,18 @@ def validate_definition(definition: dict, db: Session | None = None) -> dict:
                 isinstance(choice, dict) and choice.get("id") == condition["choice"] for choice in parent_choices
             ):
                 raise ValueError("分支选项不存在")
-        activity_version = node.get("activity_version", 1)
-        if type(activity_version) is not int or activity_version < 1:
-            raise ValueError("活动版本必须是正整数")
         if node["type"] in {"STUDY_LESSON", "COMPLETE_PRACTICE", "PASS_ASSESSMENT"}:
             if not node.get("activity_id"):
                 raise ValueError("学习节点必须绑定活动")
             if db:
                 activity = db.get(Activity, node["activity_id"])
-                snapshot = db.get(ActivityVersion, (node["activity_id"], activity_version))
-                if not activity or activity_version > activity.version or not snapshot:
-                    raise ValueError("活动版本不存在")
-                if snapshot.snapshot.get("content", {}).get("published") is False:
-                    raise ValueError("活动版本尚未发布")
+                if not activity:
+                    raise ValueError("活动不存在")
+                if activity.content.get("published") is False:
+                    raise ValueError("活动尚未发布")
                 expected = {"STUDY_LESSON": {"lesson", "reading"}, "COMPLETE_PRACTICE": {"practice"}, "PASS_ASSESSMENT": {"assessment"}}[node["type"]]
-                if snapshot.snapshot.get("kind") not in expected:
-                    raise ValueError("任务节点与教学活动版本类型不匹配")
+                if activity.kind not in expected:
+                    raise ValueError("任务节点与教学活动类型不匹配")
         if node["type"] in {"TALK_TO_NPC", "PLAY_DIALOGUE", "REPORT_BACK"}:
             if not node.get("target") or (db and not db.get(Npc, node["target"])):
                 raise ValueError("NPC不存在")
@@ -233,21 +238,15 @@ def ensure_quests(db, user, classroom_id):
     definitions = db.scalars(
         select(QuestDefinition)
         .where((QuestDefinition.owner_id.is_(None)) | (QuestDefinition.owner_id == classroom.teacher_id))
-        .order_by(QuestDefinition.version.desc())
     ).all()
-    selected = set()
     for definition in definitions:
-        if definition.id in selected or not chapter_available(db, user, classroom_id, definition.chapter_id):
+        if not chapter_available(db, user, classroom_id, definition.chapter_id):
             continue
-        release = db.get(ChapterRelease, (classroom_id, definition.chapter_id))
-        if definition.version > release.version:
-            continue
-        selected.add(definition.id)
         existing = db.scalar(
             select(PlayerQuest).where(PlayerQuest.user_id == user.id, PlayerQuest.classroom_id == classroom_id, PlayerQuest.quest_id == definition.id)
         )
         if not existing:
-            db.add(PlayerQuest(user_id=user.id, classroom_id=classroom_id, quest_id=definition.id, quest_version=definition.version))
+            db.add(PlayerQuest(user_id=user.id, classroom_id=classroom_id, quest_id=definition.id))
     try:
         db.commit()
     except IntegrityError:
@@ -272,7 +271,9 @@ def world_payload(db, user, classroom_id):
         raise HTTPException(409, "存档或NPC位置与当前地图配置不一致，请联系管理员") from exc
     quests = []
     for instance in db.scalars(select(PlayerQuest).where(PlayerQuest.user_id == user.id, PlayerQuest.classroom_id == classroom_id)):
-        definition = db.get(QuestDefinition, (instance.quest_id, instance.quest_version))
+        definition = db.get(QuestDefinition, instance.quest_id)
+        if not quest_visible(definition, user, classroom):
+            continue
         states = {state.node_id: state for state in db.scalars(select(NodeState).where(NodeState.player_quest_id == instance.id))}
         statuses = node_statuses(definition.definition, states)
         quests.append(
@@ -280,7 +281,6 @@ def world_payload(db, user, classroom_id):
                 "id": definition.id,
                 "title": definition.title,
                 "chapter_id": definition.chapter_id,
-                "version": definition.version,
                 "status": instance.status,
                 "kind": definition.definition.get("kind", "main"),
                 "nodes": [
@@ -289,7 +289,7 @@ def world_payload(db, user, classroom_id):
                 ],
             }
         )
-        story = db.scalar(select(StoryDefinition).where(StoryDefinition.quest_id == definition.id, StoryDefinition.quest_version == definition.version))
+        story = db.scalar(select(StoryDefinition).where(StoryDefinition.quest_id == definition.id))
         if story:
             quests[-1]["story_id"] = story.id
     return {
@@ -447,25 +447,24 @@ def validate_evidence(db, user, classroom_id, node, evidence):
             raise HTTPException(422, "互动对象不匹配")
         check_near(db, user, classroom_id, OBJECTS[target], radius=2 if kind == "INTERACT_OBJECT" else 5)
     elif kind == "STUDY_LESSON":
-        from .courses import authorize_activity
+        from .courses import authorize_activity, reading_completed
 
-        activity = authorize_activity(db, user, classroom_id, node["activity_id"], node.get("activity_version", 1))
+        activity = authorize_activity(db, user, classroom_id, node["activity_id"])
         if activity.content.get("completion"):
-            progress = db.get(ActivityProgress, (user.id, classroom_id, activity.id, activity.version))
-            if not progress or not progress.completed:
+            progress = db.get(ActivityProgress, (user.id, classroom_id, activity.id))
+            if not reading_completed(activity, progress):
                 raise HTTPException(422, "请先完成规定资料页的阅读参与")
         record = db.get(LearningRecord, evidence.get("record_id", ""))
-        if not record or (record.user_id, record.classroom_id, record.activity_id, record.version) != (
+        if not record or (record.user_id, record.classroom_id, record.activity_id) != (
             user.id,
             classroom_id,
             node["activity_id"],
-            node.get("activity_version", 1),
         ):
             raise HTTPException(422, "缺少当前活动的真实阅读记录")
     elif kind in {"COMPLETE_PRACTICE", "PASS_ASSESSMENT"}:
         from .courses import authorize_activity
 
-        activity = authorize_activity(db, user, classroom_id, node["activity_id"], node.get("activity_version", 1))
+        activity = authorize_activity(db, user, classroom_id, node["activity_id"])
         questions = [
             q
             for q in db.scalars(select(Question).where(Question.activity_id == node["activity_id"]))
@@ -474,7 +473,7 @@ def validate_evidence(db, user, classroom_id, node, evidence):
         if not questions:
             raise HTTPException(422, "题组为空")
         accepted = {
-            (s.question_id, s.version)
+            s.question_id
             for s in db.scalars(
                 select(Submission).where(
                     Submission.user_id == user.id,
@@ -485,7 +484,7 @@ def validate_evidence(db, user, classroom_id, node, evidence):
                 )
             ).all()
         }
-        if any((q.id, q.version) not in accepted for q in questions):
+        if any(q.id not in accepted for q in questions):
             raise HTTPException(422, "请先通过此活动的全部正式练习")
         if evidence.get("submission_id"):
             submission = db.get(Submission, evidence["submission_id"])
@@ -506,6 +505,7 @@ def apply_quest_event(db, user, body: EventInput):
     authorize_classroom(db, user, body.classroom_id)
     if user.role != "student":
         raise HTTPException(403, "教师预览不能写入学生成绩")
+    definition = authorize_quest(db, user, body.classroom_id, body.quest_id)
     existing = db.scalar(
         select(LearningEvent).where(
             LearningEvent.user_id == user.id, LearningEvent.classroom_id == body.classroom_id, LearningEvent.event_id == body.event_id
@@ -523,7 +523,6 @@ def apply_quest_event(db, user, body: EventInput):
     )
     if not instance:
         raise HTTPException(404, "任务尚未开放")
-    definition = db.get(QuestDefinition, (instance.quest_id, instance.quest_version))
     authorize_chapter(db, user, body.classroom_id, definition.chapter_id)
     states = {state.node_id: state for state in db.scalars(select(NodeState).where(NodeState.player_quest_id == instance.id))}
     node = next((n for n in definition.definition["nodes"] if n["id"] == body.node_id), None)
@@ -535,10 +534,9 @@ def apply_quest_event(db, user, body: EventInput):
     if statuses[body.node_id] != "ready":
         raise HTTPException(409, "任务前置尚未完成或不属于所选分支")
     if node["type"] in {"TALK_TO_NPC", "REPORT_BACK"}:
-        story = db.scalar(select(StoryDefinition).where(StoryDefinition.quest_id == instance.quest_id,
-                                                       StoryDefinition.quest_version == instance.quest_version))
+        story = db.scalar(select(StoryDefinition).where(StoryDefinition.quest_id == instance.quest_id))
         if story and any(item.get("checkpoint") == node["id"] for item in story.content["nodes"]):
-            marker = f"story:{story.id}:v{story.version}:{node['id']}"
+            marker = f"story:{story.id}:{node['id']}"
             if body.evidence.get("dialogue_id") != marker or not db.get(WorldFlag, (user.id, body.classroom_id,
                                                                                    f"dialogue:completed:{node['target']}:{marker}")):
                 raise HTTPException(422, "请先确认当前版本的指定对白")
@@ -553,7 +551,6 @@ def apply_quest_event(db, user, body: EventInput):
             classroom_id=body.classroom_id,
             player_quest_id=instance.id,
             node_id=node["id"],
-            content_version=instance.quest_version,
             evidence=body.evidence,
         )
     )
@@ -622,8 +619,8 @@ def create_quest(body: DefinitionInput, db: Annotated[Session, Depends(get_db)],
     from .curriculum import authoring_chapter
 
     authoring_chapter(db, user, definition["chapter_id"])
-    if db.get(QuestDefinition, (definition["id"], definition["version"])):
-        raise HTTPException(409, "已发布版本不可覆盖，请使用新版本号")
+    if db.get(QuestDefinition, definition["id"]):
+        raise HTTPException(409, "任务ID已存在")
     for node in definition["nodes"]:
         if node.get("activity_id"):
             activity = db.get(Activity, node["activity_id"])
@@ -633,7 +630,6 @@ def create_quest(body: DefinitionInput, db: Annotated[Session, Depends(get_db)],
     db.add(
         QuestDefinition(
             id=definition["id"],
-            version=definition["version"],
             chapter_id=definition["chapter_id"],
             title=definition["title"],
             owner_id=user.id,
@@ -651,6 +647,6 @@ def list_quests(db: Annotated[Session, Depends(get_db)], user: Annotated[User, D
         for q in db.scalars(
             select(QuestDefinition)
             .where((QuestDefinition.owner_id.is_(None)) | (QuestDefinition.owner_id == user.id))
-            .order_by(QuestDefinition.id, QuestDefinition.version)
+            .order_by(QuestDefinition.id)
         )
     ]

@@ -30,25 +30,25 @@
       </header>
       <LessonWorkspace
         v-if="session.workspace.kind === 'lesson'"
-        :key="`lesson-${session.workspace.activity_id}-${session.workspace.activity_version ?? 'current'}`"
+        :key="`lesson-${session.workspace.activity_id}`"
         :activity-id="session.workspace.activity_id"
-        :activity-version="session.workspace.activity_version"
+
         :initial-page="session.workspace.page_no"
         :story-session-id="session.workspace.story_session_id"
         @complete="$emit('complete')"
       /><LessonWorkspace
         v-else-if="session.workspace.kind === 'material'"
-        :key="`material-${session.workspace.material_id}-${session.workspace.version}`"
+        :key="`material-${session.workspace.material_id}`"
         activity-id=""
         :material-id="session.workspace.material_id"
-        :material-version="session.workspace.version"
+
         :initial-page="session.workspace.page_no"
       />
       <PracticeWorkspace
         v-else-if="session.workspace.kind === 'practice'"
-        :key="`practice-${session.workspace.activity_id}-${session.workspace.activity_version ?? 'current'}`"
+        :key="`practice-${session.workspace.activity_id}`"
         :activity-id="session.workspace.activity_id"
-        :activity-version="session.workspace.activity_version"
+
         :story-session-id="session.workspace.story_session_id"
         @complete="$emit('complete')"
       /><QuestJournal

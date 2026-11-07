@@ -42,7 +42,7 @@ test('teacher uploads self-authored PPTX; student reads the converted private PD
   await expect(page.locator('.class-card').filter({ has: page.getByRole('heading', { name: classroomName, exact: true }) })).toBeVisible();
   await page.getByRole('combobox', { name: '当前班级', exact: true }).selectOption(String(classroom.id));
 
-  await page.getByRole('button', { name: '材料与版本', exact: true }).click();
+  await page.getByRole('button', { name: '课程材料', exact: true }).click();
   await page.getByRole('button', { name: '上传课程材料', exact: true }).click();
   const uploadDialog = page.getByRole('dialog', { name: '上传课程材料', exact: true });
   await uploadDialog.getByLabel('资料名称', { exact: true }).fill(title);
@@ -52,8 +52,8 @@ test('teacher uploads self-authored PPTX; student reads the converted private PD
   await uploadDialog.getByRole('button', { name: '上传并处理', exact: true }).click();
   const uploadResponse = await uploaded;
   expect(uploadResponse.status()).toBe(201);
-  const material = await uploadResponse.json() as { id: number; version: number; status: string };
-  expect(material.version).toBe(1);
+  const material = await uploadResponse.json() as { id: number; status: string };
+  expect(material.id).toBeGreaterThan(0);
   await expect(uploadDialog).toBeHidden();
   await page.getByRole('searchbox', { name: '搜索材料名称或 ID', exact: true }).fill(title);
   const row = page.locator('tbody tr').filter({ hasText: title }).first();
@@ -79,21 +79,20 @@ test('teacher uploads self-authored PPTX; student reads the converted private PD
   await page.getByRole('button', { name: '创建活动', exact: true }).click();
   const activityResponse = await activitySaved;
   expect(activityResponse.status()).toBe(201);
-  const activity = await activityResponse.json() as { version: number };
+  expect((await activityResponse.json()).id).toBe(activityId);
 
   await page.getByRole('button', { name: '任务配置', exact: true }).click();
   const definition = {
-    id: questId, title: `自制 PPTX 阅读验收 ${tag}`, chapter_id: chapterId, version: 1, kind: 'side',
-    nodes: [{ id: 'read-presentation', type: 'STUDY_LESSON', title, activity_id: activityId, activity_version: activity.version, dependencies: [] }],
-    effects: [{ type: 'set_world_flag', key: `pptx_test_${tag}` }],
-  };
+    id: questId, title: `自制 PPTX 阅读验收 ${tag}`, chapter_id: chapterId, kind: 'side',
+    nodes: [{ id: 'read-presentation', type: 'STUDY_LESSON', title, activity_id: activityId, dependencies: [] }],
+    effects: [{ type: 'set_world_flag', key: `pptx_test_${tag}` }] };
   await page.getByLabel('任务 JSON', { exact: true }).fill(JSON.stringify(definition));
   const validation = page.waitForResponse(response => response.url().endsWith('/api/teacher/quests/validate') && response.request().method() === 'POST');
   await page.getByRole('button', { name: '校验任务', exact: true }).click();
   expect((await validation).status()).toBe(200);
   await expect(page.locator('pre.notice')).toContainText('"valid": true');
   const questSaved = page.waitForResponse(response => response.url().endsWith('/api/teacher/quests') && response.request().method() === 'POST');
-  await page.getByRole('button', { name: '创建任务版本', exact: true }).click();
+  await page.getByRole('button', { name: '保存任务配置', exact: true }).click();
   expect((await questSaved).status()).toBe(201);
   await page.getByRole('button', { name: '章节管理', exact: true }).click();
   const teacherToken = await page.evaluate(() => sessionStorage.getItem('pythontopia-reborn-session'));
@@ -123,7 +122,7 @@ test('teacher uploads self-authored PPTX; student reads the converted private PD
     await expect(student.getByRole('button', { name: /任务日志/ })).toBeVisible();
     const token = await student.evaluate(() => sessionStorage.getItem('pythontopia-reborn-session'));
     const headers = { Authorization: `Bearer ${token}` };
-    const fileUrl = `/api/materials/${material.id}/versions/${material.version}/file?classroom_id=${classroom.id}`;
+    const fileUrl = `/api/materials/${material.id}/file?classroom_id=${classroom.id}`;
     expect((await request.get(fileUrl)).status()).toBe(401);
     const ranged = await request.get(fileUrl, { headers: { ...headers, Range: 'bytes=0-15' } });
     expect(ranged.status()).toBe(206);
@@ -180,8 +179,7 @@ test('teacher uploads self-authored PPTX; student reads the converted private PD
       fixture: basename(pptxPath!), notice: 'Self-authored test presentation; not original courseware',
       teacher_upload_and_configuration: 'UI', converter: 'real private HTTP service',
       material_id: material.id, classroom_id: classroom.id, chapter_id: chapterId,
-      student_pdf_canvas: true, reading_record: true, reading_is_mastery: false, model_calls: 0,
-    }, null, 2));
+      student_pdf_canvas: true, reading_record: true, reading_is_mastery: false, model_calls: 0 }, null, 2));
     await testInfo.attach('presentation-acceptance.json', { contentType: 'application/json', path: acceptancePath });
   } finally {
     await context.close();

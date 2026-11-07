@@ -53,11 +53,11 @@ def test_missing_ppt_converter_reports_failure(tmp_path, monkeypatch):
         convert_presentation(tmp_path / "source.pptx", tmp_path)
 
 
-def test_teacher_upload_processing_range_and_version_authorization(client, db, teacher, student, classroom, tmp_path, monkeypatch):
+def test_teacher_upload_processing_range_and_current_material_authorization(client, db, teacher, student, classroom, tmp_path, monkeypatch):
     from sqlalchemy import select
     from sqlalchemy.orm import sessionmaker
     from app import storage
-    from app.models import MaterialVersion, Activity, ActivityVersion
+    from app.models import Material, Activity
 
     monkeypatch.setenv("REBORN_STORAGE_ROOT", str(tmp_path / "private"))
     monkeypatch.setattr(storage, "SessionLocal", sessionmaker(db.bind, expire_on_commit=False))
@@ -69,11 +69,11 @@ def test_teacher_upload_processing_range_and_version_authorization(client, db, t
     )
     assert upload.status_code == 201, upload.text
     material_id = upload.json()["id"]
-    row = db.scalar(select(MaterialVersion).where(MaterialVersion.material_id == material_id))
+    row = db.get(Material, material_id)
     storage.process_material(row.id)
     db.expire_all()
-    assert db.get(MaterialVersion, row.id).status == "ready"
-    url = f"/api/materials/{material_id}/versions/1/file?classroom_id={classroom['id']}"
+    assert db.get(Material, row.id).status == "ready"
+    url = f"/api/materials/{material_id}/file?classroom_id={classroom['id']}"
     assert client.get(url, headers=student["headers"]).status_code == 403
     activity = Activity(
         id="teacher-reading",
@@ -81,30 +81,12 @@ def test_teacher_upload_processing_range_and_version_authorization(client, db, t
         title="补充阅读",
         kind="lesson",
         material_id=material_id,
-        version=1,
         npc_key="mayor_py",
         assistant_allowed=True,
-        content={"published": True, "material_version": 1, "owner_id": teacher["id"]},
+        content={"published": True, "owner_id": teacher["id"]},
     )
     db.add(activity)
     db.flush()
-    db.add(
-        ActivityVersion(
-            activity_id=activity.id,
-            version=1,
-            snapshot={
-                "id": activity.id,
-                "chapter_id": 179,
-                "title": activity.title,
-                "kind": "lesson",
-                "version": 1,
-                "material_id": material_id,
-                "assistant_allowed": True,
-                "npc_key": "mayor_py",
-                "content": activity.content,
-            },
-        )
-    )
     db.commit()
     response = client.get(url, headers={**student["headers"], "Range": "bytes=0-5"})
     assert response.status_code == 206, response.text
@@ -114,11 +96,19 @@ def test_teacher_upload_processing_range_and_version_authorization(client, db, t
     update = client.post(
         "/api/teacher/materials/upload",
         data={"chapter_id": 179, "title": "更新", "material_id": material_id},
-        files={"file": ("lesson.txt", b"new version", "text/plain")},
+        files={"file": ("lesson.txt", b"updated content", "text/plain")},
         headers=teacher["headers"],
     )
-    assert update.status_code == 201 and update.json()["version"] == 2
-    assert client.get(f"/api/materials/{material_id}/versions/2/file?classroom_id={classroom['id']}", headers=student["headers"]).status_code == 403
+    assert update.status_code == 201 and update.json()["id"] == material_id
+    assert "version" not in update.json()
+    assert client.get(url, headers=student["headers"]).status_code == 409
+    storage.process_material(material_id)
+    db.expire_all()
+    response = client.get(url, headers=student["headers"])
+    assert response.status_code == 200 and response.content == b"updated content"
+    db.expire_all()
+    assert db.get(Material, material_id).title == "更新"
+    assert len(db.scalars(select(Material).where(Material.id == material_id)).all()) == 1
 
 
 def test_material_worker_retries_database_and_recovers_queued_job(db, monkeypatch, caplog):
@@ -127,9 +117,9 @@ def test_material_worker_retries_database_and_recovers_queued_job(db, monkeypatc
     from sqlalchemy.exc import OperationalError
     from sqlalchemy.orm import sessionmaker
     from app import storage
-    from app.models import MaterialVersion
+    from app.models import Material
 
-    row = db.scalar(select(MaterialVersion))
+    row = db.scalar(select(Material))
     row.status = "processing"
     db.commit()
     factory = sessionmaker(db.bind, expire_on_commit=False)
@@ -144,8 +134,8 @@ def test_material_worker_retries_database_and_recovers_queued_job(db, monkeypatc
     async def sleep(delay):
         delays.append(delay)
 
-    def stop_after_job(version_id):
-        processed.append(version_id)
+    def stop_after_job(material_id):
+        processed.append(material_id)
         raise asyncio.CancelledError
 
     monkeypatch.setattr(storage, "SessionLocal", flaky_database)
@@ -155,7 +145,7 @@ def test_material_worker_retries_database_and_recovers_queued_job(db, monkeypatc
         asyncio.run(storage.material_worker())
     db.expire_all()
     assert delays == [1] and processed == [row.id]
-    assert db.get(MaterialVersion, row.id).status == "queued"
+    assert db.get(Material, row.id).status == "queued"
     assert "private-connection-value" not in caplog.text
 
 
@@ -261,3 +251,36 @@ def test_image_fallback_timeout_only_removes_its_own_container(tmp_path, monkeyp
     name = calls[0][calls[0].index("--name") + 1]
     assert calls[1] == ["docker", "rm", "--force", name]
     assert name.startswith("reborn-presentation-") and len(calls) == 2
+
+
+def test_replaced_material_is_not_overwritten_by_old_processing_job(db, monkeypatch, tmp_path):
+    from sqlalchemy.orm import sessionmaker
+    from app import storage
+    from app.models import Material
+
+    monkeypatch.setenv("REBORN_STORAGE_ROOT", str(tmp_path / "private"))
+    factory = sessionmaker(db.bind, expire_on_commit=False)
+    monkeypatch.setattr(storage, "SessionLocal", factory)
+    row = Material(chapter_id=179, title="current upload", kind="text", status="queued", storage_key="materials/old.txt", content={"pages": []})
+    db.add(row)
+    db.commit()
+    material_id = row.id
+    source = tmp_path / "old.txt"
+    source.write_text("old upload", encoding="utf-8")
+    storage.get_storage().put(row.storage_key, source)
+
+    def replaced_during_parse(path, tmp):
+        with factory() as other:
+            current = other.get(Material, material_id)
+            current.storage_key = "materials/replacement.txt"
+            current.content = {"filename": "replacement.txt", "pages": []}
+            current.status = "queued"
+            other.commit()
+        return {"pages": [{"id": 1, "page_no": 1, "text": "stale output"}]}
+
+    monkeypatch.setattr(storage, "parse_bounded", replaced_during_parse)
+    storage.process_material(material_id)
+    db.expire_all()
+    saved = db.get(Material, material_id)
+    assert saved.storage_key == "materials/replacement.txt" and saved.status == "queued"
+    assert saved.content == {"filename": "replacement.txt", "pages": []}

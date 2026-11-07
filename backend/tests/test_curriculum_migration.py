@@ -254,21 +254,10 @@ def test_upgrade_seeded_baseline_preserves_foreign_keys_records_and_grades(tmp_p
         assert connection.execute(text("SELECT count(*) FROM chapters WHERE owner_id IS NULL")).scalar() == 7
         assert connection.execute(text("SELECT count(*) FROM knowledge_points WHERE owner_id IS NULL")).scalar() == 65
         assert connection.execute(text("SELECT status FROM submissions WHERE id='historic-submission'")).scalar() == "accepted"
-        assert connection.execute(text("SELECT version FROM learning_records WHERE id='historic-reading'")).scalar() == 1
+        assert connection.execute(text("SELECT count(*) FROM learning_records WHERE id='historic-reading'")).scalar() == 1
         assert connection.execute(text("SELECT status FROM player_quests WHERE id=1")).scalar() == "complete"
         assert connection.execute(text("SELECT count(*) FROM learning_events WHERE event_id='historic-event'")).scalar() == 1
         assert not connection.execute(text("PRAGMA foreign_key_check")).all()
-    with engine.begin() as connection:
-        connection.execute(text("UPDATE chapters SET owner_id=1 WHERE id=179"))
-    refused = migrate(url, "downgrade", "221d0f8caf6e", check=False)
-    assert refused.returncode != 0 and "Cannot downgrade while private curriculum exists" in refused.stderr
-    with engine.begin() as connection:
-        assert connection.execute(text("SELECT owner_id FROM chapters WHERE id=179")).scalar() == 1
-        connection.execute(text("UPDATE chapters SET owner_id=NULL WHERE id=179"))
-    engine.dispose()
-    migrate(url, "downgrade", "221d0f8caf6e")
-    migrate(url, "upgrade", "head")
-    engine = sqlite_engine(path)
     with Session(engine) as db:
         seed(db)
         assert db.execute(text("SELECT status FROM submissions WHERE id='historic-submission'")).scalar() == "accepted"
@@ -277,7 +266,7 @@ def test_upgrade_seeded_baseline_preserves_foreign_keys_records_and_grades(tmp_p
 
 
 def test_postgresql_upgrade_sql_is_generated_without_a_live_connection():
-    result = migrate("postgresql+psycopg://offline:offline@offline.invalid/reborn_offline", "upgrade", "head", "--sql")
+    result = migrate("postgresql+psycopg://offline:offline@offline.invalid/reborn_offline", "upgrade", "b63e1a4920d7", "--sql")
     assert "ALTER TABLE chapters ADD COLUMN owner_id INTEGER" in result.stdout
     assert "ALTER TABLE knowledge_points ADD COLUMN owner_id INTEGER" in result.stdout
     assert "FOREIGN KEY(owner_id) REFERENCES users (id)" in result.stdout

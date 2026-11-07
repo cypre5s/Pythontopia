@@ -9,12 +9,10 @@ from test_core import test_first_chapter_full_loop_and_idempotency as complete_f
 def basic_definition():
     return {
         "id": "schema-check",
-        "version": 1,
         "title": "Schema check",
         "chapter_id": 179,
         "nodes": [{"id": "talk", "type": "TALK_TO_NPC", "title": "Talk", "target": "mayor_py", "dependencies": []}],
-        "effects": [],
-    }
+        "effects": []}
 
 
 def invalid_definitions():
@@ -66,7 +64,7 @@ def test_kind_default_and_side_are_valid():
     assert validate_definition(definition) == definition
 
 
-def test_unfinished_side_quest_does_not_block_next_main_chapter(client, db, teacher, student, classroom):
+def test_unfinished_side_quest_does_not_block_next_main_chapter(client, db, teacher, student, classroom, branching_course):
     definition = {**basic_definition(), "id": "unfinished-side", "kind": "side"}
     assert client.post("/api/teacher/quests", json={"definition": definition}, headers=teacher["headers"]).status_code == 201
     complete_first_chapter(client, db, student, teacher, classroom)
@@ -81,7 +79,7 @@ def test_unfinished_side_quest_does_not_block_next_main_chapter(client, db, teac
     assert client.get(f"/api/activities/ch2-lesson?classroom_id={classroom['id']}", headers=student["headers"]).status_code == 200
 
 
-def test_chapter_with_only_side_quests_does_not_automatically_satisfy_prerequisite(client, db, teacher, student, classroom):
+def test_chapter_with_only_side_quests_does_not_automatically_satisfy_prerequisite(client, db, teacher, student, classroom, branching_course):
     chapter = client.post("/api/teacher/chapters", json={"title": "Only side activities"}, headers=teacher["headers"]).json()
     definition = {**basic_definition(), "id": "only-side", "kind": "side", "chapter_id": chapter["id"]}
     assert client.post("/api/teacher/quests", json={"definition": definition}, headers=teacher["headers"]).status_code == 201
@@ -103,8 +101,7 @@ def test_chapter_with_only_side_quests_does_not_automatically_satisfy_prerequisi
             "event_id": str(uuid4()),
             "quest_id": definition["id"],
             "node_id": "talk",
-            "evidence": {"npc_key": "mayor_py"},
-        },
+            "evidence": {"npc_key": "mayor_py"}},
         headers=student["headers"],
     )
     assert result.status_code == 200, result.text

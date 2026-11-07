@@ -15,8 +15,7 @@ def submit(client, student, classroom, **overrides):
         "idempotency_key": "concept-unique-0001",
         "answer": "抽象与自动化",
         "mode": "submit",
-        **overrides,
-    }
+        **overrides}
     return client.post("/api/submissions", json=body, headers=student["headers"])
 
 
@@ -33,7 +32,7 @@ def test_concept_grades_are_real_persistent_and_idempotent(client, db, student, 
     assert "抽象与自动化" not in str(wrong.json()["feedback"])
 
 
-def test_cross_activity_and_other_user_submission_denied(client, student, teacher, classroom):
+def test_cross_activity_and_other_user_submission_denied(client, student, teacher, classroom, branching_course):
     result = submit(client, student, classroom)
     assert submit(client, student, classroom, question_id="ch2-language").status_code == 404
     assert client.get(f"/api/submissions/{result.json()['id']}?classroom_id={classroom['id']}", headers=teacher["headers"]).status_code == 404
@@ -51,7 +50,7 @@ def test_boolean_requires_boolean_and_fill_handles_whitelist(client, student, cl
     )
 
 
-def test_judge_dispatch_once_unknown_does_not_blindly_resend(client, db, student, classroom, monkeypatch):
+def test_judge_dispatch_once_unknown_does_not_blindly_resend(client, db, student, classroom, monkeypatch, branching_course):
     monkeypatch.setattr(practice, "SessionLocal", sessionmaker(db.bind, expire_on_commit=False))
     result = submit(client, student, classroom, activity_id="ch2-code", question_id="course-476", code="print(input())", answer=None)
     sid = result.json()["id"]
@@ -73,7 +72,7 @@ def test_judge_dispatch_once_unknown_does_not_blindly_resend(client, db, student
     assert db.get(Submission, sid).status == "submission_unknown"
 
 
-def test_server_poll_recovers_without_browser_and_run_not_official(client, db, student, classroom, monkeypatch):
+def test_server_poll_recovers_without_browser_and_run_not_official(client, db, student, classroom, monkeypatch, branching_course):
     monkeypatch.setattr(practice, "SessionLocal", sessionmaker(db.bind, expire_on_commit=False))
     result = submit(client, student, classroom, activity_id="ch2-code", question_id="course-476", code="print(input())", answer=None, mode="run")
     sid = result.json()["id"]
@@ -94,7 +93,7 @@ def test_server_poll_recovers_without_browser_and_run_not_official(client, db, s
     assert row.status == "accepted" and row.mode == "run" and row.judge_token
 
 
-def test_judge_worker_recovers_database_outage_without_replaying_dispatch(client, db, student, classroom, monkeypatch, caplog):
+def test_judge_worker_recovers_database_outage_without_replaying_dispatch(client, db, student, classroom, monkeypatch, caplog, branching_course):
     import pytest
     from sqlalchemy.exc import OperationalError
 

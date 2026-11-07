@@ -80,9 +80,45 @@ def classroom(client, teacher, student):
         assert (
             client.put(
                 f"/api/teacher/classrooms/{classroom['id']}/releases/{chapter}",
-                json={"status": "published", "version": 1},
+                json={"status": "published"},
                 headers=teacher["headers"],
             ).status_code
             == 200
         )
     return classroom
+
+
+@pytest.fixture
+def branching_course(db, teacher):
+    """Test-only course for graph, scheduling and Judge contracts; never seeded."""
+    import json
+    from pathlib import Path
+    from app.models import Activity, KnowledgePoint, Npc, QuestDefinition, Question
+    from sqlalchemy import select
+
+    spec = json.loads((Path(__file__).parent / "fixtures/branching_course.json").read_text(encoding="utf-8"))
+    for source in spec["activities"]:
+        fields = {key: source[key] for key in ("id", "chapter_id", "title", "kind", "material_id", "npc_key", "assistant_allowed", "content")}
+        ids = [point.id for point in db.scalars(select(KnowledgePoint).where(KnowledgePoint.chapter_id == source["chapter_id"]))
+               if set(point.content.get("page_refs", [])) & set(source.get("knowledge_point_pages", []))]
+        fields["content"] = {**fields["content"], "knowledge_point_ids": [1844] if source["id"] == "ch2-code" else ids}
+        item = db.get(Activity, source["id"])
+        if not item:
+            item = Activity(**fields, owner_id=teacher["id"])
+            db.add(item)
+        else:
+            for key, value in fields.items():
+                setattr(item, key, value)
+            item.owner_id = teacher["id"]
+    db.flush()
+    db.get(Question, "course-476").activity_id = "ch2-code"
+    db.get(Npc, "professor").dialogue = spec["dialogue"]
+    db.get(Npc, "mayor_py").dialogue = [
+        {"id": "welcome", "text": "Test start", "next": "welcome-story"},
+        {"id": "welcome-story", "text": "Test terminal"},
+    ]
+    quest = spec["quest"]
+    db.add(QuestDefinition(id=quest["id"], chapter_id=quest["chapter_id"], title=quest["title"],
+                           owner_id=teacher["id"], definition=quest))
+    db.commit()
+    return quest

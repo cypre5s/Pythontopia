@@ -6,7 +6,7 @@ const sections = [
   "学习记录",
   "章节管理",
   "课程与知识点",
-  "材料与版本",
+  "课程材料",
   "题库",
   "活动与 NPC",
   "任务配置",
@@ -401,7 +401,7 @@ test("teacher management layout, forms, real records, responsive navigation and 
     .getByRole("combobox", { name: "按章节查看知识点", exact: true })
     .selectOption("0");
 
-  await openSection(page, "材料与版本");
+  await openSection(page, "课程材料");
   const materialSearch = page.getByRole("searchbox", {
     name: "搜索材料名称或 ID",
     exact: true,

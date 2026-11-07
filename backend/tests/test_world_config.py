@@ -6,7 +6,7 @@ from pydantic import ValidationError
 
 from app import world_config
 from app.classrooms import NpcInput
-from app.models import ChapterRelease, Npc, PlayerPosition, QuestDefinition, WorldFlag
+from app.models import Npc, PlayerPosition, QuestDefinition, WorldFlag
 from app.quests import PositionInput
 from app.world_config import interaction_points, load_world_config, validate_world_config
 
@@ -22,7 +22,6 @@ def transition(client, student, classroom, portal_id):
 
 @pytest.fixture
 def library_unlocked(client, db, student, classroom):
-    db.get(ChapterRelease, (classroom["id"], 179)).version = 2
     db.commit()
     assert position(client, student, classroom, "town_hub", 22, 34).status_code == 200
     response = client.post("/api/story/interactions", json={"classroom_id": classroom["id"], "npc_key": "mayor_py"}, headers=student["headers"])
@@ -187,9 +186,9 @@ def test_multi_point_interactions_reject_unbounded_duplicate_or_invalid_geometry
 @pytest.mark.parametrize("shelf_position", [(4, 4), (15, 8)])
 def test_legacy_shelf_goal_accepts_either_real_bookcase_and_rejects_room_center(client, db, student, classroom, library_unlocked, shelf_position):
     cid = classroom["id"]
-    quest = {"id": "shelf-evidence", "version": 1, "chapter_id": 179, "title": "Shelf evidence", "kind": "side", "nodes": [
+    quest = {"id": "shelf-evidence", "chapter_id": 179, "title": "Shelf evidence", "kind": "side", "nodes": [
         {"id": "inspect", "type": "INTERACT_OBJECT", "title": "调查西侧书架", "target": "library_shelf", "dependencies": []}], "effects": []}
-    db.add(QuestDefinition(id=quest["id"], version=1, title=quest["title"], chapter_id=179, definition=quest))
+    db.add(QuestDefinition(id=quest["id"], title=quest["title"], chapter_id=179, definition=quest))
     db.commit()
     client.get(f"/api/world?classroom_id={cid}", headers=student["headers"])
     assert position(client, student, classroom, "town_hub", 8, 22).status_code == 200
@@ -203,4 +202,4 @@ def test_legacy_shelf_goal_accepts_either_real_bookcase_and_rejects_room_center(
     assert response.status_code == 200, response.text
     completed = next(item for item in response.json()["world"]["quests"] if item["id"] == quest["id"])
     assert completed["status"] == "complete"
-    assert db.get(QuestDefinition, (quest["id"], 1)).definition["nodes"][0]["title"] == "调查西侧书架"
+    assert db.get(QuestDefinition, quest["id"]).definition["nodes"][0]["title"] == "调查西侧书架"

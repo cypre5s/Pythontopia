@@ -10,12 +10,7 @@ interface Release {
   chapter_id: number;
   status: "published" | "paused";
   opens_at: string | null;
-  version: number;
   prerequisite_chapter_id: number | null;
-}
-interface Definition {
-  chapter_id: number;
-  version: number;
 }
 const props = defineProps<{
   classroomId: number | null;
@@ -23,7 +18,6 @@ const props = defineProps<{
   chapters: Chapter[];
 }>();
 const releases = ref<Release[]>([]),
-  definitions = ref<Definition[]>([]),
   dates = ref<Record<number, string>>({});
 const loading = ref(false),
   saving = ref<number | null>(null),
@@ -84,13 +78,9 @@ async function load() {
   }
   loading.value = true;
   try {
-    const [rules, tasks] = await Promise.all([
-      api.get<Release[]>(`/teacher/classrooms/${classroom}/releases`),
-      api.get<Definition[]>("/teacher/quests"),
-    ]);
+    const rules = await api.get<Release[]>(`/teacher/classrooms/${classroom}/releases`);
     if (request !== generation) return;
     releases.value = rules;
-    definitions.value = tasks;
     dates.value = Object.fromEntries(
       rules.map((rule) => [rule.chapter_id, localInput(rule.opens_at)]),
     );
@@ -117,28 +107,12 @@ async function save(chapterId: number, action: "schedule" | "now" | "pause") {
         : action === "pause"
           ? (existing?.opens_at ?? null)
           : localDateTimeToIso(dates.value[chapterId]!);
-    // Scheduling never upgrades an existing class to a different content snapshot.
-    // For an unconfigured chapter, use the currently authored definition without asking teachers for engine versions.
-    if (!existing) {
-      const currentDefinitions = await api.get<Definition[]>("/teacher/quests");
-      if (request !== generation || classroom !== props.classroomId) return;
-      definitions.value = currentDefinitions;
-    }
-    const version =
-      existing?.version ??
-      Math.max(
-        1,
-        ...definitions.value
-          .filter((d) => d.chapter_id === chapterId)
-          .map((d) => d.version),
-      );
     const rule = await api.put<Release>(
       `/teacher/classrooms/${classroom}/releases/${chapterId}`,
       {
         status: action === "pause" ? "paused" : "published",
         opens_at: opensAt,
         prerequisite_chapter_id: existing?.prerequisite_chapter_id ?? null,
-        version,
       },
     );
     if (request !== generation || classroom !== props.classroomId) return;

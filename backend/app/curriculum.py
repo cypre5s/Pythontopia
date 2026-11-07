@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from .auth import require_teacher
 from .db import get_db
-from .models import Activity, ActivityVersion, Chapter, ChapterRelease, KnowledgePoint, Material, QuestDefinition, User
+from .models import Activity, Chapter, ChapterRelease, KnowledgePoint, Material, QuestDefinition, User
 
 router = APIRouter(prefix="/teacher", tags=["curriculum"])
 
@@ -198,8 +198,6 @@ def delete_point(point_id: int, db: Annotated[Session, Depends(get_db)], user: A
     point = editable(db.get(KnowledgePoint, point_id), user)
     if any(point_id in a.content.get("knowledge_point_ids", []) for a in db.scalars(select(Activity))):
         raise HTTPException(409, "知识点已被活动引用，不能删除")
-    if any(point_id in v.snapshot.get("content", {}).get("knowledge_point_ids", []) for v in db.scalars(select(ActivityVersion))):
-        raise HTTPException(409, "知识点仍被活动历史版本引用，不能删除")
     db.delete(point)
     commit_metadata(db)
     return {"ok": True}
