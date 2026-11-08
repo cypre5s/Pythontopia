@@ -3,12 +3,12 @@ WORKDIR /app/backend
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 COPY backend/requirements.lock ./requirements.lock
 RUN pip install --no-cache-dir -r requirements.lock
-COPY backend/ ./
-COPY data/course-pack-43/json/ /app/data/course-pack-43/json/
-COPY data/course-pack-43/video_manifest.json data/course-pack-43/video_transcripts.json /app/data/course-pack-43/
+COPY backend/app/ ./app/
+COPY backend/alembic/ ./alembic/
+COPY backend/alembic.ini ./alembic.ini
 COPY data/world/ /app/data/world/
 RUN useradd --uid 10001 --create-home reborn && mkdir -p /app/storage && chown -R reborn:reborn /app
 USER reborn
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=3s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"
-CMD ["sh", "-c", "alembic upgrade head && python -m app.seed && uvicorn app.main:app --host 0.0.0.0 --port 8000"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"]

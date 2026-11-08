@@ -34,13 +34,13 @@ Invoke-RestMethod http://127.0.0.1:15174/api/health
 
 默认入口为 `http://127.0.0.1:15174/world`，直接 API 为 `http://127.0.0.1:18081/api/health`。`/api/health` 会执行数据库 `SELECT 1`，只证明 API 和数据库连通；还要通过浏览器确认登录、世界加载、授权材料和所需外部服务。不要将 Web 返回200等同于媒体、AI或判题就绪。
 
-`backend/Dockerfile` 的启动顺序为：`alembic upgrade head` → `python -m app.seed` → Uvicorn。每次 API 容器启动都会迁移并同步当前课程/YAML配置；原始 PDF 和视频不会自动导入。基础 Compose 固定为生产模式，未开放开发重置工具。
+`backend/Dockerfile` 的启动顺序为：`alembic upgrade head` → Uvicorn；lifespan仍做必要管理员初始化。镜像只包含程序、迁移和世界资源，不内嵌课程JSON/YAML，也不在启动时seed。空库可以启动，课程内容通过下面的显式导入准备；重建或重启不会覆盖后台当前内容。基础Compose固定为生产模式。
 
 仓库根的 `./dev.ps1`、`./dev.sh` 是使用 `deploy/.env` 和基础 Compose 启动的简写；需要独立项目或 override 时，使用显式 Compose 命令。
 
 ### 首次管理员与后续教师账号
 
-首次部署在环境文件设置 `REBORN_ADMIN_STUDENT_ID`（1–32位数字，保留前导零）、`REBORN_ADMIN_PASSWORD`（12–200位且不能等于学号）和可选 `REBORN_ADMIN_NAME`（默认“管理员”）。没有公开默认账号或密码。API完成迁移与seed后，在启动阶段创建首个管理员；多个PostgreSQL进程通过事务锁串行检查。已存在管理员时跳过初始化，修改环境变量或重启都不会覆盖其密码。成功创建后可清空环境文件中的管理员密码；已有账号使用界面改密。全空配置不会创建管理员，部分配置或学号被其他角色占用则启动报错，不会提升已有学生权限。
+首次部署在环境文件设置 `REBORN_ADMIN_STUDENT_ID`（1–32位数字，保留前导零）、`REBORN_ADMIN_PASSWORD`（12–200位且不能等于学号）和可选 `REBORN_ADMIN_NAME`（默认“管理员”）。没有公开默认账号或密码。API完成迁移后，在启动阶段创建首个管理员；多个PostgreSQL进程通过事务锁串行检查。已存在管理员时跳过初始化，修改环境变量或重启都不会覆盖其密码。成功创建后可清空环境文件中的管理员密码；已有账号使用界面改密。全空配置不会创建管理员，部分配置或学号被其他角色占用则启动报错，不会提升已有学生权限。
 
 所有角色使用同一学号登录入口。学生在“设置 → 账户”改密，教师/管理员在左下角账号菜单的“修改密码”改密；需要当前密码，新密码至少6位。修改后其他登录失效，当前窗口获得新会话。首次管理员不使用学生的学号初始密码规则。
 
@@ -101,7 +101,7 @@ python -m venv .venv
 ./.venv/Scripts/Activate.ps1
 python -m pip install -r requirements.lock
 python -m alembic upgrade head
-python -m app.seed
+# 首次演示环境按下文显式导入课程，空库也可直接启动。
 python -m uvicorn app.main:app --host 127.0.0.1 --port 18081
 ```
 
@@ -134,34 +134,35 @@ npm run dev -- --host 127.0.0.1 --port 15174
 
 脚本入口为 `backend/content/chapters` 与 `backend/content/ambient`；当前唯一内置主线是 `arrival`（初来小镇：第一堂 Python 课），日常演出不增加主线。阅读范围、视频有效时长、重点、练习/测验和对白规则见[内容编写](content-authoring.md)。
 
-在 `backend` 中先校验，再同步：
+在 `backend` 中显式校验并导入。源目录含json/，配置目录含chapters/、questions/、ambient/；容器须以只读挂载提供，不依赖镜像内固定课程：
 
 ```powershell
 python -m app.chapter_content --check
 python -m alembic upgrade head
-python -m app.seed
+python -m app.cli import-course --source ../data/course-pack-43 --content content
 ```
 
-`--check` 校验来源，不写数据库；`seed` 按稳定 ID 更新当前配置，不创建教学内容历史版本，不清空学生进度与成绩。已导入的 PDF/视频不会因普通 seed 被替换回纯文本。不要通过改 ID 来模拟普通内容修改；删除或重排配置前，评估已有任务及学生证据的引用。`schema_version` 是 YAML 格式标识，测验草稿 `revision` 是并发控制字段，均不是内容版本管理。
+`--check` 校验来源，不写数据库；`import-course`按稳定ID显式更新当前配置，不创建教学内容历史版本，不清空学生进度与成绩。已导入的 PDF/视频不会因普通 seed 被替换回纯文本。不要通过改 ID 来模拟普通内容修改；删除或重排配置前，评估已有任务及学生证据的引用。`schema_version` 是 YAML 格式标识，测验草稿 `revision` 是并发控制字段，均不是内容版本管理。
 
-本机 Uvicorn 启动本身不会执行 seed，编辑 YAML 后须手动同步。Compose 则重建 API 镜像后按启动流程同步。格式校验不依赖数据库；导入时还会根据实际材料解析和检查学习规则，缺少材料时应处理错误，不绕过校验。
+本机和Compose启动都不执行seed。编辑YAML或切换课程包后须显式导入；本地 `python -m app.seed` 仅为人工导入仓库演示包的简写。导入只写当前活动引用的题目，不创建archive-*题目活动；导入与后台保存使用章节关联和ActivityQuestion，不保留活动JSON题集副本。教师所有的内容ID冲突应拒绝，不能覆盖。格式与真实材料规则验证失败须回滚。
 
 ### 导入课程43的真实材料包
 
-仓库保留课程 JSON、页面身份、清单与转录来源，PDF/视频原文件由操作者提供。先完成迁移与 seed，再使用 `python -m app.course_media <材料包路径>` 显式导入。该命令核对完整包结构、哈希、PDF页数及原页面 ID，失败会回滚数据库修改；不要手工解压后直接覆盖存储文件。
+仓库保留课程 JSON、页面身份、清单与转录来源，PDF/视频原文件由操作者提供。先完成迁移与课程显式导入，再使用 `python -m app.course_media <材料包路径> --source-root <独立可信课程目录>` 导入。可信目录提供json、video_manifest.json与video_transcripts.json，不从待导入媒体包采信任意校验和。该命令核对完整包结构、哈希、PDF页数及原页面 ID，失败会回滚数据库修改；不要手工解压后直接覆盖存储文件。
 
 容器导入前，确认当前 API 镜像已构建，并暂停同一环境的 API/Web，保留数据库运行。将下面路径替换为实际材料包路径：
 
 ```powershell
+$courseTrustedSource = (Resolve-Path 'E:\path\course-pack-43').Path
 $courseMediaArchive = (Resolve-Path 'E:\path\pythontopia-course-pack-43-media.tar.gz').Path
 docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml stop api web
-docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml run --rm --no-deps -v "${courseMediaArchive}:/tmp/course-pack-43-media.tar.gz:ro" api python -m app.course_media /tmp/course-pack-43-media.tar.gz
+docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml run --rm --no-deps -v "${courseMediaArchive}:/tmp/course-pack-43-media.tar.gz:ro" -v "${courseTrustedSource}:/import/course-pack:ro" api python -m app.course_media /tmp/course-pack-43-media.tar.gz --source-root /import/course-pack
 docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml up -d --no-build api web
 ```
 
-本机导入使用与 API 相同的数据库和存储环境变量，在暂停本机 API 后从 `backend` 运行导入命令，成功后重启。材料包的完整导入结果应为7份 PDF、561页、34个补充视频；这不是已经执行导入的证明，还需核对授权班级中的真实文件读取和播放。
+本机导入使用与 API 相同的数据库和存储环境变量，在暂停本机 API 后从 `backend` 运行导入命令，成功后重启。材料包的完整导入结果应为7份 PDF、561页、34个视频；这不是已经执行导入的证明，还需核对授权班级中的真实文件读取和播放。
 
-PDF原位更新原材料，保留材料 ID、页面 ID 和页码；视频按清单身份幂等更新，作为章节补充资料。导入不新增主线、不修改班级开放安排，也不删除学生任务、阅读或成绩。浏览器中的可见材料仍受班级章节授权控制。
+PDF原位更新原材料，保留材料 ID、页面 ID 和页码；视频按清单身份幂等更新，作为章节资料。导入不新增主线、不修改班级开放安排，也不删除学生任务、阅读或成绩。浏览器中的可见材料仍受班级章节授权控制。
 
 ### 数据库结构升级
 
@@ -194,7 +195,7 @@ docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.ym
 
 ## 可选服务与配置
 
-图书馆资料助教与活动助教共用下列模型配置和预算。升级到资料级会话结构前备份当前库和私有存储；执行head迁移与重复seed即可，无需新建Activity、重新导入资料或重置账号。没有凭据时图书管理员入口仍保留，但真实显示不可用。
+图书馆资料助教与活动助教共用下列模型配置和预算。升级到资料级会话结构前备份当前库和私有存储；执行head迁移即可，无需新建Activity、重新导入资料或重置账号。没有凭据时图书管理员入口仍保留，但真实显示不可用。
 
 基础 Compose 只透传其中列出的环境变量。给 env 文件新增变量不会自动注入容器；调整额外的 AI预算、S3或上传限制时，需使用私有 Compose override 显式传入 API。所有凭据只在后端配置，不进入前端构建。
 
@@ -326,7 +327,7 @@ npm run test:e2e -- --project=desktop --workers=1
 | --- | --- |
 | Web能打开，但API/登录失败 | 同项目 `ps`、API日志和 `/api/health`；区分镜像构建、数据库迁移、代理与账号问题 |
 | 端口被占用或启动到了另一环境 | 环境文件、项目名和端口；给新环境换端口，不停止无关服务 |
-| YAML修改不生效 | `--check` 是否通过，本机是否执行seed，容器是否重建API，是否误用了另一个项目/镜像 |
+| YAML修改不生效 | 校验是否通过、是否显式import-course、挂载来源与目标数据库是否正确；重建API不再自动导入内容 |
 | 页面显示旧地图或旧前端 | API/Web共同配置是否同时重建，Web镜像和浏览器缓存是否更新 |
 | PDF/视频缺失或无权限 | 是否显式导入材料包、导入的数据库与存储是否一致、章节是否开放；普通seed不包含媒体原文件 |
 | 助教不可用或回复中断 | 后端模型凭据/预算、活动授权和真实供应商状态；中断不自动重发，不能用假回复替代 |
@@ -335,3 +336,17 @@ npm run test:e2e -- --project=desktop --workers=1
 | 没有开发工具或重置返回409 | API两个显式开关、学生身份、班级关系与未完成判题/助教；不通过前端改状态绕过 |
 | Playwright首次运行失败 | 浏览器安装、`E2E_URL`、专用教师凭据、服务/媒体前置与用例skip原因；不要误报为业务失败或成功 |
 | 迁移失败或升级后资料异常 | 保留日志，核对所选库、锁文件、在线迁移条件与备份；不要删库、改迁移标记或覆盖学生记录 |
+
+## 开发环境废弃内容清理
+
+先确认目标是独立开发数据库与私有存储。`python -m app.cli cleanup-content`默认仅报告候选与跳过原因；`--apply`执行实际清理并要求显式`REBORN_ENV=development`。先移除自动导入路径，再执行清理及重启核对，避免旧题复活。命令不清空用户或班级，不删除仍被当前第一堂课、活动、正式提交、试卷凭据、任务剧情或助教会话引用的内容；普通数据库迁移不承担业务删除。真实环境的清理范围必须另行限定，不能将开发apply直接照搬生产。
+
+容器首次课程导入示例（同一独立Compose项目，两个来源路径均由操作者提供）：
+
+```powershell
+$courseSource = (Resolve-Path 'E:\path\course-pack-43').Path
+$courseContent = (Resolve-Path 'E:\path\content').Path
+docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml run --rm --no-deps -v "${courseSource}:/import/course:ro" -v "${courseContent}:/import/content:ro" api python -m app.cli import-course --source /import/course --content /import/content
+```
+
+导入操作复用同一数据库和文件卷；先完成数据库迁移，业务使用中另择维护时间导入。媒体包通过前述独立可信来源导入，不复制进镜像或前端公共目录。
