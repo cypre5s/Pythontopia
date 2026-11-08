@@ -14,6 +14,7 @@
 - 推送前补核对（2026-11-09）：用户已明确授权提交推送reborn；静态检查发现共享资料行包含状态与共享只读两个徽章，adminManagement断言改为限定[data-status]，e2e发现24项/19文件及该文件ESLint通过。GitHub连接写入返回403 Resource not accessible by integration；账号有仓库push权限，但当前App仅安装于个人账号，终端尚未认证。代码仍为本地提交，等待官方CLI登录后正常推送，未触发新CI。
 - 远端推送（2026-11-09）：用户完成GitHub官方CLI认证，6笔本地提交已正常快进推送至reborn，代码提交`fd9b36bc5d341ec4e9f54c8bd037243700685d90`；没有强制推送或修改main。GitHub Actions [首次运行42506396828](https://github.com/cypre5s/Pythontopia/actions/runs/42506396828)已触发，启动时尚未结束，最终结论需另查，不能把本地通过当作远端通过。此前自动审批拒绝与连接403属于当时的失败记录，现已通过用户授权及官方CLI认证解决。
 - 远端CI首轮结果：文档提交`7b1f263`对应[运行42506508214](https://github.com/cypre5s/Pythontopia/actions/runs/42506508214)的后端与前端任务通过；后端365通过/10跳过，PostgreSQL新库迁移及两次显式seed通过，未配置专用测试URL的5项PG并发/迁移pytest仍跳过。Chromium桌面24项为12通过、2失败、10条件跳过，耗时8.7分钟；失败为独立题库select标签定位和嵌入式PDF预览的Escape关闭假设。日志`.tmp/content-ci-browser.log`、产物`.tmp/content-ci-artifacts/`保留原失败。修复用例使用combobox可访问名称，并通过可见关闭按钮退出PDF预览，普通内容仍检查Escape；未新增skip或放宽业务断言，修复后远端结果待核对。
+- 修复后完整远端验证：代码提交`6f5c93082bb420038fa350399b4bfce07959031f`的[运行42507565813](https://github.com/cypre5s/Pythontopia/actions/runs/42507565813)三个任务均成功。Chromium桌面24项为14通过、10条件跳过，页面执行耗时7.1分钟；覆盖独立题库录入/同义答案/多章关联/两活动复用及顺序/引用删除保护，以及真实自制文本/PDF/视频上传、预览、替换和学生学习记录。日志`.tmp/content-ci-browser-fixed.log`。未增加跳过；10项仍按原媒体包、转换器和开发环境配置条件跳过，不计为通过。两份E2E文件ESLint、24项发现检查、文档检查与diff空白检查通过。随后仅同步本验收和续做记录，不重复运行功能检查。
 - 原始课程包仍可作为显式来源，源清单的39条problem数不代表实际题库数量；运行镜像不携带课程JSON/YAML。真实AI出题、付费模型、Judge0/S3/转换服务未作为本轮已通过能力。
 
 ## 隔离环境启动尝试2026-11-08
