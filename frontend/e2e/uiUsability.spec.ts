@@ -130,6 +130,8 @@ async function finishIntroDialogue(page: Page) {
     const result = (await response.json()) as { next_id?: string | null; status?: string };
     if (response.url().includes("/story/") ? result.status !== "active" : !result.next_id) {
       await expect(dialogue).toBeHidden({ timeout: 15_000 });
+      // The dialogue closes before the asynchronously loaded learning workspace mounts.
+      if (result.status === "waiting") await expect(page.locator(".lesson-workspace")).toBeVisible();
       return;
     }
   }

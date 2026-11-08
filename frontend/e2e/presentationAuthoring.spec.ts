@@ -65,37 +65,23 @@ test('teacher uploads self-authored PPTX; student reads the converted private PD
   await page.screenshot({ path: testInfo.outputPath('teacher-self-authored-pptx-ready.png'), fullPage: true });
   await page.getByRole('button', { name: '收起预览', exact: true }).click();
 
-  await page.getByRole('button', { name: '活动与 NPC', exact: true }).click();
-  await page.getByRole('button', { name: '新建活动', exact: true }).click();
-  const activityForm = page.locator('.admin-editor form');
-  await activityForm.getByLabel('活动 ID', { exact: true }).fill(activityId);
-  await activityForm.getByLabel('标题', { exact: true }).fill(title);
-  await activityForm.getByLabel(/^章节/).selectOption(String(chapterId));
-  await activityForm.getByRole('combobox', { name: '类型', exact: true }).selectOption('lesson');
-  await activityForm.getByRole('combobox', { name: 'NPC', exact: true }).selectOption('professor');
-  await activityForm.getByRole('combobox', { name: '材料', exact: true }).selectOption(String(material.id));
-  await activityForm.getByLabel('允许学生在活动内主动使用助教', { exact: true }).uncheck();
-  const activitySaved = page.waitForResponse(response => response.url().endsWith('/api/teacher/activities') && response.request().method() === 'POST');
-  await page.getByRole('button', { name: '创建活动', exact: true }).click();
-  const activityResponse = await activitySaved;
+  // Prepare real test-only definitions via API while their authoring navigation is withdrawn.
+  const teacherToken = await page.evaluate(() => sessionStorage.getItem('pythontopia-reborn-session'));
+  const teacherHeaders = { Authorization: `Bearer ${teacherToken}` };
+  const activityResponse = await request.post('/api/teacher/activities', { headers: teacherHeaders, data: {
+    id: activityId, title, chapter_id: chapterId, kind: 'lesson', npc_key: 'professor', material_id: material.id, assistant_allowed: false,
+  } });
   expect(activityResponse.status()).toBe(201);
   expect((await activityResponse.json()).id).toBe(activityId);
-
-  await page.getByRole('button', { name: '任务配置', exact: true }).click();
   const definition = {
     id: questId, title: `自制 PPTX 阅读验收 ${tag}`, chapter_id: chapterId, kind: 'side',
     nodes: [{ id: 'read-presentation', type: 'STUDY_LESSON', title, activity_id: activityId, dependencies: [] }],
     effects: [{ type: 'set_world_flag', key: `pptx_test_${tag}` }] };
-  await page.getByLabel('任务 JSON', { exact: true }).fill(JSON.stringify(definition));
-  const validation = page.waitForResponse(response => response.url().endsWith('/api/teacher/quests/validate') && response.request().method() === 'POST');
-  await page.getByRole('button', { name: '校验任务', exact: true }).click();
-  expect((await validation).status()).toBe(200);
-  await expect(page.locator('pre.notice')).toContainText('"valid": true');
-  const questSaved = page.waitForResponse(response => response.url().endsWith('/api/teacher/quests') && response.request().method() === 'POST');
-  await page.getByRole('button', { name: '保存任务配置', exact: true }).click();
-  expect((await questSaved).status()).toBe(201);
-  await page.getByRole('button', { name: '章节管理', exact: true }).click();
-  const teacherToken = await page.evaluate(() => sessionStorage.getItem('pythontopia-reborn-session'));
+  const validation = await request.post('/api/teacher/quests/validate', { headers: teacherHeaders, data: { definition } });
+  expect(validation.status()).toBe(200);
+  expect((await validation.json()).valid).toBe(true);
+  expect((await request.post('/api/teacher/quests', { headers: teacherHeaders, data: { definition } })).status()).toBe(201);
+  await page.locator('#teacher-navigation').getByRole('button', { name: '章节管理', exact: true }).click();
   const courses = await (await request.get('/api/teacher/courses', { headers: { Authorization: `Bearer ${teacherToken}` } })).json();
   const releasedChapter = courses.chapters.find((chapter: { id: number }) => chapter.id === chapterId);
   const chapterRow = page.locator('.chapter-management tbody tr').filter({ hasText: releasedChapter.title });
@@ -133,7 +119,7 @@ test('teacher uploads self-authored PPTX; student reads the converted private PD
     const quest = student.locator('.journal-entry').filter({ has: student.getByRole('heading', { name: definition.title, exact: true }) });
     const node = quest.locator('li').filter({ has: student.getByText(title, { exact: true }) });
     await node.getByRole('button', { name: '打开课程', exact: true }).click();
-    await expect(student.getByRole('heading', { name: title, exact: true })).toBeVisible();
+    await expect(student.getByRole('region', { name: '课程内容', exact: true })).toContainText(title);
     await expect(student.locator('.pdf-reader .reader-toolbar')).toContainText('第 1 / 1 页', { timeout: 30_000 });
     const pdfCanvas = student.getByLabel('PDF课件当前页', { exact: true });
     await expect(pdfCanvas).toBeVisible();

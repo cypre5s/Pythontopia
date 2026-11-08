@@ -288,6 +288,8 @@ git diff --check
 
 Playwright不会自动启动服务器。先准备已启动、已迁移/seed的独立验收环境和专用教师账号，设置 `E2E_URL`、`E2E_TEACHER_STUDENT_ID`、`E2E_TEACHER_PASSWORD`；跨教师权限用例另需 `E2E_OTHER_TEACHER_STUDENT_ID`、`E2E_OTHER_TEACHER_PASSWORD`。测试应自行创建班级与新学生，不复用真实演示记录。
 
+复现Actions时对照 `.github/workflows/reborn.yml`，另建SQLite数据库，迁移并seed，配置两位专用教师，不导入课程媒体、不设置可选媒体/开发工具验收开关，再运行下方完整套件。导入PDF环境的几项专项通过不能代替CI的纯文本种子材料路径及全套回归。已撤销的活动/任务编辑入口不再用于准备数据：相关测试通过鉴权API创建私有测试定义，继续验证现有课程管理和学生流程；这不等于恢复或验收旧编辑页面。安装依赖须在启动Web及浏览器测试之前完成，运行中不要执行npm ci。
+
 从 `frontend` 安装匹配浏览器并执行：
 
 ```powershell

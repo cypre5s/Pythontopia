@@ -150,7 +150,7 @@ async function interactAgain(page: Page, touch: boolean) {
 
 async function nextReadingPage(page: Page) {
   const nextPage = Number(
-    await page.locator(".reader-position strong").textContent(),
+    await page.locator(".reader-position progress").getAttribute("value"),
   ) + 1;
   const response = page.waitForResponse(
     (candidate) =>
@@ -163,7 +163,7 @@ async function nextReadingPage(page: Page) {
     page_no: number;
     completed: boolean;
   }>(await response);
-  await expect(page.locator(".reader-position strong")).toHaveText(
+  await expect(page.locator(".reader-position progress")).toHaveAttribute("value",
     String(saved.page_no),
   );
   return saved;
@@ -183,7 +183,7 @@ async function readRequiredPage(page: Page, pageNo: number) {
   const saved = await successfulJson<{ page_no: number; completed: boolean }>(
     await response,
   );
-  await expect(page.locator(".reader-position strong")).toHaveText(
+  await expect(page.locator(".reader-position progress")).toHaveAttribute("value",
     String(pageNo),
   );
   return saved;
@@ -346,13 +346,13 @@ for (const viewport of [
         "你回来啦",
       );
       const resumedReading = await finishDialogue(page, "继续阅读");
-      await expect(page.locator(".reader-position strong")).toHaveText(
+      await expect(page.locator(".reader-position progress")).toHaveAttribute("value",
         String(savedPage),
       );
       await page.reload({ waitUntil: "domcontentloaded" });
       await dismissArrival(page);
       await expect(page.locator(".lesson-workspace")).toBeVisible();
-      await expect(page.locator(".reader-position strong")).toHaveText(
+      await expect(page.locator(".reader-position progress")).toHaveAttribute("value",
         String(savedPage),
       );
       const restored = await readJson<StoryView>(

@@ -151,27 +151,11 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
     await (await request.get("/api/classrooms", { headers: teacher })).json()
   ).find((c: { name: string }) => c.name === className);
   expect(classroom).toBeTruthy();
-  await page.getByRole("button", { name: "活动与 NPC", exact: true }).click();
-  await page.getByRole("button", { name: "新建活动", exact: true }).click();
-  const activityForm = page.locator(".admin-editor form");
-  await activityForm.getByLabel("活动 ID", { exact: true }).fill(activityId);
-  await activityForm
-    .getByLabel("标题", { exact: true })
-    .fill(`独立编程练习 ${suffix}`);
-  await activityForm
-    .getByRole("combobox", { name: "章节", exact: true })
-    .selectOption(String(chapter.id));
-  await activityForm
-    .getByRole("combobox", { name: "类型", exact: true })
-    .selectOption("practice");
-  await activityForm.getByLabel(pointEdited, { exact: true }).check();
-  await activityForm.getByLabel("允许学生在活动内主动使用助教", { exact: true }).uncheck();
-  await activityForm
-    .getByRole("button", { name: "创建活动", exact: true })
-    .click();
-  await expect(
-    page.getByRole("row").filter({ hasText: activityId }),
-  ).toBeVisible();
+  // Withdrawn UI stays absent; create test-only activity/task fixtures through the authorized API.
+  expect((await request.post("/api/teacher/activities", { headers: teacher, data: {
+    id: activityId, title: `独立编程练习 ${suffix}`, chapter_id: chapter.id,
+    kind: "practice", npc_key: "mayor_py", knowledge_point_ids: [point.id], assistant_allowed: false,
+  } })).status()).toBe(201);
   courses = await getCourses();
   expect(
     courses.activities.find((a: { id: string }) => a.id === activityId)
@@ -192,7 +176,6 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
       source: { kind: "explicit_test_fixture" } } });
   expect(q.status()).toBe(201);
   expect((await q.json()).id).toBeTruthy();
-  await page.getByRole("button", { name: "任务配置", exact: true }).click();
   const definition = {
     id: questId,
     title: `课程配置任务 ${suffix}`,
@@ -207,16 +190,11 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
         dependencies: [] },
     ],
     effects: [] };
-  await page
-    .getByLabel("任务 JSON", { exact: true })
-    .fill(JSON.stringify(definition));
-  await page.getByRole("button", { name: "校验任务", exact: true }).click();
-  await expect(page.locator("pre.notice")).toBeVisible();
-  await page.getByRole("button", { name: "保存任务配置", exact: true }).click();
-  await expect(
-    page.getByText("任务配置已保存。", { exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: "章节管理", exact: true }).click();
+  const validated = await request.post("/api/teacher/quests/validate", { headers: teacher, data: { definition } });
+  expect(validated.ok()).toBeTruthy();
+  expect((await validated.json()).valid).toBe(true);
+  expect((await request.post("/api/teacher/quests", { headers: teacher, data: { definition } })).status()).toBe(201);
+  await page.locator("#teacher-navigation").getByRole("button", { name: "章节管理", exact: true }).click();
   await page.getByRole("combobox", { name: "当前班级", exact: true }).selectOption(String(classroom.id));
   const chapterRow = page.locator(".chapter-management tbody tr").filter({ hasText: editedTitle });
   await chapterRow.getByRole("button", { name: "立即解锁", exact: true }).click();

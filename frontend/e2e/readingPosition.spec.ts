@@ -38,9 +38,9 @@ test("library reading position survives removal of the former numeric cache suff
   await expect(welcome).toBeHidden();
   await page.getByRole("button", { name: /学习资料/ }).click();
   await page.locator(".library-list button").filter({ hasText: material.title }).click();
-  await expect(page.locator(".reader-position strong")).toHaveText(String(material.pages[1].page_no));
+  await expect(page.locator(".reader-position progress")).toHaveAttribute("value",String(material.pages[1].page_no));
   expect(await page.evaluate(key => ({ current: sessionStorage.getItem(key), oldFirst: sessionStorage.getItem(`${key}-1`), oldSecond: sessionStorage.getItem(`${key}-2`) }), currentKey))
     .toEqual({ current: "1", oldFirst: null, oldSecond: null });
-  await expect(page.locator(".learning-meta")).not.toContainText("版本");
+  await expect(page.locator(".lesson-workspace")).not.toContainText("版本");
   await page.screenshot({ path: testInfo.outputPath("restored-library-position.png") });
 });

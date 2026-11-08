@@ -3,13 +3,12 @@ import { randomUUID } from "node:crypto";
 
 const sections = [
   "班级",
+  "学生账号",
   "学习记录",
   "章节管理",
   "课程与知识点",
   "课程材料",
   "题库",
-  "活动与 NPC",
-  "任务配置",
 ];
 
 async function openSection(page: Page, name: string) {
@@ -450,23 +449,9 @@ test("teacher management layout, forms, real records, responsive navigation and 
   ).toHaveValue("未上传资料 " + tag);
   await uploadDialog.getByRole("button", { name: "取消", exact: true }).click();
 
-  // Content drafts survive switching between the admin sections and the class list.
-  await openSection(page, "活动与 NPC");
-  await page.getByRole("button", { name: "新建活动", exact: true }).click();
-  const activityForm = page.locator(".admin-editor form");
-  const activityDraft = `draft-${tag}`;
-  await activityForm.getByLabel("活动 ID", { exact: true }).fill(activityDraft);
-  await activityForm
-    .getByLabel("标题", { exact: true })
-    .fill(`未发布活动 ${tag}`);
-  await openSection(page, "班级");
-  await openSection(page, "活动与 NPC");
-  await expect(activityForm.getByLabel("活动 ID", { exact: true })).toHaveValue(
-    activityDraft,
-  );
-  await expect(activityForm.getByLabel("标题", { exact: true })).toHaveValue(
-    `未发布活动 ${tag}`,
-  );
+  // Withdrawn authoring navigation stays absent; draft persistence is checked in the question dialog below.
+  await expect(page.getByRole("button", { name: "活动与 NPC", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "任务配置", exact: true })).toHaveCount(0);
   await openSection(page, "题库");
   const questionSearch = page.getByRole("searchbox", {
     name: "搜索题目标题、ID 或活动",
@@ -522,13 +507,6 @@ test("teacher management layout, forms, real records, responsive navigation and 
     questionDraft,
   );
   await page.keyboard.press("Escape");
-  await openSection(page, "任务配置");
-  await page
-    .getByRole("combobox", { name: "已有任务", exact: true })
-    .selectOption({ index: 1 });
-  await expect(page.getByLabel("任务 JSON", { exact: true })).not.toHaveValue(
-    "",
-  );
   await expect(page.locator(".toast-layer p")).toHaveCount(0, {
     timeout: 8_000,
   });
@@ -601,7 +579,8 @@ test("teacher management layout, forms, real records, responsive navigation and 
     await page
       .getByRole("button", { name: "切换管理导航", exact: true })
       .click();
-  await page.getByRole("button", { name: "退出账号", exact: true }).click();
+  await page.getByRole("button", { name: /，账号菜单$/ }).click();
+  await page.getByRole("menuitem", { name: "退出账号", exact: true }).click();
   await expect(page.locator(".arrival-panel")).toBeVisible();
   expect(await entryStyles(page)).toEqual(originalEntryStyles);
   expect(errors).toEqual([]);

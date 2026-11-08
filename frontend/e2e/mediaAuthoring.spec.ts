@@ -153,31 +153,25 @@ test('teacher authors real private media; student reads PDF, plays video and com
     await page.getByRole('button', { name: '收起预览', exact: true }).click();
   }
   await page.screenshot({ path: testInfo.outputPath('teacher-media-processing.png'), fullPage: true });
-  await page.getByRole('button', { name: '活动与 NPC', exact: true }).click();
-  await page.getByRole('button', { name: '新建活动', exact: true }).click();
-  const activityForm = page.locator('.admin-editor form');
+  // Keep real private-media/student coverage without restoring withdrawn authoring navigation.
+  const teacherToken = await page.evaluate(() => sessionStorage.getItem('pythontopia-reborn-session'));
+  const teacherHeaders = { Authorization: `Bearer ${teacherToken}` };
   for (const material of materials) {
-    await activityForm.getByLabel('活动 ID', { exact: true }).fill(material.activityId);
-    await activityForm.getByLabel('标题', { exact: true }).fill(material.title);
-    await activityForm.getByLabel(/^章节/).selectOption(String(chapterId));
-    await activityForm.getByLabel(/^材料/).selectOption(String(material.id));
-    const saved = page.waitForResponse(response => response.url().endsWith('/api/teacher/activities') && response.request().method() === 'POST');
-    await page.getByRole('button', { name: '创建活动', exact: true }).click();
-    expect((await saved).status()).toBe(201);
+    const saved = await request.post('/api/teacher/activities', { headers: teacherHeaders, data: {
+      id: material.activityId, title: material.title, chapter_id: chapterId,
+      kind: 'lesson', npc_key: 'mayor_py', material_id: material.id, assistant_allowed: false,
+    } });
+    expect(saved.status()).toBe(201);
   }
-  await page.getByRole('button', { name: '任务配置', exact: true }).click();
   const definition = {
     id: `media-lab-${tag}`, title: `自制测试材料实验 ${tag}`, chapter_id: chapterId, kind: 'side',
     nodes: materials.map((material, index) => ({ id: `read-${index}`, type: 'STUDY_LESSON', title: material.title, activity_id: material.activityId, dependencies: [] })),
     effects: [{ type: 'set_world_flag', key: `media_lab_${tag}` }] };
-  await page.getByLabel('任务 JSON', { exact: true }).fill(JSON.stringify(definition));
-  await page.getByRole('button', { name: '校验任务', exact: true }).click();
-  await expect(page.locator('pre.notice')).toContainText('"valid": true');
-  const published = page.waitForResponse(response => response.url().endsWith('/api/teacher/quests') && response.request().method() === 'POST');
-  await page.getByRole('button', { name: '保存任务配置', exact: true }).click();
-  expect((await published).status()).toBe(201);
-  await page.getByRole('button', { name: '章节管理', exact: true }).click();
-  const teacherToken = await page.evaluate(() => sessionStorage.getItem('pythontopia-reborn-session'));
+  const validated = await request.post('/api/teacher/quests/validate', { headers: teacherHeaders, data: { definition } });
+  expect(validated.ok()).toBeTruthy();
+  expect((await validated.json()).valid).toBe(true);
+  expect((await request.post('/api/teacher/quests', { headers: teacherHeaders, data: { definition } })).status()).toBe(201);
+  await page.locator('#teacher-navigation').getByRole('button', { name: '章节管理', exact: true }).click();
   const courses = await (await request.get('/api/teacher/courses', { headers: { Authorization: `Bearer ${teacherToken}` } })).json();
   const releasedChapter = courses.chapters.find((chapter: { id: number }) => chapter.id === chapterId);
   const chapterRow = page.locator('.chapter-management tbody tr').filter({ hasText: releasedChapter.title });
@@ -251,7 +245,7 @@ test('teacher authors real private media; student reads PDF, plays video and com
       const quest = student.locator('.journal-entry').filter({ has: student.getByRole('heading', { name: definition.title, exact: true }) });
       const node = quest.locator('li').filter({ has: student.getByText(material.title, { exact: true }) });
       await node.getByRole('button', { name: '打开课程', exact: true }).click();
-      await expect(student.getByRole('heading', { name: material.title, exact: true })).toBeVisible();
+      await expect(student.getByRole('region', { name: '课程内容', exact: true })).toContainText(material.title);
       if (index === 0) await expect(student.locator('.lesson-text')).toContainText('Self-authored TEST MEDIA');
       await student.getByRole('button', { name: '记录本次学习', exact: true }).click();
       await expect(student.getByText('本次学习已记录，任务目标已更新。', { exact: true }).last()).toBeVisible();
