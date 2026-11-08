@@ -1,5 +1,11 @@
 # 验收摘要与已知边界
 
+## 隔离环境启动尝试2026-11-08
+
+源码`0caa997`，本轮仅启动与验证，未修改应用。前后端锁依赖安装成功；独立SQLite数据库迁移与seed成功（7文档、561页、7章节、65知识点、46示例、39原题）。同一执行环境中Vite与Uvicorn联通，`/api/health`返回ok；前端build（含vue-tsc）通过，保留Phaser大chunk提示。证据`.tmp/browser-qa/test.log`、`.tmp/browser-qa/build.log`。
+
+连接的Edge无法访问此隔离环境端口。Playwright浏览器下载返回无效ZIP；改用系统Chromium运行现有studentIdLogin与rebornJourney两项，两项均在浏览器启动阶段因`socket() failed: Operation not permitted`失败，未执行页面断言，不算业务失败或通过。证据`frontend/.tmp-browser-results/`。没有生成业务截图，未验证登录、世界或教学流程；未测试真实媒体、AI、Judge0及PostgreSQL。临时测试进程已结束，不提供可用公网预览链接。
+
 ## HTTP部署UUID兼容核验2026-11-08
 
 基于`bb75609a`工作区，修复非localhost HTTP缺少`crypto.randomUUID`引起的异常。任务事件、剧情变更、视频播放会话、单题与整卷提交5处统一使用共享UUID函数；原生方法缺失时由`getRandomValues`产生UUID v4，原有失败重试的键复用不变。不新增依赖、不修改后端或数据库。
