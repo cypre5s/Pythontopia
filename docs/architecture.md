@@ -16,6 +16,8 @@ SettingsPanel使用账户、界面、音乐、操作、关于的可键盘导航�
 
 ## 核心流
 
+前端请求事件、剧情请求、视频会话和提交幂等键统一使用`shared/uuid.ts`生成UUID v4；HTTP测试环境缺少`crypto.randomUUID`时使用`crypto.getRandomValues`，不退回Math.random或时间戳。失败重试继续复用原键，服务端鉴权、唯一约束及证据校验保持不变。
+
 `bootstrap.initialize_admin`在API lifespan内执行，PostgreSQL事务级advisory lock串行化首个管理员检查/创建；已有管理员时不再读取配置并覆盖密码。`users.must_change_password`由迁移`c3187f5db204`添加，既有用户默认为false；教师创建/重置学生时设true，`current_user`在服务端限制至改密/本人/退出接口。登录、改密与重置锁定用户行，改密/重置在同一事务撤销会话，避免旧密码登录与重置交错留下有效会话。自助改密签发新的当前会话。
 
 `student_accounts`复用班级所有权检查，学生创建与成员关系原子提交；已有本班学生幂等跳过，班外或职员账号冲突整批拒绝。表格只做有界内存解析与只读预览，不存储上传件；确认时重新检查，不能靠预览越权。批量移出只删除Membership，学业记录不重置。

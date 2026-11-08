@@ -47,6 +47,7 @@
   </LearningSplitLayout>
 </template>
 <script setup lang="ts">
+import { randomUUID } from "../shared/uuid";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { api, ApiError, notify } from "../shared/api";
 import { useSession } from "../shared/session";
@@ -192,7 +193,7 @@ async function submitQuestion(id: string, mode: 'run' | 'submit') {
   if (!question || !draft || !activity.value || !hasAnswer(question) || requestBusy.value || isAssessment.value && (paper.value?.locked || mode === 'submit')) return;
   const ticket = generation; requestBusy.value = true; busyQuestionId.value = id; error.value = '';
   const body = { answer: question.kind === 'boolean' ? draft.answer === 'true' : draft.answer, code: draft.code, mode };
-  const pending = draft.pending ?? { ...body, key: crypto.randomUUID() };
+  const pending = draft.pending ?? { ...body, key: randomUUID() };
   draft.pending = pending; persistLocal();
   try {
     const received = await trackMutation(api.post<Submission>('/submissions', { classroom_id: contextClassroomId, activity_id: activity.value.id, question_id: id, idempotency_key: pending.key, answer: pending.answer, code: pending.code, mode: pending.mode }));
@@ -229,7 +230,7 @@ async function submitPaper() {
   try {
     await flushDrafts();
     if (!currentOwner() || ticket !== generation) return;
-    pendingPaper ??= { key: crypto.randomUUID(), answers: allAnswers() }; paperSubmissionPending.value = true; applyAnswers(pendingPaper.answers); persistLocal();
+    pendingPaper ??= { key: randomUUID(), answers: allAnswers() }; paperSubmissionPending.value = true; applyAnswers(pendingPaper.answers); persistLocal();
     const saved = await trackMutation(api.post<AssessmentAttempt>(`/activities/${activity.value.id}/assessment/submit`, { classroom_id: contextClassroomId, idempotency_key: pendingPaper.key, answers: pendingPaper.answers }));
     if (!currentOwner() || ticket !== generation) return;
     paper.value = saved; pendingPaper = undefined; paperSubmissionPending.value = false; draftQueue = undefined; applyAnswers(saved.answers); persistLocal();

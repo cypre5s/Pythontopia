@@ -1,3 +1,4 @@
+import { randomUUID } from "./uuid";
 export interface VideoProgressPacket {
   classroom_id: number;
   material_id: number;
@@ -40,7 +41,7 @@ export function createVideoProgressQueue<T>(options: {
   }
   function sample(position: number, playing: boolean, newSession = false, playbackRate = 1) {
     if (disposed || !options.active() || !Number.isFinite(position) || position < 0 || !Number.isFinite(playbackRate) || playbackRate < .25 || playbackRate > 4) return task;
-    if (!sessionId || newSession) { sessionId = crypto.randomUUID(); sequence = 0; }
+    if (!sessionId || newSession) { sessionId = randomUUID(); sequence = 0; }
     // A stalled connection cannot grow an unbounded queue. Its oldest body must be retried first.
     if (pending.length < 4) pending.push({ classroom_id: options.classroomId, material_id: options.materialId, playback_session_id: sessionId, sequence: ++sequence, position_seconds: position, playing, playback_rate: playbackRate });
     if (!playing) { sessionId = ""; sequence = 0; }

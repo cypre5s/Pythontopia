@@ -1,3 +1,4 @@
+import { randomUUID } from "./uuid";
 import { defineStore } from "pinia";
 import { computed, nextTick, ref, watch } from "vue";
 import { api, ApiError, notify } from "./api";
@@ -168,7 +169,7 @@ export const useSession = defineStore("session", () => {
       owner = user.value?.id, generation = restartGeneration;
     const result = await api.post<{ world: World }>("/events", {
       classroom_id: id,
-      event_id: crypto.randomUUID(),
+      event_id: randomUUID(),
       quest_id: quest.id,
       node_id: node.id,
       evidence,
@@ -258,7 +259,7 @@ export const useSession = defineStore("session", () => {
     const currentStory = story.value;
     if (!currentStory || storyBusy.value) return false;
     const key = `${currentStory.id}:${currentStory.revision}:${action}:${choice ?? ""}`;
-    if (pendingStoryMutation?.key !== key) pendingStoryMutation = { key, eventId: crypto.randomUUID() };
+    if (pendingStoryMutation?.key !== key) pendingStoryMutation = { key, eventId: randomUUID() };
     const eventId = pendingStoryMutation.eventId;
     return storyRequest(
       () => api.post<StoryView>(`/story/sessions/${currentStory.id}/${action}`, {

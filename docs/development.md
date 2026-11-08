@@ -242,6 +242,8 @@ docker build -t pythontopia-reborn-converter:local deploy/converter
 
 ## 检查与浏览器验收
 
+服务器IP或域名的HTTP测试部署属于非安全上下文，与localhost不同。请求UUID统一由前端`shared/uuid.ts`生成：原生`crypto.randomUUID`不可用时使用`crypto.getRandomValues`生成UUID v4。更新兼容修复后需重建并替换Web镜像、刷新页面；无需数据库迁移。正式部署仍应在入口配置HTTPS以保护登录和会话传输，UUID兼容不提供传输加密。专项`httpUuid.spec.ts`使用非localhost的HTTP页面验证此路径，不需要启动业务服务。
+
 ### 基础检查
 
 前端从 `frontend` 执行：
