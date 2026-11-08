@@ -84,6 +84,15 @@ def load_content(root=CONTENT_ROOT):
                 raise ValueError("章节包与任务的章节不一致")
             quests.append(quest)
             stories.append({key: bundle[key] for key in ("id", "chapter_id", "quest", "story")})
+    for path in sorted((root / "ambient").glob("*.yaml")):
+        bundle = load_yaml(path)
+        if (set(bundle) != {"schema_version", "id", "chapter_id", "story"} or not isinstance(bundle["story"], dict)
+                or bundle["story"].get("mode") != "ambient"):
+            raise ValueError("日常对白包仅允许标识、章节与独立日常演出")
+        if (not isinstance(bundle["id"], str) or not bundle["id"].strip() or len(bundle["id"]) > 100
+                or type(bundle["chapter_id"]) is not int or bundle["chapter_id"] < 1):
+            raise ValueError("无效日常对白标识或章节")
+        stories.append({"id": bundle["id"], "chapter_id": bundle["chapter_id"], "quest": None, "story": bundle["story"]})
     for label, rows, keys in (
         ("NPC", npcs, ("key",)), ("活动", activities, ("id",)),
         ("任务", quests, ("id",)), ("演出", stories, ("id",)), ("题目", questions, ("id",)),
@@ -99,6 +108,7 @@ def validate_sources():
     from .dialogues import validate_dialogue
     from .quests import validate_definition
     from .story import validate_story
+    from .learning_rules import validate_learning
 
     content = load_content()
     for npc in content["npcs"]:
@@ -109,6 +119,7 @@ def validate_sources():
     npc_keys = {item["key"] for item in content["npcs"]}
     questions = {item["id"]: item["activity_id"] for item in content["questions"]}
     for item in content["activities"]:
+        validate_learning(item["content"], item["kind"])
         ids = item["content"].get("question_ids")
         if not isinstance(ids, list) or any(not isinstance(key, str) for key in ids) or len(set(ids)) != len(ids):
             raise ValueError("每个活动必须显式固定非重复question_ids")

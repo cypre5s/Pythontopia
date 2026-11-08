@@ -36,8 +36,10 @@ def seed(db, source=None):
                       if item.id not in current_quests}
     from .models import StoryDefinition
 
-    for story in db.scalars(select(StoryDefinition).where(StoryDefinition.quest_id.in_(retired_quests))):
-        db.delete(story)
+    current_stories = {item["id"] for item in content["stories"]}
+    for story in db.scalars(select(StoryDefinition)):
+        if story.quest_id in retired_quests or story.quest_id is None and story.id not in current_stories:
+            db.delete(story)
     for item in db.scalars(select(QuestDefinition).where(QuestDefinition.id.in_(retired_quests))):
         db.delete(item)
     for activity in db.scalars(select(Activity).where(Activity.owner_id.is_(None))):
@@ -83,6 +85,12 @@ def seed(db, source=None):
     reviewed_problem = next(p for p in problems if p["id"] == 476)
     activity_fields = ("title", "kind", "material_id", "npc_key", "assistant_allowed", "content")
     for spec in content["activities"]:
+        from .learning_rules import validate_learning
+
+        material = db.get(Material, spec.get("material_id")) if spec.get("material_id") else None
+        if material and material.chapter_id != spec["chapter_id"]:
+            raise ValueError("学习资料必须属于活动章节")
+        validate_learning(spec["content"], spec["kind"], material, resolve=True)
         mode = spec.get("knowledge_point_mode", "pages")
         point_ids = sorted(kc["id"] for kc in kcs if kc["chapter_id"] == spec["chapter_id"] and (
             mode == "chapter" or (mode == "pages" and set(kc.get("page_refs", [])) & set(spec.get("knowledge_point_pages", [])))
@@ -186,7 +194,7 @@ def seed(db, source=None):
         if not item:
             item = StoryDefinition(id=spec["id"])
             db.add(item)
-        item.chapter_id, item.quest_id, item.content = spec["chapter_id"], spec["quest"]["id"], spec["story"]
+        item.chapter_id, item.quest_id, item.content = spec["chapter_id"], spec["quest"]["id"] if spec["quest"] else None, spec["story"]
     # Definition changes may invalidate an open dialogue cursor; preserve the session
     # history and all learning data, and let the next interaction select a valid entry.
     from .models import StorySession

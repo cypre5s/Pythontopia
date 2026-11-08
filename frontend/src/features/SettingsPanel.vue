@@ -1,7 +1,7 @@
 <template>
   <section class="town-workspace settings-workspace">
-    <div class="town-book">
-      <aside class="town-sidebar">
+    <div class="town-book" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
+      <aside :hidden="sidebarCollapsed" :inert="sidebarCollapsed" class="town-sidebar"><SidebarToggle />
         <nav class="town-directory settings-directory" role="tablist" aria-label="设置分类" aria-orientation="vertical">
           <button v-for="category in categories" :id="`settings-tab-${category.id}`" :key="category.id"
             class="town-directory-item" :class="{ 'is-current': selected === category.id }"
@@ -42,6 +42,9 @@
   </section>
 </template>
 <script setup lang="ts">
+import SidebarToggle from "../shared/SidebarToggle.vue";
+import { useWorkspaceSidebar } from "../shared/workspaceSidebar";
+const { collapsed: sidebarCollapsed } = useWorkspaceSidebar();
 import { computed, nextTick, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import GameIcon from "../shared/GameIcon.vue";

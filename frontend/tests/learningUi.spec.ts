@@ -39,6 +39,65 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 describe("learning workspace usability", () => {
+  it("uses configured reading ranges, original outline pages and verified evidence to complete an ordinary quest node", async () => {
+    const { pinia, session } = setup();
+    const initial = { page_no: 34, visited_pages: [], required_page_ids: [201, 202], read_count: 0, read_total: 2, completed: false };
+    session.world!.quests = [{ id: "fixture", kind: "side", chapter_id: 179, title: "测试委托", status: "active", nodes: [{ id: "read", type: "STUDY_LESSON", title: "阅读", target: "", activity_id: "range", dependencies: [], aggregation: "ALL", optional: false, status: "ready" }] }];
+    vi.spyOn(session, "activity").mockResolvedValue({ id: "range", chapter_id: 179, title: "范围阅读", kind: "lesson", npc_key: "librarian_doc", assistant_allowed: false, questions: [], progress: initial,
+      learning: { reading: { scope: "range", start_page: 34, end_page: 35 }, highlights: { pages: [{ start_page: 35, end_page: 35, label: "课堂重点" }] } },
+      material: { id: 186, title: "课件", kind: "text", status: "ready", pages: [{ id: 200, page_no: 33, title: "导读", text: "范围外" }, { id: 201, page_no: 34, title: "计算", text: "计算" }, { id: 202, page_no: 35, title: "求解", text: "求解" }] } });
+    vi.spyOn(api, "get").mockResolvedValue(initial);
+    const post = vi.spyOn(api, "post").mockResolvedValueOnce({ ...initial, visited_pages: [201], read_count: 1 }).mockResolvedValueOnce({ ...initial, page_no: 35, visited_pages: [201, 202], read_count: 2, completed: true }).mockResolvedValueOnce({ record_id: "record" });
+    const event = vi.spyOn(session, "event").mockResolvedValue();
+    vi.spyOn(session, "refresh").mockResolvedValue();
+    const wrapper = mount(LessonWorkspace, { props: { activityId: "range" }, global: { plugins: [pinia], stubs: { AssistantPanel: true } } });
+    await flushPromises();
+    expect(wrapper.get(".support-goal-progress progress").attributes("value")).toBe("1");
+    expect(wrapper.get('[aria-label="文档页面目录"]').findAll("button")).toHaveLength(3);
+    expect(wrapper.get(".support-outline-important").text()).toBe("课堂重点");
+    await wrapper.get('[aria-label="本章阅读目标"]').findAll("button")[1]!.trigger("click");
+    await flushPromises();
+    expect(wrapper.get(".support-goal-progress progress").attributes("value")).toBe("2");
+    await wrapper.findAll("button").find(button => button.text() === "完成阅读")!.trigger("click");
+    await flushPromises();
+    expect(post).toHaveBeenLastCalledWith("/activities/range/participation", { classroom_id: 2, page_no: 35 });
+    expect(event).toHaveBeenCalledWith(session.world!.quests[0], session.world!.quests[0]!.nodes[0], { record_id: "record" });
+    wrapper.unmount();
+  });
+  it("returns compact goal-page navigation to the reading region without changing original page IDs", async () => {
+    const { pinia, session } = setup(true);
+    vi.spyOn(session, "activity").mockResolvedValue({ id: "lesson", chapter_id: 179, title: "阅读", kind: "lesson", npc_key: "librarian_doc", assistant_allowed: false, questions: [],
+      material: { id: 186, title: "课件", kind: "text", status: "ready", pages: [{ id: 201, page_no: 42, title: "目标页", text: "原始正文" }] },
+      completion: { required_page_ids: [201] } });
+    vi.spyOn(api, "get").mockResolvedValue({ page_no: 42, visited_pages: [201], completed: true });
+    vi.spyOn(api, "post").mockResolvedValue({ page_no: 42, visited_pages: [201], completed: true });
+    const wrapper = mount(LessonWorkspace, { props: { activityId: "lesson" }, global: { plugins: [pinia], stubs: { AssistantPanel: true } } });
+    await flushPromises();
+    await wrapper.findAll("button").find(button => button.text() === "目标与助教")!.trigger("click");
+    expect(wrapper.get(".lesson-content").attributes("hidden")).toBeDefined();
+    await wrapper.get('[aria-label="本章阅读目标"] button').trigger("click");
+    expect(wrapper.get(".lesson-content").attributes("hidden")).toBeUndefined();
+    expect(wrapper.get(".lesson-text").text()).toContain("原始正文");
+    wrapper.unmount();
+  });
+  it("refreshes server-verified learning goals after a normal practice submission", async () => {
+    const { pinia, session } = setup();
+    vi.spyOn(session, "activity").mockResolvedValue({ id: "practice", chapter_id: 179, title: "练习", kind: "practice", npc_key: "arena_guard", assistant_allowed: false, material: null,
+      progress: { page_no: null, visited_pages: [], accepted_question_ids: [], completed: false },
+      questions: [{ id: "q1", title: "判断题", kind: "boolean", prompt: "请选择", options: [], samples: [] }] });
+    vi.spyOn(api, "post").mockResolvedValue({ id: "s1", question_id: "q1", mode: "submit", status: "accepted", feedback: {} });
+    const get = vi.spyOn(api, "get").mockResolvedValue({ page_no: null, visited_pages: [], accepted_question_ids: ["q1"], completed: true });
+    vi.spyOn(session, "refresh").mockResolvedValue();
+    const wrapper = mount(PracticeWorkspace, { props: { activityId: "practice" }, global: { plugins: [pinia], stubs: { AssistantPanel: true } } });
+    await flushPromises();
+    expect(wrapper.find(".support-goal-state").exists()).toBe(false);
+    await wrapper.get('input[value="true"]').setValue();
+    await wrapper.findAll("button").find(button => button.text() === "提交答案")!.trigger("click");
+    await flushPromises();
+    expect(get).toHaveBeenCalledWith("/activities/practice/progress?classroom_id=2");
+    expect(wrapper.get(".support-goal-state").text()).toBe("已完成");
+    wrapper.unmount();
+  });
   it("retains the server page and original required IDs when current lesson media becomes PDF", async () => {
     const { pinia, session } = setup();
     const pages = [{ id: 10715, page_no: 34, title: "计算", text: "计算" }, { id: 10723, page_no: 42, title: "抽象", text: "抽象" }];
@@ -56,7 +115,9 @@ describe("learning workspace usability", () => {
     } } });
     await flushPromises();
     expect(wrapper.get(".pdf-fixture").text()).toBe("42");
-    expect(wrapper.get('[aria-label="本章阅读目标"]').text()).toContain("✓ 阅读第42页");
+    expect(wrapper.find(".lesson-extracted-text").exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("提取文本");
+    expect(wrapper.get('[aria-label="本章阅读目标"]').text()).toContain("阅读第42页");
     expect(post).toHaveBeenCalledWith("/activities/ch1-lesson/progress", { classroom_id: 2, page_no: 42 });
     wrapper.unmount();
   });
@@ -130,14 +191,16 @@ describe("learning workspace usability", () => {
     const wrapper = mount(PracticeWorkspace, { props: { activityId: "ch1-practice", storySessionId: "story-session" }, global: { plugins: [pinia], stubs: { AssistantPanel: true } } });
     await flushPromises();
     await wrapper.get('input[value="true"]').setValue();
-    await wrapper.findAll("button").find(button => button.text() === "正式提交")!.trigger("click");
+    await wrapper.findAll("button").find(button => button.text() === "提交答案")!.trigger("click");
     await flushPromises();
     expect(wrapper.emitted("complete")).toBeUndefined();
-    expect(wrapper.get(".learning-meta").text()).toContain("已完成 1 / 2 题");
-    await wrapper.get(".question-list").findAll("button")[1]!.trigger("click");
+    expect(wrapper.get(".support-goal-progress").text()).toContain("已完成 1 / 2 题");
+    await wrapper.findAll("button").find(button => button.text().includes("下一题"))!.trigger("click");
     await wrapper.get('input[value="false"]').setValue();
-    await wrapper.findAll("button").find(button => button.text() === "正式提交")!.trigger("click");
+    await wrapper.findAll("button").find(button => button.text() === "提交答案")!.trigger("click");
     await flushPromises();
+    expect(wrapper.emitted("complete")).toBeUndefined();
+    await wrapper.findAll("button").find(button => button.text() === "完成练习")!.trigger("click");
     expect(wrapper.emitted("complete")).toEqual([[]]);
     expect(get).toHaveBeenLastCalledWith("/activities/ch1-practice/progress?classroom_id=2");
     expect(post.mock.calls.every(([path]) => path === "/submissions")).toBe(true);
@@ -162,11 +225,11 @@ describe("learning workspace usability", () => {
     expect(wrapper.get(".lesson-text").text()).toContain("抽象");
     const complete = wrapper.findAll("button").find(button => button.text() === "完成阅读")!;
     expect(complete.attributes("disabled")).toBeDefined();
-    expect(wrapper.get(".lesson-footer").text()).toContain("已阅读 2 / 3 页");
+    expect(wrapper.get(".support-goal-progress").text()).toContain("已阅读 2 / 3 页");
     await wrapper.get('[aria-label="本章阅读目标"]').findAll("button")[2]!.trigger("click");
     await flushPromises();
     expect(post).toHaveBeenLastCalledWith("/activities/ch1-lesson/progress", { classroom_id: 2, page_no: 43 });
-    expect(wrapper.get(".lesson-footer").text()).toContain("已阅读 3 / 3 页");
+    expect(wrapper.get(".support-goal-progress").text()).toContain("已阅读 3 / 3 页");
     expect(complete.attributes("disabled")).toBeUndefined();
     await complete.trigger("click");
     expect(wrapper.emitted("complete")).toEqual([[]]);
@@ -202,15 +265,15 @@ describe("learning workspace usability", () => {
             template:
               '<section class="assistant-panel"><textarea aria-label="测试助教问题" /></section>' } } } });
     await flushPromises();
-    expect(wrapper.find(".assistant-panel").attributes("hidden")).toBeDefined();
-    expect(wrapper.find(".assistant-panel").attributes("inert")).toBeDefined();
+    expect(wrapper.find(".learning-support").attributes("hidden")).toBeDefined();
+    expect(wrapper.find(".learning-support").attributes("inert")).toBeDefined();
     await wrapper
       .findAll("button")
       .find((b) => b.text().trim() === "下一页")!
       .trigger("click");
     await wrapper
       .findAll("button")
-      .find((b) => b.text() === "向助教提问")!
+      .find((b) => b.text() === "目标与助教")!
       .trigger("click");
     expect(wrapper.find(".lesson-content").attributes("hidden")).toBeDefined();
     expect(wrapper.find(".lesson-content").attributes("inert")).toBeDefined();
@@ -261,7 +324,7 @@ describe("learning workspace usability", () => {
     await flushPromises();
     const submit = wrapper
       .findAll("button")
-      .find((b) => b.text() === "正式提交")!;
+      .find((b) => b.text() === "提交答案")!;
     expect(submit.attributes("disabled")).toBeDefined();
     await submit.trigger("click");
     expect(post).not.toHaveBeenCalled();

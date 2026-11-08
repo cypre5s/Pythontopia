@@ -253,9 +253,10 @@ def ensure_quests(db, user, classroom_id):
         db.rollback()
 
 
-def world_payload(db, user, classroom_id):
+def world_payload(db, user, classroom_id, initialize_quests=True):
     classroom = authorize_classroom(db, user, classroom_id)
-    ensure_quests(db, user, classroom_id)
+    if initialize_quests:
+        ensure_quests(db, user, classroom_id)
     position = db.get(PlayerPosition, (user.id, classroom_id))
     player = (
         {"map_key": position.map_key, "tile_x": position.tile_x, "tile_y": position.tile_y, "direction": position.direction}
@@ -293,6 +294,10 @@ def world_payload(db, user, classroom_id):
         if story:
             quests[-1]["story_id"] = story.id
     return {
+        "story_available": any(chapter_available(db, user, classroom_id, story.chapter_id) and (
+            story.quest_id is None and story.content.get("mode") == "ambient"
+            or story.quest_id is not None and quest_visible(db.get(QuestDefinition, story.quest_id), user, classroom))
+            for story in db.scalars(select(StoryDefinition))),
         "player": player,
         "npcs": [
             {
@@ -447,12 +452,13 @@ def validate_evidence(db, user, classroom_id, node, evidence):
             raise HTTPException(422, "互动对象不匹配")
         check_near(db, user, classroom_id, OBJECTS[target], radius=2 if kind == "INTERACT_OBJECT" else 5)
     elif kind == "STUDY_LESSON":
-        from .courses import authorize_activity, reading_completed
+        from .courses import authorize_activity, learning_material, reading_completed
+        from .learning_rules import has_completion_rule
 
         activity = authorize_activity(db, user, classroom_id, node["activity_id"])
-        if activity.content.get("completion"):
+        if has_completion_rule(activity):
             progress = db.get(ActivityProgress, (user.id, classroom_id, activity.id))
-            if not reading_completed(activity, progress):
+            if not reading_completed(activity, progress, learning_material(db, activity)):
                 raise HTTPException(422, "请先完成规定资料页的阅读参与")
         record = db.get(LearningRecord, evidence.get("record_id", ""))
         if not record or (record.user_id, record.classroom_id, record.activity_id) != (
@@ -470,7 +476,7 @@ def validate_evidence(db, user, classroom_id, node, evidence):
             for q in db.scalars(select(Question).where(Question.activity_id == node["activity_id"]))
             if activity.content.get("question_ids") is None or q.id in activity.content["question_ids"]
         ]
-        if not questions:
+        if not questions and activity.kind != "assessment":
             raise HTTPException(422, "题组为空")
         accepted = {
             s.question_id
@@ -484,7 +490,11 @@ def validate_evidence(db, user, classroom_id, node, evidence):
                 )
             ).all()
         }
-        if any(q.id not in accepted for q in questions):
+        if activity.kind == "assessment":
+            from .assessments import assessment_payload
+            if not assessment_payload(db, user, classroom_id, activity)["completed"]:
+                raise HTTPException(422, "请先提交试卷并等待全部题目判定完成")
+        elif any(q.id not in accepted for q in questions):
             raise HTTPException(422, "请先通过此活动的全部正式练习")
         if evidence.get("submission_id"):
             submission = db.get(Submission, evidence["submission_id"])

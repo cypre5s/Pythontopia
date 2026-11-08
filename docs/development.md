@@ -1,5 +1,81 @@
 # 安装、启动与排查
 
+## 百分制、剧情条件与任务外日常（2026-11-08）
+
+当前原15176/API18083已更新并健康，迁移头f4b92c71a806；备份 `.tmp/pre-story-enrichment-20261108.sql`。27张旧业务表1769条记录完整字段不变，只有当前演出与迁移头更新。刷新浏览器后体验；没有重置演示账号。独立15177/API18084验收结束后已停止web/API/db，数据卷与产物保留。
+
+脚本作者继续修改YAML：任务与测验结尾在 `backend/content/chapters/chapter01.yaml`，日常在 `backend/content/ambient/town-daily.yaml`。内容格式、条件和可复制节点片段见[内容配置](content-authoring.md)。先在backend运行 `.venv/Scripts/python.exe -m app.chapter_content --check`；当前应为4NPC、3活动、1任务、2演出、9题。新增日常不增加主线任务。格式中的schema_version仍是解析格式，不是内容历史版本。
+
+数据库需要升级到 `f4b92c71a806`，仅将StoryDefinition.quest_id设为可空，允许日常独立于任务；前序AssessmentAttempt与学生数据保留。每次启动仍先迁移再执行app.seed，同ID配置原位更新，不重导入媒体。沿用既有本地预览时，从仓库根使用显式开发override，避免意外关闭已有开发菜单：
+
+```sh
+docker compose --env-file .tmp/story-qa.env -p pythontopia-story-qa -f deploy/compose.yml -f deploy/compose.dev-tools.yml up --build -d api web
+```
+
+测验分数由后端派生，满分100，向下取整；未判完score=null。随机节点仅在新互动中选择，恢复使用已落库的对白node_id，不写世界标记。日常没有教学活动、任务检查点或效果；无授权资源的条件即使嵌套not也不能启用选项。当前NPC有ready教学目标或waiting活动优先于日常，无关NPC的新任务不因闲聊而初始化。
+
+隔离浏览器专项沿用独立15177/API18084、新学生和显式QA教师凭据，设置 `E2E_COURSE_MEDIA_IMPORTED=1`、`E2E_DEV_TOOLS=1`、`PLAYWRIGHT_CHANNEL=chrome`，在frontend运行：
+
+```sh
+npx playwright test assessmentPaper.spec.ts gameDesign.spec.ts storyChapter.spec.ts rebornJourney.spec.ts uiUsability.spec.ts worldConfiguration.spec.ts learningRules.spec.ts devTools.spec.ts --grep-invert production --project=desktop --workers=1 --output=.tmp-story-enrichment-e2e
+```
+
+storyChapter保留满分分支，rebornJourney使用真实66分交卷，并实际走随机闲聊、相同event重试、刷新恢复、章节180开放后的额外选项和账号隔离。不能通过重置原演示账号验证此流程，真实PG空schema迁移与两次seed报告保存在忽略目录 `.tmp/story-enrichment-pg-validation-20261108.json`。
+
+## 练习、整卷测验与侧栏（2026-11-08）
+
+当前本地入口仍为 `http://127.0.0.1:15176/world`，API18083，使用已验收的同一API/Web镜像更新。数据库升级至 `e682f9a410c7`，只新增 `assessment_attempts`；启动仍执行迁移与当前YAML导入，不重导入媒体。升级前完整SQL备份为忽略目录 `.tmp/pre-assessment-20261108.sql`，更新前后完整字段核对结果见acceptance.md。开发工具override保持显式启用，更新本身未重置任何学生。
+
+本轮独立15177/API18084验收环境已停止web/API/db，数据卷与验收产物保留；原15176/API18083继续运行且健康。
+
+练习使用逐题提交；测验必须通过 `/activities/{id}/assessment` 草稿和 `/assessment/submit` 整卷接口，不能再用单题正式提交接口代替交卷。整卷事务锁定答案，判题故障/未知外部分发等待对账，不盲目重交。详细契约与历史成绩兼容见api-contract.md。`AssessmentAttempt.revision`仅为草稿并发保护，不是内容版本。
+
+浏览器验收使用独立数据库/存储的15177环境及新建学生。设置 `E2E_URL`、`E2E_TEACHER_EMAIL/PASSWORD`、`E2E_COURSE_MEDIA_IMPORTED=1`、`E2E_DEV_TOOLS=1`、`PLAYWRIGHT_CHANNEL=chrome`，在frontend运行：
+
+```sh
+npx playwright test assessmentPaper.spec.ts gameDesign.spec.ts storyChapter.spec.ts rebornJourney.spec.ts uiUsability.spec.ts worldConfiguration.spec.ts learningRules.spec.ts devTools.spec.ts --grep-invert production --project=desktop --workers=1 --output=.tmp-assessment-e2e
+```
+
+验收用教师可能已有私有TEST支线，主线检查按 `kind=main` 与稳定ID `arrival` 定位，不假定返回数组第一项就是主线。不得删除私有任务来满足测试断言。生产关闭开发工具的专项沿用上一轮独立环境，本轮未重新启动或声称复验。所有侧卡通过共享 `workspaceSidebar` / `SidebarToggle` 折叠，学习分栏可拖向右端或按End收起；不要在各页复制状态或卸载内容以清除草稿。
+
+## 学习目标与目录验收（2026-11-07）
+
+新学习规则见[内容配置](content-authoring.md)，运行前先升级至 `d193b6e408a1`，再执行 YAML 校验与重复导入。迁移只为 `activity_progress` 新增默认空对象的 `media_progress` 字段，既有必读页、任务、页面ID及成绩保持原语义。修改YAML后按既有流程重建API，不需要编辑器。
+
+真实课程媒体的独立QA设置 `E2E_URL`、`E2E_TEACHER_EMAIL/PASSWORD`、`E2E_COURSE_MEDIA_IMPORTED=1`、`PLAYWRIGHT_CHANNEL=chrome`，在frontend运行：
+
+```sh
+npx playwright test gameDesign.spec.ts learningRules.spec.ts storyChapter.spec.ts uiUsability.spec.ts --project=desktop --workers=1 --output=.tmp-goals-e2e
+```
+
+学习规则专项通过教师API创建新的私有活动、支线验收任务、班级和学生，读取现有真实课件/视频，不增加内置主线、不替换材料、不重置演示账号。覆盖指定页范围、真实视频实际播放、跳播不完成、2倍速按墙钟累计、重点页/片段、服务端进度与任务推进。日志空状态使用新学生“已完成+支线”筛选，不假定QA教师从未创建过其他活动。开发重置专项仍需额外显式 `E2E_DEV_TOOLS=1`；不能把未启用时的跳过算通过。
+
+## 开发工具与独立验收
+
+“重新开始当前班级”只用于明确启用的本地开发环境，会删除当前学生在当前班级的任务、阅读和成绩，并断开客户端助教恢复指针；服务端助教会话、调用审计和预算记录保留。自动化验收不在真实演示账号或原预览数据上试验。默认部署不开放此工具；API 进程必须同时显式设置 `REBORN_ENV=development` 和 `REBORN_DEV_TOOLS=1`，并由服务端给学生返回 `dev_tools_enabled: true`。单独设置一个开关、前端开发构建或使用 localhost 都不会赋予该能力；生产环境始终不注册重置路由。
+
+当前本地15176/API18083已显式叠加开发override，刷新后现有小镇菜单的设置后方显示“开发工具”（仅学生）。启用工具本身没有重置演示账号；用户通过“重新开始当前班级→确认重新开始”自主操作。基础Compose仍为生产模式。独立15177开发QA和15178生产QA验收后均停止、卷保留，原库升级前备份.tmp/pre-dev-tools-20261107.sql。
+
+本地开发预览需要工具时，显式叠加 `deploy/compose.dev-tools.yml`；该 override 设置上述两个开关，基础 `deploy/compose.yml` 保持生产设置。自动化验收另外使用独立项目：准备新的 `.tmp/dev-tools-qa.env`，设置独立端口、数据库和存储卷，再从仓库根目录执行：
+
+```sh
+docker compose --env-file .tmp/dev-tools-qa.env -p pythontopia-dev-tools-qa -f deploy/compose.yml -f deploy/compose.dev-tools.yml up --build -d
+```
+
+自动化验收不要复用原预览项目名、数据库连接或卷。工具不删除账号、成员关系、课程内容及班级发布配置，也不影响其他学生或其他班级；当前班级的学习记录没有自动撤销入口。正在处理判题或助教调用时返回 409，应等待完成或按既有流程对账后再重试。
+
+前端仅使用服务端能力决定 HUD“开发工具”入口。用户先点击“重新开始当前班级”，再点击内联“确认重新开始”。成功后清除对应账号/班级的阅读、练习草稿、助教恢复及图书馆筛选缓存，保留令牌、当前班级和界面偏好，重新欢迎并回到 `(town_hub,22,36)`，主线从 `0/8` 开始。不要通过 hostname 或 `import.meta.env.DEV` 绕开服务端开关。
+
+浏览器专项 `frontend/e2e/devTools.spec.ts` 要求显式 `E2E_DEV_TOOLS=1`、独立开发 QA 的 `E2E_URL` 和 `E2E_TEACHER_EMAIL/PASSWORD`；设置 `PLAYWRIGHT_CHANNEL=chrome`。测试只新建验收班级与学生，通过真实 API 建立任务、阅读和正式成绩，并核对另一班级及另一学生不变。浏览器缓存 fixture 仅用于验证清理边界，不伪造服务端进度，也不发送助教问题。
+
+可另设 `E2E_PRODUCTION_URL` 指向独立生产模式 QA；其新建班级使用 `E2E_PRODUCTION_TEACHER_EMAIL/PASSWORD`，缺省时复用前述教师凭据。生产专项只注册新的学生账号，检查注册/登录能力关闭、无开发菜单以及直接 POST 返回 404，不在既有账号上尝试重置。在 `frontend` 执行：
+
+```sh
+npx playwright test devTools.spec.ts --project=desktop --workers=1 --output=.tmp-dev-tools
+```
+
+未设置所需环境时明确跳过相应用例，不把跳过、用例发现或本节命令当作真实验收通过。实际运行环境与结果记录在 acceptance.md。
+
 ## 游戏界面统一规范（2026-11-07）
 
 原本地15176已更新整套统一工作区，API18083沿用，刷新浏览器即可查看；独立15177验收后停止、卷保留。本轮只更新前端容器，数据库备份位于.tmp/pre-game-design-20261107.sql，原进度与成绩完整字段核对一致。

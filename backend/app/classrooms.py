@@ -182,6 +182,7 @@ def teacher_courses(db: Annotated[Session, Depends(get_db)], user: Annotated[Use
                 "kind": a.kind,
                 "npc_key": a.npc_key,
                 "assistant_allowed": a.assistant_allowed,
+                "learning": a.content.get("learning", {}),
                 "material_id": a.material_id,
                 "owner_id": a.owner_id,
                 "knowledge_point_ids": a.content.get("knowledge_point_ids", []),
@@ -252,6 +253,7 @@ class ActivityInput(BaseModel):
     npc_key: str
     assistant_allowed: bool = True
     knowledge_point_ids: list[int] = Field(default_factory=list, max_length=65)
+    learning: dict | None = None
 
     @field_validator("knowledge_point_ids", mode="before")
     @classmethod
@@ -277,10 +279,19 @@ def create_activity(body: ActivityInput, db: Annotated[Session, Depends(get_db)]
         raise HTTPException(403, "资料不属于当前教师或章节")
     if body.material_id and not material:
         raise HTTPException(404, "资料不存在")
+    from .learning_rules import validate_learning
+
+    content = {"published": True, "question_ids": [], "knowledge_point_ids": body.knowledge_point_ids}
+    if body.learning is not None:
+        content["learning"] = body.learning
+    try:
+        validate_learning(content, body.kind, material, resolve=True)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     item = Activity(
-        **body.model_dump(exclude={"knowledge_point_ids"}),
+        **body.model_dump(exclude={"knowledge_point_ids", "learning"}),
         owner_id=user.id,
-        content={"published": True, "question_ids": [], "knowledge_point_ids": body.knowledge_point_ids},
+        content=content,
     )
     db.add(item)
     db.flush()
@@ -295,6 +306,7 @@ class ActivityUpdate(BaseModel):
     assistant_allowed: bool | None = None
     material_id: int | None = None
     knowledge_point_ids: list[int] | None = Field(default=None, max_length=65)
+    learning: dict | None = None
 
     @field_validator("knowledge_point_ids", mode="before")
     @classmethod
@@ -314,6 +326,13 @@ def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Sessio
     if item.owner_id != user.id and user.role != "admin":
         raise HTTPException(403, "共享种子不可覆盖，请创建教师自己的活动并绑定任务")
     changes = body.model_dump(exclude_unset=True)
+    new_learning = changes.pop("learning", None)
+    content = dict(item.content)
+    if "learning" in body.model_fields_set:
+        if new_learning is None:
+            content.pop("learning", None)
+        else:
+            content["learning"] = new_learning
     new_points = changes.pop("knowledge_point_ids", None)
     if new_points is not None:
         from .curriculum import validate_activity_points
@@ -327,10 +346,20 @@ def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Sessio
         material = db.get(Material, changes["material_id"])
         if not material or material.chapter_id != item.chapter_id or (material.owner_id not in {None, user.id} and user.role != "admin"):
             raise HTTPException(403, "资料不属于当前教师或章节")
+    from .learning_rules import validate_learning
+    from .models import Material
+
+    material_id = changes.get("material_id", item.material_id)
+    material = db.get(Material, material_id) if material_id else None
+    try:
+        validate_learning(content, item.kind, material, resolve=True)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     for key, value in changes.items():
         setattr(item, key, value)
     if new_points is not None:
-        item.content = {**item.content, "knowledge_point_ids": new_points}
+        content["knowledge_point_ids"] = new_points
+    item.content = content
     db.commit()
     return {"id": item.id}
 

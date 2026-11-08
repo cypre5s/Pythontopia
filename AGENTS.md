@@ -1,6 +1,6 @@
 # Pythontopia Reborn
 
-This branch is a Web-only Python-learning RPG. Students enter /world; teachers use management pages. Current code and docs/product.md, architecture.md, api-contract.md, content-authoring.md, development.md, acceptance.md, reborn-migration.md and docs/design/README.md supersede historical plans.
+This branch is a Web-only Python-learning RPG. Students enter /world; teachers use management pages. Start with docs/README.md to find the relevant current specification. Current code and docs/product.md, architecture.md, api-contract.md, content-authoring.md, development.md, acceptance.md, reborn-migration.md and docs/design/README.md supersede historical plans.
 
 ## Scope and safety
 - Git提交标题和正文统一使用中文。
@@ -18,6 +18,7 @@ This branch is a Web-only Python-learning RPG. Students enter /world; teachers u
 - Movement, NPC scripts, task progress, page turns and world loading make zero model calls. Only explicit student questions in authorized activities invoke one create_agent runtime. Role configuration, limited tools, budgets and persisted sessions are isolated by user/class/activity. No grading/unlock/publish tools; missing credentials means unavailable.
 - Execute student code only through Judge0, never on the API host. Run differs from formal submit. Never expose hidden cases, answers or reference code to students/prompts/bundles. Unknown external dispatches require reconciliation, not blind resubmission.
 - Uploads are private, checked and bounded; replacements update current content. Conversions fail visibly. Retrieval citations must belong to authorized current materials.
+- Development replay tools require explicit `REBORN_ENV=development` and `REBORN_DEV_TOOLS=1`; production never mounts reset routes. Resets affect only the authenticated student in the selected joined classroom. Acceptance tests use new isolated accounts and never reset real demonstration records.
 
 ## Interface design
 - 游戏页面与教师后台使用两套界面规范，入口见 [设计规范索引](docs/design/README.md)。新增或修改页面前，先读对应规范，不将一套主题移植到另一套页面。

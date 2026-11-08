@@ -114,15 +114,27 @@ def test_first_chapter_full_loop_and_idempotency(client, db, student, teacher, c
                             response = client.post(f"/api/activities/{activity.id}/progress", json={"classroom_id": cid, "page_no": page["page_no"]}, headers=headers)
                             assert response.status_code == 200, response.text
                 else:
+                    paper_answers = []
                     for question in db.scalars(select(Question).where(Question.activity_id == activity.id)):
                         if question.id not in activity.content["question_ids"]:
                             continue
                         answer = db.get(QuestionSecret, question.id).answer
                         if question.kind == "fill" and isinstance(answer, list):
                             answer = answer[0]
+                        if activity.kind == "assessment":
+                            paper_answers.append({"question_id": question.id, "answer": answer})
+                            continue
                         response = client.post("/api/submissions", json={"classroom_id": cid, "activity_id": activity.id, "question_id": question.id,
                             "idempotency_key": str(uuid4()), "mode": "submit", "answer": answer}, headers=headers)
                         assert response.status_code == 201 and response.json()["status"] == "accepted", response.text
+                    if activity.kind == "assessment":
+                        response = client.post(f"/api/activities/{activity.id}/assessment/submit", json={
+                            "classroom_id": cid, "idempotency_key": str(uuid4()), "answers": paper_answers}, headers=headers)
+                        assert response.status_code == 201, response.text
+                        paper = response.json()
+                        assert paper["status"] == "graded" and paper["locked"] and paper["completed"] and paper["passed"]
+                        assert len(paper["results"]) == len(paper_answers)
+                        assert all(result["status"] == "accepted" for result in paper["results"])
                 endpoint = "return"
             elif view["node"].get("choices"):
                 body["choice"] = view["node"]["choices"][0]["id"]

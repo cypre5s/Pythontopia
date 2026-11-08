@@ -1,3 +1,4 @@
+import { answerStoryQuestions } from "./answerActivity";
 import {
   test,
   expect,
@@ -199,45 +200,6 @@ async function closeActivity(page: Page) {
   await expect(workspace(page)).toBeHidden();
   await expect(dialogue(page)).toBeVisible();
   return view;
-}
-
-async function answerConceptQuestions(
-  page: Page,
-  answers: { title: string; answer: string }[],
-) {
-  await expect(page.locator(".question-list button")).toHaveCount(
-    answers.length,
-  );
-  for (const [index, { title, answer }] of answers.entries()) {
-    await page.locator(".question-list button").filter({ hasText: title }).click();
-    await expect(page.locator(".question-body")).toBeVisible();
-    const option = page.getByLabel(answer, { exact: true });
-    if (await option.count()) await option.check();
-    else await page.getByRole("textbox", { name: "填写答案" }).fill(answer);
-    const response = page.waitForResponse(
-      (candidate) =>
-        candidate.url().endsWith("/api/submissions") &&
-        candidate.request().method() === "POST",
-    );
-    const activityReturn = index === answers.length - 1
-      ? page.waitForResponse(
-        (candidate) =>
-          /\/api\/story\/sessions\/[^/]+\/return$/.test(candidate.url()) &&
-          candidate.request().method() === "POST",
-      )
-      : null;
-    await page.getByRole("button", { name: "正式提交", exact: true }).click();
-    const result = await successfulJson<{ status: string }>(await response);
-    expect(result.status).toBe("accepted");
-    if (activityReturn) {
-      const returned = await successfulJson<StoryView>(await activityReturn);
-      expect(returned.status).toBe("active");
-      await expect(dialogue(page)).toBeVisible();
-      await expect(workspace(page)).toBeHidden();
-    } else {
-      await expect(page.locator(".submission-result strong")).toHaveText("通过");
-    }
-  }
 }
 
 async function readJson<T>(
@@ -444,7 +406,7 @@ for (const viewport of [
         status: "waiting",
         activity: { id: "ch1-practice", },
       });
-      await answerConceptQuestions(page, [
+      await answerStoryQuestions(page, [
         { title: "计算思维的核心", answer: "抽象与自动化" },
         { title: "计算的规则", answer: "正确" },
         { title: "问题到计算", answer: "建模" },
@@ -458,13 +420,14 @@ for (const viewport of [
         status: "waiting",
         activity: { id: "ch1-assessment", },
       });
-      await answerConceptQuestions(page, [
+      await answerStoryQuestions(page, [
         { title: "计算与规则", answer: "给定输入，按照规则处理并得到输出" },
         { title: "抽象与自动化", answer: "正确" },
         { title: "从问题到方案", answer: "数学模型" },
-      ]);
+      ], true);
       const finale = await finishDialogue(page);
       expect(finale.lines.join("\n")).toContain("第一章已经完成");
+      expect(finale.lines.join("\n")).toContain("满分");
       await expect.poll(async () => (await quest()).status).toBe("complete");
       expect((await quest()).nodes.every((node) => node.status === "complete"))
         .toBe(true);

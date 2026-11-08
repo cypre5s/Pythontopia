@@ -1,7 +1,8 @@
-"""Deterministic story scenes. All progress is verified by business services."""
+"""Scripted story scenes. All progress is verified by business services."""
 
 import hashlib
 import json
+import secrets
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,6 +15,7 @@ from .courses import authorize_activity, authorize_chapter, authorize_classroom,
 from .db import get_db
 from .models import Activity, ActivityProgress, ChapterRelease, LearningRecord, Material, Npc, NodeState, PlayerQuest, QuestDefinition, StoryDefinition, StorySession, User, WorldFlag
 from .quests import EventInput, apply_quest_event, authorize_quest, check_near, ensure_quests, node_statuses, quest_visible, validate_evidence, world_payload
+from .story_conditions import condition_matches, validate_condition
 
 router = APIRouter(tags=["story"])
 
@@ -25,13 +27,18 @@ def _short(value):
 def validate_story(
     content: dict, db: Session | None = None, quest_definition: dict | None = None, story_id: str | None = None
 ) -> dict:
-    if not isinstance(content, dict) or set(content) - {"schema_version", "bindings", "entries", "nodes", "checkpoint_effects"}:
+    if not isinstance(content, dict) or set(content) - {"schema_version", "bindings", "entries", "nodes", "checkpoint_effects", "mode", "when"}:
         raise ValueError("无效演出字段")
     if type(content.get("schema_version")) is not int or content["schema_version"] != 1:
         raise ValueError("不支持的演出格式版本")
     bindings, entries, nodes = content.get("bindings"), content.get("entries"), content.get("nodes")
     if not isinstance(bindings, dict) or len(bindings) > 30 or not isinstance(entries, dict) or not 1 <= len(entries) <= 30:
         raise ValueError("演出需要有界活动绑定和NPC入口")
+    mode = content.get("mode", "task")
+    if not isinstance(mode, str) or mode not in {"task", "ambient"} or mode == "ambient" and (quest_definition is not None or bindings or content.get("checkpoint_effects")):
+        raise ValueError("日常对白不能绑定任务、活动或效果")
+    if "when" in content:
+        validate_condition(content["when"], bindings, quest_definition, db)
     goals = {node["id"]: node for node in quest_definition["nodes"]} if quest_definition else None
     for key, binding in bindings.items():
         if not _short(key) or not isinstance(binding, dict) or set(binding) != {"activity_id", "goal_id"}:
@@ -47,16 +54,14 @@ def validate_story(
             if quest_definition and activity.chapter_id != quest_definition["chapter_id"]:
                 raise ValueError("演出活动必须属于当前章节")
             if activity.kind in {"lesson", "reading"}:
-                completion = activity.content.get("completion")
-                if not isinstance(completion, dict) or set(completion) != {"required_page_ids"}:
+                from .learning_rules import has_completion_rule, validate_learning
+
+                if not has_completion_rule(activity):
                     raise ValueError("演出阅读活动必须声明阅读参与完成规则")
-                required = completion["required_page_ids"]
-                material_id = activity.material_id
-                material = db.get(Material, material_id)
-                if not isinstance(required, list) or not required or any(type(key) is not int for key in required) or len(set(required)) != len(required):
-                    raise ValueError("阅读参与规则必须引用非重复真实页面ID")
-                if not material or not set(required).issubset({page["id"] for page in material.content.get("pages", [])}):
-                    raise ValueError("阅读参与规则引用了不存在的资料页")
+                material = db.get(Material, activity.material_id) if activity.material_id else None
+                if material and material.chapter_id != activity.chapter_id:
+                    raise ValueError("学习资料必须属于活动章节")
+                validate_learning(activity.content, activity.kind, material, resolve=True)
         if goals is not None:
             goal = goals.get(binding["goal_id"])
             if not goal or goal.get("activity_id") != binding["activity_id"]:
@@ -84,8 +89,10 @@ def validate_story(
             if not isinstance(choices, list) or len(choices) > 10:
                 raise ValueError("对白选项过多")
             for choice in choices:
-                if not isinstance(choice, dict) or set(choice) != {"id", "label", "next"} or not _short(choice["id"]):
+                if not isinstance(choice, dict) or set(choice) - {"id", "label", "next", "when"} or not {"id", "label", "next"}.issubset(choice) or not _short(choice["id"]):
                     raise ValueError("无效对白选项")
+                if "when" in choice:
+                    validate_condition(choice["when"], bindings, quest_definition, db)
                 if not isinstance(choice["label"], str) or not 1 <= len(choice["label"]) <= 200:
                     raise ValueError("无效选项文本")
                 targets.append(choice["next"])
@@ -94,6 +101,8 @@ def validate_story(
             if node.get("next"):
                 targets.append(node["next"])
             if "checkpoint" in node:
+                if mode == "ambient":
+                    raise ValueError("日常对白不能设置任务检查点")
                 goal_id = node["checkpoint"]
                 if not _short(goal_id) or (goals is not None and (goal_id not in goals or goals[goal_id]["type"] not in {"TALK_TO_NPC", "PLAY_DIALOGUE", "REPORT_BACK"})):
                     raise ValueError("对白检查点必须引用交谈目标")
@@ -105,12 +114,24 @@ def validate_story(
                         raise ValueError("对白检查点标记过长")
                 checkpoints.add(goal_id)
         elif kind == "activity":
+            if mode == "ambient":
+                raise ValueError("日常对白不能打开学习活动")
             if set(node) != {"id", "type", "binding", "returns"} or not _short(node.get("binding")) or node["binding"] not in bindings:
                 raise ValueError("无效活动节点")
             returns = node.get("returns")
             if not isinstance(returns, dict) or set(returns) != {"completed", "suspended", "unavailable"}:
                 raise ValueError("活动需要完成、暂停和不可用返回分支")
             targets += list(returns.values())
+        elif kind == "branch":
+            if set(node) != {"id", "type", "routes"}:
+                raise ValueError("无效条件分支节点")
+            _validate_routes(node["routes"], bindings, quest_definition, db)
+            targets += [route["node"] for route in node["routes"]]
+        elif kind == "random":
+            if (set(node) != {"id", "type", "next"} or not isinstance(node["next"], list) or not 1 <= len(node["next"]) <= 20
+                    or any(not _short(target) for target in node["next"]) or len(set(node["next"])) != len(node["next"])):
+                raise ValueError("随机分支需要1至20个不同节点")
+            targets += node["next"]
         elif kind == "end":
             if set(node) != {"id", "type"}:
                 raise ValueError("无效结束节点")
@@ -123,29 +144,11 @@ def validate_story(
     for npc_key, routes in entries.items():
         if not _short(npc_key) or (db and not db.get(Npc, npc_key)):
             raise ValueError("入口NPC不存在")
-        if not isinstance(routes, list) or not 1 <= len(routes) <= 30:
-            raise ValueError("NPC入口必须是有界列表")
-        for index, route in enumerate(routes):
-            if not isinstance(route, dict) or set(route) != {"when", "node"} or not _short(route.get("node")) or route["node"] not in mapping:
+        _validate_routes(routes, bindings, quest_definition, db)
+        for route in routes:
+            if route["node"] not in mapping:
                 raise ValueError("无效演出入口")
-            condition = route["when"]
-            if not isinstance(condition, dict) or len(condition) != 1:
-                raise ValueError("入口必须包含一个受限条件")
-            key, value = next(iter(condition.items()))
-            if key == "always":
-                if value is not True or index != len(routes) - 1:
-                    raise ValueError("兜底入口必须位于最后")
-            elif key in {"goal_complete", "goal_ready"}:
-                if not _short(value) or (goals is not None and value not in goals):
-                    raise ValueError("入口引用了不存在的任务目标")
-            elif key == "activity_started":
-                if not _short(value) or value not in bindings:
-                    raise ValueError("入口引用了不存在的活动绑定")
-            else:
-                raise ValueError("未知入口条件")
             roots.append(route["node"])
-        if routes[-1]["when"] != {"always": True}:
-            raise ValueError("NPC入口缺少兜底分支")
         if goals is not None:
             checked = set()
 
@@ -192,6 +195,19 @@ def validate_story(
     return content
 
 
+def _validate_routes(routes, bindings, quest_definition, db):
+    if not isinstance(routes, list) or not 1 <= len(routes) <= 30:
+        raise ValueError("入口或分支必须是有界列表")
+    for index, route in enumerate(routes):
+        if not isinstance(route, dict) or set(route) != {"when", "node"} or not _short(route.get("node")):
+            raise ValueError("无效演出分支")
+        validate_condition(route["when"], bindings, quest_definition, db)
+        if route["when"] == {"always": True} and index != len(routes) - 1:
+            raise ValueError("兜底入口必须位于最后")
+    if routes[-1]["when"] != {"always": True}:
+        raise ValueError("入口或分支缺少兜底分支")
+
+
 class InteractionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     classroom_id: int
@@ -229,10 +245,14 @@ def _definition(db, user, session):
     story = db.get(StoryDefinition, session.story_id)
     if not story:
         raise HTTPException(409, "演出不存在")
+    authorize_chapter(db, user, session.classroom_id, story.chapter_id)
+    if story.quest_id is None:
+        if story.content.get("mode") != "ambient":
+            raise HTTPException(409, "日常对白配置无效")
+        return story, None
     definition = authorize_quest(db, user, session.classroom_id, story.quest_id)
     if definition.chapter_id != story.chapter_id:
         raise HTTPException(409, "演出与当前任务章节不一致")
-    authorize_chapter(db, user, session.classroom_id, story.chapter_id)
     instance = db.scalar(select(PlayerQuest).where(PlayerQuest.user_id == user.id, PlayerQuest.classroom_id == session.classroom_id,
                                                   PlayerQuest.quest_id == story.quest_id))
     if not instance:
@@ -248,15 +268,17 @@ def _states(db, instance):
 
 def _legacy_ready(db, user, classroom_id, npc_key):
     classroom = authorize_classroom(db, user, classroom_id)
-    for instance in db.scalars(select(PlayerQuest).where(PlayerQuest.user_id == user.id, PlayerQuest.classroom_id == classroom_id,
-                                                        PlayerQuest.status != "complete")):
-        if not quest_visible(db.get(QuestDefinition, instance.quest_id), user, classroom):
+    for item in db.scalars(select(QuestDefinition)):
+        if not quest_visible(item, user, classroom) or not chapter_available(db, user, classroom_id, item.chapter_id):
             continue
-        if db.scalar(select(StoryDefinition.id).where(StoryDefinition.quest_id == instance.quest_id)):
+        if db.scalar(select(StoryDefinition.id).where(StoryDefinition.quest_id == item.id)):
             continue
-        definition, statuses = _states(db, instance)
-        if not chapter_available(db, user, classroom_id, definition["chapter_id"]):
+        instance = db.scalar(select(PlayerQuest).where(PlayerQuest.user_id == user.id, PlayerQuest.classroom_id == classroom_id,
+                                                      PlayerQuest.quest_id == item.id))
+        if instance and instance.status == "complete":
             continue
+        definition = item.definition
+        statuses = _states(db, instance)[1] if instance else node_statuses(definition, {})
         if any(statuses[node["id"]] == "ready" and (node.get("target") == npc_key or node.get("navigation_target") == npc_key)
                for node in definition["nodes"]):
             return True
@@ -298,6 +320,13 @@ def _settle(db, user, session, story):
         if node["type"] == "dialogue":
             session.status = "active"
             return
+        if node["type"] == "branch":
+            session.node_id = next(route["node"] for route in node["routes"]
+                                   if condition_matches(db, user, session.classroom_id, story, route["when"]))
+            continue
+        if node["type"] == "random":
+            session.node_id = secrets.choice(node["next"])
+            continue
         binding = story.content["bindings"][node["binding"]]
         _, instance = _definition(db, user, session)
         _, statuses = _states(db, instance)
@@ -320,24 +349,31 @@ def _view(db, user, session):
     node, activity = None, None
     if session.status == "active":
         source = _nodes(story)[session.node_id]
-        node = {key: source[key] for key in ("id", "text", "speaker", "choices") if key in source}
+        node = {key: source[key] for key in ("id", "text", "speaker") if key in source}
+        if "choices" in source:
+            node["choices"] = [{key: choice[key] for key in ("id", "label")} for choice in _choices(db, user, session, story, source)]
     elif session.status == "waiting":
         item = authorize_activity(db, user, session.classroom_id, session.pending_activity_id)
         progress = db.get(ActivityProgress, (user.id, session.classroom_id, item.id))
         activity = {"id": item.id, "kind": item.kind, "page_no": progress.page_no if progress else None}
-    return {"id": session.id, "revision": session.revision, "status": session.status, "npc_key": session.npc_key, "node": node, "activity": activity}
+    return {"id": session.id, "revision": session.revision, "status": session.status, "mode": "ambient" if story.quest_id is None else "task",
+            "npc_key": session.npc_key, "node": node, "activity": activity}
+
+
+def _choices(db, user, session, story, node):
+    return [choice for choice in node.get("choices", []) if "when" not in choice
+            or condition_matches(db, user, session.classroom_id, story, choice["when"])]
 
 
 def _response(db, user, session):
     result = _view(db, user, session)
-    result["world"] = world_payload(db, user, session.classroom_id)
+    result["world"] = world_payload(db, user, session.classroom_id, initialize_quests=result["mode"] != "ambient")
     return result
 
 
 @router.post("/story/interactions")
 def interact(body: InteractionInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
     classroom = authorize_classroom(db, user, body.classroom_id)
-    ensure_quests(db, user, body.classroom_id)
     _student_lock(db, user, body.classroom_id)
     npc = db.get(Npc, body.npc_key)
     if not npc:
@@ -347,8 +383,8 @@ def interact(body: InteractionInput, db: Annotated[Session, Depends(get_db)], us
     abandoned = False
     if previous:
         previous_story = db.get(StoryDefinition, previous.story_id)
-        previous_quest = db.get(QuestDefinition, previous_story.quest_id) if previous_story else None
-        if (not previous_story or not quest_visible(previous_quest, user, classroom)
+        previous_quest = db.get(QuestDefinition, previous_story.quest_id) if previous_story and previous_story.quest_id is not None else None
+        if (not previous_story or previous_story.quest_id is not None and not quest_visible(previous_quest, user, classroom)
                 or not chapter_available(db, user, body.classroom_id, previous_story.chapter_id)):
             previous.status = "ended"
             previous.revision += 1
@@ -359,48 +395,62 @@ def interact(body: InteractionInput, db: Annotated[Session, Depends(get_db)], us
             abandoned = True
     if previous and previous.status == "active":
         _, instance = _definition(db, user, previous)
-        if instance.status == "complete" and _legacy_ready(db, user, body.classroom_id, body.npc_key):
+        if instance and instance.status == "complete" and _legacy_ready(db, user, body.classroom_id, body.npc_key):
+            ensure_quests(db, user, body.classroom_id)
+            _student_lock(db, user, body.classroom_id)
             previous.status = "ended"
             db.commit()
             raise HTTPException(404, "当前目标使用既有章节对白")
-    if previous and (previous.npc_key == body.npc_key or previous.status == "waiting"):
+    if previous and previous.status == "waiting":
         return _response(db, user, previous)
-    selected = None
-    for story in db.scalars(select(StoryDefinition)):
-        if not quest_visible(db.get(QuestDefinition, story.quest_id), user, classroom):
-            continue
+    tasks, ambient = [], []
+    for story in db.scalars(select(StoryDefinition).order_by(StoryDefinition.id)):
         if body.npc_key not in story.content["entries"]:
             continue
         release = db.get(ChapterRelease, (body.classroom_id, story.chapter_id))
         if not release or not chapter_available(db, user, body.classroom_id, story.chapter_id):
             continue
+        if story.quest_id is None:
+            if story.content.get("mode") == "ambient" and condition_matches(db, user, body.classroom_id, story, story.content.get("when", {"always": True})):
+                ambient.append((story, None))
+            continue
+        definition = db.get(QuestDefinition, story.quest_id)
+        if not quest_visible(definition, user, classroom) or definition.chapter_id != story.chapter_id:
+            continue
         instance = db.scalar(select(PlayerQuest).where(PlayerQuest.user_id == user.id, PlayerQuest.classroom_id == body.classroom_id,
                                                       PlayerQuest.quest_id == story.quest_id))
-        if instance:
-            authorize_chapter(db, user, body.classroom_id, story.chapter_id)
-            selected = story, instance
-            break
+        statuses = _states(db, instance)[1] if instance else node_statuses(definition.definition, {})
+        ready = (not instance or instance.status != "complete") and any(
+            statuses[node["id"]] == "ready" and (node.get("target") == body.npc_key or node.get("navigation_target") == body.npc_key)
+            for node in definition.definition["nodes"])
+        if condition_matches(db, user, body.classroom_id, story, story.content.get("when", {"always": True})):
+            tasks.append((0 if ready else 2 if not instance or instance.status != "complete" else 3, story, instance))
+    tasks.sort(key=lambda row: row[0])
+    selected = (tasks[0][1:] if tasks and tasks[0][0] == 0 else ambient[0] if ambient else tasks[0][1:] if tasks else None)
+    if _legacy_ready(db, user, body.classroom_id, body.npc_key) and (
+            not selected or selected[0].quest_id is None or selected[1] is not None and selected[1].status == "complete"):
+        ensure_quests(db, user, body.classroom_id)
+        _student_lock(db, user, body.classroom_id)
+        if previous:
+            previous.status = "ended"
+        db.commit()
+        raise HTTPException(404, "当前目标使用既有章节对白")
     if not selected:
         if abandoned:
             db.commit()
         raise HTTPException(404, "此NPC尚未绑定当前演出")
     story, instance = selected
-    if instance.status == "complete" and _legacy_ready(db, user, body.classroom_id, body.npc_key):
-        if previous:
-            previous.status = "ended"
-        db.commit()
-        raise HTTPException(404, "当前目标使用既有章节对白")
-    _, statuses = _states(db, instance)
-    root = None
-    for route in story.content["entries"][body.npc_key]:
-        key, value = next(iter(route["when"].items()))
-        allowed = key == "always" or key == "goal_complete" and statuses[value] == "complete" or key == "goal_ready" and statuses[value] == "ready"
-        if key == "activity_started":
-            binding = story.content["bindings"][value]
-            allowed = bool(db.get(ActivityProgress, (user.id, body.classroom_id, binding["activity_id"])))
-        if allowed:
-            root = route["node"]
-            break
+    if previous:
+        previous_story = db.get(StoryDefinition, previous.story_id)
+        if previous_story.quest_id is not None and (previous.npc_key == body.npc_key or story.quest_id is None):
+            return _response(db, user, previous)
+        if previous_story.quest_id is None and story.quest_id is None and previous.npc_key == body.npc_key:
+            return _response(db, user, previous)
+    if story.quest_id is not None:
+        ensure_quests(db, user, body.classroom_id)
+        _student_lock(db, user, body.classroom_id)
+    root = next(route["node"] for route in story.content["entries"][body.npc_key]
+                if condition_matches(db, user, body.classroom_id, story, route["when"]))
     if previous:
         previous.status = "ended"
         db.flush()
@@ -458,7 +508,7 @@ def advance(session_id: str, body: AdvanceInput, db: Annotated[Session, Depends(
     if session.status != "active":
         raise HTTPException(409, "请先从当前学习活动返回")
     node = _nodes(story)[session.node_id]
-    choices = node.get("choices", [])
+    choices = _choices(db, user, session, story, node)
     selected = next((choice for choice in choices if choice["id"] == body.choice), None)
     if choices and not selected or body.choice and not choices:
         raise HTTPException(422, "请选择当前对白选项")

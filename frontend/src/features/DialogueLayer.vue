@@ -265,8 +265,8 @@ onBeforeUnmount(() => {
 .dialogue-text { color:#f0dfbb;font-size:clamp(1rem,1.6vw,1.4rem);line-height:1.8;min-height:3.6em;margin:0 0 18px;cursor:pointer;white-space:pre-wrap; }
 .dialogue-actions,.dialogue-objectives { display:flex;flex-direction:column;gap:4px;padding:0;margin:0;border:0;animation:responses-in .24s ease-out; }
 .dialogue-actions:empty,.dialogue-objectives:empty { display:none; }
-.dialogue-actions button,.dialogue-objectives button { display:flex;align-items:center;gap:14px;width:100%;min-height:46px;text-align:left;padding:10px 16px;border:1px solid transparent;border-radius:3px;background:transparent;color:#e6d4b0;font-size:1.05rem;line-height:1.5; }
-.dialogue-actions button:hover,.dialogue-actions button:focus-visible,.dialogue-objectives button:hover,.dialogue-objectives button:focus-visible { background:linear-gradient(90deg,#b185424d,#a9843910);border-color:#c89c52;color:#ffe1a1;box-shadow:inset 3px 0 #edc572,0 0 12px #bc8b2822; }
+.dialogue-actions button,.dialogue-objectives button { display:flex;align-items:center;gap:14px;width:100%;min-height:46px;text-align:left;padding:10px 16px;border:1px solid transparent;border-radius:3px;background:transparent;box-shadow:none;color:#e6d4b0;font-size:1.05rem;line-height:1.5; }
+.dialogue-actions button:hover,.dialogue-actions button:focus-visible,.dialogue-objectives button:hover,.dialogue-objectives button:focus-visible { background:linear-gradient(90deg,#b185424d,#a9843910);border-color:#c89c52;color:#ffe1a1;box-shadow:none; }
 .response-number { color:#dcb979;font-family:Georgia,serif;font-size:1.2rem;min-width:1.3em; }
 .dialogue-footer { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:12px;padding-top:10px;border-top:1px solid #a98c5733;color:#bba580;font-size:.78rem; }
 .dialogue-footer button { color:#e2c99d;min-height:44px;background:transparent;border:0; }

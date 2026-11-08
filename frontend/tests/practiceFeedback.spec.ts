@@ -5,11 +5,23 @@ import PracticeWorkspace from "../src/features/PracticeWorkspace.vue";
 import { useSession } from "../src/shared/session";
 import { api } from "../src/shared/api";
 import type { Submission } from "../src/shared/types";
+import PracticeQuestionCard from "../src/features/PracticeQuestionCard.vue";
 afterEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
 });
 describe("public judge sample feedback", () => {
+  it("does not leave empty or duplicate detail paragraphs below a one-line result", async () => {
+    const question = { id: "q1", title: "结果", kind: "boolean" as const, prompt: "请选择", options: [], samples: [] };
+    const result: Submission = { id: "submission", activity_id: "practice", question_id: "q1", mode: "submit", status: "accepted", feedback: { detail: " 回答正确  " }, created_at: "2026-11-08T00:00:00Z" };
+    const wrapper = mount(PracticeQuestionCard, { props: { question, index: 0, answer: "true", code: "", result } });
+    expect(wrapper.get(".submission-result-heading").find("svg").exists()).toBe(true);
+    expect(wrapper.get(".submission-result-heading").text()).toBe("回答正确");
+    expect(wrapper.find(".submission-result > p").exists()).toBe(false);
+    await wrapper.setProps({ result: { ...result, feedback: { detail: "  " } } });
+    expect(wrapper.find(".submission-result > p").exists()).toBe(false);
+    wrapper.unmount();
+  });
   it("renders public output and errors as text while excluding private extra fields", async () => {
     const pinia = createPinia();
     setActivePinia(pinia);

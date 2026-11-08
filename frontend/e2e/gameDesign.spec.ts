@@ -94,7 +94,7 @@ async function sameCanvas(page: Page, canvas: ElementHandle) {
 async function noHorizontalOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
   const overflow = await panel(page).evaluate(root => [root, ...root.querySelectorAll<HTMLElement>(
-    ".workspace-shell,.town-content,.quest-directory,.quest-detail,.lesson-content,.practice-content,.assistant-panel",
+    ".workspace-shell,.town-content,.quest-directory,.quest-detail,.lesson-content,.practice-content,.learning-support,.assistant-panel",
   )].filter(element => element.getClientRects().length && !element.closest("[hidden]"))
     .filter(element => element.scrollWidth > element.clientWidth + 1).map(element => element.className));
   expect(overflow).toEqual([]);
@@ -145,18 +145,107 @@ async function shell(page: Page, title: string, cards: Cards, baseline?: HeaderS
     const surface = current.locator(selector);
     await expect(surface).toBeVisible();
     expect(await surface.evaluate(element => Number.parseFloat(getComputedStyle(element).borderRadius))).toBeGreaterThanOrEqual(12);
+    if (selector === ".journal-index") {
+      await expect(surface).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+      expect(await surface.locator(".journal-cover").evaluate(element => getComputedStyle(element).backgroundImage)).toContain("linear-gradient");
+      await expect(surface.locator(".journal-directory")).toHaveCSS("background-color", "rgb(251, 245, 233)");
+      continue;
+    }
     expect(await surface.evaluate(element => {
       const value = getComputedStyle(element);
       return value.backgroundColor !== "rgba(0, 0, 0, 0)" || value.backgroundImage !== "none";
     })).toBe(true);
   }
-  if (cards.surfaces.length === 2) {
+  if (cards.surfaces.length === 2 && cards.layout !== ".learning-layout") {
     expect(await layout.evaluate(element => getComputedStyle(element).columnGap)).toBe("22px");
     const first = await current.locator(cards.surfaces[0]!).boundingBox(), second = await current.locator(cards.surfaces[1]!).boundingBox();
     expect(second!.x - first!.x - first!.width).toBeCloseTo(22, 0);
   }
   await noHorizontalOverflow(page);
+  const thickButtons = await current.evaluate(root => Array.from(root.querySelectorAll<HTMLButtonElement>("button"))
+    .filter(button => button.getClientRects().length && !button.closest("[hidden],[inert]"))
+    .filter(button => {
+      const css = getComputedStyle(button);
+      return css.boxShadow !== "none" || [css.borderTopWidth, css.borderRightWidth, css.borderBottomWidth, css.borderLeftWidth].some(value => parseFloat(value) > 1.1);
+    }).map(button => button.textContent?.trim() || button.getAttribute("aria-label")));
+  expect(thickButtons).toEqual([]);
+  const sidebar = current.locator(".learning-support,.town-sidebar,.journal-index,.map-sidebar");
+  if (await sidebar.count()) {
+    await current.getByRole("button", { name: "折叠侧边栏", exact: true }).click();
+    await expect(sidebar).toBeHidden();
+    const expand = current.getByRole("button", { name: "展开侧边栏", exact: true });
+    await expect(expand).toBeInViewport({ ratio: .99 });
+    await expand.click();
+    await expect(sidebar).toBeVisible();
+  }
   return style;
+}
+
+async function pdfFitsWithoutLeftScroll(page: Page) {
+  const reader = panel(page).locator(".pdf-reader"), left = panel(page).locator(".lesson-content"), surface = reader.locator(".pdf-page-surface");
+  await expect(reader).toHaveAttribute("aria-busy", "false", { timeout: 60_000 });
+  const canvas = reader.getByRole("img", { name: "PDF课件当前页", exact: true });
+  await expect.poll(async () => {
+    const image = await canvas.boundingBox(), card = await surface.boundingBox();
+    return Boolean(image && card && image.width > 100 && image.height > 100 && image.x >= card.x - 1 && image.y >= card.y - 1
+      && image.x + image.width <= card.x + card.width + 1 && image.y + image.height <= card.y + card.height + 1);
+  }).toBe(true);
+  for (const region of [left, reader, surface]) {
+    expect(await region.evaluate(element => ({ vertical: element.scrollHeight <= element.clientHeight + 1, horizontal: element.scrollWidth <= element.clientWidth + 1 })))
+      .toEqual({ vertical: true, horizontal: true });
+  }
+  const controls = reader.getByRole("navigation", { name: "PDF 分页", exact: true });
+  await expect(controls).toBeInViewport({ ratio: 1 });
+  const card = await surface.boundingBox(), navigation = await controls.boundingBox();
+  expect(navigation!.y).toBeGreaterThanOrEqual(card!.y + card!.height - 1);
+  await expect(panel(page)).not.toContainText("提取文本");
+  await expect(panel(page)).not.toContainText("转换后的课件");
+}
+
+async function assistantTab(page: Page, name: string) {
+  const support = panel(page).locator(".learning-support");
+  const position = panel(page).locator(".pdf-reader .reader-position"), previousPage = await position.count() ? await position.textContent() : null;
+  await support.getByRole("tab", { name, exact: true }).click();
+  await expect(support.getByRole("tab", { name, exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(support.getByRole("heading", { name, exact: true })).toBeVisible();
+  const portrait = support.locator(".assistant-panel .assistant-portrait");
+  await expect(portrait).toHaveAttribute("aria-hidden", "true");
+  await expect.poll(async () => portrait.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+  const imageStyle = await portrait.evaluate(element => ({ opacity: Number(getComputedStyle(element).opacity), pointerEvents: getComputedStyle(element).pointerEvents }));
+  expect(imageStyle.opacity).toBeGreaterThan(0);
+  expect(imageStyle.opacity).toBeLessThanOrEqual(0.15);
+  expect(imageStyle.pointerEvents).toBe("none");
+  const composer = support.getByPlaceholder("向助教提问", { exact: true });
+  await expect(support.locator(".assistant-form-actions")).not.toContainText("2000");
+  await expect(support.getByRole("button", { name: "发送", exact: true }).locator("svg")).toHaveCount(1);
+  await expect(composer).not.toHaveAttribute("maxlength");
+  await reachable(composer);
+  if (previousPage !== null) await expect(position).toHaveText(previousPage);
+  return support;
+}
+
+async function adjustLearningLayout(page: Page) {
+  const separator = panel(page).getByRole("separator", { name: "调整内容与助教宽度", exact: true });
+  await expect(separator).toBeVisible();
+  const original = Number(await separator.getAttribute("aria-valuenow")), bounds = await separator.boundingBox();
+  await page.mouse.move(bounds!.x + bounds!.width / 2, bounds!.y + bounds!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(bounds!.x + bounds!.width / 2 - 150, bounds!.y + bounds!.height / 2, { steps: 8 });
+  await page.mouse.up();
+  expect(Number(await separator.getAttribute("aria-valuenow"))).toBeGreaterThan(original);
+  await pdfFitsWithoutLeftScroll(page);
+  await separator.focus();
+  await page.keyboard.press("Home");
+  await expect(separator).toHaveAttribute("aria-valuenow", "28");
+  await page.keyboard.press("ArrowLeft");
+  await expect(separator).toHaveAttribute("aria-valuenow", "30");
+  await expect(panel(page).getByRole("button", { name: "间距", exact: true })).toHaveCount(0);
+  await expect(panel(page).locator(".learning-spacing")).toHaveCount(0);
+  await expect.poll(async () => panel(page).locator(".learning-divider").evaluate(element => Math.round(element.getBoundingClientRect().width))).toBe(22);
+  await pdfFitsWithoutLeftScroll(page);
+  await separator.focus();
+  await page.keyboard.press("Home");
+  await expect(separator).toHaveAttribute("aria-valuenow", "28");
 }
 
 async function shot(page: Page, info: TestInfo, name: string) {
@@ -218,12 +307,22 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   });
   const setup = await prepare(request), canvas = await enter(page, setup.identity, setup.classroom);
   const town = { layout: ".town-book", surfaces: [".town-sidebar", ".town-content"] };
-  const lessonCards = { layout: ".learning-layout", surfaces: [".lesson-content", ".assistant-panel"] };
-  const practiceCards = { layout: ".learning-layout", surfaces: [".practice-content", ".assistant-panel"] };
+  const lessonCards = { layout: ".learning-layout", surfaces: [".pdf-page-surface", ".learning-support"] };
+  const practiceCards = { layout: ".learning-layout", surfaces: [".practice-content", ".learning-support"] };
   const dock = page.locator(".hud-dock");
 
   await dock.getByRole("button", { name: "任务日志", exact: true }).click();
   const baseline = await shell(page, "任务日志", { layout: ".journal-book", surfaces: [".journal-index", ".quest-detail"] });
+  await expect(panel(page).locator(".journal-controls,.journal-count,.journal-cover img")).toHaveCount(0);
+  await expect(panel(page).locator(".journal-cover h3")).toHaveText("委托目录");
+  expect(await panel(page).locator(".journal-cover h3").evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThan(22);
+  await panel(page).getByRole("group", { name: "任务状态", exact: true }).getByRole("button", { name: "已完成", exact: true }).click();
+  await panel(page).getByRole("combobox", { name: "任务类型", exact: true }).selectOption("side");
+  await expect(panel(page).locator(".empty-directory")).toHaveText("没有委托");
+  await expect(panel(page).locator(".journal-empty")).toHaveText("没有委托");
+  await shot(page, info, "01-journal-empty");
+  await panel(page).getByRole("combobox", { name: "任务类型", exact: true }).selectOption("all");
+  await panel(page).getByRole("group", { name: "任务状态", exact: true }).getByRole("button", { name: "进行中", exact: true }).click();
   await expect(panel(page)).not.toContainText("QUEST JOURNAL");
   const segmented = panel(page).getByRole("group", { name: "任务状态" });
   await expect(segmented).toHaveClass(/game-segmented/);
@@ -245,7 +344,28 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   await panel(page).locator(".library-card").click();
   await expect(panel(page).locator(".pdf-reader")).toHaveAttribute("aria-busy", "false", { timeout: 60_000 });
   expect(await panel(page).getByRole("img", { name: "PDF课件当前页" }).evaluate(element => (element as HTMLCanvasElement).width)).toBeGreaterThan(100);
-  await shell(page, "资料阅读", { layout: ".learning-layout", surfaces: [".lesson-content"] }, baseline);
+  await shell(page, "资料阅读", { layout: ".learning-layout", surfaces: [".pdf-page-surface"] }, baseline);
+  await pdfFitsWithoutLeftScroll(page);
+  await panel(page).getByRole("tab", { name: "图书管理员", exact: true }).click();
+  await expect(panel(page)).toContainText("当前资料未关联助教活动");
+  await expect(panel(page).locator(".assistant-panel")).toHaveCount(0);
+  await panel(page).getByRole("tab", { name: "学习目标", exact: true }).click();
+  await panel(page).getByRole("tab", { name: "文档目录", exact: true }).click();
+  const outline = panel(page).getByRole("navigation", { name: "文档页面目录", exact: true });
+  await expect(outline.getByRole("button")).toHaveCount(45);
+  await outline.getByRole("button").nth(1).click();
+  await expect(panel(page).locator(".pdf-reader .reader-position strong")).toHaveText("2");
+  await expect(panel(page).getByRole("progressbar", { name: "阅读位置", exact: true })).toHaveAttribute("value", "2");
+  await expect(outline.getByRole("button").nth(1)).toHaveAttribute("aria-current", "page");
+  await pdfFitsWithoutLeftScroll(page);
+  await shot(page, info, "03-library-outline");
+  await page.setViewportSize({ width: 1203, height: 869 });
+  await pdfFitsWithoutLeftScroll(page);
+  await expect(panel(page).getByRole("tablist", { name: "学习支持", exact: true })).toBeInViewport({ ratio: 1 });
+  await noHorizontalOverflow(page);
+  await page.screenshot({ path: info.outputPath("03-library-1203x869.png"), animations: "disabled" });
+  await page.setViewportSize({ width: 1920, height: 1080 });
+  await panel(page).getByRole("tab", { name: "学习目标", exact: true }).click();
   await shot(page, info, "03-library-pdf-reading");
   await page.keyboard.press("Escape");
   await expect(panel(page).locator(".library-workspace")).toBeVisible();
@@ -346,19 +466,27 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   await approach(page, "现在开始阅读", "ch1-lesson");
   await expect(panel(page).locator(".pdf-reader")).toHaveAttribute("aria-busy", "false", { timeout: 60_000 });
   await shell(page, "资料阅读", lessonCards, baseline);
+  await pdfFitsWithoutLeftScroll(page);
+  await expect(panel(page).getByRole("tab", { name: "学习目标", exact: true })).toHaveAttribute("aria-selected", "true");
+  await adjustLearningLayout(page);
+  await assistantTab(page, "图书管理员");
   await shot(page, info, "07-story-pdf-reading");
   await suspendActivity(page);
   await setScale(page, "2");
   await approach(page, "继续阅读", "ch1-lesson");
   await expect(panel(page).locator(".pdf-reader")).toHaveAttribute("aria-busy", "false", { timeout: 60_000 });
   await shell(page, "资料阅读", lessonCards, baseline);
+  await pdfFitsWithoutLeftScroll(page);
   await reachable(panel(page).getByRole("button", { name: "下一页 PDF", exact: true }));
-  await reachable(panel(page).locator(".assistant-panel textarea"));
+  await assistantTab(page, "图书管理员");
+  await shot(page, info, "07-assistant-200-percent");
+  await panel(page).getByRole("tab", { name: "学习目标", exact: true }).click();
   const required = setup.lesson.material.pages.filter(value => setup.lesson.completion.required_page_ids.includes(value.id));
   expect(required.map(value => value.page_no)).toEqual([34, 42, 43]);
   for (const value of required) {
-    await panel(page).getByRole("navigation", { name: "本章阅读目标", exact: true }).getByRole("button", { name: new RegExp(`阅读第${value.page_no}页$`) }).click();
+    await panel(page).getByRole("button", { name: new RegExp(`阅读第\\s*${value.page_no}\\s*页`) }).click();
     await expect.poll(async () => (await setup.readLesson()).progress.page_no).toBe(value.page_no);
+    await pdfFitsWithoutLeftScroll(page);
   }
   await expect.poll(async () => (await setup.readLesson()).progress.completed).toBe(true);
   const completeReading = panel(page).getByRole("button", { name: "完成阅读", exact: true });
@@ -375,6 +503,8 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   await approach(page, "开始练习", "ch1-practice");
   await expect(panel(page).locator(".question-body")).toBeVisible();
   await shell(page, "练习", practiceCards, baseline);
+  await assistantTab(page, "练习场教练");
+  await panel(page).getByRole("tab", { name: "学习目标", exact: true }).click();
   const radios = panel(page).getByRole("radio");
   expect(await radios.count()).toBeGreaterThan(1);
   await radios.first().check();
@@ -393,8 +523,8 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   await shell(page, "练习", practiceCards, baseline);
   await expect(panel(page).locator('input[type="radio"]:checked')).toHaveValue(draftAnswer);
   await reachable(panel(page).getByRole("radio").nth(1));
-  await reachable(panel(page).getByRole("button", { name: "正式提交", exact: true }));
-  await reachable(panel(page).locator(".assistant-panel textarea"));
+  await reachable(panel(page).getByRole("button", { name: "提交答案", exact: true }));
+  await assistantTab(page, "练习场教练");
   await noHorizontalOverflow(page);
   await shot(page, info, "08-practice-200-percent");
   await sameCanvas(page, canvas);

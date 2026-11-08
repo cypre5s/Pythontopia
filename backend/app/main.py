@@ -3,9 +3,9 @@ import asyncio
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
-from .config import CORS_ORIGINS
+from .config import CORS_ORIGINS, dev_tools_enabled
 from .db import SessionLocal
-from . import auth, courses, classrooms, quests, practice, assistant, storage, dialogues, curriculum, story
+from . import auth, courses, classrooms, quests, practice, assistant, storage, dialogues, curriculum, story, assessments
 
 
 @asynccontextmanager
@@ -18,20 +18,29 @@ async def lifespan(app):
     await asyncio.gather(*tasks, return_exceptions=True)
 
 
-app = FastAPI(title="Pythontopia Reborn", version="0.1.0", lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=CORS_ORIGINS,
-    allow_credentials=False,
-    allow_methods=["GET", "POST", "PUT", "DELETE"],
-    allow_headers=["Authorization", "Content-Type", "Range"],
-)
-for module in (auth, courses, classrooms, quests, practice, assistant, storage, dialogues, curriculum, story):
-    app.include_router(module.router, prefix="/api")
-
-
-@app.get("/api/health")
 def health():
     with SessionLocal() as db:
         db.execute(text("SELECT 1"))
     return {"status": "ok", "service": "pythontopia-reborn"}
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(title="Pythontopia Reborn", version="0.1.0", lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=CORS_ORIGINS,
+        allow_credentials=False,
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_headers=["Authorization", "Content-Type", "Range"],
+    )
+    for module in (auth, courses, classrooms, quests, practice, assistant, storage, dialogues, curriculum, story, assessments):
+        app.include_router(module.router, prefix="/api")
+    if dev_tools_enabled():
+        from . import dev_tools
+
+        app.include_router(dev_tools.router, prefix="/api")
+    app.add_api_route("/api/health", health, methods=["GET"])
+    return app
+
+
+app = create_app()

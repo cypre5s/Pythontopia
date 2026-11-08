@@ -7,16 +7,17 @@
       <button @click="load">重试</button
       ><button @click="logout">返回入场</button>
     </section>
-    <template v-else-if="session.classroomId && session.world"
+    <template v-else-if="session.classroomId && (session.world || session.resetBusy)"
       ><WorldCanvas
+        v-if="session.world"
         :key="session.classroomId"
         ref="canvas"
-        :paused="Boolean(session.workspace || dialogueNpc || welcome || session.storyBusy)"
+        :paused="Boolean(session.workspace || dialogueNpc || welcome || session.storyBusy || session.resetBusy)"
         @ready="onWorldReady"
         @position="positionChanged"
         @interact="interact" /><GameHUD
         v-if="!welcome"
-        :blocked="Boolean(session.workspace || dialogueNpc || session.storyBusy)"
+        :blocked="Boolean(session.workspace || dialogueNpc || session.storyBusy || session.resetBusy)"
         :class="{ 'is-entering': entered }"
         @guide="guide" /><DialogueLayer
         v-if="dialogueNpc"
@@ -101,6 +102,12 @@ const session = useSession(),
   canvas = ref<InstanceType<typeof WorldCanvas>>(),
   activityNpcs = ref<Record<string, string>>({});
 let reachBusy = false;
+let reachTask: Promise<void> = Promise.resolve();
+let unregisterRestart: (() => void) | undefined;
+watch(() => session.restartCompleted, () => {
+  loading.value = true;
+  window.location.reload();
+}, { flush: "sync" });
 const actions = computed(
   () =>
     session.world?.quests.flatMap((quest) =>
@@ -207,9 +214,11 @@ async function guide(key: string) {
   canvas.value?.guide(key);
 }
 async function positionChanged(player: Player) {
+  if (session.resetBusy) return;
   if (session.world) session.world.player = player;
   if (reachBusy) return;
   reachBusy = true;
+  reachTask = (async () => {
   try {
     for (const quest of session.world?.quests ?? [])
       for (const node of quest.nodes) {
@@ -234,6 +243,8 @@ async function positionChanged(player: Player) {
   } finally {
     reachBusy = false;
   }
+  })();
+  await reachTask;
 }
 async function interact(target: string, type: "npc" | "object") {
   if (type === "npc") {
@@ -318,6 +329,7 @@ function worldShortcut(event: KeyboardEvent) {
     session.workspace ||
     dialogueNpc.value ||
     session.storyBusy ||
+    session.resetBusy ||
     !session.world
   )
     return;
@@ -327,8 +339,15 @@ function worldShortcut(event: KeyboardEvent) {
   }
 }
 onMounted(() => {
+  unregisterRestart = session.registerRestartPreparation(async () => {
+    await canvas.value?.flushSaves();
+    await reachTask;
+  });
   void load();
   window.addEventListener("keydown", worldShortcut);
 });
-onBeforeUnmount(() => window.removeEventListener("keydown", worldShortcut));
+onBeforeUnmount(() => {
+  unregisterRestart?.();
+  window.removeEventListener("keydown", worldShortcut);
+});
 </script>

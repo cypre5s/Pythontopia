@@ -55,7 +55,7 @@ quest:
     - practice
     dialogue_id: story:first-steps:meet-assessment
   - id: assessment
-    title: 通过第一章章节测试
+    title: 完成第一章章节测试
     type: PASS_ASSESSMENT
     target: mayor_py
     navigation_target: mayor_py
@@ -177,7 +177,7 @@ story:
   - id: mayor-exam-return
     type: dialogue
     speaker: 镇长 Py
-    text: 准备好继续章节测试了吗？已经通过的题目会保留。
+    text: 准备好继续章节测试了吗？之前的作答已经保留。
     choices:
     - id: continue
       label: 继续章节测试
@@ -194,8 +194,37 @@ story:
     type: dialogue
     speaker: 镇长 Py
     text: 做得好！你已经完成了学习、练习与章节测试。第一章已经完成，接下来我们会继续探索 Python 与程序设计语言。
-    next: end
+    next: mayor-score
     checkpoint: report
+  - id: mayor-score
+    type: branch
+    routes:
+    - when:
+        assessment_score: {activity_id: ch1-assessment, min: 100, max: 100}
+      node: mayor-score-excellent
+    - when:
+        assessment_score: {activity_id: ch1-assessment, min: 60, max: 99}
+      node: mayor-score-good
+    - when:
+        assessment_score: {activity_id: ch1-assessment, min: 0, max: 59}
+      node: mayor-score-encourage
+    - when: {always: true}
+      node: mayor-done
+  - id: mayor-score-excellent
+    type: dialogue
+    speaker: 镇长 Py
+    text: 这次测试拿到了满分！你已经把计算思维的基础掌握得很扎实了。带着这份好奇心，继续探索吧。
+    next: end
+  - id: mayor-score-good
+    type: dialogue
+    speaker: 镇长 Py
+    text: 你已经理解了不少关键方法。回头看看测试里还不熟悉的地方，继续巩固，下一段旅程会更从容。
+    next: end
+  - id: mayor-score-encourage
+    type: dialogue
+    speaker: 镇长 Py
+    text: 第一次学习有些疑问很正常，慢慢来。去图书馆再读一读，在练习场试着改正错误，我们会陪着你把这些方法弄明白。
+    next: end
   - id: mayor-done
     type: dialogue
     speaker: 镇长 Py

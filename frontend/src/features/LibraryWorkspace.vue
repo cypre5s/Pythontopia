@@ -1,7 +1,7 @@
 <template>
   <section class="town-workspace library-workspace">
-    <div class="town-book">
-      <aside class="town-sidebar library-sidebar">
+    <div class="town-book" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
+      <aside :hidden="sidebarCollapsed" :inert="sidebarCollapsed" class="town-sidebar library-sidebar"><SidebarToggle />
         <p class="library-directory-label">章节目录</p>
         <nav class="town-directory" aria-label="资料章节">
           <button class="town-directory-item" :class="{ 'is-current': chapter === 'all' }" :aria-pressed="chapter === 'all'" @click="selectChapter('all')">
@@ -41,6 +41,9 @@
   </section>
 </template>
 <script setup lang="ts">
+import SidebarToggle from "../shared/SidebarToggle.vue";
+import { useWorkspaceSidebar } from "../shared/workspaceSidebar";
+const { collapsed: sidebarCollapsed } = useWorkspaceSidebar();
 import GameIcon from "../shared/GameIcon.vue";
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { api } from "../shared/api";
@@ -148,8 +151,8 @@ onBeforeUnmount(() => { saveView(); disposed = true; generation++; });
 .library-chapter-heading h3 { margin:0; color:#3b5147; font-size:1.18rem; line-height:1.5; }
 .library-chapter-heading > span { flex-shrink:0; color:#8a775c; font-size:.875rem; }
 .library-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr)); gap:15px; }
-.library-workspace .library-list > .library-card { display:grid; grid-template-columns:50px minmax(0,1fr); gap:14px; align-items:start; min-height:172px; padding:20px; text-align:left; color:#354d42; border:1px solid #dbcbb1; border-radius:12px; background:linear-gradient(135deg,#fffdf5,#f9f1e1); box-shadow:0 3px 0 #b49c7520; }
-.library-workspace .library-list > .library-card:hover:not(:disabled) { background:#fffdf5; border-color:#ad9972; box-shadow:0 4px 12px #8a704321; }
+.library-workspace .library-list > .library-card { display:grid; grid-template-columns:50px minmax(0,1fr); gap:14px; align-items:start; min-height:172px; padding:20px; text-align:left; color:#354d42; border:1px solid #dbcbb1; border-radius:12px; background:linear-gradient(135deg,#fffdf5,#f9f1e1); box-shadow:none; }
+.library-workspace .library-list > .library-card:hover:not(:disabled) { background:#fffdf5; border-color:#ad9972; box-shadow:none; }
 .library-material-icon { display:grid; place-items:center; width:48px; height:55px; background:#e1e8d7; border:1px solid #c1cdb2; border-radius:7px; color:#5d7953; }
 .library-material-icon.is-video { color:#9b7143; background:#f0dfbe; border-color:#d9c19a; }
 .library-material-icon svg { width:26px; height:26px; }

@@ -1,0 +1,40 @@
+import { mount } from "@vue/test-utils";
+import { afterEach, describe, expect, it } from "vitest";
+import LearningSplitLayout from "../src/features/LearningSplitLayout.vue";
+afterEach(() => localStorage.clear());
+describe("learning layout display preferences", () => {
+  it("supports keyboard resizing, bounded local preferences and reset without touching reading or drafts", async () => {
+    localStorage.setItem("read:1:2:material-186:pdf", "42");
+    localStorage.setItem("draft:1:2:q", "preserved");
+    localStorage.setItem("pythontopia-learning-layout", JSON.stringify({ width: 100, gap: 200 }));
+    const wrapper = mount(LearningSplitLayout);
+    const separator = wrapper.get('[role="separator"]');
+    expect(separator.attributes("aria-valuenow")).toBe("42");
+    await separator.trigger("keydown", { key: "ArrowLeft" });
+    expect(separator.attributes("aria-valuenow")).toBe("42");
+    await separator.trigger("keydown", { key: "Home" });
+    expect(separator.attributes("aria-valuenow")).toBe("28");
+    await separator.trigger("keydown", { key: "ArrowRight" });
+    expect(separator.attributes("aria-valuenow")).toBe("26");
+    expect(wrapper.find("button").exists()).toBe(false);
+    expect(wrapper.find('input[type="range"]').exists()).toBe(false);
+    expect(JSON.parse(localStorage.getItem("pythontopia-learning-layout")!)).toEqual({ width: 26 });
+    expect(localStorage.getItem("read:1:2:material-186:pdf")).toBe("42");
+    expect(localStorage.getItem("draft:1:2:q")).toBe("preserved");
+    wrapper.unmount();
+    const restored = mount(LearningSplitLayout);
+    expect(restored.get('[role="separator"]').attributes("aria-valuenow")).toBe("26");
+    expect(restored.attributes("style")).not.toContain("--learning-gap");
+    restored.unmount();
+  });
+  it("keeps invalid stored preferences harmless and hides the separator in compact or single-panel layouts", () => {
+    localStorage.setItem("pythontopia-learning-layout", "invalid");
+    const compact = mount(LearningSplitLayout, { props: { compact: true } });
+    expect(compact.find('[role="separator"]').exists()).toBe(false);
+    expect(compact.attributes("style")).toContain("--support-width: 28%");
+    compact.unmount();
+    const single = mount(LearningSplitLayout, { props: { hasSupport: false } });
+    expect(single.find('[role="separator"]').exists()).toBe(false);
+    single.unmount();
+  });
+});

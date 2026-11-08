@@ -1,6 +1,6 @@
 <template>
   <section class="map-workspace" aria-label="小镇地图">
-    <div class="map-layout">
+    <div class="map-layout" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
       <div class="map-main">
         <div ref="stage" class="map-stage" :aria-busy="loading">
           <div class="map-sheet" :style="{ aspectRatio: `${bounds.width} / ${bounds.height}`, width: fittedWidth ? `${fittedWidth}px` : '100%' }">
@@ -17,7 +17,7 @@
           <div v-if="error" class="map-load-message error" role="alert"><p>{{ error }}</p><button @click="loadPreview">重新加载地图</button></div>
         </div>
       </div>
-      <aside class="map-sidebar" aria-label="地图地点与人物">
+      <aside :hidden="sidebarCollapsed" :inert="sidebarCollapsed" class="map-sidebar" aria-label="地图地点与人物"><SidebarToggle />
         <div class="map-filters game-segmented" role="group" aria-label="地图标记筛选">
           <button v-for="item in filters" :key="item.id" :aria-label="item.label" :title="item.text" :aria-pressed="filter === item.id" @click="filter = item.id"><GameIcon :name="item.icon"/></button>
         </div>
@@ -41,6 +41,9 @@
 </template>
 
 <script setup lang="ts">
+import SidebarToggle from "../shared/SidebarToggle.vue";
+import { useWorkspaceSidebar } from "../shared/workspaceSidebar";
+const { collapsed: sidebarCollapsed } = useWorkspaceSidebar();
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import GameIcon from "../shared/GameIcon.vue";
 import { useSession } from "../shared/session";

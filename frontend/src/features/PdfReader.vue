@@ -1,116 +1,162 @@
 <template>
-  <div class="pdf-reader" :aria-busy="loading">
-    <nav class="reader-toolbar" aria-label="PDF 分页">
+  <div class="pdf-reader" :aria-busy="loading || rendering">
+    <div class="pdf-page-surface">
+      <div ref="stage" class="pdf-page-stage">
+        <canvas
+          v-show="rendered && !error"
+          ref="canvas"
+          aria-label="PDF课件当前页"
+          aria-describedby="pdf-reading-position"
+          role="img"
+        ></canvas>
+      </div>
+      <div v-if="error" class="pdf-reader-state" role="alert">
+        <p>{{ error }}</p>
+        <button @click="load">重新加载课件</button>
+      </div>
+      <p v-else-if="loading" class="pdf-reader-state" role="status">
+        正在加载 PDF 课件…
+      </p>
+    </div>
+    <nav class="reader-toolbar pdf-pagination" aria-label="PDF 分页">
       <button
         :disabled="loading || page <= 1"
         aria-label="上一页 PDF"
         @click="turn(-1)"
       >
-        <GameIcon name="arrowLeft"/> 上一页</button
-      ><span
-        id="pdf-reading-position"
-        class="reader-position"
-        aria-live="polite"
-        >第 <strong>{{ page }}</strong> / {{ loading ? "…" : count }} 页<span
-          >PDF 课件</span
-        ></span
-      ><button
+        <GameIcon name="arrowLeft" /> 上一页
+      </button>
+      <div id="pdf-reading-position" class="reader-position" aria-live="polite">
+        <span class="pdf-document-title" :title="title">{{ title || "PDF 课件" }}</span>
+        <span>第 <strong>{{ page }}</strong> / {{ loading ? "…" : count }} 页</span>
+        <progress class="reader-position-progress" :value="loading ? 0 : page" :max="count" aria-label="阅读位置" :aria-valuetext="`第 ${page} / ${count} 页`" />
+      </div>
+      <button
         :disabled="loading || page >= count"
         aria-label="下一页 PDF"
         @click="turn(1)"
       >
-        下一页 <GameIcon name="arrowRight"/>
+        下一页 <GameIcon name="arrowRight" />
       </button>
     </nav>
-    <p v-if="error" class="error" role="alert">{{ error }}</p>
-    <p v-if="loading" class="learning-empty" role="status">
-      正在加载 PDF 课件…
-    </p>
-    <div class="pdf-page-surface">
-      <canvas
-        ref="canvas"
-        aria-label="PDF课件当前页"
-        aria-describedby="pdf-reading-position"
-        role="img"
-      ></canvas>
-    </div>
-    <p class="pdf-page-help">需要复制内容时，可展开下方当前页的提取文本。</p>
   </div>
 </template>
 <script setup lang="ts">
 import GameIcon from "../shared/GameIcon.vue";
 import { onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { api } from "../shared/api";
-import type { PDFDocumentProxy, RenderTask } from "pdfjs-dist";
-import "./learningUi.css";
-const props = defineProps<{ url: string; page: number }>(),
+import { fitPdfPage } from "../shared/pdfPageLayout";
+import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
+import "./pdfReader.css";
+
+const props = defineProps<{ url: string; page: number; title?: string }>(),
   emit = defineEmits<{ page: [value: number] }>(),
   canvas = ref<HTMLCanvasElement>(),
+  stage = ref<HTMLElement>(),
   count = ref(1),
   error = ref(""),
-  loading = ref(true);
+  loading = ref(true),
+  rendering = ref(false),
+  rendered = ref(false);
 let doc: PDFDocumentProxy | undefined,
+  documentTask: PDFDocumentLoadingTask | undefined,
   task: RenderTask | undefined,
+  controller: AbortController | undefined,
   resizeObserver: ResizeObserver | undefined,
   resizeFrame = 0,
-  lastWidth = 0,
-  renderGeneration = 0;
-const controller = new AbortController();
+  lastSize = "",
+  loadGeneration = 0,
+  renderGeneration = 0,
+  disposed = false;
+
+function ignoreCancellation(error: unknown) {
+  return error instanceof Error && ["AbortError", "RenderingCancelledException"].includes(error.name);
+}
 async function load() {
+  const generation = ++loadGeneration;
+  ++renderGeneration;
+  controller?.abort();
+  controller = new AbortController();
+  const signal = controller.signal;
+  task?.cancel();
+  task = undefined;
+  const previous = doc;
+  doc = undefined;
+  void previous?.destroy().catch(() => undefined);
+  void documentTask?.destroy().catch(() => undefined);
+  documentTask = undefined;
   loading.value = true;
+  rendering.value = false;
+  rendered.value = false;
   error.value = "";
+  const current = () => !disposed && generation === loadGeneration;
   try {
-    task?.cancel();
-    await doc?.destroy();
-    const [{ getDocument, GlobalWorkerOptions }, worker] = await Promise.all([
+    const [{ getDocument, GlobalWorkerOptions }, worker, blob] = await Promise.all([
       import("pdfjs-dist"),
       import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
+      api.blob(props.url, signal),
     ]);
+    if (!current()) return;
     GlobalWorkerOptions.workerSrc = worker.default;
-    const blob = await api.blob(props.url, controller.signal);
-    doc = await getDocument({
-      data: await blob.arrayBuffer(),
-      isEvalSupported: false,
-    }).promise;
-    count.value = doc.numPages;
+    const data = await blob.arrayBuffer();
+    if (!current()) return;
+    const pending = getDocument({ data, isEvalSupported: false });
+    documentTask = pending;
+    const loaded = await pending.promise;
+    if (!current()) {
+      void loaded.destroy().catch(() => undefined);
+      return;
+    }
+    documentTask = undefined;
+    doc = loaded;
+    count.value = loaded.numPages;
     const valid = Math.min(count.value, Math.max(1, props.page));
     if (valid !== props.page) emit("page", valid);
     await render();
-  } catch (e) {
-    if (!(e instanceof Error && e.name === "AbortError"))
-      error.value = e instanceof Error ? e.message : "PDF加载失败";
+  } catch (cause) {
+    if (current() && !ignoreCancellation(cause))
+      error.value = cause instanceof Error ? cause.message : "PDF加载失败";
   } finally {
-    loading.value = false;
+    if (current()) loading.value = false;
   }
 }
 async function render() {
-  if (!doc || !canvas.value) return;
-  const generation = ++renderGeneration;
-  task?.cancel();
-  const document = doc;
-  const page = await document.getPage(
-    Math.min(Math.max(1, props.page), document.numPages),
-  );
-  if (generation !== renderGeneration || document !== doc || !canvas.value)
-    return;
-  const unscaled = page.getViewport({ scale: 1 }),
-    width = Math.min(canvas.value.parentElement?.clientWidth ?? 800, 1200);
-  if (width <= 0) return;
-  const view = page.getViewport({
-      scale: Math.max(0.3, (width - 16) / unscaled.width) * devicePixelRatio,
-    }),
-    ctx = canvas.value.getContext("2d");
-  if (!ctx) return;
-  canvas.value.width = view.width;
-  canvas.value.height = view.height;
-  canvas.value.style.width = `${view.width / devicePixelRatio}px`;
-  canvas.value.style.height = `${view.height / devicePixelRatio}px`;
-  task = page.render({ canvasContext: ctx, viewport: view });
+  if (!doc || !canvas.value || !stage.value) return;
+  const generation = ++renderGeneration,
+    document = doc,
+    previous = task;
+  task = undefined;
+  previous?.cancel();
+  rendering.value = true;
+  rendered.value = false;
+  const current = () => !disposed && generation === renderGeneration && document === doc;
   try {
-    await task.promise;
-  } catch (e) {
-    if (e instanceof Error && e.name !== "RenderingCancelledException")
-      error.value = e.message;
+    // PDF.js must finish cancelling before reusing the same canvas.
+    await previous?.promise.catch(() => undefined);
+    if (!current()) return;
+    const page = await document.getPage(Math.min(Math.max(1, props.page), document.numPages));
+    if (!current() || !canvas.value || !stage.value) return;
+    const natural = page.getViewport({ scale: 1 }),
+      fitted = fitPdfPage(natural.width, natural.height, stage.value.clientWidth, stage.value.clientHeight, window.devicePixelRatio);
+    // Hidden tabs have no dimensions; their ResizeObserver renders on reveal.
+    if (!fitted) return;
+    const view = page.getViewport({ scale: fitted.renderScale }),
+      context = canvas.value.getContext("2d");
+    if (!context) throw new Error("无法显示课件，请重新加载。");
+    canvas.value.width = Math.ceil(view.width);
+    canvas.value.height = Math.ceil(view.height);
+    canvas.value.style.width = `${fitted.width}px`;
+    canvas.value.style.height = `${fitted.height}px`;
+    error.value = "";
+    const pending = page.render({ canvasContext: context, viewport: view });
+    task = pending;
+    await pending.promise;
+    if (current()) rendered.value = true;
+  } catch (cause) {
+    if (current() && !ignoreCancellation(cause))
+      error.value = cause instanceof Error ? cause.message : "课件显示失败";
+  } finally {
+    if (current()) rendering.value = false;
   }
 }
 function turn(delta: number) {
@@ -119,24 +165,29 @@ function turn(delta: number) {
 watch(() => props.page, render);
 watch(() => props.url, load);
 onMounted(() => {
-  if (typeof ResizeObserver !== "undefined" && canvas.value?.parentElement) {
+  if (typeof ResizeObserver !== "undefined" && stage.value) {
     resizeObserver = new ResizeObserver((entries) => {
-      const width = Math.floor(entries[0]?.contentRect.width ?? 0);
-      if (width > 0 && width !== lastWidth) {
-        lastWidth = width;
-        cancelAnimationFrame(resizeFrame);
+      const size = entries[0]?.contentRect,
+        key = `${Math.floor(size?.width ?? 0)}:${Math.floor(size?.height ?? 0)}`;
+      if (key === lastSize) return;
+      lastSize = key;
+      cancelAnimationFrame(resizeFrame);
+      if (size && size.width > 0 && size.height > 0)
         resizeFrame = requestAnimationFrame(() => void render());
-      }
     });
-    resizeObserver.observe(canvas.value.parentElement);
+    resizeObserver.observe(stage.value);
   }
   void load();
 });
 onBeforeUnmount(() => {
-  controller.abort();
+  disposed = true;
+  ++loadGeneration;
+  ++renderGeneration;
+  controller?.abort();
   task?.cancel();
   resizeObserver?.disconnect();
   cancelAnimationFrame(resizeFrame);
-  void doc?.destroy();
+  void documentTask?.destroy().catch(() => undefined);
+  void doc?.destroy().catch(() => undefined);
 });
 </script>

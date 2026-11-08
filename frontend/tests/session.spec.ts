@@ -44,6 +44,27 @@ describe("one workspace and account isolation", () => {
     expect(fetch).not.toHaveBeenCalled();
     fetch.mockRestore();
   });
+  it("opens and restores an independent daily story without creating a task workspace", async () => {
+    const store = useSession();
+    store.user = { id: 1, name: "student", email: "student@example.test", role: "student" };
+    store.classroomId = 2;
+    store.world = { story_available: true, player: { map_key: "town_hub", tile_x: 22, tile_y: 34, direction: "down" }, npcs: [], quests: [], chapters: [], flags: [] };
+    const daily = { id: "daily", revision: 0, status: "active", mode: "ambient", npc_key: "mayor_py", node: { id: "hello", text: "今天想聊些什么？" }, activity: null };
+    const get = vi.spyOn(api, "get").mockResolvedValue(daily);
+    const post = vi.spyOn(api, "post").mockResolvedValue(daily);
+    try {
+      await store.restoreStory();
+      expect(get).toHaveBeenCalledWith("/story/current?classroom_id=2");
+      expect(await store.interactStory("mayor_py")).toBe(true);
+      expect(post).toHaveBeenCalledWith("/story/interactions", { classroom_id: 2, npc_key: "mayor_py" });
+      expect(store.story?.id).toBe("daily");
+      expect(store.workspace).toBeNull();
+      expect(store.world.quests).toEqual([]);
+    } finally {
+      get.mockRestore();
+      post.mockRestore();
+    }
+  });
 });
 
 it("ignores a late world response from a previously selected classroom", async () => {

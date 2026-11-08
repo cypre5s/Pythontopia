@@ -93,6 +93,15 @@ function direction(key: string, down: boolean) {
   game?.direction(key, down);
 }
 let saveTask: Promise<void> = Promise.resolve();
+let transitionTask: Promise<Player | null> = Promise.resolve(null);
+async function flushSaves() {
+  game?.setPaused(true);
+  for (;;) {
+    const saving = saveTask, transition = transitionTask;
+    await Promise.all([saving, transition]);
+    if (saving === saveTask && transition === transitionTask) return;
+  }
+}
 const contextClassroomId = session.classroomId,
   contextUserId = session.user?.id,
   saveController = new AbortController();
@@ -154,7 +163,8 @@ onMounted(async () => {
     {
       position: save,
       mapPosition: player => { if (currentContext()) session.setMapPosition(player); },
-      transition: async (portalId, source) => {
+      transition: (portalId, source) => {
+        const task = (async () => {
         if (!currentContext()) return null;
         await save(source);
         if (!currentContext() || lastPosition !== JSON.stringify(source)) return null;
@@ -184,6 +194,9 @@ onMounted(async () => {
           if (currentContext()) notify(error instanceof Error ? error.message : "地图同步中断，请刷新后继续。");
           return null;
         }
+        })();
+        transitionTask = task;
+        return task;
       },
       interact: async (id, type) => {
         const generation = interactionGeneration;
@@ -252,5 +265,5 @@ onBeforeUnmount(() => {
   game = undefined;
 });
 watch(() => Boolean(props.welcomeDrift) && !preferences.reducedMotion, value => game?.setWelcomeDrift?.(value));
-defineExpose({ guide: (key: string) => game?.guide(key) });
+defineExpose({ guide: (key: string) => game?.guide(key), flushSaves });
 </script>

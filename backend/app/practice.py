@@ -56,6 +56,35 @@ def grade_answer(answer, expected, kind: str) -> bool:
     return type(answer) is type(expected) and answer == expected
 
 
+def stage_submission(db, user, classroom_id, activity, question, answer, code, key, mode):
+    """Stage existing grading evidence inside the caller's atomic transaction."""
+    secret = db.get(QuestionSecret, question.id)
+    if not secret:
+        raise HTTPException(503, "题目尚未配置评分规则")
+    row = Submission(user_id=user.id, classroom_id=classroom_id, activity_id=activity.id,
+        question_id=question.id, idempotency_key=key, mode=mode, answer=answer, code=code)
+    if question.kind == "python":
+        if not code or not code.strip():
+            raise HTTPException(422, "请填写代码")
+        cases = list(question.samples)
+        public_count = len(cases)
+        if mode == "submit":
+            cases += list(secret.hidden_cases)
+        if not cases or len(cases) > 20:
+            raise HTTPException(503, "题目未配置有效且有界的测试用例")
+        row.status, row.feedback = "prepared", {"detail": "已保存，等待 Judge0"}
+    else:
+        if mode == "run":
+            raise HTTPException(422, "概念题请使用正式提交")
+        row.status = "accepted" if grade_answer(answer, secret.answer, question.kind) else "wrong_answer"
+        row.feedback = {"detail": "回答正确" if row.status == "accepted" else "请结合课件重新思考", "status": row.status}
+    db.add(row)
+    db.flush()
+    if question.kind == "python":
+        db.add(SubmissionPayload(submission_id=row.id, cases=cases, public_count=public_count))
+    return row
+
+
 @router.post("/submissions", status_code=201)
 def create_submission(body: SubmissionInput, user: Annotated[User, Depends(current_user)], db: Annotated[Session, Depends(get_db)]):
     from .courses import authorize_activity
@@ -84,42 +113,15 @@ def create_submission(body: SubmissionInput, user: Annotated[User, Depends(curre
         ):
             raise HTTPException(409, "幂等键已用于不同提交")
         return public_submission(existing)
-    secret = db.get(QuestionSecret, question.id)
-    if not secret:
-        raise HTTPException(503, "题目尚未配置评分规则")
-    row = Submission(
-        user_id=user.id,
-        classroom_id=body.classroom_id,
-        activity_id=activity.id,
-        question_id=question.id,
-        idempotency_key=body.idempotency_key,
-        mode=body.mode,
-        answer=body.answer,
-        code=body.code,
-    )
-    if question.kind == "python":
-        if not body.code or not body.code.strip():
-            raise HTTPException(422, "请填写代码")
-        cases = list(question.samples)
-        public_count = len(cases)
+    db.execute(select(User.id).where(User.id == user.id).with_for_update())
+    if activity.kind == "assessment":
+        from .assessments import assessment_payload
         if body.mode == "submit":
-            cases += list(secret.hidden_cases)
-        if len(cases) > 20:
-            raise HTTPException(503, "题目超过判题用例上限，请教师调整配置")
-        if not cases:
-            raise HTTPException(503, "题目未配置测试用例")
-        row.status = "prepared"
-        row.feedback = {"detail": "已保存，等待 Judge0"}
-    else:
-        if body.mode == "run":
-            raise HTTPException(422, "概念题请使用正式提交")
-        row.status = "accepted" if grade_answer(body.answer, secret.answer, question.kind) else "wrong_answer"
-        row.feedback = {"detail": "回答正确" if row.status == "accepted" else "请结合课件重新思考", "status": row.status}
-    db.add(row)
+            raise HTTPException(409, "测验需要完成所有题目后统一提交试卷")
+        if assessment_payload(db, user, body.classroom_id, activity)["locked"]:
+            raise HTTPException(409, "试卷已提交，不能修改或重新运行答案")
     try:
-        db.flush()
-        if question.kind == "python":
-            db.add(SubmissionPayload(submission_id=row.id, cases=cases, public_count=public_count))
+        row = stage_submission(db, user, body.classroom_id, activity, question, body.answer, body.code, body.idempotency_key, body.mode)
         db.commit()
     except IntegrityError:
         db.rollback()

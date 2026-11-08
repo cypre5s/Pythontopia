@@ -81,6 +81,9 @@
       <button aria-label="打开设置" @click="session.open({ kind: 'settings' })">
         <GameIcon name="settings" /><span>设置</span><kbd>Esc</kbd>
       </button>
+      <button v-if="canUseDevTools(session.user)" @click="session.open({ kind: 'developer' })">
+        <GameIcon name="settings" /><span>开发工具</span>
+      </button>
     </nav>
   </div>
 </template>
@@ -90,6 +93,7 @@ import { useSession } from "../shared/session";
 import GameIcon from "../shared/GameIcon.vue";
 import { displayQuestTitle } from "../game/config/worldConfig";
 import { requiredQuestNodes } from "../shared/questProgress";
+import { canUseDevTools } from "../shared/devTools";
 defineProps<{ blocked?: boolean }>();
 const session = useSession();
 
@@ -228,6 +232,7 @@ function openActivity() {
   text-shadow: 0 2px 3px #071c16;
   border: 0;
   border-radius: 4px;
+  box-shadow: none;
 }
 .hud-dock button > .game-icon {
   width: 52px;
@@ -237,7 +242,7 @@ function openActivity() {
   background: #18372ce8;
   border: 1px solid #bba16b;
   border-radius: 5px;
-  box-shadow: inset 0 0 0 3px #d9bf7520, 0 3px 0 #0b211bb0;
+  box-shadow: none;
 }
 .hud-dock button:hover { background: #ead29b12; color: #ffe4a4; }
 .hud-dock button:hover > .game-icon { background: #365442; border-color: #f4d591; }
@@ -280,6 +285,7 @@ function openActivity() {
 .is-entering .hud-dock button:nth-child(3) { animation-delay: .20s; }
 .is-entering .hud-dock button:nth-child(4) { animation-delay: .26s; }
 .is-entering .hud-dock button:nth-child(5) { animation-delay: .32s; }
+.is-entering .hud-dock button:nth-child(6) { animation-delay: .38s; }
 .is-entering .resident-badge { animation: hud-from-bottom .55s .18s ease-out both; }
 @keyframes hud-from-left { from {opacity:0; transform:translateX(-12px)} to {opacity:1;transform:translateX(0)} }
 @keyframes hud-from-bottom { from {opacity:0; transform:translateY(12px)} to {opacity:1;transform:translateY(0)} }

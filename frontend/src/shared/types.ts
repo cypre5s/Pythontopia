@@ -3,6 +3,7 @@ export interface User {
   email: string;
   name: string;
   role: string;
+  dev_tools_enabled?: boolean;
 }
 export interface Classroom {
   id: number;
@@ -65,6 +66,7 @@ export interface Chapter {
   available: boolean;
 }
 export interface World {
+  story_available?: boolean;
   player: Player;
   npcs: Npc[];
   quests: Quest[];
@@ -108,14 +110,31 @@ export interface Activity {
   questions: Question[];
   progress?: ActivityProgress;
   completion?: { required_page_ids: number[] } | null;
+  learning?: LearningConfiguration | null;
+}
+export interface LearningConfiguration {
+  reading?: { scope: "all" | "range"; start_page?: number; end_page?: number };
+  video?: { minimum_seconds: number };
+  highlights?: {
+    pages?: { start_page: number; end_page: number; label: string }[];
+    video?: { start_seconds: number; end_seconds: number; label: string }[];
+  };
 }
 export interface ActivityProgress {
   page_no: number | null;
   visited_pages: number[];
   completed: boolean;
   accepted_question_ids?: string[];
+  required_page_ids?: number[];
+  read_count?: number;
+  read_total?: number;
+  watched_seconds?: number;
+  required_seconds?: number;
+  score?: number | null;
+  max_score?: 100;
 }
 export interface StoryView {
+  mode?: "task" | "ambient";
   id: string;
   revision: number;
   status: "active" | "waiting" | "ended";
@@ -160,6 +179,27 @@ export interface Submission {
   feedback: SubmissionFeedback;
   created_at: string;
 }
+export interface AssessmentAnswer {
+  question_id: string;
+  answer?: string | boolean | Record<string, unknown> | unknown[] | null;
+  code?: string | null;
+}
+export interface AssessmentAttempt {
+  id: string | null;
+  status: "draft" | "grading" | "graded" | "attention";
+  revision: number;
+  locked: boolean;
+  question_ids: string[];
+  answers: AssessmentAnswer[];
+  results: Submission[];
+  correct_count: number;
+  total: number;
+  score: number | null;
+  max_score: 100;
+  completed: boolean;
+  passed: boolean;
+  legacy: boolean;
+}
 export interface EventEvidence {
   npc_key?: string;
   dialogue_id?: string;
@@ -174,5 +214,5 @@ export interface EventEvidence {
 export type Workspace =
   | { kind: "lesson" | "practice"; activity_id: string; page_no?: number; story_session_id?: string }
   | { kind: "material"; material_id: number; page_no?: number }
-  | { kind: "journal" | "library" | "classroom" | "settings" | "map" }
+  | { kind: "journal" | "library" | "classroom" | "settings" | "map" | "developer" }
   | null;

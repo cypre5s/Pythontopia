@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
+from .config import dev_tools_enabled
 from .db import get_db
 from .models import AuthSession, User
 
@@ -28,7 +29,13 @@ def verify_password(password: str, encoded: str) -> bool:
 
 
 def public_user(user: User) -> dict:
-    return {"id": user.id, "email": user.email, "name": user.name, "role": user.role}
+    return {
+        "id": user.id,
+        "email": user.email,
+        "name": user.name,
+        "role": user.role,
+        "dev_tools_enabled": user.role == "student" and dev_tools_enabled(),
+    }
 
 
 def as_utc(value):

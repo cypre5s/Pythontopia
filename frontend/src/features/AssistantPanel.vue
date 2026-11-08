@@ -1,5 +1,6 @@
 <template>
-  <section class="assistant-panel" aria-label="课程助教">
+  <section class="assistant-panel assistant-conversation" :aria-label="`${roleName}助教`">
+    <img v-if="portraitUrl" class="assistant-portrait" :src="portraitUrl" alt="" aria-hidden="true" />
     <header class="assistant-heading">
       <div class="assistant-identity">
         <span class="assistant-emblem"><GameIcon name="message" /></span>
@@ -11,24 +12,6 @@
         aria-hidden="true"
       ></span>
     </header>
-    <p class="assistant-state" role="status">
-      {{
-        !allowed
-          ? "本活动未开放助教"
-          : available
-            ? "服务就绪 · 由你主动提问"
-            : "助教暂不可用"
-      }}
-    </p>
-    <p class="assistant-intro">
-      对当前内容有疑问时，可以在这里提问。
-    </p>
-    <p v-if="!allowed" class="notice">
-      本次活动不允许使用助教，可以继续独立阅读或练习。
-    </p>
-    <p v-else-if="!available" class="notice">
-      {{ unavailable || "助教尚未配置，请继续阅读或练习。" }}
-    </p>
     <div
       ref="history"
       class="chat-history"
@@ -37,18 +20,14 @@
       aria-live="polite"
     >
       <p v-if="!messages.length" class="assistant-empty">
-        {{
-          allowed && available
-            ? "从一个具体问题开始，例如：这一页的概念应该怎样理解？"
-            : "课程与练习仍可正常使用，学习进度不会因此受到影响。"
-        }}
+        阅读或练习时遇到问题，可以在这里问我。
       </p>
       <article
         v-for="(item, index) in messages"
         :key="index"
         :class="item.role"
       >
-        <small>{{ item.role === "user" ? "你的问题" : roleName }}</small>
+        <span class="assistant-sr-only">{{ item.role === "user" ? "你的问题" : roleName }}：</span>
         <p>{{ item.text }}</p>
       </article>
       <button
@@ -62,27 +41,37 @@
         {{ refItem.title }} · 第{{ refItem.page_no }}页 <GameIcon name="external"/>
       </button>
     </div>
-    <form @submit.prevent="send">
-      <label class="assistant-composer-label" for="assistant-message"
+    <p v-if="!allowed" class="assistant-service-notice" role="status">
+      本活动未开放助教，可以继续独立学习。
+    </p>
+    <p v-else-if="!available" class="assistant-service-notice" role="status">
+      {{ unavailable || "助教暂不可用，可以继续阅读或练习。" }}
+    </p>
+    <p v-else-if="busy" class="assistant-service-notice" role="status">正在回复…</p>
+    <form class="assistant-composer" @submit.prevent="send">
+      <label class="assistant-sr-only" :for="inputId"
         >向助教提问</label
       ><textarea
-        id="assistant-message"
+        :id="inputId"
         v-model="question"
-        placeholder="描述你卡住的概念或错误…"
-        rows="3"
+        placeholder="向助教提问"
+        rows="2"
         :disabled="!available || !allowed || busy"
-        maxlength="2000"
+        :aria-invalid="overLimit ? 'true' : undefined"
+        :aria-describedby="overLimit ? `${inputId}-error` : undefined"
       ></textarea>
+      <p v-if="overLimit" :id="`${inputId}-error`" class="assistant-input-error" role="alert">问题最多 2000 字，请删减 {{ questionLength - 2000 }} 字后发送。</p>
       <div class="assistant-form-actions">
-        <span class="assistant-character-count"
-          >{{ question.length }} / 2000 字</span
-        ><button v-if="busy" type="button" @click="cancel">停止回复</button
+        <button v-if="busy" type="button" @click="cancel">停止回复</button
         ><button
           v-else
-          class="primary"
-          :disabled="!available || !allowed || !question.trim()"
+          type="submit"
+          class="primary assistant-send"
+          aria-label="发送"
+          title="发送"
+          :disabled="!available || !allowed || !question.trim() || overLimit"
         >
-          发送
+          <GameIcon name="arrowUp" />
         </button>
       </div>
     </form>
@@ -90,9 +79,9 @@
 </template>
 <script setup lang="ts">
 import GameIcon from "../shared/GameIcon.vue";
-import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { api, notify } from "../shared/api";
-import "./learningUi.css";
+import "./assistantUi.css";
 import { useSession } from "../shared/session";
 const props = defineProps<{
   activityId: string;
@@ -102,6 +91,7 @@ const props = defineProps<{
   videoTime?: number;
   code?: string;
   roleName: string;
+  portraitUrl?: string;
 }>();
 defineEmits<{ cite: [materialId: number, page: number] }>();
 const session = useSession(),
@@ -115,18 +105,44 @@ const session = useSession(),
     { material_id: number; page_no: number; title: string }[]
   >([]);
 const storageKey = computed(() => `assistant:${session.user?.id}:${session.classroomId}:${props.activityId}`);
+const inputId = computed(() => `assistant-message-${props.activityId}`);
+const questionLength = computed(() => Array.from(question.value).length);
+const overLimit = computed(() => questionLength.value > 2000);
 let sessionId = "",
   requestId = "",
-  controller: AbortController | undefined;
-async function status() {
+  controller: AbortController | undefined,
+  generation = 0;
+async function restore() {
+  const current = ++generation;
+  cancel();
+  sessionId = "";
+  available.value = false;
+  unavailable.value = "正在连接助教…";
+  question.value = "";
+  messages.value = [];
+  references.value = [];
+  const key = storageKey.value;
   try {
     const s = await api.get<{ available: boolean; reason: string }>(
       "/assistant/status",
     );
+    if (current !== generation) return;
     available.value = s.available;
     unavailable.value = s.reason;
   } catch {
+    if (current !== generation) return;
     unavailable.value = "助教服务暂时不可用";
+  }
+  if (current !== generation) return;
+  const savedId = sessionStorage.getItem(key) ?? "";
+  if (!savedId) return;
+  try {
+    const saved = await api.get<{ messages: { role: string; content: string }[] }>(`/assistant/sessions/${savedId}`);
+    if (current !== generation) return;
+    sessionId = savedId;
+    messages.value = saved.messages.filter(m => m.role === "user" || m.role === "assistant").map(m => ({ role: m.role, text: m.content }));
+  } catch {
+    // Keep the recovery pointer when history is temporarily unavailable.
   }
 }
 function cancel() {
@@ -139,9 +155,11 @@ function cancel() {
   busy.value = false;
 }
 async function send() {
-  if (!question.value.trim() || busy.value || !props.allowed) return;
+  if (!question.value.trim() || overLimit.value || busy.value || !props.allowed || !available.value) return;
+  const current = generation, key = storageKey.value;
   busy.value = true;
-  controller = new AbortController();
+  const activeController = new AbortController();
+  controller = activeController;
   const text = question.value;
   question.value = "";
   messages.value.push({ role: "user", text }, { role: "assistant", text: "" });
@@ -152,9 +170,10 @@ async function send() {
         classroom_id: session.classroomId,
         activity_id: props.activityId,
       });
+      if (current !== generation || activeController.signal.aborted) return;
       sessionId = s.id;
       sessionStorage.setItem(
-        storageKey.value,
+        key,
         sessionId,
       );
     }
@@ -170,8 +189,9 @@ async function send() {
         video_time: props.videoTime,
         code: props.code,
       }),
-      signal: controller.signal,
+      signal: activeController.signal,
     });
+    if (current !== generation) return;
     if (!res.ok) {
       const e = await res.json();
       throw new Error(e.detail ?? "助教调用失败");
@@ -180,8 +200,9 @@ async function send() {
     if (!reader) throw new Error("未收到流式响应");
     let buffer = "";
     const decoder = new TextDecoder();
-    while (!controller.signal.aborted) {
+    while (!activeController.signal.aborted && current === generation) {
       const part = await reader.read();
+      if (current !== generation || activeController.signal.aborted) break;
       if (part.done) break;
       buffer += decoder.decode(part.value, { stream: true });
       buffer = buffer.replace(/\r\n/g, "\n");
@@ -217,6 +238,7 @@ async function send() {
       history.value?.scrollTo({ top: history.value.scrollHeight });
     }
   } catch (e) {
+    if (current !== generation) return;
     if (e instanceof Error && e.name === "AbortError") {
       reply.text += "\n[已停止]";
     } else {
@@ -225,37 +247,15 @@ async function send() {
       notify(detail);
     }
   } finally {
-    busy.value = false;
-  }
-}
-watch(
-  () => props.activityId,
-  () => {
-    cancel();
-    sessionId = "";
-    messages.value = [];
-    references.value = [];
-  },
-);
-onMounted(async () => {
-  await status();
-  sessionId =
-    sessionStorage.getItem(
-      storageKey.value,
-    ) ?? "";
-  if (sessionId) {
-    try {
-      const saved = await api.get<{
-        messages: { role: string; content: string }[];
-      }>(`/assistant/sessions/${sessionId}`);
-      messages.value = saved.messages.map((m) => ({
-        role: m.role,
-        text: m.content,
-      }));
-    } catch {
-      sessionId = "";
+    if (current === generation && controller === activeController) {
+      requestId = "";
+      busy.value = false;
     }
   }
+}
+watch(storageKey, restore, { immediate: true });
+onBeforeUnmount(() => {
+  generation++;
+  cancel();
 });
-onBeforeUnmount(cancel);
 </script>

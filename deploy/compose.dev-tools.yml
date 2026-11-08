@@ -1,0 +1,7 @@
+# Local development only: opt in explicitly alongside compose.yml.
+# Production keeps compose.yml's fixed production environment and no reset route.
+services:
+  api:
+    environment:
+      REBORN_ENV: development
+      REBORN_DEV_TOOLS: "1"

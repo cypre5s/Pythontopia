@@ -46,7 +46,9 @@ def test_reimport_updates_current_content_without_erasing_progress(db, student, 
     assert db.get(Question, question["id"]).prompt == question["prompt"]
     assert db.get(QuestionSecret, question["id"]).answer == question["answer"]
     assert db.get(StoryDefinition, story["id"]).content == story["story"]
-    assert len(list(db.scalars(select(StoryDefinition)))) == 1
+    definitions = list(db.scalars(select(StoryDefinition)))
+    assert {item.id for item in definitions} == {item["id"] for item in content["stories"]}
+    assert [item.quest_id for item in definitions if item.quest_id is not None] == ["arrival"]
     assert db.get(PlayerQuest, quest_id).status == "complete"
     assert db.get(NodeState, (quest_id, "welcome")).evidence == {"npc_key": "mayor_py"}
     assert db.get(ActivityProgress, (student["id"], cid, "ch1-lesson")).visited_pages == [10715]

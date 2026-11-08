@@ -183,7 +183,7 @@ class StoryDefinition(Base):
     __tablename__ = "story_definitions"
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"))
-    quest_id: Mapped[str] = mapped_column(String(100))
+    quest_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     content: Mapped[dict] = mapped_column(JSON)
 
 
@@ -214,6 +214,7 @@ class ActivityProgress(Base):
     page_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
     visited_pages: Mapped[list] = mapped_column(JSON, default=list)
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    media_progress: Mapped[dict] = mapped_column(JSON, default=dict, server_default=text("'{}'"))
 
 
 class Question(Base):
@@ -253,6 +254,24 @@ class Submission(Base):
     feedback: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class AssessmentAttempt(Base):
+    __tablename__ = "assessment_attempts"
+    __table_args__ = (UniqueConstraint("user_id", "classroom_id", "activity_id"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
+    activity_id: Mapped[str] = mapped_column(ForeignKey("activities.id"), index=True)
+    state: Mapped[str] = mapped_column(String(16), default="draft")
+    revision: Mapped[int] = mapped_column(Integer, default=0)
+    question_ids: Mapped[list] = mapped_column(JSON, default=list)
+    answers: Mapped[dict] = mapped_column(JSON, default=dict)
+    submission_ids: Mapped[dict] = mapped_column(JSON, default=dict)
+    idempotency_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+    submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class CourseExample(Base):

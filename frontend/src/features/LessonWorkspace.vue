@@ -1,169 +1,49 @@
 <template>
-  <div
-    class="lesson-workspace learning-layout"
-    :class="{ 'reading-only': !activity, 'is-compact': compact }"
-  >
-    <nav
-      v-if="activity && compact"
-      class="workspace-view-switch game-segmented"
-      aria-label="课程与助教视图"
-    >
-      <button
-        :aria-pressed="!showAssistant"
-        aria-controls="lesson-reading-region"
-        @click="switchView(false)"
-      >
-        课程内容
-      </button>
-      <button
-        :aria-pressed="showAssistant"
-        aria-controls="lesson-assistant-region"
-        @click="switchView(true)"
-      >
-        向助教提问
-      </button>
+  <LearningSplitLayout class="lesson-workspace" :has-support="true" :compact="compact">
+    <nav v-if="compact" class="workspace-view-switch game-segmented" aria-label="课程与助教视图">
+      <button :aria-pressed="!showAssistant" aria-controls="lesson-reading-region" @click="switchView(false)">课程内容</button>
+      <button :aria-pressed="showAssistant" aria-controls="lesson-assistant-region" @click="switchView(true)">目标与助教</button>
     </nav>
-    <section
-      id="lesson-reading-region"
-      class="lesson-content"
-      tabindex="-1"
-      aria-label="课程内容"
-      :hidden="compact && showAssistant"
-      :inert="compact && showAssistant"
-      :aria-busy="loading"
-    >
-      <header class="content-heading">
-        <h2>{{ activity?.title ?? material?.title ?? "正在读取课程" }}</h2>
-        <div v-if="material" class="learning-meta">
-          <span>{{ materialLabel }}</span
-          ><span v-if="material.kind === 'text' && material.pages.length"
-            >第 {{ pageIndex + 1 }} / {{ material.pages.length }} 页内容</span
-          >
-        </div>
-        <p v-if="material?.notice" class="notice">{{ material.notice }}</p>
-        <nav v-if="requiredPages.length" class="reader-toolbar required-reading" aria-label="本章阅读目标">
-          <span>本次阅读：</span>
-          <button v-for="page in requiredPages" :key="page.id" :aria-current="currentContext.page_no === page.page_no ? 'page' : undefined" @click="readRequiredPage(page.page_no)">
-            {{ progress?.visited_pages.includes(Number(page.id)) ? '✓ ' : '' }}阅读第{{ page.page_no }}页
-          </button>
-        </nav>
-      </header>
-      <p v-if="error" class="error" role="alert">{{ error }}</p>
-      <p v-if="loading" class="learning-empty" role="status">
-        正在读取课程内容…
-      </p>
+    <section id="lesson-reading-region" class="lesson-content" tabindex="-1" aria-label="课程内容" :hidden="compact && showAssistant" :inert="compact && showAssistant" :aria-busy="loading">
+      <p v-if="error" class="error lesson-state-card" role="alert">{{ error }}</p>
+      <p v-if="loading" class="learning-empty lesson-state-card" role="status">正在读取课程内容…</p>
       <template v-else-if="material">
-        <p v-if="material.status !== 'ready'" class="notice">
-          资料处理状态：{{ material.status }}。内容就绪后才可阅读。
-        </p>
+        <p v-if="material.status !== 'ready'" class="notice lesson-state-card">资料尚未就绪，请稍后再来阅读。</p>
         <template v-else>
-          <nav
-            v-if="material.kind === 'text' && material.pages.length"
-            class="reader-toolbar"
-            aria-label="课件分页"
-          >
-            <button :disabled="pageIndex <= 0" @click="pageIndex--">
-              <GameIcon name="arrowLeft"/> 上一页
-            </button>
-            <span class="reader-position" aria-live="polite"
-              >资料第 <strong>{{ currentPage?.page_no }}</strong> 页<span
-                >文本阅读</span
-              ></span
-            >
-            <button
-              :disabled="pageIndex >= material.pages.length - 1"
-              @click="pageIndex++"
-            >
-              下一页 <GameIcon name="arrowRight"/>
-            </button>
-          </nav>
-          <article
-            v-if="material.kind === 'text' && currentPage"
-            class="lesson-text"
-            aria-label="当前课件文本"
-          >
-            <h3 v-if="currentPage.title">{{ currentPage.title }}</h3>
-            <p>{{ currentPage.text }}</p>
-          </article>
-          <PdfReader
-            v-if="['pdf', 'presentation'].includes(material.kind)"
-            :url="fileUrl"
-            :page="pdfPage"
-            @page="pdfPage = $event"
-          />
-          <details
-            v-if="
-              ['pdf', 'presentation'].includes(material.kind) &&
-              pdfTextPage?.text
-            "
-            class="lesson-extracted-text"
-          >
-            <summary>当前第 {{ pdfPage }} 页提取文本（可复制）</summary>
-            <article class="lesson-text">
-              <p>{{ pdfTextPage.text }}</p>
-            </article>
-          </details>
-          <video
-            v-if="material.kind === 'video' && mediaBlob"
-            controls
-            :src="mediaBlob"
-            @timeupdate="updateTime"
-            @loadedmetadata="restoreVideoPosition"
-            preload="metadata"
-            class="course-video"
-            aria-label="课程视频"
-          ></video>
-          <p v-if="material.kind === 'video' && !mediaBlob" class="notice">
-            {{ mediaError || "正在加载受保护的视频文件…" }}
-          </p>
-          <p
-            v-if="
-              !material.pages.length &&
-              !['pdf', 'presentation', 'video'].includes(material.kind)
-            "
-            class="learning-empty"
-          >
-            当前材料没有可展示内容。
-          </p>
+          <PdfReader v-if="['pdf', 'presentation'].includes(material.kind)" :url="fileUrl" :page="pdfPage" :title="material.title" @page="pdfPage = $event" />
+          <template v-else>
+            <div class="lesson-reading-card">
+              <header class="content-heading"><h2>{{ material.title }}</h2></header>
+              <article v-if="material.kind === 'text' && currentPage" class="lesson-text" aria-label="当前课件文本" tabindex="0">
+                <h3 v-if="currentPage.title">{{ currentPage.title }}</h3><p>{{ currentPage.text }}</p>
+              </article>
+              <video v-if="material.kind === 'video' && mediaBlob" ref="videoElement" controls :src="mediaBlob" @timeupdate="updateTime" @loadedmetadata="restoreVideoPosition" @play="startVideoTracking" @playing="startVideoTracking" @pause="stopVideoTracking" @ended="stopVideoTracking" @waiting="stopVideoTracking" @seeking="stopVideoTracking" @seeked="resumeVideoTracking" @ratechange="videoRateChanged" preload="metadata" class="course-video" aria-label="课程视频"></video>
+              <p v-if="material.kind === 'video' && !mediaBlob" class="notice">{{ mediaError || "正在加载视频…" }}</p>
+              <p v-if="!material.pages.length && !['video'].includes(material.kind)" class="learning-empty">当前材料没有可展示内容。</p>
+            </div>
+            <nav v-if="material.kind === 'text' && material.pages.length" class="reader-toolbar lesson-pagination" aria-label="课件分页">
+              <button :disabled="pageIndex <= 0" @click="pageIndex--"><GameIcon name="arrowLeft" /> 上一页</button>
+              <span class="reader-position" aria-live="polite">{{ material.title }}<span>第 {{ currentPage?.page_no }} / {{ material.pages.length }} 页</span><progress class="reader-position-progress" :value="pageIndex + 1" :max="material.pages.length" aria-label="阅读位置" /></span>
+              <button :disabled="pageIndex >= material.pages.length - 1" @click="pageIndex++">下一页 <GameIcon name="arrowRight" /></button>
+            </nav>
+          </template>
         </template>
       </template>
-      <footer v-if="activity" class="lesson-footer">
-        <div>
-          <strong>{{ activity.completion ? "本章阅读进度" : "留下一次学习记录" }}</strong>
-          <p>{{ activity.completion ? `已阅读 ${requiredVisited} / ${activity.completion.required_page_ids.length} 页。完成阅读后，与${roleName}继续交谈。` : "阅读参与单独保存，知识掌握仍由正式练习与测验判定。" }}</p>
-          <p v-if="participationMessage" class="learning-success" role="status">
-            {{ participationMessage }}
-          </p>
-          <p v-if="progressError" class="error" role="alert">{{ progressError }} <button :disabled="progressSaving" @click="persistProgress">重试保存</button></p>
-        </div>
-        <button
-          class="primary"
-          :disabled="
-            saving || loading || progressSaving || !material || material.status !== 'ready' || Boolean(activity.completion && !progress?.completed)
-          "
-          @click="participate"
-        >
-          {{ saving || progressSaving ? "保存中…" : activity.completion ? "完成阅读" : "记录本次学习" }}
-        </button>
-      </footer>
     </section>
-    <AssistantPanel
-      v-if="activity"
-      :key="activity.id"
-      id="lesson-assistant-region"
-      tabindex="-1"
-      :hidden="compact && !showAssistant"
-      :inert="compact && !showAssistant"
-      :aria-hidden="compact && !showAssistant"
-      :activity-id="activity.id"
-
-      :allowed="activity.assistant_allowed"
-      :page-no="currentContext.page_no"
-      :video-time="currentContext.video_time"
-      :role-name="roleName"
-      @cite="cite"
-    />
-  </div>
+    <LearningSupportPanel v-if="material || activity" :key="activity?.id ?? material?.id" id="lesson-assistant-region" tabindex="-1" :hidden="compact && !showAssistant" :inert="compact && !showAssistant" :aria-hidden="compact && !showAssistant" :activity-id="activity?.id" :allowed="activity?.assistant_allowed ?? false" :page-no="currentContext.page_no" :video-time="currentContext.video_time" :role-name="roleName" :portrait-url="rolePortrait" :goals="learningGoals" :outline="documentOutline" @cite="cite" @select-page="readRequiredPage" @select-time="seekVideo">
+      <template #goals-footer>
+        <p v-if="material?.notice" class="notice">{{ material.notice }}</p>
+        <footer v-if="activity" class="lesson-footer">
+          <div>
+            <p>{{ hasCompletion ? `完成本次学习后，与${roleName}继续交谈。` : "阅读参与单独保存，知识掌握仍由正式练习与测验判定。" }}</p>
+            <p v-if="participationMessage" class="learning-success" role="status">{{ participationMessage }}</p>
+            <p v-if="progressError" class="error" role="alert">{{ progressError }} <button :disabled="progressSaving" @click="retryProgress">重试保存</button></p>
+          </div>
+          <button class="primary" :disabled="saving || loading || progressSaving || !material || material.status !== 'ready' || Boolean(hasCompletion && !progress?.completed)" @click="participate">{{ saving || progressSaving ? "保存中…" : hasCompletion ? activity.learning?.video ? "完成观看" : "完成阅读" : "记录本次学习" }}</button>
+        </footer>
+      </template>
+    </LearningSupportPanel>
+  </LearningSplitLayout>
 </template>
 <script setup lang="ts">
 import GameIcon from "../shared/GameIcon.vue";
@@ -177,11 +57,14 @@ import {
   defineAsyncComponent,
 } from "vue";
 import { useSession } from "../shared/session";
+import { useWorkspaceSidebar } from "../shared/workspaceSidebar";
 import { api, notify } from "../shared/api";
 import type { Activity, ActivityProgress, Material } from "../shared/types";
 import { learningContext } from "../shared/learningContext";
 import { migrateReadingPosition, pdfResumePage } from "../shared/readingPosition";
-import AssistantPanel from "./AssistantPanel.vue";
+import { createVideoProgressQueue } from "../shared/videoProgress";
+import LearningSupportPanel from "./LearningSupportPanel.vue";
+import LearningSplitLayout from "./LearningSplitLayout.vue";
 import "./learningUi.css";
 const PdfReader = defineAsyncComponent(() => import("./PdfReader.vue"));
 const props = defineProps<{
@@ -206,33 +89,59 @@ const props = defineProps<{
   mediaBlob = ref(""),
   mediaError = ref(""),
   participationMessage = ref("");
+const videoElement = ref<HTMLVideoElement>();
 const emit = defineEmits<{ complete: [] }>();
+const { collapsed: sidebarCollapsed } = useWorkspaceSidebar();
+watch(sidebarCollapsed, value => { if (value) showAssistant.value = false; });
 const progress = ref<ActivityProgress>(), progressSaving = ref(false);
 const progressError = ref("");
 let disposed = false, loadGeneration = 0, progressGeneration = 0;
 let queuedPage = "";
+let videoQueue: ReturnType<typeof createVideoProgressQueue<ActivityProgress>> | undefined,
+  videoTimer: ReturnType<typeof setInterval> | undefined,
+  videoTracking = false,
+  videoSessionRate = 1,
+  unregisterVideoPreparation: (() => void) | undefined;
+const videoTasks = new Set<Promise<void>>();
 const controller = new AbortController(),
   contextUserId = session.user?.id,
   contextClassroomId = session.classroomId;
 let compactMedia: MediaQueryList | undefined;
 const currentOwner = () => !disposed && session.user?.id === contextUserId && session.classroomId === contextClassroomId;
-const requiredVisited = computed(() => activity.value?.completion?.required_page_ids.filter(id => progress.value?.visited_pages.includes(id)).length ?? 0);
-const requiredPages = computed(() => material.value?.pages.filter(page => activity.value?.completion?.required_page_ids.includes(Number(page.id))) ?? []);
+const hasReadingCompletion = computed(() => Boolean(activity.value?.completion || activity.value?.learning?.reading));
+const hasCompletion = computed(() => hasReadingCompletion.value || Boolean(activity.value?.learning?.video));
+const requiredPageIds = computed(() => progress.value?.required_page_ids ?? activity.value?.completion?.required_page_ids ?? material.value?.pages.filter(page => {
+  const rule = activity.value?.learning?.reading;
+  return rule && (rule.scope === "all" || (page.page_no >= (rule.start_page ?? 1) && page.page_no <= (rule.end_page ?? Infinity)));
+}).map(page => Number(page.id)) ?? []);
+const requiredVisited = computed(() => progress.value?.read_count ?? requiredPageIds.value.filter(id => progress.value?.visited_pages.includes(id)).length);
+const requiredPages = computed(() => material.value?.pages.filter(page => requiredPageIds.value.includes(Number(page.id))) ?? []);
 const currentPage = computed(() => material.value?.pages[pageIndex.value]),
   roleName = computed(
     () =>
-      session.world?.npcs.find((n) => n.key === activity.value?.npc_key)
-        ?.name ?? "课程助教",
+      session.world?.npcs.find((n) => n.key === (activity.value?.npc_key ?? "librarian_doc"))
+        ?.name ?? "图书管理员",
   ),
-  materialLabel = computed(
-    () =>
-      ({
-        text: "文本资料",
-        pdf: "PDF 课件",
-        presentation: "转换后的课件",
-        video: "课程视频",
-      })[material.value?.kind ?? ""] ?? "课程资料",
-  );
+  rolePortrait = computed(() => session.world?.npcs.find(n => n.key === (activity.value?.npc_key ?? "librarian_doc"))?.portrait);
+const learningGoals = computed(() => {
+  const title = material.value?.title ?? "当前资料", learning = activity.value?.learning;
+  if (learning?.video) {
+    const watched = Math.floor(progress.value?.watched_seconds ?? 0), required = progress.value?.required_seconds ?? learning.video.minimum_seconds;
+    return [{ title: `观看《${title}》`, detail: `有效播放不少于 ${formatTime(required)}，跳转片段不计观看时长。`, completed: progress.value?.completed ?? false,
+      progress: { value: watched, max: required, label: `有效观看 ${formatTime(watched)} / ${formatTime(required)}` },
+      items: (learning.highlights?.video ?? []).map(item => ({ title: `${item.label} · ${formatTime(item.start_seconds)}–${formatTime(item.end_seconds)}`, timeSeconds: item.start_seconds })) }];
+  }
+  const total = progress.value?.read_total ?? requiredPageIds.value.length;
+  return [{ title: `${material.value?.kind === "video" ? "观看" : "阅读"}《${title}》`, detail: hasReadingCompletion.value ? learning?.reading?.scope === "all" ? "阅读完整份课件。" : "阅读本次指定的页面。" : material.value?.kind === "video" ? "补充视频可按自己的节奏观看，不计正式成绩。" : `共 ${material.value?.pages.length ?? 0} 页，可使用底部分页继续阅读。`,
+    completed: hasReadingCompletion.value && Boolean(progress.value?.completed),
+    ...(hasReadingCompletion.value ? { progress: { value: requiredVisited.value, max: total, label: `已阅读 ${requiredVisited.value} / ${total} 页` } } : {}),
+    items: requiredPages.value.map(page => ({ title: page.title || `第 ${page.page_no} 页`, pageNo: page.page_no, completed: progress.value?.visited_pages.includes(Number(page.id)) ?? false })) }];
+});
+const documentOutline = computed(() => material.value?.kind === "video" ? [] : material.value?.pages.map(page => {
+  const highlight = activity.value?.learning?.highlights?.pages?.find(item => page.page_no >= item.start_page && page.page_no <= item.end_page);
+  return { pageNo: page.page_no, title: page.title, important: Boolean(highlight), highlightLabel: highlight?.label };
+}) ?? []);
+function formatTime(value: number) { const seconds = Math.max(0, Math.floor(value)); return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`; }
 const readingKey = computed(
   () =>
     `read:${contextUserId}:${contextClassroomId}:${material.value ? `material-${material.value.id}` : props.activityId}`,
@@ -242,9 +151,7 @@ const fileUrl = computed(() =>
     ? `/materials/${material.value.id}/file?classroom_id=${session.classroomId}`
     : "",
 );
-const pdfTextPage = computed(() =>
-  material.value?.pages.find((p) => p.page_no === pdfPage.value),
-);
+
 const currentContext = computed(() =>
   learningContext(
     material.value,
@@ -265,6 +172,7 @@ function updateCompact() {
   compact.value = compactMedia.matches;
 }
 async function switchView(assistant: boolean) {
+  if (assistant) sidebarCollapsed.value = false;
   showAssistant.value = assistant;
   await nextTick();
   document
@@ -277,9 +185,16 @@ function readRequiredPage(page: number) {
   const index = material.value?.pages.findIndex(item => item.page_no === page) ?? -1;
   if (index >= 0) pageIndex.value = index;
   pdfPage.value = page;
+  if (compact.value) void switchView(false);
 }
 async function load() {
   const generation = ++loadGeneration;
+  ++progressGeneration;
+  queuedPage = "";
+  clearInterval(videoTimer);
+  videoTracking = false;
+  if (videoQueue) trackVideoTask(videoQueue.dispose());
+  videoQueue = undefined;
   loading.value = true;
   error.value = "";
   participationMessage.value = "";
@@ -288,10 +203,12 @@ async function load() {
   mediaBlob.value = "";
   try {
     if (props.materialId) {
-      activity.value = undefined;
-      material.value = await api.get<Material>(
+      const loaded = await api.get<Material>(
         `/materials/${props.materialId}?classroom_id=${session.classroomId}`,
       );
+      if (!currentOwner() || generation !== loadGeneration) return;
+      activity.value = undefined;
+      material.value = loaded;
     } else {
       const loaded = await session.activity(props.activityId);
       if (!currentOwner() || generation !== loadGeneration) return;
@@ -300,7 +217,7 @@ async function load() {
     }
     if (!currentOwner() || generation !== loadGeneration) return;
     progress.value = activity.value?.progress;
-    if (activity.value?.completion) {
+    if (hasCompletion.value && activity.value) {
       progress.value = await api.get<ActivityProgress>(`/activities/${activity.value.id}/progress?classroom_id=${contextClassroomId}`);
       if (!currentOwner() || generation !== loadGeneration) return;
     }
@@ -322,6 +239,17 @@ async function load() {
       sessionStorage.getItem(`${readingKey.value}:pdf`), pageIndex.value,
     );
     if (material.value?.kind === "video") {
+      if (activity.value?.learning?.video && contextClassroomId !== null) {
+        const activityId = activity.value.id;
+        videoQueue = createVideoProgressQueue<ActivityProgress>({
+          classroomId: contextClassroomId,
+          materialId: material.value.id,
+          active: () => currentOwner() && loadGeneration === generation && activity.value?.id === activityId,
+          send: packet => api.post<ActivityProgress>(`/activities/${activityId}/video-progress`, packet),
+          saved: saved => { progress.value = saved; progressError.value = ""; },
+          failed: cause => { progressError.value = cause instanceof Error ? cause.message : "观看记录保存失败，请重试。"; },
+        });
+      }
       try {
         mediaBlob.value = URL.createObjectURL(
           await api.blob(fileUrl.value, controller.signal),
@@ -340,7 +268,7 @@ async function load() {
   }
 }
 async function persistProgress() {
-  if (!currentOwner() || loading.value || error.value || !activity.value?.completion || material.value?.status !== "ready") return;
+  if (!currentOwner() || loading.value || error.value || !hasReadingCompletion.value || material.value?.status !== "ready" || !activity.value) return;
   if (material.value.id !== activity.value.material?.id) return;
   const page = ["pdf", "presentation"].includes(material.value.kind) ? pdfPage.value : currentPage.value?.page_no;
   if (!page) return;
@@ -355,18 +283,28 @@ async function persistProgress() {
     if (currentOwner() && generation === progressGeneration) progress.value = saved;
   } catch (error) {
     if (queuedPage === pageKey) queuedPage = "";
-    if (currentOwner()) progressError.value = error instanceof Error ? error.message : "阅读位置保存失败，请重试。";
+    if (currentOwner() && generation === progressGeneration) progressError.value = error instanceof Error ? error.message : "阅读位置保存失败，请重试。";
   } finally {
     if (currentOwner() && generation === progressGeneration) progressSaving.value = false;
   }
 }
 async function participate() {
-  if (!activity.value) return;
-  if (activity.value.completion) {
-    if (!progress.value?.completed || progressSaving.value) return;
-    if (props.storySessionId) emit("complete");
-    else { await session.refresh(); notify("本章阅读已完成。"); }
-    return;
+  if (!activity.value || saving.value) return;
+  if (hasCompletion.value) {
+    saving.value = true;
+    try {
+      if (activity.value.learning?.video) {
+        stopVideoTracking();
+        await flushVideoSaves();
+      }
+      if (!currentOwner() || !progress.value?.completed || progressSaving.value) return;
+      if (props.storySessionId) { emit("complete"); return; }
+    } catch (cause) {
+      if (currentOwner()) progressError.value = cause instanceof Error ? cause.message : "学习记录保存失败，请重试。";
+      return;
+    } finally {
+      if (currentOwner()) saving.value = false;
+    }
   }
   saving.value = true;
   try {
@@ -409,6 +347,65 @@ function updateTime(event: Event) {
   videoTime.value = (event.target as HTMLVideoElement).currentTime;
   sessionStorage.setItem(`${readingKey.value}:video`, String(videoTime.value));
 }
+function trackVideoTask(task: Promise<void>) {
+  videoTasks.add(task);
+  void task.finally(() => videoTasks.delete(task));
+}
+function startVideoTracking() {
+  const video = videoElement.value;
+  if (!videoQueue || !video || video.paused || video.seeking || document.hidden || videoTracking) return;
+  videoTracking = true;
+  videoSessionRate = videoEvidenceRate(video);
+  trackVideoTask(videoQueue.sample(videoEvidencePosition(video), true, true, videoSessionRate));
+  clearInterval(videoTimer);
+  videoTimer = setInterval(() => {
+    if (!videoQueue || !videoElement.value) return;
+    if (document.hidden || videoElement.value.paused || videoElement.value.seeking) stopVideoTracking();
+    else if (videoEvidenceRate(videoElement.value) !== videoSessionRate) videoRateChanged();
+    else trackVideoTask(videoQueue.sample(videoEvidencePosition(videoElement.value), true, false, videoSessionRate));
+  }, 5000);
+}
+function stopVideoTracking() {
+  clearInterval(videoTimer);
+  if (videoQueue && videoElement.value && videoTracking)
+    trackVideoTask(videoQueue.sample(videoEvidencePosition(videoElement.value), false, false, videoSessionRate));
+  videoTracking = false;
+}
+function videoEvidencePosition(video: HTMLVideoElement) {
+  const duration = activity.value?.material?.duration_seconds;
+  return Math.max(0, Math.min(video.currentTime, typeof duration === "number" && duration > 0 ? duration : Infinity));
+}
+function videoEvidenceRate(video: HTMLVideoElement) { return Math.min(4, Math.max(.25, Number.isFinite(video.playbackRate) ? video.playbackRate : 1)); }
+function videoRateChanged() {
+  if (!videoElement.value || (videoTracking && videoEvidenceRate(videoElement.value) === videoSessionRate)) return;
+  stopVideoTracking();
+  resumeVideoTracking();
+}
+function resumeVideoTracking() { if (!videoElement.value?.paused) startVideoTracking(); }
+function videoVisibilityChanged() { if (document.hidden) stopVideoTracking(); else resumeVideoTracking(); }
+function seekVideo(seconds: number) {
+  const video = videoElement.value;
+  if (!video) return;
+  stopVideoTracking();
+  video.currentTime = Math.max(0, Math.min(seconds, Number.isFinite(video.duration) ? video.duration : seconds));
+  if (compact.value) void switchView(false);
+}
+async function flushVideoSaves() {
+  for (;;) {
+    const queue = videoQueue;
+    if (queue && currentOwner()) await queue.flush();
+    await Promise.all([...videoTasks]);
+    if (queue === videoQueue && !videoTasks.size) break;
+  }
+  if (videoQueue?.hasPending()) throw new Error(progressError.value || "观看记录尚未保存，请重试。");
+}
+async function retryProgress() {
+  if (!activity.value?.learning?.video) return persistProgress();
+  progressSaving.value = true;
+  try { await flushVideoSaves(); }
+  catch (cause) { if (currentOwner()) progressError.value = cause instanceof Error ? cause.message : "观看记录保存失败，请重试。"; }
+  finally { progressSaving.value = false; }
+}
 function restoreVideoPosition(event: Event) {
   const video = event.target as HTMLVideoElement,
     saved = Number(sessionStorage.getItem(`${readingKey.value}:video`) ?? 0);
@@ -443,12 +440,19 @@ onMounted(() => {
   compactMedia = window.matchMedia?.("(max-width: 900px), (max-height: 540px)");
   updateCompact();
   compactMedia?.addEventListener("change", updateCompact);
+  document.addEventListener("visibilitychange", videoVisibilityChanged);
+  unregisterVideoPreparation = session.registerRestartPreparation(async () => { stopVideoTracking(); await flushVideoSaves(); });
   void load();
 });
 onBeforeUnmount(() => {
+  clearInterval(videoTimer);
+  videoTracking = false;
+  if (videoQueue) trackVideoTask(videoQueue.dispose());
   disposed = true;
   controller.abort();
   compactMedia?.removeEventListener("change", updateCompact);
+  document.removeEventListener("visibilitychange", videoVisibilityChanged);
+  void Promise.all([...videoTasks]).finally(() => unregisterVideoPreparation?.());
   if (mediaBlob.value) URL.revokeObjectURL(mediaBlob.value);
 });
 </script>

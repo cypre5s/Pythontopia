@@ -56,6 +56,7 @@ const resident = (key = "mayor_py"): Npc => ({
 });
 
 beforeEach(() => {
+  vi.mocked(createWorld).mockClear();
   pinia = createPinia();
   setActivePinia(pinia);
   const session = useSession();
@@ -119,6 +120,21 @@ async function canvas() {
 }
 
 describe("pending world interactions", () => {
+  it("drains pending position saves before the world is restarted", async () => {
+    const saved = deferred<void>();
+    const request = vi.spyOn(api, "request").mockReturnValue(saved.promise);
+    const { callbacks, wrapper, handle } = await canvas();
+    callbacks.position({ ...world().player, tile_x: 25 });
+    await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
+    let complete = false;
+    const pending = (wrapper.vm as unknown as { flushSaves(): Promise<void> }).flushSaves().then(() => { complete = true; });
+    await flushPromises();
+    expect(handle.setPaused).toHaveBeenLastCalledWith(true);
+    expect(complete).toBe(false);
+    saved.resolve();
+    await pending;
+    expect(complete).toBe(true);
+  });
   it("applies the actual environment music volume without recreating the world", async () => {
     const { handle } = await canvas();
     const preferences = useUiPreferences();

@@ -21,7 +21,7 @@ def test_chapter_text_rejects_ambiguous_or_executable_yaml(tmp_path, text):
 
 def test_current_sources_validate_without_database():
     counts = validate_sources()
-    assert counts == {"npcs": 4, "activities": 3, "quests": 1, "stories": 1, "questions": 9}
+    assert counts == {"npcs": 4, "activities": 3, "quests": 1, "stories": 2, "questions": 9}
     content = load_content()
     assert all("version" not in item for items in content.values() for item in items)
     assert "version" not in content["stories"][0]["story"]["bindings"]["lesson"]
@@ -75,3 +75,24 @@ def test_reimport_revises_question_set_without_removing_grades_or_participation(
     assert db.get(LearningRecord, record.id).data == {"page_no": 34}
     saved = db.get(ActivityProgress, (student["id"], classroom["id"], "ch1-lesson"))
     assert saved.page_no == 34 and saved.visited_pages == [10715]
+
+
+def test_removing_ambient_source_ends_only_its_open_session(db, monkeypatch, student, classroom):
+    from sqlalchemy import func, select
+    from app import seed as seed_module
+    from app.models import ActivityProgress, LearningRecord, NodeState, PlayerQuest, StoryDefinition, StorySession, Submission, WorldFlag
+
+    session = StorySession(user_id=student["id"], classroom_id=classroom["id"], story_id="town-daily", npc_key="mayor_py",
+                           node_id="mayor-daily-menu", status="active", revision=3)
+    db.add(session)
+    db.commit()
+    tracked = (ActivityProgress, LearningRecord, NodeState, PlayerQuest, Submission, WorldFlag)
+    before = [db.scalar(select(func.count()).select_from(model)) for model in tracked]
+    changed = load_content()
+    changed["stories"] = [row for row in changed["stories"] if row["quest"] is not None]
+    monkeypatch.setattr(seed_module, "load_content", lambda: changed)
+    seed_module.seed(db)
+    seed_module.seed(db)
+    assert db.get(StoryDefinition, "town-daily") is None
+    assert (session.status, session.revision, session.pending_activity_id, session.return_mapping) == ("ended", 4, None, {})
+    assert [db.scalar(select(func.count()).select_from(model)) for model in tracked] == before
