@@ -47,7 +47,7 @@ function client(request: APIRequestContext, base: string, identity: Identity) {
 }
 
 async function register(request: APIRequestContext, base: string, label: string) {
-  const credentials = { name: label, email: `dev-tools-${randomUUID()}@example.test`, password: `Resident-${randomUUID()}` };
+  const credentials = { name: label, student_id: BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString(), password: `Resident-${randomUUID()}` };
   const identity = await json<Identity>(await request.post(endpoint(base, "/auth/register"), { data: credentials }));
   return { identity, credentials };
 }
@@ -140,8 +140,8 @@ async function setTextScale(page: Page, value: "1" | "2") {
 
 test("development reset clears only the confirmed student's selected classroom and re-enters arrival", async ({ page, request }, info) => {
   test.setTimeout(180_000);
-  const base = process.env.E2E_URL, email = process.env.E2E_TEACHER_EMAIL, password = process.env.E2E_TEACHER_PASSWORD;
-  test.skip(process.env.E2E_DEV_TOOLS !== "1" || !base || !email || !password,
+  const base = process.env.E2E_URL, student_id = process.env.E2E_TEACHER_STUDENT_ID, password = process.env.E2E_TEACHER_PASSWORD;
+  test.skip(process.env.E2E_DEV_TOOLS !== "1" || !base || !student_id || !password,
     "Explicit E2E_DEV_TOOLS=1, isolated development E2E_URL and teacher credentials are required; never use a demo account.");
   const target = base!;
   const errors: string[] = [], modelMessages: string[] = [], resetRequests: string[] = [];
@@ -151,7 +151,7 @@ test("development reset clears only the confirmed student's selected classroom a
     if (/\/api\/assistant\/sessions\/[^/]+\/messages$/.test(outgoing.url())) modelMessages.push(outgoing.url());
     if (outgoing.url().endsWith("/api/dev/progress/reset")) resetRequests.push(outgoing.url());
   });
-  const teacher = await json<Identity>(await request.post(endpoint(target, "/auth/login"), { data: { email, password } }));
+  const teacher = await json<Identity>(await request.post(endpoint(target, "/auth/login"), { data: { student_id, password } }));
   expect(teacher.user.dev_tools_enabled).toBe(false);
   const first = await createClass(request, target, teacher, "当前班"), second = await createClass(request, target, teacher, "对照班");
   const { identity } = await register(request, target, "开发工具验收本人");
@@ -311,16 +311,16 @@ test("development reset clears only the confirmed student's selected classroom a
 test("production registration and login never expose the reset capability, menu or route", async ({ page, request }, info) => {
   test.setTimeout(90_000);
   const base = process.env.E2E_PRODUCTION_URL;
-  const email = process.env.E2E_PRODUCTION_TEACHER_EMAIL ?? process.env.E2E_TEACHER_EMAIL;
+  const student_id = process.env.E2E_PRODUCTION_TEACHER_STUDENT_ID ?? process.env.E2E_TEACHER_STUDENT_ID;
   const password = process.env.E2E_PRODUCTION_TEACHER_PASSWORD ?? process.env.E2E_TEACHER_PASSWORD;
-  test.skip(!base || !email || !password, "An explicit independent production QA URL and teacher credentials are required; only new test students/classrooms are used.");
+  test.skip(!base || !student_id || !password, "An explicit independent production QA URL and teacher credentials are required; only new test students/classrooms are used.");
   const target = base!;
-  const teacher = await json<Identity>(await request.post(endpoint(target, "/auth/login"), { data: { email, password } }));
+  const teacher = await json<Identity>(await request.post(endpoint(target, "/auth/login"), { data: { student_id, password } }));
   expect(teacher.user.dev_tools_enabled).toBe(false);
   const classroom = await createClass(request, target, teacher, "生产关闭");
   const registered = await register(request, target, "生产能力关闭验收学生");
   expect(registered.identity.user.dev_tools_enabled).toBe(false);
-  const identity = await json<Identity>(await request.post(endpoint(target, "/auth/login"), { data: { email: registered.credentials.email, password: registered.credentials.password } }));
+  const identity = await json<Identity>(await request.post(endpoint(target, "/auth/login"), { data: { student_id: registered.credentials.student_id, password: registered.credentials.password } }));
   expect(identity.user.dev_tools_enabled).toBe(false);
   const api = client(request, target, identity);
   expect((await api.get<Identity["user"]>("/auth/me")).dev_tools_enabled).toBe(false);

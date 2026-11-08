@@ -188,7 +188,7 @@ def test_python_whole_paper_uses_existing_judge_and_unknown_is_never_resubmitted
 
 def test_paper_is_private_to_authenticated_student_and_joined_class(client, db, student, teacher, classroom):
     paper = hand_in(client, db, student, classroom).json()
-    other = client.post("/api/auth/register", json={"email": "paper-other@example.test", "name": "Other", "password": "other-password-123"}).json()
+    other = client.post("/api/auth/register", json={"student_id": "150856393061526", "name": "Other", "password": "other-password-123"}).json()
     headers = {"Authorization": "Bearer " + other["access_token"]}
     assert client.get(url(classroom) + f"?classroom_id={classroom['id']}", headers=headers).status_code == 403
     client.post("/api/classrooms/join", json={"join_code": classroom["join_code"]}, headers=headers)
@@ -230,8 +230,8 @@ def test_postgres_concurrent_hand_ins_have_one_atomic_paper():
         Base.metadata.create_all(engine)
         with factory() as session:
             seed(session)
-            teacher = User(email="exam-teacher@contention.test", name="teacher", role="teacher", password_hash="unused")
-            student = User(email="exam-student@contention.test", name="student", role="student", password_hash="unused")
+            teacher = User(student_id="119583011949881", name="teacher", role="teacher", password_hash="unused")
+            student = User(student_id="198477289005076", name="student", role="student", password_hash="unused")
             session.add_all([teacher, student])
             session.flush()
             classroom = Classroom(name="exam-test-only", teacher_id=teacher.id, join_code=uuid4().hex[:20])

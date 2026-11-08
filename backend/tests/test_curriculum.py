@@ -6,7 +6,7 @@ from app.seed import seed
 
 
 def another_teacher(db):
-    user = User(email="curriculum-other@example.test", name="Other", role="teacher", password_hash=hash_password("curriculum-other-password"))
+    user = User(student_id="70497433634061", name="Other", role="teacher", password_hash=hash_password("curriculum-other-password"))
     db.add(user)
     db.commit()
     return {"id": user.id, "headers": {"Authorization": "Bearer " + issue(db, user)["access_token"]}}

@@ -5,12 +5,12 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
   page,
   request }, testInfo) => {
   test.setTimeout(240_000);
-  const email = process.env.E2E_TEACHER_EMAIL,
+  const student_id = process.env.E2E_TEACHER_STUDENT_ID,
     password = process.env.E2E_TEACHER_PASSWORD,
-    otherEmail = process.env.E2E_OTHER_TEACHER_EMAIL,
+    otherStudentId = process.env.E2E_OTHER_TEACHER_STUDENT_ID,
     otherPassword = process.env.E2E_OTHER_TEACHER_PASSWORD;
   test.skip(
-    !email || !password || !otherEmail || !otherPassword,
+    !student_id || !password || !otherStudentId || !otherPassword,
     "Two explicit isolated teacher accounts are required; this test creates no default teacher credentials.",
   );
   const suffix = randomUUID().slice(0, 8),
@@ -22,7 +22,7 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
     questId = `authoring-quest-${suffix}`,
     questionId = `authoring-python-${suffix}`;
   await page.goto("/");
-  await page.getByLabel("邮箱", { exact: true }).fill(email!);
+  await page.getByLabel("学号", { exact: true }).fill(student_id!);
   await page.getByLabel("密码", { exact: true }).fill(password!);
   await page.getByRole("button", { name: "进入小镇", exact: true }).click();
   await expect(
@@ -109,7 +109,7 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
     path: testInfo.outputPath("curriculum-authoring.png") });
   // A second real teacher cannot see, update or delete another teacher's curriculum.
   const otherLogin = await request.post("/api/auth/login", {
-    data: { email: otherEmail, password: otherPassword } });
+    data: { student_id: otherStudentId, password: otherPassword } });
   expect(otherLogin.ok()).toBeTruthy();
   const other = {
     Authorization: `Bearer ${(await otherLogin.json()).access_token}` };
@@ -223,7 +223,7 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
   await expect(chapterRow.locator(".status-badge")).toHaveText("已解锁");
   const registration = await request.post("/api/auth/register", {
     data: {
-      email: `${randomUUID()}@example.test`,
+      student_id: BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString(),
       password: `Reborn-${randomUUID()}`,
       name: "草稿验收学生" } });
   expect(registration.ok()).toBeTruthy();

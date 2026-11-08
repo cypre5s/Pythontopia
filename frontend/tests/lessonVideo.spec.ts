@@ -10,7 +10,7 @@ const initial: ActivityProgress = { page_no: null, visited_pages: [], completed:
 function setup() {
   const pinia = createPinia(); setActivePinia(pinia);
   const session = useSession();
-  session.user = { id: 1, email: "fixture@example.test", name: "Fixture", role: "student" }; session.classroomId = 2;
+  session.user = { id: 1, student_id: "124639931179929", name: "Fixture", role: "student" }; session.classroomId = 2;
   session.world = { player: { map_key: "library", tile_x: 5, tile_y: 5, direction: "down" }, npcs: [], quests: [], chapters: [], flags: [] };
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
   vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:video"), revokeObjectURL: vi.fn() });

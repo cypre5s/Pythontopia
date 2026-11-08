@@ -111,9 +111,9 @@ def test_unavailable_environment_has_no_reset_route(monkeypatch, environment, fl
 def test_capability_in_me_login_and_registration_is_student_only(dev_client, student, teacher):
     assert dev_client.get("/api/auth/me", headers=student["headers"]).json()["dev_tools_enabled"] is True
     assert dev_client.get("/api/auth/me", headers=teacher["headers"]).json()["dev_tools_enabled"] is False
-    logged_in = dev_client.post("/api/auth/login", json={"email": student["email"], "password": "student-password-123"})
+    logged_in = dev_client.post("/api/auth/login", json={"student_id": student["student_id"], "password": "student-password-123"})
     assert logged_in.status_code == 200 and logged_in.json()["user"]["dev_tools_enabled"] is True
-    registered = dev_client.post("/api/auth/register", json={"email": "dev-new@example.test", "name": "开发验收", "password": "student-password-123"})
+    registered = dev_client.post("/api/auth/register", json={"student_id": "42631089867999", "name": "开发验收", "password": "student-password-123"})
     assert registered.status_code == 201 and registered.json()["user"]["dev_tools_enabled"] is True
 
 
@@ -129,7 +129,7 @@ def test_runtime_guard_disables_existing_route_and_capability(dev_client, db, st
 def test_reset_is_atomic_scoped_and_repeatable(dev_client, db, student, teacher, classroom):
     cid = classroom["id"]
     other_classroom = Classroom(name="另一个班", teacher_id=teacher["id"], join_code=uuid4().hex[:20])
-    other_student = User(email="dev-other@example.test", name="另一学生", role="student", password_hash="unused-test-only")
+    other_student = User(student_id="46844559636383", name="另一学生", role="student", password_hash="unused-test-only")
     db.add_all([other_classroom, other_student])
     db.flush()
     db.add_all([Membership(user_id=student["id"], classroom_id=other_classroom.id), Membership(user_id=other_student.id, classroom_id=cid)])
@@ -216,7 +216,7 @@ def test_authentication_and_membership_are_required(dev_client, db, student, tea
     body = {"classroom_id": classroom["id"], "confirmed": True}
     assert dev_client.post(RESET_PATH, json=body).status_code == 401
     assert dev_client.post(RESET_PATH, json=body, headers=teacher["headers"]).status_code == 403
-    admin = User(email="dev-admin@example.test", name="管理员", role="admin", password_hash="unused-test-only")
+    admin = User(student_id="151447993778962", name="管理员", role="admin", password_hash="unused-test-only")
     db.add(admin)
     db.commit()
     admin_headers = {"Authorization": "Bearer " + issue(db, admin)["access_token"]}
@@ -245,8 +245,8 @@ def test_postgres_repeated_resets_are_serialized(monkeypatch):
     try:
         Base.metadata.create_all(engine)
         with factory() as db:
-            teacher = User(email="dev-teacher@contention.test", name="teacher", role="teacher", password_hash="unused")
-            actor = User(email="dev-student@contention.test", name="student", role="student", password_hash="unused")
+            teacher = User(student_id="127889460430226", name="teacher", role="teacher", password_hash="unused")
+            actor = User(student_id="206268306512709", name="student", role="student", password_hash="unused")
             db.add_all([teacher, actor])
             db.flush()
             classroom = Classroom(name="isolated reset", teacher_id=teacher.id, join_code=uuid4().hex[:20])

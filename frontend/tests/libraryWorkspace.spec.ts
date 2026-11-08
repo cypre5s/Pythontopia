@@ -13,7 +13,7 @@ const mounted: VueWrapper[] = [];
 beforeEach(() => {
   setActivePinia(createPinia());
   const session = useSession();
-  session.user = { id: 1, name: "居民", email: "library@example.test", role: "student" };
+  session.user = { id: 1, name: "居民", student_id: "135214705245359", role: "student" };
   session.classroomId = 2;
   session.world = {
     player: { map_key: "town_hub", tile_x: 22, tile_y: 36, direction: "down" }, npcs: [], quests: [], flags: [],

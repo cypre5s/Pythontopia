@@ -13,7 +13,7 @@ function setup(compact = false) {
   session.user = {
     id: 1,
     name: "fixture",
-    email: "fixture@example.test",
+    student_id: "124639931179929",
     role: "student" };
   session.classroomId = 2;
   session.world = {
@@ -135,7 +135,8 @@ describe("learning workspace usability", () => {
     await flushPromises();
     expect(wrapper.get(".pdf-fixture").text()).toBe("42");
     expect(wrapper.find(".lesson-footer").exists()).toBe(false);
-    expect(wrapper.findComponent({ name: "AssistantPanel" }).exists()).toBe(false);
+    expect(wrapper.findComponent({ name: "AssistantPanel" }).exists()).toBe(true);
+    expect(wrapper.findComponent({ name: "AssistantPanel" }).props("materialId")).toBe(186);
     expect(post).not.toHaveBeenCalled();
     wrapper.unmount();
   });

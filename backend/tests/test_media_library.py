@@ -87,7 +87,7 @@ def test_ordinary_unbound_teacher_upload_is_not_implicitly_published(client, db,
 
 
 def test_library_publication_does_not_bypass_class_membership_or_owner(client, db, student, teacher, classroom):
-    other = User(email="other-media@example.test", name="其他教师", role="teacher", password_hash="not-used")
+    other = User(student_id="83530536446524", name="其他教师", role="teacher", password_hash="not-used")
     db.add(other)
     db.flush()
     other_class = Classroom(name="其他班级", teacher_id=other.id, join_code="other-media-class")

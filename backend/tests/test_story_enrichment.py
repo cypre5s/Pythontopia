@@ -392,7 +392,7 @@ def test_score_conditions_and_scene_sessions_are_isolated_by_actor_and_joined_cl
     submit_paper(client, db, student, story_space, 3)
     view = interact(client, student, story_space)
     stranger_response = client.post("/api/auth/register", json={
-        "email": "enrichment-stranger@example.test", "name": "Other student", "password": "long-enough-test-password"})
+        "student_id": "66523241585256", "name": "Other student", "password": "long-enough-test-password"})
     assert stranger_response.status_code == 201
     other = {"headers": {"Authorization": "Bearer " + stranger_response.json()["access_token"]}}
     assert client.post("/api/classrooms/join", headers=other["headers"], json={"join_code": classroom["join_code"]}).status_code == 200
@@ -486,7 +486,7 @@ def test_negation_and_nested_any_do_not_turn_unavailable_references_into_permiss
 ):
     from app.story_conditions import condition_matches
 
-    foreign_teacher = User(email="unavailable-author@example.test", name="Other author", role="teacher", password_hash="unused-test-only")
+    foreign_teacher = User(student_id="87963449590180", name="Other author", role="teacher", password_hash="unused-test-only")
     db.add(foreign_teacher)
     db.flush()
     private_quest = {"id": "test-private-condition-quest", "chapter_id": 179, "title": "Private task", "kind": "side",
@@ -544,7 +544,7 @@ def test_negation_still_handles_authorized_unopened_chapters_and_ungraded_assess
 
 
 def test_private_score_cannot_reveal_or_enable_a_negated_dialogue_choice(client, db, student, classroom, story_space):
-    foreign_teacher = User(email="private-choice-author@example.test", name="Other author", role="teacher", password_hash="unused-test-only")
+    foreign_teacher = User(student_id="208272298728807", name="Other author", role="teacher", password_hash="unused-test-only")
     db.add(foreign_teacher)
     db.flush()
     db.add(Activity(id="test-private-choice-assessment", chapter_id=179, title="Private exam", kind="assessment",

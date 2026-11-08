@@ -5,13 +5,14 @@ from datetime import datetime, timedelta, timezone
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from .config import dev_tools_enabled
 from .db import get_db
 from .models import AuthSession, User
+from .account_ids import normalize_student_id
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 bearer = HTTPBearer(auto_error=False)
@@ -31,7 +32,7 @@ def verify_password(password: str, encoded: str) -> bool:
 def public_user(user: User) -> dict:
     return {
         "id": user.id,
-        "email": user.email,
+        "student_id": user.student_id,
         "name": user.name,
         "role": user.role,
         "dev_tools_enabled": user.role == "student" and dev_tools_enabled(),
@@ -49,7 +50,7 @@ def current_user(credentials: Annotated[HTTPAuthorizationCredentials | None, Dep
     if not session or as_utc(session.expires_at) <= datetime.now(timezone.utc):
         raise HTTPException(401, "登录已过期")
     user = db.get(User, session.user_id)
-    if not user:
+    if not user or not user.student_id:
         raise HTTPException(401, "账号不可用")
     return user
 
@@ -62,8 +63,13 @@ def require_teacher(user: Annotated[User, Depends(current_user)]) -> User:
 
 class LoginInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    email: str = Field(min_length=3, max_length=254)
+    student_id: str = Field(min_length=1, max_length=64)
     password: str = Field(min_length=10, max_length=200)
+
+    @field_validator("student_id")
+    @classmethod
+    def valid_student_id(cls, value: str) -> str:
+        return normalize_student_id(value)
 
 
 class RegisterInput(LoginInput):
@@ -81,24 +87,22 @@ def issue(db, user):
 
 @router.post("/register", status_code=201)
 def register(body: RegisterInput, db: Annotated[Session, Depends(get_db)]):
-    email = body.email.strip().lower()
-    if "@" not in email:
-        raise HTTPException(422, "请输入有效邮箱")
-    user = User(email=email, name=body.name.strip(), password_hash=hash_password(body.password), role="student")
+    student_id = body.student_id
+    user = User(student_id=student_id, name=body.name.strip(), password_hash=hash_password(body.password), role="student")
     db.add(user)
     try:
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise HTTPException(409, "邮箱已注册")
+        raise HTTPException(409, "学号已注册")
     return issue(db, user)
 
 
 @router.post("/login")
 def login(body: LoginInput, db: Annotated[Session, Depends(get_db)]):
-    user = db.scalar(select(User).where(User.email == body.email.strip().lower()))
+    user = db.scalar(select(User).where(User.student_id == body.student_id))
     if not user or not verify_password(body.password, user.password_hash):
-        raise HTTPException(401, "邮箱或密码错误")
+        raise HTTPException(401, "学号或密码错误")
     return issue(db, user)
 
 

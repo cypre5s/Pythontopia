@@ -3,7 +3,7 @@
     <div class="dev-tools-card">
       <template v-if="allowed">
         <dl class="dev-tools-context">
-          <div><dt>当前账户</dt><dd>{{ session.user?.name }}<span>{{ session.user?.email }}</span></dd></div>
+          <div><dt>当前账户</dt><dd>{{ session.user?.name }}<span>{{ session.user?.student_id }}</span></dd></div>
           <div><dt>当前班级</dt><dd>{{ classroom?.name ?? '尚未选择班级' }}</dd></div>
         </dl>
         <section class="dev-tools-reset" aria-labelledby="dev-tools-reset-title">

@@ -218,7 +218,7 @@ def progress(classroom_id: int, db: Annotated[Session, Depends(get_db)], user: A
             {
                 "id": m.id,
                 "name": m.name,
-                "email": m.email,
+                "student_id": m.student_id,
                 "completed_chapters": sum(ids.issubset(completed_by_user.get(m.id, set())) for ids in requirements.values()),
                 "completed_nodes": len([e for e in events if e.user_id == m.id]),
                 "submissions": len([s for s in submissions if s.user_id == m.id]),
@@ -496,7 +496,7 @@ def student_record(classroom_id: int, student_id: int, db: Annotated[Session, De
         raise HTTPException(404, "学生不在当前班级")
     student = db.get(User, student_id)
     return {
-        "student": {"id": student.id, "name": student.name, "email": student.email},
+        "student": {"id": student.id, "name": student.name, "student_id": student.student_id},
         "events": [
             {
                 "id": e.id,

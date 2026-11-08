@@ -70,10 +70,10 @@
       </nav>
     </section>
     <section :id="`${panelId}-assistant`" class="support-chat" role="tabpanel" :aria-labelledby="`${panelId}-assistant-tab`" :hidden="tab !== 'assistant'" :inert="tab !== 'assistant'">
-      <AssistantPanel v-if="activityId" :activity-id="activityId" :allowed="allowed" :role-name="roleName" :portrait-url="portraitUrl" :page-no="pageNo" :video-time="videoTime" :code="code" @cite="(materialId, page) => $emit('cite', materialId, page)" />
+      <AssistantPanel v-if="activityId || materialId" :activity-id="activityId" :material-id="materialId" :allowed="allowed" :role-name="roleName" :portrait-url="portraitUrl" :page-no="pageNo" :video-time="videoTime" :code="code" @cite="(materialId, page) => $emit('cite', materialId, page)" />
       <div v-else class="support-unlinked">
         <img v-if="portraitUrl" class="assistant-portrait" :src="portraitUrl" alt="" aria-hidden="true" />
-        <p>当前资料未关联助教活动，可继续阅读。</p>
+        <p>当前资料尚未加载，可继续阅读。</p>
       </div>
     </section>
   </aside>
@@ -103,6 +103,7 @@ function hasQuestionActions() { return containsContent(slots["question-actions"]
 
 const props = defineProps<{
   activityId?: string;
+  materialId?: number;
   allowed: boolean;
   roleName: string;
   portraitUrl?: string;

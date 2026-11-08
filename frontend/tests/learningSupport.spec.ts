@@ -10,7 +10,7 @@ function setup() {
   const pinia = createPinia();
   setActivePinia(pinia);
   const session = useSession();
-  session.user = { id: 9, email: "fixture@example.test", name: "Fixture", role: "student" };
+  session.user = { id: 9, student_id: "124639931179929", name: "Fixture", role: "student" };
   session.classroomId = 4;
   return { pinia, session };
 }
@@ -112,14 +112,15 @@ describe("learning goals and character assistant", () => {
     wrapper.unmount();
   });
 
-  it("does not request assistant access for standalone library materials", async () => {
+  it("offers the librarian for standalone materials without sending a question", async () => {
     const { pinia } = setup();
-    const get = vi.spyOn(api, "get"), post = vi.spyOn(api, "post");
-    const wrapper = mount(LearningSupportPanel, { props: { allowed: false, roleName: "图书管理员", goals: [] }, global: { plugins: [pinia] } });
+    const get = vi.spyOn(api, "get").mockResolvedValue({ available: true, reason: "" }), post = vi.spyOn(api, "post");
+    const wrapper = mount(LearningSupportPanel, { props: { materialId: 186, allowed: true, roleName: "图书管理员", goals: [] }, global: { plugins: [pinia] } });
+    await flushPromises();
     await wrapper.findAll('[role="tab"]')[1]!.trigger("click");
-    expect(wrapper.get('.support-chat').text()).toContain("当前资料未关联助教活动，可继续阅读。");
-    expect(wrapper.find('textarea').exists()).toBe(false);
-    expect(get).not.toHaveBeenCalled();
+    expect(wrapper.get('.support-chat').text()).toContain("图书管理员");
+    expect(wrapper.find('textarea').exists()).toBe(true);
+    expect(get).toHaveBeenCalledWith('/assistant/status');
     expect(post).not.toHaveBeenCalled();
     wrapper.unmount();
   });

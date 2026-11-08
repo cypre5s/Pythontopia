@@ -10,14 +10,14 @@ test("only configured arrival main quest completes and stays isolated across acc
   await page.emulateMedia({ reducedMotion: "reduce" });
   const browserErrors: string[] = [];
   page.on("pageerror", (error) => browserErrors.push(error.message));
-  const email = process.env.E2E_TEACHER_EMAIL,
+  const student_id = process.env.E2E_TEACHER_STUDENT_ID,
     password = process.env.E2E_TEACHER_PASSWORD;
   test.skip(
-    !email || !password,
+    !student_id || !password,
     "Explicit isolated teacher credentials required; no default account is created.",
   );
   const teacherLogin = await request.post("/api/auth/login", {
-    data: { email, password } });
+    data: { student_id, password } });
   expect(teacherLogin.ok()).toBeTruthy();
   const teacher = {
     Authorization: `Bearer ${(await teacherLogin.json()).access_token}` };
@@ -38,8 +38,8 @@ test("only configured arrival main quest completes and stays isolated across acc
   await page.getByRole("button", { name: "初次到访？注册居民证" }).click();
   await page.getByLabel("名字", { exact: true }).fill("新居民");
   await page
-    .getByLabel("邮箱", { exact: true })
-    .fill(`${randomUUID()}@example.test`);
+    .getByLabel("学号", { exact: true })
+    .fill(BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString());
   await page.getByLabel("密码", { exact: true }).fill(`Reborn-${randomUUID()}`);
   await page.getByRole("button", { name: "注册并进入", exact: true }).click();
   await page.getByLabel("班级加入码").fill(classroom.join_code);
@@ -173,8 +173,8 @@ test("only configured arrival main quest completes and stays isolated across acc
   await page.getByRole("button", { name: "初次到访？注册居民证" }).click();
   await page.getByLabel("名字", { exact: true }).fill("另一位新居民");
   await page
-    .getByLabel("邮箱", { exact: true })
-    .fill(`${randomUUID()}@example.test`);
+    .getByLabel("学号", { exact: true })
+    .fill(BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString());
   await page.getByLabel("密码", { exact: true }).fill(`Reborn-${randomUUID()}`);
   await page.getByRole("button", { name: "注册并进入", exact: true }).click();
   await page.getByLabel("班级加入码").fill(classroom.join_code);

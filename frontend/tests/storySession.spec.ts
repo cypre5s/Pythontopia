@@ -28,7 +28,7 @@ function deferred<T>() {
 beforeEach(() => {
   setActivePinia(createPinia());
   const session = useSession();
-  session.user = { id: 1, name: "学生", email: "student@example.test", role: "student" };
+  session.user = { id: 1, name: "学生", student_id: "72953879102235", role: "student" };
   session.classroomId = 2;
   session.world = world();
   useUiPreferences().reduceMotion = true;
@@ -121,7 +121,7 @@ describe("server-owned chapter performance", () => {
     vi.spyOn(api, "post").mockReturnValue(pending.promise);
     const session = useSession();
     const interaction = session.interactStory("librarian_doc");
-    session.user = { id: 2, name: "另一位", email: "other@example.test", role: "student" };
+    session.user = { id: 2, name: "另一位", student_id: "193802344597316", role: "student" };
     session.open({ kind: "settings" });
     pending.resolve(view("waiting", 1));
     expect(await interaction).toBe(true);

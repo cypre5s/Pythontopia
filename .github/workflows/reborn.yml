@@ -54,8 +54,8 @@ jobs:
       REBORN_DATABASE_URL: sqlite:////tmp/reborn-ci.db
       REBORN_STORAGE_ROOT: /tmp/reborn-ci-storage
       E2E_URL: http://127.0.0.1:15174
-      E2E_TEACHER_EMAIL: reborn-ci@example.test
-      E2E_OTHER_TEACHER_EMAIL: reborn-ci-other@example.test
+      E2E_TEACHER_STUDENT_ID: '900001'
+      E2E_OTHER_TEACHER_STUDENT_ID: '900002'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -80,8 +80,8 @@ jobs:
           cd backend
           alembic upgrade head
           python -m app.seed
-          python -m app.cli provision-user --email "$E2E_TEACHER_EMAIL" --role teacher --password-env E2E_TEACHER_PASSWORD
-          python -m app.cli provision-user --email "$E2E_OTHER_TEACHER_EMAIL" --role teacher --password-env E2E_OTHER_TEACHER_PASSWORD
+          python -m app.cli provision-user --student-id "$E2E_TEACHER_STUDENT_ID" --role teacher --password-env E2E_TEACHER_PASSWORD
+          python -m app.cli provision-user --student-id "$E2E_OTHER_TEACHER_STUDENT_ID" --role teacher --password-env E2E_OTHER_TEACHER_PASSWORD
           python -m uvicorn app.main:app --host 127.0.0.1 --port 18081 --no-access-log > /tmp/reborn-api.log 2>&1 &
           cd ../frontend
           npm run dev -- --host 127.0.0.1 --port 15174 > /tmp/reborn-web.log 2>&1 &

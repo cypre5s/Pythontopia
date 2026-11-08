@@ -1,6 +1,6 @@
 export interface User {
   id: number;
-  email: string;
+  student_id: string;
   name: string;
   role: string;
   dev_tools_enabled?: boolean;

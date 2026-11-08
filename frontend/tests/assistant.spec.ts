@@ -9,7 +9,7 @@ describe("explicit isolated assistant stream fixture", () => {
     sessionStorage.clear();
     const pinia = createPinia(); setActivePinia(pinia);
     const session = useSession();
-    session.user = { id: 9, email: "fixture@example.test", name: "Fixture", role: "student" }; session.classroomId = 4;
+    session.user = { id: 9, student_id: "124639931179929", name: "Fixture", role: "student" }; session.classroomId = 4;
     const get = vi.spyOn(api, "get").mockResolvedValue({ available: true, reason: "" });
     const post = vi.spyOn(api, "post"), fetch = vi.spyOn(globalThis, "fetch");
     const wrapper = mount(AssistantPanel, { props: { activityId: "ch1-lesson", allowed: true, roleName: "图书管理员" }, global: { plugins: [pinia] } });
@@ -42,7 +42,7 @@ describe("explicit isolated assistant stream fixture", () => {
     const pinia = createPinia();
     setActivePinia(pinia);
     const session = useSession();
-    session.user = { id: 9, email: "fixture@example.test", name: "Fixture", role: "student" };
+    session.user = { id: 9, student_id: "124639931179929", name: "Fixture", role: "student" };
     session.classroomId = 4;
     sessionStorage.setItem("assistant:9:4:ch1-lesson", "old-class-history");
     let finishOld!: (value: never) => void;
@@ -67,7 +67,7 @@ describe("explicit isolated assistant stream fixture", () => {
     const pinia = createPinia();
     setActivePinia(pinia);
     const session = useSession();
-    session.user = { id: 9, email: "fixture@example.test", name: "Fixture", role: "student" };
+    session.user = { id: 9, student_id: "124639931179929", name: "Fixture", role: "student" };
     session.classroomId = 4;
     sessionStorage.setItem("assistant:9:4:ch1-lesson", "lesson-history");
     sessionStorage.setItem("assistant:9:4:ch1-practice", "practice-history");
@@ -86,14 +86,14 @@ describe("explicit isolated assistant stream fixture", () => {
     wrapper.unmount();
     get.mockRestore(); post.mockRestore(); sessionStorage.clear();
   });
-  it("only posts when asked and renders split SSE tokens and material references", async () => {
+  it.each(["activity", "material"])("only posts when asked and renders split SSE for %s context", async (target) => {
     sessionStorage.clear();
     const pinia = createPinia();
     setActivePinia(pinia);
     const session = useSession();
     session.user = {
       id: 9,
-      email: "fixture@example.test",
+      student_id: "124639931179929",
       name: "Fixture",
       role: "student" };
     session.classroomId = 4;
@@ -121,7 +121,7 @@ describe("explicit isolated assistant stream fixture", () => {
     HTMLElement.prototype.scrollTo = vi.fn();
     const wrapper = mount(AssistantPanel, {
       props: {
-        activityId: "ch1-lesson",
+        ...(target === "activity" ? { activityId: "ch1-lesson" } : { materialId: 186 }),
         allowed: true,
         pageNo: 42,
         roleName: "镇长 Py" },
@@ -133,7 +133,7 @@ describe("explicit isolated assistant stream fixture", () => {
     await flushPromises();
     expect(post).toHaveBeenCalledWith("/assistant/sessions", {
       classroom_id: 4,
-      activity_id: "ch1-lesson" });
+      ...(target === "activity" ? { activity_id: "ch1-lesson" } : { material_id: 186 }) });
     expect(wrapper.text()).toContain("先观察这一页。");
     expect(wrapper.text()).toContain("真实课程引用");
     await wrapper.find(".citation").trigger("click");

@@ -84,7 +84,8 @@ import { api, notify } from "../shared/api";
 import "./assistantUi.css";
 import { useSession } from "../shared/session";
 const props = defineProps<{
-  activityId: string;
+  activityId?: string;
+  materialId?: number;
 
   allowed: boolean;
   pageNo?: number;
@@ -104,8 +105,9 @@ const session = useSession(),
   references = ref<
     { material_id: number; page_no: number; title: string }[]
   >([]);
-const storageKey = computed(() => `assistant:${session.user?.id}:${session.classroomId}:${props.activityId}`);
-const inputId = computed(() => `assistant-message-${props.activityId}`);
+const targetKey = computed(() => props.activityId ?? `material:${props.materialId}`);
+const storageKey = computed(() => `assistant:${session.user?.id}:${session.classroomId}:${targetKey.value}`);
+const inputId = computed(() => `assistant-message-${targetKey.value}`);
 const questionLength = computed(() => Array.from(question.value).length);
 const overLimit = computed(() => questionLength.value > 2000);
 let sessionId = "",
@@ -168,7 +170,7 @@ async function send() {
     if (!sessionId) {
       const s = await api.post<{ id: string }>("/assistant/sessions", {
         classroom_id: session.classroomId,
-        activity_id: props.activityId,
+        ...(props.activityId ? { activity_id: props.activityId } : { material_id: props.materialId }),
       });
       if (current !== generation || activeController.signal.aborted) return;
       sessionId = s.id;

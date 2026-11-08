@@ -18,6 +18,7 @@
 | DATA-02 | YAML 经校验后按稳定 ID 更新当前定义；保留账号、班级关系、任务历史、阅读进度、提交与成绩，不重新评分旧提交。正常重启可重复导入，删除当前定义与保留学生历史分别处理。 | [内容配置](content-authoring.md)、[开发手册](development.md) | `backend/app/seed.py`、`backend/tests/test_chapter_content.py`、`backend/tests/test_current_import.py` |
 | DATA-03 | 唯一内置主线是 `arrival`“初来小镇：第一堂 Python 课”；其他旧内置委托退出，不因开放其他章节复活。保留完整课程资源与教师自有任务，通用分支验证使用测试定义。 | [产品](product.md)、[内容配置](content-authoring.md) | `backend/content/chapters/`、`backend/tests/test_retired_tasks.py`、`frontend/e2e/rebornJourney.spec.ts` |
 | DATA-04 | 接入真实材料包：7 份 PDF 替换学生纯文本课件展示，原材料 ID、561 页页面 ID 与页码保留；34 个视频先作为资料库补充材料，不新增主线或影响原任务、进度和成绩。后台提取文本继续用于检索与引用。 | [内容配置](content-authoring.md)、[架构](architecture.md) | `backend/app/course_media.py`、`backend/tests/test_course_media.py`、`frontend/e2e/courseMediaPack.spec.ts` |
+| DATA-05 | 全系统使用学号替代邮箱作为登录账号；学生注册、教师/管理员登录、账户展示、学生搜索和管理命令统一使用该字段。学号为1–32位数字字符串，保留前导零。普通迁移保留旧用户及证据，旧账号待分配真实学号；用户本轮另明确授权清空当前15176本地预览环境的全部旧账号及关联记录，不扩展至其他环境。 | [产品](product.md)、[架构](architecture.md)、[HTTP契约](api-contract.md)、[开发手册](development.md) | `backend/app/account_ids.py`、`backend/app/auth.py`、`backend/tests/test_student_id_auth.py`、`frontend/src/features/EntryPage.vue` |
 
 ## 教学、测验与脚本
 
@@ -40,7 +41,7 @@
 | UI-02 | 按钮、单选、多选、下拉框、滚动条等复用简洁控件；按钮与结果卡使用平面背景、细边线，取消厚底和厚侧边。状态使用统一 Lucide 图标，不用字符勾号或临时手绘图标代替。 | [游戏设计](design/game-interface.md) | `GameIcon.vue`、`gameDesign.css`、`frontend/e2e/gameDesign.spec.ts` |
 | UI-03 | PDF 整页适配左侧阅读卡片，不出现左侧整体滚动条；题名、原始页码、上一页/下一页及位置进度放在底部。学生不看转换文本；长文本和试卷仍按内容需要滚动，优先保证可读性。 | [游戏设计](design/game-interface.md) | `PdfReader.vue`、`LessonWorkspace.vue`、`frontend/e2e/readingPosition.spec.ts` |
 | UI-04 | 学习支持用“学习目标 / 文档或题目目录 / 当前角色”标签页；文档目录显示各页标题、页码与重点，题目目录负责跳题，不在正文重复排列题目列表。切换保留阅读位置、草稿与助教消息。 | [游戏设计](design/game-interface.md) | `LearningSupportPanel.vue`、`frontend/e2e/learningRules.spec.ts`、`frontend/e2e/assessmentPaper.spec.ts` |
-| UI-05 | 所有实际目录或学习支持侧卡可折叠，收起后正文扩展，页头“回到小镇”旁提供展开入口；隐藏区域不接收焦点、不卸载草稿。分栏可拖动调宽并收起，卡片间距统一，不恢复已被删除的“间距”菜单。 | [游戏设计](design/game-interface.md) | `LearningSplitLayout.vue`、`SidebarToggle.vue`、`workspaceSidebar.ts`、`frontend/tests/workspaceSidebar.spec.ts` |
+| UI-05 | 仅阅读、练习和测验的学习支持侧卡可折叠、拖动调宽，收起后正文扩展，页头提供展开入口；隐藏区域不接收焦点、不卸载草稿。任务日志、学习资料列表、地图、我的班级、设置等普通工作区不支持侧栏折叠。卡片间距统一，不恢复“间距”菜单。 | [游戏设计](design/game-interface.md) | `LearningSplitLayout.vue`、`SidebarToggle.vue`、`workspaceSidebar.ts`、`frontend/tests/workspaceSidebar.spec.ts` |
 | UI-06 | 日志筛选集中在目录内，去掉顶部大统计和空白工具行；“委托目录”清楚可读，无多余房屋图标，封面渐隐露出地图；无结果时居中显示“没有委托”。 | [游戏设计](design/game-interface.md) | `QuestJournal.vue`、`frontend/e2e/gameDesign.spec.ts` |
 | UI-07 | 学习资料页面只保留“小镇图书馆”主标题，按章节组织，侧边小目录、顶部搜索和类型筛选；返回恢复原列表状态，只展示已授权资料。 | [产品](product.md)、[游戏设计](design/game-interface.md) | `LibraryWorkspace.vue`、`frontend/e2e/townWorkspaces.spec.ts` |
 | UI-08 | 我的班级先介绍当前班级和本人学习进度，再提供切换班级与加入入口；切换成功后才替换当前状态，失败保留原班级。设置账户优先，按分类统一设置项，来源与许可归入关于，不再跳转班级或材料列表。 | [产品](product.md)、[游戏设计](design/game-interface.md) | `ClassroomPanel.vue`、`SettingsPanel.vue`、`frontend/e2e/townWorkspaces.spec.ts` |
@@ -51,8 +52,8 @@
 | 编号 | 已确定要求与决策原因 | 细节归属 | 核对入口 |
 | --- | --- | --- | --- |
 | AI-01 | 各学习页面统一简洁聊天排版；使用实际活动角色名称，阅读角色为图书管理员。授权角色淡立绘作背景，文本清晰可读，底部输入提示“向助教提问”，向上箭头发送；不常显字数上限，超限保留原文并报错，不静默截断。切换标签保留消息与输入。 | [游戏设计](design/game-interface.md) | `AssistantPanel.vue`、`LearningSupportPanel.vue`、`frontend/e2e/gameDesign.spec.ts` |
-| AI-02 | 只有学生在已授权活动中明确发送问题才调用助教。走路、NPC 剧情与日常、翻页、播放、任务推进、切换标签和布局均零模型调用；没有配置时显示真实不可用，不伪造回复。内置章节测验不开放助教。 | [产品](product.md)、[架构](architecture.md)、[HTTP 契约](api-contract.md) | `backend/app/assistant.py`、`backend/tests/test_assistant.py`、`frontend/e2e/rebornJourney.spec.ts` |
-| AI-03 | 助教上下文、会话与引用按用户、班级、活动隔离，只引用当前授权材料；不授予评分、解锁或发布能力，界面统一不额外开放独立资料的助教权限。 | [架构](architecture.md)、[HTTP 契约](api-contract.md) | `backend/tests/test_assistant.py`、`backend/tests/test_content_security.py` |
+| AI-02 | 只有学生在已授权活动或图书馆资料阅读中明确发送问题才调用助教。走路、NPC 剧情与日常、翻页、播放、任务推进、切换标签和布局均零模型调用；没有配置时显示真实不可用，不伪造回复。内置章节测验不开放助教。 | [产品](product.md)、[架构](architecture.md)、[HTTP 契约](api-contract.md) | `backend/app/assistant.py`、`backend/tests/test_assistant.py`、`frontend/e2e/rebornJourney.spec.ts` |
+| AI-03 | 助教上下文、会话与引用按用户、班级、活动或资料隔离，只引用当前授权材料；不授予评分、解锁或发布能力。图书馆直接阅读资料可使用图书管理员助教，无需绑定活动；恢复会话和发送消息均重新鉴权，测验禁用规则保持。 | [架构](architecture.md)、[HTTP 契约](api-contract.md) | `backend/tests/test_assistant.py`、`backend/tests/test_content_security.py` |
 
 ## 开发与协作
 
@@ -80,3 +81,7 @@
 | 日期与范围 | 需求变化 | 本轮核对与限制 |
 | --- | --- | --- |
 | 2026-11-08 · 文档整理，复核 DATA-01–04、LEARN-01–08、UI-01–09、AI-01–03、DEV-01–04 | 汇总此前已确定要求，新增每轮复核和同步维护约定；现有产品要求保持，没有增加功能。 | 同步文档索引、开发手册、内容编写、验收摘要、续做入口、设计入口及AGENTS；完整归档三份旧文档。核对28项要求，新增维护检查脚本验证链接/锚点和归档完整性。未改应用代码、未启动服务、未运行迁移或重跑功能/浏览器测试；实际文档检查见[本轮记录](acceptance.md#本轮文档整理核验)。 |
+| 2026-11-08 · 本地启动，复核 DATA-02、DEV-03–04 | 要求保持，无新增需求。 | 启动Docker Desktop并核对现有独立预览服务；同步[启动核验](acceptance.md#本地启动核验2026-11-08)。未改应用或配置，未重跑功能与浏览器测试；文档检查及空白检查通过。 |
+| 2026-11-08 · 学号登录及本地账号清理，复核 DATA-02、DATA-05、UI-08、DEV-02–04 | 新增DATA-05：全系统学号替代邮箱；用户明确授权清空当前本地预览全部旧账号及关联记录。其他既定要求保持。 | 同步产品、架构、API、两套设计规范、开发手册、验收与续做入口；前后端、迁移、浏览器及清理结果见[本轮核验](acceptance.md#学号登录与账号清理核验2026-11-08)。课程材料保留；真实外部服务及生产专项未执行。 |
+| 2026-11-08 · 普通侧栏与图书馆助教，复核 UI-05、AI-01–03、DEV-04 | 按最新决定撤销普通工作区侧栏折叠，保留阅读/答题学习支持折叠；图书馆直接阅读开放资料级图书管理员助教。其余要求保持。 | 同步产品、设计、架构、API、开发、验收及续做入口；验证见[本轮核验](acceptance.md#普通侧栏与图书馆助教核验2026-11-08)。前后端、迁移与浏览器通过；本地未配置模型凭据，真实模型及其他外部服务未验收。 |
+| 2026-11-08 · 提交推送复核，复核 DATA-05、UI-05、AI-01–03、DEV-03–04 | 要求保持，无新增功能需求。 | 按用户要求提交学号登录、普通侧栏调整及资料助教改动；复核文档、暂存范围与已有验收结果。仅推送reborn，无关目录与本机凭据不纳入；本轮未重复执行功能测试。 |

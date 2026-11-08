@@ -9,18 +9,18 @@ vi.mock("vue-router", () => ({
 }));
 describe("login wire contract", () => {
   beforeEach(() => setActivePinia(createPinia()));
-  it("only sends email and password, never the registration name field", async () => {
+  it("only sends student_id and password, never the registration name field", async () => {
     const request = vi.spyOn(api, "post").mockResolvedValue({
       access_token: "token",
-      user: { id: 1, email: "a@b.test", name: "Student", role: "student" },
+      user: { id: 1, student_id: "239211289335357", name: "Student", role: "student" },
     });
     const wrapper = mount(EntryPage, { global: { plugins: [createPinia()] } });
-    await wrapper.find('input[type="email"]').setValue("a@b.test");
+    await wrapper.find('input[autocomplete="username"]').setValue("239211289335357");
     await wrapper.find('input[type="password"]').setValue("a-long-password");
     await wrapper.find("form").trigger("submit.prevent");
     await flushPromises();
     expect(request).toHaveBeenCalledWith("/auth/login", {
-      email: "a@b.test",
+      student_id: "239211289335357",
       password: "a-long-password",
     });
     request.mockRestore();

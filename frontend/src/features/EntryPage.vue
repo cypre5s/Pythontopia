@@ -13,9 +13,12 @@
             required
             maxlength="80" /></label
         ><label
-          >邮箱<input
-            v-model="email"
-            type="email"
+          >学号<input
+            v-model="student_id"
+            type="text"
+            inputmode="numeric"
+            pattern="[0-9]{1,32}"
+            maxlength="32"
             autocomplete="username"
             required /></label
         ><label
@@ -49,7 +52,7 @@ import { useSession } from "../shared/session";
 import type { User } from "../shared/types";
 const register = ref(false),
   name = ref(""),
-  email = ref(""),
+  student_id = ref(""),
   password = ref(""),
   error = ref(""),
   busy = ref(false),
@@ -66,8 +69,8 @@ async function submit() {
     const result = await api.post<{ access_token: string; user: User }>(
       `/auth/${register.value ? "register" : "login"}`,
       register.value
-        ? { email: email.value, password: password.value, name: name.value }
-        : { email: email.value, password: password.value },
+        ? { student_id: student_id.value, password: password.value, name: name.value }
+        : { student_id: student_id.value, password: password.value },
     );
     api.setToken(result.access_token);
     session.user = result.user;

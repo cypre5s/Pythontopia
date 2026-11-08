@@ -28,7 +28,7 @@ afterEach(() => {
 
 async function panel(role = "student") {
   const session = useSession();
-  session.user = { id: 7, name: "小林", email: "learner@example.test", role };
+  session.user = { id: 7, name: "小林", student_id: "97972435969354", role };
   const router = createRouter({ history: createMemoryHistory(), routes: [
     { path: "/", component: { template: "<div>登录</div>" } },
     { path: "/world", component: { template: "<div>小镇</div>" } },
@@ -47,7 +47,7 @@ describe("categorized settings", () => {
     const tabs = wrapper.findAll('[role="tab"]');
     expect(tabs.map(tab => tab.text())).toEqual(["账户", "界面", "音乐", "操作", "关于"]);
     expect(tabs[0].attributes("aria-selected")).toBe("true");
-    expect(wrapper.find('[role="tabpanel"]').text()).toContain("learner@example.test");
+    expect(wrapper.find('[role="tabpanel"]').text()).toContain("97972435969354");
     expect(wrapper.text()).toContain("学生");
     expect(wrapper.findAll("h2")).toHaveLength(0);
     expect(wrapper.text()).not.toContain("欢迎回来");

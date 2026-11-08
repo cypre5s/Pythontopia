@@ -1,7 +1,7 @@
 <template>
   <section class="town-workspace library-workspace">
-    <div class="town-book" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
-      <aside :hidden="sidebarCollapsed" :inert="sidebarCollapsed" class="town-sidebar library-sidebar"><SidebarToggle />
+    <div class="town-book">
+      <aside class="town-sidebar library-sidebar">
         <p class="library-directory-label">章节目录</p>
         <nav class="town-directory" aria-label="资料章节">
           <button class="town-directory-item" :class="{ 'is-current': chapter === 'all' }" :aria-pressed="chapter === 'all'" @click="selectChapter('all')">
@@ -41,9 +41,6 @@
   </section>
 </template>
 <script setup lang="ts">
-import SidebarToggle from "../shared/SidebarToggle.vue";
-import { useWorkspaceSidebar } from "../shared/workspaceSidebar";
-const { collapsed: sidebarCollapsed } = useWorkspaceSidebar();
 import GameIcon from "../shared/GameIcon.vue";
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { api } from "../shared/api";

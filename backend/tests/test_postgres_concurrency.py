@@ -36,8 +36,8 @@ def test_postgres_duplicate_events_under_contention():
             definition = {"id": "contention-talk", "title": "Contention", "chapter_id": 179, "kind": "side",
                           "nodes": [{"id": "greet", "type": "TALK_TO_NPC", "title": "Talk", "target": "mayor_py", "dependencies": []}], "effects": []}
             db.add(QuestDefinition(id=definition["id"], chapter_id=179, title="Contention", definition=definition))
-            teacher = User(email="teacher@concurrency.test", name="teacher", role="teacher", password_hash="unused")
-            student = User(email="student@concurrency.test", name="student", role="student", password_hash="unused")
+            teacher = User(student_id="193582816979202", name="teacher", role="teacher", password_hash="unused")
+            student = User(student_id="870446112008", name="student", role="student", password_hash="unused")
             db.add_all([teacher, student])
             db.flush()
             classroom = Classroom(name="isolated contention", teacher_id=teacher.id, join_code=uuid4().hex[:20])
@@ -77,7 +77,7 @@ def test_postgres_duplicate_events_under_contention():
         with factory() as db:
             assert db.scalar(select(func.count()).select_from(LearningEvent)) == 1
             assert db.scalar(select(func.count()).select_from(NodeState)) == 1
-            second = User(email="story@concurrency.test", name="story student", role="student", password_hash="unused")
+            second = User(student_id="161766572741808", name="story student", role="student", password_hash="unused")
             db.add(second)
             db.flush()
             second_id = second.id

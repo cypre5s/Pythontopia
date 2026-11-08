@@ -188,8 +188,8 @@ test("the eleven canonical Chinese building labels match retained Tiled objects 
 
 test("map preview, filters, WASD, library doors and cross-map guidance share one continuous world canvas", async ({ page, request }, testInfo) => {
   test.setTimeout(300_000);
-  const email = process.env.E2E_TEACHER_EMAIL, password = process.env.E2E_TEACHER_PASSWORD;
-  test.skip(!email || !password, "Explicit isolated teacher credentials are required; no default users or mocked business APIs.");
+  const student_id = process.env.E2E_TEACHER_STUDENT_ID, password = process.env.E2E_TEACHER_PASSWORD;
+  test.skip(!student_id || !password, "Explicit isolated teacher credentials are required; no default users or mocked business APIs.");
   await page.emulateMedia({ reducedMotion: "reduce" });
   const pageErrors: string[] = [], assistantMessages: string[] = [];
   page.on("pageerror", error => pageErrors.push(error.message));
@@ -197,7 +197,7 @@ test("map preview, filters, WASD, library doors and cross-map guidance share one
     if (outgoing.method() === "POST" && /\/api\/assistant\/sessions\/[^/]+\/messages$/.test(outgoing.url()))
       assistantMessages.push(outgoing.url());
   });
-  const login = await request.post("/api/auth/login", { data: { email, password } });
+  const login = await request.post("/api/auth/login", { data: { student_id, password } });
   expect(login.ok()).toBeTruthy();
   const teacher = { Authorization: `Bearer ${(await login.json()).access_token}` };
   const created = await request.post("/api/classrooms", {
@@ -212,7 +212,7 @@ test("map preview, filters, WASD, library doors and cross-map guidance share one
   await page.goto("/");
   await page.getByRole("button", { name: "初次到访？注册居民证" }).click();
   await page.getByLabel("名字", { exact: true }).fill("地图新居民");
-  await page.getByLabel("邮箱", { exact: true }).fill(`${randomUUID()}@example.test`);
+  await page.getByLabel("学号", { exact: true }).fill(BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString());
   await page.getByLabel("密码", { exact: true }).fill(`World-${randomUUID()}`);
   await page.getByRole("button", { name: "注册并进入", exact: true }).click();
   await page.getByLabel("班级加入码").fill(classroom.join_code);

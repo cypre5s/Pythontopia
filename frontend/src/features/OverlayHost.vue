@@ -95,7 +95,7 @@ const sidebar = createWorkspaceSidebar(() => panel.value), sidebarCollapsed = si
 const practiceKind = ref("practice");
 watch(() => session.workspace?.kind === "practice" ? session.workspace.activity_id : "", () => { practiceKind.value = "practice"; }, { flush: "sync" });
 provideWorkspaceSidebar(sidebar);
-const hasSidebar = computed(() => session.workspace && session.workspace.kind !== "developer");
+const hasSidebar = computed(() => session.workspace && ["lesson", "material", "practice"].includes(session.workspace.kind));
 watch(() => session.workspace?.kind, () => { sidebarCollapsed.value = false; });
 const titles = {
     lesson: "资料阅读",

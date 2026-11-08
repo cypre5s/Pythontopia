@@ -1,7 +1,7 @@
 <template>
   <section class="town-workspace classroom-workspace">
-    <div class="town-book" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
-      <aside :hidden="sidebarCollapsed" :inert="sidebarCollapsed" class="town-sidebar"><SidebarToggle />
+    <div class="town-book">
+      <aside class="town-sidebar">
         <nav class="town-directory" aria-label="班级目录">
           <button v-for="item in sections" :key="item.key" class="town-directory-item" :class="{ 'is-current': section === item.key }" :aria-pressed="section === item.key" :disabled="busy" @click="selectSection(item.key)"><GameIcon :name="item.icon" /><span>{{ item.label }}</span></button>
         </nav>
@@ -46,9 +46,6 @@
   </section>
 </template>
 <script setup lang="ts">
-import SidebarToggle from "../shared/SidebarToggle.vue";
-import { useWorkspaceSidebar } from "../shared/workspaceSidebar";
-const { collapsed: sidebarCollapsed } = useWorkspaceSidebar();
 import { computed, onBeforeUnmount, ref } from "vue";
 import GameIcon from "../shared/GameIcon.vue";
 import { useSession } from "../shared/session";

@@ -19,7 +19,7 @@ class AssistantSession(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
-    activity_id: Mapped[str] = mapped_column(ForeignKey("activities.id"), index=True)
+    activity_id: Mapped[str | None] = mapped_column(ForeignKey("activities.id"), index=True, nullable=True)
     material_id: Mapped[int | None] = mapped_column(ForeignKey("materials.id"), nullable=True)
     messages: Mapped[list] = mapped_column(JSON, default=list)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)

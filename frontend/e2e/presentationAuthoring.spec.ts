@@ -8,10 +8,10 @@ test.use({ actionTimeout: 20_000 });
 test('teacher uploads self-authored PPTX; student reads the converted private PDF and records learning', async ({ page, browser, request }, testInfo) => {
   test.setTimeout(240_000);
   const pptxPath = process.env.E2E_PPTX_PATH;
-  const email = process.env.E2E_TEACHER_EMAIL;
+  const student_id = process.env.E2E_TEACHER_STUDENT_ID;
   const password = process.env.E2E_TEACHER_PASSWORD;
   test.skip(!pptxPath, 'Requires E2E_PPTX_PATH pointing to an explicitly supplied self-authored test presentation.');
-  test.skip(!email || !password, 'Requires explicit Reborn teacher credentials; no default accounts.');
+  test.skip(!student_id || !password, 'Requires explicit Reborn teacher credentials; no default accounts.');
   await access(pptxPath!);
   expect(extname(pptxPath!).toLowerCase()).toBe('.pptx');
 
@@ -26,7 +26,7 @@ test('teacher uploads self-authored PPTX; student reads the converted private PD
   page.on('pageerror', error => errors.push(error.message));
 
   await page.goto('/');
-  await page.getByLabel('邮箱', { exact: true }).fill(email!);
+  await page.getByLabel('学号', { exact: true }).fill(student_id!);
   await page.getByLabel('密码', { exact: true }).fill(password!);
   await page.getByRole('button', { name: '进入小镇', exact: true }).click();
   await page.waitForURL('**/teacher', { timeout: 30_000 });
@@ -112,7 +112,7 @@ test('teacher uploads self-authored PPTX; student reads the converted private PD
     await student.goto('/');
     await student.getByRole('button', { name: '初次到访？注册居民证', exact: true }).click();
     await student.getByLabel('名字', { exact: true }).fill(studentName);
-    await student.getByLabel('邮箱', { exact: true }).fill(`pptx-${randomUUID()}@example.test`);
+    await student.getByLabel('学号', { exact: true }).fill(BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString());
     await student.getByLabel('密码', { exact: true }).fill(`Pptx-${randomUUID()}`);
     await student.getByRole('button', { name: '注册并进入', exact: true }).click();
     await student.getByLabel('班级加入码', { exact: true }).fill(classroom.join_code);

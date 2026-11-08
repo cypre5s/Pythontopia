@@ -1,0 +1,36 @@
+import { test, expect } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+
+test("student ID registration and login preserve leading zeroes and reject duplicates", async ({ page, request }, info) => {
+  test.setTimeout(90_000);
+  const student_id = '00' + BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 20)).toString();
+  const password = `Login-${randomUUID()}`;
+  await page.goto('/');
+  const account = page.getByLabel('学号', { exact: true });
+  await expect(account).toHaveAttribute('type', 'text');
+  await expect(account).toHaveAttribute('inputmode', 'numeric');
+  await page.getByRole('button', { name: '初次到访？注册居民证' }).click();
+  await page.getByLabel('名字', { exact: true }).fill('学号登录验收');
+  await account.fill(student_id);
+  await page.getByLabel('密码', { exact: true }).fill(password);
+  const registration = page.waitForResponse(r => r.url().endsWith('/api/auth/register') && r.request().method() === 'POST');
+  await page.getByRole('button', { name: '注册并进入', exact: true }).click();
+  const response = await registration;
+  expect(response.status()).toBe(201);
+  const identity = await response.json();
+  expect(identity.user.student_id).toBe(student_id);
+  expect(identity.user).not.toHaveProperty('email');
+  await expect(page).toHaveURL(/\/world$/);
+  expect((await request.post('/api/auth/register', { data: { student_id, password, name: '重复账号' } })).status()).toBe(409);
+  expect((await request.post('/api/auth/login', { data: { student_id: student_id.slice(2), password } })).status()).toBe(401);
+  await request.post('/api/auth/logout', { headers: { Authorization: `Bearer ${identity.access_token}` } });
+  await page.evaluate(() => sessionStorage.clear());
+  await page.goto('/');
+  await page.getByLabel('学号', { exact: true }).fill(student_id);
+  await page.getByLabel('密码', { exact: true }).fill(password);
+  await page.screenshot({ path: info.outputPath('student-id-login.png') });
+  const login = page.waitForResponse(r => r.url().endsWith('/api/auth/login') && r.request().method() === 'POST');
+  await page.getByRole('button', { name: '进入小镇', exact: true }).click();
+  expect((await login).status()).toBe(200);
+  await expect(page).toHaveURL(/\/world$/);
+});

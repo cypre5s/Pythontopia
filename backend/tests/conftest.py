@@ -54,20 +54,20 @@ def client(db):
 
 @pytest.fixture
 def student(db):
-    row = User(email="student@example.test", name="学生", role="student", password_hash=hash_password("student-password-123"))
+    row = User(student_id="72953879102235", name="学生", role="student", password_hash=hash_password("student-password-123"))
     db.add(row)
     db.commit()
     token = issue(db, row)["access_token"]
-    return {"id": row.id, "email": row.email, "headers": {"Authorization": "Bearer " + token}}
+    return {"id": row.id, "student_id": row.student_id, "headers": {"Authorization": "Bearer " + token}}
 
 
 @pytest.fixture
 def teacher(db):
-    row = User(email="teacher@example.test", name="教师", role="teacher", password_hash=hash_password("teacher-password-123"))
+    row = User(student_id="1748881331821", name="教师", role="teacher", password_hash=hash_password("teacher-password-123"))
     db.add(row)
     db.commit()
     token = issue(db, row)["access_token"]
-    return {"id": row.id, "email": row.email, "headers": {"Authorization": "Bearer " + token}}
+    return {"id": row.id, "student_id": row.student_id, "headers": {"Authorization": "Bearer " + token}}
 
 
 @pytest.fixture

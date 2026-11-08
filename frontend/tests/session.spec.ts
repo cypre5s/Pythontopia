@@ -23,7 +23,7 @@ describe("one workspace and account isolation", () => {
     store.user = {
       id: 1,
       name: "student",
-      email: "student@example.test",
+      student_id: "72953879102235",
       role: "student",
     };
     store.drafts = { q1: "print(1)" };
@@ -46,7 +46,7 @@ describe("one workspace and account isolation", () => {
   });
   it("opens and restores an independent daily story without creating a task workspace", async () => {
     const store = useSession();
-    store.user = { id: 1, name: "student", email: "student@example.test", role: "student" };
+    store.user = { id: 1, name: "student", student_id: "72953879102235", role: "student" };
     store.classroomId = 2;
     store.world = { story_available: true, player: { map_key: "town_hub", tile_x: 22, tile_y: 34, direction: "down" }, npcs: [], quests: [], chapters: [], flags: [] };
     const daily = { id: "daily", revision: 0, status: "active", mode: "ambient", npc_key: "mayor_py", node: { id: "hello", text: "今天想聊些什么？" }, activity: null };
@@ -73,7 +73,7 @@ it("ignores a late world response from a previously selected classroom", async (
   store.user = {
     id: 1,
     name: "one",
-    email: "one@example.test",
+    student_id: "26485103988533",
     role: "student",
   };
   store.classroomId = 1;
@@ -104,7 +104,7 @@ describe("classroom switching", () => {
   afterEach(() => vi.restoreAllMocks());
   function context() {
     const store = useSession();
-    store.user = { id: 1, name: "同学", email: "student@example.test", role: "student" };
+    store.user = { id: 1, name: "同学", student_id: "72953879102235", role: "student" };
     store.classes = [1, 2, 3].map(id => ({ id, name: `班级${id}`, teacher_id: 4 }));
     store.classroomId = 1;
     store.world = { player: { tile_x: 1, tile_y: 1, map_key: "town_hub", direction: "down" }, npcs: [], quests: [], chapters: [], flags: ["first"] };

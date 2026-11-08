@@ -20,7 +20,7 @@ def test_seed_idempotent_and_answers_private(client, db, student, classroom):
 
 
 def test_registration_cannot_select_role_and_session_revoke(client):
-    data = {"email": "new@example.test", "name": "新同学", "password": "test-password-123"}
+    data = {"student_id": "23258500098500", "name": "新同学", "password": "test-password-123"}
     assert client.post("/api/auth/register", json={**data, "role": "teacher"}).status_code == 422
     result = client.post("/api/auth/register", json=data)
     assert result.status_code == 201

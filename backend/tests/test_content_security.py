@@ -9,7 +9,7 @@ from app.quests import validate_definition
 
 
 def new_teacher(db):
-    user = User(email="other-teacher@example.test", name="Teacher B", role="teacher", password_hash=hash_password("teacher-b-password"))
+    user = User(student_id="19434617522190", name="Teacher B", role="teacher", password_hash=hash_password("teacher-b-password"))
     db.add(user)
     db.commit()
     return {"id": user.id, "headers": {"Authorization": "Bearer " + issue(db, user)["access_token"]}}

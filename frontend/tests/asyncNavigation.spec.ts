@@ -30,7 +30,7 @@ function deferred<T>() {
 const person = (id: number): User => ({
   id,
   name: `Student ${id}`,
-  email: `student-${id}@example.test`,
+  student_id: `student-${id}@example.test`,
   role: "student",
 });
 const classroom = (id: number): Classroom => ({

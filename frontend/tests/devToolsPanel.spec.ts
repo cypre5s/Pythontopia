@@ -11,7 +11,7 @@ const wrappers: VueWrapper[] = [];
 beforeEach(() => {
   setActivePinia(createPinia());
   const session = useSession();
-  session.user = { id: 7, name: "小林", email: "learner@example.test", role: "student", dev_tools_enabled: true };
+  session.user = { id: 7, name: "小林", student_id: "97972435969354", role: "student", dev_tools_enabled: true };
   session.classes = [{ id: 2, name: "第一班", teacher_id: 10 }, { id: 3, name: "第二班", teacher_id: 10 }];
   session.classroomId = 2;
   api.setToken("fixture-session");
@@ -76,7 +76,7 @@ describe("developer workspace", () => {
 
   it("shows the account, classroom and consequences before one cancellable confirmation", async () => {
     const restart = vi.spyOn(useSession(), "restartCurrentClassroom").mockResolvedValue(true), wrapper = panel();
-    expect(wrapper.text()).toContain("learner@example.test");
+    expect(wrapper.text()).toContain("97972435969354");
     expect(wrapper.text()).toContain("第一班");
     expect(wrapper.text()).toContain("练习和测试成绩");
     expect(wrapper.text()).toContain("课程材料和界面偏好会保留");

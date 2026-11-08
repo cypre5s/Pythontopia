@@ -9,4 +9,4 @@ def test_classroom_summary_shows_only_authorized_teacher_name(client, teacher, s
     assert [item["id"] for item in response.json()] == [classroom["id"]]
     assert response.json()[0]["teacher_name"] == "教师"
     assert "join_code" not in response.json()[0]
-    assert teacher["email"] not in response.text
+    assert teacher["student_id"] not in response.text

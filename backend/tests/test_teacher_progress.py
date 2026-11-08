@@ -117,13 +117,13 @@ def test_progress_counts_are_scoped_to_student_classroom_and_teacher(client, db,
     release(client, teacher, other_class["id"])
     assert completed_chapters(client, teacher, other_class["id"], student["id"]) == 0
     new_student = client.post(
-        "/api/auth/register", json={"email": "progress-other@example.test", "name": "Other", "password": "isolated-progress-password"}
+        "/api/auth/register", json={"student_id": "190515614727603", "name": "Other", "password": "isolated-progress-password"}
     ).json()
     other_headers = {"Authorization": "Bearer " + new_student["access_token"]}
     client.post("/api/classrooms/join", json={"join_code": classroom["join_code"]}, headers=other_headers)
     assert completed_chapters(client, teacher, cid, new_student["user"]["id"]) == 0
     other_teacher = User(
-        email="progress-teacher@example.test", name="Other teacher", role="teacher", password_hash=hash_password("other-progress-teacher")
+        student_id="259066979884583", name="Other teacher", role="teacher", password_hash=hash_password("other-progress-teacher")
     )
     db.add(other_teacher)
     db.commit()

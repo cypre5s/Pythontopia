@@ -31,10 +31,10 @@ async function json<T>(response: APIResponse | Response): Promise<T> {
 
 /** Only this newly created classroom/student are mutated; existing course content is read as published. */
 async function prepare(request: APIRequestContext) {
-  const email = process.env.E2E_TEACHER_EMAIL, password = process.env.E2E_TEACHER_PASSWORD;
-  test.skip(!email || !password || process.env.E2E_COURSE_MEDIA_IMPORTED !== "1",
+  const student_id = process.env.E2E_TEACHER_STUDENT_ID, password = process.env.E2E_TEACHER_PASSWORD;
+  test.skip(!student_id || !password || process.env.E2E_COURSE_MEDIA_IMPORTED !== "1",
     "Requires an isolated deployment, imported real PDF media and explicit teacher credentials.");
-  const login = await json<Identity>(await request.post("/api/auth/login", { data: { email, password } }));
+  const login = await json<Identity>(await request.post("/api/auth/login", { data: { student_id, password } }));
   const teacher: Headers = { Authorization: `Bearer ${login.access_token}` };
   const classroom = await json<Classroom>(await request.post("/api/classrooms", {
     headers: teacher, data: { name: `游戏设计验收 ${randomUUID().slice(0, 8)}` },
@@ -43,7 +43,7 @@ async function prepare(request: APIRequestContext) {
     headers: teacher, data: { status: "published" },
   }));
   const identity = await json<Identity>(await request.post("/api/auth/register", {
-    data: { name: "游戏界面验收居民", email: `game-design-${randomUUID()}@example.test`, password: `Resident-${randomUUID()}` },
+    data: { name: "游戏界面验收居民", student_id: BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString(), password: `Resident-${randomUUID()}` },
   }));
   const student: Headers = { Authorization: `Bearer ${identity.access_token}` };
   await json(await request.post("/api/classrooms/join", { headers: student, data: { join_code: classroom.join_code } }));
@@ -170,13 +170,17 @@ async function shell(page: Page, title: string, cards: Cards, baseline?: HeaderS
     }).map(button => button.textContent?.trim() || button.getAttribute("aria-label")));
   expect(thickButtons).toEqual([]);
   const sidebar = current.locator(".learning-support,.town-sidebar,.journal-index,.map-sidebar");
-  if (await sidebar.count()) {
+  if (cards.layout === ".learning-layout" && await sidebar.count()) {
     await current.getByRole("button", { name: "折叠侧边栏", exact: true }).click();
     await expect(sidebar).toBeHidden();
     const expand = current.getByRole("button", { name: "展开侧边栏", exact: true });
     await expect(expand).toBeInViewport({ ratio: .99 });
     await expand.click();
     await expect(sidebar).toBeVisible();
+  } else {
+    await expect(current.getByRole("button", { name: "折叠侧边栏", exact: true })).toHaveCount(0);
+    await expect(current.getByRole("button", { name: "展开侧边栏", exact: true })).toHaveCount(0);
+    if (await sidebar.count()) await expect(sidebar).toBeVisible();
   }
   return style;
 }
@@ -347,8 +351,9 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   await shell(page, "资料阅读", { layout: ".learning-layout", surfaces: [".pdf-page-surface"] }, baseline);
   await pdfFitsWithoutLeftScroll(page);
   await panel(page).getByRole("tab", { name: "图书管理员", exact: true }).click();
-  await expect(panel(page)).toContainText("当前资料未关联助教活动");
-  await expect(panel(page).locator(".assistant-panel")).toHaveCount(0);
+  await expect(panel(page).locator(".assistant-panel")).toBeVisible();
+  await expect(panel(page).locator(".assistant-panel h3")).toHaveText("图书管理员");
+  await expect(panel(page)).not.toContainText("当前资料未关联助教活动");
   await panel(page).getByRole("tab", { name: "学习目标", exact: true }).click();
   await panel(page).getByRole("tab", { name: "文档目录", exact: true }).click();
   const outline = panel(page).getByRole("navigation", { name: "文档页面目录", exact: true });

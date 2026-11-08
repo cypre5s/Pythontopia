@@ -28,7 +28,7 @@ describe("public judge sample feedback", () => {
     const session = useSession();
     session.user = {
       id: 1,
-      email: "fixture@example.test",
+      student_id: "124639931179929",
       name: "Fixture",
       role: "student",
     };

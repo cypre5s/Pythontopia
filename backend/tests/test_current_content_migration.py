@@ -91,5 +91,7 @@ def test_collapse_versions_preserves_grades_and_merges_reading_history(existing_
         if connection.dialect.name == "sqlite":
             assert not connection.execute(text("PRAGMA foreign_key_check")).all()
     refused = migrate(url, "downgrade", "b63e1a4920d7", check=False)
-    assert refused.returncode != 0 and "Cannot reconstruct removed content versions" in refused.stderr
+    # The newest identity migration also deliberately refuses destructive downgrade.
+    assert refused.returncode != 0 and any(message in refused.stderr for message in (
+        "Cannot reconstruct removed content versions", "Email identities cannot be reconstructed"))
     engine.dispose()

@@ -86,10 +86,10 @@ test("teacher management layout, forms, real records, responsive navigation and 
   request,
 }, testInfo) => {
   test.setTimeout(180_000);
-  const email = process.env.E2E_TEACHER_EMAIL;
+  const student_id = process.env.E2E_TEACHER_STUDENT_ID;
   const password = process.env.E2E_TEACHER_PASSWORD;
   test.skip(
-    !email || !password,
+    !student_id || !password,
     "Requires an explicitly provisioned isolated Reborn teacher account.",
   );
   const errors: string[] = [];
@@ -102,7 +102,7 @@ test("teacher management layout, forms, real records, responsive navigation and 
   await page.setViewportSize({ width: 1920, height: 1080 });
   await page.goto("/");
   const originalEntryStyles = await entryStyles(page);
-  await page.getByLabel("邮箱", { exact: true }).fill(email!);
+  await page.getByLabel("学号", { exact: true }).fill(student_id!);
   await page.getByLabel("密码", { exact: true }).fill(password!);
   const loggedIn = page.waitForResponse(
     (r) =>
@@ -205,7 +205,7 @@ test("teacher management layout, forms, real records, responsive navigation and 
   const studentName = `后台验收学生 ${tag}`;
   const registered = await request.post("/api/auth/register", {
     data: {
-      email: `admin-ui-${randomUUID()}@example.test`,
+      student_id: BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString(),
       password: `Admin-ui-${randomUUID()}`,
       name: studentName,
     },
@@ -231,7 +231,7 @@ test("teacher management layout, forms, real records, responsive navigation and 
   await openSection(page, "学习记录");
   await page.getByRole("button", { name: "刷新记录", exact: true }).click();
   const memberSearch = page.getByRole("searchbox", {
-    name: "搜索学生姓名或邮箱",
+    name: "搜索学生姓名或学号",
     exact: true,
   });
   await memberSearch.fill(studentName);

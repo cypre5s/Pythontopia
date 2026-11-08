@@ -141,17 +141,17 @@ test("usable world HUD, modal focus, history, text scaling and keyboard controls
   request,
 }, testInfo) => {
   test.setTimeout(180_000);
-  const email = process.env.E2E_TEACHER_EMAIL;
+  const student_id = process.env.E2E_TEACHER_STUDENT_ID;
   const password = process.env.E2E_TEACHER_PASSWORD;
   test.skip(
-    !email || !password,
+    !student_id || !password,
     "Requires explicit E2E teacher credentials; no built-in account or mocked business data.",
   );
   const pageErrors: string[] = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
 
   const login = await request.post("/api/auth/login", {
-    data: { email, password },
+    data: { student_id, password },
   });
   expect(login.ok()).toBeTruthy();
   const teacherToken = (await login.json()) as { access_token: string };
@@ -177,8 +177,8 @@ test("usable world HUD, modal focus, history, text scaling and keyboard controls
   await page.getByRole("button", { name: "初次到访？注册居民证" }).click();
   await page.getByLabel("名字", { exact: true }).fill("界面验收居民");
   await page
-    .getByLabel("邮箱", { exact: true })
-    .fill(`ui-${randomUUID()}@example.test`);
+    .getByLabel("学号", { exact: true })
+    .fill(BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString());
   await page.getByLabel("密码", { exact: true }).fill(`UI-${randomUUID()}`);
   await page.getByRole("button", { name: "注册并进入", exact: true }).click();
   await page

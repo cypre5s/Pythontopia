@@ -43,12 +43,20 @@ Invoke-RestMethod http://127.0.0.1:15174/api/health
 系统不提供默认公开账号。先在当前终端安全注入仅用于创建账号的 `REBORN_TEACHER_PASSWORD` 环境变量，至少12字符；不要将密码写进命令、文档或 Git。再创建自己的教师账号：
 
 ```powershell
-docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml exec -e REBORN_TEACHER_PASSWORD api python -m app.cli provision-user --email teacher@example.edu --name 教师 --role teacher --password-env REBORN_TEACHER_PASSWORD
+docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml exec -e REBORN_TEACHER_PASSWORD api python -m app.cli provision-user --student-id 900001 --name 教师 --role teacher --password-env REBORN_TEACHER_PASSWORD
 ```
 
-命令不会覆盖已有同邮箱账号。管理员使用 `--role admin`；本机 API 可直接执行同一 `python -m app.cli provision-user ...` 命令。用后清除临时密码环境变量。学生在界面注册，教师创建班级、分发加入码并安排章节开放。
+命令不会覆盖已有同学号账号。管理员使用 `--role admin`；本机 API 可直接执行同一 `python -m app.cli provision-user ...` 命令。用后清除临时密码环境变量。学生在界面注册，教师创建班级、分发加入码并安排章节开放。
 
 ### 更新与停止
+
+从邮箱账号升级前先备份数据库与私有文件。学号迁移保留历史用户和学习数据，撤销旧会话并移除邮箱字段；不会自动编造学号或清空账号。需要保留的历史账号先通过可信名册核对用户ID，再分配真实学号（只能分配给尚未设置学号的账号）：
+
+```powershell
+docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml exec api python -m app.cli assign-student-id --user-id 1 --student-id 00123456
+```
+
+以上ID和学号仅为格式示例。新账号使用 `provision-user --student-id`，所有角色均使用1至32位数字字符串，保留前导零。迁移后如需回退使用升级前备份；没有邮箱兼容登录。清空本地预览账号必须单独明确环境与关联记录范围，不能将测试清理加入迁移或seed。
 
 代码、YAML或前端构建配置变化后，重建相关镜像并启动。API 中的 YAML 来自构建时复制，`start` 旧容器或只刷新网页不会加载工作区修改。
 
@@ -180,6 +188,8 @@ docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.ym
 
 ## 可选服务与配置
 
+图书馆资料助教与活动助教共用下列模型配置和预算。升级到资料级会话结构前备份当前库和私有存储；执行head迁移与重复seed即可，无需新建Activity、重新导入资料或重置账号。没有凭据时图书管理员入口仍保留，但真实显示不可用。
+
 基础 Compose 只透传其中列出的环境变量。给 env 文件新增变量不会自动注入容器；调整额外的 AI预算、S3或上传限制时，需使用私有 Compose override 显式传入 API。所有凭据只在后端配置，不进入前端构建。
 
 ### AI助教
@@ -270,7 +280,7 @@ git diff --check
 
 ### 浏览器环境与专项
 
-Playwright不会自动启动服务器。先准备已启动、已迁移/seed的独立验收环境和专用教师账号，设置 `E2E_URL`、`E2E_TEACHER_EMAIL`、`E2E_TEACHER_PASSWORD`；跨教师权限用例另需 `E2E_OTHER_TEACHER_EMAIL`、`E2E_OTHER_TEACHER_PASSWORD`。测试应自行创建班级与新学生，不复用真实演示记录。
+Playwright不会自动启动服务器。先准备已启动、已迁移/seed的独立验收环境和专用教师账号，设置 `E2E_URL`、`E2E_TEACHER_STUDENT_ID`、`E2E_TEACHER_PASSWORD`；跨教师权限用例另需 `E2E_OTHER_TEACHER_STUDENT_ID`、`E2E_OTHER_TEACHER_PASSWORD`。测试应自行创建班级与新学生，不复用真实演示记录。
 
 从 `frontend` 安装匹配浏览器并执行：
 
@@ -289,7 +299,7 @@ npm run test:e2e -- --project=desktop --workers=1
 | 真实课程媒体、学习规则、页面样式 | 已导入媒体，显式设置 `E2E_COURSE_MEDIA_IMPORTED=1`；运行 `npx playwright test courseMediaPack.spec.ts learningRules.spec.ts gameDesign.spec.ts townWorkspaces.spec.ts --project=desktop --workers=1` |
 | 所有原始视频首帧 | 在媒体前置条件上额外设置 `E2E_ALL_COURSE_VIDEOS=1`，运行 `courseMediaPack.spec.ts`；首帧不代表完整逐段播放 |
 | 开发重置 | 隔离开发环境显式设置 `E2E_DEV_TOOLS=1`，运行 `devTools.spec.ts --grep-invert production`；只作用于测试创建的学生 |
-| 生产禁用开发工具 | 独立生产配置的 `E2E_PRODUCTION_URL`，及 `E2E_PRODUCTION_TEACHER_EMAIL/PASSWORD`（缺省使用测试教师变量），运行 `devTools.spec.ts --grep production` |
+| 生产禁用开发工具 | 独立生产配置的 `E2E_PRODUCTION_URL`，及 `E2E_PRODUCTION_TEACHER_STUDENT_ID/PASSWORD`（缺省使用测试教师变量），运行 `devTools.spec.ts --grep production` |
 | 自制PPTX上传转换 | `E2E_PPTX_PATH` 指向明确提供的自制测试文件，转换服务就绪，运行 `presentationAuthoring.spec.ts` |
 
 表中简写的测试文件同样通过 `npx playwright test` 执行。缺少条件的用例可能跳过；不得把跳过、契约模拟或“服务可连通”记录为实际外部服务成功。

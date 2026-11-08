@@ -10,10 +10,10 @@ type Paper = { id: string | null; revision: number; status: string; locked: bool
 
 test("practice corrections and a locked whole assessment share the question directory", async ({ page, request }, info) => {
   test.setTimeout(150_000);
-  const email = process.env.E2E_TEACHER_EMAIL, password = process.env.E2E_TEACHER_PASSWORD;
-  test.skip(!email || !password, "Requires explicit isolated QA teacher credentials; never uses a demonstration account.");
+  const student_id = process.env.E2E_TEACHER_STUDENT_ID, password = process.env.E2E_TEACHER_PASSWORD;
+  test.skip(!student_id || !password, "Requires explicit isolated QA teacher credentials; never uses a demonstration account.");
   const tag = randomUUID().slice(0, 8), practiceId = `practice-paper-${tag}`, examId = `exam-paper-${tag}`, questId = `paper-${tag}`;
-  const teacher = await json<Identity>(await request.post("/api/auth/login", { data: { email, password } }));
+  const teacher = await json<Identity>(await request.post("/api/auth/login", { data: { student_id, password } }));
   const headers = { Authorization: `Bearer ${teacher.access_token}` };
   const classroom = await json<{ id: number; join_code: string }>(await request.post("/api/classrooms", { headers, data: { name: `试卷验收 ${tag}` } }));
   await json(await request.put(`/api/teacher/classrooms/${classroom.id}/releases/179`, { headers, data: { status: "published" } }));
@@ -32,7 +32,7 @@ test("practice corrections and a locked whole assessment share the question dire
     { id: "practice", type: "COMPLETE_PRACTICE", title: "TEST 逐题练习", activity_id: practiceId, dependencies: [] },
     { id: "assessment", type: "PASS_ASSESSMENT", title: "TEST 整卷测验", activity_id: examId, dependencies: [] },
   ], effects: [] } } }));
-  const identity = await json<Identity>(await request.post("/api/auth/register", { data: { name: "试卷验收居民", email: `paper-${randomUUID()}@example.test`, password: `Resident-${randomUUID()}` } }));
+  const identity = await json<Identity>(await request.post("/api/auth/register", { data: { name: "试卷验收居民", student_id: BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString(), password: `Resident-${randomUUID()}` } }));
   const student = { Authorization: `Bearer ${identity.access_token}` };
   await json(await request.post("/api/classrooms/join", { headers: student, data: { join_code: classroom.join_code } }));
   const readPaper = () => request.get(`/api/activities/${examId}/assessment?classroom_id=${classroom.id}`, { headers: student }).then(json<Paper>);

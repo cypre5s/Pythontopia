@@ -2,7 +2,7 @@ import { test, expect, type APIRequestContext, type Page, type APIResponse, type
 import { randomUUID } from "node:crypto";
 
 interface ClassInfo { id: number; name: string; join_code: string; }
-interface Identity { access_token: string; user: { id: number; name: string; email: string }; }
+interface Identity { access_token: string; user: { id: number; name: string; student_id: string }; }
 interface WorldInfo {
   npcs: { key: string; map_key: string; tile_x: number; tile_y: number }[];
   quests: { id: string; nodes: { id: string; status: string }[] }[];
@@ -22,10 +22,10 @@ async function json<T>(response: APIResponse): Promise<T> {
 }
 
 async function prepare(request: APIRequestContext, purpose: string) {
-  const email = process.env.E2E_TEACHER_EMAIL, password = process.env.E2E_TEACHER_PASSWORD;
-  test.skip(!email || !password || process.env.E2E_COURSE_MEDIA_IMPORTED !== "1",
+  const student_id = process.env.E2E_TEACHER_STUDENT_ID, password = process.env.E2E_TEACHER_PASSWORD;
+  test.skip(!student_id || !password || process.env.E2E_COURSE_MEDIA_IMPORTED !== "1",
     "Requires an isolated deployment with the real course media imported and explicit teacher credentials.");
-  const login = await json<Identity>(await request.post("/api/auth/login", { data: { email, password } }));
+  const login = await json<Identity>(await request.post("/api/auth/login", { data: { student_id, password } }));
   const teacher: Header = { Authorization: `Bearer ${login.access_token}` };
   const createClass = async (label: string, chapters: number[]) => {
     const classroom = await json<ClassInfo>(await request.post("/api/classrooms", {
@@ -41,7 +41,7 @@ async function prepare(request: APIRequestContext, purpose: string) {
   const first = await createClass("主班", [179, 180, 181, 182, 183, 184, 185]);
   const second = await createClass("新班", [179]);
   const identity = await json<Identity>(await request.post("/api/auth/register", { data: {
-    name: "小镇界面验收学生", email: `town-workspace-${randomUUID()}@example.test`, password: `Resident-${randomUUID()}`,
+    name: "小镇界面验收学生", student_id: BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString(), password: `Resident-${randomUUID()}`,
   } }));
   const student: Header = { Authorization: `Bearer ${identity.access_token}` };
   for (const classroom of [first, second]) await json(await request.post("/api/classrooms/join", {
@@ -238,7 +238,7 @@ test("categorized settings update the real music player and keep about informati
   await expect(panel.locator("h2")).toHaveCount(1);
   await expect(panel.getByRole("tab").first()).toHaveText("账户");
   await expect(panel.getByRole("tab", { name: "账户", exact: true })).toHaveAttribute("aria-selected", "true");
-  await expect(panel.getByRole("tabpanel")).toContainText(setup.identity.user.email);
+  await expect(panel.getByRole("tabpanel")).toContainText(setup.identity.user.student_id);
   await nearFullPage(page);
   await page.screenshot({ path: testInfo.outputPath("settings-account-1920.png") });
   await panel.getByRole("tab", { name: "账户", exact: true }).focus();

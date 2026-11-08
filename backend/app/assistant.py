@@ -13,7 +13,7 @@ from typing import Annotated, Protocol
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 from .auth import current_user
@@ -36,7 +36,14 @@ def ai_config():
 class NewSession(BaseModel):
     model_config = ConfigDict(extra="forbid")
     classroom_id: int
-    activity_id: str = Field(max_length=100)
+    activity_id: str | None = Field(default=None, min_length=1, max_length=100)
+    material_id: int | None = Field(default=None, gt=0)
+
+    @model_validator(mode="after")
+    def one_target(self):
+        if (self.activity_id is None) == (self.material_id is None):
+            raise ValueError("必须且只能指定一个活动或资料")
+        return self
 
 
 class MessageInput(BaseModel):
@@ -86,11 +93,23 @@ def authorized_session(db, user, session_id):
     session = db.get(AssistantSession, session_id)
     if not session or session.user_id != user.id:
         raise HTTPException(404, "会话不存在")
+    if session.activity_id is None:
+        authorize_library_assistant(db, user, session.classroom_id, session.material_id)
+        return session, None
     activity = authorize_activity(db, user, session.classroom_id, session.activity_id)
     if not activity.assistant_allowed:
         raise HTTPException(403, "此活动禁止使用助教")
     session.material_id = activity_material(db, user, session.classroom_id, activity)
     return session, activity
+
+
+def authorize_library_assistant(db, user, classroom_id, material_id):
+    from .courses import authorize_material
+
+    material = authorize_material(db, user, classroom_id, material_id)
+    if material.status != "ready":
+        raise HTTPException(409, "当前教学资料不可用")
+    return material
 
 
 def activity_material(db, user, classroom_id, activity):
@@ -121,14 +140,16 @@ def status(user: Annotated[User, Depends(current_user)], db: Annotated[Session, 
 def new_session(body: NewSession, user: Annotated[User, Depends(current_user)], db: Annotated[Session, Depends(get_db)]):
     from .courses import authorize_activity
 
-    activity = authorize_activity(db, user, body.classroom_id, body.activity_id)
-    if not activity.assistant_allowed:
+    activity = authorize_activity(db, user, body.classroom_id, body.activity_id) if body.activity_id is not None else None
+    if activity and not activity.assistant_allowed:
         raise HTTPException(403, "此活动禁止使用助教")
+    material_id = (activity_material(db, user, body.classroom_id, activity) if activity else
+                   authorize_library_assistant(db, user, body.classroom_id, body.material_id).id)
     session = AssistantSession(
         user_id=user.id,
         classroom_id=body.classroom_id,
-        activity_id=activity.id,
-        material_id=activity_material(db, user, body.classroom_id, activity),
+        activity_id=activity.id if activity else None,
+        material_id=material_id,
     )
     db.add(session)
     db.commit()
@@ -194,8 +215,16 @@ def build_context(db, user, session, activity, body):
     selected = next((p for p in pages if p["page_no"] == body.page_no), None)
     if body.page_no is not None and selected is None:
         raise HTTPException(422, "页码不属于当前教学资料")
-    if body.video_time is not None and activity.kind not in {"lesson", "reading"}:
+    if body.video_time is not None and activity and activity.kind not in {"lesson", "reading"}:
         raise HTTPException(422, "此活动不是视频教学")
+    if activity is None:
+        npc = db.get(Npc, "librarian_doc")
+        return {
+            "activity": {"id": None, "material_id": material.id, "title": material.title, "kind": "reading", "questions": []},
+            "role": {"name": "图书管理员", "portrait": npc.portrait if npc else "", "tone": "温和、清晰，以分层提示引导学生自己思考"},
+            "current_page": selected, "video_time": body.video_time, "student_code": None,
+            "progress": [], "submissions": [], "pages": pages,
+        }
     question_ids = activity.content.get("question_ids")
     public = [
         public_question(q)

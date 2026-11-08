@@ -92,9 +92,9 @@ async function playVideo(page: Page) {
 
 test('teacher authors real private media; student reads PDF, plays video and completes configured activities', async ({ page, browser, request }, testInfo) => {
   test.setTimeout(240_000);
-  const email = process.env.E2E_TEACHER_EMAIL;
+  const student_id = process.env.E2E_TEACHER_STUDENT_ID;
   const password = process.env.E2E_TEACHER_PASSWORD;
-  test.skip(!email || !password, 'Requires explicit local Reborn teacher credentials; no default accounts.');
+  test.skip(!student_id || !password, 'Requires explicit local Reborn teacher credentials; no default accounts.');
   const tag = randomUUID().slice(0, 8);
   const classroomName = `媒体验收 ${tag}`;
   const textTitle = `TEST 自制文本 ${tag}`;
@@ -104,7 +104,7 @@ test('teacher authors real private media; student reads PDF, plays video and com
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
-  await page.getByLabel('邮箱', { exact: true }).fill(email!);
+  await page.getByLabel('学号', { exact: true }).fill(student_id!);
   await page.getByLabel('密码', { exact: true }).fill(password!);
   await page.getByRole('button', { name: '进入小镇', exact: true }).click();
   await page.waitForURL('**/teacher', { timeout: 30_000 });
@@ -209,7 +209,7 @@ test('teacher authors real private media; student reads PDF, plays video and com
     await student.goto('/');
     await student.getByRole('button', { name: '初次到访？注册居民证', exact: true }).click();
     await student.getByLabel('名字', { exact: true }).fill('媒体验收学生');
-    await student.getByLabel('邮箱', { exact: true }).fill(`media-${randomUUID()}@example.test`);
+    await student.getByLabel('学号', { exact: true }).fill(BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString());
     await student.getByLabel('密码', { exact: true }).fill(`Media-${randomUUID()}`);
     await student.getByRole('button', { name: '注册并进入', exact: true }).click();
     await student.getByLabel('班级加入码', { exact: true }).fill(classroom.join_code);

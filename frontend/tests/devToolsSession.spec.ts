@@ -12,7 +12,7 @@ function deferred<T>() {
 const world = (): World => ({ player: { map_key: "town_hub", tile_x: 24, tile_y: 28, direction: "left" }, flags: ["old"], chapters: [], quests: [], npcs: [] });
 function context() {
   const session = useSession();
-  session.user = { id: 7, name: "演示学生", email: "dev@example.test", role: "student", dev_tools_enabled: true };
+  session.user = { id: 7, name: "演示学生", student_id: "223767516863239", role: "student", dev_tools_enabled: true };
   session.classes = [{ id: 4, name: "当前班级", teacher_id: 2 }, { id: 5, name: "其他班级", teacher_id: 2 }];
   session.classroomId = 4;
   session.world = world();
@@ -90,7 +90,7 @@ describe("development replay orchestration", () => {
     const restarting = session.restartCurrentClassroom();
     await vi.waitFor(() => expect(post).toHaveBeenCalled());
     session.reset();
-    session.user = { id: 8, name: "其他学生", email: "other@example.test", role: "student" };
+    session.user = { id: 8, name: "其他学生", student_id: "193802344597316", role: "student" };
     session.classroomId = 5;
     session.world = world();
     response.resolve({ ok: true, user_id: 7, classroom_id: 4 } as never);

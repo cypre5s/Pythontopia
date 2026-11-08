@@ -183,11 +183,11 @@
               >
               <label class="search-field"
                 ><Search :size="16" /><span class="sr-only"
-                  >搜索学生姓名或邮箱</span
+                  >搜索学生姓名或学号</span
                 ><input
                   v-model="memberSearch"
                   type="search"
-                  placeholder="搜索学生姓名或邮箱"
+                  placeholder="搜索学生姓名或学号"
               /></label>
             </div>
             <section class="admin-panel member-panel">
@@ -210,7 +210,7 @@
                     ><TableRow v-for="s in pagedMembers" :key="s.id"
                       ><TableCell
                         ><span class="record-title">{{ s.name }}</span
-                        ><small>{{ s.email }}</small></TableCell
+                        ><small>{{ s.student_id ?? '未分配学号' }}</small></TableCell
                       ><TableCell>{{ s.completed_nodes }}</TableCell
                       ><TableCell>{{ s.completed_chapters }}</TableCell
                       ><TableCell>{{ s.records }}</TableCell
@@ -335,7 +335,7 @@
       :open="studentId !== null"
       :title="`${selectedStudent?.name ?? '学生'}的学习记录`"
       :description="
-        selectedStudent?.email ?? '当前班级的任务事件和正式提交记录。'
+        selectedStudent?.student_id ?? '当前班级的任务事件和正式提交记录。'
       "
       wide
       @update:open="
@@ -435,7 +435,7 @@ import "./teacherUi.css";
 interface Member {
   id: number;
   name: string;
-  email: string;
+  student_id: string | null;
   completed_nodes: number;
   completed_chapters: number;
   submissions: number;
@@ -542,7 +542,7 @@ const filteredClasses = computed(() =>
 );
 const filteredMembers = computed(() =>
   progress.value.members.filter((s) =>
-    (s.name + " " + s.email)
+    (s.name + " " + (s.student_id ?? ""))
       .toLowerCase()
       .includes(memberSearch.value.trim().toLowerCase()),
   ),

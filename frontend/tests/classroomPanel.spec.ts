@@ -10,7 +10,7 @@ function setup() {
   const pinia = createPinia();
   setActivePinia(pinia);
   const session = useSession();
-  session.user = { id: 1, name: "测试居民", email: "resident@example.test", role: "student" };
+  session.user = { id: 1, name: "测试居民", student_id: "31773467533605", role: "student" };
   session.classes = [
     { id: 2, name: "入门班", teacher_id: 10, teacher_name: "林老师" },
     { id: 3, name: "进阶班", teacher_id: 11, teacher_name: "陈老师" },
@@ -126,7 +126,7 @@ describe("classroom workspace", () => {
     await select(wrapper, "加入班级");
     await wrapper.get("#classroom-join-code").setValue("old-account-code");
     await wrapper.get("form").trigger("submit");
-    session.user = { id: 9, name: "另一居民", email: "other@example.test", role: "student" };
+    session.user = { id: 9, name: "另一居民", student_id: "193802344597316", role: "student" };
     resolve({ ok: true });
     await flushPromises();
     expect(load).not.toHaveBeenCalled();

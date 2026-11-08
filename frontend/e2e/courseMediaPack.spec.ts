@@ -4,10 +4,10 @@ import { randomUUID } from "node:crypto";
 interface LibraryMaterial { id: number; title: string; kind: string; supplementary?: boolean; }
 
 async function prepare(request: APIRequestContext) {
-  const email = process.env.E2E_TEACHER_EMAIL, password = process.env.E2E_TEACHER_PASSWORD;
-  test.skip(process.env.E2E_COURSE_MEDIA_IMPORTED !== "1" || !email || !password,
+  const student_id = process.env.E2E_TEACHER_STUDENT_ID, password = process.env.E2E_TEACHER_PASSWORD;
+  test.skip(process.env.E2E_COURSE_MEDIA_IMPORTED !== "1" || !student_id || !password,
     "Requires the real course media pack imported into an isolated deployment and explicit teacher credentials.");
-  const login = await request.post("/api/auth/login", { data: { email, password } });
+  const login = await request.post("/api/auth/login", { data: { student_id, password } });
   expect(login.ok()).toBeTruthy();
   const teacher = { Authorization: `Bearer ${(await login.json()).access_token}` };
   const created = await request.post("/api/classrooms", { headers: teacher, data: { name: `课程媒体验收 ${randomUUID().slice(0, 8)}` } });
@@ -19,7 +19,7 @@ async function prepare(request: APIRequestContext) {
     })).ok()).toBeTruthy();
   }
   const registered = await request.post("/api/auth/register", { data: {
-    email: `course-media-${randomUUID()}@example.test`, password: `Media-${randomUUID()}`, name: "课程媒体验收居民",
+    student_id: BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString(), password: `Media-${randomUUID()}`, name: "课程媒体验收居民",
   } });
   expect(registered.status()).toBe(201);
   const identity = await registered.json();

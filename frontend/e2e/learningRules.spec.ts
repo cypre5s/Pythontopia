@@ -13,14 +13,14 @@ const panel = (page: Page) => page.locator(".overlay-host.game-workspace");
 // imported real course media are read, never replaced or published as new mains.
 test("configured page ranges and real video playback drive authoritative goals", async ({ page, request }, info) => {
   test.setTimeout(150_000);
-  const email = process.env.E2E_TEACHER_EMAIL, password = process.env.E2E_TEACHER_PASSWORD;
-  test.skip(!email || !password || process.env.E2E_COURSE_MEDIA_IMPORTED !== "1", "Requires isolated QA with imported real media and explicit teacher credentials.");
+  const student_id = process.env.E2E_TEACHER_STUDENT_ID, password = process.env.E2E_TEACHER_PASSWORD;
+  test.skip(!student_id || !password || process.env.E2E_COURSE_MEDIA_IMPORTED !== "1", "Requires isolated QA with imported real media and explicit teacher credentials.");
   const tag = randomUUID().slice(0, 8), questId = `learning-${tag}`;
-  const teacher = await json<Identity>(await request.post("/api/auth/login", { data: { email, password } }));
+  const teacher = await json<Identity>(await request.post("/api/auth/login", { data: { student_id, password } }));
   const headers = { Authorization: `Bearer ${teacher.access_token}` };
   const classroom = await json<{ id: number; join_code: string }>(await request.post("/api/classrooms", { headers, data: { name: `学习目标验收 ${tag}` } }));
   await json(await request.put(`/api/teacher/classrooms/${classroom.id}/releases/179`, { headers, data: { status: "published" } }));
-  const identity = await json<Identity>(await request.post("/api/auth/register", { data: { name: "目标验收居民", email: `learning-${randomUUID()}@example.test`, password: `Resident-${randomUUID()}` } }));
+  const identity = await json<Identity>(await request.post("/api/auth/register", { data: { name: "目标验收居民", student_id: BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString(), password: `Resident-${randomUUID()}` } }));
   const student = { Authorization: `Bearer ${identity.access_token}` };
   await json(await request.post("/api/classrooms/join", { headers: student, data: { join_code: classroom.join_code } }));
   const materials = await json<{ id: number; kind: string; chapter_id: number; duration_seconds: number | null }[]>(await request.get(`/api/library?classroom_id=${classroom.id}`, { headers: student }));

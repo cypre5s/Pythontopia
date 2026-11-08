@@ -39,7 +39,7 @@ function setup(
   useSession().user = {
     id: 9,
     name: "Teacher",
-    email: "teacher@example.test",
+    student_id: "1748881331821",
     role: "teacher",
   };
   vi.spyOn(api, "get").mockResolvedValue(data);

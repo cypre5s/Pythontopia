@@ -61,8 +61,8 @@ async function registerStudent(page: Page, joinCode: string, name: string) {
   await page.getByRole("button", { name: "初次到访？注册居民证" }).click();
   await page.getByLabel("名字", { exact: true }).fill(name);
   await page
-    .getByLabel("邮箱", { exact: true })
-    .fill(`${randomUUID()}@example.test`);
+    .getByLabel("学号", { exact: true })
+    .fill(BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString());
   await page.getByLabel("密码", { exact: true }).fill(`Story-${randomUUID()}`);
   await page.getByRole("button", { name: "注册并进入", exact: true }).click();
   await page.getByLabel("班级加入码").fill(joinCode);
@@ -226,10 +226,10 @@ for (const viewport of [
       request,
     }, testInfo) => {
       test.setTimeout(360_000);
-      const email = process.env.E2E_TEACHER_EMAIL;
+      const student_id = process.env.E2E_TEACHER_STUDENT_ID;
       const password = process.env.E2E_TEACHER_PASSWORD;
       test.skip(
-        !email || !password,
+        !student_id || !password,
         "Explicit isolated teacher credentials are required; no default account or business API mock is used.",
       );
       await page.emulateMedia({ reducedMotion: "reduce" });
@@ -245,7 +245,7 @@ for (const viewport of [
       });
 
       const login = await request.post("/api/auth/login", {
-        data: { email, password },
+        data: { student_id, password },
       });
       expect(login.ok()).toBeTruthy();
       const teacher = {

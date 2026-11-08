@@ -1,7 +1,7 @@
 <template>
   <section class="journal story-journal">
-    <div class="journal-book" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
-      <aside :hidden="sidebarCollapsed" :inert="sidebarCollapsed" class="journal-index"><SidebarToggle />
+    <div class="journal-book">
+      <aside class="journal-index">
         <div class="journal-cover"><h3>委托目录</h3></div>
         <div class="journal-directory">
           <div class="journal-filter-bar">
@@ -40,9 +40,6 @@
   </section>
 </template>
 <script setup lang="ts">
-import SidebarToggle from "../shared/SidebarToggle.vue";
-import { useWorkspaceSidebar } from "../shared/workspaceSidebar";
-const { collapsed: sidebarCollapsed } = useWorkspaceSidebar();
 import { computed, ref } from "vue";
 import { useSession } from "../shared/session";
 import { notify } from "../shared/api";

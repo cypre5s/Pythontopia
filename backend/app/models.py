@@ -16,7 +16,8 @@ def uid():
 class User(Base):
     __tablename__ = "users"
     id: Mapped[int] = mapped_column(primary_key=True)
-    email: Mapped[str] = mapped_column(String(254), unique=True, index=True)
+    # Legacy accounts remain unassigned until an operator supplies a real number.
+    student_id: Mapped[str | None] = mapped_column(String(32), unique=True, index=True)
     name: Mapped[str] = mapped_column(String(80))
     role: Mapped[str] = mapped_column(String(16), default="student")
     password_hash: Mapped[str] = mapped_column(Text)

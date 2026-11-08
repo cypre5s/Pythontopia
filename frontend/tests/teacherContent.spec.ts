@@ -66,7 +66,7 @@ async function setup(section = "questions", options: { materials?: typeof materi
   useSession().user = {
     id: 9,
     name: "Teacher",
-    email: "teacher@example.test",
+    student_id: "1748881331821",
     role: "teacher",
   };
   const records = { materials: options.materials ?? [structuredClone(material)], questions: options.questions ?? [] as typeof question[] };

@@ -1,7 +1,7 @@
 <template>
   <section class="town-workspace settings-workspace">
-    <div class="town-book" :class="{ 'is-sidebar-collapsed': sidebarCollapsed }">
-      <aside :hidden="sidebarCollapsed" :inert="sidebarCollapsed" class="town-sidebar"><SidebarToggle />
+    <div class="town-book">
+      <aside class="town-sidebar">
         <nav class="town-directory settings-directory" role="tablist" aria-label="设置分类" aria-orientation="vertical">
           <button v-for="category in categories" :id="`settings-tab-${category.id}`" :key="category.id"
             class="town-directory-item" :class="{ 'is-current': selected === category.id }"
@@ -16,7 +16,7 @@
         <template v-if="selected === 'account'">
           <section class="town-section account-card" aria-label="当前账户">
             <div class="account-avatar" aria-hidden="true">{{ userInitial }}</div>
-            <div class="account-details"><strong>{{ session.user?.name ?? '未登录' }}</strong><span>{{ session.user?.email }}</span></div>
+            <div class="account-details"><strong>{{ session.user?.name ?? '未登录' }}</strong><span>{{ session.user?.student_id }}</span></div>
             <span v-if="session.user" class="account-role">{{ roleName }}</span>
           </section>
           <section class="town-section settings-group">
@@ -42,9 +42,6 @@
   </section>
 </template>
 <script setup lang="ts">
-import SidebarToggle from "../shared/SidebarToggle.vue";
-import { useWorkspaceSidebar } from "../shared/workspaceSidebar";
-const { collapsed: sidebarCollapsed } = useWorkspaceSidebar();
 import { computed, nextTick, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import GameIcon from "../shared/GameIcon.vue";
