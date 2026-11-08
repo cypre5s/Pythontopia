@@ -7,7 +7,7 @@ import { useSession } from "../src/shared/session";
 import { api } from "../src/shared/api";
 import type { Material } from "../src/shared/types";
 
-const material = (id: number, chapter: number, title: string, kind = "pdf"): Material => ({ id, chapter_id: chapter, title, kind, status: "ready", pages: [], supplementary: kind === "video", duration_seconds: kind === "video" ? 274 : null });
+const material = (id: number, chapter: number, title: string, kind = "pdf"): Material => ({ id, chapter_id: chapter, title, kind, status: "ready", pages: [], duration_seconds: kind === "video" ? 274 : null });
 const items = [material(188, 181, "第三章信息表示"), material(193, 179, "计算思维小游戏", "video"), material(186, 179, "第一章计算思维"), material(187, 180, "Python 语言基础")];
 const mounted: VueWrapper[] = [];
 beforeEach(() => {
@@ -39,6 +39,15 @@ async function library() {
   return wrapper;
 }
 describe("chapter library", () => {
+  it("shows reused material in both authorized chapters and counts it once", async () => {
+    vi.spyOn(api, "get").mockResolvedValue([{ ...material(205, 179, "共用讲义"), chapter_ids: [179, 180] }]);
+    const wrapper = await library();
+    expect(wrapper.findAll(".library-chapter")).toHaveLength(2);
+    expect(wrapper.get(".library-result-count").text()).toBe("1 份资料");
+    await wrapper.get('[aria-label="资料章节"]').findAll("button")[2]!.trigger("click");
+    expect(wrapper.findAll(".library-card")).toHaveLength(1);
+    expect(wrapper.get(".library-card").text()).toContain("共用讲义");
+  });
   it("groups only authorized materials by chapter and combines chapter, type and normalized search", async () => {
     const get = vi.spyOn(api, "get").mockResolvedValue(items);
     const post = vi.spyOn(api, "post");
@@ -50,7 +59,7 @@ describe("chapter library", () => {
     expect(wrapper.text()).not.toContain("留一页");
     await wrapper.get('[aria-label="资料类型"]').findAll("button")[2]!.trigger("click");
     expect(wrapper.findAll(".library-card")).toHaveLength(1);
-    expect(wrapper.get(".library-card").text()).toContain("补充视频");
+    expect(wrapper.get(".library-card").text()).toContain("课程视频");
     expect(wrapper.get(".library-card").text()).toContain("4:34");
     await wrapper.get('input[type="search"]').setValue(" 计算 思维 ");
     expect(wrapper.findAll(".library-card")).toHaveLength(1);

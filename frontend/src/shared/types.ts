@@ -89,7 +89,7 @@ export interface Material {
   media_url?: string;
   notice?: string;
   chapter_id?: number;
-  supplementary?: boolean;
+  chapter_ids?: number[];
   duration_seconds?: number | null;
 }
 export interface Question {

@@ -1542,3 +1542,24 @@
 .teacher-page .students-pagination { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; border-top:1px solid var(--border); padding:12px 16px; font-size:12px; color:var(--muted-foreground); }
 .teacher-page .students-hint { display:flex; align-items:flex-start; gap:7px; margin:0; font-size:12px; color:var(--muted-foreground); line-height:1.7; }
 .teacher-page .students-hint svg { flex-shrink:0; margin-top:3px; }
+
+.teacher-dialog .content-tag-select { grid-column:1/-1; min-width:0; margin:0; padding:14px; border:1px solid var(--border); border-radius:6px; }
+.teacher-dialog .content-tag-select legend { padding:0 5px; font-size:12px; font-weight:600; }
+.teacher-dialog .content-tag-options { display:flex; flex-wrap:wrap; gap:10px 18px; max-height:180px; overflow:auto; margin-top:10px; }
+.teacher-dialog .content-tag-options .checkbox-label { display:flex; gap:7px; font-size:12px; font-weight:400; }
+.teacher-dialog .question-option-row { display:grid; grid-template-columns:20px minmax(0,1fr) auto; align-items:center; gap:8px; margin:10px 0; }
+.teacher-dialog .question-option-row input[type="radio"] { width:16px; min-height:16px; height:16px; accent-color:var(--primary); }
+.teacher-dialog .question-case-row { display:grid; grid-template-columns:1fr 1fr auto; gap:10px; align-items:end; margin:10px 0 16px; }
+.teacher-dialog .content-assignment { min-width:0; }
+.teacher-dialog .content-ordered-questions { padding-left:24px; margin:12px 0; }
+.teacher-dialog .content-ordered-questions li { padding:10px 0; border-bottom:1px solid var(--border); }
+.teacher-dialog .content-ordered-questions li::marker { color:var(--muted-foreground); font-size:12px; }
+.teacher-dialog .content-ordered-questions li > span { display:inline-flex; flex-direction:column; gap:3px; max-width:100%; font-size:13px; overflow-wrap:anywhere; }
+.teacher-dialog .content-ordered-questions small, .teacher-dialog .content-assignment-options small { display:block; margin-top:3px; font-size:11px; color:var(--muted-foreground); }
+.teacher-dialog .content-ordered-questions .row-actions { display:flex; justify-content:flex-end; gap:4px; margin-top:4px; }
+.teacher-dialog .content-assignment-options { max-height:280px; overflow:auto; padding:4px 0; }
+.teacher-dialog .content-assignment-options .checkbox-label { display:flex; gap:10px; padding:10px 0; border-bottom:1px solid var(--border); font-size:13px; font-weight:400; }
+.teacher-dialog .content-preview-frame { width:100%; height:min(65vh,720px); border:1px solid var(--border); border-radius:6px; }
+.teacher-dialog .content-preview-video { width:100%; max-height:65vh; background:#000; border-radius:6px; }
+.teacher-dialog .content-preview-text { max-height:65vh; overflow:auto; white-space:pre-wrap; font:13px/1.8 system-ui,sans-serif; }
+@media(max-width:600px) { .teacher-dialog .question-case-row { grid-template-columns:minmax(0,1fr); } }

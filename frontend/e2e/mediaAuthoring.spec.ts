@@ -131,10 +131,10 @@ test('teacher authors real private media; student reads PDF, plays video and com
   for (const [index, fixture] of fixtures.entries()) {
     await page.getByRole('button', { name: '上传课程材料', exact: true }).click();
     await uploadDialog.getByLabel('资料名称', { exact: true }).fill(fixture.title);
-    await uploadDialog.getByLabel(/^所属章节/).selectOption(String(chapterId));
+    await uploadDialog.getByRole('group', { name: '关联章节', exact: true }).locator(`input[type="checkbox"][value="${chapterId}"]`).check();
     await uploadDialog.getByLabel(/^文件/).setInputFiles({ name: fixture.name, mimeType: fixture.mimeType, buffer: fixture.buffer });
     const uploaded = page.waitForResponse(response => response.url().endsWith('/api/teacher/materials/upload') && response.request().method() === 'POST');
-    await uploadDialog.getByRole('button', { name: '上传并处理', exact: true }).click();
+    await uploadDialog.getByRole('button', { name: '上传资料', exact: true }).click();
     const response = await uploaded;
     expect(response.status()).toBe(201);
     const material = await response.json() as { id: number; };
@@ -144,13 +144,17 @@ test('teacher authors real private media; student reads PDF, plays video and com
     const row = page.locator('tbody tr').filter({ hasText: fixture.title }).first();
     await expect(row).toContainText('可使用', { timeout: 45_000 });
     await row.getByRole('button', { name: '预览', exact: true }).click();
-    if (index === 0) await expect(page.locator('.material-preview pre')).toContainText('Self-authored TEST MEDIA');
+    const previewDialog = page.getByRole('dialog', { name: fixture.title, exact: true });
+    await expect(previewDialog).toBeVisible();
+    if (index === 0) await expect(previewDialog.locator('.content-preview-text')).toContainText('Self-authored TEST MEDIA');
     if (index === 1) {
-      await expect(page.getByTitle('教师 PDF 预览')).toBeVisible();
-      expect(await page.getByTitle('教师 PDF 预览').getAttribute('src')).toMatch(/^blob:/);
+      const previewFrame = previewDialog.getByTitle(fixture.title, { exact: true });
+      await expect(previewFrame).toBeVisible();
+      expect(await previewFrame.getAttribute('src')).toMatch(/^blob:/);
     }
     if (index === 2) await playVideo(page);
-    await page.getByRole('button', { name: '收起预览', exact: true }).click();
+    await page.keyboard.press('Escape');
+    await expect(previewDialog).toBeHidden();
   }
   await page.screenshot({ path: testInfo.outputPath('teacher-media-processing.png'), fullPage: true });
   // Keep real private-media/student coverage without restoring withdrawn authoring navigation.
@@ -181,17 +185,19 @@ test('teacher authors real private media; student reads PDF, plays video and com
   await expect(chapterRow.locator('.status-badge')).toHaveText('已解锁');
   // Updating existing material keeps its stable ID and updates current activity content.
   await page.getByRole('button', { name: '课程材料', exact: true }).click();
-  await page.getByRole('button', { name: '上传课程材料', exact: true }).click();
-  await uploadDialog.getByLabel('资料名称', { exact: true }).fill(textTitle);
-  await uploadDialog.getByLabel(/^所属章节/).selectOption(String(chapterId));
-  await uploadDialog.getByLabel(/^更新已有材料（选填）/).fill(String(materials[0]!.id));
-  await uploadDialog.getByLabel(/^文件/).setInputFiles({ name: 'self-authored-test-updated.txt', mimeType: 'text/plain', buffer: Buffer.from('Updated Self-authored TEST MEDIA - test fixture only.') });
+  await page.getByRole('searchbox', { name: '搜索材料名称或 ID', exact: true }).fill(textTitle);
+  const originalRow = page.locator('tbody tr').filter({ hasText: textTitle }).first();
+  await originalRow.getByRole('button', { name: '替换文件', exact: true }).click();
+  const replaceDialog = page.getByRole('dialog', { name: '替换资料文件', exact: true });
+  await expect(replaceDialog.getByLabel('资料名称', { exact: true })).toHaveValue(textTitle);
+  await expect(replaceDialog.getByRole('group', { name: '关联章节', exact: true }).locator(`input[type="checkbox"][value="${chapterId}"]`)).toBeChecked();
+  await replaceDialog.getByLabel(/^文件/).setInputFiles({ name: 'self-authored-test-updated.txt', mimeType: 'text/plain', buffer: Buffer.from('Updated Self-authored TEST MEDIA - test fixture only.') });
   const updated = page.waitForResponse(response => response.url().endsWith('/api/teacher/materials/upload') && response.request().method() === 'POST');
-  await uploadDialog.getByRole('button', { name: '上传并处理', exact: true }).click();
+  await replaceDialog.getByRole('button', { name: '替换文件', exact: true }).click();
   const updateResponse = await updated;
   expect(updateResponse.status()).toBe(201);
   expect((await updateResponse.json()).id).toBe(materials[0]!.id);
-  await expect(uploadDialog).toBeHidden();
+  await expect(replaceDialog).toBeHidden();
   await page.getByRole('searchbox', { name: '搜索材料名称或 ID', exact: true }).fill(textTitle);
   const updatedRow = page.locator('tbody tr').filter({ hasText: textTitle }).first();
   await expect(updatedRow).toContainText('可使用', { timeout: 45_000 });

@@ -24,8 +24,10 @@ test("practice corrections and a locked whole assessment share the question dire
       { title: "填空", kind: "fill", answer: "done" },
       ...(kind === "assessment" ? [{ title: "选择", kind: "single_choice", answer: "乙", options: ["甲", "乙"] }] : []),
     ].entries()) {
-      await json(await request.post("/api/teacher/questions", { headers, data: { ...question, id: `${id}-q${index}`, activity_id: id, prompt: "Self-authored acceptance question; not course content." } }));
+      await json(await request.post("/api/teacher/questions", { headers, data: { ...question, id: `${id}-q${index}`, chapter_ids: [179], source_type: "imported", status: "ready", prompt: "Self-authored acceptance question; not course content." } }));
     }
+    const question_ids = Array.from({ length: kind === "assessment" ? 3 : 2 }, (_, index) => `${id}-q${index}`);
+    await json(await request.put(`/api/teacher/activities/${id}/questions`, { headers, data: { question_ids } }));
   }
   const questTitle = `TEST 试卷流程 ${tag}`;
   await json(await request.post("/api/teacher/quests", { headers, data: { definition: { id: questId, title: questTitle, chapter_id: 179, kind: "side", nodes: [

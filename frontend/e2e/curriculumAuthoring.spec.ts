@@ -166,16 +166,20 @@ test("teacher curriculum ownership, knowledge binding and isolated code drafts",
     headers: teacher,
     data: {
       id: questionId,
-      activity_id: activityId,
+      chapter_ids: [chapter.id],
+      knowledge_point_ids: [point.id],
+      source_type: "imported",
+      status: "ready",
       title: "自建编辑器验证题",
       kind: "python",
       prompt: "这是一道教师自建编辑器验证题，本次仅保存草稿，不运行或提交。",
       options: [],
       samples: [{ input: "", output: "hello" }],
       hidden_cases: [{ input: "", expected_output: "hello" }],
-      source: { kind: "explicit_test_fixture" } } });
+      source: { evidence: "Explicit self-authored test fixture" } } });
   expect(q.status()).toBe(201);
   expect((await q.json()).id).toBeTruthy();
+  expect((await request.put(`/api/teacher/activities/${activityId}/questions`, { headers: teacher, data: { question_ids: [questionId] } })).ok()).toBeTruthy();
   const definition = {
     id: questId,
     title: `课程配置任务 ${suffix}`,

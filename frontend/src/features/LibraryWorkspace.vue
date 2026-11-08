@@ -29,7 +29,7 @@
             <div class="library-list">
               <button v-for="material in group.materials" :key="material.id" class="library-card" :disabled="material.status !== 'ready'" @click="open(material)">
                 <span class="library-material-icon" :class="{ 'is-video': material.kind === 'video' }" aria-hidden="true"><GameIcon :name="material.kind === 'video' ? 'video' : 'book'"/></span>
-                <span class="library-card-copy"><strong>{{ material.title }}</strong><small>{{ material.supplementary ? '补充视频' : kindLabels[material.kind] ?? '课程资料' }}<span v-if="duration(material)"> · {{ duration(material) }}</span></small></span>
+                <span class="library-card-copy"><strong>{{ material.title }}</strong><small>{{ kindLabels[material.kind] ?? '课程资料' }}<span v-if="duration(material)"> · {{ duration(material) }}</span></small></span>
                 <span class="library-card-action">{{ material.status === 'ready' ? material.kind === 'video' ? '观看' : '阅读' : material.status === 'failed' ? '处理失败' : '处理中' }}<GameIcon v-if="material.status === 'ready'" name="arrowRight"/></span>
               </button>
             </div>
@@ -58,10 +58,12 @@ let ownerKey = "", generation = 0, disposed = false, scrollPosition = 0;
 const chapters = computed(() => {
   const groups = new Map<number, Material[]>();
   for (const material of materials.value) {
-    const id = material.chapter_id ?? 0;
-    const list = groups.get(id) ?? [];
-    list.push(material);
-    groups.set(id, list);
+    const ids = material.chapter_ids?.length ? material.chapter_ids : [material.chapter_id ?? 0];
+    for (const id of ids) {
+      const list = groups.get(id) ?? [];
+      list.push(material);
+      groups.set(id, list);
+    }
   }
   return [...groups].map(([id, items]) => {
     const details = session.world?.chapters.find(item => item.id === id);
@@ -75,7 +77,7 @@ const filteredChapters = computed(() => chapters.value.filter(group => chapter.v
     (type.value === "all" || (type.value === "video" ? material.kind === "video" : ["text", "pdf", "presentation"].includes(material.kind))) &&
     normalize(`${material.title} ${group.title} ${kindLabels[material.kind] ?? ""}`).includes(normalize(query.value))),
 })).filter(group => group.materials.length));
-const filteredCount = computed(() => filteredChapters.value.reduce((total, group) => total + group.materials.length, 0));
+const filteredCount = computed(() => new Set(filteredChapters.value.flatMap(group => group.materials.map(material => material.id))).size);
 function duration(material: Material) {
   const seconds = material.duration_seconds;
   if (material.kind !== "video" || typeof seconds !== "number" || !Number.isFinite(seconds) || seconds <= 0) return "";

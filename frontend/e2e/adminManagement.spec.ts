@@ -335,7 +335,7 @@ test("teacher management layout, forms, real records, responsive navigation and 
     const uploaded = await request.post("/api/teacher/materials/upload", {
       headers: teacher,
       multipart: {
-        chapter_id: "179",
+        chapter_ids: "[179]",
         title: `分页验收资料 ${tag}-${index}`,
         file: {
           name: `pagination-${index}.txt`,
@@ -345,6 +345,11 @@ test("teacher management layout, forms, real records, responsive navigation and 
       },
     });
     expect(uploaded.status()).toBe(201);
+    const question = await request.post("/api/teacher/questions", { headers: teacher, data: {
+      id: `pagination-${tag}-${index}`, title: `分页验收题目 ${tag}-${index}`, kind: "boolean", prompt: "Self-authored pagination fixture.", answer: true,
+      chapter_ids: [179], source_type: "imported", status: "ready",
+    } });
+    expect(question.status()).toBe(201);
   }
 
   // Search and filter the actual shared curriculum and resource lists.
@@ -406,14 +411,14 @@ test("teacher management layout, forms, real records, responsive navigation and 
     exact: true,
   });
   await materialSearch.fill(`missing-${tag}`);
-  await expect(page.locator(".admin-table-scroll .admin-empty")).toBeVisible();
+  await expect(page.locator(".admin-panel .admin-empty")).toBeVisible();
   await materialSearch.fill("");
   await page
     .getByRole("combobox", { name: "处理状态", exact: true })
     .selectOption("ready");
   const materialRows = page
     .locator("tbody tr")
-    .filter({ has: page.locator("td.record-title") });
+    .filter({ has: page.locator(".record-title") });
   for (const row of await materialRows.all())
     await expect(row.locator(".status-badge")).toHaveAttribute(
       "data-status",
@@ -454,20 +459,20 @@ test("teacher management layout, forms, real records, responsive navigation and 
   await expect(page.getByRole("button", { name: "任务配置", exact: true })).toHaveCount(0);
   await openSection(page, "题库");
   const questionSearch = page.getByRole("searchbox", {
-    name: "搜索题目标题、ID 或活动",
+    name: "搜索题目标题或 ID",
     exact: true,
   });
   await questionSearch.fill(`missing-${tag}`);
-  await expect(page.locator(".admin-table-scroll .admin-empty")).toBeVisible();
+  await expect(page.locator(".admin-panel .admin-empty")).toBeVisible();
   await questionSearch.fill("");
   await page
     .getByRole("combobox", { name: "题型", exact: true })
     .selectOption("python");
   const questionRows = page
     .locator("tbody tr")
-    .filter({ has: page.locator("td.record-title") });
+    .filter({ has: page.locator(".record-title") });
   for (const row of await questionRows.all())
-    await expect(row.locator(".status-badge")).toHaveText("编程题");
+    await expect(row.locator("td").first()).toContainText("编程题");
   await page
     .getByRole("combobox", { name: "题型", exact: true })
     .selectOption("");
@@ -482,16 +487,9 @@ test("teacher management layout, forms, real records, responsive navigation and 
   );
   await questionSearch.fill("");
   await page.getByRole("button", { name: "新增题目", exact: true }).click();
-  await page
-    .locator("summary")
-    .filter({ hasText: "完整 JSON（导入或高级编辑）" })
-    .click();
-  const questionDraft = JSON.stringify(
-    { id: `unpublished-${tag}`, title: "仅保存界面草稿" },
-    null,
-    2,
-  );
-  await page.getByLabel("题目 JSON", { exact: true }).fill(questionDraft);
+  const questionDraft = `unpublished-${tag}`;
+  await page.getByLabel(/^题目 ID/).fill(questionDraft);
+  await page.getByLabel("题目标题", { exact: true }).fill("仅保存界面草稿");
   await page.keyboard.press("Escape");
   await expect(
     page.getByRole("dialog", { name: "新增题目", exact: true }),
@@ -499,13 +497,8 @@ test("teacher management layout, forms, real records, responsive navigation and 
   await openSection(page, "班级");
   await openSection(page, "题库");
   await page.getByRole("button", { name: "新增题目", exact: true }).click();
-  await page
-    .locator("summary")
-    .filter({ hasText: "完整 JSON（导入或高级编辑）" })
-    .click();
-  await expect(page.getByLabel("题目 JSON", { exact: true })).toHaveValue(
-    questionDraft,
-  );
+  await expect(page.getByLabel(/^题目 ID/)).toHaveValue(questionDraft);
+  await expect(page.getByLabel("题目标题", { exact: true })).toHaveValue("仅保存界面草稿");
   await page.keyboard.press("Escape");
   await expect(page.locator(".toast-layer p")).toHaveCount(0, {
     timeout: 8_000,
@@ -538,10 +531,10 @@ test("teacher management layout, forms, real records, responsive navigation and 
     expect(rect!.x + rect!.width).toBeLessThanOrEqual(viewport.width + 1);
     expect(rect!.y + rect!.height).toBeLessThanOrEqual(viewport.height + 1);
     await modal
-      .getByRole("button", { name: "创建题目", exact: true })
+      .getByRole("button", { name: "保存题目", exact: true })
       .scrollIntoViewIfNeeded();
     await expect(
-      modal.getByRole("button", { name: "创建题目", exact: true }),
+      modal.getByRole("button", { name: "保存题目", exact: true }),
     ).toBeVisible();
     await page.keyboard.press("Escape");
     await openSection(page, "课程与知识点");

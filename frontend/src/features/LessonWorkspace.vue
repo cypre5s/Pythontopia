@@ -132,7 +132,7 @@ const learningGoals = computed(() => {
       items: (learning.highlights?.video ?? []).map(item => ({ title: `${item.label} · ${formatTime(item.start_seconds)}–${formatTime(item.end_seconds)}`, timeSeconds: item.start_seconds })) }];
   }
   const total = progress.value?.read_total ?? requiredPageIds.value.length;
-  return [{ title: `${material.value?.kind === "video" ? "观看" : "阅读"}《${title}》`, detail: hasReadingCompletion.value ? learning?.reading?.scope === "all" ? "阅读完整份课件。" : "阅读本次指定的页面。" : material.value?.kind === "video" ? "补充视频可按自己的节奏观看，不计正式成绩。" : `共 ${material.value?.pages.length ?? 0} 页，可使用底部分页继续阅读。`,
+  return [{ title: `${material.value?.kind === "video" ? "观看" : "阅读"}《${title}》`, detail: hasReadingCompletion.value ? learning?.reading?.scope === "all" ? "阅读完整份课件。" : "阅读本次指定的页面。" : material.value?.kind === "video" ? "课程视频可按自己的节奏观看，不计正式成绩。" : `共 ${material.value?.pages.length ?? 0} 页，可使用底部分页继续阅读。`,
     completed: hasReadingCompletion.value && Boolean(progress.value?.completed),
     ...(hasReadingCompletion.value ? { progress: { value: requiredVisited.value, max: total, label: `已阅读 ${requiredVisited.value} / ${total} 页` } } : {}),
     items: requiredPages.value.map(page => ({ title: page.title || `第 ${page.page_no} 页`, pageNo: page.page_no, completed: progress.value?.visited_pages.includes(Number(page.id)) ?? false })) }];

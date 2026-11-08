@@ -1,7 +1,7 @@
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
-interface LibraryMaterial { id: number; title: string; kind: string; supplementary?: boolean; }
+interface LibraryMaterial { id: number; title: string; kind: string; }
 
 async function prepare(request: APIRequestContext) {
   const student_id = process.env.E2E_TEACHER_STUDENT_ID, password = process.env.E2E_TEACHER_PASSWORD;
@@ -32,7 +32,7 @@ async function prepare(request: APIRequestContext) {
   };
   const library = await read(`/api/library?classroom_id=${classroom.id}`) as LibraryMaterial[];
   expect(library.filter(item => item.kind === "pdf")).toHaveLength(7);
-  expect(library.filter(item => item.kind === "video" && item.supplementary)).toHaveLength(34);
+  expect(library.filter(item => item.kind === "video")).toHaveLength(34);
   return { classroom, identity, student, teacher, library, read };
 }
 
@@ -53,7 +53,7 @@ async function openLibrary(page: Page) {
   await expect(page.locator(".library-workspace")).toBeVisible();
 }
 
-test("imported PDF and supplementary video preserve existing lesson progress and the only main quest", async ({ page, request }, testInfo) => {
+test("imported PDF and course video preserve existing lesson progress and the only main quest", async ({ page, request }, testInfo) => {
   test.setTimeout(180_000);
   const { classroom, identity, student, teacher, library, read } = await prepare(request);
   const pdf = await read(`/api/materials/186?classroom_id=${classroom.id}`);
@@ -84,7 +84,7 @@ test("imported PDF and supplementary video preserve existing lesson progress and
   await openLibrary(page);
   const videoMaterial = library.find(item => item.kind === "video" && item.title === "计算思维小游戏")!;
   expect(videoMaterial).toBeTruthy();
-  await expect(page.locator(".library-list button").filter({ hasText: videoMaterial.title })).toContainText("补充视频");
+  await expect(page.locator(".library-list button").filter({ hasText: videoMaterial.title })).toContainText("课程视频");
   const range = await request.get(`/api/materials/${videoMaterial.id}/file?classroom_id=${classroom.id}`, { headers: { ...student, Range: "bytes=0-1023" } });
   expect(range.status()).toBe(206);
   expect((await range.body()).length).toBe(1024);
@@ -97,7 +97,7 @@ test("imported PDF and supplementary video preserve existing lesson progress and
   await video.evaluate(async element => { const v = element as HTMLVideoElement; v.muted = true; v.currentTime = 60; await v.play(); });
   await expect.poll(() => video.evaluate(element => (element as HTMLVideoElement).currentTime)).toBeGreaterThan(60.2);
   await video.evaluate(element => (element as HTMLVideoElement).pause());
-  await page.screenshot({ path: testInfo.outputPath("supplementary-course-video.png") });
+  await page.screenshot({ path: testInfo.outputPath("course-video.png") });
   const storedTime = await page.evaluate(key => Number(sessionStorage.getItem(key)), `read:${identity.user.id}:${classroom.id}:material-${videoMaterial.id}:video`);
   expect(storedTime).toBeGreaterThan(60);
   await page.getByRole("button", { name: "关闭当前工作区", exact: true }).click();

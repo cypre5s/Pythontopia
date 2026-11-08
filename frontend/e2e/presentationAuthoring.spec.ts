@@ -46,10 +46,10 @@ test('teacher uploads self-authored PPTX; student reads the converted private PD
   await page.getByRole('button', { name: '上传课程材料', exact: true }).click();
   const uploadDialog = page.getByRole('dialog', { name: '上传课程材料', exact: true });
   await uploadDialog.getByLabel('资料名称', { exact: true }).fill(title);
-  await uploadDialog.getByLabel(/^所属章节/).selectOption(String(chapterId));
+  await uploadDialog.getByRole('group', { name: '关联章节', exact: true }).locator(`input[type="checkbox"][value="${chapterId}"]`).check();
   await uploadDialog.getByLabel(/^文件/).setInputFiles(pptxPath!);
   const uploaded = page.waitForResponse(response => response.url().endsWith('/api/teacher/materials/upload') && response.request().method() === 'POST');
-  await uploadDialog.getByRole('button', { name: '上传并处理', exact: true }).click();
+  await uploadDialog.getByRole('button', { name: '上传资料', exact: true }).click();
   const uploadResponse = await uploaded;
   expect(uploadResponse.status()).toBe(201);
   const material = await uploadResponse.json() as { id: number; status: string };
@@ -60,10 +60,13 @@ test('teacher uploads self-authored PPTX; student reads the converted private PD
   await expect(row).toContainText('演示文稿');
   await expect(row).toContainText('可使用', { timeout: 90_000 });
   await row.getByRole('button', { name: '预览', exact: true }).click();
-  await expect(page.getByTitle('教师 PDF 预览')).toBeVisible();
-  expect(await page.getByTitle('教师 PDF 预览').getAttribute('src')).toMatch(/^blob:/);
+  const previewDialog = page.getByRole('dialog', { name: title, exact: true });
+  const previewFrame = previewDialog.getByTitle(title, { exact: true });
+  await expect(previewFrame).toBeVisible();
+  expect(await previewFrame.getAttribute('src')).toMatch(/^blob:/);
   await page.screenshot({ path: testInfo.outputPath('teacher-self-authored-pptx-ready.png'), fullPage: true });
-  await page.getByRole('button', { name: '收起预览', exact: true }).click();
+  await page.keyboard.press('Escape');
+  await expect(previewDialog).toBeHidden();
 
   // Prepare real test-only definitions via API while their authoring navigation is withdrawn.
   const teacherToken = await page.evaluate(() => sessionStorage.getItem('pythontopia-reborn-session'));
