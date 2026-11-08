@@ -1,0 +1,24 @@
+{
+  "source_commit": "a003fcd99786560f7ae19c3b6263b3287918ab76",
+  "archived_on": "2026-11-08",
+  "files": [
+    {
+      "source": "docs/development.md",
+      "archive": "docs/archive/2026-11-08-documentation-baseline/development.md",
+      "sha256": "887a62a8eb5efa8b65d0ba46ee824af86eb0ee861dde14ef57a7dc65eac4c00e",
+      "bytes": 33796
+    },
+    {
+      "source": "docs/acceptance.md",
+      "archive": "docs/archive/2026-11-08-documentation-baseline/acceptance.md",
+      "sha256": "52ebbe207540899f56094bc9dffd580e6a1495d14da01dd6139f56033c9957e6",
+      "bytes": 79974
+    },
+    {
+      "source": "docs/reborn-migration.md",
+      "archive": "docs/archive/2026-11-08-documentation-baseline/reborn-migration.md",
+      "sha256": "c9a270bd12b7e385e1da0ab6042b61720227e9aeba7e9ce7420b7ea993ba9fb0",
+      "bytes": 38157
+    }
+  ]
+}

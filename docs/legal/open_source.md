@@ -1,11 +1,13 @@
 # 第三方依赖与素材许可清单（阶段 14）
 
+> 历史范围说明：本清单保留旧技术栈的上游与素材来源，含已退出Reborn的Spring Boot、Graph和RAG条目，不是当前依赖清单。当前范围见[产品说明](../product.md)，实际依赖以[后端锁文件](../../backend/requirements.lock)、[前端锁文件](../../frontend/package-lock.json)及相应上游许可核对；本轮仅整理入口，未改写下方授权与署名记录。
+
 > 比赛合规所需的"第三方依赖 + License + 素材来源"汇总。本文件按子项目分块。
 > 它是第三方许可清单，不是 Pythontopia 项目的开源授权文件。
 
 ## 1. 项目自身 License
 
-当前阶段采用 **Source-Available / All rights reserved**（见仓库根 [`LICENSE`](../LICENSE)）。
+当前阶段采用 **Source-Available / All rights reserved**（见仓库根 [`LICENSE`](../../LICENSE)）。
 仓库公开可见仅用于评审、演示、课程验收与团队协作；未经项目维护者书面许可，不得复制、复用、再发布、商用、部署或二次创作 Pythontopia 原创代码、文档、产品设计、品牌、原创美术、截图、生成媒体、课程集成与演示材料。
 
 下方列出的第三方依赖与第三方素材仍由各自上游 license 管理；本文件不会收回上游作者已经授予的权利，也不会额外授权 Pythontopia 的原创集成、选择编排、品牌或业务代码。

@@ -1,6 +1,6 @@
 # Pythontopia Reborn
 
-This branch is a Web-only Python-learning RPG. Students enter /world; teachers use management pages. Start with docs/README.md to find the relevant current specification. Current code and docs/product.md, architecture.md, api-contract.md, content-authoring.md, development.md, acceptance.md, reborn-migration.md and docs/design/README.md supersede historical plans.
+This branch is a Web-only Python-learning RPG. Students enter /world; teachers use management pages. Start each development, fix or documentation round with docs/requirements.md, then use docs/README.md to find the owning current specification. Historical records under docs/archive are evidence, not current requirements or operating instructions.
 
 ## Scope and safety
 - Git提交标题和正文统一使用中文。
@@ -27,8 +27,14 @@ This branch is a Web-only Python-learning RPG. Students enter /world; teachers u
 - 教师管理页遵循 [后台界面规范](docs/design/teacher-interface.md)，复用现有后台组件与 `teacherTheme.css`，主题限定在 `.teacher-page` / `.teacher-dialog`。不要在后台导入游戏主题，也不要把后台主题、Tailwind Preflight 或无范围控件规则引入学生页面。
 
 ## Documentation and validation
+Every round must review and update [confirmed requirements](docs/requirements.md): record affected requirement IDs, whether requirements changed, synchronized documents, verification and unexecuted scope. Even with no new requirement, record that existing requirements remain in force. Preserve the user's latest decisions; never restore a withdrawn design because old code, tests or archives describe it.
+
+Follow the [documentation maintenance workflow](docs/README.md#每轮维护流程). Keep product/design/API/content rules in their owning current documents, executable procedures in development.md, latest validation and limits in acceptance.md, and concise continuation in reborn-migration.md. Archive old validation/deployment narratives with source and evidence; preserve failures, skips and local evidence paths without committing secrets or datasets. Do not duplicate complete rounds across documents or create parallel plans.
+
 Use Context7 for library/API usage: npx ctx7@latest library <official-name> "<specific question>", then docs <returned-id> "<question>"; outside sandbox, maximum 3 commands per question. Report quota errors and suggest login/CONTEXT7_API_KEY.
 
 The only built-in main quest is arrival (初来小镇：第一堂 Python 课). Retain the full course materials and knowledge points; do not restore retired chapter quests to provide test coverage. Use test-only task definitions for generic branching and merge tests.
 
-Run frontend npm ci, typecheck, lint, test and build; backend locked install, ruff, pytest, fresh Alembic migration and repeated seed. Actual startup commands belong in development.md. Validate the authored main quest including resume and account-switch scenarios, permissions, idempotency, zero incidental AI calls, map reachability, independent deployment and browser viewports. Accurately record passed/failed/skipped and live-versus-contract results in acceptance.md. Update reborn-migration.md for continuation rather than creating parallel plans/reports.
+For implementation/content changes, run frontend npm ci, typecheck, lint, test and build; backend locked install, ruff, pytest, fresh Alembic migration and repeated seed as applicable to the change. Validate the authored main quest including resume and account-switch scenarios, permissions, idempotency, zero incidental AI calls, map reachability, independent deployment and browser viewports. Accurately record passed/failed/skipped and live-versus-contract results in acceptance.md.
+
+For documentation-only rounds, run `node scripts/check-docs.mjs`, `git diff --check`, and review requirement/specification consistency and changed-file scope. Do not relabel previous functional checks as rerun. Before each commit, verify documentation checks and the requirements round record; use Chinese commit titles and bodies.
