@@ -153,7 +153,11 @@ test('teacher authors real private media; student reads PDF, plays video and com
       expect(await previewFrame.getAttribute('src')).toMatch(/^blob:/);
     }
     if (index === 2) await playVideo(page);
-    await page.keyboard.press('Escape');
+    // Chromium's embedded PDF viewer handles its own keyboard events.
+    // Keep Escape coverage for ordinary dialog content and use the visible close
+    // control when focus can be inside the PDF viewer's separate document.
+    if (index === 1) await previewDialog.getByRole('button', { name: '关闭弹窗', exact: true }).click();
+    else await page.keyboard.press('Escape');
     await expect(previewDialog).toBeHidden();
   }
   await page.screenshot({ path: testInfo.outputPath('teacher-media-processing.png'), fullPage: true });

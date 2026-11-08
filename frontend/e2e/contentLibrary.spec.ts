@@ -70,7 +70,9 @@ test("independent question bank preserves answers and reuses ordered questions i
   const editor = page.getByRole("dialog", { name: "新增题目", exact: true });
   await editor.getByLabel(/^题目 ID/).fill(questionId);
   await editor.getByLabel("题目标题", { exact: true }).fill(`同义答案 ${tag}`);
-  await editor.getByLabel("题型", { exact: true }).selectOption("fill");
+  await editor
+    .getByRole("combobox", { name: "题型", exact: true })
+    .selectOption("fill");
   await editor.getByLabel("题干", { exact: true }).fill("填写示例名称。");
   await editor.getByLabel(/^可接受答案/).fill("变量\n可变名称");
   await editor.getByRole("button", { name: "保存题目", exact: true }).click();
@@ -109,9 +111,9 @@ test("independent question bank preserves answers and reuses ordered questions i
     .getByRole("group", { name: "关联知识点", exact: true })
     .getByRole("checkbox", { name: new RegExp(`变量知识点 ${tag}`) })
     .check();
-  await edit.getByLabel(/^状态/).selectOption("ready");
+  await edit.getByRole("combobox", { name: /^状态/ }).selectOption("ready");
   await edit
-    .getByLabel("来源类型", { exact: true })
+    .getByRole("combobox", { name: "来源类型", exact: true })
     .selectOption("ai_generated");
   await edit
     .getByLabel("来源依据（可选）", { exact: true })
@@ -163,7 +165,9 @@ test("independent question bank preserves answers and reuses ordered questions i
       name: "练习 / 测验选题",
       exact: true,
     });
-    await assignment.getByLabel("练习或测验", { exact: true }).selectOption(id);
+    await assignment
+      .getByRole("combobox", { name: "练习或测验", exact: true })
+      .selectOption(id);
     await assignment.getByLabel("搜索可用题目", { exact: true }).fill(tag);
     await assignment
       .locator(".content-assignment-options label")
