@@ -12,6 +12,7 @@
 - 前端npm ci、typecheck、lint、production build通过；39文件244项单测通过，覆盖独立题目CRUD、多章节、两来源/审核、同义答案及旧value结构保留、PUT不带ID、选题排序/100题限制、共享只读、失败草稿/异步预览与分页。日志`.tmp/content-frontend-final/`，构建保留既有Phaser大chunk提示。
 - 已更新旧浏览器用例并新增独立题库完整UI用例；Playwright发现检查24项/19文件通过，但当前环境浏览器此前启动被socket权限阻断，内置浏览器无法连接隔离端口，本轮没有实际执行Chromium页面断言或产生新页面截图。终端无Git推送凭据，已连接GitHub的发布操作又被自动审批拒绝（用户未明确授权发布到目标仓库），因此新CI尚未触发；本地提交可供审阅，不能把发现检查写成浏览器通过。
 - 推送前补核对（2026-11-09）：用户已明确授权提交推送reborn；静态检查发现共享资料行包含状态与共享只读两个徽章，adminManagement断言改为限定[data-status]，e2e发现24项/19文件及该文件ESLint通过。GitHub连接写入返回403 Resource not accessible by integration；账号有仓库push权限，但当前App仅安装于个人账号，终端尚未认证。代码仍为本地提交，等待官方CLI登录后正常推送，未触发新CI。
+- 远端推送（2026-11-09）：用户完成GitHub官方CLI认证，6笔本地提交已正常快进推送至reborn，代码提交`fd9b36bc5d341ec4e9f54c8bd037243700685d90`；没有强制推送或修改main。GitHub Actions [首次运行42506396828](https://github.com/cypre5s/Pythontopia/actions/runs/42506396828)已触发，启动时尚未结束，最终结论需另查，不能把本地通过当作远端通过。此前自动审批拒绝与连接403属于当时的失败记录，现已通过用户授权及官方CLI认证解决。
 - 原始课程包仍可作为显式来源，源清单的39条problem数不代表实际题库数量；运行镜像不携带课程JSON/YAML。真实AI出题、付费模型、Judge0/S3/转换服务未作为本轮已通过能力。
 
 ## 隔离环境启动尝试2026-11-08
