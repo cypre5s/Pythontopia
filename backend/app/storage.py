@@ -182,7 +182,7 @@ async def upload_material(
             raise HTTPException(422, "chapter_ids 必须是有效的章节ID JSON数组")
         for chapter_id in selected_chapters:
             authoring_chapter(db, user, chapter_id)
-    material = db.get(Material, material_id) if material_id else None
+    material = db.scalar(select(Material).where(Material.id == material_id).with_for_update()) if material_id else None
     if material_id and (not material or (material.owner_id != user.id and user.role != "admin")):
         raise HTTPException(403, "只能更新自己上传的资料")
     if material and material.kind != KINDS[suffix]:
@@ -224,7 +224,8 @@ async def upload_material(
 
 
 def teacher_material(db, user, material_id, *, edit=False):
-    material = db.get(Material, material_id)
+    query = select(Material).where(Material.id == material_id)
+    material = db.scalar(query.with_for_update() if edit else query)
     if not material:
         raise HTTPException(404, "资料不存在")
     if user.role != "admin" and material.owner_id not in ({user.id} if edit else {None, user.id}):
@@ -320,7 +321,11 @@ def delete_material(material_id: int, user: Annotated[User, Depends(require_teac
         raise HTTPException(409, "资料已有活动、来源或助教会话引用，不能删除")
     set_material_chapters(db, material.id, [])
     db.delete(material)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "资料已被引用，请刷新后重试") from exc
     return {"ok": True}
 
 

@@ -10,13 +10,14 @@ from app.models import (
     Material, Membership, NodeState, PlayerQuest, QuestDefinition, Submission, User,
 )
 from app.seed import seed
+from conftest import make_material
 
 
 def add_media(db, *, chapter_id=180, owner_id=None, kind="video", **metadata):
-    material = Material(
-        chapter_id=chapter_id, owner_id=owner_id, title="自制补充资料", kind=kind,
+    material = make_material(db,
+        chapter_ids=[chapter_id], owner_id=owner_id, title="自制补充资料", kind=kind,
         status="ready", storage_key="materials/test-video.mp4",
-        content={"pages": [], "library_available": True, "supplementary": True,
+        content={"pages": [], "library_available": True,
                  "duration_seconds": 460, "source": {"kind": "course_media_pack", "course_id": 43}, **metadata},
     )
     db.add(material)
@@ -36,7 +37,7 @@ def test_imported_library_media_needs_no_activity_or_task(client, db, student, c
     assert media.id in library_ids(client, student, classroom)
     detail = client.get(f"/api/materials/{media.id}?classroom_id={classroom['id']}", headers=student["headers"])
     assert detail.status_code == 200, detail.text
-    assert detail.json()["supplementary"] is True
+    assert "supplementary" not in detail.json()
     assert detail.json()["duration_seconds"] == 460
     assert {row.id for row in db.scalars(select(QuestDefinition))} == {"arrival"}
 
@@ -109,17 +110,18 @@ def test_library_publication_does_not_bypass_class_membership_or_owner(client, d
     assert own.id in library_ids(client, student, classroom)
 
 
-@pytest.mark.parametrize("metadata", [
-    {"library_available": False}, {"library_available": "true"}, {"library_available": 1},
-    {"source": {}}, {"source": "course_media_pack"},
-    {"source": {"kind": "course_media_pack", "course_id": "43"}},
-    {"source": {"kind": "course_media_pack", "course_id": True}},
-    {"source": {"kind": "upload", "course_id": 43}},
-])
-def test_unbound_or_untrusted_shared_material_is_still_private(client, db, student, classroom, metadata):
-    media = add_media(db, **metadata)
+@pytest.mark.parametrize("flag", [False, "true", 1])
+def test_unbound_material_requires_explicit_boolean_publication(client, db, student, classroom, flag):
+    media = add_media(db, library_available=flag)
     assert media.id not in library_ids(client, student, classroom)
     assert client.get(f"/api/materials/{media.id}?classroom_id={classroom['id']}", headers=student["headers"]).status_code == 403
+
+
+@pytest.mark.parametrize("source", [{}, "external import", {"kind": "upload"}])
+def test_explicit_library_publication_does_not_depend_on_source_labels(client, db, student, classroom, source):
+    media = add_media(db, source=source)
+    assert media.id in library_ids(client, student, classroom)
+    assert client.get(f"/api/materials/{media.id}?classroom_id={classroom['id']}", headers=student["headers"]).status_code == 200
 
 
 @pytest.mark.parametrize("duration", [True, "460", -1, 0, None, float("nan"), float("inf")])
@@ -128,7 +130,7 @@ def test_video_metadata_is_typed(client, db, student, classroom, duration):
     response = client.get(f"/api/materials/{media.id}?classroom_id={classroom['id']}", headers=student["headers"])
     assert response.status_code == 200
     assert response.json()["duration_seconds"] is None
-    assert response.json()["supplementary"] is False
+    assert "supplementary" not in response.json()
 
 
 def test_seed_preserves_current_pdf_pages_and_library_publication(db):

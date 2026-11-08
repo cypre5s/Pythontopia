@@ -165,3 +165,39 @@ def test_optional_source_evidence_is_authorized_and_blocks_resource_deletion(cli
     db.add(AssistantSession(user_id=student["id"], classroom_id=classroom["id"], activity_id=None, material_id=material.id, messages=[]))
     db.commit()
     assert client.delete(f"/api/teacher/materials/{material.id}", headers=headers).status_code == 409
+
+
+def test_admin_cannot_assign_dependencies_unavailable_to_activity_owner(client, db, teacher):
+    from conftest import make_material
+
+    headers = teacher["headers"]
+    assert client.post("/api/teacher/questions", headers=headers, json=question_body("teacher-private-q")).status_code == 201
+    own_material = make_material(db, title="Private material", chapter_ids=[179], owner_id=teacher["id"], kind="text", status="ready",
+                                 content={"pages": [{"id": 1, "page_no": 1, "text": "Private"}]})
+    admin = User(student_id="2398417968024", name="Admin", role="admin", password_hash=hash_password("admin-password-123"))
+    db.add(admin)
+    db.flush()
+    admin_question = Question(id="admin-private-q", owner_id=admin.id, status="ready", title="Admin private", kind="boolean", prompt="Test only")
+    db.add(admin_question)
+    db.flush()
+    from app.content_relations import set_question_chapters
+    set_question_chapters(db, admin_question.id, [179])
+    admin_material = make_material(db, title="Admin material", chapter_ids=[179], owner_id=admin.id, kind="text", status="ready",
+                                   content={"pages": [{"id": 2, "page_no": 1, "text": "Admin private"}]})
+    db.commit()
+    admin_headers = {"Authorization": "Bearer " + issue(db, admin)["access_token"]}
+    before_shared = [q.id for q in activity_questions(db, "ch1-practice")]
+    assert client.put("/api/teacher/activities/ch1-practice/questions", headers=admin_headers, json={"question_ids": ["teacher-private-q"]}).status_code == 403
+    assert [q.id for q in activity_questions(db, "ch1-practice")] == before_shared
+    assert client.put("/api/teacher/activities/ch1-lesson", headers=admin_headers, json={"material_id": own_material.id}).status_code == 403
+    assert db.get(Activity, "ch1-lesson").material_id == 186
+    assert client.post("/api/teacher/activities", headers=headers, json={"id": "teacher-owner-activity", "chapter_id": 179,
+        "title": "Teacher owned", "kind": "practice", "material_id": own_material.id, "npc_key": "arena_guard"}).status_code == 201
+    assert client.put("/api/teacher/activities/teacher-owner-activity/questions", headers=admin_headers,
+        json={"question_ids": ["teacher-private-q"]}).status_code == 200
+    assert client.put("/api/teacher/activities/teacher-owner-activity/questions", headers=admin_headers,
+        json={"question_ids": ["admin-private-q"]}).status_code == 403
+    assert [q.id for q in activity_questions(db, "teacher-owner-activity")] == ["teacher-private-q"]
+    assert client.put("/api/teacher/activities/teacher-owner-activity", headers=admin_headers,
+        json={"material_id": admin_material.id}).status_code == 403
+    assert db.get(Activity, "teacher-owner-activity").material_id == own_material.id

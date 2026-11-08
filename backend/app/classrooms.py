@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import IntegrityError
 from .auth import as_utc, current_user, require_teacher
 from .db import get_db
 from .content_relations import (
@@ -282,8 +283,8 @@ def create_activity(body: ActivityInput, db: Annotated[Session, Depends(get_db)]
     validate_activity_points(db, user, body.chapter_id, body.knowledge_point_ids)
     if not db.get(Npc, body.npc_key):
         raise HTTPException(422, "NPC不存在")
-    material = db.get(Material, body.material_id) if body.material_id else None
-    if material and (not material_in_chapter(db, material.id, body.chapter_id) or (material.owner_id and material.owner_id != user.id and user.role != "admin")):
+    material = db.scalar(select(Material).where(Material.id == body.material_id).with_for_update()) if body.material_id else None
+    if material and (not material_in_chapter(db, material.id, body.chapter_id) or material.owner_id not in {None, user.id}):
         raise HTTPException(403, "资料不属于当前教师或章节")
     if body.material_id and not material:
         raise HTTPException(404, "资料不存在")
@@ -328,7 +329,7 @@ class ActivityUpdate(BaseModel):
 def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
     from .models import Material
 
-    item = db.get(Activity, activity_id)
+    item = db.scalar(select(Activity).where(Activity.id == activity_id).with_for_update())
     if not item:
         raise HTTPException(404, "活动不存在")
     if item.owner_id != user.id and user.role != "admin":
@@ -351,8 +352,8 @@ def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Sessio
     if changes.get("npc_key") and not db.get(Npc, changes["npc_key"]):
         raise HTTPException(422, "NPC不存在")
     if changes.get("material_id"):
-        material = db.get(Material, changes["material_id"])
-        if not material or not material_in_chapter(db, material.id, item.chapter_id) or (material.owner_id not in {None, user.id} and user.role != "admin"):
+        material = db.scalar(select(Material).where(Material.id == changes["material_id"]).with_for_update())
+        if not material or not material_in_chapter(db, material.id, item.chapter_id) or material.owner_id not in {None, item.owner_id}:
             raise HTTPException(403, "资料不属于当前教师或章节")
     from .learning_rules import validate_learning
     from .models import Material
@@ -388,23 +389,27 @@ class ActivityQuestionsInput(BaseModel):
 def update_activity_questions(activity_id: str, body: ActivityQuestionsInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
     from .curriculum import editable
 
-    activity = editable(db.get(Activity, activity_id), user)
+    activity = editable(db.scalar(select(Activity).where(Activity.id == activity_id).with_for_update()), user)
     if activity.kind not in {"practice", "assessment"}:
         raise HTTPException(422, "只有练习与测验活动可以选题")
     if activity.kind == "assessment" and len(body.question_ids) > 100:
         raise HTTPException(422, "章节测验最多选择100道题")
-    for question_id in body.question_ids:
-        question = db.get(Question, question_id)
+    for question_id in sorted(body.question_ids):
+        question = db.scalar(select(Question).where(Question.id == question_id).with_for_update())
         if not question:
             raise HTTPException(422, "选中的题目不存在")
-        if user.role != "admin" and question.owner_id not in {None, user.id}:
-            raise HTTPException(403, "无权使用其他教师的私有题目")
+        if question.owner_id not in {None, activity.owner_id}:
+            raise HTTPException(403, "题目必须属于活动教师或共享题库")
         if question.status != "ready":
             raise HTTPException(422, "只有已就绪题目可以用于活动")
         if activity.chapter_id not in question_chapter_ids(db, question.id):
             raise HTTPException(422, "题目必须关联活动所在章节")
-    set_activity_questions(db, activity, body.question_ids)
-    db.commit()
+    try:
+        set_activity_questions(db, activity, body.question_ids)
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "内容同时更新，请刷新后重试") from exc
     return {"id": activity.id, "question_ids": [q.id for q in activity_questions(db, activity)]}
 
 
@@ -495,7 +500,7 @@ def validate_question_links(db, user, body):
 
     if "material_id" in body.source:
         material_id = body.source["material_id"]
-        material = db.get(Material, material_id) if type(material_id) is int and material_id > 0 else None
+        material = db.scalar(select(Material).where(Material.id == material_id).with_for_update()) if type(material_id) is int and material_id > 0 else None
         if not material:
             raise HTTPException(422, "题目来源资料不存在")
         if user.role != "admin" and material.owner_id not in {None, user.id}:
@@ -541,7 +546,7 @@ def teacher_question_payload(db, question, user):
     }
 
 
-def save_question(db, user, question, body):
+def _save_question(db, user, question, body):
     validate_question_links(db, user, body)
     bound = db.scalars(select(Activity).join(ActivityQuestion, ActivityQuestion.activity_id == Activity.id).where(ActivityQuestion.question_id == question.id)).all()
     if bound and body.status != "ready":
@@ -561,6 +566,14 @@ def save_question(db, user, question, body):
     set_question_knowledge_points(db, question.id, body.knowledge_point_ids)
     db.commit()
     return teacher_question_payload(db, question, user)
+
+
+def save_question(db, user, question, body):
+    try:
+        return _save_question(db, user, question, body)
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "题目标识冲突或内容同时更新，请刷新后重试") from exc
 
 
 @router.post("/teacher/questions", status_code=201)
@@ -583,7 +596,7 @@ def update_question(question_id: str, body: QuestionUpdate, db: Annotated[Sessio
     from .curriculum import editable
     from pydantic import ValidationError
 
-    question = editable(db.get(Question, question_id), user)
+    question = editable(db.scalar(select(Question).where(Question.id == question_id).with_for_update()), user)
     fields = teacher_question_payload(db, question, user)
     for key in ("activities", "owner_id"):
         fields.pop(key, None)
@@ -599,7 +612,7 @@ def update_question(question_id: str, body: QuestionUpdate, db: Annotated[Sessio
 def delete_question(question_id: str, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
     from .curriculum import editable
 
-    question = editable(db.get(Question, question_id), user)
+    question = editable(db.scalar(select(Question).where(Question.id == question_id).with_for_update()), user)
     if (db.scalar(select(ActivityQuestion).where(ActivityQuestion.question_id == question_id).limit(1))
             or db.scalar(select(Submission).where(Submission.question_id == question_id).limit(1))
             or any(question_id in attempt.question_ids for attempt in db.scalars(select(AssessmentAttempt)))):
@@ -611,7 +624,11 @@ def delete_question(question_id: str, db: Annotated[Session, Depends(get_db)], u
         db.delete(secret)
         db.flush()
     db.delete(question)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(409, "题目已被引用，请刷新后重试") from exc
     return {"ok": True}
 
 

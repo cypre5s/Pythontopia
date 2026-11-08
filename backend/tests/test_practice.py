@@ -34,7 +34,7 @@ def test_concept_grades_are_real_persistent_and_idempotent(client, db, student, 
 
 def test_cross_activity_and_other_user_submission_denied(client, student, teacher, classroom, branching_course):
     result = submit(client, student, classroom)
-    assert submit(client, student, classroom, question_id="ch2-language").status_code == 404
+    assert submit(client, student, classroom, question_id="ch2-language", idempotency_key="wrong-activity-question").status_code == 404
     assert client.get(f"/api/submissions/{result.json()['id']}?classroom_id={classroom['id']}", headers=teacher["headers"]).status_code == 404
 
 

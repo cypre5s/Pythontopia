@@ -7,6 +7,8 @@
 - 迁移专项4项通过，覆盖新旧SQLite、关联复用、原题目/答案/提交/锁卷凭据保留和外键检查；空库Alembic metadata check无差异。SQLAlchemy/Alembic官方Context7文档核对通过；未配置真实PostgreSQL，相关语义仍待CI/独立PG验证。
 - 首轮核心题库/学习路径/迁移/媒体专项35项通过，日志`.tmp/content-core-check.log`；开发清理与外部导入等生命周期专项38项通过。后续完整检查结果在本节补充，不把阶段通过算成整体验收。
 - 对本会话创建的旧开发库做独立副本升级，48道旧题保留6道当前第一堂课题目，清理42道废弃题与40个归档活动；再次显式导入两次后仍为6题、0归档活动，6条选题关系，无外键问题，alembic check通过。报告`.tmp/content-upgrade-qa.json`。该副本没有正式学生提交，不代表真实成绩库已执行清理。
+- 后端最终全量365通过、10跳过，Ruff通过。日志`.tmp/content-backend-final.log`。5个PostgreSQL并发/迁移专项和5个真实Judge0结果专项因未配置跳过；2个Python3.12 SQLite datetime弃用警告。模型工厂编译测试仅移除当前终端代理环境变量以避免缺少socksio，不发真实模型请求，不修改依赖或外部服务。
+- 新空库完成迁移后实际启动Uvicorn两次，健康检查均ok，章节/题目/资料/活动仍为0，证明启动不执行课程导入；证据`.tmp/content-empty-startup.json`。
 - 原始课程包仍可作为显式来源，源清单的39条problem数不代表实际题库数量；运行镜像不携带课程JSON/YAML。真实AI出题、付费模型、Judge0/S3/转换服务未作为本轮已通过能力。
 
 ## 隔离环境启动尝试2026-11-08

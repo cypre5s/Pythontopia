@@ -67,7 +67,7 @@ def test_private_chapter_cannot_be_seen_bound_or_published_by_another_teacher(cl
     assert (
         client.post(
             "/api/teacher/materials/upload",
-            data={"chapter_id": cid, "title": "Cross private chapter"},
+            data={"chapter_ids": "[" + str(cid) + "]", "title": "Cross private chapter"},
             files={"file": ("test.txt", b"test", "text/plain")},
             headers=other["headers"],
         ).status_code

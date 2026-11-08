@@ -93,5 +93,5 @@ def test_collapse_versions_preserves_grades_and_merges_reading_history(existing_
     refused = migrate(url, "downgrade", "b63e1a4920d7", check=False)
     # The newest identity migration also deliberately refuses destructive downgrade.
     assert refused.returncode != 0 and any(message in refused.stderr for message in (
-        "Cannot reconstruct removed content versions", "Email identities cannot be reconstructed"))
+        "Cannot reconstruct single-owner content relationships", "Cannot reconstruct removed content versions", "Email identities cannot be reconstructed"))
     engine.dispose()
