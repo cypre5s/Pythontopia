@@ -30,23 +30,7 @@
         <RouterLink to="/world"
           ><Compass :size="17" />进入小镇<ArrowUpRight :size="14"
         /></RouterLink>
-        <div class="teacher-account">
-          <span class="account-avatar">{{
-            session.user?.name?.slice(0, 1) || "师"
-          }}</span
-          ><span
-            >{{ session.user?.name || "教师"
-            }}<small>{{
-              session.user?.role === "admin" ? "管理员" : "教师账号"
-            }}</small></span
-          ><Button
-            variant="ghost"
-            size="icon"
-            aria-label="退出账号"
-            @click="logout"
-            ><LogOut :size="17"
-          /></Button>
-        </div>
+        <TeacherAccountMenu @logout="logout" />
       </div>
     </aside>
     <div class="teacher-shell">
@@ -103,7 +87,6 @@
           正在读取教学工作台…
         </div>
         <template v-else-if="authorized">
-          <PasswordForm v-if="section === 'account'" class="admin-panel" />
           <TeacherStudents v-if="section === 'students'" :key="selectedClass ?? 0" :classroom-id="selectedClass" @changed="loadProgress" />
           <template v-if="section === 'classes'">
             <div class="table-toolbar list-toolbar">
@@ -401,11 +384,8 @@ import {
   BookOpen,
   FolderOpen,
   ListChecks,
-  MessagesSquare,
-  Route,
   Compass,
   ArrowUpRight,
-  LogOut,
   Menu,
   ChevronRight,
   ChevronLeft,
@@ -432,7 +412,7 @@ import { useSession } from "../shared/session";
 import type { Chapter } from "../shared/types";
 import TeacherContent from "./TeacherContent.vue";
 import TeacherStudents from "./TeacherStudents.vue";
-import PasswordForm from "./PasswordForm.vue";
+import TeacherAccountMenu from "../components/admin/TeacherAccountMenu.vue";
 import TeacherChapters from "./TeacherChapters.vue";
 import "./teacherTheme.css";
 import "./teacherUi.css";
@@ -474,7 +454,6 @@ const navigation = [
     items: [
       { id: "classes", label: "班级", icon: Users },
       { id: "students", label: "学生账号", icon: Users },
-      { id: "account", label: "我的密码", icon: GraduationCap },
       { id: "progress", label: "学习记录", icon: ChartNoAxesCombined },
       { id: "release", label: "章节管理", icon: Send },
     ],
@@ -487,19 +466,13 @@ const navigation = [
       { id: "questions", label: "题库", icon: ListChecks },
     ],
   },
-  {
-    label: "学习体验",
-    items: [
-      { id: "activities", label: "活动与 NPC", icon: MessagesSquare },
-      { id: "quests", label: "任务配置", icon: Route },
-    ],
-  },
+
 ];
 const currentSection = computed(() =>
   navigation.flatMap((g) => g.items).find((s) => s.id === section.value),
 );
 const isContentSection = computed(() =>
-  ["curriculum", "materials", "activities", "quests", "questions"].includes(
+  ["curriculum", "materials", "questions"].includes(
     section.value,
   ),
 );

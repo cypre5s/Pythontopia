@@ -1501,3 +1501,44 @@
     flex-wrap: wrap;
   }
 }
+
+/* Account controls reuse the admin theme, including their portal surfaces. */
+.teacher-page .account-menu-trigger { width:100%; text-align:left; background:transparent; border:0; border-top:1px solid var(--line); border-radius:0; padding:14px 8px; cursor:pointer; color:inherit; }
+.teacher-page .account-menu-trigger:hover, .teacher-page .account-menu-trigger[data-state="open"] { background:var(--accent); }
+.teacher-dialog.account-dropdown { z-index:80; min-width:220px; padding:5px; border:1px solid var(--border); border-radius:8px; background:var(--background); color:var(--foreground); box-shadow:0 4px 18px #00000012; font:13px/1.5 system-ui,sans-serif; }
+.teacher-dialog .account-menu-item { display:flex; align-items:center; gap:9px; padding:9px 10px; border-radius:4px; outline:none; cursor:pointer; }
+.teacher-dialog .account-menu-item[data-highlighted] { background:var(--accent); }
+.teacher-dialog .account-menu-separator { height:1px; margin:4px -5px; background:var(--border); }
+.teacher-dialog .account-signout { color:var(--destructive); }
+.teacher-dialog .admin-password-form { padding:0; max-width:none; gap:16px; }
+.teacher-dialog .admin-password-form > p { color:var(--muted-foreground); font-size:13px; line-height:1.65; }
+.teacher-dialog .admin-password-form > button { background:var(--primary); color:var(--primary-foreground); border:1px solid var(--primary); border-radius:6px; font-weight:500; margin-top:4px; }
+.teacher-page .students-heading, .teacher-page .students-actions { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.teacher-page .students-heading { justify-content:space-between; gap:16px; }
+.teacher-page .students-summary { margin:0; color:var(--muted-foreground); font-size:13px; }
+.teacher-page .students-summary strong { color:var(--foreground); }
+.teacher-page .students-panel { padding:0; overflow:hidden; background:var(--background); border:1px solid var(--border); border-radius:10px; box-shadow:0 1px 2px #00000004; }
+.teacher-page .students-toolbar { display:flex; align-items:center; flex-wrap:wrap; gap:10px; padding:16px; border-bottom:1px solid var(--border); }
+.teacher-page .students-toolbar .search-field { width:280px; max-width:100%; margin:0; }
+.teacher-page .students-toolbar > label { margin:0; }
+.teacher-page .students-toolbar input, .teacher-page .students-toolbar select { min-height:36px; height:36px; font-size:13px; }
+.teacher-page .students-toolbar > button:last-child { margin-left:auto; }
+.teacher-page .students-selection { display:flex; align-items:center; flex-wrap:wrap; gap:8px; padding:10px 16px; font-size:12px; background:var(--accent); border-bottom:1px solid var(--border); }
+.teacher-page .students-selection > .students-actions { margin-left:auto; }
+.teacher-page .students-feedback { margin:0; padding:12px 16px; font-size:13px; border-bottom:1px solid var(--border); }
+.teacher-page .students-table { overflow:auto; max-height:560px; }
+.teacher-page .students-table table { width:100%; }
+.teacher-page .students-table th { position:sticky; top:0; background:var(--muted); z-index:1; font-size:12px; }
+.teacher-page .students-table td { height:48px; padding:10px 16px; font-size:13px; }
+.teacher-page .students-table th { padding:12px 16px; }
+.teacher-page .students-table .student-selection-cell { width:44px; padding-right:4px; }
+.teacher-page .students-table input[type="checkbox"] { width:16px; height:16px; min-height:16px; accent-color:var(--primary); }
+.teacher-page .students-table tr[data-state="selected"] { background:#f0f8f5; }
+.teacher-page .students-table .student-number { font-variant-numeric:tabular-nums; color:var(--foreground); }
+.teacher-page .student-status { display:inline-flex; align-items:center; gap:6px; padding:3px 8px; border:1px solid var(--border); border-radius:6px; font-size:11px; white-space:nowrap; color:var(--muted-foreground); }
+.teacher-page .student-status > span { width:5px; height:5px; border-radius:50%; background:#278161; }
+.teacher-page .student-status.pending > span { background:#d49a29; }
+.teacher-page .students-table .student-empty { height:180px; text-align:center; color:var(--muted-foreground); }
+.teacher-page .students-pagination { display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:14px; border-top:1px solid var(--border); padding:12px 16px; font-size:12px; color:var(--muted-foreground); }
+.teacher-page .students-hint { display:flex; align-items:flex-start; gap:7px; margin:0; font-size:12px; color:var(--muted-foreground); line-height:1.7; }
+.teacher-page .students-hint svg { flex-shrink:0; margin-top:3px; }

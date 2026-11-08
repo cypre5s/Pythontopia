@@ -113,6 +113,16 @@ def workbook_bytes(value):
     return buffer.getvalue()
 
 
+def test_six_character_password_boundary(client, student):
+    for password, expected in [("abc12", 422), ("abc123", 200)]:
+        response = client.post("/api/auth/password", headers=student["headers"],
+                               json={"current_password": "student-password-123", "new_password": password})
+        assert response.status_code == expected
+    assert client.post("/api/auth/login", json={"student_id": student["student_id"], "password": "abc123"}).status_code == 200
+    assert client.post("/api/auth/register", json={"student_id": "006001", "name": "六位密码", "password": "abc12"}).status_code == 422
+    assert client.post("/api/auth/register", json={"student_id": "006001", "name": "六位密码", "password": "abc123"}).status_code == 201
+
+
 def test_excel_preserves_text_and_rejects_formulas_numbers_limits():
     assert parse_table("students.xlsx", workbook_bytes("000123"))[0].student_id == "000123"
     for value in [123, "=1+2"]:

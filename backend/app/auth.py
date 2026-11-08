@@ -76,7 +76,7 @@ class LoginInput(BaseModel):
 
 
 class RegisterInput(LoginInput):
-    password: str = Field(min_length=10, max_length=200)
+    password: str = Field(min_length=6, max_length=200)
     name: str = Field(min_length=1, max_length=80)
 
 
@@ -113,7 +113,7 @@ def login(body: LoginInput, db: Annotated[Session, Depends(get_db)]):
 class PasswordInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     current_password: str = Field(min_length=1, max_length=200)
-    new_password: str = Field(min_length=10, max_length=200)
+    new_password: str = Field(min_length=6, max_length=200)
 
 
 @router.post("/password")

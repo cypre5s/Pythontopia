@@ -27,7 +27,7 @@
             type="password"
             :autocomplete="register ? 'new-password' : 'current-password'"
             required
-            :minlength="register ? 10 : 1"
+            :minlength="register ? 6 : 1"
         /></label>
         <p v-if="error || resourceError" class="error" role="alert">{{ error || resourceError }}</p>
         <button class="primary" :disabled="busy || !backdropReady || !worldAssetsReady">

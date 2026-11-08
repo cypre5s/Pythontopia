@@ -1,10 +1,10 @@
 <template>
   <form class="password-form" @submit.prevent="submit">
-    <h3>修改密码</h3>
-    <p>新密码至少10位，不能与学号或当前密码相同。修改后其他设备需要重新登录。</p>
+    <h3 v-if="!compact">修改密码</h3>
+    <p>新密码至少6位，不能与学号或当前密码相同。修改后其他设备需要重新登录。</p>
     <label>当前密码<input v-model="currentPassword" type="password" autocomplete="current-password" maxlength="200" required :disabled="busy" /></label>
-    <label>新密码<input v-model="newPassword" type="password" autocomplete="new-password" minlength="10" maxlength="200" required :disabled="busy" /></label>
-    <label>确认新密码<input v-model="confirmation" type="password" autocomplete="new-password" minlength="10" maxlength="200" required :disabled="busy" /></label>
+    <label>新密码<input v-model="newPassword" type="password" autocomplete="new-password" minlength="6" maxlength="200" required :disabled="busy" /></label>
+    <label>确认新密码<input v-model="confirmation" type="password" autocomplete="new-password" minlength="6" maxlength="200" required :disabled="busy" /></label>
     <p v-if="error" role="alert">{{ error }}</p>
     <p v-if="success" role="status">密码已修改，其他设备的登录已失效。</p>
     <button type="submit" :disabled="busy">{{ busy ? '正在保存…' : '保存新密码' }}</button>
@@ -16,6 +16,7 @@ import { api } from "../shared/api";
 import { useSession } from "../shared/session";
 import type { User } from "../shared/types";
 const emit = defineEmits<{ changed: [] }>();
+defineProps<{ compact?: boolean }>();
 const session = useSession();
 const currentPassword = ref(""), newPassword = ref(""), confirmation = ref(""), error = ref(""), success = ref(false), busy = ref(false);
 async function submit() {

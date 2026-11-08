@@ -19,7 +19,7 @@
 | DATA-03 | 唯一内置主线是 `arrival`“初来小镇：第一堂 Python 课”；其他旧内置委托退出，不因开放其他章节复活。保留完整课程资源与教师自有任务，通用分支验证使用测试定义。 | [产品](product.md)、[内容配置](content-authoring.md) | `backend/content/chapters/`、`backend/tests/test_retired_tasks.py`、`frontend/e2e/rebornJourney.spec.ts` |
 | DATA-04 | 接入真实材料包：7 份 PDF 替换学生纯文本课件展示，原材料 ID、561 页页面 ID 与页码保留；34 个视频先作为资料库补充材料，不新增主线或影响原任务、进度和成绩。后台提取文本继续用于检索与引用。 | [内容配置](content-authoring.md)、[架构](architecture.md) | `backend/app/course_media.py`、`backend/tests/test_course_media.py`、`frontend/e2e/courseMediaPack.spec.ts` |
 | DATA-05 | 全系统使用学号替代邮箱作为登录账号；学生注册、教师/管理员登录、账户展示、学生搜索和管理命令统一使用该字段。学号为1–32位数字字符串，保留前导零。普通迁移保留旧用户及证据，旧账号待分配真实学号；用户本轮另明确授权清空当前15176本地预览环境的全部旧账号及关联记录，不扩展至其他环境。 | [产品](product.md)、[架构](architecture.md)、[HTTP契约](api-contract.md)、[开发手册](development.md) | `backend/app/account_ids.py`、`backend/app/auth.py`、`backend/tests/test_student_id_auth.py`、`frontend/src/features/EntryPage.vue` |
-| DATA-06 | 首个管理员在首次部署时由环境变量创建，重启不覆盖已有密码；所有角色可修改自己的密码。教师可按学号创建/表格导入学生，重置本班学生密码为其学号，批量移出班级并保留账号和学业记录；初始/重置密码须先修改再学习。 | [产品](product.md)、[架构](architecture.md)、[HTTP契约](api-contract.md)、[开发手册](development.md) | `backend/app/bootstrap.py`、`backend/app/student_accounts.py`、`frontend/src/features/TeacherStudents.vue` |
+| DATA-06 | 首个管理员在首次部署时由环境变量创建，重启不覆盖已有密码；所有角色可修改自己的密码，注册与自助改密最低6位。教师可按学号创建/表格导入学生，重置本班学生密码为其学号，批量移出班级并保留账号和学业记录；初始/重置密码须先修改再学习。 | [产品](product.md)、[架构](architecture.md)、[HTTP契约](api-contract.md)、[开发手册](development.md) | `backend/app/bootstrap.py`、`backend/app/student_accounts.py`、`frontend/src/features/TeacherStudents.vue` |
 
 ## 教学、测验与脚本
 
@@ -48,6 +48,7 @@
 | UI-07 | 学习资料页面只保留“小镇图书馆”主标题，按章节组织，侧边小目录、顶部搜索和类型筛选；返回恢复原列表状态，只展示已授权资料。 | [产品](product.md)、[游戏设计](design/game-interface.md) | `LibraryWorkspace.vue`、`frontend/e2e/townWorkspaces.spec.ts` |
 | UI-08 | 我的班级先介绍当前班级和本人学习进度，再提供切换班级与加入入口；切换成功后才替换当前状态，失败保留原班级。设置账户优先，按分类统一设置项，来源与许可归入关于，不再跳转班级或材料列表。 | [产品](product.md)、[游戏设计](design/game-interface.md) | `ClassroomPanel.vue`、`SettingsPanel.vue`、`frontend/e2e/townWorkspaces.spec.ts` |
 | UI-09 | 删除重复标题、无用计数、提交 UUID、作答长提示等干扰；保留真实错误、等待、冲突与权限信息。结果继续到学生主动确认，不能立即关闭反馈；放大文字后内容和必要操作仍清楚可达。 | [游戏设计](design/game-interface.md) | `PracticeQuestionCard.vue`、`frontend/e2e/assessmentPaper.spec.ts`、`frontend/e2e/uiUsability.spec.ts` |
+| UI-10 | 教师学生账号管理沿用shadcn后台风格，提供适合上百学生的分页、搜索、状态筛选、跨页选择与明确批量范围；左下角账号菜单提供修改密码弹窗和退出，移除独立密码导航页。暂不展示学习体验、活动与NPC、任务配置入口，后续另行决定。 | [后台设计](design/teacher-interface.md)、[产品](product.md) | `frontend/src/features/TeacherStudents.vue`、`frontend/src/components/admin/TeacherAccountMenu.vue` |
 
 ## 助教
 
@@ -82,8 +83,8 @@
 
 | 日期与范围 | 需求变化 | 本轮核对与限制 |
 | --- | --- | --- |
-| 2026-11-08 · 本地启动，复核 DATA-02、DEV-03–04 | 要求保持，无新增需求。 | 启动Docker Desktop并核对现有独立预览服务；同步[启动核验](acceptance.md#本地启动核验2026-11-08)。未改应用或配置，未重跑功能与浏览器测试；文档检查及空白检查通过。 |
 | 2026-11-08 · 学号登录及本地账号清理，复核 DATA-02、DATA-05、UI-08、DEV-02–04 | 新增DATA-05：全系统学号替代邮箱；用户明确授权清空当前本地预览全部旧账号及关联记录。其他既定要求保持。 | 同步产品、架构、API、两套设计规范、开发手册、验收与续做入口；前后端、迁移、浏览器及清理结果见[本轮核验](acceptance.md#学号登录与账号清理核验2026-11-08)。课程材料保留；真实外部服务及生产专项未执行。 |
 | 2026-11-08 · 普通侧栏与图书馆助教，复核 UI-05、AI-01–03、DEV-04 | 按最新决定撤销普通工作区侧栏折叠，保留阅读/答题学习支持折叠；图书馆直接阅读开放资料级图书管理员助教。其余要求保持。 | 同步产品、设计、架构、API、开发、验收及续做入口；验证见[本轮核验](acceptance.md#普通侧栏与图书馆助教核验2026-11-08)。前后端、迁移与浏览器通过；本地未配置模型凭据，真实模型及其他外部服务未验收。 |
 | 2026-11-08 · 提交推送复核，复核 DATA-05、UI-05、AI-01–03、DEV-03–04 | 要求保持，无新增功能需求。 | 按用户要求提交学号登录、普通侧栏调整及资料助教改动；复核文档、暂存范围与已有验收结果。仅推送reborn，无关目录与本机凭据不纳入；本轮未重复执行功能测试。 |
 | 2026-11-08 · 管理员初始化与学生账号管理，复核 DATA-02、DATA-05–06、DEV-02–04 | 新增DATA-06；首位管理员环境变量初始化、自助改密、教师创建/导入/重置密码及批量移出学生。其他要求保持。 | 同步产品、架构、API、两套界面规范、开发、验收与续做；验证与未执行项见[本轮核验](acceptance.md#账号管理核验2026-11-08)。保留已有账号和学习记录。 |
+| 2026-11-08 · 密码与后台交互调整，复核 DATA-06、UI-10、DEV-03–04 | 按用户批注将注册/改密最低长度调整为6位，明确大班名册、账号菜单改密弹窗及暂撤学习体验入口；其余要求保持。 | 已先提交上一轮账号功能；同步产品、API、设计、开发与验收，验证见[本轮核验](acceptance.md#密码与后台交互核验2026-11-08)。本轮无数据模型变更，不重置既有账号和记录。 |
