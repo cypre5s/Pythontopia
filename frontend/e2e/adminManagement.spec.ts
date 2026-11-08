@@ -420,7 +420,7 @@ test("teacher management layout, forms, real records, responsive navigation and 
     .locator("tbody tr")
     .filter({ has: page.locator(".record-title") });
   for (const row of await materialRows.all())
-    await expect(row.locator(".status-badge")).toHaveAttribute(
+    await expect(row.locator(".status-badge[data-status]")).toHaveAttribute(
       "data-status",
       "ready",
     );
