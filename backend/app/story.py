@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from .auth import current_user
 from .courses import authorize_activity, authorize_chapter, authorize_classroom, chapter_available, material_payload, authorize_material
+from .content_relations import material_in_chapter
 from .db import get_db
 from .models import Activity, ActivityProgress, ChapterRelease, LearningRecord, Material, Npc, NodeState, PlayerQuest, QuestDefinition, StoryDefinition, StorySession, User, WorldFlag
 from .quests import EventInput, apply_quest_event, authorize_quest, check_near, ensure_quests, node_statuses, quest_visible, validate_evidence, world_payload
@@ -59,7 +60,7 @@ def validate_story(
                 if not has_completion_rule(activity):
                     raise ValueError("演出阅读活动必须声明阅读参与完成规则")
                 material = db.get(Material, activity.material_id) if activity.material_id else None
-                if material and material.chapter_id != activity.chapter_id:
+                if material and not material_in_chapter(db, material.id, activity.chapter_id):
                     raise ValueError("学习资料必须属于活动章节")
                 validate_learning(activity.content, activity.kind, material, resolve=True)
         if goals is not None:

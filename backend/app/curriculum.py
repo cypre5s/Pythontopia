@@ -9,7 +9,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from .auth import require_teacher
 from .db import get_db
-from .models import Activity, Chapter, ChapterRelease, KnowledgePoint, Material, QuestDefinition, User
+from .models import Activity, Chapter, ChapterRelease, KnowledgePoint, MaterialChapter, QuestionChapter, QuestionKnowledgePoint, QuestDefinition, User
 
 router = APIRouter(prefix="/teacher", tags=["curriculum"])
 
@@ -123,7 +123,7 @@ def update_chapter(chapter_id: int, body: ChapterUpdate, db: Annotated[Session, 
 @router.delete("/chapters/{chapter_id}")
 def delete_chapter(chapter_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
     chapter = editable(db.get(Chapter, chapter_id), user)
-    for model in (Activity, Material, KnowledgePoint, QuestDefinition, ChapterRelease):
+    for model in (Activity, MaterialChapter, QuestionChapter, KnowledgePoint, QuestDefinition, ChapterRelease):
         if db.scalar(select(model).where(model.chapter_id == chapter_id).limit(1)):
             raise HTTPException(409, "章节已有知识点、材料、活动、任务或发布记录，不能删除")
     if db.scalar(select(ChapterRelease).where(ChapterRelease.prerequisite_chapter_id == chapter_id).limit(1)):
@@ -196,7 +196,8 @@ def update_point(point_id: int, body: PointUpdate, db: Annotated[Session, Depend
 @router.delete("/knowledge-points/{point_id}")
 def delete_point(point_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
     point = editable(db.get(KnowledgePoint, point_id), user)
-    if any(point_id in a.content.get("knowledge_point_ids", []) for a in db.scalars(select(Activity))):
+    if (db.scalar(select(QuestionKnowledgePoint).where(QuestionKnowledgePoint.knowledge_point_id == point_id).limit(1))
+            or any(point_id in a.content.get("knowledge_point_ids", []) for a in db.scalars(select(Activity)))):
         raise HTTPException(409, "知识点已被活动引用，不能删除")
     db.delete(point)
     commit_metadata(db)

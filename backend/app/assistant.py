@@ -17,9 +17,10 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 from .auth import current_user
+from .content_relations import material_in_chapter
 from .db import SessionLocal, get_db
 from .integration_models import AssistantCall, AssistantSession
-from .models import Classroom, LearningRecord, Material, Npc, Question, Submission, User
+from .models import Classroom, LearningRecord, Material, MaterialChapter, Npc, Submission, User
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 _active_tasks: dict[str, asyncio.Task] = {}
@@ -117,8 +118,11 @@ def activity_material(db, user, classroom_id, activity):
 
     if activity.material_id:
         authorize_material(db, user, classroom_id, activity.material_id)
+        if not material_in_chapter(db, activity.material_id, activity.chapter_id):
+            raise HTTPException(409, "学习资料必须关联活动章节")
         return activity.material_id
-    for candidate in db.scalars(select(Material).where(Material.chapter_id == activity.chapter_id).order_by(Material.id)):
+    for candidate in db.scalars(select(Material).join(MaterialChapter, MaterialChapter.material_id == Material.id)
+            .where(MaterialChapter.chapter_id == activity.chapter_id).order_by(Material.id)):
         try:
             material = authorize_material(db, user, classroom_id, candidate.id)
             if material.status == "ready":
@@ -225,17 +229,14 @@ def build_context(db, user, session, activity, body):
             "current_page": selected, "video_time": body.video_time, "student_code": None,
             "progress": [], "submissions": [], "pages": pages,
         }
-    question_ids = activity.content.get("question_ids")
-    public = [
-        public_question(q)
-        for q in db.scalars(select(Question).where(Question.activity_id == activity.id))
-        if question_ids is None or q.id in question_ids
-    ]
+    from .courses import learning_questions
+    classroom = db.get(Classroom, session.classroom_id)
+    public = [public_question(question) for question in learning_questions(db, activity, classroom.teacher_id)]
     # Secret tables and hidden test cases are never read by this module.
     records = [
         {"activity_id": x.activity_id, "kind": x.kind}
         for x in db.scalars(
-            select(LearningRecord).where(LearningRecord.user_id == user.id, LearningRecord.classroom_id == session.classroom_id).limit(30)
+            select(LearningRecord).where(LearningRecord.user_id == user.id, LearningRecord.classroom_id == session.classroom_id, LearningRecord.activity_id == activity.id).limit(30)
         )
     ]
     submissions = [

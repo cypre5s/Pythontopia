@@ -6,9 +6,31 @@ from sqlalchemy.pool import StaticPool
 from app.db import Base, get_db
 from app.main import app
 from app.models import User
+from app.content_relations import (activity_questions, set_activity_questions, set_material_chapters, set_question_chapters)
 from app.auth import hash_password, issue
 from app.seed import seed
 from app.world_config import load_world_config
+
+
+def make_material(db, *, chapter_ids=None, **fields):
+    """Author a test material through the same structured association as production."""
+    from app.models import Material
+    item = Material(**fields)
+    db.add(item)
+    db.flush()
+    set_material_chapters(db, item.id, chapter_ids or [])
+    return item
+
+
+def make_question(db, *, chapter_ids, activity_id=None, **fields):
+    from app.models import Question
+    item = Question(status="ready", **fields)
+    db.add(item)
+    db.flush()
+    set_question_chapters(db, item.id, chapter_ids)
+    if activity_id:
+        set_activity_questions(db, activity_id, [q.id for q in activity_questions(db, activity_id)] + [item.id])
+    return item
 
 
 def move_player(client, headers, classroom_id, map_key, tile_x, tile_y, direction="down"):
@@ -93,7 +115,9 @@ def branching_course(db, teacher):
     """Test-only course for graph, scheduling and Judge contracts; never seeded."""
     import json
     from pathlib import Path
-    from app.models import Activity, KnowledgePoint, Npc, QuestDefinition, Question
+    from app.models import Activity, KnowledgePoint, Npc, QuestDefinition, Question, QuestionSecret
+    from app.chapter_content import load_content
+    from app.config import ROOT
     from sqlalchemy import select
 
     spec = json.loads((Path(__file__).parent / "fixtures/branching_course.json").read_text(encoding="utf-8"))
@@ -101,7 +125,7 @@ def branching_course(db, teacher):
         fields = {key: source[key] for key in ("id", "chapter_id", "title", "kind", "material_id", "npc_key", "assistant_allowed", "content")}
         ids = [point.id for point in db.scalars(select(KnowledgePoint).where(KnowledgePoint.chapter_id == source["chapter_id"]))
                if set(point.content.get("page_refs", [])) & set(source.get("knowledge_point_pages", []))]
-        fields["content"] = {**fields["content"], "knowledge_point_ids": [1844] if source["id"] == "ch2-code" else ids}
+        fields["content"] = {**{key: value for key, value in fields["content"].items() if key != "question_ids"}, "knowledge_point_ids": [1844] if source["id"] == "ch2-code" else ids}
         item = db.get(Activity, source["id"])
         if not item:
             item = Activity(**fields, owner_id=teacher["id"])
@@ -111,7 +135,26 @@ def branching_course(db, teacher):
                 setattr(item, key, value)
             item.owner_id = teacher["id"]
     db.flush()
-    db.get(Question, "course-476").activity_id = "ch2-code"
+    question_specs = {q["id"]: q for q in load_content()["questions"]}
+    problems = {"course-" + str(p["id"]): p for p in json.loads((ROOT / "data/course-pack-43/json/course_problem.json").read_text())}
+    for activity in spec["activities"]:
+        for key in activity["content"]["question_ids"]:
+            if db.get(Question, key) is None:
+                if key in question_specs:
+                    source = question_specs[key]
+                    question = make_question(db, id=key, chapter_ids=[activity["chapter_id"]],
+                        title=source["title"], kind=source["kind"], prompt=source["prompt"],
+                        options=source["options"], samples=source.get("samples", []), source=source.get("source", {}))
+                    secret = QuestionSecret(question_id=question.id, answer=source["answer"], hidden_cases=source.get("hidden_cases", []))
+                else:
+                    source = problems[key]
+                    question = make_question(db, id=key, chapter_ids=[activity["chapter_id"]], title=source["title"],
+                        kind="python", prompt=source["statement_markdown"], options=[], samples=source["samples"], source={"reviewed": True})
+                    secret = QuestionSecret(question_id=question.id, answer=None, hidden_cases=[
+                        {"input": case["input"], "expected_output": case["expected_output"]}
+                        for case in source["test_cases"] if not case.get("is_sample")])
+                db.add(secret)
+        set_activity_questions(db, activity["id"], activity["content"]["question_ids"])
     db.get(Npc, "professor").dialogue = spec["dialogue"]
     db.get(Npc, "mayor_py").dialogue = [
         {"id": "welcome", "text": "Test start", "next": "welcome-story"},

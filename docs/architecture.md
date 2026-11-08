@@ -27,16 +27,19 @@ SettingsPanel使用账户、界面、音乐、操作、关于的可键盘导航�
 ```mermaid
 flowchart TD
     Chapter[章节] --> KC[知识点：学习目标]
-    Chapter --> Material[材料：课件、文本、视频]
+    Chapter -->|关联，可多章复用| Material[资料库：课件、文本、视频]
+    Chapter -->|关联，可多章复用| Question[独立题库]
     KC --> Activity[活动：学习、练习、测试卡片]
-    Material --> Activity
-    Question[题目] --> Activity
+    Material -->|绑定资料| Activity
+    Question -->|有序选题关系| Activity
     Quest[任务：顺序与完成要求] --> Activity
     Story[剧情：NPC对白与引导] --> Activity
     Activity --> Progress[学生记录：阅读位置、提交与成绩]
 ```
 
-YAML描述当前任务、剧情和活动，导入时按ID更新数据库。课件文本、当前文件引用和教学配置存在PostgreSQL，实际上传文件存在私有存储；学生记录存于独立表。没有每学生复制教材或按内容版本选择的流程。
+资料与题目独立保存，MaterialChapter、QuestionChapter和QuestionKnowledgePoint维护结构化关联；未归类内容只供管理，不因标签公开给学生。资料不设必读/补充分类，具体阅读页与视频完成条件仍由活动配置。Question保存owner_id、source_type与审核状态，来源仅ai_generated/imported，参考资料/页码单独保存于可选source；后台录入归入imported。ActivityQuestion是活动选题与顺序的唯一状态源；题目不再持有activity_id，也不在Activity.content中保留question_ids副本。答案与隐藏用例继续私有保存，同题不同活动的提交、进度、测验与幂等凭据相互隔离。
+
+YAML描述当前任务、剧情和活动，只有显式导入时按ID更新数据库。课件文本、当前文件引用和教学配置存在PostgreSQL，实际上传文件存在私有存储；学生记录存于独立表。没有每学生复制教材或按内容版本选择的流程。
 
 地图交互的权威配置为 `data/world/world.json`：地图尺寸/出生点、建筑名称/用途/门前锚点、普通交互点与portal源/目标/门禁。前端在构建时导入，后端加载同一文件；建筑交互点从建筑anchor派生，避免两处维护坐标。小镇和图书馆均由Tiled图层与素材对象渲染，建筑通过object_name关联。房屋贴图和仅含中文名称的名牌均可点击导航，门口显示小型透明素材箭头。
 
@@ -58,7 +61,7 @@ map工作区复用静态地图资源绘制预览，不创建额外Phaser.Game；
 
 图书馆直接阅读使用资料级助教会话：`assistant_sessions.activity_id` 可空，`material_id` 指向当前授权资料；不创建虚拟Activity或任务。活动会话保持原有assistant_allowed策略，资料会话始终为图书管理员，仅提供该资料的当前真实页面，不读取题目答案、提交或其他活动上下文。恢复历史及每次提问重新检查用户归属、班级/章节授权、资料归属和ready状态。客户端恢复键按用户、班级和活动或资料区分；翻页、切换标签与布局不创建模型请求。迁移 `b2076e4ca193` 只放宽活动外键的空值限制，保留旧会话和调用审计。
 
-章节YAML经校验后按稳定ID写入StoryDefinition、QuestDefinition和Activity，已有ID原位更新。不存在内容快照或多版选择。Material直接保存当前正文、文件引用与处理状态；Activity直接保存题集、KC和完成规则。学生任务、节点、ActivityProgress、Submission和LearningRecord独立保存，不被导入重建或清空。剧情会话保存对白位置和等待活动，event_id去重、revision拒绝过期推进，每用户/班级仅一个active或waiting演出。失效节点在导入时结束会话，下次交互重新选入口，不删除学习历史。
+章节YAML经校验后按稳定ID写入StoryDefinition、QuestDefinition和Activity，已有ID原位更新。不存在内容快照或多版选择。Material直接保存当前正文、文件引用与处理状态；Activity保存KC和完成规则，题集与顺序由ActivityQuestion保存。学生任务、节点、ActivityProgress、Submission和LearningRecord独立保存，不被导入重建或清空。剧情会话保存对白位置和等待活动，event_id去重、revision拒绝过期推进，每用户/班级仅一个active或waiting演出。失效节点在导入时结束会话，下次交互重新选入口，不删除学习历史。
 
 Vue会话协调对话、唯一工作区和Phaser导航。新任务的navigation_target先带玩家走到NPC，通过对话选择打开活动；小镇进入图书馆后继续走到馆员，离馆后也能续走到目标。读页请求串行落库，返回剧情前等待保存完成。阅读位置、参与页、代码草稿和成绩各自保存；普通演出与页码保存均不调用模型。已完成章节演出在另一章有可执行NPC目标时交还该章交互，避免章节总结挡住后续任务。
 
@@ -72,9 +75,9 @@ AssessmentAttempt按用户、班级、测验活动唯一保存答题草稿、题
 
 ## 环境隔离
 
-Reborn Compose 项目、数据库、卷、对象存储前缀和端口独立。主栈只有 db/api/web；Judge0 是可选独立隔离栈。默认数据库不对外发布，开发覆盖文件也只绑定 loopback。现有线上数据库、生产服务和 main 不参与迁移。CI 只检查 reborn，不发布生产。
+Reborn Compose 项目、数据库、卷、对象存储前缀和端口独立。主栈只有 db/api/web；Judge0 是可选独立隔离栈。API启动只执行结构迁移、必要管理员初始化与服务启动，不再自动导入课程或归档题。课程包来自显式外部来源，后台修改不因镜像更新/重启被seed覆盖；数据库卷保存元信息与关系，私有文件卷保存媒体和解析产物。默认数据库不对外发布，开发覆盖文件也只绑定 loopback。现有线上数据库、生产服务和 main 不参与迁移。CI 只检查 reborn，不发布生产。
 
 教师后台 /teacher 使用独立的管理布局与本地 shadcn-vue 组件源码，组件仅由教师路由引用。Tailwind 不加载 Preflight，工具类使用 CSS @scope 限定在 .teacher-page / .teacher-dialog；弹窗门户同样携带主题类，避免导航离开后台后影响学生/登录界面。TeacherContent 与课程编辑用 KeepAlive 保留未提交草稿，退出后台账号后随路由卸载。表单、筛选与分页为本地界面状态，权限、发布与成绩仍由原有服务端接口判定。
 
 
-课程媒体通过维护CLI导入当前Material：PDF保留原材料ID及content.pages，视频按来源ID新增/复用，均只引用私有存储中的文件。显式发布的可信课程资料可以在章节开放后直接进入资料库，无需创建虚拟Activity或Quest；普通上传仍按原绑定与归属规则授权。补充视频不进入任务完成条件。阅读卡片继续使用原活动、必读页面ID和进度；机器字幕不会因媒体接入自动加入助教上下文。
+课程媒体通过维护CLI导入当前Material：PDF保留原材料ID及content.pages，视频按来源ID新增/复用并建立章节关联，均只引用私有存储中的文件。显式发布的可信课程资料可以在章节开放后直接进入资料库，无需创建虚拟Activity或Quest；普通上传仍按原绑定与归属规则授权。未绑定活动的视频浏览不进入任务完成条件。阅读卡片继续使用原活动、必读页面ID和进度；机器字幕不会因媒体接入自动加入助教上下文。

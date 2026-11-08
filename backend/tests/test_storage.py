@@ -1,3 +1,4 @@
+from conftest import make_material
 import pytest
 from fastapi import HTTPException
 from app.storage import LocalStorage, byte_range, validate_upload, convert_presentation
@@ -63,7 +64,7 @@ def test_teacher_upload_processing_range_and_current_material_authorization(clie
     monkeypatch.setattr(storage, "SessionLocal", sessionmaker(db.bind, expire_on_commit=False))
     upload = client.post(
         "/api/teacher/materials/upload",
-        data={"chapter_id": 179, "title": "教师补充文本"},
+        data={"chapter_ids": "[179]", "title": "教师补充文本"},
         files={"file": ("lesson.txt", "教师上传的真实文本。Python 学习。".encode(), "text/plain")},
         headers=teacher["headers"],
     )
@@ -95,7 +96,7 @@ def test_teacher_upload_processing_range_and_current_material_authorization(clie
     assert client.get(url).status_code == 401
     update = client.post(
         "/api/teacher/materials/upload",
-        data={"chapter_id": 179, "title": "更新", "material_id": material_id},
+        data={"chapter_ids": "[179]", "title": "更新", "material_id": material_id},
         files={"file": ("lesson.txt", b"updated content", "text/plain")},
         headers=teacher["headers"],
     )
@@ -261,7 +262,7 @@ def test_replaced_material_is_not_overwritten_by_old_processing_job(db, monkeypa
     monkeypatch.setenv("REBORN_STORAGE_ROOT", str(tmp_path / "private"))
     factory = sessionmaker(db.bind, expire_on_commit=False)
     monkeypatch.setattr(storage, "SessionLocal", factory)
-    row = Material(chapter_id=179, title="current upload", kind="text", status="queued", storage_key="materials/old.txt", content={"pages": []})
+    row = make_material(db, chapter_ids=[179], title="current upload", kind="text", status="queued", storage_key="materials/old.txt", content={"pages": []})
     db.add(row)
     db.commit()
     material_id = row.id

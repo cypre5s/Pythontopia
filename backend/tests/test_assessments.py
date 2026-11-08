@@ -1,3 +1,5 @@
+from app.content_relations import set_activity_questions
+from conftest import make_question
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
@@ -16,7 +18,7 @@ from app.assessments import assessment_questions
 from app.db import Base, get_db
 from app.judge import JudgeSubmissionUnknown
 from app.main import create_app
-from app.models import Activity, AssessmentAttempt, ChapterRelease, Classroom, Membership, Question, QuestionSecret, Submission, User
+from app.models import Activity, AssessmentAttempt, ChapterRelease, Classroom, Membership, QuestionSecret, Submission, User
 from app.quests import validate_evidence
 from app.seed import seed
 
@@ -73,7 +75,7 @@ def test_one_hand_in_is_atomic_immutable_and_wrong_answers_still_finish_the_pape
                       {"type": "PASS_ASSESSMENT", "activity_id": "ch1-assessment"}, {"submission_id": paper["results"][-1]["id"]})
     # A submitted receipt remains readable even if the current configured set changes.
     activity = db.get(Activity, "ch1-assessment")
-    activity.content = {**activity.content, "question_ids": [paper["question_ids"][0]]}
+    set_activity_questions(db, activity, [paper["question_ids"][0]])
     db.commit()
     again = hand_in(client, db, student, classroom, entries=[{key: value for key, value in row.items() if key != "code"} for row in paper["answers"]])
     assert again.status_code == 201 and again.json()["question_ids"] == paper["question_ids"]
@@ -132,10 +134,10 @@ def test_complete_legacy_result_uses_real_latest_records_without_creating_or_reg
     assert db.scalar(select(func.count()).select_from(Submission)) == before
     fixed_ids = paper["question_ids"]
     activity = db.get(Activity, "ch1-assessment")
-    extra = Question(id="test-added-after-legacy", activity_id=activity.id, chapter_id=179, title="Later question", kind="boolean",
+    extra = make_question(db, id="test-added-after-legacy", activity_id=activity.id, chapter_ids=[179], title="Later question", kind="boolean",
                      prompt="Test only", options=[], samples=[])
     db.add(extra)
-    activity.content = {**activity.content, "question_ids": [*fixed_ids, extra.id]}
+    set_activity_questions(db, activity, [*fixed_ids, extra.id])
     db.commit()
     again = client.get(url(classroom) + f"?classroom_id={classroom['id']}", headers=student["headers"]).json()
     assert again["locked"] and again["legacy"] and again["completed"]
@@ -149,7 +151,7 @@ def test_python_whole_paper_uses_existing_judge_and_unknown_is_never_resubmitted
                         assistant_allowed=False, owner_id=teacher["id"], content={"question_ids": ["test-python-paper-q"]})
     db.add(activity)
     db.flush()
-    db.add(Question(id="test-python-paper-q", activity_id=activity.id, chapter_id=179, title="Test", kind="python", prompt="Test fixture",
+    db.add(make_question(db, id="test-python-paper-q", activity_id=activity.id, chapter_ids=[179], title="Test", kind="python", prompt="Test fixture",
                     options=[], samples=[{"input": "", "output": "public"}]))
     db.flush()
     db.add(QuestionSecret(question_id="test-python-paper-q", hidden_cases=[{"input": "secret-in", "output": "secret-out"}]))

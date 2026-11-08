@@ -8,6 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .auth import as_utc, current_user
 from .db import get_db
+from .content_relations import activity_questions, material_chapter_ids, material_in_chapter, question_chapter_ids
 from .learning_rules import record_video, required_pages, validate_learning, video_duration, video_state_for_material, video_watched
 from .models import (
     Activity,
@@ -118,30 +119,52 @@ def authorize_activity(db: Session, user: User, classroom_id: int, activity_id: 
 
 def available_in_library(material: Material) -> bool:
     """Only an explicit publication flag can publish materials without an activity."""
-    if material.content.get("library_available") is not True:
-        return False
-    if material.owner_id is not None:
-        return True
-    source = material.content.get("source")
-    return bool(isinstance(source, dict) and source.get("kind") == "course_media_pack"
-                and type(source.get("course_id")) is int and source["course_id"] == 43)
+    return material.content.get("library_available") is True
+
+
+def authorized_material_chapters(db, user, classroom_id, material):
+    """Return only usable associations; an unpublished sibling chapter stays private."""
+    classroom = authorize_classroom(db, user, classroom_id)
+    if material.owner_id not in {None, classroom.teacher_id} and user.role != "admin":
+        raise HTTPException(403, "无权访问其他班级教师资料")
+    chapters = []
+    for chapter_id in material_chapter_ids(db, material.id):
+        try:
+            authorize_chapter(db, user, classroom_id, chapter_id)
+        except HTTPException:
+            continue
+        chapters.append(chapter_id)
+    can_preview = user.role == "admin" or (user.role == "teacher" and classroom.teacher_id == user.id)
+    if not can_preview and not available_in_library(material):
+        published = db.scalars(select(Activity).where(Activity.material_id == material.id)).all()
+        chapters = [chapter_id for chapter_id in chapters if any(
+            activity.chapter_id == chapter_id and activity.owner_id in {None, classroom.teacher_id}
+            and activity.content.get("published") is not False for activity in published)]
+    if not chapters:
+        raise HTTPException(403, "资料未关联当前班级可访问的已发布章节或活动")
+    return chapters
 
 
 def authorize_material(db: Session, user: User, classroom_id: int, material_id: int) -> Material:
     material = db.get(Material, material_id)
     if not material:
         raise HTTPException(404, "资料不存在")
-    authorize_chapter(db, user, classroom_id, material.chapter_id)
-    classroom = db.get(Classroom, classroom_id)
-    if material.owner_id and material.owner_id != classroom.teacher_id and user.role != "admin":
-        raise HTTPException(403, "无权访问其他班级教师资料")
-    can_preview = user.role == "admin" or (user.role == "teacher" and classroom.teacher_id == user.id)
-    if not can_preview and not available_in_library(material):
-        published = db.scalars(select(Activity).where(Activity.material_id == material.id)).all()
-        if not any(a.owner_id in {None, classroom.teacher_id} and a.content.get("published") is not False
-                   and a.chapter_id == material.chapter_id for a in published):
-            raise HTTPException(403, "此资料未绑定当前班级已发布活动")
+    authorized_material_chapters(db, user, classroom_id, material)
     return material
+
+
+def learning_questions(db, activity, teacher_id=None):
+    """Use the complete ordered binding, and reject invalid papers as a whole."""
+    questions = activity_questions(db, activity)
+    owner_id = teacher_id if teacher_id is not None else activity.owner_id
+    for question in questions:
+        if question.status != "ready":
+            raise HTTPException(409, "活动存在尚未就绪的题目，请联系教师")
+        if activity.chapter_id not in question_chapter_ids(db, question.id):
+            raise HTTPException(409, "活动题目尚未关联当前章节")
+        if question.owner_id not in {None, owner_id}:
+            raise HTTPException(403, "活动题目不属于当前班级教师")
+    return questions
 
 
 def public_question(question: Question):
@@ -156,18 +179,18 @@ def public_question(question: Question):
     }
 
 
-def material_payload(db, material):
+def material_payload(db, material, *, chapter_ids=None):
+    chapters = material_chapter_ids(db, material.id) if chapter_ids is None else chapter_ids
     duration = material.content.get("duration_seconds")
     if (material.kind != "video" or type(duration) not in (int, float)
             or (type(duration) is float and not isfinite(duration)) or duration <= 0):
         duration = None
     return {
         "id": material.id, "title": material.title, "kind": material.kind,
-        "chapter_id": material.chapter_id, "status": material.status,
+        "chapter_id": chapters[0] if chapters else None, "chapter_ids": chapters, "status": material.status,
         "pages": material.content.get("pages", []), "notice": material.content.get("notice"),
         "media_url": f"/api/materials/{material.id}/file" if material.storage_key and material.status == "ready" else None,
         "error": material.error,
-        "supplementary": material.kind == "video" and material.content.get("supplementary") is True,
         "duration_seconds": duration,
     }
 
@@ -180,6 +203,8 @@ def get_activity(
     material = db.get(Material, activity.material_id) if activity.material_id else None
     if material:
         authorize_material(db, user, classroom_id, material.id)
+        if not material_in_chapter(db, material.id, activity.chapter_id):
+            raise HTTPException(409, "学习资料必须关联活动章节")
     classroom = db.get(Classroom, classroom_id)
     points = []
     for point_id in activity.content.get("knowledge_point_ids", []):
@@ -208,18 +233,17 @@ def get_activity(
         "progress": progress_payload(db, user, classroom_id, activity),
         "knowledge_point_ids": activity.content.get("knowledge_point_ids", []),
         "knowledge_points": points,
-        "material": material_payload(db, material) if material else None,
+        "material": material_payload(db, material, chapter_ids=authorized_material_chapters(db, user, classroom_id, material)) if material else None,
         "questions": [
             public_question(q)
-            for q in db.scalars(select(Question).where(Question.activity_id == activity.id)).all()
-            if activity.content.get("question_ids") is None or q.id in activity.content["question_ids"]
+            for q in learning_questions(db, activity, classroom.teacher_id)
         ],
     }
 
 
 def learning_material(db, activity):
     material = db.get(Material, activity.material_id) if activity.material_id else None
-    if material and material.chapter_id != activity.chapter_id:
+    if material and not material_in_chapter(db, material.id, activity.chapter_id):
         raise HTTPException(409, "学习资料必须属于活动章节")
     try:
         validate_learning(activity.content, activity.kind, material, resolve=True)
@@ -245,8 +269,8 @@ def progress_payload(db, user, classroom_id, activity):
             "assessment_status": paper["status"], "locked": paper["locked"], "passed": paper["passed"],
             "correct_count": paper["correct_count"], "total": paper["total"], "score": paper["score"], "max_score": paper["max_score"]}
     if activity.kind in {"practice", "assessment"}:
-        questions = [question for question in db.scalars(select(Question).where(Question.activity_id == activity.id))
-                     if activity.content.get("question_ids") is None or question.id in activity.content["question_ids"]]
+        classroom = db.get(Classroom, classroom_id)
+        questions = learning_questions(db, activity, classroom.teacher_id)
         accepted = {submission.question_id for submission in db.scalars(select(Submission).where(
             Submission.user_id == user.id, Submission.classroom_id == classroom_id, Submission.activity_id == activity.id,
             Submission.mode == "submit", Submission.status.in_(["accepted", "AC", "ac"])))}
@@ -407,18 +431,19 @@ def participation(activity_id: str, body: ParticipationInput, db: Annotated[Sess
 def get_material(
     material_id: int, classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]
 ):
-    return material_payload(db, authorize_material(db, user, classroom_id, material_id))
+    material = authorize_material(db, user, classroom_id, material_id)
+    return material_payload(db, material, chapter_ids=authorized_material_chapters(db, user, classroom_id, material))
 
 
 @router.get("/library")
 def library(classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
     authorize_classroom(db, user, classroom_id)
     results = []
-    for material in db.scalars(select(Material).order_by(Material.chapter_id, Material.id)):
+    for material in db.scalars(select(Material).order_by(Material.id)):
         try:
             authorize_material(db, user, classroom_id, material.id)
         except HTTPException:
             continue
-        payload = material_payload(db, material)
-        results.append({key: payload[key] for key in ("id", "title", "chapter_id", "kind", "status", "supplementary", "duration_seconds")})
+        payload = material_payload(db, material, chapter_ids=authorized_material_chapters(db, user, classroom_id, material))
+        results.append({key: payload[key] for key in ("id", "title", "chapter_id", "chapter_ids", "kind", "status", "duration_seconds")})
     return results

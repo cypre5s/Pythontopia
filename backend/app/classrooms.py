@@ -1,4 +1,5 @@
 import secrets
+import json
 from datetime import datetime, timezone
 from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException
@@ -7,9 +8,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 from .auth import as_utc, current_user, require_teacher
 from .db import get_db
+from .content_relations import (
+    activity_questions, material_in_chapter, question_chapter_ids, question_knowledge_point_ids,
+    set_activity_questions, set_question_chapters, set_question_knowledge_points,
+)
 from .world_config import validate_point
 from .models import (
     Activity,
+    ActivityQuestion,
+    AssessmentAttempt,
     Chapter,
     ChapterRelease,
     Classroom,
@@ -186,6 +193,7 @@ def teacher_courses(db: Annotated[Session, Depends(get_db)], user: Annotated[Use
                 "material_id": a.material_id,
                 "owner_id": a.owner_id,
                 "knowledge_point_ids": a.content.get("knowledge_point_ids", []),
+                "question_ids": [q.id for q in activity_questions(db, a)],
             }
             for a in db.scalars(
                 select(Activity) if user.role == "admin" else select(Activity).where((Activity.owner_id.is_(None)) | (Activity.owner_id == user.id))
@@ -275,13 +283,13 @@ def create_activity(body: ActivityInput, db: Annotated[Session, Depends(get_db)]
     if not db.get(Npc, body.npc_key):
         raise HTTPException(422, "NPC不存在")
     material = db.get(Material, body.material_id) if body.material_id else None
-    if material and (material.chapter_id != body.chapter_id or (material.owner_id and material.owner_id != user.id and user.role != "admin")):
+    if material and (not material_in_chapter(db, material.id, body.chapter_id) or (material.owner_id and material.owner_id != user.id and user.role != "admin")):
         raise HTTPException(403, "资料不属于当前教师或章节")
     if body.material_id and not material:
         raise HTTPException(404, "资料不存在")
     from .learning_rules import validate_learning
 
-    content = {"published": True, "question_ids": [], "knowledge_point_ids": body.knowledge_point_ids}
+    content = {"published": True, "knowledge_point_ids": body.knowledge_point_ids}
     if body.learning is not None:
         content["learning"] = body.learning
     try:
@@ -344,7 +352,7 @@ def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Sessio
         raise HTTPException(422, "NPC不存在")
     if changes.get("material_id"):
         material = db.get(Material, changes["material_id"])
-        if not material or material.chapter_id != item.chapter_id or (material.owner_id not in {None, user.id} and user.role != "admin"):
+        if not material or not material_in_chapter(db, material.id, item.chapter_id) or (material.owner_id not in {None, user.id} and user.role != "admin"):
             raise HTTPException(403, "资料不属于当前教师或章节")
     from .learning_rules import validate_learning
     from .models import Material
@@ -364,18 +372,77 @@ def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Sessio
     return {"id": item.id}
 
 
+class ActivityQuestionsInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    question_ids: list[str] = Field(max_length=5000)
+
+    @field_validator("question_ids")
+    @classmethod
+    def unique_questions(cls, value):
+        if any(not key or len(key) > 100 for key in value) or len(set(value)) != len(value):
+            raise ValueError("题目ID必须有效且不能重复")
+        return value
+
+
+@router.put("/teacher/activities/{activity_id}/questions")
+def update_activity_questions(activity_id: str, body: ActivityQuestionsInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
+    from .curriculum import editable
+
+    activity = editable(db.get(Activity, activity_id), user)
+    if activity.kind not in {"practice", "assessment"}:
+        raise HTTPException(422, "只有练习与测验活动可以选题")
+    if activity.kind == "assessment" and len(body.question_ids) > 100:
+        raise HTTPException(422, "章节测验最多选择100道题")
+    for question_id in body.question_ids:
+        question = db.get(Question, question_id)
+        if not question:
+            raise HTTPException(422, "选中的题目不存在")
+        if user.role != "admin" and question.owner_id not in {None, user.id}:
+            raise HTTPException(403, "无权使用其他教师的私有题目")
+        if question.status != "ready":
+            raise HTTPException(422, "只有已就绪题目可以用于活动")
+        if activity.chapter_id not in question_chapter_ids(db, question.id):
+            raise HTTPException(422, "题目必须关联活动所在章节")
+    set_activity_questions(db, activity, body.question_ids)
+    db.commit()
+    return {"id": activity.id, "question_ids": [q.id for q in activity_questions(db, activity)]}
+
+
 class QuestionInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     id: str = Field(min_length=1, max_length=100)
-    activity_id: str
     title: str = Field(min_length=1, max_length=200)
     kind: Literal["single_choice", "boolean", "fill", "python"]
     prompt: str = Field(min_length=1, max_length=30000)
+    chapter_ids: list[int] = Field(default_factory=list, max_length=65)
+    knowledge_point_ids: list[int] = Field(default_factory=list, max_length=65)
+    source_type: Literal["ai_generated", "imported"] = "imported"
+    status: Literal["draft", "ready", "disabled"] = "draft"
     options: list = Field(default_factory=list, max_length=20)
     samples: list = Field(default_factory=list, max_length=20)
     answer: dict | list | str | bool | None = None
     hidden_cases: list = Field(default_factory=list, max_length=20)
     source: dict = Field(default_factory=dict)
+
+    @field_validator("chapter_ids", "knowledge_point_ids", mode="before")
+    @classmethod
+    def valid_ids(cls, value):
+        from .curriculum import validate_id_list
+        return validate_id_list(value)
+
+    @field_validator("id", "title", "prompt")
+    @classmethod
+    def nonblank(cls, value):
+        if not value.strip():
+            raise ValueError("题目标识、标题与题干不能为空白")
+        return value.strip()
+
+    @field_validator("source", "options")
+    @classmethod
+    def bounded_json(cls, value):
+        if len(json.dumps(value, ensure_ascii=False)) > 30000:
+            raise ValueError("题目选项或来源超过30000字符")
+        return value
 
     @field_validator("samples", "hidden_cases")
     @classmethod
@@ -391,50 +458,161 @@ class QuestionInput(BaseModel):
     def validate_judge_budget(self):
         if self.kind == "python" and len(self.samples) + len(self.hidden_cases) > 20:
             raise ValueError("编程题公开样例与隐藏用例合计不能超过20个")
+        if self.status == "ready":
+            if not self.chapter_ids:
+                raise ValueError("就绪题目必须关联章节")
+            if self.kind == "python" and not self.hidden_cases:
+                raise ValueError("就绪编程题必须设置私有用例")
+            expected = self.answer.get("value") if isinstance(self.answer, dict) and "value" in self.answer else self.answer
+            if self.kind == "boolean" and not isinstance(expected, bool):
+                raise ValueError("判断题答案必须是布尔值")
+            if self.kind == "single_choice" and (not self.options or expected not in self.options):
+                raise ValueError("单选答案必须属于选项")
+            if self.kind == "fill" and (not isinstance(expected, (str, list)) or not expected):
+                raise ValueError("填空题必须设置答案")
         return self
+
+
+class QuestionUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str | None = None
+    kind: Literal["single_choice", "boolean", "fill", "python"] | None = None
+    prompt: str | None = None
+    chapter_ids: list[int] | None = None
+    knowledge_point_ids: list[int] | None = None
+    source_type: Literal["ai_generated", "imported"] | None = None
+    status: Literal["draft", "ready", "disabled"] | None = None
+    options: list | None = None
+    samples: list | None = None
+    answer: dict | list | str | bool | None = None
+    hidden_cases: list | None = None
+    source: dict | None = None
+
+
+def validate_question_links(db, user, body):
+    from .curriculum import authoring_chapter
+    from .models import Material
+
+    if "material_id" in body.source:
+        material_id = body.source["material_id"]
+        material = db.get(Material, material_id) if type(material_id) is int and material_id > 0 else None
+        if not material:
+            raise HTTPException(422, "题目来源资料不存在")
+        if user.role != "admin" and material.owner_id not in {None, user.id}:
+            raise HTTPException(403, "无权引用其他教师的私有资料")
+        if "page_no" in body.source:
+            page_no = body.source["page_no"]
+            if type(page_no) is not int or not any(page.get("page_no") == page_no for page in material.content.get("pages", [])):
+                raise HTTPException(422, "题目来源页必须属于所选资料")
+    for chapter_id in body.chapter_ids:
+        authoring_chapter(db, user, chapter_id)
+    for point_id in body.knowledge_point_ids:
+        point = db.get(KnowledgePoint, point_id)
+        if not point or point.chapter_id not in body.chapter_ids:
+            raise HTTPException(422, "知识点必须存在且属于所选章节")
+        if user.role != "admin" and point.owner_id not in {None, user.id}:
+            raise HTTPException(403, "无权使用其他教师的私有知识点")
+
+
+def teacher_question_payload(db, question, user):
+    from .courses import public_question
+
+    secret = db.get(QuestionSecret, question.id)
+    activities_query = select(Activity).join(ActivityQuestion, ActivityQuestion.activity_id == Activity.id).where(ActivityQuestion.question_id == question.id)
+    chapter_ids = question_chapter_ids(db, question.id)
+    point_ids = question_knowledge_point_ids(db, question.id)
+    if user.role != "admin":
+        activities_query = activities_query.where(Activity.owner_id.is_(None) | (Activity.owner_id == user.id))
+        chapter_ids = list(db.scalars(select(Chapter.id).where(Chapter.id.in_(chapter_ids), Chapter.owner_id.is_(None) | (Chapter.owner_id == user.id))))
+        point_ids = list(db.scalars(select(KnowledgePoint.id).where(KnowledgePoint.id.in_(point_ids), KnowledgePoint.chapter_id.in_(chapter_ids),
+            KnowledgePoint.owner_id.is_(None) | (KnowledgePoint.owner_id == user.id))))
+    activities = db.scalars(activities_query).all()
+    return {
+        **public_question(question),
+        "chapter_ids": chapter_ids,
+        "knowledge_point_ids": point_ids,
+        "source_type": question.source_type,
+        "status": question.status,
+        "source": question.source,
+        "owner_id": question.owner_id,
+        "activities": [{"id": a.id, "title": a.title, "chapter_id": a.chapter_id} for a in activities],
+        "answer": secret.answer if secret else None,
+        "hidden_cases": secret.hidden_cases if secret else [],
+    }
+
+
+def save_question(db, user, question, body):
+    validate_question_links(db, user, body)
+    bound = db.scalars(select(Activity).join(ActivityQuestion, ActivityQuestion.activity_id == Activity.id).where(ActivityQuestion.question_id == question.id)).all()
+    if bound and body.status != "ready":
+        raise HTTPException(409, "题目仍被活动引用，请先从活动移除再改为草稿或停用")
+    if any(activity.chapter_id not in body.chapter_ids for activity in bound):
+        raise HTTPException(409, "题目仍被活动引用，不能移除所用章节")
+    for key, value in body.model_dump(exclude={"id", "answer", "hidden_cases", "chapter_ids", "knowledge_point_ids"}).items():
+        setattr(question, key, value)
+    db.add(question)
+    db.flush()
+    secret = db.get(QuestionSecret, question.id)
+    if not secret:
+        secret = QuestionSecret(question_id=question.id)
+        db.add(secret)
+    secret.answer, secret.hidden_cases = body.answer, body.hidden_cases
+    set_question_chapters(db, question.id, body.chapter_ids)
+    set_question_knowledge_points(db, question.id, body.knowledge_point_ids)
+    db.commit()
+    return teacher_question_payload(db, question, user)
 
 
 @router.post("/teacher/questions", status_code=201)
 def create_question(body: QuestionInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
-    activity = db.get(Activity, body.activity_id)
-    if not activity or (activity.owner_id != user.id and user.role != "admin"):
-        raise HTTPException(403, "只能管理自己活动中的题目")
     if db.get(Question, body.id):
         raise HTTPException(409, "题目ID已存在")
-    if body.kind == "python" and not body.hidden_cases:
-        raise HTTPException(422, "编程题必须设置私有用例")
-    if body.kind == "boolean" and not isinstance(body.answer, bool):
-        raise HTTPException(422, "判断题答案必须是布尔值")
-    if body.kind == "single_choice" and body.answer not in body.options:
-        raise HTTPException(422, "单选答案必须属于选项")
-    question = Question(**body.model_dump(exclude={"answer", "hidden_cases"}), chapter_id=activity.chapter_id)
-    db.add(question)
-    db.flush()
-    db.add(QuestionSecret(question_id=question.id, answer=body.answer, hidden_cases=body.hidden_cases))
-    activity.content = {**activity.content, "question_ids": [*activity.content.get("question_ids", []), question.id]}
-    db.commit()
-    return {"id": question.id}
+    return save_question(db, user, Question(id=body.id, owner_id=user.id), body)
 
 
 @router.get("/teacher/questions")
 def list_questions(db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
-    from .courses import public_question
+    query = select(Question)
+    if user.role != "admin":
+        query = query.where(Question.owner_id.is_(None) | (Question.owner_id == user.id))
+    return [teacher_question_payload(db, item, user) for item in db.scalars(query.order_by(Question.id))]
 
-    result = []
-    for item in db.scalars(
-        select(Question).join(Activity, Activity.id == Question.activity_id).where((Activity.owner_id.is_(None)) | (Activity.owner_id == user.id))
-    ):
-        secret = db.get(QuestionSecret, item.id)
-        result.append(
-            {
-                **public_question(item),
-                "activity_id": item.activity_id,
-                "chapter_id": item.chapter_id,
-                "answer": secret.answer if secret else None,
-                "hidden_cases": secret.hidden_cases if secret else [],
-            }
-        )
-    return result
+
+@router.put("/teacher/questions/{question_id}")
+def update_question(question_id: str, body: QuestionUpdate, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
+    from .curriculum import editable
+    from pydantic import ValidationError
+
+    question = editable(db.get(Question, question_id), user)
+    fields = teacher_question_payload(db, question, user)
+    for key in ("activities", "owner_id"):
+        fields.pop(key, None)
+    fields.update(body.model_dump(exclude_unset=True))
+    try:
+        merged = QuestionInput.model_validate(fields)
+    except ValidationError as exc:
+        raise HTTPException(422, "题目配置无效：" + "; ".join(error["msg"] for error in exc.errors())) from exc
+    return save_question(db, user, question, merged)
+
+
+@router.delete("/teacher/questions/{question_id}")
+def delete_question(question_id: str, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
+    from .curriculum import editable
+
+    question = editable(db.get(Question, question_id), user)
+    if (db.scalar(select(ActivityQuestion).where(ActivityQuestion.question_id == question_id).limit(1))
+            or db.scalar(select(Submission).where(Submission.question_id == question_id).limit(1))
+            or any(question_id in attempt.question_ids for attempt in db.scalars(select(AssessmentAttempt)))):
+        raise HTTPException(409, "题目已有活动或作答引用，请停用保留历史")
+    set_question_chapters(db, question.id, [])
+    set_question_knowledge_points(db, question.id, [])
+    secret = db.get(QuestionSecret, question.id)
+    if secret:
+        db.delete(secret)
+        db.flush()
+    db.delete(question)
+    db.commit()
+    return {"ok": True}
 
 
 class NpcInput(BaseModel):

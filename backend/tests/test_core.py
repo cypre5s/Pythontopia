@@ -1,3 +1,5 @@
+from app.content_relations import activity_questions
+from conftest import make_material
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from types import SimpleNamespace
@@ -12,11 +14,11 @@ from conftest import move_player
 def test_seed_idempotent_and_answers_private(client, db, student, classroom):
     counts = seed(db)
     assert counts == {"documents": 7, "pages": 561, "chapters": 7, "knowledge_points": 65, "examples": 46, "problems": 39}
-    assert db.scalar(select(func.count()).select_from(Question)) == 48
+    assert db.scalar(select(func.count()).select_from(Question)) == 6
     payload = client.get(f"/api/activities/ch1-practice?classroom_id={classroom['id']}", headers=student["headers"]).json()
     assert len(payload["questions"]) == 3
     assert all(not {"answer", "hidden_cases", "reference_solution_code"} & q.keys() for q in payload["questions"])
-    assert client.get(f"/api/activities/archive-477?classroom_id={classroom['id']}", headers=student["headers"]).status_code == 403
+    assert client.get(f"/api/activities/archive-477?classroom_id={classroom['id']}", headers=student["headers"]).status_code == 404
 
 
 def test_registration_cannot_select_role_and_session_revoke(client):
@@ -115,8 +117,8 @@ def test_first_chapter_full_loop_and_idempotency(client, db, student, teacher, c
                             assert response.status_code == 200, response.text
                 else:
                     paper_answers = []
-                    for question in db.scalars(select(Question).where(Question.activity_id == activity.id)):
-                        if question.id not in activity.content["question_ids"]:
+                    for question in activity_questions(db, activity):
+                        if question.id not in [q.id for q in activity_questions(db, activity)]:
                             continue
                         answer = db.get(QuestionSecret, question.id).answer
                         if question.kind == "fill" and isinstance(answer, list):
@@ -158,10 +160,9 @@ def test_first_chapter_full_loop_and_idempotency(client, db, student, teacher, c
 
 
 def test_unbound_material_is_private(client, db, student, teacher, classroom):
-    from app.models import Material
 
     cid, headers = classroom["id"], student["headers"]
-    db.add(Material(id=9000, chapter_id=179, title="Unbound material", kind="text", owner_id=teacher["id"],
+    db.add(make_material(db, id=9000, chapter_ids=[179], title="Unbound material", kind="text", owner_id=teacher["id"],
                     status="ready", content={"pages": [{"id": 9000, "page_no": 1, "title": "private", "text": "unpublished"}]}))
     db.commit()
     assert client.get(f"/api/materials/9000?classroom_id={cid}", headers=headers).status_code == 403
@@ -225,7 +226,7 @@ def test_second_chapter_different_branch_and_parallel_loop(client, db, student, 
         assert response.status_code == 200, response.text
     event("choose-route", {"npc_key": "professor", "dialogue_id": "language", "choice": "concept"})
     position(38, 24)
-    for q in db.scalars(select(Question).where(Question.activity_id == "ch2-concept")):
+    for q in activity_questions(db, "ch2-concept"):
         answer = db.get(QuestionSecret, q.id).answer
         if q.kind == "fill":
             answer = answer[0]
@@ -233,7 +234,7 @@ def test_second_chapter_different_branch_and_parallel_loop(client, db, student, 
             "/api/submissions",
             json={
                 "classroom_id": cid,
-                "activity_id": q.activity_id,
+                "activity_id": "ch2-concept",
                 "question_id": q.id,
                 "idempotency_key": str(uuid4()),
                 "mode": "submit",

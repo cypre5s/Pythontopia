@@ -63,8 +63,14 @@ def load_yaml(path: Path):
 
 
 def load_content(root=CONTENT_ROOT):
+    root = Path(root)
     bundles = [load_yaml(path) for path in sorted((root / "chapters").glob("*.yaml"))]
-    questions = load_yaml(root / "questions/concepts.private.yaml")["questions"]
+    questions = []
+    for path in sorted((root / "questions").glob("*.yaml")):
+        bundle = load_yaml(path)
+        if set(bundle) != {"schema_version", "questions"} or not isinstance(bundle["questions"], list):
+            raise ValueError("题库文件仅允许schema_version与questions列表")
+        questions.extend(bundle["questions"])
     if not bundles:
         raise ValueError("未找到章节脚本")
     npcs, activities, quests, stories = [], [], [], []
@@ -104,31 +110,31 @@ def load_content(root=CONTENT_ROOT):
                 quests=sorted(quests, key=lambda q: q["id"]), stories=stories, questions=questions)
 
 
-def validate_sources():
+def validate_sources(root=CONTENT_ROOT):
     from .dialogues import validate_dialogue
     from .quests import validate_definition
     from .story import validate_story
     from .learning_rules import validate_learning
 
-    content = load_content()
+    content = load_content(root)
     for npc in content["npcs"]:
         validate_dialogue(npc["dialogue"])
     for quest in content["quests"]:
         validate_definition(quest)
     activities = {item["id"] for item in content["activities"]}
     npc_keys = {item["key"] for item in content["npcs"]}
-    questions = {item["id"]: item["activity_id"] for item in content["questions"]}
+    questions = {item["id"] for item in content["questions"]}
     for item in content["activities"]:
         validate_learning(item["content"], item["kind"])
         ids = item["content"].get("question_ids")
         if not isinstance(ids, list) or any(not isinstance(key, str) for key in ids) or len(set(ids)) != len(ids):
             raise ValueError("每个活动必须显式固定非重复question_ids")
-        allowed = {key for key, owner in questions.items() if owner == item["id"]}
-        if item.get("knowledge_point_mode") == "problem":
-            # Reviewed original course problem is imported from the real course export.
-            allowed.add("course-476")
-        if set(ids) - allowed:
-            raise ValueError("活动题集引用了未配置或不属于它的题目")
+        if len(ids) > (100 if item["kind"] == "assessment" else 5000):
+            raise ValueError("章节测验最多100道题，其他活动最多5000道题")
+        # Exported course questions are validated against the chosen JSON package
+        # by import-course; YAML questions may be reused by multiple activities.
+        if any(key not in questions and not (key.startswith("course-") and key[7:].isdigit()) for key in ids):
+            raise ValueError("活动题集引用了未配置的题目")
     for story in content["stories"]:
         validate_story(story["story"], quest_definition=story["quest"], story_id=story["id"])
         if set(story["story"]["entries"]) - npc_keys:
@@ -142,5 +148,6 @@ def validate_sources():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Validate chapter YAML sources (no database writes).")
     parser.add_argument("--check", action="store_true", help="Validate chapter sources and print counts")
-    parser.parse_args()
-    print(json.dumps(validate_sources(), ensure_ascii=False))
+    parser.add_argument("--content", type=Path, default=CONTENT_ROOT, help="External YAML content directory")
+    args = parser.parse_args()
+    print(json.dumps(validate_sources(args.content), ensure_ascii=False))

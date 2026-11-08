@@ -1,3 +1,4 @@
+from conftest import make_material
 import json
 from sqlalchemy import select
 from sqlalchemy.orm import sessionmaker
@@ -255,10 +256,10 @@ def test_stale_assistant_call_after_database_outage_does_not_lock_session_foreve
 
 
 def test_existing_session_reads_current_activity_configuration(client, db, student, classroom):
-    from app.models import Material, User
+    from app.models import User
 
     sid = create_session(client, student, classroom).json()["id"]
-    current = Material(chapter_id=179, title="替换的当前资料", kind="text", content={"pages": [
+    current = make_material(db, chapter_ids=[179], title="替换的当前资料", kind="text", content={"pages": [
         {"id": 1, "page_no": 1, "title": "当前页", "text": "当前教学内容"}
     ]})
     db.add(current)

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from .auth import current_user
 from .db import get_db
-from .models import AssessmentAttempt, Question, Submission, User, now
+from .models import AssessmentAttempt, Classroom, Submission, User, now
 from .practice import public_submission, stage_submission
 
 router = APIRouter(tags=["assessments"])
@@ -20,13 +20,10 @@ GRADED = ACCEPTED | {"wrong_answer", "compile_error", "runtime_error", "time_lim
 PENDING = {"prepared", "dispatching", "queued", "running"}
 
 
-def assessment_questions(db, activity):
-    questions = list(db.scalars(select(Question).where(Question.activity_id == activity.id).order_by(Question.id)))
-    configured = activity.content.get("question_ids")
-    if configured is None:
-        return questions
-    mapping = {question.id: question for question in questions}
-    return [mapping[key] for key in configured if key in mapping]
+def assessment_questions(db, activity, classroom_id=None):
+    from .courses import learning_questions
+    classroom = db.get(Classroom, classroom_id) if classroom_id is not None else None
+    return learning_questions(db, activity, classroom.teacher_id if classroom else None)
 
 
 def _attempt(db, user_id, classroom_id, activity_id):
@@ -49,9 +46,10 @@ def _answers_from_rows(rows):
 
 
 def assessment_payload(db, user, classroom_id, activity):
-    questions = assessment_questions(db, activity)
-    ids = [question.id for question in questions]
     attempt = _attempt(db, user.id, classroom_id, activity.id)
+    # A handed-in paper owns its question snapshot and grading evidence forever.
+    # Later bank status or activity edits must not recalculate an existing grade.
+    ids = []
     legacy, rows = False, {}
     if attempt and attempt.state in {"submitted", "legacy"}:
         ids = attempt.question_ids
@@ -59,6 +57,7 @@ def assessment_payload(db, user, classroom_id, activity):
         locked, answers = True, attempt.answers
         legacy = attempt.state == "legacy"
     else:
+        ids = [question.id for question in assessment_questions(db, activity, classroom_id)]
         rows = _latest_legacy(db, user.id, classroom_id, activity.id, ids)
         pending = any(row.status not in GRADED for row in rows.values())
         locked = bool(rows) and (pending or len(rows) == len(ids))
@@ -184,7 +183,7 @@ def save_assessment(activity_id: str, body: DraftInput, db: Annotated[Session, D
         raise HTTPException(409, "试卷已提交，不能修改答案")
     if body.revision != payload["revision"]:
         raise HTTPException(409, "试卷草稿已在其他页面更新，请重新读取")
-    questions = assessment_questions(db, activity)
+    questions = assessment_questions(db, activity, body.classroom_id)
     answers = _normalize(body.answers, questions)
     attempt = _attempt(db, user.id, body.classroom_id, activity_id)
     if not attempt:
@@ -210,7 +209,7 @@ def submit_assessment(activity_id: str, body: HandInInput, db: Annotated[Session
                 and _signature(attempt.answers) == _signature(retried)):
             return assessment_payload(db, user, body.classroom_id, activity)
         raise HTTPException(409, "试卷已提交，不能再次交卷或修改答案")
-    questions = assessment_questions(db, activity)
+    questions = assessment_questions(db, activity, body.classroom_id)
     answers = _normalize(body.answers, questions, complete=True)
     if assessment_payload(db, user, body.classroom_id, activity)["locked"]:
         raise HTTPException(409, "此测验已有正式记录，不能重复交卷")

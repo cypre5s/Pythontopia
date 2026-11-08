@@ -1,10 +1,11 @@
+from app.content_relations import activity_questions
 from copy import deepcopy
 from uuid import uuid4
 
 import pytest
 from sqlalchemy import func, select
 
-from app.models import Activity, ActivityProgress, ChapterRelease, LearningEvent, Material, PlayerQuest, QuestDefinition, Question, StoryDefinition, StorySession, Submission, User, WorldFlag
+from app.models import Activity, ActivityProgress, ChapterRelease, LearningEvent, Material, PlayerQuest, QuestDefinition, StoryDefinition, StorySession, Submission, User, WorldFlag
 from app.quests import validate_evidence
 from app.courses import progress_payload
 from app.story import validate_story
@@ -200,7 +201,7 @@ def test_completed_story_yields_to_ready_second_chapter_mission(client, db, stud
 
 def test_formal_submission_survives_current_question_and_activity_edits(db, student, classroom):
     activity = db.get(Activity, "ch1-practice")
-    questions = list(db.scalars(select(Question).where(Question.activity_id == activity.id)))
+    questions = list(activity_questions(db, activity))
     for question in questions:
         db.add(Submission(user_id=student["id"], classroom_id=classroom["id"], activity_id=activity.id, question_id=question.id,
                           idempotency_key=str(uuid4()), mode="submit", status="accepted"))

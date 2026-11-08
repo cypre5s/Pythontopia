@@ -23,6 +23,7 @@ from pypdf.errors import PdfReadError
 from sqlalchemy import select, text
 
 from .config import ROOT
+from .content_relations import material_in_chapter, set_material_chapters
 from .db import SessionLocal
 from .models import Chapter, Material
 from .storage import get_storage, storage_root
@@ -237,7 +238,7 @@ def import_media(db, archive, *, source_root=None, storage=None):
             for doc_id, (doc, pages) in documents.items():
                 material = by_id.get(doc_id)
                 chapter = chapters.get(doc["sort_order"])
-                if (not material or not chapter or material.chapter_id != chapter.id or material.owner_id is not None
+                if (not material or not chapter or not material_in_chapter(db, material.id, chapter.id) or material.owner_id is not None
                         or material.kind not in {"text", "pdf", "presentation"}):
                     raise ValueError(f"资料{doc_id}未正确导入课程或已被其他所有者占用")
                 existing_pages = material.content.get("pages", [])
@@ -278,27 +279,30 @@ def import_media(db, archive, *, source_root=None, storage=None):
                 if material is None:
                     material = Material()
                     db.add(material)
-                material.title, material.chapter_id = video["title"], chapters[video["chapter"]].id
+                material.title = video["title"]
                 material.kind, material.owner_id, material.status, material.error = "video", None, "ready", None
                 material.storage_key = item.key
                 material.content = {"filename": video["file"], "size": item.size, "sha256": item.sha256, "pages": [],
-                                    "library_available": True, "supplementary": True, "duration_seconds": video["durationSec"],
+                                    "library_available": True, "duration_seconds": video["durationSec"],
                                     "source": {"kind": SOURCE_KIND, "course_id": 43, "video_id": video_id}}
+                db.flush()
+                set_material_chapters(db, material.id, [chapters[video["chapter"]].id])
             db.commit()
         except Exception:
             db.rollback()
             raise
     return {"pdfs": len(documents), "pages": sum(len(pages) for _, pages in documents.values()),
-            "videos": len(videos), "supplementary_videos": len(videos)}
+            "videos": len(videos)}
 
 
 def main():
     parser = argparse.ArgumentParser(description="Import verified course-43 PDF/video files without changing learner data")
     parser.add_argument("archive", type=Path)
+    parser.add_argument("--source-root", type=Path, help="Trusted external export and media-manifest directory")
     args = parser.parse_args()
     with SessionLocal() as db:
         try:
-            print(json.dumps(import_media(db, args.archive), ensure_ascii=False))
+            print(json.dumps(import_media(db, args.archive, source_root=args.source_root), ensure_ascii=False))
         except (ValueError, OSError) as exc:
             parser.exit(1, f"媒体导入失败：{exc}\n")
 

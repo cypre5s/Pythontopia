@@ -109,7 +109,7 @@ def test_import_preserves_page_identity_and_learner_history_and_is_idempotent(db
     ids = (quest.id, record.id, submission.id)
     activity_before = deepcopy(db.get(Activity, "ch1-lesson").content)
     counts_before = {model: db.scalar(select(func.count()).select_from(model)) for model in (Material, Activity, QuestDefinition)}
-    assert run_import(db, media_fixture) == {"pdfs": 1, "pages": 45, "videos": 2, "supplementary_videos": 2}
+    assert run_import(db, media_fixture) == {"pdfs": 1, "pages": 45, "videos": 2}
     db.expire_all()
     imported = db.get(Material, 186)
     assert imported.kind == "pdf" and imported.status == "ready"
@@ -120,7 +120,7 @@ def test_import_preserves_page_identity_and_learner_history_and_is_idempotent(db
     video_ids = [m.id for m in db.scalars(select(Material).where(Material.kind == "video"))]
     assert len(video_ids) == 2
     for video in db.scalars(select(Material).where(Material.kind == "video")):
-        assert video.content["supplementary"] is True
+        assert "supplementary" not in video.content
         assert video.content["library_available"] is True
         assert video.content["duration_seconds"] > 0 and video.storage_key
     assert len(media_fixture["storage"].puts) == 3
@@ -201,7 +201,7 @@ def test_database_mapping_validation_precedes_any_storage_write(db, media_fixtur
         write_archive(media_fixture["archive"], media_fixture["files"])
     else:
         for number in range(2):
-            db.add(Material(chapter_id=179, title=f"duplicate{number}", kind="video",
+            db.add(Material(title=f"duplicate{number}", kind="video",
                             content={"source": {"kind": "course_media_pack", "course_id": 43, "video_id": 1}}))
     db.commit()
     with pytest.raises(ValueError):
@@ -235,7 +235,7 @@ def test_resource_limits_reject_package_before_publication(db, media_fixture, mo
 
 
 def test_unrelated_material_source_metadata_is_not_adopted(db, media_fixture):
-    unrelated = Material(chapter_id=179, title="Unrelated material", kind="video", content={"source": "teacher-provided metadata"})
+    unrelated = Material(title="Unrelated material", kind="video", content={"source": "teacher-provided metadata"})
     db.add(unrelated)
     db.commit()
     unrelated_id = unrelated.id

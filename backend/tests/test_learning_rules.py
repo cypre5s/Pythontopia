@@ -1,3 +1,4 @@
+from conftest import make_material
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from uuid import uuid4
@@ -104,7 +105,7 @@ def test_video_playback_rates_count_actual_wall_time_without_fast_forward_credit
 
 @pytest.fixture
 def video_activity(db, teacher):
-    material = Material(id=9901, chapter_id=179, title="心跳测试视频", kind="video", owner_id=teacher["id"],
+    material = make_material(db, id=9901, chapter_ids=[179], title="心跳测试视频", kind="video", owner_id=teacher["id"],
                         status="ready", storage_key="test-video.mp4", content={"pages": [], "duration_seconds": 120})
     activity = Activity(id="test-video-goal", chapter_id=179, title="观看视频", kind="lesson", material_id=9901,
                         npc_key="librarian_doc", owner_id=teacher["id"], assistant_allowed=False,
@@ -153,7 +154,7 @@ def test_video_api_requires_real_heartbeats_and_keeps_teacher_and_classroom_isol
     assert saved.media_progress["watched_seconds"] == 10
     assert saved.visited_pages == []
     # Material changes preserve each material's participation, never transfer its evidence.
-    db.add(Material(id=9902, chapter_id=179, title="另一视频", kind="video", owner_id=teacher["id"], status="ready",
+    db.add(make_material(db, id=9902, chapter_ids=[179], title="另一视频", kind="video", owner_id=teacher["id"], status="ready",
                     storage_key="other-test-video.mp4", content={"pages": [], "duration_seconds": 120}))
     db.commit()
     assert client.put(f"/api/teacher/activities/{activity.id}", json={"material_id": 9902}, headers=teacher["headers"]).status_code == 200
@@ -196,7 +197,7 @@ def test_teacher_learning_api_validates_material_replacements_and_reading_progre
         assert result.json()["read_count"] == index + 1
         assert result.json()["completed"] == (index == 1)
         assert pages[0]["id"] in result.json()["visited_pages"]
-    db.add(Material(id=9902, chapter_id=179, title="其他课件", kind="text", owner_id=teacher["id"], status="ready",
+    db.add(make_material(db, id=9902, chapter_ids=[179], title="其他课件", kind="text", owner_id=teacher["id"], status="ready",
                     content={"pages": [{"id": 99021, "page_no": 1, "title": "新页", "text": "正文"}]}))
     db.commit()
     invalid = client.put("/api/teacher/activities/test-range", headers=teacher["headers"], json={"material_id": 9902})

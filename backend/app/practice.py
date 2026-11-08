@@ -15,7 +15,7 @@ from .auth import as_utc, current_user
 from .db import SessionLocal, get_db
 from .integration_models import SubmissionPayload
 from .judge import JudgeAdapter, JudgeSubmissionUnknown, JudgeUnavailable
-from .models import Question, QuestionSecret, Submission, User
+from .models import Classroom, QuestionSecret, Submission, User
 
 router = APIRouter(tags=["practice"])
 
@@ -87,18 +87,11 @@ def stage_submission(db, user, classroom_id, activity, question, answer, code, k
 
 @router.post("/submissions", status_code=201)
 def create_submission(body: SubmissionInput, user: Annotated[User, Depends(current_user)], db: Annotated[Session, Depends(get_db)]):
-    from .courses import authorize_activity
+    from .courses import authorize_activity, learning_questions
 
     activity = authorize_activity(db, user, body.classroom_id, body.activity_id)
     if user.role != "student":
         raise HTTPException(403, "教师预览不能写入学生成绩")
-    question = db.get(Question, body.question_id)
-    if (
-        not question
-        or question.activity_id != activity.id
-        or (activity.content.get("question_ids") is not None and question.id not in activity.content["question_ids"])
-    ):
-        raise HTTPException(404, "题目不属于当前活动")
     query = select(Submission).where(
         Submission.user_id == user.id, Submission.classroom_id == body.classroom_id, Submission.idempotency_key == body.idempotency_key
     )
@@ -113,6 +106,10 @@ def create_submission(body: SubmissionInput, user: Annotated[User, Depends(curre
         ):
             raise HTTPException(409, "幂等键已用于不同提交")
         return public_submission(existing)
+    classroom = db.get(Classroom, body.classroom_id)
+    question = next((item for item in learning_questions(db, activity, classroom.teacher_id) if item.id == body.question_id), None)
+    if not question:
+        raise HTTPException(404, "题目不属于当前活动")
     db.execute(select(User.id).where(User.id == user.id).with_for_update())
     if activity.kind == "assessment":
         from .assessments import assessment_payload

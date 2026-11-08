@@ -1,8 +1,10 @@
 """Authorization and current quest-reference regression tests."""
 
+from app.content_relations import activity_questions
+from conftest import make_material, make_question
+
 from uuid import uuid4
 import pytest
-from sqlalchemy import select
 from app.auth import hash_password, issue
 from app.models import Activity, Material, Question, QuestionSecret, User
 from app.quests import validate_definition
@@ -30,9 +32,9 @@ def test_teacher_cannot_read_other_owner_draft_assessment_or_metadata(client, db
     db.add(assessment)
     db.flush()
     db.add(
-        Question(
+        make_question(db,
             id="teacher-a-private-question",
-            chapter_id=179,
+            chapter_ids=[179],
             activity_id=assessment.id,
             title="PRIVATE_QUESTION",
             kind="boolean",
@@ -59,7 +61,7 @@ def test_teacher_cannot_read_other_owner_draft_assessment_or_metadata(client, db
 def test_enrolled_external_teacher_reads_bound_current_material_only(client, db, teacher, classroom):
     other = new_teacher(db)
     client.post("/api/classrooms/join", json={"join_code": classroom["join_code"]}, headers=other["headers"])
-    material = Material(id=9200, chapter_id=179, title="Current material", kind="text", owner_id=teacher["id"], status="ready",
+    material = make_material(db, id=9200, chapter_ids=[179], title="Current material", kind="text", owner_id=teacher["id"], status="ready",
                         content={"pages": [{"id": 9201, "page_no": 1, "title": "page", "text": "PUBLISHED_CURRENT_MATERIAL"}]})
     db.add(material)
     db.flush()
@@ -247,7 +249,7 @@ def test_all_merge_keeps_required_practice_after_chosen_branch(client, db, teach
     assert statuses["b"] == "skipped" and statuses["required-practice"] == "ready"
     assert quest["status"] == "active" and "required_merge_passed" not in world["flags"]
     assert event("required-practice", {}).status_code == 422
-    for q in db.scalars(select(Question).where(Question.activity_id == "ch1-practice")):
+    for q in activity_questions(db, "ch1-practice"):
         answer = db.get(QuestionSecret, q.id).answer
         if q.kind == "fill":
             answer = answer[0]
@@ -255,7 +257,7 @@ def test_all_merge_keeps_required_practice_after_chosen_branch(client, db, teach
             "/api/submissions",
             json={
                 "classroom_id": cid,
-                "activity_id": q.activity_id,
+                "activity_id": "ch1-practice",
                 "question_id": q.id,
                 "idempotency_key": str(uuid4()),
                 "mode": "submit",
@@ -286,7 +288,7 @@ def test_teacher_cannot_publish_unjudgeable_cases(client, db, teacher, samples, 
         "/api/teacher/questions",
         json={
             "id": "invalid-cases",
-            "activity_id": "not-used-before-validation",
+            "chapter_ids": [179], "status": "ready",
             "title": "Invalid cases",
             "kind": "python",
             "prompt": "Test fixture",
@@ -310,7 +312,7 @@ def test_twenty_bounded_cases_publish_and_formally_submit_without_runtime_config
         "/api/teacher/questions",
         json={
             "id": "twenty-cases",
-            "activity_id": activity_id,
+            "chapter_ids": [179], "status": "ready",
             "title": "Twenty cases",
             "kind": "python",
             "prompt": "Explicit test fixture, not course content",
@@ -320,6 +322,7 @@ def test_twenty_bounded_cases_publish_and_formally_submit_without_runtime_config
     )
     assert response.status_code == 201, response.text
     assert "activity_version" not in response.json()
+    assert client.put(f"/api/teacher/activities/{activity_id}/questions", json={"question_ids": ["twenty-cases"]}, headers=teacher["headers"]).status_code == 200
     response = client.put(
         f"/api/teacher/classrooms/{classroom['id']}/releases/179", json={"status": "published"}, headers=teacher["headers"]
     )

@@ -22,12 +22,15 @@ from uuid import uuid4
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, ConfigDict, field_validator
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from .auth import current_user, require_teacher
 from .db import SessionLocal, get_db
-from .models import Material, User
+from .models import Activity, Chapter, Material, Question, User
+from .integration_models import AssistantSession
+from .content_relations import material_chapter_ids, set_material_chapters
 
 router = APIRouter(tags=["materials"])
 MAX_UPLOAD = int(os.getenv("REBORN_MAX_UPLOAD_BYTES", str(128 * 1024 * 1024)))
@@ -157,10 +160,10 @@ def validate_upload(path: Path, suffix: str):
 async def upload_material(
     user: Annotated[User, Depends(require_teacher)],
     db: Annotated[Session, Depends(get_db)],
-    chapter_id: Annotated[int, Form()],
     title: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
     material_id: Annotated[int | None, Form()] = None,
+    chapter_ids: Annotated[str | None, Form()] = None,
 ):
     name = file.filename or ""
     if not name or "/" in name or "\\" in name or ":" in name or len(name) > 200 or not title.strip() or len(title) > 200:
@@ -170,12 +173,22 @@ async def upload_material(
         raise HTTPException(415, "不支持此文件类型")
     from .curriculum import authoring_chapter
 
-    authoring_chapter(db, user, chapter_id)
+    selected_chapters = None
+    if chapter_ids is not None:
+        from .curriculum import validate_id_list
+        try:
+            selected_chapters = validate_id_list(json.loads(chapter_ids))
+        except (ValueError, TypeError):
+            raise HTTPException(422, "chapter_ids 必须是有效的章节ID JSON数组")
+        for chapter_id in selected_chapters:
+            authoring_chapter(db, user, chapter_id)
     material = db.get(Material, material_id) if material_id else None
     if material_id and (not material or (material.owner_id != user.id and user.role != "admin")):
         raise HTTPException(403, "只能更新自己上传的资料")
-    if material and (material.chapter_id != chapter_id or material.kind != KINDS[suffix]):
-        raise HTTPException(422, "更新必须保留章节与材料类型")
+    if material and material.kind != KINDS[suffix]:
+        raise HTTPException(422, "替换文件必须保留材料类型")
+    if material and selected_chapters is not None:
+        validate_material_links(db, material.id, selected_chapters)
     with tempfile.TemporaryDirectory(prefix="upload-", dir=storage_root()) as tmp:
         path = Path(tmp) / ("source" + suffix)
         size, digest = 0, hashlib.sha256()
@@ -192,9 +205,11 @@ async def upload_material(
         key = f"materials/{uuid4().hex}{suffix}"
         await asyncio.to_thread(get_storage().put, key, path)
     if not material:
-        material = Material(chapter_id=chapter_id, title=title.strip(), kind=KINDS[suffix], owner_id=user.id)
+        material = Material(title=title.strip(), kind=KINDS[suffix], owner_id=user.id)
         db.add(material)
         db.flush()
+    if selected_chapters is not None:
+        set_material_chapters(db, material.id, selected_chapters)
     material.title = title.strip()
     material.status = "queued"
     material.error = None
@@ -208,23 +223,105 @@ async def upload_material(
     return {"id": material.id, "status": material.status, "title": material.title}
 
 
+def teacher_material(db, user, material_id, *, edit=False):
+    material = db.get(Material, material_id)
+    if not material:
+        raise HTTPException(404, "资料不存在")
+    if user.role != "admin" and material.owner_id not in ({user.id} if edit else {None, user.id}):
+        raise HTTPException(403, "无权访问或编辑此资料")
+    return material
+
+
+def teacher_material_chapters(db, material, user):
+    chapter_ids = material_chapter_ids(db, material.id)
+    if user.role == "admin":
+        return chapter_ids
+    return list(db.scalars(select(Chapter.id).where(Chapter.id.in_(chapter_ids), Chapter.owner_id.is_(None) | (Chapter.owner_id == user.id))))
+
+
+def teacher_material_payload(db, material, user):
+    activities = select(Activity).where(Activity.material_id == material.id)
+    if user.role != "admin":
+        activities = activities.where(Activity.owner_id.is_(None) | (Activity.owner_id == user.id))
+    return {
+        "id": material.id, "title": material.title, "chapter_ids": teacher_material_chapters(db, material, user),
+        "kind": material.kind, "status": material.status, "error": material.error,
+        "owner_id": material.owner_id, "pages": len(material.content.get("pages", [])),
+        "activities": [{"id": a.id, "title": a.title, "chapter_id": a.chapter_id}
+                       for a in db.scalars(activities)],
+    }
+
+
+def validate_material_links(db, material_id, chapter_ids):
+    if db.scalar(select(Activity).where(Activity.material_id == material_id, Activity.chapter_id.not_in(chapter_ids)).limit(1)):
+        raise HTTPException(409, "资料仍被活动引用，不能移除所用章节")
+
+
 @router.get("/teacher/materials")
 def teacher_materials(user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)]):
     query = select(Material)
     if user.role != "admin":
-        query = query.where(Material.owner_id == user.id)
-    return [
-        {
-            "id": material.id,
-            "title": material.title,
-            "chapter_id": material.chapter_id,
-            "kind": material.kind,
-            "status": material.status,
-            "error": material.error,
-            "pages": len(material.content.get("pages", [])),
-        }
-        for material in db.scalars(query.order_by(Material.id))
-    ]
+        query = query.where(Material.owner_id.is_(None) | (Material.owner_id == user.id))
+    return [teacher_material_payload(db, material, user) for material in db.scalars(query.order_by(Material.id))]
+
+
+@router.get("/teacher/materials/{material_id}")
+def teacher_material_preview(material_id: int, user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)]):
+    from .courses import material_payload
+
+    material = teacher_material(db, user, material_id)
+    result = material_payload(db, material, chapter_ids=teacher_material_chapters(db, material, user))
+    result["owner_id"] = material.owner_id
+    result["media_url"] = f"/api/teacher/materials/{material.id}/file" if material.storage_key and material.status == "ready" else None
+    return result
+
+
+class MaterialUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    title: str | None = None
+    chapter_ids: list[int] | None = None
+
+    @field_validator("title")
+    @classmethod
+    def valid_title(cls, value):
+        if value is None or not value.strip() or len(value) > 200:
+            raise ValueError("资料标题必须为1至200个字符")
+        return value.strip()
+
+    @field_validator("chapter_ids", mode="before")
+    @classmethod
+    def valid_chapters(cls, value):
+        from .curriculum import validate_id_list
+        return validate_id_list(value)
+
+
+@router.put("/teacher/materials/{material_id}")
+def update_material(material_id: int, body: MaterialUpdate, user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)]):
+    from .curriculum import authoring_chapter
+
+    material = teacher_material(db, user, material_id, edit=True)
+    if "chapter_ids" in body.model_fields_set:
+        for chapter_id in body.chapter_ids:
+            authoring_chapter(db, user, chapter_id)
+        validate_material_links(db, material.id, body.chapter_ids)
+        set_material_chapters(db, material.id, body.chapter_ids)
+    if "title" in body.model_fields_set:
+        material.title = body.title
+    db.commit()
+    return teacher_material_payload(db, material, user)
+
+
+@router.delete("/teacher/materials/{material_id}")
+def delete_material(material_id: int, user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)]):
+    material = teacher_material(db, user, material_id, edit=True)
+    if (db.scalar(select(Activity).where(Activity.material_id == material.id).limit(1))
+            or db.scalar(select(AssistantSession).where(AssistantSession.material_id == material.id).limit(1))
+            or any(question.source.get("material_id") == material.id for question in db.scalars(select(Question)))):
+        raise HTTPException(409, "资料已有活动、来源或助教会话引用，不能删除")
+    set_material_chapters(db, material.id, [])
+    db.delete(material)
+    db.commit()
+    return {"ok": True}
 
 
 def byte_range(value: str | None, size: int) -> tuple[int, int, bool]:
@@ -257,6 +354,15 @@ def material_file(
     from .courses import authorize_material
 
     item = authorize_material(db, user, classroom_id, material_id)
+    return stream_material(item, request)
+
+
+@router.get("/teacher/materials/{material_id}/file")
+def teacher_material_file(material_id: int, request: Request, user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)]):
+    return stream_material(teacher_material(db, user, material_id), request)
+
+
+def stream_material(item, request):
     if not item or not item.storage_key:
         raise HTTPException(404, "原媒体文件缺失")
     if item.status != "ready":

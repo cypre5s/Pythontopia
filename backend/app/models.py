@@ -1,6 +1,6 @@
 from datetime import datetime, timezone
 from uuid import uuid4
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, text
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base
 
@@ -66,7 +66,6 @@ class KnowledgePoint(Base):
 class Material(Base):
     __tablename__ = "materials"
     id: Mapped[int] = mapped_column(primary_key=True)
-    chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), index=True)
     title: Mapped[str] = mapped_column(String(200))
     kind: Mapped[str] = mapped_column(String(24), default="text")
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
@@ -76,6 +75,12 @@ class Material(Base):
     status: Mapped[str] = mapped_column(String(24), default="ready")
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class MaterialChapter(Base):
+    __tablename__ = "material_chapters"
+    material_id: Mapped[int] = mapped_column(ForeignKey("materials.id", ondelete="CASCADE"), primary_key=True)
+    chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id", ondelete="CASCADE"), primary_key=True, index=True)
 
 
 class Activity(Base):
@@ -221,15 +226,40 @@ class ActivityProgress(Base):
 
 class Question(Base):
     __tablename__ = "questions"
+    __table_args__ = (
+        CheckConstraint("source_type IN ('ai_generated', 'imported')", name="ck_questions_source_type"),
+        CheckConstraint("status IN ('draft', 'ready', 'disabled')", name="ck_questions_status"),
+    )
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
-    chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), index=True)
-    activity_id: Mapped[str] = mapped_column(ForeignKey("activities.id"), index=True)
+    owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
+    source_type: Mapped[str] = mapped_column(String(24), default="imported", server_default=text("'imported'"))
+    status: Mapped[str] = mapped_column(String(16), default="draft", server_default=text("'draft'"))
     title: Mapped[str] = mapped_column(String(200))
     kind: Mapped[str] = mapped_column(String(24))
     prompt: Mapped[str] = mapped_column(Text)
     options: Mapped[list] = mapped_column(JSON, default=list)
     samples: Mapped[list] = mapped_column(JSON, default=list)
     source: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class QuestionChapter(Base):
+    __tablename__ = "question_chapters"
+    question_id: Mapped[str] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), primary_key=True)
+    chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id", ondelete="CASCADE"), primary_key=True, index=True)
+
+
+class QuestionKnowledgePoint(Base):
+    __tablename__ = "question_knowledge_points"
+    question_id: Mapped[str] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), primary_key=True)
+    knowledge_point_id: Mapped[int] = mapped_column(ForeignKey("knowledge_points.id", ondelete="CASCADE"), primary_key=True, index=True)
+
+
+class ActivityQuestion(Base):
+    __tablename__ = "activity_questions"
+    __table_args__ = (CheckConstraint("order_index >= 0", name="ck_activity_questions_order_index"),)
+    activity_id: Mapped[str] = mapped_column(ForeignKey("activities.id", ondelete="CASCADE"), primary_key=True)
+    question_id: Mapped[str] = mapped_column(ForeignKey("questions.id"), primary_key=True, index=True)
+    order_index: Mapped[int] = mapped_column(Integer)
 
 
 class QuestionSecret(Base):

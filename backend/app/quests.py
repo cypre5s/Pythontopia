@@ -13,6 +13,7 @@ from .models import (
     Activity,
     ActivityProgress,
     Chapter,
+    Classroom,
     LearningEvent,
     LearningRecord,
     NodeState,
@@ -20,7 +21,6 @@ from .models import (
     PlayerPosition,
     PlayerQuest,
     QuestDefinition,
-    Question,
     Submission,
     StoryDefinition,
     User,
@@ -468,14 +468,11 @@ def validate_evidence(db, user, classroom_id, node, evidence):
         ):
             raise HTTPException(422, "缺少当前活动的真实阅读记录")
     elif kind in {"COMPLETE_PRACTICE", "PASS_ASSESSMENT"}:
-        from .courses import authorize_activity
+        from .courses import authorize_activity, learning_questions
 
         activity = authorize_activity(db, user, classroom_id, node["activity_id"])
-        questions = [
-            q
-            for q in db.scalars(select(Question).where(Question.activity_id == node["activity_id"]))
-            if activity.content.get("question_ids") is None or q.id in activity.content["question_ids"]
-        ]
+        classroom = db.get(Classroom, classroom_id)
+        questions = learning_questions(db, activity, classroom.teacher_id) if activity.kind != "assessment" else []
         if not questions and activity.kind != "assessment":
             raise HTTPException(422, "题组为空")
         accepted = {

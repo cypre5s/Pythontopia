@@ -1,3 +1,4 @@
+from app.content_relations import activity_questions
 from copy import deepcopy
 
 import pytest
@@ -51,7 +52,7 @@ def test_repeated_seed_updates_current_story_quest_activity_and_question(db, mon
 def test_reimport_revises_question_set_without_removing_grades_or_participation(db, monkeypatch, student, classroom):
     from uuid import uuid4
     from app import seed as seed_module
-    from app.models import Activity, ActivityProgress, LearningRecord, Submission
+    from app.models import ActivityProgress, LearningRecord, Submission
 
     changed = deepcopy(load_content())
     activity = next(a for a in changed["activities"] if a["id"] == "ch1-practice")
@@ -70,7 +71,7 @@ def test_reimport_revises_question_set_without_removing_grades_or_participation(
     monkeypatch.setattr(seed_module, "load_content", lambda: changed)
     seed_module.seed(db)
     seed_module.seed(db)
-    assert db.get(Activity, activity["id"]).content["question_ids"] == activity["content"]["question_ids"]
+    assert [q.id for q in activity_questions(db, activity["id"])] == activity["content"]["question_ids"]
     assert db.get(Submission, submission.id).status == "accepted"
     assert db.get(LearningRecord, record.id).data == {"page_no": 34}
     saved = db.get(ActivityProgress, (student["id"], classroom["id"], "ch1-lesson"))
