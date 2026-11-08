@@ -19,6 +19,7 @@
             <div class="account-details"><strong>{{ session.user?.name ?? '未登录' }}</strong><span>{{ session.user?.student_id }}</span></div>
             <span v-if="session.user" class="account-role">{{ roleName }}</span>
           </section>
+          <section class="town-section"><PasswordForm /></section>
           <section class="town-section settings-group">
             <div v-if="isTeacher" class="setting-row"><div class="setting-copy"><strong>教师工作台</strong><p class="setting-description">管理班级与教学内容。</p></div><RouterLink to="/teacher" class="town-secondary">进入工作台 <GameIcon name="arrowRight" /></RouterLink></div>
             <div class="setting-row"><div class="setting-copy"><strong>退出登录</strong><p class="setting-description">学习进度会保留，下次登录后可继续。</p></div><button class="settings-logout" :disabled="loggingOut || !session.user" @click="logout"><GameIcon name="logout" />{{ loggingOut ? '正在退出…' : '退出账号' }}</button></div>
@@ -46,6 +47,7 @@ import { computed, nextTick, ref } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import GameIcon from "../shared/GameIcon.vue";
 import LicenseContent from "./LicenseContent.vue";
+import PasswordForm from "./PasswordForm.vue";
 import { useSession } from "../shared/session";
 import { api } from "../shared/api";
 import { useUiPreferences, textScales } from "../shared/uiPreferences";

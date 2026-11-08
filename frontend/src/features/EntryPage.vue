@@ -27,7 +27,7 @@
             type="password"
             :autocomplete="register ? 'new-password' : 'current-password'"
             required
-            minlength="10"
+            :minlength="register ? 10 : 1"
         /></label>
         <p v-if="error || resourceError" class="error" role="alert">{{ error || resourceError }}</p>
         <button class="primary" :disabled="busy || !backdropReady || !worldAssetsReady">
@@ -74,6 +74,7 @@ async function submit() {
     );
     api.setToken(result.access_token);
     session.user = result.user;
+    if (result.user.must_change_password) { await router.push("/change-password"); return; }
     if (result.user.role === "student") {
       sessionStorage.setItem("reborn-arrival", "yes");
       await preloadWorld();

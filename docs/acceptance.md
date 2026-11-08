@@ -1,8 +1,23 @@
 # 验收摘要与已知边界
 
+## 账号管理核验2026-11-08
+
+源码为`47e637e1`后的工作区，分支reborn；本机15176独立预览已升级到`c3187f5db204`，不连接main/生产。首位管理员由环境变量创建；学生和教师自助改密；教师按学号创建、CSV/XLSX预览导入、批量重置密码与移出班级。现有账号不强制改密，创建/重置学生必须先修改学号临时密码。
+
+| 检查 | 本轮结果与证据 |
+| --- | --- |
+| 前端 | npm ci、typecheck、lint、build通过；37文件229项测试通过。首次测试因沙箱临时文件rename EPERM全部未启动，正常本机环境重跑通过。`.tmp/account-frontend-tests.log`保留失败，成功见`.tmp/account-frontend-tests-rerun.log`，构建见`.tmp/account-frontend-build.log`。依赖审计仍报16项moderate，未在本轮改动前端依赖。 |
+| 后端 | 锁依赖安装、Ruff通过；340通过、10跳过、2个既有SQLite datetime弃用警告。初跑及定位重跑因系统pytest临时目录权限失败，换项目内全新basetemp后通过；记录分别为`.tmp/account-backend-tests.log`、`.tmp/account-backend-first-failure.log`、`.tmp/account-backend-tests-rerun.log`。最终Excel维度限制后，账号专项8项再次通过。 |
+| 管理员及迁移 | 新PostgreSQL库完整迁移、重复seed两次全部行一致；四个独立事务并发初始化仅创建一个管理员，改变环境密码后重试不覆盖原密码。`.tmp/account-pg-check.log`。新迁移只添加临时密码标记，既有用户默认false。 |
+| 数据保全 | 升级前数据库与私有存储备份在`.tmp/pre-account-management-20261108.dump`和`.tmp/pre-account-management-storage-20261108/`；恢复到独立临时库核对28表468条既有完整字段全部保留，新增验收记录单独排除，见`.tmp/account-preservation.log`。 |
+| 账号浏览器 | 1920×1080桌面Chrome，新增专项1项通过：教师创建、CSV预览确认、学生首次强制改密及刷新、设置中再次改密、教师重置、旧token失效、移出班级后账号保留、教师密码入口。`.tmp/account-browser.log`；截图`frontend/.tmp-account-password.png`、`frontend/.tmp-account-students.png`已人工查看。XLSX解析、文本学号保零、数字/公式拒绝由后端真实解析测试覆盖。 |
+| 游戏回归 | gameDesign、rebornJourney、storyChapter共3项通过，覆盖100%–200%布局、arrival主线、恢复与账号隔离、资料助教入口；`.tmp/account-browser-regression.log`和`frontend/.tmp-account-regression/`。世界静态检查2图/11建筑/2门户/1838可达格/353美术对象，资源存在检查68项通过。 |
+
+10项后端跳过仍是可选PostgreSQL与live Judge0检查；本轮独立PostgreSQL专项不等于把这些跳过改成通过。未验收真实AI/Judge0/S3/转换器、生产或移动设备；不对外部服务可用性作新结论。普通导航/改密/学生管理不调用模型。部署与配置的可执行说明只维护在[开发手册](development.md#首次管理员与后续教师账号)。文档链接/归档完整性和diff空白检查通过。
+
 ## 如何解释这份摘要
 
-最近一轮为2026-11-08的[普通侧栏与图书馆助教核验](#普通侧栏与图书馆助教核验2026-11-08)，继续在 `e1d26f5e` 之后的未提交工作区实现。此前[学号登录与账号清理](#学号登录与账号清理核验2026-11-08)及下方 `a003fcd99786560f7ae19c3b6263b3287918ab76` 功能矩阵保留各自执行范围，不把旧结论提升为本轮验证。
+最近一轮为2026-11-08的[账号管理核验](#账号管理核验2026-11-08)，基于 `47e637e1` 后的工作区。此前[普通侧栏与图书馆助教核验](#普通侧栏与图书馆助教核验2026-11-08)、[学号登录与账号清理](#学号登录与账号清理核验2026-11-08)及下方旧基线矩阵保留各自执行范围，不把旧结论提升为本轮验证。
 
 当前应满足的行为见[已确认要求](requirements.md)及其指向的规范，执行方法见[开发手册](development.md)。本页保存最新有效范围和限制，详细失败过程、旧部署状态及历次结果见[完整验收归档](archive/2026-11-08-documentation-baseline/acceptance.md)。记录后的代码变更必须按影响范围重新验证，不能直接继承通过结论。
 

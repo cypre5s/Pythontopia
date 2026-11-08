@@ -38,7 +38,13 @@ Invoke-RestMethod http://127.0.0.1:15174/api/health
 
 仓库根的 `./dev.ps1`、`./dev.sh` 是使用 `deploy/.env` 和基础 Compose 启动的简写；需要独立项目或 override 时，使用显式 Compose 命令。
 
-### 创建教师或管理员
+### 首次管理员与后续教师账号
+
+首次部署在环境文件设置 `REBORN_ADMIN_STUDENT_ID`（1–32位数字，保留前导零）、`REBORN_ADMIN_PASSWORD`（12–200位且不能等于学号）和可选 `REBORN_ADMIN_NAME`（默认“管理员”）。没有公开默认账号或密码。API完成迁移与seed后，在启动阶段创建首个管理员；多个PostgreSQL进程通过事务锁串行检查。已存在管理员时跳过初始化，修改环境变量或重启都不会覆盖其密码。成功创建后可清空环境文件中的管理员密码；已有账号使用界面改密。全空配置不会创建管理员，部分配置或学号被其他角色占用则启动报错，不会提升已有学生权限。
+
+所有角色使用同一学号登录入口。学生在“设置 → 账户”改密，教师/管理员在“我的密码”改密；需要当前密码，新密码至少10位。修改后其他登录失效，当前窗口获得新会话。首次管理员不使用学生的学号初始密码规则。
+
+教师在“学生账号”按学号与姓名创建学生，或上传UTF-8 CSV / `.xlsx`批量预览后确认。表格仅一张工作表，首行为“学号、姓名”，最多500人/2MB；Excel学号必须用文本单元格，拒绝公式。初始密码为本人学号，首次登录必须修改。重复导入本班已有学生跳过，不覆盖姓名/密码；其他已有账号先使用班级加入码加入。可选择学生批量重置密码为各自学号（撤销全部旧会话、强制再次改密）或移出当前班级（保留账号、其他班级、历史记录）。
 
 系统不提供默认公开账号。先在当前终端安全注入仅用于创建账号的 `REBORN_TEACHER_PASSWORD` 环境变量，至少12字符；不要将密码写进命令、文档或 Git。再创建自己的教师账号：
 
@@ -46,7 +52,7 @@ Invoke-RestMethod http://127.0.0.1:15174/api/health
 docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml exec -e REBORN_TEACHER_PASSWORD api python -m app.cli provision-user --student-id 900001 --name 教师 --role teacher --password-env REBORN_TEACHER_PASSWORD
 ```
 
-命令不会覆盖已有同学号账号。管理员使用 `--role admin`；本机 API 可直接执行同一 `python -m app.cli provision-user ...` 命令。用后清除临时密码环境变量。学生在界面注册，教师创建班级、分发加入码并安排章节开放。
+命令不会覆盖已有同学号账号。该命令用于后续教师或管理员增补（管理员用 `--role admin`）；首次管理员优先使用上述启动变量。本机 API 可直接执行同一命令。用后清除临时密码环境变量。学生仍可自行注册，教师创建班级、管理学生并安排章节开放。
 
 ### 更新与停止
 

@@ -3,10 +3,10 @@ import hmac
 import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ConfigDict, Field, field_validator
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from .config import dev_tools_enabled
@@ -35,6 +35,7 @@ def public_user(user: User) -> dict:
         "student_id": user.student_id,
         "name": user.name,
         "role": user.role,
+        "must_change_password": user.must_change_password,
         "dev_tools_enabled": user.role == "student" and dev_tools_enabled(),
     }
 
@@ -43,7 +44,7 @@ def as_utc(value):
     return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
 
 
-def current_user(credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)], db: Annotated[Session, Depends(get_db)]) -> User:
+def current_user(request: Request, credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer)], db: Annotated[Session, Depends(get_db)]) -> User:
     if credentials is None:
         raise HTTPException(401, "请先登录")
     session = db.get(AuthSession, hashlib.sha256(credentials.credentials.encode()).hexdigest())
@@ -52,6 +53,8 @@ def current_user(credentials: Annotated[HTTPAuthorizationCredentials | None, Dep
     user = db.get(User, session.user_id)
     if not user or not user.student_id:
         raise HTTPException(401, "账号不可用")
+    if user.must_change_password and request.url.path not in {"/api/auth/me", "/api/auth/password", "/api/auth/logout"}:
+        raise HTTPException(403, "请先修改初始密码")
     return user
 
 
@@ -64,7 +67,7 @@ def require_teacher(user: Annotated[User, Depends(current_user)]) -> User:
 class LoginInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     student_id: str = Field(min_length=1, max_length=64)
-    password: str = Field(min_length=10, max_length=200)
+    password: str = Field(min_length=1, max_length=200)
 
     @field_validator("student_id")
     @classmethod
@@ -73,6 +76,7 @@ class LoginInput(BaseModel):
 
 
 class RegisterInput(LoginInput):
+    password: str = Field(min_length=10, max_length=200)
     name: str = Field(min_length=1, max_length=80)
 
 
@@ -100,9 +104,28 @@ def register(body: RegisterInput, db: Annotated[Session, Depends(get_db)]):
 
 @router.post("/login")
 def login(body: LoginInput, db: Annotated[Session, Depends(get_db)]):
-    user = db.scalar(select(User).where(User.student_id == body.student_id))
+    user = db.scalar(select(User).where(User.student_id == body.student_id).with_for_update())
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(401, "学号或密码错误")
+    return issue(db, user)
+
+
+class PasswordInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    current_password: str = Field(min_length=1, max_length=200)
+    new_password: str = Field(min_length=10, max_length=200)
+
+
+@router.post("/password")
+def change_password(body: PasswordInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
+    user = db.scalar(select(User).where(User.id == user.id).with_for_update().execution_options(populate_existing=True))
+    if not verify_password(body.current_password, user.password_hash):
+        raise HTTPException(400, "当前密码不正确")
+    if body.new_password == user.student_id or verify_password(body.new_password, user.password_hash):
+        raise HTTPException(422, "新密码不能与学号或当前密码相同")
+    user.password_hash = hash_password(body.new_password)
+    user.must_change_password = False
+    db.execute(delete(AuthSession).where(AuthSession.user_id == user.id))
     return issue(db, user)
 
 

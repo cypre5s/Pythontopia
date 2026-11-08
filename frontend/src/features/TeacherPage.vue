@@ -103,6 +103,8 @@
           正在读取教学工作台…
         </div>
         <template v-else-if="authorized">
+          <PasswordForm v-if="section === 'account'" class="admin-panel" />
+          <TeacherStudents v-if="section === 'students'" :key="selectedClass ?? 0" :classroom-id="selectedClass" @changed="loadProgress" />
           <template v-if="section === 'classes'">
             <div class="table-toolbar list-toolbar">
               <span class="list-count"
@@ -429,6 +431,8 @@ import { formatTimestamp } from "../shared/time";
 import { useSession } from "../shared/session";
 import type { Chapter } from "../shared/types";
 import TeacherContent from "./TeacherContent.vue";
+import TeacherStudents from "./TeacherStudents.vue";
+import PasswordForm from "./PasswordForm.vue";
 import TeacherChapters from "./TeacherChapters.vue";
 import "./teacherTheme.css";
 import "./teacherUi.css";
@@ -469,6 +473,8 @@ const navigation = [
     label: "班级教学",
     items: [
       { id: "classes", label: "班级", icon: Users },
+      { id: "students", label: "学生账号", icon: Users },
+      { id: "account", label: "我的密码", icon: GraduationCap },
       { id: "progress", label: "学习记录", icon: ChartNoAxesCombined },
       { id: "release", label: "章节管理", icon: Send },
     ],

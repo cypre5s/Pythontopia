@@ -4,6 +4,7 @@ export interface User {
   name: string;
   role: string;
   dev_tools_enabled?: boolean;
+  must_change_password?: boolean;
 }
 export interface Classroom {
   id: number;

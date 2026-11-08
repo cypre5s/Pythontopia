@@ -5,11 +5,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from .config import CORS_ORIGINS, dev_tools_enabled
 from .db import SessionLocal
-from . import auth, courses, classrooms, quests, practice, assistant, storage, dialogues, curriculum, story, assessments
+from . import auth, courses, classrooms, quests, practice, assistant, storage, dialogues, curriculum, story, assessments, student_accounts
 
 
 @asynccontextmanager
 async def lifespan(app):
+    from .bootstrap import initialize_admin
+    initialize_admin()
     assistant.recover_interrupted_calls()
     tasks = [asyncio.create_task(practice.judge_worker()), asyncio.create_task(storage.material_worker())]
     yield
@@ -33,7 +35,7 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type", "Range"],
     )
-    for module in (auth, courses, classrooms, quests, practice, assistant, storage, dialogues, curriculum, story, assessments):
+    for module in (auth, courses, classrooms, quests, practice, assistant, storage, dialogues, curriculum, story, assessments, student_accounts):
         app.include_router(module.router, prefix="/api")
     if dev_tools_enabled():
         from . import dev_tools

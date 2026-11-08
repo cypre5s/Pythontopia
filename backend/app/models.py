@@ -21,6 +21,7 @@ class User(Base):
     name: Mapped[str] = mapped_column(String(80))
     role: Mapped[str] = mapped_column(String(16), default="student")
     password_hash: Mapped[str] = mapped_column(Text)
+    must_change_password: Mapped[bool] = mapped_column(Boolean, default=False, server_default=text("false"))
 
 
 class AuthSession(Base):
