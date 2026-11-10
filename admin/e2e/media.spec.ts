@@ -1,43 +1,10 @@
-import { test, expect, type Page } from "@playwright/test";
+import { test, expect } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { setup, go } from "./helpers";
-async function video(page: Page) {
-  const encoded = await page.evaluate(async () => {
-    const canvas = document.createElement("canvas");
-    canvas.width = 320;
-    canvas.height = 180;
-    const ctx = canvas.getContext("2d")!;
-    const stream = canvas.captureStream(12),
-      recorder = new MediaRecorder(stream, { mimeType: "video/webm" }),
-      chunks: Blob[] = [];
-    recorder.ondataavailable = (e) => chunks.push(e.data);
-    const stopped = new Promise<void>(
-      (resolve) => (recorder.onstop = () => resolve()),
-    );
-    let frame = 0;
-    const draw = () => {
-      ctx.fillStyle = frame % 2 ? "#386149" : "#32526b";
-      ctx.fillRect(0, 0, 320, 180);
-      ctx.fillStyle = "white";
-      ctx.font = "16px sans-serif";
-      ctx.fillText("Self-authored TEST MEDIA", 15, 70);
-      ctx.fillText(`Frame ${frame++}`, 15, 105);
-    };
-    draw();
-    recorder.start();
-    const timer = setInterval(draw, 80);
-    await new Promise((resolve) => setTimeout(resolve, 1300));
-    recorder.stop();
-    await stopped;
-    clearInterval(timer);
-    stream.getTracks().forEach((t) => t.stop());
-    const bytes = new Uint8Array(await new Blob(chunks).arrayBuffer());
-    return btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(""));
-  });
-  return Buffer.from(encoded, "base64");
-}
 test("教师真实视频私有预览与播放", async ({ page, request }, info) => {
   await setup(page, request, "视频回归");
-  const bytes = await video(page);
+  // 14 self-authored 320×180 canvas frames with alternating colors and a counter, encoded as VP8.
+  const bytes = await readFile(new URL("./fixtures/teacher-preview.webm", import.meta.url));
   await go(page, "资料库");
   await page.getByRole("button", { name: "上传资料", exact: true }).click();
   await page.getByLabel("资料名称").fill("自制验收视频");
