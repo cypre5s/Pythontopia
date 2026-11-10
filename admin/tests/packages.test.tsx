@@ -1,4 +1,4 @@
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Packages } from "../src/pages/packages";
@@ -41,13 +41,17 @@ function stubTransfer() {
   return xhr;
 }
 
+beforeEach(() => {
+  vi.stubGlobal("fetch", vi.fn(() => Promise.resolve(new Response(JSON.stringify({ items: [], unavailable: 0 })))));
+});
 afterEach(() => vi.unstubAllGlobals());
 
 it("separates upload bytes, server validation and applying while preserving apply retries", async () => {
   const xhr = stubTransfer();
   const apply: Record<string, unknown>[] = [];
   let finishApply!: (response: Response) => void;
-  vi.stubGlobal("fetch", vi.fn((_url: string, init: RequestInit) => {
+  vi.stubGlobal("fetch", vi.fn((url: string, init: RequestInit) => {
+    if (url.endsWith("/packages")) return Promise.resolve(new Response(JSON.stringify({ items: [], unavailable: 0 })));
     apply.push(JSON.parse(init.body as string));
     return new Promise<Response>((resolve) => { finishApply = resolve; });
   }));
@@ -145,4 +149,46 @@ it("aborts the transfer when the package page is left", async () => {
   await user.click(screen.getByRole("button", { name: "导出课程包" }));
   unmount();
   expect(xhr.abort).toHaveBeenCalledOnce();
+});
+
+
+it("previews an existing package without uploading and still requires explicit confirmation", async () => {
+  const calls: { url: string; body: unknown }[] = [];
+  const key = "mounted-" + "a".repeat(64);
+  vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
+    if (url.endsWith("/packages")) return new Response(JSON.stringify({ items: [
+      { key, name: "共享课程", package_id: "shared", package_version: "2", source: "mounted" },
+    ], unavailable: 0 }));
+    calls.push({ url, body: JSON.parse(init.body as string) });
+    if (url.endsWith("/imports/available/preview")) return new Response(JSON.stringify({
+      id: "mounted-preview", expected_revision: 3, package_id: "shared", package_version: "2", name: "共享课程",
+      can_apply: true, expires_at: "2030-01-01T00:00:00Z", blockers: [], warnings: [],
+      diff: { activities: { added: ["lesson"], updated: [], removed: [] } },
+    }));
+    return new Response(JSON.stringify({ instance_id: 1, revision: 4 }));
+  }));
+  const user = userEvent.setup();
+  render(<Packages classroomId={31} />);
+  await user.click(await screen.findByRole("combobox", { name: "选择已有课程包" }));
+  await user.click(await screen.findByRole("option", { name: "共享课程 · 2 · 可用课程包" }));
+  await user.click(screen.getByRole("button", { name: "预览所选课程包" }));
+  await screen.findByText("导入差异");
+  expect(calls).toEqual([{ url: "/api/teacher/classrooms/31/course/imports/available/preview", body: { package_key: key } }]);
+  expect(screen.getByRole("button", { name: "确认导入" })).toBeDisabled();
+  await user.click(screen.getByRole("checkbox", { name: /我已核对差异/ }));
+  await user.click(screen.getByRole("button", { name: "确认导入" }));
+  await screen.findByText("课程包已导入，班级课程已更新。");
+  expect(calls[1].url).toBe("/api/teacher/classrooms/31/course/imports/mounted-preview/apply");
+  expect(calls[1].body).toMatchObject({ expected_revision: 3 });
+  expect(screen.getByLabelText("课程包 ZIP 文件")).toBeEnabled();
+});
+
+it("keeps uploads available if the existing package catalog fails", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({ detail: "课程列表暂不可用" }), { status: 503 })));
+  const user = userEvent.setup();
+  render(<Packages classroomId={31} />);
+  expect(await screen.findByRole("alert")).toHaveTextContent("课程列表暂不可用");
+  expect(screen.getByRole("button", { name: "预览所选课程包" })).toBeDisabled();
+  await user.upload(screen.getByLabelText("课程包 ZIP 文件"), new File(["fixture"], "course.zip", { type: "application/zip" }));
+  expect(screen.getByRole("button", { name: "校验并预览" })).toBeEnabled();
 });

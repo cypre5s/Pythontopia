@@ -511,3 +511,151 @@ def test_teaching_roles_are_part_of_complete_package(client, db, teacher, exchan
     assert result.status_code == 200, result.text
     stored = db.get(CoursePackageState, result.json()["instance_id"])
     assert stored.configuration["assistant"] == policy
+
+@pytest.mark.parametrize("kind", ["zip", "directory"])
+def test_available_mounted_package_uses_normal_preview_and_apply(client, db, teacher, exchange, kind):
+    from app.course_exchange import exchange_root
+
+    source, target = exchange
+    payload = export(client, teacher, source)
+    mounted = exchange_root() / "operator-course.zip"
+    mounted.write_bytes(payload)
+    if kind == "directory":
+        folder = exchange_root() / "operator-course"
+        folder.mkdir()
+        unpack_archive(mounted, folder)
+        mounted.unlink()
+    listed = client.get(endpoint(target.id, "packages"), headers=teacher["headers"])
+    assert listed.status_code == 200, listed.text
+    items = listed.json()["items"]
+    assert len(items) == 1 and items[0]["source"] == "mounted"
+    assert not {"path", "storage_key", "answers", "secrets"} & set(items[0])
+    response = client.post(endpoint(target.id, "imports/available/preview"), headers=teacher["headers"],
+                           json={"package_key": items[0]["key"]})
+    assert response.status_code == 200, response.text
+    item = response.json()
+    assert item["expected_revision"] == 0 and item["can_apply"]
+    assert db.scalar(select(CourseInstance).where(CourseInstance.classroom_id == target.id)) is None
+    assert apply(client, teacher, target.id, item).status_code == 200
+    assert db.scalar(select(CourseInstance).where(CourseInstance.classroom_id == target.id)).package_id == source.package_id
+
+
+def test_available_upload_is_private_and_can_be_previewed_again(client, teacher, student, exchange):
+    source, target = exchange
+    item = preview(client, teacher, target.id, export(client, teacher, source))
+    listed = client.get(endpoint(target.id, "packages"), headers=teacher["headers"]).json()["items"]
+    assert len(listed) == 1 and listed[0]["key"] == "uploaded-" + item["id"]
+    response = client.post(endpoint(target.id, "imports/available/preview"), headers=teacher["headers"],
+                           json={"package_key": listed[0]["key"]})
+    assert response.status_code == 200, response.text
+    assert response.json()["id"] != item["id"]
+    assert len(client.get(endpoint(target.id, "packages"), headers=teacher["headers"]).json()["items"]) == 1
+    assert client.get(endpoint(source.classroom_id, "packages"), headers=teacher["headers"]).json()["items"] == []
+    assert client.post(endpoint(source.classroom_id, "imports/available/preview"), headers=teacher["headers"],
+                       json={"package_key": listed[0]["key"]}).status_code == 404
+    assert client.get(endpoint(target.id, "packages"), headers=student["headers"]).status_code == 403
+    assert client.post(endpoint(target.id, "imports/available/preview"), headers=student["headers"],
+                       json={"package_key": listed[0]["key"]}).status_code == 403
+
+
+def test_available_packages_never_expose_other_teacher_uploads(client, db, teacher, exchange):
+    from app.auth import issue
+    from app.models import User
+
+    source, target = exchange
+    item = preview(client, teacher, target.id, export(client, teacher, source))
+    other = User(student_id="87811934201267", name="另一教师", role="teacher", password_hash=db.get(User, teacher["id"]).password_hash)
+    db.add(other)
+    db.flush()
+    headers = {"Authorization": "Bearer " + issue(db, other)["access_token"]}
+    db.commit()
+    assert client.get(endpoint(target.id, "packages"), headers=headers).status_code == 403
+    assert client.post(endpoint(target.id, "imports/available/preview"), headers=headers,
+                       json={"package_key": "uploaded-" + item["id"]}).status_code == 403
+
+
+def test_mounted_selection_is_stale_after_change_and_files_remain_private(client, teacher, exchange):
+    from app.course_exchange import exchange_root
+
+    source, target = exchange
+    mounted = exchange_root() / "mounted.zip"
+    mounted.write_bytes(export(client, teacher, source))
+    item = client.get(endpoint(target.id, "packages"), headers=teacher["headers"]).json()["items"][0]
+    mounted.write_bytes(b"invalid archive")
+    response = client.post(endpoint(target.id, "imports/available/preview"), headers=teacher["headers"], json={"package_key": item["key"]})
+    assert response.status_code == 404
+    assert str(exchange_root()) not in response.text
+    for key in ("../exports/private.zip", str(mounted), "mounted-" + "0" * 64):
+        rejected = client.post(endpoint(target.id, "imports/available/preview"), headers=teacher["headers"], json={"package_key": key})
+        assert rejected.status_code in {404, 422}
+
+
+def test_mounted_catalog_does_not_list_private_exports_or_oversized_packages(client, teacher, exchange, monkeypatch):
+    import app.course_exchange as exchange_module
+
+    source, target = exchange
+    payload = export(client, teacher, source)
+    (exchange_module.exchange_root() / "large.zip").write_bytes(payload)
+    monkeypatch.setattr(exchange_module, "MAX_ARCHIVE", 10)
+    listed = client.get(endpoint(target.id, "packages"), headers=teacher["headers"])
+    assert listed.status_code == 200
+    assert listed.json()["items"] == []
+    assert listed.json()["unavailable"] == 1
+
+
+
+
+def test_available_preview_is_snapshot_and_apply_rechecks_revision(client, db, teacher, exchange):
+    from app.course_exchange import exchange_root
+
+    source, _ = exchange
+    mounted = exchange_root() / "snapshot.zip"
+    mounted.write_bytes(export(client, teacher, source))
+    key = client.get(endpoint(source.classroom_id, "packages"), headers=teacher["headers"]).json()["items"][0]["key"]
+    response = client.post(endpoint(source.classroom_id, "imports/available/preview"), headers=teacher["headers"], json={"package_key": key})
+    assert response.status_code == 200, response.text
+    mounted.write_bytes(b"subsequent replacement must not be used")
+    source.revision += 1
+    db.commit()
+    assert apply(client, teacher, source.classroom_id, response.json()).status_code == 409
+
+
+def test_uploaded_catalog_tampering_is_rejected(client, teacher, exchange):
+    from app.course_exchange import exchange_path
+    from app.course_exchange_models import CourseImportPreview
+
+    source, target = exchange
+    item = preview(client, teacher, target.id, export(client, teacher, source))
+    # Lookup only the authenticated upload record; no API accepts a storage path.
+    from sqlalchemy.orm import object_session
+    db = object_session(source)
+    record = db.get(CourseImportPreview, item["id"])
+    exchange_path(record.storage_key).write_bytes(b"tampered")
+    response = client.post(endpoint(target.id, "imports/available/preview"), headers=teacher["headers"],
+                           json={"package_key": "uploaded-" + item["id"]})
+    assert response.status_code == 422 and "校验失败" in response.text
+    assert db.scalar(select(CourseInstance).where(CourseInstance.classroom_id == target.id)) is None
+
+
+def test_catalog_reader_rejects_outside_files_and_reparse_points(tmp_path, monkeypatch):
+    from pathlib import Path
+    from types import SimpleNamespace
+    from app.course_catalog import regular_reader
+
+    root = tmp_path / "private"
+    root.mkdir()
+    outside = tmp_path / "other.zip"
+    outside.write_bytes(b"private")
+    with pytest.raises(PackageError, match="越界"):
+        with regular_reader(outside, root):
+            pass
+    target = root / "link.zip"
+    target.write_bytes(b"placeholder")
+    original = Path.lstat
+    def linked(path):
+        value = original(path)
+        return SimpleNamespace(st_mode=value.st_mode, st_file_attributes=0x400) if path == target else value
+    monkeypatch.setattr(Path, "lstat", linked)
+    with pytest.raises(PackageError, match="链接"):
+        with regular_reader(target, root):
+            pass
