@@ -222,8 +222,13 @@ def get_activity(
     points = []
     for point_id in activity.content.get("knowledge_point_ids", []):
         point = db.get(KnowledgePoint, point_id)
-        if not point or point.chapter_id != activity.chapter_id or point.course_instance_id != activity.course_instance_id:
+        if not point or point.course_instance_id != activity.course_instance_id:
             raise HTTPException(409, "活动知识点关联无效")
+        point_chapter = db.get(Chapter, point.chapter_id)
+        if not point_chapter or point_chapter.course_instance_id != activity.course_instance_id:
+            raise HTTPException(409, "活动知识点章节关联无效")
+        if point_chapter.owner_id not in {None, classroom.teacher_id} and user.role != "admin":
+            raise HTTPException(403, "知识点章节不属于当前班级发布范围")
         if point.owner_id not in {None, classroom.teacher_id} and user.role != "admin":
             raise HTTPException(403, "知识点不属于当前班级发布范围")
         points.append(

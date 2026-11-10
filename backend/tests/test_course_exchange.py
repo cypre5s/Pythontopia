@@ -53,7 +53,17 @@ def apply(client, teacher, cid, item, request_id=None):
 
 
 def test_complete_roundtrip_draft_private_answers_and_repeated_apply(client, db, teacher, exchange, tmp_path):
+    from app.models import Activity, KnowledgePoint
+
     source, target = exchange
+    source_maps = content_mapping(db, source)
+    source_activity = db.get(Activity, source_maps["activity"]["ch1-lesson"])
+    cross_chapter_point = db.scalar(select(KnowledgePoint).where(
+        KnowledgePoint.course_instance_id == source.id, KnowledgePoint.chapter_id != source_activity.chapter_id))
+    assert cross_chapter_point is not None
+    point_stable_id = cross_chapter_point.stable_id or str(cross_chapter_point.id)
+    source_activity.content = {**source_activity.content, "knowledge_point_ids": [cross_chapter_point.id]}
+    db.commit()
     payload = export(client, teacher, source)
     item = preview(client, teacher, target.id, payload)
     assert item["expected_revision"] == 0 and item["can_apply"]
@@ -63,6 +73,9 @@ def test_complete_roundtrip_draft_private_answers_and_repeated_apply(client, db,
     imported = db.get(CourseInstance, response.json()["instance_id"])
     assert imported.classroom_id == target.id
     maps = content_mapping(db, imported)
+    imported_activity = db.get(Activity, maps["activity"]["ch1-lesson"])
+    assert imported_activity.content["knowledge_point_ids"] == [maps["knowledge_point"][point_stable_id]]
+    assert db.get(KnowledgePoint, imported_activity.content["knowledge_point_ids"][0]).chapter_id != imported_activity.chapter_id
     assert "unassigned-draft" in maps["question"]
     question = db.get(Question, maps["question"]["unassigned-draft"])
     assert question.status == "draft" and question.source_type == "ai_generated"

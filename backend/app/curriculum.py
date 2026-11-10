@@ -44,8 +44,9 @@ def validate_activity_points(db, user, chapter_id, ids, instance_id=None):
     authoring_chapter(db, user, chapter_id, instance_id)
     for point_id in ids:
         point = db.get(KnowledgePoint, point_id)
-        if not point or point.course_instance_id != instance_id or point.chapter_id != chapter_id:
-            raise HTTPException(422, "知识点必须存在且属于活动所在章节")
+        if not point or point.course_instance_id != instance_id:
+            raise HTTPException(422, "知识点必须存在且属于当前班级课程")
+        authoring_chapter(db, user, point.chapter_id, instance_id)
         if user.role != "admin" and point.owner_id not in {None, user.id}:
             raise HTTPException(403, "无权绑定其他教师的私有知识点")
 

@@ -99,7 +99,7 @@ def test_private_chapter_cannot_be_seen_bound_or_published_by_another_teacher(cl
     assert client.get(f"/api/activities/{activity_id}?classroom_id={other_class['id']}", headers=other["headers"]).status_code == 403
 
 
-def test_activity_kc_binding_validates_owner_chapter_and_current_binding(client, db, teacher, classroom):
+def test_activity_kc_binding_validates_owner_course_and_current_binding(client, db, teacher, student, classroom):
     other = another_teacher(db)
     own = client.post("/api/teacher/knowledge-points", json={"chapter_id": 179, "title": "Own addition"}, headers=teacher["headers"], params={"classroom_id": classroom["id"]}).json()
     foreign = KnowledgePoint(chapter_id=179, title="Other teacher retained point", owner_id=other["id"], content={})
@@ -124,7 +124,19 @@ def test_activity_kc_binding_validates_owner_chapter_and_current_binding(client,
         client.put(f"/api/teacher/activities/{activity_id}", json={"knowledge_point_ids": [foreign.id]}, headers=teacher["headers"], params={"classroom_id": classroom["id"]}).status_code
         == 403
     )
-    assert client.put(f"/api/teacher/activities/{activity_id}", json={"knowledge_point_ids": [1843]}, headers=teacher["headers"], params={"classroom_id": classroom["id"]}).status_code == 422
+    cross_chapter = client.put(f"/api/teacher/activities/{activity_id}", json={"knowledge_point_ids": [1809, 1843]}, headers=teacher["headers"], params={"classroom_id": classroom["id"]})
+    assert cross_chapter.status_code == 200, cross_chapter.text
+    activity = client.get(f"/api/activities/{activity_id}", headers=student["headers"], params={"classroom_id": classroom["id"]})
+    assert activity.status_code == 200, activity.text
+    assert activity.json()["knowledge_point_ids"] == [1809, 1843]
+    assert {point["chapter_id"] for point in activity.json()["knowledge_points"]} == {179, 180}
+
+    other_class = client.post("/api/classrooms", json={"name": "Independent point source"}, headers=teacher["headers"]).json()
+    client.post(f"/api/teacher/classrooms/{other_class['id']}/course/empty", json={"confirmed": True, "name": "Other course"}, headers=teacher["headers"])
+    other_scope = {"classroom_id": other_class["id"]}
+    other_chapter = client.post("/api/teacher/chapters", json={"title": "Other chapter"}, headers=teacher["headers"], params=other_scope).json()
+    other_point = client.post("/api/teacher/knowledge-points", json={"chapter_id": other_chapter["id"], "title": "Other course point"}, headers=teacher["headers"], params=other_scope).json()
+    assert client.put(f"/api/teacher/activities/{activity_id}", json={"knowledge_point_ids": [other_point["id"]]}, headers=teacher["headers"], params={"classroom_id": classroom["id"]}).status_code == 422
     update = client.put(f"/api/teacher/activities/{activity_id}", json={"knowledge_point_ids": [1809]}, headers=teacher["headers"], params={"classroom_id": classroom["id"]})
     assert update.status_code == 200
     assert db.get(Activity, activity_id).content["knowledge_point_ids"] == [1809]

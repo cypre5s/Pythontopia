@@ -1,4 +1,5 @@
 import { SelectField } from "@/components/select-field";
+import { KnowledgePointPicker } from "@/components/knowledge-point-picker";
 import { useState, type FormEvent } from "react";
 import { Plus, Pencil, ArrowUp, ArrowDown, ListPlus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -421,7 +422,6 @@ export function Activities({ classroomId }: { classroomId: number }) {
                         onValueChange={(value) => {
                           setChapter(Number(value));
                           setMaterial(null);
-                          setPointIds([]);
                           setDirty(true);
                         }}
                       >
@@ -469,30 +469,14 @@ export function Activities({ classroomId }: { classroomId: number }) {
                       ))}
                     </SelectField>
                   </div>
-                  <fieldset className="field">
-                    <legend>关联知识点</legend>
-                    <div className="check-list">
-                      {course.data?.knowledge_points
-                        .filter((p) => p.chapter_id === chapter)
-                        .map((p) => (
-                          <label key={p.id}>
-                            <input
-                              type="checkbox"
-                              checked={pointIds.includes(p.id)}
-                              onChange={() => {
-                                setPointIds((v) =>
-                                  v.includes(p.id)
-                                    ? v.filter((id) => id !== p.id)
-                                    : [...v, p.id],
-                                );
-                                setDirty(true);
-                              }}
-                            />
-                            {p.title}
-                          </label>
-                        ))}
-                    </div>
-                  </fieldset>
+                  <KnowledgePointPicker
+                    key={id}
+                    chapters={course.data?.chapters ?? []}
+                    points={course.data?.knowledge_points ?? []}
+                    selected={pointIds}
+                    initialChapterId={chapter}
+                    onChange={(ids) => { setPointIds(ids); setDirty(true); }}
+                  />
                   {kind === "lesson" || kind === "reading" ? (
                     <>
                       <div className="field">
