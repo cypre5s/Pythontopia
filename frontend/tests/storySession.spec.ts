@@ -89,12 +89,28 @@ describe("server-owned chapter performance", () => {
     session.story = view("waiting", 4);
     session.open({ kind: "lesson", activity_id: "ch1-lesson", story_session_id: "story-session" });
     const post = vi.spyOn(api, "post").mockRejectedValue(new ApiError(status, "该活动暂不可用"));
+    vi.spyOn(api, "get").mockResolvedValue(world());
     await expect(session.returnStoryActivity()).resolves.toBe(false);
     expect(session.workspace).toBeNull();
     expect(session.story).toBeNull();
     expect(session.storyDismissed).toBe(true);
     expect(post).toHaveBeenCalledTimes(1);
     expect(post.mock.calls[0]?.[0]).toBe("/story/sessions/story-session/return");
+  });
+  it.each(["advance", "end"] as const)("releases a reset dialogue and starts the updated flow (%s)", async action => {
+    const session = useSession();
+    session.story = view("active", 4);
+    const refreshed = { ...world(), flags: ["another-achievement"] };
+    const get = vi.spyOn(api, "get").mockResolvedValue(refreshed);
+    const restarted = { ...view(), id: "updated-session" };
+    vi.spyOn(api, "post").mockRejectedValueOnce(new ApiError(404, "演出会话不存在")).mockResolvedValueOnce(restarted);
+    expect(await (action === "advance" ? session.advanceStory("read") : session.endStory())).toBe(false);
+    expect(session.story).toBeNull();
+    expect(session.storyDismissed).toBe(true);
+    expect(get).toHaveBeenCalledWith("/world?classroom_id=2");
+    expect(session.world).toEqual(refreshed);
+    expect(await session.interactStory("librarian_doc")).toBe(true);
+    expect(session.story?.id).toBe("updated-session");
   });
   it("keeps the waiting workspace and retry ID after a network failure", async () => {
     const session = useSession();

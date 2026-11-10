@@ -239,7 +239,7 @@ export const useSession = defineStore("session", () => {
         applyStory,
       );
     } catch (error) {
-      if (error instanceof ApiError && error.status === 403) releaseUnavailableStory(error);
+      if (error instanceof ApiError && error.status === 403) releaseUnavailableStory(error.message);
       else throw error;
     }
   }
@@ -262,19 +262,26 @@ export const useSession = defineStore("session", () => {
     const key = `${currentStory.id}:${currentStory.revision}:${action}:${choice ?? ""}`;
     if (pendingStoryMutation?.key !== key) pendingStoryMutation = { key, eventId: randomUUID() };
     const eventId = pendingStoryMutation.eventId;
-    return storyRequest(
-      () => api.post<StoryView>(`/story/sessions/${currentStory.id}/${action}`, {
-        classroom_id: classroomId.value, event_id: eventId, revision: currentStory.revision,
-        ...(choice ? { choice } : {}),
-      }),
-      (view) => {
-        pendingStoryMutation = null;
-        applyStory(view);
-        const node = currentStory.node;
-        if (action === "advance" && node?.type === "action" && node.action === "open_workspace" && node.workspace && view.status !== "waiting")
-          open({ kind: node.workspace });
-      },
-    );
+    try {
+      return await storyRequest(
+        () => api.post<StoryView>(`/story/sessions/${currentStory.id}/${action}`, {
+          classroom_id: classroomId.value, event_id: eventId, revision: currentStory.revision,
+          ...(choice ? { choice } : {}),
+        }),
+        (view) => {
+          pendingStoryMutation = null;
+          applyStory(view);
+          const node = currentStory.node;
+          if (action === "advance" && node?.type === "action" && node.action === "open_workspace" && node.workspace && view.status !== "waiting")
+            open({ kind: node.workspace });
+        },
+      );
+    } catch (error) {
+      if (!(error instanceof ApiError && error.status === 404 && story.value?.id === currentStory.id)) throw error;
+      releaseUnavailableStory("这次互动已无法继续，请在小镇重新发起互动。");
+      await refresh().catch(() => undefined);
+      return false;
+    }
   }
   function advanceStory(choice?: string) { return mutateStory("advance", choice); }
   function endStory() { return mutateStory("end"); }
@@ -311,19 +318,19 @@ export const useSession = defineStore("session", () => {
       return await returning;
     } catch (error) {
       if (expectedGeneration === storyGeneration && error instanceof ApiError && [403, 404].includes(error.status)) {
-        releaseUnavailableStory(error);
+        releaseUnavailableStory(error.message);
         return false;
       }
       throw error;
     }
   }
-  function releaseUnavailableStory(error: ApiError) {
+  function releaseUnavailableStory(message: string) {
     applyStory(null);
     storyDismissed.value = true;
     pendingStoryMutation = null;
     readingProgressTask = Promise.resolve();
     latestReading = null;
-    notify(error.message);
+    notify(message);
   }
   function dismissStory() { storyDismissed.value = true; }
   function guideTo(key: string) {

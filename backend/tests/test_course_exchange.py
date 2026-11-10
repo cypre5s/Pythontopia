@@ -323,6 +323,31 @@ def test_pending_story_update_has_concrete_impact_and_blocks(client, db, teacher
     assert apply(client, teacher, source.classroom_id, item).status_code == 409
 
 
+def test_zip_update_cannot_bypass_task_reset_confirmation(client, db, teacher, student, exchange):
+    import yaml
+    from app.models import PlayerQuest
+
+    source, _ = exchange
+    quest_id = content_mapping(db, source)["quest"]["arrival"]
+    db.add(PlayerQuest(user_id=student["id"], classroom_id=source.classroom_id, quest_id=quest_id))
+    db.commit()
+
+    def edit(entries):
+        for name, value in entries.items():
+            if "/quests/" not in name:
+                continue
+            row = yaml.safe_load(value)
+            if row["id"] == "arrival":
+                row["definition"]["nodes"][0]["optional"] = True
+                entries[name] = yaml.safe_dump(row, allow_unicode=True).encode()
+
+    item = preview(client, teacher, source.classroom_id, rewrite_archive(export(client, teacher, source), edit))
+    assert not item["can_apply"]
+    assert any(row["kind"] == "quest" and row["stable_id"] == "arrival" and row["affected_records"] == 1
+               for row in item["learning_impact"])
+    assert apply(client, teacher, source.classroom_id, item).status_code == 409
+
+
 def test_assessment_question_order_locked_by_formal_attempt(client, db, teacher, student, exchange):
     import yaml
     from app.models import AssessmentAttempt

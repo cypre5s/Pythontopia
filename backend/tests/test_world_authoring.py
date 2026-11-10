@@ -6,8 +6,9 @@ import pytest
 from sqlalchemy import func, select
 
 from app.content_relations import set_material_chapters
-from app.models import (Activity, BuildingUnlock, Chapter, ChapterRelease, Classroom, CourseInstance,
-                        LearningEvent, Material, Membership, Npc, PlayerQuest, StorySession, WorldFlag)
+from app.models import (Activity, ActivityProgress, AssessmentAttempt, BuildingUnlock, Chapter, ChapterRelease, Classroom,
+                        CourseInstance, LearningEvent, LearningRecord, Material, Membership, NodeState, Npc, PlayerQuest,
+                        Question, QuestDefinition, StoryDefinition, StorySession, Submission, WorldFlag)
 from app.integration_models import AssistantCall
 from app.world_authoring import reachable_cells
 
@@ -118,18 +119,59 @@ def test_authoring_revision_scope_and_active_session_fence(client, teacher, stud
     assert start(client, student, scene).json()["id"] == view["id"]
     body["flows"][0]["content"]["nodes"][0]["text"] = "修改"
     validation = client.post(endpoint(scene, "/validate"), json=body, headers=teacher["headers"]).json()
-    assert validation["valid"] is False
-    issue, = validation["diagnostics"]
-    assert issue["code"] == "active_story_session"
-    assert issue["path"] == "/flows/0/content/nodes/0"
-    assert issue["target"] == {"kind": "node", "id": "start", "flow_id": "public"}
-    assert "小镇公共流程" in issue["message"] and "1 人正在互动" in issue["message"]
-    assert "结束本次互动" in issue["suggestion"]
+    assert validation["valid"] and not validation["diagnostics"]
+    impact = validation["reset_impact"]
+    assert impact["flows"] == [{"id": "public", "title": "小镇公共流程", "reason": "edit", "sessions": 1,
+                                "active_sessions": 1, "waiting_sessions": 0, "students": 1}]
     blocked = client.put(endpoint(scene), json=body, headers=teacher["headers"])
     assert blocked.status_code == 409, blocked.text
-    assert blocked.json()["detail"]["diagnostics"] == [issue]
+    assert blocked.json()["detail"]["reset_impact"] == impact
     assert advance(client, student, scene, view, "end").status_code == 200
     save(client, teacher, scene, body)
+
+
+def test_flow_reset_confirmation_binds_to_draft_and_current_session_revision(client, teacher, student, scene):
+    body = draft(client, teacher, scene)
+    nodes = body["flows"][0]["content"]["nodes"]
+    nodes[0]["next"] = "second"
+    nodes.insert(1, {"id": "second", "type": "dialogue", "text": "另一个节点", "next": "end"})
+    body["expected_revision"] = save(client, teacher, scene, body)["revision"]
+    view = start(client, student, scene).json()
+    nodes[0]["text"] = "新的开场"
+    impact = client.post(endpoint(scene, "/validate"), json=body, headers=teacher["headers"]).json()["reset_impact"]
+    body["confirmation_token"] = impact["token"]
+    changed_draft = deepcopy(body)
+    changed_draft["flows"][0]["content"]["nodes"][0]["text"] = "没有确认过的对白"
+    assert client.put(endpoint(scene), json=changed_draft, headers=teacher["headers"]).status_code == 409
+    next_view = advance(client, student, scene, view).json()
+    assert next_view["node"]["id"] == "second"
+    conflict = client.put(endpoint(scene), json=body, headers=teacher["headers"])
+    assert conflict.status_code == 409, conflict.text
+    fresh = conflict.json()["detail"]["reset_impact"]
+    assert fresh["flows"] == impact["flows"] and fresh["token"] != impact["token"]
+    body["confirmation_token"] = fresh["token"]
+    save(client, teacher, scene, body)
+    assert advance(client, student, scene, next_view).status_code == 404
+    restarted = start(client, student, scene).json()
+    assert restarted["id"] != view["id"] and restarted["node"]["text"] == "新的开场"
+
+
+def test_deleting_flow_requires_confirmation_even_for_ended_receipts(client, db, teacher, student, scene):
+    body = draft(client, teacher, scene, flows=[flow(), flow(stable="resident-flow", entry="resident")])
+    body["expected_revision"] = save(client, teacher, scene, body)["revision"]
+    previous = start(client, student, scene).json()
+    assert advance(client, student, scene, previous).json()["status"] == "ended"
+    unaffected = start(client, student, scene, npc_key=scene["npc"].key).json()
+    body["flows"].pop(0)
+    result = client.put(endpoint(scene), json=body, headers=teacher["headers"])
+    assert result.status_code == 409, result.text
+    impact = result.json()["detail"]["reset_impact"]
+    assert impact["flows"][0]["reason"] == "delete" and impact["flows"][0]["sessions"] == 1
+    assert impact["flows"][0]["active_sessions"] == 0
+    assert db.scalar(select(StorySession.id).where(StorySession.id == previous["id"])) == previous["id"]
+    save(client, teacher, scene, {**body, "confirmation_token": impact["token"]})
+    assert db.scalar(select(StorySession.id).where(StorySession.id == previous["id"])) is None
+    assert db.scalar(select(StorySession.id).where(StorySession.id == unaffected["id"])) == unaffected["id"]
 
 
 def test_authoring_entry_issue_uses_portable_npc_id_and_catalog_location(client, teacher, scene):
@@ -198,10 +240,8 @@ def test_public_activity_waits_real_completion_before_idempotent_unlock(client, 
     changed["expected_revision"] = revision
     changed["flows"][0]["content"]["nodes"][2]["text"] = "请继续阅读"
     validation = client.post(endpoint(scene, "/validate"), json=changed, headers=teacher["headers"]).json()
-    assert validation["valid"] is False
-    issue, = validation["diagnostics"]
-    assert issue["code"] == "active_story_session"
-    assert issue["target"]["id"] == "start" and "1 人在等待学习活动返回" in issue["message"]
+    assert validation["valid"] is True
+    assert validation["reset_impact"]["flows"][0]["waiting_sessions"] == 1
     returned = advance(client, student, scene, first.json(), "return").json()
     assert returned["node"]["id"] == "pause" and returned["world"]["building_unlock"] == []
     advance(client, student, scene, returned)
@@ -296,6 +336,98 @@ def test_task_dag_authoring_accepts_valid_refs_and_rejects_foreign_activity(clie
     invalid = deepcopy(body)
     invalid["quests"][0]["definition"]["nodes"][0]["activity_id"] = "foreign"
     assert client.put(endpoint(scene), json=invalid, headers=teacher["headers"]).status_code == 422
+
+
+@pytest.mark.parametrize("remove", [False, True])
+def test_confirmed_task_reset_removes_only_linked_progress_and_restarts(client, db, teacher, student, scene, remove):
+    cid, uid, instance_id = scene["classroom"].id, student["id"], scene["instance"].id
+    item = flow(stable="lesson-flow", entry="resident", mode="task", nodes=[
+        {"id": "start", "type": "dialogue", "text": "第一次见面", "checkpoint": "talk", "next": "after"},
+        {"id": "after", "type": "dialogue", "text": "见面完成", "next": "end"}, {"id": "end", "type": "end"}])
+    item.update(chapter_id="ch1", quest_id="task")
+    body = draft(client, teacher, scene, flows=[item], interactions=[])
+    goal = {"id": "talk", "title": "见面", "type": "PLAY_DIALOGUE", "target": "resident", "dependencies": [],
+            "dialogue_id": "story:lesson-flow:talk"}
+    task = {"id": "task", "chapter_id": "ch1", "title": "初次见面", "definition": {
+        "id": "task", "chapter_id": "ch1", "title": "初次见面", "kind": "side", "nodes": [goal],
+        "effects": [{"type": "unlock_building", "building_id": "library"}]}}
+    independent = deepcopy(task)
+    independent.update(id="independent", title="独立任务")
+    independent["definition"].update(id="independent", title="独立任务", effects=[], nodes=[
+        {"id": "read", "title": "阅读", "type": "STUDY_LESSON", "activity_id": "lesson", "dependencies": []}])
+    body["quests"] = [task, independent]
+    body["expected_revision"] = save(client, teacher, scene, body)["revision"]
+    view = start(client, student, scene, npc_key=scene["npc"].key).json()
+    completed = advance(client, student, scene, view)
+    assert completed.status_code == 200, completed.text
+    saved_story_id = db.scalar(select(StoryDefinition.id).where(StoryDefinition.course_instance_id == instance_id))
+    old_flag = f"dialogue:completed:{scene['npc'].key}:story:{saved_story_id}:talk"
+    assert db.get(WorldFlag, (uid, cid, old_flag))
+    task_key = db.scalar(select(QuestDefinition.id).where(QuestDefinition.course_instance_id == instance_id, QuestDefinition.stable_id == "task"))
+    old_progress_id = db.scalar(select(PlayerQuest.id).where(PlayerQuest.classroom_id == cid, PlayerQuest.quest_id == task_key))
+    independent_key = db.scalar(select(QuestDefinition.id).where(QuestDefinition.course_instance_id == instance_id, QuestDefinition.stable_id == "independent"))
+    other_progress_id = db.scalar(select(PlayerQuest.id).where(PlayerQuest.classroom_id == cid, PlayerQuest.quest_id == independent_key))
+    assert db.get(NodeState, (old_progress_id, "talk"))
+
+    grade_activity = Activity(id=f"reset-paper-{cid}", stable_id="paper", chapter_id=scene["chapter"].id, title="独立测验",
+                              kind="assessment", course_instance_id=instance_id, owner_id=teacher["id"], npc_key=scene["npc"].key, content={})
+    question = Question(id=f"reset-question-{cid}", stable_id="question", title="保留作答", kind="boolean", prompt="判断", course_instance_id=instance_id)
+    db.add_all([grade_activity, question])
+    db.flush()
+    other = Classroom(name="另一个班", teacher_id=teacher["id"], join_code=uuid4().hex[:24])
+    db.add(other)
+    db.flush()
+    other_session = StorySession(user_id=uid, classroom_id=other.id, story_id=saved_story_id, npc_key=scene["npc"].key, node_id="after", status="ended")
+    record = LearningRecord(user_id=uid, classroom_id=cid, activity_id=scene["activity"].id, data={"page_no": 1})
+    submission = Submission(user_id=uid, classroom_id=cid, activity_id=grade_activity.id, question_id=question.id,
+                            idempotency_key="keep-grade", status="accepted", answer=True)
+    db.add_all([other_session, record, submission])
+    db.flush()
+    attempt = AssessmentAttempt(user_id=uid, classroom_id=cid, activity_id=grade_activity.id, state="submitted",
+                                question_ids=[question.id], answers={question.id: {"answer": True}}, submission_ids={question.id: submission.id})
+    db.add_all([attempt, ActivityProgress(user_id=uid, classroom_id=cid, activity_id=scene["activity"].id,
+                page_no=1, visited_pages=[901], completed=True), WorldFlag(user_id=uid, classroom_id=other.id, key=old_flag),
+                WorldFlag(user_id=uid, classroom_id=cid, key="unrelated:achievement")])
+    db.commit()
+
+    dangling = deepcopy(body)
+    dangling["flows"] = []
+    invalid = client.post(endpoint(scene, "/validate"), json=dangling, headers=teacher["headers"]).json()
+    assert invalid["valid"] is False and invalid["diagnostics"][0]["code"] == "missing_dialogue_checkpoint", invalid
+    if remove:
+        body["flows"] = []
+        body["quests"].pop(0)
+    else:
+        goal["optional"] = True
+    response = client.post(endpoint(scene, "/validate"), json=body, headers=teacher["headers"])
+    result = response.json()
+    assert result["valid"], response.text
+    impact = result["reset_impact"]
+    assert impact["quests"] == [{"id": "task", "title": "初次见面", "reason": "delete" if remove else "edit",
+                                 "progress": 1, "students": 1, "events": 1}]
+    assert impact["flows"][0]["reason"] == ("delete" if remove else "task_reset")
+    assert impact["checkpoint_flags"] == 1
+    assert client.put(endpoint(scene), json=body, headers=teacher["headers"]).status_code == 409
+    save(client, teacher, scene, {**body, "confirmation_token": impact["token"]})
+    assert db.scalar(select(PlayerQuest.id).where(PlayerQuest.id == old_progress_id)) is None
+    assert db.scalar(select(NodeState.node_id).where(NodeState.player_quest_id == old_progress_id)) is None
+    assert db.scalar(select(LearningEvent.id).where(LearningEvent.player_quest_id == old_progress_id)) is None
+    assert db.scalar(select(WorldFlag.key).where(WorldFlag.classroom_id == cid, WorldFlag.key == old_flag)) is None
+    assert db.get(WorldFlag, (uid, other.id, old_flag)) and db.get(WorldFlag, (uid, cid, "unrelated:achievement"))
+    assert db.scalar(select(StorySession.id).where(StorySession.id == other_session.id)) == other_session.id
+    assert db.get(PlayerQuest, other_progress_id) and db.get(BuildingUnlock, (uid, cid, instance_id, "library"))
+    assert db.get(ActivityProgress, (uid, cid, scene["activity"].id)).completed
+    assert db.get(LearningRecord, record.id).data == {"page_no": 1}
+    assert db.get(AssessmentAttempt, attempt.id).answers == {question.id: {"answer": True}}
+    assert db.get(Submission, submission.id).answer is True
+    grade = client.get(f"/api/activities/{grade_activity.id}/assessment", headers=student["headers"], params={"classroom_id": cid})
+    assert grade.status_code == 200 and grade.json()["score"] == 100, grade.text
+    assert advance(client, student, scene, completed.json()).status_code == 404
+    if not remove:
+        restarted = start(client, student, scene, npc_key=scene["npc"].key).json()
+        assert restarted["id"] != view["id"] and restarted["node"]["id"] == "start"
+        assert advance(client, student, scene, restarted).status_code == 200
+        assert db.scalar(select(PlayerQuest.status).where(PlayerQuest.classroom_id == cid, PlayerQuest.quest_id == task_key)) == "complete"
 
 
 def test_authored_region_produces_exactly_one_verified_map_goal_and_unlock(client, db, teacher, student, scene):

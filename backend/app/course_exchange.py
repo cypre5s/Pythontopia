@@ -13,9 +13,9 @@ from uuid import UUID, uuid4
 import zipfile
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 import yaml
@@ -599,6 +599,13 @@ def _impact(db, instance, bundle):
             if count:
                 learning_impact.append({"kind": kind, "stable_id": stable_id, "affected_records": count, "reason": reason})
                 blockers.append(reason)
+        from .authoring_protection import changed_quest_structure
+        for stable in diff["quest"]["updated"]:
+            old, new = current["quest"][stable], incoming["quest"][stable]
+            if old["chapter_id"] != new["chapter_id"] or changed_quest_structure(old["definition"], new["definition"]):
+                progress_count = db.scalar(select(func.count()).select_from(PlayerQuest).where(
+                    PlayerQuest.classroom_id == instance.classroom_id, PlayerQuest.quest_id == maps["quest"][stable]))
+                protect("quest", stable, progress_count, f"任务「{old['title']}」已有班级进度，请在教学流程编辑器中确认重置后再调整任务结构")
         for stable in diff["question"]["updated"]:
             key = maps["question"][stable]
             if current["question"][stable]["kind"] != incoming["question"][stable]["kind"]:

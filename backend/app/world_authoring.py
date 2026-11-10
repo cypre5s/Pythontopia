@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from .auth import require_teacher
 from .authoring_diagnostics import INPUT_ERRORS, AuthoringIssue, located, node_label, row_target
-from .authoring_protection import publication_diagnostics
+from .authoring_protection import publication_plan
 from .config import ROOT
 from .course_exchange_models import CoursePackageState
 from .course_instances import MODEL_NAMES, _json, classroom_course, content_mapping
@@ -237,6 +237,7 @@ def validate_configuration(config, bundle_data):
     entry_names = {**{row["id"]: row["name"] for row in bundle_data["npc"]},
                    **{f"interaction:{item['id']}": item["label"] for item in interactions}}
     priorities = {}
+    checkpoints = set()
     for index, row in enumerate(bundle_data["story"]):
         with located("flows", index, "content", target=row_target("flow", row, flow_id=row["id"]),
                      label=f"流程「{_flow_title(row)}」"):
@@ -256,6 +257,8 @@ def validate_configuration(config, bundle_data):
                 raise ValueError("无任务流程必须声明公共业务或日常模式")
             if row["quest_id"] is not None and content.get("mode", "task") != "task":
                 raise ValueError("任务流程必须声明task模式")
+            checkpoints.update((row["quest_id"], node["checkpoint"], f"story:{row['id']}:{node['checkpoint']}")
+                               for node in content["nodes"] if node.get("checkpoint"))
 
             def check_conditions(value):
                 if isinstance(value, dict):
@@ -293,6 +296,15 @@ def validate_configuration(config, bundle_data):
                         raise AuthoringIssue(f"同一入口的优先级与流程「{priorities[key]}」重复。", code="entry_priority_conflict",
                                              suggestion="打开流程设置与入口，设置不同的入口优先级。")
                     priorities[key] = _flow_title(row)
+    for quest_index, row in enumerate(bundle_data["quest"]):
+        for goal_index, goal in enumerate(row["definition"]["nodes"]):
+            marker = goal.get("dialogue_id")
+            if (goal.get("type") == "PLAY_DIALOGUE" and isinstance(marker, str) and marker.startswith("story:")
+                    and (row["id"], goal["id"], marker) not in checkpoints):
+                raise AuthoringIssue(f"任务「{row['title']}」的目标「{goal['title']}」仍引用已移除的流程对白。",
+                                     path=("quests", quest_index, "definition", "nodes", goal_index, "dialogue_id"),
+                                     target=row_target("goal", goal, quest_id=row["id"]), code="missing_dialogue_checkpoint",
+                                     suggestion="恢复原对白检查点，或同步调整这个任务目标后再保存。")
     from .course_assistant import validate_policy
     with located("configuration", "assistant", target={"kind": "assistant"}, label="助教教学角色"):
         validate_policy(config.get("assistant", {}), bundle_data)
@@ -471,6 +483,10 @@ class PreviewInput(AuthoringInput):
     entry: str = Field(min_length=1, max_length=100)
 
 
+class PublishInput(AuthoringInput):
+    confirmation_token: str | None = Field(default=None, pattern=r"^[a-f0-9]{64}$")
+
+
 def _instance(db, user, classroom_id, *, exclusive=False):
     lock_course(db, classroom_id, exclusive=exclusive)
     key = teacher_instance_id(db, user, classroom_id)
@@ -587,25 +603,33 @@ def _error_detail(diagnostics):
 @router.post("/validate")
 def validate_authoring(classroom_id: int, body: AuthoringInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
     instance = _instance(db, user, classroom_id)
+    impact = None
     try:
         data, maps = _prepare(db, instance, body)
-        diagnostics = publication_diagnostics(db, instance, data, maps, body.configuration)
+        diagnostics, plan = publication_plan(db, instance, data, maps, body.configuration)
+        if not diagnostics:
+            impact = plan.impact(instance, user.id, body.model_dump())
     except INPUT_ERRORS as exc:
         diagnostics = [_diagnostic(exc)]
-    return {"valid": not diagnostics, "diagnostics": diagnostics}
+    return {"valid": not diagnostics, "diagnostics": diagnostics, **({"reset_impact": impact} if impact else {})}
 
 
 @router.put("")
-def save_authoring(classroom_id: int, body: AuthoringInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
+def save_authoring(classroom_id: int, body: PublishInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
     instance = _instance(db, user, classroom_id, exclusive=True)
     try:
         data, maps = _prepare(db, instance, body)
     except INPUT_ERRORS as exc:
         raise HTTPException(422, _error_detail([_diagnostic(exc)])) from exc
     # Recheck under the exclusive course lock in case a student starts after preflight.
-    diagnostics = publication_diagnostics(db, instance, data, maps, body.configuration)
+    diagnostics, plan = publication_plan(db, instance, data, maps, body.configuration)
     if diagnostics:
         raise HTTPException(409, _error_detail(diagnostics))
+    impact = plan.impact(instance, user.id, body.model_dump(exclude={"confirmation_token"}))
+    if impact and impact["token"] != body.confirmation_token:
+        raise HTTPException(409, {"message": "受影响的存档已更新，请核对后再次确认。" if body.confirmation_token
+                                 else "本次修改会清理部分班级存档，请先确认影响范围。", "reset_impact": impact})
+    plan.apply(db, classroom_id)
     for model, kind, field in ((QuestDefinition, "quest", "definition"), (StoryDefinition, "story", "content")):
         incoming = {row["id"]: row for row in data[kind]}
         current = {row.stable_id or row.id: row for row in db.scalars(select(model).where(model.course_instance_id == instance.id))}

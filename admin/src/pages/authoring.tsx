@@ -64,7 +64,14 @@ type Document = AuthoringData & { students: { id: number; name: string }[] };
 interface Validation {
   valid: boolean;
   diagnostics: Diagnostic[];
+  reset_impact?: ResetImpact;
 }
+type ResetImpact = {
+  token: string;
+  students: number;
+  flows: { id: string; title: string; reason: "delete" | "edit" | "task_reset"; sessions: number; active_sessions: number; waiting_sessions: number; students: number }[];
+  quests: { id: string; title: string; reason: "delete" | "edit"; progress: number; students: number; events: number }[];
+};
 type DiagnosticTarget = {
   kind: "flow" | "entry" | "node" | "quest" | "goal" | "interaction" | "building" | "npc" | "assistant";
   id?: string;
@@ -78,6 +85,25 @@ interface Preview {
   node_id: string | null;
   trace: { node_id: string; type: string }[];
   stopped_at: string;
+}
+function ResetImpactList({ impact }: { impact: ResetImpact }) {
+  const flowReason = { delete: "删除流程", edit: "修改流程", task_reset: "随任务重置" };
+  return (
+    <ul className="mt-2 max-h-44 space-y-2 overflow-auto text-sm">
+      {impact.flows.map((flow) => (
+        <li key={`flow:${flow.id}`}>
+          <p className="font-medium">流程 · {flow.title}</p>
+          <p>{flowReason[flow.reason]}，清理 {flow.sessions} 条会话（进行中 {flow.active_sessions}，等待活动 {flow.waiting_sessions}）。</p>
+        </li>
+      ))}
+      {impact.quests.map((quest) => (
+        <li key={`quest:${quest.id}`}>
+          <p className="font-medium">任务 · {quest.title}</p>
+          <p>{quest.reason === "delete" ? "删除任务" : "修改目标结构"}，清理 {quest.students} 人的任务进度。</p>
+        </li>
+      ))}
+    </ul>
+  );
 }
 export function Authoring({ classroomId }: { classroomId: number }) {
   const resource = useResource<Document>(
@@ -125,6 +151,9 @@ function AuthoringEditor({
     [error, setError] = useState(""),
     [message, setMessage] = useState(""),
     [diagnostics, setDiagnostics] = useState<Validation["diagnostics"]>([]),
+    [resetImpact, setResetImpact] = useState<ResetImpact | undefined>(),
+    [confirmReset, setConfirmReset] = useState(false),
+    [impactChanged, setImpactChanged] = useState(false),
     [previewOpen, setPreviewOpen] = useState(false),
     [previewStudent, setPreviewStudent] = useState(
       initial.students?.[0]?.id ?? 0,
@@ -149,6 +178,7 @@ function AuthoringEditor({
     setData(next);
     setMessage("");
     setDiagnostics([]);
+    setResetImpact(undefined);
   }
   function discardEdits() {
     setData(savedData);
@@ -166,6 +196,7 @@ function AuthoringEditor({
     setError("");
     setMessage("");
     setDiagnostics([]);
+    setResetImpact(undefined);
     setDraftEpoch((epoch) => epoch + 1);
   }
   function replaceFlow(next: Flow, nextPositions = positions) {
@@ -402,28 +433,51 @@ function AuthoringEditor({
     quests: data.quests,
     configuration: data.configuration,
   });
-  async function validate(save = false) {
+  async function validate(save = false, confirmationToken?: string) {
     if (busy) return;
     setInspector(null);
     setBusy(true);
     setError("");
     setMessage("");
+    setImpactChanged(false);
     try {
-      const result = await api.post<Validation>(`${base}/validate`, body());
-      setDiagnostics(result.diagnostics);
-      if (!result.valid) return;
-      if (save) {
-        const saved = await api.put<{ revision: number }>(base, body());
-        const next = { ...data, revision: saved.revision };
-        setData(next);
-        setSavedData(next);
-        setMessage("课程已保存。");
-      } else setMessage("校验通过：流程连接、条件和引用有效。");
+      if (!confirmationToken) {
+        const result = await api.post<Validation>(`${base}/validate`, body());
+        setDiagnostics(result.diagnostics);
+        setResetImpact(result.reset_impact);
+        if (!result.valid) return;
+        if (result.reset_impact) {
+          setConfirmReset(save);
+          return;
+        }
+        if (!save) {
+          setMessage("校验通过：流程连接、条件和引用有效。");
+          return;
+        }
+      }
+      const saved = await api.put<{ revision: number }>(base, {
+        ...body(),
+        confirmation_token: confirmationToken,
+      });
+      const next = { ...data, revision: saved.revision };
+      setData(next);
+      setSavedData(next);
+      setResetImpact(undefined);
+      setConfirmReset(false);
+      setMessage("课程已保存。");
     } catch (e) {
       const detail = e instanceof ApiError ? e.detail : null;
-      if (detail && typeof detail === "object" && "diagnostics" in detail && Array.isArray(detail.diagnostics)) {
-        setDiagnostics(detail.diagnostics as Diagnostic[]);
-      } else setError(errorMessage(e));
+      if (detail && typeof detail === "object" && "reset_impact" in detail && detail.reset_impact) {
+        setResetImpact(detail.reset_impact as ResetImpact);
+        setImpactChanged(Boolean(confirmationToken));
+        setConfirmReset(true);
+      } else {
+        setConfirmReset(false);
+        setResetImpact(undefined);
+        if (detail && typeof detail === "object" && "diagnostics" in detail && Array.isArray(detail.diagnostics)) {
+          setDiagnostics(detail.diagnostics as Diagnostic[]);
+        } else setError(errorMessage(e));
+      }
     } finally {
       setBusy(false);
     }
@@ -594,6 +648,30 @@ function AuthoringEditor({
           </ul>
         </section>
       )}
+      {resetImpact && (
+        <section aria-label="保存影响" className="mb-4 overflow-hidden rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm text-amber-950">
+          <p role="status" className="font-medium">保存会重置 {resetImpact.students} 人的相关进度，需确认后才能发布。</p>
+          <ResetImpactList impact={resetImpact} />
+        </section>
+      )}
+      <AlertDialog open={confirmReset && !!resetImpact} onOpenChange={(open) => { if (!busy) setConfirmReset(open); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认重置受影响的进度？</AlertDialogTitle>
+            <AlertDialogDescription>
+              确认后将保存修改。受影响的互动将结束，保留的任务需要重新完成。阅读、作答记录和成绩会保留。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          {impactChanged && <p role="status" className="rounded-md bg-amber-50 p-2 text-sm text-amber-900">受影响的记录已变化，请按最新范围重新确认。</p>}
+          {resetImpact && <ResetImpactList impact={resetImpact} />}
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={busy}>继续编辑</AlertDialogCancel>
+            <AlertDialogAction variant="destructive" disabled={busy || !resetImpact} onClick={() => void validate(true, resetImpact?.token)}>
+              {busy ? "保存中…" : "重置进度并保存"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div inert={busy} aria-busy={busy} data-testid="authoring-fields">
         <Tabs key={draftEpoch} value={tab} className="gap-3" onValueChange={(value) => { setTab(value); setInspector(null); setMapFocus(undefined); setEditorJump(undefined); }}>
             <TabsList variant="line" aria-label="教学流程视图">

@@ -1,5 +1,5 @@
 import { it, expect, vi, afterEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
 import { Authoring } from "../src/pages/authoring";
@@ -122,6 +122,54 @@ it("preserves editable drafts when server graph validation rejects a save", asyn
   await screen.findByText("演出包含不可达节点");
   expect(saves).not.toHaveBeenCalled();
   expect(await openSettings(user)).toHaveValue("修改后的流程");
+});
+it("requires a fresh confirmation when saving will reset class progress", async () => {
+  const writes = vi.fn();
+  const impact = {
+    token: "first",
+    students: 1,
+    flows: [{ id: "public", title: "公共欢迎", reason: "delete", sessions: 1, active_sessions: 1, waiting_sessions: 0, students: 1 }],
+    quests: [],
+  };
+  vi.stubGlobal("fetch", vi.fn(async (_url: string, init: RequestInit) => {
+    if (init.method === "POST") return json({ valid: true, diagnostics: [], reset_impact: impact });
+    if (init.method === "PUT") {
+      const body = JSON.parse(init.body as string);
+      writes(body);
+      if (body.confirmation_token === "first") return json({ detail: {
+        message: "发布影响已变化",
+        reset_impact: { ...impact, token: "second", students: 2 },
+      } }, 409);
+      return json({ revision: 8 });
+    }
+    return json(base);
+  }));
+  vi.spyOn(window, "confirm").mockReturnValue(true);
+  try {
+    const user = userEvent.setup();
+    render(<Authoring classroomId={12} />);
+    await user.click(await screen.findByRole("button", { name: "删除流程" }));
+    await user.click(screen.getByRole("button", { name: "校验" }));
+    expect(await screen.findByRole("region", { name: "保存影响" })).toHaveTextContent("重置 1 人");
+    expect(screen.queryByRole("alertdialog")).toBeNull();
+
+    const save = () => user.click(screen.getByRole("button", { name: "保存课程" }));
+    await save();
+    const dialog = async () => within(await screen.findByRole("alertdialog"));
+    expect((await dialog()).getByText("流程 · 公共欢迎")).toBeVisible();
+    await user.click((await dialog()).getByRole("button", { name: "继续编辑" }));
+    expect(writes).not.toHaveBeenCalled();
+    await save();
+    await user.click((await dialog()).getByRole("button", { name: "重置进度并保存" }));
+    expect(await (await dialog()).findByText(/受影响的记录已变化/)).toBeVisible();
+    expect(writes).toHaveBeenCalledTimes(1);
+    await user.click((await dialog()).getByRole("button", { name: "重置进度并保存" }));
+    expect(await screen.findByText("课程已保存。")).toBeVisible();
+    expect(writes.mock.calls.map(([body]) => body.confirmation_token)).toEqual(["first", "second"]);
+    expect(writes.mock.calls[1][0].flows).toEqual([]);
+  } finally {
+    vi.restoreAllMocks();
+  }
 });
 it("confirms discard and restores the latest saved revision without another write", async () => {
   const writes = vi.fn();

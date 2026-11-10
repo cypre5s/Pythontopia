@@ -317,7 +317,7 @@ export function QuestEditor({
               size="icon-sm"
               aria-label="删除任务"
               onClick={() => {
-                if (!window.confirm("删除任务？服务端会阻止删除已有学习证据或流程引用的任务。")) return;
+                if (!window.confirm(`从草稿中删除「${quest.title}」？保存前可查看受影响的进度。`)) return;
                 onChange({
                   ...data,
                   quests: data.quests.filter((q) => q.id !== quest.id),
