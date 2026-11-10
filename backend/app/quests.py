@@ -6,8 +6,10 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from .auth import current_user, require_teacher
+from .authoring_diagnostics import AuthoringIssue, located, node_label, row_target
 from .courses import authorize_classroom, authorize_chapter, chapter_available
 from .db import get_db
+from .course_scope import belongs_to_course, course_clause, require_course_content
 from .world_config import interaction_points, load_world_config, validate_point
 from .models import (
     Activity,
@@ -39,10 +41,12 @@ NODE_TYPES = {
     "REPORT_BACK",
 }
 OBJECTS = interaction_points()
+# A story checkpoint uses `story:<flow id>:<goal id>` with two 100-character IDs.
+DIALOGUE_EVIDENCE_ID_MAX_LENGTH = 207
 
 
-def quest_visible(definition, user, classroom):
-    return bool(definition and (user.role == "admin" or definition.owner_id in {None, classroom.teacher_id}))
+def quest_visible(definition, user, classroom, db):
+    return bool(belongs_to_course(db, definition, classroom.id) and (user.role == "admin" or definition.owner_id in {None, classroom.teacher_id}))
 
 
 def authorize_quest(db, user, classroom_id, quest_id):
@@ -50,12 +54,12 @@ def authorize_quest(db, user, classroom_id, quest_id):
     definition = db.get(QuestDefinition, quest_id)
     if not definition:
         raise HTTPException(404, "任务定义不存在")
-    if not quest_visible(definition, user, classroom):
+    if not quest_visible(definition, user, classroom, db):
         raise HTTPException(403, "任务不属于当前班级教师")
     return definition
 
 
-def validate_definition(definition: dict, db: Session | None = None) -> dict:
+def validate_definition(definition: dict, db: Session | None = None, *, objects=None) -> dict:
     if not isinstance(definition, dict):
         raise ValueError("任务定义必须为对象")
     if set(definition) - {"id", "title", "chapter_id", "nodes", "effects", "kind"}:
@@ -77,95 +81,100 @@ def validate_definition(definition: dict, db: Session | None = None) -> dict:
     if len(set(ids)) != len(ids):
         raise ValueError("节点id重复")
     mapping = {node["id"]: node for node in nodes}
-    for node in nodes:
-        if set(node) - {
-            "id",
-            "type",
-            "title",
-            "target",
-            "dependencies",
-            "aggregation",
-            "optional",
-            "activity_id",
-            "condition",
-            "choices",
-            "dialogue_id",
-            "navigation_target",
-        }:
-            raise ValueError("未知节点字段")
-        if (
-            not isinstance(node.get("type"), str)
-            or node["type"] not in NODE_TYPES
-            or not isinstance(node.get("title"), str)
-            or not node["title"].strip()
-        ):
-            raise ValueError("节点类型或标题无效")
-        if "optional" in node and type(node["optional"]) is not bool:
-            raise ValueError("optional必须为布尔值")
-        for field in ("target", "activity_id", "dialogue_id", "navigation_target"):
-            if field in node and (not isinstance(node[field], str) or not node[field].strip() or len(node[field]) > 100):
-                raise ValueError(f"{field}必须为非空短字符串")
-        if node.get("navigation_target") and db and not db.get(Npc, node["navigation_target"]):
-            raise ValueError("导航NPC不存在")
-        dependencies = node.get("dependencies", [])
-        if not isinstance(dependencies, list) or any(not isinstance(dep, str) or not dep for dep in dependencies):
-            raise ValueError("dependencies必须为节点id字符串列表")
-        if len(set(dependencies)) != len(dependencies) or any(dep not in mapping for dep in dependencies):
-            raise ValueError("悬空或重复依赖")
-        if node.get("aggregation", "ALL") not in ("ALL", "ANY"):
-            raise ValueError("聚合必须为ALL或ANY")
-        choices = node.get("choices", [])
-        if not isinstance(choices, list) or any(not isinstance(choice, dict) or set(choice) != {"id", "label"} for choice in choices):
-            raise ValueError("choices必须为id/label对象列表")
-        if any(
-            not isinstance(choice["id"], str)
-            or not choice["id"].strip()
-            or len(choice["id"]) > 80
-            or not isinstance(choice["label"], str)
-            or not choice["label"].strip()
-            or len(choice["label"]) > 200
-            for choice in choices
-        ):
-            raise ValueError("选项id和label必须为非空短字符串")
-        if len({choice["id"] for choice in choices}) != len(choices):
-            raise ValueError("选择项id重复")
-        condition = node.get("condition")
-        if condition is not None:
+    for index, node in enumerate(nodes):
+        with located("nodes", index, target=row_target("goal", node), label=node_label(node, index)):
+            if set(node) - {
+                "id",
+                "type",
+                "title",
+                "target",
+                "dependencies",
+                "aggregation",
+                "optional",
+                "activity_id",
+                "condition",
+                "choices",
+                "dialogue_id",
+                "navigation_target",
+            }:
+                raise ValueError("未知节点字段")
             if (
-                not isinstance(condition, dict)
-                or set(condition) != {"node", "choice"}
-                or any(not isinstance(condition[key], str) or not condition[key] for key in ("node", "choice"))
+                not isinstance(node.get("type"), str)
+                or node["type"] not in NODE_TYPES
+                or not isinstance(node.get("title"), str)
+                or not node["title"].strip()
             ):
-                raise ValueError("condition必须包含node和choice字符串")
-            if condition["node"] not in mapping or condition["node"] not in dependencies:
-                raise ValueError("分支条件必须引用直接前置节点")
-            parent_choices = mapping[condition["node"]].get("choices", [])
-            if not isinstance(parent_choices, list) or not any(
-                isinstance(choice, dict) and choice.get("id") == condition["choice"] for choice in parent_choices
+                raise ValueError("节点类型或标题无效")
+            if "optional" in node and type(node["optional"]) is not bool:
+                raise ValueError("optional必须为布尔值")
+            for field in ("target", "activity_id", "dialogue_id", "navigation_target"):
+                limit = DIALOGUE_EVIDENCE_ID_MAX_LENGTH if field == "dialogue_id" else 100
+                if field in node and (not isinstance(node[field], str) or not node[field].strip() or len(node[field]) > limit):
+                    raise ValueError(f"{field}必须为非空短字符串")
+            if node.get("navigation_target") and db and not db.get(Npc, node["navigation_target"]):
+                raise ValueError("导航NPC不存在")
+            dependencies = node.get("dependencies", [])
+            if not isinstance(dependencies, list) or any(not isinstance(dep, str) or not dep for dep in dependencies):
+                raise ValueError("dependencies必须为节点id字符串列表")
+            if len(set(dependencies)) != len(dependencies) or any(dep not in mapping for dep in dependencies):
+                raise ValueError("悬空或重复依赖")
+            if node.get("aggregation", "ALL") not in ("ALL", "ANY"):
+                raise ValueError("聚合必须为ALL或ANY")
+            choices = node.get("choices", [])
+            if not isinstance(choices, list) or any(not isinstance(choice, dict) or set(choice) != {"id", "label"} for choice in choices):
+                raise ValueError("choices必须为id/label对象列表")
+            if any(
+                not isinstance(choice["id"], str)
+                or not choice["id"].strip()
+                or len(choice["id"]) > 80
+                or not isinstance(choice["label"], str)
+                or not choice["label"].strip()
+                or len(choice["label"]) > 200
+                for choice in choices
             ):
-                raise ValueError("分支选项不存在")
-        if node["type"] in {"STUDY_LESSON", "COMPLETE_PRACTICE", "PASS_ASSESSMENT"}:
-            if not node.get("activity_id"):
-                raise ValueError("学习节点必须绑定活动")
-            if db:
-                activity = db.get(Activity, node["activity_id"])
-                if not activity:
-                    raise ValueError("活动不存在")
-                if activity.content.get("published") is False:
-                    raise ValueError("活动尚未发布")
-                expected = {"STUDY_LESSON": {"lesson", "reading"}, "COMPLETE_PRACTICE": {"practice"}, "PASS_ASSESSMENT": {"assessment"}}[node["type"]]
-                if activity.kind not in expected:
-                    raise ValueError("任务节点与教学活动类型不匹配")
-        if node["type"] in {"TALK_TO_NPC", "PLAY_DIALOGUE", "REPORT_BACK"}:
-            if not node.get("target") or (db and not db.get(Npc, node["target"])):
-                raise ValueError("NPC不存在")
-        if node["type"] in {"REACH_LOCATION", "INTERACT_OBJECT"} and node.get("target") not in OBJECTS:
-            raise ValueError("目标对象不存在")
+                raise ValueError("选项id和label必须为非空短字符串")
+            if len({choice["id"] for choice in choices}) != len(choices):
+                raise ValueError("选择项id重复")
+            condition = node.get("condition")
+            if condition is not None:
+                if (
+                    not isinstance(condition, dict)
+                    or set(condition) != {"node", "choice"}
+                    or any(not isinstance(condition[key], str) or not condition[key] for key in ("node", "choice"))
+                ):
+                    raise ValueError("condition必须包含node和choice字符串")
+                if condition["node"] not in mapping or condition["node"] not in dependencies:
+                    raise ValueError("分支条件必须引用直接前置节点")
+                parent_choices = mapping[condition["node"]].get("choices", [])
+                if not isinstance(parent_choices, list) or not any(
+                    isinstance(choice, dict) and choice.get("id") == condition["choice"] for choice in parent_choices
+                ):
+                    raise ValueError("分支选项不存在")
+            if node["type"] in {"STUDY_LESSON", "COMPLETE_PRACTICE", "PASS_ASSESSMENT"}:
+                if not node.get("activity_id"):
+                    raise ValueError("学习节点必须绑定活动")
+                if db:
+                    activity = db.get(Activity, node["activity_id"])
+                    if not activity:
+                        raise ValueError("活动不存在")
+                    if activity.content.get("published") is False:
+                        raise ValueError("活动尚未发布")
+                    expected = {"STUDY_LESSON": {"lesson", "reading"}, "COMPLETE_PRACTICE": {"practice"}, "PASS_ASSESSMENT": {"assessment"}}[node["type"]]
+                    if activity.kind not in expected:
+                        raise ValueError("任务节点与教学活动类型不匹配")
+            if node["type"] in {"TALK_TO_NPC", "PLAY_DIALOGUE", "REPORT_BACK"}:
+                if not node.get("target") or (db and not db.get(Npc, node["target"])):
+                    raise ValueError("NPC不存在")
+            if node["type"] in {"REACH_LOCATION", "INTERACT_OBJECT"} and node.get("target") not in (OBJECTS if objects is None else objects):
+                raise ValueError("目标对象不存在")
+    node_indices = {node["id"]: index for index, node in enumerate(nodes)}
     visiting, done = set(), set()
 
     def visit(node_id):
         if node_id in visiting:
-            raise ValueError("任务节点存在循环")
+            index = node_indices[node_id]
+            raise AuthoringIssue("任务节点存在循环", path=("nodes", index), target=row_target("goal", mapping[node_id]),
+                                 label=node_label(mapping[node_id], index), code="quest_cycle", suggestion="移除返回上游目标的依赖连线。")
         if node_id in done:
             return
         visiting.add(node_id)
@@ -182,6 +191,11 @@ def validate_definition(definition: dict, db: Session | None = None) -> dict:
     if not isinstance(effects, list):
         raise ValueError("effects必须为列表")
     for effect in effects:
+        if isinstance(effect, dict) and effect.get("type") == "unlock_building":
+            from .world_authoring import interior_buildings
+            if set(effect) != {"type", "building_id"} or effect["building_id"] not in interior_buildings():
+                raise ValueError("建筑解锁效果必须引用可用室内")
+            continue
         if (
             not isinstance(effect, dict)
             or set(effect) != {"type", "key"}
@@ -229,7 +243,7 @@ def node_statuses(definition: dict, states: dict) -> dict:
     return {node_id: evaluate(node_id) for node_id in nodes}
 
 
-def ensure_quests(db, user, classroom_id):
+def ensure_quests(db, user, classroom_id, *, commit=True):
     if user.role != "student":
         return
     from .models import Classroom
@@ -237,7 +251,7 @@ def ensure_quests(db, user, classroom_id):
     classroom = db.get(Classroom, classroom_id)
     definitions = db.scalars(
         select(QuestDefinition)
-        .where((QuestDefinition.owner_id.is_(None)) | (QuestDefinition.owner_id == classroom.teacher_id))
+        .where(course_clause(db, QuestDefinition, classroom_id), (QuestDefinition.owner_id.is_(None)) | (QuestDefinition.owner_id == classroom.teacher_id))
     ).all()
     for definition in definitions:
         if not chapter_available(db, user, classroom_id, definition.chapter_id):
@@ -247,6 +261,9 @@ def ensure_quests(db, user, classroom_id):
         )
         if not existing:
             db.add(PlayerQuest(user_id=user.id, classroom_id=classroom_id, quest_id=definition.id))
+    if not commit:
+        db.flush()
+        return
     try:
         db.commit()
     except IntegrityError:
@@ -254,6 +271,7 @@ def ensure_quests(db, user, classroom_id):
 
 
 def world_payload(db, user, classroom_id, initialize_quests=True):
+    from .world_authoring import active_interactions, building_access, npc_present, unlocked_buildings
     classroom = authorize_classroom(db, user, classroom_id)
     if initialize_quests:
         ensure_quests(db, user, classroom_id)
@@ -263,7 +281,7 @@ def world_payload(db, user, classroom_id, initialize_quests=True):
         if position
         else dict(load_world_config()["default_spawn"])
     )
-    npcs = list(db.scalars(select(Npc)))
+    npcs = [npc for npc in db.scalars(select(Npc).where(course_clause(db, Npc, classroom_id))) if npc_present(db, user, classroom_id, npc)]
     try:
         validate_point(player["map_key"], player["tile_x"], player["tile_y"])
         for npc in npcs:
@@ -273,7 +291,7 @@ def world_payload(db, user, classroom_id, initialize_quests=True):
     quests = []
     for instance in db.scalars(select(PlayerQuest).where(PlayerQuest.user_id == user.id, PlayerQuest.classroom_id == classroom_id)):
         definition = db.get(QuestDefinition, instance.quest_id)
-        if not quest_visible(definition, user, classroom):
+        if not quest_visible(definition, user, classroom, db):
             continue
         states = {state.node_id: state for state in db.scalars(select(NodeState).where(NodeState.player_quest_id == instance.id))}
         statuses = node_statuses(definition.definition, states)
@@ -290,18 +308,19 @@ def world_payload(db, user, classroom_id, initialize_quests=True):
                 ],
             }
         )
-        story = db.scalar(select(StoryDefinition).where(StoryDefinition.quest_id == definition.id))
+        story = db.scalar(select(StoryDefinition).where(StoryDefinition.quest_id == definition.id, course_clause(db, StoryDefinition, classroom_id)))
         if story:
             quests[-1]["story_id"] = story.id
     return {
-        "story_available": any(chapter_available(db, user, classroom_id, story.chapter_id) and (
-            story.quest_id is None and story.content.get("mode") == "ambient"
-            or story.quest_id is not None and quest_visible(db.get(QuestDefinition, story.quest_id), user, classroom))
-            for story in db.scalars(select(StoryDefinition))),
+        "story_available": any((story.chapter_id is None or chapter_available(db, user, classroom_id, story.chapter_id)) and (
+            story.quest_id is None and story.content.get("mode") in {"ambient", "public"}
+            or story.quest_id is not None and quest_visible(db.get(QuestDefinition, story.quest_id), user, classroom, db))
+            for story in db.scalars(select(StoryDefinition).where(course_clause(db, StoryDefinition, classroom_id)))),
         "player": player,
         "npcs": [
             {
                 "key": npc.key,
+                "stable_id": npc.stable_id or npc.key,
                 "name": npc.name,
                 "map_key": npc.map_key,
                 "tile_x": npc.tile_x,
@@ -319,11 +338,14 @@ def world_payload(db, user, classroom_id, initialize_quests=True):
                 "order_index": chapter.order_index,
                 "available": chapter_available(db, user, classroom_id, chapter.id),
             }
-            for chapter in db.scalars(select(Chapter).order_by(Chapter.order_index))
+            for chapter in db.scalars(select(Chapter).where(course_clause(db, Chapter, classroom_id)).order_by(Chapter.order_index))
             if (chapter.owner_id in {None, classroom.teacher_id} or user.role == "admin")
             and (chapter.owner_id is None or user.role != "student" or chapter_available(db, user, classroom_id, chapter.id))
         ],
         "flags": list(db.scalars(select(WorldFlag.key).where(WorldFlag.user_id == user.id, WorldFlag.classroom_id == classroom_id))),
+        "building_unlock": sorted(unlocked_buildings(db, user, classroom_id)),
+        "building_access": building_access(db, user, classroom_id),
+        "interactions": active_interactions(db, user, classroom_id),
     }
 
 
@@ -383,8 +405,14 @@ def transition(body: TransitionInput, db: Annotated[Session, Depends(get_db)], u
     source = portal["from"]
     if current["map_key"] != source["map_key"] or abs(current["tile_x"] - source["tile_x"]) + abs(current["tile_y"] - source["tile_y"]) > source["radius"]:
         raise HTTPException(422, "请先到达对应地图入口附近")
-    if any(not db.get(WorldFlag, (user.id, body.classroom_id, flag)) for flag in portal["required_flags"]):
-        raise HTTPException(403, portal["blocked_message"])
+    if portal.get("building_id"):
+        from .world_authoring import active_interactions, building_access
+        if any(item["target"].get("object_id") in {portal["id"], portal["building_id"]}
+               for item in active_interactions(db, user, body.classroom_id)):
+            raise HTTPException(409, "请先完成建筑入口交互")
+        access = building_access(db, user, body.classroom_id)[portal["building_id"]]
+        if not access["can_enter"]:
+            raise HTTPException(403, access["blocked_message"])
     if not position:
         position = PlayerPosition(user_id=user.id, classroom_id=body.classroom_id)
         db.add(position)
@@ -398,7 +426,7 @@ def transition(body: TransitionInput, db: Annotated[Session, Depends(get_db)], u
 class EventEvidence(BaseModel):
     model_config = ConfigDict(extra="forbid")
     npc_key: str | None = Field(default=None, max_length=80)
-    dialogue_id: str | None = Field(default=None, max_length=100)
+    dialogue_id: str | None = Field(default=None, max_length=DIALOGUE_EVIDENCE_ID_MAX_LENGTH)
     choice: str | None = Field(default=None, max_length=80)
     object_id: str | None = Field(default=None, max_length=100)
     map_key: str | None = Field(default=None, max_length=40)
@@ -440,6 +468,10 @@ def validate_evidence(db, user, classroom_id, node, evidence):
     target = node.get("target")
     if kind in {"TALK_TO_NPC", "PLAY_DIALOGUE", "REPORT_BACK"}:
         npc = db.get(Npc, target)
+        from .world_authoring import npc_present
+        if npc and not npc_present(db, user, classroom_id, npc):
+            raise HTTPException(403, "当前NPC尚未出现")
+        require_course_content(db, npc, classroom_id)
         if evidence.get("npc_key") != target:
             raise HTTPException(422, "交谈对象不匹配")
         check_near(db, user, classroom_id, (npc.map_key, npc.tile_x, npc.tile_y))
@@ -450,7 +482,11 @@ def validate_evidence(db, user, classroom_id, node, evidence):
     elif kind in {"REACH_LOCATION", "INTERACT_OBJECT"}:
         if kind == "INTERACT_OBJECT" and evidence.get("object_id") != target:
             raise HTTPException(422, "互动对象不匹配")
-        check_near(db, user, classroom_id, OBJECTS[target], radius=2 if kind == "INTERACT_OBJECT" else 5)
+        from .world_authoring import course_object_points
+        points = course_object_points(db, user, classroom_id, target)
+        if not points:
+            raise HTTPException(422, "当前交互目标不可用")
+        check_near(db, user, classroom_id, points, radius=2 if kind == "INTERACT_OBJECT" else 5)
     elif kind == "STUDY_LESSON":
         from .courses import authorize_activity, learning_material, reading_completed
         from .learning_rules import has_completion_rule
@@ -567,6 +603,10 @@ def apply_quest_event(db, user, body: EventInput):
         instance.status = "complete"
         instance.completed_at = datetime.now(timezone.utc)
         for effect in definition.definition.get("effects", []):
+            if effect["type"] == "unlock_building" or effect.get("key") == "library_unlocked":
+                from .world_authoring import unlock_building
+                unlock_building(db, user, body.classroom_id, effect.get("building_id", "library"))
+                continue
             if not db.get(WorldFlag, (user.id, body.classroom_id, effect["key"])):
                 db.add(WorldFlag(user_id=user.id, classroom_id=body.classroom_id, key=effect["key"]))
     return False
@@ -599,61 +639,64 @@ class DefinitionInput(BaseModel):
     definition: dict
 
 
+def _authoring_definition(db, user, definition, instance_id):
+    from .curriculum import authoring_chapter
+    from .teacher_scope import require_scope
+
+    authoring_chapter(db, user, definition["chapter_id"], instance_id)
+    for node in definition["nodes"]:
+        if node.get("activity_id"):
+            activity = require_scope(db.get(Activity, node["activity_id"]), instance_id)
+            authoring_chapter(db, user, activity.chapter_id, instance_id)
+            if activity.owner_id and activity.owner_id != user.id and user.role != "admin":
+                raise HTTPException(403, "任务不能绑定其他教师的活动")
+        if node.get("navigation_target"):
+            require_scope(db.get(Npc, node["navigation_target"]), instance_id)
+        if node["type"] in {"TALK_TO_NPC", "PLAY_DIALOGUE", "REPORT_BACK"}:
+            require_scope(db.get(Npc, node["target"]), instance_id)
+
+
 @router.post("/teacher/quests/validate")
-def validate_quest(body: DefinitionInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
+def validate_quest(body: DefinitionInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)],
+                   classroom_id: int | None = None):
+    from .teacher_scope import teacher_instance_id
+    instance_id = teacher_instance_id(db, user, classroom_id)
     try:
         definition = validate_definition(body.definition, db)
-        from .curriculum import authoring_chapter
-
-        authoring_chapter(db, user, definition["chapter_id"])
-        for node in definition["nodes"]:
-            if node.get("activity_id"):
-                activity = db.get(Activity, node["activity_id"])
-                authoring_chapter(db, user, activity.chapter_id)
-                if activity.owner_id and activity.owner_id != user.id and user.role != "admin":
-                    raise HTTPException(403, "任务不能绑定其他教师的活动")
+        _authoring_definition(db, user, definition, instance_id)
         return {"valid": True, "definition": definition}
     except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(422, str(exc))
 
 
 @router.post("/teacher/quests", status_code=201)
-def create_quest(body: DefinitionInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
+def create_quest(body: DefinitionInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)],
+                 classroom_id: int | None = None):
+    from .teacher_scope import commit_content, scoped_key, teacher_instance_id
+    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
     try:
         definition = validate_definition(body.definition, db)
     except (ValueError, KeyError, TypeError) as exc:
         raise HTTPException(422, str(exc))
-    from .curriculum import authoring_chapter
-
-    authoring_chapter(db, user, definition["chapter_id"])
-    if db.get(QuestDefinition, definition["id"]):
+    _authoring_definition(db, user, definition, instance_id)
+    stable_id = definition["id"]
+    key = scoped_key(instance_id, "quest", stable_id)
+    if db.get(QuestDefinition, key) or (instance_id is not None and db.scalar(select(QuestDefinition.id).where(
+            QuestDefinition.course_instance_id == instance_id, QuestDefinition.stable_id == stable_id))):
         raise HTTPException(409, "任务ID已存在")
-    for node in definition["nodes"]:
-        if node.get("activity_id"):
-            activity = db.get(Activity, node["activity_id"])
-            authoring_chapter(db, user, activity.chapter_id)
-            if activity.owner_id and activity.owner_id != user.id and user.role != "admin":
-                raise HTTPException(403, "任务不能绑定其他教师的活动")
-    db.add(
-        QuestDefinition(
-            id=definition["id"],
-            chapter_id=definition["chapter_id"],
-            title=definition["title"],
-            owner_id=user.id,
-            definition=definition,
-        )
-    )
-    db.commit()
+    definition = {**definition, "id": key}
+    db.add(QuestDefinition(id=key, chapter_id=definition["chapter_id"], title=definition["title"], owner_id=user.id,
+                           course_instance_id=instance_id, stable_id=stable_id, definition=definition))
+    commit_content(db, instance_id)
     return definition
 
 
 @router.get("/teacher/quests")
-def list_quests(db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
-    return [
-        q.definition
-        for q in db.scalars(
-            select(QuestDefinition)
-            .where((QuestDefinition.owner_id.is_(None)) | (QuestDefinition.owner_id == user.id))
-            .order_by(QuestDefinition.id)
-        )
-    ]
+def list_quests(db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)],
+                classroom_id: int | None = None):
+    from .teacher_scope import teacher_instance_id
+    instance_id = teacher_instance_id(db, user, classroom_id)
+    query = select(QuestDefinition).where(QuestDefinition.course_instance_id == instance_id)
+    if user.role != "admin":
+        query = query.where((QuestDefinition.owner_id.is_(None)) | (QuestDefinition.owner_id == user.id))
+    return [q.definition for q in db.scalars(query.order_by(QuestDefinition.id))]

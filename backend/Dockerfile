@@ -6,8 +6,9 @@ RUN pip install --no-cache-dir -r requirements.lock
 COPY backend/app/ ./app/
 COPY backend/alembic/ ./alembic/
 COPY backend/alembic.ini ./alembic.ini
-COPY data/world/ /app/data/world/
-RUN useradd --uid 10001 --create-home reborn && mkdir -p /app/storage && chown -R reborn:reborn /app
+COPY shared/world/ /app/shared/world/
+COPY frontend/public/assets/maps/ /app/frontend/public/assets/maps/
+RUN useradd --uid 10001 --create-home reborn && mkdir -p /app/storage /app/data/course && chown -R reborn:reborn /app
 USER reborn
 EXPOSE 8000
 HEALTHCHECK --interval=15s --timeout=3s CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=2)"

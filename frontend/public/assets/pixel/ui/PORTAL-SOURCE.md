@@ -9,5 +9,5 @@ Its local image metadata identifies a Blender icon scene but does not name an
 author or license. No author or separate license was invented.
 
 The original transparent PNG is displayed at 8 × 8 logical map pixels through
-`data/world/world.json` `portal_marker`. The renderer rotates it for each portal
+`shared/world/world.json` `portal_marker`. The renderer rotates it for each portal
 direction. The source PNG was not edited, cropped or regenerated.

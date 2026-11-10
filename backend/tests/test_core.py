@@ -11,10 +11,13 @@ from app.seed import seed
 from conftest import move_player
 
 
-def test_seed_idempotent_and_answers_private(client, db, student, classroom):
+def test_seed_idempotent(db):
     counts = seed(db)
     assert counts == {"documents": 7, "pages": 561, "chapters": 7, "knowledge_points": 65, "examples": 46, "problems": 39}
     assert db.scalar(select(func.count()).select_from(Question)) == 6
+
+
+def test_answers_private(client, db, student, classroom):
     payload = client.get(f"/api/activities/ch1-practice?classroom_id={classroom['id']}", headers=student["headers"]).json()
     assert len(payload["questions"]) == 3
     assert all(not {"answer", "hidden_cases", "reference_solution_code"} & q.keys() for q in payload["questions"])
@@ -151,7 +154,7 @@ def test_first_chapter_full_loop_and_idempotency(client, db, student, teacher, c
         else:
             raise AssertionError("Story failed to reach an end")
     final = client.get(f"/api/world?classroom_id={cid}", headers=headers).json()
-    assert "library_unlocked" in final["flags"]
+    assert "library" in final["building_unlock"]
     assert next(q for q in final["quests"] if q["id"] == "arrival")["status"] == "complete"
     progress = client.get(f"/api/teacher/classrooms/{cid}/progress", headers=teacher["headers"]).json()
     assert next(member for member in progress["members"] if member["id"] == student["id"])["completed_chapters"] == 1
@@ -187,7 +190,7 @@ def test_activity_edits_update_current_configuration_and_keep_progress(client, d
     db.add(PlayerQuest(user_id=student["id"], classroom_id=cid, quest_id=definition["id"]))
     db.add(ActivityProgress(user_id=student["id"], classroom_id=cid, activity_id=activity.id, page_no=42, visited_pages=[10723], completed=False))
     db.commit()
-    update = client.put("/api/teacher/activities/teacher-lesson", json={"title": "Updated title", "assistant_allowed": False}, headers=teacher["headers"])
+    update = client.put("/api/teacher/activities/teacher-lesson", json={"title": "Updated title", "assistant_allowed": False}, headers=teacher["headers"], params={"classroom_id": classroom["id"]})
     assert update.status_code == 200, update.text
     current = client.get(f"/api/activities/teacher-lesson?classroom_id={cid}", headers=student["headers"])
     assert current.status_code == 200, current.text
@@ -285,7 +288,7 @@ def test_dialogue_schema_and_sequence_and_teacher_npc_scope(client, db, student,
         assert result.status_code == 200, result.text
     assert result.json()["completed_root"] == "welcome"
     payload = {"key": "new-npc", "name": "新增", "map_key": "town_hub", "tile_x": 22, "tile_y": 34, "dialogue": [{"id": "start", "text": "hello"}]}
-    assert client.post("/api/teacher/npcs", json=payload, headers=teacher["headers"]).status_code == 403
+    assert client.post("/api/teacher/npcs", json=payload, headers=teacher["headers"], params={"classroom_id": classroom["id"]}).status_code == 201
     from app.integration_models import AssistantCall
 
     assert db.scalar(select(func.count()).select_from(AssistantCall)) == 0

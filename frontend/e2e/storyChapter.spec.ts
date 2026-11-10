@@ -1,3 +1,4 @@
+import { importCourse } from "./courseFixture";
 import { answerStoryQuestions } from "./answerActivity";
 import {
   test,
@@ -154,7 +155,7 @@ async function nextReadingPage(page: Page) {
   ) + 1;
   const response = page.waitForResponse(
     (candidate) =>
-      /\/api\/activities\/ch1-lesson\/progress$/.test(candidate.url()) &&
+      /\/api\/activities\/[^/]+\/progress$/.test(candidate.url()) &&
       candidate.request().method() === "POST" &&
       candidate.request().postDataJSON().page_no === nextPage,
   );
@@ -172,7 +173,7 @@ async function nextReadingPage(page: Page) {
 async function readRequiredPage(page: Page, pageNo: number) {
   const response = page.waitForResponse(
     (candidate) =>
-      /\/api\/activities\/ch1-lesson\/progress$/.test(candidate.url()) &&
+      /\/api\/activities\/[^/]+\/progress$/.test(candidate.url()) &&
       candidate.request().method() === "POST" &&
       candidate.request().postDataJSON().page_no === pageNo,
   );
@@ -260,8 +261,9 @@ for (const viewport of [
         id: number;
         join_code: string;
       };
+  const ids = await importCourse(request, teacher, classroom.id);
       const release = await request.put(
-        `/api/teacher/classrooms/${classroom.id}/releases/179`,
+        `/api/teacher/classrooms/${classroom.id}/releases/${ids.chapter["179"]}`,
         { headers: teacher, data: { status: "published", } },
       );
       expect(release.ok(), await release.text()).toBeTruthy();
@@ -279,13 +281,13 @@ for (const viewport of [
           student,
         );
       const quest = async () =>
-        (await readWorld()).quests.find((value) => value.id === "arrival")!;
+        (await readWorld()).quests.find((value) => value.id === ids.quest.arrival)!;
       const nodeStatus = async (nodeId: string) =>
         (await quest()).nodes.find((node) => node.id === nodeId)?.status;
       const readLesson = () =>
         readJson<ActivityView>(
           request,
-          `/api/activities/ch1-lesson?classroom_id=${classroom.id}`,
+          `/api/activities/${ids.activity["ch1-lesson"]}?classroom_id=${classroom.id}`,
           student,
         );
       const aiBefore = await readJson<{ model_calls: number }>(
@@ -295,7 +297,7 @@ for (const viewport of [
       );
       expect(await quest()).toMatchObject({
 
-        story_id: "first-steps",
+        story_id: ids.story["first-steps"],
         status: "active",
       });
       expect(await nodeStatus("assessment")).toBe("locked");
@@ -326,7 +328,7 @@ for (const viewport of [
       const firstReading = await finishDialogue(page, "现在开始阅读");
       expect(firstReading.view).toMatchObject({
         status: "waiting",
-        activity: { id: "ch1-lesson", },
+        activity: { id: ids.activity["ch1-lesson"], },
       });
       await expect(page.locator(".lesson-workspace")).toBeVisible();
       await expect(dialogue(page)).toHaveCount(0);
@@ -404,7 +406,7 @@ for (const viewport of [
       const practice = await finishDialogue(page, "开始练习");
       expect(practice.view).toMatchObject({
         status: "waiting",
-        activity: { id: "ch1-practice", },
+        activity: { id: ids.activity["ch1-practice"], },
       });
       await answerStoryQuestions(page, [
         { title: "计算思维的核心", answer: "抽象与自动化" },
@@ -418,7 +420,7 @@ for (const viewport of [
       const assessment = await finishDialogue(page, "开始章节测试");
       expect(assessment.view).toMatchObject({
         status: "waiting",
-        activity: { id: "ch1-assessment", },
+        activity: { id: ids.activity["ch1-assessment"], },
       });
       await answerStoryQuestions(page, [
         { title: "计算与规则", answer: "给定输入，按照规则处理并得到输出" },
@@ -466,7 +468,7 @@ for (const viewport of [
         `/api/world?classroom_id=${classroom.id}`,
         other,
       );
-      const otherQuest = otherWorld.quests.find((value) => value.id === "arrival")!;
+      const otherQuest = otherWorld.quests.find((value) => value.id === ids.quest.arrival)!;
       expect(otherQuest.status).toBe("active");
       expect(otherQuest.nodes.find((node) => node.id === "welcome")?.status)
         .toBe("ready");
@@ -479,7 +481,7 @@ for (const viewport of [
       )).toBeNull();
       const otherLesson = await readJson<ActivityView>(
         request,
-        `/api/activities/ch1-lesson?classroom_id=${classroom.id}`,
+        `/api/activities/${ids.activity["ch1-lesson"]}?classroom_id=${classroom.id}`,
         other,
       );
       expect(otherLesson.progress?.completed ?? false).toBe(false);

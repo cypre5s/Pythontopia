@@ -13,7 +13,7 @@ without extending the 50 x 40 walk_bounds. Library walls, wood floor, rug and
 furniture use the retained original farming_source.png and explicit source frames.
 Both the Phaser world and Vue map preview consume the same art layers and props.
 Building object names identify static art. Names, purposes, approach anchors,
-portal destinations and gates are defined in data/world/world.json, imported by
+portal destinations and gates are defined in shared/world/world.json, imported by
 the frontend and loaded by the backend. Legacy interaction properties are not
 the runtime authority, and never dispatch retired Vue routes.
 Runtime NPCs, dialogue, activity bindings and quests come from the authenticated API.

@@ -42,7 +42,7 @@ boundaries were inspected to preserve the complete table top and furniture legs.
 The large rug and isolated entrance table were removed.
 
 All ten bookcase bases bind the same `library_shelf` interaction. Each has a real
-front point in `data/world/world.json`; the original (4,4) point remains among them.
+front point in `shared/world/world.json`; the original (4,4) point remains among them.
 Book rows are decorative layers over the case, not extra interaction targets.
 Collision uses one dedicated tile layer. The two-row north-wall art has one thin
 blocked foot row and an open floor corridor at y=2. Every historical interior

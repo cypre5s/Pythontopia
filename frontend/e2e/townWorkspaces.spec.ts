@@ -1,3 +1,4 @@
+import { importCourse } from "./courseFixture";
 import { test, expect, type APIRequestContext, type Page, type APIResponse, type TestInfo } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
@@ -31,12 +32,13 @@ async function prepare(request: APIRequestContext, purpose: string) {
     const classroom = await json<ClassInfo>(await request.post("/api/classrooms", {
       headers: teacher, data: { name: `${purpose}${label} ${randomUUID().slice(0, 6)}` },
     }));
+    const ids = await importCourse(request, teacher, classroom.id);
     for (const chapter of chapters) {
-      await json(await request.put(`/api/teacher/classrooms/${classroom.id}/releases/${chapter}`, {
+      await json(await request.put(`/api/teacher/classrooms/${classroom.id}/releases/${ids.chapter[String(chapter)]}`, {
         headers: teacher, data: { status: "published" },
       }));
     }
-    return classroom;
+    return { ...classroom, ids };
   };
   const first = await createClass("主班", [179, 180, 181, 182, 183, 184, 185]);
   const second = await createClass("新班", [179]);
@@ -48,7 +50,7 @@ async function prepare(request: APIRequestContext, purpose: string) {
     headers: student, data: { join_code: classroom.join_code },
   }));
   const world = await json<WorldInfo>(await request.get(`/api/world?classroom_id=${first.id}`, { headers: student }));
-  const mayor = world.npcs.find(npc => npc.key === "mayor_py")!;
+  const mayor = world.npcs.find(npc => npc.key === first.ids.npc.mayor_py)!;
   await json(await request.put("/api/world/position", { headers: student, data: {
     classroom_id: first.id, map_key: mayor.map_key, tile_x: mayor.tile_x, tile_y: mayor.tile_y, direction: "down",
   } }));
@@ -62,7 +64,7 @@ async function prepare(request: APIRequestContext, purpose: string) {
   }
   expect(story.status).toBe("ended");
   const updated = await json<WorldInfo>(await request.get(`/api/world?classroom_id=${first.id}`, { headers: student }));
-  expect(updated.quests.find(quest => quest.id === "arrival")!.nodes.filter(node => node.status === "complete")).toHaveLength(1);
+  expect(updated.quests.find(quest => quest.id === first.ids.quest.arrival)!.nodes.filter(node => node.status === "complete")).toHaveLength(1);
   return { first, second, identity, student, teacherName: login.user.name, createClass };
 }
 

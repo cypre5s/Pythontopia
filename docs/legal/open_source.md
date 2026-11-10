@@ -5,6 +5,10 @@
 > 比赛合规所需的"第三方依赖 + License + 素材来源"汇总。本文件按子项目分块。
 > 它是第三方许可清单，不是 Pythontopia 项目的开源授权文件。
 
+## 当前教师后台依赖补充
+
+- 节点编辑器使用 `@xyflow/react`，并通过该库加载 `@xyflow/system`。两者同用 webkid GmbH 的 MIT 许可，已保留原文。[React Flow 许可](../../admin/legal/react-flow-LICENSE.md) · [后台锁文件](../../admin/package-lock.json)
+
 ## 1. 项目自身 License
 
 当前阶段采用 **Source-Available / All rights reserved**（见仓库根 [`LICENSE`](../../LICENSE)）。

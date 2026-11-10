@@ -63,7 +63,7 @@ for(let y=1;y<H-1;y++)for(let x=1;x<W-1;x++){
   if(!collision[y*W+x]&&!visited.has(`${x},${y}`))throw new Error(`Historical walkable position disconnected: ${x},${y}`);
   if(collision[y*W+x]&&![[x+1,y],[x-1,y],[x,y+1],[x,y-1]].some(([a,b])=>visited.has(`${a},${b}`)))throw new Error(`Historical position has no connected escape neighbor: ${x},${y}`);
 }
-const world=JSON.parse(await fs.readFile(path.join(root,'data/world/world.json'),'utf8'));
+const world=JSON.parse(await fs.readFile(path.join(root,'shared/world/world.json'),'utf8'));
 if(JSON.stringify(world.interactions.library_shelf.points)!==JSON.stringify(shelfPoints))throw new Error('Canonical library shelf points do not match the ten real bookcases');
 const out=path.join(root,'frontend/public/assets/maps/library.json');
 const encoded=JSON.stringify(map,null,2)+'\n';

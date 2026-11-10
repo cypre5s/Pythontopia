@@ -12,22 +12,31 @@
         v-if="session.world"
         :key="session.classroomId"
         ref="canvas"
-        :paused="Boolean(session.workspace || dialogueNpc || welcome || session.storyBusy || session.resetBusy)"
+        :paused="Boolean(session.workspace || dialogueNpc || activeStory?.node || welcome || session.storyBusy || session.resetBusy)"
         @ready="onWorldReady"
         @position="positionChanged"
         @interact="interact" /><GameHUD
         v-if="!welcome"
-        :blocked="Boolean(session.workspace || dialogueNpc || session.storyBusy || session.resetBusy)"
+        :blocked="Boolean(session.workspace || dialogueNpc || activeStory?.node || session.storyBusy || session.resetBusy)"
         :class="{ 'is-entering': entered }"
         @guide="guide" /><DialogueLayer
-        v-if="dialogueNpc"
+        v-if="!silentAction && (dialogueNpc || activeStory?.node)"
         :npc="dialogueNpc"
         :story="activeStory"
         :actions="actions"
         :settling="dialogueSaving"
         @close="closeDialogue"
         @complete="finishDialogue"
-        @action="action" /><OverlayHost @close="closeWorkspace" @complete="closeWorkspace"
+        @action="action" />
+      <div v-if="silentAction && !welcome" class="world-action-status">
+        <template v-if="automaticActionError">
+          <p role="alert">{{ automaticActionError }}</p>
+          <button type="button" :disabled="session.storyBusy" @click="runAutomaticAction">重试操作</button>
+          <button type="button" :disabled="session.storyBusy" @click="endAutomaticAction">结束本次互动</button>
+        </template>
+        <p v-else role="status">正在继续互动…</p>
+      </div>
+      <OverlayHost @close="closeWorkspace" @complete="closeWorkspace"
     /></template>
     <section v-else class="arrival-page">
 
@@ -122,8 +131,40 @@ const actions = computed(
     ) ?? [],
 );
 const activeStory = computed(() =>
-  session.story?.status === "active" && !session.storyDismissed ? session.story : undefined,
+  session.story?.status === "active" && !session.storyDismissed && !session.workspace ? session.story : undefined,
 );
+const silentAction = computed(() => activeStory.value?.node?.type === "action" && !activeStory.value.node.text
+  ? `${activeStory.value.id}:${activeStory.value.revision}`
+  : null);
+const automaticActionError = ref("");
+let requestedAction: string | null = null;
+async function runAutomaticAction() {
+  const key = silentAction.value;
+  if (!key || session.storyBusy) return;
+  automaticActionError.value = "";
+  try {
+    await session.advanceStory();
+  } catch (failure) {
+    if (silentAction.value === key)
+      automaticActionError.value = failure instanceof Error ? failure.message : "互动未完成，请重试。";
+  }
+}
+async function endAutomaticAction() {
+  try {
+    await session.endStory();
+  } catch (failure) {
+    automaticActionError.value = failure instanceof Error ? failure.message : "未能结束互动，请重试。";
+  }
+}
+watch([silentAction, welcome, loading, () => session.storyBusy], ([key, entering, connecting, busy]) => {
+  if (!key) {
+    requestedAction = null;
+    return;
+  }
+  if (entering || connecting || busy || key === requestedAction) return;
+  requestedAction = key;
+  void runAutomaticAction();
+}, { immediate: true });
 const dialogueNpc = computed(() => {
   if (!activeStory.value?.node) return npc.value;
   const resident = session.world?.npcs.find(n => n.key === activeStory.value?.npc_key);
@@ -222,7 +263,7 @@ async function positionChanged(player: Player) {
   try {
     for (const quest of session.world?.quests ?? [])
       for (const node of quest.nodes) {
-        const target = resolveWorldTarget(node.target, session.world?.npcs ?? []);
+        const target = resolveWorldTarget(node.target, session.world?.npcs ?? [], session.world);
         if (
           node.status === "ready" &&
           node.type === "REACH_LOCATION" &&
@@ -257,6 +298,11 @@ async function interact(target: string, type: "npc" | "object") {
     }
     const resident = session.world?.npcs.find((n) => n.key === target);
     npc.value = resident ? { ...resident } : null;
+    return;
+  }
+  if (session.world?.interactions !== undefined) {
+    try { await session.interactStory(target, "object"); }
+    catch (error) { notify(error instanceof Error ? error.message : "互动未完成，请重试。"); }
     return;
   }
   try {
@@ -327,7 +373,7 @@ function worldShortcut(event: KeyboardEvent) {
     isTextFocus(document.activeElement) ||
     welcome.value ||
     session.workspace ||
-    dialogueNpc.value ||
+    dialogueNpc.value || activeStory.value?.node ||
     session.storyBusy ||
     session.resetBusy ||
     !session.world
@@ -351,3 +397,22 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", worldShortcut);
 });
 </script>
+
+<style scoped>
+.world-action-status {
+  position: absolute;
+  z-index: 30;
+  bottom: max(24px, var(--safe-bottom));
+  left: 50%;
+  width: max-content;
+  max-width: calc(100% - 32px);
+  transform: translateX(-50%);
+  padding: 12px 16px;
+  border: 1px solid #af8b50;
+  border-radius: 8px;
+  color: #f0dfbb;
+  background: #30291f;
+}
+.world-action-status p { margin: 0; }
+.world-action-status button { min-height: 44px; margin: 8px 8px 0 0; }
+</style>

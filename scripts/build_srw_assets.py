@@ -179,13 +179,13 @@ def parse_blob_tables():
     return out
 
 
-RUNTIME_TS = REPO / 'frontend/src/game/config/srwAssets.config.ts'
+RUNTIME_TS = REPO / 'shared/world/srwAssets.config.ts'
 
 
 def emit_runtime_manifest(manifest):
-    """生成 frontend/src/game/config/srwAssets.config.ts。
+    """生成 shared/world/srwAssets.config.ts。
 
-    BootScene 直接 import 这份清单注册资产，避免"手抄文件名"和实际切片走偏：
+    游戏和地图预览使用这份清单，避免"手抄文件名"和实际切片走偏：
     上一版就是这么错的（生成器引用 srw_tree_06，而切片目录里根本没有这个文件，
     结果是运行时静默画不出树）。
     """
@@ -206,7 +206,7 @@ def emit_runtime_manifest(manifest):
         ' * Super Retro World 运行时资产清单。',
         ' *',
         ' * 由 scripts/build_srw_assets.py 生成，勿手改：重新切片后请重跑该脚本。',
-        ' * BootScene 按这份表注册贴图，因此切片与运行时不可能走偏。',
+        ' * 游戏和地图预览按这份表加载贴图，因此切片与运行时不可能走偏。',
         ' *',
         ' * 贴图键统一为 `srw_<文件名>`，与 generate-maps.mjs 地图对象里的 sprite 字段同名。',
         ' */',

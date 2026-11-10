@@ -20,6 +20,8 @@ from .quests import validate_definition
 
 
 def _shared(item, label):
+    if item is not None and item.course_instance_id is not None:
+        raise ValueError(f"{label}标识属于班级课程，请通过班级课程包导入更新")
     if item is not None and item.owner_id is not None:
         raise ValueError(f"{label}标识已被教师内容占用，拒绝覆盖")
 
@@ -39,7 +41,7 @@ def seed(db, source=None, *, content_root=None):
 
 
 def _import_course(db, source=None, *, content_root=None):
-    root = Path(source or os.getenv("REBORN_COURSE_ROOT", str(ROOT / "data/course-pack-43")))
+    root = Path(source or os.getenv("REBORN_COURSE_ROOT", str(ROOT / "data/course/legacy/course-pack-43")))
     if (root / "json").is_dir():
         root = root / "json"
 
@@ -63,6 +65,24 @@ def _import_course(db, source=None, *, content_root=None):
     if not chapters:
         raise ValueError("课程包必须至少包含一个章节")
     content = load_content(Path(content_root)) if content_root is not None else load_content()
+    from .models import StoryDefinition
+
+    # Legacy source IDs are never permission to overwrite live classroom rows.
+    incoming = (
+        (Chapter, [row["id"] for row in chapters]),
+        (KnowledgePoint, [row["id"] for row in kcs]),
+        (Material, [row["id"] for row in docs]),
+        (CourseExample, [row["id"] for row in examples]),
+        (Npc, [row["key"] for row in content["npcs"]]),
+        (Activity, [row["id"] for row in content["activities"]]),
+        (QuestDefinition, [row["id"] for row in content["quests"]]),
+        (StoryDefinition, [row["id"] for row in content["stories"]]),
+        (Question, [row["id"] for row in content["questions"]] + ["course-" + str(row["id"]) for row in problems]),
+    )
+    for model, keys in incoming:
+        primary = model.key if model is Npc else model.id
+        if keys and db.scalar(select(primary).where(model.course_instance_id.is_not(None), primary.in_(keys)).limit(1)) is not None:
+            raise ValueError("旧课程来源标识与班级课程冲突；请使用班级课程包预览和导入，不能用seed修改班级定义")
     chapter_ids = {chapter["id"] for chapter in chapters}
     if any(spec["chapter_id"] not in chapter_ids for key in ("activities", "quests", "stories") for spec in content[key]):
         raise ValueError("教学配置引用了课程包之外的章节")
@@ -72,8 +92,6 @@ def _import_course(db, source=None, *, content_root=None):
     current_activities = {item["id"] for item in content["activities"]}
     retired_quests = {item.id for item in db.scalars(select(QuestDefinition).where(
         QuestDefinition.owner_id.is_(None), QuestDefinition.chapter_id.in_(chapter_ids))) if item.id not in current_quests}
-    from .models import StoryDefinition
-
     current_stories = {item["id"] for item in content["stories"]}
     for story in db.scalars(select(StoryDefinition).where(StoryDefinition.chapter_id.in_(chapter_ids))):
         if story.quest_id in retired_quests or story.quest_id is None and story.id not in current_stories:

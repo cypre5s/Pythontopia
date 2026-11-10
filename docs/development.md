@@ -4,14 +4,14 @@
 
 ## 环境与数据隔离
 
-- 容器部署使用 Docker Engine / Docker Desktop 与 Compose v2。本机开发使用 Python 3.12 或 3.13、Node.js 22；依赖分别来自 `backend/requirements.lock` 和 `frontend/package-lock.json`。
+- 容器部署使用 Docker Engine / Docker Desktop 与 Compose v2。本机开发使用 Python 3.12 或 3.13、Node.js 22；依赖分别来自 `backend/requirements.lock` 、`frontend/package-lock.json`和`admin/package-lock.json`。
 - 只操作 `reborn`。不得复用 `main`、旧项目或生产的数据库、数据卷、对象存储前缀与凭据；不得自动合并 `main`。
 - 每个开发、演示或验收环境使用独立的 Compose 项目名、端口、数据库与存储。下文基础环境统一为 `pythontopia-reborn`，并显式传入环境文件。
 - 同一环境的启动、更新、导入、查看日志和停止，始终使用同一组 `--env-file`、`-p` 和 `-f` 参数。启用了开发工具或转换器的环境，后续更新也要保留对应 override / profile。
 - 环境文件、凭据、数据库备份、截图与 trace 放在忽略目录，不提交 Git。不要输出含凭据的完整 Compose 配置或数据库连接串。
 - 更新已有数据库前，备份该环境的数据库与私有文件存储，并确认恢复方法。日常停止用 `stop`；不要用 `down -v`、删除卷或清空账号来完成升级、排查或验收。
 
-下列 Compose 命令从仓库根目录执行；本机 Python 命令从 `backend` 执行，npm / Playwright 命令从 `frontend` 执行。
+下列 Compose 命令从仓库根目录执行；本机 Python 命令从 `backend` 执行，游戏npm / Playwright命令从`frontend`执行，后台命令从`admin`执行。
 
 ## Compose 首次启动、更新与停止
 
@@ -71,7 +71,7 @@ docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.ym
 docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml stop
 ```
 
-`stop` 保留账号、学习记录、成绩及数据库/存储卷。修改 `data/world/world.json` 等 API/Web 共同使用的地图配置时，同时重建 API 和 Web。
+`stop` 保留账号、学习记录、成绩及数据库/存储卷。修改 `shared/world/world.json` 等 API/Web 共同使用的地图配置时，同时重建 API 和 Web。
 
 ### 已存在环境的配置示例
 
@@ -126,49 +126,39 @@ npm run dev -- --host 127.0.0.1 --port 15174
 
 显式使用 `15174` 可与默认 CORS、Playwright 地址一致。`vite.config.ts` 未覆盖时的端口是 `5178`，`/api` 默认代理至 `http://127.0.0.1:18081`；不同 API 地址通过启动终端的 `API_PROXY` 设置。直接跨域调用 API 时同步配置 `REBORN_CORS_ORIGINS`。
 
-教师时间显示默认 `Asia/Shanghai`。本机前端在 `frontend/.env.local` 设置 `VITE_TIME_ZONE`，容器使用 `REBORN_TIME_ZONE` 构建参数；修改后重启开发前端或重建 Web。使用 IANA 时区名，服务端公开时间戳带 UTC 偏移。
+另开终端在`admin`执行`npm ci`和`npm run dev -- --host 127.0.0.1`，默认5179；游戏Vite将`/teacher`代理到该入口（ADMIN_PROXY可覆盖）。直接打开游戏同域的`/teacher/`，不要在游戏正在验收时重新安装依赖。
+
+教师时间显示默认 `Asia/Shanghai`。本机后台在`admin/.env.local`设置`VITE_TIME_ZONE`，容器使用 `REBORN_TIME_ZONE` 构建参数；修改后重启开发前端或重建 Web。使用 IANA 时区名，服务端公开时间戳带 UTC 偏移。
 
 ## YAML、媒体导入与数据库迁移
 
-### 同步当前教学配置
+### 转换旧课程并导入班级
 
-脚本入口为 `backend/content/chapters` 与 `backend/content/ambient`；当前唯一内置主线是 `arrival`（初来小镇：第一堂 Python 课），日常演出不增加主线。阅读范围、视频有效时长、重点、练习/测验和对白规则见[内容编写](content-authoring.md)。
+课程源不再纳入Git或镜像。已保留的私有旧来源通常位于`data/course/legacy/course-pack-43`（json/及媒体清单）和`data/course/legacy/content`（chapters/、ambient/、questions/）；其他机器须显式提供自己的合法来源。旧主线仍只有arrival，完整资源和知识点保留。
 
-在 `backend` 中显式校验并导入。源目录含json/，配置目录含chapters/、questions/、ambient/；容器须以只读挂载提供，不依赖镜像内固定课程：
-
-```powershell
-python -m app.chapter_content --check
-python -m alembic upgrade head
-python -m app.cli import-course --source ../data/course-pack-43 --content content
-```
-
-`--check` 校验来源，不写数据库；`import-course`按稳定ID显式更新当前配置，不创建教学内容历史版本，不清空学生进度与成绩。已导入的 PDF/视频不会因普通 seed 被替换回纯文本。不要通过改 ID 来模拟普通内容修改；删除或重排配置前，评估已有任务及学生证据的引用。`schema_version` 是 YAML 格式标识，测验草稿 `revision` 是并发控制字段，均不是内容版本管理。
-
-本机和Compose启动都不执行seed。编辑YAML或切换课程包后须显式导入；本地 `python -m app.seed` 仅为人工导入仓库演示包的简写。导入只写当前活动引用的题目，不创建archive-*题目活动；导入与后台保存使用章节关联和ActivityQuestion，不保留活动JSON题集副本。教师所有的内容ID冲突应拒绝，不能覆盖。格式与真实材料规则验证失败须回滚。
-
-### 导入课程43的真实材料包
-
-仓库保留课程 JSON、页面身份、清单与转录来源，PDF/视频原文件由操作者提供。先完成迁移与课程显式导入，再使用 `python -m app.course_media <材料包路径> --source-root <独立可信课程目录>` 导入。可信目录提供json、video_manifest.json与video_transcripts.json，不从待导入媒体包采信任意校验和。该命令核对完整包结构、哈希、PDF页数及原页面 ID，失败会回滚数据库修改；不要手工解压后直接覆盖存储文件。
-
-容器导入前，确认当前 API 镜像已构建，并暂停同一环境的 API/Web，保留数据库运行。将下面路径替换为实际材料包路径：
+在backend执行离线转换，不连接运行数据库；输出文件必须不存在：
 
 ```powershell
-$courseTrustedSource = (Resolve-Path 'E:\path\course-pack-43').Path
-$courseMediaArchive = (Resolve-Path 'E:\path\pythontopia-course-pack-43-media.tar.gz').Path
-docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml stop api web
-docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml run --rm --no-deps -v "${courseMediaArchive}:/tmp/course-pack-43-media.tar.gz:ro" -v "${courseTrustedSource}:/import/course-pack:ro" api python -m app.course_media /tmp/course-pack-43-media.tar.gz --source-root /import/course-pack
-docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml up -d --no-build api web
+python -m app.convert_legacy_course --source ../data/course/legacy/course-pack-43 --content ../data/course/legacy/content --output ../data/course/python-foundations.zip --package-id python-foundations-43 --name Python语言基础
 ```
 
-本机导入使用与 API 相同的数据库和存储环境变量，在暂停本机 API 后从 `backend` 运行导入命令，成功后重启。材料包的完整导入结果应为7份 PDF、561页、34个视频；这不是已经执行导入的证明，还需核对授权班级中的真实文件读取和播放。
+只有文本来源时产物明确为提取文本课程，不会伪造原PDF/视频。若持有已核查的原始媒体归档，可加`--media-archive <完整媒体包路径>`，转换器核对可信清单、哈希、PDF页数及原页面ID后一起封装。原包43文件含7份PDF和34段视频，561页只是该来源的规模，不是数据库固定要求。转换后所有章节默认暂停，教师导入后显式发布。
 
-PDF原位更新原材料，保留材料 ID、页面 ID 和页码；视频按清单身份幂等更新，作为章节资料。导入不新增主线、不修改班级开放安排，也不删除学生任务、阅读或成绩。浏览器中的可见材料仍受班级章节授权控制。
+打开`/teacher/`创建或选择班级，在课程包页上传ZIP，检查校验、差异和学习影响，确认导入。班级日常维护直接使用后台，更新后可完整导出到私有交换区；同课程更新保留稳定ID映射和学习证据，不能借重新导入重评旧成绩或解锁试卷。原文件缺失或转换未完成时不提供假完整导出。
+
+`python -m app.seed`和`python -m app.course_media`只用于受控旧来源维护/转换测试，默认来源可由REBORN_COURSE_ROOT与REBORN_CONTENT_ROOT指定，不能覆盖已归属班级实例的同ID数据，也不成为启动行为。既有班级升级用下方保留迁移；新班级使用完整包，无需先seed全局课程。
+
+### 私有交换区
+
+Compose将`${REBORN_COURSE_EXCHANGE_DIR:-../data/course}`绑定到API的`/app/data/course`，由REBORN_COURSE_EXCHANGE_ROOT指向。Linux部署需预先创建所选宿主目录并允许API用户UID/GID10001写入；仅调整明确的交换目录权限，不递归改动数据库或其他卷。Windows Docker Desktop按共享目录权限处理。data/不入Git，Docker上下文也排除它。
+
+imports/保存24小时有效的导入预览原ZIP，exports/保存导出产物；它们无公开URL。预览过期只是禁止激活，文件不会自动删除。维护者可在确认无有效预览/下载后另行清理旧交换文件，不能删除运行中的私有媒体卷。数据库、媒体与需要保留的交换包分别备份。
 
 ### 数据库结构升级
 
 操作目标始终使用 `python -m alembic upgrade head`，不要复制历史记录中的迁移 ID。既有升级链包含需要在线读取数据的迁移，不能以离线 `--sql` 输出替代实际升级。升级失败先看日志和备份，不手工修改 `alembic_version`，不盲目 downgrade 或新建空库掩盖问题。
 
-在新的独立验收数据库验证迁移与重复 seed：
+在新的独立验收数据库验证迁移与重复seed；先提供明确外部来源，或按下方检查节生成并设置合成测试来源：
 
 ```powershell
 python -m alembic upgrade head
@@ -181,7 +171,7 @@ python -m alembic check
 
 ## 开发工具
 
-“开发工具”位于现有小镇菜单，只有学生且服务端授权时显示。必须在 API 进程中同时显式设置 `REBORN_ENV=development` 与 `REBORN_DEV_TOOLS=1`；前端开发构建、localhost或只设置一个开关都不会启用它。生产不注册重置路由。
+普通学生的“开发工具”位于现有小镇菜单，由服务端授权。API 必须同时设置 `REBORN_ENV=development` 与 `REBORN_DEV_TOOLS=1` 才注册普通重置路由。教师从后台“进入小镇”取得本班的独立体验存档，其专用重置能力按身份和班级授权，使用单独接口。
 
 需要此工具的独立开发环境显式叠加 override：
 
@@ -247,7 +237,7 @@ docker build -t pythontopia-reborn-converter:local deploy/converter
 
 ### 基础检查
 
-前端从 `frontend` 执行：
+游戏从`frontend`、后台从`admin`分别执行以下完整检查：
 
 ```powershell
 npm ci
@@ -260,13 +250,16 @@ npm run build
 后端使用独立虚拟环境与锁文件，从 `backend` 执行：
 
 ```powershell
+$env:PYTHONUTF8 = "1"
+$env:PYTHONIOENCODING = "utf-8"
 python -m pip install -r requirements.lock
 python -m ruff check app tests
 python -m pytest -q --basetemp .pytest-local
-python -m app.chapter_content --check
 ```
 
-另在全新隔离数据库执行前述迁移与重复 seed 检查。PostgreSQL并发专项需要显式 `REBORN_TEST_DATABASE_URL`，测试会创建临时 schema 并清理，不能指向真实演示库或生产库。live Judge0测试需要 `REBORN_LIVE_JUDGE0_URL`，鉴权仍用 `REBORN_JUDGE0_AUTH_TOKEN`；未配置的外部专项应记录为跳过。
+Windows测试进程显式使用UTF-8，避免旧夹具的默认文本读取采用系统GBK；这些设置只影响当前终端及其子进程，不修改系统语言。pytest临时目录保持在项目忽略目录内。
+
+自动化测试使用backend/tests/source_fixtures.py生成的人工构造资料与tests/fixtures/teaching-scripts，不依赖私有原教材，也不能拿合成夹具声称原教材正确。显式执行来源工具或重复seed前，从仓库根运行`python backend/tests/source_fixtures.py`并将REBORN_COURSE_ROOT指向生成目录、REBORN_CONTENT_ROOT指向教学测试脚本。另在全新隔离数据库执行前述迁移与重复seed检查。PostgreSQL并发专项需要显式 `REBORN_TEST_DATABASE_URL`，测试会创建临时 schema 并清理，不能指向真实演示库或生产库。live Judge0测试需要 `REBORN_LIVE_JUDGE0_URL`，鉴权仍用 `REBORN_JUDGE0_AUTH_TOKEN`；未配置的外部专项应记录为跳过。
 
 地图/素材相关修改从仓库根检查：
 
@@ -289,9 +282,9 @@ git diff --check
 
 ### 浏览器环境与专项
 
-Playwright不会自动启动服务器。先准备已启动、已迁移/seed的独立验收环境和专用教师账号，设置 `E2E_URL`、`E2E_TEACHER_STUDENT_ID`、`E2E_TEACHER_PASSWORD`；跨教师权限用例另需 `E2E_OTHER_TEACHER_STUDENT_ID`、`E2E_OTHER_TEACHER_PASSWORD`。测试应自行创建班级与新学生，不复用真实演示记录。
+Playwright不会自动启动服务器。先准备独立验收数据库、媒体/交换目录及专用教师账号，设置E2E_URL、ADMIN_E2E_URL（同域入口）、E2E_TEACHER_STUDENT_ID、E2E_TEACHER_PASSWORD。跨教师权限另需E2E_OTHER_TEACHER_STUDENT_ID/PASSWORD。REBORN_E2E_COURSE_PACKAGE必须指向一个完整ZIP；学生用例先创建班级并显式导入，不回退全局课程或复用真实学生。
 
-复现Actions时对照 `.github/workflows/reborn.yml`，另建SQLite数据库，迁移并seed，配置两位专用教师，不导入课程媒体、不设置可选媒体/开发工具验收开关，再运行下方完整套件。导入PDF环境的几项专项通过不能代替CI的纯文本种子材料路径及全套回归。已撤销的活动/任务编辑入口不再用于准备数据：相关测试通过鉴权API创建私有测试定义，继续验证现有课程管理和学生流程；这不等于恢复或验收旧编辑页面。安装依赖须在启动Web及浏览器测试之前完成，运行中不要执行npm ci。
+复现CI按`.github/workflows/reborn.yml`生成合成旧来源、离线转换测试ZIP，再启动API、React和Vue。生成夹具不是提供真实教材。依赖在启动服务器前安装，浏览器运行期间不要执行npm ci。后台e2e在admin执行`npx playwright test --workers=1`；游戏按下方命令。两套都要跑，不能用后台布局验收替代学生完整主线。
 
 从 `frontend` 安装匹配浏览器并执行：
 
@@ -307,11 +300,11 @@ npm run test:e2e -- --project=desktop --workers=1
 | 唯一主线、刷新续玩、账号隔离 | `npx playwright test rebornJourney.spec.ts storyChapter.spec.ts --project=desktop --workers=1` |
 | 练习与不可重复整卷交卷 | `npx playwright test assessmentPaper.spec.ts --project=desktop --workers=1` |
 | 地图、工作区、焦点、200%字号 | `npx playwright test worldConfiguration.spec.ts uiUsability.spec.ts --project=desktop --workers=1` |
-| 真实课程媒体、学习规则、页面样式 | 已导入媒体，显式设置 `E2E_COURSE_MEDIA_IMPORTED=1`；运行 `npx playwright test courseMediaPack.spec.ts learningRules.spec.ts gameDesign.spec.ts townWorkspaces.spec.ts --project=desktop --workers=1` |
+| 真实课程媒体、学习规则、页面样式 | REBORN_E2E_COURSE_PACKAGE本身含真实PDF/视频，显式设置`E2E_COURSE_MEDIA_IMPORTED=1`；运行 `npx playwright test courseMediaPack.spec.ts learningRules.spec.ts gameDesign.spec.ts townWorkspaces.spec.ts --project=desktop --workers=1` |
 | 所有原始视频首帧 | 在媒体前置条件上额外设置 `E2E_ALL_COURSE_VIDEOS=1`，运行 `courseMediaPack.spec.ts`；首帧不代表完整逐段播放 |
 | 开发重置 | 隔离开发环境显式设置 `E2E_DEV_TOOLS=1`，运行 `devTools.spec.ts --grep-invert production`；只作用于测试创建的学生 |
 | 生产禁用开发工具 | 独立生产配置的 `E2E_PRODUCTION_URL`，及 `E2E_PRODUCTION_TEACHER_STUDENT_ID/PASSWORD`（缺省使用测试教师变量），运行 `devTools.spec.ts --grep production` |
-| 自制PPTX上传转换 | `E2E_PPTX_PATH` 指向明确提供的自制测试文件，转换服务就绪，运行 `presentationAuthoring.spec.ts` |
+| 自制PPTX上传转换 | `ADMIN_E2E_PPTX` 指向明确提供的自制测试文件，转换服务就绪，在admin运行`media.spec.ts` |
 
 表中简写的测试文件同样通过 `npx playwright test` 执行。缺少条件的用例可能跳过；不得把跳过、契约模拟或“服务可连通”记录为实际外部服务成功。
 
@@ -350,3 +343,30 @@ docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.ym
 ```
 
 导入操作复用同一数据库和文件卷；先完成数据库迁移，业务使用中另择维护时间导入。媒体包通过前述独立可信来源导入，不复制进镜像或前端公共目录。
+
+## 课程包离线清单预检
+
+该CLI只检查已解包、静止的私有目录中的manifest与资源清单，不连接数据库、不导入课程、不解压归档。运行前完成文件复制并停止其他进程修改该目录；这不是面向不可信并发写入者的上传隔离器。目标包布局见[内容规范](content-authoring.md#班级课程完整包设计)，原course-pack-43不是新格式，不能直接用作完整包。
+
+从backend目录，使用已安装requirements.lock的Python环境执行：
+
+```powershell
+python -m app.course_package --check 'E:/course-exchange/my-course'
+```
+
+路径仅示例，应改为自己准备的私有包目录；无需设置数据库或模型凭据。成功退出0，JSON包含preflight_ok=true、scope=manifest_and_assets、content_validated=false、importable=false及文件/资源数量。失败退出2，错误JSON写stderr；不会输出资源正文和私有答案。成功只表示本层校验通过，不允许据此激活或发布。
+
+当前字段、资源格式、限额及未覆盖范围见[预检契约](content-authoring.md#清单与资源预检契约)。
+
+## 既有班级的保留迁移
+
+在隔离数据库副本完成对账后，操作者可显式迁移选定班级的课程定义及学习引用。命令不在应用启动时执行；新空班不会自动继承演示课。执行前先备份所选数据库和私有媒体，等待进行中的助教回复及资料处理结束。
+
+```powershell
+python -m app.migrate_classroom_courses --check --classroom-id 12 --classroom-id 15
+python -m app.migrate_classroom_courses --apply --classroom-id 12 --classroom-id 15
+```
+
+`--check`在逐班回滚事务中实际演练复制与引用映射，不提交内容或学习记录；PostgreSQL序列号可能前进，因此不是绝对只读操作。`--apply`逐班事务提交，失败班级回滚并报告，其他已成功班级保留；重复执行报告`already_active`。确实需要选择全部旧班时用`--all-legacy`替代班级ID，不能把示例ID直接用于真实部署。报告仅含计数及状态，不含学生答案、凭据或私有正文。
+
+迁移后核对账号/成员、提交ID与成绩、锁卷凭据、阅读进度、任务证据和等待流程。课程实例中的定义由班级独立编辑；保留的旧来源行仅用于有界迁移，不应继续充当多个班级的共同编辑对象。

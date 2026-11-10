@@ -1,3 +1,4 @@
+import { importCourse } from "./courseFixture";
 import { answerStoryQuestions } from "./answerActivity";
 import { verifyDailyDialogue, verifyUnlockedDailyChoice } from "./dailyDialogue";
 import { test, expect, type Page } from "@playwright/test";
@@ -26,10 +27,11 @@ test("only configured arrival main quest completes and stays isolated across acc
     data: { name: `验收 ${testInfo.project.name} ${randomUUID().slice(0, 6)}` } });
   expect(classRes.status()).toBe(201);
   const classroom = await classRes.json();
+  const ids = await importCourse(request, teacher, classroom.id);
   expect(
     (
       await request.put(
-        `/api/teacher/classrooms/${classroom.id}/releases/179`,
+        `/api/teacher/classrooms/${classroom.id}/releases/${ids.chapter["179"]}`,
         { headers: teacher, data: { status: "published" } },
       )
     ).ok(),
@@ -60,18 +62,18 @@ test("only configured arrival main quest completes and stays isolated across acc
   };
   const status = async (q: string, n: string) =>
     (await world()).quests
-      .find((v: { id: string }) => v.id === q)
+      .find((v: { id: string }) => v.id === ids.quest[q])
       ?.nodes.find((v: { id: string }) => v.id === n)?.status;
   expect(
     (
       await request.get(
-        `/api/materials/187?classroom_id=${classroom.id}`,
+        `/api/materials/${ids.material["187"]}?classroom_id=${classroom.id}`,
         { headers: student },
       )
     ).status(),
   ).toBe(403);
-  expect((await world()).quests.filter((quest: { kind: string }) => quest.kind === "main").map((quest: { id: string }) => quest.id)).toEqual(["arrival"]);
-  expect((await world()).quests.find((quest: { id: string }) => quest.id === "arrival").title).toBe("初来小镇：第一堂 Python 课");
+  expect((await world()).quests.filter((quest: { kind: string }) => quest.kind === "main").map((quest: { id: string }) => quest.id)).toEqual([ids.quest.arrival]);
+  expect((await world()).quests.find((quest: { id: string }) => quest.id === ids.quest.arrival).title).toBe("初来小镇：第一堂 Python 课");
   await page.screenshot({
     path: testInfo.outputPath("world.png") });
   await page.getByRole("button", { name: "立即前往", exact: true }).click();
@@ -83,7 +85,7 @@ test("only configured arrival main quest completes and stays isolated across acc
   await finishTalk(page);
   await expect(page.getByRole("navigation", { name: "本章阅读目标" })).toBeVisible();
   for (const pageNo of [34, 42, 43]) {
-    const saved = page.waitForResponse(r => r.url().endsWith("/api/activities/ch1-lesson/progress") && r.request().method() === "POST" && r.request().postDataJSON().page_no === pageNo);
+    const saved = page.waitForResponse(r => r.url().endsWith(`/api/activities/${ids.activity["ch1-lesson"]}/progress`) && r.request().method() === "POST" && r.request().postDataJSON().page_no === pageNo);
     await page.getByRole("navigation", { name: "本章阅读目标" }).getByRole("button", { name: new RegExp("阅读第" + pageNo + "页$") }).click();
     expect((await saved).ok()).toBeTruthy();
   }
@@ -111,22 +113,22 @@ test("only configured arrival main quest completes and stays isolated across acc
   ], true);
   const endingLines = await finishTalk(page);
   expect(endingLines.join("\n")).toContain("继续巩固");
-  const paper = await (await request.get(`/api/activities/ch1-assessment/assessment?classroom_id=${classroom.id}`, { headers: student })).json();
+  const paper = await (await request.get(`/api/activities/${ids.activity["ch1-assessment"]}/assessment?classroom_id=${classroom.id}`, { headers: student })).json();
   expect(paper).toMatchObject({ score: 66, max_score: 100, completed: true });
   await expect.poll(() => status("arrival", "report")).toBe("complete");
-  await expect.poll(async () => (await world()).flags).toContain("library_unlocked");
+  await expect.poll(async () => (await world()).building_unlock).toContain("library");
   await page.screenshot({ path: testInfo.outputPath("chapter-one-complete.png") });
-  await verifyDailyDialogue(page, request, classroom.id, student, testInfo);
+  await verifyDailyDialogue(page, request, classroom.id, student, testInfo, ids.activity["ch1-assessment"]);
   // Opening another course chapter must not restore a retired built-in quest.
   const releaseOtherChapter = await request.put(
-    `/api/teacher/classrooms/${classroom.id}/releases/180`,
-    { headers: teacher, data: { status: "published", prerequisite_chapter_id: 179 } },
+    `/api/teacher/classrooms/${classroom.id}/releases/${ids.chapter["180"]}`,
+    { headers: teacher, data: { status: "published", prerequisite_chapter_id: ids.chapter["179"] } },
   );
   expect(releaseOtherChapter.ok()).toBeTruthy();
   await verifyUnlockedDailyChoice(page, testInfo);
   await page.reload({ waitUntil: "domcontentloaded" });
   await dismissArrival(page);
-  expect((await world()).quests.filter((quest: { kind: string }) => quest.kind === "main").map((quest: { id: string }) => quest.id)).toEqual(["arrival"]);
+  expect((await world()).quests.filter((quest: { kind: string }) => quest.kind === "main").map((quest: { id: string }) => quest.id)).toEqual([ids.quest.arrival]);
   await page.getByRole("button", { name: /任务日志/ }).click();
   expect(await page.getByRole("dialog", { name: "游戏工作区" }).count()).toBe(
     1,
@@ -166,8 +168,8 @@ test("only configured arrival main quest completes and stays isolated across acc
   await dismissArrival(page);
   await expect(page.locator(".world-hint")).not.toHaveText("", {
     timeout: 15000 });
-  expect((await world()).quests.filter((quest: { kind: string }) => quest.kind === "main").map((quest: { id: string }) => quest.id)).toEqual(["arrival"]);
-  expect((await world()).flags).toContain("library_unlocked");
+  expect((await world()).quests.filter((quest: { kind: string }) => quest.kind === "main").map((quest: { id: string }) => quest.id)).toEqual([ids.quest.arrival]);
+  expect((await world()).building_unlock).toContain("library");
   await page.getByRole("button", { name: "打开设置" }).click();
   await page.getByRole("button", { name: "退出账号", exact: true }).click();
   await page.getByRole("button", { name: "初次到访？注册居民证" }).click();
@@ -190,10 +192,10 @@ test("only configured arrival main quest completes and stays isolated across acc
     await request.get(`/api/world?classroom_id=${classroom.id}`, {
       headers: { Authorization: `Bearer ${nextToken}` } })
   ).json();
-  expect(nextWorld.flags).not.toContain("library_unlocked");
-  expect(nextWorld.quests.filter((quest: { kind: string }) => quest.kind === "main").map((quest: { id: string }) => quest.id)).toEqual(["arrival"]);
+  expect(nextWorld.building_unlock).not.toContain("library");
+  expect(nextWorld.quests.filter((quest: { kind: string }) => quest.kind === "main").map((quest: { id: string }) => quest.id)).toEqual([ids.quest.arrival]);
   expect(
-    nextWorld.quests.find((q: { id: string }) => q.id === "arrival").status,
+    nextWorld.quests.find((q: { id: string }) => q.id === ids.quest.arrival).status,
   ).toBe("active");
   expect(browserErrors).toEqual([]);
 });

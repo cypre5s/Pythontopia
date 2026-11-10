@@ -36,6 +36,42 @@ beforeEach(() => {
 afterEach(() => { vi.restoreAllMocks(); sessionStorage.clear(); document.body.replaceChildren(); });
 
 describe("server-owned chapter performance", () => {
+  it("routes a map interaction without inventing an NPC and opens a workspace only after acknowledgment", async () => {
+    const session = useSession();
+    const action: StoryView = { ...view(), npc_key: null, interaction_id: "shelf", node: {
+      id: "open", type: "action", action: "open_workspace", workspace: "library", text: "查看开放资料", speaker: "书架",
+    } };
+    const post = vi.spyOn(api, "post").mockResolvedValueOnce(action)
+      .mockRejectedValueOnce(new ApiError(409, "课程已更新"))
+      .mockResolvedValueOnce({ ...action, status: "ended", node: null, revision: 1 });
+    await session.interactStory("shelf", "object");
+    expect(post).toHaveBeenCalledWith("/story/interactions", { classroom_id: 2, interaction_id: "shelf" });
+    const wrapper = mount(DialogueLayer, { props: { actions: [], story: action }, attachTo: document.body });
+    expect(wrapper.text()).toContain("查看开放资料");
+    await expect(session.advanceStory()).rejects.toThrow("课程已更新");
+    expect(session.workspace).toBeNull();
+    await session.advanceStory();
+    expect(session.workspace).toEqual({ kind: "library" });
+    expect(post.mock.calls[1]?.[1]).toEqual(post.mock.calls[2]?.[1]);
+    wrapper.unmount();
+  });
+  it("does not open an old account's action and explicitly ends only the current flow", async () => {
+    const session = useSession();
+    session.story = { ...view(), npc_key: null, interaction_id: "sign", node: {
+      id: "open", type: "action", action: "open_workspace", workspace: "journal", text: "任务日志",
+    } };
+    const pending = deferred<StoryView>();
+    const post = vi.spyOn(api, "post").mockReturnValueOnce(pending.promise).mockResolvedValueOnce(view("ended", 2));
+    const changing = session.advanceStory();
+    session.classroomId = 3;
+    pending.resolve(view("ended", 1));
+    expect(await changing).toBe(false);
+    expect(session.workspace).toBeNull();
+    expect(session.story).toBeNull();
+    session.story = { ...view(), id: "current-class-story" };
+    await session.endStory();
+    expect(post).toHaveBeenLastCalledWith("/story/sessions/current-class-story/end", expect.objectContaining({ classroom_id: 3 }));
+  });
   it("keeps the authorized world usable when the previous chapter cannot be restored", async () => {
     const session = useSession();
     session.story = view("waiting", 4);

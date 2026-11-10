@@ -17,3 +17,4 @@ secrets
 **/playwright-report
 assets/inbox
 qa-screens
+data/

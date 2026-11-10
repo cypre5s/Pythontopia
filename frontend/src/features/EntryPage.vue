@@ -83,7 +83,8 @@ async function submit() {
       departing.value = true;
       await new Promise(resolve => setTimeout(resolve, 450));
     }
-    await router.push(result.user.role === "student" ? "/world" : "/teacher");
+    if (result.user.role === "student") await router.push("/world");
+    else window.location.assign("/teacher/");
   } catch (e) {
     endArrival();
     departing.value = false;

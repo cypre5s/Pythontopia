@@ -97,6 +97,8 @@ async function canvas() {
     setPaused: vi.fn(),
     setNpcs: vi.fn(),
     setFlags: vi.fn(),
+    setRuntime: vi.fn(),
+    setPlayer: vi.fn(),
     direction: vi.fn(),
     interact: vi.fn(),
     guide: vi.fn(),
@@ -120,6 +122,37 @@ async function canvas() {
 }
 
 describe("pending world interactions", () => {
+  it("persists the exact region entry tile before requesting its authorized flow", async () => {
+    const saved = deferred<void>();
+    const request = vi.spyOn(api, "request").mockReturnValue(saved.promise);
+    const session = useSession();
+    const interact = vi.spyOn(session, "interactStory").mockResolvedValue(true);
+    const { callbacks } = await canvas();
+    const position = { ...world().player, tile_x: 23 };
+    const pending = callbacks.enterRegion!("entry-strip", position);
+    await flushPromises();
+    expect(request).toHaveBeenCalledWith("/world/position", expect.objectContaining({ body: JSON.stringify({ classroom_id: 1, ...position }) }));
+    expect(interact).not.toHaveBeenCalled();
+    saved.resolve();
+    await pending;
+    expect(interact).toHaveBeenCalledWith("entry-strip", "object");
+  });
+  it("does not trigger a region when its position save failed or its account changed", async () => {
+    const session = useSession();
+    const interact = vi.spyOn(session, "interactStory").mockResolvedValue(true);
+    const request = vi.spyOn(api, "request").mockRejectedValueOnce(new Error("offline"));
+    const { callbacks } = await canvas();
+    await callbacks.enterRegion!("entry-strip", { ...world().player, tile_x: 23 });
+    expect(interact).not.toHaveBeenCalled();
+    const saved = deferred<void>();
+    request.mockReturnValueOnce(saved.promise);
+    const pending = callbacks.enterRegion!("entry-strip", { ...world().player, tile_x: 24 });
+    await flushPromises();
+    session.user = person(2);
+    saved.resolve();
+    await pending;
+    expect(interact).not.toHaveBeenCalled();
+  });
   it("drains pending position saves before the world is restarted", async () => {
     const saved = deferred<void>();
     const request = vi.spyOn(api, "request").mockReturnValue(saved.promise);

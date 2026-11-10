@@ -15,11 +15,11 @@
 | 编号 | 已确定要求与决策原因 | 细节归属 | 核对入口 |
 | --- | --- | --- | --- |
 | DATA-01 | 不保留教学内容快照、内容版本管理或给学生选择版本；采用当前配置，降低早期内容维护复杂度。`schema_version` 是格式，`revision` 是并发控制；试卷本人答案与判定凭据是学习证据，均不代表恢复内容版本。 | [架构](architecture.md)、[内容配置](content-authoring.md) | `backend/app/models.py`、`backend/tests/test_current_content_migration.py` |
-| DATA-02 | YAML 经校验后按稳定 ID 更新当前定义；保留账号、班级关系、任务历史、阅读进度、提交与成绩，不重新评分旧提交。正常重启可重复导入，删除当前定义与保留学生历史分别处理。 | [内容配置](content-authoring.md)、[开发手册](development.md) | `backend/app/seed.py`、`backend/tests/test_chapter_content.py`、`backend/tests/test_current_import.py` |
-| DATA-03 | 唯一内置主线是 `arrival`“初来小镇：第一堂 Python 课”；其他旧内置委托退出，不因开放其他章节复活。保留完整课程资源与教师自有任务，通用分支验证使用测试定义。 | [产品](product.md)、[内容配置](content-authoring.md) | `backend/content/chapters/`、`backend/tests/test_retired_tasks.py`、`frontend/e2e/rebornJourney.spec.ts` |
+| DATA-02 | YAML 经校验后按稳定 ID 更新当前定义；保留账号、班级关系、任务历史、阅读进度、提交与成绩，不重新评分旧提交。重启不自动导入，显式同课程更新可重复执行，删除当前定义与保留学生历史分别处理。 | [内容配置](content-authoring.md)、[开发手册](development.md) | `backend/app/seed.py`、`backend/tests/test_chapter_content.py`、`backend/tests/test_current_import.py` |
+| DATA-03 | 唯一内置主线是 `arrival`“初来小镇：第一堂 Python 课”；其他旧内置委托退出，不因开放其他章节复活。保留完整课程资源与教师自有任务，通用分支验证使用测试定义。 | [产品](product.md)、[内容配置](content-authoring.md) | `backend/app/course_exchange.py`、`backend/tests/test_retired_tasks.py`、`frontend/e2e/rebornJourney.spec.ts` |
 | DATA-04 | 接入真实材料包：7 份 PDF 替换学生纯文本课件展示，原材料 ID、561 页页面 ID 与页码保留；34 个视频先作为资料库补充材料，不新增主线或影响原任务、进度和成绩。后台提取文本继续用于检索与引用。 | [内容配置](content-authoring.md)、[架构](architecture.md) | `backend/app/course_media.py`、`backend/tests/test_course_media.py`、`frontend/e2e/courseMediaPack.spec.ts` |
 | DATA-05 | 全系统使用学号替代邮箱作为登录账号；学生注册、教师/管理员登录、账户展示、学生搜索和管理命令统一使用该字段。学号为1–32位数字字符串，保留前导零。普通迁移保留旧用户及证据，旧账号待分配真实学号；用户本轮另明确授权清空当前15176本地预览环境的全部旧账号及关联记录，不扩展至其他环境。 | [产品](product.md)、[架构](architecture.md)、[HTTP契约](api-contract.md)、[开发手册](development.md) | `backend/app/account_ids.py`、`backend/app/auth.py`、`backend/tests/test_student_id_auth.py`、`frontend/src/features/EntryPage.vue` |
-| DATA-06 | 首个管理员在首次部署时由环境变量创建，重启不覆盖已有密码；所有角色可修改自己的密码，注册与自助改密最低6位。教师可按学号创建/表格导入学生，重置本班学生密码为其学号，批量移出班级并保留账号和学业记录；初始/重置密码须先修改再学习。 | [产品](product.md)、[架构](architecture.md)、[HTTP契约](api-contract.md)、[开发手册](development.md) | `backend/app/bootstrap.py`、`backend/app/student_accounts.py`、`frontend/src/features/TeacherStudents.vue` |
+| DATA-06 | 首个管理员在首次部署时由环境变量创建，重启不覆盖已有密码；所有角色可修改自己的密码，注册与自助改密最低6位。教师可按学号创建/表格导入学生，重置本班学生密码为其学号，批量移出班级并保留账号和学业记录；初始/重置密码须先修改再学习。 | [产品](product.md)、[架构](architecture.md)、[HTTP契约](api-contract.md)、[开发手册](development.md) | `backend/app/bootstrap.py`、`backend/app/student_accounts.py`、`admin/src/pages/students.tsx` |
 | DATA-07 | 资料与题目独立管理，通过结构化关联归入多个章节，可先上传或录入再归类；资料不设“必读/补充”分类。活动继续定义具体阅读范围和完成条件。题目可供多个练习/测验引用，选题与顺序只有一个关系来源，成绩仍按活动隔离。 | [架构](architecture.md)、[内容配置](content-authoring.md)、[HTTP契约](api-contract.md) | 资料/题库模型、关系迁移、教师内容管理与学习接口 |
 | DATA-08 | 题目来源类型只保留“AI生成/导入”，后台手动录入归入导入；参考资料及页码为可选依据。草稿与可用/停用状态分开，未来AI出题进入审核流程；本轮不伪造真实AI生成能力。 | [内容配置](content-authoring.md)、[后台设计](design/teacher-interface.md) | 教师题库与来源字段 |
 | DATA-09 | 教学内容通过显式导入或后台维护，与程序更新解耦；启动不自动导入固定课程和归档旧题。保留现有数据库与私有文件持久卷。清理指定开发环境的废弃内容，当前第一堂课使用内容迁入新结构，正式提交和成绩不通过普通迁移删除。 | [架构](architecture.md)、[开发手册](development.md)、[验收记录](acceptance.md) | 显式课程导入、开发清理命令、独立环境与重启检查 |
@@ -29,14 +29,14 @@
 
 | 编号 | 已确定要求与决策原因 | 细节归属 | 核对入口 |
 | --- | --- | --- | --- |
-| LEARN-01 | 阅读、练习、测验等是活动；任务定义要完成的目标与依赖，剧情组织人物回应和活动进出。以 YAML 维护当前脚本，不另建必须使用的编辑器。 | [架构](architecture.md)、[内容配置](content-authoring.md) | `backend/app/quests.py`、`backend/app/story.py`、`backend/content/chapters/chapter01.yaml` |
+| LEARN-01 | 阅读、练习、测验等是活动；任务定义要完成的目标与依赖，剧情组织人物回应和活动进出。教师通过可视化流程与任务编辑器维护当前定义；YAML/JSONL作为课程交换格式，仍可显式校验导入。 | [架构](architecture.md)、[内容配置](content-authoring.md) | `backend/app/quests.py`、`backend/app/story.py`、`backend/app/world_authoring.py` |
 | LEARN-02 | YAML 可配置整份或指定页范围阅读、视频最低有效观看时长、重点页和重点片段。后端统一验证与累计证据，跳页、拖动播放位置不能冒充完成。 | [内容配置](content-authoring.md)、[HTTP 契约](api-contract.md) | `backend/app/learning_rules.py`、`backend/tests/test_learning_rules.py`、`frontend/e2e/learningRules.spec.ts` |
 | LEARN-03 | 学习目标展示真实阅读、练习或观看进度；阅读位置与目标完成度分开，参与记录不称为知识掌握率。保留原主线指定页与已有学习证据。 | [游戏设计](design/game-interface.md)、[产品](product.md) | `LearningSupportPanel.vue`、`backend/app/courses.py`、`frontend/e2e/storyChapter.spec.ts` |
 | LEARN-04 | 练习只用单题模式，提供上一题、下一题和侧栏目录跳转；每题“提交答案”，错误可改正后重新提交，跳题保留各题草稿和反馈。 | [游戏设计](design/game-interface.md)、[内容配置](content-authoring.md) | `PracticeWorkspace.vue`、`PracticeQuestionCard.vue`、`backend/tests/test_practice.py`、`frontend/e2e/assessmentPaper.spec.ts` |
 | LEARN-05 | 单元测验支持单题与整卷两种排版，共用答案；全部作答后从题目目录上方统一交卷。交卷后服务器锁卷，展示逐题对错，不能修改或绕过整卷接口逐题提交。 | [HTTP 契约](api-contract.md)、[游戏设计](design/game-interface.md) | `backend/app/assessments.py`、`backend/tests/test_assessments.py`、`frontend/e2e/assessmentPaper.spec.ts` |
 | LEARN-06 | 测验满分 100，按 `correct_count * 100 // total` 向下取整；未判完为 `null`，不能显示成 0 分。所有题目真实判定结束即完成测验，全对另行表示；错误答案不阻断一次性测验剧情，基础设施故障不算答错。 | [产品](product.md)、[HTTP 契约](api-contract.md) | `backend/app/assessments.py`、`backend/tests/test_assessments.py`、`frontend/e2e/rebornJourney.spec.ts` |
 | LEARN-07 | NPC 可按目标、任务、章节状态与真实测验分数回应；镇长结束回复区分成绩。条件组合、入口、分支与选项均受限并在服务端鉴权，显示过的选项提交时也要复验。 | [内容配置](content-authoring.md)、[架构](architecture.md) | `backend/app/story_conditions.py`、`backend/tests/test_story_enrichment.py`、`frontend/e2e/storyChapter.spec.ts` |
-| LEARN-08 | 任务结束后仍可进行脚本日常聊天，条件满足时出现更多选项。日常独立于任务，复用演出引擎；随机结果落入会话，恢复与幂等重试不重抽。当前 NPC 的可执行教学和等待活动优先；闲聊不新增任务、学习或成绩记录、世界解锁标记及 AI 调用。 | [内容配置](content-authoring.md)、[架构](architecture.md) | `backend/content/ambient/town-daily.yaml`、`backend/tests/test_story_enrichment.py`、`frontend/e2e/rebornJourney.spec.ts` |
+| LEARN-08 | 任务结束后仍可进行脚本日常聊天，条件满足时出现更多选项。日常独立于任务，复用演出引擎；随机结果落入会话，恢复与幂等重试不重抽。当前 NPC 的可执行教学和等待活动优先；闲聊不新增任务、学习或成绩记录、世界解锁标记及 AI 调用。 | [内容配置](content-authoring.md)、[架构](architecture.md) | `backend/app/story.py`、`backend/tests/test_story_enrichment.py`、`frontend/e2e/rebornJourney.spec.ts` |
 
 ## 学生界面
 
@@ -51,7 +51,7 @@
 | UI-07 | 学习资料页面只保留“小镇图书馆”主标题，按章节组织，侧边小目录、顶部搜索和类型筛选；返回恢复原列表状态，只展示已授权资料。 | [产品](product.md)、[游戏设计](design/game-interface.md) | `LibraryWorkspace.vue`、`frontend/e2e/townWorkspaces.spec.ts` |
 | UI-08 | 我的班级先介绍当前班级和本人学习进度，再提供切换班级与加入入口；切换成功后才替换当前状态，失败保留原班级。设置账户优先，按分类统一设置项，来源与许可归入关于，不再跳转班级或材料列表。 | [产品](product.md)、[游戏设计](design/game-interface.md) | `ClassroomPanel.vue`、`SettingsPanel.vue`、`frontend/e2e/townWorkspaces.spec.ts` |
 | UI-09 | 删除重复标题、无用计数、提交 UUID、作答长提示等干扰；保留真实错误、等待、冲突与权限信息。结果继续到学生主动确认，不能立即关闭反馈；放大文字后内容和必要操作仍清楚可达。 | [游戏设计](design/game-interface.md) | `PracticeQuestionCard.vue`、`frontend/e2e/assessmentPaper.spec.ts`、`frontend/e2e/uiUsability.spec.ts` |
-| UI-10 | 教师学生账号管理沿用shadcn后台风格，提供适合上百学生的分页、搜索、状态筛选、跨页选择与明确批量范围；左下角账号菜单提供修改密码弹窗和退出，移除独立密码导航页。暂不展示学习体验、活动与NPC、任务配置入口，后续另行决定。 | [后台设计](design/teacher-interface.md)、[产品](product.md) | `frontend/src/features/TeacherStudents.vue`、`frontend/src/components/admin/TeacherAccountMenu.vue` |
+| UI-10 | 教师后台统一采用 shadcn/ui Select、线型 Tabs 和 Table，列表上方有搜索与相关筛选。支持批量的表格勾选后显示操作范围，单条操作放在行尾。学生名册保留分页、跨页选择和批量确认，左下角账号菜单提供改密与退出。 | [后台设计](design/teacher-interface.md)、[产品](product.md) | `admin/src/pages/students.tsx`、`admin/src/components/ui` |
 
 ## 助教
 
@@ -65,7 +65,7 @@
 
 | 编号 | 已确定要求与决策原因 | 细节归属 | 核对入口 |
 | --- | --- | --- | --- |
-| DEV-01 | 开发重玩入口是现有菜单中的“开发工具”，不另造页面角落入口。仅同时设置 `REBORN_ENV=development` 和 `REBORN_DEV_TOOLS=1` 才有效，生产不注册重置路由，前端依据服务端能力显示。 | [开发手册](development.md)、[HTTP 契约](api-contract.md)、[游戏设计](design/game-interface.md) | `backend/app/dev_tools.py`、`backend/tests/test_dev_tools.py`、`frontend/e2e/devTools.spec.ts` |
+| DEV-01 | 重玩入口使用现有菜单中的“开发工具”，前端依据服务端能力显示。普通学生需同时设置 `REBORN_ENV=development` 和 `REBORN_DEV_TOOLS=1`，生产不注册普通开发重置路由。教师体验学生按 ADMIN-04 仅可重置自己的本班存档。 | [开发手册](development.md)、[HTTP 契约](api-contract.md)、[游戏设计](design/game-interface.md) | `backend/app/dev_tools.py`、`backend/tests/test_dev_tools.py`、`frontend/e2e/devTools.spec.ts` |
 | DEV-02 | 重玩需明确确认，只清认证学生在所选已加入班级的学习与成绩记录，保留账号、成员关系和教学配置；先等待保存与异步操作，保留失败信息。验收新建隔离学生，不能顺手清真实演示账号。 | [开发手册](development.md)、[HTTP 契约](api-contract.md) | `backend/app/dev_tools.py`、`frontend/src/shared/session.ts`、`frontend/e2e/devTools.spec.ts` |
 | DEV-03 | Git 提交标题和正文使用中文；保留无关本地修改。仅在 `reborn` 工作，不自动合并 `main`，不改旧库、旧卷或生产。许可和素材来源继续保留，不能编造授权或验收结论。 | [根协作约定](../AGENTS.md)、[开发手册](development.md) | 提交前分支、diff 与暂存范围复核；许可原文件 |
 | DEV-04 | 每轮同步需求及对应拥有文档，删除废弃代码和旧说法并检查引用。按变更运行适当验证；通过、失败、跳过、真实运行与契约测试分开记录，证据统一链接验收文档，不复制多套计数和部署状态。 | 本文、[开发手册](development.md)、[验收记录](acceptance.md) | 本文维护记录、对应规范、相关测试入口与实际验收证据 |
@@ -109,3 +109,47 @@
 2026-11-09远端浏览器修复复核（DATA-07–09、UI-10、DEV-03–04）：要求保持；依据CI实际可访问树修正独立题库select定位，PDF预览用可见关闭按钮退出并保留普通内容Escape覆盖。仅调整测试和验收/续做记录，未新增跳过、修改应用或教学数据；远端首轮失败与修复后结果分别记录于内容库验收节。
 
 2026-11-09验证收尾复核（DEV-03–04）：要求保持；代码提交6f5c930对应远端CI三项任务成功，真实浏览器14通过/10条件跳过，首轮失败保留。仅同步验收及续做结论，文档链接与diff检查通过；本笔文档提交不重复触发功能CI。
+
+2026-11-09本地预览运维复核（DATA-02、DATA-07–09、DEV-03–04）：要求保持。清理已归档的独立测试资源，快进 reborn，备份并升级本地预览；局部旧数据修复、迁移和 HTTP 验证结果见[本地预览更新核验](acceptance.md#本地预览更新核验-2026-11-09)。未重跑功能回归。
+
+2026-11-10本地测试账号清理复核（DATA-05–06、DEV-02–04）：要求保持。按用户明确授权备份并清空 15176 本地预览的教师、学生及关联记录，范围和核验见[本地预览账号清理核验](acceptance.md#本地预览账号清理核验-2026-11-10)。未重跑功能回归。
+
+2026-11-10本地预览启动复核（DATA-05–06、DEV-03–04）：要求保持。启动现有 15176 预览并创建一位教师，网页、健康接口和教师登录 API 均已核验，同步至[本地预览启动与教师登录核验](acceptance.md#本地预览启动与教师登录核验-2026-11-10)。未运行浏览器交互或全量功能回归。
+
+## 课程包要求
+
+以下记录2026-11-10用户确认并授权实施的课程体系；DATA-01–03、DATA-07–09、LEARN-01/08、UI-10及DEV-03–04继续约束实现。教师编辑器与后台重建统一按ADMIN-01–03实施，具体通过范围见验收记录。公共业务流程可包含显式受验证效果，纯日常对白仍遵守LEARN-08不写学习/解锁的边界。
+
+| 编号 | 已确认方向 | 规范归属与状态 |
+| --- | --- | --- |
+| PACK-01 | 完整包包含教学内容、活动、任务、公共/章节流程、课程交互及私有资源，固定地图结构随程序发布；课程数据移出Git，通过data/course私有挂载目录交换。 | [完整包设计](content-authoring.md#班级课程完整包设计)；data/course为私有交换区，固定世界资源由程序提供。 |
+| PACK-02 | 用公共流程组织持续交互，支持章节进度条件分支；NPC出现/建筑开放使用对象条件，持久解锁按建筑ID和学生班级隔离。 | 同上；不增加虚拟默认章节或恢复旧主线。 |
+| PACK-03 | 创建班级选择包，导入后独立编辑和导出。传输显示真实上传和下载进度，校验、应用与打包区分为独立阶段。同课程更新保留学习证据，不影响其他班级。已有学习记录的跨课程替换近期不支持。 | [内容规范](content-authoring.md#班级课程完整包设计)、[后台规范](design/teacher-interface.md) |
+
+2026-11-10课程包方案复核（PACK-01–03、DATA-01–03/07–09、LEARN-01/08、UI-10、DEV-03–04）：新增上述目标设计，现有数据保留与运行规则保持。同步内容、架构、产品、索引、续做和验收；React/Vue仅作可选技术评估，不形成框架迁移要求。验证与未执行范围见[文档核验](acceptance.md#课程包设计文档核验2026-11-10)。
+
+## 后台重建与课程升级实施要求
+
+2026-11-10用户进一步确认：采用React + TypeScript + shadcn/ui重建教师后台，学生游戏保留Vue + Phaser；保留业务规则、权限和数据，不要求迁移旧Vue组件包装。以数据模型及接口边界先行，按业务纵向完成后台与课程升级，不先完整翻译旧后台再做第二次大改。
+
+| 编号 | 已确认要求 | 规范归属 |
+| --- | --- | --- |
+| ADMIN-01 | 新教师后台采用独立React + shadcn/ui入口，与Vue游戏分别构建和加载；共享框架无关契约，不共享组件实例或样式重置。 | [架构](architecture.md#班级课程与前端边界)、[后台规范](design/teacher-interface.md) |
+| ADMIN-02 | 重新组织班级、课程内容、教学流程、课程包工作流；原后台组件不机械迁移。已验证业务、权限、账号行为和无障碍操作仍须保留；替代业务验收前不删除旧可用入口。 | [后台规范](design/teacher-interface.md) |
+| ADMIN-03 | 按[阶段计划](content-authoring.md#分阶段实施计划与验收标准)实施，每阶段有范围、验收与退场门槛。数据清理指归属/关系整理与保留迁移，不授权清空真实库、替换生产或自动删除旧数据。 | [内容规范](content-authoring.md#分阶段实施计划与验收标准)、[验收](acceptance.md) |
+| ADMIN-04 | 教师进入小镇时使用本教师、本班的独立体验学生，可以完成任务并保存进度。首次进入创建身份，再进入恢复存档。开发工具只允许重玩该体验存档，体验数据不计入正式学生名册和班级统计。 | [后台规范](design/teacher-interface.md)、[接口契约](api-contract.md#session-and-classes) |
+| ADMIN-05 | 教学流程四个标签共用左侧工具栏、右侧工作区和浮动属性。流程与任务可拖入积木并手动连线，入口可从左侧添加。流程按公共或章节选择，NPC 按地图位置选择，说话人也可自定义。地图使用游戏底图，校验问题说明原因和处理办法，可定位到相关内容。未保存状态放在保存旁，取消编辑经确认恢复最后保存。打开页面只配置目标，需要提示时先接对白。 | [后台规范](design/teacher-interface.md)、[内容规范](content-authoring.md) |
+
+本轮复核（2026-11-10，ADMIN-01–03、PACK-01–03、DATA-01–03/07–09、DEV-03–04）：React后台从可选评估变更为确认的重建方向，授权分阶段实施；本轮从P1课程包格式与资源只读预检开始，不将新框架、班级隔离、编辑器或完整导入导出标为已完成。同步根协作约定、内容、架构、后台设计、产品、接口、开发、索引、续做与验收。结果见[本轮核验](acceptance.md#后台重建与课程升级启动核验2026-11-10)。
+
+2026-11-10持续实施复核（ADMIN-01–03、PACK-01–03、DATA-01–03/07–09）：用户要求按完整计划持续推进，阶段完成不结束整体目标。P2班级实例、显式保留迁移与运行/教师作用域正在实现，React后台独立建设，P3包交换同步推进。新旧并存仅作为验收前过渡，不改变最终移除旧后台/来源运行路径的要求。当前不宣称全阶段完成，实际执行与限制统一见验收记录。
+
+2026-11-10全阶段完成复核（ADMIN-01–03、PACK-01–03、DATA-01–03/07–09、LEARN-01/07–08、UI-10、AI-02–03、DEV-02–04）：已按用户确认方向完成班级课程实例、私有完整包、公共/章节流程及地图配置边界、React后台和旧Vue后台退场；需求保持，原课程与学生证据保留，不恢复退休主线。同步内容、架构、API、产品、设计、开发、索引、根协作约定、验收和续做；独立review修正流程优先级、公共/日常能力与恢复锚点说明。锁依赖、代码/类型/构建、真实PG、双前端编译部署、学生与教师浏览器及文档检查的实际范围和跳过见[最终核验](acceptance.md#课程体系与react后台核验2026-11-10)。未更新既有预览/生产，未提交推送，未验证的外部服务与设备能力保持明确。
+
+2026-11-10预览重建复核（DEV-03–04、PACK-03）：按用户明确要求删除旧story-qa及本轮course验收容器，旧数据卷保留；新建pythontopia-preview-20261110和全新数据库/存储卷，重建双前端并导入真实文本课程、发布第一章和创建体验学生。要求保持，未改应用代码；运行核验见验收记录。
+
+2026-11-10教师后台批注复核（UI-10、ADMIN-02/04–05、PACK-03、DEV-01–04）。按批注统一下拉、标签、表格与操作范围，增加教师体验存档和课程包传输状态。采用 React Flow 编辑教学节点，打开页面的提示移至独立对白。同步后台与游戏设计、产品、架构、接口、内容、开发和许可文档。实际通过、环境失败与未覆盖范围见[本轮核验](acceptance.md#教师后台批注核验2026-11-10)。
+
+2026-11-10四标签编辑工作区复核（ADMIN-05、UI-10、DEV-04）。按批注更新 ADMIN-05，统一左侧工具和浮动属性，取消新增节点的自动连线，修复拖动闪烁，将未保存与取消编辑放在保存旁。同步后台界面规范和续做，实际范围见[本轮核验](acceptance.md#四标签编辑工作区核验2026-11-10)。
+
+2026-11-10教学流程校验与地图复核（ADMIN-05、LEARN-07–08、PACK-01、DEV-04）。按批注增加入口积木、两层流程与 NPC 选择、真实地图和可定位的校验。修复旧地图交互点崩溃和对白完成记录超长。继续保护进行中的学生会话及历史证据。同步后台界面规范、接口、验收与续做，实际结果见[本轮核验](acceptance.md#教学流程校验与地图核验2026-11-10)。

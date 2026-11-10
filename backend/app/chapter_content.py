@@ -2,13 +2,14 @@
 
 import argparse
 import json
+import os
 from pathlib import Path
 
 import yaml
 from yaml.constructor import ConstructorError
 from yaml.tokens import AliasToken, AnchorToken
 
-CONTENT_ROOT = Path(__file__).resolve().parents[1] / "content"
+CONTENT_ROOT = Path(__file__).resolve().parents[2] / "data" / "course" / "legacy" / "content"
 
 
 class ChapterLoader(yaml.SafeLoader):
@@ -62,8 +63,8 @@ def load_yaml(path: Path):
         raise ValueError(f"{path.name}: {exc}") from exc
 
 
-def load_content(root=CONTENT_ROOT):
-    root = Path(root)
+def load_content(root=None):
+    root = Path(root or os.getenv("REBORN_CONTENT_ROOT", str(CONTENT_ROOT)))
     bundles = [load_yaml(path) for path in sorted((root / "chapters").glob("*.yaml"))]
     questions = []
     for path in sorted((root / "questions").glob("*.yaml")):
@@ -110,7 +111,7 @@ def load_content(root=CONTENT_ROOT):
                 quests=sorted(quests, key=lambda q: q["id"]), stories=stories, questions=questions)
 
 
-def validate_sources(root=CONTENT_ROOT):
+def validate_sources(root=None):
     from .dialogues import validate_dialogue
     from .quests import validate_definition
     from .story import validate_story
@@ -148,6 +149,6 @@ def validate_sources(root=CONTENT_ROOT):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Validate chapter YAML sources (no database writes).")
     parser.add_argument("--check", action="store_true", help="Validate chapter sources and print counts")
-    parser.add_argument("--content", type=Path, default=CONTENT_ROOT, help="External YAML content directory")
+    parser.add_argument("--content", type=Path, default=None, help="External YAML content directory")
     args = parser.parse_args()
     print(json.dumps(validate_sources(args.content), ensure_ascii=False))

@@ -6,6 +6,14 @@ from functools import lru_cache
 from .config import ROOT
 
 DIRECTIONS = {"up", "down", "left", "right"}
+PORTRAITS = frozenset(f"/assets/pixel/portraits/galgame/{name}.png" for name in (
+    "arena_guard", "class_president", "coach_q", "foreman_bug", "librarian_doc", "mayor_py",
+    "mine_keeper", "professor", "sage_review", "student_a", "workshop_master",
+))
+
+
+def valid_portrait(value):
+    return isinstance(value, str) and (value == "" or value in PORTRAITS)
 
 
 def _string(value, limit=100):
@@ -172,7 +180,7 @@ def validate_world_config(config):
 
 @lru_cache(maxsize=1)
 def load_world_config():
-    path = ROOT / "data" / "world" / "world.json"
+    path = ROOT / "shared" / "world" / "world.json"
     return validate_world_config(json.loads(path.read_text(encoding="utf-8-sig")))
 
 

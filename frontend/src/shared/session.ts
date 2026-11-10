@@ -63,6 +63,7 @@ export const useSession = defineStore("session", () => {
     if (resetBusy.value) return false;
     if (!user.value?.dev_tools_enabled || user.value.role !== "student") throw new Error("开发工具不可用。");
     const owner = user.value.id, classroom = classroomId.value, token = api.token();
+    const path = user.value.town_preview ? "/teacher-town/progress/reset" : "/dev/progress/reset";
     if (!classroom || !classes.value.some(item => item.id === classroom)) throw new Error("请先选择已加入的班级。");
     const generation = ++restartGeneration, previousWorld = world.value;
     const current = () => generation === restartGeneration && user.value?.id === owner && classroomId.value === classroom && api.token() === token;
@@ -80,7 +81,7 @@ export const useSession = defineStore("session", () => {
       classroomSwitchGeneration++;
       world.value = null;
       await nextTick();
-      const result = await api.post<{ ok: boolean; user_id: number; classroom_id: number }>("/dev/progress/reset", { classroom_id: classroom, confirmed: true });
+      const result = await api.post<{ ok: boolean; user_id: number; classroom_id: number }>(path, { classroom_id: classroom, confirmed: true });
       if (!current()) return false;
       if (!result.ok || result.user_id !== owner || result.classroom_id !== classroom) throw new Error("重新开始的结果与当前账号或班级不一致，请刷新后核对。");
       try {
@@ -242,11 +243,11 @@ export const useSession = defineStore("session", () => {
       else throw error;
     }
   }
-  async function interactStory(npcKey: string) {
-    if (!hasStory.value) return false;
+  async function interactStory(target: string, kind: "npc" | "object" = "npc") {
+    if (!hasStory.value && kind === "npc") return false;
     try {
       await storyRequest(
-        () => api.post<StoryView>("/story/interactions", { classroom_id: classroomId.value, npc_key: npcKey }),
+        () => api.post<StoryView>("/story/interactions", { classroom_id: classroomId.value, ...(kind === "npc" ? { npc_key: target } : { interaction_id: target }) }),
         applyStory,
       );
       return true;
@@ -255,7 +256,7 @@ export const useSession = defineStore("session", () => {
       throw error;
     }
   }
-  async function mutateStory(action: "advance" | "return", choice?: string) {
+  async function mutateStory(action: "advance" | "return" | "end", choice?: string) {
     const currentStory = story.value;
     if (!currentStory || storyBusy.value) return false;
     const key = `${currentStory.id}:${currentStory.revision}:${action}:${choice ?? ""}`;
@@ -266,10 +267,17 @@ export const useSession = defineStore("session", () => {
         classroom_id: classroomId.value, event_id: eventId, revision: currentStory.revision,
         ...(choice ? { choice } : {}),
       }),
-      (view) => { pendingStoryMutation = null; applyStory(view); },
+      (view) => {
+        pendingStoryMutation = null;
+        applyStory(view);
+        const node = currentStory.node;
+        if (action === "advance" && node?.type === "action" && node.action === "open_workspace" && node.workspace && view.status !== "waiting")
+          open({ kind: node.workspace });
+      },
     );
   }
   function advanceStory(choice?: string) { return mutateStory("advance", choice); }
+  function endStory() { return mutateStory("end"); }
   function saveActivityProgress(activityId: string, pageNo: number): Promise<ActivityProgress> {
     const owner = user.value?.id, classroom = classroomId.value, generation = storyGeneration;
     latestReading = { activityId, pageNo };
@@ -397,6 +405,7 @@ export const useSession = defineStore("session", () => {
     restoreStory,
     interactStory,
     advanceStory,
+    endStory,
     returnStoryActivity,
     saveActivityProgress,
     dismissStory,

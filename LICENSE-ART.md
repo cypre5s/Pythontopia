@@ -347,7 +347,7 @@ R-14「世界收缩方案 A」之后，用户判定原 Kenney tiny-town + ULPC �
   否则本项属于「有口头确认、无书面凭据」的合规缺口。
 - 切片：`scripts/build_srw_assets.py`（配 `scripts/png_io.py` 最小 PNG 解码器）
   从源包切到 `frontend/public/assets/pixel/`，全量 **约 158 KB**，并回写
-  `frontend/src/game/config/srwAssets.config.ts`（运行时清单）与
+  `shared/world/srwAssets.config.ts`（运行时清单）与
   `scripts/generate-maps.mjs` 的 `SRW_ATLAS` 块（地图生成器图集表）。
 
 | 运行时路径 | 来源 | License | 用途 |

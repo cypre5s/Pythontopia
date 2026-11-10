@@ -93,5 +93,96 @@ def test_collapse_versions_preserves_grades_and_merges_reading_history(existing_
     refused = migrate(url, "downgrade", "b63e1a4920d7", check=False)
     # The newest identity migration also deliberately refuses destructive downgrade.
     assert refused.returncode != 0 and any(message in refused.stderr for message in (
-        "Cannot reconstruct single-owner content relationships", "Cannot reconstruct removed content versions", "Email identities cannot be reconstructed"))
+        "Cannot reconstruct single-owner content relationships", "Cannot reconstruct removed content versions", "Email identities cannot be reconstructed",
+        "Class-owned definitions cannot be merged losslessly", "Generic interaction sessions and building unlock evidence",
+        "Downgrading teacher town saves requires restoring an isolated backup"))
     engine.dispose()
+
+
+def test_open_story_resumes_after_checkpoint_evidence_migration(existing_database):
+    from fastapi.testclient import TestClient
+    from sqlalchemy.orm import Session
+    from app.auth import issue
+    from app.db import get_db
+    from app.main import app
+    from app.models import Chapter, ChapterRelease, Classroom, CourseInstance, LearningEvent, Membership, Npc, QuestDefinition, StoryDefinition, User, WorldFlag
+    from app.quests import validate_definition
+    from app.story import validate_story
+
+    url, engine_factory = existing_database
+    migrate(url, "upgrade", "5a3d09d4c2b1")
+    engine = engine_factory()
+    assert next(column for column in inspect(engine).get_columns("world_flags") if column["name"] == "key")["type"].length == 100
+    try:
+        with Session(engine, expire_on_commit=False) as db:
+            teacher = User(student_id="81001", name="Teacher", role="teacher", password_hash="test-only")
+            student = User(student_id="81002", name="Student", role="student", password_hash="test-only")
+            db.add_all([teacher, student])
+            db.flush()
+            classroom = Classroom(name="Checkpoint migration", teacher_id=teacher.id, join_code="checkpoint-test")
+            db.add(classroom)
+            db.flush()
+            course = CourseInstance(classroom_id=classroom.id, package_id="checkpoint-test", name="Checkpoint test", package_version="1")
+            db.add(course)
+            db.flush()
+            chapter = Chapter(course_instance_id=course.id, stable_id="chapter", title="Chapter", order_index=1)
+            npc = Npc(key="n" * 80, stable_id="librarian", course_instance_id=course.id, name="Librarian", map_key="town_hub", tile_x=22, tile_y=36)
+            db.add_all([chapter, npc])
+            db.flush()
+            cid, sid = classroom.id, student.id
+            db.add_all([Membership(classroom_id=cid, user_id=sid), ChapterRelease(classroom_id=cid, chapter_id=chapter.id, status="published"),
+                        WorldFlag(classroom_id=cid, user_id=sid, key="kept-before-upgrade")])
+            story_id, goal_id = "s" * 100, "g" * 100
+            marker = f"story:{story_id}:{goal_id}"
+            definition = {"id": "checkpoint-quest", "chapter_id": chapter.id, "title": "Librarian dialogue", "kind": "side", "effects": [],
+                          "nodes": [{"id": goal_id, "type": "TALK_TO_NPC", "target": npc.key, "title": "Talk", "dependencies": []}]}
+            content = {"schema_version": 1, "mode": "task", "bindings": {},
+                       "entries": {npc.key: [{"when": {"always": True}, "node": "choice"}]},
+                       "nodes": [{"id": "choice", "type": "dialogue", "text": "Read the next line?", "checkpoint": goal_id,
+                                  "choices": [{"id": "yes", "label": "Continue", "next": "after"}, {"id": "no", "label": "Later", "next": "end"}]},
+                                 {"id": "after", "type": "dialogue", "text": "The choice advanced.", "next": "end"}, {"id": "end", "type": "end"}]}
+            validate_definition(definition, db)
+            validate_story(content, db, definition, story_id)
+            db.add(QuestDefinition(id=definition["id"], stable_id="checkpoint-quest", course_instance_id=course.id, chapter_id=chapter.id,
+                                   title=definition["title"], definition=definition))
+            db.add(StoryDefinition(id=story_id, stable_id="librarian-flow", course_instance_id=course.id, chapter_id=chapter.id,
+                                   quest_id=definition["id"], content=content))
+            db.commit()
+            headers = {"Authorization": "Bearer " + issue(db, student)["access_token"]}
+
+        def override_db():
+            with Session(engine, expire_on_commit=False) as db:
+                yield db
+
+        previous = dict(app.dependency_overrides)
+        app.dependency_overrides[get_db] = override_db
+        try:
+            client = TestClient(app, raise_server_exceptions=False)
+            response = client.post("/api/story/interactions", headers=headers, json={"classroom_id": cid, "npc_key": npc.key})
+            assert response.status_code == 200, response.text
+            session = response.json()
+            assert session["node"]["id"] == "choice"
+            path = f"/api/story/sessions/{session['id']}/advance"
+            choice = {"classroom_id": cid, "revision": session["revision"], "event_id": str(uuid4()), "choice": "yes"}
+            if engine.dialect.name == "postgresql":
+                # Reproduce the reported request on the same session before upgrading the column.
+                assert client.post(path, json=choice, headers=headers).status_code == 500
+            engine.dispose()
+            migrate(url, "upgrade", "head")
+            assert next(column for column in inspect(engine).get_columns("world_flags") if column["name"] == "key")["type"].length == 320
+            resumed = client.get(f"/api/story/current?classroom_id={cid}", headers=headers)
+            assert resumed.status_code == 200 and resumed.json()["revision"] == session["revision"]
+            result = client.post(path, json=choice, headers=headers)
+            assert result.status_code == 200, result.text
+            assert result.json()["node"]["id"] == "after"
+            assert client.post(path, json=choice, headers=headers).json()["revision"] == result.json()["revision"]
+            with Session(engine) as db:
+                assert db.get(WorldFlag, (sid, cid, "kept-before-upgrade"))
+                assert db.get(WorldFlag, (sid, cid, f"dialogue:completed:{npc.key}:{marker}"))
+                assert [event.evidence for event in db.scalars(select(LearningEvent))] == [{"npc_key": npc.key, "dialogue_id": marker}]
+        finally:
+            app.dependency_overrides.clear()
+            app.dependency_overrides.update(previous)
+            client.close()
+    finally:
+        engine.dispose()

@@ -1,0 +1,162 @@
+.flow-canvas-shell {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--background);
+}
+.authoring-flow-workspace .flow-canvas-shell {
+  flex: 1;
+  height: 100%;
+  border: 0;
+  border-radius: inherit;
+}
+.authoring-flow-workspace .flow-arrange-panel {
+  top: 52px;
+}
+@media (max-width: 620px) {
+  .authoring-flow-workspace .flow-arrange-panel {
+    top: 0;
+  }
+}
+.flow-palette {
+  display: grid;
+  align-content: start;
+  gap: 7px;
+}
+.flow-palette-heading {
+  font-weight: 650;
+}
+.flow-palette-hint {
+  margin-bottom: 3px;
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.flow-palette-block {
+  min-height: 32px;
+  width: 100%;
+  justify-content: start;
+  background: var(--flow-node-tint, #f1f4f2);
+  color: var(--flow-node-ink, #2e503d);
+  border-color: color-mix(in oklch, currentColor 16%, transparent);
+  cursor: grab;
+}
+.flow-palette-block:hover {
+  background: color-mix(in oklch, var(--flow-node-tint, #f1f4f2), currentColor 8%);
+  color: var(--flow-node-ink, #2e503d);
+}
+.flow-palette-block:active,
+.react-flow__node.dragging .flow-card {
+  cursor: grabbing;
+}
+.flow-viewport {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  height: clamp(470px, 60vh, 820px);
+  background: #f3f6f4;
+}
+.flow-viewport .react-flow {
+  --xy-background-pattern-dots-color-default: #a9b8af;
+  --xy-edge-stroke-default: #6e8778;
+  --xy-edge-stroke-selected-default: #274f39;
+  --xy-edge-stroke-width-default: 2;
+  --xy-connectionline-stroke-default: #315e46;
+  --xy-connectionline-stroke-width-default: 2;
+  --xy-controls-button-background-color-default: #fff;
+  --xy-controls-button-background-color-hover-default: #eaf0eb;
+  --xy-minimap-background-color-default: #fff;
+  --xy-minimap-mask-background-color-default: #d8e1db99;
+  --xy-minimap-node-background-color-default: #7d9686;
+}
+.flow-viewport .react-flow__controls-button {
+  width: 34px;
+  height: 34px;
+}
+.flow-viewport .react-flow__controls-button:focus-visible {
+  outline: 2px solid #315e46;
+  outline-offset: -2px;
+}
+.flow-viewport .react-flow__minimap {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.flow-card {
+  --flow-node-tint: #e8efeb;
+  --flow-node-ink: #2e503d;
+  width: 206px;
+  border: 1px solid #c1ccc5;
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: 0 2px 6px #23342218;
+  cursor: grab;
+}
+.flow-card.is-selected, .react-flow__node:focus-visible .flow-card {
+  border-color: #315e46;
+  outline: 2px solid #315e46;
+  outline-offset: 2px;
+}
+.flow-card[data-kind="entry"] { --flow-node-tint: #e3eee8; --flow-node-ink: #22543b; }
+:is(.flow-card, .flow-palette-block)[data-kind="dialogue"] { --flow-node-tint: #e7eef7; --flow-node-ink: #2b5085; }
+:is(.flow-card, .flow-palette-block)[data-kind="branch"] { --flow-node-tint: #fbefdf; --flow-node-ink: #7d491d; }
+:is(.flow-card, .flow-palette-block)[data-kind="activity"] { --flow-node-tint: #ede8f5; --flow-node-ink: #573987; }
+:is(.flow-card, .flow-palette-block)[data-kind="action"] { --flow-node-tint: #e5f0f2; --flow-node-ink: #205965; }
+:is(.flow-card, .flow-palette-block)[data-kind="unlock_building"] { --flow-node-tint: #e6f0e4; --flow-node-ink: #32602e; }
+:is(.flow-card, .flow-palette-block)[data-kind="random"] { --flow-node-tint: #f7e8ee; --flow-node-ink: #78354f; }
+:is(.flow-card, .flow-palette-block)[data-kind="end"] { --flow-node-tint: #eee; --flow-node-ink: #484848; }
+.flow-card header {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 34px;
+  padding: 4px 8px 4px 10px;
+  border-radius: 8px 8px 0 0;
+  color: var(--flow-node-ink);
+  background: var(--flow-node-tint);
+  font-size: 12px;
+  font-weight: 650;
+}
+.flow-card-inspect {
+  margin-inline-start: auto;
+  color: inherit;
+}
+.flow-card-title {
+  margin: 0;
+  padding: 9px 10px;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 550;
+}
+.flow-card-port {
+  position: relative;
+  display: flex;
+  justify-content: end;
+  padding: 2px 14px 2px 8px;
+  font-size: 11px;
+  color: #45594e;
+}
+.flow-card-port:last-child { margin-bottom: 5px; }
+.flow-card-port span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.flow-card .react-flow__handle {
+  width: 13px;
+  height: 13px;
+  border: 2px solid #fff;
+  background: var(--flow-node-ink);
+}
+.flow-card .react-flow__handle.connectable { cursor: crosshair; }
+.flow-card .react-flow__handle.valid { background: #31945c; }
+.canvas-help {
+  margin: 0;
+  padding: 9px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--muted-foreground);
+  font-size: 12px;
+}

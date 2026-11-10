@@ -10,18 +10,17 @@ from conftest import make_question
 
 
 def test_current_seed_exposes_only_authored_arrival(client, db, student, teacher, classroom):
-    seed(db)
-    seed(db)
     definitions = list(db.scalars(select(QuestDefinition).where(QuestDefinition.owner_id.is_(None))))
     assert [(item.id, item.title) for item in definitions] == [("arrival", "初来小镇：第一堂 Python 课")]
     response = client.get(f"/api/world?classroom_id={classroom['id']}", headers=student["headers"])
     assert response.status_code == 200
     assert [item["id"] for item in response.json()["quests"]] == ["arrival"]
-    assert [item["id"] for item in client.get("/api/teacher/quests", headers=teacher["headers"]).json()] == ["arrival"]
+    assert [item["id"] for item in client.get("/api/teacher/quests", headers=teacher["headers"], params={"classroom_id": classroom["id"]}).json()] == ["arrival"]
     assert client.get(f"/api/activities/archive-476?classroom_id={classroom['id']}", headers=student["headers"]).status_code == 404
 
 
-def test_reimport_retires_removed_shared_tasks_and_preserves_owned_tasks_and_grades(client, db, student, teacher, classroom):
+def test_legacy_source_reimport_preserves_owned_tasks_and_grades(client, db, student, teacher, legacy_classroom):
+    classroom = legacy_classroom
     retired_id = "retired-shared-task"
     definition = {"id": retired_id, "title": "Retired teaching task", "chapter_id": 180,
                   "nodes": [{"id": "talk", "type": "TALK_TO_NPC", "title": "Talk", "target": "professor", "dependencies": []}]}
@@ -63,8 +62,7 @@ def test_reimport_retires_removed_shared_tasks_and_preserves_owned_tasks_and_gra
     assert db.get(Activity, activity.id).content["published"] is False
     assert db.scalar(select(StorySession).where(StorySession.story_id == "retired-story")).status == "ended"
     response = client.get(f"/api/world?classroom_id={classroom['id']}", headers=student["headers"])
-    assert response.status_code == 200
-    assert retired_id not in [item["id"] for item in response.json()["quests"]]
+    assert response.status_code == 409  # Explicit migration is required before serving old sources.
     details = client.get(f"/api/teacher/classrooms/{classroom['id']}/students/{student['id']}", headers=teacher["headers"])
     assert details.status_code == 200
     assert event_id in [item["id"] for item in details.json()["events"]]

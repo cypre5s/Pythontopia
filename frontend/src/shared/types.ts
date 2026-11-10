@@ -4,6 +4,7 @@ export interface User {
   name: string;
   role: string;
   dev_tools_enabled?: boolean;
+  town_preview?: boolean;
   must_change_password?: boolean;
 }
 export interface Classroom {
@@ -29,6 +30,7 @@ export interface Dialogue {
 }
 export interface Npc {
   key: string;
+  stable_id?: string;
   name: string;
   map_key: string;
   tile_x: number;
@@ -73,6 +75,25 @@ export interface World {
   quests: Quest[];
   chapters: Chapter[];
   flags: string[];
+  interactions?: CourseInteraction[];
+  building_access?: Record<string, BuildingAccess>;
+  building_unlock?: string[];
+}
+export interface BuildingAccess {
+  enabled: boolean;
+  unlocked: boolean;
+  can_enter: boolean;
+  blocked_message: string;
+}
+export interface CourseInteraction {
+  id: string;
+  label: string;
+  prompt: string;
+  trigger: "click" | "enter";
+  map_key: string;
+  target: { object_id: string } | { region: { x: number; y: number; width: number; height: number } };
+  points: { map_key: string; tile_x: number; tile_y: number }[];
+  radius: number;
 }
 export interface Page {
   id: string | number;
@@ -135,12 +156,13 @@ export interface ActivityProgress {
   max_score?: 100;
 }
 export interface StoryView {
-  mode?: "task" | "ambient";
+  mode?: "task" | "ambient" | "public";
   id: string;
   revision: number;
   status: "active" | "waiting" | "ended";
-  npc_key: string;
-  node: Dialogue | null;
+  npc_key: string | null;
+  interaction_id?: string | null;
+  node: (Dialogue & { type?: "dialogue" | "action"; action?: "open_workspace" | "enter_building"; workspace?: "library" | "journal" | "classroom"; building_id?: string }) | null;
   activity: { id: string; kind: string; page_no?: number | null } | null;
   world?: World;
 }

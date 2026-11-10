@@ -1,3 +1,4 @@
+import { importCourse, courseIds, scopedTeacher } from "./courseFixture";
 import { test, expect, type APIResponse } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
@@ -16,31 +17,34 @@ test("practice corrections and a locked whole assessment share the question dire
   const teacher = await json<Identity>(await request.post("/api/auth/login", { data: { student_id, password } }));
   const headers = { Authorization: `Bearer ${teacher.access_token}` };
   const classroom = await json<{ id: number; join_code: string }>(await request.post("/api/classrooms", { headers, data: { name: `试卷验收 ${tag}` } }));
-  await json(await request.put(`/api/teacher/classrooms/${classroom.id}/releases/179`, { headers, data: { status: "published" } }));
+  let ids = await importCourse(request, headers, classroom.id);
+  await json(await request.put(`/api/teacher/classrooms/${classroom.id}/releases/${ids.chapter["179"]}`, { headers, data: { status: "published" } }));
   for (const [id, kind] of [[practiceId, "practice"], [examId, "assessment"]]) {
-    await json(await request.post("/api/teacher/activities", { headers, data: { id, chapter_id: 179, title: `TEST ${kind} ${tag}`, kind, npc_key: "arena_guard", assistant_allowed: false } }));
+    await json(await request.post(scopedTeacher("/api/teacher/activities", classroom.id), { headers, data: { id, chapter_id: ids.chapter["179"], title: `TEST ${kind} ${tag}`, kind, npc_key: ids.npc.arena_guard, assistant_allowed: false } }));
     for (const [index, question] of [
       { title: "判断", kind: "boolean", answer: true },
       { title: "填空", kind: "fill", answer: "done" },
       ...(kind === "assessment" ? [{ title: "选择", kind: "single_choice", answer: "乙", options: ["甲", "乙"] }] : []),
     ].entries()) {
-      await json(await request.post("/api/teacher/questions", { headers, data: { ...question, id: `${id}-q${index}`, chapter_ids: [179], source_type: "imported", status: "ready", prompt: "Self-authored acceptance question; not course content." } }));
+      await json(await request.post(scopedTeacher("/api/teacher/questions", classroom.id), { headers, data: { ...question, id: `${id}-q${index}`, chapter_ids: [ids.chapter["179"]], source_type: "imported", status: "ready", prompt: "Self-authored acceptance question; not course content." } }));
     }
-    const question_ids = Array.from({ length: kind === "assessment" ? 3 : 2 }, (_, index) => `${id}-q${index}`);
-    await json(await request.put(`/api/teacher/activities/${id}/questions`, { headers, data: { question_ids } }));
+    ids = await courseIds(request, headers, classroom.id);
+    const question_ids = Array.from({ length: kind === "assessment" ? 3 : 2 }, (_, index) => ids.question[`${id}-q${index}`]);
+    await json(await request.put(scopedTeacher(`/api/teacher/activities/${ids.activity[id]}/questions`, classroom.id), { headers, data: { question_ids } }));
   }
   const questTitle = `TEST 试卷流程 ${tag}`;
-  await json(await request.post("/api/teacher/quests", { headers, data: { definition: { id: questId, title: questTitle, chapter_id: 179, kind: "side", nodes: [
-    { id: "practice", type: "COMPLETE_PRACTICE", title: "TEST 逐题练习", activity_id: practiceId, dependencies: [] },
-    { id: "assessment", type: "PASS_ASSESSMENT", title: "TEST 整卷测验", activity_id: examId, dependencies: [] },
+  await json(await request.post(scopedTeacher("/api/teacher/quests", classroom.id), { headers, data: { definition: { id: questId, title: questTitle, chapter_id: ids.chapter["179"], kind: "side", nodes: [
+    { id: "practice", type: "COMPLETE_PRACTICE", title: "TEST 逐题练习", activity_id: ids.activity[practiceId], dependencies: [] },
+    { id: "assessment", type: "PASS_ASSESSMENT", title: "TEST 整卷测验", activity_id: ids.activity[examId], dependencies: [] },
   ], effects: [] } } }));
+  ids = await courseIds(request, headers, classroom.id);
   const identity = await json<Identity>(await request.post("/api/auth/register", { data: { name: "试卷验收居民", student_id: BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString(), password: `Resident-${randomUUID()}` } }));
   const student = { Authorization: `Bearer ${identity.access_token}` };
   await json(await request.post("/api/classrooms/join", { headers: student, data: { join_code: classroom.join_code } }));
-  const readPaper = () => request.get(`/api/activities/${examId}/assessment?classroom_id=${classroom.id}`, { headers: student }).then(json<Paper>);
+  const readPaper = () => request.get(`/api/activities/${ids.activity[examId]}/assessment?classroom_id=${classroom.id}`, { headers: student }).then(json<Paper>);
   const nodeState = async (nodeId: string) => {
     const world = await json<{ quests: { id: string; nodes: { id: string; status: string }[] }[] }>(await request.get(`/api/world?classroom_id=${classroom.id}`, { headers: student }));
-    return world.quests.find(quest => quest.id === questId)!.nodes.find(node => node.id === nodeId)!.status;
+    return world.quests.find(quest => quest.id === ids.quest[questId])!.nodes.find(node => node.id === nodeId)!.status;
   };
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));
@@ -105,13 +109,13 @@ test("practice corrections and a locked whole assessment share the question dire
   await panel.getByRole("button", { name: "展开侧边栏", exact: true }).click();
   await expect(panel.getByLabel("填写答案", { exact: true })).toHaveValue("done");
   await directory.getByRole("button").nth(2).click();
-  await expect(panel.locator(`[data-question-id="${examId}-q2"]`)).toBeInViewport({ ratio: .8 });
+  await expect(panel.locator(`[data-question-id="${ids.question[`${examId}-q2`]}"]`)).toBeInViewport({ ratio: .8 });
   await page.screenshot({ path: info.outputPath("assessment-paper-draft.png"), animations: "disabled" });
   await panel.getByRole("button", { name: "关闭当前工作区", exact: true }).click();
   await open("TEST 整卷测验");
   await panel.getByRole("button", { name: "试卷模式", exact: true }).click();
   await expect(panel.getByLabel("填写答案", { exact: true })).toHaveValue("done");
-  const submitted = page.waitForResponse(response => response.url().endsWith(`/activities/${examId}/assessment/submit`) && response.request().method() === "POST");
+  const submitted = page.waitForResponse(response => response.url().endsWith(`/activities/${ids.activity[examId]}/assessment/submit`) && response.request().method() === "POST");
   await panel.getByRole("button", { name: "提交试卷", exact: true }).click();
   const receipt = await submitted;
   const locked = await receipt.json() as Paper;
@@ -126,9 +130,9 @@ test("practice corrections and a locked whole assessment share the question dire
   for (const input of await panel.locator(".practice-question-card input").all()) await expect(input).toBeDisabled();
   await expect(panel.getByRole("button", { name: "提交试卷", exact: true })).toHaveCount(0);
   await expect.poll(() => nodeState("assessment")).toBe("complete");
-  expect((await request.post(`/api/activities/${examId}/assessment/submit`, { headers: student, data: { classroom_id: classroom.id, idempotency_key: randomUUID(), answers: locked.answers } })).status()).toBe(409);
-  expect((await request.put(`/api/activities/${examId}/assessment`, { headers: student, data: { classroom_id: classroom.id, revision: locked.revision, answers: [] } })).status()).toBe(409);
-  expect((await request.post("/api/submissions", { headers: student, data: { classroom_id: classroom.id, activity_id: examId, question_id: `${examId}-q2`, idempotency_key: randomUUID(), mode: "submit", answer: "乙" } })).status()).toBeGreaterThanOrEqual(400);
+  expect((await request.post(`/api/activities/${ids.activity[examId]}/assessment/submit`, { headers: student, data: { classroom_id: classroom.id, idempotency_key: randomUUID(), answers: locked.answers } })).status()).toBe(409);
+  expect((await request.put(`/api/activities/${ids.activity[examId]}/assessment`, { headers: student, data: { classroom_id: classroom.id, revision: locked.revision, answers: [] } })).status()).toBe(409);
+  expect((await request.post("/api/submissions", { headers: student, data: { classroom_id: classroom.id, activity_id: ids.activity[examId], question_id: ids.question[`${examId}-q2`], idempotency_key: randomUUID(), mode: "submit", answer: "乙" } })).status()).toBeGreaterThanOrEqual(400);
   expect((await readPaper()).correct_count).toBe(2);
   await page.screenshot({ path: info.outputPath("assessment-locked-result.png"), animations: "disabled" });
   expect(errors).toEqual([]);

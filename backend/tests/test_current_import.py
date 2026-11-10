@@ -6,11 +6,14 @@ from uuid import uuid4
 from sqlalchemy import select
 
 from app import seed as importer
-from app.models import Activity, ActivityProgress, LearningRecord, Material, NodeState, PlayerQuest, Question, QuestionSecret, StoryDefinition, Submission
+from app.models import Activity, ActivityProgress, Classroom, LearningRecord, Material, NodeState, PlayerQuest, Question, QuestionSecret, StoryDefinition, Submission
 
 
-def test_reimport_updates_current_content_without_erasing_progress(db, student, classroom, monkeypatch):
-    cid = classroom["id"]
+def test_reimport_updates_current_sources_without_erasing_legacy_progress(db, student, teacher, monkeypatch):
+    classroom = Classroom(name="Unmigrated legacy", teacher_id=teacher["id"], join_code=uuid4().hex[:20])
+    db.add(classroom)
+    db.flush()
+    cid = classroom.id
     quest = PlayerQuest(user_id=student["id"], classroom_id=cid, quest_id="arrival", status="complete")
     db.add(quest)
     db.flush()

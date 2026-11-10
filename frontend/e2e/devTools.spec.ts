@@ -1,9 +1,10 @@
+import { importCourse, type CourseIds } from "./courseFixture";
 import { test, expect, type APIRequestContext, type APIResponse, type Page, type Response } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
 type Headers = { Authorization: string };
 interface Identity { access_token: string; user: { id: number; name: string; dev_tools_enabled: boolean }; }
-interface Classroom { id: number; name: string; join_code: string; }
+interface Classroom { id: number; name: string; join_code: string; ids: CourseIds; }
 interface World {
   player: { map_key: string; tile_x: number; tile_y: number };
   flags: string[];
@@ -55,7 +56,8 @@ async function register(request: APIRequestContext, base: string, label: string)
 async function createClass(request: APIRequestContext, base: string, teacher: Identity, label: string) {
   const api = client(request, base, teacher);
   const classroom = await api.post<Classroom>("/classrooms", { name: `开发工具验收${label} ${randomUUID().slice(0, 8)}` });
-  await api.put(`/teacher/classrooms/${classroom.id}/releases/179`, { status: "published" });
+  classroom.ids = await importCourse(request, headers(teacher), classroom.id, base);
+  await api.put(`/teacher/classrooms/${classroom.id}/releases/${classroom.ids.chapter["179"]}`, { status: "published" });
   return classroom;
 }
 
@@ -64,17 +66,17 @@ async function establishEvidence(request: APIRequestContext, base: string, ident
   const api = client(request, base, identity);
   await api.post("/classrooms/join", { join_code: classroom.join_code });
   const world = await api.get<World>(`/world?classroom_id=${classroom.id}`);
-  const mayor = world.npcs.find(npc => npc.key === "mayor_py")!;
+  const mayor = world.npcs.find(npc => npc.key === classroom.ids.npc.mayor_py)!;
   await api.put("/world/position", { classroom_id: classroom.id, map_key: mayor.map_key, tile_x: mayor.tile_x, tile_y: mayor.tile_y, direction: "down" });
   let story = await api.post<Story>("/story/interactions", { classroom_id: classroom.id, npc_key: mayor.key });
   for (let step = 0; step < 8 && story.status === "active"; step++) {
     story = await api.post<Story>(`/story/sessions/${story.id}/advance`, { classroom_id: classroom.id, revision: story.revision, event_id: randomUUID() });
   }
   expect(story.status).toBe("ended");
-  const lesson = await api.get<Activity>(`/activities/ch1-lesson?classroom_id=${classroom.id}`);
+  const lesson = await api.get<Activity>(`/activities/${classroom.ids.activity["ch1-lesson"]}?classroom_id=${classroom.id}`);
   const page = lesson.material!.pages.find(value => lesson.completion!.required_page_ids.includes(value.id))!.page_no;
-  await api.post("/activities/ch1-lesson/progress", { classroom_id: classroom.id, page_no: page });
-  const practice = await api.get<Activity>(`/activities/ch1-practice?classroom_id=${classroom.id}`);
+  await api.post(`/activities/${classroom.ids.activity["ch1-lesson"]}/progress`, { classroom_id: classroom.id, page_no: page });
+  const practice = await api.get<Activity>(`/activities/${classroom.ids.activity["ch1-practice"]}?classroom_id=${classroom.id}`);
   const question = practice.questions.find(value => value.kind === "single_choice" && value.options?.includes("抽象与自动化"))!;
   expect(question).toBeDefined();
   const submission = await api.post<{ id: string; status: string }>("/submissions", {
@@ -94,8 +96,8 @@ function cache(identity: Identity, classroom: Classroom, evidence: Evidence): Ca
       [`read:${scope}:material-${evidence.material}`]: "1",
       [`read:${scope}:material-${evidence.material}:pdf`]: String(evidence.page),
       [`read:${scope}:material-${evidence.material}:video`]: "12",
-      [`assistant:${scope}:ch1-lesson`]: evidence.assistant,
-      [`library-view:${scope}`]: JSON.stringify({ query: "计算", type: "lesson", chapter: 179, scroll: 85 }),
+      [`assistant:${scope}:${classroom.ids.activity["ch1-lesson"]}`]: evidence.assistant,
+      [`library-view:${scope}`]: JSON.stringify({ query: "计算", type: "lesson", chapter: classroom.ids.chapter["179"], scroll: 85 }),
       [`library-scroll:${scope}`]: "85",
     },
   };
@@ -271,8 +273,8 @@ test("development reset clears only the confirmed student's selected classroom a
   const restarted = await mine.get<World>(`/world?classroom_id=${first.id}`);
   expect(restarted.player).toMatchObject({ map_key: "town_hub", tile_x: 22, tile_y: 36 });
   expect(restarted.flags).toEqual([]);
-  expect(restarted.quests.filter(quest => quest.kind === "main").map(quest => quest.id)).toEqual(["arrival"]);
-  const arrival = restarted.quests.find(quest => quest.id === "arrival")!;
+  expect(restarted.quests.filter(quest => quest.kind === "main").map(quest => quest.id)).toEqual([first.ids.quest.arrival]);
+  const arrival = restarted.quests.find(quest => quest.id === first.ids.quest.arrival)!;
   expect(arrival.nodes).toHaveLength(8);
   expect(arrival.nodes.filter(node => node.status === "complete")).toHaveLength(0);
   expect(arrival.nodes.find(node => node.id === "welcome")!.status).toBe("ready");

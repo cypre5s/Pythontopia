@@ -28,12 +28,12 @@ async function choose(page: Page, view: DailyView, choiceId?: string) {
   return { view: await received.json() as DailyView, requestBody: received.request().postDataJSON() };
 }
 
-export async function verifyDailyDialogue(page: Page, request: APIRequestContext, classroomId: number, headers: Record<string, string>, info: TestInfo) {
+export async function verifyDailyDialogue(page: Page, request: APIRequestContext, classroomId: number, headers: Record<string, string>, info: TestInfo, assessmentId: string) {
   const state = async () => {
     const world = await (await request.get(`/api/world?classroom_id=${classroomId}`, { headers })).json();
-    const paper = await (await request.get(`/api/activities/ch1-assessment/assessment?classroom_id=${classroomId}`, { headers })).json();
+    const paper = await (await request.get(`/api/activities/${assessmentId}/assessment?classroom_id=${classroomId}`, { headers })).json();
     const ai = await (await request.get("/api/assistant/status", { headers })).json();
-    return { quests: world.quests, flags: world.flags, paper, modelCalls: ai.model_calls };
+    return { quests: world.quests, flags: world.flags, buildingUnlock: world.building_unlock, paper, modelCalls: ai.model_calls };
   };
   const before = await state();
   const menu = await meetMayor(page);

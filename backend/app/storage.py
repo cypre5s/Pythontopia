@@ -28,7 +28,8 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from .auth import current_user, require_teacher
 from .db import SessionLocal, get_db
-from .models import Activity, Chapter, Material, Question, User
+from .teacher_scope import teacher_instance_id, require_scope, new_stable_id, commit_content
+from .models import Activity, Chapter, CourseInstance, Material, Question, User
 from .integration_models import AssistantSession
 from .content_relations import material_chapter_ids, set_material_chapters
 
@@ -133,7 +134,7 @@ def validate_upload(path: Path, suffix: str):
         raise HTTPException(415, "仅支持 PDF、PPT/PPTX、MP4/WebM 和 UTF-8 文本")
     if suffix == ".pdf" and not header.startswith(b"%PDF-"):
         raise HTTPException(415, "PDF 文件签名无效")
-    if suffix == ".ppt" and not header.startswith(bytes.fromhex("d0cf11e0a1b11e1")):
+    if suffix == ".ppt" and not header.startswith(bytes.fromhex("d0cf11e0a1b11ae1")):
         raise HTTPException(415, "PPT 文件签名无效")
     if suffix == ".pptx":
         try:
@@ -164,7 +165,9 @@ async def upload_material(
     file: Annotated[UploadFile, File()],
     material_id: Annotated[int | None, Form()] = None,
     chapter_ids: Annotated[str | None, Form()] = None,
+    classroom_id: int | None = None,
 ):
+    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
     name = file.filename or ""
     if not name or "/" in name or "\\" in name or ":" in name or len(name) > 200 or not title.strip() or len(title) > 200:
         raise HTTPException(422, "文件名或标题无效")
@@ -181,10 +184,12 @@ async def upload_material(
         except (ValueError, TypeError):
             raise HTTPException(422, "chapter_ids 必须是有效的章节ID JSON数组")
         for chapter_id in selected_chapters:
-            authoring_chapter(db, user, chapter_id)
+            authoring_chapter(db, user, chapter_id, instance_id)
     material = db.scalar(select(Material).where(Material.id == material_id).with_for_update()) if material_id else None
     if material_id and (not material or (material.owner_id != user.id and user.role != "admin")):
         raise HTTPException(403, "只能更新自己上传的资料")
+    if material:
+        require_scope(material, instance_id)
     if material and material.kind != KINDS[suffix]:
         raise HTTPException(422, "替换文件必须保留材料类型")
     if material and selected_chapters is not None:
@@ -205,7 +210,7 @@ async def upload_material(
         key = f"materials/{uuid4().hex}{suffix}"
         await asyncio.to_thread(get_storage().put, key, path)
     if not material:
-        material = Material(title=title.strip(), kind=KINDS[suffix], owner_id=user.id)
+        material = Material(title=title.strip(), kind=KINDS[suffix], owner_id=user.id, course_instance_id=instance_id, stable_id=new_stable_id())
         db.add(material)
         db.flush()
     if selected_chapters is not None:
@@ -216,18 +221,19 @@ async def upload_material(
     material.storage_key = key
     material.content = {"filename": name, "size": size, "sha256": digest.hexdigest(), "pages": []}
     try:
-        db.commit()
+        commit_content(db, instance_id)
     except IntegrityError:
         db.rollback()
         raise HTTPException(409, "资料同时更新，请刷新后重试")
     return {"id": material.id, "status": material.status, "title": material.title}
 
 
-def teacher_material(db, user, material_id, *, edit=False):
+def teacher_material(db, user, material_id, *, edit=False, instance_id=None):
     query = select(Material).where(Material.id == material_id)
     material = db.scalar(query.with_for_update() if edit else query)
     if not material:
         raise HTTPException(404, "资料不存在")
+    require_scope(material, instance_id)
     if user.role != "admin" and material.owner_id not in ({user.id} if edit else {None, user.id}):
         raise HTTPException(403, "无权访问或编辑此资料")
     return material
@@ -259,21 +265,24 @@ def validate_material_links(db, material_id, chapter_ids):
 
 
 @router.get("/teacher/materials")
-def teacher_materials(user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)]):
-    query = select(Material)
+def teacher_materials(user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)], classroom_id: int | None = None):
+    instance_id = teacher_instance_id(db, user, classroom_id)
+    query = select(Material).where(Material.course_instance_id == instance_id)
     if user.role != "admin":
         query = query.where(Material.owner_id.is_(None) | (Material.owner_id == user.id))
     return [teacher_material_payload(db, material, user) for material in db.scalars(query.order_by(Material.id))]
 
 
 @router.get("/teacher/materials/{material_id}")
-def teacher_material_preview(material_id: int, user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)]):
+def teacher_material_preview(material_id: int, user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)], classroom_id: int | None = None):
+    instance_id = teacher_instance_id(db, user, classroom_id)
     from .courses import material_payload
 
-    material = teacher_material(db, user, material_id)
+    material = teacher_material(db, user, material_id, instance_id=instance_id)
     result = material_payload(db, material, chapter_ids=teacher_material_chapters(db, material, user))
     result["owner_id"] = material.owner_id
-    result["media_url"] = f"/api/teacher/materials/{material.id}/file" if material.storage_key and material.status == "ready" else None
+    scope_query = f"?classroom_id={classroom_id}" if classroom_id is not None else ""
+    result["media_url"] = f"/api/teacher/materials/{material.id}/file{scope_query}" if material.storage_key and material.status == "ready" else None
     return result
 
 
@@ -297,24 +306,26 @@ class MaterialUpdate(BaseModel):
 
 
 @router.put("/teacher/materials/{material_id}")
-def update_material(material_id: int, body: MaterialUpdate, user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)]):
+def update_material(material_id: int, body: MaterialUpdate, user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)], classroom_id: int | None = None):
+    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
     from .curriculum import authoring_chapter
 
-    material = teacher_material(db, user, material_id, edit=True)
+    material = teacher_material(db, user, material_id, edit=True, instance_id=instance_id)
     if "chapter_ids" in body.model_fields_set:
         for chapter_id in body.chapter_ids:
-            authoring_chapter(db, user, chapter_id)
+            authoring_chapter(db, user, chapter_id, instance_id)
         validate_material_links(db, material.id, body.chapter_ids)
         set_material_chapters(db, material.id, body.chapter_ids)
     if "title" in body.model_fields_set:
         material.title = body.title
-    db.commit()
+    commit_content(db, instance_id)
     return teacher_material_payload(db, material, user)
 
 
 @router.delete("/teacher/materials/{material_id}")
-def delete_material(material_id: int, user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)]):
-    material = teacher_material(db, user, material_id, edit=True)
+def delete_material(material_id: int, user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)], classroom_id: int | None = None):
+    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
+    material = teacher_material(db, user, material_id, edit=True, instance_id=instance_id)
     if (db.scalar(select(Activity).where(Activity.material_id == material.id).limit(1))
             or db.scalar(select(AssistantSession).where(AssistantSession.material_id == material.id).limit(1))
             or any(question.source.get("material_id") == material.id for question in db.scalars(select(Question)))):
@@ -322,7 +333,7 @@ def delete_material(material_id: int, user: Annotated[User, Depends(require_teac
     set_material_chapters(db, material.id, [])
     db.delete(material)
     try:
-        db.commit()
+        commit_content(db, instance_id)
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(409, "资料已被引用，请刷新后重试") from exc
@@ -363,8 +374,9 @@ def material_file(
 
 
 @router.get("/teacher/materials/{material_id}/file")
-def teacher_material_file(material_id: int, request: Request, user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)]):
-    return stream_material(teacher_material(db, user, material_id), request)
+def teacher_material_file(material_id: int, request: Request, user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)], classroom_id: int | None = None):
+    instance_id = teacher_instance_id(db, user, classroom_id)
+    return stream_material(teacher_material(db, user, material_id, instance_id=instance_id), request)
 
 
 def stream_material(item, request):
@@ -552,13 +564,24 @@ def convert_presentation(source: Path, tmp: Path) -> Path:
     return result
 
 
+def _material_course_lock(db, material_id):
+    from .course_scope import lock_course
+
+    instance = db.scalar(select(CourseInstance).join(Material, Material.course_instance_id == CourseInstance.id)
+                         .where(Material.id == material_id))
+    if instance:
+        lock_course(db, instance.classroom_id)
+    return instance.id if instance else None
+
+
 def process_material(material_id: int):
     with SessionLocal() as db:
+        instance_id = _material_course_lock(db, material_id)
         claimed = db.execute(
             update(Material).where(Material.id == material_id, Material.status == "queued")
             .values(status="processing").returning(Material.storage_key, Material.content)
         ).first()
-        db.commit()
+        commit_content(db, instance_id if claimed else None)
         if not claimed:
             return
         key, content = claimed
@@ -584,17 +607,27 @@ def process_material(material_id: int):
         status = "failed"
         error = str(exc) if isinstance(exc, ValueError) else "资料处理失败，请检查存储或处理依赖"
     with SessionLocal() as db:
+        instance_id = _material_course_lock(db, material_id)
         # A replacement upload may have arrived while this file was processing.
         # The unique storage key identifies the claimed file, without retaining history.
-        db.execute(update(Material).where(
+        result = db.execute(update(Material).where(
             Material.id == material_id, Material.storage_key == key, Material.status == "processing"
         ).values(status=status, error=error, content=metadata))
-        db.commit()
+        commit_content(db, instance_id if result.rowcount else None)
 
 
 def _recover_material_jobs():
     with SessionLocal() as db:
-        db.execute(update(Material).where(Material.status == "processing").values(status="queued"))
+        from .course_scope import lock_course
+
+        instances = list(db.scalars(select(CourseInstance).join(Material, Material.course_instance_id == CourseInstance.id)
+                                   .where(Material.status == "processing").distinct().order_by(CourseInstance.classroom_id)))
+        for instance in instances:
+            lock_course(db, instance.classroom_id)
+        changed = list(db.scalars(update(Material).where(Material.status == "processing").values(status="queued")
+                                 .returning(Material.course_instance_id)))
+        for key in set(changed) - {None}:
+            db.execute(update(CourseInstance).where(CourseInstance.id == key).values(revision=CourseInstance.revision + 1))
         db.commit()
 
 

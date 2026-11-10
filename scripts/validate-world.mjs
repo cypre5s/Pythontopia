@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const config = JSON.parse(fs.readFileSync(path.join(root, 'data/world/world.json'), 'utf8'));
+const config = JSON.parse(fs.readFileSync(path.join(root, 'shared/world/world.json'), 'utf8'));
 const errors = [];
 let totalReachable = 0, totalBuildings = 0, totalObjects = 0;
 const reachable = new Map();

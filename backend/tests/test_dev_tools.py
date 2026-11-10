@@ -21,8 +21,10 @@ from app.models import (
     ActivityProgress,
     AssessmentAttempt,
     AuthSession,
+    BuildingUnlock,
     ChapterRelease,
     Classroom,
+    CourseInstance,
     LearningEvent,
     LearningRecord,
     Membership,
@@ -38,7 +40,7 @@ from app.world_config import load_world_config
 
 RESET_PATH = "/api/dev/progress/reset"
 RESET_MODELS = (LearningEvent, NodeState, PlayerQuest, StorySession, ActivityProgress, LearningRecord,
-                SubmissionPayload, Submission, WorldFlag, PlayerPosition, AssessmentAttempt)
+                SubmissionPayload, Submission, WorldFlag, PlayerPosition, AssessmentAttempt, BuildingUnlock)
 
 
 @pytest.fixture
@@ -63,6 +65,11 @@ def counts(db, models=RESET_MODELS):
 
 
 def add_progress(db, user_id, classroom_id):
+    course = db.scalar(select(CourseInstance).where(CourseInstance.classroom_id == classroom_id))
+    if not course:
+        course = CourseInstance(classroom_id=classroom_id, package_id="reset-test", name="Reset test", package_version="1")
+        db.add(course)
+        db.flush()
     quest = PlayerQuest(user_id=user_id, classroom_id=classroom_id, quest_id="arrival", status="complete")
     db.add(quest)
     db.flush()
@@ -82,6 +89,7 @@ def add_progress(db, user_id, classroom_id):
         SubmissionPayload(submission_id=submission.id, cases=[], public_count=0),
         AssessmentAttempt(user_id=user_id, classroom_id=classroom_id, activity_id="ch1-assessment", state="draft"),
         WorldFlag(user_id=user_id, classroom_id=classroom_id, key="library_unlocked"),
+        BuildingUnlock(user_id=user_id, classroom_id=classroom_id, course_instance_id=course.id, building_id="library"),
         PlayerPosition(user_id=user_id, classroom_id=classroom_id, map_key="library", tile_x=9, tile_y=5, direction="up"),
         AssistantCall(user_id=user_id, classroom_id=classroom_id, session_id=assistant.id, status="complete", model_calls=1, tokens=32),
     ])
@@ -137,7 +145,7 @@ def test_reset_is_atomic_scoped_and_repeatable(dev_client, db, student, teacher,
     target_submission = add_progress(db, student["id"], cid)
     other_submission = add_progress(db, other_student.id, cid)
     other_class_submission = add_progress(db, student["id"], other_classroom.id)
-    preserved = (User, AuthSession, Membership, Classroom, ChapterRelease, Activity, AssistantSession, AssistantCall)
+    preserved = (User, AuthSession, Membership, Classroom, CourseInstance, ChapterRelease, Activity, AssistantSession, AssistantCall)
     preserved_counts = counts(db, preserved)
 
     response = dev_client.post(RESET_PATH, json={"classroom_id": cid, "confirmed": True}, headers=student["headers"])

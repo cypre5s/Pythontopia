@@ -1,5 +1,6 @@
-import definition from "../../../../data/world/world.json";
-import type { Npc, Player } from "../../shared/types";
+import definition from "../../../../shared/world/world.json";
+import { mapRenderBounds, type WorldBounds } from "../../../../shared/world/mapRender";
+import type { CourseInteraction, Npc, Player, World } from "../../shared/types";
 import { findPath, type Tile } from "../pathfinding";
 
 export interface WorldBuilding {
@@ -22,7 +23,7 @@ export interface WorldMapConfig {
   render_bounds?: WorldBounds;
   camera_mode?: "centered" | "bounded";
 }
-export interface WorldBounds { x: number; y: number; width: number; height: number }
+export { mapRenderBounds, type WorldBounds };
 export interface WorldPortal {
   id: string;
   label: string;
@@ -47,6 +48,7 @@ export interface WorldInteraction {
   map_key?: string; tile_x?: number; tile_y?: number; points?: InteractionPoint[];
 }
 export const worldConfig = definition as WorldDefinition;
+export type WorldRuntime = Pick<World, "interactions" | "building_access">;
 export interface WorldTarget extends Tile {
   id: string;
   map_key: string;
@@ -56,6 +58,7 @@ export interface WorldTarget extends Tile {
   portal?: WorldPortal;
   building?: WorldBuilding;
   points?: Tile[];
+  interaction?: CourseInteraction;
 }
 export function getWorldMap(key: string): WorldMapConfig {
   const map = worldConfig.maps[key];
@@ -65,9 +68,6 @@ export function getWorldMap(key: string): WorldMapConfig {
 export function mapWalkBounds(map: WorldMapConfig): WorldBounds {
   return map.walk_bounds ?? { x: 0, y: 0, width: map.width, height: map.height };
 }
-export function mapRenderBounds(map: WorldMapConfig): WorldBounds {
-  return map.render_bounds ?? { x: 0, y: 0, width: map.width, height: map.height };
-}
 export function withinWalkBounds(map: WorldMapConfig, x: number, y: number): boolean {
   const bounds = mapWalkBounds(map);
   return x >= bounds.x && y >= bounds.y && x < bounds.x + bounds.width && y < bounds.y + bounds.height;
@@ -75,19 +75,23 @@ export function withinWalkBounds(map: WorldMapConfig, x: number, y: number): boo
 export function mapCameraBounds(map: WorldMapConfig): WorldBounds | null {
   return map.camera_mode === "centered" ? null : mapRenderBounds(map);
 }
-export function portalAvailable(portal: WorldPortal, flags: readonly string[]) {
+export function portalAvailable(portal: WorldPortal, flags: readonly string[], runtime?: WorldRuntime | null) {
+  if (runtime?.building_access && portal.building_id) return runtime.building_access[portal.building_id]?.can_enter === true;
   return portal.required_flags.every(flag => flags.includes(flag));
+}
+export function portalBlockedMessage(portal: WorldPortal, runtime?: WorldRuntime | null) {
+  return (portal.building_id && runtime?.building_access?.[portal.building_id]?.blocked_message) || portal.blocked_message;
 }
 export function interactionPoints(interaction: WorldInteraction): InteractionPoint[] {
   return interaction.points ?? [{ map_key: interaction.map_key!, tile_x: interaction.tile_x!, tile_y: interaction.tile_y! }];
 }
-export function mapTargets(mapKey: string): WorldTarget[] {
+export function mapTargets(mapKey: string, runtime?: WorldRuntime | null): WorldTarget[] {
   const targets = new Map<string, WorldTarget>();
   for (const portal of worldConfig.portals.filter(item => item.from.map_key === mapKey)) {
     targets.set(portal.id, { id: portal.id, map_key: mapKey, x: portal.from.tile_x, y: portal.from.tile_y, label: portal.label, kind: "portal", radius: portal.from.radius, portal });
   }
   const buildings = getWorldMap(mapKey).buildings;
-  for (const [id, item] of Object.entries(worldConfig.interactions)) {
+  for (const [id, item] of Object.entries(runtime?.interactions ? {} : worldConfig.interactions)) {
     const points = interactionPoints(item).filter(point => point.map_key === mapKey);
     if (!points.length || targets.has(id)) continue;
     const building = buildings.find(candidate => candidate.id === (item.building_id ?? id));
@@ -99,29 +103,41 @@ export function mapTargets(mapKey: string): WorldTarget[] {
     if (building.portal_id || targets.has(building.id)) continue;
     targets.set(building.id, { id: building.id, map_key: mapKey, ...building.anchor, label: building.label, kind: "building", radius: 2, building });
   }
+  for (const interaction of runtime?.interactions ?? []) {
+    const points = interaction.points.filter(point => point.map_key === mapKey);
+    if (!points.length) continue;
+    targets.set(interaction.id, { id: interaction.id, map_key: mapKey, label: interaction.label,
+      kind: "object", x: points[0]!.tile_x, y: points[0]!.tile_y, radius: interaction.radius,
+      points: points.map(point => ({ x: point.tile_x, y: point.tile_y })), interaction });
+  }
   return [...targets.values()];
 }
-export function resolveWorldTargets(id: string, npcs: readonly Npc[]): WorldTarget[] {
+export function resolveWorldTargets(id: string, npcs: readonly Npc[], runtime?: WorldRuntime | null): WorldTarget[] {
   const npc = npcs.find(item => item.key === id);
   if (npc) return [{ id, map_key: npc.map_key, x: npc.tile_x, y: npc.tile_y, label: npc.name, kind: "npc", radius: 2 }];
   const targets: WorldTarget[] = [];
   for (const [mapKey, map] of Object.entries(worldConfig.maps)) {
-    const building = map.buildings.find(item => item.id === id || item.object_name === id);
-    const target = mapTargets(mapKey).find(item => item.id === (building?.portal_id ?? building?.id ?? id));
+    const portalBuilding = worldConfig.portals.find(item => item.id === id)?.building_id;
+    const building = map.buildings.find(item => item.id === id || item.object_name === id || item.id === portalBuilding);
+    const options = mapTargets(mapKey, runtime);
+    const aliases = [id, building?.id, building?.object_name, building?.portal_id];
+    const target = options.find(item => item.interaction && (item.id === id
+      || ("object_id" in item.interaction.target && aliases.includes(item.interaction.target.object_id))))
+      ?? options.find(item => item.id === (building?.portal_id ?? building?.id ?? id));
     if (target) targets.push(...(target.points?.map(point => ({ ...target, ...point })) ?? [target]));
   }
   return targets;
 }
-export function resolveWorldTarget(id: string, npcs: readonly Npc[]): WorldTarget | undefined {
-  return resolveWorldTargets(id, npcs)[0];
+export function resolveWorldTarget(id: string, npcs: readonly Npc[], runtime?: WorldRuntime | null): WorldTarget | undefined {
+  return resolveWorldTargets(id, npcs, runtime)[0];
 }
-export function portalRoute(from: string, to: string, flags: readonly string[], config = worldConfig): WorldPortal[] | null {
+export function portalRoute(from: string, to: string, flags: readonly string[], config = worldConfig, runtime?: WorldRuntime | null): WorldPortal[] | null {
   if (from === to) return [];
   const queue: { map: string; route: WorldPortal[] }[] = [{ map: from, route: [] }];
   const visited = new Set([from]);
   for (const current of queue) {
     for (const portal of config.portals) {
-      if (portal.from.map_key !== current.map || !portalAvailable(portal, flags) || visited.has(portal.to.map_key)) continue;
+      if (portal.from.map_key !== current.map || !portalAvailable(portal, flags, runtime) || visited.has(portal.to.map_key)) continue;
       const route = [...current.route, portal];
       if (portal.to.map_key === to) return route;
       visited.add(portal.to.map_key);
@@ -134,15 +150,16 @@ export function buildingMessage(building: WorldBuilding) {
   const purpose = building.purpose.replace(/(?:室内)?暂未开放[。；，]?/g, "").trim().replace(/[，；、]+$/, "");
   return purpose ? `${building.label}：${purpose}` : building.label;
 }
-export function worldTargetHint(target: WorldTarget, flags: readonly string[]) {
+export function worldTargetHint(target: WorldTarget, flags: readonly string[], runtime?: WorldRuntime | null) {
+  if (target.interaction) return target.interaction.prompt || "互动";
   if (target.kind === "npc") return "交谈";
-  if (target.portal) return portalAvailable(target.portal, flags) ? (/返回|离开/.test(target.portal.action_label) ? "返回" : "进入") : "";
+  if (target.portal) return portalAvailable(target.portal, flags, runtime) ? (/返回|离开/.test(target.portal.action_label) ? "返回" : "进入") : "";
   if (target.building) return "";
   return target.id === "library_shelf" ? "阅读" : "查看";
 }
-export function nearbyWorldTarget(position: Tile & { map_key: string }, targets: readonly WorldTarget[], flags: readonly string[], preferredId?: string): WorldTarget | undefined {
+export function nearbyWorldTarget(position: Tile & { map_key: string }, targets: readonly WorldTarget[], flags: readonly string[], preferredId?: string, runtime?: WorldRuntime | null): WorldTarget | undefined {
   return targets.filter(target => target.map_key === position.map_key && (!preferredId || target.id === preferredId)
-    && worldTargetHint(target, flags) && Math.abs(target.x - position.x) + Math.abs(target.y - position.y) <= target.radius)
+    && worldTargetHint(target, flags, runtime) && Math.abs(target.x - position.x) + Math.abs(target.y - position.y) <= target.radius)
     .sort((a, b) => (Math.abs(a.x - position.x) + Math.abs(a.y - position.y)) - (Math.abs(b.x - position.x) + Math.abs(b.y - position.y)))[0];
 }
 export function displayWorldText(text: string): string {

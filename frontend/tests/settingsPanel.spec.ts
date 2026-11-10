@@ -54,7 +54,7 @@ describe("categorized settings", () => {
     expect(wrapper.text()).not.toContain("班级与课程");
     expect(wrapper.text()).not.toContain("已开放材料");
     expect(wrapper.find('a[href="/credits"]').exists()).toBe(false);
-    expect(wrapper.find('a[href="/teacher"]').exists()).toBe(false);
+      expect(wrapper.find('a[href="/teacher/"]').exists()).toBe(false);
     await tabs[4].trigger("click");
     expect(wrapper.find('[role="tabpanel"]').text()).toContain("Super Retro World");
     expect(wrapper.find('[role="tabpanel"]').text()).toContain("Alethicode");
@@ -106,7 +106,7 @@ describe("categorized settings", () => {
   it("exposes the teacher workbench only to teaching accounts", async () => {
     const { wrapper } = await panel("teacher");
     expect(wrapper.text()).toContain("教师");
-    expect(wrapper.find('a[href="/teacher"]').exists()).toBe(true);
+    expect(wrapper.find('a[href="/teacher/"]').exists()).toBe(true);
   });
 
   it.each([false, true])("clears local account state on sign-out, server failure=%s", async failure => {

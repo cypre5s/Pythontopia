@@ -6,8 +6,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-from .auth import as_utc, current_user
+from .auth import as_utc, current_user, preview_classroom
 from .db import get_db
+from .course_scope import belongs_to_course, course_clause, require_course_content
 from .content_relations import activity_questions, material_chapter_ids, material_in_chapter, question_chapter_ids
 from .learning_rules import record_video, required_pages, validate_learning, video_duration, video_state_for_material, video_watched
 from .models import (
@@ -24,6 +25,7 @@ from .models import (
     QuestDefinition,
     Question,
     Submission,
+    TownPreviewStudent,
     User,
 )
 
@@ -31,11 +33,16 @@ router = APIRouter(tags=["courses"])
 
 
 def authorize_classroom(db: Session, user: User, classroom_id: int):
+    from .course_scope import lock_course
+    lock_course(db, classroom_id)
     classroom = db.get(Classroom, classroom_id)
     if not classroom:
         raise HTTPException(404, "班级不存在")
     if user.role == "admin" or classroom.teacher_id == user.id or db.get(Membership, (user.id, classroom_id)):
         return classroom
+    preview = db.get(TownPreviewStudent, user.id)
+    if preview and preview.classroom_id == classroom_id:
+        return preview_classroom(db, preview)
     raise HTTPException(403, "无权访问此班级")
 
 
@@ -49,6 +56,7 @@ def chapter_completion_requirements(db: Session, classroom_id: int, chapter_id: 
         .join(ChapterRelease, ChapterRelease.chapter_id == QuestDefinition.chapter_id)
         .where(
             ChapterRelease.classroom_id == classroom_id,
+            course_clause(db, QuestDefinition, classroom_id),
             (QuestDefinition.owner_id.is_(None)) | (QuestDefinition.owner_id == classroom.teacher_id),
         )
     )
@@ -64,7 +72,7 @@ def chapter_completion_requirements(db: Session, classroom_id: int, chapter_id: 
 def chapter_available(db: Session, user: User, classroom_id: int, chapter_id: int, visiting=None) -> bool:
     chapter = db.get(Chapter, chapter_id)
     classroom = db.get(Classroom, classroom_id)
-    if not chapter or not classroom or (chapter.owner_id is not None and chapter.owner_id != classroom.teacher_id and user.role != "admin"):
+    if not belongs_to_course(db, chapter, classroom_id) or not classroom or (chapter.owner_id is not None and chapter.owner_id != classroom.teacher_id and user.role != "admin"):
         return False
     release = db.get(ChapterRelease, (classroom_id, chapter_id))
     if not release or release.status != "published" or (release.opens_at and as_utc(release.opens_at) > datetime.now(timezone.utc)):
@@ -94,6 +102,7 @@ def authorize_chapter(db: Session, user: User, classroom_id: int, chapter_id: in
     chapter = db.get(Chapter, chapter_id)
     if not chapter:
         raise HTTPException(404, "章节不存在")
+    require_course_content(db, chapter, classroom_id)
     if chapter.owner_id is not None and chapter.owner_id != classroom.teacher_id and user.role != "admin":
         raise HTTPException(403, "章节不属于当前班级教师")
     if user.role == "admin" or classroom.teacher_id == user.id:
@@ -106,6 +115,7 @@ def authorize_activity(db: Session, user: User, classroom_id: int, activity_id: 
     activity = db.get(Activity, activity_id)
     if not activity:
         raise HTTPException(404, "活动不存在")
+    require_course_content(db, activity, classroom_id)
     authorize_chapter(db, user, classroom_id, activity.chapter_id)
     classroom = db.get(Classroom, classroom_id)
     if user.role != "admin" and activity.owner_id is not None and activity.owner_id != classroom.teacher_id:
@@ -125,6 +135,7 @@ def available_in_library(material: Material) -> bool:
 def authorized_material_chapters(db, user, classroom_id, material):
     """Return only usable associations; an unpublished sibling chapter stays private."""
     classroom = authorize_classroom(db, user, classroom_id)
+    require_course_content(db, material, classroom_id)
     if material.owner_id not in {None, classroom.teacher_id} and user.role != "admin":
         raise HTTPException(403, "无权访问其他班级教师资料")
     chapters = []
@@ -136,7 +147,7 @@ def authorized_material_chapters(db, user, classroom_id, material):
         chapters.append(chapter_id)
     can_preview = user.role == "admin" or (user.role == "teacher" and classroom.teacher_id == user.id)
     if not can_preview and not available_in_library(material):
-        published = db.scalars(select(Activity).where(Activity.material_id == material.id)).all()
+        published = db.scalars(select(Activity).where(Activity.material_id == material.id, course_clause(db, Activity, classroom_id))).all()
         chapters = [chapter_id for chapter_id in chapters if any(
             activity.chapter_id == chapter_id and activity.owner_id in {None, classroom.teacher_id}
             and activity.content.get("published") is not False for activity in published)]
@@ -158,6 +169,8 @@ def learning_questions(db, activity, teacher_id=None):
     questions = activity_questions(db, activity)
     owner_id = teacher_id if teacher_id is not None else activity.owner_id
     for question in questions:
+        if question.course_instance_id != activity.course_instance_id:
+            raise HTTPException(403, "活动题目不属于当前班级课程")
         if question.status != "ready":
             raise HTTPException(409, "活动存在尚未就绪的题目，请联系教师")
         if activity.chapter_id not in question_chapter_ids(db, question.id):
@@ -209,7 +222,7 @@ def get_activity(
     points = []
     for point_id in activity.content.get("knowledge_point_ids", []):
         point = db.get(KnowledgePoint, point_id)
-        if not point or point.chapter_id != activity.chapter_id:
+        if not point or point.chapter_id != activity.chapter_id or point.course_instance_id != activity.course_instance_id:
             raise HTTPException(409, "活动知识点关联无效")
         if point.owner_id not in {None, classroom.teacher_id} and user.role != "admin":
             raise HTTPException(403, "知识点不属于当前班级发布范围")
@@ -243,7 +256,7 @@ def get_activity(
 
 def learning_material(db, activity):
     material = db.get(Material, activity.material_id) if activity.material_id else None
-    if material and not material_in_chapter(db, material.id, activity.chapter_id):
+    if material and (material.course_instance_id != activity.course_instance_id or not material_in_chapter(db, material.id, activity.chapter_id)):
         raise HTTPException(409, "学习资料必须属于活动章节")
     try:
         validate_learning(activity.content, activity.kind, material, resolve=True)
@@ -439,7 +452,7 @@ def get_material(
 def library(classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
     authorize_classroom(db, user, classroom_id)
     results = []
-    for material in db.scalars(select(Material).order_by(Material.id)):
+    for material in db.scalars(select(Material).where(course_clause(db, Material, classroom_id)).order_by(Material.id)):
         try:
             authorize_material(db, user, classroom_id, material.id)
         except HTTPException:

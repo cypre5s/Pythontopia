@@ -737,7 +737,7 @@ function makeLowObstacle(name, label, tileX, tileY, bw = 1, bh = 1, kind = 'low'
 //   4. 树不围成绿墙：顶边一条 1~2 排深的连续树线收边界，内部按衰减散布
 //   5. 收尾跑校验：建筑间距、道路单连通、NPC 必定落在路面上；不满足直接抛错
 
-/** 静态美术排布表。交互名称/用途/门前点/portal权威数据见data/world/world.json。
+/** 静态美术排布表。交互名称/用途/门前点/portal权威数据见shared/world/world.json。
  * 建筑：[key, 房屋图号, 中心 tileX, 底边 tileY, 历史中文名, 历史交互键]。
  * 调整排布后同步检查配置中的object_name与门前点，运行validate-world.mjs。
  */

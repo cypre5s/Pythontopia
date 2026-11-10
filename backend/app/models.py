@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, text
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column
 from .db import Base
 
 
@@ -29,6 +29,8 @@ class AuthSession(Base):
     token_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
     expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # A deleted teacher session revokes the associated preview credentials.
+    preview_teacher_token_hash: Mapped[str | None] = mapped_column(String(64))
 
 
 class Classroom(Base):
@@ -39,22 +41,57 @@ class Classroom(Base):
     join_code: Mapped[str] = mapped_column(String(24), unique=True)
 
 
+class TownPreviewStudent(Base):
+    __tablename__ = "town_preview_students"
+    __table_args__ = (UniqueConstraint("teacher_id", "classroom_id", name="uq_town_preview_teacher_classroom"),)
+    student_user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    teacher_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
+
+
+class CourseInstance(Base):
+    __tablename__ = "course_instances"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), unique=True)
+    package_id: Mapped[str] = mapped_column(String(100))
+    name: Mapped[str] = mapped_column(String(200))
+    package_version: Mapped[str] = mapped_column(String(100))
+    revision: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class CourseContent:
+    """NULL instance rows are retained import sources, never a class-owned definition."""
+    course_instance_id: Mapped[int | None] = mapped_column(ForeignKey("course_instances.id"), nullable=True, index=True)
+    stable_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    @declared_attr.directive
+    def __table_args__(cls):
+        return (UniqueConstraint("course_instance_id", "stable_id", name=f"uq_{cls.__tablename__}_instance_stable"),)
+
+
 class Membership(Base):
     __tablename__ = "memberships"
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id", ondelete="CASCADE"), primary_key=True)
 
 
-class Chapter(Base):
+class Chapter(CourseContent, Base):
     __tablename__ = "chapters"
+    __table_args__ = (
+        UniqueConstraint("course_instance_id", "stable_id", name="uq_chapters_instance_stable"),
+        UniqueConstraint("course_instance_id", "order_index", name="uq_chapters_instance_order"),
+        Index("uq_chapters_template_order", "order_index", unique=True,
+              sqlite_where=text("course_instance_id IS NULL"), postgresql_where=text("course_instance_id IS NULL")),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(200))
-    order_index: Mapped[int] = mapped_column(Integer, unique=True)
+    order_index: Mapped[int] = mapped_column(Integer)
     course_id: Mapped[int] = mapped_column(Integer, default=43)
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
 
 
-class KnowledgePoint(Base):
+class KnowledgePoint(CourseContent, Base):
     __tablename__ = "knowledge_points"
     id: Mapped[int] = mapped_column(primary_key=True)
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
@@ -63,7 +100,7 @@ class KnowledgePoint(Base):
     content: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
-class Material(Base):
+class Material(CourseContent, Base):
     __tablename__ = "materials"
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(200))
@@ -83,7 +120,7 @@ class MaterialChapter(Base):
     chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id", ondelete="CASCADE"), primary_key=True, index=True)
 
 
-class Activity(Base):
+class Activity(CourseContent, Base):
     __tablename__ = "activities"
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), index=True)
@@ -105,7 +142,7 @@ class ChapterRelease(Base):
     prerequisite_chapter_id: Mapped[int | None] = mapped_column(ForeignKey("chapters.id"), nullable=True)
 
 
-class Npc(Base):
+class Npc(CourseContent, Base):
     __tablename__ = "npcs"
     key: Mapped[str] = mapped_column(String(80), primary_key=True)
     name: Mapped[str] = mapped_column(String(80))
@@ -116,7 +153,7 @@ class Npc(Base):
     dialogue: Mapped[list] = mapped_column(JSON, default=list)
 
 
-class QuestDefinition(Base):
+class QuestDefinition(CourseContent, Base):
     __tablename__ = "quest_definitions"
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), index=True)
@@ -145,11 +182,14 @@ class NodeState(Base):
     evidence: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
+WORLD_FLAG_KEY_MAX_LENGTH = 320
+
+
 class WorldFlag(Base):
     __tablename__ = "world_flags"
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), primary_key=True)
-    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    key: Mapped[str] = mapped_column(String(WORLD_FLAG_KEY_MAX_LENGTH), primary_key=True)
 
 
 class PlayerPosition(Base):
@@ -160,6 +200,14 @@ class PlayerPosition(Base):
     tile_x: Mapped[int] = mapped_column(Integer, default=22)
     tile_y: Mapped[int] = mapped_column(Integer, default=36)
     direction: Mapped[str] = mapped_column(String(8), default="down")
+
+
+class BuildingUnlock(Base):
+    __tablename__ = "building_unlocks"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), primary_key=True)
+    course_instance_id: Mapped[int] = mapped_column(ForeignKey("course_instances.id"), primary_key=True)
+    building_id: Mapped[str] = mapped_column(String(100), primary_key=True)
 
 
 class LearningEvent(Base):
@@ -186,10 +234,10 @@ class LearningRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
-class StoryDefinition(Base):
+class StoryDefinition(CourseContent, Base):
     __tablename__ = "story_definitions"
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
-    chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"))
+    chapter_id: Mapped[int | None] = mapped_column(ForeignKey("chapters.id"), nullable=True)
     quest_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
     content: Mapped[dict] = mapped_column(JSON)
 
@@ -204,7 +252,9 @@ class StorySession(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
     story_id: Mapped[str] = mapped_column(String(100))
-    npc_key: Mapped[str] = mapped_column(ForeignKey("npcs.key"))
+    npc_key: Mapped[str | None] = mapped_column(ForeignKey("npcs.key"), nullable=True)
+    interaction_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    anchor: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     node_id: Mapped[str] = mapped_column(String(100))
     status: Mapped[str] = mapped_column(String(16), default="active")
     revision: Mapped[int] = mapped_column(Integer, default=0)
@@ -224,9 +274,10 @@ class ActivityProgress(Base):
     media_progress: Mapped[dict] = mapped_column(JSON, default=dict, server_default=text("'{}'"))
 
 
-class Question(Base):
+class Question(CourseContent, Base):
     __tablename__ = "questions"
     __table_args__ = (
+        UniqueConstraint("course_instance_id", "stable_id", name="uq_questions_instance_stable"),
         CheckConstraint("source_type IN ('ai_generated', 'imported')", name="ck_questions_source_type"),
         CheckConstraint("status IN ('draft', 'ready', 'disabled')", name="ck_questions_status"),
     )
@@ -306,7 +357,7 @@ class AssessmentAttempt(Base):
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
-class CourseExample(Base):
+class CourseExample(CourseContent, Base):
     __tablename__ = "course_examples"
     id: Mapped[int] = mapped_column(primary_key=True)
     content: Mapped[dict] = mapped_column(JSON)

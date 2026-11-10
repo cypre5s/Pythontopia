@@ -48,11 +48,13 @@ def _validate_ids(db, parent, parent_id, model, ids):
     if len(set(ids)) != len(ids):
         raise ValueError("关联标识不能重复")
     db.flush()
-    if db.get(parent, parent_id) is None:
+    parent_item = db.get(parent, parent_id)
+    if parent_item is None:
         raise ValueError("关联对象不存在")
-    found = set(db.scalars(select(model.id).where(model.id.in_(ids)))) if ids else set()
+    found = set(db.scalars(select(model.id).where(
+        model.id.in_(ids), model.course_instance_id == parent_item.course_instance_id))) if ids else set()
     if found != set(ids):
-        raise ValueError("引用的内容不存在")
+        raise ValueError("引用的内容不存在或不属于同一班级课程")
 
 
 def set_material_chapters(db, material_id, ids):

@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const publicDir=path.join(root,'frontend/public');
-const world=JSON.parse(fs.readFileSync(path.join(root,'data/world/world.json'),'utf8'));
+const world=JSON.parse(fs.readFileSync(path.join(root,'shared/world/world.json'),'utf8'));
 // Existence only: attribution and optional click/glow contract references are included.
 // The resulting count is not a count of actual runtime downloads or rendered files.
 const paths=new Set(['assets/pixel/tilesets/super-retro-world/town_tiles.png','assets/pixel/LICENSE.md']);

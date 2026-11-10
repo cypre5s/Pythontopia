@@ -22,7 +22,7 @@ SRW 作者 Gif 的条款书面存档及原始源包未在 tracked 仓库中找�
 
 网页端（`town_hub`）的地形 / 建筑 / 道具 / 角色已整体换成 **Super Retro World**，
 键名统一 `srw_<文件名>`，由 `scripts/build_srw_assets.py` 切片并生成
-`frontend/src/game/config/srwAssets.config.ts`（BootScene 按该清单注册贴图）。
+`shared/world/srwAssets.config.ts`（游戏和地图预览按该清单加载贴图）。
 
 > 素材作者：**Gif** — https://ko-fi.com/gif — Super Retro World
 > 授权：作者商用条款（用户/项目所有者已确认可商用）。源包内未附 license 文本，

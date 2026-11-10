@@ -44,7 +44,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import GameIcon from "../shared/GameIcon.vue";
 import { useSession } from "../shared/session";
-import { buildingMessage, getWorldMap, mapTargets, portalAvailable, portalRoute, worldConfig, type WorldTarget } from "../game/config/worldConfig";
+import { buildingMessage, getWorldMap, mapTargets, portalAvailable, portalBlockedMessage, portalRoute, worldConfig, type WorldTarget } from "../game/config/worldConfig";
 import { paintMapPreview } from "../game/config/worldRender";
 
 interface MapChoice {
@@ -69,7 +69,7 @@ const bounds = computed(() => ({ x: 0, y: 0, width: currentMap.value.width, heig
 const playerPosition = computed(() => session.mapPosition?.map_key === previewMap ? session.mapPosition : null);
 const fittedWidth = computed(() => compact.value ? Math.max(560, stageSize.value.width) : stageSize.value.width && stageSize.value.height ? Math.min(stageSize.value.width, stageSize.value.height * bounds.value.width / bounds.value.height) : 0);
 const targets = computed<MapChoice[]>(() => {
-  const places = mapTargets(previewMap).map(target => {
+  const places = mapTargets(previewMap, session.world).map(target => {
     const building = target.building ?? currentMap.value.buildings.find(item => item.id === target.portal?.building_id);
     return {
       key: `place:${target.id}`, id: building?.id ?? target.id, label: building?.label ?? target.label,
@@ -89,12 +89,13 @@ const selected = computed(() => visibleTargets.value.find(target => target.key =
 const navigationBlock = computed(() => {
   const target = selected.value, player = session.world?.player, flags = session.world?.flags ?? [];
   if (!target || !player) return "";
-  if (target.target?.portal && !portalAvailable(target.target.portal, flags)) return target.target.portal.blocked_message || "这个入口尚未开放。";
+  if (target.target?.portal && !portalAvailable(target.target.portal, flags, session.world)) return portalBlockedMessage(target.target.portal, session.world) || "这个入口尚未开放。";
   if (player.map_key === target.mapKey) return "";
-  if (portalRoute(player.map_key, target.mapKey, flags)) return "";
+  if (portalRoute(player.map_key, target.mapKey, flags, worldConfig, session.world)) return "";
   const allFlags = [...new Set(worldConfig.portals.flatMap(portal => portal.required_flags))];
   const route = portalRoute(player.map_key, target.mapKey, allFlags);
-  return route?.find(portal => !portalAvailable(portal, flags))?.blocked_message || "暂时没有可通行的路线。";
+  const blocked = route?.find(portal => !portalAvailable(portal, flags, session.world));
+  return (blocked && portalBlockedMessage(blocked, session.world)) || "暂时没有可通行的路线。";
 });
 function markerPosition(x: number, y: number) {
   return { left: `${(x + 0.5 - bounds.value.x) / bounds.value.width * 100}%`, top: `${(y + 0.5 - bounds.value.y) / bounds.value.height * 100}%` };

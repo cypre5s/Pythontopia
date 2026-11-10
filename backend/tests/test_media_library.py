@@ -94,17 +94,19 @@ def test_library_publication_does_not_bypass_class_membership_or_owner(client, d
     other_class = Classroom(name="其他班级", teacher_id=other.id, join_code="other-media-class")
     db.add(other_class)
     db.flush()
-    db.add(ChapterRelease(classroom_id=other_class.id, chapter_id=180, status="published"))
     db.commit()
     shared = add_media(db)
     private = add_media(db, owner_id=other.id)
+    from conftest import copy_fixture_course
+    mapped = copy_fixture_course(db, classroom["id"], other_class.id)
     assert private.id not in library_ids(client, student, classroom)
     assert client.get(f"/api/materials/{private.id}?classroom_id={classroom['id']}", headers=student["headers"]).status_code == 403
     assert client.get(f"/api/materials/{shared.id}?classroom_id={other_class.id}", headers=student["headers"]).status_code == 403
     assert client.get(f"/api/library?classroom_id={other_class.id}", headers=student["headers"]).status_code == 403
     db.add(Membership(user_id=student["id"], classroom_id=other_class.id))
     db.commit()
-    assert client.get(f"/api/materials/{shared.id}?classroom_id={other_class.id}", headers=student["headers"]).status_code == 200
+    assert client.get(f"/api/materials/{shared.id}?classroom_id={other_class.id}", headers=student["headers"]).status_code == 403
+    assert client.get(f"/api/materials/{mapped['material'][shared.id]}?classroom_id={other_class.id}", headers=student["headers"]).status_code == 200
     # The same teacher may explicitly publish their own materials without an activity.
     own = add_media(db, owner_id=teacher["id"], source={})
     assert own.id in library_ids(client, student, classroom)

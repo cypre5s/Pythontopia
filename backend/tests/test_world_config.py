@@ -32,7 +32,7 @@ def library_unlocked(client, db, student, classroom):
                                json={"classroom_id": classroom["id"], "revision": view["revision"], "event_id": str(uuid4())}, headers=student["headers"])
         assert response.status_code == 200, response.text
         view = response.json()
-    assert "library_unlocked" in view["world"]["flags"]
+    assert "library" in view["world"]["building_unlock"]
     return True
 
 
@@ -79,11 +79,13 @@ def test_invalid_world_configuration_is_rejected(mutation):
 
 
 def test_position_and_npc_dtos_take_map_names_and_dimensions_from_configuration(monkeypatch):
+    from app import world_authoring
     config = deepcopy(load_world_config())
     config["maps"]["town_hub"]["width"] = 60
     config["maps"]["town_hub"]["walk_bounds"] = {"x": 0, "y": 0, "width": 60, "height": 40}
     config["maps"]["annex"] = {"label": "Annex", "width": 6, "height": 5, "renderer": "tiled", "asset": "/assets/maps/annex.json", "buildings": []}
     monkeypatch.setattr(world_config, "load_world_config", lambda: config)
+    monkeypatch.setattr(world_authoring, "reachable_cells", lambda _: {(5, 4)})
     assert PositionInput(classroom_id=1, map_key="town_hub", tile_x=59, tile_y=39).tile_x == 59
     assert PositionInput(classroom_id=1, map_key="annex", tile_x=5, tile_y=4).map_key == "annex"
     assert NpcInput(key="annex-host", name="Host", map_key="annex", tile_x=5, tile_y=4).map_key == "annex"

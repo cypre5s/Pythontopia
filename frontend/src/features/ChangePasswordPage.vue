@@ -12,7 +12,10 @@ import { useSession } from "../shared/session";
 import { api } from "../shared/api";
 import PasswordForm from "./PasswordForm.vue";
 const router = useRouter(), session = useSession();
-async function continueSession() { await router.replace(session.user?.role === "student" ? "/world" : "/teacher"); }
+async function continueSession() {
+  if (session.user?.role === "student") await router.replace("/world");
+  else window.location.assign("/teacher/");
+}
 async function logout() {
   try { await api.post("/auth/logout", {}); }
   finally { session.reset(); await router.replace("/"); }

@@ -407,14 +407,16 @@ def test_score_conditions_and_scene_sessions_are_isolated_by_actor_and_joined_cl
     created = client.post("/api/classrooms", headers=teacher["headers"], json={"name": "Another isolated classroom"})
     assert created.status_code == 201
     second = created.json()
+    from conftest import copy_fixture_course
+    mapped = copy_fixture_course(db, classroom["id"], second["id"])
     assert client.post("/api/classrooms/join", headers=student["headers"], json={"join_code": second["join_code"]}).status_code == 200
-    assert client.put(f"/api/teacher/classrooms/{second['id']}/releases/179", headers=teacher["headers"], json={"status": "published"}).status_code == 200
     move_player(client, student["headers"], second["id"], "town_hub", 22, 34)
     second_arrival = db.scalar(select(PlayerQuest).where(PlayerQuest.user_id == student["id"],
-        PlayerQuest.classroom_id == second["id"], PlayerQuest.quest_id == "arrival"))
+        PlayerQuest.classroom_id == second["id"], PlayerQuest.quest_id == mapped["quest"]["arrival"]))
     second_arrival.status = "complete"
     db.commit()
-    interact(client, student, second["id"], expected=404)
+    assert client.post("/api/story/interactions", headers=student["headers"],
+                       json={"classroom_id": second["id"], "npc_key": mapped["npc"]["mayor_py"]}).status_code == 404
     advance(client, student, second["id"], view, expected=404)
     assert client.get(f"/api/story/current?classroom_id={second['id']}", headers=student["headers"]).json() is None
 

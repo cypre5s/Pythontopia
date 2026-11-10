@@ -1,3 +1,4 @@
+import { importCourse } from "./courseFixture";
 import {
   test,
   expect,
@@ -169,8 +170,9 @@ test("usable world HUD, modal focus, history, text scaling and keyboard controls
     id: number;
     join_code: string;
   };
+  const ids = await importCourse(request, teacherHeaders, classroom.id);
   const released = await request.put(
-    `/api/teacher/classrooms/${classroom.id}/releases/179`,
+    `/api/teacher/classrooms/${classroom.id}/releases/${ids.chapter["179"]}`,
     { headers: teacherHeaders, data: { status: "published", } },
   );
   expect(released.ok()).toBeTruthy();
@@ -210,7 +212,7 @@ test("usable world HUD, modal focus, history, text scaling and keyboard controls
   // teacher has authored other main quests in the same published chapter.
   const initialWorld = await state();
   const introQuest = initialWorld.quests.find(
-    (quest) => quest.id === "arrival",
+    (quest) => quest.id === ids.quest.arrival,
   );
   expect(introQuest).toBeDefined();
   await page
@@ -378,7 +380,7 @@ test("usable world HUD, modal focus, history, text scaling and keyboard controls
     await finishIntroDialogue(page);
   }
   const learnedWorld = await state();
-  const arrival = learnedWorld.quests.find((quest) => quest.id === "arrival");
+  const arrival = learnedWorld.quests.find((quest) => quest.id === ids.quest.arrival);
   expect(arrival?.nodes.find((node) => node.id === "study")?.status).toBe(
     "ready",
   );

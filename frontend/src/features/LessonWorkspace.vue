@@ -119,10 +119,10 @@ const requiredPages = computed(() => material.value?.pages.filter(page => requir
 const currentPage = computed(() => material.value?.pages[pageIndex.value]),
   roleName = computed(
     () =>
-      session.world?.npcs.find((n) => n.key === (activity.value?.npc_key ?? "librarian_doc"))
+      session.world?.npcs.find((n) => activity.value?.npc_key ? n.key === activity.value.npc_key : (n.stable_id ?? n.key) === "librarian_doc")
         ?.name ?? "图书管理员",
   ),
-  rolePortrait = computed(() => session.world?.npcs.find(n => n.key === (activity.value?.npc_key ?? "librarian_doc"))?.portrait);
+  rolePortrait = computed(() => session.world?.npcs.find(n => activity.value?.npc_key ? n.key === activity.value.npc_key : (n.stable_id ?? n.key) === "librarian_doc")?.portrait);
 const learningGoals = computed(() => {
   const title = material.value?.title ?? "当前资料", learning = activity.value?.learning;
   if (learning?.video) {

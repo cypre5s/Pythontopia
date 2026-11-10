@@ -53,7 +53,7 @@ def populate_baseline(engine):
     metadata = MetaData()
     metadata.reflect(engine)
     tables = metadata.tables
-    source = BACKEND.parent / "data/course-pack-43/json"
+    source = Path(os.environ["REBORN_COURSE_ROOT"]) / "json"
 
     def load(name):
         return json.loads((source / (name + ".json")).read_text(encoding="utf-8-sig"))

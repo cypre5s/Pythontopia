@@ -52,7 +52,8 @@ def write_archive(path, files, *, extra=None):
 def media_fixture(tmp_path, monkeypatch):
     source = tmp_path / "trusted"
     (source / "json").mkdir(parents=True)
-    export = Path(__file__).resolve().parents[2] / "data/course-pack-43/json"
+    import os
+    export = Path(os.environ["REBORN_COURSE_ROOT"]) / "json"
     documents = json.loads((export / "course_document.json").read_text(encoding="utf-8-sig"))
     pages = json.loads((export / "course_page.json").read_text(encoding="utf-8-sig"))
     documents = [doc for doc in documents if doc["id"] == 186]
@@ -90,7 +91,8 @@ def run_import(db, fixture):
     return import_media(db, fixture["archive"], source_root=fixture["source"], storage=fixture["storage"])
 
 
-def test_import_preserves_page_identity_and_learner_history_and_is_idempotent(db, student, classroom, media_fixture):
+def test_import_preserves_page_identity_and_learner_history_and_is_idempotent(db, student, legacy_classroom, media_fixture):
+    classroom = legacy_classroom
     material = db.get(Material, 186)
     pages_before = deepcopy(material.content["pages"])
     pages_before[0]["text"] = "人工维护的原页文本"

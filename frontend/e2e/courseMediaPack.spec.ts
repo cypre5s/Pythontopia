@@ -1,3 +1,4 @@
+import { importCourse } from "./courseFixture";
 import { test, expect, type APIRequestContext, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
@@ -13,8 +14,9 @@ async function prepare(request: APIRequestContext) {
   const created = await request.post("/api/classrooms", { headers: teacher, data: { name: `课程媒体验收 ${randomUUID().slice(0, 8)}` } });
   expect(created.status()).toBe(201);
   const classroom = await created.json();
+  const ids = await importCourse(request, teacher, classroom.id);
   for (const chapter of [179, 180, 181, 182, 183, 184, 185]) {
-    expect((await request.put(`/api/teacher/classrooms/${classroom.id}/releases/${chapter}`, {
+    expect((await request.put(`/api/teacher/classrooms/${classroom.id}/releases/${ids.chapter[String(chapter)]}`, {
       headers: teacher, data: { status: "published" },
     })).ok()).toBeTruthy();
   }
@@ -33,15 +35,15 @@ async function prepare(request: APIRequestContext) {
   const library = await read(`/api/library?classroom_id=${classroom.id}`) as LibraryMaterial[];
   expect(library.filter(item => item.kind === "pdf")).toHaveLength(7);
   expect(library.filter(item => item.kind === "video")).toHaveLength(34);
-  return { classroom, identity, student, teacher, library, read };
+  return { classroom, identity, student, teacher, library, read, ids };
 }
 
-async function enter(page: Page, identity: { access_token: string; user: { id: number } }, classroomId: number, oldTextIndex?: number) {
-  await page.addInitScript(({ identity, classroomId, oldTextIndex }) => {
+async function enter(page: Page, identity: { access_token: string; user: { id: number } }, classroomId: number, oldTextIndex?: number, materialId?: number) {
+  await page.addInitScript(({ identity, classroomId, oldTextIndex, materialId }) => {
     sessionStorage.setItem("pythontopia-reborn-session", identity.access_token);
     sessionStorage.setItem(`classroom:${identity.user.id}`, String(classroomId));
-    if (oldTextIndex !== undefined) sessionStorage.setItem(`read:${identity.user.id}:${classroomId}:material-186`, String(oldTextIndex));
-  }, { identity, classroomId, oldTextIndex });
+    if (oldTextIndex !== undefined) sessionStorage.setItem(`read:${identity.user.id}:${classroomId}:material-${materialId}`, String(oldTextIndex));
+  }, { identity, classroomId, oldTextIndex, materialId });
   await page.goto("/world");
   const welcome = page.getByRole("dialog", { name: "欢迎回到小镇", exact: true });
   await welcome.getByRole("button", { name: "按任意键继续", exact: true }).click();
@@ -55,16 +57,16 @@ async function openLibrary(page: Page) {
 
 test("imported PDF and course video preserve existing lesson progress and the only main quest", async ({ page, request }, testInfo) => {
   test.setTimeout(180_000);
-  const { classroom, identity, student, teacher, library, read } = await prepare(request);
-  const pdf = await read(`/api/materials/186?classroom_id=${classroom.id}`);
+  const { classroom, identity, student, teacher, library, read, ids } = await prepare(request);
+  const pdf = await read(`/api/materials/${ids.material["186"]}?classroom_id=${classroom.id}`);
   expect(pdf.kind).toBe("pdf");
   expect(pdf.pages).toHaveLength(45);
   expect(pdf.pages.filter((p: { id: number }) => [10715, 10723, 10724].includes(p.id)).map((p: { page_no: number }) => p.page_no)).toEqual([34, 42, 43]);
-  const saved = await request.post("/api/activities/ch1-lesson/progress", { headers: student, data: { classroom_id: classroom.id, page_no: 42 } });
+  const saved = await request.post(`/api/activities/${ids.activity["ch1-lesson"]}/progress`, { headers: student, data: { classroom_id: classroom.id, page_no: 42 } });
   expect(saved.ok()).toBeTruthy();
   const originalProgress = await saved.json();
   const worldBefore = await read(`/api/world?classroom_id=${classroom.id}`);
-  expect(worldBefore.quests.map((quest: { id: string }) => quest.id)).toEqual(["arrival"]);
+  expect(worldBefore.quests.map((quest: { id: string }) => quest.id)).toEqual([ids.quest.arrival]);
   const recordPath = `/api/teacher/classrooms/${classroom.id}/students/${identity.user.id}`;
   const recordsBefore = await (await request.get(recordPath, { headers: teacher })).json();
   const aiBefore = await read("/api/assistant/status");
@@ -72,7 +74,7 @@ test("imported PDF and course video preserve existing lesson progress and the on
   page.on("request", outgoing => {
     if (outgoing.method() === "POST" && /\/api\/(?:events|submissions|activities\/[^/]+\/(?:progress|participation)|assistant\/sessions)/.test(outgoing.url())) mutations.push(outgoing.url());
   });
-  await enter(page, identity, classroom.id, 33);
+  await enter(page, identity, classroom.id, 33, ids.material["186"]);
   await openLibrary(page);
   await page.locator(".library-list button").filter({ hasText: pdf.title }).click();
   await expect(page.locator(".pdf-reader .reader-position strong")).toHaveText("34", { timeout: 60_000 });
@@ -105,7 +107,7 @@ test("imported PDF and course video preserve existing lesson progress and the on
   await page.locator(".library-list button").filter({ hasText: videoMaterial.title }).click();
   await expect(video).toBeVisible({ timeout: 45_000 });
   await expect.poll(() => video.evaluate(element => (element as HTMLVideoElement).currentTime), { timeout: 30_000 }).toBeGreaterThanOrEqual(60);
-  expect(await read(`/api/activities/ch1-lesson/progress?classroom_id=${classroom.id}`)).toEqual(originalProgress);
+  expect(await read(`/api/activities/${ids.activity["ch1-lesson"]}/progress?classroom_id=${classroom.id}`)).toEqual(originalProgress);
   expect(await (await request.get(recordPath, { headers: teacher })).json()).toEqual(recordsBefore);
   expect((await read("/api/assistant/status")).model_calls).toBe(aiBefore.model_calls);
   expect((await read(`/api/world?classroom_id=${classroom.id}`)).quests).toEqual(worldBefore.quests);

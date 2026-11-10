@@ -145,33 +145,35 @@ def test_video_api_requires_real_heartbeats_and_keeps_teacher_and_classroom_isol
     assert complete.json()["completed"] and complete.json()["watched_seconds"] == 10
     assert client.post(path + "/participation", json={**query, "video_time": 120}, headers=student["headers"]).status_code == 200
     second_class = client.post("/api/classrooms", json={"name": "另一班级"}, headers=teacher["headers"]).json()
-    assert client.put(f"/api/teacher/classrooms/{second_class['id']}/releases/179", json={"status": "published"}, headers=teacher["headers"]).status_code == 200
+    from conftest import copy_fixture_course
+    mapped = copy_fixture_course(db, classroom["id"], second_class["id"])
     assert client.get(path, params={"classroom_id": second_class["id"]}, headers=student["headers"]).status_code == 403
     assert client.post("/api/classrooms/join", json={"join_code": second_class["join_code"]}, headers=student["headers"]).status_code == 200
-    other = client.get(path + "/progress", params={"classroom_id": second_class["id"]}, headers=student["headers"])
+    assert client.get(path, params={"classroom_id": second_class["id"]}, headers=student["headers"]).status_code == 403
+    other = client.get(f"/api/activities/{mapped['activity'][activity.id]}/progress", params={"classroom_id": second_class["id"]}, headers=student["headers"])
     assert other.json()["watched_seconds"] == 0 and not other.json()["completed"]
     saved = db.get(ActivityProgress, (student["id"], classroom["id"], activity.id))
     assert saved.media_progress["watched_seconds"] == 10
     assert saved.visited_pages == []
     # Material changes preserve each material's participation, never transfer its evidence.
-    db.add(make_material(db, id=9902, chapter_ids=[179], title="另一视频", kind="video", owner_id=teacher["id"], status="ready",
+    db.add(make_material(db, id=19902, chapter_ids=[179], title="另一视频", kind="video", owner_id=teacher["id"], status="ready",
                     storage_key="other-test-video.mp4", content={"pages": [], "duration_seconds": 120}))
     db.commit()
-    assert client.put(f"/api/teacher/activities/{activity.id}", json={"material_id": 9902}, headers=teacher["headers"]).status_code == 200
+    assert client.put(f"/api/teacher/activities/{activity.id}", json={"material_id": 19902}, headers=teacher["headers"], params={"classroom_id": classroom["id"]}).status_code == 200
     current = client.get(path + "/progress", params=query, headers=student["headers"]).json()
     assert current["watched_seconds"] == 0 and not current["completed"]
     assert client.post(path + "/video-progress", json=packet, headers=student["headers"]).status_code == 409
-    replacement_packet = {**query, "material_id": 9902, "playback_session_id": str(uuid4()), "sequence": 1, "position_seconds": 0, "playing": True}
+    replacement_packet = {**query, "material_id": 19902, "playback_session_id": str(uuid4()), "sequence": 1, "position_seconds": 0, "playing": True}
     assert client.post(path + "/video-progress", json=replacement_packet, headers=student["headers"]).status_code == 200
     clock(5)
     replacement_packet.update(sequence=2, position_seconds=5, playing=False)
     assert client.post(path + "/video-progress", json=replacement_packet, headers=student["headers"]).json()["watched_seconds"] == 5
-    assert client.put(f"/api/teacher/activities/{activity.id}", json={"material_id": 9901}, headers=teacher["headers"]).status_code == 200
+    assert client.put(f"/api/teacher/activities/{activity.id}", json={"material_id": 9901}, headers=teacher["headers"], params={"classroom_id": classroom["id"]}).status_code == 200
     restored = client.get(path + "/progress", params=query, headers=student["headers"]).json()
     assert restored["watched_seconds"] == 10 and restored["completed"]
     restored_packet = {**query, "material_id": 9901, "playback_session_id": str(uuid4()), "sequence": 1, "position_seconds": 10, "playing": False}
     assert client.post(path + "/video-progress", json=restored_packet, headers=student["headers"]).json()["watched_seconds"] == 10
-    assert db.get(ActivityProgress, (student["id"], classroom["id"], activity.id)).media_progress["material_seconds"]["9902"] == 5
+    assert db.get(ActivityProgress, (student["id"], classroom["id"], activity.id)).media_progress["material_seconds"]["19902"] == 5
 
 
 def test_teacher_learning_api_validates_material_replacements_and_reading_progress(client, db, teacher, student, classroom):
@@ -181,10 +183,11 @@ def test_teacher_learning_api_validates_material_replacements_and_reading_progre
     response = client.post("/api/teacher/activities", headers=teacher["headers"], json={
         "id": "test-range", "chapter_id": 179, "title": "范围阅读", "kind": "lesson", "material_id": 186,
         "npc_key": "librarian_doc", "learning": {"reading": {"scope": "range", "start_page": 34, "end_page": 35},
-        "highlights": {"pages": [{"start_page": 34, "end_page": 34, "label": "重点"}]}}})
+        "highlights": {"pages": [{"start_page": 34, "end_page": 34, "label": "重点"}]}}}, params={"classroom_id": classroom["id"]})
     assert response.status_code == 201, response.text
-    endpoint = "/api/activities/test-range/progress"
-    db.add(ActivityProgress(user_id=student["id"], classroom_id=classroom["id"], activity_id="test-range", page_no=1,
+    activity_id = response.json()["id"]
+    endpoint = f"/api/activities/{activity_id}/progress"
+    db.add(ActivityProgress(user_id=student["id"], classroom_id=classroom["id"], activity_id=activity_id, page_no=1,
                             visited_pages=[pages[0]["id"]], completed=False))
     db.commit()
     query = {"classroom_id": classroom["id"]}
@@ -200,12 +203,12 @@ def test_teacher_learning_api_validates_material_replacements_and_reading_progre
     db.add(make_material(db, id=9902, chapter_ids=[179], title="其他课件", kind="text", owner_id=teacher["id"], status="ready",
                     content={"pages": [{"id": 99021, "page_no": 1, "title": "新页", "text": "正文"}]}))
     db.commit()
-    invalid = client.put("/api/teacher/activities/test-range", headers=teacher["headers"], json={"material_id": 9902})
+    invalid = client.put(f"/api/teacher/activities/{activity_id}", headers=teacher["headers"], json={"material_id": 9902}, params={"classroom_id": classroom["id"]})
     assert invalid.status_code == 422
-    invalid = client.put("/api/teacher/activities/test-range", headers=teacher["headers"], json={"learning": {"reading": {"scope": "range", "start_page": 35, "end_page": 34}}})
+    invalid = client.put(f"/api/teacher/activities/{activity_id}", headers=teacher["headers"], json={"learning": {"reading": {"scope": "range", "start_page": 35, "end_page": 34}}}, params={"classroom_id": classroom["id"]})
     assert invalid.status_code == 422
-    assert db.get(Activity, "test-range").material_id == 186
-    changed = client.put("/api/teacher/activities/test-range", headers=teacher["headers"], json={"learning": {"reading": {"scope": "all"}}})
+    assert db.get(Activity, activity_id).material_id == 186
+    changed = client.put(f"/api/teacher/activities/{activity_id}", headers=teacher["headers"], json={"learning": {"reading": {"scope": "all"}}}, params={"classroom_id": classroom["id"]})
     assert changed.status_code == 200, changed.text
     after = client.get(endpoint, params=query, headers=student["headers"]).json()
     assert after["read_total"] == len(pages) and after["read_count"] == 3 and not after["completed"]

@@ -242,6 +242,8 @@ def test_postgres_concurrent_hand_ins_have_one_atomic_paper():
             session.add_all([Membership(user_id=student.id, classroom_id=classroom.id),
                              ChapterRelease(classroom_id=classroom.id, chapter_id=179, status="published")])
             session.commit()
+            from conftest import bind_test_course
+            bind_test_course(session, classroom.id)
             token = issue(session, student)["access_token"]
             body = {"classroom_id": classroom.id, "idempotency_key": "concurrent-paper-123", "answers": answers(session)}
 

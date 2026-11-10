@@ -11,7 +11,7 @@ from app.auth import issue
 from app.content_relations import set_activity_questions, set_material_chapters, set_question_chapters
 from app.db import Base, get_db
 from app.main import create_app
-from app.models import Activity, Chapter, ChapterRelease, Classroom, LearningRecord, Material, Membership, Question, QuestionSecret, User
+from app.models import Activity, Chapter, ChapterRelease, Classroom, CourseInstance, LearningRecord, Material, Membership, Question, QuestionSecret, User
 
 
 @pytest.fixture
@@ -41,6 +41,15 @@ def library_runtime():
             db.add(QuestionSecret(question_id=key, answer=True))
         for key in ("runtime-practice-a", "runtime-practice-b", "runtime-assessment"):
             set_activity_questions(db, key, ["runtime-q2", "runtime-q1"])
+        instance = CourseInstance(classroom_id=classroom.id, package_id="runtime-test", name="Test", package_version="1")
+        db.add(instance)
+        db.flush()
+        from app.course_instances import CONTENT_MODELS
+        from sqlalchemy import select
+        for model in CONTENT_MODELS:
+            for row in db.scalars(select(model)):
+                row.course_instance_id = instance.id
+                row.stable_id = str(row.id)
         db.commit()
         app = create_app()
 
@@ -94,9 +103,10 @@ def test_unavailable_question_blocks_entire_activity_instead_of_shortening_it(li
 
 def test_material_filters_unpublished_associations_and_owner_access(library_runtime):
     client, db, _, teacher, other_teacher, classroom, headers = library_runtime
-    own = Material(title="Two chapters", owner_id=teacher.id, content={"library_available": True})
-    foreign = Material(title="Private", owner_id=other_teacher.id, content={"library_available": True})
-    unclassified = Material(title="Unclassified", owner_id=teacher.id, content={"library_available": True})
+    scope = db.get(Chapter, 9001).course_instance_id
+    own = Material(title="Two chapters", owner_id=teacher.id, course_instance_id=scope, content={"library_available": True})
+    foreign = Material(title="Private", owner_id=other_teacher.id, course_instance_id=scope, content={"library_available": True})
+    unclassified = Material(title="Unclassified", owner_id=teacher.id, course_instance_id=scope, content={"library_available": True})
     db.add_all([own, foreign, unclassified])
     db.flush()
     set_material_chapters(db, own.id, [9001, 9002])
@@ -115,7 +125,7 @@ def test_material_filters_unpublished_associations_and_owner_access(library_runt
     db.commit()
     assert client.get(f"/api/materials/{own.id}?classroom_id={classroom.id}", headers=headers).status_code == 403
     # An activity in the still-unpublished chapter cannot publish the other association.
-    db.add(Activity(id="runtime-unpublished", title="Unpublished", kind="reading", chapter_id=9002,
+    db.add(Activity(id="runtime-unpublished", title="Unpublished", kind="reading", chapter_id=9002, course_instance_id=scope,
                     material_id=own.id, owner_id=teacher.id, content={"published": True}))
     db.commit()
     assert client.get(f"/api/materials/{own.id}?classroom_id={classroom.id}", headers=headers).status_code == 403
@@ -144,9 +154,10 @@ def test_locked_assessment_keeps_grade_when_bank_or_bindings_change(library_runt
 
 def test_assistant_context_uses_current_authorized_material_questions_and_progress(library_runtime):
     client, db, student, teacher, other_teacher, classroom, headers = library_runtime
-    material = Material(title="Allowed", owner_id=teacher.id, content={"pages": [
+    scope = db.get(Chapter, 9001).course_instance_id
+    material = Material(title="Allowed", owner_id=teacher.id, course_instance_id=scope, content={"pages": [
         {"id": 99001, "page_no": 1, "title": "Current page", "text": "authorized page text"}]})
-    other = Material(title="Foreign", owner_id=other_teacher.id, content={"library_available": True, "pages": [
+    other = Material(title="Foreign", owner_id=other_teacher.id, course_instance_id=scope, content={"library_available": True, "pages": [
         {"id": 99002, "page_no": 1, "title": "Private page", "text": "private other teacher text"}]})
     db.add_all([material, other])
     db.flush()

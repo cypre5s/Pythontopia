@@ -1,3 +1,4 @@
+import { importCourse } from "./courseFixture";
 import { test, expect, type APIRequestContext, type Page, type Response } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { readFileSync } from "node:fs";
@@ -20,6 +21,8 @@ interface Player {
 interface World {
   player: Player;
   flags: string[];
+  building_unlock: string[];
+  building_access: Record<string, { can_enter: boolean; blocked_message: string }>;
   npcs: { key: string; name: string; map_key: string; tile_x: number; tile_y: number }[];
 }
 interface Definition {
@@ -45,7 +48,7 @@ interface TiledMap {
 }
 
 const definition = JSON.parse(readFileSync(
-  new URL("../../data/world/world.json", import.meta.url), "utf8",
+  new URL("../../shared/world/world.json", import.meta.url), "utf8",
 )) as Definition;
 const buildingNames: Record<string, string> = {
   mayor_hall: "镇长大厅",
@@ -205,7 +208,8 @@ test("map preview, filters, WASD, library doors and cross-map guidance share one
   });
   expect(created.status()).toBe(201);
   const classroom = await created.json() as { id: number; join_code: string };
-  const release = await request.put(`/api/teacher/classrooms/${classroom.id}/releases/179`, {
+  const ids = await importCourse(request, teacher, classroom.id);
+  const release = await request.put(`/api/teacher/classrooms/${classroom.id}/releases/${ids.chapter["179"]}`, {
     headers: teacher, data: { status: "published", },
   });
   expect(release.ok(), await release.text()).toBeTruthy();
@@ -258,7 +262,7 @@ test("map preview, filters, WASD, library doors and cross-map guidance share one
   await expect(playerMarker).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("town-map-workspace.png") });
   await navigation.getByRole("button", { name: "选择图书馆", exact: true }).click();
-  await expect(navigation).toContainText(definition.portals.find(item => item.id === "library_door")!.blocked_message);
+  await expect(navigation).toContainText((await world()).building_access.library!.blocked_message);
   await expect(navigation.getByRole("button", { name: "前往所选目标", exact: true })).toBeDisabled();
   await navigation.getByRole("button", { name: "关闭当前工作区", exact: true }).click();
   await expect(navigation).toBeHidden();
@@ -307,7 +311,7 @@ test("map preview, filters, WASD, library doors and cross-map guidance share one
 
   await findNpc(page, "镇长 Py");
   await finishPlainStory(page);
-  await expect.poll(async () => (await world()).flags).toContain("library_unlocked");
+  await expect.poll(async () => (await world()).building_unlock).toContain("library");
   const enterResponse = waitForTransition(page, entrance.id);
   await goToBuilding(page, "图书馆");
   await expectTransition(await enterResponse, entrance.to);
@@ -327,6 +331,8 @@ test("map preview, filters, WASD, library doors and cross-map guidance share one
   await clickVisibleWorldPoint(page, definition.maps.library!, (await world()).player, {
     x: eastCabinet.x + eastCabinet.width / 2, y: eastCabinet.y + eastCabinet.height / 2,
   });
+  await expect(page.getByRole("dialog", { name: "剧情对白", exact: true })).toBeVisible({ timeout: 20_000 });
+  await finishPlainStory(page);
   const readingLibrary = page.getByRole("dialog", { name: "游戏工作区", exact: true });
   await expect(readingLibrary).toBeVisible({ timeout: 20_000 });
   await expect(readingLibrary.getByRole("heading", { name: "小镇图书馆", exact: true })).toBeVisible();
@@ -366,7 +372,7 @@ test("map preview, filters, WASD, library doors and cross-map guidance share one
   await finishPlainStory(page);
   await checkCanvas();
   const finalWorld = await world();
-  const mayor = finalWorld.npcs.find(npc => npc.key === "mayor_py")!;
+  const mayor = finalWorld.npcs.find(npc => npc.key === ids.npc.mayor_py)!;
   expect(finalWorld.player.map_key).toBe(mayor.map_key);
   expect(Math.abs(finalWorld.player.tile_x - mayor.tile_x) + Math.abs(finalWorld.player.tile_y - mayor.tile_y)).toBeLessThanOrEqual(2);
   expect(assistantMessages).toEqual([]);

@@ -126,13 +126,15 @@ describe("the map previews places and navigates only on request", () => {
     expect(session.navigationTarget).toBeNull();
   });
   it("links map markers with list selection and reads locked-entry feedback from configuration", async () => {
-    const wrapper = await map(), session = useSession();
+    const session = useSession();
+    session.world!.building_access = { library: { enabled: true, unlocked: false, can_enter: false, blocked_message: "完成当前班级的欢迎流程后开放" } };
+    const wrapper = await map();
     await wrapper.get('[aria-label="地图标记：图书馆"]').trigger("click");
     expect(wrapper.get('[aria-label="选择图书馆"]').attributes("aria-pressed")).toBe("true");
     expect(wrapper.get('[aria-label="前往所选目标"]').attributes("disabled")).toBeDefined();
-    expect(wrapper.get('[aria-label="所选地图目标"]').text()).toContain(worldConfig.portals.find(portal => portal.id === "library_door")!.blocked_message);
+    expect(wrapper.get('[aria-label="所选地图目标"]').text()).toContain("完成当前班级的欢迎流程后开放");
     expect(session.navigationTarget).toBeNull();
-    session.world!.flags = ["library_unlocked"];
+    session.world!.building_access.library!.can_enter = true;
     await nextTick();
     expect(wrapper.get('[aria-label="前往所选目标"]').attributes("disabled")).toBeUndefined();
     const original = { ...session.world!.player };

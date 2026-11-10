@@ -7,7 +7,9 @@ from sqlalchemy.orm import Session
 from .auth import current_user
 from .courses import authorize_activity, authorize_classroom
 from .db import get_db
+from .course_scope import require_course_content
 from .models import Npc, User, WorldFlag
+from .world_config import valid_portrait
 
 router = APIRouter(tags=["dialogues"])
 
@@ -39,7 +41,7 @@ def validate_dialogue(nodes):
             raise ValueError("对白文本缺失或过长")
         if node.get("speaker") is not None and (not isinstance(node["speaker"], str) or len(node["speaker"]) > 80):
             raise ValueError("说话人必须是短字符串")
-        if node.get("portrait") and (not isinstance(node["portrait"], str) or not node["portrait"].startswith("/assets/pixel/")):
+        if "portrait" in node and not valid_portrait(node["portrait"]):
             raise ValueError("对白立绘须使用已审计本地素材")
         if node.get("once") is not None and (not isinstance(node["once"], str) or len(node["once"]) > 100):
             raise ValueError("一次性标记必须为短字符串")
@@ -125,6 +127,10 @@ def step(npc_key: str, body: StepInput, db: Annotated[Session, Depends(get_db)],
     npc = db.get(Npc, npc_key)
     if not npc:
         raise HTTPException(404, "NPC不存在")
+    require_course_content(db, npc, body.classroom_id)
+    from .world_authoring import npc_present
+    if not npc_present(db, user, body.classroom_id, npc):
+        raise HTTPException(403, "当前NPC尚未出现")
     check_near(db, user, body.classroom_id, (npc.map_key, npc.tile_x, npc.tile_y))
     try:
         validate_dialogue(npc.dialogue)

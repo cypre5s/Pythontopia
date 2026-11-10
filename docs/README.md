@@ -15,8 +15,8 @@
 | --- | --- | --- |
 | 确认范围与产品要求 | [已确认要求](requirements.md)、[产品](product.md) | 唯一arrival主线、课程材料与学习流程 |
 | 修改学生界面 | [设计索引](design/README.md)、[游戏规范](design/game-interface.md) | OverlayHost与共享游戏布局/控件 |
-| 修改教师后台 | [后台规范](design/teacher-interface.md) | 教师组件与teacherTheme |
-| 修改任务、学习目标或NPC对白 | [内容编写](content-authoring.md) | backend/content中的章节和日常YAML |
+| 修改教师后台 | [后台规范](design/teacher-interface.md) | admin/独立React后台与流程编辑器 |
+| 修改任务、学习目标或NPC对白 | [内容编写](content-authoring.md) | 班级课程编辑器、私有课程包与受限流程模型 |
 | 修改数据、鉴权和接口 | [架构](architecture.md)、[API契约](api-contract.md) | backend/app、Alembic与前端DTO |
 | 启动、迁移、导入或测试 | [开发手册](development.md) | 环境隔离、命令与故障排查 |
 | 确认实际通过与未通过 | [验收摘要](acceptance.md) | 最后验证日期/源码/环境、失败/跳过与证据 |
@@ -52,3 +52,7 @@
 本机端口、镜像、运行状态和忽略目录的证据只代表相应记录时刻，不保证当前仍可用或其他机器能恢复。实际命令只在开发手册维护，YAML结构示例在内容编写规范维护。
 
 根目录[LICENSE](../LICENSE)、[美术许可](../LICENSE-ART.md)和保留素材来源继续保留。[第三方历史清单](legal/open_source.md)含旧技术栈，当前依赖需结合实际锁文件与上游许可核对，不能据历史清单恢复旧系统。
+
+## 课程包设计入口
+
+[班级课程完整包设计](content-authoring.md#班级课程完整包设计)集中维护包结构、公共/章节流程、地图配置边界和班级独立编辑、导入导出规则；[架构评估](architecture.md#班级课程与前端边界)说明运行边界及已确认的React后台/Vue游戏方向。当前操作按development；离线清单预检、旧来源转换及完整ZIP导入是三个不同入口，不能混用。

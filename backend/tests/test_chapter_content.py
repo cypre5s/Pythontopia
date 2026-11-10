@@ -49,7 +49,8 @@ def test_repeated_seed_updates_current_story_quest_activity_and_question(db, mon
     assert db.get(Question, question["id"]).prompt == question["prompt"]
 
 
-def test_reimport_revises_question_set_without_removing_grades_or_participation(db, monkeypatch, student, classroom):
+def test_reimport_revises_question_set_without_removing_grades_or_participation(db, monkeypatch, student, legacy_classroom):
+    classroom = legacy_classroom
     from uuid import uuid4
     from app import seed as seed_module
     from app.models import ActivityProgress, LearningRecord, Submission
@@ -78,7 +79,8 @@ def test_reimport_revises_question_set_without_removing_grades_or_participation(
     assert saved.page_no == 34 and saved.visited_pages == [10715]
 
 
-def test_removing_ambient_source_ends_only_its_open_session(db, monkeypatch, student, classroom):
+def test_removing_ambient_source_ends_only_its_open_session(db, monkeypatch, student, legacy_classroom):
+    classroom = legacy_classroom
     from sqlalchemy import func, select
     from app import seed as seed_module
     from app.models import ActivityProgress, LearningRecord, NodeState, PlayerQuest, StoryDefinition, StorySession, Submission, WorldFlag

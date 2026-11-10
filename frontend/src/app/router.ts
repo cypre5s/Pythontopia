@@ -9,8 +9,9 @@ export const router = createRouter({
     { path: "/", component: () => import("../features/EntryPage.vue") },
     { path: "/world", component: () => import("../features/WorldPage.vue") },
     {
-      path: "/teacher",
-      component: () => import("../features/TeacherPage.vue"),
+      path: "/teacher/:pathMatch(.*)*",
+      component: { render: () => null },
+      beforeEnter: (to) => { window.location.assign(to.fullPath === "/teacher" ? "/teacher/" : to.fullPath); return false; },
     },
     {
       path: "/credits",

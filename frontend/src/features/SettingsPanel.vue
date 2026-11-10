@@ -19,9 +19,9 @@
             <div class="account-details"><strong>{{ session.user?.name ?? '未登录' }}</strong><span>{{ session.user?.student_id }}</span></div>
             <span v-if="session.user" class="account-role">{{ roleName }}</span>
           </section>
-          <section class="town-section"><PasswordForm /></section>
+          <section v-if="!session.user?.town_preview" class="town-section"><PasswordForm /></section>
           <section class="town-section settings-group">
-            <div v-if="isTeacher" class="setting-row"><div class="setting-copy"><strong>教师工作台</strong><p class="setting-description">管理班级与教学内容。</p></div><RouterLink to="/teacher" class="town-secondary">进入工作台 <GameIcon name="arrowRight" /></RouterLink></div>
+            <div v-if="isTeacher" class="setting-row"><div class="setting-copy"><strong>教师工作台</strong><p class="setting-description">管理班级与教学内容。</p></div><a href="/teacher/" class="town-secondary">进入工作台 <GameIcon name="arrowRight" /></a></div>
             <div class="setting-row"><div class="setting-copy"><strong>退出登录</strong><p class="setting-description">学习进度会保留，下次登录后可继续。</p></div><button class="settings-logout" :disabled="loggingOut || !session.user" @click="logout"><GameIcon name="logout" />{{ loggingOut ? '正在退出…' : '退出账号' }}</button></div>
           </section>
         </template>
@@ -44,7 +44,7 @@
 </template>
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue";
-import { RouterLink, useRouter } from "vue-router";
+import { useRouter } from "vue-router";
 import GameIcon from "../shared/GameIcon.vue";
 import LicenseContent from "./LicenseContent.vue";
 import PasswordForm from "./PasswordForm.vue";
@@ -63,7 +63,7 @@ const selected = ref<Category>("account"), loggingOut = ref(false);
 const preferences = useUiPreferences(), session = useSession(), router = useRouter();
 const currentCategory = computed(() => categories.find(category => category.id === selected.value)!);
 const userInitial = computed(() => Array.from(session.user?.name ?? "?")[0]);
-const roleName = computed(() => ({ student: "学生", teacher: "教师", admin: "管理员" })[session.user?.role as "student" | "teacher" | "admin"] ?? "用户");
+const roleName = computed(() => session.user?.town_preview ? "体验学生" : ({ student: "学生", teacher: "教师", admin: "管理员" })[session.user?.role as "student" | "teacher" | "admin"] ?? "用户");
 const isTeacher = computed(() => session.user?.role === "teacher" || session.user?.role === "admin");
 const volumePercent = computed(() => Math.round(preferences.musicVolume * 100));
 const systemMotionOnly = computed(() => preferences.reducedMotion && !preferences.reduceMotion);

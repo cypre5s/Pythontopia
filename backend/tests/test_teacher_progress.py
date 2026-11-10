@@ -6,7 +6,7 @@ from app.auth import hash_password, issue
 from app.models import PlayerQuest, QuestDefinition, User
 
 
-def author_quest(client, teacher, quest_id, *, kind="main", optional=False):
+def author_quest(client, teacher, classroom_id, quest_id, *, kind="main", optional=False, expected=201):
     definition = {
         "id": quest_id,
         "title": quest_id,
@@ -18,8 +18,9 @@ def author_quest(client, teacher, quest_id, *, kind="main", optional=False):
         definition["nodes"].append(
             {"id": "optional-talk", "type": "TALK_TO_NPC", "title": "Optional", "target": "mayor_py", "dependencies": [], "optional": True}
         )
-    response = client.post("/api/teacher/quests", json={"definition": definition}, headers=teacher["headers"])
-    assert response.status_code in {200, 201}, response.text
+    response = client.post("/api/teacher/quests", json={"definition": definition}, headers=teacher["headers"], params={"classroom_id": classroom_id})
+    assert response.status_code == expected, response.text
+    return response.json().get("id")
 
 
 def release(client, teacher, classroom_id, **body):
@@ -53,18 +54,18 @@ def completed_chapters(client, teacher, classroom_id, student_id):
 
 def test_progress_requires_all_main_quests_but_not_optional_or_side_nodes(client, db, teacher, student, classroom):
     cid = classroom["id"]
-    author_quest(client, teacher, "progress-main-a", optional=True)
-    author_quest(client, teacher, "progress-main-b")
-    author_quest(client, teacher, "progress-unfinished-side", kind="side")
+    first_id = author_quest(client, teacher, cid, "progress-main-a", optional=True)
+    second_id = author_quest(client, teacher, cid, "progress-main-b")
+    side_id = author_quest(client, teacher, cid, "progress-unfinished-side", kind="side")
     release(client, teacher, cid)
-    first = complete_talk(client, student, cid, "progress-main-a")
+    first = complete_talk(client, student, cid, first_id)
     assert first["status"] == "complete"
     assert next(node for node in first["nodes"] if node["id"] == "optional-talk")["status"] != "complete"
     assert completed_chapters(client, teacher, cid, student["id"]) == 0
-    complete_talk(client, student, cid, "progress-main-b")
+    complete_talk(client, student, cid, second_id)
     side = db.scalar(
         select(PlayerQuest).where(
-            PlayerQuest.user_id == student["id"], PlayerQuest.classroom_id == cid, PlayerQuest.quest_id == "progress-unfinished-side"
+            PlayerQuest.user_id == student["id"], PlayerQuest.classroom_id == cid, PlayerQuest.quest_id == side_id
         )
     )
     assert side.status == "active"
@@ -76,25 +77,25 @@ def test_progress_requires_all_main_quests_but_not_optional_or_side_nodes(client
 
 def test_progress_only_side_quests_do_not_count_a_chapter(client, teacher, student, classroom):
     cid = classroom["id"]
-    author_quest(client, teacher, "progress-only-side", kind="side")
+    key = author_quest(client, teacher, cid, "progress-only-side", kind="side")
     release(client, teacher, cid)
-    assert complete_talk(client, student, cid, "progress-only-side")["status"] == "complete"
+    assert complete_talk(client, student, cid, key)["status"] == "complete"
     assert completed_chapters(client, teacher, cid, student["id"]) == 0
 
 
 def test_current_quest_edits_preserve_completion_and_new_quests_count(client, db, teacher, student, classroom, branching_course):
     cid = classroom["id"]
-    author_quest(client, teacher, "progress-versioned")
+    previous = author_quest(client, teacher, cid, "progress-versioned")
     release(client, teacher, cid)
-    complete_talk(client, student, cid, "progress-versioned")
-    db.get(QuestDefinition, "progress-versioned").title = "Updated current title"
+    complete_talk(client, student, cid, previous)
+    db.get(QuestDefinition, previous).title = "Updated current title"
     db.commit()
-    author_quest(client, teacher, "progress-new-main")
+    new = author_quest(client, teacher, cid, "progress-new-main")
     # New main quests join the current chapter without a separate release version.
     assert completed_chapters(client, teacher, cid, student["id"]) == 0
-    complete_talk(client, student, cid, "progress-new-main")
+    complete_talk(client, student, cid, new)
     old = db.scalar(
-        select(PlayerQuest).where(PlayerQuest.user_id == student["id"], PlayerQuest.classroom_id == cid, PlayerQuest.quest_id == "progress-versioned")
+        select(PlayerQuest).where(PlayerQuest.user_id == student["id"], PlayerQuest.classroom_id == cid, PlayerQuest.quest_id == previous)
     )
     assert old.status == "complete"
     assert completed_chapters(client, teacher, cid, student["id"]) == 1
@@ -108,13 +109,13 @@ def test_current_quest_edits_preserve_completion_and_new_quests_count(client, db
 
 def test_progress_counts_are_scoped_to_student_classroom_and_teacher(client, db, teacher, student, classroom):
     cid = classroom["id"]
-    author_quest(client, teacher, "progress-isolation")
+    key = author_quest(client, teacher, cid, "progress-isolation")
     release(client, teacher, cid)
-    complete_talk(client, student, cid, "progress-isolation")
+    complete_talk(client, student, cid, key)
     assert completed_chapters(client, teacher, cid, student["id"]) == 1
     other_class = client.post("/api/classrooms", json={"name": "Different classroom"}, headers=teacher["headers"]).json()
     client.post("/api/classrooms/join", json={"join_code": other_class["join_code"]}, headers=student["headers"])
-    release(client, teacher, other_class["id"])
+    assert client.post(f"/api/teacher/classrooms/{other_class['id']}/course/empty", json={"name": "Other", "confirmed": True}, headers=teacher["headers"]).status_code == 200
     assert completed_chapters(client, teacher, other_class["id"], student["id"]) == 0
     new_student = client.post(
         "/api/auth/register", json={"student_id": "190515614727603", "name": "Other", "password": "isolated-progress-password"}
@@ -128,7 +129,7 @@ def test_progress_counts_are_scoped_to_student_classroom_and_teacher(client, db,
     db.add(other_teacher)
     db.commit()
     other_teacher_headers = {"Authorization": "Bearer " + issue(db, other_teacher)["access_token"]}
-    author_quest(client, {"headers": other_teacher_headers}, "foreign-private-main")
+    author_quest(client, {"headers": other_teacher_headers}, cid, "foreign-private-main", expected=403)
     assert completed_chapters(client, teacher, cid, student["id"]) == 1
     blocked = client.get(f"/api/teacher/classrooms/{cid}/progress", headers=other_teacher_headers)
     assert blocked.status_code == 403

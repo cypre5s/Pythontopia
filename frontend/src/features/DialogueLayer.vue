@@ -45,7 +45,7 @@
         class="dialogue-objectives"
       >
         <button
-          v-if="npc.key === 'librarian_doc'"
+          v-if="(npc?.stable_id ?? npc?.key) === 'librarian_doc'"
           @click="
             close();
             session.open({ kind: 'library' });
@@ -63,6 +63,7 @@
       </div>
       <footer class="dialogue-footer">
         <span>{{ typing ? "点击显示全文" : line?.choices?.length ? "↑ ↓ 选择 · Enter 确认" : "点击继续 · Enter" }}</span>
+        <button v-if="story" class="text-button" :disabled="session.storyBusy" @click="endInteraction">结束本次互动</button>
         <button class="text-button" @click="close">暂时离开 <kbd>Esc</kbd></button>
       </footer>
     </section>
@@ -78,7 +79,7 @@ import { useModalFocus } from "../shared/modalFocus";
 import { useUiPreferences } from "../shared/uiPreferences";
 import { displayWorldText } from "../game/config/worldConfig";
 const props = defineProps<{
-    npc: Npc;
+    npc?: Npc | null;
     actions: { quest: Quest; node: QuestNode }[];
     settling?: boolean;
     story?: StoryView;
@@ -89,7 +90,7 @@ const props = defineProps<{
     action: [quest: Quest, node: QuestNode];
   }>(),
   session = useSession(),
-  nodeId = ref(props.npc.dialogue[0]?.id ?? ""),
+  nodeId = ref(props.npc?.dialogue[0]?.id ?? ""),
   displayed = ref(""),
   typing = ref(false),
   imageError = ref(false),
@@ -97,14 +98,14 @@ const props = defineProps<{
   error = ref("");
 const panel = ref<HTMLElement>();
 const preferences = useUiPreferences();
-useModalFocus(panel, () => props.npc.key, close);
+useModalFocus(panel, () => props.story?.id ?? props.npc?.key ?? "interaction", close);
 const line = computed(() => {
-    const current = props.story?.node ?? props.npc.dialogue.find((d) => d.id === nodeId.value) ?? props.npc.dialogue[0];
+    const current = props.story?.node ?? props.npc?.dialogue.find((d) => d.id === nodeId.value) ?? props.npc?.dialogue[0];
     return current ? { ...current, text: displayWorldText(current.text) } : undefined;
   }),
-  speaker = computed(() => line.value?.speaker ?? props.npc.name);
+  speaker = computed(() => line.value?.speaker ?? props.npc?.name ?? "小镇互动");
 const portrait = computed(() =>
-  imageError.value ? "" : (line.value?.portrait ?? props.npc.portrait),
+  imageError.value ? "" : (line.value?.portrait ?? props.npc?.portrait),
 );
 let timer: ReturnType<typeof setInterval> | undefined,
   lastChoice: string | undefined;
@@ -116,6 +117,10 @@ function close() {
   closed = true;
   requestGeneration++;
   emit("close");
+}
+async function endInteraction() {
+  try { if (await session.endStory()) close(); }
+  catch (failure) { error.value = failure instanceof Error ? failure.message : "未能结束互动，请重试。"; }
 }
 function continueDialogue() {
   if (busy.value || props.settling || session.storyBusy) return;
@@ -169,6 +174,7 @@ async function advance(choice?: string) {
     catch (failure) { error.value = failure instanceof Error ? failure.message : "对白推进失败，请重试。"; }
     return;
   }
+  if (!props.npc) return;
   const generation = ++requestGeneration,
     activeNpc = props.npc,
     userId = session.user?.id,
@@ -226,7 +232,7 @@ watch(
     requestGeneration++;
     closed = false;
     busy.value = false;
-    nodeId.value = props.npc.dialogue[0]?.id ?? "";
+    nodeId.value = props.npc?.dialogue[0]?.id ?? "";
     imageError.value = false;
     lastChoice = undefined;
     type();

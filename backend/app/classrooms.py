@@ -3,12 +3,14 @@ import json
 from datetime import datetime, timezone
 from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import IntegrityError
-from .auth import as_utc, current_user, require_teacher
+from .auth import as_utc, bearer, current_user, hash_password, issue, preview_classroom, require_teacher, token_hash
 from .db import get_db
+from .teacher_scope import teacher_instance_id, require_scope, scoped_key, commit_content
 from .content_relations import (
     activity_questions, material_in_chapter, question_chapter_ids, question_knowledge_point_ids,
     set_activity_questions, set_question_chapters, set_question_knowledge_points,
@@ -21,6 +23,7 @@ from .models import (
     Chapter,
     ChapterRelease,
     Classroom,
+    CourseInstance,
     LearningEvent,
     LearningRecord,
     KnowledgePoint,
@@ -30,6 +33,7 @@ from .models import (
     Question,
     QuestionSecret,
     Submission,
+    TownPreviewStudent,
     User,
 )
 
@@ -56,6 +60,10 @@ def classroom_payload(item, user, teacher_name=None):
 
 @router.get("/classrooms")
 def list_classrooms(db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
+    preview = db.get(TownPreviewStudent, user.id)
+    if preview:
+        classroom = preview_classroom(db, preview)
+        return [classroom_payload(classroom, user, db.get(User, classroom.teacher_id).name)]
     memberships = select(Membership.classroom_id).where(Membership.user_id == user.id)
     query = select(Classroom, User.name).join(User, User.id == Classroom.teacher_id)
     if user.role != "admin":
@@ -76,6 +84,31 @@ def create_classroom(body: ClassroomInput, db: Annotated[Session, Depends(get_db
     return classroom_payload(item, user, user.name)
 
 
+@router.post("/teacher/classrooms/{classroom_id}/town-session")
+def open_town_session(
+    classroom_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_teacher)],
+    credentials: Annotated[HTTPAuthorizationCredentials, Depends(bearer)],
+):
+    # Serialize initial creation against another launch of this classroom.
+    teacher_instance_id(db, user, classroom_id, exclusive=True)
+    preview = db.scalar(select(TownPreviewStudent).where(
+        TownPreviewStudent.teacher_id == user.id, TownPreviewStudent.classroom_id == classroom_id,
+    ))
+    if preview:
+        student = db.get(User, preview.student_user_id)
+        if not student or student.role != "student" or student.must_change_password:
+            raise HTTPException(409, "本班的体验学生账号不可用")
+    else:
+        student = User(student_id=f"{secrets.randbelow(10**32):032d}", name="教师体验学生", role="student",
+                       password_hash=hash_password(secrets.token_urlsafe(32)))
+        db.add(student)
+        db.flush()
+        db.add(TownPreviewStudent(student_user_id=student.id, teacher_id=user.id, classroom_id=classroom_id))
+    return issue(db, student, preview_teacher_token_hash=token_hash(credentials.credentials))
+
+
 class JoinInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     join_code: str = Field(min_length=4, max_length=24)
@@ -83,6 +116,8 @@ class JoinInput(BaseModel):
 
 @router.post("/classrooms/join")
 def join_classroom(body: JoinInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
+    if db.get(TownPreviewStudent, user.id):
+        raise HTTPException(403, "体验学生只能进入教师选择的班级")
     classroom = db.scalar(select(Classroom).where(Classroom.join_code == body.join_code.strip()))
     if not classroom:
         raise HTTPException(404, "加入码无效")
@@ -121,8 +156,12 @@ class ReleaseInput(BaseModel):
 def release_chapter(
     classroom_id: int, chapter_id: int, body: ReleaseInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]
 ):
+    from .course_scope import lock_course
+    lock_course(db, classroom_id, exclusive=True)
     classroom = own_classroom(db, user, classroom_id)
+    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
     chapter = db.get(Chapter, chapter_id)
+    require_scope(chapter, instance_id)
     if not chapter:
         raise HTTPException(404, "章节不存在")
     if chapter.owner_id is not None and chapter.owner_id != classroom.teacher_id:
@@ -130,7 +169,7 @@ def release_chapter(
     if body.prerequisite_chapter_id == chapter_id or (body.prerequisite_chapter_id and not db.get(Chapter, body.prerequisite_chapter_id)):
         raise HTTPException(422, "前置章节无效")
     if body.prerequisite_chapter_id:
-        prerequisite = db.get(Chapter, body.prerequisite_chapter_id)
+        prerequisite = require_scope(db.get(Chapter, body.prerequisite_chapter_id), instance_id)
         if prerequisite.owner_id is not None and prerequisite.owner_id != classroom.teacher_id:
             raise HTTPException(403, "不能引用其他教师的私有前置章节")
     visited = {chapter_id}
@@ -147,7 +186,7 @@ def release_chapter(
         db.add(release)
     for key, value in body.model_dump().items():
         setattr(release, key, value)
-    db.commit()
+    commit_content(db, instance_id)
     return {
         "classroom_id": classroom_id,
         "chapter_id": chapter_id,
@@ -158,12 +197,13 @@ def release_chapter(
 
 
 @router.get("/teacher/courses")
-def teacher_courses(db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
+def teacher_courses(db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)], classroom_id: int | None = None):
+    instance_id = teacher_instance_id(db, user, classroom_id)
     return {
         "chapters": [
             {"id": c.id, "title": c.title, "order_index": c.order_index, "owner_id": c.owner_id}
             for c in db.scalars(
-                select(Chapter)
+                select(Chapter).where(Chapter.course_instance_id == instance_id)
                 .where(True if user.role == "admin" else (Chapter.owner_id.is_(None)) | (Chapter.owner_id == user.id))
                 .order_by(Chapter.order_index)
             )
@@ -171,7 +211,7 @@ def teacher_courses(db: Annotated[Session, Depends(get_db)], user: Annotated[Use
         "knowledge_points": [
             {"id": k.id, "chapter_id": k.chapter_id, "title": k.title, "content": k.content, "owner_id": k.owner_id}
             for k in db.scalars(
-                select(KnowledgePoint)
+                select(KnowledgePoint).where(KnowledgePoint.course_instance_id == instance_id)
                 .join(Chapter, Chapter.id == KnowledgePoint.chapter_id)
                 .where(
                     True
@@ -197,10 +237,11 @@ def teacher_courses(db: Annotated[Session, Depends(get_db)], user: Annotated[Use
                 "question_ids": [q.id for q in activity_questions(db, a)],
             }
             for a in db.scalars(
-                select(Activity) if user.role == "admin" else select(Activity).where((Activity.owner_id.is_(None)) | (Activity.owner_id == user.id))
+                select(Activity).where(Activity.course_instance_id == instance_id).where(
+                    True if user.role == "admin" else (Activity.owner_id.is_(None)) | (Activity.owner_id == user.id))
             )
         ],
-        "npcs": [{"key": n.key, "name": n.name, "map_key": n.map_key, "tile_x": n.tile_x, "tile_y": n.tile_y} for n in db.scalars(select(Npc))],
+        "npcs": [{"key": n.key, "name": n.name, "map_key": n.map_key, "tile_x": n.tile_x, "tile_y": n.tile_y} for n in db.scalars(select(Npc).where(Npc.course_instance_id == instance_id))],
     }
 
 
@@ -216,9 +257,11 @@ def progress(classroom_id: int, db: Annotated[Session, Depends(get_db)], user: A
     ):
         completed_by_user.setdefault(user_id, set()).add(quest_id)
     members = db.scalars(select(User).join(Membership, Membership.user_id == User.id).where(Membership.classroom_id == classroom_id)).all()
-    events = db.scalars(select(LearningEvent).where(LearningEvent.classroom_id == classroom_id)).all()
-    submissions = db.scalars(select(Submission).where(Submission.classroom_id == classroom_id, Submission.mode == "submit")).all()
-    records = db.scalars(select(LearningRecord).where(LearningRecord.classroom_id == classroom_id)).all()
+    preview_ids = select(TownPreviewStudent.student_user_id).where(TownPreviewStudent.classroom_id == classroom_id)
+    events = db.scalars(select(LearningEvent).where(LearningEvent.classroom_id == classroom_id, LearningEvent.user_id.not_in(preview_ids))).all()
+    submissions = db.scalars(select(Submission).where(Submission.classroom_id == classroom_id, Submission.mode == "submit",
+                                                      Submission.user_id.not_in(preview_ids))).all()
+    records = db.scalars(select(LearningRecord).where(LearningRecord.classroom_id == classroom_id, LearningRecord.user_id.not_in(preview_ids))).all()
     distribution = {}
     for item in submissions:
         distribution[item.status] = distribution.get(item.status, 0) + 1
@@ -273,17 +316,21 @@ class ActivityInput(BaseModel):
 
 
 @router.post("/teacher/activities", status_code=201)
-def create_activity(body: ActivityInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
+def create_activity(body: ActivityInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)], classroom_id: int | None = None):
+    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
     from .models import Material
 
-    if db.get(Activity, body.id):
+    runtime_id = scoped_key(instance_id, "activity", body.id)
+    if db.get(Activity, runtime_id):
         raise HTTPException(409, "活动ID已存在")
     from .curriculum import validate_activity_points
 
-    validate_activity_points(db, user, body.chapter_id, body.knowledge_point_ids)
-    if not db.get(Npc, body.npc_key):
+    validate_activity_points(db, user, body.chapter_id, body.knowledge_point_ids, instance_id)
+    if not db.get(Npc, body.npc_key) or db.get(Npc, body.npc_key).course_instance_id != instance_id:
         raise HTTPException(422, "NPC不存在")
     material = db.scalar(select(Material).where(Material.id == body.material_id).with_for_update()) if body.material_id else None
+    if material:
+        require_scope(material, instance_id)
     if material and (not material_in_chapter(db, material.id, body.chapter_id) or material.owner_id not in {None, user.id}):
         raise HTTPException(403, "资料不属于当前教师或章节")
     if body.material_id and not material:
@@ -298,13 +345,14 @@ def create_activity(body: ActivityInput, db: Annotated[Session, Depends(get_db)]
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     item = Activity(
-        **body.model_dump(exclude={"knowledge_point_ids", "learning"}),
+        **body.model_dump(exclude={"id", "knowledge_point_ids", "learning"}),
+        id=runtime_id, stable_id=body.id, course_instance_id=instance_id,
         owner_id=user.id,
         content=content,
     )
     db.add(item)
     db.flush()
-    db.commit()
+    commit_content(db, instance_id)
     return {"id": item.id}
 
 
@@ -326,12 +374,14 @@ class ActivityUpdate(BaseModel):
 
 
 @router.put("/teacher/activities/{activity_id}")
-def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
+def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)], classroom_id: int | None = None):
+    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
     from .models import Material
 
     item = db.scalar(select(Activity).where(Activity.id == activity_id).with_for_update())
     if not item:
         raise HTTPException(404, "活动不存在")
+    require_scope(item, instance_id)
     if item.owner_id != user.id and user.role != "admin":
         raise HTTPException(403, "共享种子不可覆盖，请创建教师自己的活动并绑定任务")
     changes = body.model_dump(exclude_unset=True)
@@ -346,10 +396,10 @@ def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Sessio
     if new_points is not None:
         from .curriculum import validate_activity_points
 
-        validate_activity_points(db, user, item.chapter_id, new_points)
+        validate_activity_points(db, user, item.chapter_id, new_points, instance_id)
     if any(key in changes and changes[key] is None for key in ("title", "npc_key", "assistant_allowed")):
         raise HTTPException(422, "活动必填字段不能设为空")
-    if changes.get("npc_key") and not db.get(Npc, changes["npc_key"]):
+    if changes.get("npc_key") and (not db.get(Npc, changes["npc_key"]) or db.get(Npc, changes["npc_key"]).course_instance_id != instance_id):
         raise HTTPException(422, "NPC不存在")
     if changes.get("material_id"):
         material = db.scalar(select(Material).where(Material.id == changes["material_id"]).with_for_update())
@@ -360,6 +410,8 @@ def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Sessio
 
     material_id = changes.get("material_id", item.material_id)
     material = db.get(Material, material_id) if material_id else None
+    if material:
+        require_scope(material, instance_id)
     try:
         validate_learning(content, item.kind, material, resolve=True)
     except ValueError as exc:
@@ -369,7 +421,7 @@ def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Sessio
     if new_points is not None:
         content["knowledge_point_ids"] = new_points
     item.content = content
-    db.commit()
+    commit_content(db, instance_id)
     return {"id": item.id}
 
 
@@ -386,18 +438,23 @@ class ActivityQuestionsInput(BaseModel):
 
 
 @router.put("/teacher/activities/{activity_id}/questions")
-def update_activity_questions(activity_id: str, body: ActivityQuestionsInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
+def update_activity_questions(activity_id: str, body: ActivityQuestionsInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)], classroom_id: int | None = None):
+    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
     from .curriculum import editable
 
-    activity = editable(db.scalar(select(Activity).where(Activity.id == activity_id).with_for_update()), user)
+    activity = editable(db.scalar(select(Activity).where(Activity.id == activity_id).with_for_update()), user, instance_id)
     if activity.kind not in {"practice", "assessment"}:
         raise HTTPException(422, "只有练习与测验活动可以选题")
     if activity.kind == "assessment" and len(body.question_ids) > 100:
         raise HTTPException(422, "章节测验最多选择100道题")
+    if (activity.kind == "assessment" and body.question_ids != [q.id for q in activity_questions(db, activity)]
+            and db.scalar(select(AssessmentAttempt.id).where(AssessmentAttempt.activity_id == activity.id).limit(1)) is not None):
+        raise HTTPException(409, "测验已有试卷记录，不能更换题集或顺序；请新建测验活动")
     for question_id in sorted(body.question_ids):
         question = db.scalar(select(Question).where(Question.id == question_id).with_for_update())
         if not question:
             raise HTTPException(422, "选中的题目不存在")
+        require_scope(question, instance_id)
         if question.owner_id not in {None, activity.owner_id}:
             raise HTTPException(403, "题目必须属于活动教师或共享题库")
         if question.status != "ready":
@@ -406,7 +463,7 @@ def update_activity_questions(activity_id: str, body: ActivityQuestionsInput, db
             raise HTTPException(422, "题目必须关联活动所在章节")
     try:
         set_activity_questions(db, activity, body.question_ids)
-        db.commit()
+        commit_content(db, instance_id)
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(409, "内容同时更新，请刷新后重试") from exc
@@ -494,7 +551,7 @@ class QuestionUpdate(BaseModel):
     source: dict | None = None
 
 
-def validate_question_links(db, user, body):
+def validate_question_links(db, user, body, instance_id=None):
     from .curriculum import authoring_chapter
     from .models import Material
 
@@ -503,6 +560,7 @@ def validate_question_links(db, user, body):
         material = db.scalar(select(Material).where(Material.id == material_id).with_for_update()) if type(material_id) is int and material_id > 0 else None
         if not material:
             raise HTTPException(422, "题目来源资料不存在")
+        require_scope(material, instance_id)
         if user.role != "admin" and material.owner_id not in {None, user.id}:
             raise HTTPException(403, "无权引用其他教师的私有资料")
         if "page_no" in body.source:
@@ -510,10 +568,10 @@ def validate_question_links(db, user, body):
             if type(page_no) is not int or not any(page.get("page_no") == page_no for page in material.content.get("pages", [])):
                 raise HTTPException(422, "题目来源页必须属于所选资料")
     for chapter_id in body.chapter_ids:
-        authoring_chapter(db, user, chapter_id)
+        authoring_chapter(db, user, chapter_id, instance_id)
     for point_id in body.knowledge_point_ids:
         point = db.get(KnowledgePoint, point_id)
-        if not point or point.chapter_id not in body.chapter_ids:
+        if not point or point.course_instance_id != instance_id or point.chapter_id not in body.chapter_ids:
             raise HTTPException(422, "知识点必须存在且属于所选章节")
         if user.role != "admin" and point.owner_id not in {None, user.id}:
             raise HTTPException(403, "无权使用其他教师的私有知识点")
@@ -547,7 +605,14 @@ def teacher_question_payload(db, question, user):
 
 
 def _save_question(db, user, question, body):
-    validate_question_links(db, user, body)
+    validate_question_links(db, user, body, question.course_instance_id)
+    if question.kind is not None and question.kind != body.kind and (
+        db.scalar(select(Submission.id).where(Submission.question_id == question.id).limit(1)) is not None
+        or any(question.id in attempt.question_ids for attempt in db.scalars(select(AssessmentAttempt).where(
+            AssessmentAttempt.classroom_id.in_(select(CourseInstance.classroom_id).where(CourseInstance.id == question.course_instance_id))
+        )))
+    ):
+        raise HTTPException(409, "题目已有作答或试卷记录，不能改变题型；请新建题目")
     bound = db.scalars(select(Activity).join(ActivityQuestion, ActivityQuestion.activity_id == Activity.id).where(ActivityQuestion.question_id == question.id)).all()
     if bound and body.status != "ready":
         raise HTTPException(409, "题目仍被活动引用，请先从活动移除再改为草稿或停用")
@@ -564,7 +629,7 @@ def _save_question(db, user, question, body):
     secret.answer, secret.hidden_cases = body.answer, body.hidden_cases
     set_question_chapters(db, question.id, body.chapter_ids)
     set_question_knowledge_points(db, question.id, body.knowledge_point_ids)
-    db.commit()
+    commit_content(db, question.course_instance_id)
     return teacher_question_payload(db, question, user)
 
 
@@ -577,26 +642,30 @@ def save_question(db, user, question, body):
 
 
 @router.post("/teacher/questions", status_code=201)
-def create_question(body: QuestionInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
-    if db.get(Question, body.id):
+def create_question(body: QuestionInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)], classroom_id: int | None = None):
+    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
+    runtime_id = scoped_key(instance_id, "question", body.id)
+    if db.get(Question, runtime_id):
         raise HTTPException(409, "题目ID已存在")
-    return save_question(db, user, Question(id=body.id, owner_id=user.id), body)
+    return save_question(db, user, Question(id=runtime_id, stable_id=body.id, course_instance_id=instance_id, owner_id=user.id), body)
 
 
 @router.get("/teacher/questions")
-def list_questions(db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
-    query = select(Question)
+def list_questions(db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)], classroom_id: int | None = None):
+    instance_id = teacher_instance_id(db, user, classroom_id)
+    query = select(Question).where(Question.course_instance_id == instance_id)
     if user.role != "admin":
         query = query.where(Question.owner_id.is_(None) | (Question.owner_id == user.id))
     return [teacher_question_payload(db, item, user) for item in db.scalars(query.order_by(Question.id))]
 
 
 @router.put("/teacher/questions/{question_id}")
-def update_question(question_id: str, body: QuestionUpdate, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
+def update_question(question_id: str, body: QuestionUpdate, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)], classroom_id: int | None = None):
+    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
     from .curriculum import editable
     from pydantic import ValidationError
 
-    question = editable(db.scalar(select(Question).where(Question.id == question_id).with_for_update()), user)
+    question = editable(db.scalar(select(Question).where(Question.id == question_id).with_for_update()), user, instance_id)
     fields = teacher_question_payload(db, question, user)
     for key in ("activities", "owner_id"):
         fields.pop(key, None)
@@ -609,10 +678,11 @@ def update_question(question_id: str, body: QuestionUpdate, db: Annotated[Sessio
 
 
 @router.delete("/teacher/questions/{question_id}")
-def delete_question(question_id: str, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
+def delete_question(question_id: str, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)], classroom_id: int | None = None):
+    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
     from .curriculum import editable
 
-    question = editable(db.scalar(select(Question).where(Question.id == question_id).with_for_update()), user)
+    question = editable(db.scalar(select(Question).where(Question.id == question_id).with_for_update()), user, instance_id)
     if (db.scalar(select(ActivityQuestion).where(ActivityQuestion.question_id == question_id).limit(1))
             or db.scalar(select(Submission).where(Submission.question_id == question_id).limit(1))
             or any(question_id in attempt.question_ids for attempt in db.scalars(select(AssessmentAttempt)))):
@@ -625,7 +695,7 @@ def delete_question(question_id: str, db: Annotated[Session, Depends(get_db)], u
         db.flush()
     db.delete(question)
     try:
-        db.commit()
+        commit_content(db, instance_id)
     except IntegrityError as exc:
         db.rollback()
         raise HTTPException(409, "题目已被引用，请刷新后重试") from exc
@@ -644,13 +714,21 @@ class NpcInput(BaseModel):
 
     @model_validator(mode="after")
     def validate_map_position(self):
+        from .world_authoring import reachable_cells
+        from .world_config import valid_portrait
+
         validate_point(self.map_key, self.tile_x, self.tile_y)
+        if (self.tile_x, self.tile_y) not in reachable_cells(self.map_key):
+            raise ValueError("NPC必须放在地图可达位置")
+        if not valid_portrait(self.portrait):
+            raise ValueError("头像须选择系统已授权角色素材")
         return self
 
 
 @router.post("/teacher/npcs", status_code=201)
-def create_npc(body: NpcInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
-    if user.role != "admin":
+def create_npc(body: NpcInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)], classroom_id: int | None = None):
+    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
+    if instance_id is None and user.role != "admin":
         raise HTTPException(403, "全局世界角色仅管理员可新增，教师可绑定现有角色")
     from .dialogues import validate_dialogue
 
@@ -658,13 +736,12 @@ def create_npc(body: NpcInput, db: Annotated[Session, Depends(get_db)], user: An
         validate_dialogue(body.dialogue)
     except ValueError as exc:
         raise HTTPException(422, str(exc))
-    if db.get(Npc, body.key):
+    runtime_key = scoped_key(instance_id, "npc", body.key)
+    if db.get(Npc, runtime_key):
         raise HTTPException(409, "NPC已存在")
-    if body.portrait and not body.portrait.startswith("/assets/pixel/"):
-        raise HTTPException(422, "头像须引用受审计素材")
-    item = Npc(**body.model_dump())
+    item = Npc(**body.model_dump(exclude={"key"}), key=runtime_key, stable_id=body.key, course_instance_id=instance_id)
     db.add(item)
-    db.commit()
+    commit_content(db, instance_id)
     return {"key": item.key}
 
 

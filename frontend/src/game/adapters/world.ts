@@ -2,7 +2,8 @@ import Phaser from "phaser";
 import type { Npc, Player } from "../../shared/types";
 import { findPath, isTextFocus } from "../pathfinding";
 import { fromWorldCanvas, startedOnWorldCanvas } from "../pointerBoundary";
-import { getWorldMap, mapCameraBounds, mapRenderBounds, mapTargets, nearbyWorldTarget, portalAvailable, portalRoute, reachableTargetApproach, resolveWorldTargets, withinWalkBounds, worldConfig, worldTargetHint, type WorldTarget } from "../config/worldConfig";
+import { enteredInteractions } from "../interactionRegions";
+import { getWorldMap, mapCameraBounds, mapRenderBounds, mapTargets, nearbyWorldTarget, portalAvailable, portalBlockedMessage, portalRoute, reachableTargetApproach, resolveWorldTargets, withinWalkBounds, worldConfig, worldTargetHint, type WorldRuntime, type WorldTarget } from "../config/worldConfig";
 import { drawTileLayers, mapTextureUrls, parseRenderMap, type RenderMap } from "../config/worldRender";
 import { SRW_CHARA_FRAME } from "../config/srwAssets.config";
 const textureKey = (url: string) => `world-image:${url}`;
@@ -12,6 +13,8 @@ export interface WorldHandle {
   setWelcomeDrift?(value: boolean): void;
   setNpcs(npcs: Npc[]): void;
   setFlags(flags: string[]): void;
+  setRuntime(runtime: WorldRuntime): void;
+  setPlayer(player: Player): void;
   direction(key: string, down: boolean): void;
   interact(): void;
   guide(npcKey: string): void;
@@ -25,6 +28,7 @@ export interface WorldCallbacks {
   mapPosition?: (player: Player) => void;
   transition: (portalId: string, source: Player) => Promise<Player | null>;
   interact: (target: string, type: "npc" | "object") => void;
+  enterRegion?: (target: string, player: Player) => Promise<void>;
   hint: (text: string) => void;
   progress: (value: number) => void;
   error: (text: string) => void;
@@ -36,12 +40,14 @@ export function createWorld(
   npcs: Npc[],
   flags: string[],
   callbacks: WorldCallbacks,
+  runtime?: WorldRuntime,
 ): WorldHandle {
   if (instance) throw new Error("一个游戏会话只能创建一个世界实例");
   let drifting = false, driftStart = 0, destroyed = false;
   let paused = false,
     currentNpcs = npcs,
     currentFlags = flags;
+  let currentRuntime = runtime;
   const ambient = new Audio("/assets/pixel/bgm/track_01.mp3");
   ambient.loop = true;
   ambient.volume = 0.15;
@@ -95,6 +101,7 @@ export function createWorld(
     renderMaps = new Map<string, RenderMap>();
     queuedTextures = new Set<string>();
     lastHint = "";
+    enteredRegions = enteredInteractions(initial, currentRuntime?.interactions ?? [], new Set()).inside;
     constructor() {
       super("town");
     }
@@ -167,7 +174,7 @@ export function createWorld(
       const indoor = mapCameraBounds(config) === null;
       this.width = config.width;
       this.height = config.height;
-      this.objects = mapTargets(this.mapKey).flatMap(target => target.points?.map(point => ({ ...target, ...point })) ?? [target]);
+      this.objects = mapTargets(this.mapKey, currentRuntime).flatMap(target => target.points?.map(point => ({ ...target, ...point })) ?? [target]);
       const data = this.renderMaps.get(this.mapKey);
       if (!data) throw new Error("地图素材尚未准备好。");
       const bounds = mapRenderBounds(config);
@@ -189,17 +196,31 @@ export function createWorld(
         if (prop.frame && frameKey && !texture.has(frameKey)) texture.add(frameKey, 0, prop.frame.x, prop.frame.y, prop.frame.width, prop.frame.height);
         const image = this.add.image(prop.x, prop.y, key, frameKey).setOrigin(0.5, 1).setDepth(prop.depth);
         const building = config.buildings.find(item => item.object_name === prop.name);
-        if (building) {
+        const authored = currentRuntime?.interactions?.find(item => item.map_key === this.mapKey && "object_id" in item.target
+          && [prop.name, prop.interactionId, building?.id, building?.portal_id].includes(item.target.object_id));
+        if (authored) {
+          image.setInteractive({ useHandCursor: true });
+          image.on("pointerdown", fromWorldCanvas(this.game.canvas, () => this.approach(authored.id)));
+        } else if (building) {
           image.setInteractive({ useHandCursor: true });
           image.on("pointerdown", fromWorldCanvas(this.game.canvas, () => this.approach(building.id)));
-          const label = this.add.text(prop.x, prop.y - image.height - 3, building.label, {
-            fontSize: "8px", fontFamily: "sans-serif", resolution: 3, color: "#fff2d1", stroke: "#233a2b", strokeThickness: 2,
-          }).setOrigin(0.5, 1).setDepth(80).setInteractive({ useHandCursor: true });
-          label.on("pointerdown", fromWorldCanvas(this.game.canvas, () => this.approach(building.id)));
-        } else if (prop.interactionId) {
+        } else if (prop.interactionId && !currentRuntime?.interactions) {
           image.setInteractive({ useHandCursor: true });
           image.on("pointerdown", fromWorldCanvas(this.game.canvas, () => this.approach(prop.interactionId!, { x: Math.floor(prop.x / 16), y: Math.floor(prop.y / 16) })));
         }
+        if (building) {
+          const label = this.add.text(prop.x, prop.y - image.height - 3, building.label, {
+            fontSize: "8px", fontFamily: "sans-serif", resolution: 3, color: "#fff2d1", stroke: "#233a2b", strokeThickness: 2,
+          }).setOrigin(0.5, 1).setDepth(80).setInteractive({ useHandCursor: true });
+          label.on("pointerdown", fromWorldCanvas(this.game.canvas, () => this.approach(authored?.id ?? building.id)));
+        }
+      }
+      for (const interaction of currentRuntime?.interactions ?? []) {
+        if (interaction.map_key !== this.mapKey || !("region" in interaction.target)) continue;
+        const region = interaction.target.region;
+        this.add.rectangle(region.x * 16, region.y * 16, region.width * 16, region.height * 16, 0, 0)
+          .setOrigin(0).setDepth(-1).setInteractive({ useHandCursor: true })
+          .on("pointerdown", fromWorldCanvas(this.game.canvas, () => this.approach(interaction.id)));
       }
       if (worldConfig.portal_marker && this.textures.exists("portal-marker")) {
         for (const target of this.objects.filter(item => item.portal)) {
@@ -207,7 +228,7 @@ export function createWorld(
           const angle: Record<string, number> = { up: 0, right: 90, down: 180, left: 270 };
           const arrow = this.add.image(target.x * 16 + 8, target.y * 16 + 8, "portal-marker")
             .setDisplaySize(marker.width, marker.height).setAngle(angle[target.portal!.to.direction] ?? 0)
-            .setAlpha(portalAvailable(target.portal!, currentFlags) ? 0.92 : 0.55).setDepth(target.y + 4);
+            .setAlpha(portalAvailable(target.portal!, currentFlags, currentRuntime) ? 0.92 : 0.55).setDepth(target.y + 4);
           // Enlarge only the invisible hit area; the source artwork remains a small unobtrusive chevron.
           arrow.setInteractive({ useHandCursor: true,
             hitArea: new Phaser.Geom.Rectangle(-arrow.width / 2, -arrow.height / 2, arrow.width * 2, arrow.height * 2),
@@ -322,14 +343,14 @@ export function createWorld(
     }
     approach(key: string, preferredPoint?: { x: number; y: number }) {
       if (paused || this.transitioning) return;
-      let targets = resolveWorldTargets(key, currentNpcs);
+      let targets = resolveWorldTargets(key, currentNpcs, currentRuntime);
       if (!targets.length) { callbacks.error("暂时找不到这个地点。"); return; }
       const local = targets.filter(target => target.map_key === this.mapKey);
       if (!local.length) {
-        const route = portalRoute(this.mapKey, targets[0]!.map_key, currentFlags);
+        const route = portalRoute(this.mapKey, targets[0]!.map_key, currentFlags, worldConfig, currentRuntime);
         if (!route?.length) {
-          const blockedPortal = worldConfig.portals.find(portal => portal.from.map_key === this.mapKey && portal.to.map_key === targets[0]!.map_key && !portalAvailable(portal, currentFlags));
-          callbacks.error(blockedPortal?.blocked_message ?? "暂时无法前往该地点。");
+          const blockedPortal = worldConfig.portals.find(portal => portal.from.map_key === this.mapKey && portal.to.map_key === targets[0]!.map_key && !portalAvailable(portal, currentFlags, currentRuntime));
+          callbacks.error((blockedPortal ? portalBlockedMessage(blockedPortal, currentRuntime) : undefined) ?? "暂时无法前往该地点。");
           return;
         }
         this.travelTarget = key;
@@ -345,22 +366,22 @@ export function createWorld(
       const npcTargets: WorldTarget[] = this.activeNpcs.map(item => ({ id: item.npc.key, map_key: this.mapKey, label: item.npc.name,
         x: item.homeX, y: item.homeY, kind: "npc", radius: 2 }));
       return nearbyWorldTarget({ map_key: this.mapKey, x: this.player.x / 16 - 0.5, y: this.player.y / 16 - 0.75 },
-        [...npcTargets, ...this.objects], currentFlags, preferredTarget);
+        [...npcTargets, ...this.objects], currentFlags, preferredTarget, currentRuntime);
     }
     refreshHint() {
       const target = !paused && !this.transitioning && !isTextFocus(document.activeElement) ? this.nearbyTarget() : undefined;
-      const hint = target ? `E · ${worldTargetHint(target, currentFlags)}` : "";
+      const hint = target ? `E · ${worldTargetHint(target, currentFlags, currentRuntime)}` : "";
       if (hint !== this.lastHint) { this.lastHint = hint; callbacks.hint(hint); }
     }
     async interact(preferredTarget?: string) {
       if (paused || this.busy || this.transitioning) return;
       const explicitLockedPortal = preferredTarget ? this.objects.find(target => target.id === preferredTarget && target.portal
-        && !portalAvailable(target.portal, currentFlags)
+        && !portalAvailable(target.portal, currentFlags, currentRuntime)
         && Math.abs(target.x - (this.player.x / 16 - 0.5)) + Math.abs(target.y - (this.player.y / 16 - 0.75)) <= target.radius) : undefined;
       if (explicitLockedPortal?.portal) {
         this.pendingTarget = null;
         this.path = [];
-        callbacks.error(explicitLockedPortal.portal.blocked_message);
+        callbacks.error(portalBlockedMessage(explicitLockedPortal.portal, currentRuntime));
         return;
       }
       const target = this.nearbyTarget(preferredTarget);
@@ -387,8 +408,8 @@ export function createWorld(
         this.path = [];
         this.pendingTarget = null;
         if (obj.portal) {
-          if (!portalAvailable(obj.portal, currentFlags)) {
-            callbacks.error(obj.portal.blocked_message);
+          if (!portalAvailable(obj.portal, currentFlags, currentRuntime)) {
+            callbacks.error(portalBlockedMessage(obj.portal, currentRuntime));
             return;
           }
           this.transitioning = true;
@@ -408,13 +429,16 @@ export function createWorld(
       }
     }
     changeMap(player: Player) {
+      const crossedMap = this.mapKey !== player.map_key;
       this.mapKey = player.map_key;
       this.tileX = player.tile_x;
       this.tileY = player.tile_y;
       this.direction = player.direction.toUpperCase();
       this.path = [];
       this.pendingTarget = null;
+      if (crossedMap) this.enteredRegions = new Set();
       this.build();
+      if (crossedMap) this.time.delayedCall(0, () => { if (!destroyed) void this.checkRegionEntry(); });
       if (this.travelTarget) {
         const finalTarget = this.travelTarget;
         this.time.delayedCall(200, () => { if (this.travelTarget === finalTarget) this.approach(finalTarget); });
@@ -426,6 +450,21 @@ export function createWorld(
     mapPosition(): Player {
       return { map_key: this.mapKey, tile_x: this.player.x / 16 - 0.5, tile_y: this.player.y / 16 - 0.75,
         direction: this.direction.toLowerCase() };
+    }
+    async checkRegionEntry() {
+      const crossings = enteredInteractions(this.position(), currentRuntime?.interactions ?? [], this.enteredRegions);
+      this.enteredRegions = crossings.inside;
+      if (!crossings.entered.length || !callbacks.enterRegion || paused || destroyed) return;
+      // Both a completed walking step and an authorized cross-map landing enter a region.
+      // Keep the exact tile until persistence and the flow request finish.
+      this.busy = true;
+      pressed.clear();
+      this.path = [];
+      this.pendingTarget = null;
+      this.travelTarget = null;
+      try { await callbacks.enterRegion(crossings.entered[0]!, this.position()); }
+      catch (error) { if (!destroyed) callbacks.error(error instanceof Error ? error.message : "区域互动暂不可用"); }
+      finally { this.busy = false; }
     }
     save() {
       if (!this.transitioning) callbacks.position(this.position());
@@ -535,9 +574,10 @@ export function createWorld(
         x: this.tileX * 16 + 8,
         y: this.tileY * 16 + 12,
         duration: 130,
-        onComplete: () => {
-          this.busy = false;
+        onComplete: async () => {
           callbacks.mapPosition?.(this.mapPosition());
+          await this.checkRegionEntry();
+          this.busy = false;
         },
       });
     }
@@ -589,6 +629,15 @@ export function createWorld(
         currentFlags = value;
         if (scene?.player) scene.build();
       }
+    },
+    setRuntime(value) {
+      if (JSON.stringify(value) !== JSON.stringify(currentRuntime)) {
+        currentRuntime = value;
+        if (scene?.player) scene.build();
+      }
+    },
+    setPlayer(value) {
+      if (scene?.player && value.map_key !== scene.mapKey) scene.changeMap(value);
     },
     direction(key, down) {
       if (down) pressed.add(key);

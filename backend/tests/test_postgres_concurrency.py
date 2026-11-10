@@ -2,6 +2,7 @@
 
 import os
 from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
 from uuid import uuid4
 import pytest
 from fastapi.testclient import TestClient
@@ -47,6 +48,8 @@ def test_postgres_duplicate_events_under_contention():
             db.add(ChapterRelease(classroom_id=classroom.id, chapter_id=179, status="published"))
             db.add(PlayerPosition(user_id=student.id, classroom_id=classroom.id, map_key="town_hub", tile_x=22, tile_y=34, direction="up"))
             db.commit()
+            from conftest import bind_test_course
+            bind_test_course(db, classroom.id)
             token = issue(db, student)["access_token"]
             cid = classroom.id
 
@@ -85,9 +88,22 @@ def test_postgres_duplicate_events_under_contention():
             db.add(PlayerPosition(user_id=second.id, classroom_id=cid, map_key="town_hub", tile_x=22, tile_y=34, direction="up"))
             db.commit()
             story_headers = {"Authorization": "Bearer " + issue(db, second)["access_token"]}
-        started = client.post("/api/story/interactions", json={"classroom_id": cid, "npc_key": "mayor_py"}, headers=story_headers)
-        assert started.status_code == 200, started.text
-        story = started.json()
+        start_barrier = Barrier(4)
+
+        def start_story(_):
+            story_client = TestClient(app)
+            try:
+                start_barrier.wait(timeout=10)
+                response = story_client.post("/api/story/interactions", json={"classroom_id": cid, "npc_key": "mayor_py"}, headers=story_headers)
+                return response.status_code, response.json()
+            finally:
+                story_client.close()
+
+        with ThreadPoolExecutor(max_workers=4) as executor:
+            starts = list(executor.map(start_story, range(4)))
+        assert all(code == 200 for code, _ in starts), starts
+        assert len({result["id"] for _, result in starts}) == 1, starts
+        story = starts[0][1]
         path = f"/api/story/sessions/{story['id']}/advance"
         first_line = client.post(path, json={"classroom_id": cid, "revision": story["revision"], "event_id": str(uuid4())}, headers=story_headers)
         assert first_line.status_code == 200, first_line.text

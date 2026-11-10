@@ -35,6 +35,8 @@ assets/inbox/incoming/
 data/course-pack-43/pdfs/
 data/course-pack-43/videos/
 data/course-pack-43/.transcript-work/
+# Private course sources, imports and exports are deployment data.
+data/
 .pytest-local/
 .pytest-*/
 .tmp-*/

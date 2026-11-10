@@ -1,3 +1,4 @@
+import { importCourse, scopedTeacher } from "./courseFixture";
 import { test, expect, type APIResponse, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
@@ -19,13 +20,14 @@ test("configured page ranges and real video playback drive authoritative goals",
   const teacher = await json<Identity>(await request.post("/api/auth/login", { data: { student_id, password } }));
   const headers = { Authorization: `Bearer ${teacher.access_token}` };
   const classroom = await json<{ id: number; join_code: string }>(await request.post("/api/classrooms", { headers, data: { name: `学习目标验收 ${tag}` } }));
-  await json(await request.put(`/api/teacher/classrooms/${classroom.id}/releases/179`, { headers, data: { status: "published" } }));
+  const ids = await importCourse(request, headers, classroom.id);
+  await json(await request.put(`/api/teacher/classrooms/${classroom.id}/releases/${ids.chapter["179"]}`, { headers, data: { status: "published" } }));
   const identity = await json<Identity>(await request.post("/api/auth/register", { data: { name: "目标验收居民", student_id: BigInt('0x' + randomUUID().replaceAll('-', '').slice(0, 24)).toString(), password: `Resident-${randomUUID()}` } }));
   const student = { Authorization: `Bearer ${identity.access_token}` };
   await json(await request.post("/api/classrooms/join", { headers: student, data: { join_code: classroom.join_code } }));
   const materials = await json<{ id: number; kind: string; chapter_id: number; duration_seconds: number | null }[]>(await request.get(`/api/library?classroom_id=${classroom.id}`, { headers: student }));
-  const pdf = materials.find(material => material.id === 186)!;
-  const video = materials.find(material => material.chapter_id === 179 && material.kind === "video" && (material.duration_seconds ?? 0) > 30)!;
+  const pdf = materials.find(material => material.id === ids.material["186"])!;
+  const video = materials.find(material => material.chapter_id === ids.chapter["179"] && material.kind === "video" && (material.duration_seconds ?? 0) > 30)!;
   expect(pdf).toBeTruthy();
   expect(video).toBeTruthy();
   const activities = [
@@ -33,14 +35,15 @@ test("configured page ranges and real video playback drive authoritative goals",
     { id: `watch-${tag}`, title: `TEST 有效视频 ${tag}`, material_id: video.id, learning: { video: { minimum_seconds: 3 }, highlights: { video: [{ start_seconds: 1, end_seconds: 4, label: "验收重点片段" }] } } },
   ];
   for (const activity of activities) {
-    await json(await request.post("/api/teacher/activities", { headers, data: { ...activity, chapter_id: 179, kind: "lesson", npc_key: "librarian_doc", assistant_allowed: false } }));
+    const created = await json<{ id: string }>(await request.post(scopedTeacher("/api/teacher/activities", classroom.id), { headers, data: { ...activity, chapter_id: ids.chapter["179"], kind: "lesson", npc_key: ids.npc.librarian_doc, assistant_allowed: false } }));
+    activity.id = created.id;
   }
   const questTitle = `TEST 学习目标 ${tag}`;
-  await json(await request.post("/api/teacher/quests", { headers, data: { definition: { id: questId, title: questTitle, chapter_id: 179, kind: "side", nodes: activities.map((activity, index) => ({ id: `step-${index}`, type: "STUDY_LESSON", title: activity.title, activity_id: activity.id, dependencies: [] })), effects: [] } } }));
+  const createdQuest = await json<{ id: string }>(await request.post(scopedTeacher("/api/teacher/quests", classroom.id), { headers, data: { definition: { id: questId, title: questTitle, chapter_id: ids.chapter["179"], kind: "side", nodes: activities.map((activity, index) => ({ id: `step-${index}`, type: "STUDY_LESSON", title: activity.title, activity_id: activity.id, dependencies: [] })), effects: [] } } }));
   const progress = (activityId: string) => request.get(`/api/activities/${activityId}/progress?classroom_id=${classroom.id}`, { headers: student }).then(json<Progress>);
   const nodeStatus = async (id: string) => {
     const world = await json<{ quests: { id: string; nodes: { id: string; status: string }[] }[] }>(await request.get(`/api/world?classroom_id=${classroom.id}`, { headers: student }));
-    return world.quests.find(quest => quest.id === questId)!.nodes.find(node => node.id === id)!.status;
+    return world.quests.find(quest => quest.id === createdQuest.id)!.nodes.find(node => node.id === id)!.status;
   };
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(error.message));

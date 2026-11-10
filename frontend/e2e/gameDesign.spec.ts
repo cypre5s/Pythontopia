@@ -1,3 +1,4 @@
+import { importCourse } from "./courseFixture";
 import { test, expect, type APIRequestContext, type APIResponse, type ElementHandle, type Locator, type Page, type Response, type TestInfo } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 
@@ -39,7 +40,8 @@ async function prepare(request: APIRequestContext) {
   const classroom = await json<Classroom>(await request.post("/api/classrooms", {
     headers: teacher, data: { name: `游戏设计验收 ${randomUUID().slice(0, 8)}` },
   }));
-  await json(await request.put(`/api/teacher/classrooms/${classroom.id}/releases/179`, {
+  const ids = await importCourse(request, teacher, classroom.id);
+  await json(await request.put(`/api/teacher/classrooms/${classroom.id}/releases/${ids.chapter["179"]}`, {
     headers: teacher, data: { status: "published" },
   }));
   const identity = await json<Identity>(await request.post("/api/auth/register", {
@@ -48,7 +50,7 @@ async function prepare(request: APIRequestContext) {
   const student: Headers = { Authorization: `Bearer ${identity.access_token}` };
   await json(await request.post("/api/classrooms/join", { headers: student, data: { join_code: classroom.join_code } }));
   const readWorld = () => request.get(`/api/world?classroom_id=${classroom.id}`, { headers: student }).then(json<World>);
-  const mayor = (await readWorld()).npcs.find(npc => npc.key === "mayor_py")!;
+  const mayor = (await readWorld()).npcs.find(npc => npc.key === ids.npc.mayor_py)!;
   await json(await request.put("/api/world/position", { headers: student, data: {
     classroom_id: classroom.id, map_key: mayor.map_key, tile_x: mayor.tile_x, tile_y: mayor.tile_y, direction: "down",
   } }));
@@ -61,12 +63,12 @@ async function prepare(request: APIRequestContext) {
     }));
   }
   expect(welcome.status).toBe("ended");
-  const arrival = (await readWorld()).quests.find(quest => quest.id === "arrival")!;
+  const arrival = (await readWorld()).quests.find(quest => quest.id === ids.quest.arrival)!;
   expect(arrival.nodes.filter(node => node.status === "complete").map(node => node.id)).toEqual(["welcome"]);
-  const readLesson = () => request.get(`/api/activities/ch1-lesson?classroom_id=${classroom.id}`, { headers: student }).then(json<Activity>);
+  const readLesson = () => request.get(`/api/activities/${ids.activity["ch1-lesson"]}?classroom_id=${classroom.id}`, { headers: student }).then(json<Activity>);
   const lesson = await readLesson();
   expect(lesson.material).toMatchObject({ kind: "pdf", status: "ready" });
-  return { classroom, identity, student, lesson, readLesson };
+  return { classroom, identity, student, lesson, readLesson, ids };
 }
 
 async function enter(page: Page, identity: Identity, classroom: Classroom) {
@@ -468,7 +470,7 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   await expect(panel(page)).toBeHidden();
   await sameCanvas(page, canvas);
 
-  await approach(page, "现在开始阅读", "ch1-lesson");
+  await approach(page, "现在开始阅读", setup.ids.activity["ch1-lesson"]);
   await expect(panel(page).locator(".pdf-reader")).toHaveAttribute("aria-busy", "false", { timeout: 60_000 });
   await shell(page, "资料阅读", lessonCards, baseline);
   await pdfFitsWithoutLeftScroll(page);
@@ -478,7 +480,7 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   await shot(page, info, "07-story-pdf-reading");
   await suspendActivity(page);
   await setScale(page, "2");
-  await approach(page, "继续阅读", "ch1-lesson");
+  await approach(page, "继续阅读", setup.ids.activity["ch1-lesson"]);
   await expect(panel(page).locator(".pdf-reader")).toHaveAttribute("aria-busy", "false", { timeout: 60_000 });
   await shell(page, "资料阅读", lessonCards, baseline);
   await pdfFitsWithoutLeftScroll(page);
@@ -505,7 +507,7 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   expect((await finishDialogue(page)).status).toBe("ended");
   await setScale(page, "1");
 
-  await approach(page, "开始练习", "ch1-practice");
+  await approach(page, "开始练习", setup.ids.activity["ch1-practice"]);
   await expect(panel(page).locator(".question-body")).toBeVisible();
   await shell(page, "练习", practiceCards, baseline);
   await assistantTab(page, "练习场教练");
@@ -523,7 +525,7 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   await shot(page, info, "08-practice");
   await suspendActivity(page);
   await setScale(page, "2");
-  await approach(page, "继续练习", "ch1-practice");
+  await approach(page, "继续练习", setup.ids.activity["ch1-practice"]);
   await expect(panel(page).locator(".question-body")).toBeVisible();
   await shell(page, "练习", practiceCards, baseline);
   await expect(panel(page).locator('input[type="radio"]:checked')).toHaveValue(draftAnswer);

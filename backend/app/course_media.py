@@ -65,7 +65,7 @@ def _json(raw):
 
 
 def _sources(source_root):
-    root = Path(source_root) if source_root else Path(os.getenv("REBORN_COURSE_ROOT", str(ROOT / "data/course-pack-43")))
+    root = Path(source_root) if source_root else Path(os.getenv("REBORN_COURSE_ROOT", str(ROOT / "data/course/legacy/course-pack-43")))
     docs = _json((root / "json/course_document.json").read_text(encoding="utf-8-sig"))
     pages = _json((root / "json/course_page.json").read_text(encoding="utf-8-sig"))
     manifest = _json((root / "video_manifest.json").read_text(encoding="utf-8-sig"))
@@ -231,9 +231,11 @@ def import_media(db, archive, *, source_root=None, storage=None):
         staged = _stage_archive(archive, Path(tmp), documents, videos, checksums, manifest, transcripts)
         try:
             _lock_materials(db)
-            chapters = {c.order_index: c for c in db.scalars(select(Chapter).where(Chapter.course_id == 43, Chapter.owner_id.is_(None)))}
-            materials = list(db.scalars(select(Material)))
+            chapters = {c.order_index: c for c in db.scalars(select(Chapter).where(Chapter.course_id == 43, Chapter.owner_id.is_(None), Chapter.course_instance_id.is_(None)))}
+            materials = list(db.scalars(select(Material).where(Material.course_instance_id.is_(None))))
             by_id = {m.id: m for m in materials}
+            if db.scalar(select(Material.id).where(Material.id.in_(documents), Material.course_instance_id.is_not(None)).limit(1)):
+                raise ValueError("旧来源资料ID已归属于班级课程，请转换完整课程包并从班级导入，不能用旧媒体导入覆盖实例")
             pdf_targets = {}
             for doc_id, (doc, pages) in documents.items():
                 material = by_id.get(doc_id)

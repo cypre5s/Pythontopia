@@ -84,7 +84,7 @@ def test_first_visit_reminder_pause_refresh_resume_and_verified_reading(client, 
     view = interact(client, student, classroom, "mayor_py")
     assert view["node"]["id"] == "welcome"
     view = advance(client, student, classroom, view)
-    assert view["status"] == "ended" and "library_unlocked" in view["world"]["flags"]
+    assert view["status"] == "ended" and "library" in view["world"]["building_unlock"]
     view = interact(client, student, classroom, "mayor_py")
     assert view["node"]["id"] == "remind"
     advance(client, student, classroom, view)

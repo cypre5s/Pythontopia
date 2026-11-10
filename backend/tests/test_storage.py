@@ -67,7 +67,7 @@ def test_teacher_upload_processing_range_and_current_material_authorization(clie
         data={"chapter_ids": "[179]", "title": "教师补充文本"},
         files={"file": ("lesson.txt", "教师上传的真实文本。Python 学习。".encode(), "text/plain")},
         headers=teacher["headers"],
-    )
+     params={"classroom_id": classroom["id"]})
     assert upload.status_code == 201, upload.text
     material_id = upload.json()["id"]
     row = db.get(Material, material_id)
@@ -99,7 +99,7 @@ def test_teacher_upload_processing_range_and_current_material_authorization(clie
         data={"chapter_ids": "[179]", "title": "更新", "material_id": material_id},
         files={"file": ("lesson.txt", b"updated content", "text/plain")},
         headers=teacher["headers"],
-    )
+     params={"classroom_id": classroom["id"]})
     assert update.status_code == 201 and update.json()["id"] == material_id
     assert "version" not in update.json()
     assert client.get(url, headers=student["headers"]).status_code == 409

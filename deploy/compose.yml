@@ -25,6 +25,7 @@ services:
       REBORN_ADMIN_PASSWORD: ${REBORN_ADMIN_PASSWORD:-}
       REBORN_ADMIN_NAME: ${REBORN_ADMIN_NAME:-管理员}
       REBORN_STORAGE_ROOT: /app/storage
+      REBORN_COURSE_EXCHANGE_ROOT: /app/data/course
       REBORN_AI_API_KEY: ${REBORN_AI_API_KEY:-}
       REBORN_AI_BASE_URL: ${REBORN_AI_BASE_URL:-}
       REBORN_AI_MODEL: ${REBORN_AI_MODEL:-}
@@ -36,6 +37,7 @@ services:
       - 127.0.0.1:${REBORN_API_PORT:-18081}:8000
     volumes:
       - reborn-storage:/app/storage
+      - ${REBORN_COURSE_EXCHANGE_DIR:-../data/course}:/app/data/course
     depends_on:
       db:
         condition: service_healthy
