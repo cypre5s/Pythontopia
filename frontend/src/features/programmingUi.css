@@ -32,11 +32,8 @@
 .game-workspace .coding-problem h3 { font-size:1.25rem; margin:4px 0 18px; }
 .game-workspace .coding-problem .question-prompt { white-space:pre-wrap; line-height:1.7; }
 .game-workspace .coding-example { margin:22px 0; }
-.game-workspace .coding-workbench pre { white-space:pre-wrap; overflow-wrap:anywhere; font: .85rem/1.6 Consolas, monospace; padding:10px; border-radius:6px; background:#eae5d9; margin:8px 0 14px; }
+.game-workspace .coding-workbench pre { white-space:pre-wrap; overflow-wrap:anywhere; font: .85rem/1.6 "JetBrains Mono", Consolas, "Segoe UI", "Noto Sans SC", monospace; padding:10px; border-radius:6px; background:#eae5d9; margin:8px 0 14px; }
 .game-workspace .coding-source .code-editor { flex:1; min-height:0; border:0; border-radius:0; margin:0; }
-.game-workspace .coding-source .code-editor .cm-editor { height:100%; }
-.game-workspace .coding-source .code-editor .cm-scroller { min-height:0; }
-.game-workspace .coding-source .code-editor .cm-content { min-height:100%; }
 .game-workspace .coding-tabs { padding:0 10px; gap:14px; }
 .game-workspace .coding-tabs button { border:0; border-bottom:2px solid transparent; background:transparent; border-radius:0; padding:8px 0; color:var(--game-muted); }
 .game-workspace .coding-tabs button[aria-pressed=true] { border-bottom-color:var(--game-forest); color:var(--game-forest); }
@@ -62,3 +59,16 @@
 @media (prefers-reduced-motion:reduce) {
   .game-workspace .pane-resize-handle span, .game-workspace .learning-resize-handle > span { transition:none; }
 }
+
+.game-workspace .coding-example h4 { font-family: inherit; font-size: .9rem; font-weight: 700; margin: 0 0 12px; }
+.game-workspace .coding-example label { font-size: .8rem; color: var(--game-muted); }
+.game-workspace .coding-hint { border-top: 1px solid var(--game-line); }
+.game-workspace .coding-hint:last-child { border-bottom: 1px solid var(--game-line); }
+.game-workspace .coding-hint summary { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 10px 0; list-style: none; cursor: pointer; font-size: .9rem; font-weight: 600; }
+.game-workspace .coding-hint summary::-webkit-details-marker { display: none; }
+.game-workspace .coding-hint .game-icon { width: 16px; height: 16px; flex-shrink: 0; }
+.game-workspace .coding-hint .hint-chevron { margin-left: auto; color: var(--game-muted); }
+.game-workspace .coding-hint[open] .hint-chevron { transform: rotate(180deg); }
+.game-workspace .coding-hint p { margin: 0 0 14px 26px; font-size: .9rem; line-height: 1.65; }
+.game-workspace .coding-content .practice-page-index { color: #fff2d6; font-size: .8rem; padding: 0 6px; }
+.game-workspace .monaco-editor textarea.inputarea { min-height: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; }

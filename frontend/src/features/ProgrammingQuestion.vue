@@ -6,10 +6,9 @@
         <h3 :id="headingId">{{ index + 1 }}. {{ question.title }}</h3>
         <p class="question-prompt">{{ question.prompt }}</p>
         <section v-for="(sample, i) in question.samples" :key="i" class="coding-example">
-          <h4>示例 {{ i + 1 }}</h4><pre>输入：{{ sample.input }}
-输出：{{ sample.output }}</pre>
+          <h4>示例 {{ i + 1 }}</h4><label>输入</label><pre>{{ sample.input || '（空输入）' }}</pre><label>输出</label><pre>{{ sample.output || '（无输出）' }}</pre>
         </section>
-        <details v-for="(hint, i) in question.hints ?? []" :key="i"><summary>提示 {{ i + 1 }}</summary><p>{{ hint }}</p></details>
+        <details v-for="(hint, i) in question.hints ?? []" :key="i" class="coding-hint"><summary><GameIcon name="hint" /><span>提示 {{ i + 1 }}</span><GameIcon name="chevronDown" class="hint-chevron" /></summary><p>{{ hint }}</p></details>
       </div>
     </section>
     <div class="coding-divider coding-divider-vertical"><div class="pane-resize-handle" role="separator" tabindex="0" aria-label="调整题目与代码宽度" aria-orientation="vertical" :aria-valuenow="problemWidth" :aria-valuemin="25" :aria-valuemax="70" @pointerdown="startResize($event, 'width')" @pointermove="resize" @pointerup="finishResize" @pointercancel="finishResize" @lostpointercapture="finishResize" @keydown="resizeKeys($event, 'width')" @dblclick="resetSize('width')"><span></span></div></div>
@@ -40,14 +39,15 @@
     </section>
     <Teleport :to="toolbarTarget || 'body'" :disabled="!toolbarTarget">
       <div v-if="!readOnly" class="coding-actions">
-        <button :disabled="busy || !hasAnswer || Boolean(pendingMode)" @click="running ? controller?.abort() : runSamples()">{{ running ? '停止运行' : '运行公开样例' }}</button>
-        <button v-if="showSubmit" class="primary" :disabled="busy || running || !hasAnswer" @click="$emit('submit', 'submit')">{{ busy ? '等待判定…' : pendingMode ? '重试提交' : '提交代码' }}</button>
+        <button :disabled="busy || !hasAnswer || Boolean(pendingMode)" @click="running ? controller?.abort() : runSamples()"><GameIcon :name="running ? 'stop' : 'play'" />{{ running ? '停止运行' : '运行公开样例' }}</button>
+        <button v-if="showSubmit" class="primary" :disabled="busy || running || !hasAnswer" @click="$emit('submit', 'submit')"><GameIcon :name="busy ? 'refresh' : 'publish'" />{{ busy ? '等待判定…' : pendingMode ? '重试提交' : '提交代码' }}</button>
       </div>
     </Teleport>
   </article>
 </template>
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref, onBeforeUnmount } from "vue";
+import GameIcon from "../shared/GameIcon.vue";
 import { runPython, sameOutput } from "../shared/pythonRunner";
 import type { Question, Submission } from "../shared/types";
 import { submissionStatusName } from "../shared/practicePresentation";

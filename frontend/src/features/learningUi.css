@@ -269,22 +269,6 @@
   background: #fffdf7;
   overflow: hidden;
 }
-.game-workspace .learning-layout .code-editor .cm-editor {
-  font-size: 1rem !important;
-  color: var(--learn-ink);
-  background: #fffdf7;
-}
-.game-workspace .learning-layout .code-editor .cm-scroller {
-  min-height: 16rem;
-}
-.game-workspace .learning-layout .code-editor .cm-gutters {
-  background: var(--learn-wash);
-  color: var(--learn-muted);
-  border-right: 1px solid var(--learn-border);
-}
-.game-workspace .learning-layout .code-editor :is(.cm-activeLine, .cm-activeLineGutter) {
-  background: #e6be7626;
-}
 .game-workspace .learning-layout .submission-actions {
   display: flex;
   align-items: center;

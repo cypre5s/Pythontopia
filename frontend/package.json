@@ -13,11 +13,9 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@codemirror/commands": "6.10.3",
-    "@codemirror/lang-python": "6.2.1",
-    "@codemirror/state": "6.6.0",
-    "@codemirror/view": "6.43.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
     "@lucide/vue": "1.69.0",
+    "monaco-editor": "0.57.0",
     "pdfjs-dist": "4.10.38",
     "phaser": "3.87.0",
     "pinia": "2.3.0",

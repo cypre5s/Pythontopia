@@ -52,7 +52,7 @@ export function findPath(
 export function isTextFocus(element: Element | null) {
   return Boolean(
     element?.closest(
-      'input,textarea,select,[contenteditable="true"],.cm-editor',
+      'input,textarea,select,[contenteditable="true"],.monaco-editor',
     ),
   );
 }

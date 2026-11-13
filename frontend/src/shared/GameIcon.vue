@@ -3,13 +3,14 @@
 </template>
 <script setup lang="ts">
 import {
-  MessageSquare, NotebookText, BookOpen, Users, Settings, Compass, House,
+  Play, Square, Lightbulb, ChevronDown, MessageSquare, NotebookText, BookOpen, Users, Settings, Compass, House,
   X, Leaf, Music, Video, SquarePen, ChevronRight, Grid2X2, Folder,
   Activity, ChartColumnIncreasing, Upload, LogOut, Plus, Copy, RefreshCw,
   ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ExternalLink,
   Check, CircleX, Clock, CircleAlert, PanelRightClose, PanelRightOpen,
 } from "@lucide/vue";
 const icons = {
+  play: Play, stop: Square, hint: Lightbulb, chevronDown: ChevronDown,
   message: MessageSquare, journal: NotebookText, book: BookOpen, people: Users,
   settings: Settings, compass: Compass, building: House, close: X, leaf: Leaf,
   music: Music, video: Video, practice: SquarePen, chevron: ChevronRight,

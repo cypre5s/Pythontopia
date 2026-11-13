@@ -21,6 +21,7 @@
       <p v-else-if="!loading && activity" class="learning-empty">此活动尚未绑定公开题目，请联系教师。</p>
       <nav v-if="questions.length && (!isAssessment || viewMode === 'single')" class="practice-pagination" aria-label="答题翻页">
         <button :disabled="questionIndex <= 0 || requestBusy" @click="selectQuestion(questions[questionIndex - 1]!.id)"><GameIcon name="arrowLeft" /> 上一题</button>
+        <span class="practice-page-index">{{ questionIndex + 1 }} / {{ questions.length }}</span>
         <button :disabled="questionIndex >= questions.length - 1 || requestBusy" @click="selectQuestion(questions[questionIndex + 1]!.id)">下一题 <GameIcon name="arrowRight" /></button>
       </nav>
       <button v-if="storySessionId && (isAssessment ? paper?.completed : activityProgress?.completed)" class="primary practice-complete" @click="$emit('complete')">{{ isAssessment ? '完成测验' : '完成练习' }}</button>

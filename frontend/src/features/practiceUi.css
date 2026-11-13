@@ -16,8 +16,8 @@
 .game-workspace .learning-layout .submission-result > p { margin: .7rem 0 0; }
 .game-workspace .learning-layout .submission-result .result-symbol { width: 1.5rem; height: 1.5rem; color: var(--game-forest); }
 .game-workspace .learning-layout .submission-result[data-status="wrong_answer"] .result-symbol { color: #8b4835; }
-.game-workspace .practice-pagination { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 1rem; padding-top: 1rem; margin-top: .5rem; border-top: 1px solid var(--game-line); }
-.game-workspace .practice-pagination button { display: inline-flex; gap: .5rem; align-items: center; }
+.game-workspace .practice-pagination { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 6px; padding-top: 6px; margin-top: .5rem; border: 0; }
+.game-workspace .practice-pagination button { display: inline-flex; gap: 5px; align-items: center; padding: 4px 10px; font-size: .8rem; background: #203b32b8; color: #f5e7ce; border-color: transparent; }
 .game-workspace .practice-pagination .game-icon { width: 1.2rem; height: 1.2rem; }
 .game-workspace .practice-complete { margin-top: 1rem; align-self: flex-end; }
 .game-workspace .assessment-actions { display: grid; gap: .65rem; padding: 0; margin: 0; border: 0; }

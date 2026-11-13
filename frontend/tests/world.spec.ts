@@ -17,7 +17,7 @@ describe("world movement boundary", () => {
   });
   it("prevents world shortcuts while editing code or inputs", () => {
     document.body.innerHTML =
-      '<div class="cm-editor"><div contenteditable="true" id="code"></div></div><input id="input"><button id="button"></button>';
+      '<div class="monaco-editor"><div contenteditable="true" id="code"></div></div><input id="input"><button id="button"></button>';
     expect(isTextFocus(document.querySelector("#code"))).toBe(true);
     expect(isTextFocus(document.querySelector("#input"))).toBe(true);
     expect(isTextFocus(document.querySelector("#button"))).toBe(false);
