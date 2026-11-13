@@ -1,4 +1,13 @@
 <template>
+  <Teleport :to="toolbarTarget || 'body'" :disabled="!toolbarTarget">
+    <nav v-if="questions.length && viewMode === 'single'" class="practice-navigation" aria-label="答题翻页">
+      <button :disabled="questionIndex <= 0 || requestBusy" aria-label="上一题" title="上一题" @click="selectQuestion(questions[questionIndex - 1]!.id)"><GameIcon name="arrowLeft" /><span class="navigation-label">上一题</span></button>
+      <div id="practice-question-actions" class="practice-question-actions">
+        <span v-if="current?.kind !== 'python'" class="practice-question-location" :title="`${questionIndex + 1}/${questions.length} ${current?.title ?? ''}`"><span>{{ questionIndex + 1 }}/{{ questions.length }}</span><span class="practice-question-name">{{ current?.title }}</span></span>
+      </div>
+      <button :disabled="questionIndex >= questions.length - 1 || requestBusy" aria-label="下一题" title="下一题" @click="selectQuestion(questions[questionIndex + 1]!.id)"><span class="navigation-label">下一题</span><GameIcon name="arrowRight" /></button>
+    </nav>
+  </Teleport>
   <LearningSplitLayout class="practice-workspace" :has-support="Boolean(activity)" :compact="compact">
     <nav v-if="activity && compact" class="workspace-view-switch game-segmented" aria-label="练习与助教视图">
       <button :aria-pressed="!showAssistant" aria-controls="practice-content-region" @click="switchView(false)">题目与代码</button>
@@ -16,14 +25,10 @@
       <p v-if="draftError" class="error" role="alert">{{ draftError }} <button v-if="draftConflict" @click="load">重新载入试卷</button><button v-else-if="!paper?.locked" @click="retryDraft">重试保存</button></p>
       <p v-if="loading" class="learning-empty" role="status">正在读取题目…</p>
       <div v-else-if="questions.length" ref="questionRegion" class="question-body" :data-coding="current?.kind === 'python' && viewMode === 'single'" :class="{ 'question-paper': isAssessment && viewMode === 'paper' }" @scroll.passive="syncPaperSelection">
-        <PracticeQuestionCard v-for="question in visibleQuestions" :key="question.id" :question="question" :toolbar-target="viewMode === 'single' ? toolbarTarget : undefined" :index="questions.findIndex(item => item.id === question.id)" :answer="drafts[question.id]?.answer ?? ''" :code="drafts[question.id]?.code ?? ''" :read-only="Boolean(isAssessment && (paper?.locked || paperSubmissionPending))" :busy="questionBusy(question.id)" :show-submit="!isAssessment" :pending-mode="drafts[question.id]?.pending?.mode" :result="questionResult(question.id)" @update:answer="updateAnswer(question.id, $event)" @update:code="updateCode(question.id, $event)" @submit="submitQuestion(question.id, $event)" />
+        <PracticeQuestionCard v-for="question in visibleQuestions" :key="question.id" :question="question" :toolbar-target="actionTarget" :index="questions.findIndex(item => item.id === question.id)" :answer="drafts[question.id]?.answer ?? ''" :code="drafts[question.id]?.code ?? ''" :read-only="Boolean(isAssessment && (paper?.locked || paperSubmissionPending))" :busy="questionBusy(question.id)" :show-submit="!isAssessment" :pending-mode="drafts[question.id]?.pending?.mode" :result="questionResult(question.id)" @running-change="localRunning[question.id] = $event" @update:answer="updateAnswer(question.id, $event)" @update:code="updateCode(question.id, $event)" @submit="submitQuestion(question.id, $event)" />
       </div>
       <p v-else-if="!loading && activity" class="learning-empty">此活动尚未绑定公开题目，请联系教师。</p>
-      <nav v-if="questions.length && (!isAssessment || viewMode === 'single')" class="practice-pagination" aria-label="答题翻页">
-        <button :disabled="questionIndex <= 0 || requestBusy" @click="selectQuestion(questions[questionIndex - 1]!.id)"><GameIcon name="arrowLeft" /> 上一题</button>
-        <span class="practice-page-index">{{ questionIndex + 1 }} / {{ questions.length }}</span>
-        <button :disabled="questionIndex >= questions.length - 1 || requestBusy" @click="selectQuestion(questions[questionIndex + 1]!.id)">下一题 <GameIcon name="arrowRight" /></button>
-      </nav>
+
       <button v-if="storySessionId && (isAssessment ? paper?.completed : activityProgress?.completed)" class="primary practice-complete" @click="$emit('complete')">{{ isAssessment ? '完成测验' : '完成练习' }}</button>
     </section>
     <LearningSupportPanel v-if="activity" :key="activity.id" id="practice-assistant-region" tabindex="-1" :hidden="compact && !showAssistant" :inert="compact && !showAssistant" :aria-hidden="compact && !showAssistant" :activity-id="activity.id" :allowed="activity.assistant_allowed" :code="drafts[current?.id ?? '']?.code ?? ''" :role-name="roleName" :portrait-url="rolePortrait" :goals="learningGoals" :question-outline="questionOutline" @cite="cite" @select-question="selectQuestion">
@@ -38,7 +43,7 @@
             <p class="assessment-lock-state"><GameIcon name="check" /> 已交卷，答案已锁定</p>
           </template>
           <template v-else>
-            <Teleport :to="toolbarTarget || 'body'" :disabled="!(toolbarTarget && current?.kind === 'python' && viewMode === 'single')"><button class="primary assessment-top-submit" :disabled="requestBusy || !allAnswered || loading" @click="submitPaper">{{ requestBusy ? '正在交卷…' : paperSubmissionPending ? '重试交卷' : '提交试卷' }}</button></Teleport>
+            <Teleport :to="actionTarget || 'body'" :disabled="!(actionTarget && current?.kind === 'python')"><button v-if="!requestBusy && !publicRunBusy || current?.kind !== 'python' || viewMode === 'paper'" class="primary assessment-top-submit" :disabled="requestBusy || publicRunBusy || !allAnswered || loading" @click="submitPaper">{{ requestBusy ? '正在交卷…' : paperSubmissionPending ? '重试交卷' : '提交试卷' }}</button></Teleport>
             <span class="assessment-answer-count">已作答 {{ answeredCount }} / {{ questions.length }} 题</span>
             <p class="assessment-submit-note">交卷后不可修改</p>
           </template>
@@ -94,6 +99,9 @@ const questions = computed(() => {
     return { id, title: '题目已调整', kind: submitted?.code ? 'python' : typeof submitted?.answer === 'boolean' ? 'boolean' : 'fill', prompt: '原题内容已调整，以下保留已提交答案和判定结果。', options: [], samples: [] } as Question;
   });
 });
+const actionTarget = computed(() => viewMode.value === 'single' && props.toolbarTarget ? '#practice-question-actions' : undefined);
+const localRunning = ref<Record<string, boolean>>({});
+const publicRunBusy = computed(() => Object.values(localRunning.value).some(Boolean));
 const current = computed(() => questions.value[questionIndex.value]);
 const visibleQuestions = computed(() => isAssessment.value && viewMode.value === 'paper' ? questions.value : current.value ? [current.value] : []);
 const role = computed(() => activity.value?.role);

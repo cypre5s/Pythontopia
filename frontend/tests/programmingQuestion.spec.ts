@@ -17,7 +17,7 @@ it("public runs never emit a formal submission, while explicit submit does", asy
   await wrapper.findAll("button").find(b=>b.text()==="运行公开样例")!.trigger("click");
   await flushPromises();
   expect(runPython).toHaveBeenCalledWith("print(input())", "hello", expect.any(AbortSignal));
-  expect(wrapper.text()).toContain("样例 1 · 通过");
+  expect(wrapper.text()).toContain("通过");
   expect(wrapper.emitted("submit")).toBeUndefined();
   await wrapper.findAll("button").find(b=>b.text()==="提交代码")!.trigger("click");
   expect(wrapper.emitted("submit")).toEqual([["submit"]]);
@@ -53,4 +53,70 @@ it("switches Case tabs and moves actions into the workspace header", async () =>
   expect(target.textContent).toBe("");
   target.remove();
   localStorage.removeItem("pythontopia-coding-layout");
+});
+
+function codingCard() {
+  return mount(PracticeQuestionCard, {
+    props: { question: {id:'pending-cases',title:'Two cases',kind:'python',prompt:'Echo',options:[],samples:[{input:'first',output:'one'},{input:'second',output:'two'}]}, index:0, answer:'', code:'print(input())' },
+    global: { stubs: { CodeEditor:true } },
+  });
+}
+it('keeps one busy action and skeleton until every public case finishes', async () => {
+  let first!: (value: {stdout:string;stderr:string}) => void;
+  let second!: (value: {stdout:string;stderr:string}) => void;
+  vi.mocked(runPython).mockReset().mockImplementationOnce(() => new Promise(resolve => {first=resolve;})).mockImplementationOnce(() => new Promise(resolve => {second=resolve;}));
+  const wrapper=codingCard();
+  await wrapper.findAll('button').find(b=>b.text()==='运行公开样例')!.trigger('click');
+  expect(wrapper.find('.coding-actions').findAll('button')).toHaveLength(1);
+  expect(wrapper.find('.judging-action').attributes('disabled')).toBeDefined();
+  expect(wrapper.find('.result-skeleton').exists()).toBe(true);
+  first({stdout:'one',stderr:''});await flushPromises();
+  expect(wrapper.find('.result-skeleton').exists()).toBe(true);
+  expect(wrapper.find('.coding-outcome').exists()).toBe(false);
+  second({stdout:'incorrect',stderr:''});await flushPromises();
+  expect(wrapper.find('.result-skeleton').exists()).toBe(false);
+  expect(wrapper.find('.coding-outcome').text()).toBe('解答错误');
+  expect(wrapper.find('.case-tabs button[aria-pressed=true]').text()).toBe('Case 2');
+  expect(wrapper.find('.coding-tests').text()).toContain('实际输出incorrect');
+  expect(wrapper.find('.coding-tests').text()).toContain('预期输出two');
+  expect(wrapper.emitted('submit')).toBeUndefined();
+  wrapper.unmount();
+});
+it('shows execution errors with the failed input and separates formal results', async () => {
+  vi.mocked(runPython).mockReset().mockResolvedValue({stdout:'',stderr:'IndentationError: expected an indented block'});
+  const wrapper=codingCard();
+  await wrapper.findAll('button').find(b=>b.text()==='运行公开样例')!.trigger('click');await flushPromises();
+  expect(wrapper.find('.coding-outcome').text()).toBe('执行出错');
+  expect(wrapper.find('.coding-error').text()).toContain('IndentationError');
+  expect(wrapper.find('.coding-tests').text()).toContain('执行时的输入first');
+  await wrapper.setProps({busy:true});
+  expect(wrapper.find('.result-skeleton').exists()).toBe(true);
+  await wrapper.setProps({busy:false,result:{id:'s',activity_id:'a',question_id:'pending-cases',mode:'submit',status:'wrong_answer',created_at:'',feedback:{detail:'隐藏用例未通过',samples:[{status:'accepted',stdout:'one',stderr:'',compile_output:''}]}}});
+  expect(wrapper.find('.result-origin').text()).toBe('正式提交');
+  expect(wrapper.find('.coding-outcome').text()).toBe('解答错误');
+  expect(wrapper.find('.coding-tests').text()).not.toContain('IndentationError');
+  wrapper.unmount();
+});
+it('aborts a run when the user stops it and on unmount', async () => {
+  let signal: AbortSignal | undefined;
+  vi.mocked(runPython).mockReset().mockImplementation((_code,_input,value)=>new Promise((_resolve,reject)=>{signal=value;value?.addEventListener('abort',()=>reject(new Error('已停止运行')));}));
+  const wrapper=codingCard();
+  await wrapper.findAll('button').find(b=>b.text()==='运行公开样例')!.trigger('click');
+  await wrapper.find('.stop-run').trigger('click');await flushPromises();
+  expect(signal?.aborted).toBe(true);expect(wrapper.text()).toContain('已停止运行');
+  await wrapper.findAll('button').find(b=>b.text()==='运行公开样例')!.trigger('click');
+  wrapper.unmount();expect(signal?.aborted).toBe(true);await flushPromises();
+});
+
+it('keeps the pending state for a queued formal submission, including locked review', async () => {
+  const wrapper=codingCard();
+  const result={id:'s',activity_id:'a',question_id:'pending-cases',mode:'submit' as const,status:'queued' as const,created_at:'',feedback:{}};
+  await wrapper.setProps({result,readOnly:true});
+  expect(wrapper.find('.result-skeleton').exists()).toBe(true);
+  expect(wrapper.find('.coding-actions').text()).toContain('正在判题');
+  await wrapper.setProps({result:{...result,status:'accepted'}});
+  expect(wrapper.find('.result-skeleton').exists()).toBe(false);
+  expect(wrapper.find('.coding-outcome').text()).toBe('通过');
+  expect(wrapper.find('.coding-actions').exists()).toBe(false);
+  wrapper.unmount();
 });

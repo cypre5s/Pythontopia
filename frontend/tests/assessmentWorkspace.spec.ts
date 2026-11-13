@@ -153,3 +153,21 @@ describe("assessment and practice presentation", () => {
     expect(post).toHaveBeenLastCalledWith("/dev/progress/reset", { classroom_id: 2, confirmed: true });
   });
 });
+import * as pythonRunner from '../src/shared/pythonRunner';
+it('merges programming assessment actions while public samples are running', async () => {
+  const {pinia,session}=setup();
+  const activity=await session.activity('test');
+  vi.mocked(session.activity).mockResolvedValue({...activity,questions:[{id:'q1',title:'编程题',kind:'python',prompt:'输出',options:[],starter_code:'print(1)',samples:[{input:'',output:'1'}]},activity.questions[1]!]});
+  vi.spyOn(api,'get').mockResolvedValue(paper());
+  let finish!: (value: {stdout:string;stderr:string}) => void;
+  vi.spyOn(pythonRunner,'runPython').mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+  const wrapper=mount(PracticeWorkspace,{props:{activityId:'test'},global:{plugins:[pinia],stubs:{CodeEditor:true,AssistantPanel:true}}});
+  await flushPromises();
+  expect(wrapper.find('.assessment-top-submit').exists()).toBe(true);
+  await wrapper.findAll('button').find(button=>button.text()==='运行公开样例')!.trigger('click');
+  expect(wrapper.find('.assessment-top-submit').exists()).toBe(false);
+  expect(wrapper.find('.judging-action').exists()).toBe(true);
+  finish({stdout:'1',stderr:''});await flushPromises();
+  expect(wrapper.find('.assessment-top-submit').exists()).toBe(true);
+  wrapper.unmount();
+});

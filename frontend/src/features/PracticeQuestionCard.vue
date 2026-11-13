@@ -1,5 +1,5 @@
 <template>
-  <ProgrammingQuestion v-if="question.kind === 'python'" v-bind="$props" @update:code="$emit('update:code', $event)" @submit="$emit('submit', $event)" />
+  <ProgrammingQuestion v-if="question.kind === 'python'" v-bind="$props" @running-change="$emit('runningChange', $event)" @update:code="$emit('update:code', $event)" @submit="$emit('submit', $event)" />
   <article v-else class="practice-question-card" :data-question-id="question.id" :aria-labelledby="headingId">
     <header class="practice-question-heading">
       <span class="question-kind">{{ kindName[question.kind] }}</span>
@@ -40,7 +40,7 @@ import GameIcon from "../shared/GameIcon.vue";
 import type { Question, Submission, SubmissionStatus } from "../shared/types";
 import { pendingSubmissionStates, submissionStatusName } from "../shared/practicePresentation";
 const props = withDefaults(defineProps<{ question: Question; index: number; answer: string; code: string; readOnly?: boolean; busy?: boolean; showSubmit?: boolean; pendingMode?: 'submit'; toolbarTarget?: string; result?: Submission }>(), { readOnly: false, busy: false, showSubmit: true });
-defineEmits<{ "update:answer": [value: string]; "update:code": [value: string]; submit: [mode: "submit"] }>();
+defineEmits<{ runningChange: [running: boolean]; "update:answer": [value: string]; "update:code": [value: string]; submit: [mode: "submit"] }>();
 const headingId = computed(() => `practice-question-${props.question.id}`);
 const hasAnswer = computed(() => props.question.kind === "python" ? Boolean(props.code.trim()) : Boolean(props.answer.trim()));
 const resultDetail = computed(() => {

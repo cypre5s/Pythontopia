@@ -112,8 +112,8 @@ describe("public judge sample feedback", () => {
       .find((b) => b.text() === "提交代码")!
       .trigger("click");
     await flushPromises();
-    const feedback = wrapper.find(".submission-result");
-    expect(feedback.text()).toContain("公开样例 1 · 运行错误");
+    const feedback = wrapper.find(".coding-tests");
+    expect(feedback.text()).toContain("执行出错");
     expect(feedback.text()).toContain("<img src=x onerror=alert(1)>");
     expect(feedback.find("img").exists()).toBe(false);
     expect(feedback.text()).toContain("NameError: name wasd is not defined");

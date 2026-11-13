@@ -16,9 +16,6 @@
 .game-workspace .learning-layout .submission-result > p { margin: .7rem 0 0; }
 .game-workspace .learning-layout .submission-result .result-symbol { width: 1.5rem; height: 1.5rem; color: var(--game-forest); }
 .game-workspace .learning-layout .submission-result[data-status="wrong_answer"] .result-symbol { color: #8b4835; }
-.game-workspace .practice-pagination { display: flex; justify-content: center; align-items: center; flex-wrap: wrap; gap: 6px; padding-top: 6px; margin-top: .5rem; border: 0; }
-.game-workspace .practice-pagination button { display: inline-flex; gap: 5px; align-items: center; padding: 4px 10px; font-size: .8rem; background: #203b32b8; color: #f5e7ce; border-color: transparent; }
-.game-workspace .practice-pagination .game-icon { width: 1.2rem; height: 1.2rem; }
 .game-workspace .practice-complete { margin-top: 1rem; align-self: flex-end; }
 .game-workspace .assessment-actions { display: grid; gap: .65rem; padding: 0; margin: 0; border: 0; }
 .game-workspace .assessment-actions > button { width: 100%; }
@@ -27,3 +24,15 @@
 .game-workspace .assessment-score { color: var(--game-forest); font-size: 1.125rem; line-height: 1.7; }
 .game-workspace .assessment-lock-state { display: flex; gap: .5rem; align-items: center; color: var(--game-muted); }
 .game-workspace .assessment-lock-state .game-icon { width: 1.1rem; height: 1.1rem; flex-shrink: 0; }
+
+.game-workspace .practice-navigation { display: flex; align-items: center; justify-content: center; gap: 10px; min-width: 0; max-width: 100%; }
+.game-workspace .practice-question-actions { display: flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; }
+.game-workspace .practice-question-location { display: flex; align-items: center; gap: 10px; min-width: 0; max-width: 36vw; font-size: .875rem; }
+.game-workspace .practice-question-location > span:first-child { flex-shrink: 0; }
+.game-workspace .practice-question-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1100px) {
+  .game-workspace .practice-navigation { gap: 6px; }
+  .game-workspace .practice-navigation .navigation-label { display: none; }
+  .game-workspace .practice-navigation > button { padding-inline: 8px; }
+}
+@media (max-width: 600px) { .game-workspace .practice-toolbar { order: 3; flex-basis: 100%; } }
