@@ -36,13 +36,31 @@ def endpoint(cid, suffix):
 def export(client, teacher, instance):
     response = client.get(endpoint(instance.classroom_id, "export"), headers=teacher["headers"])
     assert response.status_code == 200, response.text
-    assert response.headers["cache-control"] == "private, no-store"
-    assert response.headers["content-length"] == str(len(response.content))
-    return response.content
+    from app.course_exchange import exchange_root
+    import io
+    root = exchange_root() / response.json()["directory"]
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w") as archive:
+        for path in root.rglob("*"):
+            if path.is_file():
+                archive.write(path, path.relative_to(root).as_posix())
+    return buffer.getvalue()
 
 
 def preview(client, teacher, cid, payload):
-    response = client.post(endpoint(cid, "imports/preview"), headers=teacher["headers"], files={"file": ("course.zip", payload, "application/zip")})
+    from app.course_exchange import exchange_root
+    from app.course_catalog import mounted_catalog
+    from app.course_exchange import LIMITS, MAX_ARCHIVE
+    root = exchange_root()
+    archive = root / f"{uuid4().hex}.zip"
+    archive.write_bytes(payload)
+    folder = root / f"fixture-{uuid4().hex}"
+    folder.mkdir()
+    unpack_archive(archive, folder)
+    archive.unlink()
+    items, _ = mounted_catalog(root, LIMITS, MAX_ARCHIVE)
+    key = next(item["key"] for item in items if item["path"] == folder)
+    response = client.post(endpoint(cid, "imports/available/preview"), headers=teacher["headers"], json={"package_key": key})
     assert response.status_code == 200, response.text
     return response.json()
 
@@ -212,7 +230,7 @@ def test_real_media_and_unassigned_sources_roundtrip(client, db, teacher, exchan
 
 
 @pytest.mark.parametrize("change", ["dangling", "duplicate", "unknown", "cycle", "answer"])
-def test_invalid_domain_package_never_creates_instance(client, db, teacher, exchange, change):
+def test_invalid_domain_package_never_creates_instance(client, db, teacher, exchange, change, tmp_path):
     import json
     import yaml
     source, target = exchange
@@ -233,8 +251,13 @@ def test_invalid_domain_package_never_creates_instance(client, db, teacher, exch
             row["definition"]["nodes"][0]["dependencies"] = [row["definition"]["nodes"][0]["id"]]
             entries[name] = yaml.safe_dump(row).encode()
     payload = rewrite_archive(export(client, teacher, source), corrupt)
-    response = client.post(endpoint(target.id, "imports/preview"), headers=teacher["headers"], files={"file": ("course.zip", payload)})
-    assert response.status_code == 422, response.text
+    archive = tmp_path / "invalid.zip"
+    archive.write_bytes(payload)
+    root = tmp_path / "invalid"
+    root.mkdir()
+    unpack_archive(archive, root)
+    with pytest.raises(PackageError):
+        load_bundle(root)
     assert db.scalar(select(CourseInstance).where(CourseInstance.classroom_id == target.id)) is None
 
 
@@ -414,8 +437,8 @@ def test_exchange_files_persist_privately_after_response(client, teacher, exchan
     source, target = exchange
     payload = export(client, teacher, source)
     preview(client, teacher, target.id, payload)
-    assert len(list((exchange_root() / "exports").glob("*.zip"))) == 1
-    assert len(list((exchange_root() / "imports").glob("*.zip"))) == 1
+    assert len(list(exchange_root().glob("export-*"))) == 1
+    assert len(list((exchange_root() / "imports").iterdir())) == 1
     assert not list(exchange_root().glob("course-*"))
 
 
@@ -512,7 +535,7 @@ def test_teaching_roles_are_part_of_complete_package(client, db, teacher, exchan
     stored = db.get(CoursePackageState, result.json()["instance_id"])
     assert stored.configuration["assistant"] == policy
 
-@pytest.mark.parametrize("kind", ["zip", "directory"])
+@pytest.mark.parametrize("kind", ["directory"])
 def test_available_mounted_package_uses_normal_preview_and_apply(client, db, teacher, exchange, kind):
     from app.course_exchange import exchange_root
 
@@ -540,22 +563,10 @@ def test_available_mounted_package_uses_normal_preview_and_apply(client, db, tea
     assert db.scalar(select(CourseInstance).where(CourseInstance.classroom_id == target.id)).package_id == source.package_id
 
 
-def test_available_upload_is_private_and_can_be_previewed_again(client, teacher, student, exchange):
-    source, target = exchange
-    item = preview(client, teacher, target.id, export(client, teacher, source))
-    listed = client.get(endpoint(target.id, "packages"), headers=teacher["headers"]).json()["items"]
-    assert len(listed) == 1 and listed[0]["key"] == "uploaded-" + item["id"]
-    response = client.post(endpoint(target.id, "imports/available/preview"), headers=teacher["headers"],
-                           json={"package_key": listed[0]["key"]})
-    assert response.status_code == 200, response.text
-    assert response.json()["id"] != item["id"]
-    assert len(client.get(endpoint(target.id, "packages"), headers=teacher["headers"]).json()["items"]) == 1
-    assert client.get(endpoint(source.classroom_id, "packages"), headers=teacher["headers"]).json()["items"] == []
-    assert client.post(endpoint(source.classroom_id, "imports/available/preview"), headers=teacher["headers"],
-                       json={"package_key": listed[0]["key"]}).status_code == 404
-    assert client.get(endpoint(target.id, "packages"), headers=student["headers"]).status_code == 403
-    assert client.post(endpoint(target.id, "imports/available/preview"), headers=student["headers"],
-                       json={"package_key": listed[0]["key"]}).status_code == 403
+def test_zip_upload_is_disabled(client, teacher, exchange):
+    _, target = exchange
+    response = client.post(endpoint(target.id, "imports/preview"), headers=teacher["headers"], files={"file": ("course.zip", b"zip")})
+    assert response.status_code == 410
 
 
 def test_available_packages_never_expose_other_teacher_uploads(client, db, teacher, exchange):
@@ -580,8 +591,11 @@ def test_mounted_selection_is_stale_after_change_and_files_remain_private(client
     source, target = exchange
     mounted = exchange_root() / "mounted.zip"
     mounted.write_bytes(export(client, teacher, source))
+    folder = exchange_root() / "mounted"
+    folder.mkdir()
+    unpack_archive(mounted, folder)
     item = client.get(endpoint(target.id, "packages"), headers=teacher["headers"]).json()["items"][0]
-    mounted.write_bytes(b"invalid archive")
+    (folder / "manifest.yaml").write_text("invalid", encoding="utf-8")
     response = client.post(endpoint(target.id, "imports/available/preview"), headers=teacher["headers"], json={"package_key": item["key"]})
     assert response.status_code == 404
     assert str(exchange_root()) not in response.text
@@ -600,7 +614,7 @@ def test_mounted_catalog_does_not_list_private_exports_or_oversized_packages(cli
     listed = client.get(endpoint(target.id, "packages"), headers=teacher["headers"])
     assert listed.status_code == 200
     assert listed.json()["items"] == []
-    assert listed.json()["unavailable"] == 1
+    assert listed.json()["unavailable"] == 0
 
 
 
@@ -630,9 +644,8 @@ def test_uploaded_catalog_tampering_is_rejected(client, teacher, exchange):
     from sqlalchemy.orm import object_session
     db = object_session(source)
     record = db.get(CourseImportPreview, item["id"])
-    exchange_path(record.storage_key).write_bytes(b"tampered")
-    response = client.post(endpoint(target.id, "imports/available/preview"), headers=teacher["headers"],
-                           json={"package_key": "uploaded-" + item["id"]})
+    (exchange_path(record.storage_key) / "manifest.yaml").write_bytes(b"tampered")
+    response = apply(client, teacher, target.id, item)
     assert response.status_code == 422 and "校验失败" in response.text
     assert db.scalar(select(CourseInstance).where(CourseInstance.classroom_id == target.id)) is None
 

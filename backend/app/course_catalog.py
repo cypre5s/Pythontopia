@@ -36,7 +36,7 @@ def regular_reader(path, root):
 
 
 def mounted_catalog(root, limits, max_archive):
-    """List only root-level ZIPs/package directories. Internal staging is private."""
+    """List root-level package directories. Internal staging is private."""
     items, rejected = [], 0
     for index, path in enumerate(root.iterdir()):
         if index >= 1000:
@@ -54,18 +54,6 @@ def mounted_catalog(root, limits, max_archive):
                 with regular_reader(path / "manifest.yaml", root) as stream:
                     raw = stream.read(limits.manifest_bytes + 1)
                 kind = "directory"
-            elif stat.S_ISREG(info.st_mode) and path.suffix.lower() == ".zip":
-                if info.st_size > max_archive:
-                    raise PackageError("课程ZIP过大")
-                with regular_reader(path, root) as stream, zipfile.ZipFile(stream) as archive:
-                    if len(archive.infolist()) > limits.files:
-                        raise PackageError("课程ZIP条目过多")
-                    members = [m for m in archive.infolist() if m.filename == "manifest.yaml"]
-                    if len(members) != 1 or members[0].file_size > limits.manifest_bytes:
-                        raise PackageError("课程包清单缺失或过大")
-                    with archive.open(members[0]) as manifest_stream:
-                        raw = manifest_stream.read(limits.manifest_bytes + 1)
-                kind = "zip"
             else:
                 continue
             if len(raw) > limits.manifest_bytes:
@@ -90,6 +78,34 @@ def copy_archive(source, destination, root, maximum):
             if size > maximum:
                 raise PackageError("课程压缩包超过上传限制")
             writer.write(chunk)
+
+
+def copy_directory(source, destination, root, limits):
+    """Create a private, bounded copy without compression or following links."""
+    source = Path(source)
+    if not source.resolve().is_relative_to(root.resolve()) or source.is_symlink():
+        raise PackageError("课程包目录越界或使用链接")
+    files, _ = _inventory(source, limits)
+    destination.mkdir()
+    digest = hashlib.sha256()
+    for relative, expected in sorted(files.items()):
+        target = destination / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        digest.update(relative.encode())
+        digest.update(b"\0")
+        file_digest = hashlib.sha256()
+        with regular_reader(source / relative, root) as reader, target.open("xb") as writer:
+            size = 0
+            while chunk := reader.read(1024 * 1024):
+                size += len(chunk)
+                if size > expected:
+                    raise PackageError("课程包在读取期间发生变化，请重新预览")
+                writer.write(chunk)
+                file_digest.update(chunk)
+        if size != expected:
+            raise PackageError("课程包在读取期间发生变化，请重新预览")
+        digest.update(file_digest.digest())
+    return digest.hexdigest()
 
 
 def archive_directory(source, destination, exchange_root, limits, max_archive):

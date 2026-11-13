@@ -10,6 +10,8 @@ import {
   Settings2,
   Undo2,
   Crosshair,
+  ListChecks,
+  Bot,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -677,8 +679,8 @@ function AuthoringEditor({
             <TabsList variant="line" aria-label="教学流程视图">
               <TabsTrigger value="flows"><GitBranch />公共与章节流程</TabsTrigger>
               <TabsTrigger value="map"><MapPinned />地图交互与开放规则</TabsTrigger>
-              <TabsTrigger value="quests">任务目标与依赖</TabsTrigger>
-              <TabsTrigger value="assistant">助教教学角色</TabsTrigger>
+              <TabsTrigger value="quests"><ListChecks aria-hidden="true" />任务目标与依赖</TabsTrigger>
+              <TabsTrigger value="assistant"><Bot aria-hidden="true" />助教教学角色</TabsTrigger>
             </TabsList>
           <TabsContent value="map">
             <MapEditor data={data} onChange={change} onAddNpc={() => setNpcOpen(true)} canAddNpc={!dirty && !busy} focusTarget={mapFocus} />

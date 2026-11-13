@@ -1,5 +1,7 @@
 import { test, expect, type Page } from "@playwright/test";
-import { chooseOption, credentials } from "./helpers";
+import { cp, rm } from "node:fs/promises";
+import { resolve } from "node:path";
+import { chooseOption, credentials, json } from "./helpers";
 const stamp = Date.now().toString().slice(-9);
 async function login(page: Page) {
   await page.goto("/teacher/");
@@ -124,13 +126,13 @@ test("真实班级、学生、内容、编辑器与包往返", async ({ page }, 
   await page.getByRole("button", { name: "对白", exact: true }).click();
   const dialogueCard = page.locator(".react-flow__node").filter({ hasText: "请输入对白" });
   await dialogueCard.click();
-  await expect(page.getByLabel("对白内容")).toHaveCount(0);
+  await expect(page.getByLabel("对白 1", { exact: true })).toHaveCount(0);
   await dialogueCard.click({ button: "right" });
   await chooseFromGroup(page, "选择说话 NPC", "Pythontopia 小镇", "验收向导");
   await expect(page.getByLabel("说话人", { exact: true })).toHaveValue("验收向导");
-  await page
-    .getByLabel("对白内容")
-    .fill("欢迎来到测试课程。这个流程由教师编辑。请开始学习吧。 ");
+  await page.getByLabel("对白 1", { exact: true }).fill("欢迎来到测试课程。");
+  await page.getByRole("button", { name: "添加对白", exact: true }).click();
+  await page.getByLabel("对白 2", { exact: true }).fill("这个流程由教师编辑。请开始学习吧。");
   await page.getByRole("button", { name: "关闭属性", exact: true }).click();
   await page.getByRole("button", { name: "打开页面", exact: true }).click();
   await expect(page.locator(".react-flow__edge")).toHaveCount(0);
@@ -223,11 +225,14 @@ test("真实班级、学生、内容、编辑器与包往返", async ({ page }, 
   await page.getByRole("button", { name: "保存安排", exact: true }).click();
   await expect(page.getByText("章节安排已保存")).toBeVisible();
   await navigate(page, "课程包");
-  const downloadPromise = page.waitForEvent("download");
+  const exportResponse = page.waitForResponse((response) => response.url().endsWith("/course/export"));
   await page.getByRole("button", { name: "导出课程包", exact: true }).click();
-  const downloaded = await downloadPromise;
-  const packagePath = info.outputPath("course.zip");
-  await downloaded.saveAs(packagePath);
+  const exported = await json<{ directory: string; path: string }>(await exportResponse);
+  await expect(page.getByText(`课程已导出到 ${exported.path}`, { exact: true })).toBeVisible();
+  const exchangeRoot = process.env.REBORN_COURSE_EXCHANGE_ROOT;
+  if (!exchangeRoot) throw new Error("REBORN_COURSE_EXCHANGE_ROOT must point to the isolated browser test exchange directory.");
+  expect(exported.directory).toMatch(/^export-\d+-[a-f\d]{32}$/);
+  const sharedCopy = resolve(exchangeRoot, `browser-roundtrip-${exported.directory}`);
   await page
     .getByRole("button", { name: "创建班级", exact: true })
     .first()
@@ -242,11 +247,18 @@ test("真实班级、学生、内容、编辑器与包往返", async ({ page }, 
   await expect(
     page.getByLabel("当前班级"),
   ).toContainText(`导入验收 ${stamp}`);
-  await page.getByLabel("课程包 ZIP 文件").setInputFiles(packagePath);
-  await page.getByRole("button", { name: "校验并预览", exact: true }).click();
-  await expect(
-    page.getByRole("heading", { name: "导入差异", exact: true }),
-  ).toBeVisible();
+  const packageSelect = page.getByLabel("选择已有课程包");
+  const exportedOption = `后台验收 ${stamp}的课程 · 1 · 可用课程包`;
+  await cp(resolve(exchangeRoot, exported.directory), sharedCopy, { recursive: true, force: false, errorOnExist: true });
+  try {
+    await page.getByRole("button", { name: "刷新列表", exact: true }).click();
+    await expect(packageSelect).toBeEnabled();
+    await chooseOption(page, packageSelect, exportedOption);
+    await page.getByRole("button", { name: "预览所选课程包", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "导入差异", exact: true })).toBeVisible();
+  } finally {
+    await rm(sharedCopy, { recursive: true, force: true });
+  }
   await page.getByRole("checkbox", { name: "我已核对差异，确认更新当前班级课程" }).click();
   await page.getByRole("button", { name: "确认导入", exact: true }).click();
   await expect(

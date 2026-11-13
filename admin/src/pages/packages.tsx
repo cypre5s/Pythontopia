@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Upload, Download, PackageCheck, Search } from "lucide-react";
+import { Download, PackageCheck, Search, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -14,13 +14,9 @@ import {
 } from "@/components/ui/table";
 import { PageHeader, ErrorNotice } from "@/components/common";
 import { SelectField } from "@/components/select-field";
-import { download, errorMessage, request, token } from "@/lib/api";
+import { errorMessage, request, token } from "@/lib/api";
 import { useDraft } from "@/lib/drafts";
-import {
-  receivePackage,
-  uploadPackage,
-  type TransferBytes,
-} from "@/lib/package-transfer";
+import { type TransferBytes } from "@/lib/package-transfer";
 import { formatTimestamp } from "@/lib/time";
 import { useResource } from "@/lib/use-resource";
 interface AvailablePackages {
@@ -86,7 +82,7 @@ const phaseLabels = {
   uploading: "正在上传课程包",
   validating: "正在校验课程包并生成差异",
   applying: "正在导入课程和资源",
-  packaging: "正在打包课程和资源",
+  packaging: "正在导出课程目录和资源",
   downloading: "正在下载课程包",
 };
 type Phase = keyof typeof phaseLabels;
@@ -101,6 +97,13 @@ function formatBytes(bytes: number) {
 
 function OperationProgress({ operation }: { operation: Operation | null }) {
   const id = useId();
+  const [elapsed, setElapsed] = useState(0);
+  useEffect(() => {
+    if (!operation) return;
+    const started = Date.now();
+    const timer = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(timer);
+  }, [operation]);
   const { transferred = 0, total = null } = operation?.bytes ?? {};
   const percent = total
     ? Math.min(100, Math.floor((100 * transferred) / total))
@@ -121,7 +124,12 @@ function OperationProgress({ operation }: { operation: Operation | null }) {
           </span>
         ) : null}
       </div>
-      {operation ? (
+      {operation && !total ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground" role="status">
+          <LoaderCircle className="size-4 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          已等待 {elapsed} 秒 · 正在处理课程资料，请稍候
+        </div>
+      ) : operation ? (
         <progress
           aria-labelledby={id}
           max={total ?? undefined}
@@ -138,9 +146,7 @@ export function Packages({ classroomId }: { classroomId: number }) {
   const available = useResource<AvailablePackages>(`${base}/packages`);
   const [selectedPackage, setSelectedPackage] = useState("");
   const pending = useRef<AbortController | null>(null);
-  const fileInput = useRef<HTMLInputElement>(null);
-  const [file, setFile] = useState<File | null>(null),
-    [preview, setPreview] = useState<Preview | null>(null),
+  const [preview, setPreview] = useState<Preview | null>(null),
     [requestKey, setRequestKey] = useState(""),
     [error, setError] = useState<{ phase: Phase; message: string } | null>(null),
     [message, setMessage] = useState(""),
@@ -149,7 +155,7 @@ export function Packages({ classroomId }: { classroomId: number }) {
     [search, setSearch] = useState(""),
     [changes, setChanges] = useState("all");
   const busy = operation !== null;
-  useDraft(Boolean(file || preview || busy));
+  useDraft(Boolean(preview || busy));
   useEffect(() => () => pending.current?.abort(), []);
 
   async function operate<T>(
@@ -176,29 +182,6 @@ export function Packages({ classroomId }: { classroomId: number }) {
       if (pending.current === controller) pending.current = null;
       if (!controller.signal.aborted) setOperation(null);
     }
-  }
-
-  function inspect() {
-    if (!file || pending.current) return;
-    setPreview(null);
-    setConfirmed(false);
-    return operate(
-      "uploading",
-      (signal, report) =>
-        uploadPackage<Preview>(
-          `${base}/imports/preview`,
-          file,
-          signal,
-          (bytes) => report({ phase: "uploading", bytes }),
-          () => report({ phase: "validating" }),
-        ),
-      (result) => {
-        setPreview(result);
-        setRequestKey(requestId());
-        setSearch("");
-        setChanges("all");
-      },
-    );
   }
 
   function inspectAvailable() {
@@ -234,8 +217,6 @@ export function Packages({ classroomId }: { classroomId: number }) {
         }),
       () => {
         setPreview(null);
-        setFile(null);
-        if (fileInput.current) fileInput.current.value = "";
         setConfirmed(false);
         setSelectedPackage("");
         available.reload();
@@ -247,11 +228,10 @@ export function Packages({ classroomId }: { classroomId: number }) {
   function exportPackage() {
     return operate(
       "packaging",
-      (signal, report) =>
-        receivePackage(`${base}/export`, signal, (bytes) => report({ phase: "downloading", bytes })),
-      (blob) => {
-        download(blob, `classroom-${classroomId}-course.zip`);
-        setMessage("课程包下载完成。");
+      (signal) => request<{ path: string }>(`${base}/export`, { signal }),
+      (result) => {
+        setMessage(`课程已导出到 ${result.path}`);
+        available.reload();
       },
     );
   }
@@ -307,15 +287,13 @@ export function Packages({ classroomId }: { classroomId: number }) {
             <Label htmlFor="available-course-package">选择已有课程包</Label>
             <Button variant="outline" size="sm" disabled={busy || available.loading} onClick={available.reload}>刷新列表</Button>
           </div>
-          <p className="text-sm text-muted-foreground">使用已提供的课程包，或重新预览你在本班上传过的课程包。</p>
+          <p className="text-sm text-muted-foreground">选择 data/course 下的课程包目录，校验后查看导入差异。</p>
           <ErrorNotice message={available.error} />
           <SelectField id="available-course-package" aria-label="选择已有课程包" value={selectedPackage}
             placeholder={available.loading ? "正在加载课程包" : "选择课程包"}
             disabled={busy || available.loading || !available.data?.items.length}
             onValueChange={(value) => {
               setSelectedPackage(value);
-              setFile(null);
-              if (fileInput.current) fileInput.current.value = "";
               setPreview(null);
               setConfirmed(false);
               setError(null);
@@ -325,35 +303,12 @@ export function Packages({ classroomId }: { classroomId: number }) {
               <option key={item.key} value={item.key}>{item.name} · {item.package_version} · {item.source === "uploaded" ? "本班已上传" : "可用课程包"}</option>
             ))}
           </SelectField>
-          {!available.loading && !available.error && !available.data?.items.length ? <p className="hint">暂无已有课程包，可以在下方上传 ZIP 文件。</p> : null}
+          {!available.loading && !available.error && !available.data?.items.length ? <p className="hint">暂无课程包。请将解压后的课程包目录放入 data/course，再刷新列表。</p> : null}
           {available.data?.unavailable ? <p className="hint">有 {available.data.unavailable} 份课程包暂不可用，请联系管理员检查包格式。</p> : null}
           <Button disabled={busy || !selectedPackage || available.loading || !available.data?.items.some((item) => item.key === selectedPackage)}
             onClick={() => void inspectAvailable()}><PackageCheck />预览所选课程包</Button>
         </div>
-        <div className="field">
-          <Label htmlFor="course-package">课程包 ZIP 文件</Label>
-          <Input
-            id="course-package"
-            ref={fileInput}
-            type="file"
-            accept=".zip"
-            disabled={busy}
-            onChange={(e) => {
-              setFile(e.target.files?.[0] ?? null);
-              setSelectedPackage("");
-              setPreview(null);
-              setConfirmed(false);
-              setError(null);
-              setMessage("");
-            }}
-          />
-          {file ? <p className="hint">文件大小 {formatBytes(file.size)}</p> : null}
-        </div>
-        <ErrorNotice message={(error?.phase === "uploading" || error?.phase === "validating") ? error.message : ""} />
-        <Button disabled={!file || busy} onClick={() => void inspect()}>
-          <Upload />
-          校验并预览
-        </Button>
+        <ErrorNotice message={error?.phase === "validating" ? error.message : ""} />
         <OperationProgress
           operation={operation?.phase === "uploading" || operation?.phase === "validating" ? operation : null}
         />

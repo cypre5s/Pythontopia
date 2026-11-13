@@ -70,6 +70,29 @@ def interact(client, student, classroom, npc):
     return response.json()
 
 
+def test_dialogue_rounds_resume_and_checkpoint_only_after_last_round(client, db, student, classroom, story_setup):
+    story = db.get(StoryDefinition, "story-test")
+    content = deepcopy(story.content)
+    content["nodes"][0]["text"] = "第一轮\n\n第二轮\n\n第三轮"
+    story.content = content
+    db.commit()
+    view = interact(client, student, classroom, "mayor_py")
+    assert view["node"]["text"] == "第一轮"
+    event_id = str(uuid4())
+    second = advance(client, student, classroom, view, event_id=event_id)
+    repeated = advance(client, student, classroom, view, event_id=event_id)
+    assert repeated["revision"] == second["revision"]
+    assert second["node"]["text"] == "第二轮"
+    current = client.get(f"/api/story/current?classroom_id={classroom['id']}", headers=student["headers"]).json()
+    assert current["node"]["text"] == "第二轮"
+    assert "library" not in current["world"]["building_unlock"]
+    third = advance(client, student, classroom, current)
+    assert third["node"]["text"] == "第三轮"
+    ended = advance(client, student, classroom, third)
+    assert ended["status"] == "ended"
+    assert "library" in ended["world"]["building_unlock"]
+
+
 def advance(client, student, classroom, view, choice=None, event_id=None, endpoint="advance"):
     body = {"classroom_id": classroom["id"], "revision": view["revision"], "event_id": event_id or str(uuid4())}
     if choice:

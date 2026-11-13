@@ -33,9 +33,44 @@ beforeEach(() => {
   session.world = world();
   useUiPreferences().reduceMotion = true;
 });
-afterEach(() => { vi.restoreAllMocks(); sessionStorage.clear(); document.body.replaceChildren(); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); sessionStorage.clear(); document.body.replaceChildren(); });
 
 describe("server-owned chapter performance", () => {
+  it("types the new round immediately when NPC and story props change on the same node", async () => {
+    vi.useFakeTimers();
+    useUiPreferences().reduceMotion = false;
+    const first = { ...view(), node: { id: "welcome", text: "你好，欢迎来到小镇。" } };
+    const npc = { ...world().npcs[0]!, dialogue: [first.node] };
+    const wrapper = mount(DialogueLayer, { props: { npc, actions: [], story: first } });
+    await vi.advanceTimersByTimeAsync(40);
+    expect(wrapper.get(".dialogue-text").text()).toBe("你好");
+    await wrapper.get(".dialogue-box").trigger("click");
+    expect(wrapper.get(".dialogue-text").text()).toBe(first.node.text);
+
+    const second = { ...first, revision: 1, node: { ...first.node, text: "图书馆里藏着计算工具的故事。" } };
+    await wrapper.setProps({ npc: { ...npc, dialogue: [second.node] }, story: second });
+    expect(wrapper.get(".dialogue-text").text()).toBe("");
+    await vi.advanceTimersByTimeAsync(40);
+    expect(wrapper.get(".dialogue-text").text()).toBe("图书");
+
+    // A replacement during typing must cancel the previous round's timer too.
+    const third = { ...second, revision: 2, node: { ...first.node, text: "准备好再去练习场。", choices: [{ id: "go", label: "出发" }] } };
+    await wrapper.setProps({ story: third });
+    await vi.advanceTimersByTimeAsync(40);
+    expect(wrapper.get(".dialogue-text").text()).toBe("准备");
+    expect(wrapper.find(".dialogue-response").exists()).toBe(false);
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(wrapper.get(".dialogue-text").text()).toBe(third.node.text);
+    expect(wrapper.get(".dialogue-response").text()).toContain("出发");
+    wrapper.unmount();
+  });
+  it("updates same-node rounds without animation when reduced motion is enabled", async () => {
+    const first = { ...view(), node: { id: "welcome", text: "第一轮问候" } };
+    const wrapper = mount(DialogueLayer, { props: { actions: [], story: first } });
+    await wrapper.setProps({ story: { ...first, revision: 1, node: { ...first.node, text: "第二轮介绍" } } });
+    expect(wrapper.get(".dialogue-text").text()).toBe("第二轮介绍");
+    wrapper.unmount();
+  });
   it("routes a map interaction without inventing an NPC and opens a workspace only after acknowledgment", async () => {
     const session = useSession();
     const action: StoryView = { ...view(), npc_key: null, interaction_id: "shelf", node: {

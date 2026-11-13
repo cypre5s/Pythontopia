@@ -427,7 +427,11 @@ def _view(db, user, session):
         node = {key: source[key] for key in ("id", "type", "text", "speaker", "action", "workspace", "building_id") if key in source}
         if source["type"] == "action":
             node.setdefault("text", "")
-        if "choices" in source:
+        rounds = source.get("text", "").split("\n\n")
+        round_index = session.return_mapping.get("dialogue_round", 0) if source["type"] == "dialogue" else 0
+        if source["type"] == "dialogue":
+            node["text"] = rounds[min(round_index, len(rounds) - 1)]
+        if "choices" in source and round_index >= len(rounds) - 1:
             node["choices"] = [{key: choice[key] for key in ("id", "label")} for choice in _choices(db, user, session, story, source)]
     elif session.status == "waiting":
         item = authorize_activity(db, user, session.classroom_id, session.pending_activity_id)
@@ -642,6 +646,17 @@ def advance(session_id: str, body: AdvanceInput, db: Annotated[Session, Depends(
     if session.status != "active":
         raise HTTPException(409, "请先从当前学习活动返回")
     node = _nodes(story)[session.node_id]
+    if node["type"] == "dialogue":
+        rounds = node["text"].split("\n\n")
+        round_index = session.return_mapping.get("dialogue_round", 0)
+        if round_index < len(rounds) - 1:
+            if body.choice:
+                raise HTTPException(422, "请先读完当前对白")
+            session.return_mapping = {"dialogue_round": round_index + 1}
+            _receipt(session, body, signature)
+            db.commit()
+            return _response(db, user, session)
+    session.return_mapping = {}
     if node["type"] == "action" and node["action"] == "enter_building":
         from .world_authoring import enter_building
         session.anchor = enter_building(db, user, session.classroom_id, node["building_id"])

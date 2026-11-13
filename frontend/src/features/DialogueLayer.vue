@@ -203,7 +203,6 @@ async function advance(choice?: string) {
     if (choice) lastChoice = choice;
     if (result.next_id) {
       nodeId.value = result.next_id;
-      type();
     } else emit("complete", lastChoice);
     for (const effect of result.effects) {
       if (!current()) return;
@@ -235,7 +234,6 @@ watch(
     nodeId.value = props.npc?.dialogue[0]?.id ?? "";
     imageError.value = false;
     lastChoice = undefined;
-    type();
   },
   { flush: "sync" },
 );
@@ -248,7 +246,13 @@ watch(
   },
   { flush: "sync" },
 );
-watch(nodeId, type, { immediate: true });
+// Start after the complete prop update, including a new round on the same node.
+watch(
+  [() => props.story?.id, () => props.story?.revision, () => props.npc?.key,
+    () => line.value?.id, () => line.value?.text],
+  type,
+  { immediate: true },
+);
 onBeforeUnmount(() => {
   disposed = true;
   requestGeneration++;

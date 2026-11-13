@@ -1,7 +1,5 @@
 import { expect, type APIRequestContext } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { readFile } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
 
 export interface CourseIds {
   chapter: Record<string, number>;
@@ -18,12 +16,17 @@ export interface CourseIds {
 /** Explicit fixture import; no global content fallback or learner evidence injection. */
 export async function importCourse(request: APIRequestContext, headers: Record<string, string>, classroomId: number, base = ""): Promise<CourseIds> {
   const configured = process.env.REBORN_E2E_COURSE_PACKAGE;
-  if (!configured) throw new Error("REBORN_E2E_COURSE_PACKAGE must name an explicit private test ZIP course package.");
-  const filename = isAbsolute(configured) ? configured : resolve(process.cwd().endsWith("frontend") ? ".." : ".", configured);
+  if (!configured) throw new Error("REBORN_E2E_COURSE_PACKAGE must identify a mounted test course by package_id.");
   const root = `${base}/api/teacher/classrooms/${classroomId}/course`;
-  const preview = await request.post(`${root}/imports/preview`, { headers, multipart: {
-    file: { name: "fixture-course.zip", mimeType: "application/zip", buffer: await readFile(filename) },
-  } });
+  const catalog = await request.get(`${root}/packages`, { headers });
+  expect(catalog.ok(), await catalog.text()).toBeTruthy();
+  const { items } = await catalog.json() as { items: Array<{ key: string; package_id: string }> };
+  const packages = items.filter((item) => item.package_id === configured);
+  expect(packages, `Expected one mounted test course with package_id=${configured}`).toHaveLength(1);
+  const preview = await request.post(`${root}/imports/available/preview`, {
+    headers,
+    data: { package_key: packages[0].key },
+  });
   expect(preview.ok(), await preview.text()).toBeTruthy();
   const item = await preview.json();
   expect(item.can_apply, JSON.stringify(item.blockers)).toBe(true);

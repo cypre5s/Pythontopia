@@ -13,7 +13,7 @@ from uuid import UUID, uuid4
 import zipfile
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import SQLAlchemyError
@@ -804,35 +804,29 @@ def export_course(classroom_id: int, db: Annotated[Session, Depends(get_db)], us
     if instance is None:
         raise HTTPException(409, "班级尚未导入课程")
     temporary = Path(tempfile.mkdtemp(prefix="course-export-", dir=exchange_root()))
-    root, archive = temporary / "package", temporary / "course.zip"
+    root = temporary / "package"
     root.mkdir()
     try:
         write_package(db, instance, root)
         load_bundle(root)
-        with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as output:
-            for path in sorted(root.rglob("*")):
-                if path.is_file():
-                    output.write(path, path.relative_to(root).as_posix())
-        if archive.stat().st_size > MAX_ARCHIVE:
-            raise PackageError("导出课程包超过当前ZIP上传限制，未生成无法恢复的产物")
-        destination = exchange_path(f"exports/{uuid4().hex}.zip")
-        os.replace(archive, destination)
+        destination = exchange_path(f"export-{classroom_id}-{uuid4().hex}")
+        os.replace(root, destination)
         shutil.rmtree(temporary)
         db.commit()
     except (PackageError, OSError, ValueError) as exc:
         db.rollback()
         shutil.rmtree(temporary, ignore_errors=True)
         raise HTTPException(422, str(exc) if isinstance(exc, PackageError) else "课程导出失败") from exc
-    return FileResponse(destination, filename="course.zip", media_type="application/zip",
-                        headers={"Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff"})
+    return {"directory": destination.name, "path": f"data/course/{destination.name}"}
 
 
-def _save_preview(db, user, classroom_id, bundle, archive):
+
+def _save_preview(db, user, classroom_id, bundle, archive, digest=None):
     instance = classroom_course(db, classroom_id)
     impact = _impact(db, instance, bundle)
     preview = CourseImportPreview(id=str(uuid4()), teacher_id=user.id, classroom_id=classroom_id,
                                   expected_revision=instance.revision if instance else 0,
-                                  archive_sha256=_digest(archive), storage_key=f"imports/{uuid4().hex}.zip",
+                                  archive_sha256=digest or _digest(archive), storage_key=f"imports/{uuid4().hex}" + ("" if digest else ".zip"),
                                   summary={**impact, "package_id": bundle["manifest"]["package_id"],
                                            "package_version": bundle["manifest"]["package_version"],
                                            "name": bundle["manifest"]["name"]}, expires_at=now() + timedelta(hours=24))
@@ -845,28 +839,14 @@ def _save_preview(db, user, classroom_id, bundle, archive):
 
 @router.get("/packages")
 def available_packages(classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
-    from .course_catalog import mounted_catalog, regular_reader
+    from .course_catalog import mounted_catalog
 
     _teacher(db, user, classroom_id)
     root = exchange_root()
     try:
         mounted, unavailable = mounted_catalog(root, LIMITS, MAX_ARCHIVE)
-        items = [{key: item[key] for key in ("key", "name", "package_id", "package_version", "source")} for item in mounted]
-        seen = set()
-        uploads = db.scalars(select(CourseImportPreview).where(
-            CourseImportPreview.teacher_id == user.id, CourseImportPreview.classroom_id == classroom_id
-        ).order_by(CourseImportPreview.created_at.desc(), CourseImportPreview.id).limit(200))
-        for item in uploads:
-            if item.archive_sha256 in seen:
-                continue
-            seen.add(item.archive_sha256)
-            try:
-                with regular_reader(root / _relative(item.storage_key), root):
-                    pass
-            except (PackageError, OSError):
-                continue
-            items.append({"key": "uploaded-" + item.id, "source": "uploaded",
-                          **{key: item.summary[key] for key in ("name", "package_id", "package_version")}})
+        items = [{key: item[key] for key in ("key", "name", "package_id", "package_version", "source")} for item in mounted
+                 if not item["path"].name.startswith("export-") or item["path"].name.startswith(f"export-{classroom_id}-")]
         return JSONResponse({"items": items, "unavailable": unavailable}, headers={"Cache-Control": "private, no-store"})
     except (PackageError, OSError) as exc:
         raise HTTPException(422, str(exc) if isinstance(exc, PackageError) else "无法读取可选课程包，请稍后刷新") from exc
@@ -880,34 +860,23 @@ class AvailablePackageInput(BaseModel):
 @router.post("/imports/available/preview")
 def preview_available_course(classroom_id: int, body: AvailablePackageInput, db: Annotated[Session, Depends(get_db)],
                              user: Annotated[User, Depends(require_teacher)]):
-    from .course_catalog import archive_directory, copy_archive, mounted_catalog
+    from .course_catalog import copy_directory, mounted_catalog
 
     lock_course(db, classroom_id, exclusive=True)
     _teacher(db, user, classroom_id)
     exchange = exchange_root()
     try:
         with tempfile.TemporaryDirectory(prefix="course-catalog-", dir=exchange) as temporary:
-            root, archive = Path(temporary) / "package", Path(temporary) / "course.zip"
-            root.mkdir()
-            if body.package_key.startswith("uploaded-"):
-                uploaded = db.get(CourseImportPreview, body.package_key.removeprefix("uploaded-"))
-                if not uploaded or uploaded.teacher_id != user.id or uploaded.classroom_id != classroom_id:
-                    raise HTTPException(404, "课程包不存在或不可访问，请刷新列表")
-                copy_archive(exchange / _relative(uploaded.storage_key), archive, exchange, MAX_ARCHIVE)
-                if _digest(archive) != uploaded.archive_sha256:
-                    raise PackageError("已上传课程包校验失败，请重新上传")
-            else:
-                items, _ = mounted_catalog(exchange, LIMITS, MAX_ARCHIVE)
-                selected = next((item for item in items if item["key"] == body.package_key), None)
-                if selected is None:
-                    raise HTTPException(404, "课程包已变化或不存在，请刷新列表")
-                if selected["kind"] == "directory":
-                    archive_directory(selected["path"], archive, exchange, LIMITS, MAX_ARCHIVE)
-                else:
-                    copy_archive(selected["path"], archive, exchange, MAX_ARCHIVE)
-            unpack_archive(archive, root)
+            root = Path(temporary) / "package"
+            items, _ = mounted_catalog(exchange, LIMITS, MAX_ARCHIVE)
+            selected = next((item for item in items if item["key"] == body.package_key), None)
+            if selected is None:
+                raise HTTPException(404, "课程包已变化或不存在，请刷新列表")
+            if selected["path"].name.startswith("export-") and not selected["path"].name.startswith(f"export-{classroom_id}-"):
+                raise HTTPException(404, "课程包不存在或不可访问")
+            digest = copy_directory(selected["path"], root, exchange, LIMITS)
             bundle = load_bundle(root)
-            return _save_preview(db, user, classroom_id, bundle, archive)
+            return _save_preview(db, user, classroom_id, bundle, root, digest)
     except HTTPException:
         db.rollback()
         raise
@@ -919,27 +888,9 @@ def preview_available_course(classroom_id: int, body: AvailablePackageInput, db:
 @router.post("/imports/preview")
 async def preview_course(classroom_id: int, file: Annotated[UploadFile, File()], db: Annotated[Session, Depends(get_db)],
                          user: Annotated[User, Depends(require_teacher)]):
-    lock_course(db, classroom_id, exclusive=True)
     _teacher(db, user, classroom_id)
-    if not (file.filename or "").lower().endswith(".zip"):
-        raise HTTPException(415, "请上传完整ZIP课程包")
-    with tempfile.TemporaryDirectory(prefix="course-preview-", dir=exchange_root()) as temporary:
-        root, archive = Path(temporary) / "package", Path(temporary) / "course.zip"
-        root.mkdir()
-        size = 0
-        with archive.open("wb") as output:
-            while chunk := await file.read(1024 * 1024):
-                size += len(chunk)
-                if size > MAX_ARCHIVE:
-                    raise HTTPException(413, "课程压缩包超过上传限制")
-                output.write(chunk)
-        try:
-            unpack_archive(archive, root)
-            bundle = load_bundle(root)
-            return _save_preview(db, user, classroom_id, bundle, archive)
-        except (PackageError, OSError) as exc:
-            db.rollback()
-            raise HTTPException(422, str(exc) if isinstance(exc, PackageError) else "课程包暂存失败") from exc
+    raise HTTPException(410, "ZIP上传已关闭，请将解压后的课程包放入data/course并从目录选择")
+
 
 
 class ApplyInput(BaseModel):
@@ -978,11 +929,18 @@ def apply_course(classroom_id: int, preview_id: str, body: ApplyInput, db: Annot
     try:
         with tempfile.TemporaryDirectory(prefix="course-apply-", dir=exchange_root()) as temporary:
             root, archive = Path(temporary) / "package", Path(temporary) / "course.zip"
-            root.mkdir()
-            _read_staged(preview.storage_key, archive)
-            if _digest(archive) != preview.archive_sha256:
-                raise PackageError("暂存包校验失败，请重新上传")
-            unpack_archive(archive, root)
+            staged = exchange_path(preview.storage_key)
+            if staged.is_dir():
+                from .course_catalog import copy_directory
+                digest = copy_directory(staged, root, exchange_root(), LIMITS)
+                if digest != preview.archive_sha256:
+                    raise PackageError("暂存目录校验失败，请重新预览")
+            else:
+                root.mkdir()
+                _read_staged(preview.storage_key, archive)
+                if _digest(archive) != preview.archive_sha256:
+                    raise PackageError("暂存包校验失败，请重新预览")
+                unpack_archive(archive, root)
             bundle = load_bundle(root)
             impact = _impact(db, instance, bundle)
             if impact["blockers"]:

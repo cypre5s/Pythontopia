@@ -17,6 +17,7 @@
 | 修改学生界面 | [设计索引](design/README.md)、[游戏规范](design/game-interface.md) | OverlayHost与共享游戏布局/控件 |
 | 修改教师后台 | [后台规范](design/teacher-interface.md) | admin/独立React后台与流程编辑器 |
 | 修改任务、学习目标或NPC对白 | [内容编写](content-authoring.md) | 班级课程编辑器、私有课程包与受限流程模型 |
+| 编排对白与流程图 | [教学流程建议文档](教学流程建议文档.md) | 多轮对白、多个结束节点、自然教学引导 |
 | 修改数据、鉴权和接口 | [架构](architecture.md)、[API契约](api-contract.md) | backend/app、Alembic与前端DTO |
 | 启动、迁移、导入或测试 | [开发手册](development.md) | 环境隔离、命令与故障排查 |
 | 确认实际通过与未通过 | [验收摘要](acceptance.md) | 最后验证日期/源码/环境、失败/跳过与证据 |

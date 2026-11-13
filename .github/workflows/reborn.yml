@@ -74,7 +74,7 @@ jobs:
       REBORN_CONTENT_ROOT: ${{ github.workspace }}/backend/tests/fixtures/teaching-scripts
       E2E_URL: http://127.0.0.1:15174
       ADMIN_E2E_URL: http://127.0.0.1:15174
-      REBORN_E2E_COURSE_PACKAGE: ${{ github.workspace }}/.tmp/test-course.zip
+      REBORN_E2E_COURSE_PACKAGE: test-python
       E2E_TEACHER_STUDENT_ID: '900001'
       E2E_OTHER_TEACHER_STUDENT_ID: '900002'
     steps:
@@ -87,7 +87,9 @@ jobs:
           node-version: '22'
       - run: pip install -r backend/requirements.lock
       - run: python backend/tests/source_fixtures.py
-      - run: python -m app.convert_legacy_course --source "$REBORN_COURSE_ROOT" --content "$REBORN_CONTENT_ROOT" --output ../.tmp/test-course.zip --package-id test-python --name "自动化验收课程"
+      - run: |
+          python -m app.convert_legacy_course --source "$REBORN_COURSE_ROOT" --content "$REBORN_CONTENT_ROOT" --output ../.tmp/test-course.zip --package-id "$REBORN_E2E_COURSE_PACKAGE" --name "自动化验收课程"
+          python -m zipfile -e ../.tmp/test-course.zip "$REBORN_COURSE_EXCHANGE_ROOT/test-course"
         working-directory: backend
       - run: npm ci && npx playwright install --with-deps chromium
         working-directory: frontend

@@ -92,3 +92,11 @@ Paused policy denies new content/progress/assistant requests immediately and pre
 - buildings按固定建筑ID定义enabled/default_unlocked/blocked_message/when?；无室内建筑不可被课程伪造为可进入。assistant为schema_version=1、enabled、roles、default_role_id/library_role_id、activity_roles/npc_roles；只允许教学说明和不超过系统上限的预算，不接受凭据、模型连接或特权工具。
 
 GET /world?classroom_id增加当前可用interactions、building_access及building_unlock解锁建筑ID列表；NPC可见性按同一条件解释器过滤。POST /story/interactions {classroom_id,npc_key? ,interaction_id?}只允许一个目标，距离和当前条件均由服务端验证。故事action支持open_workspace(library/journal/classroom)及enter_building；响应只描述允许的动作，客户端等待服务端advance确认才打开界面或切图。POST /story/sessions/{id}/end {classroom_id,event_id,revision}显式结束当前演出，退出工作区/暂时离开不冒充活动完成。故事幂等键、revision、等待/恢复和服务端证据要求保持。
+
+## 目录课程包接口更新2026-11-12
+
+`GET /teacher/classrooms/{id}/course/packages` 只列出共享包目录及本班导出目录。`POST .../imports/available/preview` 对目录创建私有副本，生成内容指纹并执行完整校验与影响分析；确认应用时再次核对指纹、课程修订和授权。其他班级导出目录不可选择。
+
+`POST .../imports/preview` 返回410，表示ZIP上传关闭。`GET .../export` 返回JSON，包含 `directory` 和 `path`，完整课程已写入服务器 `data/course/` 下的目录。原ZIP下载响应已退出当前接口。历史ZIP预览仍按原私有暂存与指纹校验应用。
+
+对白文本用空行分轮。运行DTO每次只返回当前轮文本，末轮才附带选项；提前传选择返回422。继续请求遵循原事件ID和revision幂等规则，末轮后才完成检查点。

@@ -1,5 +1,11 @@
 # 安装、启动与排查
 
+## 目录课程包操作
+
+将包含 `manifest.yaml` 的课程包目录放入 `data/course/`，例如 `data/course/python-town-chapter1/manifest.yaml`。设置 `REBORN_COURSE_EXCHANGE_DIR` 指向宿主机该目录，Compose内挂载到 `/app/data/course`。后台课程包页刷新列表、预览差异、确认导入。导出完成后页面显示 `data/course/export-<班级ID>-<随机ID>/`，可在相同班级再次选择。
+
+当前ZIP上传关闭。历史ZIP离线校验工具保留，但新运行流程直接使用目录。迁移已有交换目录时应保留 `imports/`，使未过期预览仍可应用。交换目录包含私有答案和素材，不能由Web静态服务公开。
+
 本手册说明当前 `reborn` 的操作流程，不代表某个本机环境正在运行。产品范围与内容格式分别见[产品说明](product.md)、[内容编写](content-authoring.md)；实际检查结果见[验收记录](acceptance.md)。原先按轮次追加的完整记录保存在[整理前原文](archive/2026-11-08-documentation-baseline/development.md)，其中的端口、迁移头和运行状态仅属于当时环境。
 
 ## 环境与数据隔离
@@ -282,9 +288,9 @@ git diff --check
 
 ### 浏览器环境与专项
 
-Playwright不会自动启动服务器。先准备独立验收数据库、媒体/交换目录及专用教师账号，设置E2E_URL、ADMIN_E2E_URL（同域入口）、E2E_TEACHER_STUDENT_ID、E2E_TEACHER_PASSWORD。跨教师权限另需E2E_OTHER_TEACHER_STUDENT_ID/PASSWORD。REBORN_E2E_COURSE_PACKAGE必须指向一个完整ZIP；学生用例先创建班级并显式导入，不回退全局课程或复用真实学生。
+Playwright不会自动启动服务器。先准备独立验收数据库、媒体/交换目录及专用教师账号，设置E2E_URL、ADMIN_E2E_URL（同域入口）、E2E_TEACHER_STUDENT_ID、E2E_TEACHER_PASSWORD。跨教师权限另需E2E_OTHER_TEACHER_STUDENT_ID/PASSWORD。将解压后的完整测试包放进隔离交换目录，设置 REBORN_E2E_COURSE_PACKAGE 为清单的 package_id。学生用例先创建班级并显式导入。后台包往返测试在同一隔离环境运行，测试进程的 REBORN_COURSE_EXCHANGE_ROOT 指向可访问的交换目录。
 
-复现CI按`.github/workflows/reborn.yml`生成合成旧来源、离线转换测试ZIP，再启动API、React和Vue。生成夹具不是提供真实教材。依赖在启动服务器前安装，浏览器运行期间不要执行npm ci。后台e2e在admin执行`npx playwright test --workers=1`；游戏按下方命令。两套都要跑，不能用后台布局验收替代学生完整主线。
+复现CI按`.github/workflows/reborn.yml`生成合成旧来源、离线转换测试ZIP并解压到隔离交换目录，再启动API、React和Vue。依赖在启动服务器前安装，浏览器运行期间不要执行npm ci。后台e2e在admin执行`npx playwright test --workers=1`；游戏按下方命令。
 
 从 `frontend` 安装匹配浏览器并执行：
 

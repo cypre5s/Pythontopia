@@ -150,6 +150,7 @@ export function NodeEditor({
   onConvertActionText: () => void;
 }) {
   const goals = catalog.quests.find((q) => q.id === flow.quest_id)?.nodes ?? [];
+  const rounds = (node.type === "dialogue" ? node.text : "").split("\n\n");
   return (
     <div className="node-properties">
       <div className="flex justify-between items-center gap-3 mb-4">
@@ -186,14 +187,29 @@ export function NodeEditor({
             />
           </div>
           <div className="field">
-            <Label htmlFor="node-text">对白内容</Label>
-            <Textarea
-              id="node-text"
-              rows={5}
-              maxLength={8000}
-              value={node.text}
-              onChange={(e) => onChange({ ...node, text: e.target.value })}
-            />
+            <p className="font-medium text-sm">对白内容</p>
+            <p className="hint">每个输入框是一轮对白。玩家逐轮继续，最后一轮显示选项并完成交谈目标。</p>
+            {rounds.map((text, index) => (
+              <div key={index} className="space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <Label htmlFor={`node-text-${index}`}>对白 {index + 1}</Label>
+                  <Button variant="ghost" size="icon-sm" disabled={rounds.length === 1}
+                    aria-label={`删除对白 ${index + 1}`}
+                    onClick={() => onChange({ ...node, text: rounds.filter((_, i) => i !== index).join("\n\n") })}>
+                    <Trash2 aria-hidden="true" />
+                  </Button>
+                </div>
+                <Textarea id={`node-text-${index}`} rows={3} value={text}
+                  maxLength={Math.max(0, 8000 - (node.text?.length ?? 0) + text.length)}
+                  onChange={(e) => onChange({ ...node, text: rounds.map((round, i) =>
+                    i === index ? e.target.value.replace(/\r\n/g, "\n").replace(/\n{2,}/g, "\n") : round,
+                  ).join("\n\n") })} />
+              </div>
+            ))}
+            <Button variant="outline" size="sm" disabled={(node.text?.length ?? 0) + 2 >= 8000}
+              onClick={() => onChange({ ...node, text: [...rounds, ""].join("\n\n") })}>
+              <Plus aria-hidden="true" />添加对白
+            </Button>
           </div>
           {flow.quest_id && (
             <div className="field">
