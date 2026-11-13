@@ -6,7 +6,7 @@ from sqlalchemy import text
 from .config import CORS_ORIGINS, dev_tools_enabled
 from .db import SessionLocal
 from .course_cleanup import cleanup_worker
-from . import auth, courses, classrooms, quests, practice, assistant, storage, character_assets, course_settings, curriculum, story, assessments, student_accounts, classroom_courses, course_exchange, world_authoring, dev_tools
+from . import auth, courses, classrooms, quests, practice, assistant, storage, character_assets, course_settings, curriculum, story, assessments, student_accounts, classroom_courses, course_exchange, world_authoring, dev_tools, narration
 
 
 @asynccontextmanager
@@ -39,6 +39,9 @@ def create_app() -> FastAPI:
     )
     for module in (auth, courses, classrooms, quests, practice, assistant, storage, character_assets, course_settings, curriculum, story, assessments, student_accounts, classroom_courses, course_exchange, world_authoring):
         app.include_router(module.router, prefix="/api")
+    # Narration authoring is additive and isolated; see app/narration.
+    app.include_router(narration.router, prefix="/api")
+    app.include_router(narration.student_router, prefix="/api")
     app.include_router(dev_tools.preview_router, prefix="/api")
     if dev_tools_enabled():
         app.include_router(dev_tools.router, prefix="/api")

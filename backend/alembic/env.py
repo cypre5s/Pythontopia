@@ -3,6 +3,7 @@ from sqlalchemy import create_engine, pool
 from app.config import DATABASE_URL
 from app.db import Base
 from app import models, integration_models, course_exchange_models  # noqa: F401 -- register migration metadata
+from app.narration import models as narration_models  # noqa: F401 -- register narration table
 
 target_metadata = Base.metadata
 
