@@ -169,6 +169,15 @@ Linux隔离容器后端全量541通过、17按环境条件跳过，保留2条SQL
 
 本地17234 API已更新，启动清理后imports由17项/5195.8 MiB降至5项/3474.2 MiB，回收约1.68 GiB。PostgreSQL预览记录保持9条，其中4条已回收文件、5条继续保留，符合清理条件的未回收记录为0，健康接口ok。本轮无模型迁移及前端改动，未重跑双前端和浏览器主线、独立PostgreSQL全量、真实AI/Judge0。
 
+## CI 真红修正核验2026-11-13
+
+远端 `reborn` 自 11-10 起连续 5 次 CI 失败，逐次读日志后确认与本轮改动无关，是两处测试缺陷。
+
+- **后端**（真实 PostgreSQL + 561 passed 的 CI 环境里唯一失败项）：`test_exchange_lock_excludes_another_process` 用 `subprocess` + `sys.executable -c` 验证跨进程文件锁，子进程 pwd 是仓库根，拿不到 pytest 注入的 `pythonpath=backend`，于是 `ModuleNotFoundError: No module named 'app'`。本机复现方式与 CI 一致（从仓库根 `pytest backend/tests/... `），修前 1 failed、修后 1 passed；`test_course_cleanup.py` + `test_course_exchange.py` 从仓库根整跑 41 passed / 3 skipped。
+- **浏览器**：`admin/e2e/teacher.spec.ts` 在 `744d2734` 把“课程默认答疑角色”从课程编辑器移到“课程设置”后仍找 `getByLabel('图书馆助教')`，该下拉已删除，超时 15s 必然失败。改为发布课程后到“课程设置”选默认答疑角色并保存。**未本机执行浏览器用例**（需要整套栈），等 PR 的 browser 任务确认。
+- 前端/后台 `typecheck`、`lint` 通过；`ruff check` 通过；`git diff --check`、`check-docs` 通过。
+- 未执行：完整 Playwright 两套回归、真实 PostgreSQL、部署。
+
 ## 课程包表格与导出名称核验2026-11-13
 
 课程包改为可搜索表格，展示名称、包创建日期、章节数、题目数及文件夹名，移除原下拉框和底部分隔线。列表只读取章节文件与题目索引；新导出目录包含安全课程名、北京时间和短随机后缀，保留班级前缀及已有目录兼容。
