@@ -14,7 +14,7 @@ from app.main import app
 from app.models import User
 from app.content_relations import (activity_questions, set_activity_questions, set_material_chapters, set_question_chapters)
 from app.auth import hash_password, issue
-from app.seed import seed
+from fixture_seed import seed
 from app.world_config import load_world_config
 
 
@@ -139,7 +139,7 @@ def bind_test_course(db, classroom_id):
     """Move explicitly synthetic fixture definitions into a test course namespace."""
     from app.course_instances import CONTENT_MODELS
     from app.models import CourseInstance, Npc
-    from app.world_authoring import migrate_legacy_world
+    from fixture_instances import configure_fixture_world
     instance = CourseInstance(classroom_id=classroom_id, package_id="synthetic-test", name="测试课程", package_version="1")
     db.add(instance)
     db.flush()
@@ -147,7 +147,7 @@ def bind_test_course(db, classroom_id):
         for row in db.scalars(select(model).where(model.course_instance_id.is_(None))):
             row.course_instance_id = instance.id
             row.stable_id = str(row.key if isinstance(row, Npc) else row.id)
-    migrate_legacy_world(db, instance)
+    configure_fixture_world(db, instance)
     db.commit()
     return instance
 
@@ -155,7 +155,8 @@ def bind_test_course(db, classroom_id):
 def copy_fixture_course(db, source_classroom_id, target_classroom_id):
     """Copy test definitions through the real mapper, deliberately excluding progress."""
     from copy import deepcopy
-    from app.course_instances import CONTENT_MODELS, _clone_rows, _relations, classroom_course
+    from app.course_instances import CONTENT_MODELS, classroom_course
+    from fixture_instances import _clone_rows, _relations
     from app.course_exchange_models import CoursePackageState
     from app.models import ChapterRelease, Classroom, CourseInstance
     source = classroom_course(db, source_classroom_id)
@@ -198,8 +199,8 @@ def branching_course(db, teacher):
     import json
     import os
     from pathlib import Path
-    from app.models import Activity, KnowledgePoint, Npc, QuestDefinition, Question, QuestionSecret
-    from app.chapter_content import load_content
+    from app.models import Activity, KnowledgePoint, QuestDefinition, Question, QuestionSecret, StoryDefinition
+    from fixture_content import load_content
     from sqlalchemy import select
 
     spec = json.loads((Path(__file__).parent / "fixtures/branching_course.json").read_text(encoding="utf-8"))
@@ -237,12 +238,24 @@ def branching_course(db, teacher):
                         for case in source["test_cases"] if not case.get("is_sample")])
                 db.add(secret)
         set_activity_questions(db, activity["id"], activity["content"]["question_ids"])
-    db.get(Npc, "professor").dialogue = spec["dialogue"]
-    db.get(Npc, "mayor_py").dialogue = [
-        {"id": "welcome", "text": "Test start", "next": "welcome-story"},
-        {"id": "welcome-story", "text": "Test terminal"},
-    ]
     quest = spec["quest"]
+    story_id = "test-branching-flow"
+    entries, nodes = {}, []
+    for goal in quest["nodes"]:
+        if goal["type"] not in {"TALK_TO_NPC", "PLAY_DIALOGUE", "REPORT_BACK"}:
+            continue
+        if goal["type"] == "PLAY_DIALOGUE":
+            goal["dialogue_id"] = f"story:{story_id}:{goal['id']}"
+        entries.setdefault(goal["target"], []).append({"when": {"goal_ready": goal["id"]}, "node": goal["id"]})
+        node = {"id": goal["id"], "type": "dialogue", "speaker_npc_id": goal["target"], "text": "测试检查点", "checkpoint": goal["id"]}
+        if goal.get("choices"):
+            node["choices"] = [{**choice, "next": "end"} for choice in goal["choices"]]
+        else:
+            node["next"] = "end"
+        nodes.append(node)
+    nodes.append({"id": "end", "type": "end"})
+    db.add(StoryDefinition(id=story_id, chapter_id=quest["chapter_id"], quest_id=quest["id"], content={
+        "schema_version": 1, "mode": "task", "priority": -10, "bindings": {}, "entries": entries, "nodes": nodes}))
     db.add(QuestDefinition(id=quest["id"], chapter_id=quest["chapter_id"], title=quest["title"],
                            owner_id=teacher["id"], definition=quest))
     db.commit()

@@ -51,6 +51,7 @@ def safe_key(key: str) -> str:
 
 
 class StorageAdapter(Protocol):
+    def delete(self, key: str) -> None: ...
     def put(self, key: str, source: Path) -> None: ...
     def copy_to(self, key: str, destination: Path) -> None: ...
     def size(self, key: str) -> int: ...
@@ -58,6 +59,9 @@ class StorageAdapter(Protocol):
 
 
 class LocalStorage:
+    def delete(self, key: str):
+        self.path(key).unlink(missing_ok=True)
+
     def path(self, key: str) -> Path:
         root = storage_root()
         target = (root / safe_key(key)).resolve()
@@ -89,6 +93,9 @@ class LocalStorage:
 
 
 class S3Storage:
+    def delete(self, key):
+        self.client.delete_object(Bucket=self.bucket, Key=self.key(key))
+
     def __init__(self):
         import boto3
 

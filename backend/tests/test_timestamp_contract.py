@@ -55,10 +55,10 @@ def test_all_learning_timestamps_remain_explicit_utc_after_sqlite_requery(client
     assert position.status_code == 200
     from app.models import QuestDefinition
     definition = {"id": "timestamp-talk", "title": "Timestamp", "chapter_id": 179,
-        "nodes": [{"id": "talk", "type": "TALK_TO_NPC", "title": "Talk", "target": "mayor_py", "dependencies": []}], "effects": []}
+        "nodes": [{"id": "talk", "type": "REACH_LOCATION", "title": "Talk", "target": "town_square", "dependencies": []}], "effects": []}
     db.add(QuestDefinition(id=definition["id"], chapter_id=179, title="Timestamp", definition=definition))
     db.commit()
-    event = client.post("/api/events", json={"classroom_id": cid, "event_id": str(uuid4()), "quest_id": definition["id"], "node_id": "talk", "evidence": {"npc_key": "mayor_py"}}, headers=headers)
+    event = client.post("/api/events", json={"classroom_id": cid, "event_id": str(uuid4()), "quest_id": definition["id"], "node_id": "talk", "evidence": {}}, headers=headers)
     assert event.status_code == 200, event.text
     record = client.post("/api/activities/ch1-lesson/participation", json={"classroom_id": cid, "page_no": 42}, headers=headers)
     assert record.status_code == 200, record.text

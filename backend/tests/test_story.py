@@ -49,7 +49,7 @@ def story_setup(db, classroom):
             {"id": "missing", "type": "dialogue", "text": "Unavailable", "next": "end"},
             {"id": "end", "type": "end"},
         ],
-        "checkpoint_effects": {"hello": [{"type": "set_world_flag", "key": "library_unlocked"}]}}
+        "checkpoint_effects": {"hello": [{"type": "unlock_building", "building_id": "library"}]}}
     validate_story(content, db, quest)
     db.add(QuestDefinition(id=quest["id"], chapter_id=179, title=quest["title"], definition=quest))
     db.add(StoryDefinition(id="story-test", chapter_id=179, quest_id=quest["id"], content=content))
@@ -214,11 +214,10 @@ def test_completed_story_yields_to_ready_second_chapter_mission(client, db, stud
     db.commit()
     move(client, student, classroom, "mayor_py")
     response = client.post("/api/story/interactions", json={"classroom_id": cid, "npc_key": "mayor_py"}, headers=student["headers"])
-    assert response.status_code == 404
-    response = client.post("/api/events", json={"classroom_id": cid, "event_id": str(uuid4()), "quest_id": "test-branching", "node_id": "mission",
-                                              "evidence": {"npc_key": "mayor_py"}}, headers=student["headers"])
     assert response.status_code == 200, response.text
-    quest = next(item for item in response.json()["world"]["quests"] if item["id"] == "test-branching")
+    assert response.json()["node"]["id"] == "mission"
+    view = advance(client, student, classroom, response.json())
+    quest = next(item for item in view["world"]["quests"] if item["id"] == "test-branching")
     assert next(node for node in quest["nodes"] if node["id"] == "professor")["status"] == "ready"
 
 
@@ -262,10 +261,9 @@ def test_paused_story_keeps_direct_access_denied_without_blocking_an_independent
         assert response.status_code == 200, response.text
         assert response.json()["node"]["id"] == "independent"
     else:
-        assert response.status_code == 404
-        response = client.post("/api/events", json={"classroom_id": cid, "event_id": str(uuid4()), "quest_id": "test-branching", "node_id": "mission",
-                                                  "evidence": {"npc_key": "mayor_py"}}, headers=student["headers"])
         assert response.status_code == 200, response.text
+        assert response.json()["node"]["id"] == "mission"
+        advance(client, student, classroom, response.json())
         assert client.get(f"/api/story/current?classroom_id={cid}", headers=student["headers"]).json() is None
     assert db.get(StorySession, view["id"]).status == "ended"
     assert not db.get(WorldFlag, (student["id"], cid, "library_unlocked"))

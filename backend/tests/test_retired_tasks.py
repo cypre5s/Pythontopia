@@ -5,7 +5,7 @@ from uuid import uuid4
 from sqlalchemy import select
 
 from app.models import Activity, LearningEvent, LearningRecord, NodeState, PlayerQuest, QuestDefinition, StoryDefinition, StorySession, Submission
-from app.seed import seed
+from fixture_seed import seed
 from conftest import make_question
 
 

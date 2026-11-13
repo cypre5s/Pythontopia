@@ -9,7 +9,7 @@ from app.models import (
     Activity, ActivityProgress, ChapterRelease, Classroom, LearningEvent, LearningRecord,
     Material, Membership, NodeState, PlayerQuest, QuestDefinition, Submission, User,
 )
-from app.seed import seed
+from fixture_seed import seed
 from conftest import make_material
 
 

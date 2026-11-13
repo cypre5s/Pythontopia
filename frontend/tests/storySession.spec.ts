@@ -10,7 +10,7 @@ import type { StoryView, World } from "../src/shared/types";
 
 const world = (): World => ({
   player: { map_key: "town_hub", tile_x: 22, tile_y: 36, direction: "down" },
-  npcs: [{ key: "librarian_doc", name: "图书管理员", map_key: "library", tile_x: 7, tile_y: 5, portrait: "", dialogue: [{ id: "greeting", text: "你好，欢迎阅读" }] }],
+  npcs: [{ key: "librarian_doc", name: "图书管理员", map_key: "library", tile_x: 7, tile_y: 5, portrait: "", direction: "down", sprite: { id: "builtin:sprite:chara_2", url: "/chara_2.png", frame_width: 16, frame_height: 20 } }],
   quests: [{ id: "arrival", chapter_id: 179, kind: "main", title: "第一章", story_id: "first-steps", status: "active", nodes: [
     { id: "study", type: "STUDY_LESSON", title: "阅读第一章", target: "librarian_doc", navigation_target: "librarian_doc", activity_id: "ch1-lesson", dependencies: [], aggregation: "ALL", optional: false, status: "ready" },
   ] }], chapters: [], flags: [],
@@ -40,15 +40,14 @@ describe("server-owned chapter performance", () => {
     vi.useFakeTimers();
     useUiPreferences().reduceMotion = false;
     const first = { ...view(), node: { id: "welcome", text: "你好，欢迎来到小镇。" } };
-    const npc = { ...world().npcs[0]!, dialogue: [first.node] };
-    const wrapper = mount(DialogueLayer, { props: { npc, actions: [], story: first } });
+    const wrapper = mount(DialogueLayer, { props: { story: first } });
     await vi.advanceTimersByTimeAsync(40);
     expect(wrapper.get(".dialogue-text").text()).toBe("你好");
     await wrapper.get(".dialogue-box").trigger("click");
     expect(wrapper.get(".dialogue-text").text()).toBe(first.node.text);
 
     const second = { ...first, revision: 1, node: { ...first.node, text: "图书馆里藏着计算工具的故事。" } };
-    await wrapper.setProps({ npc: { ...npc, dialogue: [second.node] }, story: second });
+    await wrapper.setProps({ story: second });
     expect(wrapper.get(".dialogue-text").text()).toBe("");
     await vi.advanceTimersByTimeAsync(40);
     expect(wrapper.get(".dialogue-text").text()).toBe("图书");
@@ -66,7 +65,7 @@ describe("server-owned chapter performance", () => {
   });
   it("updates same-node rounds without animation when reduced motion is enabled", async () => {
     const first = { ...view(), node: { id: "welcome", text: "第一轮问候" } };
-    const wrapper = mount(DialogueLayer, { props: { actions: [], story: first } });
+    const wrapper = mount(DialogueLayer, { props: { story: first } });
     await wrapper.setProps({ story: { ...first, revision: 1, node: { ...first.node, text: "第二轮介绍" } } });
     expect(wrapper.get(".dialogue-text").text()).toBe("第二轮介绍");
     wrapper.unmount();
@@ -81,7 +80,7 @@ describe("server-owned chapter performance", () => {
       .mockResolvedValueOnce({ ...action, status: "ended", node: null, revision: 1 });
     await session.interactStory("shelf", "object");
     expect(post).toHaveBeenCalledWith("/story/interactions", { classroom_id: 2, interaction_id: "shelf" });
-    const wrapper = mount(DialogueLayer, { props: { actions: [], story: action }, attachTo: document.body });
+    const wrapper = mount(DialogueLayer, { props: { story: action }, attachTo: document.body });
     expect(wrapper.text()).toContain("查看开放资料");
     await expect(session.advanceStory()).rejects.toThrow("课程已更新");
     expect(session.workspace).toBeNull();
@@ -241,7 +240,7 @@ describe("server-owned chapter performance", () => {
     const session = useSession();
     session.story = view();
     const post = vi.spyOn(api, "post").mockResolvedValue(view("waiting", 1));
-    const wrapper = mount(DialogueLayer, { props: { npc: world().npcs[0]!, actions: [], story: session.story }, attachTo: document.body });
+    const wrapper = mount(DialogueLayer, { props: { npc: world().npcs[0]!, story: session.story }, attachTo: document.body });
     expect(wrapper.get(".dialogue-text").text()).toContain("第一次来图书馆");
     await wrapper.get(".dialogue-response").trigger("click");
     await flushPromises();

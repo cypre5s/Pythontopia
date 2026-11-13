@@ -44,7 +44,6 @@ import { FlowSettings } from "@/components/flow-settings";
 import { NodeEditor, RoutesEditor } from "@/components/node-editor";
 import { MapEditor } from "@/components/map-editor";
 import { QuestEditor } from "@/components/quest-editor";
-import { NpcDialog } from "@/components/npc-dialog";
 import { AssistantEditor } from "@/components/assistant-editor";
 import { AuthoringInspector, AuthoringWorkspace } from "@/components/authoring-workspace";
 import { api, ApiError, errorMessage } from "@/lib/api";
@@ -79,7 +78,6 @@ type DiagnosticTarget = {
   id?: string;
   flow_id?: string;
   quest_id?: string;
-  role_id?: string;
 };
 type Diagnostic = { message: string; path: string; code?: string; suggestion?: string; target?: DiagnosticTarget };
 interface Preview {
@@ -120,19 +118,17 @@ export function Authoring({ classroomId }: { classroomId: number }) {
       key={`${classroomId}-${resource.data.revision}`}
       initial={resource.data}
       classroomId={classroomId}
-      onSaved={resource.reload}
     />
   ) : null;
 }
 function AuthoringEditor({
   initial,
   classroomId,
-  onSaved,
 }: {
   initial: Document;
   classroomId: number;
-  onSaved: () => void;
 }) {
+  const [assetBusy, setAssetBusy] = useState(false);
   const [data, setData] = useState<AuthoringData>(initial),
     [savedData, setSavedData] = useState<AuthoringData>(initial),
     [draftEpoch, setDraftEpoch] = useState(0),
@@ -162,7 +158,6 @@ function AuthoringEditor({
     ),
     [previewEntry, setPreviewEntry] = useState(""),
     [preview, setPreview] = useState<Preview | null>(null);
-  const [npcOpen, setNpcOpen] = useState(false);
   const dirty = data !== savedData;
   useDraft(dirty);
   const base = `/teacher/classrooms/${classroomId}/authoring`,
@@ -177,7 +172,7 @@ function AuthoringEditor({
     entryPositions = flow ? (entryLayouts[flow.id] ?? {}) : {},
     entry = selectedEntry && flow?.content.entries[selectedEntry];
   function change(next: AuthoringData) {
-    setData(next);
+    setData({ ...next, catalog: { ...next.catalog, npcs: next.npcs.map((npc) => ({ id: npc.id, name: npc.name, map_key: npc.placement?.map_key })) } });
     setMessage("");
     setDiagnostics([]);
     setResetImpact(undefined);
@@ -431,12 +426,13 @@ function AuthoringEditor({
   }
   const body = () => ({
     expected_revision: data.revision,
+      npcs: data.npcs,
     flows: data.flows,
     quests: data.quests,
     configuration: data.configuration,
   });
   async function validate(save = false, confirmationToken?: string) {
-    if (busy) return;
+    if (busy || assetBusy) return;
     setInspector(null);
     setBusy(true);
     setError("");
@@ -592,7 +588,7 @@ function AuthoringEditor({
         </Button>
         {dirty && (
           <AlertDialog>
-            <AlertDialogTrigger render={<Button variant="ghost" disabled={busy} />}>
+            <AlertDialogTrigger render={<Button variant="ghost" disabled={busy || assetBusy} />}>
               <Undo2 />取消编辑
             </AlertDialogTrigger>
             <AlertDialogContent>
@@ -619,7 +615,7 @@ function AuthoringEditor({
             <Badge variant="secondary" className="gap-1.5"><CheckCheck />{message}</Badge>
           ) : null}
         </span>
-        <Button disabled={busy || !dirty} onClick={() => void validate(true)}>
+        <Button disabled={busy || assetBusy || !dirty} onClick={() => void validate(true)}>
           <Save />
           {busy ? "处理中…" : "保存课程"}
         </Button>
@@ -683,7 +679,7 @@ function AuthoringEditor({
               <TabsTrigger value="assistant"><Bot aria-hidden="true" />助教教学角色</TabsTrigger>
             </TabsList>
           <TabsContent value="map">
-            <MapEditor data={data} onChange={change} onAddNpc={() => setNpcOpen(true)} canAddNpc={!dirty && !busy} focusTarget={mapFocus} />
+            <MapEditor data={data} onChange={change} focusTarget={mapFocus} />
           </TabsContent>
           <TabsContent value="quests">
             <QuestEditor key={editorJump?.sequence} data={data} onChange={change} focusTarget={editorJump && {
@@ -692,8 +688,8 @@ function AuthoringEditor({
             }} />
           </TabsContent>
           <TabsContent value="assistant">
-            <AssistantEditor key={editorJump?.sequence} data={data} onChange={change} focusTarget={editorJump && {
-              roleId: editorJump.target.role_id ?? editorJump.target.id,
+            <AssistantEditor onUploadState={setAssetBusy} classroomId={classroomId} key={editorJump?.sequence} data={data} onChange={change} focusTarget={editorJump && {
+              roleId: editorJump.target.id,
             }} />
           </TabsContent>
           <TabsContent value="flows">
@@ -802,10 +798,6 @@ function AuthoringEditor({
           </TabsContent>
         </Tabs>
       </div>
-      {npcOpen && (
-        <NpcDialog classroomId={classroomId} catalog={data.catalog}
-          onClose={() => setNpcOpen(false)} onSaved={onSaved} />
-      )}
       {settingsOpen && flow && (
         <FlowSettings
           flow={flow}

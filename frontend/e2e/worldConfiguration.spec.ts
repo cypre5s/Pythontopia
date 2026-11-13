@@ -331,8 +331,6 @@ test("map preview, filters, WASD, library doors and cross-map guidance share one
   await clickVisibleWorldPoint(page, definition.maps.library!, (await world()).player, {
     x: eastCabinet.x + eastCabinet.width / 2, y: eastCabinet.y + eastCabinet.height / 2,
   });
-  await expect(page.getByRole("dialog", { name: "剧情对白", exact: true })).toBeVisible({ timeout: 20_000 });
-  await finishPlainStory(page);
   const readingLibrary = page.getByRole("dialog", { name: "游戏工作区", exact: true });
   await expect(readingLibrary).toBeVisible({ timeout: 20_000 });
   await expect(readingLibrary.getByRole("heading", { name: "小镇图书馆", exact: true })).toBeVisible();

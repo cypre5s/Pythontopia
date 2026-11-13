@@ -11,12 +11,13 @@ import sys
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
-from .course_instances import CourseCloneError, classroom_course, clone_current_course, content_mapping
-from .models import (
+from app.course_instances import classroom_course, content_mapping
+from fixture_instances import CourseCloneError, clone_current_course
+from app.models import (
     ActivityProgress, AssessmentAttempt, ChapterRelease, Classroom, CourseInstance, LearningRecord,
     PlayerQuest, StorySession, Submission,
 )
-from .integration_models import AssistantSession
+from app.integration_models import AssistantSession
 
 
 def _has_course(db, classroom_id):
@@ -83,8 +84,8 @@ def main(argv=None):
     targets.add_argument("--classroom-id", type=int, action="append", help="Repeat to select specific classes")
     targets.add_argument("--all-legacy", action="store_true", help="Explicitly select all uninstantiated legacy classes")
     args = parser.parse_args(argv)
-    from .db import SessionLocal
-    from . import course_exchange_models  # noqa: F401 -- register complete metadata
+    from app.db import SessionLocal
+    from app import course_exchange_models  # noqa: F401 -- register complete metadata
 
     try:
         result = migrate_classrooms(SessionLocal, args.classroom_id, apply=args.apply)

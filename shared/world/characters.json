@@ -1,0 +1,324 @@
+[
+  {
+    "id": "builtin:portrait:arena_guard",
+    "kind": "portrait",
+    "name": "练习场教练",
+    "url": "/assets/pixel/portraits/galgame/arena_guard.png"
+  },
+  {
+    "id": "builtin:portrait:class_president",
+    "kind": "portrait",
+    "name": "class_president",
+    "url": "/assets/pixel/portraits/galgame/class_president.png"
+  },
+  {
+    "id": "builtin:portrait:coach_q",
+    "kind": "portrait",
+    "name": "coach_q",
+    "url": "/assets/pixel/portraits/galgame/coach_q.png"
+  },
+  {
+    "id": "builtin:portrait:foreman_bug",
+    "kind": "portrait",
+    "name": "foreman_bug",
+    "url": "/assets/pixel/portraits/galgame/foreman_bug.png"
+  },
+  {
+    "id": "builtin:portrait:librarian_doc",
+    "kind": "portrait",
+    "name": "图书管理员",
+    "url": "/assets/pixel/portraits/galgame/librarian_doc.png"
+  },
+  {
+    "id": "builtin:portrait:mayor_py",
+    "kind": "portrait",
+    "name": "镇长",
+    "url": "/assets/pixel/portraits/galgame/mayor_py.png"
+  },
+  {
+    "id": "builtin:portrait:mine_keeper",
+    "kind": "portrait",
+    "name": "mine_keeper",
+    "url": "/assets/pixel/portraits/galgame/mine_keeper.png"
+  },
+  {
+    "id": "builtin:portrait:professor",
+    "kind": "portrait",
+    "name": "教授",
+    "url": "/assets/pixel/portraits/galgame/professor.png"
+  },
+  {
+    "id": "builtin:portrait:sage_review",
+    "kind": "portrait",
+    "name": "sage_review",
+    "url": "/assets/pixel/portraits/galgame/sage_review.png"
+  },
+  {
+    "id": "builtin:portrait:student_a",
+    "kind": "portrait",
+    "name": "student_a",
+    "url": "/assets/pixel/portraits/galgame/student_a.png"
+  },
+  {
+    "id": "builtin:portrait:workshop_master",
+    "kind": "portrait",
+    "name": "workshop_master",
+    "url": "/assets/pixel/portraits/galgame/workshop_master.png"
+  },
+  {
+    "id": "builtin:sprite:chara_0",
+    "kind": "sprite",
+    "name": "像素角色 0",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_0.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_1",
+    "kind": "sprite",
+    "name": "像素角色 1",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_1.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_2",
+    "kind": "sprite",
+    "name": "像素角色 2",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_2.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_3",
+    "kind": "sprite",
+    "name": "像素角色 3",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_3.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_4",
+    "kind": "sprite",
+    "name": "像素角色 4",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_4.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_5",
+    "kind": "sprite",
+    "name": "像素角色 5",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_5.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_6",
+    "kind": "sprite",
+    "name": "像素角色 6",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_6.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_7",
+    "kind": "sprite",
+    "name": "像素角色 7",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_7.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_8",
+    "kind": "sprite",
+    "name": "像素角色 8",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_8.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_9",
+    "kind": "sprite",
+    "name": "像素角色 9",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_9.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_10",
+    "kind": "sprite",
+    "name": "像素角色 10",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_10.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_11",
+    "kind": "sprite",
+    "name": "像素角色 11",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_11.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_12",
+    "kind": "sprite",
+    "name": "像素角色 12",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_12.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_13",
+    "kind": "sprite",
+    "name": "像素角色 13",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_13.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_14",
+    "kind": "sprite",
+    "name": "像素角色 14",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_14.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_15",
+    "kind": "sprite",
+    "name": "像素角色 15",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_15.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_16",
+    "kind": "sprite",
+    "name": "像素角色 16",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_16.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_17",
+    "kind": "sprite",
+    "name": "像素角色 17",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_17.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_18",
+    "kind": "sprite",
+    "name": "像素角色 18",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_18.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_19",
+    "kind": "sprite",
+    "name": "像素角色 19",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_19.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_20",
+    "kind": "sprite",
+    "name": "像素角色 20",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_20.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_21",
+    "kind": "sprite",
+    "name": "像素角色 21",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_21.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_22",
+    "kind": "sprite",
+    "name": "像素角色 22",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_22.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_23",
+    "kind": "sprite",
+    "name": "像素角色 23",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_23.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_24",
+    "kind": "sprite",
+    "name": "像素角色 24",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_24.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_25",
+    "kind": "sprite",
+    "name": "像素角色 25",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_25.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_26",
+    "kind": "sprite",
+    "name": "像素角色 26",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_26.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_27",
+    "kind": "sprite",
+    "name": "像素角色 27",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_27.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_28",
+    "kind": "sprite",
+    "name": "像素角色 28",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_28.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_29",
+    "kind": "sprite",
+    "name": "像素角色 29",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_29.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_30",
+    "kind": "sprite",
+    "name": "像素角色 30",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_30.png",
+    "frame_width": 16,
+    "frame_height": 20
+  },
+  {
+    "id": "builtin:sprite:chara_31",
+    "kind": "sprite",
+    "name": "像素角色 31",
+    "url": "/assets/pixel/sprites/super-retro-world/characters/chara_31.png",
+    "frame_width": 16,
+    "frame_height": 20
+  }
+]

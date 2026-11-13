@@ -15,7 +15,7 @@ All routes use /api. JSON fields use snake_case. Bearer session authentication i
 - GET /world?classroom_id -> player position, configured NPCs/scripts, current quests and node statuses, available chapters and world flags. PUT /world/position {classroom_id,map_key,tile_x,tile_y,direction}.
 - Fixed world geometry and portal destinations come from shared/world/world.json. PUT /world/position validates logical dimensions/walk_bounds and only permits same-map updates (cross-map409). POST /world/transition {classroom_id,portal_id} validates membership, source map, radius and current classroom building_access. Unknown portal404, wrong source/distance422, denied entry403; an active course interaction bound to the entrance must finish first (409). Exits remain usable without an entry building gate. Returns {player,world} using the fixed destination; render_bounds never grant additional movement.
 - POST /events {classroom_id,event_id,quest_id,node_id,evidence}. Evidence fields are npc_key/dialogue_id/choice/object_id/map_key/tile_x/tile_y/record_id/submission_id as appropriate. The server validates current node, context and learning evidence. Repeated identical IDs are idempotent; different bodies with the same ID return409.
-- POST /dialogues/{npc_key}/steps {classroom_id,node_id,choice?} -> {node,next_id,completed_root,effects}. The node returned is the one just completed. PLAY_DIALOGUE events require a real terminal script marker. Whitelisted remember/open_activity effects never grade or unlock a task directly. Normal scripts use0 model calls.
+- TALK_TO_NPC/PLAY_DIALOGUE/REPORT_BACK events require the matching server story checkpoint and persisted completion marker. Proximity or a client dialogue claim alone is insufficient. There is no legacy `/dialogues` execution endpoint.
 
 ## Development and preview progress reset
 
@@ -27,7 +27,7 @@ All routes use /api. JSON fields use snake_case. Bearer session authentication i
 
 ## Learning and formal submissions
 
-- POST /story/interactions {classroom_id,npc_key? ,interaction_id?} requires exactly one target and selects the authorized current flow. Returns404 when no applicable flow exists; ordinary NPC dialogue may still apply. Same actor/classroom starts serialize under one transaction, so concurrent first requests return the same session.
+- POST /story/interactions {classroom_id,npc_key? ,interaction_id?} requires exactly one target and selects the authorized current flow. Returns404 when no applicable flow exists; the client shows feedback without a fallback dialogue engine. Same actor/classroom starts serialize under one transaction, so concurrent first requests return the same session. A character speaker uses `speaker_npc_id`; the server resolves current name/portrait, while `speaker` remains available for narration.
 - Story responses include mode:task|public|ambient. Public/ambient may have null chapter_id; a non-null chapter still requires release authorization. Only ambient forbids activities and learning/unlock effects. Public can wait for real activities and perform evidence-guarded unlock_building. world.story_available reports authorized flow availability without exposing definitions; entry selection follows the five-layer priority in the content specification. Active/waiting sessions are resumed first and never silently replaced by another entry.
 - Story conditions are data-only all/any/not compositions of allowlisted goal, quest, chapter and fully graded assessment score predicates. Dialogue choices are filtered to public id/label fields and revalidated on advance; a now-hidden or forged choice returns422. Random nodes settle once into a persisted dialogue cursor; current/resume and repeated matching event_id do not redraw. Ambient forbids bindings/activity/checkpoint/effects, never initializes PlayerQuest or writes learning/grades/world-unlock markers, and makes no model calls. Only the dialogue session and its bounded request receipts are persisted. If no conditional choice remains, the dialogue may safely end without a choice.
 - An interface action can omit `text`. The client advances a textless action with the normal server-authorized session request and opens the workspace or enters the building after acknowledgement. Existing scripts with nonempty action text retain the confirmation step. New explanations belong in a preceding dialogue node.
@@ -56,7 +56,7 @@ All routes use /api. JSON fields use snake_case. Bearer session authentication i
 - PUT /teacher/classrooms/{id}/releases/{chapter_id} {status:published|paused,opens_at:ISO8601|null,prerequisite_chapter_id?}. GET /teacher/classrooms/{id}/releases. Server-time evaluation is immediate. Releases control visibility, schedule and prerequisites; all students use current definitions.
 - GET /teacher/classrooms/{id}/progress; GET /teacher/classrooms/{id}/students/{student_id}: real members (including completed_chapters: integer >= 0), node events, participation records, submissions and error distribution. completed_chapters counts released chapters whose required main quest IDs all have completed server-verified PlayerQuest instances for this student/class; it uses the same current main-quest rule as chapter prerequisites, excludes side-only chapters, and retains completed history while paused. Teachers own the class; preview cannot write student grades.
 - POST /teacher/materials/upload multipart {chapter_ids?:JSON-encoded integer array,title,material_id?,file} -> {id,status,title}; omitted chapter_ids creates an unclassified upload, or preserves existing links on replacement. PUT /teacher/materials/{id} {title?,chapter_ids?} edits metadata and multiple chapter links. GET /teacher/materials lists authorized metadata; GET /teacher/materials/{id} and /file provide owner/admin preview, including unclassified material, without classroom publication. DELETE /teacher/materials/{id} returns409 for referenced content. queued/processing/ready/failed processing states persist. Upload alone does not publish; student access still requires an authorized published association/activity. Same material_id replaces the current file while preserving type; removing chapter links required by existing activities is rejected.
-- POST /teacher/npcs?classroom_id creates a classroom NPC; PUT /teacher/npcs/{key}?classroom_id edits it. Teachers manage only the selected instance. Positions must be reachable, portraits must belong to the system allowlist, and dialogue/flow references are validated. No arbitrary expressions, SQL or executable code.
+- Character CRUD is part of the complete classroom authoring draft below. Independent `/teacher/npcs` writes are removed. Activities reference the same character through npc_key; activity responses include its current `role:{key,name,portrait}`.
 
 ## Active teaching assistant
 
@@ -73,7 +73,6 @@ Paused policy denies new content/progress/assistant requests immediately and pre
 
 - GET /teacher/classrooms/{id}/course：返回id/classroom_id/package_id/name/package_version/revision；无实例为null。
 - POST /teacher/classrooms/{id}/course/empty {confirmed:true,name}：创建空课程，已有实例幂等返回。不会自动生成章节、题目、NPC或交互。
-- POST /teacher/classrooms/{id}/course/initialize {confirmed:true}：仅供显式保留迁移的旧来源克隆，保留并映射本班既有证据；不是新教师工作流中的默认导入。
 - GET /teacher/classrooms/{id}/course/ids：教师可查看九类实体的stable_id→当前运行ID映射，用于迁移/受控集成，不能用于越班查询。
 - POST /teacher/classrooms/{id}/course/imports/preview：multipart file上传ZIP，返回id、expected_revision、expires_at（24小时）、can_apply、package_id/package_version/name、diff（各类added/updated/removed）、blockers、warnings、learning_impact。校验或预览不等于激活。
 - GET /teacher/classrooms/{id}/course/packages 返回 `{items:[{key,name,package_id,package_version,source}],unavailable}`。`source` 为 `mounted` 或 `uploaded`。挂载目录只列可读的清单，上传包限本人和本班。POST /teacher/classrooms/{id}/course/imports/available/preview 接受 `{package_key}`，执行与上传一致的校验并返回相同预览结构。响应不暴露文件系统路径。
@@ -84,12 +83,20 @@ Paused policy denies new content/progress/assistant requests immediately and pre
 
 ## 教学流程与世界编辑
 
-- GET /teacher/classrooms/{id}/authoring 返回 revision、catalog、flows、quests、configuration 和 students。catalog 的 NPC 包含 `map_key` 供编辑器按位置分组。
-- POST /authoring/validate 在上述班级前缀下提交 `{expected_revision,flows,quests?,configuration}`。返回 `valid` 与 `diagnostics`。诊断包含 `code`、`message`、JSON Pointer `path`，可带 `suggestion` 与使用稳定 ID 的 `target`。可发布但涉及清理进度时另返回 `reset_impact`，含确认令牌、受影响人数、流程会话与任务进度统计。该接口只读。configuration 允许 world/buildings/assistant/editor。
+- GET /teacher/classrooms/{id}/authoring 返回 revision、catalog、npcs、flows、quests、configuration 和 students。npcs 为完整角色资料列表，字段为 id/name/portrait/sprite/persona/placement/appearance_condition，placement 可以为空。catalog 按当前放置地图分组角色。
+- POST /authoring/validate 在上述班级前缀下提交 `{expected_revision,npcs,flows,quests?,configuration}`。返回 `valid` 与 `diagnostics`。诊断包含 `code`、`message`、JSON Pointer `path`，可带 `suggestion` 与稳定 ID 的 `target`。可发布但涉及清理进度时另返回 `reset_impact`，含确认令牌及受影响统计。该接口只读。configuration 允许 world/buildings/assistant/editor。角色引用、未放置地图目标、素材和布局与流程统一校验。
 - PUT /authoring 在独占班级事务中复查并保存，接受可选的 `confirmation_token`，成功返回新 revision。定义无效返回 422 与结构化诊断。影响范围需要确认且令牌缺失或过期时返回 409 与 `detail.reset_impact`，需要教师查看并重新确认。硬阻断返回 409 与 `detail.diagnostics`。过期课程修订返回 409。重置与发布同事务提交，保存与章节开放分别控制。
 - POST /authoring/preview：同一输入加student_id、entry（NPC稳定ID或interaction:<id>），用真实本班学生状态返回selected_flow_id/node_id/trace/stopped_at，不创建进度或执行效果。
-- world.interactions定义id/label/prompt/trigger(click|enter)/map_key/target(object_id或整数矩形region)/when?；world.npcs按NPC稳定ID保存when。进入区域不可重叠，区域/位置必须可达，对象点击与进入区域有不同触发语义。
-- buildings按固定建筑ID定义enabled/default_unlocked/blocked_message/when?；无室内建筑不可被课程伪造为可进入。assistant为schema_version=1、enabled、roles、default_role_id/library_role_id、activity_roles/npc_roles；只允许教学说明和不超过系统上限的预算，不接受凭据、模型连接或特权工具。
+- world.interactions 定义 id/label/prompt/trigger(click|enter)/map_key/target(object_id或整数矩形region)/when?。不再接受 world.npcs；角色条件由 appearance_condition 保存。进入区域不可重叠，区域/位置必须可达。
+- buildings 按固定建筑 ID 定义 enabled/default_unlocked/blocked_message/when?；assistant 仅含 enabled、limits、library_npc_id?，不再保存独立角色名单或映射，不接受凭据、模型连接或特权工具。人设不进入当前模型请求。
+
+角色与流程、任务、配置在同一事务保存；改名、换素材、人设编辑不触发进度重置。删除角色须通过活动、流程、任务、图书馆及历史引用检查；正在互动的角色移动、撤回或改变出现条件返回带定位诊断的 409。
+
+- GET /teacher/classrooms/{id}/character-assets 返回本班可选系统和私有素材描述。
+- POST 同一路径接收 multipart 的 file/kind(portrait|sprite)/owner_npc_id/expected_revision/frame_width?/frame_height?。上传与完整包导入共用图片解码、大小及布局检查，成功 201 返回 id/kind/name/url/sha256/owner_npc_id，精灵另含帧宽高；不改变角色引用或课程修订；修订过期返回409。自定义素材禁止跨角色引用。保存角色时事务内移除不再引用的图片清单并持久化文件清理队列，提交后删除文件，失败定期重试。未提交上传保留24小时后回收。
+- GET /classrooms/{id}/character-assets/{asset_id} 按当前班级授权返回图片，private/no-store/nosniff。学生仅可读已被角色引用的素材，未发布 404，跨班 403。地址带哈希缓存标识；客户端切班/退出释放资源。格式限制见[角色素材规范](content-authoring.md#统一教学角色与素材)。
+
+`/world` 中只有已放置且满足出现条件的 NPC，返回 direction、sprite 描述以及当前 name/portrait；library_role 为显式配置角色或 null。persona 不在学生世界、活动和对白 DTO 中输出。
 
 GET /world?classroom_id增加当前可用interactions、building_access及building_unlock解锁建筑ID列表；NPC可见性按同一条件解释器过滤。POST /story/interactions {classroom_id,npc_key? ,interaction_id?}只允许一个目标，距离和当前条件均由服务端验证。故事action支持open_workspace(library/journal/classroom)及enter_building；响应只描述允许的动作，客户端等待服务端advance确认才打开界面或切图。POST /story/sessions/{id}/end {classroom_id,event_id,revision}显式结束当前演出，退出工作区/暂时离开不冒充活动完成。故事幂等键、revision、等待/恢复和服务端证据要求保持。
 

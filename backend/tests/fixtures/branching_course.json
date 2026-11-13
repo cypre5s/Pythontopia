@@ -207,34 +207,5 @@
         "key": "language_archive_restored"
       }
     ]
-  },
-  "dialogue": [
-    {
-      "id": "language",
-      "speaker": "林教授",
-      "text": "Test dialogue language",
-      "choices": [
-        {
-          "id": "concept",
-          "label": "辨认程序设计语言",
-          "next": "concept-path"
-        },
-        {
-          "id": "code",
-          "label": "补学输入输出并编程",
-          "next": "code-path"
-        }
-      ]
-    },
-    {
-      "id": "concept-path",
-      "speaker": "林教授",
-      "text": "Test dialogue concept-path"
-    },
-    {
-      "id": "code-path",
-      "speaker": "林教授",
-      "text": "Test dialogue code-path"
-    }
-  ]
+  }
 }

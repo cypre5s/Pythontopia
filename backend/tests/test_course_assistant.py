@@ -7,9 +7,8 @@ from app.course_assistant import validate_policy
 
 
 def sample():
-    return {"schema_version": 1, "roles": {"guide": {"name": "引导老师", "instructions": "先给一个提示，再请学生解释想法。",
-            "limits": {"model_calls": 2, "tool_calls": 3, "output_tokens": 256, "request_tokens": 6000, "timeout_seconds": 20}}},
-            "activity_roles": {"lesson": "guide"}, "library_role_id": "guide"}
+    return {"enabled": True, "library_npc_id": "guide",
+            "limits": {"model_calls": 2, "tool_calls": 3, "output_tokens": 256, "request_tokens": 6000, "timeout_seconds": 20}}
 
 
 @pytest.mark.parametrize("bad", ["credentials", "tools", "overbudget", "boolean_budget", "bad_binding"])
@@ -18,29 +17,33 @@ def test_policy_rejects_privileges_and_invalid_limits(bad):
     if bad == "credentials":
         value["api_key"] = "must-not-import"
     elif bad == "tools":
-        value["roles"]["guide"]["tools"] = ["grade"]
+        value["tools"] = ["grade"]
     elif bad == "overbudget":
-        value["roles"]["guide"]["limits"]["model_calls"] = 100
+        value["limits"]["model_calls"] = 100
     elif bad == "boolean_budget":
-        value["roles"]["guide"]["limits"]["tool_calls"] = True
+        value["limits"]["tool_calls"] = True
     else:
-        value["activity_roles"] = {"outside": "guide"}
+        value["library_npc_id"] = "outside"
     with pytest.raises(ValueError):
-        validate_policy(value, {"activity": [{"id": "lesson"}], "npc": []})
+        validate_policy(value, {"activity": [{"id": "lesson"}], "npc": [{"id": "guide"}]})
 
 
 def test_policy_role_and_budgets_apply_only_selected_class(db, teacher, student, classroom, monkeypatch):
     from app.assistant import MessageInput, build_context, new_session, NewSession
     from app.course_assistant import ensure_enabled
     from app.course_exchange_models import CoursePackageState
-    from app.course_instances import clone_current_course, content_mapping
-    from app.models import Activity, Classroom, User
+    from app.course_instances import content_mapping
+    from fixture_instances import clone_current_course
+    from app.models import Activity, Classroom, User, Npc
     from app.integration_models import AssistantSession
     from fastapi import HTTPException
     source = clone_current_course(db, db.get(Classroom, classroom["id"]))
     maps = content_mapping(db, source)
     value = sample()
-    value["activity_roles"] = {"ch1-lesson": "guide"}
+    value["library_npc_id"] = "librarian_doc"
+    npc = db.get(Npc, maps["npc"]["librarian_doc"])
+    npc.name = "引导老师"
+    npc.persona = "PRIVATE-PERSONA-ONLY"
     state = db.get(CoursePackageState, source.id)
     state.configuration = {**state.configuration, "assistant": value}
     db.commit()
@@ -53,6 +56,7 @@ def test_policy_role_and_budgets_apply_only_selected_class(db, teacher, student,
     assert context["role"]["name"] == "引导老师" and context["limits"]["model_calls"] == 2
     assert context["limits"]["timeout_seconds"] == 10
     assert "hidden_cases" not in str(context)
+    assert "PRIVATE-PERSONA-ONLY" not in str(context)
     updated = deepcopy(state.configuration)
     updated["assistant"]["enabled"] = False
     state.configuration = updated

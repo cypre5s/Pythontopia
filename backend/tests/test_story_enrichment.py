@@ -466,7 +466,7 @@ def test_ambient_validation_rejects_progress_effects_and_invalid_auto_node_graph
     elif mutation == "checkpoint":
         content["nodes"][0]["checkpoint"] = "talk"
     elif mutation == "effects":
-        content["checkpoint_effects"] = {"talk": [{"type": "set_world_flag", "key": "library_unlocked"}]}
+        content["checkpoint_effects"] = {"talk": [{"type": "unlock_building", "building_id": "library"}]}
     elif mutation == "branch-fallback":
         content["nodes"][0] = {"id": "start", "type": "branch", "routes": [
             {"when": {"all_quests_complete": True}, "node": "end"}]}

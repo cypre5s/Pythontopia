@@ -146,11 +146,27 @@ class Npc(CourseContent, Base):
     __tablename__ = "npcs"
     key: Mapped[str] = mapped_column(String(80), primary_key=True)
     name: Mapped[str] = mapped_column(String(80))
-    map_key: Mapped[str] = mapped_column(String(40), default="town_hub")
-    tile_x: Mapped[int] = mapped_column(Integer)
-    tile_y: Mapped[int] = mapped_column(Integer)
-    portrait: Mapped[str] = mapped_column(Text, default="")
-    dialogue: Mapped[list] = mapped_column(JSON, default=list)
+    map_key: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    tile_x: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tile_y: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    direction: Mapped[str] = mapped_column(String(8), default="down")
+    portrait: Mapped[str] = mapped_column(Text)
+    sprite: Mapped[str] = mapped_column(Text)
+    persona: Mapped[str] = mapped_column(Text, default="")
+    appearance_condition: Mapped[dict] = mapped_column(JSON, default=lambda: {"always": True})
+
+    @property
+    def placement(self):
+        if self.map_key is None:
+            return None
+        return {"map_key": self.map_key, "tile_x": self.tile_x, "tile_y": self.tile_y, "direction": self.direction}
+
+    @placement.setter
+    def placement(self, value):
+        self.map_key = value["map_key"] if value else None
+        self.tile_x = value["tile_x"] if value else None
+        self.tile_y = value["tile_y"] if value else None
+        self.direction = value["direction"] if value else "down"
 
 
 class QuestDefinition(CourseContent, Base):

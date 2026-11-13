@@ -171,15 +171,16 @@ export function NodeEditor({
             <GroupedPicker label="选择说话 NPC" placeholder="按位置选择 NPC" groups={npcGroups(catalog)}
               onChange={(id) => {
                 const npc = catalog.npcs.find((item) => item.id === id);
-                if (npc) onChange({ ...node, speaker: npc.name });
+                if (npc) { const next = { ...node, speaker_npc_id: npc.id }; delete next.speaker; onChange(next); }
               }} />
             <Input
               id="node-speaker"
-              value={node.speaker ?? ""}
+              value={node.speaker_npc_id ? catalog.npcs.find((npc) => npc.id === node.speaker_npc_id)?.name ?? "" : node.speaker ?? ""}
               maxLength={80}
               placeholder="自定义名称，留空沿用当前交互角色"
               onChange={(e) => {
                 const next = { ...node };
+                delete next.speaker_npc_id;
                 if (e.target.value) next.speaker = e.target.value;
                 else delete next.speaker;
                 onChange(next);

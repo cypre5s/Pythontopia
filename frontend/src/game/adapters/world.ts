@@ -1,3 +1,4 @@
+import { api } from "../../shared/api";
 import Phaser from "phaser";
 import type { Npc, Player } from "../../shared/types";
 import { findPath, isTextFocus } from "../pathfinding";
@@ -96,8 +97,6 @@ export function createWorld(
     objects: WorldTarget[] = [];
     transitioning = false;
     weather!: Phaser.GameObjects.Graphics;
-    resident: Phaser.GameObjects.Sprite | null = null;
-    patrolTime = 0;
     renderMaps = new Map<string, RenderMap>();
     queuedTextures = new Set<string>();
     lastHint = "";
@@ -112,13 +111,7 @@ export function createWorld(
         "/assets/pixel/sprites/super-retro-world/characters/chara_0.png",
         SRW_CHARA_FRAME,
       );
-      ["chara_2", "chara_4", "chara_6", "chara_10"].forEach((k) =>
-        this.load.spritesheet(
-          k,
-          `/assets/pixel/sprites/super-retro-world/characters/${k}.png`,
-          SRW_CHARA_FRAME,
-        ),
-      );
+      this.queueCharacterSprites();
       this.load.on("progress", (n: number) => callbacks.progress(n));
       this.load.on("loaderror", (file: Phaser.Loader.File) =>
         callbacks.error(`素材未能加载：${file.key}`),
@@ -138,6 +131,19 @@ export function createWorld(
           }
         });
       }
+    }
+    queueCharacterSprites() {
+      let queued = false;
+      for (const npc of currentNpcs) {
+        const key = textureKey(npc.sprite.url);
+        if (this.textures.exists(key) || this.queuedTextures.has(key)) continue;
+        this.queuedTextures.add(key);
+        this.load.spritesheet({ key, url: npc.sprite.url,
+          frameConfig: { frameWidth: npc.sprite.frame_width, frameHeight: npc.sprite.frame_height },
+          xhrSettings: npc.sprite.url.startsWith("/api/") ? { responseType: "blob", headers: { Authorization: `Bearer ${api.token() ?? ""}` } } : undefined });
+        queued = true;
+      }
+      return queued;
     }
     create() {
       scene = this;
@@ -166,7 +172,6 @@ export function createWorld(
       this.busy = false;
       this.children.removeAll(true);
       this.activeNpcs = [];
-      this.resident = null;
       this.objects = [];
       this.lastHint = "";
       callbacks.hint("");
@@ -237,12 +242,14 @@ export function createWorld(
         }
       }
       const available = currentNpcs.filter((n) => n.map_key === this.mapKey);
-      available.forEach((npc, i) => {
+      available.forEach((npc) => {
         const x = npc.tile_x,
           y = npc.tile_y;
-        const texture = ["chara_2", "chara_4", "chara_6", "chara_10"][i % 4]!;
+        const texture = textureKey(npc.sprite.url);
+        if (!this.textures.exists(texture)) return;
+        const frame = Math.max(0, ["down", "left", "right", "up"].indexOf(npc.direction)) * 3 + 1;
         const sprite = this.add
-          .sprite(x * 16 + 8, y * 16 + 12, texture, 1)
+          .sprite(x * 16 + 8, y * 16 + 12, texture, frame)
           .setOrigin(0.5, 1)
           .setDepth(y + 3)
           .setInteractive({ useHandCursor: true });
@@ -267,10 +274,6 @@ export function createWorld(
       callbacks.mapPosition?.(this.mapPosition());
       for (const name of [
         "chara_0",
-        "chara_2",
-        "chara_4",
-        "chara_6",
-        "chara_10",
       ])
         for (let d = 0; d < 4; d++) {
           const key = `${name}-${d}`;
@@ -295,19 +298,8 @@ export function createWorld(
       this.cameras.main.setBackgroundColor(indoor ? "#142019" : "#324c36");
       this.cameras.main.startFollow(this.player, true, indoor ? 1 : 0.18, indoor ? 1 : 0.18, 0, 10);
       this.resize();
-      if (!indoor) {
-        const spot = [
-          { x: 26, y: 35 },
-          { x: 24, y: 36 },
-          { x: 20, y: 36 },
-        ].find((p) => !this.blocked(p.x, p.y));
-        if (spot)
-          this.resident = this.add
-            .sprite(spot.x * 16 + 8, spot.y * 16 + 12, "chara_10", 1)
-            .setOrigin(0.5, 1)
-            .setDepth(spot.y + 3);
-      }
     }
+
     resize() {
       this.cameras.main.setZoom(
         Math.min(
@@ -489,25 +481,7 @@ export function createWorld(
         this.saveTimer = time;
         this.save();
       }
-      if (this.resident && !paused && time - this.patrolTime > 6000) {
-        this.patrolTime = time;
-        const x = Math.floor(this.resident.x / 16),
-          y = Math.floor(this.resident.y / 16),
-          step = Math.floor(time / 6000) % 2 ? 1 : -1;
-        if (!this.blocked(x + step, y)) {
-          this.resident.play(`chara_10-${step > 0 ? 2 : 1}`, true);
-          const resident = this.resident;
-          this.tweens.add({
-            targets: resident,
-            x: resident.x + step * 16,
-            duration: 800,
-            onComplete: () => {
-              resident.anims.stop();
-              resident.setFrame(1);
-            },
-          });
-        }
-      }
+
       this.weather.clear();
       if (this.mapKey === "town_hub" && new Date().getDate() % 3 === 0) {
         this.weather.lineStyle(1, 0xa4ced3, 0.16);
@@ -621,7 +595,12 @@ export function createWorld(
     setNpcs(value) {
       if (JSON.stringify(value) !== JSON.stringify(currentNpcs)) {
         currentNpcs = value;
-        if (scene?.player) scene.build();
+        if (scene?.player) {
+          if (scene.queueCharacterSprites()) {
+            scene.load.once("complete", () => { if (!destroyed) scene.build(); });
+            scene.load.start();
+          } else scene.build();
+        }
       }
     },
     setFlags(value) {

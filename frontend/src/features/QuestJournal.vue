@@ -29,7 +29,6 @@
             <div><strong>{{ displayQuestTitle(node) }}</strong><small>{{ stateName[node.status] }}{{ node.optional ? ' · 可选' : '' }}</small></div>
             <button v-if="node.status === 'ready' && node.navigation_target" @click="session.guideTo(node.navigation_target)">立即前往 <GameIcon name="compass"/></button>
             <button v-else-if="node.status === 'ready' && node.activity_id && !selectedQuest.story_id" @click="session.navigate({kind:node.type === 'STUDY_LESSON' ? 'lesson' : 'practice', activity_id:node.activity_id})">{{ node.type === 'STUDY_LESSON' ? '打开课程' : '打开练习' }} <GameIcon name="chevron"/></button>
-            <template v-if="!selectedQuest.story_id && node.status === 'ready' && node.choices?.length"><button v-for="choice in node.choices" :key="choice.id" @click="choose(selectedQuest,node,choice.id)">{{ choice.label ?? choice.text }}</button></template>
             <span v-if="node.status === 'complete'" class="step-done">已完成</span>
           </li>
         </ol>
@@ -43,7 +42,6 @@
 import { computed, ref } from "vue";
 import { useSession } from "../shared/session";
 import { notify } from "../shared/api";
-import type { Quest, QuestNode } from "../shared/types";
 import GameIcon from "../shared/GameIcon.vue";
 import { displayQuestTitle } from "../game/config/worldConfig";
 import { requiredQuestNodes } from "../shared/questProgress";
@@ -81,17 +79,6 @@ const quests = computed(
 const selectedQuest = computed(() => quests.value.find(q => q.id === selectedId.value) ?? quests.value.find(q => q.id === session.trackedQuest) ?? quests.value[0]);
 const requiredNodes = computed(() => requiredQuestNodes(selectedQuest.value));
 const completedNodes = computed(() => requiredNodes.value.filter(n => n.status === "complete").length);
-async function choose(quest: Quest, node: QuestNode, choice: string) {
-  try {
-    await session.event(quest, node, {
-      choice,
-      npc_key: node.target,
-      dialogue_id: node.dialogue_id ?? node.target,
-    });
-  } catch (e) {
-    notify(e instanceof Error ? e.message : "选择失败");
-  }
-}
 </script>
 <style scoped>
 .story-journal { display:flex; flex:1; flex-direction:column; min-width:0; min-height:0; height:100%; padding:0; color:#513b28; overflow:hidden; }

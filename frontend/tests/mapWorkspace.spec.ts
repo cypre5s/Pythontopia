@@ -20,8 +20,8 @@ beforeEach(() => {
   session.world = {
     player: { map_key: "town_hub", tile_x: 22, tile_y: 36, direction: "down" }, flags: [], chapters: [], quests: [],
     npcs: [
-      { key: "mayor_py", name: "镇长 Py", map_key: "town_hub", tile_x: 22, tile_y: 34, portrait: "", dialogue: [] },
-      { key: "librarian_doc", name: "图书管理员", map_key: "library", tile_x: 9, tile_y: 6, portrait: "", dialogue: [] },
+      { key: "mayor_py", name: "镇长 Py", map_key: "town_hub", tile_x: 22, tile_y: 34, portrait: "", direction: "down", sprite: { id: "builtin:sprite:chara_2", url: "/chara_2.png", frame_width: 16, frame_height: 20 } },
+      { key: "librarian_doc", name: "图书管理员", map_key: "library", tile_x: 9, tile_y: 6, portrait: "", direction: "down", sprite: { id: "builtin:sprite:chara_2", url: "/chara_2.png", frame_width: 16, frame_height: 20 } },
     ],
   };
   session.open({ kind: "map" });

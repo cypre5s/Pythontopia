@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type MouseEvent, type PointerEvent } from "react";
-import { DoorOpen, MapPin, MousePointer2, Plus, SquareDashedMousePointer, Trash2, Users } from "lucide-react";
+import { DoorOpen, MapPin, MousePointer2, SquareDashedMousePointer, Trash2, Users } from "lucide-react";
 import { AuthoringInspector, AuthoringWorkspace } from "@/components/authoring-workspace";
 import { Empty } from "@/components/common";
 import { ConditionEditor } from "@/components/condition-editor";
@@ -12,7 +12,8 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { newId } from "@/lib/id";
 import type { Authoring, Flow, Interaction, Point } from "@/lib/authoring";
-import { paintMapPreview } from "../../../shared/world/mapRender";
+import { MapArtwork } from "./map-artwork";
+import { CharacterPlacement } from "./character-placement";
 
 const emptyFlow: Flow = {
   id: "",
@@ -46,42 +47,6 @@ export type MapFocusTarget = { kind: "interaction" | "building" | "npc"; id: str
 type Inspector = MapFocusTarget & { anchor: HTMLElement | Point };
 const noInteractions: Interaction[] = [];
 
-function mapAssetHref(path: string) {
-  return import.meta.env.DEV ? `${import.meta.env.BASE_URL.replace(/\/$/, "")}${path}` : path;
-}
-
-function MapArtwork({ mapKey, width, height }: { mapKey: string; width: number; height: number }) {
-  const canvas = useRef<HTMLCanvasElement>(null);
-  const [status, setStatus] = useState<"loading" | "ready" | "failed">("loading");
-  useEffect(() => {
-    const element = canvas.current;
-    if (!element) return;
-    const controller = new AbortController();
-    void paintMapPreview(element, mapKey, controller.signal, { x: 0, y: 0, width, height }, mapAssetHref)
-      .then(() => { if (!controller.signal.aborted) setStatus("ready"); })
-      .catch(() => { if (!controller.signal.aborted) setStatus("failed"); });
-    return () => controller.abort();
-  }, [mapKey, width, height]);
-  return (
-    <>
-      <foreignObject width={width} height={height} pointerEvents="none" aria-hidden="true">
-        <canvas
-          ref={canvas}
-          className="block size-full [image-rendering:pixelated]"
-          width={width * 16}
-          height={height * 16}
-          data-map-art={status}
-        />
-      </foreignObject>
-      {status !== "ready" && (
-        <text x={width / 2} y={1.1} textAnchor="middle" fontSize={0.7} fill="#465849" role="status" pointerEvents="none">
-          {status === "loading" ? "正在加载地图底图…" : "底图加载失败，仍可编辑地图标记。"}
-        </text>
-      )}
-    </>
-  );
-}
-
 function markerAnchor(element: SVGElement): Point {
   const bounds = element.getBoundingClientRect();
   return { x: bounds.left + bounds.width / 2, y: bounds.top + bounds.height / 2 };
@@ -103,17 +68,14 @@ function regionBetween(start: Point, end: Point): Region {
 export function MapEditor({
   data,
   onChange,
-  onAddNpc,
-  canAddNpc = true,
   focusTarget,
 }: {
   data: Authoring;
   onChange: (value: Authoring) => void;
-  onAddNpc?: () => void;
-  canAddNpc?: boolean;
   focusTarget?: MapFocusTarget | null;
 }) {
   const [mapKey, setMapKey] = useState(data.catalog.maps[0]?.key ?? "");
+  const [characterId, setCharacterId] = useState<string>();
   const [view, setView] = useState<View>("map");
   const [inspector, setInspector] = useState<Inspector | null>(null);
   const [draw, setDraw] = useState(false);
@@ -287,15 +249,9 @@ export function MapEditor({
           </Button>
           <Button className="justify-start" variant={view === "npcs" ? "secondary" : "ghost"}
             aria-pressed={view === "npcs"} onClick={() => chooseTool("npcs")}>
-            <Users />角色出现条件
+            <Users />角色摆放与出现
           </Button>
-          {onAddNpc && (
-            <Button className="justify-start" variant="ghost" disabled={!canAddNpc}
-              title={canAddNpc ? undefined : "先保存当前编辑，再新增角色"} onClick={onAddNpc}>
-              <Plus />新增教学角色
-            </Button>
-          )}
-          {onAddNpc && !canAddNpc && <p className="hint px-2">先保存当前编辑，再新增角色。</p>}
+          {view === "npcs" && <><Separator className="my-2" /><p className="px-2 text-xs text-muted-foreground">教学角色</p>{data.npcs.map(item => <Button key={item.id} variant={(characterId ?? data.npcs[0]?.id) === item.id ? "secondary" : "ghost"} className="min-w-0 justify-start" title={`${item.name} · ${item.placement ? "已放置" : "未放置"}`} onClick={() => setCharacterId(item.id)}><Users /><span className="truncate">{item.name}</span><span className="ml-auto text-xs text-muted-foreground">{item.placement ? "已放置" : "未放置"}</span></Button>)}</>}
           {view === "map" && visible.length > 0 && (
             <>
               <Separator className="my-2" />
@@ -326,11 +282,12 @@ export function MapEditor({
           </>
         ) : (
           <span className="px-2 text-sm font-medium">
-            {view === "buildings" ? "建筑开放规则" : "角色出现条件"}
+            {view === "buildings" ? "建筑开放规则" : "角色摆放与出现"}
           </span>
         )
       }
     >
+      {view === "npcs" && <CharacterPlacement onSelect={setCharacterId} data={data} onChange={onChange} focusId={characterId ?? (focusTarget?.kind === "npc" ? focusTarget.id : undefined)} />}
       {view === "map" ? (
         map ? (
           <div className="space-y-3 p-4">
@@ -454,24 +411,9 @@ export function MapEditor({
                 <Badge variant="secondary">{item.has_interior ? buildings[item.id]?.enabled ? "允许进入" : "未开放" : "无可用室内"}</Badge>
               </span>
             </Button>
-          )) : data.catalog.npcs.map((item) => (
-            <Button key={item.id} id={`${grid}-npc-${item.id}`} variant="outline" className="h-auto min-w-0 justify-start gap-3 p-3 text-left"
-              onClick={(event) => setInspector({ kind: "npc", id: item.id, anchor: event.currentTarget })}
-              onContextMenu={(event) => {
-                event.preventDefault();
-                setInspector({ kind: "npc", id: item.id, anchor: eventAnchor(event) });
-              }}>
-              <Users className="text-muted-foreground" />
-              <span className="grid min-w-0 gap-1">
-                <span className="truncate">{item.name}</span>
-                <Badge variant="secondary">
-                  {world.npcs?.[item.id]?.when && !("always" in world.npcs[item.id].when) ? "按条件出现" : "始终出现"}
-                </Badge>
-              </span>
-            </Button>
-          ))}
+          )) : null}
           {view === "buildings" && !data.catalog.buildings.length && <Empty title="暂无建筑" />}
-          {view === "npcs" && !data.catalog.npcs.length && <Empty title="暂无教学角色" />}
+
         </div>
       )}
       {inspector && (
@@ -568,13 +510,7 @@ export function MapEditor({
               </div>
             ) : <p className="hint">此建筑没有可用室内。</p>
           )}
-          {npc && (
-            <div className="field">
-              <Label>角色出现条件</Label>
-              <ConditionEditor value={world.npcs?.[npc.id]?.when ?? { always: true }} catalog={data.catalog} flow={emptyFlow}
-                onChange={(when) => updateWorld({ ...world, npcs: { ...world.npcs, [npc.id]: { when } } })} />
-            </div>
-          )}
+
         </AuthoringInspector>
       )}
     </AuthoringWorkspace>

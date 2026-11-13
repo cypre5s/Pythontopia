@@ -25,41 +25,20 @@
         {{ displayed }}
       </p>
       <p v-if="error" class="error">{{ error }}</p>
-      <p v-if="settling || session.storyBusy" class="dialogue-saving" role="status">
+      <p v-if="session.storyBusy" class="dialogue-saving" role="status">
         正在记录这次对话…
       </p>
-      <div v-if="!typing" class="dialogue-actions" :aria-busy="busy || settling">
+      <div v-if="!typing" class="dialogue-actions" :aria-busy="session.storyBusy">
         <button
           v-for="(choice, index) in typing ? [] : (line?.choices ?? [])"
           :key="choice.id"
           class="dialogue-response"
-            :disabled="busy || settling || session.storyBusy"
+            :disabled="session.storyBusy"
           @click="advance(choice.id)"
         >
           <span class="response-number" aria-hidden="true">{{ index + 1 }}.</span>
-          <span>{{ choice.label ?? choice.text }}</span></button
+          <span>{{ choice.label }}</span></button
         >
-      </div>
-      <div
-        v-if="!story && !typing && !line?.next && !line?.choices?.length && !settling"
-        class="dialogue-objectives"
-      >
-        <button
-          v-if="(npc?.stable_id ?? npc?.key) === 'librarian_doc'"
-          @click="
-            close();
-            session.open({ kind: 'library' });
-          "
-        >
-          浏览开放书籍 <GameIcon name="arrowRight"/>
-        </button>
-        <button
-          v-for="item in actions"
-          :key="item.node.id"
-          @click="$emit('action', item.quest, item.node)"
-        >
-          {{ item.node.title }} <GameIcon name="arrowRight"/>
-        </button>
       </div>
       <footer class="dialogue-footer">
         <span>{{ typing ? "点击显示全文" : line?.choices?.length ? "↑ ↓ 选择 · Enter 确认" : "点击继续 · Enter" }}</span>
@@ -70,60 +49,33 @@
   </div>
 </template>
 <script setup lang="ts">
-import GameIcon from "../shared/GameIcon.vue";
 import { computed, ref, watch, onBeforeUnmount } from "vue";
-import type { Npc, Quest, QuestNode, Dialogue, StoryView } from "../shared/types";
-import { api } from "../shared/api";
+import type { StoryView } from "../shared/types";
+import { useCharacterImage } from "../shared/characterImage";
 import { useSession } from "../shared/session";
 import { useModalFocus } from "../shared/modalFocus";
 import { useUiPreferences } from "../shared/uiPreferences";
 import { displayWorldText } from "../game/config/worldConfig";
-const props = defineProps<{
-    npc?: Npc | null;
-    actions: { quest: Quest; node: QuestNode }[];
-    settling?: boolean;
-    story?: StoryView;
-  }>(),
-  emit = defineEmits<{
-    close: [];
-    complete: [choice?: string];
-    action: [quest: Quest, node: QuestNode];
-  }>(),
-  session = useSession(),
-  nodeId = ref(props.npc?.dialogue[0]?.id ?? ""),
-  displayed = ref(""),
-  typing = ref(false),
-  imageError = ref(false),
-  busy = ref(false),
-  error = ref("");
+const props = defineProps<{ story?: StoryView }>();
+const emit = defineEmits<{ close: [] }>();
+const session = useSession(), displayed = ref(""), typing = ref(false), imageError = ref(false), error = ref("");
 const panel = ref<HTMLElement>();
 const preferences = useUiPreferences();
-useModalFocus(panel, () => props.story?.id ?? props.npc?.key ?? "interaction", close);
+useModalFocus(panel, () => props.story?.id ?? "interaction", close);
 const line = computed(() => {
-    const current = props.story?.node ?? props.npc?.dialogue.find((d) => d.id === nodeId.value) ?? props.npc?.dialogue[0];
+    const current = props.story?.node;
     return current ? { ...current, text: displayWorldText(current.text) } : undefined;
   }),
-  speaker = computed(() => line.value?.speaker ?? props.npc?.name ?? "小镇互动");
-const portrait = computed(() =>
-  imageError.value ? "" : (line.value?.portrait ?? props.npc?.portrait),
-);
-let timer: ReturnType<typeof setInterval> | undefined,
-  lastChoice: string | undefined;
-let disposed = false,
-  closed = false,
-  requestGeneration = 0;
-function close() {
-  if (session.storyBusy) return;
-  closed = true;
-  requestGeneration++;
-  emit("close");
-}
+  speaker = computed(() => line.value?.speaker ?? "小镇互动");
+const portrait = useCharacterImage(computed(() => imageError.value ? undefined : line.value?.portrait));
+let timer: ReturnType<typeof setInterval> | undefined;
+function close() { emit("close"); }
 async function endInteraction() {
   try { if (await session.endStory()) close(); }
   catch (failure) { error.value = failure instanceof Error ? failure.message : "未能结束互动，请重试。"; }
 }
 function continueDialogue() {
-  if (busy.value || props.settling || session.storyBusy) return;
+  if (session.storyBusy) return;
   if (typing.value) reveal();
   else if (!line.value?.choices?.length) void advance();
 }
@@ -138,6 +90,7 @@ function reveal() {
 }
 function type() {
   clearInterval(timer);
+  imageError.value = false;
   displayed.value = "";
   typing.value = true;
   let i = 0;
@@ -153,7 +106,7 @@ function type() {
 }
 function navigateResponses(event: KeyboardEvent) {
   if (!['ArrowUp', 'ArrowDown'].includes(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
-  const buttons = Array.from(panel.value?.querySelectorAll<HTMLButtonElement>('.dialogue-actions button:not(:disabled), .dialogue-objectives button:not(:disabled)') ?? []);
+  const buttons = Array.from(panel.value?.querySelectorAll<HTMLButtonElement>('.dialogue-actions button:not(:disabled)') ?? []);
   if (!buttons.length) return;
   event.preventDefault();
   event.stopPropagation();
@@ -162,100 +115,20 @@ function navigateResponses(event: KeyboardEvent) {
   buttons[next]?.focus();
 }
 async function advance(choice?: string) {
-  if (busy.value || props.settling || session.storyBusy || disposed || closed) return;
-  if (typing.value) {
-    reveal();
-    if (!choice) return;
-  }
-  if (!line.value) return;
-  if (props.story) {
-    error.value = "";
-    try { await session.advanceStory(choice); }
-    catch (failure) { error.value = failure instanceof Error ? failure.message : "对白推进失败，请重试。"; }
-    return;
-  }
-  if (!props.npc) return;
-  const generation = ++requestGeneration,
-    activeNpc = props.npc,
-    userId = session.user?.id,
-    classroomId = session.classroomId;
-  const current = () =>
-    !disposed &&
-    !closed &&
-    generation === requestGeneration &&
-    props.npc === activeNpc &&
-    session.user?.id === userId &&
-    session.classroomId === classroomId;
-  busy.value = true;
+  if (session.storyBusy) return;
+  if (typing.value) { reveal(); return; }
   error.value = "";
-  try {
-    const result = await api.post<{
-      node: Dialogue;
-      next_id: string | null;
-      completed_root: string | null;
-      effects: { type: string; activity_id: string; kind: string }[];
-    }>(`/dialogues/${props.npc.key}/steps`, {
-      classroom_id: session.classroomId,
-      node_id: line.value.id,
-      ...(choice ? { choice } : {}),
-    });
-    if (!current()) return;
-    if (choice) lastChoice = choice;
-    if (result.next_id) {
-      nodeId.value = result.next_id;
-    } else emit("complete", lastChoice);
-    for (const effect of result.effects) {
-      if (!current()) return;
-      if (effect.type === "open_activity") {
-        session.open({
-          kind:
-            effect.kind === "practice" || effect.kind === "assessment"
-              ? "practice"
-              : "lesson",
-          activity_id: effect.activity_id,
-        });
-        close();
-        break;
-      }
-    }
-  } catch (e) {
-    if (current())
-      error.value = e instanceof Error ? e.message : "对白推进失败";
-  } finally {
-    if (generation === requestGeneration) busy.value = false;
-  }
+  try { await session.advanceStory(choice); }
+  catch (failure) { error.value = failure instanceof Error ? failure.message : "对白推进失败，请重试。"; }
 }
-watch(
-  () => props.npc,
-  () => {
-    requestGeneration++;
-    closed = false;
-    busy.value = false;
-    nodeId.value = props.npc?.dialogue[0]?.id ?? "";
-    imageError.value = false;
-    lastChoice = undefined;
-  },
-  { flush: "sync" },
-);
-watch(
-  [() => session.user?.id, () => session.classroomId],
-  () => {
-    requestGeneration++;
-    closed = true;
-    busy.value = false;
-  },
-  { flush: "sync" },
-);
 // Start after the complete prop update, including a new round on the same node.
 watch(
-  [() => props.story?.id, () => props.story?.revision, () => props.npc?.key,
+  [() => props.story?.id, () => props.story?.revision,
     () => line.value?.id, () => line.value?.text],
   type,
   { immediate: true },
 );
 onBeforeUnmount(() => {
-  disposed = true;
-  requestGeneration++;
   clearInterval(timer);
 });
 </script>
@@ -273,10 +146,10 @@ onBeforeUnmount(() => {
 
 
 .dialogue-text { color:#f0dfbb;font-size:clamp(1rem,1.6vw,1.4rem);line-height:1.8;min-height:3.6em;margin:0 0 18px;cursor:pointer;white-space:pre-wrap; }
-.dialogue-actions,.dialogue-objectives { display:flex;flex-direction:column;gap:4px;padding:0;margin:0;border:0;animation:responses-in .24s ease-out; }
-.dialogue-actions:empty,.dialogue-objectives:empty { display:none; }
-.dialogue-actions button,.dialogue-objectives button { display:flex;align-items:center;gap:14px;width:100%;min-height:46px;text-align:left;padding:10px 16px;border:1px solid transparent;border-radius:3px;background:transparent;box-shadow:none;color:#e6d4b0;font-size:1.05rem;line-height:1.5; }
-.dialogue-actions button:hover,.dialogue-actions button:focus-visible,.dialogue-objectives button:hover,.dialogue-objectives button:focus-visible { background:linear-gradient(90deg,#b185424d,#a9843910);border-color:#c89c52;color:#ffe1a1;box-shadow:none; }
+.dialogue-actions { display:flex;flex-direction:column;gap:4px;padding:0;margin:0;border:0;animation:responses-in .24s ease-out; }
+.dialogue-actions:empty { display:none; }
+.dialogue-actions button { display:flex;align-items:center;gap:14px;width:100%;min-height:46px;text-align:left;padding:10px 16px;border:1px solid transparent;border-radius:3px;background:transparent;box-shadow:none;color:#e6d4b0;font-size:1.05rem;line-height:1.5; }
+.dialogue-actions button:hover,.dialogue-actions button:focus-visible { background:linear-gradient(90deg,#b185424d,#a9843910);border-color:#c89c52;color:#ffe1a1;box-shadow:none; }
 .response-number { color:#dcb979;font-family:Georgia,serif;font-size:1.2rem;min-width:1.3em; }
 .dialogue-footer { display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:12px;padding-top:10px;border-top:1px solid #a98c5733;color:#bba580;font-size:.78rem; }
 .dialogue-footer button { color:#e2c99d;min-height:44px;background:transparent;border:0; }
@@ -284,10 +157,10 @@ onBeforeUnmount(() => {
 .dialogue-box button:disabled { opacity:.5;cursor:wait; }
 .dialogue-box .error { color:#ffb39e; }.dialogue-saving { color:#cdb986; }
 @keyframes responses-in { from {opacity:0;transform:translateY(6px)} to {opacity:1;transform:none} }
-@media(max-width:700px) { .dialogue-layer { padding:12px 12px 18px; }.dialogue-stage { width:48%;height:53dvh;bottom:42dvh; }.dialogue-layer .portrait { height:120%; }.dialogue-box { padding:18px;max-height:60dvh;min-height:220px;z-index:3; }.dialogue-box .eyebrow { padding:7px 16px;font-size:1.05rem; }.dialogue-text { font-size:1rem; }.dialogue-actions button,.dialogue-objectives button { font-size:.95rem; }.dialogue-box .eyebrow span { display:none; } }
+@media(max-width:700px) { .dialogue-layer { padding:12px 12px 18px; }.dialogue-stage { width:48%;height:53dvh;bottom:42dvh; }.dialogue-layer .portrait { height:120%; }.dialogue-box { padding:18px;max-height:60dvh;min-height:220px;z-index:3; }.dialogue-box .eyebrow { padding:7px 16px;font-size:1.05rem; }.dialogue-text { font-size:1rem; }.dialogue-actions button { font-size:.95rem; }.dialogue-box .eyebrow span { display:none; } }
 @media(max-height:540px) and (min-width:701px) { .dialogue-stage { height:90dvh;width:28%; }.dialogue-box { padding:16px 22px 12px 28%;max-height:80dvh;min-height:180px; }.dialogue-text { font-size:1rem;min-height:0;margin-bottom:10px; }.dialogue-heading { margin-bottom:8px; }.dialogue-box .eyebrow { font-size:1rem;padding:5px 14px; } }
-@media(prefers-reduced-motion:reduce) { .dialogue-actions,.dialogue-objectives { animation:none; } }
-:global([data-reduced-motion="true"]) .dialogue-actions,:global([data-reduced-motion="true"]) .dialogue-objectives { animation:none; }
+@media(prefers-reduced-motion:reduce) { .dialogue-actions { animation:none; } }
+:global([data-reduced-motion="true"]) .dialogue-actions { animation:none; }
 </style>
 
 <style scoped>

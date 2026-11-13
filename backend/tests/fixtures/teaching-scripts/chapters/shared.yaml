@@ -1,44 +1,53 @@
-# Automated regression fixture only; never loaded by the running service.
 schema_version: 1
 npcs:
 - key: mayor_py
   name: 镇长 Py
-  map_key: town_hub
-  tile_x: 22
-  tile_y: 34
-  portrait: /assets/pixel/portraits/galgame/mayor_py.png
-  dialogue:
-  - id: hello
-    speaker: 镇长 Py
-    text: 欢迎来到 Pythontopia。我们一起开始第一堂 Python 课吧。
+  portrait: builtin:portrait:mayor_py
+  placement:
+    map_key: town_hub
+    tile_x: 22
+    tile_y: 34
+    direction: down
+  sprite: builtin:sprite:chara_2
+  persona: ''
+  appearance_condition:
+    always: true
 - key: professor
   name: 林教授
-  map_key: town_hub
-  tile_x: 25
-  tile_y: 14
-  portrait: /assets/pixel/portraits/galgame/professor.png
-  dialogue:
-  - id: hello
-    speaker: 林教授
-    text: 欢迎来小镇学习 Python。当前主线请跟随镇长、图书管理员和练习场教练的指引。
+  portrait: builtin:portrait:professor
+  placement:
+    map_key: town_hub
+    tile_x: 25
+    tile_y: 14
+    direction: down
+  sprite: builtin:sprite:chara_2
+  persona: ''
+  appearance_condition:
+    always: true
 - key: arena_guard
   name: 练习场教练
-  map_key: town_hub
-  tile_x: 38
-  tile_y: 24
-  portrait: /assets/pixel/portraits/galgame/arena_guard.png
-  dialogue:
-  - id: practice
-    text: 正式提交会记录成绩，练习可以重试。
+  portrait: builtin:portrait:arena_guard
+  placement:
+    map_key: town_hub
+    tile_x: 38
+    tile_y: 24
+    direction: down
+  sprite: builtin:sprite:chara_2
+  persona: ''
+  appearance_condition:
+    always: true
 - key: librarian_doc
   name: 图书管理员
-  map_key: library
-  tile_x: 9
-  tile_y: 5
-  portrait: /assets/pixel/portraits/galgame/librarian_doc.png
-  dialogue:
-  - id: books
-    text: 书架记录语言的历史。阅读参与和掌握知识是两回事。
+  portrait: builtin:portrait:librarian_doc
+  placement:
+    map_key: library
+    tile_x: 9
+    tile_y: 5
+    direction: down
+  sprite: builtin:sprite:chara_2
+  persona: ''
+  appearance_condition:
+    always: true
 activities:
 - id: ch1-practice
   chapter_id: 179

@@ -21,7 +21,7 @@ def package(tmp_path):
     media = b"test-only lesson content\n"
     (root / "assets/texts/lesson.txt").write_bytes(media)
     manifest = {
-        "schema_version": 1, "package_id": "test-course", "name": "测试课程", "package_version": "1",
+        "schema_version": 2, "package_id": "test-course", "name": "测试课程", "package_version": "1",
         "created_at": "2026-11-10T10:00:00+08:00", "entry": "curriculum/course.yaml",
         "requires": {"world_id": "pythontopia-town", "world_schema_version": 1, "capabilities": ["reading", "practice"]},
     }
@@ -54,7 +54,7 @@ def test_preflight_is_read_only_and_explicitly_not_import(package):
 
 
 @pytest.mark.parametrize("field,value", [
-    ("schema_version", 2), ("schema_version", True), ("package_id", "../evil"), ("name", " "),
+    ("schema_version", 1), ("schema_version", True), ("package_id", "../evil"), ("name", " "),
     ("package_version", 1), ("created_at", "2026-11-10T10:00:00"), ("created_at", "2026-99-10T10:00:00Z"),
     ("entry", "../secrets.yaml"), ("entry", "C:/file"), ("entry", "curriculum\\course.yaml"),
     ("entry", "/etc/passwd"), ("entry", "curriculum/./course.yaml"), ("entry", "curriculum/other.yaml"),

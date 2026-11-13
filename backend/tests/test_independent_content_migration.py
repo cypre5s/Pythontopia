@@ -29,7 +29,7 @@ BACKEND = Path(__file__).resolve().parents[1]
 
 def migrate(path, target="head", *, check=True):
     result = subprocess.run([sys.executable, "-m", "alembic", "upgrade", target], cwd=BACKEND,
-                            env={**os.environ, "REBORN_DATABASE_URL": "sqlite:///" + path.as_posix()},
+                            env={**os.environ, "REBORN_ENV": "development", "REBORN_DATABASE_URL": "sqlite:///" + path.as_posix()},
                             capture_output=True, text=True, timeout=45)
     if check:
         assert result.returncode == 0, result.stderr
@@ -107,7 +107,7 @@ def test_empty_migration_and_metadata_match(tmp_path):
         assert not db.execute(text("PRAGMA foreign_key_check")).all()
     engine.dispose()
     result = subprocess.run([sys.executable, "-m", "alembic", "check"], cwd=BACKEND,
-                            env={**os.environ, "REBORN_DATABASE_URL": "sqlite:///" + path.as_posix()},
+                            env={**os.environ, "REBORN_ENV": "development", "REBORN_DATABASE_URL": "sqlite:///" + path.as_posix()},
                             capture_output=True, text=True, timeout=45)
     assert result.returncode == 0, result.stderr + result.stdout
 

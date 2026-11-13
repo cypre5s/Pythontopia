@@ -12,22 +12,18 @@
         v-if="session.world"
         :key="session.classroomId"
         ref="canvas"
-        :paused="Boolean(session.workspace || dialogueNpc || activeStory?.node || welcome || session.storyBusy || session.resetBusy)"
+        :paused="Boolean(session.workspace || activeStory?.node || welcome || session.storyBusy || session.resetBusy)"
         @ready="onWorldReady"
         @position="positionChanged"
         @interact="interact" /><GameHUD
         v-if="!welcome"
-        :blocked="Boolean(session.workspace || dialogueNpc || activeStory?.node || session.storyBusy || session.resetBusy)"
+        :blocked="Boolean(session.workspace || activeStory?.node || session.storyBusy || session.resetBusy)"
         :class="{ 'is-entering': entered }"
         @guide="guide" /><DialogueLayer
-        v-if="!silentAction && (dialogueNpc || activeStory?.node)"
-        :npc="dialogueNpc"
+        v-if="!silentAction && activeStory?.node"
         :story="activeStory"
-        :actions="actions"
-        :settling="dialogueSaving"
         @close="closeDialogue"
-        @complete="finishDialogue"
-        @action="action" />
+        />
       <div v-if="silentAction && !welcome" class="world-action-status">
         <template v-if="automaticActionError">
           <p role="alert">{{ automaticActionError }}</p>
@@ -75,7 +71,7 @@ import DialogueLayer from "./DialogueLayer.vue";
 import OverlayHost from "./OverlayHost.vue";
 import { useSession } from "../shared/session";
 import { api, notify } from "../shared/api";
-import type { Npc, Player, Quest, QuestNode } from "../shared/types";
+import type { Player } from "../shared/types";
 import { isTextFocus } from "../game/pathfinding";
 import { resolveWorldTarget } from "../game/config/worldConfig";
 import { arrivalActive, arrivalCamera, arrivalFinished, backdropReady, startArrival, endArrival, type ArrivalCamera } from "../shared/arrival";
@@ -105,11 +101,8 @@ const session = useSession(),
   router = useRouter(),
   loading = ref(true),
   error = ref(""),
-  npc = ref<Npc | null>(null),
-  dialogueSaving = ref(false),
   joinCode = ref(""),
-  canvas = ref<InstanceType<typeof WorldCanvas>>(),
-  activityNpcs = ref<Record<string, string>>({});
+  canvas = ref<InstanceType<typeof WorldCanvas>>();
 let reachBusy = false;
 let reachTask: Promise<void> = Promise.resolve();
 let unregisterRestart: (() => void) | undefined;
@@ -117,19 +110,6 @@ watch(() => session.restartCompleted, () => {
   loading.value = true;
   window.location.reload();
 }, { flush: "sync" });
-const actions = computed(
-  () =>
-    session.world?.quests.flatMap((quest) =>
-      quest.nodes
-        .filter(
-          (node) =>
-            node.status === "ready" &&
-            node.activity_id &&
-            activityNpcs.value[node.activity_id] === npc.value?.key,
-        )
-        .map((node) => ({ quest, node })),
-    ) ?? [],
-);
 const activeStory = computed(() =>
   session.story?.status === "active" && !session.storyDismissed && !session.workspace ? session.story : undefined,
 );
@@ -165,13 +145,7 @@ watch([silentAction, welcome, loading, () => session.storyBusy], ([key, entering
   requestedAction = key;
   void runAutomaticAction();
 }, { immediate: true });
-const dialogueNpc = computed(() => {
-  if (!activeStory.value?.node) return npc.value;
-  const resident = session.world?.npcs.find(n => n.key === activeStory.value?.npc_key);
-  return resident ? { ...resident, dialogue: [activeStory.value.node] } : null;
-});
 function closeDialogue() {
-  npc.value = null;
   session.dismissStory();
 }
 async function closeWorkspace() {
@@ -187,32 +161,6 @@ watch(() => session.navigationTarget, async target => {
   session.navigationTarget = null;
   await guide(target);
 });
-watch(
-  () => session.workspace,
-  (workspace) => {
-    if (workspace) npc.value = null;
-  },
-  { flush: "sync" },
-);
-watch(
-  () => session.world,
-  async (world) => {
-    for (const id of new Set(
-      world?.quests.flatMap((q) =>
-        q.nodes
-          .filter((n) => n.status === "ready" && n.activity_id)
-          .map((n) => n.activity_id!),
-      ) ?? [],
-    )) {
-      if (activityNpcs.value[id]) continue;
-      try {
-        activityNpcs.value[id] = (await session.activity(id)).npc_key;
-      } catch {
-        /* Unpublished content remains unavailable. */
-      }
-    }
-  },
-);
 async function load() {
   loading.value = true;
   error.value = "";
@@ -249,7 +197,6 @@ async function logout() {
 }
 async function guide(key: string) {
   session.open(null);
-  npc.value = null;
   session.dismissStory();
   await nextTick();
   canvas.value?.guide(key);
@@ -296,8 +243,7 @@ async function interact(target: string, type: "npc" | "object") {
       notify(error instanceof Error ? error.message : "无法读取这段对话，请重试。");
       return;
     }
-    const resident = session.world?.npcs.find((n) => n.key === target);
-    npc.value = resident ? { ...resident } : null;
+    notify("这个角色当前暂无可用对话。");
     return;
   }
   if (session.world?.interactions !== undefined) {
@@ -322,46 +268,6 @@ async function interact(target: string, type: "npc" | "object") {
   }
   if (target === "library_shelf") session.open({ kind: "library" });
 }
-async function finishDialogue(choice?: string) {
-  if (!npc.value || dialogueSaving.value) return;
-  const activeNpc = npc.value;
-  const key = activeNpc.key;
-  dialogueSaving.value = true;
-  try {
-    for (const quest of [...(session.world?.quests ?? [])])
-      for (const node of quest.nodes) {
-        if (node.status !== "ready") continue;
-        if (
-          (node.type === "TALK_TO_NPC" || node.type === "REPORT_BACK") &&
-          node.target === key
-        )
-          await session.event(quest, node, { npc_key: key });
-        else if (
-          node.type === "PLAY_DIALOGUE" &&
-          node.target === key &&
-          (!node.choices?.length || choice)
-        )
-          await session.event(quest, node, {
-            npc_key: key,
-            dialogue_id: node.dialogue_id ?? node.target,
-            choice,
-          });
-      }
-    await session.refresh();
-  } catch (e) {
-    notify(e instanceof Error ? e.message : "对白进度保存失败");
-  }
-  if (npc.value === activeNpc) npc.value = null;
-  dialogueSaving.value = false;
-}
-function action(_quest: Quest, node: QuestNode) {
-  npc.value = null;
-  if (node.activity_id)
-    session.open({
-      kind: node.type === "STUDY_LESSON" ? "lesson" : "practice",
-      activity_id: node.activity_id,
-    });
-}
 function worldShortcut(event: KeyboardEvent) {
   if (
     event.defaultPrevented ||
@@ -373,7 +279,7 @@ function worldShortcut(event: KeyboardEvent) {
     isTextFocus(document.activeElement) ||
     welcome.value ||
     session.workspace ||
-    dialogueNpc.value || activeStory.value?.node ||
+    activeStory.value?.node || activeStory.value?.node ||
     session.storyBusy ||
     session.resetBusy ||
     !session.world

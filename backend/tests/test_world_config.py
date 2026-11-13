@@ -5,10 +5,19 @@ import pytest
 from pydantic import ValidationError
 
 from app import world_config
-from app.classrooms import NpcInput
+from app.characters import validate_characters
+
 from app.models import Npc, PlayerPosition, QuestDefinition, WorldFlag
 from app.quests import PositionInput
 from app.world_config import interaction_points, load_world_config, validate_world_config
+
+
+def character_point(map_key, tile_x, tile_y):
+    row = {"id": "test", "name": "Test", "portrait": "builtin:portrait:professor", "sprite": "builtin:sprite:chara_2",
+           "persona": "", "appearance_condition": {"always": True},
+           "placement": {"map_key": map_key, "tile_x": tile_x, "tile_y": tile_y, "direction": "down"}}
+    validate_characters([row], [])
+    return row
 
 
 def position(client, student, classroom, map_key, x, y):
@@ -88,11 +97,11 @@ def test_position_and_npc_dtos_take_map_names_and_dimensions_from_configuration(
     monkeypatch.setattr(world_authoring, "reachable_cells", lambda _: {(5, 4)})
     assert PositionInput(classroom_id=1, map_key="town_hub", tile_x=59, tile_y=39).tile_x == 59
     assert PositionInput(classroom_id=1, map_key="annex", tile_x=5, tile_y=4).map_key == "annex"
-    assert NpcInput(key="annex-host", name="Host", map_key="annex", tile_x=5, tile_y=4).map_key == "annex"
+    assert character_point("annex", 5, 4)["placement"]["map_key"] == "annex"
     with pytest.raises(ValidationError):
         PositionInput(classroom_id=1, map_key="annex", tile_x=6, tile_y=4)
-    with pytest.raises(ValidationError):
-        NpcInput(key="bad", name="Bad", map_key="library", tile_x=18, tile_y=4)
+    with pytest.raises(ValueError):
+        character_point("library", 18, 4)
 
 
 def test_cross_map_put_cannot_bypass_entrance_and_initial_spawn_is_enforced(client, db, student, classroom):
@@ -163,8 +172,8 @@ def test_walk_bounds_exclude_decoration_from_player_and_npc_positions(client, st
     assert position(client, student, classroom, "town_hub", 0, 10).status_code == 422
     assert position(client, student, classroom, "town_hub", -1, 10).status_code == 422
     assert position(client, student, classroom, "town_hub", 1, 10).status_code == 200
-    with pytest.raises(ValidationError):
-        NpcInput(key="decoration-npc", name="Outside", map_key="town_hub", tile_x=0, tile_y=10)
+    with pytest.raises(ValueError):
+        character_point("town_hub", 0, 10)
 
 
 @pytest.mark.parametrize("invalid", ["empty", "duplicate", "too_many", "unknown_map", "mixed"])

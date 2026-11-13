@@ -20,7 +20,7 @@ from app.judge import JudgeSubmissionUnknown
 from app.main import create_app
 from app.models import Activity, AssessmentAttempt, ChapterRelease, Classroom, Membership, QuestionSecret, Submission, User
 from app.quests import validate_evidence
-from app.seed import seed
+from fixture_seed import seed
 
 
 def url(classroom, suffix=""):

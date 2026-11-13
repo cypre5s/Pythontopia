@@ -34,7 +34,7 @@ def spaces(db, teacher, student):
         db.flush()
         set_material_chapters(db, material.id, [chapter.id])
         npc = Npc(key=f"npc-{suffix}", stable_id="librarian_doc", course_instance_id=instance.id, name=f"NPC{suffix}",
-                  map_key="town_hub", tile_x=22, tile_y=36, portrait="", dialogue=[{"id": "hello", "text": suffix}])
+                  map_key="town_hub", tile_x=22, tile_y=36, portrait="builtin:portrait:professor", sprite="builtin:sprite:chara_2")
         activity = Activity(id=f"activity-{suffix}", stable_id="lesson", chapter_id=chapter.id, title=f"阅读{suffix}",
                             kind="lesson", material_id=material.id, npc_key=npc.key, content={"published": True}, **common)
         question = Question(id=f"question-{suffix}", stable_id="question", title="概念题", kind="single_choice",
@@ -87,8 +87,6 @@ def test_cross_instance_npc_story_and_quest_rejected(client, db, student, spaces
     a, b = spaces
     cid = a["classroom"].id
     for npc_key in (b["npc"].key, "mayor_py"):
-        assert client.post(f"/api/dialogues/{npc_key}/steps", headers=student["headers"],
-                           json={"classroom_id": cid, "node_id": "hello"}).status_code == 403
         assert client.post("/api/story/interactions", headers=student["headers"],
                            json={"classroom_id": cid, "npc_key": npc_key}).status_code == 403
     response = client.post("/api/events", headers=student["headers"], json={"classroom_id": cid, "event_id": str(uuid4()),
@@ -136,7 +134,8 @@ def test_teacher_quest_authoring_uses_selected_scope(client, teacher, spaces):
                        json={"definition": definition}).status_code == 404
 
 def test_cloned_arrival_can_begin_and_resume(client, db, classroom, student):
-    from app.course_instances import clone_current_course, content_mapping
+    from app.course_instances import content_mapping
+    from fixture_instances import clone_current_course
     instance = clone_current_course(db, classroom["id"])
     db.commit()
     mapping = content_mapping(db, instance)

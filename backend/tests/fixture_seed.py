@@ -5,18 +5,18 @@ import os
 from pathlib import Path
 from sqlalchemy import select
 
-from .chapter_content import load_content
-from .config import ROOT
-from .content_relations import (
+from fixture_content import load_content
+from app.config import ROOT
+from app.content_relations import (
     material_in_chapter, set_activity_questions, set_material_chapters,
     set_question_chapters, set_question_knowledge_points,
 )
-from .db import SessionLocal
-from .models import (
+from app.db import SessionLocal
+from app.models import (
     Activity, Chapter, CourseExample, KnowledgePoint, Material,
     Npc, QuestDefinition, Question, QuestionSecret,
 )
-from .quests import validate_definition
+from app.quests import validate_definition
 
 
 def _shared(item, label):
@@ -65,7 +65,7 @@ def _import_course(db, source=None, *, content_root=None):
     if not chapters:
         raise ValueError("课程包必须至少包含一个章节")
     content = load_content(Path(content_root)) if content_root is not None else load_content()
-    from .models import StoryDefinition
+    from app.models import StoryDefinition
 
     # Legacy source IDs are never permission to overwrite live classroom rows.
     incoming = (
@@ -155,7 +155,7 @@ def _import_course(db, source=None, *, content_root=None):
     question_chapters = {}
     activity_fields = ("title", "kind", "material_id", "npc_key", "assistant_allowed")
     for spec in content["activities"]:
-        from .learning_rules import validate_learning
+        from app.learning_rules import validate_learning
 
         material = db.get(Material, spec.get("material_id")) if spec.get("material_id") else None
         if material and not material_in_chapter(db, material.id, spec["chapter_id"]):
@@ -236,10 +236,8 @@ def _import_course(db, source=None, *, content_root=None):
     db.flush()
     for activity_id, ids in assignments.items():
         set_activity_questions(db, activity_id, ids)
-    from .dialogues import validate_dialogue
 
     for spec in content["npcs"]:
-        validate_dialogue(spec["dialogue"])
         npc = db.get(Npc, spec["key"])
         if not npc:
             db.add(Npc(**spec))
@@ -257,7 +255,7 @@ def _import_course(db, source=None, *, content_root=None):
         item.title, item.chapter_id, item.definition = definition["title"], definition["chapter_id"], definition
         item.owner_id = None
     db.flush()
-    from .story import validate_story
+    from app.story import validate_story
 
     for spec in content["stories"]:
         validate_story(spec["story"], db, spec["quest"], story_id=spec["id"])
@@ -268,7 +266,7 @@ def _import_course(db, source=None, *, content_root=None):
         item.chapter_id, item.quest_id, item.content = spec["chapter_id"], spec["quest"]["id"] if spec["quest"] else None, spec["story"]
     # Definition changes may invalidate an open dialogue cursor; preserve the session
     # history and all learning data, and let the next interaction select a valid entry.
-    from .models import StorySession
+    from app.models import StorySession
     for session in db.scalars(select(StorySession).where(StorySession.status.in_(["active", "waiting"]))):
         story = db.get(StoryDefinition, session.story_id)
         node = next((n for n in story.content["nodes"] if n["id"] == session.node_id), None) if story else None

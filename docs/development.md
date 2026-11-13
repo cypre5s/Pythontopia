@@ -2,7 +2,7 @@
 
 ## 目录课程包操作
 
-将包含 `manifest.yaml` 的课程包目录放入 `data/course/`，例如 `data/course/python-town-chapter1/manifest.yaml`。设置 `REBORN_COURSE_EXCHANGE_DIR` 指向宿主机该目录，Compose内挂载到 `/app/data/course`。后台课程包页刷新列表、预览差异、确认导入。导出完成后页面显示 `data/course/export-<班级ID>-<随机ID>/`，可在相同班级再次选择。
+将包含 `manifest.yaml` 的课程包目录放入 `data/course/`，例如 `data/course/python-town-chapter1/manifest.yaml`。设置 `REBORN_COURSE_EXCHANGE_DIR` 指向宿主机该目录，Compose内挂载到 `/app/data/course`。后台课程包页刷新列表、预览差异、确认导入。导出完成后页面显示 `data/course/export-<班级ID>-<安全课程名>-<北京时间>-<随机串>/`，可在相同班级再次选择。
 
 当前ZIP上传关闭。历史ZIP离线校验工具保留，但新运行流程直接使用目录。迁移已有交换目录时应保留 `imports/`，使未过期预览仍可应用。交换目录包含私有答案和素材，不能由Web静态服务公开。
 
@@ -138,21 +138,11 @@ npm run dev -- --host 127.0.0.1 --port 15174
 
 ## YAML、媒体导入与数据库迁移
 
-### 转换旧课程并导入班级
+### v2 课程导入班级
 
-课程源不再纳入Git或镜像。已保留的私有旧来源通常位于`data/course/legacy/course-pack-43`（json/及媒体清单）和`data/course/legacy/content`（chapters/、ambient/、questions/）；其他机器须显式提供自己的合法来源。旧主线仍只有arrival，完整资源和知识点保留。
+课程包不纳入 Git 或镜像。将编写完成的 v2 解压目录放入私有 data/course，在教师后台选择班级、预览目录包，核对差异后确认导入。新引擎明确拒绝旧格式，不提供 app.seed、convert_legacy_course、migrate_classroom_courses 或旧来源 initialize 接口。
 
-在backend执行离线转换，不连接运行数据库；输出文件必须不存在：
-
-```powershell
-python -m app.convert_legacy_course --source ../data/course/legacy/course-pack-43 --content ../data/course/legacy/content --output ../data/course/python-foundations.zip --package-id python-foundations-43 --name Python语言基础
-```
-
-只有文本来源时产物明确为提取文本课程，不会伪造原PDF/视频。若持有已核查的原始媒体归档，可加`--media-archive <完整媒体包路径>`，转换器核对可信清单、哈希、PDF页数及原页面ID后一起封装。原包43文件含7份PDF和34段视频，561页只是该来源的规模，不是数据库固定要求。转换后所有章节默认暂停，教师导入后显式发布。
-
-打开`/teacher/`创建或选择班级，在课程包页上传ZIP，检查校验、差异和学习影响，确认导入。班级日常维护直接使用后台，更新后可完整导出到私有交换区；同课程更新保留稳定ID映射和学习证据，不能借重新导入重评旧成绩或解锁试卷。原文件缺失或转换未完成时不提供假完整导出。
-
-`python -m app.seed`和`python -m app.course_media`只用于受控旧来源维护/转换测试，默认来源可由REBORN_COURSE_ROOT与REBORN_CONTENT_ROOT指定，不能覆盖已归属班级实例的同ID数据，也不成为启动行为。既有班级升级用下方保留迁移；新班级使用完整包，无需先seed全局课程。
+本机 data/course/python-town-chapter1 已更新为 v2，四个角色、立绘/精灵引用、人设、日常公共流程和图书馆设置与包一起维护，原 41 份媒体资源保留。当前包只是私有文件，不随启动自动导入。
 
 ### 私有交换区
 
@@ -164,12 +154,11 @@ imports/保存有效期24小时的导入预览目录及历史ZIP。API启动后�
 
 操作目标始终使用 `python -m alembic upgrade head`，不要复制历史记录中的迁移 ID。既有升级链包含需要在线读取数据的迁移，不能以离线 `--sql` 输出替代实际升级。升级失败先看日志和备份，不手工修改 `alembic_version`，不盲目 downgrade 或新建空库掩盖问题。
 
-在新的独立验收数据库验证迁移与重复seed；先提供明确外部来源，或按下方检查节生成并设置合成测试来源：
+在新的独立验收数据库验证结构迁移；重复课程导入使用测试包和同一稳定 package_id，不能指向演示库：
 
 ```powershell
 python -m alembic upgrade head
-python -m app.seed
-python -m app.seed
+python -m alembic upgrade head
 python -m alembic check
 ```
 
@@ -265,7 +254,7 @@ python -m pytest -q --basetemp .pytest-local
 
 Windows测试进程显式使用UTF-8，避免旧夹具的默认文本读取采用系统GBK；这些设置只影响当前终端及其子进程，不修改系统语言。pytest临时目录保持在项目忽略目录内。
 
-自动化测试使用backend/tests/source_fixtures.py生成的人工构造资料与tests/fixtures/teaching-scripts，不依赖私有原教材，也不能拿合成夹具声称原教材正确。显式执行来源工具或重复seed前，从仓库根运行`python backend/tests/source_fixtures.py`并将REBORN_COURSE_ROOT指向生成目录、REBORN_CONTENT_ROOT指向教学测试脚本。另在全新隔离数据库执行前述迁移与重复seed检查。PostgreSQL并发专项需要显式 `REBORN_TEST_DATABASE_URL`，测试会创建临时 schema 并清理，不能指向真实演示库或生产库。live Judge0测试需要 `REBORN_LIVE_JUDGE0_URL`，鉴权仍用 `REBORN_JUDGE0_AUTH_TOKEN`；未配置的外部专项应记录为跳过。
+自动化测试使用 backend/tests/source_fixtures.py 和 tests/fixtures/teaching-scripts 的合成课程，不代表原教材正确。fixture_seed/fixture_package/fixture_instances 仅位于 tests，不是运行导入入口。浏览器测试包通过 PYTHONPATH=tests 调用 fixture_package 生成 v2 目录，放入独立交换区；课程包 ID 通过 REBORN_E2E_COURSE_PACKAGE 指定。全新隔离数据库执行迁移、重复升级和包重复导入检查。PostgreSQL并发专项需要显式 `REBORN_TEST_DATABASE_URL`，测试会创建临时 schema 并清理，不能指向真实演示库或生产库。live Judge0测试需要 `REBORN_LIVE_JUDGE0_URL`，鉴权仍用 `REBORN_JUDGE0_AUTH_TOKEN`；未配置的外部专项应记录为跳过。
 
 地图/素材相关修改从仓库根检查：
 
@@ -290,7 +279,7 @@ git diff --check
 
 Playwright不会自动启动服务器。先准备独立验收数据库、媒体/交换目录及专用教师账号，设置E2E_URL、ADMIN_E2E_URL（同域入口）、E2E_TEACHER_STUDENT_ID、E2E_TEACHER_PASSWORD。跨教师权限另需E2E_OTHER_TEACHER_STUDENT_ID/PASSWORD。将解压后的完整测试包放进隔离交换目录，设置 REBORN_E2E_COURSE_PACKAGE 为清单的 package_id。学生用例先创建班级并显式导入。后台包往返测试在同一隔离环境运行，测试进程的 REBORN_COURSE_EXCHANGE_ROOT 指向可访问的交换目录。
 
-复现CI按`.github/workflows/reborn.yml`生成合成旧来源、离线转换测试ZIP并解压到隔离交换目录，再启动API、React和Vue。依赖在启动服务器前安装，浏览器运行期间不要执行npm ci。后台e2e在admin执行`npx playwright test --workers=1`；游戏按下方命令。
+复现CI按`.github/workflows/reborn.yml`使用 tests/fixture_package 生成 v2 合成测试包并解压到隔离交换目录，再启动API、React和Vue。依赖在启动服务器前安装，浏览器运行期间不要执行npm ci。后台e2e在admin执行`npx playwright test --workers=1`；游戏按下方命令。
 
 从 `frontend` 安装匹配浏览器并执行：
 
@@ -328,7 +317,7 @@ npm run test:e2e -- --project=desktop --workers=1
 | 端口被占用或启动到了另一环境 | 环境文件、项目名和端口；给新环境换端口，不停止无关服务 |
 | YAML修改不生效 | 校验是否通过、是否显式import-course、挂载来源与目标数据库是否正确；重建API不再自动导入内容 |
 | 页面显示旧地图或旧前端 | API/Web共同配置是否同时重建，Web镜像和浏览器缓存是否更新 |
-| PDF/视频缺失或无权限 | 是否显式导入材料包、导入的数据库与存储是否一致、章节是否开放；普通seed不包含媒体原文件 |
+| PDF/视频缺失或无权限 | 是否显式导入材料包、导入的数据库与存储是否一致、章节是否开放；文本测试夹具不包含原教材媒体 |
 | 助教不可用或回复中断 | 后端模型凭据/预算、活动授权和真实供应商状态；中断不自动重发，不能用假回复替代 |
 | 判题排队、未知或执行失败 | Judge0 worker、鉴权、language ID与隔离环境；未知状态先对账，不重复送交或在API主机执行 |
 | PPT转换失败 | converter profile、私有token、URL/镜像模式、原文件和处理限制；失败必须保持可见 |
@@ -364,17 +353,12 @@ python -m app.course_package --check 'E:/course-exchange/my-course'
 
 当前字段、资源格式、限额及未覆盖范围见[预检契约](content-authoring.md#清单与资源预检契约)。
 
-## 既有班级的保留迁移
+## v2 结构升级前置条件
 
-在隔离数据库副本完成对账后，操作者可显式迁移选定班级的课程定义及学习引用。命令不在应用启动时执行；新空班不会自动继承演示课。执行前先备份所选数据库和私有媒体，等待进行中的助教回复及资料处理结束。
+迁移 ea30c9b172f4 要求旧 NPC 表为空，只修改结构，不转换旧课程。它不会自动清空数据，也不提供旧格式运行。未授权清理的环境须停止升级并保留备份，不得套用本机测试清理操作。
 
-```powershell
-python -m app.migrate_classroom_courses --check --classroom-id 12 --classroom-id 15
-python -m app.migrate_classroom_courses --apply --classroom-id 12 --classroom-id 15
-```
-
-`--check`在逐班回滚事务中实际演练复制与引用映射，不提交内容或学习记录；PostgreSQL序列号可能前进，因此不是绝对只读操作。`--apply`逐班事务提交，失败班级回滚并报告，其他已成功班级保留；重复执行报告`already_active`。确实需要选择全部旧班时用`--all-legacy`替代班级ID，不能把示例ID直接用于真实部署。报告仅含计数及状态，不含学生答案、凭据或私有正文。
-
-迁移后核对账号/成员、提交ID与成绩、锁卷凭据、阅读进度、任务证据和等待流程。课程实例中的定义由班级独立编辑；保留的旧来源行仅用于有界迁移，不应继续充当多个班级的共同编辑对象。
+本轮 17234 的处理限定四个现有班级：先导出数据库与私有文件，恢复到独立数据库验证；停写后在事务中清理课程定义和关联学习/作答/成绩/体验进度，核对账号、班级、成员和体验身份指纹，随后运行新迁移。原 data/course 包和资源保留，升级后由用户自行导入。备份路径、恢复演练和前后数量统一记录在 acceptance。
 
 课程包表格展示目录名与摘要。新导出目录格式为 export-<班级ID>-<安全课程名>-<北京时间YYYYMMDD-HHMMSS>-<8位随机串>，课程名称中的文件系统禁用字符替换为短横线，名称最多48字符。旧目录可继续使用。
+
+角色图片清理与课程交换清理共用启动/每10分钟后台周期。角色保存事务提交后立即尝试清理退休图片，失败保留在课程私有状态队列重试；未提交上传超过24小时过期。文件只允许清理所属课程的 characters 前缀，系统素材不参与清理。

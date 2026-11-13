@@ -1,3 +1,5 @@
+from .characters import presentation
+from .models import Npc
 from datetime import datetime, timezone
 from math import isfinite
 from typing import Annotated
@@ -245,6 +247,7 @@ def get_activity(
         "title": activity.title,
         "kind": activity.kind,
         "npc_key": activity.npc_key,
+        "role": presentation(db, classroom_id, db.get(Npc, activity.npc_key)),
         "assistant_allowed": activity.assistant_allowed,
         "completion": activity.content.get("completion"),
         "learning": activity.content.get("learning", {}),

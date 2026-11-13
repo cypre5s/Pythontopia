@@ -94,7 +94,7 @@ const questions = computed(() => {
 });
 const current = computed(() => questions.value[questionIndex.value]);
 const visibleQuestions = computed(() => isAssessment.value && viewMode.value === 'paper' ? questions.value : current.value ? [current.value] : []);
-const role = computed(() => session.world?.npcs.find(npc => npc.key === activity.value?.npc_key));
+const role = computed(() => activity.value?.role);
 const roleName = computed(() => role.value?.name ?? '练习助教'), rolePortrait = computed(() => role.value?.portrait);
 const containerKey = computed(() => `draft:${contextUserId}:${contextClassroomId}:assessment-${props.activityId}`);
 const questionKey = (id: string) => `draft:${contextUserId}:${contextClassroomId}:${id}`;

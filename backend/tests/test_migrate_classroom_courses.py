@@ -7,8 +7,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.db import Base
 from app.models import Activity, Chapter, ChapterRelease, Classroom, CourseInstance, Material, User
-from app.migrate_classroom_courses import migrate_classrooms
-from app.seed import seed
+from fixture_migration import migrate_classrooms
+from fixture_seed import seed
 
 
 @pytest.fixture

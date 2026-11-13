@@ -16,7 +16,7 @@ from app.integration_models import AssistantSession
 from app.models import (
     Activity, AssessmentAttempt, Chapter, Material, Question, QuestionSecret, Submission,
 )
-from app.seed import seed
+from fixture_seed import seed
 
 
 def test_external_small_course_is_not_bound_to_original_pack_counts(tmp_path):
@@ -49,8 +49,8 @@ def test_external_small_course_is_not_bound_to_original_pack_counts(tmp_path):
 
 
 def test_demo_import_only_selects_current_questions_and_supports_reuse(db, monkeypatch):
-    from app import seed as importer
-    from app.chapter_content import load_content
+    import fixture_seed as importer
+    from fixture_content import load_content
 
     assert db.scalar(select(func.count()).select_from(Question)) == 6
     assert not list(db.scalars(select(Activity).where(Activity.id.like("archive-%"))))
@@ -69,8 +69,8 @@ def test_demo_import_only_selects_current_questions_and_supports_reuse(db, monke
 
 def test_import_rejects_oversized_assessment_without_changing_current_content(db, monkeypatch):
     from copy import deepcopy
-    from app import seed as importer
-    from app.chapter_content import load_content
+    import fixture_seed as importer
+    from fixture_content import load_content
 
     content = load_content()
     assessment = next(row for row in content["activities"] if row["id"] == "ch1-assessment")
@@ -142,6 +142,6 @@ def test_cleanup_apply_requires_explicit_development(db, monkeypatch, environmen
 
 def test_runtime_image_does_not_embed_or_reseed_course_content():
     dockerfile = (Path(__file__).resolve().parents[1] / "Dockerfile").read_text()
-    assert "app.seed" not in dockerfile
+    assert "fixture_seed" not in dockerfile
     assert "course-pack-43" not in dockerfile
     assert "COPY backend/ ./" not in dockerfile

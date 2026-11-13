@@ -4,7 +4,7 @@ import os
 
 import pytest
 from app.config import ROOT
-from app.convert_legacy_course import convert_legacy
+from fixture_package import convert_legacy
 from app.course_exchange import load_bundle, unpack_archive
 from app.course_package import PackageError
 

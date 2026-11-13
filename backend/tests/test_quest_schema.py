@@ -84,6 +84,7 @@ def test_unfinished_side_quest_does_not_block_next_main_chapter(client, db, teac
 def test_chapter_with_only_side_quests_does_not_automatically_satisfy_prerequisite(client, db, teacher, student, classroom, branching_course):
     chapter = client.post("/api/teacher/chapters", json={"title": "Only side activities"}, headers=teacher["headers"], params={"classroom_id": classroom["id"]}).json()
     definition = {**basic_definition(), "id": "only-side", "kind": "side", "chapter_id": chapter["id"]}
+    definition["nodes"][0].update(type="REACH_LOCATION", target="town_square")
     created = client.post("/api/teacher/quests", json={"definition": definition}, headers=teacher["headers"], params={"classroom_id": classroom["id"]})
     assert created.status_code == 201
     definition["id"] = created.json()["id"]
@@ -105,7 +106,7 @@ def test_chapter_with_only_side_quests_does_not_automatically_satisfy_prerequisi
             "event_id": str(uuid4()),
             "quest_id": definition["id"],
             "node_id": "talk",
-            "evidence": {"npc_key": "mayor_py"}},
+            "evidence": {}},
         headers=student["headers"],
     )
     assert result.status_code == 200, result.text

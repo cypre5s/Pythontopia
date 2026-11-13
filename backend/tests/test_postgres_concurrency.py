@@ -13,7 +13,7 @@ from app.auth import issue
 from app.db import Base, get_db
 from app.main import app
 from app.models import User, Classroom, Membership, ChapterRelease, PlayerPosition, LearningEvent, NodeState, StorySession, QuestDefinition
-from app.seed import seed
+from fixture_seed import seed
 
 
 @pytest.mark.skipif(
@@ -35,7 +35,7 @@ def test_postgres_duplicate_events_under_contention():
         with factory() as db:
             seed(db)
             definition = {"id": "contention-talk", "title": "Contention", "chapter_id": 179, "kind": "side",
-                          "nodes": [{"id": "greet", "type": "TALK_TO_NPC", "title": "Talk", "target": "mayor_py", "dependencies": []}], "effects": []}
+                          "nodes": [{"id": "greet", "type": "REACH_LOCATION", "title": "Reach", "target": "town_square", "dependencies": []}], "effects": []}
             db.add(QuestDefinition(id=definition["id"], chapter_id=179, title="Contention", definition=definition))
             teacher = User(student_id="193582816979202", name="teacher", role="teacher", password_hash="unused")
             student = User(student_id="870446112008", name="student", role="student", password_hash="unused")
@@ -62,7 +62,7 @@ def test_postgres_duplicate_events_under_contention():
         client = TestClient(app)
         assert client.get(f"/api/world?classroom_id={cid}", headers=headers).status_code == 200
         event_id = str(uuid4())
-        payload = {"classroom_id": cid, "event_id": event_id, "quest_id": "contention-talk", "node_id": "greet", "evidence": {"npc_key": "mayor_py"}}
+        payload = {"classroom_id": cid, "event_id": event_id, "quest_id": "contention-talk", "node_id": "greet", "evidence": {}}
 
         # Do not enter lifespan: the service workers use the live app database and are unrelated to this isolated schema.
         def send(_):

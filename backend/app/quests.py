@@ -1,3 +1,5 @@
+from .characters import world_character, presentation
+from .course_assistant import library_npc
 from typing import Annotated, Literal
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
@@ -317,19 +319,8 @@ def world_payload(db, user, classroom_id, initialize_quests=True):
             or story.quest_id is not None and quest_visible(db.get(QuestDefinition, story.quest_id), user, classroom, db))
             for story in db.scalars(select(StoryDefinition).where(course_clause(db, StoryDefinition, classroom_id)))),
         "player": player,
-        "npcs": [
-            {
-                "key": npc.key,
-                "stable_id": npc.stable_id or npc.key,
-                "name": npc.name,
-                "map_key": npc.map_key,
-                "tile_x": npc.tile_x,
-                "tile_y": npc.tile_y,
-                "portrait": npc.portrait,
-                "dialogue": npc.dialogue,
-            }
-            for npc in npcs
-        ],
+        "npcs": [world_character(db, classroom_id, npc) for npc in npcs],
+        "library_role": presentation(db, classroom_id, library_npc(db, classroom_id)),
         "quests": quests,
         "chapters": [
             {
@@ -576,13 +567,14 @@ def apply_quest_event(db, user, body: EventInput):
         return True
     if statuses[body.node_id] != "ready":
         raise HTTPException(409, "任务前置尚未完成或不属于所选分支")
-    if node["type"] in {"TALK_TO_NPC", "REPORT_BACK"}:
-        story = db.scalar(select(StoryDefinition).where(StoryDefinition.quest_id == instance.quest_id))
-        if story and any(item.get("checkpoint") == node["id"] for item in story.content["nodes"]):
-            marker = f"story:{story.id}:{node['id']}"
-            if body.evidence.get("dialogue_id") != marker or not db.get(WorldFlag, (user.id, body.classroom_id,
-                                                                                   f"dialogue:completed:{node['target']}:{marker}")):
-                raise HTTPException(422, "请先确认当前版本的指定对白")
+    if node["type"] in {"TALK_TO_NPC", "PLAY_DIALOGUE", "REPORT_BACK"}:
+        marker = body.evidence.get("dialogue_id")
+        stories = db.scalars(select(StoryDefinition).where(StoryDefinition.quest_id == instance.quest_id,
+                                                          StoryDefinition.course_instance_id == definition.course_instance_id))
+        verified = any(marker == f"story:{story.id}:{node['id']}" and
+                       any(item.get("checkpoint") == node["id"] for item in story.content["nodes"]) for story in stories)
+        if not verified or not db.get(WorldFlag, (user.id, body.classroom_id, f"dialogue:completed:{node['target']}:{marker}")):
+            raise HTTPException(422, "请先确认当前版本的指定流程对白")
     validate_evidence(db, user, body.classroom_id, node, body.evidence)
     state = NodeState(player_quest_id=instance.id, node_id=node["id"], status="complete", choice=body.evidence.get("choice"), evidence=body.evidence)
     db.add(state)

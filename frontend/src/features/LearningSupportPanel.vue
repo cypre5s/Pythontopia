@@ -72,13 +72,14 @@
     <section :id="`${panelId}-assistant`" class="support-chat" role="tabpanel" :aria-labelledby="`${panelId}-assistant-tab`" :hidden="tab !== 'assistant'" :inert="tab !== 'assistant'">
       <AssistantPanel v-if="activityId || materialId" :activity-id="activityId" :material-id="materialId" :allowed="allowed" :role-name="roleName" :portrait-url="portraitUrl" :page-no="pageNo" :video-time="videoTime" :code="code" @cite="(materialId, page) => $emit('cite', materialId, page)" />
       <div v-else class="support-unlinked">
-        <img v-if="portraitUrl" class="assistant-portrait" :src="portraitUrl" alt="" aria-hidden="true" />
+        <img v-if="characterImage" class="assistant-portrait" :src="characterImage" alt="" aria-hidden="true" />
         <p>当前资料尚未加载，可继续阅读。</p>
       </div>
     </section>
   </aside>
 </template>
 <script setup lang="ts">
+import { useCharacterImage } from "../shared/characterImage";
 import { Comment, Fragment, Text, computed, isVNode, nextTick, ref, useAttrs, useSlots, watch, type VNodeChild } from "vue";
 import AssistantPanel from "./AssistantPanel.vue";
 import GameIcon from "../shared/GameIcon.vue";
@@ -140,4 +141,5 @@ async function moveTab(event: KeyboardEvent) {
   await nextTick();
   (tab.value === "goals" ? goalsTab.value : tab.value === "outline" ? outlineTab.value : tab.value === "questions" ? questionsTab.value : assistantTab.value)?.focus();
 }
+const characterImage = useCharacterImage(computed(() => props.portraitUrl));
 </script>

@@ -46,16 +46,13 @@ def changed_quest_structure(existing, incoming):
     return without_labels(existing) != without_labels(incoming)
 
 
-def _world_issues(old, new, sessions, maps, npc_labels):
+def _world_issues(old, new, sessions):
     old_interactions = {item["id"]: item for item in old.get("interactions", [])}
     new_interactions = {item["id"]: (index, item) for index, item in enumerate(new.get("interactions", []))}
-    by_interaction, by_npc = defaultdict(list), defaultdict(list)
-    npc_ids = {runtime_id: stable_id for stable_id, runtime_id in maps["npc"].items()}
+    by_interaction = defaultdict(list)
     for session in sessions:
         if session.interaction_id:
             by_interaction[session.interaction_id].append(session)
-        elif session.npc_key in npc_ids:
-            by_npc[npc_ids[session.npc_key]].append(session)
     for stable, affected in by_interaction.items():
         prior = old_interactions.get(stable)
         index, draft = new_interactions.get(stable, (None, None))
@@ -68,11 +65,6 @@ def _world_issues(old, new, sessions, maps, npc_labels):
         yield AuthoringIssue(f"{_activity_counts(affected)}，请等他们结束后再移动或修改交互规则。",
                              path=path, target={"kind": "interaction", "id": stable}, code="active_world_interaction",
                              label=f"地图交互「{(prior or draft or {}).get('label', stable)}」", suggestion=END_INTERACTION)
-    for stable, affected in by_npc.items():
-        if old.get("npcs", {}).get(stable) != new.get("npcs", {}).get(stable):
-            yield AuthoringIssue(f"{_activity_counts(affected)}，请等他们结束后再修改出现规则。",
-                                 path=("configuration", "world", "npcs", stable), target={"kind": "npc", "id": stable},
-                                 code="active_npc_rule", label=f"角色「{npc_labels.get(stable, stable)}」", suggestion=END_INTERACTION)
 
 
 OPEN_STATUSES = {"active", "waiting"}
@@ -217,6 +209,6 @@ def publication_plan(db, instance, data, maps, configuration):
     plan = PublicationReset([row for rows in reset_sessions.values() for row in rows], progress, events, flags, flow_impact, quest_impact)
     state = db.get(CoursePackageState, instance.id)
     old_world = state.configuration.get("world", {}) if state else {}
-    npc_labels = {row["id"]: row["name"] for row in data["npc"]}
-    issues = _world_issues(old_world, configuration.get("world", {}), retained, maps, npc_labels)
+    from .characters import character_issues
+    issues = [*_world_issues(old_world, configuration.get("world", {}), retained), *character_issues(db, instance, data)]
     return [issue.diagnostic() for issue in issues], plan

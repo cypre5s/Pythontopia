@@ -15,7 +15,6 @@ from .content_relations import (
     activity_questions, material_in_chapter, question_chapter_ids, question_knowledge_point_ids,
     set_activity_questions, set_question_chapters, set_question_knowledge_points,
 )
-from .world_config import validate_point
 from .models import (
     Activity,
     ActivityQuestion,
@@ -700,49 +699,6 @@ def delete_question(question_id: str, db: Annotated[Session, Depends(get_db)], u
         db.rollback()
         raise HTTPException(409, "题目已被引用，请刷新后重试") from exc
     return {"ok": True}
-
-
-class NpcInput(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    key: str = Field(min_length=1, max_length=80)
-    name: str = Field(min_length=1, max_length=80)
-    map_key: str = Field(min_length=1, max_length=40)
-    tile_x: int = Field(ge=0)
-    tile_y: int = Field(ge=0)
-    portrait: str = ""
-    dialogue: list = Field(default_factory=list, max_length=100)
-
-    @model_validator(mode="after")
-    def validate_map_position(self):
-        from .world_authoring import reachable_cells
-        from .world_config import valid_portrait
-
-        validate_point(self.map_key, self.tile_x, self.tile_y)
-        if (self.tile_x, self.tile_y) not in reachable_cells(self.map_key):
-            raise ValueError("NPC必须放在地图可达位置")
-        if not valid_portrait(self.portrait):
-            raise ValueError("头像须选择系统已授权角色素材")
-        return self
-
-
-@router.post("/teacher/npcs", status_code=201)
-def create_npc(body: NpcInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)], classroom_id: int | None = None):
-    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
-    if instance_id is None and user.role != "admin":
-        raise HTTPException(403, "全局世界角色仅管理员可新增，教师可绑定现有角色")
-    from .dialogues import validate_dialogue
-
-    try:
-        validate_dialogue(body.dialogue)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc))
-    runtime_key = scoped_key(instance_id, "npc", body.key)
-    if db.get(Npc, runtime_key):
-        raise HTTPException(409, "NPC已存在")
-    item = Npc(**body.model_dump(exclude={"key"}), key=runtime_key, stable_id=body.key, course_instance_id=instance_id)
-    db.add(item)
-    commit_content(db, instance_id)
-    return {"key": item.key}
 
 
 @router.get("/teacher/classrooms/{classroom_id}/releases")

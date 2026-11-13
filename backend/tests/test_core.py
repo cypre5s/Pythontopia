@@ -7,7 +7,7 @@ import pytest
 from sqlalchemy import func, select
 from app.models import Question, QuestionSecret
 from app.quests import node_statuses, validate_definition
-from app.seed import seed
+from fixture_seed import seed
 from conftest import move_player
 
 
@@ -211,6 +211,12 @@ def test_second_chapter_different_branch_and_parallel_loop(client, db, student, 
         move_player(client, headers, cid, map_key, x, y)
 
     def event(node, evidence=None):
+        if evidence and "npc_key" in evidence:
+            view = client.post("/api/story/interactions", json={"classroom_id": cid, "npc_key": evidence["npc_key"]}, headers=headers).json()
+            result = client.post(f"/api/story/sessions/{view['id']}/advance", headers=headers, json={
+                "classroom_id": cid, "revision": view["revision"], "event_id": str(uuid4()), "choice": evidence.get("choice")})
+            assert result.status_code == 200, result.text
+            return result.json()["world"]
         result = client.post(
             "/api/events",
             json={"classroom_id": cid, "event_id": str(uuid4()), "quest_id": "test-branching", "node_id": node, "evidence": evidence or {}},
@@ -224,9 +230,6 @@ def test_second_chapter_different_branch_and_parallel_loop(client, db, student, 
     event("professor", {"npc_key": "professor"})
     record = client.post("/api/activities/ch2-lesson/participation", json={"classroom_id": cid, "page_no": 5}, headers=headers).json()["record_id"]
     event("learn-language", {"record_id": record})
-    for node_id, choice in (("language", "concept"), ("concept-path", None)):
-        response = client.post("/api/dialogues/professor/steps", json={"classroom_id": cid, "node_id": node_id, "choice": choice}, headers=headers)
-        assert response.status_code == 200, response.text
     event("choose-route", {"npc_key": "professor", "dialogue_id": "language", "choice": "concept"})
     position(38, 24)
     for q in activity_questions(db, "ch2-concept"):
@@ -266,29 +269,6 @@ def test_second_chapter_different_branch_and_parallel_loop(client, db, student, 
     assert db.scalar(select(func.count()).select_from(AssistantCall)) == 0
 
 
-def test_dialogue_schema_and_sequence_and_teacher_npc_scope(client, db, student, teacher, classroom, branching_course):
-    from app.dialogues import validate_dialogue
-
-    for invalid in (
-        [{"id": "a", "text": "A", "next": "b"}],
-        [{"id": "a", "text": "A", "next": "a"}],
-        [{"id": [], "text": "A"}],
-        [{"id": "a", "text": "A", "effects": [{"type": "set_world_flag", "key": "library_unlocked"}]}],
-    ):
-        with pytest.raises(ValueError):
-            validate_dialogue(invalid)
-    cid = classroom["id"]
-    headers = student["headers"]
-    client.put(
-        "/api/world/position", json={"classroom_id": cid, "map_key": "town_hub", "tile_x": 22, "tile_y": 34, "direction": "up"}, headers=headers
-    )
-    assert client.post("/api/dialogues/mayor_py/steps", json={"classroom_id": cid, "node_id": "welcome-story"}, headers=headers).status_code == 409
-    for node_id in ("welcome", "welcome-story"):
-        result = client.post("/api/dialogues/mayor_py/steps", json={"classroom_id": cid, "node_id": node_id}, headers=headers)
-        assert result.status_code == 200, result.text
-    assert result.json()["completed_root"] == "welcome"
-    payload = {"key": "new-npc", "name": "新增", "map_key": "town_hub", "tile_x": 22, "tile_y": 34, "dialogue": [{"id": "start", "text": "hello"}]}
-    assert client.post("/api/teacher/npcs", json=payload, headers=teacher["headers"], params={"classroom_id": classroom["id"]}).status_code == 201
-    from app.integration_models import AssistantCall
-
-    assert db.scalar(select(func.count()).select_from(AssistantCall)) == 0
+def test_retired_dialogue_and_independent_creation_routes_are_removed(client, student, teacher, classroom):
+    assert client.post("/api/dialogues/mayor_py/steps", json={"classroom_id": classroom["id"]}, headers=student["headers"]).status_code == 404
+    assert client.post("/api/teacher/npcs", json={}, headers=teacher["headers"]).status_code == 404

@@ -11,7 +11,7 @@ export function flowGroups(flows: Flow[], chapters: Catalog["chapters"]): Picker
   });
 }
 
-export function mapPickerGroups(catalog: Catalog, options: { value: string; label: string; map_key?: string }[]): PickerGroup[] {
+export function mapPickerGroups(catalog: Catalog, options: { value: string; label: string; map_key?: string | null }[]): PickerGroup[] {
   const byMap = new Map<string, PickerGroup>();
   const unspecified = { id: "unknown", label: "未标记位置", choices: [] as PickerGroup["choices"] };
   for (const map of catalog.maps) byMap.set(map.key, { id: map.key, label: map.label, choices: [] });

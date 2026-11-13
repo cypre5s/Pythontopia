@@ -32,7 +32,7 @@ def scene(db, teacher, student):
     db.flush()
     set_material_chapters(db, material.id, [chapter.id])
     npc = Npc(key=f"editor-npc-{instance.id}", stable_id="resident", course_instance_id=instance.id, name="居民",
-              map_key="town_hub", tile_x=22, tile_y=36, portrait="", dialogue=[])
+              map_key="town_hub", tile_x=22, tile_y=36, portrait="builtin:portrait:professor", sprite="builtin:sprite:chara_2")
     db.add(npc)
     db.add(ChapterRelease(classroom_id=classroom.id, chapter_id=chapter.id, status="published"))
     activity = Activity(id=f"editor-lesson-{instance.id}", stable_id="lesson", chapter_id=chapter.id, title="阅读",
@@ -62,8 +62,8 @@ def draft(client, teacher, scene, *, flows=None, interactions=None):
     response = client.get(endpoint(scene), headers=teacher["headers"])
     assert response.status_code == 200, response.text
     current = response.json()
-    return {"expected_revision": current["revision"], "flows": flows if flows is not None else [flow()],
-            "configuration": {"world": {"interactions": interactions if interactions is not None else [interaction()], "npcs": {}},
+    return {"expected_revision": current["revision"], "npcs": current["npcs"], "flows": flows if flows is not None else [flow()],
+            "configuration": {"world": {"interactions": interactions if interactions is not None else [interaction()]},
                               "buildings": {}, "assistant": {}, "editor": {"flow_layouts": {"public": {"start": {"x": 10, "y": 20}}}}}}
 
 
@@ -285,12 +285,15 @@ def test_building_entry_action_cannot_bypass_dialogue_and_exit_stays_safe(client
 
 def test_npc_presence_and_default_buildings_share_conditions(client, db, teacher, student, scene):
     body = draft(client, teacher, scene, flows=[flow(entry="resident")], interactions=[])
-    body["configuration"]["world"]["npcs"] = {"resident": {"when": {"building_unlocked": "library"}}}
+    body["npcs"][0]["appearance_condition"] = {"building_unlocked": "library"}
     save(client, teacher, scene, body)
     cid = scene["classroom"].id
     assert client.get(f"/api/world?classroom_id={cid}", headers=student["headers"]).json()["npcs"] == []
     assert start(client, student, scene, npc_key=scene["npc"].key).status_code == 403
     db.add(WorldFlag(user_id=student["id"], classroom_id=cid, key="library_unlocked"))
+    db.commit()
+    assert client.get(f"/api/world?classroom_id={cid}", headers=student["headers"]).json()["npcs"] == []
+    db.add(BuildingUnlock(user_id=student["id"], classroom_id=cid, course_instance_id=scene["instance"].id, building_id="library"))
     db.commit()
     world = client.get(f"/api/world?classroom_id={cid}", headers=student["headers"]).json()
     assert len(world["npcs"]) == 1 and world["building_unlock"] == ["library"]
@@ -513,6 +516,7 @@ def test_preview_resolves_unsaved_task_readiness_without_writing_progress(client
     item = flow(stable="task-flow", entry="resident", mode="task")
     item["chapter_id"], item["quest_id"] = "ch1", "draft-task"
     item["content"]["when"] = {"goal_ready": "talk"}
+    item["content"]["nodes"][0]["checkpoint"] = "talk"
     body = draft(client, teacher, scene, flows=[item], interactions=[])
     body["quests"] = [{"id": "draft-task", "chapter_id": "ch1", "title": "Draft task", "definition": {
         "id": "draft-task", "chapter_id": "ch1", "title": "Draft task", "nodes": [

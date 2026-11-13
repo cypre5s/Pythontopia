@@ -368,8 +368,8 @@ story:
     type: end
   checkpoint_effects:
     welcome:
-    - type: set_world_flag
-      key: library_unlocked
+    - type: unlock_building
+      building_id: library
 activities:
 - id: ch1-lesson
   chapter_id: 179

@@ -30,8 +30,18 @@ for(const area of Object.values(world.maps)){
  }
 }
 if(world.portal_marker?.asset)paths.add(world.portal_marker.asset.replace(/^\//,''));
-for(const i of [0,2,4,6,10])paths.add(`assets/pixel/sprites/super-retro-world/characters/chara_${i}.png`);
-for(const npc of ['mayor_py','professor','arena_guard','librarian_doc'])paths.add(`assets/pixel/portraits/galgame/${npc}.png`);
+const characters=JSON.parse(fs.readFileSync(path.join(root,'shared/world/characters.json'),'utf8'));
+const ids=new Set();
+for(const asset of characters){
+ if(ids.has(asset.id)||!asset.id.startsWith('builtin:')||!['portrait','sprite'].includes(asset.kind))throw new Error('Invalid character catalog: '+asset.id);
+ ids.add(asset.id);
+ const rel=asset.url.replace(/^\//,'');
+ paths.add(rel);
+ if(asset.kind==='sprite'){
+  const png=fs.readFileSync(path.join(publicDir,rel));
+  if(png.readUInt32BE(16)!==asset.frame_width*3||png.readUInt32BE(20)!==asset.frame_height*4)throw new Error('Invalid sprite layout: '+asset.id);
+ }
+}
 for(const rel of ['assets/pixel/bgm/track_01.mp3','assets/pixel/sfx/click/click.ogg','assets/pixel/effects/light/glow_soft.png'])paths.add(rel);
 const missing=[...paths].filter(p=>!fs.existsSync(path.join(publicDir,p)));
 if(missing.length){console.error(missing.join('\n'));process.exitCode=1;}

@@ -20,7 +20,7 @@ from .course_instances import MODEL_NAMES, _json, classroom_course, content_mapp
 from .course_scope import lock_course
 from .db import get_db
 from .models import (BuildingUnlock, Classroom, CourseInstance, Membership, PlayerPosition,
-                     PlayerQuest, QuestDefinition, StoryDefinition, User, WorldFlag)
+                     PlayerQuest, Npc, QuestDefinition, StoryDefinition, User)
 from .teacher_scope import scoped_key, teacher_instance_id
 from .world_config import interaction_points, load_world_config, validate_point
 
@@ -175,7 +175,7 @@ def validate_configuration(config, bundle_data):
         validate_condition(_json(value, maps), bindings or {}, quest, catalog)
 
     world, buildings = config.get("world", {}), config.get("buildings", {})
-    _object(world, {"interactions", "npcs"})
+    _object(world, {"interactions"})
     _object(buildings, interior_buildings())
     for building_id, policy in buildings.items():
         with located("configuration", "buildings", building_id, target={"kind": "building", "id": building_id},
@@ -227,13 +227,11 @@ def validate_configuration(config, bundle_data):
                 enter_cells.update(cells)
             if "when" in item:
                 condition(item["when"])
-    npcs = world.get("npcs", {})
-    _object(npcs, maps["npc"])
-    for npc_id, policy in npcs.items():
-        with located("configuration", "world", "npcs", npc_id, target={"kind": "npc", "id": npc_id},
-                     label=f"角色「{converted['npc'][npc_id]['name']}」"):
-            _object(policy, {"when"}, {"when"})
-            condition(policy["when"])
+    for row in bundle_data["npc"]:
+        with located("npcs", row["id"], "appearance_condition", target={"kind": "npc", "id": row["id"]}):
+            condition(row["appearance_condition"])
+    from .characters import validate_references
+    validate_references(bundle_data)
     entry_names = {**{row["id"]: row["name"] for row in bundle_data["npc"]},
                    **{f"interaction:{item['id']}": item["label"] for item in interactions}}
     priorities = {}
@@ -299,8 +297,10 @@ def validate_configuration(config, bundle_data):
     for quest_index, row in enumerate(bundle_data["quest"]):
         for goal_index, goal in enumerate(row["definition"]["nodes"]):
             marker = goal.get("dialogue_id")
-            if (goal.get("type") == "PLAY_DIALOGUE" and isinstance(marker, str) and marker.startswith("story:")
-                    and (row["id"], goal["id"], marker) not in checkpoints):
+            if goal.get("type") in {"TALK_TO_NPC", "PLAY_DIALOGUE", "REPORT_BACK"} and not any(
+                quest == row["id"] and node == goal["id"] and (goal["type"] != "PLAY_DIALOGUE" or checkpoint == marker)
+                for quest, node, checkpoint in checkpoints
+            ):
                 raise AuthoringIssue(f"任务「{row['title']}」的目标「{goal['title']}」仍引用已移除的流程对白。",
                                      path=("quests", quest_index, "definition", "nodes", goal_index, "dialogue_id"),
                                      target=row_target("goal", goal, quest_id=row["id"]), code="missing_dialogue_checkpoint",
@@ -337,8 +337,6 @@ def unlocked_buildings(db, user, classroom_id):
     instance = classroom_course(db, classroom_id)
     ids = set(db.scalars(select(BuildingUnlock.building_id).where(BuildingUnlock.user_id == user.id,
         BuildingUnlock.classroom_id == classroom_id, BuildingUnlock.course_instance_id == instance.id))) if instance else set()
-    if db.get(WorldFlag, (user.id, classroom_id, "library_unlocked")):
-        ids.add("library")
     return ids
 
 
@@ -346,12 +344,11 @@ def unlock_building(db, user, classroom_id, building_id):
     if building_id not in interior_buildings():
         raise HTTPException(409, "建筑没有室内")
     instance = classroom_course(db, classroom_id)
-    if instance:
-        key = (user.id, classroom_id, instance.id, building_id)
-        if not db.get(BuildingUnlock, key):
-            db.add(BuildingUnlock(user_id=user.id, classroom_id=classroom_id, course_instance_id=instance.id, building_id=building_id))
-    elif building_id == "library" and not db.get(WorldFlag, (user.id, classroom_id, "library_unlocked")):
-        db.add(WorldFlag(user_id=user.id, classroom_id=classroom_id, key="library_unlocked"))
+    if instance is None:
+        raise HTTPException(409, "班级尚未导入课程")
+    key = (user.id, classroom_id, instance.id, building_id)
+    if not db.get(BuildingUnlock, key):
+        db.add(BuildingUnlock(user_id=user.id, classroom_id=classroom_id, course_instance_id=instance.id, building_id=building_id))
 
 
 def building_access(db, user, classroom_id):
@@ -367,8 +364,7 @@ def building_access(db, user, classroom_id):
 
 
 def npc_present(db, user, classroom_id, npc):
-    policy = configuration(db, classroom_id).get("world", {}).get("npcs", {}).get(npc.stable_id or npc.key)
-    return not policy or _condition(db, user, classroom_id, policy["when"])
+    return npc.placement is not None and _condition(db, user, classroom_id, npc.appearance_condition)
 
 
 def active_interactions(db, user, classroom_id):
@@ -428,31 +424,6 @@ def record_interaction(db, user, classroom_id, interaction_id, session):
                     event_id=event_id, evidence={"object_id": node["target"]} if node["type"] == "INTERACT_OBJECT" else {}))
 
 
-def migrate_legacy_world(db, instance):
-    """Explicit clone-time migration of current teaching anchors and legacy access."""
-    from .world_config import interaction_anchors
-    interactions = []
-    for key, anchor in load_world_config()["interactions"].items():
-        points = interaction_anchors(anchor)
-        if len({p["map_key"] for p in points}) != 1:
-            raise ValueError("旧交互锚点跨地图，需先整理")
-        interactions.append({"id": key, "label": anchor["label"], "prompt": "阅读" if key == "library_shelf" else "查看",
-            "trigger": "click", "map_key": points[0]["map_key"], "target": {"object_id": key}})
-        stable = f"legacy-world-{key}"
-        content = {"schema_version": 1, "mode": "public", "title": anchor["label"], "priority": 0, "bindings": {},
-            "entries": {f"interaction:{key}": [{"when": {"always": True}, "node": "start"}]},
-            "nodes": [{"id": "start", "type": "action", "action": "open_workspace", "workspace": "library" if key == "library_shelf" else "journal",
-                       "next": "end"}, {"id": "end", "type": "end"}]}
-        db.add(StoryDefinition(id=scoped_key(instance.id, "story", stable), stable_id=stable, course_instance_id=instance.id,
-                               chapter_id=None, quest_id=None, content=content))
-    state = CoursePackageState(course_instance_id=instance.id, configuration={"world": {"interactions": interactions, "npcs": {}},
-        "buildings": {"library": {"enabled": True, "default_unlocked": False, "blocked_message": "请先与镇长交谈，了解图书馆。"}}, "assistant": {}, "editor": {}})
-    db.add(state)
-    for user_id in db.scalars(select(WorldFlag.user_id).where(WorldFlag.classroom_id == instance.classroom_id, WorldFlag.key == "library_unlocked")):
-        if not db.get(BuildingUnlock, (user_id, instance.classroom_id, instance.id, "library")):
-            db.add(BuildingUnlock(user_id=user_id, classroom_id=instance.classroom_id, course_instance_id=instance.id, building_id="library"))
-
-
 def enter_building(db, user, classroom_id, building_id):
     from .quests import check_near
     access = building_access(db, user, classroom_id).get(building_id)
@@ -473,6 +444,7 @@ def enter_building(db, user, classroom_id, building_id):
 class AuthoringInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     expected_revision: int = Field(ge=1)
+    npcs: list[dict] = Field(max_length=100)
     flows: list[dict] = Field(max_length=500)
     quests: list[dict] | None = Field(default=None, max_length=500)
     configuration: dict
@@ -518,7 +490,7 @@ def _catalog(data):
             for key, area in config["maps"].items() for b in area["buildings"]],
         "chapters": [{"id": row["id"], "title": row["title"]} for row in data["chapter"]],
         "activities": [{"id": row["id"], "title": row["title"], "kind": row["kind"]} for row in data["activity"]],
-        "npcs": [{"id": row["id"], "name": row["name"], "map_key": row["map_key"]} for row in data["npc"]],
+        "npcs": [{"id": row["id"], "name": row["name"], "map_key": row["placement"]["map_key"] if row["placement"] else None} for row in data["npc"]],
         "quests": [{"id": row["id"], "title": row["title"], "nodes": [{key: node[key] for key in ("id", "title", "type")} for node in row["definition"]["nodes"]]} for row in data["quest"]]}
 
 
@@ -527,7 +499,7 @@ def get_authoring(classroom_id: int, db: Annotated[Session, Depends(get_db)], us
     instance = _instance(db, user, classroom_id)
     data, config = _data(db, instance)
     students = db.scalars(select(User).join(Membership, Membership.user_id == User.id).where(Membership.classroom_id == classroom_id, User.role == "student"))
-    return {"revision": instance.revision, "catalog": _catalog(data),
+    return {"revision": instance.revision, "catalog": _catalog(data), "npcs": data["npc"],
             "flows": [{**row, "title": row["content"].get("title", row["id"])} for row in data["story"]],
             "quests": data["quest"], "configuration": {key: config.get(key, {}) for key in ("world", "buildings", "assistant", "editor")},
             "students": [{"id": row.id, "name": row.name} for row in students]}
@@ -539,6 +511,9 @@ def _prepare(db, instance, body):
     if instance.revision != body.expected_revision:
         raise HTTPException(409, "课程已被其他编辑修改，请刷新后重试")
     data, _ = _data(db, instance)
+    from .characters import stored_assets, validate_characters
+    validate_characters(body.npcs, stored_assets(db, instance.id))
+    data["npc"] = deepcopy(body.npcs)
     flows, seen = [], set()
     for index, row in enumerate(body.flows):
         with located("flows", index, target=row_target("flow", row), label=f"流程「{_flow_title(row)}」"):
@@ -562,9 +537,18 @@ def _prepare(db, instance, body):
         data["quest"] = deepcopy(body.quests)
     validate_configuration(body.configuration, data)
     maps = content_mapping(db, instance)
+    maps["npc"] = {row["id"]: maps["npc"].get(row["id"], scoped_key(instance.id, "npc", row["id"])) for row in data["npc"]}
     for kind in ("story", "quest"):
         for row in data[kind]:
             maps[kind].setdefault(row["id"], scoped_key(instance.id, kind, row["id"]))
+    class DraftCatalog:
+        def get(self, model, key):
+            if model is Npc:
+                row = next((row for row in data["npc"] if maps["npc"][row["id"]] == key), None)
+                return SimpleNamespace(**row) if row else None
+            return db.get(model, key)
+
+    draft_catalog = DraftCatalog()
     quests = {}
     for index, row in enumerate(data["quest"]):
         with located("quests", index, "definition", target=row_target("quest", row, quest_id=row["id"]),
@@ -572,7 +556,7 @@ def _prepare(db, instance, body):
             actual = _json(row, maps)
             actual["definition"]["id"] = maps["quest"][row["id"]]
             objects = set(interaction_points()) | {row["id"] for row in body.configuration.get("world", {}).get("interactions", [])}
-            validate_definition(actual["definition"], db, objects=objects)
+            validate_definition(actual["definition"], draft_catalog, objects=objects)
             quests[row["id"]] = actual
     entry_names = {**{row["id"]: row["name"] for row in data["npc"]},
                    **{f"interaction:{item['id']}": item["label"] for item in body.configuration.get("world", {}).get("interactions", [])}}
@@ -583,7 +567,7 @@ def _prepare(db, instance, body):
             actual = _json(row, maps)
             quest = quests.get(row["quest_id"])
             try:
-                validate_story(actual["content"], db, quest["definition"] if quest else None, maps["story"][row["id"]])
+                validate_story(actual["content"], draft_catalog, quest["definition"] if quest else None, maps["story"][row["id"]])
             except AuthoringIssue as issue:
                 _name_entry_issue(issue, entry_names, stable_npc_ids)
                 raise
@@ -630,6 +614,20 @@ def save_authoring(classroom_id: int, body: PublishInput, db: Annotated[Session,
         raise HTTPException(409, {"message": "受影响的存档已更新，请核对后再次确认。" if body.confirmation_token
                                  else "本次修改会清理部分班级存档，请先确认影响范围。", "reset_impact": impact})
     plan.apply(db, classroom_id)
+    from .characters import CHARACTER_FIELDS
+    incoming_npcs = {row["id"]: row for row in data["npc"]}
+    current_npcs = {row.stable_id: row for row in db.scalars(select(Npc).where(Npc.course_instance_id == instance.id))}
+    for stable, npc in current_npcs.items():
+        if stable not in incoming_npcs:
+            db.delete(npc)
+    for stable, row in incoming_npcs.items():
+        npc = current_npcs.get(stable)
+        if npc is None:
+            npc = Npc(key=maps["npc"][stable], stable_id=stable, course_instance_id=instance.id)
+            db.add(npc)
+        for field in CHARACTER_FIELDS:
+            setattr(npc, field, deepcopy(row[field]))
+    db.flush()
     for model, kind, field in ((QuestDefinition, "quest", "definition"), (StoryDefinition, "story", "content")):
         incoming = {row["id"]: row for row in data[kind]}
         current = {row.stable_id or row.id: row for row in db.scalars(select(model).where(model.course_instance_id == instance.id))}
@@ -656,8 +654,22 @@ def save_authoring(classroom_id: int, body: PublishInput, db: Annotated[Session,
         db.add(state)
     state.configuration = {**deepcopy(body.configuration), **{key: value for key, value in state.configuration.items() if key.startswith("_")}}
     instance.revision += 1
+    from .character_assets import retire_unused_assets
+    retire_unused_assets(state, body.npcs)
+    saved_revision = instance.revision
     db.commit()
-    return {"revision": instance.revision}
+    # File failures are retried by the periodic worker; the saved draft stays committed.
+    from .character_assets import drain_character_garbage
+    try:
+        from .course_scope import lock_course
+        lock_course(db, classroom_id, exclusive=True)
+        db.refresh(state)
+        drain_character_garbage(db, state)
+    except Exception:
+        db.rollback()
+        import logging
+        logging.getLogger(__name__).exception("Character cleanup deferred")
+    return {"revision": saved_revision}
 
 
 @router.post("/preview")
@@ -694,8 +706,8 @@ def preview_authoring(classroom_id: int, body: PreviewInput, db: Annotated[Sessi
         if item["target"].get("object_id"):
             targets.add(item["target"]["object_id"])
     else:
-        policy = body.configuration.get("world", {}).get("npcs", {}).get(body.entry)
-        if policy and not _condition(db, student, classroom_id, policy["when"]):
+        npc = next(row for row in body.npcs if row["id"] == body.entry)
+        if npc["placement"] is None or not _condition(db, student, classroom_id, npc["appearance_condition"]):
             return {"selected_flow_id": None, "node_id": None, "trace": [], "stopped_at": "unavailable"}
     selected = select_flow(db, student, classroom_id, entry, candidates, targets=targets)
     if not selected:

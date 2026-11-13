@@ -118,7 +118,7 @@ async function finishIntroDialogue(page: Page) {
   for (let step = 0; step < 10; step++) {
     const responsePromise = page.waitForResponse(
       (response) =>
-        (response.url().includes("/api/dialogues/") && response.url().endsWith("/steps") || /\/api\/story\/sessions\/[^/]+\/advance$/.test(response.url())) &&
+        /\/api\/story\/sessions\/[^/]+\/advance$/.test(response.url()) &&
         response.request().method() === "POST",
     );
     const text = dialogue.locator(".dialogue-text");

@@ -35,6 +35,7 @@ export type StoryNode =
       type: "dialogue";
       text: string;
       speaker?: string;
+      speaker_npc_id?: string;
       next?: string;
       choices?: Choice[];
       checkpoint?: string;
@@ -144,7 +145,7 @@ export interface Catalog {
   }[];
   chapters: { id: string; title: string }[];
   activities: { id: string; title: string; kind?: string }[];
-  npcs: { id: string; name: string; map_key?: string }[];
+  npcs: { id: string; name: string; map_key?: string | null }[];
   quests: {
     id: string;
     title: string;
@@ -162,7 +163,26 @@ export interface Interaction {
     | { region: { x: number; y: number; width: number; height: number } };
   when?: Condition;
 }
+export interface Character {
+  id: string;
+  name: string;
+  portrait: string;
+  sprite: string;
+  persona: string;
+  placement: { map_key: string; tile_x: number; tile_y: number; direction: "down" | "left" | "right" | "up" } | null;
+  appearance_condition: Condition;
+}
+export interface CharacterAsset {
+  owner_npc_id?: string;
+  id: string;
+  kind: "portrait" | "sprite";
+  name: string;
+  url: string;
+  frame_width?: number;
+  frame_height?: number;
+}
 export interface Authoring {
+  npcs: Character[];
   revision: number;
   catalog: Catalog;
   flows: Flow[];
@@ -170,7 +190,6 @@ export interface Authoring {
   configuration: {
     world: {
       interactions?: Interaction[];
-      npcs?: Record<string, { when: Condition }>;
     };
     buildings: Record<
       string,

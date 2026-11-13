@@ -36,7 +36,7 @@ jobs:
       - run: python backend/tests/source_fixtures.py
       - run: ruff check backend
       - run: pytest backend/tests -q
-      - run: alembic upgrade head && python -m app.seed && python -m app.seed
+      - run: alembic upgrade head && PYTHONPATH=tests:. python -m fixture_seed && PYTHONPATH=tests:. python -m fixture_seed
         working-directory: backend
   frontend:
     runs-on: ubuntu-latest
@@ -88,7 +88,7 @@ jobs:
       - run: pip install -r backend/requirements.lock
       - run: python backend/tests/source_fixtures.py
       - run: |
-          python -m app.convert_legacy_course --source "$REBORN_COURSE_ROOT" --content "$REBORN_CONTENT_ROOT" --output ../.tmp/test-course.zip --package-id "$REBORN_E2E_COURSE_PACKAGE" --name "自动化验收课程"
+          PYTHONPATH=tests:. python -m fixture_package --source "$REBORN_COURSE_ROOT" --content "$REBORN_CONTENT_ROOT" --output ../.tmp/test-course.zip --package-id "$REBORN_E2E_COURSE_PACKAGE" --name "自动化验收课程"
           python -m zipfile -e ../.tmp/test-course.zip "$REBORN_COURSE_EXCHANGE_ROOT/test-course"
         working-directory: backend
       - run: npm ci && npx playwright install --with-deps chromium
@@ -107,7 +107,6 @@ jobs:
         run: |
           cd backend
           alembic upgrade head
-          python -m app.seed
           python -m app.cli provision-user --student-id "$E2E_TEACHER_STUDENT_ID" --role teacher --password-env E2E_TEACHER_PASSWORD
           python -m app.cli provision-user --student-id "$E2E_OTHER_TEACHER_STUDENT_ID" --role teacher --password-env E2E_OTHER_TEACHER_PASSWORD
           python -m uvicorn app.main:app --host 127.0.0.1 --port 18081 --no-access-log > /tmp/reborn-api.log 2>&1 &

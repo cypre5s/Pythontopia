@@ -416,21 +416,10 @@ kbd {
   font-size: 0.875rem;
   line-height: 1.7;
 }
-.dialogue-actions button,
-.dialogue-objectives button {
+.dialogue-actions button {
   min-height: 44px;
   font-size: 1rem;
   padding: 0.65rem 1rem;
-}
-.dialogue-objectives {
-  border-top: 1px solid #ded3b8;
-  padding-top: 0.8rem;
-  gap: 0.6rem;
-}
-.dialogue-objectives button {
-  text-align: left;
-  background: #ebeddb;
-  border-color: #c2cda9;
 }
 
 .workspace-padding {
@@ -659,8 +648,7 @@ kbd {
     line-height: 1.7;
     min-height: 2em;
   }
-  .dialogue-actions button,
-  .dialogue-objectives button {
+  .dialogue-actions button {
     font-size: 0.95rem;
     min-height: 44px;
     padding: 0.5rem 0.8rem;

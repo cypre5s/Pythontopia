@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from sqlalchemy import select
 
-from app import seed as importer
+import fixture_seed as importer
 from app.models import Activity, ActivityProgress, Classroom, LearningRecord, Material, NodeState, PlayerQuest, Question, QuestionSecret, StoryDefinition, Submission
 
 

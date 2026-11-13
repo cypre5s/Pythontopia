@@ -17,15 +17,15 @@ test("a chapter-free public entry opens one workspace and resumes its following 
   await json(await request.post(`/api/teacher/classrooms/${classroom.id}/course/empty`, { headers,
     data: { confirmed: true, name: "无章节公共流程验收" } }));
   const endpoint = `/api/teacher/classrooms/${classroom.id}/authoring`;
-  const authoring = await json<{ revision: number }>(await request.get(endpoint, { headers }));
+  const authoring = await json<{ revision: number; npcs: unknown[] }>(await request.get(endpoint, { headers }));
   await json(await request.put(endpoint, { headers, data: {
-    expected_revision: authoring.revision, quests: [],
+    expected_revision: authoring.revision, npcs: authoring.npcs, quests: [],
     configuration: { world: { interactions: [
       { id: "welcome-region", label: "公共阅读入口", prompt: "查看公开资料", trigger: "enter",
         map_key: "town_hub", target: { region: { x: 23, y: 36, width: 2, height: 1 } } },
       { id: "library-arrival", label: "图书馆迎宾区域", prompt: "查看欢迎说明", trigger: "enter",
         map_key: "library", target: { region: { x: 9, y: 11, width: 1, height: 1 } } },
-    ], npcs: {} }, buildings: { library: { enabled: true, default_unlocked: true, blocked_message: "图书馆目前关闭" } }, assistant: {}, editor: {} },
+    ] }, buildings: { library: { enabled: true, default_unlocked: true, blocked_message: "图书馆目前关闭" } }, assistant: {}, editor: {} },
     flows: [{ id: "public-welcome", title: "无章节阅读入口", chapter_id: null, quest_id: null, content: {
       schema_version: 1, mode: "public", bindings: {},
       entries: { "interaction:welcome-region": [{ when: { always: true }, node: "greet" }] },

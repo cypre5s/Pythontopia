@@ -10,6 +10,7 @@ from pathlib import Path
 import shutil
 import stat
 import tempfile
+import time
 from typing import Annotated
 from uuid import UUID, uuid4
 import zipfile
@@ -45,7 +46,7 @@ FIELDS = {
     Chapter: ("title", "order_index"), KnowledgePoint: ("chapter_id", "title", "content"),
     Material: ("title", "kind", "content", "status", "error"),
     Question: ("title", "kind", "prompt", "options", "samples", "source", "source_type", "status"),
-    Npc: ("name", "map_key", "tile_x", "tile_y", "portrait", "dialogue"),
+    Npc: ("name", "portrait", "sprite", "persona", "placement", "appearance_condition"),
     Activity: ("chapter_id", "title", "kind", "material_id", "npc_key", "assistant_allowed", "content"),
     QuestDefinition: ("chapter_id", "title", "definition"), StoryDefinition: ("chapter_id", "quest_id", "content"),
     CourseExample: ("content",),
@@ -54,7 +55,7 @@ EXTRAS = {Material: {"chapter_ids", "asset_id", "preview_asset_id"}, Question: {
 JSONL_FILES = {Material: "content/materials.jsonl", Question: "content/questions/questions-001.jsonl",
                KnowledgePoint: "content/knowledge-points.jsonl", CourseExample: "content/examples.jsonl"}
 CONFIG_FILES = {"world": "world/interactions.yaml", "buildings": "world/buildings.yaml",
-                "assistant": "assistant/roles.yaml", "editor": "editor/layouts.json"}
+                "assistant": "assistant/settings.yaml", "editor": "editor/layouts.json"}
 
 
 def exchange_root():
@@ -126,7 +127,7 @@ def _snapshot(db, instance):
                                 "hidden_cases": deepcopy(secret.hidden_cases) if secret else []})
             elif model is Activity:
                 values["question_ids"] = _refs(db, row, ActivityQuestion, "question_id")
-            converted = _json(values, inverse)
+            converted = values if model is Npc else _json(values, inverse)
             if model is QuestDefinition:
                 converted["definition"]["id"] = _stable(row)
             if model in {KnowledgePoint, CourseExample} and "id" in converted["content"]:
@@ -157,7 +158,7 @@ def write_package(db, instance, root):
     if any(material.status in {"queued", "processing"} for material in rows[Material]):
         raise PackageError("班级资料仍在转换，请完成后导出课程")
     created = as_utc(instance.created_at).isoformat()
-    manifest = {"schema_version": 1, "package_id": instance.package_id, "name": instance.name,
+    manifest = {"schema_version": 2, "package_id": instance.package_id, "name": instance.name,
                 "package_version": instance.package_version, "created_at": created, "exported_at": now().isoformat(),
                 "requires": {"world_id": "pythontopia-town", "world_schema_version": 1,
                              "capabilities": ["reading", "practice", "assessment", "dialogue", "tasks", "library"]},
@@ -200,7 +201,9 @@ def write_package(db, instance, root):
             preview_id = preview_ids[_stable(material)]
             export_assets.append({**original_assets.get(preview_id, {}), "id": preview_id, "storage_key": material.content["preview_key"]})
     exported_ids = {asset["id"] for asset in export_assets}
-    export_assets.extend(asset for key, asset in original_assets.items() if key not in exported_ids)
+    character_assets = {row[kind][6:] for row in data["npc"] for kind in ("portrait", "sprite") if row[kind].startswith("asset:")}
+    export_assets.extend(asset for key, asset in original_assets.items() if key not in exported_ids
+                         and (not asset.get("character_kind") or key in character_assets))
     for source in {asset["id"]: asset for asset in export_assets}.values():
         suffix = Path(source["storage_key"]).suffix.lower()
         from .course_package import _MEDIA
@@ -224,7 +227,8 @@ def write_package(db, instance, root):
         assets.append({"id": asset_id, "path": path.relative_to(root).as_posix(), "media_type": media_type,
                        "size_bytes": path.stat().st_size, "sha256": digest.hexdigest(),
                        "source": source.get("source", "教师授权班级当前资料"),
-                       "license": source.get("license", "仅按原资料授权使用；本清单不新增授权")})
+                       "license": source.get("license", "仅按原资料授权使用；本清单不新增授权"),
+                       **{key: source[key] for key in ("character_kind", "width", "height", "frame_width", "frame_height", "original_name") if key in source}})
     _write_jsonl(root / "assets/index.jsonl", assets)
     validate_package(root)
     return manifest
@@ -354,13 +358,10 @@ def validate_bundle(bundle, root):
     """Validate portable references and full graphs before any database/storage writes."""
     from types import SimpleNamespace
     from .classrooms import QuestionInput
-    from .dialogues import validate_dialogue
     from .learning_rules import validate_learning
     from .quests import validate_definition
     from .story import validate_story
     from .story_conditions import validate_condition
-    from .world_config import valid_portrait, validate_point
-    from .world_authoring import reachable_cells
     try:
         _bounded(bundle)
         data = bundle["data"]
@@ -400,6 +401,12 @@ def validate_bundle(bundle, root):
         if set(secret_map) != set(indexed["question"]):
             raise PackageError("每道题必须具有私有答案记录（草稿可为空）")
         assets = {asset["id"]: asset for asset in bundle["assets"]}
+        from .characters import validate_image
+        for asset in bundle["assets"]:
+            if asset.get("character_kind"):
+                metadata = validate_image(root / asset["path"], asset["character_kind"], asset.get("frame_width", 16), asset.get("frame_height", 20))
+                if any(asset.get(key) != value for key, value in metadata.items()):
+                    raise PackageError("角色素材元信息与实际图片不一致")
         for row in data["material"]:
             if row["kind"] not in {"text", "pdf", "video", "presentation"} or row["status"] not in {"ready", "failed", "missing"}:
                 raise PackageError("资料类型或状态无效")
@@ -448,14 +455,8 @@ def validate_bundle(bundle, root):
             if "page_no" in source and ("material_id" not in source or source["page_no"] not in
                     {page["page_no"] for page in indexed["material"][source["material_id"]]["content"].get("pages", [])}):
                 raise PackageError("题目来源页不存在")
-        for row in data["npc"]:
-            if not _short(row["name"], 80) or not valid_portrait(row["portrait"]):
-                raise PackageError("NPC名称或立绘无效")
-            validate_point(row["map_key"], row["tile_x"], row["tile_y"])
-            if (row["tile_x"], row["tile_y"]) not in reachable_cells(row["map_key"]):
-                raise PackageError("NPC位置无法从地图入口到达")
-            if row["dialogue"]:
-                validate_dialogue(row["dialogue"])
+        from .characters import validate_characters
+        validate_characters(data["npc"], bundle["assets"])
         for row in data["activity"]:
             if row["kind"] not in {"lesson", "reading", "practice", "assessment"} or type(row["assistant_allowed"]) is not bool:
                 raise PackageError("学习活动类型或助教开关无效")
@@ -540,7 +541,7 @@ def validate_bundle(bundle, root):
     except (ValueError, TypeError, KeyError, AttributeError, HTTPException, RecursionError) as exc:
         if isinstance(exc, PackageError):
             raise
-        raise PackageError("课程语义校验失败：引用、数据类型或流程不合法") from exc
+        raise PackageError(f"课程语义校验失败：{exc}") from exc
 
 
 def _has_history(db, classroom_id):
@@ -591,6 +592,8 @@ def _impact(db, instance, bundle):
         elif any(diff[kind]["removed"] for kind in MODEL_NAMES.values()):
             blockers.append("班级已有学习记录，本次更新包含删除定义；请保留原ID并停用内容后重新预览")
     if instance:
+        from .characters import character_issues
+        blockers.extend(issue.diagnostic()["message"] for issue in character_issues(db, instance, bundle["data"]))
         incoming = {kind: {row["id"]: row for row in values} for kind, values in bundle["data"].items()}
         current = {kind: {row["id"]: row for row in values} for kind, values in previous.items()}
         maps = content_mapping(db, instance)
@@ -696,8 +699,6 @@ def import_bundle(db, classroom, instance, bundle, root):
                 for field in ("content", "definition"):
                     if field in values:
                         values[field] = {}
-                if "dialogue" in values:
-                    values["dialogue"] = []
                 if hasattr(model, "owner_id"):
                     values["owner_id"] = classroom.teacher_id
                 if model in {Question, Npc, Activity, QuestDefinition, StoryDefinition}:
@@ -708,9 +709,15 @@ def import_bundle(db, classroom, instance, bundle, root):
             maps[kind][source["id"]] = _pk(row)
             pairs[model].append((source, row))
     adapter, assets = get_storage(), {}
+    character_refs = {row[kind][6:] for row in data["npc"] for kind in ("portrait", "sprite") if row[kind].startswith("asset:")}
     for asset in bundle["assets"]:
+        if asset.get("character_kind") and asset["id"] not in character_refs:
+            continue
         source = root / asset["path"]
         key = f"course-assets/{asset['sha256']}{source.suffix.lower()}"
+        if asset.get("character_kind"):
+            identity = hashlib.sha256(asset["id"].encode()).hexdigest()[:24]
+            key = f"characters/{instance.id}/{identity}-{asset['sha256']}{source.suffix.lower()}"
         try:
             size = adapter.size(key)
         except Exception as exc:
@@ -727,7 +734,8 @@ def import_bundle(db, classroom, instance, bundle, root):
         assets[asset["id"]] = {**asset, "storage_key": key}
     for model, values in pairs.items():
         for source, row in values:
-            converted = _json({field: source[field] for field in FIELDS[model]}, maps)
+            fields = {field: source[field] for field in FIELDS[model]}
+            converted = deepcopy(fields) if model is Npc else _json(fields, maps)
             if model is QuestDefinition:
                 converted["definition"]["id"] = row.id
             if model in {KnowledgePoint, CourseExample} and "id" in converted["content"]:
@@ -769,7 +777,17 @@ def import_bundle(db, classroom, instance, bundle, root):
     if state is None:
         state = CoursePackageState(course_instance_id=instance.id)
         db.add(state)
-    state.configuration = {**deepcopy(bundle["configuration"]), "_assets": list(assets.values())}
+    previous_config = state.configuration or {}
+    live_keys = {asset["storage_key"] for asset in assets.values()}
+    garbage = [*previous_config.get("_character_garbage", []),
+               *(asset["storage_key"] for asset in previous_config.get("_assets", [])
+                 if asset.get("character_kind") and asset["storage_key"] not in live_keys)]
+    for npc in data["npc"]:
+        for kind in ("portrait", "sprite"):
+            if npc[kind].startswith("asset:"):
+                assets[npc[kind][6:]]["owner_npc_id"] = npc["id"]
+    state.configuration = {**deepcopy(bundle["configuration"]), "_assets": list(assets.values()),
+                           "_character_garbage": list(dict.fromkeys(garbage))}
     instance.package_id, instance.name, instance.package_version = manifest["package_id"], manifest["name"], manifest["package_version"]
     instance.revision += 1
     db.flush()
@@ -798,6 +816,19 @@ def _read_staged(key, destination):
         raise PackageError("暂存课程包不可读取，请重新上传") from exc
 
 
+def _replace_staged(source, destination):
+    # Windows scanners can briefly hold freshly validated media directories open.
+    # Preserve atomic publication; never remove a destination or copy over it.
+    for attempt in range(5):
+        try:
+            os.replace(source, destination)
+            return
+        except PermissionError as exc:
+            if getattr(exc, "winerror", None) not in (5, 32, 33) or attempt == 4:
+                raise
+            time.sleep(0.05 * (attempt + 1))
+
+
 @router.get("/export")
 def export_course(classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
     with exchange_guard(exchange_root()):
@@ -816,7 +847,7 @@ def export_course(classroom_id: int, db: Annotated[Session, Depends(get_db)], us
             name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", instance.name).strip(" .")[:48] or "课程"
             timestamp = now().astimezone(ZoneInfo("Asia/Shanghai")).strftime("%Y%m%d-%H%M%S")
             destination = exchange_path(f"export-{classroom_id}-{name}-{timestamp}-{uuid4().hex[:8]}")
-            os.replace(root, destination)
+            _replace_staged(root, destination)
             shutil.rmtree(temporary)
             db.commit()
         except (PackageError, OSError, ValueError) as exc:
@@ -835,7 +866,7 @@ def _save_preview(db, user, classroom_id, bundle, archive, digest=None):
                                   summary={**impact, "package_id": bundle["manifest"]["package_id"],
                                            "package_version": bundle["manifest"]["package_version"],
                                            "name": bundle["manifest"]["name"]}, expires_at=now() + timedelta(hours=24))
-    os.replace(archive, exchange_path(preview.storage_key))
+    _replace_staged(archive, exchange_path(preview.storage_key))
     db.add(preview)
     db.commit()
     return {"id": preview.id, "expected_revision": preview.expected_revision, "expires_at": preview.expires_at,
@@ -889,6 +920,9 @@ def preview_available_course(classroom_id: int, body: AvailablePackageInput, db:
             raise
         except (PackageError, OSError) as exc:
             db.rollback()
+            if isinstance(exc, OSError):
+                import logging
+                logging.getLogger(__name__).exception("Course directory preview failed")
             raise HTTPException(422, str(exc) if isinstance(exc, PackageError) else "课程包读取失败，请刷新列表或重新上传") from exc
 
 

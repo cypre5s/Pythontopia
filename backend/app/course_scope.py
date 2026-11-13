@@ -41,7 +41,6 @@ def require_course_content(db, item, classroom_id):
     return item
 
 
-def npc_for_role(db, classroom_id, stable_id):
-    """Resolve a system teaching role within the selected class, never a global NPC fallback."""
-    return db.scalar(select(Npc).where(course_clause(db, Npc, classroom_id),
-        (Npc.stable_id == stable_id) | ((Npc.stable_id.is_(None)) & (Npc.key == stable_id))))
+def npc_by_stable_id(db, classroom_id, stable_id):
+    """Resolve the course character referenced by its portable stable ID."""
+    return db.scalar(select(Npc).where(course_clause(db, Npc, classroom_id), Npc.stable_id == stable_id))

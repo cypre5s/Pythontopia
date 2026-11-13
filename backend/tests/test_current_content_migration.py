@@ -61,7 +61,7 @@ def test_collapse_versions_preserves_grades_and_merges_reading_history(existing_
         connection.execute(t["assistant_sessions"].insert(), {"id": "saved-assistant", "user_id": 2, "classroom_id": 1, "activity_id": "historic-lesson",
             "version": 1, "material_id": 186, "material_version": 1, "messages": [{"role": "assistant", "references": [{"material_id": 186, "version": 1, "page_no": 1}]}], "created_at": datetime.now(timezone.utc)})
     engine.dispose()
-    migrate(url, "upgrade", "head")
+    migrate(url, "upgrade", "c34d851ae60b")
     engine = engine_factory()
     metadata = MetaData()
     metadata.reflect(engine)
@@ -99,7 +99,7 @@ def test_collapse_versions_preserves_grades_and_merges_reading_history(existing_
     engine.dispose()
 
 
-def test_open_story_resumes_after_checkpoint_evidence_migration(existing_database):
+def test_current_story_resumes_with_long_checkpoint_evidence(existing_database):
     from fastapi.testclient import TestClient
     from sqlalchemy.orm import Session
     from app.auth import issue
@@ -110,9 +110,9 @@ def test_open_story_resumes_after_checkpoint_evidence_migration(existing_databas
     from app.story import validate_story
 
     url, engine_factory = existing_database
-    migrate(url, "upgrade", "5a3d09d4c2b1")
+    migrate(url, "upgrade", "head")
     engine = engine_factory()
-    assert next(column for column in inspect(engine).get_columns("world_flags") if column["name"] == "key")["type"].length == 100
+    assert next(column for column in inspect(engine).get_columns("world_flags") if column["name"] == "key")["type"].length == 320
     try:
         with Session(engine, expire_on_commit=False) as db:
             teacher = User(student_id="81001", name="Teacher", role="teacher", password_hash="test-only")
@@ -126,7 +126,7 @@ def test_open_story_resumes_after_checkpoint_evidence_migration(existing_databas
             db.add(course)
             db.flush()
             chapter = Chapter(course_instance_id=course.id, stable_id="chapter", title="Chapter", order_index=1)
-            npc = Npc(key="n" * 80, stable_id="librarian", course_instance_id=course.id, name="Librarian", map_key="town_hub", tile_x=22, tile_y=36)
+            npc = Npc(key="n" * 80, stable_id="librarian", course_instance_id=course.id, name="Librarian", map_key="town_hub", tile_x=22, tile_y=36, portrait="builtin:portrait:professor", sprite="builtin:sprite:chara_2")
             db.add_all([chapter, npc])
             db.flush()
             cid, sid = classroom.id, student.id
@@ -164,9 +164,6 @@ def test_open_story_resumes_after_checkpoint_evidence_migration(existing_databas
             assert session["node"]["id"] == "choice"
             path = f"/api/story/sessions/{session['id']}/advance"
             choice = {"classroom_id": cid, "revision": session["revision"], "event_id": str(uuid4()), "choice": "yes"}
-            if engine.dialect.name == "postgresql":
-                # Reproduce the reported request on the same session before upgrading the column.
-                assert client.post(path, json=choice, headers=headers).status_code == 500
             engine.dispose()
             migrate(url, "upgrade", "head")
             assert next(column for column in inspect(engine).get_columns("world_flags") if column["name"] == "key")["type"].length == 320
@@ -179,7 +176,7 @@ def test_open_story_resumes_after_checkpoint_evidence_migration(existing_databas
             with Session(engine) as db:
                 assert db.get(WorldFlag, (sid, cid, "kept-before-upgrade"))
                 assert db.get(WorldFlag, (sid, cid, f"dialogue:completed:{npc.key}:{marker}"))
-                assert [event.evidence for event in db.scalars(select(LearningEvent))] == [{"npc_key": npc.key, "dialogue_id": marker}]
+                assert [event.evidence for event in db.scalars(select(LearningEvent))] == [{"npc_key": npc.key, "dialogue_id": marker, "choice": "yes"}]
         finally:
             app.dependency_overrides.clear()
             app.dependency_overrides.update(previous)

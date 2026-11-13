@@ -20,13 +20,12 @@ export interface Player {
   tile_y: number;
   direction: string;
 }
-export interface Dialogue {
+export interface StoryDialogue {
   id: string;
   text: string;
   speaker?: string;
   portrait?: string;
-  next?: string;
-  choices?: { id: string; text?: string; label?: string; next?: string }[];
+  choices?: { id: string; label: string }[];
 }
 export interface Npc {
   key: string;
@@ -36,7 +35,8 @@ export interface Npc {
   tile_x: number;
   tile_y: number;
   portrait: string;
-  dialogue: Dialogue[];
+  direction: string;
+  sprite: { id: string; url: string; frame_width: number; frame_height: number };
 }
 export type NodeStatus = "ready" | "locked" | "complete" | "skipped";
 export interface QuestNode {
@@ -68,7 +68,9 @@ export interface Chapter {
   order_index: number;
   available: boolean;
 }
+export interface CharacterIdentity { key: string; name: string; portrait: string }
 export interface World {
+  library_role: CharacterIdentity | null;
   story_available?: boolean;
   player: Player;
   npcs: Npc[];
@@ -122,6 +124,7 @@ export interface Question {
   samples: { input: string; output: string }[];
 }
 export interface Activity {
+  role: CharacterIdentity;
   id: string;
   chapter_id: number;
   title: string;
@@ -162,7 +165,7 @@ export interface StoryView {
   status: "active" | "waiting" | "ended";
   npc_key: string | null;
   interaction_id?: string | null;
-  node: (Dialogue & { type?: "dialogue" | "action"; action?: "open_workspace" | "enter_building"; workspace?: "library" | "journal" | "classroom"; building_id?: string }) | null;
+  node: (StoryDialogue & { type?: "dialogue" | "action"; action?: "open_workspace" | "enter_building"; workspace?: "library" | "journal" | "classroom"; building_id?: string }) | null;
   activity: { id: string; kind: string; page_no?: number | null } | null;
   world?: World;
 }

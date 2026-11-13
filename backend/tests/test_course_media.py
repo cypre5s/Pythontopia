@@ -16,7 +16,7 @@ from sqlalchemy import func, select
 from app import course_media
 from app.course_media import import_media
 from app.models import Activity, ActivityProgress, LearningRecord, Material, NodeState, PlayerQuest, QuestDefinition, Submission
-from app.seed import seed
+from fixture_seed import seed
 
 
 class MemoryStorage:

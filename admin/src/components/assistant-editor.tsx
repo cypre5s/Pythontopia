@@ -1,274 +1,160 @@
-import { useState, type MouseEvent } from "react";
-import { Bot, Plus, Settings2, Trash2 } from "lucide-react";
-import { AuthoringInspector, AuthoringWorkspace } from "@/components/authoring-workspace";
-import { Empty } from "@/components/common";
+import { useEffect, useRef, useState } from "react";
+import { Bot, Plus, Trash2 } from "lucide-react";
+import { AuthoringWorkspace } from "@/components/authoring-workspace";
+import { Empty, ErrorNotice } from "@/components/common";
+import { CharacterAssetPicker } from "./character-asset-picker";
+import { CharacterPreview } from "@/components/character-preview";
 import { SelectField } from "@/components/select-field";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
+import { Tabs, TabsList, TabsTrigger } from "./ui/tabs";
 import { newId } from "@/lib/id";
-import type { Authoring, Point } from "@/lib/authoring";
+import { api, errorMessage } from "@/lib/api";
+import type { Authoring, Character, CharacterAsset } from "@/lib/authoring";
 
-const limits = [
-  ["model_calls", "模型调用次数", 1, 3],
-  ["tool_calls", "资料工具调用次数", 0, 5],
-  ["output_tokens", "回答长度（token）", 1, 512],
-  ["request_tokens", "请求预算（token）", 1, 12000],
-  ["timeout_seconds", "等待上限（秒）", 1, 45],
-] as const;
-
-interface Role {
-  name: string;
-  instructions: string;
-  limits?: Partial<Record<(typeof limits)[number][0], number>>;
-}
-interface Policy {
-  schema_version?: 1;
-  enabled?: boolean;
-  roles?: Record<string, Role>;
-  default_role_id?: string;
-  library_role_id?: string;
-  activity_roles?: Record<string, string>;
-  npc_roles?: Record<string, string>;
-}
-type Inspector = { kind: "role"; id: string; anchor: HTMLElement | Point } | { kind: "scope"; anchor: HTMLElement };
-
-export function AssistantEditor({
-  data,
-  onChange,
-  focusTarget,
-}: {
+export function AssistantEditor({ data, onChange, classroomId, focusTarget, onUploadState }: {
   data: Authoring;
   onChange: (value: Authoring) => void;
+  classroomId: number;
   focusTarget?: { roleId?: string };
+  onUploadState?: (busy: boolean) => void;
 }) {
-  const [manualInspector, setManualInspector] = useState<Inspector | null>(null);
-  const [initialFocus, setInitialFocus] = useState(Boolean(focusTarget));
-  const [focusAnchor, setFocusAnchor] = useState<HTMLButtonElement | null>(null);
-  const policy = data.configuration.assistant as Policy;
-  const roles = policy.roles ?? {};
-  const focusRoleId = focusTarget?.roleId && Object.hasOwn(roles, focusTarget.roleId) ? focusTarget.roleId : undefined;
-  const inspector: Inspector | null = initialFocus && focusAnchor
-    ? focusRoleId ? { kind: "role", id: focusRoleId, anchor: focusAnchor } : { kind: "scope", anchor: focusAnchor }
-    : manualInspector;
-  const roleItems = Object.entries(roles);
-  const selected = inspector?.kind === "role" ? inspector.id : "";
-  const role = roles[selected];
-  const roleOptions = roleItems.map(([id, item]) => <option key={id} value={id}>{item.name}</option>);
-  const activities = data.catalog.activities.filter((item) => item.kind !== "assessment");
-  const scopes = [
-    ["activity_roles", "各活动助教", activities.map((item) => ({ id: item.id, name: item.title }))],
-    ["npc_roles", "各教学角色助教", data.catalog.npcs],
-  ] as const;
-
-  function setInspector(next: Inspector | null) {
-    setInitialFocus(false);
-    setManualInspector(next);
+  const [section, setSection] = useState("basic");
+  const [selected, setSelected] = useState(focusTarget?.roleId ?? data.npcs[0]?.id ?? "");
+  const [assets, setAssets] = useState<CharacterAsset[]>([]);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [frameWidth, setFrameWidth] = useState(16);
+  const [frameHeight, setFrameHeight] = useState(20);
+  const [previewDirection, setPreviewDirection] = useState<"down" | "left" | "right" | "up">("down");
+  const [animate, setAnimate] = useState(false);
+  const role = data.npcs.find((item) => item.id === selected);
+  const latest = useRef(data);
+  const uploadGeneration = useRef(0);
+  useEffect(() => { latest.current = data; }, [data]);
+  const settings = data.configuration.assistant as { enabled?: boolean; library_npc_id?: string; limits?: Record<string, number> };
+  useEffect(() => () => onUploadState?.(false), [onUploadState]);
+  useEffect(() => {
+    const controller = new AbortController();
+    void api.get<CharacterAsset[]>(`/teacher/classrooms/${classroomId}/character-assets`, controller.signal)
+      .then((result) => { if (!controller.signal.aborted) setAssets(result); })
+      .catch((failure) => { if (!controller.signal.aborted) setError(errorMessage(failure)); });
+    return () => { controller.abort(); uploadGeneration.current += 1; };
+  }, [classroomId]);
+  function updateRole(next: Character) {
+    onChange({ ...data, npcs: data.npcs.map((item) => item.id === next.id ? next : item) });
   }
-
-  function update(next: Policy) {
-    onChange({
-      ...data,
-      configuration: {
-        ...data.configuration,
-        assistant: { ...next, schema_version: 1 },
-      },
-    });
+  function updateSettings(next: typeof settings) {
+    onChange({ ...data, configuration: { ...data.configuration, assistant: next } });
   }
-  function updateRole(next: Role) {
-    update({ ...policy, roles: { ...roles, [selected]: next } });
+  function addRole() {
+    const item: Character = { id: newId("npc"), name: "新的教学角色", portrait: "builtin:portrait:professor",
+      sprite: "builtin:sprite:chara_2", persona: "", placement: null, appearance_condition: { always: true } };
+    onChange({ ...data, npcs: [...data.npcs, item] });
+    setSelected(item.id);
   }
-  function selectRole(field: "default_role_id" | "library_role_id", id: string) {
-    const next = { ...policy };
-    if (id) next[field] = id;
-    else delete next[field];
-    update(next);
-  }
-  function inspectRole(id: string, event: MouseEvent<HTMLButtonElement>) {
-    const anchor = event.type === "contextmenu"
-      ? { x: event.clientX, y: event.clientY }
-      : event.currentTarget;
-    event.preventDefault();
-    setInspector({ kind: "role", id, anchor });
-  }
-  function addRole(anchor: HTMLElement) {
-    const id = newId("role");
-    update({
-      ...policy,
-      roles: {
-        ...roles,
-        [id]: {
-          name: "新的教学助教",
-          instructions: "以启发式问题引导学生理解知识点，并依据当前授权资料回答。",
-        },
-      },
-    });
-    setInspector({ kind: "role", id, anchor });
+  async function upload(file: File | undefined, kind: "portrait" | "sprite") {
+    if (!file || !role) return;
+    const roleId = role.id;
+    const generation = ++uploadGeneration.current;
+    const body = new FormData();
+    body.set("file", file);
+    body.set("kind", kind);
+    body.set("frame_width", String(frameWidth));
+    body.set("frame_height", String(frameHeight));
+    body.set("owner_npc_id", roleId);
+    body.set("expected_revision", String(data.revision));
+    setBusy(true);
+    onUploadState?.(true);
+    setError("");
+    try {
+      const asset = await api.upload<CharacterAsset>(`/teacher/classrooms/${classroomId}/character-assets`, body);
+      if (generation !== uploadGeneration.current) return;
+      setAssets((items) => [...items, asset]);
+      const current = latest.current;
+      onChange({ ...current, npcs: current.npcs.map((item) => item.id === roleId ? { ...item, [kind]: asset.id } : item) });
+    } catch (failure) { if (generation === uploadGeneration.current) setError(errorMessage(failure)); }
+    finally { if (generation === uploadGeneration.current) { setBusy(false); onUploadState?.(false); } }
   }
   function removeRole() {
-    if (!role || !window.confirm("删除角色并清除它的活动与角色绑定？")) return;
-    const nextRoles = { ...roles };
-    delete nextRoles[selected];
-    const withoutRole = (bindings: Record<string, string> | undefined) =>
-      Object.fromEntries(Object.entries(bindings ?? {}).filter(([, id]) => id !== selected));
-    const next: Policy = {
-      ...policy,
-      roles: nextRoles,
-      activity_roles: withoutRole(policy.activity_roles),
-      npc_roles: withoutRole(policy.npc_roles),
-    };
-    if (next.default_role_id === selected) delete next.default_role_id;
-    if (next.library_role_id === selected) delete next.library_role_id;
-    update(next);
-    setInspector(null);
+    if (!role || !window.confirm(`删除角色「${role.name}」？保存时将检查活动、流程和历史记录引用。`)) return;
+    onChange({ ...data, npcs: data.npcs.filter((item) => item.id !== role.id) });
+    setSelected("");
   }
+  return <AuthoringWorkspace tools={<>
+    <Button variant="ghost" className="justify-start" disabled={busy || data.npcs.length >= 100} onClick={addRole}><Plus />新增教学角色</Button>
+    {data.npcs.map((item) => <Button key={item.id} variant={selected === item.id ? "secondary" : "ghost"}
+      className="justify-start" disabled={busy} onClick={() => setSelected(item.id)}><Bot /><span className="truncate">{item.name}</span></Button>)}
+  </>} toolbar={<Tabs value={section} onValueChange={value => setSection(String(value))}><TabsList aria-label="角色配置"><TabsTrigger value="basic">基础信息</TabsTrigger><TabsTrigger value="portrait">对话立绘</TabsTrigger><TabsTrigger value="sprite">像素角色</TabsTrigger><TabsTrigger value="budget">助教预算配置</TabsTrigger></TabsList></Tabs>}>
+    <div className="space-y-5 p-5">
+      <ErrorNotice message={error} />
+      <section hidden={section !== "budget"} className="space-y-4 rounded-lg border p-4">
+    <Label className="gap-2"><Checkbox checked={settings.enabled ?? true} onCheckedChange={(enabled) => updateSettings({ ...settings, enabled })} />开放本班助教提问</Label>
+    <Label htmlFor="library-npc">在图书馆阅读时，由谁回答 AI 提问</Label>
+    <SelectField id="library-npc" value={settings.library_npc_id ?? ""} onValueChange={(value) => updateSettings({ ...settings, library_npc_id: value || undefined })}>
+      <option value="">未配置</option>
+      {data.npcs.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+    </SelectField>
 
-  return (
-    <AuthoringWorkspace
-      tools={
-        <>
-          <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">助教工具</p>
-          <Button className="justify-start" variant="ghost" disabled={roleItems.length >= 100}
-            onClick={(event) => addRole(event.currentTarget)}>
-            <Plus />新建助教角色
-          </Button>
-          <Button className="justify-start" variant={inspector?.kind === "scope" ? "secondary" : "ghost"}
-            ref={initialFocus && !focusRoleId ? setFocusAnchor : undefined}
-            onClick={(event) => setInspector({ kind: "scope", anchor: event.currentTarget })}>
-            <Settings2 />使用范围
-          </Button>
-          {roleItems.length > 0 && (
-            <>
-              <Separator className="my-2" />
-              <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">助教角色</p>
-              {roleItems.map(([id, item]) => (
-                <Button key={id} className="min-w-0 justify-start" variant={selected === id ? "secondary" : "ghost"}
-                  ref={initialFocus && focusRoleId === id ? setFocusAnchor : undefined}
-                  title={item.name} aria-label={`编辑助教角色 ${item.name}`}
-                  onClick={(event) => inspectRole(id, event)}
-                  onContextMenu={(event) => inspectRole(id, event)}>
-                  <Bot /><span className="truncate">{item.name}</span>
-                </Button>
-              ))}
-            </>
-          )}
-        </>
-      }
-      toolbar={
-        <>
-          <Label className="px-2 gap-2">
-            <Checkbox checked={policy.enabled ?? true} onCheckedChange={(enabled) => update({ ...policy, enabled })} />
-            开放本班助教提问
-          </Label>
-          <Separator orientation="vertical" className="h-5" />
-          <Label htmlFor="assistant-default_role_id">课程默认角色</Label>
-          <SelectField id="assistant-default_role_id" className="max-w-52" value={policy.default_role_id ?? ""}
-            onValueChange={(value) => selectRole("default_role_id", value)}>
-            <option value="">系统默认教学说明</option>
-            {roleOptions}
-          </SelectField>
-        </>
-      }
-    >
-      <div className="space-y-3 p-4">
-        <p className="hint">助教仅在学生主动提问时使用。教学角色提供引导方式，服务未配置时仍会明确显示不可用。</p>
-        {roleItems.length ? (
-          <div className="grid content-start gap-3 sm:grid-cols-2 xl:grid-cols-3">
-            {roleItems.map(([id, item]) => (
-              <Button key={id} variant="outline"
-                className="h-auto min-h-28 min-w-0 flex-col items-start justify-start gap-2 whitespace-normal p-4 text-left"
-                onClick={(event) => inspectRole(id, event)} onContextMenu={(event) => inspectRole(id, event)}>
-                <span className="flex w-full items-center gap-2">
-                  <Bot className="text-muted-foreground" />
-                  <span className="truncate">{item.name}</span>
-                </span>
-                <span className="line-clamp-2 text-xs font-normal text-muted-foreground">{item.instructions}</span>
-                <span className="flex flex-wrap gap-1">
-                  {policy.default_role_id === id && <Badge variant="secondary">课程默认</Badge>}
-                  {policy.library_role_id === id && <Badge variant="outline">图书馆</Badge>}
-                </span>
-              </Button>
-            ))}
-          </div>
-        ) : (
-          <Empty title="尚未创建助教角色" description="从左侧新建角色，为不同教学场景设置引导方式。" />
-        )}
-      </div>
-      {inspector && (
-        <AuthoringInspector
-          anchor={inspector.anchor}
-          title={role ? "助教角色属性" : "使用范围"}
-          onClose={() => setInspector(null)}
-        >
-          {role ? (
-            <>
-              <div className="field">
-                <Label htmlFor="assistant-name">角色名称</Label>
-                <Input id="assistant-name" value={role.name} maxLength={80}
-                  onChange={(event) => updateRole({ ...role, name: event.target.value })} />
-              </div>
-              <div className="field">
-                <Label htmlFor="assistant-instructions">教学说明</Label>
-                <Textarea id="assistant-instructions" rows={6} value={role.instructions} maxLength={2000}
-                  onChange={(event) => updateRole({ ...role, instructions: event.target.value })} />
-              </div>
-              <details>
-                <summary className="cursor-pointer font-medium">单次提问资源上限</summary>
-                <p className="hint mt-2">用于控制响应长度和等待时间，不能提高服务器固定上限。</p>
-                <div className="mt-3 grid grid-cols-2 gap-3">
-                  {limits.map(([key, label, min, max]) => (
-                    <div className="field" key={key}>
-                      <Label htmlFor={`limit-${key}`}>{label}</Label>
-                      <Input id={`limit-${key}`} type="number" min={min} max={max} value={role.limits?.[key] ?? max}
-                        onChange={(event) => updateRole({
-                          ...role,
-                          limits: { ...role.limits, [key]: Number(event.target.value) },
-                        })} />
-                    </div>
-                  ))}
-                </div>
-              </details>
-              <Separator className="my-3" />
-              <Button variant="ghost" onClick={removeRole}><Trash2 />删除角色</Button>
-            </>
-          ) : (
-            <>
-              <div className="field">
-                <Label htmlFor="assistant-library_role_id">图书馆角色</Label>
-                <SelectField id="assistant-library_role_id" value={policy.library_role_id ?? ""}
-                  onValueChange={(value) => selectRole("library_role_id", value)}>
-                  <option value="">继承课程默认</option>
-                  {roleOptions}
+<p className="hint">以下设置适用于整个班级课程。开启后，学生可在学习活动和图书馆主动向 AI 助教提问；仍需服务器配置 AI 服务。图书馆助教指定图书馆提问时显示的角色，活动助教在学习活动中分别选择。</p>
+        <h3>课程助教预算</h3>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {([
+            ["model_calls", "每次最多模型调用", 3, 1], ["tool_calls", "每次最多工具调用", 5, 0],
+            ["output_tokens", "回复令牌上限", 512, 1], ["request_tokens", "请求令牌预算", 12000, 1],
+            ["timeout_seconds", "超时秒数", 45, 1],
+          ] as const).map(([key, label, max, min]) => <div className="field" key={key}>
+            <Label htmlFor={`budget-${key}`}>{label}</Label>
+            <Input id={`budget-${key}`} type="number" min={min} max={max} value={settings.limits?.[key] ?? max}
+              onChange={(event) => updateSettings({ ...settings, limits: { ...settings.limits, [key]: Number(event.target.value) } })} />
+          </div>)}
+        </div>
+      </section>
+      {role ? <fieldset disabled={busy} aria-busy={busy} hidden={section === "budget"} className="space-y-5">
+        <div hidden={section !== "basic"} className="space-y-4">
+          <div className="field"><Label htmlFor="character-name">角色名称</Label><Input id="character-name" value={role.name} maxLength={80}
+            onChange={(event) => updateRole({ ...role, name: event.target.value })} /></div>
+          <div className="field"><Label htmlFor="character-persona">AI 助教人设描述</Label><Textarea id="character-persona" value={role.persona} maxLength={4000} rows={8}
+            placeholder="角色的身份、性格、说话习惯与教学风格" onChange={(event) => updateRole({ ...role, persona: event.target.value })} />
+            <p className="hint">当前只保存人设，尚未用于 AI 回复。</p></div>
+          <p className="text-sm text-muted-foreground">{role.placement
+            ? `${data.catalog.maps.find((map) => map.key === role.placement?.map_key)?.label ?? role.placement.map_key}（${role.placement.tile_x}, ${role.placement.tile_y}）`
+            : "未放置，可到地图交互与开放规则中安排位置。"}
+          </p>
+          <Button variant="ghost" onClick={removeRole}><Trash2 />删除角色</Button>
+        </div>
+        <div hidden={section === "basic"} className="space-y-5">
+          {(["portrait", "sprite"] as const).map((kind) => <section key={kind} hidden={section !== kind} className="space-y-3 rounded-lg border p-4">
+            <Label htmlFor={`character-${kind}`}>{kind === "portrait" ? "对话立绘" : "地图像素角色"}</Label>
+            <CharacterAssetPicker id={`character-${kind}`} value={role[kind]}
+              assets={assets.filter(asset => asset.kind === kind && (asset.id.startsWith("builtin:") || asset.id === role[kind]))}
+              onChange={value => updateRole({ ...role, [kind]: value })} />
+            <div className="flex min-h-36 items-center justify-center rounded-md bg-muted/40">
+              <CharacterPreview asset={assets.find((asset) => asset.id === role[kind])} direction={previewDirection} animate={animate && kind === "sprite"} />
+            </div>
+            {kind === "sprite" && <>
+              <div className="flex items-center gap-3">
+                <SelectField aria-label="预览朝向" value={previewDirection} onValueChange={(value) => setPreviewDirection(value as typeof previewDirection)}>
+                  <option value="down">向下</option><option value="left">向左</option><option value="right">向右</option><option value="up">向上</option>
                 </SelectField>
+                <Label><Checkbox checked={animate} onCheckedChange={setAnimate} />预览行走</Label>
               </div>
-              {scopes.map(([field, title, items]) => (
-                <details key={field}>
-                  <summary className="cursor-pointer py-3 font-medium">{title}</summary>
-                  {items.map((item) => (
-                    <div className="field" key={item.id}>
-                      <Label htmlFor={`${field}-${item.id}`}>{item.name}</Label>
-                      <SelectField id={`${field}-${item.id}`} value={policy[field]?.[item.id] ?? ""}
-                        onValueChange={(value) => {
-                          const bindings = { ...policy[field] };
-                          if (value) bindings[item.id] = value;
-                          else delete bindings[item.id];
-                          update({ ...policy, [field]: bindings });
-                        }}>
-                        <option value="">继承默认</option>
-                        {roleOptions}
-                      </SelectField>
-                    </div>
-                  ))}
-                </details>
-              ))}
-            </>
-          )}
-        </AuthoringInspector>
-      )}
-    </AuthoringWorkspace>
-  );
+              <div className="grid grid-cols-2 gap-3">
+                <div className="field"><Label htmlFor="frame-width">上传帧宽（像素）</Label><Input id="frame-width" type="number" min={8} max={256} value={frameWidth} onChange={(event) => setFrameWidth(Number(event.target.value))} /></div>
+                <div className="field"><Label htmlFor="frame-height">上传帧高（像素）</Label><Input id="frame-height" type="number" min={8} max={256} value={frameHeight} onChange={(event) => setFrameHeight(Number(event.target.value))} /></div>
+              </div>
+              <p className="hint">PNG 三列四行，方向从上至下为下、左、右、上。每行中间一帧为站立姿势。</p>
+            </>}
+            <Label htmlFor={`upload-${kind}`}>{busy ? "正在上传…" : "上传自定义素材"}</Label>
+            <Input id={`upload-${kind}`} type="file" accept={kind === "sprite" ? "image/png" : "image/png,image/jpeg,image/webp"}
+              onChange={(event) => { void upload(event.target.files?.[0], kind); event.target.value = ""; }} />
+          </section>)}
+          <p className="hint">每个角色最多一张自定义立绘和一张自定义像素图。上传替换当前图片；保存成功后清理旧图，删除角色时一并清理。取消编辑保留原图。</p>
+        </div>
+      </fieldset> : <Empty title="选择或新增教学角色" />}
+    </div>
+  </AuthoringWorkspace>;
 }

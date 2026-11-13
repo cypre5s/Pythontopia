@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { Authoring } from "../src/pages/authoring";
 import type { Authoring as Document } from "../src/lib/authoring";
 const base: Document & { students: { id: number; name: string }[] } = {
+  npcs: [],
   revision: 7,
   catalog: {
     maps: [

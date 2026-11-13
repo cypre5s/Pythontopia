@@ -88,12 +88,15 @@ def validate_story(
             kind = node.get("type")
             targets = []
             if kind == "dialogue":
-                if set(node) - {"id", "type", "text", "speaker", "next", "choices", "checkpoint"}:
+                if set(node) - {"id", "type", "text", "speaker", "speaker_npc_id", "next", "choices", "checkpoint"}:
                     raise ValueError("未知对白字段")
                 if not isinstance(node.get("text"), str) or not 1 <= len(node["text"]) <= 8000:
                     raise ValueError("对白文本缺失或过长")
                 if "speaker" in node and (not isinstance(node["speaker"], str) or len(node["speaker"]) > 80):
                     raise ValueError("对白说话人无效")
+                if "speaker_npc_id" in node:
+                    if "speaker" in node or not _short(node["speaker_npc_id"]) or (db is not None and not db.get(Npc, node["speaker_npc_id"])):
+                        raise ValueError("对白角色引用无效或与自定义说话人冲突")
                 choices = node.get("choices", [])
                 if not isinstance(choices, list) or len(choices) > 10:
                     raise ValueError("对白选项过多")
@@ -208,8 +211,6 @@ def validate_story(
         raise ValueError("检查点效果必须引用实际对白检查点")
     for values in effects.values():
         from .world_authoring import interior_buildings
-        if values == [{"type": "set_world_flag", "key": "library_unlocked"}]:
-            continue
         if not isinstance(values, list) or not 1 <= len(values) <= 20 or any(not isinstance(effect, dict)
             or set(effect) != {"type", "building_id"} or effect["type"] != "unlock_building" or effect["building_id"] not in interior_buildings() for effect in values):
             raise ValueError("检查点仅支持建筑解锁效果")
@@ -425,6 +426,15 @@ def _view(db, user, session):
     if session.status == "active":
         source = _nodes(story)[session.node_id]
         node = {key: source[key] for key in ("id", "type", "text", "speaker", "action", "workspace", "building_id") if key in source}
+        if source["type"] == "dialogue":
+            from .characters import presentation
+            speaker_key = source.get("speaker_npc_id", session.npc_key if "speaker" not in source else None)
+            speaker = db.get(Npc, speaker_key) if speaker_key else None
+            identity = presentation(db, session.classroom_id, speaker)
+            if identity:
+                node.update(speaker=identity["name"], portrait=identity["portrait"])
+            else:
+                node["portrait"] = ""
         if source["type"] == "action":
             node.setdefault("text", "")
         rounds = source.get("text", "").split("\n\n")
@@ -679,10 +689,13 @@ def advance(session_id: str, body: AdvanceInput, db: Annotated[Session, Depends(
         if not db.get(WorldFlag, (user.id, session.classroom_id, flag)):
             db.add(WorldFlag(user_id=user.id, classroom_id=session.classroom_id, key=flag))
             db.flush()
-        _goal_event(db, user, session, story, checkpoint, {"npc_key": session.npc_key, "dialogue_id": marker}, body.event_id)
+        evidence = {"npc_key": session.npc_key, "dialogue_id": marker}
+        if selected:
+            evidence["choice"] = selected["id"]
+        _goal_event(db, user, session, story, checkpoint, evidence, body.event_id)
         for effect in story.content.get("checkpoint_effects", {}).get(checkpoint, []):
             from .world_authoring import unlock_building
-            unlock_building(db, user, session.classroom_id, effect.get("building_id", "library"))
+            unlock_building(db, user, session.classroom_id, effect["building_id"])
     following = selected["next"] if selected else node.get("next")
     if following:
         session.node_id = following

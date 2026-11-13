@@ -11,7 +11,7 @@ import pytest
 from sqlalchemy.engine import make_url
 from sqlalchemy import create_engine, MetaData, event, text
 from sqlalchemy.orm import Session
-from app.seed import seed
+from fixture_seed import seed
 
 BACKEND = Path(__file__).resolve().parents[1]
 

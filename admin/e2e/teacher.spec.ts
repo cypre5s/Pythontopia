@@ -104,13 +104,16 @@ test("真实班级、学生、内容、编辑器与包往返", async ({ page }, 
   await expect(page.getByText("验收单选题", { exact: true })).toBeVisible();
   await navigate(page, "教学流程");
   await page
-    .getByRole("tab", { name: "地图交互与开放规则", exact: true })
+    .getByRole("tab", { name: "助教教学角色", exact: true })
     .click();
   await page.getByRole("button", { name: "新增教学角色", exact: true }).click();
   await page.getByLabel("角色名称").fill("验收向导");
 
-  await page.getByRole("button", { name: "创建角色", exact: true }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("tab", { name: "地图交互与开放规则", exact: true }).click();
+  await page.getByRole("button", { name: "角色摆放与出现", exact: true }).click();
+  const placement = page.getByRole("group", { name: "教学角色摆放地图" });
+  const bounds = await placement.boundingBox();
+  await placement.click({ position: { x: bounds!.width * 22.5 / 50, y: bounds!.height * 36.5 / 40 } });
   await page
     .getByRole("tab", { name: "公共与章节流程", exact: true })
     .click();
@@ -204,18 +207,21 @@ test("真实班级、学生、内容、编辑器与包往返", async ({ page }, 
   await expect(page.getByLabel("目标标题")).toHaveValue("回报角色");
   await chooseOption(page, page.getByLabel("前置依赖关系"), "任一前置完成（ANY）");
   await page.getByRole("button", { name: "关闭属性", exact: true }).click();
-  const questWrite = page.waitForRequest((request) => request.method() === "PUT" && request.url().endsWith("/authoring"));
-  await page.getByRole("button", { name: "保存课程", exact: true }).click();
+  const questWrite = page.waitForRequest((request) => request.method() === "POST" && request.url().endsWith("/authoring/validate"));
+  await page.getByRole("button", { name: "校验", exact: true }).click();
   const savedQuest = (await questWrite).postDataJSON().quests.find((quest: { title: string }) => quest.title === "验收可选任务");
   const [talkGoal, reportGoal] = savedQuest.definition.nodes;
   expect(talkGoal.dependencies).toEqual([]);
   expect(reportGoal).toMatchObject({ dependencies: [talkGoal.id], aggregation: "ANY" });
+  await expect(page.getByRole("region", { name: "校验结果" })).toContainText("流程对白");
+  await page.getByRole("button", { name: "取消编辑", exact: true }).click();
+  await page.getByRole("alertdialog").getByRole("button", { name: "放弃修改", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "保存课程", exact: true }),
   ).toBeDisabled();
   await page.getByRole("tab", { name: "助教教学角色", exact: true }).click();
-  await page.getByRole("button", { name: "新建助教角色", exact: true }).click();
-  await chooseOption(page, page.getByLabel("课程默认角色"), "新的教学助教");
+  await page.getByRole("button", { name: "新增教学角色", exact: true }).click();
+  await chooseOption(page, page.getByLabel("图书馆助教"), "新的教学角色");
   await page.getByRole("button", { name: "保存课程", exact: true }).click();
   await expect(
     page.getByRole("button", { name: "保存课程", exact: true }),

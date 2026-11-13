@@ -12,7 +12,7 @@ import {
   type WorldCallbacks,
   type WorldHandle,
 } from "../src/game/adapters/world";
-import type { Classroom, Npc, User, World } from "../src/shared/types";
+import type { Classroom, User, World } from "../src/shared/types";
 
 vi.mock("../src/game/adapters/world", () => ({ createWorld: vi.fn() }));
 
@@ -45,16 +45,6 @@ const world = (flag = "current"): World => ({
   chapters: [],
   flags: [flag],
 });
-const resident = (key = "mayor_py"): Npc => ({
-  key,
-  name: key,
-  map_key: "town_hub",
-  tile_x: 22,
-  tile_y: 34,
-  portrait: "",
-  dialogue: [{ id: "intro", text: "This is a scripted conversation." }],
-});
-
 beforeEach(() => {
   vi.mocked(createWorld).mockClear();
   pinia = createPinia();
@@ -329,129 +319,44 @@ describe("pending world interactions", () => {
 });
 
 function dialogue() {
-  const wrapper = mount(DialogueLayer, {
-    props: { npc: resident(), actions: [] },
-    attachTo: document.body,
-    global: { plugins: [pinia] },
-  });
+  const story = { id: "session", revision: 0, status: "active" as const, npc_key: "mayor_py",
+    node: { id: "intro", text: "This is a scripted conversation." }, activity: null };
+  useSession().story = story;
+  const wrapper = mount(DialogueLayer, { props: { story }, attachTo: document.body, global: { plugins: [pinia] } });
   mounted.push(wrapper);
   return wrapper;
 }
 
-const stepResult = () => ({
-  node: resident().dialogue[0],
-  next_id: null,
-  completed_root: "intro",
-  effects: [
-    {
-      type: "open_activity",
-      kind: "lesson",
-      activity_id: "old-conversation-lesson",
-    },
-  ],
-});
-
-describe("late scripted dialogue responses", () => {
-  it("reveals text on the first click and only advances on the next click", async () => {
+describe("server flow dialogue controls", () => {
+  it("reveals text first and acknowledges only on the second click", async () => {
     useUiPreferences().reduceMotion = false;
-    const post = vi.spyOn(api, "post").mockReturnValue(new Promise(() => {}));
+    const advance = vi.spyOn(useSession(), "advanceStory").mockResolvedValue(false);
     const wrapper = dialogue();
-    expect(wrapper.find(".primary").exists()).toBe(false);
     await wrapper.get(".dialogue-text").trigger("click");
-    expect(wrapper.get(".dialogue-text").text()).toBe(resident().dialogue[0]!.text);
-    expect(post).not.toHaveBeenCalled();
+    expect(wrapper.get(".dialogue-text").text()).toBe("This is a scripted conversation.");
+    expect(advance).not.toHaveBeenCalled();
     await wrapper.get(".dialogue-text").trigger("click");
-    expect(post).toHaveBeenCalledTimes(1);
+    expect(advance).toHaveBeenCalledOnce();
   });
-
-  it("reveals choices after the text, without choosing on a background click", async () => {
-    useUiPreferences().reduceMotion = false;
-    const post = vi.spyOn(api, "post").mockReturnValue(new Promise(() => {}));
+  it("requires a visible choice and supports keyboard focus", async () => {
+    const advance = vi.spyOn(useSession(), "advanceStory").mockResolvedValue(false);
     const wrapper = dialogue();
-    const npc = resident();
-    npc.dialogue[0]!.choices = [{ id: "yes", label: "开始", next: "end" }];
-    await wrapper.setProps({ npc });
-    expect(wrapper.find(".dialogue-response").exists()).toBe(false);
-    await wrapper.get(".dialogue-text").trigger("click");
-    expect(wrapper.get(".dialogue-response").text()).toContain("开始");
+    await wrapper.setProps({ story: { ...useSession().story!, node: { id: "choice", text: "Ready?", choices: [{ id: "yes", label: "开始" }] } } });
     await wrapper.get(".dialogue-box").trigger("click");
-    expect(post).not.toHaveBeenCalled();
-    await wrapper.get(".dialogue-response").trigger("click");
-    expect(post).toHaveBeenCalledTimes(1);
-  });
-
-  it("advances narration by clicking but stops before choices and completion", async () => {
-    const npc = resident();
-    npc.dialogue = [
-      { id: "intro", text: "Welcome", next: "decision" },
-      { id: "decision", text: "Your response?", choices: [{ id: "yes", label: "Let's begin", next: "end" }] },
-      { id: "end", text: "Ready" },
-    ];
-    const post = vi.spyOn(api, "post").mockResolvedValue({
-      node: npc.dialogue[0], next_id: "decision", effects: [],
-    });
-    const wrapper = dialogue();
-    await wrapper.setProps({ npc });
-    await wrapper.get(".dialogue-box").trigger("click");
-    await flushPromises();
-    expect(post).toHaveBeenCalledTimes(1);
-    expect(wrapper.get(".dialogue-response").text()).toContain("Let's begin");
-    await wrapper.get(".dialogue-box").trigger("click");
-    expect(post).toHaveBeenCalledTimes(1);
-    expect(wrapper.emitted("complete")).toBeUndefined();
+    expect(advance).not.toHaveBeenCalled();
     await wrapper.trigger("keydown", { key: "ArrowDown" });
     expect(document.activeElement).toBe(wrapper.get(".dialogue-response").element);
+    await wrapper.get(".dialogue-response").trigger("click");
+    expect(advance).toHaveBeenCalledWith("yes");
   });
-
-  it.each([
-    "Escape",
-    "unmount",
-    "account round trip",
-    "classroom round trip",
-    "different NPC",
-    "same NPC reopened",
-  ])("cannot complete or open an activity after %s", async (interrupt) => {
-    const pending = deferred<ReturnType<typeof stepResult>>();
-    vi.spyOn(api, "post").mockReturnValue(pending.promise);
+  it("keeps failed acknowledgments visible for retry", async () => {
+    const advance = vi.spyOn(useSession(), "advanceStory").mockRejectedValue(new Error("课程已更新"));
     const wrapper = dialogue();
     await wrapper.get(".dialogue-box").trigger("click");
-    const session = useSession();
-    if (interrupt === "Escape") {
-      window.dispatchEvent(
-        new KeyboardEvent("keydown", { key: "Escape", cancelable: true }),
-      );
-    } else if (interrupt === "unmount") wrapper.unmount();
-    else if (interrupt === "account round trip") {
-      session.user = person(2);
-      session.user = person(1);
-    } else if (interrupt === "classroom round trip") {
-      session.classroomId = 2;
-      session.classroomId = 1;
-    } else
-      await wrapper.setProps({
-        npc: resident(interrupt === "different NPC" ? "professor" : "mayor_py"),
-      });
-    session.open({ kind: "settings" });
-    pending.resolve(stepResult());
     await flushPromises();
-    expect(wrapper.emitted("complete")).toBeUndefined();
-    expect(session.workspace).toEqual({ kind: "settings" });
-  });
-
-  it("still completes the current transaction and applies its activity effect once", async () => {
-    const pending = deferred<ReturnType<typeof stepResult>>();
-    const post = vi.spyOn(api, "post").mockReturnValue(pending.promise);
-    const wrapper = dialogue();
-    await wrapper.get(".dialogue-box").trigger("click");
-    await wrapper.get(".dialogue-box").trigger("click");
-    expect(post).toHaveBeenCalledTimes(1);
-    pending.resolve(stepResult());
-    await flushPromises();
-    expect(wrapper.emitted("complete")).toHaveLength(1);
-    expect(useSession().workspace).toEqual({
-      kind: "lesson",
-      activity_id: "old-conversation-lesson",
-    });
+    expect(wrapper.text()).toContain("课程已更新");
+    expect(advance).toHaveBeenCalledOnce();
+    expect(wrapper.emitted("close")).toBeUndefined();
   });
 });
 

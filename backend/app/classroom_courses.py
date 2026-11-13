@@ -39,12 +39,10 @@ def course_ids(classroom_id: int, db: Annotated[Session, Depends(get_db)], user:
     return content_mapping(db, db.get(CourseInstance, key))
 
 
-class InitializeInput(BaseModel):
+class EmptyCourseInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     confirmed: Literal[True]
 
-
-class EmptyCourseInput(InitializeInput):
     name: str = Field(min_length=1, max_length=200)
 
 
@@ -67,22 +65,4 @@ def empty_course(classroom_id: int, body: EmptyCourseInput, db: Annotated[Sessio
         except IntegrityError as exc:
             db.rollback()
             raise HTTPException(409, "班级课程同时更新，请刷新后重试") from exc
-    return instance_payload(instance)
-
-
-@router.post("/initialize")
-def initialize_course(classroom_id: int, body: InitializeInput, db: Annotated[Session, Depends(get_db)],
-                      user: Annotated[User, Depends(require_teacher)]):
-    from .course_instances import clone_current_course
-
-    classroom = own_classroom(db, user, classroom_id)
-    try:
-        instance = clone_current_course(db, classroom)
-        db.commit()
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(409, "班级课程同时更新，请刷新后重试") from exc
-    except ValueError as exc:
-        db.rollback()
-        raise HTTPException(422, str(exc)) from exc
     return instance_payload(instance)

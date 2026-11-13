@@ -176,8 +176,8 @@ def _manifest(raw):
         raise PackageError("manifest YAML格式无效") from exc
     _fields(data, {"schema_version", "package_id", "name", "package_version", "created_at", "requires", "entry"},
             {"updated_at", "exported_at"})
-    if type(data["schema_version"]) is not int or data["schema_version"] != 1:
-        raise PackageError("不支持的课程包schema_version")
+    if type(data["schema_version"]) is not int or data["schema_version"] != 2:
+        raise PackageError("仅支持v2课程包，请使用新版角色格式")
     _identifier(data["package_id"], "package_id")
     _string(data["name"], "name")
     _string(data["package_version"], "package_version", 100)
@@ -216,7 +216,7 @@ def _assets(root, files, limits):
             raise
         except (ValueError, RecursionError) as exc:
             raise PackageError(f"资源清单第{line_number}行JSON无效") from exc
-        _fields(row, {"id", "path", "media_type", "size_bytes", "sha256", "source", "license"})
+        _fields(row, {"id", "path", "media_type", "size_bytes", "sha256", "source", "license"}, {"character_kind", "frame_width", "frame_height", "width", "height", "original_name"})
         _identifier(row["id"], "资源id")
         path = _relative(row["path"])
         if not path.startswith("assets/") or path == "assets/index.jsonl":

@@ -7,6 +7,7 @@ import {
 } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
+import type { Authoring } from "../src/lib/authoring";
 
 export async function chooseOption(page: Page, trigger: Locator, label: string) {
   await trigger.click();
@@ -59,34 +60,16 @@ export async function setup(
       data: { title: "回归章节", order_index: 1 },
     }),
   );
-  const doc = await json<{
-    catalog: {
-      maps: {
-        key: string;
-        objects: { points: { tile_x: number; tile_y: number }[] }[];
-      }[];
-    };
-  }>(
-    await request.get(`/api/teacher/classrooms/${classroom.id}/authoring`, {
-      headers,
-    }),
-  );
-  const map = doc.catalog.maps[0],
-    point = map.objects[0].points[0];
-  const npc = await json<{ key: string }>(
-    await request.post(scoped("/teacher/npcs"), {
-      headers,
-      data: {
-        key: `npc-${tag}`,
-        name: "回归向导",
-        map_key: map.key,
-        tile_x: point.tile_x,
-        tile_y: point.tile_y,
-        portrait: "",
-        dialogue: [{ id: "hello", text: "欢迎" }],
-      },
-    }),
-  );
+  const authoringPath = `/api/teacher/classrooms/${classroom.id}/authoring`;
+  const doc = await json<Authoring>(await request.get(authoringPath, { headers }));
+  const stable = `npc-${tag}`;
+  await json(await request.put(authoringPath, { headers, data: {
+    expected_revision: doc.revision, flows: doc.flows, quests: doc.quests, configuration: doc.configuration,
+    npcs: [{ id: stable, name: "回归向导", portrait: "builtin:portrait:professor", sprite: "builtin:sprite:chara_2",
+      persona: "", placement: { map_key: "town_hub", tile_x: 22, tile_y: 36, direction: "down" }, appearance_condition: { always: true } }],
+  } }));
+  const ids = await json<{ npc: Record<string, string> }>(await request.get(`/api/teacher/classrooms/${classroom.id}/course/ids`, { headers }));
+  const npc = { key: ids.npc[stable] };
   await page.addInitScript(
     ({ token, userId, cid }) => {
       sessionStorage.setItem("pythontopia-reborn-session", token);

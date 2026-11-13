@@ -1,7 +1,5 @@
 import argparse
-import json
 import os
-from pathlib import Path
 from .auth import hash_password
 from .db import SessionLocal
 from .models import User
@@ -21,25 +19,7 @@ def main():
     assign = sub.add_parser("assign-student-id")
     assign.add_argument("--user-id", type=int, required=True)
     assign.add_argument("--student-id", required=True)
-    course = sub.add_parser("import-course", help="Explicitly import a selected external course and YAML package")
-    course.add_argument("--source", type=Path, required=True, help="Course package directory containing json/, or JSON directory")
-    course.add_argument("--content", type=Path, required=True, help="YAML directory containing chapters/, questions/ and optional ambient/")
-    cleanup = sub.add_parser("cleanup-content", help="Preview unused legacy import cleanup (no learner data deletion)")
-    cleanup.add_argument("--course-id", type=int, default=43)
-    cleanup.add_argument("--apply", action="store_true", help="Apply only with explicit REBORN_ENV=development")
     args = parser.parse_args()
-    if args.command in {"import-course", "cleanup-content"}:
-        from .content_cleanup import cleanup_content
-        from .seed import seed
-
-        with SessionLocal() as db:
-            try:
-                result = seed(db, args.source, content_root=args.content) if args.command == "import-course" else cleanup_content(
-                    db, apply=args.apply, course_id=args.course_id)
-                print(json.dumps(result, ensure_ascii=False))
-            except (ValueError, OSError) as exc:
-                parser.exit(1, f"内容操作失败：{exc}\n")
-        return
     try:
         student_id = normalize_student_id(args.student_id)
     except ValueError as exc:

@@ -2,7 +2,7 @@ from uuid import uuid4
 from sqlalchemy import select
 from app.auth import hash_password, issue
 from app.models import Activity, Chapter, KnowledgePoint, User
-from app.seed import seed
+from fixture_seed import seed
 
 
 def another_teacher(db):

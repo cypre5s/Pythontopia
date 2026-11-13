@@ -6,7 +6,9 @@ import pytest
 from sqlalchemy import select
 
 from app.course_exchange import load_bundle, unpack_archive
-from app.course_instances import clone_current_course, content_mapping
+from app.course_instances import content_mapping
+
+from fixture_instances import clone_current_course
 from app.course_package import PackageError
 from app.models import (ActivityProgress, Classroom, CourseInstance, Material, Question, QuestionSecret)
 
@@ -525,8 +527,7 @@ def test_teaching_roles_are_part_of_complete_package(client, db, teacher, exchan
     from app.course_exchange_models import CoursePackageState
     source, target = exchange
     state = db.get(CoursePackageState, source.id)
-    policy = {"schema_version": 1, "roles": {"coach": {"name": "课程教练", "instructions": "先提问再给提示",
-              "limits": {"model_calls": 1, "output_tokens": 128}}}, "activity_roles": {"ch1-lesson": "coach"}}
+    policy = {"enabled": True, "library_npc_id": "librarian_doc", "limits": {"model_calls": 1, "output_tokens": 128}}
     state.configuration = {**state.configuration, "assistant": policy}
     db.commit()
     item = preview(client, teacher, target.id, export(client, teacher, source))

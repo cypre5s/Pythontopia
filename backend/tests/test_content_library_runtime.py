@@ -11,7 +11,7 @@ from app.auth import issue
 from app.content_relations import set_activity_questions, set_material_chapters, set_question_chapters
 from app.db import Base, get_db
 from app.main import create_app
-from app.models import Activity, Chapter, ChapterRelease, Classroom, CourseInstance, LearningRecord, Material, Membership, Question, QuestionSecret, User
+from app.models import Activity, Chapter, ChapterRelease, Classroom, CourseInstance, LearningRecord, Material, Membership, Question, QuestionSecret, User, Npc
 
 
 @pytest.fixture
@@ -30,9 +30,10 @@ def library_runtime():
         db.flush()
         db.add_all([Membership(user_id=student.id, classroom_id=classroom.id),
                     ChapterRelease(classroom_id=classroom.id, chapter_id=9001, status="published")])
+        db.add(Npc(key="teacher", name="老师", portrait="builtin:portrait:professor", sprite="builtin:sprite:chara_2"))
         for key in ("runtime-practice-a", "runtime-practice-b", "runtime-assessment"):
             db.add(Activity(id=key, chapter_id=9001, title=key, kind="assessment" if "assessment" in key else "practice",
-                            owner_id=teacher.id, content={"published": True}))
+                            owner_id=teacher.id, npc_key="teacher", content={"published": True}))
         db.add_all([Question(id="runtime-q1", title="First", kind="boolean", prompt="True?", status="ready", owner_id=teacher.id),
                     Question(id="runtime-q2", title="Second", kind="boolean", prompt="False?", status="ready", owner_id=teacher.id)])
         db.flush()
@@ -49,7 +50,7 @@ def library_runtime():
         for model in CONTENT_MODELS:
             for row in db.scalars(select(model)):
                 row.course_instance_id = instance.id
-                row.stable_id = str(row.id)
+                row.stable_id = str(row.key if isinstance(row, Npc) else row.id)
         db.commit()
         app = create_app()
 

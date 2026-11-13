@@ -117,12 +117,8 @@ const requiredPageIds = computed(() => progress.value?.required_page_ids ?? acti
 const requiredVisited = computed(() => progress.value?.read_count ?? requiredPageIds.value.filter(id => progress.value?.visited_pages.includes(id)).length);
 const requiredPages = computed(() => material.value?.pages.filter(page => requiredPageIds.value.includes(Number(page.id))) ?? []);
 const currentPage = computed(() => material.value?.pages[pageIndex.value]),
-  roleName = computed(
-    () =>
-      session.world?.npcs.find((n) => activity.value?.npc_key ? n.key === activity.value.npc_key : (n.stable_id ?? n.key) === "librarian_doc")
-        ?.name ?? "图书管理员",
-  ),
-  rolePortrait = computed(() => session.world?.npcs.find(n => activity.value?.npc_key ? n.key === activity.value.npc_key : (n.stable_id ?? n.key) === "librarian_doc")?.portrait);
+  roleName = computed(() => (activity.value?.role ?? session.world?.library_role)?.name ?? "课程助教"),
+  rolePortrait = computed(() => (activity.value?.role ?? session.world?.library_role)?.portrait);
 const learningGoals = computed(() => {
   const title = material.value?.title ?? "当前资料", learning = activity.value?.learning;
   if (learning?.video) {

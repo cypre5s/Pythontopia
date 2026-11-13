@@ -7,7 +7,9 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.course_instances import CourseCloneError, clone_current_course, content_mapping
+from app.course_instances import content_mapping
+
+from fixture_instances import CourseCloneError, clone_current_course
 from app.integration_models import AssistantSession, SubmissionPayload
 from app.models import (
     Activity, ActivityProgress, ActivityQuestion, AssessmentAttempt, Chapter, ChapterRelease, Classroom,
@@ -275,7 +277,7 @@ def pg_course_engine():
     engine = create_engine(scoped)
     try:
         migrate(scoped.render_as_string(hide_password=False), "upgrade", "head")
-        from app.seed import seed
+        from fixture_seed import seed
         with Session(engine) as session:
             seed(session)
         yield engine
@@ -314,7 +316,7 @@ def test_postgres_concurrent_same_class_clones_one_instance(pg_course_engine):
 
 def test_postgres_fresh_head_matches_models_and_repeated_source_import(pg_course_engine):
     from app.course_instances import CONTENT_MODELS
-    from app.seed import seed
+    from fixture_seed import seed
     url = pg_course_engine.url.render_as_string(hide_password=False)
     migrate(url, "upgrade", "head")
     migrate(url, "check")

@@ -9,6 +9,7 @@ vi.mock("../../shared/world/mapRender", () => ({
 }));
 
 const data: Authoring = {
+  npcs: [],
   revision: 1,
   catalog: {
     maps: [

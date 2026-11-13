@@ -12,11 +12,11 @@ def author_quest(client, teacher, classroom_id, quest_id, *, kind="main", option
         "title": quest_id,
         "chapter_id": 185,
         "kind": kind,
-        "nodes": [{"id": "talk", "type": "TALK_TO_NPC", "title": "Talk", "target": "mayor_py", "dependencies": []}],
+        "nodes": [{"id": "talk", "type": "REACH_LOCATION", "title": "Talk", "target": "town_square", "dependencies": []}],
         "effects": []}
     if optional:
         definition["nodes"].append(
-            {"id": "optional-talk", "type": "TALK_TO_NPC", "title": "Optional", "target": "mayor_py", "dependencies": [], "optional": True}
+            {"id": "optional-talk", "type": "REACH_LOCATION", "title": "Optional", "target": "town_square", "dependencies": [], "optional": True}
         )
     response = client.post("/api/teacher/quests", json={"definition": definition}, headers=teacher["headers"], params={"classroom_id": classroom_id})
     assert response.status_code == expected, response.text
@@ -28,7 +28,7 @@ def release(client, teacher, classroom_id, **body):
     assert response.status_code == 200, response.text
 
 
-def complete_talk(client, student, classroom_id, quest_id):
+def complete_goal(client, student, classroom_id, quest_id):
     position = client.put(
         "/api/world/position",
         json={"classroom_id": classroom_id, "map_key": "town_hub", "tile_x": 22, "tile_y": 34, "direction": "up"},
@@ -37,7 +37,7 @@ def complete_talk(client, student, classroom_id, quest_id):
     assert position.status_code == 200, position.text
     response = client.post(
         "/api/events",
-        json={"classroom_id": classroom_id, "event_id": str(uuid4()), "quest_id": quest_id, "node_id": "talk", "evidence": {"npc_key": "mayor_py"}},
+        json={"classroom_id": classroom_id, "event_id": str(uuid4()), "quest_id": quest_id, "node_id": "talk", "evidence": {}},
         headers=student["headers"],
     )
     assert response.status_code == 200, response.text
@@ -58,11 +58,11 @@ def test_progress_requires_all_main_quests_but_not_optional_or_side_nodes(client
     second_id = author_quest(client, teacher, cid, "progress-main-b")
     side_id = author_quest(client, teacher, cid, "progress-unfinished-side", kind="side")
     release(client, teacher, cid)
-    first = complete_talk(client, student, cid, first_id)
+    first = complete_goal(client, student, cid, first_id)
     assert first["status"] == "complete"
     assert next(node for node in first["nodes"] if node["id"] == "optional-talk")["status"] != "complete"
     assert completed_chapters(client, teacher, cid, student["id"]) == 0
-    complete_talk(client, student, cid, second_id)
+    complete_goal(client, student, cid, second_id)
     side = db.scalar(
         select(PlayerQuest).where(
             PlayerQuest.user_id == student["id"], PlayerQuest.classroom_id == cid, PlayerQuest.quest_id == side_id
@@ -79,7 +79,7 @@ def test_progress_only_side_quests_do_not_count_a_chapter(client, teacher, stude
     cid = classroom["id"]
     key = author_quest(client, teacher, cid, "progress-only-side", kind="side")
     release(client, teacher, cid)
-    assert complete_talk(client, student, cid, key)["status"] == "complete"
+    assert complete_goal(client, student, cid, key)["status"] == "complete"
     assert completed_chapters(client, teacher, cid, student["id"]) == 0
 
 
@@ -87,13 +87,13 @@ def test_current_quest_edits_preserve_completion_and_new_quests_count(client, db
     cid = classroom["id"]
     previous = author_quest(client, teacher, cid, "progress-versioned")
     release(client, teacher, cid)
-    complete_talk(client, student, cid, previous)
+    complete_goal(client, student, cid, previous)
     db.get(QuestDefinition, previous).title = "Updated current title"
     db.commit()
     new = author_quest(client, teacher, cid, "progress-new-main")
     # New main quests join the current chapter without a separate release version.
     assert completed_chapters(client, teacher, cid, student["id"]) == 0
-    complete_talk(client, student, cid, new)
+    complete_goal(client, student, cid, new)
     old = db.scalar(
         select(PlayerQuest).where(PlayerQuest.user_id == student["id"], PlayerQuest.classroom_id == cid, PlayerQuest.quest_id == previous)
     )
@@ -111,7 +111,7 @@ def test_progress_counts_are_scoped_to_student_classroom_and_teacher(client, db,
     cid = classroom["id"]
     key = author_quest(client, teacher, cid, "progress-isolation")
     release(client, teacher, cid)
-    complete_talk(client, student, cid, key)
+    complete_goal(client, student, cid, key)
     assert completed_chapters(client, teacher, cid, student["id"]) == 1
     other_class = client.post("/api/classrooms", json={"name": "Different classroom"}, headers=teacher["headers"]).json()
     client.post("/api/classrooms/join", json={"join_code": other_class["join_code"]}, headers=student["headers"])

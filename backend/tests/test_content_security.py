@@ -194,7 +194,7 @@ def test_all_merge_keeps_required_practice_after_chosen_branch(client, db, teach
                 "type": "PLAY_DIALOGUE",
                 "title": "Choose",
                 "target": "professor",
-                "dialogue_id": "language",
+                "dialogue_id": "story:required-merge-flow:choose",
                 "choices": [{"id": "concept", "label": "Concept"}, {"id": "code", "label": "Code"}],
                 "dependencies": []},
             {
@@ -224,6 +224,20 @@ def test_all_merge_keeps_required_practice_after_chosen_branch(client, db, teach
     created = client.post("/api/teacher/quests", json={"definition": definition}, headers=teacher["headers"], params={"classroom_id": classroom["id"]})
     assert created.status_code == 201, created.text
     definition["id"] = created.json()["id"]
+    from app.models import StoryDefinition
+    entries, nodes = {}, []
+    for goal in definition["nodes"][:3]:
+        entries.setdefault(goal["target"], []).append({"when": {"goal_ready": goal["id"]}, "node": goal["id"]})
+        node = {"id": goal["id"], "type": "dialogue", "text": "Test checkpoint", "checkpoint": goal["id"]}
+        if goal.get("choices"):
+            node["choices"] = [{**choice, "next": "end"} for choice in goal["choices"]]
+        else:
+            node["next"] = "end"
+        nodes.append(node)
+    nodes.append({"id": "end", "type": "end"})
+    db.add(StoryDefinition(id="required-merge-flow", chapter_id=179, quest_id=definition["id"], content={
+        "schema_version": 1, "mode": "task", "priority": 100, "bindings": {}, "entries": entries, "nodes": nodes}))
+    db.commit()
 
     def position(x, y):
         response = client.put(
@@ -232,6 +246,12 @@ def test_all_merge_keeps_required_practice_after_chosen_branch(client, db, teach
         assert response.status_code == 200, response.text
 
     def event(node, evidence):
+        if "npc_key" in evidence:
+            response = client.post("/api/story/interactions", json={"classroom_id": cid, "npc_key": evidence["npc_key"]}, headers=headers)
+            assert response.status_code == 200, response.text
+            view = response.json()
+            return client.post(f"/api/story/sessions/{view['id']}/advance", headers=headers, json={
+                "classroom_id": cid, "revision": view["revision"], "event_id": str(uuid4()), "choice": evidence.get("choice")})
         return client.post(
             "/api/events",
             json={"classroom_id": cid, "event_id": str(uuid4()), "quest_id": definition["id"], "node_id": node, "evidence": evidence},
@@ -239,10 +259,7 @@ def test_all_merge_keeps_required_practice_after_chosen_branch(client, db, teach
         )
 
     position(25, 14)
-    for node_id, choice in (("language", "concept"), ("concept-path", None)):
-        response = client.post("/api/dialogues/professor/steps", json={"classroom_id": cid, "node_id": node_id, "choice": choice}, headers=headers)
-        assert response.status_code == 200, response.text
-    assert event("choose", {"npc_key": "professor", "dialogue_id": "language", "choice": "concept"}).status_code == 200
+    assert event("choose", {"npc_key": "professor", "choice": "concept"}).status_code == 200
     position(22, 34)
     chosen = event("a", {"npc_key": "mayor_py"})
     assert chosen.status_code == 200, chosen.text

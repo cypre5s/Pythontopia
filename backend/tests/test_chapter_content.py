@@ -3,7 +3,7 @@ from copy import deepcopy
 
 import pytest
 
-from app.chapter_content import load_content, load_yaml, validate_sources
+from fixture_content import load_content, load_yaml, validate_sources
 
 
 @pytest.mark.parametrize("text", [
@@ -29,7 +29,7 @@ def test_current_sources_validate_without_database():
 
 
 def test_repeated_seed_updates_current_story_quest_activity_and_question(db, monkeypatch):
-    from app import seed as seed_module
+    import fixture_seed as seed_module
     from app.models import Activity, QuestDefinition, StoryDefinition, Question
 
     changed = deepcopy(load_content())
@@ -52,7 +52,7 @@ def test_repeated_seed_updates_current_story_quest_activity_and_question(db, mon
 def test_reimport_revises_question_set_without_removing_grades_or_participation(db, monkeypatch, student, legacy_classroom):
     classroom = legacy_classroom
     from uuid import uuid4
-    from app import seed as seed_module
+    import fixture_seed as seed_module
     from app.models import ActivityProgress, LearningRecord, Submission
 
     changed = deepcopy(load_content())
@@ -82,7 +82,7 @@ def test_reimport_revises_question_set_without_removing_grades_or_participation(
 def test_removing_ambient_source_ends_only_its_open_session(db, monkeypatch, student, legacy_classroom):
     classroom = legacy_classroom
     from sqlalchemy import func, select
-    from app import seed as seed_module
+    import fixture_seed as seed_module
     from app.models import ActivityProgress, LearningRecord, NodeState, PlayerQuest, StoryDefinition, StorySession, Submission, WorldFlag
 
     session = StorySession(user_id=student["id"], classroom_id=classroom["id"], story_id="town-daily", npc_key="mayor_py",

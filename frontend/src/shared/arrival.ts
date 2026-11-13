@@ -11,7 +11,8 @@ export function preloadWorld() {
   return preload ??= Promise.all([
     import('../features/WorldPage.vue'),
     import('../game/adapters/world'),
-    ...['chara_0','chara_2','chara_4','chara_6','chara_10'].map(key => new Promise<void>((resolve,reject)=>{
+    // Only the player appearance is fixed; course characters load from /world.
+    ...['chara_0'].map(key => new Promise<void>((resolve,reject)=>{
       const image = new Image(); image.onload=()=>resolve(); image.onerror=()=>reject(new Error('角色资源加载失败，请重试')); image.src=`/assets/pixel/sprites/super-retro-world/characters/${key}.png`;
     })),
   ]).then(()=>{ worldAssetsReady.value=true; }).catch(error=>{preload=undefined; throw error;});

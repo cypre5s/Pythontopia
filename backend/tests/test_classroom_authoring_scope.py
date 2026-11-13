@@ -9,13 +9,14 @@ from app.auth import hash_password, issue
 
 
 @pytest.fixture
-def independent_classes(client, teacher):
+def independent_classes(client, teacher, db):
     first = client.post("/api/classrooms", headers=teacher["headers"], json={"name": "第一个班"}).json()
     second = client.post("/api/classrooms", headers=teacher["headers"], json={"name": "另一个班"}).json()
     classes = [first["id"], second["id"]]
     for key in classes:
-        response = client.post(f"/api/teacher/classrooms/{key}/course/initialize", headers=teacher["headers"], json={"confirmed": True})
-        assert response.status_code == 200, response.text
+        from fixture_instances import clone_current_course
+        clone_current_course(db, key)
+        db.commit()
     return classes
 
 
@@ -66,7 +67,7 @@ def test_revision_and_scoped_chapter_order(client, teacher, independent_classes)
         assert response.status_code == 201, response.text
     after = client.get(url, headers=teacher["headers"]).json()
     assert after["revision"] == before["revision"] + 1
-    repeat = client.post(url + "/initialize", headers=teacher["headers"], json={"confirmed": True})
+    repeat = client.post(url + "/empty", headers=teacher["headers"], json={"confirmed": True, "name": "课程"})
     assert repeat.status_code == 200
     assert repeat.json()["id"] == before["id"]
     assert repeat.json()["revision"] == after["revision"]
@@ -86,8 +87,8 @@ def test_initialization_is_explicit_and_authorized(client, db, teacher, student)
     assert client.get(f"/api/world?classroom_id={created['id']}", headers=student["headers"]).status_code == 409
     assert client.get(f"/api/activities/ch1-lesson?classroom_id={created['id']}", headers=student["headers"]).status_code == 409
     for headers in (other_headers, student["headers"]):
-        assert client.post(url + "/initialize", headers=headers, json={"confirmed": True}).status_code == 403
-    assert client.post(url + "/initialize", headers=teacher["headers"], json={"confirmed": False}).status_code == 422
+        assert client.post(url + "/empty", headers=headers, json={"confirmed": True, "name": "空白课程"}).status_code == 403
+    assert client.post(url + "/empty", headers=teacher["headers"], json={"confirmed": False, "name": "空白课程"}).status_code == 422
 
 
 def test_material_processing_invalidates_course_preview_revision(client, db, teacher, independent_classes, tmp_path, monkeypatch):

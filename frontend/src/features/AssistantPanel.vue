@@ -1,6 +1,6 @@
 <template>
   <section class="assistant-panel assistant-conversation" :aria-label="`${roleName}助教`">
-    <img v-if="portraitUrl" class="assistant-portrait" :src="portraitUrl" alt="" aria-hidden="true" />
+    <img v-if="characterImage" class="assistant-portrait" :src="characterImage" alt="" aria-hidden="true" />
     <header class="assistant-heading">
       <div class="assistant-identity">
         <span class="assistant-emblem"><GameIcon name="message" /></span>
@@ -78,6 +78,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import { useCharacterImage } from "../shared/characterImage";
 import GameIcon from "../shared/GameIcon.vue";
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { api, notify } from "../shared/api";
@@ -260,4 +261,5 @@ onBeforeUnmount(() => {
   generation++;
   cancel();
 });
+const characterImage = useCharacterImage(computed(() => props.portraitUrl));
 </script>

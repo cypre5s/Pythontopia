@@ -11,13 +11,13 @@ import zipfile
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 
-from .course_exchange import MAX_ARCHIVE, load_bundle, write_package
-from .course_instances import clone_current_course
-from .course_package import PackageError
-from .db import Base
-from .models import Chapter, ChapterRelease, Classroom, User
-from .seed import seed
-from .storage import get_storage
+from app.course_exchange import MAX_ARCHIVE, load_bundle, write_package
+from fixture_instances import clone_current_course
+from app.course_package import PackageError
+from app.db import Base
+from app.models import Chapter, ChapterRelease, Classroom, User
+from fixture_seed import seed
+from app.storage import get_storage
 
 
 @contextmanager
@@ -60,7 +60,7 @@ def convert_legacy(source, content, output, *, package_id, name, package_version
             with isolated_storage(root / "media"), Session(engine) as db:
                 counts = seed(db, source=source, content_root=content)
                 if media_archive is not None:
-                    from .course_media import import_media
+                    from app.course_media import import_media
                     import_media(db, Path(media_archive).resolve(), source_root=source, storage=get_storage())
                 teacher = User(name="离线转换临时教师", role="teacher", password_hash="offline-disabled-account")
                 db.add(teacher)
