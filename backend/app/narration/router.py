@@ -14,6 +14,7 @@ from ..auth import current_user, require_teacher
 from ..db import get_db
 from ..models import Material, User
 from ..teacher_scope import require_scope, teacher_instance_id
+from . import calibrate
 from . import client as model_client
 from . import repository, service
 
@@ -107,6 +108,59 @@ def read_quota(classroom_id: int, material_id: int, db: Annotated[Session, Depen
     instance_id = teacher_instance_id(db, user, classroom_id)
     require_scope(db.get(Material, material_id), instance_id)
     return service.quota(db, instance_id)
+
+
+@router.post("/calibrate")
+def calibrate_deck(classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
+                   user: Annotated[User, Depends(require_teacher)]):
+    """Walk the whole deck with a rolling summary; returns a report, rewrites nothing."""
+    instance_id = teacher_instance_id(db, user, classroom_id)
+    material = require_scope(db.get(Material, material_id), instance_id)
+    repository.sync_staleness(db, material)
+    db.commit()
+    try:
+        entry = calibrate.analyse(db, material, instance_id=instance_id)
+    except model_client.ModelUnavailable as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except model_client.ModelFailed as exc:
+        raise HTTPException(502, str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    db.commit()
+    return {"id": entry.id, **(entry.report or {})}
+
+
+@router.get("/calibrate")
+def read_calibration(classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
+                     user: Annotated[User, Depends(require_teacher)]):
+    instance_id = teacher_instance_id(db, user, classroom_id)
+    material = require_scope(db.get(Material, material_id), instance_id)
+    entry = calibrate.latest(db, material.id)
+    if entry is None:
+        raise HTTPException(404, "还没有校准报告")
+    return {"id": entry.id, "applied_at": entry.applied_at.isoformat() if entry.applied_at else None,
+            "applied_pages": entry.applied_pages, **(entry.report or {})}
+
+
+@router.post("/calibrate/apply")
+def apply_calibration(classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
+                      user: Annotated[User, Depends(require_teacher)]):
+    """Re-generate only the flagged drafts; approved pages stay as the teacher left them."""
+    instance_id = teacher_instance_id(db, user, classroom_id)
+    material = require_scope(db.get(Material, material_id), instance_id)
+    entry = calibrate.latest(db, material.id)
+    if entry is None:
+        raise HTTPException(404, "还没有校准报告")
+
+    def regenerate(page_no: int) -> None:
+        service.generate_page(db, material, page_no, instance_id=instance_id)
+        db.commit()
+
+    applied = calibrate.apply_report(db, material, entry, regenerate=regenerate)
+    db.commit()
+    return applied
 
 
 @router.get("")

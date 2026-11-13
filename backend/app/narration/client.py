@@ -19,7 +19,7 @@ class ModelFailed(RuntimeError):
 
 
 def chat(messages: list[dict], *, settings: dict, model: str, max_tokens: int | None = None,
-         effort: str | None = None) -> dict:
+         effort: str | None = None, require_text: bool = True) -> dict:
     if not settings.get("api_key"):
         raise ModelUnavailable("未配置作者期模型凭据")
     body = {
@@ -51,11 +51,14 @@ def chat(messages: list[dict], *, settings: dict, model: str, max_tokens: int | 
         parsed = json.loads(content)
     except ValueError as exc:
         raise ModelFailed("模型返回的不是有效 JSON，请重试") from exc
-    if not isinstance(parsed, dict) or not str(parsed.get("text") or "").strip():
+    if not isinstance(parsed, dict):
+        raise ModelFailed("模型返回的 JSON 结构不可用，请重试")
+    if require_text and not str(parsed.get("text") or "").strip():
         raise ModelFailed("模型返回的讲解为空，请重试")
     anchors = [str(item)[:200] for item in (parsed.get("anchors") or []) if str(item).strip()][:6]
     return {
-        "text": str(parsed["text"]).strip(),
+        "raw": parsed,
+        "text": str(parsed.get("text") or "").strip(),
         "bridge_in": str(parsed.get("bridge_in") or "")[:300],
         "anchors": anchors,
         "usage": data.get("usage") or {},

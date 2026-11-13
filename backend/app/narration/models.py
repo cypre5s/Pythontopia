@@ -46,3 +46,16 @@ class PageNarration(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
+
+
+class NarrationCalibration(Base):
+    """The latest whole-deck review of one material: a report, not a rewrite."""
+    __tablename__ = "narration_calibrations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    material_id: Mapped[int] = mapped_column(ForeignKey("materials.id", ondelete="CASCADE"), index=True)
+    report: Mapped[dict] = mapped_column(JSON, default=dict)
+    windows: Mapped[int] = mapped_column(Integer, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    applied_pages: Mapped[dict | None] = mapped_column(JSON, nullable=True)
