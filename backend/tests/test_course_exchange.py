@@ -569,6 +569,29 @@ def test_zip_upload_is_disabled(client, teacher, exchange):
     assert response.status_code == 410
 
 
+def test_catalog_summary_and_readable_export_name(client, db, teacher, exchange):
+    import re
+    from app.course_exchange import exchange_root
+    from app.course_catalog import package_counts
+    from app.course_package import PackageLimits
+
+    source, target = exchange
+    source.name = 'Python/基础：第一课'
+    db.commit()
+    response = client.get(endpoint(source.classroom_id, "export"), headers=teacher["headers"])
+    assert response.status_code == 200
+    directory = response.json()["directory"]
+    assert re.fullmatch(r"export-\d+-Python-基础：第一课-\d{8}-\d{6}-[a-f0-9]{8}", directory)
+    items = client.get(endpoint(source.classroom_id, "packages"), headers=teacher["headers"]).json()["items"]
+    item = next(row for row in items if row["directory"] == directory)
+    assert item["name"] == source.name
+    assert item["created_at"]
+    assert item["chapter_count"] > 0 and item["question_count"] > 0
+    assert {key: item[key] for key in ("chapter_count", "question_count")} == package_counts(exchange_root() / directory, PackageLimits())
+    other_items = client.get(endpoint(target.id, "packages"), headers=teacher["headers"]).json()["items"]
+    assert not any(row["directory"] == directory for row in other_items)
+
+
 def test_available_packages_never_expose_other_teacher_uploads(client, db, teacher, exchange):
     from app.auth import issue
     from app.models import User

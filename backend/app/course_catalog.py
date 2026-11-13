@@ -35,6 +35,25 @@ def regular_reader(path, root):
         yield stream
 
 
+def package_counts(path, limits):
+    """Read chapter definitions and question indexes without scanning media."""
+    counts = {}
+    for key, pattern in (("chapter_count", "curriculum/chapters/*/chapter.yaml"),
+                         ("question_count", "content/questions/*.jsonl")):
+        count = total = 0
+        for index, file in enumerate(path.glob(pattern)):
+            if index >= limits.files:
+                raise PackageError("课程目录条目过多")
+            with regular_reader(file, path) as stream:
+                raw = stream.read(limits.index_bytes + 1)
+            total += len(raw)
+            if total > limits.index_bytes:
+                raise PackageError("课程目录索引过大")
+            count += sum(bool(line.strip()) for line in raw.splitlines()) if key == "question_count" else 1
+        counts[key] = count
+    return counts
+
+
 def mounted_catalog(root, limits, max_archive):
     """List root-level package directories. Internal staging is private."""
     items, rejected = [], 0
@@ -62,7 +81,9 @@ def mounted_catalog(root, limits, max_archive):
             stamp = json.dumps([path.name, info.st_size, info.st_mtime_ns, hashlib.sha256(raw).hexdigest()])
             key = "mounted-" + hashlib.sha256(stamp.encode()).hexdigest()
             items.append({"key": key, "name": manifest["name"], "package_id": manifest["package_id"],
-                          "package_version": manifest["package_version"], "source": "mounted", "path": path, "kind": kind})
+                          "package_version": manifest["package_version"], "source": "mounted", "path": path, "kind": kind,
+                          "directory": path.name, "created_at": manifest.get("exported_at", manifest["created_at"]),
+                          **package_counts(path, limits)})
         except (PackageError, OSError, UnicodeError, ValueError, zipfile.BadZipFile, RuntimeError, NotImplementedError):
             rejected += 1
     if len(items) > 200:

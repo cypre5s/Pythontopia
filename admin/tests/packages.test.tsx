@@ -8,7 +8,7 @@ it("previews an existing package without uploading and still requires explicit c
   const key = "mounted-" + "a".repeat(64);
   vi.stubGlobal("fetch", vi.fn(async (url: string, init: RequestInit) => {
     if (url.endsWith("/packages")) return new Response(JSON.stringify({ items: [
-      { key, name: "共享课程", package_id: "shared", package_version: "2", source: "mounted" },
+      { key, name: "共享课程", package_id: "shared", package_version: "2", source: "mounted", directory: "shared-course", created_at: "2026-11-12T00:00:00Z", chapter_count: 7, question_count: 42 },
     ], unavailable: 0 }));
     calls.push({ url, body: JSON.parse(init.body as string) });
     if (url.endsWith("/imports/available/preview")) return new Response(JSON.stringify({
@@ -20,9 +20,13 @@ it("previews an existing package without uploading and still requires explicit c
   }));
   const user = userEvent.setup();
   render(<Packages classroomId={31} />);
-  await user.click(await screen.findByRole("combobox", { name: "选择已有课程包" }));
-  await user.click(await screen.findByRole("option", { name: "共享课程 · 2 · 可用课程包" }));
-  await user.click(screen.getByRole("button", { name: "预览所选课程包" }));
+  await screen.findByText("shared-course");
+  expect(screen.getByRole("table", { name: "可用课程包" })).toHaveTextContent("42");
+  expect(screen.getByRole("table", { name: "可用课程包" })).toHaveTextContent("章节数");
+  await user.type(screen.getByRole("textbox", { name: "搜索课程包" }), "不存在");
+  expect(screen.queryByRole("button", { name: "预览 shared-course" })).not.toBeInTheDocument();
+  await user.clear(screen.getByRole("textbox", { name: "搜索课程包" }));
+  await user.click(await screen.findByRole("button", { name: "预览 shared-course" }));
   await screen.findByText("导入差异");
   expect(calls).toEqual([{ url: "/api/teacher/classrooms/31/course/imports/available/preview", body: { package_key: key } }]);
   expect(screen.getByRole("button", { name: "确认导入" })).toBeDisabled();

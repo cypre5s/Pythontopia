@@ -4,6 +4,8 @@ from datetime import datetime, timedelta
 import hashlib
 import json
 import os
+import re
+from zoneinfo import ZoneInfo
 from pathlib import Path
 import shutil
 import stat
@@ -809,7 +811,9 @@ def export_course(classroom_id: int, db: Annotated[Session, Depends(get_db)], us
     try:
         write_package(db, instance, root)
         load_bundle(root)
-        destination = exchange_path(f"export-{classroom_id}-{uuid4().hex}")
+        name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", instance.name).strip(" .")[:48] or "课程"
+        timestamp = now().astimezone(ZoneInfo("Asia/Shanghai")).strftime("%Y%m%d-%H%M%S")
+        destination = exchange_path(f"export-{classroom_id}-{name}-{timestamp}-{uuid4().hex[:8]}")
         os.replace(root, destination)
         shutil.rmtree(temporary)
         db.commit()
@@ -845,7 +849,8 @@ def available_packages(classroom_id: int, db: Annotated[Session, Depends(get_db)
     root = exchange_root()
     try:
         mounted, unavailable = mounted_catalog(root, LIMITS, MAX_ARCHIVE)
-        items = [{key: item[key] for key in ("key", "name", "package_id", "package_version", "source")} for item in mounted
+        items = [{key: item[key] for key in ("key", "name", "package_id", "package_version", "source",
+                                                        "directory", "created_at", "chapter_count", "question_count")} for item in mounted
                  if not item["path"].name.startswith("export-") or item["path"].name.startswith(f"export-{classroom_id}-")]
         return JSONResponse({"items": items, "unavailable": unavailable}, headers={"Cache-Control": "private, no-store"})
     except (PackageError, OSError) as exc:

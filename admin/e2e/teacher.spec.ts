@@ -231,7 +231,7 @@ test("真实班级、学生、内容、编辑器与包往返", async ({ page }, 
   await expect(page.getByText(`课程已导出到 ${exported.path}`, { exact: true })).toBeVisible();
   const exchangeRoot = process.env.REBORN_COURSE_EXCHANGE_ROOT;
   if (!exchangeRoot) throw new Error("REBORN_COURSE_EXCHANGE_ROOT must point to the isolated browser test exchange directory.");
-  expect(exported.directory).toMatch(/^export-\d+-[a-f\d]{32}$/);
+  expect(exported.directory).toMatch(/^export-\d+-.+-\d{8}-\d{6}-[a-f\d]{8}$/);
   const sharedCopy = resolve(exchangeRoot, `browser-roundtrip-${exported.directory}`);
   await page
     .getByRole("button", { name: "创建班级", exact: true })
@@ -247,14 +247,10 @@ test("真实班级、学生、内容、编辑器与包往返", async ({ page }, 
   await expect(
     page.getByLabel("当前班级"),
   ).toContainText(`导入验收 ${stamp}`);
-  const packageSelect = page.getByLabel("选择已有课程包");
-  const exportedOption = `后台验收 ${stamp}的课程 · 1 · 可用课程包`;
   await cp(resolve(exchangeRoot, exported.directory), sharedCopy, { recursive: true, force: false, errorOnExist: true });
   try {
     await page.getByRole("button", { name: "刷新列表", exact: true }).click();
-    await expect(packageSelect).toBeEnabled();
-    await chooseOption(page, packageSelect, exportedOption);
-    await page.getByRole("button", { name: "预览所选课程包", exact: true }).click();
+    await page.getByRole("button", { name: `预览 browser-roundtrip-${exported.directory}`, exact: true }).click();
     await expect(page.getByRole("heading", { name: "导入差异", exact: true })).toBeVisible();
   } finally {
     await rm(sharedCopy, { recursive: true, force: true });

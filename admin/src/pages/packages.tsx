@@ -20,7 +20,7 @@ import { type TransferBytes } from "@/lib/package-transfer";
 import { formatTimestamp } from "@/lib/time";
 import { useResource } from "@/lib/use-resource";
 interface AvailablePackages {
-  items: { key: string; name: string; package_id: string; package_version: string; source: "mounted" | "uploaded" }[];
+  items: { key: string; name: string; package_id: string; package_version: string; source: "mounted" | "uploaded"; directory: string; created_at: string; chapter_count: number; question_count: number }[];
   unavailable: number;
 }
 interface Preview {
@@ -144,7 +144,7 @@ function OperationProgress({ operation }: { operation: Operation | null }) {
 export function Packages({ classroomId }: { classroomId: number }) {
   const base = `/teacher/classrooms/${classroomId}/course`;
   const available = useResource<AvailablePackages>(`${base}/packages`);
-  const [selectedPackage, setSelectedPackage] = useState("");
+  const [packageSearch, setPackageSearch] = useState("");
   const pending = useRef<AbortController | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null),
     [requestKey, setRequestKey] = useState(""),
@@ -184,14 +184,14 @@ export function Packages({ classroomId }: { classroomId: number }) {
     }
   }
 
-  function inspectAvailable() {
-    if (!selectedPackage || pending.current) return;
+  function inspectAvailable(packageKey: string) {
+    if (pending.current) return;
     setPreview(null);
     setConfirmed(false);
     return operate(
       "validating",
       (signal) => request<Preview>(`${base}/imports/available/preview`, {
-        method: "POST", body: JSON.stringify({ package_key: selectedPackage }), signal,
+        method: "POST", body: JSON.stringify({ package_key: packageKey }), signal,
       }),
       (result) => {
         setPreview(result);
@@ -218,7 +218,6 @@ export function Packages({ classroomId }: { classroomId: number }) {
       () => {
         setPreview(null);
         setConfirmed(false);
-        setSelectedPackage("");
         available.reload();
         setMessage("课程包已导入，班级课程已更新。");
       },
@@ -282,31 +281,36 @@ export function Packages({ classroomId }: { classroomId: number }) {
             </p>
           </div>
         </div>
-        <div className="mb-6 space-y-3 border-b pb-6">
+        <div className="space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Label htmlFor="available-course-package">选择已有课程包</Label>
+            <Input aria-label="搜索课程包" placeholder="搜索课程名称或文件夹" className="max-w-sm"
+              value={packageSearch} onChange={(event) => setPackageSearch(event.target.value)} />
             <Button variant="outline" size="sm" disabled={busy || available.loading} onClick={available.reload}>刷新列表</Button>
           </div>
-          <p className="text-sm text-muted-foreground">选择 data/course 下的课程包目录，校验后查看导入差异。</p>
           <ErrorNotice message={available.error} />
-          <SelectField id="available-course-package" aria-label="选择已有课程包" value={selectedPackage}
-            placeholder={available.loading ? "正在加载课程包" : "选择课程包"}
-            disabled={busy || available.loading || !available.data?.items.length}
-            onValueChange={(value) => {
-              setSelectedPackage(value);
-              setPreview(null);
-              setConfirmed(false);
-              setError(null);
-              setMessage("");
-            }}>
-            {(available.data?.items ?? []).map((item) => (
-              <option key={item.key} value={item.key}>{item.name} · {item.package_version} · {item.source === "uploaded" ? "本班已上传" : "可用课程包"}</option>
-            ))}
-          </SelectField>
+          <Table aria-label="可用课程包">
+            <TableHeader><TableRow>
+              <TableHead>课程名称</TableHead><TableHead>创建日期</TableHead>
+              <TableHead>章节数</TableHead><TableHead>题目数</TableHead>
+              <TableHead>文件夹</TableHead><TableHead className="text-right">操作</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>
+              {(available.data?.items ?? []).filter((item) =>
+                (item.name + " " + item.directory).toLowerCase().includes(packageSearch.trim().toLowerCase()),
+              ).map((item) => <TableRow key={item.key}>
+                <TableCell className="min-w-48 max-w-80 whitespace-normal break-words font-medium">{item.name}</TableCell>
+                <TableCell>{item.created_at ? formatTimestamp(item.created_at) : "—"}</TableCell>
+                <TableCell className="tabular-nums">{item.chapter_count ?? "—"}</TableCell>
+                <TableCell className="tabular-nums">{item.question_count ?? "—"}</TableCell>
+                <TableCell className="min-w-48 max-w-80 whitespace-normal break-all text-muted-foreground">{item.directory}</TableCell>
+                <TableCell className="text-right"><Button variant="outline" size="sm" disabled={busy || available.loading}
+                  aria-label={`预览 ${item.directory}`} onClick={() => void inspectAvailable(item.key)}>预览导入</Button></TableCell>
+              </TableRow>)}
+            </TableBody>
+          </Table>
+          {available.loading ? <p role="status" className="hint">正在加载课程包…</p> : null}
           {!available.loading && !available.error && !available.data?.items.length ? <p className="hint">暂无课程包。请将解压后的课程包目录放入 data/course，再刷新列表。</p> : null}
-          {available.data?.unavailable ? <p className="hint">有 {available.data.unavailable} 份课程包暂不可用，请联系管理员检查包格式。</p> : null}
-          <Button disabled={busy || !selectedPackage || available.loading || !available.data?.items.some((item) => item.key === selectedPackage)}
-            onClick={() => void inspectAvailable()}><PackageCheck />预览所选课程包</Button>
+          {available.data?.unavailable ? <p className="hint">有 {available.data.unavailable} 份课程包暂不可用，请检查包格式。</p> : null}
         </div>
         <ErrorNotice message={error?.phase === "validating" ? error.message : ""} />
         <OperationProgress

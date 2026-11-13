@@ -100,3 +100,5 @@ GET /world?classroom_id增加当前可用interactions、building_access及buildi
 `POST .../imports/preview` 返回410，表示ZIP上传关闭。`GET .../export` 返回JSON，包含 `directory` 和 `path`，完整课程已写入服务器 `data/course/` 下的目录。原ZIP下载响应已退出当前接口。历史ZIP预览仍按原私有暂存与指纹校验应用。
 
 对白文本用空行分轮。运行DTO每次只返回当前轮文本，末轮才附带选项；提前传选择返回422。继续请求遵循原事件ID和revision幂等规则，末轮后才完成检查点。
+
+课程包列表增加 directory、created_at、chapter_count 和 question_count。created_at 表示该包的 exported_at 或原始 created_at。列表仅读取章节定义和题目索引生成摘要，正式预览及应用仍执行完整校验。新导出目录为 export-<班级ID>-<安全课程名>-<北京时间YYYYMMDD-HHMMSS>-<8位随机串>，旧目录继续可选。
