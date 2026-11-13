@@ -188,6 +188,23 @@ docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.ym
 
 配置 `REBORN_AI_API_KEY`、`REBORN_AI_MODEL`，按供应商需要设置 `REBORN_AI_BASE_URL`。未配置时主动提问明确返回不可用，世界、对白、翻页、概念题和进度继续工作。只有授权活动内学生主动提问才创建 `create_agent` 请求，普通操作必须保持零模型调用。
 
+本地 DeepSeek 官方配置示例（2026-11-14 核对[官方文档](https://api-docs.deepseek.com/)）：在实际 Compose 使用的私有 `--env-file` 中设置下列变量，Key 不写进源码或课程包。当前 17254 体验环境使用 `.tmp/npc-demo-20261113.env`。
+
+```dotenv
+REBORN_AI_BASE_URL=https://api.deepseek.com
+REBORN_AI_MODEL=deepseek-flash
+REBORN_AI_REASONING_EFFORT=none
+REBORN_AI_API_KEY=
+```
+
+`deepseek-flash` 当前对应 V4.1-Flash-1017。可选 `REBORN_AI_REASONING_EFFORT` 仅在非空时传给 Chat Completions；此配置用 `none` 关闭思考，适配现有短回复预算，其他供应商按其支持值配置或留空。官方 DeepSeek 的输出上限通过请求体 `max_tokens` 发送，避免 SDK 自动改名为 OpenAI 的 `max_completion_tokens`；仍受课程上限约束。手填 Key 后，需要重建 API 容器以重新读取环境变量，单纯 `restart` 不会加载新变量：
+
+```powershell
+docker compose --env-file .tmp/npc-demo-20261113.env -p pythontopia-npc-demo-20261113 -f deploy/compose.yml up -d --no-deps api
+```
+
+此命令从仓库根目录执行，仅针对当前本地体验环境；服务凭据不在教师课程设置页填写，课程设置只控制开放、默认角色与预算。缺 Key 时仍显示不可用，不发起模型请求。
+
 默认每次最多3次模型调用、5次工具调用、45秒，每次模型输出最多512 token；用户每日12请求/120000 token、班级每日100请求/1200000 token。预算参数见 `backend/app/assistant.py` 的 `REBORN_AI_*`；修改后在隔离环境验证。重启中断的回复不会自动重发，也不将离线测试称为真实模型验收。
 
 ### Judge0

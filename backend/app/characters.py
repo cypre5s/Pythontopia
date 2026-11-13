@@ -79,7 +79,8 @@ def presentation(db, classroom_id, npc):
         return None
     assets = stored_assets(db, npc.course_instance_id)
     portrait = asset_descriptor(npc.portrait, "portrait", assets, classroom_id)
-    return {"key": npc.key, "name": npc.name, "portrait": portrait["url"]}
+    return {"key": npc.key, "name": npc.name, "portrait": portrait["url"],
+            "sprite": asset_descriptor(npc.sprite, "sprite", assets, classroom_id)}
 
 
 def validate_references(data):
@@ -146,8 +147,7 @@ def character_issues(db, instance, data):
 
 def world_character(db, classroom_id, npc):
     result = presentation(db, classroom_id, npc)
-    result.update(stable_id=npc.stable_id, **npc.placement,
-                  sprite=asset_descriptor(npc.sprite, "sprite", stored_assets(db, npc.course_instance_id), classroom_id))
+    result.update(stable_id=npc.stable_id, **npc.placement)
     return result
 
 

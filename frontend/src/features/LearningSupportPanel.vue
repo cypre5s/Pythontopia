@@ -13,8 +13,8 @@
       <p v-if="!goals.length" class="support-goals-empty">按照当前资料或题目，完成本次学习。</p>
       <nav v-else :aria-label="goals.some(goal => goal.pageNo) ? '本章阅读目标' : '本次学习目标'">
       <ol class="support-goal-list">
-        <li v-for="(goal, index) in goals" :key="`${index}-${goal.title}`" :class="{ 'is-complete': goal.completed }">
-          <span class="support-goal-marker" aria-hidden="true"><GameIcon v-if="goal.completed" name="check" /><template v-else>{{ index + 1 }}</template></span>
+        <li v-for="(goal, index) in goals" :key="`${index}-${goal.title}`" :class="{ 'is-complete': goal.completed, 'single-goal': goals.length === 1 }">
+          <span v-if="goals.length > 1" class="support-goal-marker" aria-hidden="true"><GameIcon v-if="goal.completed" name="check" /><template v-else>{{ index + 1 }}</template></span>
           <div>
             <strong>{{ goal.title }}</strong>
             <p v-if="goal.detail">{{ goal.detail }}</p>
@@ -44,8 +44,8 @@
       <nav v-if="questionOutline?.length" aria-label="题目列表" class="support-detailed-questions">
         <button v-for="(question, index) in questionOutline" :key="question.id" :aria-current="question.current || currentQuestionId === question.id ? 'step' : undefined" @click="$emit('selectQuestion', question.id)">
           <span class="question-status-icon" :data-state="question.state ?? 'unanswered'" :aria-label="questionStateLabel[question.state ?? 'unanswered']"><GameIcon :name="question.state === 'accepted' ? 'check' : question.state === 'wrong' ? 'circleX' : question.state === 'pending' ? 'clock' : question.state === 'answered' ? 'practice' : 'circle'" /></span>
-          <span class="question-list-title">{{ question.index ?? index + 1 }}. {{ question.title }}</span>
-          <span class="question-kind">{{ questionKindLabel[question.kind ?? 'unknown'] }}</span>
+          <span class="question-list-title" :title="question.title">{{ question.index ?? index + 1 }}. {{ question.title }}</span>
+          <span class="question-list-kind">{{ questionKindLabel[question.kind ?? 'unknown'] }}</span>
         </button>
       </nav>
       <slot name="goals-footer" />
@@ -73,7 +73,7 @@
       </nav>
     </section>
     <section :id="`${panelId}-assistant`" class="support-chat" role="tabpanel" :aria-labelledby="`${panelId}-assistant-tab`" :hidden="tab !== 'assistant'" :inert="tab !== 'assistant'">
-      <AssistantPanel v-if="activityId || materialId" :activity-id="activityId" :material-id="materialId" :allowed="allowed" :role-name="roleName" :portrait-url="portraitUrl" :page-no="pageNo" :video-time="videoTime" :code="code" @cite="(materialId, page) => $emit('cite', materialId, page)" />
+      <AssistantPanel v-if="activityId || materialId" :activity-id="activityId" :material-id="materialId" :allowed="allowed" :role-name="roleName" :portrait-url="portraitUrl" :sprite="sprite" :page-no="pageNo" :video-time="videoTime" :code="code" @cite="(materialId, page) => $emit('cite', materialId, page)" />
       <div v-else class="support-unlinked">
         <img v-if="characterImage" class="assistant-portrait" :src="characterImage" alt="" aria-hidden="true" />
         <p>当前资料尚未加载，可继续阅读。</p>
@@ -83,6 +83,7 @@
 </template>
 <script setup lang="ts">
 import { useCharacterImage } from "../shared/characterImage";
+import type { Npc } from "../shared/types";
 import { Comment, Fragment, Text, computed, isVNode, nextTick, ref, useAttrs, useSlots, watch, type VNodeChild } from "vue";
 import AssistantPanel from "./AssistantPanel.vue";
 import GameIcon from "../shared/GameIcon.vue";
@@ -111,6 +112,7 @@ const props = defineProps<{
   allowed: boolean;
   roleName: string;
   portraitUrl?: string;
+  sprite?: Npc["sprite"];
   goals: {
     title: string;
     detail?: string;

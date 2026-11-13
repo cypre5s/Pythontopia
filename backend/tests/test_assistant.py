@@ -275,3 +275,34 @@ def test_existing_session_reads_current_activity_configuration(client, db, stude
     assert context["activity"]["title"] == "更新后的活动"
     assert context["current_page"]["excerpt"] == "当前教学内容"
     assert "version" not in context["current_page"] and "version" not in context["activity"]
+
+
+def test_optional_reasoning_effort_uses_chat_completions_without_network(monkeypatch):
+    import httpx
+    from langchain_openai import ChatOpenAI
+    monkeypatch.setenv("REBORN_AI_API_KEY", "test-only-not-a-real-key")
+    monkeypatch.setenv("REBORN_AI_MODEL", "deepseek-flash")
+    monkeypatch.setenv("REBORN_AI_BASE_URL", "https://api.deepseek.com")
+    monkeypatch.delenv("REBORN_AI_REASONING_EFFORT", raising=False)
+    assert "reasoning_effort" not in assistant.ai_config()
+    monkeypatch.setenv("REBORN_AI_REASONING_EFFORT", "none")
+    requests = []
+
+    def respond(request):
+        requests.append(json.loads(request.content))
+        return httpx.Response(200, json={"id": "test", "model": "deepseek-flash", "choices": [
+            {"index": 0, "message": {"role": "assistant", "content": "测试"}, "finish_reason": "stop"}
+        ]})
+
+    model = ChatOpenAI(**assistant.ai_config(512), max_retries=0,
+                       http_client=httpx.Client(transport=httpx.MockTransport(respond)))
+    payload = model._get_request_payload("测试配置，不发起网络请求")
+    assert payload["model"] == "deepseek-flash"
+    assert payload["reasoning_effort"] == "none"
+    assert model._use_responses_api(payload) is False
+    model.invoke("本地传输测试")
+    assert requests[0]["max_tokens"] == 512
+    assert "max_completion_tokens" not in requests[0]
+    assert requests[0]["reasoning_effort"] == "none"
+    monkeypatch.setenv("REBORN_AI_BASE_URL", "https://api.openai.com/v1")
+    assert assistant.ai_config(512)["max_tokens"] == 512

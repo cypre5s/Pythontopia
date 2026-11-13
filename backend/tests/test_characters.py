@@ -44,6 +44,7 @@ def test_unplaced_character_and_speaker_share_one_identity(client, db, teacher, 
     assert "PRIVATE-PERSONA" not in str(view)
     assert all(row["stable_id"] != extra["id"] for row in view["world"]["npcs"])
     assert view["world"]["default_role"]["name"] == "独立助教"
+    assert view["world"]["default_role"]["sprite"]["id"] == extra["sprite"]
     current = client.get(endpoint(scene), headers=teacher["headers"]).json()
     changed = {"expected_revision": current["revision"], **{key: current[key] for key in ("npcs", "flows", "configuration", "quests")}}
     changed["npcs"][1]["name"] = "新名字"
@@ -93,6 +94,11 @@ def test_private_upload_publish_and_package_roundtrip(client, db, teacher, stude
     body["npcs"][0]["sprite"] = asset["id"]
     save(client, teacher, scene, body)
     assert client.get(url, headers=student["headers"]).content == image_bytes()
+    from app.characters import presentation
+    identity = presentation(db, scene["classroom"].id, db.get(Npc, scene["npc"].key))
+    assert identity["sprite"]["url"] == url
+    assert identity["sprite"]["frame_width"] == 16
+    assert identity["sprite"]["frame_height"] == 20
     # An unused staged upload is excluded from the exported course.
     second = upload(client, teacher, scene, kind="portrait")
     assert second.status_code == 201

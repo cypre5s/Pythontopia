@@ -1,5 +1,15 @@
 # 验收摘要与已知边界
 
+## 助教密度与模型配置核验2026-11-14
+
+助教标题及回复署名使用角色朝下静止像素帧，完整立绘为淡背景；标题与输入框收紧，输入14px、圆角10px、桌面发送32px、复制28px，触控保留44px。题目行40px、单行省略、题型居中，单目标去除序号并收紧进度。角色展示DTO包含精灵资源描述，未放置及私有素材均使用角色自身配置。
+
+双前端 npm ci、类型检查、lint、测试、构建通过（学生224项，后台34项）。后端按 requirements.lock 使用 uv pip sync 安装，ruff通过；全量 pytest 564通过、19跳过，最后输出上限调整后相关27项重跑通过。新增真实SDK加MockTransport验证最终DeepSeek请求为max_tokens=512、reasoning_effort=none且不发送max_completion_tokens；未访问真实生成接口。首次 pip 安装因虚拟环境未装pip失败，改用uv；局部重跑曾因系统临时目录WinError5产生9项夹具错误，改仓库隔离basetemp后通过。全量测试2项SQLite日期适配弃用警告保留。
+
+Edge使用真实OverlayHost/Monaco、模拟活动与消息验证单目标、题型居中、单行省略、像素头像及背景、紧凑复制/发送、Markdown、新会话、空态、行列和标题间距；1553×1243、1280×720、800×900与200%文字无页面横向溢出。像素资源单测覆盖私有Blob替换与卸载释放；后端覆盖未放置身份及私有资源描述。早期浏览器断言把等价CSS值0px误作0%，修正后通过。证据：.tmp/compact-browser.cjs、compact-browser.log、compact-chat.png、compact-list.png、compact-backend-recheck.log及dense/compact检查日志。
+
+17254 API与Web已重建，数据库和存储保留；world、teacher和API健康检查HTTP200。用户手填的Key已加载，官方模型目录HTTP200且包含deepseek-flash；没有输出凭据或发起真实生成请求。真实模型流式回复、真实Judge0/Pyodide、完整arrival及真实账号切换未重跑；本轮无结构或课程包变化，未执行新PostgreSQL迁移及现场课程重导入。依赖审计和大块构建提示保留，不自动跨版本升级。仅本地提交，不推送；用户原有文档改动和piston-local未纳入提交。
+
 ## 学习侧栏与助教交互核验2026-11-13
 
 本轮将练习目标与题目明细合为题目列表，快速跳转按题型展示编号和真实作答状态；资料保留原页码列表，视频提供起点及配置片段跳转。编程结果空态垂直水平居中，Monaco 显示实时行列，题干为15px基准，页头上下留白对称。助教支持用户名、Markdown回复、仅回复复制、Enter/Shift+Enter与输入法保护，以及显式创建新会话；失败保留原对话与草稿，切班或新会话后忽略旧异步返回。未新增重新生成接口。

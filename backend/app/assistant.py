@@ -10,6 +10,7 @@ import re
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Annotated, Protocol
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
@@ -28,12 +29,21 @@ router = APIRouter(prefix="/assistant", tags=["assistant"])
 _active_tasks: dict[str, asyncio.Task] = {}
 
 
-def ai_config():
-    return {
+def ai_config(output_tokens: int | None = None):
+    config = {
         "api_key": os.getenv("REBORN_AI_API_KEY", ""),
         "base_url": os.getenv("REBORN_AI_BASE_URL") or None,
         "model": os.getenv("REBORN_AI_MODEL", ""),
     }
+    if effort := os.getenv("REBORN_AI_REASONING_EFFORT"):
+        config["reasoning_effort"] = effort
+    if output_tokens is not None:
+        if urlparse(config["base_url"] or "").hostname == "api.deepseek.com":
+            # DeepSeek documents max_tokens; ChatOpenAI renames its own max_tokens.
+            config["extra_body"] = {"max_tokens": output_tokens}
+        else:
+            config["max_tokens"] = output_tokens
+    return config
 
 
 class NewSession(BaseModel):
@@ -315,9 +325,8 @@ class AgentFactory:
             """Get only this learner's public submission feedback in the current activity."""
             return next((x for x in context["submissions"] if x["id"] == submission_id), {"error": "此提交不属于当前用户、班级和活动"})
 
-        config = ai_config()
         limits = {key: min(context.get("limits", {}).get(key, cap), cap) for key, cap in CAPS.items()}
-        model = ChatOpenAI(**config, max_tokens=limits["output_tokens"], timeout=min(20, limits["timeout_seconds"]), max_retries=0)
+        model = ChatOpenAI(**ai_config(limits["output_tokens"]), timeout=min(20, limits["timeout_seconds"]), max_retries=0)
 
         @wrap_model_call
         async def enforce_token_budget(request, handler):

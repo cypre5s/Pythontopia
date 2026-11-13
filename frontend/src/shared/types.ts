@@ -68,7 +68,7 @@ export interface Chapter {
   order_index: number;
   available: boolean;
 }
-export interface CharacterIdentity { key: string; name: string; portrait: string }
+export interface CharacterIdentity { key: string; name: string; portrait: string; sprite: Npc["sprite"] }
 export interface World {
   default_role: CharacterIdentity | null;
   story_available?: boolean;

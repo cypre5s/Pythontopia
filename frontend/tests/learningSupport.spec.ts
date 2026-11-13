@@ -101,7 +101,7 @@ describe("learning goals and character assistant", () => {
     await tabs[1]!.trigger("click");
     const input = wrapper.get('textarea');
     expect(input.attributes("placeholder")).toBe("向助教提问");
-    expect(wrapper.get('.assistant-avatar').attributes("alt")).toBe("");
+    expect(wrapper.get('.assistant-portrait').attributes("alt")).toBe("");
     await input.setValue("这一页有什么含义？");
     await tabs[0]!.trigger("click");
     await tabs[0]!.trigger("keydown", { key: "ArrowRight" });

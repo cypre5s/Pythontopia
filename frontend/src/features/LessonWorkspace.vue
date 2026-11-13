@@ -30,7 +30,7 @@
         </template>
       </template>
     </section>
-    <LearningSupportPanel v-if="material || activity" :key="activity?.id ?? material?.id" id="lesson-assistant-region" tabindex="-1" :hidden="compact && !showAssistant" :inert="compact && !showAssistant" :aria-hidden="compact && !showAssistant" :activity-id="activity?.id" :material-id="activity ? undefined : material?.id" :allowed="activity ? activity.assistant_allowed : material?.status === 'ready'" :page-no="currentContext.page_no" :video-time="currentContext.video_time" :role-name="roleName" :portrait-url="rolePortrait" :goals="learningGoals" :outline="documentOutline" :time-outline="videoOutline" @cite="cite" @select-page="readRequiredPage" @select-time="seekVideo">
+    <LearningSupportPanel v-if="material || activity" :key="activity?.id ?? material?.id" id="lesson-assistant-region" tabindex="-1" :hidden="compact && !showAssistant" :inert="compact && !showAssistant" :aria-hidden="compact && !showAssistant" :activity-id="activity?.id" :material-id="activity ? undefined : material?.id" :allowed="activity ? activity.assistant_allowed : material?.status === 'ready'" :page-no="currentContext.page_no" :video-time="currentContext.video_time" :role-name="roleName" :portrait-url="rolePortrait" :sprite="(activity?.role ?? session.world?.default_role)?.sprite" :goals="learningGoals" :outline="documentOutline" :time-outline="videoOutline" @cite="cite" @select-page="readRequiredPage" @select-time="seekVideo">
       <template #goals-footer>
         <p v-if="material?.notice" class="notice">{{ material.notice }}</p>
         <footer v-if="activity" class="lesson-footer">

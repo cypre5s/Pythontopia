@@ -31,7 +31,7 @@
 
       <button v-if="storySessionId && (isAssessment ? paper?.completed : activityProgress?.completed)" class="primary practice-complete" @click="$emit('complete')">{{ isAssessment ? '完成测验' : '完成练习' }}</button>
     </section>
-    <LearningSupportPanel v-if="activity" :key="activity.id" id="practice-assistant-region" tabindex="-1" :hidden="compact && !showAssistant" :inert="compact && !showAssistant" :aria-hidden="compact && !showAssistant" :activity-id="activity.id" :allowed="activity.assistant_allowed" :code="drafts[current?.id ?? '']?.code ?? ''" :role-name="roleName" :portrait-url="rolePortrait" :goals="learningGoals" :question-outline="questionOutline" @cite="cite" @select-question="selectQuestion">
+    <LearningSupportPanel v-if="activity" :key="activity.id" id="practice-assistant-region" tabindex="-1" :hidden="compact && !showAssistant" :inert="compact && !showAssistant" :aria-hidden="compact && !showAssistant" :activity-id="activity.id" :allowed="activity.assistant_allowed" :code="drafts[current?.id ?? '']?.code ?? ''" :role-name="roleName" :portrait-url="rolePortrait" :sprite="role?.sprite" :goals="learningGoals" :question-outline="questionOutline" @cite="cite" @select-question="selectQuestion">
       <template #question-actions>
         <div v-if="isAssessment" class="assessment-actions">
           <template v-if="paper?.locked">

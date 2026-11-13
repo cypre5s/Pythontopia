@@ -1,9 +1,9 @@
 <template>
   <section class="assistant-panel assistant-conversation" :aria-label="`${roleName}助教`">
+    <img v-if="characterImage" class="assistant-portrait" :src="characterImage" alt="" aria-hidden="true" />
     <header class="assistant-heading">
       <div class="assistant-identity">
-        <img v-if="characterImage" class="assistant-avatar" :src="characterImage" alt="" />
-        <span class="assistant-emblem"><GameIcon name="message" /></span>
+        <CharacterSprite :sprite="sprite" />
         <h3>{{ roleName }}</h3>
       </div>
       <button class="assistant-new" type="button" aria-label="开启新对话" title="开启新对话" :disabled="busy || startingConversation || !allowed || !available" @click="newConversation"><GameIcon :name="startingConversation ? 'spinner' : 'plus'" /></button>
@@ -23,7 +23,7 @@
         :key="index"
         :class="item.role"
       >
-        <div class="message-author">{{ item.role === "user" ? session.user?.name || "我" : roleName }}</div>
+        <div class="message-author"><CharacterSprite v-if="item.role === 'assistant'" :sprite="sprite" />{{ item.role === "user" ? session.user?.name || "我" : roleName }}</div>
         <p v-if="item.role === 'user'" class="user-message">{{ item.text }}</p>
         <template v-else>
           <AssistantMarkdown :text="item.text" />
@@ -63,7 +63,6 @@
       ></textarea>
       <p v-if="overLimit" :id="`${inputId}-error`" class="assistant-input-error" role="alert">问题最多 2000 字，请删减 {{ questionLength - 2000 }} 字后发送。</p>
       <div class="assistant-form-actions">
-        <span class="composer-help">Shift+Enter 换行</span>
         <button v-if="busy" type="button" @click="cancel">停止回复</button
         ><button
           v-else
@@ -83,6 +82,8 @@
 import { useCharacterImage } from "../shared/characterImage";
 import GameIcon from "../shared/GameIcon.vue";
 import AssistantMarkdown from "./AssistantMarkdown.vue";
+import CharacterSprite from "../shared/CharacterSprite.vue";
+import type { Npc } from "../shared/types";
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { api, notify } from "../shared/api";
 import "./assistantUi.css";
@@ -97,6 +98,7 @@ const props = defineProps<{
   code?: string;
   roleName: string;
   portraitUrl?: string;
+  sprite?: Npc["sprite"];
 }>();
 defineEmits<{ cite: [materialId: number, page: number] }>();
 const session = useSession(),
