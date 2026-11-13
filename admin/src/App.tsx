@@ -14,6 +14,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Package,
+  Settings,
   ArrowUpRight,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -46,6 +47,7 @@ import { Curriculum } from "@/pages/curriculum";
 import { Materials } from "@/pages/materials";
 import { Questions } from "@/pages/questions";
 import { Activities } from "@/pages/activities";
+import { CourseSettings } from "@/pages/course-settings";
 import { Packages } from "@/pages/packages";
 import { Teaching } from "@/pages/teaching";
 const Authoring = lazy(() =>
@@ -60,6 +62,7 @@ const nav = [
   { key: "questions", title: "题库", icon: ListChecks },
   { key: "activities", title: "学习活动", icon: BookOpen },
   { key: "authoring", title: "教学流程", icon: Layers3 },
+  { key: "settings", title: "课程设置", icon: Settings },
   { key: "packages", title: "课程包", icon: Package },
 ] as const;
 type Page = (typeof nav)[number]["key"];
@@ -365,6 +368,8 @@ function Workbench() {
                 <Questions classroomId={classroom.id} />
               ) : page === "activities" ? (
                 <Activities classroomId={classroom.id} />
+              ) : page === "settings" ? (
+                <CourseSettings classroomId={classroom.id} />
               ) : page === "authoring" ? (
                 <Suspense fallback={<Loading />}>
                   <Authoring classroomId={classroom.id} />

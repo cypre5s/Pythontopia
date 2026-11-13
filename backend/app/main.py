@@ -6,7 +6,7 @@ from sqlalchemy import text
 from .config import CORS_ORIGINS, dev_tools_enabled
 from .db import SessionLocal
 from .course_cleanup import cleanup_worker
-from . import auth, courses, classrooms, quests, practice, assistant, storage, character_assets, curriculum, story, assessments, student_accounts, classroom_courses, course_exchange, world_authoring, dev_tools
+from . import auth, courses, classrooms, quests, practice, assistant, storage, character_assets, course_settings, curriculum, story, assessments, student_accounts, classroom_courses, course_exchange, world_authoring, dev_tools
 
 
 @asynccontextmanager
@@ -37,7 +37,7 @@ def create_app() -> FastAPI:
         allow_methods=["GET", "POST", "PUT", "DELETE"],
         allow_headers=["Authorization", "Content-Type", "Range"],
     )
-    for module in (auth, courses, classrooms, quests, practice, assistant, storage, character_assets, curriculum, story, assessments, student_accounts, classroom_courses, course_exchange, world_authoring):
+    for module in (auth, courses, classrooms, quests, practice, assistant, storage, character_assets, course_settings, curriculum, story, assessments, student_accounts, classroom_courses, course_exchange, world_authoring):
         app.include_router(module.router, prefix="/api")
     app.include_router(dev_tools.preview_router, prefix="/api")
     if dev_tools_enabled():

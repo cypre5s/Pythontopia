@@ -8,7 +8,7 @@ CAPS = {"model_calls": 3, "tool_calls": 5, "output_tokens": 512, "request_tokens
 
 
 def validate_policy(value, bundle_data):
-    if not isinstance(value, dict) or set(value) - {"enabled", "limits", "library_npc_id"}:
+    if not isinstance(value, dict) or set(value) - {"enabled", "limits", "default_npc_id"}:
         raise ValueError("助教设置字段无效，请使用新版角色引用")
     if type(value.get("enabled", True)) is not bool:
         raise ValueError("助教启用状态无效")
@@ -17,9 +17,9 @@ def validate_policy(value, bundle_data):
         raise ValueError("助教预算字段无效")
     if any(type(limit) is not int or not (0 if key == "tool_calls" else 1) <= limit <= CAPS[key] for key, limit in limits.items()):
         raise ValueError("助教预算不得超过系统硬上限")
-    library_npc = value.get("library_npc_id")
-    if library_npc is not None and library_npc not in {row["id"] for row in bundle_data["npc"]}:
-        raise ValueError("图书馆助教角色不存在")
+    default_npc = value.get("default_npc_id")
+    if default_npc is not None and (not isinstance(default_npc, str) or default_npc not in {row["id"] for row in bundle_data["npc"]}):
+        raise ValueError("课程默认答疑角色不存在")
     return value
 
 
@@ -29,10 +29,15 @@ def policy(db, classroom_id):
     return state.configuration.get("assistant", {}) if state else {}
 
 
-def library_npc(db, classroom_id):
+def default_npc(db, classroom_id):
     from .course_scope import npc_by_stable_id
-    key = policy(db, classroom_id).get("library_npc_id")
+    key = policy(db, classroom_id).get("default_npc_id")
     return npc_by_stable_id(db, classroom_id, key) if key else None
+
+
+def activity_npc(db, classroom_id, activity):
+    from .models import Npc
+    return db.get(Npc, activity.npc_key) if activity.npc_key is not None else default_npc(db, classroom_id)
 
 
 def ensure_enabled(db, classroom_id):

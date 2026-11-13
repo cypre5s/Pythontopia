@@ -1,5 +1,25 @@
 # 验收摘要与已知边界
 
+## 课程默认答疑角色与环境收敛核验2026-11-13
+
+按用户确认拆分角色资料和课程公共设置：独立“课程设置 → AI 助教”维护 default_npc_id、开关和预算；图书馆使用默认角色，活动 npc_key=null 继承、非空独立指定。删除角色页预算控件与旧运行字段，API/课程包拒绝 library_npc_id；迁移 f318a72c90de 一次性移除存量旧字段，保留其他配置与学习证据。素材和角色单一来源要求保持。
+
+| 检查 | 本轮执行结果 |
+| --- | --- |
+| 双前端 | 重新 npm ci、类型检查、lint、全量测试和构建通过；教师 34 项、学生 207 项。最终占位文字修复后类型/lint与镜像构建再次通过。保留已有构建体积提示。日志 `.tmp/settings-admin-*`、`.tmp/settings-student-*`、`.tmp/settings-final-image.log`。 |
+| 后端 | 镜像使用 requirements.lock 锁定依赖；Ruff 通过，最终独立 Linux/PostgreSQL 全量 **574 通过、5 跳过**，保留 2 条 SQLite 日期适配器弃用提示。新增覆盖课程默认与活动覆盖、清除覆盖、学生权限、修订冲突、非法/旧字段、默认角色删除阻断、继承活动包往返与存量字段迁移。`.tmp/settings-postgres-final.log`、`.tmp/settings-ruff.log`。 |
+| 迁移 | 新建 PostgreSQL 数据库完整 upgrade、重复 upgrade、alembic check 通过；最终全量也覆盖已有记录升级和字段改名。17254 升级后结构无差异。`.tmp/settings-migration.log`、`.tmp/settings-demo-migration.log`。 |
+| 浏览器 | 角色编辑 1 项、课程设置保存/刷新/冲突草稿/活动默认选择 1 项通过；arrival 完成、恢复和账号隔离、公共流程共 2 项通过，地图及图书馆单独复跑 2 项通过。截图实看新课程设置入口、默认角色和预算布局；证据 `.tmp/settings-browser-evidence/`、`.tmp/settings-browser-verified.log`、`.tmp/settings-map-browser.log`。 |
+| 最新实课包 | data/course/python-town-chapter1 使用 schema_version=2、package_version=3；4 角色、9 流程、41 媒体。阅读活动继承默认，练习保留教练覆盖。独立数据库完成导入、重复导入、导出再导入，9 类领域内容及全部资源 SHA-256 一致。`.tmp/settings-real-package.log`、`.tmp/settings-real-roundtrip.log`。临时导出及数据库验收后清理。素材存在性检查 102 项通过。 |
+
+首次全量出现 5 个 SQLite 迁移失败，原因是可空列变更重建活动父表时已有外键引用；改为迁移期间显式保护外键、结束检查完整性，专项 29 通过/1 环境跳过后全量恢复通过。浏览器首轮断言遗漏下拉箭头，修正断言后又发现空选项显示“请选择”，已明确显示“使用课程默认角色”并复测通过。地图并行导入一次超时，顺序复跑通过。保留初始失败日志，不以初轮结果替代最终结果。
+
+当前体验环境只保留 pythontopia-npc-demo-20261113（17254/18255）及其数据库/存储卷，最终 API/Web 已更新，1 个班级、1 个课程、4 个角色保持；未重新导入或重置现场课程。升级前备份在 `.tmp/settings-demo-backup/`，原 17234 可恢复备份也保留。API 健康、/world 和 /teacher/settings 均 200。用户授权清理本项目其他 Docker 镜像/卷：旧环境 12 容器、22 卷和 34 个镜像清理项，随后删除本轮 QA 3 容器/2 卷及剩余旧标签；保留当前 API/Web 和共享 PostgreSQL 依赖，不触及 ChefMate、ZhiCluster 等其他项目。精确清单 `.tmp/settings-cleanup-old.json`、`.tmp/settings-cleanup-final.json`。
+
+data/course 仅保留最新版包及运行锁文件；旧包、导出、imports 和 10 个旧交换/临时包目录清理。可编辑题源移至 data/authoring/python-town-chapter1，备份与验收日志保留。清理路径先解析验证，清单 `.tmp/settings-package-cleanup.json`、`.tmp/settings-exchange-cleanup.json`。课程媒体、题源、环境凭据和备份不进入 Git。
+
+未执行真实 AI、远端 Judge0、S3、PPTX 转换服务、真实手机触屏或生产部署。5 项后端跳过为未配置的真实 Judge0 用例；本轮桌面浏览器覆盖不代表其他设备。提交与推送限定 reborn，原有无关文档段落和 deploy/piston-local 保留在工作区。
+
 ## 角色专属素材与提交核验2026-11-13
 
 每角色独占一份自定义立绘和一份自定义精灵，上传暂存，保存成功后回收替换/删除的旧文件；失败删除进入持久队列重试，未采用上传超过 24 小时定期回收。跨角色引用被拒绝。素材改为带缩略图的限高下拉，移除来源/授权输入；地图左侧角色项统一样式并同步地图选中。上传期间禁止保存与取消，避免迟到响应改写已放弃草稿。图书馆配置归属未改，仅明确选择器含义，后续讨论。

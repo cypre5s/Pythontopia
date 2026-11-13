@@ -295,7 +295,7 @@ def configure_fixture_world(db, instance):
         db.add(StoryDefinition(id=scoped_key(instance.id, "story", stable), stable_id=stable, course_instance_id=instance.id,
                                chapter_id=None, quest_id=None, content=content))
     state = CoursePackageState(course_instance_id=instance.id, configuration={"world": {"interactions": interactions},
-        "buildings": {"library": {"enabled": True, "default_unlocked": False, "blocked_message": "请先与镇长交谈，了解图书馆。"}}, "assistant": {"library_npc_id": "librarian_doc"}, "editor": {}})
+        "buildings": {"library": {"enabled": True, "default_unlocked": False, "blocked_message": "请先与镇长交谈，了解图书馆。"}}, "assistant": {"default_npc_id": "librarian_doc"}, "editor": {}})
     db.add(state)
     for user_id in db.scalars(select(WorldFlag.user_id).where(WorldFlag.classroom_id == instance.classroom_id, WorldFlag.key == "library_unlocked")):
         if not db.get(BuildingUnlock, (user_id, instance.classroom_id, instance.id, "library")):

@@ -1,5 +1,5 @@
 from .characters import world_character, presentation
-from .course_assistant import library_npc
+from .course_assistant import default_npc
 from typing import Annotated, Literal
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
@@ -320,7 +320,7 @@ def world_payload(db, user, classroom_id, initialize_quests=True):
             for story in db.scalars(select(StoryDefinition).where(course_clause(db, StoryDefinition, classroom_id)))),
         "player": player,
         "npcs": [world_character(db, classroom_id, npc) for npc in npcs],
-        "library_role": presentation(db, classroom_id, library_npc(db, classroom_id)),
+        "default_role": presentation(db, classroom_id, default_npc(db, classroom_id)),
         "quests": quests,
         "chapters": [
             {

@@ -81,7 +81,7 @@ export function Activities({ classroomId }: { classroomId: number }) {
     setKind(a?.kind ?? "lesson");
     setMaterial(a?.material_id ?? null);
     setPointIds(a?.knowledge_point_ids ?? []);
-    setNpc(a?.npc_key ?? course.data?.npcs[0]?.key ?? "");
+    setNpc(a?.npc_key ?? "");
     setAssistant(a?.assistant_allowed ?? true);
     setRule(a ? "keep" : "all");
     const highlights = a?.learning.highlights as
@@ -162,7 +162,7 @@ export function Activities({ classroomId }: { classroomId: number }) {
           };
         const body = {
           title,
-          npc_key: npc,
+          npc_key: npc || null,
           assistant_allowed: kind === "assessment" ? false : assistant,
           material_id: material,
           knowledge_point_ids: pointIds,
@@ -455,13 +455,14 @@ export function Activities({ classroomId }: { classroomId: number }) {
                     </div>
                   </div>
                   <div className="field">
-                    <Label htmlFor="a-npc">教学角色</Label>
+                    <Label htmlFor="a-npc">答疑角色</Label>
                     <SelectField
                       id="a-npc"
+                      placeholder="使用课程默认角色"
                       value={npc}
                       onValueChange={(value) => { setNpc(value); setDirty(true); }}
-                      required
                     >
+                      <option value="">使用课程默认角色</option>
                       {course.data?.npcs.map((n) => (
                         <option key={n.key} value={n.key}>
                           {n.name}

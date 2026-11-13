@@ -527,7 +527,7 @@ def test_teaching_roles_are_part_of_complete_package(client, db, teacher, exchan
     from app.course_exchange_models import CoursePackageState
     source, target = exchange
     state = db.get(CoursePackageState, source.id)
-    policy = {"enabled": True, "library_npc_id": "librarian_doc", "limits": {"model_calls": 1, "output_tokens": 128}}
+    policy = {"enabled": True, "default_npc_id": "librarian_doc", "limits": {"model_calls": 1, "output_tokens": 128}}
     state.configuration = {**state.configuration, "assistant": policy}
     db.commit()
     item = preview(client, teacher, target.id, export(client, teacher, source))

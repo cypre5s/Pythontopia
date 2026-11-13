@@ -53,7 +53,7 @@ export interface Activity {
   title: string;
   kind: "lesson" | "reading" | "practice" | "assessment";
   material_id: number | null;
-  npc_key: string;
+  npc_key: string | null;
   assistant_allowed: boolean;
   learning: Record<string, unknown>;
   knowledge_point_ids: number[];

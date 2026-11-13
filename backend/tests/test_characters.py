@@ -37,13 +37,13 @@ def test_unplaced_character_and_speaker_share_one_identity(client, db, teacher, 
     extra = {**deepcopy(body["npcs"][0]), "id": "assistant-only", "name": "独立助教", "persona": "PRIVATE-PERSONA", "placement": None}
     body["npcs"].append(extra)
     body["flows"][0]["content"]["nodes"][0]["speaker_npc_id"] = extra["id"]
-    body["configuration"]["assistant"]["library_npc_id"] = extra["id"]
+    body["configuration"]["assistant"]["default_npc_id"] = extra["id"]
     save(client, teacher, scene, body)
     view = start(client, student, scene).json()
     assert view["node"]["speaker"] == "独立助教"
     assert "PRIVATE-PERSONA" not in str(view)
     assert all(row["stable_id"] != extra["id"] for row in view["world"]["npcs"])
-    assert view["world"]["library_role"]["name"] == "独立助教"
+    assert view["world"]["default_role"]["name"] == "独立助教"
     current = client.get(endpoint(scene), headers=teacher["headers"]).json()
     changed = {"expected_revision": current["revision"], **{key: current[key] for key in ("npcs", "flows", "configuration", "quests")}}
     changed["npcs"][1]["name"] = "新名字"

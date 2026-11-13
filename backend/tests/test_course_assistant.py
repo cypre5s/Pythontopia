@@ -7,7 +7,7 @@ from app.course_assistant import validate_policy
 
 
 def sample():
-    return {"enabled": True, "library_npc_id": "guide",
+    return {"enabled": True, "default_npc_id": "guide",
             "limits": {"model_calls": 2, "tool_calls": 3, "output_tokens": 256, "request_tokens": 6000, "timeout_seconds": 20}}
 
 
@@ -23,7 +23,7 @@ def test_policy_rejects_privileges_and_invalid_limits(bad):
     elif bad == "boolean_budget":
         value["limits"]["tool_calls"] = True
     else:
-        value["library_npc_id"] = "outside"
+        value["default_npc_id"] = "outside"
     with pytest.raises(ValueError):
         validate_policy(value, {"activity": [{"id": "lesson"}], "npc": [{"id": "guide"}]})
 
@@ -40,7 +40,7 @@ def test_policy_role_and_budgets_apply_only_selected_class(db, teacher, student,
     source = clone_current_course(db, db.get(Classroom, classroom["id"]))
     maps = content_mapping(db, source)
     value = sample()
-    value["library_npc_id"] = "librarian_doc"
+    value["default_npc_id"] = "librarian_doc"
     npc = db.get(Npc, maps["npc"]["librarian_doc"])
     npc.name = "引导老师"
     npc.persona = "PRIVATE-PERSONA-ONLY"

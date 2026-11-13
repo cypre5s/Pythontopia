@@ -301,7 +301,7 @@ class ActivityInput(BaseModel):
     title: str = Field(min_length=1, max_length=200)
     kind: Literal["lesson", "reading", "practice", "assessment"]
     material_id: int | None = None
-    npc_key: str
+    npc_key: str | None = None
     assistant_allowed: bool = True
     knowledge_point_ids: list[int] = Field(default_factory=list, max_length=65)
     learning: dict | None = None
@@ -325,7 +325,7 @@ def create_activity(body: ActivityInput, db: Annotated[Session, Depends(get_db)]
     from .curriculum import validate_activity_points
 
     validate_activity_points(db, user, body.chapter_id, body.knowledge_point_ids, instance_id)
-    if not db.get(Npc, body.npc_key) or db.get(Npc, body.npc_key).course_instance_id != instance_id:
+    if body.npc_key is not None and (not db.get(Npc, body.npc_key) or db.get(Npc, body.npc_key).course_instance_id != instance_id):
         raise HTTPException(422, "NPC不存在")
     material = db.scalar(select(Material).where(Material.id == body.material_id).with_for_update()) if body.material_id else None
     if material:
@@ -396,9 +396,9 @@ def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Sessio
         from .curriculum import validate_activity_points
 
         validate_activity_points(db, user, item.chapter_id, new_points, instance_id)
-    if any(key in changes and changes[key] is None for key in ("title", "npc_key", "assistant_allowed")):
+    if any(key in changes and changes[key] is None for key in ("title", "assistant_allowed")):
         raise HTTPException(422, "活动必填字段不能设为空")
-    if changes.get("npc_key") and (not db.get(Npc, changes["npc_key"]) or db.get(Npc, changes["npc_key"]).course_instance_id != instance_id):
+    if "npc_key" in changes and changes["npc_key"] is not None and (not db.get(Npc, changes["npc_key"]) or db.get(Npc, changes["npc_key"]).course_instance_id != instance_id):
         raise HTTPException(422, "NPC不存在")
     if changes.get("material_id"):
         material = db.scalar(select(Material).where(Material.id == changes["material_id"]).with_for_update())

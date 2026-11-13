@@ -35,7 +35,6 @@ export function AssistantEditor({ data, onChange, classroomId, focusTarget, onUp
   const latest = useRef(data);
   const uploadGeneration = useRef(0);
   useEffect(() => { latest.current = data; }, [data]);
-  const settings = data.configuration.assistant as { enabled?: boolean; library_npc_id?: string; limits?: Record<string, number> };
   useEffect(() => () => onUploadState?.(false), [onUploadState]);
   useEffect(() => {
     const controller = new AbortController();
@@ -46,9 +45,6 @@ export function AssistantEditor({ data, onChange, classroomId, focusTarget, onUp
   }, [classroomId]);
   function updateRole(next: Character) {
     onChange({ ...data, npcs: data.npcs.map((item) => item.id === next.id ? next : item) });
-  }
-  function updateSettings(next: typeof settings) {
-    onChange({ ...data, configuration: { ...data.configuration, assistant: next } });
   }
   function addRole() {
     const item: Character = { id: newId("npc"), name: "新的教学角色", portrait: "builtin:portrait:professor",
@@ -88,32 +84,10 @@ export function AssistantEditor({ data, onChange, classroomId, focusTarget, onUp
     <Button variant="ghost" className="justify-start" disabled={busy || data.npcs.length >= 100} onClick={addRole}><Plus />新增教学角色</Button>
     {data.npcs.map((item) => <Button key={item.id} variant={selected === item.id ? "secondary" : "ghost"}
       className="justify-start" disabled={busy} onClick={() => setSelected(item.id)}><Bot /><span className="truncate">{item.name}</span></Button>)}
-  </>} toolbar={<Tabs value={section} onValueChange={value => setSection(String(value))}><TabsList aria-label="角色配置"><TabsTrigger value="basic">基础信息</TabsTrigger><TabsTrigger value="portrait">对话立绘</TabsTrigger><TabsTrigger value="sprite">像素角色</TabsTrigger><TabsTrigger value="budget">助教预算配置</TabsTrigger></TabsList></Tabs>}>
+  </>} toolbar={<Tabs value={section} onValueChange={value => setSection(String(value))}><TabsList aria-label="角色配置"><TabsTrigger value="basic">基础信息</TabsTrigger><TabsTrigger value="portrait">对话立绘</TabsTrigger><TabsTrigger value="sprite">像素角色</TabsTrigger></TabsList></Tabs>}>
     <div className="space-y-5 p-5">
       <ErrorNotice message={error} />
-      <section hidden={section !== "budget"} className="space-y-4 rounded-lg border p-4">
-    <Label className="gap-2"><Checkbox checked={settings.enabled ?? true} onCheckedChange={(enabled) => updateSettings({ ...settings, enabled })} />开放本班助教提问</Label>
-    <Label htmlFor="library-npc">在图书馆阅读时，由谁回答 AI 提问</Label>
-    <SelectField id="library-npc" value={settings.library_npc_id ?? ""} onValueChange={(value) => updateSettings({ ...settings, library_npc_id: value || undefined })}>
-      <option value="">未配置</option>
-      {data.npcs.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
-    </SelectField>
-
-<p className="hint">以下设置适用于整个班级课程。开启后，学生可在学习活动和图书馆主动向 AI 助教提问；仍需服务器配置 AI 服务。图书馆助教指定图书馆提问时显示的角色，活动助教在学习活动中分别选择。</p>
-        <h3>课程助教预算</h3>
-        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-          {([
-            ["model_calls", "每次最多模型调用", 3, 1], ["tool_calls", "每次最多工具调用", 5, 0],
-            ["output_tokens", "回复令牌上限", 512, 1], ["request_tokens", "请求令牌预算", 12000, 1],
-            ["timeout_seconds", "超时秒数", 45, 1],
-          ] as const).map(([key, label, max, min]) => <div className="field" key={key}>
-            <Label htmlFor={`budget-${key}`}>{label}</Label>
-            <Input id={`budget-${key}`} type="number" min={min} max={max} value={settings.limits?.[key] ?? max}
-              onChange={(event) => updateSettings({ ...settings, limits: { ...settings.limits, [key]: Number(event.target.value) } })} />
-          </div>)}
-        </div>
-      </section>
-      {role ? <fieldset disabled={busy} aria-busy={busy} hidden={section === "budget"} className="space-y-5">
+      {role ? <fieldset disabled={busy} aria-busy={busy} className="space-y-5">
         <div hidden={section !== "basic"} className="space-y-4">
           <div className="field"><Label htmlFor="character-name">角色名称</Label><Input id="character-name" value={role.name} maxLength={80}
             onChange={(event) => updateRole({ ...role, name: event.target.value })} /></div>

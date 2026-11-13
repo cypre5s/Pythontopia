@@ -94,7 +94,8 @@ def validate_references(data):
 
     for activity in data["activity"]:
         with located("activities", activity["id"], "npc_key", label=f"活动「{activity['title']}」"):
-            require(activity["npc_key"])
+            if activity["npc_key"] is not None:
+                require(activity["npc_key"])
     for quest in data["quest"]:
         for node in quest["definition"]["nodes"]:
             with located("quests", quest["id"], "definition", "nodes", node["id"],

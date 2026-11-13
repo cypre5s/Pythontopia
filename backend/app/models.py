@@ -129,7 +129,7 @@ class Activity(CourseContent, Base):
     material_id: Mapped[int | None] = mapped_column(ForeignKey("materials.id"), nullable=True)
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     assistant_allowed: Mapped[bool] = mapped_column(Boolean, default=True)
-    npc_key: Mapped[str] = mapped_column(String(80), default="professor")
+    npc_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
     content: Mapped[dict] = mapped_column(JSON, default=dict)
 
 

@@ -362,3 +362,5 @@ python -m app.course_package --check 'E:/course-exchange/my-course'
 课程包表格展示目录名与摘要。新导出目录格式为 export-<班级ID>-<安全课程名>-<北京时间YYYYMMDD-HHMMSS>-<8位随机串>，课程名称中的文件系统禁用字符替换为短横线，名称最多48字符。旧目录可继续使用。
 
 角色图片清理与课程交换清理共用启动/每10分钟后台周期。角色保存事务提交后立即尝试清理退休图片，失败保留在课程私有状态队列重试；未提交上传超过24小时过期。文件只允许清理所属课程的 characters 前缀，系统素材不参与清理。
+
+课程设置升级至 f318a72c90de：先备份当前环境，再执行 alembic upgrade head；一次性将存储字段 library_npc_id 改名为 default_npc_id，并允许 activities.npc_key 为空。旧包不会转换，需更新 assistant/settings.yaml 后重新校验。不要为兼容旧包恢复旧字段。课程包源仅保留 data/course/python-town-chapter1；私有包与媒体不入 Git，导出产生新目录时由教师决定保留/清理。

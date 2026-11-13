@@ -70,7 +70,7 @@ export interface Chapter {
 }
 export interface CharacterIdentity { key: string; name: string; portrait: string }
 export interface World {
-  library_role: CharacterIdentity | null;
+  default_role: CharacterIdentity | null;
   story_available?: boolean;
   player: Player;
   npcs: Npc[];
@@ -124,12 +124,12 @@ export interface Question {
   samples: { input: string; output: string }[];
 }
 export interface Activity {
-  role: CharacterIdentity;
+  role: CharacterIdentity | null;
   id: string;
   chapter_id: number;
   title: string;
   kind: string;
-  npc_key: string;
+  npc_key: string | null;
   assistant_allowed: boolean;
   material: Material | null;
   questions: Question[];

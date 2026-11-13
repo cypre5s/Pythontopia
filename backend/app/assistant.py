@@ -20,9 +20,9 @@ from .auth import current_user
 from .content_relations import material_in_chapter
 from .db import SessionLocal, get_db
 from .course_scope import course_clause, require_course_content
-from .course_assistant import CAPS, decorate_context, ensure_enabled, library_npc
+from .course_assistant import CAPS, decorate_context, ensure_enabled, default_npc
 from .integration_models import AssistantCall, AssistantSession
-from .models import Classroom, LearningRecord, Material, MaterialChapter, Npc, Submission, User
+from .models import Classroom, LearningRecord, Material, MaterialChapter, Submission, User
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 _active_tasks: dict[str, asyncio.Task] = {}
@@ -227,7 +227,7 @@ def build_context(db, user, session, activity, body):
     if body.video_time is not None and activity and activity.kind not in {"lesson", "reading"}:
         raise HTTPException(422, "此活动不是视频教学")
     if activity is None:
-        npc = library_npc(db, session.classroom_id)
+        npc = default_npc(db, session.classroom_id)
         return decorate_context(db, session.classroom_id, activity, npc, {
             "activity": {"id": None, "material_id": material.id, "title": material.title, "kind": "reading", "questions": []},
             "current_page": selected, "video_time": body.video_time, "student_code": None,
@@ -252,7 +252,8 @@ def build_context(db, user, session, activity, body):
             .limit(10)
         )
     ]
-    npc = db.get(Npc, activity.npc_key)
+    from .course_assistant import activity_npc
+    npc = activity_npc(db, session.classroom_id, activity)
     if npc:
         require_course_content(db, npc, session.classroom_id)
     return decorate_context(db, session.classroom_id, activity, npc, {

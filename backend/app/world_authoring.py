@@ -306,7 +306,7 @@ def validate_configuration(config, bundle_data):
                                      target=row_target("goal", goal, quest_id=row["id"]), code="missing_dialogue_checkpoint",
                                      suggestion="恢复原对白检查点，或同步调整这个任务目标后再保存。")
     from .course_assistant import validate_policy
-    with located("configuration", "assistant", target={"kind": "assistant"}, label="助教教学角色"):
+    with located("configuration", "assistant", target={"kind": "assistant"}, label="课程设置 · AI 助教"):
         validate_policy(config.get("assistant", {}), bundle_data)
     # Layouts are data only. The exchange parser already bounds size/depth; HTTP
     # authoring has the same explicit cap and never evaluates editor content.

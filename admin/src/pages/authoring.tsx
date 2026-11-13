@@ -516,7 +516,7 @@ function AuthoringEditor({
     if (target.kind === "interaction") return data.configuration.world.interactions?.some((item) => item.id === target.id);
     if (target.kind === "building") return data.catalog.buildings.some((item) => item.id === target.id);
     if (target.kind === "npc") return data.catalog.npcs.some((item) => item.id === target.id);
-    if (target.kind === "assistant") return true;
+    if (target.kind === "assistant") return false;
     return data.quests.some((item) => item.id === (target.quest_id ?? target.id));
   }
   const flowToolbar = (

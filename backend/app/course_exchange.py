@@ -462,7 +462,7 @@ def validate_bundle(bundle, root):
                 raise PackageError("学习活动类型或助教开关无效")
             if "question_ids" in row["content"]:
                 raise PackageError("活动题集只能声明于结构化question_ids关联")
-            if row["npc_key"] not in indexed["npc"]:
+            if row["npc_key"] is not None and row["npc_key"] not in indexed["npc"]:
                 raise PackageError("活动NPC不存在")
             material = indexed["material"].get(row["material_id"])
             if material and row["chapter_id"] not in material["chapter_ids"]:

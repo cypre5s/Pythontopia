@@ -1,0 +1,32 @@
+import { test, expect } from "@playwright/test";
+import { chooseOption, go, json, setup } from "./helpers";
+
+test("课程默认角色、活动覆盖与修订冲突草稿", async ({ page, request }, info) => {
+  const scope = await setup(page, request, "课程设置验收");
+  const path = `/api/teacher/classrooms/${scope.cid}/course/settings`;
+  await go(page, "课程设置");
+  await expect(page.getByRole("heading", { name: "课程设置", exact: true })).toBeVisible();
+  await chooseOption(page, page.getByLabel("课程默认答疑角色", { exact: true }), "回归向导");
+  await page.getByLabel("每次最多模型调用").fill("2");
+  await page.getByRole("button", { name: "保存设置", exact: true }).click();
+  await expect(page.getByRole("status")).toHaveText("课程设置已保存");
+  const saved = await json<{ revision: number; assistant: { default_npc_id: string; limits: Record<string, number> } }>(await request.get(path, { headers: scope.headers }));
+  expect(saved.assistant.default_npc_id).toBeTruthy();
+  expect(saved.assistant.limits.model_calls).toBe(2);
+  await page.reload();
+  await expect(page.getByLabel("课程默认答疑角色", { exact: true })).toContainText("回归向导");
+  await page.getByLabel("每次最多模型调用").fill("1");
+  await json(await request.put(path, { headers: scope.headers, data: { expected_revision: saved.revision, assistant: saved.assistant } }));
+  await page.getByRole("button", { name: "保存设置", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("课程已修改");
+  await expect(page.getByLabel("每次最多模型调用")).toHaveValue("1");
+  await page.screenshot({ path: info.outputPath("course-settings.png"), fullPage: true });
+  page.once("dialog", dialog => dialog.accept());
+  await page.getByRole("button", { name: "取消编辑" }).click();
+  await go(page, "学习活动");
+  await page.getByRole("button", { name: "新增活动", exact: true }).click();
+  await expect(page.getByLabel("答疑角色", { exact: true })).toContainText("使用课程默认角色");
+  await chooseOption(page, page.getByLabel("答疑角色", { exact: true }), "回归向导");
+  await expect(page.getByLabel("答疑角色", { exact: true })).toContainText("回归向导");
+  await chooseOption(page, page.getByLabel("答疑角色", { exact: true }), "使用课程默认角色");
+});
