@@ -150,6 +150,19 @@ Compose将`${REBORN_COURSE_EXCHANGE_DIR:-../data/course}`绑定到API的`/app/da
 
 imports/保存有效期24小时的导入预览目录及历史ZIP。API启动后立即尝试清理，此后每10分钟检查一次，每轮处理最多100个已完成或过期预览；清理副本后保留数据库回执，重复导入请求仍返回原结果。无数据库引用的随机名imports副本及course-catalog/apply/preview/export工作目录在超过24小时后清理。正式导出目录、共享课程包和私有媒体继续保留。清理与导入、预览、导出共用进程间排他锁，忙碌时清理跳过本轮，失败记录日志并在后续周期重试。多API进程需共用支持文件锁的同一交换目录。数据库、媒体与需要保留的交换包分别备份。
 
+### 把一个 ZIP 包变成可选课程包
+
+ZIP 上传入口已关闭，已有ZIP不会被选包列表列出。手上只有 ZIP 时，在服务器上显式解压到交换目录即可（解压后的顶层必须直接包含 `manifest.yaml`）：
+
+```bash
+cd /opt/pythontopia/shared/data/course          # 换成你的 REBORN_COURSE_EXCHANGE_DIR
+mkdir my-course && python -m zipfile -e /path/to/my-course.zip my-course
+test -f my-course/manifest.yaml && echo READY     # 顶层没有 manifest.yaml 说明多套了一层目录
+```
+
+然后在后台刷新课程包列表就能选择它。注意两点：一是解压后目录里含私有答案，不要放到任何 Web 静态目录；二是旧预览超过 24 小时后不能激活，必须重新走一次目录预览。
+
+
 ### 数据库结构升级
 
 操作目标始终使用 `python -m alembic upgrade head`，不要复制历史记录中的迁移 ID。既有升级链包含需要在线读取数据的迁移，不能以离线 `--sql` 输出替代实际升级。升级失败先看日志和备份，不手工修改 `alembic_version`，不盲目 downgrade 或新建空库掩盖问题。
@@ -182,7 +195,7 @@ docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.ym
 
 图书馆资料助教与活动助教共用下列模型配置和预算。升级到资料级会话结构前备份当前库和私有存储；执行head迁移即可，无需新建Activity、重新导入资料或重置账号。没有凭据时图书管理员入口仍保留，但真实显示不可用。
 
-基础 Compose 只透传其中列出的环境变量。给 env 文件新增变量不会自动注入容器；调整额外的 AI预算、S3或上传限制时，需使用私有 Compose override 显式传入 API。所有凭据只在后端配置，不进入前端构建。
+基础 Compose 已显式透传 AI 预算、S3、上传上限、判题 language id 与开发工具开关（见 `deploy/.env.example`）；在 `deploy/.env` 里填值即生效，留空则用代码内默认。仍不在 Compose 里的两个键：`REBORN_CORS_ORIGINS`（生产同源，仅供分离源开发）与 `REBORN_CONVERTER_IMAGE`（API 直连 Docker 的另一种模式；Compose 用 `converter` 服务，配 `REBORN_CONVERTER_URL/TOKEN`）。需要额外的自定义变量时再用私有 Compose override。所有凭据只在后端配置，不进入前端构建。
 
 ### AI助教
 
@@ -272,6 +285,10 @@ python -m pytest -q --basetemp .pytest-local
 Windows测试进程显式使用UTF-8，避免旧夹具的默认文本读取采用系统GBK；这些设置只影响当前终端及其子进程，不修改系统语言。pytest临时目录保持在项目忽略目录内。
 
 自动化测试使用 backend/tests/source_fixtures.py 和 tests/fixtures/teaching-scripts 的合成课程，不代表原教材正确。fixture_seed/fixture_package/fixture_instances 仅位于 tests，不是运行导入入口。浏览器测试包通过 PYTHONPATH=tests 调用 fixture_package 生成 v2 目录，放入独立交换区；课程包 ID 通过 REBORN_E2E_COURSE_PACKAGE 指定。全新隔离数据库执行迁移、重复升级和包重复导入检查。PostgreSQL并发专项需要显式 `REBORN_TEST_DATABASE_URL`，测试会创建临时 schema 并清理，不能指向真实演示库或生产库。live Judge0测试需要 `REBORN_LIVE_JUDGE0_URL`，鉴权仍用 `REBORN_JUDGE0_AUTH_TOKEN`；未配置的外部专项应记录为跳过。
+
+全量串行约 4 分钟。本机想快些可装 `pytest-xdist` 后加 `-n 8`（实测 258s → 约 55s，4–5 倍），但它**目前不能当门禁**：并行调度会把已有的用例间隔离问题暴露出来，`tests/test_course_exchange.py` 会随机挂 1–2 条（`422 课程包读取失败`）；未改动的 HEAD 上同样能复现，属既有问题。CI 保持串行；并行只用于本地快速反馈，失败时用串行结果为准。
+
+自动化测试使用backend/tests/source_fixtures.py生成的人工构造资料与tests/fixtures/teaching-scripts，不依赖私有原教材，也不能拿合成夹具声称原教材正确。显式执行来源工具或重复seed前，从仓库根运行`python backend/tests/source_fixtures.py`并将REBORN_COURSE_ROOT指向生成目录、REBORN_CONTENT_ROOT指向教学测试脚本。另在全新隔离数据库执行前述迁移与重复seed检查。PostgreSQL并发专项需要显式 `REBORN_TEST_DATABASE_URL`，测试会创建临时 schema 并清理，不能指向真实演示库或生产库。live Judge0测试需要 `REBORN_LIVE_JUDGE0_URL`，鉴权仍用 `REBORN_JUDGE0_AUTH_TOKEN`；未配置的外部专项应记录为跳过。
 
 地图/素材相关修改从仓库根检查：
 

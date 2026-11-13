@@ -74,10 +74,10 @@ Paused policy denies new content/progress/assistant requests immediately and pre
 - GET /teacher/classrooms/{id}/course：返回id/classroom_id/package_id/name/package_version/revision；无实例为null。
 - POST /teacher/classrooms/{id}/course/empty {confirmed:true,name}：创建空课程，已有实例幂等返回。不会自动生成章节、题目、NPC或交互。
 - GET /teacher/classrooms/{id}/course/ids：教师可查看九类实体的stable_id→当前运行ID映射，用于迁移/受控集成，不能用于越班查询。
-- POST /teacher/classrooms/{id}/course/imports/preview：multipart file上传ZIP，返回id、expected_revision、expires_at（24小时）、can_apply、package_id/package_version/name、diff（各类added/updated/removed）、blockers、warnings、learning_impact。校验或预览不等于激活。
-- GET /teacher/classrooms/{id}/course/packages 返回 `{items:[{key,name,package_id,package_version,source}],unavailable}`。`source` 为 `mounted` 或 `uploaded`。挂载目录只列可读的清单，上传包限本人和本班。POST /teacher/classrooms/{id}/course/imports/available/preview 接受 `{package_key}`，执行与上传一致的校验并返回相同预览结构。响应不暴露文件系统路径。
+- POST /teacher/classrooms/{id}/course/imports/preview：**已关闭，固定返回 410**（ZIP 上传入口不再开放）。要导入请把解压后的目录包放入私有 `data/course/`，改用下面的 `imports/available/preview`；返回结构（id、expected_revision、expires_at 24 小时、can_apply、diff、blockers、warnings、learning_impact）不变。校验或预览不等于激活。
+- GET /teacher/classrooms/{id}/course/packages 返回 `{items:[{key,name,package_id,package_version,source}],unavailable}`。当前只列私有交换目录里的**解压目录包**（`source=mounted`）及本班自己的导出目录；其他班级的导出目录不可选。POST /teacher/classrooms/{id}/course/imports/available/preview 接受 `{package_key}`，对目录创建私有副本并计算内容指纹，执行与预览一致的校验并返回相同预览结构。响应不暴露文件系统路径。
 - POST /teacher/classrooms/{id}/course/imports/{preview_id}/apply {request_id:UUID,expected_revision:int>=0}：返回instance_id/revision/package_id/package_version/duplicate。重复请求保持原回执；包被篡改、预览过期、修订冲突、影响学习记录或进行中会话时拒绝，旧课程保留。
-- GET /teacher/classrooms/{id}/course/export：完整ZIP附件，private/no-store；覆盖未归类、草稿、停用、未选用内容和私有答案/媒体，不包含账号、成员、学习记录或部署密钥。缺失/转换中的媒体不能导出为完整包。
+- GET /teacher/classrooms/{id}/course/export：把完整课程原子发布为私有交换目录 `data/course/export-<班级ID>-<随机ID>/` 并返回 `{directory,path}`（不再是ZIP附件）；覆盖未归类、草稿、停用、未选用内容和私有答案/媒体，不包含账号、成员、学习记录或部署密钥。缺失/转换中的媒体不能导出为完整包。
 
 原始包、预览和答案只供授权教师。学生只获得过滤后的运行DTO；secrets目录名本身不构成权限边界。课程文件保存在REBORN_COURSE_EXCHANGE_ROOT，运行媒体保存在原私有存储，两者不是公开静态路径。
 

@@ -175,6 +175,16 @@ Linux隔离容器后端全量541通过、17按环境条件跳过，保留2条SQL
 
 教师端锁定安装、34项测试、类型检查、Lint和构建通过；后端改动文件Ruff及课程交换37项回归通过，2项真实PostgreSQL测试按环境跳过。首次后端测试因系统临时目录权限失败，改用项目内独立目录后通过。证据在 `.tmp/package-table-final.log`、`.tmp/package-table-admin.log`、`.tmp/package-table-ci.log`。本地17234已重建API和Web，健康接口正常，浏览器1707×927实测完整名称、日期、7章/42题及目录名可见。构建日志 `.tmp/package-table-build.log`，锁定安装镜像层复用缓存。未重跑全量后端、学生端单测、独立空库/重复seed、端到端导入往返及真实AI/Judge0。
 
+## 问题清单修复核验2026-11-13
+
+范围：`reborn` 工作区 `953b8847` 之上的工程修复第一批（问题清单第 1、3（字符串部分）、4、6 条）。未改后端代码，未部署，未改数据库结构。
+
+- 前端：`typecheck`、`lint`、212 项单测、`build` 通过。`e2e/worldConfiguration.spec.ts` 的书架断言改回“打开阅读文库”（删掉不存在的“先弹对白”期望）。**该 e2e 未在本机执行**：需要完整 API+双前端栈；依据是 CI 失败产物（页面快照显示工作区已直接打开）与 11-08 绿灯版同位置断言，实际结果待推送后的浏览器任务确认。
+- 部署配置：本机无 Docker，仅做 `compose.yml` 的 YAML 解析与 `.env.example` 键覆盖检查（Compose 引用的变量都有对应键，含 `REBORN_COURSE_EXCHANGE_DIR`）。未 `docker compose config`、未启动容器。
+- 文档与门禁：`node scripts/check-docs.mjs` 的浅克隆降级路径与 `--fetch` 全量路径均通过；`git diff --check` 干净。CI 新增 `docs` 任务执行 `--fetch`。
+- 未执行：真实 PostgreSQL 空库迁移/重复 seed、浏览器全量回归、外部 AI/Judge0、任何服务器部署、ZONOS3 语音基准（`deploy/tts` 脚本未运行）。
+- 已知未归属问题：`tests/test_course_exchange.py` 与 `tests/test_course_cleanup.py` 一起跑时偶发 1–2 例失败（`422 课程包读取失败`，用例每次不同）；在提交 `953b8847` 上连跑 3 次为全绿，在合并我的改动后失败率升高，疑与新增的文件锁 `exchange_guard` 和后台 `cleanup_worker` 的交互有关，尚待隔离验证；本批已把触碰该路径的后端改动挪出，不做结论。
+
 ## 目录课程包与多轮对白提交核验2026-11-13
 
 浏览器夹具改从私有交换目录选包。隔离 SQLite 环境完成空库迁移，Edge 下教师端多轮对白编辑和目录包导出、重新导入回归通过，学生端主线完成及账号隔离回归通过，各运行一项。教师端首轮因仍引用旧的对白输入框标签失败，改用逐轮输入框后复测通过。本轮未重跑全量套件、真实 PostgreSQL、外部 AI 或 Judge0。
