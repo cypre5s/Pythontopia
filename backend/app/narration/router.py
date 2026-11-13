@@ -14,13 +14,18 @@ from ..auth import current_user, require_teacher
 from ..db import get_db
 from ..models import Material, User
 from ..teacher_scope import require_scope, teacher_instance_id
-from . import audio, calibrate
+from . import ask, audio, calibrate
 from . import client as model_client
 from . import repository, service
 from . import tts
 
 router = APIRouter(prefix="/teacher/classrooms/{classroom_id}/materials/{material_id}/narrations", tags=["narration"])
 student_router = APIRouter(prefix="/materials/{material_id}/narrations", tags=["narration"])
+
+
+class QuestionInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    question: str
 
 
 class NarrationInput(BaseModel):
@@ -328,3 +333,28 @@ def stream_narration_audio(page_no: int, material_id: int, classroom_id: int,
     item, path = found
     return FileResponse(path, media_type="audio/mpeg", filename=f"narration-{material.id}-{page_no}.mp3",
                         headers={"Cache-Control": "private, max-age=600"})
+
+
+@student_router.post("/{page_no}/ask")
+def ask_about_page(page_no: int, material_id: int, classroom_id: int, body: QuestionInput,
+                   db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
+    """One explicit student question = one model call, scoped to this page."""
+    from ..courses import authorize_material
+
+    material = authorize_material(db, user, classroom_id, material_id)
+    repository.sync_staleness(db, material)
+    db.commit()
+    try:
+        result = ask.answer(db, material, page_no, body.question, user=user)
+    except PermissionError as exc:
+        raise HTTPException(429, str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except model_client.ModelUnavailable as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except model_client.ModelFailed as exc:
+        raise HTTPException(502, str(exc)) from exc
+    db.commit()
+    return result

@@ -23,6 +23,31 @@
         <audio v-if="audioUrl" controls autoplay :src="audioUrl" aria-label="本页讲解音频"></audio>
         <small v-if="audioError" class="narration-audio-error">{{ audioError }}</small>
       </div>
+      <form class="narration-ask" @submit.prevent="submitQuestion">
+        <label for="narration-question">就这页提问</label>
+        <div class="narration-ask-row">
+          <input
+            id="narration-question"
+            v-model="question"
+            type="text"
+            maxlength="500"
+            placeholder="例如：这页的 fit 和 transform 有什么区别？"
+            :disabled="sending"
+            autocomplete="off"
+          />
+          <button type="submit" class="town-secondary" :disabled="sending || !question.trim()">
+            {{ sending ? "思考中…" : "提问" }}
+          </button>
+        </div>
+        <p v-if="askError" class="narration-ask-error" role="alert">{{ askError }}</p>
+        <div v-if="answer" class="narration-answer" role="status">
+          <p>{{ answer.answer }}</p>
+          <small>
+            依据第 {{ answer.cites.join("、") || "—" }} 页
+            <template v-if="typeof answer.remaining === 'number'">· 今日还可提问 {{ answer.remaining }} 次</template>
+          </small>
+        </div>
+      </form>
       <p class="narration-source">AI 生成 · 教师已审校。讲解是辅助材料，不替代课件原文，也不计入阅读完成。</p>
     </div>
   </section>
@@ -47,6 +72,8 @@ const session = useSession();
 const pages = ref<NarrationPage[]>([]);
 const open = ref(false);
 const audioUrl = ref(""), audioError = ref(""), loadingAudio = ref(false);
+const question = ref(""), sending = ref(false), askError = ref("");
+const answer = ref<{ answer: string; cites: number[]; remaining?: number } | null>(null);
 let generation = 0;
 
 const current = computed(() => pages.value.find((item) => item.page_no === props.pageNo) ?? null);
@@ -59,6 +86,27 @@ function releaseAudio() {
   if (audioUrl.value) URL.revokeObjectURL(audioUrl.value);
   audioUrl.value = "";
   audioError.value = "";
+}
+
+async function submitQuestion() {
+  const classroomId = session.classroomId;
+  const page = current.value;
+  const text = question.value.trim();
+  if (classroomId === null || !page || !text || sending.value) return;
+  sending.value = true;
+  askError.value = "";
+  answer.value = null;
+  try {
+    answer.value = await api.post<{ answer: string; cites: number[]; remaining?: number }>(
+      `/materials/${props.materialId}/narrations/${page.page_no}/ask?classroom_id=${classroomId}`,
+      { question: text },
+    );
+    question.value = "";
+  } catch (reason) {
+    askError.value = reason instanceof Error ? reason.message : "提问失败，请稍后重试";
+  } finally {
+    sending.value = false;
+  }
 }
 
 async function loadAudio() {
@@ -95,7 +143,12 @@ async function load() {
 }
 
 watch(() => props.materialId, () => void load(), { immediate: true });
-watch(() => props.pageNo, releaseAudio);
+watch(() => props.pageNo, () => {
+  releaseAudio();
+  // An answer belongs to the page it was asked on.
+  answer.value = null;
+  askError.value = "";
+});
 onBeforeUnmount(releaseAudio);
 </script>
 <style scoped>
@@ -110,6 +163,14 @@ onBeforeUnmount(releaseAudio);
 .narration-audio audio { flex: 1 1 min(320px, 100%); min-width: 0; }
 .narration-audio small { color: #8a775c; }
 .narration-audio-error { color: #8a4b32; }
+.narration-ask { margin-top: 16px; padding-top: 14px; border-top: 1px dashed #d9c9ad; display: grid; gap: 8px; }
+.narration-ask > label { color: #354d42; font-size: .9375rem; }
+.narration-ask-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.narration-ask-row input { flex: 1 1 min(260px, 100%); min-width: 0; min-height: 44px; padding: 0 12px; border: 1px solid #d9c9ad; border-radius: 8px; background: #fff; font: inherit; }
+.narration-answer { padding: 12px; border-radius: 8px; background: #f5f0e2; }
+.narration-answer p { margin: 0 0 8px; white-space: pre-wrap; line-height: 1.8; }
+.narration-answer small, .narration-ask-error { color: #8a775c; }
+.narration-ask-error { color: #8a4b32; }
 .narration-source { margin: 12px 0 0; color: #8a775c; font-size: .8125rem; }
 @media (max-width: 700px) { .narration-toggle { padding: 12px; } .narration-body { padding: 0 12px 14px; } }
 </style>

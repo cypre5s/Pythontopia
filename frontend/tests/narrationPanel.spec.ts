@@ -3,7 +3,7 @@ import { flushPromises, mount } from "@vue/test-utils";
 import NarrationPanel from "../src/features/NarrationPanel.vue";
 import { api } from "../src/shared/api";
 
-vi.mock("../src/shared/api", () => ({ api: { get: vi.fn(), blob: vi.fn() } }));
+vi.mock("../src/shared/api", () => ({ api: { get: vi.fn(), blob: vi.fn(), post: vi.fn() } }));
 vi.mock("../src/shared/session", () => ({
   useSession: () => ({ classroomId: 7, user: { id: 1 } }),
 }));
@@ -62,6 +62,28 @@ describe("NarrationPanel", () => {
     // Moving to a page without audio drops the previous clip.
     await wrapper.setProps({ pageNo: 2 });
     expect(wrapper.find(".narration-audio").exists()).toBe(false);
+  });
+
+  it("asks about the current page and shows the anchored answer", async () => {
+    vi.mocked(api.post).mockResolvedValue({ answer: "fit 学参数，transform 只换算。", cites: [1], remaining: 4 });
+    const wrapper = mount(NarrationPanel, { props: { materialId: 3, pageNo: 1 } });
+    await flushPromises();
+    await wrapper.get("button").trigger("click");
+    const input = wrapper.get("#narration-question");
+    await input.setValue("fit 和 transform 有什么区别？");
+    await wrapper.get(".narration-ask form, form.narration-ask").trigger("submit");
+    await flushPromises();
+    expect(api.post).toHaveBeenCalledWith(
+      "/materials/3/narrations/1/ask?classroom_id=7",
+      { question: "fit 和 transform 有什么区别？" },
+    );
+    expect(wrapper.get(".narration-answer").text()).toContain("fit 学参数");
+    expect(wrapper.get(".narration-answer").text()).toContain("今日还可提问 4 次");
+    expect(wrapper.get<HTMLInputElement>("#narration-question").element.value).toBe("");
+
+    // Switching pages clears the previous answer.
+    await wrapper.setProps({ pageNo: 2 });
+    expect(wrapper.find(".narration-answer").exists()).toBe(false);
   });
 
   it("renders nothing when the page has no approved narration, and survives fetch errors", async () => {

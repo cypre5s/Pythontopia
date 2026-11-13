@@ -47,7 +47,8 @@ def test_teacher_authors_reviews_and_student_sees_only_approved(client, db, clas
 
     shown = client.get(f"/api/materials/{material.id}/narrations?classroom_id={classroom['id']}", headers=student["headers"])
     assert shown.status_code == 200, shown.text
-    assert shown.json()["pages"] == [{"page_no": 1, "text": "这一页讲变量。", "bridge_in": "", "target_seconds": 60}]
+    assert shown.json()["pages"] == [{"page_no": 1, "text": "这一页讲变量。", "bridge_in": "", "target_seconds": 60,
+                                       "audio": False, "audio_seconds": None}]
 
     # Rejecting the approval hides it again.
     assert client.post(url(classroom, material, "/1/reject"), headers=teacher["headers"]).status_code == 200
