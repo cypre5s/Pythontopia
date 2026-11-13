@@ -1,7 +1,7 @@
 import { SelectField } from "@/components/select-field";
 import { DeleteSelection, SelectTablePage, SelectTableRow, useTableDelete } from "@/components/table-delete";
 import { useEffect, useState, type FormEvent } from "react";
-import { Plus, Pencil, Trash2, Search, Eye, FileUp } from "lucide-react";
+import { Plus, Pencil, Trash2, Search, Eye, FileUp, NotebookPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +30,7 @@ import {
   Pager,
 } from "@/components/common";
 import { api, scoped, errorMessage, fileBlob } from "@/lib/api";
+import { NarrationReview } from "@/components/narration-review";
 import { useResource } from "@/lib/use-resource";
 import { useDraft } from "@/lib/drafts";
 import type { Material, Course } from "@/lib/types";
@@ -64,7 +65,8 @@ export function Materials({ classroomId }: { classroomId: number }) {
     [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [dirty, setDirty] = useState(false),
-    [previewData, setPreviewData] = useState<MaterialPreview | null>(null);
+    [previewData, setPreviewData] = useState<MaterialPreview | null>(null),
+    [narration, setNarration] = useState<Material | null>(null);
   useDraft(dirty);
   useEffect(() => {
     if (
@@ -254,6 +256,15 @@ export function Materials({ classroomId }: { classroomId: number }) {
                       <Button
                         variant="ghost"
                         size="icon"
+                        aria-label={`讲解${m.title}`}
+                        disabled={busy || m.status !== "ready"}
+                        onClick={() => setNarration(m)}
+                      >
+                        <NotebookPen />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
                         aria-label={`编辑${m.title}`}
                         onClick={() => edit(m)}
                       >
@@ -369,6 +380,14 @@ export function Materials({ classroomId }: { classroomId: number }) {
         <MaterialViewer
           material={previewData}
           onClose={() => setPreviewData(null)}
+        />
+      )}
+      {narration && (
+        <NarrationReview
+          classroomId={classroomId}
+          materialId={narration.id}
+          title={narration.title}
+          onClose={() => setNarration(null)}
         />
       )}
     </>

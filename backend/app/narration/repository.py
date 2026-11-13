@@ -69,6 +69,8 @@ def snapshot(material: Material, item: PageNarration | None, page: dict | None) 
         "title": (page or {}).get("title") or "",
         "has_text": bool(text.strip()),
         "source_chars": len(text),
+        # Teacher review compares the wording against the page, so send a bounded copy.
+        "source_text": text[:2000],
         "narration": None if item is None else {
             "text": item.text,
             "bridge_in": item.bridge_in,
