@@ -55,6 +55,13 @@ function stub(calls: { url: string; method: string; body?: unknown }[], override
       const method = init.method ?? "GET";
       if (method !== "GET") calls.push({ url, method, body: init.body ? JSON.parse(init.body as string) : undefined });
       if (url.endsWith("/quota")) return json({ used_today: 4, daily_limit: 300, available: true });
+      if (url.endsWith("/audio"))
+        return json({
+          available: true,
+          voice: "Meilin",
+          model: "zonos3-mini",
+          pages: [{ page_no: 1, status: "draft", ready: false, seconds: null }],
+        });
       if (url.endsWith("/narrations")) return json(overrides.list ?? list);
       if (url.endsWith("/calibrate"))
         return json({ id: 1, windows: 1, pages: 2, summary: "整体连贯", terms: ["监督学习"], issues: [] });
@@ -91,6 +98,15 @@ it("accepting is blocked until an edited draft is saved", async () => {
   const saved = calls.find((call) => call.method === "PUT")!;
   expect(saved.url).toContain("/teacher/classrooms/3/materials/7/narrations/1");
   expect(saved.body).toEqual({ text: "这一页先看监督学习的定义。再看标签。" });
+});
+
+it("keeps audio generation disabled until the page is accepted", async () => {
+  stub([]);
+  render(<NarrationReview classroomId={3} materialId={7} title="第 1 讲" onClose={() => {}} />);
+  await waitFor(() => expect(screen.getByText("音色 Meilin · zonos3-mini")).toBeTruthy());
+  const audio = screen.getByRole("button", { name: /生成音频/ });
+  expect(audio).toBeDisabled();
+  expect(screen.getByRole("button", { name: /试听/ })).toBeDisabled();
 });
 
 it("generate and calibrate hit the scoped endpoints", async () => {

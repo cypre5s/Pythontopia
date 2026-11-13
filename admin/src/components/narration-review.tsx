@@ -1,13 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import { AlertTriangle, Check, ChevronLeft, ChevronRight, ListChecks, RotateCcw, Save, Sparkles, Trash2, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, ListChecks, Play, RotateCcw, Save, Sparkles, Trash2, Volume2, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ErrorNotice, Loading } from "@/components/common";
-import { errorMessage } from "@/lib/api";
-import { narrationApi, type CalibrationReport, type NarrationList, type NarrationPage, type NarrationQuota } from "@/lib/narration";
+import { errorMessage, fileBlob } from "@/lib/api";
+import {
+  narrationApi,
+  type CalibrationReport,
+  type NarrationAudioStatus,
+  type NarrationList,
+  type NarrationPage,
+  type NarrationQuota,
+} from "@/lib/narration";
 
 const STATUS: Record<string, { label: string; tone: string }> = {
   draft: { label: "待审", tone: "bg-amber-100 text-amber-900" },
@@ -37,6 +44,8 @@ export function NarrationReview({
   const [data, setData] = useState<NarrationList | null>(null);
   const [quota, setQuota] = useState<NarrationQuota | null>(null);
   const [report, setReport] = useState<CalibrationReport | null>(null);
+  const [audioState, setAudioState] = useState<NarrationAudioStatus | null>(null);
+  const [clip, setClip] = useState("");
   const [pageNo, setPageNo] = useState<number | null>(null);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState("");
@@ -47,12 +56,14 @@ export function NarrationReview({
     setBusy("load");
     setError("");
     try {
-      const [list, limits] = await Promise.all([
+      const [list, limits, sound] = await Promise.all([
         narrationApi.list(classroomId, materialId),
         narrationApi.quota(classroomId, materialId),
+        narrationApi.audioStatus(classroomId, materialId),
       ]);
       setData(list);
       setQuota(limits);
+      setAudioState(sound);
       setPageNo((current) => current ?? list.pages[0]?.page_no ?? null);
     } catch (e) {
       setError(errorMessage(e));
@@ -88,6 +99,7 @@ export function NarrationReview({
     }
   }
 
+  const audioPage = audioState?.pages.find((item) => item.page_no === pageNo);
   const navigation = () => {
     const pages = data?.pages ?? [];
     const index = pages.findIndex((item) => item.page_no === pageNo);
@@ -288,6 +300,57 @@ export function NarrationReview({
                       <Trash2 /> 删除
                     </Button>
                   </div>
+                  <section className="space-y-2 rounded border p-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Label className="m-0">讲解音频</Label>
+                      <span className="hint">
+                        {audioState?.available === false
+                          ? "未配置语音合成服务"
+                          : audioState
+                            ? `音色 ${audioState.voice} · ${audioState.model}`
+                            : ""}
+                      </span>
+                      {audioPage?.ready ? (
+                        <Badge variant="secondary">{audioPage.seconds ? `约 ${audioPage.seconds} 秒` : "已就绪"}</Badge>
+                      ) : (
+                        <Badge variant="secondary">未生成</Badge>
+                      )}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={Boolean(busy) || audioState?.available === false || page.narration?.status !== "accepted"}
+                        title={page.narration?.status !== "accepted" ? "先接受本页讲解再生成音频" : undefined}
+                        onClick={() => void run("audio", () => narrationApi.synthesizeAudio(classroomId, materialId, page.page_no), "本页音频已生成")}
+                      >
+                        <Volume2 /> {busy === "audio" ? "合成中…" : audioPage?.ready ? "重新合成" : "生成音频"}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={Boolean(busy) || !audioPage?.ready}
+                        onClick={() =>
+                          void (async () => {
+                            setBusy("listen");
+                            setError("");
+                            try {
+                              const blob = await fileBlob(narrationApi.audioFile(classroomId, materialId, page.page_no));
+                              setClip((previous) => {
+                                if (previous) URL.revokeObjectURL(previous);
+                                return URL.createObjectURL(blob);
+                              });
+                            } catch (e) {
+                              setError(errorMessage(e));
+                            } finally {
+                              setBusy("");
+                            }
+                          })()
+                        }
+                      >
+                        <Play /> 试听
+                      </Button>
+                    </div>
+                    {clip && <audio controls autoPlay src={clip} className="w-full" aria-label="讲解音频试听" />}
+                  </section>
                   <div className="flex items-center gap-2">
                     <Label htmlFor="jump">跳到页码</Label>
                     <Input

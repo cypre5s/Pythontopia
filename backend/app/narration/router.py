@@ -257,6 +257,24 @@ def synthesize_audio(page_no: int, classroom_id: int, material_id: int, db: Anno
     return result
 
 
+@router.get("/{page_no}/audio/file")
+def stream_teacher_audio(page_no: int, classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
+                         user: Annotated[User, Depends(require_teacher)]):
+    """Let the teacher hear exactly what the student will hear."""
+    from fastapi.responses import FileResponse
+
+    instance_id = teacher_instance_id(db, user, classroom_id)
+    material = require_scope(db.get(Material, material_id), instance_id)
+    repository.sync_staleness(db, material)
+    db.commit()
+    found = audio.read_audio(db, material, page_no)
+    if found is None:
+        raise HTTPException(404, "本页还没有可播放的讲解音频")
+    _, path = found
+    return FileResponse(path, media_type="audio/mpeg", filename=f"narration-{material.id}-{page_no}.mp3",
+                        headers={"Cache-Control": "private, max-age=60"})
+
+
 @router.get("/audio")
 def read_audio_status(classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
                       user: Annotated[User, Depends(require_teacher)]):
@@ -288,7 +306,9 @@ def read_narrations(material_id: int, classroom_id: int, db: Annotated[Session, 
     return {
         "material_id": material.id,
         "pages": [{"page_no": item.page_no, "text": item.text, "bridge_in": item.bridge_in,
-                   "target_seconds": item.target_seconds} for item in repository.visible(db, material)],
+                   "target_seconds": item.target_seconds,
+                   "audio": audio.current_audio(db, material, item.page_no) is not None,
+                   "audio_seconds": item.audio_seconds} for item in repository.visible(db, material)],
     }
 
 

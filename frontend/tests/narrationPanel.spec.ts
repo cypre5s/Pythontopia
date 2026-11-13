@@ -3,19 +3,20 @@ import { flushPromises, mount } from "@vue/test-utils";
 import NarrationPanel from "../src/features/NarrationPanel.vue";
 import { api } from "../src/shared/api";
 
-vi.mock("../src/shared/api", () => ({ api: { get: vi.fn() } }));
+vi.mock("../src/shared/api", () => ({ api: { get: vi.fn(), blob: vi.fn() } }));
 vi.mock("../src/shared/session", () => ({
   useSession: () => ({ classroomId: 7, user: { id: 1 } }),
 }));
 
 const pages = [
-  { page_no: 1, text: "第一页讲监督学习。", bridge_in: "", target_seconds: 90 },
-  { page_no: 2, text: "第二页讲无监督学习。", bridge_in: "接着上一页看没有标签的情况。", target_seconds: 60 },
+  { page_no: 1, text: "第一页讲监督学习。", bridge_in: "", target_seconds: 90, audio: true, audio_seconds: 80 },
+  { page_no: 2, text: "第二页讲无监督学习。", bridge_in: "接着上一页看没有标签的情况。", target_seconds: 60, audio: false },
 ];
 
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(api.get).mockResolvedValue({ material_id: 3, pages });
+  vi.mocked(api.blob).mockResolvedValue(new Blob(["audio"], { type: "audio/mpeg" }));
 });
 
 afterEach(() => vi.clearAllMocks());
@@ -44,6 +45,23 @@ describe("NarrationPanel", () => {
     expect(wrapper.get(".narration-text").text()).toBe("第二页讲无监督学习。");
     expect(wrapper.get(".narration-bridge").text()).toContain("接着上一页");
     expect(wrapper.text()).toContain("约 1 分钟");
+  });
+
+  it("plays the approved recording when the page has one", async () => {
+    vi.stubGlobal("URL", { ...URL, createObjectURL: vi.fn(() => "blob:audio"), revokeObjectURL: vi.fn() });
+    const wrapper = mount(NarrationPanel, { props: { materialId: 3, pageNo: 1 } });
+    await flushPromises();
+    await wrapper.get("button").trigger("click");
+    const audioButton = wrapper.get(".narration-audio button");
+    expect(audioButton.text()).toContain("听本页讲解");
+    await audioButton.trigger("click");
+    await flushPromises();
+    expect(api.blob).toHaveBeenCalledWith("/materials/3/narrations/1/audio?classroom_id=7");
+    expect(wrapper.get("audio").attributes("src")).toBe("blob:audio");
+
+    // Moving to a page without audio drops the previous clip.
+    await wrapper.setProps({ pageNo: 2 });
+    expect(wrapper.find(".narration-audio").exists()).toBe(false);
   });
 
   it("renders nothing when the page has no approved narration, and survives fetch errors", async () => {

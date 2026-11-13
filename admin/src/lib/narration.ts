@@ -43,6 +43,13 @@ export interface NarrationList {
   pages: NarrationPage[];
 }
 
+export interface NarrationAudioStatus {
+  available: boolean;
+  voice: string;
+  model: string;
+  pages: { page_no: number; status: string; ready: boolean; seconds: number | null }[];
+}
+
 export interface NarrationQuota {
   used_today: number;
   daily_limit: number;
@@ -98,4 +105,13 @@ export const narrationApi = {
     api.get<CalibrationReport>(`${base(classroomId, materialId)}/calibrate`),
   applyCalibration: (classroomId: number, materialId: number) =>
     api.post<CalibrationReport["applied_pages"]>(`${base(classroomId, materialId)}/calibrate/apply`, {}),
+  audioStatus: (classroomId: number, materialId: number) =>
+    api.get<NarrationAudioStatus>(`${base(classroomId, materialId)}/audio`),
+  synthesizeAudio: (classroomId: number, materialId: number, pageNo: number) =>
+    api.post<{ page_no: number; reused: boolean; key: string; seconds: number }>(
+      `${base(classroomId, materialId)}/${pageNo}/audio`,
+      {},
+    ),
+  audioFile: (classroomId: number, materialId: number, pageNo: number) =>
+    `/teacher/classrooms/${classroomId}/materials/${materialId}/narrations/${pageNo}/audio/file`,
 };
