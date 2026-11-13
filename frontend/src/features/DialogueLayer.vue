@@ -139,7 +139,7 @@ onBeforeUnmount(() => {
 .dialogue-layer .portrait { display:block;position:absolute;left:50%;transform:translateX(-50%);width:auto;height:145%;max-width:none;max-height:none;object-fit:contain;object-position:left top;filter:drop-shadow(4px 8px 10px #10171b88); }
 .dialogue-box { position:relative;flex:none;width:100%;max-width:1500px;max-height:63dvh;min-height:260px;overflow:auto;padding:24px 32px 18px max(30%,220px);border:2px solid #af8b50;border-radius:8px;background:radial-gradient(ellipse at 20% 0,#45392eeb,#242020f5 80%);box-shadow:inset 0 0 0 4px #211e1b,inset 0 0 0 5px #8f71443b,0 12px 40px #10191866;color:#f0dfbb; }
 .dialogue-box:focus { outline:none; }
-.dialogue-box:focus-visible { outline:2px solid #e7c884;outline-offset:3px; }
+.dialogue-box:focus-visible { outline:none;border-color:#e7c884; }
 .dialogue-heading { display:flex;align-items:center;justify-content:space-between;margin-bottom:14px; }
 .dialogue-box .eyebrow { margin:0;display:inline-block;background:#30291f;border:1px solid #b48d4e;border-radius:8px 22px 8px 22px;padding:8px 24px;color:#f0ce8d;font-size:1.25rem;letter-spacing:.04em;box-shadow:inset 0 0 0 3px #ad864c22; }
 .dialogue-box .eyebrow span { color:#c3ad87;font-size:.75rem; }

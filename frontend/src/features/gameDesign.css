@@ -11,7 +11,6 @@
   --game-radius: 10px;
   --game-control-radius: 8px;
   --game-gap: 10px;
-  --game-focus: #b7812e;
   --game-scroll-thumb: #a99b7e;
   color: var(--game-ink);
   color-scheme: light;
@@ -65,7 +64,7 @@
 .game-workspace .workspace-topbar .workspace-back { background: #203b32b8; }
 .game-workspace .workspace-topbar button > .game-icon { width: 18px; height: 18px; }
 .game-workspace .workspace-topbar button > span { display: inline; }
-.game-workspace .workspace-topbar :is(button, a):focus-visible { outline-color: #ffe8aa; box-shadow: none; }
+.game-workspace .workspace-topbar :is(button, a):focus-visible { border-color: #ffe8aa; background-color: #355646; box-shadow: none; }
 
 /* Keep native semantics, labels and keyboard behavior; share the visual treatment. */
 .game-workspace, .game-workspace * { scrollbar-width: thin; scrollbar-color: var(--game-scroll-thumb) transparent; }
@@ -73,7 +72,9 @@
 .game-workspace ::-webkit-scrollbar-track, .game-workspace ::-webkit-scrollbar-corner { background: transparent; }
 .game-workspace ::-webkit-scrollbar-thumb { background: var(--game-scroll-thumb); border: 2px solid transparent; background-clip: padding-box; border-radius: 8px; }
 .game-workspace ::-webkit-scrollbar-thumb:hover { background-color: #83745c; }
-.game-workspace :is(button, a, input, textarea, select, summary, [tabindex]):focus-visible { outline: 3px solid var(--game-focus); outline-offset: 3px; box-shadow: none; }
+.game-workspace :is(button, a, input, textarea, select, summary, [tabindex]):focus-visible { outline: none; border-color: var(--game-forest); box-shadow: none; }
+.game-workspace :is(button, summary):focus-visible { background-color: #e8eddf; color: var(--game-forest); text-decoration: underline; text-underline-offset: 3px; }
+.game-workspace :is(input, textarea, select):focus { outline: none; border-color: var(--game-forest); box-shadow: none; }
 .game-workspace button { min-height: 34px; border-radius: var(--game-control-radius); box-shadow: none; }
 .game-workspace button:disabled { cursor: not-allowed; opacity: .55; }
 .game-workspace :is(input:not([type="radio"]):not([type="checkbox"]):not([type="range"]), textarea, select) {
@@ -114,7 +115,7 @@
 .game-workspace .game-switch-track::after { content: ""; display: block; width: 20px; height: 20px; margin: 3px; border-radius: 50%; background: #fffdf6; box-shadow: 0 1px 3px #383e2f40; transform: translateX(0); transition: transform .16s; }
 .game-workspace .game-switch input:checked + .game-switch-track { background: var(--game-forest); }
 .game-workspace .game-switch input:checked + .game-switch-track::after { transform: translateX(20px); }
-.game-workspace .game-switch input:focus-visible + .game-switch-track { outline: 3px solid var(--game-focus); outline-offset: 4px; }
+.game-workspace .game-switch input:focus-visible + .game-switch-track { box-shadow: inset 0 0 0 1px var(--game-forest); }
 .game-workspace .game-switch input:disabled + .game-switch-track { opacity: .55; }
 .game-workspace .game-segmented { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; padding: 4px; border: 1px solid var(--game-line); border-radius: 12px; background: #e9dfca; }
 .game-workspace .game-segmented button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 9px 16px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: #6d624e; box-shadow: none; }
@@ -123,7 +124,7 @@
 .game-workspace .town-primary, .game-workspace .primary { color: #fff3d7; background: var(--game-forest); border-color: #234438; }
 .game-workspace .town-primary:hover, .game-workspace .primary:hover { background: #3d6251; }
 .game-workspace .town-secondary { color: #624a32; border-color: #c9b18d; background: var(--game-paper-raised); }
-.game-workspace .town-sidebar :focus-visible { outline-color: #ffe8aa; }
+.game-workspace .town-sidebar :focus-visible { border-color: #ffe8aa; }
 @media (max-width: 720px) {
   .overlay-host.game-workspace { padding: env(safe-area-inset-top) 14px max(18px, env(safe-area-inset-bottom)); }
   .game-workspace .workspace-topbar { gap: 12px; min-height: 44px; padding: 10px 0; flex-wrap: wrap; }

@@ -46,9 +46,10 @@ a:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  outline: 3px solid #d0a458;
-  outline-offset: 3px;
+  outline: none;
+  border-color: var(--green);
 }
+button:focus-visible, a:focus-visible { text-decoration: underline; text-underline-offset: 3px; }
 .primary {
   background: var(--green);
   border-color: var(--green);

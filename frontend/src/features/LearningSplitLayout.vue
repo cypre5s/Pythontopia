@@ -68,7 +68,7 @@ function resizeWithKeys(event: KeyboardEvent) {
 .game-workspace .learning-resize-handle { position: absolute; inset: 0 auto 0 50%; transform: translateX(-50%); width: 44px; display: grid; place-items: center; cursor: col-resize; touch-action: none; z-index: 2; border-radius: 8px; }
 .game-workspace .learning-resize-handle > span { width: 2px; height: 24px; border-radius: 8px; background: var(--game-gold); opacity: .7; transition: height .15s ease, opacity .15s ease; }
 .game-workspace .learning-resize-handle:is(:hover, :focus-visible) > span { height: 64px; opacity: 1; }
-.game-workspace .learning-resize-handle:focus-visible { outline: 2px solid var(--game-gold); outline-offset: -5px; }
+.game-workspace .learning-resize-handle:focus-visible { outline: none; }
 .game-workspace .learning-layout.is-resizing { user-select: none; cursor: col-resize; }
 .game-workspace .learning-layout.is-sidebar-collapsed > .learning-support { display: none !important; }
 .game-workspace .learning-layout.is-sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }

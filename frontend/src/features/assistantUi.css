@@ -201,6 +201,7 @@
   box-shadow: 0 2px 8px #513b2808;
 }
 .game-workspace .assistant-composer:focus-within { border-color: var(--game-forest); }
+.game-workspace .assistant-composer textarea:focus-visible { outline: none; box-shadow: none; }
 .game-workspace .learning-support .assistant-panel form.assistant-composer textarea {
   display: block;
   width: 100%;
@@ -245,7 +246,7 @@
 .game-workspace .question-jump-group h4 span { font-weight: 400; color: var(--game-muted); }
 .game-workspace .question-jump-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 10px; }
 .game-workspace .question-jump-grid button { min-width: 44px; min-height: 44px; padding: 6px; background: var(--state-bg, transparent); color: var(--state-ink, var(--game-muted)); border: 1px solid var(--state-ink, var(--game-line)); box-shadow: none; }
-.game-workspace .question-jump-grid button[aria-current] { outline: 2px solid var(--game-forest); outline-offset: 2px; font-weight: 700; }
+.game-workspace .question-jump-grid button[aria-current] { border-color: var(--game-forest); color: var(--game-forest); background: #e8eddf; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; }
 .game-workspace :is(.question-jump-grid, .question-status-legend) [data-state="answered"] { --state-bg: #deebf6; --state-ink: #376da0; }
 .game-workspace :is(.question-jump-grid, .question-status-legend) [data-state="accepted"] { --state-bg: #e0efdf; --state-ink: #28704a; }
 .game-workspace :is(.question-jump-grid, .question-status-legend) [data-state="wrong"] { --state-bg: #f6e1da; --state-ink: #a53d30; }
