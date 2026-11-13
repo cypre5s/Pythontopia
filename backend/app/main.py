@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from .config import CORS_ORIGINS, dev_tools_enabled
 from .db import SessionLocal
+from .course_cleanup import cleanup_worker
 from . import auth, courses, classrooms, quests, practice, assistant, storage, dialogues, curriculum, story, assessments, student_accounts, classroom_courses, course_exchange, world_authoring, dev_tools
 
 
@@ -13,7 +14,8 @@ async def lifespan(app):
     from .bootstrap import initialize_admin
     initialize_admin()
     assistant.recover_interrupted_calls()
-    tasks = [asyncio.create_task(practice.judge_worker()), asyncio.create_task(storage.material_worker())]
+    tasks = [asyncio.create_task(practice.judge_worker()), asyncio.create_task(storage.material_worker()),
+             asyncio.create_task(cleanup_worker())]
     yield
     for task in tasks:
         task.cancel()

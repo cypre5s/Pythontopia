@@ -158,7 +158,7 @@ python -m app.convert_legacy_course --source ../data/course/legacy/course-pack-4
 
 Compose将`${REBORN_COURSE_EXCHANGE_DIR:-../data/course}`绑定到API的`/app/data/course`，由REBORN_COURSE_EXCHANGE_ROOT指向。Linux部署需预先创建所选宿主目录并允许API用户UID/GID10001写入；仅调整明确的交换目录权限，不递归改动数据库或其他卷。Windows Docker Desktop按共享目录权限处理。data/不入Git，Docker上下文也排除它。
 
-imports/保存24小时有效的导入预览原ZIP，exports/保存导出产物；它们无公开URL。预览过期只是禁止激活，文件不会自动删除。维护者可在确认无有效预览/下载后另行清理旧交换文件，不能删除运行中的私有媒体卷。数据库、媒体与需要保留的交换包分别备份。
+imports/保存有效期24小时的导入预览目录及历史ZIP。API启动后立即尝试清理，此后每10分钟检查一次，每轮处理最多100个已完成或过期预览；清理副本后保留数据库回执，重复导入请求仍返回原结果。无数据库引用的随机名imports副本及course-catalog/apply/preview/export工作目录在超过24小时后清理。正式导出目录、共享课程包和私有媒体继续保留。清理与导入、预览、导出共用进程间排他锁，忙碌时清理跳过本轮，失败记录日志并在后续周期重试。多API进程需共用支持文件锁的同一交换目录。数据库、媒体与需要保留的交换包分别备份。
 
 ### 数据库结构升级
 

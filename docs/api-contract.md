@@ -102,3 +102,5 @@ GET /world?classroom_id增加当前可用interactions、building_access及buildi
 对白文本用空行分轮。运行DTO每次只返回当前轮文本，末轮才附带选项；提前传选择返回422。继续请求遵循原事件ID和revision幂等规则，末轮后才完成检查点。
 
 课程包列表增加 directory、created_at、chapter_count 和 question_count。created_at 表示该包的 exported_at 或原始 created_at。列表仅读取章节定义和题目索引生成摘要，正式预览及应用仍执行完整校验。新导出目录为 export-<班级ID>-<安全课程名>-<北京时间YYYYMMDD-HHMMSS>-<8位随机串>，旧目录继续可选。
+
+导入预览的暂存副本在已应用或24小时过期后由后台周期清理。预览与应用接口继续使用既有有效期和幂等规则，成功回执独立于文件保留；同请求重试仍返回duplicate结果。清理忙碌跳过，处理中的预览、应用和导出持有交换目录锁。

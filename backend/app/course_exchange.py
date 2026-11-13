@@ -28,6 +28,7 @@ from .config import ROOT
 from .course_exchange_models import CourseImportPreview, CoursePackageState
 from .course_instances import CONTENT_MODELS, MODEL_NAMES, _json, _lock_numeric_tables, classroom_course, content_mapping
 from .course_package import PackageError, PackageLimits, ManifestLoader, _relative, _unique_pairs, validate_package
+from .course_cleanup import exchange_guard
 from .course_scope import lock_course
 from .db import get_db
 from .integration_models import AssistantCall, AssistantSession
@@ -799,30 +800,30 @@ def _read_staged(key, destination):
 
 @router.get("/export")
 def export_course(classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
-    # Exclusive gate ensures one consistent export while blocking both edits and learner writes.
-    lock_course(db, classroom_id, exclusive=True)
-    _teacher(db, user, classroom_id)
-    instance = classroom_course(db, classroom_id)
-    if instance is None:
-        raise HTTPException(409, "班级尚未导入课程")
-    temporary = Path(tempfile.mkdtemp(prefix="course-export-", dir=exchange_root()))
-    root = temporary / "package"
-    root.mkdir()
-    try:
-        write_package(db, instance, root)
-        load_bundle(root)
-        name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", instance.name).strip(" .")[:48] or "课程"
-        timestamp = now().astimezone(ZoneInfo("Asia/Shanghai")).strftime("%Y%m%d-%H%M%S")
-        destination = exchange_path(f"export-{classroom_id}-{name}-{timestamp}-{uuid4().hex[:8]}")
-        os.replace(root, destination)
-        shutil.rmtree(temporary)
-        db.commit()
-    except (PackageError, OSError, ValueError) as exc:
-        db.rollback()
-        shutil.rmtree(temporary, ignore_errors=True)
-        raise HTTPException(422, str(exc) if isinstance(exc, PackageError) else "课程导出失败") from exc
-    return {"directory": destination.name, "path": f"data/course/{destination.name}"}
-
+    with exchange_guard(exchange_root()):
+        # Exclusive gate ensures one consistent export while blocking both edits and learner writes.
+        lock_course(db, classroom_id, exclusive=True)
+        _teacher(db, user, classroom_id)
+        instance = classroom_course(db, classroom_id)
+        if instance is None:
+            raise HTTPException(409, "班级尚未导入课程")
+        temporary = Path(tempfile.mkdtemp(prefix="course-export-", dir=exchange_root()))
+        root = temporary / "package"
+        root.mkdir()
+        try:
+            write_package(db, instance, root)
+            load_bundle(root)
+            name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "-", instance.name).strip(" .")[:48] or "课程"
+            timestamp = now().astimezone(ZoneInfo("Asia/Shanghai")).strftime("%Y%m%d-%H%M%S")
+            destination = exchange_path(f"export-{classroom_id}-{name}-{timestamp}-{uuid4().hex[:8]}")
+            os.replace(root, destination)
+            shutil.rmtree(temporary)
+            db.commit()
+        except (PackageError, OSError, ValueError) as exc:
+            db.rollback()
+            shutil.rmtree(temporary, ignore_errors=True)
+            raise HTTPException(422, str(exc) if isinstance(exc, PackageError) else "课程导出失败") from exc
+        return {"directory": destination.name, "path": f"data/course/{destination.name}"}
 
 
 def _save_preview(db, user, classroom_id, bundle, archive, digest=None):
@@ -865,29 +866,30 @@ class AvailablePackageInput(BaseModel):
 @router.post("/imports/available/preview")
 def preview_available_course(classroom_id: int, body: AvailablePackageInput, db: Annotated[Session, Depends(get_db)],
                              user: Annotated[User, Depends(require_teacher)]):
-    from .course_catalog import copy_directory, mounted_catalog
+    with exchange_guard(exchange_root()):
+        from .course_catalog import copy_directory, mounted_catalog
 
-    lock_course(db, classroom_id, exclusive=True)
-    _teacher(db, user, classroom_id)
-    exchange = exchange_root()
-    try:
-        with tempfile.TemporaryDirectory(prefix="course-catalog-", dir=exchange) as temporary:
-            root = Path(temporary) / "package"
-            items, _ = mounted_catalog(exchange, LIMITS, MAX_ARCHIVE)
-            selected = next((item for item in items if item["key"] == body.package_key), None)
-            if selected is None:
-                raise HTTPException(404, "课程包已变化或不存在，请刷新列表")
-            if selected["path"].name.startswith("export-") and not selected["path"].name.startswith(f"export-{classroom_id}-"):
-                raise HTTPException(404, "课程包不存在或不可访问")
-            digest = copy_directory(selected["path"], root, exchange, LIMITS)
-            bundle = load_bundle(root)
-            return _save_preview(db, user, classroom_id, bundle, root, digest)
-    except HTTPException:
-        db.rollback()
-        raise
-    except (PackageError, OSError) as exc:
-        db.rollback()
-        raise HTTPException(422, str(exc) if isinstance(exc, PackageError) else "课程包读取失败，请刷新列表或重新上传") from exc
+        lock_course(db, classroom_id, exclusive=True)
+        _teacher(db, user, classroom_id)
+        exchange = exchange_root()
+        try:
+            with tempfile.TemporaryDirectory(prefix="course-catalog-", dir=exchange) as temporary:
+                root = Path(temporary) / "package"
+                items, _ = mounted_catalog(exchange, LIMITS, MAX_ARCHIVE)
+                selected = next((item for item in items if item["key"] == body.package_key), None)
+                if selected is None:
+                    raise HTTPException(404, "课程包已变化或不存在，请刷新列表")
+                if selected["path"].name.startswith("export-") and not selected["path"].name.startswith(f"export-{classroom_id}-"):
+                    raise HTTPException(404, "课程包不存在或不可访问")
+                digest = copy_directory(selected["path"], root, exchange, LIMITS)
+                bundle = load_bundle(root)
+                return _save_preview(db, user, classroom_id, bundle, root, digest)
+        except HTTPException:
+            db.rollback()
+            raise
+        except (PackageError, OSError) as exc:
+            db.rollback()
+            raise HTTPException(422, str(exc) if isinstance(exc, PackageError) else "课程包读取失败，请刷新列表或重新上传") from exc
 
 
 @router.post("/imports/preview")
@@ -907,58 +909,59 @@ class ApplyInput(BaseModel):
 @router.post("/imports/{preview_id}/apply")
 def apply_course(classroom_id: int, preview_id: str, body: ApplyInput, db: Annotated[Session, Depends(get_db)],
                  user: Annotated[User, Depends(require_teacher)]):
-    lock_course(db, classroom_id, exclusive=True)
-    classroom = _teacher(db, user, classroom_id)
-    preview = db.scalar(select(CourseImportPreview).where(CourseImportPreview.id == preview_id).with_for_update())
-    if not preview or preview.classroom_id != classroom_id or preview.teacher_id != user.id:
-        raise HTTPException(404, "导入预览不存在")
-    if preview.applied_request_id:
-        if preview.applied_request_id != str(body.request_id) or body.expected_revision != preview.expected_revision:
-            raise HTTPException(409, "此预览已由另一次操作导入")
-        return {**preview.result, "duplicate": True}
-    receipt = db.scalar(select(CourseImportPreview).where(CourseImportPreview.classroom_id == classroom_id,
-                        CourseImportPreview.applied_request_id == str(body.request_id)))
-    if receipt:
-        if receipt.archive_sha256 != preview.archive_sha256:
-            raise HTTPException(409, "请求ID已经用于不同的课程包")
-        return {**receipt.result, "duplicate": True}
-    if as_utc(preview.expires_at) <= now():
-        raise HTTPException(409, "导入预览已过期，请重新上传预览")
-    instance = classroom_course(db, classroom_id)
-    revision = instance.revision if instance else 0
-    if body.expected_revision != preview.expected_revision or revision != preview.expected_revision:
-        raise HTTPException(409, "班级课程已修改，请重新预览差异")
-    if db.scalar(select(AssistantCall.id).where(AssistantCall.classroom_id == classroom_id,
-                                              AssistantCall.status.in_(["running", "cancel_requested"])).limit(1)):
-        raise HTTPException(409, "班级助教会话仍在运行，请完成后重试导入")
-    try:
-        with tempfile.TemporaryDirectory(prefix="course-apply-", dir=exchange_root()) as temporary:
-            root, archive = Path(temporary) / "package", Path(temporary) / "course.zip"
-            staged = exchange_path(preview.storage_key)
-            if staged.is_dir():
-                from .course_catalog import copy_directory
-                digest = copy_directory(staged, root, exchange_root(), LIMITS)
-                if digest != preview.archive_sha256:
-                    raise PackageError("暂存目录校验失败，请重新预览")
-            else:
-                root.mkdir()
-                _read_staged(preview.storage_key, archive)
-                if _digest(archive) != preview.archive_sha256:
-                    raise PackageError("暂存包校验失败，请重新预览")
-                unpack_archive(archive, root)
-            bundle = load_bundle(root)
-            impact = _impact(db, instance, bundle)
-            if impact["blockers"]:
-                raise HTTPException(409, {"message": "课程更新影响已有学习记录", "blockers": impact["blockers"]})
-            instance = import_bundle(db, classroom, instance, bundle, root)
-            preview.applied_request_id = str(body.request_id)
-            preview.result = {"instance_id": instance.id, "revision": instance.revision,
-                              "package_id": instance.package_id, "package_version": instance.package_version, "duplicate": False}
-            db.commit()
-            return preview.result
-    except HTTPException:
-        db.rollback()
-        raise
-    except (PackageError, ValueError, OSError, SQLAlchemyError) as exc:
-        db.rollback()
-        raise HTTPException(422, str(exc) if isinstance(exc, PackageError) else "课程包导入失败，未修改班级课程") from exc
+    with exchange_guard(exchange_root()):
+        lock_course(db, classroom_id, exclusive=True)
+        classroom = _teacher(db, user, classroom_id)
+        preview = db.scalar(select(CourseImportPreview).where(CourseImportPreview.id == preview_id).with_for_update())
+        if not preview or preview.classroom_id != classroom_id or preview.teacher_id != user.id:
+            raise HTTPException(404, "导入预览不存在")
+        if preview.applied_request_id:
+            if preview.applied_request_id != str(body.request_id) or body.expected_revision != preview.expected_revision:
+                raise HTTPException(409, "此预览已由另一次操作导入")
+            return {**preview.result, "duplicate": True}
+        receipt = db.scalar(select(CourseImportPreview).where(CourseImportPreview.classroom_id == classroom_id,
+                            CourseImportPreview.applied_request_id == str(body.request_id)))
+        if receipt:
+            if receipt.archive_sha256 != preview.archive_sha256:
+                raise HTTPException(409, "请求ID已经用于不同的课程包")
+            return {**receipt.result, "duplicate": True}
+        if as_utc(preview.expires_at) <= now():
+            raise HTTPException(409, "导入预览已过期，请重新上传预览")
+        instance = classroom_course(db, classroom_id)
+        revision = instance.revision if instance else 0
+        if body.expected_revision != preview.expected_revision or revision != preview.expected_revision:
+            raise HTTPException(409, "班级课程已修改，请重新预览差异")
+        if db.scalar(select(AssistantCall.id).where(AssistantCall.classroom_id == classroom_id,
+                                                  AssistantCall.status.in_(["running", "cancel_requested"])).limit(1)):
+            raise HTTPException(409, "班级助教会话仍在运行，请完成后重试导入")
+        try:
+            with tempfile.TemporaryDirectory(prefix="course-apply-", dir=exchange_root()) as temporary:
+                root, archive = Path(temporary) / "package", Path(temporary) / "course.zip"
+                staged = exchange_path(preview.storage_key)
+                if staged.is_dir():
+                    from .course_catalog import copy_directory
+                    digest = copy_directory(staged, root, exchange_root(), LIMITS)
+                    if digest != preview.archive_sha256:
+                        raise PackageError("暂存目录校验失败，请重新预览")
+                else:
+                    root.mkdir()
+                    _read_staged(preview.storage_key, archive)
+                    if _digest(archive) != preview.archive_sha256:
+                        raise PackageError("暂存包校验失败，请重新预览")
+                    unpack_archive(archive, root)
+                bundle = load_bundle(root)
+                impact = _impact(db, instance, bundle)
+                if impact["blockers"]:
+                    raise HTTPException(409, {"message": "课程更新影响已有学习记录", "blockers": impact["blockers"]})
+                instance = import_bundle(db, classroom, instance, bundle, root)
+                preview.applied_request_id = str(body.request_id)
+                preview.result = {"instance_id": instance.id, "revision": instance.revision,
+                                  "package_id": instance.package_id, "package_version": instance.package_version, "duplicate": False}
+                db.commit()
+                return preview.result
+        except HTTPException:
+            db.rollback()
+            raise
+        except (PackageError, ValueError, OSError, SQLAlchemyError) as exc:
+            db.rollback()
+            raise HTTPException(422, str(exc) if isinstance(exc, PackageError) else "课程包导入失败，未修改班级课程") from exc
