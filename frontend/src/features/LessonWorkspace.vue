@@ -10,10 +10,10 @@
       <template v-else-if="material">
         <p v-if="material.status !== 'ready'" class="notice lesson-state-card">资料尚未就绪，请稍后再来阅读。</p>
         <template v-else>
-          <PdfReader v-if="['pdf', 'presentation'].includes(material.kind)" :url="fileUrl" :page="pdfPage" :title="material.title" @page="pdfPage = $event" />
+          <PdfReader v-if="['pdf', 'presentation'].includes(material.kind)" :url="fileUrl" :page="pdfPage" :title="material.title" :kind="material.kind" @page="pdfPage = $event" />
           <template v-else>
             <div class="lesson-reading-card">
-              <header class="content-heading"><h2 class="game-card-title"><GameIcon name="book"/>{{ material.title }}</h2></header>
+              <h2 class="game-card-title reader-card-title"><GameIcon :name="material.kind === 'video' ? 'video' : 'book'"/>{{ material.kind === "video" ? "视频浏览" : "文本浏览" }}<span :title="material.title">{{ material.title }}</span></h2>
               <article v-if="material.kind === 'text' && currentPage" class="lesson-text" aria-label="当前课件文本" tabindex="0">
                 <h3 v-if="currentPage.title">{{ currentPage.title }}</h3><p>{{ currentPage.text }}</p>
               </article>

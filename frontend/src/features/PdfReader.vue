@@ -1,6 +1,7 @@
 <template>
   <div class="pdf-reader" :aria-busy="loading || rendering">
     <div class="pdf-page-surface">
+      <h2 class="game-card-title reader-card-title"><GameIcon name="description"/>{{ kind === "presentation" ? "PPT 浏览" : "PDF 浏览" }}</h2>
       <div ref="stage" class="pdf-page-stage">
         <canvas
           v-show="rendered && !error"
@@ -49,7 +50,7 @@ import { fitPdfPage } from "../shared/pdfPageLayout";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import "./pdfReader.css";
 
-const props = defineProps<{ url: string; page: number; title?: string }>(),
+const props = defineProps<{ url: string; page: number; title?: string; kind?: string }>(),
   emit = defineEmits<{ page: [value: number] }>(),
   canvas = ref<HTMLCanvasElement>(),
   stage = ref<HTMLElement>(),

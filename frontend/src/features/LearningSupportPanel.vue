@@ -54,14 +54,14 @@
       <nav aria-label="文档页面目录">
         <ol class="support-outline-list">
           <li v-for="item in outline" :key="item.pageNo">
-            <button :aria-current="pageNo === item.pageNo ? 'page' : undefined" @click="$emit('selectPage', item.pageNo)">
+            <button :title="item.title || `第 ${item.pageNo} 页`" :aria-current="pageNo === item.pageNo ? 'page' : undefined" @click="$emit('selectPage', item.pageNo)">
               <span class="support-outline-page">{{ item.pageNo }}</span>
-              <span class="support-outline-title">{{ item.title || `第 ${item.pageNo} 页` }}<span v-if="item.important" class="support-outline-important">{{ item.highlightLabel || "重点" }}</span></span>
+              <span class="support-outline-title">{{ item.title || `第 ${item.pageNo} 页` }}</span><span v-if="item.important" class="support-outline-important">{{ item.highlightLabel || "重点" }}</span>
             </button>
           </li>
         </ol>
       </nav>
-      <nav v-if="timeOutline?.length" aria-label="视频片段跳转"><ol class="support-outline-list"><li v-for="item in timeOutline" :key="`${item.timeSeconds}-${item.title}`"><button @click="$emit('selectTime', item.timeSeconds)"><span class="support-outline-page">{{ Math.floor(item.timeSeconds / 60) }}:{{ String(Math.floor(item.timeSeconds % 60)).padStart(2, '0') }}</span><span class="support-outline-title">{{ item.title }}</span></button></li></ol></nav>
+      <nav v-if="timeOutline?.length" aria-label="视频片段跳转"><ol class="support-outline-list"><li v-for="item in timeOutline" :key="`${item.timeSeconds}-${item.title}`"><button :title="item.title" @click="$emit('selectTime', item.timeSeconds)"><span class="support-outline-page">{{ Math.floor(item.timeSeconds / 60) }}:{{ String(Math.floor(item.timeSeconds % 60)).padStart(2, '0') }}</span><span class="support-outline-title">{{ item.title }}</span></button></li></ol></nav>
     </section>
     <section v-if="questionOutline?.length" :id="`${panelId}-questions`" class="support-questions" role="tabpanel" :aria-labelledby="`${panelId}-questions-tab`" :hidden="tab !== 'questions'" :inert="tab !== 'questions'">
       <div v-if="hasQuestionActions()" class="support-question-actions"><slot name="question-actions" /></div>

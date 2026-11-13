@@ -1,7 +1,7 @@
 .game-workspace .pdf-reader {
   display: grid;
   grid-template-rows: minmax(0, 1fr) auto;
-  gap: 12px;
+  gap: var(--game-gap);
   height: 100%;
   min-width: 0;
   min-height: 0;
@@ -10,16 +10,17 @@
 .game-workspace .pdf-page-surface {
   position: relative;
   display: grid;
-  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
+  grid-template: auto minmax(0, 1fr) / minmax(0, 1fr);
   min-width: 0;
   min-height: 0;
-  padding: 12px;
+  padding: 0;
   overflow: hidden;
   border: 1px solid var(--game-line);
   border-radius: var(--game-radius);
   background: var(--game-paper);
 }
 .game-workspace .pdf-page-stage {
+  margin: 12px;
   display: grid;
   place-items: center;
   min-width: 0;
@@ -36,7 +37,7 @@
 }
 .game-workspace .pdf-reader-state {
   position: absolute;
-  inset: 20px;
+  inset: 48px 20px 20px;
   display: flex;
   flex-direction: column;
   justify-content: center;
