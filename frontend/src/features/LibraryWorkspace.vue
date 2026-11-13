@@ -2,7 +2,7 @@
   <section class="town-workspace library-workspace">
     <div class="town-book">
       <aside class="town-sidebar library-sidebar">
-        <p class="library-directory-label">章节目录</p>
+        <p class="library-directory-label game-card-title"><GameIcon name="book"/>章节目录</p>
         <nav class="town-directory" aria-label="资料章节">
           <button class="town-directory-item" :class="{ 'is-current': chapter === 'all' }" :aria-pressed="chapter === 'all'" @click="selectChapter('all')">
             <GameIcon name="grid"/><span>全部章节</span><small>{{ materials.length }}</small>
@@ -25,7 +25,7 @@
         <p v-else-if="loading" class="town-empty" role="status">正在加载资料…</p>
         <template v-else>
           <section v-for="group in filteredChapters" :key="group.id" class="library-chapter" :aria-labelledby="`library-chapter-${group.id}`">
-            <header class="library-chapter-heading"><h3 :id="`library-chapter-${group.id}`">{{ group.title }}</h3><span>{{ group.materials.length }} 份</span></header>
+            <header class="library-chapter-heading"><h3 class="game-card-title" :id="`library-chapter-${group.id}`"><GameIcon name="book"/>{{ group.title }}</h3><span>{{ group.materials.length }} 份</span></header>
             <div class="library-list">
               <button v-for="material in group.materials" :key="material.id" class="library-card" :disabled="material.status !== 'ready'" @click="open(material)">
                 <span class="library-material-icon" :class="{ 'is-video': material.kind === 'video' }" aria-hidden="true"><GameIcon :name="material.kind === 'video' ? 'video' : 'book'"/></span>
@@ -134,35 +134,35 @@ watch(() => [session.user?.id, session.classroomId] as const, async ([userId, cl
 onBeforeUnmount(() => { saveView(); disposed = true; generation++; });
 </script>
 <style scoped>
-.library-directory-label { margin:0 0 18px; color:#bfae8a; font-size:.875rem; letter-spacing:.04em; }
-.library-sidebar .town-directory-item { display:grid; grid-template-columns:30px minmax(0,1fr) auto; align-items:start; gap:12px; text-align:left; }
+.library-directory-label { margin:0 0 12px; color:var(--game-muted); font-size:.875rem; letter-spacing:.04em; }
+.library-sidebar .town-directory-item { display:grid; grid-template-columns:22px minmax(0,1fr) auto; align-items:center; gap:8px; text-align:left; }
 .library-sidebar .town-directory-item > span:nth-child(2) { line-height:1.6; }
 .library-sidebar .town-directory-item > small { align-self:center; font-size:.875rem; opacity:.7; }
-.library-sidebar .town-directory-item > svg { width:21px; height:21px; margin-top:3px; }
+.library-sidebar .town-directory-item > svg { width:16px; height:16px; }
 .library-chapter-number { align-self:center; font-size:.875rem; font-variant-numeric:tabular-nums; opacity:.7; }
-.library-toolbar { align-items:flex-end; gap:20px; margin-bottom:28px; }
+.library-toolbar { align-items:flex-end; gap:10px; margin-bottom:16px; }
 .library-search { flex:1; min-width:min(240px,100%); max-width:520px; }
 .library-search > span { display:block; margin-bottom:8px; font-size:.875rem; color:#76604c; }
 .library-search > input { width:100%; }
 .library-result-count { align-self:center; margin-left:auto; padding-top:22px; font-size:.875rem; color:#8a775c; white-space:nowrap; }
-.library-chapter { margin-bottom:32px; }
-.library-chapter-heading { display:flex; align-items:baseline; justify-content:space-between; gap:16px; padding-bottom:13px; margin-bottom:17px; border-bottom:1px solid #d9c9ad; }
-.library-chapter-heading h3 { margin:0; color:#3b5147; font-size:1.18rem; line-height:1.5; }
+.library-chapter { margin-bottom:20px; }
+.library-chapter-heading { display:flex; align-items:baseline; justify-content:space-between; gap:10px; padding-bottom:8px; margin-bottom:12px; border-bottom:1px solid #d9c9ad; }
+.library-chapter-heading h3 { margin:0; color:#3b5147; font-size:.875rem; line-height:1.5; }
 .library-chapter-heading > span { flex-shrink:0; color:#8a775c; font-size:.875rem; }
-.library-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr)); gap:15px; }
-.library-workspace .library-list > .library-card { display:grid; grid-template-columns:50px minmax(0,1fr); gap:14px; align-items:start; min-height:172px; padding:20px; text-align:left; color:#354d42; border:1px solid #dbcbb1; border-radius:12px; background:linear-gradient(135deg,#fffdf5,#f9f1e1); box-shadow:none; }
+.library-list { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr)); gap:10px; }
+.library-workspace .library-list > .library-card { display:grid; grid-template-columns:32px minmax(0,1fr); gap:10px; align-items:start; min-height:112px; padding:12px; text-align:left; color:#354d42; border:1px solid #dbcbb1; border-radius:var(--game-radius); background:var(--game-paper-raised); box-shadow:none; }
 .library-workspace .library-list > .library-card:hover:not(:disabled) { background:#fffdf5; border-color:#ad9972; box-shadow:none; }
-.library-material-icon { display:grid; place-items:center; width:48px; height:55px; background:#e1e8d7; border:1px solid #c1cdb2; border-radius:7px; color:#5d7953; }
+.library-material-icon { display:grid; place-items:center; width:32px; height:36px; background:#e1e8d7; border:1px solid #c1cdb2; border-radius:7px; color:#5d7953; }
 .library-material-icon.is-video { color:#9b7143; background:#f0dfbe; border-color:#d9c19a; }
-.library-material-icon svg { width:26px; height:26px; }
-.library-card-copy { display:flex; flex-direction:column; gap:9px; min-width:0; }
-.library-workspace .library-list strong { font-size:1rem; line-height:1.6; overflow-wrap:anywhere; }
+.library-material-icon svg { width:18px; height:18px; }
+.library-card-copy { display:flex; flex-direction:column; gap:6px; min-width:0; }
+.library-workspace .library-list strong { font-size:.9375rem; line-height:1.6; overflow-wrap:anywhere; }
 .library-workspace .library-list small { color:#88775d; font-size:.875rem; line-height:1.5; }
 .library-workspace .library-list > button > .library-card-action { grid-column:1/-1; display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-top:auto; color:#6c7d57; font-size:.875rem; }
 .library-card-action svg { width:18px; height:18px; }
-.library-empty { padding:64px 20px; }
-.library-empty > svg { width:44px; height:44px; color:#9e8b68; }
+.library-empty { padding:32px 16px; }
+.library-empty > svg { width:28px; height:28px; color:#9e8b68; }
 .library-empty p { margin:16px 0 20px; }
-@media(max-width:1000px) { .library-toolbar { gap:14px; }.library-result-count { padding-top:0; }.library-workspace .library-list > .library-card { padding:16px; } }
-@media(max-width:700px) { .library-directory-label { display:none; }.library-sidebar .town-directory-item { display:flex; align-items:center; min-width:max-content; }.library-sidebar .town-directory-item > span:nth-child(2) { max-width:200px; white-space:normal; }.library-sidebar .town-directory-item > svg,.library-chapter-number { display:none; }.library-search { max-width:none; flex-basis:100%; }.library-toolbar { margin-bottom:22px; }.library-result-count { margin-left:auto; }.library-list { grid-template-columns:minmax(0,1fr); }.library-workspace .library-list > .library-card { min-height:140px; } }
+@media(max-width:1000px) { .library-toolbar { gap:14px; }.library-result-count { padding-top:0; }.library-workspace .library-list > .library-card { padding:12px; } }
+@media(max-width:700px) { .library-directory-label { display:none; }.library-sidebar .town-directory-item { display:flex; align-items:center; min-width:max-content; }.library-sidebar .town-directory-item > span:nth-child(2) { max-width:200px; white-space:normal; }.library-sidebar .town-directory-item > svg,.library-chapter-number { display:none; }.library-search { max-width:none; flex-basis:100%; }.library-toolbar { margin-bottom:16px; }.library-result-count { margin-left:auto; }.library-list { grid-template-columns:minmax(0,1fr); }.library-workspace .library-list > .library-card { min-height:112px; } }
 </style>

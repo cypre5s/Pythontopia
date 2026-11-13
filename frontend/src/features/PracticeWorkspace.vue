@@ -15,7 +15,7 @@
     </nav>
     <section id="practice-content-region" class="practice-content" :class="{ 'coding-content': current?.kind === 'python' && viewMode === 'single' }" tabindex="-1" aria-label="题目与代码" :hidden="compact && showAssistant" :inert="compact && showAssistant" :aria-busy="loading">
       <header class="content-heading practice-heading" :class="{ 'assessment-heading': isAssessment }">
-        <h2>{{ activity?.title ?? "正在读取题目" }}</h2>
+        <h2 class="game-card-title"><GameIcon name="practice"/>{{ activity?.title ?? "正在读取题目" }}</h2>
         <div v-if="isAssessment" class="game-segmented assessment-view-modes" role="group" aria-label="答题模式">
           <button :aria-pressed="viewMode === 'single'" @click="setViewMode('single')">单题模式</button>
           <button :aria-pressed="viewMode === 'paper'" @click="setViewMode('paper')">试卷模式</button>

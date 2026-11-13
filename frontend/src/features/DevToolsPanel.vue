@@ -7,7 +7,7 @@
           <div><dt>当前班级</dt><dd>{{ classroom?.name ?? '尚未选择班级' }}</dd></div>
         </dl>
         <section class="dev-tools-reset" aria-labelledby="dev-tools-reset-title">
-          <h3 id="dev-tools-reset-title">重新开始当前班级</h3>
+          <h3 class="game-card-title" id="dev-tools-reset-title"><GameIcon name="settings"/>重新开始当前班级</h3>
           <p>清除本账号在当前班级的任务与学习进度、练习和测试成绩，回到初入小镇的状态。阅读位置和练习草稿也会清空。</p>
           <p>账户、已加入班级、课程材料和界面偏好会保留，其他班级的学习记录不受影响。</p>
           <p v-if="!classroom" class="dev-tools-note">请先选择要重新开始的班级。</p>
@@ -29,6 +29,7 @@
   </section>
 </template>
 <script setup lang="ts">
+import GameIcon from "../shared/GameIcon.vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { api } from "../shared/api";
 import { canUseDevTools } from "../shared/devTools";
@@ -84,11 +85,11 @@ async function restart() {
 </script>
 <style scoped>
 .dev-tools-workspace { flex:1; min-width:0; min-height:0; overflow:auto; }
-.dev-tools-card { max-width:980px; padding:clamp(24px,3vw,40px); border:1px solid var(--game-line); border-radius:var(--game-radius); color:var(--game-ink); background:var(--game-paper); }
-.dev-tools-context { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:24px; margin:0 0 30px; padding-bottom:28px; border-bottom:1px solid var(--game-line); }
+.dev-tools-card { max-width:none; padding:var(--game-panel-padding); border:1px solid var(--game-line); border-radius:var(--game-radius); color:var(--game-ink); background:var(--game-paper); }
+.dev-tools-context { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; margin:0 0 16px; padding-bottom:12px; border-bottom:1px solid var(--game-line); }
 .dev-tools-context > div { min-width:0; }.dev-tools-context dt { color:var(--game-muted); font-size:.875rem; margin-bottom:10px; }.dev-tools-context dd { margin:0; line-height:1.7; overflow-wrap:anywhere; }.dev-tools-context dd span { display:block; color:var(--game-muted); font-size:.875rem; margin-top:5px; }
-.dev-tools-reset h3 { margin:0 0 16px; color:var(--game-forest); font-size:1.25rem; line-height:1.5; }.dev-tools-reset > p,.dev-tools-confirm p { font-size:1rem; line-height:1.85; color:var(--game-muted); margin:0 0 16px; }
-.dev-tools-reset > button { margin-top:8px; }.dev-tools-confirm { margin-top:24px; padding-top:24px; border-top:1px solid var(--game-line); }.dev-tools-confirm h4 { margin:0 0 12px; font-size:1.05rem; line-height:1.7; overflow-wrap:anywhere; }
+.dev-tools-reset h3 { margin:0 0 16px; color:var(--game-forest); font-size:.875rem; line-height:1.5; }.dev-tools-reset > p,.dev-tools-confirm p { font-size:.9375rem; line-height:1.7; color:var(--game-muted); margin:0 0 16px; }
+.dev-tools-reset > button { margin-top:8px; }.dev-tools-confirm { margin-top:16px; padding-top:16px; border-top:1px solid var(--game-line); }.dev-tools-confirm h4 { margin:0 0 12px; font-size:.875rem; line-height:1.7; overflow-wrap:anywhere; }
 .dev-tools-actions { display:flex; align-items:center; flex-wrap:wrap; gap:12px; }.dev-tools-reset > .dev-tools-error { padding:12px 16px; border:1px solid #d6b09a; border-radius:var(--game-control-radius); color:#8d4935; background:#fae9dc; }.dev-tools-reset > .dev-tools-note { color:var(--game-forest); }
 @media(max-width:700px) { .dev-tools-context { grid-template-columns:minmax(0,1fr); gap:20px; }.dev-tools-actions > button { flex:1 1 auto; } }
 </style>

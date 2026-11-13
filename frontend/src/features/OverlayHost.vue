@@ -9,7 +9,7 @@
     <section
       ref="panel"
       class="workspace-shell"
-      :class="`workspace-${session.workspace.kind}`"
+      :class="[`workspace-${session.workspace.kind}`, { 'workspace-compact': !['lesson', 'material', 'practice'].includes(session.workspace.kind) }]"
       tabindex="-1"
     >
       <header class="workspace-topbar">

@@ -30,27 +30,26 @@
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
-  padding: clamp(1.2rem, 2.3vw, 2.25rem);
+  padding: var(--game-panel-padding);
   border: 1px solid var(--learn-border);
-  border-radius: var(--game-radius, 16px);
+  border-radius: var(--game-radius);
   background: var(--learn-paper);
-  box-shadow: inset 0 0 0 4px #fffaf14d, 0 8px 24px #172b2433;
+  box-shadow: none;
   scroll-padding: 1rem;
 }
 .game-workspace .learning-layout .content-heading {
-  padding: 0 0 1.5rem;
-  margin: 0 0 1.5rem;
+  padding: 0 0 12px;
+  margin: 0 0 12px;
   border-bottom: 1px solid var(--learn-border);
 }
 .game-workspace .learning-layout .content-heading h2 {
-  font-size: clamp(1.4rem, 2.2vw, 1.8rem);
-  font-family: var(--font-heading);
+  font-size: var(--game-label-size);
+  font-family: inherit;
   font-weight: 700;
-  line-height: 1.45;
-  letter-spacing: 0;
+  line-height: 1.5;
   color: var(--learn-forest);
   overflow-wrap: anywhere;
-  margin: 0 0 0.85rem;
+  margin: 0;
 }
 .game-workspace .learning-layout .eyebrow,
 .game-workspace .learning-layout .learning-meta,
@@ -91,10 +90,10 @@
   border: 1px solid #d7b59b;
 }
 .game-workspace .learning-layout summary {
-  min-height: 2.75rem;
+  min-height: var(--game-control-height);
   font-size: 0.9375rem;
   line-height: 1.4;
-  padding: 0.65rem 1rem;
+  padding: 6px 10px;
 }
 .game-workspace .learning-layout .lesson-pagination {
   display: flex;
@@ -102,11 +101,11 @@
   align-items: center;
   justify-content: space-between;
   gap: 0.75rem;
-  padding: 0.85rem;
+  padding: 8px 12px;
   background: var(--learn-wash);
   border: 1px solid var(--learn-border);
   border-radius: 10px;
-  margin-bottom: 1.6rem;
+  margin-bottom: 16px;
 }
 .game-workspace .learning-layout .lesson-pagination button {
   display: inline-flex;
@@ -138,8 +137,8 @@
 .game-workspace .reader-position-progress::-moz-progress-bar { background: var(--game-forest); }
 .game-workspace .learning-layout .lesson-text {
   max-width: 46rem;
-  font-size: 1.125rem;
-  line-height: 1.9;
+  font-size: var(--game-body-size);
+  line-height: 1.7;
   margin: 0 auto;
   overflow-wrap: anywhere;
 }
@@ -151,7 +150,7 @@
 }
 .game-workspace .learning-layout .lesson-text p {
   white-space: pre-wrap;
-  margin-bottom: 1.6rem;
+  margin-bottom: 16px;
 }
 .game-workspace .learning-layout .lesson-footer {
   margin-top: 2.25rem;
@@ -192,48 +191,48 @@
   width: 100%;
   max-height: 65vh;
   border: 1px solid var(--learn-forest);
-  border-radius: 12px;
+  border-radius: var(--game-radius);
   background: #18342d;
 }
 .game-workspace .learning-layout .question-kind {
   display: inline-flex;
   align-items: center;
   background: var(--learn-wash);
-  padding: 0.3rem 0.75rem;
-  border-radius: 20px;
-  margin-bottom: 0.8rem;
+  padding: 3px 8px;
+  border-radius: 6px;
+  margin-bottom: 8px;
   font-weight: 600;
   letter-spacing: 0;
 }
 .game-workspace .learning-layout .question-body h3 {
-  font-size: 1.4rem;
+  font-size: 1.25rem;
   line-height: 1.5;
   letter-spacing: -0.02em;
   margin: 0 0 1rem;
   color: var(--learn-forest);
 }
 .game-workspace .learning-layout .question-prompt {
-  font-size: 1.125rem;
-  line-height: 1.9;
+  font-size: var(--game-body-size);
+  line-height: 1.7;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  margin-bottom: 1.7rem;
+  margin-bottom: 16px;
 }
 .game-workspace .learning-layout .answer-option {
-  min-height: 3.5rem;
+  min-height: max(40px, var(--game-control-height));
   display: flex;
   flex-direction: row;
   align-items: center;
   gap: 0.8rem;
-  margin: 0.75rem 0;
-  padding: 1rem 1.2rem;
-  font-size: 1.0625rem;
+  margin: 8px 0;
+  padding: 10px 12px;
+  font-size: var(--game-body-size);
   font-weight: 400;
   line-height: 1.65;
   cursor: pointer;
   background: #fffaf0;
   border: 1px solid var(--learn-border);
-  border-radius: 12px;
+  border-radius: var(--game-radius);
 }
 .game-workspace .learning-layout .answer-option:has(input:checked) {
   background: #e9eddf;
@@ -247,7 +246,7 @@
 }
 
 .game-workspace .learning-layout .sample {
-  padding: 1rem 1.2rem;
+  padding: 10px 12px;
   font-size: 0.9375rem;
   line-height: 1.75;
   margin: 1rem 0;
@@ -263,7 +262,7 @@
 }
 .game-workspace .learning-layout .code-editor {
   border: 1px solid var(--learn-border);
-  border-radius: 12px;
+  border-radius: var(--game-radius);
   margin: 1.25rem 0;
   min-height: 16rem;
   background: #fffdf7;
@@ -274,16 +273,16 @@
   align-items: center;
   gap: 0.75rem;
   flex-wrap: wrap;
-  margin: 1.4rem 0;
+  margin: 12px 0;
 }
 .game-workspace .learning-layout .submission-actions button {
   font-size: 1rem;
   min-height: 2.125rem;
 }
 .game-workspace .learning-layout .submission-result {
-  margin-top: 1.6rem;
-  padding: 1.3rem 1.4rem;
-  border-radius: 12px;
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: var(--game-radius);
   background: #eaf0e1;
   border: 1px solid #bdcba9;
 
@@ -314,7 +313,7 @@
 }
 
 .game-workspace .learning-layout .submission-result > header strong {
-  font-size: 1.125rem;
+  font-size: var(--game-body-size);
 }
 .game-workspace .learning-layout .submission-result > p {
   font-size: 1rem;
@@ -418,9 +417,9 @@
 /* Learning cards share one transparent workspace and one support column. */
 .game-workspace .learning-layout > :is(.lesson-content, .practice-content) { grid-column: 1; grid-row: 1; }
 .game-workspace .learning-layout > .learning-support { grid-column: 3; grid-row: 1; min-width: 0; min-height: 0; }
-.game-workspace .learning-layout > .lesson-content { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: 14px; min-width: 0; min-height: 0; height: 100%; overflow: hidden; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.game-workspace .learning-layout > .lesson-content { display: grid; grid-template-rows: minmax(0, 1fr) auto; gap: var(--game-gap); min-width: 0; min-height: 0; height: 100%; overflow: hidden; padding: 0; border: 0; background: transparent; box-shadow: none; }
 .game-workspace .learning-layout .lesson-reading-card,
-.game-workspace .learning-layout .lesson-state-card { min-height: 0; min-width: 0; padding: clamp(1.2rem, 2vw, 2rem); border: 1px solid var(--learn-border); border-radius: var(--game-radius); background: var(--learn-paper); }
+.game-workspace .learning-layout .lesson-state-card { min-height: 0; min-width: 0; padding: var(--game-panel-padding); border: 1px solid var(--learn-border); border-radius: var(--game-radius); background: var(--learn-paper); }
 .game-workspace .learning-layout .lesson-reading-card { display: flex; flex-direction: column; overflow: hidden; }
 .game-workspace .learning-layout .lesson-reading-card .content-heading { flex: 0 0 auto; margin-bottom: 1rem; padding-bottom: 1rem; }
 .game-workspace .learning-layout .lesson-text { flex: 1; min-height: 0; overflow: auto; width: 100%; }
@@ -428,7 +427,7 @@
 .game-workspace .learning-layout .lesson-pagination { margin: 0; background: var(--learn-paper); border-radius: var(--game-radius); }
 .game-workspace .learning-layout .lesson-footer { margin-top: 1.5rem; align-items: stretch; flex-direction: column; }
 .game-workspace .learning-layout .lesson-footer > div { flex: 0 0 auto; }
-.game-workspace .learning-layout .practice-content { display: flex; flex-direction: column; overflow: hidden; padding: clamp(1rem, 1.8vw, 2rem); }
+.game-workspace .learning-layout .practice-content { display: flex; flex-direction: column; overflow: hidden; padding: var(--game-panel-padding); }
 .game-workspace .learning-layout .practice-content > :not(.question-body) { flex-shrink: 0; }
 .game-workspace .learning-layout .practice-content .content-heading { margin-bottom: .8rem; padding-bottom: .8rem; }
 

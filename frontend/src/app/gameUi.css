@@ -30,10 +30,7 @@
   font-size: 0.875rem;
   line-height: 1.7;
 }
-.entry-form .eyebrow,
-.workspace-padding .eyebrow {
-  color: #6e6748;
-}
+.entry-form .eyebrow { color: #6e6748; }
 .entry-form {
   min-width: 0;
 }
@@ -423,161 +420,9 @@ kbd {
   padding: 0.65rem 1rem;
 }
 
-.workspace-padding {
-  padding: clamp(1rem, 3vw, 2.5rem);
-  min-width: 0;
-  min-height: 0;
-}
-.workspace-padding .eyebrow {
-  font-size: 0.875rem;
-  letter-spacing: 0.06em;
-}
-.workspace-padding h2 {
-  font-size: clamp(1.4rem, 2.5vw, 1.8rem);
-  line-height: 1.5;
-  letter-spacing: -0.02em;
-}
 .checkbox-label {
   gap: 0.75rem;
   line-height: 1.6;
-}
-.journal-heading {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-.journal-heading h2 {
-  margin-bottom: 0.5rem;
-}
-.journal-heading p {
-  color: #5d6f56;
-  font-size: 0.95rem;
-}
-.journal-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 0.6rem 1.5rem;
-  margin: 1rem 0 1.5rem;
-}
-.journal-filters {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  padding: 4px;
-  background: #ecefdf;
-  border: 1px solid #d9dfca;
-  border-radius: 8px;
-  margin: 0;
-}
-.journal-filters button {
-  border-color: transparent;
-  background: transparent;
-  font-size: 0.95rem;
-  min-height: 44px;
-}
-.journal-filters button.selected {
-  background: #fffaf0 !important;
-  box-shadow: 0 2px 4px #233c2410;
-  border-color: #b9c6a5 !important;
-}
-.journal-entry {
-  border: 1px solid #d8dec9;
-  background: #fffdf6;
-  padding: 1.2rem;
-  border-radius: 10px;
-  margin: 0 0 1rem;
-}
-.journal-entry h3 {
-  font-size: 1.15rem;
-  line-height: 1.6;
-}
-.journal-entry header button {
-  min-height: 44px;
-  font-size: 0.875rem;
-}
-.journal-entry .journal-progress-label {
-  color: #626e58;
-  font-size: 0.875rem;
-  line-height: 1.7;
-  margin-bottom: 0;
-}
-.journal-entry li {
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  padding: 0.85rem 0.6rem;
-  border-bottom: 1px solid #e7eadc;
-}
-.journal-entry li:last-child {
-  border-bottom: 0;
-}
-.journal-entry li.ready {
-  background: #f4f3e3;
-  border-left: 3px solid #b59a52;
-  border-radius: 4px;
-  margin-top: 0.4rem;
-}
-.journal-entry li.complete,
-.journal-entry li.locked,
-.journal-entry li.skipped {
-  opacity: 1;
-}
-.journal-entry li .node-icon {
-  display: grid;
-  place-items: center;
-  flex-shrink: 0;
-  width: 1.8rem;
-  height: 1.8rem;
-  border: 1px solid #c9d3b9;
-  border-radius: 50%;
-  color: #60734f;
-  font-size: 0.95rem;
-}
-.journal-entry li.ready .node-icon {
-  background: #e1c477;
-  color: #3b4b2a;
-  border-color: #c3a250;
-}
-.journal-entry li.complete .node-icon {
-  background: #e8eddd;
-  color: #426145;
-}
-.journal-entry li strong {
-  font-size: 1rem;
-  line-height: 1.6;
-  font-weight: 500;
-}
-.journal-entry li small {
-  font-size: 0.875rem;
-  line-height: 1.5;
-  color: #626e58;
-}
-.journal-entry li > div {
-  flex: 1;
-  min-width: min(13rem, 100%);
-}
-.journal-entry li > button {
-  min-height: 44px;
-  font-size: 0.95rem;
-  padding: 0.6rem 0.9rem;
-  white-space: normal;
-}
-.class-list > button {
-  min-height: 48px;
-  flex-wrap: wrap;
-  font-size: 1rem;
-}
-.class-list span,
-.inline-form label {
-  font-size: 0.95rem;
-}
-.inline-form {
-  flex-wrap: wrap;
-}
-.inline-form label {
-  min-width: min(14rem, 100%);
 }
 .toast-layer {
   max-width: min(380px, 32vw, calc(100% - var(--safe-left) - var(--safe-right)));
@@ -754,9 +599,6 @@ kbd {
 
   .dialogue-layer .portrait {
     display: none;
-  }
-  .journal-entry {
-    padding: 1rem;
   }
 }
 @media (prefers-reduced-motion: reduce) {

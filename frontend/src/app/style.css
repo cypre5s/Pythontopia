@@ -420,103 +420,6 @@ kbd {
   overflow: hidden;
   background: #fffefb;
 }
-.workspace-padding {
-  padding: 2.2rem 3rem;
-  overflow: auto;
-  flex: 1;
-}
-.journal-filters {
-  display: flex;
-  gap: 0.5rem;
-  margin: 1.5rem 0;
-}
-.journal-filters button {
-  font-size: 0.8rem;
-}
-.journal-entry {
-  border-top: 1px solid var(--line);
-  padding: 1.5rem 0;
-}
-.journal-entry header {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-}
-.journal-entry header button {
-  font-size: 0.75rem;
-  align-self: flex-start;
-}
-.journal-entry h3 {
-  margin: 0.5rem 0;
-}
-.journal-entry ol {
-  list-style: none;
-  padding: 0;
-  margin-bottom: 0;
-}
-.journal-entry li {
-  display: flex;
-  gap: 0.8rem;
-  align-items: center;
-  padding: 0.8rem 0;
-}
-.journal-entry li small {
-  display: block;
-  font-size: 0.65rem;
-  color: #91977f;
-  margin-top: 0.3rem;
-}
-.journal-entry li strong {
-  font-size: 0.85rem;
-  font-weight: 500;
-}
-.journal-entry li .node-icon {
-  color: #a5af8c;
-}
-.journal-entry li.complete {
-  opacity: 0.6;
-}
-.journal-entry li.locked,
-.journal-entry li.skipped {
-  opacity: 0.45;
-}
-.journal-entry li.ready .node-icon {
-  color: #c39944;
-}
-.journal-entry li > button {
-  margin-left: auto;
-  font-size: 0.7rem;
-  padding: 0.4rem 0.7rem;
-}
-.book-spine {
-  font-size: 2rem;
-  color: #ab9d6a;
-}
-.class-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.6rem;
-  margin: 1.5rem 0;
-}
-.class-list > button {
-  display: flex;
-  justify-content: space-between;
-  text-align: left;
-  gap: 1rem;
-  padding: 1.2rem;
-}
-.class-list span {
-  font-size: 0.75rem;
-}
-.inline-form {
-  display: flex;
-  gap: 0.6rem;
-  align-items: flex-end;
-  margin: 2rem 0;
-}
-.inline-form label {
-  flex: 1;
-}
 .toast-layer {
   position: fixed;
   right: 1.4rem;
@@ -781,9 +684,6 @@ td:nth-last-child(2) {
   .entry-art h1 {
     font-size: 3rem;
   }
-  .workspace-padding {
-    padding: 1.6rem 2rem;
-  }
 }
 @media (pointer: coarse) {
   .touch-controls {
@@ -948,19 +848,6 @@ td:nth-last-child(2) {
     font-size: 0.7rem;
     padding: 0.6rem 1rem;
   }
-  .journal-entry li {
-    gap: 0.5rem;
-  }
-  .journal-entry li strong {
-    font-size: 0.75rem;
-  }
-  .journal-entry li > button {
-    font-size: 0.65rem;
-    white-space: nowrap;
-  }
-  .workspace-padding {
-    padding: 1.4rem 1.6rem;
-  }
 }
 @media (max-width: 560px) and (min-height: 501px) {
   .entry-page {
@@ -1017,12 +904,6 @@ td:nth-last-child(2) {
   }
   .quest-tracker {
     width: 210px;
-  }
-  .workspace-padding {
-    padding: 1.3rem;
-  }
-  .class-list > button {
-    font-size: 0.8rem;
   }
   .stats-strip {
     gap: 1.5rem;

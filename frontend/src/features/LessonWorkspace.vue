@@ -13,7 +13,7 @@
           <PdfReader v-if="['pdf', 'presentation'].includes(material.kind)" :url="fileUrl" :page="pdfPage" :title="material.title" @page="pdfPage = $event" />
           <template v-else>
             <div class="lesson-reading-card">
-              <header class="content-heading"><h2>{{ material.title }}</h2></header>
+              <header class="content-heading"><h2 class="game-card-title"><GameIcon name="book"/>{{ material.title }}</h2></header>
               <article v-if="material.kind === 'text' && currentPage" class="lesson-text" aria-label="当前课件文本" tabindex="0">
                 <h3 v-if="currentPage.title">{{ currentPage.title }}</h3><p>{{ currentPage.text }}</p>
               </article>

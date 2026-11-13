@@ -1,6 +1,6 @@
 <template>
   <form class="password-form" @submit.prevent="submit">
-    <h3 v-if="!compact">修改密码</h3>
+    <h3 v-if="!compact" class="game-card-title"><GameIcon name="settings"/>修改密码</h3>
     <p>新密码至少6位，不能与学号或当前密码相同。修改后其他设备需要重新登录。</p>
     <label>当前密码<input v-model="currentPassword" type="password" autocomplete="current-password" maxlength="200" required :disabled="busy" /></label>
     <label>新密码<input v-model="newPassword" type="password" autocomplete="new-password" minlength="6" maxlength="200" required :disabled="busy" /></label>
@@ -11,6 +11,7 @@
   </form>
 </template>
 <script setup lang="ts">
+import GameIcon from "../shared/GameIcon.vue";
 import { ref } from "vue";
 import { api } from "../shared/api";
 import { useSession } from "../shared/session";
@@ -39,4 +40,6 @@ async function submit() {
 .password-form label { display:grid; gap:6px; }
 .password-form input { width:100%; min-height:44px; }
 .password-form button { min-height:44px; }
+.game-workspace .password-form { padding:0; gap:10px; }
+.game-workspace .password-form :is(input, button) { min-height:var(--game-control-height); }
 </style>

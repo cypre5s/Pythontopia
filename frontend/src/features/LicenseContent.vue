@@ -20,10 +20,10 @@ import GameIcon from "../shared/GameIcon.vue";
 withDefaults(defineProps<{ headingTag?: "h2" | "h4" }>(), { headingTag: "h4" });
 </script>
 <style scoped>
-.license-content { color:#6e5d49; line-height:1.9; }
-.license-content section + section { margin-top:1.75rem; padding-top:1.5rem; border-top:1px solid #d6c6aa; }
-.license-content h2,.license-content h4 { color:#3d5145; font-size:1.1rem; margin:0 0 .9rem; }
-.license-content p { margin:.65rem 0; font-size:1rem; }
+.license-content { color:#6e5d49; line-height:1.7; }
+.license-content section + section { margin-top:16px; padding-top:12px; border-top:1px solid #d6c6aa; }
+.license-content h2,.license-content h4 { color:#3d5145; font-family:inherit; font-size:.875rem; margin:0 0 8px; }
+.license-content p { margin:.65rem 0; font-size:.9375rem; }
 .license-content a { display:inline-flex; align-items:center; gap:.55rem; min-height:44px; color:#305d4b; text-underline-offset:4px; }
 .license-content a svg { width:18px; height:18px; }
 </style>

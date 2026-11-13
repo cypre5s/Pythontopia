@@ -12,7 +12,7 @@
         </nav>
       </aside>
       <main :id="`settings-panel-${selected}`" class="town-content settings-content" role="tabpanel" :aria-labelledby="`settings-tab-${selected}`">
-        <header class="settings-category-heading"><h3>{{ currentCategory.label }}</h3></header>
+        <header class="settings-category-heading"><h3 class="game-card-title"><GameIcon :name="currentCategory.icon"/>{{ currentCategory.label }}</h3></header>
         <template v-if="selected === 'account'">
           <section class="town-section account-card" aria-label="当前账户">
             <div class="account-avatar" aria-hidden="true">{{ userInitial }}</div>
@@ -90,28 +90,28 @@ async function logout() {
 .settings-workspace { overflow:hidden; }
 .settings-directory .town-directory-item > svg:last-child { width:16px; height:16px; margin-left:auto; opacity:.65; }
 .settings-content { color:#4d4939; }
-.settings-category-heading { margin:0 0 1.65rem; padding-bottom:1.2rem; border-bottom:1px solid #d4c2a3; }
-.settings-category-heading h3 { font-family:Georgia,'Noto Serif SC',serif; color:#314d40; font-size:1.45rem; margin:0; }
-.settings-group { padding:0 1.65rem; }
-.setting-row { display:flex; align-items:center; justify-content:space-between; gap:2rem; min-height:112px; padding:1.6rem 0; }
+.settings-category-heading { margin:0 0 16px; padding-bottom:10px; border-bottom:1px solid #d4c2a3; }
+.settings-category-heading h3 { color:var(--game-forest); margin:0; }
+.settings-group { padding:0 16px; }
+.setting-row { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:72px; padding:12px 0; }
 .setting-row + .setting-row { border-top:1px solid #ded1b9; }
-.setting-copy { display:flex; flex-direction:column; gap:.5rem; min-width:0; color:#445140; cursor:default; }
-.setting-copy > strong { font-size:1.05rem; font-weight:600; }
-.setting-description { display:block; color:#7c715d; line-height:1.75; font-size:.95rem; font-weight:400; margin:0; }
+.setting-copy { display:flex; flex-direction:column; gap:4px; min-width:0; color:#445140; cursor:default; }
+.setting-copy > strong { font-size:.9375rem; font-weight:600; }
+.setting-description { display:block; color:#7c715d; line-height:1.75; font-size:.875rem; font-weight:400; margin:0; }
 .setting-status { color:#34614e; font-size:.875rem; }
-.setting-row select { min-width:168px; }
-.volume-control { display:flex; align-items:center; gap:1rem; min-width:280px; }
-.volume-control input { width:210px; }
+.setting-row select { min-width:140px; }
+.volume-control { display:flex; align-items:center; gap:1rem; min-width:220px; }
+.volume-control input { width:160px; }
 .volume-control input:disabled { opacity:.45; cursor:not-allowed; }.volume-control output { width:3.5rem; text-align:right; color:#485841; font-variant-numeric:tabular-nums; }
-.account-card { display:flex; align-items:center; gap:1.35rem; padding:2rem; margin-bottom:1.4rem; background:linear-gradient(110deg,#e4e9d8,#f9f3e5); }
-.account-avatar { width:68px; height:68px; display:grid; place-items:center; border-radius:18px; color:#fff4d6; background:#375c4b; font-size:1.75rem; flex-shrink:0; }
-.account-details { display:flex; flex-direction:column; gap:.55rem; min-width:0; }.account-details > strong { font-size:1.35rem; color:#304e3e; }.account-details > span { color:#7b705d; overflow-wrap:anywhere; font-size:.95rem; }
-.account-role { margin-left:auto; padding:.4rem .85rem; color:#526348; border:1px solid #bcc8ac; border-radius:20px; font-size:.875rem; white-space:nowrap; }
-.settings-logout { min-height:46px; display:inline-flex; align-items:center; gap:.6rem; color:#9d5443; background:#fff6ec; border:1px solid #cfae98; border-radius:8px; padding:.65rem 1.1rem; font:inherit; white-space:nowrap; }
+.account-card { display:flex; align-items:center; gap:12px; padding:16px; margin-bottom:10px; background:#e8eddf; }
+.account-avatar { width:44px; height:44px; display:grid; place-items:center; border-radius:8px; color:#fff4d6; background:#375c4b; font-size:1.25rem; flex-shrink:0; }
+.account-details { display:flex; flex-direction:column; gap:4px; min-width:0; }.account-details > strong { font-size:1rem; color:#304e3e; }.account-details > span { color:#7b705d; overflow-wrap:anywhere; font-size:.875rem; }
+.account-role { margin-left:auto; padding:3px 8px; color:#526348; border:1px solid #bcc8ac; border-radius:6px; font-size:.875rem; white-space:nowrap; }
+.settings-logout { display:inline-flex; align-items:center; gap:.6rem; color:#9d5443; background:#fff6ec; border:1px solid #cfae98; border-radius:8px; padding:6px 12px; white-space:nowrap; }
 .settings-logout svg,.setting-row a svg { width:18px; height:18px; }.settings-logout:hover { background:#f8e7da; }.settings-logout:disabled { opacity:.5; cursor:not-allowed; }
 .setting-row a { display:inline-flex; align-items:center; gap:.6rem; white-space:nowrap; }
-.settings-controls { padding:1.3rem 2rem 1.6rem; }.settings-controls dl { margin:0; }.settings-controls dl > div { display:grid; grid-template-columns:125px minmax(0,1fr); gap:1.5rem; padding:1.5rem 0; border-bottom:1px solid #ddd0b8; }.settings-controls dt { color:#455440; font-weight:600; }.settings-controls dd { display:flex; flex-wrap:wrap; align-items:center; gap:.45rem; margin:0; color:#776950; line-height:1.9; }.settings-controls dd > span { margin-left:.35rem; }.settings-controls kbd { min-width:32px; padding:.1rem .45rem; text-align:center; color:#53604a; background:#fcf8ee; border:1px solid #cbbda3; border-bottom-width:3px; border-radius:5px; font-family:inherit; }.settings-controls > p { margin-top:1.4rem; }
-.settings-about { padding:1.7rem 2rem; }.about-product { display:flex; align-items:center; flex-wrap:wrap; gap:.8rem; padding-bottom:1.5rem; margin-bottom:1.5rem; border-bottom:1px solid #d4c4a8; color:#34533f; }.about-product svg { width:32px; height:32px; }.about-product strong { font-size:1.3rem; }.about-product span { margin-left:auto; color:#82745c; font-size:.95rem; }
-@media(max-width:900px) { .setting-row { gap:1rem; }.volume-control { min-width:220px; }.volume-control input { width:150px; }.account-card { padding:1.5rem; }.settings-group { padding:0 1.2rem; } }
-@media(max-width:700px) { .settings-category-heading { margin-bottom:1.2rem; }.setting-row { flex-wrap:wrap; min-height:0; padding:1.3rem 0; }.setting-copy { flex:1 1 190px; }.setting-volume-row .setting-copy { flex-basis:100%; }.volume-control { width:100%; min-width:0; }.volume-control input { flex:1; width:auto; }.account-card { flex-wrap:wrap; gap:1rem; }.account-avatar { width:52px; height:52px; border-radius:13px; }.account-details { flex:1; }.account-details strong { font-size:1.1rem; }.account-role { margin-left:calc(52px + 1rem); }.settings-controls { padding:1rem 1.2rem; }.settings-controls dl > div { grid-template-columns:1fr; gap:.65rem; }.settings-about { padding:1.2rem; }.about-product span { margin-left:0; width:100%; } }
+.settings-controls { padding:0 16px 12px; }.settings-controls dl { margin:0; }.settings-controls dl > div { display:grid; grid-template-columns:90px minmax(0,1fr); gap:12px; padding:12px 0; border-bottom:1px solid #ddd0b8; }.settings-controls dt { color:#455440; font-weight:600; }.settings-controls dd { display:flex; flex-wrap:wrap; align-items:center; gap:.45rem; margin:0; color:#776950; line-height:1.9; }.settings-controls dd > span { margin-left:.35rem; }.settings-controls kbd { min-width:32px; padding:.1rem .45rem; text-align:center; color:#53604a; background:#fcf8ee; border:1px solid #cbbda3; border-radius:5px; font-family:inherit; }.settings-controls > p { margin-top:12px; }
+.settings-about { padding:16px; }.about-product { display:flex; align-items:center; flex-wrap:wrap; gap:.8rem; padding-bottom:12px; margin-bottom:12px; border-bottom:1px solid #d4c4a8; color:#34533f; }.about-product svg { width:20px; height:20px; }.about-product strong { font-size:1rem; }.about-product span { margin-left:auto; color:#82745c; font-size:.875rem; }
+@media(max-width:900px) { .setting-row { gap:1rem; }.volume-control { min-width:220px; }.volume-control input { width:150px; }.account-card { padding:16px; }.settings-group { padding:0 12px; } }
+@media(max-width:700px) { .settings-category-heading { margin-bottom:1.2rem; }.setting-row { flex-wrap:wrap; min-height:0; padding:12px 0; }.setting-copy { flex:1 1 190px; }.setting-volume-row .setting-copy { flex-basis:100%; }.volume-control { width:100%; min-width:0; }.volume-control input { flex:1; width:auto; }.account-card { flex-wrap:wrap; gap:1rem; }.account-avatar { width:44px; height:44px; border-radius:8px; }.account-details { flex:1; }.account-details strong { font-size:1.1rem; }.account-role { margin-left:calc(44px + 1rem); }.settings-controls { padding:1rem 1.2rem; }.settings-controls dl > div { grid-template-columns:1fr; gap:.65rem; }.settings-about { padding:1.2rem; }.about-product span { margin-left:0; width:100%; } }
 </style>
