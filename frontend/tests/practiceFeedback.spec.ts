@@ -73,7 +73,7 @@ describe("public judge sample feedback", () => {
       activity_id: "code-test",
       question_id: "q1",
 
-      mode: "run",
+      mode: "submit",
       status: "runtime_error",
       created_at: "2026-11-03T00:00:00Z",
       feedback: {
@@ -109,7 +109,7 @@ describe("public judge sample feedback", () => {
     await wrapper.find("textarea").setValue("wasd");
     await wrapper
       .findAll("button")
-      .find((b) => b.text() === "运行公开样例")!
+      .find((b) => b.text() === "提交代码")!
       .trigger("click");
     await flushPromises();
     const feedback = wrapper.find(".submission-result");

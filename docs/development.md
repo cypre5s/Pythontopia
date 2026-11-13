@@ -192,7 +192,7 @@ docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.ym
 
 ### Judge0
 
-学生代码仅送往 Judge0，不在 API 主机执行。可选隔离栈为 `deploy/judge0.compose.yml` 与 `deploy/judge0.conf`；当前固定镜像为 `judge0/judge0:1.13.1`，不要改成 `latest`。在独立受信 Linux 环境部署 worker，保持禁网及其隔离限制，不向学生浏览器暴露判题 API。
+正式提交仅送往 Judge0，不在 API 主机执行；公开样例允许在隔离浏览器环境试运行。可选隔离栈为 `deploy/judge0.compose.yml` 与 `deploy/judge0.conf`；当前固定镜像为 `judge0/judge0:1.13.1`，不要改成 `latest`。在独立受信 Linux 环境部署 worker，保持禁网及其隔离限制，不向学生浏览器暴露判题 API。
 
 为判题栈准备忽略的独立环境文件，设置随机的 `REBORN_JUDGE_DB_PASSWORD`、`REBORN_JUDGE_REDIS_PASSWORD`、`REBORN_JUDGE0_AUTH_TOKEN`，再启动：
 
@@ -364,3 +364,7 @@ python -m app.course_package --check 'E:/course-exchange/my-course'
 角色图片清理与课程交换清理共用启动/每10分钟后台周期。角色保存事务提交后立即尝试清理退休图片，失败保留在课程私有状态队列重试；未提交上传超过24小时过期。文件只允许清理所属课程的 characters 前缀，系统素材不参与清理。
 
 课程设置升级至 f318a72c90de：先备份当前环境，再执行 alembic upgrade head；一次性将存储字段 library_npc_id 改名为 default_npc_id，并允许 activities.npc_key 为空。旧包不会转换，需更新 assistant/settings.yaml 后重新校验。不要为兼容旧包恢复旧字段。课程包源仅保留 data/course/python-town-chapter1；私有包与媒体不入 Git，导出产生新目录时由教师决定保留/清理。
+
+## Python 浏览器运行验证
+
+公开样例首次运行需要访问 https://cdn.jsdelivr.net/pyodide/v0.27.7/full/ 下载固定运行时；不可用时显示加载错误，不回退到服务端运行。标准输入输出与基础 Python 为支持范围，本机耗时不等同于 Judge0 耗时。运行 Vite 后，设置 PYTHON_RUNNER_DEV_URL 指向 Vite 地址，执行 frontend/e2e/pythonRunner.spec.ts；测试验证真实 WASM、超时、取消和 API 网络隔离。生产正式评测仍需按 Judge0 小节部署 Linux 隔离栈。新增迁移 c421b8e091aa 只增加提示及初始代码字段，保留提交记录。Windows 测试设置 PYTHONUTF8=1 并为 pytest 指定工作区内独立 basetemp。

@@ -52,7 +52,7 @@ class JudgeAdapter:
 
     async def submit(self, code: str, cases: list[dict]) -> list[str]:
         if not self.base_url:
-            raise JudgeUnavailable("Judge0 未配置，编程运行与正式判题不可用")
+            raise JudgeUnavailable("Judge0 未配置，正式判题不可用；仍可在浏览器运行公开样例")
         payload = {
             "submissions": [
                 {

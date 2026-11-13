@@ -54,7 +54,7 @@ class MessageInput(BaseModel):
     message: str = Field(min_length=1, max_length=2000)
     page_no: int | None = Field(default=None, ge=1)
     video_time: float | None = Field(default=None, ge=0, le=86400)
-    code: str | None = Field(default=None, max_length=12000)
+    code: str | None = Field(default=None, max_length=20000)
 
 
 class RetrievalAdapter(Protocol):

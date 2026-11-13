@@ -306,6 +306,8 @@ class Question(CourseContent, Base):
     prompt: Mapped[str] = mapped_column(Text)
     options: Mapped[list] = mapped_column(JSON, default=list)
     samples: Mapped[list] = mapped_column(JSON, default=list)
+    hints: Mapped[list] = mapped_column(JSON, default=list, server_default=text("'[]'"))
+    starter_code: Mapped[str] = mapped_column(Text, default="", server_default=text("''"))
     source: Mapped[dict] = mapped_column(JSON, default=dict)
 
 

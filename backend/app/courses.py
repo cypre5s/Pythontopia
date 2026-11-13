@@ -190,6 +190,8 @@ def public_question(question: Question):
         "prompt": question.prompt,
         "options": question.options,
         "samples": question.samples,
+        "hints": question.hints,
+        "starter_code": question.starter_code,
         "source": question.source,
     }
 

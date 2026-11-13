@@ -72,25 +72,25 @@ def test_judge_dispatch_once_unknown_does_not_blindly_resend(client, db, student
     assert db.get(Submission, sid).status == "submission_unknown"
 
 
-def test_server_poll_recovers_without_browser_and_run_not_official(client, db, student, classroom, monkeypatch, branching_course):
+def test_server_poll_recovers_without_browser(client, db, student, classroom, monkeypatch, branching_course):
     monkeypatch.setattr(practice, "SessionLocal", sessionmaker(db.bind, expire_on_commit=False))
-    result = submit(client, student, classroom, activity_id="ch2-code", question_id="course-476", code="print(input())", answer=None, mode="run")
+    result = submit(client, student, classroom, activity_id="ch2-code", question_id="course-476", code="print(input())", answer=None)
     sid = result.json()["id"]
 
     class FakeJudge:
         async def submit(self, code, cases):
-            assert len(cases) == 3  # Run executes public samples only.
+            assert len(cases) > 3  # Formal grading includes hidden cases.
             return ["token-" + str(i) for i in range(len(cases))]
 
         async def poll(self, tokens, public_count):
-            assert len(tokens) == public_count == 3
+            assert len(tokens) > public_count == 3
             return JudgeResult("accepted", {"samples": []})
 
     asyncio.run(practice.dispatch_one(sid, FakeJudge()))
     asyncio.run(practice.poll_one(sid, FakeJudge()))
     db.expire_all()
     row = db.get(Submission, sid)
-    assert row.status == "accepted" and row.mode == "run" and row.judge_token
+    assert row.status == "accepted" and row.mode == "submit" and row.judge_token
 
 
 def test_judge_worker_recovers_database_outage_without_replaying_dispatch(client, db, student, classroom, monkeypatch, caplog, branching_course):

@@ -481,6 +481,8 @@ class QuestionInput(BaseModel):
     status: Literal["draft", "ready", "disabled"] = "draft"
     options: list = Field(default_factory=list, max_length=20)
     samples: list = Field(default_factory=list, max_length=20)
+    hints: list[str] = Field(default_factory=list, max_length=10)
+    starter_code: str = Field(default="", max_length=20000)
     answer: dict | list | str | bool | None = None
     hidden_cases: list = Field(default_factory=list, max_length=20)
     source: dict = Field(default_factory=dict)
@@ -504,6 +506,13 @@ class QuestionInput(BaseModel):
         if len(json.dumps(value, ensure_ascii=False)) > 30000:
             raise ValueError("题目选项或来源超过30000字符")
         return value
+
+    @field_validator("hints")
+    @classmethod
+    def validate_hints(cls, hints):
+        if any(not hint.strip() or len(hint) > 2000 for hint in hints):
+            raise ValueError("每条提示须为1至2000字符")
+        return hints
 
     @field_validator("samples", "hidden_cases")
     @classmethod
@@ -545,6 +554,8 @@ class QuestionUpdate(BaseModel):
     status: Literal["draft", "ready", "disabled"] | None = None
     options: list | None = None
     samples: list | None = None
+    hints: list[str] | None = None
+    starter_code: str | None = None
     answer: dict | list | str | bool | None = None
     hidden_cases: list | None = None
     source: dict | None = None

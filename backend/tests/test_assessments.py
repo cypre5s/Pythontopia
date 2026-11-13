@@ -159,15 +159,15 @@ def test_python_whole_paper_uses_existing_judge_and_unknown_is_never_resubmitted
     run_body = {"classroom_id": classroom["id"], "activity_id": activity.id, "question_id": "test-python-paper-q",
                 "idempotency_key": "old-public-run", "mode": "run", "code": "print('public')"}
     run = client.post("/api/submissions", headers=student["headers"], json=run_body)
-    assert run.status_code == 201
+    assert run.status_code == 422
     submitted = client.post(f"/api/activities/{activity.id}/assessment/submit", headers=student["headers"], json={
         "classroom_id": classroom["id"], "idempotency_key": "python-whole-paper", "answers": [{"question_id": "test-python-paper-q", "code": "print('public')"}]})
     assert submitted.status_code == 201 and submitted.json()["status"] == "grading" and submitted.json()["locked"]
     assert submitted.json()["score"] is None and submitted.json()["max_score"] == 100
     assert "secret-in" not in submitted.text and "secret-out" not in submitted.text
     sid = submitted.json()["results"][0]["id"]
-    assert client.post("/api/submissions", headers=student["headers"], json={**run_body, "idempotency_key": "new-public-run"}).status_code == 409
-    assert client.post("/api/submissions", headers=student["headers"], json=run_body).json()["id"] == run.json()["id"]
+    assert client.post("/api/submissions", headers=student["headers"], json={**run_body, "idempotency_key": "new-public-run"}).status_code == 422
+    assert client.post("/api/submissions", headers=student["headers"], json=run_body).status_code == 422
     monkeypatch.setattr(practice, "SessionLocal", sessionmaker(db.bind, expire_on_commit=False))
 
     class Unknown:

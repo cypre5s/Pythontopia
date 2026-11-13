@@ -116,6 +116,8 @@ export interface Material {
   duration_seconds?: number | null;
 }
 export interface Question {
+  hints?: string[];
+  starter_code?: string;
   id: string;
   title: string;
   kind: "single_choice" | "boolean" | "fill" | "python";

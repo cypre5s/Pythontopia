@@ -77,6 +77,8 @@ export interface Material {
   has_file?: boolean;
 }
 export interface Question {
+  hints?: string[];
+  starter_code?: string;
   id: string;
   title: string;
   kind: "single_choice" | "boolean" | "fill" | "python";

@@ -54,6 +54,7 @@ export function Questions({ classroomId }: { classroomId: number }) {
   const [query, setQuery] = useState(""),
     [filter, setFilter] = useState("all"),
     [sourceFilter, setSourceFilter] = useState("all"),
+    [kindFilter, setKindFilter] = useState("all"),
     [page, setPage] = useState(1),
     [size, setSize] = useState(10),
     [editing, setEditing] = useState<Question | null>(null),
@@ -61,6 +62,8 @@ export function Questions({ classroomId }: { classroomId: number }) {
     [id, setId] = useState(""),
     [title, setTitle] = useState(""),
     [prompt, setPrompt] = useState(""),
+    [hints, setHints] = useState(""),
+    [starterCode, setStarterCode] = useState(""),
     [kind, setKind] = useState<Question["kind"]>("single_choice"),
     [status, setStatus] = useState<Question["status"]>("draft"),
     [options, setOptions] = useState<string[]>(["", ""]),
@@ -78,6 +81,7 @@ export function Questions({ classroomId }: { classroomId: number }) {
   const rows = (list.data ?? []).filter(
     (q) =>
       (q.title.toLowerCase().includes(query.trim().toLowerCase()) || q.prompt.toLowerCase().includes(query.trim().toLowerCase())) &&
+      (kindFilter === "all" || q.kind === kindFilter) &&
       (filter === "all" || q.status === filter) &&
       (sourceFilter === "all" || q.source_type === sourceFilter),
   );
@@ -90,6 +94,8 @@ export function Questions({ classroomId }: { classroomId: number }) {
     setId(q?.id ?? newId("question"));
     setTitle(q?.title ?? "");
     setPrompt(q?.prompt ?? "");
+    setHints(q?.hints?.join("\n") ?? "");
+    setStarterCode(q?.starter_code ?? "");
     setKind(q?.kind ?? "single_choice");
     setStatus(q?.status ?? "draft");
     setOptions(q?.options?.length ? q.options : ["", ""]);
@@ -157,6 +163,8 @@ export function Questions({ classroomId }: { classroomId: number }) {
               : kind === "python"
                 ? (editing?.answer ?? null)
                 : answer,
+        hints: kind === "python" ? hints.split("\n").filter(x=>x.trim()) : [],
+        starter_code: kind === "python" ? starterCode : "",
         hidden_cases: kind === "python" ? cases : [],
         samples:
           kind === "python"
@@ -212,6 +220,7 @@ export function Questions({ classroomId }: { classroomId: number }) {
               }}
             />
           </div>
+          <SelectField aria-label="题目类型" value={kindFilter} onValueChange={value=>{setKindFilter(value);setPage(1);deletion.clear();}}><option value="all">全部题型</option>{Object.entries(kinds).map(([key,value])=><option key={key} value={key}>{value}</option>)}</SelectField>
           <SelectField
             aria-label="题目状态"
             value={filter}
@@ -467,6 +476,8 @@ export function Questions({ classroomId }: { classroomId: number }) {
                 </div>
               ) : (
                 <>
+                  <div className="field"><Label htmlFor="q-starter">初始 Python 代码（标准输入输出）</Label><Textarea id="q-starter" value={starterCode} maxLength={20000} onChange={e=>{setStarterCode(e.target.value);setDirty(true);}} /></div>
+                  <div className="field"><Label htmlFor="q-hints">分步提示（每行一条，最多10条）</Label><Textarea id="q-hints" value={hints} onChange={e=>{setHints(e.target.value);setDirty(true);}} /></div>
                   <Cases
                     title="公开样例"
                     rows={samples}

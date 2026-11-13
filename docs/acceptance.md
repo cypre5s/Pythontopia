@@ -1,5 +1,23 @@
 # 验收摘要与已知边界
 
+
+## 统一题库编程题核验2026-11-13
+
+本轮在 reborn 实现标准输入输出编程题：统一题库与混排练习、提示和初始代码、浏览器公开样例试运行、正式提交继续走 Judge0；旧服务端 run 模式返回422。课程包仍为v2，本地最新包 version 4 加入“向小镇问好”，不自动覆盖演示班级。
+
+- 双前端 npm ci、类型检查、lint、构建通过；学生38文件210测试通过，后台10文件34测试通过。构建保留现有大块体积提示。
+- 后端 uv pip sync 锁定依赖、Ruff通过；独立 PostgreSQL 完整 pytest：575通过、7跳过、2条SQLite datetime弃用提示。跳过为5项真实Judge0未配置和2项Windows符号链接不可用。
+- 全新 PostgreSQL 迁移到 c421b8e091aa、重复upgrade、alembic check通过。新增字段保留现有数据。真实包重复导入、导出、再次导入的9类数据及41个资源校验值一致。
+- Edge真实Pyodide测试通过：标准输入输出、错误反馈、死循环5秒终止、取消/销毁、禁止请求应用API。编程题组件实际运行样例通过；自动化证明运行不会触发正式提交事件。截图为组件级证据，不冒充完整小镇视口验收。
+- 17254现有体验环境已更新，健康与题库页面HTTP200；保留课程、账号和学习数据。课程包仍由教师显式导入。
+
+初轮失败保留：Windows默认GBK读取夹具、系统pytest临时目录权限、前端沙盒临时缓存rename受限；修正UTF-8、独立basetemp及正常执行环境后通过。第一次PostgreSQL专项因数据库名不满足reborn保护规则失败，改用独立reborn_programming_tests库后全量通过。运行器提前取消单测暴露初始化时机问题，已改为创建iframe前返回，复测通过。
+
+证据：.tmp/programming-postgres-verified.log、programming-frontend-final-suite.log、programming-admin-test-latest.log、programming-runner-e2e.log、programming-browser.log、programming-browser.png、programming-migration.log、programming-package-roundtrip.log、programming-preview-deploy.log。全部为本地忽略证据，不提交数据或凭据。
+
+未执行：真实Judge0执行沙箱、真实模型调用、S3/PPTX、完整arrival主线浏览器重走/账号切换恢复、多视口整页验收及生产部署。本轮浏览器验证是运行器与编程题组件专项，不能替代这些范围。公开试运行首次需要访问固定Pyodide CDN，失败明确显示，不回退到服务端。
+
+
 ## 课程默认答疑角色与环境收敛核验2026-11-13
 
 按用户确认拆分角色资料和课程公共设置：独立“课程设置 → AI 助教”维护 default_npc_id、开关和预算；图书馆使用默认角色，活动 npc_key=null 继承、非空独立指定。删除角色页预算控件与旧运行字段，API/课程包拒绝 library_npc_id；迁移 f318a72c90de 一次性移除存量旧字段，保留其他配置与学习证据。素材和角色单一来源要求保持。

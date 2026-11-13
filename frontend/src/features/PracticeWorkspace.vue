@@ -61,7 +61,7 @@ import LearningSplitLayout from "./LearningSplitLayout.vue";
 import PracticeQuestionCard from "./PracticeQuestionCard.vue";
 import "./learningUi.css";
 import "./practiceUi.css";
-interface Draft { answer: string; code: string; submission_id?: string; pending?: { key: string; mode: 'run' | 'submit'; answer: string | boolean; code: string } }
+interface Draft { answer: string; code: string; submission_id?: string; pending?: { key: string; mode: 'submit'; answer: string | boolean; code: string } }
 const props = defineProps<{ activityId: string; storySessionId?: string }>();
 const emit = defineEmits<{ complete: []; activityKind: [kind: string] }>();
 const session = useSession(), { collapsed: sidebarCollapsed } = useWorkspaceSidebar();
@@ -171,7 +171,7 @@ async function load() {
     const loaded = await session.activity(props.activityId);
     if (!currentOwner() || ticket !== generation) return;
     activity.value = loaded; emit('activityKind', loaded.kind); activityProgress.value = loaded.progress; questionIndex.value = 0; viewMode.value = 'single';
-    for (const question of loaded.questions) { const old = localJson(questionKey(question.id)); drafts.value[question.id] = { answer: typeof old?.answer === 'string' ? old.answer : '', code: typeof old?.code === 'string' ? old.code : '', submission_id: old?.submission_id, pending: old?.pending }; }
+    for (const question of loaded.questions) { const old = localJson(questionKey(question.id)); drafts.value[question.id] = { answer: typeof old?.answer === 'string' ? old.answer : '', code: typeof old?.code === 'string' ? old.code : question.starter_code ?? '', submission_id: old?.submission_id, pending: old?.pending }; }
     if (loaded.kind === 'assessment') {
       const saved = await api.get<AssessmentAttempt>(`/activities/${loaded.id}/assessment?classroom_id=${contextClassroomId}`);
       if (!currentOwner() || ticket !== generation) return;
@@ -188,7 +188,7 @@ async function load() {
   } catch (cause) { if (currentOwner() && ticket === generation) error.value = cause instanceof Error ? cause.message : '题目加载失败'; }
   finally { if (currentOwner() && ticket === generation) loading.value = false; }
 }
-async function submitQuestion(id: string, mode: 'run' | 'submit') {
+async function submitQuestion(id: string, mode: 'submit') {
   const question = questions.value.find(item => item.id === id), draft = drafts.value[id];
   if (!question || !draft || !activity.value || !hasAnswer(question) || requestBusy.value || isAssessment.value && (paper.value?.locked || mode === 'submit')) return;
   const ticket = generation; requestBusy.value = true; busyQuestionId.value = id; error.value = '';

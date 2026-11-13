@@ -26,7 +26,7 @@ class SubmissionInput(BaseModel):
     activity_id: str = Field(max_length=100)
     question_id: str = Field(max_length=100)
     idempotency_key: str = Field(min_length=8, max_length=100)
-    mode: Literal["run", "submit"] = "submit"
+    mode: Literal["submit"] = "submit"
     answer: dict | list | str | bool | None = None
     code: str | None = Field(default=None, max_length=20000)
 
@@ -68,14 +68,11 @@ def stage_submission(db, user, classroom_id, activity, question, answer, code, k
             raise HTTPException(422, "请填写代码")
         cases = list(question.samples)
         public_count = len(cases)
-        if mode == "submit":
-            cases += list(secret.hidden_cases)
+        cases += list(secret.hidden_cases)
         if not cases or len(cases) > 20:
             raise HTTPException(503, "题目未配置有效且有界的测试用例")
         row.status, row.feedback = "prepared", {"detail": "已保存，等待 Judge0"}
     else:
-        if mode == "run":
-            raise HTTPException(422, "概念题请使用正式提交")
         row.status = "accepted" if grade_answer(answer, secret.answer, question.kind) else "wrong_answer"
         row.feedback = {"detail": "回答正确" if row.status == "accepted" else "请结合课件重新思考", "status": row.status}
     db.add(row)
@@ -112,11 +109,7 @@ def create_submission(body: SubmissionInput, user: Annotated[User, Depends(curre
         raise HTTPException(404, "题目不属于当前活动")
     db.execute(select(User.id).where(User.id == user.id).with_for_update())
     if activity.kind == "assessment":
-        from .assessments import assessment_payload
-        if body.mode == "submit":
-            raise HTTPException(409, "测验需要完成所有题目后统一提交试卷")
-        if assessment_payload(db, user, body.classroom_id, activity)["locked"]:
-            raise HTTPException(409, "试卷已提交，不能修改或重新运行答案")
+        raise HTTPException(409, "测验需要完成所有题目后统一提交试卷")
     try:
         row = stage_submission(db, user, body.classroom_id, activity, question, body.answer, body.code, body.idempotency_key, body.mode)
         db.commit()

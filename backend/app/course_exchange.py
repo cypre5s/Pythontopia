@@ -45,7 +45,7 @@ MAX_ARCHIVE = int(os.getenv("REBORN_COURSE_UPLOAD_BYTES", str(2 * 1024**3)))
 FIELDS = {
     Chapter: ("title", "order_index"), KnowledgePoint: ("chapter_id", "title", "content"),
     Material: ("title", "kind", "content", "status", "error"),
-    Question: ("title", "kind", "prompt", "options", "samples", "source", "source_type", "status"),
+    Question: ("title", "kind", "prompt", "options", "samples", "hints", "starter_code", "source", "source_type", "status"),
     Npc: ("name", "portrait", "sprite", "persona", "placement", "appearance_condition"),
     Activity: ("chapter_id", "title", "kind", "material_id", "npc_key", "assistant_allowed", "content"),
     QuestDefinition: ("chapter_id", "title", "definition"), StoryDefinition: ("chapter_id", "quest_id", "content"),
