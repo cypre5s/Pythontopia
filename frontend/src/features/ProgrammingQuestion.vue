@@ -114,4 +114,3 @@ const resultDetail = computed(() => {
   return props.result && detail !== submissionStatusName[props.result.status] ? detail : "";
 });
 </script>
-

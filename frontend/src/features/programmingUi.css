@@ -62,4 +62,3 @@
 @media (prefers-reduced-motion:reduce) {
   .game-workspace .pane-resize-handle span, .game-workspace .learning-resize-handle > span { transition:none; }
 }
-
