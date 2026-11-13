@@ -14,9 +14,10 @@ from ..auth import current_user, require_teacher
 from ..db import get_db
 from ..models import Material, User
 from ..teacher_scope import require_scope, teacher_instance_id
-from . import calibrate
+from . import audio, calibrate
 from . import client as model_client
 from . import repository, service
+from . import tts
 
 router = APIRouter(prefix="/teacher/classrooms/{classroom_id}/materials/{material_id}/narrations", tags=["narration"])
 student_router = APIRouter(prefix="/materials/{material_id}/narrations", tags=["narration"])
@@ -234,6 +235,47 @@ def delete_narration(page_no: int, classroom_id: int, material_id: int, db: Anno
     return {"page_no": page_no, "removed": True}
 
 
+@router.post("/{page_no}/audio")
+def synthesize_audio(page_no: int, classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
+                     user: Annotated[User, Depends(require_teacher)]):
+    """Speak one approved page. Draft wording is refused, not spoken."""
+    instance_id = teacher_instance_id(db, user, classroom_id)
+    material = require_scope(db.get(Material, material_id), instance_id)
+    repository.sync_staleness(db, material)
+    db.commit()
+    try:
+        result = audio.synthesize_page(db, material, page_no)
+    except tts.SpeechUnavailable as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except tts.SpeechFailed as exc:
+        raise HTTPException(502, str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    db.commit()
+    return result
+
+
+@router.get("/audio")
+def read_audio_status(classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
+                      user: Annotated[User, Depends(require_teacher)]):
+    instance_id = teacher_instance_id(db, user, classroom_id)
+    material = require_scope(db.get(Material, material_id), instance_id)
+    repository.sync_staleness(db, material)
+    db.commit()
+    engine = tts.settings()
+    rows = repository.rows(db, material.id)
+    return {
+        "available": tts.unavailable_reason() is None,
+        "voice": engine["voice"],
+        "model": engine["model"],
+        "pages": [{"page_no": item.page_no, "status": item.status,
+                   "ready": audio.current_audio(db, material, item.page_no) is not None,
+                   "seconds": item.audio_seconds} for item in rows],
+    }
+
+
 @student_router.get("")
 def read_narrations(material_id: int, classroom_id: int, db: Annotated[Session, Depends(get_db)],
                     user: Annotated[User, Depends(current_user)]):
@@ -248,3 +290,21 @@ def read_narrations(material_id: int, classroom_id: int, db: Annotated[Session, 
         "pages": [{"page_no": item.page_no, "text": item.text, "bridge_in": item.bridge_in,
                    "target_seconds": item.target_seconds} for item in repository.visible(db, material)],
     }
+
+
+@student_router.get("/{page_no}/audio")
+def stream_narration_audio(page_no: int, material_id: int, classroom_id: int,
+                           db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
+    """Stream one approved page's audio; stale recordings are unavailable, not guessed."""
+    from fastapi.responses import FileResponse
+    from ..courses import authorize_material
+
+    material = authorize_material(db, user, classroom_id, material_id)
+    repository.sync_staleness(db, material)
+    db.commit()
+    found = audio.read_audio(db, material, page_no)
+    if found is None:
+        raise HTTPException(404, "本页还没有可播放的讲解音频")
+    item, path = found
+    return FileResponse(path, media_type="audio/mpeg", filename=f"narration-{material.id}-{page_no}.mp3",
+                        headers={"Cache-Control": "private, max-age=600"})

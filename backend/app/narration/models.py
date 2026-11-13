@@ -44,6 +44,12 @@ class PageNarration(Base):
     reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     edited_by_teacher: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Audio is derived from the approved wording; the hash makes stale audio unusable.
+    audio_key: Mapped[str | None] = mapped_column(Text, nullable=True)
+    audio_text_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    audio_seconds: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    audio_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now, onupdate=now)
 
