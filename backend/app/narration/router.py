@@ -14,7 +14,8 @@ from ..auth import current_user, require_teacher
 from ..db import get_db
 from ..models import Material, User
 from ..teacher_scope import require_scope, teacher_instance_id
-from . import repository
+from . import client as model_client
+from . import repository, service
 
 router = APIRouter(prefix="/teacher/classrooms/{classroom_id}/materials/{material_id}/narrations", tags=["narration"])
 student_router = APIRouter(prefix="/materials/{material_id}/narrations", tags=["narration"])
@@ -23,6 +24,18 @@ student_router = APIRouter(prefix="/materials/{material_id}/narrations", tags=["
 class NarrationInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
     text: str
+    target_seconds: int | None = None
+
+
+class GenerateInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    first_page: int
+    last_page: int
+    target_seconds: int | None = None
+
+
+class PageGenerateInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
     target_seconds: int | None = None
 
 
@@ -36,6 +49,64 @@ def _page(material: Material, page_no: int) -> dict:
     if page is None:
         raise HTTPException(404, "本页不存在或页码超出范围")
     return page
+
+
+@router.post("/{page_no}/generate")
+def generate_narration(page_no: int, classroom_id: int, material_id: int,
+                       db: Annotated[Session, Depends(get_db)],
+                       user: Annotated[User, Depends(require_teacher)],
+                       body: PageGenerateInput | None = None):
+    """One explicit authoring request = at most one model call. Never runs on page turns."""
+    instance_id = teacher_instance_id(db, user, classroom_id)
+    material = require_scope(db.get(Material, material_id), instance_id)
+    repository.sync_staleness(db, material)
+    db.commit()
+    try:
+        result = service.generate_page(db, material, page_no, instance_id=instance_id,
+                                       target_seconds=body.target_seconds if body else None)
+    except service.NarrationUnavailable as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    except model_client.ModelUnavailable as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except model_client.ModelFailed as exc:
+        raise HTTPException(502, str(exc)) from exc
+    db.commit()
+    return result
+
+
+@router.post("/generate")
+def generate_range(classroom_id: int, material_id: int, body: GenerateInput,
+                   db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
+    """Serial batch: each page commits on its own, so a failure keeps earlier pages."""
+    instance_id = teacher_instance_id(db, user, classroom_id)
+    material = require_scope(db.get(Material, material_id), instance_id)
+    repository.sync_staleness(db, material)
+    db.commit()
+    if body.first_page < 1 or body.last_page < body.first_page:
+        raise HTTPException(422, "页码范围无效")
+    try:
+        results = service.generate_range(db, material, first=body.first_page, last=body.last_page,
+                                         instance_id=instance_id, target_seconds=body.target_seconds)
+    except service.NarrationUnavailable as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(404, str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    db.commit()
+    return {"results": results}
+
+
+@router.get("/quota")
+def read_quota(classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
+               user: Annotated[User, Depends(require_teacher)]):
+    instance_id = teacher_instance_id(db, user, classroom_id)
+    require_scope(db.get(Material, material_id), instance_id)
+    return service.quota(db, instance_id)
 
 
 @router.get("")

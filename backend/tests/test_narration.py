@@ -9,9 +9,10 @@ def pages(*texts):
 
 
 def material_fixture(db, classroom, texts, **fields):
-    # Students may only read materials attached to a published chapter of their class.
+    """Library-published material of the test course; students may read it without an activity."""
+    fields.setdefault("kind", "presentation")
     return make_material(db, chapter_ids=[179, 180], course_instance_id=db.info["fixture_course_instance_id"],
-                         title="讲义", kind="presentation", status="ready", content=pages(*texts), **fields)
+                         title="讲义", status="ready", content=pages(*texts), **fields)
 
 
 def url(classroom, material, suffix=""):
