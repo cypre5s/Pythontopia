@@ -36,10 +36,10 @@
 .game-workspace .town-content p { line-height: 1.7; }
 .game-workspace .town-toolbar { display: flex; align-items: center; flex-wrap: wrap; gap: 14px; margin-bottom: 28px; }
 .game-workspace .town-field { display: flex; flex-direction: column; gap: 9px; font-weight: 500; }
-.game-workspace .town-section { border: 1px solid var(--town-line); background: #fffdf780; border-radius: 12px; padding: clamp(20px, 2vw, 32px); margin-bottom: 24px; }
-.game-workspace .town-row { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 22px 0; border-bottom: 1px solid #ddcfb7; }
+.game-workspace .town-section { border: 1px solid var(--town-line); background: #fffdf780; border-radius: 12px; padding: clamp(20px, 2vw, 32px); margin-bottom: 12px; }
+.game-workspace .town-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 0; border-bottom: 1px solid #ddcfb7; }
 .game-workspace .town-row:last-child { border-bottom: 0; }
-.game-workspace .town-primary, .game-workspace .town-secondary { min-height: 44px; padding: 11px 20px; border-radius: 8px; font-size: 1rem; font-weight: 550; }
+.game-workspace .town-primary, .game-workspace .town-secondary { min-height: 34px; padding: 6px 12px; border-radius: 8px; font-size: 1rem; font-weight: 550; }
 .game-workspace .town-primary { background: #2c5144; color: #fff3d7; border: 1px solid #234438; }
 .game-workspace .town-primary:hover { background: #3d6251; }
 .game-workspace .town-secondary { background: #fffaf0; color: #624a32; border: 1px solid #c9b18d; }

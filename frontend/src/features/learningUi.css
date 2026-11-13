@@ -8,7 +8,7 @@
   --learn-wash: #f0e7d5;
   color: var(--learn-ink);
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 22px minmax(18rem, var(--support-width, 28%));
+  grid-template-columns: minmax(0, 1fr) 10px minmax(18rem, var(--support-width, 28%));
   gap: 0;
   flex: 1;
   height: 100%;
@@ -44,8 +44,8 @@
 }
 .game-workspace .learning-layout .content-heading h2 {
   font-size: clamp(1.4rem, 2.2vw, 1.8rem);
-  font-family: Georgia, "Noto Serif SC", serif;
-  font-weight: 600;
+  font-family: var(--font-heading);
+  font-weight: 700;
   line-height: 1.45;
   letter-spacing: 0;
   color: var(--learn-forest);
@@ -294,7 +294,7 @@
 }
 .game-workspace .learning-layout .submission-actions button {
   font-size: 1rem;
-  min-height: 3rem;
+  min-height: 2.125rem;
 }
 .game-workspace .learning-layout .submission-result {
   margin-top: 1.6rem;
@@ -352,7 +352,7 @@
   margin: 0.75rem 0 0.4rem;
 }
 .game-workspace .learning-layout .public-sample-feedback pre {
-  padding: 0.8rem 1rem;
+  padding: 0.4rem 0.75rem;
   background: #fffdf7;
   border: 1px solid var(--learn-border);
   border-radius: 8px;

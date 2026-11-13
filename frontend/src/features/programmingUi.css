@@ -1,0 +1,65 @@
+.game-workspace .practice-toolbar { display:flex; justify-content:center; flex:1; min-width:0; }
+.game-workspace .coding-actions { display:flex; gap:6px; justify-content:center; }
+.game-workspace .coding-divider { position:relative; min-width:0; min-height:0; }
+.game-workspace .coding-divider-vertical { grid-column:2; grid-row:1 / 4; }
+.game-workspace .coding-divider-horizontal { grid-column:3; grid-row:2; }
+.game-workspace .pane-resize-handle { position:absolute; display:grid; place-items:center; z-index:2; touch-action:none; }
+.game-workspace .coding-divider-vertical .pane-resize-handle { inset:0 auto 0 50%; transform:translateX(-50%); width:20px; cursor:col-resize; }
+.game-workspace .coding-divider-horizontal .pane-resize-handle { inset:50% 0 auto; transform:translateY(-50%); height:20px; cursor:row-resize; }
+.game-workspace .pane-resize-handle span { display:block; border-radius:3px; background:var(--game-gold); opacity:.7; transition:width .15s ease,height .15s ease,opacity .15s ease; }
+.game-workspace .coding-divider-vertical span { width:2px; height:24px; }
+.game-workspace .coding-divider-horizontal span { width:24px; height:2px; }
+.game-workspace .coding-divider-vertical .pane-resize-handle:is(:hover,:focus-visible) span { height:64px; opacity:1; }
+.game-workspace .coding-divider-horizontal .pane-resize-handle:is(:hover,:focus-visible) span { width:64px; opacity:1; }
+.game-workspace .coding-workbench.is-dragging { user-select:none; }
+.game-workspace .practice-toolbar { gap:6px; }
+.game-workspace .practice-toolbar .coding-actions { order:1; }
+.game-workspace .practice-toolbar .assessment-top-submit { order:2; }
+.game-workspace .learning-layout > .practice-content.coding-content { padding:0; background:transparent; border:0; box-shadow:none; }
+.game-workspace .coding-content > .practice-heading { display:none; }
+.game-workspace .coding-content > .assessment-heading { display:flex; margin:0 0 6px; padding:0; }
+.game-workspace .coding-content > .assessment-heading h2 { display:none; }
+.game-workspace .coding-content .question-body { flex:1; min-height:0; padding:0; overflow:hidden; }
+.game-workspace .coding-content .practice-pagination { margin:0; padding:6px 0 0; }
+.game-workspace .coding-workbench { display:grid; grid-template-columns:minmax(0, var(--problem-fr)) 10px minmax(0, var(--code-fr)); grid-template-rows:minmax(140px, var(--editor-fr)) 10px minmax(140px, var(--cases-fr)); gap:0; height:100%; min-height:0; }
+.game-workspace .coding-pane { display:flex; flex-direction:column; min-width:0; min-height:0; border:1px solid var(--game-line); border-radius:10px; background:var(--game-paper); overflow:hidden; }
+.game-workspace .coding-problem { grid-column:1; grid-row:1 / 4; }
+.game-workspace .coding-source { grid-column:3; grid-row:1; }
+.game-workspace .coding-tests { grid-column:3; grid-row:3; }
+.game-workspace .coding-pane-title { display:flex; align-items:center; gap:10px; flex-shrink:0; padding:8px 12px; background:#e9e5da; border-bottom:1px solid var(--game-line); font-size:.85rem; font-weight:600; }
+.game-workspace .coding-pane-title span { margin-left:auto; color:var(--game-muted); font-size:.75rem; font-weight:400; }
+.game-workspace .coding-pane-body { padding:14px; overflow:auto; min-height:0; }
+.game-workspace .coding-problem h3 { font-size:1.25rem; margin:4px 0 18px; }
+.game-workspace .coding-problem .question-prompt { white-space:pre-wrap; line-height:1.7; }
+.game-workspace .coding-example { margin:22px 0; }
+.game-workspace .coding-workbench pre { white-space:pre-wrap; overflow-wrap:anywhere; font: .85rem/1.6 Consolas, monospace; padding:10px; border-radius:6px; background:#eae5d9; margin:8px 0 14px; }
+.game-workspace .coding-source .code-editor { flex:1; min-height:0; border:0; border-radius:0; margin:0; }
+.game-workspace .coding-source .code-editor .cm-editor { height:100%; }
+.game-workspace .coding-source .code-editor .cm-scroller { min-height:0; }
+.game-workspace .coding-source .code-editor .cm-content { min-height:100%; }
+.game-workspace .coding-tabs { padding:0 10px; gap:14px; }
+.game-workspace .coding-tabs button { border:0; border-bottom:2px solid transparent; background:transparent; border-radius:0; padding:8px 0; color:var(--game-muted); }
+.game-workspace .coding-tabs button[aria-pressed=true] { border-bottom-color:var(--game-forest); color:var(--game-forest); }
+.game-workspace .case-tabs { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:16px; }
+.game-workspace .case-tabs button { border:0; background:transparent; padding:4px 12px; font-size:.8rem; }
+.game-workspace .case-tabs button[aria-pressed=true] { background:#dfdacd; color:var(--game-forest-deep); }
+.game-workspace .coding-tests label { font-size:.8rem; color:var(--game-muted); }
+.game-workspace .question-paper .coding-workbench { height:650px; margin-bottom:20px; }
+.game-workspace .question-paper .coding-actions { grid-column:1 / -1; }
+@media (max-width:1100px) {
+  .game-workspace .coding-content .question-body { overflow:auto; }
+  .game-workspace .coding-workbench { height:auto; gap:10px; grid-template-columns:minmax(0,1fr); grid-template-rows:auto 320px auto; }
+  .game-workspace .coding-problem,.game-workspace .coding-source,.game-workspace .coding-tests { grid-column:1; grid-row:auto; }
+  .game-workspace .coding-tests { min-height:240px; }
+  .game-workspace .coding-divider { display:none; }
+  .game-workspace .workspace-topbar { flex-wrap:wrap; gap:6px; }
+}
+@media (pointer:coarse) {
+  .game-workspace button { min-height:44px; }
+  .game-workspace .coding-divider-vertical .pane-resize-handle { width:44px; }
+  .game-workspace .coding-divider-horizontal .pane-resize-handle { height:44px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .game-workspace .pane-resize-handle span, .game-workspace .learning-resize-handle > span { transition:none; }
+}
+

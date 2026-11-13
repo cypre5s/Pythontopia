@@ -4,8 +4,8 @@
       <button :aria-pressed="!showAssistant" aria-controls="practice-content-region" @click="switchView(false)">题目与代码</button>
       <button :aria-pressed="showAssistant" aria-controls="practice-assistant-region" @click="switchView(true)">目标与目录</button>
     </nav>
-    <section id="practice-content-region" class="practice-content" tabindex="-1" aria-label="题目与代码" :hidden="compact && showAssistant" :inert="compact && showAssistant" :aria-busy="loading">
-      <header class="content-heading practice-heading">
+    <section id="practice-content-region" class="practice-content" :class="{ 'coding-content': current?.kind === 'python' && viewMode === 'single' }" tabindex="-1" aria-label="题目与代码" :hidden="compact && showAssistant" :inert="compact && showAssistant" :aria-busy="loading">
+      <header class="content-heading practice-heading" :class="{ 'assessment-heading': isAssessment }">
         <h2>{{ activity?.title ?? "正在读取题目" }}</h2>
         <div v-if="isAssessment" class="game-segmented assessment-view-modes" role="group" aria-label="答题模式">
           <button :aria-pressed="viewMode === 'single'" @click="setViewMode('single')">单题模式</button>
@@ -15,8 +15,8 @@
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <p v-if="draftError" class="error" role="alert">{{ draftError }} <button v-if="draftConflict" @click="load">重新载入试卷</button><button v-else-if="!paper?.locked" @click="retryDraft">重试保存</button></p>
       <p v-if="loading" class="learning-empty" role="status">正在读取题目…</p>
-      <div v-else-if="questions.length" ref="questionRegion" class="question-body" :class="{ 'question-paper': isAssessment && viewMode === 'paper' }" @scroll.passive="syncPaperSelection">
-        <PracticeQuestionCard v-for="question in visibleQuestions" :key="question.id" :question="question" :index="questions.findIndex(item => item.id === question.id)" :answer="drafts[question.id]?.answer ?? ''" :code="drafts[question.id]?.code ?? ''" :read-only="Boolean(isAssessment && (paper?.locked || paperSubmissionPending))" :busy="questionBusy(question.id)" :show-submit="!isAssessment" :pending-mode="drafts[question.id]?.pending?.mode" :result="questionResult(question.id)" @update:answer="updateAnswer(question.id, $event)" @update:code="updateCode(question.id, $event)" @submit="submitQuestion(question.id, $event)" />
+      <div v-else-if="questions.length" ref="questionRegion" class="question-body" :data-coding="current?.kind === 'python' && viewMode === 'single'" :class="{ 'question-paper': isAssessment && viewMode === 'paper' }" @scroll.passive="syncPaperSelection">
+        <PracticeQuestionCard v-for="question in visibleQuestions" :key="question.id" :question="question" :toolbar-target="viewMode === 'single' ? toolbarTarget : undefined" :index="questions.findIndex(item => item.id === question.id)" :answer="drafts[question.id]?.answer ?? ''" :code="drafts[question.id]?.code ?? ''" :read-only="Boolean(isAssessment && (paper?.locked || paperSubmissionPending))" :busy="questionBusy(question.id)" :show-submit="!isAssessment" :pending-mode="drafts[question.id]?.pending?.mode" :result="questionResult(question.id)" @update:answer="updateAnswer(question.id, $event)" @update:code="updateCode(question.id, $event)" @submit="submitQuestion(question.id, $event)" />
       </div>
       <p v-else-if="!loading && activity" class="learning-empty">此活动尚未绑定公开题目，请联系教师。</p>
       <nav v-if="questions.length && (!isAssessment || viewMode === 'single')" class="practice-pagination" aria-label="答题翻页">
@@ -37,7 +37,7 @@
             <p class="assessment-lock-state"><GameIcon name="check" /> 已交卷，答案已锁定</p>
           </template>
           <template v-else>
-            <button class="primary" :disabled="requestBusy || !allAnswered || loading" @click="submitPaper">{{ requestBusy ? '正在交卷…' : paperSubmissionPending ? '重试交卷' : '提交试卷' }}</button>
+            <Teleport :to="toolbarTarget || 'body'" :disabled="!(toolbarTarget && current?.kind === 'python' && viewMode === 'single')"><button class="primary assessment-top-submit" :disabled="requestBusy || !allAnswered || loading" @click="submitPaper">{{ requestBusy ? '正在交卷…' : paperSubmissionPending ? '重试交卷' : '提交试卷' }}</button></Teleport>
             <span class="assessment-answer-count">已作答 {{ answeredCount }} / {{ questions.length }} 题</span>
             <p class="assessment-submit-note">交卷后不可修改</p>
           </template>
@@ -61,8 +61,9 @@ import LearningSplitLayout from "./LearningSplitLayout.vue";
 import PracticeQuestionCard from "./PracticeQuestionCard.vue";
 import "./learningUi.css";
 import "./practiceUi.css";
+import "./programmingUi.css";
 interface Draft { answer: string; code: string; submission_id?: string; pending?: { key: string; mode: 'submit'; answer: string | boolean; code: string } }
-const props = defineProps<{ activityId: string; storySessionId?: string }>();
+const props = defineProps<{ activityId: string; storySessionId?: string; toolbarTarget?: string }>();
 const emit = defineEmits<{ complete: []; activityKind: [kind: string] }>();
 const session = useSession(), { collapsed: sidebarCollapsed } = useWorkspaceSidebar();
 const activity = ref<Activity>(), activityProgress = ref<ActivityProgress>(), paper = ref<AssessmentAttempt>();

@@ -48,7 +48,7 @@ function moveDrag(event: PointerEvent) {
   if (!dragging.value || !layout.value) return;
   const rect = layout.value.getBoundingClientRect();
   if (rect.width <= 0) return;
-  const nextWidth = (rect.right - event.clientX - 11) / rect.width * 100;
+  const nextWidth = (rect.right - event.clientX - 5) / rect.width * 100;
   if (nextWidth < 12) { endDrag(); sidebar.collapse(); return; }
   supportWidth.value = Math.round(Math.min(42, Math.max(22, nextWidth)));
 }
@@ -66,11 +66,12 @@ function resizeWithKeys(event: KeyboardEvent) {
 <style>
 .game-workspace .learning-divider { grid-column: 2; grid-row: 1; min-width: 0; position: relative; }
 .game-workspace .learning-resize-handle { position: absolute; inset: 0 auto 0 50%; transform: translateX(-50%); width: 44px; display: grid; place-items: center; cursor: col-resize; touch-action: none; z-index: 2; border-radius: 8px; }
-.game-workspace .learning-resize-handle > span { width: 4px; height: 50px; border-radius: 8px; background: var(--game-gold); opacity: .7; box-shadow: 0 0 0 3px #203b3266; }
-.game-workspace .learning-resize-handle:is(:hover, :focus-visible) > span { opacity: 1; }
+.game-workspace .learning-resize-handle > span { width: 2px; height: 24px; border-radius: 8px; background: var(--game-gold); opacity: .7; transition: height .15s ease, opacity .15s ease; }
+.game-workspace .learning-resize-handle:is(:hover, :focus-visible) > span { height: 64px; opacity: 1; }
 .game-workspace .learning-resize-handle:focus-visible { outline: 2px solid var(--game-gold); outline-offset: -5px; }
 .game-workspace .learning-layout.is-resizing { user-select: none; cursor: col-resize; }
 .game-workspace .learning-layout.is-sidebar-collapsed > .learning-support { display: none !important; }
 .game-workspace .learning-layout.is-sidebar-collapsed { grid-template-columns: minmax(0, 1fr); }
 .game-workspace .learning-layout.is-sidebar-collapsed > :is(.lesson-content, .practice-content) { grid-column: 1; }
+@media (prefers-reduced-motion: reduce) { .game-workspace .learning-resize-handle > span { transition: none; } }
 </style>

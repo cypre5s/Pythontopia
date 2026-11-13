@@ -14,6 +14,7 @@
     >
       <header class="workspace-topbar">
         <div class="game-workspace-title"><GameIcon :name="icon"/><h2>{{ title }}</h2></div>
+        <div v-if="session.workspace.kind === 'practice'" id="practice-toolbar" class="practice-toolbar"></div>
         <div class="workspace-actions">
           <button
             v-if="session.canGoBack"
@@ -48,6 +49,7 @@
       <PracticeWorkspace
         v-else-if="session.workspace.kind === 'practice'"
         :key="`practice-${session.workspace.activity_id}`"
+        toolbar-target="#practice-toolbar"
         :activity-id="session.workspace.activity_id"
 
         :story-session-id="session.workspace.story_session_id"
