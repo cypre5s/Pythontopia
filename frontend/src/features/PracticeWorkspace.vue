@@ -112,8 +112,8 @@ const answeredCount = computed(() => questions.value.filter(question => hasAnswe
 const allAnswered = computed(() => questions.value.length > 0 && answeredCount.value === questions.value.length);
 const questionOutline = computed(() => questions.value.map((question, index) => {
   const result = questionResult(question.id);
-  return { id: question.id, index: index + 1, title: question.title, current: index === questionIndex.value,
-    state: result && (isAssessment.value ? paper.value?.locked : result.mode === 'submit') ? result.status === 'accepted' ? 'accepted' as const : [...pendingSubmissionStates, 'infrastructure_error', 'submission_unknown'].includes(result.status) ? 'pending' as const : 'wrong' as const : hasAnswer(question) ? 'answered' as const : 'unanswered' as const };
+  return { id: question.id, index: index + 1, title: question.title, kind: question.kind, current: index === questionIndex.value,
+    state: result && (isAssessment.value ? paper.value?.locked : result.mode === 'submit') ? result.status === 'accepted' ? 'accepted' as const : [...pendingSubmissionStates, 'infrastructure_error', 'submission_unknown'].includes(result.status) ? 'pending' as const : 'wrong' as const : !isAssessment.value && activityProgress.value?.accepted_question_ids?.includes(question.id) ? 'accepted' as const : hasAnswer(question) ? 'answered' as const : 'unanswered' as const };
 }));
 const markedCount = computed(() => paper.value?.results.filter(result => ['accepted', 'wrong_answer', 'compile_error', 'runtime_error', 'time_limit', 'memory_limit'].includes(result.status)).length ?? 0);
 const learningGoals = computed(() => {

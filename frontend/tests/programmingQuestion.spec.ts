@@ -120,3 +120,13 @@ it('keeps the pending state for a queued formal submission, including locked rev
   expect(wrapper.find('.coding-actions').exists()).toBe(false);
   wrapper.unmount();
 });
+
+it("shows only the centered prompt in results before execution and keeps cases available separately", async () => {
+  const wrapper = mount(PracticeQuestionCard, { props: { question: { id: "empty", title: "Empty", kind: "python", prompt: "Test", options: [], samples: [{input:"hello",output:"hello"}] }, index:0, answer:"", code:"print(input())" }, global: { stubs: { CodeEditor:true } } });
+  await wrapper.findAll("button").find(button => button.text() === "测试结果")!.trigger("click");
+  expect(wrapper.get(".coding-empty-result").text()).toBe("请先执行代码");
+  expect(wrapper.find(".case-tabs").exists()).toBe(false);
+  await wrapper.findAll("button").find(button => button.text() === "测试用例")!.trigger("click");
+  expect(wrapper.get(".case-tabs").text()).toContain("Case 1");
+  wrapper.unmount();
+});

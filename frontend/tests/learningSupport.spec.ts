@@ -25,7 +25,7 @@ describe("learning goals and character assistant", () => {
     const { pinia } = setup(), showActions = ref(false);
     const wrapper = mount(LearningSupportPanel, { props: { allowed: false, roleName: "练习场教练", goals: [], questionOutline: [{ id: "q1", title: "第一题" }] },
       slots: { "question-actions": () => [h(Fragment, null, [h(Text, "  "), showActions.value ? h("button", "提交试卷") : h(Comment), null])] }, global: { plugins: [pinia] } });
-    await wrapper.findAll('[role="tab"]').find(tab => tab.text() === "题目目录")!.trigger("click");
+    await wrapper.findAll('[role="tab"]').find(tab => tab.text() === "快速跳转")!.trigger("click");
     expect(wrapper.find(".support-question-actions").exists()).toBe(false);
     showActions.value = true; await nextTick();
     expect(wrapper.get(".support-question-actions").text()).toBe("提交试卷");
@@ -40,12 +40,12 @@ describe("learning goals and character assistant", () => {
       { id: "q1", title: "第一题", state: "answered" }, { id: "q2", title: "第二题", state: "unanswered" },
     ] }, slots: { "question-actions": '<button>提交试卷</button>' }, global: { plugins: [pinia] } });
     const tabs = wrapper.findAll('[role="tab"]');
-    expect(tabs.map(tab => tab.text())).toEqual(["学习目标", "题目目录", "练习场教练"]);
+    expect(tabs.map(tab => tab.text())).toEqual(["题目列表", "快速跳转", "练习场教练"]);
     await tabs[1]!.trigger("click");
-    const directory = wrapper.get('[aria-label="题目目录"]');
+    const directory = wrapper.get('[aria-label="题目快速跳转"]');
     expect(wrapper.get('.support-question-actions').text()).toContain("提交试卷");
     expect(directory.text()).toContain("已作答");
-    expect(directory.text()).not.toContain("正确");
+    expect(directory.findAll("button").every(button => button.attributes("data-state") !== "accepted")).toBe(true);
     const questions = directory.findAll("button");
     expect(questions[1]!.attributes("aria-current")).toBe("step");
     await questions[0]!.trigger("click");
@@ -65,7 +65,7 @@ describe("learning goals and character assistant", () => {
     expect(wrapper.get('progress').attributes("value")).toBe("1");
     expect(wrapper.get('progress').attributes("max")).toBe("2");
     const tabs = wrapper.findAll('[role="tab"]');
-    expect(tabs.map(tab => tab.text())).toEqual(["学习目标", "文档目录", "图书管理员"]);
+    expect(tabs.map(tab => tab.text())).toEqual(["学习目标", "快速跳转", "图书管理员"]);
     await tabs[0]!.trigger("keydown", { key: "ArrowRight" });
     expect(document.activeElement).toBe(tabs[1]!.element);
     expect(wrapper.get(".support-outline").attributes("hidden")).toBeUndefined();
@@ -101,7 +101,7 @@ describe("learning goals and character assistant", () => {
     await tabs[1]!.trigger("click");
     const input = wrapper.get('textarea');
     expect(input.attributes("placeholder")).toBe("向助教提问");
-    expect(wrapper.get('.assistant-portrait').attributes("alt")).toBe("");
+    expect(wrapper.get('.assistant-avatar').attributes("alt")).toBe("");
     await input.setValue("这一页有什么含义？");
     await tabs[0]!.trigger("click");
     await tabs[0]!.trigger("keydown", { key: "ArrowRight" });
@@ -124,4 +124,26 @@ describe("learning goals and character assistant", () => {
     expect(post).not.toHaveBeenCalled();
     wrapper.unmount();
   });
+});
+
+it("shows question types and statuses in the list and groups numbered jumps without changing IDs", async () => {
+  const {pinia} = setup();
+  const wrapper = mount(LearningSupportPanel, {props:{allowed:false, roleName:"助教", goals:[], questionOutline:[{id:"a",title:"选择",kind:"single_choice",state:"accepted"},{id:"b",title:"代码",kind:"python",state:"wrong"},{id:"c",title:"判断",kind:"boolean",state:"pending"}]},global:{plugins:[pinia]}});
+  expect(wrapper.get('[aria-label="题目列表"]').text()).toContain("编程题");
+  expect(wrapper.findAll('.question-status-icon').map(item=>item.attributes('data-state'))).toEqual(['accepted','wrong','pending']);
+  const jump = wrapper.get('[aria-label="题目快速跳转"]');
+  expect(jump.findAll('.question-jump-group')).toHaveLength(3);
+  await jump.findAll('button')[1]!.trigger('click');
+  expect(wrapper.emitted('selectQuestion')).toEqual([['b']]);
+  expect(jump.findAll('button')[1]!.attributes('aria-label')).toContain('错误');
+  wrapper.unmount();
+});
+it("offers video timestamps in quick jump without marking progress", async () => {
+  const {pinia} = setup();
+  const post=vi.spyOn(api,'post');
+  const wrapper=mount(LearningSupportPanel,{props:{allowed:false,roleName:'助教',goals:[],timeOutline:[{timeSeconds:0,title:'视频开始'},{timeSeconds:85,title:'重点片段'}]},global:{plugins:[pinia]}});
+  await wrapper.findAll('[role="tab"]')[1]!.trigger('click');
+  const items=wrapper.get('[aria-label="视频片段跳转"]').findAll('button');
+  expect(items[1]!.text()).toContain('1:25');await items[1]!.trigger('click');
+  expect(wrapper.emitted('selectTime')).toEqual([[85]]);expect(post).not.toHaveBeenCalled();wrapper.unmount();
 });

@@ -71,7 +71,7 @@ describe("assessment and practice presentation", () => {
     expect(wrapper.get('input[name="answer-q1"][value="false"]').element).toHaveProperty("checked", true);
     await wrapper.get('input[name="answer-q2"][value="true"]').setValue();
     expect(post).not.toHaveBeenCalled();
-    await wrapper.findAll("button").find(button => button.text() === "题目目录")!.trigger("click");
+    await wrapper.findAll("button").find(button => button.text() === "快速跳转")!.trigger("click");
     await wrapper.findAll("button").find(button => button.text() === "提交试卷")!.trigger("click");
     await flushPromises();
     expect(post).toHaveBeenCalledOnce();

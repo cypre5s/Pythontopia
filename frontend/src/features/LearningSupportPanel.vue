@@ -2,9 +2,9 @@
   <aside v-bind="attrs" v-show="!sidebarCollapsed" :hidden="sidebarCollapsed || attributeEnabled(attrs.hidden)" :inert="sidebarCollapsed || attributeEnabled(attrs.inert)" class="learning-support" aria-label="学习目标与助教">
     <div class="support-heading">
     <div class="support-tabs" :style="{ '--support-tab-count': tabs.length }" role="tablist" aria-label="学习支持" @keydown="moveTab">
-      <button :id="`${panelId}-goals-tab`" ref="goalsTab" role="tab" :aria-selected="tab === 'goals'" :tabindex="tab === 'goals' ? 0 : -1" :aria-controls="`${panelId}-goals`" @click="tab = 'goals'"><GameIcon name="target" />学习目标</button>
-      <button v-if="outline?.length" :id="`${panelId}-outline-tab`" ref="outlineTab" role="tab" :aria-selected="tab === 'outline'" :tabindex="tab === 'outline' ? 0 : -1" :aria-controls="`${panelId}-outline`" @click="tab = 'outline'"><GameIcon name="list" />文档目录</button>
-      <button v-if="questionOutline?.length" :id="`${panelId}-questions-tab`" ref="questionsTab" role="tab" :aria-selected="tab === 'questions'" :tabindex="tab === 'questions' ? 0 : -1" :aria-controls="`${panelId}-questions`" @click="tab = 'questions'"><GameIcon name="list" />题目目录</button>
+      <button :id="`${panelId}-goals-tab`" ref="goalsTab" role="tab" :aria-selected="tab === 'goals'" :tabindex="tab === 'goals' ? 0 : -1" :aria-controls="`${panelId}-goals`" @click="tab = 'goals'"><GameIcon name="target" />{{ questionOutline?.length ? "题目列表" : "学习目标" }}</button>
+      <button v-if="hasOutline" :id="`${panelId}-outline-tab`" ref="outlineTab" role="tab" :aria-selected="tab === 'outline'" :tabindex="tab === 'outline' ? 0 : -1" :aria-controls="`${panelId}-outline`" @click="tab = 'outline'"><GameIcon name="list" />快速跳转</button>
+      <button v-if="questionOutline?.length" :id="`${panelId}-questions-tab`" ref="questionsTab" role="tab" :aria-selected="tab === 'questions'" :tabindex="tab === 'questions' ? 0 : -1" :aria-controls="`${panelId}-questions`" @click="tab = 'questions'"><GameIcon name="list" />快速跳转</button>
       <button :id="`${panelId}-assistant-tab`" ref="assistantTab" role="tab" :aria-selected="tab === 'assistant'" :tabindex="tab === 'assistant' ? 0 : -1" :aria-controls="`${panelId}-assistant`" @click="tab = 'assistant'"><GameIcon name="message" />{{ roleName }}</button>
     </div>
     <SidebarToggle />
@@ -41,9 +41,16 @@
         </li>
       </ol>
       </nav>
+      <nav v-if="questionOutline?.length" aria-label="题目列表" class="support-detailed-questions">
+        <button v-for="(question, index) in questionOutline" :key="question.id" :aria-current="question.current || currentQuestionId === question.id ? 'step' : undefined" @click="$emit('selectQuestion', question.id)">
+          <span class="question-status-icon" :data-state="question.state ?? 'unanswered'" :aria-label="questionStateLabel[question.state ?? 'unanswered']"><GameIcon :name="question.state === 'accepted' ? 'check' : question.state === 'wrong' ? 'circleX' : question.state === 'pending' ? 'clock' : question.state === 'answered' ? 'practice' : 'circle'" /></span>
+          <span class="question-list-title">{{ question.index ?? index + 1 }}. {{ question.title }}</span>
+          <span class="question-kind">{{ questionKindLabel[question.kind ?? 'unknown'] }}</span>
+        </button>
+      </nav>
       <slot name="goals-footer" />
     </section>
-    <section v-if="outline?.length" :id="`${panelId}-outline`" class="support-outline" role="tabpanel" :aria-labelledby="`${panelId}-outline-tab`" tabindex="0" :hidden="tab !== 'outline'" :inert="tab !== 'outline'">
+    <section v-if="hasOutline" :id="`${panelId}-outline`" class="support-outline" role="tabpanel" :aria-labelledby="`${panelId}-outline-tab`" tabindex="0" :hidden="tab !== 'outline'" :inert="tab !== 'outline'">
       <nav aria-label="文档页面目录">
         <ol class="support-outline-list">
           <li v-for="item in outline" :key="item.pageNo">
@@ -54,19 +61,15 @@
           </li>
         </ol>
       </nav>
+      <nav v-if="timeOutline?.length" aria-label="视频片段跳转"><ol class="support-outline-list"><li v-for="item in timeOutline" :key="`${item.timeSeconds}-${item.title}`"><button @click="$emit('selectTime', item.timeSeconds)"><span class="support-outline-page">{{ Math.floor(item.timeSeconds / 60) }}:{{ String(Math.floor(item.timeSeconds % 60)).padStart(2, '0') }}</span><span class="support-outline-title">{{ item.title }}</span></button></li></ol></nav>
     </section>
     <section v-if="questionOutline?.length" :id="`${panelId}-questions`" class="support-questions" role="tabpanel" :aria-labelledby="`${panelId}-questions-tab`" :hidden="tab !== 'questions'" :inert="tab !== 'questions'">
       <div v-if="hasQuestionActions()" class="support-question-actions"><slot name="question-actions" /></div>
-      <nav class="support-question-navigation" aria-label="题目目录">
-        <ol class="support-outline-list support-question-list">
-          <li v-for="(question, index) in questionOutline" :key="question.id">
-            <button :aria-current="question.current || currentQuestionId === question.id ? 'step' : undefined" @click="$emit('selectQuestion', question.id)">
-              <span class="support-outline-page">{{ question.index ?? index + 1 }}</span>
-              <span class="support-outline-title">{{ question.title }}</span>
-              <span class="support-question-state" :data-state="question.state ?? 'unanswered'"><GameIcon v-if="question.state === 'accepted'" name="check" /><GameIcon v-else-if="question.state === 'wrong'" name="circleX" /><GameIcon v-else-if="question.state === 'pending'" name="clock" />{{ questionStateLabel[question.state ?? 'unanswered'] }}</span>
-            </button>
-          </li>
-        </ol>
+      <nav class="support-question-navigation" aria-label="题目快速跳转">
+        <div class="question-status-legend"><span v-for="(label, state) in questionStateLabel" :key="state" :data-state="state">{{ label }}</span></div>
+        <section v-for="group in questionGroups" :key="group.kind" class="question-jump-group"><h4>{{ questionKindLabel[group.kind] }} <span>{{ group.items.length }} 题</span></h4>
+          <div class="question-jump-grid"><button v-for="question in group.items" :key="question.id" :data-state="question.state ?? 'unanswered'" :aria-label="`${question.index}. ${question.title} · ${questionStateLabel[question.state ?? 'unanswered']}`" :title="`${question.title} · ${questionStateLabel[question.state ?? 'unanswered']}`" :aria-current="question.current || currentQuestionId === question.id ? 'step' : undefined" @click="$emit('selectQuestion', question.id)">{{ question.index }}</button></div>
+        </section>
       </nav>
     </section>
     <section :id="`${panelId}-assistant`" class="support-chat" role="tabpanel" :aria-labelledby="`${panelId}-assistant-tab`" :hidden="tab !== 'assistant'" :inert="tab !== 'assistant'">
@@ -117,7 +120,8 @@ const props = defineProps<{
     items?: { title: string; pageNo?: number; timeSeconds?: number; completed?: boolean }[];
   }[];
   outline?: { pageNo: number; title: string; important?: boolean; highlightLabel?: string }[];
-  questionOutline?: { id: string; index?: number; title: string; state?: "unanswered" | "answered" | "accepted" | "wrong" | "pending"; current?: boolean }[];
+  timeOutline?: { timeSeconds: number; title: string }[];
+  questionOutline?: { id: string; index?: number; title: string; kind?: "single_choice" | "boolean" | "fill" | "python"; state?: "unanswered" | "answered" | "accepted" | "wrong" | "pending"; current?: boolean }[];
   currentQuestionId?: string;
   pageNo?: number;
   videoTime?: number;
@@ -128,9 +132,15 @@ const { collapsed: sidebarCollapsed } = useWorkspaceSidebar();
 const tab = ref<"goals" | "outline" | "questions" | "assistant">("goals"),
   goalsTab = ref<HTMLButtonElement>(), outlineTab = ref<HTMLButtonElement>(), questionsTab = ref<HTMLButtonElement>(), assistantTab = ref<HTMLButtonElement>();
 const questionStateLabel = { unanswered: "未作答", answered: "已作答", accepted: "正确", wrong: "错误", pending: "判定中" };
+const questionKindLabel = { single_choice: "单选题", boolean: "判断题", fill: "填空题", python: "编程题", unknown: "题目" };
+const questionGroups = computed(() => {
+  const items = (props.questionOutline ?? []).map((question, index) => ({ ...question, index: question.index ?? index + 1 }));
+  return [...new Set(items.map(question => question.kind ?? 'unknown' as const))].map(kind => ({ kind, items: items.filter(question => (question.kind ?? 'unknown') === kind) }));
+});
+const hasOutline = computed(() => Boolean(props.outline?.length || props.timeOutline?.length));
 const panelId = computed(() => `learning-support-${props.activityId || 'material'}`);
-const tabs = computed(() => ["goals", ...(props.outline?.length ? ["outline"] : []), ...(props.questionOutline?.length ? ["questions"] : []), "assistant"]);
-watch(() => props.outline?.length, length => { if (!length && tab.value === "outline") tab.value = "goals"; });
+const tabs = computed(() => ["goals", ...(hasOutline.value ? ["outline"] : []), ...(props.questionOutline?.length ? ["questions"] : []), "assistant"]);
+watch(hasOutline, value => { if (!value && tab.value === "outline") tab.value = "goals"; });
 watch(() => props.questionOutline?.length, length => { if (!length && tab.value === "questions") tab.value = "goals"; });
 async function moveTab(event: KeyboardEvent) {
   if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;

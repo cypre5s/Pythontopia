@@ -30,7 +30,7 @@
         </template>
       </template>
     </section>
-    <LearningSupportPanel v-if="material || activity" :key="activity?.id ?? material?.id" id="lesson-assistant-region" tabindex="-1" :hidden="compact && !showAssistant" :inert="compact && !showAssistant" :aria-hidden="compact && !showAssistant" :activity-id="activity?.id" :material-id="activity ? undefined : material?.id" :allowed="activity ? activity.assistant_allowed : material?.status === 'ready'" :page-no="currentContext.page_no" :video-time="currentContext.video_time" :role-name="roleName" :portrait-url="rolePortrait" :goals="learningGoals" :outline="documentOutline" @cite="cite" @select-page="readRequiredPage" @select-time="seekVideo">
+    <LearningSupportPanel v-if="material || activity" :key="activity?.id ?? material?.id" id="lesson-assistant-region" tabindex="-1" :hidden="compact && !showAssistant" :inert="compact && !showAssistant" :aria-hidden="compact && !showAssistant" :activity-id="activity?.id" :material-id="activity ? undefined : material?.id" :allowed="activity ? activity.assistant_allowed : material?.status === 'ready'" :page-no="currentContext.page_no" :video-time="currentContext.video_time" :role-name="roleName" :portrait-url="rolePortrait" :goals="learningGoals" :outline="documentOutline" :time-outline="videoOutline" @cite="cite" @select-page="readRequiredPage" @select-time="seekVideo">
       <template #goals-footer>
         <p v-if="material?.notice" class="notice">{{ material.notice }}</p>
         <footer v-if="activity" class="lesson-footer">
@@ -133,6 +133,7 @@ const learningGoals = computed(() => {
     ...(hasReadingCompletion.value ? { progress: { value: requiredVisited.value, max: total, label: `已阅读 ${requiredVisited.value} / ${total} 页` } } : {}),
     items: requiredPages.value.map(page => ({ title: page.title || `第 ${page.page_no} 页`, pageNo: page.page_no, completed: progress.value?.visited_pages.includes(Number(page.id)) ?? false })) }];
 });
+const videoOutline = computed(() => material.value?.kind === "video" ? [{ timeSeconds: 0, title: "视频开始" }, ...(activity.value?.learning?.highlights?.video ?? []).map(item => ({ timeSeconds: item.start_seconds, title: item.label }))] : []);
 const documentOutline = computed(() => material.value?.kind === "video" ? [] : material.value?.pages.map(page => {
   const highlight = activity.value?.learning?.highlights?.pages?.find(item => page.page_no >= item.start_page && page.page_no <= item.end_page);
   return { pageNo: page.page_no, title: page.title, important: Boolean(highlight), highlightLabel: highlight?.label };

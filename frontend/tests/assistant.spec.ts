@@ -144,3 +144,36 @@ describe("explicit isolated assistant stream fixture", () => {
     fetch.mockRestore();
   });
 });
+
+it("starts a new conversation only after success, preserves failed drafts and copies assistant Markdown only", async () => {
+  sessionStorage.clear();const pinia=createPinia();setActivePinia(pinia);const session=useSession();
+  session.user={id:9,student_id:"fixture",name:"小林",role:"student"};session.classroomId=4;
+  sessionStorage.setItem('assistant:9:4:lesson','old');
+  const get=vi.spyOn(api,'get').mockImplementation(async path => (path==='/assistant/status'?{available:true,reason:''}:{messages:[{role:'user',content:'你好'},{role:'assistant',content:'**先尝试**\n\n1. 读取输入'}]}) as never);
+  const post=vi.spyOn(api,'post').mockRejectedValueOnce(new Error('创建失败')).mockResolvedValue({id:'new'});
+  const fetch=vi.spyOn(globalThis,'fetch');const writeText=vi.fn().mockResolvedValue(undefined);
+  Object.defineProperty(navigator,'clipboard',{configurable:true,value:{writeText}});
+  const wrapper=mount(AssistantPanel,{props:{activityId:'lesson',allowed:true,roleName:'教练'},global:{plugins:[pinia]}});await flushPromises();
+  expect(wrapper.get('article.user .message-author').text()).toBe('小林');expect(wrapper.find('article.user button').exists()).toBe(false);
+  expect(wrapper.get('.assistant-markdown strong').text()).toBe('先尝试');
+  await wrapper.get('[aria-label="复制回复"]').trigger('click');await flushPromises();expect(writeText).toHaveBeenCalledWith('**先尝试**\n\n1. 读取输入');
+  await wrapper.get('textarea').setValue('保留草稿');await wrapper.get('[aria-label="开启新对话"]').trigger('click');await flushPromises();
+  expect(wrapper.text()).toContain('先尝试');expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('保留草稿');expect(sessionStorage.getItem('assistant:9:4:lesson')).toBe('old');
+  await wrapper.get('[aria-label="开启新对话"]').trigger('click');await flushPromises();expect(wrapper.findAll('article')).toHaveLength(0);expect(sessionStorage.getItem('assistant:9:4:lesson')).toBe('new');expect(fetch).not.toHaveBeenCalled();
+  wrapper.unmount();get.mockRestore();post.mockRestore();fetch.mockRestore();sessionStorage.clear();
+});
+it("ignores IME and Shift+Enter and isolates a late new-session response after switching class", async () => {
+  sessionStorage.clear();const pinia=createPinia();setActivePinia(pinia);const session=useSession();session.user={id:9,student_id:'fixture',name:'小林',role:'student'};session.classroomId=4;
+  const get=vi.spyOn(api,'get').mockResolvedValue({available:true,reason:''});let finish!: (value:never)=>void;
+  const post=vi.spyOn(api,'post').mockImplementation(()=>new Promise(resolve=>{finish=resolve}));
+  const wrapper=mount(AssistantPanel,{props:{activityId:'lesson',allowed:true,roleName:'教练'},global:{plugins:[pinia]}});await flushPromises();
+  const input=wrapper.get('textarea');await input.setValue('问题');await input.trigger('keydown',{key:'Enter',isComposing:true});await input.trigger('keydown',{key:'Enter',shiftKey:true});expect(post).not.toHaveBeenCalled();
+  await wrapper.get('[aria-label="开启新对话"]').trigger('click');session.classroomId=5;await flushPromises();finish({id:'old-class'} as never);await flushPromises();expect(sessionStorage.getItem('assistant:9:5:lesson')).toBeNull();expect(sessionStorage.getItem('assistant:9:4:lesson')).toBeNull();
+  wrapper.unmount();get.mockRestore();post.mockRestore();sessionStorage.clear();
+});
+
+it("does not restore old history over a newly created conversation", async () => {
+  sessionStorage.clear();const pinia=createPinia();setActivePinia(pinia);const session=useSession();session.user={id:9,student_id:'fixture',name:'小林',role:'student'};session.classroomId=4;sessionStorage.setItem('assistant:9:4:lesson','old');
+  let finish!: (value:never)=>void;const get=vi.spyOn(api,'get').mockImplementation(async path=>path==='/assistant/status'?{available:true,reason:''} as never:new Promise(resolve=>{finish=resolve}));
+  const post=vi.spyOn(api,'post').mockResolvedValue({id:'new'});const wrapper=mount(AssistantPanel,{props:{activityId:'lesson',allowed:true,roleName:'教练'},global:{plugins:[pinia]}});await flushPromises();await wrapper.get('[aria-label="开启新对话"]').trigger('click');await flushPromises();finish({messages:[{role:'assistant',content:'旧会话'}]} as never);await flushPromises();expect(wrapper.text()).not.toContain('旧会话');expect(sessionStorage.getItem('assistant:9:4:lesson')).toBe('new');wrapper.unmount();get.mockRestore();post.mockRestore();sessionStorage.clear();
+});

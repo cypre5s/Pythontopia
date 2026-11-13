@@ -1,16 +1,12 @@
 <template>
   <section class="assistant-panel assistant-conversation" :aria-label="`${roleName}助教`">
-    <img v-if="characterImage" class="assistant-portrait" :src="characterImage" alt="" aria-hidden="true" />
     <header class="assistant-heading">
       <div class="assistant-identity">
+        <img v-if="characterImage" class="assistant-avatar" :src="characterImage" alt="" />
         <span class="assistant-emblem"><GameIcon name="message" /></span>
         <h3>{{ roleName }}</h3>
       </div>
-      <span
-        class="status-dot"
-        :class="{ online: available && allowed }"
-        aria-hidden="true"
-      ></span>
+      <button class="assistant-new" type="button" aria-label="开启新对话" title="开启新对话" :disabled="busy || startingConversation || !allowed || !available" @click="newConversation"><GameIcon :name="startingConversation ? 'spinner' : 'plus'" /></button>
     </header>
     <div
       ref="history"
@@ -27,8 +23,12 @@
         :key="index"
         :class="item.role"
       >
-        <span class="assistant-sr-only">{{ item.role === "user" ? "你的问题" : roleName }}：</span>
-        <p>{{ item.text }}</p>
+        <div class="message-author">{{ item.role === "user" ? session.user?.name || "我" : roleName }}</div>
+        <p v-if="item.role === 'user'" class="user-message">{{ item.text }}</p>
+        <template v-else>
+          <AssistantMarkdown :text="item.text" />
+          <button v-if="item.text" class="message-copy" :disabled="busy && index === messages.length - 1" :aria-label="copiedIndex === index ? '已复制回复' : '复制回复'" :title="copiedIndex === index ? '已复制' : '复制回复'" @click="copyReply(item.text, index)"><GameIcon :name="copiedIndex === index ? 'check' : 'copy'" /></button>
+        </template>
       </article>
       <button
         v-for="refItem in references"
@@ -56,12 +56,14 @@
         v-model="question"
         placeholder="向助教提问"
         rows="2"
-        :disabled="!available || !allowed || busy"
+        :disabled="!available || !allowed || busy || startingConversation"
+        @keydown="composerKeydown"
         :aria-invalid="overLimit ? 'true' : undefined"
         :aria-describedby="overLimit ? `${inputId}-error` : undefined"
       ></textarea>
       <p v-if="overLimit" :id="`${inputId}-error`" class="assistant-input-error" role="alert">问题最多 2000 字，请删减 {{ questionLength - 2000 }} 字后发送。</p>
       <div class="assistant-form-actions">
+        <span class="composer-help">Shift+Enter 换行</span>
         <button v-if="busy" type="button" @click="cancel">停止回复</button
         ><button
           v-else
@@ -69,7 +71,7 @@
           class="primary assistant-send"
           aria-label="发送"
           title="发送"
-          :disabled="!available || !allowed || !question.trim() || overLimit"
+          :disabled="!available || !allowed || startingConversation || !question.trim() || overLimit"
         >
           <GameIcon name="arrowUp" />
         </button>
@@ -80,6 +82,7 @@
 <script setup lang="ts">
 import { useCharacterImage } from "../shared/characterImage";
 import GameIcon from "../shared/GameIcon.vue";
+import AssistantMarkdown from "./AssistantMarkdown.vue";
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { api, notify } from "../shared/api";
 import "./assistantUi.css";
@@ -101,6 +104,8 @@ const session = useSession(),
   unavailable = ref(""),
   question = ref(""),
   busy = ref(false),
+  startingConversation = ref(false),
+  copiedIndex = ref<number | null>(null),
   history = ref<HTMLElement>(),
   messages = ref<{ role: string; text: string }[]>([]),
   references = ref<
@@ -124,6 +129,8 @@ async function restore() {
   question.value = "";
   messages.value = [];
   references.value = [];
+  startingConversation.value = false;
+  copiedIndex.value = null;
   const key = storageKey.value;
   try {
     const s = await api.get<{ available: boolean; reason: string }>(
@@ -157,8 +164,42 @@ function cancel() {
   requestId = "";
   busy.value = false;
 }
+async function newConversation() {
+  if (busy.value || startingConversation.value || !props.allowed || !available.value) return;
+  const current = generation, key = storageKey.value;
+  startingConversation.value = true;
+  try {
+    const created = await api.post<{ id: string }>("/assistant/sessions", {
+      classroom_id: session.classroomId,
+      ...(props.activityId ? { activity_id: props.activityId } : { material_id: props.materialId }),
+    });
+    if (current !== generation) return;
+    sessionStorage.setItem(key, created.id);
+    sessionId = created.id;
+    messages.value = []; references.value = []; question.value = ""; copiedIndex.value = null;
+    startingConversation.value = false;
+    generation++;
+  } catch (error) {
+    if (current === generation) notify(error instanceof Error ? error.message : "新对话创建失败，原对话已保留。");
+  } finally {
+    if (current === generation) startingConversation.value = false;
+  }
+}
+async function copyReply(text: string, index: number) {
+  const current = generation;
+  try {
+    await navigator.clipboard.writeText(text);
+    if (current === generation) copiedIndex.value = index;
+  } catch { notify("复制失败，请选择回复文字复制。"); }
+}
+function composerKeydown(event: KeyboardEvent) {
+  if (event.key === "Enter" && !event.shiftKey && !event.isComposing && event.keyCode !== 229) {
+    event.preventDefault();
+    void send();
+  }
+}
 async function send() {
-  if (!question.value.trim() || overLimit.value || busy.value || !props.allowed || !available.value) return;
+  if (!question.value.trim() || overLimit.value || busy.value || startingConversation.value || !props.allowed || !available.value) return;
   const current = generation, key = storageKey.value;
   busy.value = true;
   const activeController = new AbortController();

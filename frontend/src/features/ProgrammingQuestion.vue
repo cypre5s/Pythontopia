@@ -23,11 +23,12 @@
         <button :aria-pressed="tab === 'cases'" @click="tab = 'cases'"><GameIcon name="cases" />测试用例</button>
         <button :aria-pressed="tab === 'results'" @click="tab = 'results'"><GameIcon :name="judging ? 'spinner' : 'terminal'" :class="{ 'is-spinning': judging }" />测试结果</button>
       </header>
-      <div class="coding-pane-body" :aria-busy="judging">
+      <div class="coding-pane-body" :class="{ 'is-empty': tab === 'results' && !judging && !outcome }" :aria-busy="judging">
         <template v-if="tab === 'results' && judging">
           <div class="coding-run-progress" role="status">正在判题…<button v-if="running" class="stop-run" @click="controller?.abort()"><GameIcon name="stop" />停止运行</button></div>
           <div class="result-skeleton" aria-hidden="true"><i class="skeleton-heading"></i><div class="skeleton-tabs"><i></i><i></i><i></i></div><template v-for="n in 3" :key="n"><i class="skeleton-label"></i><i class="skeleton-block"></i></template></div>
         </template>
+        <p v-else-if="tab === 'results' && !outcome" class="coding-empty-result">请先执行代码</p>
         <template v-else>
           <template v-if="tab === 'results' && outcome">
             <p class="result-origin">{{ resultSource === 'submission' ? '正式提交' : '公开样例 · 不计成绩' }}</p>
@@ -43,7 +44,6 @@
               <label>{{ selectedResult?.error || runError ? '执行时的输入' : '输入' }}</label><pre>{{ selectedSample?.input || '（空输入）' }}</pre>
               <template v-if="selectedResult"><label>实际输出</label><pre :class="{ 'coding-error': selectedResult.status === 'wrong_answer' }">{{ selectedResult.stdout || '（无输出）' }}</pre><label>预期输出</label><pre>{{ selectedSample?.output || '（无输出）' }}</pre></template>
             </template>
-            <p v-else-if="!outcome">运行后在这里查看结果。公开样例不计入成绩。</p>
             <p v-else-if="resultSource === 'submission'">此用例没有可展示的评测反馈。</p>
           </template>
         </template>

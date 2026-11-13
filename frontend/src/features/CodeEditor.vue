@@ -1,6 +1,7 @@
 <template>
   <div class="code-editor">
     <div ref="root" class="monaco-host" aria-label="Python代码编辑器"></div>
+    <footer v-if="!loadError" class="code-position" aria-label="光标位置">行 {{ position.lineNumber }}，列 {{ position.column }}</footer>
     <p v-if="loadError" role="alert">{{ loadError }}</p>
   </div>
 </template>
@@ -12,9 +13,11 @@ const preferences = useUiPreferences();
 const props = defineProps<{ modelValue: string }>();
 const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 const root = ref<HTMLElement>(), loadError = ref("");
+const position = ref({ lineNumber: 1, column: 1 });
 let view: editor.IStandaloneCodeEditor | undefined;
 let model: editor.ITextModel | undefined;
 let subscription: IDisposable | undefined;
+let cursorSubscription: IDisposable | undefined;
 let disposed = false;
 onMounted(async () => {
   try {
@@ -32,6 +35,7 @@ onMounted(async () => {
       unicodeHighlight: { ambiguousCharacters: false, nonBasicASCII: false },
     });
     subscription = view.onDidChangeModelContent(() => emit("update:modelValue", model!.getValue()));
+    cursorSubscription = view.onDidChangeCursorPosition(event => { position.value = event.position; });
     void document.fonts?.ready.then(() => { if (!disposed) monaco.editor.remeasureFonts(); });
   } catch {
     if (!disposed) loadError.value = "代码编辑器加载失败，请刷新页面后重试。";
@@ -46,9 +50,11 @@ watch(() => preferences.textScale, (scale) => {
 });
 onBeforeUnmount(() => {
   disposed = true;
-  subscription?.dispose(); view?.dispose(); model?.dispose();
+  subscription?.dispose(); cursorSubscription?.dispose(); view?.dispose(); model?.dispose();
 });
 </script>
 <style scoped>
-.monaco-host { height: 100%; min-height: 0; }
+.code-editor { display: flex; flex-direction: column; }
+.monaco-host { flex: 1; min-height: 0; }
+.code-position { flex: 0 0 auto; padding: 5px 12px; text-align: right; color: var(--game-muted); font-size: .75rem; line-height: 1.5; }
 </style>

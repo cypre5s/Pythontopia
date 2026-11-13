@@ -18,7 +18,7 @@
 }
 .overlay-host.game-workspace {
   position: absolute; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center;
-  padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  padding: env(safe-area-inset-top) max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
   background: #10291f80;
   backdrop-filter: blur(4px);
 }
@@ -46,7 +46,7 @@
   flex-shrink: 0;
   min-height: 44px;
   height: auto;
-  padding: 4px 0;
+  padding: 10px 0;
   border: 0;
   background: transparent;
   color: #fff2d6;
@@ -125,8 +125,8 @@
 .game-workspace .town-secondary { color: #624a32; border-color: #c9b18d; background: var(--game-paper-raised); }
 .game-workspace .town-sidebar :focus-visible { outline-color: #ffe8aa; }
 @media (max-width: 720px) {
-  .overlay-host.game-workspace { padding: max(14px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom)); }
-  .game-workspace .workspace-topbar { gap: 12px; min-height: 44px; padding: 4px 0; flex-wrap: wrap; }
+  .overlay-host.game-workspace { padding: env(safe-area-inset-top) 14px max(18px, env(safe-area-inset-bottom)); }
+  .game-workspace .workspace-topbar { gap: 12px; min-height: 44px; padding: 10px 0; flex-wrap: wrap; }
   .game-workspace .game-workspace-title { gap: 10px; }.game-workspace .game-workspace-title > .game-icon { width: 22px; height: 22px; }
   .game-workspace .game-workspace-title h2 { font-size: 1.2rem; }
   .game-workspace .workspace-actions { gap: 6px; }.game-workspace .workspace-topbar button { padding: 9px 12px; }

@@ -29,7 +29,7 @@
 .game-workspace .coding-pane-title span { margin-left:auto; color:var(--game-muted); font-size:.75rem; font-weight:400; }
 .game-workspace .coding-pane-body { padding:14px; overflow:auto; min-height:0; }
 .game-workspace .coding-problem h3 { font-size:1.25rem; margin:4px 0 18px; }
-.game-workspace .coding-problem .question-prompt { white-space:pre-wrap; line-height:1.7; }
+.game-workspace .coding-problem .question-prompt { white-space:pre-wrap; font-size:.9375rem; line-height:1.7; }
 .game-workspace .coding-example { margin:22px 0; }
 .game-workspace .coding-workbench pre { white-space:pre-wrap; overflow-wrap:anywhere; font: .85rem/1.6 "JetBrains Mono", Consolas, "Segoe UI", "Noto Sans SC", monospace; padding:10px; border-radius:6px; background:#eae5d9; margin:8px 0 14px; }
 .game-workspace .coding-source .code-editor { flex:1; min-height:0; border:0; border-radius:0; margin:0; }
@@ -99,3 +99,6 @@
 @keyframes coding-pulse { from { opacity: .45; } to { opacity: .85; } }
 [data-reduced-motion=true] .game-workspace :is(.is-spinning,.result-skeleton) { animation: none; }
 @media (prefers-reduced-motion: reduce) { .game-workspace :is(.is-spinning,.result-skeleton) { animation: none; } }
+
+.game-workspace .coding-tests .coding-pane-body.is-empty { flex: 1; display: grid; place-items: center; }
+.game-workspace .coding-empty-result { margin: 0; color: var(--game-muted); font-size: .9375rem; }

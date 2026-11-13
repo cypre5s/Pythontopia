@@ -10,6 +10,8 @@
 - Monaco Editor 0.57.0：Microsoft，MIT。[保留的许可原文](../../frontend/public/legal/monaco-editor-LICENSE.txt)。仅按需加载编辑器与 Python 语言注册。
 - JetBrains Mono 5.3.0（Fontsource 分发）：字体作者为 The JetBrains Mono Project Authors，SIL Open Font License 1.1。[保留的许可原文](../../frontend/public/legal/jetbrains-mono-OFL.txt)。拉丁字形随应用本地分发，中文采用系统回退。
 
+- markdown-it 15.0.3：Vitaly Puzrin、Alex Kocharin，MIT。[保留的许可原文](../../frontend/public/legal/markdown-it-LICENSE.txt)。用于助教回复的 Markdown 渲染，禁用原始 HTML 和图片解析。
+
 ## 当前教师后台依赖补充
 
 - 节点编辑器使用 `@xyflow/react`，并通过该库加载 `@xyflow/system`。两者同用 webkid GmbH 的 MIT 许可，已保留原文。[React Flow 许可](../../admin/legal/react-flow-LICENSE.md) · [后台锁文件](../../admin/package-lock.json)
