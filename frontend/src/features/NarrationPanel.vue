@@ -8,12 +8,11 @@
       @click="open = !open"
     >
       <GameIcon name="book" />
-      <span id="narration-heading">{{ compact ? "向助教提问" : "本页讲解" }}</span>
-      <small v-if="!compact">{{ durationLabel }}</small>
+      <span id="narration-heading">本页讲解</span>
+      <small>{{ durationLabel }}</small>
       <span class="narration-chevron" aria-hidden="true">{{ open ? "收起" : "展开" }}</span>
     </button>
     <div v-show="open" id="narration-body" class="narration-body">
-      <template v-if="!compact">
       <p v-if="current.bridge_in" class="narration-bridge">{{ current.bridge_in }}</p>
       <p class="narration-text">{{ current.text }}</p>
       <div v-if="current.audio" class="narration-audio">
@@ -24,7 +23,6 @@
         <audio v-if="audioUrl" controls autoplay :src="audioUrl" aria-label="本页讲解音频"></audio>
         <small v-if="audioError" class="narration-audio-error">{{ audioError }}</small>
       </div>
-      </template>
       <form class="narration-ask" @submit.prevent="submitQuestion">
         <label for="narration-question">就这页提问</label>
         <div class="narration-ask-row">
@@ -69,7 +67,7 @@ interface NarrationPage {
   audio_seconds?: number | null;
 }
 
-const props = defineProps<{ materialId: number; pageNo: number; compact?: boolean }>();
+const props = defineProps<{ materialId: number; pageNo: number }>();
 const session = useSession();
 const pages = ref<NarrationPage[]>([]);
 const open = ref(false);

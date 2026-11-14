@@ -27,7 +27,7 @@
               <button :disabled="pageIndex >= material.pages.length - 1" @click="pageIndex++">下一页 <GameIcon name="arrowRight" /></button>
             </nav>
           </template>
-          <NarrationPanel v-if="['pdf', 'presentation', 'text'].includes(material.kind)" :material-id="material.id" :page-no="material.kind === 'text' ? Number(currentPage?.page_no ?? 1) : pdfPage" :compact="['pdf', 'presentation'].includes(material.kind)" />
+          <NarrationPanel v-if="material.kind === 'text'" :material-id="material.id" :page-no="material.kind === 'text' ? Number(currentPage?.page_no ?? 1) : pdfPage" />
         </template>
       </template>
     </section>
