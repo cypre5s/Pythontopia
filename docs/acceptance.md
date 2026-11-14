@@ -23,7 +23,11 @@
 
 本轮不改账号、班级、学习记录、成绩与既有课程内容；迁移只增表与列，未删除旧数据。
 
-部署前置补齐（同一轮，验证口径不同）：`backend/Dockerfile` 增加 `poppler-utils`，`deploy/compose.yml` 透传 `REBORN_AUTHORING_AI_*`、`REBORN_NARRATION_ASK_DAILY` 与 `REBORN_TTS_*`，`deploy/.env.example` 补齐对应条目。已核对：`compose.yml` 可被 YAML 解析，api 环境变量 36 项且含全部 16 个新键；`check-docs.mjs` 与 `git diff --check` 通过。**未验证**：本机没有 Docker，镜像未构建、`pdftoppm` 在容器内是否可执行未实际运行，透传变量在真实部署中是否生效也未运行；这两项只能在有 Docker 的环境补验。
+部署前置补齐（同一轮，已补验）：`backend/Dockerfile` 增加 `poppler-utils`，`deploy/compose.yml` 透传 `REBORN_AUTHORING_AI_*`、`REBORN_NARRATION_ASK_DAILY` 与 `REBORN_TTS_*`，`deploy/.env.example` 补齐对应条目。
+
+在 WSL Docker（服务器侧网络）实跑：镜像 `pythontopia-api:local` 构建成功（663 MB）；容器内 `which pdftoppm` = `/usr/bin/pdftoppm`，版本 25.03.0，运行用户 `10001(reborn)`；以普通用户身份真实渲染样本《第 1 讲》第 1 页 126108 字节、第 8 页 222541 字节，均为合法 JPEG（magic `ffd8ff`），第 8 页中文与代码清晰、无方框；容器内 `alembic upgrade head` 到达 `e1f4b23c7d90 (head)`，`/api/health` 返回 200；`docker compose config` 解析出 api 39 个环境变量，16 个新键全部为 `""`。首次构建失败是 WSL 的 docker 代理指向 `127.0.0.1:7897` 而代理实际在 Windows 侧；开启代理后构建通过。
+
+仍未验证：真实服务器部署里这些变量是否按预期注入、TTS 引擎与格式（`format` 与硬编码的 `audio/mpeg` 是否一致）、以及未内嵌 CJK 字体的 PDF 渲染结果（样本 `lecture1.pdf` 54/54 字体内嵌，`workflow.pdf` 76 个字体中 64 个内嵌，未内嵌的为西文标准字体；镜像未装 `fonts-noto-cjk`，遇到不内嵌中文字体的课件可能出现空白字形）。
 
 ## 阅读卡片与目录密度核验2026-11-14
 
