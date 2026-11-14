@@ -242,6 +242,30 @@ docker compose --env-file .tmp/judge0.env -f deploy/judge0.compose.yml up -d
 
 生成参数按实测锁定：关思考（`reasoning_effort=none`）、`max_tokens` 至少8000、`response_format=json_object`；成功判定需同时满足 JSON 可解析、正文非空、`finish_reason` 不为 `length`。开着思考时单页耗时升到15–55秒，且预算不足会返回空正文。批量校准按页窗滚动摘要，参数见 `backend/app/narration/calibrate.py`。
 
+### 语音引擎基准（自托管前必跑）
+
+自托管语音引擎只用受限容器，不发布端口、不动共享机上其他人的容器/镜像/卷。`deploy/tts/` 的 Dockerfile、`fetch-models.sh` 与 `bench.sh` 已写好但**未执行过**；执行者需要在服务器上手动跑，任何一步失败就停并贴日志。
+
+先回答四个问题：① CPU 上 `page_short` 的 RTF ≤1.0；② 峰值 RSS ≤3072 MiB（容器上限 4g）；③ 400 字左右一页能否一次合成；④ 三段中文人工试听（人名、术语、停顿、口气）。任一项不过关就不要继续接工程。
+
+```bash
+# 1. 拉模型（约 1.1 GB，不拉整个 9.3 GB）
+sudo mkdir -p /srv/pythontopia-tts/models && sudo chown "$USER" /srv/pythontopia-tts/models
+WITH_OPTIONAL=1 DEST=/srv/pythontopia-tts/models bash deploy/tts/fetch-models.sh
+
+# 2. 构建（JOBS 故意不占满 48 核；首次约 5–15 分钟，临时占盘 3–5 GB）
+docker build -f deploy/tts/Dockerfile -t pythontopia-reborn-tts:local --build-arg JOBS=8 deploy/tts
+
+# 3. 基准（临时容器 4g/8cpu，端口只绑 127.0.0.1:19191，测完自动删除）
+REBORN_TTS_TOKEN=$(openssl rand -hex 24) bash deploy/tts/bench.sh
+```
+
+产物在 `.tmp/tts-bench/`（`capabilities.json`、`speakers.json`、`page_short.wav`、`page_long.wav`）。把两段 wav 下回来听；听感不过关，后面的工程都是白做。结果按“环境/镜像/模型/启动到ready/page_short/page_long/峰值RSS/中文听感/结论”记到验收文档。
+
+共享机三条纪律：不发布端口（`tts` 只挂内部网络，基准才临时绑 `127.0.0.1`）、不 prune 任何人的镜像/卷、容器 `mem_limit: 4g`。
+
+通过后才接：`deploy/.env` 加 `REBORN_TTS_*`；用 `deploy/compose.yml` + `deploy/compose.tts.yml --profile tts` 起服务（不发布端口）。已知未验证：模型实际 RTF、峰值内存、源码构建能否一次过、官方 release 预编译包是否可用。
+
 语音合成走 OpenAI 兼容 `POST /v1/audio/speech`，配置 `REBORN_TTS_BASE_URL`、`REBORN_TTS_API_KEY`、`REBORN_TTS_MODEL`（默认 `zonos3-mini`）、`REBORN_TTS_VOICE`（默认 `Meilin`）、`REBORN_TTS_FORMAT`（默认 mp3）、`REBORN_TTS_SPEED`、`REBORN_TTS_TIMEOUT_SECONDS`。TTS 权重不进镜像，从挂载卷加载，拉取方式见 `deploy/tts/`；未配置引擎时只有文字讲解可用。
 
 学生“就这页提问”优先使用 `REBORN_AI_*`，缺失时退回作者期凭据，两者都没有则明确不可用；每日提问上限为 `REBORN_NARRATION_ASK_DAILY`（默认20）。

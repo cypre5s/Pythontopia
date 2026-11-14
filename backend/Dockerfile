@@ -1,6 +1,10 @@
 FROM python:3.13-slim@sha256:ae14d4ce8771606477a81446e7ef429edd6762305fc50c84507c1041fa8285d1
 WORKDIR /app/backend
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
+# 资料逐页讲解把 PDF 渲染成页图，靠 pdftoppm（poppler）；缺了它容器内生成必然失败。
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends poppler-utils \
+    && rm -rf /var/lib/apt/lists/*
 COPY backend/requirements.lock ./requirements.lock
 RUN pip install --no-cache-dir -r requirements.lock
 COPY backend/app/ ./app/

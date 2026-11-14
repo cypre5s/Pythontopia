@@ -23,6 +23,8 @@
 
 本轮不改账号、班级、学习记录、成绩与既有课程内容；迁移只增表与列，未删除旧数据。
 
+部署前置补齐（同一轮，验证口径不同）：`backend/Dockerfile` 增加 `poppler-utils`，`deploy/compose.yml` 透传 `REBORN_AUTHORING_AI_*`、`REBORN_NARRATION_ASK_DAILY` 与 `REBORN_TTS_*`，`deploy/.env.example` 补齐对应条目。已核对：`compose.yml` 可被 YAML 解析，api 环境变量 36 项且含全部 16 个新键；`check-docs.mjs` 与 `git diff --check` 通过。**未验证**：本机没有 Docker，镜像未构建、`pdftoppm` 在容器内是否可执行未实际运行，透传变量在真实部署中是否生效也未运行；这两项只能在有 Docker 的环境补验。
+
 ## 阅读卡片与目录密度核验2026-11-14
 
 PPT/PDF页面上方新增独立图标标题栏，视频/文本使用同一紧凑标题样式；PDF继续按扣除标题栏后的空间适应。快速跳转页面及视频列表采用40px桌面/44px触控最低行高、单行省略、细分隔和当前页底色，完整题名保留在title及可访问文本，重点标签独立。
