@@ -152,6 +152,19 @@ Compose将`${REBORN_COURSE_EXCHANGE_DIR:-../data/course}`绑定到API的`/app/da
 
 imports/保存有效期24小时的导入预览目录及历史ZIP。API启动后立即尝试清理，此后每10分钟检查一次，每轮处理最多100个已完成或过期预览；清理副本后保留数据库回执，重复导入请求仍返回原结果。无数据库引用的随机名imports副本及course-catalog/apply/preview/export工作目录在超过24小时后清理。正式导出目录、共享课程包和私有媒体继续保留。清理与导入、预览、导出共用进程间排他锁，忙碌时清理跳过本轮，失败记录日志并在后续周期重试。多API进程需共用支持文件锁的同一交换目录。数据库、媒体与需要保留的交换包分别备份。
 
+### 把一个 ZIP 包变成可选课程包
+
+ZIP 上传入口已关闭，已有ZIP不会被选包列表列出。手上只有 ZIP 时，在服务器上显式解压到交换目录即可（解压后的顶层必须直接包含 `manifest.yaml`）：
+
+```bash
+cd /opt/pythontopia/shared/data/course          # 换成你的 REBORN_COURSE_EXCHANGE_DIR
+mkdir my-course && python -m zipfile -e /path/to/my-course.zip my-course
+test -f my-course/manifest.yaml && echo READY     # 顶层没有 manifest.yaml 说明多套了一层目录
+```
+
+然后在后台刷新课程包列表就能选择它。注意两点：一是解压后目录里含私有答案，不要放到任何 Web 静态目录；二是旧预览超过 24 小时后不能激活，必须重新走一次目录预览。
+
+
 ### 数据库结构升级
 
 操作目标始终使用 `python -m alembic upgrade head`，不要复制历史记录中的迁移 ID。既有升级链包含需要在线读取数据的迁移，不能以离线 `--sql` 输出替代实际升级。升级失败先看日志和备份，不手工修改 `alembic_version`，不盲目 downgrade 或新建空库掩盖问题。
@@ -184,7 +197,7 @@ docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.ym
 
 图书馆资料助教与活动助教共用下列模型配置和预算。升级到资料级会话结构前备份当前库和私有存储；执行head迁移即可，无需新建Activity、重新导入资料或重置账号。没有凭据时图书管理员入口仍保留，但真实显示不可用。
 
-基础 Compose 只透传其中列出的环境变量。给 env 文件新增变量不会自动注入容器；调整额外的 AI预算、S3或上传限制时，需使用私有 Compose override 显式传入 API。所有凭据只在后端配置，不进入前端构建。
+基础 Compose 已显式透传 AI 预算、S3、上传上限、判题 language id 与开发工具开关（见 `deploy/.env.example`）；在 `deploy/.env` 里填值即生效，留空则用代码内默认。仍不在 Compose 里的两个键：`REBORN_CORS_ORIGINS`（生产同源，仅供分离源开发）与 `REBORN_CONVERTER_IMAGE`（API 直连 Docker 的另一种模式；Compose 用 `converter` 服务，配 `REBORN_CONVERTER_URL/TOKEN`）。需要额外的自定义变量时再用私有 Compose override。所有凭据只在后端配置，不进入前端构建。
 
 ### AI助教
 
@@ -234,6 +247,18 @@ docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.ym
 
 保持原项目名、环境文件及数据卷，补齐判题token后用 `deploy/compose.yml` 执行 `up --build -d --wait`。先确认新四服务健康、原卷挂载与历史记录保持，再删除已脱离API的旧独立判题容器/网络。不要用 `down -v`、全局prune或新项目名替代更新；不得重置旧失败提交/成绩。旧Judge0配置、轮询和Piston试验下载已退出当前部署。
 
+### 资料讲解与语音合成
+
+讲解生成使用一套独立的作者期模型配置，与助教预算分开：`REBORN_AUTHORING_AI_API_KEY`、`REBORN_AUTHORING_AI_BASE_URL`、`REBORN_AUTHORING_AI_MODEL`、`REBORN_AUTHORING_AI_VISION_MODEL`，以及可选 `REBORN_AUTHORING_AI_EFFORT`、`REBORN_AUTHORING_AI_MAX_TOKENS`、`REBORN_AUTHORING_AI_TIMEOUT_SECONDS`、`REBORN_AUTHORING_AI_DAILY_PAGES`。接口为 OpenAI 兼容的 chat completions，换供应商只改这些变量。未配置时审校界面显示真实不可用，不伪造讲解。
+
+页图渲染需要宿主机或镜像内有 `pdftoppm`（poppler）。当前 Windows 本机为 `B:/Latex/2026/bin/windows/pdftoppm.EXE`（poppler 25.02），**不支持 `-jpeg`**，只能先转 PNG 再交 Pillow 压成 JPEG；渲染宽 1600px、质量 82，单页约 200KB，在供应商每图 token 封顶内。
+
+生成参数按实测锁定：关思考（`reasoning_effort=none`）、`max_tokens` 至少8000、`response_format=json_object`；成功判定需同时满足 JSON 可解析、正文非空、`finish_reason` 不为 `length`。开着思考时单页耗时升到15–55秒，且预算不足会返回空正文。批量校准按页窗滚动摘要，参数见 `backend/app/narration/calibrate.py`。改动 `prompts.py` 的正文会自动改变幂等键（提示词指纹参与哈希），不需要手动改版本号也不会复用旧讲解；`PROMPT_VERSION` 只用于追踪。校准每窗最多4页，携带原文/必要页图及完整讲解，回复上限2048 tokens；逐窗续租。整册仍是同步请求，大资料可能超过网关300秒上限，应检查任务状态后再操作，不盲目重复调用。
+
+### 语音合成现状
+
+当前只使用云端语音：`REBORN_TTS_PROTOCOL=deepseek` + `REBORN_TTS_BASE_URL=https://api.deepseek.com`。自托管方案（Zonos3-Mini、Kokoro-82M ONNX）在 2026-11-14 试过并暂缓：Kokoro 的中文普通话质量不达标，Zonos3 未做基准；相关脚本与镜像已从仓库移除，评测数据见[验收记录](acceptance.md#本地语音合成试跑核验2026-11-14)。
+
 ### PPT / PPTX转换
 
 容器服务配置 `REBORN_CONVERTER_URL=http://converter:8090` 和随机、至少24字符的 `REBORN_CONVERTER_TOKEN`，使用 documents profile：
@@ -282,9 +307,22 @@ python -m ruff check app tests
 python -m pytest -q --basetemp .pytest-local
 ```
 
+新增或修改的 Python 代码要写完整类型声明：参数、返回值、容器元素（`list[str]` 而不写 `list`），跨模块传递的结构用 `TypedDict` 描述，不用裸 `dict`。`requirements.lock` 同时锁定运行与验证依赖（包括 mypy）：
+
+```powershell
+python -m pip install -r requirements.lock
+python -m mypy          # 读取 pyproject 里的 [tool.mypy]，当前只检查 app/narration
+```
+
+`[tool.mypy]` 先只对 `app/narration` 开启严格检查（`disallow_untyped_defs`、`check_untyped_defs`、`warn_return_any`），其余模块尚未注解，全量打开会淹没真问题。让某个旧模块也纳入时，把它加进 `files` 并先补齐注解，不要直接放宽全局设置。类型检查目前不在 CI 门禁里；要在流水线加一步时，先确认依赖安装方式再改工作流。
+
 Windows测试进程显式使用UTF-8，避免旧夹具的默认文本读取采用系统GBK；这些设置只影响当前终端及其子进程，不修改系统语言。pytest临时目录保持在项目忽略目录内。
 
 自动化测试使用 backend/tests/source_fixtures.py 和 tests/fixtures/teaching-scripts 的合成课程，不代表原教材正确。fixture_seed/fixture_package/fixture_instances 仅位于 tests，不是运行导入入口。浏览器测试包通过 PYTHONPATH=tests 调用 fixture_package 生成 v2 目录，放入独立交换区；课程包 ID 通过 REBORN_E2E_COURSE_PACKAGE 指定。全新隔离数据库执行迁移、重复升级和包重复导入检查。PostgreSQL并发专项需要显式 `REBORN_TEST_DATABASE_URL`，测试会创建临时 schema 并清理，不能指向真实演示库或生产库。当前live判题使用 `REBORN_LIVE_GO_JUDGE_URL` 和 `REBORN_GO_JUDGE_AUTH_TOKEN`；未配置的外部专项应记录为跳过。
+
+全量串行约 4 分钟。本机想快些可装 `pytest-xdist` 后加 `-n 8`（实测 258s → 约 55s，4–5 倍），但它**目前不能当门禁**：并行调度会把已有的用例间隔离问题暴露出来，`tests/test_course_exchange.py` 会随机挂 1–2 条（`422 课程包读取失败`）；未改动的 HEAD 上同样能复现，属既有问题。CI 保持串行；并行只用于本地快速反馈，失败时用串行结果为准。
+
+自动化测试使用backend/tests/source_fixtures.py生成的人工构造资料与tests/fixtures/teaching-scripts，不依赖私有原教材，也不能拿合成夹具声称原教材正确。显式执行来源工具或重复seed前，从仓库根运行`python backend/tests/source_fixtures.py`并将REBORN_COURSE_ROOT指向生成目录、REBORN_CONTENT_ROOT指向教学测试脚本。另在全新隔离数据库执行前述迁移与重复seed检查。PostgreSQL并发专项需要显式 `REBORN_TEST_DATABASE_URL`，测试会创建临时 schema 并清理，不能指向真实演示库或生产库。live go-judge测试需要 `REBORN_LIVE_GO_JUDGE_URL`，鉴权用 `REBORN_GO_JUDGE_AUTH_TOKEN`；未配置的外部专项应记录为跳过。
 
 地图/素材相关修改从仓库根检查：
 
@@ -414,3 +452,5 @@ python -m app.course_package --check 'E:/course-exchange/my-course'
 更新到e831ab247c90前备份当前数据库并保留私有媒体卷；沿用现有Compose项目运行迁移，不重建数据库卷。迁移新增七类定义的deleted_at、当前章节排序条件唯一索引和content_deletion_previews，不改学生证据。SQLite测试迁移重建章节表时暂时关闭外键，恢复后执行完整外键检查；正式PostgreSQL事务内升级。此迁移不可无损降级，恢复需使用隔离备份。
 
 排查删除失败先查看预览blockers、过期和课程修订；确认冲突应重新预览，禁止绕过为直接SQL删除。历史评测已使用include_deleted读取；其他默认ORM查询只读当前内容，显式历史查询必须另行校验用户与班级。历史私有文件和已移除稳定ID继续保留，不能按“当前页面看不到”当作无用数据清理。删除预览和成功回执持久保存，本版未加入自动回收、恢复或永久清除入口。
+
+PR #2 集成迁移为 `a52e901c7d41`，合并 `f942bc358da1` 与 `f2a7c5d81b34` 两条已发布迁移链，不改写历史迁移。任一分支数据库升级前备份，然后执行 `alembic upgrade head` 与 `alembic check`。旧讲解因缺少新资料指纹会失效，保留正文、审校记录与学生历史，需教师重新核对；不会自动重生成或消耗模型额度。

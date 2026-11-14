@@ -1,6 +1,7 @@
 from contextlib import nullcontext
 from datetime import timedelta
 import os
+from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor
 from uuid import uuid4
 
@@ -72,9 +73,16 @@ def test_exchange_lock_excludes_another_process(tmp_path):
         "with exchange_guard(Path(sys.argv[1]), blocking=False) as acquired:\n"
         "    print(int(acquired))\n"
     )
+    # CI 从仓库根运行 pytest，子进程的 cwd 不是 backend/，默认找不到 app；显式给 cwd 才与解释器一致。
+    backend = Path(__file__).resolve().parents[1]
+
+    def run():
+        return subprocess.check_output(
+            [sys.executable, "-c", probe, str(tmp_path)], cwd=backend, timeout=20,
+        ).strip()
     with exchange_guard(tmp_path):
-        assert subprocess.check_output([sys.executable, "-c", probe, str(tmp_path)], timeout=20).strip() == b"0"
-    assert subprocess.check_output([sys.executable, "-c", probe, str(tmp_path)], timeout=20).strip() == b"1"
+        assert run() == b"0"
+    assert run() == b"1"
 
 
 def test_cleanup_retries_failed_removal(client, db, teacher, exchange, monkeypatch):

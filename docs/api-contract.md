@@ -72,6 +72,27 @@ All routes use /api. JSON fields use snake_case. Bearer session authentication i
 
 Paused policy denies new content/progress/assistant requests immediately and preserves history; reopening continues stored state. The only built-in main quest is arrival (stable ID arrival, 初来小镇：第一堂 Python 课; database IDs are instance-specific). Retired shared quest definitions are removed only during explicit course import, so stored player history does not restore them to the current world. Teacher-owned definitions and learner grades remain intact. Normal course import includes only currently selected teaching questions, not an automatic legacy archive. Explicit development cleanup skips real learner and authoring references; ordinary migration does not delete grades. Validation results and external-service skips are documented in acceptance.md.
 
+## 资料逐页讲解与音频
+
+教师接口必须带 `classroom_id` 并限定在选定班级当前课程实例；学生接口按资料授权与班级开放范围鉴权，未授权一律404/403，不泄露资料存在性。以下路径均在 `/api` 下。
+
+- GET /teacher/classrooms/{classroom_id}/materials/{id}/narrations?classroom_id -> {pages:[{page_no,title,has_text,status,narration,bridge_in,anchors,target_seconds,source_text,audio,audio_seconds,reviewed_at,reviewed_by}],coverage:{pages,covered,missing,draft,accepted,rejected,unavailable,stale},quota:{...}}。`status` 为 draft|accepted|rejected|unavailable|stale；`source_text` 为该页当前原文前2000字，只用于并排比对，不返回学生。
+- PUT /teacher/classrooms/{classroom_id}/materials/{id}/narrations/{page_no} {text,bridge_in?,anchors?,target_seconds?} 写入或改写讲解正文，结果为 draft；页文本已变时旧 accepted 记录在读取时被判 stale。DELETE 删除该页讲解。
+- POST /teacher/classrooms/{classroom_id}/materials/{id}/narrations/{page_no}/accept；POST .../reject。只有 accepted 能进入学生端、音频与课程包。未保存修改不得接受（后台层面阻断，服务端以提交正文为准）。
+- POST /teacher/classrooms/{classroom_id}/materials/{id}/narrations/{page_no}/generate 按单页生成，POST .../narrations/generate {first_page,last_page,mode?} 批量逐页生成；`mode=serial`（默认独立）会把已生成页的讲解作为上下文，过渡句才有依据，且上下文参与幂等键。
+- GET .../narrations/job -> {running,kind,status,done,total,message,started_at}：前端轮询用。
+- 生成／校准／音频端点共用一份资料锁：已有任务在跑时返回 409「这份资料正在处理中」；心跳超过 5 分钟的旧任务视为过期，允许接管。
+- POST .../narrations/accept-batch {first_page?,last_page?} 一次接受范围内全部可审草稿，返回 {accepted:[页码],count,skipped:[{page_no,reason}]}；空文本、非 draft 页跳过。
+- POST .../narrations/audio-batch {first_page?,last_page?} 为范围内已接受的页批量合成音频，返回 {made,reused,failed:[{page_no,error}],skipped,count}；单页失败不中断。；两者幂等，输入未变不重复请求模型。余额/额度不足、无凭据、供应商失败分别返回429/409/502，单页失败不阻断其余页。
+- GET /teacher/classrooms/{classroom_id}/materials/{id}/narrations/quota 返回当日额度使用；POST .../narrations/calibrate 产出全篇校准报告，GET .../calibrate 取最近一份，POST .../calibrate/apply 只重生成修订与报告一致的 draft 页，已接受、已修改或旧报告无修订的页列入 awaiting_teacher。
+- GET /teacher/classrooms/{classroom_id}/materials/{id}/narrations/{page_no}/page-image -> image/jpeg，返回审校用页图（与生成时送模型的页图同一份、同一尺寸）；文本资料或没有可读来源时404。页面图像不返回给学生，学生端仍只看课件本身。
+- POST /teacher/classrooms/{classroom_id}/materials/{id}/narrations/{page_no}/audio 合成单页语音：仅 accepted 可合成（draft/未就绪409），无TTS引擎409且不伪造音频，引擎失败502。GET .../narrations/audio 返回逐页就绪状态与音色/模型；GET .../{page_no}/audio/file 为教师试听流（audio/mpeg）。
+- GET /materials/{id}/narrations/{page_no}/page-image?classroom_id -> image/jpeg：学生播放讲解用的大页面，鉴权与讲解列表一致；没有可读来源时404。
+- GET /materials/{id}/narrations?classroom_id 学生只读到 accepted 且未 stale 的页，字段仅 page_no/text/bridge_in/target_seconds/audio/audio_seconds。GET /materials/{id}/narrations/{page_no}/audio?classroom_id 为 audio/mpeg 流，未接受或无录音404。
+- 逐页提问复用 `/assistant/sessions` 与现有消息/SSE接口，state.page_no 指定当前页；独立讲解 `/ask` 已移除（404），历史问答表保留。授权、课程开关、全站模型配置、额度、幂等和会话修订均沿用学习助教。工具可读取当前资料的有效已审校讲解，长内容分段读取，草稿不外泄。
+
+讲解、审校、音频与提问均不改变成绩、解锁、任务进度或阅读完成；翻页、播放与浏览不产生模型调用。课程包导出目前不包含讲解，见内容规范的未覆盖说明。
+
 ## 班级课程与包交换
 
 以下路径均位于/api。教师内容接口必须带classroom_id查询参数，路径包含班级时以路径为准；省略或班级未初始化不能访问全局来源。管理员也必须指定实例，跨班对象、关联、文件和学生预览均再次鉴权。包内stable_id与运行id分开，新增内容后使用服务端返回的id。
@@ -79,10 +100,10 @@ Paused policy denies new content/progress/assistant requests immediately and pre
 - GET /teacher/classrooms/{id}/course：返回id/classroom_id/package_id/name/package_version/revision；无实例为null。
 - POST /teacher/classrooms/{id}/course/empty {confirmed:true,name}：创建空课程，已有实例幂等返回。不会自动生成章节、题目、NPC或交互。
 - GET /teacher/classrooms/{id}/course/ids：教师可查看九类实体的stable_id→当前运行ID映射，用于迁移/受控集成，不能用于越班查询。
-- POST /teacher/classrooms/{id}/course/imports/preview：multipart file上传ZIP，返回id、expected_revision、expires_at（24小时）、can_apply、package_id/package_version/name、diff（各类added/updated/removed）、blockers、warnings、learning_impact。校验或预览不等于激活。
-- GET /teacher/classrooms/{id}/course/packages 返回 `{items:[{key,name,package_id,package_version,source}],unavailable}`。`source` 为 `mounted` 或 `uploaded`。挂载目录只列可读的清单，上传包限本人和本班。POST /teacher/classrooms/{id}/course/imports/available/preview 接受 `{package_key}`，执行与上传一致的校验并返回相同预览结构。响应不暴露文件系统路径。
+- POST /teacher/classrooms/{id}/course/imports/preview：**已关闭，固定返回 410**（ZIP 上传入口不再开放）。要导入请把解压后的目录包放入私有 `data/course/`，改用下面的 `imports/available/preview`；返回结构（id、expected_revision、expires_at 24 小时、can_apply、diff、blockers、warnings、learning_impact）不变。校验或预览不等于激活。
+- GET /teacher/classrooms/{id}/course/packages 返回 `{items:[{key,name,package_id,package_version,source}],unavailable}`。当前只列私有交换目录里的**解压目录包**（`source=mounted`）及本班自己的导出目录；其他班级的导出目录不可选。POST /teacher/classrooms/{id}/course/imports/available/preview 接受 `{package_key}`，对目录创建私有副本并计算内容指纹，执行与预览一致的校验并返回相同预览结构。响应不暴露文件系统路径。
 - POST /teacher/classrooms/{id}/course/imports/{preview_id}/apply {request_id:UUID,expected_revision:int>=0}：返回instance_id/revision/package_id/package_version/duplicate。重复请求保持原回执；包被篡改、预览过期、修订冲突、影响学习记录或进行中会话时拒绝，旧课程保留。
-- GET /teacher/classrooms/{id}/course/export：完整ZIP附件，private/no-store；覆盖未归类、草稿、停用、未选用内容和私有答案/媒体，不包含账号、成员、学习记录或部署密钥。缺失/转换中的媒体不能导出为完整包。
+- GET /teacher/classrooms/{id}/course/export：把完整课程原子发布为私有交换目录 `data/course/export-<班级ID>-<随机ID>/` 并返回 `{directory,path}`（不再是ZIP附件）；覆盖未归类、草稿、停用、未选用内容和私有答案/媒体，不包含账号、成员、学习记录或部署密钥。缺失/转换中的媒体不能导出为完整包。
 
 原始包、预览和答案只供授权教师。学生只获得过滤后的运行DTO；secrets目录名本身不构成权限边界。课程文件保存在REBORN_COURSE_EXCHANGE_ROOT，运行媒体保存在原私有存储，两者不是公开静态路径。
 

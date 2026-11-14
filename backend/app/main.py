@@ -11,6 +11,7 @@ from .db import SessionLocal
 from .course_cleanup import cleanup_worker
 from . import judge_management, content_deletions, assistant_settings
 from . import auth, courses, classrooms, quests, practice, assistant, storage, character_assets, course_settings, curriculum, story, assessments, student_accounts, classroom_courses, course_exchange, world_authoring, dev_tools
+from . import narration
 
 
 @asynccontextmanager
@@ -51,6 +52,9 @@ def create_app() -> FastAPI:
     )
     for module in (auth, courses, classrooms, quests, practice, assistant, storage, character_assets, course_settings, curriculum, story, assessments, student_accounts, classroom_courses, course_exchange, world_authoring):
         app.include_router(module.router, prefix="/api")
+    # Narration authoring is additive and isolated; see app/narration.
+    app.include_router(narration.router, prefix="/api")
+    app.include_router(narration.student_router, prefix="/api")
     app.include_router(dev_tools.preview_router, prefix="/api")
     app.include_router(judge_management.router, prefix="/api")
     app.include_router(content_deletions.router, prefix="/api")

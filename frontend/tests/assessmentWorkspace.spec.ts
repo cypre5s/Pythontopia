@@ -1,5 +1,6 @@
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { defineComponent, h } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import PracticeWorkspace from "../src/features/PracticeWorkspace.vue";
 import { useSession } from "../src/shared/session";
@@ -18,6 +19,25 @@ function paper(overrides: Partial<AssessmentAttempt> = {}): AssessmentAttempt { 
 function result(id: string, status: Submission["status"]): Submission { return { id: `submission-${id}`, activity_id: "test", question_id: id, mode: "submit", status, feedback: { detail: status === "accepted" ? "回答正确" : "请重新思考" }, created_at: "2026-11-08T00:00:00Z" }; }
 afterEach(async () => { await flushPromises(); vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear(); sessionStorage.clear(); });
 describe("assessment and practice presentation", () => {
+  it("mounts and reopens a cached workspace with its toolbar in the same render", async () => {
+    const { pinia } = setup();
+    vi.spyOn(api, "get").mockResolvedValue(paper());
+    const warn = vi.spyOn(console, "warn");
+    const Host = defineComponent({ setup: () => () => h("section", [
+      h("div", { id: "test-practice-toolbar" }),
+      h(PracticeWorkspace, { activityId: "test", toolbarTarget: "#test-practice-toolbar" }),
+    ]) });
+    for (let visit = 0; visit < 2; visit++) {
+      const wrapper = mount(Host, { attachTo: document.body, global: { plugins: [pinia], stubs: { AssistantPanel: true } } });
+      try {
+        await flushPromises();
+        expect(wrapper.get("#test-practice-toolbar .practice-navigation").exists()).toBe(true);
+        await wrapper.get('#test-practice-toolbar [aria-label="下一题"]').trigger("click");
+        expect(wrapper.get(".practice-question-card h3").text()).toContain("q2");
+      } finally { wrapper.unmount(); wrapper.element.remove(); }
+    }
+    expect(warn.mock.calls.some(args => args.some(arg => String(arg).includes("Teleport")))).toBe(false);
+  });
   it("resumes server draft saves after a partial legacy assessment unlocks from grading", async () => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     const { pinia } = setup();

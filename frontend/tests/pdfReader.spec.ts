@@ -6,7 +6,8 @@ import { api } from "../src/shared/api";
 
 vi.mock("pdfjs-dist", () => ({ getDocument: vi.fn(), GlobalWorkerOptions: { workerSrc: "" } }));
 vi.mock("pdfjs-dist/build/pdf.worker.min.mjs?url", () => ({ default: "worker-url" }));
-vi.mock("../src/shared/api", () => ({ api: { blob: vi.fn() } }));
+vi.mock("../src/shared/api", () => ({ api: { blob: vi.fn(), get: vi.fn(async () => ({ pages: [] })) } }));
+vi.mock("../src/shared/session", () => ({ useSession: () => ({ classroomId: 7 }) }));
 
 const mounted: VueWrapper[] = [];
 let width = 800, height = 500, resizeCallback: ResizeObserverCallback;
@@ -48,6 +49,16 @@ async function resize(nextWidth: number, nextHeight: number) {
   resizeCallback([{ contentRect: { width, height } } as ResizeObserverEntry], {} as ResizeObserver);
   await flushPromises();
 }
+
+it("keeps rendering the PDF canvas when narration is unavailable on the current page", async () => {
+  const wrapper = mount(PdfReader, { props: { url: "/materials/186/file", materialId: 186, page: 2 } });
+  mounted.push(wrapper);
+  await flushPromises();
+  expect(document.getPage).toHaveBeenCalledWith(2);
+  expect(renderPage).toHaveBeenCalled();
+  expect(wrapper.get("canvas").isVisible()).toBe(true);
+  expect(api.blob).not.toHaveBeenCalledWith(expect.stringContaining("page-image"), expect.anything());
+});
 
 describe("PDF reading surface", () => {
   it("fits both dimensions, rerenders on height-only changes and recovers after being hidden", async () => {

@@ -3,7 +3,7 @@
 </template>
 <script setup lang="ts">
 import {
-  LoaderCircle, FileText, CodeXml, ListChecks, Terminal, Target, List, Play, Square, Lightbulb, ChevronDown, MessageSquare, NotebookText, BookOpen, Users, Settings, Compass, House,
+  LoaderCircle, FileText, CodeXml, ListChecks, Terminal, Target, List, Play, Pause, Square, Lightbulb, ChevronDown, MessageSquare, NotebookText, BookOpen, Users, Settings, Compass, House,
   X, Leaf, Music, Video, SquarePen, ChevronRight, Grid2X2, Folder,
   Activity, ChartColumnIncreasing, Upload, LogOut, Plus, Copy, RefreshCw,
   ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ExternalLink,
@@ -11,7 +11,7 @@ import {
 } from "@lucide/vue";
 const icons = {
   spinner: LoaderCircle, description: FileText, code: CodeXml, cases: ListChecks, terminal: Terminal, target: Target, list: List,
-  play: Play, stop: Square, hint: Lightbulb, chevronDown: ChevronDown,
+  play: Play, pause: Pause, stop: Square, hint: Lightbulb, chevronDown: ChevronDown,
   message: MessageSquare, journal: NotebookText, book: BookOpen, people: Users,
   settings: Settings, compass: Compass, building: House, close: X, leaf: Leaf,
   music: Music, video: Video, practice: SquarePen, chevron: ChevronRight,

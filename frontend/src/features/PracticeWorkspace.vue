@@ -1,5 +1,5 @@
 <template>
-  <Teleport :to="toolbarTarget || 'body'" :disabled="!toolbarTarget">
+  <Teleport defer :to="toolbarTarget || 'body'" :disabled="!toolbarTarget">
     <nav v-if="questions.length && viewMode === 'single'" class="practice-navigation" aria-label="答题翻页">
       <button :disabled="questionIndex <= 0 || requestBusy" aria-label="上一题" title="上一题" @click="selectQuestion(questions[questionIndex - 1]!.id)"><GameIcon name="arrowLeft" /><span class="navigation-label">上一题</span></button>
       <div id="practice-question-actions" class="practice-question-actions">

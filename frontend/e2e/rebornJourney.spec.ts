@@ -11,6 +11,9 @@ test("only configured arrival main quest completes and stays isolated across acc
   await page.emulateMedia({ reducedMotion: "reduce" });
   const browserErrors: string[] = [];
   page.on("pageerror", (error) => browserErrors.push(error.message));
+  page.on("console", message => {
+    if (message.type() === "error" && /^(?:TypeError|ReferenceError|\[Vue warn\])/.test(message.text())) browserErrors.push(message.text());
+  });
   const student_id = process.env.E2E_TEACHER_STUDENT_ID,
     password = process.env.E2E_TEACHER_PASSWORD;
   test.skip(

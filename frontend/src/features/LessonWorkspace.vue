@@ -10,7 +10,7 @@
       <template v-else-if="material">
         <p v-if="material.status !== 'ready'" class="notice lesson-state-card">资料尚未就绪，请稍后再来阅读。</p>
         <template v-else>
-          <PdfReader v-if="['pdf', 'presentation'].includes(material.kind)" :url="fileUrl" :page="pdfPage" :title="material.title" :kind="material.kind" @page="pdfPage = $event" />
+          <PdfReader @ask="openPageAssistant" v-if="['pdf', 'presentation'].includes(material.kind)" :url="fileUrl" :page="pdfPage" :title="material.title" :kind="material.kind" :material-id="material.id" @page="pdfPage = $event" />
           <template v-else>
             <div class="lesson-reading-card">
               <h2 class="game-card-title reader-card-title"><GameIcon :name="material.kind === 'video' ? 'video' : 'book'"/>{{ material.kind === "video" ? "视频浏览" : "文本浏览" }}<span :title="material.title">{{ material.title }}</span></h2>
@@ -27,10 +27,11 @@
               <button :disabled="pageIndex >= material.pages.length - 1" @click="pageIndex++">下一页 <GameIcon name="arrowRight" /></button>
             </nav>
           </template>
+          <NarrationPanel @ask="openPageAssistant" v-if="material.kind === 'text'" :material-id="material.id" :page-no="material.kind === 'text' ? Number(currentPage?.page_no ?? 1) : pdfPage" />
         </template>
       </template>
     </section>
-    <LearningSupportPanel v-if="material || activity" :key="activity?.id ?? material?.id" id="lesson-assistant-region" tabindex="-1" :hidden="compact && !showAssistant" :inert="compact && !showAssistant" :aria-hidden="compact && !showAssistant" :activity-id="activity?.id" :material-id="activity ? undefined : material?.id" :allowed="activity ? activity.assistant_allowed : material?.status === 'ready'" :page-no="currentContext.page_no" :video-time="currentContext.video_time" :role-name="roleName" :portrait-url="rolePortrait" :sprite="(activity?.role ?? session.world?.default_role)?.sprite" :goals="learningGoals" :outline="documentOutline" :time-outline="videoOutline" @cite="cite" @select-page="readRequiredPage" @select-time="seekVideo">
+    <LearningSupportPanel ref="supportPanel" v-if="material || activity" :key="activity?.id ?? material?.id" id="lesson-assistant-region" tabindex="-1" :hidden="compact && !showAssistant" :inert="compact && !showAssistant" :aria-hidden="compact && !showAssistant" :activity-id="activity?.id" :material-id="activity ? undefined : material?.id" :allowed="activity ? activity.assistant_allowed : material?.status === 'ready'" :page-no="currentContext.page_no" :video-time="currentContext.video_time" :role-name="roleName" :portrait-url="rolePortrait" :sprite="(activity?.role ?? session.world?.default_role)?.sprite" :goals="learningGoals" :outline="documentOutline" :time-outline="videoOutline" @cite="cite" @select-page="readRequiredPage" @select-time="seekVideo">
       <template #goals-footer>
         <p v-if="material?.notice" class="notice">{{ material.notice }}</p>
         <footer v-if="activity" class="lesson-footer">
@@ -64,6 +65,7 @@ import { learningContext } from "../shared/learningContext";
 import { migrateReadingPosition, pdfResumePage } from "../shared/readingPosition";
 import { createVideoProgressQueue } from "../shared/videoProgress";
 import LearningSupportPanel from "./LearningSupportPanel.vue";
+import NarrationPanel from "./NarrationPanel.vue";
 import LearningSplitLayout from "./LearningSplitLayout.vue";
 import "./learningUi.css";
 const PdfReader = defineAsyncComponent(() => import("./PdfReader.vue"));
@@ -167,6 +169,11 @@ function updateCompact() {
         ?.contains(document.activeElement),
     );
   compact.value = compactMedia.matches;
+}
+const supportPanel = ref<InstanceType<typeof LearningSupportPanel>>();
+async function openPageAssistant() {
+  await switchView(true);
+  await supportPanel.value?.openAssistant();
 }
 async function switchView(assistant: boolean) {
   if (assistant) sidebarCollapsed.value = false;

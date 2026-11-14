@@ -129,9 +129,15 @@ def build_context(db, user, session, activity, body):
         material = authorize_material(db, user, session.classroom_id, material_id)
         if material.status != "ready":
             raise HTTPException(409, "当前资料不可用")
+        from .narration.repository import visible
+        narrations = {item.page_no: item.text for item in visible(db, material)} if not practice else {}
         pages.extend({"material_id": material.id, "material_title": material.title, "page_no": int(p["page_no"]),
                       "page_id": p.get("id"), "title": str(p.get("title", "")), "excerpt": str(p.get("text", ""))}
                      for p in material.content.get("pages", []))
+        for page in pages:
+            narration = narrations.get(page["page_no"]) if page["material_id"] == material.id else None
+            if narration:
+                page["excerpt"] += "\n\n教师已审校的辅助讲解（不替代原文）：\n" + narration
     page = next((p for p in pages if p["material_id"] == session.material_id and p["page_no"] == state.page_no), None)
     if state.page_no is not None and page is None:
         raise HTTPException(422, "页码不属于当前资料")

@@ -155,5 +155,11 @@ async function moveTab(event: KeyboardEvent) {
   await nextTick();
   (tab.value === "goals" ? goalsTab.value : tab.value === "outline" ? outlineTab.value : tab.value === "questions" ? questionsTab.value : assistantTab.value)?.focus();
 }
+defineExpose({ openAssistant: async () => {
+  sidebarCollapsed.value = false;
+  tab.value = "assistant";
+  await nextTick();
+  document.querySelector<HTMLTextAreaElement>(`#${panelId.value}-assistant textarea`)?.focus();
+} });
 const characterImage = useCharacterImage(computed(() => props.portraitUrl));
 </script>

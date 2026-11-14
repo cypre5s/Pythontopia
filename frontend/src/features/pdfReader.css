@@ -98,3 +98,5 @@
   .game-workspace .pdf-pagination.reader-toolbar { gap: 4px; padding: 8px; }
   .game-workspace .pdf-pagination button { padding-inline: 8px; gap: 4px; }
 }
+
+.game-workspace .pdf-page-surface.with-narration { grid-template-rows: auto minmax(0, 1fr) auto; }
