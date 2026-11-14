@@ -60,8 +60,9 @@
 | 编号 | 已确定要求与决策原因 | 细节归属 | 核对入口 |
 | --- | --- | --- | --- |
 | AI-01 | 各学习页面统一简洁聊天排版；使用实际活动角色名称，阅读角色为图书管理员。授权角色淡立绘作背景，文本清晰可读，底部输入提示“向助教提问”，向上箭头发送；不常显字数上限，超限保留原文并报错，不静默截断。切换标签保留消息与输入。 | [游戏设计](design/game-interface.md) | `AssistantPanel.vue`、`LearningSupportPanel.vue`、`frontend/e2e/gameDesign.spec.ts` |
-| AI-02 | 只有学生在已授权活动或图书馆资料阅读中明确发送问题才调用助教。走路、NPC 剧情与日常、翻页、播放、任务推进、切换标签和布局均零模型调用；没有配置时显示真实不可用，不伪造回复。内置章节测验不开放助教。 | [产品](product.md)、[架构](architecture.md)、[HTTP 契约](api-contract.md) | `backend/app/assistant.py`、`backend/tests/test_assistant.py`、`frontend/e2e/rebornJourney.spec.ts` |
-| AI-03 | 助教上下文、会话与引用按用户、班级、活动或资料隔离，只引用当前授权材料；不授予评分、解锁或发布能力。图书馆直接阅读资料可使用图书管理员助教，无需绑定活动；恢复会话和发送消息均重新鉴权，测验禁用规则保持。 | [架构](architecture.md)、[HTTP 契约](api-contract.md) | `backend/tests/test_assistant.py`、`backend/tests/test_content_security.py` |
+| AI-02 | 只有学生在已授权活动或图书馆资料阅读中明确发送问题才调用助教，包括阅读资料时的“就这页提问”。走路、NPC 剧情与日常、翻页、播放、任务推进、切换标签、布局、讲解与音频均零模型调用；没有配置时显示真实不可用，不伪造回复。内置章节测验不开放助教。 | [产品](product.md)、[架构](architecture.md)、[HTTP 契约](api-contract.md) | `backend/app/assistant.py`、`backend/app/narration/ask.py`、`backend/tests/test_assistant.py`、`frontend/e2e/rebornJourney.spec.ts` |
+| AI-03 | 助教上下文、会话与引用按用户、班级、活动或资料隔离，只引用当前授权材料；本页提问只使用当前页原文、该页已接受讲解与邻近页标题，超过邻近范围的引用丢弃。不授予评分、解锁或发布能力。图书馆直接阅读资料可使用图书管理员助教，无需绑定活动；恢复会话和发送消息均重新鉴权，测验禁用规则保持。 | [架构](architecture.md)、[HTTP 契约](api-contract.md) | `backend/tests/test_assistant.py`、`backend/tests/test_narration_ask.py`、`backend/tests/test_content_security.py` |
+| AI-04 | 资料逐页讲解只由教师显式触发模型生成，生成前不自动跑；状态分 draft/accepted/rejected，原文变化使旧审校失效（stale）。只有 accepted 且未失效的讲解对学生可见、可合成音频、可进课程包；学生端明确标注 AI 生成且经教师审校，讲解不计入阅读完成与学习证据。全篇校准只出报告，不静默改写已接受内容。音频一页一份并与讲解文本绑定，文本改动即失效；音频不属学习证据，当前无过期清理。 | [内容配置](content-authoring.md#资料逐页讲解与音频)、[HTTP 契约](api-contract.md#资料逐页讲解与音频)、[开发手册](development.md#资料讲解与语音合成) | `backend/app/narration/`、`backend/tests/test_narration*.py`、`admin/src/components/narration-review.tsx`、`frontend/src/features/NarrationPanel.vue` |
 
 ## 开发与协作
 
@@ -117,6 +118,8 @@
 2026-11-10本地测试账号清理复核（DATA-05–06、DEV-02–04）：要求保持。按用户明确授权备份并清空 15176 本地预览的教师、学生及关联记录，范围和核验见[本地预览账号清理核验](acceptance.md#本地预览账号清理核验-2026-11-10)。未重跑功能回归。
 
 2026-11-10本地预览启动复核（DATA-05–06、DEV-03–04）：要求保持。启动现有 15176 预览并创建一位教师，网页、健康接口和教师登录 API 均已核验，同步至[本地预览启动与教师登录核验](acceptance.md#本地预览启动与教师登录核验-2026-11-10)。未运行浏览器交互或全量功能回归。
+
+2026-11-14讲解与音频复核（AI-02–04、DEV-03–04）：用户在“别管CI、全心做功能”的授权下逐项确认 PPT 逐页讲解的生成、审校、校准、音频与学生提问；需求变化为新增 AI-04，并修订 AI-02（明示“就这页提问”属于唯一模型调用入口之一，讲解/音频零调用）与 AI-03（本页提问的上下文与引用限邻近页）。同步内容、API、开发、验收与续做；验证为后端讲解5组用例32通过、空库迁移与alembic check通过、学生39文件215项与后台38项单测及两旁类型/lint通过，真实模型单页端到端一次，详见[讲解与音频核验](acceptance.md#资料逐页讲解与音频核验2026-11-14)。未完成：课程包导出/导入携带讲解、批量音频、音频过期清理、Compose变量透传、真实TTS联调、103页整份PPT端到端与浏览器e2e均未执行，不记为通过。
 
 ## 统一教学角色要求
 

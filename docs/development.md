@@ -234,6 +234,20 @@ docker compose --env-file .tmp/judge0.env -f deploy/judge0.compose.yml up -d
 
 连通或健康检查不证明真实代码运行成功。Docker Desktop 的 cgroup 版本可能与 Judge0 内置 isolate 不兼容，出现 cgroup目录或 `/box/script.py` 错误时应修复隔离运行环境；不能禁用隔离来通过验收。未知分发状态 `submission_unknown` 必须对账，不盲目重送。练习提交与测验整卷交卷的不同契约见[API说明](api-contract.md)。
 
+### 资料讲解与语音合成
+
+讲解生成使用一套独立的作者期模型配置，与助教预算分开：`REBORN_AUTHORING_AI_API_KEY`、`REBORN_AUTHORING_AI_BASE_URL`、`REBORN_AUTHORING_AI_MODEL`、`REBORN_AUTHORING_AI_VISION_MODEL`，以及可选 `REBORN_AUTHORING_AI_EFFORT`、`REBORN_AUTHORING_AI_MAX_TOKENS`、`REBORN_AUTHORING_AI_TIMEOUT_SECONDS`、`REBORN_AUTHORING_AI_DAILY_PAGES`。接口为 OpenAI 兼容的 chat completions，换供应商只改这些变量。未配置时审校界面显示真实不可用，不伪造讲解。
+
+页图渲染需要宿主机或镜像内有 `pdftoppm`（poppler）。当前 Windows 本机为 `B:/Latex/2026/bin/windows/pdftoppm.EXE`（poppler 25.02），**不支持 `-jpeg`**，只能先转 PNG 再交 Pillow 压成 JPEG；渲染宽 1600px、质量 82，单页约 200KB，在供应商每图 token 封顶内。
+
+生成参数按实测锁定：关思考（`reasoning_effort=none`）、`max_tokens` 至少8000、`response_format=json_object`；成功判定需同时满足 JSON 可解析、正文非空、`finish_reason` 不为 `length`。开着思考时单页耗时升到15–55秒，且预算不足会返回空正文。批量校准按页窗滚动摘要，参数见 `backend/app/narration/calibrate.py`。
+
+语音合成走 OpenAI 兼容 `POST /v1/audio/speech`，配置 `REBORN_TTS_BASE_URL`、`REBORN_TTS_API_KEY`、`REBORN_TTS_MODEL`（默认 `zonos3-mini`）、`REBORN_TTS_VOICE`（默认 `Meilin`）、`REBORN_TTS_FORMAT`（默认 mp3）、`REBORN_TTS_SPEED`、`REBORN_TTS_TIMEOUT_SECONDS`。TTS 权重不进镜像，从挂载卷加载，拉取方式见 `deploy/tts/`；未配置引擎时只有文字讲解可用。
+
+学生“就这页提问”优先使用 `REBORN_AI_*`，缺失时退回作者期凭据，两者都没有则明确不可用；每日提问上限为 `REBORN_NARRATION_ASK_DAILY`（默认20）。
+
+讲解和音频使用现有私有文件存储挂载，回滚迁移只删表字段不删已存文件。给 env 文件新增变量不会自动进容器，部署时须在 Compose 中显式透传。
+
 ### PPT / PPTX转换
 
 容器服务配置 `REBORN_CONVERTER_URL=http://converter:8090` 和随机、至少24字符的 `REBORN_CONVERTER_TOKEN`，使用 documents profile：

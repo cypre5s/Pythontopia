@@ -67,6 +67,21 @@ All routes use /api. JSON fields use snake_case. Bearer session authentication i
 
 Paused policy denies new content/progress/assistant requests immediately and preserves history; reopening continues stored state. The only built-in main quest is arrival (stable ID arrival, 初来小镇：第一堂 Python 课; database IDs are instance-specific). Retired shared quest definitions are removed only during explicit course import, so stored player history does not restore them to the current world. Teacher-owned definitions and learner grades remain intact. Normal course import includes only currently selected teaching questions, not an automatic legacy archive. Explicit development cleanup skips real learner and authoring references; ordinary migration does not delete grades. Validation results and external-service skips are documented in acceptance.md.
 
+## 资料逐页讲解与音频
+
+教师接口必须带 `classroom_id` 并限定在选定班级当前课程实例；学生接口按资料授权与班级开放范围鉴权，未授权一律404/403，不泄露资料存在性。以下路径均在 `/api` 下。
+
+- GET /teacher/materials/{id}/narrations?classroom_id -> {pages:[{page_no,title,has_text,status,narration,bridge_in,anchors,target_seconds,source_text,audio,audio_seconds,reviewed_at,reviewed_by}],coverage:{pages,covered,missing,draft,accepted,rejected,unavailable,stale},quota:{...}}。`status` 为 draft|accepted|rejected|unavailable|stale；`source_text` 为该页当前原文前2000字，只用于并排比对，不返回学生。
+- PUT /teacher/materials/{id}/narrations/{page_no} {text,bridge_in?,anchors?,target_seconds?} 写入或改写讲解正文，结果为 draft；页文本已变时旧 accepted 记录在读取时被判 stale。DELETE 删除该页讲解。
+- POST /teacher/materials/{id}/narrations/{page_no}/accept；POST .../reject。只有 accepted 能进入学生端、音频与课程包。未保存修改不得接受（后台层面阻断，服务端以提交正文为准）。
+- POST /teacher/materials/{id}/narrations/{page_no}/generate 按单页生成，POST .../narrations/generate {pages?} 批量逐页生成；两者幂等，输入未变不重复请求模型。余额/额度不足、无凭据、供应商失败分别返回429/409/502，单页失败不阻断其余页。
+- GET /teacher/materials/{id}/narrations/quota 返回当日额度使用；POST .../narrations/calibrate 产出全篇校准报告，GET .../calibrate 取最近一份，POST .../calibrate/apply 只重生成 draft 页并列出待教师确认的 accepted 页。
+- POST /teacher/materials/{id}/narrations/{page_no}/audio 合成单页语音：仅 accepted 可合成（draft/未就绪409），无TTS引擎409且不伪造音频，引擎失败502。GET .../narrations/audio 返回逐页就绪状态与音色/模型；GET .../{page_no}/audio/file 为教师试听流（audio/mpeg）。
+- GET /materials/{id}/narrations?classroom_id 学生只读到 accepted 且未 stale 的页，字段仅 page_no/text/bridge_in/target_seconds/audio/audio_seconds。GET /materials/{id}/narrations/{page_no}/audio?classroom_id 为 audio/mpeg 流，未接受或无录音404。
+- POST /materials/{id}/narrations/{page_no}/ask {question} -> {page_no,answer,cites,remaining,checks}。只有学生主动提问才调模型；上下文限本页原文、该页已接受讲解与邻近页标题，草稿不进入；`cites` 只保留邻近页码，越界丢弃。空问题或超500字422，越界页或无内容页404，无凭据409，日额度用尽429，供应商失败502。
+
+讲解、审校、音频与提问均不改变成绩、解锁、任务进度或阅读完成；翻页、播放与浏览不产生模型调用。课程包导出目前不包含讲解，见内容规范的未覆盖说明。
+
 ## 班级课程与包交换
 
 以下路径均位于/api。教师内容接口必须带classroom_id查询参数，路径包含班级时以路径为准；省略或班级未初始化不能访问全局来源。管理员也必须指定实例，跨班对象、关联、文件和学生预览均再次鉴权。包内stable_id与运行id分开，新增内容后使用服务端返回的id。
