@@ -51,6 +51,8 @@ export function NarrationReview({
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [imageFailed, setImageFailed] = useState(false);
+  const [pageImage, setPageImage] = useState("");
 
   const load = useCallback(async () => {
     setBusy("load");
@@ -82,7 +84,39 @@ export function NarrationReview({
 
   useEffect(() => {
     setDraft(saved);
+    setImageFailed(false);
   }, [pageNo, saved]);
+
+  useEffect(() => {
+    if (pageNo === null) return;
+    let dropped = false;
+    setPageImage((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return "";
+    });
+    void (async () => {
+      try {
+        const blob = await fileBlob(narrationApi.pageImage(classroomId, materialId, pageNo));
+        if (dropped) return;
+        setPageImage(URL.createObjectURL(blob));
+      } catch {
+        if (!dropped) setImageFailed(true);
+      }
+    })();
+    return () => {
+      dropped = true;
+    };
+  }, [classroomId, materialId, pageNo]);
+
+  useEffect(
+    () => () => {
+      setPageImage((previous) => {
+        if (previous) URL.revokeObjectURL(previous);
+        return "";
+      });
+    },
+    [],
+  );
 
   async function run(label: string, action: () => Promise<unknown>, done: string) {
     setBusy(label);
@@ -96,6 +130,37 @@ export function NarrationReview({
       setError(errorMessage(e));
     } finally {
       setBusy("");
+    }
+  }
+
+  // 一页要 3–15 秒，整册串行会超过网关的读超时（90s）。按小批提交：能显示进度，
+  // 中途失败也能直接重试（服务端按输入哈希跳过了已生成的页，不会重复计费）。
+  async function generateWholeDeck() {
+    if (!data) return;
+    const total = data.coverage.pages;
+    const chunk = 4;
+    const failures: string[] = [];
+    setBusy("all");
+    setError("");
+    setMessage("");
+    try {
+      for (let first = 1; first <= total; first += chunk) {
+        const last = Math.min(first + chunk - 1, total);
+        setMessage(`正在生成第 ${first}–${last} 页（共 ${total} 页）…`);
+        const { results } = await narrationApi.generateRange(classroomId, materialId, first, last);
+        for (const item of results) {
+          if (item.status === "failed") failures.push(`第 ${item.page_no} 页：${item.error ?? "未知错误"}`);
+        }
+        await load();
+      }
+      setMessage(failures.length ? `整份生成结束，${failures.length} 页失败，可重试` : "整份生成已结束");
+      if (failures.length) setError(failures.slice(0, 5).join("；"));
+    } catch (e) {
+      setError(errorMessage(e));
+      setMessage("已生成的页已保存，可直接重试（不会重复计费）");
+    } finally {
+      setBusy("");
+      await load().catch(() => {});
     }
   }
 
@@ -144,7 +209,7 @@ export function NarrationReview({
                 disabled={!quota?.available || Boolean(busy)}
                 onClick={() => {
                   if (!window.confirm(`将为全部 ${data.coverage.pages} 页生成讲解，已生成的页不会重复计费。继续？`)) return;
-                  void run("all", () => narrationApi.generateRange(classroomId, materialId, 1, data.coverage.pages), "整份生成已结束");
+                  void generateWholeDeck();
                 }}
               >
                 <Sparkles /> {busy === "all" ? "正在生成…" : "整份生成"}
@@ -200,8 +265,8 @@ export function NarrationReview({
                 )}
               </section>
             )}
-            <div className="grid gap-4 md:grid-cols-[220px_1fr]">
-              <div className="max-h-[50vh] space-y-1 overflow-y-auto pr-1">
+            <div className="grid gap-4 lg:grid-cols-[140px_minmax(0,1fr)_420px]">
+              <div className="max-h-[66vh] space-y-1 overflow-y-auto pr-1">
                 {data.pages.map((item) => (
                   <button
                     key={item.page_no}
@@ -217,158 +282,180 @@ export function NarrationReview({
                   </button>
                 ))}
               </div>
+
               {page ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Button size="sm" variant="ghost" disabled={!previous} onClick={() => previous && setPageNo(previous)}>
-                      <ChevronLeft /> 上一页
-                    </Button>
-                    <Button size="sm" variant="ghost" disabled={!next} onClick={() => next && setPageNo(next)}>
-                      下一页 <ChevronRight />
-                    </Button>
-                    <span className="hint">
-                      {page.title || `第 ${page.page_no} 页`} · 原文 {page.source_chars} 字
-                      {page.narration?.image_used && " · 生成时使用了页图"}
-                    </span>
-                  </div>
-                  {page.narration?.stale_reason && (
-                    <p className="flex items-center gap-1 text-sm text-amber-700">
-                      <AlertTriangle size={14} /> {page.narration.stale_reason}
-                    </p>
-                  )}
-                  {!page.has_text && <p className="hint">本页文本层为空（内容在页图里），生成依赖页图。</p>}
-                  <div className="grid gap-3 lg:grid-cols-2">
-                    <div>
-                      <Label>页面原文</Label>
-                      <pre className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded border p-2 text-xs">
-                        {page.source_text || "（无文本层）"}
-                      </pre>
-                    </div>
-                    <div>
-                      <Label htmlFor="narration-text">讲解稿</Label>
-                      <textarea
-                        id="narration-text"
-                        className="min-h-40 w-full rounded border p-2 text-sm"
-                        value={draft}
-                        onChange={(event) => setDraft(event.target.value)}
-                        placeholder="还没有草稿，可以先点“生成本页”，也可以自己写。"
+                <>
+                  <div className="space-y-2">
+                    <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <Button size="sm" variant="ghost" disabled={!previous} onClick={() => previous && setPageNo(previous)}>
+                        <ChevronLeft /> 上一页
+                      </Button>
+                      <Button size="sm" variant="ghost" disabled={!next} onClick={() => next && setPageNo(next)}>
+                        下一页 <ChevronRight />
+                      </Button>
+                      <span className="hint">第 {page.page_no} / {data.coverage.pages} 页</span>
+                      <Input
+                        type="number"
+                        aria-label="跳到页码"
+                        className="ml-auto w-20"
+                        min={1}
+                        max={data.coverage.pages}
+                        placeholder="跳页"
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter") return;
+                          const target = Number((event.target as HTMLInputElement).value);
+                          if (data.pages.some((item) => item.page_no === target)) setPageNo(target);
+                        }}
                       />
-                      <p className="hint">{draft.trim().length} 字（约 {Math.round(draft.trim().length / 4.2)} 秒）</p>
                     </div>
-                  </div>
-                  {page.narration?.anchors?.length ? (
-                    <p className="hint">anchors：{page.narration.anchors.join(" / ")}</p>
-                  ) : null}
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      size="sm"
-                      disabled={!quota?.available || Boolean(busy)}
-                      onClick={() => void run("generate", () => narrationApi.generatePage(classroomId, materialId, page.page_no), "本页草稿已生成")}
-                    >
-                      <Sparkles /> {busy === "generate" ? "生成中…" : "生成本页"}
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={Boolean(busy) || !dirty}
-                      onClick={() => void run("save", () => narrationApi.save(classroomId, materialId, page.page_no, draft), "已保存修改")}
-                    >
-                      <Save /> 保存修改
-                    </Button>
-                    <Button
-                      size="sm"
-                      disabled={Boolean(busy) || dirty || !draft.trim() || page.narration?.status === "accepted"}
-                      title={dirty ? "先保存修改再接受" : undefined}
-                      onClick={() => void run("accept", () => narrationApi.accept(classroomId, materialId, page.page_no), "本页讲解已接受")}
-                    >
-                      <Check /> 接受
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={Boolean(busy) || dirty || !page.narration}
-                      onClick={() => void run("reject", () => narrationApi.reject(classroomId, materialId, page.page_no), "本页讲解已拒绝")}
-                    >
-                      <X /> 拒绝
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      disabled={Boolean(busy) || !page.narration}
-                      onClick={() => void run("remove", () => narrationApi.remove(classroomId, materialId, page.page_no), "本页讲解已删除")}
-                    >
-                      <Trash2 /> 删除
-                    </Button>
-                  </div>
-                  <section className="space-y-2 rounded border p-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Label className="m-0">讲解音频</Label>
-                      <span className="hint">
-                        {audioState?.available === false
-                          ? "未配置语音合成服务"
-                          : audioState
-                            ? `音色 ${audioState.voice} · ${audioState.model}`
-                            : ""}
-                      </span>
-                      {audioPage?.ready ? (
-                        <Badge variant="secondary">{audioPage.seconds ? `约 ${audioPage.seconds} 秒` : "已就绪"}</Badge>
+                    <div className="flex max-h-[62vh] min-h-[280px] items-center justify-center overflow-auto rounded border bg-muted/30 p-2">
+                      {imageFailed ? (
+                        <p className="hint px-4 text-center">
+                          这一页没有可渲染的页面图像（文本资料或转换缺少预览）。
+                          <br />
+                          右侧仍可查看原文片段与讲解。
+                        </p>
                       ) : (
-                        <Badge variant="secondary">未生成</Badge>
+                        <img
+                          src={pageImage}
+                          alt={`第 ${page.page_no} 页`}
+                          className="max-h-[60vh] w-auto max-w-full"
+                          onError={() => setImageFailed(true)}
+                        />
                       )}
+                    </div>
+                    <details className="text-sm">
+                      <summary className="cursor-pointer">页面原文（{page.source_chars} 字）</summary>
+                      <pre className="mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap rounded border p-2 text-xs">
+                        {page.source_text || "（无文本层，内容在页面图像里）"}
+                      </pre>
+                    </details>
+                  </div>
+
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <StatusBadge status={page.narration?.status} />
+                      <span className="hint">
+                        {page.narration?.image_used ? "生成时使用了页图" : "生成时使用文本层"}
+                      </span>
+                    </div>
+                    {page.narration?.stale_reason && (
+                      <p className="flex items-center gap-1 text-sm text-amber-700">
+                        <AlertTriangle size={14} /> {page.narration.stale_reason}
+                      </p>
+                    )}
+                    <Label htmlFor="narration-text">讲解稿</Label>
+                    <textarea
+                      id="narration-text"
+                      className="min-h-44 w-full rounded border p-2 text-sm"
+                      value={draft}
+                      onChange={(event) => setDraft(event.target.value)}
+                      placeholder="还没有草稿，可以先点“生成本页”，也可以自己写。"
+                    />
+                    <p className="hint">
+                      {draft.trim().length} 字（约 {Math.round(draft.trim().length / 4.2)} 秒）
+                      {audioPage?.seconds ? ` · 实际音频 ${audioPage.seconds} 秒` : ""}
+                    </p>
+                    {page.narration?.anchors?.length ? (
+                      <p className="hint">anchors：{page.narration.anchors.join(" / ")}</p>
+                    ) : null}
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        disabled={!quota?.available || Boolean(busy)}
+                        onClick={() => void run("generate", () => narrationApi.generatePage(classroomId, materialId, page.page_no), "本页草稿已生成")}
+                      >
+                        <Sparkles /> {busy === "generate" ? "生成中…" : "生成本页"}
+                      </Button>
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={Boolean(busy) || audioState?.available === false || page.narration?.status !== "accepted"}
-                        title={page.narration?.status !== "accepted" ? "先接受本页讲解再生成音频" : undefined}
-                        onClick={() => void run("audio", () => narrationApi.synthesizeAudio(classroomId, materialId, page.page_no), "本页音频已生成")}
+                        disabled={Boolean(busy) || !dirty}
+                        onClick={() => void run("save", () => narrationApi.save(classroomId, materialId, page.page_no, draft), "已保存修改")}
                       >
-                        <Volume2 /> {busy === "audio" ? "合成中…" : audioPage?.ready ? "重新合成" : "生成音频"}
+                        <Save /> 保存修改
+                      </Button>
+                      <Button
+                        size="sm"
+                        disabled={Boolean(busy) || dirty || !draft.trim() || page.narration?.status === "accepted"}
+                        title={dirty ? "先保存修改再接受" : undefined}
+                        onClick={() => void run("accept", () => narrationApi.accept(classroomId, materialId, page.page_no), "本页讲解已接受")}
+                      >
+                        <Check /> 接受
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={Boolean(busy) || dirty || !page.narration}
+                        onClick={() => void run("reject", () => narrationApi.reject(classroomId, materialId, page.page_no), "本页讲解已拒绝")}
+                      >
+                        <X /> 拒绝
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
-                        disabled={Boolean(busy) || !audioPage?.ready}
-                        onClick={() =>
-                          void (async () => {
-                            setBusy("listen");
-                            setError("");
-                            try {
-                              const blob = await fileBlob(narrationApi.audioFile(classroomId, materialId, page.page_no));
-                              setClip((previous) => {
-                                if (previous) URL.revokeObjectURL(previous);
-                                return URL.createObjectURL(blob);
-                              });
-                            } catch (e) {
-                              setError(errorMessage(e));
-                            } finally {
-                              setBusy("");
-                            }
-                          })()
-                        }
+                        disabled={Boolean(busy) || !page.narration}
+                        onClick={() => void run("remove", () => narrationApi.remove(classroomId, materialId, page.page_no), "本页讲解已删除")}
                       >
-                        <Play /> 试听
+                        <Trash2 /> 删除
                       </Button>
                     </div>
-                    {clip && <audio controls autoPlay src={clip} className="w-full" aria-label="讲解音频试听" />}
-                  </section>
-                  <div className="flex items-center gap-2">
-                    <Label htmlFor="jump">跳到页码</Label>
-                    <Input
-                      id="jump"
-                      type="number"
-                      className="w-24"
-                      min={1}
-                      max={data.coverage.pages}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter") return;
-                        const target = Number((event.target as HTMLInputElement).value);
-                        if (data.pages.some((item) => item.page_no === target)) setPageNo(target);
-                      }}
-                    />
+                    <section className="space-y-2 rounded border p-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Label className="m-0">讲解音频</Label>
+                        <span className="hint">
+                          {audioState?.available === false
+                            ? "未配置语音合成服务"
+                            : audioState
+                              ? `音色 ${audioState.voice} · ${audioState.model}`
+                              : ""}
+                        </span>
+                        {audioPage?.ready ? (
+                          <Badge variant="secondary">{audioPage.seconds ? `约 ${audioPage.seconds} 秒` : "已就绪"}</Badge>
+                        ) : (
+                          <Badge variant="secondary">未生成</Badge>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={Boolean(busy) || audioState?.available === false || page.narration?.status !== "accepted"}
+                          title={page.narration?.status !== "accepted" ? "先接受本页讲解再生成音频" : undefined}
+                          onClick={() => void run("audio", () => narrationApi.synthesizeAudio(classroomId, materialId, page.page_no), "本页音频已生成")}
+                        >
+                          <Volume2 /> {busy === "audio" ? "合成中…" : audioPage?.ready ? "重新合成" : "生成音频"}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          disabled={Boolean(busy) || !audioPage?.ready}
+                          onClick={() =>
+                            void (async () => {
+                              setBusy("listen");
+                              setError("");
+                              try {
+                                const blob = await fileBlob(narrationApi.audioFile(classroomId, materialId, page.page_no));
+                                setClip((previous) => {
+                                  if (previous) URL.revokeObjectURL(previous);
+                                  return URL.createObjectURL(blob);
+                                });
+                              } catch (e) {
+                                setError(errorMessage(e));
+                              } finally {
+                                setBusy("");
+                              }
+                            })()
+                          }
+                        >
+                          <Play /> 试听
+                        </Button>
+                      </div>
+                      {clip && <audio controls autoPlay src={clip} className="w-full" aria-label="讲解音频试听" />}
+                      <p className="hint">音频只对已接受的讲解生成；改稿后旧录音会失效，需要重新合成。</p>
+                    </section>
                   </div>
-                </div>
+                </>
               ) : (
-                <p className="hint">这份资料没有可讲解的页。</p>
+                <p className="hint lg:col-span-2">这份资料没有可讲解的页。</p>
               )}
             </div>
           </>

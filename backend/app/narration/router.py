@@ -6,7 +6,7 @@ package keeps its own model, prompts and (later) authoring client.
 
 from typing import Annotated, Any, cast
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
@@ -17,7 +17,7 @@ from ..models import Material, User
 from ..teacher_scope import require_scope, teacher_instance_id
 from . import ask, audio, calibrate
 from . import client as model_client
-from . import repository, service
+from . import render, repository, service
 from . import tts
 from .contracts import AppliedCalibration, AskReply, AudioRecord, GeneratedPage, Quota
 
@@ -264,6 +264,17 @@ def synthesize_audio(page_no: int, classroom_id: int, material_id: int, db: Anno
     db.commit()
     return result
 
+
+@router.get("/{page_no}/page-image")
+def read_page_image(page_no: int, classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
+                    user: Annotated[User, Depends(require_teacher)]) -> Response:
+    """The same rendered page the model saw, so review can compare wording against the slide."""
+    material = _material(db, user, classroom_id, material_id)
+    image = render.render_page(material, page_no)
+    if image is None:
+        raise HTTPException(404, "本页没有可预览的页面图像")
+    return Response(content=image, media_type="image/jpeg",
+                    headers={"Cache-Control": "private, max-age=300"})
 
 @router.get("/{page_no}/audio/file")
 def stream_teacher_audio(page_no: int, classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],

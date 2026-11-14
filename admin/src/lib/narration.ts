@@ -112,6 +112,8 @@ export const narrationApi = {
       `${base(classroomId, materialId)}/${pageNo}/audio`,
       {},
     ),
+  pageImage: (classroomId: number, materialId: number, pageNo: number) =>
+    `${base(classroomId, materialId)}/${pageNo}/page-image`,
   audioFile: (classroomId: number, materialId: number, pageNo: number) =>
     `/teacher/classrooms/${classroomId}/materials/${materialId}/narrations/${pageNo}/audio/file`,
 };
