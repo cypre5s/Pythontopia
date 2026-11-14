@@ -112,7 +112,7 @@ export function NarrationReview({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="max-w-6xl">
+      <DialogContent className="sm:max-w-6xl max-h-[92vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>逐页讲解 · {title}</DialogTitle>
           <DialogDescription>
