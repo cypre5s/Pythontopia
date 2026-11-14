@@ -172,6 +172,49 @@ export function NarrationReview({
     }
   }
 
+  async function acceptAllDrafts() {
+    if (!data) return;
+    const drafts = data.pages.filter((item) => item.narration?.status === "draft").length;
+    if (!drafts) {
+      setMessage("没有待审的草稿");
+      return;
+    }
+    if (!window.confirm(`一次接受全部 ${drafts} 页待审草稿？之后仍可在右侧单独驳回。`)) return;
+    await run("accept-all", () => narrationApi.acceptBatch(classroomId, materialId), `已接受 ${drafts} 页`);
+  }
+
+  async function synthesizeAllAudio() {
+    if (!data) return;
+    const accepted = data.pages.filter((item) => item.narration?.status === "accepted").length;
+    if (!accepted) {
+      setMessage("还没有已接受的页，先接受再合成音频");
+      return;
+    }
+    if (!window.confirm(`为 ${accepted} 页已接受的讲解合成音频？已合成的页会复用，不重复计费。`)) return;
+    const total = data.coverage.pages;
+    const chunk = 4;
+    setBusy("audio-all");
+    setError("");
+    try {
+      for (let first = 1; first <= total; first += chunk) {
+        const last = Math.min(first + chunk - 1, total);
+        setMessage(`正在合成第 ${first}–${last} 页音频（共 ${total} 页）…`);
+        const result = await narrationApi.audioBatch(classroomId, materialId, first, last);
+        if (result.failed?.length) {
+          setError(result.failed.map((item) => `第 ${item.page_no} 页：${item.error}`).slice(0, 5).join("；"));
+        }
+        await load();
+      }
+      setMessage("音频批量合成结束");
+    } catch (e) {
+      setError(errorMessage(e));
+      setMessage("已合成的音频已保存，可直接重试");
+    } finally {
+      setBusy("");
+      await load().catch(() => {});
+    }
+  }
+
   const audioPage = audioState?.pages.find((item) => item.page_no === pageNo);
   const navigation = () => {
     const pages = data?.pages ?? [];
@@ -221,6 +264,20 @@ export function NarrationReview({
                 }}
               >
                 <Sparkles /> {busy === "all" ? "正在生成…" : "整份生成"}
+              </Button>
+              <Button
+                variant="outline"
+                disabled={Boolean(busy) || data.coverage.draft === 0}
+                onClick={() => void acceptAllDrafts()}
+              >
+                <Check /> {busy === "accept-all" ? "接受中…" : `接受全部草稿（${data.coverage.draft}）`}
+              </Button>
+              <Button
+                variant="outline"
+                disabled={Boolean(busy) || audioState?.available === false || data.coverage.accepted === 0}
+                onClick={() => void synthesizeAllAudio()}
+              >
+                <Volume2 /> {busy === "audio-all" ? "合成中…" : "批量合成音频"}
               </Button>
               <Button
                 variant="outline"

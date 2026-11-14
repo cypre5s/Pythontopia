@@ -4,7 +4,7 @@ Mounting is deliberately additive: `app.main` only includes this router, and the
 package keeps its own model, prompts and (later) authoring client.
 """
 
-from typing import Annotated, Any, cast
+from typing import Annotated, Any, Literal, cast
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import FileResponse
@@ -41,6 +41,14 @@ class GenerateInput(BaseModel):
     first_page: int
     last_page: int
     target_seconds: int | None = None
+    # serial：把已生成的页作为上下文，过渡句才有依据；independent：每页独立（旧行为）。
+    mode: Literal["independent", "serial"] = "independent"
+
+
+class RangeInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    first_page: int | None = None
+    last_page: int | None = None
 
 
 class PageGenerateInput(BaseModel):
@@ -99,7 +107,8 @@ def generate_range(classroom_id: int, material_id: int, body: GenerateInput,
         raise HTTPException(422, "页码范围无效")
     try:
         results = service.generate_range(db, material, first=body.first_page, last=body.last_page,
-                                         instance_id=instance_id, target_seconds=body.target_seconds)
+                                         instance_id=instance_id, target_seconds=body.target_seconds,
+                                         serial=body.mode == "serial")
     except service.NarrationUnavailable as exc:
         raise HTTPException(409, str(exc)) from exc
     except LookupError as exc:
@@ -218,6 +227,33 @@ def accept_narration(page_no: int, classroom_id: int, material_id: int, db: Anno
             "reviewed_at": item.reviewed_at.isoformat() if item.reviewed_at else None}
 
 
+@router.post("/accept-batch")
+def accept_batch(classroom_id: int, material_id: int,
+                 db: Annotated[Session, Depends(get_db)],
+                 user: Annotated[User, Depends(require_teacher)],
+                 body: RangeInput | None = None) -> dict[str, Any]:
+    """Accept every reviewable draft in the range: reviewers read the deck, not one page at a time."""
+    material = _material(db, user, classroom_id, material_id, exclusive=True)
+    repository.sync_staleness(db, material)
+    first = body.first_page if body and body.first_page else 1
+    last = body.last_page if body and body.last_page else 10**9
+    accepted: list[int] = []
+    skipped: list[dict[str, Any]] = []
+    for item in repository.rows(db, material.id):
+        if item.page_no < first or item.page_no > last:
+            continue
+        if item.status != "draft":
+            skipped.append({"page_no": item.page_no, "reason": item.status})
+            continue
+        if not item.text.strip():
+            skipped.append({"page_no": item.page_no, "reason": "empty"})
+            continue
+        repository.decide(db, material, item.page_no, "accepted", user)
+        accepted.append(item.page_no)
+    db.commit()
+    return {"accepted": accepted, "count": len(accepted), "skipped": skipped[:50]}
+
+
 @router.post("/{page_no}/reject")
 def reject_narration(page_no: int, classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
                      user: Annotated[User, Depends(require_teacher)]) -> dict[str, Any]:
@@ -275,6 +311,40 @@ def read_page_image(page_no: int, classroom_id: int, material_id: int, db: Annot
         raise HTTPException(404, "本页没有可预览的页面图像")
     return Response(content=image, media_type="image/jpeg",
                     headers={"Cache-Control": "private, max-age=300"})
+
+@router.post("/audio-batch")
+def synthesize_audio_batch(classroom_id: int, material_id: int,
+                           db: Annotated[Session, Depends(get_db)],
+                           user: Annotated[User, Depends(require_teacher)],
+                           body: RangeInput | None = None) -> dict[str, Any]:
+    """Synthesize every accepted page in the range; one failure must not abort the rest."""
+    material = _material(db, user, classroom_id, material_id)
+    repository.sync_staleness(db, material)
+    db.commit()
+    if tts.unavailable_reason():
+        raise HTTPException(409, tts.unavailable_reason() or "语音合成不可用")
+    first = body.first_page if body and body.first_page else 1
+    last = body.last_page if body and body.last_page else 10**9
+    made: list[int] = []
+    reused: list[int] = []
+    failed: list[dict[str, Any]] = []
+    skipped: list[int] = []
+    for item in repository.rows(db, material.id):
+        if item.page_no < first or item.page_no > last:
+            continue
+        if item.status != "accepted" or not item.text.strip():
+            skipped.append(item.page_no)
+            continue
+        try:
+            result = audio.synthesize_page(db, material, item.page_no)
+            db.commit()
+            (reused if result["reused"] else made).append(item.page_no)
+        except (tts.SpeechFailed, ValueError, LookupError) as exc:
+            db.rollback()
+            failed.append({"page_no": item.page_no, "error": str(exc)[:160]})
+    return {"made": made, "reused": reused, "failed": failed, "skipped": skipped[:50],
+            "count": len(made) + len(reused)}
+
 
 @router.get("/{page_no}/audio/file")
 def stream_teacher_audio(page_no: int, classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],

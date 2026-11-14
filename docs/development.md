@@ -240,7 +240,7 @@ docker compose --env-file .tmp/judge0.env -f deploy/judge0.compose.yml up -d
 
 页图渲染需要宿主机或镜像内有 `pdftoppm`（poppler）。当前 Windows 本机为 `B:/Latex/2026/bin/windows/pdftoppm.EXE`（poppler 25.02），**不支持 `-jpeg`**，只能先转 PNG 再交 Pillow 压成 JPEG；渲染宽 1600px、质量 82，单页约 200KB，在供应商每图 token 封顶内。
 
-生成参数按实测锁定：关思考（`reasoning_effort=none`）、`max_tokens` 至少8000、`response_format=json_object`；成功判定需同时满足 JSON 可解析、正文非空、`finish_reason` 不为 `length`。开着思考时单页耗时升到15–55秒，且预算不足会返回空正文。批量校准按页窗滚动摘要，参数见 `backend/app/narration/calibrate.py`。
+生成参数按实测锁定：关思考（`reasoning_effort=none`）、`max_tokens` 至少8000、`response_format=json_object`；成功判定需同时满足 JSON 可解析、正文非空、`finish_reason` 不为 `length`。开着思考时单页耗时升到15–55秒，且预算不足会返回空正文。批量校准按页窗滚动摘要，参数见 `backend/app/narration/calibrate.py`。改动 `prompts.py` 的正文会自动改变幂等键（提示词指纹参与哈希），不需要手动改版本号也不会复用旧讲解；`PROMPT_VERSION` 只用于追踪。校准按 40 页一窗、`max_tokens=16000`（默认 8000 会被截断）；103 页整册约 76–100 秒。
 
 ### 语音引擎基准（自托管前必跑）
 

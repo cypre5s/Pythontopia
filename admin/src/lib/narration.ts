@@ -90,7 +90,19 @@ export const narrationApi = {
     api.post<{ results: { page_no: number; status: string; error?: string }[] }>(`${base(classroomId, materialId)}/generate`, {
       first_page: firstPage,
       last_page: lastPage,
+      // 串行：后面的页会读到前面已生成的讲解，过渡句不再凭空编。
+      mode: "serial",
     }),
+  acceptBatch: (classroomId: number, materialId: number, firstPage?: number, lastPage?: number) =>
+    api.post<{ accepted: number[]; count: number }>(`${base(classroomId, materialId)}/accept-batch`, {
+      first_page: firstPage ?? null,
+      last_page: lastPage ?? null,
+    }),
+  audioBatch: (classroomId: number, materialId: number, firstPage: number, lastPage: number) =>
+    api.post<{ made: number[]; reused: number[]; failed: { page_no: number; error: string }[]; count: number }>(
+      `${base(classroomId, materialId)}/audio-batch`,
+      { first_page: firstPage, last_page: lastPage },
+    ),
   save: (classroomId: number, materialId: number, pageNo: number, text: string) =>
     api.put<{ page_no: number; status: string; text: string }>(`${base(classroomId, materialId)}/${pageNo}`, { text }),
   accept: (classroomId: number, materialId: number, pageNo: number) =>

@@ -88,7 +88,7 @@ it("accepting is blocked until an edited draft is saved", async () => {
   render(<NarrationReview classroomId={3} materialId={7} title="第 1 讲" onClose={() => {}} />);
   await waitFor(() => expect(screen.getByLabelText("讲解稿")).toBeTruthy());
 
-  const accept = screen.getByRole("button", { name: /接受/ });
+  const accept = screen.getByRole("button", { name: /^接受$/ });
   await waitFor(() => expect(accept).not.toBeDisabled());
   await user.type(screen.getByLabelText("讲解稿"), "再看标签。");
   expect(accept).toBeDisabled();

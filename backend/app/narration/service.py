@@ -32,12 +32,14 @@ def with_image(material: Material, page_text: str) -> bool:
 
 
 def input_hash(*, page_hash: str, image: bytes | None, settings: AuthoringSettings, model: str,
-               target_seconds: int) -> str:
+               target_seconds: int, history: str = "") -> str:
     """Re-running the same page with the same inputs must not spend another call."""
     parts = "\n".join([
-        page_hash, prompts.PROMPT_VERSION, model, settings["effort"],
+        page_hash, prompts.PROMPT_VERSION, prompts.fingerprint(), model, settings["effort"],
         str(target_seconds), "image" if image else "text",
         hashlib.sha256(image).hexdigest() if image else "",
+        # 串行模式下上下文变了，同一页的产出也会变，必须算进幂等键。
+        hashlib.sha256(history.encode("utf-8")).hexdigest() if history else "",
     ])
     return hashlib.sha256(parts.encode("utf-8")).hexdigest()
 
@@ -51,6 +53,51 @@ def previous_tail(db: Session, material: Material, page_no: int) -> str:
     return text[-120:]
 
 
+HISTORY_PAGES = 4
+HISTORY_CHARS = 2400
+OUTLINE_CHARS = 600
+
+
+def previous_context(db: Session, material: Material, page_no: int) -> str:
+    """What the class has already heard, in order: recent wording plus an outline of earlier pages.
+
+    Reading it back from stored rows (instead of holding server-side conversation state) keeps
+    the continuity working even when the frontend submits the deck in small batches.
+    """
+    earlier = [item for item in repository.rows(db, material.id)
+               if item.page_no < page_no and item.text.strip() and item.status in {"draft", "accepted"}]
+    if not earlier:
+        return ""
+    recent = earlier[-HISTORY_PAGES:]
+    older = earlier[:-HISTORY_PAGES]
+    pages = repository.page_map(material)
+    blocks: list[str] = []
+    if older:
+        titles = []
+        for item in older:
+            title = str(pages.get(item.page_no, {}).get("title") or "").strip()
+            titles.append(f"第 {item.page_no} 页 {title}".strip())
+        outline = "；".join(titles)[-OUTLINE_CHARS:]
+        blocks.append("更早讲过：" + outline)
+    for item in recent:
+        blocks.append(f"第 {item.page_no} 页：{item.text.strip()}")
+    return "\n".join(blocks)[-HISTORY_CHARS:]
+
+
+def next_page_hint(material: Material, page_no: int) -> tuple[str, bool]:
+    """What the next page actually is (and whether it exists), so transitions stop being invented.
+
+    大部分幻灯片没有文本层：这时不能假装知道下一页讲什么，也不能让模型以为已经是最后一页。
+    """
+    page = repository.page_map(material).get(page_no + 1)
+    if page is None:
+        return "", False
+    title = str(page.get("title") or "").strip()
+    if title:
+        return title, True
+    return str(page.get("text") or "").strip().replace("\n", " ")[:40], True
+
+
 def used_today(db: Session, instance_id: int) -> int:
     start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     return db.scalar(select(func.count()).select_from(PageNarration).join(
@@ -60,7 +107,7 @@ def used_today(db: Session, instance_id: int) -> int:
 
 
 def generate_page(db: Session, material: Material, page_no: int, *, instance_id: int,
-                  target_seconds: int | None = None) -> GeneratedPage:
+                  target_seconds: int | None = None, serial: bool = False) -> GeneratedPage:
     """One page, one model call. Returns the stored row's public state."""
     reason = config.unavailable_reason()
     if reason:
@@ -77,17 +124,21 @@ def generate_page(db: Session, material: Material, page_no: int, *, instance_id:
         raise NarrationUnavailable("本页没有可读的页面来源，无法生成讲解")
     model = settings["vision_model"] if image else settings["model"]
     page_hash = repository.text_hash(page_text)
-    fingerprint = input_hash(page_hash=page_hash, image=image, settings=settings, model=model, target_seconds=seconds)
+    history = previous_context(db, material, page_no) if serial else ""
+    fingerprint = input_hash(page_hash=page_hash, image=image, settings=settings, model=model,
+                             target_seconds=seconds, history=history)
     existing = repository.row(db, material.id, page_no)
     if existing is not None and existing.input_hash == fingerprint and existing.status in {"draft", "accepted"}:
         return {"page_no": page_no, "status": existing.status, "reused": True, "model": existing.model}
     if used_today(db, instance_id) >= settings["daily_pages"]:
         raise NarrationUnavailable("本班今日讲解生成额度已用完，请明天再试")
 
+    hint, has_next = next_page_hint(material, page_no)
     messages: list[dict[str, Any]] = [{"role": "system", "content": prompts.SYSTEM},
                 {"role": "user", "content": prompts.user_parts(
                     material_title=material.title, page_no=page_no, page_text=page_text,
                     target_seconds=seconds, previous_tail=previous_tail(db, material, page_no - 1),
+                    next_page_hint=hint, next_page_exists=has_next, history=history,
                     image_b64=base64.b64encode(image).decode("ascii") if image else None)}]
     result = model_client.chat(messages, settings=settings, model=model)
 
@@ -120,7 +171,7 @@ def generate_page(db: Session, material: Material, page_no: int, *, instance_id:
 
 
 def generate_range(db: Session, material: Material, *, first: int, last: int, instance_id: int,
-                   target_seconds: int | None = None) -> list[GeneratedPage]:
+                   target_seconds: int | None = None, serial: bool = False) -> list[GeneratedPage]:
     """Serial generation; one failing page must not discard the pages that worked."""
     pages = repository.page_map(material)
     wanted = [page_no for page_no in range(first, last + 1) if page_no in pages]
@@ -129,7 +180,8 @@ def generate_range(db: Session, material: Material, *, first: int, last: int, in
     results: list[GeneratedPage] = []
     for page_no in wanted:
         try:
-            results.append(generate_page(db, material, page_no, instance_id=instance_id, target_seconds=target_seconds))
+            results.append(generate_page(db, material, page_no, instance_id=instance_id,
+                                         target_seconds=target_seconds, serial=serial))
             db.commit()
         except (NarrationUnavailable, LookupError):
             db.rollback()
