@@ -4,12 +4,15 @@ import base64
 import hashlib
 import logging
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from ..models import Material, now
 from . import client as model_client
 from . import config, prompts, render, repository
+from .contracts import AuthoringSettings, GeneratedPage, Quota
 from .models import PageNarration
 
 log = logging.getLogger("narration")
@@ -28,7 +31,8 @@ def with_image(material: Material, page_text: str) -> bool:
     return len(page_text.strip()) < TEXT_ONLY_THRESHOLD
 
 
-def input_hash(*, page_hash: str, image: bytes | None, settings: dict, model: str, target_seconds: int) -> str:
+def input_hash(*, page_hash: str, image: bytes | None, settings: AuthoringSettings, model: str,
+               target_seconds: int) -> str:
     """Re-running the same page with the same inputs must not spend another call."""
     parts = "\n".join([
         page_hash, prompts.PROMPT_VERSION, model, settings["effort"],
@@ -38,7 +42,7 @@ def input_hash(*, page_hash: str, image: bytes | None, settings: dict, model: st
     return hashlib.sha256(parts.encode("utf-8")).hexdigest()
 
 
-def previous_tail(db, material: Material, page_no: int) -> str:
+def previous_tail(db: Session, material: Material, page_no: int) -> str:
     """Carry the teacher-approved ending of the previous page to keep one voice."""
     previous = repository.row(db, material.id, page_no - 1)
     if previous is None or previous.status != "accepted" or not previous.text.strip():
@@ -47,7 +51,7 @@ def previous_tail(db, material: Material, page_no: int) -> str:
     return text[-120:]
 
 
-def used_today(db, instance_id: int) -> int:
+def used_today(db: Session, instance_id: int) -> int:
     start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     return db.scalar(select(func.count()).select_from(PageNarration).join(
         Material, Material.id == PageNarration.material_id).where(
@@ -55,7 +59,8 @@ def used_today(db, instance_id: int) -> int:
         PageNarration.updated_at >= start)) or 0
 
 
-def generate_page(db, material: Material, page_no: int, *, instance_id: int, target_seconds: int | None = None) -> dict:
+def generate_page(db: Session, material: Material, page_no: int, *, instance_id: int,
+                  target_seconds: int | None = None) -> GeneratedPage:
     """One page, one model call. Returns the stored row's public state."""
     reason = config.unavailable_reason()
     if reason:
@@ -79,7 +84,7 @@ def generate_page(db, material: Material, page_no: int, *, instance_id: int, tar
     if used_today(db, instance_id) >= settings["daily_pages"]:
         raise NarrationUnavailable("本班今日讲解生成额度已用完，请明天再试")
 
-    messages = [{"role": "system", "content": prompts.SYSTEM},
+    messages: list[dict[str, Any]] = [{"role": "system", "content": prompts.SYSTEM},
                 {"role": "user", "content": prompts.user_parts(
                     material_title=material.title, page_no=page_no, page_text=page_text,
                     target_seconds=seconds, previous_tail=previous_tail(db, material, page_no - 1),
@@ -114,14 +119,14 @@ def generate_page(db, material: Material, page_no: int, *, instance_id: int, tar
             "chars": len(item.text), "image_used": item.image_used}
 
 
-def generate_range(db, material: Material, *, first: int, last: int, instance_id: int,
-                   target_seconds: int | None = None) -> list[dict]:
+def generate_range(db: Session, material: Material, *, first: int, last: int, instance_id: int,
+                   target_seconds: int | None = None) -> list[GeneratedPage]:
     """Serial generation; one failing page must not discard the pages that worked."""
     pages = repository.page_map(material)
     wanted = [page_no for page_no in range(first, last + 1) if page_no in pages]
     if not wanted:
         raise LookupError("指定范围内没有可生成的页面")
-    results = []
+    results: list[GeneratedPage] = []
     for page_no in wanted:
         try:
             results.append(generate_page(db, material, page_no, instance_id=instance_id, target_seconds=target_seconds))
@@ -136,7 +141,7 @@ def generate_range(db, material: Material, *, first: int, last: int, instance_id
     return results
 
 
-def quota(db, instance_id: int) -> dict:
+def quota(db: Session, instance_id: int) -> Quota:
     settings = config.settings()
     return {"used_today": used_today(db, instance_id), "daily_limit": settings["daily_pages"],
             "available": config.unavailable_reason() is None}

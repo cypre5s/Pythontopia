@@ -7,12 +7,15 @@ teacher asks for it, and approved pages are never edited behind their back.
 """
 
 import json
+from typing import Any, Callable, cast
 
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from ..models import Material, now
 from . import client as model_client
 from . import config, repository
+from .contracts import AppliedCalibration, CalibrationIssue, CalibrationReport
 from .models import NarrationCalibration, PageNarration
 
 WINDOW = 40
@@ -36,7 +39,7 @@ issues 最多 8 条，没有就给空数组。kind：flow=连贯性，mismatch=�
 """
 
 
-def page_payload(item: PageNarration) -> dict:
+def page_payload(item: PageNarration) -> dict[str, Any]:
     text = item.text.strip()
     return {"page_no": item.page_no, "status": item.status,
             "head": text[:HEAD_CHARS], "tail": text[-TAIL_CHARS:] if len(text) > HEAD_CHARS else ""}
@@ -47,12 +50,12 @@ def windows(items: list[PageNarration]) -> list[list[PageNarration]]:
     return [ordered[start:start + WINDOW] for start in range(0, len(ordered), WINDOW)]
 
 
-def latest(db, material_id: int) -> NarrationCalibration | None:
+def latest(db: Session, material_id: int) -> NarrationCalibration | None:
     return db.scalar(select(NarrationCalibration).where(NarrationCalibration.material_id == material_id)
                      .order_by(NarrationCalibration.id.desc()))
 
 
-def analyse(db, material: Material, *, instance_id: int) -> NarrationCalibration:
+def analyse(db: Session, material: Material, *, instance_id: int) -> NarrationCalibration:
     """One call per window; approved pages are reported but never rewritten here."""
     reason = config.unavailable_reason()
     if reason:
@@ -61,7 +64,9 @@ def analyse(db, material: Material, *, instance_id: int) -> NarrationCalibration
     if not items:
         raise LookupError("没有可校准的讲解，请先生成")
     settings = config.settings()
-    summary, terms, issues = "", [], []
+    summary: str = ""
+    terms: list[str] = []
+    issues: list[CalibrationIssue] = []
     groups = windows(items)
     for group in groups:
         payload = {"summary": summary, "terms": terms, "pages": [page_payload(item) for item in group]}
@@ -77,12 +82,16 @@ def analyse(db, material: Material, *, instance_id: int) -> NarrationCalibration
             page_no = issue.get("page_no")
             if not isinstance(page_no, int):
                 continue
-            issues.append({"page_no": page_no, "kind": str(issue.get("kind") or "flow")[:16],
-                           "detail": str(issue.get("detail") or "")[:200],
-                           "status": "accepted" if any(item.page_no == page_no and item.status == "accepted"
-                                                       for item in items) else "draft"})
+            issues.append(CalibrationIssue(
+                page_no=page_no,
+                kind=str(issue.get("kind") or "flow")[:16],
+                detail=str(issue.get("detail") or "")[:200],
+                status="accepted" if any(item.page_no == page_no and item.status == "accepted"
+                                         for item in items) else "draft",
+            ))
     # The same page can be flagged by two windows; keep one entry per page and kind.
-    unique, keys = [], set()
+    unique: list[CalibrationIssue] = []
+    keys: set[tuple[int, str]] = set()
     for issue in issues:
         key = (issue["page_no"], issue["kind"])
         if key in keys:
@@ -90,12 +99,12 @@ def analyse(db, material: Material, *, instance_id: int) -> NarrationCalibration
         keys.add(key)
         unique.append(issue)
     issues = unique
-    report = {"windows": len(groups), "pages": len(items), "summary": summary, "terms": terms,
-              "issues": issues, "generated_at": now().isoformat()}
+    report = CalibrationReport(windows=len(groups), pages=len(items), summary=summary, terms=terms,
+                               issues=issues, generated_at=now().isoformat())
     entry = latest(db, material.id) or NarrationCalibration(material_id=material.id)
     if entry.id is None:
         db.add(entry)
-    entry.report = report
+    entry.report = cast(Any, report)
     entry.windows = len(groups)
     entry.created_at = now()
     entry.applied_at = None
@@ -103,12 +112,15 @@ def analyse(db, material: Material, *, instance_id: int) -> NarrationCalibration
     return entry
 
 
-def apply_report(db, material: Material, entry: NarrationCalibration, *, regenerate) -> dict:
+def apply_report(db: Session, material: Material, entry: NarrationCalibration, *,
+                 regenerate: Callable[[int], object]) -> AppliedCalibration:
     """Re-generate only flagged draft pages; approved pages stay untouched and listed."""
-    issues = (entry.report or {}).get("issues") or []
+    report: dict[str, Any] = entry.report or {}
+    issues: list[CalibrationIssue] = report.get("issues") or []
     approved = [issue["page_no"] for issue in issues if issue["status"] == "accepted"]
     targets = sorted({issue["page_no"] for issue in issues if issue["status"] == "draft"})
-    done, failed = [], []
+    done: list[int] = []
+    failed: list[dict[str, Any]] = []
     for page_no in targets:
         try:
             regenerate(page_no)
@@ -118,4 +130,4 @@ def apply_report(db, material: Material, entry: NarrationCalibration, *, regener
     entry.applied_at = now()
     entry.applied_pages = {"regenerated": done, "failed": failed, "awaiting_teacher": approved}
     db.flush()
-    return entry.applied_pages
+    return cast(AppliedCalibration, entry.applied_pages)

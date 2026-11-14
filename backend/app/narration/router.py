@@ -4,9 +4,10 @@ Mounting is deliberately additive: `app.main` only includes this router, and the
 package keeps its own model, prompts and (later) authoring client.
 """
 
-from typing import Annotated
+from typing import Annotated, Any, cast
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy.orm import Session
 
@@ -18,6 +19,7 @@ from . import ask, audio, calibrate
 from . import client as model_client
 from . import repository, service
 from . import tts
+from .contracts import AppliedCalibration, AskReply, AudioRecord, GeneratedPage, Quota
 
 router = APIRouter(prefix="/teacher/classrooms/{classroom_id}/materials/{material_id}/narrations", tags=["narration"])
 student_router = APIRouter(prefix="/materials/{material_id}/narrations", tags=["narration"])
@@ -48,10 +50,10 @@ class PageGenerateInput(BaseModel):
 
 def _material(db: Session, user: User, classroom_id: int, material_id: int, *, exclusive: bool = False) -> Material:
     instance_id = teacher_instance_id(db, user, classroom_id, exclusive=exclusive)
-    return require_scope(db.get(Material, material_id), instance_id)
+    return cast(Material, require_scope(db.get(Material, material_id), instance_id))
 
 
-def _page(material: Material, page_no: int) -> dict:
+def _page(material: Material, page_no: int) -> dict[str, Any]:
     page = repository.page_map(material).get(page_no)
     if page is None:
         raise HTTPException(404, "本页不存在或页码超出范围")
@@ -62,7 +64,7 @@ def _page(material: Material, page_no: int) -> dict:
 def generate_narration(page_no: int, classroom_id: int, material_id: int,
                        db: Annotated[Session, Depends(get_db)],
                        user: Annotated[User, Depends(require_teacher)],
-                       body: PageGenerateInput | None = None):
+                       body: PageGenerateInput | None = None) -> GeneratedPage:
     """One explicit authoring request = at most one model call. Never runs on page turns."""
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
@@ -87,7 +89,7 @@ def generate_narration(page_no: int, classroom_id: int, material_id: int,
 
 @router.post("/generate")
 def generate_range(classroom_id: int, material_id: int, body: GenerateInput,
-                   db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
+                   db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]) -> dict[str, list[GeneratedPage]]:
     """Serial batch: each page commits on its own, so a failure keeps earlier pages."""
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
@@ -110,7 +112,7 @@ def generate_range(classroom_id: int, material_id: int, body: GenerateInput,
 
 @router.get("/quota")
 def read_quota(classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
-               user: Annotated[User, Depends(require_teacher)]):
+               user: Annotated[User, Depends(require_teacher)]) -> Quota:
     instance_id = teacher_instance_id(db, user, classroom_id)
     require_scope(db.get(Material, material_id), instance_id)
     return service.quota(db, instance_id)
@@ -118,7 +120,7 @@ def read_quota(classroom_id: int, material_id: int, db: Annotated[Session, Depen
 
 @router.post("/calibrate")
 def calibrate_deck(classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
-                   user: Annotated[User, Depends(require_teacher)]):
+                   user: Annotated[User, Depends(require_teacher)]) -> dict[str, Any]:
     """Walk the whole deck with a rolling summary; returns a report, rewrites nothing."""
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
@@ -140,7 +142,7 @@ def calibrate_deck(classroom_id: int, material_id: int, db: Annotated[Session, D
 
 @router.get("/calibrate")
 def read_calibration(classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
-                     user: Annotated[User, Depends(require_teacher)]):
+                     user: Annotated[User, Depends(require_teacher)]) -> dict[str, Any]:
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
     entry = calibrate.latest(db, material.id)
@@ -152,7 +154,7 @@ def read_calibration(classroom_id: int, material_id: int, db: Annotated[Session,
 
 @router.post("/calibrate/apply")
 def apply_calibration(classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
-                      user: Annotated[User, Depends(require_teacher)]):
+                      user: Annotated[User, Depends(require_teacher)]) -> AppliedCalibration:
     """Re-generate only the flagged drafts; approved pages stay as the teacher left them."""
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
@@ -171,7 +173,7 @@ def apply_calibration(classroom_id: int, material_id: int, db: Annotated[Session
 
 @router.get("")
 def list_narrations(classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
-                    user: Annotated[User, Depends(require_teacher)]):
+                    user: Annotated[User, Depends(require_teacher)]) -> dict[str, Any]:
     material = _material(db, user, classroom_id, material_id)
     repository.sync_staleness(db, material)
     db.commit()
@@ -188,7 +190,7 @@ def list_narrations(classroom_id: int, material_id: int, db: Annotated[Session, 
 
 @router.put("/{page_no}")
 def author_narration(page_no: int, classroom_id: int, material_id: int, body: NarrationInput,
-                     db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
+                     db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]) -> dict[str, Any]:
     material = _material(db, user, classroom_id, material_id, exclusive=True)
     _page(material, page_no)
     repository.sync_staleness(db, material)
@@ -202,7 +204,7 @@ def author_narration(page_no: int, classroom_id: int, material_id: int, body: Na
 
 @router.post("/{page_no}/accept")
 def accept_narration(page_no: int, classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
-                     user: Annotated[User, Depends(require_teacher)]):
+                     user: Annotated[User, Depends(require_teacher)]) -> dict[str, Any]:
     material = _material(db, user, classroom_id, material_id, exclusive=True)
     repository.sync_staleness(db, material)
     try:
@@ -212,12 +214,13 @@ def accept_narration(page_no: int, classroom_id: int, material_id: int, db: Anno
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
     db.commit()
-    return {"page_no": page_no, "status": item.status, "reviewed_at": item.reviewed_at.isoformat()}
+    return {"page_no": page_no, "status": item.status,
+            "reviewed_at": item.reviewed_at.isoformat() if item.reviewed_at else None}
 
 
 @router.post("/{page_no}/reject")
 def reject_narration(page_no: int, classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
-                     user: Annotated[User, Depends(require_teacher)]):
+                     user: Annotated[User, Depends(require_teacher)]) -> dict[str, Any]:
     material = _material(db, user, classroom_id, material_id, exclusive=True)
     repository.sync_staleness(db, material)
     try:
@@ -232,7 +235,7 @@ def reject_narration(page_no: int, classroom_id: int, material_id: int, db: Anno
 
 @router.delete("/{page_no}")
 def delete_narration(page_no: int, classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
-                     user: Annotated[User, Depends(require_teacher)]):
+                     user: Annotated[User, Depends(require_teacher)]) -> dict[str, Any]:
     material = _material(db, user, classroom_id, material_id, exclusive=True)
     if not repository.remove(db, material, page_no):
         raise HTTPException(404, "本页还没有讲解草稿")
@@ -242,7 +245,7 @@ def delete_narration(page_no: int, classroom_id: int, material_id: int, db: Anno
 
 @router.post("/{page_no}/audio")
 def synthesize_audio(page_no: int, classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
-                     user: Annotated[User, Depends(require_teacher)]):
+                     user: Annotated[User, Depends(require_teacher)]) -> AudioRecord:
     """Speak one approved page. Draft wording is refused, not spoken."""
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
@@ -264,10 +267,8 @@ def synthesize_audio(page_no: int, classroom_id: int, material_id: int, db: Anno
 
 @router.get("/{page_no}/audio/file")
 def stream_teacher_audio(page_no: int, classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
-                         user: Annotated[User, Depends(require_teacher)]):
+                         user: Annotated[User, Depends(require_teacher)]) -> FileResponse:
     """Let the teacher hear exactly what the student will hear."""
-    from fastapi.responses import FileResponse
-
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
     repository.sync_staleness(db, material)
@@ -276,13 +277,14 @@ def stream_teacher_audio(page_no: int, classroom_id: int, material_id: int, db: 
     if found is None:
         raise HTTPException(404, "本页还没有可播放的讲解音频")
     _, path = found
-    return FileResponse(path, media_type="audio/mpeg", filename=f"narration-{material.id}-{page_no}.mp3",
+    return FileResponse(path, media_type=audio.media_type(path.name),
+                        filename=audio.download_name(material.id, page_no, path.name),
                         headers={"Cache-Control": "private, max-age=60"})
 
 
 @router.get("/audio")
 def read_audio_status(classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
-                      user: Annotated[User, Depends(require_teacher)]):
+                      user: Annotated[User, Depends(require_teacher)]) -> dict[str, Any]:
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
     repository.sync_staleness(db, material)
@@ -301,7 +303,7 @@ def read_audio_status(classroom_id: int, material_id: int, db: Annotated[Session
 
 @student_router.get("")
 def read_narrations(material_id: int, classroom_id: int, db: Annotated[Session, Depends(get_db)],
-                    user: Annotated[User, Depends(current_user)]):
+                    user: Annotated[User, Depends(current_user)]) -> dict[str, Any]:
     """Students only ever receive teacher-approved wording."""
     from ..courses import authorize_material
 
@@ -319,7 +321,7 @@ def read_narrations(material_id: int, classroom_id: int, db: Annotated[Session, 
 
 @student_router.get("/{page_no}/audio")
 def stream_narration_audio(page_no: int, material_id: int, classroom_id: int,
-                           db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
+                           db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]) -> FileResponse:
     """Stream one approved page's audio; stale recordings are unavailable, not guessed."""
     from fastapi.responses import FileResponse
     from ..courses import authorize_material
@@ -331,13 +333,14 @@ def stream_narration_audio(page_no: int, material_id: int, classroom_id: int,
     if found is None:
         raise HTTPException(404, "本页还没有可播放的讲解音频")
     item, path = found
-    return FileResponse(path, media_type="audio/mpeg", filename=f"narration-{material.id}-{page_no}.mp3",
+    return FileResponse(path, media_type=audio.media_type(path.name),
+                        filename=audio.download_name(material.id, page_no, path.name),
                         headers={"Cache-Control": "private, max-age=600"})
 
 
 @student_router.post("/{page_no}/ask")
 def ask_about_page(page_no: int, material_id: int, classroom_id: int, body: QuestionInput,
-                   db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]):
+                   db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]) -> AskReply:
     """One explicit student question = one model call, scoped to this page."""
     from ..courses import authorize_material
 

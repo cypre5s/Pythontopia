@@ -6,6 +6,8 @@ must not touch student-facing behaviour.
 
 import os
 
+from .contracts import AuthoringSettings
+
 DEFAULT_MODEL = "deepseek-flash"
 DEFAULT_BASE_URL = "https://api.deepseek.com"
 
@@ -20,19 +22,19 @@ def _int(name: str, default: int) -> int:
         return default
 
 
-def settings() -> dict:
+def settings() -> AuthoringSettings:
     model = (os.getenv("REBORN_AUTHORING_AI_MODEL") or DEFAULT_MODEL).strip()
-    return {
-        "base_url": (os.getenv("REBORN_AUTHORING_AI_BASE_URL") or DEFAULT_BASE_URL).rstrip("/"),
-        "api_key": (os.getenv("REBORN_AUTHORING_AI_API_KEY") or "").strip(),
-        "model": model,
-        "vision_model": (os.getenv("REBORN_AUTHORING_AI_VISION_MODEL") or model).strip(),
+    return AuthoringSettings(
+        base_url=(os.getenv("REBORN_AUTHORING_AI_BASE_URL") or DEFAULT_BASE_URL).rstrip("/"),
+        api_key=(os.getenv("REBORN_AUTHORING_AI_API_KEY") or "").strip(),
+        model=model,
+        vision_model=(os.getenv("REBORN_AUTHORING_AI_VISION_MODEL") or model).strip(),
         # "none" disables the thinking pass; measured at 2-3s per page against 15-55s.
-        "effort": (os.getenv("REBORN_AUTHORING_AI_EFFORT") or "none").strip(),
-        "max_tokens": _int("REBORN_AUTHORING_AI_MAX_TOKENS", 8000),
-        "timeout": _int("REBORN_AUTHORING_AI_TIMEOUT_SECONDS", 120),
-        "daily_pages": _int("REBORN_AUTHORING_AI_DAILY_PAGES", 300),
-    }
+        effort=(os.getenv("REBORN_AUTHORING_AI_EFFORT") or "none").strip(),
+        max_tokens=_int("REBORN_AUTHORING_AI_MAX_TOKENS", 8000),
+        timeout=_int("REBORN_AUTHORING_AI_TIMEOUT_SECONDS", 120),
+        daily_pages=_int("REBORN_AUTHORING_AI_DAILY_PAGES", 300),
+    )
 
 
 def unavailable_reason() -> str | None:

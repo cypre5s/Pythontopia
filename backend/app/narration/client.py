@@ -6,8 +6,11 @@ replaced with spaces. Neither may be stored as narration.
 """
 
 import json
+from typing import Any
 
 import httpx
+
+from .contracts import AuthoringSettings, ChatReply
 
 
 class ModelUnavailable(RuntimeError):
@@ -18,11 +21,12 @@ class ModelFailed(RuntimeError):
     """The provider answered but the result cannot be used."""
 
 
-def chat(messages: list[dict], *, settings: dict, model: str, max_tokens: int | None = None,
-         effort: str | None = None, require_text: bool = True) -> dict:
-    if not settings.get("api_key"):
+def chat(messages: list[dict[str, Any]], *, settings: AuthoringSettings, model: str,
+         max_tokens: int | None = None, effort: str | None = None,
+         require_text: bool = True) -> ChatReply:
+    if not settings["api_key"]:
         raise ModelUnavailable("未配置作者期模型凭据")
-    body = {
+    body: dict[str, Any] = {
         "model": model,
         "messages": messages,
         "max_tokens": max_tokens or settings["max_tokens"],
@@ -56,11 +60,11 @@ def chat(messages: list[dict], *, settings: dict, model: str, max_tokens: int | 
     if require_text and not str(parsed.get("text") or "").strip():
         raise ModelFailed("模型返回的讲解为空，请重试")
     anchors = [str(item)[:200] for item in (parsed.get("anchors") or []) if str(item).strip()][:6]
-    return {
-        "raw": parsed,
-        "text": str(parsed.get("text") or "").strip(),
-        "bridge_in": str(parsed.get("bridge_in") or "")[:300],
-        "anchors": anchors,
-        "usage": data.get("usage") or {},
-        "model": data.get("model") or model,
-    }
+    return ChatReply(
+        raw=parsed,
+        text=str(parsed.get("text") or "").strip(),
+        bridge_in=str(parsed.get("bridge_in") or "")[:300],
+        anchors=anchors,
+        usage=data.get("usage") or {},
+        model=str(data.get("model") or model),
+    )

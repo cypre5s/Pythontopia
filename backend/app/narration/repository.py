@@ -1,10 +1,12 @@
 """Read and review narration rows; staleness is derived from the material's current pages."""
 
 import hashlib
+from typing import Any
 
-from sqlalchemy import delete, select
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-from ..models import Material, now
+from ..models import Material, User, now
 from .models import VISIBLE_STATUSES, PageNarration
 
 MAX_TEXT = 4000
@@ -15,10 +17,10 @@ def text_hash(text: str) -> str:
     return hashlib.sha256((text or "").strip().encode("utf-8")).hexdigest()
 
 
-def page_map(material: Material) -> dict[int, dict]:
+def page_map(material: Material) -> dict[int, dict[str, Any]]:
     """Pages keyed by the page number the reading workspace actually shows."""
     pages = (material.content or {}).get("pages") or []
-    result = {}
+    result: dict[int, dict[str, Any]] = {}
     for item in pages:
         if not isinstance(item, dict):
             continue
@@ -35,15 +37,17 @@ def page_text(material: Material, page_no: int) -> str | None:
     return str(page.get("text") or "")
 
 
-def rows(db, material_id: int) -> list[PageNarration]:
-    return list(db.scalars(select(PageNarration).where(PageNarration.material_id == material_id).order_by(PageNarration.page_no)))
+def rows(db: Session, material_id: int) -> list[PageNarration]:
+    return list(db.scalars(select(PageNarration).where(PageNarration.material_id == material_id)
+                           .order_by(PageNarration.page_no)))
 
 
-def row(db, material_id: int, page_no: int) -> PageNarration | None:
-    return db.scalar(select(PageNarration).where(PageNarration.material_id == material_id, PageNarration.page_no == page_no))
+def row(db: Session, material_id: int, page_no: int) -> PageNarration | None:
+    return db.scalar(select(PageNarration).where(PageNarration.material_id == material_id,
+                                                 PageNarration.page_no == page_no))
 
 
-def sync_staleness(db, material: Material) -> bool:
+def sync_staleness(db: Session, material: Material) -> bool:
     """Void a review when the page it was written against changed or disappeared.
 
     A replacement upload rewrites `Material.content` wholesale; rows live in their own
@@ -62,16 +66,11 @@ def sync_staleness(db, material: Material) -> bool:
     return changed
 
 
-def snapshot(material: Material, item: PageNarration | None, page: dict | None) -> dict:
+def snapshot(material: Material, item: PageNarration | None, page: dict[str, Any] | None) -> dict[str, Any]:
     text = str((page or {}).get("text") or "")
-    return {
-        "page_no": (page or {}).get("page_no") or (page or {}).get("id"),
-        "title": (page or {}).get("title") or "",
-        "has_text": bool(text.strip()),
-        "source_chars": len(text),
-        # Teacher review compares the wording against the page, so send a bounded copy.
-        "source_text": text[:2000],
-        "narration": None if item is None else {
+    narration: dict[str, Any] | None = None
+    if item is not None:
+        narration = {
             "text": item.text,
             "bridge_in": item.bridge_in,
             "target_seconds": item.target_seconds,
@@ -83,11 +82,19 @@ def snapshot(material: Material, item: PageNarration | None, page: dict | None) 
             "edited_by_teacher": item.edited_by_teacher,
             "reviewed_at": item.reviewed_at.isoformat() if item.reviewed_at else None,
             "stale_reason": "本页原文已变化，需要重新生成或重新审校" if item.status == "stale" else None,
-        },
+        }
+    return {
+        "page_no": (page or {}).get("page_no") or (page or {}).get("id"),
+        "title": (page or {}).get("title") or "",
+        "has_text": bool(text.strip()),
+        "source_chars": len(text),
+        # Teacher review compares the wording against the page, so send a bounded copy.
+        "source_text": text[:2000],
+        "narration": narration,
     }
 
 
-def coverage(pages: dict[int, dict], items: list[PageNarration]) -> dict:
+def coverage(pages: dict[int, dict[str, Any]], items: list[PageNarration]) -> dict[str, int]:
     by_page = {item.page_no: item for item in items}
     counts = {status: 0 for status in ("draft", "accepted", "rejected", "unavailable", "stale")}
     covered = 0
@@ -117,7 +124,7 @@ def trim_seconds(value: int | None) -> int:
     return value
 
 
-def upsert(db, material: Material, page_no: int, *, text: str, target_seconds: int | None = None,
+def upsert(db: Session, material: Material, page_no: int, *, text: str, target_seconds: int | None = None,
            source: str = "teacher", keep_review: bool = False) -> PageNarration:
     """Teacher-authored wording. An approved page stays approved; a void or refused one returns to draft."""
     clean = trim_text(text)
@@ -145,7 +152,7 @@ def upsert(db, material: Material, page_no: int, *, text: str, target_seconds: i
     return item
 
 
-def decide(db, material: Material, page_no: int, status: str, user) -> PageNarration:
+def decide(db: Session, material: Material, page_no: int, status: str, user: User) -> PageNarration:
     """Accept or reject one page. A stale row must be regenerated or edited first."""
     item = row(db, material.id, page_no)
     if item is None:
@@ -162,12 +169,15 @@ def decide(db, material: Material, page_no: int, status: str, user) -> PageNarra
     return item
 
 
-def remove(db, material: Material, page_no: int) -> bool:
-    result = db.execute(delete(PageNarration).where(PageNarration.material_id == material.id, PageNarration.page_no == page_no))
+def remove(db: Session, material: Material, page_no: int) -> bool:
+    item = row(db, material.id, page_no)
+    if item is None:
+        return False
+    db.delete(item)
     db.flush()
-    return bool(result.rowcount)
+    return True
 
 
-def visible(db, material: Material) -> list[PageNarration]:
+def visible(db: Session, material: Material) -> list[PageNarration]:
     """Only teacher-approved wording reaches a student."""
     return [item for item in rows(db, material.id) if item.status in VISIBLE_STATUSES and item.text.strip()]

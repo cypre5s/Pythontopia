@@ -8,12 +8,15 @@ approved narration, and is capped per user per day.
 import json
 import os
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
-from ..models import Material
+from ..models import Material, User
 from . import client as model_client
 from . import repository
+from .contracts import AskChecks, AskContext, AskReply, AuthoringSettings
 from .models import NarrationQuestion
 
 MAX_QUESTION = 500
@@ -37,45 +40,43 @@ def _daily_cap() -> int:
     return int(raw) if raw.isdigit() else 20
 
 
-def _settings() -> dict:
+def _settings() -> AuthoringSettings:
     from .config import settings as authoring
 
     base = authoring()
-    return {
-        **base,
-        "base_url": (os.getenv("REBORN_AI_BASE_URL") or base["base_url"]).rstrip("/"),
-        "api_key": (os.getenv("REBORN_AI_API_KEY") or base["api_key"]).strip(),
-        "model": (os.getenv("REBORN_AI_MODEL") or base["model"]).strip(),
-    }
+    return AuthoringSettings(
+        **{
+            **base,
+            "base_url": (os.getenv("REBORN_AI_BASE_URL") or base["base_url"]).rstrip("/"),
+            "api_key": (os.getenv("REBORN_AI_API_KEY") or base["api_key"]).strip(),
+            "model": (os.getenv("REBORN_AI_MODEL") or base["model"]).strip(),
+        }
+    )
 
 
-def used_today(db, user_id: int) -> int:
+def used_today(db: Session, user_id: int) -> int:
     start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     return db.scalar(select(func.count()).select_from(NarrationQuestion).where(
         NarrationQuestion.user_id == user_id, NarrationQuestion.created_at >= start)) or 0
 
 
-def context_for(db, material: Material, page_no: int) -> dict | None:
+def context_for(db: Session, material: Material, page_no: int) -> AskContext | None:
     """Only the current page, its approved narration and nearby titles — never the whole book."""
     pages = repository.page_map(material)
     page = pages.get(page_no)
     if page is None:
         return None
     item = repository.row(db, material.id, page_no)
-    approved = item is not None and item.status == "accepted" and item.text.strip()
+    approved = item is not None and item.status == "accepted" and bool(item.text.strip())
+    narration = item.text if approved and item is not None else ""
     nearby = [f"第 {number} 页：{pages[number].get('title') or ''}".strip()
               for number in sorted(pages) if abs(number - page_no) <= 2 and number != page_no][:NEIGHBOUR_TITLES]
-    return {
-        "page_no": page_no,
-        "text": str(page.get("text") or "")[:8000],
-        "narration": item.text if approved else "",
-        "nearby": nearby,
-        "has_text": bool(str(page.get("text") or "").strip()),
-        "has_narration": bool(approved),
-    }
+    text = str(page.get("text") or "")
+    return AskContext(page_no=page_no, text=text[:8000], narration=narration, nearby=nearby,
+                      has_text=bool(text.strip()), has_narration=approved)
 
 
-def answer(db, material: Material, page_no: int, question: str, *, user) -> dict:
+def answer(db: Session, material: Material, page_no: int, question: str, *, user: User) -> AskReply:
     text = (question or "").strip()
     if not text:
         raise ValueError("请先写下你的问题")
@@ -92,7 +93,7 @@ def answer(db, material: Material, page_no: int, question: str, *, user) -> dict
     if used_today(db, user.id) >= _daily_cap():
         raise PermissionError("今天的提问次数已用完，请明天再试")
 
-    payload = {
+    payload: dict[str, Any] = {
         "material": material.title,
         "page_no": page_no,
         "page_text": context["text"],
@@ -100,18 +101,21 @@ def answer(db, material: Material, page_no: int, question: str, *, user) -> dict
         "nearby_pages": context["nearby"],
         "question": text,
     }
-    messages = [{"role": "system", "content": SYSTEM},
-                {"role": "user", "content": TEMPLATE + "\n\n" + json.dumps(payload, ensure_ascii=False)}]
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": SYSTEM},
+        {"role": "user", "content": TEMPLATE + "\n\n" + json.dumps(payload, ensure_ascii=False)},
+    ]
     result = model_client.chat(messages, settings=settings, model=settings["model"], require_text=False)
-    reply = result.get("raw") or {}
+    reply = result["raw"]
     body = str(reply.get("answer") or "").strip()
     if not body:
         raise model_client.ModelFailed("助教没有给出回答，请重试")
-    cites = [int(value) for value in (reply.get("cites") or []) if isinstance(value, int) and abs(value - page_no) <= 2]
+    cites = [int(value) for value in (reply.get("cites") or [])
+             if isinstance(value, int) and abs(value - page_no) <= 2]
     row = NarrationQuestion(user_id=user.id, material_id=material.id, page_no=page_no,
                             question=text, answer=body[:MAX_ANSWER], cites=cites)
     db.add(row)
     db.flush()
-    return {"page_no": page_no, "answer": row.answer, "cites": cites,
-            "remaining": max(0, _daily_cap() - used_today(db, user.id)),
-            "checks": {"page_text": context["has_text"], "narration": context["has_narration"]}}
+    return AskReply(page_no=page_no, answer=row.answer, cites=cites,
+                    remaining=max(0, _daily_cap() - used_today(db, user.id)),
+                    checks=AskChecks(page_text=context["has_text"], narration=context["has_narration"]))

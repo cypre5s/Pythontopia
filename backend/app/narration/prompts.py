@@ -1,5 +1,7 @@
 """Prompts for one-page narration. The version string is part of every idempotency key."""
 
+from typing import Any
+
 PROMPT_VERSION = "narr-v2"
 
 SYSTEM = (
@@ -20,8 +22,9 @@ anchors：只抄这页上最关键的 3 到 6 条原文（标题、小标题、�
 """
 
 
+
 def user_parts(*, material_title: str, page_no: int, page_text: str, target_seconds: int,
-               previous_tail: str = "", image_b64: str | None = None) -> list[dict]:
+               previous_tail: str = "", image_b64: str | None = None) -> list[dict[str, Any]]:
     """Build a user message: instructions, page facts, optional slide image."""
     facts = [f"材料：{material_title}", f"第 {page_no} 页，目标朗读时长约 {target_seconds} 秒。"]
     if previous_tail.strip():
@@ -30,7 +33,7 @@ def user_parts(*, material_title: str, page_no: int, page_text: str, target_seco
         facts.append("本页文本层内容：\n" + page_text.strip()[:15000])
     else:
         facts.append("本页文本层为空，这一页的内容全在图里。")
-    parts = [{"type": "text", "text": TEMPLATE}, {"type": "text", "text": "\n".join(facts)}]
+    parts: list[dict[str, Any]] = [{"type": "text", "text": TEMPLATE}, {"type": "text", "text": "\n".join(facts)}]
     if image_b64:
         parts.append({"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}})
     return parts

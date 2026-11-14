@@ -14,6 +14,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from ..models import Material
 from ..storage import get_storage, storage_root
 
 TARGET_WIDTH = 1600  # 16:9 -> 900 high, ~1.44M px, still inside the provider's per-image token cap
@@ -22,13 +23,16 @@ MAX_BYTES = 3 * 1024 * 1024
 TIMEOUT_SECONDS = 60
 
 
-def source_key(material) -> str | None:
+def source_key(material: Material) -> str | None:
     """The converted preview is what students read, so it is what the teacher narrates."""
     content = material.content or {}
-    return content.get("preview_key") or material.storage_key
+    preview = content.get("preview_key")
+    if isinstance(preview, str) and preview.strip():
+        return preview
+    return material.storage_key
 
 
-def render_page(material, page_no: int) -> bytes | None:
+def render_page(material: Material, page_no: int) -> bytes | None:
     """Return JPEG bytes for one page, or None when the material has no readable source."""
     key = source_key(material)
     if not key or not key.lower().endswith(".pdf"):

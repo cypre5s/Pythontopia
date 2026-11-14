@@ -320,6 +320,15 @@ python -m ruff check app tests
 python -m pytest -q --basetemp .pytest-local
 ```
 
+新增或修改的 Python 代码要写完整类型声明：参数、返回值、容器元素（`list[str]` 而不写 `list`），跨模块传递的结构用 `TypedDict` 描述，不用裸 `dict`。`requirements.lock` 只锁定运行期依赖，类型检查器属于开发依赖：
+
+```powershell
+python -m pip install mypy
+python -m mypy          # 读取 pyproject 里的 [tool.mypy]，当前只检查 app/narration
+```
+
+`[tool.mypy]` 先只对 `app/narration` 开启严格检查（`disallow_untyped_defs`、`check_untyped_defs`、`warn_return_any`），其余模块尚未注解，全量打开会淹没真问题。让某个旧模块也纳入时，把它加进 `files` 并先补齐注解，不要直接放宽全局设置。类型检查目前不在 CI 门禁里；要在流水线加一步时，先确认依赖安装方式再改工作流。
+
 Windows测试进程显式使用UTF-8，避免旧夹具的默认文本读取采用系统GBK；这些设置只影响当前终端及其子进程，不修改系统语言。pytest临时目录保持在项目忽略目录内。
 
 自动化测试使用 backend/tests/source_fixtures.py 和 tests/fixtures/teaching-scripts 的合成课程，不代表原教材正确。fixture_seed/fixture_package/fixture_instances 仅位于 tests，不是运行导入入口。浏览器测试包通过 PYTHONPATH=tests 调用 fixture_package 生成 v2 目录，放入独立交换区；课程包 ID 通过 REBORN_E2E_COURSE_PACKAGE 指定。全新隔离数据库执行迁移、重复升级和包重复导入检查。PostgreSQL并发专项需要显式 `REBORN_TEST_DATABASE_URL`，测试会创建临时 schema 并清理，不能指向真实演示库或生产库。live Judge0测试需要 `REBORN_LIVE_JUDGE0_URL`，鉴权仍用 `REBORN_JUDGE0_AUTH_TOKEN`；未配置的外部专项应记录为跳过。
