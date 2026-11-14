@@ -43,7 +43,7 @@ def test_calibration_walks_the_deck_with_one_call_per_window(client, db, classro
 
         payload = json.loads(payload_text)
         seen.append({"pages": [page["page_no"] for page in payload["pages"]], "summary": payload["summary"],
-                     "effort": effort})
+                     "effort": effort, "require_text": require_text})
         return {"raw": {"summary": f"已看过 {payload['pages'][-1]['page_no']} 页", "terms": ["变量"],
                         "issues": [{"page_no": 2, "kind": "flow", "detail": "第二页开头与上一页重复"}]},
                 "text": "", "bridge_in": "", "anchors": [], "usage": {}, "model": model}
@@ -58,6 +58,8 @@ def test_calibration_walks_the_deck_with_one_call_per_window(client, db, classro
     # The rolling summary must be carried into the next window, not restarted.
     assert seen[0]["summary"] == "" and seen[1]["summary"] == "已看过 2 页"
     assert seen[0]["effort"] == "low", "校准要开思考，与生成不同"
+    # 校准回复里没有 text 字段，不能在客户端被当成“空讲解”拦下来。
+    assert all(item["require_text"] is False for item in seen)
     assert [issue["page_no"] for issue in body["issues"]] == [2]
     assert body["issues"][0]["status"] == "draft"
 

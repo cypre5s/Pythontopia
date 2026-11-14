@@ -88,6 +88,14 @@ export function NarrationReview({
   }, [pageNo, saved]);
 
   useEffect(() => {
+    // 切页必须停掉上一页：否则点过试听后翻页，旧音频会继续播放，看起来像"这一页在放"。
+    setClip((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return "";
+    });
+  }, [pageNo]);
+
+  useEffect(() => {
     if (pageNo === null) return;
     let dropped = false;
     setPageImage((previous) => {
@@ -420,7 +428,20 @@ export function NarrationReview({
                           variant="outline"
                           disabled={Boolean(busy) || audioState?.available === false || page.narration?.status !== "accepted"}
                           title={page.narration?.status !== "accepted" ? "先接受本页讲解再生成音频" : undefined}
-                          onClick={() => void run("audio", () => narrationApi.synthesizeAudio(classroomId, materialId, page.page_no), "本页音频已生成")}
+                          onClick={() =>
+                            void run(
+                              "audio",
+                              async () => {
+                                await narrationApi.synthesizeAudio(classroomId, materialId, page.page_no);
+                                // 旧录音已经作废，播放器必须清掉，否则听到的是上一版。
+                                setClip((previous) => {
+                                  if (previous) URL.revokeObjectURL(previous);
+                                  return "";
+                                });
+                              },
+                              "本页音频已生成",
+                            )
+                          }
                         >
                           <Volume2 /> {busy === "audio" ? "合成中…" : audioPage?.ready ? "重新合成" : "生成音频"}
                         </Button>

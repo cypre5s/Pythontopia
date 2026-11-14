@@ -72,7 +72,9 @@ def analyse(db: Session, material: Material, *, instance_id: int) -> NarrationCa
         payload = {"summary": summary, "terms": terms, "pages": [page_payload(item) for item in group]}
         messages = [{"role": "system", "content": SYSTEM},
                     {"role": "user", "content": TEMPLATE + "\n\n" + json.dumps(payload, ensure_ascii=False)}]
-        result = model_client.chat(messages, settings=settings, model=settings["model"], effort="low")
+        # 校准回复的是 {summary, terms, issues}，没有 text 字段；默认的“必须有 text”校验会把它误判成空讲解。
+        result = model_client.chat(messages, settings=settings, model=settings["model"], effort="low",
+                                   require_text=False)
         reply = result.get("raw") or {}
         summary = str(reply.get("summary") or summary)[:SUMMARY_LIMIT]
         terms = [str(term)[:40] for term in (reply.get("terms") or terms or [])][:TERM_LIMIT]
