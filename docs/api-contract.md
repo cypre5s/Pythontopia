@@ -75,6 +75,8 @@ Paused policy denies new content/progress/assistant requests immediately and pre
 - PUT /teacher/materials/{id}/narrations/{page_no} {text,bridge_in?,anchors?,target_seconds?} 写入或改写讲解正文，结果为 draft；页文本已变时旧 accepted 记录在读取时被判 stale。DELETE 删除该页讲解。
 - POST /teacher/materials/{id}/narrations/{page_no}/accept；POST .../reject。只有 accepted 能进入学生端、音频与课程包。未保存修改不得接受（后台层面阻断，服务端以提交正文为准）。
 - POST /teacher/materials/{id}/narrations/{page_no}/generate 按单页生成，POST .../narrations/generate {first_page,last_page,mode?} 批量逐页生成；`mode=serial`（默认独立）会把已生成页的讲解作为上下文，过渡句才有依据，且上下文参与幂等键。
+- GET .../narrations/job -> {running,kind,status,done,total,message,started_at}：前端轮询用。
+- 生成／校准／音频端点共用一份资料锁：已有任务在跑时返回 409「这份资料正在处理中」；心跳超过 5 分钟的旧任务视为过期，允许接管。
 - POST .../narrations/accept-batch {first_page?,last_page?} 一次接受范围内全部可审草稿，返回 {accepted:[页码],count,skipped:[{page_no,reason}]}；空文本、非 draft 页跳过。
 - POST .../narrations/audio-batch {first_page?,last_page?} 为范围内已接受的页批量合成音频，返回 {made,reused,failed:[{page_no,error}],skipped,count}；单页失败不中断。；两者幂等，输入未变不重复请求模型。余额/额度不足、无凭据、供应商失败分别返回429/409/502，单页失败不阻断其余页。
 - GET /teacher/materials/{id}/narrations/quota 返回当日额度使用；POST .../narrations/calibrate 产出全篇校准报告，GET .../calibrate 取最近一份，POST .../calibrate/apply 只重生成 draft 页并列出待教师确认的 accepted 页。

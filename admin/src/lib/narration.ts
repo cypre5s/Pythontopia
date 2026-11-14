@@ -93,6 +93,10 @@ export const narrationApi = {
       // 串行：后面的页会读到前面已生成的讲解，过渡句不再凭空编。
       mode: "serial",
     }),
+  job: (classroomId: number, materialId: number) =>
+    api.get<{ running: boolean; kind: string; status: string; done: number; total: number; message: string }>(
+      `${base(classroomId, materialId)}/job`,
+    ),
   acceptBatch: (classroomId: number, materialId: number, firstPage?: number, lastPage?: number) =>
     api.post<{ accepted: number[]; count: number }>(`${base(classroomId, materialId)}/accept-batch`, {
       first_page: firstPage ?? null,

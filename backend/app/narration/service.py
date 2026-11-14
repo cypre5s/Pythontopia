@@ -178,10 +178,12 @@ def generate_range(db: Session, material: Material, *, first: int, last: int, in
     if not wanted:
         raise LookupError("指定范围内没有可生成的页面")
     results: list[GeneratedPage] = []
-    for page_no in wanted:
+    for position, page_no in enumerate(wanted, start=1):
         try:
             results.append(generate_page(db, material, page_no, instance_id=instance_id,
                                          target_seconds=target_seconds, serial=serial))
+            # 心跳和页码写进任务状态，前端能显示“第 7/103 页”，进程死掉也能被判为过期。
+            repository.beat(db, material.id, done=position, total=len(wanted), message=f"第 {page_no} 页")
             db.commit()
         except (NarrationUnavailable, LookupError):
             db.rollback()

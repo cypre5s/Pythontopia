@@ -52,6 +52,7 @@ export function NarrationReview({
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [imageFailed, setImageFailed] = useState(false);
+  const [job, setJob] = useState<{ running: boolean; kind: string; done: number; total: number; message: string } | null>(null);
   const [pageImage, setPageImage] = useState("");
 
   const load = useCallback(async () => {
@@ -86,6 +87,24 @@ export function NarrationReview({
     setDraft(saved);
     setImageFailed(false);
   }, [pageNo, saved]);
+
+  useEffect(() => {
+    let stopped = false;
+    const tick = async () => {
+      try {
+        const state = await narrationApi.job(classroomId, materialId);
+        if (!stopped) setJob(state);
+      } catch {
+        // 状态查询失败不影响审校本身
+      }
+    };
+    void tick();
+    const timer = window.setInterval(() => void tick(), 3000);
+    return () => {
+      stopped = true;
+      window.clearInterval(timer);
+    };
+  }, [classroomId, materialId]);
 
   useEffect(() => {
     // 切页必须停掉上一页：否则点过试听后翻页，旧音频会继续播放，看起来像"这一页在放"。
@@ -215,6 +234,8 @@ export function NarrationReview({
     }
   }
 
+  const running = Boolean(job?.running);
+  const busyNow = Boolean(busy) || running;
   const audioPage = audioState?.pages.find((item) => item.page_no === pageNo);
   const navigation = () => {
     const pages = data?.pages ?? [];
@@ -248,6 +269,12 @@ export function NarrationReview({
               <Badge variant="secondary">已接受 {data.coverage.accepted}</Badge>
               {data.coverage.stale > 0 && <Badge variant="secondary">已失效 {data.coverage.stale}</Badge>}
               {data.coverage.missing > 0 && <Badge variant="secondary">未生成 {data.coverage.missing}</Badge>}
+              {running && (
+                <Badge variant="secondary" className="animate-pulse">
+                  正在处理：{job?.kind === "audio" ? "音频" : job?.kind === "calibrate" ? "校准" : "生成"}
+                  {job && job.total ? ` ${job.done}/${job.total}` : ""}
+                </Badge>
+              )}
               {quota && (
                 <span className="hint">
                   今日已生成 {quota.used_today} / {quota.daily_limit}
@@ -257,7 +284,7 @@ export function NarrationReview({
             </div>
             <div className="flex flex-wrap items-end gap-2">
               <Button
-                disabled={!quota?.available || Boolean(busy)}
+                disabled={!quota?.available || busyNow}
                 onClick={() => {
                   if (!window.confirm(`将为全部 ${data.coverage.pages} 页生成讲解，已生成的页不会重复计费。继续？`)) return;
                   void generateWholeDeck();
@@ -267,21 +294,21 @@ export function NarrationReview({
               </Button>
               <Button
                 variant="outline"
-                disabled={Boolean(busy) || data.coverage.draft === 0}
+                disabled={busyNow || data.coverage.draft === 0}
                 onClick={() => void acceptAllDrafts()}
               >
                 <Check /> {busy === "accept-all" ? "接受中…" : `接受全部草稿（${data.coverage.draft}）`}
               </Button>
               <Button
                 variant="outline"
-                disabled={Boolean(busy) || audioState?.available === false || data.coverage.accepted === 0}
+                disabled={busyNow || audioState?.available === false || data.coverage.accepted === 0}
                 onClick={() => void synthesizeAllAudio()}
               >
                 <Volume2 /> {busy === "audio-all" ? "合成中…" : "批量合成音频"}
               </Button>
               <Button
                 variant="outline"
-                disabled={!quota?.available || Boolean(busy) || data.coverage.covered === 0}
+                disabled={!quota?.available || busyNow || data.coverage.covered === 0}
                 onClick={() => void run("calibrate", async () => setReport(await narrationApi.calibrate(classroomId, materialId)), "校准报告已生成")}
               >
                 <ListChecks /> {busy === "calibrate" ? "正在校准…" : "全篇校准"}
@@ -427,7 +454,7 @@ export function NarrationReview({
                     <div className="flex flex-wrap gap-2">
                       <Button
                         size="sm"
-                        disabled={!quota?.available || Boolean(busy)}
+                        disabled={!quota?.available || busyNow}
                         onClick={() => void run("generate", () => narrationApi.generatePage(classroomId, materialId, page.page_no), "本页草稿已生成")}
                       >
                         <Sparkles /> {busy === "generate" ? "生成中…" : "生成本页"}

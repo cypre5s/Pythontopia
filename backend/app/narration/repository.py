@@ -6,8 +6,10 @@ from typing import Any
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from datetime import datetime, timedelta, timezone
+
 from ..models import Material, User, now
-from .models import VISIBLE_STATUSES, PageNarration
+from .models import VISIBLE_STATUSES, NarrationJob, PageNarration
 
 MAX_TEXT = 4000
 MIN_SECONDS, MAX_SECONDS = 30, 300
@@ -181,3 +183,81 @@ def remove(db: Session, material: Material, page_no: int) -> bool:
 def visible(db: Session, material: Material) -> list[PageNarration]:
     """Only teacher-approved wording reaches a student."""
     return [item for item in rows(db, material.id) if item.status in VISIBLE_STATUSES and item.text.strip()]
+
+
+# 心跳超过这个时间就认为上一次任务已经死掉（进程被杀、容器重启），允许接管。
+JOB_STALE_SECONDS = 300
+
+
+class JobBusy(RuntimeError):
+    """Another narration task is already running for this material."""
+
+    def __init__(self, kind: str, started_at: datetime | None) -> None:
+        self.kind = kind
+        self.started_at = started_at
+        super().__init__("这份资料正在处理中，请等待当前任务结束")
+
+
+def job_running(job: NarrationJob) -> bool:
+    """活着的任务才算“正在运行”；心跳过期说明进程已经死了，可以接管。"""
+    if job.status != "running":
+        return False
+    moment = job.heartbeat_at or job.started_at
+    if moment is None:
+        return False
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=timezone.utc)
+    return datetime.now(timezone.utc) - moment < timedelta(seconds=JOB_STALE_SECONDS)
+
+
+def job_of(db: Session, material_id: int) -> NarrationJob | None:
+    return db.scalar(select(NarrationJob).where(NarrationJob.material_id == material_id))
+
+
+def acquire(db: Session, material: Material, kind: str, user: User | None = None) -> NarrationJob:
+    """Take the material lock for one task. Raises JobBusy while another task is alive."""
+    job = db.scalar(select(NarrationJob).where(NarrationJob.material_id == material.id).with_for_update())
+    if job is None:
+        job = NarrationJob(material_id=material.id)
+        db.add(job)
+    elif job_running(job):
+        db.rollback()
+        raise JobBusy(job.kind, job.started_at)
+    job.kind = kind
+    job.status = "running"
+    job.requested_by = user.id if user else None
+    job.started_at = now()
+    job.heartbeat_at = job.started_at
+    job.finished_at = None
+    job.progress = {}
+    job.message = ""
+    db.commit()
+    return job
+
+
+def beat(db: Session, material_id: int, *, done: int | None = None, total: int | None = None,
+         message: str | None = None) -> None:
+    """Refresh the heartbeat together with the page commit, so a live task never looks stale."""
+    job = job_of(db, material_id)
+    if job is None or job.status != "running":
+        return
+    job.heartbeat_at = now()
+    if done is not None or total is not None:
+        job.progress = {**(job.progress or {}),
+                        **({"done": done} if done is not None else {}),
+                        **({"total": total} if total is not None else {})}
+    if message is not None:
+        job.message = message[:200]
+
+
+def release(db: Session, material_id: int, *, status: str = "done", message: str = "",
+            extra: dict[str, Any] | None = None) -> None:
+    job = job_of(db, material_id)
+    if job is None:
+        return
+    job.status = status
+    job.finished_at = now()
+    job.message = message[:200]
+    if extra:
+        job.progress = {**(job.progress or {}), **extra}
+    db.commit()

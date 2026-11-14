@@ -79,3 +79,23 @@ class NarrationCalibration(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     applied_pages: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
+class NarrationJob(Base):
+    """每份资料一行的工作状态，用来挡住重复触发，也让前端能显示进度。
+
+    状态只在数据库里，所以重启、多进程都不会丢；心跳超过阈值就认为上一次已经死掉，
+    允许接管（否则一个崩掉的进程会把资料永久锁住）。
+    """
+    __tablename__ = "narration_jobs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    material_id: Mapped[int] = mapped_column(ForeignKey("materials.id", ondelete="CASCADE"), unique=True, index=True)
+    kind: Mapped[str] = mapped_column(String(24), default="")
+    status: Mapped[str] = mapped_column(String(16), default="idle")  # idle|running|done|failed
+    requested_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    progress: Mapped[dict] = mapped_column(JSON, default=dict)
+    message: Mapped[str] = mapped_column(Text, default="")

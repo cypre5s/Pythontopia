@@ -79,6 +79,10 @@ def generate_narration(page_no: int, classroom_id: int, material_id: int,
     repository.sync_staleness(db, material)
     db.commit()
     try:
+        repository.acquire(db, material, "generate", user)
+    except repository.JobBusy as exc:
+        raise HTTPException(409, str(exc)) from exc
+    try:
         result = service.generate_page(db, material, page_no, instance_id=instance_id,
                                        target_seconds=body.target_seconds if body else None)
     except service.NarrationUnavailable as exc:
@@ -90,8 +94,13 @@ def generate_narration(page_no: int, classroom_id: int, material_id: int,
     except model_client.ModelUnavailable as exc:
         raise HTTPException(409, str(exc)) from exc
     except model_client.ModelFailed as exc:
+        repository.release(db, material.id, status="failed", message=str(exc))
         raise HTTPException(502, str(exc)) from exc
+    except Exception:
+        repository.release(db, material.id, status="failed", message="生成本页失败")
+        raise
     db.commit()
+    repository.release(db, material.id, message="本页已生成")
     return result
 
 
@@ -106,6 +115,10 @@ def generate_range(classroom_id: int, material_id: int, body: GenerateInput,
     if body.first_page < 1 or body.last_page < body.first_page:
         raise HTTPException(422, "页码范围无效")
     try:
+        repository.acquire(db, material, "generate", user)
+    except repository.JobBusy as exc:
+        raise HTTPException(409, str(exc)) from exc
+    try:
         results = service.generate_range(db, material, first=body.first_page, last=body.last_page,
                                          instance_id=instance_id, target_seconds=body.target_seconds,
                                          serial=body.mode == "serial")
@@ -114,9 +127,34 @@ def generate_range(classroom_id: int, material_id: int, body: GenerateInput,
     except LookupError as exc:
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
+        repository.release(db, material.id, status="failed", message=str(exc))
         raise HTTPException(422, str(exc)) from exc
+    except service.NarrationUnavailable as exc:
+        repository.release(db, material.id, status="failed", message=str(exc))
+        raise HTTPException(409, str(exc)) from exc
     db.commit()
+    done = sum(1 for item in results if item.get("status") != "failed")
+    repository.release(db, material.id, message=f"已生成 {done} 页", extra={"done": done})
     return {"results": results}
+
+
+@router.get("/job")
+def read_job(classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
+             user: Annotated[User, Depends(require_teacher)]) -> dict[str, Any]:
+    """前端轮询它来置灰按钮：同一份资料同时只允许一个生成/校准/音频任务。"""
+    material = _material(db, user, classroom_id, material_id)
+    job = repository.job_of(db, material.id)
+    if job is None:
+        return {"running": False, "kind": "", "status": "idle", "done": 0, "total": 0, "message": ""}
+    return {
+        "running": repository.job_running(job),
+        "kind": job.kind,
+        "status": job.status,
+        "done": (job.progress or {}).get("done", 0),
+        "total": (job.progress or {}).get("total", 0),
+        "message": job.message,
+        "started_at": job.started_at.isoformat() if job.started_at else None,
+    }
 
 
 @router.get("/quota")
@@ -136,16 +174,25 @@ def calibrate_deck(classroom_id: int, material_id: int, db: Annotated[Session, D
     repository.sync_staleness(db, material)
     db.commit()
     try:
+        repository.acquire(db, material, "calibrate", user)
+    except repository.JobBusy as exc:
+        raise HTTPException(409, str(exc)) from exc
+    try:
         entry = calibrate.analyse(db, material, instance_id=instance_id)
     except model_client.ModelUnavailable as exc:
+        repository.release(db, material.id, status="failed", message=str(exc))
         raise HTTPException(409, str(exc)) from exc
     except model_client.ModelFailed as exc:
+        repository.release(db, material.id, status="failed", message=str(exc))
         raise HTTPException(502, str(exc)) from exc
     except RuntimeError as exc:
+        repository.release(db, material.id, status="failed", message=str(exc))
         raise HTTPException(409, str(exc)) from exc
     except LookupError as exc:
+        repository.release(db, material.id, status="failed", message=str(exc))
         raise HTTPException(404, str(exc)) from exc
     db.commit()
+    repository.release(db, material.id, message="校准完成")
     return {"id": entry.id, **(entry.report or {})}
 
 
@@ -288,16 +335,25 @@ def synthesize_audio(page_no: int, classroom_id: int, material_id: int, db: Anno
     repository.sync_staleness(db, material)
     db.commit()
     try:
+        repository.acquire(db, material, "audio", user)
+    except repository.JobBusy as exc:
+        raise HTTPException(409, str(exc)) from exc
+    try:
         result = audio.synthesize_page(db, material, page_no)
     except tts.SpeechUnavailable as exc:
+        repository.release(db, material.id, status="failed", message=str(exc))
         raise HTTPException(409, str(exc)) from exc
     except tts.SpeechFailed as exc:
+        repository.release(db, material.id, status="failed", message=str(exc))
         raise HTTPException(502, str(exc)) from exc
     except LookupError as exc:
+        repository.release(db, material.id, status="failed", message=str(exc))
         raise HTTPException(404, str(exc)) from exc
     except ValueError as exc:
+        repository.release(db, material.id, status="failed", message=str(exc))
         raise HTTPException(409, str(exc)) from exc
     db.commit()
+    repository.release(db, material.id, message="本页音频已生成")
     return result
 
 
@@ -323,12 +379,18 @@ def synthesize_audio_batch(classroom_id: int, material_id: int,
     db.commit()
     if tts.unavailable_reason():
         raise HTTPException(409, tts.unavailable_reason() or "语音合成不可用")
+    try:
+        repository.acquire(db, material, "audio", user)
+    except repository.JobBusy as exc:
+        raise HTTPException(409, str(exc)) from exc
     first = body.first_page if body and body.first_page else 1
     last = body.last_page if body and body.last_page else 10**9
     made: list[int] = []
     reused: list[int] = []
     failed: list[dict[str, Any]] = []
     skipped: list[int] = []
+    wanted = [item for item in repository.rows(db, material.id)
+              if first <= item.page_no <= last and item.status == "accepted" and item.text.strip()]
     for item in repository.rows(db, material.id):
         if item.page_no < first or item.page_no > last:
             continue
@@ -337,11 +399,15 @@ def synthesize_audio_batch(classroom_id: int, material_id: int,
             continue
         try:
             result = audio.synthesize_page(db, material, item.page_no)
+            repository.beat(db, material.id, done=len(made) + len(reused) + len(failed),
+                            total=len(wanted), message=f"音频第 {item.page_no} 页")
             db.commit()
             (reused if result["reused"] else made).append(item.page_no)
         except (tts.SpeechFailed, ValueError, LookupError) as exc:
             db.rollback()
             failed.append({"page_no": item.page_no, "error": str(exc)[:160]})
+    repository.release(db, material.id, message=f"音频完成 {len(made) + len(reused)} 页",
+                       extra={"done": len(made) + len(reused)})
     return {"made": made, "reused": reused, "failed": failed, "skipped": skipped[:50],
             "count": len(made) + len(reused)}
 
