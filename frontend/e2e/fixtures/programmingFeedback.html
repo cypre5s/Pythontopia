@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><title>编程结果组件验收夹具</title></head>
+<body><main class="game-workspace"><nav id="fixture-toolbar"></nav><div id="fixture"></div></main>
+<script type="module">
+import {createApp, h, ref} from 'vue';
+import ProgrammingQuestion from '/src/features/ProgrammingQuestion.vue';
+import '/src/features/gameDesign.css';
+import '/src/features/programmingUi.css';
+const question={id:'fixture-python',kind:'python',title:'向小镇问好',prompt:'读取一个名字，输出：你好，名字！',options:[],samples:[{input:'小林',output:'你好，小林！'},{input:'Python',output:'你好，Python！'}]};
+createApp({setup(){
+  const code=ref('print("你好，" + input())');
+  const mode=new URLSearchParams(location.search).get('result');
+  const result=mode ? {id:'fixture',activity_id:'fixture',question_id:question.id,mode:'submit',status:mode,created_at:'',feedback:mode==='infrastructure_error'?{detail:'判题服务暂不可用'}:{passed_count:mode==='accepted'?5:3,total_count:5}} : undefined;
+  return ()=>h('div',{class:'fixture-workbench'},[h(ProgrammingQuestion,{question,index:0,answer:'',code:code.value,readOnly:!!mode,result,toolbarTarget:'#fixture-toolbar','onUpdate:code':value=>code.value=value})]);
+}}).mount('#fixture');
+</script>
+<style>
+body{margin:0;background:#254638;font-family:Arial,'Microsoft YaHei',sans-serif}
+main{padding:20px}#fixture-toolbar{height:44px}.fixture-workbench{height:calc(100vh - 90px)}
+@media(max-width:1100px){.fixture-workbench{height:auto}}
+</style></body></html>

@@ -1,9 +1,8 @@
-"""Practice endpoints and durable, bounded Judge0 reconciliation."""
+"""Practice endpoints and the durable, bounded go-judge queue."""
 
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException
@@ -14,7 +13,8 @@ from sqlalchemy.orm import Session
 from .auth import as_utc, current_user
 from .db import SessionLocal, get_db
 from .integration_models import SubmissionPayload
-from .judge import JudgeAdapter, JudgeSubmissionUnknown, JudgeUnavailable
+from .judge import JudgeSubmissionUnknown, JudgeUnavailable
+from .go_judge import GoJudgeAdapter
 from .models import Classroom, QuestionSecret, Submission, User
 
 router = APIRouter(tags=["practice"])
@@ -71,7 +71,7 @@ def stage_submission(db, user, classroom_id, activity, question, answer, code, k
         cases += list(secret.hidden_cases)
         if not cases or len(cases) > 20:
             raise HTTPException(503, "题目未配置有效且有界的测试用例")
-        row.status, row.feedback = "prepared", {"detail": "已保存，等待 Judge0"}
+        row.status, row.feedback = "prepared", {"detail": "已保存，等待判题"}
     else:
         row.status = "accepted" if grade_answer(answer, secret.answer, question.kind) else "wrong_answer"
         row.feedback = {"detail": "回答正确" if row.status == "accepted" else "请结合课件重新思考", "status": row.status}
@@ -149,88 +149,55 @@ def _claim_submission(submission_id):
             return None
         row = db.get(Submission, submission_id)
         payload = db.get(SubmissionPayload, submission_id)
-        return row.code, payload.cases
+        return row.code, payload.cases, payload.public_count
 
 
-def _save_dispatch(submission_id, tokens, status, feedback):
+def _save_dispatch(submission_id, status, feedback):
     with SessionLocal() as db:
         row = db.get(Submission, submission_id)
         row.status, row.feedback = status, feedback
-        row.judge_token = json.dumps(tokens) if tokens else None
         db.commit()
 
 
-async def dispatch_one(submission_id: str, adapter: JudgeAdapter | None = None):
+async def dispatch_one(submission_id: str, adapter: GoJudgeAdapter | None = None):
     claimed = await asyncio.to_thread(_claim_submission, submission_id)
     if claimed is None:
         return
-    code, cases = claimed
+    code, cases, public_count = claimed
+    adapter = adapter or GoJudgeAdapter()
     try:
-        tokens = await (adapter or JudgeAdapter()).submit(code, cases)
-        status, feedback = "queued", {"detail": "Judge0 已受理"}
+        result = await adapter.execute(code, cases, public_count)
+        status, feedback = result.status, result.feedback
     except JudgeUnavailable as exc:
-        tokens, status, feedback = [], "infrastructure_error", {"detail": str(exc)}
+        status, feedback = "infrastructure_error", {"detail": str(exc)}
     except JudgeSubmissionUnknown as exc:
-        tokens, status, feedback = [], "submission_unknown", {"detail": str(exc)}
-    await asyncio.to_thread(_save_dispatch, submission_id, tokens, status, feedback)
-
-
-def _read_pending(submission_id):
-    with SessionLocal() as db:
-        row = db.get(Submission, submission_id)
-        if not row or not row.judge_token or row.status not in {"queued", "running"}:
-            return None
-        payload = db.get(SubmissionPayload, row.id)
-        return json.loads(row.judge_token), payload.public_count
-
-
-def _save_result(submission_id, result):
-    with SessionLocal() as db:
-        row = db.get(Submission, submission_id)
-        if row.status in {"queued", "running"}:
-            row.status, row.feedback = result.status, result.feedback
-            db.commit()
-
-
-async def poll_one(submission_id: str, adapter: JudgeAdapter | None = None):
-    pending = await asyncio.to_thread(_read_pending, submission_id)
-    if pending is None:
-        return
-    tokens, public_count = pending
-    try:
-        result = await (adapter or JudgeAdapter()).poll(tokens, public_count)
-    except JudgeUnavailable:
-        return  # The durable token survives service outages; no WA or resubmission.
-    await asyncio.to_thread(_save_result, submission_id, result)
+        status, feedback = "submission_unknown", {"detail": str(exc)}
+    await asyncio.to_thread(_save_dispatch, submission_id, status, feedback)
 
 
 def _pending_ids():
     with SessionLocal() as db:
-        prepared = list(db.scalars(select(Submission.id).where(Submission.status == "prepared").limit(20)))
-        pending = list(db.scalars(select(Submission.id).where(Submission.status.in_(["queued", "running"])).limit(20)))
-        return prepared, pending
+        prepared = list(db.scalars(select(Submission.id).where(Submission.status == "prepared")
+                                  .order_by(Submission.created_at, Submission.id).limit(4)))
+        return prepared
 
 
 async def reconcile_once():
-    prepared, pending = await asyncio.to_thread(_pending_ids)
-    for submission_id in prepared:
-        await dispatch_one(submission_id)
-    # Bound poll concurrency independently from page/API traffic.
-    semaphore = asyncio.Semaphore(4)
-
-    async def poll(submission_id):
-        async with semaphore:
-            await poll_one(submission_id)
-
-    await asyncio.gather(*(poll(sid) for sid in pending))
+    prepared = await asyncio.to_thread(_pending_ids)
+    # Drain every in-flight request before recovery after a DB error. Otherwise
+    # recovering dispatching rows could race a still-running sandbox request.
+    outcomes = await asyncio.gather(*(dispatch_one(sid) for sid in prepared), return_exceptions=True)
+    for outcome in outcomes:
+        if isinstance(outcome, BaseException):
+            raise outcome
 
 
 def _recover_dispatching():
-    # Never replay a POST that could have reached Judge0 before a DB outage/crash.
+    # Never replay a POST that could have reached an executor before a DB outage/crash.
     with SessionLocal() as db:
         db.execute(
             update(Submission)
-            .where(Submission.status == "dispatching")
+            .where(Submission.status.in_(["dispatching", "queued", "running"]))
             .values(status="submission_unknown", feedback={"detail": "服务中断时送交状态不确定，需要管理员对账；不会自动重复提交"})
         )
         db.commit()
@@ -252,4 +219,4 @@ async def judge_worker():
             await asyncio.sleep(delay)
             delay = min(delay * 2, 30)
             continue
-        await asyncio.sleep(2)
+        await asyncio.sleep(0.1)

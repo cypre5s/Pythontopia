@@ -102,3 +102,15 @@
 
 .game-workspace .coding-tests .coding-pane-body.is-empty { flex: 1; display: grid; place-items: center; }
 .game-workspace .coding-empty-result { margin: 0; color: var(--game-muted); font-size: .9375rem; }
+.game-workspace .coding-result-summary { display:flex; flex-wrap:wrap; align-items:baseline; gap:8px 12px; margin-bottom:16px; }
+.game-workspace .coding-result-summary .coding-outcome { margin:0; }
+.game-workspace :is(.coding-pass-count,.coding-run-time) { color:var(--game-muted); font-size:.8rem; }
+.game-workspace .coding-diff-toggle { margin-left:auto; padding:0 8px; background:transparent; font-size:.8rem; }
+.game-workspace .coding-diff-toggle[aria-pressed=true] { color:var(--game-forest); background:#284b4310; }
+.game-workspace .coding-failure-hints { font-size:.85rem; line-height:1.65; }
+.game-workspace .coding-failure-hints h5 { margin:16px 0 8px; font-family:inherit; font-weight:600; font-size:.9rem; }
+.game-workspace .coding-failure-hints ul { padding-left:20px; margin:0; }
+.game-workspace .coding-failure-hints p { color:var(--game-muted); font-size:.8rem; }
+.game-workspace .diff-extra { color:#a12d28; background:#a4372e18; text-decoration:underline wavy; text-underline-offset:3px; }
+.game-workspace .diff-missing { color:#21603a; background:#2d754920; text-decoration:underline; text-underline-offset:3px; }
+.game-workspace .diff-legend { margin-left:6px; font-size:.75rem; }

@@ -1,4 +1,4 @@
-// Authenticated world reads only: does not load-test AI or Judge0.
+// Authenticated world reads only: does not load-test AI or the code executor.
 // REBORN_LOAD_TOKEN and REBORN_LOAD_CLASSROOM must be supplied explicitly.
 const token=process.env.REBORN_LOAD_TOKEN;
 const classroom=process.env.REBORN_LOAD_CLASSROOM;

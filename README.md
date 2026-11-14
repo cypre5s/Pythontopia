@@ -2,7 +2,7 @@
 
 面向 Python 初学者的像素学习 RPG。学生在小镇与人物交谈、接取任务、读课件和完成真实练习；教师通过后台管理班级、材料、任务、发布规则与学习记录。
 
-学生游戏使用 Vue 3 + TypeScript + Phaser 3，教师后台使用独立 React + TypeScript + shadcn/ui；两者共用 Python FastAPI 模块化单体。正式存储为独立 PostgreSQL；本机轻量开发可使用 SQLite。普通游戏行为不调用大模型，学习场景的主动提问使用统一 LangChain create_agent。正式代码执行仅接入隔离 Judge0。
+学生游戏使用 Vue 3 + TypeScript + Phaser 3，教师后台使用独立 React + TypeScript + shadcn/ui；两者共用 Python FastAPI 模块化单体。正式存储为独立 PostgreSQL；本机轻量开发可使用 SQLite。普通游戏行为不调用大模型，学习场景的主动提问使用统一 LangChain create_agent。正式代码执行使用同一 Compose 内的独立 Python-only go-judge 容器。
 
 ## 运行
 
@@ -11,6 +11,14 @@
 本机轻量开发可使用SQLite，正式部署必须配置独立PostgreSQL。后端与前端均使用锁定依赖，没有默认教师账号，需显式创建。启动不自动导入课程；课程包与教学配置由管理员显式导入，资料和题目通过后台独立维护。
 
 容器配置与完整本机命令见 [开发说明](docs/development.md)。本机开发与独立 Compose 部署均可使用，各环境使用独立数据库和存储。开发重玩工具需要显式双开关，生产环境不注册重置路由。
+
+从 `deploy/.env.example` 准备私有 `deploy/.env`，设置数据库密码、判题鉴权token和首次管理员信息后，一条命令启动完整基础系统：
+
+```sh
+docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml up --build -d --wait
+```
+
+默认包含 `db / judge / api / web` 四个服务；判题没有宿主机公开端口，队列使用已有数据库，不另加 Redis。PPT转换器仍通过 `documents` profile按需启用；课程内容由教师显式导入，AI需单独配置凭据。
 
 每轮开发先复核[已确认要求](docs/requirements.md)，再从[文档总索引](docs/README.md)选择对应规范与操作。当前流程、验收摘要和[历史归档](docs/archive/README.md)分开查阅，每轮同步维护需求与相关文档。
 
@@ -32,7 +40,7 @@ shared/world/   随程序发布的地图、建筑、入口及固定对象目录
 data/course/    私有课程交换与外部来源（不纳入Git）
 assets/         保留素材源及上游署名、授权记录
 scripts/        地图生成、资源/可达检查与限定负载脚本
-deploy/         独立部署、可选Judge0与文档转换器配置
+deploy/         完整四服务Compose、Python判题沙箱与可选文档转换器
 docs/           已确认要求、当前规范、操作手册、验收摘要和历史归档
 ```
 

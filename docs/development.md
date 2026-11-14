@@ -21,9 +21,11 @@
 
 ## Compose 首次启动、更新与停止
 
+学生端 `npm run dev` / `npm run build` 的前置脚本从锁定的 `pyodide@0.27.7` 复制核心运行文件及许可到忽略的 `frontend/public/python-runtime/0.27.7/`，构建后随 Web 分发。浏览器无需访问外部 CDN；Nginx/Vite 仅为该公开静态路径提供跨源读取。不要给 `/api` 放开此设置。运行器实测使用独立 Vite 测试地址设置 `PYTHON_RUNNER_DEV_URL`，再执行 `frontend/e2e/pythonRunner.spec.ts`；本地静态文件准备并不代表所有第三方 Python 包已安装。
+
 ### 首次启动
 
-首次创建 `deploy/.env` 时，从 `deploy/.env.example` 复制，已有文件则保留。设置独立随机的 `REBORN_DB_PASSWORD`；推荐使用32字节的十六进制随机值，避免数据库 URL 中的特殊字符。可选服务未配置时保留空值。
+首次创建 `deploy/.env` 时，从 `deploy/.env.example` 复制，已有文件则保留。设置两个独立随机值 `REBORN_DB_PASSWORD` 和 `REBORN_GO_JUDGE_AUTH_TOKEN`；推荐分别使用32字节的十六进制随机值，避免数据库 URL 中的特殊字符。首次管理员按下文配置。AI和可选转换器未配置时保留空值。
 
 ```powershell
 if (-not (Test-Path -LiteralPath deploy/.env)) { Copy-Item deploy/.env.example deploy/.env }
@@ -32,7 +34,7 @@ if (-not (Test-Path -LiteralPath deploy/.env)) { Copy-Item deploy/.env.example d
 基础配置默认只绑定本机：Web 为 `15174`，API 为 `18081`。端口已被占用时，在新环境文件中设置其他端口，并使用新的项目名，不停止其他环境。
 
 ```powershell
-docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml up --build -d
+docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml up --build -d --wait
 docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml ps
 docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml logs --tail 100 api web
 Invoke-RestMethod http://127.0.0.1:15174/api/health
@@ -113,7 +115,7 @@ python -m uvicorn app.main:app --host 127.0.0.1 --port 18081
 
 首次创建环境才生成新名称；记录并保留这组数据库/存储配置，后续启动复用同一环境，不重复生成名称造成存档看似消失，也不指向归档中的旧库。已有虚拟环境可直接激活并按锁文件安装。Linux/macOS 用 `source .venv/bin/activate` 激活。生产必须使用独立 PostgreSQL；SQLite 不覆盖 PostgreSQL 的行锁和并发语义。
 
-本机开发要使用容器 PostgreSQL 时，另准备带独立密码的忽略环境文件 `.tmp/native.env`，可只启动独立项目的数据库：
+本机开发要使用容器 PostgreSQL 时，另准备带独立数据库密码和判题token的忽略环境文件 `.tmp/native.env`（Compose解析完整配置仍要求两者），可只启动独立项目的数据库：
 
 ```powershell
 docker compose --env-file .tmp/native.env -p pythontopia-reborn-native -f deploy/compose.yml -f deploy/local-db.yml up -d db
@@ -207,19 +209,28 @@ docker compose --env-file .tmp/npc-demo-20261113.env -p pythontopia-npc-demo-202
 
 默认每次最多3次模型调用、5次工具调用、45秒，每次模型输出最多512 token；用户每日12请求/120000 token、班级每日100请求/1200000 token。预算参数见 `backend/app/assistant.py` 的 `REBORN_AI_*`；修改后在隔离环境验证。重启中断的回复不会自动重发，也不将离线测试称为真实模型验收。
 
-### Judge0
+### go-judge（默认包含，仅 Python）
 
-正式提交仅送往 Judge0，不在 API 主机执行；公开样例允许在隔离浏览器环境试运行。可选隔离栈为 `deploy/judge0.compose.yml` 与 `deploy/judge0.conf`；当前固定镜像为 `judge0/judge0:1.13.1`，不要改成 `latest`。在独立受信 Linux 环境部署 worker，保持禁网及其隔离限制，不向学生浏览器暴露判题 API。
+`deploy/compose.yml` 默认包含 db/judge/api/web，使用前文同一条启动命令，不再有独立判题Compose、外部网络或手工填写执行URL。judge先通过健康检查（cgroups cpu/memory/pids、seccomp、非root沙箱UID），API再启动；Web等待API健康。固定go-judge v1.14.1与Python3.13镜像摘要，源码/许可与挂载配置在 `deploy/go-judge/`。
 
-为判题栈准备忽略的独立环境文件，设置随机的 `REBORN_JUDGE_DB_PASSWORD`、`REBORN_JUDGE_REDIS_PASSWORD`、`REBORN_JUDGE0_AUTH_TOKEN`，再启动：
+judge只接入项目内部judging网络，无宿主机端口；只有API与它共享该网络。API自动使用 `http://judge:5050`，二者共用环境文件中独立随机的 `REBORN_GO_JUDGE_AUTH_TOKEN`。四个执行槽，4CPU/1GiB上限、256MiB共享内存，默认seccomp、`-no-fallback`、不共享网络命名空间，不挂载业务文件、密钥、数据库或Docker socket。执行器privileged仅用于建立嵌套沙箱，学生程序使用UID1536。健康检查不能替代真实执行和隔离实测。
+
+队列使用已有Submission/SubmissionPayload，无额外数据库或Redis。单API进程后台每批最多认领4份，按创建时间排序，条件更新防止重复认领。每份最多20个用例，逐个独立执行；单例CPU2秒、墙钟5秒、内存128MiB、进程16、stdout16KiB、stderr8KiB。prepared持久等待，dispatching执行中，完成直接回写结果。重启保留prepared；dispatching以及遗留queued/running转submission_unknown，旧token字段保留但不再轮询旧服务。超时、部分执行后断连及无效响应不自动重送。多API进程扩容前需要跨进程恢复租约，当前只启动一个API进程。
+
+后端将输出的CRLF归一为LF并忽略末尾空白，内部空格和标点严格比较。私有预期输出不送执行器，仅公开样例诊断和总通过数进入学生回执。go-judge的Accepted只表示进程正常退出，不能直接当成答题正确。
+
+在API容器中测量实际内部网络链路，不需要打开判题端口；从仓库根目录执行（项目名和环境文件替换为自己的）：
 
 ```powershell
-docker compose --env-file .tmp/judge0.env -f deploy/judge0.compose.yml up -d
+Get-Content scripts/benchmark-go-judge.py -Raw | docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml exec -T api python - --output /tmp/go-judge-benchmark.json
+docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.yml cp api:/tmp/go-judge-benchmark.json .tmp/go-judge-benchmark.json
 ```
 
-业务 API 配置 `REBORN_JUDGE0_URL` 和相同鉴权 token。本机默认地址为 `http://127.0.0.1:2359`；Docker Desktop 中 API 可用 `http://host.docker.internal:2359`，Linux 容器需另配置 host-gateway或受控网络地址。通过该服务 `/languages` 核对 Python language ID，再按需设置 `REBORN_JUDGE0_PYTHON_LANGUAGE_ID`。
+脚本检查鉴权、Python、超时/内存/输出限制、文件清理和禁网，再测1/4/8/16并发，每份5用例。自动化live测试仍通过显式 `REBORN_LIVE_GO_JUDGE_URL` 指向受控执行器；真实数据库测试必须使用独立 `REBORN_TEST_DATABASE_URL`。未知派发只能对账，不能重送或回退API宿主机执行。
 
-连通或健康检查不证明真实代码运行成功。Docker Desktop 的 cgroup 版本可能与 Judge0 内置 isolate 不兼容，出现 cgroup目录或 `/box/script.py` 错误时应修复隔离运行环境；不能禁用隔离来通过验收。未知分发状态 `submission_unknown` 必须对账，不盲目重送。练习提交与测验整卷交卷的不同契约见[API说明](api-contract.md)。
+### 已有分离判题环境合并
+
+保持原项目名、环境文件及数据卷，补齐判题token后用 `deploy/compose.yml` 执行 `up --build -d --wait`。先确认新四服务健康、原卷挂载与历史记录保持，再删除已脱离API的旧独立判题容器/网络。不要用 `down -v`、全局prune或新项目名替代更新；不得重置旧失败提交/成绩。旧Judge0配置、轮询和Piston试验下载已退出当前部署。
 
 ### PPT / PPTX转换
 
@@ -271,7 +282,7 @@ python -m pytest -q --basetemp .pytest-local
 
 Windows测试进程显式使用UTF-8，避免旧夹具的默认文本读取采用系统GBK；这些设置只影响当前终端及其子进程，不修改系统语言。pytest临时目录保持在项目忽略目录内。
 
-自动化测试使用 backend/tests/source_fixtures.py 和 tests/fixtures/teaching-scripts 的合成课程，不代表原教材正确。fixture_seed/fixture_package/fixture_instances 仅位于 tests，不是运行导入入口。浏览器测试包通过 PYTHONPATH=tests 调用 fixture_package 生成 v2 目录，放入独立交换区；课程包 ID 通过 REBORN_E2E_COURSE_PACKAGE 指定。全新隔离数据库执行迁移、重复升级和包重复导入检查。PostgreSQL并发专项需要显式 `REBORN_TEST_DATABASE_URL`，测试会创建临时 schema 并清理，不能指向真实演示库或生产库。live Judge0测试需要 `REBORN_LIVE_JUDGE0_URL`，鉴权仍用 `REBORN_JUDGE0_AUTH_TOKEN`；未配置的外部专项应记录为跳过。
+自动化测试使用 backend/tests/source_fixtures.py 和 tests/fixtures/teaching-scripts 的合成课程，不代表原教材正确。fixture_seed/fixture_package/fixture_instances 仅位于 tests，不是运行导入入口。浏览器测试包通过 PYTHONPATH=tests 调用 fixture_package 生成 v2 目录，放入独立交换区；课程包 ID 通过 REBORN_E2E_COURSE_PACKAGE 指定。全新隔离数据库执行迁移、重复升级和包重复导入检查。PostgreSQL并发专项需要显式 `REBORN_TEST_DATABASE_URL`，测试会创建临时 schema 并清理，不能指向真实演示库或生产库。当前live判题使用 `REBORN_LIVE_GO_JUDGE_URL` 和 `REBORN_GO_JUDGE_AUTH_TOKEN`；未配置的外部专项应记录为跳过。
 
 地图/素材相关修改从仓库根检查：
 
@@ -336,7 +347,7 @@ npm run test:e2e -- --project=desktop --workers=1
 | 页面显示旧地图或旧前端 | API/Web共同配置是否同时重建，Web镜像和浏览器缓存是否更新 |
 | PDF/视频缺失或无权限 | 是否显式导入材料包、导入的数据库与存储是否一致、章节是否开放；文本测试夹具不包含原教材媒体 |
 | 助教不可用或回复中断 | 后端模型凭据/预算、活动授权和真实供应商状态；中断不自动重发，不能用假回复替代 |
-| 判题排队、未知或执行失败 | Judge0 worker、鉴权、language ID与隔离环境；未知状态先对账，不重复送交或在API主机执行 |
+| 判题排队、未知或执行失败 | go-judge健康、鉴权、数据库队列与隔离环境；未知状态先对账，不重复送交或在API主机执行 |
 | PPT转换失败 | converter profile、私有token、URL/镜像模式、原文件和处理限制；失败必须保持可见 |
 | 没有开发工具或重置返回409 | API两个显式开关、学生身份、班级关系与未完成判题/助教；不通过前端改状态绕过 |
 | Playwright首次运行失败 | 浏览器安装、`E2E_URL`、专用教师凭据、服务/媒体前置与用例skip原因；不要误报为业务失败或成功 |
@@ -384,4 +395,4 @@ python -m app.course_package --check 'E:/course-exchange/my-course'
 
 ## Python 浏览器运行验证
 
-公开样例首次运行需要访问 https://cdn.jsdelivr.net/pyodide/v0.27.7/full/ 下载固定运行时；不可用时显示加载错误，不回退到服务端运行。标准输入输出与基础 Python 为支持范围，本机耗时不等同于 Judge0 耗时。运行 Vite 后，设置 PYTHON_RUNNER_DEV_URL 指向 Vite 地址，执行 frontend/e2e/pythonRunner.spec.ts；测试验证真实 WASM、超时、取消和 API 网络隔离。生产正式评测仍需按 Judge0 小节部署 Linux 隔离栈。新增迁移 c421b8e091aa 只增加提示及初始代码字段，保留提交记录。Windows 测试设置 PYTHONUTF8=1 并为 pytest 指定工作区内独立 basetemp。
+公开样例首次运行需要加载本地 /python-runtime/0.27.7/ 固定运行时；不可用时显示加载错误，不回退到服务端运行。标准输入输出与基础 Python 为支持范围，本机耗时不等同于正式判题耗时。运行 Vite 后，设置 PYTHON_RUNNER_DEV_URL 指向 Vite 地址，执行 frontend/e2e/pythonRunner.spec.ts；测试验证真实 WASM、超时、取消和 API 网络隔离。正式评测按 go-judge 小节部署独立 Linux 隔离服务。新增迁移 c421b8e091aa 只增加提示及初始代码字段，保留提交记录。Windows 测试设置 PYTHONUTF8=1 并为 pytest 指定工作区内独立 basetemp。

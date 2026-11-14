@@ -1,4 +1,5 @@
 import asyncio
+import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import sessionmaker
 from app.integration_models import SubmissionPayload
@@ -60,7 +61,7 @@ def test_judge_dispatch_once_unknown_does_not_blindly_resend(client, db, student
     class Unknown:
         calls = 0
 
-        async def submit(self, code, cases):
+        async def execute(self, code, cases, public_count):
             self.calls += 1
             raise JudgeSubmissionUnknown("uncertain")
 
@@ -72,29 +73,24 @@ def test_judge_dispatch_once_unknown_does_not_blindly_resend(client, db, student
     assert db.get(Submission, sid).status == "submission_unknown"
 
 
-def test_server_poll_recovers_without_browser(client, db, student, classroom, monkeypatch, branching_course):
+def test_worker_completes_without_browser(client, db, student, classroom, monkeypatch, branching_course):
     monkeypatch.setattr(practice, "SessionLocal", sessionmaker(db.bind, expire_on_commit=False))
     result = submit(client, student, classroom, activity_id="ch2-code", question_id="course-476", code="print(input())", answer=None)
     sid = result.json()["id"]
 
     class FakeJudge:
-        async def submit(self, code, cases):
+        async def execute(self, code, cases, public_count):
             assert len(cases) > 3  # Formal grading includes hidden cases.
-            return ["token-" + str(i) for i in range(len(cases))]
-
-        async def poll(self, tokens, public_count):
-            assert len(tokens) > public_count == 3
+            assert public_count == 3
             return JudgeResult("accepted", {"samples": []})
 
     asyncio.run(practice.dispatch_one(sid, FakeJudge()))
-    asyncio.run(practice.poll_one(sid, FakeJudge()))
     db.expire_all()
     row = db.get(Submission, sid)
-    assert row.status == "accepted" and row.mode == "submit" and row.judge_token
+    assert row.status == "accepted" and row.mode == "submit" and row.judge_token is None
 
 
 def test_judge_worker_recovers_database_outage_without_replaying_dispatch(client, db, student, classroom, monkeypatch, caplog, branching_course):
-    import pytest
     from sqlalchemy.exc import OperationalError
 
     response = submit(client, student, classroom, activity_id="ch2-code", question_id="course-476", code="print('x')", answer=None)
@@ -126,3 +122,18 @@ def test_judge_worker_recovers_database_outage_without_replaying_dispatch(client
     assert delays == [1] and len(attempts) == 2
     assert db.get(Submission, sid).status == "submission_unknown"
     assert "private-connection-value" not in caplog.text
+
+
+@pytest.mark.parametrize("state", ["queued", "running"])
+def test_retired_pending_jobs_require_reconciliation_without_erasing_tokens(client, db, student, classroom, monkeypatch, branching_course, state):
+    monkeypatch.setattr(practice, "SessionLocal", sessionmaker(db.bind, expire_on_commit=False))
+    response = submit(client, student, classroom, activity_id="ch2-code", question_id="course-476", code="print(input())", answer=None)
+    sid = response.json()["id"]
+    row = db.get(Submission, sid)
+    row.status, row.judge_token = state, '["historical-receipt"]'
+    db.commit()
+    practice._recover_dispatching()
+    asyncio.run(practice.reconcile_once())
+    db.expire_all()
+    assert row.status == "submission_unknown"
+    assert row.judge_token == '["historical-receipt"]'

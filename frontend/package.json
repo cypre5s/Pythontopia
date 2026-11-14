@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/prepare-python-runtime.mjs",
+    "prebuild": "node scripts/prepare-python-runtime.mjs",
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
@@ -35,6 +37,7 @@
     "eslint": "8.57.1",
     "eslint-plugin-vue": "10.11.1",
     "jsdom": "29.1.1",
+    "pyodide": "0.27.7",
     "typescript": "5.7.2",
     "vite": "6.4.4",
     "vitest": "4.1.11",

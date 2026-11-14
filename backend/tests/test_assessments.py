@@ -173,7 +173,7 @@ def test_python_whole_paper_uses_existing_judge_and_unknown_is_never_resubmitted
     class Unknown:
         calls = 0
 
-        async def submit(self, code, cases):
+        async def execute(self, code, cases, public_count):
             self.calls += 1
             assert len(cases) == 2
             raise JudgeSubmissionUnknown("unknown-test-only")

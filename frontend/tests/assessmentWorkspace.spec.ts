@@ -160,7 +160,7 @@ it('merges programming assessment actions while public samples are running', asy
   vi.mocked(session.activity).mockResolvedValue({...activity,questions:[{id:'q1',title:'编程题',kind:'python',prompt:'输出',options:[],starter_code:'print(1)',samples:[{input:'',output:'1'}]},activity.questions[1]!]});
   vi.spyOn(api,'get').mockResolvedValue(paper());
   let finish!: (value: {stdout:string;stderr:string}) => void;
-  vi.spyOn(pythonRunner,'runPython').mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+  vi.spyOn(pythonRunner,'createPythonRunner').mockReturnValue({run:()=>new Promise(resolve=>{finish=resolve;}),ready:async()=>[],dispose:vi.fn()});
   const wrapper=mount(PracticeWorkspace,{props:{activityId:'test'},global:{plugins:[pinia],stubs:{CodeEditor:true,AssistantPanel:true}}});
   await flushPromises();
   expect(wrapper.find('.assessment-top-submit').exists()).toBe(true);

@@ -6,6 +6,7 @@ import { useSession } from "../src/shared/session";
 import { api } from "../src/shared/api";
 import type { Submission } from "../src/shared/types";
 import PracticeQuestionCard from "../src/features/PracticeQuestionCard.vue";
+import * as pythonRunner from '../src/shared/pythonRunner';
 afterEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();
@@ -22,7 +23,8 @@ describe("public judge sample feedback", () => {
     expect(wrapper.find(".submission-result > p").exists()).toBe(false);
     wrapper.unmount();
   });
-  it("renders public output and errors as text while excluding private extra fields", async () => {
+  it("shows safe public diagnostics in formal summaries without case output or private fields", async () => {
+    vi.spyOn(pythonRunner,'createPythonRunner').mockReturnValue({run:vi.fn(),ready:async()=>[],dispose:vi.fn()});
     const pinia = createPinia();
     setActivePinia(pinia);
     const session = useSession();
@@ -114,7 +116,8 @@ describe("public judge sample feedback", () => {
     await flushPromises();
     const feedback = wrapper.find(".coding-tests");
     expect(feedback.text()).toContain("执行出错");
-    expect(feedback.text()).toContain("<img src=x onerror=alert(1)>");
+    expect(feedback.text()).not.toContain("<img src=x onerror=alert(1)>");
+    expect(feedback.find('.case-tabs').exists()).toBe(false);
     expect(feedback.find("img").exists()).toBe(false);
     expect(feedback.text()).toContain("NameError: name wasd is not defined");
     expect(feedback.text()).toContain("Syntax diagnostics");

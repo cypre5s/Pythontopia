@@ -1,10 +1,12 @@
 import { mount, flushPromises } from "@vue/test-utils";
 import { it, expect, vi } from "vitest";
 import PracticeQuestionCard from "../src/features/PracticeQuestionCard.vue";
+import ProgrammingQuestion from '../src/features/ProgrammingQuestion.vue';
 import { runPython } from "../src/shared/pythonRunner";
 
 vi.mock("../src/shared/pythonRunner", () => ({
   runPython: vi.fn().mockResolvedValue({ stdout: "hello\n", stderr: "" }),
+  createPythonRunner: () => ({ run: (...args: Parameters<typeof runPython>) => runPython(...args), dispose: vi.fn() }),
   sameOutput: (actual: string, expected: string) => actual.trimEnd() === expected,
 }));
 
@@ -77,8 +79,8 @@ it('keeps one busy action and skeleton until every public case finishes', async 
   expect(wrapper.find('.result-skeleton').exists()).toBe(false);
   expect(wrapper.find('.coding-outcome').text()).toBe('解答错误');
   expect(wrapper.find('.case-tabs button[aria-pressed=true]').text()).toBe('Case 2');
-  expect(wrapper.find('.coding-tests').text()).toContain('实际输出incorrect');
-  expect(wrapper.find('.coding-tests').text()).toContain('预期输出two');
+  expect(wrapper.findAll('.output-diff')[0]!.text()).toBe('incorrect');
+  expect(wrapper.findAll('.output-diff')[1]!.text()).toBe('two');
   expect(wrapper.emitted('submit')).toBeUndefined();
   wrapper.unmount();
 });
@@ -118,6 +120,51 @@ it('keeps the pending state for a queued formal submission, including locked rev
   expect(wrapper.find('.result-skeleton').exists()).toBe(false);
   expect(wrapper.find('.coding-outcome').text()).toBe('通过');
   expect(wrapper.find('.coding-actions').exists()).toBe(false);
+  wrapper.unmount();
+});
+
+it('shows only aggregate formal results and never invents counts for unavailable or old results', async () => {
+  const wrapper = codingCard();
+  const result = {id:'s',activity_id:'a',question_id:'pending-cases',mode:'submit' as const,status:'wrong_answer' as const,created_at:'',feedback:{passed_count:3,total_count:5}};
+  await wrapper.setProps({result});
+  expect(wrapper.get('.coding-pass-count').text()).toBe('3 / 5 个测试用例通过');
+  expect(wrapper.find('.case-tabs').exists()).toBe(false);
+  expect(wrapper.get('.coding-failure-hints').text()).toContain('为什么运行正确');
+  await wrapper.setProps({result:{...result,status:'accepted',feedback:{passed_count:5,total_count:5}}});
+  expect(wrapper.get('.coding-pass-count').text()).toBe('5 / 5 个测试用例通过');
+  expect(wrapper.find('.coding-failure-hints').exists()).toBe(false);
+  await wrapper.setProps({result:{...result,status:'infrastructure_error',feedback:{detail:'判题服务未配置'}}});
+  expect(wrapper.find('.coding-pass-count').exists()).toBe(false);
+  expect(wrapper.find('.case-tabs').exists()).toBe(false);
+  expect(wrapper.find('.coding-failure-hints').exists()).toBe(false);
+  await wrapper.setProps({result:{...result,feedback:{}}});
+  expect(wrapper.find('.coding-pass-count').exists()).toBe(false);
+  wrapper.unmount();
+});
+
+it('enables public output Diff by default and toggles back to exact plain text', async () => {
+  vi.mocked(runPython).mockReset().mockResolvedValue({stdout:'one!',stderr:''});
+  const wrapper=codingCard();
+  await wrapper.findAll('button').find(b=>b.text()==='运行公开样例')!.trigger('click'); await flushPromises();
+  expect(wrapper.get('.coding-diff-toggle').attributes('aria-pressed')).toBe('true');
+  expect(wrapper.get('.diff-extra').text()).toBe('!');
+  await wrapper.get('.coding-diff-toggle').trigger('click');
+  expect(wrapper.find('.diff-extra').exists()).toBe(false);
+  expect(wrapper.findAll('.coding-tests pre')[1]!.text()).toBe('one!');
+  wrapper.unmount();
+});
+
+it('discards a late public result after changing question', async () => {
+  let finish!: (value:{stdout:string;stderr:string})=>void;
+  vi.mocked(runPython).mockReset().mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
+  const wrapper=codingCard();
+  const programming=wrapper.findComponent(ProgrammingQuestion);
+  await wrapper.findAll('button').find(b=>b.text()==='运行公开样例')!.trigger('click');
+  await wrapper.setProps({question:{...programming.props('question'),id:'next-question'}});
+  finish({stdout:'old result',stderr:''}); await flushPromises();
+  expect(wrapper.find('.coding-outcome').exists()).toBe(false);
+  expect(wrapper.text()).not.toContain('old result');
+  expect(wrapper.find('.judging-action').exists()).toBe(false);
   wrapper.unmount();
 });
 

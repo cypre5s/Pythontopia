@@ -30,8 +30,8 @@ services:
       REBORN_AI_BASE_URL: ${REBORN_AI_BASE_URL:-}
       REBORN_AI_MODEL: ${REBORN_AI_MODEL:-}
       REBORN_AI_REASONING_EFFORT: ${REBORN_AI_REASONING_EFFORT:-}
-      REBORN_JUDGE0_URL: ${REBORN_JUDGE0_URL:-}
-      REBORN_JUDGE0_AUTH_TOKEN: ${REBORN_JUDGE0_AUTH_TOKEN:-}
+      REBORN_GO_JUDGE_URL: http://judge:5050
+      REBORN_GO_JUDGE_AUTH_TOKEN: ${REBORN_GO_JUDGE_AUTH_TOKEN:?set REBORN_GO_JUDGE_AUTH_TOKEN in deploy/.env}
       REBORN_CONVERTER_URL: ${REBORN_CONVERTER_URL:-}
       REBORN_CONVERTER_TOKEN: ${REBORN_CONVERTER_TOKEN:-}
     ports:
@@ -42,8 +42,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      judge:
+        condition: service_healthy
     restart: unless-stopped
-    networks: [default, conversion]
+    networks: [default, conversion, judging]
     logging: {driver: json-file, options: {max-size: 10m, max-file: "3"}}
   web:
     build:
@@ -53,7 +55,28 @@ services:
         VITE_TIME_ZONE: ${REBORN_TIME_ZONE:-Asia/Shanghai}
     ports:
       - 127.0.0.1:${REBORN_WEB_PORT:-15174}:80
-    depends_on: [api]
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    logging: {driver: json-file, options: {max-size: 10m, max-file: "3"}}
+  judge:
+    build: ./go-judge
+    image: pythontopia-go-judge:1.14.1-python3.13
+    privileged: true
+    shm_size: 256m
+    mem_limit: 1g
+    cpus: 4
+    pids_limit: 128
+    environment:
+      ES_AUTH_TOKEN: ${REBORN_GO_JUDGE_AUTH_TOKEN:?set REBORN_GO_JUDGE_AUTH_TOKEN in deploy/.env}
+    networks: [judging]
+    healthcheck:
+      test: [CMD, python, /opt/healthcheck.py]
+      interval: 15s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
     restart: unless-stopped
     logging: {driver: json-file, options: {max-size: 10m, max-file: "3"}}
   converter:
@@ -75,6 +98,8 @@ services:
     networks: [conversion]
     restart: unless-stopped
 networks:
+  judging:
+    internal: true
   conversion:
     internal: true
 volumes:

@@ -1,0 +1,34 @@
+import { test, expect } from '@playwright/test';
+
+test('formal summaries and public output Diff across desktop and narrow viewports', async ({page}, testInfo) => {
+  test.skip(!process.env.PYTHON_RUNNER_DEV_URL, 'Requires Vite and prepared local runtime');
+  test.setTimeout(90000);
+  const root=process.env.PYTHON_RUNNER_DEV_URL! + '/e2e/fixtures/programmingFeedback.html';
+  await page.goto(root + '?result=accepted');
+  await expect(page.locator('.coding-outcome')).toHaveText('通过');
+  await expect(page.locator('.coding-pass-count')).toHaveText('5 / 5 个测试用例通过');
+  await expect(page.locator('.case-tabs')).toHaveCount(0);
+  await page.screenshot({path:testInfo.outputPath('formal-passed.png'),fullPage:true});
+  await page.goto(root + '?result=wrong_answer');
+  await expect(page.locator('.coding-outcome')).toHaveText('解答错误');
+  await expect(page.locator('.coding-failure-hints')).toContainText('公开样例只覆盖部分输入');
+  await expect(page.locator('.case-tabs')).toHaveCount(0);
+  await page.screenshot({path:testInfo.outputPath('formal-wrong.png'),fullPage:true});
+  await page.goto(root + '?result=infrastructure_error');
+  await expect(page.locator('.coding-pass-count')).toHaveCount(0);
+  await expect(page.locator('.case-tabs')).toHaveCount(0);
+  await page.goto(root);
+  await page.getByRole('button',{name:'运行公开样例'}).click();
+  await expect(page.locator('.coding-outcome')).toHaveText('解答错误',{timeout:20000});
+  await expect(page.locator('.diff-missing')).toHaveText('！');
+  await expect(page.locator('.diff-extra')).toHaveCount(0);
+  await expect(page.locator('.coding-diff-toggle')).toHaveAttribute('aria-pressed','true');
+  await page.screenshot({path:testInfo.outputPath('public-diff.png'),fullPage:true});
+  await page.locator('.coding-diff-toggle').click();
+  await expect(page.locator('.output-diff')).toHaveCount(0);
+  await page.setViewportSize({width:900,height:900});
+  await page.evaluate(()=>document.documentElement.style.fontSize='200%');
+  await expect(page.locator('.coding-diff-toggle')).toBeVisible();
+  expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({path:testInfo.outputPath('narrow-200.png'),fullPage:true});
+});

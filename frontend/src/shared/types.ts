@@ -194,6 +194,8 @@ export interface PublicSampleResult {
   compile_output: string;
 }
 export interface SubmissionFeedback {
+  passed_count?: number;
+  total_count?: number;
   detail?: string;
   status?: SubmissionStatus;
   samples?: PublicSampleResult[];

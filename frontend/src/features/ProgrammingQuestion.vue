@@ -32,19 +32,38 @@
         <template v-else>
           <template v-if="tab === 'results' && outcome">
             <p class="result-origin">{{ resultSource === 'submission' ? '正式提交' : '公开样例 · 不计成绩' }}</p>
-            <h4 class="coding-outcome" :data-tone="outcomeTone" role="status">{{ outcomeTitle }}</h4>
+            <div class="coding-result-summary">
+              <h4 class="coding-outcome" :data-tone="outcomeTone" role="status">{{ outcomeTitle }}</h4>
+              <span v-if="resultSource === 'submission' && submissionCounts" class="coding-pass-count">{{ submissionCounts.passed }} / {{ submissionCounts.total }} 个测试用例通过</span>
+              <span v-if="resultSource === 'local' && runDuration !== undefined" class="coding-run-time">用时 {{ runDuration }} ms</span>
+              <button v-if="resultSource === 'local' && selectedResult?.status === 'wrong_answer'" class="coding-diff-toggle" :aria-pressed="diffEnabled" @click="diffEnabled = !diffEnabled">Diff {{ diffEnabled ? '开' : '关' }}</button>
+            </div>
             <p v-if="resultSource === 'submission' && resultDetail">{{ resultDetail }}</p>
+            <pre v-if="resultSource === 'submission' && publicDiagnostic" class="coding-error" role="alert">{{ publicDiagnostic }}</pre>
+            <section v-if="resultSource === 'submission' && failureHints.length" class="coding-failure-hints" aria-label="排查建议">
+              <h5>{{ outcome === 'wrong_answer' ? '为什么运行正确，提交却错误？' : '可以检查这些地方' }}</h5>
+              <ul><li v-for="hint in failureHints" :key="hint">{{ hint }}</li></ul>
+              <p>以上是排查方向，不代表已确定的错误原因。</p>
+            </section>
             <pre v-if="runError && resultSource === 'local'" class="coding-error" role="alert">{{ runError }}</pre>
           </template>
+          <template v-if="tab === 'cases' || resultSource === 'local'">
           <div class="case-tabs" role="group" aria-label="选择公开用例"><button v-for="(_, i) in question.samples" :key="i" :aria-pressed="activeCase === i" @click="activeCase = i"><GameIcon v-if="tab === 'results' && displayedResults[i]" :name="displayedResults[i]?.status === 'accepted' ? 'check' : 'circleX'" :class="displayedResults[i]?.status === 'accepted' ? 'case-pass' : 'case-fail'" />Case {{ i + 1 }}</button></div>
           <template v-if="tab === 'cases' && selectedSample"><label>输入</label><pre>{{ selectedSample.input || '（空输入）' }}</pre><label>预期输出</label><pre>{{ selectedSample.output || '（无输出）' }}</pre></template>
           <template v-else-if="tab === 'results'">
             <pre v-if="selectedResult?.error" class="coding-error" role="alert">{{ selectedResult.error }}</pre>
             <template v-if="selectedResult || (runError && resultSource === 'local')">
               <label>{{ selectedResult?.error || runError ? '执行时的输入' : '输入' }}</label><pre>{{ selectedSample?.input || '（空输入）' }}</pre>
-              <template v-if="selectedResult"><label>实际输出</label><pre :class="{ 'coding-error': selectedResult.status === 'wrong_answer' }">{{ selectedResult.stdout || '（无输出）' }}</pre><label>预期输出</label><pre>{{ selectedSample?.output || '（无输出）' }}</pre></template>
+              <template v-if="selectedResult">
+                <label>实际输出 <span v-if="showDiff" class="diff-legend">红色：多余或不匹配的内容</span></label>
+                <pre v-if="showDiff" class="output-diff"><template v-if="comparedOutput.actual.length"><span v-for="(part, i) in comparedOutput.actual" :key="i" :class="{ 'diff-extra': part.changed }">{{ visibleDiffText(part) }}</span></template><template v-else>（无输出）</template></pre>
+                <pre v-else>{{ selectedResult.stdout || '（无输出）' }}</pre>
+                <label>预期输出 <span v-if="showDiff" class="diff-legend">绿色：缺少或需要替换的内容</span></label>
+                <pre v-if="showDiff" class="output-diff"><template v-if="comparedOutput.expected.length"><span v-for="(part, i) in comparedOutput.expected" :key="i" :class="{ 'diff-missing': part.changed }">{{ visibleDiffText(part) }}</span></template><template v-else>（无输出）</template></pre>
+                <pre v-else>{{ selectedSample?.output || '（无输出）' }}</pre>
+              </template>
             </template>
-            <p v-else-if="resultSource === 'submission'">此用例没有可展示的评测反馈。</p>
+          </template>
           </template>
         </template>
       </div>
@@ -61,9 +80,10 @@
   </article>
 </template>
 <script setup lang="ts">
-import { computed, defineAsyncComponent, ref, watch, onBeforeUnmount } from "vue";
+import { computed, defineAsyncComponent, ref, watch, onMounted, onBeforeUnmount } from "vue";
 import GameIcon from "../shared/GameIcon.vue";
-import { runPython, sameOutput } from "../shared/pythonRunner";
+import { createPythonRunner, sameOutput } from "../shared/pythonRunner";
+import { outputDiff, visibleDiffText } from "../shared/outputDiff";
 import type { Question, Submission, SubmissionStatus } from "../shared/types";
 import { pendingSubmissionStates, submissionStatusName } from "../shared/practicePresentation";
 const CodeEditor = defineAsyncComponent(() => import("./CodeEditor.vue"));
@@ -111,6 +131,26 @@ const resultSource = ref<'local' | 'submission'>(props.result ? 'submission' : '
 const judging = computed(() => running.value || props.busy || Boolean(props.result && pendingSubmissionStates.includes(props.result.status)));
 const displayedResults = computed<CaseResult[]>(() => resultSource.value === 'local' ? localResults.value : (props.result?.feedback.samples ?? []).map(sample => ({ stdout: sample.stdout ?? '', error: [sample.stderr, sample.compile_output].filter(Boolean).join('\n'), status: sample.status })));
 const selectedResult = computed(() => displayedResults.value[activeCase.value]);
+const publicDiagnostic = computed(() => ['runtime_error', 'compile_error'].includes(props.result?.status ?? '')
+  ? (props.result?.feedback.samples ?? []).map(sample => [sample.stderr, sample.compile_output].filter(Boolean).join('\n')).find(Boolean) : undefined);
+const diffEnabled = ref(true), runDuration = ref<number>();
+const showDiff = computed(() => diffEnabled.value && selectedResult.value?.status === 'wrong_answer');
+const comparedOutput = computed(() => outputDiff(selectedResult.value?.stdout ?? '', selectedSample.value?.output ?? ''));
+const submissionCounts = computed(() => {
+  const feedback = props.result?.feedback;
+  if (!props.result || pendingSubmissionStates.includes(props.result.status) || ['infrastructure_error', 'submission_unknown'].includes(props.result.status)) return undefined;
+  const passed = feedback?.passed_count, total = feedback?.total_count;
+  return Number.isInteger(passed) && Number.isInteger(total) && total! > 0 && passed! >= 0 && passed! <= total! ? {passed, total} : undefined;
+});
+const failureHints = computed(() => {
+  switch (outcome.value) {
+    case 'wrong_answer': return ['公开样例只覆盖部分输入，正式提交还会检查其他数据和边界情况。', '核对空格、换行、中英文标点；不要输出 input() 提示、调试文字或多余说明。', '检查最小值、零、负数、重复值及多行输入，避免只针对示例写死答案。'];
+    case 'runtime_error': case 'compile_error': return ['检查缩进、语法、变量名，以及输入是否按题目要求读取。', '考虑空输入、下标越界、除零或类型转换失败；浏览器与判题环境的 Python 版本、可用库也可能不同。'];
+    case 'time_limit': return ['检查循环是否能够结束，是否读取了超出题目范围的输入。', '较大的测试数据可能使重复计算超时，尝试减少循环和重复工作。'];
+    case 'memory_limit': return ['检查是否创建了过大的列表、字符串，或不断向容器中添加数据。'];
+    default: return [];
+  }
+});
 const outcome = computed<SubmissionStatus | undefined>(() => {
   if (resultSource.value === 'submission') return props.result?.status;
   if (runError.value) return 'runtime_error';
@@ -123,22 +163,37 @@ watch(() => [props.result, props.busy], () => { resultSource.value = 'submission
   if (props.result && !pendingSubmissionStates.includes(props.result.status)) activeCase.value = Math.max(0, (props.result.feedback.samples ?? []).findIndex(sample => sample.status !== 'accepted'));
 });
 let controller: AbortController | undefined;
+let runVersion = 0;
+let pythonRunner: ReturnType<typeof createPythonRunner> | undefined;
+onMounted(() => { if (!props.readOnly && props.question.samples.length) pythonRunner = createPythonRunner(props.question.samples.length); });
+watch(() => props.question.id, () => {
+  runVersion++; running.value=false; emit('runningChange', false);
+  controller?.abort(); pythonRunner?.dispose(); pythonRunner = undefined;
+  localResults.value=[]; runError.value=''; runStopped.value=false; runDuration.value=undefined;
+  activeCase.value=0; diffEnabled.value=true; resultSource.value=props.result ? 'submission' : 'local';
+  tab.value=props.result ? 'results' : 'cases';
+  if (!props.readOnly && props.question.samples.length) pythonRunner=createPythonRunner(props.question.samples.length);
+});
 async function runSamples() {
   if (running.value || props.busy || props.readOnly) return;
   resultSource.value='local'; runStopped.value=false; activeCase.value=0; tab.value='results'; running.value=true; emit('runningChange', true); runError.value=''; localResults.value=[];
-  controller = new AbortController();
-  const source = props.code;
+  const currentController = new AbortController(), version = ++runVersion;
+  controller = currentController;
+  const source = props.code, started = performance.now();
+  runDuration.value = undefined;
   try {
     if (!props.question.samples.length) throw Error('此题尚未配置公开样例');
     for (const [i, sample] of props.question.samples.entries()) {
       activeCase.value = i;
-      const result = await runPython(source, sample.input, controller.signal);
+      pythonRunner ??= createPythonRunner(props.question.samples.length);
+      const result = await pythonRunner.run(source, sample.input, currentController.signal);
+      if (version !== runVersion) return;
       localResults.value.push({stdout:result.stdout,error:result.stderr,status:result.stderr ? 'runtime_error' : sameOutput(result.stdout,sample.output) ? 'accepted' : 'wrong_answer'});
     }
-  } catch(e) { runStopped.value=controller.signal.aborted; runError.value=e instanceof Error ? e.message : '运行失败'; }
-  finally { running.value=false; emit('runningChange', false); if (!runError.value) activeCase.value=Math.max(0,localResults.value.findIndex(item=>item.status !== 'accepted')); }
+  } catch(e) { if (version === runVersion) { runStopped.value=currentController.signal.aborted; runError.value=e instanceof Error ? e.message : '运行失败'; } }
+  finally { if (version === runVersion) { runDuration.value=Math.round(performance.now()-started); running.value=false; emit('runningChange', false); if (!runError.value) activeCase.value=Math.max(0,localResults.value.findIndex(item=>item.status !== 'accepted')); } }
 }
-onBeforeUnmount(()=>{ controller?.abort(); emit('runningChange', false); });
+onBeforeUnmount(()=>{ runVersion++; controller?.abort(); pythonRunner?.dispose(); emit('runningChange', false); });
 const headingId = computed(() => `practice-question-${props.question.id}`);
 const hasAnswer = computed(() => props.question.kind === "python" ? Boolean(props.code.trim()) : Boolean(props.answer.trim()));
 const resultDetail = computed(() => {

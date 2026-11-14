@@ -1,5 +1,72 @@
 # 验收摘要与已知边界
 
+## 统一Compose部署与清理2026-11-14
+
+提交复核：本轮仅重跑文档链接和提交差异检查，复核reborn远端状态及文件范围；下述功能测试保留原运行时间。此前课程包编写、预览启动等无关文档段落保留本地，不随本次功能提交。
+
+范围：默认 `deploy/compose.yml` 统一db/judge/api/web四服务，判题容器仅接内部judging网络，无宿主机端口；API自动使用内部URL，数据库和judge健康后启动API，再启动Web。Judge0适配/轮询/部署配置、分离判题Compose和API覆盖文件已删除；历史token字段保留为证据，遗留queued/running转待对账，不重发也不重评。当前体验数据库旧token计数为0。
+
+真实新装：新建 `pythontopia-compose-qa-20261114`，使用独立空卷、随机凭据与空交换目录；同一份Compose启动成功。API/db/judge健康，17257的world、teacher与代理health正常；judge端口映射为空，内部网络成员仅API与judge。API容器内运行合成Python隔离与并发检查通过，证据 `.tmp/go-judge-unified.json`。此小批量验证每档12份，最后一档最多实际12份同时提交，不作为16并发容量结论。
+
+首次新装因本机Docker默认地址池已耗尽而失败；检查归属/无容器连接后仅删除旧 `pythontopia-arrival-qa` 和 `pythontopia-authoring-qa` 各两条闲置网络，再成功启动。未使用全局prune，不清理其他项目。删除已退出的 `deploy/piston-local/` 下载包226555419字节；不删除业务卷或课程目录。
+
+清理完成：本轮新建QA栈、两个专用QA数据卷、测试镜像标签和临时数据库已删除；原独立 `pythontopia-go-judge-judge-1` 与无人使用的外部网络已退场。当前项目只运行统一Compose的四个容器。测试/旧判题环境文件清理，保留体验环境配置、备份、测试日志和报告。
+
+现有体验环境原地合并前备份 `.tmp/compose-unification-before-20261114.dump` 并记录数量基线 `.tmp/compose-unification-before-counts.json`。原地合并成功，原数据库卷 `pythontopia-npc-demo-20261113_reborn-db`、存储卷 `pythontopia-npc-demo-20261113_reborn-storage` 和课程目录挂载不变；合并前后2账号/1班级/43题/7提交数量一致。17254的world/teacher/health正常，API内实际正确/错误判题和隐藏诊断过滤通过；同一Compose下API/db/judge健康、Web运行。
+
+新栈真实HTTP链路：仅在QA数据库创建测试师生和课程，HTTP正式提交→持久队列→运行中的后台worker→go-judge→回执读取，正确341ms、错误245ms（含50ms轮询及幂等复验，不代表浏览器性能）；重复同幂等键只有一份提交，隐藏诊断保持私有。QA库全新迁移、合成课程两次seed和alembic check通过。证据脚本 `.tmp/unified-live-flow.py` 不进入产品源码。
+
+本轮重新检查：后端锁文件同步、ruff、全量 **590通过/2跳过/2条既有SQLite弃用提示**（530.14秒，日志 `.tmp/compose-cleanup-tests.log`），含真实隔离判题、PostgreSQL并发和旧状态保护；前端npm ci/typecheck/lint、41文件230测试、build通过。旧Judge0测试随退役实现删除，所以计数与上一轮不同，不能将减少误报成未回归。npm audit现有18项告警和Vite大包提示保留。未新增迁移、未重跑完整浏览器主线/账号切换，也未做生产部署或长期容量测试。
+
+## go-judge本地接入核验2026-11-14
+
+本轮按用户确认替换新正式提交的执行器，源码为 reborn 未提交工作区。独立 go-judge v1.14.1 + Python 3.13，固定镜像摘要；新业务提交使用现有数据库队列，旧 Judge0 回执不重判。以下为真实本机测试，不代表其他机器或生产容量。
+
+| 验证 | 结果 |
+| --- | --- |
+| Docker Desktop cgroups v2 | 实际启用 cpu/cpuset/memory/pids 控制器、seccomp、非特权沙箱用户；`-no-fallback`，未关闭隔离 |
+| 真实 Python 与隔离 | 鉴权拒绝错误token；中文输入输出、异常、死循环、512MiB申请触发128MiB内存限制、输出超限、跨任务文件清理、私有路径不可见、外网访问失败均通过 |
+| 正式适配与回执 | 正确/错误、语法/运行/时间/内存错误实际执行通过；认证提交→持久化→独立执行→回执读取通过；隐藏输出不返回，幂等提交和完成后重复派发不再执行 |
+| 真实 PostgreSQL 队列 | 临时独立数据库与schema，双派发器认领同一提交仅执行一次；每批4份，其余prepared；12份×5用例整批0.826秒；prepared重启保留、dispatching转unknown且不重发 |
+| 前端 | 本轮重新 npm ci、typecheck、lint、41文件230测试、build通过；无新增UI改动 |
+| 后端依赖与迁移 | 锁文件同步、ruff通过；临时全新PostgreSQL迁移、合成种子重复两次、alembic check无差异 |
+
+独立沙箱速度：每档40份提交，每份5个独立标准输入输出用例；4个执行槽，测量含本机HTTP调用及槽位等待，不含业务API、数据库排队和浏览器轮询。
+
+| 同时提交数 | 每份中位耗时 | 每份P95 | 每秒完成提交 |
+| --- | --- | --- | --- |
+| 1 | 116.4 ms | 134.2 ms | 8.4 |
+| 4 | 124.8 ms | 150.1 ms | 31.1 |
+| 8 | 258.4 ms | 281.1 ms | 30.4 |
+| 16 | 552.5 ms | 602.9 ms | 28.1 |
+
+证据：`.tmp/go-judge-benchmark.json`、`.tmp/go-judge-full-tests.log`；可复现入口 `scripts/benchmark-go-judge.py`、`backend/tests/test_go_judge.py` 与 `test_go_judge_postgres.py`。首次使用internal Docker网络时本机端口未发布，已改为专用bridge+loopback绑定；首次鉴权环境变量漏ES前缀，在接业务服务前纠正并通过未授权请求测试。未将这两次配置失败计为通过。
+
+最终核验：后端全量 **600通过、7跳过、2条既有SQLite时间适配弃用提示**（497.48秒，含真实go-judge与隔离PostgreSQL）；随后补充断连/未知派发两条故障回归，该文件 **18通过、7项live因本次未配变量跳过**，不将它当成再次运行live。前述live结果仍有效。新脚本和后端ruff、文档链接及git diff检查通过。没有新增数据库迁移，迁移/重复seed仅在临时独立库验证。
+
+本地部署：`pythontopia-go-judge-judge-1` 和更新后的体验API均healthy；17254的 `/world` 和代理 `/api/health` 正常。API容器内经实际私有Docker网络调用go-judge，正确/错误判定和隐藏诊断过滤通过，两用例首次调用156ms；此探针不写学生成绩。Python实际版本3.13.18，未安装node/java/gcc/g++/go工具链。Docker显示专用镜像约208MB，压力测试后空闲内存约34MiB；配置上限1GiB、4CPU，数字不是满载内存承诺。临时测试数据库容器及匿名卷已清理，常驻仅原db/api/web加独立judge。原账号、课程、旧成绩、未知/失败提交未重置，未提交或推送。
+
+范围限制：未进行长时间班级压力测试、恶意代码安全审计、多API进程扩容、服务器部署或新一轮完整浏览器主线回放。长程序及多用例会排队，不保证所有提交秒内完成。npm audit报告18项现有依赖告警、Vite大包提示保留，不进行无关升级。
+
+## 编程结果与样例性能核验2026-11-14
+
+范围：正式判题返回真实通过数/总数并以汇总行展示，不显示Case；公开样例默认字符Diff；Pyodide核心文件本地分发、全页面最多两个空白环境预热、每个样例独立一次性Worker；增加切题迟到结果保护。既有工作区未提交文档与 `deploy/piston-local/` 保留，未合并PR、提交或推送。
+
+- 前端：`npm ci`、typecheck、lint通过；全量41文件229项通过，最后补充预热总量/切题保护后相关5文件25项通过，类型与lint再次通过；本机及Docker构建通过。首轮沙箱内Vitest因临时目录rename权限导致41文件均未执行，沙箱外首轮3项失败为测试替身/旧展示断言，修正后通过。保留既有Phaser/Monaco大chunk提示；npm audit报告本机17项、Linux构建18项依赖告警，未在本轮做无关依赖升级。
+- 后端：独立Python3.12环境按 `requirements.lock` 同步；ruff通过，全量564通过/19条件跳过，保留2项SQLite datetime弃用警告。Judge契约覆盖隐藏输出不泄漏、真实聚合及未完成/基础设施故障不返回计分数量。沙箱uv缓存权限失败后在沙箱外完成安装；原测试环境无pip，使用uv同步。
+- 迁移：新建 `.tmp/coding-feedback-fresh-20261114.sqlite` 升级到现有head，使用显式合成源与 `tests/fixtures/teaching-scripts` 连续seed两次，数量一致，alembic check无差异。最初未指定测试路径时，fixture默认引用已退场目录/脚本而失败；随后显式指定测试源完成，未恢复旧课程。无模型或迁移改动，未新增真实PostgreSQL迁移专项。
+- 浏览器：真实Chrome最终3项通过，包含中文/无末尾换行输出、执行错误、5秒超时、主动停止、变量/文件隔离、API及任意站点请求被CSP阻止、销毁回收、预热总量限制，以及汇总通过/错误/不可用、默认Diff切换、900px/200%文字布局。初次实测发现无换行输出未flush，修复后复测通过；页面夹具首次页头挂载位置不正确，修复夹具后通过。最后测量两个环境准备1573ms，预热后两样例总计161ms（前一轮分别1647ms/142ms）；首次立即点击仍包含准备时间，不承诺任意代码或任意样例数均小于1秒。
+- 视觉证据：`frontend/test-results/programmingFeedback-formal-0bcc8-esktop-and-narrow-viewports-desktop/` 下正式成功/错误、公开Diff及窄屏200%截图；正式计数场景使用明确测试夹具，不代表真实Judge0验收。已查看错误汇总及公开Diff截图。
+- Judge0仅评估：现有配置额外4容器（API、worker、PostgreSQL、Redis），主应用3容器不变。检查时CPU为Ryzen9 7945HX（16核32线程），物理内存15.69GiB/可用1.26GiB；Docker内存上限约7.60GiB、cgroups v2。已有 `judge0/judge0:1.13.1` 镜像显示14.2GB，API/worker共享镜像。官方1.13.1要求cgroups v1；本轮未部署Judge0、未改宿主机配置，真实正式判题仍未验证。
+
+部署核验：已重建并更新现有17254 Web/API，沿用原数据库、课程与存储卷；更新前现有迁移已是 `c421b8e091aa`。双端页面、健康接口及运行时JS/WASM/许可均成功返回，静态运行时具备CORS和一年版本缓存，API未放开CORS。内置浏览器刷新并恢复已有教师体验存档，打开原编程题，仅执行公开样例，结果显示85ms并默认Diff标绿缺少的“！”，旧的Judge0不可用记录与草稿保留；未发送新正式提交、未重置进度。文档检查22份Markdown/298链接/85锚点通过，git diff --check通过。
+
+未重跑：真实登录/arrival全流程恢复与切账号、地图、真实模型/TTS/Judge0、生产部署。上述浏览器页面与后端契约不能代替外部服务验收。
+
+## 本地服务启动核验2026-11-14
+
+在 `reborn` 工作区启动现有 `pythontopia-npc-demo-20261113` 的 db、api、web 容器，未重建镜像、导入课程或重置数据。数据库健康检查通过；`http://127.0.0.1:17254/world`、`/teacher/` 均返回 HTTP 200，17254 代理与 18255 直连 `/api/health` 均返回 `status=ok`，确认 API 与数据库连通。保留原有未提交文件；未执行浏览器登录、课程交互、真实 AI/Judge0 或功能全量回归。
+
 ## 阅读卡片与目录密度核验2026-11-14
 
 PPT/PDF页面上方新增独立图标标题栏，视频/文本使用同一紧凑标题样式；PDF继续按扣除标题栏后的空间适应。快速跳转页面及视频列表采用40px桌面/44px触控最低行高、单行省略、细分隔和当前页底色，完整题名保留在title及可访问文本，重点标签独立。

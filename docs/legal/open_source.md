@@ -7,6 +7,10 @@
 
 ## 当前学生编辑器与字体补充
 
+- go-judge v1.14.1：Yang Gao / criyle，MIT；仅用于独立 Python 判题容器。[固定版本源码](https://github.com/criyle/go-judge/tree/v1.14.1)、[保留的许可原文](../../deploy/go-judge/LICENSE)。构建将许可复制至 `/opt/licenses/`；Python 使用原始官方 Python 3.13 slim 镜像并保留其上游许可文件。
+
+- Pyodide 0.27.7：Pyodide 项目，MPL-2.0；核心运行时通过锁定的 npm 包原样本地分发。[上游源码](https://github.com/pyodide/pyodide/tree/0.27.7)、[保留的许可原文](../../frontend/scripts/PYODIDE-LICENSE.txt)。构建复制许可至运行时静态目录，Python 标准库归属保留在上游分发文件中。
+
 - Monaco Editor 0.57.0：Microsoft，MIT。[保留的许可原文](../../frontend/public/legal/monaco-editor-LICENSE.txt)。仅按需加载编辑器与 Python 语言注册。
 - JetBrains Mono 5.3.0（Fontsource 分发）：字体作者为 The JetBrains Mono Project Authors，SIL Open Font License 1.1。[保留的许可原文](../../frontend/public/legal/jetbrains-mono-OFL.txt)。拉丁字形随应用本地分发，中文采用系统回退。
 

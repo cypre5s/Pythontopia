@@ -1,4 +1,5 @@
 node_modules/
+frontend/public/python-runtime/
 dist/
 coverage/
 __pycache__/
