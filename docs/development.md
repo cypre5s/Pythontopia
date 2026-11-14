@@ -242,48 +242,9 @@ docker compose --env-file .tmp/judge0.env -f deploy/judge0.compose.yml up -d
 
 生成参数按实测锁定：关思考（`reasoning_effort=none`）、`max_tokens` 至少8000、`response_format=json_object`；成功判定需同时满足 JSON 可解析、正文非空、`finish_reason` 不为 `length`。开着思考时单页耗时升到15–55秒，且预算不足会返回空正文。批量校准按页窗滚动摘要，参数见 `backend/app/narration/calibrate.py`。改动 `prompts.py` 的正文会自动改变幂等键（提示词指纹参与哈希），不需要手动改版本号也不会复用旧讲解；`PROMPT_VERSION` 只用于追踪。校准按 40 页一窗、`max_tokens=16000`（默认 8000 会被截断）；103 页整册约 76–100 秒。
 
-### 语音引擎基准（自托管前必跑）
+### 语音合成现状
 
-自托管语音引擎只用受限容器，不发布端口、不动共享机上其他人的容器/镜像/卷。`deploy/tts/` 的 Dockerfile、`fetch-models.sh` 与 `bench.sh` 已写好但**未执行过**；执行者需要在服务器上手动跑，任何一步失败就停并贴日志。
-
-先回答四个问题：① CPU 上 `page_short` 的 RTF ≤1.0；② 峰值 RSS ≤3072 MiB（容器上限 4g）；③ 400 字左右一页能否一次合成；④ 三段中文人工试听（人名、术语、停顿、口气）。任一项不过关就不要继续接工程。
-
-```bash
-# 1. 拉模型（约 1.1 GB，不拉整个 9.3 GB）
-sudo mkdir -p /srv/pythontopia-tts/models && sudo chown "$USER" /srv/pythontopia-tts/models
-WITH_OPTIONAL=1 DEST=/srv/pythontopia-tts/models bash deploy/tts/fetch-models.sh
-
-# 2. 构建（JOBS 故意不占满 48 核；首次约 5–15 分钟，临时占盘 3–5 GB）
-docker build -f deploy/tts/Dockerfile -t pythontopia-reborn-tts:local --build-arg JOBS=8 deploy/tts
-
-# 3. 基准（临时容器 4g/8cpu，端口只绑 127.0.0.1:19191，测完自动删除）
-REBORN_TTS_TOKEN=$(openssl rand -hex 24) bash deploy/tts/bench.sh
-```
-
-产物在 `.tmp/tts-bench/`（`capabilities.json`、`speakers.json`、`page_short.wav`、`page_long.wav`）。把两段 wav 下回来听；听感不过关，后面的工程都是白做。结果按“环境/镜像/模型/启动到ready/page_short/page_long/峰值RSS/中文听感/结论”记到验收文档。
-
-共享机三条纪律：不发布端口（`tts` 只挂内部网络，基准才临时绑 `127.0.0.1`）、不 prune 任何人的镜像/卷、容器 `mem_limit: 4g`。
-
-通过后才接：`deploy/.env` 加 `REBORN_TTS_*`；用 `deploy/compose.yml` + `deploy/compose.tts.yml --profile tts` 起服务（不发布端口）。已知未验证：模型实际 RTF、峰值内存、源码构建能否一次过、官方 release 预编译包是否可用。
-
-语音合成目前支持两种请求形状，由 `REBORN_TTS_PROTOCOL` 选择：
-
-- `openai`（默认）：`POST /v1/audio/speech`，参数 `{model,input,voice,response_format,speed}`，供自托管兼容服务使用。
-- `deepseek`：`POST /v1/tools/tts`，参数 `{text,voice_id,format,filter_markdown}`。只有 `stella`（女声）/`tide`（男声）两个音色，只支持 `wav`/`pcm`，**不支持调语速**，单次最多 10,000 计费字符、30 分钟音频；`filter_markdown` 传 false，否则 `PCA(n_components=0.95)`、`**kwargs` 这类代码标识符会被当成 Markdown 处理。
-
-DeepSeek 返回的是流式 wav，长度字段是 `0xFFFFFFFF` 占位值；客户端会把 RIFF 与 data 两处长度改写为实际字节，既让播放器正常读，也让音频时长可以直接从头部算出来。`pcm` 是 24kHz/16bit/单声道裸数据，会包一层 wav 容器再存。状态码映射：400（文本为空或未过审核）、429（并发超限）、503/504（繁忙或超时）都直接报可读错误，不重试。
-
-本机实测（2026-11-14，DeepSeek 官方接口）：80 字→17.08 秒音频，耗时 2.97 秒；315 字→58.36 秒音频，耗时 10.76 秒，RTF 均约 0.17–0.18。
-
-引擎只产出 wav/pcm，315 字一页 wav 约 2.8MB，所以生成时会转成 mp3 再存：镜像用 `lame`（`REBORN_TTS_MP3_BITRATE` 默认 96k，`REBORN_TTS_TRANSCODE=off` 可关闭）。实现在 `audio._to_mp3`：优先 ffmpeg（开发机常有），否则 lame，两者都没有就保留原始 wav 并如实标注后缀，不假装是 mp3。容器内实测 2.80MB wav → 701KB mp3（4.0 倍），单页耗时约 0.4 秒，103 页整册约 70MB。
-
-**不要用 apt 的 ffmpeg 做这件事**：实测该层会多占 479MB（镜像 663MB → 1.26GB），而 `lame` 只让镜像从 663MB 涨到 674MB。ffmpeg 只在开发机上作为可选路径保留。
-
-自托管引擎的权重不进镜像，从挂载卷加载，拉取方式见 `deploy/tts/`；未配置引擎时只有文字讲解可用。
-
-学生“就这页提问”优先使用 `REBORN_AI_*`，缺失时退回作者期凭据，两者都没有则明确不可用；每日提问上限为 `REBORN_NARRATION_ASK_DAILY`（默认20）。
-
-讲解和音频使用现有私有文件存储挂载，回滚迁移只删表字段不删已存文件。给 env 文件新增变量不会自动进容器，部署时须在 Compose 中显式透传。
+当前只使用云端语音：`REBORN_TTS_PROTOCOL=deepseek` + `REBORN_TTS_BASE_URL=https://api.deepseek.com`。自托管方案（Zonos3-Mini、Kokoro-82M ONNX）在 2026-11-14 试过并暂缓：Kokoro 的中文普通话质量不达标，Zonos3 未做基准；相关脚本与镜像已从仓库移除，评测数据见[验收记录](acceptance.md#本地语音合成试跑核验2026-11-14)。
 
 ### PPT / PPTX转换
 
