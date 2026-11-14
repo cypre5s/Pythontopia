@@ -1,5 +1,7 @@
 """Independent content authoring, reuse, ownership, and reference protection."""
 
+from sqlalchemy import select
+
 from app.auth import hash_password, issue
 from app.content_relations import activity_questions
 from app.models import Activity, Material, Question, User
@@ -103,8 +105,12 @@ def test_material_upload_without_chapter_then_multichapter_metadata_and_teacher_
     extra = client.post("/api/teacher/materials/upload", headers=headers, data={"title": "Disposable", "chapter_ids": "[179,180]"},
                         files={"file": ("delete.txt", b"temporary", "text/plain")}, params={"classroom_id": classroom["id"]})
     disposable = extra.json()["id"]
-    assert client.delete(f"/api/teacher/materials/{disposable}", headers=headers, params={"classroom_id": classroom["id"]}).status_code == 200
-    assert db.get(Material, disposable) is None
+    from test_activity_deletion import preview, confirm
+    db.get(Material, disposable).status = "ready"
+    db.commit()
+    plan = preview(client, teacher, classroom, "material", disposable)
+    assert confirm(client, teacher, classroom, plan).status_code == 200
+    assert db.scalar(select(Material).where(Material.id == disposable)) is None
 
 
 def test_assessment_selection_matches_hundred_answer_limit_atomically(client, db, teacher, student, classroom):
@@ -174,7 +180,9 @@ def test_optional_source_evidence_is_authorized_and_blocks_resource_deletion(cli
     assert client.delete(f"/api/teacher/materials/{material.id}", headers=headers, params={"classroom_id": classroom["id"]}).status_code == 409
     assert client.post("/api/teacher/questions", headers=headers, json=question_body("wrong-source-page",
         source={"material_id": material.id, "page_no": 2}), params={"classroom_id": classroom["id"]}).status_code == 422
-    assert client.delete(f"/api/teacher/questions/{created.json()['id']}", headers=headers, params={"classroom_id": classroom["id"]}).status_code == 200
+    from test_activity_deletion import preview, confirm
+    plan = preview(client, teacher, classroom, "question", created.json()["id"])
+    assert confirm(client, teacher, classroom, plan).status_code == 200
     db.add(AssistantSession(user_id=student["id"], classroom_id=classroom["id"], activity_id=None, material_id=material.id, messages=[]))
     db.commit()
     assert client.delete(f"/api/teacher/materials/{material.id}", headers=headers, params={"classroom_id": classroom["id"]}).status_code == 409

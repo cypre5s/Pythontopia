@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from .auth import require_teacher
 from .db import get_db
 from .teacher_scope import teacher_instance_id, require_scope, new_stable_id, commit_content
-from .models import Activity, Chapter, ChapterRelease, KnowledgePoint, MaterialChapter, QuestionChapter, QuestionKnowledgePoint, QuestDefinition, User
+from .models import Activity, Chapter, KnowledgePoint, QuestionKnowledgePoint, User
 
 router = APIRouter(prefix="/teacher", tags=["curriculum"])
 
@@ -130,15 +130,8 @@ def update_chapter(chapter_id: int, body: ChapterUpdate, db: Annotated[Session, 
 @router.delete("/chapters/{chapter_id}")
 def delete_chapter(chapter_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)], classroom_id: int | None = None):
     instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
-    chapter = editable(db.get(Chapter, chapter_id), user, instance_id)
-    for model in (Activity, MaterialChapter, QuestionChapter, KnowledgePoint, QuestDefinition, ChapterRelease):
-        if db.scalar(select(model).where(model.chapter_id == chapter_id).limit(1)):
-            raise HTTPException(409, "章节已有知识点、材料、活动、任务或发布记录，不能删除")
-    if db.scalar(select(ChapterRelease).where(ChapterRelease.prerequisite_chapter_id == chapter_id).limit(1)):
-        raise HTTPException(409, "章节仍作为发布前置，不能删除")
-    db.delete(chapter)
-    commit_metadata(db, instance_id)
-    return {"ok": True}
+    editable(db.get(Chapter, chapter_id), user, instance_id)
+    raise HTTPException(409, "请先预览删除影响并完成二次确认")
 
 
 class PointInput(BaseModel):

@@ -16,6 +16,7 @@ import {
   Package,
   Settings,
   ArrowUpRight,
+  ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +51,7 @@ import { Activities } from "@/pages/activities";
 import { CourseSettings } from "@/pages/course-settings";
 import { Packages } from "@/pages/packages";
 import { Teaching } from "@/pages/teaching";
+const Judge = lazy(() => import("@/pages/judge").then(module => ({ default: module.Judge })));
 const Authoring = lazy(() =>
   import("@/pages/authoring").then((module) => ({ default: module.Authoring })),
 );
@@ -64,6 +66,7 @@ const nav = [
   { key: "authoring", title: "教学流程", icon: Layers3 },
   { key: "settings", title: "课程设置", icon: Settings },
   { key: "packages", title: "课程包", icon: Package },
+  { key: "judge", title: "评测管理", icon: ShieldCheck },
 ] as const;
 type Page = (typeof nav)[number]["key"];
 function currentPage(): Page {
@@ -370,6 +373,8 @@ function Workbench() {
                 <Activities classroomId={classroom.id} />
               ) : page === "settings" ? (
                 <CourseSettings classroomId={classroom.id} />
+              ) : page === "judge" ? (
+                <Suspense fallback={<Loading />}><Judge classroomId={classroom.id} canManage={user.role === "admin"} /></Suspense>
               ) : page === "authoring" ? (
                 <Suspense fallback={<Loading />}>
                   <Authoring classroomId={classroom.id} />

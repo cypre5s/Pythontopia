@@ -25,7 +25,7 @@ def teacher_instance_id(db, user, classroom_id, *, exclusive=False):
 
 
 def require_scope(item, instance_id):
-    if item is None or item.course_instance_id != instance_id:
+    if item is None or getattr(item, "deleted_at", None) is not None or item.course_instance_id != instance_id:
         raise HTTPException(404, "内容不属于当前班级课程")
     return item
 

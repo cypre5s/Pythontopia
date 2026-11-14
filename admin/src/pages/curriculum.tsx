@@ -38,7 +38,7 @@ export function Curriculum({ classroomId }: { classroomId: number }) {
   useDraft(dirty);
   const deletion = useTableDelete<Chapter | Point>((item) => scoped(
     `/teacher/${"order_index" in item ? "chapters" : "knowledge-points"}/${item.id}`, classroomId,
-  ), course.reload);
+  ), course.reload, { classroomId, kind: item => "order_index" in item ? "chapter" : null });
   function edit(item: Chapter | Point | null) {
     if (dirty && !window.confirm("放弃当前内容的未保存修改？")) return;
     setEditing(item);

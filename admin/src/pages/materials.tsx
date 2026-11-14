@@ -83,7 +83,7 @@ export function Materials({ classroomId }: { classroomId: number }) {
   );
   const safePage = Math.min(page, Math.max(1, Math.ceil(rows.length / size)));
   const visible = rows.slice((safePage - 1) * size, safePage * size);
-  const deletion = useTableDelete<Material>((m) => scoped(`/teacher/materials/${m.id}`, classroomId), list.reload);
+  const deletion = useTableDelete<Material>((m) => scoped(`/teacher/materials/${m.id}`, classroomId), list.reload, { classroomId, kind: () => "material" });
   function edit(m: Material | null) {
     if (dirty && !window.confirm("放弃当前资料的未保存修改？")) return;
     setEditing(m);

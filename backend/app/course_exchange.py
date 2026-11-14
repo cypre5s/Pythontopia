@@ -201,8 +201,12 @@ def write_package(db, instance, root):
             preview_id = preview_ids[_stable(material)]
             export_assets.append({**original_assets.get(preview_id, {}), "id": preview_id, "storage_key": material.content["preview_key"]})
     exported_ids = {asset["id"] for asset in export_assets}
+    retired_materials = db.scalars(select(Material).where(Material.course_instance_id == instance.id,
+                                                        Material.deleted_at.is_not(None)).execution_options(include_deleted=True))
+    retired_keys = {key for row in retired_materials for key in (row.storage_key, row.content.get("preview_key")) if key}
     character_assets = {row[kind][6:] for row in data["npc"] for kind in ("portrait", "sprite") if row[kind].startswith("asset:")}
     export_assets.extend(asset for key, asset in original_assets.items() if key not in exported_ids
+                         and asset["storage_key"] not in retired_keys
                          and (not asset.get("character_kind") or key in character_assets))
     for source in {asset["id"]: asset for asset in export_assets}.values():
         suffix = Path(source["storage_key"]).suffix.lower()
@@ -583,6 +587,16 @@ def _impact(db, instance, bundle):
     compare("manifest", {"package_id": instance.package_id, "name": instance.name, "package_version": instance.package_version} if instance else {},
             {key: bundle["manifest"][key] for key in ("package_id", "name", "package_version")})
     blockers, learning_impact = [], []
+    if instance:
+        from .db import RetirableContent
+        for model in CONTENT_MODELS:
+            if not issubclass(model, RetirableContent):
+                continue
+            incoming_ids = {row["id"] for row in bundle["data"][MODEL_NAMES[model]]}
+            retired = db.scalars(select(model.stable_id).where(model.course_instance_id == instance.id,
+                model.deleted_at.is_not(None), model.stable_id.in_(incoming_ids)).execution_options(include_deleted=True)).all()
+            if retired:
+                blockers.append(f"{MODEL_NAMES[model]} 包含已删除且保留历史的ID，请为新内容使用新ID：" + "、".join(retired[:10]))
     if instance and db.scalar(select(Material.id).where(Material.course_instance_id == instance.id,
                                                        Material.status.in_(["queued", "processing"])).limit(1)):
         blockers.append("班级资料仍在转换，请完成后重新预览")
@@ -597,6 +611,24 @@ def _impact(db, instance, bundle):
         incoming = {kind: {row["id"]: row for row in values} for kind, values in bundle["data"].items()}
         current = {kind: {row["id"]: row for row in values} for kind, values in previous.items()}
         maps = content_mapping(db, instance)
+        # Retired definitions still own historical foreign keys, even when no
+        # learner has used them. Package replacement must not hard-delete their
+        # current parents or fail later as an unexplained integrity error.
+        from sqlalchemy import or_
+        table_kinds = {model.__tablename__: MODEL_NAMES[model] for model in CONTENT_MODELS}
+        for model in CONTENT_MODELS:
+            if not issubclass(model, RetirableContent):
+                continue
+            references = []
+            for foreign in model.__table__.foreign_keys:
+                kind = table_kinds.get(foreign.column.table.name)
+                if kind:
+                    removed_keys = [maps[kind][key] for key in diff[kind]["removed"]]
+                    if removed_keys:
+                        references.append(foreign.parent.in_(removed_keys))
+            if references and db.scalar(select(model).where(model.course_instance_id == instance.id,
+                    model.deleted_at.is_not(None), or_(*references)).execution_options(include_deleted=True).limit(1)):
+                blockers.append("待移除定义仍被历史保留内容引用，请先使用级联删除预览处理，再重新导入")
         attempts = list(db.scalars(select(AssessmentAttempt).where(AssessmentAttempt.classroom_id == instance.classroom_id)))
         submissions = list(db.scalars(select(Submission).where(Submission.classroom_id == instance.classroom_id)))
         active_stories = list(db.scalars(select(StorySession).where(StorySession.classroom_id == instance.classroom_id,

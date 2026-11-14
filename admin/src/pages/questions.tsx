@@ -87,7 +87,7 @@ export function Questions({ classroomId }: { classroomId: number }) {
   );
   const safePage = Math.min(page, Math.max(1, Math.ceil(rows.length / size)));
   const visible = rows.slice((safePage - 1) * size, safePage * size);
-  const deletion = useTableDelete<Question>((q) => scoped(`/teacher/questions/${encodeURIComponent(q.id)}`, classroomId), list.reload);
+  const deletion = useTableDelete<Question>((q) => scoped(`/teacher/questions/${encodeURIComponent(q.id)}`, classroomId), list.reload, { classroomId, kind: () => "question" });
   function edit(q: Question | null) {
     if (dirty && !window.confirm("放弃当前题目的未保存修改？")) return;
     setEditing(q);

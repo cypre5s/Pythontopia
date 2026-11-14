@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from uuid import uuid4
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, text
 from sqlalchemy.orm import Mapped, declared_attr, mapped_column
-from .db import Base
+from .db import Base, RetirableContent
 
 
 def now():
@@ -76,11 +76,12 @@ class Membership(Base):
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id", ondelete="CASCADE"), primary_key=True)
 
 
-class Chapter(CourseContent, Base):
+class Chapter(RetirableContent, CourseContent, Base):
     __tablename__ = "chapters"
     __table_args__ = (
         UniqueConstraint("course_instance_id", "stable_id", name="uq_chapters_instance_stable"),
-        UniqueConstraint("course_instance_id", "order_index", name="uq_chapters_instance_order"),
+        Index("uq_chapters_instance_order", "course_instance_id", "order_index", unique=True,
+              sqlite_where=text("deleted_at IS NULL"), postgresql_where=text("deleted_at IS NULL")),
         Index("uq_chapters_template_order", "order_index", unique=True,
               sqlite_where=text("course_instance_id IS NULL"), postgresql_where=text("course_instance_id IS NULL")),
     )
@@ -91,7 +92,7 @@ class Chapter(CourseContent, Base):
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
 
 
-class KnowledgePoint(CourseContent, Base):
+class KnowledgePoint(RetirableContent, CourseContent, Base):
     __tablename__ = "knowledge_points"
     id: Mapped[int] = mapped_column(primary_key=True)
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True, index=True)
@@ -100,7 +101,7 @@ class KnowledgePoint(CourseContent, Base):
     content: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
-class Material(CourseContent, Base):
+class Material(RetirableContent, CourseContent, Base):
     __tablename__ = "materials"
     id: Mapped[int] = mapped_column(primary_key=True)
     title: Mapped[str] = mapped_column(String(200))
@@ -120,7 +121,7 @@ class MaterialChapter(Base):
     chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id", ondelete="CASCADE"), primary_key=True, index=True)
 
 
-class Activity(CourseContent, Base):
+class Activity(RetirableContent, CourseContent, Base):
     __tablename__ = "activities"
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), index=True)
@@ -169,7 +170,7 @@ class Npc(CourseContent, Base):
         self.direction = value["direction"] if value else "down"
 
 
-class QuestDefinition(CourseContent, Base):
+class QuestDefinition(RetirableContent, CourseContent, Base):
     __tablename__ = "quest_definitions"
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), index=True)
@@ -250,7 +251,7 @@ class LearningRecord(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
-class StoryDefinition(CourseContent, Base):
+class StoryDefinition(RetirableContent, CourseContent, Base):
     __tablename__ = "story_definitions"
     id: Mapped[str] = mapped_column(String(100), primary_key=True)
     chapter_id: Mapped[int | None] = mapped_column(ForeignKey("chapters.id"), nullable=True)
@@ -290,7 +291,7 @@ class ActivityProgress(Base):
     media_progress: Mapped[dict] = mapped_column(JSON, default=dict, server_default=text("'{}'"))
 
 
-class Question(CourseContent, Base):
+class Question(RetirableContent, CourseContent, Base):
     __tablename__ = "questions"
     __table_args__ = (
         UniqueConstraint("course_instance_id", "stable_id", name="uq_questions_instance_stable"),

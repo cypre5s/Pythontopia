@@ -38,7 +38,9 @@ def test_teacher_owns_chapter_and_kc_crud_shared_is_readonly(client, db, teacher
     assert client.delete("/api/teacher/chapters/179", headers=headers, params={"classroom_id": classroom["id"]}).status_code == 403
     assert client.delete(f"/api/teacher/chapters/{cid}", headers=headers, params={"classroom_id": classroom["id"]}).status_code == 409
     assert client.delete(f"/api/teacher/knowledge-points/{kid}", headers=headers, params={"classroom_id": classroom["id"]}).status_code == 200
-    assert client.delete(f"/api/teacher/chapters/{cid}", headers=headers, params={"classroom_id": classroom["id"]}).status_code == 200
+    from test_activity_deletion import preview, confirm
+    plan = preview(client, teacher, classroom, "chapter", cid)
+    assert confirm(client, teacher, classroom, plan).status_code == 200
 
 
 def test_private_chapter_cannot_be_seen_bound_or_published_by_another_teacher(client, db, teacher, student, classroom):

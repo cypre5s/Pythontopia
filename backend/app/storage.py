@@ -29,8 +29,7 @@ from sqlalchemy.orm import Session
 from .auth import current_user, require_teacher
 from .db import SessionLocal, get_db
 from .teacher_scope import teacher_instance_id, require_scope, new_stable_id, commit_content
-from .models import Activity, Chapter, CourseInstance, Material, Question, User
-from .integration_models import AssistantSession
+from .models import Activity, Chapter, CourseInstance, Material, User
 from .content_relations import material_chapter_ids, set_material_chapters
 
 router = APIRouter(tags=["materials"])
@@ -332,19 +331,8 @@ def update_material(material_id: int, body: MaterialUpdate, user: Annotated[User
 @router.delete("/teacher/materials/{material_id}")
 def delete_material(material_id: int, user: Annotated[User, Depends(require_teacher)], db: Annotated[Session, Depends(get_db)], classroom_id: int | None = None):
     instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
-    material = teacher_material(db, user, material_id, edit=True, instance_id=instance_id)
-    if (db.scalar(select(Activity).where(Activity.material_id == material.id).limit(1))
-            or db.scalar(select(AssistantSession).where(AssistantSession.material_id == material.id).limit(1))
-            or any(question.source.get("material_id") == material.id for question in db.scalars(select(Question)))):
-        raise HTTPException(409, "资料已有活动、来源或助教会话引用，不能删除")
-    set_material_chapters(db, material.id, [])
-    db.delete(material)
-    try:
-        commit_content(db, instance_id)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(409, "资料已被引用，请刷新后重试") from exc
-    return {"ok": True}
+    teacher_material(db, user, material_id, edit=True, instance_id=instance_id)
+    raise HTTPException(409, "请先预览删除影响并完成二次确认")
 
 
 def byte_range(value: str | None, size: int) -> tuple[int, int, bool]:

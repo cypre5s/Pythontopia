@@ -243,6 +243,15 @@ def get_activity(
                 "source": {"kc_code": point.content.get("kc_code"), "page_ids": point.content.get("page_refs", [])},
             }
         )
+    questions = learning_questions(db, activity, classroom.teacher_id)
+    if activity.kind == "assessment" and user.role == "student":
+        from .models import AssessmentAttempt
+        attempt = db.scalar(select(AssessmentAttempt).where(AssessmentAttempt.user_id == user.id,
+            AssessmentAttempt.classroom_id == classroom_id, AssessmentAttempt.activity_id == activity.id))
+        if attempt and attempt.state in {"submitted", "legacy"}:
+            historical = {q.id: q for q in db.scalars(select(Question).where(Question.id.in_(attempt.question_ids),
+                Question.course_instance_id == activity.course_instance_id).execution_options(include_deleted=True))}
+            questions = [historical[key] for key in attempt.question_ids if key in historical]
     return {
         "id": activity.id,
         "chapter_id": activity.chapter_id,
@@ -259,7 +268,7 @@ def get_activity(
         "material": material_payload(db, material, chapter_ids=authorized_material_chapters(db, user, classroom_id, material)) if material else None,
         "questions": [
             public_question(q)
-            for q in learning_questions(db, activity, classroom.teacher_id)
+            for q in questions
         ],
     }
 

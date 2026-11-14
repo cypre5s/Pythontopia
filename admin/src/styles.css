@@ -683,3 +683,34 @@ h1,h2,h3,h4,h5,h6 { font-family:var(--font-heading); font-weight:700; }
 .surface { padding:16px; }
 .toolbar { gap:8px; }
 :is(h1,h2,h3,h4,h5,h6) { font-synthesis: weight; }
+
+.judge-service, .judge-submissions { margin-bottom: 16px; }
+.judge-metrics { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 12px; margin: 20px 0; }
+.judge-metrics > div { padding: 12px; border: 1px solid var(--border); border-radius: 8px; }
+.judge-metrics span { display: block; color: var(--muted-foreground); font-size: 12px; }
+.judge-metrics strong { display: block; margin-top: 5px; font-size: 24px; }
+.judge-status { font-weight: 600; white-space: nowrap; }
+.judge-date-filter { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px; padding-block: 12px; }
+.judge-pass { color: #217348; }
+.judge-fail { color: #b2392e; }
+.judge-events { max-height: 220px; overflow: auto; margin-top: 12px; }
+.judge-events li { display: flex; gap: 16px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.judge-events time { flex-shrink: 0; color: var(--muted-foreground); }
+.judge-detail { max-height: 90dvh; display: flex; flex-direction: column; }
+.judge-detail-body { min-height: 0; overflow: auto; padding-right: 6px; }
+.judge-advice { padding: 12px; margin: 16px 0; background: var(--muted); border-radius: 8px; font-size: 13px; line-height: 1.7; }
+.judge-case { padding: 12px 0; border-bottom: 1px solid var(--border); }
+.judge-case summary { cursor: pointer; font-size: 13px; }
+.judge-code, .judge-output pre { background: var(--muted); border-radius: 6px; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.65 ui-monospace,Consolas,monospace; tab-size: 4; }
+.judge-code { max-height: 260px; overflow: auto; }
+.judge-output { min-width: 0; margin: 10px 0; }
+.judge-output h4 { font-size: 12px; margin-bottom: 6px; }
+.judge-output pre { max-height: 200px; overflow: auto; }
+.judge-output-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.judge-output .judge-actual { color: #ab2924; background: #fff1ee; }
+.judge-output .judge-expected { color: #20653e; background: #eef8f1; }
+@media (max-width: 640px) {
+  .judge-metrics { grid-template-columns: 1fr 1fr; }
+  .judge-output-grid { grid-template-columns: 1fr; }
+  .judge-events li { flex-direction: column; gap: 4px; }
+}

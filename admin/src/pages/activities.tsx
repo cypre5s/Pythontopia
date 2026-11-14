@@ -1,7 +1,8 @@
+import { DeleteSelection, useTableDelete } from "@/components/table-delete";
 import { SelectField } from "@/components/select-field";
 import { KnowledgePointPicker } from "@/components/knowledge-point-picker";
 import { useState, type FormEvent } from "react";
-import { Plus, Pencil, ArrowUp, ArrowDown, ListPlus } from "lucide-react";
+import { Plus, Pencil, ArrowUp, ArrowDown, ListPlus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -72,6 +73,7 @@ export function Activities({ classroomId }: { classroomId: number }) {
     [busy, setBusy] = useState(false),
     [dirty, setDirty] = useState(false);
   useDraft(dirty);
+  const deletion = useTableDelete<Activity>(a => scoped(`/teacher/activities/${encodeURIComponent(a.id)}`, classroomId), course.reload, { classroomId, kind: () => "activity" });
   function edit(a: Activity | null, pick = false) {
     if (dirty && !window.confirm("放弃当前活动的未保存修改？")) return;
     setEditing(a);
@@ -295,6 +297,10 @@ export function Activities({ classroomId }: { classroomId: number }) {
                       >
                         <Pencil />
                       </Button>
+                      <Button variant="ghost" size="icon" aria-label={`删除${a.title}`} title="删除活动"
+                        onClick={() => deletion.ask([a])}>
+                        <Trash2 />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -303,6 +309,7 @@ export function Activities({ classroomId }: { classroomId: number }) {
           </Table>
         )}
       </div>
+      <DeleteSelection actions={deletion} />
       <Dialog
         open={open}
         onOpenChange={(v) => {

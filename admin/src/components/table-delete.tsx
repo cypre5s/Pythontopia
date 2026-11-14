@@ -5,10 +5,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { ErrorNotice } from "@/components/common";
 import { api, errorMessage, token } from "@/lib/api";
+import { ContentDeleteDialog, type DeletionKind } from "@/components/content-delete-dialog";
 
 type Row = { id: number | string; title: string };
 
-export function useTableDelete<T extends Row>(url: (row: T) => string, reload: () => void) {
+export function useTableDelete<T extends Row>(url: (row: T) => string, reload: () => void,
+  cascade?: { classroomId: number; kind: (row: T) => DeletionKind | null }) {
   const [selected, setSelected] = useState<T[]>([]);
   const [targets, setTargets] = useState<T[]>([]);
   const [busy, setBusy] = useState(false);
@@ -37,6 +39,7 @@ export function useTableDelete<T extends Row>(url: (row: T) => string, reload: (
   }
   async function confirm() {
     if (busy || !targets.length) return;
+    if (cascade && targets.every(row => cascade.kind(row))) return;
     const currentToken = token();
     const removed = new Set<Row["id"]>();
     const failed: T[] = [];
@@ -64,7 +67,12 @@ export function useTableDelete<T extends Row>(url: (row: T) => string, reload: (
     }
   }
 
-  return { selected, isSelected, toggle, togglePage, ask, confirm, targets, busy, errors, completed, clear: () => setSelected([]) };
+  function cascadeDone() {
+    const ids = new Set(targets.map(row => row.id));
+    setSelected(current => current.filter(row => !ids.has(row.id)));
+    setCompleted(targets.length); setTargets([]); reload();
+  }
+  return { selected, isSelected, toggle, togglePage, ask, confirm, targets, busy, errors, completed, cascade, cascadeDone, clear: () => setSelected([]) };
 }
 
 export function DeleteSelection<T extends Row>({ actions }: { actions: ReturnType<typeof useTableDelete<T>> }) {
@@ -81,7 +89,10 @@ export function DeleteSelection<T extends Row>({ actions }: { actions: ReturnTyp
         </div>
       )}
       {completed > 0 && targets.length === 0 && <p role="status" className="notice-success">已删除 {completed} 条。</p>}
-      <Dialog open={targets.length > 0} onOpenChange={(open) => { if (!open && !busy) ask([]); }}>
+      {actions.cascade && targets.length > 0 && targets.every(row => actions.cascade!.kind(row)) ?
+        <ContentDeleteDialog classroomId={actions.cascade.classroomId}
+          targets={targets.map(row => ({ kind: actions.cascade!.kind(row)!, id: String(row.id) }))}
+          onClose={() => ask([])} onDone={actions.cascadeDone} /> : <Dialog open={targets.length > 0} onOpenChange={(open) => { if (!open && !busy) ask([]); }}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>
             <DialogTitle>{targets.length === 1 ? `删除「${targets[0].title}」` : `删除选中的 ${targets.length} 条内容`}</DialogTitle>
@@ -100,7 +111,7 @@ export function DeleteSelection<T extends Row>({ actions }: { actions: ReturnTyp
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
     </>
   );
 }

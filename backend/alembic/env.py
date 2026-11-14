@@ -2,7 +2,7 @@ from alembic import context
 from sqlalchemy import create_engine, pool
 from app.config import DATABASE_URL
 from app.db import Base
-from app import models, integration_models, course_exchange_models  # noqa: F401 -- register migration metadata
+from app import models, integration_models, course_exchange_models, deletion_models  # noqa: F401 -- register migration metadata
 
 target_metadata = Base.metadata
 

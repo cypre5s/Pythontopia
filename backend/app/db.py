@@ -1,10 +1,24 @@
-from sqlalchemy import create_engine, event
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from datetime import datetime
+from sqlalchemy import DateTime, create_engine, event
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, sessionmaker, with_loader_criteria
 from .config import DATABASE_URL
 
 
 class Base(DeclarativeBase):
     pass
+
+
+class RetirableContent:
+    """Removed from current teaching; retained for immutable learner evidence."""
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+@event.listens_for(Session, "do_orm_execute")
+def current_content_only(state):
+    if state.is_select and not state.is_column_load and not state.execution_options.get("include_deleted", False):
+        state.statement = state.statement.options(with_loader_criteria(
+            RetirableContent, lambda model: model.deleted_at.is_(None), include_aliases=True,
+        ))
 
 
 engine = create_engine(

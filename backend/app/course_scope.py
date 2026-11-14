@@ -32,7 +32,7 @@ def course_clause(db, model, classroom_id):
 
 
 def belongs_to_course(db, item, classroom_id):
-    return item is not None and item.course_instance_id == instance_id(db, classroom_id)
+    return item is not None and getattr(item, "deleted_at", None) is None and item.course_instance_id == instance_id(db, classroom_id)
 
 
 def require_course_content(db, item, classroom_id):

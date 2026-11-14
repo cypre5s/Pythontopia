@@ -6,15 +6,17 @@ import time
 
 import httpx
 
-from .judge import JudgeResult, JudgeSubmissionUnknown, JudgeUnavailable
+from .judge import JudgeNotDispatched, JudgeResult, JudgeSubmissionUnknown, JudgeUnavailable
 
 
 class GoJudgeAdapter:
     def __init__(self, base_url: str | None = None, transport=None):
         self.base_url = (base_url if base_url is not None else os.getenv("REBORN_GO_JUDGE_URL", "")).rstrip("/")
         self.transport = transport
+        self.diagnostics: list[dict] = []
 
     async def execute(self, code: str, cases: list[dict], public_count: int = 0) -> JudgeResult:
+        self.diagnostics = []
         if not self.base_url:
             raise JudgeUnavailable("go-judge 未配置，正式判题不可用；仍可在浏览器运行公开样例")
         if not 1 <= len(cases) <= 20 or not 0 <= public_count <= len(cases):
@@ -49,7 +51,7 @@ class GoJudgeAdapter:
                 except httpx.ConnectError as exc:
                     if states:
                         raise JudgeSubmissionUnknown("判题连接中断，已有部分用例执行；需管理员对账，不自动重送") from exc
-                    raise JudgeUnavailable("go-judge 连接失败") from exc
+                    raise JudgeNotDispatched("go-judge 连接失败，提交保留在队列中") from exc
                 except (httpx.HTTPError, ValueError, KeyError, TypeError, AttributeError) as exc:
                     raise JudgeSubmissionUnknown("go-judge 执行结果不确定；需管理员对账，不自动重送") from exc
                 if remote == "Accepted" and item.get("exitStatus") == 0:
@@ -68,6 +70,12 @@ class GoJudgeAdapter:
                         elif last_line.startswith(("SyntaxError:", "IndentationError:", "TabError:")):
                             state = "compile_error"
                 states.append(state)
+                self.diagnostics.append({
+                    "index": index, "status": state, "stdout": stdout[:16384], "stderr": stderr[:8192],
+                    "output_truncated": len(stdout) > 16384 or len(stderr) > 8192,
+                    "time_ns": item.get("time") if isinstance(item.get("time"), int) else None,
+                    "memory_bytes": item.get("memory") if isinstance(item.get("memory"), int) else None,
+                })
                 # No hidden output, diagnostic text, index or timing is exposed.
                 if index < public_count:
                     samples.append({"status": state, "stdout": stdout[:4000], "stderr": stderr[:2000], "compile_output": ""})

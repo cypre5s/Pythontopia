@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict, Field
@@ -12,10 +13,11 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 from .auth import as_utc, current_user
 from .db import SessionLocal, get_db
-from .integration_models import SubmissionPayload
-from .judge import JudgeSubmissionUnknown, JudgeUnavailable
+from .integration_models import JudgeService, SubmissionDiagnostic, SubmissionPayload
+from .judge import JudgeNotDispatched, JudgeSubmissionUnknown, JudgeUnavailable
+from .judge_management import probe_service, save_health
 from .go_judge import GoJudgeAdapter
-from .models import Classroom, QuestionSecret, Submission, User
+from .models import Classroom, QuestionSecret, Submission, User, now
 
 router = APIRouter(tags=["practice"])
 
@@ -132,30 +134,46 @@ def create_submission(body: SubmissionInput, user: Annotated[User, Depends(curre
 
 @router.get("/submissions/{submission_id}")
 def get_submission(submission_id: str, classroom_id: int, user: Annotated[User, Depends(current_user)], db: Annotated[Session, Depends(get_db)]):
-    from .courses import authorize_activity
+    from .courses import authorize_activity, authorize_classroom
+    from .models import Activity
 
     row = db.get(Submission, submission_id)
     if not row or row.user_id != user.id or row.classroom_id != classroom_id:
         raise HTTPException(404, "提交不存在")
-    authorize_activity(db, user, classroom_id, row.activity_id)
+    authorize_classroom(db, user, classroom_id)
+    activity = db.get(Activity, row.activity_id, execution_options={"include_deleted": True})
+    if activity is None or activity.deleted_at is None:
+        authorize_activity(db, user, classroom_id, row.activity_id)
     return public_submission(row)
 
 
 def _claim_submission(submission_id):
     with SessionLocal() as db:
+        control = db.get(JudgeService, 1, with_for_update=True)
+        if control and (control.paused or control.health.get("status", "healthy") != "healthy"):
+            return None
         changed = db.execute(update(Submission).where(Submission.id == submission_id, Submission.status == "prepared").values(status="dispatching"))
-        db.commit()
         if not changed.rowcount:
             return None
+        diagnostic = db.get(SubmissionDiagnostic, submission_id)
+        if diagnostic is None:
+            db.add(SubmissionDiagnostic(submission_id=submission_id))
+        else:
+            diagnostic.started_at, diagnostic.finished_at, diagnostic.detail = now(), None, ""
+        db.commit()
         row = db.get(Submission, submission_id)
         payload = db.get(SubmissionPayload, submission_id)
         return row.code, payload.cases, payload.public_count
 
 
-def _save_dispatch(submission_id, status, feedback):
+def _save_dispatch(submission_id, status, feedback, diagnostics=None):
     with SessionLocal() as db:
         row = db.get(Submission, submission_id)
         row.status, row.feedback = status, feedback
+        diagnostic = db.get(SubmissionDiagnostic, submission_id)
+        if diagnostic:
+            diagnostic.cases = diagnostics or []
+            diagnostic.finished_at, diagnostic.detail = now(), feedback.get("detail", "")
         db.commit()
 
 
@@ -168,15 +186,21 @@ async def dispatch_one(submission_id: str, adapter: GoJudgeAdapter | None = None
     try:
         result = await adapter.execute(code, cases, public_count)
         status, feedback = result.status, result.feedback
+    except JudgeNotDispatched as exc:
+        status, feedback = "prepared", {"detail": str(exc)}
+        await asyncio.to_thread(save_health, {"status": "unavailable", "detail": "无法连接评测服务，提交保留在队列中"})
     except JudgeUnavailable as exc:
         status, feedback = "infrastructure_error", {"detail": str(exc)}
     except JudgeSubmissionUnknown as exc:
         status, feedback = "submission_unknown", {"detail": str(exc)}
-    await asyncio.to_thread(_save_dispatch, submission_id, status, feedback)
+    await asyncio.to_thread(_save_dispatch, submission_id, status, feedback, getattr(adapter, "diagnostics", []))
 
 
 def _pending_ids():
     with SessionLocal() as db:
+        control = db.get(JudgeService, 1)
+        if control and (control.paused or control.health.get("status", "healthy") != "healthy"):
+            return []
         prepared = list(db.scalars(select(Submission.id).where(Submission.status == "prepared")
                                   .order_by(Submission.created_at, Submission.id).limit(4)))
         return prepared
@@ -195,6 +219,10 @@ async def reconcile_once():
 def _recover_dispatching():
     # Never replay a POST that could have reached an executor before a DB outage/crash.
     with SessionLocal() as db:
+        ids = list(db.scalars(select(Submission.id).where(Submission.status.in_(["dispatching", "queued", "running"]))))
+        if ids:
+            db.execute(update(SubmissionDiagnostic).where(SubmissionDiagnostic.submission_id.in_(ids))
+                       .values(finished_at=now(), detail="服务中断，执行结果不确定；需要管理员对账，不自动重送"))
         db.execute(
             update(Submission)
             .where(Submission.status.in_(["dispatching", "queued", "running"]))
@@ -205,17 +233,24 @@ def _recover_dispatching():
 
 async def judge_worker():
     recovered, delay = False, 1
+    last_probe, healthy = 0.0, False
     while True:
         try:
             if not recovered:
                 await asyncio.to_thread(_recover_dispatching)
                 recovered = True
-            await reconcile_once()
+            if time.monotonic() - last_probe >= 5:
+                health = await probe_service()
+                await asyncio.to_thread(save_health, health, worker=True)
+                healthy, last_probe = health["status"] == "healthy", time.monotonic()
+            if healthy:
+                await reconcile_once()
             delay = 1
         except SQLAlchemyError:
             # Log no connection string, credentials, source code or hidden tests.
             logging.getLogger(__name__).warning("Judge worker database unavailable; retrying in %ss", delay)
             recovered = False
+            last_probe, healthy = 0.0, False
             await asyncio.sleep(delay)
             delay = min(delay * 2, 30)
             continue

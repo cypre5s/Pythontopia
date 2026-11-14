@@ -1,7 +1,7 @@
 """Private integration state, included in the same Alembic metadata."""
 
 from datetime import datetime
-from sqlalchemy import DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base
 from .models import now, uid
@@ -12,6 +12,25 @@ class SubmissionPayload(Base):
     submission_id: Mapped[str] = mapped_column(ForeignKey("submissions.id", ondelete="CASCADE"), primary_key=True)
     cases: Mapped[list] = mapped_column(JSON, default=list)
     public_count: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class JudgeService(Base):
+    __tablename__ = "judge_service"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    paused: Mapped[bool] = mapped_column(Boolean, default=False)
+    health: Mapped[dict] = mapped_column(JSON, default=dict)
+    events: Mapped[list] = mapped_column(JSON, default=list)
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    worker_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class SubmissionDiagnostic(Base):
+    __tablename__ = "submission_diagnostics"
+    submission_id: Mapped[str] = mapped_column(ForeignKey("submissions.id", ondelete="CASCADE"), primary_key=True)
+    cases: Mapped[list] = mapped_column(JSON, default=list)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    detail: Mapped[str] = mapped_column(Text, default="")
 
 
 class AssistantSession(Base):

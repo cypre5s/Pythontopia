@@ -113,9 +113,15 @@ def test_judge_worker_recovers_database_outage_without_replaying_dispatch(client
     async def stop_after_recovery():
         raise asyncio.CancelledError
 
+    async def healthy_probe():
+        return {"status": "healthy", "detail": "test-only healthy executor"}
+
     monkeypatch.setattr(practice, "SessionLocal", flaky_database)
     monkeypatch.setattr(practice.asyncio, "sleep", sleep)
     monkeypatch.setattr(practice, "reconcile_once", stop_after_recovery)
+    monkeypatch.setattr(practice, "probe_service", healthy_probe)
+    from app import judge_management
+    monkeypatch.setattr(judge_management, "SessionLocal", factory)
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(practice.judge_worker())
     db.expire_all()

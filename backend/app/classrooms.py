@@ -320,7 +320,7 @@ def create_activity(body: ActivityInput, db: Annotated[Session, Depends(get_db)]
     from .models import Material
 
     runtime_id = scoped_key(instance_id, "activity", body.id)
-    if db.get(Activity, runtime_id):
+    if db.get(Activity, runtime_id, execution_options={"include_deleted": True}):
         raise HTTPException(409, "活动ID已存在")
     from .curriculum import validate_activity_points
 
@@ -422,6 +422,14 @@ def update_activity(activity_id: str, body: ActivityUpdate, db: Annotated[Sessio
     item.content = content
     commit_content(db, instance_id)
     return {"id": item.id}
+
+
+@router.delete("/teacher/activities/{activity_id}")
+def delete_activity(activity_id: str, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)], classroom_id: int | None = None):
+    from .curriculum import editable
+    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
+    editable(db.scalar(select(Activity).where(Activity.id == activity_id).with_for_update()), user, instance_id)
+    raise HTTPException(409, "请先预览删除影响并完成二次确认")
 
 
 class ActivityQuestionsInput(BaseModel):
@@ -655,7 +663,7 @@ def save_question(db, user, question, body):
 def create_question(body: QuestionInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)], classroom_id: int | None = None):
     instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
     runtime_id = scoped_key(instance_id, "question", body.id)
-    if db.get(Question, runtime_id):
+    if db.get(Question, runtime_id, execution_options={"include_deleted": True}):
         raise HTTPException(409, "题目ID已存在")
     return save_question(db, user, Question(id=runtime_id, stable_id=body.id, course_instance_id=instance_id, owner_id=user.id), body)
 
@@ -689,27 +697,10 @@ def update_question(question_id: str, body: QuestionUpdate, db: Annotated[Sessio
 
 @router.delete("/teacher/questions/{question_id}")
 def delete_question(question_id: str, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)], classroom_id: int | None = None):
-    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
     from .curriculum import editable
-
-    question = editable(db.scalar(select(Question).where(Question.id == question_id).with_for_update()), user, instance_id)
-    if (db.scalar(select(ActivityQuestion).where(ActivityQuestion.question_id == question_id).limit(1))
-            or db.scalar(select(Submission).where(Submission.question_id == question_id).limit(1))
-            or any(question_id in attempt.question_ids for attempt in db.scalars(select(AssessmentAttempt)))):
-        raise HTTPException(409, "题目已有活动或作答引用，请停用保留历史")
-    set_question_chapters(db, question.id, [])
-    set_question_knowledge_points(db, question.id, [])
-    secret = db.get(QuestionSecret, question.id)
-    if secret:
-        db.delete(secret)
-        db.flush()
-    db.delete(question)
-    try:
-        commit_content(db, instance_id)
-    except IntegrityError as exc:
-        db.rollback()
-        raise HTTPException(409, "题目已被引用，请刷新后重试") from exc
-    return {"ok": True}
+    instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
+    editable(db.scalar(select(Question).where(Question.id == question_id).with_for_update()), user, instance_id)
+    raise HTTPException(409, "请先预览删除影响并完成二次确认")
 
 
 @router.get("/teacher/classrooms/{classroom_id}/releases")
