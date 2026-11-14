@@ -7,6 +7,8 @@ import { fileBlob } from "@/lib/api";
 import { narrationApi, type NarrationAudioStatus, type NarrationList } from "@/lib/narration";
 
 const SPEEDS = ["0.7", "0.8", "0.9", "1", "1.1", "1.2", "1.4", "1.6", "1.8", "2"];
+// 预取页数：当前页 + 后 4 页。每页约 100–250KB，五页仍然很轻。
+const PREFETCH = 5;
 
 /**
  * 教师试听：像学生一样从第一页连着听。
@@ -26,7 +28,10 @@ export function NarrationPlayer({
   const [data, setData] = useState<NarrationList | null>(null);
   const [audioState, setAudioState] = useState<NarrationAudioStatus | null>(null);
   const [pageNo, setPageNo] = useState<number | null>(null);
-  const [image, setImage] = useState("");
+  // 页图按页缓存：同时预取后面几页，翻页时不用等网络。
+  const [images, setImages] = useState<Record<number, string>>({});
+  const [failed, setFailed] = useState<number[]>([]);
+  const inFlight = useRef<Set<number>>(new Set());
   const [imageError, setImageError] = useState("");
   const [clip, setClip] = useState("");
   const [playing, setPlaying] = useState(false);
@@ -71,34 +76,61 @@ export function NarrationPlayer({
   const page = data?.pages.find((item) => item.page_no === pageNo) ?? null;
   const hasAudio = page ? playable.includes(page.page_no) : false;
 
-  // 页面图像走 blob：<img> 带不了鉴权头。渲染偶尔会比请求慢，失败重试一次。
+  // 页面图像走 blob：<img> 带不了鉴权头。按页做滑动窗口预取（当前页 + 后 4 页），
+  // 翻页时画面已经就位，避免"音频先响、画面还在转圈"。
+  const cacheRef = useRef<Record<number, string>>({});
   useEffect(() => {
-    if (pageNo === null) return;
+    if (pageNo === null || !playable.length) return;
+    const index = Math.max(0, playable.indexOf(pageNo));
+    const window = playable.slice(index, index + PREFETCH);
+    const windowSet = new Set(window);
     let dropped = false;
-    setImage((previous) => {
-      if (previous) URL.revokeObjectURL(previous);
-      return "";
-    });
-    setImageError("");
+
+    // 淘汰窗口外的缓存，避免几十页图一直占内存
+    const kept: Record<number, string> = {};
+    for (const [page, url] of Object.entries(cacheRef.current)) {
+      if (windowSet.has(Number(page))) kept[Number(page)] = url;
+      else URL.revokeObjectURL(url);
+    }
+    cacheRef.current = kept;
+    setImages(kept);
+
     void (async () => {
-      for (let attempt = 0; attempt < 2; attempt += 1) {
+      for (const target of window) {
+        if (dropped) return;
+        if (cacheRef.current[target] || inFlight.current.has(target)) continue;
+        inFlight.current.add(target);
         try {
-          const blob = await fileBlob(narrationApi.pageImage(classroomId, materialId, pageNo));
-          if (!dropped) setImage(URL.createObjectURL(blob));
-          return;
+          const blob = await fileBlob(narrationApi.pageImage(classroomId, materialId, target));
+          if (dropped) return;
+          const url = URL.createObjectURL(blob);
+          cacheRef.current = { ...cacheRef.current, [target]: url };
+          setImages(cacheRef.current);
         } catch (e) {
-          if (attempt === 1 && !dropped) {
+          if (!dropped && target === pageNo) {
             setImageError(e instanceof Error ? e.message : "页面图像加载失败");
-          } else {
-            await new Promise((resolve) => setTimeout(resolve, 600));
+            setFailed((previous) => (previous.includes(target) ? previous : [...previous, target]));
           }
+        } finally {
+          inFlight.current.delete(target);
         }
       }
     })();
+
     return () => {
       dropped = true;
     };
-  }, [classroomId, materialId, pageNo]);
+  }, [classroomId, materialId, pageNo, playable]);
+
+  // 关闭时释放全部缓存
+  useEffect(
+    () => () => {
+      Object.values(cacheRef.current).forEach((url) => URL.revokeObjectURL(url));
+      cacheRef.current = {};
+      setImages({});
+    },
+    [],
+  );
 
   // 音频：换页即换流，播完自动下一页
   useEffect(() => {
@@ -204,10 +236,20 @@ export function NarrationPlayer({
         ) : (
           <>
             <div className="flex min-h-0 flex-1 items-center justify-center">
-              {image ? (
-                <img src={image} alt={`第 ${pageNo} 页`} className="max-h-full max-w-full rounded object-contain" />
-              ) : (
+              {images[pageNo ?? 0] ? (
+                <img
+                  src={images[pageNo ?? 0]}
+                  alt={`第 ${pageNo} 页`}
+                  className="max-h-full max-w-full rounded object-contain"
+                  onError={() => setImageError("页面图像无法显示")}
+                />
+              ) : failed.includes(pageNo ?? 0) ? (
                 <p className="text-sm text-white/70">{imageError || "这一页没有可预览的页面图像"}</p>
+              ) : (
+                <p className="text-sm text-white/70">
+                  <Loader2 className="mr-2 inline animate-spin" aria-hidden="true" />
+                  正在准备第 {pageNo} 页画面…
+                </p>
               )}
             </div>
             <p className="max-h-[22vh] w-full max-w-4xl overflow-y-auto rounded bg-black/50 p-3 text-sm leading-7 text-white/90">
@@ -238,7 +280,7 @@ export function NarrationPlayer({
         </Button>
       </footer>
 
-      {clip && (
+      {clip && (images[pageNo ?? 0] || failed.includes(pageNo ?? 0)) && (
         <audio
           ref={audioRef}
           src={clip}

@@ -37,3 +37,22 @@ def test_page_image_requires_classroom_scope(client, db, classroom, teacher, stu
     monkeypatch.setattr("app.narration.render.render_page", lambda material, page_no: b"\xff\xd8\xff" + b"\x00" * 600)
 
     assert client.get(url(classroom, material, "/1/page-image"), headers=student["headers"]).status_code == 403
+
+
+def test_student_page_image_is_scoped_to_the_classroom(client, db, classroom, student, monkeypatch):
+    """学生页图走与讲解列表一致的授权；换一个班就必须被拒。"""
+    material = doc_material(db, classroom, "第一页正文")
+    db.commit()
+    monkeypatch.setattr("app.narration.render.render_page", lambda material, page_no: b"\xff\xd8\xff" + b"\x00" * 600)
+
+    response = client.get(f"/api/materials/{material.id}/narrations/1/page-image?classroom_id={classroom['id'] + 99}",
+                          headers=student["headers"])
+    assert response.status_code in (403, 404), response.text
+
+
+def test_page_image_requires_authentication(client, db, classroom, monkeypatch):
+    material = doc_material(db, classroom, "第一页正文")
+    db.commit()
+    monkeypatch.setattr("app.narration.render.render_page", lambda material, page_no: b"\xff\xd8\xff" + b"\x00" * 600)
+    response = client.get(f"/api/materials/{material.id}/narrations/1/page-image?classroom_id={classroom['id']}")
+    assert response.status_code in (401, 403)

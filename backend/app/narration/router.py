@@ -467,6 +467,21 @@ def read_narrations(material_id: int, classroom_id: int, db: Annotated[Session, 
     }
 
 
+@student_router.get("/{page_no}/page-image")
+def read_student_page_image(page_no: int, material_id: int, classroom_id: int,
+                            db: Annotated[Session, Depends(get_db)],
+                            user: Annotated[User, Depends(current_user)]) -> Response:
+    """Student 播放讲解时的大页面：与审校用同一份渲染，鉴权与讲解列表一致。"""
+    from ..courses import authorize_material
+
+    material = authorize_material(db, user, classroom_id, material_id)
+    image = render.render_page(material, page_no)
+    if image is None:
+        raise HTTPException(404, "本页没有可预览的页面图像")
+    return Response(content=image, media_type="image/jpeg",
+                    headers={"Cache-Control": "private, max-age=300"})
+
+
 @student_router.get("/{page_no}/audio")
 def stream_narration_audio(page_no: int, material_id: int, classroom_id: int,
                            db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(current_user)]) -> FileResponse:

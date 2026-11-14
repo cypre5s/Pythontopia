@@ -82,6 +82,7 @@ Paused policy denies new content/progress/assistant requests immediately and pre
 - GET /teacher/materials/{id}/narrations/quota 返回当日额度使用；POST .../narrations/calibrate 产出全篇校准报告，GET .../calibrate 取最近一份，POST .../calibrate/apply 只重生成 draft 页并列出待教师确认的 accepted 页。
 - GET /teacher/materials/{id}/narrations/{page_no}/page-image -> image/jpeg，返回审校用页图（与生成时送模型的页图同一份、同一尺寸）；文本资料或没有可读来源时404。页面图像不返回给学生，学生端仍只看课件本身。
 - POST /teacher/materials/{id}/narrations/{page_no}/audio 合成单页语音：仅 accepted 可合成（draft/未就绪409），无TTS引擎409且不伪造音频，引擎失败502。GET .../narrations/audio 返回逐页就绪状态与音色/模型；GET .../{page_no}/audio/file 为教师试听流（audio/mpeg）。
+- GET /materials/{id}/narrations/{page_no}/page-image?classroom_id -> image/jpeg：学生播放讲解用的大页面，鉴权与讲解列表一致；没有可读来源时404。
 - GET /materials/{id}/narrations?classroom_id 学生只读到 accepted 且未 stale 的页，字段仅 page_no/text/bridge_in/target_seconds/audio/audio_seconds。GET /materials/{id}/narrations/{page_no}/audio?classroom_id 为 audio/mpeg 流，未接受或无录音404。
 - POST /materials/{id}/narrations/{page_no}/ask {question} -> {page_no,answer,cites,remaining,checks}。只有学生主动提问才调模型；上下文限本页原文、该页已接受讲解与邻近页标题，草稿不进入；`cites` 只保留邻近页码，越界丢弃。空问题或超500字422，越界页或无内容页404，无凭据409，日额度用尽429，供应商失败502。
 
