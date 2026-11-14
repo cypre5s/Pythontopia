@@ -25,13 +25,13 @@
       <p v-if="draftError" class="error" role="alert">{{ draftError }} <button v-if="draftConflict" @click="load">重新载入试卷</button><button v-else-if="!paper?.locked" @click="retryDraft">重试保存</button></p>
       <p v-if="loading" class="learning-empty" role="status">正在读取题目…</p>
       <div v-else-if="questions.length" ref="questionRegion" class="question-body" :data-coding="current?.kind === 'python' && viewMode === 'single'" :class="{ 'question-paper': isAssessment && viewMode === 'paper' }" @scroll.passive="syncPaperSelection">
-        <PracticeQuestionCard v-for="question in visibleQuestions" :key="question.id" :question="question" :toolbar-target="actionTarget" :index="questions.findIndex(item => item.id === question.id)" :answer="drafts[question.id]?.answer ?? ''" :code="drafts[question.id]?.code ?? ''" :read-only="Boolean(isAssessment && (paper?.locked || paperSubmissionPending))" :busy="questionBusy(question.id)" :show-submit="!isAssessment" :pending-mode="drafts[question.id]?.pending?.mode" :result="questionResult(question.id)" @running-change="localRunning[question.id] = $event" @update:answer="updateAnswer(question.id, $event)" @update:code="updateCode(question.id, $event)" @submit="submitQuestion(question.id, $event)" />
+        <PracticeQuestionCard v-for="question in visibleQuestions" :key="question.id" :question="question" :toolbar-target="actionTarget" :index="questions.findIndex(item => item.id === question.id)" :answer="drafts[question.id]?.answer ?? ''" :code="drafts[question.id]?.code ?? ''" :read-only="Boolean(isAssessment && (paper?.locked || paperSubmissionPending))" :busy="questionBusy(question.id)" :show-submit="!isAssessment" :pending-mode="drafts[question.id]?.pending?.mode" :result="questionResult(question.id)" :assistant-feedback="assistantFeedback[question.id]" @assistant-feedback="assistantFeedback[question.id] = $event" @running-change="localRunning[question.id] = $event" @update:answer="updateAnswer(question.id, $event)" @update:code="updateCode(question.id, $event)" @submit="submitQuestion(question.id, $event)" />
       </div>
       <p v-else-if="!loading && activity" class="learning-empty">此活动尚未绑定公开题目，请联系教师。</p>
 
       <button v-if="storySessionId && (isAssessment ? paper?.completed : activityProgress?.completed)" class="primary practice-complete" @click="$emit('complete')">{{ isAssessment ? '完成测验' : '完成练习' }}</button>
     </section>
-    <LearningSupportPanel v-if="activity" :key="activity.id" id="practice-assistant-region" tabindex="-1" :hidden="compact && !showAssistant" :inert="compact && !showAssistant" :aria-hidden="compact && !showAssistant" :activity-id="activity.id" :allowed="activity.assistant_allowed" :code="drafts[current?.id ?? '']?.code ?? ''" :role-name="roleName" :portrait-url="rolePortrait" :sprite="role?.sprite" :goals="learningGoals" :question-outline="questionOutline" @cite="cite" @select-question="selectQuestion">
+    <LearningSupportPanel v-if="activity" :key="activity.id" id="practice-assistant-region" tabindex="-1" :hidden="compact && !showAssistant" :inert="compact && !showAssistant" :aria-hidden="compact && !showAssistant" :activity-id="activity.id" :allowed="activity.assistant_allowed" :code="drafts[current?.id ?? '']?.code ?? ''" :assistant-state="assistantState" :role-name="roleName" :portrait-url="rolePortrait" :sprite="role?.sprite" :goals="learningGoals" :question-outline="questionOutline" @cite="cite" @select-question="selectQuestion">
       <template #question-actions>
         <div v-if="isAssessment" class="assessment-actions">
           <template v-if="paper?.locked">
@@ -54,6 +54,7 @@
 </template>
 <script setup lang="ts">
 import { randomUUID } from "../shared/uuid";
+import type { AssistantFeedback } from '../shared/assistantState';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { api, ApiError, notify } from "../shared/api";
 import { useSession } from "../shared/session";
@@ -74,6 +75,7 @@ const emit = defineEmits<{ complete: []; activityKind: [kind: string] }>();
 const session = useSession(), { collapsed: sidebarCollapsed } = useWorkspaceSidebar();
 const activity = ref<Activity>(), activityProgress = ref<ActivityProgress>(), paper = ref<AssessmentAttempt>();
 const drafts = ref<Record<string, Draft>>({}), results = ref<Record<string, Submission>>({});
+const assistantFeedback = ref<Record<string, AssistantFeedback>>({});
 const questionIndex = ref(0), viewMode = ref<'single' | 'paper'>('single'), questionRegion = ref<HTMLElement>();
 const loading = ref(true), error = ref(''), draftError = ref(''), draftConflict = ref(false), requestBusy = ref(false), busyQuestionId = ref('');
 const compact = ref(false), showAssistant = ref(false), paperSubmissionPending = ref(false);
@@ -103,6 +105,8 @@ const actionTarget = computed(() => viewMode.value === 'single' && props.toolbar
 const localRunning = ref<Record<string, boolean>>({});
 const publicRunBusy = computed(() => Object.values(localRunning.value).some(Boolean));
 const current = computed(() => questions.value[questionIndex.value]);
+const assistantState = computed(() => ({ question_id: current.value?.id, answer: drafts.value[current.value?.id ?? '']?.answer ?? '',
+  code: drafts.value[current.value?.id ?? '']?.code ?? '', ...assistantFeedback.value[current.value?.id ?? ''] }));
 const visibleQuestions = computed(() => isAssessment.value && viewMode.value === 'paper' ? questions.value : current.value ? [current.value] : []);
 const role = computed(() => activity.value?.role);
 const roleName = computed(() => role.value?.name ?? '练习助教'), rolePortrait = computed(() => role.value?.portrait);

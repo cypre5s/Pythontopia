@@ -1,7 +1,7 @@
 """Private integration state, included in the same Alembic metadata."""
 
 from datetime import datetime
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 from .db import Base
 from .models import now, uid
@@ -41,11 +41,14 @@ class AssistantSession(Base):
     activity_id: Mapped[str | None] = mapped_column(ForeignKey("activities.id"), index=True, nullable=True)
     material_id: Mapped[int | None] = mapped_column(ForeignKey("materials.id"), nullable=True)
     messages: Mapped[list] = mapped_column(JSON, default=list)
+    revision: Mapped[int] = mapped_column(Integer, default=0)
+    runtime: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
 
 
 class AssistantCall(Base):
     __tablename__ = "assistant_calls"
+    __table_args__ = (UniqueConstraint("session_id", "client_request_id", name="uq_assistant_request"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uid)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     classroom_id: Mapped[int] = mapped_column(ForeignKey("classrooms.id"), index=True)
@@ -55,4 +58,16 @@ class AssistantCall(Base):
     tokens: Mapped[int] = mapped_column(Integer, default=0)
     elapsed_ms: Mapped[int] = mapped_column(Integer, default=0)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    client_request_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    request_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    reserved_tokens: Mapped[int] = mapped_column(Integer, default=0)
+    trace: Mapped[dict] = mapped_column(JSON, default=dict)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=now)
+
+
+class AssistantModelSettings(Base):
+    __tablename__ = "assistant_model_settings"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    revision: Mapped[int] = mapped_column(Integer, default=0)
+    configuration: Mapped[dict] = mapped_column(JSON, default=dict)
+    encrypted_key: Mapped[str] = mapped_column(Text, default="")

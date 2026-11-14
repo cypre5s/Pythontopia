@@ -5,6 +5,24 @@ import AssistantPanel from "../src/features/AssistantPanel.vue";
 import { api } from "../src/shared/api";
 import { useSession } from "../src/shared/session";
 describe("explicit isolated assistant stream fixture", () => {
+  it('sends a frozen state only with an explicit question and retains failed input', async () => {
+    sessionStorage.clear();
+    const pinia = createPinia(); setActivePinia(pinia);
+    const session = useSession(); session.user = { id: 9, student_id: 'fixture', name: '小林', role: 'student' }; session.classroomId = 4;
+    const get = vi.spyOn(api, 'get').mockResolvedValue({ available: true, reason: '' });
+    const post = vi.spyOn(api, 'post').mockResolvedValue({ id: 'state-session' });
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(JSON.stringify({ detail: '测试失败' }), { status: 503 }));
+    const wrapper = mount(AssistantPanel, { props: { activityId: 'practice', allowed: true, roleName: '教练', state: { question_id: 'one', answer: 'A' } }, global: { plugins: [pinia] } });
+    await flushPromises();
+    await wrapper.setProps({ state: { question_id: 'two', answer: 'B' } });
+    expect(fetch).not.toHaveBeenCalled(); expect(post).not.toHaveBeenCalled();
+    await wrapper.get('textarea').setValue('为什么'); await wrapper.get('form').trigger('submit'); await flushPromises();
+    const payload = JSON.parse(fetch.mock.calls[0]![1]!.body as string);
+    expect(payload.state).toEqual({ question_id: 'two', answer: 'B' });
+    expect(payload.expected_revision).toBe(0); expect(payload.client_request_id).toBeTruthy();
+    expect((wrapper.get('textarea').element as HTMLTextAreaElement).value).toBe('为什么');
+    wrapper.unmount(); get.mockRestore(); post.mockRestore(); fetch.mockRestore(); sessionStorage.clear();
+  });
   it("keeps overlong questions intact, reports the limit only when exceeded and never sends them", async () => {
     sessionStorage.clear();
     const pinia = createPinia(); setActivePinia(pinia);

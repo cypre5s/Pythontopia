@@ -173,10 +173,12 @@ def test_assistant_context_uses_current_authorized_material_questions_and_progre
                           json={"classroom_id": classroom.id, "activity_id": activity.id})
     assert created.status_code == 201, created.text
     session, authorized_activity = assistant.authorized_session(db, student, created.json()["id"])
-    context = assistant.build_context(db, student, session, authorized_activity, assistant.MessageInput(message="A question", page_no=1))
+    context = assistant.build_context(db, student, session, authorized_activity,
+                                      assistant.MessageInput(message="A question", state={"question_id": "runtime-q2"}))
     assert [page["material_id"] for page in context["pages"]] == [material.id]
     assert [question["id"] for question in context["activity"]["questions"]] == ["runtime-q2", "runtime-q1"]
-    assert context["progress"] == [{"activity_id": activity.id, "kind": "participation"}]
+    assert context["progress"]["accepted_question_ids"] == []
+    assert context["current_question"]["id"] == "runtime-q2"
     assert "answer" not in context["activity"]["questions"][0]
     assert client.get("/api/assistant/status", headers=headers).json()["model_calls"] == 0
     material.owner_id = other_teacher.id

@@ -56,9 +56,9 @@
   appearance_condition: {always: true}
 ```
 
-位置也可以为 `placement: null`。未放置角色仍可作为活动助教和流程说话人，但不能作为地图交互入口、交谈目标或任务导航对象。朝向为 down/left/right/up。角色至多 100 个，名称 1–80 字，人设最多 4000 字；人设本轮只编辑和保存，不进入模型提示词。角色不自带 dialogue，日常对白统一保存在公共范围的流程中；没有适用流程时显示明确反馈。
+位置也可以为 `placement: null`。未放置角色仍可作为活动助教和流程说话人，但不能作为地图交互入口、交谈目标或任务导航对象。朝向为 down/left/right/up。角色至多 100 个，名称 1–80 字，人设最多 4000 字；人设进入新建助教会话的固定提示词；已有会话保留原设定。角色不自带 dialogue，日常对白统一保存在公共范围的流程中；没有适用流程时显示明确反馈。
 
-课程助教设置集中在 `assistant/settings.yaml`，仅含 `enabled`、`limits` 和可空的 `default_npc_id`。后台独立的“课程设置 → AI 助教”维护这些课程公共设置，角色编辑页只维护角色资料。图书馆始终使用课程默认答疑角色；活动 `npc_key: null` 使用默认角色，非空则指定本课程角色。未配置默认角色时，依赖默认角色的场景不可答疑并显示明确反馈；没有角色列表顺序或固定 ID 回退。旧 `library_npc_id` 被明确拒绝，不提供包兼容。`assistant/roles.yaml`、角色映射和单角色预算已移除。课程预算仍受引擎上限约束。
+课程助教设置集中在 `assistant/settings.yaml`，仅含 `enabled`、`limits` 和可空的 `default_npc_id`。后台独立的“智能体设置 → 本班设置”维护这些课程公共设置，角色编辑页只维护角色资料。图书馆始终使用课程默认答疑角色；活动 `npc_key: null` 使用默认角色，非空则指定本课程角色。未配置默认角色时，依赖默认角色的场景不可答疑并显示明确反馈；没有角色列表顺序或固定 ID 回退。旧 `library_npc_id` 被明确拒绝，不提供包兼容。`assistant/roles.yaml`、角色映射和单角色预算已移除。课程预算仍受引擎上限约束。
 
 素材引用支持 `builtin:<类型>:<素材名>` 和 `asset:<资源ID>`。系统目录由 `shared/world/characters.json` 提供；自定义资源写入私有存储并列入 `assets/index.jsonl`，除通用来源、许可、哈希和大小外，包含 `character_kind`、`width`、`height`，精灵另有 `frame_width`、`frame_height`，可选 `original_name`。包导出只携带当前角色引用的自定义角色素材，取消编辑留下的未引用上传不会进入包。
 

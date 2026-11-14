@@ -127,13 +127,12 @@ def test_real_agent_runtime_tools_scope_and_pre_call_budget(monkeypatch):
             return "test-only-no-network"
 
         def bind_tools(self, tools, **kwargs):
-            assert len(tools) == 5
+            assert len(tools) == 4
             assert {t.name for t in tools} == {
-                "search_course_materials",
-                "get_material_excerpt",
-                "get_activity_context",
-                "get_my_learning_progress",
-                "get_my_submission_feedback",
+                "list_material_pages",
+                "search_material_pages",
+                "read_material_page",
+                "get_reading_progress",
             }
             return self
 
@@ -145,8 +144,8 @@ def test_real_agent_runtime_tools_scope_and_pre_call_budget(monkeypatch):
                     tool_calls=[
                         {
                             "id": "forbidden-resource",
-                            "name": "get_material_excerpt",
-                            "args": {"material_id": 999, "page_no": 1},
+                            "name": "read_material_page",
+                            "args": {"page_no": 999},
                             "type": "tool_call",
                         }
                     ],
@@ -266,6 +265,7 @@ def test_existing_session_reads_current_activity_configuration(client, db, stude
     db.flush()
     activity = db.get(Activity, "ch1-lesson")
     activity.material_id = current.id
+    activity.content = {"learning": {"reading": {"scope": "all"}}}
     activity.title = "更新后的活动"
     db.commit()
     session, activity = assistant.authorized_session(db, db.get(User, student["id"]), sid)

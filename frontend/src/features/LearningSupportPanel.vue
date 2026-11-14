@@ -73,7 +73,7 @@
       </nav>
     </section>
     <section :id="`${panelId}-assistant`" class="support-chat" role="tabpanel" :aria-labelledby="`${panelId}-assistant-tab`" :hidden="tab !== 'assistant'" :inert="tab !== 'assistant'">
-      <AssistantPanel v-if="activityId || materialId" :activity-id="activityId" :material-id="materialId" :allowed="allowed" :role-name="roleName" :portrait-url="portraitUrl" :sprite="sprite" :page-no="pageNo" :video-time="videoTime" :code="code" @cite="(materialId, page) => $emit('cite', materialId, page)" />
+      <AssistantPanel v-if="activityId || materialId" :activity-id="activityId" :material-id="materialId" :allowed="allowed" :role-name="roleName" :portrait-url="portraitUrl" :sprite="sprite" :page-no="pageNo" :video-time="videoTime" :code="code" :state="assistantState" @cite="(materialId, page) => $emit('cite', materialId, page)" />
       <div v-else class="support-unlinked">
         <img v-if="characterImage" class="assistant-portrait" :src="characterImage" alt="" aria-hidden="true" />
         <p>当前资料尚未加载，可继续阅读。</p>
@@ -84,6 +84,7 @@
 <script setup lang="ts">
 import { useCharacterImage } from "../shared/characterImage";
 import type { Npc } from "../shared/types";
+import type { AssistantState } from "../shared/assistantState";
 import { Comment, Fragment, Text, computed, isVNode, nextTick, ref, useAttrs, useSlots, watch, type VNodeChild } from "vue";
 import AssistantPanel from "./AssistantPanel.vue";
 import GameIcon from "../shared/GameIcon.vue";
@@ -128,6 +129,7 @@ const props = defineProps<{
   pageNo?: number;
   videoTime?: number;
   code?: string;
+  assistantState?: AssistantState;
 }>();
 defineEmits<{ cite: [materialId: number, page: number]; selectPage: [page: number]; selectTime: [seconds: number]; selectQuestion: [questionId: string] }>();
 const { collapsed: sidebarCollapsed } = useWorkspaceSidebar();

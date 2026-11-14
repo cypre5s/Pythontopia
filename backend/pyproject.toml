@@ -2,7 +2,7 @@
 name = "pythontopia-reborn-backend"
 version = "0.1.0"
 requires-python = ">=3.12,<3.14"
-dependencies = ["fastapi", "uvicorn", "sqlalchemy>=2,<3", "alembic", "psycopg[binary]", "pydantic>=2", "python-multipart", "httpx", "langchain", "langchain-openai", "pypdf", "boto3", "PyYAML>=6.0.3,<7", "openpyxl>=3.1,<4", "defusedxml>=0.7,<1", "Pillow>=12.3,<14"]
+dependencies = ["fastapi", "uvicorn", "sqlalchemy>=2,<3", "alembic", "psycopg[binary]", "pydantic>=2", "python-multipart", "httpx", "langchain", "langchain-openai", "cryptography>=50,<51", "pypdf", "boto3", "PyYAML>=6.0.3,<7", "openpyxl>=3.1,<4", "defusedxml>=0.7,<1", "Pillow>=12.3,<14"]
 
 [project.optional-dependencies]
 dev = ["pytest", "ruff"]

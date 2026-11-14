@@ -56,7 +56,7 @@ def test_policy_role_and_budgets_apply_only_selected_class(db, teacher, student,
     assert context["role"]["name"] == "引导老师" and context["limits"]["model_calls"] == 2
     assert context["limits"]["timeout_seconds"] == 10
     assert "hidden_cases" not in str(context)
-    assert "PRIVATE-PERSONA-ONLY" not in str(context)
+    assert context["role"]["persona"] == "PRIVATE-PERSONA-ONLY"
     updated = deepcopy(state.configuration)
     updated["assistant"]["enabled"] = False
     state.configuration = updated

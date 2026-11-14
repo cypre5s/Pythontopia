@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from .auth import require_teacher
 from .course_assistant import validate_policy
+from .assistant_settings import configuration, CAPS
 from .course_exchange_models import CoursePackageState
 from .db import get_db
 from .models import CourseInstance, Npc, User
@@ -32,8 +33,10 @@ def role_choices(db, instance_id):
 def read_settings(classroom_id: int, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]):
     instance_id = teacher_instance_id(db, user, classroom_id)
     state = db.get(CoursePackageState, instance_id)
+    system = configuration(db, include_key=False)
     return {"revision": db.get(CourseInstance, instance_id).revision,
-            "assistant": state.configuration.get("assistant", {}) if state else {}, "roles": role_choices(db, instance_id)}
+            "assistant": state.configuration.get("assistant", {}) if state else {}, "roles": role_choices(db, instance_id),
+            "system_limits": {key: system[key] for key in CAPS}}
 
 
 @router.put("")
@@ -45,6 +48,9 @@ def save_settings(classroom_id: int, body: SettingsInput, db: Annotated[Session,
         raise HTTPException(409, "课程已修改，请重新加载后再保存；当前草稿仍保留")
     try:
         validate_policy(body.assistant, {"npc": role_choices(db, instance_id)})
+        system = configuration(db, include_key=False)
+        if any(value > system[key] for key, value in body.assistant.get("limits", {}).items()):
+            raise ValueError("本班预算不能高于全站上限")
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
     state = db.get(CoursePackageState, instance_id)

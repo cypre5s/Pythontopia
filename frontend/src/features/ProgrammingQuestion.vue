@@ -82,13 +82,15 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, ref, watch, onMounted, onBeforeUnmount } from "vue";
 import GameIcon from "../shared/GameIcon.vue";
+import { randomUUID } from '../shared/uuid';
+import type { AssistantFeedback, AssistantLocalRun } from '../shared/assistantState';
 import { createPythonRunner, sameOutput } from "../shared/pythonRunner";
 import { outputDiff, visibleDiffText } from "../shared/outputDiff";
 import type { Question, Submission, SubmissionStatus } from "../shared/types";
 import { pendingSubmissionStates, submissionStatusName } from "../shared/practicePresentation";
 const CodeEditor = defineAsyncComponent(() => import("./CodeEditor.vue"));
-const props = withDefaults(defineProps<{ question: Question; index: number; answer: string; code: string; readOnly?: boolean; busy?: boolean; showSubmit?: boolean; pendingMode?: 'submit'; toolbarTarget?: string; result?: Submission }>(), { readOnly: false, busy: false, showSubmit: true });
-const emit = defineEmits<{ runningChange: [running: boolean]; "update:answer": [value: string]; "update:code": [value: string]; submit: [mode: "submit"] }>();
+const props = withDefaults(defineProps<{ question: Question; index: number; answer: string; code: string; readOnly?: boolean; busy?: boolean; showSubmit?: boolean; pendingMode?: 'submit'; toolbarTarget?: string; result?: Submission; assistantFeedback?: AssistantFeedback }>(), { readOnly: false, busy: false, showSubmit: true });
+const emit = defineEmits<{ runningChange: [running: boolean]; "update:answer": [value: string]; "update:code": [value: string]; submit: [mode: "submit"]; assistantFeedback: [feedback: AssistantFeedback] }>();
 const workbench = ref<HTMLElement>();
 const problemWidth = ref(47), editorHeight = ref(57);
 const dragAxis = ref<'width' | 'height' | null>(null);
@@ -126,8 +128,9 @@ const selectedSample = computed(()=>props.question.samples[activeCase.value]);
 
 const running = ref(false), runError = ref(''), runStopped = ref(false);
 type CaseResult = { stdout: string; error: string; status: SubmissionStatus };
-const localResults = ref<CaseResult[]>([]);
-const resultSource = ref<'local' | 'submission'>(props.result ? 'submission' : 'local');
+const localResults = ref<CaseResult[]>(props.assistantFeedback?.local_run?.cases ?? []);
+const latestRun = ref<AssistantLocalRun | undefined>(props.assistantFeedback?.local_run);
+const resultSource = ref<'local' | 'submission'>(props.assistantFeedback?.displayed === 'local_run' ? 'local' : props.result ? 'submission' : 'local');
 const judging = computed(() => running.value || props.busy || Boolean(props.result && pendingSubmissionStates.includes(props.result.status)));
 const displayedResults = computed<CaseResult[]>(() => resultSource.value === 'local' ? localResults.value : (props.result?.feedback.samples ?? []).map(sample => ({ stdout: sample.stdout ?? '', error: [sample.stderr, sample.compile_output].filter(Boolean).join('\n'), status: sample.status })));
 const selectedResult = computed(() => displayedResults.value[activeCase.value]);
@@ -159,6 +162,11 @@ const outcome = computed<SubmissionStatus | undefined>(() => {
 });
 const outcomeTitle = computed(() => runStopped.value && resultSource.value === 'local' ? '已停止运行' : outcome.value === 'accepted' ? '通过' : outcome.value === 'wrong_answer' ? '解答错误' : outcome.value === 'runtime_error' || outcome.value === 'compile_error' ? '执行出错' : outcome.value ? submissionStatusName[outcome.value] : '');
 const outcomeTone = computed(() => runStopped.value && resultSource.value === 'local' ? 'warning' : outcome.value === 'accepted' ? 'success' : ['submission_unknown', 'infrastructure_error'].includes(outcome.value ?? '') ? 'warning' : 'error');
+watch([latestRun, resultSource, activeCase], () => emit('assistantFeedback', {
+  local_run: latestRun.value,
+  displayed: resultSource.value === 'local' ? 'local_run' : 'submission',
+  selected_case: activeCase.value,
+}), { deep: true });
 watch(() => [props.result, props.busy], () => { resultSource.value = 'submission'; runError.value = ''; tab.value = 'results';
   if (props.result && !pendingSubmissionStates.includes(props.result.status)) activeCase.value = Math.max(0, (props.result.feedback.samples ?? []).findIndex(sample => sample.status !== 'accepted'));
 });
@@ -191,7 +199,12 @@ async function runSamples() {
       localResults.value.push({stdout:result.stdout,error:result.stderr,status:result.stderr ? 'runtime_error' : sameOutput(result.stdout,sample.output) ? 'accepted' : 'wrong_answer'});
     }
   } catch(e) { if (version === runVersion) { runStopped.value=currentController.signal.aborted; runError.value=e instanceof Error ? e.message : '运行失败'; } }
-  finally { if (version === runVersion) { runDuration.value=Math.round(performance.now()-started); running.value=false; emit('runningChange', false); if (!runError.value) activeCase.value=Math.max(0,localResults.value.findIndex(item=>item.status !== 'accepted')); } }
+  finally { if (version === runVersion) { runDuration.value=Math.round(performance.now()-started); running.value=false; emit('runningChange', false); if (!runError.value) activeCase.value=Math.max(0,localResults.value.findIndex(item=>item.status !== 'accepted'));
+    const cap = Math.min(16000, Math.floor(60000 / Math.max(1, localResults.value.length)));
+    const bounded = (value: string) => value.length > cap ? value.slice(0, cap - 20) + '\n（输出过长，已省略）' : value;
+    latestRun.value = { question_id: props.question.id, run_id: randomUUID(), code: source, completed_at: new Date().toISOString(), duration_ms: runDuration.value,
+      cases: localResults.value.map(item => ({ ...item, stdout: bounded(item.stdout), error: bounded(item.error) })), error: runError.value.slice(0, 2000), stopped: runStopped.value };
+  } }
 }
 onBeforeUnmount(()=>{ runVersion++; controller?.abort(); pythonRunner?.dispose(); emit('runningChange', false); });
 const headingId = computed(() => `practice-question-${props.question.id}`);

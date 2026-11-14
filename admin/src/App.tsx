@@ -64,7 +64,7 @@ const nav = [
   { key: "questions", title: "题库", icon: ListChecks },
   { key: "activities", title: "学习活动", icon: BookOpen },
   { key: "authoring", title: "教学流程", icon: Layers3 },
-  { key: "settings", title: "课程设置", icon: Settings },
+  { key: "settings", title: "智能体设置", icon: Settings },
   { key: "packages", title: "课程包", icon: Package },
   { key: "judge", title: "评测管理", icon: ShieldCheck },
 ] as const;
@@ -372,7 +372,7 @@ function Workbench() {
               ) : page === "activities" ? (
                 <Activities classroomId={classroom.id} />
               ) : page === "settings" ? (
-                <CourseSettings classroomId={classroom.id} />
+                <CourseSettings classroomId={classroom.id} isAdmin={user.role === 'admin'} />
               ) : page === "judge" ? (
                 <Suspense fallback={<Loading />}><Judge classroomId={classroom.id} canManage={user.role === "admin"} /></Suspense>
               ) : page === "authoring" ? (

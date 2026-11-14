@@ -46,7 +46,7 @@ def test_library_context_and_stream_contract(client, db, student, classroom, mon
     def factory(context, references, stats):
         assert context['role']['name'] == '图书管理员'
         assert context['activity']['id'] is None
-        assert context['activity']['questions'] == [] and context['submissions'] == []
+        assert context['activity']['questions'] == [] and context['submission'] is None
         assert all(p['material_id'] == 186 for p in context['pages'])
         assert 'hidden_cases' not in json.dumps(context)
         return TestAgent()

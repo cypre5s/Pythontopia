@@ -1,10 +1,10 @@
-"""Course assistant settings. Persona text is authored but not sent to models."""
+"""Course assistant limits and shared character identity."""
 import os
 from fastapi import HTTPException
 from .course_exchange_models import CoursePackageState
 from .course_instances import classroom_course
 
-CAPS = {"model_calls": 3, "tool_calls": 5, "output_tokens": 512, "request_tokens": 12000, "timeout_seconds": 45}
+from .assistant_settings import CAPS, configuration
 
 
 def validate_policy(value, bundle_data):
@@ -47,9 +47,12 @@ def ensure_enabled(db, classroom_id):
 
 def runtime_policy(db, classroom_id, activity=None, npc=None):
     value = policy(db, classroom_id)
-    limits = {key: min(value.get("limits", {}).get(key, cap), cap) for key, cap in CAPS.items()}
-    limits["request_tokens"] = min(limits["request_tokens"], int(os.getenv("REBORN_AI_REQUEST_TOKEN_RESERVATION", "12000")))
-    limits["timeout_seconds"] = min(limits["timeout_seconds"], int(os.getenv("REBORN_AI_TIMEOUT_SECONDS", "45")))
+    global_config = configuration(db, include_key=False)
+    limits = {key: min(value.get("limits", {}).get(key, global_config[key]), global_config[key], cap) for key, cap in CAPS.items()}
+    if os.getenv("REBORN_AI_REQUEST_TOKEN_RESERVATION"):
+        limits["request_tokens"] = min(limits["request_tokens"], int(os.environ["REBORN_AI_REQUEST_TOKEN_RESERVATION"]))
+    if os.getenv("REBORN_AI_TIMEOUT_SECONDS"):
+        limits["timeout_seconds"] = min(limits["timeout_seconds"], int(os.environ["REBORN_AI_TIMEOUT_SECONDS"]))
     return {}, limits
 
 
@@ -58,6 +61,6 @@ def decorate_context(db, classroom_id, activity, npc, context):
     role = presentation(db, classroom_id, npc)
     if role is None:
         raise HTTPException(409, "请先配置此学习场景的助教角色")
-    context["role"] = {**role, "tone": "温和、清晰，以分层提示引导学生自己思考"}
+    context["role"] = {**role, "persona": npc.persona, "tone": "温和、清晰，以分层提示引导学生自己思考"}
     _, context["limits"] = runtime_policy(db, classroom_id)
     return context

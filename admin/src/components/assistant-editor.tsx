@@ -93,7 +93,7 @@ export function AssistantEditor({ data, onChange, classroomId, focusTarget, onUp
             onChange={(event) => updateRole({ ...role, name: event.target.value })} /></div>
           <div className="field"><Label htmlFor="character-persona">AI 助教人设描述</Label><Textarea id="character-persona" value={role.persona} maxLength={4000} rows={8}
             placeholder="角色的身份、性格、说话习惯与教学风格" onChange={(event) => updateRole({ ...role, persona: event.target.value })} />
-            <p className="hint">当前只保存人设，尚未用于 AI 回复。</p></div>
+            <p className="hint">人设用于新建的学习与练习对话；已有对话保留原角色设定。</p></div>
           <p className="text-sm text-muted-foreground">{role.placement
             ? `${data.catalog.maps.find((map) => map.key === role.placement?.map_key)?.label ?? role.placement.map_key}（${role.placement.tile_x}, ${role.placement.tile_y}）`
             : "未放置，可到地图交互与开放规则中安排位置。"}

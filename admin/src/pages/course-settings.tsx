@@ -8,16 +8,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api, errorMessage } from "@/lib/api";
 import { useDraft } from "@/lib/drafts";
+import { AssistantModelSettings } from '@/components/assistant-model-settings';
 
 type AssistantSettings = { enabled?: boolean; default_npc_id?: string | null; limits?: Record<string, number> };
-type Settings = { revision: number; assistant: AssistantSettings; roles: { id: string; name: string }[] };
+type Settings = { revision: number; assistant: AssistantSettings; roles: { id: string; name: string }[]; system_limits?: Record<string, number> };
 const budgets = [
-  ["model_calls", "每次最多模型调用", 3, 1], ["tool_calls", "每次最多工具调用", 5, 0],
-  ["output_tokens", "回复令牌上限", 512, 1], ["request_tokens", "请求令牌预算", 12000, 1],
-  ["timeout_seconds", "超时秒数", 45, 1],
+  ["model_calls", "每次最多模型调用", 6, 1], ["tool_calls", "每次最多工具调用", 12, 0],
+  ["output_tokens", "回复令牌上限", 2048, 1], ["request_tokens", "请求令牌预算", 262144, 1],
+  ["timeout_seconds", "超时秒数", 120, 1],
 ] as const;
 
-export function CourseSettings({ classroomId }: { classroomId: number }) {
+export function CourseSettings({ classroomId, isAdmin = false }: { classroomId: number; isAdmin?: boolean }) {
   const [saved, setSaved] = useState<Settings | null>(null);
   const [draft, setDraft] = useState<AssistantSettings>({});
   const [error, setError] = useState("");
@@ -44,7 +45,7 @@ export function CourseSettings({ classroomId }: { classroomId: number }) {
     finally { setBusy(false); }
   }
   return <>
-    <PageHeader title="课程设置" description="设置本班课程共用的 AI 答疑角色、开关与预算。">
+    <PageHeader title="智能体设置" description="学习与练习分别提供辅导，共用本班角色设置和调用预算。">
       {dirty && <Button variant="ghost" disabled={busy} onClick={() => {
         if (saved && window.confirm("放弃课程设置的未保存修改？")) { setDraft(saved.assistant); setError(""); }
       }}><Undo2 />取消编辑</Button>}
@@ -53,7 +54,7 @@ export function CourseSettings({ classroomId }: { classroomId: number }) {
     <ErrorNotice message={error} />
     {message && !dirty && <p role="status" className="hint">{message}</p>}
     {!saved ? (!error && <Loading />) : <fieldset disabled={busy} aria-busy={busy} className="surface space-y-6 p-6">
-      <h2 className="font-semibold">AI 助教</h2>
+      <h2 className="font-semibold">本班设置</h2>
       <Label className="gap-2"><Checkbox checked={draft.enabled ?? true} onCheckedChange={enabled => setDraft({ ...draft, enabled })} />开放本班课程 AI 答疑</Label>
       <div className="field max-w-lg">
         <Label htmlFor="default-npc">课程默认答疑角色</Label>
@@ -70,11 +71,12 @@ export function CourseSettings({ classroomId }: { classroomId: number }) {
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {budgets.map(([key, label, max, min]) => <div className="field" key={key}>
             <Label htmlFor={`budget-${key}`}>{label}</Label>
-            <Input id={`budget-${key}`} type="number" min={min} max={max} value={draft.limits?.[key] ?? max}
+            <Input id={`budget-${key}`} type="number" min={min} max={saved.system_limits?.[key] ?? max} value={draft.limits?.[key] ?? saved.system_limits?.[key] ?? max}
               onChange={event => setDraft({ ...draft, limits: { ...draft.limits, [key]: Number(event.target.value) } })} />
           </div>)}
         </div>
       </section>
     </fieldset>}
+    {isAdmin && <AssistantModelSettings onSaved={limits => setSaved(current => current ? { ...current, system_limits: limits } : current)} />}
   </>;
 }

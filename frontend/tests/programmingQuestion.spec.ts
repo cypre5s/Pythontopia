@@ -21,6 +21,11 @@ it("public runs never emit a formal submission, while explicit submit does", asy
   expect(runPython).toHaveBeenCalledWith("print(input())", "hello", expect.any(AbortSignal));
   expect(wrapper.text()).toContain("通过");
   expect(wrapper.emitted("submit")).toBeUndefined();
+  const state = wrapper.emitted('assistantFeedback')?.at(-1)?.[0] as { local_run: {code:string;question_id:string;cases:{stdout:string}[]}; displayed:string };
+  expect(state.displayed).toBe('local_run');
+  expect(state.local_run.code).toBe('print(input())');
+  expect(state.local_run.question_id).toBe('q');
+  expect(state.local_run.cases[0]?.stdout).toBe('hello\n');
   await wrapper.findAll("button").find(b=>b.text()==="提交代码")!.trigger("click");
   expect(wrapper.emitted("submit")).toEqual([["submit"]]);
   wrapper.unmount();

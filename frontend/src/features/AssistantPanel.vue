@@ -47,7 +47,8 @@
     <p v-else-if="!available" class="assistant-service-notice" role="status">
       {{ unavailable || "助教暂不可用，可以继续阅读或练习。" }}
     </p>
-    <p v-else-if="busy" class="assistant-service-notice" role="status">正在回复…</p>
+    <p v-else-if="busy" class="assistant-service-notice" role="status">{{ phase }}</p>
+    <p v-if="roleChanged" class="assistant-service-notice">角色设置已更新，开启新对话后生效。</p>
     <form class="assistant-composer" @submit.prevent="send">
       <label class="assistant-sr-only" :for="inputId"
         >向助教提问</label
@@ -87,6 +88,8 @@ import type { Npc } from "../shared/types";
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { api, notify } from "../shared/api";
 import "./assistantUi.css";
+import { randomUUID } from "../shared/uuid";
+import type { AssistantState } from "../shared/assistantState";
 import { useSession } from "../shared/session";
 const props = defineProps<{
   activityId?: string;
@@ -96,6 +99,7 @@ const props = defineProps<{
   pageNo?: number;
   videoTime?: number;
   code?: string;
+  state?: AssistantState;
   roleName: string;
   portraitUrl?: string;
   sprite?: Npc["sprite"];
@@ -114,6 +118,8 @@ const session = useSession(),
     { material_id: number; page_no: number; title: string }[]
   >([]);
 const targetKey = computed(() => props.activityId ?? `material:${props.materialId}`);
+const phase = ref('正在回复…'), roleChanged = ref(false);
+let revision = 0;
 const storageKey = computed(() => `assistant:${session.user?.id}:${session.classroomId}:${targetKey.value}`);
 const inputId = computed(() => `assistant-message-${targetKey.value}`);
 const questionLength = computed(() => Array.from(question.value).length);
@@ -126,6 +132,7 @@ async function restore() {
   const current = ++generation;
   cancel();
   sessionId = "";
+  revision = 0; roleChanged.value = false;
   available.value = false;
   unavailable.value = "正在连接助教…";
   question.value = "";
@@ -149,9 +156,10 @@ async function restore() {
   const savedId = sessionStorage.getItem(key) ?? "";
   if (!savedId) return;
   try {
-    const saved = await api.get<{ messages: { role: string; content: string }[] }>(`/assistant/sessions/${savedId}`);
+    const saved = await api.get<{ revision: number; role_changed: boolean; messages: { role: string; content: string }[] }>(`/assistant/sessions/${savedId}`);
     if (current !== generation) return;
     sessionId = savedId;
+    revision = saved.revision ?? 0; roleChanged.value = saved.role_changed ?? false;
     messages.value = saved.messages.filter(m => m.role === "user" || m.role === "assistant").map(m => ({ role: m.role, text: m.content }));
   } catch {
     // Keep the recovery pointer when history is temporarily unavailable.
@@ -178,6 +186,7 @@ async function newConversation() {
     if (current !== generation) return;
     sessionStorage.setItem(key, created.id);
     sessionId = created.id;
+    revision = 0; roleChanged.value = false;
     messages.value = []; references.value = []; question.value = ""; copiedIndex.value = null;
     startingConversation.value = false;
     generation++;
@@ -207,6 +216,9 @@ async function send() {
   const activeController = new AbortController();
   controller = activeController;
   const text = question.value;
+  const state: AssistantState = JSON.parse(JSON.stringify(props.state ?? { page_no: props.pageNo, video_time: props.videoTime, code: props.code }));
+  const clientRequestId = randomUUID();
+  phase.value = '正在回复…';
   question.value = "";
   messages.value.push({ role: "user", text }, { role: "assistant", text: "" });
   const reply = messages.value[messages.value.length - 1]!;
@@ -231,9 +243,9 @@ async function send() {
       },
       body: JSON.stringify({
         message: text,
-        page_no: props.pageNo,
-        video_time: props.videoTime,
-        code: props.code,
+        state,
+        client_request_id: clientRequestId,
+        expected_revision: revision,
       }),
       signal: activeController.signal,
     });
@@ -272,9 +284,12 @@ async function send() {
             detail?: string;
             request_id?: string;
             items?: typeof references.value;
+            revision?: number;
+            role_changed?: boolean;
           };
-          if (event === "meta") requestId = data.request_id ?? "";
-          if (event === "token") reply.text += data.text ?? "";
+          if (event === "meta") { requestId = data.request_id ?? ""; revision = data.revision ?? revision; roleChanged.value = data.role_changed ?? false; }
+          if (event === "status") phase.value = data.text ?? '正在整理上下文…';
+          if (event === "token") { phase.value = '正在回复…'; reply.text += data.text ?? ""; }
           if (event === "references") references.value = data.items ?? [];
           if (event === "error") throw new Error(data.detail ?? "助教服务错误");
         }
@@ -288,6 +303,7 @@ async function send() {
     if (e instanceof Error && e.name === "AbortError") {
       reply.text += "\n[已停止]";
     } else {
+      if (!question.value) question.value = text;
       const detail = e instanceof Error ? e.message : "助教调用失败";
       reply.text += `\n${detail}`;
       notify(detail);

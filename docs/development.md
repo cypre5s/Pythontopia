@@ -205,9 +205,11 @@ REBORN_AI_API_KEY=
 docker compose --env-file .tmp/npc-demo-20261113.env -p pythontopia-npc-demo-20261113 -f deploy/compose.yml up -d --no-deps api
 ```
 
-此命令从仓库根目录执行，仅针对当前本地体验环境；服务凭据不在教师课程设置页填写，课程设置只控制开放、默认角色与预算。缺 Key 时仍显示不可用，不发起模型请求。
+以上环境配置仅在尚未保存后台全站模型设置时生效。管理员可在“智能体设置 → 全站模型与上下文”填写 API 地址、模型和密钥，保存后无需重启；教师只能维护本班开关、默认角色及不高于全站上限的预算。保存不调用模型，点击“测试已保存连接”才发一次短请求。缺 Key 时显示不可用。
 
-默认每次最多3次模型调用、5次工具调用、45秒，每次模型输出最多512 token；用户每日12请求/120000 token、班级每日100请求/1200000 token。预算参数见 `backend/app/assistant.py` 的 `REBORN_AI_*`；修改后在隔离环境验证。重启中断的回复不会自动重发，也不将离线测试称为真实模型验收。
+默认每次提问最多6次助教模型调用、12次工具调用、120秒，回复最多2048 tokens，累计请求预算262144 tokens；最多另加一次摘要调用，计入实际额度。每日仍为用户12请求/120000 tokens、班级100请求/1200000 tokens；实际可用请求预算还受每日剩余额度限制。默认应用上下文上限32768、压缩触发24576，须根据供应商模型容量调整；未知模型使用保守估算。显式设置的 `REBORN_AI_REQUEST_TOKEN_RESERVATION`、`REBORN_AI_TIMEOUT_SECONDS` 仍可收紧运行上限，不再默认固定为12000/45。重启不自动重发。
+
+后台 API Key 使用 Fernet 加密保存在独立配置表，主密钥默认 `REBORN_STORAGE_ROOT/.secrets/assistant.key`（Compose 为 `/app/storage/.secrets/assistant.key`）；可用 `REBORN_AI_MASTER_KEY_FILE` 指定私有路径。首次保存自动以独占创建方式生成，Linux权限0600，存储目录0700。备份数据库必须同时备份对应主密钥；主密钥丢失或不匹配时调用明确失败，管理员可重新填写密钥。禁止提交到 Git、放入课程包或公开文件服务；API日志和响应不输出密钥。沿用现有存储卷，无需增加容器或消息队列。迁移先执行 `alembic upgrade head` 至 f942bc358da1，再更新双前端；旧聊天历史保留，新消息会补全状态。
 
 ### go-judge（默认包含，仅 Python）
 
