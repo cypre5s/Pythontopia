@@ -1,23 +1,17 @@
 <template>
   <div class="pdf-reader" :aria-busy="loading || rendering">
     <div class="pdf-page-surface">
-      <h2 class="game-card-title reader-card-title"><GameIcon name="description"/>{{ kind === "presentation" ? "PPT 浏览" : "PDF 浏览" }}<button
-        v-if="materialId"
-        type="button"
-        class="reader-listen-toggle"
-        :aria-pressed="listen"
-        @click="emit('listen', !listen)"
-      ><GameIcon :name="listen ? 'stop' : 'play'" />{{ listen ? "退出播放" : "一键播放" }}</button></h2>
-      <div ref="stage" class="pdf-page-stage">
+      <h2 class="game-card-title reader-card-title"><GameIcon name="description"/>{{ kind === "presentation" ? "PPT 浏览" : "PDF 浏览" }}</h2>
+      <div ref="stage" class="pdf-page-stage" :class="{ 'is-player': playerStage }">
         <LectureStage
-          v-if="listen && materialId"
-          :material-id="materialId"
+          v-if="playerStage"
+          :material-id="materialId!"
           :page-no="page"
           :total-pages="count"
           @page="emit('page', $event)"
         />
         <canvas
-          v-show="!listen && rendered && !error"
+          v-show="!playerStage && rendered && !error"
           ref="canvas"
           aria-label="PDF课件当前页"
           aria-describedby="pdf-reading-position"
@@ -58,14 +52,14 @@
 <script setup lang="ts">
 import GameIcon from "../shared/GameIcon.vue";
 import LectureStage from "./LectureStage.vue";
-import { onMounted, onBeforeUnmount, ref, watch } from "vue";
+import { computed, onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { api } from "../shared/api";
 import { fitPdfPage } from "../shared/pdfPageLayout";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import "./pdfReader.css";
 
-const props = defineProps<{ url: string; page: number; title?: string; kind?: string; materialId?: number; listen?: boolean }>(),
-  emit = defineEmits<{ page: [value: number]; listen: [value: boolean] }>(),
+const props = defineProps<{ url: string; page: number; title?: string; kind?: string; materialId?: number }>(),
+  emit = defineEmits<{ page: [value: number] }>(),
   canvas = ref<HTMLCanvasElement>(),
   stage = ref<HTMLElement>(),
   count = ref(1),
@@ -73,6 +67,7 @@ const props = defineProps<{ url: string; page: number; title?: string; kind?: st
   loading = ref(true),
   rendering = ref(false),
   rendered = ref(false);
+const playerStage = computed(() => Boolean(props.materialId));
 let doc: PDFDocumentProxy | undefined,
   documentTask: PDFDocumentLoadingTask | undefined,
   task: RenderTask | undefined,
@@ -136,6 +131,7 @@ async function load() {
   }
 }
 async function render() {
+  if (playerStage.value) return;
   if (!doc || !canvas.value || !stage.value) return;
   const generation = ++renderGeneration,
     document = doc,

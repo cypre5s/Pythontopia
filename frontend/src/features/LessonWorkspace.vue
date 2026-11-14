@@ -10,7 +10,7 @@
       <template v-else-if="material">
         <p v-if="material.status !== 'ready'" class="notice lesson-state-card">资料尚未就绪，请稍后再来阅读。</p>
         <template v-else>
-          <PdfReader v-if="['pdf', 'presentation'].includes(material.kind)" :url="fileUrl" :page="pdfPage" :title="material.title" :kind="material.kind" :material-id="material.id" :listen="listening" @page="pdfPage = $event" @listen="listening = $event" />
+          <PdfReader v-if="['pdf', 'presentation'].includes(material.kind)" :url="fileUrl" :page="pdfPage" :title="material.title" :kind="material.kind" :material-id="material.id" @page="pdfPage = $event" />
           <template v-else>
             <div class="lesson-reading-card">
               <h2 class="game-card-title reader-card-title"><GameIcon :name="material.kind === 'video' ? 'video' : 'book'"/>{{ material.kind === "video" ? "视频浏览" : "文本浏览" }}<span :title="material.title">{{ material.title }}</span></h2>
@@ -27,7 +27,7 @@
               <button :disabled="pageIndex >= material.pages.length - 1" @click="pageIndex++">下一页 <GameIcon name="arrowRight" /></button>
             </nav>
           </template>
-          <NarrationPanel v-if="!listening && ['pdf', 'presentation', 'text'].includes(material.kind)" :material-id="material.id" :page-no="material.kind === 'text' ? Number(currentPage?.page_no ?? 1) : pdfPage" />
+          <NarrationPanel v-if="['pdf', 'presentation', 'text'].includes(material.kind)" :material-id="material.id" :page-no="material.kind === 'text' ? Number(currentPage?.page_no ?? 1) : pdfPage" :compact="['pdf', 'presentation'].includes(material.kind)" />
         </template>
       </template>
     </section>
@@ -69,7 +69,6 @@ import NarrationPanel from "./NarrationPanel.vue";
 import LearningSplitLayout from "./LearningSplitLayout.vue";
 import "./learningUi.css";
 const PdfReader = defineAsyncComponent(() => import("./PdfReader.vue"));
-const listening = ref(false);
 const props = defineProps<{
     activityId: string;
 

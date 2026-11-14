@@ -34,7 +34,7 @@
       v-if="clip && (currentImage || failed.has(pageNo))"
       ref="audio"
       :src="clip"
-      autoplay
+      @canplay="resume"
       @play="playing = true"
       @pause="playing = false"
       @ended="advance"
@@ -64,6 +64,7 @@ const playable = ref<number[]>([]);
 const texts = ref<Record<number, string>>({});
 const clip = ref("");
 const playing = ref(false);
+const wantsPlay = ref(false);
 const audio = ref<HTMLAudioElement>();
 const speed = ref(localStorage.getItem("narration-speed") ?? "1");
 const inFlight = new Set<number>();
@@ -145,6 +146,13 @@ async function loadAudio() {
   }
 }
 
+/** 用户点过播放后，翻页加载完成就接着播；没点过就停在待播状态。 */
+function resume() {
+  if (!wantsPlay.value || !audio.value) return;
+  audio.value.playbackRate = Number(speed.value);
+  void audio.value.play().catch(() => (playing.value = false));
+}
+
 function advance() {
   playing.value = false;
   const index = playable.value.indexOf(props.pageNo);
@@ -154,8 +162,13 @@ function advance() {
 
 function toggle() {
   if (!audio.value) return;
-  if (audio.value.paused) void audio.value.play().catch(() => (playing.value = false));
-  else audio.value.pause();
+  if (audio.value.paused) {
+    wantsPlay.value = true;
+    void audio.value.play().catch(() => (playing.value = false));
+  } else {
+    wantsPlay.value = false;
+    audio.value.pause();
+  }
 }
 
 function setSpeed(value: string) {
@@ -190,11 +203,11 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.lecture-stage { display: grid; gap: 10px; align-content: start; width: 100%; }
-.lecture-frame { display: flex; align-items: center; justify-content: center; aspect-ratio: 16 / 9; background: #12100d; border-radius: 8px; overflow: hidden; }
+.lecture-stage { display: grid; grid-template-rows: minmax(0, 1fr) auto auto; gap: 8px; width: 100%; height: 100%; min-height: 0; }
+.lecture-frame { display: flex; align-items: center; justify-content: center; min-height: 0; background: #12100d; border-radius: 8px; overflow: hidden; }
 .lecture-page { width: 100%; height: 100%; object-fit: contain; }
 .lecture-state { color: #d8ccb4; font-size: .9375rem; padding: 24px; text-align: center; }
-.lecture-subtitle { margin: 0; padding: 12px 14px; border-radius: 8px; background: #f6f1e3; color: #2f2b24; line-height: 1.85; font-size: .9375rem; max-height: 22vh; overflow-y: auto; }
+.lecture-subtitle { margin: 0; padding: 10px 14px; border-radius: 8px; background: #f6f1e3; color: #2f2b24; line-height: 1.8; font-size: .9375rem; max-height: 22vh; overflow-y: auto; }
 .lecture-subtitle.is-muted { color: #8a775c; }
 .lecture-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
 .lecture-speed { display: inline-flex; align-items: center; gap: 6px; color: #354d42; font-size: .9375rem; }

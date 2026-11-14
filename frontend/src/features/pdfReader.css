@@ -19,6 +19,10 @@
   border-radius: var(--game-radius);
   background: var(--game-paper);
 }
+.game-workspace .pdf-page-stage.is-player {
+  place-items: stretch;
+  margin: 10px;
+}
 .game-workspace .pdf-page-stage {
   margin: 12px;
   display: grid;
