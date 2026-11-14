@@ -5,6 +5,9 @@ key, so the streaming endpoints can answer with an honest Content-Type instead o
 claiming `audio/mpeg`.
 """
 
+import os
+import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -84,12 +87,14 @@ def synthesize_page(db: Session, material: Material, page_no: int) -> AudioRecor
     if item.audio_key and item.audio_text_hash == digest:
         return AudioRecord(page_no=page_no, reused=True, key=item.audio_key,
                            seconds=item.audio_seconds or _duration_seconds(item.text))
-    audio = tts.synthesize(item.text)
-    key = audio_key(material.id, page_no, digest)
+    spoken = tts.synthesize(item.text)
+    seconds = _duration_seconds(item.text, spoken)
+    payload, stored_format = _stored_audio(spoken)
+    key = audio_key(material.id, page_no, digest, stored_format)
     storage = get_storage()
     with tempfile.TemporaryDirectory(prefix="narr-tts-", dir=storage_root()) as tmp_name:
-        local = Path(tmp_name) / f"page.{_extension()}"
-        local.write_bytes(audio)
+        local = Path(tmp_name) / f"page.{Path(key).suffix.lstrip('.')}"
+        local.write_bytes(payload)
         storage.put(key, local)
     previous = item.audio_key
     if previous and previous != key:
@@ -100,10 +105,60 @@ def synthesize_page(db: Session, material: Material, page_no: int) -> AudioRecor
             pass
     item.audio_key = key
     item.audio_text_hash = digest
-    item.audio_seconds = _duration_seconds(item.text, audio)
+    item.audio_seconds = seconds
     item.audio_created_at = now()
     db.flush()
-    return AudioRecord(page_no=page_no, reused=False, key=key, seconds=item.audio_seconds)
+    return AudioRecord(page_no=page_no, reused=False, key=key, seconds=seconds)
+
+
+def _stored_audio(audio: bytes) -> tuple[bytes, str]:
+    """Store mp3 when we can encode it, otherwise keep the engine's own container.
+
+    DeepSeek only produces wav/pcm, and a 315-character page is ~2.8MB of wav against
+    ~680KB of 96k mono mp3. Transcoding costs about 0.4s per page, so it happens once at
+    generation time rather than on every playback.
+    """
+    engine_format = _extension()
+    if engine_format == "mp3" or not _transcode_enabled():
+        return audio, engine_format
+    encoded = _to_mp3(audio)
+    if encoded is None:
+        return audio, engine_format
+    return encoded, "mp3"
+
+
+def _transcode_enabled() -> bool:
+    value = (os.getenv("REBORN_TTS_TRANSCODE") or "mp3").strip().lower()
+    return value not in {"off", "none", "0", "false"}
+
+
+def _to_mp3(audio: bytes) -> bytes | None:
+    """Return mp3 bytes, or None when no encoder is available (keep the original).
+
+    `lame` is the intended encoder: it only needs wav→mp3 and costs a few MB, while
+    ffmpeg drags in hundreds of MB of codec libraries. ffmpeg is still accepted when a
+    development machine happens to have it.
+    """
+    bitrate = (os.getenv("REBORN_TTS_MP3_BITRATE") or "96k").strip()
+    ffmpeg = shutil.which("ffmpeg")
+    lame = shutil.which("lame")
+    if ffmpeg is None and lame is None:
+        return None
+    try:
+        with tempfile.TemporaryDirectory(prefix="narr-mp3-", dir=storage_root()) as tmp_name:
+            source = Path(tmp_name) / "source.wav"
+            target = Path(tmp_name) / "encoded.mp3"
+            source.write_bytes(audio)
+            if ffmpeg:
+                command = [ffmpeg, "-hide_banner", "-loglevel", "error", "-y", "-i", str(source),
+                           "-ac", "1", "-c:a", "libmp3lame", "-b:a", bitrate, str(target)]
+            else:
+                command = [str(lame), "--silent", "-m", "m", "-b", bitrate.rstrip("kK"),
+                           str(source), str(target)]
+            subprocess.run(command, check=True, capture_output=True, timeout=180)
+            return target.read_bytes()
+    except (OSError, subprocess.SubprocessError):
+        return None
 
 
 def _duration_seconds(text: str, data: bytes | None = None) -> int:
