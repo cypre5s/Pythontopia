@@ -37,6 +37,30 @@ TTS 真实联调（2026-11-14）：DeepSeek 的语音接口是 `POST /v1/tools/t
 
 仍未执行：在浏览器里点击“生成音频/试听”的真实交互（后台与学生两处只做过替换引擎的单测与真实文件渲染），以及 `POST .../audio` 在真实引擎下经 HTTP 层的调用（HTTP 层目前用替身引擎覆盖）。
 
+## 讲解全链路真机核验2026-11-14（WSL 整套 compose）
+
+在 WSL 里用 `deploy/compose.yml` 拉起 db + api + web 三个服务（`docker compose up -d --build`），
+用真实数据库、真实文件和真实模型跑完整条产品链路，不再依赖替身。
+
+- 启动与健康：db healthy，api `/api/health` 200，web `/` 200，`/teacher/` 200。
+- 教师侧：建班 → 建课程实例 → 建章 → 上传真实《第 1 讲 机器学习技术》PDF（17MB、**103 页**，
+  页文本长度 45/39/7 字），状态从 queued 变 ready；讲解列表返回 103 页。
+- 生成：第 8 页（文本层 0 字的整页截图）**3.4 秒**生成 398 字，`image_used=true`，
+  anchors 取自页面真实标题；接受后 `reviewed_at` 落库。
+- 音频：对该页合成 **13.3 秒**得到 **72 秒**音频，`narrations/1/8-10870c5a6b5f9118.mp3`，
+  **867,744 字节**，`Content-Type: audio/mpeg`（真实 DeepSeek 合成 + 容器内 lame 转码）。
+- 学生侧：发布章节并建阅读活动后，学生只读到第 8 页（`audio=true`、72 秒），音频流同样
+  867,744 字节 `audio/mpeg`；浏览器里展开“本页讲解”并点“听本页讲解”，`<audio>` 实际播放
+  （`duration=72.24`、`paused=false`），页面显示“AI 生成 · 教师已审校……不计入阅读完成”。
+- 证据：`.tmp/preview/wsl-1-materials.png`（资料库）、`wsl-2-review-audio.png`（审校面板与
+  音频状态）、`wsl-4-page8.png`、`wsl-5-narration.png`、`wsl-6-audio.png`（学生阅读与播放）。
+
+本轮同时修正：审校面板音频行在 DeepSeek 协议下错误显示 `zonos3-mini`，改为按协议显示协议名。
+
+未覆盖：批量生成 103 页与全篇校准未在本轮真机执行（只单页验证）；`converter`（LibreOffice）
+未启动，PPTX 上传未验证；Judge0 判题栈未启动；学生“就这页提问”只做过替身引擎用例，未在
+真机点过；浏览器只覆盖 1440×900 一种视口与一个人工账号。
+
 ## 阅读卡片与目录密度核验2026-11-14
 
 PPT/PDF页面上方新增独立图标标题栏，视频/文本使用同一紧凑标题样式；PDF继续按扣除标题栏后的空间适应。快速跳转页面及视频列表采用40px桌面/44px触控最低行高、单行省略、细分隔和当前页底色，完整题名保留在title及可访问文本，重点标签独立。

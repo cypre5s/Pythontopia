@@ -294,7 +294,8 @@ def read_audio_status(classroom_id: int, material_id: int, db: Annotated[Session
     return {
         "available": tts.unavailable_reason() is None,
         "voice": engine["voice"],
-        "model": engine["model"],
+        # DeepSeek 没有模型概念，显示固定默认值会误导教师，直接回协议名。
+        "model": engine["model"] if tts.protocol() == "openai" else tts.protocol(),
         "pages": [{"page_no": item.page_no, "status": item.status,
                    "ready": audio.current_audio(db, material, item.page_no) is not None,
                    "seconds": item.audio_seconds} for item in rows],
