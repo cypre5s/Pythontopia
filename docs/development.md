@@ -266,7 +266,16 @@ REBORN_TTS_TOKEN=$(openssl rand -hex 24) bash deploy/tts/bench.sh
 
 通过后才接：`deploy/.env` 加 `REBORN_TTS_*`；用 `deploy/compose.yml` + `deploy/compose.tts.yml --profile tts` 起服务（不发布端口）。已知未验证：模型实际 RTF、峰值内存、源码构建能否一次过、官方 release 预编译包是否可用。
 
-语音合成走 OpenAI 兼容 `POST /v1/audio/speech`，配置 `REBORN_TTS_BASE_URL`、`REBORN_TTS_API_KEY`、`REBORN_TTS_MODEL`（默认 `zonos3-mini`）、`REBORN_TTS_VOICE`（默认 `Meilin`）、`REBORN_TTS_FORMAT`（默认 mp3）、`REBORN_TTS_SPEED`、`REBORN_TTS_TIMEOUT_SECONDS`。TTS 权重不进镜像，从挂载卷加载，拉取方式见 `deploy/tts/`；未配置引擎时只有文字讲解可用。
+语音合成目前支持两种请求形状，由 `REBORN_TTS_PROTOCOL` 选择：
+
+- `openai`（默认）：`POST /v1/audio/speech`，参数 `{model,input,voice,response_format,speed}`，供自托管兼容服务使用。
+- `deepseek`：`POST /v1/tools/tts`，参数 `{text,voice_id,format,filter_markdown}`。只有 `stella`（女声）/`tide`（男声）两个音色，只支持 `wav`/`pcm`，**不支持调语速**，单次最多 10,000 计费字符、30 分钟音频；`filter_markdown` 传 false，否则 `PCA(n_components=0.95)`、`**kwargs` 这类代码标识符会被当成 Markdown 处理。
+
+DeepSeek 返回的是流式 wav，长度字段是 `0xFFFFFFFF` 占位值；客户端会把 RIFF 与 data 两处长度改写为实际字节，既让播放器正常读，也让音频时长可以直接从头部算出来。`pcm` 是 24kHz/16bit/单声道裸数据，会包一层 wav 容器再存。状态码映射：400（文本为空或未过审核）、429（并发超限）、503/504（繁忙或超时）都直接报可读错误，不重试。
+
+本机实测（2026-11-14，DeepSeek 官方接口）：80 字→17.08 秒音频，耗时 2.97 秒；315 字→58.36 秒音频，耗时 10.76 秒，RTF 均约 0.17–0.18。代价是体积：315 字一页 wav 约 2.8MB，103 页整册约 290MB；要压小需要镜像里加 ffmpeg 转 mp3，当前没有做。
+
+自托管引擎的权重不进镜像，从挂载卷加载，拉取方式见 `deploy/tts/`；未配置引擎时只有文字讲解可用。
 
 学生“就这页提问”优先使用 `REBORN_AI_*`，缺失时退回作者期凭据，两者都没有则明确不可用；每日提问上限为 `REBORN_NARRATION_ASK_DAILY`（默认20）。
 

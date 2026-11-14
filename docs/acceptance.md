@@ -27,7 +27,9 @@
 
 在 WSL Docker（服务器侧网络）实跑：镜像 `pythontopia-api:local` 构建成功（663 MB）；容器内 `which pdftoppm` = `/usr/bin/pdftoppm`，版本 25.03.0，运行用户 `10001(reborn)`；以普通用户身份真实渲染样本《第 1 讲》第 1 页 126108 字节、第 8 页 222541 字节，均为合法 JPEG（magic `ffd8ff`），第 8 页中文与代码清晰、无方框；容器内 `alembic upgrade head` 到达 `e1f4b23c7d90 (head)`，`/api/health` 返回 200；`docker compose config` 解析出 api 39 个环境变量，16 个新键全部为 `""`。首次构建失败是 WSL 的 docker 代理指向 `127.0.0.1:7897` 而代理实际在 Windows 侧；开启代理后构建通过。
 
-仍未验证：真实服务器部署里这些变量是否按预期注入、TTS 引擎与格式（`format` 与硬编码的 `audio/mpeg` 是否一致）、以及未内嵌 CJK 字体的 PDF 渲染结果（样本 `lecture1.pdf` 54/54 字体内嵌，`workflow.pdf` 76 个字体中 64 个内嵌，未内嵌的为西文标准字体；镜像未装 `fonts-noto-cjk`，遇到不内嵌中文字体的课件可能出现空白字形）。
+仍未验证：真实服务器部署里这些变量是否按预期注入、未内嵌 CJK 字体的 PDF 渲染结果（样本 `lecture1.pdf` 54/54 字体内嵌，`workflow.pdf` 76 个字体中 64 个内嵌，未内嵌的为西文标准字体；镜像未装 `fonts-noto-cjk`，遇到不内嵌中文字体的课件可能出现空白字形）。
+
+TTS 真实联调（2026-11-14）：DeepSeek 的语音接口是 `POST /v1/tools/tts`，不是 OpenAI 的`/v1/audio/speech`，本轮加了 `REBORN_TTS_PROTOCOL` 适配。用官方接口实跑两组：80 字→17.08 秒音频（耗时 2.97 秒）；315 字→58.36 秒（stella，10.76 秒）、57.04 秒（tide，10.50 秒），RTF 约 0.17–0.18。音频结构经检查：文件长度与 RIFF 声明一致，峰值 28601/24642，RMS 3349/3075，不是静音或截断；DeepSeek 原本返回 `0xFFFFFFFF` 的长度占位已改写为实际值，因此页面时长走的是真实解码值而不是“4.2 字/秒”估算。体积代价：315 字一页 wav 约 2.8MB，103 页约 290MB。
 
 ## 阅读卡片与目录密度核验2026-11-14
 

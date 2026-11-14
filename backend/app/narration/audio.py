@@ -28,8 +28,14 @@ MEDIA_TYPES = {
 
 
 def _extension(fmt: str | None = None) -> str:
-    """Normalise the configured container format; unknown values fall back to mp3."""
+    """Normalise the configured container format; unknown values fall back to mp3.
+
+    DeepSeek can return raw pcm, which the client wraps into a wav container, so the
+    stored file is always a playable container.
+    """
     value = (fmt or tts.settings()["format"] or "mp3").strip().lower().lstrip(".")
+    if value == "pcm":
+        return "wav"
     return value if value in MEDIA_TYPES else "mp3"
 
 
