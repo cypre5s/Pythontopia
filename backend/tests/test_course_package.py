@@ -58,7 +58,7 @@ def test_preflight_is_read_only_and_explicitly_not_import(package):
     ("package_version", 1), ("created_at", "2026-11-10T10:00:00"), ("created_at", "2026-99-10T10:00:00Z"),
     ("entry", "../secrets.yaml"), ("entry", "C:/file"), ("entry", "curriculum\\course.yaml"),
     ("entry", "/etc/passwd"), ("entry", "curriculum/./course.yaml"), ("entry", "curriculum/other.yaml"),
-    ("unknown", "value"),
+    ("unknown", "value"), ("origin", "unknown"), ("origin", True), ("origin", "exported"),
 ])
 def test_invalid_manifest_fields(package, field, value):
     root, manifest, _ = package

@@ -140,6 +140,12 @@ npm run dev -- --host 127.0.0.1 --port 15174
 
 ## YAML、媒体导入与数据库迁移
 
+### 复制导出课程到其他服务器
+
+在课程包页导出后，完整复制 `data/course/export-…/` 文件夹到目标服务器实际挂载的 `data/course/` 下，保留manifest、课程定义、私有答案和assets媒体的相对路径。支持改文件夹名；不要只复制manifest，也不需要复制数据库、账号、学生进度、环境文件或包外导出凭据。目标服务器应使用支持当前v3及origin字段的代码。
+
+后台刷新课程包列表，选择目标班级，预览差异后确认导入。所有教师及管理员共用同一列表，均可导入与删除origin=exported的包；导入后各班课程独立。默认包origin缺省或为supplied，始终受保护。origin是开发人员管理服务器目录时使用的来源声明，不是签名或本机所有权凭据。
+
 ### v3 课程导入班级
 
 课程包不纳入 Git 或镜像。将编写完成的 v3 解压目录放入私有 data/course，在教师后台选择班级、预览目录包，核对差异后确认导入。新引擎明确拒绝旧格式，不提供 app.seed、convert_legacy_course、migrate_classroom_courses 或旧来源 initialize 接口。

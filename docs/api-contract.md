@@ -106,7 +106,7 @@ Paused policy denies new content/progress/assistant requests immediately and pre
 - POST /teacher/classrooms/{id}/course/empty {confirmed:true,name}：创建空课程，已有实例幂等返回。不会自动生成章节、题目、NPC或交互。
 - GET /teacher/classrooms/{id}/course/ids：教师可查看九类实体的stable_id→当前运行ID映射，用于迁移/受控集成，不能用于越班查询。
 - 课程导入只接受当前v3目录包，放入私有 `data/course/` 后使用 `imports/available/preview`。返回预览结构（id、expected_revision、expires_at 24 小时、can_apply、diff、blockers、warnings、learning_impact）；校验或预览不等于激活。旧ZIP上传路由已移除，返回404。
-- GET /teacher/classrooms/{id}/course/packages 返回 `{items:[{key,name,package_id,package_version,source,can_delete}],unavailable}`。当前只列私有交换目录里的**解压目录包**（`source=mounted`）及本班自己的导出目录；其他班级的导出目录不可选。POST /teacher/classrooms/{id}/course/imports/available/preview 接受 `{package_key}`，对目录创建私有副本并计算内容指纹，执行与预览一致的校验并返回相同预览结构。响应不暴露文件系统路径。
+- GET /teacher/classrooms/{id}/course/packages 返回 `{items:[{key,name,package_id,package_version,source,can_delete}],unavailable}`。列出私有交换目录里的全部**解压目录包**（`source=mounted`），包括其他班级及其他教师导出的包；教师和管理员均可查看与预览导入。POST /teacher/classrooms/{id}/course/imports/available/preview 接受 `{package_key}`，对目录创建私有副本并计算内容指纹，执行与预览一致的校验并返回相同预览结构。响应不暴露文件系统路径。
 - POST /teacher/classrooms/{id}/course/imports/{preview_id}/apply {request_id:UUID,expected_revision:int>=0}：返回instance_id/revision/package_id/package_version/duplicate。重复请求保持原回执；包被篡改、预览过期、修订冲突、影响学习记录或进行中会话时拒绝，旧课程保留。
 - GET /teacher/classrooms/{id}/course/export：把完整课程原子发布为私有交换目录 `data/course/export-<班级ID>-<随机ID>/` 并返回 `{directory,path}`（不再是ZIP附件）；覆盖未归类、草稿、停用、未选用内容和私有答案/媒体，不包含账号、成员、学习记录或部署密钥。缺失/转换中的媒体不能导出为完整包。
 
@@ -133,7 +133,7 @@ GET /world?classroom_id增加当前可用interactions、building_access及buildi
 
 ## 目录课程包接口更新2026-11-12
 
-`GET /teacher/classrooms/{id}/course/packages` 只列出共享包目录及本班导出目录。`POST .../imports/available/preview` 对目录创建私有副本，生成内容指纹并执行完整校验与影响分析；确认应用时再次核对指纹、课程修订和授权。其他班级导出目录不可选择。
+`GET /teacher/classrooms/{id}/course/packages` 列出共享默认包和全部导出目录，不按班级或导出者过滤。`POST .../imports/available/preview` 对目录创建私有副本，生成内容指纹并执行完整校验与影响分析；确认应用时再次核对指纹、课程修订和授权。教师可将任意共享包导入本人管理的班级，不能借共享包修改其他教师的班级。
 
 `package_key` 仅接受 `mounted-` 加64位十六进制摘要，不接受旧 `uploaded-` 标识。`GET .../export` 返回JSON，包含 `directory` 和 `path`，完整课程已写入服务器 `data/course/` 下的目录。旧ZIP上传、下载及预览应用分支均已退出。旧待应用的非目录预览返回422并要求重新选择目录；已完成导入的幂等回执仍按原请求返回，不重新执行导入，也不删除课程或学习记录。
 
@@ -141,7 +141,7 @@ GET /world?classroom_id增加当前可用interactions、building_access及buildi
 
 课程包列表增加 directory、created_at、chapter_count 和 question_count。created_at 表示该包的 exported_at 或原始 created_at。列表仅读取章节定义和题目索引生成摘要，正式预览及应用仍执行完整校验。新导出目录为 export-<班级ID>-<安全课程名>-<北京时间YYYYMMDD-HHMMSS>-<8位随机串>，旧目录继续可选。
 
-DELETE /teacher/classrooms/{id}/course/packages/{package_key}：只删除当前班级具有服务端导出凭据且清单未改变的目录，返回 `{deleted:true,directory}`。默认包、手动拷入的包以及其他班级的导出包不可删除（403）；目录不存在或选择过期返回404，文件操作失败返回422。列表的can_delete由同一权限规则计算。删除持有交换目录锁，拒绝链接及越界路径，不修改数据库课程、学习记录或已创建的预览副本。
+DELETE /teacher/classrooms/{id}/course/packages/{package_key}：所有教师和管理员可删除任意清单origin=exported的共享导出目录，返回 `{deleted:true,directory}`；不校验导出者或来源班级。默认包（origin缺省或supplied）不可删除（403）；目录不存在或选择过期返回404，文件操作失败返回422。列表的can_delete根据包内origin计算，与目录名、原服务器和来源班级无关。学生与未登录请求仍拒绝，路径中的目标班级仍需教师管理权限。删除持有交换目录锁，拒绝链接及越界路径，不修改数据库课程、学习记录或已创建的预览副本。
 
 导入预览的暂存副本在已应用或24小时过期后由后台周期清理。预览与应用接口继续使用既有有效期和幂等规则，成功回执独立于文件保留；同请求重试仍返回duplicate结果。清理忙碌跳过，处理中的预览、应用和导出持有交换目录锁。
 

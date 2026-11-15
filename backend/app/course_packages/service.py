@@ -23,7 +23,6 @@ from app.course_packages.apply import import_bundle
 from app.course_packages.cleanup import exchange_guard
 from app.course_packages.contracts import LIMITS, ApplyInput, AvailablePackageInput
 from app.course_packages.impact import preview_impact
-from app.course_packages.exports import is_owned_export, register_export
 from app.course_packages.manifest import PackageError
 from app.course_packages.paths import exchange_path, exchange_root
 from app.course_packages.reader import load_bundle
@@ -73,7 +72,6 @@ def export_course(classroom_id: int, db: Session, user: User):
             timestamp = now().astimezone(ZoneInfo("Asia/Shanghai")).strftime("%Y%m%d-%H%M%S")
             destination = exchange_path(f"export-{classroom_id}-{name}-{timestamp}-{uuid4().hex[:8]}")
             _replace_staged(root, destination)
-            register_export(exchange_root(), destination, classroom_id)
             shutil.rmtree(temporary)
             db.commit()
         except (PackageError, OSError, ValueError) as exc:
@@ -122,11 +120,9 @@ def available_packages(classroom_id: int, db: Session, user: User):
         mounted, unavailable = mounted_catalog(root, LIMITS)
         items = [
             {
-                **{key: item[key] for key in ("key", "name", "package_id", "package_version", "source", "directory", "created_at", "chapter_count", "question_count")},
-                "can_delete": is_owned_export(root, item["path"], classroom_id),
+                **{key: item[key] for key in ("key", "name", "package_id", "package_version", "source", "directory", "created_at", "chapter_count", "question_count", "can_delete")},
             }
             for item in mounted
-            if not item["path"].name.startswith("export-") or item["path"].name.startswith(f"export-{classroom_id}-")
         ]
         return JSONResponse({"items": items, "unavailable": unavailable}, headers={"Cache-Control": "private, no-store"})
     except (PackageError, OSError) as exc:
@@ -147,8 +143,6 @@ def preview_available_course(classroom_id: int, body: AvailablePackageInput, db:
                 selected = next((item for item in items if item["key"] == body.package_key), None)
                 if selected is None:
                     raise HTTPException(404, "课程包已变化或不存在，请刷新列表")
-                if selected["path"].name.startswith("export-") and not selected["path"].name.startswith(f"export-{classroom_id}-"):
-                    raise HTTPException(404, "课程包不存在或不可访问")
                 digest = copy_directory(selected["path"], root, exchange, LIMITS)
                 bundle = load_bundle(root)
                 return _save_preview(db, user, classroom_id, bundle, root, digest)

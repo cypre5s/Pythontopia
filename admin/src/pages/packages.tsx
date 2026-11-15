@@ -263,7 +263,7 @@ export function Packages({ classroomId }: { classroomId: number }) {
     <>
       <Dialog open={Boolean(deleting)} onOpenChange={(open) => { if (!open && !busy) setDeleting(null); }}>
         <DialogContent showCloseButton={!busy}>
-          <DialogHeader><DialogTitle>删除导出的课程包</DialogTitle><DialogDescription>仅删除这份导出文件，已导入的班级课程、学生进度和成绩都会保留。</DialogDescription></DialogHeader>
+          <DialogHeader><DialogTitle>删除导出的课程包</DialogTitle><DialogDescription>从全站共享目录删除此导出包。已导入的班级课程、学生进度和成绩都会保留。</DialogDescription></DialogHeader>
           <p className="font-medium">{deleting?.name}</p><p className="break-all text-sm text-muted-foreground">{deleting?.directory}</p>
           <ErrorNotice message={error?.phase === "deleting" ? error.message : ""} />
           <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setDeleting(null)}>取消</Button><Button variant="destructive" disabled={busy} onClick={() => void deletePackage()}><Trash2 />{busy ? "正在删除…" : "确认删除"}</Button></DialogFooter>
@@ -271,7 +271,7 @@ export function Packages({ classroomId }: { classroomId: number }) {
       </Dialog>
       <PageHeader
         title="课程包"
-        description="导出完整课程，或预览并导入课程更新。"
+        description="导出包全站共享，所有教师均可导入和删除；默认课程包受保护。"
       >
         <Button
           variant="outline"

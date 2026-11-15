@@ -4,7 +4,7 @@
 
 运行入口使用 `data/course/<包目录>/` 的 v3 解压目录。ZIP 上传关闭，目录选择复制到私有暂存目录后校验。导出原子发布为 `data/course/export-<班级ID>-<安全课程名>-<北京时间>-<随机串>/`。引擎只接收 manifest.schema_version=3，旧格式明确报错；不提供旧角色、独立角色名单或旧 NPC 自带对白的兼容入口。已有 ZIP 包时，先按[开发手册](development.md#把一个-zip-包变成可选课程包)解压到私有交换目录再选择。
 
-导出服务在私有交换目录的 `.export-receipts/` 单独记录目录、所属班级和清单指纹，不将删除凭据打包或导入。只有本班带有效凭据的导出包可由教师确认删除；默认、开发人员拷入及无凭据的目录均受保护，不能只凭 export- 前缀开放删除。删除只影响交换文件，不触及已导入课程、学习进度、成绩或有效导入预览。
+导出包暂按全站共享管理：所有已登录教师和管理员均可查看、预览导入和确认删除，不按导出班级或教师过滤。导入目标班级、预览归属和应用权限仍需单独授权。导出清单自带 `origin: exported`，无本机数据库或包外凭据依赖；整份目录复制或改名后仍可在其他服务器使用。默认包的origin缺省或为supplied，允许导入但禁止删除；仅凭文件夹名前缀不改变保护状态。删除只影响共享交换文件，不触及已导入课程、学习进度、成绩或有效导入预览。
 
 对白在后台按轮次分框编辑，支持添加和删除；课程包文本仍按空行分轮，最后一轮才展示选项并触发交谈检查点，轮次随服务端会话恢复。流程允许多个结束节点，编排建议见[教学流程建议文档](教学流程建议文档.md)。
 
@@ -407,7 +407,7 @@ YAML用于可读配置与流程；JSONL每行一个对象，题库可分片，�
 
 ### 清单与资源预检契约
 
-v3 必需 manifest.yaml、curriculum/course.yaml、assets/index.jsonl；无媒体时资源清单可以为空。manifest必填schema_version=3、package_id、name、字符串package_version、带时区created_at、requires和entry；updated_at/exported_at可选且按时间递增。entry固定curriculum/course.yaml。requires为world_id=pythontopia-town、world_schema_version=1及不重复的capabilities列表，当前识别reading/video/practice/assessment/dialogue/tasks/library。能力名称匹配只属于格式预检，不代表整包可执行。
+v3 必需 manifest.yaml、curriculum/course.yaml、assets/index.jsonl；无媒体时资源清单可以为空。manifest必填schema_version=3、package_id、name、字符串package_version、带时区created_at、requires和entry；updated_at/exported_at可选且按时间递增。origin可选为supplied（缺省，受保护）或exported（全站可删除，必须提供exported_at）；系统导出固定写入exported，复制包无需复制服务器私有状态。entry固定curriculum/course.yaml。requires为world_id=pythontopia-town、world_schema_version=1及不重复的capabilities列表，当前识别reading/video/practice/assessment/dialogue/tasks/library。能力名称匹配只属于格式预检，不代表整包可执行。
 
 资源清单每行一个JSON对象，必填id、path、media_type、size_bytes、sha256、source、license；path是assets内POSIX相对路径，sha256为64位小写十六进制。资源必须存在、清单完整、ID/路径不重复、大小和哈希一致，类型声明与支持的扩展名相符；角色图片在完整导入时额外执行解码、尺寸及布局校验。清单预检不验证许可真实性。
 

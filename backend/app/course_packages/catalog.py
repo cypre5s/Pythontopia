@@ -93,6 +93,7 @@ def mounted_catalog(root, limits):
                     "kind": kind,
                     "directory": path.name,
                     "created_at": manifest.get("exported_at", manifest["created_at"]),
+                    "can_delete": manifest.get("origin") == "exported",
                     **package_counts(path, limits),
                 }
             )

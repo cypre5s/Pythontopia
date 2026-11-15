@@ -591,7 +591,8 @@ def test_available_mounted_package_uses_normal_preview_and_apply(client, db, tea
     listed = client.get(endpoint(target.id, "packages"), headers=teacher["headers"])
     assert listed.status_code == 200, listed.text
     items = listed.json()["items"]
-    assert len(items) == 1 and items[0]["source"] == "mounted"
+    assert len(items) == 2 and all(item["source"] == "mounted" for item in items)
+    items = [item for item in items if item["directory"] == "operator-course"]
     assert not {"path", "storage_key", "answers", "secrets"} & set(items[0])
     response = client.post(endpoint(target.id, "imports/available/preview"), headers=teacher["headers"],
                            json={"package_key": items[0]["key"]})
@@ -661,7 +662,7 @@ def test_catalog_summary_and_readable_export_name(client, db, teacher, exchange)
     assert item["chapter_count"] > 0 and item["question_count"] > 0
     assert {key: item[key] for key in ("chapter_count", "question_count")} == package_counts(exchange_root() / directory, PackageLimits())
     other_items = client.get(endpoint(target.id, "packages"), headers=teacher["headers"]).json()["items"]
-    assert not any(row["directory"] == directory for row in other_items)
+    assert any(row["directory"] == directory and row["can_delete"] for row in other_items)
 
 
 def test_available_packages_authorize_the_selected_classroom(client, db, teacher, exchange):
@@ -689,7 +690,7 @@ def test_mounted_selection_is_stale_after_change_and_files_remain_private(client
     folder = exchange_root() / "mounted"
     folder.mkdir()
     unpack_archive(mounted, folder)
-    item = client.get(endpoint(target.id, "packages"), headers=teacher["headers"]).json()["items"][0]
+    item = next(item for item in client.get(endpoint(target.id, "packages"), headers=teacher["headers"]).json()["items"] if item["directory"] == folder.name)
     (folder / "manifest.yaml").write_text("invalid", encoding="utf-8")
     response = client.post(endpoint(target.id, "imports/available/preview"), headers=teacher["headers"], json={"package_key": item["key"]})
     assert response.status_code == 404
@@ -706,7 +707,8 @@ def test_mounted_catalog_does_not_list_archives(client, teacher, exchange):
     (course_packages_paths.exchange_root() / "large.zip").write_bytes(payload)
     listed = client.get(endpoint(target.id, "packages"), headers=teacher["headers"])
     assert listed.status_code == 200
-    assert listed.json()["items"] == []
+    assert len(listed.json()["items"]) == 1
+    assert listed.json()["items"][0]["can_delete"]
     assert listed.json()["unavailable"] == 0
 
 
@@ -802,7 +804,7 @@ def test_directory_size_metadata_does_not_invalidate_catalog_key(client, teacher
         return value
 
     monkeypatch.setattr(Path, "lstat", directory_stat)
-    item = client.get(endpoint(target.id, "packages"), headers=teacher["headers"]).json()["items"][0]
+    item = next(item for item in client.get(endpoint(target.id, "packages"), headers=teacher["headers"]).json()["items"] if item["directory"] == folder.name)
     size = 4096
     response = client.post(endpoint(target.id, "imports/available/preview"), headers=teacher["headers"],
                            json={"package_key": item["key"]})
@@ -819,9 +821,15 @@ def test_export_delete_protects_supplied_packages_and_preserves_preview(client, 
     directory = root / response.json()["directory"]
     supplied = root / "supplied-course"
     shutil.copytree(directory, supplied)
-    # Even a copied export-like directory has no private receipt.
+    # A supplied package is protected regardless of its directory name.
     lookalike = root / f"export-{source.classroom_id}-manual-copy"
     shutil.copytree(directory, lookalike)
+    import yaml
+    for folder in (supplied, lookalike):
+        manifest = folder / "manifest.yaml"
+        data = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+        data.pop("origin")
+        manifest.write_text(yaml.safe_dump(data, allow_unicode=True), encoding="utf-8")
     items = client.get(base + "packages", headers=teacher["headers"]).json()["items"]
     original = next(x for x in items if x["directory"] == directory.name)
     assert original["can_delete"]
@@ -843,21 +851,20 @@ def test_export_delete_protects_supplied_packages_and_preserves_preview(client, 
     assert client.delete(base + "packages/" + original["key"], headers=teacher["headers"]).status_code == 404
 
 
-def test_export_delete_rejects_other_class_and_changed_package(client, teacher, exchange):
+def test_shared_export_delete_rejects_stale_selection(client, teacher, exchange):
     from app.course_packages.paths import exchange_root
     source, target = exchange
     base = endpoint(source.classroom_id, "")
     response = client.get(base + "export", headers=teacher["headers"])
     path = exchange_root() / response.json()["directory"]
     item = next(x for x in client.get(base + "packages", headers=teacher["headers"]).json()["items"] if x["directory"] == path.name)
-    assert client.delete(endpoint(target.id, "packages/" + item["key"]), headers=teacher["headers"]).status_code == 403
     manifest = path / "manifest.yaml"
     manifest.write_text(manifest.read_text(encoding="utf-8") + "\n# changed\n", encoding="utf-8")
     assert client.delete(base + "packages/" + item["key"], headers=teacher["headers"]).status_code == 404
     changed = next(x for x in client.get(base + "packages", headers=teacher["headers"]).json()["items"] if x["directory"] == path.name)
-    assert not changed["can_delete"]
-    assert client.delete(base + "packages/" + changed["key"], headers=teacher["headers"]).status_code == 403
-    assert path.exists()
+    assert changed["can_delete"]
+    assert client.delete(endpoint(target.id, "packages/" + changed["key"]), headers=teacher["headers"]).status_code == 200
+    assert not path.exists()
 
 
 def test_export_delete_rejects_linked_descendants(client, teacher, exchange, tmp_path):
@@ -875,3 +882,49 @@ def test_export_delete_rejects_linked_descendants(client, teacher, exchange, tmp
     item = next(x for x in client.get(base + "packages", headers=teacher["headers"]).json()["items"] if x["directory"] == path.name)
     assert client.delete(base + "packages/" + item["key"], headers=teacher["headers"]).status_code == 422
     assert path.exists() and outside.read_text() == "keep"
+
+
+def test_export_can_be_copied_renamed_imported_and_deleted_by_another_teacher(client, db, teacher, student, exchange, tmp_path, monkeypatch):
+    import shutil
+    from app.auth import issue
+    from app.models import User
+    from app.course_packages.paths import exchange_root
+
+    source, target = exchange
+    original_root = exchange_root()
+    response = client.get(endpoint(source.classroom_id, "export"), headers=teacher["headers"])
+    assert response.status_code == 200
+    original = original_root / response.json()["directory"]
+    other_root = tmp_path / "another-server" / "data" / "course"
+    other_root.mkdir(parents=True)
+    copied = other_root / "renamed-portable-course"
+    shutil.copytree(original, copied)
+    monkeypatch.setenv("REBORN_COURSE_EXCHANGE_ROOT", str(other_root))
+    other = User(student_id="991116287", name="另一位教师", role="teacher", password_hash=db.get(User, teacher["id"]).password_hash)
+    db.add(other)
+    db.flush()
+    target.teacher_id = other.id
+    headers = {"Authorization": "Bearer " + issue(db, other)["access_token"]}
+    db.commit()
+    base = endpoint(target.id, "")
+    catalog = client.get(base + "packages", headers=headers)
+    assert catalog.status_code == 200
+    item, = catalog.json()["items"]
+    assert item["directory"] == copied.name and item["can_delete"]
+    assert not (other_root / ".export-receipts").exists()
+    for auth in ({}, student["headers"]):
+        assert client.get(base + "packages", headers=auth).status_code in {401, 403}
+        assert client.delete(base + "packages/" + item["key"], headers=auth).status_code in {401, 403}
+    previewed = client.post(base + "imports/available/preview", headers=headers, json={"package_key": item["key"]})
+    assert previewed.status_code == 200, previewed.text
+    imported = apply(client, {"headers": headers}, target.id, previewed.json())
+    assert imported.status_code == 200, imported.text
+    instance = db.scalar(select(CourseInstance).where(CourseInstance.classroom_id == target.id))
+    assert instance and instance.id != source.id and instance.package_id == source.package_id
+    revision = instance.revision
+    deleted = client.delete(base + "packages/" + item["key"], headers=headers)
+    assert deleted.status_code == 200, deleted.text
+    assert not copied.exists() and original.exists()
+    db.refresh(instance)
+    assert instance.revision == revision
+    assert db.scalar(select(Question).where(Question.course_instance_id == instance.id)) is not None

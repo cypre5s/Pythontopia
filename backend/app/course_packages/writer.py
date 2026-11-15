@@ -33,6 +33,7 @@ def write_package(db, instance, root):
     created = as_utc(instance.created_at).isoformat()
     manifest = {
         "schema_version": 3,
+        "origin": "exported",
         "package_id": instance.package_id,
         "name": instance.name,
         "package_version": instance.package_version,
