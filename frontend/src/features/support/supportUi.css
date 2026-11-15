@@ -75,7 +75,7 @@
 
 .game-workspace .support-question-actions {
   flex: 0 0 auto;
-  padding: 1rem 1rem .35rem;
+  margin: 12px 0;
 }
 
 .game-workspace .support-question-actions > button {

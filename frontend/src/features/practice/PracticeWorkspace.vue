@@ -30,11 +30,11 @@
       </div>
       <p v-else-if="!loading && activity" class="learning-empty">此活动尚未绑定公开题目，请联系教师。</p>
 
-      <button v-if="storySessionId && (isAssessment ? paper?.completed : activityProgress?.completed)" class="primary practice-complete" @click="$emit('complete')">{{ isAssessment ? '完成测验' : '完成练习' }}</button>
+      <button v-if="storySessionId && !isAssessment && activityProgress?.completed" class="primary practice-complete" @click="$emit('complete')">完成练习</button>
     </section>
     <LearningSupportPanel v-if="activity" :key="activity.id" id="practice-assistant-region" tabindex="-1" :hidden="compact && !showAssistant" :inert="compact && !showAssistant" :aria-hidden="compact && !showAssistant" :activity-id="activity.id" :allowed="activity.assistant_allowed" :code="drafts[current?.id ?? '']?.code ?? ''" :assistant-state="assistantState" :role-name="roleName" :portrait-url="rolePortrait" :sprite="role?.sprite" :goals="learningGoals" :question-outline="questionOutline" @cite="cite" @select-question="selectQuestion">
       <template #question-actions>
-        <div v-if="isAssessment" class="assessment-actions">
+        <div v-if="isAssessment && (paper?.locked || allAnswered)" class="assessment-actions">
           <template v-if="paper?.locked">
             <template v-if="paper.status === 'graded' && paper.score !== null">
               <strong class="assessment-score" role="status">{{ paper.score }} / {{ paper.max_score }} 分</strong>
@@ -44,9 +44,8 @@
             <p class="assessment-lock-state"><GameIcon name="check" /> 已交卷，答案已锁定</p>
           </template>
           <template v-else>
-            <Teleport :to="actionTarget || 'body'" :disabled="!(actionTarget && current?.kind === 'python')"><button v-if="!requestBusy && !publicRunBusy || current?.kind !== 'python' || viewMode === 'paper'" class="primary assessment-top-submit" :disabled="requestBusy || publicRunBusy || !allAnswered || loading" @click="submitPaper">{{ requestBusy ? '正在交卷…' : paperSubmissionPending ? '重试交卷' : '提交试卷' }}</button></Teleport>
-            <span class="assessment-answer-count">已作答 {{ answeredCount }} / {{ questions.length }} 题</span>
-            <p class="assessment-submit-note">交卷后不可修改</p>
+              <button class="primary" :disabled="requestBusy || publicRunBusy || loading" @click="submitPaper">{{ requestBusy ? '正在交卷…' : paperSubmissionPending ? '重试交卷' : '提交试卷' }}</button>
+              <p class="assessment-submit-note">交卷后不可修改</p>
           </template>
         </div>
       </template>

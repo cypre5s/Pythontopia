@@ -39,3 +39,12 @@ def apply_course(
     classroom_id: int, preview_id: str, body: ApplyInput, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]
 ):
     return _apply_course(classroom_id=classroom_id, preview_id=preview_id, body=body, db=db, user=user)
+
+
+@router.delete("/packages/{package_key}")
+def delete_exported_package(
+    classroom_id: int, package_key: str, db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]
+):
+    from app.course_packages.exports import delete_export
+
+    return delete_export(classroom_id, package_key, db, user)

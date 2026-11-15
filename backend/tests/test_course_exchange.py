@@ -807,3 +807,71 @@ def test_directory_size_metadata_does_not_invalidate_catalog_key(client, teacher
     response = client.post(endpoint(target.id, "imports/available/preview"), headers=teacher["headers"],
                            json={"package_key": item["key"]})
     assert response.status_code == 200, response.text
+
+def test_export_delete_protects_supplied_packages_and_preserves_preview(client, db, teacher, exchange):
+    import shutil
+    from app.course_packages.paths import exchange_root
+    source, _ = exchange
+    base = endpoint(source.classroom_id, "")
+    response = client.get(base + "export", headers=teacher["headers"])
+    assert response.status_code == 200
+    root = exchange_root()
+    directory = root / response.json()["directory"]
+    supplied = root / "supplied-course"
+    shutil.copytree(directory, supplied)
+    # Even a copied export-like directory has no private receipt.
+    lookalike = root / f"export-{source.classroom_id}-manual-copy"
+    shutil.copytree(directory, lookalike)
+    items = client.get(base + "packages", headers=teacher["headers"]).json()["items"]
+    original = next(x for x in items if x["directory"] == directory.name)
+    assert original["can_delete"]
+    for item in items:
+        if item["directory"] in {supplied.name, lookalike.name}:
+            assert not item["can_delete"]
+            assert client.delete(base + "packages/" + item["key"], headers=teacher["headers"]).status_code == 403
+    preview = client.post(base + "imports/available/preview", json={"package_key": original["key"]}, headers=teacher["headers"])
+    assert preview.status_code == 200
+    from app.course_exchange_models import CourseImportPreview
+    receipt = db.get(CourseImportPreview, preview.json()["id"])
+    staged = root / receipt.storage_key
+    revision = source.revision
+    result = client.delete(base + "packages/" + original["key"], headers=teacher["headers"])
+    assert result.status_code == 200, result.text
+    assert not directory.exists() and supplied.exists() and lookalike.exists() and staged.exists()
+    db.refresh(source)
+    assert source.revision == revision
+    assert client.delete(base + "packages/" + original["key"], headers=teacher["headers"]).status_code == 404
+
+
+def test_export_delete_rejects_other_class_and_changed_package(client, teacher, exchange):
+    from app.course_packages.paths import exchange_root
+    source, target = exchange
+    base = endpoint(source.classroom_id, "")
+    response = client.get(base + "export", headers=teacher["headers"])
+    path = exchange_root() / response.json()["directory"]
+    item = next(x for x in client.get(base + "packages", headers=teacher["headers"]).json()["items"] if x["directory"] == path.name)
+    assert client.delete(endpoint(target.id, "packages/" + item["key"]), headers=teacher["headers"]).status_code == 403
+    manifest = path / "manifest.yaml"
+    manifest.write_text(manifest.read_text(encoding="utf-8") + "\n# changed\n", encoding="utf-8")
+    assert client.delete(base + "packages/" + item["key"], headers=teacher["headers"]).status_code == 404
+    changed = next(x for x in client.get(base + "packages", headers=teacher["headers"]).json()["items"] if x["directory"] == path.name)
+    assert not changed["can_delete"]
+    assert client.delete(base + "packages/" + changed["key"], headers=teacher["headers"]).status_code == 403
+    assert path.exists()
+
+
+def test_export_delete_rejects_linked_descendants(client, teacher, exchange, tmp_path):
+    from app.course_packages.paths import exchange_root
+    source, _ = exchange
+    base = endpoint(source.classroom_id, "")
+    response = client.get(base + "export", headers=teacher["headers"])
+    path = exchange_root() / response.json()["directory"]
+    outside = tmp_path / "outside.txt"
+    outside.write_text("keep", encoding="utf-8")
+    try:
+        (path / "linked.txt").symlink_to(outside)
+    except OSError:
+        pytest.skip("Symlinks unavailable")
+    item = next(x for x in client.get(base + "packages", headers=teacher["headers"]).json()["items"] if x["directory"] == path.name)
+    assert client.delete(base + "packages/" + item["key"], headers=teacher["headers"]).status_code == 422
+    assert path.exists() and outside.read_text() == "keep"

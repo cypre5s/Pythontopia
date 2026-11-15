@@ -23,6 +23,7 @@ from app.course_packages.apply import import_bundle
 from app.course_packages.cleanup import exchange_guard
 from app.course_packages.contracts import LIMITS, ApplyInput, AvailablePackageInput
 from app.course_packages.impact import preview_impact
+from app.course_packages.exports import is_owned_export, register_export
 from app.course_packages.manifest import PackageError
 from app.course_packages.paths import exchange_path, exchange_root
 from app.course_packages.reader import load_bundle
@@ -72,6 +73,7 @@ def export_course(classroom_id: int, db: Session, user: User):
             timestamp = now().astimezone(ZoneInfo("Asia/Shanghai")).strftime("%Y%m%d-%H%M%S")
             destination = exchange_path(f"export-{classroom_id}-{name}-{timestamp}-{uuid4().hex[:8]}")
             _replace_staged(root, destination)
+            register_export(exchange_root(), destination, classroom_id)
             shutil.rmtree(temporary)
             db.commit()
         except (PackageError, OSError, ValueError) as exc:
@@ -120,8 +122,8 @@ def available_packages(classroom_id: int, db: Session, user: User):
         mounted, unavailable = mounted_catalog(root, LIMITS)
         items = [
             {
-                key: item[key]
-                for key in ("key", "name", "package_id", "package_version", "source", "directory", "created_at", "chapter_count", "question_count")
+                **{key: item[key] for key in ("key", "name", "package_id", "package_version", "source", "directory", "created_at", "chapter_count", "question_count")},
+                "can_delete": is_owned_export(root, item["path"], classroom_id),
             }
             for item in mounted
             if not item["path"].name.startswith("export-") or item["path"].name.startswith(f"export-{classroom_id}-")

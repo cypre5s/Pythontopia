@@ -66,3 +66,36 @@ it("shows a catalog error with a retry and no ZIP upload", async () => {
   expect(screen.getByRole("button", { name: "刷新列表" })).toBeEnabled();
   expect(screen.queryByLabelText("课程包 ZIP 文件")).not.toBeInTheDocument();
 });
+
+it("only offers deletion for exported packages, confirms and handles failure before removing the row", async () => {
+  const items = [
+    {key:'owned',name:'导出课程',directory:'export-31-demo',can_delete:true},
+    {key:'default',name:'默认课程',directory:'default',can_delete:false},
+  ];
+  let fail = true;
+  const deletes: string[] = [];
+  vi.stubGlobal('fetch', vi.fn(async (url: string, init: RequestInit) => {
+    if (init?.method === 'DELETE') {
+      deletes.push(url);
+      if (fail) return new Response(JSON.stringify({detail:'删除失败'}),{status:422});
+      items.shift(); return new Response(JSON.stringify({deleted:true}));
+    }
+    return new Response(JSON.stringify({items,unavailable:0}));
+  }));
+  const user = userEvent.setup(); render(<Packages classroomId={31}/>);
+  await user.click(await screen.findByRole('button',{name:'删除 export-31-demo'}));
+  expect(screen.queryByRole('button',{name:'删除 default'})).not.toBeInTheDocument();
+  expect(deletes).toHaveLength(0);
+  await user.click(screen.getByRole('button',{name:'取消'}));
+  expect(deletes).toHaveLength(0);
+  await user.click(screen.getByRole('button',{name:'删除 export-31-demo'}));
+  await user.click(screen.getByRole('button',{name:'确认删除'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('删除失败');
+  expect(screen.getByRole('dialog')).toBeVisible();
+  fail = false;
+  await user.click(screen.getByRole('button',{name:'确认删除'}));
+  await screen.findByText('导出的课程包已删除，班级课程和学生记录不受影响。');
+  expect(screen.queryByRole('button',{name:'删除 export-31-demo'})).not.toBeInTheDocument();
+  expect(screen.getByText('default')).toBeInTheDocument();
+  expect(deletes).toEqual(['/api/teacher/classrooms/31/course/packages/owned','/api/teacher/classrooms/31/course/packages/owned']);
+});

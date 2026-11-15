@@ -89,10 +89,6 @@
   order: 1;
 }
 
-.game-workspace .practice-toolbar .assessment-top-submit {
-  order: 2;
-}
-
 .game-workspace .learning-layout > .practice-content.coding-content {
   padding: 0;
   background: transparent;

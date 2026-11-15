@@ -104,6 +104,7 @@ describe("assessment and practice presentation", () => {
     const wrapper = mount(PracticeWorkspace, { props: { activityId: "test" }, global: { plugins: [pinia], stubs: { AssistantPanel: true } } });
     await flushPromises();
     expect(wrapper.findAll(".practice-question-card")).toHaveLength(1);
+    expect(wrapper.find('.assessment-actions button').exists()).toBe(false);
     expect(wrapper.get(".practice-question-card").attributes("data-question-id")).toBe("removed-question");
     expect(wrapper.get(".practice-question-card h3").text()).toContain("题目已调整");
     expect(wrapper.get('input[placeholder="输入你的答案"]').element).toHaveProperty("value", "original answer");
@@ -119,14 +120,18 @@ describe("assessment and practice presentation", () => {
     await flushPromises();
     expect(wrapper.findAll(".practice-question-card")).toHaveLength(1);
     expect(wrapper.find(".question-list,.question-position,.learning-meta,.answer-hint,.draft-note").exists()).toBe(false);
+    expect(wrapper.find('.assessment-actions button').exists()).toBe(false);
     await wrapper.get('input[name="answer-q1"][value="false"]').setValue();
+    expect(wrapper.find('.assessment-actions button').exists()).toBe(false);
     await wrapper.findAll("button").find(button => button.text() === "试卷模式")!.trigger("click");
     expect(wrapper.findAll(".practice-question-card")).toHaveLength(2);
     expect(wrapper.get('input[name="answer-q1"][value="false"]').element).toHaveProperty("checked", true);
     await wrapper.get('input[name="answer-q2"][value="true"]').setValue();
     expect(post).not.toHaveBeenCalled();
-    await wrapper.findAll("button").find(button => button.text() === "快速跳转")!.trigger("click");
-    await wrapper.findAll("button").find(button => button.text() === "提交试卷")!.trigger("click");
+    const submit = wrapper.get('.support-goals .assessment-actions button');
+    expect(submit.text()).toBe('提交试卷');
+    expect(wrapper.get('.support-detailed-questions').element.previousElementSibling).toBe(wrapper.get('.support-question-actions').element);
+    await submit.trigger('click');
     await flushPromises();
     expect(post).toHaveBeenCalledOnce();
     expect(post).toHaveBeenCalledWith("/activities/test/assessment/submit", expect.objectContaining({ classroom_id: 2, answers: [{ question_id: "q1", answer: false }, { question_id: "q2", answer: true }] }));
@@ -136,8 +141,7 @@ describe("assessment and practice presentation", () => {
     expect(wrapper.findAll(".submission-result")).toHaveLength(2);
     expect(wrapper.text()).not.toContain("submission-q1");
     expect(wrapper.emitted("complete")).toBeUndefined();
-    await wrapper.findAll("button").find(button => button.text() === "完成测验")!.trigger("click");
-    expect(wrapper.emitted("complete")).toEqual([[]]);
+    expect(wrapper.find('.practice-complete').exists()).toBe(false);
     wrapper.unmount(); await flushPromises();
   });
   it("restores a legacy locked paper without creating or modifying grades", async () => {
@@ -208,20 +212,20 @@ describe("assessment and practice presentation", () => {
   });
 });
 import * as pythonRunner from '../src/features/practice/pythonRunner';
-it('merges programming assessment actions while public samples are running', async () => {
+it('keeps submission below goals and disables it while public samples are running', async () => {
   const {pinia,session}=setup();
   const activity=await session.activity('test');
   vi.mocked(session.activity).mockResolvedValue({...activity,questions:[{id:'q1',title:'编程题',kind:'python',prompt:'输出',options:[],starter_code:'print(1)',samples:[{input:'',output:'1'}]},activity.questions[1]!]});
-  vi.spyOn(api,'get').mockResolvedValue(paper());
+  vi.spyOn(api,'get').mockResolvedValue(paper({answers:[{question_id:'q2',answer:true}]}));
   let finish!: (value: {stdout:string;stderr:string}) => void;
   vi.spyOn(pythonRunner,'createPythonRunner').mockReturnValue({run:()=>new Promise(resolve=>{finish=resolve;}),ready:async()=>[],dispose:vi.fn()});
   const wrapper=mount(PracticeWorkspace,{props:{activityId:'test'},global:{plugins:[pinia],stubs:{CodeEditor:true,AssistantPanel:true}}});
   await flushPromises();
-  expect(wrapper.find('.assessment-top-submit').exists()).toBe(true);
+  expect(wrapper.get('.support-goals .assessment-actions button').attributes('disabled')).toBeUndefined();
   await wrapper.findAll('button').find(button=>button.text()==='运行公开样例')!.trigger('click');
-  expect(wrapper.find('.assessment-top-submit').exists()).toBe(false);
+  expect(wrapper.get('.support-goals .assessment-actions button').attributes('disabled')).toBeDefined();
   expect(wrapper.find('.judging-action').exists()).toBe(true);
   finish({stdout:'1',stderr:''});await flushPromises();
-  expect(wrapper.find('.assessment-top-submit').exists()).toBe(true);
+  expect(wrapper.get('.support-goals .assessment-actions button').attributes('disabled')).toBeUndefined();
   wrapper.unmount();
 });

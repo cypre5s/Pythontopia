@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Download, PackageCheck, Search, LoaderCircle } from "lucide-react";
+import { Download, PackageCheck, Search, LoaderCircle, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -20,7 +21,7 @@ import { type TransferBytes } from "@/lib/package-transfer";
 import { formatTimestamp } from "@/lib/time";
 import { useResource } from "@/lib/use-resource";
 interface AvailablePackages {
-  items: { key: string; name: string; package_id: string; package_version: string; source: "mounted" | "uploaded"; directory: string; created_at: string; chapter_count: number; question_count: number }[];
+  items: { key: string; name: string; package_id: string; package_version: string; source: "mounted" | "uploaded"; directory: string; created_at: string; chapter_count: number; question_count: number; can_delete?: boolean }[];
   unavailable: number;
 }
 interface Preview {
@@ -84,6 +85,7 @@ const phaseLabels = {
   applying: "正在导入课程和资源",
   packaging: "正在导出课程目录和资源",
   downloading: "正在下载课程包",
+  deleting: "正在删除导出的课程包",
 };
 type Phase = keyof typeof phaseLabels;
 type Operation = { phase: Phase; bytes?: TransferBytes };
@@ -144,6 +146,7 @@ function OperationProgress({ operation }: { operation: Operation | null }) {
 export function Packages({ classroomId }: { classroomId: number }) {
   const base = `/teacher/classrooms/${classroomId}/course`;
   const available = useResource<AvailablePackages>(`${base}/packages`);
+  const [deleting, setDeleting] = useState<AvailablePackages["items"][number] | null>(null);
   const [packageSearch, setPackageSearch] = useState("");
   const pending = useRef<AbortController | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null),
@@ -182,6 +185,17 @@ export function Packages({ classroomId }: { classroomId: number }) {
       if (pending.current === controller) pending.current = null;
       if (!controller.signal.aborted) setOperation(null);
     }
+  }
+
+  function deletePackage() {
+    if (!deleting?.can_delete) return;
+    return operate("deleting", (signal) => request(`${base}/packages/${encodeURIComponent(deleting.key)}`, { method: "DELETE", signal }), () => {
+      setDeleting(null);
+      setPreview(null);
+      setConfirmed(false);
+      setMessage("导出的课程包已删除，班级课程和学生记录不受影响。");
+      available.reload();
+    });
   }
 
   function inspectAvailable(packageKey: string) {
@@ -247,6 +261,14 @@ export function Packages({ classroomId }: { classroomId: number }) {
 
   return (
     <>
+      <Dialog open={Boolean(deleting)} onOpenChange={(open) => { if (!open && !busy) setDeleting(null); }}>
+        <DialogContent showCloseButton={!busy}>
+          <DialogHeader><DialogTitle>删除导出的课程包</DialogTitle><DialogDescription>仅删除这份导出文件，已导入的班级课程、学生进度和成绩都会保留。</DialogDescription></DialogHeader>
+          <p className="font-medium">{deleting?.name}</p><p className="break-all text-sm text-muted-foreground">{deleting?.directory}</p>
+          <ErrorNotice message={error?.phase === "deleting" ? error.message : ""} />
+          <DialogFooter><Button variant="outline" disabled={busy} onClick={() => setDeleting(null)}>取消</Button><Button variant="destructive" disabled={busy} onClick={() => void deletePackage()}><Trash2 />{busy ? "正在删除…" : "确认删除"}</Button></DialogFooter>
+        </DialogContent>
+      </Dialog>
       <PageHeader
         title="课程包"
         description="导出完整课程，或预览并导入课程更新。"
@@ -304,7 +326,10 @@ export function Packages({ classroomId }: { classroomId: number }) {
                 <TableCell className="tabular-nums">{item.question_count ?? "—"}</TableCell>
                 <TableCell className="min-w-48 max-w-80 whitespace-normal break-all text-muted-foreground">{item.directory}</TableCell>
                 <TableCell className="text-right"><Button variant="outline" size="sm" disabled={busy || available.loading}
-                  aria-label={`预览 ${item.directory}`} onClick={() => void inspectAvailable(item.key)}>预览导入</Button></TableCell>
+                  aria-label={`预览 ${item.directory}`} onClick={() => void inspectAvailable(item.key)}>预览导入</Button>
+                  {item.can_delete ? <Button className="ml-2" variant="ghost" size="sm" disabled={busy || available.loading}
+                    aria-label={`删除 ${item.directory}`} onClick={() => { setDeleting(item); setError(null); }}><Trash2 />删除</Button> : <span className="ml-2 text-xs text-muted-foreground">受保护</span>}
+                </TableCell>
               </TableRow>)}
             </TableBody>
           </Table>

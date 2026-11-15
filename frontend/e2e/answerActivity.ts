@@ -22,13 +22,13 @@ export async function answerStoryQuestions(page: Page, answers: { title?: string
     }
   }
   if (assessment) {
-    await page.getByRole("tab", { name: "快速跳转", exact: true }).click();
+    await page.getByRole("tab", { name: "题目列表", exact: true }).click();
     const receipt = page.waitForResponse(response => /\/assessment\/submit$/.test(response.url()) && response.request().method() === "POST");
     await page.getByRole("button", { name: "提交试卷", exact: true }).click();
     expect((await receipt).ok()).toBe(true);
   }
   const returned = page.waitForResponse(response => /\/story\/sessions\/[^/]+\/return$/.test(response.url()) && response.request().method() === "POST");
-  await page.getByRole("button", { name: assessment ? "完成测验" : "完成练习", exact: true }).click();
+  await page.getByRole("button", { name: assessment ? "关闭当前工作区" : "完成练习", exact: true }).click();
   expect((await returned).ok()).toBe(true);
   await expect(page.getByRole("dialog", { name: "剧情对白", exact: true })).toBeVisible();
 }

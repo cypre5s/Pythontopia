@@ -30,10 +30,7 @@ interface StoryView {
 
 interface ActivityView {
   id: string;
-  completion?: { required_page_ids: number[] };
-  material: {
-    pages: { id: number; page_no: number }[];
-  } | null;
+  resources: { material: { pages: { id: number; page_no: number }[] }; learning: { reading?: { page_ids?: number[] } } }[];
   progress?: { page_no: number | null; completed: boolean };
 }
 
@@ -178,8 +175,8 @@ async function readRequiredPage(page: Page, pageNo: number) {
       candidate.request().postDataJSON().page_no === pageNo,
   );
   await page
-    .getByRole("navigation", { name: "本章阅读目标", exact: true })
-    .getByRole("button", { name: new RegExp(`阅读第${pageNo}页$`) })
+    .locator(".activity-resource-requirements")
+    .getByRole("button", { name: new RegExp(`^${pageNo}\\.`) })
     .click();
   const saved = await successfulJson<{ page_no: number; completed: boolean }>(
     await response,
@@ -332,7 +329,7 @@ for (const viewport of [
       });
       await expect(page.locator(".lesson-workspace")).toBeVisible();
       await expect(dialogue(page)).toHaveCount(0);
-      await expect(page.getByRole("button", { name: "完成阅读", exact: true }))
+      await expect(page.getByRole("button", { name: "完成学习", exact: true }))
         .toBeDisabled();
       const savedPage = (await nextReadingPage(page)).page_no;
       await closeActivity(page);
@@ -367,14 +364,16 @@ for (const viewport of [
         status: "waiting",
       });
       const lesson = await readLesson();
-      expect(lesson.material).not.toBeNull();
-      expect(lesson.completion?.required_page_ids).toEqual([
+      expect(lesson.resources).toHaveLength(1);
+      const resource = lesson.resources[0]!;
+      expect(resource.learning.reading?.page_ids).toEqual([
         10715, 10723, 10724,
       ]);
-      const requiredPages = lesson.material!.pages
-        .filter((item) => lesson.completion!.required_page_ids.includes(item.id))
+      const requiredPages = resource.material.pages
+        .filter((item) => resource.learning.reading!.page_ids!.includes(item.id))
         .map((item) => item.page_no);
       expect(requiredPages).toEqual([34, 42, 43]);
+      await page.locator(".activity-resource-requirements summary").click();
       for (const pageNo of requiredPages)
         await readRequiredPage(page, pageNo);
       await expect.poll(async () => (await readLesson()).progress?.completed)
@@ -383,7 +382,7 @@ for (const viewport of [
       const pdfReader = page.locator(".pdf-reader");
       if (await pdfReader.count()) {
         await expect(pdfReader).toHaveAttribute("aria-busy", "false", { timeout: 60_000 });
-        await expect(pdfReader.locator(".reader-position")).toContainText(`/ ${lesson.material!.pages.length} 页`);
+        await expect(pdfReader.locator(".reader-position")).toContainText(`/ ${resource.material.pages.length} 页`);
         expect(await pdfReader.locator("canvas").evaluate(canvas => (canvas as HTMLCanvasElement).width)).toBeGreaterThan(100);
       }
       await page.screenshot({ path: testInfo.outputPath("resumed-reading.png") });
@@ -395,7 +394,7 @@ for (const viewport of [
           /\/api\/story\/sessions\/[^/]+\/return$/.test(candidate.url()) &&
           candidate.request().method() === "POST",
       );
-      await page.getByRole("button", { name: "完成阅读", exact: true }).click();
+      await page.getByRole("button", { name: "完成学习", exact: true }).click();
       await successfulJson<StoryView>(await readingReturn);
       await expect(dialogue(page)).toBeVisible();
       const readingEnd = await finishDialogue(page);
