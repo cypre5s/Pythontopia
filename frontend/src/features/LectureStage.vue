@@ -1,11 +1,10 @@
 <template>
   <div v-if="visible" class="lecture-stage">
-    <p class="lecture-subtitle" :class="{ 'is-muted': !currentLine }" aria-live="polite">
+    <p class="lecture-subtitle" :style="{ fontSize: `${preferences.subtitleSize}rem` }" :class="{ 'is-muted': !currentLine }" aria-live="polite">
       {{ audioError || currentLine || emptyHint }}
     </p>
 
     <div class="lecture-bar">
-      <small v-if="texts[pageNo]" class="lecture-source">教师已审校</small>
       <button
         type="button"
         class="lecture-play"
@@ -19,19 +18,18 @@
         class="lecture-track"
         type="range"
         min="0"
-        :max="duration || 0"
+        :max="totalDuration"
         step="0.2"
-        :value="position"
+        :value="globalPosition"
         :style="{ '--progress': `${percent}%` }"
-        :disabled="!canPlay || !clip"
-        aria-label="讲解进度"
+        :disabled="!timeline.length"
+        aria-label="整篇讲解进度"
         @input="seek"
       />
       <span class="lecture-time">{{ clock }}</span>
       <select class="lecture-speed" :value="speed" aria-label="讲解语速" @change="setSpeed(($event.target as HTMLSelectElement).value)">
         <option v-for="value in SPEEDS" :key="value" :value="value">{{ value }}×</option>
       </select>
-      <button type="button" class="town-secondary" @click="emit('ask')">就这页提问</button>
     </div>
 
     <audio
@@ -55,13 +53,16 @@ import { computed, onBeforeUnmount, ref, watch } from "vue";
 import GameIcon from "../shared/GameIcon.vue";
 import { api } from "../shared/api";
 import { useSession } from "../shared/session";
+import { useUiPreferences } from "../shared/uiPreferences";
+import { lectureTimeline, lectureTarget, lectureStamp, type LectureSegment } from "../shared/lectureTimeline";
 
 const SPEEDS = ["0.7", "0.8", "0.9", "1", "1.1", "1.2", "1.4", "1.6", "1.8", "2"];
 const LINE_CHARS = 44;
 
 const props = withDefaults(defineProps<{ materialId: number; pageNo: number; totalPages: number; pageReady?: boolean }>(), { pageReady: true });
-const emit = defineEmits<{ page: [value: number]; ask: []; availability: [value: boolean] }>();
+const emit = defineEmits<{ page: [value: number]; timeline: [value: LectureSegment[]]; availability: [value: boolean] }>();
 const session = useSession();
+const preferences = useUiPreferences();
 
 const loading = ref(true);
 const playable = ref<number[]>([]);
@@ -72,6 +73,8 @@ const wantsPlay = ref(false);
 const audio = ref<HTMLAudioElement>();
 const position = ref(0);
 const duration = ref(0);
+const durations = ref<Record<number, number>>({});
+let pendingSeek: { pageNo: number; offset: number } | undefined;
 const lineIndex = ref(0);
 const speed = ref(localStorage.getItem("narration-speed") ?? "1");
 let generation = 0;
@@ -88,14 +91,15 @@ const emptyHint = computed(() => (loading.value ? "正在加载讲解…" : "这
 /** 讲义按句切行，播放时一行一行换，不再整段堆在画面下。 */
 const lines = computed(() => splitLines(texts.value[props.pageNo] ?? ""));
 const currentLine = computed(() => lines.value[lineIndex.value] ?? "");
-const percent = computed(() => (duration.value > 0 ? Math.min(100, (position.value / duration.value) * 100) : 0));
-const clock = computed(() => (canPlay.value ? `${stamp(position.value)} / ${stamp(duration.value)}` : "--:--"));
-
-function stamp(seconds: number) {
-  if (!Number.isFinite(seconds) || seconds <= 0) return "00:00";
-  const total = Math.round(seconds);
-  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
-}
+const timeline = computed(() => lectureTimeline(playable.value, durations.value));
+watch(timeline, value => emit('timeline', value), { immediate: true });
+const totalDuration = computed(() => { const last = timeline.value.at(-1); return last ? last.start + last.seconds : 0; });
+const globalPosition = computed(() => {
+  const current = timeline.value.find(item => item.pageNo === props.pageNo);
+  return current ? current.start + Math.min(position.value, current.seconds) : timeline.value.find(item => item.pageNo > props.pageNo)?.start ?? totalDuration.value;
+});
+const percent = computed(() => totalDuration.value ? Math.min(100, globalPosition.value / totalDuration.value * 100) : 0);
+const clock = computed(() => timeline.value.length ? `${lectureStamp(globalPosition.value)} / ${lectureStamp(totalDuration.value)}` : '时长待加载');
 
 /** 先按整句（。！？；）切行；单句过长再按逗号切，避免把半句话单独留在屏上。 */
 function splitLines(text: string): string[] {
@@ -150,16 +154,19 @@ async function load() {
   const ticket = ++generation;
   clearAudio();
   wantsPlay.value = false;
+  pendingSeek = undefined;
+  durations.value = {};
   texts.value = {};
   playable.value = [];
   loading.value = true;
   const id = props.materialId;
   try {
-    const data = await api.get<{ pages: { page_no: number; text: string; audio: boolean }[] }>(
+    const data = await api.get<{ pages: { page_no: number; text: string; audio: boolean; audio_seconds?: number }[] }>(
       `/materials/${id}/narrations?${query()}`,
     );
     if (ticket !== generation) return;
     texts.value = Object.fromEntries(data.pages.map((page) => [page.page_no, page.text]));
+    durations.value = Object.fromEntries(data.pages.map(page => [page.page_no, page.audio_seconds ?? 0]));
     playable.value = data.pages.filter((page) => page.audio).map((page) => page.page_no).sort((a, b) => a - b);
   } catch {
     if (ticket === generation) audioError.value = "讲解暂时无法加载，可以继续阅读。";
@@ -170,6 +177,7 @@ async function load() {
 
 async function loadAudio() {
   clearAudio();
+  if (pendingSeek && pendingSeek.pageNo !== props.pageNo) pendingSeek = undefined;
   if (!canPlay.value) return;
   const ticket = audioGeneration;
   const controller = new AbortController();
@@ -185,13 +193,20 @@ async function loadAudio() {
 
 /** 用户点过播放后，翻页加载完成就接着播；没点过就停在待播状态。 */
 function resume() {
-  if (!wantsPlay.value || !audio.value) return;
+  if (!audio.value) return;
   audio.value.playbackRate = Number(speed.value);
+  if (!wantsPlay.value) return;
   void audio.value.play().catch(() => (playing.value = false));
 }
 
 function readDuration() {
   duration.value = audio.value?.duration ?? 0;
+  if (duration.value > 0 && Number.isFinite(duration.value)) durations.value[props.pageNo] = duration.value;
+  if (audio.value && pendingSeek?.pageNo === props.pageNo) {
+    audio.value.currentTime = Math.min(pendingSeek.offset, duration.value);
+    pendingSeek = undefined;
+    tick();
+  }
 }
 
 /** 按播放进度把字幕换到对应那一行（按字数占比估算，无逐字时间轴）。 */
@@ -214,11 +229,11 @@ function tick() {
 }
 
 function seek(event: Event) {
-  const value = Number((event.target as HTMLInputElement).value);
-  position.value = value;
-  if (!audio.value) return;
-  audio.value.currentTime = value;
-  tick();
+  const target = lectureTarget(timeline.value, Number((event.target as HTMLInputElement).value));
+  if (!target) return;
+  pendingSeek = target;
+  if (target.pageNo !== props.pageNo) emit('page', target.pageNo);
+  else if (audio.value) { audio.value.currentTime = target.offset; pendingSeek = undefined; tick(); }
 }
 
 function advance() {
@@ -232,6 +247,7 @@ function toggle() {
   if (!audio.value) return;
   if (audio.value.paused) {
     wantsPlay.value = true;
+    audio.value.playbackRate = Number(speed.value);
     void audio.value.play().catch(() => (playing.value = false));
   } else {
     wantsPlay.value = false;
@@ -290,7 +306,6 @@ onBeforeUnmount(() => {
 }
 .lecture-subtitle.is-muted { color: var(--game-muted, #7c6b55); font-size: var(--game-body-size, .9375rem); }
 .lecture-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 2px 2px; }
-.lecture-source { color: var(--game-muted); font-size: var(--game-caption-size); }
 .lecture-play {
   flex: none;
   display: grid;
@@ -307,10 +322,12 @@ onBeforeUnmount(() => {
 .lecture-play:hover:not(:disabled) { background: var(--game-forest-deep, #203b32); }
 .lecture-play:disabled { opacity: .45; cursor: not-allowed; }
 .lecture-play :deep(.game-icon) { width: 18px; height: 18px; }
-.lecture-track {
+.game-workspace .lecture-track {
   flex: 1;
   min-width: 0;
   height: 6px;
+  min-height: 6px;
+  border: 0;
   margin: 0;
   padding: 0;
   appearance: none;
@@ -319,15 +336,24 @@ onBeforeUnmount(() => {
   cursor: pointer;
 }
 .lecture-track:disabled { opacity: .45; cursor: default; }
-.lecture-track::-webkit-slider-thumb {
+.game-workspace .lecture-track::-webkit-slider-runnable-track {
+  height: 6px;
+  background: linear-gradient(to right, var(--game-forest) 0 var(--progress, 0%), #e0d3ba var(--progress, 0%) 100%);
+}
+.game-workspace .lecture-track::-moz-range-track {
+  height: 6px;
+  background: linear-gradient(to right, var(--game-forest) 0 var(--progress, 0%), #e0d3ba var(--progress, 0%) 100%);
+}
+.game-workspace .lecture-track::-webkit-slider-thumb {
   appearance: none;
   width: 14px;
   height: 14px;
+  margin-top: -4px;
   border: 2px solid var(--game-forest, #284b43);
   border-radius: 50%;
   background: var(--game-paper, #fbf5e9);
 }
-.lecture-track::-moz-range-thumb {
+.game-workspace .lecture-track::-moz-range-thumb {
   width: 12px;
   height: 12px;
   border: 2px solid var(--game-forest, #284b43);
@@ -335,13 +361,17 @@ onBeforeUnmount(() => {
   background: var(--game-paper, #fbf5e9);
 }
 .lecture-time { flex: none; color: var(--game-muted, #7c6b55); font-size: var(--game-caption-size, .8125rem); font-variant-numeric: tabular-nums; }
-.lecture-speed {
+.game-workspace .lecture-stage .lecture-bar select.lecture-speed {
   flex: none;
-  height: 30px;
-  padding: 0 4px;
+  width: 58px;
+  min-width: 58px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 18px 0 5px;
   border: 1px solid var(--game-line, #d7c7a9);
   border-radius: 6px;
   background: var(--game-paper-raised, #fffaf0);
+  appearance: auto;
   color: var(--game-ink, #513b28);
   font-size: var(--game-caption-size, .8125rem);
 }

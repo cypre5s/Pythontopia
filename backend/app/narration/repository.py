@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from datetime import datetime, timedelta, timezone
 
 from ..models import Material, User, now
-from .models import VISIBLE_STATUSES, NarrationJob, PageNarration
+from .models import VISIBLE_STATUSES, NarrationJob, NarrationRun, PageNarration
 
 MAX_TEXT = 4000
 MIN_SECONDS, MAX_SECONDS = 30, 300
@@ -238,7 +238,7 @@ def task(db: Session, material: Material, kind: str, user: User,
         release(db, material.id)
 
 
-def job_running(job: NarrationJob) -> bool:
+def job_running(job: NarrationJob | NarrationRun) -> bool:
     """活着的任务才算“正在运行”；心跳过期说明进程已经死了，可以接管。"""
     if job.status != "running":
         return False
@@ -274,6 +274,10 @@ def acquire(db: Session, material: Material, kind: str, user: User | None = None
     elif job_running(job):
         db.rollback()
         raise JobBusy(job.kind, job.started_at)
+    elif job.status == "running":
+        job.status = "interrupted"
+        job.message = "任务心跳已中断，执行结果待核查"
+        sync_run(db, job)
     job.kind = kind
     job.status = "running"
     job.requested_by = user.id if user else None
@@ -282,6 +286,7 @@ def acquire(db: Session, material: Material, kind: str, user: User | None = None
     job.finished_at = None
     job.progress = {"request": request} if request else {}
     job.message = ""
+    sync_run(db, job)
     db.commit()
     db.info.setdefault("narration_leases", {})[material.id] = job.started_at
     return job
@@ -316,6 +321,7 @@ def beat(db: Session, material_id: int, *, done: int | None = None, total: int |
                         **({"total": total} if total is not None else {})}
     if message is not None:
         job.message = message[:200]
+    sync_run(db, job)
 
 
 def release(db: Session, material_id: int, *, status: str = "done", message: str = "",
@@ -334,8 +340,20 @@ def release(db: Session, material_id: int, *, status: str = "done", message: str
         material = db.get(Material, material_id)
         if material:
             job.progress = {**(job.progress or {}), "retry_fingerprint": retry_fingerprint(db, material)}
+    sync_run(db, job)
     db.commit()
     db.info.get("narration_leases", {}).pop(material_id, None)
+
+
+def sync_run(db: Session, job: NarrationJob) -> None:
+    record = db.scalar(select(NarrationRun).where(NarrationRun.material_id == job.material_id,
+                                                 NarrationRun.started_at == job.started_at))
+    if record is None:
+        record = NarrationRun(material_id=job.material_id, started_at=job.started_at)
+        db.add(record)
+    for field in ("kind", "status", "requested_by", "heartbeat_at", "finished_at", "message"):
+        setattr(record, field, getattr(job, field))
+    record.progress = dict(job.progress or {})
 
 
 def retry_fingerprint(db: Session, material: Material) -> str:

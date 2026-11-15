@@ -99,3 +99,20 @@ class NarrationJob(Base):
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     progress: Mapped[dict] = mapped_column(JSON, default=dict)
     message: Mapped[str] = mapped_column(Text, default="")
+
+
+class NarrationRun(Base):
+    """One durable record per attempt; the material job above remains the execution lock."""
+    __tablename__ = "narration_runs"
+    __table_args__ = (UniqueConstraint("material_id", "started_at", name="uq_narration_runs_attempt"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    material_id: Mapped[int] = mapped_column(ForeignKey("materials.id", ondelete="CASCADE"), index=True)
+    kind: Mapped[str] = mapped_column(String(24), default="")
+    status: Mapped[str] = mapped_column(String(16), default="running")
+    requested_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    progress: Mapped[dict] = mapped_column(JSON, default=dict)
+    message: Mapped[str] = mapped_column(Text, default="")

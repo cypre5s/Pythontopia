@@ -1,25 +1,26 @@
-"""Class-scoped latest task overview and explicit, guarded failed-task retries."""
+"""Class-scoped active tasks and durable execution history."""
+from datetime import timedelta
 from typing import Annotated, Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session, load_only
 
 from ..auth import require_teacher
 from ..db import get_db
-from ..models import Material, User
+from ..models import Material, User, now
 from ..teacher_scope import teacher_instance_id
 from . import repository
 from .router import (GenerateInput, PageGenerateInput, RangeInput, _material, calibrate_deck,
                      generate_narration, generate_range, synthesize_audio, synthesize_audio_batch)
-from .models import NarrationJob
+from .models import NarrationJob, NarrationRun
 
 router = APIRouter(prefix="/teacher/classrooms/{classroom_id}/synthesis", tags=["narration"])
 OPERATIONS = {"generate_page", "generate_range", "audio_page", "audio_batch", "calibrate"}
 
 
-def snapshot(material: Material, job: NarrationJob | None) -> dict[str, Any]:
+def snapshot(material: Material, job: NarrationJob | NarrationRun | None) -> dict[str, Any]:
     progress = (job.progress or {}) if job else {}
     request = progress.get("request") or {}
     running = bool(job and repository.job_running(job))
@@ -28,7 +29,7 @@ def snapshot(material: Material, job: NarrationJob | None) -> dict[str, Any]:
                      and progress.get("retry_fingerprint"))
     if request.get("operation") in {"generate_range", "audio_batch"} and not progress.get("retry_pages"):
         retryable = False
-    return {"material_id": material.id, "title": material.title, "material_kind": material.kind,
+    return {"id": job.id if job else None, "material_id": material.id, "title": material.title, "material_kind": material.kind,
             "kind": job.kind if job else "", "status": status, "running": running,
             "done": progress.get("done", 0), "total": progress.get("total", 0),
             "message": job.message if job else "", "failed": progress.get("failed", []),
@@ -42,21 +43,40 @@ def snapshot(material: Material, job: NarrationJob | None) -> dict[str, Any]:
 @router.get("")
 def list_tasks(classroom_id: int, db: Annotated[Session, Depends(get_db)],
                user: Annotated[User, Depends(require_teacher)],
-               query: str = "", status: Literal["all", "idle", "running", "done", "failed", "interrupted"] = "all",
+               query: str = "", status: Literal["all", "running", "done", "failed", "interrupted"] = "all",
+               view: Literal["all", "running", "history"] = "all",
                page: Annotated[int, Query(ge=1)] = 1, size: Annotated[int, Query(ge=1, le=100)] = 20) -> dict[str, Any]:
     instance_id = teacher_instance_id(db, user, classroom_id)
-    statement = select(Material, NarrationJob).options(load_only(Material.id, Material.title, Material.kind)).outerjoin(NarrationJob, NarrationJob.material_id == Material.id).where(
-        Material.course_instance_id == instance_id, Material.deleted_at.is_(None),
-        Material.kind.in_(["pdf", "presentation"]))
+    cutoff = now() - timedelta(seconds=repository.JOB_STALE_SECONDS)
+    moment = func.coalesce(NarrationRun.heartbeat_at, NarrationRun.started_at)
+    state = case(((NarrationRun.status == "running") & ((moment < cutoff) | moment.is_(None)), "interrupted"),
+        else_=NarrationRun.status)
+    statement = select(NarrationRun, Material, User.name).join(Material, NarrationRun.material_id == Material.id).outerjoin(
+        User, NarrationRun.requested_by == User.id).options(load_only(Material.id, Material.title, Material.kind, Material.deleted_at)).where(
+        Material.course_instance_id == instance_id)
     if query.strip():
         statement = statement.where(Material.title.icontains(query.strip(), autoescape=True))
-    # Only status/timestamps are joined; no page images, text or audio are fetched separately.
-    items = [snapshot(material, job) for material, job in db.execute(statement.order_by(
-        func.coalesce(NarrationJob.started_at, Material.created_at).desc(), Material.id.desc()))]
-    counts = {state: sum(item["status"] == state for item in items)
-              for state in ("idle", "running", "done", "failed", "interrupted")}
-    filtered = items if status == "all" else [item for item in items if item["status"] == status]
-    return {"items": filtered[(page - 1) * size:page * size], "total": len(filtered), "counts": counts}
+    counts: dict[str, int] = dict(db.execute(statement.with_only_columns(state, func.count()).group_by(state)).all())
+    if view != "all":
+        statement = statement.where(state == "running" if view == "running" else state != "running")
+    if status != "all":
+        statement = statement.where(state == status)
+    total = db.scalar(select(func.count()).select_from(statement.subquery())) or 0
+    items = []
+    for record, material, name in db.execute(statement.order_by(NarrationRun.started_at.desc(), NarrationRun.id.desc()).offset((page - 1) * size).limit(size)):
+        item = snapshot(material, record)
+        latest = repository.job_of(db, material.id)
+        is_latest = bool(latest and latest.started_at == record.started_at)
+        item.update(requested_by=name or "—", material_available=material.deleted_at is None)
+        if not is_latest or material.deleted_at is not None:
+            item.update(retryable=False, retry_note="")
+        request = (record.progress or {}).get("request") or {}
+        body = request.get("body") or {}
+        item["scope"] = (f"第 {request['page_no']} 页" if request.get("page_no") else
+                         f"第 {body.get('first_page') or 1}–{body['last_page']} 页" if body.get("last_page") else "整份资料")
+        items.append(item)
+    return {"items": items, "total": total,
+            "counts": {key: counts.get(key, 0) for key in ("running", "done", "failed", "interrupted")}}
 
 
 class RetryInput(BaseModel):

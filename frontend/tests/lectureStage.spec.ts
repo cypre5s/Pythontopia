@@ -1,14 +1,16 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import LectureStage from "../src/features/LectureStage.vue";
+import { createPinia, setActivePinia } from "pinia";
 import { api } from "../src/shared/api";
 
 vi.mock("../src/shared/api", () => ({ api: { get: vi.fn(), blob: vi.fn() } }));
 vi.mock("../src/shared/session", () => ({ useSession: () => ({ classroomId: 7 }) }));
 const wrappers: VueWrapper[] = [];
-const pages = [{ page_no: 1, text: "for i in range(3):", audio: true }, { page_no: 3, text: "第三页", audio: true }];
+const pages = [{ page_no: 1, text: "for i in range(3):", audio: true, audio_seconds: 20 }, { page_no: 3, text: "第三页", audio: true, audio_seconds: 30 }];
 beforeEach(() => {
   vi.clearAllMocks();
+  setActivePinia(createPinia());
   vi.mocked(api.get).mockResolvedValue({ pages });
   vi.mocked(api.blob).mockResolvedValue(new Blob(["audio"]));
   vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:current"), revokeObjectURL: vi.fn() });
@@ -38,13 +40,30 @@ it("shows an honest load failure instead of claiming the document is silent", as
   await flushPromises();
   expect(w.text()).toContain('讲解暂时无法加载');
 });
+it('seeks across the full narrated document and applies the offset after page audio loads', async () => {
+  const w = player();
+  await flushPromises();
+  expect(w.get('.lecture-track').attributes('max')).toBe('50');
+  expect(w.text()).toContain('00:00 / 00:50');
+  await w.get('.lecture-track').setValue('25');
+  expect(w.emitted('page')?.at(-1)).toEqual([3]);
+  await w.setProps({ pageNo: 3 });
+  await flushPromises();
+  const element = w.get('audio').element as HTMLAudioElement;
+  Object.defineProperty(element, 'duration', { value: 30 });
+  await w.get('audio').trigger('loadedmetadata');
+  expect(element.currentTime).toBe(5);
+  expect(w.text()).toContain('00:25 / 00:50');
+  expect(w.get('.lecture-track').attributes('style')).toContain('50%');
+  expect(w.emitted('timeline')?.at(-1)).toEqual([[{ pageNo: 1, start: 0, seconds: 20 }, { pageNo: 3, start: 20, seconds: 30 }]]);
+});
 it("does not request server-rendered page images, even between narrated pages", async () => {
   const w = player(2);
   await flushPromises();
   expect(api.blob).not.toHaveBeenCalled();
   expect(w.text()).toContain("这一页还没有");
-  await w.get(".town-secondary").trigger("click");
-  expect(w.emitted("ask")).toHaveLength(1);
+  expect(w.text()).not.toContain("就这页提问");
+  expect(w.text()).not.toContain("教师已审校");
 });
 it("drops an old page's delayed audio and preserves Python whitespace", async () => {
   let finish!: (blob: Blob) => void;

@@ -26,6 +26,8 @@
           </section>
         </template>
         <section v-else-if="selected === 'interface'" class="town-section settings-group">
+          <div class="setting-row"><label for="settings-subtitle-size" class="setting-copy"><strong>讲解字幕大小</strong><span class="setting-description">仅调整资料讲解的字幕。</span></label><select id="settings-subtitle-size" v-model="preferences.subtitleSize"><option v-for="(size, index) in subtitleSizes" :key="size" :value="size">{{ ['小', '标准', '中', '大', '特大'][index] }}</option></select></div>
+          <p class="subtitle-preview" :style="{ fontSize: `${preferences.subtitleSize}rem` }">从计算工具出发，一起理解计算思维。</p>
           <div class="setting-row"><label for="settings-text-scale" class="setting-copy"><strong>文字大小</strong><span class="setting-description">调整学习内容和菜单的文字大小。</span></label><select id="settings-text-scale" v-model="preferences.textScale"><option v-for="scale in textScales" :key="scale" :value="scale">{{ scale * 100 }}%{{ scale === 1 ? ' · 标准' : '' }}</option></select></div>
           <div class="setting-row"><label for="settings-reduce-motion" class="setting-copy"><strong>减少界面动效</strong><span id="settings-motion-description" class="setting-description">减少过渡动画，对话直接显示全文。</span><span v-if="systemMotionOnly" class="setting-status">设备已启用减少动态效果</span></label><span class="game-switch"><input id="settings-reduce-motion" v-model="preferences.reduceMotion" type="checkbox" role="switch" aria-describedby="settings-motion-description" /><span class="game-switch-track" aria-hidden="true"></span></span></div>
         </section>
@@ -50,7 +52,7 @@ import LicenseContent from "./LicenseContent.vue";
 import PasswordForm from "./PasswordForm.vue";
 import { useSession } from "../shared/session";
 import { api } from "../shared/api";
-import { useUiPreferences, textScales } from "../shared/uiPreferences";
+import { useUiPreferences, textScales, subtitleSizes } from "../shared/uiPreferences";
 const categories = [
   { id: "account", label: "账户", icon: "people" },
   { id: "interface", label: "界面", icon: "settings" },
@@ -93,6 +95,7 @@ async function logout() {
 .settings-category-heading { margin:0 0 16px; padding-bottom:10px; border-bottom:1px solid #d4c2a3; }
 .settings-category-heading h3 { color:var(--game-forest); margin:0; }
 .settings-group { padding:0 16px; }
+.subtitle-preview { margin: 0 0 12px; padding: 12px; text-align: center; line-height: 1.55; color: var(--game-ink); background: var(--game-paper-raised); border-radius: 6px; }
 .setting-row { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:72px; padding:12px 0; }
 .setting-row + .setting-row { border-top:1px solid #ded1b9; }
 .setting-copy { display:flex; flex-direction:column; gap:4px; min-width:0; color:#445140; cursor:default; }

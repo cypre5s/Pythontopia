@@ -82,7 +82,11 @@ describe("categorized settings", () => {
     await nextTick();
     expect(preferences.textScale).toBe(2);
     expect(preferences.reduceMotion).toBe(true);
-    expect(JSON.parse(localStorage.getItem("pythontopia-reborn-interface")!)).toEqual({ textScale: 2, reduceMotion: true, musicVolume: 0.62 });
+    expect(JSON.parse(localStorage.getItem("pythontopia-reborn-interface")!)).toEqual({ textScale: 2, subtitleSize: 1, reduceMotion: true, musicVolume: 0.62 });
+    await wrapper.get('#settings-subtitle-size').setValue('1.5');
+    await nextTick();
+    expect(wrapper.get('.subtitle-preview').attributes('style')).toContain('1.5rem');
+    expect(JSON.parse(localStorage.getItem('pythontopia-reborn-interface')!).subtitleSize).toBe(1.5);
     expect(get).not.toHaveBeenCalled();
     expect(post).not.toHaveBeenCalled();
     expect(open).not.toHaveBeenCalled();

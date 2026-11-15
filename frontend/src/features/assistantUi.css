@@ -221,7 +221,19 @@
 .game-workspace .assistant-composer button { min-width: 2.75rem; padding: 0.4rem 0.8rem; border-radius: 0.85rem; }
 .game-workspace .assistant-composer .assistant-send { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; min-width: 32px; min-height: 32px; padding: 7px; border-radius: 50%; }
 .game-workspace .assistant-send .game-icon { display: block; width: 16px; height: 16px; }
-.game-workspace .citation { display: block; margin: 0.5rem 0; text-align: left; font-size: 0.875rem; line-height: 1.8; overflow-wrap: anywhere; }
+.game-workspace .citation { display: block; width: 100%; margin: 0; padding: 6px 0 6px 24px; background: transparent; border: 0; text-align: left; font-size: 0.8125rem; line-height: 1.6; overflow-wrap: anywhere; }
+.game-workspace .assistant-references { margin: 10px 0 4px; border-block: 1px solid var(--game-line); }
+.game-workspace .assistant-references summary { display: flex; align-items: center; gap: 7px; padding: 9px 0; cursor: pointer; list-style: none; font-size: .8125rem; font-weight: 600; }
+.game-workspace .assistant-references summary::-webkit-details-marker { display: none; }
+.game-workspace .assistant-references summary .game-icon { width: 15px; height: 15px; }
+.game-workspace .assistant-references summary .game-icon:last-child { margin-left: auto; }
+.game-workspace .assistant-references[open] summary .game-icon:last-child { transform: rotate(180deg); }
+.game-workspace .assistant-phase { display: flex; align-items: center; gap: 6px; margin: 5px 0 8px; color: var(--game-muted); font-size: .8125rem; }
+.game-workspace .assistant-phase .game-icon { width: 14px; height: 14px; animation: assistant-thinking 1s linear infinite; }
+@keyframes assistant-thinking { to { transform: rotate(360deg); } }
+[data-reduced-motion="true"] .game-workspace .assistant-phase .game-icon { animation: none; }
+.game-workspace .support-outline-list button:has(.support-outline-time) { grid-template-columns: 2rem auto minmax(0, 1fr) auto; }
+.game-workspace .support-outline-time { font-size: .75rem; font-variant-numeric: tabular-nums; color: var(--game-muted); }
 .game-workspace .citation svg { width: 1rem; height: 1rem; vertical-align: middle; }
 .game-workspace .assistant-sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
 
@@ -254,7 +266,8 @@
 .game-workspace :is(.question-jump-grid, .question-status-legend) [data-state="pending"] { --state-bg: #f5ecd2; --state-ink: #8b6522; }
 .game-workspace .assistant-conversation { padding: 12px; }
 .game-workspace .assistant-heading { border-bottom: 1px solid var(--game-line); padding: 0 0 4px; }
-.game-workspace .assistant-new { display: grid; place-items: center; width: 32px; height: 32px; min-height: 32px; padding: 6px; border: 0; background: transparent; }
+.game-workspace .assistant-new { display: inline-flex; align-items: center; gap: 4px; width: auto; height: 28px; min-height: 28px; padding: 4px; border: 0; background: transparent; font-size: .75rem; white-space: nowrap; }
+.game-workspace .assistant-new .game-icon { width: 14px; height: 14px; }
 .game-workspace .message-author { display: flex; align-items: center; gap: 6px; margin: 6px 0; font-size: .8125rem; color: var(--game-muted); font-weight: 600; }
 .game-workspace .user .message-author { justify-content: flex-end; }
 .game-workspace .assistant-markdown { overflow-wrap: anywhere; font-size: .9375rem; line-height: 1.75; }

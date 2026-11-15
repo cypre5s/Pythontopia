@@ -11,7 +11,7 @@
           role="img"
         ></canvas>
       </div>
-      <LectureStage v-if="materialId" :key="materialId" @availability="hasNarration = $event" :material-id="materialId" :page-no="page" :total-pages="count" :page-ready="rendered && !rendering && !loading && !error" @page="emit('page', $event)" @ask="emit('ask')" />
+      <LectureStage v-if="materialId" :key="materialId" @availability="hasNarration = $event" :material-id="materialId" :page-no="page" :total-pages="count" :page-ready="rendered && !rendering && !loading && !error" @page="emit('page', $event)" @timeline="emit('timeline', $event)" />
       <div v-if="error" class="pdf-reader-state" role="alert">
         <p>{{ error }}</p>
         <button @click="load">重新加载课件</button>
@@ -45,6 +45,7 @@
 </template>
 <script setup lang="ts">
 import LectureStage from "./LectureStage.vue";
+import type { LectureSegment } from "../shared/lectureTimeline";
 import GameIcon from "../shared/GameIcon.vue";
 import { onMounted, onBeforeUnmount, ref, watch } from "vue";
 import { api } from "../shared/api";
@@ -55,7 +56,7 @@ import "./pdfReader.css";
 const hasNarration = ref(false);
 
 const props = defineProps<{ url: string; page: number; title?: string; kind?: string; materialId?: number }>(),
-  emit = defineEmits<{ page: [value: number]; ask: [] }>(),
+  emit = defineEmits<{ page: [value: number]; timeline: [value: LectureSegment[]] }>(),
   canvas = ref<HTMLCanvasElement>(),
   stage = ref<HTMLElement>(),
   count = ref(1),

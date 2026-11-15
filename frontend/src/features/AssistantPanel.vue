@@ -6,7 +6,7 @@
         <CharacterSprite :sprite="sprite" />
         <h3>{{ roleName }}</h3>
       </div>
-      <button class="assistant-new" type="button" aria-label="开启新对话" title="开启新对话" :disabled="busy || startingConversation || !allowed || !available" @click="newConversation"><GameIcon :name="startingConversation ? 'spinner' : 'plus'" /></button>
+      <button class="assistant-new" type="button" aria-label="创建新对话" :disabled="busy || startingConversation || !allowed || !available" @click="newConversation"><GameIcon :name="startingConversation ? 'spinner' : 'plus'" />创建新对话</button>
     </header>
     <div
       ref="history"
@@ -26,20 +26,15 @@
         <div class="message-author"><CharacterSprite v-if="item.role === 'assistant'" :sprite="sprite" />{{ item.role === "user" ? session.user?.name || "我" : roleName }}</div>
         <p v-if="item.role === 'user'" class="user-message">{{ item.text }}</p>
         <template v-else>
+          <p v-if="busy && index === messages.length - 1" class="assistant-phase" role="status"><GameIcon name="spinner" />{{ phase }}</p>
           <AssistantMarkdown :text="item.text" />
+          <details v-if="item.references?.length" class="assistant-references">
+            <summary><GameIcon name="book" />引用资料 <span>{{ item.references.length }}</span><GameIcon name="chevronDown" /></summary>
+            <button v-for="refItem in item.references" :key="`${refItem.material_id}-${refItem.page_no}`" class="citation" @click="$emit('cite', refItem.material_id, refItem.page_no)">{{ refItem.title }} · 第{{ refItem.page_no }}页 <GameIcon name="external" /></button>
+          </details>
           <button v-if="item.text" class="message-copy" :disabled="busy && index === messages.length - 1" :aria-label="copiedIndex === index ? '已复制回复' : '复制回复'" :title="copiedIndex === index ? '已复制' : '复制回复'" @click="copyReply(item.text, index)"><GameIcon :name="copiedIndex === index ? 'check' : 'copy'" /></button>
         </template>
       </article>
-      <button
-        v-for="refItem in references"
-        :key="`${refItem.material_id}-${refItem.page_no}`"
-        class="citation"
-        @click="
-          $emit('cite', refItem.material_id, refItem.page_no)
-        "
-      >
-        {{ refItem.title }} · 第{{ refItem.page_no }}页 <GameIcon name="external"/>
-      </button>
     </div>
     <p v-if="!allowed" class="assistant-service-notice" role="status">
       本活动未开放助教，可以继续独立学习。
@@ -47,7 +42,6 @@
     <p v-else-if="!available" class="assistant-service-notice" role="status">
       {{ unavailable || "助教暂不可用，可以继续阅读或练习。" }}
     </p>
-    <p v-else-if="busy" class="assistant-service-notice" role="status">{{ phase }}</p>
     <p v-if="roleChanged" class="assistant-service-notice">角色设置已更新，开启新对话后生效。</p>
     <form class="assistant-composer" @submit.prevent="send">
       <label class="assistant-sr-only" :for="inputId"
@@ -113,10 +107,8 @@ const session = useSession(),
   startingConversation = ref(false),
   copiedIndex = ref<number | null>(null),
   history = ref<HTMLElement>(),
-  messages = ref<{ role: string; text: string }[]>([]),
-  references = ref<
-    { material_id: number; page_no: number; title: string }[]
-  >([]);
+  messages = ref<{ role: string; text: string; references?: Citation[] }[]>([]);
+type Citation = { material_id: number; page_no: number; title: string };
 const targetKey = computed(() => props.activityId ?? `material:${props.materialId}`);
 const phase = ref('正在回复…'), roleChanged = ref(false);
 let revision = 0;
@@ -137,7 +129,6 @@ async function restore() {
   unavailable.value = "正在连接助教…";
   question.value = "";
   messages.value = [];
-  references.value = [];
   startingConversation.value = false;
   copiedIndex.value = null;
   const key = storageKey.value;
@@ -156,11 +147,11 @@ async function restore() {
   const savedId = sessionStorage.getItem(key) ?? "";
   if (!savedId) return;
   try {
-    const saved = await api.get<{ revision: number; role_changed: boolean; messages: { role: string; content: string }[] }>(`/assistant/sessions/${savedId}`);
+    const saved = await api.get<{ revision: number; role_changed: boolean; messages: { role: string; content: string; references?: Citation[] }[] }>(`/assistant/sessions/${savedId}`);
     if (current !== generation) return;
     sessionId = savedId;
     revision = saved.revision ?? 0; roleChanged.value = saved.role_changed ?? false;
-    messages.value = saved.messages.filter(m => m.role === "user" || m.role === "assistant").map(m => ({ role: m.role, text: m.content }));
+    messages.value = saved.messages.filter(m => m.role === "user" || m.role === "assistant").map(m => ({ role: m.role, text: m.content, references: m.references }));
   } catch {
     // Keep the recovery pointer when history is temporarily unavailable.
   }
@@ -187,7 +178,7 @@ async function newConversation() {
     sessionStorage.setItem(key, created.id);
     sessionId = created.id;
     revision = 0; roleChanged.value = false;
-    messages.value = []; references.value = []; question.value = ""; copiedIndex.value = null;
+    messages.value = []; question.value = ""; copiedIndex.value = null;
     startingConversation.value = false;
     generation++;
   } catch (error) {
@@ -283,14 +274,14 @@ async function send() {
             text?: string;
             detail?: string;
             request_id?: string;
-            items?: typeof references.value;
+            items?: Citation[];
             revision?: number;
             role_changed?: boolean;
           };
           if (event === "meta") { requestId = data.request_id ?? ""; revision = data.revision ?? revision; roleChanged.value = data.role_changed ?? false; }
           if (event === "status") phase.value = data.text ?? '正在整理上下文…';
           if (event === "token") { phase.value = '正在回复…'; reply.text += data.text ?? ""; }
-          if (event === "references") references.value = data.items ?? [];
+          if (event === "references") reply.references = data.items ?? [];
           if (event === "error") throw new Error(data.detail ?? "助教服务错误");
         }
         boundary = buffer.indexOf("\n\n");

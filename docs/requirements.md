@@ -66,7 +66,7 @@
 | AI-03 | 助教上下文、会话与引用按用户、班级、活动或资料隔离，只引用当前授权材料；不授予评分、解锁或发布能力。图书馆直接阅读资料可使用图书管理员助教，无需绑定活动；恢复会话和发送消息均重新鉴权，测验禁用规则保持。 | [架构](architecture.md)、[HTTP 契约](api-contract.md) | `backend/tests/test_assistant.py`、`backend/tests/test_content_security.py` |
 | AI-04 | 学习与练习共用 LangChain create_agent 框架，分别使用精简活动提示词和独立工具清单；角色名称、人设进入固定会话前缀。阅读包含图书馆，练习只做分层提示，不代交完整答案。下一次主动提问附带当前页面/题目、作答和本题最新运行/提交的增量状态，区分学生原话与数据；长内容可分段读取。 | [架构](architecture.md)、[HTTP 契约](api-contract.md) | `backend/app/assistant_context.py`、`frontend/src/shared/assistantState.ts` |
 | AI-05 | 智能体设置以图标标签集中维护本班答疑、学生助教 API、讲稿生成与语音合成；管理员维护三项全站服务，统一 env 初始化、后台保存覆盖，教师仅收紧本班预算；密钥服务端加密保存，不进入课程包。按阈值自动摘要旧对话并保留近期完整轮次、工具链与当前状态，压缩计费，失败保留原历史；请求幂等、会话修订及账号隔离保护持续对话。 | [架构](architecture.md)、[开发手册](development.md)、[后台设计](design/teacher-interface.md) | `backend/app/assistant_runtime.py`、`backend/app/assistant_settings.py` |
-| AI-06 | 仅 PDF/演示文稿可启用逐页讲解；试听为共享控件的大弹窗，整篇无有效音频时学生端隐藏播放区。资料逐页讲解只由教师显式触发模型生成，生成前不自动跑；状态分 draft/accepted/rejected，原文变化使旧审校失效（stale）。只有 accepted 且未失效的讲解对学生可见、可合成音频（课程包携带暂未实现）；学生端明确标注 AI 生成且经教师审校，讲解不计入阅读完成与学习证据。全篇校准只出报告，不静默改写已接受内容。音频一页一份并与讲解文本绑定，文本改动即失效；音频不属学习证据，当前无过期清理。 | [内容配置](content-authoring.md#资料逐页讲解与音频)、[HTTP 契约](api-contract.md#资料逐页讲解与音频)、[开发手册](development.md#资料讲解与语音合成) | `backend/app/narration/`、`backend/tests/test_narration*.py`、`admin/src/components/narration-review.tsx`、`frontend/src/features/LectureStage.vue` |
+| AI-06 | 仅 PDF/演示文稿可启用逐页讲解；试听为共享控件的大弹窗，整篇无有效音频时学生端隐藏播放区。资料逐页讲解只由教师显式触发模型生成，生成前不自动跑；状态分 draft/accepted/rejected，原文变化使旧审校失效（stale）。只有 accepted 且未失效的讲解对学生可见、可合成音频（课程包携带暂未实现）；学生播放器不显示来源/审校标签，仍由服务端保证已接受且未失效；讲解不计入阅读完成与学习证据。全篇校准只出报告，不静默改写已接受内容。音频一页一份并与讲解文本绑定，文本改动即失效；音频不属学习证据，当前无过期清理。 | [内容配置](content-authoring.md#资料逐页讲解与音频)、[HTTP 契约](api-contract.md#资料逐页讲解与音频)、[开发手册](development.md#资料讲解与语音合成) | `backend/app/narration/`、`backend/tests/test_narration*.py`、`admin/src/components/narration-review.tsx`、`frontend/src/features/LectureStage.vue` |
 
 ## 开发与协作
 
@@ -265,3 +265,5 @@ ADMIN-07：后台提供评测管理，默认近七天，支持近一天/七天/�
 
 
 2026-11-15 设置操作与资料合成管理复核（AI-05/06、ADMIN-01/02、DATA-09、DEV-04）：用户确认四标签统一保存位置与用词、语音协议示例，以及本班合成任务查看/审校/明确失败重试。沿用管理员配置隔离、保存零模型调用、既有审校与数据保留要求；批次失败定向重试，未知或旧记录先核查。同步后台设计、内容、API、开发与验收；验证与未执行范围见[本轮核验](acceptance.md#设置统一与合成管理核验2026-11-15)。只提交不推送。
+
+2026-11-15 合成任务历史与阅读体验复核（AI-02/06、UI-01/03/10、ADMIN-02、DATA-02/09、DEV-04）：用户修正管理范围为正在执行及每次历史任务，不再按资料仅列最近状态；新增持久执行记录并保留原数据。整篇配音时间轴、目录全局起点、字幕大小预览、回复内引用及状态位置按批注更新；删除重复提问入口和审校标签，权限、审校门控和零附带模型调用要求保持。开发工具仅整理待实施方案，未增加跳阶段操作。同步游戏/后台设计、内容、API、开发、验收与续做；实际检查及未执行范围见[本轮核验](acceptance.md#合成历史与阅读体验核验2026-11-15)，只提交不推送。

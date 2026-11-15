@@ -56,6 +56,7 @@
           <li v-for="item in outline" :key="item.pageNo">
             <button :title="item.title || `第 ${item.pageNo} 页`" :aria-current="pageNo === item.pageNo ? 'page' : undefined" @click="$emit('selectPage', item.pageNo)">
               <span class="support-outline-page">{{ item.pageNo }}</span>
+              <span v-if="item.timeSeconds !== undefined" class="support-outline-time">{{ lectureStamp(item.timeSeconds) }}</span>
               <span class="support-outline-title">{{ item.title || `第 ${item.pageNo} 页` }}</span><span v-if="item.important" class="support-outline-important">{{ item.highlightLabel || "重点" }}</span>
             </button>
           </li>
@@ -88,6 +89,7 @@ import type { AssistantState } from "../shared/assistantState";
 import { Comment, Fragment, Text, computed, isVNode, nextTick, ref, useAttrs, useSlots, watch, type VNodeChild } from "vue";
 import AssistantPanel from "./AssistantPanel.vue";
 import GameIcon from "../shared/GameIcon.vue";
+import { lectureStamp } from "../shared/lectureTimeline";
 import SidebarToggle from "../shared/SidebarToggle.vue";
 import { useWorkspaceSidebar } from "../shared/workspaceSidebar";
 import "./assistantUi.css";
@@ -122,7 +124,7 @@ const props = defineProps<{
     progress?: { value: number; max: number; label: string };
     items?: { title: string; pageNo?: number; timeSeconds?: number; completed?: boolean }[];
   }[];
-  outline?: { pageNo: number; title: string; important?: boolean; highlightLabel?: string }[];
+  outline?: { pageNo: number; title: string; important?: boolean; highlightLabel?: string; timeSeconds?: number }[];
   timeOutline?: { timeSeconds: number; title: string }[];
   questionOutline?: { id: string; index?: number; title: string; kind?: "single_choice" | "boolean" | "fill" | "python"; state?: "unanswered" | "answered" | "accepted" | "wrong" | "pending"; current?: boolean }[];
   currentQuestionId?: string;

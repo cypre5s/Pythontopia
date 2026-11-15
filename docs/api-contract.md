@@ -169,7 +169,7 @@ GET /world?classroom_id增加当前可用interactions、building_access及buildi
 
 ### 资料合成管理
 
-- `GET /api/teacher/classrooms/{classroom_id}/synthesis`：教师本班/管理员可读，学生403。参数 `query/status/page/size`，状态为 all/idle/running/done/failed/interrupted，页大小1–100。只列未删除PDF/演示文稿，返回items、筛选后的total及搜索范围内counts。每项包含资料ID/标题/类型、最近任务类型/状态、done/total、message、失败页列表、开始/结束时间、retryable/retry_note；不返回凭据、讲稿正文或文件地址。
+- `GET /api/teacher/classrooms/{classroom_id}/synthesis`：教师本班/管理员可读，学生403。参数 `query/view/status/page/size`；view为all/running/history，status为all/running/done/failed/interrupted，页大小1–100。按执行记录分页，不列未执行资料。返回items、筛选total和搜索范围counts。每项包含执行记录id、资料ID/标题/类型、kind/status、done/total、message、failed、started_at/finished_at、requested_by显示名、scope、material_available、retryable/retry_note；不返回凭据、正文或文件地址。已删除资料仍保留执行记录，关闭查看和重试。
 - `POST /api/teacher/classrooms/{classroom_id}/synthesis/{material_id}/retry`：正文 `expected_started_at`，只重试有保存参数及指纹的明确失败任务。资料行锁内再次核对最新任务及失败时的资料/讲稿指纹；重复、内容变化、不支持或旧任务返回409。批次仅处理已记录失败页，返回新的任务状态；上游失败仍明确返回错误并保留已成功页。查询、筛选及打开页面零外部生成调用。
 
-每份资料的已有任务行保留最近一次记录，progress附带内部请求参数、失败页和重试指纹；不新增历史任务表或数据库迁移。心跳过期显示interrupted，不把未知结果改作可直接重试。首次新任务与重试继续使用同一资料锁及任务租约。
+`narration_jobs`继续作为资料级执行锁；`narration_runs`每次执行新增一行，心跳进度和最终结果同步到该次记录，重试不覆盖历史。b72c49e018a3只回填实际存在的最近任务，不能恢复已覆盖记录。心跳过期显示interrupted，不能直接重试；新任务接管时旧次记录保留待核查，不捏造结束时间。

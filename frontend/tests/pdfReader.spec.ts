@@ -3,6 +3,7 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { getDocument, type PDFDocumentLoadingTask } from "pdfjs-dist";
 import PdfReader from "../src/features/PdfReader.vue";
 import { api } from "../src/shared/api";
+import { createPinia, setActivePinia } from "pinia";
 
 vi.mock("pdfjs-dist", () => ({ getDocument: vi.fn(), GlobalWorkerOptions: { workerSrc: "" } }));
 vi.mock("pdfjs-dist/build/pdf.worker.min.mjs?url", () => ({ default: "worker-url" }));
@@ -17,6 +18,7 @@ const document = { numPages: 45, getPage: vi.fn(async () => page), destroy: vi.f
 const blob = () => ({ arrayBuffer: async () => new ArrayBuffer(8) }) as Blob;
 
 beforeEach(() => {
+  setActivePinia(createPinia());
   vi.clearAllMocks();
   width = 800; height = 500;
   vi.mocked(api.blob).mockResolvedValue(blob());

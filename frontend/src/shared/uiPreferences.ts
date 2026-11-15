@@ -3,8 +3,9 @@ import { computed, ref, watch } from "vue";
 
 const key = "pythontopia-reborn-interface";
 export const textScales = [1, 1.25, 1.5, 2] as const;
+export const subtitleSizes = [0.875, 1, 1.125, 1.25, 1.5] as const;
 export const useUiPreferences = defineStore("ui-preferences", () => {
-  let saved: { textScale?: number; reduceMotion?: boolean; musicVolume?: number } = {};
+  let saved: { textScale?: number; subtitleSize?: number; reduceMotion?: boolean; musicVolume?: number } = {};
   try {
     saved = JSON.parse(localStorage.getItem(key) ?? "{}");
   } catch {
@@ -16,6 +17,7 @@ export const useUiPreferences = defineStore("ui-preferences", () => {
       : 1,
   );
   const reduceMotion = ref(saved?.reduceMotion === true);
+  const subtitleSize = ref(subtitleSizes.some(size => size === saved?.subtitleSize) ? saved.subtitleSize! : 1);
   const boundedVolume = (value: unknown) =>
     typeof value === "number" && Number.isFinite(value)
       ? Math.max(0, Math.min(1, value))
@@ -33,7 +35,7 @@ export const useUiPreferences = defineStore("ui-preferences", () => {
     };
     media.addEventListener("change", update);
     const stop = watch(
-      [textScale, reduceMotion, reducedMotion, musicVolume],
+      [textScale, subtitleSize, reduceMotion, reducedMotion, musicVolume],
       () => {
         musicVolume.value = boundedVolume(musicVolume.value);
         document.documentElement.style.setProperty(
@@ -48,6 +50,7 @@ export const useUiPreferences = defineStore("ui-preferences", () => {
             key,
             JSON.stringify({
               textScale: textScale.value,
+              subtitleSize: subtitleSize.value,
               reduceMotion: reduceMotion.value,
               musicVolume: musicVolume.value,
             }),
@@ -63,5 +66,5 @@ export const useUiPreferences = defineStore("ui-preferences", () => {
       media.removeEventListener("change", update);
     };
   }
-  return { textScale, reduceMotion, reducedMotion, musicVolume, connect };
+  return { textScale, subtitleSize, reduceMotion, reducedMotion, musicVolume, connect };
 });

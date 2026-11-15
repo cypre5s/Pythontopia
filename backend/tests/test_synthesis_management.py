@@ -4,7 +4,7 @@ import pytest
 
 from app.models import Classroom, now
 from app.narration import repository, service
-from app.narration.models import NarrationJob
+from app.narration.models import NarrationRun
 from app.narration.tts import endpoint
 from test_narration import material_fixture, url
 
@@ -17,7 +17,7 @@ def test_overview_scope_types_and_interrupted_tasks(client, db, classroom, teach
     material = material_fixture(db, classroom, ["正文"])
     material.title = "正在处理"
     material_fixture(db, classroom, ["正文"], kind="video")
-    db.add(NarrationJob(material_id=material.id, kind="audio", status="running", started_at=now() - timedelta(hours=1)))
+    db.add(NarrationRun(material_id=material.id, kind="audio", status="running", started_at=now() - timedelta(hours=1)))
     db.commit()
     response = client.get(overview(classroom) + "?query=正在", headers=teacher["headers"])
     assert response.status_code == 200, response.text
@@ -59,6 +59,35 @@ def test_explicit_retry_uses_saved_request_and_cannot_repeat(client, db, classro
     assert result.json()["status"] == "done" and calls == [1]
     assert client.post(path, json={"expected_started_at": started}, headers=teacher["headers"]).status_code == 409
     assert calls == [1]
+    history = client.get(overview(classroom) + "?view=history", headers=teacher["headers"]).json()
+    assert history["total"] == 2
+    assert [row["status"] for row in history["items"]] == ["done", "failed"]
+    assert history["items"][0]["id"] != history["items"][1]["id"]
+    assert not history["items"][1]["retryable"]
+    assert client.get(overview(classroom) + "?view=running", headers=teacher["headers"]).json()["total"] == 0
+
+
+def test_live_progress_and_takeover_retain_previous_attempt(db, client, classroom, teacher):
+    from app.models import User
+    material = material_fixture(db, classroom, ["正文"])
+    db.commit()
+    user = db.get(User, teacher["id"])
+    repository.acquire(db, material, "generate", user)
+    repository.beat(db, material.id, done=2, total=4, message="正在生成第 3 页")
+    db.commit()
+    current = client.get(overview(classroom) + "?view=running", headers=teacher["headers"]).json()
+    assert current["total"] == 1 and current["items"][0]["done"] == 2
+    job = repository.job_of(db, material.id)
+    job.heartbeat_at = now() - timedelta(hours=1)
+    repository.sync_run(db, job)
+    db.commit()
+    stale = client.get(overview(classroom) + "?view=history", headers=teacher["headers"]).json()
+    assert stale["items"][0]["status"] == "interrupted"
+    repository.acquire(db, material, "audio", user)
+    repository.release(db, material.id, message="完成配音")
+    records = client.get(overview(classroom) + "?view=history", headers=teacher["headers"]).json()
+    assert records["total"] == 2
+    assert [row["status"] for row in records["items"]] == ["done", "interrupted"]
 
 
 def test_changed_source_blocks_retry_before_external_request(client, db, classroom, teacher, monkeypatch):
@@ -98,7 +127,7 @@ def test_batch_retry_runs_failed_pages_only(client, db, classroom, teacher, monk
 
 def test_legacy_failure_has_no_blind_retry(client, db, classroom, teacher):
     material = material_fixture(db, classroom, ["正文"])
-    db.add(NarrationJob(material_id=material.id, kind="generate", status="failed", started_at=now()))
+    db.add(NarrationRun(material_id=material.id, kind="generate", status="failed", started_at=now()))
     db.commit()
     items = client.get(overview(classroom), headers=teacher["headers"]).json()["items"]
     assert not next(i for i in items if i["material_id"] == material.id)["retryable"]

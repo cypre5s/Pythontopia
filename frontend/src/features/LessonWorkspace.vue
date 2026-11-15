@@ -10,7 +10,7 @@
       <template v-else-if="material">
         <p v-if="material.status !== 'ready'" class="notice lesson-state-card">资料尚未就绪，请稍后再来阅读。</p>
         <template v-else>
-          <PdfReader @ask="openPageAssistant" v-if="['pdf', 'presentation'].includes(material.kind)" :url="fileUrl" :page="pdfPage" :title="material.title" :kind="material.kind" :material-id="material.id" @page="pdfPage = $event" />
+          <PdfReader @timeline="lectureSegments = $event" v-if="['pdf', 'presentation'].includes(material.kind)" :url="fileUrl" :page="pdfPage" :title="material.title" :kind="material.kind" :material-id="material.id" @page="pdfPage = $event" />
           <template v-else>
             <div class="lesson-reading-card">
               <h2 class="game-card-title reader-card-title"><GameIcon :name="material.kind === 'video' ? 'video' : 'book'"/>{{ material.kind === "video" ? "视频浏览" : "文本浏览" }}<span :title="material.title">{{ material.title }}</span></h2>
@@ -63,6 +63,7 @@ import type { Activity, ActivityProgress, Material } from "../shared/types";
 import { learningContext } from "../shared/learningContext";
 import { migrateReadingPosition, pdfResumePage } from "../shared/readingPosition";
 import { createVideoProgressQueue } from "../shared/videoProgress";
+import type { LectureSegment } from "../shared/lectureTimeline";
 import LearningSupportPanel from "./LearningSupportPanel.vue";
 import LearningSplitLayout from "./LearningSplitLayout.vue";
 import "./learningUi.css";
@@ -134,9 +135,12 @@ const learningGoals = computed(() => {
     items: requiredPages.value.map(page => ({ title: page.title || `第 ${page.page_no} 页`, pageNo: page.page_no, completed: progress.value?.visited_pages.includes(Number(page.id)) ?? false })) }];
 });
 const videoOutline = computed(() => material.value?.kind === "video" ? [{ timeSeconds: 0, title: "视频开始" }, ...(activity.value?.learning?.highlights?.video ?? []).map(item => ({ timeSeconds: item.start_seconds, title: item.label }))] : []);
+const lectureSegments = ref<LectureSegment[]>([]);
+watch(() => material.value?.id, () => { lectureSegments.value = []; });
 const documentOutline = computed(() => material.value?.kind === "video" ? [] : material.value?.pages.map(page => {
   const highlight = activity.value?.learning?.highlights?.pages?.find(item => page.page_no >= item.start_page && page.page_no <= item.end_page);
-  return { pageNo: page.page_no, title: page.title, important: Boolean(highlight), highlightLabel: highlight?.label };
+  return { pageNo: page.page_no, title: page.title, important: Boolean(highlight), highlightLabel: highlight?.label,
+    timeSeconds: lectureSegments.value.find(item => item.pageNo === page.page_no)?.start };
 }) ?? []);
 function formatTime(value: number) { const seconds = Math.max(0, Math.floor(value)); return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`; }
 const readingKey = computed(
@@ -169,10 +173,6 @@ function updateCompact() {
   compact.value = compactMedia.matches;
 }
 const supportPanel = ref<InstanceType<typeof LearningSupportPanel>>();
-async function openPageAssistant() {
-  await switchView(true);
-  await supportPanel.value?.openAssistant();
-}
 async function switchView(assistant: boolean) {
   if (assistant) sidebarCollapsed.value = false;
   showAssistant.value = assistant;
