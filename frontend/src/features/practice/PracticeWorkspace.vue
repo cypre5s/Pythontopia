@@ -17,10 +17,9 @@
       <header class="content-heading practice-heading" :class="{ 'assessment-heading': isAssessment && !modeTarget }">
         <h2 class="game-card-title"><GameIcon name="practice"/>{{ activity?.title ?? "正在读取题目" }}</h2>
         <Teleport defer :to="modeTarget || 'body'" :disabled="!modeTarget">
-          <div v-if="isAssessment" class="assessment-view-modes" :class="modeTarget ? 'workspace-mode-switch' : 'game-segmented'" role="group" aria-label="答题模式">
-            <button :aria-pressed="viewMode === 'single'" @click="setViewMode('single')"><GameIcon name="practice" /><span>单题模式</span></button>
-            <button :aria-pressed="viewMode === 'paper'" @click="setViewMode('paper')"><GameIcon name="list" /><span>试卷模式</span></button>
-          </div>
+          <button v-if="isAssessment" class="assessment-mode-toggle" type="button" :title="viewMode === 'single' ? '切换到试卷模式' : '切换到单题模式'" @click="setViewMode(viewMode === 'single' ? 'paper' : 'single')">
+            <GameIcon :name="viewMode === 'single' ? 'list' : 'practice'" /><span>{{ viewMode === 'single' ? '试卷模式' : '单题模式' }}</span>
+          </button>
         </Teleport>
       </header>
       <p v-if="error" class="error" role="alert">{{ error }}</p>

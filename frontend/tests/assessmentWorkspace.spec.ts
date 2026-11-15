@@ -61,10 +61,10 @@ describe("assessment and practice presentation", () => {
       try {
         await flushPromises();
         expect(wrapper.get("#test-practice-toolbar .practice-navigation").exists()).toBe(true);
-        expect(wrapper.findAll('#test-mode-toolbar button')).toHaveLength(2);
-        expect(wrapper.find('.practice-heading .assessment-view-modes').exists()).toBe(false);
-        await wrapper.get('#test-mode-toolbar button:nth-child(2)').trigger('click');
-        expect(wrapper.get('#test-mode-toolbar button:nth-child(2)').attributes('aria-pressed')).toBe('true');
+        expect(wrapper.findAll('#test-mode-toolbar button')).toHaveLength(1);
+        expect(wrapper.find('.practice-heading .assessment-mode-toggle').exists()).toBe(false);
+        await wrapper.get('#test-mode-toolbar button').trigger('click');
+        expect(wrapper.get('#test-mode-toolbar button').text()).toBe('单题模式');
         await wrapper.get('#test-mode-toolbar button:first-child').trigger('click');
         await wrapper.get('#test-practice-toolbar [aria-label="下一题"]').trigger("click");
         expect(wrapper.get(".practice-question-card h3").text()).toContain("q2");

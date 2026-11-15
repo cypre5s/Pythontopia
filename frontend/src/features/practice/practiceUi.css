@@ -265,15 +265,6 @@
   min-width: 0;
 }
 
-.game-workspace .assessment-view-modes {
-  flex: 0 1 auto;
-  max-width: 100%;
-}
-
-.game-workspace .assessment-view-modes button {
-  font-size: .9375rem;
-}
-
 .game-workspace .practice-question-card {
   min-width: 0;
   scroll-margin-top: 1rem;
