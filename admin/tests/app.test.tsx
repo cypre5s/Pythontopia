@@ -3,7 +3,7 @@ import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "../src/App";
 import { setToken } from "../src/lib/api";
-vi.mock("../src/pages/materials", async () => {
+vi.mock("../src/features/materials/materials-page", async () => {
   const { useDraft } = await import("../src/lib/drafts");
   return { Materials: () => { useDraft(true); return <input aria-label="未保存资料" defaultValue="保留草稿" />; } };
 });

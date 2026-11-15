@@ -1,12 +1,12 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import PracticeWorkspace from "../src/features/PracticeWorkspace.vue";
+import PracticeWorkspace from "../src/features/practice/PracticeWorkspace.vue";
 import { useSession } from "../src/shared/session";
 import { api } from "../src/shared/api";
 import type { Submission } from "../src/shared/types";
-import PracticeQuestionCard from "../src/features/PracticeQuestionCard.vue";
-import * as pythonRunner from '../src/shared/pythonRunner';
+import PracticeQuestionCard from "../src/features/practice/PracticeQuestionCard.vue";
+import * as pythonRunner from '../src/features/practice/pythonRunner';
 afterEach(() => {
   vi.restoreAllMocks();
   localStorage.clear();

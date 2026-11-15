@@ -15,7 +15,7 @@ import tempfile
 from pathlib import Path
 
 from ..models import Material
-from ..storage import get_storage, storage_root
+from app.materials.storage import get_storage, storage_root
 
 TARGET_WIDTH = 1600  # 16:9 -> 900 high, ~1.44M px, still inside the provider's per-image token cap
 JPEG_QUALITY = 82

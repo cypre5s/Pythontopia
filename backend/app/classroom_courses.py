@@ -10,7 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .auth import require_teacher
-from .classrooms import own_classroom
+from app.classrooms.access import own_classroom
 from .db import get_db
 from .models import CourseInstance, User
 

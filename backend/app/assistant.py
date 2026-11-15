@@ -46,7 +46,7 @@ class NewSession(BaseModel):
 
 
 def authorized_session(db, user, session_id):
-    from .courses import authorize_activity
+    from app.course_content.access import authorize_activity
     session = db.get(AssistantSession, session_id)
     if not session or session.user_id != user.id:
         raise HTTPException(404, "会话不存在")
@@ -62,7 +62,7 @@ def authorized_session(db, user, session_id):
 
 
 def authorize_library_assistant(db, user, classroom_id, material_id):
-    from .courses import authorize_material
+    from app.course_content.access import authorize_material
     material = authorize_material(db, user, classroom_id, material_id)
     if material.status != "ready":
         raise HTTPException(409, "当前教学资料不可用")
@@ -70,7 +70,7 @@ def authorize_library_assistant(db, user, classroom_id, material_id):
 
 
 def activity_material(db, user, classroom_id, activity):
-    from .courses import authorize_material
+    from app.course_content.access import authorize_material
     if activity.material_id:
         authorize_material(db, user, classroom_id, activity.material_id)
         if not material_in_chapter(db, activity.material_id, activity.chapter_id):
@@ -88,7 +88,7 @@ def status(user: Annotated[User, Depends(current_user)], db: Annotated[Session, 
 
 @router.post("/sessions", status_code=201)
 def new_session(body: NewSession, user: Annotated[User, Depends(current_user)], db: Annotated[Session, Depends(get_db)]):
-    from .courses import authorize_activity
+    from app.course_content.access import authorize_activity
     from .course_assistant import activity_npc, default_npc
     activity = authorize_activity(db, user, body.classroom_id, body.activity_id) if body.activity_id is not None else None
     if activity and (not activity.assistant_allowed or activity.kind == "assessment"):

@@ -22,7 +22,7 @@ def content_mapping(db, instance):
             for row in db.scalars(select(model).where(model.course_instance_id == instance.id))} for model in CONTENT_MODELS}
 
 
-def _lock_numeric_tables(db):
+def lock_content_tables(db):
     if db.get_bind().dialect.name != "postgresql":
         return
     # Import sources have explicit integer IDs; do not let an unadvanced sequence
@@ -55,7 +55,7 @@ def _marker(value, maps):
     return value
 
 
-def _json(value, maps, context=None):
+def remap_references(value, maps, context=None):
     """Rewrite only typed references; never replace text, answers, node or event IDs."""
     scalar = {"chapter_id": "chapter", "prerequisite_chapter_id": "chapter", "material_id": "material",
               "document_id": "material", "activity_id": "activity", "pending_activity_id": "activity",
@@ -63,7 +63,7 @@ def _json(value, maps, context=None):
               "story_id": "story", "npc_key": "npc", "speaker_npc_id": "npc", "activity_completed": "activity"}
     lists = {"chapter_ids": "chapter", "question_ids": "question", "knowledge_point_ids": "knowledge_point"}
     if isinstance(value, list):
-        return [_json(item, maps, context) for item in value]
+        return [remap_references(item, maps, context) for item in value]
     if not isinstance(value, dict):
         return deepcopy(value)
     result = {}
@@ -75,11 +75,11 @@ def _json(value, maps, context=None):
         elif key == "id" and context in {"chapter", "quest"}:
             result[key] = _lookup(maps, context, item)
         elif key == "entries" and isinstance(item, dict):
-            result[key] = {npc if npc.startswith("interaction:") else _lookup(maps, "npc", npc): _json(routes, maps) for npc, routes in item.items()}
+            result[key] = {npc if npc.startswith("interaction:") else _lookup(maps, "npc", npc): remap_references(routes, maps) for npc, routes in item.items()}
         elif key in {"target", "navigation_target"} and isinstance(item, str):
             result[key] = _lookup(maps, "npc", item, required=False)
         elif key == "dialogue_id":
             result[key] = _marker(item, maps)
         else:
-            result[key] = _json(item, maps, key)
+            result[key] = remap_references(item, maps, key)
     return result

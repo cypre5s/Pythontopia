@@ -12,9 +12,11 @@ from PIL import Image
 from sqlalchemy import func, select
 
 from app.characters import validate_image
-from app.course_exchange import import_bundle, load_bundle, write_package
+from app.course_packages.apply import import_bundle
+from app.course_packages.reader import load_bundle
+from app.course_packages.writer import write_package
 from app.course_instances import content_mapping
-from app.course_package import PackageError
+from app.course_packages.manifest import PackageError
 from app.integration_models import AssistantCall
 from app.models import Classroom, Npc, StorySession
 from test_world_authoring import scene, draft, endpoint, flow, save, start  # noqa: F401
@@ -147,7 +149,7 @@ def test_failed_upload_keeps_published_reference(client, db, teacher, scene, mon
 
 def test_replacement_deletes_old_file_only_after_successful_save(client, db, teacher, scene, monkeypatch, tmp_path):
     from app.course_exchange_models import CoursePackageState
-    from app.storage import get_storage
+    from app.materials.storage import get_storage
     monkeypatch.setenv("REBORN_STORAGE_ROOT", str(tmp_path / "storage"))
     first = upload(client, teacher, scene).json()
     body = draft(client, teacher, scene)
@@ -172,7 +174,7 @@ def test_replacement_deletes_old_file_only_after_successful_save(client, db, tea
 
 def test_owned_asset_cannot_be_shared_and_deleted_role_retires_file(client, db, teacher, scene, monkeypatch, tmp_path):
     from app.course_exchange_models import CoursePackageState
-    from app.storage import get_storage
+    from app.materials.storage import get_storage
     monkeypatch.setenv("REBORN_STORAGE_ROOT", str(tmp_path / "storage"))
     asset = upload(client, teacher, scene).json()
     body = draft(client, teacher, scene)
@@ -198,7 +200,7 @@ def test_owned_asset_cannot_be_shared_and_deleted_role_retires_file(client, db, 
 def test_abandoned_upload_expiry_and_failed_file_delete_retry(client, db, teacher, scene, monkeypatch, tmp_path):
     from app.character_assets import retire_unused_assets, drain_character_garbage
     from app.course_exchange_models import CoursePackageState
-    from app.storage import LocalStorage
+    from app.materials.storage import LocalStorage
     monkeypatch.setenv("REBORN_STORAGE_ROOT", str(tmp_path / "storage"))
     asset = upload(client, teacher, scene).json()
     state = db.get(CoursePackageState, scene["instance"].id)

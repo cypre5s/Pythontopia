@@ -253,15 +253,16 @@ def test_retired_question_does_not_change_locked_paper(client, db, teacher, stud
 
 
 def test_package_import_cannot_hard_delete_parent_of_retired_content(client, db, teacher, classroom, authored):
-    from app.course_exchange import _snapshot, _impact
+    from app.course_content.snapshot import snapshot_content
+    from app.course_packages.impact import preview_impact
     chapter, _, _, _, activity = authored
     plan = preview(client, teacher, classroom, 'activity', activity.id)
     assert confirm(client, teacher, classroom, plan).status_code == 200
     instance = db.get(CourseInstance, activity.course_instance_id)
-    data, answers, releases, config, _ = _snapshot(db, instance)
+    data, answers, releases, config, _ = snapshot_content(db, instance)
     data['chapter'] = [c for c in data['chapter'] if c['id'] != chapter.stable_id]
     bundle = {'data': data, 'secrets': answers, 'course': {'releases': releases}, 'configuration': config, 'assets': [],
               'manifest': {key: getattr(instance,key) for key in ('package_id','name','package_version')}}
-    impact = _impact(db, instance, bundle)
+    impact = preview_impact(db, instance, bundle)
     assert any('历史保留内容引用' in message for message in impact['blockers'])
     assert db.scalar(select(Chapter).where(Chapter.id == chapter.id))

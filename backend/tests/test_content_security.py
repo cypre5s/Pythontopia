@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 from app.auth import hash_password, issue
 from app.models import Activity, Material, Question, QuestionSecret, User
-from app.quests import validate_definition
+from app.teaching.quests.validation import validate_definition
 
 
 def new_teacher(db):
@@ -151,7 +151,7 @@ def test_retained_quest_progress_does_not_expose_new_private_owner_configuration
 def test_current_reading_requirements_use_preserved_visited_pages_not_old_completed_flag(client, db, student, classroom):
     from fastapi import HTTPException
     from app.models import ActivityProgress, LearningRecord, PlayerQuest
-    from app.quests import validate_evidence
+    from app.teaching.quests.evidence import validate_evidence
 
     activity = db.get(Activity, "ch1-lesson")
     visited = list(activity.content["completion"]["required_page_ids"])

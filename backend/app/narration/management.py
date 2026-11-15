@@ -12,8 +12,9 @@ from ..db import get_db
 from ..models import Material, User, now
 from ..teacher_scope import teacher_instance_id
 from . import repository
-from .router import (GenerateInput, PageGenerateInput, RangeInput, _material, calibrate_deck,
-                     generate_narration, generate_range, synthesize_audio, synthesize_audio_batch)
+from .access import teacher_material
+from .request_contracts import GenerateInput, PageGenerateInput, RangeInput
+from .task_commands import (calibrate_deck, generate_narration, generate_range, synthesize_audio, synthesize_audio_batch)
 from .models import NarrationJob, NarrationRun
 
 router = APIRouter(prefix="/teacher/classrooms/{classroom_id}/synthesis", tags=["narration"])
@@ -87,7 +88,7 @@ class RetryInput(BaseModel):
 @router.post("/{material_id}/retry")
 def retry_task(classroom_id: int, material_id: int, body: RetryInput,
                db: Annotated[Session, Depends(get_db)], user: Annotated[User, Depends(require_teacher)]) -> dict[str, Any]:
-    material = _material(db, user, classroom_id, material_id)
+    material = teacher_material(db, user, classroom_id, material_id)
     job = repository.job_of(db, material_id)
     if (not job or not snapshot(material, job)["retryable"] or not job.started_at
             or job.started_at.isoformat() != body.expected_started_at):

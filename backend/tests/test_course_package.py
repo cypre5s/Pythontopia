@@ -9,7 +9,7 @@ import sys
 import pytest
 import yaml
 
-from app.course_package import PackageError, PackageLimits, main, validate_package
+from app.course_packages.manifest import PackageError, PackageLimits, main, validate_package
 
 
 @pytest.fixture
@@ -191,7 +191,7 @@ def test_symlink_is_rejected(package, tmp_path):
 def test_cli_does_not_import_database_or_touch_configuration(package):
     root, _, _ = package
     env = {**os.environ, "REBORN_DATABASE_URL": "invalid://must-not-be-read", "PYTHONIOENCODING": "utf-8"}
-    result = subprocess.run([sys.executable, "-m", "app.course_package", "--check", str(root)],
+    result = subprocess.run([sys.executable, "-m", "app.course_packages.manifest", "--check", str(root)],
                             cwd=Path(__file__).resolve().parents[1], env=env, capture_output=True, text=True, encoding="utf-8", check=False)
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["importable"] is False

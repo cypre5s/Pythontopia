@@ -416,7 +416,7 @@ docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.ym
 从backend目录，使用已安装requirements.lock的Python环境执行：
 
 ```powershell
-python -m app.course_package --check 'E:/course-exchange/my-course'
+python -m app.course_packages.manifest --check 'E:/course-exchange/my-course'
 ```
 
 路径仅示例，应改为自己准备的私有包目录；无需设置数据库或模型凭据。成功退出0，JSON包含preflight_ok=true、scope=manifest_and_assets、content_validated=false、importable=false及文件/资源数量。失败退出2，错误JSON写stderr；不会输出资源正文和私有答案。成功只表示本层校验通过，不允许据此激活或发布。
@@ -475,3 +475,16 @@ PR #2 集成迁移为 `a52e901c7d41`，合并 `f942bc358da1` 与 `f2a7c5d81b34` 
 升级前备份当前数据库，然后运行 `alembic upgrade head` 与 `alembic check`。迁移 d74e90bc21a6 一次性移除 action.text：已发布包中图书馆/日志的确切重复提示直接删除，其他实质文字改为保留原节点 ID 的对白并连接新操作节点，因此入口、连线与存档位置不丢失。不修改会话、任务进度、成绩或消息。受影响课程 revision 递增，旧编辑草稿需刷新，既有体验检查点按定义变更规则失效。拆分超过200节点时升级中止，先整理流程，不静默截断。回退使用升级前备份，不恢复运行时兼容分支。
 
 当前课程包源应同步删除操作节点提示，实质文字手工编为对白；新导入不会替旧格式自动转换。私有包及数据库备份不入 Git。
+
+## 模块边界检查
+
+目录和依赖归属见[架构](architecture.md#模块组织与依赖边界)。整理或新增模块后执行：
+
+```powershell
+node --test scripts/tests/module-boundaries.test.mjs
+node scripts/check-modules.mjs
+python -m unittest discover -s scripts/tests -p "test_*.py"
+python scripts/check-python-imports.py
+```
+
+检查已进入现有 Reborn checks 的文档与后端任务，无需单独流水线。Python 检查只静态读取 `backend/app`，包含函数内导入、常量动态导入、循环依赖与跨模块私有访问，不加载应用或连接数据库。边界违规阻断，行数与压行只提醒复核职责；仍须按本轮变更执行原有双端与后端检查。删除旧路径时同步真实调用、测试模拟和命令，不用兼容转发遮蔽缺漏。

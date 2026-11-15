@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { randomUUID } from "node:crypto";
 import { chooseOption, go, json, setup } from "./helpers";
-import type { Authoring, CharacterAsset } from "../src/lib/authoring";
+import type { Authoring, CharacterAsset } from "../src/features/authoring/model";
 
 test("统一角色草稿、私有素材、摆放与真实游戏身份", async ({ page, request, browser }, info) => {
   test.setTimeout(150000);

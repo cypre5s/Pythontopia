@@ -19,7 +19,7 @@ from app.db import Base, get_db
 from app.judge import JudgeSubmissionUnknown
 from app.main import create_app
 from app.models import Activity, AssessmentAttempt, ChapterRelease, Classroom, Membership, QuestionSecret, Submission, User
-from app.quests import validate_evidence
+from app.teaching.quests.evidence import validate_evidence
 from fixture_seed import seed
 
 

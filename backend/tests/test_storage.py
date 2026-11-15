@@ -1,7 +1,13 @@
+import app.materials.conversion as materials_conversion
+import app.materials.jobs as materials_jobs
+import app.materials.storage as materials_storage
 from conftest import make_material
 import pytest
 from fastapi import HTTPException
-from app.storage import LocalStorage, byte_range, validate_upload, convert_presentation
+from app.materials.storage import LocalStorage
+from app.materials.delivery import byte_range
+from app.materials.uploads import UploadValidationError, validate_upload
+from app.materials.conversion import convert_presentation
 
 
 def test_local_storage_rejects_traversal_and_symlink_escape(tmp_path, monkeypatch):
@@ -40,7 +46,7 @@ def test_invalid_ranges_are_416(header):
 def test_fake_pdf_rejected_and_utf8_text_accepted(tmp_path):
     path = tmp_path / "test.pdf"
     path.write_text("not a PDF")
-    with pytest.raises(HTTPException):
+    with pytest.raises(UploadValidationError):
         validate_upload(path, ".pdf")
     path = tmp_path / "test.txt"
     path.write_text("Python 语言基础", encoding="utf-8")
@@ -57,11 +63,10 @@ def test_missing_ppt_converter_reports_failure(tmp_path, monkeypatch):
 def test_teacher_upload_processing_range_and_current_material_authorization(client, db, teacher, student, classroom, tmp_path, monkeypatch):
     from sqlalchemy import select
     from sqlalchemy.orm import sessionmaker
-    from app import storage
     from app.models import Material, Activity
 
     monkeypatch.setenv("REBORN_STORAGE_ROOT", str(tmp_path / "private"))
-    monkeypatch.setattr(storage, "SessionLocal", sessionmaker(db.bind, expire_on_commit=False))
+    monkeypatch.setattr(materials_jobs, "SessionLocal", sessionmaker(db.bind, expire_on_commit=False))
     upload = client.post(
         "/api/teacher/materials/upload",
         data={"chapter_ids": "[179]", "title": "教师补充文本"},
@@ -71,7 +76,7 @@ def test_teacher_upload_processing_range_and_current_material_authorization(clie
     assert upload.status_code == 201, upload.text
     material_id = upload.json()["id"]
     row = db.get(Material, material_id)
-    storage.process_material(row.id)
+    materials_jobs.process_material(row.id)
     db.expire_all()
     assert db.get(Material, row.id).status == "ready"
     url = f"/api/materials/{material_id}/file?classroom_id={classroom['id']}"
@@ -103,7 +108,7 @@ def test_teacher_upload_processing_range_and_current_material_authorization(clie
     assert update.status_code == 201 and update.json()["id"] == material_id
     assert "version" not in update.json()
     assert client.get(url, headers=student["headers"]).status_code == 409
-    storage.process_material(material_id)
+    materials_jobs.process_material(material_id)
     db.expire_all()
     response = client.get(url, headers=student["headers"])
     assert response.status_code == 200 and response.content == b"updated content"
@@ -117,7 +122,6 @@ def test_material_worker_retries_database_and_recovers_queued_job(db, monkeypatc
     from sqlalchemy import select
     from sqlalchemy.exc import OperationalError
     from sqlalchemy.orm import sessionmaker
-    from app import storage
     from app.models import Material
 
     row = db.scalar(select(Material))
@@ -139,11 +143,11 @@ def test_material_worker_retries_database_and_recovers_queued_job(db, monkeypatc
         processed.append(material_id)
         raise asyncio.CancelledError
 
-    monkeypatch.setattr(storage, "SessionLocal", flaky_database)
-    monkeypatch.setattr(storage.asyncio, "sleep", sleep)
-    monkeypatch.setattr(storage, "process_material", stop_after_job)
+    monkeypatch.setattr(materials_jobs, "SessionLocal", flaky_database)
+    monkeypatch.setattr(materials_jobs.asyncio, "sleep", sleep)
+    monkeypatch.setattr(materials_jobs, "process_material", stop_after_job)
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(storage.material_worker())
+        asyncio.run(materials_jobs.material_worker())
     db.expire_all()
     assert delays == [1] and processed == [row.id]
     assert db.get(Material, row.id).status == "queued"
@@ -154,7 +158,6 @@ def test_private_http_converter_adapter_auth_type_and_pdf_contract(tmp_path, mon
     import io
     import httpx
     from pypdf import PdfReader, PdfWriter
-    from app import storage
 
     output = io.BytesIO()
     writer = PdfWriter()
@@ -174,17 +177,16 @@ def test_private_http_converter_adapter_auth_type_and_pdf_contract(tmp_path, mon
 
     monkeypatch.setenv("REBORN_CONVERTER_URL", "http://private-converter.test")
     monkeypatch.setenv("REBORN_CONVERTER_TOKEN", "test-only-private-converter-token")
-    monkeypatch.setattr(storage.httpx, "Client", lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs))
-    result = storage.convert_presentation(source, tmp_path)
+    monkeypatch.setattr(materials_conversion.httpx, "Client", lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs))
+    result = materials_conversion.convert_presentation(source, tmp_path)
     assert result.read_bytes() == pdf and len(PdfReader(result).pages) == 1
-    monkeypatch.setattr(storage, "MAX_UPLOAD", 8)
+    monkeypatch.setattr(materials_conversion, "MAX_UPLOAD", 8)
     with pytest.raises(ValueError, match="过大"):
-        storage.convert_presentation(source, tmp_path)
+        materials_conversion.convert_presentation(source, tmp_path)
 
 
 def test_private_http_converter_does_not_follow_redirects(tmp_path, monkeypatch):
     import httpx
-    from app import storage
 
     source = tmp_path / "source.pptx"
     source.write_bytes(b"explicit-test-presentation-payload")
@@ -197,15 +199,14 @@ def test_private_http_converter_does_not_follow_redirects(tmp_path, monkeypatch)
 
     monkeypatch.setenv("REBORN_CONVERTER_URL", "http://private-converter.test")
     monkeypatch.setenv("REBORN_CONVERTER_TOKEN", "test-only-private-converter-token")
-    monkeypatch.setattr(storage.httpx, "Client", lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs))
+    monkeypatch.setattr(materials_conversion.httpx, "Client", lambda **kwargs: real_client(transport=httpx.MockTransport(handler), **kwargs))
     with pytest.raises(ValueError, match="转换服务"):
-        storage.convert_presentation(source, tmp_path)
+        materials_conversion.convert_presentation(source, tmp_path)
     assert requests == ["http://private-converter.test/convert"]
 
 
 def test_image_fallback_keeps_host_read_only_and_applies_isolation(tmp_path, monkeypatch):
     import subprocess
-    from app import storage
 
     source = tmp_path / "self authored.pptx"
     source.write_bytes(b"explicit-test-presentation")
@@ -225,14 +226,13 @@ def test_image_fallback_keeps_host_read_only_and_applies_isolation(tmp_path, mon
         assert command[command.index("--name") + 1].startswith("reborn-presentation-")
         return subprocess.CompletedProcess(command, 0, stdout=pdf, stderr=b"")
 
-    monkeypatch.setattr(storage.subprocess, "run", fake_process)
-    result = storage.convert_presentation(source, tmp_path)
+    monkeypatch.setattr(materials_conversion.subprocess, "run", fake_process)
+    result = materials_conversion.convert_presentation(source, tmp_path)
     assert result.read_bytes() == pdf
 
 
 def test_image_fallback_timeout_only_removes_its_own_container(tmp_path, monkeypatch):
     import subprocess
-    from app import storage
 
     source = tmp_path / "source.pptx"
     source.write_bytes(b"explicit-test-presentation")
@@ -246,9 +246,9 @@ def test_image_fallback_timeout_only_removes_its_own_container(tmp_path, monkeyp
             raise subprocess.TimeoutExpired(command, 70)
         return subprocess.CompletedProcess(command, 0, stdout=b"", stderr=b"")
 
-    monkeypatch.setattr(storage.subprocess, "run", fake_process)
+    monkeypatch.setattr(materials_conversion.subprocess, "run", fake_process)
     with pytest.raises(ValueError, match="超时"):
-        storage.convert_presentation(source, tmp_path)
+        materials_conversion.convert_presentation(source, tmp_path)
     name = calls[0][calls[0].index("--name") + 1]
     assert calls[1] == ["docker", "rm", "--force", name]
     assert name.startswith("reborn-presentation-") and len(calls) == 2
@@ -256,19 +256,18 @@ def test_image_fallback_timeout_only_removes_its_own_container(tmp_path, monkeyp
 
 def test_replaced_material_is_not_overwritten_by_old_processing_job(db, monkeypatch, tmp_path):
     from sqlalchemy.orm import sessionmaker
-    from app import storage
     from app.models import Material
 
     monkeypatch.setenv("REBORN_STORAGE_ROOT", str(tmp_path / "private"))
     factory = sessionmaker(db.bind, expire_on_commit=False)
-    monkeypatch.setattr(storage, "SessionLocal", factory)
+    monkeypatch.setattr(materials_jobs, "SessionLocal", factory)
     row = make_material(db, chapter_ids=[179], title="current upload", kind="text", status="queued", storage_key="materials/old.txt", content={"pages": []})
     db.add(row)
     db.commit()
     material_id = row.id
     source = tmp_path / "old.txt"
     source.write_text("old upload", encoding="utf-8")
-    storage.get_storage().put(row.storage_key, source)
+    materials_storage.get_storage().put(row.storage_key, source)
 
     def replaced_during_parse(path, tmp):
         with factory() as other:
@@ -279,8 +278,8 @@ def test_replaced_material_is_not_overwritten_by_old_processing_job(db, monkeypa
             other.commit()
         return {"pages": [{"id": 1, "page_no": 1, "text": "stale output"}]}
 
-    monkeypatch.setattr(storage, "parse_bounded", replaced_during_parse)
-    storage.process_material(material_id)
+    monkeypatch.setattr(materials_jobs, "parse_bounded", replaced_during_parse)
+    materials_jobs.process_material(material_id)
     db.expire_all()
     saved = db.get(Material, material_id)
     assert saved.storage_key == "materials/replacement.txt" and saved.status == "queued"

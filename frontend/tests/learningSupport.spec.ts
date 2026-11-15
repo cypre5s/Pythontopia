@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { Comment, Fragment, Text, h, nextTick, ref } from "vue";
-import LearningSupportPanel from "../src/features/LearningSupportPanel.vue";
+import LearningSupportPanel from "../src/features/support/LearningSupportPanel.vue";
 import { api } from "../src/shared/api";
 import { useSession } from "../src/shared/session";
 

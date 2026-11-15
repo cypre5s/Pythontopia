@@ -1,8 +1,8 @@
 import { defineComponent, h, ref } from "vue";
 import { mount } from "@vue/test-utils";
 import { describe, expect, it } from "vitest";
-import LearningSplitLayout from "../src/features/LearningSplitLayout.vue";
-import LearningSupportPanel from "../src/features/LearningSupportPanel.vue";
+import LearningSplitLayout from "../src/features/support/LearningSplitLayout.vue";
+import LearningSupportPanel from "../src/features/support/LearningSupportPanel.vue";
 import { createWorkspaceSidebar, provideWorkspaceSidebar } from "../src/shared/workspaceSidebar";
 
 describe("workspace sidebar state", () => {

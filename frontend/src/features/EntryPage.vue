@@ -45,7 +45,7 @@
 </template>
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
-import { preloadWorld, startArrival, endArrival, backdropReady, worldAssetsReady, resourceError } from "../shared/arrival";
+import { preloadWorld, startArrival, endArrival, backdropReady, worldAssetsReady, resourceError } from "../app/arrival";
 import { useRouter, RouterLink } from "vue-router";
 import { api } from "../shared/api";
 import { useSession } from "../shared/session";

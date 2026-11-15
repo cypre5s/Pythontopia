@@ -1,0 +1,60 @@
+.condition-editor {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  width: 100%;
+  margin: 8px 0;
+}
+.condition-editor [data-slot="select-trigger"] {
+  min-width: 0;
+  width: 100%;
+  font-size: 12px;
+}
+.condition-children {
+  border-left: 2px solid #dfe6dc;
+  padding-left: 10px;
+}
+.route-card {
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fafcf9;
+}
+.route-card > [data-slot="select-trigger"],
+.route-card > input {
+  margin-bottom: 7px;
+}
+.map-authoring {
+  width: 100%;
+  max-height: 570px;
+  border: 1px solid #dce4dd;
+  border-radius: 8px;
+  background: #f8faf5;
+}
+.map-authoring.drawing {
+  cursor: crosshair;
+  touch-action: none;
+}
+.map-object {
+  cursor: pointer;
+}
+.map-object rect {
+  fill: #f4f9e4a6;
+  stroke: #315949;
+  stroke-width: 0.08;
+}
+.map-object text {
+  fill: #fffdf6;
+  stroke: #182c23;
+  stroke-width: 0.12;
+  stroke-linejoin: round;
+  paint-order: stroke;
+  pointer-events: none;
+}
+.map-object:focus {
+  outline: none;
+}
+.map-object:focus rect {
+  stroke: #d68947;
+  stroke-width: 0.2;
+}

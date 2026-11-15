@@ -2,8 +2,8 @@ import { it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ReactNode } from "react";
-import { Authoring } from "../src/pages/authoring";
-import type { Authoring as Document } from "../src/lib/authoring";
+import { Authoring } from "../src/features/authoring/authoring-page";
+import type { Authoring as Document } from "../src/features/authoring/model";
 const base: Document & { students: { id: number; name: string }[] } = {
   npcs: [],
   revision: 7,
@@ -59,7 +59,7 @@ function json(value: unknown, status = 200) {
 }
 afterEach(() => vi.unstubAllGlobals());
 // Browser tests cover measured nodes and drag handles. These tests exercise editor forms.
-vi.mock("../src/components/flow-canvas", () => ({
+vi.mock("../src/features/authoring/graph/flow-canvas", () => ({
   FlowCanvas: ({ renderWorkspace, paletteItems, onAddNode }: {
     renderWorkspace: (slots: { palette: ReactNode; canvas: ReactNode }) => ReactNode;
     paletteItems?: { kind: string; label: string }[];

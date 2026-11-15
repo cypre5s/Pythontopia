@@ -1,0 +1,244 @@
+/* Reading cards, video surface, lesson pagination and learning completion. */
+.course-video {
+  width: 100%;
+  max-height: 500px;
+  background: #13271d;
+}
+
+.game-workspace .learning-layout .lesson-pagination {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  letter-spacing: 0.04em;
+  color: var(--learn-muted);
+}
+
+.game-workspace .learning-layout .lesson-pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 8px 12px;
+  border: 1px solid var(--learn-border);
+  margin-bottom: 16px;
+}
+
+.game-workspace .learning-layout .lesson-pagination button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  font-size: 0.9375rem;
+}
+
+.game-workspace .learning-layout .lesson-pagination .reader-position {
+  flex: 1;
+  text-align: center;
+  min-width: 7rem;
+  font-size: 1rem;
+  color: var(--learn-ink);
+}
+
+.game-workspace .learning-layout .lesson-pagination .reader-position > span {
+  display: block;
+  font-size: 0.875rem;
+  color: var(--learn-muted);
+  margin-top: 0.15rem;
+}
+
+.game-workspace .learning-layout .lesson-pagination .reader-position strong {
+  font-weight: 700;
+}
+
+.game-workspace .reader-position-progress {
+  display: block;
+  width: min(100%, 16rem);
+  height: 4px;
+  margin: 4px auto 0;
+  appearance: none;
+  border: 0;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--game-line);
+}
+
+.game-workspace .reader-position-progress::-webkit-progress-bar {
+  background: var(--game-line);
+}
+
+.game-workspace .reader-position-progress::-webkit-progress-value {
+  background: var(--game-forest);
+  border-radius: 4px;
+}
+
+.game-workspace .reader-position-progress::-moz-progress-bar {
+  background: var(--game-forest);
+}
+
+.game-workspace .learning-layout .lesson-text {
+  max-width: 46rem;
+  font-size: var(--game-body-size);
+  line-height: 1.7;
+  margin: 0 auto;
+  overflow-wrap: anywhere;
+}
+
+.game-workspace .learning-layout .lesson-text h3 {
+  font-size: 1.25rem;
+  line-height: 1.6;
+  margin: 0 0 1.25rem;
+  letter-spacing: 0;
+}
+
+.game-workspace .learning-layout .lesson-text p {
+  white-space: pre-wrap;
+  margin-bottom: 16px;
+}
+
+.game-workspace .learning-layout .lesson-footer {
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--learn-border);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.game-workspace .learning-layout .lesson-footer strong {
+  font-size: 1rem;
+}
+
+.game-workspace .learning-layout .lesson-footer p {
+  font-size: 0.875rem;
+  line-height: 1.7;
+  color: var(--learn-muted);
+  margin: 0.4rem 0 0;
+}
+
+.game-workspace .learning-layout .lesson-footer button {
+  flex: 0 0 auto;
+  font-size: 1rem;
+}
+
+.game-workspace .learning-layout .learning-success {
+  color: var(--learn-forest) !important;
+  font-weight: 600;
+}
+
+.game-workspace .learning-layout .learning-empty {
+  font-size: 1rem;
+  line-height: 1.8;
+  color: var(--learn-muted);
+  padding: 2rem 0;
+}
+
+.game-workspace .learning-layout .course-video {
+  width: 100%;
+  border-radius: var(--game-radius);
+  background: #18342d;
+}
+
+@media (max-width: 900px), (max-height: 540px) {
+  .game-workspace .learning-layout .lesson-pagination {
+    gap: 0.5rem;
+    padding: 0.6rem;
+    margin-bottom: 1.25rem;
+  }
+  .game-workspace .learning-layout .lesson-pagination button {
+    flex: 0 1 auto;
+    font-size: 0.9375rem;
+    padding: 0.6rem 0.7rem;
+  }
+  .game-workspace .learning-layout .lesson-pagination .reader-position {
+    min-width: 5.5rem;
+  }
+  .game-workspace .learning-layout .lesson-footer > button {
+    width: 100%;
+  }
+}
+
+.game-workspace .learning-layout > .lesson-content {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: var(--game-gap);
+  min-width: 0;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.game-workspace .learning-layout .lesson-reading-card,
+.game-workspace .learning-layout .lesson-state-card {
+  min-height: 0;
+  min-width: 0;
+  padding: var(--game-panel-padding);
+  border: 1px solid var(--learn-border);
+  border-radius: var(--game-radius);
+  background: var(--learn-paper);
+}
+
+.game-workspace .learning-layout .lesson-reading-card {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.game-workspace .reader-card-title {
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  background: #e9e5da;
+  border-bottom: 1px solid var(--game-line);
+  font-size: .85rem;
+}
+
+.game-workspace .reader-card-title > span {
+  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--game-muted);
+  font-size: .8125rem;
+  font-weight: 400;
+}
+
+.game-workspace .lesson-reading-card > .notice {
+  margin: 16px;
+}
+
+.game-workspace .learning-layout .lesson-text {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  width: 100%;
+  padding: 16px;
+}
+
+.game-workspace .learning-layout .course-video {
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border: 0;
+}
+
+.game-workspace .learning-layout .lesson-pagination {
+  margin: 0;
+  background: var(--learn-paper);
+  border-radius: var(--game-radius);
+}
+
+.game-workspace .learning-layout .lesson-footer {
+  margin-top: 1.5rem;
+  align-items: stretch;
+  flex-direction: column;
+}
+
+.game-workspace .learning-layout .lesson-footer > div {
+  flex: 0 0 auto;
+}

@@ -106,8 +106,8 @@ def test_current_story_resumes_with_long_checkpoint_evidence(existing_database):
     from app.db import get_db
     from app.main import app
     from app.models import Chapter, ChapterRelease, Classroom, CourseInstance, LearningEvent, Membership, Npc, QuestDefinition, StoryDefinition, User, WorldFlag
-    from app.quests import validate_definition
-    from app.story import validate_story
+    from app.teaching.quests.validation import validate_definition
+    from app.teaching.story.validation import validate_story
 
     url, engine_factory = existing_database
     migrate(url, "upgrade", "head")

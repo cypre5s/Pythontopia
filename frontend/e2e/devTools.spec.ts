@@ -1,6 +1,7 @@
 import { importCourse, type CourseIds } from "./courseFixture";
 import { test, expect, type APIRequestContext, type APIResponse, type Page, type Response } from "@playwright/test";
 import { randomUUID } from "node:crypto";
+import type { ExperienceOverview } from "../src/features/developer/types";
 
 type Headers = { Authorization: string };
 interface Identity { access_token: string; user: { id: number; name: string; dev_tools_enabled: boolean }; }
@@ -191,11 +192,11 @@ test("development reset clears only the confirmed student's selected classroom a
   await setTextScale(page, "2");
   await dev.click();
   await expect(panel(page).locator(".game-workspace-title h2")).toBeInViewport({ ratio: 1 });
-  const scaledStart = panel(page).getByRole("button", { name: "重新开始当前班级", exact: true });
+  const scaledStart = panel(page).getByRole("button", { name: "重置当前学生进度", exact: true });
   await scaledStart.scrollIntoViewIfNeeded();
   await expect(scaledStart).toBeInViewport({ ratio: 1 });
   await scaledStart.click();
-  const scaledConfirm = panel(page).getByRole("button", { name: "确认重新开始", exact: true });
+  const scaledConfirm = panel(page).getByRole("button", { name: "确认重置学生进度", exact: true });
   await scaledConfirm.scrollIntoViewIfNeeded();
   await expect(scaledConfirm).toBeInViewport({ ratio: 0.99 });
   await expect(panel(page).getByRole("button", { name: "关闭当前工作区", exact: true })).toBeInViewport({ ratio: 1 });
@@ -206,11 +207,23 @@ test("development reset clears only the confirmed student's selected classroom a
   await setTextScale(page, "1");
   await dev.click();
   await expect(panel(page).locator(".game-workspace-title h2")).toHaveText("开发工具");
+  await expect(panel(page).getByRole("tab")).toHaveText(["账户概要", "内容定位", "任务阶段", "体验检查点"]);
+  await expect(panel(page).getByRole("tablist")).toHaveAttribute("aria-orientation", "vertical");
+  await panel(page).getByRole("tab", { name: "内容定位", exact: true }).click();
+  await expect(panel(page).getByRole("combobox", { name: "选择章节", exact: true })).toBeVisible();
+  await expect(panel(page).getByRole("button", { name: "重置当前学生进度", exact: true })).toBeHidden();
+  await page.screenshot({ path: info.outputPath("dev-tools-content-side-tabs-1920.png") });
+  await panel(page).getByRole("tab", { name: "任务阶段", exact: true }).click();
+  await expect(panel(page).getByRole("combobox", { name: "目标阶段", exact: true })).toBeVisible();
+  await panel(page).getByRole("tab", { name: "体验检查点", exact: true }).click();
+  await expect(panel(page).getByLabel("检查点名称", { exact: true })).toBeVisible();
+  await page.screenshot({ path: info.outputPath("dev-tools-checkpoints-side-tabs-1920.png") });
+  await panel(page).getByRole("tab", { name: "账户概要", exact: true }).click();
   await expect(panel(page)).toContainText(identity.user.name);
   await expect(panel(page)).toContainText(first.name);
   await page.screenshot({ path: info.outputPath("dev-tools-current-classroom-1920.png") });
-  await panel(page).getByRole("button", { name: "重新开始当前班级", exact: true }).click();
-  const confirm = panel(page).getByRole("button", { name: "确认重新开始", exact: true });
+  await panel(page).getByRole("button", { name: "重置当前学生进度", exact: true }).click();
+  const confirm = panel(page).getByRole("button", { name: "确认重置学生进度", exact: true });
   await expect(confirm).toBeVisible();
   expect(resetRequests).toHaveLength(0);
   await page.screenshot({ path: info.outputPath("dev-tools-confirmation-1920.png") });
@@ -245,7 +258,7 @@ test("development reset clears only the confirmed student's selected classroom a
   try {
     await expect.poll(() => confirming.evaluate(element => element.isConnected)).toBe(true);
     await expect.poll(() => confirming.isDisabled()).toBe(true);
-    await expect(panel(page).locator(".dev-tools-workspace")).toBeVisible();
+    await expect(panel(page).locator(".developer-workspace")).toBeVisible();
     await page.screenshot({ path: info.outputPath("dev-tools-pending-1920.png") });
   } finally { release(); }
   expect((await response).ok()).toBe(true);
@@ -334,7 +347,90 @@ test("production registration and login never expose the reset capability, menu 
   await enter(page, target, identity, classroom, []);
   await expect(page.locator(".hud-dock").getByRole("button", { name: "开发工具", exact: true })).toHaveCount(0);
   await page.locator(".hud-dock").getByRole("button", { name: "打开设置", exact: true }).click();
-  await expect(panel(page)).not.toContainText("重新开始当前班级");
+  await expect(panel(page)).not.toContainText("重置当前学生进度");
   await page.screenshot({ path: info.outputPath("production-no-dev-tools-1920.png") });
   expect((await api.get<{ model_calls: number }>("/assistant/status")).model_calls).toBe(0);
+});
+
+test("experience panels locate content and restore checkpoints without rewinding formal evidence", async ({ page, request }, info) => {
+  test.setTimeout(180_000);
+  const base = process.env.E2E_URL, student_id = process.env.E2E_TEACHER_STUDENT_ID, password = process.env.E2E_TEACHER_PASSWORD;
+  test.skip(process.env.E2E_DEV_TOOLS !== "1" || !base || !student_id || !password,
+    "Requires explicit isolated development URL and teacher credentials.");
+  const target = base!;
+  const teacher = await json<Identity>(await request.post(endpoint(target, "/auth/login"), { data: { student_id, password } }));
+  const classroom = await createClass(request, target, teacher, "体验链路");
+  const { identity } = await register(request, target, "体验链路验收学生");
+  const evidence = await establishEvidence(request, target, identity, classroom);
+  const mine = client(request, target, identity);
+  const errors: string[] = [], modelMessages: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  page.on("request", outgoing => {
+    if (outgoing.method() === "POST" && /\/assistant\/sessions\/[^/]+\/messages$/.test(outgoing.url())) modelMessages.push(outgoing.url());
+  });
+  await enter(page, target, identity, classroom, []);
+  const openTools = async (tab: string) => {
+    if (await panel(page).isVisible()) await panel(page).getByRole("button", { name: "关闭当前工作区", exact: true }).click();
+    await page.locator(".hud-dock").getByRole("button", { name: "开发工具", exact: true }).click();
+    await panel(page).getByRole("tab", { name: tab, exact: true }).click();
+  };
+  const reenter = async () => {
+    await expect(welcome(page)).toBeVisible({ timeout: 30_000 });
+    await welcome(page).getByRole("button", { name: "按任意键继续", exact: true }).click();
+    await expect(welcome(page)).toBeHidden();
+    await expect(page.locator(".world-canvas canvas")).toHaveCount(1);
+  };
+  await openTools("内容定位");
+  await panel(page).getByRole("combobox", { name: "选择章节", exact: true }).selectOption(String(classroom.ids.chapter["179"]));
+  await panel(page).getByRole("button", { name: "定位本章", exact: true }).click();
+  await expect(panel(page).getByRole("status")).toContainText("章节定位已更新");
+  await panel(page).getByRole("combobox", { name: "选择活动", exact: true }).selectOption(classroom.ids.activity["ch1-practice"]!);
+  await panel(page).getByRole("button", { name: "打开活动", exact: true }).click();
+  await expect(panel(page).locator(".practice-question-card").first()).toBeVisible();
+  await page.screenshot({ path: info.outputPath("experience-open-practice.png") });
+
+  await openTools("体验检查点");
+  const checkpointName = `练习前 ${randomUUID().slice(0, 6)}`;
+  await panel(page).getByRole("textbox", { name: "检查点名称", exact: true }).fill(checkpointName);
+  await panel(page).getByRole("button", { name: "保存检查点", exact: true }).click();
+  const checkpoint = panel(page).locator(".developer-checkpoints li").filter({ hasText: checkpointName });
+  await expect(checkpoint).toBeVisible();
+  const before = await mine.get<World>(`/world?classroom_id=${classroom.id}`);
+  const overview = await mine.get<ExperienceOverview>(`/dev/experience?classroom_id=${classroom.id}`);
+  const quest = overview.quests.find(item => item.nodes.some(node => node.status === "locked" && !node.condition))!;
+  expect(quest).toBeDefined();
+  const node = quest.nodes.find(item => item.status === "locked" && !item.condition)!;
+  await panel(page).getByRole("tab", { name: "任务阶段", exact: true }).click();
+  await panel(page).getByRole("combobox", { name: "任务", exact: true }).selectOption(quest.id);
+  await panel(page).getByRole("combobox", { name: "目标阶段", exact: true }).selectOption(node.id);
+  await panel(page).getByRole("button", { name: "预览阶段调整", exact: true }).click();
+  await expect(panel(page).getByRole("region", { name: "确认体验调整", exact: true })).toContainText(node.title);
+  await page.screenshot({ path: info.outputPath("experience-stage-preview.png") });
+  await panel(page).getByRole("button", { name: "确认定位", exact: true }).click();
+  await reenter();
+  const staged = await mine.get<World>(`/world?classroom_id=${classroom.id}`);
+  expect(staged.quests.find(item => item.id === quest.id)?.nodes.find(item => item.id === node.id)?.status).toBe("ready");
+  expect((await mine.get<{ status: string }>(`/submissions/${evidence.submission}?classroom_id=${classroom.id}`)).status).toBe("accepted");
+
+  await openTools("体验检查点");
+  await checkpoint.getByRole("button", { name: "恢复", exact: true }).click();
+  await expect(panel(page).getByRole("region", { name: "确认体验调整", exact: true })).toContainText(checkpointName);
+  await panel(page).getByRole("button", { name: "确认恢复", exact: true }).click();
+  await reenter();
+  await expect(panel(page).locator(".practice-question-card").first()).toBeVisible();
+  const restored = await mine.get<World>(`/world?classroom_id=${classroom.id}`);
+  const state = (world: World) => world.quests.map(item => ({ id: item.id, nodes: item.nodes.map(entry => ({ id: entry.id, status: entry.status })) }));
+  expect(state(restored)).toEqual(state(before));
+  expect((await mine.get<{ status: string }>(`/submissions/${evidence.submission}?classroom_id=${classroom.id}`)).status).toBe("accepted");
+  await mine.get(`/assistant/sessions/${evidence.assistant}`);
+  await page.screenshot({ path: info.outputPath("experience-restored-practice.png") });
+
+  await openTools("体验检查点");
+  await checkpoint.getByRole("button", { name: "删除", exact: true }).click();
+  await panel(page).getByRole("button", { name: "确认删除", exact: true }).click();
+  await expect(checkpoint).toHaveCount(0);
+  expect((await mine.get<ExperienceOverview>(`/dev/experience?classroom_id=${classroom.id}`)).checkpoints).toHaveLength(0);
+  expect(errors).toEqual([]);
+  expect(modelMessages).toEqual([]);
+  expect((await mine.get<{ model_calls: number }>("/assistant/status")).model_calls).toBe(0);
 });

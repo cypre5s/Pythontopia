@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import AssistantPanel from "../src/features/AssistantPanel.vue";
+import AssistantPanel from "../src/features/assistant/AssistantPanel.vue";
 import { api } from "../src/shared/api";
 import { useSession } from "../src/shared/session";
 describe("explicit isolated assistant stream fixture", () => {

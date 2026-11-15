@@ -37,7 +37,7 @@ def asset_descriptor(reference, kind, assets, classroom_id=None):
 
 
 def validate_characters(rows, assets):
-    from .world_authoring import reachable_cells
+    from app.teaching.world.rules import reachable_cells
     if not isinstance(rows, list) or len(rows) > 100:
         raise ValueError("教学角色最多100个")
     ids, positions, private_refs = set(), set(), set()

@@ -64,7 +64,7 @@ test("configured page ranges and real video playback drive authoritative goals",
   await expect(panel(page).locator(".support-goal-progress")).toContainText("0 / 2");
   await panel(page).getByRole("button", { name: /阅读第34页/ }).click();
   await expect.poll(async () => (await progress(activities[0]!.id)).read_count).toBe(1);
-  await panel(page).getByRole("tab", { name: "文档目录", exact: true }).click();
+  await panel(page).getByRole("tab", { name: "快速跳转", exact: true }).click();
   await expect(panel(page).getByRole("navigation", { name: "文档页面目录", exact: true })).toContainText("验收重点页");
   await panel(page).getByRole("tab", { name: "学习目标", exact: true }).click();
   await panel(page).getByRole("button", { name: /阅读第35页/ }).click();

@@ -9,7 +9,7 @@ import { onMounted, onBeforeUnmount, ref, watch } from 'vue';
 import { getWorldMap, mapRenderBounds, worldConfig } from '../game/config/worldConfig';
 import { paintMapPreview } from '../game/config/worldRender';
 import { useUiPreferences } from '../shared/uiPreferences';
-import { arrivalActive, arrivalCamera, endArrival, backdropReady, resourceError } from "../shared/arrival";
+import { arrivalActive, arrivalCamera, endArrival, backdropReady, resourceError } from "../app/arrival";
 const backdrop = ref<HTMLElement>();
 let flight: Animation | undefined;
 let reveal: Animation | undefined;

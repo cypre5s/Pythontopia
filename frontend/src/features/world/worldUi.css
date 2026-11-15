@@ -1,0 +1,182 @@
+/* World canvas, interaction prompt, touch controls and transient messages. */
+.world-page {
+  position: fixed;
+  inset: 0;
+  background: #213d2d;
+  overflow: hidden;
+}
+
+.world-canvas {
+  width: 100%;
+  height: 100%;
+  position: absolute;
+  inset: 0;
+}
+
+.world-canvas canvas {
+  display: block;
+}
+
+.world-loading,
+.screen-message {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  background: #f4f3e8;
+  color: var(--ink);
+  padding: 2rem;
+  z-index: 10;
+}
+
+.screen-message form {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.touch-controls {
+  position: absolute;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+}
+
+.touch-controls div {
+  display: flex;
+}
+
+.touch-controls button {
+  user-select: none;
+}
+
+.toast-layer {
+  position: fixed;
+  z-index: 90;
+  pointer-events: none;
+}
+
+.toast-layer p {
+  border: 1px solid #8a9e72;
+  color: #fff9e4;
+  box-shadow: 0 5px 35px #132b1b30;
+  border-radius: 7px;
+  line-height: 1.5;
+}
+
+@media (pointer: coarse) {
+  .touch-controls {
+    display: flex;
+  }
+}
+
+.world-page {
+  height: 100dvh;
+}
+
+.world-hint {
+  border-color: #dac4948c;
+  margin: 0;
+}
+
+.touch-controls {
+  bottom: var(--safe-bottom);
+  left: var(--safe-left);
+  gap: 8px;
+}
+
+.touch-controls div {
+  gap: 8px;
+}
+
+.touch-controls button {
+  width: 48px;
+  height: 48px;
+  min-height: 48px;
+  padding: 0;
+  border-color: #cfb986;
+  background: #fff7e8ed;
+  color: #294b35;
+  font-size: 1.2rem;
+  touch-action: none;
+}
+
+.touch-controls .touch-interact {
+  background: #385a3e;
+  color: #fff7d9;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.toast-layer {
+  max-width: min(380px, 32vw, calc(100% - var(--safe-left) - var(--safe-right)));
+  top: var(--safe-top);
+  left: 50%;
+  right: auto;
+  bottom: auto;
+  transform: translateX(-50%);
+}
+
+.toast-layer p {
+  font-size: 0.875rem;
+  background: #203e31f5;
+  border-color: #b7c397;
+  padding: 0.8rem 1rem;
+}
+
+@media (pointer: coarse) {
+  .touch-controls {
+    display: flex;
+  }
+}
+
+@media (max-width: 560px) and (min-height: 541px) {
+  .touch-controls {
+    bottom: calc(var(--safe-bottom) + 6.5rem);
+  }
+}
+
+.world-page .world-hint {
+  position: absolute;
+  left: 50%;
+  right: auto;
+  width: max-content;
+  bottom: calc(var(--safe-bottom) + 128px);
+  transform: translateX(-50%);
+  max-width: min(36rem, calc(100% - var(--safe-left) - var(--safe-right)));
+  padding: 8px 14px;
+  border: 1px solid #bda36b;
+  border-radius: 5px;
+  color: #fff3d4;
+  background: #142e26ed;
+  box-shadow: 0 3px 0 #0c201b80;
+  font-size: 1rem;
+  line-height: 1.5;
+  text-align: center;
+  white-space: normal;
+  pointer-events: none;
+}
+
+@media (max-width: 700px) {
+  .world-page .world-hint {
+    bottom: calc(var(--safe-bottom) + 170px);
+    padding: 8px 14px;
+    font-size: .875rem;
+    width: max-content;
+  }
+}
+
+@media (max-height: 540px) {
+  .world-page .world-hint {
+    bottom: calc(var(--safe-bottom) + 88px);
+    padding: 6px 14px;
+    font-size: .875rem;
+  }
+}
+
+.world-canvas:focus-visible {
+  outline: none;
+  box-shadow: none;
+}

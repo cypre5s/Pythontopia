@@ -11,14 +11,15 @@ import zipfile
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session
 
-from app.course_exchange import load_bundle, write_package
+from app.course_packages.reader import load_bundle
+from app.course_packages.writer import write_package
 from fixture_archive import MAX_ARCHIVE
 from fixture_instances import clone_current_course
-from app.course_package import PackageError
+from app.course_packages.manifest import PackageError
 from app.db import Base
 from app.models import Chapter, ChapterRelease, Classroom, User
 from fixture_seed import seed
-from app.storage import get_storage
+from app.materials.storage import get_storage
 
 
 @contextmanager

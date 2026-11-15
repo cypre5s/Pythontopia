@@ -6,7 +6,8 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import func, select
 from app.models import Question, QuestionSecret
-from app.quests import node_statuses, validate_definition
+from app.teaching.quests.graph import node_statuses
+from app.teaching.quests.validation import validate_definition
 from fixture_seed import seed
 from conftest import move_player
 

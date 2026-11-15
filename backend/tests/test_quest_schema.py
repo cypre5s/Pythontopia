@@ -1,7 +1,7 @@
 from copy import deepcopy
 from uuid import uuid4
 import pytest
-from app.quests import validate_definition
+from app.teaching.quests.validation import validate_definition
 from app.models import PlayerQuest
 from test_core import test_first_chapter_full_loop_and_idempotency as complete_first_chapter
 

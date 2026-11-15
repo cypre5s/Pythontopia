@@ -6,7 +6,7 @@ import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
 
-from app.experience_tools import stage_plan
+from app.experience.stages import stage_plan
 from app.models import (ActivityProgress, CourseInstance, ExperienceCheckpoint, NodeState, PlayerQuest,
                         QuestDefinition, StorySession, WorldFlag)
 from test_dev_tools import dev_client  # noqa: F401
@@ -244,7 +244,7 @@ def test_checkpoint_scope_stale_preview_and_capacity(dev_client, db, classroom, 
 
 def test_chapter_prerequisite_bypass_is_self_scoped_and_keeps_release_gate(dev_client, db, classroom, student):
     from app.models import ChapterRelease, Membership, User
-    from app.courses import chapter_available
+    from app.course_content.access import chapter_available
     release = db.get(ChapterRelease, (classroom["id"], 180))
     release.prerequisite_chapter_id = 179
     other = User(student_id="20261115008", name="其他学生", role="student", password_hash="not-used")

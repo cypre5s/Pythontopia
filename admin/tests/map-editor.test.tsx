@@ -1,8 +1,8 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { it, expect, vi } from "vitest";
-import { MapEditor } from "../src/components/map-editor";
-import type { Authoring } from "../src/lib/authoring";
+import { MapEditor } from "../src/features/authoring/map/map-editor";
+import type { Authoring } from "../src/features/authoring/model";
 
 vi.mock("../../shared/world/mapRender", () => ({
   paintMapPreview: vi.fn().mockRejectedValue(new Error("素材加载失败")),

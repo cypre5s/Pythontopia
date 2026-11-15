@@ -1,0 +1,245 @@
+/* Student-only reset, typography, primitive controls and accessibility preferences. */
+:root {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans SC", sans-serif;
+  color: #253a31;
+  background: #f6f4ec;
+  font-synthesis: none;
+  --ink: #253a31;
+  --green: #315b45;
+  --paper: #fffdf7;
+  --line: #dedfd3;
+  --font-heading: "Noto Serif SC", "Source Han Serif SC", "Songti SC", SimSun, serif;
+  font-size: calc(100% * var(--text-scale, 1));
+  --muted: #5e6b5d;
+  --ui-forest: #213f32;
+  --ui-gold: #d9b66c;
+  --ui-paper: #fff9e9;
+  --safe-top: max(12px, env(safe-area-inset-top));
+  --safe-right: max(16px, env(safe-area-inset-right));
+  --safe-bottom: max(16px, env(safe-area-inset-bottom));
+  --safe-left: max(16px, env(safe-area-inset-left));
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+  touch-action: manipulation;
+}
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  padding: 0.65rem 1rem;
+  border-radius: 7px;
+  background: var(--paper);
+  color: var(--ink);
+  transition: background-color 120ms,
+    border-color 120ms,
+    box-shadow 120ms;
+}
+
+button:hover {
+  background: #e9edde;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+a {
+  color: var(--green);
+  text-underline-offset: 4px;
+}
+
+button:focus-visible, a:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.primary {
+  background: var(--green);
+  border-color: var(--green);
+  color: #fffdf1;
+}
+
+.primary:hover {
+  background: #244735;
+}
+
+.text-button {
+  border: none;
+  background: transparent;
+  padding: 0.5rem 0;
+  text-align: left;
+  color: #687b62;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+.eyebrow {
+  font-size: 0.7rem;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+  color: #8b845e;
+  text-transform: uppercase;
+}
+
+.notice {
+  background: #f2f1e5;
+  border-left: 3px solid #b9b386;
+  padding: 1rem;
+  color: #676951;
+  font-size: 0.88rem;
+  line-height: 1.7;
+}
+
+.error {
+  background: #fff0e9;
+  color: #a3442e;
+  padding: 0.8rem 1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  white-space: pre-wrap;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+input,
+textarea,
+select {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0.75rem;
+  background: #fffef9;
+  color: var(--ink);
+  max-width: 100%;
+}
+
+textarea {
+  resize: vertical;
+}
+
+h1,
+h2,
+h3,
+p {
+  margin-top: 0;
+}
+
+h2 {
+  font-size: 1.55rem;
+  letter-spacing: -0.04em;
+}
+
+h3 {
+  font-size: 1.1rem;
+}
+
+kbd {
+  margin-left: 0.3rem;
+  font: inherit;
+  font-size: 0.75em;
+  padding: 0.1em 0.35em;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  opacity: 0.75;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+}
+
+@media (max-width: 760px), (max-height: 500px) {
+  .notice {
+    padding: 0.7rem;
+    font-size: 0.75rem;
+  }
+}
+
+h1,h2,h3,h4,h5,h6 {
+  font-family: var(--font-heading);
+  font-weight: 700;
+}
+
+:is(h1,h2,h3,h4,h5,h6) {
+  font-synthesis: weight;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.game-icon {
+  width: 1.3em;
+  height: 1.3em;
+  flex-shrink: 0;
+}
+
+button,
+a,
+summary {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible,
+summary:focus-visible,
+[tabindex]:focus-visible {
+  outline: none;
+  border-color: var(--ui-forest);
+  box-shadow: none;
+}
+
+button:focus-visible, summary:focus-visible {
+  background-color: #e9edde;
+}
+
+button:active:not(:disabled) {
+  box-shadow: inset 0 2px 0 #18352525;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+:root[data-reduced-motion="true"] *,
+:root[data-reduced-motion="true"] *::before,
+:root[data-reduced-motion="true"] *::after {
+  scroll-behavior: auto !important;
+  animation: none !important;
+  transition: none !important;
+}

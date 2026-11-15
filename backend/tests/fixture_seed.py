@@ -16,7 +16,7 @@ from app.models import (
     Activity, Chapter, CourseExample, KnowledgePoint, Material,
     Npc, QuestDefinition, Question, QuestionSecret,
 )
-from app.quests import validate_definition
+from app.teaching.quests.validation import validate_definition
 
 
 def _shared(item, label):
@@ -255,7 +255,7 @@ def _import_course(db, source=None, *, content_root=None):
         item.title, item.chapter_id, item.definition = definition["title"], definition["chapter_id"], definition
         item.owner_id = None
     db.flush()
-    from app.story import validate_story
+    from app.teaching.story.validation import validate_story
 
     for spec in content["stories"]:
         validate_story(spec["story"], db, spec["quest"], story_id=spec["id"])

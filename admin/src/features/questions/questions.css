@@ -1,0 +1,18 @@
+.case-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 10px;
+  padding: 12px 0;
+}
+.case-row label {
+  display: block;
+  margin-bottom: 5px;
+}
+.case-row textarea {
+  font-family: monospace;
+}
+@media (max-width: 600px) {
+  .case-row {
+    grid-template-columns: 1fr;
+  }
+}

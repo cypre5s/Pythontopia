@@ -9,7 +9,7 @@ from alembic.operations import Operations
 import pytest
 import sqlalchemy as sa
 
-from app.story import validate_story
+from app.teaching.story.validation import validate_story
 from test_curriculum_migration import migrate
 
 spec = spec_from_file_location("action_text_migration", Path(__file__).resolve().parents[1] / "alembic/versions/d74e90bc21a6_action_nodes_without_text.py")

@@ -1,0 +1,116 @@
+/* Shared learning split layout, status feedback and compact-view behavior. */
+.game-workspace .learning-layout {
+  --learn-ink: var(--game-ink, #513b28);
+  --learn-muted: #7d6c54;
+  --learn-border: var(--game-line, #d7c7a9);
+  --learn-accent: var(--game-gold, #e6be76);
+  --learn-forest: var(--game-forest, #284b43);
+  --learn-paper: var(--game-paper, #fbf5e9);
+  --learn-wash: #f0e7d5;
+  color: var(--learn-ink);
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 10px minmax(18rem, var(--support-width, 28%));
+  gap: 0;
+  flex: 1;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.game-workspace .learning-layout.reading-only {
+  grid-template-columns: 1fr;
+}
+
+.game-workspace .learning-layout > [hidden] {
+  display: none !important;
+}
+
+.game-workspace .learning-layout .eyebrow {
+  font-size: 0.875rem;
+  line-height: 1.6;
+  letter-spacing: 0.04em;
+  color: var(--learn-muted);
+}
+
+.game-workspace .learning-layout .notice,
+.game-workspace .learning-layout .error {
+  font-size: 0.9375rem;
+  line-height: 1.75;
+  margin: 1.2rem 0 0;
+  padding: 1rem 1.15rem;
+  overflow-wrap: anywhere;
+  border-radius: 10px;
+}
+
+.game-workspace .learning-layout .notice {
+  color: var(--learn-muted);
+  background: var(--learn-wash);
+  border: 1px solid var(--learn-border);
+}
+
+.game-workspace .learning-layout .error {
+  color: #8b4835;
+  background: #faeadd;
+  border: 1px solid #d7b59b;
+}
+
+.game-workspace .learning-layout summary {
+  min-height: var(--game-control-height);
+  font-size: 0.9375rem;
+  line-height: 1.4;
+  padding: 6px 10px;
+}
+
+.game-workspace .learning-layout .workspace-view-switch {
+  display: none;
+}
+
+@media (max-width: 900px), (max-height: 540px) {
+  .game-workspace .learning-layout.is-compact {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr);
+    position: relative;
+  }
+  .game-workspace .learning-layout.is-compact.reading-only {
+    grid-template-rows: minmax(0, 1fr);
+  }
+  .game-workspace .learning-layout.is-compact .workspace-view-switch {
+    display: flex;
+    align-items: stretch;
+    gap: 0.65rem;
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .game-workspace .learning-layout .workspace-view-switch button {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 1rem;
+  }
+}
+
+.game-workspace .learning-layout > :is(.lesson-content, .practice-content) {
+  grid-column: 1;
+  grid-row: 1;
+}
+
+.game-workspace .learning-layout > .learning-support {
+  grid-column: 3;
+  grid-row: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+@media (max-width: 900px), (max-height: 540px) {
+  .game-workspace .learning-layout.is-compact {
+    gap: 12px;
+  }
+  .game-workspace .learning-layout.is-compact > :is(.lesson-content, .practice-content, .learning-support) {
+    grid-column: 1;
+    grid-row: 2;
+  }
+}

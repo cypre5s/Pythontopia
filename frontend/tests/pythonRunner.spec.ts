@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { runPython, sameOutput } from "../src/shared/pythonRunner";
+import { runPython, sameOutput } from "../src/features/practice/pythonRunner";
 
 describe("public sample execution", () => {
   it("normalizes terminal newline without hiding incorrect internal whitespace", () => {

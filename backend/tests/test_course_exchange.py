@@ -1,22 +1,24 @@
 """Portable private exchanges preserve definitions and isolate classroom learning state."""
+import app.course_packages.apply as course_packages_apply
+import app.course_packages.paths as course_packages_paths
 from uuid import uuid4
 import zipfile
 
 import pytest
 from sqlalchemy import select
 
-from app.course_exchange import load_bundle
+from app.course_packages.reader import load_bundle
 from fixture_archive import unpack_archive
 from app.course_instances import content_mapping
 
 from fixture_instances import clone_current_course
-from app.course_package import PackageError
+from app.course_packages.manifest import PackageError
 from app.models import (ActivityProgress, Classroom, CourseInstance, Material, Question, QuestionSecret)
 
 
 def test_directory_package_rejects_action_prompt_field(client, teacher, exchange, tmp_path):
     import yaml
-    from app.course_package import PackageError
+    from app.course_packages.manifest import PackageError
 
     root = tmp_path / "action-prompt-package"
     root.mkdir()
@@ -63,7 +65,7 @@ def endpoint(cid, suffix):
 def export(client, teacher, instance):
     response = client.get(endpoint(instance.classroom_id, "export"), headers=teacher["headers"])
     assert response.status_code == 200, response.text
-    from app.course_exchange import exchange_root
+    from app.course_packages.paths import exchange_root
     import io
     root = exchange_root() / response.json()["directory"]
     buffer = io.BytesIO()
@@ -75,9 +77,9 @@ def export(client, teacher, instance):
 
 
 def preview(client, teacher, cid, payload):
-    from app.course_exchange import exchange_root
-    from app.course_catalog import mounted_catalog
-    from app.course_exchange import LIMITS
+    from app.course_packages.paths import exchange_root
+    from app.course_packages.catalog import mounted_catalog
+    from app.course_packages.contracts import LIMITS
     root = exchange_root()
     archive = root / f"{uuid4().hex}.zip"
     archive.write_bytes(payload)
@@ -225,7 +227,7 @@ def test_real_media_and_unassigned_sources_roundtrip(client, db, teacher, exchan
     import hashlib
     import json
     from app.course_exchange_models import CoursePackageState
-    from app.storage import get_storage
+    from app.materials.storage import get_storage
     source, target = exchange
     material = db.scalar(select(Material).where(Material.course_instance_id == source.id))
     raw = "这是真实课件原文件".encode()
@@ -313,9 +315,8 @@ def test_history_blocks_course_replacement_and_removal(client, db, teacher, stud
 
 
 def test_storage_failure_rolls_back_every_definition(client, db, teacher, exchange, tmp_path, monkeypatch):
-    from app import course_exchange
     from app.course_exchange_models import CourseImportPreview
-    from app.storage import get_storage
+    from app.materials.storage import get_storage
     source, target = exchange
     material = db.scalar(select(Material).where(Material.course_instance_id == source.id))
     original = tmp_path / "original.txt"
@@ -328,7 +329,7 @@ def test_storage_failure_rolls_back_every_definition(client, db, teacher, exchan
     def fail_put(*args):
         raise OSError("simulated storage failure")
     monkeypatch.setattr(adapter, "put", fail_put)
-    monkeypatch.setattr(course_exchange, "get_storage", lambda: adapter)
+    monkeypatch.setattr(course_packages_apply, "get_storage", lambda: adapter)
     response = apply(client, teacher, target.id, item)
     assert response.status_code == 422
     assert db.scalar(select(CourseInstance).where(CourseInstance.classroom_id == target.id)) is None
@@ -434,7 +435,7 @@ def test_assessment_question_order_locked_by_formal_attempt(client, db, teacher,
 def test_preview_resource_is_portable_and_storage_keys_are_private(client, db, teacher, exchange, tmp_path):
     import json
     from io import BytesIO
-    from app.storage import get_storage
+    from app.materials.storage import get_storage
     source, target = exchange
     material = db.scalar(select(Material).where(Material.course_instance_id == source.id))
     original, rendered = tmp_path / "original.ppt", tmp_path / "preview.pdf"
@@ -460,7 +461,7 @@ def test_preview_resource_is_portable_and_storage_keys_are_private(client, db, t
 
 
 def test_exchange_files_persist_privately_after_response(client, teacher, exchange, monkeypatch, tmp_path):
-    from app.course_exchange import exchange_root
+    from app.course_packages.paths import exchange_root
     source, target = exchange
     payload = export(client, teacher, source)
     preview(client, teacher, target.id, payload)
@@ -479,8 +480,11 @@ def test_postgres_repeated_apply_is_serialized_and_idempotent(pg_course_engine, 
     from datetime import timedelta
     from threading import Barrier
     from sqlalchemy.orm import Session
-    from app.course_exchange import ApplyInput, LIMITS, apply_course, exchange_path, write_package
-    from app.course_catalog import copy_directory
+    from app.course_packages.contracts import ApplyInput, LIMITS
+    from app.course_packages.service import apply_course
+    from app.course_packages.paths import exchange_path
+    from app.course_packages.writer import write_package
+    from app.course_packages.catalog import copy_directory
     from app.course_exchange_models import CourseImportPreview
     from app.models import User, now
     from test_course_instances import classes
@@ -519,7 +523,8 @@ def test_postgres_repeated_apply_is_serialized_and_idempotent(pg_course_engine, 
 
 def test_postgres_same_instance_reorders_and_removes_unreferenced_content(pg_course_engine, tmp_path, monkeypatch):
     from sqlalchemy.orm import Session
-    from app.course_exchange import import_bundle, write_package
+    from app.course_packages.apply import import_bundle
+    from app.course_packages.writer import write_package
     from app.models import Chapter
     from test_course_instances import classes
     monkeypatch.setenv("REBORN_STORAGE_ROOT", str(tmp_path / "media"))
@@ -561,7 +566,7 @@ def test_teaching_roles_are_part_of_complete_package(client, db, teacher, exchan
 
 @pytest.mark.parametrize("kind", ["directory"])
 def test_available_mounted_package_uses_normal_preview_and_apply(client, db, teacher, exchange, kind):
-    from app.course_exchange import exchange_root
+    from app.course_packages.paths import exchange_root
 
     source, target = exchange
     payload = export(client, teacher, source)
@@ -594,7 +599,7 @@ def test_retired_zip_upload_route_is_absent(client, teacher, exchange):
 
 
 def test_historical_archive_preview_is_not_executed_but_receipts_are_preserved(client, db, teacher, exchange):
-    from app.course_exchange import exchange_path
+    from app.course_packages.paths import exchange_path
     from app.course_exchange_models import CourseImportPreview
 
     source, target = exchange
@@ -627,9 +632,9 @@ def test_historical_archive_preview_is_not_executed_but_receipts_are_preserved(c
 
 def test_catalog_summary_and_readable_export_name(client, db, teacher, exchange):
     import re
-    from app.course_exchange import exchange_root
-    from app.course_catalog import package_counts
-    from app.course_package import PackageLimits
+    from app.course_packages.paths import exchange_root
+    from app.course_packages.catalog import package_counts
+    from app.course_packages.manifest import PackageLimits
 
     source, target = exchange
     source.name = 'Python/基础：第一课'
@@ -665,7 +670,7 @@ def test_available_packages_authorize_the_selected_classroom(client, db, teacher
 
 
 def test_mounted_selection_is_stale_after_change_and_files_remain_private(client, teacher, exchange):
-    from app.course_exchange import exchange_root
+    from app.course_packages.paths import exchange_root
 
     source, target = exchange
     mounted = exchange_root() / "mounted.zip"
@@ -684,11 +689,10 @@ def test_mounted_selection_is_stale_after_change_and_files_remain_private(client
 
 
 def test_mounted_catalog_does_not_list_archives(client, teacher, exchange):
-    import app.course_exchange as exchange_module
 
     source, target = exchange
     payload = export(client, teacher, source)
-    (exchange_module.exchange_root() / "large.zip").write_bytes(payload)
+    (course_packages_paths.exchange_root() / "large.zip").write_bytes(payload)
     listed = client.get(endpoint(target.id, "packages"), headers=teacher["headers"])
     assert listed.status_code == 200
     assert listed.json()["items"] == []
@@ -698,7 +702,7 @@ def test_mounted_catalog_does_not_list_archives(client, teacher, exchange):
 
 
 def test_available_preview_is_snapshot_and_apply_rechecks_revision(client, db, teacher, exchange):
-    from app.course_exchange import exchange_root
+    from app.course_packages.paths import exchange_root
 
     source, _ = exchange
     mounted = exchange_root() / "snapshot.zip"
@@ -713,7 +717,7 @@ def test_available_preview_is_snapshot_and_apply_rechecks_revision(client, db, t
 
 
 def test_uploaded_catalog_tampering_is_rejected(client, teacher, exchange):
-    from app.course_exchange import exchange_path
+    from app.course_packages.paths import exchange_path
     from app.course_exchange_models import CourseImportPreview
 
     source, target = exchange
@@ -731,7 +735,7 @@ def test_uploaded_catalog_tampering_is_rejected(client, teacher, exchange):
 def test_catalog_reader_rejects_outside_files_and_reparse_points(tmp_path, monkeypatch):
     from pathlib import Path
     from types import SimpleNamespace
-    from app.course_catalog import regular_reader
+    from app.course_packages.catalog import regular_reader
 
     root = tmp_path / "private"
     root.mkdir()
@@ -754,7 +758,7 @@ def test_catalog_reader_rejects_outside_files_and_reparse_points(tmp_path, monke
 
 def test_catalog_reader_accepts_relative_paths(tmp_path, monkeypatch):
     from pathlib import Path
-    from app.course_catalog import regular_reader
+    from app.course_packages.catalog import regular_reader
 
     monkeypatch.chdir(tmp_path)
     root = Path("private")
@@ -768,7 +772,7 @@ def test_catalog_reader_accepts_relative_paths(tmp_path, monkeypatch):
 def test_directory_size_metadata_does_not_invalidate_catalog_key(client, teacher, exchange, monkeypatch):
     from pathlib import Path
     from types import SimpleNamespace
-    from app.course_exchange import exchange_root
+    from app.course_packages.paths import exchange_root
 
     source, target = exchange
     folder = exchange_root() / "mounted"

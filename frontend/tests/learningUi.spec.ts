@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import LessonWorkspace from "../src/features/LessonWorkspace.vue";
-import PracticeWorkspace from "../src/features/PracticeWorkspace.vue";
+import LessonWorkspace from "../src/features/learning/LessonWorkspace.vue";
+import PracticeWorkspace from "../src/features/practice/PracticeWorkspace.vue";
 import OverlayHost from "../src/features/OverlayHost.vue";
 import { api } from "../src/shared/api";
 import { useSession } from "../src/shared/session";

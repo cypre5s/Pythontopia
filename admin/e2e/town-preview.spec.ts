@@ -13,7 +13,8 @@ test("教师从独立标签页进入并继续本班体验存档", async ({ page,
     await expect(town.getByRole("heading", { name: "欢迎回到小镇，教师体验学生。" })).toBeVisible();
     await town.getByRole("button", { name: "按任意键继续" }).click();
     await town.getByRole("button", { name: "开发工具", exact: true }).click();
-    await expect(town.getByRole("heading", { name: "重新开始当前班级" })).toBeVisible();
+    await expect(town.getByRole("tab", { name: "账户概要", exact: true })).toHaveAttribute("aria-selected", "true");
+    await expect(town.getByRole("heading", { name: "重置当前学生进度", exact: true })).toBeVisible();
     expect(await town.evaluate(() => window.opener === null)).toBe(true);
     return town;
   };

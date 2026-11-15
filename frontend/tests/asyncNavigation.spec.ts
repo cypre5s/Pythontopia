@@ -7,11 +7,8 @@ import { useSession } from "../src/shared/session";
 import { useUiPreferences } from "../src/shared/uiPreferences";
 import WorldCanvas from "../src/features/WorldCanvas.vue";
 import DialogueLayer from "../src/features/DialogueLayer.vue";
-import {
-  createWorld,
-  type WorldCallbacks,
-  type WorldHandle,
-} from "../src/game/adapters/world";
+import { createWorld } from "../src/game/adapters/world";
+import type { WorldCallbacks, WorldHandle } from "../src/game/world/types";
 import type { Classroom, User, World } from "../src/shared/types";
 
 vi.mock("../src/game/adapters/world", () => ({ createWorld: vi.fn() }));

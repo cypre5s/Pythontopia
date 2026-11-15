@@ -12,7 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 from .account_ids import normalize_student_id
 from .auth import hash_password, require_teacher
-from .classrooms import own_classroom
+from app.classrooms.access import own_classroom
 from .db import get_db
 from .models import AuthSession, Membership, User
 

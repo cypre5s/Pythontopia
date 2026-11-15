@@ -21,6 +21,8 @@ jobs:
           node-version: '22'
       # 链接/锚点/归档溯源。--fetch 只按需拉取归档清单里的那一个旧提交，不克隆全量历史。
       - run: node scripts/check-docs.mjs --fetch
+      - run: node --test scripts/tests/module-boundaries.test.mjs
+      - run: node scripts/check-modules.mjs
   backend:
     timeout-minutes: 30
     runs-on: ubuntu-24.04
@@ -48,6 +50,8 @@ jobs:
           cache: pip
           cache-dependency-path: backend/requirements.lock
       - run: pip install -r backend/requirements.lock
+      - run: python -m unittest discover -s scripts/tests -p "test_*.py"
+      - run: python scripts/check-python-imports.py
       - run: python backend/tests/source_fixtures.py
       - run: ruff check backend
       - run: python -m mypy

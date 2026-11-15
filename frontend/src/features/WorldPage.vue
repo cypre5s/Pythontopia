@@ -74,7 +74,7 @@ import { api, notify } from "../shared/api";
 import type { Player, Workspace } from "../shared/types";
 import { isTextFocus } from "../game/pathfinding";
 import { resolveWorldTarget } from "../game/config/worldConfig";
-import { arrivalActive, arrivalCamera, arrivalFinished, backdropReady, startArrival, endArrival, type ArrivalCamera } from "../shared/arrival";
+import { arrivalActive, arrivalCamera, arrivalFinished, backdropReady, startArrival, endArrival, type ArrivalCamera } from "../app/arrival";
 import ArrivalWelcome from "./ArrivalWelcome.vue";
 const welcome = ref(true);
 if (!arrivalActive.value) startArrival();

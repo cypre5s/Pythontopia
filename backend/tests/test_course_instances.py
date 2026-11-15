@@ -226,8 +226,8 @@ def test_public_flow_is_copied_without_inventing_default_chapter(db):
 
 
 def test_cloned_arrival_definitions_keep_valid_story_and_goal_links(db):
-    from app.quests import validate_definition
-    from app.story import validate_story
+    from app.teaching.quests.validation import validate_definition
+    from app.teaching.story.validation import validate_story
 
     _, _, alpha, _ = classes(db)
     instance = clone_current_course(db, alpha)

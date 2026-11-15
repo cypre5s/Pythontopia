@@ -1,3 +1,4 @@
+import app.course_packages.cleanup as course_packages_cleanup
 from contextlib import nullcontext
 from datetime import timedelta
 import os
@@ -7,8 +8,8 @@ from uuid import uuid4
 
 import pytest
 
-from app.course_cleanup import cleanup_exchange, exchange_guard, remove_scratch
-from app.course_exchange import exchange_root
+from app.course_packages.cleanup import cleanup_exchange, exchange_guard, remove_scratch
+from app.course_packages.paths import exchange_root
 from app.course_exchange_models import CourseImportPreview
 from app.models import now
 from test_course_exchange import exchange as exchange, export, preview, apply
@@ -69,7 +70,7 @@ def test_exchange_lock_excludes_another_process(tmp_path):
     probe = (
         "from pathlib import Path\n"
         "import sys\n"
-        "from app.course_cleanup import exchange_guard\n"
+        "from app.course_packages.cleanup import exchange_guard\n"
         "with exchange_guard(Path(sys.argv[1]), blocking=False) as acquired:\n"
         "    print(int(acquired))\n"
     )
@@ -86,18 +87,17 @@ def test_exchange_lock_excludes_another_process(tmp_path):
 
 
 def test_cleanup_retries_failed_removal(client, db, teacher, exchange, monkeypatch):
-    import app.course_cleanup as cleanup
     source, target = exchange
     item = preview(client, teacher, target.id, export(client, teacher, source))
     row = db.get(CourseImportPreview, item["id"])
     row.expires_at = now() - timedelta(seconds=1)
     db.commit()
     key = row.storage_key
-    real_remove = cleanup.remove_scratch
-    monkeypatch.setattr(cleanup, "remove_scratch", lambda *args: (_ for _ in ()).throw(OSError("busy")))
+    real_remove = course_packages_cleanup.remove_scratch
+    monkeypatch.setattr(course_packages_cleanup, "remove_scratch", lambda *args: (_ for _ in ()).throw(OSError("busy")))
     assert cleanup_exchange(exchange_root(), lambda: nullcontext(db)) == 0
     assert row.storage_key == key
-    monkeypatch.setattr(cleanup, "remove_scratch", real_remove)
+    monkeypatch.setattr(course_packages_cleanup, "remove_scratch", real_remove)
     assert cleanup_exchange(exchange_root(), lambda: nullcontext(db)) == 1
 
 

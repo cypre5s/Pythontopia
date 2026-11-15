@@ -2,7 +2,7 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { defineComponent, h } from "vue";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import PracticeWorkspace from "../src/features/PracticeWorkspace.vue";
+import PracticeWorkspace from "../src/features/practice/PracticeWorkspace.vue";
 import { useSession } from "../src/shared/session";
 import { api } from "../src/shared/api";
 import type { AssessmentAttempt, AssessmentAnswer, Submission } from "../src/shared/types";
@@ -173,7 +173,7 @@ describe("assessment and practice presentation", () => {
     expect(post).toHaveBeenLastCalledWith("/dev/progress/reset", { classroom_id: 2, confirmed: true });
   });
 });
-import * as pythonRunner from '../src/shared/pythonRunner';
+import * as pythonRunner from '../src/features/practice/pythonRunner';
 it('merges programming assessment actions while public samples are running', async () => {
   const {pinia,session}=setup();
   const activity=await session.activity('test');

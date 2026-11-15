@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createAssessmentDraftQueue } from "../src/shared/assessmentDraft";
+import { createAssessmentDraftQueue } from "../src/features/practice/assessmentDraft";
 import type { AssessmentAttempt } from "../src/shared/types";
 function deferred<T>() { let resolve!: (value: T) => void; const promise = new Promise<T>(done => { resolve = done; }); return { promise, resolve }; }
 const saved = (revision: number) => ({ revision, locked: false } as AssessmentAttempt);

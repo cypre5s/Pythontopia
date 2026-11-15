@@ -4,7 +4,7 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import TownBackdrop from "../src/features/TownBackdrop.vue";
 import { paintMapPreview } from "../src/game/config/worldRender";
 import { getWorldMap, mapRenderBounds, worldConfig } from "../src/game/config/worldConfig";
-import { arrivalActive, arrivalCamera, arrivalFinished, backdropReady, resourceError, startArrival } from "../src/shared/arrival";
+import { arrivalActive, arrivalCamera, arrivalFinished, backdropReady, resourceError, startArrival } from "../src/app/arrival";
 
 vi.mock("../src/game/config/worldRender", () => ({ paintMapPreview: vi.fn(async () => undefined) }));
 const mounted: VueWrapper[] = [];

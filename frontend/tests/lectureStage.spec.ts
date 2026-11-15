@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
-import LectureStage from "../src/features/LectureStage.vue";
+import LectureStage from "../src/features/learning/LectureStage.vue";
 import { createPinia, setActivePinia } from "pinia";
 import { api } from "../src/shared/api";
 

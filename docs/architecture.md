@@ -2,7 +2,7 @@
 
 `frontend` 使用 Vue 3、Pinia、TypeScript 和 Phaser 3。`game/adapters/world.ts` 是世界渲染边界；Vue 的 WorldCanvas、GameHUD、DialogueLayer 和 OverlayHost 管理画布、任务信息、脚本对白和唯一工作区。阅读器和编辑器延迟加载。API 契约见 api-contract.md。
 
-学生界面由app/gameUi.css、features/learningUi.css与features/townWorkspaces.css提供响应式布局，HUD在安全视口内按三行容器流动，不根据每帧世界状态轮询。shared/modalFocus.ts统一学习弹层的初始焦点、可见控件Tab边界、Esc与调用入口恢复；地图仅保留Esc关闭，不增加WASD/方向键选择或自动聚焦目标，关闭后回到世界焦点。背后的HUD为inert，窄屏的非当前学习视图同时hidden/inert。session.navigate/back保留最多6项返回历史，open作为新的顶层入口会清空历史，关闭/退出不保留旧路径。uiPreferences仅保存设备上的字号、动效和音乐音量选择，不产生模型请求。
+学生界面由features/world/、features/support/learningUi.css与features/townWorkspaces.css提供响应式布局，HUD在安全视口内按三行容器流动，不根据每帧世界状态轮询。shared/modalFocus.ts统一学习弹层的初始焦点、可见控件Tab边界、Esc与调用入口恢复；地图仅保留Esc关闭，不增加WASD/方向键选择或自动聚焦目标，关闭后回到世界焦点。背后的HUD为inert，窄屏的非当前学习视图同时hidden/inert。session.navigate/back保留最多6项返回历史，open作为新的顶层入口会清空历史，关闭/退出不保留旧路径。uiPreferences仅保存设备上的字号、动效和音乐音量选择，不产生模型请求。
 
 OverlayHost为日志、图书馆、地图、班级、设置、资料阅读与练习提供同一页头与近满屏透明外壳。gameDesign.css只在.game-workspace内定义令牌、图标标题、返回按钮、滚动条及原生单选/多选/下拉/开关/滑块的共同样式；各页不再覆写外壳尺寸和页头主题。townWorkspaces.css、learningUi.css和页面局部样式负责独立纸面卡片与透明间隙，教师主题保持独立。设计入口为design/README.md。LibraryWorkspace基于已授权/library响应，在客户端按章节分组并搜索/筛选；视图状态与滚动位置使用用户/班级隔离的sessionStorage键，阅读返回后恢复。筛选不改变服务端发布或授权。
 
@@ -10,7 +10,7 @@ ClassroomPanel从当前session.classes和world展示教师姓名与服务器任�
 
 SettingsPanel使用账户、界面、音乐、操作、关于的可键盘导航标签页。字号和动效复用uiPreferences，musicVolume经有效数值检查并限制在0到1，直接传给当前世界的环境音频对象；没有为设置创建另一套Phaser.Game或轮询。播放开关属于当前会话，音量属于本机偏好。关于页复用LicenseContent承载许可与来源，设置内不再提供班级或资料库跳转。
 
-`backend/app` 是一个 FastAPI 项目：auth、courses、curriculum、classrooms、quests、practice、assistant、storage 共用 SQLAlchemy 模型、数据库会话和鉴权。无旧 Java 服务和业务兼容层。PostgreSQL 是正式状态源，Alembic 是唯一迁移机制。SQLite 只用于轻量测试。登录使用随机不透明 bearer 会话令牌，数据库只存摘要；密码采用独立盐的 scrypt。
+`backend/app` 是一个 FastAPI 项目：auth、courses、course_content、classrooms、teaching、course_packages、materials、practice、assistant 共用 SQLAlchemy 模型、数据库会话和鉴权。无旧 Java 服务和业务兼容层。PostgreSQL 是正式状态源，Alembic 是唯一迁移机制。SQLite 只用于轻量测试。登录使用随机不透明 bearer 会话令牌，数据库只存摘要；密码采用独立盐的 scrypt。
 
 当前内置主线仅为arrival“初来小镇：第一堂 Python 课”。任务引擎仍支持通用分支与依赖，课程资源的章节数不等于已编写的主线数量。旧共享任务从当前配置退出，学生历史与当前任务定义分开保存。
 
@@ -141,3 +141,42 @@ ContentDeletionPreview保存教师/班级/课程归属、修订、目标、影�
 ## 体验检查点
 
 ExperienceCheckpoint按user_id/classroom_id保存命名体验快照和当前定义指纹，迁移c38d01fe72b9接b72c49e018a3。只包含WorldFlag、BuildingUnlock、PlayerPosition、ActivityProgress、当前StorySession必要状态及PlayerQuest/NodeState；客户端补充限定作用域的阅读和草稿缓存。没有课程定义副本、Submission、AssessmentAttempt、LearningEvent或AssistantSession回滚。恢复复用PlayerQuest主键以保留事件引用，重建未结束对白的新ID，拒绝过期指纹。课程锁与本人行锁串行化状态变更，检查未决评测和助教调用；详情见[体验接口](api-contract.md#体验开发工具)。
+
+## 模块组织与依赖边界
+
+2026-11-15 用户确认并实施完整整理。按业务职责组织源码，保留 HTTP 路径、请求响应字段、课程包格式、数据库表与稳定 ID；旧入口删除，不设置兼容转发层。当前验收结果与未执行范围单独记录于[验收](acceptance.md)，这里维护长期结构规则。
+
+### 学生端
+
+| 模块 | 职责与边界 |
+| --- | --- |
+| `frontend/src/shared/session/` | `index.ts` 是唯一身份、班级和世界快照所有者；navigation、position、story、reading、experience 分别处理工作区导航、实时位置、对白幂等请求、串行阅读保存和恢复前准备。子模块显式接收引用与回调，不自行创建相互依赖的 store。 |
+| `frontend/src/features/developer/` | DeveloperWorkspace 组装账户概要、内容定位、任务阶段、体验检查点四个图标侧标签。模块内 API 和请求协调器负责权限范围、并发动作与迟到结果；重置指向当前学生在当前班级的进度。 |
+| `frontend/src/features/learning/` | LessonWorkspace 组装阅读与支持侧栏；LessonMaterial 负责 PDF、文本、视频展示；source、reading evidence、video、completion、goals 分别管理资料生命周期、阅读证据、播放采样、显式完成和目标展示。旧资料的迟到响应不能覆盖新资料，离开释放媒体 URL。 |
+| `frontend/src/features/practice/` | 练习工作区、题卡、编程三卡片、Monaco、公开样例运行、输出差异与整卷草稿队列集中在练习模块。正式判题仍由 API/隔离判题服务提供证据，浏览器运行不产生分数。 |
+| `frontend/src/features/assistant/`、`support/` | 助教消息/Markdown 与学习目标/目录/分栏各有归属；共用的当前题目和阅读状态契约继续留在 shared，避免学习与练习互相依赖页面。 |
+| `frontend/src/game/world/` | assets、render、interactions、environment、keyboard、scene 分别拥有资源、地图人物绘制、互动与门户、环境、输入、场景生命周期；`game/adapters/world.ts` 保留唯一 Phaser.Game 与 Vue 回调边界。Phaser 层不导入 Vue 页面或会话 store。 |
+
+### 教师端
+
+`admin/src/App.tsx` 直接装配功能入口。教学流程放入 `features/authoring/`：页面只组装，草稿/保存校验、流程操作、预览独立；graph、flows/nodes、quests、map、characters、conditions 各拥有对应模型、状态与视图。资料、题库、活动分别归入 `features/materials/`、`questions/`、`activities/`；逐页讲解审校在资料模块内区分请求、审校状态、媒体生命周期、页面预览与编辑。通用控件留在 `components/ui/`，不反向依赖业务页面。不为保持旧路径新建空路由页面或 re-export。
+
+### 后端
+
+| 模块 | 所有权 |
+| --- | --- |
+| `course_packages/` | manifest/reader/writer/validation 负责格式与读写，catalog/paths/cleanup 负责目录生命周期，impact/apply/service 负责影响、事务应用及预览回执；router 仅装配接口。 |
+| `course_content/` | snapshot 保存当前定义快照供比较和交换；access/learning/evidence/presentation 共用授权、学习规则、证据与公开响应；activities/questions/releases/progress 维护活动、题库、发布和统计。定义快照不是学生可切换的课程版本。 |
+| `classrooms/` | 班级、成员、教师独立体验身份；课程内容不再混入班级接口文件。 |
+| `materials/` | storage 是本地/S3存储适配，uploads/conversion/jobs 负责上传解析与后台转换，delivery 负责私有文件与 Range 交付，access/presentation/service/router 维护授权、响应和接口。 |
+| `teaching/` | authoring、story、quests、world、conditions 分开定义校验、编写、运行状态、证据处理与 HTTP 装配。定义校验不依赖 HTTP 路由或应用编排，运行规则不反向调用教师编辑服务。 |
+| `experience/` | navigation/stages/checkpoints 分别拥有内容定位、任务阶段预览应用和检查点；access/state/contracts/router 共享本人作用域、状态快照和接口。 |
+| `narration/` | 保留已有讲稿、校准、TTS与仓储边界。请求契约、资料授权、任务命令和环境默认值独立维护，HTTP路由与失败重试管理共用任务命令，不互调路由函数。 |
+
+数据库事务边界由对应的应用操作确定，完整的仓储操作可封装自己的事务、锁与任务租约；拆出的子步骤不得提前提交破坏原子性，幂等回执与业务修改须保持一致。复用规则通过明确公共函数导入，不跨模块访问私有函数，不以函数内导入掩盖循环依赖。`models.py`、Alembic历史和现有学生数据不因目录整理改变。
+
+### 样式与持续检查
+
+学生基础样式在 `app/styles/base.css`，入口展示与关于页各自维护；世界/HUD/对白归入 `features/world/`，游戏共享控件在 `gameDesign.css`、普通工作区布局在 `townWorkspaces.css`。学习正文、支持侧卡、助教与练习样式各归功能目录。教师 `styles.css` 是导入入口，基础令牌、外壳和控件在 `styles/`，业务样式跟随 features。两端主题隔离，删除已退场 Vue 后台和旧登录/HUD覆盖，不复制主题到新模块。
+
+`node scripts/check-modules.mjs` 检查明确的导入边界和已退场入口；`python scripts/check-python-imports.py` 静态检查后端的循环依赖与跨模块私有访问，包含函数内和常量动态导入。两项进入既有 CI，配套合成测试覆盖规则。行数超过500或超过10行长于200字符只提醒人工复核，不能通过压行、机械切片或无意义转调达标。编译器、行为测试与浏览器仍负责真实正确性，依赖检查不替代它们。操作步骤见[开发手册](development.md)。

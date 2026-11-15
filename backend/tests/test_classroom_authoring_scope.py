@@ -1,4 +1,5 @@
 """Two classes of the same teacher must never share editable definitions."""
+import app.materials.jobs as materials_jobs
 
 import pytest
 from sqlalchemy import select
@@ -93,18 +94,17 @@ def test_initialization_is_explicit_and_authorized(client, db, teacher, student)
 
 def test_material_processing_invalidates_course_preview_revision(client, db, teacher, independent_classes, tmp_path, monkeypatch):
     from sqlalchemy.orm import sessionmaker
-    from app import storage
 
     cid = independent_classes[0]
     monkeypatch.setenv("REBORN_STORAGE_ROOT", str(tmp_path))
-    monkeypatch.setattr(storage, "SessionLocal", sessionmaker(db.bind, expire_on_commit=False))
-    monkeypatch.setattr(storage, "parse_bounded", lambda *_: {"pages": [{"id": 1, "page_no": 1, "text": "converted", "title": "页"}]})
+    monkeypatch.setattr(materials_jobs, "SessionLocal", sessionmaker(db.bind, expire_on_commit=False))
+    monkeypatch.setattr(materials_jobs, "parse_bounded", lambda *_: {"pages": [{"id": 1, "page_no": 1, "text": "converted", "title": "页"}]})
     response = client.post(f"/api/teacher/materials/upload?classroom_id={cid}", headers=teacher["headers"],
                            data={"title": "当前班资料"}, files={"file": ("course.txt", b"text", "text/plain")})
     assert response.status_code == 201, response.text
     instance = db.scalar(select(CourseInstance).where(CourseInstance.classroom_id == cid))
     before = instance.revision
-    storage.process_material(response.json()["id"])
+    materials_jobs.process_material(response.json()["id"])
     db.expire_all()
     assert instance.revision == before + 2  # Claim and final result each affect exchange consistency.
     assert db.get(Material, response.json()["id"]).status == "ready"

@@ -1,0 +1,85 @@
+/* Developer tools own content layout; shared game controls own their appearance. */
+.game-workspace .developer-workspace {
+  width: 100%;
+  max-width: 1280px;
+  max-height: 720px;
+  margin: auto;
+  overflow: hidden;
+}
+.game-workspace .developer-book { grid-template-columns: 200px minmax(0, 1fr); }
+.game-workspace .developer-content { padding: 0; }
+.game-workspace .developer-heading {
+  display: flex;
+  align-items: center;
+  min-height: var(--game-control-height);
+  padding: 8px var(--game-panel-padding);
+  border-bottom: 1px solid var(--game-line);
+  background: #eae6dc;
+}
+.game-workspace .developer-heading h3 { margin: 0; }
+.game-workspace .developer-panel { padding: var(--game-panel-padding); }
+.game-workspace .developer-section { margin: 0 0 20px; }
+.game-workspace .developer-section:last-child { margin-bottom: 0; }
+.game-workspace .developer-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.game-workspace .developer-section > .town-field { margin-bottom: 12px; }
+.game-workspace .developer-columns .developer-section { margin-bottom: 0; }
+.game-workspace .developer-columns + .developer-footer { margin-top: 20px; }
+.game-workspace .developer-field-action {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+.game-workspace .developer-field-action > .town-field { flex: 1 1 220px; }
+.game-workspace .developer-position { max-width: 160px; margin-top: 12px; }
+.game-workspace .developer-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.game-workspace .developer-panel button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.game-workspace .developer-help,
+.game-workspace .developer-feedback {
+  margin: 8px 0;
+  color: var(--game-muted);
+  font-size: var(--game-caption-size);
+  line-height: 1.6;
+}
+.game-workspace .developer-feedback { color: var(--game-forest); }
+.game-workspace .developer-feedback.is-error { color: #963f2c; }
+.game-workspace .developer-account {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px 24px;
+  margin: 0 0 24px;
+}
+.game-workspace .developer-account dt { color: var(--game-muted); font-size: var(--game-caption-size); margin-bottom: 4px; }
+.game-workspace .developer-account dd { margin: 0; font-size: var(--game-body-size); overflow-wrap: anywhere; }
+.game-workspace .developer-reset { border-top: 1px solid var(--game-line); padding-top: 16px; }
+.game-workspace .developer-reset > button { margin-top: 8px; }
+.game-workspace .developer-confirm {
+  border-top: 1px solid var(--game-line);
+  padding-top: 14px;
+  margin-top: 16px;
+  font-size: var(--game-label-size);
+}
+.game-workspace .developer-confirm p { margin: 8px 0 12px; }
+.game-workspace .developer-list-heading { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.game-workspace .developer-list-heading > .developer-help { margin: 0; }
+.game-workspace .developer-checkpoints { list-style: none; padding: 0; margin: 0; }
+.game-workspace .developer-checkpoints li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--game-line); }
+.game-workspace .developer-checkpoint-info { min-width: 0; }
+.game-workspace .developer-checkpoint-info strong { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--game-label-size); }
+.game-workspace .developer-checkpoint-info span { display: block; color: var(--game-muted); font-size: var(--game-caption-size); line-height: 1.6; }
+.game-workspace .developer-checkpoints .developer-actions { flex-shrink: 0; }
+.game-workspace .developer-load-error,
+.game-workspace .developer-unavailable { padding: var(--game-panel-padding); }
+@media (max-width: 900px) {
+  .game-workspace .developer-book { grid-template-columns: 170px minmax(0, 1fr); }
+  .game-workspace .developer-columns { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 720px) {
+  .game-workspace .developer-account { grid-template-columns: minmax(0, 1fr); }
+  .game-workspace .developer-checkpoints li { flex-wrap: wrap; }
+  .game-workspace .developer-content { padding: 0; }
+}

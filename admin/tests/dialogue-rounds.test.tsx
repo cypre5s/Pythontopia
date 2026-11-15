@@ -2,8 +2,8 @@ import { useState } from "react";
 import { expect, it } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { NodeEditor } from "../src/components/node-editor";
-import type { Catalog, Flow, StoryNode } from "../src/lib/authoring";
+import { NodeEditor } from "../src/features/authoring/flows/node-editor";
+import type { Catalog, Flow, StoryNode } from "../src/features/authoring/model";
 
 const catalog: Catalog = { maps: [], buildings: [], chapters: [], activities: [], npcs: [], quests: [] };
 const flow: Flow = { id: "welcome", title: "欢迎", chapter_id: null, quest_id: null,

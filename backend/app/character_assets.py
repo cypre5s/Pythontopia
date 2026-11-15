@@ -16,10 +16,10 @@ from .auth import current_user, require_teacher
 from .characters import asset_descriptor, builtin_assets, stored_assets, validate_image
 from .course_exchange_models import CoursePackageState
 from .course_instances import classroom_course
-from .courses import authorize_classroom
+from app.course_content.access import authorize_classroom
 from .db import get_db
 from .models import User, CourseInstance, Npc
-from .storage import get_storage
+from app.materials.storage import get_storage
 from .teacher_scope import teacher_instance_id
 
 router = APIRouter(tags=["character-assets"])

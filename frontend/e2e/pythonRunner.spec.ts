@@ -8,7 +8,7 @@ test("isolated Python samples, errors, timeout and teardown", async ({ page }) =
   page.on("request", request => { if (request.url().endsWith("/api/runner-security-probe")) applicationRequests++; });
   const result = await page.evaluate(async () => {
     // Vite serves the actual implementation, including its iframe CSP.
-    const path = "/src/shared/pythonRunner.ts";
+    const path = "/src/features/practice/pythonRunner.ts";
     const { runPython } = await import(/* @vite-ignore */ path);
     const run = (code: string, input = "") => runPython(code, input, new AbortController().signal);
     const echo = await run("print(input())", "hello");
@@ -38,7 +38,7 @@ test('prewarmed samples are fast, fresh, network-isolated and released with the 
     if (request.url().includes('/api/runner-security-probe') || request.url().includes('example.com/runner-probe')) leakedRequests++;
   });
   const result = await page.evaluate(async () => {
-    const path = '/src/shared/pythonRunner.ts';
+    const path = '/src/features/practice/pythonRunner.ts';
     const { createPythonRunner } = await import(/* @vite-ignore */ path);
     const coldStart = performance.now();
     const runner = createPythonRunner(2);

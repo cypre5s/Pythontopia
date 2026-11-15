@@ -15,7 +15,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from .auth import as_utc, require_teacher
-from .classrooms import own_classroom
+from app.classrooms.access import own_classroom
 from .db import SessionLocal, get_db
 from .integration_models import JudgeService, SubmissionDiagnostic, SubmissionPayload
 from .models import Activity, Question, Submission, User, now

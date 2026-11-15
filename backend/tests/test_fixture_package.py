@@ -4,9 +4,9 @@ import os
 
 import pytest
 from fixture_package import build_fixture_package
-from app.course_exchange import load_bundle
+from app.course_packages.reader import load_bundle
 from fixture_archive import unpack_archive
-from app.course_package import PackageError
+from app.course_packages.manifest import PackageError
 
 
 def test_fixture_package_isolated_and_paused(tmp_path, monkeypatch):

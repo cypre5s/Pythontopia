@@ -21,7 +21,7 @@ PENDING = {"prepared", "dispatching", "queued", "running"}
 
 
 def assessment_questions(db, activity, classroom_id=None):
-    from .courses import learning_questions
+    from app.course_content.learning import learning_questions
     classroom = db.get(Classroom, classroom_id) if classroom_id is not None else None
     return learning_questions(db, activity, classroom.teacher_id if classroom else None)
 
@@ -107,7 +107,7 @@ class HandInInput(BaseModel):
 
 
 def _authorize(db, user, classroom_id, activity_id, *, write=False):
-    from .courses import authorize_activity
+    from app.course_content.access import authorize_activity
     activity = authorize_activity(db, user, classroom_id, activity_id)
     if activity.kind != "assessment":
         raise HTTPException(422, "此活动不是测验")

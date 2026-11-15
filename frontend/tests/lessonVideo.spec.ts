@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import LessonWorkspace from "../src/features/LessonWorkspace.vue";
+import LessonWorkspace from "../src/features/learning/LessonWorkspace.vue";
 import { api } from "../src/shared/api";
 import { useSession } from "../src/shared/session";
 import type { ActivityProgress } from "../src/shared/types";

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { getDocument, type PDFDocumentLoadingTask } from "pdfjs-dist";
-import PdfReader from "../src/features/PdfReader.vue";
+import PdfReader from "../src/features/learning/PdfReader.vue";
 import { api } from "../src/shared/api";
 import { createPinia, setActivePinia } from "pinia";
 

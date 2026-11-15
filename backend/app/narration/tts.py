@@ -12,16 +12,14 @@ Two request shapes are supported behind one seam, selected by `REBORN_TTS_PROTOC
 Weights for a self-hosted engine are fetched outside the image; nothing is baked in.
 """
 
-import os
 from typing import cast
 
 import httpx
 from sqlalchemy.orm import Session
 
 from .contracts import SpeechSettings
+from .defaults import environment_protocol
 
-DEFAULT_VOICE = "Meilin"
-DEEPSEEK_VOICE = "stella"
 DEEPSEEK_FORMATS = {"wav", "pcm"}
 
 
@@ -33,23 +31,8 @@ class SpeechFailed(RuntimeError):
     """The engine answered but the audio cannot be used."""
 
 
-def environment_protocol() -> str:
-    value = (os.getenv("REBORN_TTS_PROTOCOL") or "openai").strip().lower()
-    return "deepseek" if value == "deepseek" else "openai"
 
 
-def environment() -> SpeechSettings:
-    vendor = environment_protocol()
-    return SpeechSettings(
-        protocol=vendor,
-        base_url=(os.getenv("REBORN_TTS_BASE_URL") or "").rstrip("/"),
-        api_key=(os.getenv("REBORN_TTS_API_KEY") or "").strip(),
-        model=(os.getenv("REBORN_TTS_MODEL") or "zonos3-mini").strip(),
-        voice=(os.getenv("REBORN_TTS_VOICE") or (DEEPSEEK_VOICE if vendor == "deepseek" else DEFAULT_VOICE)).strip(),
-        format=(os.getenv("REBORN_TTS_FORMAT") or ("wav" if vendor == "deepseek" else "mp3")).strip().lower(),
-        speed=float(os.getenv("REBORN_TTS_SPEED") or 1.0),
-        timeout=int(os.getenv("REBORN_TTS_TIMEOUT_SECONDS") or 120),
-    )
 
 
 def settings(db: Session | None = None) -> SpeechSettings:

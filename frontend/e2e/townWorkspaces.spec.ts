@@ -99,12 +99,14 @@ async function sameCanvas(page: Page) {
   expect(await page.evaluate(() => window.__townWorkspaceCanvas === document.querySelector(".world-canvas canvas"))).toBe(true);
   await expect(page.locator(".world-canvas canvas")).toHaveCount(1);
 }
-async function nearFullPage(page: Page) {
-  const book = await workspace(page).locator(".town-book").boundingBox();
+async function centeredCompactWorkspace(page: Page) {
+  const book = await workspace(page).locator(".workspace-shell").boundingBox();
   expect(book).not.toBeNull();
   const viewport = page.viewportSize()!;
-  expect(book!.width / viewport.width).toBeGreaterThanOrEqual(0.85);
-  expect(book!.height / viewport.height).toBeGreaterThanOrEqual(0.75);
+  expect(book!.width).toBe(1280);
+  expect(book!.height).toBe(720);
+  expect(book!.x).toBe((viewport.width - 1280) / 2);
+  expect(book!.y).toBe((viewport.height - 12 - 720) / 2);
 }
 async function noHorizontalOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
@@ -123,7 +125,7 @@ async function noModelCalls(request: APIRequestContext, student: Header) {
   expect((await json<{ model_calls: number }>(await request.get("/api/assistant/status", { headers: student }))).model_calls).toBe(0);
 }
 
-test("town library fills the workspace and preserves chapter search and filters across reading", async ({ page, request }, testInfo) => {
+test("town library uses a centered workspace and preserves chapter search and filters across reading", async ({ page, request }, testInfo) => {
   test.setTimeout(180_000);
   const setup = await prepare(request, "图书馆");
   await enter(page, setup.identity, setup.first);
@@ -134,7 +136,7 @@ test("town library fills the workspace and preserves chapter search and filters 
   await expect(panel).not.toContainText("留一页，慢慢读");
   await expect(panel.locator(".library-chapter")).toHaveCount(7);
   await expect(panel.locator(".library-card")).toHaveCount(41);
-  await nearFullPage(page);
+  await centeredCompactWorkspace(page);
   await page.screenshot({ path: testInfo.outputPath("town-library-1920.png") });
   const firstChapter = panel.getByRole("navigation", { name: "资料章节" }).getByRole("button", { name: /第一章/ });
   await firstChapter.click();
@@ -197,7 +199,7 @@ test("my classroom shows verified progress and safely switches or joins real cla
   await expect(panel.locator(".current-classroom h3")).toHaveText(setup.first.name);
   await expect(panel.locator(".current-classroom")).toContainText(setup.teacherName);
   await expect(panel.locator(".classroom-progress-caption strong")).toHaveText("1 / 8 步");
-  await nearFullPage(page);
+  await centeredCompactWorkspace(page);
   await page.screenshot({ path: testInfo.outputPath("my-classroom-1920.png") });
   await reducedViewportChecks(page, testInfo, "my-classroom");
   await sameCanvas(page);
@@ -242,7 +244,7 @@ test("categorized settings update the real music player and keep about informati
   await expect(panel.getByRole("tab").first()).toHaveText("账户");
   await expect(panel.getByRole("tab", { name: "账户", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect(panel.getByRole("tabpanel")).toContainText(setup.identity.user.student_id);
-  await nearFullPage(page);
+  await centeredCompactWorkspace(page);
   await page.screenshot({ path: testInfo.outputPath("settings-account-1920.png") });
   await panel.getByRole("tab", { name: "账户", exact: true }).focus();
   await page.keyboard.press("ArrowDown");

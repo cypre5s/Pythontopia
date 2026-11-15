@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from "vitest";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { Activities } from "../src/pages/activities";
+import { Activities } from "../src/features/activities/activities-page";
 
 const json = (value: unknown) => new Response(JSON.stringify(value), { headers: { "Content-Type": "application/json" } });
 afterEach(() => vi.unstubAllGlobals());

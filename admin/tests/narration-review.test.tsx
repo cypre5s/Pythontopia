@@ -1,7 +1,7 @@
 import { it, expect, vi, afterEach } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { NarrationReview } from "../src/components/narration-review";
+import { NarrationReview } from "../src/features/materials/narration/review";
 
 afterEach(() => vi.unstubAllGlobals());
 

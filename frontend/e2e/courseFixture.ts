@@ -25,7 +25,7 @@ export async function importCourse(request: APIRequestContext, headers: Record<s
   expect(packages, `Expected one mounted test course with package_id=${configured}`).toHaveLength(1);
   const preview = await request.post(`${root}/imports/available/preview`, {
     headers,
-    data: { package_key: packages[0].key },
+    data: { package_key: packages[0]!.key },
   });
   expect(preview.ok(), await preview.text()).toBeTruthy();
   const item = await preview.json();

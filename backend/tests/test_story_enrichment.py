@@ -1,4 +1,5 @@
 """Story DSL behavior: verified state, persistent randomness and harmless ambient scenes."""
+import app.teaching.story.runtime as teaching_story_runtime
 
 from copy import deepcopy
 from uuid import uuid4
@@ -6,7 +7,7 @@ from uuid import uuid4
 import pytest
 from sqlalchemy import select
 
-from app import assistant, story as story_module
+from app import assistant
 from app.assessments import assessment_questions
 from app.models import (
     Activity,
@@ -27,7 +28,7 @@ from app.models import (
     WorldFlag,
 )
 from app.integration_models import AssistantCall, AssistantSession
-from app.story import validate_story
+from app.teaching.story.validation import validate_story
 from conftest import move_player
 
 
@@ -177,7 +178,7 @@ def test_unfinished_judging_never_matches_even_zero_score(client, db, student, c
 
 
 def test_conditional_choices_are_hidden_revalidated_and_cannot_be_forged(client, db, student, classroom, story_space):
-    from app.story_conditions import condition_matches
+    from app.teaching.conditions.runtime import condition_matches
 
     quest = install_task(db, npc="professor")
     # No ready task at this NPC, so this independent ambient scene is selectable.
@@ -221,7 +222,7 @@ def test_random_scene_is_drawn_once_and_survives_restore_and_request_retry(clien
         draws.append(tuple(options))
         return options[-1]
 
-    monkeypatch.setattr(story_module.secrets, "choice", choose)
+    monkeypatch.setattr(teaching_story_runtime.secrets, "choice", choose)
     content = ambient_content(nodes=[
         {"id": "start", "type": "dialogue", "text": "Say hello", "next": "random"},
         {"id": "random", "type": "random", "next": ["one", "two"]},
@@ -319,7 +320,7 @@ def test_waiting_task_is_not_replaced_by_a_new_ambient_scene(client, db, student
 def test_composed_conditions_use_real_goal_states_and_distinguish_chapter_from_all_quests(
     client, db, student, classroom, story_space,
 ):
-    from app.story_conditions import condition_matches
+    from app.teaching.conditions.runtime import condition_matches
 
     quest = {
         "id": "test-enrichment-conditions", "chapter_id": 179, "title": "Condition fixture", "kind": "side",
@@ -485,7 +486,7 @@ def test_ambient_validation_rejects_progress_effects_and_invalid_auto_node_graph
 def test_negation_and_nested_any_do_not_turn_unavailable_references_into_permission(
     db, student, classroom, story_space, reference,
 ):
-    from app.story_conditions import condition_matches
+    from app.teaching.conditions.runtime import condition_matches
 
     foreign_teacher = User(student_id="87963449590180", name="Other author", role="teacher", password_hash="unused-test-only")
     db.add(foreign_teacher)
@@ -529,7 +530,7 @@ def test_negation_and_nested_any_do_not_turn_unavailable_references_into_permiss
 def test_negation_still_handles_authorized_unopened_chapters_and_ungraded_assessments_normally(
     db, student, classroom, story_space,
 ):
-    from app.story_conditions import condition_matches
+    from app.teaching.conditions.runtime import condition_matches
 
     scene = install_story(db, ambient_content())
     db.get(ChapterRelease, (story_space, 180)).status = "draft"

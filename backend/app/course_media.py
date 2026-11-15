@@ -24,7 +24,7 @@ from sqlalchemy import select, text
 from .content_relations import material_in_chapter, set_material_chapters
 from .db import SessionLocal
 from .models import Chapter, Material
-from .storage import get_storage, storage_root
+from app.materials.storage import get_storage, storage_root
 
 MAX_ARCHIVE_BYTES = 1024 * 1024 * 1024
 MAX_EXPANDED_BYTES = 1024 * 1024 * 1024
@@ -54,7 +54,7 @@ def _unique_object(pairs):
     return result
 
 
-def _json(raw):
+def remap_references(raw):
     try:
         return json.loads(raw, object_pairs_hook=_unique_object,
                           parse_constant=lambda value: (_ for _ in ()).throw(ValueError("无效JSON数字")))
@@ -64,10 +64,10 @@ def _json(raw):
 
 def _sources(source_root):
     root = Path(source_root)
-    docs = _json((root / "json/course_document.json").read_text(encoding="utf-8-sig"))
-    pages = _json((root / "json/course_page.json").read_text(encoding="utf-8-sig"))
-    manifest = _json((root / "video_manifest.json").read_text(encoding="utf-8-sig"))
-    transcripts = _json((root / "video_transcripts.json").read_text(encoding="utf-8-sig"))
+    docs = remap_references((root / "json/course_document.json").read_text(encoding="utf-8-sig"))
+    pages = remap_references((root / "json/course_page.json").read_text(encoding="utf-8-sig"))
+    manifest = remap_references((root / "video_manifest.json").read_text(encoding="utf-8-sig"))
+    transcripts = remap_references((root / "video_transcripts.json").read_text(encoding="utf-8-sig"))
     if not isinstance(docs, list) or not docs or not isinstance(pages, list) or not isinstance(manifest, list) or not manifest:
         raise ValueError("课程来源清单无效")
     by_doc = {}
@@ -159,7 +159,7 @@ def _stage_archive(archive, directory, documents, videos, checksums, manifest, t
                 if size != member.size:
                     raise ValueError("媒体文件不完整")
                 staged[name] = StagedFile(destination, size, digest.hexdigest())
-                if name in metadata and _json(destination.read_text(encoding="utf-8-sig")) != metadata[name]:
+                if name in metadata and remap_references(destination.read_text(encoding="utf-8-sig")) != metadata[name]:
                     raise ValueError("包内媒体清单与可信课程来源不一致")
     except (tarfile.TarError, EOFError, OSError) as exc:
         raise ValueError("媒体压缩包损坏或无法完整读取") from exc

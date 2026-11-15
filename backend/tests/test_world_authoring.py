@@ -10,7 +10,7 @@ from app.models import (Activity, ActivityProgress, AssessmentAttempt, BuildingU
                         CourseInstance, LearningEvent, LearningRecord, Material, Membership, NodeState, Npc, PlayerQuest,
                         Question, QuestDefinition, StoryDefinition, StorySession, Submission, WorldFlag)
 from app.integration_models import AssistantCall
-from app.world_authoring import reachable_cells
+from app.teaching.world.rules import reachable_cells
 
 
 @pytest.fixture

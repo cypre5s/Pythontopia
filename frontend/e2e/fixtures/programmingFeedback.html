@@ -3,9 +3,9 @@
 <body><main class="game-workspace"><nav id="fixture-toolbar"></nav><div id="fixture"></div></main>
 <script type="module">
 import {createApp, h, ref} from 'vue';
-import ProgrammingQuestion from '/src/features/ProgrammingQuestion.vue';
+import ProgrammingQuestion from '/src/features/practice/ProgrammingQuestion.vue';
 import '/src/features/gameDesign.css';
-import '/src/features/programmingUi.css';
+import '/src/features/practice/programmingUi.css';
 const question={id:'fixture-python',kind:'python',title:'向小镇问好',prompt:'读取一个名字，输出：你好，名字！',options:[],samples:[{input:'小林',output:'你好，小林！'},{input:'Python',output:'你好，Python！'}]};
 createApp({setup(){
   const code=ref('print("你好，" + input())');

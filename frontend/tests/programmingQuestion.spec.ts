@@ -1,10 +1,10 @@
 import { mount, flushPromises } from "@vue/test-utils";
 import { it, expect, vi } from "vitest";
-import PracticeQuestionCard from "../src/features/PracticeQuestionCard.vue";
-import ProgrammingQuestion from '../src/features/ProgrammingQuestion.vue';
-import { runPython } from "../src/shared/pythonRunner";
+import PracticeQuestionCard from "../src/features/practice/PracticeQuestionCard.vue";
+import ProgrammingQuestion from '../src/features/practice/ProgrammingQuestion.vue';
+import { runPython } from "../src/features/practice/pythonRunner";
 
-vi.mock("../src/shared/pythonRunner", () => ({
+vi.mock("../src/features/practice/pythonRunner", () => ({
   runPython: vi.fn().mockResolvedValue({ stdout: "hello\n", stderr: "" }),
   createPythonRunner: () => ({ run: (...args: Parameters<typeof runPython>) => runPython(...args), dispose: vi.fn() }),
   sameOutput: (actual: string, expected: string) => actual.trimEnd() === expected,

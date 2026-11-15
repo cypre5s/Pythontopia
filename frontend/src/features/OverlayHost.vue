@@ -66,7 +66,7 @@
       /><ClassroomPanel
         v-else-if="session.workspace.kind === 'classroom'"
       /><SettingsPanel v-else-if="session.workspace.kind === 'settings'" />
-      <DevToolsPanel v-else-if="session.workspace.kind === 'developer' && canUseDevTools(session.user)" />
+      <DeveloperWorkspace v-else-if="session.workspace.kind === 'developer' && canUseDevTools(session.user)" />
       <p v-else class="town-section" role="alert">当前功能不可用。</p>
     </section>
   </div>
@@ -83,14 +83,14 @@ import QuestJournal from "./QuestJournal.vue";
 import LibraryWorkspace from "./LibraryWorkspace.vue";
 import ClassroomPanel from "./ClassroomPanel.vue";
 import SettingsPanel from "./SettingsPanel.vue";
-import DevToolsPanel from "./DevToolsPanel.vue";
+import DeveloperWorkspace from "./developer/DeveloperWorkspace.vue";
 import { canUseDevTools } from "../shared/devTools";
 import { createWorkspaceSidebar, provideWorkspaceSidebar } from "../shared/workspaceSidebar";
 function lazyWorkspace(loader: () => Promise<{ default: Component }>) {
   return defineAsyncComponent({loader, loadingComponent: WorkspaceLoadState, errorComponent: WorkspaceLoadState, delay: 0, timeout: 20000});
 }
-const LessonWorkspace = lazyWorkspace(() => import("./LessonWorkspace.vue"));
-const PracticeWorkspace = lazyWorkspace(() => import("./PracticeWorkspace.vue"));
+const LessonWorkspace = lazyWorkspace(() => import("./learning/LessonWorkspace.vue"));
+const PracticeWorkspace = lazyWorkspace(() => import("./practice/PracticeWorkspace.vue"));
 const MapWorkspace = lazyWorkspace(() => import("./MapWorkspace.vue"));
 const session = useSession(),
   emit = defineEmits<{ close: []; complete: [] }>(),

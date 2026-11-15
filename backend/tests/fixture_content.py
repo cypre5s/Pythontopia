@@ -112,8 +112,8 @@ def load_content(root=None):
 
 
 def validate_sources(root=None):
-    from app.quests import validate_definition
-    from app.story import validate_story
+    from app.teaching.quests.validation import validate_definition
+    from app.teaching.story.validation import validate_story
     from app.learning_rules import validate_learning
 
     content = load_content(root)

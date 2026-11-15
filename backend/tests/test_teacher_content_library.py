@@ -1,4 +1,5 @@
 """Independent content authoring, reuse, ownership, and reference protection."""
+import app.materials.jobs as materials_jobs
 
 from sqlalchemy import select
 
@@ -76,18 +77,17 @@ def test_question_selection_rejects_invalid_status_chapter_duplicates_and_owner(
 
 
 def test_material_upload_without_chapter_then_multichapter_metadata_and_teacher_preview(client, db, teacher, student, classroom, tmp_path, monkeypatch):
-    from app import storage
     from sqlalchemy.orm import sessionmaker
 
     headers = teacher["headers"]
     monkeypatch.setenv("REBORN_STORAGE_ROOT", str(tmp_path))
-    monkeypatch.setattr(storage, "SessionLocal", sessionmaker(db.bind, expire_on_commit=False))
+    monkeypatch.setattr(materials_jobs, "SessionLocal", sessionmaker(db.bind, expire_on_commit=False))
     upload = client.post("/api/teacher/materials/upload", headers=headers, data={"title": "Unclassified"},
                          files={"file": ("library.txt", b"Current learning material", "text/plain")}, params={"classroom_id": classroom["id"]})
     assert upload.status_code == 201, upload.text
     key = upload.json()["id"]
     assert next(m for m in client.get("/api/teacher/materials", headers=headers, params={"classroom_id": classroom["id"]}).json() if m["id"] == key)["chapter_ids"] == []
-    storage.process_material(key)
+    materials_jobs.process_material(key)
     db.expire_all()
     detail = client.get(f"/api/teacher/materials/{key}", headers=headers, params={"classroom_id": classroom["id"]})
     assert detail.status_code == 200 and detail.json()["chapter_ids"] == []

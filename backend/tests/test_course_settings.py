@@ -3,7 +3,8 @@
 from copy import deepcopy
 
 from app.course_assistant import activity_npc, default_npc
-from app.course_exchange import import_bundle, write_package
+from app.course_packages.apply import import_bundle
+from app.course_packages.writer import write_package
 from app.course_exchange_models import CoursePackageState
 from app.models import Activity, Npc
 from test_world_authoring import scene  # noqa: F401
@@ -62,7 +63,7 @@ def test_inherited_activity_roundtrip(db, teacher, scene, tmp_path):
     package = tmp_path / "package"
     package.mkdir()
     write_package(db, scene["instance"], package)
-    from app.course_exchange import load_bundle
+    from app.course_packages.reader import load_bundle
     bundle = load_bundle(package)
     assert bundle["data"]["activity"][0]["npc_key"] is None
     before = deepcopy(state.configuration["assistant"])

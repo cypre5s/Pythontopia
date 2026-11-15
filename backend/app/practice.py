@@ -86,7 +86,8 @@ def stage_submission(db, user, classroom_id, activity, question, answer, code, k
 
 @router.post("/submissions", status_code=201)
 def create_submission(body: SubmissionInput, user: Annotated[User, Depends(current_user)], db: Annotated[Session, Depends(get_db)]):
-    from .courses import authorize_activity, learning_questions
+    from app.course_content.access import authorize_activity
+    from app.course_content.learning import learning_questions
 
     activity = authorize_activity(db, user, body.classroom_id, body.activity_id)
     if user.role != "student":
@@ -134,7 +135,7 @@ def create_submission(body: SubmissionInput, user: Annotated[User, Depends(curre
 
 @router.get("/submissions/{submission_id}")
 def get_submission(submission_id: str, classroom_id: int, user: Annotated[User, Depends(current_user)], db: Annotated[Session, Depends(get_db)]):
-    from .courses import authorize_activity, authorize_classroom
+    from app.course_content.access import authorize_activity, authorize_classroom
     from .models import Activity
 
     row = db.get(Submission, submission_id)

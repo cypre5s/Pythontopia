@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest';
-import { outputDiff, visibleDiffText } from '../src/shared/outputDiff';
+import { outputDiff, visibleDiffText } from '../src/features/practice/outputDiff';
 
 it('highlights missing Chinese punctuation without marking equal text', () => {
   const diff = outputDiff('你好，小林\n', '你好，小林！');

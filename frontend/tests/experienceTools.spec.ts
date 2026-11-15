@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils';
 import { createPinia, setActivePinia } from 'pinia';
-import ExperienceTools from '../src/features/ExperienceTools.vue';
+import DeveloperWorkspace from '../src/features/developer/DeveloperWorkspace.vue';
 import { useSession } from '../src/shared/session';
 import { api } from '../src/shared/api';
 import { captureExperience, restoreExperienceCaches } from '../src/shared/devTools';
@@ -13,17 +13,24 @@ beforeEach(() => {
   const session = useSession();
   session.user = {id:7,name:'学生',student_id:'7',role:'student',dev_tools_enabled:true};
   session.classroomId = 2;
+  session.classes = [{id:2,name:"体验班",teacher_id:10}];
+  api.setToken("fixture-experience");
   vi.spyOn(api,'get').mockResolvedValue(overview);
 });
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.restoreAllMocks(); sessionStorage.clear(); localStorage.clear(); });
-async function tool() { wrapper = mount(ExperienceTools); await flushPromises(); return wrapper; }
+async function tool(tab = "content") {
+  wrapper = mount(DeveloperWorkspace);
+  await wrapper.get(`#developer-tab-${tab}`).trigger("click");
+  await flushPromises();
+  return wrapper;
+}
 
 it('opens an authorized activity at the requested question without marking progress', async () => {
   const post = vi.spyOn(api,'post').mockResolvedValue({workspace:{kind:'practice',activity_id:'practice',question_no:2}});
   const session = useSession(), navigate = vi.spyOn(session,'navigate');
   const w = await tool();
-  await w.findAll('select')[2]!.setValue('practice');
-  await w.findAll('input[type=number]')[1]!.setValue('2');
+  await w.get('#developer-activity').setValue('practice');
+  await w.get('#developer-question').setValue('2');
   await w.findAll('button').find(b=>b.text()==='打开活动')!.trigger('click');
   await flushPromises();
   expect(post).toHaveBeenCalledExactlyOnceWith('/dev/experience/open', {classroom_id:2,kind:'activity',target:'practice',page_no:1,question_no:2,video_time:0});
@@ -33,15 +40,14 @@ it('opens an authorized activity at the requested question without marking progr
 it('requires a stage preview and passes its concurrency token to the state-changing operation', async () => {
   vi.spyOn(api,'post').mockResolvedValue({expected:'token',completed:[],target:'欢迎'});
   const session = useSession(), restart = vi.spyOn(session,'restartCurrentClassroom').mockResolvedValue(true);
-  const w = await tool();
-  await w.get('[role=tab]:nth-child(2)').trigger('click');
-  await w.findAll('select')[0]!.setValue('arrival');
-  await w.findAll('select')[1]!.setValue('welcome');
+  const w = await tool('stage');
+  await w.get('#developer-quest').setValue('arrival');
+  await w.get('#developer-node').setValue('welcome');
   await w.findAll('button').find(b=>b.text()==='预览阶段调整')!.trigger('click');
   await flushPromises();
   expect(restart).not.toHaveBeenCalled();
-  await w.get('.experience-confirm .town-primary').trigger('click');
-  expect(restart).toHaveBeenCalledWith({path:'/dev/experience/stage',body:{classroom_id:2,quest_id:'arrival',node_id:'welcome',choices:{},any_dependencies:{},expected:'token'},restore:false});
+  await w.get('.developer-confirm .town-primary').trigger('click');
+  expect(restart).toHaveBeenCalledWith({path:'/dev/experience/stage',body:{classroom_id:2,quest_id:'arrival',node_id:'welcome',choices:{},any_dependencies:{},expected:'token'}});
 });
 
 it('ignores a late content response after switching account', async () => {
@@ -49,7 +55,7 @@ it('ignores a late content response after switching account', async () => {
   vi.spyOn(api,'post').mockImplementation(()=>new Promise(resolve=>{finish=resolve;}));
   const session = useSession(), navigate = vi.spyOn(session,'navigate');
   const w = await tool();
-  await w.findAll('select')[2]!.setValue('practice');
+  await w.get('#developer-activity').setValue('practice');
   await w.findAll('button').find(b=>b.text()==='打开活动')!.trigger('click');
   session.user = {...session.user!,id:8};
   await flushPromises();
@@ -75,4 +81,55 @@ it('captures the last activity and restores only the owning classroom reading an
   expect(sessionStorage.getItem('read:8:2:question:practice')).toBe('3');
   expect(localStorage.getItem('auth-token')).toBe('private');
   expect(localStorage.getItem('draft:8:2:question')).toBeNull();
+});
+
+it('reuses a frozen checkpoint payload after uncertain failure, including across tab switches', async () => {
+  const post = vi.spyOn(api, 'post').mockRejectedValueOnce(new Error('连接中断')).mockResolvedValueOnce({});
+  const w = await tool('checkpoints');
+  sessionStorage.setItem('read:7:2:question:practice', '1');
+  await w.get('#developer-checkpoint-name').setValue('练习前');
+  await w.get('form').trigger('submit');
+  await flushPromises();
+  expect(w.get('[role=alert]').text()).toBe('连接中断');
+  const initial = structuredClone(post.mock.calls[0]![1]);
+  sessionStorage.setItem('read:7:2:question:practice', '2');
+  await w.get('#developer-tab-account').trigger('click');
+  await w.get('#developer-tab-checkpoints').trigger('click');
+  await w.get('form').trigger('submit');
+  await flushPromises();
+  expect(post.mock.calls[1]![1]).toEqual(initial);
+  expect(w.get('#developer-checkpoint-name').element).toHaveProperty('value', '');
+  expect(w.text()).toContain('检查点已保存。');
+});
+
+it('does not present a stale stage confirmation after leaving its tab', async () => {
+  let finish!: (value: unknown) => void;
+  vi.spyOn(api, 'post').mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  const w = await tool('stage');
+  await w.get('#developer-quest').setValue('arrival');
+  await w.get('#developer-node').setValue('welcome');
+  await w.findAll('button').find(button => button.text() === '预览阶段调整')!.trigger('click');
+  await flushPromises();
+  await w.get('#developer-tab-content').trigger('click');
+  finish({ expected: 'old-token', completed: [], target: '欢迎' });
+  await flushPromises();
+  await w.get('#developer-tab-stage').trigger('click');
+  expect(w.find('.developer-confirm').exists()).toBe(false);
+});
+
+it('keeps checkpoint restore separate from reset and sends the preview fingerprint', async () => {
+  vi.mocked(api.get).mockImplementation(async path => path.includes('/preview')
+    ? { expected: 'checkpoint-token', name: '练习前' }
+    : { ...overview, checkpoints: [{ id: 'cp1', name: '练习前', created_at: '2026-11-15T00:00:00Z', valid: true }] });
+  const restart = vi.spyOn(useSession(), 'restartCurrentClassroom').mockResolvedValue(true);
+  const w = await tool('checkpoints');
+  await w.findAll('button').find(button => button.text() === '恢复')!.trigger('click');
+  await flushPromises();
+  expect(restart).not.toHaveBeenCalled();
+  await w.get('.developer-confirm .town-primary').trigger('click');
+  expect(restart).toHaveBeenCalledExactlyOnceWith({
+    path: '/dev/experience/checkpoints/cp1/restore',
+    body: { classroom_id: 2, expected: 'checkpoint-token' },
+    restore: true,
+  });
 });

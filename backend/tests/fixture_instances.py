@@ -48,7 +48,7 @@ def _source_rows(db, model, teacher_id):
     return list(db.scalars(query.order_by(*model.__table__.primary_key.columns).with_for_update()))
 
 
-def _lock_numeric_tables(db):
+def lock_content_tables(db):
     if db.get_bind().dialect.name != "postgresql":
         return
     # Import sources have explicit integer IDs; do not let an unadvanced sequence
@@ -81,7 +81,7 @@ def _marker(value, maps):
     return value
 
 
-def _json(value, maps, context=None):
+def remap_references(value, maps, context=None):
     """Rewrite only typed references; never replace text, answers, node or event IDs."""
     scalar = {"chapter_id": "chapter", "prerequisite_chapter_id": "chapter", "material_id": "material",
               "document_id": "material", "activity_id": "activity", "pending_activity_id": "activity",
@@ -89,7 +89,7 @@ def _json(value, maps, context=None):
               "story_id": "story", "npc_key": "npc", "speaker_npc_id": "npc", "activity_completed": "activity"}
     lists = {"chapter_ids": "chapter", "question_ids": "question", "knowledge_point_ids": "knowledge_point"}
     if isinstance(value, list):
-        return [_json(item, maps, context) for item in value]
+        return [remap_references(item, maps, context) for item in value]
     if not isinstance(value, dict):
         return deepcopy(value)
     result = {}
@@ -101,13 +101,13 @@ def _json(value, maps, context=None):
         elif key == "id" and context in {"chapter", "quest"}:
             result[key] = _lookup(maps, context, item)
         elif key == "entries" and isinstance(item, dict):
-            result[key] = {npc if npc.startswith("interaction:") else _lookup(maps, "npc", npc): _json(routes, maps) for npc, routes in item.items()}
+            result[key] = {npc if npc.startswith("interaction:") else _lookup(maps, "npc", npc): remap_references(routes, maps) for npc, routes in item.items()}
         elif key in {"target", "navigation_target"} and isinstance(item, str):
             result[key] = _lookup(maps, "npc", item, required=False)
         elif key == "dialogue_id":
             result[key] = _marker(item, maps)
         else:
-            result[key] = _json(item, maps, key)
+            result[key] = remap_references(item, maps, key)
     return result
 
 
@@ -137,7 +137,7 @@ def _clone_rows(db, instance, sources):
         for old, new in rows:
             for field in ("content", "source", "dialogue", "definition"):
                 if hasattr(new, field):
-                    transformed = _json(getattr(old, field), maps)
+                    transformed = remap_references(getattr(old, field), maps)
                     if field == "definition":
                         transformed["id"] = new.id
                     if model is KnowledgePoint and field == "content" and "id" in transformed:
@@ -199,23 +199,23 @@ def _learner_records(db, classroom_id, maps):
                 row.answers = {_lookup(maps, "question", key): deepcopy(value) for key, value in row.answers.items()}
                 row.submission_ids = {_lookup(maps, "question", key): value for key, value in row.submission_ids.items()}
             elif model is LearningRecord:
-                row.data = _json(row.data, maps)
+                row.data = remap_references(row.data, maps)
             elif model is AssistantSession:
                 # Message prose and call audit remain untouched; citation IDs are typed.
-                row.messages = _json(row.messages, maps)
+                row.messages = remap_references(row.messages, maps)
             elif model is StorySession:
                 row.story_id = _lookup(maps, "story", row.story_id, required=False)
-                row.return_mapping = _json(row.return_mapping, maps)
-                row.receipts = _json(row.receipts, maps)
+                row.return_mapping = remap_references(row.return_mapping, maps)
+                row.receipts = remap_references(row.receipts, maps)
             if stamp is not None:
                 row.updated_at = stamp
                 flag_modified(row, "updated_at")
     for row in db.scalars(select(PlayerQuest).where(PlayerQuest.classroom_id == classroom_id).order_by(PlayerQuest.id).with_for_update()):
         row.quest_id = _lookup(maps, "quest", row.quest_id, required=False)
         for state in db.scalars(select(NodeState).where(NodeState.player_quest_id == row.id).order_by(NodeState.node_id).with_for_update()):
-            state.evidence = _json(state.evidence, maps)
+            state.evidence = remap_references(state.evidence, maps)
     for event in db.scalars(select(LearningEvent).where(LearningEvent.classroom_id == classroom_id).order_by(LearningEvent.id).with_for_update()):
-        event.evidence = _json(event.evidence, maps)
+        event.evidence = remap_references(event.evidence, maps)
     for flag in db.scalars(select(WorldFlag).where(WorldFlag.classroom_id == classroom_id).order_by(WorldFlag.user_id, WorldFlag.key).with_for_update()):
         new = _flag(flag.key, maps)
         if len(new) > WORLD_FLAG_KEY_MAX_LENGTH:
@@ -248,7 +248,7 @@ def clone_current_course(db, classroom, *, package_id="legacy-current", name="�
             AssistantCall.status.in_(["running", "cancel_requested"]))):
         raise CourseCloneError("班级仍有进行中的助教回复，请等待结束后迁移课程")
     with db.begin_nested():
-        _lock_numeric_tables(db)
+        lock_content_tables(db)
         sources = {model: _source_rows(db, model, locked.teacher_id) for model in CONTENT_MODELS}
         if any(row.status in {"queued", "processing"} for row in sources[Material]):
             raise CourseCloneError("资料仍在转换，请等待转换结束后再迁移班级课程")
@@ -277,7 +277,7 @@ def clone_current_course(db, classroom, *, package_id="legacy-current", name="�
 def configure_fixture_world(db, instance):
     """Explicit clone-time migration of current teaching anchors and legacy access."""
     from app.world_config import interaction_anchors, load_world_config
-    from app.world_authoring import scoped_key
+    from app.teaching.authoring.service import scoped_key
     from app.course_exchange_models import CoursePackageState
     from app.models import BuildingUnlock
     interactions = []

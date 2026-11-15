@@ -115,8 +115,14 @@ async function shell(page: Page, title: string, cards: Cards, baseline?: HeaderS
   await expect(heading).toHaveText(title);
   await expect(heading).toBeInViewport({ ratio: 1 });
   const dimensions = await current.locator(".workspace-shell").boundingBox(), viewport = page.viewportSize()!;
-  expect(dimensions!.width / viewport.width).toBeGreaterThanOrEqual(0.9);
-  expect(dimensions!.height / viewport.height).toBeGreaterThanOrEqual(0.9);
+  const rootSize = await page.locator("html").evaluate(element => parseFloat(getComputedStyle(element).fontSize));
+  const compact = cards.layout !== ".learning-layout";
+  const expectedWidth = compact ? Math.min(viewport.width - 32, 80 * rootSize) : viewport.width - 32;
+  const expectedHeight = compact ? Math.min(viewport.height - 12, 45 * rootSize) : viewport.height - 12;
+  expect(dimensions!.width).toBeCloseTo(expectedWidth, 0);
+  expect(dimensions!.height).toBeCloseTo(expectedHeight, 0);
+  expect(dimensions!.x).toBeCloseTo((viewport.width - expectedWidth) / 2, 0);
+  expect(dimensions!.y).toBeCloseTo((viewport.height - 12 - expectedHeight) / 2, 0);
   expect(await current.locator(".workspace-shell").evaluate(element => {
     const style = getComputedStyle(element);
     return { background: style.backgroundColor, image: style.backgroundImage, border: style.borderWidth, shadow: style.boxShadow };
@@ -124,19 +130,19 @@ async function shell(page: Page, title: string, cards: Cards, baseline?: HeaderS
   expect(await current.locator(".game-workspace-title > .game-icon").evaluate(element => {
     const style = getComputedStyle(element);
     return { width: style.width, height: style.height, color: style.color };
-  })).toEqual({ width: "42px", height: "42px", color: "rgb(230, 190, 118)" });
+  })).toEqual({ width: "22px", height: "22px", color: "rgb(230, 190, 118)" });
   const sizes = await heading.evaluate(element => ({ title: Number.parseFloat(getComputedStyle(element).fontSize), root: Number.parseFloat(getComputedStyle(document.documentElement).fontSize) }));
-  expect(sizes.title).toBeCloseTo(sizes.root * 1.7, 1);
+  expect(sizes.title).toBeCloseTo(sizes.root * 1.2, 1);
   const close = closeButton(page), closeBox = await close.boundingBox(), titleBox = await heading.boundingBox();
   await expect(close).toBeInViewport({ ratio: 1 });
-  expect(closeBox!.height).toBeGreaterThanOrEqual(44);
+  expect(closeBox!.height).toBeGreaterThanOrEqual(34);
   expect(closeBox!.x).toBeGreaterThan(titleBox!.x + titleBox!.width);
   expect(closeBox!.x + closeBox!.width).toBeLessThanOrEqual(dimensions!.x + dimensions!.width + 1);
   const style = await close.evaluate(element => {
     const value = getComputedStyle(element);
     return { background: value.backgroundColor, color: value.color, border: value.borderColor, radius: value.borderRadius, padding: value.padding, shadow: value.boxShadow };
   });
-  expect(style.radius).toBe("24px");
+  expect(style.radius).toBe("8px");
   if (baseline) expect(style).toEqual(baseline);
   const layout = current.locator(cards.layout);
   expect(await layout.evaluate(element => {
@@ -146,11 +152,10 @@ async function shell(page: Page, title: string, cards: Cards, baseline?: HeaderS
   for (const selector of cards.surfaces) {
     const surface = current.locator(selector);
     await expect(surface).toBeVisible();
-    expect(await surface.evaluate(element => Number.parseFloat(getComputedStyle(element).borderRadius))).toBeGreaterThanOrEqual(12);
+    expect(await surface.evaluate(element => Number.parseFloat(getComputedStyle(element).borderRadius))).toBe(10);
     if (selector === ".journal-index") {
-      await expect(surface).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-      expect(await surface.locator(".journal-cover").evaluate(element => getComputedStyle(element).backgroundImage)).toContain("linear-gradient");
-      await expect(surface.locator(".journal-directory")).toHaveCSS("background-color", "rgb(251, 245, 233)");
+      await expect(surface).toHaveCSS("background-color", "rgb(251, 245, 233)");
+      await expect(surface.locator(".journal-cover")).toHaveCSS("background-image", "none");
       continue;
     }
     expect(await surface.evaluate(element => {
@@ -159,16 +164,18 @@ async function shell(page: Page, title: string, cards: Cards, baseline?: HeaderS
     })).toBe(true);
   }
   if (cards.surfaces.length === 2 && cards.layout !== ".learning-layout") {
-    expect(await layout.evaluate(element => getComputedStyle(element).columnGap)).toBe("22px");
+    expect(await layout.evaluate(element => getComputedStyle(element).columnGap)).toBe("10px");
     const first = await current.locator(cards.surfaces[0]!).boundingBox(), second = await current.locator(cards.surfaces[1]!).boundingBox();
-    expect(second!.x - first!.x - first!.width).toBeCloseTo(22, 0);
+    expect(second!.x - first!.x - first!.width).toBeCloseTo(10, 0);
   }
   await noHorizontalOverflow(page);
   const thickButtons = await current.evaluate(root => Array.from(root.querySelectorAll<HTMLButtonElement>("button"))
     .filter(button => button.getClientRects().length && !button.closest("[hidden],[inert]"))
     .filter(button => {
       const css = getComputedStyle(button);
-      return css.boxShadow !== "none" || [css.borderTopWidth, css.borderRightWidth, css.borderBottomWidth, css.borderLeftWidth].some(value => parseFloat(value) > 1.1);
+      const bottomLimit = button.getAttribute("role") === "tab" ? 2.1 : 1.1;
+      return css.boxShadow !== "none" || parseFloat(css.borderBottomWidth) > bottomLimit
+        || [css.borderTopWidth, css.borderRightWidth, css.borderLeftWidth].some(value => parseFloat(value) > 1.1);
     }).map(button => button.textContent?.trim() || button.getAttribute("aria-label")));
   expect(thickButtons).toEqual([]);
   const sidebar = current.locator(".learning-support,.town-sidebar,.journal-index,.map-sidebar");
@@ -247,7 +254,7 @@ async function adjustLearningLayout(page: Page) {
   await expect(separator).toHaveAttribute("aria-valuenow", "30");
   await expect(panel(page).getByRole("button", { name: "间距", exact: true })).toHaveCount(0);
   await expect(panel(page).locator(".learning-spacing")).toHaveCount(0);
-  await expect.poll(async () => panel(page).locator(".learning-divider").evaluate(element => Math.round(element.getBoundingClientRect().width))).toBe(22);
+  await expect.poll(async () => panel(page).locator(".learning-divider").evaluate(element => Math.round(element.getBoundingClientRect().width))).toBe(10);
   await pdfFitsWithoutLeftScroll(page);
   await separator.focus();
   await page.keyboard.press("Home");
@@ -321,7 +328,7 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   const baseline = await shell(page, "任务日志", { layout: ".journal-book", surfaces: [".journal-index", ".quest-detail"] });
   await expect(panel(page).locator(".journal-controls,.journal-count,.journal-cover img")).toHaveCount(0);
   await expect(panel(page).locator(".journal-cover h3")).toHaveText("委托目录");
-  expect(await panel(page).locator(".journal-cover h3").evaluate(element => parseFloat(getComputedStyle(element).fontSize))).toBeGreaterThan(22);
+  await expect(panel(page).locator(".journal-cover h3")).toHaveCSS("font-size", "14px");
   await panel(page).getByRole("group", { name: "任务状态", exact: true }).getByRole("button", { name: "已完成", exact: true }).click();
   await panel(page).getByRole("combobox", { name: "任务类型", exact: true }).selectOption("side");
   await expect(panel(page).locator(".empty-directory")).toHaveText("没有委托");
@@ -333,7 +340,8 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   const segmented = panel(page).getByRole("group", { name: "任务状态" });
   await expect(segmented).toHaveClass(/game-segmented/);
   await segmented.getByRole("button", { name: "全部", exact: true }).click();
-  expect(await segmented.getByRole("button", { name: "全部", exact: true }).evaluate(element => getComputedStyle(element).backgroundImage)).toContain("linear-gradient");
+  await expect(segmented.getByRole("button", { name: "全部", exact: true })).toHaveCSS("background-image", "none");
+  await expect(segmented.getByRole("button", { name: "全部", exact: true })).toHaveCSS("background-color", "rgb(255, 250, 240)");
   await shot(page, info, "01-journal");
   await page.keyboard.press("Escape");
   await expect(panel(page)).toBeHidden();
@@ -357,7 +365,7 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   await expect(panel(page).locator(".assistant-panel h3")).toHaveText("图书管理员");
   await expect(panel(page)).not.toContainText("当前资料未关联助教活动");
   await panel(page).getByRole("tab", { name: "学习目标", exact: true }).click();
-  await panel(page).getByRole("tab", { name: "文档目录", exact: true }).click();
+  await panel(page).getByRole("tab", { name: "快速跳转", exact: true }).click();
   const outline = panel(page).getByRole("navigation", { name: "文档页面目录", exact: true });
   await expect(outline.getByRole("button")).toHaveCount(45);
   await outline.getByRole("button").nth(1).click();
@@ -472,7 +480,7 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   await expect(panel(page)).toBeHidden();
   await sameCanvas(page, canvas);
 
-  await approach(page, "现在开始阅读", setup.ids.activity["ch1-lesson"]);
+  await approach(page, "现在开始阅读", setup.ids.activity["ch1-lesson"]!);
   await expect(panel(page).locator(".pdf-reader")).toHaveAttribute("aria-busy", "false", { timeout: 60_000 });
   await shell(page, "资料阅读", lessonCards, baseline);
   await pdfFitsWithoutLeftScroll(page);
@@ -482,7 +490,7 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   await shot(page, info, "07-story-pdf-reading");
   await suspendActivity(page);
   await setScale(page, "2");
-  await approach(page, "继续阅读", setup.ids.activity["ch1-lesson"]);
+  await approach(page, "继续阅读", setup.ids.activity["ch1-lesson"]!);
   await expect(panel(page).locator(".pdf-reader")).toHaveAttribute("aria-busy", "false", { timeout: 60_000 });
   await shell(page, "资料阅读", lessonCards, baseline);
   await pdfFitsWithoutLeftScroll(page);
@@ -509,11 +517,11 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   expect((await finishDialogue(page)).status).toBe("ended");
   await setScale(page, "1");
 
-  await approach(page, "开始练习", setup.ids.activity["ch1-practice"]);
+  await approach(page, "开始练习", setup.ids.activity["ch1-practice"]!);
   await expect(panel(page).locator(".question-body")).toBeVisible();
   await shell(page, "练习", practiceCards, baseline);
   await assistantTab(page, "练习场教练");
-  await panel(page).getByRole("tab", { name: "学习目标", exact: true }).click();
+  await panel(page).getByRole("tab", { name: "题目列表", exact: true }).click();
   const radios = panel(page).getByRole("radio");
   expect(await radios.count()).toBeGreaterThan(1);
   await radios.first().check();
@@ -527,7 +535,7 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   await shot(page, info, "08-practice");
   await suspendActivity(page);
   await setScale(page, "2");
-  await approach(page, "继续练习", setup.ids.activity["ch1-practice"]);
+  await approach(page, "继续练习", setup.ids.activity["ch1-practice"]!);
   await expect(panel(page).locator(".question-body")).toBeVisible();
   await shell(page, "练习", practiceCards, baseline);
   await expect(panel(page).locator('input[type="radio"]:checked')).toHaveValue(draftAnswer);

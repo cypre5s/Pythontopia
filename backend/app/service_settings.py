@@ -68,8 +68,8 @@ class SpeechInput(ConnectionInput):
 
 
 def environment(service: Service):
-    from .narration import config, tts
-    return config.environment() if service == "authoring" else tts.environment()
+    from .narration.defaults import authoring_environment, speech_environment
+    return authoring_environment() if service == "authoring" else speech_environment()
 
 
 def configuration(service: Service, db: Session | None = None, *, include_key=True):

@@ -6,9 +6,9 @@ import pytest
 from sqlalchemy import func, select
 
 from app.models import Activity, ActivityProgress, ChapterRelease, LearningEvent, Material, PlayerQuest, QuestDefinition, StoryDefinition, StorySession, Submission, User, WorldFlag
-from app.quests import validate_evidence
-from app.courses import progress_payload
-from app.story import validate_story
+from app.teaching.quests.evidence import validate_evidence
+from app.course_content.presentation import progress_payload
+from app.teaching.story.validation import validate_story
 from conftest import move_player
 
 

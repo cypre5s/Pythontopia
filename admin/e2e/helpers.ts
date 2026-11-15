@@ -7,7 +7,7 @@ import {
 } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
-import type { Authoring } from "../src/lib/authoring";
+import type { Authoring } from "../src/features/authoring/model";
 
 export async function chooseOption(page: Page, trigger: Locator, label: string) {
   await trigger.click();

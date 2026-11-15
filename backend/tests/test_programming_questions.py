@@ -1,7 +1,7 @@
 import pytest
 from pydantic import ValidationError
-from app.classrooms import QuestionInput
-from app.courses import public_question
+from app.course_content.question_contracts import QuestionInput
+from app.course_content.presentation import public_question
 from app.models import Question
 from app.practice import SubmissionInput
 

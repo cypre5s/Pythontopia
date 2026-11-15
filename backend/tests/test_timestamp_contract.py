@@ -1,8 +1,8 @@
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
-from app import courses
+from app.course_content import access
 from app.auth import as_utc
-from app.classrooms import ReleaseInput
+from app.course_content.releases import ReleaseInput
 from app.models import ChapterRelease, LearningEvent, LearningRecord, Submission
 from sqlalchemy import select
 
@@ -17,7 +17,7 @@ def test_shanghai_and_utc_release_inputs_store_the_same_instant_and_preserve_bou
         def now(cls, tz=None):
             return cls.current.astimezone(tz) if tz is not None else cls.current.replace(tzinfo=None)
 
-    monkeypatch.setattr(courses, "datetime", ControlledClock)
+    monkeypatch.setattr(access, "datetime", ControlledClock)
     path = f"/api/teacher/classrooms/{classroom['id']}/releases/180"
     for representation in ("2026-11-03T20:00:00+08:00", "2026-11-03T12:00:00Z"):
         model = ReleaseInput(opens_at=representation)

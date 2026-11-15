@@ -174,11 +174,11 @@ def plan_deletion(db, user, instance, targets):
         unlink("chapter", key, "解除已删除的前置章节并暂停发布，待教师重新确认开放规则")
 
     # Validate the resulting current course, never splice arbitrary story edges.
-    from .course_exchange import _snapshot
-    from .world_authoring import validate_configuration
+    from app.course_content.snapshot import snapshot_content
+    from app.teaching.authoring.validation import validate_configuration
     from .authoring_diagnostics import AuthoringIssue
     try:
-        data = _snapshot(db, instance)[0]
+        data = snapshot_content(db, instance)[0]
         stable = {kind: {rows[kind][key].stable_id or key for key in removed_keys} for kind, removed_keys in retiring.items()}
         for kind in MODELS:
             data[kind] = [r for r in data[kind] if r["id"] not in stable[kind]]

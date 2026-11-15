@@ -110,7 +110,9 @@ class LocalTextRetrieval:
 
 
 def build_context(db, user, session, activity, body):
-    from .courses import authorize_material, learning_questions, public_question, progress_payload
+    from app.course_content.access import authorize_material
+    from app.course_content.learning import learning_questions
+    from app.course_content.presentation import public_question, progress_payload
     state = body.turn_state()
     practice = bool(activity and activity.kind == "practice")
     questions = learning_questions(db, activity, db.get(Classroom, session.classroom_id).teacher_id) if practice else []

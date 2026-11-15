@@ -5,8 +5,8 @@ import { api } from '../src/lib/api';
 
 vi.mock('../src/lib/drafts', () => ({ useDraft: vi.fn() }));
 vi.mock('../src/lib/api', () => ({ api: { get: vi.fn(), post: vi.fn() }, errorMessage: (e: Error) => e.message }));
-vi.mock('../src/components/narration-review', () => ({ NarrationReview: () => <div>审校对话框</div> }));
-vi.mock('../src/components/narration-player', () => ({ NarrationPlayer: () => <div>试听对话框</div> }));
+vi.mock('../src/features/materials/narration/review', () => ({ NarrationReview: () => <div>审校对话框</div> }));
+vi.mock('../src/features/materials/narration/player', () => ({ NarrationPlayer: () => <div>试听对话框</div> }));
 const task = { id: 1, requested_by: '老师', scope: '第 1–2 页', material_available: true, material_id: 11, title: '变量讲义', material_kind: 'pdf', kind: 'generate', status: 'failed',
   done: 2, total: 2, message: '有一页失败', started_at: '2026-11-15T00:00:00', failed: [{ page_no: 2, error: '服务繁忙' }], retryable: true, retry_note: '' };
 beforeEach(() => {

@@ -14,7 +14,7 @@ from pathlib import Path
 from sqlalchemy.orm import Session
 
 from ..models import Material, now
-from ..storage import get_storage, storage_root
+from app.materials.storage import get_storage, storage_root
 from . import repository, tts
 from .contracts import AudioRecord
 from .models import PageNarration

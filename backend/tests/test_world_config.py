@@ -1,3 +1,4 @@
+import app.teaching.world.rules as teaching_world_rules
 from copy import deepcopy
 from uuid import uuid4
 
@@ -8,7 +9,7 @@ from app import world_config
 from app.characters import validate_characters
 
 from app.models import Npc, PlayerPosition, QuestDefinition, WorldFlag
-from app.quests import PositionInput
+from app.teaching.world.contracts import PositionInput
 from app.world_config import interaction_points, load_world_config, validate_world_config
 
 
@@ -88,13 +89,12 @@ def test_invalid_world_configuration_is_rejected(mutation):
 
 
 def test_position_and_npc_dtos_take_map_names_and_dimensions_from_configuration(monkeypatch):
-    from app import world_authoring
     config = deepcopy(load_world_config())
     config["maps"]["town_hub"]["width"] = 60
     config["maps"]["town_hub"]["walk_bounds"] = {"x": 0, "y": 0, "width": 60, "height": 40}
     config["maps"]["annex"] = {"label": "Annex", "width": 6, "height": 5, "renderer": "tiled", "asset": "/assets/maps/annex.json", "buildings": []}
     monkeypatch.setattr(world_config, "load_world_config", lambda: config)
-    monkeypatch.setattr(world_authoring, "reachable_cells", lambda _: {(5, 4)})
+    monkeypatch.setattr(teaching_world_rules, "reachable_cells", lambda _: {(5, 4)})
     assert PositionInput(classroom_id=1, map_key="town_hub", tile_x=59, tile_y=39).tile_x == 59
     assert PositionInput(classroom_id=1, map_key="annex", tile_x=5, tile_y=4).map_key == "annex"
     assert character_point("annex", 5, 4)["placement"]["map_key"] == "annex"

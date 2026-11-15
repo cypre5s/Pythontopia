@@ -9,7 +9,7 @@ from sqlalchemy import delete, or_, select, tuple_
 
 from .authoring_diagnostics import AuthoringIssue
 from .course_exchange_models import CoursePackageState
-from .course_instances import _json
+from .course_instances import remap_references
 from .models import LearningEvent, NodeState, PlayerQuest, QuestDefinition, StoryDefinition, StorySession, WorldFlag
 
 
@@ -114,7 +114,7 @@ def _scope_changes(existing, incoming, maps, changed):
         draft = by_stable.get(row.stable_id or row.id)
         if draft is None:
             changes[row.id] = "delete"
-        elif changed(row, _json(draft, maps)):
+        elif changed(row, remap_references(draft, maps)):
             changes[row.id] = "edit"
     return changes
 

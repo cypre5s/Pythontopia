@@ -4,7 +4,7 @@ import "./arrival.css";
 import { RouterView, useRoute } from "vue-router";
 import ToastLayer from "../shared/ToastLayer.vue";
 import TownBackdrop from "../features/TownBackdrop.vue";
-import { arrivalActive } from "../shared/arrival";
+import { arrivalActive } from "./arrival";
 import { useSession } from "../shared/session";
 import { computed, onBeforeUnmount } from "vue";
 import { useUiPreferences } from "../shared/uiPreferences";

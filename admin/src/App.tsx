@@ -46,16 +46,16 @@ import { Login } from "@/pages/login";
 import { Students } from "@/pages/students";
 import { ClassOverview } from "@/pages/class-overview";
 import { Curriculum } from "@/pages/curriculum";
-import { Materials } from "@/pages/materials";
-import { Questions } from "@/pages/questions";
-import { Activities } from "@/pages/activities";
+import { Materials } from "@/features/materials/materials-page";
+import { Questions } from "@/features/questions/questions-page";
+import { Activities } from "@/features/activities/activities-page";
 import { CourseSettings } from "@/pages/course-settings";
 import { Packages } from "@/pages/packages";
 import { Teaching } from "@/pages/teaching";
 const Synthesis = lazy(() => import("@/pages/synthesis").then(module => ({ default: module.Synthesis })));
 const Judge = lazy(() => import("@/pages/judge").then(module => ({ default: module.Judge })));
 const Authoring = lazy(() =>
-  import("@/pages/authoring").then((module) => ({ default: module.Authoring })),
+  import("@/features/authoring/authoring-page").then((module) => ({ default: module.Authoring })),
 );
 const nav = [
   { key: "classroom", title: "班级概况", icon: GraduationCap },

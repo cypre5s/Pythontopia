@@ -2,7 +2,7 @@
 from pathlib import Path
 import stat
 import zipfile
-from app.course_package import PackageError, PackageLimits, _relative
+from app.course_packages.manifest import PackageError, PackageLimits, relative_package_path
 
 LIMITS = PackageLimits()
 MAX_ARCHIVE = LIMITS.total_bytes
@@ -18,7 +18,7 @@ def unpack_archive(archive, root):
                 raise PackageError("压缩包条目过多")
             seen, total = set(), 0
             for item in members:
-                name = _relative(item.orig_filename[:-1] if item.is_dir() else item.orig_filename)
+                name = relative_package_path(item.orig_filename[:-1] if item.is_dir() else item.orig_filename)
                 folded = name.casefold()
                 if folded in seen or item.flag_bits & 1:
                     raise PackageError("压缩包包含重复路径或加密文件")

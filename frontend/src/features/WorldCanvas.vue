@@ -62,7 +62,7 @@ import { computed, nextTick, onMounted, onBeforeUnmount, ref, watch } from "vue"
 import type { Player, World } from "../shared/types";
 import { useSession } from "../shared/session";
 import { api, ApiError, notify } from "../shared/api";
-import type { WorldHandle } from "../game/adapters/world";
+import type { WorldHandle } from "../game/world/types";
 const props = defineProps<{ paused: boolean; welcomeDrift?: boolean }>(),
   emit = defineEmits<{
     interact: [target: string, type: "npc" | "object"];

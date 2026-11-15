@@ -1,6 +1,6 @@
 import { mount } from "@vue/test-utils";
 import { afterEach, describe, expect, it } from "vitest";
-import LearningSplitLayout from "../src/features/LearningSplitLayout.vue";
+import LearningSplitLayout from "../src/features/support/LearningSplitLayout.vue";
 afterEach(() => localStorage.clear());
 describe("learning layout display preferences", () => {
   it("supports keyboard resizing, bounded local preferences and reset without touching reading or drafts", async () => {

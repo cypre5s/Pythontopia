@@ -1,0 +1,29 @@
+/* Credits page typography; isolated from game workspaces. */
+.credits-page {
+  max-width: 850px;
+  margin: 6vh auto;
+  padding: 2rem;
+  line-height: 1.9;
+}
+
+.credits-page h1 {
+  font-size: 2.2rem;
+  line-height: 1.5;
+  margin-top: 2rem;
+}
+
+.credits-page h2 {
+  margin-top: 2.5rem;
+}
+
+.credits-page p {
+  color: #71816c;
+  font-size: 0.95rem;
+}
+
+@media (max-width: 560px) and (min-height: 501px) {
+  .credits-page {
+    margin: 1rem auto;
+    padding: 1.5rem;
+  }
+}
