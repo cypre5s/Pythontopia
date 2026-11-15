@@ -257,15 +257,6 @@
   color: var(--game-muted);
 }
 
-.game-workspace .question-paper .coding-workbench {
-  height: 650px;
-  margin-bottom: 20px;
-}
-
-.game-workspace .question-paper .coding-actions {
-  grid-column: 1 / -1;
-}
-
 @media (max-width:1100px) {
   .game-workspace .coding-content .question-body {
     overflow: auto;
@@ -611,3 +602,21 @@
   margin-left: 6px;
   font-size: .75rem;
 }
+
+.game-workspace .programming-paper-summary .coding-summary-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
+}
+.game-workspace .coding-summary-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .4rem .75rem;
+  font-size: .875rem;
+  color: var(--game-muted);
+}
+.game-workspace .coding-summary-status p { margin: 0; }
+.game-workspace .coding-summary-status svg { width: 1rem; height: 1rem; }

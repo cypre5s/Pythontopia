@@ -25,7 +25,7 @@
       <p v-if="draftError" class="error" role="alert">{{ draftError }} <button v-if="draftConflict" @click="load">重新载入试卷</button><button v-else-if="!paper?.locked" @click="retryDraft">重试保存</button></p>
       <p v-if="loading" class="learning-empty" role="status">正在读取题目…</p>
       <div v-else-if="questions.length" ref="questionRegion" class="question-body" :data-coding="current?.kind === 'python' && viewMode === 'single'" :class="{ 'question-paper': isAssessment && viewMode === 'paper' }" @scroll.passive="syncPaperSelection">
-        <PracticeQuestionCard v-for="question in visibleQuestions" :key="question.id" :question="question" :toolbar-target="actionTarget" :index="questions.findIndex(item => item.id === question.id)" :answer="drafts[question.id]?.answer ?? ''" :code="drafts[question.id]?.code ?? ''" :read-only="Boolean(isAssessment && (paper?.locked || paperSubmissionPending))" :busy="questionBusy(question.id)" :show-submit="!isAssessment" :pending-mode="drafts[question.id]?.pending?.mode" :result="questionResult(question.id)" :assistant-feedback="assistantFeedback[question.id]" @assistant-feedback="assistantFeedback[question.id] = $event" @running-change="localRunning[question.id] = $event" @update:answer="updateAnswer(question.id, $event)" @update:code="updateCode(question.id, $event)" @submit="submitQuestion(question.id, $event)" />
+        <PracticeQuestionCard v-for="question in visibleQuestions" :key="question.id" :question="question" :paper-mode="isAssessment && viewMode === 'paper'" @open-single="openSingleQuestion(question.id)" :toolbar-target="actionTarget" :index="questions.findIndex(item => item.id === question.id)" :answer="drafts[question.id]?.answer ?? ''" :code="drafts[question.id]?.code ?? ''" :read-only="Boolean(isAssessment && (paper?.locked || paperSubmissionPending))" :busy="questionBusy(question.id)" :show-submit="!isAssessment" :pending-mode="drafts[question.id]?.pending?.mode" :result="questionResult(question.id)" :assistant-feedback="assistantFeedback[question.id]" @assistant-feedback="assistantFeedback[question.id] = $event" @running-change="localRunning[question.id] = $event" @update:answer="updateAnswer(question.id, $event)" @update:code="updateCode(question.id, $event)" @submit="submitQuestion(question.id, $event)" />
       </div>
       <p v-else-if="!loading && activity" class="learning-empty">此活动尚未绑定公开题目，请联系教师。</p>
 
@@ -166,6 +166,12 @@ async function selectQuestion(id: string) {
   await nextTick();
   if (viewMode.value === 'paper' && isAssessment.value) Array.from(questionRegion.value?.querySelectorAll<HTMLElement>('.practice-question-card') ?? []).find(element => element.dataset.questionId === id)?.scrollIntoView?.({ block: 'start', behavior: 'auto' });
   else if (questionRegion.value) questionRegion.value.scrollTop = 0;
+}
+async function openSingleQuestion(id: string) {
+  viewMode.value = 'single';
+  await selectQuestion(id);
+  persistLocal();
+  document.getElementById('practice-content-region')?.focus({ preventScroll: true });
 }
 function syncPaperSelection() { if (!isAssessment.value || viewMode.value !== 'paper' || !questionRegion.value) return; const top = questionRegion.value.getBoundingClientRect().top; const cards = Array.from(questionRegion.value.querySelectorAll<HTMLElement>('.practice-question-card')); const selected = cards.find(card => card.getBoundingClientRect().bottom > top + 36); if (selected) questionIndex.value = Math.max(0, questions.value.findIndex(question => question.id === selected.dataset.questionId)); }
 async function setViewMode(mode: 'single' | 'paper') { if (!isAssessment.value) return; viewMode.value = mode; persistLocal(); await nextTick(); await selectQuestion(current.value?.id ?? ''); }

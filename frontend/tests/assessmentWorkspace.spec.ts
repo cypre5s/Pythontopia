@@ -26,6 +26,27 @@ function paper(overrides: Partial<AssessmentAttempt> = {}): AssessmentAttempt { 
 function result(id: string, status: Submission["status"]): Submission { return { id: `submission-${id}`, activity_id: "test", question_id: id, mode: "submit", status, feedback: { detail: status === "accepted" ? "回答正确" : "请重新思考" }, created_at: "2026-11-08T00:00:00Z" }; }
 afterEach(async () => { await flushPromises(); vi.restoreAllMocks(); vi.unstubAllGlobals(); localStorage.clear(); sessionStorage.clear(); });
 describe("assessment and practice presentation", () => {
+  it("opens the selected programming summary in single mode without losing its draft", async () => {
+    const { pinia, session } = setup();
+    const activity = await session.activity("test");
+    vi.mocked(session.activity).mockResolvedValue({ ...activity, questions: [...activity.questions.slice(0, 1), { id: "q2", title: "编程", kind: "python", prompt: "输入名字", samples: [], starter_code: "name = input()" }] });
+    vi.spyOn(api, "get").mockResolvedValue(paper({ answers: [{ question_id: "q2", code: "print('saved')" }] }));
+    const post = vi.spyOn(api, "post"), put = vi.spyOn(api, "put");
+    const wrapper = mount(PracticeWorkspace, { props: { activityId: "test" }, global: { plugins: [pinia], stubs: { AssistantPanel: true, ProgrammingQuestion: true } } });
+    await flushPromises();
+    await wrapper.findAll('button').find(button => button.text() === '试卷模式')!.trigger('click');
+    expect(wrapper.find('.programming-paper-summary').exists()).toBe(true);
+    expect(wrapper.findComponent({name:'ProgrammingQuestion'}).exists()).toBe(false);
+    await wrapper.get('.programming-paper-summary button').trigger('click');
+    await flushPromises();
+    const editor = wrapper.findComponent({name:'ProgrammingQuestion'});
+    expect(editor.props('question').id).toBe('q2');
+    expect(editor.props('code')).toBe("print('saved')");
+    expect(wrapper.find('.question-paper').exists()).toBe(false);
+    expect(post).not.toHaveBeenCalled();
+    expect(put).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
   it("mounts and reopens a cached workspace with its toolbar in the same render", async () => {
     const { pinia } = setup();
     vi.spyOn(api, "get").mockResolvedValue(paper());

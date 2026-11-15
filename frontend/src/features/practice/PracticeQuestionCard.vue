@@ -1,5 +1,6 @@
 <template>
-  <ProgrammingQuestion v-if="question.kind === 'python'" v-bind="$props" @running-change="$emit('runningChange', $event)" @assistant-feedback="$emit('assistantFeedback', $event)" @update:code="$emit('update:code', $event)" @submit="$emit('submit', $event)" />
+  <ProgrammingPaperSummary v-if="paperMode && question.kind === 'python'" :question="question" :index="index" :code="code" :read-only="readOnly" :result="result" :feedback="assistantFeedback" @open="$emit('openSingle')" />
+  <ProgrammingQuestion v-else-if="question.kind === 'python'" v-bind="$props" @running-change="$emit('runningChange', $event)" @assistant-feedback="$emit('assistantFeedback', $event)" @update:code="$emit('update:code', $event)" @submit="$emit('submit', $event)" />
   <article v-else class="practice-question-card" :data-question-id="question.id" :aria-labelledby="headingId">
     <header class="practice-question-heading">
       <span class="question-kind">{{ kindName[question.kind] }}</span>
@@ -35,13 +36,14 @@
 </template>
 <script setup lang="ts">
 import { computed } from "vue";
+import ProgrammingPaperSummary from "./ProgrammingPaperSummary.vue";
 import ProgrammingQuestion from "./ProgrammingQuestion.vue";
 import GameIcon from "../../shared/GameIcon.vue";
 import type { AssistantFeedback } from '../../shared/assistantState';
 import type { Question, Submission, SubmissionStatus } from "../../shared/types";
 import { pendingSubmissionStates, submissionStatusName } from "./practicePresentation";
-const props = withDefaults(defineProps<{ question: Question; index: number; answer: string; code: string; readOnly?: boolean; busy?: boolean; showSubmit?: boolean; pendingMode?: 'submit'; toolbarTarget?: string; result?: Submission; assistantFeedback?: AssistantFeedback }>(), { readOnly: false, busy: false, showSubmit: true });
-defineEmits<{ runningChange: [running: boolean]; "update:answer": [value: string]; "update:code": [value: string]; submit: [mode: "submit"]; assistantFeedback: [feedback: AssistantFeedback] }>();
+const props = withDefaults(defineProps<{ question: Question; index: number; answer: string; code: string; paperMode?: boolean; readOnly?: boolean; busy?: boolean; showSubmit?: boolean; pendingMode?: 'submit'; toolbarTarget?: string; result?: Submission; assistantFeedback?: AssistantFeedback }>(), { readOnly: false, busy: false, showSubmit: true });
+defineEmits<{ openSingle: []; runningChange: [running: boolean]; "update:answer": [value: string]; "update:code": [value: string]; submit: [mode: "submit"]; assistantFeedback: [feedback: AssistantFeedback] }>();
 const headingId = computed(() => `practice-question-${props.question.id}`);
 const hasAnswer = computed(() => props.question.kind === "python" ? Boolean(props.code.trim()) : Boolean(props.answer.trim()));
 const resultDetail = computed(() => {
