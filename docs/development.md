@@ -144,7 +144,7 @@ npm run dev -- --host 127.0.0.1 --port 15174
 
 课程包不纳入 Git 或镜像。将编写完成的 v3 解压目录放入私有 data/course，在教师后台选择班级、预览目录包，核对差异后确认导入。新引擎明确拒绝旧格式，不提供 app.seed、convert_legacy_course、migrate_classroom_courses 或旧来源 initialize 接口。
 
-本机 data/course/python-town-chapter1 已更新为 v2，四个角色、立绘/精灵引用、人设、日常公共流程和图书馆设置与包一起维护，原 41 份媒体资源保留。当前包只是私有文件，不随启动自动导入。
+本机 data/course/python-town-chapter1 已更新为 v3，四个角色、立绘/精灵引用、人设、日常公共流程和图书馆设置与包一起维护，原 41 份媒体资源保留。当前包只是私有文件，不随启动自动导入。
 
 ### 私有交换区
 
