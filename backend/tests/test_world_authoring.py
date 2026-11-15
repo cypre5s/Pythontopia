@@ -257,11 +257,29 @@ def test_public_activity_waits_real_completion_before_idempotent_unlock(client, 
     assert db.scalar(select(func.count()).select_from(BuildingUnlock)) == 1
 
 
-@pytest.mark.parametrize("legacy_text", [False, True])
-def test_building_entry_action_cannot_bypass_dialogue_and_exit_stays_safe(client, teacher, student, scene, legacy_text):
+@pytest.mark.parametrize("prompt", ["打开图书馆", "请先阅读说明", ""])
+@pytest.mark.parametrize("action", [
+    {"action": "open_workspace", "workspace": "library"},
+    {"action": "enter_building", "building_id": "library"},
+])
+def test_action_text_is_rejected_without_changing_saved_flow(client, db, teacher, scene, action, prompt):
+    nodes = [{"id": "start", "type": "action", **action, "next": "end"}, {"id": "end", "type": "end"}]
+    body = draft(client, teacher, scene, flows=[flow(mode="public", nodes=nodes)])
+    saved = save(client, teacher, scene, body)
+    before = deepcopy(db.scalar(select(StoryDefinition.content).where(StoryDefinition.course_instance_id == scene["instance"].id)))
+    body["expected_revision"] = saved["revision"]
+    body["flows"][0]["content"]["nodes"][0]["text"] = prompt
+    validation = client.post(endpoint(scene, "/validate"), json=body, headers=teacher["headers"])
+    assert validation.status_code == 200 and validation.json()["valid"] is False
+    rejected = client.put(endpoint(scene), json=body, headers=teacher["headers"])
+    assert rejected.status_code == 422
+    assert db.scalar(select(StoryDefinition.content).where(StoryDefinition.course_instance_id == scene["instance"].id)) == before
+
+
+def test_building_entry_action_cannot_bypass_dialogue_and_exit_stays_safe(client, teacher, student, scene):
     nodes = [{"id": "start", "type": "dialogue", "text": "进入前对白", "next": "enter"},
              {"id": "enter", "type": "action", "action": "enter_building", "building_id": "library",
-              **({"text": "进入图书馆"} if legacy_text else {}), "next": "inside"},
+              "next": "inside"},
              {"id": "inside", "type": "dialogue", "text": "室内对白", "next": "end"}, {"id": "end", "type": "end"}]
     body = draft(client, teacher, scene, flows=[flow(mode="public", nodes=nodes)], interactions=[interaction(object_id="library")])
     body["configuration"]["buildings"] = {"library": {"enabled": True, "default_unlocked": True, "blocked_message": "未开放"}}
@@ -272,7 +290,7 @@ def test_building_entry_action_cannot_bypass_dialogue_and_exit_stays_safe(client
     view = start(client, student, scene).json()
     view = advance(client, student, scene, view).json()
     assert view["node"]["action"] == "enter_building"
-    assert view["node"]["text"] == ("进入图书馆" if legacy_text else "")
+    assert "text" not in view["node"]
     entered = advance(client, student, scene, view)
     assert entered.status_code == 200, entered.text
     assert entered.json()["world"]["player"]["map_key"] == "library"

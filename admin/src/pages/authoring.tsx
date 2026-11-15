@@ -52,7 +52,6 @@ import { useDraft } from "@/lib/drafts";
 import { newId } from "@/lib/id";
 import {
   nodeTitle,
-  nodeEdges,
   routePorts,
   setNodeTarget,
   setRouteTarget,
@@ -373,27 +372,6 @@ function AuthoringEditor({
     }, { ...positions, [id]: position });
     selectNode(id);
     setInspector(null);
-  }
-  function convertActionText() {
-    if (!flow || node?.type !== "action" || !node.text || flow.content.nodes.length >= 200) return;
-    const id = newId("node");
-    const dialogue: StoryNode = { id, type: "dialogue", text: node.text, next: node.id };
-    const action = { ...node };
-    delete action.text;
-    const nodes = flow.content.nodes.flatMap((n) =>
-      n.id === node.id ? [dialogue, action] : [
-        nodeEdges(n).filter((port) => port.to === node.id)
-          .reduce((source, port) => setNodeTarget(source, port.id, id), n),
-      ],
-    );
-    const entries = Object.fromEntries(Object.entries(flow.content.entries).map(([key, routes]) => [
-      key, routes.map((route) => route.node === node.id ? { ...route, node: id } : route),
-    ]));
-    const position = positions[node.id];
-    replaceFlow({ ...flow, content: { ...flow.content, nodes, entries } },
-      position ? { ...positions, [id]: { x: position.x - 266, y: position.y } } : positions,
-    );
-    selectNode(id);
   }
   function removeNode() {
     if (
@@ -764,7 +742,6 @@ function AuthoringEditor({
                       onChange={replaceNode}
                       onFlowChange={replaceFlow}
                       onDelete={removeNode}
-                      onConvertActionText={convertActionText}
                     />
                   ) : selectedEntry && entry ? (
                     <div className="node-properties" key={selectedEntry}>

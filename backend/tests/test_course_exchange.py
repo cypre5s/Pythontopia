@@ -13,6 +13,30 @@ from app.course_package import PackageError
 from app.models import (ActivityProgress, Classroom, CourseInstance, Material, Question, QuestionSecret)
 
 
+def test_directory_package_rejects_action_prompt_field(client, teacher, exchange, tmp_path):
+    import yaml
+    from app.course_package import PackageError
+
+    root = tmp_path / "action-prompt-package"
+    root.mkdir()
+    import io
+    with zipfile.ZipFile(io.BytesIO(export(client, teacher, exchange[0]))) as archive:
+        archive.extractall(root)
+    load_bundle(root)
+    changed = False
+    for path in (root / "world" / "flows").glob("*.yaml"):
+        row = yaml.safe_load(path.read_text(encoding="utf-8"))
+        action = next((node for node in row["content"]["nodes"] if node["type"] == "action"), None)
+        if action:
+            action["text"] = "旧操作提示"
+            path.write_text(yaml.safe_dump(row, allow_unicode=True), encoding="utf-8")
+            changed = True
+            break
+    assert changed
+    with pytest.raises(PackageError, match="无效界面操作节点"):
+        load_bundle(root)
+
+
 @pytest.fixture
 def exchange(db, classroom, teacher, monkeypatch, tmp_path):
     monkeypatch.setenv("REBORN_STORAGE_ROOT", str(tmp_path / "storage"))

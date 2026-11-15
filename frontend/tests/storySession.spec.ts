@@ -73,26 +73,24 @@ describe("server-owned chapter performance", () => {
   it("routes a map interaction without inventing an NPC and opens a workspace only after acknowledgment", async () => {
     const session = useSession();
     const action: StoryView = { ...view(), npc_key: null, interaction_id: "shelf", node: {
-      id: "open", type: "action", action: "open_workspace", workspace: "library", text: "查看开放资料", speaker: "书架",
+      id: "open", type: "action", action: "open_workspace", workspace: "library",
     } };
     const post = vi.spyOn(api, "post").mockResolvedValueOnce(action)
       .mockRejectedValueOnce(new ApiError(409, "课程已更新"))
       .mockResolvedValueOnce({ ...action, status: "ended", node: null, revision: 1 });
     await session.interactStory("shelf", "object");
     expect(post).toHaveBeenCalledWith("/story/interactions", { classroom_id: 2, interaction_id: "shelf" });
-    const wrapper = mount(DialogueLayer, { props: { story: action }, attachTo: document.body });
-    expect(wrapper.text()).toContain("查看开放资料");
+    expect(session.story?.node).not.toHaveProperty("text");
     await expect(session.advanceStory()).rejects.toThrow("课程已更新");
     expect(session.workspace).toBeNull();
     await session.advanceStory();
     expect(session.workspace).toEqual({ kind: "library" });
     expect(post.mock.calls[1]?.[1]).toEqual(post.mock.calls[2]?.[1]);
-    wrapper.unmount();
   });
   it("does not open an old account's action and explicitly ends only the current flow", async () => {
     const session = useSession();
     session.story = { ...view(), npc_key: null, interaction_id: "sign", node: {
-      id: "open", type: "action", action: "open_workspace", workspace: "journal", text: "任务日志",
+      id: "open", type: "action", action: "open_workspace", workspace: "journal",
     } };
     const pending = deferred<StoryView>();
     const post = vi.spyOn(api, "post").mockReturnValueOnce(pending.promise).mockResolvedValueOnce(view("ended", 2));

@@ -139,7 +139,6 @@ export function NodeEditor({
   onChange,
   onFlowChange,
   onDelete,
-  onConvertActionText,
 }: {
   node: StoryNode;
   flow: Flow;
@@ -147,7 +146,6 @@ export function NodeEditor({
   onChange: (n: StoryNode) => void;
   onFlowChange: (f: Flow) => void;
   onDelete: () => void;
-  onConvertActionText: () => void;
 }) {
   const goals = catalog.quests.find((q) => q.id === flow.quest_id)?.nodes ?? [];
   const rounds = (node.type === "dialogue" ? node.text : "").split("\n\n");
@@ -479,7 +477,6 @@ export function NodeEditor({
                         building_id:
                           catalog.buildings.find((b) => b.has_interior)?.id ??
                           "",
-                        text: node.text,
                         next: node.next,
                       }
                     : {
@@ -487,7 +484,6 @@ export function NodeEditor({
                         type: "action",
                         action: "open_workspace",
                         workspace: "library",
-                        text: node.text,
                         next: node.next,
                       },
                 )
@@ -537,15 +533,6 @@ export function NodeEditor({
                   <option key={key} value={key}>{name}</option>
                 ))}
               </SelectField>
-            </div>
-          )}
-          {node.text && (
-            <div className="route-card space-y-2 mb-4">
-              <p className="hint">此节点保留了旧版提示：</p>
-              <p className="text-sm whitespace-pre-wrap">{node.text}</p>
-              <Button variant="outline" size="sm" disabled={flow.content.nodes.length >= 200} onClick={onConvertActionText}>
-                转为前置对白
-              </Button>
             </div>
           )}
           <details>

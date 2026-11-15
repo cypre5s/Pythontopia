@@ -64,7 +64,7 @@ const preferences = useUiPreferences();
 useModalFocus(panel, () => props.story?.id ?? "interaction", close);
 const line = computed(() => {
     const current = props.story?.node;
-    return current ? { ...current, text: displayWorldText(current.text) } : undefined;
+    return current && current.type !== "action" ? { ...current, text: displayWorldText(current.text) } : undefined;
   }),
   speaker = computed(() => line.value?.speaker ?? "小镇互动");
 const portrait = useCharacterImage(computed(() => imageError.value ? undefined : line.value?.portrait));

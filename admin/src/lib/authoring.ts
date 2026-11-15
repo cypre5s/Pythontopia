@@ -54,7 +54,6 @@ export type StoryNode =
       type: "action";
       action: "open_workspace";
       workspace: "library" | "journal" | "classroom";
-      text?: string;
       next: string;
     }
   | {
@@ -69,7 +68,6 @@ export type StoryNode =
       type: "action";
       action: "enter_building";
       building_id: string;
-      text?: string;
       next: string;
     };
 export type QuestNodeType =

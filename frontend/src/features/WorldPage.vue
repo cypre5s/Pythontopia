@@ -113,7 +113,7 @@ watch(() => session.restartCompleted, () => {
 const activeStory = computed(() =>
   session.story?.status === "active" && !session.storyDismissed && !session.workspace ? session.story : undefined,
 );
-const silentAction = computed(() => activeStory.value?.node?.type === "action" && !activeStory.value.node.text
+const silentAction = computed(() => activeStory.value?.node?.type === "action"
   ? `${activeStory.value.id}:${activeStory.value.revision}`
   : null);
 const automaticActionError = ref("");

@@ -167,7 +167,7 @@ export interface StoryView {
   status: "active" | "waiting" | "ended";
   npc_key: string | null;
   interaction_id?: string | null;
-  node: (StoryDialogue & { type?: "dialogue" | "action"; action?: "open_workspace" | "enter_building"; workspace?: "library" | "journal" | "classroom"; building_id?: string }) | null;
+  node: (StoryDialogue & { type?: "dialogue" }) | { id: string; type: "action"; action: "open_workspace"; workspace: "library" | "journal" | "classroom" } | { id: string; type: "action"; action: "enter_building"; building_id: string } | null;
   activity: { id: string; kind: string; page_no?: number | null } | null;
   world?: World;
 }

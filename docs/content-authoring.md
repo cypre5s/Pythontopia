@@ -28,7 +28,7 @@
 
 - `bindings`：命名活动绑定，任务流程每项明确`activity_id/goal_id`；公共流程只需`activity_id`，不伪造任务目标。
 - `entries`：每个NPC有从上到下匹配的入口列表，最后一项必须为 `when: {always: true}`。原有 `goal_complete`、`goal_ready`、`activity_started` 简写继续有效；完整条件组合和成绩分支见下方[剧情条件](#剧情条件成绩回应与任务外日常)。反复访问通过重新选入口实现。
-- `nodes`：支持`dialogue`、`activity`、`branch`、`random`、`action`、`unlock_building`、`end`。角色说话人使用 `speaker_npc_id`，服务端解析当前名字和立绘；旁白使用自定义 `speaker`，二者互斥。`checkpoint` 引用交谈目标并由服务端确认；日常禁止任务检查点和活动。单次演出无环，缺失跳转和不可达节点拒绝发布。
+- `nodes`：支持`dialogue`、`activity`、`branch`、`random`、`action`、`unlock_building`、`end`。`action` 只配置操作目标与后续连接，不接受 `text`；提示应使用前置 `dialogue`，保存与目录包导入均严格校验。角色说话人使用 `speaker_npc_id`，服务端解析当前名字和立绘；旁白使用自定义 `speaker`，二者互斥。`checkpoint` 引用交谈目标并由服务端确认；日常禁止任务检查点和活动。单次演出无环，缺失跳转和不可达节点拒绝发布。
 - `activity`：引用binding，必须定义 `returns.completed/suspended/unavailable`。打开活动保存等待点，玩家主动关闭后由服务端检查证据决定返回分支；刷新直接恢复等待活动。
 - 使用`unlock_building`受限节点/效果，服务端验证完成条件并幂等记录BuildingUnlock。纯日常不允许效果。操作节点配置工作区或具备室内的建筑，落点由系统控制。图书馆入口通过流程动作配置，不按角色 ID 特判。需要说明时先接对白。
 

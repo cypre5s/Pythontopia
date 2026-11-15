@@ -12,7 +12,7 @@ function Editor({ initial }: { initial: string }) {
   const [node, setNode] = useState<StoryNode>({ id: "greeting", type: "dialogue", text: initial, next: "end" });
   return <>
     <NodeEditor node={node} flow={flow} catalog={catalog} onChange={setNode}
-      onFlowChange={() => {}} onDelete={() => {}} onConvertActionText={() => {}} />
+      onFlowChange={() => {}} onDelete={() => {}} />
     <output data-testid="saved-node">{JSON.stringify(node)}</output>
   </>;
 }

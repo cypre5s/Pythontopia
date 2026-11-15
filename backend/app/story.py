@@ -146,9 +146,7 @@ def validate_story(
                 targets += node["next"]
             elif kind == "action":
                 required = {"id", "type", "action", "next", "workspace" if node.get("action") == "open_workspace" else "building_id"}
-                if not required <= set(node) <= required | {"text"} or (
-                    "text" in node and (not isinstance(node["text"], str) or not 1 <= len(node["text"]) <= 1000)
-                ):
+                if set(node) != required:
                     raise ValueError("无效界面操作节点")
                 if node["action"] == "open_workspace":
                     if node["workspace"] not in {"library", "journal", "classroom"}:
@@ -425,7 +423,8 @@ def _view(db, user, session):
     node, activity = None, None
     if session.status == "active":
         source = _nodes(story)[session.node_id]
-        node = {key: source[key] for key in ("id", "type", "text", "speaker", "action", "workspace", "building_id") if key in source}
+        fields = ("text", "speaker") if source["type"] == "dialogue" else ("action", "workspace", "building_id")
+        node = {key: source[key] for key in ("id", "type", *fields) if key in source}
         if source["type"] == "dialogue":
             from .characters import presentation
             speaker_key = source.get("speaker_npc_id", session.npc_key if "speaker" not in source else None)
@@ -435,8 +434,6 @@ def _view(db, user, session):
                 node.update(speaker=identity["name"], portrait=identity["portrait"])
             else:
                 node["portrait"] = ""
-        if source["type"] == "action":
-            node.setdefault("text", "")
         rounds = source.get("text", "").split("\n\n")
         round_index = session.return_mapping.get("dialogue_round", 0) if source["type"] == "dialogue" else 0
         if source["type"] == "dialogue":
