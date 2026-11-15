@@ -15,6 +15,7 @@ from app.materials.storage import get_storage
 from app.models import (
     Activity,
     ActivityQuestion,
+    ActivityMaterial,
     Chapter,
     ChapterRelease,
     CourseExample,
@@ -38,6 +39,8 @@ def _delete_content(db, instance, incoming):
     # All relation removals are explicit; never depend on database cascades for learner rows.
     for relation, field, model in (
         (ActivityQuestion, ActivityQuestion.activity_id, Activity),
+        (ActivityMaterial, ActivityMaterial.activity_id, Activity),
+        (ActivityMaterial, ActivityMaterial.material_id, Material),
         (ActivityQuestion, ActivityQuestion.question_id, Question),
         (QuestionSecret, QuestionSecret.question_id, Question),
         (QuestionKnowledgePoint, QuestionKnowledgePoint.question_id, Question),
@@ -157,6 +160,9 @@ def import_bundle(db, classroom, instance, bundle, root):
                 if relation is ActivityQuestion:
                     values["order_index"] = index
                 db.add(relation(**values))
+    for source, row in pairs[Activity]:
+        from app.course_content.resources import set_resources
+        set_resources(db, row, remap_references(source["resources"], maps))
     for source in bundle["secrets"]:
         key = maps["question"][source["id"]]
         row = db.get(QuestionSecret, key)

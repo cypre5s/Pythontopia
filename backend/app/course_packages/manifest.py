@@ -195,7 +195,7 @@ def read_manifest(raw):
     except (yaml.YAMLError, RecursionError, ValueError) as exc:
         raise PackageError("manifest YAML格式无效") from exc
     _fields(data, {"schema_version", "package_id", "name", "package_version", "created_at", "requires", "entry"}, {"updated_at", "exported_at"})
-    if type(data["schema_version"]) is not int or data["schema_version"] != 2:
+    if type(data["schema_version"]) is not int or data["schema_version"] != 3:
         raise PackageError("仅支持v2课程包，请使用新版角色格式")
     _identifier(data["package_id"], "package_id")
     _string(data["name"], "name")

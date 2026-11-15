@@ -1,4 +1,6 @@
 """World authoring uses real scoped definitions, collision and learning evidence."""
+from app.models import ActivityMaterial
+
 from copy import deepcopy
 from uuid import uuid4
 
@@ -35,9 +37,7 @@ def scene(db, teacher, student):
               map_key="town_hub", tile_x=22, tile_y=36, portrait="builtin:portrait:professor", sprite="builtin:sprite:chara_2")
     db.add(npc)
     db.add(ChapterRelease(classroom_id=classroom.id, chapter_id=chapter.id, status="published"))
-    activity = Activity(id=f"editor-lesson-{instance.id}", stable_id="lesson", chapter_id=chapter.id, title="阅读",
-                        kind="lesson", material_id=material.id, npc_key=npc.key,
-                        content={"published": True, "learning": {"reading": {"scope": "all"}}}, **fields)
+    activity = Activity(id=f'editor-lesson-{instance.id}', stable_id='lesson', chapter_id=chapter.id, title='阅读', kind='lesson', npc_key=npc.key, content={'published': True}, **fields, resources=[ActivityMaterial(material_id=material.id, required=True, order_index=0, learning={'reading': {'scope': 'all'}})])
     db.add(activity)
     db.commit()
     return {"classroom": classroom, "instance": instance, "chapter": chapter, "npc": npc, "activity": activity}
@@ -247,7 +247,7 @@ def test_public_activity_waits_real_completion_before_idempotent_unlock(client, 
     advance(client, student, scene, returned)
     view = start(client, student, scene).json()
     progress = client.post(f"/api/activities/{scene['activity'].id}/progress", headers=student["headers"],
-        json={"classroom_id": scene["classroom"].id, "page_no": 1})
+        json={"classroom_id": scene["classroom"].id, "material_id": scene["activity"].resources[0].material_id, "page_no": 1})
     assert progress.status_code == 200, progress.text
     assert progress.json()["completed"] is True
     done = advance(client, student, scene, view, "return", "unlock-once")

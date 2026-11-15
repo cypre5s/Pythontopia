@@ -45,10 +45,8 @@ export function useLessonCompletion(context: CompletionContext) {
     saving.value = true;
     try {
       if (context.hasCompletion.value) {
-        if (activity.learning?.video) {
-          context.stopVideo();
-          await context.flushVideo();
-        }
+        context.stopVideo();
+        await context.flushVideo();
         if (
           !current() ||
           !context.progress.value?.completed ||

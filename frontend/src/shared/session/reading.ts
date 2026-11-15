@@ -11,12 +11,12 @@ interface ReadingScope {
 // before switching class, leaving an activity, or replacing experience state.
 export function createReadingProgress(scope: ReadingScope) {
   let pending: Promise<unknown> = Promise.resolve();
-  let latest: { activityId: string; pageNo: number } | null = null;
-  function save(activityId: string, pageNo: number): Promise<ActivityProgress> {
+  let latest: { activityId: string; pageNo: number; materialId: number } | null = null;
+  function save(activityId: string, pageNo: number, materialId: number): Promise<ActivityProgress> {
     const owner = scope.owner(),
       classroom = scope.classroom(),
       generation = scope.generation();
-    latest = { activityId, pageNo };
+    latest = { activityId, pageNo, materialId };
     const task = pending
       .catch(() => undefined)
       .then(async () => {
@@ -29,7 +29,7 @@ export function createReadingProgress(scope: ReadingScope) {
         }
         return api.post<ActivityProgress>(
           `/activities/${activityId}/progress`,
-          { classroom_id: classroom, page_no: pageNo },
+          { classroom_id: classroom, page_no: pageNo, material_id: materialId },
         );
       });
     pending = task;

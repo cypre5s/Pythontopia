@@ -140,9 +140,9 @@ npm run dev -- --host 127.0.0.1 --port 15174
 
 ## YAML、媒体导入与数据库迁移
 
-### v2 课程导入班级
+### v3 课程导入班级
 
-课程包不纳入 Git 或镜像。将编写完成的 v2 解压目录放入私有 data/course，在教师后台选择班级、预览目录包，核对差异后确认导入。新引擎明确拒绝旧格式，不提供 app.seed、convert_legacy_course、migrate_classroom_courses 或旧来源 initialize 接口。
+课程包不纳入 Git 或镜像。将编写完成的 v3 解压目录放入私有 data/course，在教师后台选择班级、预览目录包，核对差异后确认导入。新引擎明确拒绝旧格式，不提供 app.seed、convert_legacy_course、migrate_classroom_courses 或旧来源 initialize 接口。
 
 本机 data/course/python-town-chapter1 已更新为 v2，四个角色、立绘/精灵引用、人设、日常公共流程和图书馆设置与包一起维护，原 41 份媒体资源保留。当前包只是私有文件，不随启动自动导入。
 
@@ -320,7 +320,7 @@ python -m mypy          # 读取 pyproject 里的 [tool.mypy]，当前只检查 
 
 Windows测试进程显式使用UTF-8，避免旧夹具的默认文本读取采用系统GBK；这些设置只影响当前终端及其子进程，不修改系统语言。pytest临时目录保持在项目忽略目录内。
 
-自动化测试使用 backend/tests/source_fixtures.py 和 tests/fixtures/teaching-scripts 的合成课程，不代表原教材正确。fixture_seed/fixture_package/fixture_instances 仅位于 tests，不是运行导入入口。浏览器测试包通过 PYTHONPATH=tests 调用 fixture_package 生成 v2 目录，放入独立交换区；课程包 ID 通过 REBORN_E2E_COURSE_PACKAGE 指定。全新隔离数据库执行迁移、重复升级和包重复导入检查。PostgreSQL并发专项需要显式 `REBORN_TEST_DATABASE_URL`，测试会创建临时 schema 并清理，不能指向真实演示库或生产库。当前live判题使用 `REBORN_LIVE_GO_JUDGE_URL` 和 `REBORN_GO_JUDGE_AUTH_TOKEN`；未配置的外部专项应记录为跳过。
+自动化测试使用 backend/tests/source_fixtures.py 和 tests/fixtures/teaching-scripts 的合成课程，不代表原教材正确。fixture_seed/fixture_package/fixture_instances 仅位于 tests，不是运行导入入口。浏览器测试包通过 PYTHONPATH=tests 调用 fixture_package 生成 v3 目录，放入独立交换区；课程包 ID 通过 REBORN_E2E_COURSE_PACKAGE 指定。全新隔离数据库执行迁移、重复升级和包重复导入检查。PostgreSQL并发专项需要显式 `REBORN_TEST_DATABASE_URL`，测试会创建临时 schema 并清理，不能指向真实演示库或生产库。当前live判题使用 `REBORN_LIVE_GO_JUDGE_URL` 和 `REBORN_GO_JUDGE_AUTH_TOKEN`；未配置的外部专项应记录为跳过。
 
 后端通用db夹具每次测试复制独立的SQLite内存库，只将合成建表和seed准备一次；测试中的提交、删除和Session均隔离。真实迁移、重复seed和PostgreSQL锁验证仍独立执行，不用快照代替这些断言。默认串行，不依赖未锁定的pytest-xdist；实际耗时与机器、启用专项有关，最新结果见acceptance。
 
@@ -349,7 +349,7 @@ git diff --check
 
 Playwright不会自动启动服务器。先准备独立验收数据库、媒体/交换目录及专用教师账号，设置E2E_URL、ADMIN_E2E_URL（同域入口）、E2E_TEACHER_STUDENT_ID、E2E_TEACHER_PASSWORD。跨教师权限另需E2E_OTHER_TEACHER_STUDENT_ID/PASSWORD。将解压后的完整测试包放进隔离交换目录，设置 REBORN_E2E_COURSE_PACKAGE 为清单的 package_id。学生用例先创建班级并显式导入。后台包往返测试在同一隔离环境运行，测试进程的 REBORN_COURSE_EXCHANGE_ROOT 指向可访问的交换目录。
 
-复现CI按`.github/workflows/reborn.yml`使用 tests/fixture_package 生成 v2 合成测试包并解压到隔离交换目录，再启动API、React和Vue。依赖在启动服务器前安装，浏览器运行期间不要执行npm ci。后台e2e在admin执行`npx playwright test --workers=1`；游戏按下方命令。
+复现CI按`.github/workflows/reborn.yml`使用 tests/fixture_package 生成 v3 合成测试包并解压到隔离交换目录，再启动API、React和Vue。依赖在启动服务器前安装，浏览器运行期间不要执行npm ci。后台e2e在admin执行`npx playwright test --workers=1`；游戏按下方命令。
 
 从 `frontend` 安装匹配浏览器并执行：
 
@@ -488,3 +488,9 @@ python scripts/check-python-imports.py
 ```
 
 检查已进入现有 Reborn checks 的文档与后端任务，无需单独流水线。Python 检查只静态读取 `backend/app`，包含函数内导入、常量动态导入、循环依赖与跨模块私有访问，不加载应用或连接数据库。边界违规阻断，行数与压行只提醒复核职责；仍须按本轮变更执行原有双端与后端检查。删除旧路径时同步真实调用、测试模拟和命令，不用兼容转发遮蔽缺漏。
+
+## 多资料活动升级
+
+升级前停止写入并备份数据库、私有存储和课程目录，先在隔离副本演练迁移。`e51b92fa60c3` 将旧单资料关联及学习要求、已读页、位置、有效体验检查点迁入当前结构；旧已失效检查点不重新激活。数据库原成绩、任务和会话不重置。此迁移不可无损降级，回退使用升级前的完整备份，不运行 seed 覆盖已有课程。随后执行 Alembic 元数据检查，逐表比较未变更数据，并验证活动资料对应关系和学习记录。
+
+课程目录清单格式为3。此前格式2私有目录先复制备份，再将活动 `material_id` 及 `content.learning/completion` 转为单项 `resources`，其他资料、媒体和答案不变；完整语义校验通过后使用。学生实测须用隔离班级/体验账号，不能重置演示学习记录。

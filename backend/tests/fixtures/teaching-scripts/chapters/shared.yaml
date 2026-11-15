@@ -53,7 +53,6 @@ activities:
   chapter_id: 179
   title: 计算思维概念练习
   kind: practice
-  material_id: null
   npc_key: arena_guard
   assistant_allowed: true
   content:
@@ -67,4 +66,5 @@ activities:
   - 10723
   - 10724
   knowledge_point_mode: pages
+  resources: []
 quests: []

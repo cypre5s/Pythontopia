@@ -1,3 +1,4 @@
+from app.models import ActivityMaterial
 import pytest
 from copy import deepcopy
 from datetime import timedelta
@@ -53,8 +54,7 @@ def authored(db, teacher, classroom):
     material = Material(id=9001, title='独立资料', owner_id=owner, content={'text': '保留原文'})
     point = KnowledgePoint(id=9001, chapter_id=9001, title='相关知识', owner_id=owner)
     questions = [Question(id=f'cascade-q{i}', title=f'题目{i}', kind='boolean', prompt='判断', owner_id=owner, status='ready') for i in range(2)]
-    activity = Activity(id='cascade-a', chapter_id=9001, title='关联活动', kind='practice', owner_id=owner,
-                        material_id=9001, content={'knowledge_point_ids': [9001]})
+    activity = Activity(id='cascade-a', chapter_id=9001, title='关联活动', kind='practice', owner_id=owner, content={'knowledge_point_ids': [9001]}, resources=[ActivityMaterial(material_id=9001, required=True, order_index=0, learning={})])
     db.add_all([chapter, material, point, *questions, activity])
     db.flush()
     db.add_all([MaterialChapter(material_id=9001, chapter_id=9001), MaterialChapter(material_id=9001, chapter_id=179)])

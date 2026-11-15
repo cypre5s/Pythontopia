@@ -35,6 +35,7 @@ class LocalRun(BaseModel):
 
 
 class TurnState(BaseModel):
+    material_id: int | None = Field(default=None, strict=True, ge=1)
     model_config = ConfigDict(extra="forbid")
     page_no: int | None = Field(default=None, ge=1)
     video_time: float | None = Field(default=None, ge=0, le=86400, allow_inf_nan=False)
@@ -123,6 +124,12 @@ def build_context(db, user, session, activity, body):
         raise HTTPException(422, "阅读助教不接收练习作答")
     if practice and (state.page_no is not None or state.video_time is not None):
         raise HTTPException(422, "练习助教不接收阅读位置")
+    if activity and state.material_id is not None:
+        if state.material_id not in {row.material_id for row in activity.resources}:
+            raise HTTPException(422, "当前资料不属于此学习活动")
+        session.material_id = state.material_id
+    elif state.material_id is not None and state.material_id != session.material_id:
+        raise HTTPException(422, "当前资料与助教会话不一致")
     ids = {session.material_id} if session.material_id else set()
     if current and current.source.get("material_id"):
         ids.add(current.source["material_id"])

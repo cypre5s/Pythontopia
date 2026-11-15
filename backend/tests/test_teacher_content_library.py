@@ -1,4 +1,6 @@
 """Independent content authoring, reuse, ownership, and reference protection."""
+from app.models import ActivityMaterial
+
 import app.materials.jobs as materials_jobs
 
 from sqlalchemy import select
@@ -96,7 +98,7 @@ def test_material_upload_without_chapter_then_multichapter_metadata_and_teacher_
     updated = client.put(f"/api/teacher/materials/{key}", headers=headers, json={"title": "Shared chapters", "chapter_ids": [179, 180]}, params={"classroom_id": classroom["id"]})
     assert updated.status_code == 200 and updated.json()["chapter_ids"] == [179, 180]
     assert client.post("/api/teacher/activities", headers=headers, json={"id": "library-reading", "chapter_id": 180,
-        "title": "Read", "kind": "reading", "material_id": key, "npc_key": "librarian_doc"}, params={"classroom_id": classroom["id"]}).status_code == 201
+        "title": "Read", "kind": "reading", "resources": [{"material_id": key, "required": True, "learning": {}}], "npc_key": "librarian_doc"}, params={"classroom_id": classroom["id"]}).status_code == 201
     assert client.put(f"/api/teacher/materials/{key}", headers=headers, json={"chapter_ids": [179]}, params={"classroom_id": classroom["id"]}).status_code == 409
     assert client.delete(f"/api/teacher/materials/{key}", headers=headers, params={"classroom_id": classroom["id"]}).status_code == 409
     bad = client.post("/api/teacher/materials/upload", headers=headers, data={"title": "wrong type", "material_id": key},
@@ -151,8 +153,7 @@ def test_shared_library_payload_hides_other_teacher_activity_and_chapter_metadat
     question = activity_questions(db, "ch1-practice")[0]
     set_material_chapters(db, 186, [179, chapter.id])
     set_question_chapters(db, question.id, [179, chapter.id])
-    activity = Activity(id="private-reference", chapter_id=179, title="PRIVATE_ACTIVITY_TITLE", kind="practice", owner_id=other.id,
-                        material_id=186, content={"published": True})
+    activity = Activity(id='private-reference', chapter_id=179, title='PRIVATE_ACTIVITY_TITLE', kind='practice', owner_id=other.id, content={'published': True}, resources=[ActivityMaterial(material_id=186, required=True, order_index=0, learning={})])
     db.add(activity)
     db.flush()
     set_activity_questions(db, activity, [question.id])
@@ -212,10 +213,10 @@ def test_admin_cannot_assign_dependencies_unavailable_to_activity_owner(client, 
     before_shared = [q.id for q in activity_questions(db, "ch1-practice")]
     assert client.put("/api/teacher/activities/ch1-practice/questions", headers=admin_headers, json={"question_ids": [question_id]}, params={"classroom_id": classroom["id"]}).status_code == 403
     assert [q.id for q in activity_questions(db, "ch1-practice")] == before_shared
-    assert client.put("/api/teacher/activities/ch1-lesson", headers=admin_headers, json={"material_id": own_material.id}, params={"classroom_id": classroom["id"]}).status_code == 403
-    assert db.get(Activity, "ch1-lesson").material_id == 186
+    assert client.put("/api/teacher/activities/ch1-lesson", headers=admin_headers, json={"resources": [{"material_id": own_material.id, "required": True, "learning": {}}]}, params={"classroom_id": classroom["id"]}).status_code == 403
+    assert db.get(Activity, "ch1-lesson").resources[0].material_id == 186
     created = client.post("/api/teacher/activities", headers=headers, json={"id": "teacher-owner-activity", "chapter_id": 179,
-        "title": "Teacher owned", "kind": "practice", "material_id": own_material.id, "npc_key": "arena_guard"}, params={"classroom_id": classroom["id"]})
+        "title": "Teacher owned", "kind": "practice", "resources": [{"material_id": own_material.id, "required": True, "learning": {}}], "npc_key": "arena_guard"}, params={"classroom_id": classroom["id"]})
     assert created.status_code == 201
     activity_id = created.json()["id"]
     assert client.put(f"/api/teacher/activities/{activity_id}/questions", headers=admin_headers,
@@ -224,5 +225,5 @@ def test_admin_cannot_assign_dependencies_unavailable_to_activity_owner(client, 
         json={"question_ids": ["admin-private-q"]}, params={"classroom_id": classroom["id"]}).status_code == 403
     assert [q.id for q in activity_questions(db, activity_id)] == [question_id]
     assert client.put(f"/api/teacher/activities/{activity_id}", headers=admin_headers,
-        json={"material_id": admin_material.id}, params={"classroom_id": classroom["id"]}).status_code == 403
-    assert db.get(Activity, activity_id).material_id == own_material.id
+        json={"resources": [{"material_id": admin_material.id, "required": True, "learning": {}}]}, params={"classroom_id": classroom["id"]}).status_code == 403
+    assert db.get(Activity, activity_id).resources[0].material_id == own_material.id

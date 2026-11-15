@@ -1,4 +1,6 @@
 """Authorization and current quest-reference regression tests."""
+from app.models import ActivityMaterial
+
 
 from app.content_relations import activity_questions
 from conftest import make_material, make_question
@@ -21,15 +23,7 @@ def test_teacher_cannot_read_other_owner_draft_assessment_or_metadata(client, db
     other = new_teacher(db)
     other_class = client.post("/api/classrooms", json={"name": "Teacher B private class"}, headers=other["headers"]).json()
     assert client.post(f"/api/teacher/classrooms/{other_class['id']}/course/empty", json={"name": "Other", "confirmed": True}, headers=other["headers"]).status_code == 200
-    assessment = Activity(
-        id="teacher-a-unpublished-exam",
-        chapter_id=179,
-        title="PRIVATE_DRAFT_TITLE",
-        kind="assessment",
-        owner_id=teacher["id"],
-        material_id=None,
-        content={"published": False, "question_ids": ["teacher-a-private-question"]},
-    )
+    assessment = Activity(id='teacher-a-unpublished-exam', chapter_id=179, title='PRIVATE_DRAFT_TITLE', kind='assessment', owner_id=teacher['id'], content={'published': False, 'question_ids': ['teacher-a-private-question']}, resources=[])
     db.add(assessment)
     db.flush()
     db.add(
@@ -66,8 +60,7 @@ def test_enrolled_external_teacher_reads_bound_current_material_only(client, db,
                         content={"pages": [{"id": 9201, "page_no": 1, "title": "page", "text": "PUBLISHED_CURRENT_MATERIAL"}]})
     db.add(material)
     db.flush()
-    activity = Activity(id="a-published-reading", chapter_id=179, title="A published lesson", kind="lesson", owner_id=teacher["id"],
-                        material_id=material.id, content={"published": True, "question_ids": []})
+    activity = Activity(id='a-published-reading', chapter_id=179, title='A published lesson', kind='lesson', owner_id=teacher['id'], content={'published': True, 'question_ids': []}, resources=[ActivityMaterial(material_id=material.id, required=True, order_index=0, learning={})])
     db.add(activity)
     db.commit()
     cid, headers = classroom["id"], other["headers"]
@@ -154,15 +147,15 @@ def test_current_reading_requirements_use_preserved_visited_pages_not_old_comple
     from app.teaching.quests.evidence import validate_evidence
 
     activity = db.get(Activity, "ch1-lesson")
-    visited = list(activity.content["completion"]["required_page_ids"])
+    visited = list(activity.resources[0].learning["reading"]["page_ids"])
     progress = ActivityProgress(user_id=student["id"], classroom_id=classroom["id"], activity_id=activity.id,
-                                page_no=43, visited_pages=visited, completed=True)
+                                page_no=43, visited_pages=visited, completed=True, media_progress={"reading_pages": {"186": visited}})
     record = LearningRecord(user_id=student["id"], classroom_id=classroom["id"], activity_id=activity.id,
                             data={"page_no": 43, "page_id": visited[-1]})
     task = PlayerQuest(user_id=student["id"], classroom_id=classroom["id"], quest_id="arrival", status="complete")
     db.add_all([progress, record, task])
     db.commit()
-    activity.content = {**activity.content, "completion": {"required_page_ids": [*visited, 10725]}}
+    activity.resources[0].learning = {"reading": {"scope": "pages", "page_ids": [*visited, 10725]}}
     db.commit()
 
     response = client.get(f"/api/activities/{activity.id}/progress?classroom_id={classroom['id']}", headers=student["headers"])
@@ -172,8 +165,8 @@ def test_current_reading_requirements_use_preserved_visited_pages_not_old_comple
         validate_evidence(db, db.get(User, student["id"]), classroom["id"],
                           {"type": "STUDY_LESSON", "activity_id": activity.id}, {"record_id": record.id})
     assert error.value.status_code == 422
-    page = next(page for page in db.get(Material, activity.material_id).content["pages"] if page["id"] == 10725)
-    saved = client.post(f"/api/activities/{activity.id}/progress", json={"classroom_id": classroom["id"], "page_no": page["page_no"]},
+    page = next(page for page in db.get(Material, activity.resources[0].material_id).content["pages"] if page["id"] == 10725)
+    saved = client.post(f"/api/activities/{activity.id}/progress", json={"material_id": 186, "classroom_id": classroom["id"], "page_no": page["page_no"]},
                         headers=student["headers"])
     assert saved.status_code == 200 and saved.json()["completed"]
     validate_evidence(db, db.get(User, student["id"]), classroom["id"],

@@ -86,13 +86,14 @@ test("only configured arrival main quest completes and stays isolated across acc
   await page.getByRole("button", { name: "立即前往", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "剧情对白" })).toBeVisible({ timeout: 40_000 });
   await finishTalk(page);
-  await expect(page.getByRole("navigation", { name: "本章阅读目标" })).toBeVisible();
+  await expect(page.locator(".activity-reading-goals")).toBeVisible();
+  await page.locator(".activity-resource-requirements summary").click();
   for (const pageNo of [34, 42, 43]) {
     const saved = page.waitForResponse(r => r.url().endsWith(`/api/activities/${ids.activity["ch1-lesson"]}/progress`) && r.request().method() === "POST" && r.request().postDataJSON().page_no === pageNo);
-    await page.getByRole("navigation", { name: "本章阅读目标" }).getByRole("button", { name: new RegExp("阅读第" + pageNo + "页$") }).click();
+    await page.locator(".activity-resource-requirements").getByRole("button", { name: new RegExp("^" + pageNo + "\\.") }).click();
     expect((await saved).ok()).toBeTruthy();
   }
-  await page.getByRole("button", { name: "完成阅读", exact: true }).click();
+  await page.getByRole("button", { name: "完成学习", exact: true }).click();
   await expect(page.getByRole("dialog", { name: "剧情对白" })).toBeVisible();
   await finishTalk(page);
   await expect.poll(() => status("arrival", "study")).toBe("complete");

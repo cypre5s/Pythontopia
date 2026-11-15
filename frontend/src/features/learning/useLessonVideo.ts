@@ -1,11 +1,12 @@
 import { onMounted, onBeforeUnmount, ref } from "vue";
 import type { Ref } from "vue";
 import { api } from "../../shared/api";
-import type { Activity, ActivityProgress } from "../../shared/types";
+import type { Activity, ActivityProgress, Material } from "../../shared/types";
 import { createVideoProgressQueue } from "../../shared/videoProgress";
 
 interface VideoContext {
   activity: Ref<Activity | undefined>;
+  material: Ref<Material | undefined>;
   progress: Ref<ActivityProgress | undefined>;
   progressError: Ref<string>;
   readingKey: Ref<string>;
@@ -19,6 +20,7 @@ interface VideoContext {
 
 export function useLessonVideo({
   activity,
+  material,
   progress,
   progressError,
   readingKey,
@@ -31,6 +33,8 @@ export function useLessonVideo({
 }: VideoContext) {
   const videoElement = ref<HTMLVideoElement>();
   const videoTime = ref(0);
+  let pendingSeek: number | undefined;
+  let initialTimeUsed = false;
   let videoQueue:
     | ReturnType<typeof createVideoProgressQueue<ActivityProgress>>
     | undefined;
@@ -40,6 +44,8 @@ export function useLessonVideo({
   let unregisterVideoPreparation: (() => void) | undefined;
   const videoTasks = new Set<Promise<void>>();
   function resetVideo() {
+    pendingSeek = undefined;
+    videoTime.value = 0;
     clearInterval(videoTimer);
     videoTracking = false;
     if (videoQueue) trackVideoTask(videoQueue.dispose());
@@ -47,7 +53,7 @@ export function useLessonVideo({
   }
   function configureVideo(materialId: number) {
     const generation = currentGeneration();
-    if (activity.value?.learning?.video && contextClassroomId !== null) {
+    if (activity.value?.resources.some(row => row.material_id === materialId) && contextClassroomId !== null) {
       const activityId = activity.value.id;
       videoQueue = createVideoProgressQueue<ActivityProgress>({
         classroomId: contextClassroomId,
@@ -142,7 +148,7 @@ export function useLessonVideo({
     videoTracking = false;
   }
   function videoEvidencePosition(video: HTMLVideoElement) {
-    const duration = activity.value?.material?.duration_seconds;
+    const duration = material.value?.duration_seconds;
     return Math.max(
       0,
       Math.min(
@@ -179,6 +185,7 @@ export function useLessonVideo({
   }
   function seekVideo(seconds: number) {
     const video = videoElement.value;
+    if (!video || video.readyState === 0) pendingSeek = seconds;
     if (!video) return;
     stopVideoTracking();
     video.currentTime = Math.max(
@@ -203,10 +210,12 @@ export function useLessonVideo({
   function restoreVideoPosition(event: Event) {
     const video = event.target as HTMLVideoElement,
       saved =
-        initialTime() ??
+        pendingSeek ?? (initialTimeUsed ? undefined : initialTime()) ??
         Number(sessionStorage.getItem(`${readingKey.value}:video`) ?? 0);
     if (Number.isFinite(saved) && saved > 0 && Number.isFinite(video.duration))
       video.currentTime = Math.min(saved, Math.max(0, video.duration - 0.1));
+    pendingSeek = undefined;
+    initialTimeUsed = true;
   }
 
   onMounted(() => {

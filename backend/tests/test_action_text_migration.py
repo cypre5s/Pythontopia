@@ -67,8 +67,8 @@ def test_migration_updates_definitions_once_and_preserves_session_and_receipts(t
         connection.execute(sessions.insert(), {"id": "resume", "user_id": 1, "classroom_id": 99, "story_id": "prompt", "node_id": "start",
                                                "status": "active", "revision": 3, "return_mapping": {}, "receipts": [{"id": "old", "signature": "evidence"}]})
         session_before = dict(connection.execute(sa.select(sessions)).mappings().one())
-    migrate(url, "upgrade", "head")
-    migrate(url, "upgrade", "head")
+    migrate(url, "upgrade", migration.revision)
+    migrate(url, "upgrade", migration.revision)
     with engine.begin() as connection:
         assert connection.scalar(sa.select(instances.c.revision)) == 5
         saved = connection.scalar(sa.select(stories.c.content).where(stories.c.id == "prompt"))

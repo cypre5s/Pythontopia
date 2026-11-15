@@ -242,3 +242,27 @@
 .game-workspace .learning-layout .lesson-footer > div {
   flex: 0 0 auto;
 }
+
+/* Activity goals use the same compact rows as the page outline. */
+.game-workspace .activity-reading-summary { display: grid; gap: 8px; padding-bottom: 12px; border-bottom: 1px solid var(--game-line); }
+.game-workspace .activity-reading-summary-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.game-workspace .activity-reading-summary strong { font: inherit; font-weight: 650; }
+.game-workspace .activity-reading-goals progress { width: 100%; height: 6px; display: block; }
+.game-workspace .activity-reading-resource { padding: 10px 0; border-bottom: 1px solid var(--game-line); }
+.game-workspace .activity-resource-heading { display: flex; align-items: center; gap: 7px; width: 100%; min-width: 0; text-align: left; background: transparent; border: 0; border-radius: 3px; padding: 7px 4px; }
+.game-workspace .activity-resource-heading[aria-current="page"] { background: color-mix(in srgb, var(--game-forest) 10%, transparent); color: var(--game-forest); }
+.game-workspace .activity-resource-title { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.game-workspace .activity-resource-progress { display: grid; gap: 6px; padding: 4px; font-size: .85em; }
+.game-workspace .activity-reading-resource.is-optional { color: var(--game-muted); }
+.game-workspace .activity-resource-requirements summary { display: flex; justify-content: space-between; padding: 8px 4px; cursor: pointer; font-size: .85em; }
+.game-workspace .activity-resource-requirements summary::-webkit-details-marker { display: none; }
+.game-workspace .activity-resource-requirements button { display: flex; align-items: center; gap: 6px; width: 100%; border: 0; border-radius: 0; border-top: 1px solid var(--game-line); background: transparent; padding: 6px 4px; text-align: left; font-size: .85em; }
+.game-workspace .activity-resource-requirements button span { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+.game-workspace .activity-reading-goals progress { appearance: none; border: 0; border-radius: 4px; overflow: hidden; background: var(--game-line); color: var(--game-forest); }
+.game-workspace .activity-reading-goals progress::-webkit-progress-bar { background: var(--game-line); }
+.game-workspace .activity-reading-goals progress::-webkit-progress-value { background: var(--game-forest); }
+.game-workspace .activity-reading-goals progress::-moz-progress-bar { background: var(--game-forest); }
+.game-workspace .activity-reading-resource.is-optional .activity-resource-heading { color: var(--game-muted); }
+.game-workspace .activity-reading-resource.is-optional progress::-webkit-progress-value { background: var(--game-muted); }
+.game-workspace .activity-reading-resource.is-optional progress::-moz-progress-bar { background: var(--game-muted); }

@@ -1,4 +1,6 @@
 """Removed shared teaching tasks disappear without erasing learning history."""
+from app.models import ActivityMaterial
+
 
 from uuid import uuid4
 
@@ -27,8 +29,7 @@ def test_legacy_source_reimport_preserves_owned_tasks_and_grades(client, db, stu
     db.add(QuestDefinition(id=retired_id, chapter_id=180, title=definition["title"], definition=definition))
     owned = {**definition, "id": "teacher-owned-task", "title": "Teacher authored"}
     db.add(QuestDefinition(id=owned["id"], chapter_id=180, title=owned["title"], owner_id=teacher["id"], definition=owned))
-    activity = Activity(id="retired-reading", chapter_id=180, title="Retired card", kind="reading", material_id=187,
-                        content={"published": True, "question_ids": []})
+    activity = Activity(id='retired-reading', chapter_id=180, title='Retired card', kind='reading', content={'published': True, 'question_ids': []}, resources=[ActivityMaterial(material_id=187, required=True, order_index=0, learning={})])
     db.add(activity)
     db.flush()
     instance = PlayerQuest(user_id=student["id"], classroom_id=classroom["id"], quest_id=retired_id, status="complete")

@@ -62,7 +62,7 @@ export function useLessonSource(context: LessonSourceContext) {
     pdfPage.value = page;
   }
 
-  function restorePosition() {
+  function restorePosition(initial = false) {
     if (
       material.value &&
       context.userId !== undefined &&
@@ -75,7 +75,7 @@ export function useLessonSource(context: LessonSourceContext) {
         material.value.id,
       );
     const saved = Number(sessionStorage.getItem(readingKey.value) ?? 0);
-    const resumePage = context.initialPage() ?? progress.value?.page_no;
+    const resumePage = (initial ? context.initialPage() : undefined) ?? progress.value?.resources?.find(row => row.material_id === material.value?.id)?.page_no;
     const requested = resumePage
       ? (material.value?.pages.findIndex(
           (page) => page.page_no === resumePage,
@@ -127,22 +127,16 @@ export function useLessonSource(context: LessonSourceContext) {
         const loaded = await context.fetchActivity(context.activityId());
         if (!current(request)) return;
         activity.value = loaded;
-        material.value = loaded.material ?? undefined;
+        material.value = (loaded.resources.find(row => row.material_id === loaded.progress?.material_id) ?? loaded.resources[0])?.material;
       }
       progress.value = activity.value?.progress;
-      if (
-        activity.value &&
-        (activity.value.completion ||
-          activity.value.learning?.reading ||
-          activity.value.learning?.video)
-      ) {
-        const saved = await api.get<ActivityProgress>(
-          `/activities/${activity.value.id}/progress?classroom_id=${context.classroomId}`,
-        );
+      if (activity.value?.resources.length) {
+        const saved = await api.get<ActivityProgress>(`/activities/${activity.value.id}/progress?classroom_id=${context.classroomId}`);
         if (!current(request)) return;
         progress.value = saved;
+        material.value = (activity.value.resources.find(row => row.material_id === saved.material_id) ?? activity.value.resources[0])?.material;
       }
-      restorePosition();
+      restorePosition(true);
       await loadMedia(request);
     } catch (cause) {
       if (current(request))
@@ -155,6 +149,20 @@ export function useLessonSource(context: LessonSourceContext) {
     }
   }
 
+  async function switchMaterial(id: number) {
+    const resource = activity.value?.resources.find(row => row.material_id === id);
+    if (!resource || resource.material_id === material.value?.id || !currentOwner()) return;
+    const request = ++generation;
+    citationGeneration++;
+    context.beforeLoad();
+    loading.value = true;
+    releaseMedia();
+    material.value = resource.material;
+    restorePosition();
+    await loadMedia(request);
+    if (current(request)) { loading.value = false; context.ready(); }
+  }
+
   async function showCitation(id: number, page: number) {
     const request = generation;
     const citation = ++citationGeneration;
@@ -163,8 +171,10 @@ export function useLessonSource(context: LessonSourceContext) {
         `/materials/${id}?classroom_id=${context.classroomId}`,
       );
       if (!current(request) || citation !== citationGeneration) return false;
+      context.beforeLoad();
       releaseMedia();
       material.value = loaded;
+      await loadMedia(request);
     }
     if (!current(request) || citation !== citationGeneration) return false;
     selectPage(page);
@@ -194,5 +204,6 @@ export function useLessonSource(context: LessonSourceContext) {
     load,
     selectPage,
     showCitation,
+    switchMaterial,
   };
 }

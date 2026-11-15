@@ -1,6 +1,6 @@
 import json
 from datetime import datetime, timezone
-from sqlalchemy import select, text, update, func
+from sqlalchemy import select, text, func
 from sqlalchemy.orm import sessionmaker
 from app import assistant
 from app.integration_models import AssistantSession, AssistantCall
@@ -16,7 +16,9 @@ def create(client, student, classroom, **fields):
 def test_material_session_authorization_and_revocation(client, db, student, teacher, classroom):
     material = db.get(Material, 186)
     material.content = {**material.content, 'library_available': True, 'source': {'kind': 'course_media_pack', 'course_id': 43}}
-    db.execute(update(Activity).where(Activity.material_id == 186).values(material_id=None))
+    from app.models import ActivityMaterial
+    from sqlalchemy import delete
+    db.execute(delete(ActivityMaterial).where(ActivityMaterial.material_id == 186))
     db.commit()
     activity_count = db.scalar(select(func.count()).select_from(Activity))
     assert create(client, student, classroom, activity_id='ch1-lesson').status_code == 422

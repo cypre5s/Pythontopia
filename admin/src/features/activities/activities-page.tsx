@@ -143,10 +143,8 @@ export function Activities({ classroomId }: { classroomId: number }) {
                     <Badge variant="outline">{kindName[a.kind]}</Badge>
                   </TableCell>
                   <TableCell>
-                    {a.material_id
-                      ? materials.data?.find((m) => m.id === a.material_id)
-                          ?.title
-                      : `${a.question_ids.length} 道题`}
+                    {a.kind === "lesson" || a.kind === "reading" ? `${a.resources.length} 份资料 · ${a.resources.filter(row => row.required).length} 份必读` : `${a.question_ids.length} 道题`}
+
                   </TableCell>
                   <TableCell>
                     <div className="flex justify-end gap-1">

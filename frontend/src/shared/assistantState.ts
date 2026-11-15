@@ -16,6 +16,7 @@ export interface AssistantFeedback {
   selected_case?: number;
 }
 export interface AssistantState extends AssistantFeedback {
+  material_id?: number;
   page_no?: number;
   video_time?: number;
   question_id?: string;

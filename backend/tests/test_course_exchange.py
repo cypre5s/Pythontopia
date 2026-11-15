@@ -100,7 +100,8 @@ def apply(client, teacher, cid, item, request_id=None):
 
 
 def test_complete_roundtrip_draft_private_answers_and_repeated_apply(client, db, teacher, exchange, tmp_path):
-    from app.models import Activity, KnowledgePoint
+    from app.models import Activity, KnowledgePoint, ActivityMaterial
+    from app.content_relations import set_material_chapters
 
     source, target = exchange
     source_maps = content_mapping(db, source)
@@ -110,6 +111,13 @@ def test_complete_roundtrip_draft_private_answers_and_repeated_apply(client, db,
     assert cross_chapter_point is not None
     point_stable_id = cross_chapter_point.stable_id or str(cross_chapter_point.id)
     source_activity.content = {**source_activity.content, "knowledge_point_ids": [cross_chapter_point.id]}
+    extra = Material(stable_id="optional-notes", course_instance_id=source.id, owner_id=teacher["id"], title="可选补充", kind="text",
+                     status="ready", content={"pages": [{"id": 42, "page_no": 1, "title": "补充", "text": "保留可选要求"}]})
+    db.add(extra)
+    db.flush()
+    set_material_chapters(db, extra.id, [source_activity.chapter_id])
+    source_activity.resources.append(ActivityMaterial(material_id=extra.id, required=False, order_index=1,
+                                                      learning={"reading": {"scope": "pages", "page_ids": [42]}}))
     db.commit()
     payload = export(client, teacher, source)
     item = preview(client, teacher, target.id, payload)
@@ -122,6 +130,9 @@ def test_complete_roundtrip_draft_private_answers_and_repeated_apply(client, db,
     maps = content_mapping(db, imported)
     imported_activity = db.get(Activity, maps["activity"]["ch1-lesson"])
     assert imported_activity.content["knowledge_point_ids"] == [maps["knowledge_point"][point_stable_id]]
+    assert [(row.required, row.order_index) for row in imported_activity.resources] == [(True, 0), (False, 1)]
+    assert imported_activity.resources[1].material_id == maps["material"]["optional-notes"]
+    assert imported_activity.resources[1].learning == {"reading": {"scope": "pages", "page_ids": [42]}}
     assert db.get(KnowledgePoint, imported_activity.content["knowledge_point_ids"][0]).chapter_id != imported_activity.chapter_id
     assert "unassigned-draft" in maps["question"]
     question = db.get(Question, maps["question"]["unassigned-draft"])

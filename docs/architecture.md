@@ -65,7 +65,7 @@ map工作区复用静态地图资源绘制预览，不创建额外Phaser.Game；
 
 全站模型连接由管理员维护，课堂设置只包含角色、开关和收紧后的预算。API Key 使用 Fernet 加密，主密钥位于私有持久化存储；模型配置不进入课程包。未保存后台配置时使用环境连接，保存后整体采用数据库配置。学习与练习共享连接但工具清单独立；模型、工具、时间、单请求累计预算和每日额度共同生效，摘要调用也记账。未知模型采用保守 token 估算，不假定供应商窗口容量。
 
-章节YAML经校验后按稳定ID写入StoryDefinition、QuestDefinition和Activity，已有ID原位更新。不存在内容快照或多版选择。Material直接保存当前正文、文件引用与处理状态；Activity保存KC和完成规则，题集与顺序由ActivityQuestion保存。学生任务、节点、ActivityProgress、Submission和LearningRecord独立保存，不被导入重建或清空。剧情会话保存对白位置和等待活动，event_id去重、revision拒绝过期推进，每用户/班级仅一个active或waiting演出。导入和编辑拒绝破坏活跃会话节点及其等待活动；历史会话与学习证据保留。
+章节YAML经校验后按稳定ID写入StoryDefinition、QuestDefinition和Activity，已有ID原位更新。不存在内容快照或多版选择。Material直接保存当前正文、文件引用与处理状态；Activity保存KC；ActivityMaterial保存有序资料、必读标记和每份学习规则，题集与顺序由ActivityQuestion保存。学生任务、节点、ActivityProgress、Submission和LearningRecord独立保存，不被导入重建或清空。剧情会话保存对白位置和等待活动，event_id去重、revision拒绝过期推进，每用户/班级仅一个active或waiting演出。导入和编辑拒绝破坏活跃会话节点及其等待活动；历史会话与学习证据保留。
 
 Vue会话协调对话、唯一工作区和Phaser导航。新任务的navigation_target先带玩家走到NPC，通过对话选择打开活动；小镇进入图书馆后继续走到馆员，离馆后也能续走到目标。读页请求串行落库，返回剧情前等待保存完成。阅读位置、参与页、代码草稿和成绩各自保存；普通演出与页码保存均不调用模型。已完成章节演出在另一章有可执行NPC目标时交还该章交互，避免章节总结挡住后续任务。
 
@@ -92,7 +92,7 @@ Reborn Compose 项目、数据库、卷、对象存储前缀和端口独立。�
 
 完整包和阶段门槛由[内容规范](content-authoring.md#班级课程完整包设计)拥有。CourseInstance按classroom_id唯一；九类内容保存course_instance_id与stable_id。包内稳定ID在本班映射为运行ID，不能直接将另一个班的数据库ID作为引用。数据库与私有存储是运行来源，data/course只是私有交换区，程序启动不seed。
 
-运行和教师编辑只使用当前班级课程。未导入课程返回明确 409，可创建空课程或导入 v2 目录包。旧来源克隆、转换和运行 fallback 已退出；DDL 只处理结构，含旧 NPC 的库不会自动转换或清空。
+运行和教师编辑只使用当前班级课程。未导入课程返回明确 409，可创建空课程或导入 v3 目录包。旧来源克隆、转换和运行 fallback 已退出；DDL 只处理结构，含旧 NPC 的库不会自动转换或清空。
 
 PostgreSQL使用班级事务级共享/独占advisory gate。普通运行读写先取共享gate，编辑、导入、导出、实例迁移先取独占gate，再锁实例与业务行；revision检测预览与保存之间的变化。媒体转换从queued到processing/ready/failed同样更新修订，不能让异步写入绕过导入冲突检测。运行中的助教调用阻止课程迁移/导入，未知判题派发保持原状态等待对账。SQLite测试不代替PostgreSQL并发验证。
 
@@ -180,3 +180,5 @@ ExperienceCheckpoint按user_id/classroom_id保存命名体验快照和当前定�
 学生基础样式在 `app/styles/base.css`，入口展示与关于页各自维护；世界/HUD/对白归入 `features/world/`，游戏共享控件在 `gameDesign.css`、普通工作区布局在 `townWorkspaces.css`。学习正文、支持侧卡、助教与练习样式各归功能目录。教师 `styles.css` 是导入入口，基础令牌、外壳和控件在 `styles/`，业务样式跟随 features。两端主题隔离，删除已退场 Vue 后台和旧登录/HUD覆盖，不复制主题到新模块。
 
 `node scripts/check-modules.mjs` 检查明确的导入边界和已退场入口；`python scripts/check-python-imports.py` 静态检查后端的循环依赖与跨模块私有访问，包含函数内和常量动态导入。两项进入既有 CI，配套合成测试覆盖规则。行数超过500或超过10行长于200字符只提醒人工复核，不能通过压行、机械切片或无意义转调达标。编译器、行为测试与浏览器仍负责真实正确性，依赖检查不替代它们。操作步骤见[开发手册](development.md)。
+
+多资料阅读的聚合与规则校验归 `course_content/resources.py`，累计证据仍在 `ActivityProgress`，其中 `media_progress.reading_pages/reading_positions` 按资料ID保存，视频的时间/覆盖/会话也按资料隔离。移除活动单资料列通过一次性迁移处理，课程包格式3显式交换资源关联，不增设旧格式运行适配层。

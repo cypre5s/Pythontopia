@@ -1,3 +1,4 @@
+from app.models import ActivityMaterial
 from conftest import make_material
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
@@ -16,7 +17,7 @@ def test_learning_config_validates_actual_pages_and_video_boundaries():
              "highlights": {"pages": [{"start_page": 1, "end_page": 1, "label": "重点"}]}}
     assert validate_learning({"learning": valid}, "lesson", handout, resolve=True) == valid
     assert validate_learning({"learning": {"video": {"minimum_seconds": 180}}}, "lesson", video, resolve=True)
-    assert validate_learning({"completion": {"required_page_ids": [101]}, "learning": {"highlights": valid["highlights"]}}, "lesson", handout, resolve=True)
+    assert validate_learning({"learning": {"reading": {"scope": "pages", "page_ids": [101]}, "highlights": valid["highlights"]}}, "lesson", handout, resolve=True)
     invalid = [
         {"reading": {"scope": "all", "start_page": 1}},
         {"reading": {"scope": "range", "start_page": 2, "end_page": 1}},
@@ -34,7 +35,7 @@ def test_learning_config_validates_actual_pages_and_video_boundaries():
     for learning in ({"video": {"minimum_seconds": 5}}, {"highlights": {"video": [{"start_seconds": 5, "end_seconds": 130, "label": "越界"}]}}):
         with pytest.raises(ValueError):
             validate_learning({"learning": learning}, "lesson", handout if "video" in learning else video, resolve=True)
-    with pytest.raises(ValueError, match="不能与required_page_ids"):
+    with pytest.raises(ValueError, match="活动资料项"):
         validate_learning({"completion": {"required_page_ids": [101]}, "learning": {"reading": {"scope": "all"}}}, "lesson", handout, resolve=True)
     with pytest.raises(ValueError, match="只有阅读活动"):
         validate_learning({"learning": {"reading": {"scope": "all"}}}, "practice")
@@ -107,10 +108,7 @@ def test_video_playback_rates_count_actual_wall_time_without_fast_forward_credit
 def video_activity(db, teacher):
     material = make_material(db, id=9901, chapter_ids=[179], title="心跳测试视频", kind="video", owner_id=teacher["id"],
                         status="ready", storage_key="test-video.mp4", content={"pages": [], "duration_seconds": 120})
-    activity = Activity(id="test-video-goal", chapter_id=179, title="观看视频", kind="lesson", material_id=9901,
-                        npc_key="librarian_doc", owner_id=teacher["id"], assistant_allowed=False,
-                        content={"published": True, "question_ids": [], "learning": {"video": {"minimum_seconds": 10},
-                                 "highlights": {"video": [{"start_seconds": 5, "end_seconds": 20, "label": "重点"}]}}})
+    activity = Activity(id='test-video-goal', chapter_id=179, title='观看视频', kind='lesson', npc_key='librarian_doc', owner_id=teacher['id'], assistant_allowed=False, content={'published': True, 'question_ids': []}, resources=[ActivityMaterial(material_id=9901, required=True, order_index=0, learning={'video': {'minimum_seconds': 10}, 'highlights': {'video': [{'start_seconds': 5, 'end_seconds': 20, 'label': '重点'}]}})])
     db.add_all([material, activity])
     db.commit()
     return activity
@@ -122,8 +120,8 @@ def test_video_api_requires_real_heartbeats_and_keeps_teacher_and_classroom_isol
     query = {"classroom_id": classroom["id"]}
     view = client.get(path, params=query, headers=student["headers"])
     assert view.status_code == 200
-    assert view.json()["learning"]["video"]["minimum_seconds"] == 10
-    assert view.json()["progress"]["watched_seconds"] == 0
+    assert view.json()["resources"][0]["learning"]["video"]["minimum_seconds"] == 10
+    assert view.json()["progress"]["resources"][0]["watched_seconds"] == 0
     packet = {**query, "material_id": 9901, "playback_session_id": str(uuid4()), "sequence": 1, "position_seconds": 0, "playing": True}
     for rate in (.1, 5, True):
         assert client.post(path + "/video-progress", json={**packet, "playback_rate": rate}, headers=student["headers"]).status_code == 422
@@ -136,13 +134,13 @@ def test_video_api_requires_real_heartbeats_and_keeps_teacher_and_classroom_isol
     clock(5)
     packet.update(sequence=2, position_seconds=5)
     second = client.post(path + "/video-progress", json=packet, headers=student["headers"])
-    assert second.json()["watched_seconds"] == 5
-    assert client.post(path + "/video-progress", json=packet, headers=student["headers"]).json()["watched_seconds"] == 5
+    assert second.json()["resources"][0]["watched_seconds"] == 5
+    assert client.post(path + "/video-progress", json=packet, headers=student["headers"]).json()["resources"][0]["watched_seconds"] == 5
     clock(5)
     packet.update(sequence=3, position_seconds=10, playing=False)
     complete = client.post(path + "/video-progress", json=packet, headers=student["headers"])
     assert complete.status_code == 200, complete.text
-    assert complete.json()["completed"] and complete.json()["watched_seconds"] == 10
+    assert complete.json()["completed"] and complete.json()["resources"][0]["watched_seconds"] == 10
     assert client.post(path + "/participation", json={**query, "video_time": 120}, headers=student["headers"]).status_code == 200
     second_class = client.post("/api/classrooms", json={"name": "另一班级"}, headers=teacher["headers"]).json()
     from conftest import copy_fixture_course
@@ -151,7 +149,7 @@ def test_video_api_requires_real_heartbeats_and_keeps_teacher_and_classroom_isol
     assert client.post("/api/classrooms/join", json={"join_code": second_class["join_code"]}, headers=student["headers"]).status_code == 200
     assert client.get(path, params={"classroom_id": second_class["id"]}, headers=student["headers"]).status_code == 403
     other = client.get(f"/api/activities/{mapped['activity'][activity.id]}/progress", params={"classroom_id": second_class["id"]}, headers=student["headers"])
-    assert other.json()["watched_seconds"] == 0 and not other.json()["completed"]
+    assert other.json()["resources"][0]["watched_seconds"] == 0 and not other.json()["completed"]
     saved = db.get(ActivityProgress, (student["id"], classroom["id"], activity.id))
     assert saved.media_progress["watched_seconds"] == 10
     assert saved.visited_pages == []
@@ -159,20 +157,20 @@ def test_video_api_requires_real_heartbeats_and_keeps_teacher_and_classroom_isol
     db.add(make_material(db, id=19902, chapter_ids=[179], title="另一视频", kind="video", owner_id=teacher["id"], status="ready",
                     storage_key="other-test-video.mp4", content={"pages": [], "duration_seconds": 120}))
     db.commit()
-    assert client.put(f"/api/teacher/activities/{activity.id}", json={"material_id": 19902}, headers=teacher["headers"], params={"classroom_id": classroom["id"]}).status_code == 200
+    assert client.put(f"/api/teacher/activities/{activity.id}", json={"resources": [{"material_id": 19902, "required": True, "learning": {"video": {"minimum_seconds": 10}}}]}, headers=teacher["headers"], params={"classroom_id": classroom["id"]}).status_code == 200
     current = client.get(path + "/progress", params=query, headers=student["headers"]).json()
-    assert current["watched_seconds"] == 0 and not current["completed"]
+    assert current["resources"][0]["watched_seconds"] == 0 and not current["completed"]
     assert client.post(path + "/video-progress", json=packet, headers=student["headers"]).status_code == 409
     replacement_packet = {**query, "material_id": 19902, "playback_session_id": str(uuid4()), "sequence": 1, "position_seconds": 0, "playing": True}
     assert client.post(path + "/video-progress", json=replacement_packet, headers=student["headers"]).status_code == 200
     clock(5)
     replacement_packet.update(sequence=2, position_seconds=5, playing=False)
-    assert client.post(path + "/video-progress", json=replacement_packet, headers=student["headers"]).json()["watched_seconds"] == 5
-    assert client.put(f"/api/teacher/activities/{activity.id}", json={"material_id": 9901}, headers=teacher["headers"], params={"classroom_id": classroom["id"]}).status_code == 200
+    assert client.post(path + "/video-progress", json=replacement_packet, headers=student["headers"]).json()["resources"][0]["watched_seconds"] == 5
+    assert client.put(f"/api/teacher/activities/{activity.id}", json={"resources": [{"material_id": 9901, "required": True, "learning": {"video": {"minimum_seconds": 10}}}]}, headers=teacher["headers"], params={"classroom_id": classroom["id"]}).status_code == 200
     restored = client.get(path + "/progress", params=query, headers=student["headers"]).json()
-    assert restored["watched_seconds"] == 10 and restored["completed"]
+    assert restored["resources"][0]["watched_seconds"] == 10 and restored["completed"]
     restored_packet = {**query, "material_id": 9901, "playback_session_id": str(uuid4()), "sequence": 1, "position_seconds": 10, "playing": False}
-    assert client.post(path + "/video-progress", json=restored_packet, headers=student["headers"]).json()["watched_seconds"] == 10
+    assert client.post(path + "/video-progress", json=restored_packet, headers=student["headers"]).json()["resources"][0]["watched_seconds"] == 10
     assert db.get(ActivityProgress, (student["id"], classroom["id"], activity.id)).media_progress["material_seconds"]["19902"] == 5
 
 
@@ -181,23 +179,23 @@ def test_teacher_learning_api_validates_material_replacements_and_reading_progre
     pages = material.content["pages"]
     selected = [page for page in pages if 34 <= page["page_no"] <= 35]
     response = client.post("/api/teacher/activities", headers=teacher["headers"], json={
-        "id": "test-range", "chapter_id": 179, "title": "范围阅读", "kind": "lesson", "material_id": 186,
-        "npc_key": "librarian_doc", "learning": {"reading": {"scope": "range", "start_page": 34, "end_page": 35},
-        "highlights": {"pages": [{"start_page": 34, "end_page": 34, "label": "重点"}]}}}, params={"classroom_id": classroom["id"]})
+        "id": "test-range", "chapter_id": 179, "title": "范围阅读", "kind": "lesson", "npc_key": "librarian_doc",
+        "resources": [{"material_id": 186, "required": True, "learning": {"reading": {"scope": "range", "start_page": 34, "end_page": 35},
+        "highlights": {"pages": [{"start_page": 34, "end_page": 34, "label": "重点"}]}}}]}, params={"classroom_id": classroom["id"]})
     assert response.status_code == 201, response.text
     activity_id = response.json()["id"]
     endpoint = f"/api/activities/{activity_id}/progress"
     db.add(ActivityProgress(user_id=student["id"], classroom_id=classroom["id"], activity_id=activity_id, page_no=1,
-                            visited_pages=[pages[0]["id"]], completed=False))
+                            visited_pages=[pages[0]["id"]], completed=False, media_progress={"reading_pages": {"186": [pages[0]["id"]]}}))
     db.commit()
     query = {"classroom_id": classroom["id"]}
     before = client.get(endpoint, params=query, headers=student["headers"]).json()
-    assert before["required_page_ids"] == [page["id"] for page in selected]
-    assert before["read_count"] == 0 and before["read_total"] == 2
+    assert before["resources"][0]["required_page_ids"] == [page["id"] for page in selected]
+    assert before["resources"][0]["read_count"] == 0 and before["resources"][0]["read_total"] == 2
     for index, page in enumerate(selected):
-        result = client.post(endpoint, json={**query, "page_no": page["page_no"]}, headers=student["headers"])
+        result = client.post(endpoint, json={"material_id": 186, **query, "page_no": page["page_no"]}, headers=student["headers"])
         assert result.status_code == 200, result.text
-        assert result.json()["read_count"] == index + 1
+        assert result.json()["resources"][0]["read_count"] == index + 1
         assert result.json()["completed"] == (index == 1)
         assert pages[0]["id"] in result.json()["visited_pages"]
     db.add(make_material(db, id=9902, chapter_ids=[179], title="其他课件", kind="text", owner_id=teacher["id"], status="ready",
@@ -207,9 +205,9 @@ def test_teacher_learning_api_validates_material_replacements_and_reading_progre
     assert invalid.status_code == 422
     invalid = client.put(f"/api/teacher/activities/{activity_id}", headers=teacher["headers"], json={"learning": {"reading": {"scope": "range", "start_page": 35, "end_page": 34}}}, params={"classroom_id": classroom["id"]})
     assert invalid.status_code == 422
-    assert db.get(Activity, activity_id).material_id == 186
-    changed = client.put(f"/api/teacher/activities/{activity_id}", headers=teacher["headers"], json={"learning": {"reading": {"scope": "all"}}}, params={"classroom_id": classroom["id"]})
+    assert db.get(Activity, activity_id).resources[0].material_id == 186
+    changed = client.put(f"/api/teacher/activities/{activity_id}", headers=teacher["headers"], json={"resources": [{"material_id": 186, "required": True, "learning": {"reading": {"scope": "all"}}}]}, params={"classroom_id": classroom["id"]})
     assert changed.status_code == 200, changed.text
     after = client.get(endpoint, params=query, headers=student["headers"]).json()
-    assert after["read_total"] == len(pages) and after["read_count"] == 3 and not after["completed"]
+    assert after["resources"][0]["read_total"] == len(pages) and after["resources"][0]["read_count"] == 3 and not after["completed"]
     assert after["visited_pages"] == result.json()["visited_pages"]

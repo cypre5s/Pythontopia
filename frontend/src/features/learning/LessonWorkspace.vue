@@ -41,6 +41,7 @@
       </p>
       <LessonMaterial
         v-else-if="material"
+        :key="material.id"
         :material="material"
         :file-url="fileUrl"
         :pdf-page="pdfPage"
@@ -70,6 +71,7 @@
       "
       :page-no="currentContext.page_no"
       :video-time="currentContext.video_time"
+      :assistant-state="{ ...currentContext, material_id: material?.id }"
       :role-name="roleName"
       :portrait-url="rolePortrait"
       :sprite="(activity?.role ?? session.world?.default_role)?.sprite"
@@ -80,55 +82,16 @@
       @select-page="readRequiredPage"
       @select-time="seekVideo"
     >
-      <template #goals-footer>
-        <p v-if="material?.notice" class="notice">{{ material.notice }}</p>
-        <footer v-if="activity" class="lesson-footer">
-          <div>
-            <p>
-              {{
-                hasCompletion
-                  ? `完成本次学习后，与${roleName}继续交谈。`
-                  : "阅读参与单独保存，知识掌握仍由正式练习与测验判定。"
-              }}
-            </p>
-            <p
-              v-if="participationMessage"
-              class="learning-success"
-              role="status"
-            >
-              {{ participationMessage }}
-            </p>
-            <p v-if="progressError" class="error" role="alert">
-              {{ progressError }}
-              <button :disabled="progressSaving" @click="retryProgress">
-                重试保存
-              </button>
-            </p>
-          </div>
-          <button
-            class="primary"
-            :disabled="
-              saving ||
-              loading ||
-              progressSaving ||
-              !material ||
-              material.status !== 'ready' ||
-              Boolean(hasCompletion && !progress?.completed)
-            "
-            @click="participate"
-          >
-            {{
-              saving || progressSaving
-                ? "保存中…"
-                : hasCompletion
-                  ? activity.learning?.video
-                    ? "完成观看"
-                    : "完成阅读"
-                  : "记录本次学习"
-            }}
-          </button>
-        </footer>
+      <template v-if="activity" #goals>
+        <ActivityGoals :activity="activity" :progress="progress" :material-id="material?.id" :stage-title="stageTitle"
+          :busy="saving || loading || progressSaving || switching" @complete="participate" @select="selectResource" @locate="locateResource">
+          <template #status>
+            <p v-if="participationMessage" class="learning-success" role="status">{{ participationMessage }}</p>
+            <p v-if="progressError" class="error" role="alert">{{ progressError }} <button :disabled="progressSaving" @click="retryProgress">重试保存</button></p>
+          </template>
+        </ActivityGoals>
       </template>
+      <template #goals-footer><p v-if="material?.notice" class="notice">{{ material.notice }}</p></template>
     </LearningSupportPanel>
   </LearningSplitLayout>
 </template>
@@ -152,6 +115,7 @@ import { useReadingEvidence } from "./useReadingEvidence";
 import { useLessonVideo } from "./useLessonVideo";
 import "../support/learningUi.css";
 import "./lessonUi.css";
+import ActivityGoals from "./ActivityGoals.vue";
 import LessonMaterial from "./LessonMaterial.vue";
 import { useLessonSource } from "./useLessonSource";
 import { useLessonCompletion } from "./useLessonCompletion";
@@ -193,6 +157,7 @@ const {
   load,
   selectPage,
   showCitation,
+  switchMaterial,
 } = useLessonSource({
   userId: contextUserId,
   classroomId: contextClassroomId,
@@ -230,6 +195,7 @@ const roleName = computed(
   );
 const video = useLessonVideo({
   activity,
+  material,
   progress,
   progressError,
   readingKey,
@@ -260,13 +226,13 @@ const { persistProgress, resetReading } = useReadingEvidence({
   save: session.saveActivityProgress,
 });
 const currentContext = computed(() =>
-  learningContext(
+  ({ ...learningContext(
     material.value,
     material.value && ["pdf", "presentation"].includes(material.value.kind)
       ? pdfPage.value
       : currentPage.value?.page_no,
     videoTime.value,
-  ),
+  ), material_id: activity.value?.resources.some(row => row.material_id === material.value?.id) ? material.value?.id : undefined }),
 );
 const completion = useLessonCompletion({
   activity,
@@ -305,12 +271,41 @@ async function switchView(assistant: boolean) {
     )
     ?.focus({ preventScroll: true });
 }
+const switching = ref(false);
+const stageTitle = computed(() => session.world?.quests.flatMap(quest => quest.nodes).find(node => node.activity_id === activity.value?.id && node.status === "ready")?.title);
+async function selectResource(id: number) {
+  if (switching.value || saving.value || material.value?.id === id) return;
+  switching.value = true;
+  try {
+    stopVideoTracking();
+    await flushVideoSaves();
+    await persistProgress();
+    if (progressError.value) return;
+    await switchMaterial(id);
+    if (compact.value) await switchView(false);
+  } catch (cause) { progressError.value = cause instanceof Error ? cause.message : "资料切换失败，请重试。"; }
+  finally { switching.value = false; }
+}
+async function locateResource(id: number, page?: number, seconds?: number) {
+  await selectResource(id);
+  if (material.value?.id !== id) return;
+  if (page !== undefined) readRequiredPage(page);
+  if (seconds !== undefined) { await nextTick(); seekVideo(seconds); }
+}
 function readRequiredPage(page: number) {
   selectPage(page);
   if (compact.value) void switchView(false);
 }
 async function cite(id: number, page: number) {
   try {
+    if (activity.value?.resources.some(row => row.material_id === id)) {
+      await locateResource(id, page);
+      return;
+    }
+    stopVideoTracking();
+    await flushVideoSaves();
+    await persistProgress();
+    if (progressError.value) return;
     if (await showCitation(id, page)) await switchView(false);
   } catch (cause) {
     if (currentOwner())
@@ -318,7 +313,7 @@ async function cite(id: number, page: number) {
   }
 }
 async function retryProgress() {
-  if (!activity.value?.learning?.video) return persistProgress();
+  if (material.value?.kind !== "video") return persistProgress();
   progressSaving.value = true;
   try {
     await flushVideoSaves();

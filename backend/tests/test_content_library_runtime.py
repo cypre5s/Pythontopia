@@ -1,4 +1,6 @@
 """Student authorization and grading contracts for reusable library content."""
+from app.models import ActivityMaterial
+
 
 import pytest
 from fastapi.testclient import TestClient
@@ -126,8 +128,7 @@ def test_material_filters_unpublished_associations_and_owner_access(library_runt
     db.commit()
     assert client.get(f"/api/materials/{own.id}?classroom_id={classroom.id}", headers=headers).status_code == 403
     # An activity in the still-unpublished chapter cannot publish the other association.
-    db.add(Activity(id="runtime-unpublished", title="Unpublished", kind="reading", chapter_id=9002, course_instance_id=scope,
-                    material_id=own.id, owner_id=teacher.id, content={"published": True}))
+    db.add(Activity(id='runtime-unpublished', title='Unpublished', kind='reading', chapter_id=9002, course_instance_id=scope, owner_id=teacher.id, content={'published': True}, resources=[ActivityMaterial(material_id=own.id, required=True, order_index=0, learning={})]))
     db.commit()
     assert client.get(f"/api/materials/{own.id}?classroom_id={classroom.id}", headers=headers).status_code == 403
 
@@ -165,7 +166,7 @@ def test_assistant_context_uses_current_authorized_material_questions_and_progre
     set_material_chapters(db, material.id, [9001, 9002])
     set_material_chapters(db, other.id, [9001])
     activity = db.get(Activity, "runtime-practice-a")
-    activity.material_id = material.id
+    activity.resources = [ActivityMaterial(material_id=material.id, required=True, order_index=0, learning={"reading": {"scope": "all"}})]
     db.add_all([LearningRecord(user_id=student.id, classroom_id=classroom.id, activity_id=activity.id, kind="participation"),
                 LearningRecord(user_id=student.id, classroom_id=classroom.id, activity_id="runtime-practice-b", kind="participation")])
     db.commit()

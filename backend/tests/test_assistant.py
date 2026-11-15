@@ -1,3 +1,4 @@
+from app.models import ActivityMaterial
 from conftest import make_material
 import json
 from sqlalchemy import select
@@ -264,7 +265,7 @@ def test_existing_session_reads_current_activity_configuration(client, db, stude
     db.add(current)
     db.flush()
     activity = db.get(Activity, "ch1-lesson")
-    activity.material_id = current.id
+    activity.resources = [ActivityMaterial(material_id=current.id, required=True, order_index=0, learning={"reading": {"scope": "all"}})]
     activity.content = {"learning": {"reading": {"scope": "all"}}}
     activity.title = "更新后的活动"
     db.commit()

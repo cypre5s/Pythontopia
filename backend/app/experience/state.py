@@ -10,6 +10,7 @@ from app.models import (
     Activity,
     ActivityProgress,
     ActivityQuestion,
+    ActivityMaterial,
     BuildingUnlock,
     Chapter,
     ChapterRelease,
@@ -57,6 +58,10 @@ def definition_hash(db, classroom_id):
             .order_by(ActivityQuestion.activity_id, ActivityQuestion.order_index)
         )
     ]
+    result["activity_materials"] = [
+        (row.activity_id, row.material_id, row.order_index, row.required, row.learning)
+        for row in db.scalars(select(ActivityMaterial).join(Activity).where(course_clause(db, Activity, classroom_id))
+                             .order_by(ActivityMaterial.activity_id, ActivityMaterial.order_index))]
     return digest(result)
 
 

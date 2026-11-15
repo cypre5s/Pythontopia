@@ -1,5 +1,6 @@
 """Capture a consistent portable content snapshot for editing and package exchange."""
 
+from app.course_content.resources import resource_payload
 import hashlib
 from copy import deepcopy
 
@@ -32,7 +33,7 @@ FIELDS = {
     Material: ("title", "kind", "content", "status", "error"),
     Question: ("title", "kind", "prompt", "options", "samples", "hints", "starter_code", "source", "source_type", "status"),
     Npc: ("name", "portrait", "sprite", "persona", "placement", "appearance_condition"),
-    Activity: ("chapter_id", "title", "kind", "material_id", "npc_key", "assistant_allowed", "content"),
+    Activity: ("chapter_id", "title", "kind", "npc_key", "assistant_allowed", "content"),
     QuestDefinition: ("chapter_id", "title", "definition"),
     StoryDefinition: ("chapter_id", "quest_id", "content"),
     CourseExample: ("content",),
@@ -94,6 +95,7 @@ def snapshot_content(db, instance):
                 )
             elif model is Activity:
                 values["question_ids"] = related_ids(db, row, ActivityQuestion, "question_id")
+                values["resources"] = [resource_payload(item) for item in row.resources]
             converted = values if model is Npc else remap_references(values, inverse)
             if model is QuestDefinition:
                 converted["definition"]["id"] = stable_id(row)

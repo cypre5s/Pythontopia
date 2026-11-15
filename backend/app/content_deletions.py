@@ -116,7 +116,7 @@ def plan_deletion(db, user, instance, targets):
                 if str(row.chapter_id) in retiring["chapter"]:
                     changed |= add(kind, key, "所属章节将删除")
                 if kind == "activity":
-                    if str(row.material_id) in retiring["material"]:
+                    if any(str(resource.material_id) in retiring["material"] for resource in row.resources):
                         changed |= add(kind, key, "依赖的资料将删除")
                     selected = questions_by_activity[key]
                     if selected and selected <= set(retiring["question"]):
@@ -246,7 +246,7 @@ def plan_deletion(db, user, instance, targets):
             preserved.append({"kind": item["kind"], "id": item["id"], "title": item["title"], "count": 1})
     for key in retiring["activity"]:
         activity = rows["activity"][key]
-        for kind, keys in (("material", {str(activity.material_id)}), ("question", questions_by_activity[key])):
+        for kind, keys in (("material", {str(resource.material_id) for resource in activity.resources}), ("question", questions_by_activity[key])):
             for content_id in sorted(keys):
                 if content_id in rows[kind] and content_id not in retiring[kind]:
                     preserved.append({"kind": kind, "id": content_id, "title": title(rows[kind][content_id]), "count": 1})

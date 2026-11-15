@@ -12,18 +12,15 @@ const material = (id: number, kind = "text"): Material => ({
   status: "ready",
   pages: [{ id: id * 10, page_no: 1, title: "第一页", text: "正文" }],
 });
-const activity = (id: string): Activity => ({
-  id,
-  role: null,
-  chapter_id: 1,
-  title: id,
-  kind: "lesson",
-  npc_key: null,
-  assistant_allowed: false,
-  questions: [],
-  material: material(1),
-  completion: { required_page_ids: [10] },
-});
+const activity = (id: string): Activity => ({id,
+role: null,
+chapter_id: 1,
+title: id,
+kind: "lesson",
+npc_key: null,
+assistant_allowed: false,
+questions: [],
+resources: [{material_id: (material(1)).id, required: true, learning: { ...{}, reading: { scope: "pages", page_ids: ({ required_page_ids: [10] }).required_page_ids } }, material: material(1)}]});
 const progress = (page: number): ActivityProgress => ({
   page_no: page,
   visited_pages: [],

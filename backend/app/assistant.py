@@ -71,11 +71,12 @@ def authorize_library_assistant(db, user, classroom_id, material_id):
 
 def activity_material(db, user, classroom_id, activity):
     from app.course_content.access import authorize_material
-    if activity.material_id:
-        authorize_material(db, user, classroom_id, activity.material_id)
-        if not material_in_chapter(db, activity.material_id, activity.chapter_id):
+    for resource in activity.resources:
+        authorize_material(db, user, classroom_id, resource.material_id)
+        if not material_in_chapter(db, resource.material_id, activity.chapter_id):
             raise HTTPException(409, "学习资料必须关联活动章节")
-    return activity.material_id
+    return activity.resources[0].material_id if activity.resources else None
+
 
 
 @router.get("/status")

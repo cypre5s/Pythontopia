@@ -33,7 +33,7 @@ def library_ids(client, student, classroom):
 
 def test_imported_library_media_needs_no_activity_or_task(client, db, student, classroom):
     media = add_media(db)
-    assert db.scalar(select(func.count()).select_from(Activity).where(Activity.material_id == media.id)) == 0
+    assert db.scalar(select(func.count()).select_from(Activity).where(Activity.resources.any(material_id=media.id))) == 0
     assert media.id in library_ids(client, student, classroom)
     detail = client.get(f"/api/materials/{media.id}?classroom_id={classroom['id']}", headers=student["headers"])
     assert detail.status_code == 200, detail.text

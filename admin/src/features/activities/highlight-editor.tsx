@@ -6,16 +6,18 @@ export function HighlightEditor({
   rows,
   onChange,
   video = false,
+  required = false,
 }: {
   title: string;
   rows: Highlight[];
   onChange: (v: Highlight[]) => void;
   video?: boolean;
+  required?: boolean;
 }) {
   return (
     <fieldset className="field">
       <legend>{title}</legend>
-      <p className="hint">提示学生重点内容，不会自动视为完成。</p>
+      <p className="hint">{required ? "学生需实际播放每个片段，跳转到片段不计为完成。" : "提示学生重点内容，不会自动视为完成。"}</p>
       {rows.map((r, i) => (
         <div className="border rounded p-3 space-y-2 mb-2" key={i}>
           <Input

@@ -10,7 +10,7 @@ from sqlalchemy import select, or_, text
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.models import (
-    Activity, ActivityProgress, ActivityQuestion, AssessmentAttempt, Chapter, ChapterRelease,
+    Activity, ActivityMaterial, ActivityProgress, ActivityQuestion, AssessmentAttempt, Chapter, ChapterRelease,
     Classroom, CourseExample, CourseInstance, KnowledgePoint, LearningEvent, LearningRecord,
     Material, MaterialChapter, NodeState, Npc, PlayerQuest, Question, QuestionChapter,
     QuestionKnowledgePoint, QuestionSecret, QuestDefinition, StoryDefinition, StorySession,
@@ -155,13 +155,16 @@ def _relations(db, maps):
         (QuestionChapter, {"question_id": "question", "chapter_id": "chapter"}),
         (QuestionKnowledgePoint, {"question_id": "question", "knowledge_point_id": "knowledge_point"}),
         (ActivityQuestion, {"activity_id": "activity", "question_id": "question"}),
+        (ActivityMaterial, {"activity_id": "activity", "material_id": "material"}),
     ):
         first = next(iter(fields))
         rows = list(db.scalars(select(model).where(getattr(model, first).in_(maps[fields[first]]))))
         for row in rows:
             values = {field: _lookup(maps, kind, getattr(row, field)) for field, kind in fields.items()}
-            if model is ActivityQuestion:
+            if model in {ActivityQuestion, ActivityMaterial}:
                 values["order_index"] = row.order_index
+            if model is ActivityMaterial:
+                values.update(required=row.required, learning=deepcopy(row.learning))
             db.add(model(**values))
     for secret in db.scalars(select(QuestionSecret).where(QuestionSecret.question_id.in_(maps["question"]))):
         db.add(QuestionSecret(question_id=maps["question"][secret.question_id], answer=deepcopy(secret.answer),

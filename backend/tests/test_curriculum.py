@@ -113,7 +113,7 @@ def test_activity_kc_binding_validates_owner_course_and_current_binding(client, 
         "title": "Bound",
         "kind": "lesson",
         "npc_key": "mayor_py",
-        "material_id": 186,
+        "resources": [{"material_id": 186, "required": True, "learning": {}}],
         "knowledge_point_ids": [1809, own["id"]]}
     response = client.post("/api/teacher/activities", json=payload, headers=teacher["headers"], params={"classroom_id": classroom["id"]})
     assert response.status_code == 201, response.text

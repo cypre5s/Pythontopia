@@ -10,13 +10,14 @@ def validate_learning_evidence(db, user, classroom_id, node, evidence):
     kind = node["type"]
     if kind == "STUDY_LESSON":
         from app.course_content.access import authorize_activity
-        from app.course_content.learning import learning_material, reading_completed
+        from app.course_content.learning import reading_completed
+        from app.course_content.resources import learning_materials
         from app.learning_rules import has_completion_rule
 
         activity = authorize_activity(db, user, classroom_id, node["activity_id"])
         if has_completion_rule(activity):
             progress = db.get(ActivityProgress, (user.id, classroom_id, activity.id))
-            if not reading_completed(activity, progress, learning_material(db, activity)):
+            if not reading_completed(activity, progress, learning_materials(db, activity)):
                 raise HTTPException(422, "请先完成规定资料页的阅读参与")
         record = db.get(LearningRecord, evidence.get("record_id", ""))
         if not record or (record.user_id, record.classroom_id, record.activity_id) != (

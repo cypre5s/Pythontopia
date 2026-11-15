@@ -1,3 +1,4 @@
+from conftest import read_activity
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 from app.course_content import access
@@ -60,6 +61,7 @@ def test_all_learning_timestamps_remain_explicit_utc_after_sqlite_requery(client
     db.commit()
     event = client.post("/api/events", json={"classroom_id": cid, "event_id": str(uuid4()), "quest_id": definition["id"], "node_id": "talk", "evidence": {}}, headers=headers)
     assert event.status_code == 200, event.text
+    read_activity(client, student["headers"], cid, "ch1-lesson")
     record = client.post("/api/activities/ch1-lesson/participation", json={"classroom_id": cid, "page_no": 42}, headers=headers)
     assert record.status_code == 200, record.text
     submission = client.post(
@@ -88,7 +90,7 @@ def test_all_learning_timestamps_remain_explicit_utc_after_sqlite_requery(client
         (progress["events"][0]["created_at"], event_row.created_at),
         (progress["submissions"][0]["created_at"], submission_row.created_at),
         (detail["events"][0]["created_at"], event_row.created_at),
-        (detail["participation"][0]["created_at"], record_row.created_at),
+        (next(row for row in detail["participation"] if row["id"] == record_row.id)["created_at"], record_row.created_at),
         (detail["submissions"][0]["created_at"], submission_row.created_at),
         (reread.json()["created_at"], submission_row.created_at),
         (submission.json()["created_at"], submission_row.created_at),

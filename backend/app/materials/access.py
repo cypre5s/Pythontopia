@@ -29,7 +29,7 @@ def teacher_material_chapters(db, material, user):
 
 
 def teacher_material_payload(db, material, user):
-    activities = select(Activity).where(Activity.material_id == material.id)
+    activities = select(Activity).where(Activity.resources.any(material_id=material.id))
     if user.role != "admin":
         activities = activities.where(Activity.owner_id.is_(None) | (Activity.owner_id == user.id))
     return {
@@ -46,5 +46,5 @@ def teacher_material_payload(db, material, user):
 
 
 def validate_material_links(db, material_id, chapter_ids):
-    if db.scalar(select(Activity).where(Activity.material_id == material_id, Activity.chapter_id.not_in(chapter_ids)).limit(1)):
+    if db.scalar(select(Activity).where(Activity.resources.any(material_id=material_id), Activity.chapter_id.not_in(chapter_ids)).limit(1)):
         raise HTTPException(409, "资料仍被活动引用，不能移除所用章节")

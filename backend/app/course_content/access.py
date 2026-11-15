@@ -152,7 +152,7 @@ def authorized_material_chapters(db, user, classroom_id, material):
         chapters.append(chapter_id)
     can_preview = user.role == "admin" or (user.role == "teacher" and classroom.teacher_id == user.id)
     if not can_preview and not available_in_library(material):
-        published = db.scalars(select(Activity).where(Activity.material_id == material.id, course_clause(db, Activity, classroom_id))).all()
+        published = db.scalars(select(Activity).where(Activity.resources.any(material_id=material.id), course_clause(db, Activity, classroom_id))).all()
         chapters = [
             chapter_id
             for chapter_id in chapters

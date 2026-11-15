@@ -133,21 +133,35 @@ export interface Activity {
   kind: string;
   npc_key: string | null;
   assistant_allowed: boolean;
-  material: Material | null;
+  resources: ActivityResource[];
   questions: Question[];
   progress?: ActivityProgress;
-  completion?: { required_page_ids: number[] } | null;
-  learning?: LearningConfiguration | null;
 }
 export interface LearningConfiguration {
-  reading?: { scope: "all" | "range"; start_page?: number; end_page?: number };
-  video?: { minimum_seconds: number };
+  reading?: { scope: "all" | "range" | "pages"; start_page?: number; end_page?: number; page_ids?: number[] };
+  video?: { minimum_seconds?: number; segments?: { start_seconds: number; end_seconds: number; label: string }[] };
   highlights?: {
     pages?: { start_page: number; end_page: number; label: string }[];
     video?: { start_seconds: number; end_seconds: number; label: string }[];
   };
 }
+export interface ActivityResource {
+  material_id: number;
+  material: Material;
+  required: boolean;
+  learning: LearningConfiguration;
+}
+export interface ResourceProgress {
+  material_id: number; completed: boolean; fraction: number; page_no: number | null;
+  visited_pages: number[]; required_page_ids: number[]; read_count: number; read_total: number;
+  watched_seconds: number; required_seconds: number; completed_segments: number[];
+}
 export interface ActivityProgress {
+  resources?: ResourceProgress[];
+  material_id?: number | null;
+  fraction?: number;
+  required_count?: number;
+  completed_count?: number;
   page_no: number | null;
   visited_pages: number[];
   completed: boolean;

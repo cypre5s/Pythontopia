@@ -109,7 +109,7 @@ def test_private_upload_publish_and_package_roundtrip(client, db, teacher, stude
     write_package(db, scene["instance"], root)
     bundle = load_bundle(root)
     assert len(bundle["assets"]) == 1
-    assert bundle["manifest"]["schema_version"] == 2
+    assert bundle["manifest"]["schema_version"] == 3
     target = Classroom(name="隔离导入", teacher_id=teacher["id"], join_code="characters-test")
     db.add(target)
     db.flush()

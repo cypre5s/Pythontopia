@@ -1,5 +1,6 @@
 """Read teacher chapter and knowledge-point catalogues."""
 
+from app.course_content.resources import resource_payload
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -43,8 +44,7 @@ def teacher_courses(db: Session, user: User, classroom_id: int | None = None):
                 "kind": a.kind,
                 "npc_key": a.npc_key,
                 "assistant_allowed": a.assistant_allowed,
-                "learning": a.content.get("learning", {}),
-                "material_id": a.material_id,
+                "resources": [resource_payload(row) for row in a.resources],
                 "owner_id": a.owner_id,
                 "knowledge_point_ids": a.content.get("knowledge_point_ids", []),
                 "question_ids": [q.id for q in activity_questions(db, a)],

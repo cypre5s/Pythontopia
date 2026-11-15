@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint, text
-from sqlalchemy.orm import Mapped, declared_attr, mapped_column
+from sqlalchemy.orm import Mapped, declared_attr, mapped_column, relationship
 from .db import Base, RetirableContent
 
 
@@ -138,11 +138,21 @@ class Activity(RetirableContent, CourseContent, Base):
     chapter_id: Mapped[int] = mapped_column(ForeignKey("chapters.id"), index=True)
     title: Mapped[str] = mapped_column(String(200))
     kind: Mapped[str] = mapped_column(String(24))
-    material_id: Mapped[int | None] = mapped_column(ForeignKey("materials.id"), nullable=True)
+    resources: Mapped[list["ActivityMaterial"]] = relationship(
+        cascade="all, delete-orphan", order_by="ActivityMaterial.order_index", lazy="selectin")
     owner_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"), nullable=True)
     assistant_allowed: Mapped[bool] = mapped_column(Boolean, default=True)
     npc_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
     content: Mapped[dict] = mapped_column(JSON, default=dict)
+
+
+class ActivityMaterial(Base):
+    __tablename__ = "activity_materials"
+    activity_id: Mapped[str] = mapped_column(ForeignKey("activities.id", ondelete="CASCADE"), primary_key=True)
+    material_id: Mapped[int] = mapped_column(ForeignKey("materials.id"), primary_key=True, index=True)
+    order_index: Mapped[int] = mapped_column(Integer)
+    required: Mapped[bool] = mapped_column(Boolean, default=True)
+    learning: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
 class ChapterRelease(Base):

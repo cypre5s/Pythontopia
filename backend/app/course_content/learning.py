@@ -2,11 +2,7 @@
 
 from fastapi import HTTPException
 
-from app.content_relations import activity_questions, material_in_chapter, question_chapter_ids
-from app.learning_rules import required_pages, validate_learning, video_watched
-from app.models import (
-    Material,
-)
+from app.content_relations import activity_questions, question_chapter_ids
 
 
 def learning_questions(db, activity, teacher_id=None):
@@ -25,20 +21,6 @@ def learning_questions(db, activity, teacher_id=None):
     return questions
 
 
-def learning_material(db, activity):
-    material = db.get(Material, activity.material_id) if activity.material_id else None
-    if material and (material.course_instance_id != activity.course_instance_id or not material_in_chapter(db, material.id, activity.chapter_id)):
-        raise HTTPException(409, "学习资料必须属于活动章节")
-    try:
-        validate_learning(activity.content, activity.kind, material, resolve=True)
-    except ValueError as exc:
-        raise HTTPException(409, str(exc)) from exc
-    return material
-
-
-def reading_completed(activity, progress, material=None):
-    video = activity.content.get("learning", {}).get("video")
-    if video:
-        return bool(progress and video_watched(progress.media_progress or {}, activity.material_id) >= video["minimum_seconds"])
-    required = required_pages(activity, material)
-    return bool(progress and required and set(required).issubset(progress.visited_pages))
+def reading_completed(activity, progress, materials):
+    from app.course_content.resources import reading_progress
+    return reading_progress(activity, progress, materials)["completed"]

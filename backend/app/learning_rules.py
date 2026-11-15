@@ -30,7 +30,7 @@ def validate_learning(content, kind, material=None, *, resolve=False):
     _object(learning, {"reading", "video", "highlights"}, "学习配置")
     reading, video = learning.get("reading"), learning.get("video")
     if "reading" in learning:
-        _object(reading, {"scope", "start_page", "end_page"}, "阅读规则")
+        _object(reading, {"scope", "start_page", "end_page", "page_ids"}, "阅读规则")
         if reading.get("scope") == "all":
             if set(reading) != {"scope"}:
                 raise ValueError("整份阅读不能同时声明页范围")
@@ -38,24 +38,30 @@ def validate_learning(content, kind, material=None, *, resolve=False):
             if set(reading) != {"scope", "start_page", "end_page"}:
                 raise ValueError("范围阅读必须同时声明起止页")
             _range(reading, "start_page", "end_page", "阅读页")
+        elif reading.get("scope") == "pages":
+            ids = reading.get("page_ids")
+            if set(reading) != {"scope", "page_ids"} or not isinstance(ids, list) or not ids or len(ids) > 5000 or any(not _integer(key, high=2**53 - 1) for key in ids) or len(set(ids)) != len(ids):
+                raise ValueError("关键页必须引用非重复真实页面ID")
         else:
-            raise ValueError("阅读范围只支持all或range")
+            raise ValueError("阅读范围只支持all、range或pages")
     if "video" in learning:
-        _object(video, {"minimum_seconds"}, "视频规则")
-        if set(video) != {"minimum_seconds"} or not _integer(video["minimum_seconds"]):
+        _object(video, {"minimum_seconds", "segments"}, "视频规则")
+        if not video or ("minimum_seconds" in video and not _integer(video["minimum_seconds"])):
             raise ValueError("视频有效播放目标必须为1至86400秒整数")
+        segments = video.get("segments", [])
+        if not isinstance(segments, list) or len(segments) > 100 or not (video.get("minimum_seconds") or segments):
+            raise ValueError("视频需要最低观看时长或关键片段，最多100项")
+        for segment in segments:
+            _object(segment, {"start_seconds", "end_seconds", "label"}, "关键片段")
+            _range(segment, "start_seconds", "end_seconds", "关键片段", 0)
+            if segment["start_seconds"] == segment["end_seconds"] or not isinstance(segment.get("label"), str) or not 1 <= len(segment["label"].strip()) <= 200:
+                raise ValueError("关键片段需要非零时长和1至200字说明")
     if reading is not None and video is not None:
-        raise ValueError("单个活动不能同时配置阅读和视频完成规则")
+        raise ValueError("同一份资料不能同时配置阅读和视频完成规则")
     if (reading is not None or video is not None) and kind not in {"lesson", "reading"}:
         raise ValueError("只有阅读活动可声明材料完成规则")
-    legacy = content.get("completion")
     if "completion" in content:
-        _object(legacy, {"required_page_ids"}, "阅读完成规则")
-        ids = legacy.get("required_page_ids")
-        if not isinstance(ids, list) or not ids or len(ids) > 5000 or any(not _integer(key, high=2**53 - 1) for key in ids) or len(set(ids)) != len(ids):
-            raise ValueError("阅读参与规则必须引用非重复真实页面ID")
-        if reading is not None or video is not None:
-            raise ValueError("新材料完成规则不能与required_page_ids同时配置")
+        raise ValueError("阅读要求必须配置在活动资料项中")
     highlights = learning.get("highlights", {})
     _object(highlights, {"pages", "video"}, "重点标记")
     for key, start, end, low in (("pages", "start_page", "end_page", 1), ("video", "start_seconds", "end_seconds", 0)):
@@ -72,18 +78,18 @@ def validate_learning(content, kind, material=None, *, resolve=False):
     if not resolve:
         return learning
     if not material:
-        if learning or legacy:
+        if learning:
             raise ValueError("学习配置必须绑定真实资料")
         return learning
     pages = material.content.get("pages", [])
     page_numbers = {page["page_no"] for page in pages}
-    if reading is not None or highlights.get("pages") or legacy:
+    if reading is not None or highlights.get("pages"):
         if material.kind not in {"text", "pdf", "presentation"} or not pages:
             raise ValueError("阅读规则或重点页必须绑定有页面的课件")
     if reading and reading["scope"] == "range" and not {reading["start_page"], reading["end_page"]}.issubset(page_numbers):
         raise ValueError("阅读范围引用了不存在的原始页码")
-    if legacy and not set(legacy["required_page_ids"]).issubset({page["id"] for page in pages}):
-        raise ValueError("阅读完成规则引用了不存在的资料页")
+    if reading and reading["scope"] == "pages" and not set(reading["page_ids"]).issubset({page["id"] for page in pages}):
+        raise ValueError("关键页引用了不存在的资料页")
     for row in highlights.get("pages", []):
         if not {row["start_page"], row["end_page"]}.issubset(page_numbers):
             raise ValueError("重点标记引用了不存在的原始页码")
@@ -91,20 +97,19 @@ def validate_learning(content, kind, material=None, *, resolve=False):
         duration = video_duration(material)
         if material.kind != "video" or duration is None:
             raise ValueError("视频规则或片段必须绑定有可靠时长的视频资料")
-        if any(row["end_seconds"] > duration for row in highlights.get("video", [])):
+        if any(row["end_seconds"] > duration for row in [*highlights.get("video", []), *(video or {}).get("segments", [])]):
             raise ValueError("重点片段超出视频时长")
     return learning
 
 
 def has_completion_rule(activity):
-    learning = activity.content.get("learning", {})
-    return bool(activity.content.get("completion") or learning.get("reading") or learning.get("video"))
+    return any(resource.required for resource in activity.resources)
 
 
-def required_pages(activity, material):
-    reading = activity.content.get("learning", {}).get("reading")
-    if not reading:
-        return list(activity.content.get("completion", {}).get("required_page_ids", []))
+def required_pages(resource, material):
+    reading = resource.learning.get("reading", {"scope": "all"})
+    if reading["scope"] == "pages":
+        return reading["page_ids"]
     pages = material.content.get("pages", []) if material else []
     return [page["id"] for page in pages if reading["scope"] == "all" or reading["start_page"] <= page["page_no"] <= reading["end_page"]]
 
@@ -127,7 +132,19 @@ def video_state_for_material(state, material_id):
         summary[str(state["material_id"])] = state.get("watched_seconds", 0)
     if str(material_id) not in summary and len(summary) >= 64:
         raise ValueError("活动累计关联的视频资料过多，请联系教师")
-    return {"material_id": material_id, "watched_seconds": summary.get(str(material_id), 0), "material_seconds": summary}
+    states = dict(state.get("material_states", {}))
+    if state.get("material_id") is not None:
+        states[str(state["material_id"])] = {key: value for key, value in state.items() if key not in {"material_states", "material_seconds", "reading_positions", "reading_pages", "selected_material_id"}}
+    return {**states.get(str(material_id), {}), "material_id": material_id,
+            "watched_seconds": summary.get(str(material_id), 0), "material_seconds": summary,
+            "selected_material_id": state.get("selected_material_id"), "material_states": states, "reading_positions": state.get("reading_positions", {}), "reading_pages": state.get("reading_pages", {})}
+
+
+def ensure_video_switch(state, material_id):
+    if state.get("material_id") not in {None, material_id} and state.get("playing") and state.get("received_at"):
+        elapsed = (utcnow() - datetime.fromisoformat(state["received_at"])).total_seconds()
+        if 0 <= elapsed < 20:
+            raise ValueError("另一份视频正在记录进度，请先暂停或稍后重试")
 
 
 def record_video(state, session_id, sequence, position, playing, duration, playback_rate=1):
@@ -153,13 +170,24 @@ def record_video(state, session_id, sequence, position, playing, duration, playb
         if state.get("playing") and elapsed is not None and 0 <= elapsed < 15:
             raise ValueError("另一个播放会话正在记录进度，请先暂停或稍后重试")
     watched = state.get("watched_seconds", 0)
+    covered = list(state.get("covered", []))
     delta = position - state.get("position", position)
     previous_rate = state.get("rate", 1)
     if same_session and state.get("playing") and elapsed is not None and 0 < elapsed <= 20 and 0 < delta <= elapsed * previous_rate * 1.25 + .5:
         watched = min(86400, watched + min(delta / previous_rate, elapsed))
+        merged = []
+        for start, end in sorted([*covered, [state["position"], position]]):
+            if merged and start <= merged[-1][1] + .05:
+                merged[-1][1] = max(merged[-1][1], end)
+            else:
+                merged.append([start, end])
+        # Bound evidence size without inventing coverage across gaps.
+        covered = merged[:5000]
     receipts = state.get("receipts", []) if same_session else []
     return {
-        "material_id": state.get("material_id"),
+        "material_id": state.get("material_id"), "covered": covered,
+        "reading_pages": state.get("reading_pages", {}),
+        "selected_material_id": state.get("selected_material_id"), "material_states": state.get("material_states", {}), "reading_positions": state.get("reading_positions", {}),
         "material_seconds": state.get("material_seconds", {}),
         "session_id": session_id, "sequence": sequence, "position": position,
         "playing": playing, "rate": playback_rate, "received_at": now.isoformat(), "watched_seconds": round(watched, 3),

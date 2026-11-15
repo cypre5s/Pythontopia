@@ -10,7 +10,7 @@ from app.models import Activity, CourseExample, KnowledgePoint, Material, Questi
 LIMITS = PackageLimits()
 
 
-EXTRAS = {Material: {"chapter_ids", "asset_id", "preview_asset_id"}, Question: {"chapter_ids", "knowledge_point_ids"}, Activity: {"question_ids"}}
+EXTRAS = {Material: {"chapter_ids", "asset_id", "preview_asset_id"}, Question: {"chapter_ids", "knowledge_point_ids"}, Activity: {"question_ids", "resources"}}
 
 
 JSONL_FILES = {

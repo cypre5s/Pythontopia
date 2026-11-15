@@ -14,7 +14,7 @@ import { Label } from "@/components/ui/label";
 import { KnowledgePointPicker } from "@/features/curriculum/knowledge-point-picker";
 import type { Activity, Course, Material, Question } from "@/lib/types";
 import { ArrowDown, ArrowUp } from "lucide-react";
-import { HighlightEditor } from "./highlight-editor";
+import { ResourceEditor } from "./resource-editor";
 import type { useActivityEditor } from "./use-editor";
 export function ActivityDialog({
   editor,
@@ -41,26 +41,14 @@ export function ActivityDialog({
     setChapter,
     kind,
     setKind,
-    material,
-    setMaterial,
+    resources,
+    setResources,
     pointIds,
     setPointIds,
     npc,
     setNpc,
     assistant,
     setAssistant,
-    rule,
-    setRule,
-    start,
-    setStart,
-    end,
-    setEnd,
-    seconds,
-    setSeconds,
-    pageHighlights,
-    setPageHighlights,
-    videoHighlights,
-    setVideoHighlights,
     selected,
     setSelected,
     error,
@@ -193,7 +181,7 @@ export function ActivityDialog({
                       value={chapter}
                       onValueChange={(value) => {
                         setChapter(Number(value));
-                        setMaterial(null);
+                        setResources([]);
                         setDirty(true);
                       }}
                     >
@@ -212,8 +200,7 @@ export function ActivityDialog({
                       value={kind}
                       onValueChange={(value) => {
                         setKind(value as Activity["kind"]);
-                        setRule("keep");
-                        setMaterial(null);
+                        setResources([]);
                         setDirty(true);
                       }}
                     >
@@ -257,107 +244,8 @@ export function ActivityDialog({
                   }}
                 />
                 {kind === "lesson" || kind === "reading" ? (
-                  <>
-                    <div className="field">
-                      <Label htmlFor="a-material">阅读资料</Label>
-                      <SelectField
-                        id="a-material"
-                        value={material ?? ""}
-                        onValueChange={(value) => {
-                          setDirty(true);
-                          setMaterial(value ? Number(value) : null);
-                          setRule(
-                            materials.data?.find((m) => m.id === Number(value))
-                              ?.kind === "video"
-                              ? "video"
-                              : "all",
-                          );
-                        }}
-                      >
-                        <option value="">选择资料</option>
-                        {materials.data
-                          ?.filter(
-                            (m) =>
-                              m.chapter_ids.includes(chapter) &&
-                              m.status === "ready",
-                          )
-                          .map((m) => (
-                            <option key={m.id} value={m.id}>
-                              {m.title}
-                            </option>
-                          ))}
-                      </SelectField>
-                    </div>
-                    <div className="field">
-                      <Label htmlFor="a-rule">完成条件</Label>
-                      <SelectField
-                        id="a-rule"
-                        value={rule}
-                        onValueChange={(value) => {
-                          setRule(value);
-                          setDirty(true);
-                        }}
-                      >
-                        <option value="keep">保留当前条件</option>
-                        <option value="all">阅读整份资料</option>
-                        <option value="range">阅读指定页范围</option>
-                        <option value="video">有效视频观看时长</option>
-                      </SelectField>
-                    </div>
-                    {rule === "range" ? (
-                      <div className="grid grid-cols-2 gap-4">
-                        <div className="field">
-                          <Label htmlFor="a-start">起始页</Label>
-                          <Input
-                            id="a-start"
-                            type="number"
-                            min={1}
-                            value={start}
-                            onChange={(e) => setStart(Number(e.target.value))}
-                          />
-                        </div>
-                        <div className="field">
-                          <Label htmlFor="a-end">结束页</Label>
-                          <Input
-                            id="a-end"
-                            type="number"
-                            min={start}
-                            value={end}
-                            onChange={(e) => setEnd(Number(e.target.value))}
-                          />
-                        </div>
-                      </div>
-                    ) : rule === "video" ? (
-                      <div className="field">
-                        <Label htmlFor="a-seconds">最低有效观看秒数</Label>
-                        <Input
-                          id="a-seconds"
-                          type="number"
-                          min={1}
-                          max={86400}
-                          value={seconds}
-                          onChange={(e) => setSeconds(Number(e.target.value))}
-                        />
-                      </div>
-                    ) : null}
-                    <HighlightEditor
-                      title="重点页标记"
-                      rows={pageHighlights}
-                      onChange={(v) => {
-                        setPageHighlights(v);
-                        setDirty(true);
-                      }}
-                    />
-                    <HighlightEditor
-                      title="重点视频片段（秒）"
-                      rows={videoHighlights}
-                      onChange={(v) => {
-                        setVideoHighlights(v);
-                        setDirty(true);
-                      }}
-                      video
-                    />
-                  </>
+                  <ResourceEditor classroomId={editor.classroomId} resources={resources} materials={materials.data ?? []} chapterId={chapter}
+                    onChange={(value) => { setResources(value); setDirty(true); }} />
                 ) : null}
                 {kind !== "assessment" ? (
                   <label className="flex items-center gap-2 mb-4">

@@ -5,7 +5,6 @@
       "chapter_id": 180,
       "title": "Test ch2-lesson",
       "kind": "lesson",
-      "material_id": 187,
       "npc_key": "professor",
       "assistant_allowed": true,
       "content": {
@@ -20,14 +19,20 @@
         10736,
         10750
       ],
-      "knowledge_point_mode": "pages"
+      "knowledge_point_mode": "pages",
+      "resources": [
+        {
+          "material_id": 187,
+          "required": true,
+          "learning": {}
+        }
+      ]
     },
     {
       "id": "ch2-concept",
       "chapter_id": 180,
       "title": "Test ch2-concept",
       "kind": "practice",
-      "material_id": null,
       "npc_key": "arena_guard",
       "assistant_allowed": true,
       "content": {
@@ -43,14 +48,14 @@
         10732,
         10734
       ],
-      "knowledge_point_mode": "pages"
+      "knowledge_point_mode": "pages",
+      "resources": []
     },
     {
       "id": "ch2-io",
       "chapter_id": 180,
       "title": "Test ch2-io",
       "kind": "lesson",
-      "material_id": 187,
       "npc_key": "professor",
       "assistant_allowed": true,
       "content": {
@@ -62,14 +67,20 @@
         10786,
         10787
       ],
-      "knowledge_point_mode": "pages"
+      "knowledge_point_mode": "pages",
+      "resources": [
+        {
+          "material_id": 187,
+          "required": true,
+          "learning": {}
+        }
+      ]
     },
     {
       "id": "ch2-code",
       "chapter_id": 180,
       "title": "Test ch2-code",
       "kind": "practice",
-      "material_id": null,
       "npc_key": "arena_guard",
       "assistant_allowed": true,
       "content": {
@@ -79,7 +90,8 @@
         ]
       },
       "knowledge_point_pages": [],
-      "knowledge_point_mode": "problem"
+      "knowledge_point_mode": "problem",
+      "resources": []
     }
   ],
   "quest": {

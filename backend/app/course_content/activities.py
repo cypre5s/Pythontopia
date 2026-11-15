@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.content_relations import activity_questions, material_in_chapter, question_chapter_ids, set_activity_questions
+from app.content_relations import activity_questions, question_chapter_ids, set_activity_questions
 from app.models import Activity, AssessmentAttempt, Npc, Question, User
 from app.teacher_scope import commit_content, require_scope, scoped_key, teacher_instance_id
 
@@ -19,11 +19,10 @@ class ActivityInput(BaseModel):
     chapter_id: int
     title: str = Field(min_length=1, max_length=200)
     kind: Literal["lesson", "reading", "practice", "assessment"]
-    material_id: int | None = None
+    resources: list[dict] = Field(default_factory=list, max_length=64)
     npc_key: str | None = None
     assistant_allowed: bool = True
     knowledge_point_ids: list[int] = Field(default_factory=list, max_length=65)
-    learning: dict | None = None
 
     @field_validator("knowledge_point_ids", mode="before")
     @classmethod
@@ -35,7 +34,6 @@ class ActivityInput(BaseModel):
 
 def create_activity(body: ActivityInput, db: Session, user: User, classroom_id: int | None = None):
     instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
-    from app.models import Material
 
     runtime_id = scoped_key(instance_id, "activity", body.id)
     if db.get(Activity, runtime_id, execution_options={"include_deleted": True}):
@@ -45,24 +43,9 @@ def create_activity(body: ActivityInput, db: Session, user: User, classroom_id: 
     validate_activity_points(db, user, body.chapter_id, body.knowledge_point_ids, instance_id)
     if body.npc_key is not None and (not db.get(Npc, body.npc_key) or db.get(Npc, body.npc_key).course_instance_id != instance_id):
         raise HTTPException(422, "NPC不存在")
-    material = db.scalar(select(Material).where(Material.id == body.material_id).with_for_update()) if body.material_id else None
-    if material:
-        require_scope(material, instance_id)
-    if material and (not material_in_chapter(db, material.id, body.chapter_id) or material.owner_id not in {None, user.id}):
-        raise HTTPException(403, "资料不属于当前教师或章节")
-    if body.material_id and not material:
-        raise HTTPException(404, "资料不存在")
-    from app.learning_rules import validate_learning
-
     content = {"published": True, "knowledge_point_ids": body.knowledge_point_ids}
-    if body.learning is not None:
-        content["learning"] = body.learning
-    try:
-        validate_learning(content, body.kind, material, resolve=True)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
     item = Activity(
-        **body.model_dump(exclude={"id", "knowledge_point_ids", "learning"}),
+        **body.model_dump(exclude={"id", "knowledge_point_ids", "resources"}),
         id=runtime_id,
         stable_id=body.id,
         course_instance_id=instance_id,
@@ -71,6 +54,11 @@ def create_activity(body: ActivityInput, db: Session, user: User, classroom_id: 
     )
     db.add(item)
     db.flush()
+    from app.course_content.resources import set_resources
+    try:
+        set_resources(db, item, body.resources)
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
     commit_content(db, instance_id)
     return {"id": item.id}
 
@@ -80,9 +68,8 @@ class ActivityUpdate(BaseModel):
     title: str | None = Field(default=None, min_length=1, max_length=200)
     npc_key: str | None = None
     assistant_allowed: bool | None = None
-    material_id: int | None = None
+    resources: list[dict] | None = Field(default=None, max_length=64)
     knowledge_point_ids: list[int] | None = Field(default=None, max_length=65)
-    learning: dict | None = None
 
     @field_validator("knowledge_point_ids", mode="before")
     @classmethod
@@ -94,7 +81,6 @@ class ActivityUpdate(BaseModel):
 
 def update_activity(activity_id: str, body: ActivityUpdate, db: Session, user: User, classroom_id: int | None = None):
     instance_id = teacher_instance_id(db, user, classroom_id, exclusive=True)
-    from app.models import Material
 
     item = db.scalar(select(Activity).where(Activity.id == activity_id).with_for_update())
     if not item:
@@ -103,13 +89,8 @@ def update_activity(activity_id: str, body: ActivityUpdate, db: Session, user: U
     if item.owner_id != user.id and user.role != "admin":
         raise HTTPException(403, "共享种子不可覆盖，请创建教师自己的活动并绑定任务")
     changes = body.model_dump(exclude_unset=True)
-    new_learning = changes.pop("learning", None)
+    resources = changes.pop("resources", None)
     content = dict(item.content)
-    if "learning" in body.model_fields_set:
-        if new_learning is None:
-            content.pop("learning", None)
-        else:
-            content["learning"] = new_learning
     new_points = changes.pop("knowledge_point_ids", None)
     if new_points is not None:
         from app.curriculum import validate_activity_points
@@ -123,21 +104,12 @@ def update_activity(activity_id: str, body: ActivityUpdate, db: Session, user: U
         and (not db.get(Npc, changes["npc_key"]) or db.get(Npc, changes["npc_key"]).course_instance_id != instance_id)
     ):
         raise HTTPException(422, "NPC不存在")
-    if changes.get("material_id"):
-        material = db.scalar(select(Material).where(Material.id == changes["material_id"]).with_for_update())
-        if not material or not material_in_chapter(db, material.id, item.chapter_id) or material.owner_id not in {None, item.owner_id}:
-            raise HTTPException(403, "资料不属于当前教师或章节")
-    from app.learning_rules import validate_learning
-    from app.models import Material
-
-    material_id = changes.get("material_id", item.material_id)
-    material = db.get(Material, material_id) if material_id else None
-    if material:
-        require_scope(material, instance_id)
-    try:
-        validate_learning(content, item.kind, material, resolve=True)
-    except ValueError as exc:
-        raise HTTPException(422, str(exc)) from exc
+    if "resources" in body.model_fields_set:
+        from app.course_content.resources import set_resources
+        try:
+            set_resources(db, item, resources)
+        except ValueError as exc:
+            raise HTTPException(422, str(exc)) from exc
     for key, value in changes.items():
         setattr(item, key, value)
     if new_points is not None:

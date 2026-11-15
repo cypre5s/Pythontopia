@@ -52,10 +52,9 @@ export interface Activity {
   chapter_id: number;
   title: string;
   kind: "lesson" | "reading" | "practice" | "assessment";
-  material_id: number | null;
+  resources: ActivityResource[];
   npc_key: string | null;
   assistant_allowed: boolean;
-  learning: Record<string, unknown>;
   knowledge_point_ids: number[];
   question_ids: string[];
   owner_id: number | null;
@@ -93,4 +92,14 @@ export interface Question {
   chapter_ids: number[];
   knowledge_point_ids: number[];
   owner_id: number | null;
+}
+
+export interface ActivityResource {
+  material_id: number;
+  required: boolean;
+  learning: {
+    reading?: { scope: "all" | "range" | "pages"; start_page?: number; end_page?: number; page_ids?: number[] };
+    video?: { minimum_seconds?: number; segments?: { start_seconds: number; end_seconds: number; label: string }[] };
+    highlights?: { pages?: { start_page: number; end_page: number; label: string }[]; video?: { start_seconds: number; end_seconds: number; label: string }[] };
+  };
 }

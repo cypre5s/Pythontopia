@@ -47,16 +47,13 @@ describe("public judge sample feedback", () => {
       chapters: [],
       flags: [],
     };
-    vi.spyOn(session, "activity").mockResolvedValue({
-      id: "code-test",
-      chapter_id: 179,
-      title: "公开反馈测试",
-      kind: "practice",
-
-      npc_key: "mayor_py",
-      assistant_allowed: false,
-      material: null,
-      questions: [
+    vi.spyOn(session, "activity").mockResolvedValue({id: "code-test",
+chapter_id: 179,
+title: "公开反馈测试",
+kind: "practice",
+npc_key: "mayor_py",
+assistant_allowed: false,
+questions: [
         {
           id: "q1",
           title: "测试题",
@@ -67,7 +64,7 @@ describe("public judge sample feedback", () => {
 
         },
       ],
-    });
+resources: []});
     const result: Submission & {
       feedback: Submission["feedback"] & { hidden_cases: string[] };
     } = {

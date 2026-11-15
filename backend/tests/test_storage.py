@@ -1,3 +1,4 @@
+from app.models import ActivityMaterial
 import app.materials.conversion as materials_conversion
 import app.materials.jobs as materials_jobs
 import app.materials.storage as materials_storage
@@ -81,16 +82,7 @@ def test_teacher_upload_processing_range_and_current_material_authorization(clie
     assert db.get(Material, row.id).status == "ready"
     url = f"/api/materials/{material_id}/file?classroom_id={classroom['id']}"
     assert client.get(url, headers=student["headers"]).status_code == 403
-    activity = Activity(
-        id="teacher-reading",
-        chapter_id=179,
-        title="补充阅读",
-        kind="lesson",
-        material_id=material_id,
-        npc_key="mayor_py",
-        assistant_allowed=True,
-        content={"published": True, "owner_id": teacher["id"]},
-    )
+    activity = Activity(id='teacher-reading', chapter_id=179, title='补充阅读', kind='lesson', npc_key='mayor_py', assistant_allowed=True, content={'published': True, 'owner_id': teacher['id']}, resources=[ActivityMaterial(material_id=material_id, required=True, order_index=0, learning={})])
     db.add(activity)
     db.flush()
     db.commit()

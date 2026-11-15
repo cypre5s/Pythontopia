@@ -32,7 +32,7 @@ def write_package(db, instance, root):
         raise PackageError("班级资料仍在转换，请完成后导出课程")
     created = as_utc(instance.created_at).isoformat()
     manifest = {
-        "schema_version": 2,
+        "schema_version": 3,
         "package_id": instance.package_id,
         "name": instance.name,
         "package_version": instance.package_version,

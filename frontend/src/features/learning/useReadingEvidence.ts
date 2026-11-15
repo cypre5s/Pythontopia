@@ -12,7 +12,7 @@ interface ReadingEvidenceContext {
   hasReadingCompletion: Ref<boolean>;
   currentOwner: () => boolean;
   pageNo: () => number | undefined;
-  save: (activityId: string, page: number) => Promise<ActivityProgress>;
+  save: (activityId: string, page: number, materialId: number) => Promise<ActivityProgress>;
 }
 
 export function useReadingEvidence({
@@ -30,7 +30,12 @@ export function useReadingEvidence({
 }: ReadingEvidenceContext) {
   let progressGeneration = 0,
     queuedPage = "";
-  async function persistProgress() {
+  let pending: Promise<void> = Promise.resolve();
+  function persistProgress() {
+    pending = saveProgress();
+    return pending;
+  }
+  async function saveProgress() {
     if (
       !currentOwner() ||
       loading.value ||
@@ -40,17 +45,17 @@ export function useReadingEvidence({
       !activity.value
     )
       return;
-    if (material.value.id !== activity.value.material?.id) return;
+    if (!activity.value.resources.some(row => row.material_id === material.value?.id)) return;
     const page = pageNo();
     if (!page) return;
-    const pageKey = `${activity.value.id}:${page}`;
-    if (queuedPage === pageKey) return;
+    const pageKey = `${activity.value.id}:${material.value.id}:${page}`;
+    if (queuedPage === pageKey) return pending;
     queuedPage = pageKey;
     const generation = ++progressGeneration;
     progressSaving.value = true;
     progressError.value = "";
     try {
-      const saved = await save(activity.value.id, page);
+      const saved = await save(activity.value.id, page, material.value.id);
       if (currentOwner() && generation === progressGeneration)
         progress.value = saved;
     } catch (error) {

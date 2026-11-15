@@ -6,6 +6,13 @@ import PracticeWorkspace from "../src/features/practice/PracticeWorkspace.vue";
 import OverlayHost from "../src/features/OverlayHost.vue";
 import { api } from "../src/shared/api";
 import { useSession } from "../src/shared/session";
+function readingState(value: { page_no?: number | null; visited_pages: number[]; completed: boolean; required_page_ids?: number[]; read_count?: number; read_total?: number }) {
+ const required = value.required_page_ids ?? (value.visited_pages.includes(201) ? [201] : value.completed ? value.visited_pages : [10715,10723,10724]);
+ const count = value.read_count ?? required.filter(id => value.visited_pages.includes(id)).length;
+ const total = value.read_total ?? required.length;
+ return { ...value, material_id: 186, fraction: total ? count / total : 0, required_count: 1, completed_count: value.completed ? 1 : 0,
+ resources: [{ ...value, material_id: 186, fraction: total ? count / total : 0, required_page_ids: required, read_count: count, read_total: total, watched_seconds: 0, required_seconds: 0, completed_segments: [] }] };
+}
 function setup(compact = false) {
   const pinia = createPinia();
   setActivePinia(pinia);
@@ -41,50 +48,68 @@ afterEach(() => {
 describe("learning workspace usability", () => {
   it("uses configured reading ranges, original outline pages and verified evidence to complete an ordinary quest node", async () => {
     const { pinia, session } = setup();
-    const initial = { page_no: 34, visited_pages: [], required_page_ids: [201, 202], read_count: 0, read_total: 2, completed: false };
+    const initial = readingState({ page_no: 34, visited_pages: [], required_page_ids: [201, 202], read_count: 0, read_total: 2, completed: false });
     session.world!.quests = [{ id: "fixture", kind: "side", chapter_id: 179, title: "测试委托", status: "active", nodes: [{ id: "read", type: "STUDY_LESSON", title: "阅读", target: "", activity_id: "range", dependencies: [], aggregation: "ALL", optional: false, status: "ready" }] }];
-    vi.spyOn(session, "activity").mockResolvedValue({ id: "range", chapter_id: 179, title: "范围阅读", kind: "lesson", npc_key: "librarian_doc", assistant_allowed: false, questions: [], progress: initial,
-      learning: { reading: { scope: "range", start_page: 34, end_page: 35 }, highlights: { pages: [{ start_page: 35, end_page: 35, label: "课堂重点" }] } },
-      material: { id: 186, title: "课件", kind: "text", status: "ready", pages: [{ id: 200, page_no: 33, title: "导读", text: "范围外" }, { id: 201, page_no: 34, title: "计算", text: "计算" }, { id: 202, page_no: 35, title: "求解", text: "求解" }] } });
+    vi.spyOn(session, "activity").mockResolvedValue({id: "range",
+chapter_id: 179,
+title: "范围阅读",
+kind: "lesson",
+npc_key: "librarian_doc",
+assistant_allowed: false,
+questions: [],
+progress: initial,
+resources: [{material_id: 186, required: true, learning: { reading: { scope: "range", start_page: 34, end_page: 35 }, highlights: { pages: [{ start_page: 35, end_page: 35, label: "课堂重点" }] } }, material: { id: 186, title: "课件", kind: "text", status: "ready", pages: [{ id: 200, page_no: 33, title: "导读", text: "范围外" }, { id: 201, page_no: 34, title: "计算", text: "计算" }, { id: 202, page_no: 35, title: "求解", text: "求解" }] }}]});
     vi.spyOn(api, "get").mockResolvedValue(initial);
-    const post = vi.spyOn(api, "post").mockResolvedValueOnce({ ...initial, visited_pages: [201], read_count: 1 }).mockResolvedValueOnce({ ...initial, page_no: 35, visited_pages: [201, 202], read_count: 2, completed: true }).mockResolvedValueOnce({ record_id: "record" });
+    const post = vi.spyOn(api, "post").mockResolvedValueOnce(readingState({ ...initial, visited_pages: [201], read_count: 1 })).mockResolvedValueOnce(readingState({ ...initial, page_no: 35, visited_pages: [201, 202], read_count: 2, completed: true })).mockResolvedValueOnce({ record_id: "record" });
     const event = vi.spyOn(session, "event").mockResolvedValue();
     vi.spyOn(session, "refresh").mockResolvedValue();
     const wrapper = mount(LessonWorkspace, { props: { activityId: "range" }, global: { plugins: [pinia], stubs: { AssistantPanel: true } } });
     await flushPromises();
-    expect(wrapper.get(".support-goal-progress progress").attributes("value")).toBe("1");
+    expect(wrapper.get(".activity-resource-progress progress").attributes("value")).toBe("0.5");
     expect(wrapper.get('[aria-label="文档页面目录"]').findAll("button")).toHaveLength(3);
     expect(wrapper.get(".support-outline-important").text()).toBe("课堂重点");
-    await wrapper.get('[aria-label="本章阅读目标"]').findAll("button")[1]!.trigger("click");
+    await wrapper.get('.activity-resource-requirements').findAll("button")[1]!.trigger("click");
     await flushPromises();
-    expect(wrapper.get(".support-goal-progress progress").attributes("value")).toBe("2");
-    await wrapper.findAll("button").find(button => button.text() === "完成阅读")!.trigger("click");
+    expect(wrapper.get(".activity-resource-progress progress").attributes("value")).toBe("1");
+    await wrapper.findAll("button").find(button => button.text() === "完成学习")!.trigger("click");
     await flushPromises();
-    expect(post).toHaveBeenLastCalledWith("/activities/range/participation", { classroom_id: 2, page_no: 35 });
+    expect(post).toHaveBeenLastCalledWith("/activities/range/participation", { classroom_id: 2, material_id: 186, page_no: 35 });
     expect(event).toHaveBeenCalledWith(session.world!.quests[0], session.world!.quests[0]!.nodes[0], { record_id: "record" });
     wrapper.unmount();
   });
   it("returns compact goal-page navigation to the reading region without changing original page IDs", async () => {
     const { pinia, session } = setup(true);
-    vi.spyOn(session, "activity").mockResolvedValue({ id: "lesson", chapter_id: 179, title: "阅读", kind: "lesson", npc_key: "librarian_doc", assistant_allowed: false, questions: [],
-      material: { id: 186, title: "课件", kind: "text", status: "ready", pages: [{ id: 201, page_no: 42, title: "目标页", text: "原始正文" }] },
-      completion: { required_page_ids: [201] } });
-    vi.spyOn(api, "get").mockResolvedValue({ page_no: 42, visited_pages: [201], completed: true });
-    vi.spyOn(api, "post").mockResolvedValue({ page_no: 42, visited_pages: [201], completed: true });
+    vi.spyOn(session, "activity").mockResolvedValue({id: "lesson",
+chapter_id: 179,
+title: "阅读",
+kind: "lesson",
+npc_key: "librarian_doc",
+assistant_allowed: false,
+questions: [],
+resources: [{material_id: 186, required: true, learning: { ...{}, reading: { scope: "pages", page_ids: ({ required_page_ids: [201] }).required_page_ids } }, material: { id: 186, title: "课件", kind: "text", status: "ready", pages: [{ id: 201, page_no: 42, title: "目标页", text: "原始正文" }] }}]});
+    vi.spyOn(api, "get").mockResolvedValue(readingState({ page_no: 42, visited_pages: [201], completed: true }));
+    vi.spyOn(api, "post").mockResolvedValue(readingState({ page_no: 42, visited_pages: [201], completed: true }));
     const wrapper = mount(LessonWorkspace, { props: { activityId: "lesson" }, global: { plugins: [pinia], stubs: { AssistantPanel: true } } });
     await flushPromises();
     await wrapper.findAll("button").find(button => button.text() === "目标与助教")!.trigger("click");
     expect(wrapper.get(".lesson-content").attributes("hidden")).toBeDefined();
-    await wrapper.get('[aria-label="本章阅读目标"] button').trigger("click");
+    await wrapper.get('.activity-resource-requirements button').trigger("click");
+    await flushPromises();
     expect(wrapper.get(".lesson-content").attributes("hidden")).toBeUndefined();
     expect(wrapper.get(".lesson-text").text()).toContain("原始正文");
     wrapper.unmount();
   });
   it("refreshes server-verified learning goals after a normal practice submission", async () => {
     const { pinia, session } = setup();
-    vi.spyOn(session, "activity").mockResolvedValue({ id: "practice", chapter_id: 179, title: "练习", kind: "practice", npc_key: "arena_guard", assistant_allowed: false, material: null,
-      progress: { page_no: null, visited_pages: [], accepted_question_ids: [], completed: false },
-      questions: [{ id: "q1", title: "判断题", kind: "boolean", prompt: "请选择", options: [], samples: [] }] });
+    vi.spyOn(session, "activity").mockResolvedValue({id: "practice",
+chapter_id: 179,
+title: "练习",
+kind: "practice",
+npc_key: "arena_guard",
+assistant_allowed: false,
+progress: { page_no: null, visited_pages: [], accepted_question_ids: [], completed: false },
+questions: [{ id: "q1", title: "判断题", kind: "boolean", prompt: "请选择", options: [], samples: [] }],
+resources: []});
     vi.spyOn(api, "post").mockResolvedValue({ id: "s1", question_id: "q1", mode: "submit", status: "accepted", feedback: {} });
     const get = vi.spyOn(api, "get").mockResolvedValue({ page_no: null, visited_pages: [], accepted_question_ids: ["q1"], completed: true });
     vi.spyOn(session, "refresh").mockResolvedValue();
@@ -101,12 +126,16 @@ describe("learning workspace usability", () => {
   it("retains the server page and original required IDs when current lesson media becomes PDF", async () => {
     const { pinia, session } = setup();
     const pages = [{ id: 10715, page_no: 34, title: "计算", text: "计算" }, { id: 10723, page_no: 42, title: "抽象", text: "抽象" }];
-    const progress = { page_no: 42, visited_pages: [10715, 10723], completed: true };
-    vi.spyOn(session, "activity").mockResolvedValue({
-      id: "ch1-lesson", chapter_id: 179, title: "第一章", kind: "lesson", npc_key: "librarian_doc", assistant_allowed: true,
-      questions: [], completion: { required_page_ids: [10715, 10723] }, progress,
-      material: { id: 186, title: "课件", kind: "pdf", status: "ready", pages },
-    });
+    const progress = readingState({ page_no: 42, visited_pages: [10715, 10723], completed: true });
+    vi.spyOn(session, "activity").mockResolvedValue({id: "ch1-lesson",
+chapter_id: 179,
+title: "第一章",
+kind: "lesson",
+npc_key: "librarian_doc",
+assistant_allowed: true,
+questions: [],
+progress,
+resources: [{material_id: 186, required: true, learning: { ...{}, reading: { scope: "pages", page_ids: ({ required_page_ids: [10715, 10723] }).required_page_ids } }, material: { id: 186, title: "课件", kind: "pdf", status: "ready", pages }}]});
     vi.spyOn(api, "get").mockResolvedValue(progress);
     const post = vi.spyOn(api, "post").mockResolvedValue(progress);
     sessionStorage.setItem("read:1:2:material-186:pdf", "34");
@@ -117,8 +146,8 @@ describe("learning workspace usability", () => {
     expect(wrapper.get(".pdf-fixture").text()).toBe("42");
     expect(wrapper.find(".lesson-extracted-text").exists()).toBe(false);
     expect(wrapper.text()).not.toContain("提取文本");
-    expect(wrapper.get('[aria-label="本章阅读目标"]').text()).toContain("阅读第42页");
-    expect(post).toHaveBeenCalledWith("/activities/ch1-lesson/progress", { classroom_id: 2, page_no: 42 });
+    expect(wrapper.get('.activity-resource-requirements').text()).toContain("42.");
+    expect(post).toHaveBeenCalledWith("/activities/ch1-lesson/progress", { classroom_id: 2, material_id: 186, page_no: 42 });
     wrapper.unmount();
   });
 
@@ -160,7 +189,15 @@ describe("learning workspace usability", () => {
   it("restores the current activity and existing reading progress from a waiting story", async () => {
     const { pinia, session } = setup();
     session.world!.quests = [{ id: "arrival", kind: "main", chapter_id: 179, title: "第一章", story_id: "first-steps", status: "active", nodes: [] }];
-    const current = { id: "ch1-lesson", chapter_id: 179, title: "课程", kind: "lesson", npc_key: "librarian_doc", assistant_allowed: true, questions: [], material: { id: 186, kind: "text", status: "ready", title: "课件", pages: [{ id: 201, page_no: 42, title: "当前内容", text: "当前教学配置中的课件" }] }, completion: { required_page_ids: [201] }, progress: { page_no: 42, visited_pages: [201], completed: true } };
+    const current = {id: "ch1-lesson",
+chapter_id: 179,
+title: "课程",
+kind: "lesson",
+npc_key: "librarian_doc",
+assistant_allowed: true,
+questions: [],
+progress: readingState({ page_no: 42, visited_pages: [201], completed: true }),
+resources: [{material_id: 186, required: true, learning: { ...{}, reading: { scope: "pages", page_ids: ({ required_page_ids: [201] }).required_page_ids } }, material: { id: 186, kind: "text", status: "ready", title: "课件", pages: [{ id: 201, page_no: 42, title: "当前内容", text: "当前教学配置中的课件" }] }}]};
     const get = vi.spyOn(api, "get").mockImplementation(async path => {
       if (path.startsWith("/story/current")) return { id: "story-session", revision: 3, status: "waiting", npc_key: "librarian_doc", node: null, activity: { id: "ch1-lesson", kind: "lesson", page_no: 42 } } as never;
       if (path === "/activities/ch1-lesson?classroom_id=2") return current as never;
@@ -174,17 +211,22 @@ describe("learning workspace usability", () => {
     await vi.waitFor(async () => { await flushPromises(); expect(wrapper.text()).toContain("当前教学配置中的课件"); });
     expect(get).toHaveBeenCalledWith("/activities/ch1-lesson?classroom_id=2");
     expect(get).toHaveBeenCalledWith("/activities/ch1-lesson/progress?classroom_id=2");
-    expect(post).toHaveBeenCalledWith("/activities/ch1-lesson/progress", { classroom_id: 2, page_no: 42 });
-    expect(wrapper.get('[aria-label="本章阅读目标"]').text()).toContain("阅读第42页");
+    expect(post).toHaveBeenCalledWith("/activities/ch1-lesson/progress", { classroom_id: 2, material_id: 186, page_no: 42 });
+    expect(wrapper.get('.activity-resource-requirements').text()).toContain("42.");
     expect(wrapper.text()).not.toContain("版本");
     wrapper.unmount();
   });
   it("returns from a story practice only after the server verifies all formal questions", async () => {
     const { pinia, session } = setup();
-    vi.spyOn(session, "activity").mockResolvedValue({
-      id: "ch1-practice", chapter_id: 179, title: "练习", kind: "practice", npc_key: "arena_guard", assistant_allowed: false, material: null,
-      progress: { page_no: null, visited_pages: [], completed: false, accepted_question_ids: [] },
-      questions: ["q1", "q2"].map(id => ({ id, title: id, kind: "boolean" as const, prompt: "请选择", options: [], samples: [] })) });
+    vi.spyOn(session, "activity").mockResolvedValue({id: "ch1-practice",
+chapter_id: 179,
+title: "练习",
+kind: "practice",
+npc_key: "arena_guard",
+assistant_allowed: false,
+progress: { page_no: null, visited_pages: [], completed: false, accepted_question_ids: [] },
+questions: ["q1", "q2"].map(id => ({ id, title: id, kind: "boolean" as const, prompt: "请选择", options: [], samples: [] })),
+resources: []});
     const post = vi.spyOn(api, "post").mockResolvedValueOnce({ id: "s1", activity_id: "ch1-practice", question_id: "q1", mode: "submit", status: "accepted", feedback: {}, created_at: "2026-11-05T00:00:00Z" })
       .mockResolvedValueOnce({ id: "s2", activity_id: "ch1-practice", question_id: "q2", mode: "submit", status: "accepted", feedback: {}, created_at: "2026-11-05T00:00:00Z" });
     const get = vi.spyOn(api, "get").mockResolvedValueOnce({ page_no: null, visited_pages: [], completed: false, accepted_question_ids: ["q1"] })
@@ -209,28 +251,32 @@ describe("learning workspace usability", () => {
   });
   it("restores the server page and requires every configured reading page before continuing the story", async () => {
     const { pinia, session } = setup();
-    vi.spyOn(session, "activity").mockResolvedValue({
-      id: "ch1-lesson", chapter_id: 179, title: "第一章", kind: "lesson", npc_key: "librarian_doc", assistant_allowed: true, questions: [],
-      completion: { required_page_ids: [10715, 10723, 10724] },
-      progress: { page_no: 42, visited_pages: [10715], completed: false },
-      material: { id: 186, title: "真实课件文本", kind: "text", status: "ready", pages: [
+    vi.spyOn(session, "activity").mockResolvedValue({id: "ch1-lesson",
+chapter_id: 179,
+title: "第一章",
+kind: "lesson",
+npc_key: "librarian_doc",
+assistant_allowed: true,
+questions: [],
+progress: readingState({ page_no: 42, visited_pages: [10715], completed: false }),
+resources: [{material_id: 186, required: true, learning: { ...{}, reading: { scope: "pages", page_ids: ({ required_page_ids: [10715, 10723, 10724] }).required_page_ids } }, material: { id: 186, title: "真实课件文本", kind: "text", status: "ready", pages: [
         { id: 10715, page_no: 34, title: "目标一", text: "计算思维" },
         { id: 10723, page_no: 42, title: "目标二", text: "抽象" },
         { id: 10724, page_no: 43, title: "目标三", text: "问题求解" },
-      ] } });
-    vi.spyOn(api, "get").mockResolvedValue({ page_no: 42, visited_pages: [10715], completed: false });
-    const post = vi.spyOn(api, "post").mockResolvedValueOnce({ page_no: 42, visited_pages: [10715, 10723], completed: false })
-      .mockResolvedValueOnce({ page_no: 43, visited_pages: [10715, 10723, 10724], completed: true });
+      ] }}]});
+    vi.spyOn(api, "get").mockResolvedValue(readingState({ page_no: 42, visited_pages: [10715], completed: false }));
+    const post = vi.spyOn(api, "post").mockResolvedValueOnce(readingState({ page_no: 42, visited_pages: [10715, 10723], completed: false }))
+      .mockResolvedValueOnce(readingState({ page_no: 43, visited_pages: [10715, 10723, 10724], completed: true }));
     const wrapper = mount(LessonWorkspace, { props: { activityId: "ch1-lesson", storySessionId: "story-session" }, global: { plugins: [pinia], stubs: { AssistantPanel: true } } });
     await flushPromises();
     expect(wrapper.get(".lesson-text").text()).toContain("抽象");
-    const complete = wrapper.findAll("button").find(button => button.text() === "完成阅读")!;
+    const complete = wrapper.findAll("button").find(button => button.text() === "完成学习")!;
     expect(complete.attributes("disabled")).toBeDefined();
-    expect(wrapper.get(".support-goal-progress").text()).toContain("已阅读 2 / 3 页");
-    await wrapper.get('[aria-label="本章阅读目标"]').findAll("button")[2]!.trigger("click");
+    expect(wrapper.get(".activity-resource-progress").text()).toContain("已阅读 2 / 3 页");
+    await wrapper.get('.activity-resource-requirements').findAll("button")[2]!.trigger("click");
     await flushPromises();
-    expect(post).toHaveBeenLastCalledWith("/activities/ch1-lesson/progress", { classroom_id: 2, page_no: 43 });
-    expect(wrapper.get(".support-goal-progress").text()).toContain("已阅读 3 / 3 页");
+    expect(post).toHaveBeenLastCalledWith("/activities/ch1-lesson/progress", { classroom_id: 2, material_id: 186, page_no: 43 });
+    expect(wrapper.get(".activity-resource-progress").text()).toContain("已阅读 3 / 3 页");
     expect(complete.attributes("disabled")).toBeUndefined();
     await complete.trigger("click");
     expect(wrapper.emitted("complete")).toEqual([[]]);
@@ -239,15 +285,14 @@ describe("learning workspace usability", () => {
   });
   it("makes inactive compact regions hidden and inert while preserving reading position across the assistant view", async () => {
     const { pinia, session } = setup(true);
-    vi.spyOn(session, "activity").mockResolvedValue({
-      id: "lesson",
-      chapter_id: 179,
-      title: "真实文本夹具",
-      kind: "lesson",
-      npc_key: "mayor_py",
-      assistant_allowed: true,
-      questions: [],
-      material: {
+    vi.spyOn(session, "activity").mockResolvedValue({id: "lesson",
+chapter_id: 179,
+title: "真实文本夹具",
+kind: "lesson",
+npc_key: "mayor_py",
+assistant_allowed: true,
+questions: [],
+resources: [{material_id: 186, required: true, learning: {}, material: {
         id: 186,
         title: "课件",
         kind: "text",
@@ -255,7 +300,7 @@ describe("learning workspace usability", () => {
         pages: [
           { id: 1, page_no: 41, title: "第一页", text: "原课件文本" },
           { id: 2, page_no: 42, title: "第二页", text: "第二页文本" },
-        ] } });
+        ] }}]});
     const wrapper = mount(LessonWorkspace, {
       attachTo: document.body,
       props: { activityId: "lesson" },
@@ -292,15 +337,13 @@ describe("learning workspace usability", () => {
   });
   it("requires a deliberate boolean choice and sends false only after the student selects it", async () => {
     const { pinia, session } = setup();
-    vi.spyOn(session, "activity").mockResolvedValue({
-      id: "practice",
-      chapter_id: 179,
-      title: "判断题夹具",
-      kind: "practice",
-      npc_key: "mayor_py",
-      assistant_allowed: false,
-      material: null,
-      questions: [
+    vi.spyOn(session, "activity").mockResolvedValue({id: "practice",
+chapter_id: 179,
+title: "判断题夹具",
+kind: "practice",
+npc_key: "mayor_py",
+assistant_allowed: false,
+questions: [
         {
           id: "boolean-q",
           title: "判断一个命题",
@@ -308,7 +351,8 @@ describe("learning workspace usability", () => {
           prompt: "请选择你的判断。",
           options: [],
           samples: [] },
-      ] });
+      ],
+resources: []});
     const post = vi
       .spyOn(api, "post")
       .mockResolvedValue({

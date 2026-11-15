@@ -1,3 +1,5 @@
+from conftest import read_activity
+from app.models import ActivityMaterial
 from app.content_relations import activity_questions
 from conftest import make_material
 from datetime import datetime, timedelta, timezone
@@ -115,9 +117,9 @@ def test_first_chapter_full_loop_and_idempotency(client, db, student, teacher, c
                 activity = db.get(Activity, view["activity"]["id"])
                 if activity.kind in {"lesson", "reading"}:
                     payload = client.get(f"/api/activities/{activity.id}?classroom_id={cid}", headers=headers).json()
-                    for page in payload["material"]["pages"]:
-                        if page["id"] in activity.content["completion"]["required_page_ids"]:
-                            response = client.post(f"/api/activities/{activity.id}/progress", json={"classroom_id": cid, "page_no": page["page_no"]}, headers=headers)
+                    for page in payload["resources"][0]["material"]["pages"]:
+                        if page["id"] in activity.resources[0].learning["reading"]["page_ids"]:
+                            response = client.post(f"/api/activities/{activity.id}/progress", json={"material_id": 186, "classroom_id": cid, "page_no": page["page_no"]}, headers=headers)
                             assert response.status_code == 200, response.text
                 else:
                     paper_answers = []
@@ -180,8 +182,7 @@ def test_activity_edits_update_current_configuration_and_keep_progress(client, d
     from app.models import Activity, ActivityProgress, PlayerQuest, QuestDefinition
 
     cid = classroom["id"]
-    activity = Activity(id="teacher-lesson", chapter_id=179, title="Initial title", kind="lesson", material_id=186,
-                        npc_key="mayor_py", owner_id=teacher["id"], assistant_allowed=True, content={"published": True})
+    activity = Activity(id='teacher-lesson', chapter_id=179, title='Initial title', kind='lesson', npc_key='mayor_py', owner_id=teacher['id'], assistant_allowed=True, content={'published': True}, resources=[ActivityMaterial(material_id=186, required=True, order_index=0, learning={})])
     db.add(activity)
     db.flush()
     definition = {"id": "current-quest", "title": "Current", "chapter_id": 179,
@@ -198,7 +199,8 @@ def test_activity_edits_update_current_configuration_and_keep_progress(client, d
     assert current.json()["title"] == "Updated title" and current.json()["assistant_allowed"] is False
     assert "version" not in current.json()
     assert current.json()["progress"]["page_no"] == 42
-    record = client.post("/api/activities/teacher-lesson/participation", json={"classroom_id": cid, "page_no": 42}, headers=student["headers"]).json()["record_id"]
+    read_activity(client, student["headers"], cid, "teacher-lesson")
+    record = client.post("/api/activities/teacher-lesson/participation", json={"material_id": 186, "classroom_id": cid, "page_no": 42}, headers=student["headers"]).json()["record_id"]
     result = client.post("/api/events", json={"classroom_id": cid, "event_id": str(uuid4()), "quest_id": definition["id"], "node_id": "study", "evidence": {"record_id": record}}, headers=student["headers"])
     assert result.status_code == 200, result.text
 
@@ -229,6 +231,7 @@ def test_second_chapter_different_branch_and_parallel_loop(client, db, student, 
     event("mission", {"npc_key": "mayor_py"})
     position(25, 14)
     event("professor", {"npc_key": "professor"})
+    read_activity(client, student["headers"], cid, "ch2-lesson")
     record = client.post("/api/activities/ch2-lesson/participation", json={"classroom_id": cid, "page_no": 5}, headers=headers).json()["record_id"]
     event("learn-language", {"record_id": record})
     event("choose-route", {"npc_key": "professor", "dialogue_id": "language", "choice": "concept"})

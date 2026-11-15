@@ -50,7 +50,7 @@ def test_policy_role_and_budgets_apply_only_selected_class(db, teacher, student,
     user = db.get(User, student["id"])
     activity = db.get(Activity, maps["activity"]["ch1-lesson"])
     session = AssistantSession(user_id=user.id, classroom_id=source.classroom_id, activity_id=activity.id,
-                               material_id=activity.material_id, messages=[])
+                               material_id=activity.resources[0].material_id, messages=[])
     monkeypatch.setenv("REBORN_AI_TIMEOUT_SECONDS", "10")
     context = build_context(db, user, session, activity, MessageInput(message="解释此页", page_no=42))
     assert context["role"]["name"] == "引导老师" and context["limits"]["model_calls"] == 2

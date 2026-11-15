@@ -11,7 +11,14 @@ function setup(kind = "assessment") {
   session.user = { id: 1, name: "测试居民", student_id: "124639931179929", role: "student" }; session.classroomId = 2;
   session.world = { player: { map_key: "town_hub", tile_x: 22, tile_y: 36, direction: "down" }, npcs: [], quests: [], chapters: [], flags: [] };
   const questions = ["q1", "q2"].map(id => ({ id, title: id, kind: "boolean" as const, prompt: `判断 ${id}`, options: [], samples: [] }));
-  vi.spyOn(session, "activity").mockResolvedValue({ id: "test", chapter_id: 179, title: "测验", kind, npc_key: "arena_guard", assistant_allowed: false, material: null, questions });
+  vi.spyOn(session, "activity").mockResolvedValue({id: "test",
+chapter_id: 179,
+title: "测验",
+kind,
+npc_key: "arena_guard",
+assistant_allowed: false,
+questions,
+resources: []});
   vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })));
   return { pinia, session };
 }

@@ -1,3 +1,4 @@
+from app.models import ActivityMaterial
 from app.content_relations import activity_questions
 from copy import deepcopy
 from uuid import uuid4
@@ -17,8 +18,7 @@ def story_setup(db, classroom):
     db.delete(db.get(StoryDefinition, "first-steps"))
     material = db.get(Material, 186)
     pages = material.content["pages"][:2]
-    activity = Activity(id="story-test-lesson", chapter_id=179, title="Test reading", kind="lesson", material_id=186,
-                        npc_key="librarian_doc", content={ "completion": {"required_page_ids": [p["id"] for p in pages]}})
+    activity = Activity(id='story-test-lesson', chapter_id=179, title='Test reading', kind='lesson', npc_key='librarian_doc', content={}, resources=[ActivityMaterial(material_id=186, required=True, order_index=0, learning={'reading': {'scope': 'pages', 'page_ids': [p['id'] for p in pages]}})])
     db.add(activity)
     db.flush()
     quest = {
@@ -116,7 +116,7 @@ def test_first_visit_reminder_pause_refresh_resume_and_verified_reading(client, 
     view = advance(client, student, classroom, view, "yes")
     assert view["status"] == "waiting"
     first, second = story_setup["pages"]
-    response = client.post("/api/activities/story-test-lesson/progress", json={"classroom_id": cid, "page_no": first["page_no"]}, headers=student["headers"])
+    response = client.post("/api/activities/story-test-lesson/progress", json={"material_id": 186, "classroom_id": cid, "page_no": first["page_no"]}, headers=student["headers"])
     assert response.status_code == 200 and response.json()["completed"] is False
     assert response.json()["visited_pages"] == [first["id"]]
     current = client.get(f"/api/story/current?classroom_id={cid}", headers=student["headers"]).json()
@@ -128,7 +128,7 @@ def test_first_visit_reminder_pause_refresh_resume_and_verified_reading(client, 
     assert view["node"]["id"] == "resume"
     view = advance(client, student, classroom, view, "yes")
     assert view["activity"]["page_no"] == first["page_no"]
-    response = client.post("/api/activities/story-test-lesson/progress", json={"classroom_id": cid, "page_no": second["page_no"]}, headers=student["headers"])
+    response = client.post("/api/activities/story-test-lesson/progress", json={"material_id": 186, "classroom_id": cid, "page_no": second["page_no"]}, headers=student["headers"])
     assert response.status_code == 200 and response.json()["completed"] is True
     view = advance(client, student, classroom, view, endpoint="return")
     assert view["node"]["id"] == "done"
@@ -162,12 +162,12 @@ def test_partial_participation_cannot_bypass_completion_and_foreign_page_rejecte
     view = interact(client, student, classroom, "mayor_py")
     advance(client, student, classroom, view)
     cid = classroom["id"]
-    record = client.post("/api/activities/story-test-lesson/participation", json={"classroom_id": cid, "page_no": story_setup["pages"][0]["page_no"]},
-                         headers=student["headers"]).json()["record_id"]
-    body = {"classroom_id": cid, "event_id": str(uuid4()), "quest_id": "story-test", "node_id": "read", "evidence": {"record_id": record}}
+    denied = client.post("/api/activities/story-test-lesson/participation", json={"classroom_id": cid}, headers=student["headers"])
+    assert denied.status_code == 422
+    body = {"classroom_id": cid, "event_id": str(uuid4()), "quest_id": "story-test", "node_id": "read", "evidence": {"record_id": "unearned"}}
     assert client.post("/api/events", json=body, headers=student["headers"]).status_code == 422
-    assert client.post("/api/activities/story-test-lesson/progress", json={"classroom_id": cid, "page_no": 99999}, headers=student["headers"]).status_code == 422
-    assert client.post("/api/activities/story-test-lesson/progress", json={"classroom_id": cid, "page_no": 1, "version": 99}, headers=student["headers"]).status_code == 422
+    assert client.post("/api/activities/story-test-lesson/progress", json={"material_id": 186, "classroom_id": cid, "page_no": 99999}, headers=student["headers"]).status_code == 422
+    assert client.post("/api/activities/story-test-lesson/progress", json={"material_id": 186, "classroom_id": cid, "page_no": 1, "version": 99}, headers=student["headers"]).status_code == 422
     assert db.scalar(select(func.count()).select_from(ActivityProgress)) == 0
 
 

@@ -68,10 +68,11 @@ def validate_story(content: dict, db: Session | None = None, quest_definition: d
 
                 if not has_completion_rule(activity):
                     raise ValueError("演出阅读活动必须声明阅读参与完成规则")
-                material = db.get(Material, activity.material_id) if activity.material_id else None
-                if material and not material_in_chapter(db, material.id, activity.chapter_id):
-                    raise ValueError("学习资料必须属于活动章节")
-                validate_learning(activity.content, activity.kind, material, resolve=True)
+                for resource in activity.resources:
+                    material = db.get(Material, resource.material_id)
+                    if not material or not material_in_chapter(db, material.id, activity.chapter_id):
+                        raise ValueError("学习资料必须属于活动章节")
+                    validate_learning({"learning": resource.learning}, activity.kind, material, resolve=True)
         if goals is not None:
             goal = goals.get(binding["goal_id"])
             if not goal or goal.get("activity_id") != binding["activity_id"]:

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from fixture_content import load_content
 from app.config import ROOT
 from app.content_relations import (
-    material_in_chapter, set_activity_questions, set_material_chapters,
+    set_activity_questions, set_material_chapters,
     set_question_chapters, set_question_knowledge_points,
 )
 from app.db import SessionLocal
@@ -153,14 +153,8 @@ def _import_course(db, source=None, *, content_root=None):
         raise ValueError("题目标识与课程导出题重复")
     assignments = {}
     question_chapters = {}
-    activity_fields = ("title", "kind", "material_id", "npc_key", "assistant_allowed")
+    activity_fields = ("title", "kind", "npc_key", "assistant_allowed")
     for spec in content["activities"]:
-        from app.learning_rules import validate_learning
-
-        material = db.get(Material, spec.get("material_id")) if spec.get("material_id") else None
-        if material and not material_in_chapter(db, material.id, spec["chapter_id"]):
-            raise ValueError("学习资料必须关联活动章节")
-        validate_learning(spec["content"], spec["kind"], material, resolve=True)
         question_ids = spec["content"].get("question_ids")
         if (not isinstance(question_ids, list) or any(not isinstance(key, str) for key in question_ids)
                 or len(set(question_ids)) != len(question_ids)):
@@ -185,6 +179,9 @@ def _import_course(db, source=None, *, content_root=None):
         for key, value in values.items():
             setattr(item, key, value)
         item.chapter_id, item.owner_id = spec["chapter_id"], None
+        db.flush()
+        from app.course_content.resources import set_resources
+        set_resources(db, item, spec["resources"])
         assignments[item.id] = question_ids
         for key in question_ids:
             question_chapters.setdefault(key, set()).add(spec["chapter_id"])

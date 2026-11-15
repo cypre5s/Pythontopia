@@ -185,7 +185,7 @@ def preview_impact(db, instance, bundle):
         changed_activities.update(
             maps["activity"][stable]
             for stable, row in current["activity"].items()
-            if row["material_id"] in changed_materials or changed_questions.intersection(row["question_ids"])
+            if any(item["material_id"] in changed_materials for item in row["resources"]) or changed_questions.intersection(row["question_ids"])
         )
         for stable in maps["story"]:
             affected = [

@@ -1,4 +1,6 @@
 """Class-owned clones preserve source definitions and learner evidence."""
+from app.models import ActivityMaterial
+
 from copy import deepcopy
 from datetime import datetime, timezone
 
@@ -199,8 +201,7 @@ def test_invalid_private_material_reference_rolls_back_after_allocation(db):
     material = Material(title="Foreign", owner_id=other.id, content={})
     db.add(material)
     db.flush()
-    db.add(Activity(id="cross-private", title="Invalid reference", kind="lesson", owner_id=teacher.id,
-        chapter_id=179, material_id=material.id, npc_key="professor", content={}))
+    db.add(Activity(id='cross-private', title='Invalid reference', kind='lesson', owner_id=teacher.id, chapter_id=179, npc_key='professor', content={}, resources=[ActivityMaterial(material_id=material.id, required=True, order_index=0, learning={})]))
     db.commit()
     with pytest.raises(CourseCloneError):
         clone_current_course(db, alpha)

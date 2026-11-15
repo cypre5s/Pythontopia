@@ -10,6 +10,7 @@
     <SidebarToggle />
     </div>
     <section :id="`${panelId}-goals`" class="support-goals" role="tabpanel" :aria-labelledby="`${panelId}-goals-tab`" tabindex="0" :hidden="tab !== 'goals'" :inert="tab !== 'goals'">
+      <slot name="goals">
       <p v-if="!goals.length" class="support-goals-empty">按照当前资料或题目，完成本次学习。</p>
       <nav v-else :aria-label="goals.some(goal => goal.pageNo) ? '本章阅读目标' : '本次学习目标'">
       <ol class="support-goal-list">
@@ -41,6 +42,7 @@
         </li>
       </ol>
       </nav>
+      </slot>
       <nav v-if="questionOutline?.length" aria-label="题目列表" class="support-detailed-questions">
         <button v-for="(question, index) in questionOutline" :key="question.id" :aria-current="question.current || currentQuestionId === question.id ? 'step' : undefined" @click="$emit('selectQuestion', question.id)">
           <span class="question-status-icon" :data-state="question.state ?? 'unanswered'" :aria-label="questionStateLabel[question.state ?? 'unanswered']"><GameIcon :name="question.state === 'accepted' ? 'check' : question.state === 'wrong' ? 'circleX' : question.state === 'pending' ? 'clock' : question.state === 'answered' ? 'practice' : 'circle'" /></span>

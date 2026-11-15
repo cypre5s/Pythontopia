@@ -183,7 +183,7 @@ export function createStorySession({
           if (error instanceof ApiError && [403, 404].includes(error.status))
             throw error;
           if (!reading.latest || generation !== storyGeneration) throw error;
-          await reading.save(reading.latest.activityId, reading.latest.pageNo);
+          await reading.save(reading.latest.activityId, reading.latest.pageNo, reading.latest.materialId);
         }
         if (pending === reading.pending || generation !== storyGeneration)
           break;

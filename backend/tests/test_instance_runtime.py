@@ -1,4 +1,6 @@
 """Classroom course namespaces are enforced even for the same teacher."""
+from app.models import ActivityMaterial
+
 
 from uuid import uuid4
 
@@ -35,8 +37,7 @@ def spaces(db, teacher, student):
         set_material_chapters(db, material.id, [chapter.id])
         npc = Npc(key=f"npc-{suffix}", stable_id="librarian_doc", course_instance_id=instance.id, name=f"NPC{suffix}",
                   map_key="town_hub", tile_x=22, tile_y=36, portrait="builtin:portrait:professor", sprite="builtin:sprite:chara_2")
-        activity = Activity(id=f"activity-{suffix}", stable_id="lesson", chapter_id=chapter.id, title=f"阅读{suffix}",
-                            kind="lesson", material_id=material.id, npc_key=npc.key, content={"published": True}, **common)
+        activity = Activity(id=f'activity-{suffix}', stable_id='lesson', chapter_id=chapter.id, title=f'阅读{suffix}', kind='lesson', npc_key=npc.key, content={'published': True}, **common, resources=[ActivityMaterial(material_id=material.id, required=True, order_index=0, learning={})])
         question = Question(id=f"question-{suffix}", stable_id="question", title="概念题", kind="single_choice",
                             prompt=suffix, options=[{"id": "a", "text": "A"}], status="ready", source_type="imported", **common)
         definition = {"id": f"quest-{suffix}", "chapter_id": chapter.id, "title": f"任务{suffix}", "kind": "main",

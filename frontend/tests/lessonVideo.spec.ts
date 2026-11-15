@@ -15,9 +15,15 @@ function setup() {
   vi.stubGlobal("matchMedia", () => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() }));
   vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:video"), revokeObjectURL: vi.fn() });
   vi.spyOn(document, "hidden", "get").mockReturnValue(false);
-  vi.spyOn(session, "activity").mockResolvedValue({ id: "video", chapter_id: 179, title: "观看", kind: "lesson", npc_key: "librarian_doc", assistant_allowed: false, questions: [], progress: initial,
-    learning: { video: { minimum_seconds: 5 }, highlights: { video: [{ start_seconds: 30, end_seconds: 40, label: "重点演示" }] } },
-    material: { id: 193, title: "示范视频", kind: "video", status: "ready", pages: [], duration_seconds: 460 } });
+  vi.spyOn(session, "activity").mockResolvedValue({id: "video",
+chapter_id: 179,
+title: "观看",
+kind: "lesson",
+npc_key: "librarian_doc",
+assistant_allowed: false,
+questions: [],
+progress: initial,
+resources: [{material_id: 193, required: true, learning: { video: { minimum_seconds: 5 }, highlights: { video: [{ start_seconds: 30, end_seconds: 40, label: "重点演示" }] } }, material: { id: 193, title: "示范视频", kind: "video", status: "ready", pages: [], duration_seconds: 460 }}]});
   vi.spyOn(api, "get").mockResolvedValue(initial);
   vi.spyOn(api, "blob").mockResolvedValue(new Blob(["video"]));
   return { session, pinia };
@@ -42,11 +48,12 @@ describe("configured video learning", () => {
     const rateSamples = post.mock.calls.slice(-2).map(call => call[1]);
     expect(rateSamples[0]).toMatchObject({ playback_rate: 1, playing: false });
     expect(rateSamples[1]).toMatchObject({ playback_rate: 2, playing: true, sequence: 1 });
-    await wrapper.get(".support-goal-page").trigger("click");
+    await wrapper.get('[role="tab"][id$="-outline-tab"]').trigger("click");
+    await wrapper.get('[title="重点演示"]').trigger("click");
     await flushPromises();
     expect(video.currentTime).toBe(30);
-    expect(wrapper.get(".support-goal-progress progress").attributes("value")).toBe("0");
-    expect(wrapper.findAll("button").find(button => button.text() === "完成观看")!.attributes("disabled")).toBeDefined();
+    expect(wrapper.get(".activity-resource-progress progress").attributes("value")).toBe("0");
+    expect(wrapper.findAll("button").find(button => button.text() === "完成学习")!.attributes("disabled")).toBeDefined();
     await wrapper.get("video").trigger("seeked");
     await flushPromises();
     const restarted = post.mock.calls.at(-1)![1] as { sequence: number; position_seconds: number };

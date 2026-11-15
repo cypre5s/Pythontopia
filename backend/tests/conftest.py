@@ -231,7 +231,7 @@ def branching_course(db, teacher):
 
     spec = json.loads((Path(__file__).parent / "fixtures/branching_course.json").read_text(encoding="utf-8"))
     for source in spec["activities"]:
-        fields = {key: source[key] for key in ("id", "chapter_id", "title", "kind", "material_id", "npc_key", "assistant_allowed", "content")}
+        fields = {key: source[key] for key in ("id", "chapter_id", "title", "kind", "npc_key", "assistant_allowed", "content")}
         ids = [point.id for point in db.scalars(select(KnowledgePoint).where(KnowledgePoint.chapter_id == source["chapter_id"]))
                if set(point.content.get("page_refs", [])) & set(source.get("knowledge_point_pages", []))]
         fields["content"] = {**{key: value for key, value in fields["content"].items() if key != "question_ids"}, "knowledge_point_ids": [1844] if source["id"] == "ch2-code" else ids}
@@ -243,6 +243,9 @@ def branching_course(db, teacher):
             for key, value in fields.items():
                 setattr(item, key, value)
             item.owner_id = teacher["id"]
+        db.flush()
+        from app.course_content.resources import set_resources
+        set_resources(db, item, source["resources"])
     db.flush()
     question_specs = {q["id"]: q for q in load_content()["questions"]}
     problems = {"course-" + str(p["id"]): p for p in json.loads((Path(os.environ["REBORN_COURSE_ROOT"]) / "json/course_problem.json").read_text())}
@@ -286,3 +289,11 @@ def branching_course(db, teacher):
                            owner_id=teacher["id"], definition=quest))
     db.commit()
     return quest
+def read_activity(client, headers, classroom_id, activity_id):
+    payload = client.get(f"/api/activities/{activity_id}?classroom_id={classroom_id}", headers=headers).json()
+    for resource in payload["resources"]:
+        if resource["required"] and resource["material"]["kind"] != "video":
+            for page in resource["material"]["pages"]:
+                response = client.post(f"/api/activities/{activity_id}/progress", headers=headers,
+                    json={"classroom_id": classroom_id, "material_id": resource["material_id"], "page_no": page["page_no"]})
+                assert response.status_code == 200, response.text

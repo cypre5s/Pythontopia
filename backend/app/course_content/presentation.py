@@ -2,8 +2,8 @@
 
 from sqlalchemy import select
 
-from app.course_content.learning import learning_material, learning_questions, reading_completed
-from app.learning_rules import required_pages, video_watched
+from app.course_content.learning import learning_questions
+from app.course_content.resources import learning_materials, reading_progress
 from app.models import (
     ActivityProgress,
     Classroom,
@@ -61,18 +61,5 @@ def progress_payload(db, user, classroom_id, activity):
         }
         passed = [question.id for question in questions if question.id in accepted]
         return {"page_no": None, "visited_pages": [], "completed": bool(questions) and len(passed) == len(questions), "accepted_question_ids": passed}
-    material = learning_material(db, activity)
     progress = db.get(ActivityProgress, (user.id, classroom_id, activity.id))
-    required = required_pages(activity, material)
-    visited = progress.visited_pages if progress else []
-    media = (progress.media_progress or {}) if progress else {}
-    return {
-        "page_no": progress.page_no if progress else None,
-        "visited_pages": visited,
-        "completed": reading_completed(activity, progress, material),
-        "required_page_ids": required,
-        "read_count": len(set(required) & set(visited)),
-        "read_total": len(required),
-        "watched_seconds": video_watched(media, activity.material_id),
-        "required_seconds": activity.content.get("learning", {}).get("video", {}).get("minimum_seconds", 0),
-    }
+    return reading_progress(activity, progress, learning_materials(db, activity))

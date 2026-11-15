@@ -47,7 +47,7 @@ def validate_bundle(bundle, root):
     from types import SimpleNamespace
 
     from app.course_content.question_contracts import QuestionInput
-    from app.learning_rules import validate_learning
+    from app.course_content.resources import validate_resources
     from app.teaching.conditions.validation import validate_condition
     from app.teaching.quests.validation import validate_definition
     from app.teaching.story.validation import validate_story
@@ -158,10 +158,14 @@ def validate_bundle(bundle, root):
                 raise PackageError("活动题集只能声明于结构化question_ids关联")
             if row["npc_key"] is not None and row["npc_key"] not in indexed["npc"]:
                 raise PackageError("活动NPC不存在")
-            material = indexed["material"].get(row["material_id"])
-            if material and row["chapter_id"] not in material["chapter_ids"]:
-                raise PackageError("活动资料必须属于活动章节")
-            validate_learning(row["content"], row["kind"], SimpleNamespace(**material) if material else None, resolve=True)
+            if "learning" in row["content"] or "completion" in row["content"]:
+                raise PackageError("学习要求必须配置在活动资料项中")
+            def resolve(key):
+                material = indexed["material"].get(key)
+                if material and row["chapter_id"] not in material["chapter_ids"]:
+                    raise PackageError("活动资料必须属于活动章节")
+                return SimpleNamespace(**material) if material else None
+            validate_resources(row["resources"], row["kind"], resolve)
             if len(set(row["question_ids"])) != len(row["question_ids"]):
                 raise PackageError("活动题目重复")
             for question_id in row["question_ids"]:
@@ -195,6 +199,8 @@ def validate_bundle(bundle, root):
             def get(self, model, key):
                 kind = MODEL_NAMES[model]
                 row = next((value for stable, value in converted[kind].items() if maps[kind][stable] == key), None)
+                if row and model is Activity:
+                    row = {**row, "resources": [SimpleNamespace(**item) for item in row["resources"]]}
                 return SimpleNamespace(**row) if row else None
 
         catalog = Catalog()

@@ -86,8 +86,10 @@ def story_nodes(story):
 def available_activity(db, user, session, binding):
     try:
         activity = authorize_activity(db, user, session.classroom_id, binding["activity_id"])
-        if activity.material_id:
-            material = authorize_material(db, user, session.classroom_id, activity.material_id)
+        for resource in activity.resources:
+            if not resource.required:
+                continue
+            material = authorize_material(db, user, session.classroom_id, resource.material_id)
             if material_payload(db, material)["status"] != "ready":
                 return None
         return activity
