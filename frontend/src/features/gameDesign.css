@@ -544,3 +544,14 @@ html[data-reduced-motion="true"] .game-workspace .game-switch-track, html[data-r
     --game-control-height: 44px;
   }
 }
+
+.game-workspace .workspace-topbar .workspace-mode-switch {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.game-workspace .workspace-topbar .workspace-mode-switch button[aria-pressed="true"] {
+  color: var(--game-forest);
+  background: var(--game-paper);
+  border-color: var(--game-paper);
+}

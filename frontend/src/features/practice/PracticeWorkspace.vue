@@ -14,12 +14,14 @@
       <button :aria-pressed="showAssistant" aria-controls="practice-assistant-region" @click="switchView(true)">目标与目录</button>
     </nav>
     <section id="practice-content-region" class="practice-content" :class="{ 'coding-content': current?.kind === 'python' && viewMode === 'single' }" tabindex="-1" aria-label="题目与代码" :hidden="compact && showAssistant" :inert="compact && showAssistant" :aria-busy="loading">
-      <header class="content-heading practice-heading" :class="{ 'assessment-heading': isAssessment }">
+      <header class="content-heading practice-heading" :class="{ 'assessment-heading': isAssessment && !modeTarget }">
         <h2 class="game-card-title"><GameIcon name="practice"/>{{ activity?.title ?? "正在读取题目" }}</h2>
-        <div v-if="isAssessment" class="game-segmented assessment-view-modes" role="group" aria-label="答题模式">
-          <button :aria-pressed="viewMode === 'single'" @click="setViewMode('single')">单题模式</button>
-          <button :aria-pressed="viewMode === 'paper'" @click="setViewMode('paper')">试卷模式</button>
-        </div>
+        <Teleport defer :to="modeTarget || 'body'" :disabled="!modeTarget">
+          <div v-if="isAssessment" class="assessment-view-modes" :class="modeTarget ? 'workspace-mode-switch' : 'game-segmented'" role="group" aria-label="答题模式">
+            <button :aria-pressed="viewMode === 'single'" @click="setViewMode('single')"><GameIcon name="practice" /><span>单题模式</span></button>
+            <button :aria-pressed="viewMode === 'paper'" @click="setViewMode('paper')"><GameIcon name="list" /><span>试卷模式</span></button>
+          </div>
+        </Teleport>
       </header>
       <p v-if="error" class="error" role="alert">{{ error }}</p>
       <p v-if="draftError" class="error" role="alert">{{ draftError }} <button v-if="draftConflict" @click="load">重新载入试卷</button><button v-else-if="!paper?.locked" @click="retryDraft">重试保存</button></p>
@@ -70,7 +72,7 @@ import "../support/learningUi.css";
 import "./practiceUi.css";
 import "./programmingUi.css";
 interface Draft { answer: string; code: string; submission_id?: string; pending?: { key: string; mode: 'submit'; answer: string | boolean; code: string } }
-const props = defineProps<{ activityId: string; storySessionId?: string; toolbarTarget?: string; initialQuestion?: number }>();
+const props = defineProps<{ activityId: string; storySessionId?: string; toolbarTarget?: string; modeTarget?: string; initialQuestion?: number }>();
 const emit = defineEmits<{ complete: []; activityKind: [kind: string] }>();
 const session = useSession(), { collapsed: sidebarCollapsed } = useWorkspaceSidebar();
 const activity = ref<Activity>(), activityProgress = ref<ActivityProgress>(), paper = ref<AssessmentAttempt>();

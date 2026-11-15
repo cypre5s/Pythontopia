@@ -620,3 +620,14 @@
 }
 .game-workspace .coding-summary-status p { margin: 0; }
 .game-workspace .coding-summary-status svg { width: 1rem; height: 1rem; }
+
+.game-workspace .coding-summary-edit {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .375rem;
+  flex-shrink: 0;
+  margin-left: auto;
+  white-space: nowrap;
+}
+.game-workspace .coding-summary-edit > .game-icon { flex-shrink: 0; }

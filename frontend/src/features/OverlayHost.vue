@@ -25,6 +25,7 @@
             <GameIcon name="arrowLeft"/> 返回{{ previousTitle }} <kbd>Esc</kbd></button
           >
           <button v-if="sidebarCollapsed && hasSidebar" class="workspace-sidebar-expand" type="button" :disabled="session.resetBusy" aria-expanded="false" @click="sidebar.expand()"><GameIcon name="panelOpen" />展开侧边栏</button>
+          <div v-if="session.workspace.kind === 'practice'" id="assessment-mode-toolbar"></div>
         <button class="return-to-town" aria-label="关闭当前工作区" :disabled="session.storyBusy || session.resetBusy" @click="close">
           <GameIcon name="close" /><span>回到小镇</span><kbd v-if="!session.canGoBack">Esc</kbd>
         </button>
@@ -52,6 +53,7 @@
         v-else-if="session.workspace.kind === 'practice'"
         :key="`practice-${session.workspace.activity_id}`"
         toolbar-target="#practice-toolbar"
+        mode-target="#assessment-mode-toolbar"
         :activity-id="session.workspace.activity_id"
         :initial-question="session.workspace.question_no"
         :story-session-id="session.workspace.story_session_id"

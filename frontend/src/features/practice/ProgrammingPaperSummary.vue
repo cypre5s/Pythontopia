@@ -11,7 +11,7 @@
         <span>{{ readOnly ? '答案已锁定' : edited ? '已作答' : '未作答' }}</span>
         <p>{{ outcome }}</p>
       </div>
-      <button class="town-secondary" @click="$emit('open')"><GameIcon :name="readOnly ? 'code' : 'practice'" />{{ readOnly ? '查看单题详情' : '进入单题编辑' }}</button>
+      <button class="town-secondary coding-summary-edit" @click="$emit('open')"><GameIcon :name="readOnly ? 'code' : 'practice'" /><span>{{ readOnly ? '查看单题详情' : '进入单题编辑' }}</span></button>
     </div>
   </article>
 </template>

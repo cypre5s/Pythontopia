@@ -53,13 +53,19 @@ describe("assessment and practice presentation", () => {
     const warn = vi.spyOn(console, "warn");
     const Host = defineComponent({ setup: () => () => h("section", [
       h("div", { id: "test-practice-toolbar" }),
-      h(PracticeWorkspace, { activityId: "test", toolbarTarget: "#test-practice-toolbar" }),
+      h("div", { id: "test-mode-toolbar" }),
+      h(PracticeWorkspace, { activityId: "test", toolbarTarget: "#test-practice-toolbar", modeTarget: "#test-mode-toolbar" }),
     ]) });
     for (let visit = 0; visit < 2; visit++) {
       const wrapper = mount(Host, { attachTo: document.body, global: { plugins: [pinia], stubs: { AssistantPanel: true } } });
       try {
         await flushPromises();
         expect(wrapper.get("#test-practice-toolbar .practice-navigation").exists()).toBe(true);
+        expect(wrapper.findAll('#test-mode-toolbar button')).toHaveLength(2);
+        expect(wrapper.find('.practice-heading .assessment-view-modes').exists()).toBe(false);
+        await wrapper.get('#test-mode-toolbar button:nth-child(2)').trigger('click');
+        expect(wrapper.get('#test-mode-toolbar button:nth-child(2)').attributes('aria-pressed')).toBe('true');
+        await wrapper.get('#test-mode-toolbar button:first-child').trigger('click');
         await wrapper.get('#test-practice-toolbar [aria-label="下一题"]').trigger("click");
         expect(wrapper.get(".practice-question-card h3").text()).toContain("q2");
       } finally { wrapper.unmount(); wrapper.element.remove(); }
