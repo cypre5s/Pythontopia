@@ -58,12 +58,15 @@ def create_app() -> FastAPI:
     app.include_router(synthesis_management.router, prefix="/api")
     app.include_router(narration.student_router, prefix="/api")
     app.include_router(dev_tools.preview_router, prefix="/api")
+    from .experience_tools import router as experience_router
+    app.include_router(experience_router, prefix="/api/teacher-town")
     app.include_router(judge_management.router, prefix="/api")
     app.include_router(content_deletions.router, prefix="/api")
     app.include_router(assistant_settings.router, prefix="/api")
     app.include_router(service_settings.router, prefix="/api")
     if dev_tools_enabled():
         app.include_router(dev_tools.router, prefix="/api")
+        app.include_router(experience_router, prefix="/api/dev")
     app.add_api_route("/api/health", health, methods=["GET"])
     return app
 

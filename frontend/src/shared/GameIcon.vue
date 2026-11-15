@@ -5,7 +5,7 @@
 import {
   LoaderCircle, FileText, CodeXml, ListChecks, Terminal, Target, List, Play, Pause, Square, Lightbulb, ChevronDown, MessageSquare, NotebookText, BookOpen, Users, Settings, Compass, House,
   X, Leaf, Music, Video, SquarePen, ChevronRight, Grid2X2, Folder,
-  Activity, ChartColumnIncreasing, Upload, LogOut, Plus, Copy, RefreshCw,
+  Activity, ChartColumnIncreasing, Upload, LogOut, Plus, Copy, RefreshCw, Save,
   ArrowLeft, ArrowRight, ArrowUp, ArrowDown, ExternalLink,
   Check, Circle, CircleX, Clock, CircleAlert, PanelRightClose, PanelRightOpen,
 } from "@lucide/vue";
@@ -16,7 +16,7 @@ const icons = {
   settings: Settings, compass: Compass, building: House, close: X, leaf: Leaf,
   music: Music, video: Video, practice: SquarePen, chevron: ChevronRight,
   grid: Grid2X2, folder: Folder, activity: Activity, chart: ChartColumnIncreasing,
-  publish: Upload, logout: LogOut, plus: Plus, copy: Copy, refresh: RefreshCw,
+  publish: Upload, logout: LogOut, plus: Plus, copy: Copy, refresh: RefreshCw, save: Save,
   arrowLeft: ArrowLeft, arrowRight: ArrowRight, arrowUp: ArrowUp, arrowDown: ArrowDown,
   external: ExternalLink, check: Check, circleX: CircleX, clock: Clock,
   circle: Circle, alertCircle: CircleAlert, panelClose: PanelRightClose, panelOpen: PanelRightOpen,

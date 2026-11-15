@@ -2,7 +2,7 @@ import { randomUUID } from "./uuid";
 import { defineStore } from "pinia";
 import { computed, nextTick, ref, watch } from "vue";
 import { api, ApiError, notify } from "./api";
-import { clearClassroomCaches } from "./devTools";
+import { clearClassroomCaches, restoreExperienceCaches, type ExperienceClientState } from "./devTools";
 import type {
   Activity,
   ActivityProgress,
@@ -59,11 +59,15 @@ export const useSession = defineStore("session", () => {
     restartPreparations.add(prepare);
     return () => { restartPreparations.delete(prepare); };
   }
-  async function restartCurrentClassroom() {
+  async function prepareExperience() {
+    await Promise.all([...restartPreparations].map(prepare => prepare()));
+    await readingProgressTask;
+  }
+  async function restartCurrentClassroom(experience?: { path: string; body: Record<string, unknown>; restore?: boolean }) {
     if (resetBusy.value) return false;
     if (!user.value?.dev_tools_enabled || user.value.role !== "student") throw new Error("开发工具不可用。");
     const owner = user.value.id, classroom = classroomId.value, token = api.token();
-    const path = user.value.town_preview ? "/teacher-town/progress/reset" : "/dev/progress/reset";
+    const path = experience?.path ?? (user.value.town_preview ? "/teacher-town/progress/reset" : "/dev/progress/reset");
     if (!classroom || !classes.value.some(item => item.id === classroom)) throw new Error("请先选择已加入的班级。");
     const generation = ++restartGeneration, previousWorld = world.value;
     const current = () => generation === restartGeneration && user.value?.id === owner && classroomId.value === classroom && api.token() === token;
@@ -81,11 +85,13 @@ export const useSession = defineStore("session", () => {
       classroomSwitchGeneration++;
       world.value = null;
       await nextTick();
-      const result = await api.post<{ ok: boolean; user_id: number; classroom_id: number }>(path, { classroom_id: classroom, confirmed: true });
+      const result = await api.post<{ ok: boolean; user_id: number; classroom_id: number; client_state?: ExperienceClientState }>(path, experience?.body ?? { classroom_id: classroom, confirmed: true });
       if (!current()) return false;
       if (!result.ok || result.user_id !== owner || result.classroom_id !== classroom) throw new Error("重新开始的结果与当前账号或班级不一致，请刷新后核对。");
       try {
-        if (clearClassroomCaches(owner, classroom).failedStorage) notify("学习记录已重置，本机缓存未能完全清除；请清除本站缓存后重新进入。");
+        if (experience?.restore) restoreExperienceCaches(owner, classroom, result.client_state ?? {});
+        else if (!experience && clearClassroomCaches(owner, classroom).failedStorage) notify("学习记录已重置，本机缓存未能完全清除；请清除本站缓存后重新进入。");
+        if (experience) sessionStorage.setItem(`experience-resume:${owner}:${classroom}`, JSON.stringify(result.client_state?.workspace ?? { kind: 'journal' }));
       }
       catch { notify("学习记录已重置，本机缓存未能完全清除；请清除本站缓存后重新进入。"); }
       storyGeneration++;
@@ -184,10 +190,12 @@ export const useSession = defineStore("session", () => {
     );
   }
   function open(next: Workspace) {
+    rememberContent();
     workspaceHistory.value = [];
     workspace.value = next;
   }
   function navigate(next: Exclude<Workspace, null>) {
+    rememberContent();
     if (workspace.value)
       workspaceHistory.value = [
         ...workspaceHistory.value.slice(-5),
@@ -196,7 +204,13 @@ export const useSession = defineStore("session", () => {
     workspace.value = next;
   }
   function back() {
+    rememberContent();
     workspace.value = workspaceHistory.value.pop() ?? null;
+  }
+  function rememberContent() {
+    if (user.value && classroomId.value && workspace.value && ['lesson', 'material', 'practice'].includes(workspace.value.kind)) {
+      sessionStorage.setItem(`read:${user.value.id}:${classroomId.value}:workspace`, JSON.stringify(workspace.value));
+    }
   }
   function applyStory(view: StoryView | null) {
     const returningFromActivity = story.value?.status === "waiting";
@@ -431,6 +445,7 @@ export const useSession = defineStore("session", () => {
     resetBusy,
     restartCompleted,
     registerRestartPreparation,
+    prepareExperience,
     restartCurrentClassroom,
   };
 });

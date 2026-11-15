@@ -71,7 +71,7 @@ import DialogueLayer from "./DialogueLayer.vue";
 import OverlayHost from "./OverlayHost.vue";
 import { useSession } from "../shared/session";
 import { api, notify } from "../shared/api";
-import type { Player } from "../shared/types";
+import type { Player, Workspace } from "../shared/types";
 import { isTextFocus } from "../game/pathfinding";
 import { resolveWorldTarget } from "../game/config/worldConfig";
 import { arrivalActive, arrivalCamera, arrivalFinished, backdropReady, startArrival, endArrival, type ArrivalCamera } from "../shared/arrival";
@@ -167,6 +167,15 @@ async function load() {
   try {
     if (!session.world) await session.load();
     await session.restoreStory();
+    const resumeKey = `experience-resume:${session.user?.id}:${session.classroomId}`;
+    const resume = sessionStorage.getItem(resumeKey);
+    sessionStorage.removeItem(resumeKey);
+    if (resume && session.user?.dev_tools_enabled && !session.workspace) {
+      try {
+        const target = JSON.parse(resume) as Workspace;
+        if (target && ['lesson', 'practice', 'material', 'journal', 'library'].includes(target.kind)) session.open(target);
+      } catch { /* An invalid local navigation hint never prevents entering the town. */ }
+    }
     if (!session.classroomId) endArrival();
   } catch (e) {
     error.value = e instanceof Error ? e.message : "连接失败";

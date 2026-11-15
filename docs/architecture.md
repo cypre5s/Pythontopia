@@ -137,3 +137,7 @@ ContentDeletionPreview保存教师/班级/课程归属、修订、目标、影�
 讲解生成、校准和 TTS 是教师显式作者期操作，使用独立配置；学生只有现有学习与练习两个 create_agent 运行时。学习上下文从已授权当前资料读取原文和有效已审校讲解，在本轮冻结后交给现有四个工具检索/分段读取。学生播放与打开提问侧栏不调用模型。旧逐页问答表保留历史，不再提供独立调用端点。讲解表随资料逻辑移除而隐藏，历史不删除。
 
 讲解有效性包含页内容、上传文件摘要、存储键和预览键；图片页替换也会使审校失效。任务以资料父行串行获取租约，心跳与释放校验本次所有者；生成完成以资料指纹和讲解修订检查防止覆盖教师修改。校准附真实原文/必要页图，保存逐页修订，应用前再次验证。两条迁移链由 a52e901c7d41 合并。
+
+## 体验检查点
+
+ExperienceCheckpoint按user_id/classroom_id保存命名体验快照和当前定义指纹，迁移c38d01fe72b9接b72c49e018a3。只包含WorldFlag、BuildingUnlock、PlayerPosition、ActivityProgress、当前StorySession必要状态及PlayerQuest/NodeState；客户端补充限定作用域的阅读和草稿缓存。没有课程定义副本、Submission、AssessmentAttempt、LearningEvent或AssistantSession回滚。恢复复用PlayerQuest主键以保留事件引用，重建未结束对白的新ID，拒绝过期指纹。课程锁与本人行锁串行化状态变更，检查未决评测和助教调用；详情见[体验接口](api-contract.md#体验开发工具)。

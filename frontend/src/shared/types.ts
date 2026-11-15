@@ -242,7 +242,7 @@ export interface EventEvidence {
   submission_id?: string;
 }
 export type Workspace =
-  | { kind: "lesson" | "practice"; activity_id: string; page_no?: number; story_session_id?: string }
-  | { kind: "material"; material_id: number; page_no?: number }
+  | { kind: "lesson" | "practice"; activity_id: string; page_no?: number; question_no?: number; video_time?: number; story_session_id?: string }
+  | { kind: "material"; material_id: number; page_no?: number; video_time?: number }
   | { kind: "journal" | "library" | "classroom" | "settings" | "map" | "developer" }
   | null;

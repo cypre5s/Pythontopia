@@ -70,7 +70,7 @@ import "./learningUi.css";
 import "./practiceUi.css";
 import "./programmingUi.css";
 interface Draft { answer: string; code: string; submission_id?: string; pending?: { key: string; mode: 'submit'; answer: string | boolean; code: string } }
-const props = defineProps<{ activityId: string; storySessionId?: string; toolbarTarget?: string }>();
+const props = defineProps<{ activityId: string; storySessionId?: string; toolbarTarget?: string; initialQuestion?: number }>();
 const emit = defineEmits<{ complete: []; activityKind: [kind: string] }>();
 const session = useSession(), { collapsed: sidebarCollapsed } = useWorkspaceSidebar();
 const activity = ref<Activity>(), activityProgress = ref<ActivityProgress>(), paper = ref<AssessmentAttempt>();
@@ -112,6 +112,8 @@ const role = computed(() => activity.value?.role);
 const roleName = computed(() => role.value?.name ?? '练习助教'), rolePortrait = computed(() => role.value?.portrait);
 const containerKey = computed(() => `draft:${contextUserId}:${contextClassroomId}:assessment-${props.activityId}`);
 const questionKey = (id: string) => `draft:${contextUserId}:${contextClassroomId}:${id}`;
+const questionPositionKey = () => `read:${contextUserId}:${contextClassroomId}:question:${props.activityId}`;
+watch(questionIndex, value => { if (currentOwner() && !loading.value) sessionStorage.setItem(questionPositionKey(), String(value + 1)); });
 const answeredCount = computed(() => questions.value.filter(question => hasAnswer(question)).length);
 const allAnswered = computed(() => questions.value.length > 0 && answeredCount.value === questions.value.length);
 const questionOutline = computed(() => questions.value.map((question, index) => {
@@ -184,7 +186,8 @@ async function load() {
   try {
     const loaded = await session.activity(props.activityId);
     if (!currentOwner() || ticket !== generation) return;
-    activity.value = loaded; emit('activityKind', loaded.kind); activityProgress.value = loaded.progress; questionIndex.value = 0; viewMode.value = 'single';
+    const savedQuestion = Number(sessionStorage.getItem(questionPositionKey())) || 1;
+    activity.value = loaded; emit('activityKind', loaded.kind); activityProgress.value = loaded.progress; questionIndex.value = Math.max(0, Math.min((props.initialQuestion ?? savedQuestion) - 1, loaded.questions.length - 1)); viewMode.value = 'single';
     for (const question of loaded.questions) { const old = localJson(questionKey(question.id)); drafts.value[question.id] = { answer: typeof old?.answer === 'string' ? old.answer : '', code: typeof old?.code === 'string' ? old.code : question.starter_code ?? '', submission_id: old?.submission_id, pending: old?.pending }; }
     if (loaded.kind === 'assessment') {
       const saved = await api.get<AssessmentAttempt>(`/activities/${loaded.id}/assessment?classroom_id=${contextClassroomId}`);
@@ -200,7 +203,7 @@ async function load() {
       }
     } else for (const [id, draft] of Object.entries(drafts.value)) if (draft.submission_id) void pollQuestion(id, draft.submission_id, ticket);
   } catch (cause) { if (currentOwner() && ticket === generation) error.value = cause instanceof Error ? cause.message : '题目加载失败'; }
-  finally { if (currentOwner() && ticket === generation) loading.value = false; }
+  finally { if (currentOwner() && ticket === generation) { loading.value = false; if (activity.value) sessionStorage.setItem(questionPositionKey(), String(questionIndex.value + 1)); } }
 }
 async function submitQuestion(id: string, mode: 'submit') {
   const question = questions.value.find(item => item.id === id), draft = drafts.value[id];

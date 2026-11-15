@@ -79,6 +79,10 @@ def chapter_available(db: Session, user: User, classroom_id: int, chapter_id: in
     release = db.get(ChapterRelease, (classroom_id, chapter_id))
     if not release or release.status != "published" or (release.opens_at and as_utc(release.opens_at) > datetime.now(timezone.utc)):
         return False
+    from .config import dev_tools_enabled
+    from .models import WorldFlag
+    if user.role == "student" and (dev_tools_enabled() or db.get(TownPreviewStudent, user.id)) and db.get(WorldFlag, (user.id, classroom_id, f"dev:chapter:{chapter_id}")):
+        return True
     visiting = set() if visiting is None else visiting
     if chapter_id in visiting:
         return False

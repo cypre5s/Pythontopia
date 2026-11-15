@@ -173,3 +173,22 @@ GET /world?classroom_id增加当前可用interactions、building_access及buildi
 - `POST /api/teacher/classrooms/{classroom_id}/synthesis/{material_id}/retry`：正文 `expected_started_at`，只重试有保存参数及指纹的明确失败任务。资料行锁内再次核对最新任务及失败时的资料/讲稿指纹；重复、内容变化、不支持或旧任务返回409。批次仅处理已记录失败页，返回新的任务状态；上游失败仍明确返回错误并保留已成功页。查询、筛选及打开页面零外部生成调用。
 
 `narration_jobs`继续作为资料级执行锁；`narration_runs`每次执行新增一行，心跳进度和最终结果同步到该次记录，重试不覆盖历史。b72c49e018a3只回填实际存在的最近任务，不能恢复已覆盖记录。心跳过期显示interrupted，不能直接重试；新任务接管时旧次记录保留待核查，不捏造结束时间。
+
+### 体验开发工具
+
+接口前缀为 /api/dev/experience（仅development且REBORN_DEV_TOOLS=1注册）与 /api/teacher-town/experience（仅教师本人当前班级体验学生）。每次校验classroom_id和认证归属，教师原身份/其他学生/其他班级不能借用；不存在或非本人检查点404，非法选择422，状态过期/待判题/助教进行中409。所有操作不调用模型。
+
+| 方法与路径 | 契约 |
+| --- | --- |
+| GET 空路径 | classroom_id查询；返回章节开放状态、资料与活动定位信息、已有任务节点/依赖/分支、检查点摘要及有效性，不返回私有答案。 |
+| POST /chapter | classroom_id、chapter_id；只写本人选定章节前置豁免，发布/时间门控仍保留。 |
+| POST /open | classroom_id、kind=material/activity、target、page_no/question_no（从1）、video_time（秒）；按正常学习权限返回workspace描述，不写完成记录。 |
+| POST /stage/preview | classroom_id、quest_id、node_id、choices、any_dependencies；返回completed前置计划、target和expected状态指纹，不写进度。 |
+| POST /stage | 同预览并附expected；事务重验定义与当前状态，重建本人该任务前置和必要开放效果，目标未完成，结束对白并回到出生点。 |
+| POST /checkpoints | classroom_id、name（1–80字）、client_state（最多256KB）、可选UUID request_id；每班每人20个上限，同request_id重试返回同id。服务端生成体验快照，不接受客户端任务/成绩状态。 |
+| GET /checkpoints/{id}/preview | classroom_id查询；校验定义指纹，返回name、quests数量和当前expected。 |
+| POST /checkpoints/{id}/restore | classroom_id、expected；状态/定义变化409，校验地图合法点，恢复本人体验记录并返回client_state。客户端只恢复本人班级的read/draft缓存键。 |
+| DELETE /checkpoints/{id} | classroom_id查询；仅删除本人检查点。 |
+| POST /spawn | classroom_id；返回合法出生点并结束当前对白，不登记学习证据。 |
+
+正式提交、试卷、学习事件/成绩、助教聊天不进入恢复范围。课程/地图/发布状态指纹变化时检查点失效，不提供兼容恢复或隐藏题目数据导出。

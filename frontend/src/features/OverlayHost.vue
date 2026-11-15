@@ -36,6 +36,7 @@
         :activity-id="session.workspace.activity_id"
 
         :initial-page="session.workspace.page_no"
+        :initial-video-time="session.workspace.video_time"
         :story-session-id="session.workspace.story_session_id"
         @complete="$emit('complete')"
       /><LessonWorkspace
@@ -45,13 +46,14 @@
         :material-id="session.workspace.material_id"
 
         :initial-page="session.workspace.page_no"
+        :initial-video-time="session.workspace.video_time"
       />
       <PracticeWorkspace
         v-else-if="session.workspace.kind === 'practice'"
         :key="`practice-${session.workspace.activity_id}`"
         toolbar-target="#practice-toolbar"
         :activity-id="session.workspace.activity_id"
-
+        :initial-question="session.workspace.question_no"
         :story-session-id="session.workspace.story_session_id"
         @activity-kind="practiceKind = $event"
         @complete="$emit('complete')"

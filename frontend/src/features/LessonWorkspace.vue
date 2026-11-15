@@ -72,6 +72,7 @@ const props = defineProps<{
     activityId: string;
 
     initialPage?: number;
+    initialVideoTime?: number;
     materialId?: number;
 
     storySessionId?: string;
@@ -410,7 +411,7 @@ async function retryProgress() {
 }
 function restoreVideoPosition(event: Event) {
   const video = event.target as HTMLVideoElement,
-    saved = Number(sessionStorage.getItem(`${readingKey.value}:video`) ?? 0);
+    saved = props.initialVideoTime ?? Number(sessionStorage.getItem(`${readingKey.value}:video`) ?? 0);
   if (Number.isFinite(saved) && saved > 0 && Number.isFinite(video.duration))
     video.currentTime = Math.min(saved, Math.max(0, video.duration - 0.1));
 }

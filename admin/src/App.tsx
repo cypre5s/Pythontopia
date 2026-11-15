@@ -290,7 +290,7 @@ function Workbench() {
             <div key={key}>
               {key === "classroom" && <p className="nav-label">班级教学</p>}
               {key === "curriculum" && <p className="nav-label">课程内容</p>}
-              {key === "authoring" && <p className="nav-label">课程编排与交换</p>}
+              {key === "activities" && <p className="nav-label">课程编排与交换</p>}
               {key === "settings" && <p className="nav-label">服务与设置</p>}
               <a
                 href={`/teacher/${key}`}

@@ -15,6 +15,7 @@ beforeEach(() => {
   session.classes = [{ id: 2, name: "第一班", teacher_id: 10 }, { id: 3, name: "第二班", teacher_id: 10 }];
   session.classroomId = 2;
   api.setToken("fixture-session");
+  vi.spyOn(api, "get").mockResolvedValue({ chapters: [], materials: [], activities: [], quests: [], checkpoints: [] });
 });
 afterEach(() => {
   for (const wrapper of wrappers.splice(0)) wrapper.unmount();

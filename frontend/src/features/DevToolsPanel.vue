@@ -6,6 +6,7 @@
           <div><dt>当前账户</dt><dd>{{ session.user?.name }}<span>{{ session.user?.student_id }}</span></dd></div>
           <div><dt>当前班级</dt><dd>{{ classroom?.name ?? '尚未选择班级' }}</dd></div>
         </dl>
+        <ExperienceTools v-if="classroom" />
         <section class="dev-tools-reset" aria-labelledby="dev-tools-reset-title">
           <h3 class="game-card-title" id="dev-tools-reset-title"><GameIcon name="settings"/>重新开始当前班级</h3>
           <p>清除本账号在当前班级的任务与学习进度、练习和测试成绩，回到初入小镇的状态。阅读位置和练习草稿也会清空。</p>
@@ -30,6 +31,7 @@
 </template>
 <script setup lang="ts">
 import GameIcon from "../shared/GameIcon.vue";
+import ExperienceTools from "./ExperienceTools.vue";
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { api } from "../shared/api";
 import { canUseDevTools } from "../shared/devTools";
