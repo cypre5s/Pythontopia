@@ -150,7 +150,7 @@ npm run dev -- --host 127.0.0.1 --port 15174
 
 Compose将`${REBORN_COURSE_EXCHANGE_DIR:-../data/course}`绑定到API的`/app/data/course`，由REBORN_COURSE_EXCHANGE_ROOT指向。Linux部署需预先创建所选宿主目录并允许API用户UID/GID10001写入；仅调整明确的交换目录权限，不递归改动数据库或其他卷。Windows Docker Desktop按共享目录权限处理。data/不入Git，Docker上下文也排除它。
 
-imports/保存有效期24小时的导入预览目录及历史ZIP。API启动后立即尝试清理，此后每10分钟检查一次，每轮处理最多100个已完成或过期预览；清理副本后保留数据库回执，重复导入请求仍返回原结果。无数据库引用的随机名imports副本及course-catalog/apply/preview/export工作目录在超过24小时后清理。正式导出目录、共享课程包和私有媒体继续保留。清理与导入、预览、导出共用进程间排他锁，忙碌时清理跳过本轮，失败记录日志并在后续周期重试。多API进程需共用支持文件锁的同一交换目录。数据库、媒体与需要保留的交换包分别备份。
+imports/保存有效期24小时的导入预览目录；残留历史ZIP仅按原到期清理规则回收，不再支持应用。API启动后立即尝试清理，此后每10分钟检查一次，每轮处理最多100个已完成或过期预览；清理副本后保留数据库回执，重复导入请求仍返回原结果。无数据库引用的随机名imports副本及course-catalog/apply/preview/export工作目录在超过24小时后清理。正式导出目录、共享课程包和私有媒体继续保留。清理与导入、预览、导出共用进程间排他锁，忙碌时清理跳过本轮，失败记录日志并在后续周期重试。多API进程需共用支持文件锁的同一交换目录。数据库、媒体与需要保留的交换包分别备份。
 
 ### 把一个 ZIP 包变成可选课程包
 
@@ -293,11 +293,10 @@ docker build -t pythontopia-reborn-converter:local deploy/converter
 
 ```powershell
 npm ci
-npm run typecheck
-npm run lint
-npm test
-npm run build
+npm run check
 ```
+
+`check` 依次执行 lint、完整单元测试（最多2个worker）和带类型检查的构建；不再额外重复同一类型检查。只需快速反馈时仍可单独运行typecheck或指定测试文件。
 
 后端使用独立虚拟环境与锁文件，从 `backend` 执行：
 
@@ -306,7 +305,8 @@ $env:PYTHONUTF8 = "1"
 $env:PYTHONIOENCODING = "utf-8"
 python -m pip install -r requirements.lock
 python -m ruff check app tests
-python -m pytest -q --basetemp .pytest-local
+python -m mypy
+python -m pytest -q --durations=10 --basetemp .pytest-local
 ```
 
 新增或修改的 Python 代码要写完整类型声明：参数、返回值、容器元素（`list[str]` 而不写 `list`），跨模块传递的结构用 `TypedDict` 描述，不用裸 `dict`。`requirements.lock` 同时锁定运行与验证依赖（包括 mypy）：
@@ -316,15 +316,15 @@ python -m pip install -r requirements.lock
 python -m mypy          # 读取 pyproject 里的 [tool.mypy]，当前只检查 app/narration
 ```
 
-`[tool.mypy]` 先只对 `app/narration` 开启严格检查（`disallow_untyped_defs`、`check_untyped_defs`、`warn_return_any`），其余模块尚未注解，全量打开会淹没真问题。让某个旧模块也纳入时，把它加进 `files` 并先补齐注解，不要直接放宽全局设置。类型检查目前不在 CI 门禁里；要在流水线加一步时，先确认依赖安装方式再改工作流。
+`[tool.mypy]` 先只对 `app/narration` 开启严格检查（`disallow_untyped_defs`、`check_untyped_defs`、`warn_return_any`），其余模块尚未注解，全量打开会淹没真问题。让某个旧模块也纳入时，把它加进 `files` 并先补齐注解，不要直接放宽全局设置。当前CI使用同一锁文件安装后执行这组类型检查。
 
 Windows测试进程显式使用UTF-8，避免旧夹具的默认文本读取采用系统GBK；这些设置只影响当前终端及其子进程，不修改系统语言。pytest临时目录保持在项目忽略目录内。
 
 自动化测试使用 backend/tests/source_fixtures.py 和 tests/fixtures/teaching-scripts 的合成课程，不代表原教材正确。fixture_seed/fixture_package/fixture_instances 仅位于 tests，不是运行导入入口。浏览器测试包通过 PYTHONPATH=tests 调用 fixture_package 生成 v2 目录，放入独立交换区；课程包 ID 通过 REBORN_E2E_COURSE_PACKAGE 指定。全新隔离数据库执行迁移、重复升级和包重复导入检查。PostgreSQL并发专项需要显式 `REBORN_TEST_DATABASE_URL`，测试会创建临时 schema 并清理，不能指向真实演示库或生产库。当前live判题使用 `REBORN_LIVE_GO_JUDGE_URL` 和 `REBORN_GO_JUDGE_AUTH_TOKEN`；未配置的外部专项应记录为跳过。
 
-全量串行约 4 分钟。本机想快些可装 `pytest-xdist` 后加 `-n 8`（实测 258s → 约 55s，4–5 倍），但它**目前不能当门禁**：并行调度会把已有的用例间隔离问题暴露出来，`tests/test_course_exchange.py` 会随机挂 1–2 条（`422 课程包读取失败`）；未改动的 HEAD 上同样能复现，属既有问题。CI 保持串行；并行只用于本地快速反馈，失败时用串行结果为准。
+后端通用db夹具每次测试复制独立的SQLite内存库，只将合成建表和seed准备一次；测试中的提交、删除和Session均隔离。真实迁移、重复seed和PostgreSQL锁验证仍独立执行，不用快照代替这些断言。默认串行，不依赖未锁定的pytest-xdist；实际耗时与机器、启用专项有关，最新结果见acceptance。
 
-自动化测试使用backend/tests/source_fixtures.py生成的人工构造资料与tests/fixtures/teaching-scripts，不依赖私有原教材，也不能拿合成夹具声称原教材正确。显式执行来源工具或重复seed前，从仓库根运行`python backend/tests/source_fixtures.py`并将REBORN_COURSE_ROOT指向生成目录、REBORN_CONTENT_ROOT指向教学测试脚本。另在全新隔离数据库执行前述迁移与重复seed检查。PostgreSQL并发专项需要显式 `REBORN_TEST_DATABASE_URL`，测试会创建临时 schema 并清理，不能指向真实演示库或生产库。live go-judge测试需要 `REBORN_LIVE_GO_JUDGE_URL`，鉴权用 `REBORN_GO_JUDGE_AUTH_TOKEN`；未配置的外部专项应记录为跳过。
+CI继续保留docs、backend、frontend、admin、browser五个检查名，只监听reborn的push/PR并支持手动触发，不部署、不推送。官方Actions按已核对发布版本固定SHA；升级依据见[checkout](https://github.com/actions/checkout/releases)、[setup-node](https://github.com/actions/setup-node/releases)、[setup-python](https://github.com/actions/setup-python/releases)、[upload-artifact](https://github.com/actions/upload-artifact/releases)。运行环境固定ubuntu-24.04、Node 22、Python 3.13；依赖缓存按锁文件，取消同分支旧运行，任务限时，浏览器失败保留测试结果和隔离服务日志7天。PostgreSQL服务同时提供REBORN_DATABASE_URL和REBORN_TEST_DATABASE_URL，避免并发/迁移专项被静默跳过。独立空库升级两次、alembic check及重复seed均需通过。此工作流不等同于真实模型、TTS或正式判题集成验证。
 
 地图/素材相关修改从仓库根检查：
 
@@ -358,7 +358,7 @@ npx playwright install chromium
 npm run test:e2e -- --project=desktop --workers=1
 ```
 
-也可将 `PLAYWRIGHT_CHANNEL=chrome` 指向已安装的Chrome。当前唯一 Playwright project 是桌面 Chromium、1920×1080；手机、触屏、小屏和超宽屏不作为当前CI门槛。检查具体测试中的视口覆盖，不能只看项目配置。
+也可将 `PLAYWRIGHT_CHANNEL=chrome` 指向已安装的Chrome。默认门禁为桌面Chromium、1920×1080，文字偏好100%–200%；额外小屏/手机视口仅在显式E2E_EXTRA_VIEWPORTS=1时运行，不作为CI门槛。PYTHON_RUNNER_DEV_URL指向已准备Python运行时的Vite，CI显式启用公开样例真实WASM验证。资料转换测试必须启动API生命周期中的资料处理worker，并使用独立存储目录，不能用lifespan=off后把一直排队误认成业务失败。
 
 | 专项 | 前置条件与命令（在 `frontend`） |
 | --- | --- |

@@ -55,7 +55,6 @@ import { useCharacterImage } from "../shared/characterImage";
 import { useSession } from "../shared/session";
 import { useModalFocus } from "../shared/modalFocus";
 import { useUiPreferences } from "../shared/uiPreferences";
-import { displayWorldText } from "../game/config/worldConfig";
 const props = defineProps<{ story?: StoryView }>();
 const emit = defineEmits<{ close: [] }>();
 const session = useSession(), displayed = ref(""), typing = ref(false), imageError = ref(false), error = ref("");
@@ -64,7 +63,7 @@ const preferences = useUiPreferences();
 useModalFocus(panel, () => props.story?.id ?? "interaction", close);
 const line = computed(() => {
     const current = props.story?.node;
-    return current && current.type !== "action" ? { ...current, text: displayWorldText(current.text) } : undefined;
+    return current && current.type !== "action" ? current : undefined;
   }),
   speaker = computed(() => line.value?.speaker ?? "小镇互动");
 const portrait = useCharacterImage(computed(() => imageError.value ? undefined : line.value?.portrait));

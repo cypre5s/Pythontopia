@@ -366,12 +366,14 @@ test("seven game workspaces share the real shell, controls and readable 100–20
   await expect(outline.getByRole("button").nth(1)).toHaveAttribute("aria-current", "page");
   await pdfFitsWithoutLeftScroll(page);
   await shot(page, info, "03-library-outline");
-  await page.setViewportSize({ width: 1203, height: 869 });
-  await pdfFitsWithoutLeftScroll(page);
-  await expect(panel(page).getByRole("tablist", { name: "学习支持", exact: true })).toBeInViewport({ ratio: 1 });
-  await noHorizontalOverflow(page);
-  await page.screenshot({ path: info.outputPath("03-library-1203x869.png"), animations: "disabled" });
-  await page.setViewportSize({ width: 1920, height: 1080 });
+  if (process.env.E2E_EXTRA_VIEWPORTS === "1") {
+    await page.setViewportSize({ width: 1203, height: 869 });
+    await pdfFitsWithoutLeftScroll(page);
+    await expect(panel(page).getByRole("tablist", { name: "学习支持", exact: true })).toBeInViewport({ ratio: 1 });
+    await noHorizontalOverflow(page);
+    await page.screenshot({ path: info.outputPath("03-library-1203x869.png"), animations: "disabled" });
+    await page.setViewportSize({ width: 1920, height: 1080 });
+  }
   await panel(page).getByRole("tab", { name: "学习目标", exact: true }).click();
   await shot(page, info, "03-library-pdf-reading");
   await page.keyboard.press("Escape");

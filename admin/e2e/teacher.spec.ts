@@ -229,7 +229,7 @@ test("真实班级、学生、内容、编辑器与包往返", async ({ page }, 
   await navigate(page, "智能体设置");
   await chooseOption(page, page.getByLabel("课程默认答疑角色", { exact: true }), "新的教学角色");
   await page.getByRole("button", { name: "保存设置", exact: true }).click();
-  await expect(page.getByRole("status")).toHaveText("课程设置已保存");
+  await expect(page.getByRole("status")).toHaveText("设置已保存");
   await navigate(page, "教学管理");
   await page.getByRole("button", { name: "设置", exact: true }).click();
   await page.getByRole("button", { name: "保存安排", exact: true }).click();

@@ -8,14 +8,12 @@ import re
 from zoneinfo import ZoneInfo
 from pathlib import Path
 import shutil
-import stat
 import tempfile
 import time
 from typing import Annotated
 from uuid import UUID, uuid4
-import zipfile
 
-from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import delete, func, select
@@ -41,7 +39,6 @@ from .storage import get_storage, validate_upload
 
 router = APIRouter(prefix="/teacher/classrooms/{classroom_id}/course", tags=["course-packages"])
 LIMITS = PackageLimits()
-MAX_ARCHIVE = int(os.getenv("REBORN_COURSE_UPLOAD_BYTES", str(2 * 1024**3)))
 FIELDS = {
     Chapter: ("title", "order_index"), KnowledgePoint: ("chapter_id", "title", "content"),
     Material: ("title", "kind", "content", "status", "error"),
@@ -236,43 +233,6 @@ def write_package(db, instance, root):
     _write_jsonl(root / "assets/index.jsonl", assets)
     validate_package(root)
     return manifest
-
-
-def unpack_archive(archive, root):
-    if archive.stat().st_size > MAX_ARCHIVE:
-        raise PackageError("课程压缩包超过上传限制")
-    try:
-        with zipfile.ZipFile(archive) as source:
-            members = source.infolist()
-            if len(members) > LIMITS.files:
-                raise PackageError("压缩包条目过多")
-            seen, total = set(), 0
-            for item in members:
-                name = _relative(item.orig_filename[:-1] if item.is_dir() else item.orig_filename)
-                folded = name.casefold()
-                if folded in seen or item.flag_bits & 1:
-                    raise PackageError("压缩包包含重复路径或加密文件")
-                seen.add(folded)
-                mode = item.external_attr >> 16
-                if stat.S_ISLNK(mode) or (stat.S_IFMT(mode) and not (stat.S_ISDIR(mode) or stat.S_ISREG(mode))):
-                    raise PackageError("压缩包不能包含链接或特殊文件")
-                total += item.file_size
-                if item.file_size > LIMITS.file_bytes or total > LIMITS.total_bytes or len(Path(name).parts) > LIMITS.depth:
-                    raise PackageError("压缩包解压大小或深度超限")
-                target = root / name
-                if item.is_dir():
-                    target.mkdir(parents=True, exist_ok=True)
-                    continue
-                target.parent.mkdir(parents=True, exist_ok=True)
-                size = 0
-                with source.open(item) as reader, target.open("xb") as writer:
-                    while chunk := reader.read(1024 * 1024):
-                        size += len(chunk)
-                        if size > item.file_size:
-                            raise PackageError("压缩包文件大小不一致")
-                        writer.write(chunk)
-    except (zipfile.BadZipFile, RuntimeError, OSError, NotImplementedError) as exc:
-        raise PackageError("课程ZIP文件无效或不可读取") from exc
 
 
 def _load(path, *, json_lines=False):
@@ -826,26 +786,11 @@ def import_bundle(db, classroom, instance, bundle, root):
     return instance
 
 
-def _digest(path):
-    checksum = hashlib.sha256()
-    with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-            checksum.update(chunk)
-    return checksum.hexdigest()
-
-
 def _store_file(adapter, key, source):
     try:
         adapter.put(key, source)
     except Exception as exc:
         raise PackageError("私有资源写入失败，课程未发布") from exc
-
-
-def _read_staged(key, destination):
-    try:
-        shutil.copyfile(exchange_path(key), destination)
-    except Exception as exc:
-        raise PackageError("暂存课程包不可读取，请重新上传") from exc
 
 
 def _replace_staged(source, destination):
@@ -889,16 +834,16 @@ def export_course(classroom_id: int, db: Annotated[Session, Depends(get_db)], us
         return {"directory": destination.name, "path": f"data/course/{destination.name}"}
 
 
-def _save_preview(db, user, classroom_id, bundle, archive, digest=None):
+def _save_preview(db, user, classroom_id, bundle, directory, digest):
     instance = classroom_course(db, classroom_id)
     impact = _impact(db, instance, bundle)
     preview = CourseImportPreview(id=str(uuid4()), teacher_id=user.id, classroom_id=classroom_id,
                                   expected_revision=instance.revision if instance else 0,
-                                  archive_sha256=digest or _digest(archive), storage_key=f"imports/{uuid4().hex}" + ("" if digest else ".zip"),
+                                  archive_sha256=digest, storage_key=f"imports/{uuid4().hex}",
                                   summary={**impact, "package_id": bundle["manifest"]["package_id"],
                                            "package_version": bundle["manifest"]["package_version"],
                                            "name": bundle["manifest"]["name"]}, expires_at=now() + timedelta(hours=24))
-    _replace_staged(archive, exchange_path(preview.storage_key))
+    _replace_staged(directory, exchange_path(preview.storage_key))
     db.add(preview)
     db.commit()
     return {"id": preview.id, "expected_revision": preview.expected_revision, "expires_at": preview.expires_at,
@@ -912,7 +857,7 @@ def available_packages(classroom_id: int, db: Annotated[Session, Depends(get_db)
     _teacher(db, user, classroom_id)
     root = exchange_root()
     try:
-        mounted, unavailable = mounted_catalog(root, LIMITS, MAX_ARCHIVE)
+        mounted, unavailable = mounted_catalog(root, LIMITS)
         items = [{key: item[key] for key in ("key", "name", "package_id", "package_version", "source",
                                                         "directory", "created_at", "chapter_count", "question_count")} for item in mounted
                  if not item["path"].name.startswith("export-") or item["path"].name.startswith(f"export-{classroom_id}-")]
@@ -923,7 +868,7 @@ def available_packages(classroom_id: int, db: Annotated[Session, Depends(get_db)
 
 class AvailablePackageInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    package_key: str = Field(pattern=r"^(mounted-[0-9a-f]{64}|uploaded-[0-9a-f-]{36})$", max_length=80)
+    package_key: str = Field(pattern=r"^mounted-[0-9a-f]{64}$", max_length=80)
 
 
 @router.post("/imports/available/preview")
@@ -938,7 +883,7 @@ def preview_available_course(classroom_id: int, body: AvailablePackageInput, db:
         try:
             with tempfile.TemporaryDirectory(prefix="course-catalog-", dir=exchange) as temporary:
                 root = Path(temporary) / "package"
-                items, _ = mounted_catalog(exchange, LIMITS, MAX_ARCHIVE)
+                items, _ = mounted_catalog(exchange, LIMITS)
                 selected = next((item for item in items if item["key"] == body.package_key), None)
                 if selected is None:
                     raise HTTPException(404, "课程包已变化或不存在，请刷新列表")
@@ -955,15 +900,7 @@ def preview_available_course(classroom_id: int, body: AvailablePackageInput, db:
             if isinstance(exc, OSError):
                 import logging
                 logging.getLogger(__name__).exception("Course directory preview failed")
-            raise HTTPException(422, str(exc) if isinstance(exc, PackageError) else "课程包读取失败，请刷新列表或重新上传") from exc
-
-
-@router.post("/imports/preview")
-async def preview_course(classroom_id: int, file: Annotated[UploadFile, File()], db: Annotated[Session, Depends(get_db)],
-                         user: Annotated[User, Depends(require_teacher)]):
-    _teacher(db, user, classroom_id)
-    raise HTTPException(410, "ZIP上传已关闭，请将解压后的课程包放入data/course并从目录选择")
-
+            raise HTTPException(422, str(exc) if isinstance(exc, PackageError) else "课程包读取失败，请刷新列表并重新预览") from exc
 
 
 class ApplyInput(BaseModel):
@@ -992,7 +929,7 @@ def apply_course(classroom_id: int, preview_id: str, body: ApplyInput, db: Annot
                 raise HTTPException(409, "请求ID已经用于不同的课程包")
             return {**receipt.result, "duplicate": True}
         if as_utc(preview.expires_at) <= now():
-            raise HTTPException(409, "导入预览已过期，请重新上传预览")
+            raise HTTPException(409, "导入预览已过期，请重新预览")
         instance = classroom_course(db, classroom_id)
         revision = instance.revision if instance else 0
         if body.expected_revision != preview.expected_revision or revision != preview.expected_revision:
@@ -1002,19 +939,14 @@ def apply_course(classroom_id: int, preview_id: str, body: ApplyInput, db: Annot
             raise HTTPException(409, "班级助教会话仍在运行，请完成后重试导入")
         try:
             with tempfile.TemporaryDirectory(prefix="course-apply-", dir=exchange_root()) as temporary:
-                root, archive = Path(temporary) / "package", Path(temporary) / "course.zip"
+                from .course_catalog import copy_directory
+                root = Path(temporary) / "package"
                 staged = exchange_path(preview.storage_key)
-                if staged.is_dir():
-                    from .course_catalog import copy_directory
-                    digest = copy_directory(staged, root, exchange_root(), LIMITS)
-                    if digest != preview.archive_sha256:
-                        raise PackageError("暂存目录校验失败，请重新预览")
-                else:
-                    root.mkdir()
-                    _read_staged(preview.storage_key, archive)
-                    if _digest(archive) != preview.archive_sha256:
-                        raise PackageError("暂存包校验失败，请重新预览")
-                    unpack_archive(archive, root)
+                if not staged.is_dir():
+                    raise PackageError("暂存课程目录不可用，请从目录重新预览")
+                digest = copy_directory(staged, root, exchange_root(), LIMITS)
+                if digest != preview.archive_sha256:
+                    raise PackageError("暂存目录校验失败，请重新预览")
                 bundle = load_bundle(root)
                 impact = _impact(db, instance, bundle)
                 if impact["blockers"]:

@@ -104,7 +104,7 @@ Paused policy denies new content/progress/assistant requests immediately and pre
 - GET /teacher/classrooms/{id}/course：返回id/classroom_id/package_id/name/package_version/revision；无实例为null。
 - POST /teacher/classrooms/{id}/course/empty {confirmed:true,name}：创建空课程，已有实例幂等返回。不会自动生成章节、题目、NPC或交互。
 - GET /teacher/classrooms/{id}/course/ids：教师可查看九类实体的stable_id→当前运行ID映射，用于迁移/受控集成，不能用于越班查询。
-- POST /teacher/classrooms/{id}/course/imports/preview：**已关闭，固定返回 410**（ZIP 上传入口不再开放）。要导入请把解压后的目录包放入私有 `data/course/`，改用下面的 `imports/available/preview`；返回结构（id、expected_revision、expires_at 24 小时、can_apply、diff、blockers、warnings、learning_impact）不变。校验或预览不等于激活。
+- 课程导入只接受当前v2目录包，放入私有 `data/course/` 后使用 `imports/available/preview`。返回预览结构（id、expected_revision、expires_at 24 小时、can_apply、diff、blockers、warnings、learning_impact）；校验或预览不等于激活。旧ZIP上传路由已移除，返回404。
 - GET /teacher/classrooms/{id}/course/packages 返回 `{items:[{key,name,package_id,package_version,source}],unavailable}`。当前只列私有交换目录里的**解压目录包**（`source=mounted`）及本班自己的导出目录；其他班级的导出目录不可选。POST /teacher/classrooms/{id}/course/imports/available/preview 接受 `{package_key}`，对目录创建私有副本并计算内容指纹，执行与预览一致的校验并返回相同预览结构。响应不暴露文件系统路径。
 - POST /teacher/classrooms/{id}/course/imports/{preview_id}/apply {request_id:UUID,expected_revision:int>=0}：返回instance_id/revision/package_id/package_version/duplicate。重复请求保持原回执；包被篡改、预览过期、修订冲突、影响学习记录或进行中会话时拒绝，旧课程保留。
 - GET /teacher/classrooms/{id}/course/export：把完整课程原子发布为私有交换目录 `data/course/export-<班级ID>-<随机ID>/` 并返回 `{directory,path}`（不再是ZIP附件）；覆盖未归类、草稿、停用、未选用内容和私有答案/媒体，不包含账号、成员、学习记录或部署密钥。缺失/转换中的媒体不能导出为完整包。
@@ -134,7 +134,7 @@ GET /world?classroom_id增加当前可用interactions、building_access及buildi
 
 `GET /teacher/classrooms/{id}/course/packages` 只列出共享包目录及本班导出目录。`POST .../imports/available/preview` 对目录创建私有副本，生成内容指纹并执行完整校验与影响分析；确认应用时再次核对指纹、课程修订和授权。其他班级导出目录不可选择。
 
-`POST .../imports/preview` 返回410，表示ZIP上传关闭。`GET .../export` 返回JSON，包含 `directory` 和 `path`，完整课程已写入服务器 `data/course/` 下的目录。原ZIP下载响应已退出当前接口。历史ZIP预览仍按原私有暂存与指纹校验应用。
+`package_key` 仅接受 `mounted-` 加64位十六进制摘要，不接受旧 `uploaded-` 标识。`GET .../export` 返回JSON，包含 `directory` 和 `path`，完整课程已写入服务器 `data/course/` 下的目录。旧ZIP上传、下载及预览应用分支均已退出。旧待应用的非目录预览返回422并要求重新选择目录；已完成导入的幂等回执仍按原请求返回，不重新执行导入，也不删除课程或学习记录。
 
 对白文本用空行分轮。运行DTO每次只返回当前轮文本，末轮才附带选项；提前传选择返回422。继续请求遵循原事件ID和revision幂等规则，末轮后才完成检查点。
 

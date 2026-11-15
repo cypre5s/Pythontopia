@@ -38,8 +38,7 @@ def story_space(client, db, student, classroom):
         db.delete(item)
     db.commit()
     move_player(client, student["headers"], classroom["id"], "town_hub", 22, 34)
-    # The original first-steps scene is absent here; avoid its legacy NPC fallback
-    # intercepting the independent test scenes at the mayor.
+    # These independent scenes start after arrival; no built-in quest is restored.
     arrival = db.scalar(select(PlayerQuest).where(PlayerQuest.user_id == student["id"],
         PlayerQuest.classroom_id == classroom["id"], PlayerQuest.quest_id == "arrival"))
     arrival.status = "complete"
@@ -568,9 +567,9 @@ def test_private_score_cannot_reveal_or_enable_a_negated_dialogue_choice(client,
     assert learning_state(db) == before
 
 
-@pytest.mark.parametrize("npc,expected_status", [("mayor_py", 404), ("professor", 200)])
-def test_new_legacy_task_takes_priority_and_initializes_only_for_its_current_npc(
-    client, db, student, classroom, story_space, npc, expected_status,
+@pytest.mark.parametrize("npc", ["mayor_py", "professor"])
+def test_task_without_flow_does_not_hijack_ambient_dialogue_or_initialize_progress(
+    client, db, student, classroom, story_space, npc,
 ):
     quest = {"id": "test-new-legacy-npc-task", "chapter_id": 179, "title": "New legacy task", "kind": "side",
              "nodes": [{"id": "talk", "type": "TALK_TO_NPC", "title": "Talk", "target": npc, "dependencies": []}]}
@@ -584,13 +583,7 @@ def test_new_legacy_task_takes_priority_and_initializes_only_for_its_current_npc
 
     assert instance() is None
     before = learning_state(db)
-    response = interact(client, student, story_space, expected=expected_status)
-    if npc == "mayor_py":
-        assert instance() is not None and instance().status == "active"
-        assert list(db.scalars(select(StorySession))) == []
-        assert list(db.scalars(select(NodeState))) == []
-        assert list(db.scalars(select(LearningEvent))) == []
-    else:
-        assert response["mode"] == "ambient"
-        assert instance() is None
-        assert learning_state(db) == before
+    response = interact(client, student, story_space)
+    assert response["mode"] == "ambient"
+    assert instance() is None
+    assert learning_state(db) == before

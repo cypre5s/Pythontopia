@@ -132,13 +132,18 @@ test("知识点、题目草稿与私有答案、多活动有序复用、资料�
   await page.getByRole("checkbox", { name: "选择同义答案", exact: true }).click();
   await page.getByRole("checkbox", { name: "选择待删除的独立题目", exact: true }).click();
   await page.getByRole("button", { name: "批量删除", exact: true }).click();
-  await page.getByRole("button", { name: "确认删除", exact: true }).click();
-  const deleteDialog = page.getByRole("dialog");
-  await expect(deleteDialog.getByRole("alert")).toContainText("同义答案");
-  await expect(deleteDialog.getByRole("status")).toContainText("已删除 1 条");
-  await deleteDialog.getByRole("button", { name: "关闭", exact: true }).click();
-  await expect(page.getByText("同义答案", { exact: true })).toBeVisible();
-  expect((await json<{ id: string }[]>(await request.get(scoped("/teacher/questions"), { headers }))).some((item) => item.id === unused.id)).toBe(false);
+  const deleteDialog = page.getByRole("dialog", { name: "删除影响范围", exact: true });
+  await expect(deleteDialog).toContainText("解除关联（2）");
+  await expect(deleteDialog).toContainText("学生提交、试卷、成绩、阅读及任务历史全部保留");
+  await deleteDialog.getByRole("button", { name: "继续确认", exact: true }).click();
+  await page.getByLabel("输入“删除所选2项”确认", { exact: true }).fill("删除所选2项");
+  await page.getByRole("checkbox", { name: "我已核对删除范围，确认保留学生历史记录" }).check();
+  await page.getByRole("button", { name: "确认级联删除", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const remaining = await json<{ id: string }[]>(await request.get(scoped("/teacher/questions"), { headers }));
+  expect(remaining.some(item => item.id === unused.id || item.id === question.id)).toBe(false);
+  const afterDelete = await json<{ activities: { question_ids: string[] }[] }>(await request.get(scoped("/teacher/courses"), { headers }));
+  for (const activity of afterDelete.activities) expect(activity.question_ids).not.toContain(question.id);
   await go(page, "资料库");
   async function upload(name: string, file: Buffer, fileName: string) {
     await page.getByRole("button", { name: "上传资料", exact: true }).click();
@@ -198,13 +203,15 @@ test("知识点、题目草稿与私有答案、多活动有序复用、资料�
     "src",
     /^blob:/,
   );
-  await expect.poll(async () => {
-    const viewer = page.frames().find((frame) => frame.url().startsWith("chrome-extension://"));
-    return viewer ? viewer.locator("embed").count() : 0;
-  }).toBe(1);
-  const pdfViewer = page.frames().find((frame) => frame.url().startsWith("chrome-extension://"))!;
-  await expect(pdfViewer.locator("#pageSelector")).toHaveValue("1");
-  await expect(pdfViewer.locator("#pageSelector")).toBeVisible();
+  const pdfFrame = page.getByRole("dialog").locator("iframe");
+  await expect(pdfFrame).toBeVisible();
+  // The native PDF viewer's extension URL and controls belong to the browser.
+  // Verify the actual authenticated document handed to it instead of Chrome internals.
+  expect(await pdfFrame.evaluate(async frame => {
+    const response = await fetch((frame as HTMLIFrameElement).src);
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    return { type: response.headers.get("content-type"), signature: new TextDecoder().decode(bytes.slice(0, 5)), size: bytes.length };
+  })).toEqual({ type: "application/pdf", signature: "%PDF-", size: pdf().length });
   await page.screenshot({ path: info.outputPath("private-pdf-preview.png"), animations: "disabled" });
   await page.getByRole("button", { name: "关闭", exact: true }).click();
   await go(page, "教学管理");

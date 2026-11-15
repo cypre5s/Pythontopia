@@ -35,7 +35,7 @@
           {{ tracked.status === "complete" ? "委托已完成" : "当前目标" }}
         </p>
         <p class="quest-next">
-          {{ node ? displayQuestTitle(node) : "全部目标已达成，去看看下一段故事吧。" }}
+          {{ node ? node.title : "全部目标已达成，去看看下一段故事吧。" }}
         </p>
         <p v-if="readyCount > 1" class="quest-parallel">
           还有 {{ readyCount - 1 }} 个目标可在日志中查看
@@ -91,7 +91,6 @@
 import { computed } from "vue";
 import { useSession } from "../shared/session";
 import GameIcon from "../shared/GameIcon.vue";
-import { displayQuestTitle } from "../game/config/worldConfig";
 import { requiredQuestNodes } from "../shared/questProgress";
 import { canUseDevTools } from "../shared/devTools";
 defineProps<{ blocked?: boolean }>();

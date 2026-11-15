@@ -162,12 +162,6 @@ export function nearbyWorldTarget(position: Tile & { map_key: string }, targets:
     && worldTargetHint(target, flags, runtime) && Math.abs(target.x - position.x) + Math.abs(target.y - position.y) <= target.radius)
     .sort((a, b) => (Math.abs(a.x - position.x) + Math.abs(a.y - position.y)) - (Math.abs(b.x - position.x) + Math.abs(b.y - position.y)))[0];
 }
-export function displayWorldText(text: string): string {
-  return text.replaceAll("西侧书架", worldConfig.interactions.library_shelf?.label ?? "图书馆书架");
-}
-export function displayQuestTitle(node: { target?: string; title: string }): string {
-  return node.target === "library_shelf" ? displayWorldText(node.title) : node.title;
-}
 export function reachableTargetApproach(start: Tile, targets: readonly WorldTarget[], width: number, height: number,
   blocked: (x: number, y: number) => boolean, preferredPoint?: Tile) {
   let best: { target: WorldTarget; point: Tile; path: Tile[]; score: number } | null = null;

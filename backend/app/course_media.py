@@ -10,7 +10,6 @@ import argparse
 import hashlib
 import json
 import math
-import os
 import re
 import tarfile
 import tempfile
@@ -22,7 +21,6 @@ from pypdf import PdfReader
 from pypdf.errors import PdfReadError
 from sqlalchemy import select, text
 
-from .config import ROOT
 from .content_relations import material_in_chapter, set_material_chapters
 from .db import SessionLocal
 from .models import Chapter, Material
@@ -65,7 +63,7 @@ def _json(raw):
 
 
 def _sources(source_root):
-    root = Path(source_root) if source_root else Path(os.getenv("REBORN_COURSE_ROOT", str(ROOT / "data/course/legacy/course-pack-43")))
+    root = Path(source_root)
     docs = _json((root / "json/course_document.json").read_text(encoding="utf-8-sig"))
     pages = _json((root / "json/course_page.json").read_text(encoding="utf-8-sig"))
     manifest = _json((root / "video_manifest.json").read_text(encoding="utf-8-sig"))
@@ -219,7 +217,7 @@ def _lock_materials(db):
         """))
 
 
-def import_media(db, archive, *, source_root=None, storage=None):
+def import_media(db, archive, *, source_root, storage=None):
     """Validate the complete package, then update only current material rows.
 
     Failed imports roll back all database changes. Uploaded hash-addressed files
@@ -300,7 +298,7 @@ def import_media(db, archive, *, source_root=None, storage=None):
 def main():
     parser = argparse.ArgumentParser(description="Import verified course-43 PDF/video files without changing learner data")
     parser.add_argument("archive", type=Path)
-    parser.add_argument("--source-root", type=Path, help="Trusted external export and media-manifest directory")
+    parser.add_argument("--source-root", type=Path, required=True, help="Trusted external export and media-manifest directory")
     args = parser.parse_args()
     with SessionLocal() as db:
         try:

@@ -105,8 +105,10 @@ test("统一角色草稿、私有素材、摆放与真实游戏身份", async ({
   await roles();
   await page.getByRole("button", { name: "服务端新名称", exact: true }).click();
   await expect(page.getByLabel("角色名称")).toHaveValue("服务端新名称");
-  await page.setViewportSize({ width: 1024, height: 768 });
-  await page.screenshot({ path: info.outputPath("character-editor-1024.png"), animations: "disabled" });
+  if (process.env.E2E_EXTRA_VIEWPORTS === "1") {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.screenshot({ path: info.outputPath("character-editor-1024.png"), animations: "disabled" });
+  }
   doc = await read();
   doc.flows.push({ id: "character-test-flow", title: "角色身份", quest_id: null, chapter_id: null, content: {
     schema_version: 1, mode: "public", bindings: {}, entries: { [character.id]: [{ when: { always: true }, node: "hello" }] },
@@ -122,7 +124,7 @@ test("统一角色草稿、私有素材、摆放与真实游戏身份", async ({
   const world = await json<{ npcs: { key: string; stable_id: string; name: string }[] }>(await request.get(`/api/world?classroom_id=${scope.cid}`, { headers: studentHeaders }));
   const npc = world.npcs.find((n) => n.stable_id === character.id)!;
   expect(npc.name).toBe("服务端新名称");
-  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, reducedMotion: "reduce" });
+  const context = await browser.newContext({ viewport: { width: 1920, height: 1080 }, reducedMotion: "reduce" });
   await context.addInitScript((token) => sessionStorage.setItem("pythontopia-reborn-session", token), student.access_token);
   const game = await context.newPage();
   const aiCalls: string[] = [], images: number[] = [];
@@ -141,8 +143,10 @@ test("统一角色草稿、私有素材、摆放与真实游戏身份", async ({
   await expect(game.getByRole("dialog", { name: "剧情对白" })).toContainText("服务端新名称");
   await expect(game.locator(".dialogue-stage img.portrait")).toBeVisible();
   await game.screenshot({ path: info.outputPath("private-character-dialogue.png"), animations: "disabled" });
-  await game.setViewportSize({ width: 390, height: 844 });
-  await game.screenshot({ path: info.outputPath("private-character-mobile.png"), animations: "disabled" });
+  if (process.env.E2E_EXTRA_VIEWPORTS === "1") {
+    await game.setViewportSize({ width: 390, height: 844 });
+    await game.screenshot({ path: info.outputPath("private-character-mobile.png"), animations: "disabled" });
+  }
   expect(aiCalls).toEqual([]);
   await context.close();
 });

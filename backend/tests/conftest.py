@@ -57,12 +57,40 @@ def move_player(client, headers, classroom_id, map_key, tile_x, tile_y, directio
     return response
 
 
-@pytest.fixture
-def db():
+@pytest.fixture(scope="session")
+def seeded_database():
+    """Build immutable synthetic content once, never share a test's mutable state."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(engine)
     with sessionmaker(engine, expire_on_commit=False)() as session:
         seed(session)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture
+def database_factory(seeded_database):
+    engines = []
+
+    def create_database():
+        engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+        engines.append(engine)
+        source, target = seeded_database.raw_connection(), engine.raw_connection()
+        try:
+            source.driver_connection.backup(target.driver_connection)
+        finally:
+            source.close()
+            target.close()
+        return engine
+
+    yield create_database
+    for engine in engines:
+        engine.dispose()
+
+
+@pytest.fixture
+def db(database_factory):
+    with sessionmaker(database_factory(), expire_on_commit=False)() as session:
         @event.listens_for(session, "before_flush")
         def attach_test_content(session, flush_context, instances):
             """Synthetic unit-test authoring keeps stable fixture IDs in one course.
@@ -81,8 +109,6 @@ def db():
                     row.course_instance_id = key
                     row.stable_id = row.stable_id or str(row.key if isinstance(row, Npc) else row.id or uuid4().hex)
         yield session
-    Base.metadata.drop_all(engine)
-    engine.dispose()
 
 
 @pytest.fixture

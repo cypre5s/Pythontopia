@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import tiledTown from "../public/assets/maps/town_hub.json";
-import { buildingMessage, displayQuestTitle, getWorldMap, mapTargets, nearbyWorldTarget, portalRoute, reachableApproach, reachableTargetApproach, resolveWorldTarget, resolveWorldTargets, worldConfig, worldTargetHint, type WorldDefinition, type WorldTarget } from "../src/game/config/worldConfig";
+import { buildingMessage, getWorldMap, mapTargets, nearbyWorldTarget, portalRoute, reachableApproach, reachableTargetApproach, resolveWorldTarget, resolveWorldTargets, worldConfig, worldTargetHint, type WorldDefinition, type WorldTarget } from "../src/game/config/worldConfig";
 const courseAccess = (can_enter: boolean) => ({ building_access: { library: { enabled: true, unlocked: can_enter, can_enter, blocked_message: "课程尚未开放" } } });
 
 describe("configured world places and portals", () => {
@@ -82,10 +82,5 @@ describe("configured world places and portals", () => {
     expect(worldTargetHint(npc, [])).toBe("交谈");
     expect(worldTargetHint(resolveWorldTarget("library_exit", [])!, [])).toBe("返回");
   });
-  it("renames only the displayed legacy shelf title without mutating published content", () => {
-    const node = { target: "library_shelf", title: "调查西侧书架" };
-    expect(displayQuestTitle(node)).toBe("调查图书馆书架");
-    expect(node.title).toBe("调查西侧书架");
-    expect(displayQuestTitle({ title: "西侧书架的故事" })).toBe("西侧书架的故事");
-  });
+
 });

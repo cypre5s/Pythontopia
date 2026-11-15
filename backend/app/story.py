@@ -316,27 +316,6 @@ def _states(db, instance):
     return definition.definition, node_statuses(definition.definition, states)
 
 
-def _legacy_ready(db, user, classroom_id, npc_key):
-    if npc_key is None:
-        return False
-    classroom = authorize_classroom(db, user, classroom_id)
-    for item in db.scalars(select(QuestDefinition).where(course_clause(db, QuestDefinition, classroom_id))):
-        if not quest_visible(item, user, classroom, db) or not chapter_available(db, user, classroom_id, item.chapter_id):
-            continue
-        if db.scalar(select(StoryDefinition.id).where(StoryDefinition.quest_id == item.id)):
-            continue
-        instance = db.scalar(select(PlayerQuest).where(PlayerQuest.user_id == user.id, PlayerQuest.classroom_id == classroom_id,
-                                                      PlayerQuest.quest_id == item.id))
-        if instance and instance.status == "complete":
-            continue
-        definition = item.definition
-        statuses = _states(db, instance)[1] if instance else node_statuses(definition, {})
-        if any(statuses[node["id"]] == "ready" and (node.get("target") == npc_key or node.get("navigation_target") == npc_key)
-               for node in definition["nodes"]):
-            return True
-    return False
-
-
 def _near(db, user, session):
     from .world_authoring import npc_present, require_interaction
     if session.anchor:
@@ -522,14 +501,6 @@ def interact(body: InteractionInput, db: Annotated[Session, Depends(get_db)], us
             db.flush()
             previous = None
             abandoned = True
-    if previous and previous.status == "active":
-        _, instance = _definition(db, user, previous)
-        if instance and instance.status == "complete" and _legacy_ready(db, user, body.classroom_id, body.npc_key):
-            ensure_quests(db, user, body.classroom_id)
-            _student_lock(db, user, body.classroom_id)
-            previous.status = "ended"
-            db.commit()
-            raise HTTPException(404, "当前目标使用既有章节对白")
     if previous:
         if previous.npc_key == body.npc_key and previous.interaction_id == body.interaction_id:
             return _response(db, user, previous)
@@ -541,33 +512,16 @@ def interact(body: InteractionInput, db: Annotated[Session, Depends(get_db)], us
             targets.add(object_id)
     selected = select_flow(db, user, body.classroom_id, entry,
         db.scalars(select(StoryDefinition).where(course_clause(db, StoryDefinition, body.classroom_id))), targets=targets)
-    if _legacy_ready(db, user, body.classroom_id, body.npc_key) and (
-            not selected or selected[0].quest_id is None or selected[1] is not None and selected[1].status == "complete"):
-        ensure_quests(db, user, body.classroom_id)
-        _student_lock(db, user, body.classroom_id)
-        if previous:
-            previous.status = "ended"
-        db.commit()
-        raise HTTPException(404, "当前目标使用既有章节对白")
     if not selected:
         if abandoned:
             db.commit()
         raise HTTPException(404, "此NPC尚未绑定当前演出")
     story, instance = selected
-    if previous:
-        previous_story = db.get(StoryDefinition, previous.story_id)
-        if previous_story.quest_id is not None and (previous.npc_key == body.npc_key or story.quest_id is None):
-            return _response(db, user, previous)
-        if previous_story.quest_id is None and story.quest_id is None and previous.npc_key == body.npc_key:
-            return _response(db, user, previous)
     if story.quest_id is not None:
         ensure_quests(db, user, body.classroom_id, commit=False)
         _student_lock(db, user, body.classroom_id)
     root = next(route["node"] for route in story.content["entries"][entry]
                 if condition_matches(db, user, body.classroom_id, story, route["when"]))
-    if previous:
-        previous.status = "ended"
-        db.flush()
     session = StorySession(user_id=user.id, classroom_id=body.classroom_id, story_id=story.id,
                            npc_key=body.npc_key, interaction_id=body.interaction_id, node_id=root, status="active", revision=0, receipts=[])
     # Appearance/entry conditions may change as this flow supplies real evidence.

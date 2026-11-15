@@ -5,7 +5,8 @@ import zipfile
 import pytest
 from sqlalchemy import select
 
-from app.course_exchange import load_bundle, unpack_archive
+from app.course_exchange import load_bundle
+from fixture_archive import unpack_archive
 from app.course_instances import content_mapping
 
 from fixture_instances import clone_current_course
@@ -76,7 +77,7 @@ def export(client, teacher, instance):
 def preview(client, teacher, cid, payload):
     from app.course_exchange import exchange_root
     from app.course_catalog import mounted_catalog
-    from app.course_exchange import LIMITS, MAX_ARCHIVE
+    from app.course_exchange import LIMITS
     root = exchange_root()
     archive = root / f"{uuid4().hex}.zip"
     archive.write_bytes(payload)
@@ -84,7 +85,7 @@ def preview(client, teacher, cid, payload):
     folder.mkdir()
     unpack_archive(archive, folder)
     archive.unlink()
-    items, _ = mounted_catalog(root, LIMITS, MAX_ARCHIVE)
+    items, _ = mounted_catalog(root, LIMITS)
     key = next(item["key"] for item in items if item["path"] == folder)
     response = client.post(endpoint(cid, "imports/available/preview"), headers=teacher["headers"], json={"package_key": key})
     assert response.status_code == 200, response.text
@@ -204,8 +205,8 @@ def test_missing_media_blocks_complete_export(client, db, teacher, exchange):
 def test_student_cannot_export_private_answers(client, student, exchange):
     source, target = exchange
     assert client.get(endpoint(source.classroom_id, "export"), headers=student["headers"]).status_code == 403
-    assert client.post(endpoint(target.id, "imports/preview"), headers=student["headers"],
-                       files={"file": ("a.zip", b"bad")}).status_code == 403
+    assert client.post(endpoint(target.id, "imports/available/preview"), headers=student["headers"],
+                       json={"package_key": "mounted-" + "0" * 64}).status_code == 403
 
 
 def rewrite_archive(payload, transform):
@@ -478,7 +479,8 @@ def test_postgres_repeated_apply_is_serialized_and_idempotent(pg_course_engine, 
     from datetime import timedelta
     from threading import Barrier
     from sqlalchemy.orm import Session
-    from app.course_exchange import ApplyInput, _digest, apply_course, exchange_path, write_package
+    from app.course_exchange import ApplyInput, LIMITS, apply_course, exchange_path, write_package
+    from app.course_catalog import copy_directory
     from app.course_exchange_models import CourseImportPreview
     from app.models import User, now
     from test_course_instances import classes
@@ -491,13 +493,10 @@ def test_postgres_repeated_apply_is_serialized_and_idempotent(pg_course_engine, 
         directory = tmp_path / "package"
         directory.mkdir()
         write_package(db, instance, directory)
-        archive = exchange_path("imports/parallel.zip")
-        with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as writer:
-            for path in directory.rglob("*"):
-                if path.is_file():
-                    writer.write(path, path.relative_to(directory).as_posix())
+        staged = exchange_path("imports/parallel")
+        digest = copy_directory(directory, staged, tmp_path, LIMITS)
         item = CourseImportPreview(teacher_id=teacher_row.id, classroom_id=target.id, expected_revision=0,
-                                   archive_sha256=_digest(archive), storage_key="imports/parallel.zip", summary={},
+                                   archive_sha256=digest, storage_key="imports/parallel", summary={},
                                    expires_at=now() + timedelta(hours=1))
         db.add(item)
         db.commit()
@@ -588,10 +587,42 @@ def test_available_mounted_package_uses_normal_preview_and_apply(client, db, tea
     assert db.scalar(select(CourseInstance).where(CourseInstance.classroom_id == target.id)).package_id == source.package_id
 
 
-def test_zip_upload_is_disabled(client, teacher, exchange):
+def test_retired_zip_upload_route_is_absent(client, teacher, exchange):
     _, target = exchange
     response = client.post(endpoint(target.id, "imports/preview"), headers=teacher["headers"], files={"file": ("course.zip", b"zip")})
-    assert response.status_code == 410
+    assert response.status_code == 404
+
+
+def test_historical_archive_preview_is_not_executed_but_receipts_are_preserved(client, db, teacher, exchange):
+    from app.course_exchange import exchange_path
+    from app.course_exchange_models import CourseImportPreview
+
+    source, target = exchange
+    payload = export(client, teacher, source)
+    item = preview(client, teacher, target.id, payload)
+    saved = db.get(CourseImportPreview, item["id"])
+    saved.storage_key = f"imports/{uuid4().hex}.zip"
+    archive = exchange_path(saved.storage_key)
+    archive.write_bytes(payload)
+    db.commit()
+    request_id = str(uuid4())
+    body = {"request_id": request_id, "expected_revision": item["expected_revision"]}
+    url = endpoint(target.id, f"imports/{item['id']}/apply")
+    response = client.post(url, headers=teacher["headers"], json=body)
+    assert response.status_code == 422 and "重新预览" in response.text
+    assert archive.read_bytes() == payload
+    assert db.get(CourseImportPreview, saved.id).applied_request_id is None
+    assert db.scalar(select(CourseInstance).where(CourseInstance.classroom_id == target.id)) is None
+    assert client.post(endpoint(target.id, "imports/available/preview"), headers=teacher["headers"],
+                       json={"package_key": "uploaded-" + item["id"]}).status_code == 422
+
+    # Historical completed receipts are factual records, not a second import path.
+    saved.applied_request_id = request_id
+    saved.result = {"instance_id": source.id, "revision": 1, "duplicate": False}
+    db.commit()
+    response = client.post(url, headers=teacher["headers"], json=body)
+    assert response.status_code == 200 and response.json() == {**saved.result, "duplicate": True}
+    assert archive.exists()
 
 
 def test_catalog_summary_and_readable_export_name(client, db, teacher, exchange):
@@ -617,12 +648,12 @@ def test_catalog_summary_and_readable_export_name(client, db, teacher, exchange)
     assert not any(row["directory"] == directory for row in other_items)
 
 
-def test_available_packages_never_expose_other_teacher_uploads(client, db, teacher, exchange):
+def test_available_packages_authorize_the_selected_classroom(client, db, teacher, exchange):
     from app.auth import issue
     from app.models import User
 
     source, target = exchange
-    item = preview(client, teacher, target.id, export(client, teacher, source))
+    preview(client, teacher, target.id, export(client, teacher, source))
     other = User(student_id="87811934201267", name="另一教师", role="teacher", password_hash=db.get(User, teacher["id"]).password_hash)
     db.add(other)
     db.flush()
@@ -630,7 +661,7 @@ def test_available_packages_never_expose_other_teacher_uploads(client, db, teach
     db.commit()
     assert client.get(endpoint(target.id, "packages"), headers=headers).status_code == 403
     assert client.post(endpoint(target.id, "imports/available/preview"), headers=headers,
-                       json={"package_key": "uploaded-" + item["id"]}).status_code == 403
+                       json={"package_key": "mounted-" + "0" * 64}).status_code == 403
 
 
 def test_mounted_selection_is_stale_after_change_and_files_remain_private(client, teacher, exchange):
@@ -652,13 +683,12 @@ def test_mounted_selection_is_stale_after_change_and_files_remain_private(client
         assert rejected.status_code in {404, 422}
 
 
-def test_mounted_catalog_does_not_list_private_exports_or_oversized_packages(client, teacher, exchange, monkeypatch):
+def test_mounted_catalog_does_not_list_archives(client, teacher, exchange):
     import app.course_exchange as exchange_module
 
     source, target = exchange
     payload = export(client, teacher, source)
     (exchange_module.exchange_root() / "large.zip").write_bytes(payload)
-    monkeypatch.setattr(exchange_module, "MAX_ARCHIVE", 10)
     listed = client.get(endpoint(target.id, "packages"), headers=teacher["headers"])
     assert listed.status_code == 200
     assert listed.json()["items"] == []
@@ -720,3 +750,45 @@ def test_catalog_reader_rejects_outside_files_and_reparse_points(tmp_path, monke
     with pytest.raises(PackageError, match="链接"):
         with regular_reader(target, root):
             pass
+
+
+def test_catalog_reader_accepts_relative_paths(tmp_path, monkeypatch):
+    from pathlib import Path
+    from app.course_catalog import regular_reader
+
+    monkeypatch.chdir(tmp_path)
+    root = Path("private")
+    root.mkdir()
+    target = root / "manifest.yaml"
+    target.write_bytes(b"current package")
+    with regular_reader(target, root) as reader:
+        assert reader.read() == b"current package"
+
+
+def test_directory_size_metadata_does_not_invalidate_catalog_key(client, teacher, exchange, monkeypatch):
+    from pathlib import Path
+    from types import SimpleNamespace
+    from app.course_exchange import exchange_root
+
+    source, target = exchange
+    folder = exchange_root() / "mounted"
+    folder.mkdir()
+    archive = exchange_root() / "fixture.zip"
+    archive.write_bytes(export(client, teacher, source))
+    unpack_archive(archive, folder)
+    original = Path.lstat
+    size = 0
+
+    def directory_stat(path):
+        value = original(path)
+        if path == folder:
+            return SimpleNamespace(st_mode=value.st_mode, st_file_attributes=0,
+                                   st_size=size, st_mtime_ns=value.st_mtime_ns)
+        return value
+
+    monkeypatch.setattr(Path, "lstat", directory_stat)
+    item = client.get(endpoint(target.id, "packages"), headers=teacher["headers"]).json()["items"][0]
+    size = 4096
+    response = client.post(endpoint(target.id, "imports/available/preview"), headers=teacher["headers"],
+                           json={"package_key": item["key"]})
+    assert response.status_code == 200, response.text

@@ -11,7 +11,7 @@ export default defineConfig({
     viewport: { width: 1920, height: 1080 },
     browserName: "chromium",
     channel: process.env.PLAYWRIGHT_CHANNEL ?? "chromium",
-    trace: "off",
+    trace: "retain-on-failure",
     screenshot: "only-on-failure",
     actionTimeout: 15000,
   },

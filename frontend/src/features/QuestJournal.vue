@@ -26,7 +26,7 @@
           <li v-for="(node,index) in selectedQuest.nodes" :key="node.id" :class="node.status">
             <span class="node-icon" aria-hidden="true"><GameIcon v-if="node.status === 'complete'" name="check" /><template v-else>{{ node.status === 'skipped' ? '−' : index+1 }}</template></span>
             <GameIcon class="step-icon" :name="node.type === 'STUDY_LESSON' ? 'book' : node.type === 'TALK_TO_NPC' || node.type === 'PLAY_DIALOGUE' ? 'message' : 'compass'"/>
-            <div><strong>{{ displayQuestTitle(node) }}</strong><small>{{ stateName[node.status] }}{{ node.optional ? ' · 可选' : '' }}</small></div>
+            <div><strong>{{ node.title }}</strong><small>{{ stateName[node.status] }}{{ node.optional ? ' · 可选' : '' }}</small></div>
             <button v-if="node.status === 'ready' && node.navigation_target" @click="session.guideTo(node.navigation_target)">立即前往 <GameIcon name="compass"/></button>
             <button v-else-if="node.status === 'ready' && node.activity_id && !selectedQuest.story_id" @click="session.navigate({kind:node.type === 'STUDY_LESSON' ? 'lesson' : 'practice', activity_id:node.activity_id})">{{ node.type === 'STUDY_LESSON' ? '打开课程' : '打开练习' }} <GameIcon name="chevron"/></button>
             <span v-if="node.status === 'complete'" class="step-done">已完成</span>
@@ -43,7 +43,6 @@ import { computed, ref } from "vue";
 import { useSession } from "../shared/session";
 import { notify } from "../shared/api";
 import GameIcon from "../shared/GameIcon.vue";
-import { displayQuestTitle } from "../game/config/worldConfig";
 import { requiredQuestNodes } from "../shared/questProgress";
 const selectedId = ref("");
 const session = useSession(),

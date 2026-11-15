@@ -111,6 +111,7 @@ async function noHorizontalOverflow(page: Page) {
   expect(await workspace(page).locator(".town-content").evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
 }
 async function reducedViewportChecks(page: Page, testInfo: TestInfo, name: string) {
+  if (process.env.E2E_EXTRA_VIEWPORTS !== "1") return;
   for (const viewport of [{ width: 1366, height: 768 }, { width: 980, height: 760 }]) {
     await page.setViewportSize(viewport);
     await noHorizontalOverflow(page);

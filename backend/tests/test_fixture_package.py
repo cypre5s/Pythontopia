@@ -1,26 +1,26 @@
-"""Offline conversion must not open the configured app database or overwrite artifacts."""
+"""Fixture generation must not open the configured app database or overwrite artifacts."""
 from pathlib import Path
 import os
 
 import pytest
-from app.config import ROOT
-from fixture_package import convert_legacy
-from app.course_exchange import load_bundle, unpack_archive
+from fixture_package import build_fixture_package
+from app.course_exchange import load_bundle
+from fixture_archive import unpack_archive
 from app.course_package import PackageError
 
 
-def test_offline_conversion_isolated_and_paused(tmp_path, monkeypatch):
+def test_fixture_package_isolated_and_paused(tmp_path, monkeypatch):
     from app import db as app_db
     def forbidden(*args, **kwargs):
         raise AssertionError("configured database must never be opened")
     monkeypatch.setattr(app_db.engine, "connect", forbidden)
     monkeypatch.setenv("REBORN_STORAGE", "s3")
     monkeypatch.setenv("REBORN_STORAGE_ROOT", str(tmp_path / "untouched-runtime"))
-    destination = tmp_path / "converted.zip"
-    source = Path(os.getenv("REBORN_COURSE_ROOT", str(ROOT / "data/course/legacy/course-pack-43")))
-    content = Path(os.getenv("REBORN_CONTENT_ROOT", str(ROOT / "data/course/legacy/content")))
-    result = convert_legacy(source, content, destination,
-                            package_id="offline-test", name="离线转换测试")
+    destination = tmp_path / "fixture.zip"
+    source = Path(os.environ["REBORN_COURSE_ROOT"])
+    content = Path(os.environ["REBORN_CONTENT_ROOT"])
+    result = build_fixture_package(source, content, destination,
+                                   package_id="offline-test", name="合成课程包测试")
     assert result["assets"] == 0 and result["media"] == "existing_extracted_text_only"
     assert os.environ["REBORN_STORAGE"] == "s3" and not (tmp_path / "untouched-runtime").exists()
     directory = tmp_path / "package"
@@ -36,5 +36,5 @@ def test_offline_conversion_isolated_and_paused(tmp_path, monkeypatch):
     assert "users" not in bundle and "student" not in bundle
     original = destination.read_bytes()
     with pytest.raises(PackageError):
-        convert_legacy(source, content, destination, package_id="x", name="x")
+        build_fixture_package(source, content, destination, package_id="x", name="x")
     assert destination.read_bytes() == original

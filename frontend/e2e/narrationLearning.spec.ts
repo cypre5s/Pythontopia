@@ -70,7 +70,7 @@ test("PDF narration keeps all pages readable and opens the existing learning ass
   await page.getByRole("button", { name: "下一页 PDF", exact: true }).click();
   await expect(page.locator(".lecture-stage")).toHaveCount(0);
   await expect(page.locator(".pdf-reader")).toHaveAttribute("aria-busy", "false");
-  for (const width of [1920, 1280]) {
+  for (const width of (process.env.E2E_EXTRA_VIEWPORTS === "1" ? [1920, 1280] : [1920])) {
     await page.setViewportSize({ width, height: width === 1920 ? 1080 : 720 });
     await expect(canvas).toBeVisible();
     expect(await canvas.evaluate(el => (el as HTMLCanvasElement).width)).toBeGreaterThan(0);

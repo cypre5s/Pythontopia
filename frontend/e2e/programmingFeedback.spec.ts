@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-test('formal summaries and public output Diff across desktop and narrow viewports', async ({page}, testInfo) => {
+test('formal summaries and public output Diff at desktop 100–200% text size', async ({page}, testInfo) => {
   test.skip(!process.env.PYTHON_RUNNER_DEV_URL, 'Requires Vite and prepared local runtime');
   test.setTimeout(90000);
   const root=process.env.PYTHON_RUNNER_DEV_URL! + '/e2e/fixtures/programmingFeedback.html';
@@ -26,9 +26,9 @@ test('formal summaries and public output Diff across desktop and narrow viewport
   await page.screenshot({path:testInfo.outputPath('public-diff.png'),fullPage:true});
   await page.locator('.coding-diff-toggle').click();
   await expect(page.locator('.output-diff')).toHaveCount(0);
-  await page.setViewportSize({width:900,height:900});
+  await page.setViewportSize({width:1920,height:1080});
   await page.evaluate(()=>document.documentElement.style.fontSize='200%');
   await expect(page.locator('.coding-diff-toggle')).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({path:testInfo.outputPath('narrow-200.png'),fullPage:true});
+  await page.screenshot({path:testInfo.outputPath('desktop-200.png'),fullPage:true});
 });

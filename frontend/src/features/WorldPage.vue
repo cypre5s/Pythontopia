@@ -255,27 +255,8 @@ async function interact(target: string, type: "npc" | "object") {
     notify("这个角色当前暂无可用对话。");
     return;
   }
-  if (session.world?.interactions !== undefined) {
-    try { await session.interactStory(target, "object"); }
-    catch (error) { notify(error instanceof Error ? error.message : "互动未完成，请重试。"); }
-    return;
-  }
-  try {
-    for (const quest of session.world?.quests ?? [])
-      for (const node of quest.nodes)
-        if (
-          node.status === "ready" &&
-          node.type === "INTERACT_OBJECT" &&
-          node.target === target
-        )
-          await session.event(quest, node, {
-            object_id: target,
-            map_key: session.world?.player.map_key,
-          });
-  } catch (e) {
-    notify(e instanceof Error ? e.message : "互动未完成");
-  }
-  if (target === "library_shelf") session.open({ kind: "library" });
+  try { await session.interactStory(target, "object"); }
+  catch (error) { notify(error instanceof Error ? error.message : "互动未完成，请重试。"); }
 }
 function worldShortcut(event: KeyboardEvent) {
   if (
@@ -288,7 +269,7 @@ function worldShortcut(event: KeyboardEvent) {
     isTextFocus(document.activeElement) ||
     welcome.value ||
     session.workspace ||
-    activeStory.value?.node || activeStory.value?.node ||
+    activeStory.value?.node ||
     session.storyBusy ||
     session.resetBusy ||
     !session.world

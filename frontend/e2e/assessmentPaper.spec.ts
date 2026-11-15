@@ -54,20 +54,21 @@ test("practice corrections and a locked whole assessment share the question dire
   }, { token: identity.access_token, userId: identity.user.id, classroomId: classroom.id });
   await page.goto("/world");
   await page.getByRole("button", { name: "按任意键继续", exact: true }).click();
-  const panel = page.locator(".game-workspace"), directory = panel.getByRole("navigation", { name: "题目目录", exact: true });
+  const panel = page.locator(".game-workspace"), directory = panel.getByRole("navigation", { name: "题目快速跳转", exact: true });
   async function open(title: string) {
     await page.locator(".hud-dock").getByRole("button", { name: "任务日志", exact: true }).click();
     await panel.locator(".quest-card").filter({ hasText: questTitle }).click();
     await panel.locator(".journal-entry li").filter({ hasText: title }).getByRole("button", { name: "打开练习", exact: true }).click();
-    await panel.getByRole("tab", { name: "题目目录", exact: true }).click();
+    await panel.getByRole("tab", { name: "快速跳转", exact: true }).click();
   }
   await open("TEST 逐题练习");
   await expect(panel.locator(".support-question-actions")).toHaveCount(0);
   const directorySpacing = await panel.locator(".support-questions").evaluate(element => {
-    const firstQuestion = element.querySelector(".support-question-list button")!;
-    return firstQuestion.getBoundingClientRect().top - element.getBoundingClientRect().top;
+    const firstQuestion = element.querySelector(".question-jump-grid button")!;
+    const heading = element.querySelector(".question-jump-group h4")!;
+    return firstQuestion.getBoundingClientRect().top - heading.getBoundingClientRect().bottom;
   });
-  expect(directorySpacing).toBeLessThanOrEqual(24);
+  expect(directorySpacing).toBeLessThanOrEqual(16);
   await expect(panel.locator(".question-list,.question-position,.learning-meta,.answer-hint,.draft-note")).toHaveCount(0);
   await expect(panel.getByRole("button", { name: "试卷模式", exact: true })).toHaveCount(0);
   await panel.getByLabel("错误", { exact: true }).check();
@@ -81,9 +82,7 @@ test("practice corrections and a locked whole assessment share the question dire
     return Math.abs(box.top + box.height / 2 - title.top - title.height / 2);
   })).toBeLessThanOrEqual(2);
   await expect(panel.locator(".submission-result small")).toHaveCount(0);
-  for (const state of await panel.locator(".support-question-state").all()) {
-    expect(await state.evaluate(element => element.getBoundingClientRect().height <= parseFloat(getComputedStyle(element).fontSize) * 2)).toBe(true);
-  }
+  await expect(directory.getByRole("button").first()).toHaveAttribute("data-state", "accepted");
   await panel.getByRole("button", { name: "下一题", exact: true }).click();
   await panel.getByLabel("填写答案", { exact: true }).fill("done");
   await panel.getByRole("button", { name: "提交答案", exact: true }).click();
@@ -124,9 +123,8 @@ test("practice corrections and a locked whole assessment share the question dire
   await expect(panel.locator(".assessment-score")).toHaveText("66 / 100 分");
   expect(locked.score).toBe(66);
   expect(locked.max_score).toBe(100);
-  for (const state of await panel.locator(".support-question-state").all()) {
-    expect(await state.evaluate(element => element.getBoundingClientRect().height <= parseFloat(getComputedStyle(element).fontSize) * 2)).toBe(true);
-  }
+  await expect(directory.locator('button[data-state="accepted"]')).toHaveCount(2);
+  await expect(directory.locator('button[data-state="wrong"]')).toHaveCount(1);
   for (const input of await panel.locator(".practice-question-card input").all()) await expect(input).toBeDisabled();
   await expect(panel.getByRole("button", { name: "提交试卷", exact: true })).toHaveCount(0);
   await expect.poll(() => nodeState("assessment")).toBe("complete");
