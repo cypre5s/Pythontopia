@@ -9,7 +9,7 @@ from sqlalchemy import text
 from .config import CORS_ORIGINS, dev_tools_enabled
 from .db import SessionLocal
 from .course_cleanup import cleanup_worker
-from . import judge_management, content_deletions, assistant_settings
+from . import judge_management, content_deletions, assistant_settings, service_settings
 from . import auth, courses, classrooms, quests, practice, assistant, storage, character_assets, course_settings, curriculum, story, assessments, student_accounts, classroom_courses, course_exchange, world_authoring, dev_tools
 from . import narration
 
@@ -38,7 +38,7 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request, exc):
-        if request.url.path == "/api/teacher/assistant/model":
+        if request.url.path == "/api/teacher/assistant/model" or request.url.path.startswith("/api/teacher/services/"):
             # Pydantic otherwise echoes the entire rejected input, including API keys.
             return JSONResponse(status_code=422, content={"detail": [{key: error[key] for key in ("loc", "msg", "type")}
                                                                       for error in exc.errors()]})
@@ -59,6 +59,7 @@ def create_app() -> FastAPI:
     app.include_router(judge_management.router, prefix="/api")
     app.include_router(content_deletions.router, prefix="/api")
     app.include_router(assistant_settings.router, prefix="/api")
+    app.include_router(service_settings.router, prefix="/api")
     if dev_tools_enabled():
         app.include_router(dev_tools.router, prefix="/api")
     app.add_api_route("/api/health", health, methods=["GET"])

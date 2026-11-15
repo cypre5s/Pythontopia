@@ -109,13 +109,13 @@ def used_today(db: Session, instance_id: int) -> int:
 def generate_page(db: Session, material: Material, page_no: int, *, instance_id: int,
                   target_seconds: int | None = None, serial: bool = False) -> GeneratedPage:
     """One page, one model call. Returns the stored row's public state."""
-    reason = config.unavailable_reason()
+    reason = config.unavailable_reason(db)
     if reason:
         raise NarrationUnavailable(reason)
     page_text = repository.page_text(material, page_no)
     if page_text is None:
         raise LookupError("本页不存在或页码超出范围")
-    settings = config.settings()
+    settings = config.settings(db)
     seconds = repository.trim_seconds(target_seconds)
     use_image = with_image(material, page_text)
     image = render.render_page(material, page_no) if use_image else None
@@ -212,6 +212,6 @@ def generate_range(db: Session, material: Material, *, first: int, last: int, in
 
 
 def quota(db: Session, instance_id: int) -> Quota:
-    settings = config.settings()
+    settings = config.settings(db)
     return {"used_today": used_today(db, instance_id), "daily_limit": settings["daily_pages"],
-            "available": config.unavailable_reason() is None}
+            "available": config.unavailable_reason(db) is None}

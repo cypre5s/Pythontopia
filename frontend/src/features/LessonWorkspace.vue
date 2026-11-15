@@ -27,7 +27,6 @@
               <button :disabled="pageIndex >= material.pages.length - 1" @click="pageIndex++">下一页 <GameIcon name="arrowRight" /></button>
             </nav>
           </template>
-          <NarrationPanel @ask="openPageAssistant" v-if="material.kind === 'text'" :material-id="material.id" :page-no="material.kind === 'text' ? Number(currentPage?.page_no ?? 1) : pdfPage" />
         </template>
       </template>
     </section>
@@ -65,7 +64,6 @@ import { learningContext } from "../shared/learningContext";
 import { migrateReadingPosition, pdfResumePage } from "../shared/readingPosition";
 import { createVideoProgressQueue } from "../shared/videoProgress";
 import LearningSupportPanel from "./LearningSupportPanel.vue";
-import NarrationPanel from "./NarrationPanel.vue";
 import LearningSplitLayout from "./LearningSplitLayout.vue";
 import "./learningUi.css";
 const PdfReader = defineAsyncComponent(() => import("./PdfReader.vue"));

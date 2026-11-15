@@ -13,8 +13,10 @@ Weights for a self-hosted engine are fetched outside the image; nothing is baked
 """
 
 import os
+from typing import cast
 
 import httpx
+from sqlalchemy.orm import Session
 
 from .contracts import SpeechSettings
 
@@ -31,14 +33,15 @@ class SpeechFailed(RuntimeError):
     """The engine answered but the audio cannot be used."""
 
 
-def protocol() -> str:
+def environment_protocol() -> str:
     value = (os.getenv("REBORN_TTS_PROTOCOL") or "openai").strip().lower()
     return "deepseek" if value == "deepseek" else "openai"
 
 
-def settings() -> SpeechSettings:
-    vendor = protocol()
+def environment() -> SpeechSettings:
+    vendor = environment_protocol()
     return SpeechSettings(
+        protocol=vendor,
         base_url=(os.getenv("REBORN_TTS_BASE_URL") or "").rstrip("/"),
         api_key=(os.getenv("REBORN_TTS_API_KEY") or "").strip(),
         model=(os.getenv("REBORN_TTS_MODEL") or "zonos3-mini").strip(),
@@ -49,17 +52,26 @@ def settings() -> SpeechSettings:
     )
 
 
-def unavailable_reason() -> str | None:
-    if not settings()["base_url"]:
+def settings(db: Session | None = None) -> SpeechSettings:
+    from ..service_settings import configuration
+    return cast(SpeechSettings, configuration("speech", db))
+
+
+def protocol(db: Session | None = None) -> str:
+    return settings(db)["protocol"]
+
+
+def unavailable_reason(db: Session | None = None) -> str | None:
+    if not settings(db)["base_url"]:
         return "未配置语音合成服务，讲解音频不可用"
     return None
 
 
 def _request(config: SpeechSettings, text: str) -> tuple[str, dict[str, object]]:
     """Path + body for the configured protocol; unsupported knobs are dropped, not ignored silently."""
-    if config["format"] and config["format"] not in {"wav", "pcm"} and protocol() == "deepseek":
+    if config["format"] and config["format"] not in {"wav", "pcm"} and config.get("protocol", environment_protocol()) == "deepseek":
         raise SpeechFailed(f"DeepSeek 语音只支持 wav/pcm，当前配置为 {config['format']}")
-    if protocol() == "deepseek":
+    if config.get("protocol", environment_protocol()) == "deepseek":
         return "/v1/tools/tts", {
             "text": text,
             # Our prompts forbid Markdown; leaving the filter on would also mangle code

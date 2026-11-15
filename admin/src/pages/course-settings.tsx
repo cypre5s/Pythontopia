@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Save, Undo2 } from "lucide-react";
+import { Save, Undo2, Bot, GraduationCap, FileAudio, Volume2 } from "lucide-react";
 import { ErrorNotice, Loading, PageHeader } from "@/components/common";
 import { SelectField } from "@/components/select-field";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { api, errorMessage } from "@/lib/api";
 import { useDraft } from "@/lib/drafts";
 import { AssistantModelSettings } from '@/components/assistant-model-settings';
+import { ServiceSettings } from '@/components/service-settings';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 
 type AssistantSettings = { enabled?: boolean; default_npc_id?: string | null; limits?: Record<string, number> };
 type Settings = { revision: number; assistant: AssistantSettings; roles: { id: string; name: string }[]; system_limits?: Record<string, number> };
@@ -19,6 +21,7 @@ const budgets = [
 ] as const;
 
 export function CourseSettings({ classroomId, isAdmin = false }: { classroomId: number; isAdmin?: boolean }) {
+  const [tab, setTab] = useState('course');
   const [saved, setSaved] = useState<Settings | null>(null);
   const [draft, setDraft] = useState<AssistantSettings>({});
   const [error, setError] = useState("");
@@ -45,12 +48,17 @@ export function CourseSettings({ classroomId, isAdmin = false }: { classroomId: 
     finally { setBusy(false); }
   }
   return <>
-    <PageHeader title="智能体设置" description="学习与练习分别提供辅导，共用本班角色设置和调用预算。">
-      {dirty && <Button variant="ghost" disabled={busy} onClick={() => {
+    <PageHeader title="智能体设置" description="统一管理本班答疑，以及全站助教、讲稿和配音服务。">
+      {tab === 'course' && dirty && <Button variant="ghost" disabled={busy} onClick={() => {
         if (saved && window.confirm("放弃课程设置的未保存修改？")) { setDraft(saved.assistant); setError(""); }
       }}><Undo2 />取消编辑</Button>}
-      <Button disabled={!dirty || busy} onClick={() => void save()}><Save />{busy ? "正在保存…" : "保存设置"}</Button>
+      {tab === 'course' && <Button disabled={!dirty || busy} onClick={() => void save()}><Save />{busy ? "正在保存…" : "保存设置"}</Button>}
     </PageHeader>
+    <Tabs value={tab} onValueChange={value => setTab(String(value))}>
+      <TabsList><TabsTrigger value="course"><GraduationCap />本班答疑</TabsTrigger>
+        {isAdmin && <><TabsTrigger value="student"><Bot />学生助教 API</TabsTrigger><TabsTrigger value="authoring"><FileAudio />讲稿生成</TabsTrigger><TabsTrigger value="speech"><Volume2 />语音合成</TabsTrigger></>}
+      </TabsList>
+      <TabsContent value="course" keepMounted hidden={tab !== 'course'}>
     <ErrorNotice message={error} />
     {message && !dirty && <p role="status" className="hint">{message}</p>}
     {!saved ? (!error && <Loading />) : <fieldset disabled={busy} aria-busy={busy} className="surface space-y-6 p-6">
@@ -77,6 +85,12 @@ export function CourseSettings({ classroomId, isAdmin = false }: { classroomId: 
         </div>
       </section>
     </fieldset>}
-    {isAdmin && <AssistantModelSettings onSaved={limits => setSaved(current => current ? { ...current, system_limits: limits } : current)} />}
+      </TabsContent>
+      {isAdmin && <>
+        <TabsContent value="student" keepMounted hidden={tab !== 'student'}><AssistantModelSettings onSaved={limits => setSaved(current => current ? { ...current, system_limits: limits } : current)} /></TabsContent>
+        <TabsContent value="authoring" keepMounted hidden={tab !== 'authoring'}><ServiceSettings service="authoring" /></TabsContent>
+        <TabsContent value="speech" keepMounted hidden={tab !== 'speech'}><ServiceSettings service="speech" /></TabsContent>
+      </>}
+    </Tabs>
   </>;
 }

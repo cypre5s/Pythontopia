@@ -255,7 +255,7 @@ export function Materials({ classroomId }: { classroomId: number }) {
                       >
                         <Eye />
                       </Button>
-                      <Button
+                      {["pdf", "presentation"].includes(m.kind) && <><Button
                         variant="ghost"
                         size="icon"
                         aria-label={`讲解${m.title}`}
@@ -272,7 +272,7 @@ export function Materials({ classroomId }: { classroomId: number }) {
                         onClick={() => setListening(m)}
                       >
                         <Headphones />
-                      </Button>
+                      </Button></>}
                       <Button
                         variant="ghost"
                         size="icon"

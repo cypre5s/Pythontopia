@@ -1,6 +1,6 @@
 <template>
   <div class="pdf-reader" :aria-busy="loading || rendering">
-    <div class="pdf-page-surface" :class="{ 'with-narration': materialId }">
+    <div class="pdf-page-surface" :class="{ 'with-narration': materialId && hasNarration }">
       <h2 class="game-card-title reader-card-title"><GameIcon name="description"/>{{ kind === "presentation" ? "PPT 浏览" : "PDF 浏览" }}</h2>
       <div ref="stage" class="pdf-page-stage">
         <canvas
@@ -11,7 +11,7 @@
           role="img"
         ></canvas>
       </div>
-      <LectureStage v-if="materialId" :material-id="materialId" :page-no="page" :total-pages="count" :page-ready="rendered && !rendering && !loading && !error" @page="emit('page', $event)" @ask="emit('ask')" />
+      <LectureStage v-if="materialId" :key="materialId" @availability="hasNarration = $event" :material-id="materialId" :page-no="page" :total-pages="count" :page-ready="rendered && !rendering && !loading && !error" @page="emit('page', $event)" @ask="emit('ask')" />
       <div v-if="error" class="pdf-reader-state" role="alert">
         <p>{{ error }}</p>
         <button @click="load">重新加载课件</button>
@@ -51,6 +51,8 @@ import { api } from "../shared/api";
 import { fitPdfPage } from "../shared/pdfPageLayout";
 import type { PDFDocumentLoadingTask, PDFDocumentProxy, RenderTask } from "pdfjs-dist";
 import "./pdfReader.css";
+
+const hasNarration = ref(false);
 
 const props = defineProps<{ url: string; page: number; title?: string; kind?: string; materialId?: number }>(),
   emit = defineEmits<{ page: [value: number]; ask: [] }>(),

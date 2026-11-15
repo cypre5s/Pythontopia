@@ -60,13 +60,13 @@ def latest(db: Session, material_id: int) -> NarrationCalibration | None:
 
 def analyse(db: Session, material: Material, *, instance_id: int) -> NarrationCalibration:
     """One call per window; approved pages are reported but never rewritten here."""
-    reason = config.unavailable_reason()
+    reason = config.unavailable_reason(db)
     if reason:
         raise RuntimeError(reason)
     items = [row for row in repository.rows(db, material.id) if row.text.strip() and row.status in {"draft", "accepted"}]
     if not items:
         raise LookupError("没有可校准的讲解，请先生成")
-    settings = config.settings()
+    settings = config.settings(db)
     summary: str = ""
     terms: list[str] = []
     issues: list[CalibrationIssue] = []

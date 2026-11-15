@@ -57,6 +57,8 @@ it("keeps rendering the PDF canvas when narration is unavailable on the current 
   expect(document.getPage).toHaveBeenCalledWith(2);
   expect(renderPage).toHaveBeenCalled();
   expect(wrapper.get("canvas").isVisible()).toBe(true);
+  expect(wrapper.find('.lecture-stage').exists()).toBe(false);
+  expect(wrapper.get('.pdf-page-surface').classes()).not.toContain('with-narration');
   expect(api.blob).not.toHaveBeenCalledWith(expect.stringContaining("page-image"), expect.anything());
 });
 

@@ -66,9 +66,9 @@ test("PDF narration keeps all pages readable and opens the existing learning ass
   await page.locator(".library-list button").filter({ hasText: title }).click();
   const canvas = page.locator(".pdf-reader canvas");
   await expect(canvas).toBeVisible();
-  await expect(page.locator(".lecture-subtitle")).toContainText("for i in range(3)");
+  await expect(page.locator(".lecture-stage")).toHaveCount(0);
   await page.getByRole("button", { name: "下一页 PDF", exact: true }).click();
-  await expect(page.locator(".lecture-subtitle")).toContainText("这一页还没有");
+  await expect(page.locator(".lecture-stage")).toHaveCount(0);
   await expect(page.locator(".pdf-reader")).toHaveAttribute("aria-busy", "false");
   for (const width of [1920, 1280]) {
     await page.setViewportSize({ width, height: width === 1920 ? 1080 : 720 });
@@ -76,12 +76,12 @@ test("PDF narration keeps all pages readable and opens the existing learning ass
     expect(await canvas.evaluate(el => (el as HTMLCanvasElement).width)).toBeGreaterThan(0);
     await page.screenshot({ path: info.outputPath(`narration-${width}.png`) });
   }
-  await page.getByRole("button", { name: "就这页提问", exact: true }).click();
+  await page.getByRole("tab", { name: "图书管理员", exact: true }).click();
   await expect(page.locator(".support-chat")).toBeVisible();
   const message = page.locator(".support-chat textarea");
   // This real-service QA also runs without model credentials; opening the panel
   // must preserve the shared assistant's unavailable state instead of bypassing it.
-  if (await message.isEnabled()) await expect(message).toBeFocused();
+  if (await message.isEnabled()) await expect(message).toBeEditable();
   else await expect(message).toBeDisabled();
   expect(modelRequests).toEqual([]);
   expect(pageImages).toEqual([]);

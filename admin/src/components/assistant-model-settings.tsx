@@ -56,8 +56,8 @@ export function AssistantModelSettings({ onSaved }: { onSaved?: (limits: Record<
       setNotice(`连接正常 · ${result.elapsed_ms} ms · ${result.tokens} tokens`);
     } catch (e) { setError(errorMessage(e)); } finally { setBusy(false); }
   }
-  return <section className="surface mt-4 space-y-4 p-6">
-    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">全站模型与上下文</h2>
+  return <section className="surface space-y-4 p-6">
+    <div className="flex flex-wrap items-center justify-between gap-2"><h2 className="font-semibold">学生助教模型与上下文</h2>
       <div className="flex gap-2"><Button variant="outline" disabled={busy || dirty || !saved?.key_configured} onClick={() => void test()}>测试已保存连接</Button>
         <Button disabled={busy || !dirty} onClick={() => void save()}>保存全站设置</Button>
         {dirty && <Button variant="ghost" disabled={busy} onClick={() => { if (window.confirm('放弃全站设置的未保存修改？')) { setDraft(saved); setKey(''); setClearKey(false); } }}>取消编辑</Button>}</div>

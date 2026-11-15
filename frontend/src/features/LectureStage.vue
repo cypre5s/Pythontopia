@@ -1,5 +1,5 @@
 <template>
-  <div class="lecture-stage">
+  <div v-if="visible" class="lecture-stage">
     <p class="lecture-subtitle" :class="{ 'is-muted': !currentLine }" aria-live="polite">
       {{ audioError || currentLine || emptyHint }}
     </p>
@@ -60,7 +60,7 @@ const SPEEDS = ["0.7", "0.8", "0.9", "1", "1.1", "1.2", "1.4", "1.6", "1.8", "2"
 const LINE_CHARS = 44;
 
 const props = withDefaults(defineProps<{ materialId: number; pageNo: number; totalPages: number; pageReady?: boolean }>(), { pageReady: true });
-const emit = defineEmits<{ page: [value: number]; ask: [] }>();
+const emit = defineEmits<{ page: [value: number]; ask: []; availability: [value: boolean] }>();
 const session = useSession();
 
 const loading = ref(true);
@@ -78,6 +78,9 @@ let generation = 0;
 let audioGeneration = 0;
 let audioController: AbortController | undefined;
 const audioError = ref("");
+
+const visible = computed(() => playable.value.length > 0 || !!audioError.value);
+watch(visible, value => emit("availability", value), { immediate: true });
 
 const canPlay = computed(() => playable.value.includes(props.pageNo));
 const emptyHint = computed(() => (loading.value ? "正在加载讲解…" : "这一页还没有可播放的讲解。"));

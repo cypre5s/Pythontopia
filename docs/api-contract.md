@@ -72,9 +72,13 @@ All routes use /api. JSON fields use snake_case. Bearer session authentication i
 
 Paused policy denies new content/progress/assistant requests immediately and preserves history; reopening continues stored state. The only built-in main quest is arrival (stable ID arrival, 初来小镇：第一堂 Python 课; database IDs are instance-specific). Retired shared quest definitions are removed only during explicit course import, so stored player history does not restore them to the current world. Teacher-owned definitions and learner grades remain intact. Normal course import includes only currently selected teaching questions, not an automatic legacy archive. Explicit development cleanup skips real learner and authoring references; ordinary migration does not delete grades. Validation results and external-service skips are documented in acceptance.md.
 
+### 全站讲稿与语音服务设置
+
+管理员 GET/PUT `/teacher/services/authoring` 与 `/teacher/services/speech`，普通教师/学生403。两者均含 expected_revision、base_url、api_key（空值保留）、clear_key、timeout；authoring 另含 model、vision_model、effort、max_tokens、daily_pages；speech 另含 protocol（openai/deepseek）、model、voice、format、speed。DeepSeek 语音限制 wav/pcm 与合成速度1。修订冲突409，验证失败422且不回显输入密钥。GET/PUT 响应含 revision、key_configured、source，无明文密钥。首次读取环境初始化，保存后独立覆盖；保存不产生外部调用，不影响学生模型与课程预算。
+
 ## 资料逐页讲解与音频
 
-教师接口必须带 `classroom_id` 并限定在选定班级当前课程实例；学生接口按资料授权与班级开放范围鉴权，未授权一律404/403，不泄露资料存在性。以下路径均在 `/api` 下。
+教师接口仅支持 PDF/演示文稿（其他类型422），必须带 `classroom_id` 并限定在选定班级当前课程实例；学生接口按资料授权与班级开放范围鉴权，未授权一律404/403，不泄露资料存在性。以下路径均在 `/api` 下。
 
 - GET /teacher/classrooms/{classroom_id}/materials/{id}/narrations?classroom_id -> {pages:[{page_no,title,has_text,status,narration,bridge_in,anchors,target_seconds,source_text,audio,audio_seconds,reviewed_at,reviewed_by}],coverage:{pages,covered,missing,draft,accepted,rejected,unavailable,stale},quota:{...}}。`status` 为 draft|accepted|rejected|unavailable|stale；`source_text` 为该页当前原文前2000字，只用于并排比对，不返回学生。
 - PUT /teacher/classrooms/{classroom_id}/materials/{id}/narrations/{page_no} {text,bridge_in?,anchors?,target_seconds?} 写入或改写讲解正文，结果为 draft；页文本已变时旧 accepted 记录在读取时被判 stale。DELETE 删除该页讲解。

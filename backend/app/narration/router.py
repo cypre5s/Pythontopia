@@ -54,9 +54,15 @@ class PageGenerateInput(BaseModel):
 def _material(db: Session, user: User, classroom_id: int, material_id: int, *, exclusive: bool = False) -> Material:
     instance_id = teacher_instance_id(db, user, classroom_id, exclusive=exclusive)
     material = cast(Material, require_scope(db.get(Material, material_id), instance_id))
+    _narratable(material)
     if exclusive:
         db.refresh(material, with_for_update=True)
     return material
+
+
+def _narratable(material: Material) -> None:
+    if material.kind not in {"pdf", "presentation"}:
+        raise HTTPException(422, "只有 PDF 和演示文稿支持逐页 AI 讲解")
 
 
 def _page(material: Material, page_no: int) -> dict[str, Any]:
@@ -74,6 +80,7 @@ def generate_narration(page_no: int, classroom_id: int, material_id: int,
     """One explicit authoring request = at most one model call. Never runs on page turns."""
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
+    _narratable(material)
     repository.sync_staleness(db, material)
     db.commit()
     with repository.task(db, material, "generate", user):
@@ -105,6 +112,7 @@ def generate_range(classroom_id: int, material_id: int, body: GenerateInput,
     """Serial batch: each page commits on its own, so a failure keeps earlier pages."""
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
+    _narratable(material)
     repository.sync_staleness(db, material)
     db.commit()
     if body.first_page < 1 or body.last_page < body.first_page:
@@ -150,7 +158,7 @@ def read_job(classroom_id: int, material_id: int, db: Annotated[Session, Depends
 def read_quota(classroom_id: int, material_id: int, db: Annotated[Session, Depends(get_db)],
                user: Annotated[User, Depends(require_teacher)]) -> Quota:
     instance_id = teacher_instance_id(db, user, classroom_id)
-    require_scope(db.get(Material, material_id), instance_id)
+    _material(db, user, classroom_id, material_id)
     return service.quota(db, instance_id)
 
 
@@ -160,6 +168,7 @@ def calibrate_deck(classroom_id: int, material_id: int, db: Annotated[Session, D
     """Walk the whole deck with a rolling summary; returns a report, rewrites nothing."""
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
+    _narratable(material)
     repository.sync_staleness(db, material)
     db.commit()
     with repository.task(db, material, "calibrate", user):
@@ -187,6 +196,7 @@ def read_calibration(classroom_id: int, material_id: int, db: Annotated[Session,
                      user: Annotated[User, Depends(require_teacher)]) -> dict[str, Any]:
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
+    _narratable(material)
     entry = calibrate.latest(db, material.id)
     if entry is None:
         raise HTTPException(404, "还没有校准报告")
@@ -200,6 +210,7 @@ def apply_calibration(classroom_id: int, material_id: int, db: Annotated[Session
     """Re-generate only the flagged drafts; approved pages stay as the teacher left them."""
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
+    _narratable(material)
     entry = calibrate.latest(db, material.id)
     if entry is None:
         raise HTTPException(404, "还没有校准报告")
@@ -319,6 +330,7 @@ def synthesize_audio(page_no: int, classroom_id: int, material_id: int, db: Anno
     """Speak one approved page. Draft wording is refused, not spoken."""
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
+    _narratable(material)
     repository.sync_staleness(db, material)
     db.commit()
     with repository.task(db, material, "audio", user):
@@ -361,8 +373,8 @@ def synthesize_audio_batch(classroom_id: int, material_id: int,
     material = _material(db, user, classroom_id, material_id)
     repository.sync_staleness(db, material)
     db.commit()
-    if tts.unavailable_reason():
-        raise HTTPException(409, tts.unavailable_reason() or "语音合成不可用")
+    if tts.unavailable_reason(db):
+        raise HTTPException(409, tts.unavailable_reason(db) or "语音合成不可用")
     with repository.task(db, material, "audio", user):
         first = body.first_page if body and body.first_page else 1
         last = body.last_page if body and body.last_page else 10**9
@@ -399,6 +411,7 @@ def stream_teacher_audio(page_no: int, classroom_id: int, material_id: int, db: 
     """Let the teacher hear exactly what the student will hear."""
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
+    _narratable(material)
     repository.sync_staleness(db, material)
     db.commit()
     found = audio.read_audio(db, material, page_no)
@@ -415,15 +428,16 @@ def read_audio_status(classroom_id: int, material_id: int, db: Annotated[Session
                       user: Annotated[User, Depends(require_teacher)]) -> dict[str, Any]:
     instance_id = teacher_instance_id(db, user, classroom_id)
     material = require_scope(db.get(Material, material_id), instance_id)
+    _narratable(material)
     repository.sync_staleness(db, material)
     db.commit()
-    engine = tts.settings()
+    engine = tts.settings(db)
     rows = repository.rows(db, material.id)
     return {
-        "available": tts.unavailable_reason() is None,
+        "available": tts.unavailable_reason(db) is None,
         "voice": engine["voice"],
         # DeepSeek 没有模型概念，显示固定默认值会误导教师，直接回协议名。
-        "model": engine["model"] if tts.protocol() == "openai" else tts.protocol(),
+        "model": engine["model"] if tts.protocol(db) == "openai" else tts.protocol(db),
         "pages": [{"page_no": item.page_no, "status": item.status,
                    "ready": audio.current_audio(db, material, item.page_no) is not None,
                    "seconds": item.audio_seconds} for item in rows],

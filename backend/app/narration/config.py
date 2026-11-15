@@ -5,6 +5,8 @@ must not touch student-facing behaviour.
 """
 
 import os
+from typing import cast
+from sqlalchemy.orm import Session
 
 from .contracts import AuthoringSettings
 
@@ -22,7 +24,7 @@ def _int(name: str, default: int) -> int:
         return default
 
 
-def settings() -> AuthoringSettings:
+def environment() -> AuthoringSettings:
     model = (os.getenv("REBORN_AUTHORING_AI_MODEL") or DEFAULT_MODEL).strip()
     return AuthoringSettings(
         base_url=(os.getenv("REBORN_AUTHORING_AI_BASE_URL") or DEFAULT_BASE_URL).rstrip("/"),
@@ -37,8 +39,13 @@ def settings() -> AuthoringSettings:
     )
 
 
-def unavailable_reason() -> str | None:
+def settings(db: Session | None = None) -> AuthoringSettings:
+    from ..service_settings import configuration
+    return cast(AuthoringSettings, configuration("authoring", db))
+
+
+def unavailable_reason(db: Session | None = None) -> str | None:
     """Missing credentials mean unavailable, never a silent fallback."""
-    if not settings()["api_key"]:
+    if not settings(db)["api_key"]:
         return "未配置作者期模型凭据，讲解生成不可用"
     return None

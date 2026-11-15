@@ -20,6 +20,24 @@ function player(pageNo = 1) {
   wrappers.push(w);
   return w;
 }
+it("hides an entirely silent material and restores controls when switching to narrated material", async () => {
+  vi.mocked(api.get).mockResolvedValueOnce({ pages: [{ page_no: 1, text: "仅文字", audio: false }] });
+  const w = player();
+  await flushPromises();
+  expect(w.find('.lecture-stage').exists()).toBe(false);
+  expect(w.emitted('availability')?.at(-1)).toEqual([false]);
+  expect(api.blob).not.toHaveBeenCalled();
+  await w.setProps({ materialId: 8 });
+  await flushPromises();
+  expect(w.find('.lecture-stage').exists()).toBe(true);
+  expect(w.emitted('availability')?.at(-1)).toEqual([true]);
+});
+it("shows an honest load failure instead of claiming the document is silent", async () => {
+  vi.mocked(api.get).mockRejectedValueOnce(new Error('offline'));
+  const w = player();
+  await flushPromises();
+  expect(w.text()).toContain('讲解暂时无法加载');
+});
 it("does not request server-rendered page images, even between narrated pages", async () => {
   const w = player(2);
   await flushPromises();

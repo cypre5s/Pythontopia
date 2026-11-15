@@ -20,6 +20,7 @@ class AuthoringSettings(TypedDict):
 
 
 class SpeechSettings(TypedDict):
+    protocol: str
     base_url: str
     api_key: str
     model: str

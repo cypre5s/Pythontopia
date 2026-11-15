@@ -64,8 +64,8 @@ const nav = [
   { key: "questions", title: "题库", icon: ListChecks },
   { key: "activities", title: "学习活动", icon: BookOpen },
   { key: "authoring", title: "教学流程", icon: Layers3 },
-  { key: "settings", title: "智能体设置", icon: Settings },
   { key: "packages", title: "课程包", icon: Package },
+  { key: "settings", title: "智能体设置", icon: Settings },
   { key: "judge", title: "评测管理", icon: ShieldCheck },
 ] as const;
 type Page = (typeof nav)[number]["key"];
@@ -283,9 +283,12 @@ function Workbench() {
           </Button>
         </div>
         <nav aria-label="教师导航">
-          {nav.map(({ key, title, icon: Icon }, i) => (
+          {nav.map(({ key, title, icon: Icon }) => (
             <div key={key}>
-              {i === 2 ? <p className="nav-label">课程创作</p> : null}
+              {key === "classroom" && <p className="nav-label">班级教学</p>}
+              {key === "curriculum" && <p className="nav-label">课程内容</p>}
+              {key === "authoring" && <p className="nav-label">课程编排与交换</p>}
+              {key === "settings" && <p className="nav-label">服务与设置</p>}
               <a
                 href={`/teacher/${key}`}
                 aria-current={page === key ? "page" : undefined}

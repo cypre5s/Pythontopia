@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Loader2, Pause, Play, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Pause, Play } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { SelectField } from "@/components/select-field";
 import { Label } from "@/components/ui/label";
 import { fileBlob } from "@/lib/api";
 import { narrationApi, type NarrationAudioStatus, type NarrationList } from "@/lib/narration";
@@ -182,6 +184,7 @@ export function NarrationPlayer({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      if (event.target instanceof Element && event.target.closest('button, input, textarea, select, [role="combobox"], [role="option"]')) return;
       if (event.key === " ") {
         event.preventDefault();
         void toggle();
@@ -198,37 +201,33 @@ export function NarrationPlayer({
   const progress = playable.length ? Math.max(0, playable.indexOf(pageNo ?? 0) + 1) : 0;
 
   return (
-    <div role="dialog" aria-modal="true" aria-label={`试听 ${title}`} className="fixed inset-0 z-50 flex flex-col bg-neutral-950 p-4 text-white">
-      <header className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 pb-2">
-        <span className="truncate text-sm font-medium">{title} · 试听</span>
-        <span className="text-xs text-white/70">
+    <Dialog open onOpenChange={open => { if (!open) onClose(); }}><DialogContent aria-label={`试听 ${title}`} className="flex h-[85vh] w-[92vw] max-w-[1400px] flex-col gap-3 overflow-hidden sm:max-w-[1400px]">
+      <header className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-3 border-b pb-3 pr-8">
+        <DialogTitle className="truncate text-sm font-medium">{title} · 试听</DialogTitle>
+        <span className="text-xs text-muted-foreground">
           {progress}/{playable.length} 页可听{pageNo ? ` · 第 ${pageNo} 页` : ""}
         </span>
         <div className="ml-auto flex items-center gap-2">
-          <Label htmlFor="speed" className="m-0 text-xs text-white/80">
+          <Label htmlFor="speed" className="m-0 text-xs text-muted-foreground">
             语速
           </Label>
-          <select
+          <SelectField
             id="speed"
-            className="h-8 rounded border border-white/20 bg-black/40 px-2 text-sm text-white"
             value={speed}
-            onChange={(event) => setSpeed(event.target.value)}
+            onValueChange={setSpeed}
           >
             {SPEEDS.map((value) => (
               <option key={value} value={value}>
                 {value}×
               </option>
             ))}
-          </select>
-          <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" aria-label="退出试听" onClick={onClose}>
-            <X />
-          </Button>
+          </SelectField>
         </div>
       </header>
 
       <div className="mx-auto flex min-h-0 w-full max-w-6xl flex-1 flex-col items-center justify-center gap-3">
         {loading ? (
-          <Loader2 className="animate-spin text-white" aria-label="正在准备试听" />
+          <Loader2 className="animate-spin text-foreground" aria-label="正在准备试听" />
         ) : (
           <>
             <div className="flex min-h-0 flex-1 items-center justify-center">
@@ -240,15 +239,15 @@ export function NarrationPlayer({
                   onError={() => setImageError("页面图像无法显示")}
                 />
               ) : failed.includes(pageNo ?? 0) ? (
-                <p className="text-sm text-white/70">{imageError || "这一页没有可预览的页面图像"}</p>
+                <p className="text-sm text-muted-foreground">{imageError || "这一页没有可预览的页面图像"}</p>
               ) : (
-                <p className="text-sm text-white/70">
+                <p className="text-sm text-muted-foreground">
                   <Loader2 className="mr-2 inline animate-spin" aria-hidden="true" />
                   正在准备第 {pageNo} 页画面…
                 </p>
               )}
             </div>
-            <p className="max-h-[22vh] w-full max-w-4xl overflow-y-auto rounded bg-black/50 p-3 text-sm leading-7 text-white/90">
+            <p className="max-h-[22vh] w-full max-w-4xl overflow-y-auto rounded bg-muted p-3 text-sm leading-7 text-foreground">
               {page?.narration?.status === "accepted"
                 ? page.narration.text
                 : "这一页还没有已接受的讲解，试听会跳过它。"}
@@ -290,6 +289,6 @@ export function NarrationPlayer({
           }}
         />
       )}
-    </div>
+    </DialogContent></Dialog>
   );
 }

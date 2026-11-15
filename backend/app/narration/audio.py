@@ -75,7 +75,7 @@ def needs_audio(db: Session, material: Material, page_no: int) -> bool:
 
 def synthesize_page(db: Session, material: Material, page_no: int) -> AudioRecord:
     """Speak one approved page. Refuses unapproved wording instead of speaking a draft."""
-    reason = tts.unavailable_reason()
+    reason = tts.unavailable_reason(db)
     if reason:
         raise tts.SpeechUnavailable(reason)
     item = repository.row(db, material.id, page_no)
@@ -91,9 +91,10 @@ def synthesize_page(db: Session, material: Material, page_no: int) -> AudioRecor
     if item.audio_key and item.audio_text_hash == digest:
         return AudioRecord(page_no=page_no, reused=True, key=item.audio_key,
                            seconds=item.audio_seconds or _duration_seconds(item.text))
-    spoken = tts.synthesize(item.text)
+    engine = tts.settings(db)
+    spoken = tts.synthesize(item.text, settings_override=engine)
     seconds = _duration_seconds(item.text, spoken)
-    payload, stored_format = _stored_audio(spoken)
+    payload, stored_format = _stored_audio(spoken, engine["format"])
     repository.ensure_lease(db, material.id)
     db.refresh(material, with_for_update=True)
     db.refresh(item, with_for_update=True)
@@ -121,14 +122,14 @@ def synthesize_page(db: Session, material: Material, page_no: int) -> AudioRecor
     return AudioRecord(page_no=page_no, reused=False, key=key, seconds=seconds)
 
 
-def _stored_audio(audio: bytes) -> tuple[bytes, str]:
+def _stored_audio(audio: bytes, fmt: str | None = None) -> tuple[bytes, str]:
     """Store mp3 when we can encode it, otherwise keep the engine's own container.
 
     DeepSeek only produces wav/pcm, and a 315-character page is ~2.8MB of wav against
     ~680KB of 96k mono mp3. Transcoding costs about 0.4s per page, so it happens once at
     generation time rather than on every playback.
     """
-    engine_format = _extension()
+    engine_format = _extension(fmt)
     if engine_format == "mp3" or not _transcode_enabled():
         return audio, engine_format
     encoded = _to_mp3(audio)

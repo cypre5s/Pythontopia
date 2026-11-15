@@ -218,7 +218,7 @@ REBORN_AI_API_KEY=
 docker compose --env-file .tmp/npc-demo-20261113.env -p pythontopia-npc-demo-20261113 -f deploy/compose.yml up -d --no-deps api
 ```
 
-以上环境配置仅在尚未保存后台全站模型设置时生效。管理员可在“智能体设置 → 全站模型与上下文”填写 API 地址、模型和密钥，保存后无需重启；教师只能维护本班开关、默认角色及不高于全站上限的预算。保存不调用模型，点击“测试已保存连接”才发一次短请求。缺 Key 时显示不可用。
+以上环境配置仅在尚未保存后台全站模型设置时生效。管理员可在“智能体设置 → 学生助教 API”填写 API 地址、模型和密钥，保存后无需重启；教师只能维护本班开关、默认角色及不高于全站上限的预算。保存不调用模型，点击“测试已保存连接”才发一次短请求。缺 Key 时显示不可用。
 
 默认每次提问最多6次助教模型调用、12次工具调用、120秒，回复最多2048 tokens，累计请求预算262144 tokens；最多另加一次摘要调用，计入实际额度。每日仍为用户12请求/120000 tokens、班级100请求/1200000 tokens；实际可用请求预算还受每日剩余额度限制。默认应用上下文上限32768、压缩触发24576，须根据供应商模型容量调整；未知模型使用保守估算。显式设置的 `REBORN_AI_REQUEST_TOKEN_RESERVATION`、`REBORN_AI_TIMEOUT_SECONDS` 仍可收紧运行上限，不再默认固定为12000/45。重启不自动重发。
 
@@ -249,11 +249,13 @@ docker compose --env-file deploy/.env -p pythontopia-reborn -f deploy/compose.ym
 
 ### 资料讲解与语音合成
 
-讲解生成使用一套独立的作者期模型配置，与助教预算分开：`REBORN_AUTHORING_AI_API_KEY`、`REBORN_AUTHORING_AI_BASE_URL`、`REBORN_AUTHORING_AI_MODEL`、`REBORN_AUTHORING_AI_VISION_MODEL`，以及可选 `REBORN_AUTHORING_AI_EFFORT`、`REBORN_AUTHORING_AI_MAX_TOKENS`、`REBORN_AUTHORING_AI_TIMEOUT_SECONDS`、`REBORN_AUTHORING_AI_DAILY_PAGES`。接口为 OpenAI 兼容的 chat completions，换供应商只改这些变量。未配置时审校界面显示真实不可用，不伪造讲解。
+讲解生成使用一套独立的作者期模型配置，与助教预算分开：`REBORN_AUTHORING_AI_API_KEY`、`REBORN_AUTHORING_AI_BASE_URL`、`REBORN_AUTHORING_AI_MODEL`、`REBORN_AUTHORING_AI_VISION_MODEL`，以及可选 `REBORN_AUTHORING_AI_EFFORT`、`REBORN_AUTHORING_AI_MAX_TOKENS`、`REBORN_AUTHORING_AI_TIMEOUT_SECONDS`、`REBORN_AUTHORING_AI_DAILY_PAGES`。接口为 OpenAI 兼容的 chat completions；上述变量统一放在 `deploy/.env`（模板 `deploy/.env.example`）。管理员也可在“智能体设置 → 讲稿生成 / 语音合成”分别填写连接、模型/音色与额度。每项服务未保存时读取环境初始化值；保存后以数据库配置为准，新请求生效，无需重启。未配置时审校界面显示真实不可用，不伪造讲解。
 
 页图渲染需要宿主机或镜像内有 `pdftoppm`（poppler）。当前 Windows 本机为 `B:/Latex/2026/bin/windows/pdftoppm.EXE`（poppler 25.02），**不支持 `-jpeg`**，只能先转 PNG 再交 Pillow 压成 JPEG；渲染宽 1600px、质量 82，单页约 200KB，在供应商每图 token 封顶内。
 
 生成参数按实测锁定：关思考（`reasoning_effort=none`）、`max_tokens` 至少8000、`response_format=json_object`；成功判定需同时满足 JSON 可解析、正文非空、`finish_reason` 不为 `length`。开着思考时单页耗时升到15–55秒，且预算不足会返回空正文。批量校准按页窗滚动摘要，参数见 `backend/app/narration/calibrate.py`。改动 `prompts.py` 的正文会自动改变幂等键（提示词指纹参与哈希），不需要手动改版本号也不会复用旧讲解；`PROMPT_VERSION` 只用于追踪。校准每窗最多4页，携带原文/必要页图及完整讲解，回复上限2048 tokens；逐窗续租。整册仍是同步请求，大资料可能超过网关300秒上限，应检查任务状态后再操作，不盲目重复调用。
+
+服务配置复用加密配置存储：学生助教记录1、讲稿记录2、语音记录3，修订互相独立。空密钥输入保留原值，显式清除后不会回退到环境密钥。密钥与主密钥文件必须配套备份；配置不进入课程包。端口、存储、文档转换和转码参数继续是部署配置，集中在同一 env，不通过普通教师表单改变基础设施。
 
 ### 语音合成现状
 

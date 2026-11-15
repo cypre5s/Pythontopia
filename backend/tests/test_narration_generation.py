@@ -33,9 +33,9 @@ def calls(monkeypatch):
 
 
 def doc_material(db, classroom, *texts):
-    """Plain text material whose pages are long enough to take the text-only route."""
+    """PDF with extracted text long enough to take the text-only model route."""
     padded = tuple(text * (1 + 240 // max(1, len(text))) for text in texts)
-    return material_fixture(db, classroom, padded, kind="text")
+    return material_fixture(db, classroom, padded, kind="pdf")
 
 
 def slide_material(db, classroom, *texts):
