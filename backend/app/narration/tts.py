@@ -67,6 +67,16 @@ def unavailable_reason(db: Session | None = None) -> str | None:
     return None
 
 
+def endpoint(base_url: str, path: str) -> str:
+    """Accept a service root, /v1 root or complete supported speech endpoint."""
+    root = base_url.rstrip("/")
+    for suffix in ("/v1/tools/tts", "/v1/audio/speech", "/v1"):
+        if root.endswith(suffix):
+            root = root[:-len(suffix)]
+            break
+    return root + path
+
+
 def _request(config: SpeechSettings, text: str) -> tuple[str, dict[str, object]]:
     """Path + body for the configured protocol; unsupported knobs are dropped, not ignored silently."""
     if config["format"] and config["format"] not in {"wav", "pcm"} and config.get("protocol", environment_protocol()) == "deepseek":
@@ -100,7 +110,7 @@ def synthesize(text: str, *, settings_override: SpeechSettings | None = None) ->
         headers["Authorization"] = f"Bearer {config['api_key']}"
     try:
         with httpx.Client(timeout=config["timeout"]) as client:
-            response = client.post(config["base_url"] + path, headers=headers, json=body)
+            response = client.post(endpoint(config["base_url"], path), headers=headers, json=body)
     except httpx.HTTPError as exc:
         raise SpeechFailed("语音合成请求失败，请稍后重试") from exc
     if response.status_code in {401, 403}:

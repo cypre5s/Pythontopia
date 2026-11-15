@@ -17,6 +17,7 @@ import {
   Settings,
   ArrowUpRight,
   ShieldCheck,
+  FileAudio,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +52,7 @@ import { Activities } from "@/pages/activities";
 import { CourseSettings } from "@/pages/course-settings";
 import { Packages } from "@/pages/packages";
 import { Teaching } from "@/pages/teaching";
+const Synthesis = lazy(() => import("@/pages/synthesis").then(module => ({ default: module.Synthesis })));
 const Judge = lazy(() => import("@/pages/judge").then(module => ({ default: module.Judge })));
 const Authoring = lazy(() =>
   import("@/pages/authoring").then((module) => ({ default: module.Authoring })),
@@ -66,6 +68,7 @@ const nav = [
   { key: "authoring", title: "教学流程", icon: Layers3 },
   { key: "packages", title: "课程包", icon: Package },
   { key: "settings", title: "智能体设置", icon: Settings },
+  { key: "synthesis", title: "资料合成管理", icon: FileAudio },
   { key: "judge", title: "评测管理", icon: ShieldCheck },
 ] as const;
 type Page = (typeof nav)[number]["key"];
@@ -376,6 +379,8 @@ function Workbench() {
                 <Activities classroomId={classroom.id} />
               ) : page === "settings" ? (
                 <CourseSettings classroomId={classroom.id} isAdmin={user.role === 'admin'} />
+              ) : page === "synthesis" ? (
+                <Suspense fallback={<Loading />}><Synthesis classroomId={classroom.id} /></Suspense>
               ) : page === "judge" ? (
                 <Suspense fallback={<Loading />}><Judge classroomId={classroom.id} canManage={user.role === "admin"} /></Suspense>
               ) : page === "authoring" ? (

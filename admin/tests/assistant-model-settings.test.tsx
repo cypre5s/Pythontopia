@@ -26,9 +26,9 @@ it('preserves an unsaved key on failure and clears it after successful save', as
   await screen.findByDisplayValue('fixture');
   const key = screen.getByLabelText('API Key （已配置）') as HTMLInputElement;
   fireEvent.change(key, { target: { value: 'test-only-key' } });
-  fireEvent.click(screen.getByText('保存全站设置'));
+  fireEvent.click(screen.getByText('保存设置'));
   await screen.findByText('设置冲突'); expect(key.value).toBe('test-only-key');
-  fireEvent.click(screen.getByText('保存全站设置'));
+  fireEvent.click(screen.getByText('保存设置'));
   await waitFor(() => expect(key.value).toBe(''));
   expect(api.post).not.toHaveBeenCalled();
 });

@@ -184,12 +184,15 @@ def generate_page(db: Session, material: Material, page_no: int, *, instance_id:
 
 
 def generate_range(db: Session, material: Material, *, first: int, last: int, instance_id: int,
-                   target_seconds: int | None = None, serial: bool = False) -> list[GeneratedPage]:
+                   target_seconds: int | None = None, serial: bool = False,
+                   only_pages: list[int] | None = None) -> list[GeneratedPage]:
     """Serial generation; one failing page must not discard the pages that worked."""
     pages = repository.page_map(material)
-    wanted = [page_no for page_no in range(first, last + 1) if page_no in pages]
+    wanted = [page_no for page_no in range(first, last + 1) if page_no in pages and (only_pages is None or page_no in only_pages)]
     if not wanted:
         raise LookupError("指定范围内没有可生成的页面")
+    repository.beat(db, material.id, done=0, total=len(wanted))
+    db.commit()
     results: list[GeneratedPage] = []
     for position, page_no in enumerate(wanted, start=1):
         try:

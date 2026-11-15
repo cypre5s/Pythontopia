@@ -218,19 +218,21 @@ class JobBusy(RuntimeError):
 
 
 @contextmanager
-def task(db: Session, material: Material, kind: str, user: User) -> Iterator[None]:
+def task(db: Session, material: Material, kind: str, user: User,
+         request: dict[str, Any] | None = None) -> Iterator[None]:
     from fastapi import HTTPException
 
     try:
-        acquire(db, material, kind, user)
+        acquire(db, material, kind, user, request=request)
     except JobBusy as exc:
         raise HTTPException(409, str(exc)) from exc
     try:
         yield
         db.commit()
-    except BaseException:
+    except BaseException as exc:
         db.rollback()
-        release(db, material.id, status="failed", message="任务未完成，请查看错误后重试")
+        message = str(exc.detail) if isinstance(exc, HTTPException) else "任务未完成，请查看错误后重试"
+        release(db, material.id, status="failed", message=message)
         raise
     else:
         release(db, material.id)
@@ -252,12 +254,20 @@ def job_of(db: Session, material_id: int) -> NarrationJob | None:
     return db.scalar(select(NarrationJob).where(NarrationJob.material_id == material_id))
 
 
-def acquire(db: Session, material: Material, kind: str, user: User | None = None) -> NarrationJob:
+def acquire(db: Session, material: Material, kind: str, user: User | None = None,
+            *, request: dict[str, Any] | None = None) -> NarrationJob:
     """Take the material lock for one task. Raises JobBusy while another task is alive."""
     # A missing job row cannot be locked; serialize first acquisition on its parent.
     db.scalar(select(Material).where(Material.id == material.id).with_for_update())
     job = db.scalar(select(NarrationJob).where(NarrationJob.material_id == material.id)
                     .with_for_update().execution_options(populate_existing=True))
+    expected = db.info.pop("narration_retry_expected", None)
+    if expected:
+        from fastapi import HTTPException
+        if (job is None or job.status != "failed" or not job.started_at
+                or job.started_at.isoformat() != expected
+                or (job.progress or {}).get("retry_fingerprint") != retry_fingerprint(db, material)):
+            raise HTTPException(409, "任务或资料已变化，请刷新并重新审校")
     if job is None:
         job = NarrationJob(material_id=material.id)
         db.add(job)
@@ -270,7 +280,7 @@ def acquire(db: Session, material: Material, kind: str, user: User | None = None
     job.started_at = now()
     job.heartbeat_at = job.started_at
     job.finished_at = None
-    job.progress = {}
+    job.progress = {"request": request} if request else {}
     job.message = ""
     db.commit()
     db.info.setdefault("narration_leases", {})[material.id] = job.started_at
@@ -320,5 +330,17 @@ def release(db: Session, material_id: int, *, status: str = "done", message: str
     job.message = message[:200]
     if extra:
         job.progress = {**(job.progress or {}), **extra}
+    if status == "failed":
+        material = db.get(Material, material_id)
+        if material:
+            job.progress = {**(job.progress or {}), "retry_fingerprint": retry_fingerprint(db, material)}
     db.commit()
     db.info.get("narration_leases", {}).pop(material_id, None)
+
+
+def retry_fingerprint(db: Session, material: Material) -> str:
+    """A retry must not overwrite a source or narration edited after the failure."""
+    db.refresh(material)
+    return text_hash(json.dumps({"source": material.content, "file": material.storage_key,
+                                "narrations": [revision(item) for item in rows(db, material.id)]},
+                               ensure_ascii=False, sort_keys=True))
