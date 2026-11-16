@@ -20,9 +20,9 @@ def delete_export(classroom_id: int, package_key: str, db: Session, user: User) 
     from app.course_packages.cleanup import exchange_guard, remove_scratch
     from app.course_packages.contracts import LIMITS
     from app.course_packages.paths import exchange_root
-    from app.course_packages.service import _teacher
+    from app.course_packages.service import require_teacher
 
-    _teacher(db, user, classroom_id)
+    require_teacher(db, user, classroom_id)
     root = exchange_root()
     with exchange_guard(root):
         try:

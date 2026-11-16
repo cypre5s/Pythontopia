@@ -94,7 +94,8 @@ def write_package(db, instance, root):
     export_assets.extend(
         asset
         for key, asset in original_assets.items()
-        if key not in exported_ids and asset["storage_key"] not in retired_keys and (not asset.get("character_kind") or key in character_assets)
+        if key not in exported_ids and not asset.get("path", "").startswith("narrations/")
+        and asset["storage_key"] not in retired_keys and (not asset.get("character_kind") or key in character_assets)
     )
     for source in {asset["id"]: asset for asset in export_assets}.values():
         suffix = Path(source["storage_key"]).suffix.lower()
@@ -131,6 +132,9 @@ def write_package(db, instance, root):
                 },
             }
         )
+    from app.course_packages.narrations import export_narrations
+
+    export_narrations(db, instance, root, data["material"], assets)
     _write_jsonl(root / "assets/index.jsonl", assets)
     validate_package(root)
     return manifest

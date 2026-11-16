@@ -44,6 +44,13 @@ _TIMESTAMP = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]
 
 
 MEDIA_TYPES = {
+    ".wav": "audio/wav",
+    ".mp3": "audio/mpeg",
+    ".ogg": "audio/ogg",
+    ".opus": "audio/ogg",
+    ".flac": "audio/flac",
+    ".aac": "audio/aac",
+    ".m4a": "audio/mp4",
     ".pdf": "application/pdf",
     ".pptx": "application/vnd.openxmlformats-officedocument.presentationml.presentation",
     ".ppt": "application/vnd.ms-powerpoint",
@@ -250,8 +257,9 @@ def _assets(root, files, limits):
         )
         _identifier(row["id"], "资源id")
         path = relative_package_path(row["path"])
-        if not path.startswith("assets/") or path == "assets/index.jsonl":
-            raise PackageError("资源路径必须指向assets内的媒体文件")
+        narration_audio = bool(re.fullmatch(r"narrations/[0-9a-f]{64}/audio/[0-9a-f]{64}-[1-9][0-9]*\.[a-z0-9]+", path))
+        if (not path.startswith("assets/") or path == "assets/index.jsonl") and not narration_audio:
+            raise PackageError("资源路径必须指向assets或讲稿audio内的媒体文件")
         if row["id"] in ids or path.casefold() in paths:
             raise PackageError("资源ID或路径重复")
         if path not in files:
@@ -259,7 +267,7 @@ def _assets(root, files, limits):
         if type(row["size_bytes"]) is not int or row["size_bytes"] < 0 or row["size_bytes"] != files[path]:
             raise PackageError(f"资源大小不匹配：{path}")
         expected_type = MEDIA_TYPES.get(PurePosixPath(path).suffix.lower())
-        if expected_type is None or row["media_type"] != expected_type:
+        if expected_type is None or row["media_type"] != expected_type or (narration_audio and not expected_type.startswith("audio/")):
             raise PackageError(f"资源类型不支持或与扩展名不符：{path}")
         _string(row["source"], "source", 2000)
         _string(row["license"], "license", 2000)
@@ -276,7 +284,8 @@ def _assets(root, files, limits):
             raise PackageError(f"资源哈希或大小不匹配：{path}")
         ids.add(row["id"])
         paths.add(path.casefold())
-    actual = {path.casefold() for path in files if path.startswith("assets/") and path != "assets/index.jsonl"}
+    actual = {path.casefold() for path in files if (path.startswith("assets/") and path != "assets/index.jsonl")
+              or (path.startswith("narrations/") and "/audio/" in path)}
     if actual != paths:
         raise PackageError("assets中存在未登记文件")
     return len(ids)

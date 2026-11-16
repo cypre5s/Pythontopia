@@ -79,11 +79,13 @@ Paused policy denies new content/progress/assistant requests immediately and pre
 
 ## 资料逐页讲解与音频
 
+课程目录交换现包含逐页讲稿与有效配音，文件契约见[讲稿与配音交换](content-authoring.md#课程包中的讲稿与配音)。导入预览diff新增narrations分类，摘要含服务端narration_revision；apply再次校验，预览后讲稿或配音变化返回409，生成任务进行中返回422。缺省讲稿不清空目标讲稿，已有未应用的旧预览需重新预览，成功回执继续幂等复用。学生接口仍只返回已审校且当前有效的正文和音频。
+
 教师接口仅支持 PDF/演示文稿（其他类型422），必须带 `classroom_id` 并限定在选定班级当前课程实例；学生接口按资料授权与班级开放范围鉴权，未授权一律404/403，不泄露资料存在性。以下路径均在 `/api` 下。
 
 - GET /teacher/classrooms/{classroom_id}/materials/{id}/narrations?classroom_id -> {pages:[{page_no,title,has_text,status,narration,bridge_in,anchors,target_seconds,source_text,audio,audio_seconds,reviewed_at,reviewed_by}],coverage:{pages,covered,missing,draft,accepted,rejected,unavailable,stale},quota:{...}}。`status` 为 draft|accepted|rejected|unavailable|stale；`source_text` 为该页当前原文前2000字，只用于并排比对，不返回学生。
 - PUT /teacher/classrooms/{classroom_id}/materials/{id}/narrations/{page_no} {text,bridge_in?,anchors?,target_seconds?} 写入或改写讲解正文，结果为 draft；页文本已变时旧 accepted 记录在读取时被判 stale。DELETE 删除该页讲解。
-- POST /teacher/classrooms/{classroom_id}/materials/{id}/narrations/{page_no}/accept；POST .../reject。只有 accepted 能进入学生端、音频与课程包。未保存修改不得接受（后台层面阻断，服务端以提交正文为准）。
+- POST /teacher/classrooms/{classroom_id}/materials/{id}/narrations/{page_no}/accept；POST .../reject。只有 accepted 能进入学生端并合成音频。课程包保留各讲稿状态，草稿和过期内容不会因导入变成可见。未保存修改不得接受（后台层面阻断，服务端以提交正文为准）。
 - POST /teacher/classrooms/{classroom_id}/materials/{id}/narrations/{page_no}/generate 按单页生成，POST .../narrations/generate {first_page,last_page,mode?} 批量逐页生成；`mode=serial`（默认独立）会把已生成页的讲解作为上下文，过渡句才有依据，且上下文参与幂等键。
 - GET .../narrations/job -> {running,kind,status,done,total,message,started_at}：前端轮询用。
 - 生成／校准／音频端点共用一份资料锁：已有任务在跑时返回 409「这份资料正在处理中」；心跳超过 5 分钟的旧任务视为过期，允许接管。
@@ -96,7 +98,7 @@ Paused policy denies new content/progress/assistant requests immediately and pre
 - GET /materials/{id}/narrations?classroom_id 学生只读到 accepted 且未 stale 的页，字段仅 page_no/text/bridge_in/target_seconds/audio/audio_seconds。GET /materials/{id}/narrations/{page_no}/audio?classroom_id 为 audio/mpeg 流，未接受或无录音404。
 - 逐页提问复用 `/assistant/sessions` 与现有消息/SSE接口，state.page_no 指定当前页；独立讲解 `/ask` 已移除（404），历史问答表保留。授权、课程开关、全站模型配置、额度、幂等和会话修订均沿用学习助教。工具可读取当前资料的有效已审校讲解，长内容分段读取，草稿不外泄。
 
-讲解、审校、音频与提问均不改变成绩、解锁、任务进度或阅读完成；翻页、播放与浏览不产生模型调用。课程包导出目前不包含讲解，见内容规范的未覆盖说明。
+讲解、审校、音频与提问均不改变成绩、解锁、任务进度或阅读完成；翻页、播放与浏览不产生模型调用。课程包携带讲稿状态及有效配音，详见内容规范的交换契约。
 
 ## 班级课程与包交换
 

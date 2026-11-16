@@ -9,12 +9,12 @@ from ..db import Base
 from ..models import now
 
 # draft   : AI-written (or teacher-written) and not visible to students
-# accepted: teacher approved; the only status students and exports may use
+# accepted: teacher approved; the only status students may use
 # rejected: teacher refused this draft
 # unavailable: the page has no text and no image input, so nothing can be authored
 # stale   : the page text changed after this row was written; review is void
 STATUSES = frozenset({"draft", "accepted", "rejected", "unavailable", "stale"})
-# Only these may be shown to students or travel in a course package.
+# Course packages preserve all statuses; student visibility remains approval-only.
 VISIBLE_STATUSES = frozenset({"accepted"})
 
 

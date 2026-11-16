@@ -32,7 +32,7 @@ from app.integration_models import AssistantCall
 from app.models import Classroom, User, now
 
 
-def _teacher(db, user, classroom_id):
+def require_teacher(db, user, classroom_id):
     classroom = db.get(Classroom, classroom_id)
     if not classroom:
         raise HTTPException(404, "班级不存在")
@@ -58,7 +58,7 @@ def export_course(classroom_id: int, db: Session, user: User):
     with exchange_guard(exchange_root()):
         # Exclusive gate ensures one consistent export while blocking both edits and learner writes.
         lock_course(db, classroom_id, exclusive=True)
-        _teacher(db, user, classroom_id)
+        require_teacher(db, user, classroom_id)
         instance = classroom_course(db, classroom_id)
         if instance is None:
             raise HTTPException(409, "班级尚未导入课程")
@@ -114,7 +114,7 @@ def _save_preview(db, user, classroom_id, bundle, directory, digest):
 def available_packages(classroom_id: int, db: Session, user: User):
     from app.course_packages.catalog import mounted_catalog
 
-    _teacher(db, user, classroom_id)
+    require_teacher(db, user, classroom_id)
     root = exchange_root()
     try:
         mounted, unavailable = mounted_catalog(root, LIMITS)
@@ -134,7 +134,7 @@ def preview_available_course(classroom_id: int, body: AvailablePackageInput, db:
         from app.course_packages.catalog import copy_directory, mounted_catalog
 
         lock_course(db, classroom_id, exclusive=True)
-        _teacher(db, user, classroom_id)
+        require_teacher(db, user, classroom_id)
         exchange = exchange_root()
         try:
             with tempfile.TemporaryDirectory(prefix="course-catalog-", dir=exchange) as temporary:
@@ -161,7 +161,7 @@ def preview_available_course(classroom_id: int, body: AvailablePackageInput, db:
 def apply_course(classroom_id: int, preview_id: str, body: ApplyInput, db: Session, user: User):
     with exchange_guard(exchange_root()):
         lock_course(db, classroom_id, exclusive=True)
-        classroom = _teacher(db, user, classroom_id)
+        classroom = require_teacher(db, user, classroom_id)
         preview = db.scalar(select(CourseImportPreview).where(CourseImportPreview.id == preview_id).with_for_update())
         if not preview or preview.classroom_id != classroom_id or preview.teacher_id != user.id:
             raise HTTPException(404, "导入预览不存在")
@@ -203,6 +203,8 @@ def apply_course(classroom_id: int, preview_id: str, body: ApplyInput, db: Sessi
                     raise PackageError("暂存目录校验失败，请重新预览")
                 bundle = load_bundle(root)
                 impact = preview_impact(db, instance, bundle)
+                if impact["narration_revision"] != preview.summary.get("narration_revision"):
+                    raise HTTPException(409, "讲稿或配音已变化，请重新预览差异")
                 if impact["blockers"]:
                     raise HTTPException(409, {"message": "课程更新影响已有学习记录", "blockers": impact["blockers"]})
                 instance = import_bundle(db, classroom, instance, bundle, root)

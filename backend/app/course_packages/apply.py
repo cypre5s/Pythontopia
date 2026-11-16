@@ -114,6 +114,8 @@ def import_bundle(db, classroom, instance, bundle, root):
             continue
         source = root / asset["path"]
         key = f"course-assets/{asset['sha256']}{source.suffix.lower()}"
+        if asset["path"].startswith("narrations/"):
+            key = f"course-narrations/{instance.id}/{asset['id']}-{asset['sha256']}{source.suffix.lower()}"
         if asset.get("character_kind"):
             identity = hashlib.sha256(asset["id"].encode()).hexdigest()[:24]
             key = f"characters/{instance.id}/{identity}-{asset['sha256']}{source.suffix.lower()}"
@@ -146,6 +148,9 @@ def import_bundle(db, classroom, instance, bundle, root):
                 if source["preview_asset_id"]:
                     row.content = {**row.content, "preview_key": assets[source["preview_asset_id"]]["storage_key"]}
     db.flush()
+    from app.course_packages.narrations import import_narrations
+
+    import_narrations(db, bundle, maps, assets)
     relations = (
         (Material, MaterialChapter, "material_id", "chapter_ids", "chapter_id", "chapter"),
         (Question, QuestionChapter, "question_id", "chapter_ids", "chapter_id", "chapter"),

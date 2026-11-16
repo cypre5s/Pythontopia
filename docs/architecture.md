@@ -165,7 +165,7 @@ ExperienceCheckpoint按user_id/classroom_id保存命名体验快照和当前定�
 
 | 模块 | 所有权 |
 | --- | --- |
-| `course_packages/` | manifest/reader/writer/validation 负责格式与读写，catalog/paths/cleanup 负责目录生命周期，impact/apply/service 负责影响、事务应用及预览回执；router 仅装配接口。 |
+| `course_packages/` | manifest/reader/writer/validation 负责格式与读写，catalog/paths/cleanup 负责目录生命周期，impact/apply/service 负责影响、事务应用及预览回执；narration_contract/narrations 负责可移植讲稿、媒体指纹、状态校验与目标关联，复用 narration 的运行时有效性判定；router 仅装配接口。 |
 | `course_content/` | snapshot 保存当前定义快照供比较和交换；access/learning/evidence/presentation 共用授权、学习规则、证据与公开响应；activities/questions/releases/progress 维护活动、题库、发布和统计。定义快照不是学生可切换的课程版本。 |
 | `classrooms/` | 班级、成员、教师独立体验身份；课程内容不再混入班级接口文件。 |
 | `materials/` | storage 是本地/S3存储适配，uploads/conversion/jobs 负责上传解析与后台转换，delivery 负责私有文件与 Range 交付，access/presentation/service/router 维护授权、响应和接口。 |

@@ -33,6 +33,9 @@ def has_learning_history(db, classroom_id):
 
 
 def preview_impact(db, instance, bundle):
+    from app.course_packages.narrations import preview_narrations, revision
+
+    narration_revision = revision(db, instance)
     snapshot = snapshot_content(db, instance) if instance else None
     previous = snapshot[0] if snapshot else {kind: [] for kind in MODEL_NAMES.values()}
     diff = {}
@@ -46,6 +49,7 @@ def preview_impact(db, instance, bundle):
 
     for kind, incoming in bundle["data"].items():
         compare(kind, {row["id"]: row for row in previous[kind]}, {row["id"]: row for row in incoming})
+    diff["narrations"] = preview_narrations(db, instance, bundle)
     compare("answers", {row["id"]: row for row in snapshot[1]} if snapshot else {}, {row["id"]: row for row in bundle["secrets"]})
     old_config = snapshot[3] if snapshot else {}
     compare("configuration", {key: old_config.get(key, {}) for key in CONFIG_FILES}, bundle["configuration"])
@@ -196,6 +200,7 @@ def preview_impact(db, instance, bundle):
             ]
             protect("story", stable, len(affected), "流程仍有进行中或等待活动的会话，请先完成或关闭后重新预览更新")
     return {
+        "narration_revision": narration_revision,
         "diff": diff,
         "blockers": list(dict.fromkeys(blockers)),
         "learning_impact": learning_impact,

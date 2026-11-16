@@ -510,8 +510,9 @@ def test_postgres_repeated_apply_is_serialized_and_idempotent(pg_course_engine, 
         write_package(db, instance, directory)
         staged = exchange_path("imports/parallel")
         digest = copy_directory(directory, staged, tmp_path, LIMITS)
+        from app.course_packages.narrations import revision
         item = CourseImportPreview(teacher_id=teacher_row.id, classroom_id=target.id, expected_revision=0,
-                                   archive_sha256=digest, storage_key="imports/parallel", summary={},
+                                   archive_sha256=digest, storage_key="imports/parallel", summary={"narration_revision": revision(db, None)},
                                    expires_at=now() + timedelta(hours=1))
         db.add(item)
         db.commit()

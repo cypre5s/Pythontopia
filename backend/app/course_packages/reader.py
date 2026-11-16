@@ -52,6 +52,7 @@ def load_bundle(root):
         "world/flows/*.yaml",
         "content/activities/*.yaml",
         "content/questions/*.jsonl",
+        "narrations/*/pages.jsonl",
     )
     for pattern in patterns:
         accepted.update(path.relative_to(root).as_posix() for path in root.glob(pattern) if path.is_file())
@@ -78,5 +79,16 @@ def load_bundle(root):
     course = _load(root / "curriculum/course.yaml")
     manifest = _load(root / "manifest.yaml")
     bundle = {"data": data, "secrets": secrets, "assets": assets, "configuration": config, "course": course, "manifest": manifest}
+    from app.course_packages.narration_contract import directory
+
+    bundle["narrations"] = []
+    for path in sorted(root.glob("narrations/*/pages.jsonl")):
+        pages = _load(path, json_lines=True)
+        for row in pages:
+            if not isinstance(row, dict) or not isinstance(row.get("material_id"), str) or path.parent != root / directory(row["material_id"]):
+                raise PackageError("讲稿目录与资料稳定ID不匹配")
+        bundle["narrations"].extend(pages)
+    if len(bundle["narrations"]) > 10000:
+        raise PackageError("课程讲稿页数超限")
     validate_bundle(bundle, root)
     return bundle
